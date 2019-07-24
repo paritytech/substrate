@@ -4,6 +4,10 @@
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit="256"]
 
+// Make the WASM binary available.
+#[cfg(feature = "std")]
+include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
+
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use parity_codec::{Encode, Decode};
@@ -11,9 +15,9 @@ use rstd::prelude::*;
 #[cfg(feature = "std")]
 use primitives::bytes;
 use primitives::{ed25519, sr25519, OpaqueMetadata};
-use runtime_primitives::{
+use sr_primitives::{
 	ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
-	traits::{self, NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify}
+	traits::{self, NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify}, weights::Weight,
 };
 use client::{
 	block_builder::api::{CheckInherentsResult, InherentData, self as block_builder_api},
@@ -25,12 +29,11 @@ use version::NativeVersion;
 
 // A few exports that help ease life for downstream crates.
 #[cfg(any(feature = "std", test))]
-pub use runtime_primitives::BuildStorage;
+pub use sr_primitives::BuildStorage;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
-pub use runtime_primitives::{Permill, Perbill};
-pub use timestamp::BlockPeriod;
-pub use support::{StorageValue, construct_runtime};
+pub use sr_primitives::{Permill, Perbill};
+pub use support::{StorageValue, construct_runtime, parameter_types};
 
 /// Alias to the signature scheme used for Aura authority signatures.
 pub type AuraSignature = ed25519::Signature;
@@ -53,6 +56,9 @@ pub type BlockNumber = u64;
 /// Index of an account's extrinsic in the chain.
 pub type Nonce = u64;
 
+/// Balance type for the node.
+pub type Balance = u128;
+
 /// Used for the module template in `./template.rs`
 mod template;
 
@@ -63,21 +69,8 @@ mod template;
 pub mod opaque {
 	use super::*;
 
-	/// Opaque, encoded, unchecked extrinsic.
-	#[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub struct UncheckedExtrinsic(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
-	#[cfg(feature = "std")]
-	impl std::fmt::Debug for UncheckedExtrinsic {
-		fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-			write!(fmt, "{}", primitives::hexdisplay::HexDisplay::from(&self.0))
-		}
-	}
-	impl traits::Extrinsic for UncheckedExtrinsic {
-		fn is_signed(&self) -> Option<bool> {
-			None
-		}
-	}
+	pub use sr_primitives::OpaqueExtrinsic as UncheckedExtrinsic;
+
 	/// Opaque block header type.
 	pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 	/// Opaque block type.
@@ -107,6 +100,12 @@ pub fn native_version() -> NativeVersion {
 	}
 }
 
+parameter_types! {
+	pub const BlockHashCount: BlockNumber = 250;
+	pub const MaximumBlockWeight: Weight = 4 * 1024 * 1024;
+	pub const MaximumBlockLength: u32 = 4 * 1024 * 1024;
+}
+
 impl system::Trait for Runtime {
 	/// The identifier used to distinguish between accounts.
 	type AccountId = AccountId;
@@ -124,8 +123,16 @@ impl system::Trait for Runtime {
 	type Header = generic::Header<BlockNumber, BlakeTwo256>;
 	/// The ubiquitous event type.
 	type Event = Event;
+	/// Update weight (to fee) multiplier per-block.
+	type WeightMultiplierUpdate = ();
 	/// The ubiquitous origin type.
 	type Origin = Origin;
+	/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
+	type BlockHashCount = BlockHashCount;
+	/// Maximum weight of each block. With a default weight system of 1byte == 1weight, 4mb is ok.
+	type MaximumBlockWeight = MaximumBlockWeight;
+	/// Maximum size of all encoded transactions (in bytes) that are allowed in one block.
+	type MaximumBlockLength = MaximumBlockLength;
 }
 
 impl aura::Trait for Runtime {
@@ -145,15 +152,27 @@ impl indices::Trait for Runtime {
 	type Event = Event;
 }
 
+parameter_types! {
+	pub const MinimumPeriod: u64 = 5;
+}
 impl timestamp::Trait for Runtime {
 	/// A timestamp: seconds since the unix epoch.
 	type Moment = u64;
 	type OnTimestampSet = Aura;
+	type MinimumPeriod = MinimumPeriod;
+}
+
+parameter_types! {
+	pub const ExistentialDeposit: u128 = 500;
+	pub const TransferFee: u128 = 0;
+	pub const CreationFee: u128 = 0;
+	pub const TransactionBaseFee: u128 = 1;
+	pub const TransactionByteFee: u128 = 0;
 }
 
 impl balances::Trait for Runtime {
 	/// The type for recording an account's balance.
-	type Balance = u128;
+	type Balance = Balance;
 	/// What to do if an account's free balance gets zeroed.
 	type OnFreeBalanceZero = ();
 	/// What to do if a new account is created.
@@ -164,6 +183,11 @@ impl balances::Trait for Runtime {
 	type TransactionPayment = ();
 	type DustRemoval = ();
 	type TransferPayment = ();
+	type ExistentialDeposit = ExistentialDeposit;
+	type TransferFee = TransferFee;
+	type CreationFee = CreationFee;
+	type TransactionBaseFee = TransactionBaseFee;
+	type TransactionByteFee = TransactionByteFee;
 }
 
 impl sudo::Trait for Runtime {
@@ -183,8 +207,8 @@ construct_runtime!(
 		NodeBlock = opaque::Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: system::{default, Config<T>},
-		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
+		System: system::{Module, Call, Storage, Config, Event},
+		Timestamp: timestamp::{Module, Call, Storage, Inherent},
 		Aura: aura::{Module, Config<T>, Inherent(Timestamp)},
 		Indices: indices::{default, Config<T>},
 		Balances: balances,
@@ -204,12 +228,14 @@ pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 /// BlockId type as expected by this runtime.
 pub type BlockId = generic::BlockId<Block>;
+/// The SignedExtension to the basic transaction logic.
+pub type SignedExtra = (system::CheckNonce<Runtime>, system::CheckWeight<Runtime>, balances::TakeFees<Runtime>);
 /// Unchecked extrinsic type as expected by this runtime.
-pub type UncheckedExtrinsic = generic::UncheckedMortalCompactExtrinsic<Address, Nonce, Call, AccountSignature>;
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, AccountSignature, SignedExtra>;
 /// Extrinsic type that has already been checked.
-pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Nonce, Call>;
+pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Call, SignedExtra>;
 /// Executive: handles dispatch to the various modules.
-pub type Executive = executive::Executive<Runtime, Block, Context, Balances, Runtime, AllModules>;
+pub type Executive = executive::Executive<Runtime, Block, Context, Runtime, AllModules>;
 
 // Implement our runtime API endpoints. This is just a bunch of proxying.
 impl_runtime_apis! {

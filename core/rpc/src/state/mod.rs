@@ -26,6 +26,7 @@ use std::{
 	ops::Range,
 	sync::Arc,
 };
+use futures03::{future, StreamExt as _, TryStreamExt as _};
 
 use client::{self, Client, CallExecutor, BlockchainEvents, runtime_api::Metadata};
 use crate::rpc::Result as RpcResult;
@@ -484,14 +485,14 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 
 		self.subscriptions.add(subscriber, |sink| {
 			let stream = stream
-				.map_err(|e| warn!("Error creating storage notification stream: {:?}", e))
-				.map(|(block, changes)| Ok(StorageChangeSet {
+				.map(|(block, changes)| Ok::<_, ()>(Ok(StorageChangeSet {
 					block,
 					changes: changes.iter()
 						.filter_map(|(o_sk, k, v)| if o_sk.is_none() {
 							Some((k.clone(),v.cloned()))
 						} else { None }).collect(),
-				}));
+				})))
+				.compat();
 
 			sink
 				.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
@@ -530,7 +531,6 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 			let mut previous_version = version.clone();
 
 			let stream = stream
-				.map_err(|e| warn!("Error creating storage notification stream: {:?}", e))
 				.filter_map(move |_| {
 					let info = client.info();
 					let version = client
@@ -539,11 +539,12 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 						.map_err(Into::into);
 					if previous_version != version {
 						previous_version = version.clone();
-						Some(version)
+						future::ready(Some(Ok::<_, ()>(version)))
 					} else {
-						None
+						future::ready(None)
 					}
-				});
+				})
+				.compat();
 
 			sink
 				.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))

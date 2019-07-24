@@ -20,12 +20,14 @@
 //! time during which certain events can and/or must occur.  This crate
 //! provides generic functionality for slots.
 
-#![forbid(warnings, unsafe_code, missing_docs)]
+#![deny(warnings)]
+#![forbid(unsafe_code, missing_docs)]
 
 mod slots;
 mod aux_schema;
 
-pub use slots::{SignedDuration, SlotInfo, Slots};
+pub use slots::{SignedDuration, SlotInfo};
+use slots::Slots;
 pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
 
 use codec::{Decode, Encode};
@@ -38,19 +40,15 @@ use futures::{
 use inherents::{InherentData, InherentDataProviders};
 use log::{debug, error, info, warn};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{ApiRef, Block, ProvideRuntimeApi};
+use runtime_primitives::traits::{ApiRef, Block as BlockT, ProvideRuntimeApi};
 use std::fmt::Debug;
 use std::ops::Deref;
 
 /// A worker that should be invoked at every new slot.
-pub trait SlotWorker<B: Block> {
+pub trait SlotWorker<B: BlockT> {
 	/// The type of the future that will be returned when a new slot is
 	/// triggered.
 	type OnSlot: IntoFuture<Item = (), Error = consensus_common::Error>;
-
-	/// Called when the proposer starts.
-	#[deprecated(note = "Not called. Please perform any initialization before calling start_slot_worker.")]
-	fn on_start(&self, _slot_duration: u64) -> Result<(), consensus_common::Error> { Ok(()) }
 
 	/// Called when a new slot is triggered.
 	fn on_slot(&self, chain_head: B::Header, slot_info: SlotInfo) -> Self::OnSlot;
@@ -60,8 +58,13 @@ pub trait SlotWorker<B: Block> {
 pub trait SlotCompatible {
 	/// Extract timestamp and slot from inherent data.
 	fn extract_timestamp_and_slot(
+		&self,
 		inherent: &InherentData,
-	) -> Result<(u64, u64), consensus_common::Error>;
+	) -> Result<(u64, u64, std::time::Duration), consensus_common::Error>;
+
+	/// Get the difference between chain time and local time.  Defaults to
+	/// always returning zero.
+	fn time_offset() -> SignedDuration { Default::default() }
 }
 
 /// Start a new slot worker.
@@ -74,9 +77,10 @@ pub fn start_slot_worker<B, C, W, T, SO, SC>(
 	worker: W,
 	sync_oracle: SO,
 	inherent_data_providers: InherentDataProviders,
+	timestamp_extractor: SC,
 ) -> impl Future<Item = (), Error = ()>
 where
-	B: Block,
+	B: BlockT,
 	C: SelectChain<B> + Clone,
 	W: SlotWorker<B>,
 	SO: SyncOracle + Send + Clone,
@@ -86,8 +90,11 @@ where
 	let SlotDuration(slot_duration) = slot_duration;
 
 	// rather than use a timer interval, we schedule our waits ourselves
-	let mut authorship = Slots::<SC>::new(slot_duration.slot_duration(), inherent_data_providers)
-		.map_err(|e| debug!(target: "slots", "Faulty timer: {:?}", e))
+	let mut authorship = Slots::<SC>::new(
+		slot_duration.slot_duration(),
+		inherent_data_providers,
+		timestamp_extractor,
+	).map_err(|e| debug!(target: "slots", "Faulty timer: {:?}", e))
 		.for_each(move |slot_info| {
 			// only propose when we are not syncing.
 			if sync_oracle.is_major_syncing() {
@@ -188,7 +195,7 @@ impl<T: Clone> SlotDuration<T> {
 	///
 	/// `slot_key` is marked as `'static`, as it should really be a
 	/// compile-time constant.
-	pub fn get_or_compute<B: Block, C, CB>(client: &C, cb: CB) -> ::client::error::Result<Self> where
+	pub fn get_or_compute<B: BlockT, C, CB>(client: &C, cb: CB) -> ::client::error::Result<Self> where
 		C: client::backend::AuxStore,
 		C: ProvideRuntimeApi,
 		CB: FnOnce(ApiRef<C::Api>, &BlockId<B>) -> ::client::error::Result<T>,

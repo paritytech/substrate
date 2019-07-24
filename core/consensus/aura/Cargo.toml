@@ -6,7 +6,7 @@ description = "Aura consensus algorithm for substrate"
 edition = "2018"
 
 [dependencies]
-parity-codec = "3.4"
+parity-codec = "4.1.1"
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 runtime_support = { package = "srml-support", path = "../../../srml/support" }
 runtime_version = { package = "sr-version", path = "../../sr-version" }
@@ -25,6 +25,7 @@ parking_lot = "0.8.0"
 log = "0.4"
 
 [dev-dependencies]
+futures03 = { package = "futures-preview", version = "0.3.0-alpha.17", features = ["compat"] }
 keyring = { package = "substrate-keyring", path = "../../keyring" }
 substrate-executor = { path = "../../executor" }
 network = { package = "substrate-network", path = "../../network", features = ["test-helpers"]}

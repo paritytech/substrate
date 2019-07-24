@@ -21,17 +21,18 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use aura::{import_queue, start_aura, AuraImportQueue, SlotDuration};
 use client::{self, LongestChain};
-use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use node_executor;
-use primitives::{Pair as PairT, ed25519};
+use primitives::Pair;
+use grandpa_primitives::AuthorityPair as GrandpaPair;
 use futures::prelude::*;
-use node_primitives::Block;
+use node_primitives::{AuraPair, Block};
 use node_runtime::{GenesisConfig, RuntimeApi};
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
-	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor, TaskExecutor,
+	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor,
 	error::{Error as ServiceError},
 };
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
@@ -50,7 +51,7 @@ construct_simple_protocol! {
 pub struct NodeConfig<F: substrate_service::ServiceFactory> {
 	/// grandpa connection to import block
 	// FIXME #1134 rather than putting this on the config, let's have an actual intermediate setup state
-	pub grandpa_import_setup: Option<(Arc<grandpa::BlockImportForService<F>>, grandpa::LinkHalfForService<F>)>,
+	pub grandpa_import_setup: Option<(grandpa::BlockImportForService<F>, grandpa::LinkHalfForService<F>)>,
 	inherent_data_providers: InherentDataProviders,
 }
 
@@ -66,6 +67,8 @@ impl<F> Default for NodeConfig<F> where F: substrate_service::ServiceFactory {
 construct_service_factory! {
 	struct Factory {
 		Block = Block,
+		ConsensusPair = AuraPair,
+		FinalityPair = GrandpaPair,
 		RuntimeApi = RuntimeApi,
 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
 		RuntimeDispatch = node_executor::Executor,
@@ -76,15 +79,16 @@ construct_service_factory! {
 		Genesis = GenesisConfig,
 		Configuration = NodeConfig<Self>,
 		FullService = FullComponents<Self>
-			{ |config: FactoryFullConfiguration<Self>, executor: TaskExecutor|
-				FullComponents::<Factory>::new(config, executor) },
+			{ |config: FactoryFullConfiguration<Self>|
+				FullComponents::<Factory>::new(config) },
 		AuthoritySetup = {
-			|mut service: Self::FullService, executor: TaskExecutor, local_key: Option<Arc<ed25519::Pair>>| {
+			|mut service: Self::FullService| {
 				let (block_import, link_half) = service.config.custom.grandpa_import_setup.take()
 					.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
-				if let Some(ref key) = local_key {
-					info!("Using authority key {}", key.public());
+				if let Some(aura_key) = service.authority_key() {
+					info!("Using aura key {}", aura_key.public());
+
 					let proposer = Arc::new(substrate_basic_authorship::ProposerFactory {
 						client: service.client(),
 						transaction_pool: service.transaction_pool(),
@@ -93,30 +97,30 @@ construct_service_factory! {
 					let client = service.client();
 					let select_chain = service.select_chain()
 						.ok_or(ServiceError::SelectChainRequired)?;
+
 					let aura = start_aura(
 						SlotDuration::get_or_compute(&*client)?,
-						key.clone(),
+						Arc::new(aura_key),
 						client,
 						select_chain,
-						block_import.clone(),
+						block_import,
 						proposer,
 						service.network(),
 						service.config.custom.inherent_data_providers.clone(),
 						service.config.force_authoring,
 					)?;
-					executor.spawn(aura.select(service.on_exit()).then(|_| Ok(())));
-
-					info!("Running Grandpa session as Authority {}", key.public());
+					let select = aura.select(service.on_exit()).then(|_| Ok(()));
+					service.spawn_task(Box::new(select));
 				}
 
-				let local_key = if service.config.disable_grandpa {
+				let grandpa_key = if service.config.disable_grandpa {
 					None
 				} else {
-					local_key
+					service.fg_authority_key()
 				};
 
 				let config = grandpa::Config {
-					local_key,
+					local_key: grandpa_key.map(Arc::new),
 					// FIXME #1578 make this available through chainspec
 					gossip_duration: Duration::from_millis(333),
 					justification_period: 4096,
@@ -124,19 +128,18 @@ construct_service_factory! {
 				};
 
 				match config.local_key {
-					None => {
-						executor.spawn(grandpa::run_grandpa_observer(
+					None if !service.config.grandpa_voter => {
+						service.spawn_task(Box::new(grandpa::run_grandpa_observer(
 							config,
 							link_half,
 							service.network(),
 							service.on_exit(),
-						)?);
+						)?));
 					},
-					Some(_) => {
+					// Either config.local_key is set, or user forced voter service via `--grandpa-voter` flag.
+					_ => {
 						let telemetry_on_connect = TelemetryOnConnect {
-							on_exit: Box::new(service.on_exit()),
 							telemetry_connection_sinks: service.telemetry_on_connect_stream(),
-							executor: &executor,
 						};
 						let grandpa_config = grandpa::GrandpaParams {
 							config: config,
@@ -146,7 +149,7 @@ construct_service_factory! {
 							on_exit: service.on_exit(),
 							telemetry_on_connect: Some(telemetry_on_connect),
 						};
-						executor.spawn(grandpa::run_grandpa_voter(grandpa_config)?);
+						service.spawn_task(Box::new(grandpa::run_grandpa_voter(grandpa_config)?));
 					},
 				}
 
@@ -154,7 +157,7 @@ construct_service_factory! {
 			}
 		},
 		LightService = LightComponents<Self>
-			{ |config, executor| <LightComponents<Factory>>::new(config, executor) },
+			{ |config| <LightComponents<Factory>>::new(config) },
 		FullImportQueue = AuraImportQueue<Self::Block>
 			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>, select_chain: Self::SelectChain| {
 				let slot_duration = SlotDuration::get_or_compute(&*client)?;
@@ -162,16 +165,14 @@ construct_service_factory! {
 					grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>, _>(
 						client.clone(), client.clone(), select_chain
 					)?;
-				let block_import = Arc::new(block_import);
 				let justification_import = block_import.clone();
 
 				config.custom.grandpa_import_setup = Some((block_import.clone(), link_half));
 
-				import_queue::<_, _, ed25519::Pair>(
+				import_queue::<_, _, AuraPair>(
 					slot_duration,
-					block_import,
-					Some(justification_import),
-					None,
+					Box::new(block_import),
+					Some(Box::new(justification_import)),
 					None,
 					client,
 					config.custom.inherent_data_providers.clone(),
@@ -187,19 +188,17 @@ construct_service_factory! {
 				let block_import = grandpa::light_block_import::<_, _, _, RuntimeApi, LightClient<Self>>(
 					client.clone(), Arc::new(fetch_checker), client.clone()
 				)?;
-				let block_import = Arc::new(block_import);
 				let finality_proof_import = block_import.clone();
 				let finality_proof_request_builder = finality_proof_import.create_finality_proof_request_builder();
 
-				import_queue::<_, _, ed25519::Pair>(
+				import_queue::<_, _, AuraPair>(
 					SlotDuration::get_or_compute(&*client)?,
-					block_import,
+					Box::new(block_import),
 					None,
-					Some(finality_proof_import),
-					Some(finality_proof_request_builder),
+					Some(Box::new(finality_proof_import)),
 					client,
 					config.custom.inherent_data_providers.clone(),
-				).map_err(Into::into)
+				).map(|q| (q, finality_proof_request_builder)).map_err(Into::into)
 			}},
 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>
 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {
@@ -217,11 +216,11 @@ construct_service_factory! {
 #[cfg(test)]
 mod tests {
 	use std::sync::Arc;
-	use consensus::CompatibleDigestItem;
-	use consensus_common::{Environment, Proposer, ImportBlock, BlockOrigin, ForkChoiceStrategy};
+	use aura::CompatibleDigestItem;
+	use consensus_common::{Environment, Proposer, BlockImportParams, BlockOrigin, ForkChoiceStrategy};
 	use node_primitives::DigestItem;
-	use node_runtime::{Call, BalancesCall, UncheckedExtrinsic};
-	use parity_codec::{Compact, Encode, Decode};
+	use node_runtime::{BalancesCall, Call, CENTS, SECS_PER_BLOCK, UncheckedExtrinsic};
+	use parity_codec::{Encode, Decode};
 	use primitives::{
 		crypto::Pair as CryptoPair, ed25519::Pair, blake2_256,
 		sr25519::Public as AddressPublic, H256,
@@ -231,12 +230,13 @@ mod tests {
 	use finality_tracker;
 	use keyring::{ed25519::Keyring as AuthorityKeyring, sr25519::Keyring as AccountKeyring};
 	use substrate_service::ServiceFactory;
+	use service_test::SyncService;
 	use crate::service::Factory;
 
 	#[cfg(feature = "rhd")]
 	fn test_sync() {
 		use {service_test, Factory};
-		use client::{ImportBlock, BlockOrigin};
+		use client::{BlockImportParams, BlockOrigin};
 
 		let alice: Arc<ed25519::Pair> = Arc::new(Keyring::Alice.into());
 		let bob: Arc<ed25519::Pair> = Arc::new(Keyring::Bob.into());
@@ -256,7 +256,7 @@ mod tests {
 			};
 			let (proposer, _, _) = proposer_factory.init(&parent_header, &validators, alice.clone()).unwrap();
 			let block = proposer.propose().expect("Error making test block");
-			ImportBlock {
+			BlockImportParams {
 				origin: BlockOrigin::File,
 				justification: Vec::new(),
 				internal_justification: Vec::new(),
@@ -266,8 +266,13 @@ mod tests {
 				auxiliary: Vec::new(),
 			}
 		};
-		let extrinsic_factory = |service: &<Factory as service::ServiceFactory>::FullService| {
-			let payload = (0, Call::Balances(BalancesCall::transfer(RawAddress::Id(bob.public().0.into()), 69.into())), Era::immortal(), service.client().genesis_hash());
+		let extrinsic_factory = |service: &SyncService<<Factory as service::ServiceFactory>::FullService>| {
+			let payload = (
+				0,
+				Call::Balances(BalancesCall::transfer(RawAddress::Id(bob.public().0.into()), 69.into())),
+				Era::immortal(),
+				service.client().genesis_hash()
+			);
 			let signature = alice.sign(&payload.encode()).into();
 			let id = alice.public().0.into();
 			let xt = UncheckedExtrinsic {
@@ -277,7 +282,11 @@ mod tests {
 			let v: Vec<u8> = Decode::decode(&mut xt.as_slice()).unwrap();
 			OpaqueExtrinsic(v)
 		};
-		service_test::sync::<Factory, _, _>(chain_spec::integration_test_config(), block_factory, extrinsic_factory);
+		service_test::sync::<Factory, _, _>(
+			chain_spec::integration_test_config(),
+			block_factory,
+			extrinsic_factory,
+		);
 	}
 
 	#[test]
@@ -287,11 +296,16 @@ mod tests {
 
 		let alice = Arc::new(AuthorityKeyring::Alice.pair());
 		let mut slot_num = 1u64;
-		let block_factory = |service: &<Factory as ServiceFactory>::FullService| {
-			let mut inherent_data = service.config.custom.inherent_data_providers
-				.create_inherent_data().unwrap();
+		let block_factory = |service: &SyncService<<Factory as ServiceFactory>::FullService>| {
+			let service = service.get();
+			let mut inherent_data = service
+				.config
+				.custom
+				.inherent_data_providers
+				.create_inherent_data()
+				.expect("Creates inherent data.");
 			inherent_data.replace_data(finality_tracker::INHERENT_IDENTIFIER, &1u64);
-			inherent_data.replace_data(timestamp::INHERENT_IDENTIFIER, &(slot_num * 10));
+			inherent_data.replace_data(timestamp::INHERENT_IDENTIFIER, &(slot_num * SECS_PER_BLOCK));
 
 			let parent_id = BlockId::number(service.client().info().chain.best_number);
 			let parent_header = service.client().header(&parent_id).unwrap().unwrap();
@@ -299,13 +313,14 @@ mod tests {
 				client: service.client(),
 				transaction_pool: service.transaction_pool(),
 			});
+
 			let mut digest = Digest::<H256>::default();
-			digest.push(<DigestItem as CompatibleDigestItem<Pair>>::aura_pre_digest(slot_num * 10 / 2));
+			digest.push(<DigestItem as CompatibleDigestItem<Pair>>::aura_pre_digest(slot_num));
 			let proposer = proposer_factory.init(&parent_header).unwrap();
 			let new_block = proposer.propose(
 				inherent_data,
 				digest,
-				::std::time::Duration::from_secs(1),
+				std::time::Duration::from_secs(1),
 			).expect("Error making test block");
 
 			let (new_header, new_body) = new_block.deconstruct();
@@ -319,7 +334,7 @@ mod tests {
 			);
 			slot_num += 1;
 
-			ImportBlock {
+			BlockImportParams {
 				origin: BlockOrigin::File,
 				header: new_header,
 				justification: None,
@@ -335,27 +350,32 @@ mod tests {
 		let charlie = Arc::new(AccountKeyring::Charlie.pair());
 
 		let mut index = 0;
-		let extrinsic_factory = |service: &<Factory as ServiceFactory>::FullService| {
-			let amount = 1000;
+		let extrinsic_factory = |service: &SyncService<<Factory as ServiceFactory>::FullService>| {
+			let amount = 5 * CENTS;
 			let to = AddressPublic::from_raw(bob.public().0);
 			let from = AddressPublic::from_raw(charlie.public().0);
-			let genesis_hash = service.client().block_hash(0).unwrap().unwrap();
+			let genesis_hash = service.get().client().block_hash(0).unwrap().unwrap();
 			let signer = charlie.clone();
 
 			let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
-			let era = Era::immortal();
-			let raw_payload = (Compact(index), function, era, genesis_hash);
+
+			let check_era = system::CheckEra::from(Era::Immortal);
+			let check_nonce = system::CheckNonce::from(index);
+			let check_weight = system::CheckWeight::from();
+			let take_fees = balances::TakeFees::from(0);
+			let extra = (check_era, check_nonce, check_weight, take_fees);
+
+			let raw_payload = (function, extra.clone(), genesis_hash);
 			let signature = raw_payload.using_encoded(|payload| if payload.len() > 256 {
 				signer.sign(&blake2_256(payload)[..])
 			} else {
 				signer.sign(payload)
 			});
 			let xt = UncheckedExtrinsic::new_signed(
-				index,
-				raw_payload.1,
+				raw_payload.0,
 				from.into(),
 				signature.into(),
-				era,
+				extra,
 			).encode();
 			let v: Vec<u8> = Decode::decode(&mut xt.as_slice()).unwrap();
 

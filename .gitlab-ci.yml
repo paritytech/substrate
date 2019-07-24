@@ -95,8 +95,7 @@ cargo-check-benches:
   stage:                           test
   <<:                              *docker-env
   script:
-    - ./scripts/build.sh --locked
-    - time cargo check --benches
+    - BUILD_DUMMY_WASM_BINARY=1 time cargo check --benches --all
     - sccache -s
 
 
@@ -107,7 +106,7 @@ cargo-check-subkey:
     - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
   script:
     - cd ./subkey
-    - time cargo check --release   # makes sense to save artifacts for building it
+    - BUILD_DUMMY_WASM_BINARY=1 time cargo check --release   # makes sense to save artifacts for building it
     - sccache -s
 
 
@@ -122,29 +121,62 @@ test-linux-stable:                 &test-linux
     variables:
       - $DEPLOY_TAG
   script:
-    - ./scripts/build.sh --locked
     - time cargo test --all --release --verbose --locked
     - sccache -s
+
+
+test-srml-staking:                 &test-srml-staking
+  stage:                           test
+  <<:                              *docker-env
+  variables:
+    # Enable debug assertions since we are running optimized builds for testing
+    # but still want to have debug assertions.
+    RUSTFLAGS: -Cdebug-assertions=y
+    RUST_BACKTRACE: 1
+  except:
+    variables:
+      - $DEPLOY_TAG
+  only:
+    changes:
+      - .gitlab-ci.yml
+      - srml/staking/*
+  script:
+    - cd srml/staking/
+    - time cargo test --release --verbose --no-default-features --features std
+    - sccache -s
+
+
+
+
+
 
 test-linux-stable-int:
   <<:                              *test-linux
   except:
     refs:
-      - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
+      - /^v[0-9]+\.[0-9]+.*$/      # i.e. v1.0, v2.1rc1
     variables:
       - $DEPLOY_TAG
   script:
-    - ./scripts/build.sh --locked
-    - time RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
-        cargo test -p node-cli --release --verbose --locked -- --ignored --test-threads=1
+    - echo "___Logs will be partly shown at the end in case of failure.___"
+    - echo "___Full log will be saved to the job artifacts only in case of failure.___"
+    - RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
+        time cargo test -p node-cli --release --verbose --locked -- --ignored --test-threads=1
+        &> ${CI_COMMIT_SHORT_SHA}_int_failure.log
     - sccache -s
-  allow_failure:                   true
+  after_script:
+    - awk '/FAILED/,0' ${CI_COMMIT_SHORT_SHA}_int_failure.log
+  artifacts:
+    name:                          $CI_COMMIT_SHORT_SHA
+    when:                          on_failure
+    expire_in:                     24 hrs
+    paths:
+      - ${CI_COMMIT_SHORT_SHA}_int_failure.log
 
 
 check-web-wasm:
   stage:                           test
   <<:                              *docker-env
-  allow_failure:                   true
   except:
     - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
   script:
@@ -161,9 +193,12 @@ check-web-wasm:
     - time cargo web build -p substrate-keystore
     - time cargo web build -p substrate-executor
     - time cargo web build -p substrate-network
+    - time cargo web build -p substrate-offchain
     - time cargo web build -p substrate-panic-handler
     - time cargo web build -p substrate-peerset
     - time cargo web build -p substrate-primitives
+    # TODO: we can't use cargo web until https://github.com/paritytech/jsonrpc/pull/436 is deployed
+    - time cargo build -p substrate-rpc-servers --target wasm32-unknown-unknown
     - time cargo web build -p substrate-serializer
     - time cargo web build -p substrate-state-db
     - time cargo web build -p substrate-state-machine
@@ -188,7 +223,6 @@ build-linux-release:
     variables:
       - $DEPLOY_TAG
   script:
-    - ./scripts/build.sh --locked
     - time cargo build --release --verbose
     - mkdir -p ./artifacts
     - mv ./target/release/substrate ./artifacts/.
@@ -206,6 +240,28 @@ build-linux-release:
     - cp -r scripts/docker/* ./artifacts
     - sccache -s
 
+build-linux-subkey:
+  stage:                           build
+  <<:                              *collect-artifacts
+  <<:                              *docker-env
+  # <<:                              *build-only
+  except:
+    variables:
+      - $DEPLOY_TAG
+  script:
+    - cd ./subkey
+    - BUILD_DUMMY_WASM_BINARY=1 time cargo build --release --verbose
+    - cd ..
+    # - time cargo build --release
+    - sccache -s
+    - mkdir -p ./artifacts
+    - mv ./target/release/subkey ./artifacts/.
+    - echo -n "Subkey version = "
+    - ./artifacts/subkey --version |
+        sed -n -r 's/^subkey ([0-9.]+.*)/\1/p' |
+        tee ./artifacts/SUBKEY-VERSION;
+    - sha256sum ./artifacts/subkey | tee ./artifacts/subkey.sha256
+
 build-rust-doc-release:
   stage:                           build
   <<:                              *docker-env
@@ -218,9 +274,8 @@ build-rust-doc-release:
     - ./crate-docs
   <<:                              *build-only
   script:
-    - ./scripts/build.sh --locked
     - rm -f ./crate-docs/index.html # use it as an indicator if the job succeeds
-    - time cargo +nightly doc --release --all --verbose
+    - BUILD_DUMMY_WASM_BINARY=1 time cargo +nightly doc --release --all --verbose
     - cp -R ./target/doc ./crate-docs
     - echo "<meta http-equiv=refresh content=0;url=substrate_service/index.html>" > ./crate-docs/index.html
     - sccache -s
@@ -231,6 +286,7 @@ build-rust-doc-release:
   stage:                           publish
   dependencies:
     - build-linux-release
+    - build-linux-subkey
   <<:                              *build-only
   <<:                              *kubernetes-build
 
@@ -288,6 +344,7 @@ publish-s3-release:
   after_script:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/latest/
         --recursive --human-readable --summarize
+
 
 publish-s3-doc:
   stage:                           publish

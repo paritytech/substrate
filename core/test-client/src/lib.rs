@@ -32,7 +32,7 @@ pub use state_machine::ExecutionStrategy;
 
 use std::sync::Arc;
 use std::collections::HashMap;
-use futures::future::FutureResult;
+use futures::future::Ready;
 use hash_db::Hasher;
 use primitives::storage::well_known_keys;
 use runtime_primitives::traits::{
@@ -220,11 +220,11 @@ impl<E, Backend, G: GenesisInit> TestClientBuilder<
 }
 
 impl<Block: BlockT> client::light::fetcher::Fetcher<Block> for LightFetcher {
-	type RemoteHeaderResult = FutureResult<Block::Header, client::error::Error>;
-	type RemoteReadResult = FutureResult<Option<Vec<u8>>, client::error::Error>;
-	type RemoteCallResult = FutureResult<Vec<u8>, client::error::Error>;
-	type RemoteChangesResult = FutureResult<Vec<(NumberFor<Block>, u32)>, client::error::Error>;
-	type RemoteBodyResult = FutureResult<Vec<Block::Extrinsic>, client::error::Error>;
+	type RemoteHeaderResult = Ready<Result<Block::Header, client::error::Error>>;
+	type RemoteReadResult = Ready<Result<Option<Vec<u8>>, client::error::Error>>;
+	type RemoteCallResult = Ready<Result<Vec<u8>, client::error::Error>>;
+	type RemoteChangesResult = Ready<Result<Vec<(NumberFor<Block>, u32)>, client::error::Error>>;
+	type RemoteBodyResult = Ready<Result<Vec<Block::Extrinsic>, client::error::Error>>;
 
 	fn remote_header(
 		&self,

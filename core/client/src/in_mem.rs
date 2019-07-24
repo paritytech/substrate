@@ -588,6 +588,7 @@ where
 	type BlockImportOperation = BlockImportOperation<Block, H>;
 	type Blockchain = Blockchain<Block>;
 	type State = InMemory<H>;
+	type OffchainStorage = OffchainStorage;
 
 	fn begin_operation(&self) -> error::Result<Self::BlockImportOperation> {
 		let old_state = self.state_at(BlockId::Hash(Default::default()))?;
@@ -664,6 +665,10 @@ where
 		None
 	}
 
+	fn offchain_storage(&self) -> Option<Self::OffchainStorage> {
+		None
+	}
+
 	fn state_at(&self, block: BlockId<Block>) -> error::Result<Self::State> {
 		match block {
 			BlockId::Hash(h) if h == Default::default() => {
@@ -720,8 +725,50 @@ pub fn check_genesis_storage(top: &StorageOverlay, children: &ChildrenStorageOve
 	Ok(())
 }
 
+/// In-memory storage for offchain workers.
+#[derive(Debug, Clone, Default)]
+pub struct OffchainStorage {
+	storage: HashMap<Vec<u8>, Vec<u8>>,
+}
+
+impl backend::OffchainStorage for OffchainStorage {
+	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
+		let key = prefix.iter().chain(key).cloned().collect();
+		self.storage.insert(key, value.to_vec());
+	}
+
+	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
+		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
+		self.storage.get(&key).cloned()
+	}
+
+	fn compare_and_set(
+		&mut self,
+		prefix: &[u8],
+		key: &[u8],
+		old_value: Option<&[u8]>,
+		new_value: &[u8],
+	) -> bool {
+		use std::collections::hash_map::Entry;
+		let key = prefix.iter().chain(key).cloned().collect();
+
+		match self.storage.entry(key) {
+			Entry::Vacant(entry) => if old_value.is_none() {
+				entry.insert(new_value.to_vec());
+				true
+			} else { false },
+			Entry::Occupied(ref mut entry) if Some(entry.get().as_slice()) == old_value => {
+				entry.insert(new_value.to_vec());
+				true
+			},
+			_ => false,
+		}
+	}
+}
+
 #[cfg(test)]
 mod tests {
+	use super::*;
 	use std::sync::Arc;
 	use test_client;
 	use primitives::Blake2Hasher;
@@ -740,5 +787,27 @@ mod tests {
 		let backend = Arc::new(TestBackend::new());
 
 		test_client::trait_tests::test_blockchain_query_by_number_gets_canonical(backend);
+	}
+
+	#[test]
+	fn in_memory_offchain_storage() {
+		use crate::backend::OffchainStorage as _;
+
+		let mut storage = OffchainStorage::default();
+		assert_eq!(storage.get(b"A", b"B"), None);
+		assert_eq!(storage.get(b"B", b"A"), None);
+
+		storage.set(b"A", b"B", b"C");
+		assert_eq!(storage.get(b"A", b"B"), Some(b"C".to_vec()));
+		assert_eq!(storage.get(b"B", b"A"), None);
+
+		storage.compare_and_set(b"A", b"B", Some(b"X"), b"D");
+		assert_eq!(storage.get(b"A", b"B"), Some(b"C".to_vec()));
+		storage.compare_and_set(b"A", b"B", Some(b"C"), b"D");
+		assert_eq!(storage.get(b"A", b"B"), Some(b"D".to_vec()));
+
+		assert!(!storage.compare_and_set(b"B", b"A", Some(b""), b"Y"));
+		assert!(storage.compare_and_set(b"B", b"A", None, b"X"));
+		assert_eq!(storage.get(b"B", b"A"), Some(b"X".to_vec()));
 	}
 }

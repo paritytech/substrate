@@ -18,24 +18,20 @@
 
 #![cfg(test)]
 
-use primitives::{
-	BuildStorage, DigestItem, traits::IdentityLookup, testing::{Header, UintAuthorityId}
-};
+use primitives::{DigestItem, traits::IdentityLookup, testing::{Header, UintAuthorityId}};
 use runtime_io;
-use srml_support::{impl_outer_origin, impl_outer_event};
+use srml_support::{impl_outer_origin, impl_outer_event, parameter_types};
 use substrate_primitives::{H256, Blake2Hasher};
 use parity_codec::{Encode, Decode};
-use crate::{AuthorityId, GenesisConfig, Trait, Module, Signal};
+use crate::{AuthorityId, GenesisConfig, Trait, Module, ConsensusLog};
 use substrate_finality_grandpa_primitives::GRANDPA_ENGINE_ID;
 
 impl_outer_origin!{
 	pub enum Origin for Test {}
 }
 
-impl From<Signal<u64>> for DigestItem<H256> {
-	fn from(log: Signal<u64>) -> DigestItem<H256> {
-		DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode())
-	}
+pub fn grandpa_log(log: ConsensusLog<u64>) -> DigestItem<H256> {
+	DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode())
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
@@ -44,6 +40,11 @@ pub struct Test;
 impl Trait for Test {
 	type Event = TestEvent;
 
+}
+parameter_types! {
+	pub const BlockHashCount: u64 = 250;
+	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockLength: u32 = 2 * 1024;
 }
 impl system::Trait for Test {
 	type Origin = Origin;
@@ -54,7 +55,11 @@ impl system::Trait for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
+	type WeightMultiplierUpdate = ();
 	type Event = TestEvent;
+	type BlockHashCount = BlockHashCount;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type MaximumBlockLength = MaximumBlockLength;
 }
 
 mod grandpa {
@@ -72,9 +77,8 @@ pub fn to_authorities(vec: Vec<(u64, u64)>) -> Vec<(AuthorityId, u64)> {
 }
 
 pub fn new_test_ext(authorities: Vec<(u64, u64)>) -> runtime_io::TestExternalities<Blake2Hasher> {
-	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
-	t.extend(GenesisConfig::<Test> {
-		_genesis_phantom_data: Default::default(),
+	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
+	t.extend(GenesisConfig {
 		authorities: to_authorities(authorities),
 	}.build_storage().unwrap().0);
 	t.into()

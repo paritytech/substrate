@@ -83,6 +83,7 @@ impl<Block> LightStorage<Block>
 		Self::from_kvdb(db as Arc<_>)
 	}
 
+	/// Create new memory-backed `LightStorage` for tests.
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn new_test() -> Self {
 		use utils::NUM_COLUMNS;
@@ -209,7 +210,7 @@ impl<Block: BlockT> LightStorage<Block> {
 	/// should be the parent of `best_to`. In the case where we set an existing block
 	/// to be best, `route_to` should equal to `best_to`.
 	fn set_head_with_transaction(&self, transaction: &mut DBTransaction, route_to: Block::Hash, best_to: (NumberFor<Block>, Block::Hash)) -> Result<(), client::error::Error> {
-		let lookup_key = utils::number_and_hash_to_lookup_key(best_to.0, &best_to.1);
+		let lookup_key = utils::number_and_hash_to_lookup_key(best_to.0, &best_to.1)?;
 
 		// handle reorg.
 		let meta = self.meta.read();
@@ -232,7 +233,7 @@ impl<Block: BlockT> LightStorage<Block> {
 					transaction,
 					columns::KEY_LOOKUP,
 					retracted.number
-				);
+				)?;
 			}
 
 			for enacted in tree_route.enacted() {
@@ -241,7 +242,7 @@ impl<Block: BlockT> LightStorage<Block> {
 					columns::KEY_LOOKUP,
 					enacted.number,
 					enacted.hash
-				);
+				)?;
 			}
 		}
 
@@ -251,7 +252,7 @@ impl<Block: BlockT> LightStorage<Block> {
 			columns::KEY_LOOKUP,
 			best_to.0,
 			best_to.1,
-		);
+		)?;
 
 		Ok(())
 	}
@@ -272,7 +273,7 @@ impl<Block: BlockT> LightStorage<Block> {
 			).into())
 		}
 
-		let lookup_key = utils::number_and_hash_to_lookup_key(header.number().clone(), hash);
+		let lookup_key = utils::number_and_hash_to_lookup_key(header.number().clone(), hash)?;
 		transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
 
 		// build new CHT(s) if required
@@ -291,7 +292,7 @@ impl<Block: BlockT> LightStorage<Block> {
 			)?;
 			transaction.put(
 				columns::CHT,
-				&cht_key(HEADER_CHT_PREFIX, new_cht_start),
+				&cht_key(HEADER_CHT_PREFIX, new_cht_start)?,
 				new_header_cht_root.as_ref()
 			);
 
@@ -309,7 +310,7 @@ impl<Block: BlockT> LightStorage<Block> {
 				)?;
 				transaction.put(
 					columns::CHT,
-					&cht_key(CHANGES_TRIE_CHT_PREFIX, new_cht_start),
+					&cht_key(CHANGES_TRIE_CHT_PREFIX, new_cht_start)?,
 					new_changes_trie_cht_root.as_ref()
 				);
 			}
@@ -329,7 +330,7 @@ impl<Block: BlockT> LightStorage<Block> {
 						columns::KEY_LOOKUP,
 						prune_block,
 						hash
-					);
+					)?;
 					transaction.delete(columns::HEADER, &lookup_key);
 				}
 				prune_block += One::one();
@@ -356,7 +357,7 @@ impl<Block: BlockT> LightStorage<Block> {
 
 		let cht_number = cht::block_to_cht_number(cht_size, block).ok_or_else(no_cht_for_block)?;
 		let cht_start = cht::start_number(cht_size, cht_number);
-		self.db.get(columns::CHT, &cht_key(cht_type, cht_start)).map_err(db_err)?
+		self.db.get(columns::CHT, &cht_key(cht_type, cht_start)?).map_err(db_err)?
 			.ok_or_else(no_cht_for_block)
 			.and_then(|hash| Block::Hash::decode(&mut &*hash).ok_or_else(no_cht_for_block))
 	}
@@ -412,7 +413,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		}
 
 		// blocks are keyed by number + hash.
-		let lookup_key = utils::number_and_hash_to_lookup_key(number, &hash);
+		let lookup_key = utils::number_and_hash_to_lookup_key(number, &hash)?;
 
 		if leaf_state.is_best() {
 			self.set_head_with_transaction(&mut transaction, parent_hash, (number, hash))?;
@@ -423,7 +424,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 			columns::KEY_LOOKUP,
 			number,
 			hash,
-		);
+		)?;
 		transaction.put(columns::HEADER, &lookup_key, &header.encode());
 
 		let is_genesis = number.is_zero();
@@ -495,6 +496,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 			let mut transaction = DBTransaction::new();
 			self.set_head_with_transaction(&mut transaction, hash.clone(), (number.clone(), hash.clone()))?;
 			self.db.write(transaction).map_err(db_err)?;
+			self.update_meta(hash, header.number().clone(), true, false);
 			Ok(())
 		} else {
 			Err(ClientError::UnknownBlock(format!("Cannot set head {:?}", id)))
@@ -559,10 +561,10 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 }
 
 /// Build the key for inserting header-CHT at given block.
-fn cht_key<N: TryInto<u32>>(cht_type: u8, block: N) -> [u8; 5] {
+fn cht_key<N: TryInto<u32>>(cht_type: u8, block: N) -> ClientResult<[u8; 5]> {
 	let mut key = [cht_type; 5];
-	key[1..].copy_from_slice(&utils::number_index_key(block));
-	key
+	key[1..].copy_from_slice(&utils::number_index_key(block)?);
+	Ok(key)
 }
 
 #[cfg(test)]

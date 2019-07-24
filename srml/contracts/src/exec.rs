@@ -15,19 +15,21 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait,
-	TrieId, BalanceOf, ContractInfoOf};
+	TrieId, BalanceOf, ContractInfo};
 use crate::account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
-use crate::gas::{GasMeter, Token, approx_gas_for_balance};
+use crate::gas::{Gas, GasMeter, Token, approx_gas_for_balance};
+use crate::rent;
 
 use rstd::prelude::*;
 use runtime_primitives::traits::{Bounded, CheckedAdd, CheckedSub, Zero};
-use srml_support::{StorageMap, traits::{WithdrawReason, Currency}};
+use srml_support::traits::{WithdrawReason, Currency};
 use timestamp;
 
 pub type AccountIdOf<T> = <T as system::Trait>::AccountId;
 pub type CallOf<T> = <T as Trait>::Call;
 pub type MomentOf<T> = <T as timestamp::Trait>::Moment;
 pub type SeedOf<T> = <T as system::Trait>::Hash;
+pub type BlockNumberOf<T> = <T as system::Trait>::BlockNumber;
 
 /// A type that represents a topic of an event. At the moment a hash is used.
 pub type TopicOf<T> = <T as system::Trait>::Hash;
@@ -59,15 +61,14 @@ pub trait Ext {
 	/// was deleted.
 	fn get_storage(&self, key: &StorageKey) -> Option<Vec<u8>>;
 
-	/// Sets the storage entry by the given key to the specified value.
-	///
-	/// If `value` is `None` then the storage entry is deleted.
-	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>);
+	/// Sets the storage entry by the given key to the specified value. If `value` is `None` then
+	/// the storage entry is deleted. Returns an Err if the value size is too large.
+	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) -> Result<(), &'static str>;
 
 	/// Instantiate a contract from the given code.
 	///
 	/// The newly created account will be associated with `code`. `value` specifies the amount of value
-	/// transfered from this to the newly created account (also known as endowment).
+	/// transferred from this to the newly created account (also known as endowment).
 	fn instantiate(
 		&mut self,
 		code: &CodeHash<Self::T>,
@@ -76,7 +77,7 @@ pub trait Ext {
 		input_data: &[u8],
 	) -> Result<InstantiateReceipt<AccountIdOf<Self::T>>, &'static str>;
 
-	/// Call (possibly transfering some amount of funds) into the specified account.
+	/// Call (possibly transferring some amount of funds) into the specified account.
 	fn call(
 		&mut self,
 		to: &AccountIdOf<Self::T>,
@@ -100,7 +101,7 @@ pub trait Ext {
 	/// The `value_transferred` is already added.
 	fn balance(&self) -> BalanceOf<Self::T>;
 
-	/// Returns the value transfered along with this call or as endowment.
+	/// Returns the value transferred along with this call or as endowment.
 	fn value_transferred(&self) -> BalanceOf<Self::T>;
 
 	/// Returns a reference to the timestamp of the current block
@@ -119,6 +120,12 @@ pub trait Ext {
 
 	/// Rent allowance of the contract
 	fn rent_allowance(&self) -> BalanceOf<Self::T>;
+
+	/// Returns the current block number.
+	fn block_number(&self) -> BlockNumberOf<Self::T>;
+
+	/// Returns the maximum allowed size of a storage item.
+	fn max_value_size(&self) -> u32;
 }
 
 /// Loader is a companion of the `Vm` trait. It loads an appropriate abstract
@@ -239,10 +246,10 @@ pub enum ExecFeeToken {
 impl<T: Trait> Token<T> for ExecFeeToken {
 	type Metadata = Config<T>;
 	#[inline]
-	fn calculate_amount(&self, metadata: &Config<T>) -> T::Gas {
+	fn calculate_amount(&self, metadata: &Config<T>) -> Gas {
 		match *self {
-			ExecFeeToken::Call => metadata.call_base_fee,
-			ExecFeeToken::Instantiate => metadata.instantiate_base_fee,
+			ExecFeeToken::Call => metadata.schedule.call_base_cost,
+			ExecFeeToken::Instantiate => metadata.schedule.instantiate_base_cost,
 		}
 	}
 }
@@ -257,6 +264,8 @@ pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
 	pub config: &'a Config<T>,
 	pub vm: &'a V,
 	pub loader: &'a L,
+	pub timestamp: T::Moment,
+	pub block_number: T::BlockNumber,
 }
 
 impl<'a, T, E, V, L> ExecutionContext<'a, T, V, L>
@@ -267,11 +276,11 @@ where
 {
 	/// Create the top level execution context.
 	///
-	/// The specified `origin` address will be used as `sender` for
+	/// The specified `origin` address will be used as `sender` for. The `origin` must be a regular
+	/// account (not a contract).
 	pub fn top_level(origin: T::AccountId, cfg: &'a Config<T>, vm: &'a V, loader: &'a L) -> Self {
 		ExecutionContext {
-			self_trie_id: <ContractInfoOf<T>>::get(&origin)
-				.and_then(|i| i.as_alive().map(|i| i.trie_id.clone())),
+			self_trie_id: None,
 			self_account: origin,
 			overlay: OverlayAccountDb::<T>::new(&DirectAccountDb),
 			depth: 0,
@@ -280,13 +289,16 @@ where
 			config: &cfg,
 			vm: &vm,
 			loader: &loader,
+			timestamp: <timestamp::Module<T>>::now(),
+			block_number: <system::Module<T>>::block_number(),
 		}
 	}
 
-	fn nested(&self, overlay: OverlayAccountDb<'a, T>, dest: T::AccountId) -> Self {
+	fn nested(&self, overlay: OverlayAccountDb<'a, T>, dest: T::AccountId, trie_id: Option<TrieId>)
+		-> Self
+	{
 		ExecutionContext {
-			self_trie_id: <ContractInfoOf<T>>::get(&dest)
-				.and_then(|i| i.as_alive().map(|i| i.trie_id.clone())),
+			self_trie_id: trie_id,
 			self_account: dest,
 			overlay,
 			depth: self.depth + 1,
@@ -295,10 +307,12 @@ where
 			config: self.config,
 			vm: self.vm,
 			loader: self.loader,
+			timestamp: self.timestamp.clone(),
+			block_number: self.block_number.clone(),
 		}
 	}
 
-	/// Make a call to the specified address, optionally transfering some funds.
+	/// Make a call to the specified address, optionally transferring some funds.
 	pub fn call(
 		&mut self,
 		dest: T::AccountId,
@@ -321,14 +335,20 @@ where
 		// Assumption: pay_rent doesn't collide with overlay because
 		// pay_rent will be done on first call and dest contract and balance
 		// cannot be changed before the first call
-		crate::rent::pay_rent::<T>(&dest);
+		let contract_info = rent::pay_rent::<T>(&dest);
+
+		// Calls to dead contracts always fail.
+		if let Some(ContractInfo::Tombstone(_)) = contract_info {
+			return Err("contract has been evicted");
+		};
 
 		let mut output_data = Vec::new();
 
 		let (change_set, events, calls) = {
 			let mut nested = self.nested(
 				OverlayAccountDb::new(&self.overlay),
-				dest.clone()
+				dest.clone(),
+				contract_info.and_then(|i| i.as_alive().map(|i| i.trie_id.clone()))
 			);
 
 			if value > BalanceOf::<T>::zero() {
@@ -342,6 +362,8 @@ where
 				)?;
 			}
 
+			// If code_hash is not none, then the destination account is a live contract, otherwise
+			// it is a regular account since tombstone accounts have already been rejected.
 			if let Some(dest_code_hash) = self.overlay.get_code_hash(&dest) {
 				let executable = self.loader.load_main(&dest_code_hash)?;
 				output_data = self
@@ -352,7 +374,8 @@ where
 							ctx: &mut nested,
 							caller: self.self_account.clone(),
 							value_transferred: value,
-							timestamp: timestamp::Module::<T>::now(),
+							timestamp: self.timestamp.clone(),
+							block_number: self.block_number.clone(),
 						},
 						input_data,
 						empty_output_buf,
@@ -400,7 +423,8 @@ where
 
 			overlay.create_contract(&dest, code_hash.clone())?;
 
-			let mut nested = self.nested(overlay, dest.clone());
+			// TrieId has not been generated yet and storage is empty since contract is new.
+			let mut nested = self.nested(overlay, dest.clone(), None);
 
 			// Send funds unconditionally here. If the `endowment` is below existential_deposit
 			// then error will be returned here.
@@ -421,7 +445,8 @@ where
 						ctx: &mut nested,
 						caller: self.self_account.clone(),
 						value_transferred: endowment,
-						timestamp: timestamp::Module::<T>::now(),
+						timestamp: self.timestamp.clone(),
+						block_number: self.block_number.clone(),
 					},
 					input_data,
 					EmptyOutputBuf::new(),
@@ -465,13 +490,13 @@ impl<T: Trait> Token<T> for TransferFeeToken<BalanceOf<T>> {
 	type Metadata = Config<T>;
 
 	#[inline]
-	fn calculate_amount(&self, metadata: &Config<T>) -> T::Gas {
+	fn calculate_amount(&self, metadata: &Config<T>) -> Gas {
 		let balance_fee = match self.kind {
 			TransferFeeKind::ContractInstantiate => metadata.contract_account_instantiate_fee,
 			TransferFeeKind::AccountCreate => metadata.account_create_fee,
 			TransferFeeKind::Transfer => metadata.transfer_fee,
 		};
-		approx_gas_for_balance::<T>(self.gas_price, balance_fee)
+		approx_gas_for_balance(self.gas_price, balance_fee)
 	}
 }
 
@@ -487,11 +512,11 @@ enum TransferCause {
 ///
 /// This function also handles charging the fee. The fee depends
 /// on whether the transfer happening because of contract instantiation
-/// (transfering endowment) or because of a transfer via `call`. This
+/// (transferring endowment) or because of a transfer via `call`. This
 /// is specified using the `cause` parameter.
 ///
 /// NOTE: that the fee is denominated in `BalanceOf<T>` units, but
-/// charged in `T::Gas` from the provided `gas_meter`. This means
+/// charged in `Gas` from the provided `gas_meter`. This means
 /// that the actual amount charged might differ.
 ///
 /// NOTE: that we allow for draining all funds of the contract so it
@@ -574,6 +599,7 @@ struct CallContext<'a, 'b: 'a, T: Trait + 'b, V: Vm<T> + 'b, L: Loader<T>> {
 	caller: T::AccountId,
 	value_transferred: BalanceOf<T>,
 	timestamp: T::Moment,
+	block_number: T::BlockNumber,
 }
 
 impl<'a, 'b: 'a, T, E, V, L> Ext for CallContext<'a, 'b, T, V, L>
@@ -588,10 +614,17 @@ where
 		self.ctx.overlay.get_storage(&self.ctx.self_account, self.ctx.self_trie_id.as_ref(), key)
 	}
 
-	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) {
+	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) -> Result<(), &'static str> {
+		if let Some(ref value) = value {
+			if self.max_value_size() < value.len() as u32 {
+				return Err("value size exceeds maximum");
+			}
+		}
+
 		self.ctx
 			.overlay
-			.set_storage(&self.ctx.self_account, key, value)
+			.set_storage(&self.ctx.self_account, key, value);
+		Ok(())
 	}
 
 	fn instantiate(
@@ -661,6 +694,12 @@ where
 	fn rent_allowance(&self) -> BalanceOf<T> {
 		self.ctx.overlay.get_rent_allowance(&self.ctx.self_account)
 			.unwrap_or(<BalanceOf<T>>::max_value()) // Must never be triggered actually
+	}
+
+	fn block_number(&self) -> T::BlockNumber { self.block_number }
+
+	fn max_value_size(&self) -> u32 {
+		self.ctx.config.max_value_size
 	}
 }
 

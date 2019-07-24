@@ -19,7 +19,6 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
-use futures::{Future, IntoFuture};
 use parking_lot::{RwLock, Mutex};
 
 use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
@@ -37,7 +36,7 @@ use crate::light::fetcher::{Fetcher, RemoteReadRequest};
 use hash_db::Hasher;
 use trie::MemoryDB;
 
-const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type and always suceeds; qed";
+const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type and always succeeds; qed";
 
 /// Light client backend.
 pub struct Backend<S, F, H: Hasher> {
@@ -116,6 +115,7 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 	type BlockImportOperation = ImportOperation<Block, S, F, H>;
 	type Blockchain = Blockchain<S, F>;
 	type State = OnDemandOrGenesisState<Block, S, F, H>;
+	type OffchainStorage = crate::in_mem::OffchainStorage;
 
 	fn begin_operation(&self) -> ClientResult<Self::BlockImportOperation> {
 		Ok(ImportOperation {
@@ -190,6 +190,10 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 	}
 
 	fn changes_trie_storage(&self) -> Option<&PrunableStateChangesTrieStorage<Block, H>> {
+		None
+	}
+
+	fn offchain_storage(&self) -> Option<Self::OffchainStorage> {
 		None
 	}
 
@@ -352,14 +356,15 @@ where
 			*self.cached_header.write() = Some(cached_header);
 		}
 
-		self.fetcher.upgrade().ok_or(ClientError::NotAvailableOnLightClient)?
-			.remote_read(RemoteReadRequest {
-				block: self.block,
-				header: header.expect("if block above guarantees that header is_some(); qed"),
-				key: key.to_vec(),
-				retry_count: None,
-			})
-			.into_future().wait()
+		futures::executor::block_on(
+			self.fetcher.upgrade().ok_or(ClientError::NotAvailableOnLightClient)?
+				.remote_read(RemoteReadRequest {
+					block: self.block,
+					header: header.expect("if block above guarantees that header is_some(); qed"),
+					key: key.to_vec(),
+					retry_count: None,
+				})
+		)
 	}
 
 	fn child_storage(&self, _storage_key: &[u8], _key: &[u8]) -> ClientResult<Option<Vec<u8>>> {

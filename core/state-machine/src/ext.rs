@@ -14,17 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Conrete externalities implementation.
+//! Concrete externalities implementation.
 
 use std::{error, fmt, cmp::Ord};
 use log::warn;
 use crate::backend::Backend;
-use crate::changes_trie::{State as ChangesTrieState, compute_changes_trie_root};
+use crate::changes_trie::{State as ChangesTrieState, build_changes_trie};
 use crate::{Externalities, OverlayedChanges, ChildStorageKey};
 use hash_db::Hasher;
 use primitives::offchain;
 use primitives::storage::well_known_keys::is_child_storage_key;
-use trie::{MemoryDB, TrieDBMut, TrieMut, default_child_trie_root};
+use trie::{MemoryDB, default_child_trie_root};
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
 
@@ -80,7 +80,7 @@ where
 	changes_trie_transaction: Option<(MemoryDB<H>, H::Out)>,
 	/// Additional externalities for offchain workers.
 	///
-	/// If None, some methods from the trait might not supported.
+	/// If None, some methods from the trait might not be supported.
 	offchain_externalities: Option<&'a mut O>,
 	/// Dummy usage of N arg.
 	_phantom: ::std::marker::PhantomData<N>,
@@ -113,7 +113,7 @@ where
 	}
 
 	/// Get the transaction necessary to update the backend.
-	pub fn transaction(mut self) -> (B::Transaction, Option<MemoryDB<H>>) {
+	pub fn transaction(mut self) -> ((B::Transaction, H::Out), Option<MemoryDB<H>>) {
 		let _ = self.storage_root();
 
 		let (storage_transaction, changes_trie_transaction) = (
@@ -124,7 +124,7 @@ where
 		);
 
 		(
-			storage_transaction.0,
+			storage_transaction,
 			changes_trie_transaction,
 		)
 	}
@@ -316,28 +316,13 @@ where
 
 	fn storage_changes_root(&mut self, parent_hash: H::Out) -> Result<Option<H::Out>, ()> {
 		let _guard = panic_handler::AbortGuard::new(true);
-
-		let root_and_tx = compute_changes_trie_root::<_, H, N>(
+		self.changes_trie_transaction = build_changes_trie::<_, H, N>(
 			self.backend,
 			self.changes_trie_state.clone(),
 			self.overlay,
 			parent_hash,
 		)?;
-		let root_and_tx = root_and_tx.map(|(root, changes)| {
-			let mut calculated_root = Default::default();
-			let mut mdb = MemoryDB::default();
-			{
-				let mut trie = TrieDBMut::<H>::new(&mut mdb, &mut calculated_root);
-				for (key, value) in changes {
-					trie.insert(&key, &value).expect(EXT_NOT_ALLOWED_TO_FAIL);
-				}
-			}
-
-			(mdb, root)
-		});
-		let root = root_and_tx.as_ref().map(|(_, root)| root.clone());
-		self.changes_trie_transaction = root_and_tx;
-		Ok(root)
+		Ok(self.changes_trie_transaction.as_ref().map(|(_, root)| root.clone()))
 	}
 
 	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities> {

@@ -23,7 +23,8 @@ use runtime_support::storage::{self, StorageValue, StorageMap};
 use runtime_support::storage_items;
 use runtime_primitives::traits::{Hash as HashT, BlakeTwo256, Header as _};
 use runtime_primitives::generic;
-use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult, transaction_validity::TransactionValidity};
+use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult};
+use runtime_primitives::transaction_validity::{TransactionValidity, ValidTransaction};
 use parity_codec::{KeyedVec, Encode};
 use super::{
 	AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest, AuthorityId
@@ -110,6 +111,8 @@ fn execute_block_with_state_root_handler(
 		storage::unhashed::kill(well_known_keys::EXTRINSIC_INDEX);
 	});
 
+	let o_new_authorities = <NewAuthorities>::take();
+
 	if let Mode::Overwrite = mode {
 		header.state_root = storage_root().into();
 	} else {
@@ -124,7 +127,7 @@ fn execute_block_with_state_root_handler(
 	if let Some(storage_changes_root) = storage_changes_root(header.parent_hash.into()) {
 		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root.into()));
 	}
-	if let Some(new_authorities) = <NewAuthorities>::take() {
+	if let Some(new_authorities) = o_new_authorities {
 		digest.push(generic::DigestItem::Consensus(*b"aura", new_authorities.encode()));
 		digest.push(generic::DigestItem::Consensus(*b"babe", new_authorities.encode()));
 	}
@@ -173,13 +176,13 @@ pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 		p
 	};
 
-	TransactionValidity::Valid {
+	TransactionValidity::Valid(ValidTransaction {
 		priority: tx.amount,
 		requires,
 		provides,
 		longevity: 64,
 		propagate: true,
-	}
+	})
 }
 
 /// Execute a transaction outside of the block execution function.
@@ -203,6 +206,7 @@ pub fn finalize_block() -> Header {
 	let parent_hash = <ParentHash>::take();
 	let mut digest = <StorageDigest>::take().expect("StorageDigest is set by `initialize_block`");
 
+	let o_new_authorities = <NewAuthorities>::take();
 	// This MUST come after all changes to storage are done.  Otherwise we will fail the
 	// “Storage root does not match that calculated” assertion.
 	let storage_root = BlakeTwo256::storage_root();
@@ -211,7 +215,8 @@ pub fn finalize_block() -> Header {
 	if let Some(storage_changes_root) = storage_changes_root {
 		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root));
 	}
-	if let Some(new_authorities) = <NewAuthorities>::take() {
+
+	if let Some(new_authorities) = o_new_authorities {
 		digest.push(generic::DigestItem::Consensus(*b"aura", new_authorities.encode()));
 		digest.push(generic::DigestItem::Consensus(*b"babe", new_authorities.encode()));
 	}
@@ -309,12 +314,9 @@ mod tests {
 
 	use runtime_io::{with_externalities, TestExternalities};
 	use substrate_test_runtime_client::{AuthorityKeyring, AccountKeyring};
-	use crate::{Header, Transfer};
+	use crate::{Header, Transfer, WASM_BINARY};
 	use primitives::{Blake2Hasher, map};
 	use substrate_executor::WasmExecutor;
-
-	const WASM_CODE: &'static [u8] =
-			include_bytes!("../wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm");
 
 	fn new_test_ext() -> TestExternalities<Blake2Hasher> {
 		let authorities = vec![
@@ -361,7 +363,7 @@ mod tests {
 	#[test]
 	fn block_import_works_wasm() {
 		block_import_works(|b, ext| {
-			WasmExecutor::new().call(ext, 8, &WASM_CODE, "Core_execute_block", &b.encode()).unwrap();
+			WasmExecutor::new().call(ext, 8, &WASM_BINARY, "Core_execute_block", &b.encode()).unwrap();
 		})
 	}
 
@@ -449,7 +451,7 @@ mod tests {
 	#[test]
 	fn block_import_with_transaction_works_wasm() {
 		block_import_with_transaction_works(|b, ext| {
-			WasmExecutor::new().call(ext, 8, &WASM_CODE, "Core_execute_block", &b.encode()).unwrap();
+			WasmExecutor::new().call(ext, 8, &WASM_BINARY, "Core_execute_block", &b.encode()).unwrap();
 		})
 	}
 }

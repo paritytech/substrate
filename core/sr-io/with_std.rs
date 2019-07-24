@@ -269,31 +269,56 @@ impl OffchainApi for () {
 		}, "submit_transaction can be called only in the offchain worker context")
 	}
 
-	fn new_crypto_key(crypto: offchain::CryptoKind) -> Result<offchain::CryptoKeyId, ()> {
+	fn network_state() -> Result<OpaqueNetworkState, ()> {
+		with_offchain(|ext| {
+			ext.network_state()
+		}, "network_state can be called only in the offchain worker context")
+	}
+
+	fn pubkey(key: offchain::CryptoKey) -> Result<Vec<u8>, ()> {
+		with_offchain(|ext| {
+			ext.pubkey(key)
+		}, "authority_pubkey can be called only in the offchain worker context")
+	}
+
+	fn new_crypto_key(crypto: offchain::CryptoKind) -> Result<offchain::CryptoKey, ()> {
 		with_offchain(|ext| {
 			ext.new_crypto_key(crypto)
 		}, "new_crypto_key can be called only in the offchain worker context")
 	}
 
-	fn encrypt(key: Option<offchain::CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()> {
+	fn encrypt(
+		key: offchain::CryptoKey,
+		data: &[u8],
+	) -> Result<Vec<u8>, ()> {
 		with_offchain(|ext| {
 			ext.encrypt(key, data)
 		}, "encrypt can be called only in the offchain worker context")
 	}
 
-	fn decrypt(key: Option<offchain::CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()> {
+	fn decrypt(
+		key: offchain::CryptoKey,
+		data: &[u8],
+	) -> Result<Vec<u8>, ()> {
 		with_offchain(|ext| {
 			ext.decrypt(key, data)
 		}, "decrypt can be called only in the offchain worker context")
 	}
 
-	fn sign(key: Option<offchain::CryptoKeyId>, data: &[u8]) -> Result<Vec<u8>, ()> {
+	fn sign(
+		key: offchain::CryptoKey,
+		data: &[u8],
+	) -> Result<Vec<u8>, ()> {
 		with_offchain(|ext| {
 			ext.sign(key, data)
 		}, "sign can be called only in the offchain worker context")
 	}
 
-	fn verify(key: Option<offchain::CryptoKeyId>, msg: &[u8], signature: &[u8]) -> Result<bool, ()> {
+	fn verify(
+		key: offchain::CryptoKey,
+		msg: &[u8],
+		signature: &[u8],
+	) -> Result<bool, ()> {
 		with_offchain(|ext| {
 			ext.verify(key, msg, signature)
 		}, "verify can be called only in the offchain worker context")
@@ -305,7 +330,7 @@ impl OffchainApi for () {
 		}, "timestamp can be called only in the offchain worker context")
 	}
 
-	fn sleep_until(deadline: Timestamp) {
+	fn sleep_until(deadline: offchain::Timestamp) {
 		with_offchain(|ext| {
 			ext.sleep_until(deadline)
 		}, "sleep_until can be called only in the offchain worker context")
@@ -317,21 +342,26 @@ impl OffchainApi for () {
 		}, "random_seed can be called only in the offchain worker context")
 	}
 
-	fn local_storage_set(key: &[u8], value: &[u8]) {
+	fn local_storage_set(kind: offchain::StorageKind, key: &[u8], value: &[u8]) {
 		with_offchain(|ext| {
-			ext.local_storage_set(key, value)
+			ext.local_storage_set(kind, key, value)
 		}, "local_storage_set can be called only in the offchain worker context")
 	}
 
-	fn local_storage_compare_and_set(key: &[u8], old_value: &[u8], new_value: &[u8]) {
+	fn local_storage_compare_and_set(
+		kind: offchain::StorageKind,
+		key: &[u8],
+		old_value: &[u8],
+		new_value: &[u8],
+	) -> bool {
 		with_offchain(|ext| {
-			ext.local_storage_compare_and_set(key, old_value, new_value)
+			ext.local_storage_compare_and_set(kind, key, old_value, new_value)
 		}, "local_storage_compare_and_set can be called only in the offchain worker context")
 	}
 
-	fn local_storage_get(key: &[u8]) -> Option<Vec<u8>> {
+	fn local_storage_get(kind: offchain::StorageKind, key: &[u8]) -> Option<Vec<u8>> {
 		with_offchain(|ext| {
-			ext.local_storage_get(key)
+			ext.local_storage_get(kind, key)
 		}, "local_storage_get can be called only in the offchain worker context")
 	}
 
@@ -413,9 +443,32 @@ pub type ChildrenStorageOverlay = HashMap<Vec<u8>, StorageOverlay>;
 pub fn with_storage<R, F: FnOnce() -> R>(storage: &mut StorageOverlay, f: F) -> R {
 	let mut alt_storage = Default::default();
 	rstd::mem::swap(&mut alt_storage, storage);
-	let mut ext: BasicExternalities = alt_storage.into();
+	let mut ext = BasicExternalities::new(alt_storage);
 	let r = ext::using(&mut ext, f);
-	*storage = ext.into();
+	*storage = ext.into_storages().0;
+	r
+}
+
+/// Execute the given closure with global functions available whose functionality routes into
+/// externalities that draw from and populate `storage` and `children_storage`.
+/// Forwards the value that the closure returns.
+pub fn with_storage_and_children<R, F: FnOnce() -> R>(
+	storage: &mut StorageOverlay,
+	children_storage: &mut ChildrenStorageOverlay,
+	f: F
+) -> R {
+	let mut alt_storage = Default::default();
+	let mut alt_children_storage = Default::default();
+	rstd::mem::swap(&mut alt_storage, storage);
+	rstd::mem::swap(&mut alt_children_storage, children_storage);
+
+	let mut ext = BasicExternalities::new_with_children(alt_storage, alt_children_storage);
+	let r = ext::using(&mut ext, f);
+
+	let storage_tuple = ext.into_storages();
+	*storage = storage_tuple.0;
+	*children_storage = storage_tuple.1;
+
 	r
 }
 

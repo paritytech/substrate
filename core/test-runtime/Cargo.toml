@@ -3,11 +3,12 @@ name = "substrate-test-runtime"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
+build = "build.rs"
 
 [dependencies]
 log = { version = "0.4", optional = true }
 serde = { version = "1.0", optional = true, features = ["derive"] }
-parity-codec = { version = "3.3", default-features = false, features = ["derive"] }
+parity-codec = { version = "4.1.1", default-features = false, features = ["derive"] }
 keyring = { package = "substrate-keyring", path = "../keyring", optional = true }
 substrate-client = { path = "../client", default-features = false }
 primitives = { package = "substrate-primitives", path = "../primitives", default-features = false }
@@ -20,21 +21,26 @@ runtime_primitives = { package = "sr-primitives", path = "../sr-primitives", def
 runtime_version = { package = "sr-version", path = "../sr-version", default-features = false }
 runtime_support = { package = "srml-support", path = "../../srml/support", default-features = false }
 substrate-trie = { path = "../trie", default-features = false }
-trie-db = { version = "0.12", default-features = false }
-memory-db = { version = "0.12", default-features = false }
+trie-db = { version = "0.14.0", default-features = false }
 offchain-primitives = { package = "substrate-offchain-primitives", path = "../offchain/primitives", default-features = false}
 executive = { package = "srml-executive", path = "../../srml/executive", default-features = false }
 cfg-if = "0.1.6"
+srml-babe = { path = "../../srml/babe", default-features = false }
+srml-timestamp = { path = "../../srml/timestamp", default-features = false }
+srml-system = { path = "../../srml/system", default-features = false }
 
 [dev-dependencies]
 substrate-executor = { path = "../executor" }
 substrate-test-runtime-client = { path = "./client" }
 
+[build-dependencies]
+wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.2", path = "../utils/wasm-builder-runner" }
+
 [features]
 default = [
 	"std",
-	"include-wasm-blob"
 ]
+no_std = []
 std = [
 	"log",
 	"serde",
@@ -53,9 +59,9 @@ std = [
 	"primitives/std",
 	"substrate-trie/std",
 	"trie-db/std",
-	"memory-db/std",
 	"offchain-primitives/std",
 	"executive/std",
+	"srml-babe/std",
+	"srml-timestamp/std",
+	"srml-system/std",
 ]
-# If enabled, the WASM blob is added to the `GenesisConfig`.
-include-wasm-blob = []

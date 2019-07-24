@@ -32,12 +32,11 @@ use std::{sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fm
 
 use parity_codec::{Encode, Decode, Codec};
 use consensus_common::{self, BlockImport, Environment, Proposer,
-	ForkChoiceStrategy, ImportBlock, BlockOrigin, Error as ConsensusError,
+	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
 	SelectChain,
 };
 use consensus_common::import_queue::{
-	Verifier, BasicQueue, SharedBlockImport, SharedJustificationImport, SharedFinalityProofImport,
-	SharedFinalityProofRequestBuilder,
+	Verifier, BasicQueue, BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
 };
 use client::{
 	block_builder::api::BlockBuilder as BlockBuilderApi,
@@ -49,12 +48,13 @@ use client::{
 };
 
 use runtime_primitives::{generic::{self, BlockId, OpaqueDigestItemId}, Justification};
-use runtime_primitives::traits::{Block, Header, DigestItemFor, ProvideRuntimeApi, Zero, Member};
+use runtime_primitives::traits::{Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi, Zero, Member};
 
 use primitives::Pair;
 use inherents::{InherentDataProviders, InherentData};
 
 use futures::{Future, IntoFuture, future};
+use parking_lot::Mutex;
 use tokio_timer::Timeout;
 use log::{error, warn, debug, info, trace};
 
@@ -85,7 +85,7 @@ impl SlotDuration {
 	pub fn get_or_compute<A, B, C>(client: &C) -> CResult<Self>
 	where
 		A: Codec,
-		B: Block,
+		B: BlockT,
 		C: AuxStore + ProvideRuntimeApi,
 		C::Api: AuraApi<B, A>,
 	{
@@ -118,12 +118,14 @@ struct AuraSlotCompatible;
 
 impl SlotCompatible for AuraSlotCompatible {
 	fn extract_timestamp_and_slot(
+		&self,
 		data: &InherentData
-	) -> Result<(TimestampInherent, AuraInherent), consensus_common::Error> {
+	) -> Result<(TimestampInherent, AuraInherent, std::time::Duration), consensus_common::Error> {
 		data.timestamp_inherent_data()
 			.and_then(|t| data.aura_inherent_data().map(|a| (t, a)))
 			.map_err(Into::into)
 			.map_err(consensus_common::Error::InherentData)
+			.map(|(x, y)| (x, y, Default::default()))
 	}
 }
 
@@ -133,13 +135,13 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 	local_key: Arc<P>,
 	client: Arc<C>,
 	select_chain: SC,
-	block_import: Arc<I>,
+	block_import: I,
 	env: Arc<E>,
 	sync_oracle: SO,
 	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
 ) -> Result<impl Future<Item=(), Error=()>, consensus_common::Error> where
-	B: Block<Header=H>,
+	B: BlockT<Header=H>,
 	C: ProvideRuntimeApi + ProvideCache<B> + AuxStore + Send + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	SC: SelectChain<B>,
@@ -156,7 +158,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 {
 	let worker = AuraWorker {
 		client: client.clone(),
-		block_import,
+		block_import: Arc::new(Mutex::new(block_import)),
 		env,
 		local_key,
 		sync_oracle: sync_oracle.clone(),
@@ -171,13 +173,14 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 		select_chain,
 		worker,
 		sync_oracle,
-		inherent_data_providers
+		inherent_data_providers,
+		AuraSlotCompatible,
 	))
 }
 
 struct AuraWorker<C, E, I, P, SO> {
 	client: Arc<C>,
-	block_import: Arc<I>,
+	block_import: Arc<Mutex<I>>,
 	env: Arc<E>,
 	local_key: Arc<P>,
 	sync_oracle: SO,
@@ -185,7 +188,7 @@ struct AuraWorker<C, E, I, P, SO> {
 }
 
 impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> where
-	B: Block<Header=H>,
+	B: BlockT<Header=H>,
 	C: ProvideRuntimeApi + ProvideCache<B> + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	E: Environment<B, Error=Error>,
@@ -315,7 +318,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 			let signature = pair.sign(header_hash.as_ref());
 			let signature_digest_item = <DigestItemFor<B> as CompatibleDigestItem<P>>::aura_seal(signature);
 
-			let import_block: ImportBlock<B> = ImportBlock {
+			let import_block: BlockImportParams<B> = BlockImportParams {
 				origin: BlockOrigin::Own,
 				header,
 				justification: None,
@@ -337,7 +340,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 				"hash_previously" => ?header_hash
 			);
 
-			if let Err(e) = block_import.import_block(import_block, Default::default()) {
+			if let Err(e) = block_import.lock().import_block(import_block, Default::default()) {
 				warn!(target: "aura", "Error with block built on {:?}: {:?}",
 						parent_hash, e);
 				telemetry!(CONSENSUS_WARN; "aura.err_with_block_built_on";
@@ -356,7 +359,7 @@ macro_rules! aura_err {
 	};
 }
 
-fn find_pre_digest<B: Block, P: Pair>(header: &B::Header) -> Result<u64, String>
+fn find_pre_digest<B: BlockT, P: Pair>(header: &B::Header) -> Result<u64, String>
 	where DigestItemFor<B>: CompatibleDigestItem<P>,
 		P::Signature: Decode,
 		P::Public: Encode + Decode + PartialEq + Clone,
@@ -380,7 +383,7 @@ fn find_pre_digest<B: Block, P: Pair>(header: &B::Header) -> Result<u64, String>
 /// This digest item will always return `Some` when used with `as_aura_seal`.
 //
 // FIXME #1018 needs misbehavior types
-fn check_header<C, B: Block, P: Pair>(
+fn check_header<C, B: BlockT, P: Pair>(
 	client: &C,
 	slot_now: u64,
 	mut header: B::Header,
@@ -449,7 +452,7 @@ pub struct AuraVerifier<C, P> {
 impl<C, P> AuraVerifier<C, P>
 	where P: Send + Sync + 'static
 {
-	fn check_inherents<B: Block>(
+	fn check_inherents<B: BlockT>(
 		&self,
 		block: B,
 		block_id: BlockId<B>,
@@ -499,7 +502,7 @@ impl<C, P> AuraVerifier<C, P>
 }
 
 #[forbid(deprecated)]
-impl<B: Block, C, P> Verifier<B> for AuraVerifier<C, P> where
+impl<B: BlockT, C, P> Verifier<B> for AuraVerifier<C, P> where
 	C: ProvideRuntimeApi + Send + Sync + client::backend::AuxStore + ProvideCache<B>,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>>,
 	DigestItemFor<B>: CompatibleDigestItem<P>,
@@ -513,9 +516,9 @@ impl<B: Block, C, P> Verifier<B> for AuraVerifier<C, P> where
 		header: B::Header,
 		justification: Option<Justification>,
 		mut body: Option<Vec<B::Extrinsic>>,
-	) -> Result<(ImportBlock<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+	) -> Result<(BlockImportParams<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		let mut inherent_data = self.inherent_data_providers.create_inherent_data().map_err(String::from)?;
-		let (timestamp_now, slot_now) = AuraSlotCompatible::extract_timestamp_and_slot(&inherent_data)
+		let (timestamp_now, slot_now, _) = AuraSlotCompatible.extract_timestamp_and_slot(&inherent_data)
 			.map_err(|e| format!("Could not extract timestamp and slot: {:?}", e))?;
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
@@ -562,16 +565,21 @@ impl<B: Block, C, P> Verifier<B> for AuraVerifier<C, P> where
 				trace!(target: "aura", "Checked {:?}; importing.", pre_header);
 				telemetry!(CONSENSUS_TRACE; "aura.checked_and_importing"; "pre_header" => ?pre_header);
 
-				// `Consensus` is the Aura-specific authorities change log.
+				// Look for an authorities-change log.
 				let maybe_keys = pre_header.digest()
-					.convert_first(|l| l.try_to::<ConsensusLog<AuthorityId<P>>>(
+					.logs()
+					.iter()
+					.filter_map(|l| l.try_to::<ConsensusLog<AuthorityId<P>>>(
 						OpaqueDigestItemId::Consensus(&AURA_ENGINE_ID)
 					))
-					.map(|ConsensusLog::AuthoritiesChange(a)|
-						vec![(well_known_cache_keys::AUTHORITIES, a.encode())]
-					);
+					.find_map(|l| match l {
+						ConsensusLog::AuthoritiesChange(a) => Some(
+							vec![(well_known_cache_keys::AUTHORITIES, a.encode())]
+						),
+						_ => None,
+					});
 
-				let import_block = ImportBlock {
+				let import_block = BlockImportParams {
 					origin,
 					header: pre_header,
 					post_digests: vec![seal],
@@ -597,7 +605,7 @@ impl<B: Block, C, P> Verifier<B> for AuraVerifier<C, P> where
 
 fn initialize_authorities_cache<A, B, C>(client: &C) -> Result<(), ConsensusError> where
 	A: Codec,
-	B: Block,
+	B: BlockT,
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: AuraApi<B, A>,
 {
@@ -631,7 +639,7 @@ fn initialize_authorities_cache<A, B, C>(client: &C) -> Result<(), ConsensusErro
 #[allow(deprecated)]
 fn authorities<A, B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<A>, ConsensusError> where
 	A: Codec,
-	B: Block,
+	B: BlockT,
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: AuraApi<B, A>,
 {
@@ -666,14 +674,13 @@ fn register_aura_inherent_data_provider(
 /// Start an import queue for the Aura consensus algorithm.
 pub fn import_queue<B, C, P>(
 	slot_duration: SlotDuration,
-	block_import: SharedBlockImport<B>,
-	justification_import: Option<SharedJustificationImport<B>>,
-	finality_proof_import: Option<SharedFinalityProofImport<B>>,
-	finality_proof_request_builder: Option<SharedFinalityProofRequestBuilder<B>>,
+	block_import: BoxBlockImport<B>,
+	justification_import: Option<BoxJustificationImport<B>>,
+	finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	client: Arc<C>,
 	inherent_data_providers: InherentDataProviders,
 ) -> Result<AuraImportQueue<B>, consensus_common::Error> where
-	B: Block,
+	B: BlockT,
 	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>>,
 	DigestItemFor<B>: CompatibleDigestItem<P>,
@@ -696,14 +703,14 @@ pub fn import_queue<B, C, P>(
 		block_import,
 		justification_import,
 		finality_proof_import,
-		finality_proof_request_builder,
 	))
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use futures::stream::Stream as _;
+	use futures::{Async, stream::Stream as _};
+	use futures03::{StreamExt as _, TryStreamExt as _};
 	use consensus_common::NoNetwork as DummyOracle;
 	use network::test::*;
 	use network::test::{Block as TestBlock, PeersClient, PeersFullClient};
@@ -754,11 +761,9 @@ mod tests {
 	}
 
 	const SLOT_DURATION: u64 = 1;
-	const TEST_ROUTING_INTERVAL: Duration = Duration::from_millis(50);
 
 	pub struct AuraTestNet {
-		peers: Vec<Arc<Peer<(), DummySpecialization>>>,
-		started: bool,
+		peers: Vec<Peer<(), DummySpecialization>>,
 	}
 
 	impl TestNetFactory for AuraTestNet {
@@ -770,7 +775,6 @@ mod tests {
 		fn from_config(_config: &ProtocolConfig) -> Self {
 			AuraTestNet {
 				peers: Vec::new(),
-				started: false,
 			}
 		}
 
@@ -798,28 +802,16 @@ mod tests {
 			}
 		}
 
-		fn uses_tokio(&self) -> bool {
-			true
+		fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData, DummySpecialization> {
+			&mut self.peers[i]
 		}
 
-		fn peer(&self, i: usize) -> &Peer<Self::PeerData, DummySpecialization> {
-			&self.peers[i]
-		}
-
-		fn peers(&self) -> &Vec<Arc<Peer<Self::PeerData, DummySpecialization>>> {
+		fn peers(&self) -> &Vec<Peer<Self::PeerData, DummySpecialization>> {
 			&self.peers
 		}
 
-		fn mut_peers<F: FnOnce(&mut Vec<Arc<Peer<Self::PeerData, DummySpecialization>>>)>(&mut self, closure: F) {
+		fn mut_peers<F: FnOnce(&mut Vec<Peer<Self::PeerData, DummySpecialization>>)>(&mut self, closure: F) {
 			closure(&mut self.peers);
-		}
-
-		fn started(&self) -> bool {
-			self.started
-		}
-
-		fn set_started(&mut self, new: bool) {
-			self.started = new;
 		}
 	}
 
@@ -827,9 +819,7 @@ mod tests {
 	#[allow(deprecated)]
 	fn authoring_blocks() {
 		let _ = ::env_logger::try_init();
-		let mut net = AuraTestNet::new(3);
-
-		net.start();
+		let net = AuraTestNet::new(3);
 
 		let peers = &[
 			(0, Keyring::Alice),
@@ -850,6 +840,7 @@ mod tests {
 			let environ = Arc::new(DummyFactory(client.clone()));
 			import_notifications.push(
 				client.import_notification_stream()
+					.map(|v| Ok::<_, ()>(v)).compat()
 					.take_while(|n| Ok(!(n.origin != BlockOrigin::Own && n.header.number() < &5)))
 					.for_each(move |_| Ok(()))
 			);
@@ -882,15 +873,7 @@ mod tests {
 			.map(|_| ())
 			.map_err(|_| ());
 
-		let drive_to_completion = ::tokio_timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
-			.for_each(move |_| {
-				net.lock().send_import_notifications();
-				net.lock().sync_without_disconnects();
-				Ok(())
-			})
-			.map(|_| ())
-			.map_err(|_| ());
-
+		let drive_to_completion = futures::future::poll_fn(|| { net.lock().poll(); Ok(Async::NotReady) });
 		let _ = runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
 	}
 

@@ -68,7 +68,8 @@
 //! The Contract module is a work in progress. The following examples show how this Contract module can be
 //! used to create and call contracts.
 //!
-//! * [`pDSL`](https://github.com/Robbepop/pdsl) is a domain specific language that enables writing
+//! * [`ink`](https://github.com/paritytech/ink) is
+//! an [`eDSL`](https://wiki.haskell.org/Embedded_domain_specific_language) that enables writing
 //! WebAssembly based smart contracts in the Rust programming language. This is a work in progress.
 //!
 //! ## Related Modules
@@ -90,22 +91,24 @@ mod tests;
 
 use crate::exec::ExecutionContext;
 use crate::account_db::{AccountDb, DirectAccountDb};
+pub use crate::gas::Gas;
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use substrate_primitives::crypto::UncheckedFrom;
-use rstd::{prelude::*, marker::PhantomData, convert::TryFrom};
+use rstd::{prelude::*, marker::PhantomData};
 use parity_codec::{Codec, Encode, Decode};
 use runtime_io::blake2_256;
 use runtime_primitives::traits::{
-	Hash, SimpleArithmetic, Bounded, StaticLookup, Zero, MaybeSerializeDebug, Member
+	Hash, StaticLookup, Zero, MaybeSerializeDebug, Member
 };
 use srml_support::dispatch::{Result, Dispatchable};
 use srml_support::{
-	Parameter, StorageMap, StorageValue, decl_module, decl_event, decl_storage, storage::child
+	Parameter, StorageMap, StorageValue, decl_module, decl_event, decl_storage, storage::child,
+	parameter_types,
 };
-use srml_support::traits::{OnFreeBalanceZero, OnUnbalanced, Currency};
-use system::{ensure_signed, RawOrigin};
+use srml_support::traits::{OnFreeBalanceZero, OnUnbalanced, Currency, Get};
+use system::{ensure_signed, RawOrigin, ensure_root};
 use substrate_primitives::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
 use timestamp;
 
@@ -157,7 +160,7 @@ impl<T: Trait> ContractInfo<T> {
 		}
 	}
 
-	/// If contract is tombstone then return some alive info
+	/// If contract is tombstone then return some tombstone info
 	pub fn get_tombstone(self) -> Option<TombstoneContractInfo<T>> {
 		if let ContractInfo::Tombstone(tombstone) = self {
 			Some(tombstone)
@@ -256,7 +259,7 @@ where
 	fn trie_id(account_id: &T::AccountId) -> TrieId {
 		// Note that skipping a value due to error is not an issue here.
 		// We only need uniqueness, not sequence.
-		let new_seed = <AccountCounter<T>>::mutate(|v| {
+		let new_seed = AccountCounter::mutate(|v| {
 			*v = v.wrapping_add(1);
 			*v
 		});
@@ -278,6 +281,41 @@ pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>
 pub type NegativeImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 
+parameter_types! {
+	/// A resonable default value for [`Trait::SignedClaimedHandicap`].
+	pub const DefaultSignedClaimHandicap: u32 = 2;
+	/// A resonable default value for [`Trait::TombstoneDeposit`].
+	pub const DefaultTombstoneDeposit: u32 = 16;
+	/// A resonable default value for [`Trait::StorageSizeOffset`].
+	pub const DefaultStorageSizeOffset: u32 = 8;
+	/// A resonable default value for [`Trait::RentByteFee`].
+	pub const DefaultRentByteFee: u32 = 4;
+	/// A resonable default value for [`Trait::RentDepositOffset`].
+	pub const DefaultRentDepositOffset: u32 = 1000;
+	/// A resonable default value for [`Trait::SurchargeReward`].
+	pub const DefaultSurchargeReward: u32 = 150;
+	/// A resonable default value for [`Trait::TransferFee`].
+	pub const DefaultTransferFee: u32 = 0;
+	/// A resonable default value for [`Trait::CreationFee`].
+	pub const DefaultCreationFee: u32 = 0;
+	/// A resonable default value for [`Trait::TransactionBaseFee`].
+	pub const DefaultTransactionBaseFee: u32 = 0;
+	/// A resonable default value for [`Trait::TransactionByteFee`].
+	pub const DefaultTransactionByteFee: u32 = 0;
+	/// A resonable default value for [`Trait::ContractFee`].
+	pub const DefaultContractFee: u32 = 21;
+	/// A resonable default value for [`Trait::CallBaseFee`].
+	pub const DefaultCallBaseFee: u32 = 1000;
+	/// A resonable default value for [`Trait::CreateBaseFee`].
+	pub const DefaultCreateBaseFee: u32 = 1000;
+	/// A resonable default value for [`Trait::MaxDepth`].
+	pub const DefaultMaxDepth: u32 = 1024;
+	/// A resonable default value for [`Trait::MaxValueSize`].
+	pub const DefaultMaxValueSize: u32 = 16_384;
+	/// A resonable default value for [`Trait::BlockGasLimit`].
+	pub const DefaultBlockGasLimit: u32 = 10_000_000;
+}
+
 pub trait Trait: timestamp::Trait {
 	type Currency: Currency<Self::AccountId>;
 
@@ -286,9 +324,6 @@ pub trait Trait: timestamp::Trait {
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
-
-	type Gas: Parameter + Default + Codec + SimpleArithmetic + Bounded + Copy +
-		Into<BalanceOf<Self>> + TryFrom<BalanceOf<Self>>;
 
 	/// A function type to get the contract address given the creator.
 	type DetermineContractAddress: ContractAddressFor<CodeHash<Self>, Self::AccountId>;
@@ -299,11 +334,70 @@ pub trait Trait: timestamp::Trait {
 	/// by the Executive module for regular dispatch.
 	type ComputeDispatchFee: ComputeDispatchFee<Self::Call, BalanceOf<Self>>;
 
-	/// trieid id generator
+	/// trie id generator
 	type TrieIdGenerator: TrieIdGenerator<Self::AccountId>;
 
 	/// Handler for the unbalanced reduction when making a gas payment.
 	type GasPayment: OnUnbalanced<NegativeImbalanceOf<Self>>;
+
+	/// Number of block delay an extrinsic claim surcharge has.
+	///
+	/// When claim surcharge is called by an extrinsic the rent is checked
+	/// for current_block - delay
+	type SignedClaimHandicap: Get<Self::BlockNumber>;
+
+	/// The minimum amount required to generate a tombstone.
+	type TombstoneDeposit: Get<BalanceOf<Self>>;
+
+	/// Size of a contract at the time of creation. This is a simple way to ensure
+	/// that empty contracts eventually gets deleted.
+	type StorageSizeOffset: Get<u32>;
+
+	/// Price of a byte of storage per one block interval. Should be greater than 0.
+	type RentByteFee: Get<BalanceOf<Self>>;
+
+	/// The amount of funds a contract should deposit in order to offset
+	/// the cost of one byte.
+	///
+	/// Let's suppose the deposit is 1,000 BU (balance units)/byte and the rent is 1 BU/byte/day,
+	/// then a contract with 1,000,000 BU that uses 1,000 bytes of storage would pay no rent.
+	/// But if the balance reduced to 500,000 BU and the storage stayed the same at 1,000,
+	/// then it would pay 500 BU/day.
+	type RentDepositOffset: Get<BalanceOf<Self>>;
+
+	/// Reward that is received by the party whose touch has led
+	/// to removal of a contract.
+	type SurchargeReward: Get<BalanceOf<Self>>;
+
+	/// The fee required to make a transfer.
+	type TransferFee: Get<BalanceOf<Self>>;
+
+	/// The fee required to create an account.
+	type CreationFee: Get<BalanceOf<Self>>;
+
+	/// The fee to be paid for making a transaction; the base.
+	type TransactionBaseFee: Get<BalanceOf<Self>>;
+
+	/// The fee to be paid for making a transaction; the per-byte portion.
+	type TransactionByteFee: Get<BalanceOf<Self>>;
+
+	/// The fee required to create a contract instance.
+	type ContractFee: Get<BalanceOf<Self>>;
+
+	/// The base fee charged for calling into a contract.
+	type CallBaseFee: Get<Gas>;
+
+	/// The base fee charged for creating a contract.
+	type CreateBaseFee: Get<Gas>;
+
+	/// The maximum nesting level of a call/create stack.
+	type MaxDepth: Get<u32>;
+
+	/// The maximum size of a storage value in bytes.
+	type MaxValueSize: Get<u32>;
+
+	/// The maximum amount of gas that could be expended per block.
+	type BlockGasLimit: Get<Gas>;
 }
 
 /// Simple contract address determiner.
@@ -335,8 +429,8 @@ pub struct DefaultDispatchFeeComputor<T: Trait>(PhantomData<T>);
 impl<T: Trait> ComputeDispatchFee<T::Call, BalanceOf<T>> for DefaultDispatchFeeComputor<T> {
 	fn compute_dispatch_fee(call: &T::Call) -> BalanceOf<T> {
 		let encoded_len = call.using_encoded(|encoded| encoded.len() as u32);
-		let base_fee = <Module<T>>::transaction_base_fee();
-		let byte_fee = <Module<T>>::transaction_byte_fee();
+		let base_fee = T::TransactionBaseFee::get();
+		let byte_fee = T::TransactionByteFee::get();
 		base_fee + byte_fee * encoded_len.into()
 	}
 }
@@ -344,18 +438,83 @@ impl<T: Trait> ComputeDispatchFee<T::Call, BalanceOf<T>> for DefaultDispatchFeeC
 decl_module! {
 	/// Contracts module.
 	pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
+		/// Number of block delay an extrinsic claim surcharge has.
+		///
+		/// When claim surcharge is called by an extrinsic the rent is checked
+		/// for current_block - delay
+		const SignedClaimHandicap: T::BlockNumber = T::SignedClaimHandicap::get();
+
+		/// The minimum amount required to generate a tombstone.
+		const TombstoneDeposit: BalanceOf<T> = T::TombstoneDeposit::get();
+
+		/// Size of a contract at the time of creation. This is a simple way to ensure
+		/// that empty contracts eventually gets deleted.
+		const StorageSizeOffset: u32 = T::StorageSizeOffset::get();
+
+		/// Price of a byte of storage per one block interval. Should be greater than 0.
+		const RentByteFee: BalanceOf<T> = T::RentByteFee::get();
+
+		/// The amount of funds a contract should deposit in order to offset
+		/// the cost of one byte.
+		///
+		/// Let's suppose the deposit is 1,000 BU (balance units)/byte and the rent is 1 BU/byte/day,
+		/// then a contract with 1,000,000 BU that uses 1,000 bytes of storage would pay no rent.
+		/// But if the balance reduced to 500,000 BU and the storage stayed the same at 1,000,
+		/// then it would pay 500 BU/day.
+		const RentDepositOffset: BalanceOf<T> = T::RentDepositOffset::get();
+
+		/// Reward that is received by the party whose touch has led
+		/// to removal of a contract.
+		const SurchargeReward: BalanceOf<T> = T::SurchargeReward::get();
+
+		/// The fee required to make a transfer.
+		const TransferFee: BalanceOf<T> = T::TransferFee::get();
+
+		/// The fee required to create an account.
+		const CreationFee: BalanceOf<T> = T::CreationFee::get();
+
+		/// The fee to be paid for making a transaction; the base.
+		const TransactionBaseFee: BalanceOf<T> = T::TransactionBaseFee::get();
+
+		/// The fee to be paid for making a transaction; the per-byte portion.
+		const TransactionByteFee: BalanceOf<T> = T::TransactionByteFee::get();
+
+		/// The fee required to create a contract instance. A reasonable default value
+		/// is 21.
+		const ContractFee: BalanceOf<T> = T::ContractFee::get();
+
+		/// The base fee charged for calling into a contract. A reasonable default
+		/// value is 135.
+		const CallBaseFee: Gas = T::CallBaseFee::get();
+
+		/// The base fee charged for creating a contract. A reasonable default value
+		/// is 175.
+		const CreateBaseFee: Gas = T::CreateBaseFee::get();
+
+		/// The maximum nesting level of a call/create stack. A reasonable default
+		/// value is 100.
+		const MaxDepth: u32 = T::MaxDepth::get();
+
+		/// The maximum size of a storage value in bytes. A reasonable default is 16 KiB.
+		const MaxValueSize: u32 = T::MaxValueSize::get();
+
+		/// The maximum amount of gas that could be expended per block. A reasonable
+		/// default value is 10_000_000.
+		const BlockGasLimit: Gas = T::BlockGasLimit::get();
+
 		fn deposit_event<T>() = default;
 
 		/// Updates the schedule for metering contracts.
 		///
 		/// The schedule must have a greater version than the stored schedule.
-		pub fn update_schedule(schedule: Schedule<T::Gas>) -> Result {
+		pub fn update_schedule(origin, schedule: Schedule) -> Result {
+			ensure_root(origin)?;
 			if <Module<T>>::current_schedule().version >= schedule.version {
 				return Err("new schedule must have a greater version than current");
 			}
 
 			Self::deposit_event(RawEvent::ScheduleUpdated(schedule.version));
-			<CurrentSchedule<T>>::put(schedule);
+			CurrentSchedule::put(schedule);
 
 			Ok(())
 		}
@@ -364,7 +523,7 @@ decl_module! {
 		/// You can instantiate contracts only with stored code.
 		pub fn put_code(
 			origin,
-			#[compact] gas_limit: T::Gas,
+			#[compact] gas_limit: Gas,
 			code: Vec<u8>
 		) -> Result {
 			let origin = ensure_signed(origin)?;
@@ -393,7 +552,7 @@ decl_module! {
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
 			#[compact] value: BalanceOf<T>,
-			#[compact] gas_limit: T::Gas,
+			#[compact] gas_limit: Gas,
 			data: Vec<u8>
 		) -> Result {
 			let origin = ensure_signed(origin)?;
@@ -453,7 +612,7 @@ decl_module! {
 		pub fn create(
 			origin,
 			#[compact] endowment: BalanceOf<T>,
-			#[compact] gas_limit: T::Gas,
+			#[compact] gas_limit: Gas,
 			code_hash: CodeHash<T>,
 			data: Vec<u8>
 		) -> Result {
@@ -521,14 +680,14 @@ decl_module! {
 			// adding a handicap: for signed extrinsics we use a slightly older block number
 			// for the eviction check. This can be viewed as if we pushed regular users back in past.
 			let handicap = if signed {
-				<Module<T>>::signed_claim_handicap()
+				T::SignedClaimHandicap::get()
 			} else {
 				Zero::zero()
 			};
 
 			// If poking the contract has lead to eviction of the contract, give out the rewards.
 			if rent::try_evict::<T>(&dest, handicap) == rent::RentOutcome::Evicted {
-				T::Currency::deposit_into_existing(rewarded, Self::surcharge_reward())?;
+				T::Currency::deposit_into_existing(rewarded, T::SurchargeReward::get())?;
 			}
 		}
 
@@ -611,7 +770,7 @@ decl_module! {
 		}
 
 		fn on_finalize() {
-			<GasSpent<T>>::kill();
+			GasSpent::kill();
 		}
 	}
 }
@@ -646,53 +805,10 @@ decl_event! {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Contract {
-		/// Number of block delay an extrinsic claim surcharge has.
-		///
-		/// When claim surchage is called by an extrinsic the rent is checked
-		/// for current_block - delay
-		SignedClaimHandicap get(signed_claim_handicap) config(): T::BlockNumber;
-		/// The minimum amount required to generate a tombstone.
-		TombstoneDeposit get(tombstone_deposit) config(): BalanceOf<T>;
-		/// Size of a contract at the time of creation. This is a simple way to ensure
-		/// that empty contracts eventually gets deleted.
-		StorageSizeOffset get(storage_size_offset) config(): u32;
-		/// Price of a byte of storage per one block interval. Should be greater than 0.
-		RentByteFee get(rent_byte_price) config(): BalanceOf<T>;
-		/// The amount of funds a contract should deposit in order to offset
-		/// the cost of one byte.
-		///
-		/// Let's suppose the deposit is 1,000 BU (balance units)/byte and the rent is 1 BU/byte/day,
-		/// then a contract with 1,000,000 BU that uses 1,000 bytes of storage would pay no rent.
-		/// But if the balance reduced to 500,000 BU and the storage stayed the same at 1,000,
-		/// then it would pay 500 BU/day.
-		RentDepositOffset get(rent_deposit_offset) config(): BalanceOf<T>;
-		/// Reward that is received by the party whose touch has led
-		/// to removal of a contract.
-		SurchargeReward get(surcharge_reward) config(): BalanceOf<T>;
-		/// The fee required to make a transfer.
-		TransferFee get(transfer_fee) config(): BalanceOf<T>;
-		/// The fee required to create an account.
-		CreationFee get(creation_fee) config(): BalanceOf<T>;
-		/// The fee to be paid for making a transaction; the base.
-		TransactionBaseFee get(transaction_base_fee) config(): BalanceOf<T>;
-		/// The fee to be paid for making a transaction; the per-byte portion.
-		TransactionByteFee get(transaction_byte_fee) config(): BalanceOf<T>;
-		/// The fee required to create a contract instance.
-		ContractFee get(contract_fee) config(): BalanceOf<T> = 21.into();
-		/// The base fee charged for calling into a contract.
-		CallBaseFee get(call_base_fee) config(): T::Gas = 135.into();
-		/// The base fee charged for creating a contract.
-		CreateBaseFee get(create_base_fee) config(): T::Gas = 175.into();
-		/// The price of one unit of gas.
-		GasPrice get(gas_price) config(): BalanceOf<T> = 1.into();
-		/// The maximum nesting level of a call/create stack.
-		MaxDepth get(max_depth) config(): u32 = 100;
-		/// The maximum amount of gas that could be expended per block.
-		BlockGasLimit get(block_gas_limit) config(): T::Gas = 10_000_000.into();
 		/// Gas spent so far in this block.
-		GasSpent get(gas_spent): T::Gas;
+		GasSpent get(gas_spent): Gas;
 		/// Current cost schedule for contracts.
-		CurrentSchedule get(current_schedule) config(): Schedule<T::Gas> = Schedule::default();
+		CurrentSchedule get(current_schedule) config(): Schedule = Schedule::default();
 		/// A mapping from an original code hash to the original code, untouched by instrumentation.
 		pub PristineCode: map CodeHash<T> => Option<Vec<u8>>;
 		/// A mapping between an original code hash and instrumented wasm code, ready for execution.
@@ -701,6 +817,8 @@ decl_storage! {
 		pub AccountCounter: u64 = 0;
 		/// The code associated with a given account.
 		pub ContractInfoOf: map T::AccountId => Option<ContractInfo<T>>;
+		/// The price of one unit of gas.
+		GasPrice get(gas_price) config(): BalanceOf<T> = 1.into();
 	}
 }
 
@@ -718,14 +836,13 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 /// We assume that these values can't be changed in the
 /// course of transaction execution.
 pub struct Config<T: Trait> {
-	pub schedule: Schedule<T::Gas>,
+	pub schedule: Schedule,
 	pub existential_deposit: BalanceOf<T>,
 	pub max_depth: u32,
+	pub max_value_size: u32,
 	pub contract_account_instantiate_fee: BalanceOf<T>,
 	pub account_create_fee: BalanceOf<T>,
 	pub transfer_fee: BalanceOf<T>,
-	pub call_base_fee: T::Gas,
-	pub instantiate_base_fee: T::Gas,
 }
 
 impl<T: Trait> Config<T> {
@@ -733,12 +850,11 @@ impl<T: Trait> Config<T> {
 		Config {
 			schedule: <Module<T>>::current_schedule(),
 			existential_deposit: T::Currency::minimum_balance(),
-			max_depth: <Module<T>>::max_depth(),
-			contract_account_instantiate_fee: <Module<T>>::contract_fee(),
-			account_create_fee: <Module<T>>::creation_fee(),
-			transfer_fee: <Module<T>>::transfer_fee(),
-			call_base_fee: <Module<T>>::call_base_fee(),
-			instantiate_base_fee: <Module<T>>::create_base_fee(),
+			max_depth: T::MaxDepth::get(),
+			max_value_size: T::MaxValueSize::get(),
+			contract_account_instantiate_fee: T::ContractFee::get(),
+			account_create_fee: T::CreationFee::get(),
+			transfer_fee: T::TransferFee::get(),
 		}
 	}
 }
@@ -746,7 +862,7 @@ impl<T: Trait> Config<T> {
 /// Definition of the cost schedule and other parameterizations for wasm vm.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq)]
-pub struct Schedule<Gas> {
+pub struct Schedule {
 	/// Version of the schedule.
 	pub version: u32,
 
@@ -771,6 +887,12 @@ pub struct Schedule<Gas> {
 	/// Gas cost to deposit an event; the base.
 	pub event_base_cost: Gas,
 
+	/// Base gas cost to call into a contract.
+	pub call_base_cost: Gas,
+
+	/// Base gas cost to instantiate a contract.
+	pub instantiate_base_cost: Gas,
+
 	/// Gas cost per one byte read from the sandbox memory.
 	pub sandbox_data_read_cost: Gas,
 
@@ -789,6 +911,9 @@ pub struct Schedule<Gas> {
 	/// Maximum number of memory pages allowed for a contract.
 	pub max_memory_pages: u32,
 
+	/// Maximum allowed size of a declared table.
+	pub max_table_size: u32,
+
 	/// Whether the `ext_println` function is allowed to be used contracts.
 	/// MUST only be enabled for `dev` chains, NOT for production chains
 	pub enable_println: bool,
@@ -797,22 +922,25 @@ pub struct Schedule<Gas> {
 	pub max_subject_len: u32,
 }
 
-impl<Gas: From<u32>> Default for Schedule<Gas> {
-	fn default() -> Schedule<Gas> {
+impl Default for Schedule {
+	fn default() -> Schedule {
 		Schedule {
 			version: 0,
-			put_code_per_byte_cost: 1.into(),
-			grow_mem_cost: 1.into(),
-			regular_op_cost: 1.into(),
-			return_data_per_byte_cost: 1.into(),
-			event_data_per_byte_cost: 1.into(),
-			event_per_topic_cost: 1.into(),
-			event_base_cost: 1.into(),
-			sandbox_data_read_cost: 1.into(),
-			sandbox_data_write_cost: 1.into(),
+			put_code_per_byte_cost: 1,
+			grow_mem_cost: 1,
+			regular_op_cost: 1,
+			return_data_per_byte_cost: 1,
+			event_data_per_byte_cost: 1,
+			event_per_topic_cost: 1,
+			event_base_cost: 1,
+			call_base_cost: 135,
+			instantiate_base_cost: 175,
+			sandbox_data_read_cost: 1,
+			sandbox_data_write_cost: 1,
 			max_event_topics: 4,
 			max_stack_height: 64 * 1024,
 			max_memory_pages: 16,
+			max_table_size: 16 * 1024,
 			enable_println: false,
 			max_subject_len: 32,
 		}

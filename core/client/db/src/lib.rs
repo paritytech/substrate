@@ -24,7 +24,10 @@
 //!
 //! Finality implies canonicality but not vice-versa.
 
+#![warn(missing_docs)]
+
 pub mod light;
+pub mod offchain;
 
 mod cache;
 mod changes_tries_storage;
@@ -78,6 +81,10 @@ const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
 pub type DbState = state_machine::TrieBackend<Arc<dyn state_machine::Storage<Blake2Hasher>>, Blake2Hasher>;
 
+/// A reference tracking state.
+///
+/// It makes sure that the hash we are using stays pinned in storage
+/// until this structure is dropped.
 pub struct RefTrackingState<Block: BlockT> {
 	state: DbState,
 	storage: Arc<StorageDb<Block>>,
@@ -203,7 +210,7 @@ pub fn new_client<E, S, Block, RA>(
 	Ok(client::Client::new(backend, executor, genesis_storage, execution_strategies)?)
 }
 
-mod columns {
+pub(crate) mod columns {
 	pub const META: Option<u32> = crate::utils::COLUMN_META;
 	pub const STATE: Option<u32> = Some(1);
 	pub const STATE_META: Option<u32> = Some(2);
@@ -214,7 +221,9 @@ mod columns {
 	pub const JUSTIFICATION: Option<u32> = Some(6);
 	pub const CHANGES_TRIE: Option<u32> = Some(7);
 	pub const AUX: Option<u32> = Some(8);
-	pub const CACHE: Option<u32> = Some(9);
+	/// Offchain workers local storage
+	pub const OFFCHAIN: Option<u32> = Some(9);
+	pub const CACHE: Option<u32> = Some(10);
 }
 
 struct PendingBlock<Block: BlockT> {
@@ -549,6 +558,7 @@ impl state_machine::Storage<Blake2Hasher> for DbGenesisStorage {
 /// Otherwise, trie nodes are kept only from some recent blocks.
 pub struct Backend<Block: BlockT> {
 	storage: Arc<StorageDb<Block>>,
+	offchain_storage: offchain::LocalStorage,
 	changes_tries_storage: DbChangesTrieStorage<Block>,
 	blockchain: BlockchainDb<Block>,
 	canonicalization_delay: u64,
@@ -560,31 +570,29 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	/// Create a new instance of database backend.
 	///
 	/// The pruning window is how old a block must be before the state is pruned.
-	pub fn new(config: DatabaseSettings, canonicalization_delay: u64) -> Result<Self, client::error::Error> {
+	pub fn new(config: DatabaseSettings, canonicalization_delay: u64) -> client::error::Result<Self> {
 		Self::new_inner(config, canonicalization_delay)
 	}
 
-	#[cfg(feature = "kvdb-rocksdb")]
 	fn new_inner(config: DatabaseSettings, canonicalization_delay: u64) -> Result<Self, client::error::Error> {
+		#[cfg(feature = "kvdb-rocksdb")]
 		let db = crate::utils::open_database(&config, columns::META, "full")?;
-		Backend::from_kvdb(db as Arc<_>, canonicalization_delay, &config)
+		#[cfg(not(feature = "kvdb-rocksdb"))]
+		let db = {
+			log::warn!("Running without the RocksDB feature. The database will NOT be saved.");
+			Arc::new(kvdb_memorydb::create(crate::utils::NUM_COLUMNS))
+		};
+		Self::from_kvdb(db as Arc<_>, canonicalization_delay, &config)
 	}
 
-	#[cfg(not(feature = "kvdb-rocksdb"))]
-	fn new_inner(config: DatabaseSettings, canonicalization_delay: u64) -> Result<Self, client::error::Error> {
-		log::warn!("Running without the RocksDB feature. The database will NOT be saved.");
-		let db = Arc::new(kvdb_memorydb::create(crate::utils::NUM_COLUMNS));
-		Backend::from_kvdb(db as Arc<_>, canonicalization_delay, &config)
-	}
-
+	/// Create new memory-backed client backend for tests.
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn new_test(keep_blocks: u32, canonicalization_delay: u64) -> Self {
-		use utils::NUM_COLUMNS;
-
-		let db = Arc::new(::kvdb_memorydb::create(NUM_COLUMNS));
+		let db = Arc::new(kvdb_memorydb::create(crate::utils::NUM_COLUMNS));
 		Self::new_test_db(keep_blocks, canonicalization_delay, db as Arc<_>)
 	}
 
+	/// Creates a client backend with test settings.
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn new_test_db(keep_blocks: u32, canonicalization_delay: u64, db: Arc<dyn KeyValueDB>) -> Self {
 
@@ -595,7 +603,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			path: Default::default(),
 			pruning: PruningMode::keep_blocks(keep_blocks),
 		};
-		Backend::from_kvdb(
+		Self::from_kvdb(
 			db,
 			canonicalization_delay,
 			&db_setting,
@@ -616,6 +624,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			db: db.clone(),
 			state_db,
 		};
+		let offchain_storage = offchain::LocalStorage::new(db.clone());
 		let changes_tries_storage = DbChangesTrieStorage::new(
 			db,
 			columns::CHANGES_TRIE,
@@ -628,6 +637,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 
 		Ok(Backend {
 			storage: Arc::new(storage_db),
+			offchain_storage,
 			changes_tries_storage,
 			blockchain,
 			canonicalization_delay,
@@ -725,7 +735,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 					transaction,
 					columns::KEY_LOOKUP,
 					r.number
-				);
+				)?;
 			}
 
 			// canonicalize: set the number lookup to map to this block's hash.
@@ -736,18 +746,18 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 					columns::KEY_LOOKUP,
 					e.number,
 					e.hash
-				);
+				)?;
 			}
 		}
 
-		let lookup_key = utils::number_and_hash_to_lookup_key(best_to.0, &best_to.1);
+		let lookup_key = utils::number_and_hash_to_lookup_key(best_to.0, &best_to.1)?;
 		transaction.put(columns::META, meta_keys::BEST_BLOCK, &lookup_key);
 		utils::insert_number_to_key_mapping(
 			transaction,
 			columns::KEY_LOOKUP,
 			best_to.0,
 			best_to.1,
-		);
+		)?;
 
 		Ok((enacted, retracted))
 	}
@@ -788,7 +798,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		if let Some(justification) = justification {
 			transaction.put(
 				columns::JUSTIFICATION,
-				&utils::number_and_hash_to_lookup_key(number, hash),
+				&utils::number_and_hash_to_lookup_key(number, hash)?,
 				&justification.encode(),
 			);
 		}
@@ -863,7 +873,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			let number = pending_block.header.number().clone();
 
 			// blocks are keyed by number + hash.
-			let lookup_key = utils::number_and_hash_to_lookup_key(number, hash);
+			let lookup_key = utils::number_and_hash_to_lookup_key(number, hash)?;
 
 			let (enacted, retracted) = if pending_block.leaf_state.is_best() {
 				self.set_head_with_transaction(&mut transaction, parent_hash, (number, hash))?
@@ -876,7 +886,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				columns::KEY_LOOKUP,
 				number,
 				hash,
-			);
+			)?;
 
 			transaction.put(columns::HEADER, &lookup_key, &pending_block.header.encode());
 			if let Some(body) = pending_block.body {
@@ -971,6 +981,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 					hash.clone(),
 					(number.clone(), hash.clone())
 				)?;
+				meta_updates.push((hash, *number, true, false));
 			} else {
 				return Err(client::error::Error::UnknownBlock(format!("Cannot set head {:?}", set_head)))
 			}
@@ -1031,7 +1042,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		if self.storage.state_db.best_canonical().map(|c| f_num.saturated_into::<u64>() > c).unwrap_or(true) {
 			let parent_hash = f_header.parent_hash().clone();
 
-			let lookup_key = utils::number_and_hash_to_lookup_key(f_num, f_hash.clone());
+			let lookup_key = utils::number_and_hash_to_lookup_key(f_num, f_hash.clone())?;
 			transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
 
 			let commit = self.storage.state_db.canonicalize_block(&f_hash)
@@ -1096,6 +1107,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 	type BlockImportOperation = BlockImportOperation<Block, Blake2Hasher>;
 	type Blockchain = BlockchainDb<Block>;
 	type State = CachingState<Blake2Hasher, RefTrackingState<Block>, Block>;
+	type OffchainStorage = offchain::LocalStorage;
 
 	fn begin_operation(&self) -> Result<Self::BlockImportOperation, client::error::Error> {
 		let old_state = self.state_at(BlockId::Hash(Default::default()))?;
@@ -1170,6 +1182,10 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		Some(&self.changes_tries_storage)
 	}
 
+	fn offchain_storage(&self) -> Option<Self::OffchainStorage> {
+		Some(self.offchain_storage.clone())
+	}
+
 	fn revert(&self, n: NumberFor<Block>) -> Result<NumberFor<Block>, client::error::Error> {
 		let mut best = self.blockchain.info().best_number;
 		let finalized = self.blockchain.info().finalized_number;
@@ -1192,7 +1208,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 					let hash = self.blockchain.hash(best)?.ok_or_else(
 						|| client::error::Error::UnknownBlock(
 							format!("Error reverting to {}. Block hash not found.", best)))?;
-					let key = utils::number_and_hash_to_lookup_key(best.clone(), &hash);
+					let key = utils::number_and_hash_to_lookup_key(best.clone(), &hash)?;
 					transaction.put(columns::META, meta_keys::BEST_BLOCK, &key);
 					transaction.delete(columns::KEY_LOOKUP, removed.hash().as_ref());
 					children::remove_children(&mut transaction, columns::META, meta_keys::CHILDREN_PREFIX, hash);
