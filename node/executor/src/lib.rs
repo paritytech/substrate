@@ -39,7 +39,7 @@ mod tests {
 	use super::Executor;
 	use substrate_executor::{WasmExecutor, NativeExecutionDispatch};
 	use parity_codec::{Encode, Decode, Joiner};
-	use keyring::{AuthorityKeyring, AccountKeyring};
+	use keyring::{AccountKeyring, Ed25519Keyring, Sr25519Keyring};
 	use runtime_support::{Hashable, StorageValue, StorageMap, traits::{Currency, Get}};
 	use state_machine::{CodeExecutor, Externalities, TestExternalities as CoreTestExternalities};
 	use primitives::{
@@ -314,15 +314,19 @@ mod tests {
 		});
 	}
 
-	fn to_session_keys(ring: &AuthorityKeyring) -> SessionKeys {
+	fn to_session_keys(
+		ed25519_keyring: &Ed25519Keyring,
+		sr25519_keyring: &Sr25519Keyring,
+	) -> SessionKeys {
 		SessionKeys {
-			ed25519: ring.to_owned().into(),
+			ed25519: ed25519_keyring.to_owned().into(),
+			sr25519: sr25519_keyring.to_owned().into(),
 		}
 	}
 
 	fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<Blake2Hasher> {
 		let mut ext = TestExternalities::new_with_code_with_children(code, GenesisConfig {
-			aura: Some(Default::default()),
+			babe: Some(Default::default()),
 			system: Some(SystemConfig {
 				changes_trie_config: if support_changes_trie { Some(ChangesTrieConfiguration {
 					digest_interval: 2,
@@ -346,9 +350,18 @@ mod tests {
 			}),
 			session: Some(SessionConfig {
 				keys: vec![
-					(alice(), to_session_keys(&AuthorityKeyring::Alice)),
-					(bob(), to_session_keys(&AuthorityKeyring::Bob)),
-					(charlie(), to_session_keys(&AuthorityKeyring::Charlie)),
+					(alice(), to_session_keys(
+						&Ed25519Keyring::Alice,
+						&Sr25519Keyring::Alice,
+					)),
+					(bob(), to_session_keys(
+						&Ed25519Keyring::Bob,
+						&Sr25519Keyring::Bob,
+					)),
+					(charlie(), to_session_keys(
+						&Ed25519Keyring::Charlie,
+						&Sr25519Keyring::Charlie,
+					)),
 				]
 			}),
 			staking: Some(StakingConfig {
