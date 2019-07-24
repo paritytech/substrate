@@ -26,6 +26,10 @@ fn main() {
 		// Note that we set the stack-size to 1MB explicitly even though it is set
 		// to this value by default. This is because some of our tests (`restoration_of_globals`)
 		// depend on the stack-size.
-		"-Clink-arg=-zstack-size=1048576",
+		//
+		// The --export=__heap_base instructs LLD to export __heap_base as a global variable, which
+		// is used by the external memory allocator.
+		"-Clink-arg=-zstack-size=1048576 \
+		-Clink-arg=--export=__heap_base",
 	);
 }
