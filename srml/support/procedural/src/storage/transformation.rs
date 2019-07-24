@@ -596,7 +596,7 @@ fn create_and_impl_instance(
 		});
 	}
 
-	let prefix = format!("{}{}", cratename.to_string(), instance_prefix);
+	let prefix = format!("{}{}", instance_prefix, cratename.to_string());
 
 	quote! {
 		// Those trait are derived because of wrong bounds for generics
