@@ -19,6 +19,10 @@ use runtime_io::{with_externalities, Blake2Hasher};
 use srml_support::{
 	Parameter, traits::Get, parameter_types,
 	runtime_primitives::{generic, BuildStorage, traits::{BlakeTwo256, Block as _, Verify}},
+	metadata::{
+		DecodeDifferent, StorageMetadata, StorageEntryModifier, StorageEntryType, DefaultByteGetter,
+		StorageEntryMetadata, StorageHasher
+	},
 };
 use inherents::{
 	ProvideInherent, InherentData, InherentIdentifier, RuntimeString, MakeFatalError
@@ -407,4 +411,97 @@ fn storage_with_instance_basic_operation() {
 		DoubleMap::remove(&key1, &key2);
 		assert_eq!(DoubleMap::get(&key1, &key2), 0);
 	});
+}
+
+const EXPECTED_METADATA: StorageMetadata = StorageMetadata {
+	prefix: DecodeDifferent::Encode("Instance2Module2"),
+	entries: DecodeDifferent::Encode(
+		&[
+			StorageEntryMetadata {
+				name: DecodeDifferent::Encode("Value"),
+				modifier: StorageEntryModifier::Default,
+				ty: StorageEntryType::Plain(DecodeDifferent::Encode("T::Amount")),
+				default: DecodeDifferent::Encode(
+					DefaultByteGetter(
+						&module2::__GetByteStructValue(
+							std::marker::PhantomData::<(Runtime, module2::Instance2)>
+						)
+					)
+				),
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageEntryMetadata {
+				name: DecodeDifferent::Encode("Map"),
+				modifier: StorageEntryModifier::Default,
+				ty: StorageEntryType::Map {
+					hasher: StorageHasher::Blake2_256,
+					key: DecodeDifferent::Encode("u64"),
+					value: DecodeDifferent::Encode("u64"),
+					is_linked: false,
+				},
+				default: DecodeDifferent::Encode(
+					DefaultByteGetter(
+						&module2::__GetByteStructMap(
+							std::marker::PhantomData::<(Runtime, module2::Instance2)>
+						)
+					)
+				),
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageEntryMetadata {
+				name: DecodeDifferent::Encode("LinkedMap"),
+				modifier: StorageEntryModifier::Default,
+				ty: StorageEntryType::Map {
+					hasher: StorageHasher::Blake2_256,
+					key: DecodeDifferent::Encode("u64"),
+					value: DecodeDifferent::Encode("u64"),
+					is_linked: true,
+				},
+				default: DecodeDifferent::Encode(
+					DefaultByteGetter(
+						&module2::__GetByteStructLinkedMap(
+							std::marker::PhantomData::<(Runtime, module2::Instance2)>
+						)
+					)
+				),
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageEntryMetadata {
+				name: DecodeDifferent::Encode("DoubleMap"),
+				modifier: StorageEntryModifier::Default,
+				ty: StorageEntryType::DoubleMap {
+					hasher: StorageHasher::Blake2_256,
+					key2_hasher: StorageHasher::Blake2_256,
+					key1: DecodeDifferent::Encode("u64"),
+					key2: DecodeDifferent::Encode("u64"),
+					value: DecodeDifferent::Encode("u64"),
+				},
+				default: DecodeDifferent::Encode(
+					DefaultByteGetter(
+						&module2::__GetByteStructDoubleMap(
+							std::marker::PhantomData::<(Runtime, module2::Instance2)>
+						)
+					)
+				),
+				documentation: DecodeDifferent::Encode(&[]),
+			}
+		]
+	)
+};
+
+#[test]
+fn test_instance_storage_metadata() {
+	let metadata = Module2_2::storage_metadata();
+	pretty_assertions::assert_eq!(EXPECTED_METADATA, metadata);
+}
+
+#[test]
+fn instance_prefix_is_prefix_of_entries() {
+	use module2::Instance;
+
+	let prefix = module2::Instance2::PREFIX;
+	assert!(module2::Instance2::PREFIX_FOR_Value.starts_with(prefix));
+	assert!(module2::Instance2::PREFIX_FOR_Map.starts_with(prefix));
+	assert!(module2::Instance2::PREFIX_FOR_LinkedMap.starts_with(prefix));
+	assert!(module2::Instance2::PREFIX_FOR_DoubleMap.starts_with(prefix));
 }

@@ -39,7 +39,7 @@ pub mod prelude {
 		Executor, LightExecutor, LocalExecutor, NativeExecutor,
 	};
 	// Keyring
-	pub use super::{AccountKeyring, AuthorityKeyring};
+	pub use super::{AccountKeyring, Sr25519Keyring};
 }
 
 mod local_executor {
@@ -172,9 +172,9 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 
 fn genesis_config(support_changes_trie: bool) -> GenesisConfig {
 	GenesisConfig::new(support_changes_trie, vec![
-		AuthorityKeyring::Alice.into(),
-		AuthorityKeyring::Bob.into(),
-		AuthorityKeyring::Charlie.into(),
+		Sr25519Keyring::Alice.into(),
+		Sr25519Keyring::Bob.into(),
+		Sr25519Keyring::Charlie.into(),
 	], vec![
 		AccountKeyring::Alice.into(),
 		AccountKeyring::Bob.into(),

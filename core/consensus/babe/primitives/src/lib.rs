@@ -24,16 +24,21 @@ mod digest;
 use parity_codec::{Encode, Decode};
 use rstd::vec::Vec;
 use runtime_primitives::ConsensusEngineId;
-use substrate_primitives::sr25519::Public;
+use substrate_primitives::sr25519;
 use substrate_client::decl_runtime_apis;
 
 #[cfg(feature = "std")]
 pub use digest::{BabePreDigest, CompatibleDigestItem};
 pub use digest::{BABE_VRF_PREFIX, RawBabePreDigest};
 
+/// A Babe authority keypair. Necessarily equivalent to the schnorrkel public key used in
+/// the main Babe module. If that ever changes, then this must, too.
+#[cfg(feature = "std")]
+pub type AuthorityPair = sr25519::Pair;
+
 /// A Babe authority identifier. Necessarily equivalent to the schnorrkel public key used in
 /// the main Babe module. If that ever changes, then this must, too.
-pub type AuthorityId = Public;
+pub type AuthorityId = sr25519::Public;
 
 /// The `ConsensusEngineId` of BABE.
 pub const BABE_ENGINE_ID: ConsensusEngineId = *b"BABE";
@@ -54,20 +59,24 @@ pub type AuthorityIndex = u64;
 pub type SlotNumber = u64;
 
 /// The weight of an authority.
-pub type Weight = u64;
+// NOTE: we use a unique name for the weight to avoid conflicts with other
+//       `Weight` types, since the metadata isn't able to disambiguate.
+pub type BabeWeight = u64;
 
 /// BABE epoch information
 #[derive(Decode, Encode, Default, PartialEq, Eq, Clone)]
 #[cfg_attr(any(feature = "std", test), derive(Debug))]
 pub struct Epoch {
-	/// The authorities and their weights
-	pub authorities: Vec<(AuthorityId, Weight)>,
 	/// The epoch index
 	pub epoch_index: u64,
-	/// Randomness for this epoch
-	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+	/// The starting slot of the epoch,
+	pub start_slot: u64,
 	/// The duration of this epoch
 	pub duration: SlotNumber,
+	/// The authorities and their weights
+	pub authorities: Vec<(AuthorityId, BabeWeight)>,
+	/// Randomness for this epoch
+	pub randomness: [u8; VRF_OUTPUT_LENGTH],
 }
 
 /// An consensus log item for BABE.
@@ -93,23 +102,10 @@ pub struct BabeConfiguration {
 	/// Dynamic slot duration may be supported in the future.
 	pub slot_duration: u64,
 
-	/// The number of slots per BABE epoch. Currently, only
-	/// the value provided by this type at genesis will be used.
-	///
-	/// Dynamic slot duration may be supported in the future.
-	pub slots_per_epoch: u64,
-
-	/// The expected block time in milliseconds for BABE. Currently,
-	/// only the value provided by this type at genesis will be used.
-	///
-	/// Dynamic expected block time may be supported in the future.
-	pub expected_block_time: u64,
-
-	/// The maximum permitted VRF output, or *threshold*, for BABE. Currently,
-	/// only the value provided by this type at genesis will be used.
-	///
-	/// Dynamic thresholds may be supported in the future.
-	pub threshold: u64,
+	/// A constant value that is used in the threshold calculation formula.
+	/// Expressed as a fraction where the first member of the tuple is the
+	/// numerator and the second is the denominator.
+	pub c: (u64, u64),
 
 	/// The minimum number of blocks that must be received before running the
 	/// median algorithm to compute the offset between the on-chain time and the
