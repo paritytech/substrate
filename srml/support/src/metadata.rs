@@ -184,44 +184,6 @@ macro_rules! __runtime_modules_to_metadata_calls_event {
 
 #[macro_export]
 #[doc(hidden)]
-macro_rules! __runtime_modules_to_metadata_calls_storagename {
-	(
-		$mod: ident,
-		$module: ident $( <$instance:ident> )?,
-		$runtime: ident,
-		with Storage
-		$(with $kws:ident)*
-	) => {
-		$crate::metadata::DecodeDifferent::Encode(
-			$crate::metadata::FnEncode(
-				$mod::$module::<$runtime $(, $mod::$instance )?>::storage_metadata_name
-			)
-		)
-	};
-	(
-		$mod: ident,
-		$module: ident $( <$instance:ident> )?,
-		$runtime: ident,
-		with $_:ident
-		$(with $kws:ident)*
-	) => {
-		$crate::__runtime_modules_to_metadata_calls_storagename! {
-			$mod, $module $( <$instance> )?, $runtime, $(with $kws)*
-		};
-	};
-	(
-		$mod: ident,
-		$module: ident $( <$instance:ident> )?,
-		$runtime: ident,
-	) => {
-		$crate::metadata::DecodeDifferent::Encode(
-			$crate::metadata::FnEncode(|| "")
-		)
-	};
-}
-
-#[macro_export]
-#[doc(hidden)]
 macro_rules! __runtime_modules_to_metadata_calls_storage {
 	(
 		$mod: ident,
