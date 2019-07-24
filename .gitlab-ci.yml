@@ -299,7 +299,6 @@ publish-docker-substrate:          &publish-docker-release
   stage:                           publish
   dependencies:
     - build-linux-release
-    - build-linux-subkey
   <<:                              *kubernetes-build
   # debug
   image:                           docker:stable
@@ -343,7 +342,13 @@ publish-docker-subkey:
     - build-linux-subkey
   # debug <<:                              *build-only
   <<:                              *kubernetes-build
+  image:                           docker:stable
+  services:
+    - docker:dind
   variables:
+    DOCKER_HOST:                   tcp://localhost:2375
+    DOCKER_DRIVER:                 overlay2
+    GIT_STRATEGY:                  none
     # DOCKERFILE:                  scripts/docker/subkey.Dockerfile
     CONTAINER_IMAGE:               parity/subkey
   before_script:
