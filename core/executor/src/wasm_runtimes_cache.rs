@@ -36,7 +36,7 @@ enum CacheError {
 	ApplySnapshotFailed,
 	InvalidModule,
 	CantDeserializeWasm,
-	Instantiation,
+	Instantiation(Error),
 }
 
 /// A runtime along with its version and initial state snapshot.
@@ -291,7 +291,7 @@ impl RuntimesCache {
 
 		// Instantiate this module.
 		let instance = WasmExecutor::instantiate_module::<E>(heap_pages as usize, &module)
-			.map_err(|_| CacheError::Instantiation)?;
+			.map_err(CacheError::Instantiation)?;
 
 		// Take state snapshot before executing anything.
 		let state_snapshot = StateSnapshot::take(&instance, data_segments, heap_pages as u32)
