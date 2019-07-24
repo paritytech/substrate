@@ -90,18 +90,23 @@ const I_NPOS: PiecewiseLinear = PiecewiseLinear {
 	]
 };
 
-/// PNPoS: the target total payout to all validators (and their nominators) per era.
+/// Second per year for the Julian year (365.25 days)
+const SECOND_PER_YEAR: u32 = 3600*24*36525/100;
+
+/// The total payout to all validators (and their nominators) per era.
 ///
-/// The value take into consideration desired interest rate and inflation rate (see module doc)
-/// and is defined as such:
+/// Named P_NPoS in the [paper](http://research.web3.foundation/en/latest/polkadot/Token%20Ec
+/// onomics/#inflation-model).
 ///
-/// for x the staking rate in NPoS: `PNPoS(x) = INPoS(x) * current_total_token / era_per_year`
-/// i.e.  `PNPoS(x) = INPoS(x) * current_total_token * era_duration / year_duration`
+/// For x the staking rate in NPoS: `P_NPoS(x) = I_NPoS(x) * current_total_token / era_per_year`
+/// i.e.  `P_NPoS(x) = I_NPoS(x) * current_total_token * era_duration / year_duration`
+///
+/// I_NPoS is the desired yearly inflation rate for nominated proof of stake.
 pub fn compute_total_payout<N>(npos_token_staked: N, total_tokens: N, era_duration: N) -> N
 where
 	N: SimpleArithmetic + Clone
 {
-	let year_duration: N = 31_557_600u32.into();
+	let year_duration: N = SECOND_PER_YEAR.into();
 	I_NPOS.calculate_for_fraction_times_denominator(npos_token_staked, total_tokens)
 		* era_duration / year_duration
 }
