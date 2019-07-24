@@ -431,15 +431,15 @@ struct KeyringTestAccountCliValues {
 	help: String,
 	conflicts_with: Vec<String>,
 	name: String,
-	variant: keyring::AuthorityKeyring,
+	variant: keyring::Sr25519Keyring,
 }
 
 lazy_static::lazy_static! {
 	/// The Cli values for all test accounts.
 	static ref TEST_ACCOUNTS_CLI_VALUES: Vec<KeyringTestAccountCliValues> = {
-		keyring::AuthorityKeyring::iter().map(|a| {
+		keyring::Sr25519Keyring::iter().map(|a| {
 			let help = format!("Shortcut for `--key //{} --name {}`.", a, a);
-			let conflicts_with = keyring::AuthorityKeyring::iter()
+			let conflicts_with = keyring::Sr25519Keyring::iter()
 				.filter(|b| a != *b)
 				.map(|b| b.to_string().to_lowercase())
 				.chain(["name", "key"].iter().map(ToString::to_string))
@@ -459,7 +459,7 @@ lazy_static::lazy_static! {
 /// Wrapper for exposing the keyring test accounts into the Cli.
 #[derive(Debug, Clone)]
 pub struct Keyring {
-	pub account: Option<keyring::AuthorityKeyring>,
+	pub account: Option<keyring::Sr25519Keyring>,
 }
 
 impl StructOpt for Keyring {
