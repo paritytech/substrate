@@ -468,7 +468,10 @@ where Block: BlockT<Hash=H256>,
 		Ok(root)
 	}
 
-	fn update_changes_trie(&mut self, update: ChangesTrieTransaction<Blake2Hasher, NumberFor<Block>>) -> Result<(), client::error::Error> {
+	fn update_changes_trie(
+		&mut self,
+		update: ChangesTrieTransaction<Blake2Hasher, NumberFor<Block>>,
+	) -> Result<(), client::error::Error> {
 		self.changes_trie_updates = update.0;
 		self.changes_trie_cache_update = update.1;
 		Ok(())
