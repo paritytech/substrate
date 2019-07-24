@@ -184,14 +184,14 @@ impl Permill {
 
 	/// create a new raw instance. This can be called at compile time.
 	pub const fn from_const_parts(parts: u32) -> Self {
-		Self([parts, 1_000_000] [(parts > 1_000_000) as usize])
+		Self([parts, 1_000_000][(parts > 1_000_000) as usize])
 	}
 
 	/// From an explicitly defined number of parts per maximum of the type.
-	pub fn from_parts(x: u32) -> Self { Self(x.min(1_000_000)) }
+	pub fn from_parts(parts: u32) -> Self { Self::from_const_parts(parts) }
 
 	/// Converts from a percent. Equal to `x / 100`.
-	pub fn from_percent(x: u32) -> Self { Self(x.min(100) * 10_000) }
+	pub const fn from_percent(x: u32) -> Self { Self([x, 100][(x > 100) as usize] * 10_000) }
 
 	/// Converts a fraction into `Permill`.
 	#[cfg(feature = "std")]
@@ -293,14 +293,14 @@ impl Perbill {
 
 	/// create a new raw instance. This can be called at compile time.
 	pub const fn from_const_parts(parts: u32) -> Self {
-		Self([parts, 1_000_000_000] [(parts > 1_000_000_000) as usize])
+		Self([parts, 1_000_000_000][(parts > 1_000_000_000) as usize])
 	}
 
 	/// From an explicitly defined number of parts per maximum of the type.
-	pub fn from_parts(x: u32) -> Self { Self(x.min(1_000_000_000)) }
+	pub fn from_parts(parts: u32) -> Self { Self::from_const_parts(parts) }
 
 	/// Converts from a percent. Equal to `x / 100`.
-	pub fn from_percent(x: u32) -> Self { Self(x.min(100) * 10_000_000) }
+	pub const fn from_percent(x: u32) -> Self { Self([x, 100][(x > 100) as usize] * 10_000_000) }
 
 	/// Construct new instance where `x` is in millionths. Value equivalent to `x / 1,000,000`.
 	pub fn from_millionths(x: u32) -> Self { Self(x.min(1_000_000) * 1000) }

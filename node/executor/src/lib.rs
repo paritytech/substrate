@@ -49,7 +49,7 @@ mod tests {
 	use node_primitives::{Hash, BlockNumber, AccountId, Balance, Index};
 	use runtime_primitives::traits::{Header as HeaderT, Hash as HashT, Convert};
 	use runtime_primitives::{generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
-	use runtime_primitives::weights::{WeightMultiplier, GetDispatchInfo, Weight};
+	use runtime_primitives::weights::{WeightMultiplier, GetDispatchInfo};
 	use {balances, contracts, indices, staking, system, timestamp};
 	use contracts::ContractAddressFor;
 	use system::{EventRecord, Phase};
@@ -57,9 +57,9 @@ mod tests {
 		Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances, BuildStorage,
 		GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System, SystemConfig,
 		GrandpaConfig, IndicesConfig, ContractsConfig, Event, SessionKeys, CreationFee, SignedExtra,
-		TransactionBaseFee, TransactionByteFee, MaximumBlockWeight,
+		TransactionBaseFee, TransactionByteFee,
 	};
-	use node_runtime::constants::{currency::*, fee::TARGET_BLOCK_FULLNESS};
+	use node_runtime::constants::currency::*;
 	use node_runtime::impls::WeightToFee;
 	use wabt;
 	use primitives::map;
@@ -88,17 +88,13 @@ mod tests {
 		let length_fee = <TransactionBaseFee as Get<Balance>>::get() +
 			<TransactionByteFee as Get<Balance>>::get() *
 			(extrinsic.encode().len() as Balance);
-		let mut weight_fee = default_transfer_call().get_dispatch_info().weight as Balance;
-		weight_fee = weight_fee * 1_000_000 as Balance;
+
+		let weight = default_transfer_call().get_dispatch_info().weight;
+		let weight_fee = <Runtime as balances::Trait>::WeightToFee::convert(weight);
 		// NOTE: we don't need this anymore, but in case needed, this makes the fee accurate over
 		// multiple blocks.
 		// weight_fee = <system::Module<Runtime>>::next_weight_multiplier().apply_to(weight_fee as u32) as Balance;
 		length_fee + weight_fee
-	}
-
-	/// Get the target weight of the fee multiplier.
-	fn _multiplier_target() -> Weight {
-		TARGET_BLOCK_FULLNESS * <MaximumBlockWeight as Get<Weight>>::get()
 	}
 
 	/// Default creation fee.

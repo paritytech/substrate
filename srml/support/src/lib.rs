@@ -225,22 +225,16 @@ macro_rules! __assert_eq_uvec {
 /// # Example
 ///
 /// ```rust
-/// #[macro_use]
-/// # extern crate srml_support;
-/// # use srml_support::{assert_eq_error_rate};
 /// # fn main() {
-/// assert_eq_error_rate!(10, 10, 0);
-/// assert_eq_error_rate!(10, 11, 1);
-/// assert_eq_error_rate!(12, 10, 2);
+/// srml_support::assert_eq_error_rate!(10, 10, 0);
+/// srml_support::assert_eq_error_rate!(10, 11, 1);
+/// srml_support::assert_eq_error_rate!(12, 10, 2);
 /// # }
 /// ```
 ///
 /// ```rust,should_panic
-/// #[macro_use]
-/// # extern crate srml_support;
-/// # use srml_support::{assert_eq_error_rate};
 /// # fn main() {
-/// assert_eq_error_rate!(12, 10, 1);
+/// srml_support::assert_eq_error_rate!(12, 10, 1);
 /// # }
 /// ```
 #[macro_export]
