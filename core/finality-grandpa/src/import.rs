@@ -25,6 +25,7 @@ use client::{blockchain, CallExecutor, Client};
 use client::blockchain::HeaderBackend;
 use client::backend::Backend;
 use client::runtime_api::ApiExt;
+use client::utils::is_descendent_of;
 use consensus_common::{
 	BlockImport, Error as ConsensusError,
 	BlockImportParams, ImportResult, JustificationImport, well_known_cache_keys,
@@ -42,7 +43,7 @@ use substrate_primitives::{H256, Blake2Hasher};
 use crate::{Error, CommandOrError, NewAuthoritySet, VoterCommand};
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, DelayKind, PendingChange};
 use crate::consensus_changes::SharedConsensusChanges;
-use crate::environment::{finalize_block, is_descendent_of};
+use crate::environment::finalize_block;
 use crate::justification::GrandpaJustification;
 
 /// A block-import handler for GRANDPA.

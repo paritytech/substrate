@@ -15,14 +15,21 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Primitives for BABE.
-#![deny(warnings, unsafe_code, missing_docs)]
+#![deny(warnings)]
+#![forbid(unsafe_code, missing_docs, unused_variables, unused_imports)]
 #![cfg_attr(not(feature = "std"), no_std)]
+
+mod digest;
 
 use parity_codec::{Encode, Decode};
 use rstd::vec::Vec;
 use runtime_primitives::ConsensusEngineId;
 use substrate_primitives::sr25519::Public;
 use substrate_client::decl_runtime_apis;
+
+#[cfg(feature = "std")]
+pub use digest::{BabePreDigest, CompatibleDigestItem};
+pub use digest::{BABE_VRF_PREFIX, RawBabePreDigest};
 
 /// A Babe authority identifier. Necessarily equivalent to the schnorrkel public key used in
 /// the main Babe module. If that ever changes, then this must, too.
@@ -49,15 +56,29 @@ pub type SlotNumber = u64;
 /// The weight of an authority.
 pub type Weight = u64;
 
+/// BABE epoch information
+#[derive(Decode, Encode, Default, PartialEq, Eq, Clone)]
+#[cfg_attr(any(feature = "std", test), derive(Debug))]
+pub struct Epoch {
+	/// The authorities and their weights
+	pub authorities: Vec<(AuthorityId, Weight)>,
+	/// The epoch index
+	pub epoch_index: u64,
+	/// Randomness for this epoch
+	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+	/// The duration of this epoch
+	pub duration: SlotNumber,
+}
+
 /// An consensus log item for BABE.
-#[derive(Decode, Encode)]
+#[derive(Decode, Encode, Clone, PartialEq, Eq)]
 pub enum ConsensusLog {
 	/// The epoch has changed. This provides information about the
 	/// epoch _after_ next: what slot number it will start at, who are the authorities (and their weights)
 	/// and the next epoch randomness. The information for the _next_ epoch should already
 	/// be available.
 	#[codec(index = "1")]
-	NextEpochData(SlotNumber, Vec<(AuthorityId, Weight)>, [u8; VRF_OUTPUT_LENGTH]),
+	NextEpochData(Epoch),
 	/// Disable the authority with given index.
 	#[codec(index = "2")]
 	OnDisabled(AuthorityIndex),
@@ -71,6 +92,12 @@ pub struct BabeConfiguration {
 	///
 	/// Dynamic slot duration may be supported in the future.
 	pub slot_duration: u64,
+
+	/// The number of slots per BABE epoch. Currently, only
+	/// the value provided by this type at genesis will be used.
+	///
+	/// Dynamic slot duration may be supported in the future.
+	pub slots_per_epoch: u64,
 
 	/// The expected block time in milliseconds for BABE. Currently,
 	/// only the value provided by this type at genesis will be used.
@@ -116,7 +143,7 @@ decl_runtime_apis! {
 		/// Dynamic configuration may be supported in the future.
 		fn startup_data() -> BabeConfiguration;
 
-		/// Get the current authorites for Babe.
-		fn authorities() -> Vec<AuthorityId>;
+		/// Get the current epoch data for Babe.
+		fn epoch() -> Epoch;
 	}
 }

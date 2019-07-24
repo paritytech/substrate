@@ -20,12 +20,14 @@
 //! time during which certain events can and/or must occur.  This crate
 //! provides generic functionality for slots.
 
-#![forbid(warnings, unsafe_code, missing_docs)]
+#![deny(warnings)]
+#![forbid(unsafe_code, missing_docs)]
 
 mod slots;
 mod aux_schema;
 
-pub use slots::{SignedDuration, SlotInfo, Slots};
+pub use slots::{SignedDuration, SlotInfo};
+use slots::Slots;
 pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
 
 use codec::{Decode, Encode};
