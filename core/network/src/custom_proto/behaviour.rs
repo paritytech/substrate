@@ -930,6 +930,11 @@ where
 			CustomProtoHandlerOut::ProtocolError { error, .. } => {
 				debug!(target: "sub-libp2p", "Handler({:?}) => Severe protocol error: {:?}",
 					source, error);
+				// A severe protocol error happens when we detect a "bad" node, such as a node on
+				// a different chain, or a node that doesn't speak the same protocol(s). We
+				// decrease the node's reputation, hence lowering the chances we try this node
+				// again in the short term.
+				self.peerset.report_peer(source.clone(), i32::min_value());
 				self.disconnect_peer_inner(&source, Some(Duration::from_secs(5)));
 			}
 		}
