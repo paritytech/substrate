@@ -387,32 +387,32 @@ mod tests {
 			// get / insert / take
 			let key1 = 17u32;
 			let key2 = 18u32;
-			assert_eq!(DoubleMap::get(key1, key2), 0u64);
-			DoubleMap::insert(key1, key2, 4u64);
-			assert_eq!(DoubleMap::get(key1, key2), 4u64);
-			assert_eq!(DoubleMap::take(key1, key2), 4u64);
-			assert_eq!(DoubleMap::get(key1, key2), 0u64);
+			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
+			DoubleMap::insert(&key1, &key2, &4u64);
+			assert_eq!(DoubleMap::get(&key1, &key2), 4u64);
+			assert_eq!(DoubleMap::take(&key1, &key2), 4u64);
+			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
 
 			// mutate
-			DoubleMap::mutate(key1, key2, |val| {
+			DoubleMap::mutate(&key1, &key2, |val| {
 				*val = 15;
 			});
-			assert_eq!(DoubleMap::get(key1, key2), 15u64);
+			assert_eq!(DoubleMap::get(&key1, &key2), 15u64);
 
 			// remove
-			DoubleMap::remove(key1, key2);
-			assert_eq!(DoubleMap::get(key1, key2), 0u64);
+			DoubleMap::remove(&key1, &key2);
+			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
 
 			// remove prefix
-			DoubleMap::insert(key1, key2, 4u64);
-			DoubleMap::insert(key1, key2+1, 4u64);
-			DoubleMap::insert(key1+1, key2, 4u64);
-			DoubleMap::insert(key1+1, key2+1, 4u64);
-			DoubleMap::remove_prefix(key1);
-			assert_eq!(DoubleMap::get(key1, key2), 0u64);
-			assert_eq!(DoubleMap::get(key1, key2+1), 0u64);
-			assert_eq!(DoubleMap::get(key1+1, key2), 4u64);
-			assert_eq!(DoubleMap::get(key1+1, key2+1), 4u64);
+			DoubleMap::insert(&key1, &key2, &4u64);
+			DoubleMap::insert(&key1, &(key2 + 1), &4u64);
+			DoubleMap::insert(&(key1 + 1), &key2, &4u64);
+			DoubleMap::insert(&(key1 + 1), &(key2 + 1), &4u64);
+			DoubleMap::remove_prefix(&key1);
+			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
+			assert_eq!(DoubleMap::get(&key1, &(key2 + 1)), 0u64);
+			assert_eq!(DoubleMap::get(&(key1 + 1), &key2), 4u64);
+			assert_eq!(DoubleMap::get(&(key1 + 1), &(key2 + 1)), 4u64);
 
 		});
 	}
@@ -425,9 +425,9 @@ mod tests {
 			let key1 = 17u32;
 			let key2 = 18u32;
 
-			DoubleMap::insert(key1, key2, vec![1]);
-			DoubleMap::append(key1, key2, &[2, 3]).unwrap();
-			assert_eq!(DoubleMap::get(key1, key2), vec![1, 2, 3]);
+			DoubleMap::insert(&key1, &key2, &vec![1]);
+			DoubleMap::append(&key1, &key2, &[2, 3]).unwrap();
+			assert_eq!(DoubleMap::get(&key1, &key2), &[1, 2, 3]);
 		});
 	}
 
