@@ -44,8 +44,8 @@ pub fn check() -> Option<&'static str> {
 }
 
 fn check_nightly_installed() -> bool {
-	let mut command = crate::get_nightly_cargo();
-	!crate::is_nightly(&mut command)
+	let command = crate::get_nightly_cargo();
+	command.is_nightly()
 }
 
 fn check_wasm_toolchain_installed() -> bool {
@@ -74,6 +74,7 @@ fn check_wasm_toolchain_installed() -> bool {
 
 	let manifest_path = manifest_path.display().to_string();
 	crate::get_nightly_cargo()
+		.command()
 		.args(&["build", "--target=wasm32-unknown-unknown", "--manifest-path", &manifest_path])
 		.stdout(Stdio::null())
 		.stderr(Stdio::null())

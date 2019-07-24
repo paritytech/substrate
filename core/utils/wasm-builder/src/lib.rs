@@ -79,7 +79,7 @@
 //! - wasm-gc
 //!
 
-use std::{env, fs, path::PathBuf, process::{Command, Stdio, self}};
+use std::{env, ffi::{OsString}, fs, path::PathBuf, process::{Command, Stdio, self}};
 
 mod prerequisites;
 mod wasm_project;
@@ -151,33 +151,68 @@ fn create_out_file(file_name: &str, content: String) {
 }
 
 /// Get a cargo command that compiles with nightly
-fn get_nightly_cargo() -> Command {
-	let mut default_cargo = Command::new("cargo");
+fn get_nightly_cargo() -> CargoCommand {
+	let default_cargo = CargoCommand::new("cargo");
+	let mut rustup_run_nightly = CargoCommand::new("rustup");
+	rustup_run_nightly.args(&["run", "nightly", "cargo"]);
 
-	if is_nightly(&mut default_cargo) {
+	if default_cargo.is_nightly() {
 		default_cargo
-	} else if Command::new("rustup")
-		.args(&["run", "nightly", "cargo"])
-		.stdout(Stdio::null())
-		.stderr(Stdio::null())
-		.status()
-		.map(|s| s.success()).unwrap_or(false)
-	{
-		let mut cmd = Command::new("rustup");
-		cmd.args(&["run", "nightly", "cargo"]);
-		cmd
+	} else if rustup_run_nightly.works() {
+		rustup_run_nightly
 	} else {
 		default_cargo
 	}
 }
 
-/// Check if the supplied cargo command is a nightly version
-fn is_nightly(command: &mut Command) -> bool {
-	command
-		.arg("--version")
-		.output()
-		.map_err(|_| ())
-		.and_then(|o| String::from_utf8(o.stdout).map_err(|_| ()))
-		.unwrap_or_default()
-		.contains("-nightly")
+/// Builder for cargo commands
+#[derive(Debug)]
+struct CargoCommand {
+	program: OsString,
+	args: Vec<OsString>,
+}
+
+impl CargoCommand {
+	fn new(program: &str) -> Self {
+		CargoCommand { program: program.into(), args: Vec::new() }
+	}
+
+	fn arg<S: Into<OsString>>(&mut self, arg: S) -> &mut Self {
+		self.args.push(arg.into());
+		self
+	}
+
+	fn args<I, S>(&mut self, args: I) -> &mut Self
+		where I: IntoIterator<Item=S>, S: Into<OsString>
+	{
+		for arg in args {
+			self.arg(arg);
+		}
+		self
+	}
+
+	fn command(&self) -> Command {
+		let mut cmd = Command::new(&self.program);
+		cmd.args(&self.args);
+		cmd
+	}
+
+	fn works(&self) -> bool {
+		self.command()
+			.stdout(Stdio::null())
+			.stderr(Stdio::null())
+			.status()
+			.map(|s| s.success()).unwrap_or(false)
+	}
+
+	/// Check if the supplied cargo command is a nightly version
+	fn is_nightly(&self) -> bool {
+		self.command()
+			.arg("--version")
+			.output()
+			.map_err(|_| ())
+			.and_then(|o| String::from_utf8(o.stdout).map_err(|_| ()))
+			.unwrap_or_default()
+			.contains("-nightly")
+	}
 }
