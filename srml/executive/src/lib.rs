@@ -356,7 +356,7 @@ mod tests {
 	use balances::Call;
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
-	use primitives::extend_storage_overlays;
+	use primitives::BuildStorage;
 	use primitives::generic::Era;
 	use primitives::traits::{Header as HeaderT, BlakeTwo256, IdentityLookup};
 	use primitives::testing::{Digest, Header, Block};
@@ -481,10 +481,10 @@ mod tests {
 
 	fn new_test_ext(balance_factor: u64) -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
-		extend_storage_overlays(&mut t, balances::GenesisConfig::<Runtime> {
+		balances::GenesisConfig::<Runtime> {
 			balances: vec![(1, 111 * balance_factor)],
 			vesting: vec![],
-		}.build_storage().unwrap());
+		}.build_storage().unwrap().assimilate_storage(&mut t.0, &mut t.1).unwrap();
 		t.into()
 	}
 

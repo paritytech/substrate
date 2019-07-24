@@ -19,7 +19,7 @@
 #![cfg(test)]
 
 use primitives::{DigestItem, traits::IdentityLookup, testing::{Header, UintAuthorityId}};
-use primitives::extend_storage_overlays;
+use primitives::BuildStorage;
 use runtime_io;
 use srml_support::{impl_outer_origin, impl_outer_event, parameter_types};
 use substrate_primitives::{H256, Blake2Hasher};
@@ -79,9 +79,9 @@ pub fn to_authorities(vec: Vec<(u64, u64)>) -> Vec<(AuthorityId, u64)> {
 
 pub fn new_test_ext(authorities: Vec<(u64, u64)>) -> runtime_io::TestExternalities<Blake2Hasher> {
 	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	extend_storage_overlays(&mut t, GenesisConfig {
+	GenesisConfig {
 		authorities: to_authorities(authorities),
-	}.build_storage().unwrap());
+	}.build_storage().unwrap().assimilate_storage(&mut t.0, &mut t.1).unwrap();
 	t.into()
 }
 

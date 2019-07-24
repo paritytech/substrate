@@ -155,22 +155,6 @@ impl BuildStorage for (StorageOverlay, ChildrenStorageOverlay) {
 	}
 }
 
-#[cfg(feature = "std")]
-/// Extend storage overlays
-pub fn extend_storage_overlays(
-		from: &mut (StorageOverlay, ChildrenStorageOverlay),
-		with: (StorageOverlay, ChildrenStorageOverlay),
-	) {
-	from.0.extend(with.0);
-	for (k, other_map) in with.1.into_iter() {
-		if let Some(map) = from.1.get_mut(&k) {
-			map.extend(other_map);
-		} else {
-			from.1.insert(k, other_map);
-		}
-	}
-}
-
 /// Consensus engine unique ID.
 pub type ConsensusEngineId = [u8; 4];
 

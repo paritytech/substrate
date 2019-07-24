@@ -21,7 +21,7 @@
 use primitives::{
 	traits::IdentityLookup,
 	testing::{Header, UintAuthorityId},
-	extend_storage_overlays,
+	BuildStorage,
 };
 use srml_support::{impl_outer_origin, parameter_types};
 use runtime_io;
@@ -72,9 +72,9 @@ impl Trait for Test {
 
 pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blake2Hasher> {
 	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	extend_storage_overlays(&mut t, GenesisConfig::<Test>{
+	GenesisConfig::<Test>{
 		authorities: authorities.into_iter().map(|a| UintAuthorityId(a)).collect(),
-	}.build_storage().unwrap());
+	}.build_storage().unwrap().assimilate_storage(&mut t.0, &mut t.1).unwrap();
 	t.into()
 }
 

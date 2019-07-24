@@ -314,9 +314,9 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::Blake2Hasher;
 	use primitives::{
+		BuildStorage,
 		traits::OnInitialize,
 		testing::{UintAuthorityId, UINT_DUMMY_KEY},
-		extend_storage_overlays,
 	};
 	use crate::mock::{
 		NEXT_VALIDATORS, force_new_session,
@@ -328,12 +328,11 @@ mod tests {
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		let storage = crate::GenesisConfig::<Test> {
+		crate::GenesisConfig::<Test> {
 			keys: NEXT_VALIDATORS.with(|l|
 				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i))).collect()
 			),
-		}.build_storage().unwrap();
-		extend_storage_overlays(&mut t, storage);
+		}.build_storage().unwrap().assimilate_storage(&mut t.0, &mut t.1).unwrap();
 		runtime_io::TestExternalities::new(t)
 	}
 

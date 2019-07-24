@@ -18,7 +18,7 @@
 
 #![cfg(test)]
 
-use primitives::{traits::IdentityLookup, testing::Header, extend_storage_overlays,
+use primitives::{traits::IdentityLookup, testing::Header, BuildStorage,
 	weights::{DispatchInfo, Weight}};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
@@ -164,7 +164,7 @@ impl ExtBuilder {
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 		self.set_associated_consts();
 		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
-		extend_storage_overlays(&mut t, GenesisConfig::<Runtime> {
+		GenesisConfig::<Runtime> {
 			balances: if self.monied {
 				vec![
 					(1, 10 * self.existential_deposit),
@@ -185,7 +185,7 @@ impl ExtBuilder {
 			} else {
 				vec![]
 			},
-		}.build_storage().unwrap());
+		}.build_storage().unwrap().assimilate_storage(&mut t.0, &mut t.1).unwrap();
 		t.into()
 	}
 }

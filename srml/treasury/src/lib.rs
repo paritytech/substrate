@@ -357,12 +357,11 @@ impl<T: Trait> OnDilution<BalanceOf<T>> for Module<T> {
 mod tests {
 	use super::*;
 
-
-	use runtime_primitives::extend_storage_overlays;
 	use runtime_io::with_externalities;
 	use srml_support::{assert_noop, assert_ok, impl_outer_origin, parameter_types};
 	use substrate_primitives::{H256, Blake2Hasher};
-	use runtime_primitives::{traits::{BlakeTwo256, OnFinalize, IdentityLookup}, testing::Header};
+	use runtime_primitives::{traits::{BlakeTwo256, OnFinalize, IdentityLookup}, testing::Header,
+		BuildStorage};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -434,10 +433,10 @@ mod tests {
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		extend_storage_overlays(&mut t, balances::GenesisConfig::<Test>{
+		balances::GenesisConfig::<Test>{
 			balances: vec![(0, 100), (1, 99), (2, 1)],
 			vesting: vec![],
-		}.build_storage().unwrap());
+		}.build_storage().unwrap().assimilate_storage(&mut t.0, &mut t.1).unwrap();
 		t.into()
 	}
 

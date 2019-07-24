@@ -989,26 +989,6 @@ where
 	}
 }
 
-/// Reads child storage value from overlay or from the backend.
-fn try_child_read_overlay_value<H, B>(
-	overlay: &OverlayedChanges,
-	backend: &B,
-	storage_key: &[u8],
-	key: &[u8],
-)	-> Result<Option<Vec<u8>>, Box<dyn Error>>
-where
-	H: Hasher,
-	B: Backend<H>,
-{
-	match overlay.child_storage(storage_key, key).map(|x| x.map(|x| x.to_vec())) {
-		Some(value) => Ok(value),
-		None => backend
-			.storage(key)
-			.map_err(|err| Box::new(ExecutionError::Backend(format!("{}", err))) as Box<dyn Error>),
-	}
-}
-
-
 #[cfg(test)]
 mod tests {
 	use std::collections::HashMap;
