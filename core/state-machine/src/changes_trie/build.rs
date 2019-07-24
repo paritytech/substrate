@@ -290,8 +290,8 @@ fn prepare_digest_input<'a, S, H, Number>(
 		})
 
 		.map(|(pairs, child_pairs)| (
-				pairs.into_iter().map(|(_, (k, v))| InputPair::DigestIndex(k, v)),
-				child_pairs,
+			pairs.into_iter().map(|(_, (k, v))| InputPair::DigestIndex(k, v)),
+			child_pairs,
 		))
 }
 

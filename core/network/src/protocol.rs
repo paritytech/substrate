@@ -1351,10 +1351,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			request.id,
 			who,
 			if let Some(sk) = request.storage_key.as_ref() {
-        format!("{} : {}", sk.to_hex::<String>(), request.key.to_hex::<String>())
-      } else {
-        request.key.to_hex::<String>()
-      },
+				format!("{} : {}", sk.to_hex::<String>(), request.key.to_hex::<String>())
+			} else {
+				request.key.to_hex::<String>()
+			},
 			request.first,
 			request.last
 		);
@@ -1374,10 +1374,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					request.id,
 					who,
 					if let Some(sk) = storage_key {
-            format!("{} : {}", sk.0.to_hex::<String>(), key.0.to_hex::<String>())
-          } else {
-            key.0.to_hex::<String>()
-          },
+						format!("{} : {}", sk.0.to_hex::<String>(), key.0.to_hex::<String>())
+					} else {
+						key.0.to_hex::<String>()
+					},
 					request.first,
 					request.last,
 					error
