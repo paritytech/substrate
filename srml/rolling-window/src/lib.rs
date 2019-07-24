@@ -179,10 +179,7 @@ mod tests {
 
 	#[test]
 	fn it_works() {
-		with_externalities(&mut ExtBuilder::default()
-			.build(),
-		|| {
-
+		with_externalities(&mut new_test_ext(), || {
 			let zero = H256::zero();
 			let one: H256 = [1_u8; 32].into();
 			let two: H256 = [2_u8; 32].into();
@@ -222,10 +219,7 @@ mod tests {
 
 	#[test]
 	fn bonding_unbounded() {
-		with_externalities(&mut ExtBuilder::default()
-			.build(),
-		|| {
-
+		with_externalities(&mut new_test_ext(), || {
 			let zero = H256::zero();
 			let one: H256 = [1_u8; 32].into();
 
@@ -245,10 +239,7 @@ mod tests {
 
 	#[test]
 	fn rolling_window_wrapped() {
-		with_externalities(&mut ExtBuilder::default()
-			.build(),
-		|| {
-
+		with_externalities(&mut new_test_ext(), || {
 			// window length is u32::max_value should expire at session 24
 			assert!(RollingWindow::report_misbehavior(Kind::Four, H256::zero(), 25).is_ok());
 			assert_eq!(RollingWindow::get_misbehaviors(Kind::Four), 1);

@@ -168,18 +168,13 @@ parameter_types! {
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 }
 
-#[derive(Default)]
-pub struct ExtBuilder;
+pub fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
-impl ExtBuilder {
-	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-
-		srml_session::GenesisConfig::<Test> {
-			keys: NEXT_VALIDATORS.with(|l|
-				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i))).collect()
-			),
-		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
-		runtime_io::TestExternalities::new_with_children(t)
-	}
+	srml_session::GenesisConfig::<Test> {
+		keys: NEXT_VALIDATORS.with(|l|
+			l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i))).collect()
+		),
+	}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
+	runtime_io::TestExternalities::new_with_children(t)
 }
