@@ -466,7 +466,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore>(
 	slot_now: u64,
 	mut header: B::Header,
 	hash: B::Hash,
-	authorities: &[AuthorityId],
+	authorities: &[(AuthorityId, BabeWeight)],
 	randomness: [u8; 32],
 	epoch_index: u64,
 	c: f64,
@@ -493,7 +493,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore>(
 	} else if authority_index > authorities.len() as u64 {
 		Err(babe_err!("Slot author not found"))
 	} else {
-		let (pre_hash, author) = (header.hash(), &authorities[authority_index as usize]);
+		let (pre_hash, author) = (header.hash(), &authorities[authority_index as usize].0);
 
 		if sr25519::Pair::verify(&sig, pre_hash, author.clone()) {
 			let (inout, _batchable_proof) = {
@@ -510,7 +510,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore>(
 				})?
 			};
 
-			let threshold = calculate_threshold(c, authorities.len());
+			let threshold = calculate_threshold(c, authorities, authority_index as usize);
 			if !check(&inout, threshold) {
 				return Err(babe_err!("VRF verification of block by author {:?} failed: \
 									  threshold {} exceeded", author, threshold));
@@ -652,8 +652,6 @@ impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
 			epoch(self.api.as_ref(), &BlockId::Hash(parent_hash))
 				.map_err(|e| format!("Could not fetch epoch at {:?}: {:?}", parent_hash, e))?;
 
-		let authorities: Vec<_> = authorities.into_iter().map(|(s, _)| s).collect();
-
 		// We add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of headers
 		let checked_header = check_header::<B, C>(
@@ -661,7 +659,7 @@ impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
 			slot_now + 1,
 			header,
 			hash,
-			&authorities[..],
+			&authorities,
 			randomness,
 			epoch_index,
 			self.config.c(),
@@ -795,13 +793,20 @@ fn check(inout: &VRFInOut, threshold: u128) -> bool {
 	u128::from_le_bytes(inout.make_bytes::<[u8; 16]>(BABE_VRF_PREFIX)) < threshold
 }
 
-fn calculate_threshold(c: f64, authorities: usize) -> u128 {
+fn calculate_threshold(
+	c: f64,
+	authorities: &[(AuthorityId, BabeWeight)],
+	authority_index: usize,
+) -> u128 {
 	use num_bigint::BigUint;
 	use num_rational::BigRational;
 	use num_traits::{cast::ToPrimitive, identities::One};
 
+	let relative_weight = authorities[authority_index].1 as f64 /
+		authorities.iter().map(|(_, weight)| weight).sum::<u64>() as f64;
+
 	let calc = || {
-		let p = BigRational::from_float((1f64 - c).powf(1f64 / authorities as f64))?;
+		let p = BigRational::from_float((1f64 - c).powf(relative_weight))?;
 		let numer = p.numer().to_biguint()?;
 		let denom = p.denom().to_biguint()?;
 		((BigUint::one() << 128) * numer / denom).to_u128()
@@ -829,7 +834,7 @@ fn claim_slot(
 	//
 	// We already checked that authorities contains `key.public()`, so it can't
 	// be empty.  Therefore, this division in `calculate_threshold` is safe.
-	let threshold = calculate_threshold(c, authorities.len());
+	let threshold = calculate_threshold(c, authorities, authority_index);
 
 	get_keypair(key)
 		.vrf_sign_n_check(transcript, |inout| check(inout, threshold))
