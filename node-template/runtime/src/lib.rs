@@ -18,7 +18,7 @@ use primitives::{ed25519, sr25519, OpaqueMetadata};
 use sr_primitives::{
 	ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
 	traits::{
-		self, NumberFor, BlakeTwo256, Block as BlockT, IsOnline StaticLookup, Verify,
+		self, NumberFor, BlakeTwo256, Block as BlockT, IsOnline, StaticLookup, Verify,
 	},
 	weights::Weight,
 };
