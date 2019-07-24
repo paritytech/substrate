@@ -98,7 +98,7 @@ macro_rules! parameter_types {
 	() => ();
 	(IMPL $name:ident , $type:ty , $value:expr) => {
 		impl $name {
-			fn get() -> $type {
+			pub fn get() -> $type {
 				$value
 			}
 		}
