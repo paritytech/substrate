@@ -63,7 +63,9 @@
 //!
 //! ## Dependencies
 //!
-//! This module depends on the [Session module](../srml_session/index.html).
+//! This module depends on the [Session module](../srml_session/index.html) for
+//! generic session functionality and on the [Authorship module](../srml_authorship/index.html)
+//! to mark validators automatically as online once they author a block.
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -76,7 +78,9 @@ use substrate_primitives::{
 };
 use parity_codec::{Encode, Decode};
 use primitives::{
-	ApplyError, traits::{Member, IsMember, Extrinsic as ExtrinsicT},
+	ApplyError, traits::{
+		Convert, DisableValidator, Member, IsMember, Extrinsic as ExtrinsicT, Zero,
+	},
 	transaction_validity::{TransactionValidity, TransactionLongevity, ValidTransaction},
 };
 use rstd::prelude::*;
@@ -158,6 +162,12 @@ pub trait Trait: system::Trait + session::Trait {
 
 	/// Determine if an `AuthorityId` is a valid authority.
 	type IsValidAuthorityId: IsMember<Self::AuthorityId>;
+
+	/// A conversion of `AuthorityId` to `AccountId`.
+	type AuthorityIdOf: Convert<Self::AccountId, Option<Self::AuthorityId>>;
+
+	/// Disable a given validator.
+	type DisableValidator: DisableValidator<Self::AccountId>;
 }
 
 decl_event!(
@@ -173,15 +183,24 @@ decl_event!(
 decl_storage! {
 	trait Store for Module<T: Trait> as ImOnline {
 		// The block number when we should gossip.
-		GossipAt get(gossip_at) config(): T::BlockNumber;
+		GossipAt get(gossip_at) build(|_| T::BlockNumber::zero()): T::BlockNumber;
 
 		// The session index when the last new era started.
-		LastNewEraStart get(last_new_era_start) config(): Option<session::SessionIndex>;
+		LastNewEraStart get(last_new_era_start): Option<session::SessionIndex>;
 
 		// For each session index we keep a mapping of `AuthorityId` to
 		// `offchain::OpaqueNetworkState`.
 		ReceivedHeartbeats get(received_heartbeats): double_map session::SessionIndex,
 			blake2_256(T::AuthorityId) => Vec<u8>;
+
+		// For each session index we track if an `AuthorityId` was noted as
+		// a block author by the authorship module.
+		BlockAuthors get(block_authors): double_map session::SessionIndex,
+			blake2_256(T::AuthorityId) => bool;
+
+		// The validators in the current session.
+		CurrentSessionValidators get(current_session_validators):
+			Vec<(T::AccountId, T::AuthorityId)>;
 	}
 }
 
@@ -198,6 +217,7 @@ decl_module! {
 			_signature: Vec<u8>
 		) {
 			ensure_none(origin)?;
+			print("heartbeat");
 
 			let current_session = <session::Module<T>>::current_index();
 			let exists = <ReceivedHeartbeats<T>>::exists(&current_session, &heartbeat.authority_id);
@@ -206,6 +226,7 @@ decl_module! {
 				Self::deposit_event(RawEvent::HeartbeatReceived(now, heartbeat.authority_id.clone()));
 
 				let network_state = heartbeat.network_state.encode();
+
 				<ReceivedHeartbeats<T>>::insert(&current_session, &heartbeat.authority_id, &network_state);
 			}
 		}
@@ -283,6 +304,7 @@ decl_module! {
 			if next_gossip < now && not_yet_gossipped {
 				set_worker_status::<T>(now, false);
 
+				print("gossipping");
 				match gossip_at::<T>(now) {
 					Ok(_) => {},
 					Err(err) => print(err),
@@ -301,25 +323,56 @@ impl<T: Trait> Module<T> {
 			Some(start) => {
 				// iterate over every session
 				for index in start..curr  {
-					if <ReceivedHeartbeats<T>>::exists(&index, authority_id) {
+					let got_heartbeat = <ReceivedHeartbeats<T>>::exists(&index, authority_id);
+					let was_author = <BlockAuthors<T>>::exists(&index, authority_id);
+					if  got_heartbeat || was_author {
 						return true;
 					}
 				}
 				false
 			},
-			None => <ReceivedHeartbeats<T>>::exists(&curr, authority_id),
+			None => {
+				let got_heartbeat = <ReceivedHeartbeats<T>>::exists(&curr, authority_id);
+				let was_author = <BlockAuthors<T>>::exists(&curr, authority_id);
+				got_heartbeat || was_author
+			},
 		}
 	}
 
 	/// Returns `true` if a heartbeat has been received for `AuthorityId`
 	/// during the current session. Otherwise `false`.
 	pub fn is_online_in_current_session(authority_id: &T::AuthorityId) -> bool {
-		let current_session = <session::Module<T>>::current_index();
-		<ReceivedHeartbeats<T>>::exists(&current_session, authority_id)
+		let curr = <session::Module<T>>::current_index();
+		let got_heartbeat = <ReceivedHeartbeats<T>>::exists(&curr, authority_id);
+		let was_author = <BlockAuthors<T>>::exists(&curr, authority_id);
+		got_heartbeat || was_author
+	}
+
+	/// Returns `true` if a heartbeat has been received for `AuthorityId`
+	/// during the previous session. Otherwise `false`.
+	pub fn is_online_in_previous_session(authority_id: &T::AuthorityId) -> bool {
+		let index = <session::Module<T>>::current_index() - 1;
+		let got_heartbeat = <ReceivedHeartbeats<T>>::exists(&index, authority_id);
+		let was_author = <BlockAuthors<T>>::exists(&index, authority_id);
+		got_heartbeat || was_author
+	}
+
+	/// Disables all validators which haven't been online in the previous session.
+	fn disable_offline_validators() {
+		<Module<T>>::current_session_validators()
+			.iter()
+			.for_each(|(validator_id, authority_id)| {
+				if !Self::is_online_in_previous_session(authority_id) {
+					let _ = T::DisableValidator::disable(validator_id);
+				}
+			});
 	}
 
 	/// Session has just changed.
-	fn new_session() {
+	fn new_session(validators: Vec<(T::AccountId, T::AuthorityId)>) {
+		Self::disable_offline_validators();
+		<CurrentSessionValidators<T>>::put(validators);
+
 		let now = <system::Module<T>>::block_number();
 		<GossipAt<T>>::put(now);
 
@@ -346,9 +399,13 @@ impl<T: Trait> Module<T> {
 			Some(start) => {
 				for index in start..curr {
 					<ReceivedHeartbeats<T>>::remove_prefix(&index);
+					<BlockAuthors<T>>::remove_prefix(&index);
 				}
 			},
-			None => <ReceivedHeartbeats<T>>::remove_prefix(&curr),
+			None => {
+				<ReceivedHeartbeats<T>>::remove_prefix(&curr);
+				<BlockAuthors<T>>::remove_prefix(&curr);
+			},
 		}
 	}
 }
@@ -356,11 +413,42 @@ impl<T: Trait> Module<T> {
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = <T as Trait>::AuthorityId;
 
-	fn on_new_session<'a, I: 'a>(_: (SessionIndex, SessionIndex), _changed: bool, _validators: I, _next_validators: I) {
-		Self::new_session();
+	fn on_new_session<'a, I: 'a>(
+		_: (SessionIndex, SessionIndex),
+		_changed: bool,
+		validators: I,
+		_next_validators: I,
+	)
+		where I: Iterator<Item=(&'a T::AccountId, T::AuthorityId)>
+	{
+		let validators: Vec<(T::AccountId, T::AuthorityId)> = validators
+			.map(|(acc_id, auth_id)| (acc_id.clone(), auth_id))
+			.collect();
+
+		Self::new_session(validators);
 	}
 
 	fn on_disabled(_i: usize) {
+		// ignore
+	}
+}
+
+/// Mark nodes which authored automatically as online.
+impl<T: Trait + authorship::Trait> authorship::EventHandler<T::AccountId, T::BlockNumber> for Module<T> {
+	fn note_author(account_id: T::AccountId) {
+		// we need to convert to the authority
+		let maybe_authority_id = T::AuthorityIdOf::convert(account_id);
+		if let Some(authority_id) = maybe_authority_id {
+			let current_session = <session::Module<T>>::current_index();
+
+			let exists = <BlockAuthors<T>>::exists(&current_session, &authority_id);
+			if !exists {
+				<BlockAuthors<T>>::insert(&current_session, &authority_id, &true);
+			}
+		}
+	}
+
+	fn note_uncle(_author: T::AccountId, _age: T::BlockNumber) {
 		// ignore
 	}
 }

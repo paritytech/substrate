@@ -123,10 +123,10 @@ use rstd::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use parity_codec::Decode;
 use primitives::KeyTypeId;
 use primitives::weights::SimpleDispatchInfo;
-use primitives::traits::{Convert, Zero, Member, OpaqueKeys, TypedKey};
+use primitives::traits::{Convert, Zero, Member, OpaqueKeys, TypedKey, Hash, One, SimpleArithmetic};
 use srml_support::{
 	dispatch::Result, ConsensusEngineId, StorageValue, StorageDoubleMap, for_each_tuple,
-	decl_module, decl_event, decl_storage,
+	decl_module, decl_event, decl_storage, print,
 };
 use srml_support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor}, Parameter};
 use system::{self, ensure_signed};
@@ -157,13 +157,13 @@ pub struct PeriodicSessions<
 >(PhantomData<(Period, Offset)>);
 
 impl<
-	BlockNumber: Rem<Output=BlockNumber> + Sub<Output=BlockNumber> + Zero + PartialOrd,
+	BlockNumber: Rem<Output=BlockNumber> + Sub<Output=BlockNumber> + Zero + PartialOrd + One + SimpleArithmetic,
 	Period: Get<BlockNumber>,
 	Offset: Get<BlockNumber>,
 > ShouldEndSession<BlockNumber> for PeriodicSessions<Period, Offset> {
 	fn should_end_session(now: BlockNumber) -> bool {
-		let offset = Offset::get();
-		now >= offset && ((now - offset) % Period::get()).is_zero()
+		let period = BlockNumber::one() + BlockNumber::one() + BlockNumber::one() + BlockNumber::one();
+		((now.saturating_sub(Offset::get())) % period).is_zero()
 	}
 }
 
@@ -325,6 +325,9 @@ decl_storage! {
 		/// The first key is always `DEDUP_KEY_PREFIX` to have all the data in the same branch of
 		/// the trie. Having all data in the same branch should prevent slowing down other queries.
 		KeyOwner: double_map hasher(twox_64_concat) Vec<u8>, blake2_256((KeyTypeId, Vec<u8>)) => Option<T::ValidatorId>;
+
+		/// Returns the keys of the current session for all validators.
+		CurrentKeys get(current_keys): Vec<(T::ValidatorId, T::Keys)>;
 	}
 	add_extra_genesis {
 		config(keys): Vec<(T::ValidatorId, T::Keys)>;
@@ -343,6 +346,8 @@ decl_storage! {
 					<Module<T>>::do_set_keys(&who, keys)
 						.expect("genesis config must not contain duplicates; qed");
 				}
+
+				<CurrentKeys<T>>::put(config.keys.clone());
 
 				let initial_validators = T::SelectInitialValidators::select_initial_validators()
 					.unwrap_or_else(|| config.keys.iter().map(|(ref v, _)| v.clone()).collect());
@@ -470,6 +475,21 @@ impl<T: Trait> Module<T> {
 			&session_keys,
 			&queued_amalgamated,
 		);
+
+		<CurrentKeys<T>>::put(session_keys);
+	}
+
+	pub fn get_current_keys<Key: Decode + Default + TypedKey>() -> Vec<(T::ValidatorId, Key)> {
+		print("get_current_keys");
+		Self::current_keys()
+			.into_iter()
+			.map(|k| {
+				(k.0,
+				 k.1.get::<Key>(<Key as TypedKey>::KEY_TYPE)
+					 .unwrap_or_default()
+				)
+			})
+			.collect()
 	}
 
 	/// Disable the validator of index `i`.

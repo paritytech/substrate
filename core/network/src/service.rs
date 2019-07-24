@@ -667,7 +667,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 		// Update the variables shared with the `NetworkService`.
 		self.num_connected.store(self.network_service.user_protocol_mut().num_connected_peers(), Ordering::Relaxed);
 		{
-			let external_addresses = Swarm::<B, S, H>::external_addresses(&self.network_service).cloned().collect();
+			let external_addresses: Vec<Multiaddr> = Swarm::<B, S, H>::external_addresses(&self.network_service).cloned().collect();
 			*self.external_addresses.lock() = external_addresses;
 		}
 		self.is_major_syncing.store(match self.network_service.user_protocol_mut().sync_state() {

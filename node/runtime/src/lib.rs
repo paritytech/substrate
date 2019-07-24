@@ -79,8 +79,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 121,
-	impl_version: 121,
+	spec_version: 122,
+	impl_version: 122,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -127,11 +127,12 @@ impl system::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const EpochDuration: u64 = 10 * MINUTES;
+	pub const EpochDuration: u64 = 1;
 }
 
 impl babe::Trait for Runtime {
 	type EpochDuration = EpochDuration;
+	type SessionInterfaceFoo = Self;
 }
 
 impl indices::Trait for Runtime {
@@ -183,7 +184,7 @@ impl authorship::Trait for Runtime {
 	type FindAuthor = ();
 	type UncleGenerations = UncleGenerations;
 	type FilterUncle = ();
-	type EventHandler = ();
+	type EventHandler = (ImOnline);
 }
 
 type SessionHandlers = (Grandpa, Babe, ImOnline, RollingWindow);
@@ -374,6 +375,8 @@ impl im_online::Trait for Runtime {
 	type SessionsPerEra = SessionsPerEra;
 	type UncheckedExtrinsic = UncheckedExtrinsic;
 	type IsValidAuthorityId = Babe;
+	type AuthorityIdOf = babe::AuthorityIdOf<Self, BabeId>;
+	type DisableValidator = staking::DisableValidatorInterface<Self>;
 }
 
 impl rolling_window::Trait for Runtime {

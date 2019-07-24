@@ -10,9 +10,14 @@ include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use rstd::prelude::*;
 use primitives::{ed25519, sr25519, OpaqueMetadata};
-use sr_primitives::{ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str};
-use sr_primitives::traits::{NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify, ConvertInto};
-use sr_primitives::weights::Weight;
+use sr_primitives::{
+	ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
+	traits::{
+		self, NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify,
+		ConvertInto,
+	},
+	weights::Weight,
+};
 use client::{
 	block_builder::api::{CheckInherentsResult, InherentData, self as block_builder_api},
 	runtime_api, impl_runtime_apis

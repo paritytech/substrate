@@ -287,7 +287,6 @@ where
 
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
 		let external_addresses = self.network_state.external_addresses();
-
 		let state = NetworkState::new(
 			self.network_state.peer_id(),
 			external_addresses,

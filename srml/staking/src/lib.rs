@@ -297,7 +297,7 @@ use primitives::Perbill;
 use primitives::weights::SimpleDispatchInfo;
 use primitives::traits::{
 	Convert, Zero, One, StaticLookup, CheckedSub, CheckedShl, Saturating, Bounded,
-	SaturatedConversion, SimpleArithmetic
+	SaturatedConversion, SimpleArithmetic, TypedKey, DisableValidator,
 };
 #[cfg(feature = "std")]
 use primitives::{Serialize, Deserialize};
@@ -480,6 +480,8 @@ pub trait SessionInterface<AccountId>: system::Trait {
 	fn validators() -> Vec<AccountId>;
 	/// Prune historical session tries up to but not including the given index.
 	fn prune_historical_up_to(up_to: session::SessionIndex);
+	/// Get the keys of the current session.
+	fn current_keys<Key: Decode + Default + TypedKey>() -> Vec<(AccountId, Key)>;
 }
 
 impl<T: Trait> SessionInterface<<T as system::Trait>::AccountId> for T where
@@ -491,7 +493,7 @@ impl<T: Trait> SessionInterface<<T as system::Trait>::AccountId> for T where
 	T::SessionHandler: session::SessionHandler<<T as system::Trait>::AccountId>,
 	T::OnSessionEnding: session::OnSessionEnding<<T as system::Trait>::AccountId>,
 	T::SelectInitialValidators: session::SelectInitialValidators<<T as system::Trait>::AccountId>,
-	T::ValidatorIdOf: Convert<<T as system::Trait>::AccountId, Option<<T as system::Trait>::AccountId>>
+	T::ValidatorIdOf: Convert<<T as system::Trait>::AccountId, Option<<T as system::Trait>::AccountId>>,
 {
 	fn disable_validator(validator: &<T as system::Trait>::AccountId) -> Result<(), ()> {
 		<session::Module<T>>::disable(validator)
@@ -499,6 +501,12 @@ impl<T: Trait> SessionInterface<<T as system::Trait>::AccountId> for T where
 
 	fn validators() -> Vec<<T as system::Trait>::AccountId> {
 		<session::Module<T>>::validators()
+	}
+
+	fn current_keys<Key>() -> Vec<(<T as system::Trait>::AccountId, Key)>
+		where Key: Decode + Default + TypedKey
+	{
+		<session::Module<T>>::get_current_keys::<Key>()
 	}
 
 	fn prune_historical_up_to(up_to: session::SessionIndex) {
@@ -1429,6 +1437,16 @@ impl<T: Trait> OnSessionEnding<T::AccountId, Exposure<T::AccountId, BalanceOf<T>
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(stash: &T::AccountId) {
 		Self::kill_stash(stash);
+	}
+}
+
+/// A `Convert` implementation that finds the controller account of the given stash account,
+/// if any.
+pub struct DisableValidatorInterface<T>(rstd::marker::PhantomData<T>);
+
+impl<T: Trait> DisableValidator<T::AccountId> for DisableValidatorInterface<T> {
+	fn disable(account_id: &T::AccountId) -> Result<(), ()> {
+		T::SessionInterface::disable_validator(account_id)
 	}
 }
 

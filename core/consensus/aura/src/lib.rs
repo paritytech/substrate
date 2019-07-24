@@ -294,7 +294,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 			// minor hack since we don't have access to the timestamp
 			// that is actually set by the proposer.
 			let slot_after_building = SignedDuration::default().slot_now(slot_duration);
-			if slot_after_building != slot_num {
+			if 1==2 && slot_after_building != slot_num {
 				info!(
 					"Discarding proposal for slot {}; block production took too long",
 					slot_num
