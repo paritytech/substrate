@@ -16,7 +16,7 @@
 
 use super::api::BlockBuilder as BlockBuilderApi;
 use std::vec::Vec;
-use parity_codec::Encode;
+use parity_scale_codec::Encode;
 use runtime_primitives::ApplyOutcome;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{

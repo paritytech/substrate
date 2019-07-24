@@ -27,9 +27,11 @@ use super::SlotNumber;
 use runtime_primitives::{DigestItem, generic::OpaqueDigestItemId};
 #[cfg(feature = "std")]
 use std::fmt::Debug;
-use parity_codec::{Decode, Encode};
+use parity_scale_codec::{Decode, Encode};
 #[cfg(feature = "std")]
-use parity_codec::{Codec, Input};
+use parity_scale_codec::Error;
+#[cfg(feature = "std")]
+use parity_scale_codec::{Codec, Input};
 #[cfg(feature = "std")]
 use schnorrkel::vrf::{VRFProof, VRFOutput, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH};
 
@@ -72,21 +74,23 @@ impl Encode for BabePreDigest {
 			authority_index: self.authority_index,
 			slot_number: self.slot_number,
 		};
-		parity_codec::Encode::encode(&tmp)
+		parity_scale_codec::Encode::encode(&tmp)
 	}
 }
 
 #[cfg(feature = "std")]
 impl Decode for BabePreDigest {
-	fn decode<R: Input>(i: &mut R) -> Option<Self> {
+	fn decode<R: Input>(i: &mut R) -> Result<Self, Error> {
 		let RawBabePreDigest { vrf_output, vrf_proof, authority_index, slot_number } = Decode::decode(i)?;
 
 		// Verify (at compile time) that the sizes in babe_primitives are correct
 		let _: [u8; super::VRF_OUTPUT_LENGTH] = vrf_output;
 		let _: [u8; super::VRF_PROOF_LENGTH] = vrf_proof;
-		Some(BabePreDigest {
-			vrf_proof: VRFProof::from_bytes(&vrf_proof).ok()?,
-			vrf_output: VRFOutput::from_bytes(&vrf_output).ok()?,
+		Ok(BabePreDigest {
+			vrf_proof: VRFProof::from_bytes(&vrf_proof)
+				.map_err(|_| Error::from("Invalid VRFProof"))?,
+			vrf_output: VRFOutput::from_bytes(&vrf_output)
+				.map_err(|_| Error::from("Invalid VRFOutput"))?,
 			authority_index,
 			slot_number,
 		})

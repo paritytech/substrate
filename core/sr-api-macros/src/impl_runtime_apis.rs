@@ -77,8 +77,8 @@ fn generate_impl_call(
 		quote!(
 			#(
 				let #pnames : #ptypes = match #c_iter::runtime_api::Decode::decode(&mut #input) {
-					Some(input) => input,
-					None => panic!("Bad input data provided to {}", #fn_name_str),
+					Ok(input) => input,
+					Err(e) => panic!("Bad input data provided to {}: {}", #fn_name_str, e.what()),
 				};
 			)*
 

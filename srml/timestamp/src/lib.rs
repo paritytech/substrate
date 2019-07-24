@@ -91,9 +91,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::{result, ops::{Mul, Div}, cmp};
-use parity_codec::Encode;
+use parity_scale_codec::Encode;
 #[cfg(feature = "std")]
-use parity_codec::Decode;
+use parity_scale_codec::Decode;
 #[cfg(feature = "std")]
 use inherents::ProvideInherentData;
 use srml_support::{StorageValue, Parameter, decl_storage, decl_module, for_each_tuple, traits::Get};
@@ -131,7 +131,7 @@ impl InherentError {
 	#[cfg(feature = "std")]
 	pub fn try_from(id: &InherentIdentifier, data: &[u8]) -> Option<Self> {
 		if id == &INHERENT_IDENTIFIER {
-			<InherentError as parity_codec::Decode>::decode(&mut &data[..])
+			<InherentError as parity_scale_codec::Decode>::decode(&mut &data[..]).ok()
 		} else {
 			None
 		}

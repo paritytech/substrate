@@ -34,7 +34,7 @@ use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImport
 use consensus_common::import_queue::{BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport};
 use std::collections::{HashMap, HashSet};
 use std::result;
-use parity_codec::Decode;
+use parity_scale_codec::Decode;
 use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
 use substrate_primitives::{NativeOrEncoded, ExecutionContext};
@@ -336,7 +336,7 @@ impl AuthoritySetForFinalityChecker<Block> for TestApi {
 		proof: Vec<Vec<u8>>,
 	) -> Result<Vec<(AuthorityId, u64)>> {
 		Decode::decode(&mut &proof[0][..])
-			.ok_or_else(|| unreachable!("incorrect value is passed as GRANDPA authorities proof"))
+			.map_err(|_| unreachable!("incorrect value is passed as GRANDPA authorities proof"))
 	}
 }
 

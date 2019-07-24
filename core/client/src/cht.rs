@@ -26,7 +26,7 @@
 use std::collections::HashSet;
 
 use hash_db;
-use parity_codec::Encode;
+use parity_scale_codec::Encode;
 use trie;
 
 use primitives::{H256, convert_hash};

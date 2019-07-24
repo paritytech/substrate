@@ -16,7 +16,7 @@
 
 //! Different types of changes trie input pairs.
 
-use parity_codec::{Decode, Encode, Input, Output};
+use parity_scale_codec::{Decode, Encode, Input, Output, Error};
 use crate::changes_trie::BlockNumber;
 
 /// Key of { changed key => set of extrinsic indices } mapping.
@@ -113,17 +113,17 @@ impl<Number: BlockNumber> Encode for DigestIndex<Number> {
 }
 
 impl<Number: BlockNumber> Decode for InputKey<Number> {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
 		match input.read_byte()? {
-			1 => Some(InputKey::ExtrinsicIndex(ExtrinsicIndex {
+			1 => Ok(InputKey::ExtrinsicIndex(ExtrinsicIndex {
 				block: Decode::decode(input)?,
 				key: Decode::decode(input)?,
 			})),
-			2 => Some(InputKey::DigestIndex(DigestIndex {
+			2 => Ok(InputKey::DigestIndex(DigestIndex {
 				block: Decode::decode(input)?,
 				key: Decode::decode(input)?,
 			})),
-			_ => None,
+			_ => Err("Invalid input key variant".into()),
 		}
 	}
 }

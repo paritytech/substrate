@@ -120,7 +120,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
-use parity_codec::Decode;
+use parity_scale_codec::Decode;
 use primitives::KeyTypeId;
 use primitives::traits::{Convert, Zero, Member, OpaqueKeys, TypedKey};
 use srml_support::{

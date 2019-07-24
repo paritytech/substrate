@@ -26,7 +26,7 @@ use runtime_primitives::Justification;
 use runtime_primitives::traits::{Block as BlockT};
 use runtime_primitives::generic::BlockId;
 use primitives::Blake2Hasher;
-use parity_codec::alloc::collections::hash_map::HashMap;
+use parity_scale_codec::alloc::collections::hash_map::HashMap;
 
 /// Extension trait for a test client.
 pub trait ClientExt<Block: BlockT>: Sized {

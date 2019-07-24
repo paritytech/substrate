@@ -25,8 +25,8 @@
 #[cfg(feature = "std")]
 use serde::Serialize;
 #[cfg(feature = "std")]
-use parity_codec::{Decode, Input};
-use parity_codec::{Encode, Output};
+use parity_scale_codec::{Decode, Input, Error};
+use parity_scale_codec::{Encode, Output};
 use rstd::vec::Vec;
 
 #[cfg(feature = "std")]
@@ -61,9 +61,9 @@ impl<B, O> Encode for DecodeDifferent<B, O> where B: Encode + 'static, O: Encode
 
 #[cfg(feature = "std")]
 impl<B, O> Decode for DecodeDifferent<B, O> where B: 'static, O: Decode + 'static {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		<O>::decode(input).and_then(|val| {
-			Some(DecodeDifferent::Decoded(val))
+	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
+		<O>::decode(input).map(|val| {
+			DecodeDifferent::Decoded(val)
 		})
 	}
 }
@@ -324,7 +324,7 @@ impl Encode for RuntimeMetadataDeprecated {
 
 #[cfg(feature = "std")]
 impl Decode for RuntimeMetadataDeprecated {
-	fn decode<I: Input>(_input: &mut I) -> Option<Self> {
+	fn decode<I: Input>(_input: &mut I) -> Result<Self, Error> {
 		unimplemented!()
 	}
 }

@@ -26,7 +26,7 @@ use substrate_primitives::{
 	ed25519, sr25519, hexdisplay::HexDisplay, Pair, Public, blake2_256,
 	crypto::{Ss58Codec, set_default_ss58_version, Ss58AddressFormat}
 };
-use parity_codec::{Encode, Decode, Compact};
+use parity_scale_codec::{Encode, Decode, Compact};
 use sr_primitives::generic::Era;
 use node_primitives::{Balance, Index, Hash};
 use node_runtime::{Call, UncheckedExtrinsic, /*CheckNonce, TakeFees, */BalancesCall};
@@ -279,7 +279,7 @@ mod tests {
 	fn should_work() {
 		let s = "0123456789012345678901234567890123456789012345678901234567890123";
 
-		let d1: Hash = hex::decode(s).ok().and_then(|x| Decode::decode(&mut &x[..])).unwrap();
+		let d1: Hash = hex::decode(s).ok().and_then(|x| Decode::decode(&mut &x[..]).ok()).unwrap();
 
 		let d2: Hash = {
 			let mut gh: [u8; 32] = Default::default();

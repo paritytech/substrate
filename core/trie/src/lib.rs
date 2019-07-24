@@ -125,7 +125,7 @@ pub fn unhashed_trie<H: Hasher, I, A, B>(input: I) -> Vec<u8> where
 }
 
 /// A trie root formed from the items, with keys attached according to their
-/// compact-encoded index (using `parity-codec` crate).
+/// compact-encoded index (using `parity-scale-codec` crate).
 pub fn ordered_trie_root<H: Hasher, I, A>(input: I) -> H::Out
 where
 	I: IntoIterator<Item = A>,

@@ -38,7 +38,7 @@ mod tests {
 	use runtime_io;
 	use super::Executor;
 	use substrate_executor::{WasmExecutor, NativeExecutionDispatch};
-	use parity_codec::{Encode, Decode, Joiner};
+	use parity_scale_codec::{Encode, Decode, Joiner};
 	use keyring::{AuthorityKeyring, AccountKeyring};
 	use runtime_support::{Hashable, StorageValue, StorageMap, traits::{Currency, Get}};
 	use state_machine::{CodeExecutor, Externalities, TestExternalities as CoreTestExternalities};

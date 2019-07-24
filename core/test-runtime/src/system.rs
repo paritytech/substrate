@@ -25,7 +25,7 @@ use runtime_primitives::traits::{Hash as HashT, BlakeTwo256, Header as _};
 use runtime_primitives::generic;
 use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult};
 use runtime_primitives::transaction_validity::{TransactionValidity, ValidTransaction};
-use parity_codec::{KeyedVec, Encode};
+use parity_scale_codec::{KeyedVec, Encode};
 use super::{
 	AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest, AuthorityId
 };

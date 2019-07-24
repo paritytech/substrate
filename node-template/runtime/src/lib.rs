@@ -10,7 +10,7 @@ include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
-use parity_codec::{Encode, Decode};
+use parity_scale_codec::{Encode, Decode};
 use rstd::prelude::*;
 #[cfg(feature = "std")]
 use primitives::bytes;

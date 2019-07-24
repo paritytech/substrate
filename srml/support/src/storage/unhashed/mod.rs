@@ -27,6 +27,7 @@ pub fn get<T: Decode + Sized>(key: &[u8]) -> Option<T> {
 		let mut input = IncrementalInput {
 			key,
 			pos: 0,
+			remaining_len: None,
 		};
 		Decode::decode(&mut input).expect("storage is not null, therefore must be a valid type")
 	})

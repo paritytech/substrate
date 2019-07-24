@@ -23,7 +23,7 @@ pub mod genesismap;
 pub mod system;
 
 use rstd::{prelude::*, marker::PhantomData};
-use parity_codec::{Encode, Decode, Input};
+use parity_scale_codec::{Encode, Decode, Input, Error};
 
 use primitives::Blake2Hasher;
 use trie_db::{TrieMut, Trie};
@@ -225,9 +225,8 @@ impl<B: BlockT> DecodeFails<B> {
 }
 
 impl<B: BlockT> Decode for DecodeFails<B> {
-	fn decode<I: Input>(_: &mut I) -> Option<Self> {
-		// decoding always fails
-		None
+	fn decode<I: Input>(_: &mut I) -> Result<Self, Error> {
+		Err("DecodeFails always fails".into())
 	}
 }
 

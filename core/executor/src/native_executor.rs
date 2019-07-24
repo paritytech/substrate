@@ -21,7 +21,7 @@ use crate::wasm_executor::WasmExecutor;
 use wasmi::{Module as WasmModule, ModuleRef as WasmModuleInstanceRef};
 use runtime_version::{NativeVersion, RuntimeVersion};
 use std::{collections::HashMap, panic::UnwindSafe};
-use parity_codec::{Decode, Encode};
+use parity_scale_codec::{Decode, Encode};
 use crate::RuntimeInfo;
 use primitives::{Blake2Hasher, NativeOrEncoded};
 use primitives::storage::well_known_keys;
@@ -65,7 +65,7 @@ fn fetch_cached_runtime_version<'a, E: Externalities<Blake2Hasher>>(
 				None => return RuntimePreproc::InvalidCode,
 			};
 			let heap_pages = ext.storage(well_known_keys::HEAP_PAGES)
-				.and_then(|pages| u64::decode(&mut &pages[..]))
+				.and_then(|pages| u64::decode(&mut &pages[..]).ok())
 				.or(default_heap_pages)
 				.unwrap_or(DEFAULT_HEAP_PAGES);
 			match WasmModule::from_buffer(code)
@@ -75,7 +75,7 @@ fn fetch_cached_runtime_version<'a, E: Externalities<Blake2Hasher>>(
 				Ok(module) => {
 					let version = wasm_executor.call_in_wasm_module(ext, &module, "Core_version", &[])
 						.ok()
-						.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()));
+						.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()).ok());
 					RuntimePreproc::ValidCode(module, version)
 				}
 				Err(e) => {

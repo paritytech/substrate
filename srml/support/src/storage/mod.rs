@@ -30,14 +30,29 @@ pub mod hashed;
 struct IncrementalInput<'a> {
 	key: &'a [u8],
 	pos: usize,
+	remaining_len: Option<usize>,
 }
 
 impl<'a> Input for IncrementalInput<'a> {
-	fn read(&mut self, into: &mut [u8]) -> usize {
+	fn remaining_len(&mut self) -> Result<usize, codec::Error> {
+		if let Some(len) = self.remaining_len {
+			Ok(len)
+		} else {
+			let len = runtime_io::read_storage(self.key, &mut [][..], self.pos).unwrap_or(0);
+			self.remaining_len = Some(len);
+			Ok(len)
+		}
+	}
+
+	fn read(&mut self, into: &mut [u8]) -> Result<(), codec::Error> {
 		let len = runtime_io::read_storage(self.key, into, self.pos).unwrap_or(0);
-		let read = crate::rstd::cmp::min(len, into.len());
-		self.pos += read;
-		read
+		if len < into.len() {
+			return Err("Not enough data in storage value".into())
+		}
+
+		self.remaining_len = Some(len - into.len());
+		self.pos += into.len();
+		Ok(())
 	}
 }
 
@@ -45,14 +60,31 @@ struct IncrementalChildInput<'a> {
 	storage_key: &'a [u8],
 	key: &'a [u8],
 	pos: usize,
+	remaining_len: Option<usize>
 }
 
 impl<'a> Input for IncrementalChildInput<'a> {
-	fn read(&mut self, into: &mut [u8]) -> usize {
-		let len = runtime_io::read_child_storage(self.storage_key, self.key, into, self.pos).unwrap_or(0);
-		let read = crate::rstd::cmp::min(len, into.len());
-		self.pos += read;
-		read
+	fn remaining_len(&mut self) -> Result<usize, codec::Error> {
+		if let Some(len) = self.remaining_len {
+			Ok(len)
+		} else {
+			let len = runtime_io::read_child_storage(self.storage_key, self.key, &mut [][..], self.pos)
+				.unwrap_or(0);
+			self.remaining_len = Some(len);
+			Ok(len)
+		}
+	}
+
+	fn read(&mut self, into: &mut [u8]) -> Result<(), codec::Error> {
+		let len = runtime_io::read_child_storage(self.storage_key, self.key, into, self.pos)
+			.unwrap_or(0);
+		if len < into.len() {
+			return Err("Not enough data in child storage value".into())
+		}
+
+		self.remaining_len = Some(len - into.len());
+		self.pos += into.len();
+		Ok(())
 	}
 }
 
@@ -531,6 +563,7 @@ pub mod child {
 				storage_key,
 				key,
 				pos: 0,
+				remaining_len: None,
 			};
 			Decode::decode(&mut input).expect("storage is not null, therefore must be a valid type")
 		})

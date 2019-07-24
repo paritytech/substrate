@@ -79,7 +79,7 @@ use runtime_primitives::{Permill, ModuleId};
 use runtime_primitives::traits::{
 	Zero, EnsureOrigin, StaticLookup, CheckedSub, CheckedMul, AccountIdConversion
 };
-use parity_codec::{Encode, Decode};
+use parity_scale_codec::{Encode, Decode};
 use system::ensure_signed;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;

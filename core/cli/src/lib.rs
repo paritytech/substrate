@@ -37,8 +37,8 @@ use network::{
 use primitives::H256;
 
 use std::{
-	io::{Write, Read, stdin, stdout, ErrorKind}, iter, fs::{self, File}, net::{Ipv4Addr, SocketAddr},
-	path::{Path, PathBuf}, str::FromStr,
+	io::{Write, Read, Seek, Cursor, stdin, stdout, ErrorKind}, iter, fs::{self, File},
+	net::{Ipv4Addr, SocketAddr}, path::{Path, PathBuf}, str::FromStr,
 };
 
 use names::{Generator, Name};
@@ -628,6 +628,10 @@ where
 	).map_err(Into::into)
 }
 
+trait ReadPlusSeek: Read + Seek {}
+
+impl<T: Read + Seek> ReadPlusSeek for T {}
+
 fn import_blocks<F, E, S>(
 	cli: ImportBlocksCmd,
 	spec_factory: S,
@@ -641,9 +645,13 @@ where
 {
 	let config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params, version)?;
 
-	let file: Box<dyn Read> = match cli.input {
+	let file: Box<dyn ReadPlusSeek> = match cli.input {
 		Some(filename) => Box::new(File::open(filename)?),
-		None => Box::new(stdin()),
+		None => {
+			let mut buffer = Vec::new();
+			stdin().read_to_end(&mut buffer)?;
+			Box::new(Cursor::new(buffer))
+		},
 	};
 
 	let fut = service::chain_ops::import_blocks::<F, _, _>(config, exit.into_exit(), file)?;

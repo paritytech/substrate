@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::{sync::Arc, cmp::Ord, panic::UnwindSafe, result, cell::RefCell, rc::Rc};
-use parity_codec::{Encode, Decode};
+use parity_scale_codec::{Encode, Decode};
 use runtime_primitives::{
 	generic::BlockId, traits::Block as BlockT,
 };

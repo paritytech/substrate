@@ -19,8 +19,8 @@
 use client;
 use transaction_pool::txpool;
 use crate::rpc;
-
 use crate::errors;
+use parity_scale_codec::Error as CodecError;
 
 /// Author RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -36,8 +36,8 @@ pub enum Error {
 	#[display(fmt="Extrinsic verification error: {}", _0)]
 	Verification(Box<dyn std::error::Error + Send>),
 	/// Incorrect extrinsic format.
-	#[display(fmt="Invalid extrinsic format")]
-	BadFormat,
+	#[display(fmt="Invalid extrinsic format: {}", _0)]
+	BadFormat(CodecError),
 }
 
 impl std::error::Error for Error {
@@ -78,9 +78,9 @@ impl From<Error> for rpc::Error {
 		use txpool::error::{Error as PoolError};
 
 		match e {
-			Error::BadFormat => rpc::Error {
+			Error::BadFormat(e) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(BAD_FORMAT),
-				message: "Extrinsic has invalid format.".into(),
+				message: format!("Extrinsic has invalid format: {}", e).into(),
 				data: None,
 			},
 			Error::Verification(e) => rpc::Error {

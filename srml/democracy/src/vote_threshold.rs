@@ -18,7 +18,7 @@
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
-use parity_codec::{Encode, Decode};
+use parity_scale_codec::{Encode, Decode};
 use primitives::traits::{Zero, IntegerSquareRoot};
 use rstd::ops::{Add, Mul, Div, Rem};
 

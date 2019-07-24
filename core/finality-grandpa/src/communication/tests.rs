@@ -24,7 +24,7 @@ use network_gossip::Validator;
 use tokio::runtime::current_thread;
 use std::sync::Arc;
 use keyring::AuthorityKeyring;
-use parity_codec::Encode;
+use parity_scale_codec::Encode;
 
 use crate::environment::SharedVoterSetState;
 use super::gossip::{self, GossipValidator};

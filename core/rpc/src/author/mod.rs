@@ -30,7 +30,7 @@ use crate::subscriptions::Subscriptions;
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use log::warn;
-use parity_codec::{Encode, Decode};
+use parity_scale_codec::{Encode, Decode};
 use primitives::{Bytes, Blake2Hasher, H256};
 use runtime_primitives::{generic, traits};
 use self::error::Result;
@@ -110,7 +110,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 	type Metadata = crate::metadata::Metadata;
 
 	fn submit_extrinsic(&self, ext: Bytes) -> Result<ExHash<P>> {
-		let xt = Decode::decode(&mut &ext[..]).ok_or(error::Error::BadFormat)?;
+		let xt = Decode::decode(&mut &ext[..])?;
 		let best_block_hash = self.client.info().chain.best_hash;
 		self.pool
 			.submit_one(&generic::BlockId::hash(best_block_hash), xt)
@@ -129,7 +129,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 			.map(|x| match x {
 				hash::ExtrinsicOrHash::Hash(h) => Ok(h),
 				hash::ExtrinsicOrHash::Extrinsic(bytes) => {
-					let xt = Decode::decode(&mut &bytes[..]).ok_or(error::Error::BadFormat)?;
+					let xt = Decode::decode(&mut &bytes[..])?;
 					Ok(self.pool.hash_of(&xt))
 				},
 			})
@@ -147,7 +147,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 		let submit = || -> Result<_> {
 			let best_block_hash = self.client.info().chain.best_hash;
 			let dxt = <<P as PoolChainApi>::Block as traits::Block>::Extrinsic::decode(&mut &xt[..])
-				.ok_or(error::Error::BadFormat)?;
+				?;
 			self.pool
 				.submit_and_watch(&generic::BlockId::hash(best_block_hash), dxt)
 				.map_err(|e| e.into_pool_error()

@@ -18,7 +18,7 @@
 
 use bitflags::bitflags;
 use runtime_primitives::{ConsensusEngineId, traits::{Block as BlockT, Header as HeaderT}};
-use parity_codec::{Encode, Decode, Input, Output};
+use parity_scale_codec::{Encode, Decode, Input, Output, Error};
 pub use self::generic::{
 	BlockAnnounce, RemoteCallRequest, RemoteReadRequest,
 	RemoteHeaderRequest, RemoteHeaderResponse,
@@ -91,8 +91,8 @@ impl Encode for BlockAttributes {
 }
 
 impl Decode for BlockAttributes {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Self::from_bits(input.read_byte()?)
+	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
+		Self::from_bits(input.read_byte()?).ok_or_else(|| Error::from("Invalid bytes"))
 	}
 }
 
@@ -126,7 +126,7 @@ pub struct RemoteReadResponse {
 /// Generic types.
 pub mod generic {
 	use crate::custom_proto::CustomMessage;
-	use parity_codec::{Encode, Decode};
+	use parity_scale_codec::{Encode, Decode};
 	use runtime_primitives::Justification;
 	use crate::config::Roles;
 	use super::{
@@ -218,7 +218,7 @@ pub mod generic {
 		}
 
 		fn from_bytes(bytes: &[u8]) -> Result<Self, ()> {
-			Decode::decode(&mut &bytes[..]).ok_or(())
+			Decode::decode(&mut &bytes[..]).map_err(|_| ())
 		}
 	}
 

@@ -57,7 +57,7 @@ use log::{debug, info, warn};
 use futures::sync::mpsc;
 use client::{BlockchainEvents, CallExecutor, Client, backend::Backend, error::Error as ClientError};
 use client::blockchain::HeaderBackend;
-use parity_codec::Encode;
+use parity_scale_codec::Encode;
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, DigestFor, ProvideRuntimeApi,
 };

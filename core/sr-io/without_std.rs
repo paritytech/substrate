@@ -529,7 +529,7 @@ pub mod ext {
 
 		/// Initiates a http request.
 		///
-		/// `meta` is parity-codec encoded additional parameters to the request (like redirection policy,
+		/// `meta` is parity-scale-codec encoded additional parameters to the request (like redirection policy,
 		/// timeouts, certificates policy, etc). The format is not yet specified and the field is currently
 		/// only reserved for future use.
 		///
@@ -596,7 +596,7 @@ pub mod ext {
 		///
 		/// # Returns
 		///
-		/// - A pointer to parity-codec encoded vector of pairs `(HeaderKey, HeaderValue)`.
+		/// - A pointer to parity-scale-codec encoded vector of pairs `(HeaderKey, HeaderValue)`.
 		/// - In case invalid `id` is passed it returns a pointer to parity-encoded empty vector.
 		fn ext_http_response_headers(
 			id: u32,

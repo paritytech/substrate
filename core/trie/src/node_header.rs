@@ -16,7 +16,7 @@
 
 //! The node header.
 
-use codec::{Encode, Decode, Input, Output};
+use codec::{Encode, Decode, Input, Output, Error};
 use super::{EMPTY_TRIE, LEAF_NODE_OFFSET, LEAF_NODE_BIG, EXTENSION_NODE_OFFSET,
 	EXTENSION_NODE_BIG, BRANCH_NODE_NO_VALUE, BRANCH_NODE_WITH_VALUE, LEAF_NODE_THRESHOLD,
 	EXTENSION_NODE_THRESHOLD, LEAF_NODE_SMALL_MAX, EXTENSION_NODE_SMALL_MAX};
@@ -56,8 +56,8 @@ impl Encode for NodeHeader {
 }
 
 impl Decode for NodeHeader {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Some(match input.read_byte()? {
+	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
+		Ok(match input.read_byte()? {
 			EMPTY_TRIE => NodeHeader::Null,							// 0
 
 			i @ LEAF_NODE_OFFSET ..= LEAF_NODE_SMALL_MAX =>			// 1 ... (127 - 1)

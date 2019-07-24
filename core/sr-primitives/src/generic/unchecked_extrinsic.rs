@@ -21,7 +21,7 @@ use std::fmt;
 
 use rstd::prelude::*;
 use runtime_io::blake2_256;
-use crate::codec::{Decode, Encode, Input};
+use crate::codec::{Decode, Encode, Input, Error};
 use crate::traits::{self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic};
 use super::CheckedExtrinsic;
 
@@ -131,22 +131,23 @@ where
 	Call: Decode,
 	Extra: SignedExtension,
 {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
 		// This is a little more complicated than usual since the binary format must be compatible
 		// with substrate's generic `Vec<u8>` type. Basically this just means accepting that there
 		// will be a prefix of vector length (we don't need
 		// to use this).
 		let _length_do_not_remove_me_see_above: Vec<()> = Decode::decode(input)?;
+		// TODO TODO: is this correct ? can it work ?
 
 		let version = input.read_byte()?;
 
 		let is_signed = version & 0b1000_0000 != 0;
 		let version = version & 0b0111_1111;
 		if version != TRANSACTION_VERSION {
-			return None
+			return Err("Invalid transaction version".into());
 		}
 
-		Some(UncheckedExtrinsic {
+		Ok(UncheckedExtrinsic {
 			signature: if is_signed { Some(Decode::decode(input)?) } else { None },
 			function: Decode::decode(input)?,
 		})
@@ -254,7 +255,7 @@ mod tests {
 	fn unsigned_codec_should_work() {
 		let ux = Ex::new_unsigned(vec![0u8; 0]);
 		let encoded = ux.encode();
-		assert_eq!(Ex::decode(&mut &encoded[..]), Some(ux));
+		assert_eq!(Ex::decode(&mut &encoded[..]), Ok(ux));
 	}
 
 	#[test]
@@ -266,7 +267,7 @@ mod tests {
 			TestExtra
 		);
 		let encoded = ux.encode();
-		assert_eq!(Ex::decode(&mut &encoded[..]), Some(ux));
+		assert_eq!(Ex::decode(&mut &encoded[..]), Ok(ux));
 	}
 
 	#[test]
@@ -279,7 +280,7 @@ mod tests {
 			TestExtra
 		);
 		let encoded = ux.encode();
-		assert_eq!(Ex::decode(&mut &encoded[..]), Some(ux));
+		assert_eq!(Ex::decode(&mut &encoded[..]), Ok(ux));
 	}
 
 	#[test]
