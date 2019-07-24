@@ -23,6 +23,18 @@ use service::NetworkStatus;
 use std::{convert::TryInto, fmt, time};
 
 /// State of the informant display system.
+///
+/// This is the system that handles the line that gets regularly printed and that looks something
+/// like:
+///
+/// > Syncing  5.4 bps, target=#531028 (4 peers), best: #90683 (0x4ca8…51b8),
+/// >  finalized #360 (0x6f24…a38b), ⬇ 5.5kiB/s ⬆ 0.9kiB/s
+///
+/// # Usage
+///
+/// Call `InformantDisplay::new` to initialize the state, then regularly call `display` with the
+/// information to display.
+///
 pub struct InformantDisplay<B: BlockT> {
 	/// Head of chain block number from the last time `display` has been called.
 	/// `None` if `display` has never been called.
