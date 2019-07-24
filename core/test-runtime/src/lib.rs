@@ -531,7 +531,7 @@ cfg_if! {
 					babe_primitives::BabeConfiguration {
 						median_required_blocks: 0,
 						slot_duration: 3,
-						c: (6, 9),
+						c: (3, 10),
 					}
 				}
 
@@ -687,7 +687,7 @@ cfg_if! {
 					babe_primitives::BabeConfiguration {
 						median_required_blocks: 0,
 						slot_duration: 1,
-						c: (6, 9),
+						c: (3, 10),
 					}
 				}
 

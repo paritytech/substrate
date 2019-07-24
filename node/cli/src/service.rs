@@ -370,7 +370,7 @@ mod tests {
 					&parent_id,
 					slot_num,
 					&alice,
-					(6, 9),
+					(3, 10),
 				) {
 					break babe_pre_digest;
 				}
