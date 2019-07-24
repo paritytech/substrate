@@ -17,7 +17,7 @@
 use wasm_builder_runner::{build_current_project_with_rustflags, WasmBuilderSource};
 
 fn main() {
-	build_current_project(
+	build_current_project_with_rustflags(
 		"wasm_binary.rs",
 		WasmBuilderSource::Crates("1.0.4"),
 		// This instructs LLD to export __heap_base as a global variable, which is used by the
