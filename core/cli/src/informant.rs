@@ -16,14 +16,14 @@
 
 //! Console informant. Prints sync progress and block events. Runs on the calling thread.
 
+use client::{backend::Backend, BlockchainEvents};
 use futures::{Future, Stream};
 use futures03::{StreamExt as _, TryStreamExt as _};
-use service::{Service, Components};
-use tokio::runtime::TaskExecutor;
-use client::{backend::Backend, BlockchainEvents};
 use log::{info, warn};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::Header;
+use service::{Service, Components};
+use tokio::runtime::TaskExecutor;
 
 mod display;
 

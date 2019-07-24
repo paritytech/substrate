@@ -15,12 +15,12 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use ansi_term::Colour;
-use std::{fmt, marker::PhantomData, time};
-use service::NetworkStatus;
-use network::SyncState;
 use client::ClientInfo;
 use log::info;
+use network::SyncState;
 use runtime_primitives::traits::{Block as BlockT, SaturatedConversion};
+use service::NetworkStatus;
+use std::{fmt, marker::PhantomData, time};
 
 /// State of the informant display system.
 pub struct InformantDisplay<B: BlockT> {
