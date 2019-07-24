@@ -45,7 +45,7 @@ pub fn check() -> Option<&'static str> {
 
 fn check_nightly_installed() -> bool {
 	let mut command = crate::get_nightly_cargo();
-	crate::is_nightly(&mut command)
+	!crate::is_nightly(&mut command)
 }
 
 fn check_wasm_toolchain_installed() -> bool {
