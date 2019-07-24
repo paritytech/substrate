@@ -150,15 +150,19 @@ pub fn build_changes_trie<'a, B: Backend<H>, S: Storage<H, Number>, H: Hasher, N
 	let mut mdb = MemoryDB::default();
 	let mut child_roots = Vec::with_capacity(child_input_pairs.len());
 	for (child_index, input_pairs) in child_input_pairs {
+		let mut not_empty = false;
 		let mut root = Default::default();
 		{
 			let mut trie = TrieDBMut::<H>::new(&mut mdb, &mut root);
 			for (key, value) in input_pairs.map(Into::into) {
+				not_empty = true;
 				trie.insert(&key, &value)
 					.expect("changes trie: insertion to trie is not allowed to fail within runtime");
 			}
 		}
-		child_roots.push(input::InputPair::ChildIndex(child_index, root.as_ref().to_vec()));
+		if not_empty {
+			child_roots.push(input::InputPair::ChildIndex(child_index, root.as_ref().to_vec()));
+		}
 	}
 	let mut root = Default::default();
 	{
