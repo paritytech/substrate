@@ -23,7 +23,7 @@
 
 use futures::Future;
 use hyper::rt;
-use substrate::primitives::Hash;
+use node_primitives::Hash;
 use substrate_rpc::author::{
 	AuthorClient,
 	hash::ExtrinsicOrHash,
