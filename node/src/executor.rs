@@ -35,7 +35,6 @@ native_executor_instance!(
 
 #[cfg(test)]
 mod tests {
-	use runtime_io;
 	use super::Executor;
 	use substrate_executor::{WasmExecutor, NativeExecutionDispatch};
 	use parity_codec::{Encode, Decode, Joiner};
@@ -129,7 +128,7 @@ mod tests {
 				let key = AccountKeyring::from_public(&signed).unwrap();
 				let signature = payload.using_encoded(|b| {
 					if b.len() > 256 {
-						key.sign(&runtime_io::blake2_256(b))
+						key.sign(&sr_io::blake2_256(b))
 					} else {
 						key.sign(b)
 					}
@@ -272,7 +271,7 @@ mod tests {
 		).0;
 		assert!(r.is_ok());
 
-		runtime_io::with_externalities(&mut t, || {
+		sr_io::with_externalities(&mut t, || {
 			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()) - creation_fee());
 			assert_eq!(Balances::total_balance(&bob()), 69 * DOLLARS);
 		});
@@ -308,7 +307,7 @@ mod tests {
 		).0;
 		assert!(r.is_ok());
 
-		runtime_io::with_externalities(&mut t, || {
+		sr_io::with_externalities(&mut t, || {
 			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()) - creation_fee());
 			assert_eq!(Balances::total_balance(&bob()), 69 * DOLLARS);
 		});
@@ -540,7 +539,7 @@ mod tests {
 			None,
 		).0.unwrap();
 
-		runtime_io::with_externalities(&mut t, || {
+		sr_io::with_externalities(&mut t, || {
 			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()) - creation_fee());
 			assert_eq!(Balances::total_balance(&bob()), 169 * DOLLARS);
 			let events = vec![
@@ -575,7 +574,7 @@ mod tests {
 			None,
 		).0.unwrap();
 
-		runtime_io::with_externalities(&mut t, || {
+		sr_io::with_externalities(&mut t, || {
 			// TODO TODO: this needs investigating: why are we deducting creation fee twice here? and why bob also pays it?
 			assert_eq!(Balances::total_balance(&alice()), 32 * DOLLARS - 2 * transfer_fee(&xt()) - 2 * creation_fee());
 			assert_eq!(Balances::total_balance(&bob()), 179 * DOLLARS - transfer_fee(&xt()) - creation_fee());
@@ -632,14 +631,14 @@ mod tests {
 
 		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block1.0).unwrap();
 
-		runtime_io::with_externalities(&mut t, || {
+		sr_io::with_externalities(&mut t, || {
 			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()) - creation_fee());
 			assert_eq!(Balances::total_balance(&bob()), 169 * DOLLARS);
 		});
 
 		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block2.0).unwrap();
 
-		runtime_io::with_externalities(&mut t, || {
+		sr_io::with_externalities(&mut t, || {
 			assert_eq!(Balances::total_balance(&alice()), 32 * DOLLARS - 2 * transfer_fee(&xt()) - 2 * creation_fee());
 			assert_eq!(Balances::total_balance(&bob()), 179 * DOLLARS - 1 * transfer_fee(&xt()) - creation_fee());
 		});
@@ -787,7 +786,7 @@ mod tests {
 
 		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE,"Core_execute_block", &b.0).unwrap();
 
-		runtime_io::with_externalities(&mut t, || {
+		sr_io::with_externalities(&mut t, || {
 			// Verify that the contract constructor worked well and code of TRANSFER contract is actually deployed.
 			assert_eq!(
 				&contracts::ContractInfoOf::<Runtime>::get(addr)
@@ -885,7 +884,7 @@ mod tests {
 		let r = ApplyResult::decode(&mut &r[..]).unwrap();
 		assert_eq!(r, Ok(ApplyOutcome::Success));
 
-		runtime_io::with_externalities(&mut t, || {
+		sr_io::with_externalities(&mut t, || {
 			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - 1 * transfer_fee(&xt()) - creation_fee());
 			assert_eq!(Balances::total_balance(&bob()), 69 * DOLLARS);
 		});
@@ -942,7 +941,7 @@ mod tests {
 
 		let mut prev_multiplier = WeightMultiplier::default();
 
-		runtime_io::with_externalities(&mut t, || {
+		sr_io::with_externalities(&mut t, || {
 			assert_eq!(System::next_weight_multiplier(), prev_multiplier);
 		});
 
@@ -995,7 +994,7 @@ mod tests {
 		).0.unwrap();
 
 		// weight multiplier is increased for next block.
-		runtime_io::with_externalities(&mut t, || {
+		sr_io::with_externalities(&mut t, || {
 			let fm = System::next_weight_multiplier();
 			println!("After a big block: {:?} -> {:?}", prev_multiplier, fm);
 			assert!(fm > prev_multiplier);
@@ -1012,7 +1011,7 @@ mod tests {
 		).0.unwrap();
 
 		// weight multiplier is increased for next block.
-		runtime_io::with_externalities(&mut t, || {
+		sr_io::with_externalities(&mut t, || {
 			let fm = System::next_weight_multiplier();
 			println!("After a small block: {:?} -> {:?}", prev_multiplier, fm);
 			assert!(fm < prev_multiplier);
