@@ -51,7 +51,7 @@ pub fn get_or_else<T: Decode + Sized, F: FnOnce() -> T>(key: &[u8], default_valu
 }
 
 /// Put `value` in storage under `key`.
-pub fn put<T: Encode>(key: &[u8], value: &T) {
+pub fn put<T: Encode + ?Sized>(key: &[u8], value: &T) {
 	value.using_encoded(|slice| runtime_io::set_storage(key, slice));
 }
 

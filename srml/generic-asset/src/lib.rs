@@ -336,7 +336,7 @@ decl_module! {
 
 			<NextAssetId<T>>::put(next_id);
 			<TotalIssuance<T>>::insert(id, &options.initial_issuance);
-			<FreeBalance<T>>::insert(&id, &origin, options.initial_issuance);
+			<FreeBalance<T>>::insert(&id, &origin, &options.initial_issuance);
 			<Permissions<T>>::insert(&id, permissions);
 
 			Self::deposit_event(RawEvent::Created(id, origin, options));
@@ -560,7 +560,7 @@ impl<T: Trait> Module<T> {
 		let permissions: PermissionVersions<T::AccountId> = options.permissions.clone().into();
 
 		<TotalIssuance<T>>::insert(asset_id, &options.initial_issuance);
-		<FreeBalance<T>>::insert(&asset_id, &account_id, options.initial_issuance);
+		<FreeBalance<T>>::insert(&asset_id, &account_id, &options.initial_issuance);
 		<Permissions<T>>::insert(&asset_id, permissions);
 
 		Self::deposit_event(RawEvent::Created(asset_id, account_id, options));
@@ -768,13 +768,13 @@ impl<T: Trait> Module<T> {
 	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
 	/// the caller will do this.
 	fn set_reserved_balance(asset_id: &T::AssetId, who: &T::AccountId, balance: T::Balance) {
-		<ReservedBalance<T>>::insert(asset_id, who, balance);
+		<ReservedBalance<T>>::insert(asset_id, who, &balance);
 	}
 
 	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
 	/// the caller will do this.
 	fn set_free_balance(asset_id: &T::AssetId, who: &T::AccountId, balance: T::Balance) {
-		<FreeBalance<T>>::insert(asset_id, who, balance);
+		<FreeBalance<T>>::insert(asset_id, who, &balance);
 	}
 
 	fn set_lock(
