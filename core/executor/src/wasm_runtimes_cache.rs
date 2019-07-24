@@ -96,30 +96,33 @@ impl StateSnapshot {
 		data_segments: Vec<DataSegment>,
 		heap_pages: u32,
 	) -> Option<Self> {
-		let mut prepared_segments = Vec::with_capacity(data_segments.len());
-		for mut segment in data_segments {
-			// Just replace contents of the segment since the segments will be discarded later
-			// anyway.
-			let contents = mem::replace(segment.value_mut(), vec![]);
+		let prepared_segments = data_segments
+			.into_iter()
+			.map(|mut segment| {
+				// Just replace contents of the segment since the segments will be discarded later
+				// anyway.
+				let contents = mem::replace(segment.value_mut(), vec![]);
 
-			let init_expr = segment.offset().code();
-			// [op, End]
-			if init_expr.len() != 2 {
-				return None;
-			}
-			let offset = match init_expr[0] {
-				Instruction::I32Const(v) => v as u32,
-				Instruction::GetGlobal(idx) => {
-					let global_val = module_instance.globals().get(idx as usize)?.get();
-					match global_val {
-						RuntimeValue::I32(v) => v as u32,
-						_ => return None,
-					}
+				let init_expr = segment.offset().code();
+				// [op, End]
+				if init_expr.len() != 2 {
+					return None;
 				}
-				_ => return None,
-			};
-			prepared_segments.push((offset, contents))
-		}
+				let offset = match init_expr[0] {
+					Instruction::I32Const(v) => v as u32,
+					Instruction::GetGlobal(idx) => {
+						let global_val = module_instance.globals().get(idx as usize)?.get();
+						match global_val {
+							RuntimeValue::I32(v) => v as u32,
+							_ => return None,
+						}
+					}
+					_ => return None,
+				};
+
+				Some((offset, contents))
+			})
+			.collect::<Option<Vec<_>>>()?;
 
 		// Collect all values of mutable globals.
 		let global_mut_values = module_instance
