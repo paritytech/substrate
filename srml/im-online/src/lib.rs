@@ -251,14 +251,12 @@ decl_module! {
 					done,
 					gossipping_at,
 				};
-				match curr_worker_status {
-					None =>
-						sr_io::local_storage_compare_and_set(
-							StorageKind::PERSISTENT, DB_KEY, None, &enc.encode()),
-					Some(v) =>
-						sr_io::local_storage_compare_and_set(
-							StorageKind::PERSISTENT, DB_KEY, Some(&v[..]), &enc.encode()),
-				}
+				sr_io::local_storage_compare_and_set(
+					StorageKind::PERSISTENT,
+					DB_KEY,
+					curr_worker_status.as_ref().map(Vec::as_slice),
+					&enc.encode()
+				)
 			}
 
 			fn set_worker_status<T: Trait>(
