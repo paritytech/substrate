@@ -152,17 +152,11 @@ fn create_out_file(file_name: &str, content: String) {
 
 /// Get a cargo command that compiles with nightly
 fn get_nightly_cargo() -> Command {
-	let version = Command::new("cargo")
-		.arg("--version")
-		.output()
-		.map_err(|_| ())
-		.and_then(|o| String::from_utf8(o.stdout).map_err(|_| ()))
-		.unwrap_or_default();
+	let mut default_cargo = Command::new("cargo");
 
-	if version.contains("-nightly") {
-		Command::new("cargo")
-	}
-	else if Command::new("rustup")
+	if is_nightly(&mut default_cargo) {
+		default_cargo
+	} else if Command::new("rustup")
 		.args(&["run", "nightly", "cargo"])
 		.stdout(Stdio::null())
 		.stderr(Stdio::null())
@@ -173,6 +167,17 @@ fn get_nightly_cargo() -> Command {
 		cmd.args(&["run", "nightly", "cargo"]);
 		cmd
 	} else {
-		Command::new("cargo")
+		default_cargo
 	}
+}
+
+/// Check if the supplied cargo command is a nightly version
+fn is_nightly(command: &mut Command) -> bool {
+	command
+		.arg("--version")
+		.output()
+		.map_err(|_| ())
+		.and_then(|o| String::from_utf8(o.stdout).map_err(|_| ()))
+		.unwrap_or_default()
+		.contains("-nightly")
 }
