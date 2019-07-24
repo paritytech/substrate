@@ -154,7 +154,7 @@ impl<
 			partial_from_iterator_encode::<N,_>(partial, number_nibble, NodeKind::BranchNoValue)
 		};
 		let bitmap_index = output.len();
-		let mut bitmap: BITMAP::Buff = Default::default();
+		let mut bitmap: BITMAP::Buffer = Default::default();
 		(0..BITMAP::ENCODED_LEN).for_each(|_|output.push(0));
 		if let Some(value) = maybe_value {
 			value.encode_to(&mut output);
@@ -228,7 +228,7 @@ pub struct BitMap16(u16);
 impl BitMap for BitMap16 {
 	const ENCODED_LEN: usize = 2;
 	type Error = Error;
-	type Buff = [u8; 3]; // need an additional byte for header
+	type Buffer = [u8; 3]; // need an additional byte for header
 
 	fn decode(data: &[u8]) -> Result<Self, Self::Error> {
 		u16::decode(&mut &data[..])
