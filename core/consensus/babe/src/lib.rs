@@ -115,7 +115,7 @@ impl Config {
 	}
 
 	/// Retrieve the threshold calculation constant `c`.
-	pub fn c(&self) -> (i32, i32) {
+	pub fn c(&self) -> (u64, u64) {
 		self.0.c
 	}
 }
@@ -224,7 +224,7 @@ struct BabeWorker<C, E, I, SO> {
 	local_key: Arc<sr25519::Pair>,
 	sync_oracle: SO,
 	force_authoring: bool,
-	c: (i32, i32),
+	c: (u64, u64),
 }
 
 impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> where
@@ -469,7 +469,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore>(
 	authorities: &[(AuthorityId, BabeWeight)],
 	randomness: [u8; 32],
 	epoch_index: u64,
-	c: (i32, i32),
+	c: (u64, u64),
 ) -> Result<CheckedHeader<B::Header, (DigestItemFor<B>, DigestItemFor<B>)>, String>
 	where DigestItemFor<B>: CompatibleDigestItem,
 {
@@ -794,30 +794,28 @@ fn check(inout: &VRFInOut, threshold: u128) -> bool {
 }
 
 fn calculate_threshold(
-	c: (i32, i32),
+	c: (u64, u64),
 	authorities: &[(AuthorityId, BabeWeight)],
 	authority_index: usize,
 ) -> u128 {
 	use num_bigint::BigUint;
-	use num_rational::Rational32;
+	use num_rational::BigRational;
 	use num_traits::{cast::ToPrimitive, identities::One};
 
-	let c = Rational32::new(c.0, c.1);
+	let c = c.0 as f64 / c.1 as f64;
 
-	let theta = Rational32::new(
-		authorities[authority_index].1 as i32,
-		authorities.iter().map(|(_, weight)| weight).sum::<u64>() as i32,
-	);
+	let theta =
+		authorities[authority_index].1 as f64 /
+		authorities.iter().map(|(_, weight)| weight).sum::<u64>() as f64;
 
-	let p = Rational32::one() -
-		(Rational32::one() - c).pow(*theta.numer()).pow(-theta.denom());
+	let calc = || {
+		let p = BigRational::from_float(1f64 - (1f64 - c).powf(theta))?;
+		let numer = p.numer().to_biguint()?;
+		let denom = p.denom().to_biguint()?;
+		((BigUint::one() << 128) * numer / denom).to_u128()
+	};
 
-	let numer = BigUint::from(*p.numer() as usize);
-	let denom = BigUint::from(*p.denom() as usize);
-
-	let threshold = ((BigUint::one() << 128) * numer / denom).to_u128();
-
-	threshold.unwrap_or(u128::max_value())
+	calc().unwrap_or(u128::max_value())
 }
 
 /// Claim a slot if it is our turn.  Returns `None` if it is not our turn.
@@ -829,7 +827,7 @@ fn claim_slot(
 	slot_number: u64,
 	Epoch { ref authorities, ref randomness, epoch_index, .. }: Epoch,
 	key: &sr25519::Pair,
-	c: (i32, i32),
+	c: (u64, u64),
 ) -> Option<((VRFInOut, VRFProof, VRFProofBatchable), usize)> {
 	let public = &key.public();
 	let authority_index = authorities.iter().position(|s| &s.0 == public)?;

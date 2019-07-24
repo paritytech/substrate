@@ -105,7 +105,7 @@ pub struct BabeConfiguration {
 	/// A constant value that is used in the threshold calculation formula.
 	/// Expressed as a fraction where the first member of the tuple is the
 	/// numerator and the second is the denominator.
-	pub c: (i32, i32),
+	pub c: (u64, u64),
 
 	/// The minimum number of blocks that must be received before running the
 	/// median algorithm to compute the offset between the on-chain time and the
