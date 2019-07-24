@@ -19,14 +19,13 @@
 use std::{sync::Arc, ops::Deref, ops::DerefMut};
 use serde::{Serialize, de::DeserializeOwned};
 use crate::chain_spec::ChainSpec;
-use std::time::Duration;
-use log::warn;
+use std::time::{Duration, Instant};
+use log::{log, warn, Level};
 use std::collections::HashSet;
 use libp2p::Multiaddr;
 use parking_lot::Mutex;
 use client::{BlockchainEvents};
 use futures03::stream::{StreamExt as _, TryStreamExt as _};
-use session_primitives::SessionApi;
 use consensus_aura_primitives::AuraApi;
 use offchain::AuthorityKeyProvider as _;
 
@@ -44,10 +43,9 @@ use sr_primitives::{
 
 use network::NetworkState;
 use crate::config::Configuration;
-use primitives::{Blake2Hasher, H256, Pair, Public};
+use primitives::{Blake2Hasher, H256, Pair};
 use rpc::{self, apis::system::SystemInfo};
 use futures::{prelude::*, future::Executor, sync::mpsc};
-use runtime_api::KeyTypeGetter;
 
 // Type aliases.
 // These exist mainly to avoid typing `<F as Factory>::Foo` all over the code.
@@ -283,8 +281,8 @@ impl<C: Components> OffchainWorker<Self> for C where
 	}
 }
 
-pub trait TestRuntime<C: Components> {
-	fn test_runtime<
+pub trait NetworkFutureBuilder<C: Components> {
+	fn build_network_future<
 			H: network::ExHashT,
 		S:network::specialization::NetworkSpecialization<ComponentBlock<C>> ,
 		>(
@@ -294,20 +292,19 @@ pub trait TestRuntime<C: Components> {
 		rpc_rx: mpsc::UnboundedReceiver<rpc::apis::system::Request<ComponentBlock<C>>>,
 		should_have_peers: bool,
 		// TODO: still needed?
-		public_key: String,
 		keystore: ComponentAuthorityKeyProvider<C>,
 	)-> Box<dyn Future<Item = (), Error = ()>+ Send>  ;
 }
 
-impl<C: Components> TestRuntime<Self> for C where
+impl<C: Components> NetworkFutureBuilder<Self> for C where
 	ComponentClient<C>: ProvideRuntimeApi,
 	<ComponentClient<C> as ProvideRuntimeApi>::Api: runtime_api::Metadata<ComponentBlock<C>>,
-    <ComponentClient<C> as ProvideRuntimeApi>::Api: runtime_api::KeyTypeGetter<ComponentBlock<C>>,
+    // <ComponentClient<C> as ProvideRuntimeApi>::Api: runtime_api::KeyTypeGetter<ComponentBlock<C>>,
 	// <ComponentClient<C> as ProvideRuntimeApi>::Api: session_primitives::SessionApi<ComponentBlock<C>, <C::Factory as ServiceFactory>::AuthorityId>,
 // <ComponentClient<C> as ProvideRuntimeApi>::Api: consensus_aura_primitives::AuraApi<ComponentBlock<C>, <C::Factory as ServiceFactory>::AuthorityId>,
 <<<C as Components>::Factory as ServiceFactory>::ConsensusPair as primitives::crypto::Pair>::Public : std::string::ToString
 {
-	fn test_runtime<
+	fn build_network_future<
 			H: network::ExHashT,
 		S:network::specialization::NetworkSpecialization<ComponentBlock<C>> ,
 		>(
@@ -316,14 +313,10 @@ impl<C: Components> TestRuntime<Self> for C where
 		status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<(NetworkStatus<ComponentBlock<C>>, NetworkState)>>>>,
 		mut rpc_rx: mpsc::UnboundedReceiver<rpc::apis::system::Request<ComponentBlock<C>>>,
 		should_have_peers: bool,
-		public_key: String,
 		keystore: ComponentAuthorityKeyProvider<C>,
 	)-> Box<dyn Future<Item = (), Error = ()> + Send>  {
 		// Interval at which we send status updates on the status stream.
 		const STATUS_INTERVAL: Duration = Duration::from_millis(5000);
-
-
-		let hashed_public_key = libp2p::multihash::encode(libp2p::multihash::Hash::SHA2256, &public_key.as_bytes()).unwrap();
 
 		let mut status_interval = tokio_timer::Interval::new_interval(STATUS_INTERVAL);
 
@@ -335,32 +328,33 @@ impl<C: Components> TestRuntime<Self> for C where
 			.map(|v| Ok::<_, ()>(v)).compat();
 
 		Box::new(futures::future::poll_fn(move || {
+		    let before_polling = Instant::now();
+
 			// We poll `imported_blocks_stream`.
 			while let Ok(Async::Ready(Some(notification))) = imported_blocks_stream.poll() {
 				network.on_block_imported(notification.hash, notification.header);
 			}
 
 			while let Ok(Async::Ready(_)) = report_ext_addresses_interval.poll() {
-				println!("==== public key: {:?}", public_key);
+				let id = BlockId::hash( client.info().chain.best_hash);
+
+				// TODO: remove unwrap().
+				let public_key = keystore.authority_key( &id).map(|k| k.public().to_string()).unwrap();
+				println!("=== authority key: {}", public_key);
+				let hashed_public_key = libp2p::multihash::encode(
+					libp2p::multihash::Hash::SHA2256,
+					&public_key.as_bytes(),
+				).unwrap();
+
 				let external_addresses = network.external_addresses();
-
 				println!("==== external addresses: {:?}", external_addresses);
-
-				// println!("network state: {:?}", network.network_state());
 
 				// TODO: Remove unwrap.
 				let serialized_addresses = serde_json::to_string(&external_addresses).unwrap();
 
 				network.service().put_value(hashed_public_key.clone(), serialized_addresses.as_bytes().to_vec());
-
-				let id = BlockId::hash( client.info().chain.best_hash);
-				// TODO: These seem to be stash keys, not public keys.
+				// TODO: This gets the Aura authorities, what if a user uses babe? That should be abstracted.
 				// println!("=== validators: {:?}", client.runtime_api().authorities(&id));
-
-				// TODO: Remove.
-				// println!("==== KeyTypeId: {}", client.runtime_api().get_key_type(&id));
-
-				println!("=== authority key: {}", keystore.authority_key( &id).map(|k| k.public().to_string()).unwrap());
 
 				// TODO: Let's trigger a search for us for now. Remove.
 				network.service().get_value(&hashed_public_key.clone());
@@ -424,7 +418,7 @@ impl<C: Components> TestRuntime<Self> for C where
 			while let Ok(Async::Ready(Some(Event::Dht(DhtEvent::ValueFound(values))))) = network.poll().map_err(|err| {
 				warn!(target: "service", "Error in network: {:?}", err);
 			}) {
-				for (key, value) in values.iter() {
+				for (_key, value) in values.iter() {
 					let value = std::str::from_utf8(value).unwrap();
 
 					let external_addresses: HashSet<Multiaddr> = serde_json::from_str(value).unwrap();
@@ -432,6 +426,15 @@ impl<C: Components> TestRuntime<Self> for C where
 					println!("==== Found the following external addresses on the DHT: {:?}", external_addresses);
 				}
 			}
+
+			// Now some diagnostic for performances.
+			let polling_dur = before_polling.elapsed();
+			log!(
+				target: "service",
+				if polling_dur >= Duration::from_millis(50) { Level::Warn } else { Level::Trace },
+				"Polling the network future took {:?}",
+				polling_dur
+			);
 
 			Ok(Async::NotReady)
 
@@ -446,7 +449,7 @@ pub trait ServiceTrait<C: Components>:
 	+ Send
 	+ 'static
 	+ StartRPC<C>
-	+ TestRuntime<C>
+	+ NetworkFutureBuilder<C>
 	+ MaintainTransactionPool<C>
 	+ OffchainWorker<C>
 {}
@@ -455,7 +458,7 @@ impl<C: Components, T> ServiceTrait<C> for T where
 	+ Send
 	+ 'static
 	+ StartRPC<C>
-	+ TestRuntime<C>
+	+ NetworkFutureBuilder<C>
 	+ MaintainTransactionPool<C>
 	+ OffchainWorker<C>
 {}

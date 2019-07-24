@@ -22,6 +22,7 @@ use parity_codec::{Codec};
 use client::decl_runtime_apis;
 use rstd::vec::Vec;
 
+// TODO: Remove entire module.
 decl_runtime_apis! {
     pub trait SessionApi<AuthorityId: Codec> {
         fn validators() -> Vec<AuthorityId>;

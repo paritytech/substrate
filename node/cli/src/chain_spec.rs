@@ -331,14 +331,11 @@ pub fn development_config() -> ChainSpec {
 }
 
 fn local_testnet_genesis() -> GenesisConfig {
-	let authorities = vec![
+	testnet_genesis(
+		vec![
 			get_authority_keys_from_seed("Alice"),
 			get_authority_keys_from_seed("Bob"),
-		];
-
-	println!("==== authorities inside node chainspec: {:?}", authorities);
-	testnet_genesis(
-		authorities,
+		],
 		get_account_id_from_seed("Alice"),
 		None,
 		false,

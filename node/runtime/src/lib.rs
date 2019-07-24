@@ -493,12 +493,6 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl client_api::KeyTypeGetter<Block> for Runtime {
-		fn get_key_type() -> substrate_primitives::crypto::KeyTypeId {
-			substrate_primitives::crypto::key_types::ED25519
-		}
-	}
-
 	impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
 		fn offchain_worker(number: NumberFor<Block>) {
 			Executive::offchain_worker(number)

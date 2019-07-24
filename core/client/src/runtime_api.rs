@@ -183,9 +183,4 @@ decl_runtime_apis! {
 		/// Validate the given transaction.
 		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity;
 	}
-
-	// TODO: This doesn't belong here.
-	pub trait KeyTypeGetter {
-		fn get_key_type() -> primitives::crypto::KeyTypeId;
-	}
 }
