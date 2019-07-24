@@ -285,6 +285,7 @@ use session::{historical::OnSessionEnding, SelectInitialValidators, SessionIndex
 use primitives::Perbill;
 use primitives::traits::{
 	Convert, Zero, One, StaticLookup, CheckedSub, CheckedShl, Saturating, Bounded,
+	TypedKey,
 };
 #[cfg(feature = "std")]
 use primitives::{Serialize, Deserialize};
@@ -455,6 +456,8 @@ pub trait SessionInterface<AccountId>: system::Trait {
 	fn validators() -> Vec<AccountId>;
 	/// Prune historical session tries up to but not including the given index.
 	fn prune_historical_up_to(up_to: session::SessionIndex);
+	/// Get the keys of the current session.
+	fn current_keys<Key: Decode + Default + TypedKey>() -> Vec<(AccountId, Key)>;
 }
 
 impl<T: Trait> SessionInterface<<T as system::Trait>::AccountId> for T where
@@ -474,6 +477,12 @@ impl<T: Trait> SessionInterface<<T as system::Trait>::AccountId> for T where
 
 	fn validators() -> Vec<<T as system::Trait>::AccountId> {
 		<session::Module<T>>::validators()
+	}
+
+	fn current_keys<Key>() -> Vec<(<T as system::Trait>::AccountId, Key)>
+		where Key: Decode + Default + TypedKey
+	{
+		<session::Module<T>>::get_current_keys::<Key>()
 	}
 
 	fn prune_historical_up_to(up_to: session::SessionIndex) {

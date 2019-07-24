@@ -19,7 +19,7 @@
 #![cfg(test)]
 
 use primitives::{
-	traits::IdentityLookup,
+	traits::{IdentityLookup, IsOnline},
 	testing::{Header, UintAuthorityId},
 };
 use srml_support::{impl_outer_origin, parameter_types};
@@ -67,6 +67,13 @@ impl timestamp::Trait for Test {
 impl Trait for Test {
 	type HandleReport = ();
 	type AuthorityId = UintAuthorityId;
+	type IsOnline = Test;
+}
+
+impl IsOnline<UintAuthorityId> for Test {
+	fn is_online_in_current_session(authority_id: &UintAuthorityId) -> bool {
+		true
+	}
 }
 
 pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blake2Hasher> {

@@ -54,7 +54,7 @@ use rstd::{result, prelude::*};
 use parity_codec::Encode;
 use srml_support::{decl_storage, decl_module, Parameter, storage::StorageValue, traits::Get};
 use primitives::{
-	traits::{SaturatedConversion, Saturating, Zero, One, Member, IsMember, TypedKey},
+	traits::{SaturatedConversion, Saturating, Zero, One, Member, IsMember, IsOnline, TypedKey},
 	generic::DigestItem,
 };
 use timestamp::OnTimestampSet;
@@ -157,6 +157,9 @@ pub trait Trait: timestamp::Trait {
 
 	/// The identifier type for an authority.
 	type AuthorityId: Member + Parameter + TypedKey + Default;
+
+	/// Determine if an `AuthorityId` is online.
+	type IsOnline: IsOnline<Self::AuthorityId>;
 }
 
 decl_storage! {

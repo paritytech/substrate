@@ -38,7 +38,7 @@ use runtime_primitives::{ApplyResult, impl_opaque_keys, generic, create_runtime_
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::weights::Weight;
 use runtime_primitives::traits::{
-	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup,
+	BlakeTwo256, Block as BlockT, DigestFor, IsOnline, NumberFor, StaticLookup,
 };
 use version::RuntimeVersion;
 use elections::VoteIndex;
@@ -143,6 +143,7 @@ impl system::Trait for Runtime {
 impl aura::Trait for Runtime {
 	type HandleReport = aura::StakingSlasher<Runtime>;
 	type AuthorityId = AuraId;
+	type IsOnline = Runtime;
 }
 
 impl indices::Trait for Runtime {
@@ -386,6 +387,12 @@ impl im_online::Trait for Runtime {
 	type SessionsPerEra = SessionsPerEra;
 	type UncheckedExtrinsic = UncheckedExtrinsic;
 	type IsValidAuthorityId = Aura;
+}
+
+impl IsOnline<AuraId> for Runtime {
+	fn is_online_in_current_session(authority_id: &AuraId) -> bool {
+		ImOnline::is_online_in_current_session(authority_id)
+	}
 }
 
 impl grandpa::Trait for Runtime {

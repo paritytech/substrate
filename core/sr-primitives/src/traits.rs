@@ -629,6 +629,12 @@ pub trait IsMember<MemberId> {
 	fn is_member(member_id: &MemberId) -> bool;
 }
 
+/// Determine if an `AuthorityId` is online in the current session.
+pub trait IsOnline<AuthorityId> {
+	/// Is the given `AuthorityId` online in the current session?
+	fn is_online_in_current_session(authority_id: &AuthorityId) -> bool;
+}
+
 /// Something which fulfills the abstract idea of a Substrate header. It has types for a `Number`,
 /// a `Hash` and a `Digest`. It provides access to an `extrinsics_root`, `state_root` and
 /// `parent_hash`, as well as a `digest` and a block `number`.

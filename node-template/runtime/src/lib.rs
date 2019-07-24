@@ -17,7 +17,10 @@ use primitives::bytes;
 use primitives::{ed25519, sr25519, OpaqueMetadata};
 use sr_primitives::{
 	ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
-	traits::{self, NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify}, weights::Weight,
+	traits::{
+		self, NumberFor, BlakeTwo256, Block as BlockT, IsOnline StaticLookup, Verify,
+	},
+	weights::Weight,
 };
 use client::{
 	block_builder::api::{CheckInherentsResult, InherentData, self as block_builder_api},
@@ -138,6 +141,13 @@ impl system::Trait for Runtime {
 impl aura::Trait for Runtime {
 	type HandleReport = ();
 	type AuthorityId = AuraId;
+	type IsOnline = Runtime;
+}
+
+impl IsOnline<AuraId> for Runtime {
+	fn is_online_in_current_session(authority_id: &AuraId) -> bool {
+		true
+	}
 }
 
 impl indices::Trait for Runtime {

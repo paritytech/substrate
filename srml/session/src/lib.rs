@@ -304,6 +304,9 @@ decl_storage! {
 		/// will be used to determine the validator's session keys.
 		QueuedKeys get(queued_keys): Vec<(T::ValidatorId, T::Keys)>;
 
+		/// Returns the keys of the current session for all validators.
+		CurrentKeys get(current_keys): Vec<(T::ValidatorId, T::Keys)>;
+
 	}
 	add_extra_genesis {
 		config(keys): Vec<(T::ValidatorId, T::Keys)>;
@@ -439,6 +442,19 @@ impl<T: Trait> Module<T> {
 
 		// Tell everyone about the new session keys.
 		T::SessionHandler::on_new_session::<T::Keys>(changed, &session_keys, &queued_amalgamated);
+
+		<CurrentKeys<T>>::put(session_keys);
+	}
+
+	pub fn get_current_keys<Key: Decode + Default + TypedKey>() -> Vec<(T::ValidatorId, Key)> {
+		<CurrentKeys<T>>::get()
+			.into_iter()
+			.map(|(v, k)| {
+				let tk= k.get::<Key>(<Key as TypedKey>::KEY_TYPE)
+					.unwrap_or_default();
+				(v, tk)
+			})
+			.collect()
 	}
 
 	/// Disable the validator of index `i`.
