@@ -1,6 +1,6 @@
 [[bin]]
 name = "substrate"
-path = "node/src/main.rs"
+path = "node/src/bin/main.rs"
 
 [lib]
 name = "substrate_node_cli"
