@@ -68,7 +68,7 @@ impl Proposer<TestBlock> for DummyProposer {
 		_: InherentData,
 		digests: DigestFor<TestBlock>,
 		_: Duration,
-	) -> Result<TestBlock, Error> {
+	) -> Self::Create {
 		future::ready(self.1.new_block(digests).unwrap().bake().map_err(|e| e.into()))
 	}
 }
