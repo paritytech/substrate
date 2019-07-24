@@ -59,7 +59,7 @@ mod tests {
 		GrandpaConfig, IndicesConfig, ContractsConfig, Event, SessionKeys, CreationFee, SignedExtra,
 		TransactionBaseFee, TransactionByteFee, MaximumBlockWeight,
 	};
-	use node_runtime::constants::currency::*;
+	use node_runtime::constants::{currency::*, fee::TARGET_BLOCK_FULLNESS};
 	use node_runtime::impls::WeightToFee;
 	use wabt;
 	use primitives::map;
@@ -98,7 +98,7 @@ mod tests {
 
 	/// Get the target weight of the fee multiplier.
 	fn _multiplier_target() -> Weight {
-		<MaximumBlockWeight as Get<Weight>>::get() / 4
+		TARGET_BLOCK_FULLNESS * <MaximumBlockWeight as Get<Weight>>::get()
 	}
 
 	/// Default creation fee.
@@ -589,7 +589,7 @@ mod tests {
 
 		runtime_io::with_externalities(&mut t, || {
 			// NOTE: fees differ slightly in tests that execute more than one block due to the
-			// weight update.
+			// weight update. Hence, using `assert_eq_error_rate`.
 			assert_eq_error_rate!(
 				Balances::total_balance(&alice()),
 				 32 * DOLLARS - 2 * transfer_fee(&xt()) - 2 * creation_fee(),
@@ -1120,6 +1120,134 @@ mod tests {
 
 			assert_eq!(Balances::total_balance(&alice()), balance_alice);
 		});
+	}
+
+	#[test]
+	#[should_panic]
+	#[cfg(feature = "stress-test")]
+	fn block_weight_capacity_report() {
+		// Just report how many transfer calls you could fit into a block. The number should at least
+		// be a few hundred (250 at the time of writing but can change over time). Runs until panic.
+
+		// execution ext.
+		let mut t = new_test_ext(COMPACT_CODE, false);
+		// setup ext.
+		let mut tt = new_test_ext(COMPACT_CODE, false);
+
+		let factor = 50;
+		let mut time = 10;
+		let mut nonce: Index = 0;
+		let mut block_number = 1;
+		let mut previous_hash: Hash = GENESIS_HASH.into();
+
+		loop {
+			let num_transfers = block_number * factor;
+			let mut xts = (0..num_transfers).map(|i| CheckedExtrinsic {
+				signed: Some((charlie(), signed_extra(nonce + i as Index, 0))),
+				function: Call::Balances(balances::Call::transfer(bob().into(), 0)),
+			}).collect::<Vec<CheckedExtrinsic>>();
+
+			xts.insert(0, CheckedExtrinsic {
+				signed: None,
+				function: Call::Timestamp(timestamp::Call::set(time)),
+			});
+
+			// NOTE: this is super slow. Can probably be improved.
+			let block = construct_block(
+				&mut tt,
+				block_number,
+				previous_hash,
+				xts
+			);
+
+			let len = block.0.len();
+			print!(
+				"++ Executing block with {} transfers. Block size = {} bytes / {} kb / {} mb",
+				num_transfers,
+				len,
+				len / 1024,
+				len / 1024 / 1024,
+			);
+
+			let r = executor().call::<_, NeverNativeValue, fn() -> _>(
+				&mut t,
+				"Core_execute_block",
+				&block.0,
+				true,
+				None,
+			).0;
+
+			println!(" || Result = {:?}", r);
+			assert!(r.is_ok());
+
+			previous_hash = block.1;
+			nonce += num_transfers;
+			time += 10;
+			block_number += 1;
+		}
+	}
+
+	#[test]
+	#[should_panic]
+	#[cfg(feature = "stress-test")]
+	fn block_length_capacity_report() {
+		// Just report how big a block can get. Executes until panic. Should be ignored unless if
+		// manually inspected. The number should at least be a few megabytes (5 at the time of
+		// writing but can change over time).
+
+		// execution ext.
+		let mut t = new_test_ext(COMPACT_CODE, false);
+		// setup ext.
+		let mut tt = new_test_ext(COMPACT_CODE, false);
+
+		let factor = 256 * 1024;
+		let mut time = 10;
+		let mut nonce: Index = 0;
+		let mut block_number = 1;
+		let mut previous_hash: Hash = GENESIS_HASH.into();
+
+		loop {
+			// NOTE: this is super slow. Can probably be improved.
+			let block = construct_block(
+				&mut tt,
+				block_number,
+				previous_hash,
+				vec![
+					CheckedExtrinsic {
+						signed: None,
+						function: Call::Timestamp(timestamp::Call::set(time)),
+					},
+					CheckedExtrinsic {
+						signed: Some((charlie(), signed_extra(nonce, 0))),
+						function: Call::System(system::Call::remark(vec![0u8; (block_number * factor) as usize])),
+					},
+				]
+			);
+
+			let len = block.0.len();
+			print!(
+				"++ Executing block with big remark. Block size = {} bytes / {} kb / {} mb",
+				len,
+				len / 1024,
+				len / 1024 / 1024,
+			);
+
+			let r = executor().call::<_, NeverNativeValue, fn() -> _>(
+				&mut t,
+				"Core_execute_block",
+				&block.0,
+				true,
+				None,
+			).0;
+
+			println!(" || Result = {:?}", r);
+			assert!(r.is_ok());
+
+			previous_hash = block.1;
+			nonce += 1;
+			time += 10;
+			block_number += 1;
+		}
 	}
 
 	#[cfg(feature = "benchmarks")]

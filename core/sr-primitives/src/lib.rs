@@ -422,7 +422,7 @@ impl Fixed64 {
 	/// Performs a saturated multiply and accumulate.
 	///
 	/// Returns a saturated `n + (self * n)`.
-	/// TODO: generalize this to any weight type.
+	/// TODO: generalize this to any weight type. #3189
 	pub fn saturated_multiply_accumulate(&self, int: u32) -> u32 {
 		let parts = self.0;
 		let positive = parts > 0;
