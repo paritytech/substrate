@@ -121,8 +121,6 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		staking: Some(StakingConfig {
 			current_era: 0,
 			offline_slash: Perbill::from_parts(1_000_000),
-			session_reward: Perbill::from_parts(2_065),
-			current_session_reward: 0,
 			validator_count: 7,
 			offline_slash_grace: 4,
 			minimum_validator_count: 4,
@@ -259,8 +257,6 @@ pub fn testnet_genesis(
 			minimum_validator_count: 1,
 			validator_count: 2,
 			offline_slash: Perbill::zero(),
-			session_reward: Perbill::zero(),
-			current_session_reward: 0,
 			offline_slash_grace: 0,
 			stakers: initial_authorities.iter().map(|x| (x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator)).collect(),
 			invulnerables: initial_authorities.iter().map(|x| x.0.clone()).collect(),
