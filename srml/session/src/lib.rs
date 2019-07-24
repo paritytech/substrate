@@ -362,6 +362,10 @@ decl_event!(
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		/// Used as first key for `NextKeys` and `KeyOwner` to put all the data into the same branch
+		/// of the trie.
+		const DEDUP_KEY_PREFIX: &[u8] = DEDUP_KEY_PREFIX;
+
 		fn deposit_event() = default;
 
 		/// Sets the session key(s) of the function caller to `key`.
