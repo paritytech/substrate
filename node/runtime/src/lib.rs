@@ -530,7 +530,7 @@ impl_runtime_apis! {
 			babe_primitives::BabeConfiguration {
 				median_required_blocks: 1000,
 				slot_duration: Babe::slot_duration(),
-				c: (3, 10),
+				c: (6, 9),
 			}
 		}
 

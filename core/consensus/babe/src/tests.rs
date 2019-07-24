@@ -318,13 +318,13 @@ fn can_author_block() {
 	let mut i = 0;
 	let epoch = Epoch {
 		start_slot: 0,
-		authorities: vec![(pair.public(), 0)],
+		authorities: vec![(pair.public(), 1)],
 		randomness: [0; 32],
 		epoch_index: 1,
 		duration: 100,
 	};
 	loop {
-		match claim_slot(i, epoch.clone(), &pair, 0.1f64) {
+		match claim_slot(i, epoch.clone(), &pair, (6, 9)) {
 			None => i += 1,
 			Some(s) => {
 				debug!(target: "babe", "Authored block {:?}", s);
