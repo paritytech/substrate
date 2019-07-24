@@ -252,7 +252,7 @@ mod tests {
 	use std::sync::Arc;
 	use aura::CompatibleDigestItem;
 	use consensus_common::{Environment, Proposer, BlockImportParams, BlockOrigin, ForkChoiceStrategy};
-	use node_primitives::DigestItem;
+	use node_primitives::{DigestItem, AuraPair};
 	use node_runtime::{BalancesCall, Call, CENTS, SECS_PER_BLOCK, UncheckedExtrinsic};
 	use parity_codec::{Compact, Encode, Decode};
 	use primitives::{
@@ -349,7 +349,7 @@ mod tests {
 			});
 
 			let mut digest = Digest::<H256>::default();
-			digest.push(<DigestItem as CompatibleDigestItem<Pair>>::aura_pre_digest(slot_num));
+			digest.push(<DigestItem as CompatibleDigestItem<Signature>>::aura_pre_digest(slot_num));
 			let proposer = proposer_factory.init(&parent_header).unwrap();
 			let new_block = proposer.propose(
 				inherent_data,

@@ -17,22 +17,26 @@ use primitives::bytes;
 use primitives::{ed25519, sr25519, OpaqueMetadata};
 use sr_primitives::{
 	ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
-	traits::{self, NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify}
+	traits::{self, NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify},
+	impl_opaque_keys, key_types, KeyTypeId
 };
 use client::{
 	block_builder::api::{CheckInherentsResult, InherentData, self as block_builder_api},
-	runtime_api, impl_runtime_apis
+	runtime_api, impl_runtime_apis, transaction_builder::{self as transaction_builder_api},
 };
 use consensus_aura::AuraEquivocationProof;
+use grandpa::{AuthorityId as GrandpaId, fg_primitives::{AuthorityId, AuthoritySignature}};
 use version::RuntimeVersion;
 #[cfg(feature = "std")]
 use version::NativeVersion;
-use session::historical::Proof;
+use session::{self, historical::{self, Proof}};
+use staking;
+
 
 // A few exports that help ease life for downstream crates.
 #[cfg(any(feature = "std", test))]
 pub use sr_primitives::BuildStorage;
-pub use timestamp::Call as TimestampCall;
+// pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use sr_primitives::{Permill, Perbill};
 pub use support::{StorageValue, construct_runtime, parameter_types};
@@ -152,7 +156,7 @@ impl aura::Trait for Runtime {
 	type HandleReport = ();
 	type AuthorityId = AuraId;
 	type Signature = AuraSignature;
-	type KeyOwnerSystem = ();
+	type KeyOwnerSystem = Historical;
 	type Proof = Proof;
 	type Equivocation = AuraEquivocationProof<
 		Self::Header,
@@ -160,6 +164,11 @@ impl aura::Trait for Runtime {
 		Self::AuthorityId,
 		Self::Proof
 	>;
+}
+
+impl session::historical::Trait for Runtime {
+	type FullIdentification = staking::Exposure<AccountId, Balance>;
+	type FullIdentificationOf = staking::ExposureOf<Runtime>;
 }
 
 impl indices::Trait for Runtime {
@@ -223,6 +232,47 @@ impl template::Trait for Runtime {
 	type Event = Event;
 }
 
+parameter_types! {
+	pub const Period: BlockNumber = 100;
+	pub const Offset: BlockNumber = 0;
+}
+
+impl session::Trait for Runtime {
+	type OnSessionEnding = ();
+	type SessionHandler = ();
+	type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
+	type Event = Event;
+	type Keys = SessionKeys;
+	type ValidatorId = AccountId;
+	type ValidatorIdOf = staking::StashOf<Self>;
+	type SelectInitialValidators = ();
+}
+
+impl_opaque_keys! {
+	pub struct SessionKeys {
+		#[id(key_types::ED25519)]
+		pub ed25519: GrandpaId,
+	}
+}
+
+parameter_types! {
+	pub const SessionsPerEra: session::SessionIndex = 6;
+	pub const BondingDuration: staking::EraIndex = 24 * 28;
+}
+
+impl staking::Trait for Runtime {
+	type Currency = Balances;
+	type CurrencyToVote = (); // CurrencyToVoteHandler
+	type OnRewardMinted = (); // Treasury
+	type Event = Event;
+	type Slash = ();
+	type Reward = ();
+	type SessionsPerEra = SessionsPerEra;
+	type BondingDuration = BondingDuration;
+	type SessionInterface = Self;
+}
+
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -235,6 +285,9 @@ construct_runtime!(
 		Indices: indices::{default, Config<T>},
 		Balances: balances,
 		Sudo: sudo,
+		Staking: staking::{default, OfflineWorker},
+		Session: session::{Module, Call, Storage, Event, Config<T>},
+		Historical: historical::{Module},
 		// Used for the module template in `./template.rs`
 		TemplateModule: template::{Module, Call, Storage, Event<T>},
 	}
@@ -258,7 +311,7 @@ pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Nonce, Call>;
 pub type Executive = executive::Executive<Runtime, Block, Context, Balances, Runtime, AllModules>;
 
 type AuraEquivocation<Block> =
-	AuraEquivocationProof<<Block as BlockT>::Header, AccountSignature, AccountId, Proof>;
+	AuraEquivocationProof<<Block as BlockT>::Header, AuthoritySignature, AuthorityId, Proof>;
 
 // Implement our runtime API endpoints. This is just a bunch of proxying.
 impl_runtime_apis! {
@@ -320,14 +373,29 @@ impl_runtime_apis! {
 
 		fn construct_equivocation_report_call(
 			_proof: AuraEquivocation<Block>
-		) -> Vec<u8> {
-			vec![]
+		) -> Option<Vec<u8>> {
+			None
 		}
 	}
 
 	impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
 		fn offchain_worker(n: NumberFor<Block>) {
 			Executive::offchain_worker(n)
+		}
+	}
+
+	impl transaction_builder_api::TransactionBuilder<Block> for Runtime {
+		fn signing_payload(encoded_call: Vec<u8>, encoded_account_id: Vec<u8>) -> Vec<u8> {
+			vec![]
+		}
+
+		fn build_transaction(signing_payload: Vec<u8>, encoded_account_id: Vec<u8>, signature: Vec<u8>) -> Vec<u8> {
+			vec![]
+		}
+
+		fn possible_crypto() -> Vec<KeyTypeId> {
+			// TODO: implement
+			vec![]
 		}
 	}
 }

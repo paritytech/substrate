@@ -433,7 +433,7 @@ where
 	PRA: ProvideRuntimeApi,
 	PRA::Api: GrandpaApi<Block>,
 	SC: SelectChain<Block>,
-	T: SubmitReport<Client<B, E, Block, RA>, Block>,
+	T: SubmitReport<Client<B, E, Block, RA>, Block, ed25519::Pair>,
 {
 	use runtime_primitives::traits::Zero;
 
@@ -585,7 +585,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T>(
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
 	X: Future<Item=(),Error=()> + Clone + Send + 'static,
-	T: SubmitReport<Client<B, E, Block, RA>, Block> + Send + Sync + 'static,
+	T: SubmitReport<Client<B, E, Block, RA>, Block, ed25519::Pair> + Send + Sync + 'static,
 	Client<B, E, Block, RA>: HeaderBackend<Block> + ProvideRuntimeApi,
 	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: GrandpaApi<Block>,
 	RA: Send + Sync + 'static + ConstructRuntimeApi<Block, Client<B, E, Block, RA>>,
@@ -880,7 +880,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T>(
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
 	X: Future<Item=(),Error=()> + Clone + Send + 'static,
-	T: Sync + Send + 'static + SubmitReport<Client<B, E, Block, RA>, Block>,
+	T: Sync + Send + 'static + SubmitReport<Client<B, E, Block, RA>, Block, ed25519::Pair>,
 	Client<B, E, Block, RA>: HeaderBackend<Block> + ProvideRuntimeApi,
 	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: GrandpaApi<Block>,
 	RA: Send + Sync + 'static + ConstructRuntimeApi<Block, Client<B, E, Block, RA>>,

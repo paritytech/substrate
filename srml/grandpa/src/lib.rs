@@ -82,15 +82,15 @@ pub trait Trait: system::Trait {
 	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
 
 	/// The identifier type for an authority.
-	type AuthorityId: Eq + PartialEq + Clone + Codec + TypedKey + Default + core::fmt::Debug;
+	type AuthorityId: Codec + TypedKey + Default + Member;
 
 	/// The signature of the authority.
-	type Signature: Verify<Signer=Self::AuthorityId> + Codec + Eq + PartialEq + Clone + core::fmt::Debug;
+	type Signature: Verify<Signer=Self::AuthorityId> + Codec + Member;
 
 	/// The block.
 	type Block: BlockT<Hash=<Self as system::Trait>::Hash, Header=<Self as system::Trait>::Header>;
 
-	type Proof: Eq + PartialEq + Clone + Codec + core::fmt::Debug;
+	type Proof: Codec + Member;
 
 	/// The session key proof owned system.
 	type KeyOwnerSystem: KeyOwnerProofSystem<(KeyTypeId, Vec<u8>), Proof=Self::Proof>;
@@ -214,9 +214,15 @@ decl_module! {
 		fn report_equivocation(origin, equivocation: Equivocation<T>) {
 			ensure_signed(origin)?;
 
+			if equivocation.identity_proof.is_none() {
+				return Err("Equivocation does not have inclusion proof")
+			}
+
 			let to_punish = <T as Trait>::KeyOwnerSystem::check_proof(
 				(key_types::ED25519, equivocation.identity.encode()),
-				equivocation.identity_proof.clone(),
+				equivocation.identity_proof
+					.clone()
+					.expect("already checked; qed")
 			);
 
 			if to_punish.is_none() {
@@ -234,15 +240,23 @@ decl_module! {
 
 			let mut to_punish = Vec::new();
 
-			for (idx, proof) in challenge.targets_proof.iter().enumerate() {
-				let maybe_targets = <T as Trait>::KeyOwnerSystem::check_proof(
-					(key_types::ED25519, challenge.targets[idx].encode()),
-					proof.clone(),
-				);
-				if maybe_targets.is_none() {
-					return Err("Bad session key proof")
-				}
-				to_punish.push(maybe_targets.expect("already checked; qed"));
+			if challenge.targets_proof.is_none() {
+				return Err("Challenge does not have proof of inclusion")
+			}
+
+			for (idx, proof) in challenge.targets_proof
+				.clone()
+				.expect("already checked; qed")
+				.iter()
+				.enumerate() {
+					let maybe_targets = <T as Trait>::KeyOwnerSystem::check_proof(
+						(key_types::ED25519, challenge.targets[idx].encode()),
+						proof.clone(),
+					);
+					if maybe_targets.is_none() {
+						return Err("Bad session key proof")
+					}
+					to_punish.push(maybe_targets.expect("already checked; qed"));
 			}
 
 			let round_s = challenge.rejecting_set.round;

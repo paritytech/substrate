@@ -555,7 +555,7 @@ impl_runtime_apis! {
 		) -> Option<Vec<u8>> {
 			let proof = Historical::prove((key_types::ED25519, equivocation.identity.encode()))?;
 			let mut proved_equivocation = equivocation.clone();
-			proved_equivocation.identity_proof = proof;
+			proved_equivocation.identity_proof = Some(proof);
 			let grandpa_call = GrandpaCall::report_equivocation(proved_equivocation);
 			let call = Call::Grandpa(grandpa_call);
 			Some(call.encode())
@@ -573,7 +573,7 @@ impl_runtime_apis! {
 				proofs.push(proof);
 			}
 			let mut proved_challenge = challenge.clone();
-			challenge.targets_proof = proofs;
+			proved_challenge.targets_proof = Some(proofs);
 			let grandpa_call = GrandpaCall::report_rejecting_set(proved_challenge);
 			let call = Call::Grandpa(grandpa_call);
 			Some(call.encode())

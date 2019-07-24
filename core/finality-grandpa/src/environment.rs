@@ -477,7 +477,7 @@ where
 	RA: 'static + Send + Sync + ConstructRuntimeApi<Block, Client<B, E, Block, RA>>,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
-	T: SubmitReport<Client<B, E, Block, RA>, Block>,
+	T: SubmitReport<Client<B, E, Block, RA>, Block, AuthorityPair>,
 	Client<B, E, Block, RA>: HeaderBackend<Block> + ProvideRuntimeApi,
 	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: GrandpaApi<Block>,
 {
@@ -782,6 +782,7 @@ where
 		let grandpa_equivocation = GrandpaEquivocation::<Block> {
 			round_number: equivocation.round_number,
 			identity: equivocation.identity,
+			identity_proof: None,
 			first: (first_vote, first_signature),
 			second: (second_vote, second_signature),
 			set_id: self.set_id,
@@ -822,6 +823,7 @@ where
 		let grandpa_equivocation = GrandpaEquivocation::<Block> {
 			round_number: equivocation.round_number,
 			identity: equivocation.identity,
+			identity_proof: None,
 			first: (first_vote, first_signature),
 			second: (second_vote, second_signature),
 			set_id: self.set_id,

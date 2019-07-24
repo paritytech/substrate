@@ -74,11 +74,11 @@ pub trait AuthorshipEquivocationProof {
 ///    and thus proving that B was indeed finalized in round r_B, and
 /// d) a reference to a previous challenge, if the current tx is an answer to it.
 
-#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
 pub struct Challenge<H, N, Header, P> {
 	pub targets: Vec<AuthorityId>, // TODO: Optimize to bitset?
-	pub targets_proof: Vec<P>,
+	pub targets_proof: Option<Vec<P>>,
 	pub finalized_block: (H, N),
 	pub finalized_block_proof: VoteSet<H, N, Header>,
 	pub rejecting_set: VoteSet<H, N, Header>,

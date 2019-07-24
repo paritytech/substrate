@@ -329,8 +329,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 					generic::Digest {
 						logs: vec![
 							<generic::DigestItem<B::Hash> as 
-								CompatibleDigestItem<BabePreDigest, AuthoritySignature>>
-									::babe_pre_digest(inherent_digest.clone()),
+								CompatibleDigestItem>::babe_pre_digest(inherent_digest.clone()),
 						],
 					},
 					remaining_duration,
@@ -359,7 +358,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 
 			let (header, body) = b.deconstruct();
 			let pre_digest: Result<BabePreDigest, &str> =
-				find_pre_digest::<H, BabePreDigest, AuthoritySignature>(&header);
+				find_pre_digest::<H, BabePreDigest>(&header);
 			if let Err(e) = pre_digest {
 				error!(target: "babe", "FATAL ERROR: Invalid pre-digest: {}!", e);
 				return
@@ -374,8 +373,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			// add it to a digest item.
 			let header_hash = header.hash();
 			let signature = pair.sign(header_hash.as_ref());
-			let signature_digest_item = <DigestItemFor::<B> as
-				CompatibleDigestItem<BabePreDigest, AuthoritySignature>>::babe_seal(signature);
+			let signature_digest_item = <DigestItemFor::<B> as CompatibleDigestItem>::babe_seal(signature);
 
 			let import_block: BlockImportParams<B> = BlockImportParams {
 				origin: BlockOrigin::Own,
@@ -440,7 +438,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore>(
 	authorities: &[AuthorityId],
 	threshold: u64,
 ) -> Result<CheckedHeader<B::Header, (DigestItemFor<B>, DigestItemFor<B>)>, String>
-	where DigestItemFor<B>: CompatibleDigestItem<BabePreDigest, AuthoritySignature>,
+	where DigestItemFor<B>: CompatibleDigestItem,
 {
 	trace!(target: "babe", "Checking header");
 	let seal = match header.digest_mut().pop() {
@@ -452,7 +450,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore>(
 		babe_err!("Header {:?} has a bad seal", hash)
 	})?;
 
-	let pre_digest = find_pre_digest::<B::Header, BabePreDigest, AuthoritySignature>(&header)?;
+	let pre_digest = find_pre_digest::<B::Header, BabePreDigest>(&header)?;
 	let BabePreDigest { slot_num, index, ref proof, ref vrf_output } = pre_digest;
 
 	if slot_num > slot_now {
@@ -502,7 +500,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore>(
 				);
 			}
 
-			let pre_digest = CompatibleDigestItem::<BabePreDigest, AuthoritySignature>::babe_pre_digest(pre_digest);
+			let pre_digest = CompatibleDigestItem::babe_pre_digest(pre_digest);
 			Ok(CheckedHeader::Checked(header, (pre_digest, seal)))
 		} else {
 			Err(babe_err!("Bad signature on {:?}", hash))
@@ -583,7 +581,7 @@ impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
 	C: ProvideRuntimeApi + Send + Sync + AuxStore + ProvideCache<B>,
 	C::Api: BlockBuilderApi<B>
 		+ BabeApi<B, BabeEquivocationProof<<B as BlockT>::Header, AuthoritySignature, AuthorityId, Proof>>,
-	DigestItemFor<B>: CompatibleDigestItem<BabePreDigest, AuthoritySignature>,
+	DigestItemFor<B>: CompatibleDigestItem,
 {
 	fn verify(
 		&self,
@@ -838,7 +836,7 @@ pub fn import_queue<B, C, E>(
 	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore,
 	C::Api: BlockBuilderApi<B>
 		+ BabeApi<B, BabeEquivocationProof<<B as BlockT>::Header, AuthoritySignature, AuthorityId, Proof>>,
-	DigestItemFor<B>: CompatibleDigestItem<BabePreDigest, AuthoritySignature>,
+	DigestItemFor<B>: CompatibleDigestItem,
 	E: 'static,
 {
 	register_babe_inherent_data_provider(&inherent_data_providers, config.get())?;
@@ -1054,15 +1052,18 @@ mod tests {
 		drop(env_logger::try_init());
 		let sig = sr25519::Pair::generate().0.sign(b"");
 		let bad_seal: Item = DigestItem::Seal([0; 4], sig.0.to_vec());
-		assert!(bad_seal.as_babe_pre_digest().is_none());
-		assert!(bad_seal.as_babe_seal().is_none())
+		let maybe_babe_pre_digest: Option<BabePreDigest> = bad_seal.as_babe_pre_digest();
+		let maybe_seal: Option<sr25519::Signature> = bad_seal.as_babe_seal();
+		assert!(maybe_babe_pre_digest.is_none());
+		assert!(maybe_seal.is_none())
 	}
 
 	#[test]
 	fn malformed_pre_digest_rejected() {
 		drop(env_logger::try_init());
 		let bad_seal: Item = DigestItem::Seal(BABE_ENGINE_ID, [0; 64].to_vec());
-		assert!(bad_seal.as_babe_pre_digest().is_none());
+		let maybe_babe_pre_digest: Option<BabePreDigest> = bad_seal.as_babe_pre_digest();
+		assert!(maybe_babe_pre_digest.is_none());
 	}
 
 	#[test]
@@ -1070,8 +1071,8 @@ mod tests {
 		drop(env_logger::try_init());
 		let sig = sr25519::Pair::generate().0.sign(b"");
 		let bad_seal: Item = DigestItem::Seal(BABE_ENGINE_ID, sig.0.to_vec());
-		assert!(bad_seal.as_babe_pre_digest().is_none());
-		assert!(bad_seal.as_babe_seal().is_some())
+		assert!(bad_seal.as_babe_pre_digest::<BabePreDigest>().is_none());
+		assert!(bad_seal.as_babe_seal::<sr25519::Signature>().is_some())
 	}
 
 	#[test]

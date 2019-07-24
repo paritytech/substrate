@@ -376,7 +376,7 @@ fn check_header<C, B: BlockT, P: Pair, T>(
 	C::Api: AuraApi<B, P::Public, P::Signature,
 		AuraEquivocationProof<<B as BlockT>::Header, P::Signature, P::Public, Proof>>,
 	P::Public: AsRef<P::Public> + Encode + Decode + PartialEq + Clone,
-	T: SubmitReport<C, B>,
+	T: SubmitReport<C, B, P>,
 {
 	let seal = match header.digest_mut().pop() {
 		Some(x) => x,
@@ -511,7 +511,7 @@ impl<B: BlockT, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + AsRef<P::Public> + 'static,
 	P::Signature: Encode + Decode + Verify<Signer=P::Public> + Clone,
-	T: SubmitReport<C, B> + Send + Sync,
+	T: SubmitReport<C, B, P> + Send + Sync,
 {
 	fn verify(
 		&self,
@@ -695,7 +695,7 @@ pub fn import_queue<B, C, P, T>(
 	P: Pair + Send + Sync + 'static,
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode + AsRef<P::Public>,
 	P::Signature: Encode + Decode + Verify<Signer=P::Public> + Clone,
-	T: SubmitReport<C, B> + Send + Sync + 'static,
+	T: SubmitReport<C, B, P> + Send + Sync + 'static,
 {
 	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
 	initialize_authorities_cache(&*client)?;
@@ -920,8 +920,8 @@ mod tests {
 		pool: RwLock<u32>
 	}
 
-	impl<C, B> SubmitReport<C, B> for TestPool {
-		fn submit_report_call(&self, _client: &C, _extrinsic: &[u8]) {
+	impl<C, B, P> SubmitReport<C, B, P> for TestPool {
+		fn submit_report_call(&self, _client: &C, _pair: &P, _extrinsic: &[u8]) {
 			let mut pool = self.pool.write().unwrap();
 			*pool += 1;
 		}

@@ -29,12 +29,12 @@ use client::transaction_builder::TransactionBuilder as TransactionBuilderApi;
 use substrate_primitives::{crypto::Pair as PairT, ed25519::Pair};
 
 /// Trait to submit report calls to the transaction pool.
-pub trait SubmitReport<C, Block> {
+pub trait SubmitReport<C, Block, P> {
 	/// Submit report call to the transaction pool.
-	fn submit_report_call(&self, client: &C, pair: &Pair, encoded_call: &[u8]);
+	fn submit_report_call(&self, client: &C, pair: &P, encoded_call: &[u8]);
 }
 
-impl<C, Block, T: PoolApi + Send + Sync + 'static> SubmitReport<C, Block> for T 
+impl<C, Block, T: PoolApi + Send + Sync + 'static> SubmitReport<C, Block, Pair> for T 
 where 
 	Block: BlockT + 'static,
 	<T as PoolApi>::Api: txpool::ChainApi<Block=Block> + 'static,

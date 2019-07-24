@@ -168,14 +168,31 @@ mod test {
 	struct TestEquivocation {
 		h1: HeaderTest,
 		h2: HeaderTest,
+		identity: sr25519::Public,
+		identity_proof: sr25519::Public,
 		s1: sr25519::Signature,
 		s2: sr25519::Signature,
 	}
 
-	impl AuthorshipEquivocationProof<HeaderTest, sr25519::Signature> for TestEquivocation {
-		fn new(h1: HeaderTest, h2: HeaderTest, s1: sr25519::Signature, s2: sr25519::Signature) -> Self {
-			TestEquivocation { h1, h2, s1, s2 }
+	impl AuthorshipEquivocationProof for TestEquivocation {
+		type Header = HeaderTest;
+		type Signature = sr25519::Signature;
+		type Identity = sr25519::Public;
+		type InclusionProof = sr25519::Public;
+
+		fn new(
+			identity: Self::Identity,
+			identity_proof: Self::InclusionProof,
+			h1: HeaderTest,
+			h2: HeaderTest,
+			s1: sr25519::Signature,
+			s2: sr25519::Signature
+		) -> Self {
+			TestEquivocation { identity, identity_proof, h1, h2, s1, s2 }
 		}
+		fn is_valid(&self) -> bool { false }
+		fn identity(&self) -> &Self::Identity { &self.identity }
+		fn identity_proof(&self) -> &Self::InclusionProof { &self.identity_proof }
 		fn first_header(&self) -> &HeaderTest { &self.h1 }
 		fn second_header(&self) -> &HeaderTest { &self.h2 }
 		fn first_signature(&self) -> &sr25519::Signature { &self.s1 }
@@ -198,7 +215,7 @@ mod test {
 
 		// It's ok to sign same headers.
 		assert!(
-			check_equivocation::<_, _, TestEquivocation, _>(
+			check_equivocation::<_, _, TestEquivocation, _, _>(
 				&client,
 				2,
 				2,
@@ -209,7 +226,7 @@ mod test {
 		);
 
 		assert!(
-			check_equivocation::<_, _, TestEquivocation, _>(
+			check_equivocation::<_, _, TestEquivocation, _, _>(
 				&client,
 				3,
 				2,
@@ -221,7 +238,7 @@ mod test {
 
 		// But not two different headers at the same slot.
 		assert!(
-			check_equivocation::<_, _, TestEquivocation, _>(
+			check_equivocation::<_, _, TestEquivocation, _, _>(
 				&client,
 				4,
 				2,
@@ -233,7 +250,7 @@ mod test {
 
 		// Different slot is ok.
 		assert!(
-			check_equivocation::<_, _, TestEquivocation, _>(
+			check_equivocation::<_, _, TestEquivocation, _, _>(
 				&client,
 				5,
 				4,
@@ -245,7 +262,7 @@ mod test {
 
 		// Here we trigger pruning and save header 4.
 		assert!(
-			check_equivocation::<_, _, TestEquivocation, _>(
+			check_equivocation::<_, _, TestEquivocation, _, _>(
 				&client,
 				PRUNING_BOUND + 2,
 				MAX_SLOT_CAPACITY + 4,
@@ -257,7 +274,7 @@ mod test {
 
 		// This fails because header 5 is an equivocation of header 4.
 		assert!(
-			check_equivocation::<_, _, TestEquivocation, _>(
+			check_equivocation::<_, _, TestEquivocation, _, _>(
 				&client,
 				PRUNING_BOUND + 3,
 				MAX_SLOT_CAPACITY + 4,
@@ -269,7 +286,7 @@ mod test {
 
 		// This is ok because we pruned the corresponding header. Shows that we are pruning.
 		assert!(
-			check_equivocation::<_, _, TestEquivocation, _>(
+			check_equivocation::<_, _, TestEquivocation, _, _>(
 				&client,
 				PRUNING_BOUND + 4,
 				4,

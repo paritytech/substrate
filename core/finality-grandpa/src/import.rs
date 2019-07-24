@@ -240,7 +240,7 @@ where
 	RA: Send + Sync,
 	PRA: ProvideRuntimeApi + HeaderBackend<Block>,
 	PRA::Api: GrandpaApi<Block>,
-	T: SubmitReport<Client<B, E, Block, RA>, Block>,
+	T: SubmitReport<Client<B, E, Block, RA>, Block, ed25519::Pair>,
 	SC: SelectChain<Block>,
 {
 	// check for a new authority set change.
@@ -492,12 +492,14 @@ where
 
 					let mut headers = Vec::new();
 					let mut challenged_votes = Vec::new();
+					let mut targets = Vec::new();
 
 					for signed_message in votes_seen.into_iter() {
 						let hash = signed_message.message.target().0.clone();
 
 						if let Ok(Some(header)) = self.api.header(BlockId::Hash(hash)) {
 							headers.push(header);
+							targets.push(signed_message.id.clone());
 
 							let vote = ChallengedVote {
 								vote: signed_message.message,
@@ -522,7 +524,8 @@ where
 					let previous_challenge = Some(BlakeTwo256::hash_of(&challenge));
 
 					Challenge::<Block> {
-						targets: vec![],
+						targets,
+						targets_proof: None,
 						finalized_block: challenge.finalized_block,
 						finalized_block_proof,
 						rejecting_set: challenge.rejecting_set,
@@ -568,6 +571,7 @@ where
 
 					Challenge::<Block> {
 						targets: challenge.targets,
+						targets_proof: None,
 						finalized_block: challenge.finalized_block,
 						finalized_block_proof: challenge.finalized_block_proof,
 						rejecting_set: challenge.rejecting_set,
@@ -608,7 +612,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC, T> BlockImport<Block>
 		RA: Send + Sync,
 		PRA: ProvideRuntimeApi + HeaderBackend<Block>,
 		PRA::Api: GrandpaApi<Block>,
-		T: SubmitReport<Client<B, E, Block, RA>, Block>,
+		T: SubmitReport<Client<B, E, Block, RA>, Block, ed25519::Pair>,
 		SC: SelectChain<Block>,
 {
 	type Error = ConsensusError;
@@ -770,7 +774,7 @@ where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 	RA: Send + Sync,
-	T: SubmitReport<Client<B, E, Block, RA>, Block>,
+	T: SubmitReport<Client<B, E, Block, RA>, Block, ed25519::Pair>,
 {
 
 	/// Import a block justification and finalize the block.

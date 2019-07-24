@@ -31,11 +31,7 @@ use client::{
 };
 use test_client::{self, runtime::BlockNumber, blockchain::{Info, BlockStatus}};
 use consensus_common::{
-	BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock, BlockImportParams,
-	ImportResult
-};
-use consensus_common::import_queue::{
-	SharedFinalityProofRequestBuilder,
+	BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, ImportResult
 };
 use consensus_common::import_queue::{BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport};
 use std::collections::{HashMap, HashSet};
@@ -49,11 +45,8 @@ use runtime_primitives::{generic::{BlockId, DigestItem}};
 use runtime_primitives::testing::{Header, Digest};
 use substrate_primitives::{NativeOrEncoded, ExecutionContext};
 use fg_primitives::{
-	AuthorityId, GrandpaEquivocationProof, PrevoteEquivocation, PrecommitEquivocation,
-	Challenge, ChallengedVoteSet, ChallengedVote, FinalizedBlockProof, Commit,
-	SignedPrecommit
+	AuthorityId, GrandpaEquivocation, Challenge, safety::{self, VoteSet}, Commit, SignedPrecommit, ConsensusLog
 };
-use srml_grandpa::Signal;
 use authorities::AuthoritySet;
 use finality_proof::{
 	FinalityProofProvider, AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker
@@ -143,6 +136,7 @@ impl TestNetFactory for GrandpaTestNet {
 					Arc::new(self.test_config.clone()),
 					select_chain,
 					test_pool.clone(),
+					None,
 				).expect("Could not create block import for fresh peer.");
 				let justification_import = Box::new(import.clone());
 				let block_import = Box::new(import);
@@ -358,27 +352,6 @@ impl GrandpaApi<Block> for RuntimeApi {
 		Ok(self.inner.forced_changes.lock().get(&parent_hash).map(|c| c.clone())).map(NativeOrEncoded::Native)
 	}
 
-	fn GrandpaApi_construct_prevote_equivocation_report_call_runtime_api_impl(
-		&self,
-		_at: &BlockId<Block>,
-		_: ExecutionContext,
-		_: Option<GrandpaEquivocationProof<PrevoteEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>>>,
-		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<Vec<u8>>> {
-		Ok(NativeOrEncoded::Native(vec![]))
-	}
-
-	/// Construct a call to report the precommit equivocation.
-	fn GrandpaApi_construct_precommit_equivocation_report_call_runtime_api_impl(
-		&self,
-		_at: &BlockId<Block>,
-		_: ExecutionContext,
-		_: Option<GrandpaEquivocationProof<PrecommitEquivocation<<Block as BlockT>::Hash, NumberFor<Block>>>>,
-		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<Vec<u8>>> {
-		Ok(NativeOrEncoded::Native(vec![]))
-	}
-
 	fn GrandpaApi_grandpa_challenges_runtime_api_impl(
 		&self,
 		_at: &BlockId<Block>,
@@ -393,20 +366,20 @@ impl GrandpaApi<Block> for RuntimeApi {
 		&self,
 		_at: &BlockId<Block>,
 		_: ExecutionContext,
-		_: Option<Challenge<Block>>,
+		_: Option<GrandpaEquivocation<Block>>,
 		_: Vec<u8>,
-	) ->  Result<NativeOrEncoded<Vec<u8>>> {
-		Ok(NativeOrEncoded::Native(vec![]))
+	) ->  Result<NativeOrEncoded<Option<Vec<u8>>>> {
+		Ok(NativeOrEncoded::Native(None))
 	}
 
-	fn GrandpaApi_construct_rejecting_set_call_runtime_api_impl(
+	fn GrandpaApi_construct_rejecting_set_report_call_runtime_api_impl(
 		&self,
 		_at: &BlockId<Block>,
 		_: ExecutionContext,
 		_: Option<Challenge<Block>>,
 		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<Vec<u8>>> {
-		Ok(NativeOrEncoded::Native(vec![]))
+	) -> Result<NativeOrEncoded<Option<Vec<u8>>>> {
+		Ok(NativeOrEncoded::Native(None))
 	}
 }
 
@@ -451,12 +424,12 @@ pub struct TestPool {
 	pool: RwLock<Vec<u32>>,
 }
 	
-impl<C, Block> SubmitReport<C, Block> for TestPool
+impl<C, Block, P> SubmitReport<C, Block, P> for TestPool
 where
 	Block: BlockT,
 	C: HeaderBackend<Block>
 {
-	fn submit_report_call(&self, _client: &C, mut extrinsic: &[u8]) {
+	fn submit_report_call(&self, _client: &C, _pair: &P, mut extrinsic: &[u8]) {
 		if let Some(num) = Decode::decode(&mut extrinsic) {
 			let mut pool = self.pool.write();
 			pool.push(num);
@@ -1075,42 +1048,32 @@ fn challenge_digest_produces_answer() {
 	let peers = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie, AuthorityKeyring::Dave];
 	let voters = make_ids(peers);
 	let api = TestApi::new(voters);
-	let net = GrandpaTestNet::new(api.clone(), 4);
+	let mut net = GrandpaTestNet::new(api.clone(), 4);
 
 	let client = net.peer(0).client().clone();
-	let (block_import, _, _, _, _, transaction_pool) = net.make_block_import(client.clone());
+	let (mut block_import, _, _, _, _, transaction_pool) = net.make_block_import(client.clone());
 
 	let full_client = client.as_full().unwrap();
 	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
 	let mut block = builder.bake().unwrap();
 
-	let challenge = Challenge::<H256, u64, Header, AuthoritySignature, AuthorityId, Prevote<Block>> {
+	let challenge = safety::Challenge::<u64, u64, Header, ()> {
+		targets: vec![],
+		targets_proof: None,
 		finalized_block: (Default::default(), Default::default()),
-		finalized_block_proof: FinalizedBlockProof {
-			commit: Commit {
-				target_hash: Default::default(),
-				target_number: Default::default(),
-				precommits: vec![
-					SignedPrecommit {
-						precommit: Precommit::<Block> {
-							target_hash: Default::default(),
-							target_number: Default::default(),
-						},
-						signature: Default::default(),
-						id: Default::default(),
-					}
-				],
-			},
+		finalized_block_proof: VoteSet {
+			votes: vec![],
 			headers: vec![],
+			round: 0,
 		},
-		challenged_vote_set: ChallengedVoteSet {
-			challenged_votes: vec![],
-			set_id: 0,
+		rejecting_set: VoteSet {
+			votes: vec![],
+			headers: vec![],
 			round: 0,
 		},
 		previous_challenge: None,
 	};
-	let signal = Signal::PrevoteChallenge(challenge);
+	let signal = ConsensusLog::Challenges(vec![challenge]);
 
 	block.header.digest_mut().push(DigestItem::Consensus(GRANDPA_ENGINE_ID, signal.encode()));
 
@@ -1118,7 +1081,7 @@ fn challenge_digest_produces_answer() {
 
 	let block = || {
 		let block = block.clone();
-		ImportBlock {
+		BlockImportParams {
 			origin: BlockOrigin::File,
 			header: block.header,
 			justification: None,

@@ -27,7 +27,7 @@ use system::{EventRecord, Phase};
 use codec::{Decode, Encode};
 use fg_primitives::{
 	ScheduledChange, Equivocation, Prevote, Precommit, localized_payload,
-	Commit, SignedPrecommit, GrandpaMessage
+	Commit, SignedPrecommit, GrandpaMessage, GrandpaPrevote
 };
 use super::*;
 
@@ -296,12 +296,12 @@ fn report_equivocation_works() {
 		let hash1 = H256::random();
 		let hash2 = H256::random();
 
-		let prevote1 = Prevote { target_hash: hash1, target_number: 1 };
+		let prevote1 = GrandpaPrevote { target_hash: hash1, target_number: 1 };
 		let message1 = GrandpaMessage::Prevote(prevote1.clone());
 		let payload1 = localized_payload(0, 0, &message1);
 		let signature1 = UintSignature { msg: payload1.as_slice().to_vec(), signer: public.clone() };
 
-		let prevote2 = Prevote { target_hash: hash2, target_number: 2 };
+		let prevote2 = GrandpaPrevote { target_hash: hash2, target_number: 2 };
 		let message2 = GrandpaMessage::Prevote(prevote2.clone());
 		let payload2 = localized_payload(0, 0, &message2);
 		let signature2 = UintSignature { msg: payload2.as_slice().to_vec(), signer: public.clone() };
@@ -311,7 +311,7 @@ fn report_equivocation_works() {
 			set_id: 0,
 			round_number: 0,
 			identity: public.clone(),
-			identity_proof: Proof::default(),
+			identity_proof: None,
 			first: (message1.clone(), signature1.clone()),
 			second: (message2.clone(), signature2.clone()),
 		};
@@ -321,7 +321,7 @@ fn report_equivocation_works() {
 			set_id: 0,
 			round_number: 0,
 			identity: public.clone(),
-			identity_proof: Proof::default(),
+			identity_proof: None,
 			first: (message1.clone(), signature1.clone()),
 			second: (message1.clone(), signature1.clone()),
 		};
@@ -331,7 +331,7 @@ fn report_equivocation_works() {
 			set_id: 0,
 			round_number: 0,
 			identity: public.clone(),
-			identity_proof: Proof::default(),
+			identity_proof: None,
 			first: (message1.clone(), signature1.clone()),
 			second: (message2.clone(), signature1.clone()),
 		};

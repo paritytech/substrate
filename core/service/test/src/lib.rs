@@ -37,7 +37,7 @@ use service::{
 use network::{multiaddr, Multiaddr};
 use network::config::{NetworkConfiguration, TransportConfig, NodeKeyConfig, Secret, NonReservedPeerMode};
 use sr_primitives::generic::BlockId;
-use consensus::{BlockImportParams, ImportBlock, BlockImport};
+use consensus::{BlockImportParams, BlockImport};
 use transaction_pool::txpool::PoolApi;
 
 /// Maximum duration of single wait call.

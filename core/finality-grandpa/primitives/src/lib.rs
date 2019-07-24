@@ -98,7 +98,7 @@ pub type Challenge<Block> = safety::Challenge<
 pub type AuthorityIndex = u64;
 
 /// A scheduled change of authority set.
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[cfg_attr(feature = "std", derive(Serialize))]
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct ScheduledChange<N> {
 	/// The new authorities after the change, along with their respective weights.
@@ -108,7 +108,7 @@ pub struct ScheduledChange<N> {
 }
 
 /// An consensus log item for GRANDPA.
-#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+#[cfg_attr(feature = "std", derive(Serialize))]
 #[derive(Decode, Encode, PartialEq, Eq, Clone)]
 pub enum ConsensusLog<H: Codec, N: Codec, Header: Codec, P: Codec> {
 	/// Schedule an authority set change.
@@ -327,7 +327,7 @@ where
 pub mod equivocation {
 	use super::*;
 
-	#[cfg_attr(feature = "std", derive(Serialize, Debug))]
+	#[cfg_attr(feature = "std", derive(Debug, Serialize))]
 	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 	pub struct GrandpaEquivocation<H, N, S, I, P> {
 		/// The set id.
@@ -337,7 +337,7 @@ pub mod equivocation {
 		/// The identity of the equivocator.
 		pub identity: I,
 		/// The proof of identity inclusion.
-		pub identity_proof: P,
+		pub identity_proof: Option<P>,
 		/// The first vote in the equivocation.
 		pub	first: (GrandpaMessage<H, N>, S),
 		/// The second vote in the equivocation.

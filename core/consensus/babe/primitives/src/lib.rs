@@ -127,36 +127,36 @@ decl_runtime_apis! {
 		fn authorities() -> Vec<AuthorityId>;
 
 		/// Construct a call to report the equivocation.
-		fn construct_equivocation_report_call(proof: Equivocation) -> Vec<u8>;
+		fn construct_equivocation_report_call(proof: Equivocation) -> Option<Vec<u8>>;
 	}
 }
 
 
 /// A digest item which is usable with BABE consensus.
-pub trait CompatibleDigestItem<BabePreDigest, Signature> {
+pub trait CompatibleDigestItem {
 	/// Construct a digest item which contains a BABE pre-digest.
-	fn babe_pre_digest(seal: BabePreDigest) -> Self;
+	fn babe_pre_digest<D: Codec>(seal: D) -> Self;
 
 	/// If this item is an BABE pre-digest, return it.
-	fn as_babe_pre_digest(&self) -> Option<BabePreDigest>;
+	fn as_babe_pre_digest<D: Codec>(&self) -> Option<D>;
 
 	/// Construct a digest item which contains a BABE seal.
-	fn babe_seal(signature: Signature) -> Self;
+	fn babe_seal<S: Codec + Verify>(signature: S) -> Self;
 
 	/// If this item is a BABE signature, return the signature.
-	fn as_babe_seal(&self) -> Option<Signature>;
+	fn as_babe_seal<S: Codec + Verify>(&self) -> Option<S>;
 }
 
 /// Extract the digest item type for a block.
 pub type DigestItemForHeader<H> = DigestItem<<H as Header>::Hash>;
 
 /// Find Babe's pre-digest.
-pub fn find_pre_digest<H: Header, D, S>(header: &H) -> Result<D, &str>
-	where DigestItemForHeader<H>: CompatibleDigestItem<D, S>,
+pub fn find_pre_digest<H: Header, D: Codec>(header: &H) -> Result<D, &str>
+	where DigestItemForHeader<H>: CompatibleDigestItem,
 {
 	let mut pre_digest: Option<_> = None;
 	for log in header.digest().logs() {
-		match (log.as_babe_pre_digest(), pre_digest.is_some()) {
+		match (log.as_babe_pre_digest::<D>(), pre_digest.is_some()) {
 			(Some(_), true) => Err("Multiple BABE pre-runtime headers, rejecting!")?,
 			(None, _) => {},
 			(s, false) => pre_digest = s,
@@ -166,29 +166,27 @@ pub fn find_pre_digest<H: Header, D, S>(header: &H) -> Result<D, &str>
 }
 
 
-impl<Hash, D, S> CompatibleDigestItem<D, S> for DigestItem<Hash> where
+impl<Hash> CompatibleDigestItem for DigestItem<Hash> where
 	Hash: Send + Sync + Eq + Clone + Codec + 'static,
-	S: Codec,
-	D: Codec,
 {
-	fn babe_pre_digest(digest: D) -> Self {
+	fn babe_pre_digest<D: Codec>(digest: D) -> Self {
 		DigestItem::PreRuntime(BABE_ENGINE_ID, digest.encode())
 	}
 
-	fn as_babe_pre_digest(&self) -> Option<D> {
+	fn as_babe_pre_digest<D: Codec>(&self) -> Option<D> {
 		self.try_to(OpaqueDigestItemId::PreRuntime(&BABE_ENGINE_ID))
 	}
 
-	fn babe_seal(signature: S) -> Self {
+	fn babe_seal<S: Verify + Codec>(signature: S) -> Self {
 		DigestItem::Seal(BABE_ENGINE_ID, signature.encode())
 	}
 
-	fn as_babe_seal(&self) -> Option<S> {
+	fn as_babe_seal<S: Verify + Codec>(&self) -> Option<S> {
 		self.try_to(OpaqueDigestItemId::Seal(&BABE_ENGINE_ID))
 	}
 }
 
-/// Raw Babe pre-digest;
+/// Raw Babe pre-digest
 pub type RawBabePreDigest = (
 	[u8; VRF_OUTPUT_LENGTH],
 	[u8; VRF_PROOF_LENGTH],
@@ -197,10 +195,10 @@ pub type RawBabePreDigest = (
 );
 
 /// Get the slot.
-pub fn get_slot<H: Header, S: Codec>(header: &H) -> Result<SlotNumber, &str>
-	where DigestItemForHeader<H>: CompatibleDigestItem<RawBabePreDigest, S>,
+pub fn get_slot<H: Header>(header: &H) -> Result<SlotNumber, &str>
+	where DigestItemForHeader<H>: CompatibleDigestItem,
 {
-	find_pre_digest(header)
+	find_pre_digest::<H, RawBabePreDigest>(header)
 		.map(|raw_pre_digest| raw_pre_digest.3)
 }
 
@@ -256,8 +254,8 @@ where
 			return false
 		}
 
-		let maybe_first_slot = get_slot::<H, S>(first_header);
-		let maybe_second_slot = get_slot::<H, S>(second_header);
+		let maybe_first_slot = get_slot::<H>(first_header);
+		let maybe_second_slot = get_slot::<H>(second_header);
 
 		if maybe_first_slot.is_ok() && maybe_first_slot == maybe_second_slot {
 			// TODO: Check that author matches slot author (improve HistoricalSession).

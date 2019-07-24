@@ -484,13 +484,13 @@ cfg_if! {
 				}
 			}
 
-			impl consensus_aura::AuraApi<Block, AuraId, sr25519::Signature> for Runtime {
+			impl consensus_aura::AuraApi<Block, AuraId, AuthoritySignature, AuraEquivocation<Block>> for Runtime {
 				fn slot_duration() -> u64 { 1 }
 				fn authorities() -> Vec<AuraId> { system::authorities() }
 				fn construct_equivocation_report_call(
-					_proof: AuraEquivocationProof<<Block as BlockT>::Header,sr25519::Signature>
-				) -> Vec<u8> {
-					vec![]
+					_proof: AuraEquivocationProof<<Block as BlockT>::Header, AuthoritySignature, AuthorityId, Proof>
+				) -> Option<Vec<u8>> {
+					None
 				}
 			}
 
@@ -504,6 +504,11 @@ cfg_if! {
 					}
 				}
 				fn authorities() -> Vec<BabeId> { system::authorities() }
+				fn construct_equivocation_report_call(
+					_proof: BabeEquivocationProof<<Block as BlockT>::Header, AuthoritySignature, AuthorityId, Proof>
+				) -> Option<Vec<u8>> {
+					None
+				}
 			}
 
 			impl consensus_grandpa::GrandpaApi<Block> for Runtime {
@@ -522,20 +527,20 @@ cfg_if! {
 				}
 
 				fn grandpa_challenges(digest: &DigestFor<Block>) 
-				-> Option<Challenge<Block>> {
+				-> Option<Vec<Challenge<Block>>> {
 					unimplemented!()
 				}
 
 				fn construct_equivocation_report_call(
 					_proof: GrandpaEquivocation<Block>
-				) -> Vec<u8> {
-					vec![]
+				) -> Option<Vec<u8>> {
+					None
 				}
 		
 				fn construct_rejecting_set_report_call(
-					_proof: GrandpaEquivocation<Block>
-				) -> Vec<u8> {
-					vec![]
+					_proof: Challenge<Block>
+				) -> Option<Vec<u8>> {
+					None
 				}
 			}
 
@@ -682,8 +687,8 @@ cfg_if! {
 						sr25519::Public,
 						Proof,
 					>
-				) -> Vec<u8> {
-					vec![]
+				) -> Option<Vec<u8>> {
+					None
 				}
 			}
 
@@ -697,6 +702,16 @@ cfg_if! {
 					}
 				}
 				fn authorities() -> Vec<BabeId> { system::authorities() }
+				fn construct_equivocation_report_call(
+					_proof: BabeEquivocationProof<
+						<Block as BlockT>::Header,
+						sr25519::Signature,
+						sr25519::Public,
+						Proof,
+					>
+				) -> Option<Vec<u8>> {
+					None
+				}
 			}
 
 			impl consensus_grandpa::GrandpaApi<Block> for Runtime {
@@ -716,18 +731,18 @@ cfg_if! {
 		
 				fn construct_equivocation_report_call(
 					_proof: GrandpaEquivocation<Block>
-				) -> Vec<u8> {
-					vec![]
+				) -> Option<Vec<u8>> {
+					None
 				}
 
 				fn construct_rejecting_set_report_call(
 					_proof: Challenge<Block>
-				) -> Vec<u8> {
-					vec![]
+				) -> Option<Vec<u8>> {
+					None
 				}
 
 				fn grandpa_challenges(digest: &DigestFor<Block>) 
-				-> Option<Challenge<Block>> {
+				-> Option<Vec<Challenge<Block>>> {
 					unimplemented!()
 				}
 			}
