@@ -180,12 +180,13 @@ impl OverlayedChanges {
 		});
 
 		if let Some(committed_map) = self.committed.children.get(storage_key) {
-			for (key, _) in committed_map.iter() {
+			for (key, value) in committed_map.iter() {
 				if !map_entry.contains_key(key) {
 					map_entry.insert(key.clone(), OverlayedValue {
 						value: None,
 						extrinsics: extrinsic_index.map(|i| {
-							let mut e = BTreeSet::default();
+							let mut e = value.extrinsics.clone()
+								.unwrap_or_else(|| BTreeSet::default());
 							e.insert(i);
 							e
 						}),

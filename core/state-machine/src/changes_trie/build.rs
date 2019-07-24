@@ -263,7 +263,12 @@ fn prepare_digest_input<'a, S, H, Number>(
 
 
 				for (storage_key, trie_root) in children_roots.into_iter() {
-					let mut map = BTreeMap::<Vec<u8>, _>::new();
+					let child_index = ChildIndex::<Number> {
+						block: block.clone(),
+						storage_key,
+					};
+
+					let mut map = child_map.entry(child_index).or_insert_with(|| BTreeMap::<Vec<u8>, _>::new());
 					let trie_storage = TrieBackendEssence::<_, H>::new(
 						crate::changes_trie::TrieBackendStorageAdapter(storage),
 						trie_root,
@@ -277,13 +282,6 @@ fn prepare_digest_input<'a, S, H, Number>(
 						if let Some(InputKey::DigestIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
 							insert_to_map(&mut map, trie_key.key);
 						});
-
-
-					let child_index = ChildIndex::<Number> {
-						block: block.clone(),
-						storage_key,
-					};
-					child_map.insert(child_index, map.into_iter().map(|(_, (k, v))| InputPair::DigestIndex(k, v)));
 				}
 				Ok((map, child_map))
 
@@ -291,7 +289,8 @@ fn prepare_digest_input<'a, S, H, Number>(
 
 		.map(|(pairs, child_pairs)| (
 			pairs.into_iter().map(|(_, (k, v))| InputPair::DigestIndex(k, v)),
-			child_pairs,
+			child_pairs.into_iter().map(|(sk, pairs)|
+				(sk, pairs.into_iter().map(|(_, (k, v))| InputPair::DigestIndex(k, v)))).collect(),
 		))
 }
 
@@ -478,7 +477,10 @@ mod test {
 				vec![
 					InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4u64, key: vec![100] }, vec![0, 2, 3]),
 
+					InputPair::DigestIndex(DigestIndex { block: 4, key: vec![100] }, vec![1]),
+					InputPair::DigestIndex(DigestIndex { block: 4, key: vec![101] }, vec![1]),
 					InputPair::DigestIndex(DigestIndex { block: 4, key: vec![102] }, vec![2]),
+					InputPair::DigestIndex(DigestIndex { block: 4, key: vec![105] }, vec![1]),
 				]),
 			(ChildIndex { block: 4, storage_key: b"2".to_vec() },
 				vec![
@@ -560,7 +562,10 @@ mod test {
 				vec![
 					InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4u64, key: vec![100] }, vec![0, 2, 3]),
 
+					InputPair::DigestIndex(DigestIndex { block: 4, key: vec![100] }, vec![1]),
+					InputPair::DigestIndex(DigestIndex { block: 4, key: vec![101] }, vec![1]),
 					InputPair::DigestIndex(DigestIndex { block: 4, key: vec![102] }, vec![2]),
+					InputPair::DigestIndex(DigestIndex { block: 4, key: vec![105] }, vec![1]),
 				]),
 			(ChildIndex { block: 4, storage_key: b"2".to_vec() },
 				vec![
