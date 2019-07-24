@@ -79,7 +79,7 @@
 //! - wasm-gc
 //!
 
-use std::{env, ffi::{OsString}, fs, path::PathBuf, process::{Command, Stdio, self}};
+use std::{env, fs, path::PathBuf, process::{Command, Stdio, self}};
 
 mod prerequisites;
 mod wasm_project;
@@ -168,8 +168,8 @@ fn get_nightly_cargo() -> CargoCommand {
 /// Builder for cargo commands
 #[derive(Debug)]
 struct CargoCommand {
-	program: OsString,
-	args: Vec<OsString>,
+	program: String,
+	args: Vec<String>,
 }
 
 impl CargoCommand {
