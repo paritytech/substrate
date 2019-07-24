@@ -194,7 +194,9 @@ fn run_one_test() {
 	let mut import_notifications = Vec::new();
 	let mut runtime = current_thread::Runtime::new().unwrap();
 	for (peer_id, key) in peers {
-		let client = net.lock().peer(*peer_id).client().as_full().unwrap();
+		let peer = net.lock().peer(*peer_id);
+		let client = peer.client().as_full().expect("full clients are created").clone();
+		let select_chain = peer.select_chain();
 		let environ = Arc::new(DummyFactory(client.clone()));
 		import_notifications.push(
 			client.import_notification_stream()
@@ -210,10 +212,6 @@ fn run_one_test() {
 		register_babe_inherent_data_provider(
 			&inherent_data_providers, config.get()
 		).expect("Registers babe inherent data provider");
-
-
-		#[allow(deprecated)]
-		let select_chain = LongestChain::new(client.backend().clone());
 
 		runtime.spawn(start_babe(BabeParams {
 			config,

@@ -27,7 +27,10 @@ use std::sync::Arc;
 use crate::config::build_multiaddr;
 use log::trace;
 use crate::chain::FinalityProofProvider;
-use client::{self, ClientInfo, BlockchainEvents, BlockImportNotification, FinalityNotifications, FinalityNotification};
+use client::
+	self, ClientInfo, BlockchainEvents, BlockImportNotification, FinalityNotifications,
+	FinalityNotification, LongestChain,
+};
 use client::{in_mem::Backend as InMemoryBackend, error::Result as ClientResult};
 use client::block_builder::BlockBuilder;
 use client::backend::AuxStore;
@@ -207,6 +210,7 @@ pub struct Peer<D, S: NetworkSpecialization<Block>> {
 	/// We keep a copy of the block_import so that we can invoke it for locally-generated blocks,
 	/// instead of going through the import queue.
 	block_import: Box<dyn BlockImport<Block, Error = ConsensusError>>,
+	select_chain: Option<LongestChain<test_client::Backend, Block>>,
 	network: NetworkWorker<Block, S, <Block as BlockT>::Hash>,
 	imported_blocks_stream: Box<dyn Stream<Item = BlockImportNotification<Block>, Error = ()> + Send>,
 	finality_notification_stream: Box<dyn Stream<Item = FinalityNotification<Block>, Error = ()> + Send>,
@@ -216,6 +220,11 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	/// Returns true if we're major syncing.
 	pub fn is_major_syncing(&self) -> bool {
 		self.network.service().is_major_syncing()
+	}
+
+	// Returns a clone of the local SelectChain, only available on full nodes
+	pub fn select_chain(&self) -> Option<LongestChain<test_client::Backend, Block>> {
+		self.select_chain.clone()
 	}
 
 	/// Returns the number of peers we're connected to.
@@ -437,7 +446,8 @@ pub trait TestNetFactory: Sized {
 
 	/// Add a full peer.
 	fn add_full_peer(&mut self, config: &ProtocolConfig) {
-		let client = Arc::new(test_client::new());
+		let (c, longest_chain, _) TestClient::build_with_longest_chain();
+		let client = Arc::new(c);
 		let verifier = self.make_verifier(PeersClient::Full(client.clone()), config);
 		let (block_import, justification_import, finality_proof_import, finality_proof_request_builder, data)
 			= self.make_block_import(PeersClient::Full(client.clone()));
@@ -482,6 +492,7 @@ pub trait TestNetFactory: Sized {
 			peers.push(Peer {
 				data,
 				client: PeersClient::Full(client),
+				select_chain> Some(longest_chain),
 				imported_blocks_stream,
 				finality_notification_stream,
 				block_import: Box::new(block_import),
@@ -541,6 +552,7 @@ pub trait TestNetFactory: Sized {
 			peers.push(Peer {
 				data,
 				verifier,
+				select_chain: None,
 				block_import: Box::new(block_import),
 				client: PeersClient::Light(client),
 				imported_blocks_stream,

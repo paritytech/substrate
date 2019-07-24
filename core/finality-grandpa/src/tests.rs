@@ -103,7 +103,7 @@ impl TestNetFactory for GrandpaTestNet {
 		Arc::new(PassThroughVerifier(false)) // use non-instant finality.
 	}
 
-	fn make_block_import(&self, client: PeersClient)
+	fn make_block_import(&self, peer: &GrandpaPeer)
 		-> (
 			BoxBlockImport<Block>,
 			Option<BoxJustificationImport<Block>>,
@@ -112,16 +112,13 @@ impl TestNetFactory for GrandpaTestNet {
 			PeerData,
 		)
 	{
+		let client = peer.client();
 		match client {
 			PeersClient::Full(ref client) => {
-				#[allow(deprecated)]
-				let select_chain = LongestChain::new(
-					client.backend().clone()
-				);
 				let (import, link) = block_import(
 					client.clone(),
 					Arc::new(self.test_config.clone()),
-					select_chain,
+					select_chain: peer.select_chain().expect("Full Client has select chain"),
 				).expect("Could not create block import for fresh peer.");
 				let justification_import = Box::new(import.clone());
 				let block_import = Box::new(import);
@@ -953,8 +950,9 @@ fn allows_reimporting_change_blocks() {
 	let api = TestApi::new(voters);
 	let mut net = GrandpaTestNet::new(api.clone(), 3);
 
-	let client = net.peer(0).client().clone();
-	let (mut block_import, ..) = net.make_block_import(client.clone());
+	let peer = net.peer(0);
+	let client = peer.client().clone();
+	let (mut block_import, ..) = net.make_block_import(peer);
 
 	let full_client = client.as_full().unwrap();
 	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
@@ -1002,8 +1000,9 @@ fn test_bad_justification() {
 	let api = TestApi::new(voters);
 	let mut net = GrandpaTestNet::new(api.clone(), 3);
 
-	let client = net.peer(0).client().clone();
-	let (mut block_import, ..) = net.make_block_import(client.clone());
+	let peer = net.peer(0);
+	let client = peer.client().clone();
+	let (mut block_import, ..) = net.make_block_import(peer);
 
 	let full_client = client.as_full().expect("only full clients are used in test");
 	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
@@ -1066,7 +1065,9 @@ fn voter_persists_its_votes() {
 	assert_eq!(net.peer(0).client().info().chain.best_number, 20,
 			   "Peer #{} failed to sync", 0);
 
-	let client = net.peer(0).client().clone();
+
+	let peer = net.peer(0);
+	let client = peer.client().clone();
 	let net = Arc::new(Mutex::new(net));
 
 	let (voter_tx, voter_rx) = mpsc::unbounded::<()>();
@@ -1079,7 +1080,7 @@ fn voter_persists_its_votes() {
 		let client = client.clone();
 
 		let voter = future::loop_fn(voter_rx, move |rx| {
-			let (_block_import, _, _, _, link) = net.lock().make_block_import(client.clone());
+			let (_block_import, _, _, _, link) = net.lock().make_block_import(peer);
 			let link = link.lock().take().unwrap();
 
 			let grandpa_params = GrandpaParams {
@@ -1143,7 +1144,7 @@ fn voter_persists_its_votes() {
 		};
 
 		let set_state = {
-			let (_, _, _, _, link) = net.lock().make_block_import(client);
+			let (_, _, _, _, link) = net.lock().make_block_import(peer);
 			let LinkHalf { persistent_data, .. } = link.lock().take().unwrap();
 			let PersistentData { set_state, .. } = persistent_data;
 			set_state
