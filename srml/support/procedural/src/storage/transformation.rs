@@ -579,21 +579,24 @@ fn decl_store_extra_genesis(
 }
 
 fn create_and_impl_instance(
-	postfix: &str,
+	instance_prefix: &str,
 	ident: &Ident,
 	doc: &TokenStream2,
 	const_names: &[(Ident, String)],
 	scrate: &TokenStream2,
 	instantiable: &Ident,
+	cratename: &Ident,
 ) -> TokenStream2 {
 	let mut const_impls = TokenStream2::new();
 
 	for (const_name, partial_const_value) in const_names {
-		let const_value = format!("{}{}", partial_const_value, postfix);
+		let const_value = format!("{}{}", instance_prefix, partial_const_value);
 		const_impls.extend(quote! {
 			const #const_name: &'static str = #const_value;
 		});
 	}
+
+	let prefix = format!("{}{}", cratename.to_string(), instance_prefix);
 
 	quote! {
 		// Those trait are derived because of wrong bounds for generics
@@ -602,7 +605,7 @@ fn create_and_impl_instance(
 		#doc
 		pub struct #ident;
 		impl #instantiable for #ident {
-			const PREFIX_ENDS_WITH: &'static str = #postfix;
+			const PREFIX: &'static str = #prefix;
 			#const_impls
 		}
 	}
@@ -682,8 +685,8 @@ fn decl_storage_items(
 			/// Defines storage prefixes, they must be unique.
 			#hide
 			pub trait #instantiable: 'static {
-				/// The common end of each storage entry prefix of an instance.
-				const PREFIX_ENDS_WITH: &'static str;
+				/// The prefix used by any storage entry of an instance.
+				const PREFIX: &'static str;
 				#const_impls
 			}
 		});
@@ -705,9 +708,11 @@ fn decl_storage_items(
 			);
 
 		// Impl Instance trait for instances
-		for (postfix, ident, doc) in instances {
+		for (instance_prefix, ident, doc) in instances {
 			impls.extend(
-				create_and_impl_instance(&postfix, &ident, &doc, &const_names, scrate, &instantiable)
+				create_and_impl_instance(
+					&instance_prefix, &ident, &doc, &const_names, scrate, &instantiable, cratename
+				)
 			);
 		}
 	}
@@ -723,7 +728,13 @@ fn decl_storage_items(
 	} else {
 		impls.extend(
 			create_and_impl_instance(
-				"", &inherent_instance, &quote!(#[doc(hidden)]), &const_names, scrate, &instantiable
+				"",
+				&inherent_instance,
+				&quote!(#[doc(hidden)]),
+				&const_names,
+				scrate,
+				&instantiable,
+				cratename,
 			)
 		);
 	}
@@ -1072,14 +1083,11 @@ fn store_functions_to_metadata (
 	}
 
 	let prefix = cratename.to_string();
-	let instance = instance.as_ref().map_or_else(|| quote!(None), |i| quote! {
-		Some(#scrate::metadata::DecodeDifferent::Encode(#i::PREFIX_ENDS_WITH))
-	});
+	let prefix = instance.as_ref().map_or_else(|| quote!(#prefix), |i| quote!(#i::PREFIX));
 
 	(default_getter_struct_def, quote!{
 		#scrate::metadata::StorageMetadata {
 			prefix: #scrate::metadata::DecodeDifferent::Encode(#prefix),
-			instance: #instance,
 			entries: #scrate::metadata::DecodeDifferent::Encode(&[ #items ][..]),
 		}
 	})

@@ -475,7 +475,6 @@ mod tests {
 				storage: Some(DecodeDifferent::Encode(
 					FnEncode(|| StorageMetadata {
 						prefix: DecodeDifferent::Encode("TestStorage"),
-						instance: None,
 						entries: DecodeDifferent::Encode(
 							&[
 								StorageEntryMetadata {

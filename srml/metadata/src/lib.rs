@@ -292,9 +292,6 @@ pub enum StorageEntryModifier {
 pub struct StorageMetadata {
 	/// The common prefix used by all storage entries.
 	pub prefix: DecodeDifferent<&'static str, StringBuf>,
-	/// The instance identifier. This identifier is appended to each storage entry prefix to make it
-	/// unique per instance.
-	pub instance: Option<DecodeDifferent<&'static str, StringBuf>>,
 	pub entries: DecodeDifferent<&'static [StorageEntryMetadata], Vec<StorageEntryMetadata>>,
 }
 

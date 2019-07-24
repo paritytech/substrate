@@ -414,8 +414,7 @@ fn storage_with_instance_basic_operation() {
 }
 
 const EXPECTED_METADATA: StorageMetadata = StorageMetadata {
-	prefix: DecodeDifferent::Encode("Module2"),
-	instance: Some(DecodeDifferent::Encode("Instance2")),
+	prefix: DecodeDifferent::Encode("Module2Instance2"),
 	entries: DecodeDifferent::Encode(
 		&[
 			StorageEntryMetadata {
