@@ -4763,6 +4763,7 @@ dependencies = [
  "sr-primitives 2.0.0",
  "substrate-client 2.0.0",
  "substrate-client-db 2.0.0",
+ "substrate-consensus-aura-primitives 2.0.0",
  "substrate-consensus-common 2.0.0",
  "substrate-executor 2.0.0",
  "substrate-finality-grandpa 2.0.0",

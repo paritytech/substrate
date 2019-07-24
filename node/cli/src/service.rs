@@ -22,14 +22,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use babe::{import_queue, start_babe, BabeImportQueue, Config};
-use babe_primitives::AuthorityPair as BabePair;
+use babe_primitives::{AuthorityPair as BabePair, AuthorityId};
 use client::{self, LongestChain};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use node_executor;
 use primitives::Pair;
 use grandpa_primitives::AuthorityPair as GrandpaPair;
 use futures::prelude::*;
-use node_primitives::{Block, ValidatorId};
 use node_runtime::{GenesisConfig, RuntimeApi};
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
@@ -42,6 +41,7 @@ use network::construct_simple_protocol;
 use substrate_service::construct_service_factory;
 use log::info;
 use substrate_service::TelemetryOnConnect;
+use node_primitives::{Block};
 
 construct_simple_protocol! {
 	/// Demo protocol attachment for substrate.
@@ -255,7 +255,7 @@ construct_service_factory! {
 		}},
 		// TODO: Sure this is supposed to be called AuthorityId? SessionId and AuthorityId are not the same according to
 		// the srml session modul.
-		AuthorityId = ValidatorId,
+		AuthorityId = AuthorityId,
 	}
 }
 

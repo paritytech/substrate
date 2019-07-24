@@ -36,6 +36,7 @@ offchain = { package = "substrate-offchain", path = "../../core/offchain" }
 parity-multiaddr = { package = "parity-multiaddr", version = "0.5.0" }
 libp2p = { version = "0.11.0", default-features = false, features = ["secp256k1", "libp2p-websocket"] }
 session_primitives = { package = "substrate-session-primitives", path = "../../core/session/primitives", default-features = false }
+consensus_aura_primitives = { package = "substrate-consensus-aura-primitives", path = "../../core/consensus/aura/primitives", default-features = false }
 
 [dev-dependencies]
 substrate-test-runtime-client = { path = "../test-runtime/client" }

@@ -195,6 +195,7 @@ impl<Components: components::Components> Service<Components> {
 		// FIXME #1063 remove this
 		if let Some(keystore) = keystore.as_mut() {
 			for seed in &config.keys {
+				println!("==== seed: {}", seed);
 				keystore.generate_from_seed::<ed25519::Pair>(seed)?;
 				keystore.generate_from_seed::<sr25519::Pair>(seed)?;
 			}
@@ -207,7 +208,14 @@ impl<Components: components::Components> Service<Components> {
 					info!("Generated a new keypair: {:?}", public_key);
 					public_key.to_string()
 				}
-			}
+			};
+
+			match keystore.contents::<sr25519::Public>()?.get(0) {
+				Some(public_key) => println!("====== Second public key: {}", public_key.to_string()),
+				None => {
+					println!("======= no second public key");
+				}
+			};
 		} else {
 			public_key = format!("<disabled-keystore>");
 		}
@@ -439,6 +447,7 @@ impl<Components: components::Components> Service<Components> {
 			has_bootnodes,
 			// TODO: Public key might be <disabled-keystore>, handle that!
 			public_key.clone(),
+			keystore_authority_key.clone(),
 		)
 			.map_err(|_| ())
 			.select(exit.clone())

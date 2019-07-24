@@ -26,7 +26,7 @@ use support::{
 };
 use primitives::u32_trait::{_1, _2, _3, _4};
 use node_primitives::{
-	AccountId, AccountIndex, ValidatorId, Balance, BlockNumber, Hash, Index,
+	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
 	Moment, Signature,
 };
 use babe::{AuthorityId as BabeId};
@@ -490,6 +490,12 @@ impl_runtime_apis! {
 	impl client_api::TaggedTransactionQueue<Block> for Runtime {
 		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 			Executive::validate_transaction(tx)
+		}
+	}
+
+	impl client_api::KeyTypeGetter<Block> for Runtime {
+		fn get_key_type() -> substrate_primitives::crypto::KeyTypeId {
+			substrate_primitives::crypto::key_types::ED25519
 		}
 	}
 
