@@ -1049,7 +1049,7 @@ mod tests {
 		// This uses the exact values of substrate-node.
 		//
 		// weight of transfer call as of now: 1_000_000
-		// if weight of cheapest weight would be 10^7, this would be 10^9, which is:
+		// if weight of the cheapest weight would be 10^7, this would be 10^9, which is:
 		//   - 1 MILLICENTS in substrate node.
 		//   - 1 milldot based on current polkadot runtime.
 		// (this baed on assigning 0.1 CENT to the cheapest tx with `weight = 100`)

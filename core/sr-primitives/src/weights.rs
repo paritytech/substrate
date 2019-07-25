@@ -164,7 +164,7 @@ impl<T> ClassifyDispatch<T> for SimpleDispatchInfo {
 impl Default for SimpleDispatchInfo {
 	fn default() -> Self {
 		// Default weight of all transactions.
-		SimpleDispatchInfo::FixedNormal(10)
+		SimpleDispatchInfo::FixedNormal(10_000)
 	}
 }
 
