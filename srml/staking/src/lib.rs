@@ -292,7 +292,7 @@ use srml_support::{
 		WithdrawReasons, WithdrawReason, OnUnbalanced, Imbalance, Get, Time
 	}
 };
-use session::{historical::OnSessionEnding, SelectInitialValidators, SessionIndex};
+use session::{SelectInitialValidators, SessionIndex};
 use primitives::Perbill;
 use primitives::weights::SimpleDispatchInfo;
 use primitives::traits::{
@@ -1425,7 +1425,9 @@ impl<T: Trait> session::OnSessionEnding<T::AccountId> for Module<T> {
 	}
 }
 
-impl<T: Trait> historical::OnSessionEnding<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>> for Module<T> {
+impl<T: Trait> session::historical::OnSessionEnding<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>>
+	for Module<T>
+{
 	fn on_session_ending(ending: SessionIndex, _: SessionIndex)
 		-> Option<(Vec<T::AccountId>, Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>)>
 	{
