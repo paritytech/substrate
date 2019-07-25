@@ -32,7 +32,6 @@ use keyring::sr25519::Keyring;
 use super::generic::DigestItem;
 use client::BlockchainEvents;
 use test_client;
-use futures::Async;
 use log::debug;
 use std::{time::Duration, borrow::Borrow, cell::RefCell};
 type Item = generic::DigestItem<Hash>;
@@ -62,15 +61,15 @@ impl Environment<TestBlock> for DummyFactory {
 
 impl Proposer<TestBlock> for DummyProposer {
 	type Error = Error;
-	type Create = Result<TestBlock, Error>;
+	type Create = future::Ready<Result<TestBlock, Error>>;
 
 	fn propose(
 		&self,
 		_: InherentData,
 		digests: DigestFor<TestBlock>,
 		_: Duration,
-	) -> Result<TestBlock, Error> {
-		self.1.new_block(digests).unwrap().bake().map_err(|e| e.into())
+	) -> Self::Create {
+		future::ready(self.1.new_block(digests).unwrap().bake().map_err(|e| e.into()))
 	}
 }
 
@@ -203,9 +202,8 @@ fn run_one_test() {
 		let environ = Arc::new(DummyFactory(client.clone()));
 		import_notifications.push(
 			client.import_notification_stream()
-				.map(|v| Ok::<_, ()>(v)).compat()
-				.take_while(|n| Ok(n.header.number() < &5))
-				.for_each(move |_| Ok(()))
+				.take_while(|n| future::ready(!(n.origin != BlockOrigin::Own && n.header.number() < &5)))
+				.for_each(move |_| future::ready(()))
 		);
 
 		let config = Config::get_or_compute(&*client)
@@ -234,14 +232,13 @@ fn run_one_test() {
 		}).expect("Starts babe"));
 	}
 
-	// wait for all finalized on each.
-	let wait_for = futures::future::join_all(import_notifications);
-
-	let drive_to_completion = futures::future::poll_fn(|| {
+	runtime.spawn(futures01::future::poll_fn(move || {
 		net.lock().poll();
-		Ok(Async::NotReady)
-	});
-	let _ = runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
+		Ok::<_, ()>(futures01::Async::NotReady::<()>)
+	}));
+
+	runtime.block_on(future::join_all(import_notifications)
+		.map(|_| Ok::<(), ()>(())).compat()).unwrap();
 }
 
 #[test]

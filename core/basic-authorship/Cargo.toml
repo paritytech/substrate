@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 log = "0.4"
+futures-preview = "0.3.0-alpha.17"
 codec = { package = "parity-codec", version = "4.1.1" }
 runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
 client = { package = "substrate-client", path = "../../core/client" }
