@@ -2370,7 +2370,6 @@ dependencies = [
  "substrate-keyring 2.0.0",
  "substrate-offchain-primitives 2.0.0",
  "substrate-primitives 2.0.0",
- "substrate-session-primitives 2.0.0",
  "substrate-wasm-builder-runner 1.0.2",
 ]
 
