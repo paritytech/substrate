@@ -28,6 +28,7 @@ use client::{BlockchainEvents};
 use futures03::stream::{StreamExt as _, TryStreamExt as _};
 use consensus_aura_primitives::AuraApi;
 use offchain::AuthorityKeyProvider as _;
+use consensus_common_primitives::ConsensusApi;
 
 use network::{Event, DhtEvent};
 use client_db;
@@ -300,8 +301,8 @@ impl<C: Components> NetworkFutureBuilder<Self> for C where
 	ComponentClient<C>: ProvideRuntimeApi,
 	<ComponentClient<C> as ProvideRuntimeApi>::Api: runtime_api::Metadata<ComponentBlock<C>>,
     // <ComponentClient<C> as ProvideRuntimeApi>::Api: runtime_api::KeyTypeGetter<ComponentBlock<C>>,
-	// <ComponentClient<C> as ProvideRuntimeApi>::Api: session_primitives::SessionApi<ComponentBlock<C>, <C::Factory as ServiceFactory>::AuthorityId>,
-// <ComponentClient<C> as ProvideRuntimeApi>::Api: consensus_aura_primitives::AuraApi<ComponentBlock<C>, <C::Factory as ServiceFactory>::AuthorityId>,
+	<ComponentClient<C> as ProvideRuntimeApi>::Api: consensus_common_primitives::ConsensusApi<ComponentBlock<C>, <C::Factory as ServiceFactory>::AuthorityId>,
+// <ComponentClient<C> as ProvideRuntimeApi>::Api: consensus_babe_primitives::BabeApi<ComponentBlock<C>>,
 <<<C as Components>::Factory as ServiceFactory>::ConsensusPair as primitives::crypto::Pair>::Public : std::string::ToString
 {
 	fn build_network_future<
@@ -369,25 +370,23 @@ impl<C: Components> NetworkFutureBuilder<Self> for C where
 					}
 				}
 
+				match client.runtime_api().authorities(&id) {
+					Ok(authorities) => {
+						for authority in authorities.iter() {
+							println!("==== querying dht for authority: {}", authority.to_string());
+							// TODO: Remove unwrap.
+							let hashed_public_key = libp2p::multihash::encode(
+								libp2p::multihash::Hash::SHA2256,
+								authority.to_string().as_bytes(),
+							).unwrap();
 
-				// TODO: Get authorities from current consensus, whatever that might be.
-				// match client.runtime_api().authorities(&id) {
-				// 	Ok(authorities) => {
-				// 		for authority in authorities.iter() {
-				// 			println!("==== querying dht for authority: {}", authority.to_string());
-				// 			// TODO: Remove unwrap.
-				// 			let hashed_public_key = libp2p::multihash::encode(
-				// 				libp2p::multihash::Hash::SHA2256,
-				// 				authority.to_string().as_bytes(),
-				// 			).unwrap();
-
-				// 			network.service().get_value(&hashed_public_key.clone());
-				// 		}
-				// 	},
-				// 	Err(e) => {
-				// 		println!("==== Got no authorities, but an error: {:?}", e);
-				// 	}
-				// }
+							network.service().get_value(&hashed_public_key.clone());
+						}
+					},
+					Err(e) => {
+						println!("==== Got no authorities, but an error: {:?}", e);
+					}
+				}
 			}
 
 
@@ -450,6 +449,7 @@ impl<C: Components> NetworkFutureBuilder<Self> for C where
 			}) {
 				for (key, value) in values.iter() {
 					let id = BlockId::hash( client.info().chain.best_hash);
+
 					match client.runtime_api().authorities(&id) {
 						Ok(authorities) => {
 							for authority in authorities.iter() {
@@ -463,7 +463,7 @@ impl<C: Components> NetworkFutureBuilder<Self> for C where
 									let value = std::str::from_utf8(value).unwrap();
 
 									let external_addresses: HashSet<libp2p::Multiaddr> = serde_json::from_str(value).unwrap();
-									println!("==== Got key {:?} value {:?} from DHT", authority.0.to_string(), external_addresses);
+									println!("==== Got key {:?} value {:?} from DHT", authority.to_string(), external_addresses);
 
 									for address in external_addresses.iter() {
 										// TODO: Why does add_reserved_peer take a string?
