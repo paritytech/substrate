@@ -50,7 +50,6 @@ pub struct ProposerFactory<C, A> where A: txpool::ChainApi {
 impl<B, E, Block, RA, A> consensus_common::Environment<Block> for
 ProposerFactory<SubstrateClient<B, E, Block, RA>, A>
 where
-	Block: BlockT,
 	A: txpool::ChainApi<Block=Block>,
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
@@ -98,7 +97,6 @@ pub struct Proposer<Block: BlockT, C, A: txpool::ChainApi> {
 impl<B, E, Block, RA, A> consensus_common::Proposer<Block> for
 Proposer<Block, SubstrateClient<B, E, Block, RA>, A>
 where
-	Block: BlockT,
 	A: txpool::ChainApi<Block=Block>,
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
@@ -123,7 +121,6 @@ where
 }
 
 impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	where
-	Block: BlockT,
 	A: txpool::ChainApi<Block=Block>,
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
