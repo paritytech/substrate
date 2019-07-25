@@ -147,7 +147,8 @@ mod tests {
 		let mut storage = GenesisConfig::new(false,
 			vec![Sr25519Keyring::One.into(), Sr25519Keyring::Two.into()],
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
-			1000
+			1000,
+			None,
 		).genesis_map();
 		let genesis_hash = insert_genesis_block(&mut storage);
 
@@ -173,7 +174,8 @@ mod tests {
 		let mut storage = GenesisConfig::new(false,
 			vec![Sr25519Keyring::One.into(), Sr25519Keyring::Two.into()],
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
-			1000
+			1000,
+			None,
 		).genesis_map();
 		let genesis_hash = insert_genesis_block(&mut storage);
 
@@ -199,7 +201,8 @@ mod tests {
 		let mut storage = GenesisConfig::new(false,
 			vec![Sr25519Keyring::One.into(), Sr25519Keyring::Two.into()],
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
-			68
+			68,
+			None,
 		).genesis_map();
 		let genesis_hash = insert_genesis_block(&mut storage);
 
