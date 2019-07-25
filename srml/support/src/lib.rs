@@ -223,6 +223,37 @@ macro_rules! __assert_eq_uvec {
 	}
 }
 
+/// Checks that `$x` is equal to `$y` with an error rate of `$error`.
+///
+/// # Example
+///
+/// ```rust
+/// # fn main() {
+/// srml_support::assert_eq_error_rate!(10, 10, 0);
+/// srml_support::assert_eq_error_rate!(10, 11, 1);
+/// srml_support::assert_eq_error_rate!(12, 10, 2);
+/// # }
+/// ```
+///
+/// ```rust,should_panic
+/// # fn main() {
+/// srml_support::assert_eq_error_rate!(12, 10, 1);
+/// # }
+/// ```
+#[macro_export]
+#[cfg(feature = "std")]
+macro_rules! assert_eq_error_rate {
+	($x:expr, $y:expr, $error:expr) => {
+		assert!(
+			($x) >= (($y) - ($error)) && ($x) <= (($y) + ($error)),
+			"{:?} != {:?} (with error rate {:?})",
+			$x,
+			$y,
+			$error,
+		);
+	};
+}
+
 /// The void type - it cannot exist.
 // Oh rust, you crack me up...
 #[derive(Clone, Eq, PartialEq)]

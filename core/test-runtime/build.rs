@@ -14,14 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use wasm_builder_runner::{build_current_project, WasmBuilderSource};
+use wasm_builder_runner::{build_current_project_with_rustflags, WasmBuilderSource};
 
 fn main() {
-	build_current_project(
+	build_current_project_with_rustflags(
 		"wasm_binary.rs",
 		WasmBuilderSource::CratesOrPath {
 			path: "../utils/wasm-builder",
 			version: "1.0.4",
 		},
+		// Note that we set the stack-size to 1MB explicitly even though it is set
+		// to this value by default. This is because some of our tests (`restoration_of_globals`)
+		// depend on the stack-size.
+		//
+		// The --export=__heap_base instructs LLD to export __heap_base as a global variable, which
+		// is used by the external memory allocator.
+		"-Clink-arg=-zstack-size=1048576 \
+		-Clink-arg=--export=__heap_base",
 	);
 }

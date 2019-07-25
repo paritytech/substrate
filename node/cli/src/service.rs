@@ -263,7 +263,8 @@ mod tests {
 	use babe::CompatibleDigestItem;
 	use consensus_common::{Environment, Proposer, BlockImportParams, BlockOrigin, ForkChoiceStrategy};
 	use node_primitives::DigestItem;
-	use node_runtime::{BalancesCall, Call, CENTS, SECS_PER_BLOCK, UncheckedExtrinsic};
+	use node_runtime::{BalancesCall, Call, UncheckedExtrinsic};
+	use node_runtime::constants::{currency::CENTS, time::SECS_PER_BLOCK};
 	use parity_codec::{Encode, Decode};
 	use primitives::{
 		crypto::Pair as CryptoPair, blake2_256,

@@ -1622,7 +1622,7 @@ mod tests {
 			fn aux_0(_origin) -> Result { unreachable!() }
 			fn aux_1(_origin, #[compact] _data: u32) -> Result { unreachable!() }
 			fn aux_2(_origin, _data: i32, _data2: String) -> Result { unreachable!() }
-			#[weight = SimpleDispatchInfo::FixedNormal(10)]
+			#[weight = SimpleDispatchInfo::FixedNormal(3)]
 			fn aux_3(_origin) -> Result { unreachable!() }
 			fn aux_4(_origin, _data: i32) -> Result { unreachable!() }
 			fn aux_5(_origin, _data: i32, #[compact] _data2: u32) -> Result { unreachable!() }
@@ -1772,7 +1772,7 @@ mod tests {
 
 	#[test]
 	fn weight_should_attach_to_call_enum() {
-		// max weight. not dependent on input.
+		// operational.
 		assert_eq!(
 			Call::<TraitImpl>::operational().get_dispatch_info(),
 			DispatchInfo { weight: 5, class: DispatchClass::Operational },
@@ -1780,12 +1780,12 @@ mod tests {
 		// default weight.
 		assert_eq!(
 			Call::<TraitImpl>::aux_0().get_dispatch_info(),
-			DispatchInfo { weight: 100, class: DispatchClass::Normal },
+			DispatchInfo { weight: 10_000, class: DispatchClass::Normal },
 		);
 		// custom basic
 		assert_eq!(
 			Call::<TraitImpl>::aux_3().get_dispatch_info(),
-			DispatchInfo { weight: 10, class: DispatchClass::Normal },
+			DispatchInfo { weight: 3, class: DispatchClass::Normal },
 		);
 	}
 }
