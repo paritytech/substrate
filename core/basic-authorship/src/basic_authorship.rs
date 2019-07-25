@@ -27,7 +27,7 @@ use client::{
 use codec::Decode;
 use consensus_common::{evaluation};
 use inherents::InherentData;
-use log::{info, debug, trace};
+use log::{error, info, debug, trace};
 use primitives::{H256, Blake2Hasher, ExecutionContext};
 use runtime_primitives::{ApplyError, generic::BlockId};
 use runtime_primitives::traits::{
@@ -210,16 +210,15 @@ impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	wh
 			"hash" => ?<Block as BlockT>::Hash::from(block.header().hash()),
 		);
 
-		let substrate_block = Decode::decode(&mut block.encode().as_slice())
-			.expect("blocks are defined to serialize to substrate blocks correctly; qed");
+		if Decode::decode(&mut block.encode().as_slice()).as_ref() != Some(&block) {
+			error!("Failed to verify block encoding/decoding");
+		}
 
-		assert!(evaluation::evaluate_initial(
-			&substrate_block,
-			&self.parent_hash,
-			self.parent_number,
-		).is_ok());
+		if let Err(err) = evaluation::evaluate_initial(&block, &self.parent_hash, self.parent_number) {
+			error!("Failed to evaluate authored block: {:?}", err);
+		}
 
-		Ok(substrate_block)
+		Ok(block)
 	}
 }
 
