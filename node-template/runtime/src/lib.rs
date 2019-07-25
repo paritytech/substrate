@@ -8,17 +8,11 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
-#[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
-use parity_codec::{Encode, Decode};
 use rstd::prelude::*;
-#[cfg(feature = "std")]
-use primitives::bytes;
 use primitives::{ed25519, sr25519, OpaqueMetadata};
-use sr_primitives::{
-	ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
-	traits::{self, NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify}, weights::Weight,
-};
+use sr_primitives::{ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str};
+use sr_primitives::traits::{NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify, ConvertInto};
+use sr_primitives::weights::Weight;
 use client::{
 	block_builder::api::{CheckInherentsResult, InherentData, self as block_builder_api},
 	runtime_api, impl_runtime_apis
@@ -102,8 +96,9 @@ pub fn native_version() -> NativeVersion {
 
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 250;
-	pub const MaximumBlockWeight: Weight = 4 * 1024 * 1024;
-	pub const MaximumBlockLength: u32 = 4 * 1024 * 1024;
+	pub const MaximumBlockWeight: Weight = 1_000_000;
+	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
+	pub const MaximumBlockLength: u32 = 5 * 1024 * 1024;
 }
 
 impl system::Trait for Runtime {
@@ -133,6 +128,8 @@ impl system::Trait for Runtime {
 	type MaximumBlockWeight = MaximumBlockWeight;
 	/// Maximum size of all encoded transactions (in bytes) that are allowed in one block.
 	type MaximumBlockLength = MaximumBlockLength;
+	/// Portion of the block weight that is available to all normal transactions.
+	type AvailableBlockRatio = AvailableBlockRatio;
 }
 
 impl aura::Trait for Runtime {
@@ -166,8 +163,8 @@ parameter_types! {
 	pub const ExistentialDeposit: u128 = 500;
 	pub const TransferFee: u128 = 0;
 	pub const CreationFee: u128 = 0;
-	pub const TransactionBaseFee: u128 = 1;
-	pub const TransactionByteFee: u128 = 0;
+	pub const TransactionBaseFee: u128 = 0;
+	pub const TransactionByteFee: u128 = 1;
 }
 
 impl balances::Trait for Runtime {
@@ -188,6 +185,7 @@ impl balances::Trait for Runtime {
 	type CreationFee = CreationFee;
 	type TransactionBaseFee = TransactionBaseFee;
 	type TransactionByteFee = TransactionByteFee;
+	type WeightToFee = ConvertInto;
 }
 
 impl sudo::Trait for Runtime {
