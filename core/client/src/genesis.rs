@@ -149,7 +149,8 @@ mod tests {
 		let mut storage = GenesisConfig::new(false,
 			vec![Sr25519Keyring::One.into(), Sr25519Keyring::Two.into()],
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
-			1000
+			1000,
+			None,
 		).genesis_map();
 		let state_root = BlakeTwo256::trie_root(storage.clone().into_iter());
 		let block = construct_genesis_block::<Block>(state_root);
@@ -178,7 +179,8 @@ mod tests {
 		let mut storage = GenesisConfig::new(false,
 			vec![Sr25519Keyring::One.into(), Sr25519Keyring::Two.into()],
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
-			1000
+			1000,
+			None,
 		).genesis_map();
 		let state_root = BlakeTwo256::trie_root(storage.clone().into_iter());
 		let block = construct_genesis_block::<Block>(state_root);
@@ -207,7 +209,8 @@ mod tests {
 		let mut storage = GenesisConfig::new(false,
 			vec![Sr25519Keyring::One.into(), Sr25519Keyring::Two.into()],
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
-			68
+			68,
+			None,
 		).genesis_map();
 		let state_root = BlakeTwo256::trie_root(storage.clone().into_iter());
 		let block = construct_genesis_block::<Block>(state_root);

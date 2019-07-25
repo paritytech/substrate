@@ -16,6 +16,7 @@
 
 use test_client::{
 	prelude::*,
+	DefaultTestClientBuilderExt, TestClientBuilder,
 	runtime::{TestAPI, DecodeFails, Transfer, Header},
 };
 use runtime_primitives::{
