@@ -24,6 +24,8 @@ use srml_support::{assert_ok, assert_noop, assert_eq_uvec, EnumerableStorageMap}
 use mock::*;
 use srml_support::traits::{Currency, ReservableCurrency};
 
+type Staking = Module<Test>;
+
 #[test]
 fn basic_setup_works() {
 	// Verifies initial conditions of mock
@@ -2085,11 +2087,11 @@ fn reward_from_authorship_event_handler_works() {
 
 		assert_eq!(<authorship::Module<Test>>::author(), 11);
 
-		<Module<Test>>::note_author(11);
-		<Module<Test>>::note_uncle(21, 1);
+		Staking::note_author(11);
+		Staking::note_uncle(21, 1);
 		// An uncle author that is not currently elected doesn't get rewards,
 		// but the block producer does get reward for referencing it.
-		<Module<Test>>::note_uncle(31, 1);
+		Staking::note_uncle(31, 1);
 
 		// Not mandatory but must be coherent with rewards
 		assert_eq!(<CurrentElected<Test>>::get(), vec![21, 11]);
@@ -2099,4 +2101,26 @@ fn reward_from_authorship_event_handler_works() {
 		assert_eq!(CurrentEraRewards::get().rewards, vec![1, 20+2*2]);
 		assert_eq!(CurrentEraRewards::get().total, 25);
 	})
+}
+
+#[test]
+fn era_is_always_same_length() {
+	with_externalities(&mut ExtBuilder::default()
+		.build(),
+		|| {
+			start_era(1);
+			assert_eq!(Staking::current_era_start_session_index(), SessionsPerEra::get());
+
+			start_era(2);
+			assert_eq!(Staking::current_era_start_session_index(), SessionsPerEra::get() * 2);
+
+			let session = Session::current_index();
+			ForceNewEra::put(true);
+			start_next_session();
+			assert_eq!(Staking::current_era(), 3);
+			assert_eq!(Staking::current_era_start_session_index(), session + 1);
+
+			start_era(4);
+			assert_eq!(Staking::current_era_start_session_index(), session + SessionsPerEra::get() + 1);
+		});
 }

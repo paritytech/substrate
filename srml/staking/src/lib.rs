@@ -1117,7 +1117,8 @@ impl<T: Trait> Module<T> {
 	fn new_session(session_index: SessionIndex)
 		-> Option<(Vec<T::AccountId>, Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>)>
 	{
-		if ForceNewEra::take() || session_index % T::SessionsPerEra::get() == 0 {
+		let era_length = session_index.checked_sub(Self::current_era_start_session_index()).unwrap_or(0);
+		if ForceNewEra::take() || era_length == T::SessionsPerEra::get() {
 			let validators = T::SessionInterface::validators();
 			let prior = validators.into_iter()
 				.map(|v| { let e = Self::stakers(&v); (v, e) })
@@ -1419,16 +1420,16 @@ impl<T: Trait> Module<T> {
 }
 
 impl<T: Trait> session::OnSessionEnding<T::AccountId> for Module<T> {
-	fn on_session_ending(_ending: SessionIndex, start_session: SessionIndex) -> Option<Vec<T::AccountId>> {
-		Self::new_session(start_session - 1).map(|(new, _old)| new)
+	fn on_session_ending(ending: SessionIndex, _: SessionIndex) -> Option<Vec<T::AccountId>> {
+		Self::new_session(ending + 1).map(|(new, _old)| new)
 	}
 }
 
 impl<T: Trait> OnSessionEnding<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>> for Module<T> {
-	fn on_session_ending(_ending: SessionIndex, start_session: SessionIndex)
+	fn on_session_ending(ending: SessionIndex, _: SessionIndex)
 		-> Option<(Vec<T::AccountId>, Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>)>
 	{
-		Self::new_session(start_session - 1)
+		Self::new_session(ending + 1)
 	}
 }
 

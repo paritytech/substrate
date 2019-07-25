@@ -406,8 +406,12 @@ pub fn start_session(session_index: session::SessionIndex) {
 	assert_eq!(Session::current_index(), session_index);
 }
 
+pub fn start_next_session() {
+	start_session(Session::current_index() + 1);
+}
+
 pub fn start_era(era_index: EraIndex) {
-	start_session((era_index * 3).into());
+	start_session((era_index * SessionsPerEra::get()).into());
 	assert_eq!(Staking::current_era(), era_index);
 }
 
