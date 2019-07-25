@@ -381,11 +381,11 @@ mod tests {
 			digest.push(<DigestItem as CompatibleDigestItem>::babe_pre_digest(babe_pre_digest));
 
 			let proposer = proposer_factory.init(&parent_header).unwrap();
-			let new_block = proposer.propose(
+			let new_block = futures03::executor::block_on(proposer.propose(
 				inherent_data,
 				digest,
 				std::time::Duration::from_secs(1),
-			).expect("Error making test block");
+			)).expect("Error making test block");
 
 			let (new_header, new_body) = new_block.deconstruct();
 			let pre_hash = new_header.hash();

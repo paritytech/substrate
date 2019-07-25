@@ -31,6 +31,7 @@ use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
 use consensus::import_queue::{ImportQueue, Link};
 use consensus::import_queue::{BlockImportResult, BlockImportError};
 use futures::{prelude::*, sync::mpsc};
+use futures03::TryFutureExt as _;
 use log::{warn, error, info};
 use libp2p::{PeerId, Multiaddr, multihash::Multihash};
 use libp2p::core::{transport::boxed::Boxed, muxing::StreamMuxerBox};
@@ -583,9 +584,12 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
 		// Poll the import queue for actions to perform.
-		self.import_queue.poll_actions(&mut NetworkLink {
-			protocol: &mut self.network_service,
-		});
+		let _ = futures03::future::poll_fn(|cx| {
+			self.import_queue.poll_actions(cx, &mut NetworkLink {
+				protocol: &mut self.network_service,
+			});
+			std::task::Poll::Pending::<Result<(), ()>>
+		}).compat().poll();
 
 		// Check for new incoming on-demand requests.
 		if let Some(on_demand_in) = self.on_demand_in.as_mut() {

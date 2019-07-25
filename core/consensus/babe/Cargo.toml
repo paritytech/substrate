@@ -23,9 +23,9 @@ consensus_common = { package = "substrate-consensus-common", path = "../common" 
 slots = { package = "substrate-consensus-slots", path = "../slots"  }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 fork-tree = { path = "../../utils/fork-tree" }
-futures = "0.1.26"
-futures03 = { package = "futures-preview", version = "0.3.0-alpha.17", features = ["compat"] }
-tokio-timer = "0.2.11"
+futures-preview = { version = "0.3.0-alpha.17", features = ["compat"] }
+futures01 = { package = "futures", version = "0.1" }
+futures-timer = "0.2.1"
 parking_lot = "0.8.0"
 log = "0.4.6"
 schnorrkel = "0.1.1"
