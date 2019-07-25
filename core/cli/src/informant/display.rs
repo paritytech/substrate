@@ -18,7 +18,7 @@ use ansi_term::Colour;
 use client::ClientInfo;
 use log::info;
 use network::SyncState;
-use runtime_primitives::traits::{Block as BlockT, SaturatedConversion, CheckedDiv, NumberFor, One, Zero, Saturating};
+use runtime_primitives::traits::{Block as BlockT, CheckedDiv, NumberFor, One, Zero, Saturating};
 use service::NetworkStatus;
 use std::{convert::TryInto, fmt, time};
 
@@ -66,8 +66,6 @@ impl<B: BlockT> InformantDisplay<B> {
 			(SyncState::Downloading, Some(n)) => (format!("Syncing{}", speed), format!(", target=#{}", n)),
 		};
 
-		let finalized_number: u64 = info.chain.finalized_number.saturated_into::<u64>();
-
 		info!(
 			target: "substrate",
 			"{}{} ({} peers), best: #{} ({}), finalized #{} ({}), ⬇ {} ⬆ {}",
@@ -76,7 +74,7 @@ impl<B: BlockT> InformantDisplay<B> {
 			Colour::White.bold().paint(format!("{}", net_status.num_connected_peers)),
 			Colour::White.paint(format!("{}", best_number)),
 			best_hash,
-			Colour::White.paint(format!("{}", finalized_number)),
+			Colour::White.paint(format!("{}", info.chain.finalized_number)),
 			info.chain.finalized_hash,
 			TransferRateFormat(net_status.average_download_per_sec),
 			TransferRateFormat(net_status.average_upload_per_sec),
