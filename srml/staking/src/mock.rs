@@ -22,6 +22,7 @@ use primitives::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize};
 use primitives::testing::{Header, UintAuthorityId};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
+use session::SessionIndex;
 use srml_support::{assert_ok, impl_outer_origin, parameter_types, EnumerableStorageMap};
 use srml_support::traits::{Currency, Get, FindAuthor};
 use crate::{
@@ -53,6 +54,7 @@ thread_local! {
 pub struct TestSessionHandler;
 impl session::SessionHandler<AccountId> for TestSessionHandler {
 	fn on_new_session<Ks: OpaqueKeys>(
+		_session_index: (SessionIndex, SessionIndex),
 		_changed: bool,
 		validators: &[(AccountId, Ks)],
 		_queued_validators: &[(AccountId, Ks)],

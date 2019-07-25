@@ -16,7 +16,7 @@
 
 use super::*;
 use serde::{Serialize, Deserialize};
-use sr_primitives::{traits::{BlakeTwo256, IdentityLookup, Convert}, testing::{Header, UintAuthorityId}};
+use sr_primitives::{Perbill, traits::{BlakeTwo256, IdentityLookup, Convert}, testing::{Header, UintAuthorityId}};
 use substrate_primitives::{Blake2Hasher, H256};
 use srml_support::{impl_outer_origin, parameter_types, traits::{Get, WindowLength}};
 use std::{collections::HashSet, cell::RefCell};
@@ -91,6 +91,7 @@ impl system::Trait for Test {
 	type WeightMultiplierUpdate = ();
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type MaximumBlockLength = MaximumBlockLength;
+	type AvailableBlockRatio = AvailableBlockRatio;
 }
 
 impl balances::Trait for Test {
@@ -106,6 +107,7 @@ impl balances::Trait for Test {
 	type CreationFee = CreationFee;
 	type TransactionBaseFee = TransactionBaseFee;
 	type TransactionByteFee = TransactionByteFee;
+	type WeightToFee = ();
 }
 
 impl srml_staking::Trait for Test {
@@ -150,26 +152,15 @@ impl srml_session::historical::Trait for Test {
 
 parameter_types! {
 	pub const MinimumPeriod: u64 = 5;
-}
-
-parameter_types! {
 	pub const SessionsPerEra: srml_session::SessionIndex = 3;
 	pub const BondingDuration: srml_staking::EraIndex = 3;
-}
-
-parameter_types! {
 	pub const Period: BlockNumber = 1;
 	pub const Offset: BlockNumber = 0;
-}
-
-parameter_types! {
 	pub const TransferFee: u64 = 0;
 	pub const CreationFee: u64 = 0;
 	pub const TransactionBaseFee: u64 = 0;
 	pub const TransactionByteFee: u64 = 0;
-}
-
-parameter_types! {
+	pub const AvailableBlockRatio: Perbill = Perbill::one();
 	pub const BlockHashCount: u64 = 250;
 	pub const MaximumBlockWeight: u32 = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
