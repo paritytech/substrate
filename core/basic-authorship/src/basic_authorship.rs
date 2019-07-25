@@ -132,66 +132,69 @@ impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	wh
 		inherent_data: InherentData,
 		inherent_digests: DigestFor<Block>,
 		deadline: time::Instant,
-	) -> Result<Block, error::Error>
-	{
+	) -> Result<Block, error::Error> {
 		/// If the block is full we will attempt to push at most
 		/// this number of transactions before quitting for real.
 		/// It allows us to increase block utilization.
 		const MAX_SKIPPED_TRANSACTIONS: usize = 8;
 
 		let mut block_builder = self.client.new_block_at(&self.parent_id, inherent_digests)?;
-
 		let runtime_api = self.client.runtime_api();
+
 		// We don't check the API versions any further here since the dispatch compatibility
 		// check should be enough.
-		runtime_api.inherent_extrinsics_with_context(&self.parent_id, ExecutionContext::BlockConstruction, inherent_data)?
-			.into_iter().try_for_each(|i| block_builder.push(i))?;
+		runtime_api
+			.inherent_extrinsics_with_context(
+				&self.parent_id,
+				ExecutionContext::BlockConstruction,
+				inherent_data
+			)?
+			.into_iter()
+			.try_for_each(|i| block_builder.push(i))?;
 
-		{
-			// proceed with transactions
-			let mut is_first = true;
-			let mut skipped = 0;
-			let mut unqueue_invalid = Vec::new();
-			let pending_iterator = self.transaction_pool.ready();
+		// proceed with transactions
+		let mut is_first = true;
+		let mut skipped = 0;
+		let mut unqueue_invalid = Vec::new();
+		let pending_iterator = self.transaction_pool.ready();
 
-			debug!("Attempting to push transactions from the pool.");
-			for pending in pending_iterator {
-				if (self.now)() > deadline {
-					debug!("Consensus deadline reached when pushing block transactions, proceeding with proposing.");
-					break;
-				}
-
-				trace!("[{:?}] Pushing to the block.", pending.hash);
-				match client::block_builder::BlockBuilder::push(&mut block_builder, pending.data.clone()).map_err(Into::into) {
-					Ok(()) => {
-						debug!("[{:?}] Pushed to the block.", pending.hash);
-					}
-					Err(error::Error::ApplyExtrinsicFailed(ApplyError::FullBlock)) => {
-						if is_first {
-							debug!("[{:?}] Invalid transaction: FullBlock on empty block", pending.hash);
-							unqueue_invalid.push(pending.hash.clone());
-						} else if skipped < MAX_SKIPPED_TRANSACTIONS {
-							skipped += 1;
-							debug!(
-								"Block seems full, but will try {} more transactions before quitting.",
-								MAX_SKIPPED_TRANSACTIONS - skipped
-							);
-						} else {
-							debug!("Block is full, proceed with proposing.");
-							break;
-						}
-					}
-					Err(e) => {
-						debug!("[{:?}] Invalid transaction: {}", pending.hash, e);
-						unqueue_invalid.push(pending.hash.clone());
-					}
-				}
-
-				is_first = false;
+		debug!("Attempting to push transactions from the pool.");
+		for pending in pending_iterator {
+			if (self.now)() > deadline {
+				debug!("Consensus deadline reached when pushing block transactions, proceeding with proposing.");
+				break;
 			}
 
-			self.transaction_pool.remove_invalid(&unqueue_invalid);
+			trace!("[{:?}] Pushing to the block.", pending.hash);
+			match client::block_builder::BlockBuilder::push(&mut block_builder, pending.data.clone()) {
+				Ok(()) => {
+					debug!("[{:?}] Pushed to the block.", pending.hash);
+				}
+				Err(error::Error::ApplyExtrinsicFailed(ApplyError::FullBlock)) => {
+					if is_first {
+						debug!("[{:?}] Invalid transaction: FullBlock on empty block", pending.hash);
+						unqueue_invalid.push(pending.hash.clone());
+					} else if skipped < MAX_SKIPPED_TRANSACTIONS {
+						skipped += 1;
+						debug!(
+							"Block seems full, but will try {} more transactions before quitting.",
+							MAX_SKIPPED_TRANSACTIONS - skipped
+						);
+					} else {
+						debug!("Block is full, proceed with proposing.");
+						break;
+					}
+				}
+				Err(e) => {
+					debug!("[{:?}] Invalid transaction: {}", pending.hash, e);
+					unqueue_invalid.push(pending.hash.clone());
+				}
+			}
+
+			is_first = false;
 		}
+
+		self.transaction_pool.remove_invalid(&unqueue_invalid);
 
 		let block = block_builder.bake()?;
 
