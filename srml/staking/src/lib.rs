@@ -590,6 +590,9 @@ decl_storage! {
 		/// The start of the current era.
 		pub CurrentEraStart get(current_era_start): MomentOf<T>;
 
+		/// The session index at which the current era started.
+		pub CurrentEraStartSessionIndex get(current_era_start_session_index): SessionIndex;
+
 		/// Rewards for the current era. Using indices of current elected set.
 		pub CurrentEraRewards: EraRewards;
 
@@ -1169,6 +1172,9 @@ impl<T: Trait> Module<T> {
 
 		// Increment current era.
 		let current_era = CurrentEra::mutate(|s| { *s += 1; *s });
+		CurrentEraStartSessionIndex::mutate(|v| {
+			*v = start_session_index;
+		});
 		let bonding_duration = T::BondingDuration::get();
 
 		if current_era > bonding_duration {
