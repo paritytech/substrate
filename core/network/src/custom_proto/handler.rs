@@ -19,13 +19,14 @@ use crate::custom_proto::upgrade::{RegisteredProtocolEvent, RegisteredProtocolSu
 use futures::prelude::*;
 use futures03::{compat::Compat, TryFutureExt as _};
 use futures_timer::Delay;
-use libp2p::core::{
-	ConnectedPoint, PeerId, Endpoint, ProtocolsHandler, ProtocolsHandlerEvent,
-	protocols_handler::IntoProtocolsHandler,
-	protocols_handler::KeepAlive,
-	protocols_handler::ProtocolsHandlerUpgrErr,
-	protocols_handler::SubstreamProtocol,
-	upgrade::{InboundUpgrade, OutboundUpgrade}
+use libp2p::core::{ConnectedPoint, PeerId, Endpoint};
+use libp2p::core::upgrade::{InboundUpgrade, OutboundUpgrade};
+use libp2p::swarm::{
+	ProtocolsHandler, ProtocolsHandlerEvent,
+	IntoProtocolsHandler,
+	KeepAlive,
+	ProtocolsHandlerUpgrErr,
+	SubstreamProtocol,
 };
 use log::{debug, error};
 use smallvec::{smallvec, SmallVec};

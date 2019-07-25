@@ -67,13 +67,14 @@ impl FreeingBumpHeapAllocator {
 		let current_size: Bytes = mem.current_size().into();
 		let current_size = current_size.0 as u32;
 		let used_size = mem.used_size().0 as u32;
-		let heap_size = current_size - used_size;
 
 		let mut ptr_offset = used_size;
 		let padding = ptr_offset % ALIGNMENT;
 		if padding != 0 {
 			ptr_offset += ALIGNMENT - padding;
 		}
+
+		let heap_size = current_size - ptr_offset;
 
 		FreeingBumpHeapAllocator {
 			bumper: 0,

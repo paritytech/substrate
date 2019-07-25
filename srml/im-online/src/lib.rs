@@ -200,13 +200,13 @@ decl_module! {
 			ensure_none(origin)?;
 
 			let current_session = <session::Module<T>>::current_index();
-			let exists = <ReceivedHeartbeats<T>>::exists(current_session, &heartbeat.authority_id);
+			let exists = <ReceivedHeartbeats<T>>::exists(&current_session, &heartbeat.authority_id);
 			if !exists {
 				let now = <system::Module<T>>::block_number();
 				Self::deposit_event(RawEvent::HeartbeatReceived(now, heartbeat.authority_id.clone()));
 
 				let network_state = heartbeat.network_state.encode();
-				<ReceivedHeartbeats<T>>::insert(current_session, &heartbeat.authority_id, network_state);
+				<ReceivedHeartbeats<T>>::insert(&current_session, &heartbeat.authority_id, &network_state);
 			}
 		}
 
@@ -301,13 +301,13 @@ impl<T: Trait> Module<T> {
 			Some(start) => {
 				// iterate over every session
 				for index in start..curr  {
-					if <ReceivedHeartbeats<T>>::exists(index, authority_id) {
+					if <ReceivedHeartbeats<T>>::exists(&index, authority_id) {
 						return true;
 					}
 				}
 				false
 			},
-			None => <ReceivedHeartbeats<T>>::exists(curr, authority_id),
+			None => <ReceivedHeartbeats<T>>::exists(&curr, authority_id),
 		}
 	}
 
@@ -315,7 +315,7 @@ impl<T: Trait> Module<T> {
 	/// during the current session. Otherwise `false`.
 	pub fn is_online_in_current_session(authority_id: &T::AuthorityId) -> bool {
 		let current_session = <session::Module<T>>::current_index();
-		<ReceivedHeartbeats<T>>::exists(current_session, authority_id)
+		<ReceivedHeartbeats<T>>::exists(&current_session, authority_id)
 	}
 
 	/// Session has just changed.
@@ -345,10 +345,10 @@ impl<T: Trait> Module<T> {
 		match LastNewEraStart::get() {
 			Some(start) => {
 				for index in start..curr {
-					<ReceivedHeartbeats<T>>::remove_prefix(index);
+					<ReceivedHeartbeats<T>>::remove_prefix(&index);
 				}
 			},
-			None => <ReceivedHeartbeats<T>>::remove_prefix(curr),
+			None => <ReceivedHeartbeats<T>>::remove_prefix(&curr),
 		}
 	}
 }

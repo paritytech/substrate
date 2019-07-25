@@ -615,6 +615,12 @@ bitmask! {
 	}
 }
 
+pub trait Time {
+	type Moment: SimpleArithmetic + Codec + Clone + Default;
+
+	fn now() -> Self::Moment;
+}
+
 impl WithdrawReasons {
 	/// Choose all variants except for `one`.
 	pub fn except(one: WithdrawReason) -> WithdrawReasons {

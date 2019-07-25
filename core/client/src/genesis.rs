@@ -47,7 +47,7 @@ mod tests {
 	use test_client::{
 		runtime::genesismap::{GenesisConfig, additional_storage_with_genesis},
 		runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest},
-		AccountKeyring, AuthorityKeyring
+		AccountKeyring, Sr25519Keyring,
 	};
 	use runtime_primitives::traits::BlakeTwo256;
 	use primitives::Blake2Hasher;
@@ -147,7 +147,7 @@ mod tests {
 	#[test]
 	fn construct_genesis_should_work_with_native() {
 		let mut storage = GenesisConfig::new(false,
-			vec![AuthorityKeyring::One.into(), AuthorityKeyring::Two.into()],
+			vec![Sr25519Keyring::One.into(), Sr25519Keyring::Two.into()],
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			1000
 		).genesis_map();
@@ -176,7 +176,7 @@ mod tests {
 	#[test]
 	fn construct_genesis_should_work_with_wasm() {
 		let mut storage = GenesisConfig::new(false,
-			vec![AuthorityKeyring::One.into(), AuthorityKeyring::Two.into()],
+			vec![Sr25519Keyring::One.into(), Sr25519Keyring::Two.into()],
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			1000
 		).genesis_map();
@@ -205,7 +205,7 @@ mod tests {
 	#[test]
 	fn construct_genesis_with_bad_transaction_should_panic() {
 		let mut storage = GenesisConfig::new(false,
-			vec![AuthorityKeyring::One.into(), AuthorityKeyring::Two.into()],
+			vec![Sr25519Keyring::One.into(), Sr25519Keyring::Two.into()],
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			68
 		).genesis_map();

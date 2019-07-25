@@ -18,6 +18,7 @@
 
 use std::{self, io::{Read, Write}};
 use futures::prelude::*;
+use futures03::TryFutureExt as _;
 use log::{info, warn};
 
 use runtime_primitives::generic::{SignedBlock, BlockId};
@@ -193,7 +194,10 @@ pub fn import_blocks<F, E, R>(
 		}
 
 		let blocks_before = link.imported_blocks;
-		queue.poll_actions(&mut link);
+		let _ = futures03::future::poll_fn(|cx| {
+			queue.poll_actions(cx, &mut link);
+			std::task::Poll::Pending::<Result<(), ()>>
+		}).compat().poll();
 		if link.imported_blocks / 1000 != blocks_before / 1000 {
 			info!(
 				"#{} blocks were imported (#{} left)",
