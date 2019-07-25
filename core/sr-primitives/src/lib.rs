@@ -182,11 +182,16 @@ impl Permill {
 	/// Everything.
 	pub fn one() -> Self { Self(1_000_000) }
 
+	/// create a new raw instance. This can be called at compile time.
+	pub const fn from_const_parts(parts: u32) -> Self {
+		Self([parts, 1_000_000][(parts > 1_000_000) as usize])
+	}
+
 	/// From an explicitly defined number of parts per maximum of the type.
-	pub fn from_parts(x: u32) -> Self { Self(x.min(1_000_000)) }
+	pub fn from_parts(parts: u32) -> Self { Self::from_const_parts(parts) }
 
 	/// Converts from a percent. Equal to `x / 100`.
-	pub fn from_percent(x: u32) -> Self { Self(x.min(100) * 10_000) }
+	pub const fn from_percent(x: u32) -> Self { Self([x, 100][(x > 100) as usize] * 10_000) }
 
 	/// Converts a fraction into `Permill`.
 	#[cfg(feature = "std")]
@@ -286,11 +291,16 @@ impl Perbill {
 	/// Everything.
 	pub fn one() -> Self { Self(1_000_000_000) }
 
+	/// create a new raw instance. This can be called at compile time.
+	pub const fn from_const_parts(parts: u32) -> Self {
+		Self([parts, 1_000_000_000][(parts > 1_000_000_000) as usize])
+	}
+
 	/// From an explicitly defined number of parts per maximum of the type.
-	pub fn from_parts(x: u32) -> Self { Self(x.min(1_000_000_000)) }
+	pub fn from_parts(parts: u32) -> Self { Self::from_const_parts(parts) }
 
 	/// Converts from a percent. Equal to `x / 100`.
-	pub fn from_percent(x: u32) -> Self { Self(x.min(100) * 10_000_000) }
+	pub const fn from_percent(x: u32) -> Self { Self([x, 100][(x > 100) as usize] * 10_000_000) }
 
 	/// Construct new instance where `x` is in millionths. Value equivalent to `x / 1,000,000`.
 	pub fn from_millionths(x: u32) -> Self { Self(x.min(1_000_000) * 1000) }
@@ -411,11 +421,12 @@ impl Fixed64 {
 
 	/// Performs a saturated multiply and accumulate.
 	///
-	/// Returns `n + (self * n)`.
+	/// Returns a saturated `n + (self * n)`.
+	/// TODO: generalize this to any weight type. #3189
 	pub fn saturated_multiply_accumulate(&self, int: u32) -> u32 {
 		let parts = self.0;
-
 		let positive = parts > 0;
+
 		// natural parts might overflow.
 		let natural_parts = self.clone().saturated_into::<u32>();
 		// fractional parts can always fit into u32.
@@ -459,8 +470,8 @@ impl Saturating for Fixed64 {
 	}
 }
 
-/// Note that this is a standard, _potentially-panicking_, implementation. Use `Saturating` trait for
-/// safe addition.
+/// Note that this is a standard, _potentially-panicking_, implementation. Use `Saturating` trait
+/// for safe addition.
 impl ops::Add for Fixed64 {
 	type Output = Self;
 
@@ -469,8 +480,8 @@ impl ops::Add for Fixed64 {
 	}
 }
 
-/// Note that this is a standard, _potentially-panicking_, implementation. Use `Saturating` trait for
-/// safe subtraction.
+/// Note that this is a standard, _potentially-panicking_, implementation. Use `Saturating` trait
+/// for safe subtraction.
 impl ops::Sub for Fixed64 {
 	type Output = Self;
 

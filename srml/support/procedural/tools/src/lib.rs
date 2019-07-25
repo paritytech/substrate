@@ -37,8 +37,8 @@ fn generate_hidden_includes_mod_name(unique_id: &str) -> Ident {
 
 /// Generates the access to the `srml-support` crate.
 pub fn generate_crate_access(unique_id: &str, def_crate: &str) -> TokenStream {
-	if ::std::env::var("CARGO_PKG_NAME").unwrap() == def_crate {
-		quote::quote!( crate )
+	if std::env::var("CARGO_PKG_NAME").unwrap() == def_crate {
+		quote::quote!( srml_support )
 	} else {
 		let mod_name = generate_hidden_includes_mod_name(unique_id);
 		quote::quote!( self::#mod_name::hidden_include )

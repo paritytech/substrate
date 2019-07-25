@@ -122,6 +122,7 @@
 use rstd::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use parity_codec::Decode;
 use primitives::KeyTypeId;
+use primitives::weights::SimpleDispatchInfo;
 use primitives::traits::{Convert, Zero, Member, OpaqueKeys, TypedKey};
 use srml_support::{
 	dispatch::Result, ConsensusEngineId, StorageValue, StorageDoubleMap, for_each_tuple,
@@ -378,6 +379,7 @@ decl_module! {
 		/// - O(log n) in number of accounts.
 		/// - One extra DB entry.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(150_000)]
 		fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) -> Result {
 			let who = ensure_signed(origin)?;
 

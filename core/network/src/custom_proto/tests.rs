@@ -17,11 +17,10 @@
 #![cfg(test)]
 
 use futures::{future, prelude::*, try_ready};
-use libp2p::core::{nodes::Substream, swarm::Swarm};
-use libp2p::core::{transport::boxed::Boxed, muxing::StreamMuxerBox};
-use libp2p::core::{ProtocolsHandler, protocols_handler::IntoProtocolsHandler};
-use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourAction};
-use libp2p::core::swarm::PollParameters;
+use libp2p::core::nodes::Substream;
+use libp2p::core::{ConnectedPoint, transport::boxed::Boxed, muxing::StreamMuxerBox};
+use libp2p::swarm::{Swarm, ProtocolsHandler, IntoProtocolsHandler};
+use libp2p::swarm::{PollParameters, NetworkBehaviour, NetworkBehaviourAction};
 use libp2p::{PeerId, Multiaddr, Transport};
 use rand::seq::SliceRandom;
 use std::{io, time::Duration, time::Instant};
@@ -84,7 +83,7 @@ fn build_nodes<T: CustomMessage + Send + 'static>()
 				.collect(),
 		};
 
-		let mut swarm = libp2p::core::swarm::Swarm::new(
+		let mut swarm = Swarm::new(
 			transport,
 			behaviour,
 			keypairs[index].public().into_peer_id()
