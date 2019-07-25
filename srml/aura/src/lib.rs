@@ -66,6 +66,7 @@ use inherents::{InherentDataProviders, ProvideInherentData};
 use substrate_consensus_aura_primitives::{AURA_ENGINE_ID, ConsensusLog};
 #[cfg(feature = "std")]
 use parity_codec::Decode;
+use session::SessionIndex;
 
 mod mock;
 mod tests;
@@ -188,7 +189,7 @@ impl<T: Trait> Module<T> {
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = T::AuthorityId;
 
-	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, _queued_validators: I)
+	fn on_new_session<'a, I: 'a>(_: (SessionIndex, SessionIndex), changed: bool, validators: I, _queued_validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, T::AuthorityId)>
 	{
 		// instant changes

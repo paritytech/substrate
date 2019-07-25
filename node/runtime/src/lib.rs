@@ -201,7 +201,7 @@ parameter_types! {
 	pub const Offset: BlockNumber = 0;
 }
 
-type SessionHandlers = (Grandpa, Aura, ImOnline);
+type SessionHandlers = (Grandpa, Aura, ImOnline, RollingWindow);
 
 impl_opaque_keys! {
 	pub struct SessionKeys {
@@ -388,6 +388,11 @@ impl im_online::Trait for Runtime {
 	type IsValidAuthorityId = Aura;
 }
 
+impl rolling_window::Trait for Runtime {
+	type Kind = Misbehavior;
+	type SessionKey = substrate_primitives::sr25519::Public;
+}
+
 impl grandpa::Trait for Runtime {
 	type Event = Event;
 }
@@ -427,6 +432,7 @@ construct_runtime!(
 		Contracts: contracts,
 		Sudo: sudo,
 		ImOnline: im_online::{default, ValidateUnsigned},
+		RollingWindow: rolling_window::{Module, Storage},
 	}
 );
 

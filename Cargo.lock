@@ -2364,6 +2364,7 @@ dependencies = [
  "srml-grandpa 2.0.0",
  "srml-im-online 0.1.0",
  "srml-indices 2.0.0",
+ "srml-rolling-window 2.0.0",
  "srml-session 2.0.0",
  "srml-staking 2.0.0",
  "srml-sudo 2.0.0",

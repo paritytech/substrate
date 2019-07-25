@@ -187,6 +187,7 @@ impl<A> OnSessionEnding<A> for () {
 pub trait SessionHandler<ValidatorId> {
 	/// Session set has changed; act appropriately.
 	fn on_new_session<Ks: OpaqueKeys>(
+		session_index: (SessionIndex, SessionIndex),
 		changed: bool,
 		validators: &[(ValidatorId, Ks)],
 		queued_validators: &[(ValidatorId, Ks)],
@@ -201,15 +202,25 @@ pub trait OneSessionHandler<ValidatorId> {
 	/// The key type expected.
 	type Key: Decode + Default + TypedKey;
 
-	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, queued_validators: I)
-		where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
+	fn on_new_session<'a, I: 'a>(
+		session_index: (SessionIndex, SessionIndex),
+		changed: bool,
+		validators: I,
+		queued_validators: I
+	) where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
+
 	fn on_disabled(i: usize);
 }
 
 macro_rules! impl_session_handlers {
 	() => (
 		impl<AId> SessionHandler<AId> for () {
-			fn on_new_session<Ks: OpaqueKeys>(_: bool, _: &[(AId, Ks)], _: &[(AId, Ks)]) {}
+			fn on_new_session<Ks: OpaqueKeys>(
+				_: (SessionIndex, SessionIndex),
+				_: bool,
+				_: &[(AId, Ks)],
+				_: &[(AId, Ks)],
+			) {}
 			fn on_disabled(_: usize) {}
 		}
 	);
@@ -217,6 +228,7 @@ macro_rules! impl_session_handlers {
 	( $($t:ident)* ) => {
 		impl<AId, $( $t: OneSessionHandler<AId> ),*> SessionHandler<AId> for ( $( $t , )* ) {
 			fn on_new_session<Ks: OpaqueKeys>(
+				session_index: (SessionIndex, SessionIndex),
 				changed: bool,
 				validators: &[(AId, Ks)],
 				queued_validators: &[(AId, Ks)],
@@ -228,7 +240,7 @@ macro_rules! impl_session_handlers {
 					let queued_keys: Box<dyn Iterator<Item=_>> = Box::new(queued_validators.iter()
 						.map(|k| (&k.0, k.1.get::<$t::Key>(<$t::Key as TypedKey>::KEY_TYPE)
 							.unwrap_or_default())));
-					$t::on_new_session(changed, our_keys, queued_keys);
+					$t::on_new_session(session_index, changed, our_keys, queued_keys);
 				)*
 			}
 			fn on_disabled(i: usize) {
@@ -438,7 +450,12 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event(Event::NewSession(session_index));
 
 		// Tell everyone about the new session keys.
-		T::SessionHandler::on_new_session::<T::Keys>(changed, &session_keys, &queued_amalgamated);
+		T::SessionHandler::on_new_session::<T::Keys>(
+			(session_index - 1, session_index),
+			changed,
+			&session_keys,
+			&queued_amalgamated,
+		);
 	}
 
 	/// Disable the validator of index `i`.

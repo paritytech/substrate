@@ -34,17 +34,21 @@
 mod mock;
 
 use srml_support::{
-	StorageMap, EnumerableStorageMap, decl_module, decl_storage,
+	StorageMap, Parameter, EnumerableStorageMap, decl_module, decl_storage,
 	traits::WindowLength
 };
-use parity_codec::Codec;
-use sr_primitives::traits::MaybeSerializeDebug;
-use srml_session::SessionIndex;
+use parity_codec::{Codec, Decode, Encode};
+use rstd::vec::Vec;
+use sr_primitives::traits::{Member, MaybeSerializeDebug, TypedKey};
+use srml_session::{SessionIndex, OneSessionHandler};
 
 /// Rolling Window trait
 pub trait Trait: system::Trait {
 	/// Kind to report with window length
 	type Kind: Copy + Clone + Codec + MaybeSerializeDebug + WindowLength<u32>;
+
+	/// Identifier type to implement `OneSessionHandler`
+	type SessionKey: Member + Parameter + Default + TypedKey + Decode + Encode + AsRef<[u8]>;
 }
 
 decl_storage! {
@@ -105,22 +109,30 @@ impl<T: Trait> MisbehaviorReporter<T::Kind, T::Hash> for Module<T> {
 	}
 }
 
-impl<T: Trait> srml_session::OnSessionEnding<T::AccountId> for Module<T> {
-	fn on_session_ending(ending: SessionIndex, _applied_at: SessionIndex) -> Option<Vec<T::AccountId>> {
+impl<T: Trait> OneSessionHandler<T::SessionKey> for Module<T>
+{
+	type Key = T::SessionKey;
+
+	fn on_new_session<'a, I: 'a>(
+		(ended_session, _new_session): (SessionIndex, SessionIndex),
+		_changed: bool,
+		_validators: I,
+		_queued_validators: I,
+	) {
 		for (kind, _) in <MisbehaviorReports<T>>::enumerate() {
 			let window_length = kind.window_length();
 			<MisbehaviorReports<T>>::mutate(kind, |reports| {
 				// it is guaranteed that `reported_session` happened in the same session or before `ending`
 				reports.retain(|reported_session| {
-					let diff = ending.wrapping_sub(*reported_session);
+					let diff = ended_session.wrapping_sub(*reported_session);
 					diff < *window_length
 				});
 			});
 		}
-
-		// don't provide a new validator set
-		None
 	}
+
+	// ignored
+	fn on_disabled(_: usize) {}
 }
 
 /// Macro for implement static `base_severity` which may be used for misconducts implementations
@@ -170,10 +182,10 @@ macro_rules! impl_kind {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use std::iter::empty;
 	use runtime_io::with_externalities;
 	use crate::mock::*;
 	use substrate_primitives::H256;
-	use srml_session::OnSessionEnding;
 	use srml_support::{assert_ok, assert_noop};
 
 	type RollingWindow = Module<Test>;
@@ -195,25 +207,23 @@ mod tests {
 			assert_eq!(RollingWindow::get_misbehaviors(Kind::Two), 2);
 			assert_noop!(RollingWindow::report_misbehavior(Kind::Two, one, current_session), ());
 
-
-			RollingWindow::on_session_ending(current_session, current_session + 1);
-
 			current_session += 1;
+			RollingWindow::on_new_session((current_session - 1, current_session), false, empty(), empty());
 
 			assert_ok!(RollingWindow::report_misbehavior(Kind::Two, two, current_session));
 			assert_eq!(RollingWindow::get_misbehaviors(Kind::Two), 3);
 
-			RollingWindow::on_session_ending(current_session, current_session + 1);
+			current_session += 1;
+
+			RollingWindow::on_new_session((current_session - 1, current_session), false, empty(), empty());
 			assert_eq!(RollingWindow::get_misbehaviors(Kind::Two), 3);
 
 			current_session += 1;
-
-			RollingWindow::on_session_ending(current_session, current_session + 1);
+			RollingWindow::on_new_session((current_session - 1, current_session), false, empty(), empty());
 			assert_eq!(RollingWindow::get_misbehaviors(Kind::Two), 3);
 
 			current_session += 1;
-
-			RollingWindow::on_session_ending(current_session, current_session + 1);
+			RollingWindow::on_new_session((current_session - 1, current_session), false, empty(), empty());
 			assert_eq!(RollingWindow::get_misbehaviors(Kind::Two), 1);
 		});
 	}
@@ -231,7 +241,7 @@ mod tests {
 			assert_eq!(RollingWindow::get_misbehaviors(Kind::Two), 2);
 
 			// rolling window has expired but bonding_uniqueness shall be unbounded
-			RollingWindow::on_session_ending(50, 51);
+			RollingWindow::on_new_session((50, 51), false, empty(), empty());
 
 			assert_noop!(RollingWindow::report_misbehavior(Kind::Two, zero, 51), ());
 			assert_noop!(RollingWindow::report_misbehavior(Kind::One, one, 52), ());
@@ -246,16 +256,16 @@ mod tests {
 			assert_eq!(RollingWindow::get_misbehaviors(Kind::Four), 1);
 
 			// `u32::max_value() - 25` sessions have been executed
-			RollingWindow::on_session_ending(u32::max_value(), 0);
+			RollingWindow::on_new_session((u32::max_value(), 0), false, empty(), empty());
 			assert_eq!(RollingWindow::get_misbehaviors(Kind::Four), 1);
 
 			for session in 0..24 {
-				RollingWindow::on_session_ending(session, session + 1);
+				RollingWindow::on_new_session((session, session + 1), false, empty(), empty());
 				assert_eq!(RollingWindow::get_misbehaviors(Kind::Four), 1);
 			}
 
 			// `u32::max_value` sessions have been executed should removed from the window
-			RollingWindow::on_session_ending(24, 25);
+			RollingWindow::on_new_session((24, 25), false, empty(), empty());
 			assert_eq!(RollingWindow::get_misbehaviors(Kind::Four), 0);
 		});
 	}
