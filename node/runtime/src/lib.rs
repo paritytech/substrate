@@ -534,4 +534,10 @@ impl_runtime_apis! {
 			}
 		}
 	}
+
+	impl consensus_primitives::ConsensusApi<Block, babe_primitives::AuthorityId> for Runtime {
+		fn authorities() -> Vec<babe_primitives::AuthorityId> {
+			Babe::authorities().into_iter().map(|(a, _)| a).collect()
+		}
+	}
 }
