@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,9 +18,9 @@ use ansi_term::Colour;
 use client::ClientInfo;
 use log::info;
 use network::SyncState;
-use runtime_primitives::traits::{Block as BlockT, SaturatedConversion, CheckedDiv, NumberFor, One, Zero, Saturating};
+use runtime_primitives::traits::{Block as BlockT, CheckedDiv, NumberFor, Zero, Saturating};
 use service::NetworkStatus;
-use std::{convert::TryInto, fmt, time};
+use std::{convert::{TryFrom, TryInto}, fmt, time};
 
 /// State of the informant display system.
 ///
@@ -66,8 +66,6 @@ impl<B: BlockT> InformantDisplay<B> {
 			(SyncState::Downloading, Some(n)) => (format!("Syncing{}", speed), format!(", target=#{}", n)),
 		};
 
-		let finalized_number: u64 = info.chain.finalized_number.saturated_into::<u64>();
-
 		info!(
 			target: "substrate",
 			"{}{} ({} peers), best: #{} ({}), finalized #{} ({}), ⬇ {} ⬆ {}",
@@ -76,7 +74,7 @@ impl<B: BlockT> InformantDisplay<B> {
 			Colour::White.bold().paint(format!("{}", net_status.num_connected_peers)),
 			Colour::White.paint(format!("{}", best_number)),
 			best_hash,
-			Colour::White.paint(format!("{}", finalized_number)),
+			Colour::White.paint(format!("{}", info.chain.finalized_number)),
 			info.chain.finalized_hash,
 			TransferRateFormat(net_status.average_download_per_sec),
 			TransferRateFormat(net_status.average_upload_per_sec),
@@ -91,10 +89,13 @@ fn speed<B: BlockT>(
 	last_number: Option<NumberFor<B>>,
 	last_update: time::Instant
 ) -> String {
-	let elapsed = last_update.elapsed();
-	let since_last_millis = elapsed.as_secs() * 1000;
-	let since_last_subsec_millis = elapsed.subsec_millis() as u64;
-	let elapsed_ms = since_last_millis + since_last_subsec_millis;
+	// Number of milliseconds elapsed since last time.
+	let elapsed_ms = {
+		let elapsed = last_update.elapsed();
+		let since_last_millis = elapsed.as_secs() * 1000;
+		let since_last_subsec_millis = elapsed.subsec_millis() as u64;
+		since_last_millis + since_last_subsec_millis
+	};
 
 	// Number of blocks that have been imported since last time.
 	let diff = match last_number {
@@ -112,11 +113,10 @@ fn speed<B: BlockT>(
 	} else {
 		// If the number of blocks can't be converted to a regular integer, then we need a more
 		// algebraic approach and we stay within the realm of integers.
-		let ten = (0..10)
-			.fold(<NumberFor<B> as Zero>::zero(), |a, _| a.saturating_add(One::one()));
-		let one_thousand = ten * ten * ten;
-		let elapsed = (0..elapsed_ms)
-			.fold(<NumberFor<B> as Zero>::zero(), |a, _| a.saturating_add(One::one()));
+		let one_thousand = NumberFor::<B>::from(1_000);
+		let elapsed = NumberFor::<B>::from(
+			<u32 as TryFrom<_>>::try_from(elapsed_ms).unwrap_or(u32::max_value())
+		);
 
 		let speed = diff.saturating_mul(one_thousand).checked_div(&elapsed)
 			.unwrap_or_else(Zero::zero);
