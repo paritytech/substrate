@@ -1425,7 +1425,7 @@ impl<T: Trait> session::OnSessionEnding<T::AccountId> for Module<T> {
 	}
 }
 
-impl<T: Trait> OnSessionEnding<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>> for Module<T> {
+impl<T: Trait> historical::OnSessionEnding<T::AccountId, Exposure<T::AccountId, BalanceOf<T>>> for Module<T> {
 	fn on_session_ending(ending: SessionIndex, _: SessionIndex)
 		-> Option<(Vec<T::AccountId>, Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>)>
 	{
