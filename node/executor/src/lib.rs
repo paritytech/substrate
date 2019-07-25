@@ -1053,7 +1053,7 @@ mod tests {
 		//   - 1 MILLICENTS in substrate node.
 		//   - 1 milldot based on current polkadot runtime.
 		// (this baed on assigning 0.1 CENT to the cheapest tx with `weight = 100`)
-		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, map![
+		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, (map![
 			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
 				(100 * DOLLARS).encode()
 			},
@@ -1065,7 +1065,7 @@ mod tests {
 			},
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
-		]);
+		], map![]));
 
 		let tip = 1_000_000;
 		let xt = sign(CheckedExtrinsic {
