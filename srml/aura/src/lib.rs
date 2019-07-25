@@ -309,7 +309,7 @@ impl<T: staking::Trait + Trait> HandleReport for StakingSlasher<T> {
 					.find(|(k, _)| *k == account_id)
 					.map(|(_, a)| a);
 				if let Some(aura_id) = maybe_aura_id {
-					if T::IsOnline::is_online_in_current_session(aura_id) {
+					if !T::IsOnline::is_online_in_current_session(aura_id) {
 						staking::Module::<T>::on_offline_validator(account_id, slash_count);
 					}
 				}
