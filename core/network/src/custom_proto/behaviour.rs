@@ -20,8 +20,8 @@ use crate::custom_proto::upgrade::{CustomMessage, RegisteredProtocol};
 use fnv::FnvHashMap;
 use futures::prelude::*;
 use futures03::{compat::Compat, TryFutureExt as _, StreamExt as _, TryStreamExt as _};
-use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourAction, PollParameters};
-use libp2p::core::{Multiaddr, PeerId};
+use libp2p::core::{ConnectedPoint, Multiaddr, PeerId};
+use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use log::{debug, error, trace, warn};
 use smallvec::SmallVec;
 use std::{borrow::Cow, collections::hash_map::Entry, cmp, error, marker::PhantomData, mem, pin::Pin};
@@ -930,6 +930,11 @@ where
 			CustomProtoHandlerOut::ProtocolError { error, .. } => {
 				debug!(target: "sub-libp2p", "Handler({:?}) => Severe protocol error: {:?}",
 					source, error);
+				// A severe protocol error happens when we detect a "bad" node, such as a node on
+				// a different chain, or a node that doesn't speak the same protocol(s). We
+				// decrease the node's reputation, hence lowering the chances we try this node
+				// again in the short term.
+				self.peerset.report_peer(source.clone(), i32::min_value());
 				self.disconnect_peer_inner(&source, Some(Duration::from_secs(5)));
 			}
 		}

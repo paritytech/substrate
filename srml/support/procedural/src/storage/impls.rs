@@ -694,13 +694,18 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 
 		let mutate_impl = if !is_option {
 			quote!{
-				#as_double_map::insert(key1, key2, &val, storage)
+				#as_double_map::insert(k1, k2, &val, storage)
 			}
 		} else {
 			quote!{
 				match val {
-					Some(ref val) => #as_double_map::insert(key1, key2, &val, storage),
-					None => #as_double_map::remove(key1, key2, storage),
+					Some(ref val) => #as_double_map::insert::<KArg1, KArg2, #typ, S>(
+						k1,
+						k2,
+						val,
+						storage,
+					),
+					None => #as_double_map::remove(k1, k2, storage),
 				}
 			}
 		};
@@ -751,7 +756,10 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			{
 				type Query = #value_type;
 
-				fn prefix_for(k1: &#k1ty) -> Vec<u8> {
+				fn prefix_for<KArg1>(k1: &KArg1) -> #scrate::rstd::vec::Vec<u8> where
+					KArg1: ?Sized + #scrate::codec::Encode,
+					#k1ty: #scrate::rstd::borrow::Borrow<KArg1>,
+				{
 					use #scrate::storage::hashed::generator::StorageHasher;
 
 					let mut key = #as_double_map::prefix().to_vec();
@@ -763,7 +771,15 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					#final_prefix
 				}
 
-				fn key_for(k1: &#k1ty, k2: &#k2ty) -> Vec<u8> {
+				fn key_for<KArg1, KArg2>(
+					k1: &KArg1,
+					k2: &KArg2,
+				) -> #scrate::rstd::vec::Vec<u8> where
+					#k1ty: #scrate::rstd::borrow::Borrow<KArg1>,
+					#k2ty: #scrate::rstd::borrow::Borrow<KArg2>,
+					KArg1: ?Sized + #scrate::codec::Encode,
+					KArg2: ?Sized + #scrate::codec::Encode,
+				{
 					use #scrate::storage::hashed::generator::StorageHasher;
 
 					let mut key = #as_double_map::prefix_for(k1);
@@ -771,25 +787,50 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					key
 				}
 
-				fn get<S: #scrate::UnhashedStorage>(key1: &#k1ty, key2: &#k2ty, storage: &S) -> Self::Query {
-					let key = #as_double_map::key_for(key1, key2);
+				fn get<KArg1, KArg2, S: #scrate::UnhashedStorage>(
+					k1: &KArg1,
+					k2: &KArg2,
+					storage: &S,
+				) -> Self::Query where
+					#k1ty: #scrate::rstd::borrow::Borrow<KArg1>,
+					#k2ty: #scrate::rstd::borrow::Borrow<KArg2>,
+					KArg1: ?Sized + #scrate::codec::Encode,
+					KArg2: ?Sized + #scrate::codec::Encode,
+				{
+					let key = #as_double_map::key_for(k1, k2);
 					storage.get(&key).#option_simple_1(|| #fielddefault)
 				}
 
-				fn take<S: #scrate::UnhashedStorage>(key1: &#k1ty, key2: &#k2ty, storage: &mut S) -> Self::Query {
-					let key = #as_double_map::key_for(key1, key2);
+				fn take<KArg1, KArg2, S: #scrate::UnhashedStorage>(
+					k1: &KArg1,
+					k2: &KArg2,
+					storage: &mut S,
+				) -> Self::Query where
+					#k1ty: #scrate::rstd::borrow::Borrow<KArg1>,
+					#k2ty: #scrate::rstd::borrow::Borrow<KArg2>,
+					KArg1: ?Sized + #scrate::codec::Encode,
+					KArg2: ?Sized + #scrate::codec::Encode,
+				{
+					let key = #as_double_map::key_for(k1, k2);
 					storage.take(&key).#option_simple_1(|| #fielddefault)
 				}
 
-				fn mutate<R, F, S>(key1: &#k1ty, key2: &#k2ty, f: F, storage: &mut S) -> R
-				where
+				fn mutate<KArg1, KArg2, R, F, S: #scrate::UnhashedStorage>(
+					k1: &KArg1,
+					k2: &KArg2,
+					f: F,
+					storage: &mut S,
+				) -> R where
+					#k1ty: #scrate::rstd::borrow::Borrow<KArg1>,
+					#k2ty: #scrate::rstd::borrow::Borrow<KArg2>,
+					KArg1: ?Sized + #scrate::codec::Encode,
+					KArg2: ?Sized + #scrate::codec::Encode,
 					F: FnOnce(&mut Self::Query) -> R,
-					S: #scrate::UnhashedStorage,
 				{
-					let mut val = #as_double_map::get(key1, key2, storage);
+					let mut val = #as_double_map::get(k1, k2, storage);
 
 					let ret = f(&mut val);
-					#mutate_impl ;
+					#mutate_impl;
 					ret
 				}
 			}
