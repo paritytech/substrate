@@ -34,8 +34,7 @@ use substrate_client::{
 	impl_runtime_apis,
 };
 use runtime_primitives::{
-	ApplyResult,
-	create_runtime_str,
+	ApplyResult, create_runtime_str, Perbill,
 	transaction_validity::{TransactionValidity, ValidTransaction},
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
@@ -330,6 +329,7 @@ parameter_types! {
 	pub const MinimumPeriod: u64 = 5;
 	pub const MaximumBlockWeight: u32 = 4 * 1024 * 1024;
 	pub const MaximumBlockLength: u32 = 4 * 1024 * 1024;
+	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 }
 
 impl srml_system::Trait for Runtime {
@@ -346,6 +346,7 @@ impl srml_system::Trait for Runtime {
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type MaximumBlockLength = MaximumBlockLength;
+	type AvailableBlockRatio = AvailableBlockRatio;
 }
 
 impl srml_timestamp::Trait for Runtime {
