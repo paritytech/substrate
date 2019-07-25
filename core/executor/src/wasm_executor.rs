@@ -56,10 +56,10 @@ struct FunctionExecutor<'e, E: Externalities<Blake2Hasher> + 'e> {
 }
 
 impl<'e, E: Externalities<Blake2Hasher>> FunctionExecutor<'e, E> {
-	fn new(m: MemoryRef, t: Option<TableRef>, e: &'e mut E) -> Result<Self> {
+	fn new(m: MemoryRef, heap_base: u32, t: Option<TableRef>, e: &'e mut E) -> Result<Self> {
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
-			heap: allocator::FreeingBumpHeapAllocator::new(m.clone()),
+			heap: allocator::FreeingBumpHeapAllocator::new(m.clone(), heap_base),
 			memory: m,
 			table: t,
 			ext: e,
@@ -1270,7 +1270,7 @@ impl WasmExecutor {
 		data: &[u8],
 	) -> Result<Vec<u8>> {
 		let module = ::wasmi::Module::from_buffer(code)?;
-		let module = self.prepare_module(ext, heap_pages, &module)?;
+		let module = Self::instantiate_module::<E>(heap_pages, &module)?;
 		self.call_in_wasm_module(ext, &module, method, data)
 	}
 
@@ -1292,7 +1292,7 @@ impl WasmExecutor {
 		filter_result: FR,
 	) -> Result<R> {
 		let module = wasmi::Module::from_buffer(code)?;
-		let module = self.prepare_module(ext, heap_pages, &module)?;
+		let module = Self::instantiate_module::<E>(heap_pages, &module)?;
 		self.call_in_wasm_module_with_custom_signature(
 			ext,
 			&module,
@@ -1309,6 +1309,22 @@ impl WasmExecutor {
 			.as_memory()
 			.ok_or_else(|| Error::InvalidMemoryReference)?
 			.clone())
+	}
+
+	/// Find the global named `__heap_base` in the given wasm module instance and
+	/// tries to get its value.
+	fn get_heap_base(module: &ModuleRef) -> Result<u32> {
+		let heap_base_val = module
+			.export_by_name("__heap_base")
+			.ok_or_else(|| Error::HeapBaseNotFoundOrInvalid)?
+			.as_global()
+			.ok_or_else(|| Error::HeapBaseNotFoundOrInvalid)?
+			.get();
+
+		Ok(match heap_base_val {
+			wasmi::RuntimeValue::I32(v) => v as u32,
+			_ => return Err(Error::HeapBaseNotFoundOrInvalid),
+		})
 	}
 
 	/// Call a given method in the given wasm-module runtime.
@@ -1359,10 +1375,9 @@ impl WasmExecutor {
 		let table: Option<TableRef> = module_instance
 			.export_by_name("__indirect_function_table")
 			.and_then(|e| e.as_table().cloned());
+		let heap_base = Self::get_heap_base(module_instance)?;
 
-		let low = memory.lowest_used();
-		let used_mem = memory.used_size();
-		let mut fec = FunctionExecutor::new(memory.clone(), table, ext)?;
+		let mut fec = FunctionExecutor::new(memory.clone(), heap_base, table, ext)?;
 		let parameters = create_parameters(&mut |data: &[u8]| {
 			let offset = fec.heap.allocate(data.len() as u32)?;
 			memory.set(offset, &data)?;
@@ -1385,24 +1400,14 @@ impl WasmExecutor {
 			},
 		};
 
-		// cleanup module instance for next use
-		let new_low = memory.lowest_used();
-		if new_low < low {
-			memory.zero(new_low as usize, (low - new_low) as usize)?;
-			memory.reset_lowest_used(low);
-		}
-		memory.with_direct_access_mut(|buf| buf.resize(used_mem.0, 0));
 		result
 	}
 
 	/// Prepare module instance
-	pub fn prepare_module<E: Externalities<Blake2Hasher>>(
-		&self,
-		ext: &mut E,
+	pub fn instantiate_module<E: Externalities<Blake2Hasher>>(
 		heap_pages: usize,
 		module: &Module,
-		) -> Result<ModuleRef>
-	{
+	) -> Result<ModuleRef> {
 		// start module instantiation. Don't run 'start' function yet.
 		let intermediate_instance = ModuleInstance::new(
 			module,
@@ -1410,18 +1415,19 @@ impl WasmExecutor {
 			.with_resolver("env", FunctionExecutor::<E>::resolver())
 		)?;
 
-		// extract a reference to a linear memory, optional reference to a table
-		// and then initialize FunctionExecutor.
+		// Verify that the module has the heap base global variable.
+		let _ = Self::get_heap_base(intermediate_instance.not_started_instance())?;
+
+		// Extract a reference to a linear memory.
 		let memory = Self::get_mem_instance(intermediate_instance.not_started_instance())?;
 		memory.grow(Pages(heap_pages)).map_err(|_| Error::Runtime)?;
-		let table: Option<TableRef> = intermediate_instance
-			.not_started_instance()
-			.export_by_name("__indirect_function_table")
-			.and_then(|e| e.as_table().cloned());
-		let mut fec = FunctionExecutor::new(memory.clone(), table, ext)?;
 
-		// finish instantiation by running 'start' function (if any).
-		Ok(intermediate_instance.run_start(&mut fec)?)
+		if intermediate_instance.has_start() {
+			// Runtime is not allowed to have the `start` function.
+			Err(Error::RuntimeHasStartFn)
+		} else {
+			Ok(intermediate_instance.assert_no_start())
+		}
 	}
 }
 
