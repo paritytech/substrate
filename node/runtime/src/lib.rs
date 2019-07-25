@@ -166,7 +166,7 @@ impl balances::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const MinimumPeriod: u64 = SECS_PER_BLOCK / 2;
+	pub const MinimumPeriod: u64 = SLOT_DURATION / 2;
 }
 impl timestamp::Trait for Runtime {
 	type Moment = Moment;

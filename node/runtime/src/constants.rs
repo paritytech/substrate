@@ -29,7 +29,11 @@ pub mod currency {
 pub mod time {
 	use node_primitives::Moment;
 
-	pub const SECS_PER_BLOCK: Moment = 6;
+	pub const MILLISECS_PER_BLOCK: Moment = 6000;
+	pub const SECS_PER_BLOCK: Moment = MILLISECS_PER_BLOCK / 1000;
+	pub const SLOT_DURATION: Moment = 6000;
+
+	// These time units are defined in number of blocks.
 	pub const MINUTES: Moment = 60 / SECS_PER_BLOCK;
 	pub const HOURS: Moment = MINUTES * 60;
 	pub const DAYS: Moment = HOURS * 24;
