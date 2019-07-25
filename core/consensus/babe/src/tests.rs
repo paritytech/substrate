@@ -236,6 +236,7 @@ fn run_one_test() {
 		net.lock().poll();
 		Ok::<_, ()>(futures01::Async::NotReady::<()>)
 	}));
+
 	runtime.block_on(future::join_all(import_notifications)
 		.map(|_| Ok::<(), ()>(())).compat()).unwrap();
 }
