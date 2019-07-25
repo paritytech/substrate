@@ -82,11 +82,6 @@ fn basic_setup_works() {
 
 		// Initial Era and session
 		assert_eq!(Staking::current_era(), 0);
-		assert_eq!(Session::current_index(), 0);
-
-		// initial rewards
-		assert_eq!(Staking::current_session_reward(), 10);
-
 
 		// initial slash_count of validators
 		assert_eq!(Staking::slash_count(&11), 0);
@@ -301,6 +296,7 @@ fn slashing_does_not_cause_underflow() {
 		assert_eq!(Staking::offline_slash_grace(), 0);
 
 		// Set validator preference so that 2^unstake_threshold would cause overflow (greater than 64)
+		// FIXME: that doesn't overflow.
 		<Validators<Test>>::insert(11, ValidatorPrefs {
 			unstake_threshold: 10,
 			validator_payment: 0,
@@ -316,7 +312,6 @@ fn slashing_does_not_cause_underflow() {
 	});
 }
 
-
 #[test]
 fn rewards_should_work() {
 	// should check that:
@@ -324,12 +319,16 @@ fn rewards_should_work() {
 	// * rewards get paid per Era
 	// * Check that nominators are also rewarded
 	with_externalities(&mut ExtBuilder::default()
-	.build(),
+		.nominate(false)
+		.build(),
 	|| {
+		// Init some balances
+		let _ = Balances::make_free_balance_be(&2, 500);
+
 		let delay = 1;
-		// this test is only in the scope of one era. Since this variable changes
-		// at the last block/new era, we'll save it.
-		let session_reward = 10;
+		let init_balance_2 = Balances::total_balance(&2);
+		let init_balance_10 = Balances::total_balance(&10);
+		let init_balance_11 = Balances::total_balance(&11);
 
 		// Set payee to controller
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
@@ -337,17 +336,13 @@ fn rewards_should_work() {
 		// Initial config should be correct
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 0);
-		assert_eq!(Staking::current_session_reward(), 10);
 
-		// check the balance of a validator accounts.
-		assert_eq!(Balances::total_balance(&11), 1000);
-		// and the nominator (to-be)
-		let _ = Balances::make_free_balance_be(&2, 500);
-		assert_eq!(Balances::total_balance(&2), 500);
-
-		// add a dummy nominator.
+		// Add a dummy nominator.
+		//
+		// Equal division indicates that the reward will be equally divided among validator and
+		// nominator.
 		<Stakers<Test>>::insert(&11, Exposure {
-			own: 500, // equal division indicates that the reward will be equally divided among validator and nominator.
+			own: 500,
 			total: 1000,
 			others: vec![IndividualExposure {who: 2, value: 500 }]
 		});
@@ -362,10 +357,21 @@ fn rewards_should_work() {
 		Session::on_initialize(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 1);
+		<Module<Test>>::add_reward_points_to_validator(11, 50);
+		<Module<Test>>::add_reward_points_to_validator(11, 50);
+		// This is the second validator of the current elected set.
+		<Module<Test>>::add_reward_points_to_validator(21, 50);
+		// This must be no-op as it is not an elected validator.
+		<Module<Test>>::add_reward_points_to_validator(1001, 10_000);
 
-		// session triggered: the reward value stashed should be 10 -- defined in ExtBuilder genesis.
-		assert_eq!(Staking::current_session_reward(), session_reward);
-		assert_eq!(Staking::current_era_reward(), session_reward);
+		// Compute total payout now for whole duration as other parameter won't change
+		let total_payout = current_total_payout_for_duration(9*5);
+		assert!(total_payout > 10); // Test is meaningfull if reward something
+
+		// No reward yet
+		assert_eq!(Balances::total_balance(&2), init_balance_2);
+		assert_eq!(Balances::total_balance(&10), init_balance_10);
+		assert_eq!(Balances::total_balance(&11), init_balance_11);
 
 		block = 6; // Block 6 => Session 2 => Era 0
 		System::set_block_number(block);
@@ -374,11 +380,6 @@ fn rewards_should_work() {
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 2);
 
-		// session reward is the same,
-		assert_eq!(Staking::current_session_reward(), session_reward);
-		// though 2 will be deducted while stashed in the era reward due to delay
-		assert_eq!(Staking::current_era_reward(), 2*session_reward); // - delay);
-
 		block = 9; // Block 9 => Session 3 => Era 1
 		System::set_block_number(block);
 		Timestamp::set_timestamp(block*5);  // back to being on time. no delays
@@ -386,8 +387,10 @@ fn rewards_should_work() {
 		assert_eq!(Staking::current_era(), 1);
 		assert_eq!(Session::current_index(), 3);
 
-		assert_eq!(Balances::total_balance(&10), 1 + (3*session_reward)/2);
-		assert_eq!(Balances::total_balance(&2), 500 + (3*session_reward)/2);
+		// 11 validator has 2/3 of the total rewards and half half for it and its nominator
+		assert_eq!(Balances::total_balance(&2), init_balance_2 + total_payout/3);
+		assert_eq!(Balances::total_balance(&10), init_balance_10 + total_payout/3);
+		assert_eq!(Balances::total_balance(&11), init_balance_11);
 	});
 }
 
@@ -400,49 +403,36 @@ fn multi_era_reward_should_work() {
 		.nominate(false)
 		.build(),
 	|| {
-		let session_reward = 10;
-
-		// This is set by the test config builder.
-		assert_eq!(Staking::current_session_reward(), session_reward);
-
-		// check the balance of a validator accounts.
-		assert_eq!(Balances::total_balance(&10), 1);
+		let init_balance_10 = Balances::total_balance(&10);
 
 		// Set payee to controller
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
 
+		// Compute now as other parameter won't change
+		let total_payout_0 = current_total_payout_for_duration(3);
+		assert!(total_payout_0 > 10); // Test is meaningfull if reward something
+		dbg!(<Module<Test>>::slot_stake());
+		<Module<Test>>::add_reward_points_to_validator(11, 1);
+
 		start_session(0);
-
-		// session triggered: the reward value stashed should be 10
-		assert_eq!(Staking::current_session_reward(), session_reward);
-		assert_eq!(Staking::current_era_reward(), session_reward);
-
 		start_session(1);
-
-		assert_eq!(Staking::current_session_reward(), session_reward);
-		assert_eq!(Staking::current_era_reward(), 2*session_reward);
-
 		start_session(2);
+		start_session(3);
 
-		// 1 + sum of of the session rewards accumulated
-		let recorded_balance = 1 + 3*session_reward;
-		assert_eq!(Balances::total_balance(&10), recorded_balance);
+		assert_eq!(Staking::current_era(), 1);
+		assert_eq!(Balances::total_balance(&10), init_balance_10 + total_payout_0);
 
-		// the reward for next era will be: session_reward * slot_stake
-		let new_session_reward = Staking::session_reward() * Staking::slot_stake();
-		assert_eq!(Staking::current_session_reward(), new_session_reward);
-
-		// fast forward to next era:
 		start_session(4);
 
-		// intermediate test.
-		assert_eq!(Staking::current_era_reward(), 2*new_session_reward);
+		let total_payout_1 = current_total_payout_for_duration(3);
+		assert!(total_payout_1 > 10); // Test is meaningfull if reward something
+		<Module<Test>>::add_reward_points_to_validator(11, 101);
 
 		// new era is triggered here.
 		start_session(5);
 
 		// pay time
-		assert_eq!(Balances::total_balance(&10), 3*new_session_reward + recorded_balance);
+		assert_eq!(Balances::total_balance(&10), init_balance_10 + total_payout_0 + total_payout_1);
 	});
 }
 
@@ -457,6 +447,8 @@ fn staking_should_work() {
 		.fair(false) // to give 20 more staked value
 		.build(),
 	|| {
+		Timestamp::set_timestamp(1); // Initialize time.
+
 		// remember + compare this along with the test.
 		assert_eq_uvec!(validator_controllers(), vec![20, 10]);
 
@@ -622,10 +614,6 @@ fn nominating_and_rewards_should_work() {
 		assert_ok!(Staking::set_payee(Origin::signed(30), RewardDestination::Controller));
 		assert_ok!(Staking::set_payee(Origin::signed(40), RewardDestination::Controller));
 
-		// default reward for the first session.
-		let session_reward = 10;
-		assert_eq!(Staking::current_session_reward(), session_reward);
-
 		// give the man some money
 		let initial_balance = 1000;
 		for i in [1, 2, 3, 4, 5, 10, 11, 20, 21].iter() {
@@ -640,14 +628,22 @@ fn nominating_and_rewards_should_work() {
 		assert_ok!(Staking::bond(Origin::signed(3), 4, 1000, RewardDestination::Controller));
 		assert_ok!(Staking::nominate(Origin::signed(4), vec![11, 21, 41]));
 
+		// the total reward for era 0
+		let total_payout_0 = current_total_payout_for_duration(3);
+		assert!(total_payout_0 > 100); // Test is meaningfull if reward something
+		<Module<Test>>::add_reward_points_to_validator(41, 1);
+		<Module<Test>>::add_reward_points_to_validator(31, 1);
+		<Module<Test>>::add_reward_points_to_validator(21, 10); // must be no-op
+		<Module<Test>>::add_reward_points_to_validator(11, 10); // must be no-op
+
 		start_era(1);
 
 		// 10 and 20 have more votes, they will be chosen by phragmen.
 		assert_eq_uvec!(validator_controllers(), vec![20, 10]);
 
 		// OLD validators must have already received some rewards.
-		assert_eq!(Balances::total_balance(&40), 1 + 3 * session_reward);
-		assert_eq!(Balances::total_balance(&30), 1 + 3 * session_reward);
+		assert_eq!(Balances::total_balance(&40), 1 + total_payout_0/2);
+		assert_eq!(Balances::total_balance(&30), 1 + total_payout_0/2);
 
 		// ------ check the staked value of all parties.
 
@@ -707,35 +703,41 @@ fn nominating_and_rewards_should_work() {
 		assert_eq!(Staking::stakers(31).total, 0);
 		assert_eq!(Staking::stakers(41).total, 0);
 
+		// the total reward for era 1
+		let total_payout_1 = current_total_payout_for_duration(3);
+		assert!(total_payout_1 > 100); // Test is meaningfull if reward something
+		<Module<Test>>::add_reward_points_to_validator(41, 10); // must be no-op
+		<Module<Test>>::add_reward_points_to_validator(31, 10); // must be no-op
+		<Module<Test>>::add_reward_points_to_validator(21, 2);
+		<Module<Test>>::add_reward_points_to_validator(11, 1);
 
 		start_era(2);
-		// next session reward.
-		let new_session_reward = Staking::session_reward() * 3 * Staking::slot_stake();
 
-		// NOTE: some addition or substraction (-2, -3, +1) are due to arithmetic approximations
+		// nothing else will happen, era ends and rewards are paid again,
+		// it is expected that nominators will also be paid. See below
+
+		let payout_for_10 = total_payout_1/3;
+		let payout_for_20 = 2*total_payout_1/3;
 		if cfg!(feature = "equalize") {
-			// Both have: has [400/2000 ~ 1/5 from 10] + [600/2000 ~ 3/10 from 20]'s reward. ==> 1/5 + 3/10 = 1/2
-			assert_eq!(Balances::total_balance(&2), initial_balance + new_session_reward/2 - 3);
-			assert_eq!(Balances::total_balance(&4), initial_balance + new_session_reward/2 - 3);
-			// Rest for validators.
-			assert_eq!(Balances::total_balance(&10), initial_balance + new_session_reward/2 + 1);
-			assert_eq!(Balances::total_balance(&20), initial_balance + new_session_reward/2 + 1);
+			// Nominator 2: has [400/2000 ~ 1/5 from 10] + [600/2000 ~ 3/10 from 20]'s reward.
+			assert_eq!(Balances::total_balance(&2), initial_balance + payout_for_10/5 + payout_for_20*3/10 - 1);
+			// Nominator 4: has [400/2000 ~ 1/5 from 20] + [600/2000 ~ 3/10 from 10]'s reward.
+			assert_eq!(Balances::total_balance(&4), initial_balance + payout_for_20/5 + payout_for_10*3/10);
+
+			// Validator 10: got 1000 / 2000 external stake.
+			assert_eq!(Balances::total_balance(&10), initial_balance + payout_for_10/2);
+			// Validator 20: got 1000 / 2000 external stake.
+			assert_eq!(Balances::total_balance(&20), initial_balance + payout_for_20/2);
 		} else {
 			// Nominator 2: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
-			assert_eq!(
-				Balances::total_balance(&2),
-				initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11) - 2
-			);
+			assert_eq!(Balances::total_balance(&2), initial_balance + (2*payout_for_10/9 + 3*payout_for_20/11) - 2);
 			// Nominator 4: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
-			assert_eq!(
-				Balances::total_balance(&4),
-				initial_balance + (2*new_session_reward/9 + 3*new_session_reward/11) - 2
-			);
+			assert_eq!(Balances::total_balance(&4), initial_balance + (2*payout_for_10/9 + 3*payout_for_20/11) - 2);
 
-			// 10 got 800 / 1800 external stake => 8/18 =? 4/9 => Validator's share = 5/9
-			assert_eq!(Balances::total_balance(&10), initial_balance + 5*new_session_reward/9 - 1);
-			// 10 got 1200 / 2200 external stake => 12/22 =? 6/11 => Validator's share = 5/11
-			assert_eq!(Balances::total_balance(&20), initial_balance + 5*new_session_reward/11 + 2);
+			// Validator 10: got 800 / 1800 external stake => 8/18 =? 4/9 => Validator's share = 5/9
+			assert_eq!(Balances::total_balance(&10), initial_balance + 5*payout_for_10/9 - 1);
+			// Validator 20: got 1200 / 2200 external stake => 12/22 =? 6/11 => Validator's share = 5/11
+			assert_eq!(Balances::total_balance(&20), initial_balance + 5*payout_for_20/11);
 		}
 
 		check_exposure_all();
@@ -768,6 +770,10 @@ fn nominators_also_get_slashed() {
 		assert_ok!(Staking::bond(Origin::signed(1), 2, nominator_stake, RewardDestination::default()));
 		assert_ok!(Staking::nominate(Origin::signed(2), vec![20, 10]));
 
+		let total_payout = current_total_payout_for_duration(3);
+		assert!(total_payout > 100); // Test is meaningfull if reward something
+		<Module<Test>>::add_reward_points_to_validator(11, 1);
+
 		// new era, pay rewards,
 		start_era(1);
 
@@ -783,7 +789,7 @@ fn nominators_also_get_slashed() {
 		let nominator_slash = nominator_stake.min(total_slash - validator_slash);
 
 		// initial + first era reward + slash
-		assert_eq!(Balances::total_balance(&10), initial_balance + 30 - validator_slash);
+		assert_eq!(Balances::total_balance(&10), initial_balance + total_payout - validator_slash);
 		assert_eq!(Balances::total_balance(&2), initial_balance - nominator_slash);
 		check_exposure_all();
 		check_nominator_all();
@@ -957,45 +963,47 @@ fn reward_destination_works() {
 			active: 1000,
 			unlocking: vec![],
 		}));
-		// Check current session reward is 10
-		let session_reward0 = 3 * Staking::current_session_reward(); // 10
 
-		// Move forward the system for payment
-		Timestamp::set_timestamp(5);
+		// Compute total payout now for whole duration as other parameter won't change
+		let total_payout_0 = current_total_payout_for_duration(3);
+		assert!(total_payout_0 > 100); // Test is meaningfull if reward something
+		<Module<Test>>::add_reward_points_to_validator(11, 1);
+
 		start_era(1);
 
 		// Check that RewardDestination is Staked (default)
 		assert_eq!(Staking::payee(&11), RewardDestination::Staked);
 		// Check that reward went to the stash account of validator
-		assert_eq!(Balances::free_balance(&11), 1000 + session_reward0);
+		assert_eq!(Balances::free_balance(&11), 1000 + total_payout_0);
 		// Check that amount at stake increased accordingly
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
 			stash: 11,
-			total: 1000 + session_reward0,
-			active: 1000 + session_reward0,
+			total: 1000 + total_payout_0,
+			active: 1000 + total_payout_0,
 			unlocking: vec![],
 		}));
-		// Update current session reward
-		let session_reward1 = 3 * Staking::current_session_reward(); // 1010 (1* slot_stake)
 
 		//Change RewardDestination to Stash
 		<Payee<Test>>::insert(&11, RewardDestination::Stash);
 
-		// Move forward the system for payment
-		Timestamp::set_timestamp(10);
+		// Compute total payout now for whole duration as other parameter won't change
+		let total_payout_1 = current_total_payout_for_duration(3);
+		assert!(total_payout_1 > 100); // Test is meaningfull if reward something
+		<Module<Test>>::add_reward_points_to_validator(11, 1);
+
 		start_era(2);
 
 		// Check that RewardDestination is Stash
 		assert_eq!(Staking::payee(&11), RewardDestination::Stash);
 		// Check that reward went to the stash account
-		assert_eq!(Balances::free_balance(&11), 1000 + session_reward0 + session_reward1);
+		assert_eq!(Balances::free_balance(&11), 1000 + total_payout_0 + total_payout_1);
 		// Record this value
-		let recorded_stash_balance = 1000 + session_reward0 + session_reward1;
+		let recorded_stash_balance = 1000 + total_payout_0 + total_payout_1;
 		// Check that amount at stake is NOT increased
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
 			stash: 11,
-			total: 1000 + session_reward0,
-			active: 1000 + session_reward0,
+			total: 1000 + total_payout_0,
+			active: 1000 + total_payout_0,
 			unlocking: vec![],
 		}));
 
@@ -1005,20 +1013,22 @@ fn reward_destination_works() {
 		// Check controller balance
 		assert_eq!(Balances::free_balance(&10), 1);
 
-		// Move forward the system for payment
-		Timestamp::set_timestamp(15);
+		// Compute total payout now for whole duration as other parameter won't change
+		let total_payout_2 = current_total_payout_for_duration(3);
+		assert!(total_payout_2 > 100); // Test is meaningfull if reward something
+		<Module<Test>>::add_reward_points_to_validator(11, 1);
+
 		start_era(3);
-		let session_reward2 = 3 * Staking::current_session_reward(); // 1010 (1* slot_stake)
 
 		// Check that RewardDestination is Controller
 		assert_eq!(Staking::payee(&11), RewardDestination::Controller);
 		// Check that reward went to the controller account
-		assert_eq!(Balances::free_balance(&10), 1 + session_reward2);
+		assert_eq!(Balances::free_balance(&10), 1 + total_payout_2);
 		// Check that amount at stake is NOT increased
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
 			stash: 11,
-			total: 1000 + session_reward0,
-			active: 1000 + session_reward0,
+			total: 1000 + total_payout_0,
+			active: 1000 + total_payout_0,
 			unlocking: vec![],
 		}));
 		// Check that amount in staked account is NOT increased.
@@ -1035,10 +1045,8 @@ fn validator_payment_prefs_work() {
 		.build(),
 	|| {
 		// Initial config
-		let session_reward = 10;
 		let validator_cut = 5;
 		let stash_initial_balance = Balances::total_balance(&11);
-		assert_eq!(Staking::current_session_reward(), session_reward);
 
 		// check the balance of a validator accounts.
 		assert_eq!(Balances::total_balance(&10), 1);
@@ -1059,35 +1067,15 @@ fn validator_payment_prefs_work() {
 			validator_payment: validator_cut
 		});
 
-		// ------------ Fast forward
-		// Block 3 => Session 1 => Era 0
-		let mut block = 3;
-		System::set_block_number(block);
-		Session::on_initialize(System::block_number());
-		assert_eq!(Staking::current_era(), 0);
-		assert_eq!(Session::current_index(), 1);
+		// Compute total payout now for whole duration as other parameter won't change
+		let total_payout_0 = current_total_payout_for_duration(3);
+		assert!(total_payout_0 > 100); // Test is meaningfull if reward something
+		<Module<Test>>::add_reward_points_to_validator(11, 1);
 
-		// session triggered: the reward value stashed should be 10 -- defined in ExtBuilder genesis.
-		assert_eq!(Staking::current_session_reward(), session_reward);
-		assert_eq!(Staking::current_era_reward(), session_reward);
-
-		block = 6; // Block 6 => Session 2 => Era 0
-		System::set_block_number(block);
-		Session::on_initialize(System::block_number());
-		assert_eq!(Staking::current_era(), 0);
-		assert_eq!(Session::current_index(), 2);
-
-		assert_eq!(Staking::current_session_reward(), session_reward);
-		assert_eq!(Staking::current_era_reward(), 2*session_reward);
-
-		block = 9; // Block 9 => Session 3 => Era 1
-		System::set_block_number(block);
-		Session::on_initialize(System::block_number());
-		assert_eq!(Staking::current_era(), 1);
-		assert_eq!(Session::current_index(), 3);
+		start_era(1);
 
 		// whats left to be shared is the sum of 3 rounds minus the validator's cut.
-		let shared_cut = 3 * session_reward - validator_cut;
+		let shared_cut = total_payout_0 - validator_cut;
 		// Validator's payee is Staked account, 11, reward will be paid here.
 		assert_eq!(Balances::total_balance(&11), stash_initial_balance + shared_cut/2 + validator_cut);
 		// Controller account will not get any reward.
@@ -1165,7 +1153,6 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		// Initial config should be correct
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 0);
-		assert_eq!(Staking::current_session_reward(), 10);
 
 		// check the balance of a validator accounts.
 		assert_eq!(Balances::total_balance(&10), 1);
@@ -1294,22 +1281,31 @@ fn slot_stake_is_least_staked_validator_and_exposure_defines_maximum_punishment(
 		assert_eq!(Staking::stakers(&21).total, 69);
 		<Ledger<Test>>::insert(&20, StakingLedger { stash: 22, total: 69, active: 69, unlocking: vec![] });
 
+		// Compute total payout now for whole duration as other parameter won't change
+		let total_payout_0 = current_total_payout_for_duration(3);
+		assert!(total_payout_0 > 100); // Test is meaningfull if reward something
+		<Module<Test>>::add_reward_points_to_validator(11, 1);
+		<Module<Test>>::add_reward_points_to_validator(21, 1);
+
 		// New era --> rewards are paid --> stakes are changed
 		start_era(1);
 
 		// -- new balances + reward
-		assert_eq!(Staking::stakers(&11).total, 1000 + 30);
-		assert_eq!(Staking::stakers(&21).total, 69 + 30);
+		assert_eq!(Staking::stakers(&11).total, 1000 + total_payout_0/2);
+		assert_eq!(Staking::stakers(&21).total, 69 + total_payout_0/2);
+
+		let _11_balance = Balances::free_balance(&11);
+		assert_eq!(_11_balance, 1000 + total_payout_0/2);
 
 		// -- slot stake should also be updated.
-		assert_eq!(Staking::slot_stake(), 69 + 30);
+		assert_eq!(Staking::slot_stake(), 69 + total_payout_0/2);
 
 		// If 10 gets slashed now, it will be slashed by 5% of exposure.total * 2.pow(unstake_thresh)
 		Staking::on_offline_validator(10, 4);
 		// Confirm user has been reported
 		assert_eq!(Staking::slash_count(&11), 4);
 		// check the balance of 10 (slash will be deducted from free balance.)
-		assert_eq!(Balances::free_balance(&11), 1000 + 30 - 51 /*5% of 1030*/ * 8 /*2**3*/);
+		assert_eq!(Balances::free_balance(&11), _11_balance - _11_balance*5/100 * 2u64.pow(3));
 
 		check_exposure_all();
 		check_nominator_all();
@@ -1621,6 +1617,8 @@ fn switching_roles() {
 		.nominate(false)
 		.build(),
 	|| {
+		Timestamp::set_timestamp(1); // Initialize time.
+
 		// Reset reward destination
 		for i in &[10, 20] { assert_ok!(Staking::set_payee(Origin::signed(*i), RewardDestination::Controller)); }
 
@@ -1718,7 +1716,7 @@ fn bond_with_no_staked_value() {
 	.nominate(false)
 	.minimum_validator_count(1)
 	.build(), || {
-		// Can't bond with 1
+				// Can't bond with 1
 		assert_noop!(
 			Staking::bond(Origin::signed(1), 2, 1, RewardDestination::Controller),
 			"can not bond with value less than minimum balance"
@@ -1753,7 +1751,6 @@ fn bond_with_no_staked_value() {
 		assert_ok!(Staking::withdraw_unbonded(Origin::signed(2)));
 		assert!(Staking::ledger(2).is_none());
 		assert_eq!(Balances::locks(&1).len(), 0);
-
 	});
 }
 
@@ -1771,13 +1768,16 @@ fn bond_with_little_staked_value_bounded_by_slot_stake() {
 		// setup
 		assert_ok!(Staking::chill(Origin::signed(30)));
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
-		let initial_balance_2 = Balances::free_balance(&2);
-		let initial_balance_10 = Balances::free_balance(&10);
+		let init_balance_2 = Balances::free_balance(&2);
+		let init_balance_10 = Balances::free_balance(&10);
 
 		// Stingy validator.
 		assert_ok!(Staking::bond(Origin::signed(1), 2, 1, RewardDestination::Controller));
 		assert_ok!(Staking::validate(Origin::signed(2), ValidatorPrefs::default()));
 
+		let total_payout_0 = current_total_payout_for_duration(3);
+		assert!(total_payout_0 > 100); // Test is meaningfull if reward something
+		add_reward_points_to_all_elected();
 		start_era(1);
 
 		// 2 is elected.
@@ -1786,25 +1786,24 @@ fn bond_with_little_staked_value_bounded_by_slot_stake() {
 		assert_eq!(Staking::slot_stake(), 1);
 
 		// Old ones are rewarded.
-		assert_eq!(Balances::free_balance(&10), initial_balance_10 + 30);
+		assert_eq!(Balances::free_balance(&10), init_balance_10 + total_payout_0/3);
 		// no rewards paid to 2. This was initial election.
-		assert_eq!(Balances::free_balance(&2), initial_balance_2);
+		assert_eq!(Balances::free_balance(&2), init_balance_2);
 
+		let total_payout_1 = current_total_payout_for_duration(3);
+		assert!(total_payout_1 > 100); // Test is meaningfull if reward something
+		add_reward_points_to_all_elected();
 		start_era(2);
 
 		assert_eq_uvec!(validator_controllers(), vec![20, 10, 2]);
 		assert_eq!(Staking::slot_stake(), 1);
 
-		let reward = Staking::current_session_reward();
-		// 2 will not get the full reward, practically 1
-		assert_eq!(Balances::free_balance(&2), initial_balance_2 + reward.max(3));
-		// same for 10
-		assert_eq!(Balances::free_balance(&10), initial_balance_10 + 30 + reward.max(3));
+		assert_eq!(Balances::free_balance(&2), init_balance_2 + total_payout_1/3);
+		assert_eq!(Balances::free_balance(&10), init_balance_10 + total_payout_0/3 + total_payout_1/3);
 		check_exposure_all();
 		check_nominator_all();
 	});
 }
-
 
 #[cfg(feature = "equalize")]
 #[test]
@@ -2060,7 +2059,7 @@ fn reward_validator_slashing_validator_doesnt_overflow() {
 		<Stakers<Test>>::insert(&11, Exposure { total: stake, own: stake, others: vec![] });
 
 		// Check reward
-		Staking::reward_validator(&11, reward_slash);
+		let _ = Staking::reward_validator(&11, reward_slash);
 		assert_eq!(Balances::total_balance(&11), stake * 2);
 
 		// Set staker
@@ -2074,5 +2073,30 @@ fn reward_validator_slashing_validator_doesnt_overflow() {
 		Staking::slash_validator(&11, reward_slash);
 		assert_eq!(Balances::total_balance(&11), stake - 1);
 		assert_eq!(Balances::total_balance(&2), 1);
+	})
+}
+
+#[test]
+fn reward_from_authorship_event_handler_works() {
+	with_externalities(&mut ExtBuilder::default()
+		.build(),
+	|| {
+		use authorship::EventHandler;
+
+		assert_eq!(<authorship::Module<Test>>::author(), 11);
+
+		<Module<Test>>::note_author(11);
+		<Module<Test>>::note_uncle(21, 1);
+		// An uncle author that is not currently elected doesn't get rewards,
+		// but the block producer does get reward for referencing it.
+		<Module<Test>>::note_uncle(31, 1);
+
+		// Not mandatory but must be coherent with rewards
+		assert_eq!(<CurrentElected<Test>>::get(), vec![21, 11]);
+
+		// 21 is rewarded as an uncle procuder
+		// 11 is rewarded as a block procuder and unclde referencer
+		assert_eq!(CurrentEraRewards::get().rewards, vec![1, 20+2*2]);
+		assert_eq!(CurrentEraRewards::get().total, 25);
 	})
 }

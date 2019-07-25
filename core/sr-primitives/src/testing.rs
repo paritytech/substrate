@@ -282,7 +282,7 @@ impl<Call: Encode, Extra: Encode> GetDispatchInfo for TestXt<Call, Extra> {
 	fn get_dispatch_info(&self) -> DispatchInfo {
 		// for testing: weight == size.
 		DispatchInfo {
-			weight: self.encode().len() as u32,
+			weight: self.encode().len() as _,
 			..Default::default()
 		}
 	}

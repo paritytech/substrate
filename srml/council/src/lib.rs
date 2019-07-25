@@ -44,6 +44,7 @@ mod tests {
 	pub use substrate_primitives::{H256, Blake2Hasher, u32_trait::{_1, _2, _3, _4}};
 	pub use primitives::traits::{BlakeTwo256, IdentityLookup};
 	pub use primitives::testing::{Digest, DigestItem, Header};
+	pub use primitives::Perbill;
 	pub use {seats, motions};
 	use std::cell::RefCell;
 
@@ -100,6 +101,7 @@ mod tests {
 		pub const BlockHashCount: u64 = 250;
 		pub const MaximumBlockWeight: u32 = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
+		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl system::Trait for Test {
 		type Origin = Origin;
@@ -115,6 +117,7 @@ mod tests {
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type MaximumBlockLength = MaximumBlockLength;
+		type AvailableBlockRatio = AvailableBlockRatio;
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
@@ -136,6 +139,7 @@ mod tests {
 		type CreationFee = CreationFee;
 		type TransactionBaseFee = TransactionBaseFee;
 		type TransactionByteFee = TransactionByteFee;
+		type WeightToFee = ();
 	}
 	parameter_types! {
 		pub const LaunchPeriod: u64 = 1;

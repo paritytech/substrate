@@ -268,6 +268,7 @@ mod tests {
 	use substrate_primitives::H256;
 	use primitives::traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT};
 	use primitives::testing::Header;
+	use primitives::Perbill;
 	use srml_support::{assert_ok, impl_outer_origin, parameter_types};
 	use srml_system as system;
 	use std::cell::RefCell;
@@ -301,6 +302,7 @@ mod tests {
 		pub const BlockHashCount: u64 = 250;
 		pub const MaximumBlockWeight: u32 = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
+		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl system::Trait for Test {
 		type Origin = Origin;
@@ -315,6 +317,7 @@ mod tests {
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 	}
 	parameter_types! {

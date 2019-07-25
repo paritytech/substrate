@@ -19,10 +19,7 @@ use srml_system as system;
 use srml_support::{decl_module, decl_event, impl_outer_origin, impl_outer_event};
 use runtime_io::{with_externalities, Blake2Hasher};
 use substrate_primitives::H256;
-use primitives::{
-	traits::{BlakeTwo256, IdentityLookup},
-	testing::Header,
-};
+use primitives::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 mod module {
 	use super::*;
@@ -58,6 +55,7 @@ srml_support::parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const MaximumBlockWeight: u32 = 4 * 1024 * 1024;
 	pub const MaximumBlockLength: u32 = 4 * 1024 * 1024;
+	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 }
 #[derive(Clone, Eq, PartialEq)]
 pub struct Runtime;
@@ -75,6 +73,7 @@ impl system::Trait for Runtime {
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type MaximumBlockLength = MaximumBlockLength;
+	type AvailableBlockRatio = AvailableBlockRatio;
 }
 
 impl module::Trait for Runtime {

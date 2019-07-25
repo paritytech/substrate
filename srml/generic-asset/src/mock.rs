@@ -21,6 +21,7 @@
 #![cfg(test)]
 
 use primitives::{
+	Perbill,
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
@@ -43,6 +44,7 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const MaximumBlockWeight: u32 = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
+	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl system::Trait for Test {
 	type Origin = Origin;
@@ -54,9 +56,10 @@ impl system::Trait for Test {
 	type Lookup = IdentityLookup<u64>;
 	type Header = Header;
 	type Event = TestEvent;
+	type WeightMultiplierUpdate = ();
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type MaximumBlockLength = MaximumBlockLength;
-	type WeightMultiplierUpdate = ();
+	type AvailableBlockRatio = AvailableBlockRatio;
 	type BlockHashCount = BlockHashCount;
 }
 

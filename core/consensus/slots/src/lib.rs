@@ -32,23 +32,18 @@ pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
 
 use codec::{Decode, Encode};
 use consensus_common::{SyncOracle, SelectChain};
-use futures::prelude::*;
-use futures::{
-	future::{self, Either},
-	Future, IntoFuture,
-};
+use futures::{prelude::*, future::{self, Either}, task::Poll};
 use inherents::{InherentData, InherentDataProviders};
 use log::{debug, error, info, warn};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{ApiRef, Block as BlockT, ProvideRuntimeApi};
-use std::fmt::Debug;
-use std::ops::Deref;
+use std::{fmt::Debug, ops::Deref, panic, pin::Pin};
 
 /// A worker that should be invoked at every new slot.
 pub trait SlotWorker<B: BlockT> {
 	/// The type of the future that will be returned when a new slot is
 	/// triggered.
-	type OnSlot: IntoFuture<Item = (), Error = consensus_common::Error>;
+	type OnSlot: Future<Output = Result<(), consensus_common::Error>>;
 
 	/// Called when a new slot is triggered.
 	fn on_slot(&self, chain_head: B::Header, slot_info: SlotInfo) -> Self::OnSlot;
@@ -78,13 +73,14 @@ pub fn start_slot_worker<B, C, W, T, SO, SC>(
 	sync_oracle: SO,
 	inherent_data_providers: InherentDataProviders,
 	timestamp_extractor: SC,
-) -> impl Future<Item = (), Error = ()>
+) -> impl Future<Output = ()>
 where
 	B: BlockT,
 	C: SelectChain<B> + Clone,
 	W: SlotWorker<B>,
+	W::OnSlot: Unpin,
 	SO: SyncOracle + Send + Clone,
-	SC: SlotCompatible,
+	SC: SlotCompatible + Unpin,
 	T: SlotData + Clone,
 {
 	let SlotDuration(slot_duration) = slot_duration;
@@ -94,12 +90,12 @@ where
 		slot_duration.slot_duration(),
 		inherent_data_providers,
 		timestamp_extractor,
-	).map_err(|e| debug!(target: "slots", "Faulty timer: {:?}", e))
-		.for_each(move |slot_info| {
+	).inspect_err(|e| debug!(target: "slots", "Faulty timer: {:?}", e))
+		.try_for_each(move |slot_info| {
 			// only propose when we are not syncing.
 			if sync_oracle.is_major_syncing() {
 				debug!(target: "slots", "Skipping proposal slot due to sync.");
-				return Either::B(future::ok(()));
+				return Either::Right(future::ready(Ok(())));
 			}
 
 			let slot_num = slot_info.number;
@@ -108,23 +104,23 @@ where
 				Err(e) => {
 					warn!(target: "slots", "Unable to author block in slot {}. \
 					no best block header: {:?}", slot_num, e);
-					return Either::B(future::ok(()));
+					return Either::Right(future::ready(Ok(())));
 				}
 			};
 
-			Either::A(worker.on_slot(chain_head, slot_info).into_future().map_err(
-				|e| warn!(target: "slots", "Encountered consensus error: {:?}", e),
+			Either::Left(worker.on_slot(chain_head, slot_info).map_err(
+				|e| { warn!(target: "slots", "Encountered consensus error: {:?}", e); e }
 			))
 		});
 
-	future::poll_fn(move ||
+	future::poll_fn(move |cx| {
 		loop {
-			let mut authorship = std::panic::AssertUnwindSafe(&mut authorship);
-			match std::panic::catch_unwind(move || authorship.poll()) {
-				Ok(Ok(Async::Ready(()))) =>
+			match panic::catch_unwind(panic::AssertUnwindSafe(|| Future::poll(Pin::new(&mut authorship), cx))) {
+				Ok(Poll::Ready(Ok(()))) =>
 					warn!(target: "slots", "Slots stream has terminated unexpectedly."),
-				Ok(Ok(Async::NotReady)) => break Ok(Async::NotReady),
-				Ok(Err(())) => warn!(target: "slots", "Authorship task terminated unexpectedly. Restarting"),
+				Ok(Poll::Pending) => break Poll::Pending,
+				Ok(Poll::Ready(Err(_err))) =>
+					warn!(target: "slots", "Authorship task terminated unexpectedly. Restarting"),
 				Err(e) => {
 					if let Some(s) = e.downcast_ref::<&'static str>() {
 						warn!(target: "slots", "Authorship task panicked at {:?}", s);
@@ -134,7 +130,7 @@ where
 				}
 			}
 		}
-	)
+	})
 }
 
 /// A header which has been checked

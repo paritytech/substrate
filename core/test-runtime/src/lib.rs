@@ -34,8 +34,7 @@ use substrate_client::{
 	impl_runtime_apis,
 };
 use runtime_primitives::{
-	ApplyResult,
-	create_runtime_str,
+	ApplyResult, create_runtime_str, Perbill,
 	transaction_validity::{TransactionValidity, ValidTransaction},
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
@@ -50,11 +49,10 @@ use runtime_version::NativeVersion;
 use runtime_support::{impl_outer_origin, parameter_types};
 use inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
-pub use consensus_babe::AuthorityId;
+
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
+pub use babe_primitives::AuthorityId;
 pub type AuraId = AuthorityId;
-// Ensure Babe and Aura use the same crypto to simplify things a bit.
-pub type BabeId = AuthorityId;
 
 // Inlucde the WASM binary
 #[cfg(feature = "std")]
@@ -331,6 +329,7 @@ parameter_types! {
 	pub const MinimumPeriod: u64 = 5;
 	pub const MaximumBlockWeight: u32 = 4 * 1024 * 1024;
 	pub const MaximumBlockLength: u32 = 4 * 1024 * 1024;
+	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 }
 
 impl srml_system::Trait for Runtime {
@@ -347,6 +346,7 @@ impl srml_system::Trait for Runtime {
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type MaximumBlockLength = MaximumBlockLength;
+	type AvailableBlockRatio = AvailableBlockRatio;
 }
 
 impl srml_timestamp::Trait for Runtime {
@@ -354,6 +354,14 @@ impl srml_timestamp::Trait for Runtime {
 	type Moment = u64;
 	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
+}
+
+parameter_types! {
+	pub const EpochDuration: u64 = 6;
+}
+
+impl srml_babe::Trait for Runtime {
+	type EpochDuration = EpochDuration;
 }
 
 /// Adds one to the given input and returns the final result.
@@ -514,29 +522,30 @@ cfg_if! {
 				}
 			}
 
-			impl consensus_aura::AuraApi<Block, AuraId> for Runtime {
+			impl aura_primitives::AuraApi<Block, AuraId> for Runtime {
 				fn slot_duration() -> u64 { 1 }
 				fn authorities() -> Vec<AuraId> { system::authorities() }
 			}
 
-			impl consensus_babe::BabeApi<Block> for Runtime {
-				fn startup_data() -> consensus_babe::BabeConfiguration {
-					consensus_babe::BabeConfiguration {
+			impl babe_primitives::BabeApi<Block> for Runtime {
+				fn startup_data() -> babe_primitives::BabeConfiguration {
+					babe_primitives::BabeConfiguration {
 						median_required_blocks: 0,
 						slot_duration: 3,
-						expected_block_time: 1,
-						threshold: core::u64::MAX,
-						slots_per_epoch: 6,
+						c: (3, 10),
 					}
 				}
-				fn epoch() -> consensus_babe::Epoch {
+
+				fn epoch() -> babe_primitives::Epoch {
 					let authorities = system::authorities();
 					let authorities: Vec<_> = authorities.into_iter().map(|x|(x, 1)).collect();
-					consensus_babe::Epoch {
+
+					babe_primitives::Epoch {
+						start_slot: <srml_babe::Module<Runtime>>::epoch_start_slot(),
 						authorities,
 						randomness: <srml_babe::Module<Runtime>>::randomness(),
-						epoch_index: 1,
-						duration: 6,
+						epoch_index: <srml_babe::Module<Runtime>>::epoch_index(),
+						duration: EpochDuration::get(),
 					}
 				}
 			}
@@ -669,30 +678,30 @@ cfg_if! {
 				}
 			}
 
-			impl consensus_aura::AuraApi<Block, AuraId> for Runtime {
+			impl aura_primitives::AuraApi<Block, AuraId> for Runtime {
 				fn slot_duration() -> u64 { 1 }
 				fn authorities() -> Vec<AuraId> { system::authorities() }
 			}
 
-			impl consensus_babe::BabeApi<Block> for Runtime {
-				fn startup_data() -> consensus_babe::BabeConfiguration {
-					consensus_babe::BabeConfiguration {
+			impl babe_primitives::BabeApi<Block> for Runtime {
+				fn startup_data() -> babe_primitives::BabeConfiguration {
+					babe_primitives::BabeConfiguration {
 						median_required_blocks: 0,
 						slot_duration: 1,
-						expected_block_time: 1,
-						threshold: core::u64::MAX,
-						slots_per_epoch: 6,
+						c: (3, 10),
 					}
 				}
 
-				fn epoch() -> consensus_babe::Epoch {
+				fn epoch() -> babe_primitives::Epoch {
 					let authorities = system::authorities();
 					let authorities: Vec<_> = authorities.into_iter().map(|x|(x, 1)).collect();
-					consensus_babe::Epoch {
+
+					babe_primitives::Epoch {
+						start_slot: <srml_babe::Module<Runtime>>::epoch_start_slot(),
 						authorities,
 						randomness: <srml_babe::Module<Runtime>>::randomness(),
-						epoch_index: 1,
-						duration: 6,
+						epoch_index: <srml_babe::Module<Runtime>>::epoch_index(),
+						duration: EpochDuration::get(),
 					}
 				}
 			}

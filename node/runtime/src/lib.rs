@@ -22,13 +22,14 @@
 
 use rstd::prelude::*;
 use support::{
-	construct_runtime, parameter_types, traits::{SplitTwoWays, Currency, OnUnbalanced}
+	construct_runtime, parameter_types, traits::{SplitTwoWays, Currency}
 };
 use substrate_primitives::u32_trait::{_1, _2, _3, _4};
 use node_primitives::{
-	AccountId, AccountIndex, AuraId, Balance, BlockNumber, Hash, Index,
+	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
 	Moment, Signature,
 };
+use babe::{AuthorityId as BabeId};
 use grandpa::fg_primitives::{self, ScheduledChange};
 use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
@@ -57,10 +58,13 @@ pub use runtime_primitives::{Permill, Perbill};
 pub use support::StorageValue;
 pub use staking::StakerStatus;
 
-/// Implementations for `Convert` and other helper structs passed into runtime modules as associated
-/// types.
+/// Implementations of some helper traits passed into runtime modules as associated types.
 pub mod impls;
-use impls::{CurrencyToVoteHandler, WeightMultiplierUpdateHandler};
+use impls::{CurrencyToVoteHandler, WeightMultiplierUpdateHandler, Author, WeightToFee};
+
+/// Constant values used within the runtime.
+pub mod constants;
+use constants::{time::*, currency::*};
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -75,8 +79,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 118,
-	impl_version: 118,
+	spec_version: 122,
+	impl_version: 122,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -89,19 +93,7 @@ pub fn native_version() -> NativeVersion {
 	}
 }
 
-pub const MILLICENTS: Balance = 1_000_000_000;
-pub const CENTS: Balance = 1_000 * MILLICENTS;    // assume this is worth about a cent.
-pub const DOLLARS: Balance = 100 * CENTS;
-
 type NegativeImbalance = <Balances as Currency<AccountId>>::NegativeImbalance;
-
-pub struct Author;
-
-impl OnUnbalanced<NegativeImbalance> for Author {
-	fn on_unbalanced(amount: NegativeImbalance) {
-		Balances::resolve_creating(&Authorship::author(), amount);
-	}
-}
 
 pub type DealWithFees = SplitTwoWays<
 	Balance,
@@ -110,15 +102,11 @@ pub type DealWithFees = SplitTwoWays<
 	_1, Author,     // 1 part (20%) goes to the block author.
 >;
 
-pub const SECS_PER_BLOCK: Moment = 6;
-pub const MINUTES: Moment = 60 / SECS_PER_BLOCK;
-pub const HOURS: Moment = MINUTES * 60;
-pub const DAYS: Moment = HOURS * 24;
-
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 250;
-	pub const MaximumBlockWeight: Weight = 4 * 1024 * 1024;
-	pub const MaximumBlockLength: u32 = 4 * 1024 * 1024;
+	pub const MaximumBlockWeight: Weight = 1_000_000_000;
+	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
+	pub const MaximumBlockLength: u32 = 5 * 1024 * 1024;
 }
 
 impl system::Trait for Runtime {
@@ -135,11 +123,15 @@ impl system::Trait for Runtime {
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type MaximumBlockLength = MaximumBlockLength;
+	type AvailableBlockRatio = AvailableBlockRatio;
 }
 
-impl aura::Trait for Runtime {
-	type HandleReport = aura::StakingSlasher<Runtime>;
-	type AuthorityId = AuraId;
+parameter_types! {
+	pub const EpochDuration: u64 = 10 * MINUTES;
+}
+
+impl babe::Trait for Runtime {
+	type EpochDuration = EpochDuration;
 }
 
 impl indices::Trait for Runtime {
@@ -170,6 +162,7 @@ impl balances::Trait for Runtime {
 	type CreationFee = CreationFee;
 	type TransactionBaseFee = TransactionBaseFee;
 	type TransactionByteFee = TransactionByteFee;
+	type WeightToFee = WeightToFee;
 }
 
 parameter_types! {
@@ -177,7 +170,7 @@ parameter_types! {
 }
 impl timestamp::Trait for Runtime {
 	type Moment = Moment;
-	type OnTimestampSet = Aura;
+	type OnTimestampSet = Babe;
 	type MinimumPeriod = MinimumPeriod;
 }
 
@@ -193,17 +186,14 @@ impl authorship::Trait for Runtime {
 	type EventHandler = ();
 }
 
-parameter_types! {
-	pub const Period: BlockNumber = 10 * MINUTES;
-	pub const Offset: BlockNumber = 0;
-}
-
-type SessionHandlers = (Grandpa, Aura, ImOnline);
+type SessionHandlers = (Grandpa, Babe, ImOnline);
 
 impl_opaque_keys! {
 	pub struct SessionKeys {
 		#[id(key_types::ED25519)]
 		pub ed25519: GrandpaId,
+		#[id(key_types::SR25519)]
+		pub sr25519: BabeId,
 	}
 }
 
@@ -216,7 +206,7 @@ impl_opaque_keys! {
 impl session::Trait for Runtime {
 	type OnSessionEnding = Staking;
 	type SessionHandler = SessionHandlers;
-	type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
+	type ShouldEndSession = Babe;
 	type Event = Event;
 	type Keys = SessionKeys;
 	type ValidatorId = AccountId;
@@ -236,6 +226,7 @@ parameter_types! {
 
 impl staking::Trait for Runtime {
 	type Currency = Balances;
+	type Time = Timestamp;
 	type CurrencyToVote = CurrencyToVoteHandler;
 	type OnRewardMinted = Treasury;
 	type Event = Event;
@@ -377,12 +368,12 @@ impl sudo::Trait for Runtime {
 }
 
 impl im_online::Trait for Runtime {
-	type AuthorityId = AuraId;
+	type AuthorityId = BabeId;
 	type Call = Call;
 	type Event = Event;
 	type SessionsPerEra = SessionsPerEra;
 	type UncheckedExtrinsic = UncheckedExtrinsic;
-	type IsValidAuthorityId = Aura;
+	type IsValidAuthorityId = Babe;
 }
 
 impl grandpa::Trait for Runtime {
@@ -407,7 +398,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{Module, Call, Storage, Config, Event},
-		Aura: aura::{Module, Call, Storage, Config<T>, Inherent(Timestamp)},
+		Babe: babe::{Module, Call, Storage, Config, Inherent(Timestamp)},
 		Timestamp: timestamp::{Module, Call, Storage, Inherent},
 		Authorship: authorship::{Module, Call, Storage},
 		Indices: indices,
@@ -524,12 +515,23 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl consensus_aura::AuraApi<Block, AuraId> for Runtime {
-		fn slot_duration() -> u64 {
-			Aura::slot_duration()
+	impl babe_primitives::BabeApi<Block> for Runtime {
+		fn startup_data() -> babe_primitives::BabeConfiguration {
+			babe_primitives::BabeConfiguration {
+				median_required_blocks: 1000,
+				slot_duration: Babe::slot_duration(),
+				c: (3, 10),
+			}
 		}
-		fn authorities() -> Vec<AuraId> {
-			Aura::authorities()
+
+		fn epoch() -> babe_primitives::Epoch {
+			babe_primitives::Epoch {
+				start_slot: Babe::epoch_start_slot(),
+				authorities: Babe::authorities(),
+				epoch_index: Babe::epoch_index(),
+				randomness: Babe::randomness(),
+				duration: EpochDuration::get(),
+			}
 		}
 	}
 }
