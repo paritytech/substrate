@@ -233,27 +233,55 @@ decl_module! {
 						.ok_or(OffchainErr::ExtrinsicCreation)?;
 					sr_io::submit_transaction(&ex)
 						.map_err(|_| OffchainErr::SubmitTransaction)?;
+
+					// once finished we set the worker status without comparing
+					// if the existing value changed in the meantime. this is
+					// because at this point the heartbeat was definitely submitted.
 					set_worker_status::<T>(block_number, true);
 				}
 				Ok(())
 			}
 
-			fn set_worker_status<T: Trait>(gossipping_at: T::BlockNumber, done: bool) {
+			fn compare_and_set_worker_status<T: Trait>(
+				gossipping_at: T::BlockNumber,
+				done: bool,
+				curr_worker_status: Option<Vec<u8>>,
+			) -> bool {
 				let enc = WorkerStatus {
 					done,
 					gossipping_at,
 				};
-				sr_io::local_storage_set(StorageKind::PERSISTENT, DB_KEY, &enc.encode());
+				sr_io::local_storage_compare_and_set(
+					StorageKind::PERSISTENT,
+					DB_KEY,
+					curr_worker_status.as_ref().map(Vec::as_slice),
+					&enc.encode()
+				)
 			}
 
-			fn was_not_yet_gossipped<T: Trait>(
+			fn set_worker_status<T: Trait>(
+				gossipping_at: T::BlockNumber,
+				done: bool,
+			) {
+				let enc = WorkerStatus {
+					done,
+					gossipping_at,
+				};
+				sr_io::local_storage_set(
+					StorageKind::PERSISTENT, DB_KEY, &enc.encode());
+			}
+
+			// Checks if a heartbeat gossip already occurred at this block number.
+			// Returns a tuple of `(current worker status, bool)`, whereby the bool
+			// is true if not yet gossipped.
+			fn check_not_yet_gossipped<T: Trait>(
 				now: T::BlockNumber,
 				next_gossip: T::BlockNumber,
-			) -> Result<bool, OffchainErr> {
+			) -> Result<(Option<Vec<u8>>, bool), OffchainErr> {
 				let last_gossip = sr_io::local_storage_get(StorageKind::PERSISTENT, DB_KEY);
 				match last_gossip {
-					Some(l) => {
-						let worker_status: WorkerStatus<T::BlockNumber> = Decode::decode(&mut &l[..])
+					Some(last) => {
+						let worker_status: WorkerStatus<T::BlockNumber> = Decode::decode(&mut &last[..])
 							.ok_or(OffchainErr::DecodeWorkerStatus)?;
 
 						let was_aborted = !worker_status.done && worker_status.gossipping_at < now;
@@ -266,22 +294,29 @@ decl_module! {
 							worker_status.done && worker_status.gossipping_at < next_gossip;
 
 						let ret = (was_aborted && !already_submitting) || not_yet_gossipped;
-						Ok(ret)
+						Ok((Some(last), ret))
 					},
-					None => Ok(true),
+					None => Ok((None, true)),
 				}
 			}
 
 			let next_gossip = <GossipAt<T>>::get();
-			let not_yet_gossipped = match was_not_yet_gossipped::<T>(now, next_gossip) {
-				Ok(v) => v,
+			let check = check_not_yet_gossipped::<T>(now, next_gossip);
+			let (curr_worker_status, not_yet_gossipped) = match check {
+				Ok((s, v)) => (s, v),
 				Err(err) => {
 					print(err);
 					return;
 				},
 			};
 			if next_gossip < now && not_yet_gossipped {
-				set_worker_status::<T>(now, false);
+				let value_set = compare_and_set_worker_status::<T>(now, false, curr_worker_status);
+				if !value_set {
+					// value could not be set in local storage, since the value was
+					// different from `curr_worker_status`. this indicates that
+					// another worker was running in parallel.
+					return;
+				}
 
 				match gossip_at::<T>(now) {
 					Ok(_) => {},
