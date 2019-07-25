@@ -358,7 +358,7 @@ publish-docker-subkey:
     - docker info
   script:
     - cd ./artifacts/subkey/
-    - VERSION="$(cat .VERSION)"
+    - VERSION="$(cat ./VERSION)"
     - echo "Subkey version = ${VERSION}"
     - test -z "${VERSION}" && exit 1
     - docker build
