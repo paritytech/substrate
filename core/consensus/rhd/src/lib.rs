@@ -1331,7 +1331,7 @@ mod tests {
 
 	use runtime_primitives::testing::{Block as GenericTestBlock, Header as TestHeader};
 	use primitives::H256;
-	use keyring::AuthorityKeyring;
+	use keyring::Ed25519Keyring;
 
 	type TestBlock = GenericTestBlock<()>;
 
@@ -1436,7 +1436,7 @@ mod tests {
 				start_round: 0,
 			})),
 			round_timeout_multiplier: 10,
-			key: Arc::new(AuthorityKeyring::One.into()),
+			key: Arc::new(Ed25519Keyring::One.into()),
 			factory: DummyFactory
 		}
 	}
@@ -1462,10 +1462,10 @@ mod tests {
 	fn future_gets_preempted() {
 		let client = FakeClient {
 			authorities: vec![
-				AuthorityKeyring::One.into(),
-				AuthorityKeyring::Two.into(),
-				AuthorityKeyring::Alice.into(),
-				AuthorityKeyring::Eve.into(),
+				Ed25519Keyring::One.into(),
+				Ed25519Keyring::Two.into(),
+				Ed25519Keyring::Alice.into(),
+				Ed25519Keyring::Eve.into(),
 			],
 			imported_heights: Mutex::new(HashSet::new()),
 		};
@@ -1509,17 +1509,17 @@ mod tests {
 		let hash = [0xff; 32].into();
 
 		let authorities = vec![
-			AuthorityKeyring::One.into(),
-			AuthorityKeyring::Two.into(),
-			AuthorityKeyring::Alice.into(),
-			AuthorityKeyring::Eve.into(),
+			Ed25519Keyring::One.into(),
+			Ed25519Keyring::Two.into(),
+			Ed25519Keyring::Alice.into(),
+			Ed25519Keyring::Eve.into(),
 		];
 
 		let authorities_keys = vec![
-			AuthorityKeyring::One.into(),
-			AuthorityKeyring::Two.into(),
-			AuthorityKeyring::Alice.into(),
-			AuthorityKeyring::Eve.into(),
+			Ed25519Keyring::One.into(),
+			Ed25519Keyring::Two.into(),
+			Ed25519Keyring::Alice.into(),
+			Ed25519Keyring::Eve.into(),
 		];
 
 		let unchecked = UncheckedJustification(rhododendron::UncheckedJustification {
@@ -1570,8 +1570,8 @@ mod tests {
 		let parent_hash = Default::default();
 
 		let authorities = vec![
-			AuthorityKeyring::Alice.into(),
-			AuthorityKeyring::Eve.into(),
+			Ed25519Keyring::Alice.into(),
+			Ed25519Keyring::Eve.into(),
 		];
 
 		let block = TestBlock {
@@ -1579,7 +1579,11 @@ mod tests {
 			extrinsics: Default::default()
 		};
 
-		let proposal = sign_message(rhododendron::Message::Propose(1, block.clone()), &AuthorityKeyring::Alice.pair(), parent_hash);;
+		let proposal = sign_message(
+			rhododendron::Message::Propose(1, block.clone()),
+			&Ed25519Keyring::Alice.pair(),
+			parent_hash,
+		);
 		if let rhododendron::LocalizedMessage::Propose(proposal) = proposal {
 			assert!(check_proposal(&authorities, &parent_hash, &proposal).is_ok());
 			let mut invalid_round = proposal.clone();
@@ -1593,7 +1597,11 @@ mod tests {
 		}
 
 		// Not an authority
-		let proposal = sign_message::<TestBlock>(rhododendron::Message::Propose(1, block), &AuthorityKeyring::Bob.pair(), parent_hash);;
+		let proposal = sign_message::<TestBlock>(
+			rhododendron::Message::Propose(1, block),
+			&Ed25519Keyring::Bob.pair(),
+			parent_hash,
+		);
 		if let rhododendron::LocalizedMessage::Propose(proposal) = proposal {
 			assert!(check_proposal(&authorities, &parent_hash, &proposal).is_err());
 		} else {
@@ -1607,8 +1615,8 @@ mod tests {
 		let hash: H256 = [0xff; 32].into();
 
 		let authorities = vec![
-			AuthorityKeyring::Alice.into(),
-			AuthorityKeyring::Eve.into(),
+			Ed25519Keyring::Alice.into(),
+			Ed25519Keyring::Eve.into(),
 		];
 
 		let vote = sign_message::<TestBlock>(rhododendron::Message::Vote(rhododendron::Vote::Prepare(1, hash)), &Keyring::Alice.pair(), parent_hash);;
@@ -1634,10 +1642,10 @@ mod tests {
 	fn drop_bft_future_does_not_deadlock() {
 		let client = FakeClient {
 			authorities: vec![
-				AuthorityKeyring::One.into(),
-				AuthorityKeyring::Two.into(),
-				AuthorityKeyring::Alice.into(),
-				AuthorityKeyring::Eve.into(),
+				Ed25519Keyring::One.into(),
+				Ed25519Keyring::Two.into(),
+				Ed25519Keyring::Alice.into(),
+				Ed25519Keyring::Eve.into(),
 			],
 			imported_heights: Mutex::new(HashSet::new()),
 		};
@@ -1659,10 +1667,10 @@ mod tests {
 	fn bft_can_build_though_skipped() {
 		let client = FakeClient {
 			authorities: vec![
-				AuthorityKeyring::One.into(),
-				AuthorityKeyring::Two.into(),
-				AuthorityKeyring::Alice.into(),
-				AuthorityKeyring::Eve.into(),
+				Ed25519Keyring::One.into(),
+				Ed25519Keyring::Two.into(),
+				Ed25519Keyring::Alice.into(),
+				Ed25519Keyring::Eve.into(),
 			],
 			imported_heights: Mutex::new(HashSet::new()),
 		};

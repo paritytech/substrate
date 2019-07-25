@@ -125,4 +125,7 @@ pub mod well_known_cache_keys {
 
 	/// A list of authorities.
 	pub const AUTHORITIES: Id = *b"auth";
+
+	/// Current Epoch data.
+	pub const EPOCH: Id = *b"epch";
 }
