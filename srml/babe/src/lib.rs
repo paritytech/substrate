@@ -18,11 +18,12 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unused_must_use, unsafe_code, unused_variables, dead_code)]
+
 pub use timestamp;
 
 use rstd::{result, prelude::*};
 use srml_support::{decl_storage, decl_module, StorageValue, traits::FindAuthor, traits::Get};
-use timestamp::{OnTimestampSet, Trait};
+use timestamp::{OnTimestampSet};
 use primitives::{generic::DigestItem, ConsensusEngineId};
 use primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert};
 #[cfg(feature = "std")]
@@ -31,7 +32,7 @@ use parity_codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-use babe_primitives::{BABE_ENGINE_ID, ConsensusLog, Weight, Epoch, RawBabePreDigest};
+use babe_primitives::{BABE_ENGINE_ID, ConsensusLog, BabeWeight, Epoch, RawBabePreDigest};
 pub use babe_primitives::{AuthorityId, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH};
 
 /// The BABE inherent identifier.
@@ -106,18 +107,28 @@ impl ProvideInherentData for InherentDataProvider {
 	}
 }
 
+pub trait Trait: timestamp::Trait {
+	type EpochDuration: Get<u64>;
+}
+
 /// The length of the BABE randomness
 pub const RANDOMNESS_LENGTH: usize = 32;
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Babe {
-		NextRandomness: [u8; RANDOMNESS_LENGTH];
+		/// Current epoch index.
+		pub EpochIndex get(epoch_index): u64;
 
-		/// Randomness under construction
-		UnderConstruction: [u8; VRF_OUTPUT_LENGTH];
+		/// Current epoch authorities.
+		pub Authorities get(authorities) config(): Vec<(AuthorityId, BabeWeight)>;
 
-		/// Current epoch
-		pub Authorities get(authorities) config(): Vec<(AuthorityId, Weight)>;
+		/// Slot at which the current epoch started. It is possible that no
+		/// block was authored at the given slot and the epoch change was
+		/// signalled later than this.
+		pub EpochStartSlot get(epoch_start_slot): u64;
+
+		/// Current slot number.
+		pub CurrentSlot get(current_slot): u64;
 
 		/// The epoch randomness for the *current* epoch.
 		///
@@ -129,10 +140,16 @@ decl_storage! {
 		/// (like everything else on-chain) it is public. For example, it can be
 		/// used where a number is needed that cannot have been chosen by an
 		/// adversary, for purposes such as public-coin zero-knowledge proofs.
-		pub Randomness get(randomness): [u8; RANDOMNESS_LENGTH];
+		// NOTE: the following fields don't use the constants to define the
+		// array size because the metadata API currently doesn't resolve the
+		// variable to its underlying value.
+		pub Randomness get(randomness): [u8; 32 /* RANDOMNESS_LENGTH */];
 
-		/// Current epoch index
-		EpochIndex: u64;
+		/// Next epoch randomness.
+		NextRandomness: [u8; 32 /* RANDOMNESS_LENGTH */];
+
+		/// Randomness under construction.
+		UnderConstruction: [u8; 32 /* VRF_OUTPUT_LENGTH */];
 	}
 }
 
@@ -141,7 +158,7 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// Initialization
 		fn on_initialize() {
-			for i in Self::get_inherent_digests()
+			for digest in Self::get_inherent_digests()
 				.logs
 				.iter()
 				.filter_map(|s| s.as_pre_runtime())
@@ -149,9 +166,15 @@ decl_module! {
 					RawBabePreDigest::decode(&mut data)
 				} else {
 					None
-				}) {
+				})
+			{
+				if EpochStartSlot::get() == 0 {
+					EpochStartSlot::put(digest.slot_number);
+				}
 
-				Self::deposit_vrf_output(&i.vrf_output);
+				CurrentSlot::put(digest.slot_number);
+				Self::deposit_vrf_output(&digest.vrf_output);
+
 				return;
 			}
 		}
@@ -180,11 +203,18 @@ impl<T: Trait> FindAuthor<u64> for Module<T> {
 	}
 }
 
-impl<T: timestamp::Trait> IsMember<AuthorityId> for Module<T> {
+impl<T: Trait> IsMember<AuthorityId> for Module<T> {
 	fn is_member(authority_id: &AuthorityId) -> bool {
 		<Module<T>>::authorities()
 			.iter()
 			.any(|id| &id.0 == authority_id)
+	}
+}
+
+impl<T: Trait> session::ShouldEndSession<T::BlockNumber> for Module<T> {
+	fn should_end_session(_: T::BlockNumber) -> bool {
+		let diff = CurrentSlot::get().saturating_sub(EpochStartSlot::get());
+		diff >= T::EpochDuration::get()
 	}
 }
 
@@ -205,23 +235,17 @@ impl<T: Trait> Module<T> {
 		<system::Module<T>>::digest()
 	}
 
-	fn change_epoch(new: Epoch) {
-		Authorities::put(&new.authorities);
-		Randomness::put(&new.randomness);
-		Self::deposit_consensus(ConsensusLog::NextEpochData(new))
-	}
-
 	fn deposit_vrf_output(vrf_output: &[u8; VRF_OUTPUT_LENGTH]) {
 		UnderConstruction::mutate(|z| z.iter_mut().zip(vrf_output).for_each(|(x, y)| *x^=y))
 	}
 
 	/// Call this function exactly once when an epoch changes, to update the
 	/// randomness. Returns the new randomness.
-	fn randomness_change_epoch(epoch_index: u64) -> [u8; RANDOMNESS_LENGTH] {
+	fn randomness_change_epoch(next_epoch_index: u64) -> [u8; RANDOMNESS_LENGTH] {
 		let this_randomness = NextRandomness::get();
 		let next_randomness = compute_randomness(
 			this_randomness,
-			epoch_index,
+			next_epoch_index,
 			UnderConstruction::get(),
 		);
 		UnderConstruction::put(&[0; RANDOMNESS_LENGTH]);
@@ -235,13 +259,9 @@ impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 	fn on_timestamp_set(_moment: T::Moment) { }
 }
 
-pub trait Duration {
-	fn babe_epoch_duration() -> u64;
-}
-
-impl<T: Trait + staking::Trait + Duration> session::OneSessionHandler<T::AccountId> for Module<T> {
+impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = AuthorityId;
-	fn on_new_session<'a, I: 'a>(_changed: bool, _validators: I, queued_validators: I)
+	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, queued_validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
 		use staking::BalanceOf;
@@ -249,25 +269,63 @@ impl<T: Trait + staking::Trait + Duration> session::OneSessionHandler<T::Account
 			<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b)
 		};
 
+		// Update epoch index
 		let epoch_index = EpochIndex::get()
 			.checked_add(1)
 			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
 
 		EpochIndex::put(epoch_index);
 
-		// *Next* epoch's authorities.
-		let authorities = queued_validators.map(|(account, k)| {
+		// Update authorities.
+		let authorities = validators.map(|(account, k)| {
 			(k, to_votes(staking::Module::<T>::stakers(account).total))
 		}).collect::<Vec<_>>();
 
-		// What was the next epoch is now the current epoch
-		let randomness = Self::randomness_change_epoch(epoch_index);
-		Self::change_epoch(Epoch {
-			randomness,
-			authorities,
-			epoch_index,
-			duration: T::babe_epoch_duration(),
-		})
+		Authorities::put(authorities);
+
+		// Update epoch start slot.
+		let now = CurrentSlot::get();
+		EpochStartSlot::mutate(|previous| {
+			loop {
+				// on the first epoch we must account for skipping at least one
+				// whole epoch, in case the first block is authored with a slot
+				// number far in the past.
+				if now.saturating_sub(*previous) < T::EpochDuration::get() {
+					break;
+				}
+
+				*previous = previous.saturating_add(T::EpochDuration::get());
+			}
+		});
+
+		// Update epoch randomness.
+		let next_epoch_index = epoch_index
+			.checked_add(1)
+			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
+
+		// Returns randomness for the current epoch and computes the *next*
+		// epoch randomness.
+		let randomness = Self::randomness_change_epoch(next_epoch_index);
+		Randomness::put(randomness);
+
+		// After we update the current epoch, we signal the *next* epoch change
+		// so that nodes can track changes.
+		let next_authorities = queued_validators.map(|(account, k)| {
+			(k, to_votes(staking::Module::<T>::stakers(account).total))
+		}).collect::<Vec<_>>();
+
+		let next_epoch_start_slot = EpochStartSlot::get().saturating_add(T::EpochDuration::get());
+		let next_randomness = NextRandomness::get();
+
+		let next = Epoch {
+			epoch_index: next_epoch_index,
+			start_slot: next_epoch_start_slot,
+			duration: T::EpochDuration::get(),
+			authorities: next_authorities,
+			randomness: next_randomness,
+		};
+
+		Self::deposit_consensus(ConsensusLog::NextEpochData(next))
 	}
 
 	fn on_disabled(i: usize) {
@@ -304,6 +362,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 
 		let timestamp_based_slot = (timestamp / Self::slot_duration()).saturated_into::<u64>();
 		let seal_slot = data.babe_inherent_data()?;
+
 		if timestamp_based_slot == seal_slot {
 			Ok(())
 		} else {

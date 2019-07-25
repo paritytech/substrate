@@ -286,6 +286,15 @@ pub enum StorageEntryModifier {
 	Default,
 }
 
+/// All metadata of the storage.
+#[derive(Clone, PartialEq, Eq, Encode)]
+#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
+pub struct StorageMetadata {
+	/// The common prefix used by all storage entries.
+	pub prefix: DecodeDifferent<&'static str, StringBuf>,
+	pub entries: DecodeDifferent<&'static [StorageEntryMetadata], Vec<StorageEntryMetadata>>,
+}
+
 #[derive(Eq, Encode, PartialEq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 /// Metadata prefixed by a u32 for reserved usage
@@ -309,8 +318,10 @@ pub enum RuntimeMetadata {
 	V4(RuntimeMetadataDeprecated),
 	/// Version 5 for runtime metadata. No longer used.
 	V5(RuntimeMetadataDeprecated),
-	/// Version 6 for runtime metadata.
-	V6(RuntimeMetadataV6),
+	/// Version 6 for runtime metadata. No longer used.
+	V6(RuntimeMetadataDeprecated),
+	/// Version 7 for runtime metadata.
+	V7(RuntimeMetadataV7),
 }
 
 /// Enum that should fail.
@@ -332,17 +343,19 @@ impl Decode for RuntimeMetadataDeprecated {
 /// The metadata of a runtime.
 #[derive(Eq, Encode, PartialEq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
-pub struct RuntimeMetadataV6 {
+pub struct RuntimeMetadataV7 {
 	pub modules: DecodeDifferentArray<ModuleMetadata>,
 }
+
+/// The latest version of the metadata.
+pub type RuntimeMetadataLastVersion = RuntimeMetadataV7;
 
 /// All metadata about an runtime module.
 #[derive(Clone, PartialEq, Eq, Encode)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct ModuleMetadata {
 	pub name: DecodeDifferentStr,
-	pub prefix: DecodeDifferent<FnEncode<&'static str>, StringBuf>,
-	pub storage: ODFnA<StorageEntryMetadata>,
+	pub storage: Option<DecodeDifferent<FnEncode<StorageMetadata>, StorageMetadata>>,
 	pub calls: ODFnA<FunctionMetadata>,
 	pub event: ODFnA<EventMetadata>,
 	pub constants: DFnA<ModuleConstantMetadata>,
@@ -357,8 +370,8 @@ impl Into<primitives::OpaqueMetadata> for RuntimeMetadataPrefixed {
 	}
 }
 
-impl Into<RuntimeMetadataPrefixed> for RuntimeMetadata {
+impl Into<RuntimeMetadataPrefixed> for RuntimeMetadataLastVersion {
 	fn into(self) -> RuntimeMetadataPrefixed {
-		RuntimeMetadataPrefixed(META_RESERVED, self)
+		RuntimeMetadataPrefixed(META_RESERVED, RuntimeMetadata::V7(self))
 	}
 }

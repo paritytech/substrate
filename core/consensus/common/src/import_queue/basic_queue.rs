@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
-use futures::{prelude::*, future::Executor, sync::mpsc};
+use std::{pin::Pin, sync::Arc};
+use futures::{prelude::*, channel::mpsc, task::SpawnExt as _, task::Context, task::Poll};
 use runtime_primitives::{Justification, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
 
 use crate::error::Error as ConsensusError;
@@ -34,15 +34,12 @@ pub struct BasicQueue<B: BlockT> {
 	sender: mpsc::UnboundedSender<ToWorkerMsg<B>>,
 	/// Results coming from the worker task.
 	result_port: BufferedLinkReceiver<B>,
-	/// Since we have to be in a tokio context in order to spawn background tasks, we first store
-	/// the task to spawn here, then extract it as soon as we are in a tokio context.
-	/// If `Some`, contains the task to spawn in the background. If `None`, the future has already
-	/// been spawned.
-	future_to_spawn: Option<Box<dyn Future<Item = (), Error = ()> + Send>>,
 	/// If it isn't possible to spawn the future in `future_to_spawn` (which is notably the case in
 	/// "no std" environment), we instead put it in `manual_poll`. It is then polled manually from
 	/// `poll_actions`.
-	manual_poll: Option<Box<dyn Future<Item = (), Error = ()> + Send>>,
+	manual_poll: Option<Pin<Box<dyn Future<Output = ()> + Send>>>,
+	/// A thread pool where the background worker is being run.
+	pool: Option<futures::executor::ThreadPool>,
 }
 
 impl<B: BlockT> BasicQueue<B> {
@@ -65,11 +62,27 @@ impl<B: BlockT> BasicQueue<B> {
 			finality_proof_import,
 		);
 
+		let mut pool = futures::executor::ThreadPool::builder()
+			.name_prefix("import-queue-worker-")
+			.pool_size(1)
+			.create()
+			.ok();
+
+		let manual_poll;
+		if let Some(pool) = &mut pool {
+			// TODO: this expect() can be removed once
+			// https://github.com/rust-lang-nursery/futures-rs/pull/1750 is merged and deployed
+			pool.spawn(future).expect("ThreadPool can never fail to spawn tasks; QED");
+			manual_poll = None;
+		} else {
+			manual_poll = Some(Box::pin(future) as Pin<Box<_>>);
+		}
+
 		Self {
 			sender: worker_sender,
 			result_port,
-			future_to_spawn: Some(Box::new(future)),
-			manual_poll: None,
+			manual_poll,
+			pool,
 		}
 	}
 }
@@ -99,25 +112,17 @@ impl<B: BlockT> ImportQueue<B> for BasicQueue<B> {
 		let _ = self.sender.unbounded_send(ToWorkerMsg::ImportFinalityProof(who, hash, number, finality_proof));
 	}
 
-	fn poll_actions(&mut self, link: &mut dyn Link<B>) {
-		// Try to spawn the future in `future_to_spawn`.
-		if let Some(future) = self.future_to_spawn.take() {
-			if let Err(err) = tokio_executor::DefaultExecutor::current().execute(future) {
-				debug_assert!(self.manual_poll.is_none());
-				self.manual_poll = Some(err.into_future());
-			}
-		}
-
+	fn poll_actions(&mut self, cx: &mut Context, link: &mut dyn Link<B>) {
 		// As a backup mechanism, if we failed to spawn the `future_to_spawn`, we instead poll
 		// manually here.
 		if let Some(manual_poll) = self.manual_poll.as_mut() {
-			match manual_poll.poll() {
-				Ok(Async::NotReady) => {}
+			match Future::poll(Pin::new(manual_poll), cx) {
+				Poll::Pending => {}
 				_ => self.manual_poll = None,
 			}
 		}
 
-		self.result_port.poll_actions(link);
+		self.result_port.poll_actions(cx, link);
 	}
 }
 
@@ -144,7 +149,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 		block_import: BoxBlockImport<B>,
 		justification_import: Option<BoxJustificationImport<B>>,
 		finality_proof_import: Option<BoxFinalityProofImport<B>>,
-	) -> (impl Future<Item = (), Error = ()> + Send, mpsc::UnboundedSender<ToWorkerMsg<B>>) {
+	) -> (impl Future<Output = ()> + Send, mpsc::UnboundedSender<ToWorkerMsg<B>>) {
 		let (sender, mut port) = mpsc::unbounded();
 
 		let mut worker = BlockImportWorker {
@@ -167,12 +172,12 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 			}
 		}
 
-		let future = futures::future::poll_fn(move || {
+		let future = futures::future::poll_fn(move |cx| {
 			loop {
-				let msg = match port.poll() {
-					Ok(Async::Ready(Some(msg))) => msg,
-					Err(_) | Ok(Async::Ready(None)) => return Ok(Async::Ready(())),
-					Ok(Async::NotReady) => return Ok(Async::NotReady),
+				let msg = match Stream::poll_next(Pin::new(&mut port), cx) {
+					Poll::Ready(Some(msg)) => msg,
+					Poll::Ready(None) => return Poll::Ready(()),
+					Poll::Pending => return Poll::Pending,
 				};
 
 				match msg {
