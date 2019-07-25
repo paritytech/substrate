@@ -336,6 +336,7 @@ impl<C: Components> NetworkFutureBuilder<Self> for C where
 			}
 
 			while let Ok(Async::Ready(_)) = report_ext_addresses_interval.poll() {
+				println!("==== We are connected to {} nodes", network.service().num_connected());
 				let id = BlockId::hash( client.info().chain.best_hash);
 
 				// TODO: remove unwrap().
@@ -350,8 +351,15 @@ impl<C: Components> NetworkFutureBuilder<Self> for C where
 						let external_addresses = network.external_addresses();
 						println!("==== external addresses: {:?}", external_addresses);
 
+						let enriched_addresses: Vec<Multiaddr> = external_addresses.iter().map(|a| {
+							let mut a = a.clone();
+							// TODO: Don't get peer id on each iteration.
+							a.push(libp2p::core::multiaddr::Protocol::P2p(network.service().peer_id().into()));
+							a
+						}).collect();
+
 						// TODO: Remove unwrap.
-						let serialized_addresses = serde_json::to_string(&external_addresses).unwrap();
+						let serialized_addresses = serde_json::to_string(&enriched_addresses).unwrap();
 
 						// TODO: Sign the payload before putting it on the DHT.
 						network.service().put_value(hashed_public_key.clone(), serialized_addresses.as_bytes().to_vec());
@@ -454,9 +462,13 @@ impl<C: Components> NetworkFutureBuilder<Self> for C where
 								if *key == hashed_public_key {
 									let value = std::str::from_utf8(value).unwrap();
 
-									let external_addresses: HashSet<Multiaddr> = serde_json::from_str(value).unwrap();
+									let external_addresses: HashSet<libp2p::Multiaddr> = serde_json::from_str(value).unwrap();
+									println!("==== Got key {:?} value {:?} from DHT", authority.0.to_string(), external_addresses);
 
-									println!("==== Got key {:?} value {:?} from DHT", authority.to_string(), external_addresses);
+									for address in external_addresses.iter() {
+										// TODO: Why does add_reserved_peer take a string?
+										network.service().add_reserved_peer(address.to_string());
+									}
 								}
 							}
 						},
