@@ -21,6 +21,7 @@
 use rstd::prelude::*;
 use rstd::{result, convert::TryFrom};
 use primitives::traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin, Hash};
+use primitives::weights::SimpleDispatchInfo;
 use parity_codec::{Encode, Decode, Input, Output};
 use srml_support::{
 	decl_module, decl_storage, decl_event, ensure,
@@ -359,6 +360,7 @@ decl_module! {
 		/// - O(1).
 		/// - Two DB changes, one DB entry.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
 		fn propose(origin,
 			proposal: Box<T::Proposal>,
 			#[compact] value: BalanceOf<T>
@@ -386,6 +388,7 @@ decl_module! {
 		/// - O(1).
 		/// - One DB entry.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
 		fn second(origin, #[compact] proposal: PropIndex) {
 			let who = ensure_signed(origin)?;
 			let mut deposit = Self::deposit_of(proposal)
@@ -403,6 +406,7 @@ decl_module! {
 		/// - O(1).
 		/// - One DB change, one DB entry.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(200_000)]
 		fn vote(origin,
 			#[compact] ref_index: ReferendumIndex,
 			vote: Vote
@@ -418,6 +422,7 @@ decl_module! {
 		/// - O(1).
 		/// - One DB change, one DB entry.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(200_000)]
 		fn proxy_vote(origin,
 			#[compact] ref_index: ReferendumIndex,
 			vote: Vote
@@ -432,6 +437,7 @@ decl_module! {
 		/// exceed `threshold` and, if approved, enacted after the given `delay`.
 		///
 		/// It may be called from either the Root or the Emergency origin.
+		#[weight = SimpleDispatchInfo::FixedOperational(500_000)]
 		fn emergency_propose(origin,
 			proposal: Box<T::Proposal>,
 			threshold: VoteThreshold,
@@ -453,6 +459,7 @@ decl_module! {
 
 		/// Schedule an emergency cancellation of a referendum. Cannot happen twice to the same
 		/// referendum.
+		#[weight = SimpleDispatchInfo::FixedOperational(500_000)]
 		fn emergency_cancel(origin, ref_index: ReferendumIndex) {
 			T::CancellationOrigin::ensure_origin(origin)?;
 
@@ -466,6 +473,7 @@ decl_module! {
 
 		/// Schedule a referendum to be tabled once it is legal to schedule an external
 		/// referendum.
+		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
 		fn external_propose(origin, proposal: Box<T::Proposal>) {
 			T::ExternalOrigin::ensure_origin(origin)?;
 			ensure!(!<NextExternal<T>>::exists(), "proposal already made");
@@ -478,6 +486,7 @@ decl_module! {
 
 		/// Schedule a majority-carries referendum to be tabled next once it is legal to schedule
 		/// an external referendum.
+		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
 		fn external_propose_majority(origin, proposal: Box<T::Proposal>) {
 			T::ExternalMajorityOrigin::ensure_origin(origin)?;
 			ensure!(!<NextExternal<T>>::exists(), "proposal already made");
@@ -496,6 +505,7 @@ decl_module! {
 		/// - `voting_period`: The period that is allowed for voting on this proposal.
 		/// - `delay`: The number of block after voting has ended in approval and this should be
 		///   enacted. Increased to `EmergencyVotingPeriod` if too low.
+		#[weight = SimpleDispatchInfo::FixedNormal(200_000)]
 		fn external_push(origin,
 			proposal_hash: T::Hash,
 			voting_period: T::BlockNumber,
@@ -514,6 +524,7 @@ decl_module! {
 		}
 
 		/// Veto and blacklist the external proposal hash.
+		#[weight = SimpleDispatchInfo::FixedNormal(200_000)]
 		fn veto_external(origin, proposal_hash: T::Hash) {
 			let who = T::VetoOrigin::ensure_origin(origin)?;
 
@@ -538,12 +549,14 @@ decl_module! {
 		}
 
 		/// Remove a referendum.
+		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn cancel_referendum(origin, #[compact] ref_index: ReferendumIndex) {
 			ensure_root(origin)?;
 			Self::clear_referendum(ref_index);
 		}
 
 		/// Cancel a proposal queued for enactment.
+		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn cancel_queued(
 			origin,
 			#[compact] when: T::BlockNumber,
@@ -572,6 +585,7 @@ decl_module! {
 		/// # <weight>
 		/// - One extra DB entry.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
 		fn set_proxy(origin, proxy: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			ensure!(!<Proxy<T>>::exists(&proxy), "already a proxy");
@@ -583,6 +597,7 @@ decl_module! {
 		/// # <weight>
 		/// - One DB clear.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
 		fn resign_proxy(origin) {
 			let who = ensure_signed(origin)?;
 			<Proxy<T>>::remove(who);
@@ -593,6 +608,7 @@ decl_module! {
 		/// # <weight>
 		/// - One DB clear.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
 		fn remove_proxy(origin, proxy: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			ensure!(&Self::proxy(&proxy).ok_or("not a proxy")? == &who, "wrong proxy");
@@ -604,6 +620,7 @@ decl_module! {
 		/// # <weight>
 		/// - One extra DB entry.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		pub fn delegate(origin, to: T::AccountId, conviction: Conviction) {
 			let who = ensure_signed(origin)?;
 			<Delegations<T>>::insert(who.clone(), (to.clone(), conviction));
@@ -623,6 +640,7 @@ decl_module! {
 		/// # <weight>
 		/// - O(1).
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn undelegate(origin) {
 			let who = ensure_signed(origin)?;
 			ensure!(<Delegations<T>>::exists(&who), "not delegated");
@@ -974,6 +992,7 @@ mod tests {
 	};
 	use substrate_primitives::{H256, Blake2Hasher};
 	use primitives::{traits::{BlakeTwo256, IdentityLookup, Bounded}, testing::Header};
+	use primitives::Perbill;
 	use balances::BalanceLock;
 	use system::EnsureSignedBy;
 
@@ -1000,6 +1019,7 @@ mod tests {
 		pub const BlockHashCount: u64 = 250;
 		pub const MaximumBlockWeight: u32 = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
+		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl system::Trait for Test {
 		type Origin = Origin;
@@ -1015,6 +1035,7 @@ mod tests {
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type MaximumBlockLength = MaximumBlockLength;
+		type AvailableBlockRatio = AvailableBlockRatio;
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
@@ -1036,6 +1057,7 @@ mod tests {
 		type CreationFee = CreationFee;
 		type TransactionBaseFee = TransactionBaseFee;
 		type TransactionByteFee = TransactionByteFee;
+		type WeightToFee = ();
 	}
 	parameter_types! {
 		pub const LaunchPeriod: u64 = 2;

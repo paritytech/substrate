@@ -161,10 +161,10 @@ use srml_support::traits::{
 use srml_support::dispatch::Result;
 use primitives::traits::{
 	Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug,
-	Saturating, Bounded, SignedExtension, SaturatedConversion, DispatchError
+	Saturating, Bounded, SignedExtension, SaturatedConversion, DispatchError, Convert,
 };
 use primitives::transaction_validity::{TransactionPriority, ValidTransaction};
-use primitives::weights::DispatchInfo;
+use primitives::weights::{DispatchInfo, SimpleDispatchInfo, Weight};
 use system::{IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
 
 mod mock;
@@ -206,6 +206,9 @@ pub trait Subtrait<I: Instance = DefaultInstance>: system::Trait {
 
 	/// The fee to be paid for making a transaction; the per-byte portion.
 	type TransactionByteFee: Get<Self::Balance>;
+
+	/// Convert a weight value into a deductible fee based on the currency type.
+	type WeightToFee: Convert<Weight, Self::Balance>;
 }
 
 pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
@@ -249,6 +252,9 @@ pub trait Trait<I: Instance = DefaultInstance>: system::Trait {
 
 	/// The fee to be paid for making a transaction; the per-byte portion.
 	type TransactionByteFee: Get<Self::Balance>;
+
+	/// Convert a weight value into a deductible fee based on the currency type.
+	type WeightToFee: Convert<Weight, Self::Balance>;
 }
 
 impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
@@ -260,6 +266,7 @@ impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
 	type CreationFee = T::CreationFee;
 	type TransactionBaseFee = T::TransactionBaseFee;
 	type TransactionByteFee = T::TransactionByteFee;
+	type WeightToFee = T::WeightToFee;
 }
 
 decl_event!(
@@ -428,6 +435,7 @@ decl_module! {
 		///     `T::DustRemoval::on_unbalanced` and `T::OnFreeBalanceZero::on_free_balance_zero`.
 		///
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
 		pub fn transfer(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -451,6 +459,7 @@ decl_module! {
 		/// - Independent of the arguments.
 		/// - Contains a limited number of reads and writes.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedOperational(500_000)]
 		fn set_balance(
 			origin,
 			who: <T::Lookup as StaticLookup>::Source,
@@ -766,6 +775,7 @@ impl<T: Subtrait<I>, I: Instance> system::Trait for ElevatedTrait<T, I> {
 	type BlockHashCount = T::BlockHashCount;
 	type MaximumBlockWeight = T::MaximumBlockWeight;
 	type MaximumBlockLength = T::MaximumBlockLength;
+	type AvailableBlockRatio = T::AvailableBlockRatio;
 }
 impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type Balance = T::Balance;
@@ -780,6 +790,7 @@ impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type CreationFee = T::CreationFee;
 	type TransactionBaseFee = T::TransactionBaseFee;
 	type TransactionByteFee = T::TransactionByteFee;
+	type WeightToFee = T::WeightToFee;
 }
 
 impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I>
@@ -1171,19 +1182,23 @@ impl<T: Trait<I>, I: Instance> TakeFees<T, I> {
 	///   - (optional) _tip_: if included in the transaction, it will be added on top. Only signed
 	///      transactions can have a tip.
 	fn compute_fee(len: usize, info: DispatchInfo, tip: T::Balance) -> T::Balance {
-		// length fee
 		let len_fee = if info.pay_length_fee() {
 			let len = T::Balance::from(len as u32);
 			let base = T::TransactionBaseFee::get();
-			let byte = T::TransactionByteFee::get();
-			base.saturating_add(byte.saturating_mul(len))
+			let per_byte = T::TransactionByteFee::get();
+			base.saturating_add(per_byte.saturating_mul(len))
 		} else {
 			Zero::zero()
 		};
 
-		// weight fee
-		let weight = info.weight;
-		let weight_fee: T::Balance = <system::Module<T>>::next_weight_multiplier().apply_to(weight).into();
+		let weight_fee = {
+			// cap the weight to the maximum defined in runtime, otherwise it will be the `Bounded`
+			// maximum of its data type, which is not desired.
+			let capped_weight = info.weight.min(<T as system::Trait>::MaximumBlockWeight::get());
+			let weight_update = <system::Module<T>>::next_weight_multiplier();
+			let adjusted_weight = weight_update.apply_to(capped_weight);
+			T::WeightToFee::convert(adjusted_weight)
+		};
 
 		len_fee.saturating_add(weight_fee).saturating_add(tip)
 	}

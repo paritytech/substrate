@@ -74,6 +74,7 @@ mod tests {
 	use support::{impl_outer_origin, assert_ok, parameter_types};
 	use sr_primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 	use sr_primitives::weights::Weight;
+	use sr_primitives::Perbill;
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -88,6 +89,7 @@ mod tests {
 		pub const BlockHashCount: u64 = 250;
 		pub const MaximumBlockWeight: Weight = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
+		pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 	}
 	impl system::Trait for Test {
 		type Origin = Origin;
@@ -103,6 +105,7 @@ mod tests {
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type MaximumBlockLength = MaximumBlockLength;
+		type AvailableBlockRatio = AvailableBlockRatio;
 	}
 	impl Trait for Test {
 		type Event = ();
