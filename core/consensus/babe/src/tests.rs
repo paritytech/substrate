@@ -64,7 +64,12 @@ impl Proposer<TestBlock> for DummyProposer {
 	type Error = Error;
 	type Create = Result<TestBlock, Error>;
 
-	fn propose(&self, _: InherentData, digests: DigestFor<TestBlock>, _: Duration) -> Result<TestBlock, Error> {
+	fn propose(
+		&self,
+		_: InherentData,
+		digests: DigestFor<TestBlock>,
+		_: Duration,
+	) -> Result<TestBlock, Error> {
 		self.1.new_block(digests).unwrap().bake().map_err(|e| e.into())
 	}
 }
@@ -232,7 +237,10 @@ fn run_one_test() {
 	// wait for all finalized on each.
 	let wait_for = futures::future::join_all(import_notifications);
 
-	let drive_to_completion = futures::future::poll_fn(|| { net.lock().poll(); Ok(Async::NotReady) });
+	let drive_to_completion = futures::future::poll_fn(|| {
+		net.lock().poll();
+		Ok(Async::NotReady)
+	});
 	let _ = runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
 }
 
@@ -306,17 +314,17 @@ fn sig_is_not_pre_digest() {
 #[test]
 fn can_author_block() {
 	let _ = env_logger::try_init();
-	let randomness = &[];
 	let (pair, _) = sr25519::Pair::generate();
 	let mut i = 0;
 	let epoch = Epoch {
-		authorities: vec![(pair.public(), 0)],
+		start_slot: 0,
+		authorities: vec![(pair.public(), 1)],
 		randomness: [0; 32],
 		epoch_index: 1,
 		duration: 100,
 	};
 	loop {
-		match claim_slot(randomness, i, 0, epoch.clone(), &pair, u64::MAX / 10) {
+		match claim_slot(i, epoch.clone(), &pair, (3, 10)) {
 			None => i += 1,
 			Some(s) => {
 				debug!(target: "babe", "Authored block {:?}", s);
