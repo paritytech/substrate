@@ -126,7 +126,6 @@ impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for Propose
 	<C as ProvideRuntimeApi>::Api: BlockBuilderApi<<C as AuthoringApi>::Block>,
 	A: txpool::ChainApi<Block=<C as AuthoringApi>::Block>,
 	client::error::Error: From<<C as AuthoringApi>::Error>,
-	Proposer<<C as AuthoringApi>::Block, C, A>: consensus_common::Proposer<<C as AuthoringApi>::Block>,
 {
 	type Proposer = Proposer<<C as AuthoringApi>::Block, C, A>;
 	type Error = error::Error;
