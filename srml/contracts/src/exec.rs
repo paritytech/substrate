@@ -227,7 +227,7 @@ pub trait Vm<T: Trait> {
 	fn execute<E: Ext<T = T>>(
 		&self,
 		exec: &Self::Executable,
-		ext: &mut E,
+		ext: E,
 		input_data: &[u8],
 		empty_output_buf: EmptyOutputBuf,
 		gas_meter: &mut GasMeter<T>,
@@ -370,7 +370,7 @@ where
 					.vm
 					.execute(
 						&executable,
-						&mut CallContext {
+						CallContext {
 							ctx: &mut nested,
 							caller: self.self_account.clone(),
 							value_transferred: value,
@@ -441,7 +441,7 @@ where
 			self.vm
 				.execute(
 					&executable,
-					&mut CallContext {
+					CallContext {
 						ctx: &mut nested,
 						caller: self.self_account.clone(),
 						value_transferred: endowment,
@@ -806,13 +806,13 @@ mod tests {
 		fn execute<E: Ext<T = Test>>(
 			&self,
 			exec: &MockExecutable,
-			ext: &mut E,
+			mut ext: E,
 			input_data: &[u8],
 			empty_output_buf: EmptyOutputBuf,
 			gas_meter: &mut GasMeter<Test>,
 		) -> VmExecResult {
 			(exec.0)(MockCtx {
-				ext,
+				ext: &mut ext,
 				input_data,
 				empty_output_buf: Some(empty_output_buf),
 				gas_meter,
