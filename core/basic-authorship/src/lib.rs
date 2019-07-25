@@ -16,8 +16,6 @@
 
 //! Basic implementation of block-authoring logic.
 
-#![warn(unused_extern_crates)]
-
 mod basic_authorship;
 
 pub use crate::basic_authorship::{ProposerFactory, Proposer};
