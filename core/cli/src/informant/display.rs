@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,9 +18,9 @@ use ansi_term::Colour;
 use client::ClientInfo;
 use log::info;
 use network::SyncState;
-use runtime_primitives::traits::{Block as BlockT, CheckedDiv, NumberFor, One, Zero, Saturating};
+use runtime_primitives::traits::{Block as BlockT, CheckedDiv, NumberFor, Zero, Saturating};
 use service::NetworkStatus;
-use std::{convert::TryInto, fmt, time};
+use std::{convert::{TryFrom, TryInto}, fmt, time};
 
 /// State of the informant display system.
 ///
@@ -110,11 +110,10 @@ fn speed<B: BlockT>(
 	} else {
 		// If the number of blocks can't be converted to a regular integer, then we need a more
 		// algebraic approach and we stay within the realm of integers.
-		let ten = (0..10)
-			.fold(<NumberFor<B> as Zero>::zero(), |a, _| a.saturating_add(One::one()));
-		let one_thousand = ten * ten * ten;
-		let elapsed = (0..elapsed_ms)
-			.fold(<NumberFor<B> as Zero>::zero(), |a, _| a.saturating_add(One::one()));
+		let one_thousand = NumberFor::<B>::from(1_000);
+		let elapsed = NumberFor::<B>::from(
+			<u32 as TryFrom<_>>::try_from(elapsed_ms).unwrap_or(u32::max_value())
+		);
 
 		let speed = diff.saturating_mul(one_thousand).checked_div(&elapsed)
 			.unwrap_or_else(Zero::zero);
