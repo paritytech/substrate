@@ -1772,7 +1772,7 @@ mod tests {
 
 	#[test]
 	fn weight_should_attach_to_call_enum() {
-		// max weight. not dependent on input.
+		// operational.
 		assert_eq!(
 			Call::<TraitImpl>::operational().get_dispatch_info(),
 			DispatchInfo { weight: 5, class: DispatchClass::Operational },
@@ -1780,7 +1780,7 @@ mod tests {
 		// default weight.
 		assert_eq!(
 			Call::<TraitImpl>::aux_0().get_dispatch_info(),
-			DispatchInfo { weight: 10, class: DispatchClass::Normal },
+			DispatchInfo { weight: 10_000, class: DispatchClass::Normal },
 		);
 		// custom basic
 		assert_eq!(
