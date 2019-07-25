@@ -117,7 +117,7 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - No DB writes.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(1_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(1_000_000)]
 		fn sudo(origin, proposal: Box<T::Proposal>) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;

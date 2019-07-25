@@ -218,7 +218,7 @@ decl_module! {
 		}
 
 		/// Provide a set of uncles.
-		#[weight = SimpleDispatchInfo::FixedOperational(10)]
+		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn set_uncles(origin, new_uncles: Vec<T::Header>) -> DispatchResult {
 			ensure_none(origin)?;
 

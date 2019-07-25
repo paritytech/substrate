@@ -435,7 +435,7 @@ decl_module! {
 		///     `T::DustRemoval::on_unbalanced` and `T::OnFreeBalanceZero::on_free_balance_zero`.
 		///
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(1_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
 		pub fn transfer(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -459,7 +459,7 @@ decl_module! {
 		/// - Independent of the arguments.
 		/// - Contains a limited number of reads and writes.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(500)]
+		#[weight = SimpleDispatchInfo::FixedOperational(500_000)]
 		fn set_balance(
 			origin,
 			who: <T::Lookup as StaticLookup>::Source,

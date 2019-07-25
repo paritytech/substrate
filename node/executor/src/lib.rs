@@ -35,29 +35,26 @@ native_executor_instance!(
 
 #[cfg(test)]
 mod tests {
-	use runtime_io;
 	use super::Executor;
+	use {balances, contracts, indices, staking, system, timestamp};
+	use runtime_io;
 	use substrate_executor::{WasmExecutor, NativeExecutionDispatch};
 	use parity_codec::{Encode, Decode, Joiner};
 	use keyring::{AccountKeyring, Ed25519Keyring, Sr25519Keyring};
 	use runtime_support::{Hashable, StorageValue, StorageMap, assert_eq_error_rate, traits::Currency};
 	use state_machine::{CodeExecutor, Externalities, TestExternalities as CoreTestExternalities};
-	use primitives::{
-		twox_128, blake2_256, Blake2Hasher, ChangesTrieConfiguration, NeverNativeValue,
-		NativeOrEncoded
-	};
+	use primitives::{ twox_128, blake2_256, Blake2Hasher, ChangesTrieConfiguration, NeverNativeValue, NativeOrEncoded};
 	use node_primitives::{Hash, BlockNumber, AccountId, Balance, Index};
 	use runtime_primitives::traits::{Header as HeaderT, Hash as HashT, Convert};
 	use runtime_primitives::{generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
 	use runtime_primitives::weights::{WeightMultiplier, GetDispatchInfo};
-	use {balances, contracts, indices, staking, system, timestamp};
 	use contracts::ContractAddressFor;
 	use system::{EventRecord, Phase};
 	use node_runtime::{
 		Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances, BuildStorage,
 		GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System, SystemConfig,
-		GrandpaConfig, IndicesConfig, ContractsConfig, Event, SessionKeys, CreationFee, SignedExtra,
-		TransactionBaseFee, TransactionByteFee,
+		GrandpaConfig, IndicesConfig, ContractsConfig, Event, SessionKeys, SignedExtra,
+		TransferFee, TransactionBaseFee, TransactionByteFee,
 	};
 	use node_runtime::constants::currency::*;
 	use node_runtime::impls::WeightToFee;
@@ -90,16 +87,11 @@ mod tests {
 			(extrinsic.encode().len() as Balance);
 
 		let weight = default_transfer_call().get_dispatch_info().weight;
+		// NOTE: this is really hard to apply, since the multiplier of each block needs to be fetched
+		// before the block, while we compute this after the block.
+		// weight = <system::Module<Runtime>>::next_weight_multiplier().apply_to(weight);
 		let weight_fee = <Runtime as balances::Trait>::WeightToFee::convert(weight);
-		// NOTE: we don't need this anymore, but in case needed, this makes the fee accurate over
-		// multiple blocks.
-		// weight_fee = <system::Module<Runtime>>::next_weight_multiplier().apply_to(weight_fee as u32) as Balance;
-		length_fee + weight_fee
-	}
-
-	/// Default creation fee.
-	fn creation_fee() -> Balance {
-		CreationFee::get()
+		length_fee + weight_fee + TransferFee::get()
 	}
 
 	fn alice() -> AccountId {
@@ -281,7 +273,7 @@ mod tests {
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()) - creation_fee());
+			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()));
 			assert_eq!(Balances::total_balance(&bob()), 69 * DOLLARS);
 		});
 	}
@@ -317,7 +309,7 @@ mod tests {
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()) - creation_fee());
+			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()));
 			assert_eq!(Balances::total_balance(&bob()), 69 * DOLLARS);
 		});
 	}
@@ -560,7 +552,7 @@ mod tests {
 		).0.unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()) - creation_fee());
+			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()));
 			assert_eq!(Balances::total_balance(&bob()), 169 * DOLLARS);
 			let events = vec![
 				EventRecord {
@@ -599,13 +591,13 @@ mod tests {
 			// weight update. Hence, using `assert_eq_error_rate`.
 			assert_eq_error_rate!(
 				Balances::total_balance(&alice()),
-				 32 * DOLLARS - 2 * transfer_fee(&xt()) - 2 * creation_fee(),
-				 10
+				32 * DOLLARS - 2 * transfer_fee(&xt()),
+				10_000
 			);
 			assert_eq_error_rate!(
 				Balances::total_balance(&bob()),
-				179 * DOLLARS - transfer_fee(&xt()) - creation_fee(),
-				10
+				179 * DOLLARS - transfer_fee(&xt()),
+				10_000
 			);
 			let events = vec![
 				EventRecord {
@@ -661,7 +653,7 @@ mod tests {
 		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block1.0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()) - creation_fee());
+			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - transfer_fee(&xt()));
 			assert_eq!(Balances::total_balance(&bob()), 169 * DOLLARS);
 		});
 
@@ -670,13 +662,13 @@ mod tests {
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq_error_rate!(
 				Balances::total_balance(&alice()),
-				32 * DOLLARS - 2 * transfer_fee(&xt()) - 2 * creation_fee(),
-				10
+				32 * DOLLARS - 2 * transfer_fee(&xt()),
+				10_000
 			);
 			assert_eq_error_rate!(
 				Balances::total_balance(&bob()),
-				179 * DOLLARS - 1 * transfer_fee(&xt()) - creation_fee(),
-				10
+				179 * DOLLARS - 1 * transfer_fee(&xt()),
+				10_000
 			);
 		});
 	}
@@ -921,7 +913,7 @@ mod tests {
 		assert_eq!(r, Ok(ApplyOutcome::Success));
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - 1 * transfer_fee(&xt()) - creation_fee());
+			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - 1 * transfer_fee(&xt()));
 			assert_eq!(Balances::total_balance(&bob()), 69 * DOLLARS);
 		});
 	}
@@ -1056,7 +1048,7 @@ mod tests {
 	fn transaction_fee_is_correct_ultimate() {
 		// This uses the exact values of substrate-node.
 		//
-		// weight of transfer call as of now: 1_000
+		// weight of transfer call as of now: 1_000_000
 		// if weight of cheapest weight would be 10^7, this would be 10^9, which is:
 		//   - 1 MILLICENTS in substrate node.
 		//   - 1 milldot based on current polkadot runtime.
@@ -1121,9 +1113,7 @@ mod tests {
 			balance_alice -= weight_fee;
 
 			balance_alice -= tip;
-
-			// TODO: why again??? creation fee should not be deducted here.
-			balance_alice -= creation_fee();
+			balance_alice -= TransferFee::get();
 
 			assert_eq!(Balances::total_balance(&alice()), balance_alice);
 		});

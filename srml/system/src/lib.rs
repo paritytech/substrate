@@ -233,27 +233,27 @@ decl_module! {
 		}
 
 		/// Make some on-chain remark.
-		#[weight = SimpleDispatchInfo::FixedNormal(1_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
 		fn remark(origin, _remark: Vec<u8>) {
 			ensure_signed(origin)?;
 		}
 
 		/// Set the number of pages in the WebAssembly environment's heap.
-		#[weight = SimpleDispatchInfo::FixedOperational(10)]
+		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn set_heap_pages(origin, pages: u64) {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
 		}
 
 		/// Set the new code.
-		#[weight = SimpleDispatchInfo::FixedOperational(200)]
+		#[weight = SimpleDispatchInfo::FixedOperational(200_000)]
 		pub fn set_code(origin, new: Vec<u8>) {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::CODE, &new);
 		}
 
 		/// Set some items of storage.
-		#[weight = SimpleDispatchInfo::FixedOperational(10)]
+		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn set_storage(origin, items: Vec<KeyValue>) {
 			ensure_root(origin)?;
 			for i in &items {
@@ -262,7 +262,7 @@ decl_module! {
 		}
 
 		/// Kill some items from storage.
-		#[weight = SimpleDispatchInfo::FixedOperational(10)]
+		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn kill_storage(origin, keys: Vec<Key>) {
 			ensure_root(origin)?;
 			for key in &keys {

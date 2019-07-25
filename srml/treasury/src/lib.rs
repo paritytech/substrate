@@ -154,7 +154,7 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - One DB change, one extra DB entry.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(500)]
+		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn propose_spend(
 			origin,
 			#[compact] value: BalanceOf<T>,
@@ -181,7 +181,7 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - One DB clear.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(100)]
+		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
 		fn reject_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::RejectOrigin::ensure_origin(origin)?;
 			let proposal = <Proposals<T>>::take(proposal_id).ok_or("No proposal at that index")?;
@@ -199,7 +199,7 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - One DB change.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(100)]
+		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
 		fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::ApproveOrigin::ensure_origin(origin)?;
 

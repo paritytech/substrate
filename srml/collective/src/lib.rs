@@ -130,7 +130,7 @@ decl_module! {
 		/// provide it pre-sorted.
 		///
 		/// Requires root origin.
-		#[weight = SimpleDispatchInfo::FixedOperational(100)]
+		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
 		fn set_members(origin, new_members: Vec<T::AccountId>) {
 			ensure_root(origin)?;
 
@@ -173,7 +173,7 @@ decl_module! {
 		/// Dispatch a proposal from a member using the `Member` origin.
 		///
 		/// Origin must be a member of the collective.
-		#[weight = SimpleDispatchInfo::FixedOperational(1_00)]
+		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
 		fn execute(origin, proposal: Box<<T as Trait<I>>::Proposal>) {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), "proposer not a member");
@@ -187,7 +187,7 @@ decl_module! {
 		/// - Bounded storage reads and writes.
 		/// - Argument `threshold` has bearing on weight.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(5_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(5_000_000)]
 		fn propose(origin, #[compact] threshold: MemberCount, proposal: Box<<T as Trait<I>>::Proposal>) {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), "proposer not a member");
@@ -216,7 +216,7 @@ decl_module! {
 		/// - Bounded storage read and writes.
 		/// - Will be slightly heavier if the proposal is approved / disapproved after the vote.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(200)]
+		#[weight = SimpleDispatchInfo::FixedOperational(200_000)]
 		fn vote(origin, proposal: T::Hash, #[compact] index: ProposalIndex, approve: bool) {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), "voter not a member");

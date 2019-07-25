@@ -379,7 +379,7 @@ decl_module! {
 		/// - O(log n) in number of accounts.
 		/// - One extra DB entry.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(150)] // TODO: this is operational?
+		#[weight = SimpleDispatchInfo::FixedNormal(150_000)]
 		fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) -> Result {
 			let who = ensure_signed(origin)?;
 

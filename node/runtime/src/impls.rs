@@ -58,13 +58,13 @@ impl Convert<u128, Balance> for CurrencyToVoteHandler {
 ///   - Setting it to `0` will essentially disable the weight fee.
 ///   - Setting it to `1` will cause the literal `#[weight = x]` values to be charged.
 ///
-/// By default, substrate node will have a weight range of [0, 1_000_000].
+/// By default, substrate node will have a weight range of [0, 1_000_000_000].
 pub struct WeightToFee;
 impl Convert<Weight, Balance> for WeightToFee {
 	fn convert(x: Weight) -> Balance {
-		// substrate-node a weight of 10 (smallest non-zero weight) to be mapped to 10^7 units of
+		// substrate-node a weight of 10_000 (smallest non-zero weight) to be mapped to 10^7 units of
 		// fees, hence:
-		Balance::from(x).saturating_mul(1_000_000)
+		Balance::from(x).saturating_mul(1_000)
 	}
 }
 
