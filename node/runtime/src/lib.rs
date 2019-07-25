@@ -205,7 +205,7 @@ parameter_types! {
 	pub const Offset: BlockNumber = 0;
 }
 
-type SessionHandlers = (Grandpa, Aura, ImOnline, RollingWindow);
+type SessionHandlers = (Grandpa, ImOnline, RollingWindow);
 
 impl_opaque_keys! {
 	pub struct SessionKeys {
@@ -396,7 +396,7 @@ impl im_online::Trait for Runtime {
 }
 
 impl rolling_window::Trait for Runtime {
-	type Kind = Misbehavior;
+	type MisbehaviorKind = Misbehavior;
 	type SessionKey = substrate_primitives::sr25519::Public;
 }
 

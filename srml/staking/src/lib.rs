@@ -290,7 +290,6 @@ use srml_support::{
 	decl_storage, ensure, traits::{
 		Currency, OnFreeBalanceZero, OnDilution, LockIdentifier, LockableCurrency,
 		WithdrawReasons, WithdrawReason, OnUnbalanced, Imbalance, Get, DoSlash, Time
-		WithdrawReasons, WithdrawReason, OnUnbalanced, Imbalance, Get, Time
 	}
 };
 use session::{historical::OnSessionEnding, SelectInitialValidators, SessionIndex};

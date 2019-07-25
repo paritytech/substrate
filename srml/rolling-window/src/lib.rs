@@ -44,8 +44,8 @@ use srml_session::{SessionIndex, OneSessionHandler};
 
 /// Rolling Window trait
 pub trait Trait: system::Trait {
-	/// Kind to report with window length
-	type Kind: Copy + Clone + Codec + MaybeSerializeDebug + WindowLength<u32>;
+	/// MisbehaviorKind to report with window length
+	type MisbehaviorKind: Copy + Clone + Codec + MaybeSerializeDebug + WindowLength<u32>;
 
 	/// Identifier type to implement `OneSessionHandler`
 	type SessionKey: Member + Parameter + Default + TypedKey + Decode + Encode + AsRef<[u8]>;
@@ -57,7 +57,7 @@ decl_storage! {
 		///
 		/// It stores every unique misbehavior of a kind
 		// TODO [#3149]: optimize how to shrink the window when sessions expire
-		MisbehaviorReports get(misbehavior_reports): linked_map T::Kind => Vec<SessionIndex>;
+		MisbehaviorReports get(misbehavior_reports): linked_map T::MisbehaviorKind => Vec<SessionIndex>;
 
 		/// Bonding Uniqueness
 		///
@@ -76,26 +76,26 @@ decl_module! {
 }
 
 /// Trait for getting the number of misbehaviors in the current window
-pub trait GetMisbehaviors<Kind> {
+pub trait GetMisbehaviors<MisbehaviorKind> {
 	/// Get number of misbehavior's in the current window for a kind
-	fn get_misbehaviors(kind: Kind) -> u64;
+	fn get_misbehaviors(kind: MisbehaviorKind) -> u64;
 }
 
-impl<T: Trait> GetMisbehaviors<T::Kind> for Module<T> {
-	fn get_misbehaviors(kind: T::Kind) -> u64 {
+impl<T: Trait> GetMisbehaviors<T::MisbehaviorKind> for Module<T> {
+	fn get_misbehaviors(kind: T::MisbehaviorKind) -> u64 {
 		<MisbehaviorReports<T>>::get(kind).len() as u64
 	}
 }
 
 /// Trait for reporting misbehavior's
-pub trait MisbehaviorReporter<Kind, Hash> {
+pub trait MisbehaviorReporter<MisbehaviorKind, Hash> {
 	/// Report misbehavior for a kind
-	fn report_misbehavior(kind: Kind, footprint: Hash, current_session: SessionIndex) -> Result<(), ()>;
+	fn report_misbehavior(kind: MisbehaviorKind, footprint: Hash, current_session: SessionIndex) -> Result<(), ()>;
 }
 
-impl<T: Trait> MisbehaviorReporter<T::Kind, T::Hash> for Module<T> {
+impl<T: Trait> MisbehaviorReporter<T::MisbehaviorKind, T::Hash> for Module<T> {
 	fn report_misbehavior(
-		kind: T::Kind,
+		kind: T::MisbehaviorKind,
 		footprint: T::Hash,
 		current_session: SessionIndex,
 	) -> Result<(), ()> {

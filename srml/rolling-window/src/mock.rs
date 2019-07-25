@@ -118,6 +118,7 @@ impl srml_staking::Trait for Test {
 	type SessionsPerEra = SessionsPerEra;
 	type BondingDuration = BondingDuration;
 	type SessionInterface = Self;
+	type Time = timestamp::Module<Self>;
 }
 
 impl srml_session::Trait for Test {
@@ -131,9 +132,14 @@ impl srml_session::Trait for Test {
 	type ValidatorIdOf = srml_staking::StashOf<Test>;
 }
 
+impl timestamp::Trait for Test {
+	type Moment = u64;
+	type OnTimestampSet = ();
+	type MinimumPeriod = MinimumPeriod;
+}
 
 impl Trait for Test {
-	type Kind = Kind;
+	type MisbehaviorKind = Kind;
 	type SessionKey = UintAuthorityId;
 }
 

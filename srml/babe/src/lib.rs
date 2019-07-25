@@ -34,6 +34,7 @@ use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent
 use inherents::{InherentDataProviders, ProvideInherentData};
 use babe_primitives::{BABE_ENGINE_ID, ConsensusLog, BabeWeight, Epoch, RawBabePreDigest};
 pub use babe_primitives::{AuthorityId, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH};
+use session::SessionIndex;
 
 /// The BABE inherent identifier.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"babeslot";
@@ -261,8 +262,14 @@ impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 
 impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = AuthorityId;
-	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, queued_validators: I)
-		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
+
+	fn on_new_session<'a, I: 'a>(
+		_: (SessionIndex, SessionIndex),
+		_changed: bool,
+		validators: I,
+		queued_validators: I,
+	) where
+		I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
 		use staking::BalanceOf;
 		let to_votes = |b: BalanceOf<T>| {
