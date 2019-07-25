@@ -63,16 +63,12 @@ impl Proposer<TestBlock> for DummyProposer {
 	type Error = Error;
 	type Create = future::Ready<Result<TestBlock, Error>>;
 
-<<<<<<< HEAD
-	fn propose(&mut self, _: InherentData, digests: DigestFor<TestBlock>, _: Duration) -> Self::Create {
-=======
 	fn propose(
-		&self,
+		&mut self,
 		_: InherentData,
 		digests: DigestFor<TestBlock>,
 		_: Duration,
 	) -> Self::Create {
->>>>>>> upstream/master
 		future::ready(self.1.new_block(digests).unwrap().bake().map_err(|e| e.into()))
 	}
 }
