@@ -139,18 +139,18 @@ impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	wh
 		const MAX_SKIPPED_TRANSACTIONS: usize = 8;
 
 		let mut block_builder = self.client.new_block_at(&self.parent_id, inherent_digests)?;
-		let runtime_api = self.client.runtime_api();
 
 		// We don't check the API versions any further here since the dispatch compatibility
 		// check should be enough.
-		runtime_api
+		for extrinsic in self.client.runtime_api()
 			.inherent_extrinsics_with_context(
 				&self.parent_id,
 				ExecutionContext::BlockConstruction,
 				inherent_data
 			)?
-			.into_iter()
-			.try_for_each(|i| block_builder.push(i))?;
+		{
+			block_builder.push(extrinsic)?;
+		}
 
 		// proceed with transactions
 		let mut is_first = true;
