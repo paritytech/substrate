@@ -19,10 +19,7 @@ use srml_system as system;
 use srml_support::{decl_module, decl_event, impl_outer_origin, impl_outer_event};
 use runtime_io::{with_externalities, Blake2Hasher};
 use substrate_primitives::H256;
-use primitives::{
-	BuildStorage, traits::{BlakeTwo256, IdentityLookup},
-	testing::Header,
-};
+use primitives::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 mod module {
 	use super::*;
@@ -54,6 +51,12 @@ impl_outer_event! {
 	}
 }
 
+srml_support::parameter_types! {
+	pub const BlockHashCount: u64 = 250;
+	pub const MaximumBlockWeight: u32 = 4 * 1024 * 1024;
+	pub const MaximumBlockLength: u32 = 4 * 1024 * 1024;
+	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
+}
 #[derive(Clone, Eq, PartialEq)]
 pub struct Runtime;
 impl system::Trait for Runtime {
@@ -67,6 +70,10 @@ impl system::Trait for Runtime {
 	type Header = Header;
 	type WeightMultiplierUpdate = ();
 	type Event = Event;
+	type BlockHashCount = BlockHashCount;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type MaximumBlockLength = MaximumBlockLength;
+	type AvailableBlockRatio = AvailableBlockRatio;
 }
 
 impl module::Trait for Runtime {
@@ -74,7 +81,7 @@ impl module::Trait for Runtime {
 }
 
 fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-	system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0.into()
+	system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0.into()
 }
 
 fn deposit_events(n: usize) {

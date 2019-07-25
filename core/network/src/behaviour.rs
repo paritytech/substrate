@@ -23,7 +23,7 @@ use crate::protocol::{CustomMessageOutcome, Protocol};
 use futures::prelude::*;
 use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, PublicKey};
-use libp2p::core::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess};
+use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess};
 use libp2p::core::{nodes::Substream, muxing::StreamMuxerBox};
 use libp2p::multihash::Multihash;
 use log::warn;
@@ -150,6 +150,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviourEventPr
 	for Behaviour<B, S, H> {
 	fn inject_event(&mut self, out: DiscoveryOut) {
 		match out {
+			DiscoveryOut::UnroutablePeer(_peer_id) => {
+				// Obtaining and reporting listen addresses for unroutable peers back
+				// to Kademlia is handled by the `Identify` protocol, part of the
+				// `DebugInfoBehaviour`. See the `NetworkBehaviourEventProcess`
+				// implementation for `DebugInfoEvent`.
+			}
 			DiscoveryOut::Discovered(peer_id) => {
 				self.substrate.add_discovered_nodes(iter::once(peer_id));
 			}

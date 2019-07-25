@@ -24,8 +24,8 @@ substrate-basic-authorship = { path = "../../core/basic-authorship" }
 substrate-service = { path = "../../core/service" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
 network = { package = "substrate-network", path = "../../core/network" }
-aura = { package = "substrate-consensus-aura", path = "../../core/consensus/aura" }
-aura_primitives = { package = "substrate-consensus-aura-primitives", path = "../../core/consensus/aura/primitives" }
+babe = { package = "substrate-consensus-babe", path = "../../core/consensus/babe" }
+babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../core/consensus/babe/primitives" }
 grandpa = { package = "substrate-finality-grandpa", path = "../../core/finality-grandpa" }
 grandpa_primitives = { package = "substrate-finality-grandpa-primitives", path = "../../core/finality-grandpa/primitives" }
 sr-primitives = { path = "../../core/sr-primitives" }
@@ -40,10 +40,14 @@ timestamp = { package = "srml-timestamp", path = "../../srml/timestamp", default
 rand = "0.6"
 finality_tracker = { package = "srml-finality-tracker", path = "../../srml/finality-tracker", default-features = false }
 contracts = { package = "srml-contracts", path = "../../srml/contracts" }
+system = { package = "srml-system", path = "../../srml/system" }
+balances = { package = "srml-balances", path = "../../srml/balances" }
 
 [dev-dependencies]
+babe = { package = "substrate-consensus-babe", path = "../../core/consensus/babe", features = ["test-helpers"] }
 consensus-common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 service-test = { package = "substrate-service-test", path = "../../core/service/test" }
+futures03 = { package = "futures-preview", version = "0.3.0-alpha.17" }
 
 [build-dependencies]
 cli = { package = "substrate-cli", path = "../../core/cli" }

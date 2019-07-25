@@ -23,7 +23,7 @@ use core::marker::PhantomData;
 
 use primitives::{
 	KeyTypeId, BuildStorage, key_types,
-	traits::{IdentityLookup, BlakeTwo256, ConvertInto, OpaqueKeys, Verify, Lazy},
+	traits::{IdentityLookup, Perbill, BlakeTwo256, ConvertInto, OpaqueKeys, Verify, Lazy},
 	testing::{UINT_DUMMY_KEY, Header, UintAuthorityId}
 };
 use substrate_primitives::{H256, Blake2Hasher, sr25519};
@@ -69,6 +69,9 @@ pub struct Test;
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
+	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockLength: u32 = 2 * 1024;
+	pub const AvailableBlockRatio: Perbill = Perbill::one();
 	pub const MinimumPeriod: u64 = 1;
 }
 
@@ -128,6 +131,9 @@ impl system::Trait for Test {
 	type WeightMultiplierUpdate = ();
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type AvailableBlockRatio = AvailableBlockRatio;
+	type MaximumBlockLength = MaximumBlockLength;
 }
 
 impl timestamp::Trait for Test {

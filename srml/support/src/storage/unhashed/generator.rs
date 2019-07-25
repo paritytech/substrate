@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::codec;
-use crate::rstd::vec::Vec;
+use crate::codec::{self, Encode, EncodeAppend};
+use crate::rstd::{borrow::Borrow, vec::Vec};
 
 /// Abstraction around storage with unhashed access.
 pub trait UnhashedStorage {
@@ -38,7 +38,7 @@ pub trait UnhashedStorage {
 	}
 
 	/// Put a value in under a key.
-	fn put<T: codec::Encode>(&mut self, key: &[u8], val: &T);
+	fn put<T: codec::Encode + ?Sized>(&mut self, key: &[u8], val: &T);
 
 	/// Remove the bytes of a key from storage.
 	fn kill(&mut self, key: &[u8]);
@@ -82,7 +82,7 @@ impl UnhashedStorage for sr_primitives::StorageOverlay {
 			.map(|x| codec::Decode::decode(&mut x.as_slice()).expect("Unable to decode expected type."))
 	}
 
-	fn put<T: codec::Encode>(&mut self, key: &[u8], val: &T) {
+	fn put<T: codec::Encode + ?Sized>(&mut self, key: &[u8], val: &T) {
 		self.insert(key.to_vec(), codec::Encode::encode(val));
 	}
 
@@ -117,7 +117,7 @@ impl UnhashedStorage for sr_primitives::StorageOverlay {
 /// is a hash of a `Key2`.
 ///
 /// /!\ be careful while choosing the Hash, indeed malicious could craft second keys to lower the trie.
-pub trait StorageDoubleMap<K1: codec::Codec, K2: codec::Codec, V: codec::Codec> {
+pub trait StorageDoubleMap<K1: codec::Encode, K2: codec::Encode, V: codec::Codec> {
 	/// The type that get/take returns.
 	type Query;
 
@@ -125,50 +125,110 @@ pub trait StorageDoubleMap<K1: codec::Codec, K2: codec::Codec, V: codec::Codec> 
 	fn prefix() -> &'static [u8];
 
 	/// Get the storage key used to fetch a value corresponding to a specific key.
-	fn key_for(k1: &K1, k2: &K2) -> Vec<u8>;
+	fn key_for<KArg1, KArg2>(
+		k1: &KArg1,
+		k2: &KArg2,
+	) -> Vec<u8> where
+		K1: Borrow<KArg1>,
+		K2: Borrow<KArg2>,
+		KArg1: ?Sized + Encode,
+		KArg2: ?Sized + Encode;
 
 	/// Get the storage prefix used to fetch keys corresponding to a specific key1.
-	fn prefix_for(k1: &K1) -> Vec<u8>;
+	fn prefix_for<KArg1>(k1: &KArg1) -> Vec<u8> where KArg1: ?Sized + Encode, K1: Borrow<KArg1>;
 
 	/// true if the value is defined in storage.
-	fn exists<S: UnhashedStorage>(k1: &K1, k2: &K2, storage: &S) -> bool {
+	fn exists<KArg1, KArg2, S: UnhashedStorage>(
+		k1: &KArg1,
+		k2: &KArg2,
+		storage: &S,
+	) -> bool where K1: Borrow<KArg1>, K2: Borrow<KArg2>, KArg1: ?Sized + Encode, KArg2: ?Sized + Encode {
 		storage.exists(&Self::key_for(k1, k2))
 	}
 
 	/// Load the value associated with the given key from the map.
-	fn get<S: UnhashedStorage>(k1: &K1, k2: &K2, storage: &S) -> Self::Query;
+	fn get<KArg1, KArg2, S: UnhashedStorage>(
+		k1: &KArg1,
+		k2: &KArg2,
+		storage: &S,
+	) -> Self::Query where
+		K1: Borrow<KArg1>,
+		K2: Borrow<KArg2>,
+		KArg1: ?Sized + Encode,
+		KArg2: ?Sized + Encode;
 
 	/// Take the value under a key.
-	fn take<S: UnhashedStorage>(k1: &K1, k2: &K2, storage: &mut S) -> Self::Query;
+	fn take<KArg1, KArg2, S: UnhashedStorage>(
+		k1: &KArg1,
+		k2: &KArg2,
+		storage: &mut S,
+	) -> Self::Query where
+		K1: Borrow<KArg1>,
+		K2: Borrow<KArg2>,
+		KArg1: ?Sized + Encode,
+		KArg2: ?Sized + Encode;
 
 	/// Store a value to be associated with the given key from the map.
-	fn insert<S: UnhashedStorage>(k1: &K1, k2: &K2, val: &V, storage: &mut S) {
+	fn insert<KArg1, KArg2, VArg, S: UnhashedStorage>(
+		k1: &KArg1,
+		k2: &KArg2,
+		val: &VArg,
+		storage: &mut S,
+	) where
+		K1: Borrow<KArg1>,
+		K2: Borrow<KArg2>,
+		V: Borrow<VArg>,
+		KArg1: ?Sized + Encode,
+		KArg2: ?Sized + Encode,
+		VArg: ?Sized + Encode,
+	{
 		storage.put(&Self::key_for(k1, k2), val);
 	}
 
 	/// Remove the value under a key.
-	fn remove<S: UnhashedStorage>(k1: &K1, k2: &K2, storage: &mut S) {
+	fn remove<KArg1, KArg2, S: UnhashedStorage>(
+		k1: &KArg1,
+		k2: &KArg2,
+		storage: &mut S,
+	) where K1: Borrow<KArg1>, K2: Borrow<KArg2>, KArg1: ?Sized + Encode, KArg2: ?Sized + Encode {
 		storage.kill(&Self::key_for(k1, k2));
 	}
 
 	/// Removes all entries that shares the `k1` as the first key.
-	fn remove_prefix<S: UnhashedStorage>(k1: &K1, storage: &mut S) {
+	fn remove_prefix<KArg1, S: UnhashedStorage>(
+		k1: &KArg1,
+		storage: &mut S,
+	) where KArg1: ?Sized + Encode, K1: Borrow<KArg1> {
 		storage.kill_prefix(&Self::prefix_for(k1));
 	}
 
 	/// Mutate the value under a key.
-	fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: UnhashedStorage>(k1: &K1, k2: &K2, f: F, storage: &mut S) -> R;
+	fn mutate<KArg1, KArg2, R, F, S: UnhashedStorage>(
+		k1: &KArg1,
+		k2: &KArg2,
+		f: F,
+		storage: &mut S,
+	) -> R where
+		K1: Borrow<KArg1>,
+		K2: Borrow<KArg2>,
+		KArg1: ?Sized + Encode,
+		KArg2: ?Sized + Encode,
+		F: FnOnce(&mut Self::Query) -> R;
 
 	/// Append the given items to the value under the key specified.
-	fn append<I, S: UnhashedStorage>(
-		k1: &K1,
-		k2: &K2,
+	fn append<KArg1, KArg2, I, S: UnhashedStorage>(
+		k1: &KArg1,
+		k2: &KArg2,
 		items: &[I],
 		storage: &mut S,
 	) -> Result<(), &'static str>
 	where
+		K1: Borrow<KArg1>,
+		K2: Borrow<KArg2>,
+		KArg1: ?Sized + Encode,
+		KArg2: ?Sized + Encode,
 		I: codec::Encode,
-		V: codec::EncodeAppend<Item=I>,
+		V: EncodeAppend<Item=I>,
 	{
 		let key = Self::key_for(k1, k2);
 		let new_val = <V as codec::EncodeAppend>::append(

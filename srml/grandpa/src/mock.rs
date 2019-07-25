@@ -22,7 +22,8 @@ use std::cell::RefCell;
 use parity_codec::{Encode, Decode};
 use runtime_io;
 use primitives::{
-	BuildStorage, DigestItem, traits::{IdentityLookup, ConvertInto, OpaqueKeys, Verify, Lazy},
+	BuildStorage, DigestItem, Perbill,
+	traits::{IdentityLookup, ConvertInto, OpaqueKeys, Verify, Lazy},
 	testing::{Header, Block, UintAuthorityId, TestXt}
 };
 use substrate_primitives::{H256, Blake2Hasher};
@@ -132,6 +133,9 @@ impl Trait for Test {
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
+	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockLength: u32 = 2 * 1024;
+	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl system::Trait for Test {
 	type Origin = Origin;
@@ -145,6 +149,9 @@ impl system::Trait for Test {
 	type WeightMultiplierUpdate = ();
 	type Event = TestEvent;
 	type BlockHashCount = BlockHashCount;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type MaximumBlockLength = MaximumBlockLength;
+	type AvailableBlockRatio = AvailableBlockRatio;
 }
 
 impl session::Trait for Test {

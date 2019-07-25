@@ -77,7 +77,7 @@ use substrate_primitives::{
 use parity_codec::{Encode, Decode};
 use primitives::{
 	ApplyError, traits::{Member, IsMember, Extrinsic as ExtrinsicT},
-	transaction_validity::{TransactionValidity, TransactionLongevity},
+	transaction_validity::{TransactionValidity, TransactionLongevity, ValidTransaction},
 };
 use rstd::prelude::*;
 use session::SessionIndex;
@@ -200,13 +200,13 @@ decl_module! {
 			ensure_none(origin)?;
 
 			let current_session = <session::Module<T>>::current_index();
-			let exists = <ReceivedHeartbeats<T>>::exists(current_session, &heartbeat.authority_id);
+			let exists = <ReceivedHeartbeats<T>>::exists(&current_session, &heartbeat.authority_id);
 			if !exists {
 				let now = <system::Module<T>>::block_number();
 				Self::deposit_event(RawEvent::HeartbeatReceived(now, heartbeat.authority_id.clone()));
 
 				let network_state = heartbeat.network_state.encode();
-				<ReceivedHeartbeats<T>>::insert(current_session, &heartbeat.authority_id, network_state);
+				<ReceivedHeartbeats<T>>::insert(&current_session, &heartbeat.authority_id, &network_state);
 			}
 		}
 
@@ -301,13 +301,13 @@ impl<T: Trait> Module<T> {
 			Some(start) => {
 				// iterate over every session
 				for index in start..curr  {
-					if <ReceivedHeartbeats<T>>::exists(index, authority_id) {
+					if <ReceivedHeartbeats<T>>::exists(&index, authority_id) {
 						return true;
 					}
 				}
 				false
 			},
-			None => <ReceivedHeartbeats<T>>::exists(curr, authority_id),
+			None => <ReceivedHeartbeats<T>>::exists(&curr, authority_id),
 		}
 	}
 
@@ -315,7 +315,7 @@ impl<T: Trait> Module<T> {
 	/// during the current session. Otherwise `false`.
 	pub fn is_online_in_current_session(authority_id: &T::AuthorityId) -> bool {
 		let current_session = <session::Module<T>>::current_index();
-		<ReceivedHeartbeats<T>>::exists(current_session, authority_id)
+		<ReceivedHeartbeats<T>>::exists(&current_session, authority_id)
 	}
 
 	/// Session has just changed.
@@ -345,10 +345,10 @@ impl<T: Trait> Module<T> {
 		match LastNewEraStart::get() {
 			Some(start) => {
 				for index in start..curr {
-					<ReceivedHeartbeats<T>>::remove_prefix(index);
+					<ReceivedHeartbeats<T>>::remove_prefix(&index);
 				}
 			},
-			None => <ReceivedHeartbeats<T>>::remove_prefix(curr),
+			None => <ReceivedHeartbeats<T>>::remove_prefix(&curr),
 		}
 	}
 }
@@ -356,7 +356,7 @@ impl<T: Trait> Module<T> {
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = <T as Trait>::AuthorityId;
 
-	fn on_new_session<'a, I: 'a>(_changed: bool, _validators: I) {
+	fn on_new_session<'a, I: 'a>(_changed: bool, _validators: I, _next_validators: I) {
 		Self::new_session();
 	}
 
@@ -411,13 +411,13 @@ impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
 				return TransactionValidity::Invalid(ApplyError::BadSignature as i8);
 			}
 
-			return srml_support::unsigned::TransactionValidity::Valid {
+			return TransactionValidity::Valid(ValidTransaction {
 				priority: 0,
 				requires: vec![],
 				provides: vec![encoded_heartbeat],
 				longevity: TransactionLongevity::max_value(),
 				propagate: true,
-			}
+			})
 		}
 		TransactionValidity::Invalid(0)
 	}

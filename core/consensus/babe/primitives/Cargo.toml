@@ -13,6 +13,7 @@ substrate-primitives = { path = "../../../primitives", default-features = false 
 slots = { package = "substrate-consensus-slots", path = "../../slots", optional = true }
 consensus_accountable_safety_primitives = { package = "substrate-consensus-accountable-safety-primitives", path = "../../accountable-safety/primitives", default-features = false }
 parity-codec = { version = "4.1.1", default-features = false }
+schnorrkel = { version = "0.1.1", optional = true }
 
 [features]
 default = ["std"]
@@ -21,6 +22,7 @@ std = [
 	"runtime_primitives/std",
 	"substrate-client/std",
 	"parity-codec/std",
+	"schnorrkel",
 	"slots",
 	"consensus_accountable_safety_primitives/std",
 ]

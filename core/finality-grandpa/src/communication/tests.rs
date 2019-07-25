@@ -24,7 +24,7 @@ use network_gossip::Validator;
 use tokio::runtime::current_thread;
 use std::sync::Arc;
 use std::collections::VecDeque;
-use keyring::AuthorityKeyring;
+use keyring::Ed25519Keyring;
 use parity_codec::Encode;
 
 use crate::environment::SharedVoterSetState;
@@ -206,7 +206,7 @@ fn make_test_network() -> (
 	)
 }
 
-fn make_ids(keys: &[AuthorityKeyring]) -> Vec<(AuthorityId, u64)> {
+fn make_ids(keys: &[Ed25519Keyring]) -> Vec<(AuthorityId, u64)> {
 	keys.iter()
 		.map(|key| AuthorityId(key.to_raw_public()))
 		.map(|id| (id, 1))
@@ -224,7 +224,7 @@ impl network_gossip::ValidatorContext<Block> for NoopContext {
 
 #[test]
 fn good_commit_leads_to_relay() {
-	let private = [AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
+	let private = [Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let public = make_ids(&private[..]);
 	let voter_set = Arc::new(public.iter().cloned().collect::<VoterSet<AuthorityId>>());
 
@@ -339,7 +339,7 @@ fn good_commit_leads_to_relay() {
 
 #[test]
 fn bad_commit_leads_to_report() {
-	let private = [AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
+	let private = [Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let public = make_ids(&private[..]);
 	let voter_set = Arc::new(public.iter().cloned().collect::<VoterSet<AuthorityId>>());
 

@@ -34,12 +34,11 @@ use substrate_client::{
 	impl_runtime_apis,
 };
 use runtime_primitives::{
-	ApplyResult,
-	create_runtime_str,
-	transaction_validity::TransactionValidity,
+	ApplyResult, create_runtime_str, Perbill,
+	transaction_validity::{TransactionValidity, ValidTransaction},
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType, Verify, NumberFor, DigestFor,
+		GetNodeBlockType, GetRuntimeBlockType, Verify, NumberFor, DigestFor, IdentityLookup
 	},
 };
 
@@ -54,6 +53,7 @@ use runtime_version::RuntimeVersion;
 use primitives::{sr25519, OpaqueMetadata};
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
+use runtime_support::{impl_outer_origin, parameter_types};
 use inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
 use session::historical::Proof;
@@ -61,9 +61,8 @@ pub use consensus_babe::{AuthorityId, AuthoritySignature, BabeEquivocationProof}
 pub use primitives::hash::H256;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
+pub use babe_primitives::AuthorityId;
 pub type AuraId = AuthorityId;
-// Ensure Babe and Aura use the same crypto to simplify things a bit.
-pub type BabeId = AuthorityId;
 
 // Inlucde the WASM binary
 #[cfg(feature = "std")]
@@ -316,6 +315,7 @@ cfg_if! {
 	}
 }
 
+#[derive(Clone, Eq, PartialEq)]
 pub struct Runtime;
 
 impl GetNodeBlockType for Runtime {
@@ -324,6 +324,60 @@ impl GetNodeBlockType for Runtime {
 
 impl GetRuntimeBlockType for Runtime {
 	type RuntimeBlock = Block;
+}
+
+impl_outer_origin!{
+	pub enum Origin for Runtime where system = srml_system {}
+}
+
+#[derive(Clone, Encode, Decode, Eq, PartialEq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct Event;
+
+impl From<srml_system::Event> for Event {
+	fn from(_evt: srml_system::Event) -> Self {
+		unimplemented!("Not required in tests!")
+	}
+}
+
+parameter_types! {
+	pub const BlockHashCount: BlockNumber = 250;
+	pub const MinimumPeriod: u64 = 5;
+	pub const MaximumBlockWeight: u32 = 4 * 1024 * 1024;
+	pub const MaximumBlockLength: u32 = 4 * 1024 * 1024;
+	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
+}
+
+impl srml_system::Trait for Runtime {
+	type Origin = Origin;
+	type Index = u64;
+	type BlockNumber = u64;
+	type Hash = H256;
+	type Hashing = BlakeTwo256;
+	type AccountId = u64;
+	type Lookup = IdentityLookup<Self::AccountId>;
+	type Header = Header;
+	type Event = Event;
+	type WeightMultiplierUpdate = ();
+	type BlockHashCount = BlockHashCount;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type MaximumBlockLength = MaximumBlockLength;
+	type AvailableBlockRatio = AvailableBlockRatio;
+}
+
+impl srml_timestamp::Trait for Runtime {
+	/// A timestamp: seconds since the unix epoch.
+	type Moment = u64;
+	type OnTimestampSet = ();
+	type MinimumPeriod = MinimumPeriod;
+}
+
+parameter_types! {
+	pub const EpochDuration: u64 = 6;
+}
+
+impl srml_babe::Trait for Runtime {
+	type EpochDuration = EpochDuration;
 }
 
 /// Adds one to the given input and returns the final result.
@@ -392,13 +446,13 @@ cfg_if! {
 			impl client_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
-						return TransactionValidity::Valid {
+						return TransactionValidity::Valid(ValidTransaction {
 							priority: data.len() as u64,
 							requires: vec![],
 							provides: vec![data],
 							longevity: 1,
 							propagate: false,
-						};
+						});
 					}
 
 					system::validate_transaction(utx)
@@ -484,28 +538,11 @@ cfg_if! {
 				}
 			}
 
-			impl consensus_aura::AuraApi<Block, AuraId, AuthoritySignature, AuraEquivocation<Block>> for Runtime {
+			impl aura_primitives::AuraApi<Block, AuraId, AuthoritySignature, AuraEquivocation<Block>> for Runtime {
 				fn slot_duration() -> u64 { 1 }
 				fn authorities() -> Vec<AuraId> { system::authorities() }
 				fn construct_equivocation_report_call(
 					_proof: AuraEquivocationProof<<Block as BlockT>::Header, AuthoritySignature, AuthorityId, Proof>
-				) -> Option<Vec<u8>> {
-					None
-				}
-			}
-
-			impl consensus_babe::BabeApi<Block, BabeEquivocation<Block>> for Runtime {
-				fn startup_data() -> consensus_babe::BabeConfiguration {
-					consensus_babe::BabeConfiguration {
-						slot_duration: 1,
-						expected_block_time: 1,
-						threshold: std::u64::MAX,
-						median_required_blocks: 100,
-					}
-				}
-				fn authorities() -> Vec<BabeId> { system::authorities() }
-				fn construct_equivocation_report_call(
-					_proof: BabeEquivocationProof<<Block as BlockT>::Header, AuthoritySignature, AuthorityId, Proof>
 				) -> Option<Vec<u8>> {
 					None
 				}
@@ -544,6 +581,30 @@ cfg_if! {
 				}
 			}
 
+
+			impl babe_primitives::BabeApi<Block, BabeEquivocation<Block>> for Runtime {
+				fn startup_data() -> babe_primitives::BabeConfiguration {
+					babe_primitives::BabeConfiguration {
+						median_required_blocks: 0,
+						slot_duration: 3,
+						c: (3, 10),
+					}
+				}
+
+				fn epoch() -> babe_primitives::Epoch {
+					let authorities = system::authorities();
+					let authorities: Vec<_> = authorities.into_iter().map(|x|(x, 1)).collect();
+
+					babe_primitives::Epoch {
+						start_slot: <srml_babe::Module<Runtime>>::epoch_start_slot(),
+						authorities,
+						randomness: <srml_babe::Module<Runtime>>::randomness(),
+						epoch_index: <srml_babe::Module<Runtime>>::epoch_index(),
+						duration: EpochDuration::get(),
+					}
+				}
+			}
+
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
 				fn offchain_worker(block: u64) {
 					let ex = Extrinsic::IncludeData(block.encode());
@@ -576,13 +637,13 @@ cfg_if! {
 			impl client_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
-						return TransactionValidity::Valid {
+						return TransactionValidity::Valid(ValidTransaction{
 							priority: data.len() as u64,
 							requires: vec![],
 							provides: vec![data],
 							longevity: 1,
 							propagate: false,
-						};
+						});
 					}
 
 					system::validate_transaction(utx)
@@ -672,7 +733,7 @@ cfg_if! {
 				}
 			}
 
-			impl consensus_aura::AuraApi<
+			impl aura_primitives::AuraApi<
 				Block,
 				AuraId,
 				AuthoritySignature,
@@ -692,16 +753,28 @@ cfg_if! {
 				}
 			}
 
-			impl consensus_babe::BabeApi<Block, BabeEquivocation<Block>> for Runtime {
-				fn startup_data() -> consensus_babe::BabeConfiguration {
-					consensus_babe::BabeConfiguration {
+			impl babe_primitives::BabeApi<Block, BabeEquivocation<Block>> for Runtime {
+				fn startup_data() -> babe_primitives::BabeConfiguration {
+					babe_primitives::BabeConfiguration {
 						median_required_blocks: 0,
 						slot_duration: 1,
-						expected_block_time: 1,
-						threshold: core::u64::MAX,
+						c: (3, 10),
 					}
 				}
-				fn authorities() -> Vec<BabeId> { system::authorities() }
+
+				fn epoch() -> babe_primitives::Epoch {
+					let authorities = system::authorities();
+					let authorities: Vec<_> = authorities.into_iter().map(|x|(x, 1)).collect();
+
+					babe_primitives::Epoch {
+						start_slot: <srml_babe::Module<Runtime>>::epoch_start_slot(),
+						authorities,
+						randomness: <srml_babe::Module<Runtime>>::randomness(),
+						epoch_index: <srml_babe::Module<Runtime>>::epoch_index(),
+						duration: EpochDuration::get(),
+					}
+				}
+
 				fn construct_equivocation_report_call(
 					_proof: BabeEquivocationProof<
 						<Block as BlockT>::Header,
