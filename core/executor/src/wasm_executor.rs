@@ -949,17 +949,24 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				.map_err(|_| "storage kind OOB while ext_local_storage_compare_and_set: wasm")?;
 		let key = this.memory.get(key, key_len as usize)
 			.map_err(|_| "OOB while ext_local_storage_compare_and_set: wasm")?;
-		let old_value = this.memory.get(old_value, old_value_len as usize)
-			.map_err(|_| "OOB while ext_local_storage_compare_and_set: wasm")?;
 		let new_value = this.memory.get(new_value, new_value_len as usize)
 			.map_err(|_| "OOB while ext_local_storage_compare_and_set: wasm")?;
 
-		let res = this.ext.offchain()
-			.map(|api| api.local_storage_compare_and_set(kind, &key, &old_value, &new_value))
-			.ok_or_else(|| "Calling unavailable API ext_local_storage_compare_andset: wasm")?;
+		let res = {
+			if old_value == u32::max_value() {
+				this.ext.offchain()
+					.map(|api| api.local_storage_compare_and_set(kind, &key, None, &new_value))
+					.ok_or_else(|| "Calling unavailable API ext_local_storage_compare_and_set: wasm")?
+			} else {
+				let v = this.memory.get(old_value, old_value_len as  usize)
+					.map_err(|_| "OOB while ext_local_storage_compare_and_set: wasm")?;
+				this.ext.offchain()
+					.map(|api| api.local_storage_compare_and_set(kind, &key, Some(v.as_slice()), &new_value))
+					.ok_or_else(|| "Calling unavailable API ext_local_storage_compare_and_set: wasm")?
+			}
+		};
 
 		Ok(if res { 0 } else { 1 })
-
 	},
 	ext_http_request_start(
 		method: *const u8,
