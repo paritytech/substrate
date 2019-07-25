@@ -22,7 +22,7 @@
 
 use rstd::prelude::*;
 use support::{
-	construct_runtime, parameter_types, traits::{SplitTwoWays, Currency, OnUnbalanced, WindowLength}
+	construct_runtime, parameter_types, traits::{SplitTwoWays, Currency, OnUnbalanced}
 };
 use substrate_primitives::u32_trait::{_1, _2, _3, _4};
 use node_primitives::{
@@ -45,9 +45,6 @@ use version::RuntimeVersion;
 use elections::VoteIndex;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
-#[cfg(any(feature = "std", test))]
-use serde::{Serialize, Deserialize};
-use parity_codec::{Encode, Decode};
 use substrate_primitives::OpaqueMetadata;
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
 use finality_tracker::{DEFAULT_REPORT_LATENCY, DEFAULT_WINDOW_SIZE};
@@ -64,7 +61,7 @@ pub use staking::StakerStatus;
 /// Implementations for `Convert` and other helper structs passed into runtime modules as associated
 /// types.
 pub mod impls;
-use impls::{CurrencyToVoteHandler, WeightMultiplierUpdateHandler};
+use impls::{CurrencyToVoteHandler, WeightMultiplierUpdateHandler, Misbehavior};
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -557,41 +554,6 @@ impl_runtime_apis! {
 				randomness: Babe::randomness(),
 				duration: EpochDuration::get(),
 			}
-		}
-	}
-}
-
-/// Misbehavior type which takes window length as input
-/// Each variant and its data is a seperate kind
-#[derive(Copy, Clone, Eq, Hash, PartialEq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-pub enum Misbehavior {
-	/// Validator is not online
-	Unresponsiveness(u32),
-	/// Unjustified vote
-	UnjustifiedVote(u32),
-	/// Rejecting set of votes
-	RejectSetVotes(u32),
-	/// Equivocation
-	Equivocation(u32),
-	/// Invalid Vote
-	InvalidVote(u32),
-	/// Invalid block
-	InvalidBlock(u32),
-	/// Parachain Invalid validity statement
-	ParachainInvalidity(u32),
-}
-
-impl WindowLength<u32> for Misbehavior {
-	fn window_length(&self) -> &u32 {
-		match self {
-			Misbehavior::Unresponsiveness(len) => len,
-			Misbehavior::UnjustifiedVote(len) => len,
-			Misbehavior::RejectSetVotes(len) => len,
-			Misbehavior::Equivocation(len) => len,
-			Misbehavior::InvalidVote(len) => len,
-			Misbehavior::InvalidBlock(len) => len,
-			Misbehavior::ParachainInvalidity(len) => len,
 		}
 	}
 }
