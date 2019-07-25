@@ -50,7 +50,7 @@ pub type Index = u64;
 /// A hash of some data used by the chain.
 pub type Hash = primitives::H256;
 
-/// A timestamp: seconds since the unix epoch.
+/// A timestamp: milliseconds since the unix epoch.
 pub type Timestamp = u64;
 
 /// Digest item type.

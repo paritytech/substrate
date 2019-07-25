@@ -354,7 +354,7 @@ impl srml_system::Trait for Runtime {
 }
 
 impl srml_timestamp::Trait for Runtime {
-	/// A timestamp: seconds since the unix epoch.
+	/// A timestamp: milliseconds since the unix epoch.
 	type Moment = u64;
 	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
@@ -731,7 +731,7 @@ cfg_if! {
 			}
 
 			impl aura_primitives::AuraApi<Block, AuraId> for Runtime {
-				fn slot_duration() -> u64 { 1 }
+				fn slot_duration() -> u64 { 1000 }
 				fn authorities() -> Vec<AuraId> { system::authorities() }
 			}
 

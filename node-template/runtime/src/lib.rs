@@ -150,10 +150,10 @@ impl indices::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const MinimumPeriod: u64 = 5;
+	pub const MinimumPeriod: u64 = 5000;
 }
 impl timestamp::Trait for Runtime {
-	/// A timestamp: seconds since the unix epoch.
+	/// A timestamp: milliseconds since the unix epoch.
 	type Moment = u64;
 	type OnTimestampSet = Aura;
 	type MinimumPeriod = MinimumPeriod;
