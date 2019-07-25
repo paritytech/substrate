@@ -24,7 +24,7 @@ use log::{info, debug, trace};
 
 use client::{
 	self, error, Client as SubstrateClient, CallExecutor,
-	block_builder::api::BlockBuilder as BlockBuilderApi, runtime_api::Core,
+	block_builder::api::BlockBuilder as BlockBuilderApi,
 };
 use codec::Decode;
 use consensus_common::{self, evaluation};
@@ -39,80 +39,6 @@ use transaction_pool::txpool::{self, Pool as TransactionPool};
 use inherents::InherentData;
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
-/// Build new blocks.
-pub trait BlockBuilder<Block: BlockT> {
-	/// Push an extrinsic onto the block. Fails if the extrinsic is invalid.
-	fn push_extrinsic(&mut self, extrinsic: <Block as BlockT>::Extrinsic) -> Result<(), error::Error>;
-}
-
-/// Local client abstraction for the consensus.
-pub trait AuthoringApi: Send + Sync + ProvideRuntimeApi where
-	<Self as ProvideRuntimeApi>::Api: Core<Self::Block>
-{
-	/// The block used for this API type.
-	type Block: BlockT;
-	/// The error used by this API type.
-	type Error: std::error::Error;
-
-	/// Build a block on top of the given block, with inherent extrinsics and
-	/// inherent digests pre-pushed.
-	fn build_block<F: FnMut(&mut dyn BlockBuilder<Self::Block>) -> ()>(
-		&self,
-		at: &BlockId<Self::Block>,
-		inherent_data: InherentData,
-		inherent_digests: DigestFor<Self::Block>,
-		build_ctx: F,
-	) -> Result<Self::Block, error::Error>;
-}
-
-impl<'a, B, E, Block, RA> BlockBuilder<Block>
-	for client::block_builder::BlockBuilder<'a, Block, SubstrateClient<B, E, Block, RA>>
-where
-	B: client::backend::Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
-	Block: BlockT<Hash=H256>,
-	RA: Send + Sync + 'static,
-	SubstrateClient<B, E, Block, RA> : ProvideRuntimeApi,
-	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api: BlockBuilderApi<Block>,
-{
-	fn push_extrinsic(&mut self, extrinsic: <Block as BlockT>::Extrinsic) -> Result<(), error::Error> {
-		client::block_builder::BlockBuilder::push(self, extrinsic).map_err(Into::into)
-	}
-}
-
-impl<B, E, Block, RA> AuthoringApi for SubstrateClient<B, E, Block, RA> where
-	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
-	Block: BlockT<Hash=H256>,
-	RA: Send + Sync + 'static,
-	SubstrateClient<B, E, Block, RA> : ProvideRuntimeApi,
-	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api: BlockBuilderApi<Block>,
-{
-	type Block = Block;
-	type Error = client::error::Error;
-
-	fn build_block<F: FnMut(&mut dyn BlockBuilder<Self::Block>) -> ()>(
-		&self,
-		at: &BlockId<Self::Block>,
-		inherent_data: InherentData,
-		inherent_digests: DigestFor<Self::Block>,
-		mut build_ctx: F,
-	) -> Result<Self::Block, error::Error> {
-
-		let mut block_builder = self.new_block_at(at, inherent_digests)?;
-
-		let runtime_api = self.runtime_api();
-		// We don't check the API versions any further here since the dispatch compatibility
-		// check should be enough.
-		runtime_api.inherent_extrinsics_with_context(at, ExecutionContext::BlockConstruction, inherent_data)?
-			.into_iter().try_for_each(|i| block_builder.push(i))?;
-
-		build_ctx(&mut block_builder);
-
-		block_builder.bake().map_err(Into::into)
-	}
-}
-
 /// Proposer factory.
 pub struct ProposerFactory<C, A> where A: txpool::ChainApi {
 	/// The client instance.
@@ -121,18 +47,24 @@ pub struct ProposerFactory<C, A> where A: txpool::ChainApi {
 	pub transaction_pool: Arc<TransactionPool<A>>,
 }
 
-impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for ProposerFactory<C, A> where
-	C: AuthoringApi,
-	<C as ProvideRuntimeApi>::Api: BlockBuilderApi<<C as AuthoringApi>::Block>,
-	A: txpool::ChainApi<Block=<C as AuthoringApi>::Block>,
-	client::error::Error: From<<C as AuthoringApi>::Error>,
+impl<B, E, Block, RA, A> consensus_common::Environment<Block> for
+ProposerFactory<SubstrateClient<B, E, Block, RA>, A>
+where
+	Block: BlockT,
+	A: txpool::ChainApi<Block=Block>,
+	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
+	Block: BlockT<Hash=H256>,
+	RA: Send + Sync + 'static,
+	SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
+	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api: BlockBuilderApi<Block>,
 {
-	type Proposer = Proposer<<C as AuthoringApi>::Block, C, A>;
+	type Proposer = Proposer<Block, SubstrateClient<B, E, Block, RA>, A>;
 	type Error = error::Error;
 
 	fn init(
 		&mut self,
-		parent_header: &<<C as AuthoringApi>::Block as BlockT>::Header,
+		parent_header: &<Block as BlockT>::Header,
 	) -> Result<Self::Proposer, error::Error> {
 		let parent_hash = parent_header.hash();
 
@@ -163,14 +95,19 @@ pub struct Proposer<Block: BlockT, C, A: txpool::ChainApi> {
 	now: Box<dyn Fn() -> time::Instant>,
 }
 
-impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block> for Proposer<Block, C, A> where
+impl<B, E, Block, RA, A> consensus_common::Proposer<Block> for
+Proposer<Block, SubstrateClient<B, E, Block, RA>, A>
+where
 	Block: BlockT,
-	C: AuthoringApi<Block=Block>,
-	<C as ProvideRuntimeApi>::Api: BlockBuilderApi<Block>,
 	A: txpool::ChainApi<Block=Block>,
-	client::error::Error: From<<C as AuthoringApi>::Error>
+	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
+	Block: BlockT<Hash=H256>,
+	RA: Send + Sync + 'static,
+	SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
+	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api: BlockBuilderApi<Block>,
 {
-	type Create = futures::future::Ready<Result<<C as AuthoringApi>::Block, error::Error>>;
+	type Create = futures::future::Ready<Result<Block, error::Error>>;
 	type Error = error::Error;
 
 	fn propose(
@@ -185,19 +122,22 @@ impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block> for Pro
 	}
 }
 
-impl<Block, C, A> Proposer<Block, C, A>	where
+impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	where
 	Block: BlockT,
-	C: AuthoringApi<Block=Block>,
-	<C as ProvideRuntimeApi>::Api: BlockBuilderApi<Block>,
 	A: txpool::ChainApi<Block=Block>,
-	client::error::Error: From<<C as AuthoringApi>::Error>,
+	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
+	Block: BlockT<Hash=H256>,
+	RA: Send + Sync + 'static,
+	SubstrateClient<B, E, Block, RA>: ProvideRuntimeApi,
+	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api: BlockBuilderApi<Block>,
 {
 	fn propose_with(
 		&self,
 		inherent_data: InherentData,
 		inherent_digests: DigestFor<Block>,
 		deadline: time::Instant,
-	) -> Result<<C as AuthoringApi>::Block, error::Error>
+	) -> Result<Block, error::Error>
 	{
 		use runtime_primitives::traits::BlakeTwo256;
 
@@ -206,59 +146,65 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 		/// It allows us to increase block utilization.
 		const MAX_SKIPPED_TRANSACTIONS: usize = 8;
 
-		let block = self.client.build_block(
-			&self.parent_id,
-			inherent_data,
-			inherent_digests.clone(),
-			|block_builder| {
-				// proceed with transactions
-				let mut is_first = true;
-				let mut skipped = 0;
-				let mut unqueue_invalid = Vec::new();
-				let pending_iterator = self.transaction_pool.ready();
+		let mut block_builder = self.client.new_block_at(&self.parent_id, inherent_digests)?;
 
-				debug!("Attempting to push transactions from the pool.");
-				for pending in pending_iterator {
-					if (self.now)() > deadline {
-						debug!("Consensus deadline reached when pushing block transactions, proceeding with proposing.");
-						break;
-					}
+		let runtime_api = self.client.runtime_api();
+		// We don't check the API versions any further here since the dispatch compatibility
+		// check should be enough.
+		runtime_api.inherent_extrinsics_with_context(&self.parent_id, ExecutionContext::BlockConstruction, inherent_data)?
+			.into_iter().try_for_each(|i| block_builder.push(i))?;
 
-					trace!("[{:?}] Pushing to the block.", pending.hash);
-					match block_builder.push_extrinsic(pending.data.clone()) {
-						Ok(()) => {
-							debug!("[{:?}] Pushed to the block.", pending.hash);
-						}
-						Err(error::Error::ApplyExtrinsicFailed(ApplyError::FullBlock)) => {
-							if is_first {
-								debug!("[{:?}] Invalid transaction: FullBlock on empty block", pending.hash);
-								unqueue_invalid.push(pending.hash.clone());
-							} else if skipped < MAX_SKIPPED_TRANSACTIONS {
-								skipped += 1;
-								debug!(
-									"Block seems full, but will try {} more transactions before quitting.",
-									MAX_SKIPPED_TRANSACTIONS - skipped
-								);
-							} else {
-								debug!("Block is full, proceed with proposing.");
-								break;
-							}
-						}
-						Err(e) => {
-							debug!("[{:?}] Invalid transaction: {}", pending.hash, e);
-							unqueue_invalid.push(pending.hash.clone());
-						}
-					}
+		{
+			// proceed with transactions
+			let mut is_first = true;
+			let mut skipped = 0;
+			let mut unqueue_invalid = Vec::new();
+			let pending_iterator = self.transaction_pool.ready();
 
-					is_first = false;
+			debug!("Attempting to push transactions from the pool.");
+			for pending in pending_iterator {
+				if (self.now)() > deadline {
+					debug!("Consensus deadline reached when pushing block transactions, proceeding with proposing.");
+					break;
 				}
 
-				self.transaction_pool.remove_invalid(&unqueue_invalid);
-			})?;
+				trace!("[{:?}] Pushing to the block.", pending.hash);
+				match client::block_builder::BlockBuilder::push(&mut block_builder, pending.data.clone()).map_err(Into::into) {
+					Ok(()) => {
+						debug!("[{:?}] Pushed to the block.", pending.hash);
+					}
+					Err(error::Error::ApplyExtrinsicFailed(ApplyError::FullBlock)) => {
+						if is_first {
+							debug!("[{:?}] Invalid transaction: FullBlock on empty block", pending.hash);
+							unqueue_invalid.push(pending.hash.clone());
+						} else if skipped < MAX_SKIPPED_TRANSACTIONS {
+							skipped += 1;
+							debug!(
+								"Block seems full, but will try {} more transactions before quitting.",
+								MAX_SKIPPED_TRANSACTIONS - skipped
+							);
+						} else {
+							debug!("Block is full, proceed with proposing.");
+							break;
+						}
+					}
+					Err(e) => {
+						debug!("[{:?}] Invalid transaction: {}", pending.hash, e);
+						unqueue_invalid.push(pending.hash.clone());
+					}
+				}
+
+				is_first = false;
+			}
+
+			self.transaction_pool.remove_invalid(&unqueue_invalid);
+		}
+
+		let block = block_builder.bake()?;
 
 		info!("Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics: [{}]]",
 			block.header().number(),
-			<<C as AuthoringApi>::Block as BlockT>::Hash::from(block.header().hash()),
+			<Block as BlockT>::Hash::from(block.header().hash()),
 			block.header().parent_hash(),
 			block.extrinsics()
 				.iter()
@@ -268,7 +214,7 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 		);
 		telemetry!(CONSENSUS_INFO; "prepared_block_for_proposing";
 			"number" => ?block.header().number(),
-			"hash" => ?<<C as AuthoringApi>::Block as BlockT>::Hash::from(block.header().hash()),
+			"hash" => ?<Block as BlockT>::Hash::from(block.header().hash()),
 		);
 
 		let substrate_block = Decode::decode(&mut block.encode().as_slice())
