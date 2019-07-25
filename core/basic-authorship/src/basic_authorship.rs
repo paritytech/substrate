@@ -18,25 +18,23 @@
 
 // FIXME #1021 move this into substrate-consensus-common
 //
-use std::{self, time, sync::Arc};
 
-use log::{info, debug, trace};
-
+use std::{time, sync::Arc};
 use client::{
-	self, error, Client as SubstrateClient, CallExecutor,
+	error, Client as SubstrateClient, CallExecutor,
 	block_builder::api::BlockBuilder as BlockBuilderApi,
 };
 use codec::Decode;
-use consensus_common::{self, evaluation};
+use consensus_common::{evaluation};
+use inherents::InherentData;
+use log::{info, debug, trace};
 use primitives::{H256, Blake2Hasher, ExecutionContext};
+use runtime_primitives::{ApplyError, generic::BlockId};
 use runtime_primitives::traits::{
 	Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi,
-	DigestFor,
+	DigestFor, BlakeTwo256,
 };
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::ApplyError;
 use transaction_pool::txpool::{self, Pool as TransactionPool};
-use inherents::InherentData;
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
 /// Proposer factory.
@@ -136,8 +134,6 @@ impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	wh
 		deadline: time::Instant,
 	) -> Result<Block, error::Error>
 	{
-		use runtime_primitives::traits::BlakeTwo256;
-
 		/// If the block is full we will attempt to push at most
 		/// this number of transactions before quitting for real.
 		/// It allows us to increase block utilization.
