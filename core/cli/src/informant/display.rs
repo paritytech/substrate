@@ -89,10 +89,13 @@ fn speed<B: BlockT>(
 	last_number: Option<NumberFor<B>>,
 	last_update: time::Instant
 ) -> String {
-	let elapsed = last_update.elapsed();
-	let since_last_millis = elapsed.as_secs() * 1000;
-	let since_last_subsec_millis = elapsed.subsec_millis() as u64;
-	let elapsed_ms = since_last_millis + since_last_subsec_millis;
+	// Number of milliseconds elapsed since last time.
+	let elapsed_ms = {
+		let elapsed = last_update.elapsed();
+		let since_last_millis = elapsed.as_secs() * 1000;
+		let since_last_subsec_millis = elapsed.subsec_millis() as u64;
+		since_last_millis + since_last_subsec_millis
+	};
 
 	// Number of blocks that have been imported since last time.
 	let diff = match last_number {
