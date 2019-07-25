@@ -20,7 +20,6 @@
 
 use std::collections::HashSet;
 use ref_thread_local::{ref_thread_local, RefThreadLocal};
-use primitives::BuildStorage;
 use primitives::testing::Header;
 use substrate_primitives::{H256, Blake2Hasher};
 use srml_support::{impl_outer_origin, parameter_types};
@@ -102,7 +101,7 @@ pub fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 	let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 	GenesisConfig::<Runtime> {
 		ids: vec![1, 2, 3, 4]
-	}.build_storage().unwrap().assimilate_storage(&mut t).unwrap();
+	}.assimilate_storage(&mut t).unwrap();
 	t.into()
 }
 

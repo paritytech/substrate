@@ -504,7 +504,6 @@ impl<T: Trait> Module<T> {
 mod tests {
 	use super::*;
 
-	use srml_support::runtime_primitives::BuildStorage;
 	use srml_support::{assert_ok, impl_outer_origin, parameter_types};
 	use sr_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
@@ -574,14 +573,13 @@ mod tests {
 	fn new_test_ext() -> sr_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
-		balances::GenesisConfig::<Test>::default().build_storage().unwrap()
-			.assimilate_storage(&mut t).unwrap();
+		balances::GenesisConfig::<Test>::default().assimilate_storage(&mut t).unwrap();
 		GenesisConfig::<Test>{
 			dummy: 42,
 			// we configure the map with (key, value) pairs.
 			bar: vec![(1, 2), (2, 3)],
 			foo: 24,
-		}.build_storage().unwrap().assimilate_storage(&mut t).unwrap();
+		}.assimilate_storage(&mut t).unwrap();
 		t.into()
 	}
 

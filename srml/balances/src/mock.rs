@@ -18,7 +18,7 @@
 
 #![cfg(test)]
 
-use primitives::{traits::IdentityLookup, testing::Header, BuildStorage,
+use primitives::{traits::IdentityLookup, testing::Header,
 	weights::{DispatchInfo, Weight}};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
@@ -185,7 +185,7 @@ impl ExtBuilder {
 			} else {
 				vec![]
 			},
-		}.build_storage().unwrap().assimilate_storage(&mut t).unwrap();
+		}.assimilate_storage(&mut t).unwrap();
 		t.into()
 	}
 }

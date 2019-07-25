@@ -314,7 +314,6 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::Blake2Hasher;
 	use primitives::{
-		BuildStorage,
 		traits::OnInitialize,
 		testing::{UintAuthorityId, UINT_DUMMY_KEY},
 	};
@@ -332,7 +331,7 @@ mod tests {
 			keys: NEXT_VALIDATORS.with(|l|
 				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i))).collect()
 			),
-		}.build_storage().unwrap().assimilate_storage(&mut t).unwrap();
+		}.assimilate_storage(&mut t).unwrap();
 		runtime_io::TestExternalities::new(t)
 	}
 

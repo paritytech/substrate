@@ -356,7 +356,6 @@ mod tests {
 	use balances::Call;
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
-	use primitives::BuildStorage;
 	use primitives::generic::Era;
 	use primitives::traits::{Header as HeaderT, BlakeTwo256, IdentityLookup};
 	use primitives::testing::{Digest, Header, Block};
@@ -484,7 +483,7 @@ mod tests {
 		balances::GenesisConfig::<Runtime> {
 			balances: vec![(1, 111 * balance_factor)],
 			vesting: vec![],
-		}.build_storage().unwrap().assimilate_storage(&mut t).unwrap();
+		}.assimilate_storage(&mut t).unwrap();
 		t.into()
 	}
 

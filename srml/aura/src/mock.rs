@@ -21,7 +21,6 @@
 use primitives::{
 	traits::IdentityLookup,
 	testing::{Header, UintAuthorityId},
-	BuildStorage,
 };
 use srml_support::{impl_outer_origin, parameter_types};
 use runtime_io;
@@ -74,7 +73,7 @@ pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blak
 	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	GenesisConfig::<Test>{
 		authorities: authorities.into_iter().map(|a| UintAuthorityId(a)).collect(),
-	}.build_storage().unwrap().assimilate_storage(&mut t).unwrap();
+	}.assimilate_storage(&mut t).unwrap();
 	t.into()
 }
 

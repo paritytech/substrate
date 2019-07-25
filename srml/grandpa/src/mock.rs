@@ -19,7 +19,6 @@
 #![cfg(test)]
 
 use primitives::{DigestItem, traits::IdentityLookup, testing::{Header, UintAuthorityId}};
-use primitives::BuildStorage;
 use runtime_io;
 use srml_support::{impl_outer_origin, impl_outer_event, parameter_types};
 use substrate_primitives::{H256, Blake2Hasher};
@@ -81,7 +80,7 @@ pub fn new_test_ext(authorities: Vec<(u64, u64)>) -> runtime_io::TestExternaliti
 	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	GenesisConfig {
 		authorities: to_authorities(authorities),
-	}.build_storage().unwrap().assimilate_storage(&mut t).unwrap();
+	}.assimilate_storage(&mut t).unwrap();
 	t.into()
 }
 
