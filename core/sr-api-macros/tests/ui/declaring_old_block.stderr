@@ -14,6 +14,6 @@ warning: unused import: `sr_primitives::traits::Block as BlockT`
  --> $DIR/declaring_old_block.rs:1:5
   |
 1 | use sr_primitives::traits::Block as BlockT;
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |
-  = note: #[warn(unused_imports)] on by default
+  = note: `#[warn(unused_imports)]` on by default
