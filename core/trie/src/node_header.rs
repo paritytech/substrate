@@ -41,11 +41,11 @@ impl Encode for NodeHeader {
 		match self {
 			NodeHeader::Null => output.push_byte(trie_constants::EMPTY_TRIE),
 			NodeHeader::Branch(true, nibble_count)	=>
-				s_encode_size_and_prefix(*nibble_count, trie_constants::BRANCH_WITH_MASK, output),
+				encode_size_and_prefix(*nibble_count, trie_constants::BRANCH_WITH_MASK, output),
 			NodeHeader::Branch(false, nibble_count) =>
-				s_encode_size_and_prefix(*nibble_count, trie_constants::BRANCH_WITHOUT_MASK, output),
+				encode_size_and_prefix(*nibble_count, trie_constants::BRANCH_WITHOUT_MASK, output),
 			NodeHeader::Leaf(nibble_count) =>
-				s_encode_size_and_prefix(*nibble_count, trie_constants::LEAF_PREFIX_MASK, output),
+				encode_size_and_prefix(*nibble_count, trie_constants::LEAF_PREFIX_MASK, output),
 		}
 	}
 }
@@ -57,9 +57,9 @@ impl Decode for NodeHeader {
 			return Some(NodeHeader::Null);
 		}
 		match i & (0b11 << 6) {
-			trie_constants::LEAF_PREFIX_MASK => Some(NodeHeader::Leaf(s_decode_size(i, input)?)),
-			trie_constants::BRANCH_WITHOUT_MASK => Some(NodeHeader::Branch(false, s_decode_size(i, input)?)),
-			trie_constants::BRANCH_WITH_MASK => Some(NodeHeader::Branch(true, s_decode_size(i, input)?)),
+			trie_constants::LEAF_PREFIX_MASK => Some(NodeHeader::Leaf(decode_size(i, input)?)),
+			trie_constants::BRANCH_WITHOUT_MASK => Some(NodeHeader::Branch(false, decode_size(i, input)?)),
+			trie_constants::BRANCH_WITH_MASK => Some(NodeHeader::Branch(true, decode_size(i, input)?)),
 			// do not allow any special encoding
 			_ => None,
 		}
@@ -69,7 +69,7 @@ impl Decode for NodeHeader {
 /// Returns an iterator over encoded bytes for node header and size.
 /// Size encoding allows unlimited, length unefficient, representation, but
 /// is bounded to 16 bit maximum value to avoid possible DOS.
-pub(crate) fn s_size_and_prefix_iter(size: usize, prefix: u8) -> impl Iterator<Item = u8> {
+pub(crate) fn size_and_prefix_iterator(size: usize, prefix: u8) -> impl Iterator<Item = u8> {
 	let size = rstd::cmp::min(trie_constants::NIBBLE_SIZE_BOUND, size);
 
 	let l1 = rstd::cmp::min(62, size);
@@ -81,9 +81,9 @@ pub(crate) fn s_size_and_prefix_iter(size: usize, prefix: u8) -> impl Iterator<I
 	let next_bytes = move || {
 		if rem > 0 {
 			if rem < 256 {
-				let res = rem - 1;
+				let result = rem - 1;
 				rem = 0;
-				Some(res as u8)
+				Some(result as u8)
 			} else {
 				rem = rem.saturating_sub(255);
 				Some(255)
@@ -96,14 +96,14 @@ pub(crate) fn s_size_and_prefix_iter(size: usize, prefix: u8) -> impl Iterator<I
 }
 
 /// Encodes size and prefix to a stream output.
-fn s_encode_size_and_prefix(size: usize, prefix: u8, out: &mut impl Output) {
-	for b in s_size_and_prefix_iter(size, prefix) {
+fn encode_size_and_prefix(size: usize, prefix: u8, out: &mut impl Output) {
+	for b in size_and_prefix_iterator(size, prefix) {
 		out.push_byte(b)
 	}
 }
 
 /// Decode size only from stream input and header byte.
-fn s_decode_size(first: u8, input: &mut impl Input) -> Option<usize> {
+fn decode_size(first: u8, input: &mut impl Input) -> Option<usize> {
 	let mut result = (first & 255u8 >> 2) as usize;
 	if result < 63 {
 		return Some(result);

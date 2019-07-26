@@ -60,7 +60,7 @@ impl<H: Hasher> TrieOps for Layout<H> {
 		A: AsRef<[u8]> + Ord,
 		B: AsRef<[u8]>,
 	{
-		trie_root::trie_root_no_ext::<H, TrieStream, _, _, _>(input)
+		trie_root::trie_root_no_extension::<H, TrieStream, _, _, _>(input)
 	}
 	
 	fn trie_root_unhashed<I, A, B>(input: I) -> Vec<u8> where
@@ -68,7 +68,7 @@ impl<H: Hasher> TrieOps for Layout<H> {
 		A: AsRef<[u8]> + Ord,
 		B: AsRef<[u8]>,
 	{
-		trie_root::unhashed_trie_no_ext::<H, TrieStream, _, _, _>(input)
+		trie_root::unhashed_trie_no_extension::<H, TrieStream, _, _, _>(input)
 	}
 	
 	fn encode_index(input: u32) -> Vec<u8> {

@@ -127,7 +127,7 @@ impl<
 		output
 	}
 
-	fn ext_node(
+	fn extension_node(
 		_partial: impl Iterator<Item = u8>,
 		_nbnibble: usize,
 		_child: ChildReference<<H as Hasher>::Out>,

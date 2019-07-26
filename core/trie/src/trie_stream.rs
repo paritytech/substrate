@@ -21,7 +21,7 @@ use trie_root;
 use codec::Encode;
 use rstd::vec::Vec;
 use crate::trie_constants;
-use crate::node_header::{NodeKind, s_size_and_prefix_iter};
+use crate::node_header::{NodeKind, size_and_prefix_iterator};
 use crate::node_codec::BitMap16;
 use trie_db::BitMap;
 
@@ -55,9 +55,9 @@ fn fuse_nibbles_node<'a>(nibbles: &'a [u8], kind: NodeKind) -> impl Iterator<Ite
 	let size = rstd::cmp::min(trie_constants::NIBBLE_SIZE_BOUND, nibbles.len());
 
 	let iter_start = match kind {
-		NodeKind::Leaf => s_size_and_prefix_iter(size, trie_constants::LEAF_PREFIX_MASK),
-		NodeKind::BranchNoValue => s_size_and_prefix_iter(size, trie_constants::BRANCH_WITHOUT_MASK),
-		NodeKind::BranchWithValue => s_size_and_prefix_iter(size, trie_constants::BRANCH_WITH_MASK),
+		NodeKind::Leaf => size_and_prefix_iterator(size, trie_constants::LEAF_PREFIX_MASK),
+		NodeKind::BranchNoValue => size_and_prefix_iterator(size, trie_constants::BRANCH_WITHOUT_MASK),
+		NodeKind::BranchWithValue => size_and_prefix_iterator(size, trie_constants::BRANCH_WITH_MASK),
 	};
 	iter_start
 		.chain(if nibbles.len() % 2 == 1 { Some(nibbles[0]) } else { None })
@@ -121,12 +121,12 @@ impl trie_root::TrieStream for TrieStream {
 }
 
 fn branch_node(has_value: bool, has_children: impl Iterator<Item = bool>) -> [u8; 3] {
-	let mut res = [0, 0, 0];
-	branch_node_buf::<BitMap16, _>(has_value, has_children, &mut res[..]);
-	res
+	let mut result = [0, 0, 0];
+	branch_node_buffered::<BitMap16, _>(has_value, has_children, &mut result[..]);
+	result
 }
 
-fn branch_node_buf<BM, I>(has_value: bool, has_children: I, dest: &mut[u8]) 
+fn branch_node_buffered<BM, I>(has_value: bool, has_children: I, dest: &mut[u8]) 
 	where
 		BM: BitMap,
 		I: Iterator<Item = bool>,
