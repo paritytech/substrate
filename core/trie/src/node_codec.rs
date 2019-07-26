@@ -77,7 +77,7 @@ impl<
 				let child_val = &**input;
 				let mut ix = 0;
 				children.as_mut()[0] = ix;
-				for i in 0..N::NIBBLE_LEN {
+				for i in 0..N::NIBBLE_LENGTH {
 					if bitmap.value_at(i) {
 						let count = <Compact<u32>>::decode(input).ok_or(Error::BadFormat)?.0 as usize;
 						let _ = take(input, count);
