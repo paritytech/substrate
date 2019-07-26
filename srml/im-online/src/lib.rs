@@ -148,7 +148,7 @@ pub trait Trait: system::Trait + session::Trait {
 
 	/// A extrinsic right from the external world. This is unchecked and so
 	/// can contain a signature.
-	type UncheckedExtrinsic: ExtrinsicT<Call=Self::Call> + Encode + Decode;
+	type UncheckedExtrinsic: ExtrinsicT<Call=<Self as Trait>::Call> + Encode + Decode;
 
 	/// The identifier type for an authority.
 	type AuthorityId: Member + Parameter + Default + TypedKey + Decode + Encode + AsRef<[u8]>;

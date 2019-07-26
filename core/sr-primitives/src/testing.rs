@@ -245,7 +245,7 @@ impl<Call: Codec + Sync + Send, Extra> traits::Extrinsic for TestXt<Call, Extra>
 
 impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 	Call: 'static + Sized + Send + Sync + Clone + Eq + Codec + Debug + Dispatchable<Origin=Origin>,
-	Extra: SignedExtension<AccountId=u64>,
+	Extra: SignedExtension<AccountId=u64, Call=Call>,
 	Origin: From<Option<u64>>
 {
 	type AccountId = u64;
@@ -268,10 +268,10 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 		len: usize,
 	) -> Result<DispatchResult, DispatchError> {
 		let maybe_who = if let Some((who, extra)) = self.0 {
-			Extra::pre_dispatch(extra, &who, info, len)?;
+			Extra::pre_dispatch(extra, &who, &self.1, info, len)?;
 			Some(who)
 		} else {
-			Extra::pre_dispatch_unsigned(info, len)?;
+			Extra::pre_dispatch_unsigned(&self.1, info, len)?;
 			None
 		};
 		Ok(self.1.dispatch(maybe_who.into()))
