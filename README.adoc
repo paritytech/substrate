@@ -393,7 +393,7 @@ substrate
 * Substrate Core
 [source, shell]
 substrate, substrate-cli, substrate-client, substrate-client-db,
-substrate-consensus-common, substrate-consensus-rhd,
+substrate-consensus-common,
 substrate-executor, substrate-finality-grandpa, substrate-keyring, substrate-keystore, substrate-network,
 substrate-network-libp2p, substrate-primitives, substrate-rpc, substrate-rpc-servers,
 substrate-serializer, substrate-service, substrate-service-test, substrate-state-db,

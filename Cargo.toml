@@ -25,7 +25,6 @@ members = [
 	"core/consensus/aura",
 	"core/consensus/babe",
 	"core/consensus/common",
-	"core/consensus/rhd",
 	"core/consensus/slots",
 	"core/executor",
 	"core/executor/runtime-test",
