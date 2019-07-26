@@ -172,7 +172,6 @@ test-linux-stable-int:
     expire_in:                     24 hrs
     paths:
       - ${CI_COMMIT_SHORT_SHA}_int_failure.log
-  allow_failure:                   true
 
 
 check-web-wasm:
@@ -206,7 +205,6 @@ check-web-wasm:
     - time cargo web build -p substrate-telemetry
     - time cargo web build -p substrate-trie
     - sccache -s
-  allow_failure:                   true
 
 .build-only:                       &build-only
   only:
@@ -220,7 +218,7 @@ build-linux-substrate:
   stage:                           build
   <<:                              *collect-artifacts
   <<:                              *docker-env
-  # <<:                              *build-only
+  <<:                              *build-only
   except:
     variables:
       - $DEPLOY_TAG
@@ -246,7 +244,7 @@ build-linux-subkey:
   stage:                           build
   <<:                              *collect-artifacts
   <<:                              *docker-env
-  # <<:                              *build-only
+  <<:                              *build-only
   except:
     variables:
       - $DEPLOY_TAG
@@ -286,7 +284,7 @@ build-rust-doc-release:
 #### stage:                        publish
 
 .publish-docker-release:           &publish-docker-release
-  # <<:                              *build-only
+  <<:                              *build-only
   <<:                              *kubernetes-build
   image:                           docker:stable
   services:
@@ -346,7 +344,7 @@ publish-docker-subkey:
 
 publish-s3-release:
   stage:                           publish
-  # <<:                              *build-only
+  <<:                              *build-only
   <<:                              *kubernetes-build
   dependencies:
     - build-linux-substrate
