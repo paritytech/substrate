@@ -35,7 +35,6 @@ pub use codec;
 pub use once_cell;
 #[doc(hidden)]
 pub use paste;
-pub use sr_primitives as sr_primitives;
 
 pub use self::storage::hashed::generator::{
 	HashedStorage, Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat
