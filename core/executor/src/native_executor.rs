@@ -52,16 +52,11 @@ pub trait NativeExecutionDispatch: Send + Sync {
 	/// Get the wasm code that the native dispatch will be equivalent to.
 	fn native_equivalent() -> &'static [u8];
 
-	/// Dispatch a method and input data to be executed natively. Returns `Some` result or `None`
-	/// if the `method` is unknown. Panics if there's an unrecoverable error.
-	// fn dispatch<H: hash_db::Hasher>(ext: &mut Externalities<H>, method: &str, data: &[u8]) -> Result<Vec<u8>>;
+	/// Dispatch a method and input data to be executed natively.
 	fn dispatch(ext: &mut dyn Externalities<Blake2Hasher>, method: &str, data: &[u8]) -> Result<Vec<u8>>;
 
 	/// Provide native runtime version.
 	fn native_version() -> NativeVersion;
-
-	/// Construct corresponding `NativeExecutor`
-	fn new(default_heap_pages: Option<u64>) -> NativeExecutor<Self> where Self: Sized;
 }
 
 /// A generic `CodeExecutor` implementation that uses a delegate to determine wasm code equivalence
@@ -222,17 +217,18 @@ macro_rules! native_executor_instance {
 				// get a proper build script, this must be strictly adhered to or things will go wrong.
 				$code
 			}
-			fn dispatch(ext: &mut $crate::Externalities<$crate::Blake2Hasher>, method: &str, data: &[u8]) -> $crate::error::Result<Vec<u8>> {
+
+			fn dispatch(
+				ext: &mut $crate::Externalities<$crate::Blake2Hasher>,
+				method: &str,
+				data: &[u8]
+			) -> $crate::error::Result<Vec<u8>> {
 				$crate::with_native_environment(ext, move || $dispatcher(method, data))?
 					.ok_or_else(|| $crate::error::Error::MethodNotFound(method.to_owned()))
 			}
 
 			fn native_version() -> $crate::NativeVersion {
 				$version()
-			}
-
-			fn new(default_heap_pages: Option<u64>) -> $crate::NativeExecutor<$name> {
-				$crate::NativeExecutor::new(default_heap_pages)
 			}
 		}
 	}
