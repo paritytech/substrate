@@ -764,7 +764,7 @@ mod tests {
 		}
 	}
 
-	const SLOT_DURATION: u64 = 1;
+	const SLOT_DURATION: u64 = 1000;
 
 	pub struct AuraTestNet {
 		peers: Vec<Peer<(), DummySpecialization>>,

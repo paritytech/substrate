@@ -264,7 +264,7 @@ mod tests {
 	use consensus_common::{Environment, Proposer, BlockImportParams, BlockOrigin, ForkChoiceStrategy};
 	use node_primitives::DigestItem;
 	use node_runtime::{BalancesCall, Call, UncheckedExtrinsic};
-	use node_runtime::constants::{currency::CENTS, time::SECS_PER_BLOCK};
+	use node_runtime::constants::{currency::CENTS, time::SLOT_DURATION};
 	use parity_codec::{Encode, Decode};
 	use primitives::{
 		crypto::Pair as CryptoPair, blake2_256,
@@ -365,7 +365,7 @@ mod tests {
 			// even though there's only one authority some slots might be empty,
 			// so we must keep trying the next slots until we can claim one.
 			let babe_pre_digest = loop {
-				inherent_data.replace_data(timestamp::INHERENT_IDENTIFIER, &(slot_num * SECS_PER_BLOCK));
+				inherent_data.replace_data(timestamp::INHERENT_IDENTIFIER, &(slot_num * SLOT_DURATION));
 				if let Some(babe_pre_digest) = babe::test_helpers::claim_slot(
 					&*service.client(),
 					&parent_id,

@@ -57,15 +57,14 @@ impl SignedDuration {
 			duration_now() + self.offset
 		} else {
 			duration_now() - self.offset
-		}.as_secs()) / slot_duration
+		}.as_millis() as u64) / slot_duration
 	}
 }
 
 /// Returns the duration until the next slot, based on current duration since
 pub fn time_until_next(now: Duration, slot_duration: u64) -> Duration {
-	let remaining_full_secs = slot_duration - (now.as_secs() % slot_duration) - 1;
-	let remaining_nanos = 1_000_000_000 - now.subsec_nanos();
-	Duration::new(remaining_full_secs, remaining_nanos)
+	let remaining_full_millis = slot_duration - (now.as_millis() as u64 % slot_duration) - 1;
+	Duration::from_millis(remaining_full_millis)
 }
 
 /// Information about a slot.
@@ -89,7 +88,7 @@ impl SlotInfo {
 		if now < self.ends_at {
 			self.ends_at.duration_since(now)
 		} else {
-			Duration::from_secs(0)
+			Duration::from_millis(0)
 		}
 	}
 }
@@ -156,7 +155,7 @@ impl<SC: SlotCompatible + Unpin> Stream for Slots<SC> {
 			};
 			// reschedule delay for next slot.
 			let ends_in = offset +
-				time_until_next(Duration::from_secs(timestamp), slot_duration);
+				time_until_next(Duration::from_millis(timestamp), slot_duration);
 			let ends_at = Instant::now() + ends_in;
 			self.inner_delay = Some(Delay::new(ends_in));
 

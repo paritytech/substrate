@@ -354,7 +354,7 @@ impl srml_system::Trait for Runtime {
 }
 
 impl srml_timestamp::Trait for Runtime {
-	/// A timestamp: seconds since the unix epoch.
+	/// A timestamp: milliseconds since the unix epoch.
 	type Moment = u64;
 	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
@@ -540,7 +540,7 @@ cfg_if! {
 			}
 
 			impl aura_primitives::AuraApi<Block, AuraId> for Runtime {
-				fn slot_duration() -> u64 { 1 }
+				fn slot_duration() -> u64 { 1000 }
 				fn authorities() -> Vec<AuraId> { system::authorities() }
 			}
 
@@ -548,7 +548,7 @@ cfg_if! {
 				fn startup_data() -> babe_primitives::BabeConfiguration {
 					babe_primitives::BabeConfiguration {
 						median_required_blocks: 0,
-						slot_duration: 3,
+						slot_duration: 3000,
 						c: (3, 10),
 					}
 				}
@@ -731,7 +731,7 @@ cfg_if! {
 			}
 
 			impl aura_primitives::AuraApi<Block, AuraId> for Runtime {
-				fn slot_duration() -> u64 { 1 }
+				fn slot_duration() -> u64 { 1000 }
 				fn authorities() -> Vec<AuraId> { system::authorities() }
 			}
 
@@ -739,7 +739,7 @@ cfg_if! {
 				fn startup_data() -> babe_primitives::BabeConfiguration {
 					babe_primitives::BabeConfiguration {
 						median_required_blocks: 0,
-						slot_duration: 1,
+						slot_duration: 1000,
 						c: (3, 10),
 					}
 				}

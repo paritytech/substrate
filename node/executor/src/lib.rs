@@ -463,7 +463,7 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(timestamp::Call::set(42)),
+					function: Call::Timestamp(timestamp::Call::set(42 * 1000)),
 				},
 				CheckedExtrinsic {
 					signed: Some((alice(), signed_extra(0, 0))),
@@ -485,7 +485,7 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(timestamp::Call::set(42)),
+					function: Call::Timestamp(timestamp::Call::set(42 * 1000)),
 				},
 				CheckedExtrinsic {
 					signed: Some((alice(), signed_extra(0, 0))),
@@ -500,7 +500,7 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(timestamp::Call::set(52)),
+					function: Call::Timestamp(timestamp::Call::set(52 * 1000)),
 				},
 				CheckedExtrinsic {
 					signed: Some((bob(), signed_extra(0, 0))),
@@ -528,7 +528,7 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(timestamp::Call::set(time)),
+					function: Call::Timestamp(timestamp::Call::set(time * 1000)),
 				},
 				CheckedExtrinsic {
 					signed: Some((alice(), signed_extra(nonce, 0))),
@@ -784,7 +784,7 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(timestamp::Call::set(42)),
+					function: Call::Timestamp(timestamp::Call::set(42 * 1000)),
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), signed_extra(0, 0))),
@@ -983,7 +983,7 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(timestamp::Call::set(42)),
+				function: Call::Timestamp(timestamp::Call::set(42 * 1000)),
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), signed_extra(0, 0))),
@@ -1000,7 +1000,7 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(timestamp::Call::set(52)),
+				function: Call::Timestamp(timestamp::Call::set(52 * 1000)),
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), signed_extra(1, 0))),
@@ -1147,7 +1147,7 @@ mod tests {
 
 			xts.insert(0, CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(timestamp::Call::set(time)),
+				function: Call::Timestamp(timestamp::Call::set(time * 1000)),
 			});
 
 			// NOTE: this is super slow. Can probably be improved.
@@ -1213,7 +1213,7 @@ mod tests {
 				vec![
 					CheckedExtrinsic {
 						signed: None,
-						function: Call::Timestamp(timestamp::Call::set(time)),
+						function: Call::Timestamp(timestamp::Call::set(time * 1000)),
 					},
 					CheckedExtrinsic {
 						signed: Some((charlie(), signed_extra(nonce, 0))),
