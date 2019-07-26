@@ -355,12 +355,12 @@ where
 		&mut self,
 		kind: StorageKind,
 		key: &[u8],
-		old_value: &[u8],
+		old_value: Option<&[u8]>,
 		new_value: &[u8],
 	) -> bool {
 		match kind {
 			StorageKind::PERSISTENT => {
-				self.db.compare_and_set(STORAGE_PREFIX, key, Some(old_value), new_value)
+				self.db.compare_and_set(STORAGE_PREFIX, key, old_value, new_value)
 			},
 			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
 		}
@@ -657,12 +657,27 @@ mod tests {
 		api.local_storage_set(kind, key, b"value");
 
 		// when
-		assert_eq!(api.local_storage_compare_and_set(kind, key, b"val", b"xxx"), false);
+		assert_eq!(api.local_storage_compare_and_set(kind, key, Some(b"val"), b"xxx"), false);
 		assert_eq!(api.local_storage_get(kind, key), Some(b"value".to_vec()));
 
 		// when
-		assert_eq!(api.local_storage_compare_and_set(kind, key, b"value", b"xxx"), true);
+		assert_eq!(api.local_storage_compare_and_set(kind, key, Some(b"value"), b"xxx"), true);
 		assert_eq!(api.local_storage_get(kind, key), Some(b"xxx".to_vec()));
+	}
+
+	#[test]
+	fn should_compare_and_set_local_storage_with_none() {
+		// given
+		let kind = StorageKind::PERSISTENT;
+		let mut api = offchain_api().0;
+		let key = b"test";
+
+		// when
+		let res = api.local_storage_compare_and_set(kind, key, None, b"value");
+
+		// then
+		assert_eq!(res, true);
+		assert_eq!(api.local_storage_get(kind, key), Some(b"value".to_vec()));
 	}
 
 	#[test]

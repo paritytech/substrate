@@ -306,7 +306,12 @@ export_api! {
 		///
 		/// Note this storage is not part of the consensus, it's only accessible by
 		/// offchain worker tasks running on the same machine. It IS persisted between runs.
-		fn local_storage_compare_and_set(kind: StorageKind, key: &[u8], old_value: &[u8], new_value: &[u8]) -> bool;
+		fn local_storage_compare_and_set(
+			kind: StorageKind,
+			key: &[u8],
+			old_value: Option<&[u8]>,
+			new_value: &[u8]
+		) -> bool;
 
 		/// Gets a value from the local storage.
 		///
