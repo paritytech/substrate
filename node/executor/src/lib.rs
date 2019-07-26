@@ -39,7 +39,7 @@ mod tests {
 	use super::Executor;
 	use {balances, contracts, indices, staking, system, timestamp};
 	use runtime_io;
-	use substrate_executor::{WasmExecutor, NativeExecutionDispatch};
+	use substrate_executor::WasmExecutor;
 	use parity_codec::{Encode, Decode, Joiner};
 	use keyring::{AccountKeyring, Ed25519Keyring, Sr25519Keyring};
 	use runtime_support::{Hashable, StorageValue, StorageMap, assert_eq_error_rate, traits::Currency};
@@ -422,7 +422,7 @@ mod tests {
 		};
 
 		// execute the block to get the real header.
-		Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
+		executor().call::<_, NeverNativeValue, fn() -> _>(
 			env,
 			"Core_initialize_block",
 			&header.encode(),
@@ -431,7 +431,7 @@ mod tests {
 		).0.unwrap();
 
 		for i in extrinsics.iter() {
-			Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
+			executor().call::<_, NeverNativeValue, fn() -> _>(
 				env,
 				"BlockBuilder_apply_extrinsic",
 				&i.encode(),
@@ -440,7 +440,7 @@ mod tests {
 			).0.unwrap();
 		}
 
-		let header = match Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
+		let header = match executor().call::<_, NeverNativeValue, fn() -> _>(
 			env,
 			"BlockBuilder_finalize_block",
 			&[0u8;0],
@@ -846,7 +846,7 @@ mod tests {
 	fn native_big_block_import_succeeds() {
 		let mut t = new_test_ext(COMPACT_CODE, false);
 
-		Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
+		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
 			&block_with_size(42, 0, 120_000).0,
@@ -860,7 +860,7 @@ mod tests {
 		let mut t = new_test_ext(COMPACT_CODE, false);
 
 		assert!(
-			Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
+			executor().call::<_, NeverNativeValue, fn() -> _>(
 				&mut t,
 				"Core_execute_block",
 				&block_with_size(42, 0, 120_000).0,
@@ -926,7 +926,7 @@ mod tests {
 		let block = Block::decode(&mut &block_data[..]).unwrap();
 
 		let mut t = new_test_ext(COMPACT_CODE, true);
-		Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
+		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
 			&block.encode(),
