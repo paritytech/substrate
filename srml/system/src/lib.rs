@@ -151,6 +151,9 @@ pub trait Trait: 'static + Eq + Clone {
 	/// The aggregated `Origin` type used by dispatchable calls.
 	type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>> + From<RawOrigin<Self::AccountId>>;
 
+	/// The aggregated `Call` type.
+	type Call;
+
 	/// Account index (aka nonce) type. This stores the number of previous transactions associated with a sender
 	/// account.
 	type Index:
@@ -873,6 +876,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 
 impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 	type AccountId = T::AccountId;
+	type Call = T::Call;
 	type AdditionalSigned = ();
 
 	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
@@ -880,6 +884,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 	fn pre_dispatch(
 		self,
 		_who: &Self::AccountId,
+		_call: &Self::Call,
 		info: DispatchInfo,
 		len: usize,
 	) -> Result<(), DispatchError> {
@@ -893,6 +898,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 	fn validate(
 		&self,
 		_who: &Self::AccountId,
+		_call: &Self::Call,
 		info: DispatchInfo,
 		len: usize,
 	) -> Result<ValidTransaction, DispatchError> {
@@ -933,6 +939,7 @@ impl<T: Trait> rstd::fmt::Debug for CheckNonce<T> {
 
 impl<T: Trait> SignedExtension for CheckNonce<T> {
 	type AccountId = T::AccountId;
+	type Call = T::Call;
 	type AdditionalSigned = ();
 
 	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
@@ -940,6 +947,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 	fn pre_dispatch(
 		self,
 		who: &Self::AccountId,
+		_call: &Self::Call,
 		_info: DispatchInfo,
 		_len: usize,
 	) -> Result<(), DispatchError> {
@@ -956,6 +964,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 	fn validate(
 		&self,
 		who: &Self::AccountId,
+		_call: &Self::Call,
 		info: DispatchInfo,
 		_len: usize,
 	) -> Result<ValidTransaction, DispatchError> {
@@ -1003,6 +1012,7 @@ impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckEra<T> {
 
 impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 	type AccountId = T::AccountId;
+	type Call = T::Call;
 	type AdditionalSigned = T::Hash;
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str> {
 		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
@@ -1066,6 +1076,7 @@ mod tests {
 
 	impl Trait for Test {
 		type Origin = Origin;
+		type Call = ();
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;

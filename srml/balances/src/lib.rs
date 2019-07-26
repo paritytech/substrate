@@ -763,6 +763,7 @@ impl<T: Subtrait<I>, I: Instance> PartialEq for ElevatedTrait<T, I> {
 impl<T: Subtrait<I>, I: Instance> Eq for ElevatedTrait<T, I> {}
 impl<T: Subtrait<I>, I: Instance> system::Trait for ElevatedTrait<T, I> {
 	type Origin = T::Origin;
+	type Call = T::Call;
 	type Index = T::Index;
 	type BlockNumber = T::BlockNumber;
 	type Hash = T::Hash;
@@ -1213,12 +1214,14 @@ impl<T: Trait<I>, I: Instance> rstd::fmt::Debug for TakeFees<T, I> {
 
 impl<T: Trait<I>, I: Instance + Clone + Eq> SignedExtension for TakeFees<T, I> {
 	type AccountId = T::AccountId;
+	type Call = T::Call;
 	type AdditionalSigned = ();
 	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
 
 	fn validate(
 		&self,
 		who: &Self::AccountId,
+		_call: &Self::Call,
 		info: DispatchInfo,
 		len: usize,
 	) -> rstd::result::Result<ValidTransaction, DispatchError> {

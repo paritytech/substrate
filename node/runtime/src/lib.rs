@@ -111,6 +111,7 @@ parameter_types! {
 
 impl system::Trait for Runtime {
 	type Origin = Origin;
+	type Call = Call;
 	type Index = Index;
 	type BlockNumber = BlockNumber;
 	type Hash = Hash;

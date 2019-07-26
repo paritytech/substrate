@@ -788,8 +788,8 @@ pub enum DispatchError {
 	/// General error to do with the transaction's proofs (e.g. signature).
 	BadProof,
 
-/*	/// General error to do with actually executing the dispatched logic.
-	User(&'static str),*/
+	/// General error to do with a limit being reached that may be reset on the next block.
+	BlockExhausted,
 }
 
 impl From<DispatchError> for i8 {
@@ -802,6 +802,7 @@ impl From<DispatchError> for i8 {
 			DispatchError::Stale => -68,
 			DispatchError::Future => -69,
 			DispatchError::BadProof => -70,
+			DispatchError::BlockExhausted => -71,
 		}
 	}
 }
@@ -830,6 +831,8 @@ pub trait SignedExtension:
 {
 	/// The type which encodes the sender identity.
 	type AccountId;
+	/// The type which encodes the call to be dispatched.
+	type Call;
 
 	/// Any additional data that will go into the signed payload. This may be created dynamically
 	/// from the transaction using the `additional_signed` function.
@@ -839,35 +842,45 @@ pub trait SignedExtension:
 	/// also perform any pre-signature-verification checks and return an error if needed.
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str>;
 
-		/// Validate a signed transaction for the transaction queue.
+	/// Validate a signed transaction for the transaction queue.
 	fn validate(
 		&self,
 		_who: &Self::AccountId,
+		_call: &Self::Call,
 		_info: DispatchInfo,
 		_len: usize,
-	) -> Result<ValidTransaction, DispatchError> { Ok(Default::default()) }
+	) -> Result<ValidTransaction, DispatchError> {
+		Ok(Default::default())
+	}
 
 	/// Do any pre-flight stuff for a signed transaction.
 	fn pre_dispatch(
 		self,
 		who: &Self::AccountId,
+		call: &Self::Call,
 		info: DispatchInfo,
 		len: usize,
-	) -> Result<(), DispatchError> { self.validate(who, info, len).map(|_| ()) }
+	) -> Result<(), DispatchError> {
+		self.validate(who, call, info, len).map(|_| ())
+	}
 
 	/// Validate an unsigned transaction for the transaction queue. Normally the default
 	/// implementation is fine since `ValidateUnsigned` is a better way of recognising and
 	/// validating unsigned transactions.
 	fn validate_unsigned(
+		_call: &Self::Call,
 		_info: DispatchInfo,
 		_len: usize,
 	) -> Result<ValidTransaction, DispatchError> { Ok(Default::default()) }
 
 	/// Do any pre-flight stuff for a unsigned transaction.
 	fn pre_dispatch_unsigned(
+		call: &Self::Call,
 		info: DispatchInfo,
 		len: usize,
-	) -> Result<(), DispatchError> { Self::validate_unsigned(info, len).map(|_| ()) }
+	) -> Result<(), DispatchError> {
+		Self::validate_unsigned(call, info, len).map(|_| ())
+	}
 }
 
 macro_rules! tuple_impl_indexed {
@@ -877,9 +890,11 @@ macro_rules! tuple_impl_indexed {
 	([$($direct:ident)+] ; [$($index:tt,)+]) => {
 		impl<
 			AccountId,
-			$($direct: SignedExtension<AccountId=AccountId>),+
+			Call,
+			$($direct: SignedExtension<AccountId=AccountId, Call=Call>),+
 		> SignedExtension for ($($direct),+,) {
 			type AccountId = AccountId;
+			type Call = Call;
 			type AdditionalSigned = ($($direct::AdditionalSigned,)+);
 			fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str> {
 				Ok(( $(self.$index.additional_signed()?,)+ ))
@@ -887,33 +902,37 @@ macro_rules! tuple_impl_indexed {
 			fn validate(
 				&self,
 				who: &Self::AccountId,
+				call: &Self::Call,
 				info: DispatchInfo,
 				len: usize,
 			) -> Result<ValidTransaction, DispatchError> {
-				let aggregator = vec![$(<$direct as SignedExtension>::validate(&self.$index, who, info, len)?),+];
+				let aggregator = vec![$(<$direct as SignedExtension>::validate(&self.$index, who, call, info, len)?),+];
 				Ok(aggregator.into_iter().fold(ValidTransaction::default(), |acc, a| acc.combine_with(a)))
 			}
 			fn pre_dispatch(
 				self,
 				who: &Self::AccountId,
+				call: &Self::Call,
 				info: DispatchInfo,
 				len: usize,
 			) -> Result<(), DispatchError> {
-				$(self.$index.pre_dispatch(who, info, len)?;)+
+				$(self.$index.pre_dispatch(who, call, info, len)?;)+
 				Ok(())
 			}
 			fn validate_unsigned(
+				call: &Self::Call,
 				info: DispatchInfo,
 				len: usize,
 			) -> Result<ValidTransaction, DispatchError> {
-				let aggregator = vec![$($direct::validate_unsigned(info, len)?),+];
+				let aggregator = vec![$($direct::validate_unsigned(call, info, len)?),+];
 				Ok(aggregator.into_iter().fold(ValidTransaction::default(), |acc, a| acc.combine_with(a)))
 			}
 			fn pre_dispatch_unsigned(
+				call: &Self::Call,
 				info: DispatchInfo,
 				len: usize,
 			) -> Result<(), DispatchError> {
-				$($direct::pre_dispatch_unsigned(info, len)?;)+
+				$($direct::pre_dispatch_unsigned(call, info, len)?;)+
 				Ok(())
 			}
 		}
@@ -941,6 +960,7 @@ tuple_impl_indexed!(A, B, C, D, E, F, G, H, I, J, ; 0, 1, 2, 3, 4, 5, 6, 7, 8, 9
 impl SignedExtension for () {
 	type AccountId = u64;
 	type AdditionalSigned = ();
+	type Call = ();
 	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
 }
 

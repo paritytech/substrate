@@ -260,7 +260,7 @@ pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
 	pub overlay: OverlayAccountDb<'a, T>,
 	pub depth: usize,
 	pub events: Vec<IndexedEvent<T>>,
-	pub calls: Vec<(T::AccountId, T::Call)>,
+	pub calls: Vec<(T::AccountId, <T as Trait>::Call)>,
 	pub config: &'a Config<T>,
 	pub vm: &'a V,
 	pub loader: &'a L,

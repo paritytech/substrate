@@ -114,6 +114,9 @@ mod internal {
 				DispatchError::Stale => ApplyError::Stale,
 				DispatchError::Future => ApplyError::Future,
 				DispatchError::BadProof => ApplyError::BadSignature(""),
+				DispatchError::BlockExhausted => ApplyError::Future,
+				// ^^^ TODO: consider a better way of expressing this. does ::Future attempt to
+				// reschedule at the beginning of the next block?
 			}
 		}
 	}

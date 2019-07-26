@@ -172,10 +172,13 @@ pub trait OnSessionEnding<ValidatorId> {
 	/// Handle the fact that the session is ending, and optionally provide the new validator set.
 	///
 	/// `ending_index` is the index of the currently ending session.
-	/// The returned validator set, if any, will not be applied until `next_index`.
-	/// `next_index` is guaranteed to be at least `ending_index + 1`, since session indices don't
-	/// repeat.
-	fn on_session_ending(ending_index: SessionIndex, next_index: SessionIndex) -> Option<Vec<ValidatorId>>;
+	/// The returned validator set, if any, will not be applied until `will_apply_at`.
+	/// `will_apply_at` is guaranteed to be at least `ending_index + 1`, since session indices don't
+	/// repeat, but it could be some time after in case we are staging authority set changes.
+	fn on_session_ending(
+		ending_index: SessionIndex,
+		will_apply_at: SessionIndex
+	) -> Option<Vec<ValidatorId>>;
 }
 
 impl<A> OnSessionEnding<A> for () {
