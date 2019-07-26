@@ -172,6 +172,7 @@ test-linux-stable-int:
     expire_in:                     24 hrs
     paths:
       - ${CI_COMMIT_SHORT_SHA}_int_failure.log
+  allow_failure:                   true
 
 
 check-web-wasm:
@@ -205,6 +206,7 @@ check-web-wasm:
     - time cargo web build -p substrate-telemetry
     - time cargo web build -p substrate-trie
     - sccache -s
+  allow_failure:                   true
 
 .build-only:                       &build-only
   only:
