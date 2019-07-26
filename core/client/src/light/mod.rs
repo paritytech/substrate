@@ -25,8 +25,8 @@ use std::sync::Arc;
 
 use executor::RuntimeInfo;
 use primitives::{H256, Blake2Hasher};
-use runtime_primitives::BuildStorage;
-use runtime_primitives::traits::Block as BlockT;
+use sr_primitives::BuildStorage;
+use sr_primitives::traits::Block as BlockT;
 use state_machine::CodeExecutor;
 
 use crate::call_executor::LocalCallExecutor;

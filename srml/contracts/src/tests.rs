@@ -29,9 +29,9 @@ use hex_literal::*;
 use parity_codec::{Decode, Encode, KeyedVec};
 use runtime_io;
 use runtime_io::with_externalities;
-use runtime_primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, H256};
-use runtime_primitives::traits::{BlakeTwo256, Hash, IdentityLookup};
-use runtime_primitives::{Perbill, BuildStorage};
+use sr_primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, H256};
+use sr_primitives::traits::{BlakeTwo256, Hash, IdentityLookup};
+use sr_primitives::{Perbill, BuildStorage};
 use srml_support::{
 	assert_ok, assert_err, impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types,
 	storage::child,	StorageMap, StorageValue, traits::{Currency, Get},

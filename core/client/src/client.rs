@@ -24,7 +24,7 @@ use crate::error::Error;
 use futures::channel::mpsc;
 use parking_lot::{Mutex, RwLock};
 use primitives::NativeOrEncoded;
-use runtime_primitives::{
+use sr_primitives::{
 	Justification,
 	generic::{BlockId, SignedBlock},
 };
@@ -34,13 +34,13 @@ use consensus::{
 	well_known_cache_keys::Id as CacheKeyId,
 	SelectChain, self,
 };
-use runtime_primitives::traits::{
+use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Zero, NumberFor, CurrentHeight,
 	BlockNumberToHash, ApiRef, ProvideRuntimeApi,
 	SaturatedConversion, One, DigestFor,
 };
-use runtime_primitives::generic::DigestItem;
-use runtime_primitives::BuildStorage;
+use sr_primitives::generic::DigestItem;
+use sr_primitives::BuildStorage;
 use crate::runtime_api::{
 	CallRuntimeAt, ConstructRuntimeApi, Core as CoreApi, ProofRecorder,
 	InitializeBlock,
@@ -1851,7 +1851,7 @@ pub(crate) mod tests {
 	use std::collections::HashMap;
 	use super::*;
 	use primitives::blake2_256;
-	use runtime_primitives::DigestItem;
+	use sr_primitives::DigestItem;
 	use consensus::{BlockOrigin, SelectChain};
 	use test_client::{
 		prelude::*,

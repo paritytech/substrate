@@ -18,7 +18,7 @@
 
 #![cfg(test)]
 
-use primitives::{
+use sr_primitives::{
 	traits::IdentityLookup, Perbill,
 	testing::{Header, UintAuthorityId},
 };
@@ -48,7 +48,7 @@ impl system::Trait for Test {
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type Hashing = ::primitives::traits::BlakeTwo256;
+	type Hashing = ::sr_primitives::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;

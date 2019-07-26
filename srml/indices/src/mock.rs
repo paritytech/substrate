@@ -20,8 +20,8 @@
 
 use std::collections::HashSet;
 use ref_thread_local::{ref_thread_local, RefThreadLocal};
-use primitives::testing::Header;
-use primitives::Perbill;
+use sr_primitives::testing::Header;
+use sr_primitives::Perbill;
 use substrate_primitives::{H256, Blake2Hasher};
 use srml_support::{impl_outer_origin, parameter_types};
 use {runtime_io, system};
@@ -76,7 +76,7 @@ impl system::Trait for Runtime {
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type Hashing = ::primitives::traits::BlakeTwo256;
+	type Hashing = ::sr_primitives::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = Indices;
 	type Header = Header;

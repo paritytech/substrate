@@ -23,7 +23,7 @@ use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
 use fork_tree::ForkTree;
 use grandpa::round::State as RoundState;
-use runtime_primitives::traits::{Block as BlockT, NumberFor};
+use sr_primitives::traits::{Block as BlockT, NumberFor};
 use log::{info, warn};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 use fg_primitives::AuthorityId;

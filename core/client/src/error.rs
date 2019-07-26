@@ -18,7 +18,7 @@
 
 use std::{self, error, result};
 use state_machine;
-use runtime_primitives::ApplyError;
+use sr_primitives::ApplyError;
 use consensus;
 use derive_more::{Display, From};
 

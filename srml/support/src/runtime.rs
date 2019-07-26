@@ -194,10 +194,10 @@ macro_rules! construct_runtime {
 		#[derive(Clone, Copy, PartialEq, Eq)]
 		#[cfg_attr(feature = "std", derive(Debug))]
 		pub struct $runtime;
-		impl $crate::runtime_primitives::traits::GetNodeBlockType for $runtime {
+		impl $crate::sr_primitives::traits::GetNodeBlockType for $runtime {
 			type NodeBlock = $node_block;
 		}
-		impl $crate::runtime_primitives::traits::GetRuntimeBlockType for $runtime {
+		impl $crate::sr_primitives::traits::GetRuntimeBlockType for $runtime {
 			type RuntimeBlock = $block;
 		}
 		$crate::__decl_outer_event!(
@@ -698,7 +698,7 @@ macro_rules! __decl_outer_config {
 		};
 	) => {
 		$crate::paste::item! {
-			$crate::runtime_primitives::impl_outer_config!(
+			$crate::sr_primitives::impl_outer_config!(
 				pub struct GenesisConfig for $runtime {
 					$(
 						[< $parsed_name Config >] =>

@@ -29,12 +29,9 @@ use client::{
 use codec::Decode;
 use consensus_common::{self, evaluation};
 use primitives::{H256, Blake2Hasher, ExecutionContext};
-use runtime_primitives::traits::{
-	Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi,
-	DigestFor,
-};
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::ApplyError;
+use sr_primitives::traits::{ Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi, DigestFor};
+use sr_primitives::generic::BlockId;
+use sr_primitives::ApplyError;
 use transaction_pool::txpool::{self, Pool as TransactionPool};
 use inherents::InherentData;
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
@@ -200,7 +197,7 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 		deadline: time::Instant,
 	) -> Result<<C as AuthoringApi>::Block, error::Error>
 	{
-		use runtime_primitives::traits::BlakeTwo256;
+		use sr_primitives::traits::BlakeTwo256;
 
 		/// If the block is full we will attempt to push at most
 		/// this number of transactions before quitting for real.

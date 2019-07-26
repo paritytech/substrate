@@ -26,7 +26,7 @@ use parity_wasm::elements::{self, Internal, External, MemoryType, Type};
 use pwasm_utils;
 use pwasm_utils::rules;
 use rstd::prelude::*;
-use runtime_primitives::traits::{SaturatedConversion};
+use sr_primitives::traits::{SaturatedConversion};
 
 struct ContractModule<'a> {
 	/// A deserialized module. The module is valid (this is Guaranteed by `new` method).

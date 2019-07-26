@@ -77,11 +77,11 @@ use rstd::prelude::*;
 #[cfg(any(feature = "std", test))]
 use rstd::map;
 use rstd::marker::PhantomData;
-use primitives::generic::{self, Era};
-use primitives::Perbill;
-use primitives::weights::{Weight, DispatchInfo, DispatchClass, WeightMultiplier, SimpleDispatchInfo};
-use primitives::transaction_validity::{ValidTransaction, TransactionPriority, TransactionLongevity};
-use primitives::traits::{self, CheckEqual, SimpleArithmetic, Zero, SignedExtension, Convert,
+use sr_primitives::generic::{self, Era};
+use sr_primitives::Perbill;
+use sr_primitives::weights::{Weight, DispatchInfo, DispatchClass, WeightMultiplier, SimpleDispatchInfo};
+use sr_primitives::transaction_validity::{ValidTransaction, TransactionPriority, TransactionLongevity};
+use sr_primitives::traits::{self, CheckEqual, SimpleArithmetic, Zero, SignedExtension, Convert,
 	SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, CurrentHeight, BlockNumberToHash,
 	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded,
 	Lookup, DispatchError, SaturatedConversion,
@@ -404,7 +404,7 @@ decl_storage! {
 		#[serde(with = "substrate_primitives::bytes")]
 		config(code): Vec<u8>;
 
-		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig| {
+		build(|storage: &mut sr_primitives::StorageOverlay, _: &mut sr_primitives::ChildrenStorageOverlay, config: &GenesisConfig| {
 			use parity_codec::Encode;
 
 			storage.insert(well_known_keys::CODE.to_vec(), config.code.clone());
@@ -1043,7 +1043,7 @@ mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
-	use primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+	use sr_primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 	use srml_support::{impl_outer_origin, parameter_types};
 
 	impl_outer_origin!{

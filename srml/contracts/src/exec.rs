@@ -21,7 +21,7 @@ use crate::gas::{Gas, GasMeter, Token, approx_gas_for_balance};
 use crate::rent;
 
 use rstd::prelude::*;
-use runtime_primitives::traits::{Bounded, CheckedAdd, CheckedSub, Zero};
+use sr_primitives::traits::{Bounded, CheckedAdd, CheckedSub, Zero};
 use srml_support::traits::{WithdrawReason, Currency};
 use timestamp;
 

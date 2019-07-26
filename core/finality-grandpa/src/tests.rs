@@ -35,8 +35,8 @@ use consensus_common::import_queue::{BoxBlockImport, BoxJustificationImport, Box
 use std::collections::{HashMap, HashSet};
 use std::result;
 use parity_codec::Decode;
-use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT};
-use runtime_primitives::generic::BlockId;
+use sr_primitives::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT};
+use sr_primitives::generic::BlockId;
 use substrate_primitives::{NativeOrEncoded, ExecutionContext};
 use fg_primitives::AuthorityId;
 

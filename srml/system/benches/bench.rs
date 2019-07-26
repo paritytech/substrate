@@ -19,7 +19,7 @@ use srml_system as system;
 use srml_support::{decl_module, decl_event, impl_outer_origin, impl_outer_event};
 use runtime_io::{with_externalities, Blake2Hasher};
 use substrate_primitives::H256;
-use primitives::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+use sr_primitives::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 mod module {
 	use super::*;

@@ -99,7 +99,7 @@ use substrate_primitives::crypto::UncheckedFrom;
 use rstd::{prelude::*, marker::PhantomData};
 use parity_codec::{Codec, Encode, Decode};
 use runtime_io::blake2_256;
-use runtime_primitives::traits::{
+use sr_primitives::traits::{
 	Hash, StaticLookup, Zero, MaybeSerializeDebug, Member
 };
 use srml_support::dispatch::{Result, Dispatchable};

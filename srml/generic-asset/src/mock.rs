@@ -20,7 +20,7 @@
 
 #![cfg(test)]
 
-use primitives::{Perbill, testing::Header, traits::{BlakeTwo256, IdentityLookup}};
+use sr_primitives::{Perbill, testing::Header, traits::{BlakeTwo256, IdentityLookup}};
 use substrate_primitives::{Blake2Hasher, H256};
 use support::{parameter_types, impl_outer_event, impl_outer_origin};
 

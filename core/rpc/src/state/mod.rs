@@ -38,8 +38,8 @@ use log::{warn, trace};
 use primitives::hexdisplay::HexDisplay;
 use primitives::storage::{self, StorageKey, StorageData, StorageChangeSet};
 use primitives::{H256, Blake2Hasher, Bytes};
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{
+use sr_primitives::generic::BlockId;
+use sr_primitives::traits::{
 	Block as BlockT, Header, ProvideRuntimeApi, NumberFor,
 	SaturatedConversion
 };

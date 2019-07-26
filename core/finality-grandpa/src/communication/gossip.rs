@@ -82,7 +82,7 @@
 //!
 //! We only send polite messages to peers,
 
-use runtime_primitives::traits::{NumberFor, Block as BlockT, Zero};
+use sr_primitives::traits::{NumberFor, Block as BlockT, Zero};
 use network::consensus_gossip::{self as network_gossip, MessageIntent, ValidatorContext};
 use network::{config::Roles, PeerId};
 use parity_codec::{Encode, Decode};

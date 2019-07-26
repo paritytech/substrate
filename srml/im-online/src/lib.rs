@@ -75,7 +75,7 @@ use substrate_primitives::{
 	sr25519, ed25519,
 };
 use parity_codec::{Encode, Decode};
-use primitives::{
+use sr_primitives::{
 	ApplyError, traits::{Member, IsMember, Extrinsic as ExtrinsicT},
 	transaction_validity::{TransactionValidity, TransactionLongevity, ValidTransaction},
 };

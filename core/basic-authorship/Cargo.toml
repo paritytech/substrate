@@ -8,11 +8,11 @@ edition = "2018"
 log = "0.4"
 futures-preview = "0.3.0-alpha.17"
 codec = { package = "parity-codec", version = "4.1.1" }
-runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
+sr-primitives = { path = "../../core/sr-primitives" }
+primitives = { package = "substrate-primitives", path = "../../core/primitives" }
 client = { package = "substrate-client", path = "../../core/client" }
 aura_primitives = { package = "substrate-consensus-aura-primitives", path = "../../core/consensus/aura/primitives" }
 consensus_common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
-primitives = { package = "substrate-primitives", path = "../../core/primitives" }
 inherents = { package = "substrate-inherents", path = "../inherents" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
 substrate-telemetry = { path = "../telemetry" }

@@ -33,8 +33,8 @@ use grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
 	voter, voter_set::VoterSet,
 };
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{
+use sr_primitives::generic::BlockId;
+use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, BlockNumberToHash,
 };
 use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair};

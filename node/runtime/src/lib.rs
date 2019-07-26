@@ -35,10 +35,10 @@ use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
 	runtime_api as client_api, impl_runtime_apis
 };
-use runtime_primitives::{ApplyResult, impl_opaque_keys, generic, create_runtime_str, key_types};
-use runtime_primitives::transaction_validity::TransactionValidity;
-use runtime_primitives::weights::Weight;
-use runtime_primitives::traits::{
+use sr_primitives::{ApplyResult, impl_opaque_keys, generic, create_runtime_str, key_types};
+use sr_primitives::transaction_validity::TransactionValidity;
+use sr_primitives::weights::Weight;
+use sr_primitives::traits::{
 	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup,
 };
 use version::RuntimeVersion;
@@ -50,11 +50,11 @@ use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
 use finality_tracker::{DEFAULT_REPORT_LATENCY, DEFAULT_WINDOW_SIZE};
 
 #[cfg(any(feature = "std", test))]
-pub use runtime_primitives::BuildStorage;
+pub use sr_primitives::BuildStorage;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use contracts::Gas;
-pub use runtime_primitives::{Permill, Perbill};
+pub use sr_primitives::{Permill, Perbill};
 pub use support::StorageValue;
 pub use staking::StakerStatus;
 

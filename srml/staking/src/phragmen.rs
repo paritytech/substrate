@@ -17,8 +17,8 @@
 //! Rust implementation of the Phragmén election algorithm.
 
 use rstd::{prelude::*, collections::btree_map::BTreeMap};
-use primitives::{PerU128};
-use primitives::traits::{Zero, Convert, Saturating};
+use sr_primitives::{PerU128};
+use sr_primitives::traits::{Zero, Convert, Saturating};
 use crate::{BalanceOf, RawAssignment, ExpoMap, Trait, ValidatorPrefs, IndividualExposure};
 
 type Fraction = PerU128;

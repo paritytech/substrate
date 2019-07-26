@@ -45,8 +45,8 @@ use client::{
 };
 use parity_codec::{Encode, Decode};
 use grandpa::BlockNumberOps;
-use runtime_primitives::{Justification, generic::BlockId};
-use runtime_primitives::traits::{
+use sr_primitives::{Justification, generic::BlockId};
+use sr_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, One,
 };
 use substrate_primitives::{H256, Blake2Hasher};

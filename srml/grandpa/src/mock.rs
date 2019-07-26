@@ -18,7 +18,7 @@
 
 #![cfg(test)]
 
-use primitives::{Perbill, DigestItem, traits::IdentityLookup, testing::{Header, UintAuthorityId}};
+use sr_primitives::{Perbill, DigestItem, traits::IdentityLookup, testing::{Header, UintAuthorityId}};
 use runtime_io;
 use srml_support::{impl_outer_origin, impl_outer_event, parameter_types};
 use substrate_primitives::{H256, Blake2Hasher};
@@ -52,7 +52,7 @@ impl system::Trait for Test {
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type Hashing = ::primitives::traits::BlakeTwo256;
+	type Hashing = ::sr_primitives::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;

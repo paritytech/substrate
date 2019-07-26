@@ -16,7 +16,7 @@
 
 //! Tool for creating the genesis block.
 
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, Zero};
+use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, Zero};
 
 /// Create a genesis block, given the initial storage.
 pub fn construct_genesis_block<
@@ -49,7 +49,7 @@ mod tests {
 		runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest},
 		AccountKeyring, Sr25519Keyring,
 	};
-	use runtime_primitives::traits::BlakeTwo256;
+	use sr_primitives::traits::BlakeTwo256;
 	use primitives::Blake2Hasher;
 	use hex::*;
 
