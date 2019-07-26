@@ -26,13 +26,12 @@
 // our error-chain could potentially blow up otherwise
 #![recursion_limit="128"]
 
-#[macro_use] extern crate crossbeam_channel;
 #[macro_use] extern crate log;
 
 use std::sync::Arc;
 use std::time::Duration;
 
-use runtime_primitives::traits::{Block, DigestFor};
+use runtime_primitives::traits::{Block as BlockT, DigestFor};
 use futures::prelude::*;
 pub use inherents::InherentData;
 
@@ -48,13 +47,13 @@ const MAX_BLOCK_SIZE: usize = 4 * 1024 * 1024 + 512;
 
 pub use self::error::Error;
 pub use block_import::{
-	BlockImport, BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock, ImportResult,
-	JustificationImport, FinalityProofImport, FinalityProofRequestBuilder,
+	BlockImport, BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, ImportResult,
+	JustificationImport, FinalityProofImport,
 };
 pub use select_chain::SelectChain;
 
 /// Environment producer for a Consensus instance. Creates proposer instance and communication streams.
-pub trait Environment<B: Block> {
+pub trait Environment<B: BlockT> {
 	/// The proposer type this creates.
 	type Proposer: Proposer<B>;
 	/// Error which can occur upon creation.
@@ -72,11 +71,11 @@ pub trait Environment<B: Block> {
 /// block.
 ///
 /// Proposers are generic over bits of "consensus data" which are engine-specific.
-pub trait Proposer<B: Block> {
+pub trait Proposer<B: BlockT> {
 	/// Error type which can occur when proposing or evaluating.
 	type Error: From<Error> + ::std::fmt::Debug + 'static;
 	/// Future that resolves to a committed proposal.
-	type Create: IntoFuture<Item=B, Error=Self::Error>;
+	type Create: Future<Output = Result<B, Self::Error>>;
 	/// Create a proposal.
 	fn propose(
 		&self,
@@ -124,4 +123,7 @@ pub mod well_known_cache_keys {
 
 	/// A list of authorities.
 	pub const AUTHORITIES: Id = *b"auth";
+
+	/// Current Epoch data.
+	pub const EPOCH: Id = *b"epch";
 }

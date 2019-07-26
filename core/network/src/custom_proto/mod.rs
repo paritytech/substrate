@@ -20,3 +20,4 @@ pub use self::upgrade::CustomMessage;
 mod behaviour;
 mod handler;
 mod upgrade;
+mod tests;

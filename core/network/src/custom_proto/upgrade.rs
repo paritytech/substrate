@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::ProtocolId;
+use crate::config::ProtocolId;
 use bytes::Bytes;
 use libp2p::core::{Negotiated, Endpoint, UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade::ProtocolName};
 use libp2p::tokio_codec::Framed;
@@ -139,19 +139,6 @@ pub trait CustomMessage {
 	/// Tries to parse `bytes` received from the network into a message.
 	fn from_bytes(bytes: &[u8]) -> Result<Self, ()>
 		where Self: Sized;
-}
-
-// This trait implementation exist mostly for testing convenience. This should eventually be
-// removed.
-
-impl CustomMessage for Vec<u8> {
-	fn into_bytes(self) -> Vec<u8> {
-		self
-	}
-
-	fn from_bytes(bytes: &[u8]) -> Result<Self, ()> {
-		Ok(bytes.to_vec())
-	}
 }
 
 /// Event produced by the `RegisteredProtocolSubstream`.

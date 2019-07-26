@@ -46,7 +46,7 @@ use consensus::error::{ErrorKind as CommonErrorKind};
 use consensus::{Authorities, BlockImport, Environment, Proposer as BaseProposer};
 use client::{Client as SubstrateClient, CallExecutor};
 use client::runtime_api::{Core, BlockBuilder as BlockBuilderAPI, OldTxQueue, BlockBuilderError};
-use runtime_primitives::generic::{BlockId, Era, ImportResult, ImportBlock, BlockOrigin};
+use runtime_primitives::generic::{BlockId, Era, ImportResult, BlockImportParams, BlockOrigin};
 use runtime_primitives::traits::{Block, Header};
 use runtime_primitives::traits::{
 	Block as BlockT, Hash as HashT, Header as HeaderT,
@@ -150,7 +150,7 @@ pub type Misbehavior<H> = rhododendron::Misbehavior<H, LocalizedSignature>;
 pub type SharedOfflineTracker = Arc<RwLock<OfflineTracker>>;
 
 /// A proposer for a rhododendron instance. This must implement the base proposer logic.
-pub trait LocalProposer<B: Block>: BaseProposer<B, Error=Error> {
+pub trait LocalProposer<B: BlockT>: BaseProposer<B, Error=Error> {
 	/// Import witnessed rhododendron misbehavior.
 	fn import_misbehavior(&self, misbehavior: Vec<(AuthorityId, Misbehavior<B::Hash>)>);
 
@@ -224,7 +224,7 @@ struct RoundCache<H> {
 }
 
 /// Instance of BFT agreement.
-struct BftInstance<B: Block, P> {
+struct BftInstance<B: BlockT, P> {
 	key: Arc<ed25519::Pair>,
 	authorities: Vec<AuthorityId>,
 	parent_hash: B::Hash,
@@ -233,7 +233,7 @@ struct BftInstance<B: Block, P> {
 	proposer: P,
 }
 
-impl<B: Block, P: LocalProposer<B>> BftInstance<B, P>
+impl<B: BlockT, P: LocalProposer<B>> BftInstance<B, P>
 	where
 		B: Clone + Eq,
 		B::Hash: ::std::hash::Hash
@@ -262,7 +262,7 @@ impl<B: Block, P: LocalProposer<B>> BftInstance<B, P>
 	}
 }
 
-impl<B: Block, P: LocalProposer<B>> rhododendron::Context for BftInstance<B, P>
+impl<B: BlockT, P: LocalProposer<B>> rhododendron::Context for BftInstance<B, P>
 	where
 		B: Clone + Eq,
 		B::Hash: ::std::hash::Hash,
@@ -391,7 +391,7 @@ impl<B, P, I, InStream, OutSink> Future for BftFuture<B, P, I, InStream, OutSink
 				justified_block.header().number(), hash);
 			let just: Justification = UncheckedJustification(committed.justification.uncheck()).into();
 			let (header, body) = justified_block.deconstruct();
-			let import_block = ImportBlock {
+			let import_block = BlockImportParams {
 				origin: BlockOrigin::ConsensusBroadcast,
 				header: header,
 				justification: Some(just),
@@ -465,7 +465,7 @@ impl Drop for AgreementHandle {
 /// is notified of.
 ///
 /// This assumes that it is being run in the context of a tokio runtime.
-pub struct BftService<B: Block, P, I> {
+pub struct BftService<B: BlockT, P, I> {
 	client: Arc<I>,
 	live_agreement: Mutex<Option<(B::Header, AgreementHandle)>>,
 	round_cache: Arc<Mutex<RoundCache<B::Hash>>>,
@@ -638,14 +638,14 @@ impl<B, P, I> BftService<B, P, I>
 /// This stream is localized to a specific parent block-hash, as all messages
 /// will be signed in a way that accounts for it. When using this with
 /// `BftService::build_upon`, the user should take care to use the same hash as for that.
-pub struct CheckedStream<B: Block, S> {
+pub struct CheckedStream<B: BlockT, S> {
 	inner: S,
 	local_id: AuthorityId,
 	authorities: Vec<AuthorityId>,
 	parent_hash: B::Hash,
 }
 
-impl<B: Block, S> CheckedStream<B, S> {
+impl<B: BlockT, S> CheckedStream<B, S> {
 	/// Construct a new checked stream.
 	pub fn new(
 		inner: S,
@@ -662,7 +662,7 @@ impl<B: Block, S> CheckedStream<B, S> {
 	}
 }
 
-impl<B: Block, S: Stream<Item=Vec<u8>>> Stream for CheckedStream<B, S>
+impl<B: BlockT, S: Stream<Item=Vec<u8>>> Stream for CheckedStream<B, S>
 	where S::Error: From<InputStreamConcluded>,
 {
 	type Item = Communication<B>;
@@ -780,7 +780,7 @@ fn check_justification_signed_message<H>(
 /// Provide all valid authorities.
 ///
 /// On failure, returns the justification back.
-pub fn check_justification<B: Block>(
+pub fn check_justification<B: BlockT>(
 	authorities: &[AuthorityId],
 	parent: B::Hash,
 	just: UncheckedJustification<B::Hash>
@@ -795,9 +795,11 @@ pub fn check_justification<B: Block>(
 /// Provide all valid authorities.
 ///
 /// On failure, returns the justification back.
-pub fn check_prepare_justification<B: Block>(authorities: &[AuthorityId], parent: B::Hash, just: UncheckedJustification<B::Hash>)
-	-> Result<PrepareJustification<B::Hash>, UncheckedJustification<B::Hash>>
-{
+pub fn check_prepare_justification<B: BlockT>(
+	authorities: &[AuthorityId],
+	parent: B::Hash,
+	just: UncheckedJustification<B::Hash>
+) -> Result<PrepareJustification<B::Hash>, UncheckedJustification<B::Hash>> {
 	let vote: Action<B, B::Hash> = Action::Prepare(just.0.round_number as u32, just.0.digest.clone());
 	let message = localized_encode(parent, vote);
 
@@ -824,7 +826,7 @@ pub fn check_proposal<B: Block + Clone>(
 
 /// Check vote message signatures and authority.
 /// Provide all valid authorities.
-pub fn check_vote<B: Block>(
+pub fn check_vote<B: BlockT>(
 	authorities: &[AuthorityId],
 	parent_hash: &B::Hash,
 	vote: &rhododendron::LocalizedVote<B::Hash, AuthorityId, LocalizedSignature>)
@@ -842,7 +844,11 @@ pub fn check_vote<B: Block>(
 	check_action::<B>(action, parent_hash, &vote.signature)
 }
 
-fn check_action<B: Block>(action: Action<B, B::Hash>, parent_hash: &B::Hash, sig: &LocalizedSignature) -> Result<(), Error> {
+fn check_action<B: BlockT>(
+	action: Action<B, B::Hash>,
+	parent_hash: &B::Hash,
+	sig: &LocalizedSignature
+) -> Result<(), Error> {
 	let message = localized_encode(*parent_hash, action);
 	if ed25519::Pair::verify(&sig.signature, &message, &sig.signer) {
 		Ok(())
@@ -981,7 +987,8 @@ impl<N, C, A> consensus::Environment<<C as AuthoringApi>::Block> for ProposerFac
 
 		let id = BlockId::hash(parent_hash);
 		let random_seed = self.client.random_seed(&id)?;
-		let random_seed = <<<C as AuthoringApi>::Block as BlockT>::Header as HeaderT>::Hashing::hash(random_seed.as_ref());
+		let random_seed = <<<C as AuthoringApi>::Block as BlockT>::Header as HeaderT>
+			::Hashing::hash(random_seed.as_ref());
 
 		let validators = self.client.validators(&id)?;
 		self.offline.write().note_new_block(&validators[..]);
@@ -1225,7 +1232,10 @@ impl<C, A> LocalProposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 		proposer
 	}
 
-	fn import_misbehavior(&self, _misbehavior: Vec<(AuthorityId, Misbehavior<<<C as AuthoringApi>::Block as BlockT>::Hash>)>) {
+	fn import_misbehavior(
+		&self,
+		_misbehavior: Vec<(AuthorityId, Misbehavior<<<C as AuthoringApi>::Block as BlockT>::Hash>)>
+	) {
 		use rhododendron::Misbehavior as GenericMisbehavior;
 		use runtime_primitives::bft::{MisbehaviorKind, MisbehaviorReport};
 		use node_runtime::{Call, UncheckedExtrinsic, ConsensusCall};
@@ -1321,7 +1331,7 @@ mod tests {
 
 	use runtime_primitives::testing::{Block as GenericTestBlock, Header as TestHeader};
 	use primitives::H256;
-	use keyring::AuthorityKeyring;
+	use keyring::Ed25519Keyring;
 
 	type TestBlock = GenericTestBlock<()>;
 
@@ -1334,7 +1344,7 @@ mod tests {
 		type Error = Error;
 
 		fn import_block(&self,
-			block: ImportBlock<TestBlock>,
+			block: BlockImportParams<TestBlock>,
 			_new_authorities: Option<Vec<AuthorityId>>
 		) -> Result<ImportResult, Self::Error> {
 			assert!(self.imported_heights.lock().insert(block.header.number));
@@ -1426,7 +1436,7 @@ mod tests {
 				start_round: 0,
 			})),
 			round_timeout_multiplier: 10,
-			key: Arc::new(AuthorityKeyring::One.into()),
+			key: Arc::new(Ed25519Keyring::One.into()),
 			factory: DummyFactory
 		}
 	}
@@ -1452,10 +1462,10 @@ mod tests {
 	fn future_gets_preempted() {
 		let client = FakeClient {
 			authorities: vec![
-				AuthorityKeyring::One.into(),
-				AuthorityKeyring::Two.into(),
-				AuthorityKeyring::Alice.into(),
-				AuthorityKeyring::Eve.into(),
+				Ed25519Keyring::One.into(),
+				Ed25519Keyring::Two.into(),
+				Ed25519Keyring::Alice.into(),
+				Ed25519Keyring::Eve.into(),
 			],
 			imported_heights: Mutex::new(HashSet::new()),
 		};
@@ -1499,17 +1509,17 @@ mod tests {
 		let hash = [0xff; 32].into();
 
 		let authorities = vec![
-			AuthorityKeyring::One.into(),
-			AuthorityKeyring::Two.into(),
-			AuthorityKeyring::Alice.into(),
-			AuthorityKeyring::Eve.into(),
+			Ed25519Keyring::One.into(),
+			Ed25519Keyring::Two.into(),
+			Ed25519Keyring::Alice.into(),
+			Ed25519Keyring::Eve.into(),
 		];
 
 		let authorities_keys = vec![
-			AuthorityKeyring::One.into(),
-			AuthorityKeyring::Two.into(),
-			AuthorityKeyring::Alice.into(),
-			AuthorityKeyring::Eve.into(),
+			Ed25519Keyring::One.into(),
+			Ed25519Keyring::Two.into(),
+			Ed25519Keyring::Alice.into(),
+			Ed25519Keyring::Eve.into(),
 		];
 
 		let unchecked = UncheckedJustification(rhododendron::UncheckedJustification {
@@ -1560,8 +1570,8 @@ mod tests {
 		let parent_hash = Default::default();
 
 		let authorities = vec![
-			AuthorityKeyring::Alice.into(),
-			AuthorityKeyring::Eve.into(),
+			Ed25519Keyring::Alice.into(),
+			Ed25519Keyring::Eve.into(),
 		];
 
 		let block = TestBlock {
@@ -1569,7 +1579,11 @@ mod tests {
 			extrinsics: Default::default()
 		};
 
-		let proposal = sign_message(rhododendron::Message::Propose(1, block.clone()), &AuthorityKeyring::Alice.pair(), parent_hash);;
+		let proposal = sign_message(
+			rhododendron::Message::Propose(1, block.clone()),
+			&Ed25519Keyring::Alice.pair(),
+			parent_hash,
+		);
 		if let rhododendron::LocalizedMessage::Propose(proposal) = proposal {
 			assert!(check_proposal(&authorities, &parent_hash, &proposal).is_ok());
 			let mut invalid_round = proposal.clone();
@@ -1583,7 +1597,11 @@ mod tests {
 		}
 
 		// Not an authority
-		let proposal = sign_message::<TestBlock>(rhododendron::Message::Propose(1, block), &AuthorityKeyring::Bob.pair(), parent_hash);;
+		let proposal = sign_message::<TestBlock>(
+			rhododendron::Message::Propose(1, block),
+			&Ed25519Keyring::Bob.pair(),
+			parent_hash,
+		);
 		if let rhododendron::LocalizedMessage::Propose(proposal) = proposal {
 			assert!(check_proposal(&authorities, &parent_hash, &proposal).is_err());
 		} else {
@@ -1597,8 +1615,8 @@ mod tests {
 		let hash: H256 = [0xff; 32].into();
 
 		let authorities = vec![
-			AuthorityKeyring::Alice.into(),
-			AuthorityKeyring::Eve.into(),
+			Ed25519Keyring::Alice.into(),
+			Ed25519Keyring::Eve.into(),
 		];
 
 		let vote = sign_message::<TestBlock>(rhododendron::Message::Vote(rhododendron::Vote::Prepare(1, hash)), &Keyring::Alice.pair(), parent_hash);;
@@ -1624,10 +1642,10 @@ mod tests {
 	fn drop_bft_future_does_not_deadlock() {
 		let client = FakeClient {
 			authorities: vec![
-				AuthorityKeyring::One.into(),
-				AuthorityKeyring::Two.into(),
-				AuthorityKeyring::Alice.into(),
-				AuthorityKeyring::Eve.into(),
+				Ed25519Keyring::One.into(),
+				Ed25519Keyring::Two.into(),
+				Ed25519Keyring::Alice.into(),
+				Ed25519Keyring::Eve.into(),
 			],
 			imported_heights: Mutex::new(HashSet::new()),
 		};
@@ -1649,10 +1667,10 @@ mod tests {
 	fn bft_can_build_though_skipped() {
 		let client = FakeClient {
 			authorities: vec![
-				AuthorityKeyring::One.into(),
-				AuthorityKeyring::Two.into(),
-				AuthorityKeyring::Alice.into(),
-				AuthorityKeyring::Eve.into(),
+				Ed25519Keyring::One.into(),
+				Ed25519Keyring::Two.into(),
+				Ed25519Keyring::Alice.into(),
+				Ed25519Keyring::Eve.into(),
 			],
 			imported_heights: Mutex::new(HashSet::new()),
 		};

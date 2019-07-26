@@ -171,7 +171,7 @@ impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block> for Pro
 	A: txpool::ChainApi<Block=Block>,
 	client::error::Error: From<<C as AuthoringApi>::Error>
 {
-	type Create = Result<<C as AuthoringApi>::Block, error::Error>;
+	type Create = futures::future::Ready<Result<<C as AuthoringApi>::Block, error::Error>>;
 	type Error = error::Error;
 
 	fn propose(
@@ -179,11 +179,10 @@ impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block> for Pro
 		inherent_data: InherentData,
 		inherent_digests: DigestFor<Block>,
 		max_duration: time::Duration,
-	) -> Result<<C as AuthoringApi>::Block, error::Error>
-	{
+	) -> Self::Create {
 		// leave some time for evaluation and block finalization (33%)
 		let deadline = (self.now)() + max_duration - max_duration / 3;
-		self.propose_with(inherent_data, inherent_digests, deadline)
+		futures::future::ready(self.propose_with(inherent_data, inherent_digests, deadline))
 	}
 }
 
@@ -328,7 +327,8 @@ mod tests {
 			cell.replace(new)
 		});
 		let deadline = time::Duration::from_secs(3);
-		let block = proposer.propose(Default::default(), Default::default(), deadline).unwrap();
+		let block = futures::executor::block_on(proposer.propose(Default::default(), Default::default(), deadline))
+			.unwrap();
 
 		// then
 		// block should have some extrinsics although we have some more in the pool.

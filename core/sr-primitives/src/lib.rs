@@ -28,10 +28,13 @@ pub use serde;
 #[doc(hidden)]
 pub use rstd;
 
+#[doc(hidden)]
+pub use paste;
+
 #[cfg(feature = "std")]
 pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 
-use rstd::{prelude::*, ops};
+use rstd::{prelude::*, ops, convert::TryInto};
 use substrate_primitives::{crypto, ed25519, sr25519, hash::{H256, H512}};
 use codec::{Encode, Decode};
 
@@ -40,13 +43,16 @@ pub mod testing;
 
 pub mod weights;
 pub mod traits;
-use traits::{SaturatedConversion, UniqueSaturatedInto};
+use traits::{SaturatedConversion, UniqueSaturatedInto, Saturating, Bounded, CheckedSub, CheckedAdd};
 
 pub mod generic;
 pub mod transaction_validity;
 
 /// Re-export these since they're only "kind of" generic.
 pub use generic::{DigestItem, Digest};
+
+/// Re-export this since it's part of the API of this crate.
+pub use substrate_primitives::crypto::{key_types, KeyTypeId};
 
 /// A message indicating an invalid signature in extrinsic.
 pub const BAD_SIGNATURE: &str = "bad signature in extrinsic";
@@ -65,6 +71,14 @@ pub const BLOCK_FULL: &str = "block size limit is reached";
 pub type Justification = Vec<u8>;
 
 use traits::{Verify, Lazy};
+
+/// A module identifier. These are per module and should be stored in a registry somewhere.
+#[derive(Clone, Copy, Eq, PartialEq, Encode, Decode)]
+pub struct ModuleId(pub [u8; 8]);
+
+impl traits::TypeId for ModuleId {
+	const TYPE_ID: [u8; 4] = *b"modl";
+}
 
 /// A String that is a `&'static str` on `no_std` and a `Cow<'static, str>` on `std`.
 #[cfg(feature = "std")]
@@ -101,7 +115,22 @@ pub trait BuildStorage: Sized {
 		Ok((storage, child_storage))
 	}
 	/// Assimilate the storage for this module into pre-existing overlays.
-	fn assimilate_storage(self, storage: &mut StorageOverlay, child_storage: &mut ChildrenStorageOverlay) -> Result<(), String>;
+	fn assimilate_storage(
+		self,
+		storage: &mut StorageOverlay,
+		child_storage: &mut ChildrenStorageOverlay
+	) -> Result<(), String>;
+}
+
+/// Something that can build the genesis storage of a module.
+#[cfg(feature = "std")]
+pub trait BuildModuleGenesisStorage<T, I>: Sized {
+	/// Create the module genesis storage into the given `storage` and `child_storage`.
+	fn build_module_genesis_storage(
+		self,
+		storage: &mut StorageOverlay,
+		child_storage: &mut ChildrenStorageOverlay
+	) -> Result<(), String>;
 }
 
 #[cfg(feature = "std")]
@@ -139,7 +168,7 @@ impl BuildStorage for (StorageOverlay, ChildrenStorageOverlay) {
 pub type ConsensusEngineId = [u8; 4];
 
 /// Permill is parts-per-million (i.e. after multiplying by this, divide by 1000000).
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Ord, PartialOrd))]
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
 pub struct Permill(u32);
 
@@ -153,15 +182,35 @@ impl Permill {
 	/// Everything.
 	pub fn one() -> Self { Self(1_000_000) }
 
+	/// create a new raw instance. This can be called at compile time.
+	pub const fn from_const_parts(parts: u32) -> Self {
+		Self([parts, 1_000_000][(parts > 1_000_000) as usize])
+	}
+
 	/// From an explicitly defined number of parts per maximum of the type.
-	pub fn from_parts(x: u32) -> Self { Self(x.min(1_000_000)) }
+	pub fn from_parts(parts: u32) -> Self { Self::from_const_parts(parts) }
 
 	/// Converts from a percent. Equal to `x / 100`.
-	pub fn from_percent(x: u32) -> Self { Self(x.min(100) * 10_000) }
+	pub const fn from_percent(x: u32) -> Self { Self([x, 100][(x > 100) as usize] * 10_000) }
 
 	/// Converts a fraction into `Permill`.
 	#[cfg(feature = "std")]
 	pub fn from_fraction(x: f64) -> Self { Self((x * 1_000_000.0) as u32) }
+
+	/// Approximate the fraction `p/q` into a per million fraction
+	pub fn from_rational_approximation<N>(p: N, q: N) -> Self
+		where N: traits::SimpleArithmetic + Clone
+	{
+		let p = p.min(q.clone());
+		let factor = (q.clone() / 1_000_000u32.into()).max(1u32.into());
+
+		// Conversion can't overflow as p < q so ( p / (q/million)) < million
+		let p_reduce: u32 = (p / factor.clone()).try_into().unwrap_or_else(|_| panic!());
+		let q_reduce: u32 = (q / factor.clone()).try_into().unwrap_or_else(|_| panic!());
+		let part = p_reduce as u64 * 1_000_000u64 / q_reduce as u64;
+
+		Permill(part as u32)
+	}
 }
 
 impl<N> ops::Mul<N> for Permill
@@ -229,7 +278,7 @@ impl From<codec::Compact<Permill>> for Permill {
 /// Perbill is parts-per-billion. It stores a value between 0 and 1 in fixed point and
 /// provides a means to multiply some other value by that.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
+#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct Perbill(u32);
 
 impl Perbill {
@@ -242,11 +291,16 @@ impl Perbill {
 	/// Everything.
 	pub fn one() -> Self { Self(1_000_000_000) }
 
+	/// create a new raw instance. This can be called at compile time.
+	pub const fn from_const_parts(parts: u32) -> Self {
+		Self([parts, 1_000_000_000][(parts > 1_000_000_000) as usize])
+	}
+
 	/// From an explicitly defined number of parts per maximum of the type.
-	pub fn from_parts(x: u32) -> Self { Self(x.min(1_000_000_000)) }
+	pub fn from_parts(parts: u32) -> Self { Self::from_const_parts(parts) }
 
 	/// Converts from a percent. Equal to `x / 100`.
-	pub fn from_percent(x: u32) -> Self { Self(x.min(100) * 10_000_000) }
+	pub const fn from_percent(x: u32) -> Self { Self([x, 100][(x > 100) as usize] * 10_000_000) }
 
 	/// Construct new instance where `x` is in millionths. Value equivalent to `x / 1,000,000`.
 	pub fn from_millionths(x: u32) -> Self { Self(x.min(1_000_000) * 1000) }
@@ -254,6 +308,21 @@ impl Perbill {
 	#[cfg(feature = "std")]
 	/// Construct new instance whose value is equal to `x` (between 0 and 1).
 	pub fn from_fraction(x: f64) -> Self { Self((x.max(0.0).min(1.0) * 1_000_000_000.0) as u32) }
+
+	/// Approximate the fraction `p/q` into a per billion fraction
+	pub fn from_rational_approximation<N>(p: N, q: N) -> Self
+		where N: traits::SimpleArithmetic + Clone
+	{
+		let p = p.min(q.clone());
+		let factor = (q.clone() / 1_000_000_000u32.into()).max(1u32.into());
+
+		// Conversion can't overflow as p < q so ( p / (q/billion)) < billion
+		let p_reduce: u32 = (p / factor.clone()).try_into().unwrap_or_else(|_| panic!());
+		let q_reduce: u32 = (q / factor.clone()).try_into().unwrap_or_else(|_| panic!());
+		let part = p_reduce as u64 * 1_000_000_000u64 / q_reduce as u64;
+
+		Perbill(part as u32)
+	}
 }
 
 impl<N> ops::Mul<N> for Perbill
@@ -318,8 +387,130 @@ impl From<codec::Compact<Perbill>> for Perbill {
 	}
 }
 
-/// PerU128 is parts-per-u128-max-value. It stores a value between 0 and 1 in fixed point and
-/// provides a means to multiply some other value by that.
+
+/// A fixed point number by the scale of 1 billion.
+///
+/// cannot hold a value larger than +-`9223372036854775807 / 1_000_000_000` (~9 billion).
+#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Fixed64(i64);
+
+/// The maximum value of the `Fixed64` type
+const DIV: i64 = 1_000_000_000;
+
+impl Fixed64 {
+	/// creates self from a natural number.
+	///
+	/// Note that this might be lossy.
+	pub fn from_natural(int: i64) -> Self {
+		Self(int.saturating_mul(DIV))
+	}
+
+	/// Return the accuracy of the type. Given that this function returns the value `X`, it means
+	/// that an instance composed of `X` parts (`Fixed64::from_parts(X)`) is equal to `1`.
+	pub fn accuracy() -> i64 {
+		DIV
+	}
+
+	/// creates self from a rational number. Equal to `n/d`.
+	///
+	/// Note that this might be lossy.
+	pub fn from_rational(n: i64, d: u64) -> Self {
+		Self((n as i128 * DIV as i128 / (d as i128).max(1)).try_into().unwrap_or(Bounded::max_value()))
+	}
+
+	/// Performs a saturated multiply and accumulate.
+	///
+	/// Returns a saturated `n + (self * n)`.
+	/// TODO: generalize this to any weight type. #3189
+	pub fn saturated_multiply_accumulate(&self, int: u32) -> u32 {
+		let parts = self.0;
+		let positive = parts > 0;
+
+		// natural parts might overflow.
+		let natural_parts = self.clone().saturated_into::<u32>();
+		// fractional parts can always fit into u32.
+		let perbill_parts = (parts.abs() % DIV) as u32;
+
+		let n = int.saturating_mul(natural_parts);
+		let p = Perbill::from_parts(perbill_parts) * int;
+		// everything that needs to be either added or subtracted from the original weight.
+		let excess = n.saturating_add(p);
+
+		if positive {
+			int.saturating_add(excess)
+		} else {
+			int.saturating_sub(excess)
+		}
+	}
+
+	/// Raw constructor. Equal to `parts / 1_000_000_000`.
+	pub fn from_parts(parts: i64) -> Self {
+		Self(parts)
+	}
+}
+
+impl UniqueSaturatedInto<u32> for Fixed64 {
+	/// Note that the maximum value of Fixed64 might be more than what can fit in u32. This is hence,
+	/// expected to be lossy.
+	fn unique_saturated_into(self) -> u32 {
+		(self.0.abs() / DIV).try_into().unwrap_or(Bounded::max_value())
+	}
+}
+
+impl Saturating for Fixed64 {
+	fn saturating_add(self, rhs: Self) -> Self {
+		Self(self.0.saturating_add(rhs.0))
+	}
+	fn saturating_mul(self, rhs: Self) -> Self {
+		Self(self.0.saturating_mul(rhs.0) / DIV)
+	}
+	fn saturating_sub(self, rhs: Self) -> Self {
+		Self(self.0.saturating_sub(rhs.0))
+	}
+}
+
+/// Note that this is a standard, _potentially-panicking_, implementation. Use `Saturating` trait
+/// for safe addition.
+impl ops::Add for Fixed64 {
+	type Output = Self;
+
+	fn add(self, rhs: Self) -> Self::Output {
+		Self(self.0 + rhs.0)
+	}
+}
+
+/// Note that this is a standard, _potentially-panicking_, implementation. Use `Saturating` trait
+/// for safe subtraction.
+impl ops::Sub for Fixed64 {
+	type Output = Self;
+
+	fn sub(self, rhs: Self) -> Self::Output {
+		Self(self.0 - rhs.0)
+	}
+}
+
+impl CheckedSub for Fixed64 {
+	fn checked_sub(&self, rhs: &Self) -> Option<Self> {
+		if let Some(v) = self.0.checked_sub(rhs.0) {
+			Some(Self(v))
+		} else {
+			None
+		}
+	}
+}
+
+impl CheckedAdd for Fixed64 {
+	fn checked_add(&self, rhs: &Self) -> Option<Self> {
+		if let Some(v) = self.0.checked_add(rhs.0) {
+			Some(Self(v))
+		} else {
+			None
+		}
+	}
+}
+
+/// PerU128 is parts-per-u128-max-value. It stores a value between 0 and 1 in fixed point.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
 pub struct PerU128(u128);
@@ -556,26 +747,32 @@ pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(sig: &V, item: &T, signe
 /// Helper macro for `impl_outer_config`
 #[macro_export]
 macro_rules! __impl_outer_config_types {
+	// Generic + Instance
 	(
-		$concrete:ident $config:ident $snake:ident < $ignore:ident, $instance:path > $( $rest:tt )*
+		$concrete:ident $config:ident $snake:ident { $instance:ident } < $ignore:ident >;
+		$( $rest:tt )*
 	) => {
 		#[cfg(any(feature = "std", test))]
-		pub type $config = $snake::GenesisConfig<$concrete, $instance>;
-		$crate::__impl_outer_config_types! {$concrete $($rest)*}
+		pub type $config = $snake::GenesisConfig<$concrete, $snake::$instance>;
+		$crate::__impl_outer_config_types! { $concrete $( $rest )* }
 	};
+	// Generic
 	(
-		$concrete:ident $config:ident $snake:ident < $ignore:ident > $( $rest:tt )*
+		$concrete:ident $config:ident $snake:ident < $ignore:ident >;
+		$( $rest:tt )*
 	) => {
 		#[cfg(any(feature = "std", test))]
 		pub type $config = $snake::GenesisConfig<$concrete>;
-		$crate::__impl_outer_config_types! {$concrete $($rest)*}
+		$crate::__impl_outer_config_types! { $concrete $( $rest )* }
 	};
+	// No Generic and maybe Instance
 	(
-		$concrete:ident $config:ident $snake:ident $( $rest:tt )*
+		$concrete:ident $config:ident $snake:ident $( { $instance:ident } )?;
+		$( $rest:tt )*
 	) => {
 		#[cfg(any(feature = "std", test))]
 		pub type $config = $snake::GenesisConfig;
-		__impl_outer_config_types! {$concrete $($rest)*}
+		$crate::__impl_outer_config_types! { $concrete $( $rest )* }
 	};
 	($concrete:ident) => ()
 }
@@ -590,30 +787,76 @@ macro_rules! __impl_outer_config_types {
 macro_rules! impl_outer_config {
 	(
 		pub struct $main:ident for $concrete:ident {
-			$( $config:ident => $snake:ident $( < $generic:ident $(, $instance:path)? > )*, )*
+			$( $config:ident =>
+				$snake:ident $( $instance:ident )? $( <$generic:ident> )*, )*
 		}
 	) => {
-		$crate::__impl_outer_config_types! { $concrete $( $config $snake $( < $generic $(, $instance)? > )* )* }
-		#[cfg(any(feature = "std", test))]
-		#[derive($crate::serde::Serialize, $crate::serde::Deserialize)]
-		#[serde(rename_all = "camelCase")]
-		#[serde(deny_unknown_fields)]
-		pub struct $main {
-			$(
-				pub $snake: Option<$config>,
-			)*
+		$crate::__impl_outer_config_types! {
+			$concrete $( $config $snake $( { $instance } )? $( <$generic> )*; )*
 		}
-		#[cfg(any(feature = "std", test))]
-		impl $crate::BuildStorage for $main {
-			fn assimilate_storage(self, top: &mut $crate::StorageOverlay, children: &mut $crate::ChildrenStorageOverlay) -> ::std::result::Result<(), String> {
+
+		$crate::paste::item! {
+			#[cfg(any(feature = "std", test))]
+			#[derive($crate::serde::Serialize, $crate::serde::Deserialize)]
+			#[serde(rename_all = "camelCase")]
+			#[serde(deny_unknown_fields)]
+			pub struct $main {
 				$(
-					if let Some(extra) = self.$snake {
-						extra.assimilate_storage(top, children)?;
-					}
+					pub [< $snake $(_ $instance )? >]: Option<$config>,
 				)*
-				Ok(())
+			}
+			#[cfg(any(feature = "std", test))]
+			impl $crate::BuildStorage for $main {
+				fn assimilate_storage(
+					self,
+					top: &mut $crate::StorageOverlay,
+					children: &mut $crate::ChildrenStorageOverlay
+				) -> std::result::Result<(), String> {
+					$(
+						if let Some(extra) = self.[< $snake $(_ $instance )? >] {
+							$crate::impl_outer_config! {
+								@CALL_FN
+								$concrete;
+								$snake;
+								$( $instance )?;
+								extra;
+								top;
+								children;
+							}
+						}
+					)*
+					Ok(())
+				}
 			}
 		}
+	};
+	(@CALL_FN
+		$runtime:ident;
+		$module:ident;
+		$instance:ident;
+		$extra:ident;
+		$top:ident;
+		$children:ident;
+	) => {
+		$crate::BuildModuleGenesisStorage::<$runtime, $module::$instance>::build_module_genesis_storage(
+			$extra,
+			$top,
+			$children,
+		)?;
+	};
+	(@CALL_FN
+		$runtime:ident;
+		$module:ident;
+		;
+		$extra:ident;
+		$top:ident;
+		$children:ident;
+	) => {
+		$crate::BuildModuleGenesisStorage::<$runtime, $module::__InherentHiddenInstance>::build_module_genesis_storage(
+			$extra,
+			$top,
+			$children,
+		)?;
 	}
 }
 
@@ -637,18 +880,23 @@ impl ::serde::Serialize for OpaqueExtrinsic {
 }
 
 impl traits::Extrinsic for OpaqueExtrinsic {
+	type Call = ();
+
 	fn is_signed(&self) -> Option<bool> {
 		None
 	}
+
+	fn new_unsigned(_call: Self::Call) -> Option<Self> { None }
 }
 
 #[cfg(test)]
 mod tests {
 	use crate::codec::{Encode, Decode};
+	use super::{Perbill, Permill};
 
-	macro_rules! per_thing_mul_upper_test {
+	macro_rules! per_thing_upper_test {
 		($num_type:tt, $per:tt) => {
-			// all sort of from_percent
+			// multiplication from all sort of from_percent
 			assert_eq!($per::from_percent(100) * $num_type::max_value(), $num_type::max_value());
 			assert_eq!(
 				$per::from_percent(99) * $num_type::max_value(),
@@ -658,9 +906,23 @@ mod tests {
 			assert_eq!($per::from_percent(1) * $num_type::max_value(), $num_type::max_value() / 100);
 			assert_eq!($per::from_percent(0) * $num_type::max_value(), 0);
 
-			// bounds
+			// multiplication with bounds
 			assert_eq!($per::one() * $num_type::max_value(), $num_type::max_value());
 			assert_eq!($per::zero() * $num_type::max_value(), 0);
+
+			// from_rational_approximation
+			assert_eq!(
+				$per::from_rational_approximation(u128::max_value() - 1, u128::max_value()),
+				$per::one(),
+			);
+			assert_eq!(
+				$per::from_rational_approximation(u128::max_value()/3, u128::max_value()),
+				$per::from_parts($per::one().0/3),
+			);
+			assert_eq!(
+				$per::from_rational_approximation(1, u128::max_value()),
+				$per::zero(),
+			);
 		}
 	}
 
@@ -674,19 +936,19 @@ mod tests {
 	fn compact_permill_perbill_encoding() {
 		let tests = [(0u32, 1usize), (63, 1), (64, 2), (16383, 2), (16384, 4), (1073741823, 4), (1073741824, 5), (u32::max_value(), 5)];
 		for &(n, l) in &tests {
-			let compact: crate::codec::Compact<super::Permill> = super::Permill(n).into();
+			let compact: crate::codec::Compact<Permill> = Permill(n).into();
 			let encoded = compact.encode();
 			assert_eq!(encoded.len(), l);
-			let decoded = <crate::codec::Compact<super::Permill>>::decode(&mut & encoded[..]).unwrap();
-			let permill: super::Permill = decoded.into();
-			assert_eq!(permill, super::Permill(n));
+			let decoded = <crate::codec::Compact<Permill>>::decode(&mut & encoded[..]).unwrap();
+			let permill: Permill = decoded.into();
+			assert_eq!(permill, Permill(n));
 
-			let compact: crate::codec::Compact<super::Perbill> = super::Perbill(n).into();
+			let compact: crate::codec::Compact<Perbill> = Perbill(n).into();
 			let encoded = compact.encode();
 			assert_eq!(encoded.len(), l);
-			let decoded = <crate::codec::Compact<super::Perbill>>::decode(&mut & encoded[..]).unwrap();
-			let perbill: super::Perbill = decoded.into();
-			assert_eq!(perbill, super::Perbill(n));
+			let decoded = <crate::codec::Compact<Perbill>>::decode(&mut & encoded[..]).unwrap();
+			let perbill: Perbill = decoded.into();
+			assert_eq!(perbill, Perbill(n));
 		}
 	}
 
@@ -697,16 +959,16 @@ mod tests {
 
 	#[test]
 	fn test_has_compact_permill() {
-		let data = WithCompact { data: super::Permill(1) };
+		let data = WithCompact { data: Permill(1) };
 		let encoded = data.encode();
-		assert_eq!(data, WithCompact::<super::Permill>::decode(&mut &encoded[..]).unwrap());
+		assert_eq!(data, WithCompact::<Permill>::decode(&mut &encoded[..]).unwrap());
 	}
 
 	#[test]
 	fn test_has_compact_perbill() {
-		let data = WithCompact { data: super::Perbill(1) };
+		let data = WithCompact { data: Perbill(1) };
 		let encoded = data.encode();
-		assert_eq!(data, WithCompact::<super::Perbill>::decode(&mut &encoded[..]).unwrap());
+		assert_eq!(data, WithCompact::<Perbill>::decode(&mut &encoded[..]).unwrap());
 	}
 
 	#[test]
@@ -714,18 +976,19 @@ mod tests {
 		use super::{Perbill, Permill};
 		use primitive_types::U256;
 
-		per_thing_mul_upper_test!(u32, Perbill);
-		per_thing_mul_upper_test!(u64, Perbill);
-		per_thing_mul_upper_test!(u128, Perbill);
+		per_thing_upper_test!(u32, Perbill);
+		per_thing_upper_test!(u64, Perbill);
+		per_thing_upper_test!(u128, Perbill);
 
-		per_thing_mul_upper_test!(u32, Permill);
-		per_thing_mul_upper_test!(u64, Permill);
-		per_thing_mul_upper_test!(u128, Permill);
+		per_thing_upper_test!(u32, Permill);
+		per_thing_upper_test!(u64, Permill);
+		per_thing_upper_test!(u128, Permill);
+
 	}
 
 	#[test]
 	fn per_things_operate_in_output_type() {
-		assert_eq!(super::Perbill::one() * 255_u64, 255);
+		assert_eq!(Perbill::one() * 255_u64, 255);
 	}
 
 	#[test]
@@ -733,12 +996,12 @@ mod tests {
 		use primitive_types::U256;
 
 		assert_eq!(
-			super::Perbill::from_parts(999_999_999) * std::u128::MAX,
+			Perbill::from_parts(999_999_999) * std::u128::MAX,
 			((Into::<U256>::into(std::u128::MAX) * 999_999_999u32) / 1_000_000_000u32).as_u128()
 		);
 
 		assert_eq!(
-			super::Permill::from_parts(999_999) * std::u128::MAX,
+			Permill::from_parts(999_999) * std::u128::MAX,
 			((Into::<U256>::into(std::u128::MAX) * 999_999u32) / 1_000_000u32).as_u128()
 		);
 	}

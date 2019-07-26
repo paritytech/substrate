@@ -18,7 +18,7 @@
 
 use std::{collections::HashMap, ops::Deref};
 use lazy_static::lazy_static;
-use substrate_primitives::{ed25519::{Pair, Public, Signature}, Pair as PairT, H256};
+use substrate_primitives::{ed25519::{Pair, Public, Signature}, Pair as PairT, Public as PublicT, H256};
 pub use substrate_primitives::ed25519;
 
 /// Set of test accounts.

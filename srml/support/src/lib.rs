@@ -18,6 +18,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+/// Export ourself as `srml_support` to make tests happy.
+extern crate self as srml_support;
+
 #[macro_use]
 extern crate bitmask;
 
@@ -34,7 +37,9 @@ pub use once_cell;
 pub use paste;
 pub use sr_primitives as runtime_primitives;
 
-pub use self::storage::hashed::generator::{HashedStorage, Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat};
+pub use self::storage::hashed::generator::{
+	HashedStorage, Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat
+};
 pub use self::storage::unhashed::generator::UnhashedStorage;
 
 #[macro_use]
@@ -64,6 +69,7 @@ pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
 pub use self::double_map::StorageDoubleMapWithHasher;
 pub use runtime_io::{print, storage_root};
+pub use runtime_primitives::ConsensusEngineId;
 
 /// Macro for easily creating a new implementation of the `Get` trait. Use similarly to
 /// how you would declare a `const`:
@@ -82,19 +88,28 @@ pub use runtime_io::{print, storage_root};
 /// ```
 #[macro_export]
 macro_rules! parameter_types {
-	(pub const $name:ident: $type:ty = $value:expr; $( $rest:tt )*) => (
-		pub struct $name;
-		$crate::parameter_types!{IMPL $name , $type , $value}
-		$crate::parameter_types!{ $( $rest )* }
-	);
-	(const $name:ident: $type:ty = $value:expr; $( $rest:tt )*) => (
-		struct $name;
+	(
+		$( #[ $attr:meta ] )*
+		$vis:vis const $name:ident: $type:ty = $value:expr;
+		$( $rest:tt )*
+	) => (
+		$( #[ $attr ] )*
+		$vis struct $name;
 		$crate::parameter_types!{IMPL $name , $type , $value}
 		$crate::parameter_types!{ $( $rest )* }
 	);
 	() => ();
 	(IMPL $name:ident , $type:ty , $value:expr) => {
-		impl $crate::traits::Get<$type> for $name { fn get() -> $type { $value } }
+		impl $name {
+			pub fn get() -> $type {
+				$value
+			}
+		}
+		impl<I: From<$type>> $crate::traits::Get<I> for $name {
+			fn get() -> I {
+				I::from($value)
+			}
+		}
 	}
 }
 
@@ -208,6 +223,37 @@ macro_rules! __assert_eq_uvec {
 	}
 }
 
+/// Checks that `$x` is equal to `$y` with an error rate of `$error`.
+///
+/// # Example
+///
+/// ```rust
+/// # fn main() {
+/// srml_support::assert_eq_error_rate!(10, 10, 0);
+/// srml_support::assert_eq_error_rate!(10, 11, 1);
+/// srml_support::assert_eq_error_rate!(12, 10, 2);
+/// # }
+/// ```
+///
+/// ```rust,should_panic
+/// # fn main() {
+/// srml_support::assert_eq_error_rate!(12, 10, 1);
+/// # }
+/// ```
+#[macro_export]
+#[cfg(feature = "std")]
+macro_rules! assert_eq_error_rate {
+	($x:expr, $y:expr, $error:expr) => {
+		assert!(
+			($x) >= (($y) - ($error)) && ($x) <= (($y) + ($error)),
+			"{:?} != {:?} (with error rate {:?})",
+			$x,
+			$y,
+			$error,
+		);
+	};
+}
+
 /// The void type - it cannot exist.
 // Oh rust, you crack me up...
 #[derive(Clone, Eq, PartialEq)]
@@ -238,11 +284,9 @@ mod tests {
 	use super::*;
 	use codec::Codec;
 	use runtime_io::{with_externalities, Blake2Hasher};
-	use runtime_primitives::BuildStorage;
 	pub use srml_metadata::{
-		DecodeDifferent, StorageMetadata, StorageFunctionMetadata,
-		StorageFunctionType, StorageFunctionModifier,
-		DefaultByte, DefaultByteGetter, StorageHasher
+		DecodeDifferent, StorageEntryMetadata, StorageMetadata, StorageEntryType,
+		StorageEntryModifier, DefaultByte, DefaultByteGetter, StorageHasher
 	};
 	pub use rstd::marker::PhantomData;
 
@@ -257,9 +301,7 @@ mod tests {
 		use super::Trait;
 
 		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-
-			}
+			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 		}
 	}
 	use self::module::Module;
@@ -285,10 +327,10 @@ mod tests {
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		GenesisConfig::<Test>::default().build_storage().unwrap().0.into()
+		GenesisConfig::default().build_storage().unwrap().0.into()
 	}
 
-	type Map = Data<Test>;
+	type Map = Data;
 
 	#[test]
 	fn linked_map_basic_insert_remove_should_work() {
@@ -371,39 +413,39 @@ mod tests {
 	#[test]
 	fn double_map_basic_insert_remove_remove_prefix_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			type DoubleMap = DataDM<Test>;
+			type DoubleMap = DataDM;
 			// initialized during genesis
 			assert_eq!(DoubleMap::get(&15u32, &16u32), 42u64);
 
 			// get / insert / take
 			let key1 = 17u32;
 			let key2 = 18u32;
-			assert_eq!(DoubleMap::get(key1, key2), 0u64);
-			DoubleMap::insert(key1, key2, 4u64);
-			assert_eq!(DoubleMap::get(key1, key2), 4u64);
-			assert_eq!(DoubleMap::take(key1, key2), 4u64);
-			assert_eq!(DoubleMap::get(key1, key2), 0u64);
+			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
+			DoubleMap::insert(&key1, &key2, &4u64);
+			assert_eq!(DoubleMap::get(&key1, &key2), 4u64);
+			assert_eq!(DoubleMap::take(&key1, &key2), 4u64);
+			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
 
 			// mutate
-			DoubleMap::mutate(key1, key2, |val| {
+			DoubleMap::mutate(&key1, &key2, |val| {
 				*val = 15;
 			});
-			assert_eq!(DoubleMap::get(key1, key2), 15u64);
+			assert_eq!(DoubleMap::get(&key1, &key2), 15u64);
 
 			// remove
-			DoubleMap::remove(key1, key2);
-			assert_eq!(DoubleMap::get(key1, key2), 0u64);
+			DoubleMap::remove(&key1, &key2);
+			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
 
 			// remove prefix
-			DoubleMap::insert(key1, key2, 4u64);
-			DoubleMap::insert(key1, key2+1, 4u64);
-			DoubleMap::insert(key1+1, key2, 4u64);
-			DoubleMap::insert(key1+1, key2+1, 4u64);
-			DoubleMap::remove_prefix(key1);
-			assert_eq!(DoubleMap::get(key1, key2), 0u64);
-			assert_eq!(DoubleMap::get(key1, key2+1), 0u64);
-			assert_eq!(DoubleMap::get(key1+1, key2), 4u64);
-			assert_eq!(DoubleMap::get(key1+1, key2+1), 4u64);
+			DoubleMap::insert(&key1, &key2, &4u64);
+			DoubleMap::insert(&key1, &(key2 + 1), &4u64);
+			DoubleMap::insert(&(key1 + 1), &key2, &4u64);
+			DoubleMap::insert(&(key1 + 1), &(key2 + 1), &4u64);
+			DoubleMap::remove_prefix(&key1);
+			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
+			assert_eq!(DoubleMap::get(&key1, &(key2 + 1)), 0u64);
+			assert_eq!(DoubleMap::get(&(key1 + 1), &key2), 4u64);
+			assert_eq!(DoubleMap::get(&(key1 + 1), &(key2 + 1)), 4u64);
 
 		});
 	}
@@ -416,120 +458,123 @@ mod tests {
 			let key1 = 17u32;
 			let key2 = 18u32;
 
-			DoubleMap::insert(key1, key2, vec![1]);
-			DoubleMap::append(key1, key2, &[2, 3]).unwrap();
-			assert_eq!(DoubleMap::get(key1, key2), vec![1, 2, 3]);
+			DoubleMap::insert(&key1, &key2, &vec![1]);
+			DoubleMap::append(&key1, &key2, &[2, 3]).unwrap();
+			assert_eq!(DoubleMap::get(&key1, &key2), &[1, 2, 3]);
 		});
 	}
 
 	const EXPECTED_METADATA: StorageMetadata = StorageMetadata {
-		functions: DecodeDifferent::Encode(&[
-			StorageFunctionMetadata {
-				name: DecodeDifferent::Encode("Data"),
-				modifier: StorageFunctionModifier::Default,
-				ty: StorageFunctionType::Map{
-					hasher: StorageHasher::Twox64Concat,
-					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("u64"), is_linked: true
+		prefix: DecodeDifferent::Encode("Example"),
+		entries: DecodeDifferent::Encode(
+			&[
+				StorageEntryMetadata {
+					name: DecodeDifferent::Encode("Data"),
+					modifier: StorageEntryModifier::Default,
+					ty: StorageEntryType::Map{
+						hasher: StorageHasher::Twox64Concat,
+						key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("u64"), is_linked: true
+					},
+					default: DecodeDifferent::Encode(
+						DefaultByteGetter(&__GetByteStructData(PhantomData::<Test>))
+					),
+					documentation: DecodeDifferent::Encode(&[]),
 				},
-				default: DecodeDifferent::Encode(
-					DefaultByteGetter(&__GetByteStructData(PhantomData::<Test>))
-				),
-				documentation: DecodeDifferent::Encode(&[]),
-			},
-			StorageFunctionMetadata {
-				name: DecodeDifferent::Encode("GenericData"),
-				modifier: StorageFunctionModifier::Default,
-				ty: StorageFunctionType::Map{
-					hasher: StorageHasher::Twox128,
-					key: DecodeDifferent::Encode("T::BlockNumber"),
-					value: DecodeDifferent::Encode("T::BlockNumber"),
-					is_linked: true
+				StorageEntryMetadata {
+					name: DecodeDifferent::Encode("GenericData"),
+					modifier: StorageEntryModifier::Default,
+					ty: StorageEntryType::Map{
+						hasher: StorageHasher::Twox128,
+						key: DecodeDifferent::Encode("T::BlockNumber"),
+						value: DecodeDifferent::Encode("T::BlockNumber"),
+						is_linked: true
+					},
+					default: DecodeDifferent::Encode(
+						DefaultByteGetter(&__GetByteStructGenericData(PhantomData::<Test>))
+					),
+					documentation: DecodeDifferent::Encode(&[]),
 				},
-				default: DecodeDifferent::Encode(
-					DefaultByteGetter(&__GetByteStructGenericData(PhantomData::<Test>))
-				),
-				documentation: DecodeDifferent::Encode(&[]),
-			},
-			StorageFunctionMetadata {
-				name: DecodeDifferent::Encode("GenericData2"),
-				modifier: StorageFunctionModifier::Optional,
-				ty: StorageFunctionType::Map{
-					hasher: StorageHasher::Blake2_256,
-					key: DecodeDifferent::Encode("T::BlockNumber"),
-					value: DecodeDifferent::Encode("T::BlockNumber"),
-					is_linked: true
+				StorageEntryMetadata {
+					name: DecodeDifferent::Encode("GenericData2"),
+					modifier: StorageEntryModifier::Optional,
+					ty: StorageEntryType::Map{
+						hasher: StorageHasher::Blake2_256,
+						key: DecodeDifferent::Encode("T::BlockNumber"),
+						value: DecodeDifferent::Encode("T::BlockNumber"),
+						is_linked: true
+					},
+					default: DecodeDifferent::Encode(
+						DefaultByteGetter(&__GetByteStructGenericData2(PhantomData::<Test>))
+					),
+					documentation: DecodeDifferent::Encode(&[]),
 				},
-				default: DecodeDifferent::Encode(
-					DefaultByteGetter(&__GetByteStructGenericData2(PhantomData::<Test>))
-				),
-				documentation: DecodeDifferent::Encode(&[]),
-			},
-			StorageFunctionMetadata {
-				name: DecodeDifferent::Encode("DataDM"),
-				modifier: StorageFunctionModifier::Default,
-				ty: StorageFunctionType::DoubleMap{
-					hasher: StorageHasher::Twox64Concat,
-					key1: DecodeDifferent::Encode("u32"),
-					key2: DecodeDifferent::Encode("u32"),
-					value: DecodeDifferent::Encode("u64"),
-					key2_hasher: StorageHasher::Blake2_256,
+				StorageEntryMetadata {
+					name: DecodeDifferent::Encode("DataDM"),
+					modifier: StorageEntryModifier::Default,
+					ty: StorageEntryType::DoubleMap{
+						hasher: StorageHasher::Twox64Concat,
+						key1: DecodeDifferent::Encode("u32"),
+						key2: DecodeDifferent::Encode("u32"),
+						value: DecodeDifferent::Encode("u64"),
+						key2_hasher: StorageHasher::Blake2_256,
+					},
+					default: DecodeDifferent::Encode(
+						DefaultByteGetter(&__GetByteStructDataDM(PhantomData::<Test>))
+					),
+					documentation: DecodeDifferent::Encode(&[]),
 				},
-				default: DecodeDifferent::Encode(
-					DefaultByteGetter(&__GetByteStructDataDM(PhantomData::<Test>))
-				),
-				documentation: DecodeDifferent::Encode(&[]),
-			},
-			StorageFunctionMetadata {
-				name: DecodeDifferent::Encode("GenericDataDM"),
-				modifier: StorageFunctionModifier::Default,
-				ty: StorageFunctionType::DoubleMap{
-					hasher: StorageHasher::Blake2_256,
-					key1: DecodeDifferent::Encode("T::BlockNumber"),
-					key2: DecodeDifferent::Encode("T::BlockNumber"),
-					value: DecodeDifferent::Encode("T::BlockNumber"),
-					key2_hasher: StorageHasher::Twox128,
+				StorageEntryMetadata {
+					name: DecodeDifferent::Encode("GenericDataDM"),
+					modifier: StorageEntryModifier::Default,
+					ty: StorageEntryType::DoubleMap{
+						hasher: StorageHasher::Blake2_256,
+						key1: DecodeDifferent::Encode("T::BlockNumber"),
+						key2: DecodeDifferent::Encode("T::BlockNumber"),
+						value: DecodeDifferent::Encode("T::BlockNumber"),
+						key2_hasher: StorageHasher::Twox128,
+					},
+					default: DecodeDifferent::Encode(
+						DefaultByteGetter(&__GetByteStructGenericDataDM(PhantomData::<Test>))
+					),
+					documentation: DecodeDifferent::Encode(&[]),
 				},
-				default: DecodeDifferent::Encode(
-					DefaultByteGetter(&__GetByteStructGenericDataDM(PhantomData::<Test>))
-				),
-				documentation: DecodeDifferent::Encode(&[]),
-			},
-			StorageFunctionMetadata {
-				name: DecodeDifferent::Encode("GenericData2DM"),
-				modifier: StorageFunctionModifier::Optional,
-				ty: StorageFunctionType::DoubleMap{
-					hasher: StorageHasher::Blake2_256,
-					key1: DecodeDifferent::Encode("T::BlockNumber"),
-					key2: DecodeDifferent::Encode("T::BlockNumber"),
-					value: DecodeDifferent::Encode("T::BlockNumber"),
-					key2_hasher: StorageHasher::Twox256,
+				StorageEntryMetadata {
+					name: DecodeDifferent::Encode("GenericData2DM"),
+					modifier: StorageEntryModifier::Optional,
+					ty: StorageEntryType::DoubleMap{
+						hasher: StorageHasher::Blake2_256,
+						key1: DecodeDifferent::Encode("T::BlockNumber"),
+						key2: DecodeDifferent::Encode("T::BlockNumber"),
+						value: DecodeDifferent::Encode("T::BlockNumber"),
+						key2_hasher: StorageHasher::Twox256,
+					},
+					default: DecodeDifferent::Encode(
+						DefaultByteGetter(&__GetByteStructGenericData2DM(PhantomData::<Test>))
+					),
+					documentation: DecodeDifferent::Encode(&[]),
 				},
-				default: DecodeDifferent::Encode(
-					DefaultByteGetter(&__GetByteStructGenericData2DM(PhantomData::<Test>))
-				),
-				documentation: DecodeDifferent::Encode(&[]),
-			},
-			StorageFunctionMetadata {
-				name: DecodeDifferent::Encode("AppendableDM"),
-				modifier: StorageFunctionModifier::Default,
-				ty: StorageFunctionType::DoubleMap{
-					hasher: StorageHasher::Blake2_256,
-					key1: DecodeDifferent::Encode("u32"),
-					key2: DecodeDifferent::Encode("T::BlockNumber"),
-					value: DecodeDifferent::Encode("Vec<u32>"),
-					key2_hasher: StorageHasher::Blake2_256,
+				StorageEntryMetadata {
+					name: DecodeDifferent::Encode("AppendableDM"),
+					modifier: StorageEntryModifier::Default,
+					ty: StorageEntryType::DoubleMap{
+						hasher: StorageHasher::Blake2_256,
+						key1: DecodeDifferent::Encode("u32"),
+						key2: DecodeDifferent::Encode("T::BlockNumber"),
+						value: DecodeDifferent::Encode("Vec<u32>"),
+						key2_hasher: StorageHasher::Blake2_256,
+					},
+					default: DecodeDifferent::Encode(
+						DefaultByteGetter(&__GetByteStructGenericData2DM(PhantomData::<Test>))
+					),
+					documentation: DecodeDifferent::Encode(&[]),
 				},
-				default: DecodeDifferent::Encode(
-					DefaultByteGetter(&__GetByteStructGenericData2DM(PhantomData::<Test>))
-				),
-				documentation: DecodeDifferent::Encode(&[]),
-			},
-		])
+			]
+		),
 	};
 
 	#[test]
 	fn store_metadata() {
-		let metadata = Module::<Test>::store_metadata();
+		let metadata = Module::<Test>::storage_metadata();
 		assert_eq!(EXPECTED_METADATA, metadata);
 	}
 }

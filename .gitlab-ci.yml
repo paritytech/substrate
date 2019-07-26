@@ -107,8 +107,7 @@ cargo-check-benches:
   stage:                           test
   <<:                              *docker-env
   script:
-    - ./scripts/build.sh --locked
-    - time cargo check --benches
+    - BUILD_DUMMY_WASM_BINARY=1 time cargo check --benches --all
     - sccache -s
 
 
@@ -119,7 +118,7 @@ cargo-check-subkey:
     - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
   script:
     - cd ./subkey
-    - time cargo check --release   # makes sense to save artifacts for building it
+    - BUILD_DUMMY_WASM_BINARY=1 time cargo check --release
     - sccache -s
 
 
@@ -134,22 +133,57 @@ test-linux-stable:                 &test-linux
     variables:
       - $DEPLOY_TAG
   script:
-    - ./scripts/build.sh --locked
     - time cargo test --all --release --verbose --locked
     - sccache -s
+
+
+test-srml-staking:                 &test-srml-staking
+  stage:                           test
+  <<:                              *docker-env
+  variables:
+    # Enable debug assertions since we are running optimized builds for testing
+    # but still want to have debug assertions.
+    RUSTFLAGS: -Cdebug-assertions=y
+    RUST_BACKTRACE: 1
+  except:
+    variables:
+      - $DEPLOY_TAG
+  only:
+    changes:
+      - .gitlab-ci.yml
+      - srml/staking/*
+  script:
+    - cd srml/staking/
+    - time cargo test --release --verbose --no-default-features --features std
+    - sccache -s
+
+
+
+
+
 
 test-linux-stable-int:
   <<:                              *test-linux
   except:
     refs:
-      - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
+      - /^v[0-9]+\.[0-9]+.*$/      # i.e. v1.0, v2.1rc1
     variables:
       - $DEPLOY_TAG
   script:
-    - ./scripts/build.sh --locked
-    - time RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
-        cargo test -p node-cli --release --verbose --locked -- --ignored --test-threads=1
+    - echo "___Logs will be partly shown at the end in case of failure.___"
+    - echo "___Full log will be saved to the job artifacts only in case of failure.___"
+    - RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
+        time cargo test -p node-cli --release --verbose --locked -- --ignored --test-threads=1
+        &> ${CI_COMMIT_SHORT_SHA}_int_failure.log
     - sccache -s
+  after_script:
+    - awk '/FAILED/,0' ${CI_COMMIT_SHORT_SHA}_int_failure.log
+  artifacts:
+    name:                          $CI_COMMIT_SHORT_SHA
+    when:                          on_failure
+    expire_in:                     24 hrs
+    paths:
+      - ${CI_COMMIT_SHORT_SHA}_int_failure.log
   allow_failure:                   true
 
 
@@ -173,9 +207,12 @@ check-web-wasm:
     - time cargo web build -p substrate-keystore
     - time cargo web build -p substrate-executor
     - time cargo web build -p substrate-network
+    - time cargo web build -p substrate-offchain
     - time cargo web build -p substrate-panic-handler
     - time cargo web build -p substrate-peerset
     - time cargo web build -p substrate-primitives
+    # TODO: we can't use cargo web until https://github.com/paritytech/jsonrpc/pull/436 is deployed
+    - time cargo build -p substrate-rpc-servers --target wasm32-unknown-unknown
     - time cargo web build -p substrate-serializer
     - time cargo web build -p substrate-state-db
     - time cargo web build -p substrate-state-machine
@@ -195,32 +232,55 @@ build-linux-release:
   stage:                           build
   <<:                              *collect-artifacts
   <<:                              *docker-env
-  <<:                              *build-only
+  # debug <<:                              *build-only
   except:
     variables:
       - $DEPLOY_TAG
   script:
-    - ./scripts/build.sh --locked
     - time cargo build --release --verbose
-    - mkdir -p ./artifacts
-    - mv ./target/release/substrate ./artifacts/.
+    - mkdir -p ./artifacts/substrate/
+    - mv ./target/release/substrate ./artifacts/substrate/.
     - echo -n "Substrate version = "
     - if [ "${CI_COMMIT_TAG}" ]; then
-        echo "${CI_COMMIT_TAG}" | tee ./artifacts/VERSION;
+        echo "${CI_COMMIT_TAG}" | tee ./artifacts/substrate/VERSION;
       else
-        ./artifacts/substrate --version |
+        ./artifacts/substrate/substrate --version |
         sed -n -r 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
-        tee ./artifacts/VERSION;
+        tee ./artifacts/substrate/VERSION;
       fi
-    - sha256sum ./artifacts/substrate | tee ./artifacts/substrate.sha256
+    - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
     - printf '\n# building node-template\n\n'
-    - ./scripts/node-template-release.sh ./artifacts/substrate-node-template.tar.gz
-    - cp -r scripts/docker/* ./artifacts
+    - ./scripts/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
+    - cp -r scripts/docker/substrate.Dockerfile ./artifacts/substrate/
+    - sccache -s
+
+build-linux-subkey:
+  stage:                           build
+  <<:                              *collect-artifacts
+  <<:                              *docker-env
+  # debug <<:                              *build-only
+  except:
+    variables:
+      - $DEPLOY_TAG
+  script:
+    - cd ./subkey
+    - BUILD_DUMMY_WASM_BINARY=1 time cargo build --release --verbose
+    - cd ..
+    - sccache -s
+    - mkdir -p ./artifacts/subkey
+    - mv ./target/release/subkey ./artifacts/subkey/.
+    - echo -n "Subkey version = "
+    - ./artifacts/subkey/subkey --version |
+        sed -n -r 's/^subkey ([0-9.]+.*)/\1/p' |
+        tee ./artifacts/subkey/VERSION;
+    - sha256sum ./artifacts/subkey/subkey | tee ./artifacts/subkey/subkey.sha256
+    - cp -r scripts/docker/subkey.Dockerfile ./artifacts/subkey/
     - sccache -s
 
 build-rust-doc-release:
   stage:                           build
   <<:                              *docker-env
+
   allow_failure:                   true
   artifacts:
     name:                          "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}-doc"
@@ -230,9 +290,8 @@ build-rust-doc-release:
     - ./crate-docs
   <<:                              *build-only
   script:
-    - ./scripts/build.sh --locked
     - rm -f ./crate-docs/index.html # use it as an indicator if the job succeeds
-    - time cargo +nightly doc --release --all --verbose
+    - BUILD_DUMMY_WASM_BINARY=1 time cargo +nightly doc --release --all --verbose
     - cp -R ./target/doc ./crate-docs
     - echo "<meta http-equiv=refresh content=0;url=substrate_service/index.html>" > ./crate-docs/index.html
     - sccache -s
@@ -243,11 +302,17 @@ build-rust-doc-release:
   stage:                           publish
   dependencies:
     - build-linux-release
+    - build-linux-subkey
   <<:                              *build-only
   <<:                              *kubernetes-build
 
-publish-docker-release:
-  <<:                              *publish-build
+publish-docker-substrate:          &publish-docker-release
+  # debug <<:                              *publish-build
+  stage:                           publish
+  dependencies:
+    - build-linux-release
+  <<:                              *kubernetes-build
+  # debug
   image:                           docker:stable
   services:
     - docker:dind
@@ -257,7 +322,7 @@ publish-docker-release:
     DOCKER_HOST:                   tcp://localhost:2375
     DOCKER_DRIVER:                 overlay2
     GIT_STRATEGY:                  none
-    # DOCKERFILE:                  scripts/docker/Dockerfile
+    # DOCKERFILE:                  scripts/docker/substrate.Dockerfile
     CONTAINER_IMAGE:               parity/substrate
   before_script:
     - test "$Docker_Hub_User_Parity" -a "$Docker_Hub_Pass_Parity"
@@ -265,41 +330,81 @@ publish-docker-release:
     - docker login -u "$Docker_Hub_User_Parity" -p "$Docker_Hub_Pass_Parity"
     - docker info
   script:
-    - VERSION="$(cat ./artifacts/VERSION)"
+    - cd ./artifacts/substrate/
+    - VERSION="$(cat ./VERSION)"
     - echo "Substrate version = ${VERSION}"
     - test -z "${VERSION}" && exit 1
-    - cd ./artifacts
     - docker build
       --build-arg VCS_REF="${CI_COMMIT_SHA}"
       --build-arg BUILD_DATE="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
       --tag $CONTAINER_IMAGE:$VERSION
-      --tag $CONTAINER_IMAGE:latest .
+      --tag $CONTAINER_IMAGE:latest
+      --file substrate.Dockerfile .
     - docker push $CONTAINER_IMAGE:$VERSION
     - docker push $CONTAINER_IMAGE:latest
   after_script:
     - docker logout
     # only VERSION information is needed for the deployment
-    - find ./artifacts/ -depth -not -name VERSION -not -name artifacts -delete
+    - find ./artifacts/ -depth -not -name VERSION -type f -delete
+
+publish-docker-subkey:
+  # debug <<:                              *publish-docker-release
+  stage:                           publish
+  dependencies:
+    - build-linux-subkey
+  # debug <<:                              *build-only
+  <<:                              *kubernetes-build
+  image:                           docker:stable
+  services:
+    - docker:dind
+  variables:
+    DOCKER_HOST:                   tcp://localhost:2375
+    DOCKER_DRIVER:                 overlay2
+    GIT_STRATEGY:                  none
+    # DOCKERFILE:                  scripts/docker/subkey.Dockerfile
+    CONTAINER_IMAGE:               parity/subkey
+  before_script:
+    - test "$Docker_Hub_User_Parity" -a "$Docker_Hub_Pass_Parity"
+        || ( echo "no docker credentials provided"; exit 1 )
+    - docker login -u "$Docker_Hub_User_Parity" -p "$Docker_Hub_Pass_Parity"
+    - docker info
+  script:
+    - cd ./artifacts/subkey/
+    - VERSION="$(cat ./VERSION)"
+    - echo "Subkey version = ${VERSION}"
+    - test -z "${VERSION}" && exit 1
+    - docker build
+      --build-arg VCS_REF="${CI_COMMIT_SHA}"
+      --build-arg BUILD_DATE="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+      --tag $CONTAINER_IMAGE:$VERSION
+      --tag $CONTAINER_IMAGE:latest
+      --file subkey.Dockerfile .
+    - docker push $CONTAINER_IMAGE:$VERSION
+    - docker push $CONTAINER_IMAGE:latest
+  after_script:
+    - docker logout
 
 publish-s3-release:
-  <<:                              *publish-build
+  # debug <<:                              *publish-build
+  stage:                           publish
+  dependencies:
+    - build-linux-release
+    - build-linux-subkey
+  <<:                              *kubernetes-build
+  # debug
   image:                           parity/awscli:latest
   variables:
     GIT_STRATEGY:                  none
     BUCKET:                        "releases.parity.io"
     PREFIX:                        "substrate/${ARCH}-${DOCKER_OS}"
   script:
-    - aws s3 sync ./artifacts/ s3://${BUCKET}/${PREFIX}/$(cat ./artifacts/VERSION)/
+    - aws s3 sync ./artifacts/ s3://${BUCKET}/${PREFIX}/$(cat ./artifacts/substrate/VERSION)/
     - echo "update objects in latest path"
-    - for file in ./artifacts/*; do
-      name="$(basename ${file})";
-      aws s3api copy-object
-        --copy-source ${BUCKET}/${PREFIX}/$(cat ./artifacts/VERSION)/${name}
-        --bucket ${BUCKET} --key ${PREFIX}/latest/${name};
-      done
+    - aws s3 sync s3://${BUCKET}/${PREFIX}/$(cat ./artifacts/substrate/VERSION)/ s3://${BUCKET}/${PREFIX}/latest/
   after_script:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/latest/
         --recursive --human-readable --summarize
+
 
 publish-s3-doc:
   stage:                           publish
@@ -325,6 +430,48 @@ publish-s3-doc:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/
         --human-readable --summarize
 
+
+publish-gh-doc:
+  stage:                           publish
+  image:                           parity/tools:latest
+  allow_failure:                   true
+  dependencies:
+    - build-rust-doc-release
+  cache:                           {}
+  <<:                              *build-only
+  <<:                              *kubernetes-build
+  variables:
+    GIT_STRATEGY:                  none
+    GITHUB_API:                    "https://api.github.com"
+  script:
+    - test -r ./crate-docs/index.html || (
+        echo "./crate-docs/index.html not present, build:rust:doc:release job not complete";
+        exit 1
+      )
+    - test "${GITHUB_USER}" -a "${GITHUB_EMAIL}" -a "${GITHUB_TOKEN}" || (
+        echo "environment variables for github insufficient";
+        exit 1
+      )
+    - |
+      cat > ${HOME}/.gitconfig <<EOC
+      [user]
+      name = "${GITHUB_USER}"
+      email = "${GITHUB_EMAIL}"
+
+      [url "https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/"]
+      insteadOf = "https://github.com/"
+      EOC
+    - unset GITHUB_TOKEN
+    - git clone https://github.com/substrate-developer-hub/rustdocs.git
+    - rsync -ax --delete ./crate-docs/ ./rustdocs/${CI_COMMIT_REF_NAME}/
+    - cd ./rustdocs; git add .
+    - git commit -m "update rustdoc ${CI_COMMIT_REF_NAME}"
+    - git push origin master 2>&1 | sed -r "s|(${GITHUB_USER}):[a-f0-9]+@|\1:REDACTED@|g"
+  after_script:
+    - rm -vrf ${HOME}/.gitconfig
+
+
+
 .deploy-template:                  &deploy
   stage:                           kubernetes
   when:                            manual
@@ -336,8 +483,8 @@ publish-s3-doc:
     - kubernetes-parity-build
   before_script:
     - test -z "${DEPLOY_TAG}" &&
-      test -f ./artifacts/VERSION &&
-      DEPLOY_TAG="$(cat ./artifacts/VERSION)"
+        test -f ./artifacts/substrate/VERSION &&
+        DEPLOY_TAG="$(cat ./artifacts/substrate/VERSION)"
     - test "${DEPLOY_TAG}" || ( echo "Neither DEPLOY_TAG nor VERSION information available"; exit 1 )
   script:
     - echo "Substrate version = ${DEPLOY_TAG}"
@@ -363,7 +510,7 @@ publish-s3-doc:
 .deploy-cibuild:                   &deploy-cibuild
   <<:                              *deploy
   dependencies:
-    - publish-docker-release
+    - publish-docker-substrate
 
 .deploy-tag:                       &deploy-tag
   <<:                              *deploy

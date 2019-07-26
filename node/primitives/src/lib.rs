@@ -41,11 +41,8 @@ pub type AccountIndex = u32;
 /// Balance of an account.
 pub type Balance = u128;
 
-/// Alias to the signature scheme used for Aura authority signatures.
-pub type AuraSignature = primitives::ed25519::Signature;
-
-/// The Ed25519 pub key of an session that belongs to an Aura authority of the chain.
-pub type AuraId = primitives::ed25519::Public;
+/// Type used for expressing timestamp.
+pub type Moment = u64;
 
 /// Index of a transaction in the chain.
 pub type Index = u64;
@@ -53,7 +50,9 @@ pub type Index = u64;
 /// A hash of some data used by the chain.
 pub type Hash = primitives::H256;
 
-/// A timestamp: seconds since the unix epoch.
+/// A timestamp: milliseconds since the unix epoch.
+/// `u64` is enough to represent a duration of half a billion years, when the
+/// time scale is milliseconds.
 pub type Timestamp = u64;
 
 /// Digest item type.

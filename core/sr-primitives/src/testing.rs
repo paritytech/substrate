@@ -19,12 +19,16 @@
 use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializer};
 use std::{fmt::Debug, ops::Deref, fmt};
 use crate::codec::{Codec, Encode, Decode};
-use crate::traits::{self, Checkable, Applyable, BlakeTwo256, OpaqueKeys};
-use crate::generic;
-use crate::weights::{Weighable, Weight};
+use crate::traits::{
+	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys, TypedKey, DispatchError, DispatchResult,
+	ValidateUnsigned, SignedExtension, Dispatchable,
+};
+use crate::{generic, KeyTypeId};
+use crate::weights::{GetDispatchInfo, DispatchInfo};
 pub use substrate_primitives::H256;
 use substrate_primitives::U256;
 use substrate_primitives::ed25519::{Public as AuthorityId};
+use crate::transaction_validity::TransactionValidity;
 
 /// Authority Id
 #[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug)]
@@ -37,12 +41,36 @@ impl Into<AuthorityId> for UintAuthorityId {
 	}
 }
 
+/// The key-type of the `UintAuthorityId`
+pub const UINT_DUMMY_KEY: KeyTypeId = 0xdeadbeef;
+
+impl TypedKey for UintAuthorityId {
+	const KEY_TYPE: KeyTypeId = UINT_DUMMY_KEY;
+}
+
+impl AsRef<[u8]> for UintAuthorityId {
+	fn as_ref(&self) -> &[u8] {
+		let ptr = self.0 as *const _;
+		// It's safe to do this here since `UintAuthorityId` is `u64`.
+		unsafe { std::slice::from_raw_parts(ptr, 8) }
+	}
+}
+
 impl OpaqueKeys for UintAuthorityId {
-	fn count() -> usize { 1 }
+	type KeyTypeIds = std::iter::Cloned<std::slice::Iter<'static, KeyTypeId>>;
+
+	fn key_ids() -> Self::KeyTypeIds { [UINT_DUMMY_KEY].iter().cloned() }
 	// Unsafe, i know, but it's test code and it's just there because it's really convenient to
 	// keep `UintAuthorityId` as a u64 under the hood.
-	fn get_raw(&self, _: usize) -> &[u8] { unsafe { &std::mem::transmute::<_, &[u8; 8]>(&self.0)[..] } }
-	fn get<T: Decode>(&self, _: usize) -> Option<T> { self.0.using_encoded(|mut x| T::decode(&mut x)) }
+	fn get_raw(&self, _: KeyTypeId) -> &[u8] {
+		unsafe {
+			std::slice::from_raw_parts(
+				&self.0 as *const _ as *const u8,
+				std::mem::size_of::<u64>(),
+			)
+		}
+	}
+	fn get<T: Decode>(&self, _: KeyTypeId) -> Option<T> { self.0.using_encoded(|mut x| T::decode(&mut x)) }
 }
 
 /// Digest item
@@ -117,6 +145,8 @@ impl<'a> Deserialize<'a> for Header {
 pub struct ExtrinsicWrapper<Xt>(Xt);
 
 impl<Xt> traits::Extrinsic for ExtrinsicWrapper<Xt> {
+	type Call = ();
+
 	fn is_signed(&self) -> Option<bool> {
 		None
 	}
@@ -178,50 +208,82 @@ impl<'a, Xt> Deserialize<'a> for Block<Xt> where Block<Xt>: Decode {
 	}
 }
 
-/// Test transaction, tuple of (sender, index, call)
+/// Test transaction, tuple of (sender, call, signed_extra)
 /// with index only used if sender is some.
 ///
 /// If sender is some then the transaction is signed otherwise it is unsigned.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
-pub struct TestXt<Call>(pub Option<u64>, pub u64, pub Call);
+pub struct TestXt<Call, Extra>(pub Option<(u64, Extra)>, pub Call);
 
-impl<Call> Serialize for TestXt<Call> where TestXt<Call>: Encode
-{
+impl<Call, Extra> Serialize for TestXt<Call, Extra> where TestXt<Call, Extra>: Encode {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: Serializer {
 		self.using_encoded(|bytes| seq.serialize_bytes(bytes))
 	}
 }
 
-impl<Call> Debug for TestXt<Call> {
+impl<Call, Extra> Debug for TestXt<Call, Extra> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "TestXt({:?}, {:?})", self.0, self.1)
+		write!(f, "TestXt({:?}, ...)", self.0.as_ref().map(|x| &x.0))
 	}
 }
 
-impl<Call: Codec + Sync + Send, Context> Checkable<Context> for TestXt<Call> {
+impl<Call: Codec + Sync + Send, Context, Extra> Checkable<Context> for TestXt<Call, Extra> {
 	type Checked = Self;
 	fn check(self, _: &Context) -> Result<Self::Checked, &'static str> { Ok(self) }
 }
-impl<Call: Codec + Sync + Send> traits::Extrinsic for TestXt<Call> {
+impl<Call: Codec + Sync + Send, Extra> traits::Extrinsic for TestXt<Call, Extra> {
+	type Call = Call;
+
 	fn is_signed(&self) -> Option<bool> {
 		Some(self.0.is_some())
 	}
-}
-impl<Call> Applyable for TestXt<Call> where
-	Call: 'static + Sized + Send + Sync + Clone + Eq + Codec + Debug,
-{
-	type AccountId = u64;
-	type Index = u64;
-	type Call = Call;
-	fn sender(&self) -> Option<&u64> { self.0.as_ref() }
-	fn index(&self) -> Option<&u64> { self.0.as_ref().map(|_| &self.1) }
-	fn deconstruct(self) -> (Self::Call, Option<Self::AccountId>) {
-		(self.2, self.0)
+
+	fn new_unsigned(_c: Call) -> Option<Self> {
+		None
 	}
 }
-impl<Call> Weighable for TestXt<Call> {
-	fn weight(&self, len: usize) -> Weight {
+
+impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
+	Call: 'static + Sized + Send + Sync + Clone + Eq + Codec + Debug + Dispatchable<Origin=Origin>,
+	Extra: SignedExtension<AccountId=u64>,
+	Origin: From<Option<u64>>
+{
+	type AccountId = u64;
+	type Call = Call;
+
+	fn sender(&self) -> Option<&u64> { self.0.as_ref().map(|x| &x.0) }
+
+	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
+	fn validate<U: ValidateUnsigned<Call=Self::Call>>(&self,
+		_info: DispatchInfo,
+		_len: usize,
+	) -> TransactionValidity {
+		TransactionValidity::Valid(Default::default())
+	}
+
+	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
+	/// index and sender.
+	fn dispatch(self,
+		info: DispatchInfo,
+		len: usize,
+	) -> Result<DispatchResult, DispatchError> {
+		let maybe_who = if let Some((who, extra)) = self.0 {
+			Extra::pre_dispatch(extra, &who, info, len)?;
+			Some(who)
+		} else {
+			Extra::pre_dispatch_unsigned(info, len)?;
+			None
+		};
+		Ok(self.1.dispatch(maybe_who.into()))
+	}
+}
+
+impl<Call: Encode, Extra: Encode> GetDispatchInfo for TestXt<Call, Extra> {
+	fn get_dispatch_info(&self) -> DispatchInfo {
 		// for testing: weight == size.
-		len as Weight
+		DispatchInfo {
+			weight: self.encode().len() as _,
+			..Default::default()
+		}
 	}
 }

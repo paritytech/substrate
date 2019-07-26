@@ -23,7 +23,7 @@ use std::path::PathBuf;
 use std::fs::{self, File};
 use std::io::{self, Write};
 
-use substrate_primitives::{ed25519::{Pair, Public}, Pair as PairT};
+use substrate_primitives::crypto::{KeyTypeId, Pair, Public};
 
 /// Keystore error.
 #[derive(Debug, derive_more::Display, derive_more::From)]
@@ -59,7 +59,7 @@ impl std::error::Error for Error {
 /// Key store.
 pub struct Store {
 	path: PathBuf,
-	additional: HashMap<Public, Pair>,
+	additional: HashMap<(KeyTypeId, Vec<u8>), Vec<u8>>,
 }
 
 impl Store {
@@ -69,33 +69,49 @@ impl Store {
 		Ok(Store { path, additional: HashMap::new() })
 	}
 
+	fn get_pair<TPair: Pair>(&self, public: &TPair::Public) -> Result<Option<TPair>> {
+		let key = (TPair::KEY_TYPE, public.to_raw_vec());
+		if let Some(bytes) = self.additional.get(&key) {
+			let pair = TPair::from_seed_slice(bytes)
+				.map_err(|_| Error::InvalidSeed)?;
+			return Ok(Some(pair));
+		}
+		Ok(None)
+	}
+
+	fn insert_pair<TPair: Pair>(&mut self, pair: &TPair) {
+		let key = (TPair::KEY_TYPE, pair.public().to_raw_vec());
+		self.additional.insert(key, pair.to_raw_vec());
+	}
+
 	/// Generate a new key, placing it into the store.
-	pub fn generate(&self, password: &str) -> Result<Pair> {
-		let (pair, phrase, _) = Pair::generate_with_phrase(Some(password));
-		let mut file = File::create(self.key_file_path(&pair.public()))?;
+	pub fn generate<TPair: Pair>(&self, password: &str) -> Result<TPair> {
+		let (pair, phrase, _) = TPair::generate_with_phrase(Some(password));
+		let mut file = File::create(self.key_file_path::<TPair>(&pair.public()))?;
 		::serde_json::to_writer(&file, &phrase)?;
 		file.flush()?;
 		Ok(pair)
 	}
 
 	/// Create a new key from seed. Do not place it into the store.
-	pub fn generate_from_seed(&mut self, seed: &str) -> Result<Pair> {
-		let pair = Pair::from_string(seed, None)
+	pub fn generate_from_seed<TPair: Pair>(&mut self, seed: &str) -> Result<TPair> {
+		let pair = TPair::from_string(seed, None)
 			.ok().ok_or(Error::InvalidSeed)?;
-		self.additional.insert(pair.public(), pair.clone());
+		self.insert_pair(&pair);
 		Ok(pair)
 	}
 
 	/// Load a key file with given public key.
-	pub fn load(&self, public: &Public, password: &str) -> Result<Pair> {
-		if let Some(pair) = self.additional.get(public) {
-			return Ok(pair.clone());
+	pub fn load<TPair: Pair>(&self, public: &TPair::Public, password: &str) -> Result<TPair> {
+		if let Some(pair) = self.get_pair(public)? {
+			return Ok(pair)
 		}
-		let path = self.key_file_path(public);
+
+		let path = self.key_file_path::<TPair>(public);
 		let file = File::open(path)?;
 
 		let phrase: String = ::serde_json::from_reader(&file)?;
-		let (pair, _) = Pair::from_phrase(&phrase, Some(password))
+		let (pair, _) = TPair::from_phrase(&phrase, Some(password))
 			.ok().ok_or(Error::InvalidPhrase)?;
 		if &pair.public() != public {
 			return Err(Error::InvalidPassword);
@@ -104,22 +120,28 @@ impl Store {
 	}
 
 	/// Get public keys of all stored keys.
-	pub fn contents(&self) -> Result<Vec<Public>> {
-		let mut public_keys: Vec<Public> = self.additional.keys().cloned().collect();
+	pub fn contents<TPublic: Public>(&self) -> Result<Vec<TPublic>> {
+		let mut public_keys: Vec<TPublic> = self.additional.keys()
+			.filter_map(|(ty, public)| {
+				if *ty != TPublic::KEY_TYPE {
+					return None
+				}
+				Some(TPublic::from_slice(public))
+			})
+			.collect();
+
+		let key_type: [u8; 4] = TPublic::KEY_TYPE.to_le_bytes();
 		for entry in fs::read_dir(&self.path)? {
 			let entry = entry?;
 			let path = entry.path();
 
 			// skip directories and non-unicode file names (hex is unicode)
 			if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-				if name.len() != 64 { continue }
-
 				match hex::decode(name) {
-					Ok(ref hex) if hex.len() == 32 => {
-						let mut buf = [0; 32];
-						buf.copy_from_slice(&hex[..]);
-
-						public_keys.push(Public(buf));
+					Ok(ref hex) => {
+						if hex[0..4] != key_type { continue	}
+						let public = TPublic::from_slice(&hex[4..]);
+						public_keys.push(public);
 					}
 					_ => continue,
 				}
@@ -129,9 +151,12 @@ impl Store {
 		Ok(public_keys)
 	}
 
-	fn key_file_path(&self, public: &Public) -> PathBuf {
+	fn key_file_path<TPair: Pair>(&self, public: &TPair::Public) -> PathBuf {
 		let mut buf = self.path.clone();
-		buf.push(hex::encode(public.as_slice()));
+		let bytes: [u8; 4] = TPair::KEY_TYPE.to_le_bytes();
+		let key_type = hex::encode(bytes);
+		let key = hex::encode(public.as_slice());
+		buf.push(key_type + key.as_str());
 		buf
 	}
 }
@@ -140,6 +165,7 @@ impl Store {
 mod tests {
 	use super::*;
 	use tempdir::TempDir;
+	use substrate_primitives::ed25519;
 	use substrate_primitives::crypto::Ss58Codec;
 
 	#[test]
@@ -147,16 +173,16 @@ mod tests {
 		let temp_dir = TempDir::new("keystore").unwrap();
 		let store = Store::open(temp_dir.path().to_owned()).unwrap();
 
-		assert!(store.contents().unwrap().is_empty());
+		assert!(store.contents::<ed25519::Public>().unwrap().is_empty());
 
-		let key = store.generate("thepassword").unwrap();
-		let key2 = store.load(&key.public(), "thepassword").unwrap();
+		let key: ed25519::Pair = store.generate("thepassword").unwrap();
+		let key2: ed25519::Pair = store.load(&key.public(), "thepassword").unwrap();
 
-		assert!(store.load(&key.public(), "notthepassword").is_err());
+		assert!(store.load::<ed25519::Pair>(&key.public(), "notthepassword").is_err());
 
 		assert_eq!(key.public(), key2.public());
 
-		assert_eq!(store.contents().unwrap()[0], key.public());
+		assert_eq!(store.contents::<ed25519::Public>().unwrap()[0], key.public());
 	}
 
 	#[test]
@@ -164,7 +190,9 @@ mod tests {
 		let temp_dir = TempDir::new("keystore").unwrap();
 		let mut store = Store::open(temp_dir.path().to_owned()).unwrap();
 
-		let pair = store.generate_from_seed("0x3d97c819d68f9bafa7d6e79cb991eebcd77d966c5334c0b94d9e1fa7ad0869dc").unwrap();
+		let pair: ed25519::Pair = store
+			.generate_from_seed("0x3d97c819d68f9bafa7d6e79cb991eebcd77d966c5334c0b94d9e1fa7ad0869dc")
+			.unwrap();
 		assert_eq!("5DKUrgFqCPV8iAXx9sjy1nyBygQCeiUYRFWurZGhnrn3HJCA", pair.public().to_ss58check());
 	}
 }

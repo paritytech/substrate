@@ -19,11 +19,11 @@
 use std::collections::HashMap;
 use std::ops::Deref;
 use lazy_static::lazy_static;
-use substrate_primitives::{sr25519::{Pair, Public, Signature}, Pair as PairT, H256};
+use substrate_primitives::{sr25519::{Pair, Public, Signature}, Pair as PairT, Public as PublicT, H256};
 pub use substrate_primitives::sr25519;
 
 /// Set of test accounts.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum_macros::Display, strum_macros::EnumIter)]
 pub enum Keyring {
 	Alice,
 	Bob,
@@ -68,7 +68,7 @@ impl Keyring {
 	}
 
 	pub fn to_raw_public_vec(self) -> Vec<u8> {
-		Public::from(self).into_raw_vec()
+		Public::from(self).to_raw_vec()
 	}
 
 	pub fn sign(self, msg: &[u8]) -> Signature {
@@ -78,6 +78,11 @@ impl Keyring {
 	pub fn pair(self) -> Pair {
 		Pair::from_string(&format!("//{}", <&'static str>::from(self)), None)
 			.expect("static values are known good; qed")
+	}
+
+	/// Returns an iterator over all test accounts.
+	pub fn iter() -> impl Iterator<Item=Keyring> {
+		<Self as strum::IntoEnumIterator>::iter()
 	}
 }
 
