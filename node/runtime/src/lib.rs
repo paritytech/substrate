@@ -520,7 +520,7 @@ impl_runtime_apis! {
 			// The choice of `c` parameter is done in accordance to
 			// the slot duration and expected target block time, for
 			// safely resisting network delays of maximum two seconds.
-			// [https://research.web3.foundation/en/latest/polkadot/BABE/Babe/#6-practical-results]
+			// <https://research.web3.foundation/en/latest/polkadot/BABE/Babe/#6-practical-results>
 			babe_primitives::BabeConfiguration {
 				median_required_blocks: 1000,
 				slot_duration: Babe::slot_duration(),
