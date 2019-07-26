@@ -291,12 +291,6 @@ build-rust-doc-release:
   image:                           docker:stable
   services:
     - docker:dind
-  variables:
-    DOCKER_HOST:                   tcp://localhost:2375
-    DOCKER_DRIVER:                 overlay2
-    GIT_STRATEGY:                  none
-    DOCKERFILE:                    $PRODUCT.Dockerfile
-    CONTAINER_IMAGE:               parity/$PRODUCT
   before_script:
     - test "$Docker_Hub_User_Parity" -a "$Docker_Hub_Pass_Parity"
         || ( echo "no docker credentials provided"; exit 1 )
@@ -324,7 +318,12 @@ publish-docker-substrate:
   dependencies:
     - build-linux-substrate
   variables:
+    DOCKER_HOST:                   tcp://localhost:2375
+    DOCKER_DRIVER:                 overlay2
+    GIT_STRATEGY:                  none
     PRODUCT:                       substrate
+    DOCKERFILE:                    $PRODUCT.Dockerfile
+    CONTAINER_IMAGE:               parity/$PRODUCT
   after_script:
     - docker logout
     # only VERSION information is needed for the deployment
@@ -336,7 +335,12 @@ publish-docker-subkey:
   dependencies:
     - build-linux-subkey
   variables:
+    DOCKER_HOST:                   tcp://localhost:2375
+    DOCKER_DRIVER:                 overlay2
+    GIT_STRATEGY:                  none
     PRODUCT:                       subkey
+    DOCKERFILE:                    $PRODUCT.Dockerfile
+    CONTAINER_IMAGE:               parity/$PRODUCT
   after_script:
     - docker logout
 
