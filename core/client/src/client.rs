@@ -338,17 +338,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn backend(&self) -> &Arc<B> {
 		&self.backend
 	}
-	
-	/// Test helper to compare the blockchain state of multiple (networked)
-	/// clients.
-	/// Potentially costly, as creates in-memory copies of both blockchains in order
-	/// to compare them. If you have easier/softer checks that are sufficient, e.g. 
-	/// by using .info(), you should probably use it instead of this.
-	#[cfg(feature = "test-helpers")]
-	pub fn blockchain_canon_equals(&self, other: &Self) -> bool {
-		self.backend.as_in_memory().blockchain()
-			.canon_equals_to(other.backend.as_in_memory().blockchain())
-	}
 
 	/// Given a `BlockId` and a key prefix, return the matching child storage keys in that block.
 	pub fn storage_keys(&self, id: &BlockId<Block>, key_prefix: &StorageKey) -> error::Result<Vec<StorageKey>> {
@@ -1913,7 +1902,6 @@ pub(crate) mod tests {
 	use consensus::{BlockOrigin, SelectChain};
 	use test_client::{
 		prelude::*,
-		client::backend::Backend as TestBackend,
 		runtime::{self, Block, Transfer, RuntimeApi, TestAPI},
 	};
 
@@ -2573,8 +2561,6 @@ pub(crate) mod tests {
 
 	#[test]
 	fn import_with_justification() {
-		use test_client::blockchain::Backend;
-
 		let client = test_client::new();
 
 		// G -> A1
@@ -2591,29 +2577,28 @@ pub(crate) mod tests {
 		client.import_justified(BlockOrigin::Own, a3.clone(), justification.clone()).unwrap();
 
 		assert_eq!(
-			client.info().chain.last_finalized,
+			client.info().chain.finalized_hash,
 			a3.hash(),
 		);
 
 		assert_eq!(
-			client.justification(BlockId::Hash(a3.hash())).unwrap(),
+			client.justification(&BlockId::Hash(a3.hash())).unwrap(),
 			Some(justification),
 		);
 
 		assert_eq!(
-			client.justification(BlockId::Hash(a1.hash())).unwrap(),
+			client.justification(&BlockId::Hash(a1.hash())).unwrap(),
 			None,
 		);
 
 		assert_eq!(
-			client.justification(BlockId::Hash(a2.hash())).unwrap(),
+			client.justification(&BlockId::Hash(a2.hash())).unwrap(),
 			None,
 		);
 	}
 
 	#[test]
 	fn importing_diverged_finalized_block_should_trigger_reorg() {
-		use test_client::blockchain::HeaderBackend;
 
 		let client = test_client::new();
 
@@ -2660,7 +2645,6 @@ pub(crate) mod tests {
 
 	#[test]
 	fn finalizing_diverged_block_should_trigger_reorg() {
-		use test_client::blockchain::HeaderBackend;
 
 		let (client, select_chain) = TestClientBuilder::new().build_with_longest_chain();
 
@@ -2695,7 +2679,7 @@ pub(crate) mod tests {
 
 		// we finalize block B1 which is on a different branch from current best
 		// which should trigger a re-org.
-		client.finalize_block(BlockId::Hash(b1.hash()), None, false).unwrap();
+		client.finalize_block(BlockId::Hash(b1.hash()), None).unwrap();
 
 		// B1 should now be the latest finalized
 		assert_eq!(

@@ -1105,7 +1105,7 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
 		config,
 	};
 
-	let epoch_changes = aux_schema::load_epoch_changes(&**client)?;
+	let epoch_changes = aux_schema::load_epoch_changes(&*client)?;
 
 	let block_import = BabeBlockImport::new(
 		client.clone(),

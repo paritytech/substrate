@@ -9,7 +9,7 @@ use node_template_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi, WASM
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
 	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor,
-	error::{Error as ServiceError},
+	error::{Error as ServiceError}, FullComponentsSetupState, LightComponentsSetupState
 };
 use basic_authorship::ProposerFactory;
 use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration};
@@ -68,7 +68,7 @@ construct_service_factory! {
 				FullComponents::<Factory>::new(config)
 			},
 		AuthoritySetup = {
-			|service: Self::FullService, state: &mut FullComponentsSetupState<Self>| {
+			|service: Self::FullService, state: FullComponentsSetupState<Self>| {
 				if let Some(key) = service.authority_key() {
 					info!("Using authority key {}", key.public());
 					let proposer = Arc::new(ProposerFactory {
@@ -100,7 +100,7 @@ construct_service_factory! {
 		FullImportQueue = AuraImportQueue<
 			Self::Block,
 		>
-			{ ||state: &mut FullComponentsSetupState<Self>, client: Arc<FullClient<Self>>, _select_chain: Self::SelectChain| {
+			{ |state: &mut FullComponentsSetupState<Self>, client: Arc<FullClient<Self>>, _select_chain: Self::SelectChain| {
 					import_queue::<_, _, Pair>(
 						SlotDuration::get_or_compute(&*client)?,
 						Box::new(client.clone()),
@@ -114,7 +114,7 @@ construct_service_factory! {
 		LightImportQueue = AuraImportQueue<
 			Self::Block,
 		>
-			{ |state: &mut FullComponentsSetupState<Self>, client: Arc<LightClient<Self>>| {
+			{ |state: &mut LightComponentsSetupState<Self>, client: Arc<LightClient<Self>>| {
 					let fprb = Box::new(DummyFinalityProofRequestBuilder::default()) as Box<_>;
 					import_queue::<_, _, Pair>(
 						SlotDuration::get_or_compute(&*client)?,
@@ -127,7 +127,7 @@ construct_service_factory! {
 				}
 			},
 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>
-			{ ||state: &mut FullComponentsSetupState<Self>, client: Arc<FullClient<Self>>| {
+			{ |state: &mut FullComponentsSetupState<Self>, client: Arc<FullClient<Self>>| {
 				Ok(LongestChain::new(state.backend.clone()))
 			}
 		},

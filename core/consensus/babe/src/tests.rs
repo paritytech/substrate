@@ -21,7 +21,7 @@
 #![allow(deprecated)]
 use super::*;
 
-use client::{LongestChain, block_builder::BlockBuilder};
+use client::block_builder::BlockBuilder;
 use consensus_common::NoNetwork as DummyOracle;
 use network::test::*;
 use network::test::{Block as TestBlock, PeersClient};
@@ -194,9 +194,10 @@ fn run_one_test() {
 	let mut import_notifications = Vec::new();
 	let mut runtime = current_thread::Runtime::new().unwrap();
 	for (peer_id, key) in peers {
-		let peer = net.lock().peer(*peer_id);
+		let mut net = net.lock();
+		let peer = net.peer(*peer_id);
 		let client = peer.client().as_full().expect("full clients are created").clone();
-		let select_chain = peer.select_chain();
+		let select_chain = peer.select_chain().expect("full client has select chain");
 		let environ = Arc::new(DummyFactory(client.clone()));
 		import_notifications.push(
 			client.import_notification_stream()

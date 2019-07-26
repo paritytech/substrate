@@ -27,13 +27,13 @@ use std::sync::Arc;
 use crate::config::build_multiaddr;
 use log::trace;
 use crate::chain::FinalityProofProvider;
-use client::
+use client::{
 	self, ClientInfo, BlockchainEvents, BlockImportNotification, FinalityNotifications,
-	FinalityNotification, LongestChain,
+	FinalityNotification, LongestChain
 };
-use client::{in_mem::Backend as InMemoryBackend, error::Result as ClientResult};
+use client::error::Result as ClientResult;
 use client::block_builder::BlockBuilder;
-use client::backend::AuxStore;
+use client::backend::{AuxStore, Backend, Finalizer};
 use crate::config::Roles;
 use consensus::import_queue::BasicQueue;
 use consensus::import_queue::{
@@ -48,7 +48,7 @@ use crate::{NetworkWorker, NetworkService, config::ProtocolId};
 use crate::config::{NetworkConfiguration, TransportConfig, BoxFinalityProofRequestBuilder};
 use libp2p::PeerId;
 use parking_lot::Mutex;
-use primitives::{H256, Blake2Hasher};
+use primitives::H256;
 use crate::protocol::{Context, ProtocolConfig};
 use runtime_primitives::generic::{BlockId, OpaqueDigestItemId};
 use runtime_primitives::traits::{Block as BlockT, Header, NumberFor};
@@ -58,7 +58,7 @@ use crate::specialization::NetworkSpecialization;
 use test_client::{self, AccountKeyring};
 
 pub use test_client::runtime::{Block, Extrinsic, Hash, Transfer};
-pub use test_client::TestClient;
+pub use test_client::{TestClient, TestClientBuilder, TestClientBuilderExt};
 
 type AuthorityId = primitives::sr25519::Public;
 
@@ -211,6 +211,7 @@ pub struct Peer<D, S: NetworkSpecialization<Block>> {
 	/// instead of going through the import queue.
 	block_import: Box<dyn BlockImport<Block, Error = ConsensusError>>,
 	select_chain: Option<LongestChain<test_client::Backend, Block>>,
+	backend: Option<Arc<test_client::Backend>>,
 	network: NetworkWorker<Block, S, <Block as BlockT>::Hash>,
 	imported_blocks_stream: Box<dyn Stream<Item = BlockImportNotification<Block>, Error = ()> + Send>,
 	finality_notification_stream: Box<dyn Stream<Item = FinalityNotification<Block>, Error = ()> + Send>,
@@ -342,6 +343,20 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	pub fn network_service(&self) -> &Arc<NetworkService<Block, S, <Block as BlockT>::Hash>> {
 		&self.network.service()
 	}
+
+	/// Test helper to compare the blockchain state of multiple (networked)
+	/// clients.
+	/// Potentially costly, as it creates in-memory copies of both blockchains in order
+	/// to compare them. If you have easier/softer checks that are sufficient, e.g. 
+	/// by using .info(), you should probably use it instead of this.
+	pub fn blockchain_canon_equals(&self, other: &Self) -> bool {
+		if let (Some(mine), Some(others)) = (self.backend.clone(), other.backend.clone()) {
+			mine.as_in_memory().blockchain()
+				.canon_equals_to(others.as_in_memory().blockchain())
+		} else {
+			false
+		}
+	}
 }
 
 pub struct EmptyTransactionPool;
@@ -446,7 +461,9 @@ pub trait TestNetFactory: Sized {
 
 	/// Add a full peer.
 	fn add_full_peer(&mut self, config: &ProtocolConfig) {
-		let (c, longest_chain, _) TestClient::build_with_longest_chain();
+		let test_client_builder = TestClientBuilder::with_default_backend();
+		let backend = test_client_builder.backend();
+		let (c, longest_chain) = test_client_builder.build_with_longest_chain();
 		let client = Arc::new(c);
 		let verifier = self.make_verifier(PeersClient::Full(client.clone()), config);
 		let (block_import, justification_import, finality_proof_import, finality_proof_request_builder, data)
@@ -492,7 +509,8 @@ pub trait TestNetFactory: Sized {
 			peers.push(Peer {
 				data,
 				client: PeersClient::Full(client),
-				select_chain> Some(longest_chain),
+				select_chain: Some(longest_chain),
+				backend: Some(backend),
 				imported_blocks_stream,
 				finality_notification_stream,
 				block_import: Box::new(block_import),
@@ -553,6 +571,7 @@ pub trait TestNetFactory: Sized {
 				data,
 				verifier,
 				select_chain: None,
+				backend: None,
 				block_import: Box::new(block_import),
 				client: PeersClient::Light(client),
 				imported_blocks_stream,

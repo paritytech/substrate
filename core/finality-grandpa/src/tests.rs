@@ -103,7 +103,7 @@ impl TestNetFactory for GrandpaTestNet {
 		Arc::new(PassThroughVerifier(false)) // use non-instant finality.
 	}
 
-	fn make_block_import(&self, peer: &GrandpaPeer)
+	fn make_block_import(&self, peer: GrandpaPeer)
 		-> (
 			BoxBlockImport<Block>,
 			Option<BoxJustificationImport<Block>>,
@@ -113,12 +113,13 @@ impl TestNetFactory for GrandpaTestNet {
 		)
 	{
 		let client = peer.client();
+		let backend = self.backend();
 		match client {
 			PeersClient::Full(ref client) => {
 				let (import, link) = block_import(
 					client.clone(),
 					Arc::new(self.test_config.clone()),
-					select_chain: peer.select_chain().expect("Full Client has select chain"),
+					peer.select_chain().expect("Full Client has select chain"),
 				).expect("Could not create block import for fresh peer.");
 				let justification_import = Box::new(import.clone());
 				let block_import = Box::new(import);
@@ -132,6 +133,7 @@ impl TestNetFactory for GrandpaTestNet {
 				// => light clients will try to fetch finality proofs
 				let import = light_block_import_without_justifications(
 					client.clone(),
+					backend,
 					authorities_provider,
 					Arc::new(self.test_config.clone())
 				).expect("Could not create block import for fresh peer.");

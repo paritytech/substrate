@@ -719,7 +719,7 @@ mod tests {
 	use tokio::runtime::current_thread;
 	use keyring::sr25519::Keyring;
 	use primitives::sr25519;
-	use client::{LongestChain, BlockchainEvents};
+	use client::BlockchainEvents;
 	use test_client;
 
 	type Error = client::error::Error;
@@ -831,11 +831,10 @@ mod tests {
 
 		let mut runtime = current_thread::Runtime::new().unwrap();
 		for (peer_id, key) in peers {
-			let client = net.lock().peer(*peer_id).client().as_full().expect("full clients are created").clone();
-			#[allow(deprecated)]
-			let select_chain = LongestChain::new(
-				client.backend().clone(),
-			);
+			let mut net = net.lock();
+			let peer = net.peer(*peer_id);
+			let client = peer.client().as_full().expect("full clients are created").clone();
+			let select_chain = peer.select_chain().expect("full client has a select chain");
 			let environ = Arc::new(DummyFactory(client.clone()));
 			import_notifications.push(
 				client.import_notification_stream()
