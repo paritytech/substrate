@@ -28,6 +28,7 @@ use srml_support::dispatch::Result as DispatchResult;
 use parity_codec::{Encode, Decode};
 use system::ensure_none;
 use primitives::traits::{SimpleArithmetic, Header as HeaderT, One, Zero};
+use primitives::weights::SimpleDispatchInfo;
 
 pub trait Trait: system::Trait {
 	/// Find the author of a block.
@@ -217,6 +218,7 @@ decl_module! {
 		}
 
 		/// Provide a set of uncles.
+		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn set_uncles(origin, new_uncles: Vec<T::Header>) -> DispatchResult {
 			ensure_none(origin)?;
 
@@ -326,6 +328,7 @@ mod tests {
 	use primitives::traits::{BlakeTwo256, IdentityLookup};
 	use primitives::testing::Header;
 	use primitives::generic::DigestItem;
+	use primitives::Perbill;
 	use srml_support::{parameter_types, impl_outer_origin, ConsensusEngineId};
 
 	impl_outer_origin!{
@@ -339,6 +342,7 @@ mod tests {
 		pub const BlockHashCount: u64 = 250;
 		pub const MaximumBlockWeight: u32 = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
+		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 
 	impl system::Trait for Test {
@@ -354,6 +358,7 @@ mod tests {
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 	}
 

@@ -351,7 +351,7 @@ impl OffchainApi for () {
 	fn local_storage_compare_and_set(
 		kind: offchain::StorageKind,
 		key: &[u8],
-		old_value: &[u8],
+		old_value: Option<&[u8]>,
 		new_value: &[u8],
 	) -> bool {
 		with_offchain(|ext| {

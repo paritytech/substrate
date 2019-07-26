@@ -313,16 +313,16 @@ mod tests {
 	use super::*;
 
 	use runtime_io::{with_externalities, TestExternalities};
-	use substrate_test_runtime_client::{AuthorityKeyring, AccountKeyring};
+	use substrate_test_runtime_client::{AccountKeyring, Sr25519Keyring};
 	use crate::{Header, Transfer, WASM_BINARY};
 	use primitives::{Blake2Hasher, map};
 	use substrate_executor::WasmExecutor;
 
 	fn new_test_ext() -> TestExternalities<Blake2Hasher> {
 		let authorities = vec![
-			AuthorityKeyring::Alice.to_raw_public(),
-			AuthorityKeyring::Bob.to_raw_public(),
-			AuthorityKeyring::Charlie.to_raw_public()
+			Sr25519Keyring::Alice.to_raw_public(),
+			Sr25519Keyring::Bob.to_raw_public(),
+			Sr25519Keyring::Charlie.to_raw_public()
 		];
 		TestExternalities::new(map![
 			twox_128(b"latest").to_vec() => vec![69u8; 32],
