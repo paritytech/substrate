@@ -250,7 +250,7 @@ impl<H: Hasher> From<HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>> for In
 impl<H: Hasher> From<(
 		HashMap<Vec<u8>, Vec<u8>>,
 		HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
-	)> for InMemory<H> {
+)> for InMemory<H> {
 	fn from(inners: (
 		HashMap<Vec<u8>, Vec<u8>>,
 		HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
