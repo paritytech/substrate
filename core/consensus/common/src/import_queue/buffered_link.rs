@@ -66,6 +66,14 @@ impl<B: BlockT> BufferedLinkSender<B> {
 	}
 }
 
+impl<B: BlockT> Clone for BufferedLinkSender<B> {
+	fn clone(&self) -> Self {
+		BufferedLinkSender {
+			tx: self.tx.clone(),
+		}
+	}
+}
+
 /// Internal buffered message.
 enum BlockImportWorkerMsg<B: BlockT> {
 	BlocksProcessed(usize, usize, Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>),
