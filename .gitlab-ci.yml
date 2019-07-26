@@ -97,7 +97,6 @@ check-warnings:
   only:
     - /^[0-9]+$/
   script:
-    - ./scripts/build.sh --locked
     - RUSTFLAGS="-D warnings" time cargo check --all --release --verbose
     - sccache -s
   allow_failure:                   true
