@@ -21,12 +21,10 @@ use serde::{Serialize, de::DeserializeOwned};
 use crate::chain_spec::ChainSpec;
 use std::time::{Duration, Instant};
 use log::{log, warn, Level};
-use std::collections::HashSet;
 use libp2p::Multiaddr;
 use parking_lot::Mutex;
 use client::{BlockchainEvents};
 use futures03::stream::{StreamExt as _, TryStreamExt as _};
-use consensus_aura_primitives::AuraApi;
 use offchain::AuthorityKeyProvider as _;
 use consensus_common_primitives::ConsensusApi;
 
@@ -301,9 +299,9 @@ impl<C: Components> NetworkFutureBuilder<Self> for C where
 	ComponentClient<C>: ProvideRuntimeApi,
 	<ComponentClient<C> as ProvideRuntimeApi>::Api: runtime_api::Metadata<ComponentBlock<C>>,
     // <ComponentClient<C> as ProvideRuntimeApi>::Api: runtime_api::KeyTypeGetter<ComponentBlock<C>>,
+// TODO: This is a mess. Can this be done cleaner?
 	<ComponentClient<C> as ProvideRuntimeApi>::Api: consensus_common_primitives::ConsensusApi<ComponentBlock<C>, <C::Factory as ServiceFactory>::AuthorityId>,
-// <ComponentClient<C> as ProvideRuntimeApi>::Api: consensus_babe_primitives::BabeApi<ComponentBlock<C>>,
-<<<C as Components>::Factory as ServiceFactory>::ConsensusPair as primitives::crypto::Pair>::Public : std::string::ToString
+<<<C as Components>::Factory as ServiceFactory>::ConsensusPair as primitives::crypto::Pair>::Public : std::string::ToString,
 {
 	fn build_network_future<
 			H: network::ExHashT,
@@ -341,13 +339,14 @@ impl<C: Components> NetworkFutureBuilder<Self> for C where
 				let id = BlockId::hash( client.info().chain.best_hash);
 
 				// TODO: remove unwrap().
-				match keystore.authority_key( &id).map(|k| k.public().to_string()) {
-					Some(public_key) => {
+				match keystore.authority_key( &id) {
+					Some(authority_key) => {
+						let public_key = authority_key.public().to_string();
 						println!("=== authority key: {}", public_key);
 						let hashed_public_key = libp2p::multihash::encode(
 							libp2p::multihash::Hash::SHA2256,
 							&public_key.as_bytes(),
-						).unwrap();
+						).expect("public key hashing not to fail");
 
 						let external_addresses = network.external_addresses();
 						println!("==== external addresses: {:?}", external_addresses);
@@ -360,10 +359,22 @@ impl<C: Components> NetworkFutureBuilder<Self> for C where
 						}).collect();
 
 						// TODO: Remove unwrap.
-						let serialized_addresses = serde_json::to_string(&enriched_addresses).unwrap();
+						let signature = authority_key.sign(
+							&serde_json::to_string(&enriched_addresses)
+								.map(|s| s.into_bytes())
+								.expect("enriched_address marshaling not to fail")
+						);
 
-						// TODO: Sign the payload before putting it on the DHT.
-						network.service().put_value(hashed_public_key.clone(), serialized_addresses.as_bytes().to_vec());
+						let sig_bytes: &[u8] = signature.as_ref();
+
+						let sig_vec: Vec<u8> = sig_bytes.to_vec();
+
+						println!("===== signature authorityid {}: {:?}", public_key, sig_vec);
+
+						// TODO: Remove unwrap.
+						let payload = serde_json::to_string(&(enriched_addresses, sig_vec)).expect("payload marshaling not to fail");
+
+						network.service().put_value(hashed_public_key, payload.into_bytes());
 					},
 					None => {
 						println!("==== Got no authority key");
@@ -378,7 +389,7 @@ impl<C: Components> NetworkFutureBuilder<Self> for C where
 							let hashed_public_key = libp2p::multihash::encode(
 								libp2p::multihash::Hash::SHA2256,
 								authority.to_string().as_bytes(),
-							).unwrap();
+							).expect("public key hashing not to fail");
 
 							network.service().get_value(&hashed_public_key.clone());
 						}
@@ -457,17 +468,33 @@ impl<C: Components> NetworkFutureBuilder<Self> for C where
 								let hashed_public_key = libp2p::multihash::encode(
 									libp2p::multihash::Hash::SHA2256,
 									authority.to_string().as_bytes(),
-								).unwrap();
+								).expect("public key hashing not to fail");
 
 								if *key == hashed_public_key {
-									let value = std::str::from_utf8(value).unwrap();
+									let value = std::str::from_utf8(value).expect("value to string not to fail");
 
-									let external_addresses: HashSet<libp2p::Multiaddr> = serde_json::from_str(value).unwrap();
-									println!("==== Got key {:?} value {:?} from DHT", authority.to_string(), external_addresses);
+									let (addresses, signature): (Vec<Multiaddr>, Vec<u8>) = serde_json::from_str(value).expect("payload unmarshaling not to fail");
+									println!("==== Got key {:?} value {:?} from DHT", authority.to_string(), addresses);
 
-									for address in external_addresses.iter() {
-										// TODO: Why does add_reserved_peer take a string?
-										network.service().add_reserved_peer(address.to_string());
+									let sig_bytes: &[u8] = &signature;
+
+									println!("===== got signature authorityid {}: {:?}", authority.to_string(), signature);
+
+									// TODO: is using verify-weak a problem here?
+									if <<C as Components>::Factory as ServiceFactory>::ConsensusPair::verify_weak(
+										sig_bytes,
+										&serde_json::to_string(&addresses)
+											.map(|s| s.into_bytes())
+											.expect("address marshaling not to fail"),
+										authority,
+									) {
+										for address in addresses.iter() {
+											// TODO: Why does add_reserved_peer take a string?
+											// TODO: Remove unwrap.
+											network.service().add_reserved_peer(address.to_string()).expect("adding reserved peer not to fail");
+										}
+									} else {
+										println!("==== signature not valid");
 									}
 								}
 							}
@@ -551,7 +578,8 @@ pub trait ServiceFactory: 'static + Sized {
 	/// The Fork Choice Strategy for the chain
 	type SelectChain: SelectChain<Self::Block> + 'static;
 	///
-	type AuthorityId: parity_codec::Codec + std::fmt::Debug + std::string::ToString;
+	// TODO: Are all of these traits necessary?
+	type AuthorityId:  primitives::crypto::Public + std::hash::Hash + parity_codec::Codec + std::fmt::Debug + std::string::ToString;
 
 	//TODO: replace these with a constructor trait. that TransactionPool implements. (#1242)
 	/// Extrinsic pool constructor for the full client.
