@@ -91,15 +91,15 @@ cargo-audit:
   allow_failure:                   true
 
 
-check-warnings:
-  stage:                           test
-  <<:                              *docker-env
-  only:
-    - /^[0-9]+$/
-  script:
-    - RUSTFLAGS="-D warnings" time cargo check --all --release --verbose
-    - sccache -s
-  allow_failure:                   true
+# check-warnings:
+#   stage:                           test
+#   <<:                              *docker-env
+#   only:
+#     - /^[0-9]+$/
+#   script:
+#     - RUSTFLAGS="-D warnings" time cargo check --all --release --verbose
+#     - sccache -s
+#   allow_failure:                   true
 
 
 cargo-check-benches:
@@ -132,7 +132,7 @@ test-linux-stable:                 &test-linux
     variables:
       - $DEPLOY_TAG
   script:
-    - time cargo test --all --release --verbose --locked
+    - RUSTFLAGS="-D warnings" time cargo test --all --release --verbose --locked
     - sccache -s
 
 
