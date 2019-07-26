@@ -183,7 +183,7 @@ impl authorship::Trait for Runtime {
 	type FindAuthor = ();
 	type UncleGenerations = UncleGenerations;
 	type FilterUncle = ();
-	type EventHandler = ();
+	type EventHandler = Staking;
 }
 
 type SessionHandlers = (Grandpa, Babe, ImOnline);
