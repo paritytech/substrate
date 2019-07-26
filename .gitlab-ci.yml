@@ -94,7 +94,7 @@ cargo-audit:
 check-warnings:
   stage:                           test
   <<:                              *docker-env
-  except:
+  only:
     - /^[0-9]+$/
   script:
     - ./scripts/build.sh --locked
