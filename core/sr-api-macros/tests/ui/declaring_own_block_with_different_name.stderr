@@ -11,5 +11,3 @@ warning: unused import: `sr_primitives::traits::Block as BlockT`
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |
   = note: `#[warn(unused_imports)]` on by default
-
-error: Could not compile `sr-api-macros-tests`.
