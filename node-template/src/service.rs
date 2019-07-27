@@ -95,7 +95,12 @@ construct_service_factory! {
 		FullImportQueue = AuraImportQueue<
 			Self::Block,
 		>
-			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>, _select_chain: Self::SelectChain| {
+			{ |
+				config: &mut FactoryFullConfiguration<Self>,
+				client: Arc<FullClient<Self>>,
+				_select_chain: Self::SelectChain,
+				_transaction_pool: Option<Arc<TransactionPool<Self::FullTransactionPoolApi>>>,
+			| {
 					import_queue::<_, _, aura_primitives::sr25519::AuthorityPair>(
 						SlotDuration::get_or_compute(&*client)?,
 						Box::new(client.clone()),
