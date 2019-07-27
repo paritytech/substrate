@@ -771,7 +771,7 @@ pub enum DispatchError {
 	Payment,
 
 	/// General error to do with the exhaustion of block resources.
-	Resource,
+	Exhausted,
 
 	/// General error to do with the permissions of the sender.
 	NoPermission,
