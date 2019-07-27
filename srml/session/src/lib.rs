@@ -266,6 +266,9 @@ pub trait Trait: system::Trait {
 	/// A conversion to validator ID to account ID.
 	type ValidatorIdOf: Convert<Self::AccountId, Option<Self::ValidatorId>>;
 
+	/// A conversion of validator ID to account ID.
+	type AccountIdOf: Convert<Self::ValidatorId, Option<Self::AccountId>>;
+
 	/// Indicator for when to end the session.
 	type ShouldEndSession: ShouldEndSession<Self::BlockNumber>;
 
@@ -331,6 +334,8 @@ decl_storage! {
 					<Module<T>>::do_set_keys(&who, keys)
 						.expect("genesis config must not contain duplicates; qed");
 				}
+
+				<CurrentKeys<T>>::put(config.keys.clone());
 
 				let initial_validators = T::SelectInitialValidators::select_initial_validators()
 					.unwrap_or_else(|| config.keys.iter().map(|(ref v, _)| v.clone()).collect());
@@ -453,6 +458,18 @@ impl<T: Trait> Module<T> {
 
 		// Tell everyone about the new session keys.
 		T::SessionHandler::on_new_session::<T::Keys>(changed, &session_keys, &queued_amalgamated);
+	}
+
+	pub fn get_current_keys<Key: Decode + Default + TypedKey>() -> Vec<(T::ValidatorId, Key)> {
+		Self::current_keys()
+			.into_iter()
+			.map(|k| {
+				(k.0,
+				 k.1.get::<Key>(<Key as TypedKey>::KEY_TYPE)
+					 .unwrap_or_default()
+				)
+			})
+			.collect()
 	}
 
 	/// Disable the validator of index `i`.

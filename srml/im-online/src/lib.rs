@@ -158,6 +158,9 @@ pub trait Trait: system::Trait + session::Trait {
 
 	/// Determine if an `AuthorityId` is a valid authority.
 	type IsValidAuthorityId: IsMember<Self::AuthorityId>;
+
+	/// A conversion of `AccountId` to `AuthorityId`.
+	type AuthorityIdOf: Convert<Self::AccountId, Option<Self::AuthorityId>>;
 }
 
 decl_event!(

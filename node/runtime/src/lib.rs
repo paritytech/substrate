@@ -132,6 +132,7 @@ parameter_types! {
 
 impl babe::Trait for Runtime {
 	type EpochDuration = EpochDuration;
+	type SessionInterface = Self;
 }
 
 impl indices::Trait for Runtime {
@@ -211,6 +212,7 @@ impl session::Trait for Runtime {
 	type Keys = SessionKeys;
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = staking::StashOf<Self>;
+	type AccountIdOf = staking::ControllerOf<Self>;
 	type SelectInitialValidators = Staking;
 }
 
@@ -374,6 +376,7 @@ impl im_online::Trait for Runtime {
 	type SessionsPerEra = SessionsPerEra;
 	type UncheckedExtrinsic = UncheckedExtrinsic;
 	type IsValidAuthorityId = Babe;
+	type AuthorityIdOf = babe::AuthorityIdOf<Self, BabeId>;
 }
 
 impl grandpa::Trait for Runtime {

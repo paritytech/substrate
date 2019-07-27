@@ -25,7 +25,7 @@ use rstd::{result, prelude::*};
 use srml_support::{decl_storage, decl_module, StorageValue, traits::FindAuthor, traits::Get};
 use timestamp::{OnTimestampSet};
 use primitives::{generic::DigestItem, ConsensusEngineId};
-use primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert};
+use primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert, TypedKey};
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
 use parity_codec::{Encode, Decode};
@@ -107,8 +107,11 @@ impl ProvideInherentData for InherentDataProvider {
 	}
 }
 
-pub trait Trait: timestamp::Trait {
+pub trait Trait: timestamp::Trait + session::Trait {
 	type EpochDuration: Get<u64>;
+
+	/// Interface for interacting with a session module.
+	type SessionInterface: self::SessionInterface<Self::AccountId>;
 }
 
 /// The length of the BABE randomness
@@ -208,6 +211,51 @@ impl<T: Trait> IsMember<AuthorityId> for Module<T> {
 		<Module<T>>::authorities()
 			.iter()
 			.any(|id| &id.0 == authority_id)
+	}
+}
+
+/// Means for interacting with a specialized version of the `session` trait.
+///
+/// This is needed because `Staking` sets the `ValidatorIdOf` of the `session::Trait`
+pub trait SessionInterface<AccountId>: system::Trait {
+	/// Get the keys of the current session.
+	fn current_keys<Key: Decode + Default + TypedKey>() -> Vec<(AccountId, Key)>;
+}
+
+impl<T: Trait> SessionInterface<<T as system::Trait>::AccountId> for T where
+	T::AccountIdOf: Convert<<T as session::Trait>::ValidatorId, Option<<T as system::Trait>::AccountId>>,
+{
+	fn current_keys<Key>() -> Vec<(<T as system::Trait>::AccountId, Key)>
+		where Key: Decode + Default + TypedKey
+	{
+		<session::Module<T>>::get_current_keys::<Key>()
+			.into_iter()
+			.map(|(validator_id, keys)| {
+				let account_id = T::AccountIdOf::convert(validator_id).unwrap_or_default();
+				(account_id, keys)
+			})
+			.collect()
+	}
+}
+
+/// A `Convert` implementation that finds the babe authority id of the given controller
+/// account, if any.
+pub struct AuthorityIdOf<T, Id>(rstd::marker::PhantomData<T>, rstd::marker::PhantomData<Id>);
+
+impl<T, AuthorityId> Convert<T::AccountId, Option<AuthorityId>> for AuthorityIdOf<T, AuthorityId>
+	where
+		T: Trait,
+		AuthorityId: Decode + Default + TypedKey,
+{
+	fn convert(account_id: T::AccountId) -> Option<AuthorityId> {
+		let keys = T::SessionInterface::current_keys::<AuthorityId>();
+		let maybe_authority_id = keys
+			.into_iter()
+			.find(|(id, _)| {
+				*id == account_id
+			})
+			.map(|(_, a)| a);
+		maybe_authority_id
 	}
 }
 
