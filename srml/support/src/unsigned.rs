@@ -19,7 +19,7 @@ pub use crate::sr_primitives::traits::ValidateUnsigned;
 #[doc(hidden)]
 pub use crate::sr_primitives::transaction_validity::TransactionValidity;
 #[doc(hidden)]
-pub use crate::sr_primitives::ApplyError;
+pub use sr_primitives::ApplyError;
 
 
 /// Implement `ValidateUnsigned` for `Runtime`.

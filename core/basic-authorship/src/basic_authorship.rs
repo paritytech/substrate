@@ -32,8 +32,8 @@ use primitives::{H256, Blake2Hasher, ExecutionContext};
 use sr_primitives::{
 	traits::{Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi, DigestFor},
 	generic::BlockId,
-	sr_primitives::ApplyError,
-}
+	ApplyError,
+};
 use transaction_pool::txpool::{self, Pool as TransactionPool};
 use inherents::InherentData;
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
