@@ -787,22 +787,18 @@ pub enum DispatchError {
 
 	/// General error to do with the transaction's proofs (e.g. signature).
 	BadProof,
-
-	/// General error to do with a limit being reached that may be reset on the next block.
-	BlockExhausted,
 }
 
 impl From<DispatchError> for i8 {
 	fn from(e: DispatchError) -> i8 {
 		match e {
 			DispatchError::Payment => -64,
-			DispatchError::Resource => -65,
+			DispatchError::Exhausted => -65,
 			DispatchError::NoPermission => -66,
 			DispatchError::BadState => -67,
 			DispatchError::Stale => -68,
 			DispatchError::Future => -69,
 			DispatchError::BadProof => -70,
-			DispatchError::BlockExhausted => -71,
 		}
 	}
 }

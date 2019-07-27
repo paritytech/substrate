@@ -108,7 +108,7 @@ mod internal {
 		fn from(d: DispatchError) -> Self {
 			match d {
 				DispatchError::Payment => ApplyError::CantPay,
-				DispatchError::Resource => ApplyError::FullBlock,
+				DispatchError::Exhausted => ApplyError::FullBlock,
 				DispatchError::NoPermission => ApplyError::CantPay,
 				DispatchError::BadState => ApplyError::CantPay,
 				DispatchError::Stale => ApplyError::Stale,
