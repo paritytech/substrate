@@ -123,7 +123,10 @@ use rstd::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use parity_codec::Decode;
 use primitives::KeyTypeId;
 use primitives::weights::SimpleDispatchInfo;
-use primitives::traits::{Convert, Zero, Member, OpaqueKeys, TypedKey};
+use primitives::traits::{
+	Convert, CurrentSessionKeys as CurrentSessionKeysT, Zero, Member, OpaqueKeys,
+	TypedKey,
+};
 use srml_support::{
 	dispatch::Result, ConsensusEngineId, StorageValue, StorageDoubleMap, for_each_tuple,
 	decl_module, decl_event, decl_storage,
@@ -556,6 +559,25 @@ impl<T: Trait> Module<T> {
 impl<T: Trait> OnFreeBalanceZero<T::ValidatorId> for Module<T> {
 	fn on_free_balance_zero(who: &T::ValidatorId) {
 		Self::prune_dead_keys(who);
+	}
+}
+
+/// Returns the current session keys.
+pub struct CurrentSessionKeys<T>(rstd::marker::PhantomData<T>);
+
+impl<T: Trait> CurrentSessionKeysT<<T as system::Trait>::AccountId> for CurrentSessionKeys<T> where
+	T::AccountIdOf: Convert<T::ValidatorId, Option<<T as system::Trait>::AccountId>>,
+{
+	fn current_keys<Key>() -> Vec<(<T as system::Trait>::AccountId, Key)>
+		where Key: Decode + Default + TypedKey
+	{
+		<Module<T>>::get_current_keys::<Key>()
+			.into_iter()
+			.map(|(validator_id, keys)| {
+				let account_id = T::AccountIdOf::convert(validator_id).unwrap_or_default();
+				(account_id, keys)
+			})
+			.collect()
 	}
 }
 

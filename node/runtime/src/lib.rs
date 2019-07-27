@@ -132,7 +132,7 @@ parameter_types! {
 
 impl babe::Trait for Runtime {
 	type EpochDuration = EpochDuration;
-	type SessionInterface = Self;
+	type CurrentSessionKeys = session::CurrentSessionKeys<Self>;
 }
 
 impl indices::Trait for Runtime {

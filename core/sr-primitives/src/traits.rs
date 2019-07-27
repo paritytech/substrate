@@ -628,6 +628,18 @@ pub trait IsMember<MemberId> {
 	fn is_member(member_id: &MemberId) -> bool;
 }
 
+/// Mean for getting the current session keys.
+pub trait CurrentSessionKeys<AccountId> {
+	/// Get the keys of the current session.
+	fn current_keys<Key: Decode + Default + TypedKey>() -> Vec<(AccountId, Key)>;
+}
+
+impl<T> CurrentSessionKeys<T> for () {
+	fn current_keys<Key>() -> Vec<(T, Key)> {
+		Vec::new()
+	}
+}
+
 /// Disable a validator referenced by an `AccountId`.
 pub trait DisableValidator<AccountId> {
 	/// Disable a validator referenced by an `AccountId`.

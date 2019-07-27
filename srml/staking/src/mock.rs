@@ -157,6 +157,7 @@ impl session::Trait for Test {
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = crate::StashOf<Test>;
 	type SelectInitialValidators = Staking;
+	type AccountIdOf = crate::ControllerOf<Self>;
 }
 
 impl session::historical::Trait for Test {

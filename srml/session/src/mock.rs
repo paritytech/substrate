@@ -153,6 +153,7 @@ impl Trait for Test {
 	type ValidatorIdOf = ConvertInto;
 	type Keys = UintAuthorityId;
 	type Event = ();
+	type AccountIdOf = ();
 	type SelectInitialValidators = ();
 }
 

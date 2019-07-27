@@ -366,6 +366,7 @@ parameter_types! {
 
 impl srml_babe::Trait for Runtime {
 	type EpochDuration = EpochDuration;
+	type CurrentSessionKeys = ();
 }
 
 /// Adds one to the given input and returns the final result.
