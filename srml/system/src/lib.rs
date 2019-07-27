@@ -835,7 +835,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 		let added_weight = info.weight.min(limit);
 		let next_weight = current_weight.saturating_add(added_weight);
 		if next_weight > limit {
-			return Err(DispatchError::Resource)
+			return Err(DispatchError::Exhausted)
 		}
 		Ok(next_weight)
 	}
@@ -850,7 +850,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 		let added_len = len as u32;
 		let next_len = current_len.saturating_add(added_len);
 		if next_len > limit {
-			return Err(DispatchError::Resource)
+			return Err(DispatchError::Exhausted)
 		}
 		Ok(next_len)
 	}

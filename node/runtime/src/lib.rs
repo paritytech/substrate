@@ -187,7 +187,7 @@ impl authorship::Trait for Runtime {
 	type EventHandler = ();
 }
 
-type SessionHandlers = (Grandpa, Babe, ImOnline);
+type SessionHandlers = (Grandpa, Babe);
 
 impl_opaque_keys! {
 	pub struct SessionKeys {
