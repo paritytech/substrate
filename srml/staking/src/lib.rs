@@ -1447,6 +1447,16 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	}
 }
 
+/// A `Convert` implementation that finds the controller account of the given stash account,
+/// if any.
+pub struct DisableValidatorInterface<T>(rstd::marker::PhantomData<T>);
+
+impl<T: Trait> DisableValidator<T::AccountId> for DisableValidatorInterface<T> {
+	fn disable(account_id: &T::AccountId) -> Result<(), ()> {
+		T::SessionInterface::disable_validator(account_id)
+	}
+}
+
 /// Add reward points to block authors:
 /// * 20 points to the block producer for producing a (non-uncle) block in the relay chain,
 /// * 2 points to the block producer for each reference to a previously unreferenced uncle, and

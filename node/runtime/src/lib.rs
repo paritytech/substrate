@@ -184,7 +184,7 @@ impl authorship::Trait for Runtime {
 	type FindAuthor = ();
 	type UncleGenerations = UncleGenerations;
 	type FilterUncle = ();
-	type EventHandler = ();
+	type EventHandler = (ImOnline);
 }
 
 type SessionHandlers = (Grandpa, Babe, ImOnline);
@@ -377,6 +377,7 @@ impl im_online::Trait for Runtime {
 	type UncheckedExtrinsic = UncheckedExtrinsic;
 	type IsValidAuthorityId = Babe;
 	type AuthorityIdOf = babe::AuthorityIdOf<Self, BabeId>;
+	type DisableValidator = staking::DisableValidatorInterface<Self>;
 }
 
 impl grandpa::Trait for Runtime {

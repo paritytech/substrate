@@ -628,6 +628,12 @@ pub trait IsMember<MemberId> {
 	fn is_member(member_id: &MemberId) -> bool;
 }
 
+/// Disable a validator referenced by an `AccountId`.
+pub trait DisableValidator<AccountId> {
+	/// Disable a validator referenced by an `AccountId`.
+	fn disable(account_id: &AccountId) -> Result<(), ()>;
+}
+
 /// Something which fulfills the abstract idea of a Substrate header. It has types for a `Number`,
 /// a `Hash` and a `Digest`. It provides access to an `extrinsics_root`, `state_root` and
 /// `parent_hash`, as well as a `digest` and a block `number`.
