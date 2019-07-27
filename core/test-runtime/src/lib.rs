@@ -138,7 +138,7 @@ impl BlindCheckable for Extrinsic {
 }
 
 impl ExtrinsicT for Extrinsic {
-	type Call = ();
+	type Call = Extrinsic;
 
 	fn is_signed(&self) -> Option<bool> {
 		if let Extrinsic::IncludeData(_) = *self {
@@ -148,8 +148,8 @@ impl ExtrinsicT for Extrinsic {
 		}
 	}
 
-	fn new_unsigned(_call: Self::Call) -> Option<Self> {
-		None
+	fn new_unsigned(call: Self::Call) -> Option<Self> {
+		Some(call)
 	}
 }
 
@@ -338,6 +338,7 @@ parameter_types! {
 
 impl srml_system::Trait for Runtime {
 	type Origin = Origin;
+	type Call = Extrinsic;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
