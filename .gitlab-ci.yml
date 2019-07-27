@@ -172,13 +172,11 @@ test-linux-stable-int:
     expire_in:                     24 hrs
     paths:
       - ${CI_COMMIT_SHORT_SHA}_int_failure.log
-  allow_failure:                   true
 
 
 check-web-wasm:
   stage:                           test
   <<:                              *docker-env
-  allow_failure:                   true
   except:
     - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
   script:
@@ -216,11 +214,11 @@ check-web-wasm:
 
 #### stage:                        build
 
-build-linux-release:
+build-linux-substrate:
   stage:                           build
   <<:                              *collect-artifacts
   <<:                              *docker-env
-  # debug <<:                              *build-only
+  <<:                              *build-only
   except:
     variables:
       - $DEPLOY_TAG
@@ -233,8 +231,8 @@ build-linux-release:
         echo "${CI_COMMIT_TAG}" | tee ./artifacts/substrate/VERSION;
       else
         ./artifacts/substrate/substrate --version |
-        sed -n -r 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
-        tee ./artifacts/substrate/VERSION;
+          sed -n -r 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
+          tee ./artifacts/substrate/VERSION;
       fi
     - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
     - printf '\n# building node-template\n\n'
@@ -246,7 +244,7 @@ build-linux-subkey:
   stage:                           build
   <<:                              *collect-artifacts
   <<:                              *docker-env
-  # debug <<:                              *build-only
+  <<:                              *build-only
   except:
     variables:
       - $DEPLOY_TAG
@@ -260,7 +258,7 @@ build-linux-subkey:
     - echo -n "Subkey version = "
     - ./artifacts/subkey/subkey --version |
         sed -n -r 's/^subkey ([0-9.]+.*)/\1/p' |
-        tee ./artifacts/subkey/VERSION;
+          tee ./artifacts/subkey/VERSION;
     - sha256sum ./artifacts/subkey/subkey | tee ./artifacts/subkey/subkey.sha256
     - cp -r scripts/docker/subkey.Dockerfile ./artifacts/subkey/
     - sccache -s
@@ -268,7 +266,6 @@ build-linux-subkey:
 build-rust-doc-release:
   stage:                           build
   <<:                              *docker-env
-
   allow_failure:                   true
   artifacts:
     name:                          "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}-doc"
@@ -286,100 +283,72 @@ build-rust-doc-release:
 
 #### stage:                        publish
 
-.publish-build:                    &publish-build
-  stage:                           publish
-  dependencies:
-    - build-linux-release
-    - build-linux-subkey
+.publish-docker-release:           &publish-docker-release
   <<:                              *build-only
   <<:                              *kubernetes-build
-
-publish-docker-substrate:          &publish-docker-release
-  # debug <<:                              *publish-build
-  stage:                           publish
-  dependencies:
-    - build-linux-release
-  <<:                              *kubernetes-build
-  # debug
   image:                           docker:stable
   services:
     - docker:dind
-  # collect VERSION artifact here to pass it on to kubernetes
-  <<:                              *collect-artifacts
-  variables:
-    DOCKER_HOST:                   tcp://localhost:2375
-    DOCKER_DRIVER:                 overlay2
-    GIT_STRATEGY:                  none
-    # DOCKERFILE:                  scripts/docker/substrate.Dockerfile
-    CONTAINER_IMAGE:               parity/substrate
   before_script:
     - test "$Docker_Hub_User_Parity" -a "$Docker_Hub_Pass_Parity"
         || ( echo "no docker credentials provided"; exit 1 )
     - docker login -u "$Docker_Hub_User_Parity" -p "$Docker_Hub_Pass_Parity"
     - docker info
   script:
-    - cd ./artifacts/substrate/
+    - cd ./artifacts/$PRODUCT/
     - VERSION="$(cat ./VERSION)"
-    - echo "Substrate version = ${VERSION}"
+    - echo "${PRODUCT} version = ${VERSION}"
     - test -z "${VERSION}" && exit 1
     - docker build
       --build-arg VCS_REF="${CI_COMMIT_SHA}"
       --build-arg BUILD_DATE="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
       --tag $CONTAINER_IMAGE:$VERSION
       --tag $CONTAINER_IMAGE:latest
-      --file substrate.Dockerfile .
+      --file $DOCKERFILE .
     - docker push $CONTAINER_IMAGE:$VERSION
     - docker push $CONTAINER_IMAGE:latest
+
+publish-docker-substrate:          
+  stage:                           publish
+  <<:                              *publish-docker-release
+  # collect VERSION artifact here to pass it on to kubernetes
+  <<:                              *collect-artifacts
+  dependencies:
+    - build-linux-substrate
+  variables:
+    DOCKER_HOST:                   tcp://localhost:2375
+    DOCKER_DRIVER:                 overlay2
+    GIT_STRATEGY:                  none
+    PRODUCT:                       substrate
+    DOCKERFILE:                    $PRODUCT.Dockerfile
+    CONTAINER_IMAGE:               parity/$PRODUCT
   after_script:
     - docker logout
     # only VERSION information is needed for the deployment
     - find ./artifacts/ -depth -not -name VERSION -type f -delete
 
 publish-docker-subkey:
-  # debug <<:                              *publish-docker-release
   stage:                           publish
+  <<:                              *publish-docker-release
   dependencies:
     - build-linux-subkey
-  # debug <<:                              *build-only
-  <<:                              *kubernetes-build
-  image:                           docker:stable
-  services:
-    - docker:dind
   variables:
     DOCKER_HOST:                   tcp://localhost:2375
     DOCKER_DRIVER:                 overlay2
     GIT_STRATEGY:                  none
-    # DOCKERFILE:                  scripts/docker/subkey.Dockerfile
-    CONTAINER_IMAGE:               parity/subkey
-  before_script:
-    - test "$Docker_Hub_User_Parity" -a "$Docker_Hub_Pass_Parity"
-        || ( echo "no docker credentials provided"; exit 1 )
-    - docker login -u "$Docker_Hub_User_Parity" -p "$Docker_Hub_Pass_Parity"
-    - docker info
-  script:
-    - cd ./artifacts/subkey/
-    - VERSION="$(cat ./VERSION)"
-    - echo "Subkey version = ${VERSION}"
-    - test -z "${VERSION}" && exit 1
-    - docker build
-      --build-arg VCS_REF="${CI_COMMIT_SHA}"
-      --build-arg BUILD_DATE="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-      --tag $CONTAINER_IMAGE:$VERSION
-      --tag $CONTAINER_IMAGE:latest
-      --file subkey.Dockerfile .
-    - docker push $CONTAINER_IMAGE:$VERSION
-    - docker push $CONTAINER_IMAGE:latest
+    PRODUCT:                       subkey
+    DOCKERFILE:                    $PRODUCT.Dockerfile
+    CONTAINER_IMAGE:               parity/$PRODUCT
   after_script:
     - docker logout
 
 publish-s3-release:
-  # debug <<:                              *publish-build
   stage:                           publish
-  dependencies:
-    - build-linux-release
-    - build-linux-subkey
+  <<:                              *build-only
   <<:                              *kubernetes-build
-  # debug
+  dependencies:
+    - build-linux-substrate
+    - build-linux-subkey
   image:                           parity/awscli:latest
   variables:
     GIT_STRATEGY:                  none
@@ -531,7 +500,7 @@ deploy-ue1-tag:
 .validator-deploy:                 &validator-deploy
   stage:                           flaming-fir
   dependencies:
-    - build-linux-release
+    - build-linux-substrate
   image:                           parity/azure-ansible:v1
   allow_failure:                   true
   when:                            manual
