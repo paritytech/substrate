@@ -104,6 +104,8 @@ parameter_types! {
 impl system::Trait for Runtime {
 	/// The identifier used to distinguish between accounts.
 	type AccountId = AccountId;
+	/// The aggregated dispatch type that is available for extrinsics.
+	type Call = Call;
 	/// The lookup mechanism to get account ID from whatever is passed in dispatchers.
 	type Lookup = Indices;
 	/// The index type for storing how many extrinsics an account has signed.
