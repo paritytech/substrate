@@ -481,7 +481,7 @@ pub fn check_execution_proof<Header, E, H>(
 mod tests {
 	use consensus::BlockOrigin;
 	use test_client::{self, runtime::Header, ClientExt, TestClient};
-	use executor::NativeExecutionDispatch;
+	use executor::NativeExecutor;
 	use crate::backend::{Backend, NewBlockState};
 	use crate::in_mem::Backend as InMemBackend;
 	use crate::light::fetcher::tests::OkCallFetcher;
@@ -502,7 +502,7 @@ mod tests {
 			).unwrap();
 
 			// check remote execution proof locally
-			let local_executor = test_client::LocalExecutor::new(None);
+			let local_executor = NativeExecutor::<test_client::LocalExecutor>::new(None);
 			let local_result = check_execution_proof(&local_executor, &RemoteCallRequest {
 				block: test_client::runtime::Hash::default(),
 				header: test_client::runtime::Header {
