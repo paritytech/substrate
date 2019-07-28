@@ -18,10 +18,11 @@
 //!
 //! BABE (Blind Assignment for Blockchain Extension) consensus in Substrate.
 
-#![forbid(unsafe_code, missing_docs, unused_must_use, unused_imports, unused_variables)]
-#![cfg_attr(not(test), forbid(dead_code))]
+//#![forbid(unsafe_code, missing_docs, unused_must_use, unused_imports, unused_variables)]
+//#![cfg_attr(not(test), forbid(dead_code))]
 pub use babe_primitives::*;
 pub use consensus_common::SyncOracle;
+use std::{collections::HashMap, sync::Arc, u64, fmt::{Debug, Display}, pin::Pin, time::{Instant, Duration}};
 use babe_primitives;
 use consensus_common::ImportResult;
 use consensus_common::import_queue::{
@@ -33,7 +34,7 @@ use sr_primitives::traits::{
 	Block as BlockT, Header, DigestItemFor, NumberFor, ProvideRuntimeApi,
 	SimpleBitOps, Zero,
 };
-use std::{collections::HashMap, sync::Arc, u64, fmt::{Debug, Display}, pin::Pin, time::{Instant, Duration}};
+use substrate_keystore::Store;
 use runtime_support::serde::{Serialize, Deserialize};
 use parity_codec::{Decode, Encode};
 use parking_lot::{Mutex, MutexGuard};
@@ -66,8 +67,7 @@ use consensus_common::import_queue::{Verifier, BasicQueue};
 use client::{
 	block_builder::api::BlockBuilder as BlockBuilderApi,
 	blockchain::{self, HeaderBackend, ProvideCache},
-	BlockchainEvents,
-	CallExecutor, Client,
+	BlockchainEvents, BlockOf, CallExecutor, Client,
 	runtime_api::ApiExt,
 	error::Result as ClientResult,
 	backend::{AuxStore, Backend},
@@ -1195,6 +1195,117 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
 	);
 
 	Ok((queue, timestamp_core, block_import, pruning_task))
+}
+
+/// Provide a list of authority keys that is current as of a given block.
+#[allow(deprecated)]
+fn authorities_at<C>(client: &C, at: &BlockId<<C as BlockOf>::Type>)
+	-> Result<Vec<AuthorityId>, ConsensusError>
+where
+	C: ProvideRuntimeApi + BlockOf + ProvideCache<<C as BlockOf>::Type>,
+	C::Api: BabeApi<<C as BlockOf>::Type>
+{
+	client
+		.cache()
+		.and_then(|cache| cache
+			.get_at(&well_known_cache_keys::AUTHORITIES, at)
+			.and_then(|v| Decode::decode(&mut &v[..]))
+		)
+		.or_else(|| BabeApi::epoch(&*client.runtime_api(), at).ok()
+			.map(|epoch| epoch.authorities.into_iter().map(|x| x.0).collect())
+		)
+		.ok_or_else(|| consensus_common::Error::InvalidAuthoritiesSet.into())
+}
+
+/// Provide the authority key, if any, that is controlled by this node as of the given block.
+fn authority<C>(client: &C, keystore: Arc<Store>) -> Option<AuthorityPair> where
+	C: ProvideRuntimeApi + BlockOf + ProvideCache<<C as BlockOf>::Type>
+	+ HeaderBackend<<C as BlockOf>::Type>,
+	C::Api: BabeApi<<C as BlockOf>::Type>
+{
+	let owned = keystore.contents::<AuthorityId>().ok()?;
+	let at = BlockId::Number(client.info().best_number);
+	/// The list of authority keys that is current. By default this will just use the state of
+	/// the best block, but you might want it to use some other block's state instead if it's
+	/// more sophisticated. Grandpa, for example, will probably want to use the state of the last
+	/// finalised block.
+	let authorities = authorities_at::<C>(client, &at).ok()?;
+	let maybe_pub = owned.into_iter()
+		.find(|i| authorities.contains(i));
+	maybe_pub.and_then(|public| keystore.load(&public, "").ok())
+}
+
+/// Type of source for block sealing. Different consensus algorithms have different sealing
+/// methods; for PoW it'll be a miner or mining instance. For PoA/PoS it'll be a key type.
+pub trait SealingSource {
+	/// Human-readable description of this general class.
+	///
+	/// e.g. `"ProgPoW"`, `"S/R 25519 Key"`.
+	const SEALER_TYPE: &'static str;
+	/// Human-readable description of this specific instance.
+	///
+	/// e.g. `"OpenCL GPU Radeon 8970 @ slot 1"`, `"5Gav1mbbo348grBREHTYgevvf4Gfe5GFE4"`.
+	fn format(&self) -> String;
+}
+
+impl<T: primitives::crypto::AppPublic> SealingSource for T {
+	const SEALER_TYPE: &'static str = "Key";
+	fn format(&self) -> String { use primitives::crypto::Ss58Codec; self.to_ss58check() }
+}
+
+/// A runtime service for a consensus worker.
+///
+/// This is administered by the client service to help it spin up everything necessary. It can
+/// provide API hooks for handling user-level/RPC events. It can return information regarding
+/// the status of the service.
+pub trait Service<'a>: 'a {
+	/// Instance of the source of sealing. Different consensus algorithms have different sealing
+	/// methods; for PoW it'll be a miner or mining instance. For PoA/PoS it'll be a key type.
+	type Sealer: SealingSource;
+
+	/// The Client type. Different services can make different constraints on this.
+	type Client: ProvideRuntimeApi + BlockOf + ProvideCache<<Self::Client as BlockOf>::Type>
+		+ HeaderBackend<<Self::Client as BlockOf>::Type>;
+
+	/// Initialize the consensus service.
+	fn initialize(client: &'a Self::Client, keystore: Arc<Store>) -> Self;
+
+	/// Return status of the authoring/sealing instance. For PoA/PoS consensus mechanisms, this
+	/// will just be a public key. For PoW mechanisms, this could be the miner instance.
+	fn sealer(&self) -> Option<Self::Sealer>;
+}
+
+/// The Babe consensus service struct. This can be passed in to the main service as (one of) the
+/// consensus modules if your chain uses Babe block production.
+pub struct BabeService<'a, Client> where
+	Client: ProvideRuntimeApi + BlockOf + ProvideCache<<Client as BlockOf>::Type>
+		+ HeaderBackend<<Client as BlockOf>::Type>,
+	Client::Api: BabeApi<<Client as BlockOf>::Type>,
+{
+	/// The main client that lets us interact with the chain/state.
+	client: &'a Client,
+	/// The keystore.
+	keystore: Arc<Store>,
+}
+
+impl<'a, Client> Service<'a> for BabeService<'a, Client> where
+	Client: ProvideRuntimeApi + BlockOf + ProvideCache<<Client as BlockOf>::Type>
+		+ HeaderBackend<<Client as BlockOf>::Type>,
+	Client::Api: BabeApi<<Client as BlockOf>::Type>
+{
+	type Sealer = AuthorityId;
+	type Client = Client;
+
+	fn initialize(client: &'a Self::Client, keystore: Arc<Store>) -> Self {
+		// TODO: Put in any default/test keys into the keystore.
+		// TODO: Actually initialise the babe worker.
+		Self { client, keystore }
+	}
+
+	fn sealer(&self) -> Option<Self::Sealer> {
+		authority(self.client, self.keystore.clone())
+			.map(|p| p.public())
+	}
 }
 
 /// BABE test helpers. Utility methods for manually authoring blocks.
