@@ -142,7 +142,7 @@ impl Store {
 	/// Load a key file with given public key.
 	pub fn load<
 		Pair_: AppPair
-	>(&self, public: &Pair_::Public, password: &str) -> Result<Pair_> {
+	>(&self, public: &<Pair_ as AppKey>::Public, password: &str) -> Result<Pair_> {
 		self.load_by_type::<Pair_::Generic>(IsWrappedBy::from_ref(public), password, Pair_::ID)
 			.map(Into::into)
 	}

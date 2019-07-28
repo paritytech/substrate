@@ -291,6 +291,20 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	Client::new(backend, call_executor, build_genesis_storage, Default::default())
 }
 
+/// Figure out the block type for a given type (for now, just a `Client`).
+pub trait BlockOf {
+	/// The type of the block.
+	type Type: BlockT<Hash=H256>;
+}
+
+impl<B, E, Block, RA> BlockOf for Client<B, E, Block, RA> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
+	Block: BlockT<Hash=H256>,
+{
+	type Type = Block;
+}
+
 impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,

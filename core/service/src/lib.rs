@@ -172,7 +172,7 @@ impl<Components: components::Components> Service<Components> {
 		// Create client
 		let executor = NativeExecutor::new(config.default_heap_pages);
 
-		let mut keystore = if let Some(keystore_path) = config.keystore_path.as_ref() {
+		let keystore = if let Some(keystore_path) = config.keystore_path.as_ref() {
 			match Keystore::open(keystore_path.clone()) {
 				Ok(ks) => Some(ks),
 				Err(err) => {
@@ -506,7 +506,7 @@ impl<Components: components::Components> Service<Components> {
 			_telemetry_on_connect_sinks: telemetry_connection_sinks.clone(),
 		})
 	}
-/*
+
 	/// give the authority key, if we are an authority and have a key
 	pub fn authority_key(&self) -> Option<ComponentConsensusPair<Components>> {
 		use offchain::AuthorityKeyProvider;
@@ -520,7 +520,7 @@ impl<Components: components::Components> Service<Components> {
 
 		self.keystore.fg_authority_key(&BlockId::Number(Zero::zero()))
 	}
-*/
+
 	/// return a shared instance of Telemetry (if enabled)
 	pub fn telemetry(&self) -> Option<tel::Telemetry> {
 		self._telemetry.as_ref().map(|t| t.clone())
@@ -926,10 +926,10 @@ where
 	ConsensusPair: Pair,
 	FinalityPair: Pair,
 {
-	type ConsensusPair = ConsensusPair::Generic;
-	type FinalityPair = FinalityPair::Generic;
+	type ConsensusPair = ConsensusPair;
+	type FinalityPair = FinalityPair;
 
-	fn authority_key(&self, _at: &BlockId<Block>) -> Option<Self::ConsensusPair> {
+	fn authority_key(&self, _at: &BlockId<Block>) -> Option<ConsensusPair> {
 		if self.roles != Roles::AUTHORITY {
 			return None
 		}
@@ -940,11 +940,10 @@ where
 		};
 
 		let loaded_key = keystore
-			.contents::<ConsensusPair::Public>()
+			.contents::<<ConsensusPair as AppKey>::Public>()
 			.map(|keys| keys.get(0)
 				 .map(|k|
 					 keystore.load::<ConsensusPair>(k, self.password.as_ref())
-					    .map(Into::into)
 				 )
 			);
 
@@ -955,7 +954,7 @@ where
 		}
 	}
 
-	fn fg_authority_key(&self, _at: &BlockId<Block>) -> Option<Self::FinalityPair> {
+	fn fg_authority_key(&self, _at: &BlockId<Block>) -> Option<FinalityPair> {
 		if self.roles != Roles::AUTHORITY {
 			return None
 		}
@@ -966,11 +965,10 @@ where
 		};
 
 		let loaded_key = keystore
-			.contents::<FinalityPair::Public>()
+			.contents::<<FinalityPair as AppKey>::Public>()
 			.map(|keys| keys.get(0)
 				 .map(|k|
 					 keystore.load::<FinalityPair>(k, self.password.as_ref())
-					    .map(Into::into)
 				 )
 			);
 

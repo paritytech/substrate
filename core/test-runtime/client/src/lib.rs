@@ -26,6 +26,7 @@ pub use block_builder_ext::BlockBuilderExt;
 pub use generic_test_client::*;
 pub use runtime;
 
+use primitives::sr25519;
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT};
 
@@ -183,9 +184,9 @@ fn genesis_config(support_changes_trie: bool, heap_pages_override: Option<u64>) 
 	GenesisConfig::new(
 		support_changes_trie,
 		vec![
-			Sr25519Keyring::Alice.into(),
-			Sr25519Keyring::Bob.into(),
-			Sr25519Keyring::Charlie.into(),
+			sr25519::Public::from(Sr25519Keyring::Alice).into(),
+			sr25519::Public::from(Sr25519Keyring::Bob).into(),
+			sr25519::Public::from(Sr25519Keyring::Charlie).into(),
 		], vec![
 			AccountKeyring::Alice.into(),
 			AccountKeyring::Bob.into(),
