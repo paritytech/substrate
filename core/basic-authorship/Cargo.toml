@@ -11,11 +11,10 @@ codec = { package = "parity-codec", version = "4.1.1" }
 sr-primitives = { path = "../../core/sr-primitives" }
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
 client = { package = "substrate-client", path = "../../core/client" }
-aura_primitives = { package = "substrate-consensus-aura-primitives", path = "../../core/consensus/aura/primitives" }
 consensus_common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 inherents = { package = "substrate-inherents", path = "../inherents" }
-transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
 substrate-telemetry = { path = "../telemetry" }
+transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
 
 [dev-dependencies]
 test-client = { package = "substrate-test-runtime-client", path = "../../core/test-runtime/client" }

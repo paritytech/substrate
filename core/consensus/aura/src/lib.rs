@@ -135,7 +135,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 	client: Arc<C>,
 	select_chain: SC,
 	block_import: I,
-	env: Arc<E>,
+	env: E,
 	sync_oracle: SO,
 	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
@@ -180,7 +180,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 struct AuraWorker<C, E, I, P, SO> {
 	client: Arc<C>,
 	block_import: Arc<Mutex<I>>,
-	env: Arc<E>,
+	env: E,
 	local_key: Arc<P>,
 	sync_oracle: SO,
 	force_authoring: bool,
@@ -204,7 +204,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 	type OnSlot = Pin<Box<dyn Future<Output = Result<(), consensus_common::Error>> + Send>>;
 
 	fn on_slot(
-		&self,
+		&mut self,
 		chain_head: B::Header,
 		slot_info: SlotInfo,
 	) -> Self::OnSlot {
@@ -212,7 +212,6 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 		let public_key = self.local_key.public();
 		let client = self.client.clone();
 		let block_import = self.block_import.clone();
-		let env = self.env.clone();
 
 		let (timestamp, slot_num, slot_duration) =
 			(slot_info.timestamp, slot_info.number, slot_info.duration);
@@ -253,7 +252,7 @@ impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> w
 				);
 
 				// we are the slot author. make a block and sign it.
-				let proposer = match env.init(&chain_head) {
+				let mut proposer = match self.env.init(&chain_head) {
 					Ok(p) => p,
 					Err(e) => {
 						warn!("Unable to author block in slot {:?}: {:?}", slot_num, e);
@@ -742,7 +741,7 @@ mod tests {
 		type Proposer = DummyProposer;
 		type Error = Error;
 
-		fn init(&self, parent_header: &<TestBlock as BlockT>::Header)
+		fn init(&mut self, parent_header: &<TestBlock as BlockT>::Header)
 			-> Result<DummyProposer, Error>
 		{
 			Ok(DummyProposer(parent_header.number + 1, self.0.clone()))
@@ -754,7 +753,7 @@ mod tests {
 		type Create = future::Ready<Result<TestBlock, Error>>;
 
 		fn propose(
-			&self,
+			&mut self,
 			_: InherentData,
 			digests: DigestFor<TestBlock>,
 			_: Duration,
@@ -841,7 +840,7 @@ mod tests {
 			let select_chain = LongestChain::new(
 				client.backend().clone(),
 			);
-			let environ = Arc::new(DummyFactory(client.clone()));
+			let environ = DummyFactory(client.clone());
 			import_notifications.push(
 				client.import_notification_stream()
 					.take_while(|n| future::ready(!(n.origin != BlockOrigin::Own && n.header.number() < &5)))
@@ -862,7 +861,7 @@ mod tests {
 				client.clone(),
 				select_chain,
 				client,
-				environ.clone(),
+				environ,
 				DummyOracle,
 				inherent_data_providers,
 				false,
