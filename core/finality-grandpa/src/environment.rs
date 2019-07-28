@@ -37,7 +37,7 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, BlockNumberToHash,
 };
-use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair};
+use substrate_primitives::{Blake2Hasher, H256, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
 use crate::{
@@ -476,7 +476,7 @@ where
 {
 	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
 	type Id = AuthorityId;
-	type Signature = ed25519::Signature;
+	type Signature = AuthoritySignature;
 
 	// regular round message streams
 	type In = Box<dyn Stream<

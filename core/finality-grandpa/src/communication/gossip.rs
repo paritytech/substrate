@@ -86,7 +86,7 @@ use runtime_primitives::traits::{NumberFor, Block as BlockT, Zero};
 use network::consensus_gossip::{self as network_gossip, MessageIntent, ValidatorContext};
 use network::{config::Roles, PeerId};
 use parity_codec::{Encode, Decode};
-use crate::ed25519::Public as AuthorityId;
+use fg_primitives::AuthorityId;
 
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG};
 use log::{trace, debug, warn};

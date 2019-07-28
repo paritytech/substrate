@@ -61,11 +61,11 @@ use parity_codec::Encode;
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, DigestFor, ProvideRuntimeApi,
 };
-use fg_primitives::GrandpaApi;
+use fg_primitives::{GrandpaApi, AuthorityPair};
 use inherents::InherentDataProviders;
 use runtime_primitives::generic::BlockId;
 use consensus_common::SelectChain;
-use substrate_primitives::{ed25519, H256, Pair, Blake2Hasher};
+use substrate_primitives::{H256, Pair, Blake2Hasher};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_WARN};
 use serde_json;
 
@@ -199,7 +199,7 @@ pub struct Config {
 	/// justification generation.
 	pub justification_period: u32,
 	/// The local signing key.
-	pub local_key: Option<Arc<ed25519::Pair>>,
+	pub local_key: Option<Arc<AuthorityPair>>,
 	/// Some local identifier of the voter.
 	pub name: Option<String>,
 }
@@ -396,7 +396,7 @@ where
 }
 
 fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
-	local_key: Option<&Arc<ed25519::Pair>>,
+	local_key: Option<&Arc<AuthorityPair>>,
 	set_id: u64,
 	voters: &Arc<VoterSet<AuthorityId>>,
 	client: &Arc<Client<B, E, Block, RA>>,

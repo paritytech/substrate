@@ -24,7 +24,6 @@ use std::convert::{TryFrom, TryInto};
 use parking_lot::Mutex;
 #[cfg(feature = "std")]
 use rand::{RngCore, rngs::OsRng};
-#[cfg(feature = "std")]
 use parity_codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use regex::Regex;
@@ -457,7 +456,7 @@ impl<T: AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 }
 
 /// Trait suitable for typical cryptographic PKI key public type.
-pub trait Public: AsRef<[u8]> + TypedKey + PartialEq + Eq + Clone + Send + Sync {
+pub trait Public: AsRef<[u8]> + CryptoType + PartialEq + Eq + Clone + Send + Sync {
 	/// A new instance from the given slice that should be 32 bytes long.
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
@@ -466,17 +465,85 @@ pub trait Public: AsRef<[u8]> + TypedKey + PartialEq + Eq + Clone + Send + Sync 
 
 	/// Return a `Vec<u8>` filled with raw data.
 	#[cfg(feature = "std")]
-	fn to_raw_vec(&self) -> Vec<u8>;
+	fn to_raw_vec(&self) -> Vec<u8> { self.as_slice().to_owned() }
 
 	/// Return a slice filled with raw data.
-	fn as_slice(&self) -> &[u8];
+	fn as_slice(&self) -> &[u8] { self.as_ref() }
+}
+
+/// Dummy cryptography. Doesn't do anything.
+#[derive(Clone, Hash, Default, Eq, PartialEq)]
+pub struct Dummy;
+
+impl AsRef<[u8]> for Dummy {
+	fn as_ref(&self) -> &[u8] { &b""[..] }
+}
+
+impl AsMut<[u8]> for Dummy {
+	fn as_mut(&mut self) -> &mut[u8] {
+		unsafe {
+			#[allow(mutable_transmutes)]
+			rstd::mem::transmute::<_, &'static mut [u8]>(&b""[..])
+		}
+	}
+}
+
+impl CryptoType for Dummy {
+	const KIND: Kind = Kind::Dummy;
+	type Pair = Dummy;
+}
+
+/// Trait suitable for typical cryptographic PKI key public type.
+impl Public for Dummy {
+	fn from_slice(_: &[u8]) -> Self { Self }
+	#[cfg(feature = "std")]
+	fn to_raw_vec(&self) -> Vec<u8> { vec![] }
+	fn as_slice(&self) -> &[u8] { b"" }
+}
+#[cfg(feature = "std")]
+impl Pair for Dummy {
+	type Public = Dummy;
+	type Seed = Dummy;
+	type Signature = Dummy;
+	type DeriveError = ();
+	fn generate_with_phrase(_: Option<&str>) -> (Self, String, Self::Seed) { Default::default() }
+	fn from_phrase(_: &str, _: Option<&str>)
+		-> Result<(Self, Self::Seed), SecretStringError>
+	{
+		Ok(Default::default())
+	}
+	fn derive<
+		Iter: Iterator<Item=DeriveJunction>
+	>(&self, _: Iter) -> Result<Self, Self::DeriveError> { Ok(Self) }
+	fn from_seed(_: &Self::Seed) -> Self { Self }
+	fn from_seed_slice(_: &[u8]) -> Result<Self, SecretStringError> { Ok(Self) }
+	fn from_standard_components<
+		I: Iterator<Item=DeriveJunction>
+	>(
+		_: &str,
+		_: Option<&str>,
+		_: I
+	) -> Result<Self, SecretStringError> { Ok(Self) }
+	fn sign(&self, _: &[u8]) -> Self::Signature { Self }
+	fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(
+		_: &Self::Signature,
+		_: M,
+		_: P
+	) -> bool { true }
+	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(
+		_: &[u8],
+		_: M,
+		_: P
+	) -> bool { true }
+	fn public(&self) -> Self::Public { Self }
+	fn to_raw_vec(&self) -> Vec<u8> { vec![] }
 }
 
 /// Trait suitable for typical cryptographic PKI key pair type.
 ///
 /// For now it just specifies how to create a key from a phrase and derivation path.
 #[cfg(feature = "std")]
-pub trait Pair: TypedKey + Sized + Clone + Send + Sync + 'static {
+pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	/// The type which is used to encode a public key.
 	type Public: Public + Hash;
 
@@ -603,26 +670,432 @@ pub trait Pair: TypedKey + Sized + Clone + Send + Sync + 'static {
 	fn to_raw_vec(&self) -> Vec<u8>;
 }
 
+/// A type of supported crypto.
+#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+#[repr(u32)]
+pub enum Kind {
+	/// SR25519 crypto (Schnorrkel)
+	Sr25519 = 0,
+	/// ED25519 crypto (Edwards)
+	Ed25519 = 1,
+
+	/// Dummy kind, just for testing.
+	#[cfg(feature = "std")]
+	Dummy = !0,
+}
+
+impl TryFrom<u32> for Kind {
+	type Error = ();
+
+	fn try_from(kind: u32) -> Result<Self, Self::Error> {
+		Ok(match kind {
+			e if e == Kind::Sr25519 as usize as u32 => Kind::Sr25519,
+			e if e == Kind::Ed25519 as usize as u32 => Kind::Ed25519,
+			_ => Err(())?,
+		})
+	}
+}
+
+impl From<Kind> for u32 {
+	fn from(kind: Kind) -> Self {
+		kind as u32
+	}
+}
+
+/// One type is wrapped by another.
+pub trait IsWrappedBy<Outer>: From<Outer> + Into<Outer> {
+	/// Get a reference to the inner from the outer.
+	fn from_ref(outer: &Outer) -> &Self;
+	/// Get a mutable reference to the inner from the outer.
+	fn from_mut(outer: &mut Outer) -> &mut Self;
+}
+
+/// Opposite of `IsWrappedBy` - denotes a type which is a simple wrapper around another type.
+pub trait Wraps: Sized {
+	/// The inner type it is wrapping.
+	type Inner: IsWrappedBy<Self>;
+}
+
+impl<T, Outer> IsWrappedBy<Outer> for T where
+	Outer: AsRef<Self> + AsMut<Self> + From<Self>,
+	T: From<Outer>,
+{
+	/// Get a reference to the inner from the outer.
+	fn from_ref(outer: &Outer) -> &Self { outer.as_ref() }
+
+	/// Get a mutable reference to the inner from the outer.
+	fn from_mut(outer: &mut Outer) -> &mut Self { outer.as_mut() }
+}
+
+impl<Inner, Outer, T> UncheckedFrom<T> for Outer where
+	Outer: Wraps<Inner=Inner>,
+	Inner: IsWrappedBy<Outer> + UncheckedFrom<T>,
+{
+	fn unchecked_from(t: T) -> Self {
+		let inner: Inner = t.unchecked_into();
+		inner.into()
+	}
+}
+
+/// An application-specific key.
+pub trait AppKey: 'static + Send + Sync + Sized + CryptoType + Clone {
+	/// The corresponding type as a generic crypto type.
+	type UntypedGeneric: IsWrappedBy<Self>;
+
+	/// The corresponding public key type in this application scheme.
+	type Public: AppPublic;
+
+	/// The corresponding key pair type in this application scheme.
+	type Pair: AppPair;
+
+	/// The corresponding signature type in this application scheme.
+	type Signature: AppSignature;
+
+	/// An identifier for this application-specific key type.
+	const ID: KeyTypeId;
+}
+
+/// Type which implements Debug and Hash in std, not when no-std (std variant).
+#[cfg(feature = "std")]
+pub trait MaybeDebugHash: std::fmt::Debug + std::hash::Hash {}
+#[cfg(feature = "std")]
+impl<T: std::fmt::Debug + std::hash::Hash> MaybeDebugHash for T {}
+
+/// Type which implements Debug and Hash in std, not when no-std (no-std variant).
+#[cfg(not(feature = "std"))]
+pub trait MaybeDebugHash {}
+
+/// A application's public key.
+pub trait AppPublic: AppKey + Ord + PartialOrd + Eq + PartialEq + MaybeDebugHash {
+	/// The wrapped type which is just a plain instance of `Public`.
+	type Generic: IsWrappedBy<Self> + Public + Ord + PartialOrd + Eq + PartialEq + MaybeDebugHash;
+}
+
+/// A application's public key.
+pub trait AppPair: AppKey {
+	/// The wrapped type which is just a plain instance of `Pair`.
+	type Generic: IsWrappedBy<Self> + Pair<Public=<<Self as AppKey>::Public as AppPublic>::Generic>;
+}
+
+/// A application's public key.
+pub trait AppSignature: AppKey + Eq + PartialEq + MaybeDebugHash {
+	/// The wrapped type which is just a plain instance of `Signature`.
+	type Generic: IsWrappedBy<Self> + Eq + PartialEq + MaybeDebugHash;
+}
+
+/// Implement `AsRef<Self>` and `AsMut<Self>` for the provided type.
+#[macro_export]
+macro_rules! impl_as_ref_mut {
+	($name:ty) => {
+		impl AsMut<Self> for $name {
+			fn as_mut(&mut self) -> &mut Self {
+				self
+			}
+		}
+		impl AsRef<Self> for $name {
+			fn as_ref(&self) -> &Self {
+				&self
+			}
+		}
+	}
+}
+
+/// Implement bidirectional `From` and on-way `AsRef`/`AsMut` for two types, `$inner` and `$outer`
+/// where .
+///
+/// ```rust
+/// impl_wrapper! {
+///     pub struct Outer(Inner);
+/// }
+/// ```
+#[macro_export]
+macro_rules! wrap {
+	($( #[ $attr:meta ] )* struct $outer:ident($inner:ty);) => {
+		$( #[ $attr ] )*
+		struct $outer( $inner );
+		$crate::wrap!($inner, $outer);
+	};
+	($( #[ $attr:meta ] )* pub struct $outer:ident($inner:ty);) => {
+		$( #[ $attr ] )*
+		pub struct $outer( $inner );
+		$crate::wrap!($inner, $outer);
+	};
+	($inner:ty, $outer:ty) => {
+		impl $crate::crypto::Wraps for $outer {
+			type Inner = $inner;
+		}
+		impl From<$inner> for $outer {
+			fn from(inner: $inner) -> Self {
+				Self(inner)
+			}
+		}
+		impl From<$outer> for $inner {
+			fn from(outer: $outer) -> Self {
+				outer.0
+			}
+		}
+		impl AsRef<$inner> for $outer {
+			fn as_ref(&self) -> &$inner {
+				&self.0
+			}
+		}
+		impl AsMut<$inner> for $outer {
+			fn as_mut(&mut self) -> &mut $inner {
+				&mut self.0
+			}
+		}
+	}
+}
+
+/// Declares Public, Pair, Signature types which are functionally equivalent to `$pair`, but are new
+/// Application-specific types whose identifier is `$key_type`.
+///
+/// ```rust
+/// // Declare a new set of crypto types using Ed25519 logic that identifies as `KeyTypeId`
+/// // of value `b"fuba"`.
+/// app_crypto!(ed25519, *b"fuba");
+/// ```
+#[macro_export]
+macro_rules! app_crypto {
+	($pair:ty, $public:ty, $sig:ty, $key_type:expr) => {
+		$crate::wrap!{
+			/// A generic `AppPublic` wrapper type over Ed25519 crypto; this has no specific App.
+			#[derive(Clone, Default, Eq, PartialEq, Ord, PartialOrd, $crate::Encode, $crate::Decode)]
+			#[cfg_attr(feature = "std", derive(Debug, Hash))]
+			pub struct Public($public);
+		}
+		// TODO: needed for verify since it takes an AsRef, but should be removed once that is
+		// refactored.
+		$crate::impl_as_ref_mut!(Public);
+
+		#[cfg(feature = "std")]
+		impl $crate::crypto::Derive for Public {
+			fn derive<Iter: Iterator<Item=$crate::crypto::DeriveJunction>>(&self,
+				path: Iter
+			) -> Option<Self> {
+				self.0.derive(path).map(Self)
+			}
+		}
+		#[cfg(feature = "std")]
+		impl ::std::fmt::Display for Public {
+			fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+				use $crate::crypto::Ss58Codec;
+				write!(f, "{}", self.0.to_ss58check())
+			}
+		}
+		#[cfg(feature = "std")]
+		impl $crate::serde::Serialize for Public {
+			fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> where
+				S: $crate::serde::Serializer
+			{
+				use $crate::crypto::Ss58Codec;
+				serializer.serialize_str(&self.to_ss58check())
+			}
+		}
+		#[cfg(feature = "std")]
+		impl<'de> $crate::serde::Deserialize<'de> for Public {
+			fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error> where
+				D: $crate::serde::Deserializer<'de>
+			{
+				use $crate::crypto::Ss58Codec;
+				Public::from_ss58check(&String::deserialize(deserializer)?)
+					.map_err(|e| $crate::serde::de::Error::custom(format!("{:?}", e)))
+			}
+		}
+		impl AsRef<[u8]> for Public {
+			fn as_ref(&self) -> &[u8] { self.0.as_ref() }
+		}
+		impl AsMut<[u8]> for Public {
+			fn as_mut(&mut self) -> &mut [u8] { self.0.as_mut() }
+		}
+		impl $crate::crypto::CryptoType for Public {
+			const KIND: $crate::crypto::Kind = <$pair as $crate::crypto::CryptoType>::KIND;
+			type Pair = Pair;
+		}
+		impl $crate::crypto::Public for Public {
+			fn from_slice(x: &[u8]) -> Self { Self(<$public>::from_slice(x)) }
+		}
+		impl $crate::crypto::AppKey for Public {
+			type UntypedGeneric = $public;
+			type Public = Public;
+			type Pair = Pair;
+			type Signature = Signature;
+			const ID: $crate::crypto::KeyTypeId = $key_type;
+		}
+		impl $crate::crypto::AppPublic for Public {
+			type Generic = $public;
+		}
+
+		$crate::wrap!{
+			/// A generic `AppPublic` wrapper type over Ed25519 crypto; this has no specific App.
+			#[derive(Clone)]
+			pub struct Pair($pair);
+		}
+
+		impl $crate::crypto::CryptoType for Pair {
+			const KIND: $crate::crypto::Kind = <$pair as $crate::crypto::CryptoType>::KIND;
+			type Pair = Pair;
+		}
+		#[cfg(feature = "std")]
+		impl $crate::crypto::Pair for Pair {
+			type Public = Public;
+			type Seed = <$pair as $crate::crypto::Pair>::Seed;
+			type Signature = Signature;
+			type DeriveError = <$pair as $crate::crypto::Pair>::DeriveError;
+			fn generate_with_phrase(password: Option<&str>) -> (Self, String, Self::Seed) {
+				let r = <$pair>::generate_with_phrase(password);
+				(Self(r.0), r.1, r.2)
+			}
+			fn from_phrase(phrase: &str, password: Option<&str>)
+				-> Result<(Self, Self::Seed), $crate::crypto::SecretStringError>
+			{
+				<$pair>::from_phrase(phrase, password).map(|r| (Self(r.0), r.1))
+			}
+			fn derive<
+				Iter: Iterator<Item=$crate::crypto::DeriveJunction>
+			>(&self, path: Iter) -> Result<Self, Self::DeriveError> {
+				self.0.derive(path).map(Self)
+			}
+			fn from_seed(seed: &Self::Seed) -> Self { Self(<$pair>::from_seed(seed)) }
+			fn from_seed_slice(seed: &[u8]) -> Result<Self, $crate::crypto::SecretStringError> {
+				<$pair>::from_seed_slice(seed).map(Self)
+			}
+			fn from_standard_components<
+				I: Iterator<Item=$crate::crypto::DeriveJunction>
+			>(
+				seed: &str,
+				password: Option<&str>,
+				path: I
+			) -> Result<Self, $crate::crypto::SecretStringError> {
+				<$pair>::from_standard_components::<I>(seed, password, path).map(Self)
+			}
+			fn sign(&self, msg: &[u8]) -> Self::Signature {
+				Signature(self.0.sign(msg))
+			}
+			fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(
+				sig: &Self::Signature,
+				message: M,
+				pubkey: P
+			) -> bool {
+				<$pair>::verify(&sig.0, message, &pubkey.as_ref().0)
+			}
+			fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(
+				sig: &[u8],
+				message: M,
+				pubkey: P
+			) -> bool {
+				<$pair>::verify_weak(sig, message, pubkey)
+			}
+			fn public(&self) -> Self::Public { Public(self.0.public()) }
+			fn to_raw_vec(&self) -> Vec<u8> { self.0.to_raw_vec() }
+		}
+		impl $crate::crypto::AppKey for Pair {
+			type UntypedGeneric = $pair;
+			type Public = Public;
+			type Pair = Pair;
+			type Signature = Signature;
+			const ID: $crate::crypto::KeyTypeId = $key_type;
+		}
+		impl $crate::crypto::AppPair for Pair {
+			type Generic = $pair;
+		}
+
+		$crate::wrap!{
+			/// A generic `AppPublic` wrapper type over Ed25519 crypto; this has no specific App.
+			#[derive(Clone, Default, Eq, PartialEq, $crate::Encode, $crate::Decode)]
+			#[cfg_attr(feature = "std", derive(Debug, Hash))]
+			pub struct Signature($sig);
+		}
+
+		impl AsRef<[u8]> for Signature {
+			fn as_ref(&self) -> &[u8] { self.0.as_ref() }
+		}
+		impl $crate::crypto::CryptoType for Signature {
+			const KIND: $crate::crypto::Kind = <$pair as $crate::crypto::CryptoType>::KIND;
+			type Pair = Pair;
+		}
+		impl $crate::crypto::AppKey for Signature {
+			type UntypedGeneric = $sig;
+			type Public = Public;
+			type Pair = Pair;
+			type Signature = Signature;
+			const ID: $crate::crypto::KeyTypeId = $key_type;
+		}
+		impl $crate::crypto::AppSignature for Signature {
+			type Generic = $sig;
+		}
+	}
+}
+
+// TODO: remove default cryptos
+
+/// Type which has a particular kind of crypto associated with it.
+pub trait CryptoType {
+	/// The kind of crypto it has.
+	const KIND: Kind;
+
+	/// The pair key type of this crypto.
+	type Pair: Pair;
+}
+
 /// An identifier for a type of cryptographic key.
 ///
-/// 0-1024 are reserved.
-pub type KeyTypeId = u32;
+/// To avoid clashes with other modules when distributing your module publically, register your
+/// `KeyTypeId` on the list here by making a PR.
+///
+/// Values whose first character is `_` are reserved for private use and won't conflict with any
+/// public modules.
+pub type KeyTypeId = [u8; 4];
 
-/// Constant key types.
+/// Known key types; this also functions as a global registry of key types for projects wishing to
+/// avoid collisions with each other.
 pub mod key_types {
 	use super::KeyTypeId;
 
-	/// ED25519 public key.
-	pub const ED25519: KeyTypeId = 10;
-
-	/// SR25519 public key.
-	pub const SR25519: KeyTypeId = 20;
+	/// Key type for generic S/R 25519 key.
+	pub const SR25519: KeyTypeId = *b"sr25";
+	/// Key type for generic Ed25519 key.
+	pub const ED25519: KeyTypeId = *b"ed25";
+	/// Key type for Aura module, build-in.
+	pub const AURA: KeyTypeId = *b"aura";
+	/// Key type for Babe module, build-in.
+	pub const BABE: KeyTypeId = *b"babe";
+	/// Key type for Grandpa module, build-in.
+	pub const GRANDPA: KeyTypeId = *b"gran";
+	/// A key type ID useful for tests.
+	#[cfg(feature = "std")]
+	pub const DUMMY: KeyTypeId = *b"dumy";
 }
 
-/// A trait for something that has a key type ID.
-pub trait TypedKey {
-	/// The type ID of this key.
-	const KEY_TYPE: KeyTypeId;
+impl TryFrom<KeyTypeId> for Kind {
+	type Error = ();
+
+	fn try_from(kind: KeyTypeId) -> Result<Self, Self::Error> {
+		Ok(match kind {
+			e if e == key_types::SR25519 => Kind::Sr25519,
+			e if e == key_types::ED25519 => Kind::Ed25519,
+			e if e == key_types::BABE => Kind::Sr25519,
+			e if e == key_types::GRANDPA => Kind::Ed25519,
+			#[cfg(feature = "std")]
+			e if e == key_types::DUMMY => Kind::Dummy,
+			_ => Err(())?,
+		})
+	}
+}
+
+// This doesn't make much sense and should be reconsidered.
+impl TryFrom<Kind> for KeyTypeId {
+	type Error = ();
+
+	fn try_from(kind: Kind) -> Result<Self, Self::Error> {
+		Ok(match kind {
+			Kind::Sr25519 => key_types::SR25519,
+			Kind::Ed25519 => key_types::ED25519,
+			#[cfg(feature = "std")]
+			Kind::Dummy => key_types::DUMMY,
+		})
+	}
 }
 
 #[cfg(test)]
@@ -659,7 +1132,7 @@ mod tests {
 		}
 	}
 	impl TypedKey for TestPublic {
-		const KEY_TYPE: u32 = 4242;
+		const KEY_TYPE: KeyTypeId = TEST_KEY_TYPE;
 	}
 	impl Pair for TestPair {
 		type Public = TestPublic;

@@ -30,7 +30,7 @@ use runtime_primitives::{
 	BuildStorage, traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi}, generic::BlockId
 };
 use crate::config::Configuration;
-use primitives::{Blake2Hasher, H256, Pair};
+use primitives::{Blake2Hasher, H256, crypto::AppPair};
 use rpc::{self, apis::system::SystemInfo};
 use futures::{prelude::*, future::Executor, sync::mpsc};
 
@@ -294,9 +294,9 @@ pub trait ServiceFactory: 'static + Sized {
 	/// Block type.
 	type Block: BlockT<Hash=H256>;
 	/// Consensus crypto type.
-	type ConsensusPair: Pair;
+	type ConsensusPair: AppPair;
 	/// Finality crypto type.
-	type FinalityPair: Pair;
+	type FinalityPair: AppPair;
 	/// The type that implements the runtime API.
 	type RuntimeApi: Send + Sync;
 	/// Network protocol extensions.

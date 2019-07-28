@@ -119,7 +119,12 @@ construct_service_factory! {
 					}
 				}
 
-				if let Some(babe_key) = service.authority_key() {
+				// TODO: key used should be automated and both of these should be plugins.
+
+				let maybe_babe_key: Option<BabePair> = None;//service.authority_key();
+				let maybe_grandpa_key = None;//service.fg_authority_key();
+
+				if let Some(babe_key) = maybe_babe_key {
 					info!("Using BABE key {}", babe_key.public());
 
 					let proposer = Arc::new(substrate_basic_authorship::ProposerFactory {
@@ -149,14 +154,14 @@ construct_service_factory! {
 					service.spawn_task(Box::new(select));
 				}
 
-				let grandpa_key = if service.config.disable_grandpa {
+				let maybe_grandpa_key = if service.config.disable_grandpa {
 					None
 				} else {
-					service.fg_authority_key()
+					maybe_grandpa_key
 				};
 
 				let config = grandpa::Config {
-					local_key: grandpa_key.map(Arc::new),
+					local_key: maybe_grandpa_key.map(Arc::new),
 					// FIXME #1578 make this available through chainspec
 					gossip_duration: Duration::from_millis(333),
 					justification_period: 4096,

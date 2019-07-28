@@ -36,7 +36,7 @@ use futures::sync::{oneshot, mpsc};
 use log::{debug, trace};
 use tokio_executor::Executor;
 use parity_codec::{Encode, Decode};
-use substrate_primitives::{ed25519, Pair};
+use substrate_primitives::Pair;
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
 use network::{consensus_gossip as network_gossip, NetworkService};
@@ -50,7 +50,7 @@ use crate::environment::HasVoted;
 use gossip::{
 	GossipMessage, FullCatchUpMessage, FullCommitMessage, VoteOrPrecommitMessage, GossipValidator
 };
-use substrate_primitives::ed25519::{Public as AuthorityId, Signature as AuthoritySignature};
+use fg_primitives::{AuthorityPair, AuthorityId, AuthoritySignature};
 
 pub mod gossip;
 mod periodic;
@@ -341,7 +341,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		round: Round,
 		set_id: SetId,
 		voters: Arc<VoterSet<AuthorityId>>,
-		local_key: Option<Arc<ed25519::Pair>>,
+		local_key: Option<Arc<AuthorityPair>>,
 		has_voted: HasVoted<B>,
 	) -> (
 		impl Stream<Item=SignedMessage<B>,Error=Error>,
@@ -354,8 +354,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		);
 
 		let locals = local_key.and_then(|pair| {
-			let public = pair.public();
-			let id = AuthorityId(public.0);
+			let id = pair.public();
 			if voters.contains_key(&id) {
 				Some((pair, id))
 			} else {
@@ -633,9 +632,9 @@ pub(crate) fn check_message_sig<Block: BlockT>(
 	round: u64,
 	set_id: u64,
 ) -> Result<(), ()> {
-	let as_public = AuthorityId::from_raw(id.0);
+	let as_public = id.clone();
 	let encoded_raw = localized_payload(round, set_id, message);
-	if ed25519::Pair::verify(signature, &encoded_raw, as_public) {
+	if AuthorityPair::verify(signature, &encoded_raw, as_public) {
 		Ok(())
 	} else {
 		debug!(target: "afg", "Bad signature on message from {:?}", id);
@@ -653,7 +652,7 @@ pub(crate) fn check_message_sig<Block: BlockT>(
 struct OutgoingMessages<Block: BlockT, N: Network<Block>> {
 	round: u64,
 	set_id: u64,
-	locals: Option<(Arc<ed25519::Pair>, AuthorityId)>,
+	locals: Option<(Arc<AuthorityPair>, AuthorityId)>,
 	sender: mpsc::UnboundedSender<SignedMessage<Block>>,
 	network: N,
 	has_voted: HasVoted<Block>,

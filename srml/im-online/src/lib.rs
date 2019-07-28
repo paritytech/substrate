@@ -69,7 +69,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use substrate_primitives::{
-	crypto::TypedKey, offchain::CryptoKey,
+	crypto::{AppKey, CryptoType}, offchain::CryptoKey,
 	offchain::OpaqueNetworkState,
 	offchain::StorageKind,
 	sr25519, ed25519,
@@ -151,7 +151,7 @@ pub trait Trait: system::Trait + session::Trait {
 	type UncheckedExtrinsic: ExtrinsicT<Call=<Self as Trait>::Call> + Encode + Decode;
 
 	/// The identifier type for an authority.
-	type AuthorityId: Member + Parameter + Default + TypedKey + Decode + Encode + AsRef<[u8]>;
+	type AuthorityId: Member + Parameter + Default + AppKey + Decode + Encode + AsRef<[u8]>;
 
 	/// Number of sessions per era.
 	type SessionsPerEra: Get<SessionIndex>;
@@ -428,10 +428,10 @@ impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
 
 			let encoded_heartbeat = heartbeat.encode();
 
-			let signature_valid = match <T::AuthorityId as TypedKey>::KEY_TYPE {
-				ed25519::Public::KEY_TYPE =>
+			let signature_valid = match <T::AuthorityId as CryptoType>::KIND {
+				ed25519::Public::KIND =>
 					sr_io::ed25519_verify(&signature, &encoded_heartbeat, &heartbeat.authority_id),
-				sr25519::Public::KEY_TYPE =>
+				sr25519::Public::KIND =>
 					sr_io::sr25519_verify(&signature, &encoded_heartbeat, &heartbeat.authority_id),
 				_ => return TransactionValidity::Invalid(ApplyError::BadSignature as i8),
 			};

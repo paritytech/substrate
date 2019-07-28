@@ -41,9 +41,9 @@ use keystore::Store as Keystore;
 use network::{NetworkState, NetworkStateInfo};
 use log::{log, info, warn, debug, error, Level};
 use parity_codec::{Encode, Decode};
-use primitives::{Pair, ed25519, sr25519, crypto};
+use primitives::{crypto::{self, AppPair}};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Header, NumberFor, SaturatedConversion, Zero};
+use runtime_primitives::traits::{Header, NumberFor, SaturatedConversion};
 use substrate_executor::NativeExecutor;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
@@ -187,12 +187,15 @@ impl<Components: components::Components> Service<Components> {
 		// Keep the public key for telemetry
 		let public_key: String;
 
+		/*
 		// This is meant to be for testing only
 		// FIXME #1063 remove this
 		if let Some(keystore) = keystore.as_mut() {
 			for seed in &config.keys {
-				keystore.generate_from_seed::<ed25519::Pair>(seed)?;
-				keystore.generate_from_seed::<sr25519::Pair>(seed)?;
+				// this won't work as desired since it's only generating "plain"
+				// keys here, not app-specific keys as the engines will need.
+				keystore.generate_from_seed::<ed25519::AppPair>(seed)?;
+				keystore.generate_from_seed::<sr25519::AppPair>(seed)?;
 			}
 
 			public_key = match keystore.contents::<ed25519::Public>()?.get(0) {
@@ -207,6 +210,8 @@ impl<Components: components::Components> Service<Components> {
 		} else {
 			public_key = format!("<disabled-keystore>");
 		}
+		*/
+		public_key = format!("<disabled-keystore>");
 
 		let (client, on_demand) = Components::build_client(&config, executor)?;
 		let select_chain = Components::build_select_chain(&mut config, client.clone())?;
@@ -501,7 +506,7 @@ impl<Components: components::Components> Service<Components> {
 			_telemetry_on_connect_sinks: telemetry_connection_sinks.clone(),
 		})
 	}
-
+/*
 	/// give the authority key, if we are an authority and have a key
 	pub fn authority_key(&self) -> Option<ComponentConsensusPair<Components>> {
 		use offchain::AuthorityKeyProvider;
@@ -515,7 +520,7 @@ impl<Components: components::Components> Service<Components> {
 
 		self.keystore.fg_authority_key(&BlockId::Number(Zero::zero()))
 	}
-
+*/
 	/// return a shared instance of Telemetry (if enabled)
 	pub fn telemetry(&self) -> Option<tel::Telemetry> {
 		self._telemetry.as_ref().map(|t| t.clone())
@@ -914,14 +919,15 @@ pub struct AuthorityKeyProvider<Block, ConsensusPair, FinalityPair> {
 
 impl<Block, ConsensusPair, FinalityPair>
 	offchain::AuthorityKeyProvider<Block>
-	for AuthorityKeyProvider<Block, ConsensusPair, FinalityPair>
+for
+	AuthorityKeyProvider<Block, ConsensusPair, FinalityPair>
 where
 	Block: runtime_primitives::traits::Block,
-	ConsensusPair: Pair,
-	FinalityPair: Pair,
+	ConsensusPair: AppPair,
+	FinalityPair: AppPair,
 {
-	type ConsensusPair = ConsensusPair;
-	type FinalityPair = FinalityPair;
+	type ConsensusPair = ConsensusPair::Generic;
+	type FinalityPair = FinalityPair::Generic;
 
 	fn authority_key(&self, _at: &BlockId<Block>) -> Option<Self::ConsensusPair> {
 		if self.roles != Roles::AUTHORITY {
@@ -934,9 +940,12 @@ where
 		};
 
 		let loaded_key = keystore
-			.contents()
+			.contents::<ConsensusPair::Public>()
 			.map(|keys| keys.get(0)
-				 .map(|k| keystore.load(k, self.password.as_ref()))
+				 .map(|k|
+					 keystore.load::<ConsensusPair>(k, self.password.as_ref())
+					    .map(Into::into)
+				 )
 			);
 
 		if let Ok(Some(Ok(key))) = loaded_key {
@@ -957,9 +966,12 @@ where
 		};
 
 		let loaded_key = keystore
-			.contents()
+			.contents::<FinalityPair::Public>()
 			.map(|keys| keys.get(0)
-				 .map(|k| keystore.load(k, self.password.as_ref()))
+				 .map(|k|
+					 keystore.load::<FinalityPair>(k, self.password.as_ref())
+					    .map(Into::into)
+				 )
 			);
 
 		if let Ok(Some(Ok(key))) = loaded_key {

@@ -22,6 +22,7 @@
 #![cfg_attr(not(test), forbid(dead_code))]
 pub use babe_primitives::*;
 pub use consensus_common::SyncOracle;
+use babe_primitives;
 use consensus_common::ImportResult;
 use consensus_common::import_queue::{
 	BoxJustificationImport, BoxFinalityProofImport,
@@ -36,7 +37,7 @@ use std::{collections::HashMap, sync::Arc, u64, fmt::{Debug, Display}, pin::Pin,
 use runtime_support::serde::{Serialize, Deserialize};
 use parity_codec::{Decode, Encode};
 use parking_lot::{Mutex, MutexGuard};
-use primitives::{Blake2Hasher, H256, Pair, Public, sr25519};
+use primitives::{Blake2Hasher, H256, Pair, Public};
 use merlin::Transcript;
 use inherents::{InherentDataProviders, InherentData};
 use substrate_telemetry::{
@@ -142,7 +143,7 @@ pub struct BabeParams<C, E, I, SO, SC> {
 	pub config: Config,
 
 	/// The key of the node we are running on.
-	pub local_key: Arc<sr25519::Pair>,
+	pub local_key: Arc<AuthorityPair>,
 
 	/// The client to use
 	pub client: Arc<C>,
@@ -221,7 +222,7 @@ struct BabeWorker<C, E, I, SO> {
 	client: Arc<C>,
 	block_import: Arc<Mutex<I>>,
 	env: Arc<E>,
-	local_key: Arc<sr25519::Pair>,
+	local_key: Arc<AuthorityPair>,
 	sync_oracle: SO,
 	force_authoring: bool,
 	c: (u64, u64),
@@ -498,7 +499,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore>(
 	} else {
 		let (pre_hash, author) = (header.hash(), &authorities[authority_index as usize].0);
 
-		if sr25519::Pair::verify(&sig, pre_hash, author.clone()) {
+		if AuthorityPair::verify(&sig, pre_hash, author.clone()) {
 			let (inout, _batchable_proof) = {
 				let transcript = make_transcript(
 					&randomness,
@@ -775,8 +776,9 @@ fn register_babe_inherent_data_provider(
 	}
 }
 
-fn get_keypair(q: &sr25519::Pair) -> &Keypair {
-	q.as_ref()
+fn get_keypair(q: &AuthorityPair) -> &Keypair {
+	use primitives::crypto::IsWrappedBy;
+	primitives::sr25519::Pair::from_ref(q).as_ref()
 }
 
 #[allow(deprecated)]
@@ -829,7 +831,7 @@ fn calculate_threshold(
 fn claim_slot(
 	slot_number: u64,
 	Epoch { ref authorities, ref randomness, epoch_index, .. }: Epoch,
-	key: &sr25519::Pair,
+	key: &AuthorityPair,
 	c: (u64, u64),
 ) -> Option<((VRFInOut, VRFProof, VRFProofBatchable), usize)> {
 	let public = &key.public();

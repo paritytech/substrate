@@ -52,7 +52,7 @@ pub mod transaction_validity;
 pub use generic::{DigestItem, Digest};
 
 /// Re-export this since it's part of the API of this crate.
-pub use substrate_primitives::crypto::{key_types, KeyTypeId};
+pub use substrate_primitives::crypto::{key_types, KeyTypeId, AppKey, Kind, CryptoType};
 
 /// A message indicating an invalid signature in extrinsic.
 pub const BAD_SIGNATURE: &str = "bad signature in extrinsic";

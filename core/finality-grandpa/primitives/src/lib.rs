@@ -28,15 +28,20 @@ use sr_primitives::{ConsensusEngineId, traits::{DigestFor, NumberFor}};
 use client::decl_runtime_apis;
 use rstd::vec::Vec;
 
+mod app {
+	use substrate_primitives::{app_crypto, crypto::key_types::GRANDPA, ed25519};
+	app_crypto!(ed25519::Pair, ed25519::Public, ed25519::Signature, GRANDPA);
+}
+
 /// The grandpa crypto scheme defined via the keypair type.
 #[cfg(feature = "std")]
-pub type AuthorityPair = substrate_primitives::ed25519::Pair;
+pub type AuthorityPair = app::Pair;
 
 /// Identity of a Grandpa authority.
-pub type AuthorityId = substrate_primitives::ed25519::Public;
+pub type AuthorityId = app::Public;
 
 /// Signature for a Grandpa authority.
-pub type AuthoritySignature = substrate_primitives::ed25519::Signature;
+pub type AuthoritySignature = app::Signature;
 
 /// The `ConsensusEngineId` of GRANDPA.
 pub const GRANDPA_ENGINE_ID: ConsensusEngineId = *b"FRNK";
