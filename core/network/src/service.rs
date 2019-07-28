@@ -505,11 +505,22 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>
 	::consensus::SyncOracle for NetworkService<B, S, H> {
-	fn is_major_syncing(&self) -> bool {
-		self.is_major_syncing()
+	fn is_major_syncing(&mut self) -> bool {
+		NetworkService::is_major_syncing(self)
 	}
 
-	fn is_offline(&self) -> bool {
+	fn is_offline(&mut self) -> bool {
+		self.num_connected.load(Ordering::Relaxed) == 0
+	}
+}
+
+impl<'a, B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>
+	::consensus::SyncOracle for &'a NetworkService<B, S, H> {
+	fn is_major_syncing(&mut self) -> bool {
+		NetworkService::is_major_syncing(self)
+	}
+
+	fn is_offline(&mut self) -> bool {
 		self.num_connected.load(Ordering::Relaxed) == 0
 	}
 }

@@ -1392,7 +1392,7 @@ mod tests {
 		type Proposer = DummyProposer;
 		type Error = Error;
 
-		fn init(&self, parent_header: &TestHeader, _authorities: &[AuthorityId], _sign_with: Arc<ed25519::Pair>)
+		fn init(&mut self, parent_header: &TestHeader, _authorities: &[AuthorityId], _sign_with: Arc<ed25519::Pair>)
 			-> Result<DummyProposer, Error>
 		{
 			Ok(DummyProposer(parent_header.number + 1))

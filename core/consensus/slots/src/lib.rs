@@ -46,7 +46,7 @@ pub trait SlotWorker<B: BlockT> {
 	type OnSlot: Future<Output = Result<(), consensus_common::Error>>;
 
 	/// Called when a new slot is triggered.
-	fn on_slot(&self, chain_head: B::Header, slot_info: SlotInfo) -> Self::OnSlot;
+	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo) -> Self::OnSlot;
 }
 
 /// Slot compatible inherent data.
@@ -69,8 +69,8 @@ pub trait SlotCompatible {
 pub fn start_slot_worker<B, C, W, T, SO, SC>(
 	slot_duration: SlotDuration<T>,
 	client: C,
-	worker: W,
-	sync_oracle: SO,
+	mut worker: W,
+	mut sync_oracle: SO,
 	inherent_data_providers: InherentDataProviders,
 	timestamp_extractor: SC,
 ) -> impl Future<Output = ()>
