@@ -826,6 +826,7 @@ pub trait SignedExtension:
 {
 	/// The type which encodes the sender identity.
 	type AccountId;
+
 	/// The type which encodes the call to be dispatched.
 	type Call;
 
@@ -950,7 +951,7 @@ macro_rules! tuple_impl_indexed {
 #[allow(non_snake_case)]
 tuple_impl_indexed!(A, B, C, D, E, F, G, H, I, J, ; 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,);
 
-/// Only for base bone testing when you don't care about signed extensions at all.\
+/// Only for bare bone testing when you don't care about signed extensions at all.
 #[cfg(feature = "std")]
 impl SignedExtension for () {
 	type AccountId = u64;

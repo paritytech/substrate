@@ -240,7 +240,7 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 	type AccountId = u64;
 	type Call = Call;
 
-	fn sender(&self) -> Option<&u64> { self.0.as_ref().map(|x| &x.0) }
+	fn sender(&self) -> Option<&Self::AccountId> { self.0.as_ref().map(|x| &x.0) }
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
 	fn validate<U: ValidateUnsigned<Call=Self::Call>>(&self,
