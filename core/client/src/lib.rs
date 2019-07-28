@@ -59,7 +59,7 @@ pub use crate::client::{
 	new_in_mem,
 	BlockBody, BlockStatus, ImportNotifications, FinalityNotifications, BlockchainEvents,
 	BlockImportNotification, Client, ClientInfo, ExecutionStrategies, FinalityNotification,
-	LongestChain,
+	LongestChain, BlockOf,
 	utils,
 };
 #[cfg(feature = "std")]

@@ -40,16 +40,18 @@ use consensus_common::import_queue::{
 };
 use client::{
 	block_builder::api::BlockBuilder as BlockBuilderApi,
-	blockchain::ProvideCache,
+	blockchain::{ProvideCache, HeaderBackend},
 	runtime_api::ApiExt,
 	error::Result as CResult,
 	backend::AuxStore,
+	BlockOf
 };
+use substrate_keystore::Store;
 
 use runtime_primitives::{generic::{self, BlockId, OpaqueDigestItemId}, Justification};
 use runtime_primitives::traits::{Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi, Zero, Member};
 
-use primitives::Pair;
+use primitives::crypto::{Pair, AppPair, AppKey};
 use inherents::{InherentDataProviders, InherentData};
 
 use futures::{prelude::*, future};
@@ -141,7 +143,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 	force_authoring: bool,
 ) -> Result<impl futures01::Future<Item = (), Error = ()>, consensus_common::Error> where
 	B: BlockT<Header=H>,
-	C: ProvideRuntimeApi + ProvideCache<B> + AuxStore + Send + Sync,
+	C: ProvideRuntimeApi + BlockOf + ProvideCache<B> + AuxStore + Send + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	SC: SelectChain<B>,
 	E::Proposer: Proposer<B, Error=Error>,
@@ -188,7 +190,7 @@ struct AuraWorker<C, E, I, P, SO> {
 
 impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> where
 	B: BlockT<Header=H>,
-	C: ProvideRuntimeApi + ProvideCache<B> + Sync,
+	C: ProvideRuntimeApi + BlockOf + ProvideCache<B> + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
@@ -508,7 +510,7 @@ impl<C, P> AuraVerifier<C, P>
 
 #[forbid(deprecated)]
 impl<B: BlockT, C, P> Verifier<B> for AuraVerifier<C, P> where
-	C: ProvideRuntimeApi + Send + Sync + client::backend::AuxStore + ProvideCache<B>,
+	C: ProvideRuntimeApi + Send + Sync + client::backend::AuxStore + ProvideCache<B> + BlockOf,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>>,
 	DigestItemFor<B>: CompatibleDigestItem<P>,
 	P: Pair + Send + Sync + 'static,
@@ -611,7 +613,7 @@ impl<B: BlockT, C, P> Verifier<B> for AuraVerifier<C, P> where
 fn initialize_authorities_cache<A, B, C>(client: &C) -> Result<(), ConsensusError> where
 	A: Codec,
 	B: BlockT,
-	C: ProvideRuntimeApi + ProvideCache<B>,
+	C: ProvideRuntimeApi + BlockOf + ProvideCache<B>,
 	C::Api: AuraApi<B, A>,
 {
 	// no cache => no initialization
@@ -645,7 +647,7 @@ fn initialize_authorities_cache<A, B, C>(client: &C) -> Result<(), ConsensusErro
 fn authorities<A, B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<A>, ConsensusError> where
 	A: Codec,
 	B: BlockT,
-	C: ProvideRuntimeApi + ProvideCache<B>,
+	C: ProvideRuntimeApi + BlockOf + ProvideCache<B>,
 	C::Api: AuraApi<B, A>,
 {
 	client
@@ -656,6 +658,69 @@ fn authorities<A, B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<A>, Consensus
 		)
 		.or_else(|| AuraApi::authorities(&*client.runtime_api(), at).ok())
 		.ok_or_else(|| consensus_common::Error::InvalidAuthoritiesSet.into())
+}
+
+/// Means of determining a list of authority keys, generally used to determine if we are an
+/// authority by cross-referencing this list against the keys in the store and finding one that
+/// appears in both.
+///
+/// This is implemented directly on the `AppPair` key type.
+pub trait AuthorityProvider: AppPair {
+	/// Provide a list of authority keys that is current as of a given block.
+	fn authorities_at<C>(client: &C, at: &BlockId<<C as BlockOf>::Type>)
+		-> Result<Vec<<Self as AppKey>::Public>, ConsensusError>
+	where
+		C: ProvideRuntimeApi + BlockOf + ProvideCache<<C as BlockOf>::Type>,
+		C::Api: AuraApi<<C as BlockOf>::Type, <Self as AppKey>::Public>;
+
+	/// Provide a list of authority keys that is current. By default this will just use the state of
+	/// the best block, but you might want it to use some other block's state instead if it's
+	/// more sophisticated. Grandpa, for example, will probably want to use the state of the last
+	/// finalised block.
+	fn authorities<C>(client: &C) -> Result<Vec<<Self as AppKey>::Public>, ConsensusError> where
+		C: ProvideRuntimeApi + BlockOf + ProvideCache<<C as BlockOf>::Type>
+			+ HeaderBackend<<C as BlockOf>::Type>,
+		C::Api: AuraApi<<C as BlockOf>::Type, <Self as AppKey>::Public>
+	{
+		Self::authorities_at::<C>(client, &BlockId::Number(client.info().best_number))
+	}
+
+	/// Provide the authority key, if any, that is controlled by this node as of the given block.
+	fn authority<C>(client: &C, keystore: Arc<Store>) -> Option<Self> where
+		C: ProvideRuntimeApi + BlockOf + ProvideCache<<C as BlockOf>::Type>
+		+ HeaderBackend<<C as BlockOf>::Type>,
+		C::Api: AuraApi<<C as BlockOf>::Type, <Self as AppKey>::Public>
+	{
+		let owned = keystore.contents::<<Self as AppKey>::Public>().ok()?;
+		let authorities = Self::authorities(client).ok()?;
+		let maybe_pub = owned.into_iter()
+			.find(|i| authorities.contains(i));
+		maybe_pub.and_then(|public| keystore.load(&public, "").ok())
+	}
+}
+
+impl AuthorityProvider for aura_primitives::ed25519::AuthorityPair {
+	/// Provide a list of authority keys that is current as of a given block.
+	fn authorities_at<C>(client: &C, at: &BlockId<<C as BlockOf>::Type>)
+		-> Result<Vec<<Self as AppKey>::Public>, ConsensusError>
+	where
+		C: ProvideRuntimeApi + BlockOf + ProvideCache<<C as BlockOf>::Type>,
+		C::Api: AuraApi<<C as BlockOf>::Type, <Self as AppKey>::Public>,
+	{
+		authorities::<aura_primitives::ed25519::AuthorityId, _, _>(client, at)
+	}
+}
+
+impl AuthorityProvider for aura_primitives::sr25519::AuthorityPair {
+	/// Provide a list of authority keys that is current as of a given block.
+	fn authorities_at<C>(client: &C, at: &BlockId<<C as BlockOf>::Type>)
+		-> Result<Vec<<Self as AppKey>::Public>, ConsensusError>
+	where
+		C: ProvideRuntimeApi + BlockOf + ProvideCache<<C as BlockOf>::Type>,
+		C::Api: AuraApi<<C as BlockOf>::Type, <Self as AppKey>::Public>,
+	{
+		authorities::<aura_primitives::sr25519::AuthorityId, _, _>(client, at)
+	}
 }
 
 /// The Aura import queue type.
@@ -686,7 +751,7 @@ pub fn import_queue<B, C, P>(
 	inherent_data_providers: InherentDataProviders,
 ) -> Result<AuraImportQueue<B>, consensus_common::Error> where
 	B: BlockT,
-	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore,
+	C: 'static + ProvideRuntimeApi + BlockOf + ProvideCache<B> + Send + Sync + AuxStore,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>>,
 	DigestItemFor<B>: CompatibleDigestItem<P>,
 	P: Pair + Send + Sync + 'static,

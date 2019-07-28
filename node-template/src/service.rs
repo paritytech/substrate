@@ -15,7 +15,7 @@ use basic_authorship::ProposerFactory;
 use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration};
 use futures::prelude::*;
 use substrate_client::{self as client, LongestChain};
-use primitives::{ed25519::Pair, Pair as PairT};
+use primitives::{Pair as PairT};
 use inherents::InherentDataProviders;
 use network::{config::DummyFinalityProofRequestBuilder, construct_simple_protocol};
 use substrate_executor::native_executor_instance;
@@ -43,8 +43,8 @@ construct_simple_protocol! {
 construct_service_factory! {
 	struct Factory {
 		Block = Block,
-		ConsensusPair = Pair,
-		FinalityPair = Pair,
+		ConsensusPair = aura_primitives::sr25519::AuthorityPair,
+		FinalityPair = grandpa_primitives::AuthorityPair,
 		RuntimeApi = RuntimeApi,
 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
 		RuntimeDispatch = Executor,
@@ -100,7 +100,7 @@ construct_service_factory! {
 			Self::Block,
 		>
 			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>, _select_chain: Self::SelectChain| {
-					import_queue::<_, _, Pair>(
+					import_queue::<_, _, aura_primitives::sr25519::AuthorityPair>(
 						SlotDuration::get_or_compute(&*client)?,
 						Box::new(client.clone()),
 						None,
@@ -115,7 +115,7 @@ construct_service_factory! {
 		>
 			{ |config: &mut FactoryFullConfiguration<Self>, client: Arc<LightClient<Self>>| {
 					let fprb = Box::new(DummyFinalityProofRequestBuilder::default()) as Box<_>;
-					import_queue::<_, _, Pair>(
+					import_queue::<_, _, aura_primitives::sr25519::AuthorityPair>(
 						SlotDuration::get_or_compute(&*client)?,
 						Box::new(client.clone()),
 						None,

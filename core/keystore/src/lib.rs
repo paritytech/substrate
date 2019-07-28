@@ -23,7 +23,9 @@ use std::path::PathBuf;
 use std::fs::{self, File};
 use std::io::{self, Write};
 
-use substrate_primitives::crypto::{KeyTypeId, AppPublic, AppPair, Pair, Public, IsWrappedBy};
+use substrate_primitives::crypto::{
+	KeyTypeId, AppPublic, AppKey, AppPair, Pair, Public, IsWrappedBy
+};
 
 /// Keystore error.
 #[derive(Debug, derive_more::Display, derive_more::From)]
@@ -142,7 +144,7 @@ impl Store {
 	/// Load a key file with given public key.
 	pub fn load<
 		Pair_: AppPair
-	>(&self, public: &Pair_::Public, password: &str) -> Result<Pair_> {
+	>(&self, public: &<Pair_ as AppKey>::Public, password: &str) -> Result<Pair_> {
 		self.load_by_type::<Pair_::Generic>(IsWrappedBy::from_ref(public), password, Pair_::ID)
 			.map(Into::into)
 	}

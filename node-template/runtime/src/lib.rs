@@ -9,7 +9,7 @@
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use rstd::prelude::*;
-use primitives::{ed25519, sr25519, OpaqueMetadata};
+use primitives::{sr25519, OpaqueMetadata};
 use sr_primitives::{ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str};
 use sr_primitives::traits::{NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify, ConvertInto};
 use sr_primitives::weights::Weight;
@@ -30,10 +30,10 @@ pub use sr_primitives::{Permill, Perbill};
 pub use support::{StorageValue, construct_runtime, parameter_types};
 
 /// Alias to the signature scheme used for Aura authority signatures.
-pub type AuraSignature = ed25519::Signature;
+pub type AuraSignature = consensus_aura::sr25519::AuthoritySignature;
 
 /// The Ed25519 pub key of an session that belongs to an Aura authority of the chain.
-pub type AuraId = ed25519::Public;
+pub type AuraId = consensus_aura::sr25519::AuthorityId;
 
 /// Alias to pubkey that identifies an account on the chain.
 pub type AccountId = <AccountSignature as Verify>::Signer;

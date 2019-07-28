@@ -24,7 +24,7 @@ use std::convert::{TryFrom, TryInto};
 use parking_lot::Mutex;
 #[cfg(feature = "std")]
 use rand::{RngCore, rngs::OsRng};
-use parity_codec::{Encode, Decode};
+use parity_codec::{Encode, Decode, Codec};
 #[cfg(feature = "std")]
 use regex::Regex;
 #[cfg(feature = "std")]
@@ -767,13 +767,14 @@ impl<T: std::fmt::Debug + std::hash::Hash> MaybeDebugHash for T {}
 pub trait MaybeDebugHash {}
 
 /// A application's public key.
-pub trait AppPublic: AppKey + Ord + PartialOrd + Eq + PartialEq + MaybeDebugHash {
+pub trait AppPublic: AppKey + Public + Ord + PartialOrd + Eq + PartialEq + MaybeDebugHash + Codec {
 	/// The wrapped type which is just a plain instance of `Public`.
-	type Generic: IsWrappedBy<Self> + Public + Ord + PartialOrd + Eq + PartialEq + MaybeDebugHash;
+	type Generic:
+		IsWrappedBy<Self> + Public + Ord + PartialOrd + Eq + PartialEq + MaybeDebugHash + Codec;
 }
 
 /// A application's public key.
-pub trait AppPair: AppKey {
+pub trait AppPair: AppKey + Pair<Public=<Self as AppKey>::Public> {
 	/// The wrapped type which is just a plain instance of `Pair`.
 	type Generic: IsWrappedBy<Self> + Pair<Public=<<Self as AppKey>::Public as AppPublic>::Generic>;
 }
@@ -1050,6 +1051,9 @@ pub type KeyTypeId = [u8; 4];
 
 /// Known key types; this also functions as a global registry of key types for projects wishing to
 /// avoid collisions with each other.
+///
+/// It's not universal in the sense that *all* key types need to be mentioned here, it's just a
+/// handy place to put common key types.
 pub mod key_types {
 	use super::KeyTypeId;
 
@@ -1057,18 +1061,20 @@ pub mod key_types {
 	pub const SR25519: KeyTypeId = *b"sr25";
 	/// Key type for generic Ed25519 key.
 	pub const ED25519: KeyTypeId = *b"ed25";
-	/// Key type for Aura module, build-in.
-	pub const AURA: KeyTypeId = *b"aura";
 	/// Key type for Babe module, build-in.
 	pub const BABE: KeyTypeId = *b"babe";
 	/// Key type for Grandpa module, build-in.
 	pub const GRANDPA: KeyTypeId = *b"gran";
+	/// Key type for controlling an account in a Substrate runtime, built-in.
+	pub const ACCOUNT: KeyTypeId = *b"acco";
+	/// Key type for Aura module, built-in.
+	pub const AURA: KeyTypeId = *b"acco";
 	/// A key type ID useful for tests.
 	#[cfg(feature = "std")]
 	pub const DUMMY: KeyTypeId = *b"dumy";
 }
 
-impl TryFrom<KeyTypeId> for Kind {
+/*impl TryFrom<KeyTypeId> for Kind {
 	type Error = ();
 
 	fn try_from(kind: KeyTypeId) -> Result<Self, Self::Error> {
@@ -1096,7 +1102,7 @@ impl TryFrom<Kind> for KeyTypeId {
 			Kind::Dummy => key_types::DUMMY,
 		})
 	}
-}
+}*/
 
 #[cfg(test)]
 mod tests {
