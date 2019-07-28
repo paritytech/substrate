@@ -16,8 +16,7 @@
 
 //! Substrate chain configurations.
 
-use babe_primitives::AuthorityId as BabeId;
-use primitives::{ed25519, sr25519, Pair, crypto::UncheckedInto};
+use primitives::{sr25519, Pair, crypto::UncheckedInto};
 use node_primitives::{AccountId, Balance};
 use node_runtime::{
 	BabeConfig,	BalancesConfig, ContractsConfig, CouncilConfig, DemocracyConfig,
@@ -30,7 +29,8 @@ pub use node_runtime::GenesisConfig;
 use substrate_service;
 use hex_literal::hex;
 use substrate_telemetry::TelemetryEndpoints;
-use grandpa::AuthorityId as GrandpaId;
+use grandpa_primitives::{AuthorityId as GrandpaId, AuthorityPair as GrandpaPair};
+use babe_primitives::{AuthorityId as BabeId, AuthorityPair as BabePair};
 
 const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 
@@ -42,11 +42,8 @@ pub fn flaming_fir_config() -> Result<ChainSpec, String> {
 	ChainSpec::from_json_bytes(&include_bytes!("../res/flaming-fir.json")[..])
 }
 
-fn session_keys(ed_key: ed25519::Public, sr_key: sr25519::Public) -> SessionKeys {
-	SessionKeys {
-		ed25519: ed_key,
-		sr25519: sr_key,
-	}
+fn session_keys(grandpa: GrandpaId, babe: BabeId) -> SessionKeys {
+	SessionKeys { grandpa, babe }
 }
 
 fn staging_testnet_config_genesis() -> GenesisConfig {
@@ -56,7 +53,9 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 	// and
 	// for i in 1 2 3 4 ; do for j in session; do subkey --ed25519 inspect "$secret"//fir//$j//$i; done; done
 
-	let initial_authorities: Vec<(AccountId, AccountId, BabeId, GrandpaId)> = vec![(
+	// TODO: actually use sr25519 for babe keys (right now they seems to just be copies of the
+	// ed25519 grandpa key).
+	let initial_authorities: Vec<(AccountId, AccountId, GrandpaId, BabeId)> = vec![(
 		// 5Fbsd6WXDGiLTxunqeK5BATNiocfCqu9bS1yArVjCgeBLkVy
 		hex!["9c7a2ee14e565db0c69f78c7b4cd839fbf52b607d867e9e9c5a79042898a0d12"].unchecked_into(),
 		// 5EnCiV7wSHeNhjW3FSUwiJNkcc2SBkPLn5Nj93FmbLtBjQUq
@@ -122,7 +121,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		}),
 		session: Some(SessionConfig {
 			keys: initial_authorities.iter().map(|x| {
-				(x.0.clone(), session_keys(x.3.clone(), x.2.clone()))
+				(x.0.clone(), session_keys(x.2.clone(), x.3.clone()))
 			}).collect::<Vec<_>>(),
 		}),
 		staking: Some(StakingConfig {
@@ -159,14 +158,14 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			key: endowed_accounts[0].clone(),
 		}),
 		babe: Some(BabeConfig {
-			authorities: initial_authorities.iter().map(|x| (x.2.clone(), 1)).collect(),
+			authorities: initial_authorities.iter().map(|x| (x.3.clone(), 1)).collect(),
 		}),
 		im_online: Some(ImOnlineConfig {
 			gossip_at: 0,
 			last_new_era_start: 0,
 		}),
 		grandpa: Some(GrandpaConfig {
-			authorities: initial_authorities.iter().map(|x| (x.3.clone(), 1)).collect(),
+			authorities: initial_authorities.iter().map(|x| (x.2.clone(), 1)).collect(),
 		}),
 	}
 }
@@ -195,31 +194,31 @@ pub fn get_account_id_from_seed(seed: &str) -> AccountId {
 
 /// Helper function to generate BabeId from seed
 pub fn get_babe_id_from_seed(seed: &str) -> BabeId {
-	sr25519::Pair::from_string(&format!("//{}", seed), None)
+	BabePair::from_string(&format!("//{}", seed), None)
 		.expect("static values are valid; qed")
 		.public()
 }
 
 /// Helper function to generate GrandpaId from seed
 pub fn get_grandpa_id_from_seed(seed: &str) -> GrandpaId {
-	ed25519::Pair::from_string(&format!("//{}", seed), None)
+	GrandpaPair::from_string(&format!("//{}", seed), None)
 		.expect("static values are valid; qed")
 		.public()
 }
 
 /// Helper function to generate stash, controller and session key from seed
-pub fn get_authority_keys_from_seed(seed: &str) -> (AccountId, AccountId, BabeId, GrandpaId) {
+pub fn get_authority_keys_from_seed(seed: &str) -> (AccountId, AccountId, GrandpaId, BabeId) {
 	(
 		get_account_id_from_seed(&format!("{}//stash", seed)),
 		get_account_id_from_seed(seed),
+		get_grandpa_id_from_seed(seed),
 		get_babe_id_from_seed(seed),
-		get_grandpa_id_from_seed(seed)
 	)
 }
 
 /// Helper function to create GenesisConfig for testing
 pub fn testnet_genesis(
-	initial_authorities: Vec<(AccountId, AccountId, BabeId, GrandpaId)>,
+	initial_authorities: Vec<(AccountId, AccountId, GrandpaId, BabeId)>,
 	root_key: AccountId,
 	endowed_accounts: Option<Vec<AccountId>>,
 	enable_println: bool,
@@ -260,7 +259,7 @@ pub fn testnet_genesis(
 		}),
 		session: Some(SessionConfig {
 			keys: initial_authorities.iter().map(|x| {
-				(x.0.clone(), session_keys(x.3.clone(), x.2.clone()))
+				(x.0.clone(), session_keys(x.2.clone(), x.3.clone()))
 			}).collect::<Vec<_>>(),
 		}),
 		staking: Some(StakingConfig {
@@ -302,14 +301,14 @@ pub fn testnet_genesis(
 			key: root_key,
 		}),
 		babe: Some(BabeConfig {
-			authorities: initial_authorities.iter().map(|x| (x.2.clone(), 1)).collect(),
+			authorities: initial_authorities.iter().map(|x| (x.3.clone(), 1)).collect(),
 		}),
 		im_online: Some(ImOnlineConfig{
 			gossip_at: 0,
 			last_new_era_start: 0,
 		}),
 		grandpa: Some(GrandpaConfig {
-			authorities: initial_authorities.iter().map(|x| (x.3.clone(), 1)).collect(),
+			authorities: initial_authorities.iter().map(|x| (x.2.clone(), 1)).collect(),
 		}),
 	}
 }

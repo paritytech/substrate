@@ -33,11 +33,13 @@ macro_rules! map {
 
 use rstd::prelude::*;
 use rstd::ops::Deref;
-use parity_codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use std::borrow::Cow;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
+#[cfg(feature = "std")]
+pub use serde;// << for macro
+pub use parity_codec::{Encode, Decode};// << for macro
 
 #[cfg(feature = "std")]
 pub use impl_serde::serialize as bytes;

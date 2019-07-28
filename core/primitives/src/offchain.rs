@@ -16,10 +16,11 @@
 
 //! Offchain workers types
 
-use crate::crypto;
 use parity_codec::{Encode, Decode};
 use rstd::prelude::{Vec, Box};
 use rstd::convert::TryFrom;
+
+pub use crate::crypto::Kind as CryptoKind;
 
 /// A type of supported crypto.
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
@@ -55,35 +56,6 @@ impl TryFrom<u32> for StorageKind {
 impl From<StorageKind> for u32 {
 	fn from(c: StorageKind) -> Self {
 		c as u8 as u32
-	}
-}
-
-/// A type of supported crypto.
-#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
-#[repr(C)]
-pub enum CryptoKind {
-	/// SR25519 crypto (Schnorrkel)
-	Sr25519 = crypto::key_types::SR25519 as isize,
-	/// ED25519 crypto (Edwards)
-	Ed25519 = crypto::key_types::ED25519 as isize,
-}
-
-impl TryFrom<u32> for CryptoKind {
-	type Error = ();
-
-	fn try_from(kind: u32) -> Result<Self, Self::Error> {
-		match kind {
-			e if e == CryptoKind::Sr25519 as isize as u32 => Ok(CryptoKind::Sr25519),
-			e if e == CryptoKind::Ed25519 as isize as u32 => Ok(CryptoKind::Ed25519),
-			_ => Err(()),
-		}
-	}
-}
-
-impl From<CryptoKind> for u32 {
-	fn from(c: CryptoKind) -> Self {
-		c as isize as u32
 	}
 }
 

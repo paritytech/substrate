@@ -67,6 +67,7 @@ impl StoredKey {
 				let phrase = sr25519::Pair::generate_with_phrase(password).1;
 				Self { kind, phrase }
 			}
+			CryptoKind::Dummy => Self { kind, phrase: String::new() },
 		}
 	}
 
@@ -80,6 +81,7 @@ impl StoredKey {
 				sr25519::Pair::from_phrase(&self.phrase, password)
 					.map(|x| LocalKey::Sr25519(x.0))
 			}
+			CryptoKind::Dummy => Err(())?,
 		}
 		.map_err(|e| {
 			warn!("Error recovering Offchain Worker key. Password invalid? {:?}", e);

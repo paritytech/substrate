@@ -32,7 +32,9 @@ use bip39::{Mnemonic, Language, MnemonicType};
 use crate::crypto::{Pair as TraitPair, DeriveJunction, SecretStringError, Derive, Ss58Codec};
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
-use crate::crypto::{key_types, KeyTypeId, Public as TraitPublic, TypedKey, UncheckedFrom};
+use crate::{impl_as_ref_mut, crypto::{
+	Public as TraitPublic, UncheckedFrom, CryptoType, Kind
+}};
 
 /// A secret seed. It's not called a "secret key" because ring doesn't expose the secret keys
 /// of the key pair (yeah, dumb); as such we're forced to remember the seed manually if we
@@ -87,12 +89,6 @@ impl From<Public> for [u8; 32] {
 impl From<Pair> for Public {
 	fn from(x: Pair) -> Self {
 		x.public()
-	}
-}
-
-impl AsRef<Public> for Public {
-	fn as_ref(&self) -> &Public {
-		&self
 	}
 }
 
@@ -296,6 +292,8 @@ impl Public {
 	}
 }
 
+impl_as_ref_mut!(Public);
+
 impl TraitPublic for Public {
 	/// A new instance from the given slice that should be 32 bytes long.
 	///
@@ -306,30 +304,10 @@ impl TraitPublic for Public {
 		r.copy_from_slice(data);
 		Public(r)
 	}
-
-	/// Return a `Vec<u8>` filled with raw data.
-	#[cfg(feature = "std")]
-	fn to_raw_vec(&self) -> Vec<u8> {
-		let r: &[u8; 32] = self.as_ref();
-		r.to_vec()
-	}
-
-	/// Return a slice filled with raw data.
-	fn as_slice(&self) -> &[u8] {
-		let r: &[u8; 32] = self.as_ref();
-		&r[..]
-	}
 }
 
 #[cfg(feature = "std")]
 impl Derive for Public {}
-
-#[cfg(feature = "std")]
-impl AsRef<Pair> for Pair {
-	fn as_ref(&self) -> &Pair {
-		&self
-	}
-}
 
 /// Derive a single hard junction.
 #[cfg(feature = "std")]
@@ -488,18 +466,30 @@ impl Pair {
 	}
 }
 
-impl TypedKey for Public {
-	const KEY_TYPE: KeyTypeId = key_types::ED25519;
+impl CryptoType for Public {
+	const KIND: Kind = Kind::Ed25519;
+	type Pair = Pair;
 }
 
-impl TypedKey for Signature {
-	const KEY_TYPE: KeyTypeId = key_types::ED25519;
+impl CryptoType for Signature {
+	const KIND: Kind = Kind::Ed25519;
+	type Pair = Pair;
 }
 
 #[cfg(feature = "std")]
-impl TypedKey for Pair {
-	const KEY_TYPE: KeyTypeId = key_types::ED25519;
+impl CryptoType for Pair {
+	const KIND: Kind = Kind::Ed25519;
+	type Pair = Pair;
 }
+
+mod app {
+	use crate::crypto::key_types::ED25519;
+	crate::app_crypto!(super::Pair, super::Public, super::Signature, ED25519);
+}
+
+pub use app::Public as AppPublic;
+pub use app::Pair as AppPair;
+pub use app::Signature as AppSignature;
 
 #[cfg(test)]
 mod test {

@@ -191,10 +191,10 @@ type SessionHandlers = (Grandpa, Babe);
 
 impl_opaque_keys! {
 	pub struct SessionKeys {
-		#[id(key_types::ED25519)]
-		pub ed25519: GrandpaId,
-		#[id(key_types::SR25519)]
-		pub sr25519: BabeId,
+		#[id(key_types::GRANDPA)]
+		pub grandpa: GrandpaId,
+		#[id(key_types::BABE)]
+		pub babe: BabeId,
 	}
 }
 

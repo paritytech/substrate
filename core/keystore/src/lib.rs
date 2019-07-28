@@ -23,7 +23,7 @@ use std::path::PathBuf;
 use std::fs::{self, File};
 use std::io::{self, Write};
 
-use primitives::crypto::{KeyTypeId, Pair, Public};
+use primitives::crypto::{KeyTypeId, AppPublic, AppPair, Pair, Public, IsWrappedBy};
 
 /// Keystore error.
 #[derive(Debug, derive_more::Display, derive_more::From)]
@@ -69,8 +69,8 @@ impl Store {
 		Ok(Store { path, additional: HashMap::new() })
 	}
 
-	fn get_pair<TPair: Pair>(&self, public: &TPair::Public) -> Result<Option<TPair>> {
-		let key = (TPair::KEY_TYPE, public.to_raw_vec());
+	fn get_pair<TPair: Pair>(&self, public: &TPair::Public, key_type: KeyTypeId) -> Result<Option<TPair>> {
+		let key = (key_type, public.to_raw_vec());
 		if let Some(bytes) = self.additional.get(&key) {
 			let pair = TPair::from_seed_slice(bytes)
 				.map_err(|_| Error::InvalidSeed)?;
@@ -79,35 +79,55 @@ impl Store {
 		Ok(None)
 	}
 
-	fn insert_pair<TPair: Pair>(&mut self, pair: &TPair) {
-		let key = (TPair::KEY_TYPE, pair.public().to_raw_vec());
+	fn insert_pair<TPair: Pair>(&mut self, pair: &TPair, key_type: KeyTypeId) {
+		let key = (key_type, pair.public().to_raw_vec());
 		self.additional.insert(key, pair.to_raw_vec());
 	}
 
 	/// Generate a new key, placing it into the store.
-	pub fn generate<TPair: Pair>(&self, password: &str) -> Result<TPair> {
+	pub fn generate_by_type<TPair: Pair>(&self, password: &str, key_type: KeyTypeId) -> Result<TPair> {
 		let (pair, phrase, _) = TPair::generate_with_phrase(Some(password));
-		let mut file = File::create(self.key_file_path::<TPair>(&pair.public()))?;
+		let mut file = File::create(self.key_file_path::<TPair>(&pair.public(), key_type))?;
 		::serde_json::to_writer(&file, &phrase)?;
 		file.flush()?;
 		Ok(pair)
 	}
 
 	/// Create a new key from seed. Do not place it into the store.
-	pub fn generate_from_seed<TPair: Pair>(&mut self, seed: &str) -> Result<TPair> {
+	pub fn generate_from_seed_by_type<TPair: Pair>(&mut self, seed: &str, key_type: KeyTypeId) -> Result<TPair> {
 		let pair = TPair::from_string(seed, None)
 			.ok().ok_or(Error::InvalidSeed)?;
-		self.insert_pair(&pair);
+		self.insert_pair(&pair, key_type);
 		Ok(pair)
 	}
 
+	/// Generate a new key, placing it into the store.
+	pub fn generate<
+		Pair: AppPair
+	>(&self, password: &str) -> Result<Pair> {
+		self.generate_by_type::<Pair::Generic>(password, Pair::ID)
+			.map(Into::into)
+	}
+
+	/// Create a new key from seed. Do not place it into the store.
+	pub fn generate_from_seed<
+		Pair: AppPair,
+	>(&mut self, seed: &str) -> Result<Pair> {
+		self.generate_from_seed_by_type::<Pair::Generic>(seed, Pair::ID)
+			.map(Into::into)
+	}
+
 	/// Load a key file with given public key.
-	pub fn load<TPair: Pair>(&self, public: &TPair::Public, password: &str) -> Result<TPair> {
-		if let Some(pair) = self.get_pair(public)? {
+	pub fn load_by_type<TPair: Pair>(&self,
+		public: &TPair::Public,
+		password: &str,
+		key_type: KeyTypeId
+	) -> Result<TPair> {
+		if let Some(pair) = self.get_pair(public, key_type)? {
 			return Ok(pair)
 		}
 
-		let path = self.key_file_path::<TPair>(public);
+		let path = self.key_file_path::<TPair>(public, key_type);
 		let file = File::open(path)?;
 
 		let phrase: String = ::serde_json::from_reader(&file)?;
@@ -119,18 +139,25 @@ impl Store {
 		Ok(pair)
 	}
 
+	/// Load a key file with given public key.
+	pub fn load<
+		Pair_: AppPair
+	>(&self, public: &Pair_::Public, password: &str) -> Result<Pair_> {
+		self.load_by_type::<Pair_::Generic>(IsWrappedBy::from_ref(public), password, Pair_::ID)
+			.map(Into::into)
+	}
+
 	/// Get public keys of all stored keys.
-	pub fn contents<TPublic: Public>(&self) -> Result<Vec<TPublic>> {
+	pub fn contents_by_type<TPublic: Public>(&self, key_type: KeyTypeId) -> Result<Vec<TPublic>> {
 		let mut public_keys: Vec<TPublic> = self.additional.keys()
 			.filter_map(|(ty, public)| {
-				if *ty != TPublic::KEY_TYPE {
+				if *ty != key_type {
 					return None
 				}
 				Some(TPublic::from_slice(public))
 			})
 			.collect();
 
-		let key_type: [u8; 4] = TPublic::KEY_TYPE.to_le_bytes();
 		for entry in fs::read_dir(&self.path)? {
 			let entry = entry?;
 			let path = entry.path();
@@ -151,10 +178,22 @@ impl Store {
 		Ok(public_keys)
 	}
 
-	fn key_file_path<TPair: Pair>(&self, public: &TPair::Public) -> PathBuf {
+	/// Get public keys of all stored keys.
+	///
+	/// This will just use the type of the public key (a list of which to be returned) in order
+	/// to determine the key type. Unless you use a specialised application-type public key, then
+	/// this only give you keys registered under generic cryptography, and will not return keys
+	/// registered under the application type.
+	pub fn contents<
+		Public: AppPublic
+	>(&self) -> Result<Vec<Public>> {
+		self.contents_by_type::<Public::Generic>(Public::ID)
+			.map(|v| v.into_iter().map(Into::into).collect())
+	}
+
+	fn key_file_path<TPair: Pair>(&self, public: &TPair::Public, key_type: KeyTypeId) -> PathBuf {
 		let mut buf = self.path.clone();
-		let bytes: [u8; 4] = TPair::KEY_TYPE.to_le_bytes();
-		let key_type = hex::encode(bytes);
+		let key_type = hex::encode(key_type);
 		let key = hex::encode(public.as_slice());
 		buf.push(key_type + key.as_str());
 		buf

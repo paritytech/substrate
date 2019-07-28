@@ -22,6 +22,7 @@
 #![cfg_attr(not(test), forbid(dead_code))]
 pub use babe_primitives::*;
 pub use consensus_common::SyncOracle;
+use babe_primitives;
 use consensus_common::ImportResult;
 use consensus_common::import_queue::{
 	BoxJustificationImport, BoxFinalityProofImport,
@@ -36,7 +37,7 @@ use std::{collections::HashMap, sync::Arc, u64, fmt::{Debug, Display}, pin::Pin,
 use runtime_support::serde::{Serialize, Deserialize};
 use parity_codec::{Decode, Encode};
 use parking_lot::{Mutex, MutexGuard};
-use primitives::{Blake2Hasher, H256, Pair, Public, sr25519};
+use primitives::{Blake2Hasher, H256, Pair, Public};
 use merlin::Transcript;
 use inherents::{InherentDataProviders, InherentData};
 use substrate_telemetry::{
@@ -775,7 +776,8 @@ fn register_babe_inherent_data_provider(
 }
 
 fn get_keypair(q: &sr25519::Pair) -> &Keypair {
-	q.as_ref()
+	use primitives::crypto::IsWrappedBy;
+	primitives::sr25519::Pair::from_ref(q).as_ref()
 }
 
 #[allow(deprecated)]

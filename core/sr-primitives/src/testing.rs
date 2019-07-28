@@ -20,19 +20,18 @@ use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializ
 use std::{fmt::Debug, ops::Deref, fmt};
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{
-	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys, TypedKey, DispatchError, DispatchResult,
+	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys, DispatchError, DispatchResult,
 	ValidateUnsigned, SignedExtension, Dispatchable,
 };
 use crate::{generic, KeyTypeId};
 use crate::weights::{GetDispatchInfo, DispatchInfo};
 pub use primitives::H256;
-use primitives::U256;
+use primitives::{crypto::{Kind, CryptoType, Dummy, key_types}, U256};
 use primitives::ed25519::{Public as AuthorityId};
 use crate::transaction_validity::TransactionValidity;
 
 /// Authority Id
-#[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug, Hash, Serialize, Deserialize)]
 pub struct UintAuthorityId(pub u64);
 impl Into<AuthorityId> for UintAuthorityId {
 	fn into(self) -> AuthorityId {
@@ -41,25 +40,15 @@ impl Into<AuthorityId> for UintAuthorityId {
 	}
 }
 
-/// The key-type of the `UintAuthorityId`
-pub const UINT_DUMMY_KEY: KeyTypeId = 0xdeadbeef;
-
-impl TypedKey for UintAuthorityId {
-	const KEY_TYPE: KeyTypeId = UINT_DUMMY_KEY;
-}
-
-impl AsRef<[u8]> for UintAuthorityId {
-	fn as_ref(&self) -> &[u8] {
-		let ptr = self.0 as *const _;
-		// It's safe to do this here since `UintAuthorityId` is `u64`.
-		unsafe { std::slice::from_raw_parts(ptr, 8) }
-	}
+impl CryptoType for UintAuthorityId {
+	const KIND: Kind = Kind::Dummy;
+	type Pair = Dummy;
 }
 
 impl OpaqueKeys for UintAuthorityId {
 	type KeyTypeIds = std::iter::Cloned<std::slice::Iter<'static, KeyTypeId>>;
 
-	fn key_ids() -> Self::KeyTypeIds { [UINT_DUMMY_KEY].iter().cloned() }
+	fn key_ids() -> Self::KeyTypeIds { [key_types::DUMMY].iter().cloned() }
 	// Unsafe, i know, but it's test code and it's just there because it's really convenient to
 	// keep `UintAuthorityId` as a u64 under the hood.
 	fn get_raw(&self, _: KeyTypeId) -> &[u8] {

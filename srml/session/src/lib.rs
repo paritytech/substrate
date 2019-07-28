@@ -121,7 +121,7 @@
 
 use rstd::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use parity_codec::Decode;
-use sr_primitives::KeyTypeId;
+use sr_primitives::{KeyTypeId, AppKey};
 use sr_primitives::weights::SimpleDispatchInfo;
 use sr_primitives::traits::{Convert, Zero, Member, OpaqueKeys, TypedKey};
 use srml_support::{
@@ -201,7 +201,7 @@ pub trait SessionHandler<ValidatorId> {
 /// One session-key type handler.
 pub trait OneSessionHandler<ValidatorId> {
 	/// The key type expected.
-	type Key: Decode + Default + TypedKey;
+	type Key: Decode + Default + AppKey;
 
 	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, queued_validators: I)
 		where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
@@ -225,10 +225,10 @@ macro_rules! impl_session_handlers {
 			) {
 				$(
 					let our_keys: Box<dyn Iterator<Item=_>> = Box::new(validators.iter()
-						.map(|k| (&k.0, k.1.get::<$t::Key>(<$t::Key as TypedKey>::KEY_TYPE)
+						.map(|k| (&k.0, k.1.get::<$t::Key>(<$t::Key as AppKey>::ID)
 							.unwrap_or_default())));
 					let queued_keys: Box<dyn Iterator<Item=_>> = Box::new(queued_validators.iter()
-						.map(|k| (&k.0, k.1.get::<$t::Key>(<$t::Key as TypedKey>::KEY_TYPE)
+						.map(|k| (&k.0, k.1.get::<$t::Key>(<$t::Key as AppKey>::ID)
 							.unwrap_or_default())));
 					$t::on_new_session(changed, our_keys, queued_keys);
 				)*

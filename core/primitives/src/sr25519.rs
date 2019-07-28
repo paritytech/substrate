@@ -30,8 +30,10 @@ use substrate_bip39::mini_secret_from_entropy;
 #[cfg(feature = "std")]
 use bip39::{Mnemonic, Language, MnemonicType};
 #[cfg(feature = "std")]
-use crate::crypto::{Pair as TraitPair, DeriveJunction, Infallible, SecretStringError, Derive, Ss58Codec};
-use crate::crypto::{key_types, KeyTypeId, Public as TraitPublic, TypedKey, UncheckedFrom};
+use crate::crypto::{
+	Pair as TraitPair, DeriveJunction, Infallible, SecretStringError, Derive, Ss58Codec
+};
+use crate::{impl_as_ref_mut, crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Kind}};
 use crate::hash::{H256, H512};
 use parity_codec::{Encode, Decode};
 
@@ -63,11 +65,7 @@ impl Clone for Pair {
 	}
 }
 
-impl AsRef<Public> for Public {
-	fn as_ref(&self) -> &Public {
-		&self
-	}
-}
+impl_as_ref_mut!(Public);
 
 impl AsRef<[u8; 32]> for Public {
 	fn as_ref(&self) -> &[u8; 32] {
@@ -318,24 +316,6 @@ impl TraitPublic for Public {
 		r.copy_from_slice(data);
 		Public(r)
 	}
-
-	/// Return a `Vec<u8>` filled with raw data.
-	#[cfg(feature = "std")]
-	fn to_raw_vec(&self) -> Vec<u8> {
-		self.0.to_vec()
-	}
-
-	/// Return a slice filled with raw data.
-	fn as_slice(&self) -> &[u8] {
-		&self.0
-	}
-}
-
-#[cfg(feature = "std")]
-impl AsRef<Pair> for Pair {
-	fn as_ref(&self) -> &Pair {
-		&self
-	}
 }
 
 #[cfg(feature = "std")]
@@ -523,18 +503,30 @@ impl Pair {
 	}
 }
 
-impl TypedKey for Public {
-	const KEY_TYPE: KeyTypeId = key_types::SR25519;
+impl CryptoType for Public {
+	const KIND: Kind = Kind::Sr25519;
+	type Pair = Pair;
 }
 
-impl TypedKey for Signature {
-	const KEY_TYPE: KeyTypeId = key_types::SR25519;
+impl CryptoType for Signature {
+	const KIND: Kind = Kind::Sr25519;
+	type Pair = Pair;
 }
 
 #[cfg(feature = "std")]
-impl TypedKey for Pair {
-	const KEY_TYPE: KeyTypeId = key_types::SR25519;
+impl CryptoType for Pair {
+	const KIND: Kind = Kind::Sr25519;
+	type Pair = Pair;
 }
+
+mod app {
+	use crate::crypto::key_types::SR25519;
+	crate::app_crypto!(super::Pair, super::Public, super::Signature, SR25519);
+}
+
+pub use app::Public as AppPublic;
+pub use app::Pair as AppPair;
+pub use app::Signature as AppSignature;
 
 #[cfg(test)]
 mod test {

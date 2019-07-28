@@ -476,7 +476,7 @@ where
 {
 	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
 	type Id = AuthorityId;
-	type Signature = ed25519::Signature;
+	type Signature = AuthoritySignature;
 
 	// regular round message streams
 	type In = Box<dyn Stream<

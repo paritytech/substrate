@@ -61,7 +61,7 @@ use parity_codec::Encode;
 use sr_primitives::traits::{
 	NumberFor, Block as BlockT, DigestFor, ProvideRuntimeApi,
 };
-use fg_primitives::GrandpaApi;
+use fg_primitives::{GrandpaApi, AuthorityPair};
 use inherents::InherentDataProviders;
 use sr_primitives::generic::BlockId;
 use consensus_common::SelectChain;
@@ -199,7 +199,7 @@ pub struct Config {
 	/// justification generation.
 	pub justification_period: u32,
 	/// The local signing key.
-	pub local_key: Option<Arc<ed25519::Pair>>,
+	pub local_key: Option<Arc<AuthorityPair>>,
 	/// Some local identifier of the voter.
 	pub name: Option<String>,
 }
@@ -396,7 +396,7 @@ where
 }
 
 fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
-	local_key: Option<&Arc<ed25519::Pair>>,
+	local_key: Option<&Arc<AuthorityPair>>,
 	set_id: u64,
 	voters: &Arc<VoterSet<AuthorityId>>,
 	client: &Arc<Client<B, E, Block, RA>>,
