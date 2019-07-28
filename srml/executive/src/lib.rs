@@ -368,8 +368,7 @@ mod tests {
 	use hex_literal::hex;
 
 	impl_outer_origin! {
-		pub enum Origin for Runtime {
-		}
+		pub enum Origin for Runtime { }
 	}
 
 	impl_outer_event!{
@@ -390,6 +389,7 @@ mod tests {
 	impl system::Trait for Runtime {
 		type Origin = Origin;
 		type Index = u64;
+		type Call = Call<Runtime>;
 		type BlockNumber = u64;
 		type Hash = substrate_primitives::H256;
 		type Hashing = BlakeTwo256;
