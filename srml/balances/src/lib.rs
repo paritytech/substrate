@@ -164,7 +164,7 @@ use sr_primitives::traits::{
 	Saturating, Bounded, SignedExtension, SaturatedConversion, DispatchError, Convert,
 };
 use sr_primitives::transaction_validity::{TransactionPriority, ValidTransaction};
-use sr_primitives::weights::{DispatchInfo, SimpleDispatchInfo, Weight};
+use sr_primitives::weights::{DispatchInfo, GetDispatchInfo, SimpleDispatchInfo, Weight};
 use system::{IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
 
 mod mock;
@@ -1221,10 +1221,10 @@ impl<T: Trait<I>, I: Instance + Clone + Eq> SignedExtension for TakeFees<T, I> {
 	fn validate(
 		&self,
 		who: &Self::AccountId,
-		_call: &Self::Call,
-		info: DispatchInfo,
+		call: &Self::Call,
 		len: usize,
 	) -> rstd::result::Result<ValidTransaction, DispatchError> {
+		let info = call.get_dispatch_info();
 		// pay any fees.
 		let fee = Self::compute_fee(len, info, self.0);
 		let imbalance = <Module<T, I>>::withdraw(

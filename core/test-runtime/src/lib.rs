@@ -40,6 +40,7 @@ use sr_primitives::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
 		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup
 	},
+	weights::{DispatchInfo, GetDispatchInfo, DispatchClass},
 };
 use runtime_version::RuntimeVersion;
 pub use primitives::hash::H256;
@@ -109,6 +110,15 @@ pub enum Extrinsic {
 	Transfer(Transfer, AccountSignature),
 	IncludeData(Vec<u8>),
 	StorageChange(Vec<u8>, Option<Vec<u8>>),
+}
+
+impl GetDispatchInfo for Extrinsic {
+	fn get_dispatch_info(&self) -> DispatchInfo {
+		match *self {
+			Extrinsic::AuthoritiesChange(..) => DispatchInfo { weight: 10, class: DispatchClass::Operational },
+			_ => Default::default(),
+		}
+	}
 }
 
 #[cfg(feature = "std")]

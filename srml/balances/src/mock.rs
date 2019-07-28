@@ -18,7 +18,12 @@
 
 #![cfg(test)]
 
-use sr_primitives::{Perbill, traits::{Convert, IdentityLookup}, testing::Header, weights::{DispatchInfo, Weight}};
+use sr_primitives::{
+	Perbill,
+	testing::Header,
+	traits::{Convert, IdentityLookup},
+	weights::{DispatchInfo, Weight, GetDispatchInfo},
+};
 use primitives::{H256, Blake2Hasher};
 use runtime_io;
 use srml_support::{impl_outer_origin, parameter_types};
@@ -209,10 +214,18 @@ impl ExtBuilder {
 pub type System = system::Module<Runtime>;
 pub type Balances = Module<Runtime>;
 
+pub enum TestCall {
+	Five,
+	Two,
+	Max,
+}
 
-pub const CALL: &<Runtime as system::Trait>::Call = &();
-
-/// create a transaction info struct from weight. Handy to avoid building the whole struct.
-pub fn info_from_weight(w: Weight) -> DispatchInfo {
-	DispatchInfo { weight: w, ..Default::default() }
+impl GetDispatchInfo for TestCall {
+	fn get_dispatch_info(&self) -> DispatchInfo {
+		match *self {
+			TestCall::Five => DispatchInfo { weight: 5, ..Default::default() },
+			TestCall::Two => DispatchInfo { weight: 2, ..Default::default() },
+			TestCall::Max => DispatchInfo { weight: Weight::max_value(), ..Default::default() },
+		}
+	}
 }

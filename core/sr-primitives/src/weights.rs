@@ -93,6 +93,12 @@ pub trait GetDispatchInfo {
 	fn get_dispatch_info(&self) -> DispatchInfo;
 }
 
+/// To enable using `()` is a call type of needed for testing.
+#[cfg(feature = "std")]
+impl GetDispatchInfo for () {
+	fn get_dispatch_info(&self) -> DispatchInfo { Default::default() }
+}
+
 /// Means of weighing some particular kind of data (`T`).
 pub trait WeighData<T> {
 	/// Weigh the data `T` given by `target`.

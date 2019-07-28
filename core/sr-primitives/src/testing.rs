@@ -244,7 +244,7 @@ impl<Call: Codec + Sync + Send, Extra> traits::Extrinsic for TestXt<Call, Extra>
 }
 
 impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
-	Call: 'static + Sized + Send + Sync + Clone + Eq + Codec + Debug + Dispatchable<Origin=Origin>,
+	Call: 'static + Sized + Send + Sync + Clone + Eq + Codec + Debug + Dispatchable<Origin=Origin> + GetDispatchInfo,
 	Extra: SignedExtension<AccountId=u64, Call=Call>,
 	Origin: From<Option<u64>>
 {
@@ -254,36 +254,21 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 	fn sender(&self) -> Option<&Self::AccountId> { self.0.as_ref().map(|x| &x.0) }
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
-	fn validate<U: ValidateUnsigned<Call=Self::Call>>(&self,
-		_info: DispatchInfo,
-		_len: usize,
-	) -> TransactionValidity {
+	fn validate<U: ValidateUnsigned<Call=Self::Call>>(&self, _len: usize) -> TransactionValidity {
 		TransactionValidity::Valid(Default::default())
 	}
 
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
-	fn dispatch(self,
-		info: DispatchInfo,
-		len: usize,
-	) -> Result<DispatchResult, DispatchError> {
+	fn dispatch(self, len: usize) -> Result<DispatchResult, DispatchError> {
 		let maybe_who = if let Some((who, extra)) = self.0 {
-			Extra::pre_dispatch(extra, &who, &self.1, info, len)?;
+			Extra::pre_dispatch(extra, &who, &self.1, len)?;
 			Some(who)
 		} else {
-			Extra::pre_dispatch_unsigned(&self.1, info, len)?;
+			Extra::pre_dispatch_unsigned(&self.1, len)?;
 			None
 		};
 		Ok(self.1.dispatch(maybe_who.into()))
 	}
 }
 
-impl<Call: Encode, Extra: Encode> GetDispatchInfo for TestXt<Call, Extra> {
-	fn get_dispatch_info(&self) -> DispatchInfo {
-		// for testing: weight == size.
-		DispatchInfo {
-			weight: self.encode().len() as _,
-			..Default::default()
-		}
-	}
-}

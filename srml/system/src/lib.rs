@@ -79,7 +79,7 @@ use rstd::map;
 use rstd::marker::PhantomData;
 use sr_primitives::generic::{self, Era};
 use sr_primitives::Perbill;
-use sr_primitives::weights::{Weight, DispatchInfo, DispatchClass, WeightMultiplier, SimpleDispatchInfo};
+use sr_primitives::weights::{Weight, DispatchInfo, DispatchClass, WeightMultiplier, SimpleDispatchInfo, GetDispatchInfo};
 use sr_primitives::transaction_validity::{ValidTransaction, TransactionPriority, TransactionLongevity};
 use sr_primitives::traits::{self, CheckEqual, SimpleArithmetic, Zero, SignedExtension, Convert,
 	SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, CurrentHeight, BlockNumberToHash,
@@ -152,7 +152,7 @@ pub trait Trait: 'static + Eq + Clone {
 	type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>> + From<RawOrigin<Self::AccountId>>;
 
 	/// The aggregated `Call` type.
-	type Call;
+	type Call: primitives::weights::GetDispatchInfo;
 
 	/// Account index (aka nonce) type. This stores the number of previous transactions associated with a sender
 	/// account.
@@ -884,10 +884,10 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 	fn pre_dispatch(
 		self,
 		_who: &Self::AccountId,
-		_call: &Self::Call,
-		info: DispatchInfo,
+		call: &Self::Call,
 		len: usize,
 	) -> Result<(), DispatchError> {
+		let info = call.get_dispatch_info();
 		let next_len = Self::check_block_length(info, len)?;
 		AllExtrinsicsLen::put(next_len);
 		let next_weight = Self::check_weight(info)?;
@@ -898,13 +898,13 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 	fn validate(
 		&self,
 		_who: &Self::AccountId,
-		_call: &Self::Call,
-		info: DispatchInfo,
+		call: &Self::Call,
 		len: usize,
 	) -> Result<ValidTransaction, DispatchError> {
 		// There is no point in writing to storage here since changes are discarded. This basically
 		// discards any transaction which is bigger than the length or weight limit **alone**,which
 		// is a guarantee that it will fail in the pre-dispatch phase.
+		let info = call.get_dispatch_info();
 		let _ = Self::check_block_length(info, len)?;
 		let _ = Self::check_weight(info)?;
 		Ok(ValidTransaction { priority: Self::get_priority(info), ..Default::default() })
@@ -948,7 +948,6 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 		self,
 		who: &Self::AccountId,
 		_call: &Self::Call,
-		_info: DispatchInfo,
 		_len: usize,
 	) -> Result<(), DispatchError> {
 		let expected = <AccountNonce<T>>::get(who);
@@ -964,10 +963,10 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 	fn validate(
 		&self,
 		who: &Self::AccountId,
-		_call: &Self::Call,
-		info: DispatchInfo,
+		call: &Self::Call,
 		_len: usize,
 	) -> Result<ValidTransaction, DispatchError> {
+		let info = call.get_dispatch_info();
 		// check index
 		let expected = <AccountNonce<T>>::get(who);
 		if self.0 < expected {
@@ -1076,7 +1075,7 @@ mod tests {
 
 	impl Trait for Test {
 		type Origin = Origin;
-		type Call = ();
+		type Call = TestCall;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
@@ -1103,7 +1102,31 @@ mod tests {
 
 	type System = Module<Test>;
 
-	const CALL: &<Test as Trait>::Call = &();
+	#[derive(Copy, Clone)]
+	pub enum TestCall {
+		Default,
+		Max,
+		Free,
+		Small,
+		Medium,
+		Big,
+		Op,
+	}
+
+	impl GetDispatchInfo for TestCall {
+		fn get_dispatch_info(&self) -> DispatchInfo {
+			let limit = MaximumBlockWeight::get();
+			match *self {
+				TestCall::Default => Default::default(),
+				TestCall::Free => DispatchInfo { weight: 0, ..Default::default() },
+				TestCall::Max => DispatchInfo { weight: Weight::max_value(), ..Default::default() },
+				TestCall::Small => DispatchInfo { weight: 100, ..Default::default() },
+				TestCall::Medium => DispatchInfo { weight: limit - 1, ..Default::default() },
+				TestCall::Big => DispatchInfo { weight: limit + 1, ..Default::default() },
+				TestCall::Op => DispatchInfo { weight: 100, class: DispatchClass::Operational },
+			}
+		}
+	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		GenesisConfig::default().build_storage::<Test>().unwrap().0.into()
@@ -1255,38 +1278,30 @@ mod tests {
 	fn signed_ext_check_nonce_works() {
 		with_externalities(&mut new_test_ext(), || {
 			<AccountNonce<Test>>::insert(1, 1);
-			let info = DispatchInfo::default();
 			let len = 0_usize;
 			// stale
-			assert!(CheckNonce::<Test>(0).validate(&1, CALL, info, len).is_err());
-			assert!(CheckNonce::<Test>(0).pre_dispatch(&1, CALL, info, len).is_err());
+			assert!(CheckNonce::<Test>(0).validate(&1, &TestCall::Default, len).is_err());
+			assert!(CheckNonce::<Test>(0).pre_dispatch(&1, &TestCall::Default, len).is_err());
 			// correct
-			assert!(CheckNonce::<Test>(1).validate(&1, CALL, info, len).is_ok());
-			assert!(CheckNonce::<Test>(1).pre_dispatch(&1, CALL, info, len).is_ok());
+			assert!(CheckNonce::<Test>(1).validate(&1, &TestCall::Default, len).is_ok());
+			assert!(CheckNonce::<Test>(1).pre_dispatch(&1, &TestCall::Default, len).is_ok());
 			// future
-			assert!(CheckNonce::<Test>(5).validate(&1, CALL, info, len).is_ok());
-			assert!(CheckNonce::<Test>(5).pre_dispatch(&1, CALL, info, len).is_err());
+			assert!(CheckNonce::<Test>(5).validate(&1, &TestCall::Default, len).is_ok());
+			assert!(CheckNonce::<Test>(5).pre_dispatch(&1, &TestCall::Default, len).is_err());
 		})
 	}
 
 	#[test]
 	fn signed_ext_check_weight_works_normal_tx() {
 		with_externalities(&mut new_test_ext(), || {
-			let normal_limit = normal_weight_limit();
-			let small = DispatchInfo { weight: 100, ..Default::default() };
-			let medium = DispatchInfo {
-				weight: normal_limit - 1,
-				..Default::default()
-			};
-			let big = DispatchInfo {
-				weight: normal_limit + 1,
-				..Default::default()
-			};
+			let small = TestCall::Small;
+			let medium = TestCall::Medium;
+			let big = TestCall::Big;
 			let len = 0_usize;
 
 			let reset_check_weight = |i, f, s| {
 				AllExtrinsicsWeight::put(s);
-				let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, i, len);
+				let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, &i, len);
 				if f { assert!(r.is_err()) } else { assert!(r.is_ok()) }
 			};
 
@@ -1299,11 +1314,11 @@ mod tests {
 	#[test]
 	fn signed_ext_check_weight_fee_works() {
 		with_externalities(&mut new_test_ext(), || {
-			let free = DispatchInfo { weight: 0, ..Default::default() };
+			let free = TestCall::Free;
 			let len = 0_usize;
 
 			assert_eq!(System::all_extrinsics_weight(), 0);
-			let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, free, len);
+			let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, &free, len);
 			assert!(r.is_ok());
 			assert_eq!(System::all_extrinsics_weight(), 0);
 		})
@@ -1312,12 +1327,12 @@ mod tests {
 	#[test]
 	fn signed_ext_check_weight_max_works() {
 		with_externalities(&mut new_test_ext(), || {
-			let max = DispatchInfo { weight: Weight::max_value(), ..Default::default() };
+			let max = TestCall::Max;
 			let len = 0_usize;
 			let normal_limit = normal_weight_limit();
 
 			assert_eq!(System::all_extrinsics_weight(), 0);
-			let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, max, len);
+			let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, &max, len);
 			assert!(r.is_ok());
 			assert_eq!(System::all_extrinsics_weight(), normal_limit);
 		})
@@ -1326,39 +1341,39 @@ mod tests {
 	#[test]
 	fn signed_ext_check_weight_works_operational_tx() {
 		with_externalities(&mut new_test_ext(), || {
-			let normal = DispatchInfo { weight: 100, ..Default::default() };
-			let op = DispatchInfo { weight: 100, class: DispatchClass::Operational };
+			let normal = TestCall::Medium;
+			let op = TestCall::Op;
 			let len = 0_usize;
 			let normal_limit = normal_weight_limit();
 
 			// given almost full block
 			AllExtrinsicsWeight::put(normal_limit);
 			// will not fit.
-			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, normal, len).is_err());
+			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, &normal, len).is_err());
 			// will fit.
-			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, op, len).is_ok());
+			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, &op, len).is_ok());
 
 			// likewise for length limit.
 			let len = 100_usize;
 			AllExtrinsicsLen::put(normal_length_limit());
-			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, normal, len).is_err());
-			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, op, len).is_ok());
+			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, &normal, len).is_err());
+			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, &op, len).is_ok());
 		})
 	}
 
 	#[test]
 	fn signed_ext_check_weight_priority_works() {
 		with_externalities(&mut new_test_ext(), || {
-			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal };
-			let op = DispatchInfo { weight: 100, class: DispatchClass::Operational };
+			let normal = TestCall::Small;
+			let op = TestCall::Op;
 			let len = 0_usize;
 
 			assert_eq!(
-				CheckWeight::<Test>(PhantomData).validate(&1, CALL, normal, len).unwrap().priority,
+				CheckWeight::<Test>(PhantomData).validate(&1, &normal, len).unwrap().priority,
 				100,
 			);
 			assert_eq!(
-				CheckWeight::<Test>(PhantomData).validate(&1, CALL, op, len).unwrap().priority,
+				CheckWeight::<Test>(PhantomData).validate(&1, &op, len).unwrap().priority,
 				Bounded::max_value(),
 			);
 		})
@@ -1367,11 +1382,12 @@ mod tests {
 	#[test]
 	fn signed_ext_check_weight_block_size_works() {
 		with_externalities(&mut new_test_ext(), || {
-			let normal = DispatchInfo::default();
+			let normal = TestCall::Default;
 			let normal_limit = normal_weight_limit() as usize;
+
 			let reset_check_weight = |tx, s, f| {
 				AllExtrinsicsLen::put(0);
-				let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, tx, s);
+				let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, &tx, s);
 				if f { assert!(r.is_err()) } else { assert!(r.is_ok()) }
 			};
 
@@ -1380,7 +1396,7 @@ mod tests {
 			reset_check_weight(normal, normal_limit + 1, true);
 
 			// Operational ones don't have this limit.
-			let op = DispatchInfo { weight: 0, class: DispatchClass::Operational };
+			let op = TestCall::Op;
 			reset_check_weight(op, normal_limit, false);
 			reset_check_weight(op, normal_limit + 100, false);
 			reset_check_weight(op, 1024, false);

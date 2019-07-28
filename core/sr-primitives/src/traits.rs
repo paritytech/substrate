@@ -25,7 +25,7 @@ use primitives::{self, Hasher, Blake2Hasher};
 use crate::codec::{Codec, Encode, Decode, HasCompact};
 use crate::transaction_validity::{ValidTransaction, TransactionValidity};
 use crate::generic::{Digest, DigestItem};
-use crate::weights::DispatchInfo;
+use crate::weights::{GetDispatchInfo, DispatchInfo};
 pub use primitives::crypto::TypedKey;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
@@ -829,7 +829,7 @@ pub trait SignedExtension:
 	type AccountId;
 
 	/// The type which encodes the call to be dispatched.
-	type Call;
+	type Call: GetDispatchInfo;
 
 	/// Any additional data that will go into the signed payload. This may be created dynamically
 	/// from the transaction using the `additional_signed` function.
@@ -844,7 +844,6 @@ pub trait SignedExtension:
 		&self,
 		_who: &Self::AccountId,
 		_call: &Self::Call,
-		_info: DispatchInfo,
 		_len: usize,
 	) -> Result<ValidTransaction, DispatchError> {
 		Ok(Default::default())
@@ -855,10 +854,9 @@ pub trait SignedExtension:
 		self,
 		who: &Self::AccountId,
 		call: &Self::Call,
-		info: DispatchInfo,
 		len: usize,
 	) -> Result<(), DispatchError> {
-		self.validate(who, call, info, len).map(|_| ())
+		self.validate(who, call, len).map(|_| ())
 	}
 
 	/// Validate an unsigned transaction for the transaction queue. Normally the default
@@ -866,17 +864,15 @@ pub trait SignedExtension:
 	/// validating unsigned transactions.
 	fn validate_unsigned(
 		_call: &Self::Call,
-		_info: DispatchInfo,
 		_len: usize,
 	) -> Result<ValidTransaction, DispatchError> { Ok(Default::default()) }
 
 	/// Do any pre-flight stuff for a unsigned transaction.
 	fn pre_dispatch_unsigned(
 		call: &Self::Call,
-		info: DispatchInfo,
 		len: usize,
 	) -> Result<(), DispatchError> {
-		Self::validate_unsigned(call, info, len).map(|_| ())
+		Self::validate_unsigned(call, len).map(|_| ())
 	}
 }
 
@@ -887,7 +883,7 @@ macro_rules! tuple_impl_indexed {
 	([$($direct:ident)+] ; [$($index:tt,)+]) => {
 		impl<
 			AccountId,
-			Call,
+			Call: GetDispatchInfo,
 			$($direct: SignedExtension<AccountId=AccountId, Call=Call>),+
 		> SignedExtension for ($($direct),+,) {
 			type AccountId = AccountId;
@@ -900,36 +896,32 @@ macro_rules! tuple_impl_indexed {
 				&self,
 				who: &Self::AccountId,
 				call: &Self::Call,
-				info: DispatchInfo,
 				len: usize,
 			) -> Result<ValidTransaction, DispatchError> {
-				let aggregator = vec![$(<$direct as SignedExtension>::validate(&self.$index, who, call, info, len)?),+];
+				let aggregator = vec![$(<$direct as SignedExtension>::validate(&self.$index, who, call, len)?),+];
 				Ok(aggregator.into_iter().fold(ValidTransaction::default(), |acc, a| acc.combine_with(a)))
 			}
 			fn pre_dispatch(
 				self,
 				who: &Self::AccountId,
 				call: &Self::Call,
-				info: DispatchInfo,
 				len: usize,
 			) -> Result<(), DispatchError> {
-				$(self.$index.pre_dispatch(who, call, info, len)?;)+
+				$(self.$index.pre_dispatch(who, call, len)?;)+
 				Ok(())
 			}
 			fn validate_unsigned(
 				call: &Self::Call,
-				info: DispatchInfo,
 				len: usize,
 			) -> Result<ValidTransaction, DispatchError> {
-				let aggregator = vec![$($direct::validate_unsigned(call, info, len)?),+];
+				let aggregator = vec![$($direct::validate_unsigned(call, len)?),+];
 				Ok(aggregator.into_iter().fold(ValidTransaction::default(), |acc, a| acc.combine_with(a)))
 			}
 			fn pre_dispatch_unsigned(
 				call: &Self::Call,
-				info: DispatchInfo,
 				len: usize,
 			) -> Result<(), DispatchError> {
-				$($direct::pre_dispatch_unsigned(call, info, len)?;)+
+				$($direct::pre_dispatch_unsigned(call, len)?;)+
 				Ok(())
 			}
 		}
@@ -978,17 +970,11 @@ pub trait Applyable: Sized + Send + Sync {
 	fn sender(&self) -> Option<&Self::AccountId>;
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
-	fn validate<V: ValidateUnsigned<Call=Self::Call>>(&self,
-		info: DispatchInfo,
-		len: usize,
-	) -> TransactionValidity;
+	fn validate<V: ValidateUnsigned<Call=Self::Call>>(&self, len: usize) -> TransactionValidity;
 
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
-	fn dispatch(self,
-		info: DispatchInfo,
-		len: usize,
-	) -> Result<DispatchResult, DispatchError>;
+	fn dispatch(self, len: usize) -> Result<DispatchResult, DispatchError>;
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.

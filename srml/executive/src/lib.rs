@@ -142,7 +142,7 @@ impl<
 > ExecuteBlock<Block> for Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
-	CheckedOf<Block::Extrinsic, Context>: Applyable<AccountId=System::AccountId> + GetDispatchInfo,
+	CheckedOf<Block::Extrinsic, Context>: Applyable<AccountId=System::AccountId>,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
@@ -161,7 +161,7 @@ impl<
 > Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
-	CheckedOf<Block::Extrinsic, Context>: Applyable<AccountId=System::AccountId> + GetDispatchInfo,
+	CheckedOf<Block::Extrinsic, Context>: Applyable<AccountId=System::AccountId>,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
@@ -285,8 +285,7 @@ where
 		// AUDIT: Under no circumstances may this function panic from here onwards.
 
 		// Decode parameters and dispatch
-		let dispatch_info = xt.get_dispatch_info();
-		let r = Applyable::dispatch(xt, dispatch_info, encoded_len)
+		let r = Applyable::dispatch(xt, encoded_len)
 			.map_err(internal::ApplyError::from)?;
 
 		<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32);
@@ -340,8 +339,7 @@ where
 			Err(_) => return TransactionValidity::Invalid(UNKNOWN_ERROR),
 		};
 
-		let dispatch_info = xt.get_dispatch_info();
-		xt.validate::<UnsignedValidator>(dispatch_info, encoded_len)
+		xt.validate::<UnsignedValidator>(encoded_len)
 	}
 
 	/// Start an offchain worker and generate extrinsics.
@@ -359,7 +357,7 @@ mod tests {
 	use primitives::{H256, Blake2Hasher};
 	use sr_primitives::generic::Era;
 	use sr_primitives::Perbill;
-	use sr_primitives::weights::Weight;
+	use sr_primitives::weights::{Weight, GetDispatchInfo};
 	use sr_primitives::traits::{Header as HeaderT, BlakeTwo256, IdentityLookup, ConvertInto};
 	use sr_primitives::testing::{Digest, Header, Block};
 	use srml_support::{impl_outer_event, impl_outer_origin, parameter_types};
@@ -382,8 +380,8 @@ mod tests {
 	pub struct Runtime;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: u32 = 1024;
-		pub const MaximumBlockLength: u32 = 2 * 1024;
+		pub const MaximumBlockWeight: u32 = 1_000_000_000;
+		pub const MaximumBlockLength: u32 = 128 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl system::Trait for Runtime {
@@ -461,14 +459,9 @@ mod tests {
 
 	#[test]
 	fn balance_transfer_dispatch_works() {
-		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
-		balances::GenesisConfig::<Runtime> {
-			balances: vec![(1, 211)],
-			vesting: vec![],
-		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
+		let mut t = new_test_ext(1_000_000);
 		let xt = sr_primitives::testing::TestXt(sign_extra(1, 0, 0), Call::transfer(2, 69));
-		let weight = xt.get_dispatch_info().weight as u64;
-		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new_with_children(t);
+		let weight = Call::<Runtime>::transfer(2, 69).get_dispatch_info().weight as u64;
 		with_externalities(&mut t, || {
 			Executive::initialize_block(&Header::new(
 				1,
@@ -479,7 +472,7 @@ mod tests {
 			));
 			let r = Executive::apply_extrinsic(xt);
 			assert_eq!(r, Ok(ApplyOutcome::Success));
-			assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 142 - 10 - weight);
+			assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 111_000_000 - 69 - 10 - weight);
 			assert_eq!(<balances::Module<Runtime>>::total_balance(&2), 69);
 		});
 	}
@@ -563,13 +556,16 @@ mod tests {
 
 	#[test]
 	fn block_weight_limit_enforced() {
-		let mut t = new_test_ext(10000);
-		// given: TestXt uses the encoded len as fixed Len:
+		let mut t = new_test_ext(1_000_000_000);
 		let xt = sr_primitives::testing::TestXt(sign_extra(1, 0, 0), Call::transfer::<Runtime>(33, 0));
+		let weight = Call::transfer::<Runtime>(33, 0).get_dispatch_info().weight as u32;
 		let encoded = xt.encode();
 		let encoded_len = encoded.len() as Weight;
-		let limit = AvailableBlockRatio::get() * MaximumBlockWeight::get();
-		let num_to_exhaust_block = limit / encoded_len;
+		let len_limit = AvailableBlockRatio::get() * MaximumBlockLength::get();
+		let weight_limit = AvailableBlockRatio::get() * MaximumBlockWeight::get();
+		let num_to_exhaust_block = rstd::cmp::min(len_limit / encoded_len, weight_limit / weight);
+
+		let mut total_len = 0u32;
 		with_externalities(&mut t, || {
 			Executive::initialize_block(&Header::new(
 				1,
@@ -579,13 +575,17 @@ mod tests {
 				Digest::default(),
 			));
 			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
+			assert_eq!(<system::Module<Runtime>>::all_extrinsics_len(), 0);
 
 			for nonce in 0..=num_to_exhaust_block {
 				let xt = sr_primitives::testing::TestXt(sign_extra(1, nonce.into(), 0), Call::transfer::<Runtime>(33, 0));
+				let added_len = xt.clone().encode().len() as u32;
 				let res = Executive::apply_extrinsic(xt);
 				if nonce != num_to_exhaust_block {
+					total_len += added_len;
 					assert_eq!(res.unwrap(), ApplyOutcome::Success);
-					assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), encoded_len * (nonce + 1));
+					assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), weight * (nonce + 1));
+					assert_eq!(<system::Module<Runtime>>::all_extrinsics_len(), total_len);
 					assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(nonce as u32 + 1));
 				} else {
 					assert_eq!(res, Err(ApplyError::FullBlock));
@@ -599,9 +599,10 @@ mod tests {
 		let xt = sr_primitives::testing::TestXt(sign_extra(1, 0, 0), Call::transfer(33, 0));
 		let x1 = sr_primitives::testing::TestXt(sign_extra(1, 1, 0), Call::transfer(33, 0));
 		let x2 = sr_primitives::testing::TestXt(sign_extra(1, 2, 0), Call::transfer(33, 0));
+		let weight = Call::<Runtime>::transfer(33, 0).get_dispatch_info().weight;
 		let len = xt.clone().encode().len() as u32;
-		let mut t = new_test_ext(1);
-		with_externalities(&mut t, || {
+
+		with_externalities(&mut new_test_ext(1_000_000), || {
 			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
 			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
 
@@ -609,8 +610,7 @@ mod tests {
 			assert_eq!(Executive::apply_extrinsic(x1.clone()).unwrap(), ApplyOutcome::Success);
 			assert_eq!(Executive::apply_extrinsic(x2.clone()).unwrap(), ApplyOutcome::Success);
 
-			// default weight for `TestXt` == encoded length.
-			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), (3 * len).into());
+			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), (3 * weight).into());
 			assert_eq!(<system::Module<Runtime>>::all_extrinsics_len(), 3 * len);
 
 			let _ = <system::Module<Runtime>>::finalize();
@@ -636,17 +636,17 @@ mod tests {
 	fn can_pay_for_tx_fee_on_full_lock() {
 		let id: LockIdentifier = *b"0       ";
 		let execute_with_lock = |lock: WithdrawReasons| {
-			let mut t = new_test_ext(1);
+			let mut t = new_test_ext(1_000_000);
 			with_externalities(&mut t, || {
 				<balances::Module<Runtime> as LockableCurrency<u64>>::set_lock(
 					id,
 					&1,
-					110,
+					111 * 1_000_000 - 10, // lock most of the balance.
 					10,
 					lock,
 				);
 				let xt = sr_primitives::testing::TestXt(sign_extra(1, 0, 0), Call::transfer(2, 10));
-				let weight = xt.get_dispatch_info().weight as u64;
+				let weight = Call::<Runtime>::transfer(2, 10).get_dispatch_info().weight as u64;
 				Executive::initialize_block(&Header::new(
 					1,
 					H256::default(),
@@ -658,10 +658,10 @@ mod tests {
 				if lock == WithdrawReasons::except(WithdrawReason::TransactionPayment) {
 					assert_eq!(Executive::apply_extrinsic(xt).unwrap(), ApplyOutcome::Fail);
 					// but tx fee has been deducted. the transaction failed on transfer, not on fee.
-					assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 111 - 10 - weight);
+					assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 111_000_000 - 10 - weight);
 				} else {
 					assert_eq!(Executive::apply_extrinsic(xt), Err(ApplyError::CantPay));
-					assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 111);
+					assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 111_000_000);
 				}
 			});
 		};

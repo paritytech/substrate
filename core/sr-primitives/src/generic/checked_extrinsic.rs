@@ -22,7 +22,7 @@ use crate::traits::{
 	self, Member, MaybeDisplay, SignedExtension, DispatchError, Dispatchable, DispatchResult,
 	ValidateUnsigned
 };
-use crate::weights::{GetDispatchInfo, DispatchInfo};
+use crate::weights::GetDispatchInfo;
 use crate::transaction_validity::TransactionValidity;
 
 /// Definition of something that the external world might want to say; its
@@ -44,7 +44,7 @@ for
 	CheckedExtrinsic<AccountId, Call, Extra>
 where
 	AccountId: Member + MaybeDisplay,
-	Call: Member + Dispatchable<Origin=Origin>,
+	Call: Member + Dispatchable<Origin=Origin> + GetDispatchInfo,
 	Extra: SignedExtension<AccountId=AccountId, Call=Call>,
 	Origin: From<Option<AccountId>>,
 {
@@ -55,14 +55,11 @@ where
 		self.signed.as_ref().map(|x| &x.0)
 	}
 
-	fn validate<U: ValidateUnsigned<Call=Self::Call>>(&self,
-		info: DispatchInfo,
-		len: usize,
-	) -> TransactionValidity {
+	fn validate<U: ValidateUnsigned<Call=Self::Call>>(&self, len: usize) -> TransactionValidity {
 		if let Some((ref id, ref extra)) = self.signed {
-			Extra::validate(extra, id, &self.function, info, len).into()
+			Extra::validate(extra, id, &self.function, len).into()
 		} else {
-			match Extra::validate_unsigned(&self.function, info, len) {
+			match Extra::validate_unsigned(&self.function, len) {
 				Ok(extra) => match U::validate_unsigned(&self.function) {
 					TransactionValidity::Valid(v) =>
 						TransactionValidity::Valid(v.combine_with(extra)),
@@ -73,26 +70,14 @@ where
 		}
 	}
 
-	fn dispatch(self,
-		info: DispatchInfo,
-		len: usize,
-	) -> Result<DispatchResult, DispatchError> {
+	fn dispatch(self, len: usize) -> Result<DispatchResult, DispatchError> {
 		let maybe_who = if let Some((id, extra)) = self.signed {
-			Extra::pre_dispatch(extra, &id, &self.function, info, len)?;
+			Extra::pre_dispatch(extra, &id, &self.function, len)?;
 			Some(id)
 		} else {
-			Extra::pre_dispatch_unsigned(&self.function, info, len)?;
+			Extra::pre_dispatch_unsigned(&self.function, len)?;
 			None
 		};
 		Ok(self.function.dispatch(Origin::from(maybe_who)))
-	}
-}
-
-impl<AccountId, Call, Extra> GetDispatchInfo for CheckedExtrinsic<AccountId, Call, Extra>
-where
-	Call: GetDispatchInfo,
-{
-	fn get_dispatch_info(&self) -> DispatchInfo {
-		self.function.get_dispatch_info()
 	}
 }
