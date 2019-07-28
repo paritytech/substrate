@@ -85,8 +85,8 @@ impl system::Trait for Runtime {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Hash = H256;
 	type Call = ();
+	type Hash = H256;
 	type Hashing = ::primitives::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;

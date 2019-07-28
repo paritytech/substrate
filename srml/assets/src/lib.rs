@@ -264,6 +264,7 @@ mod tests {
 	impl system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
+		type Call = ();
 		type BlockNumber = u64;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
