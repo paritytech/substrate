@@ -456,7 +456,7 @@ impl<T: AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 }
 
 /// Trait suitable for typical cryptographic PKI key public type.
-pub trait Public: AsRef<[u8]> + CryptoType + PartialEq + Eq + Clone + Send + Sync {
+pub trait Public: AsRef<[u8]> + AsMut<[u8]> + Default + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync {
 	/// A new instance from the given slice that should be 32 bytes long.
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
@@ -492,6 +492,8 @@ impl CryptoType for Dummy {
 	const KIND: Kind = Kind::Dummy;
 	type Pair = Dummy;
 }
+
+impl Derive for Dummy {}
 
 /// Trait suitable for typical cryptographic PKI key public type.
 impl Public for Dummy {
