@@ -44,6 +44,7 @@ mod tests {
 	pub use substrate_primitives::{H256, Blake2Hasher, u32_trait::{_1, _2, _3, _4}};
 	pub use primitives::traits::{BlakeTwo256, IdentityLookup};
 	pub use primitives::testing::{Digest, DigestItem, Header};
+	pub use primitives::Perbill;
 	pub use {seats, motions};
 	use std::cell::RefCell;
 
@@ -96,6 +97,12 @@ mod tests {
 	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 	#[derive(Clone, Eq, PartialEq, Debug)]
 	pub struct Test;
+	parameter_types! {
+		pub const BlockHashCount: u64 = 250;
+		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockLength: u32 = 2 * 1024;
+		pub const AvailableBlockRatio: Perbill = Perbill::one();
+	}
 	impl system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
@@ -105,13 +112,18 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
+		type WeightMultiplierUpdate = ();
 		type Event = Event;
+		type BlockHashCount = BlockHashCount;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type MaximumBlockLength = MaximumBlockLength;
+		type AvailableBlockRatio = AvailableBlockRatio;
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
 		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
-		pub const TransactionBaseFee: u64 = 0;
+		pub const TransactionBaseFee: u64 = 1;
 		pub const TransactionByteFee: u64 = 0;
 	}
 	impl balances::Trait for Test {
@@ -127,6 +139,7 @@ mod tests {
 		type CreationFee = CreationFee;
 		type TransactionBaseFee = TransactionBaseFee;
 		type TransactionByteFee = TransactionByteFee;
+		type WeightToFee = ();
 	}
 	parameter_types! {
 		pub const LaunchPeriod: u64 = 1;
@@ -234,8 +247,8 @@ mod tests {
 		}
 		pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 			self.set_associated_consts();
-			let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
-			t.extend(balances::GenesisConfig::<Test>{
+			let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+			balances::GenesisConfig::<Test>{
 				balances: vec![
 					(1, 10 * self.balance_factor),
 					(2, 20 * self.balance_factor),
@@ -245,8 +258,8 @@ mod tests {
 					(6, 60 * self.balance_factor)
 				],
 				vesting: vec![],
-			}.build_storage().unwrap().0);
-			t.extend(seats::GenesisConfig::<Test> {
+			}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
+			seats::GenesisConfig::<Test> {
 				active_council: if self.with_council { vec![
 					(1, 10),
 					(2, 10),
@@ -255,8 +268,8 @@ mod tests {
 				desired_seats: 2,
 				presentation_duration: 2,
 				term_duration: 5,
-			}.build_storage().unwrap().0);
-			runtime_io::TestExternalities::new(t)
+			}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
+			runtime_io::TestExternalities::new_with_children(t)
 		}
 	}
 

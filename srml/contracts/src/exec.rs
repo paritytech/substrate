@@ -29,6 +29,7 @@ pub type AccountIdOf<T> = <T as system::Trait>::AccountId;
 pub type CallOf<T> = <T as Trait>::Call;
 pub type MomentOf<T> = <T as timestamp::Trait>::Moment;
 pub type SeedOf<T> = <T as system::Trait>::Hash;
+pub type BlockNumberOf<T> = <T as system::Trait>::BlockNumber;
 
 /// A type that represents a topic of an event. At the moment a hash is used.
 pub type TopicOf<T> = <T as system::Trait>::Hash;
@@ -60,15 +61,14 @@ pub trait Ext {
 	/// was deleted.
 	fn get_storage(&self, key: &StorageKey) -> Option<Vec<u8>>;
 
-	/// Sets the storage entry by the given key to the specified value.
-	///
-	/// If `value` is `None` then the storage entry is deleted.
-	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>);
+	/// Sets the storage entry by the given key to the specified value. If `value` is `None` then
+	/// the storage entry is deleted. Returns an Err if the value size is too large.
+	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) -> Result<(), &'static str>;
 
 	/// Instantiate a contract from the given code.
 	///
 	/// The newly created account will be associated with `code`. `value` specifies the amount of value
-	/// transfered from this to the newly created account (also known as endowment).
+	/// transferred from this to the newly created account (also known as endowment).
 	fn instantiate(
 		&mut self,
 		code: &CodeHash<Self::T>,
@@ -77,7 +77,7 @@ pub trait Ext {
 		input_data: &[u8],
 	) -> Result<InstantiateReceipt<AccountIdOf<Self::T>>, &'static str>;
 
-	/// Call (possibly transfering some amount of funds) into the specified account.
+	/// Call (possibly transferring some amount of funds) into the specified account.
 	fn call(
 		&mut self,
 		to: &AccountIdOf<Self::T>,
@@ -101,7 +101,7 @@ pub trait Ext {
 	/// The `value_transferred` is already added.
 	fn balance(&self) -> BalanceOf<Self::T>;
 
-	/// Returns the value transfered along with this call or as endowment.
+	/// Returns the value transferred along with this call or as endowment.
 	fn value_transferred(&self) -> BalanceOf<Self::T>;
 
 	/// Returns a reference to the timestamp of the current block
@@ -120,6 +120,12 @@ pub trait Ext {
 
 	/// Rent allowance of the contract
 	fn rent_allowance(&self) -> BalanceOf<Self::T>;
+
+	/// Returns the current block number.
+	fn block_number(&self) -> BlockNumberOf<Self::T>;
+
+	/// Returns the maximum allowed size of a storage item.
+	fn max_value_size(&self) -> u32;
 }
 
 /// Loader is a companion of the `Vm` trait. It loads an appropriate abstract
@@ -258,6 +264,8 @@ pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
 	pub config: &'a Config<T>,
 	pub vm: &'a V,
 	pub loader: &'a L,
+	pub timestamp: T::Moment,
+	pub block_number: T::BlockNumber,
 }
 
 impl<'a, T, E, V, L> ExecutionContext<'a, T, V, L>
@@ -281,6 +289,8 @@ where
 			config: &cfg,
 			vm: &vm,
 			loader: &loader,
+			timestamp: <timestamp::Module<T>>::now(),
+			block_number: <system::Module<T>>::block_number(),
 		}
 	}
 
@@ -297,10 +307,12 @@ where
 			config: self.config,
 			vm: self.vm,
 			loader: self.loader,
+			timestamp: self.timestamp.clone(),
+			block_number: self.block_number.clone(),
 		}
 	}
 
-	/// Make a call to the specified address, optionally transfering some funds.
+	/// Make a call to the specified address, optionally transferring some funds.
 	pub fn call(
 		&mut self,
 		dest: T::AccountId,
@@ -362,7 +374,8 @@ where
 							ctx: &mut nested,
 							caller: self.self_account.clone(),
 							value_transferred: value,
-							timestamp: timestamp::Module::<T>::now(),
+							timestamp: self.timestamp.clone(),
+							block_number: self.block_number.clone(),
 						},
 						input_data,
 						empty_output_buf,
@@ -432,7 +445,8 @@ where
 						ctx: &mut nested,
 						caller: self.self_account.clone(),
 						value_transferred: endowment,
-						timestamp: timestamp::Module::<T>::now(),
+						timestamp: self.timestamp.clone(),
+						block_number: self.block_number.clone(),
 					},
 					input_data,
 					EmptyOutputBuf::new(),
@@ -498,7 +512,7 @@ enum TransferCause {
 ///
 /// This function also handles charging the fee. The fee depends
 /// on whether the transfer happening because of contract instantiation
-/// (transfering endowment) or because of a transfer via `call`. This
+/// (transferring endowment) or because of a transfer via `call`. This
 /// is specified using the `cause` parameter.
 ///
 /// NOTE: that the fee is denominated in `BalanceOf<T>` units, but
@@ -585,6 +599,7 @@ struct CallContext<'a, 'b: 'a, T: Trait + 'b, V: Vm<T> + 'b, L: Loader<T>> {
 	caller: T::AccountId,
 	value_transferred: BalanceOf<T>,
 	timestamp: T::Moment,
+	block_number: T::BlockNumber,
 }
 
 impl<'a, 'b: 'a, T, E, V, L> Ext for CallContext<'a, 'b, T, V, L>
@@ -599,10 +614,17 @@ where
 		self.ctx.overlay.get_storage(&self.ctx.self_account, self.ctx.self_trie_id.as_ref(), key)
 	}
 
-	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) {
+	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) -> Result<(), &'static str> {
+		if let Some(ref value) = value {
+			if self.max_value_size() < value.len() as u32 {
+				return Err("value size exceeds maximum");
+			}
+		}
+
 		self.ctx
 			.overlay
-			.set_storage(&self.ctx.self_account, key, value)
+			.set_storage(&self.ctx.self_account, key, value);
+		Ok(())
 	}
 
 	fn instantiate(
@@ -672,6 +694,12 @@ where
 	fn rent_allowance(&self) -> BalanceOf<T> {
 		self.ctx.overlay.get_rent_allowance(&self.ctx.self_account)
 			.unwrap_or(<BalanceOf<T>>::max_value()) // Must never be triggered actually
+	}
+
+	fn block_number(&self) -> T::BlockNumber { self.block_number }
+
+	fn max_value_size(&self) -> u32 {
+		self.ctx.config.max_value_size
 	}
 }
 

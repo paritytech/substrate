@@ -21,9 +21,7 @@
 use crate::rstd::{result, marker::PhantomData, ops::Div};
 use crate::codec::{Codec, Encode, Decode};
 use substrate_primitives::u32_trait::Value as U32;
-use crate::runtime_primitives::traits::{
-	MaybeSerializeDebug, SimpleArithmetic, Saturating
-};
+use crate::runtime_primitives::traits::{MaybeSerializeDebug, SimpleArithmetic, Saturating};
 use crate::runtime_primitives::ConsensusEngineId;
 
 use super::for_each_tuple;
@@ -91,19 +89,6 @@ pub enum UpdateBalanceOutcome {
 	AccountKilled,
 }
 
-/// Simple trait designed for hooking into a transaction payment.
-///
-/// It operates over a single generic `AccountId` type.
-pub trait MakePayment<AccountId> {
-	/// Make transaction payment from `who` for an extrinsic of encoded length
-	/// `encoded_len` bytes. Return `Ok` iff the payment was successful.
-	fn make_payment(who: &AccountId, encoded_len: usize) -> Result<(), &'static str>;
-}
-
-impl<T> MakePayment<T> for () {
-	fn make_payment(_: &T, _: usize) -> Result<(), &'static str> { Ok(()) }
-}
-
 /// A trait for finding the author of a block header based on the `PreRuntime` digests contained
 /// within it.
 pub trait FindAuthor<Author> {
@@ -124,6 +109,29 @@ impl<A> FindAuthor<A> for () {
 pub trait VerifySeal<Header, Author> {
 	/// Verify a header and return the author, if any.
 	fn verify_seal(header: &Header) -> Result<Option<Author>, &'static str>;
+}
+
+/// Something which can compute and check proofs of
+/// a historical key owner and return full identification data of that
+/// key owner.
+pub trait KeyOwnerProofSystem<Key> {
+	/// The proof of membership itself.
+	type Proof: Codec;
+	/// The full identification of a key owner.
+	type FullIdentification: Codec;
+
+	/// Prove membership of a key owner in the current block-state.
+	///
+	/// This should typically only be called off-chain, since it may be
+	/// computationally heavy.
+	///
+	/// Returns `Some` iff the key owner referred to by the given `key` is a
+	/// member of the current set.
+	fn prove(key: Key) -> Option<Self::Proof>;
+
+	/// Check a proof of membership on-chain. Return `Some` iff the proof is
+	/// valid and recent enough to check.
+	fn check_proof(key: Key, proof: Self::Proof) -> Option<Self::FullIdentification>;
 }
 
 /// Handler for when some currency "account" decreased in balance for
@@ -607,3 +615,28 @@ bitmask! {
 	}
 }
 
+pub trait Time {
+	type Moment: SimpleArithmetic + Codec + Clone + Default;
+
+	fn now() -> Self::Moment;
+}
+
+impl WithdrawReasons {
+	/// Choose all variants except for `one`.
+	pub fn except(one: WithdrawReason) -> WithdrawReasons {
+		let mut mask = Self::all();
+		mask.toggle(one);
+		mask
+	}
+}
+
+/// Trait for type that can handle incremental changes to a set of account IDs.
+pub trait ChangeMembers<AccountId> {
+	/// A number of members `_incoming` just joined the set and replaced some `_outgoing` ones. The
+	/// new set is thus given by `_new`.
+	fn change_members(_incoming: &[AccountId], _outgoing: &[AccountId], _new: &[AccountId]);
+}
+
+impl<T> ChangeMembers<T> for () {
+	fn change_members(_incoming: &[T], _outgoing: &[T], _new_set: &[T]) {}
+}

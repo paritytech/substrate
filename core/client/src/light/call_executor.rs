@@ -21,7 +21,6 @@ use std::{
 	collections::HashSet, sync::Arc, panic::UnwindSafe, result,
 	marker::PhantomData, cell::RefCell, rc::Rc,
 };
-use futures::{IntoFuture, Future};
 
 use parity_codec::{Encode, Decode};
 use primitives::{offchain, H256, Blake2Hasher, convert_hash, NativeOrEncoded};
@@ -100,13 +99,13 @@ where
 		let block_hash = self.blockchain.expect_block_hash_from_id(id)?;
 		let block_header = self.blockchain.expect_header(id.clone())?;
 
-		self.fetcher.remote_call(RemoteCallRequest {
+		futures::executor::block_on(self.fetcher.remote_call(RemoteCallRequest {
 			block: block_hash,
 			header: block_header,
 			method: method.into(),
 			call_data: call_data.to_vec(),
 			retry_count: None,
-		}).into_future().wait()
+		}))
 	}
 
 	fn contextual_call<
@@ -482,7 +481,7 @@ pub fn check_execution_proof<Header, E, H>(
 mod tests {
 	use consensus::BlockOrigin;
 	use test_client::{self, runtime::Header, ClientExt, TestClient};
-	use executor::NativeExecutionDispatch;
+	use executor::NativeExecutor;
 	use crate::backend::{Backend, NewBlockState};
 	use crate::in_mem::Backend as InMemBackend;
 	use crate::light::fetcher::tests::OkCallFetcher;
@@ -503,7 +502,7 @@ mod tests {
 			).unwrap();
 
 			// check remote execution proof locally
-			let local_executor = test_client::LocalExecutor::new(None);
+			let local_executor = NativeExecutor::<test_client::LocalExecutor>::new(None);
 			let local_result = check_execution_proof(&local_executor, &RemoteCallRequest {
 				block: test_client::runtime::Hash::default(),
 				header: test_client::runtime::Header {

@@ -16,14 +16,16 @@
 
 //! Substrate chain configurations.
 
+use babe_primitives::AuthorityId as BabeId;
 use primitives::{ed25519, sr25519, Pair, crypto::UncheckedInto};
-use node_primitives::{AccountId, AuraId, Balance};
+use node_primitives::{AccountId, Balance};
 use node_runtime::{
-	AuraConfig, BalancesConfig, ContractsConfig, CouncilSeatsConfig, DemocracyConfig,
-	GrandpaConfig, IndicesConfig, SessionConfig, StakingConfig, SudoConfig,
-	SystemConfig, TimestampConfig, WASM_BINARY, Perbill, SessionKeys, StakerStatus, DAYS, DOLLARS,
-	MILLICENTS, SECS_PER_BLOCK,
+	BabeConfig,	BalancesConfig, ContractsConfig, CouncilConfig, DemocracyConfig,
+	ElectionsConfig, GrandpaConfig, ImOnlineConfig, IndicesConfig, Perbill,
+	SessionConfig,	SessionKeys, StakerStatus, StakingConfig, SudoConfig, SystemConfig,
+	TechnicalCommitteeConfig, WASM_BINARY,
 };
+use node_runtime::constants::{time::*, currency::*};
 pub use node_runtime::GenesisConfig;
 use substrate_service;
 use hex_literal::hex;
@@ -40,6 +42,13 @@ pub fn flaming_fir_config() -> Result<ChainSpec, String> {
 	ChainSpec::from_embedded(include_bytes!("../res/flaming-fir.json"))
 }
 
+fn session_keys(ed_key: ed25519::Public, sr_key: sr25519::Public) -> SessionKeys {
+	SessionKeys {
+		ed25519: ed_key,
+		sr25519: sr_key,
+	}
+}
+
 fn staging_testnet_config_genesis() -> GenesisConfig {
 	// stash, controller, session-key
 	// generated with secret:
@@ -47,7 +56,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 	// and
 	// for i in 1 2 3 4 ; do for j in session; do subkey --ed25519 inspect "$secret"//fir//$j//$i; done; done
 
-	let initial_authorities: Vec<(AccountId, AccountId, AuraId, GrandpaId)> = vec![(
+	let initial_authorities: Vec<(AccountId, AccountId, BabeId, GrandpaId)> = vec![(
 		// 5Fbsd6WXDGiLTxunqeK5BATNiocfCqu9bS1yArVjCgeBLkVy
 		hex!["9c7a2ee14e565db0c69f78c7b4cd839fbf52b607d867e9e9c5a79042898a0d12"].unchecked_into(),
 		// 5EnCiV7wSHeNhjW3FSUwiJNkcc2SBkPLn5Nj93FmbLtBjQUq
@@ -112,28 +121,35 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 				.collect::<Vec<_>>(),
 		}),
 		session: Some(SessionConfig {
-			keys: initial_authorities.iter().map(|x| (x.1.clone(), SessionKeys(x.2.clone(),x.2.clone()))).collect::<Vec<_>>(),
+			keys: initial_authorities.iter().map(|x| {
+				(x.0.clone(), session_keys(x.3.clone(), x.2.clone()))
+			}).collect::<Vec<_>>(),
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
 			offline_slash: Perbill::from_parts(1_000_000),
-			session_reward: Perbill::from_parts(2_065),
-			current_session_reward: 0,
 			validator_count: 7,
 			offline_slash_grace: 4,
 			minimum_validator_count: 4,
-			stakers: initial_authorities.iter().map(|x| (x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator)).collect(),
-			invulnerables: initial_authorities.iter().map(|x| x.1.clone()).collect(),
+			stakers: initial_authorities.iter().map(|x| {
+				(x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator)
+			}).collect(),
+			invulnerables: initial_authorities.iter().map(|x| x.0.clone()).collect(),
 		}),
 		democracy: Some(DemocracyConfig::default()),
-		council_seats: Some(CouncilSeatsConfig {
-			active_council: vec![],
+		collective_Instance1: Some(CouncilConfig {
+			members: vec![],
+			phantom: Default::default(),
+		}),
+		collective_Instance2: Some(TechnicalCommitteeConfig {
+			members: vec![],
+			phantom: Default::default(),
+		}),
+		elections: Some(ElectionsConfig {
+			members: vec![],
 			presentation_duration: 1 * DAYS,
 			term_duration: 28 * DAYS,
 			desired_seats: 0,
-		}),
-		timestamp: Some(TimestampConfig {
-			minimum_period: SECS_PER_BLOCK / 2, // due to the nature of aura the slots are 2*period
 		}),
 		contracts: Some(ContractsConfig {
 			current_schedule: Default::default(),
@@ -142,8 +158,12 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		sudo: Some(SudoConfig {
 			key: endowed_accounts[0].clone(),
 		}),
-		aura: Some(AuraConfig {
-			authorities: initial_authorities.iter().map(|x| x.2.clone()).collect(),
+		babe: Some(BabeConfig {
+			authorities: initial_authorities.iter().map(|x| (x.2.clone(), 1)).collect(),
+		}),
+		im_online: Some(ImOnlineConfig {
+			gossip_at: 0,
+			last_new_era_start: 0,
 		}),
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.iter().map(|x| (x.3.clone(), 1)).collect(),
@@ -173,9 +193,9 @@ pub fn get_account_id_from_seed(seed: &str) -> AccountId {
 		.public()
 }
 
-/// Helper function to generate AuraId from seed
-pub fn get_aura_id_from_seed(seed: &str) -> AuraId {
-	ed25519::Pair::from_string(&format!("//{}", seed), None)
+/// Helper function to generate BabeId from seed
+pub fn get_babe_id_from_seed(seed: &str) -> BabeId {
+	sr25519::Pair::from_string(&format!("//{}", seed), None)
 		.expect("static values are valid; qed")
 		.public()
 }
@@ -188,18 +208,18 @@ pub fn get_grandpa_id_from_seed(seed: &str) -> GrandpaId {
 }
 
 /// Helper function to generate stash, controller and session key from seed
-pub fn get_authority_keys_from_seed(seed: &str) -> (AccountId, AccountId, AuraId, GrandpaId) {
+pub fn get_authority_keys_from_seed(seed: &str) -> (AccountId, AccountId, BabeId, GrandpaId) {
 	(
 		get_account_id_from_seed(&format!("{}//stash", seed)),
 		get_account_id_from_seed(seed),
-		get_aura_id_from_seed(seed),
+		get_babe_id_from_seed(seed),
 		get_grandpa_id_from_seed(seed)
 	)
 }
 
 /// Helper function to create GenesisConfig for testing
 pub fn testnet_genesis(
-	initial_authorities: Vec<(AccountId, AccountId, AuraId, GrandpaId)>,
+	initial_authorities: Vec<(AccountId, AccountId, BabeId, GrandpaId)>,
 	root_key: AccountId,
 	endowed_accounts: Option<Vec<AccountId>>,
 	enable_println: bool,
@@ -224,7 +244,7 @@ pub fn testnet_genesis(
 	const ENDOWMENT: Balance = 10_000_000 * DOLLARS;
 	const STASH: Balance = 100 * DOLLARS;
 
-	let council_desired_seats = (endowed_accounts.len() / 2 - initial_authorities.len()) as u32;
+	let desired_seats = (endowed_accounts.len() / 2 - initial_authorities.len()) as u32;
 
 	GenesisConfig {
 		system: Some(SystemConfig {
@@ -239,30 +259,37 @@ pub fn testnet_genesis(
 			vesting: vec![],
 		}),
 		session: Some(SessionConfig {
-			keys: initial_authorities.iter().map(|x| (x.1.clone(), SessionKeys(x.2.clone(), x.2.clone()))).collect::<Vec<_>>(),
+			keys: initial_authorities.iter().map(|x| {
+				(x.0.clone(), session_keys(x.3.clone(), x.2.clone()))
+			}).collect::<Vec<_>>(),
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
 			minimum_validator_count: 1,
 			validator_count: 2,
 			offline_slash: Perbill::zero(),
-			session_reward: Perbill::zero(),
-			current_session_reward: 0,
 			offline_slash_grace: 0,
-			stakers: initial_authorities.iter().map(|x| (x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator)).collect(),
-			invulnerables: initial_authorities.iter().map(|x| x.1.clone()).collect(),
+			stakers: initial_authorities.iter().map(|x| {
+				(x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator)
+			}).collect(),
+			invulnerables: initial_authorities.iter().map(|x| x.0.clone()).collect(),
 		}),
 		democracy: Some(DemocracyConfig::default()),
-		council_seats: Some(CouncilSeatsConfig {
-			active_council: endowed_accounts.iter()
+		collective_Instance1: Some(CouncilConfig {
+			members: vec![],
+			phantom: Default::default(),
+		}),
+		collective_Instance2: Some(TechnicalCommitteeConfig {
+			members: vec![],
+			phantom: Default::default(),
+		}),
+		elections: Some(ElectionsConfig {
+			members: endowed_accounts.iter()
 				.filter(|&endowed| initial_authorities.iter().find(|&(_, controller, ..)| controller == endowed).is_none())
 				.map(|a| (a.clone(), 1000000)).collect(),
 			presentation_duration: 10,
 			term_duration: 1000000,
-			desired_seats: council_desired_seats,
-		}),
-		timestamp: Some(TimestampConfig {
-			minimum_period: 2,                    // 2*2=4 second block time.
+			desired_seats: desired_seats,
 		}),
 		contracts: Some(ContractsConfig {
 			current_schedule: contracts::Schedule {
@@ -274,8 +301,12 @@ pub fn testnet_genesis(
 		sudo: Some(SudoConfig {
 			key: root_key,
 		}),
-		aura: Some(AuraConfig {
-			authorities: initial_authorities.iter().map(|x| x.2.clone()).collect(),
+		babe: Some(BabeConfig {
+			authorities: initial_authorities.iter().map(|x| (x.2.clone(), 1)).collect(),
+		}),
+		im_online: Some(ImOnlineConfig{
+			gossip_at: 0,
+			last_new_era_start: 0,
 		}),
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.iter().map(|x| (x.3.clone(), 1)).collect(),
@@ -322,23 +353,15 @@ pub(crate) mod tests {
 	use service_test;
 	use crate::service::Factory;
 
-	fn local_testnet_genesis_instant() -> GenesisConfig {
-		let mut genesis = local_testnet_genesis();
-		genesis.timestamp = Some(TimestampConfig { minimum_period: 1 });
-		genesis
-	}
-
 	fn local_testnet_genesis_instant_single() -> GenesisConfig {
-		let mut genesis = testnet_genesis(
+		testnet_genesis(
 			vec![
 				get_authority_keys_from_seed("Alice"),
 			],
 			get_account_id_from_seed("Alice"),
 			None,
 			false,
-		);
-		genesis.timestamp = Some(TimestampConfig { minimum_period: 1 });
-		genesis
+		)
 	}
 
 	/// Local testnet config (single validator - Alice)
@@ -357,7 +380,7 @@ pub(crate) mod tests {
 
 	/// Local testnet config (multivalidator Alice + Bob)
 	pub fn integration_test_config_with_two_authorities() -> ChainSpec {
-		ChainSpec::from_genesis("Integration Test", "test", local_testnet_genesis_instant, vec![], None, None, None, None)
+		ChainSpec::from_genesis("Integration Test", "test", local_testnet_genesis, vec![], None, None, None, None)
 	}
 
 	#[test]

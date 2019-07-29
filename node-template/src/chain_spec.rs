@@ -1,6 +1,6 @@
 use primitives::{ed25519, sr25519, Pair};
 use node_template_runtime::{
-	AccountId, GenesisConfig, AuraConfig, TimestampConfig, BalancesConfig,
+	AccountId, GenesisConfig, AuraConfig, BalancesConfig,
 	SudoConfig, IndicesConfig, SystemConfig, WASM_BINARY, AuraId
 };
 use substrate_service;
@@ -96,9 +96,6 @@ fn testnet_genesis(initial_authorities: Vec<AuraId>, endowed_accounts: Vec<Accou
 		}),
 		aura: Some(AuraConfig {
 			authorities: initial_authorities.clone(),
-		}),
-		timestamp: Some(TimestampConfig {
-			minimum_period: 5, // 10 second block time.
 		}),
 		indices: Some(IndicesConfig {
 			ids: endowed_accounts.clone(),

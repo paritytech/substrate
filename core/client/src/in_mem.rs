@@ -794,19 +794,23 @@ impl backend::OffchainStorage for OffchainStorage {
 		&mut self,
 		prefix: &[u8],
 		key: &[u8],
-		old_value: &[u8],
+		old_value: Option<&[u8]>,
 		new_value: &[u8],
 	) -> bool {
+		use std::collections::hash_map::Entry;
 		let key = prefix.iter().chain(key).cloned().collect();
 
-		let mut set = false;
-		self.storage.entry(key).and_modify(|val| {
-			if val.as_slice() == old_value {
-				*val = new_value.to_vec();
-				set = true;
-			}
-		});
-		set
+		match self.storage.entry(key) {
+			Entry::Vacant(entry) => if old_value.is_none() {
+				entry.insert(new_value.to_vec());
+				true
+			} else { false },
+			Entry::Occupied(ref mut entry) if Some(entry.get().as_slice()) == old_value => {
+				entry.insert(new_value.to_vec());
+				true
+			},
+			_ => false,
+		}
 	}
 }
 
@@ -845,9 +849,13 @@ mod tests {
 		assert_eq!(storage.get(b"A", b"B"), Some(b"C".to_vec()));
 		assert_eq!(storage.get(b"B", b"A"), None);
 
-		storage.compare_and_set(b"A", b"B", b"X", b"D");
+		storage.compare_and_set(b"A", b"B", Some(b"X"), b"D");
 		assert_eq!(storage.get(b"A", b"B"), Some(b"C".to_vec()));
-		storage.compare_and_set(b"A", b"B", b"C", b"D");
+		storage.compare_and_set(b"A", b"B", Some(b"C"), b"D");
 		assert_eq!(storage.get(b"A", b"B"), Some(b"D".to_vec()));
+
+		assert!(!storage.compare_and_set(b"B", b"A", Some(b""), b"Y"));
+		assert!(storage.compare_and_set(b"B", b"A", None, b"X"));
+		assert_eq!(storage.get(b"B", b"A"), Some(b"X".to_vec()));
 	}
 }

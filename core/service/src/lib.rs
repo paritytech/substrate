@@ -26,21 +26,24 @@ pub mod chain_ops;
 pub mod error;
 
 use std::io;
+use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::collections::HashMap;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use futures::sync::mpsc;
 use parking_lot::Mutex;
 
 use client::{BlockchainEvents, backend::Backend, runtime_api::BlockT};
 use exit_future::Signal;
 use futures::prelude::*;
+use futures03::stream::{StreamExt as _, TryStreamExt as _};
 use keystore::Store as Keystore;
-use log::{info, warn, debug, error};
+use network::{NetworkState, NetworkStateInfo};
+use log::{log, info, warn, debug, error, Level};
 use parity_codec::{Encode, Decode};
-use primitives::{Pair, Public, crypto::TypedKey, ed25519};
+use primitives::{Pair, ed25519, sr25519, crypto};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Header, NumberFor, SaturatedConversion};
+use runtime_primitives::traits::{Header, NumberFor, SaturatedConversion, Zero};
 use substrate_executor::NativeExecutor;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
@@ -53,18 +56,20 @@ pub use transaction_pool::txpool::{
 };
 pub use client::FinalityNotifications;
 
-pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
+pub use components::{
+	ServiceFactory, FullBackend, FullExecutor, LightBackend, ComponentAuthorityKeyProvider,
 	LightExecutor, Components, PoolApi, ComponentClient, ComponentOffchainStorage,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
 	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock,
 	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
-	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic
+	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic,
+	ComponentConsensusPair, ComponentFinalityPair,
 };
 use components::{StartRPC, MaintainTransactionPool, OffchainWorker};
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
-pub use network::{FinalityProofProvider, OnDemand};
+pub use network::{FinalityProofProvider, OnDemand, config::BoxFinalityProofRequestBuilder};
 #[doc(hidden)]
 pub use futures::future::Executor;
 
@@ -73,12 +78,14 @@ const DEFAULT_PROTOCOL_ID: &str = "sup";
 /// Substrate service.
 pub struct Service<Components: components::Components> {
 	client: Arc<ComponentClient<Components>>,
-	select_chain: Option<<Components as components::Components>::SelectChain>,
+	select_chain: Option<Components::SelectChain>,
 	network: Arc<components::NetworkService<Components>>,
 	/// Sinks to propagate network status updates.
-	network_status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<NetworkStatus<ComponentBlock<Components>>>>>>,
+	network_status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<(
+		NetworkStatus<ComponentBlock<Components>>, NetworkState
+	)>>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
-	keystore: Option<Keystore>,
+	keystore: ComponentAuthorityKeyProvider<Components>,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
 	/// Sender for futures that must be spawned as background tasks.
@@ -98,6 +105,7 @@ pub struct Service<Components: components::Components> {
 	_offchain_workers: Option<Arc<offchain::OffchainWorkers<
 		ComponentClient<Components>,
 		ComponentOffchainStorage<Components>,
+		ComponentAuthorityKeyProvider<Components>,
 		ComponentBlock<Components>>
 	>>,
 }
@@ -184,12 +192,13 @@ impl<Components: components::Components> Service<Components> {
 		if let Some(keystore) = keystore.as_mut() {
 			for seed in &config.keys {
 				keystore.generate_from_seed::<ed25519::Pair>(seed)?;
+				keystore.generate_from_seed::<sr25519::Pair>(seed)?;
 			}
 
 			public_key = match keystore.contents::<ed25519::Public>()?.get(0) {
 				Some(public_key) => public_key.to_string(),
 				None => {
-					let key: ed25519::Pair = keystore.generate(&config.password)?;
+					let key: ed25519::Pair = keystore.generate(&config.password.as_ref())?;
 					let public_key = key.public();
 					info!("Generated a new keypair: {:?}", public_key);
 					public_key.to_string()
@@ -201,11 +210,12 @@ impl<Components: components::Components> Service<Components> {
 
 		let (client, on_demand) = Components::build_client(&config, executor)?;
 		let select_chain = Components::build_select_chain(&mut config, client.clone())?;
-		let import_queue = Box::new(Components::build_import_queue(
+		let (import_queue, finality_proof_request_builder) = Components::build_import_queue(
 			&mut config,
 			client.clone(),
 			select_chain.clone(),
-		)?);
+		)?;
+		let import_queue = Box::new(import_queue);
 		let finality_proof_provider = Components::build_finality_proof_provider(client.clone())?;
 		let chain_info = client.info().chain;
 
@@ -236,7 +246,7 @@ impl<Components: components::Components> Service<Components> {
 					DEFAULT_PROTOCOL_ID
 				}
 			}.as_bytes();
-			network::ProtocolId::from(protocol_id_full)
+			network::config::ProtocolId::from(protocol_id_full)
 		};
 
 		let network_params = network::config::Params {
@@ -244,6 +254,7 @@ impl<Components: components::Components> Service<Components> {
 			network_config: config.network.clone(),
 			chain: client.clone(),
 			finality_proof_provider,
+			finality_proof_request_builder,
 			on_demand,
 			transaction_pool: transaction_pool_adapter.clone() as _,
 			import_queue,
@@ -256,10 +267,12 @@ impl<Components: components::Components> Service<Components> {
 		let network = network_mut.service().clone();
 		let network_status_sinks = Arc::new(Mutex::new(Vec::new()));
 
-		let _ = to_spawn_tx.unbounded_send(Box::new(build_network_future(network_mut, network_status_sinks.clone())
-			.map_err(|_| ())
-			.select(exit.clone())
-			.then(|_| Ok(()))));
+		let keystore_authority_key = AuthorityKeyProvider {
+			_marker: PhantomData,
+			roles: config.roles,
+			password: config.password.clone(),
+			keystore: keystore.map(Arc::new),
+		};
 
 		#[allow(deprecated)]
 		let offchain_storage = client.backend().offchain_storage();
@@ -268,6 +281,8 @@ impl<Components: components::Components> Service<Components> {
 				Some(Arc::new(offchain::OffchainWorkers::new(
 					client.clone(),
 					db,
+					keystore_authority_key.clone(),
+					config.password.clone(),
 				)))
 			},
 			(true, None) => {
@@ -279,19 +294,16 @@ impl<Components: components::Components> Service<Components> {
 
 		{
 			// block notifications
-			let network = Arc::downgrade(&network);
 			let txpool = Arc::downgrade(&transaction_pool);
 			let wclient = Arc::downgrade(&client);
 			let offchain = offchain_workers.as_ref().map(Arc::downgrade);
 			let to_spawn_tx_ = to_spawn_tx.clone();
+			let network_state_info: Arc<dyn NetworkStateInfo + Send + Sync> = network.clone();
 
 			let events = client.import_notification_stream()
+				.map(|v| Ok::<_, ()>(v)).compat()
 				.for_each(move |notification| {
 					let number = *notification.header.number();
-
-					if let Some(network) = network.upgrade() {
-						network.on_block_imported(notification.hash, notification.header);
-					}
 
 					if let (Some(txpool), Some(client)) = (txpool.upgrade(), wclient.upgrade()) {
 						Components::RuntimeServices::maintain_transaction_pool(
@@ -306,6 +318,7 @@ impl<Components: components::Components> Service<Components> {
 							&number,
 							&offchain,
 							&txpool,
+							&network_state_info,
 						).map_err(|e| warn!("Offchain workers error processing new block: {:?}", e))?;
 						let _ = to_spawn_tx_.unbounded_send(future);
 					}
@@ -314,52 +327,6 @@ impl<Components: components::Components> Service<Components> {
 				})
 				.select(exit.clone())
 				.then(|_| Ok(()));
-			let _ = to_spawn_tx.unbounded_send(Box::new(events));
-		}
-
-		{
-			// finality notifications
-			let network = Arc::downgrade(&network);
-
-			// A utility stream that drops all ready items and only returns the last one.
-			// This is used to only keep the last finality notification and avoid
-			// overloading the sync module with notifications.
-			struct MostRecentNotification<B: BlockT>(futures::stream::Fuse<FinalityNotifications<B>>);
-
-			impl<B: BlockT> Stream for MostRecentNotification<B> {
-				type Item = <FinalityNotifications<B> as Stream>::Item;
-				type Error = <FinalityNotifications<B> as Stream>::Error;
-
-				fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-					let mut last = None;
-					let last = loop {
-						match self.0.poll()? {
-							Async::Ready(Some(item)) => { last = Some(item) }
-							Async::Ready(None) => match last {
-								None => return Ok(Async::Ready(None)),
-								Some(last) => break last,
-							},
-							Async::NotReady => match last {
-								None => return Ok(Async::NotReady),
-								Some(last) => break last,
-							},
-						}
-					};
-
-					Ok(Async::Ready(Some(last)))
-				}
-			}
-
-			let events = MostRecentNotification(client.finality_notification_stream().fuse())
-				.for_each(move |notification| {
-					if let Some(network) = network.upgrade() {
-						network.on_block_finalized(notification.hash, notification.header);
-					}
-					Ok(())
-				})
-				.select(exit.clone())
-				.then(|_| Ok(()));
-
 			let _ = to_spawn_tx.unbounded_send(Box::new(events));
 		}
 
@@ -388,12 +355,11 @@ impl<Components: components::Components> Service<Components> {
 		// Periodically notify the telemetry.
 		let transaction_pool_ = transaction_pool.clone();
 		let client_ = client.clone();
-		let network_ = network.clone();
 		let mut sys = System::new();
 		let self_pid = get_current_pid().ok();
-		let (netstat_tx, netstat_rx) = mpsc::unbounded();
+		let (netstat_tx, netstat_rx) = mpsc::unbounded::<(NetworkStatus<ComponentBlock<Components>>, NetworkState)>();
 		network_status_sinks.lock().push(netstat_tx);
-		let tel_task = netstat_rx.for_each(move |net_status| {
+		let tel_task = netstat_rx.for_each(move |(net_status, network_state)| {
 			let info = client_.info();
 			let best_number = info.chain.best_number.saturated_into::<u64>();
 			let best_hash = info.chain.best_hash;
@@ -418,8 +384,6 @@ impl<Components: components::Components> Service<Components> {
 					(proc.cpu_usage(), proc.memory())
 				} else { (0.0, 0) }
 			} else { (0.0, 0) };
-
-			let network_state = network_.network_state();
 
 			telemetry!(
 				SUBSTRATE_INFO;
@@ -461,11 +425,17 @@ impl<Components: components::Components> Service<Components> {
 		};
 		let rpc_handlers = gen_handler();
 		let rpc = start_rpc_servers::<Components::Factory, _>(&config, gen_handler)?;
-		let _ = to_spawn_tx.unbounded_send(Box::new(build_system_rpc_handler::<Components>(
-			network.clone(),
+
+		let _ = to_spawn_tx.unbounded_send(Box::new(build_network_future::<Components, _, _>(
+			network_mut,
+			client.clone(),
+			network_status_sinks.clone(),
 			system_rpc_rx,
 			has_bootnodes
-		)));
+		)
+			.map_err(|_| ())
+			.select(exit.clone())
+			.then(|_| Ok(()))));
 
 		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();
 
@@ -483,6 +453,8 @@ impl<Components: components::Components> Service<Components> {
 				wasm_external_transport: config.telemetry_external_transport.take(),
 			});
 			let future = telemetry.clone()
+				.map(|ev| Ok::<_, ()>(ev))
+				.compat()
 				.for_each(move |event| {
 					// Safe-guard in case we add more events in the future.
 					let tel::TelemetryEvent::Connected = event;
@@ -519,7 +491,7 @@ impl<Components: components::Components> Service<Components> {
 			to_spawn_tx,
 			to_spawn_rx,
 			to_poll: Vec::new(),
-			keystore,
+			keystore: keystore_authority_key,
 			config,
 			exit,
 			rpc_handlers,
@@ -531,23 +503,17 @@ impl<Components: components::Components> Service<Components> {
 	}
 
 	/// give the authority key, if we are an authority and have a key
-	pub fn authority_key<TPair>(&self) -> Option<TPair>
-	where
-		TPair: Pair + TypedKey,
-		<TPair as Pair>::Public: Public + TypedKey,
-	{
-		if self.config.roles != Roles::AUTHORITY { return None }
-		if let Some(keystore) = &self.keystore {
-			if let Ok(Some(Ok(key))) =  keystore.contents::<TPair::Public>().map(|keys| keys.get(0)
-					.map(|k| keystore.load::<TPair>(k, &self.config.password)))
-			{
-				Some(key)
-			} else {
-				None
-			}
-		} else {
-			None
-		}
+	pub fn authority_key(&self) -> Option<ComponentConsensusPair<Components>> {
+		use offchain::AuthorityKeyProvider;
+
+		self.keystore.authority_key(&BlockId::Number(Zero::zero()))
+	}
+
+	/// give the authority key, if we are an authority and have a key
+	pub fn fg_authority_key(&self) -> Option<ComponentFinalityPair<Components>> {
+		use offchain::AuthorityKeyProvider;
+
+		self.keystore.fg_authority_key(&BlockId::Number(Zero::zero()))
 	}
 
 	/// return a shared instance of Telemetry (if enabled)
@@ -577,7 +543,8 @@ impl<Components: components::Components> Service<Components> {
 	/// If the request subscribes you to events, the `Sender` in the `RpcSession` object is used to
 	/// send back spontaneous events.
 	pub fn rpc_query(&self, mem: &RpcSession, request: &str)
-	-> impl Future<Item = Option<String>, Error = ()> {
+		-> impl Future<Item = Option<String>, Error = ()>
+	{
 		self.rpc_handlers.handle_request(request, mem.metadata.clone())
 	}
 
@@ -597,7 +564,7 @@ impl<Components: components::Components> Service<Components> {
 	}
 
 	/// Returns a receiver that periodically receives a status of the network.
-	pub fn network_status(&self) -> mpsc::UnboundedReceiver<NetworkStatus<ComponentBlock<Components>>> {
+	pub fn network_status(&self) -> mpsc::UnboundedReceiver<(NetworkStatus<ComponentBlock<Components>>, NetworkState)> {
 		let (sink, stream) = mpsc::unbounded();
 		self.network_status_sinks.lock().push(sink);
 		stream
@@ -660,15 +627,71 @@ impl<Components> Executor<Box<dyn Future<Item = (), Error = ()> + Send>>
 /// Builds a never-ending future that continuously polls the network.
 ///
 /// The `status_sink` contain a list of senders to send a periodic network status to.
-fn build_network_future<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: network::ExHashT>(
-	mut network: network::NetworkWorker<B, S, H>,
-	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<NetworkStatus<B>>>>>,
+fn build_network_future<
+	Components: components::Components,
+	S: network::specialization::NetworkSpecialization<ComponentBlock<Components>>,
+	H: network::ExHashT
+> (
+	mut network: network::NetworkWorker<ComponentBlock<Components>, S, H>,
+	client: Arc<ComponentClient<Components>>,
+	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<(NetworkStatus<ComponentBlock<Components>>, NetworkState)>>>>,
+	mut rpc_rx: mpsc::UnboundedReceiver<rpc::apis::system::Request<ComponentBlock<Components>>>,
+	should_have_peers: bool,
 ) -> impl Future<Item = (), Error = ()> {
 	// Interval at which we send status updates on the status stream.
 	const STATUS_INTERVAL: Duration = Duration::from_millis(5000);
 	let mut status_interval = tokio_timer::Interval::new_interval(STATUS_INTERVAL);
 
+	let mut imported_blocks_stream = client.import_notification_stream().fuse()
+		.map(|v| Ok::<_, ()>(v)).compat();
+	let mut finality_notification_stream = client.finality_notification_stream().fuse()
+		.map(|v| Ok::<_, ()>(v)).compat();
+
 	futures::future::poll_fn(move || {
+		let before_polling = Instant::now();
+
+		// We poll `imported_blocks_stream`.
+		while let Ok(Async::Ready(Some(notification))) = imported_blocks_stream.poll() {
+			network.on_block_imported(notification.hash, notification.header);
+		}
+
+		// We poll `finality_notification_stream`, but we only take the last event.
+		let mut last = None;
+		while let Ok(Async::Ready(Some(item))) = finality_notification_stream.poll() {
+			last = Some(item);
+		}
+		if let Some(notification) = last {
+			network.on_block_finalized(notification.hash, notification.header);
+		}
+
+		// Poll the RPC requests and answer them.
+		while let Ok(Async::Ready(Some(request))) = rpc_rx.poll() {
+			match request {
+				rpc::apis::system::Request::Health(sender) => {
+					let _ = sender.send(rpc::apis::system::Health {
+						peers: network.peers_debug_info().len(),
+						is_syncing: network.service().is_major_syncing(),
+						should_have_peers,
+					});
+				},
+				rpc::apis::system::Request::Peers(sender) => {
+					let _ = sender.send(network.peers_debug_info().into_iter().map(|(peer_id, p)|
+						rpc::apis::system::PeerInfo {
+							peer_id: peer_id.to_base58(),
+							roles: format!("{:?}", p.roles),
+							protocol_version: p.protocol_version,
+							best_hash: p.best_hash,
+							best_number: p.best_number,
+						}
+					).collect());
+				}
+				rpc::apis::system::Request::NetworkState(sender) => {
+					let _ = sender.send(network.network_state());
+				}
+			};
+		}
+
+		// Interval report for the external API.
 		while let Ok(Async::Ready(_)) = status_interval.poll() {
 			let status = NetworkStatus {
 				sync_state: network.sync_state(),
@@ -679,14 +702,28 @@ fn build_network_future<B: BlockT, S: network::specialization::NetworkSpecializa
 				average_download_per_sec: network.average_download_per_sec(),
 				average_upload_per_sec: network.average_upload_per_sec(),
 			};
+			let state = network.network_state();
 
-			status_sinks.lock().retain(|sink| sink.unbounded_send(status.clone()).is_ok());
+			status_sinks.lock().retain(|sink| sink.unbounded_send((status.clone(), state.clone())).is_ok());
 		}
 
-		network.poll()
-			.map_err(|err| {
-				warn!(target: "service", "Error in network: {:?}", err);
-			})
+		// Main network polling.
+		match network.poll() {
+			Ok(Async::NotReady) => {}
+			Err(err) => warn!(target: "service", "Error in network: {:?}", err),
+			Ok(Async::Ready(())) => warn!(target: "service", "Network service finished"),
+		}
+
+		// Now some diagnostic for performances.
+		let polling_dur = before_polling.elapsed();
+		log!(
+			target: "service",
+			if polling_dur >= Duration::from_millis(50) { Level::Warn } else { Level::Trace },
+			"Polling the network future took {:?}",
+			polling_dur
+		);
+		
+		Ok(Async::NotReady)
 	})
 }
 
@@ -723,7 +760,7 @@ impl<Components> Drop for Service<Components> where Components: components::Comp
 fn start_rpc_servers<F: ServiceFactory, H: FnMut() -> rpc::RpcHandler>(
 	config: &FactoryFullConfiguration<F>,
 	mut gen_handler: H
-) -> Result<Box<std::any::Any + Send + Sync>, error::Error> {
+) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	fn maybe_start_server<T, F>(address: Option<SocketAddr>, mut start: F) -> Result<Option<T>, io::Error>
 		where F: FnMut(&SocketAddr) -> Result<T, io::Error>,
 	{
@@ -866,37 +903,71 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 	}
 }
 
-/// Builds a never-ending `Future` that answers the RPC requests coming on the receiver.
-fn build_system_rpc_handler<Components: components::Components>(
-	network: Arc<NetworkService<Components>>,
-	rx: mpsc::UnboundedReceiver<rpc::apis::system::Request<ComponentBlock<Components>>>,
-	should_have_peers: bool,
-) -> impl Future<Item = (), Error = ()> {
-	rx.for_each(move |request| {
-		match request {
-			rpc::apis::system::Request::Health(sender) => {
-				let _ = sender.send(rpc::apis::system::Health {
-					peers: network.peers_debug_info().len(),
-					is_syncing: network.is_major_syncing(),
-					should_have_peers,
-				});
-			},
-			rpc::apis::system::Request::Peers(sender) => {
-				let _ = sender.send(network.peers_debug_info().into_iter().map(|(peer_id, p)| rpc::apis::system::PeerInfo {
-					peer_id: peer_id.to_base58(),
-					roles: format!("{:?}", p.roles),
-					protocol_version: p.protocol_version,
-					best_hash: p.best_hash,
-					best_number: p.best_number,
-				}).collect());
-			}
-			rpc::apis::system::Request::NetworkState(sender) => {
-				let _ = sender.send(network.network_state());
-			}
+#[derive(Clone)]
+/// A provider of current authority key.
+pub struct AuthorityKeyProvider<Block, ConsensusPair, FinalityPair> {
+	_marker: PhantomData<(Block, ConsensusPair, FinalityPair)>,
+	roles: Roles,
+	keystore: Option<Arc<Keystore>>,
+	password: crypto::Protected<String>,
+}
+
+impl<Block, ConsensusPair, FinalityPair>
+	offchain::AuthorityKeyProvider<Block>
+	for AuthorityKeyProvider<Block, ConsensusPair, FinalityPair>
+where
+	Block: runtime_primitives::traits::Block,
+	ConsensusPair: Pair,
+	FinalityPair: Pair,
+{
+	type ConsensusPair = ConsensusPair;
+	type FinalityPair = FinalityPair;
+
+	fn authority_key(&self, _at: &BlockId<Block>) -> Option<Self::ConsensusPair> {
+		if self.roles != Roles::AUTHORITY {
+			return None
+		}
+
+		let keystore = match self.keystore {
+			Some(ref keystore) => keystore,
+			None => return None
 		};
 
-		Ok(())
-	})
+		let loaded_key = keystore
+			.contents()
+			.map(|keys| keys.get(0)
+				 .map(|k| keystore.load(k, self.password.as_ref()))
+			);
+
+		if let Ok(Some(Ok(key))) = loaded_key {
+			Some(key)
+		} else {
+			None
+		}
+	}
+
+	fn fg_authority_key(&self, _at: &BlockId<Block>) -> Option<Self::FinalityPair> {
+		if self.roles != Roles::AUTHORITY {
+			return None
+		}
+
+		let keystore = match self.keystore {
+			Some(ref keystore) => keystore,
+			None => return None
+		};
+
+		let loaded_key = keystore
+			.contents()
+			.map(|keys| keys.get(0)
+				 .map(|k| keystore.load(k, self.password.as_ref()))
+			);
+
+		if let Ok(Some(Ok(key))) = loaded_key {
+			Some(key)
+		} else {
+			None
+		}
+	}
 }
 
 /// Constructs a service factory with the given name that implements the `ServiceFactory` trait.
@@ -913,10 +984,10 @@ fn build_system_rpc_handler<Components: components::Components>(
 /// # 	FullComponents, LightComponents, FactoryFullConfiguration, FullClient
 /// # };
 /// # use transaction_pool::{self, txpool::{Pool as TransactionPool}};
-/// # use network::construct_simple_protocol;
+/// # use network::{config::DummyFinalityProofRequestBuilder, construct_simple_protocol};
 /// # use client::{self, LongestChain};
 /// # use consensus_common::import_queue::{BasicQueue, Verifier};
-/// # use consensus_common::{BlockOrigin, ImportBlock, well_known_cache_keys::Id as CacheKeyId};
+/// # use consensus_common::{BlockOrigin, BlockImportParams, well_known_cache_keys::Id as CacheKeyId};
 /// # use node_runtime::{GenesisConfig, RuntimeApi};
 /// # use std::sync::Arc;
 /// # use node_primitives::Block;
@@ -934,7 +1005,7 @@ fn build_system_rpc_handler<Components: components::Components>(
 /// # 		header: B::Header,
 /// # 		justification: Option<Justification>,
 /// # 		body: Option<Vec<B::Extrinsic>>,
-/// # 	) -> Result<(ImportBlock<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+/// # 	) -> Result<(BlockImportParams<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 /// # 		unimplemented!();
 /// # 	}
 /// # }
@@ -947,6 +1018,8 @@ fn build_system_rpc_handler<Components: components::Components>(
 /// 	struct Factory {
 /// 		// Declare the block type
 /// 		Block = Block,
+///		ConsensusPair = primitives::ed25519::Pair,
+///		FinalityPair = primitives::ed25519::Pair,
 /// 		RuntimeApi = RuntimeApi,
 /// 		// Declare the network protocol and give an initializer.
 /// 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
@@ -967,9 +1040,12 @@ fn build_system_rpc_handler<Components: components::Components>(
 /// 		LightService = LightComponents<Self>
 /// 			{ |config| <LightComponents<Factory>>::new(config) },
 /// 		FullImportQueue = BasicQueue<Block>
-/// 			{ |_, client, _| Ok(BasicQueue::new(Arc::new(MyVerifier), client, None, None, None)) },
+/// 			{ |_, client, _| Ok(BasicQueue::new(Arc::new(MyVerifier), Box::new(client), None, None)) },
 /// 		LightImportQueue = BasicQueue<Block>
-/// 			{ |_, client| Ok(BasicQueue::new(Arc::new(MyVerifier), client, None, None, None)) },
+/// 			{ |_, client| {
+/// 				let fprb = Box::new(DummyFinalityProofRequestBuilder::default()) as Box<_>;
+/// 				Ok((BasicQueue::new(Arc::new(MyVerifier), Box::new(client), None, None), fprb))
+/// 			}},
 /// 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>
 /// 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {
 /// 				#[allow(deprecated)]
@@ -987,6 +1063,8 @@ macro_rules! construct_service_factory {
 		$(#[$attr:meta])*
 		struct $name:ident {
 			Block = $block:ty,
+			ConsensusPair = $consensus_pair:ty,
+			FinalityPair = $finality_pair:ty,
 			RuntimeApi = $runtime_api:ty,
 			NetworkProtocol = $protocol:ty { $( $protocol_init:tt )* },
 			RuntimeDispatch = $dispatch:ty,
@@ -1012,6 +1090,8 @@ macro_rules! construct_service_factory {
 		#[allow(unused_variables)]
 		impl $crate::ServiceFactory for $name {
 			type Block = $block;
+			type ConsensusPair = $consensus_pair;
+			type FinalityPair = $finality_pair;
 			type RuntimeApi = $runtime_api;
 			type NetworkProtocol = $protocol;
 			type RuntimeDispatch = $dispatch;
@@ -1065,7 +1145,7 @@ macro_rules! construct_service_factory {
 			fn build_light_import_queue(
 				config: &mut FactoryFullConfiguration<Self>,
 				client: Arc<$crate::LightClient<Self>>,
-			) -> Result<Self::LightImportQueue, $crate::Error> {
+			) -> Result<(Self::LightImportQueue, $crate::BoxFinalityProofRequestBuilder<$block>), $crate::Error> {
 				( $( $light_import_queue_init )* ) (config, client)
 			}
 

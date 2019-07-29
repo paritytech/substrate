@@ -29,8 +29,9 @@ use primitives::offchain::{
 	HttpRequestStatus as RequestStatus,
 	Timestamp,
 	CryptoKind,
-	CryptoKeyId,
+	CryptoKey,
 	StorageKind,
+	OpaqueNetworkState,
 };
 
 /// Pending request.
@@ -139,23 +140,48 @@ impl offchain::Externalities for TestOffchainExt {
 		unimplemented!("not needed in tests so far")
 	}
 
-	fn new_crypto_key(&mut self, _crypto: CryptoKind) -> Result<CryptoKeyId, ()> {
+	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
 		unimplemented!("not needed in tests so far")
 	}
 
-	fn encrypt(&mut self, _key: Option<CryptoKeyId>, _data: &[u8]) -> Result<Vec<u8>, ()> {
+	fn pubkey(&self, _key: CryptoKey) -> Result<Vec<u8>, ()> {
 		unimplemented!("not needed in tests so far")
 	}
 
-	fn decrypt(&mut self, _key: Option<CryptoKeyId>, _data: &[u8]) -> Result<Vec<u8>, ()> {
+	fn new_crypto_key(&mut self, _crypto: CryptoKind) -> Result<CryptoKey, ()> {
 		unimplemented!("not needed in tests so far")
 	}
 
-	fn sign(&mut self, _key: Option<CryptoKeyId>, _data: &[u8]) -> Result<Vec<u8>, ()> {
+	fn encrypt(
+		&mut self,
+		_key: CryptoKey,
+		_data: &[u8],
+	) -> Result<Vec<u8>, ()> {
 		unimplemented!("not needed in tests so far")
 	}
 
-	fn verify(&mut self, _key: Option<CryptoKeyId>, _msg: &[u8], _signature: &[u8]) -> Result<bool, ()> {
+	fn decrypt(
+		&mut self,
+		_key: CryptoKey,
+		_data: &[u8],
+	) -> Result<Vec<u8>, ()> {
+		unimplemented!("not needed in tests so far")
+	}
+
+	fn sign(
+		&mut self,
+		_key: CryptoKey,
+		_data: &[u8],
+	) -> Result<Vec<u8>, ()> {
+		unimplemented!("not needed in tests so far")
+	}
+
+	fn verify(
+		&mut self,
+		_key: CryptoKey,
+		_msg: &[u8],
+		_signature: &[u8],
+	) -> Result<bool, ()> {
 		unimplemented!("not needed in tests so far")
 	}
 
@@ -183,7 +209,7 @@ impl offchain::Externalities for TestOffchainExt {
 		&mut self,
 		kind: StorageKind,
 		key: &[u8],
-		old_value: &[u8],
+		old_value: Option<&[u8]>,
 		new_value: &[u8]
 	) -> bool {
 		let mut state = self.0.write();
@@ -302,4 +328,3 @@ impl offchain::Externalities for TestOffchainExt {
 		}
 	}
 }
-

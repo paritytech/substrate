@@ -268,6 +268,7 @@ mod tests {
 	use substrate_primitives::H256;
 	use primitives::traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT};
 	use primitives::testing::Header;
+	use primitives::Perbill;
 	use srml_support::{assert_ok, impl_outer_origin, parameter_types};
 	use srml_system as system;
 	use std::cell::RefCell;
@@ -297,6 +298,12 @@ mod tests {
 		}
 	}
 
+	parameter_types! {
+		pub const BlockHashCount: u64 = 250;
+		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockLength: u32 = 2 * 1024;
+		pub const AvailableBlockRatio: Perbill = Perbill::one();
+	}
 	impl system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
@@ -306,7 +313,12 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
+		type WeightMultiplierUpdate = ();
 		type Event = ();
+		type BlockHashCount = BlockHashCount;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type AvailableBlockRatio = AvailableBlockRatio;
+		type MaximumBlockLength = MaximumBlockLength;
 	}
 	parameter_types! {
 		pub const WindowSize: u64 = 11;
@@ -323,8 +335,8 @@ mod tests {
 
 	#[test]
 	fn median_works() {
-		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
-		with_externalities(&mut TestExternalities::new(t), || {
+		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		with_externalities(&mut TestExternalities::new_with_children(t), || {
 			FinalityTracker::update_hint(Some(500));
 			assert_eq!(FinalityTracker::median(), 250);
 			assert!(NOTIFICATIONS.with(|n| n.borrow().is_empty()));
@@ -333,8 +345,8 @@ mod tests {
 
 	#[test]
 	fn notifies_when_stalled() {
-		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
-		with_externalities(&mut TestExternalities::new(t), || {
+		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		with_externalities(&mut TestExternalities::new_with_children(t), || {
 			let mut parent_hash = System::parent_hash();
 			for i in 2..106 {
 				System::initialize(&i, &parent_hash, &Default::default(), &Default::default());
@@ -352,8 +364,8 @@ mod tests {
 
 	#[test]
 	fn recent_notifications_prevent_stalling() {
-		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
-		with_externalities(&mut TestExternalities::new(t), || {
+		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		with_externalities(&mut TestExternalities::new_with_children(t), || {
 			let mut parent_hash = System::parent_hash();
 			for i in 2..106 {
 				System::initialize(&i, &parent_hash, &Default::default(), &Default::default());

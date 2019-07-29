@@ -30,8 +30,6 @@
 // re-export since this is necessary for `impl_apis` in runtime.
 pub use substrate_finality_grandpa_primitives as fg_primitives;
 
-#[cfg(feature = "std")]
-use serde::Serialize;
 use rstd::prelude::*;
 use parity_codec::{self as codec, Encode, Decode};
 use srml_support::{
@@ -40,43 +38,12 @@ use srml_support::{
 use primitives::{
 	generic::{DigestItem, OpaqueDigestItemId}, traits::CurrentHeight
 };
-use fg_primitives::{ScheduledChange, GRANDPA_ENGINE_ID};
+use fg_primitives::{ScheduledChange, ConsensusLog, GRANDPA_ENGINE_ID};
 pub use fg_primitives::{AuthorityId, AuthorityWeight};
 use system::{ensure_signed, DigestOf};
 
 mod mock;
 mod tests;
-
-/// Consensus log type of this module.
-#[cfg_attr(feature = "std", derive(Serialize, Debug))]
-#[derive(Encode, Decode, PartialEq, Eq, Clone)]
-pub enum Signal<N> {
-	/// Authorities set change has been signaled. Contains the new set of authorities
-	/// and the delay in blocks _to finalize_ before applying.
-	AuthoritiesChange(ScheduledChange<N>),
-	/// A forced authorities set change. Contains in this order: the median last
-	/// finalized block when the change was signaled, the delay in blocks _to import_
-	/// before applying and the new set of authorities.
-	ForcedAuthoritiesChange(N, ScheduledChange<N>),
-}
-
-impl<N> Signal<N> {
-	/// Try to cast the log entry as a contained signal.
-	pub fn try_into_change(self) -> Option<ScheduledChange<N>> {
-		match self {
-			Signal::AuthoritiesChange(change) => Some(change),
-			Signal::ForcedAuthoritiesChange(_, _) => None,
-		}
-	}
-
-	/// Try to cast the log entry as a contained forced signal.
-	pub fn try_into_forced_change(self) -> Option<(N, ScheduledChange<N>)> {
-		match self {
-			Signal::ForcedAuthoritiesChange(median, change) => Some((median, change)),
-			Signal::AuthoritiesChange(_) => None,
-		}
-	}
-}
 
 pub trait Trait: system::Trait {
 	/// The event type of this module.
@@ -124,10 +91,42 @@ impl<N: Decode> Decode for StoredPendingChange<N> {
 	}
 }
 
+/// Current state of the GRANDPA authority set. State transitions must happen in
+/// the same order of states defined below, e.g. `Paused` implies a prior
+/// `PendingPause`.
+#[derive(Decode, Encode)]
+#[cfg_attr(test, derive(Debug, PartialEq))]
+pub enum StoredState<N> {
+	/// The current authority set is live, and GRANDPA is enabled.
+	Live,
+	/// There is a pending pause event which will be enacted at the given block
+	/// height.
+	PendingPause {
+		/// Block at which the intention to pause was scheduled.
+		scheduled_at: N,
+		/// Number of blocks after which the change will be enacted.
+		delay: N
+	},
+	/// The current GRANDPA authority set is paused.
+	Paused,
+	/// There is a pending resume event which will be enacted at the given block
+	/// height.
+	PendingResume {
+		/// Block at which the intention to resume was scheduled.
+		scheduled_at: N,
+		/// Number of blocks after which the change will be enacted.
+		delay: N,
+	},
+}
+
 decl_event!(
 	pub enum Event {
 		/// New authority set has been applied.
 		NewAuthorities(Vec<(AuthorityId, u64)>),
+		/// Current authority set has been paused.
+		Paused,
+		/// Current authority set has been resumed.
+		Resumed,
 	}
 );
 
@@ -135,6 +134,9 @@ decl_storage! {
 	trait Store for Module<T: Trait> as GrandpaFinality {
 		/// The current authority set.
 		Authorities get(authorities) config(): Vec<(AuthorityId, AuthorityWeight)>;
+
+		/// State of the current authority set.
+		State get(state): StoredState<T::BlockNumber> = StoredState::Live;
 
 		/// Pending change: (signaled at, scheduled change).
 		PendingChange: Option<StoredPendingChange<T::BlockNumber>>;
@@ -158,18 +160,20 @@ decl_module! {
 		}
 
 		fn on_finalize(block_number: T::BlockNumber) {
+			// check for scheduled pending authority set changes
 			if let Some(pending_change) = <PendingChange<T>>::get() {
+				// emit signal if we're at the block that scheduled the change
 				if block_number == pending_change.scheduled_at {
 					if let Some(median) = pending_change.forced {
-						Self::deposit_log(Signal::ForcedAuthoritiesChange(
+						Self::deposit_log(ConsensusLog::ForcedChange(
 							median,
-							ScheduledChange{
+							ScheduledChange {
 								delay: pending_change.delay,
 								next_authorities: pending_change.next_authorities.clone(),
 							}
 						))
 					} else {
-						Self::deposit_log(Signal::AuthoritiesChange(
+						Self::deposit_log(ConsensusLog::ScheduledChange(
 							ScheduledChange{
 								delay: pending_change.delay,
 								next_authorities: pending_change.next_authorities.clone(),
@@ -178,6 +182,7 @@ decl_module! {
 					}
 				}
 
+				// enact the change if we've reached the enacting block
 				if block_number == pending_change.scheduled_at + pending_change.delay {
 					Authorities::put(&pending_change.next_authorities);
 					Self::deposit_event(
@@ -185,6 +190,35 @@ decl_module! {
 					);
 					<PendingChange<T>>::kill();
 				}
+			}
+
+			// check for scheduled pending state changes
+			match <State<T>>::get() {
+				StoredState::PendingPause { scheduled_at, delay } => {
+					// signal change to pause
+					if block_number == scheduled_at {
+						Self::deposit_log(ConsensusLog::Pause(delay));
+					}
+
+					// enact change to paused state
+					if block_number == scheduled_at + delay {
+						<State<T>>::put(StoredState::Paused);
+						Self::deposit_event(Event::Paused);
+					}
+				},
+				StoredState::PendingResume { scheduled_at, delay } => {
+					// signal change to resume
+					if block_number == scheduled_at {
+						Self::deposit_log(ConsensusLog::Resume(delay));
+					}
+
+					// enact change to live state
+					if block_number == scheduled_at + delay {
+						<State<T>>::put(StoredState::Live);
+						Self::deposit_event(Event::Resumed);
+					}
+				},
+				_ => {},
 			}
 		}
 	}
@@ -194,6 +228,36 @@ impl<T: Trait> Module<T> {
 	/// Get the current set of authorities, along with their respective weights.
 	pub fn grandpa_authorities() -> Vec<(AuthorityId, u64)> {
 		Authorities::get()
+	}
+
+	pub fn schedule_pause(in_blocks: T::BlockNumber) -> Result {
+		if let StoredState::Live = <State<T>>::get() {
+			let scheduled_at = system::ChainContext::<T>::default().current_height();
+			<State<T>>::put(StoredState::PendingPause {
+				delay: in_blocks,
+				scheduled_at,
+			});
+
+			Ok(())
+		} else {
+			Err("Attempt to signal GRANDPA pause when the authority set isn't live \
+				(either paused or already pending pause).")
+		}
+	}
+
+	pub fn schedule_resume(in_blocks: T::BlockNumber) -> Result {
+		if let StoredState::Paused = <State<T>>::get() {
+			let scheduled_at = system::ChainContext::<T>::default().current_height();
+			<State<T>>::put(StoredState::PendingResume {
+				delay: in_blocks,
+				scheduled_at,
+			});
+
+			Ok(())
+		} else {
+			Err("Attempt to signal GRANDPA resume when the authority set isn't paused \
+				(either live or already pending resume).")
+		}
 	}
 
 	/// Schedule a change in the authorities.
@@ -242,16 +306,16 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Deposit one of this module's logs.
-	fn deposit_log(log: Signal<T::BlockNumber>) {
+	fn deposit_log(log: ConsensusLog<T::BlockNumber>) {
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode());
 		<system::Module<T>>::deposit_log(log.into());
 	}
 }
 
 impl<T: Trait> Module<T> {
-	pub fn grandpa_log(digest: &DigestOf<T>) -> Option<Signal<T::BlockNumber>> {
+	pub fn grandpa_log(digest: &DigestOf<T>) -> Option<ConsensusLog<T::BlockNumber>> {
 		let id = OpaqueDigestItemId::Consensus(&GRANDPA_ENGINE_ID);
-		digest.convert_first(|l| l.try_to::<Signal<T::BlockNumber>>(id))
+		digest.convert_first(|l| l.try_to::<ConsensusLog<T::BlockNumber>>(id))
 	}
 
 	pub fn pending_change(digest: &DigestOf<T>)
@@ -265,11 +329,24 @@ impl<T: Trait> Module<T> {
 	{
 		Self::grandpa_log(digest).and_then(|signal| signal.try_into_forced_change())
 	}
+
+	pub fn pending_pause(digest: &DigestOf<T>)
+		-> Option<T::BlockNumber>
+	{
+		Self::grandpa_log(digest).and_then(|signal| signal.try_into_pause())
+	}
+
+	pub fn pending_resume(digest: &DigestOf<T>)
+		-> Option<T::BlockNumber>
+	{
+		Self::grandpa_log(digest).and_then(|signal| signal.try_into_resume())
+	}
 }
 
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = AuthorityId;
-	fn on_new_session<'a, I: 'a>(changed: bool, validators: I)
+
+	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, _queued_validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
 		// instant changes
@@ -286,8 +363,9 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 			}
 		}
 	}
-	fn on_disabled(_i: usize) {
-		// ignore?
+
+	fn on_disabled(i: usize) {
+		Self::deposit_log(ConsensusLog::OnDisabled(i as u64))
 	}
 }
 
