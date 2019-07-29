@@ -484,6 +484,16 @@ impl<Factory: ServiceFactory> Future for FullComponents<Factory> {
 	}
 }
 
+impl<Factory: ServiceFactory> Executor<Box<dyn Future<Item = (), Error = ()> + Send>>
+for FullComponents<Factory> {
+	fn execute(
+		&self,
+		future: Box<dyn Future<Item = (), Error = ()> + Send>
+	) -> Result<(), futures::future::ExecuteError<Box<dyn Future<Item = (), Error = ()> + Send>>> {
+		self.service.execute(future)
+	}
+}
+
 impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	type Factory = Factory;
 	type Executor = FullExecutor<Factory>;
@@ -589,6 +599,16 @@ impl<Factory: ServiceFactory> Future for LightComponents<Factory> {
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
 		self.service.poll()
+	}
+}
+
+impl<Factory: ServiceFactory> Executor<Box<dyn Future<Item = (), Error = ()> + Send>>
+for LightComponents<Factory> {
+	fn execute(
+		&self,
+		future: Box<dyn Future<Item = (), Error = ()> + Send>
+	) -> Result<(), futures::future::ExecuteError<Box<dyn Future<Item = (), Error = ()> + Send>>> {
+		self.service.execute(future)
 	}
 }
 
