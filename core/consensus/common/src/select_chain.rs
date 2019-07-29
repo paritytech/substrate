@@ -15,7 +15,7 @@
 // along with Substrate Consensus Common.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::error::Error;
-use runtime_primitives::traits::{Block as BlockT, NumberFor};
+use sr_primitives::traits::{Block as BlockT, NumberFor};
 
 
 /// The SelectChain trait defines the strategy upon which the head is chosen

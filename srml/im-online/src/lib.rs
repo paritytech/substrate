@@ -68,14 +68,14 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use substrate_primitives::{
+use primitives::{
 	crypto::TypedKey, offchain::CryptoKey,
 	offchain::OpaqueNetworkState,
 	offchain::StorageKind,
 	sr25519, ed25519,
 };
 use parity_codec::{Encode, Decode};
-use primitives::{
+use sr_primitives::{
 	ApplyError, traits::{Member, IsMember, Extrinsic as ExtrinsicT},
 	transaction_validity::{TransactionValidity, TransactionLongevity, ValidTransaction},
 };

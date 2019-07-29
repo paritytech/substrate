@@ -20,8 +20,7 @@ use client::{backend::Backend, BlockchainEvents};
 use futures::{Future, Stream};
 use futures03::{StreamExt as _, TryStreamExt as _};
 use log::{info, warn};
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::Header;
+use sr_primitives::{generic::BlockId, traits::Header};
 use service::{Service, Components};
 use tokio::runtime::TaskExecutor;
 

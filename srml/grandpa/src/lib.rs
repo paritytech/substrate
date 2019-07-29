@@ -35,8 +35,8 @@ use parity_codec::{self as codec, Encode, Decode};
 use srml_support::{
 	decl_event, decl_storage, decl_module, dispatch::Result, storage::StorageValue
 };
-use primitives::{
-	generic::{DigestItem, OpaqueDigestItemId}, traits::CurrentHeight
+use sr_primitives::{
+	generic::{DigestItem, OpaqueDigestItemId}, traits::{CurrentHeight, Zero},
 };
 use fg_primitives::{ScheduledChange, ConsensusLog, GRANDPA_ENGINE_ID};
 pub use fg_primitives::{AuthorityId, AuthorityWeight};
@@ -354,7 +354,6 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 			let next_authorities = validators.map(|(_, k)| (k, 1u64)).collect::<Vec<_>>();
 			let last_authorities = <Module<T>>::grandpa_authorities();
 			if next_authorities != last_authorities {
-				use primitives::traits::Zero;
 				if let Some((further_wait, median)) = <Stalled<T>>::take() {
 					let _ = Self::schedule_change(next_authorities, further_wait, Some(median));
 				} else {

@@ -35,8 +35,8 @@ use consensus_common::{SyncOracle, SelectChain};
 use futures::{prelude::*, future::{self, Either}, task::Poll};
 use inherents::{InherentData, InherentDataProviders};
 use log::{debug, error, info, warn};
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{ApiRef, Block as BlockT, ProvideRuntimeApi};
+use sr_primitives::generic::BlockId;
+use sr_primitives::traits::{ApiRef, Block as BlockT, ProvideRuntimeApi};
 use std::{fmt::Debug, ops::Deref, panic, pin::Pin};
 
 /// A worker that should be invoked at every new slot.
@@ -208,7 +208,7 @@ impl<T: Clone> SlotDuration<T> {
 					.into()
 				}),
 			None => {
-				use runtime_primitives::traits::Zero;
+				use sr_primitives::traits::Zero;
 				let genesis_slot_duration =
 					cb(client.runtime_api(), &BlockId::number(Zero::zero()))?;
 

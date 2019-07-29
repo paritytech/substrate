@@ -21,7 +21,7 @@ use std::sync::Arc;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use linked_hash_map::{LinkedHashMap, Entry};
 use hash_db::Hasher;
-use runtime_primitives::traits::{Block as BlockT, Header};
+use sr_primitives::traits::{Block as BlockT, Header};
 use state_machine::{backend::Backend as StateBackend, TrieBackend};
 use log::trace;
 use super::{StorageCollection, ChildStorageCollection};
@@ -105,7 +105,7 @@ impl<K: EstimateSize + Eq + StdHash, V: EstimateSize> LRUMap<K, V> {
 		// TODO assert k v size fit into limit?? to avoid insert remove?
 		match lmap.entry(k) {
 			Entry::Occupied(mut entry) => {
-				// note that in this case we are not running pure lru as 
+				// note that in this case we are not running pure lru as
 				// it would require to remove first
 				*storage_used_size -= entry.get().estimate_size();
 				entry.insert(v);
@@ -143,7 +143,7 @@ impl<K: EstimateSize + Eq + StdHash, V: EstimateSize> LRUMap<K, V> {
 	}
 
 }
- 
+
 impl<B: BlockT, H: Hasher> Cache<B, H> {
 	/// Returns the used memory size of the storage cache in bytes.
 	pub fn used_storage_cache_size(&self) -> usize {
@@ -563,7 +563,7 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_primitives::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
+	use sr_primitives::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
 	use state_machine::backend::InMemory;
 	use primitives::Blake2Hasher;
 

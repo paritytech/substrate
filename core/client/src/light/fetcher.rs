@@ -24,7 +24,7 @@ use std::future::Future;
 use hash_db::{HashDB, Hasher};
 use parity_codec::{Decode, Encode};
 use primitives::{ChangesTrieConfiguration, convert_hash};
-use runtime_primitives::traits::{
+use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
 	SimpleArithmetic, CheckedConversion,
 };
@@ -502,7 +502,7 @@ pub mod tests {
 	use crate::light::blockchain::tests::{DummyStorage, DummyBlockchain};
 	use primitives::{blake2_256, Blake2Hasher, H256};
 	use primitives::storage::{well_known_keys, StorageKey};
-	use runtime_primitives::generic::BlockId;
+	use sr_primitives::generic::BlockId;
 	use state_machine::Backend;
 	use super::*;
 

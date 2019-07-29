@@ -38,7 +38,7 @@ use libp2p::core::{transport::boxed::Boxed, muxing::StreamMuxerBox};
 use libp2p::swarm::NetworkBehaviour;
 use parking_lot::Mutex;
 use peerset::PeersetHandle;
-use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
+use sr_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
 
 use crate::{behaviour::{Behaviour, BehaviourOut}, config::parse_str_addr};
 use crate::{NetworkState, NetworkStateNotConnectedPeer, NetworkStatePeer};
@@ -536,7 +536,7 @@ pub trait NetworkStateInfo {
 
 impl<B, S, H> NetworkStateInfo for NetworkService<B, S, H>
 	where
-		B: runtime_primitives::traits::Block,
+		B: sr_primitives::traits::Block,
 		S: NetworkSpecialization<B>,
 		H: ExHashT,
 {

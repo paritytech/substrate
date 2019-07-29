@@ -21,10 +21,10 @@ use rstd::prelude::*;
 use runtime_io::{storage_root, enumerated_trie_root, storage_changes_root, twox_128, blake2_256};
 use runtime_support::storage::{self, StorageValue, StorageMap};
 use runtime_support::storage_items;
-use runtime_primitives::traits::{Hash as HashT, BlakeTwo256, Header as _};
-use runtime_primitives::generic;
-use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult};
-use runtime_primitives::transaction_validity::{TransactionValidity, ValidTransaction};
+use sr_primitives::traits::{Hash as HashT, BlakeTwo256, Header as _};
+use sr_primitives::generic;
+use sr_primitives::{ApplyError, ApplyOutcome, ApplyResult};
+use sr_primitives::transaction_validity::{TransactionValidity, ValidTransaction};
 use parity_codec::{KeyedVec, Encode};
 use super::{
 	AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest, AuthorityId
@@ -232,7 +232,7 @@ pub fn finalize_block() -> Header {
 
 #[inline(always)]
 fn check_signature(utx: &Extrinsic) -> Result<(), ApplyError> {
-	use runtime_primitives::traits::BlindCheckable;
+	use sr_primitives::traits::BlindCheckable;
 	utx.clone().check().map_err(|_| ApplyError::BadSignature)?;
 	Ok(())
 }

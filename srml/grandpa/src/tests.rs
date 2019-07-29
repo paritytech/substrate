@@ -18,8 +18,8 @@
 
 #![cfg(test)]
 
-use primitives::testing::Digest;
-use primitives::traits::{Header, OnFinalize};
+use sr_primitives::testing::Digest;
+use sr_primitives::traits::{Header, OnFinalize};
 use runtime_io::with_externalities;
 use crate::mock::*;
 use system::{EventRecord, Phase};

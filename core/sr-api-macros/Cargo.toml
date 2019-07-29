@@ -18,9 +18,9 @@ proc-macro-crate = "0.1.3"
 client = { package = "substrate-client", path = "../client" }
 test-client = { package = "substrate-test-runtime-client", path = "../test-runtime/client" }
 state_machine = { package = "substrate-state-machine", path = "../state-machine" }
-runtime_primitives = { package = "sr-primitives", path = "../sr-primitives" }
+sr-primitives = {  path = "../sr-primitives" }
 sr-version = { path = "../sr-version" }
-substrate-primitives = { path = "../primitives" }
+primitives = { package = "substrate-primitives",  path = "../primitives" }
 criterion = "0.2"
 consensus_common = { package = "substrate-consensus-common", path = "../consensus/common" }
 codec = { package = "parity-codec", version = "4.1.1" }

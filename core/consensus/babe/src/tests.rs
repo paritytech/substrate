@@ -25,7 +25,7 @@ use client::{LongestChain, block_builder::BlockBuilder};
 use consensus_common::NoNetwork as DummyOracle;
 use network::test::*;
 use network::test::{Block as TestBlock, PeersClient};
-use runtime_primitives::traits::{Block as BlockT, DigestFor};
+use sr_primitives::traits::{Block as BlockT, DigestFor};
 use network::config::ProtocolConfig;
 use tokio::runtime::current_thread;
 use keyring::sr25519::Keyring;
