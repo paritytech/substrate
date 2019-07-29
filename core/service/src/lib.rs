@@ -874,7 +874,7 @@ where
 	C: network::ClientHandle<B> + Send + Sync,
 	PoolApi: ChainApi<Block=B, Hash=H, Error=E>,
 	B: BlockT,
-	H: std::hash::Hash + Eq + runtime_primitives::traits::Member + serde::Serialize,
+	H: std::hash::Hash + Eq + sr_primitives::traits::Member + serde::Serialize,
 	E: txpool::error::IntoPoolError + From<txpool::error::Error>,
 {
 	fn transactions(&self) -> Vec<(H, <B as BlockT>::Extrinsic)> {
