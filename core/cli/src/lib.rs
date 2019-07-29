@@ -52,7 +52,7 @@ use params::{
 	NetworkConfigurationParams, MergeParameters, TransactionPoolParams,
 	NodeKeyParams, NodeKeyType, Cors,
 };
-pub use params::{NoCustom, CoreParams, SharedParams};
+pub use params::{NoCustom, CoreParams, SharedParams, ExecutionStrategy as ExecutionStrategyParam};
 pub use traits::{GetLogFilter, AugmentClap};
 use app_dirs::{AppInfo, AppDataType};
 use log::info;
@@ -643,7 +643,12 @@ where
 	E: IntoExit,
 	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 {
-	let config = create_config_with_db_path(spec_factory, &cli.shared_params, version)?;
+	let mut config = create_config_with_db_path(spec_factory, &cli.shared_params, version)?;
+	config.execution_strategies = ExecutionStrategies {
+		importing: cli.execution.into(),
+		other: cli.execution.into(),
+		..Default::default()
+	};
 
 	let file: Box<dyn Read> = match cli.input {
 		Some(filename) => Box::new(File::open(filename)?),
