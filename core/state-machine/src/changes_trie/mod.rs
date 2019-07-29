@@ -139,6 +139,17 @@ impl<'a, H: Hasher, N: BlockNumber> crate::TrieBackendStorage<H> for TrieBackend
 /// Changes trie configuration.
 pub type Configuration = primitives::ChangesTrieConfiguration;
 
+/// Blocks range where configuration has been constant.
+#[derive(Clone)]
+pub struct ConfigurationRange<'a, N> {
+	/// Active configuration.
+	pub config: &'a Configuration,
+	/// Zero block of this configuration. The configuration is active starting from the next block.
+	pub zero: N,
+	/// End block of this configuration. It is the last block where configuration has been active.
+	pub end: Option<N>,
+}
+
 impl<'a, H, Number> State<'a, H, Number> {
 	/// Create state with given config and storage.
 	pub fn new(
