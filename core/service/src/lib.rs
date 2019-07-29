@@ -152,13 +152,6 @@ pub struct TelemetryOnConnect {
 }
 
 impl<Components: components::Components> Service<Components> {
-	/// Get event stream for telemetry connection established events.
-	pub fn telemetry_on_connect_stream(&self) -> TelemetryOnConnectNotifications {
-		let (sink, stream) = mpsc::unbounded();
-		self._telemetry_on_connect_sinks.lock().push(sink);
-		stream
-	}
-
 	/// Creates a new service.
 	pub fn new(
 		mut config: FactoryFullConfiguration<Components::Factory>,
@@ -500,6 +493,13 @@ impl<Components: components::Components> Service<Components> {
 			_offchain_workers: offchain_workers,
 			_telemetry_on_connect_sinks: telemetry_connection_sinks.clone(),
 		})
+	}
+
+	/// Get event stream for telemetry connection established events.
+	pub fn telemetry_on_connect_stream(&self) -> TelemetryOnConnectNotifications {
+		let (sink, stream) = mpsc::unbounded();
+		self._telemetry_on_connect_sinks.lock().push(sink);
+		stream
 	}
 
 	/// give the authority key, if we are an authority and have a key
