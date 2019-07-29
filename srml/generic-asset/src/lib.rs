@@ -151,7 +151,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use parity_scale_codec::{Decode, Encode, HasCompact, Input, Output, Error};
+use codec::{Decode, Encode, HasCompact, Input, Output, Error};
 
 use sr_primitives::traits::{
 	CheckedAdd, CheckedSub, MaybeSerializeDebug, Member, One, Saturating, SimpleArithmetic, Zero, Bounded
@@ -484,7 +484,7 @@ decl_storage! {
 				config.endowed_accounts.iter().for_each(|account_id| {
 					storage.insert(
 						<FreeBalance<T>>::key_for(asset_id, account_id),
-						<T::Balance as parity_scale_codec::Encode>::encode(&config.initial_balance)
+						<T::Balance as codec::Encode>::encode(&config.initial_balance)
 					);
 				});
 			});

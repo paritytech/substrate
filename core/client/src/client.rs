@@ -51,7 +51,7 @@ use primitives::{
 };
 use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use state_machine::{
 	DBValue, Backend as StateBackend, CodeExecutor, ChangesTrieAnchorBlockId,
 	ExecutionStrategy, ExecutionManager, prove_read, prove_child_read,

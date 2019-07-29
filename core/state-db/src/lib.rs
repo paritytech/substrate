@@ -35,7 +35,6 @@ mod pruning;
 
 use std::fmt;
 use parking_lot::RwLock;
-use parity_scale_codec as codec;
 use codec::Codec;
 use std::collections::{VecDeque, HashMap, hash_map::Entry};
 use noncanonical::NonCanonicalOverlay;

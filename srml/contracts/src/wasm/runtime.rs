@@ -26,7 +26,7 @@ use sandbox;
 use system;
 use rstd::prelude::*;
 use rstd::mem;
-use parity_scale_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use sr_primitives::traits::{Bounded, SaturatedConversion};
 
 /// Enumerates all possible *special* trap conditions.

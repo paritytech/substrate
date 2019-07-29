@@ -34,7 +34,7 @@ use consensus_common::{
 	SelectChain
 };
 use consensus_common::block_import::BlockImport;
-use parity_scale_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, ProvideRuntimeApi, SimpleArithmetic,

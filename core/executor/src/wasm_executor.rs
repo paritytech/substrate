@@ -26,7 +26,7 @@ use wasmi::{
 };
 use state_machine::{Externalities, ChildStorageKey};
 use crate::error::{Error, Result};
-use parity_scale_codec::Encode;
+use codec::Encode;
 use primitives::{blake2_128, blake2_256, twox_64, twox_128, twox_256, ed25519, sr25519, Pair};
 use primitives::offchain;
 use primitives::hexdisplay::HexDisplay;
@@ -1081,7 +1081,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		request_id: u32,
 		written_out: *mut u32
 	) -> *mut u8 => {
-		use parity_scale_codec::Encode;
+		use codec::Encode;
 
 		let headers = this.ext.offchain()
 			.map(|api| api.http_response_headers(offchain::HttpRequestId(request_id as u16)))
@@ -1172,7 +1172,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		return_val_len: usize,
 		state: usize
 	) -> u32 => {
-		use parity_scale_codec::{Decode, Encode};
+		use codec::{Decode, Encode};
 
 		trace!(target: "sr-sandbox", "invoke, instance_idx={}", instance_idx);
 		let export = this.memory.get(export_ptr, export_len as usize)
@@ -1448,7 +1448,7 @@ impl WasmExecutor {
 mod tests {
 	use super::*;
 
-	use parity_scale_codec::Encode;
+	use codec::Encode;
 
 	use state_machine::TestExternalities as CoreTestExternalities;
 	use hex_literal::hex;

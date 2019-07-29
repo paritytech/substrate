@@ -42,7 +42,7 @@ use client::backend::NewBlockState;
 use client::blockchain::HeaderBackend;
 use client::ExecutionStrategies;
 use client::backend::{StorageCollection, ChildStorageCollection};
-use parity_scale_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use hash_db::Hasher;
 use kvdb::{KeyValueDB, DBTransaction};
 use trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};

@@ -27,7 +27,6 @@ use crate::on_demand_layer::OnDemand;
 use crate::service::{ExHashT, TransactionPool};
 use bitflags::bitflags;
 use consensus::import_queue::ImportQueue;
-use parity_scale_codec as codec;
 use sr_primitives::traits::{Block as BlockT};
 use std::sync::Arc;
 use libp2p::identity::{Keypair, secp256k1, ed25519};

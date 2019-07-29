@@ -17,7 +17,7 @@
 //! Offchain workers types
 
 use crate::crypto;
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use rstd::prelude::{Vec, Box};
 use rstd::convert::TryFrom;
 

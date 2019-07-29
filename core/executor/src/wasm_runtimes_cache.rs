@@ -19,7 +19,7 @@
 use crate::error::Error;
 use crate::wasm_executor::WasmExecutor;
 use log::{trace, warn};
-use parity_scale_codec::Decode;
+use codec::Decode;
 use parity_wasm::elements::{deserialize_buffer, DataSegment, Instruction, Module as RawModule};
 use primitives::storage::well_known_keys;
 use primitives::Blake2Hasher;

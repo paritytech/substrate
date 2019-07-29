@@ -21,7 +21,7 @@
 
 use primitives::Pair;
 use aura_primitives::AURA_ENGINE_ID;
-use parity_scale_codec::{Encode, Codec};
+use codec::{Encode, Codec};
 use std::fmt::Debug;
 
 type Signature<P> = <P as Pair>::Signature;

@@ -20,7 +20,7 @@ use std::collections::BTreeMap;
 use std::cmp::Reverse;
 use kvdb::{KeyValueDB, DBTransaction};
 use sr_primitives::traits::SimpleArithmetic;
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use crate::error;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

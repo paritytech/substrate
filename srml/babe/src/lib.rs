@@ -28,7 +28,7 @@ use sr_primitives::{generic::DigestItem, ConsensusEngineId};
 use sr_primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert};
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};

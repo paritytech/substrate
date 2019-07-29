@@ -29,7 +29,7 @@ use client::cht;
 use client::leaves::{LeafSet, FinalizationDisplaced};
 use client::error::{Error as ClientError, Result as ClientResult};
 use client::light::blockchain::Storage as LightBlockchainStorage;
-use parity_scale_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use primitives::Blake2Hasher;
 use sr_primitives::generic::{DigestItem, BlockId};
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor};

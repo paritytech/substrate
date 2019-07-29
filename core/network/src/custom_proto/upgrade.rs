@@ -22,7 +22,7 @@ use libp2p::tokio_codec::Framed;
 use log::warn;
 use std::{collections::VecDeque, io, marker::PhantomData, vec::IntoIter as VecIntoIter};
 use futures::{prelude::*, future, stream};
-use parity_scale_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use runtime_primitives::traits::Block as BlockT;
 use tokio_io::{AsyncRead, AsyncWrite};
 use unsigned_varint::codec::UviBytes;

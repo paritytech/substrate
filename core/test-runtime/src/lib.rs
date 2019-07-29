@@ -23,7 +23,7 @@ pub mod genesismap;
 pub mod system;
 
 use rstd::{prelude::*, marker::PhantomData};
-use parity_scale_codec::{Encode, Decode, Input, Error};
+use codec::{Encode, Decode, Input, Error};
 
 use primitives::Blake2Hasher;
 use trie_db::{TrieMut, Trie};

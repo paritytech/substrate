@@ -5,4 +5,4 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-parity-scale-codec = { path = "/home/thiolliere/Developpement/parity-scale-codec", features = ["derive"] }
+codec = { package = "parity-scale-codec", path = "/home/thiolliere/Developpement/parity-scale-codec", features = ["derive"] }

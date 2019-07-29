@@ -51,7 +51,7 @@
 pub use timestamp;
 
 use rstd::{result, prelude::*};
-use parity_scale_codec::Encode;
+use codec::Encode;
 use srml_support::{decl_storage, decl_module, Parameter, storage::StorageValue, traits::Get};
 use sr_primitives::{
 	traits::{SaturatedConversion, Saturating, Zero, One, Member, IsMember, TypedKey},
@@ -65,7 +65,7 @@ use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent
 use inherents::{InherentDataProviders, ProvideInherentData};
 use substrate_consensus_aura_primitives::{AURA_ENGINE_ID, ConsensusLog};
 #[cfg(feature = "std")]
-use parity_scale_codec::Decode;
+use codec::Decode;
 
 mod mock;
 mod tests;

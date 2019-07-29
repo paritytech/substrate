@@ -35,7 +35,7 @@ use futures::prelude::*;
 use futures::sync::{oneshot, mpsc};
 use log::{debug, trace};
 use tokio_executor::Executor;
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use primitives::{ed25519, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};

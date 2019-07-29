@@ -18,7 +18,7 @@
 
 use super::MAX_BLOCK_SIZE;
 
-use parity_scale_codec::Encode;
+use codec::Encode;
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, One, CheckedConversion};
 
 // This is just a best effort to encode the number. None indicated that it's too big to encode
@@ -33,7 +33,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
 	/// Proposal provided not a block.
 	#[display(fmt="Proposal provided not a block: decoding error: {}", _0)]
-	BadProposalFormat(parity_scale_codec::Error),
+	BadProposalFormat(codec::Error),
 	/// Proposal had wrong parent hash.
 	#[display(fmt="Proposal had wrong parent hash. Expected {:?}, got {:?}", expected, got)]
 	WrongParentHash { expected: String, got: String },

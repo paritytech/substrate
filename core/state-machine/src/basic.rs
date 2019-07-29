@@ -23,7 +23,7 @@ use hash_db::Hasher;
 use trie::trie_root;
 use primitives::offchain;
 use primitives::storage::well_known_keys::{HEAP_PAGES, is_child_storage_key};
-use parity_scale_codec::Encode;
+use codec::Encode;
 use super::{ChildStorageKey, Externalities};
 use log::warn;
 

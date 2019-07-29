@@ -25,7 +25,7 @@ use rstd::collections::btree_set::BTreeSet;
 use srml_support::{decl_module, decl_storage, for_each_tuple, StorageValue};
 use srml_support::traits::{FindAuthor, VerifySeal, Get};
 use srml_support::dispatch::Result as DispatchResult;
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use system::ensure_none;
 use sr_primitives::traits::{SimpleArithmetic, Header as HeaderT, One, Zero};
 use sr_primitives::weights::SimpleDispatchInfo;

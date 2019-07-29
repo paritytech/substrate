@@ -34,7 +34,7 @@ use sr_primitives::traits::{
 };
 use std::{collections::HashMap, sync::Arc, u64, fmt::{Debug, Display}, pin::Pin, time::{Instant, Duration}};
 use runtime_support::serde::{Serialize, Deserialize};
-use parity_scale_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use parking_lot::{Mutex, MutexGuard};
 use primitives::{Blake2Hasher, H256, Pair, Public, sr25519};
 use merlin::Transcript;

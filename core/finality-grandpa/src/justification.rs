@@ -20,7 +20,7 @@ use client::{CallExecutor, Client};
 use client::backend::Backend;
 use client::blockchain::HeaderBackend;
 use client::error::Error as ClientError;
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use grandpa::voter_set::VoterSet;
 use grandpa::{Error as GrandpaError};
 use sr_primitives::generic::BlockId;

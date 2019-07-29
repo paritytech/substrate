@@ -21,7 +21,7 @@
 
 mod digest;
 
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use rstd::vec::Vec;
 use sr_primitives::ConsensusEngineId;
 use primitives::sr25519;

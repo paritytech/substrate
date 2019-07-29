@@ -27,11 +27,11 @@ use super::SlotNumber;
 use sr_primitives::{DigestItem, generic::OpaqueDigestItemId};
 #[cfg(feature = "std")]
 use std::fmt::Debug;
-use parity_scale_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 #[cfg(feature = "std")]
-use parity_scale_codec::Error;
+use codec::Error;
 #[cfg(feature = "std")]
-use parity_scale_codec::{Codec, Input};
+use codec::{Codec, Input};
 #[cfg(feature = "std")]
 use schnorrkel::vrf::{VRFProof, VRFOutput, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH};
 
@@ -74,7 +74,7 @@ impl Encode for BabePreDigest {
 			authority_index: self.authority_index,
 			slot_number: self.slot_number,
 		};
-		parity_scale_codec::Encode::encode(&tmp)
+		codec::Encode::encode(&tmp)
 	}
 }
 

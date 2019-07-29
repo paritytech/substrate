@@ -22,7 +22,7 @@ use rstd::prelude::*;
 use rstd::{result, convert::TryFrom};
 use sr_primitives::traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin, Hash};
 use sr_primitives::weights::SimpleDispatchInfo;
-use parity_scale_codec::{Encode, Decode, Input, Output, Error};
+use codec::{Encode, Decode, Input, Output, Error};
 use srml_support::{
 	decl_module, decl_storage, decl_event, ensure,
 	StorageValue, StorageMap, Parameter, Dispatchable, IsSubType, EnumerableStorageMap,

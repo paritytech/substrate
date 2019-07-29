@@ -18,7 +18,7 @@
 
 use std::fmt::Debug;
 use std::sync::Arc;
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
 use fork_tree::ForkTree;

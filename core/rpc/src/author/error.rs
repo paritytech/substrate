@@ -20,7 +20,6 @@ use client;
 use transaction_pool::txpool;
 use crate::rpc;
 use crate::errors;
-use parity_scale_codec::Error as CodecError;
 
 /// Author RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -37,7 +36,7 @@ pub enum Error {
 	Verification(Box<dyn std::error::Error + Send>),
 	/// Incorrect extrinsic format.
 	#[display(fmt="Invalid extrinsic format: {}", _0)]
-	BadFormat(CodecError),
+	BadFormat(codec::Error),
 }
 
 impl std::error::Error for Error {

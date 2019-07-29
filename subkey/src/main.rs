@@ -26,7 +26,7 @@ use primitives::{
 	ed25519, sr25519, hexdisplay::HexDisplay, Pair, Public, blake2_256,
 	crypto::{Ss58Codec, set_default_ss58_version, Ss58AddressFormat}
 };
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sr_primitives::generic::Era;
 use node_primitives::{Balance, Index, Hash};
 use node_runtime::{Call, UncheckedExtrinsic, BalancesCall, Runtime};

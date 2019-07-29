@@ -22,7 +22,7 @@ use std::marker::PhantomData;
 use std::future::Future;
 
 use hash_db::{HashDB, Hasher};
-use parity_scale_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use primitives::{ChangesTrieConfiguration, convert_hash};
 use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
@@ -486,7 +486,7 @@ impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H, Number> for RootsStorage<'a
 pub mod tests {
 	use futures::future::Ready;
 	use parking_lot::Mutex;
-	use parity_scale_codec::Decode;
+	use codec::Decode;
 	use crate::client::tests::prepare_client_with_key_changes;
 	use executor::{self, NativeExecutor};
 	use crate::error::Error as ClientError;

@@ -13,7 +13,7 @@ parking_lot = "0.8.0"
 tokio-executor = "0.1.7"
 tokio-timer = "0.2.11"
 rand = "0.6"
-parity-scale-codec = { path = "/home/thiolliere/Developpement/parity-scale-codec", features = ["derive"] }
+codec = { package = "parity-scale-codec", path = "/home/thiolliere/Developpement/parity-scale-codec", features = ["derive"] }
 sr-primitives = {  path = "../sr-primitives" }
 consensus_common = { package = "substrate-consensus-common", path = "../consensus/common" }
 primitives = { package = "substrate-primitives",  path = "../primitives" }

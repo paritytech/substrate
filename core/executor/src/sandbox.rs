@@ -20,7 +20,7 @@
 
 use crate::error::{Result, Error};
 use std::{collections::HashMap, rc::Rc};
-use parity_scale_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use primitives::sandbox as sandbox_primitives;
 use wasmi::{
 	Externals, FuncRef, ImportResolver, MemoryInstance, MemoryRef, Module, ModuleInstance,

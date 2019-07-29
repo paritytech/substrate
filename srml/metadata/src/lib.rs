@@ -25,8 +25,8 @@
 #[cfg(feature = "std")]
 use serde::Serialize;
 #[cfg(feature = "std")]
-use parity_scale_codec::{Decode, Input, Error};
-use parity_scale_codec::{Encode, Output};
+use codec::{Decode, Input, Error};
+use codec::{Encode, Output};
 use rstd::vec::Vec;
 
 #[cfg(feature = "std")]

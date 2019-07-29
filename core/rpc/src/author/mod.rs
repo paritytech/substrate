@@ -30,7 +30,7 @@ use crate::subscriptions::Subscriptions;
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use log::warn;
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use primitives::{Bytes, Blake2Hasher, H256};
 use sr_primitives::{generic, traits};
 use self::error::Result;

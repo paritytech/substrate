@@ -40,7 +40,7 @@ use futures03::stream::{StreamExt as _, TryStreamExt as _};
 use keystore::Store as Keystore;
 use network::{NetworkState, NetworkStateInfo};
 use log::{log, info, warn, debug, error, Level};
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use primitives::{Pair, ed25519, sr25519, crypto};
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{Header, NumberFor, SaturatedConversion, Zero};

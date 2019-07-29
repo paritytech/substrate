@@ -20,7 +20,7 @@
 use std::fmt;
 use rstd::convert::TryInto;
 use crate::Member;
-use parity_scale_codec::{Encode, Decode, Input, Output, Error};
+use codec::{Encode, Decode, Input, Output, Error};
 
 /// An indices-aware address, which can be either a direct `AccountId` or
 /// an index.
@@ -126,7 +126,7 @@ impl<AccountId, AccountIndex> Default for Address<AccountId, AccountIndex> where
 
 #[cfg(test)]
 mod tests {
-	use parity_scale_codec::{Encode, Decode};
+	use codec::{Encode, Decode};
 
 	type Address = super::Address<[u8; 8], u32>;
 	fn index(i: u32) -> Address { super::Address::Index(i) }

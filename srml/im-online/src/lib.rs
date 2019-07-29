@@ -74,7 +74,7 @@ use primitives::{
 	offchain::StorageKind,
 	sr25519, ed25519,
 };
-use parity_scale_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sr_primitives::{
 	ApplyError, traits::{Member, IsMember, Extrinsic as ExtrinsicT},
 	transaction_validity::{TransactionValidity, TransactionLongevity, ValidTransaction},
