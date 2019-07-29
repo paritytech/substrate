@@ -49,7 +49,7 @@
 //! use std::sync::Arc;
 //! use substrate_client::{Client, in_mem::Backend, LocalCallExecutor};
 //! use primitives::Blake2Hasher;
-//! use runtime_primitives::{StorageOverlay, ChildrenStorageOverlay};
+//! use sr_primitives::{StorageOverlay, ChildrenStorageOverlay};
 //! use executor::NativeExecutor;
 //!
 //! // In this example, we're using the `Block` and `RuntimeApi` types from the
