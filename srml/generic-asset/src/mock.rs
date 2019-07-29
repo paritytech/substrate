@@ -20,10 +20,7 @@
 
 #![cfg(test)]
 
-use primitives::{
-	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
-};
+use primitives::{Perbill, testing::Header, traits::{BlakeTwo256, IdentityLookup}};
 use substrate_primitives::{Blake2Hasher, H256};
 use support::{parameter_types, impl_outer_event, impl_outer_origin};
 
@@ -40,6 +37,9 @@ impl_outer_origin! {
 pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
+	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockLength: u32 = 2 * 1024;
+	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl system::Trait for Test {
 	type Origin = Origin;
@@ -52,6 +52,9 @@ impl system::Trait for Test {
 	type Header = Header;
 	type Event = TestEvent;
 	type WeightMultiplierUpdate = ();
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type MaximumBlockLength = MaximumBlockLength;
+	type AvailableBlockRatio = AvailableBlockRatio;
 	type BlockHashCount = BlockHashCount;
 }
 

@@ -18,7 +18,7 @@
 
 use crate::rstd::prelude::*;
 use crate::rstd::borrow::Borrow;
-use codec::{Codec, Encode, Decode, KeyedVec, Input, EncodeAppend};
+use codec::{Codec, Encode, Decode, KeyedVec, EncodeAppend};
 use hashed::generator::{HashedStorage, StorageHasher};
 use unhashed::generator::UnhashedStorage;
 
@@ -26,35 +26,6 @@ use unhashed::generator::UnhashedStorage;
 pub mod storage_items;
 pub mod unhashed;
 pub mod hashed;
-
-struct IncrementalInput<'a> {
-	key: &'a [u8],
-	pos: usize,
-}
-
-impl<'a> Input for IncrementalInput<'a> {
-	fn read(&mut self, into: &mut [u8]) -> usize {
-		let len = runtime_io::read_storage(self.key, into, self.pos).unwrap_or(0);
-		let read = crate::rstd::cmp::min(len, into.len());
-		self.pos += read;
-		read
-	}
-}
-
-struct IncrementalChildInput<'a> {
-	storage_key: &'a [u8],
-	key: &'a [u8],
-	pos: usize,
-}
-
-impl<'a> Input for IncrementalChildInput<'a> {
-	fn read(&mut self, into: &mut [u8]) -> usize {
-		let len = runtime_io::read_child_storage(self.storage_key, self.key, into, self.pos).unwrap_or(0);
-		let read = crate::rstd::cmp::min(len, into.len());
-		self.pos += read;
-		read
-	}
-}
 
 /// The underlying runtime storage.
 pub struct RuntimeStorage;
@@ -104,7 +75,7 @@ impl UnhashedStorage for RuntimeStorage {
 	}
 
 	/// Put a value in under a key.
-	fn put<T: Encode>(&mut self, key: &[u8], val: &T) {
+	fn put<T: Encode + ?Sized>(&mut self, key: &[u8], val: &T) {
 		unhashed::put(key, val)
 	}
 
@@ -332,60 +303,83 @@ impl<K: Codec, V: Codec, U> EnumerableStorageMap<K, V> for U
 /// is a hash of a `Key2`.
 ///
 /// /!\ be careful while choosing the Hash, indeed malicious could craft second keys to lower the trie.
-pub trait StorageDoubleMap<K1: Codec, K2: Codec, V: Codec> {
+pub trait StorageDoubleMap<K1: Encode, K2: Encode, V: Codec> {
 	/// The type that get/take returns.
 	type Query;
 
-	/// Get the prefix key in storage.
 	fn prefix() -> &'static [u8];
 
-	/// Get the storage key used to fetch a value corresponding to a specific key.
-	fn key_for<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2) -> Vec<u8>;
-
-	/// Get the storage prefix used to fetch keys corresponding to a specific key1.
-	fn prefix_for<KArg1: Borrow<K1>>(k1: KArg1) -> Vec<u8>;
-
-	/// true if the value is defined in storage.
-	fn exists<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2) -> bool;
-
-	/// Load the value associated with the given key from the map.
-	fn get<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2) -> Self::Query;
-
-	/// Take the value under a key.
-	fn take<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2) -> Self::Query;
-
-	/// Store a value to be associated with the given key from the map.
-	fn insert<KArg1: Borrow<K1>, KArg2: Borrow<K2>, VArg: Borrow<V>>(k1: KArg1, k2: KArg2, val: VArg);
-
-	/// Remove the value under a key.
-	fn remove<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2);
-
-	/// Removes all entries that shares the `k1` as the first key.
-	fn remove_prefix<KArg1: Borrow<K1>>(k1: KArg1);
-
-	/// Mutate the value under a key.
-	fn mutate<KArg1, KArg2, R, F>(k1: KArg1, k2: KArg2, f: F) -> R
+	fn key_for<KArg1, KArg2>(k1: &KArg1, k2: &KArg2) -> Vec<u8>
 	where
-		KArg1: Borrow<K1>,
-		KArg2: Borrow<K2>,
+		K1: Borrow<KArg1>,
+		K2: Borrow<KArg2>,
+		KArg1: ?Sized + Encode,
+		KArg2: ?Sized + Encode;
+
+	fn prefix_for<KArg1>(k1: &KArg1) -> Vec<u8> where KArg1: ?Sized + Encode, K1: Borrow<KArg1>;
+
+	fn exists<KArg1, KArg2>(k1: &KArg1, k2: &KArg2) -> bool
+	where
+		K1: Borrow<KArg1>,
+		K2: Borrow<KArg2>,
+		KArg1: ?Sized + Encode,
+		KArg2: ?Sized + Encode;
+
+	fn get<KArg1, KArg2>(k1: &KArg1, k2: &KArg2) -> Self::Query
+	where
+		K1: Borrow<KArg1>,
+		K2: Borrow<KArg2>,
+		KArg1: ?Sized + Encode,
+		KArg2: ?Sized + Encode;
+
+	fn take<KArg1, KArg2>(k1: &KArg1, k2: &KArg2) -> Self::Query
+	where
+		K1: Borrow<KArg1>,
+		K2: Borrow<KArg2>,
+		KArg1: ?Sized + Encode,
+		KArg2: ?Sized + Encode;
+
+	fn insert<KArg1, KArg2, VArg>(k1: &KArg1, k2: &KArg2, val: &VArg)
+	where
+		K1: Borrow<KArg1>,
+		K2: Borrow<KArg2>,
+		V: Borrow<VArg>,
+		KArg1: ?Sized + Encode,
+		KArg2: ?Sized + Encode,
+		VArg: ?Sized + Encode;
+
+	fn remove<KArg1, KArg2>(k1: &KArg1, k2: &KArg2)
+	where
+		K1: Borrow<KArg1>,
+		K2: Borrow<KArg2>,
+		KArg1: ?Sized + Encode,
+		KArg2: ?Sized + Encode;
+
+	fn remove_prefix<KArg1>(k1: &KArg1) where KArg1: ?Sized + Encode, K1: Borrow<KArg1>;
+
+	fn mutate<KArg1, KArg2, R, F>(k1: &KArg1, k2: &KArg2, f: F) -> R
+	where
+		K1: Borrow<KArg1>,
+		K2: Borrow<KArg2>,
+		KArg1: ?Sized + Encode,
+		KArg2: ?Sized + Encode,
 		F: FnOnce(&mut Self::Query) -> R;
 
-	/// Append the given items to the value under the key specified.
-	///
-	/// `V` is required to implement `codec::EncodeAppend<Item=I>`.
 	fn append<KArg1, KArg2, I>(
-		k1: KArg1,
-		k2: KArg2,
+		k1: &KArg1,
+		k2: &KArg2,
 		items: &[I],
 	) -> Result<(), &'static str>
 	where
-		KArg1: Borrow<K1>,
-		KArg2: Borrow<K2>,
+		K1: Borrow<KArg1>,
+		K2: Borrow<KArg2>,
+		KArg1: ?Sized + Encode,
+		KArg2: ?Sized + Encode,
 		I: codec::Encode,
 		V: EncodeAppend<Item=I>;
 }
 
-impl<K1: Codec, K2: Codec, V: Codec, U> StorageDoubleMap<K1, K2, V> for U
+impl<K1: Encode, K2: Encode, V: Codec, U> StorageDoubleMap<K1, K2, V> for U
 where
 	U: unhashed::generator::StorageDoubleMap<K1, K2, V>
 {
@@ -395,59 +389,101 @@ where
 		<U as unhashed::generator::StorageDoubleMap<K1, K2, V>>::prefix()
 	}
 
-	fn key_for<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2) -> Vec<u8> {
-		<U as unhashed::generator::StorageDoubleMap<K1, K2, V>>::key_for(k1.borrow(), k2.borrow())
+	fn key_for<KArg1, KArg2>(k1: &KArg1, k2: &KArg2) -> Vec<u8>
+	where
+		K1: Borrow<KArg1>,
+		K2: Borrow<KArg2>,
+		KArg1: ?Sized + Encode,
+		KArg2: ?Sized + Encode,
+	{
+		<U as unhashed::generator::StorageDoubleMap<K1, K2, V>>::key_for(k1, k2)
 	}
 
-	fn prefix_for<KArg1: Borrow<K1>>(k1: KArg1) -> Vec<u8> {
-		<U as unhashed::generator::StorageDoubleMap<K1, K2, V>>::prefix_for(k1.borrow())
+	fn prefix_for<KArg1>(k1: &KArg1) -> Vec<u8> where KArg1: ?Sized + Encode, K1: Borrow<KArg1> {
+		<U as unhashed::generator::StorageDoubleMap<K1, K2, V>>::prefix_for(k1)
 	}
 
-	fn exists<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2) -> bool {
-		U::exists(k1.borrow(), k2.borrow(), &RuntimeStorage)
+	fn exists<KArg1, KArg2>(k1: &KArg1, k2: &KArg2) -> bool
+	where
+		K1: Borrow<KArg1>,
+		K2: Borrow<KArg2>,
+		KArg1: ?Sized + Encode,
+		KArg2: ?Sized + Encode,
+	{
+		U::exists(k1, k2, &RuntimeStorage)
 	}
 
-	fn get<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2) -> Self::Query {
-		U::get(k1.borrow(), k2.borrow(), &RuntimeStorage)
+	fn get<KArg1, KArg2>(k1: &KArg1, k2: &KArg2) -> Self::Query
+	where
+		K1: Borrow<KArg1>,
+		K2: Borrow<KArg2>,
+		KArg1: ?Sized + Encode,
+		KArg2: ?Sized + Encode,
+	{
+		U::get(k1, k2, &RuntimeStorage)
 	}
 
-	fn take<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2) -> Self::Query {
+	fn take<KArg1, KArg2>(k1: &KArg1, k2: &KArg2) -> Self::Query
+	where
+		K1: Borrow<KArg1>,
+		K2: Borrow<KArg2>,
+		KArg1: ?Sized + Encode,
+		KArg2: ?Sized + Encode,
+	{
 		U::take(k1.borrow(), k2.borrow(), &mut RuntimeStorage)
 	}
 
-	fn insert<KArg1: Borrow<K1>, KArg2: Borrow<K2>, VArg: Borrow<V>>(k1: KArg1, k2: KArg2, val: VArg) {
-		U::insert(k1.borrow(), k2.borrow(), val.borrow(), &mut RuntimeStorage)
-	}
-
-	fn remove<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2) {
-		U::remove(k1.borrow(), k2.borrow(), &mut RuntimeStorage)
-	}
-
-	fn remove_prefix<KArg1: Borrow<K1>>(k1: KArg1) {
-		U::remove_prefix(k1.borrow(), &mut RuntimeStorage)
-	}
-
-	fn mutate<KArg1, KArg2, R, F>(k1: KArg1, k2: KArg2, f: F) -> R
+	fn insert<KArg1, KArg2, VArg>(k1: &KArg1, k2: &KArg2, val: &VArg)
 	where
-		KArg1: Borrow<K1>,
-		KArg2: Borrow<K2>,
+		K1: Borrow<KArg1>,
+		K2: Borrow<KArg2>,
+		V: Borrow<VArg>,
+		KArg1: ?Sized + Encode,
+		KArg2: ?Sized + Encode,
+		VArg: ?Sized + Encode,
+	{
+		U::insert(k1, k2, val, &mut RuntimeStorage)
+	}
+
+	fn remove<KArg1, KArg2>(k1: &KArg1, k2: &KArg2)
+	where
+		K1: Borrow<KArg1>,
+		K2: Borrow<KArg2>,
+		KArg1: ?Sized + Encode,
+		KArg2: ?Sized + Encode,
+	{
+		U::remove(k1, k2, &mut RuntimeStorage)
+	}
+
+	fn remove_prefix<KArg1>(k1: &KArg1) where KArg1: ?Sized + Encode, K1: Borrow<KArg1> {
+		U::remove_prefix(k1, &mut RuntimeStorage)
+	}
+
+	fn mutate<KArg1, KArg2, R, F>(k1: &KArg1, k2: &KArg2, f: F) -> R
+	where
+		K1: Borrow<KArg1>,
+		K2: Borrow<KArg2>,
+		KArg1: ?Sized + Encode,
+		KArg2: ?Sized + Encode,
 		F: FnOnce(&mut Self::Query) -> R
 	{
-		U::mutate(k1.borrow(), k2.borrow(), f, &mut RuntimeStorage)
+		U::mutate(k1, k2, f, &mut RuntimeStorage)
 	}
 
 	fn append<KArg1, KArg2, I>(
-		k1: KArg1,
-		k2: KArg2,
+		k1: &KArg1,
+		k2: &KArg2,
 		items: &[I],
 	) -> Result<(), &'static str>
 	where
-		KArg1: Borrow<K1>,
-		KArg2: Borrow<K2>,
+		K1: Borrow<KArg1>,
+		K2: Borrow<KArg2>,
+		KArg1: ?Sized + Encode,
+		KArg2: ?Sized + Encode,
 		I: codec::Encode,
 		V: EncodeAppend<Item=I>,
 	{
-		U::append(k1.borrow(), k2.borrow(), items, &mut RuntimeStorage)
+		U::append(k1, k2, items, &mut RuntimeStorage)
 	}
 }
 
@@ -457,17 +493,12 @@ where
 /// Note that `storage_key` must be unique and strong (strong in the sense of being long enough to
 /// avoid collision from a resistant hash function (which unique implies)).
 pub mod child {
-	use super::{Codec, Decode, Vec, IncrementalChildInput};
+	use super::{Codec, Decode, Vec};
 
 	/// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 	pub fn get<T: Codec + Sized>(storage_key: &[u8], key: &[u8]) -> Option<T> {
-		runtime_io::read_child_storage(storage_key, key, &mut [0; 0][..], 0).map(|_| {
-			let mut input = IncrementalChildInput {
-				storage_key,
-				key,
-				pos: 0,
-			};
-			Decode::decode(&mut input).expect("storage is not null, therefore must be a valid type")
+		runtime_io::child_storage(storage_key, key).map(|v| {
+			Decode::decode(&mut &v[..]).expect("storage is not null, therefore must be a valid type")
 		})
 	}
 

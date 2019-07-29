@@ -18,7 +18,7 @@
 
 #![cfg(test)]
 
-use primitives::{DigestItem, traits::IdentityLookup, testing::{Header, UintAuthorityId}};
+use primitives::{Perbill, DigestItem, traits::IdentityLookup, testing::{Header, UintAuthorityId}};
 use runtime_io;
 use srml_support::{impl_outer_origin, impl_outer_event, parameter_types};
 use substrate_primitives::{H256, Blake2Hasher};
@@ -43,6 +43,9 @@ impl Trait for Test {
 }
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
+	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockLength: u32 = 2 * 1024;
+	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl system::Trait for Test {
 	type Origin = Origin;
@@ -56,6 +59,9 @@ impl system::Trait for Test {
 	type WeightMultiplierUpdate = ();
 	type Event = TestEvent;
 	type BlockHashCount = BlockHashCount;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type MaximumBlockLength = MaximumBlockLength;
+	type AvailableBlockRatio = AvailableBlockRatio;
 }
 
 mod grandpa {

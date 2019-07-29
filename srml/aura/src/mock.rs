@@ -19,7 +19,7 @@
 #![cfg(test)]
 
 use primitives::{
-	traits::IdentityLookup,
+	traits::IdentityLookup, Perbill,
 	testing::{Header, UintAuthorityId},
 };
 use srml_support::{impl_outer_origin, parameter_types};
@@ -37,6 +37,9 @@ pub struct Test;
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
+	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockLength: u32 = 2 * 1024;
+	pub const AvailableBlockRatio: Perbill = Perbill::one();
 	pub const MinimumPeriod: u64 = 1;
 }
 
@@ -52,6 +55,9 @@ impl system::Trait for Test {
 	type WeightMultiplierUpdate = ();
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type AvailableBlockRatio = AvailableBlockRatio;
+	type MaximumBlockLength = MaximumBlockLength;
 }
 
 impl timestamp::Trait for Test {

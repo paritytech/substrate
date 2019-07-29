@@ -14,14 +14,21 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{str::FromStr, sync::Arc, convert::TryFrom};
+use std::{
+	str::FromStr, 
+	sync::Arc, 
+	convert::{TryFrom, TryInto}, 
+	time::{SystemTime, Duration},
+	thread::sleep,
+};
 use client::backend::OffchainStorage;
 use crate::AuthorityKeyProvider;
 use futures::{Stream, Future, sync::mpsc};
 use log::{info, debug, warn, error};
 use parity_codec::{Encode, Decode};
 use primitives::offchain::{
-	Timestamp, HttpRequestId, HttpRequestStatus, HttpError,
+	Timestamp,
+	HttpRequestId, HttpRequestStatus, HttpError,
 	Externalities as OffchainExt,
 	CryptoKind, CryptoKey,
 	StorageKind,
@@ -308,11 +315,29 @@ where
 	}
 
 	fn timestamp(&mut self) -> Timestamp {
-		unavailable_yet("timestamp")
+		let now = SystemTime::now();
+		let epoch_duration = now.duration_since(SystemTime::UNIX_EPOCH);
+		match epoch_duration {
+			Err(_) => {
+				// Current time is earlier than UNIX_EPOCH.
+				Timestamp::from_unix_millis(0)
+			},
+			Ok(d) => {
+				let duration = d.as_millis();
+				// Assuming overflow won't happen for a few hundred years.
+				Timestamp::from_unix_millis(duration.try_into()
+					.expect("epoch milliseconds won't overflow u64 for hundreds of years; qed"))
+			}
+		}
 	}
 
-	fn sleep_until(&mut self, _deadline: Timestamp) {
-		unavailable_yet::<()>("sleep_until")
+	fn sleep_until(&mut self, deadline: Timestamp) {
+		// Get current timestamp.
+		let now = self.timestamp();
+		// Calculate the diff with the deadline.
+		let diff = deadline.diff(&now);
+		// Call thread::sleep for the diff duration.
+		sleep(Duration::from_millis(diff.millis()));
 	}
 
 	fn random_seed(&mut self) -> [u8; 32] {
@@ -330,12 +355,12 @@ where
 		&mut self,
 		kind: StorageKind,
 		key: &[u8],
-		old_value: &[u8],
+		old_value: Option<&[u8]>,
 		new_value: &[u8],
 	) -> bool {
 		match kind {
 			StorageKind::PERSISTENT => {
-				self.db.compare_and_set(STORAGE_PREFIX, key, Some(old_value), new_value)
+				self.db.compare_and_set(STORAGE_PREFIX, key, old_value, new_value)
 			},
 			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
 		}
@@ -575,6 +600,40 @@ mod tests {
 	}
 
 	#[test]
+	fn should_get_timestamp() {
+		let mut api = offchain_api().0;
+		
+		// Get timestamp from std.
+		let now = SystemTime::now();
+		let d: u64 = now.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis().try_into().unwrap();
+
+		// Get timestamp from offchain api.
+		let timestamp = api.timestamp();
+		
+		// Compare.
+		assert!(timestamp.unix_millis() > 0);
+		assert_eq!(timestamp.unix_millis(), d);
+	}
+
+	#[test]
+	fn should_sleep() {
+		let mut api = offchain_api().0;
+
+		// Arrange.
+		let now = api.timestamp();
+		let delta = primitives::offchain::Duration::from_millis(100);
+		let deadline = now.add(delta);
+
+		// Act.
+		api.sleep_until(deadline);
+		let new_now = api.timestamp();
+		
+		// Assert.
+		// The diff could be more than the sleep duration.
+		assert!(new_now.unix_millis() - 100 >= now.unix_millis());
+	}
+
+	#[test]
 	fn should_set_and_get_local_storage() {
 		// given
 		let kind = StorageKind::PERSISTENT;
@@ -598,12 +657,27 @@ mod tests {
 		api.local_storage_set(kind, key, b"value");
 
 		// when
-		assert_eq!(api.local_storage_compare_and_set(kind, key, b"val", b"xxx"), false);
+		assert_eq!(api.local_storage_compare_and_set(kind, key, Some(b"val"), b"xxx"), false);
 		assert_eq!(api.local_storage_get(kind, key), Some(b"value".to_vec()));
 
 		// when
-		assert_eq!(api.local_storage_compare_and_set(kind, key, b"value", b"xxx"), true);
+		assert_eq!(api.local_storage_compare_and_set(kind, key, Some(b"value"), b"xxx"), true);
 		assert_eq!(api.local_storage_get(kind, key), Some(b"xxx".to_vec()));
+	}
+
+	#[test]
+	fn should_compare_and_set_local_storage_with_none() {
+		// given
+		let kind = StorageKind::PERSISTENT;
+		let mut api = offchain_api().0;
+		let key = b"test";
+
+		// when
+		let res = api.local_storage_compare_and_set(kind, key, None, b"value");
+
+		// then
+		assert_eq!(res, true);
+		assert_eq!(api.local_storage_get(kind, key), Some(b"value".to_vec()));
 	}
 
 	#[test]

@@ -96,8 +96,10 @@ use parity_codec::Encode;
 use parity_codec::Decode;
 #[cfg(feature = "std")]
 use inherents::ProvideInherentData;
-use srml_support::{StorageValue, Parameter, decl_storage, decl_module, for_each_tuple, traits::Get};
+use srml_support::{StorageValue, Parameter, decl_storage, decl_module, for_each_tuple};
+use srml_support::traits::{Time, Get};
 use runtime_primitives::traits::{SimpleArithmetic, Zero, SaturatedConversion};
+use runtime_primitives::weights::SimpleDispatchInfo;
 use system::ensure_none;
 use inherents::{RuntimeString, InherentIdentifier, ProvideInherent, IsFatalError, InherentData};
 
@@ -168,7 +170,7 @@ impl ProvideInherentData for InherentDataProvider {
 			.map_err(|_| {
 				"Current time is before unix epoch".into()
 			}).and_then(|d| {
-				let duration: InherentType = d.as_secs();
+				let duration: InherentType = d.as_millis() as u64;
 				inherent_data.put_data(INHERENT_IDENTIFIER, &duration)
 			})
 	}
@@ -235,6 +237,7 @@ decl_module! {
 		/// `MinimumPeriod`.
 		///
 		/// The dispatch origin for this call must be `Inherent`.
+		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn set(origin, #[compact] now: T::Moment) {
 			ensure_none(origin)?;
 			assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
@@ -321,6 +324,15 @@ impl<T: Trait> ProvideInherent for Module<T> {
 	}
 }
 
+impl<T: Trait> Time for Module<T> {
+	type Moment = T::Moment;
+
+	/// Before the first set of now with inherent the value returned is zero.
+	fn now() -> Self::Moment {
+		Self::now()
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -328,7 +340,7 @@ mod tests {
 	use srml_support::{impl_outer_origin, assert_ok, parameter_types};
 	use runtime_io::{with_externalities, TestExternalities};
 	use substrate_primitives::H256;
-	use runtime_primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+	use runtime_primitives::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -338,6 +350,9 @@ mod tests {
 	pub struct Test;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
+		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockLength: u32 = 2 * 1024;
+		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl system::Trait for Test {
 		type Origin = Origin;
@@ -351,6 +366,9 @@ mod tests {
 		type WeightMultiplierUpdate = ();
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type AvailableBlockRatio = AvailableBlockRatio;
+		type MaximumBlockLength = MaximumBlockLength;
 	}
 	parameter_types! {
 		pub const MinimumPeriod: u64 = 5;

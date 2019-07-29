@@ -19,6 +19,10 @@ use runtime_io::{with_externalities, Blake2Hasher};
 use srml_support::{
 	Parameter, traits::Get, parameter_types,
 	runtime_primitives::{generic, BuildStorage, traits::{BlakeTwo256, Block as _, Verify}},
+	metadata::{
+		DecodeDifferent, StorageMetadata, StorageEntryModifier, StorageEntryType, DefaultByteGetter,
+		StorageEntryMetadata, StorageHasher
+	},
 };
 use inherents::{
 	ProvideInherent, InherentData, InherentIdentifier, RuntimeString, MakeFatalError
@@ -269,7 +273,7 @@ srml_support::construct_runtime!(
 
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = generic::UncheckedMortalCompactExtrinsic<u32, Index, Call, Signature>;
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
 
 fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 	GenesisConfig{
@@ -335,14 +339,14 @@ fn storage_instance_independance() {
 			module2::LinkedMap::<module2::Instance1>::key_for(1).to_vec(),
 			module2::LinkedMap::<module2::Instance2>::key_for(1).to_vec(),
 			module2::LinkedMap::<module2::Instance3>::key_for(1).to_vec(),
-			module2::DoubleMap::<module2::DefaultInstance>::prefix_for(1),
-			module2::DoubleMap::<module2::Instance1>::prefix_for(1).to_vec(),
-			module2::DoubleMap::<module2::Instance2>::prefix_for(1).to_vec(),
-			module2::DoubleMap::<module2::Instance3>::prefix_for(1).to_vec(),
-			module2::DoubleMap::<module2::DefaultInstance>::key_for(1, 1),
-			module2::DoubleMap::<module2::Instance1>::key_for(1, 1).to_vec(),
-			module2::DoubleMap::<module2::Instance2>::key_for(1, 1).to_vec(),
-			module2::DoubleMap::<module2::Instance3>::key_for(1, 1).to_vec(),
+			module2::DoubleMap::<module2::DefaultInstance>::prefix_for(&1),
+			module2::DoubleMap::<module2::Instance1>::prefix_for(&1).to_vec(),
+			module2::DoubleMap::<module2::Instance2>::prefix_for(&1).to_vec(),
+			module2::DoubleMap::<module2::Instance3>::prefix_for(&1).to_vec(),
+			module2::DoubleMap::<module2::DefaultInstance>::key_for(&1, &1),
+			module2::DoubleMap::<module2::Instance1>::key_for(&1, &1).to_vec(),
+			module2::DoubleMap::<module2::Instance2>::key_for(&1, &1).to_vec(),
+			module2::DoubleMap::<module2::Instance3>::key_for(&1, &1).to_vec(),
 		].iter() {
 			assert!(map.insert(key, ()).is_none())
 		}
@@ -396,15 +400,108 @@ fn storage_with_instance_basic_operation() {
 
 		let key1 = 1;
 		let key2 = 1;
-		assert_eq!(DoubleMap::exists(0, 0), true);
-		assert_eq!(DoubleMap::exists(key1, key2), false);
-		DoubleMap::insert(key1, key2, 1);
-		assert_eq!(DoubleMap::get(key1, key2), 1);
-		assert_eq!(DoubleMap::take(key1, key2), 1);
-		assert_eq!(DoubleMap::get(key1, key2), 0);
-		DoubleMap::mutate(key1, key2, |a| *a=2);
-		assert_eq!(DoubleMap::get(key1, key2), 2);
-		DoubleMap::remove(key1, key2);
-		assert_eq!(DoubleMap::get(key1, key2), 0);
+		assert_eq!(DoubleMap::exists(&0, &0), true);
+		assert_eq!(DoubleMap::exists(&key1, &key2), false);
+		DoubleMap::insert(&key1, &key2, &1);
+		assert_eq!(DoubleMap::get(&key1, &key2), 1);
+		assert_eq!(DoubleMap::take(&key1, &key2), 1);
+		assert_eq!(DoubleMap::get(&key1, &key2), 0);
+		DoubleMap::mutate(&key1, &key2, |a| *a=2);
+		assert_eq!(DoubleMap::get(&key1, &key2), 2);
+		DoubleMap::remove(&key1, &key2);
+		assert_eq!(DoubleMap::get(&key1, &key2), 0);
 	});
+}
+
+const EXPECTED_METADATA: StorageMetadata = StorageMetadata {
+	prefix: DecodeDifferent::Encode("Instance2Module2"),
+	entries: DecodeDifferent::Encode(
+		&[
+			StorageEntryMetadata {
+				name: DecodeDifferent::Encode("Value"),
+				modifier: StorageEntryModifier::Default,
+				ty: StorageEntryType::Plain(DecodeDifferent::Encode("T::Amount")),
+				default: DecodeDifferent::Encode(
+					DefaultByteGetter(
+						&module2::__GetByteStructValue(
+							std::marker::PhantomData::<(Runtime, module2::Instance2)>
+						)
+					)
+				),
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageEntryMetadata {
+				name: DecodeDifferent::Encode("Map"),
+				modifier: StorageEntryModifier::Default,
+				ty: StorageEntryType::Map {
+					hasher: StorageHasher::Blake2_256,
+					key: DecodeDifferent::Encode("u64"),
+					value: DecodeDifferent::Encode("u64"),
+					is_linked: false,
+				},
+				default: DecodeDifferent::Encode(
+					DefaultByteGetter(
+						&module2::__GetByteStructMap(
+							std::marker::PhantomData::<(Runtime, module2::Instance2)>
+						)
+					)
+				),
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageEntryMetadata {
+				name: DecodeDifferent::Encode("LinkedMap"),
+				modifier: StorageEntryModifier::Default,
+				ty: StorageEntryType::Map {
+					hasher: StorageHasher::Blake2_256,
+					key: DecodeDifferent::Encode("u64"),
+					value: DecodeDifferent::Encode("u64"),
+					is_linked: true,
+				},
+				default: DecodeDifferent::Encode(
+					DefaultByteGetter(
+						&module2::__GetByteStructLinkedMap(
+							std::marker::PhantomData::<(Runtime, module2::Instance2)>
+						)
+					)
+				),
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageEntryMetadata {
+				name: DecodeDifferent::Encode("DoubleMap"),
+				modifier: StorageEntryModifier::Default,
+				ty: StorageEntryType::DoubleMap {
+					hasher: StorageHasher::Blake2_256,
+					key2_hasher: StorageHasher::Blake2_256,
+					key1: DecodeDifferent::Encode("u64"),
+					key2: DecodeDifferent::Encode("u64"),
+					value: DecodeDifferent::Encode("u64"),
+				},
+				default: DecodeDifferent::Encode(
+					DefaultByteGetter(
+						&module2::__GetByteStructDoubleMap(
+							std::marker::PhantomData::<(Runtime, module2::Instance2)>
+						)
+					)
+				),
+				documentation: DecodeDifferent::Encode(&[]),
+			}
+		]
+	)
+};
+
+#[test]
+fn test_instance_storage_metadata() {
+	let metadata = Module2_2::storage_metadata();
+	pretty_assertions::assert_eq!(EXPECTED_METADATA, metadata);
+}
+
+#[test]
+fn instance_prefix_is_prefix_of_entries() {
+	use module2::Instance;
+
+	let prefix = module2::Instance2::PREFIX;
+	assert!(module2::Instance2::PREFIX_FOR_Value.starts_with(prefix));
+	assert!(module2::Instance2::PREFIX_FOR_Map.starts_with(prefix));
+	assert!(module2::Instance2::PREFIX_FOR_LinkedMap.starts_with(prefix));
+	assert!(module2::Instance2::PREFIX_FOR_DoubleMap.starts_with(prefix));
 }
