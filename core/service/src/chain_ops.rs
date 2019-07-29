@@ -117,13 +117,17 @@ impl<B: Block> Link<B> for WaitLink {
 	fn blocks_processed(
 		&mut self,
 		imported: usize,
-		count: usize,
+		_count: usize,
 		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
 	) {
 		self.imported_blocks += imported as u64;
-		if results.iter().any(|(r, _)| r.is_err()) {
-			warn!("There was an error importing {} blocks", count);
-			self.has_error = true;
+
+		for result in results {
+			if let (Err(err), hash) = result {
+				warn!("There was an error importing block with hash {:?}: {:?}", hash, err);
+				self.has_error = true;
+				break;
+			}
 		}
 	}
 }
