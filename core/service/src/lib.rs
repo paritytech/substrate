@@ -223,7 +223,7 @@ impl<Components: components::Components> Service<Components> {
 		let transaction_pool = Arc::new(
 			Components::build_transaction_pool(config.transaction_pool.clone(), client.clone())?
 		);
-		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter::<Components> {
+		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
 			imports_external_transactions: !config.roles.is_light(),
 			pool: transaction_pool.clone(),
 			client: client.clone(),
@@ -417,9 +417,9 @@ impl<Components: components::Components> Service<Components> {
 			)
 		};
 		let rpc_handlers = gen_handler();
-		let rpc = start_rpc_servers::<Components::Factory, _>(&config, gen_handler)?;
+		let rpc = start_rpc_servers(&config, gen_handler)?;
 
-		let _ = to_spawn_tx.unbounded_send(Box::new(build_network_future::<Components, _, _>(
+		let _ = to_spawn_tx.unbounded_send(Box::new(build_network_future(
 			network_mut,
 			client.clone(),
 			network_status_sinks.clone(),
@@ -642,14 +642,15 @@ impl<Components> Executor<Box<dyn Future<Item = (), Error = ()> + Send>>
 ///
 /// The `status_sink` contain a list of senders to send a periodic network status to.
 fn build_network_future<
-	Components: components::Components,
-	S: network::specialization::NetworkSpecialization<ComponentBlock<Components>>,
+	B: BlockT,
+	C: client::BlockchainEvents<B>,
+	S: network::specialization::NetworkSpecialization<B>,
 	H: network::ExHashT
 > (
-	mut network: network::NetworkWorker<ComponentBlock<Components>, S, H>,
-	client: Arc<ComponentClient<Components>>,
-	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<(NetworkStatus<ComponentBlock<Components>>, NetworkState)>>>>,
-	mut rpc_rx: mpsc::UnboundedReceiver<rpc::apis::system::Request<ComponentBlock<Components>>>,
+	mut network: network::NetworkWorker<B, S, H>,
+	client: Arc<C>,
+	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<(NetworkStatus<B>, NetworkState)>>>>,
+	mut rpc_rx: mpsc::UnboundedReceiver<rpc::apis::system::Request<B>>,
 	should_have_peers: bool,
 ) -> impl Future<Item = (), Error = ()> {
 	// Interval at which we send status updates on the status stream.
@@ -771,8 +772,8 @@ impl<Components> Drop for Service<Components> where Components: components::Comp
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(not(target_os = "unknown"))]
-fn start_rpc_servers<F: ServiceFactory, H: FnMut() -> rpc::RpcHandler>(
-	config: &FactoryFullConfiguration<F>,
+fn start_rpc_servers<C, G, H: FnMut() -> rpc::RpcHandler>(
+	config: &Configuration<C, G>,
 	mut gen_handler: H
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	fn maybe_start_server<T, F>(address: Option<SocketAddr>, mut start: F) -> Result<Option<T>, io::Error>
@@ -812,8 +813,8 @@ fn start_rpc_servers<F: ServiceFactory, H: FnMut() -> rpc::RpcHandler>(
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(target_os = "unknown")]
-fn start_rpc_servers<F: ServiceFactory, H: FnMut() -> rpc::RpcHandler>(
-	_: &FactoryFullConfiguration<F>,
+fn start_rpc_servers<C, G, H: FnMut() -> rpc::RpcHandler>(
+	_: &Configuration<C, G>,
 	_: H
 ) -> Result<Box<std::any::Any + Send + Sync>, error::Error> {
 	Ok(Box::new(()))
@@ -840,16 +841,10 @@ impl RpcSession {
 }
 
 /// Transaction pool adapter.
-pub struct TransactionPoolAdapter<C: Components> {
+pub struct TransactionPoolAdapter<C, P> {
 	imports_external_transactions: bool,
-	pool: Arc<TransactionPool<C::TransactionPoolApi>>,
-	client: Arc<ComponentClient<C>>,
-}
-
-impl<C: Components> TransactionPoolAdapter<C> {
-	fn best_block_id(&self) -> Option<BlockId<ComponentBlock<C>>> {
-		Some(BlockId::hash(self.client.info().chain.best_hash))
-	}
+	pool: Arc<P>,
+	client: Arc<C>,
 }
 
 /// Get transactions for propagation.
@@ -873,14 +868,20 @@ where
 		.collect()
 }
 
-impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<C>> for
-	TransactionPoolAdapter<C> where <C as components::Components>::RuntimeApi: Send + Sync
+impl<B, H, C, PoolApi, E> network::TransactionPool<H, B> for
+	TransactionPoolAdapter<C, TransactionPool<PoolApi>>
+where
+	C: network::ClientHandle<B> + Send + Sync,
+	PoolApi: ChainApi<Block=B, Hash=H, Error=E>,
+	B: BlockT,
+	H: std::hash::Hash + Eq + runtime_primitives::traits::Member + serde::Serialize,
+	E: txpool::error::IntoPoolError + From<txpool::error::Error>,
 {
-	fn transactions(&self) -> Vec<(ComponentExHash<C>, ComponentExtrinsic<C>)> {
+	fn transactions(&self) -> Vec<(H, <B as BlockT>::Extrinsic)> {
 		transactions_to_propagate(&self.pool)
 	}
 
-	fn import(&self, transaction: &ComponentExtrinsic<C>) -> Option<ComponentExHash<C>> {
+	fn import(&self, transaction: &<B as BlockT>::Extrinsic) -> Option<H> {
 		if !self.imports_external_transactions {
 			debug!("Transaction rejected");
 			return None;
@@ -888,12 +889,12 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 
 		let encoded = transaction.encode();
 		if let Some(uxt) = Decode::decode(&mut &encoded[..]) {
-			let best_block_id = self.best_block_id()?;
+			let best_block_id = BlockId::hash(self.client.info().chain.best_hash);
 			match self.pool.submit_one(&best_block_id, uxt) {
 				Ok(hash) => Some(hash),
 				Err(e) => match e.into_pool_error() {
 					Ok(txpool::error::Error::AlreadyImported(hash)) => {
-						hash.downcast::<ComponentExHash<C>>().ok()
+						hash.downcast::<H>().ok()
 							.map(|x| x.as_ref().clone())
 					},
 					Ok(e) => {
@@ -912,7 +913,7 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 		}
 	}
 
-	fn on_broadcasted(&self, propagations: HashMap<ComponentExHash<C>, Vec<String>>) {
+	fn on_broadcasted(&self, propagations: HashMap<H, Vec<String>>) {
 		self.pool.on_broadcasted(propagations)
 	}
 }
