@@ -38,7 +38,7 @@
 //!
 
 use futures::{prelude::*, channel::mpsc};
-use runtime_primitives::traits::{Block as BlockT, NumberFor};
+use sr_primitives::traits::{Block as BlockT, NumberFor};
 use std::{pin::Pin, task::Context, task::Poll};
 use crate::import_queue::{Origin, Link, BlockImportResult, BlockImportError};
 

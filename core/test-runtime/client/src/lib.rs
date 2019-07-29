@@ -27,7 +27,7 @@ pub use generic_test_client::*;
 pub use runtime;
 
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT};
+use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT};
 
 /// A prelude to import in tests.
 pub mod prelude {

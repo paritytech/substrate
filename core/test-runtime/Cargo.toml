@@ -17,7 +17,7 @@ aura-primitives = { package = "substrate-consensus-aura-primitives", path = "../
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../consensus/babe/primitives", default-features = false }
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
 runtime_io = { package = "sr-io", path = "../sr-io", default-features = false }
-runtime_primitives = { package = "sr-primitives", path = "../sr-primitives", default-features = false }
+sr-primitives = {  path = "../sr-primitives", default-features = false }
 runtime_version = { package = "sr-version", path = "../sr-version", default-features = false }
 runtime_support = { package = "srml-support", path = "../../srml/support", default-features = false }
 substrate-trie = { path = "../trie", default-features = false }
@@ -53,7 +53,7 @@ std = [
 	"runtime_support/std",
 	"primitives/std",
 	"inherents/std",
-	"runtime_primitives/std",
+	"sr-primitives/std",
 	"runtime_version/std",
 	"aura-primitives/std",
 	"babe-primitives/std",

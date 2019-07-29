@@ -5,14 +5,14 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-client = { package = "substrate-client", path = "../../core/client" }
-codec = { package = "parity-codec", version = "4.1.1" }
-consensus_common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
-futures-preview = "0.3.0-alpha.17"
-inherents = { package = "substrate-inherents", path = "../inherents" }
 log = "0.4"
+futures-preview = "0.3.0-alpha.17"
+codec = { package = "parity-codec", version = "4.1.1" }
+sr-primitives = { path = "../../core/sr-primitives" }
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
-runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
+client = { package = "substrate-client", path = "../../core/client" }
+consensus_common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
+inherents = { package = "substrate-inherents", path = "../inherents" }
 substrate-telemetry = { path = "../telemetry" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
 

@@ -17,14 +17,14 @@
 //! Private implementation details of BABE digests.
 
 #[cfg(feature = "std")]
-use substrate_primitives::sr25519::Signature;
+use primitives::sr25519::Signature;
 #[cfg(feature = "std")]
 use super::{BABE_ENGINE_ID, Epoch};
 #[cfg(not(feature = "std"))]
 use super::{VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH};
 use super::SlotNumber;
 #[cfg(feature = "std")]
-use runtime_primitives::{DigestItem, generic::OpaqueDigestItemId};
+use sr_primitives::{DigestItem, generic::OpaqueDigestItemId};
 #[cfg(feature = "std")]
 use std::fmt::Debug;
 use parity_codec::{Decode, Encode};

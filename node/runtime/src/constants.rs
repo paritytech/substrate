@@ -68,7 +68,7 @@ pub mod time {
 // the ratio that `system` module uses to find normal transaction quota.
 /// Fee-related.
 pub mod fee {
-	pub use runtime_primitives::Perbill;
+	pub use sr_primitives::Perbill;
 
 	/// The block saturation level. Fees will be updates based on this value.
 	pub const TARGET_BLOCK_FULLNESS: Perbill = Perbill::from_percent(25);

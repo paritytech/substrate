@@ -24,8 +24,8 @@ use std::{
 
 use parity_codec::{Encode, Decode};
 use primitives::{offchain, H256, Blake2Hasher, convert_hash, NativeOrEncoded};
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{One, Block as BlockT, Header as HeaderT};
+use sr_primitives::generic::BlockId;
+use sr_primitives::traits::{One, Block as BlockT, Header as HeaderT};
 use state_machine::{
 	self, Backend as StateBackend, CodeExecutor, OverlayedChanges,
 	ExecutionStrategy, create_proof_check_backend,

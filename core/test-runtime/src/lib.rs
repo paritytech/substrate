@@ -33,7 +33,7 @@ use substrate_client::{
 	runtime_api as client_api, block_builder::api as block_builder_api, decl_runtime_apis,
 	impl_runtime_apis,
 };
-use runtime_primitives::{
+use sr_primitives::{
 	ApplyResult, create_runtime_str, Perbill,
 	transaction_validity::{TransactionValidity, ValidTransaction},
 	traits::{
@@ -125,13 +125,13 @@ impl BlindCheckable for Extrinsic {
 		match self {
 			Extrinsic::AuthoritiesChange(new_auth) => Ok(Extrinsic::AuthoritiesChange(new_auth)),
 			Extrinsic::Transfer(transfer, signature) => {
-				if runtime_primitives::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
+				if sr_primitives::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
 					Ok(Extrinsic::Transfer(transfer, signature))
 				} else {
-					Err(runtime_primitives::BAD_SIGNATURE)
+					Err(sr_primitives::BAD_SIGNATURE)
 				}
 			},
-			Extrinsic::IncludeData(_) => Err(runtime_primitives::BAD_SIGNATURE),
+			Extrinsic::IncludeData(_) => Err(sr_primitives::BAD_SIGNATURE),
 			Extrinsic::StorageChange(key, value) => Ok(Extrinsic::StorageChange(key, value)),
 		}
 	}
@@ -173,13 +173,13 @@ pub type BlockNumber = u64;
 /// Index of a transaction.
 pub type Index = u64;
 /// The item of a block digest.
-pub type DigestItem = runtime_primitives::generic::DigestItem<H256>;
+pub type DigestItem = sr_primitives::generic::DigestItem<H256>;
 /// The digest of a block.
-pub type Digest = runtime_primitives::generic::Digest<H256>;
+pub type Digest = sr_primitives::generic::Digest<H256>;
 /// A test block.
-pub type Block = runtime_primitives::generic::Block<Header, Extrinsic>;
+pub type Block = sr_primitives::generic::Block<Header, Extrinsic>;
 /// A test block's header.
-pub type Header = runtime_primitives::generic::Header<BlockNumber, BlakeTwo256>;
+pub type Header = sr_primitives::generic::Header<BlockNumber, BlakeTwo256>;
 
 /// Run whatever tests we have.
 pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
@@ -775,7 +775,7 @@ mod tests {
 		DefaultTestClientBuilderExt, TestClientBuilder,
 		runtime::TestAPI,
 	};
-	use runtime_primitives::{
+	use sr_primitives::{
 		generic::BlockId,
 		traits::ProvideRuntimeApi,
 	};
