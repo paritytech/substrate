@@ -1276,7 +1276,6 @@ impl WasmExecutor {
 		method: &str,
 		data: &[u8],
 	) -> Result<Vec<u8>> {
-		dbg!();
 		let module = ::wasmi::Module::from_buffer(code)?;
 		let module = Self::instantiate_module::<E>(heap_pages, &module)?;
 		self.call_in_wasm_module(ext, &module, method, data)
@@ -1377,7 +1376,6 @@ impl WasmExecutor {
 		create_parameters: F,
 		filter_result: FR,
 	) -> Result<R> {
-		dbg!();
 		// extract a reference to a linear memory, optional reference to a table
 		// and then initialize FunctionExecutor.
 		let memory = Self::get_mem_instance(module_instance)?;
@@ -1392,14 +1390,12 @@ impl WasmExecutor {
 			memory.set(offset, &data)?;
 			Ok(offset)
 		})?;
-		dbg!();
 
 		let result = module_instance.invoke_export(
 			method,
 			&parameters,
 			&mut fec
 		);
-		dbg!();
 		let result = match result {
 			Ok(val) => match filter_result(val, &memory)? {
 				Some(val) => Ok(val),
@@ -1410,7 +1406,6 @@ impl WasmExecutor {
 				Err(e.into())
 			},
 		};
-		dbg!();
 
 		result
 	}
