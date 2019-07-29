@@ -2690,4 +2690,69 @@ pub(crate) mod tests {
 		let id = BlockId::<Block>::Number(72340207214430721);
 		client.header(&id).expect_err("invalid block number overflows u32");
 	}
+
+	#[test]
+	fn state_reverted_on_reorg() {
+		use test_client::blockchain::HeaderBackend;
+
+		let client = test_client::new();
+
+		// G -> A1 -> A2
+		//   \
+		//    -> B1
+		let alice = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into())).to_vec();
+		let current_balance = ||
+			u64::decode(
+				&mut client.storage(&BlockId::number(client.current_height()), &StorageKey(alice.clone()))
+				.unwrap().unwrap().0.as_slice()
+			).unwrap();
+
+		let mut a1 = client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
+		a1.push_transfer(Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Bob.into(),
+			amount: 10,
+			nonce: 0,
+		}).unwrap();
+		let a1 = a1.bake().unwrap();
+		client.import(BlockOrigin::Own, a1.clone()).unwrap();
+
+		let mut a2 = client.new_block_at(&BlockId::Hash(a1.hash()), Default::default()).unwrap();
+		a2.push_transfer(Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Charlie.into(),
+			amount: 10,
+			nonce: 1,
+		}).unwrap();
+		let a2 = a2.bake().unwrap();
+		client.import(BlockOrigin::Own, a2.clone()).unwrap();
+
+		let mut b1 = client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
+		// needed to make sure B1 gets a different hash from A1
+		b1.push_transfer(Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
+			amount: 50,
+			nonce: 0,
+		}).unwrap();
+		let b1 = b1.bake().unwrap();
+
+		#[allow(deprecated)]
+		let blockchain = client.backend().blockchain();
+
+		// A2 is the current best since it's the longest chain
+		assert_eq!(
+			blockchain.info().best_hash,
+			a2.hash(),
+		);
+
+		//assert_eq!(980, current_balance());
+
+		// importing B1 as finalized should trigger a re-org and set it as new best
+		let justification = vec![1, 2, 3];
+		client.import_justified(BlockOrigin::Own, b1.clone(), justification).unwrap();
+		assert_eq!( blockchain.info().best_hash, b1.hash()); 
+		assert_eq!( blockchain.info().finalized_hash, b1.hash());
+		assert_eq!(950, current_balance());
+	}
 }
