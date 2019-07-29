@@ -227,7 +227,7 @@ pub trait Vm<T: Trait> {
 	fn execute<E: Ext<T = T>>(
 		&self,
 		exec: &Self::Executable,
-		ext: &mut E,
+		ext: E,
 		input_data: &[u8],
 		empty_output_buf: EmptyOutputBuf,
 		gas_meter: &mut GasMeter<T>,
@@ -294,13 +294,13 @@ where
 		}
 	}
 
-	fn nested(&self, overlay: OverlayAccountDb<'a, T>, dest: T::AccountId, trie_id: Option<TrieId>)
-		-> Self
+	fn nested<'b, 'c: 'b>(&'c self, dest: T::AccountId, trie_id: Option<TrieId>)
+		-> ExecutionContext<'b, T, V, L>
 	{
 		ExecutionContext {
 			self_trie_id: trie_id,
 			self_account: dest,
-			overlay,
+			overlay: OverlayAccountDb::new(&self.overlay),
 			depth: self.depth + 1,
 			events: Vec::new(),
 			calls: Vec::new(),
@@ -342,54 +342,41 @@ where
 			return Err("contract has been evicted");
 		};
 
-		let mut output_data = Vec::new();
+		let caller = self.self_account.clone();
+		let dest_trie_id = contract_info.and_then(|i| i.as_alive().map(|i| i.trie_id.clone()));
 
-		let (change_set, events, calls) = {
-			let mut nested = self.nested(
-				OverlayAccountDb::new(&self.overlay),
-				dest.clone(),
-				contract_info.and_then(|i| i.as_alive().map(|i| i.trie_id.clone()))
-			);
-
+		let output_data = self.with_nested_context(dest.clone(), dest_trie_id, |nested| {
 			if value > BalanceOf::<T>::zero() {
 				transfer(
 					gas_meter,
 					TransferCause::Call,
-					&self.self_account,
+					&caller,
 					&dest,
 					value,
-					&mut nested,
+					nested,
 				)?;
 			}
 
 			// If code_hash is not none, then the destination account is a live contract, otherwise
 			// it is a regular account since tombstone accounts have already been rejected.
-			if let Some(dest_code_hash) = self.overlay.get_code_hash(&dest) {
-				let executable = self.loader.load_main(&dest_code_hash)?;
-				output_data = self
-					.vm
-					.execute(
-						&executable,
-						&mut CallContext {
-							ctx: &mut nested,
-							caller: self.self_account.clone(),
-							value_transferred: value,
-							timestamp: self.timestamp.clone(),
-							block_number: self.block_number.clone(),
-						},
-						input_data,
-						empty_output_buf,
-						gas_meter,
-					)
-					.into_result()?;
-			}
+			let output_data = match nested.overlay.get_code_hash(&dest) {
+				Some(dest_code_hash) => {
+					let executable = nested.loader.load_main(&dest_code_hash)?;
+					nested.vm
+						.execute(
+							&executable,
+							nested.new_call_context(caller, value),
+							input_data,
+							empty_output_buf,
+							gas_meter,
+						)
+						.into_result()?
+				}
+				None => Vec::new(),
+			};
 
-			(nested.overlay.into_change_set(), nested.events, nested.calls)
-		};
-
-		self.overlay.commit(change_set);
-		self.events.extend(events);
-		self.calls.extend(calls);
+			Ok(output_data)
+		})?;
 
 		Ok(CallReceipt { output_data })
 	}
@@ -412,42 +399,35 @@ where
 			return Err("not enough gas to pay base instantiate fee");
 		}
 
+		let caller = self.self_account.clone();
 		let dest = T::DetermineContractAddress::contract_address_for(
 			code_hash,
 			input_data,
-			&self.self_account,
+			&caller,
 		);
 
-		let (change_set, events, calls) = {
-			let mut overlay = OverlayAccountDb::new(&self.overlay);
+		// TrieId has not been generated yet and storage is empty since contract is new.
+		let dest_trie_id = None;
 
-			overlay.create_contract(&dest, code_hash.clone())?;
-
-			// TrieId has not been generated yet and storage is empty since contract is new.
-			let mut nested = self.nested(overlay, dest.clone(), None);
+		let _ = self.with_nested_context(dest.clone(), dest_trie_id, |nested| {
+			nested.overlay.create_contract(&dest, code_hash.clone())?;
 
 			// Send funds unconditionally here. If the `endowment` is below existential_deposit
 			// then error will be returned here.
 			transfer(
 				gas_meter,
 				TransferCause::Instantiate,
-				&self.self_account,
+				&caller,
 				&dest,
 				endowment,
-				&mut nested,
+				nested,
 			)?;
 
-			let executable = self.loader.load_init(&code_hash)?;
-			self.vm
+			let executable = nested.loader.load_init(&code_hash)?;
+			nested.vm
 				.execute(
 					&executable,
-					&mut CallContext {
-						ctx: &mut nested,
-						caller: self.self_account.clone(),
-						value_transferred: endowment,
-						timestamp: self.timestamp.clone(),
-						block_number: self.block_number.clone(),
-					},
+					nested.new_call_context(caller.clone(), endowment),
 					input_data,
 					EmptyOutputBuf::new(),
 					gas_meter,
@@ -456,18 +436,45 @@ where
 
 			// Deposit an instantiation event.
 			nested.events.push(IndexedEvent {
-				event: RawEvent::Instantiated(self.self_account.clone(), dest.clone()),
+				event: RawEvent::Instantiated(caller.clone(), dest.clone()),
 				topics: Vec::new(),
 			});
 
-			(nested.overlay.into_change_set(), nested.events, nested.calls)
+			Ok(Vec::new())
+		})?;
+
+		Ok(InstantiateReceipt { address: dest })
+	}
+
+	fn new_call_context<'b>(&'b mut self, caller: T::AccountId, value: BalanceOf<T>)
+		-> CallContext<'b, 'a, T, V, L>
+	{
+		let timestamp = self.timestamp.clone();
+		let block_number = self.block_number.clone();
+		CallContext {
+			ctx: self,
+			caller,
+			value_transferred: value,
+			timestamp,
+			block_number,
+		}
+	}
+
+	fn with_nested_context<F>(&mut self, dest: T::AccountId, trie_id: Option<TrieId>, func: F)
+		-> Result<Vec<u8>, &'static str>
+		where F: FnOnce(&mut ExecutionContext<T, V, L>) -> Result<Vec<u8>, &'static str>
+	{
+		let (output_data, change_set, events, calls) = {
+			let mut nested = self.nested(dest, trie_id);
+			let output_data = func(&mut nested)?;
+			(output_data, nested.overlay.into_change_set(), nested.events, nested.calls)
 		};
 
 		self.overlay.commit(change_set);
 		self.events.extend(events);
 		self.calls.extend(calls);
 
-		Ok(InstantiateReceipt { address: dest })
+		Ok(output_data)
 	}
 }
 
@@ -806,13 +813,13 @@ mod tests {
 		fn execute<E: Ext<T = Test>>(
 			&self,
 			exec: &MockExecutable,
-			ext: &mut E,
+			mut ext: E,
 			input_data: &[u8],
 			empty_output_buf: EmptyOutputBuf,
 			gas_meter: &mut GasMeter<Test>,
 		) -> VmExecResult {
 			(exec.0)(MockCtx {
-				ext,
+				ext: &mut ext,
 				input_data,
 				empty_output_buf: Some(empty_output_buf),
 				gas_meter,
