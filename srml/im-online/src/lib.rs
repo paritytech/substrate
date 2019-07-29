@@ -282,7 +282,7 @@ decl_module! {
 				match last_gossip {
 					Some(last) => {
 						let worker_status: WorkerStatus<T::BlockNumber> = Decode::decode(&mut &last[..])
-							.map_err(-_| OffchainErr::DecodeWorkerStatus)?;
+							.map_err(|_| OffchainErr::DecodeWorkerStatus)?;
 
 						let was_aborted = !worker_status.done && worker_status.gossipping_at < now;
 

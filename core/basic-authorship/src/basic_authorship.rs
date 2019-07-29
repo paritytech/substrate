@@ -213,7 +213,7 @@ impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	wh
 			"hash" => ?<Block as BlockT>::Hash::from(block.header().hash()),
 		);
 
-		if Decode::decode(&mut block.encode().as_slice()).as_ref() != Some(&block) {
+		if Decode::decode(&mut block.encode().as_slice()).as_ref() != Ok(&block) {
 			error!("Failed to verify block encoding/decoding");
 		}
 
