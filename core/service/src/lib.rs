@@ -97,7 +97,7 @@ pub struct Service<Components: components::Components> {
 	/// The elements must then be polled manually.
 	to_poll: Vec<Box<dyn Future<Item = (), Error = ()> + Send>>,
 	/// Configuration of this Service
-	pub config: FactoryFullConfiguration<Components::Factory>,
+	config: FactoryFullConfiguration<Components::Factory>,
 	rpc_handlers: rpc::RpcHandler,
 	_rpc: Box<dyn std::any::Any + Send + Sync>,
 	_telemetry: Option<tel::Telemetry>,
@@ -493,6 +493,20 @@ impl<Components: components::Components> Service<Components> {
 			_offchain_workers: offchain_workers,
 			_telemetry_on_connect_sinks: telemetry_connection_sinks.clone(),
 		})
+	}
+
+	/// Returns a reference to the config passed at initialization.
+	pub fn config(&self) -> &FactoryFullConfiguration<Components::Factory> {
+		&self.config
+	}
+
+	/// Returns a reference to the config passed at initialization.
+	///
+	/// > **Note**: This method is currently necessary because we extract some elements from the
+	/// >			configuration at the end of the service initialization. It is intended to be
+	/// >			removed.
+	pub fn config_mut(&mut self) -> &mut FactoryFullConfiguration<Components::Factory> {
+		&mut self.config
 	}
 
 	/// Get event stream for telemetry connection established events.
