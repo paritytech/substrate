@@ -24,11 +24,13 @@ use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
 use session::SessionIndex;
 use srml_support::{assert_ok, impl_outer_origin, parameter_types, EnumerableStorageMap};
-use srml_support::traits::{Currency, Get, FindAuthor};
+use srml_support::traits::{Currency, Get, FindAuthor, WindowLength};
 use crate::{
 	EraIndex, GenesisConfig, Module, Trait, StakerStatus, ValidatorPrefs, RewardDestination,
 	Nominators, inflation
 };
+use parity_codec::{Encode, Decode};
+use serde::{Serialize, Deserialize};
 
 /// The AccountId alias in this test module.
 pub type AccountId = u64;
@@ -194,6 +196,31 @@ impl Trait for Test {
 	type SessionsPerEra = SessionsPerEra;
 	type BondingDuration = BondingDuration;
 	type SessionInterface = Self;
+	type SlashKind = Kind;
+}
+
+impl srml_rolling_window::Trait for Test {
+	type MisbehaviorKind = Kind;
+	type SessionKey = UintAuthorityId;
+}
+
+#[derive(Debug, Copy, Clone, Encode, Decode, Serialize, Deserialize, PartialEq)]
+pub enum Kind {
+	One,
+	Two,
+	Three,
+	Four,
+}
+
+impl WindowLength<u32> for Kind {
+	fn window_length(&self) -> &u32 {
+		match self {
+			Kind::One => &4,
+			Kind::Two => &3,
+			Kind::Three => &2,
+			Kind::Four => &u32::max_value(),
+		}
+	}
 }
 
 pub struct ExtBuilder {

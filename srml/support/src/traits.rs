@@ -651,9 +651,15 @@ pub trait ReportSlash<Misbehaved, Reporters, Hash> {
 }
 
 /// A generic trait for enacting slashes.
-pub trait DoSlash<Misbehaved, Reporters, Severity> {
+pub trait DoSlash<Misbehaved, Reporters, Severity, Kind> {
 	/// Performs the actual slashing and rewarding based on severity
-	fn do_slash(to_slash: Misbehaved, to_reward: Reporters, severity: Severity) -> Result<(), ()>;
+	fn do_slash(to_slash: Misbehaved, to_reward: Reporters, severity: Severity, kind: Kind) -> Result<(), ()>;
+}
+
+/// A generic event handler trait after slashing occured
+pub trait AfterSlash<Who, MisconductLevel> {
+	/// Invoke event handler after slashing occurred.
+	fn after_slash(who: Who, misconduct_level: MisconductLevel);
 }
 
 /// Trait for representing window length

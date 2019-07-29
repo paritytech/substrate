@@ -235,6 +235,7 @@ impl staking::Trait for Runtime {
 	type SessionsPerEra = SessionsPerEra;
 	type BondingDuration = BondingDuration;
 	type SessionInterface = Self;
+	type SlashKind = Misbehavior;
 }
 
 parameter_types! {
