@@ -281,42 +281,39 @@ impl<C: Components> OffchainWorker<Self> for C where
 }
 
 pub trait NetworkFutureBuilder<C: Components> {
-	fn build_network_future<
-			H: network::ExHashT,
-		S:network::specialization::NetworkSpecialization<ComponentBlock<C>> ,
-		>(
+	fn build_network_future<H, S>(
 		network: network::NetworkWorker<ComponentBlock<C>, S, H >,
 		client: Arc<ComponentClient<C>>,
 		status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<(NetworkStatus<ComponentBlock<C>>, NetworkState)>>>>,
 		rpc_rx: mpsc::UnboundedReceiver<rpc::apis::system::Request<ComponentBlock<C>>>,
 		should_have_peers: bool,
-		// TODO: still needed?
-		keystore: ComponentAuthorityKeyProvider<C>,
-	)-> Box<dyn Future<Item = (), Error = ()>+ Send>  ;
+		authority_key_provider: ComponentAuthorityKeyProvider<C>,
+	)-> Box<dyn Future<Item = (), Error = ()>+ Send>
+	where
+		H: network::ExHashT,
+		S:network::specialization::NetworkSpecialization<ComponentBlock<C>>;
 }
 
-impl<C: Components> NetworkFutureBuilder<Self> for C where
+impl<C: Components> NetworkFutureBuilder<Self> for C
+where
 	ComponentClient<C>: ProvideRuntimeApi,
-	<ComponentClient<C> as ProvideRuntimeApi>::Api: runtime_api::Metadata<ComponentBlock<C>>,
-    // <ComponentClient<C> as ProvideRuntimeApi>::Api: runtime_api::KeyTypeGetter<ComponentBlock<C>>,
-// TODO: This is a mess. Can this be done cleaner?
-	<ComponentClient<C> as ProvideRuntimeApi>::Api: consensus_common_primitives::ConsensusApi<ComponentBlock<C>, <C::Factory as ServiceFactory>::AuthorityId>,
-<<<C as Components>::Factory as ServiceFactory>::ConsensusPair as primitives::crypto::Pair>::Public : std::string::ToString,
+	<ComponentClient<C> as ProvideRuntimeApi>::Api: ConsensusApi<ComponentBlock<C>, <C::Factory as ServiceFactory>::AuthorityId>,
+	<<<C as Components>::Factory as ServiceFactory>::ConsensusPair as primitives::crypto::Pair>::Public : std::string::ToString,
 {
-	fn build_network_future<
-			H: network::ExHashT,
-		S:network::specialization::NetworkSpecialization<ComponentBlock<C>> ,
-		>(
+	fn build_network_future<H, S>(
 		mut network: network::NetworkWorker<ComponentBlock<C>,  S, H>,
 		client: Arc<ComponentClient<C>>,
 		status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<(NetworkStatus<ComponentBlock<C>>, NetworkState)>>>>,
 		mut rpc_rx: mpsc::UnboundedReceiver<rpc::apis::system::Request<ComponentBlock<C>>>,
 		should_have_peers: bool,
-		keystore: ComponentAuthorityKeyProvider<C>,
-	)-> Box<dyn Future<Item = (), Error = ()> + Send>  {
+		authority_key_provider: ComponentAuthorityKeyProvider<C>,
+	)-> Box<dyn Future<Item = (), Error = ()> + Send>
+	where
+		H: network::ExHashT,
+		S:network::specialization::NetworkSpecialization<ComponentBlock<C>>,
+	{
 		// Interval at which we send status updates on the status stream.
 		const STATUS_INTERVAL: Duration = Duration::from_millis(5000);
-
 		let mut status_interval = tokio_timer::Interval::new_interval(STATUS_INTERVAL);
 
 		let mut report_ext_addresses_interval = tokio_timer::Interval::new_interval(Duration::from_secs(5));
@@ -338,49 +335,40 @@ impl<C: Components> NetworkFutureBuilder<Self> for C where
 				println!("==== We are connected to {} nodes", network.service().num_connected());
 				let id = BlockId::hash( client.info().chain.best_hash);
 
-				// TODO: remove unwrap().
-				match keystore.authority_key( &id) {
-					Some(authority_key) => {
-						let public_key = authority_key.public().to_string();
-						println!("=== authority key: {}", public_key);
-						let hashed_public_key = libp2p::multihash::encode(
-							libp2p::multihash::Hash::SHA2256,
-							&public_key.as_bytes(),
-						).expect("public key hashing not to fail");
+				// Put our addresses on the DHT if we are a validator.
+				if let Some(authority_key) = authority_key_provider.authority_key( &id) {
+					let public_key = authority_key.public().to_string();
 
-						let external_addresses = network.external_addresses();
-						println!("==== external addresses: {:?}", external_addresses);
+					let hashed_public_key = libp2p::multihash::encode(
+						libp2p::multihash::Hash::SHA2256,
+						&public_key.as_bytes(),
+					).expect("public key hashing not to fail");
 
-						let enriched_addresses: Vec<Multiaddr> = external_addresses.iter().map(|a| {
+					let addresses: Vec<Multiaddr> = network.service().external_addresses()
+						.iter()
+						.map(|a| {
 							let mut a = a.clone();
-							// TODO: Don't get peer id on each iteration.
 							a.push(libp2p::core::multiaddr::Protocol::P2p(network.service().peer_id().into()));
 							a
-						}).collect();
+						})
+						.collect();
+					println!("==== external addresses: {:?}", addresses);
 
-						// TODO: Remove unwrap.
-						let signature = authority_key.sign(
-							&serde_json::to_string(&enriched_addresses)
-								.map(|s| s.into_bytes())
-								.expect("enriched_address marshaling not to fail")
-						);
+					// TODO: Remove unwrap.
+					let signature = authority_key.sign(
+						&serde_json::to_string(&addresses)
+							.map(|s| s.into_bytes())
+							.expect("enriched_address marshaling not to fail")
+					).as_ref().to_vec();
 
-						let sig_bytes: &[u8] = signature.as_ref();
+					// TODO: Remove unwrap.
+					let payload = serde_json::to_string(&(addresses, signature)).expect("payload marshaling not to fail");
 
-						let sig_vec: Vec<u8> = sig_bytes.to_vec();
-
-						println!("===== signature authorityid {}: {:?}", public_key, sig_vec);
-
-						// TODO: Remove unwrap.
-						let payload = serde_json::to_string(&(enriched_addresses, sig_vec)).expect("payload marshaling not to fail");
-
-						network.service().put_value(hashed_public_key, payload.into_bytes());
-					},
-					None => {
-						println!("==== Got no authority key");
-					}
+					network.service().put_value(hashed_public_key, payload.into_bytes());
 				}
 
+				// Query addresses of other validators.
+				// TODO: Should non-validators also do this? Probably not a good default.
 				match client.runtime_api().authorities(&id) {
 					Ok(authorities) => {
 						for authority in authorities.iter() {
@@ -399,8 +387,6 @@ impl<C: Components> NetworkFutureBuilder<Self> for C where
 					}
 				}
 			}
-
-
 
 			// We poll `finality_notification_stream`, but we only take the last event.
 			let mut last = None;
@@ -423,13 +409,13 @@ impl<C: Components> NetworkFutureBuilder<Self> for C where
 					},
 					rpc::apis::system::Request::Peers(sender) => {
 						let _ = sender.send(network.peers_debug_info().into_iter().map(|(peer_id, p)|
-																					   rpc::apis::system::PeerInfo {
-																						   peer_id: peer_id.to_base58(),
-																						   roles: format!("{:?}", p.roles),
-																						   protocol_version: p.protocol_version,
-																						   best_hash: p.best_hash,
-																						   best_number: p.best_number,
-																					   }
+							rpc::apis::system::PeerInfo {
+								peer_id: peer_id.to_base58(),
+								roles: format!("{:?}", p.roles),
+								protocol_version: p.protocol_version,
+								best_hash: p.best_hash,
+								best_number: p.best_number,
+							}
 						).collect());
 					}
 					rpc::apis::system::Request::NetworkState(sender) => {
@@ -454,57 +440,74 @@ impl<C: Components> NetworkFutureBuilder<Self> for C where
 				status_sinks.lock().retain(|sink| sink.unbounded_send((status.clone(), state.clone())).is_ok());
 			}
 
-			// Main network polling.
-			while let Ok(Async::Ready(Some(Event::Dht(DhtEvent::ValueFound(values))))) = network.poll().map_err(|err| {
-				warn!(target: "service", "Error in network: {:?}", err);
-			}) {
-				for (key, value) in values.iter() {
-					let id = BlockId::hash( client.info().chain.best_hash);
+			let authorities = client.runtime_api().authorities(&BlockId::hash(client.info().chain.best_hash));
+			let valid_authority = |a: &libp2p::multihash::Multihash| {
+				match &authorities {
+					Ok(authorities) => {
+						for authority in authorities.iter() {
+							let hashed_public_key = libp2p::multihash::encode(
+								libp2p::multihash::Hash::SHA2256,
+								authority.to_string().as_bytes(),
+							).expect("public key hashing not to fail");
 
-					match client.runtime_api().authorities(&id) {
-						Ok(authorities) => {
-							for authority in authorities.iter() {
-								// TODO: Remove unwrap.
-								let hashed_public_key = libp2p::multihash::encode(
-									libp2p::multihash::Hash::SHA2256,
-									authority.to_string().as_bytes(),
-								).expect("public key hashing not to fail");
-
-								if *key == hashed_public_key {
-									let value = std::str::from_utf8(value).expect("value to string not to fail");
-
-									let (addresses, signature): (Vec<Multiaddr>, Vec<u8>) = serde_json::from_str(value).expect("payload unmarshaling not to fail");
-									println!("==== Got key {:?} value {:?} from DHT", authority.to_string(), addresses);
-
-									let sig_bytes: &[u8] = &signature;
-
-									println!("===== got signature authorityid {}: {:?}", authority.to_string(), signature);
-
-									// TODO: is using verify-weak a problem here?
-									if <<C as Components>::Factory as ServiceFactory>::ConsensusPair::verify_weak(
-										sig_bytes,
-										&serde_json::to_string(&addresses)
-											.map(|s| s.into_bytes())
-											.expect("address marshaling not to fail"),
-										authority,
-									) {
-										for address in addresses.iter() {
-											// TODO: Why does add_reserved_peer take a string?
-											// TODO: Remove unwrap.
-											network.service().add_reserved_peer(address.to_string()).expect("adding reserved peer not to fail");
-										}
-									} else {
-										println!("==== signature not valid");
-									}
-								}
+							// TODO: Comparing two pointers is safe, right? Given they are not fat-pointers.
+							if a == &hashed_public_key {
+								return Some(authority.clone());
 							}
-						},
-						Err(e) => {
-							println!("==== Got no authorities, but an error: {:?}", e);
 						}
+					},
+					// TODO: Should we handle the error here?
+					Err(_e) => {},
+				}
+
+				return None;
+			};
+
+			// TODO: Can we do this nicer?
+			let network_service = network.service().clone();
+			let add_reserved_peer = |values: Vec<(libp2p::multihash::Multihash, Vec<u8>)>| {
+				for (key, value) in values.iter() {
+					// TODO: Should we log if it is not a valid one?
+					if let Some(authority_pub_key) = valid_authority(key) {
+						println!("===== adding other node");
+						let value = std::str::from_utf8(value).expect("value to string not to fail");
+
+						let (addresses, signature): (Vec<Multiaddr>, Vec<u8>) = serde_json::from_str(value).expect("payload unmarshaling not to fail");
+
+						// TODO: is using verify-weak a problem here?
+						if <<C as Components>::Factory as ServiceFactory>::ConsensusPair::verify_weak(
+							&signature,
+							&serde_json::to_string(&addresses)
+								.map(|s| s.into_bytes())
+								.expect("address marshaling not to fail"),
+							authority_pub_key,
+						) {
+							for address in addresses.iter() {
+								// TODO: Why does add_reserved_peer take a string?
+								// TODO: Remove unwrap.
+								network_service.add_reserved_peer(address.to_string()).expect("adding reserved peer not to fail");
+							}
+						} else {
+							// TODO: Log, don't print.
+							println!("==== signature not valid");
+						}
+					} else {
+						println!("==== Did not find a match for the key");
 					}
 				}
-			}
+			};
+
+			// Main network polling.
+			while let Ok(Async::Ready(Some(Event::Dht(event)))) = network.poll().map_err(|err| {
+				warn!(target: "service", "Error in network: {:?}", err);
+			}) {
+				match event {
+					DhtEvent::ValueFound(values) => add_reserved_peer(values),
+					DhtEvent::ValueNotFound(_h) => println!("==== Didn't find hash"),
+					DhtEvent::ValuePut(_h) => {},
+					DhtEvent::ValuePutFailed(_h) => println!("==== failed to put value on DHT"),
+				}
+			};
 
 			// Now some diagnostic for performances.
 			let polling_dur = before_polling.elapsed();
@@ -516,7 +519,6 @@ impl<C: Components> NetworkFutureBuilder<Self> for C where
 			);
 
 			Ok(Async::NotReady)
-
 		}))
 	}
 
@@ -578,8 +580,8 @@ pub trait ServiceFactory: 'static + Sized {
 	/// The Fork Choice Strategy for the chain
 	type SelectChain: SelectChain<Self::Block> + 'static;
 	///
-	// TODO: Are all of these traits necessary?
-	type AuthorityId:  primitives::crypto::Public + std::hash::Hash + parity_codec::Codec + std::fmt::Debug + std::string::ToString;
+	// TODO: Are all of these trait bounds necessary?
+	type AuthorityId:  primitives::crypto::Public + std::hash::Hash + parity_codec::Codec + std::string::ToString;
 
 	//TODO: replace these with a constructor trait. that TransactionPool implements. (#1242)
 	/// Extrinsic pool constructor for the full client.

@@ -25,7 +25,7 @@
 //! The methods of the [`NetworkService`] are implemented by sending a message over a channel,
 //! which is then processed by [`NetworkWorker::poll`].
 
-use std::{collections::{ HashMap, HashSet }, fs, marker::PhantomData, io, path::Path};
+use std::{collections::HashMap, fs, marker::PhantomData, io, path::Path};
 use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
 
 use consensus::import_queue::{ImportQueue, Link};
@@ -258,12 +258,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 	/// Returns the number of peers we're connected to.
 	pub fn num_connected_peers(&self) -> usize {
 		self.network_service.user_protocol().num_connected_peers()
-	}
-
-	/// Returns the local external addresses.
-	pub fn external_addresses(&self) -> HashSet<Multiaddr> {
-		let swarm = &self.network_service;
-		Swarm::<B, S, H>::external_addresses(&swarm).cloned().collect()
 	}
 
 	/// Returns the number of peers we're connected to and that are being queried.

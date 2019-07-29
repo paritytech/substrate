@@ -30,7 +30,7 @@ services:
       - ../../target/release/substrate:/usr/local/bin/substrate
     image: parity/substrate
     networks:
-      - internet
+      - network-a
     command:
       # Local node id: QmRpheLN4JWdAnY7HGJfWFNbfkQCb6tFf4vvA6hgjMZKrR
       - "--node-key"
@@ -57,7 +57,6 @@ services:
       - "--no-telemetry"
       - "--rpc-cors"
       - "all"
-      - "--no-mdns"
 
   sentry-a:
     image: parity/substrate
@@ -84,9 +83,9 @@ services:
       # - "--validator"
       - "--name"
       - "CharliesNode"
-      - "--reserved-nodes"
+      - "--bootnodes"
       - "/dns4/validator-a/tcp/30333/p2p/QmRpheLN4JWdAnY7HGJfWFNbfkQCb6tFf4vvA6hgjMZKrR"
-      - "--reserved-nodes"
+      - "--bootnodes"
       - "/dns4/validator-b/tcp/30333/p2p/QmSVnNf9HwVMT1Y4cK1P6aoJcEZjmoTXpjKBmAABLMnZEk"
       - "--no-telemetry"
       - "--rpc-cors"
@@ -97,7 +96,6 @@ services:
       # Make sure sentry-a still participates as a grandpa voter to forward
       # grandpa finality gossip messages.
       - "--grandpa-voter"
-      - "--no-mdns"
 
   validator-b:
     image: parity/substrate
@@ -121,7 +119,9 @@ services:
       - "--validator"
       - "--name"
       - "BobsNode"
-      - "--reserved-nodes"
+      - "--bootnodes"
+      - "/dns4/validator-a/tcp/30333/p2p/QmRpheLN4JWdAnY7HGJfWFNbfkQCb6tFf4vvA6hgjMZKrR"
+      - "--bootnodes"
       - "/dns4/sentry-a/tcp/30333/p2p/QmV7EhW6J6KgmNdr558RH1mPx2xGGznW7At4BhXzntRFsi"
       - "--no-telemetry"
       - "--rpc-cors"
@@ -129,7 +129,6 @@ services:
       # Not only bind to localhost.
       - "--ws-external"
       - "--rpc-external"
-      - "--no-mdns"
 
   ui:
     image: polkadot-js/apps
