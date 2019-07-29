@@ -32,13 +32,13 @@ use consensus_common::{
 	Error as ConsensusError,
 };
 use network::config::{BoxFinalityProofRequestBuilder, FinalityProofRequestBuilder};
-use runtime_primitives::Justification;
-use runtime_primitives::traits::{
+use sr_primitives::Justification;
+use sr_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, ProvideRuntimeApi, DigestFor,
 };
 use fg_primitives::{GrandpaApi, AuthorityId};
-use runtime_primitives::generic::BlockId;
-use substrate_primitives::{H256, Blake2Hasher};
+use sr_primitives::generic::BlockId;
+use primitives::{H256, Blake2Hasher};
 
 use crate::aux_schema::load_decode;
 use crate::consensus_changes::ConsensusChanges;
@@ -468,7 +468,7 @@ fn load_aux_import_data<B, Block: BlockT<Hash=H256>, PRA>(
 		PRA: ProvideRuntimeApi,
 		PRA::Api: GrandpaApi<Block>,
 {
-	use runtime_primitives::traits::Zero;
+	use sr_primitives::traits::Zero;
 	let authority_set = match load_decode(aux_store, LIGHT_AUTHORITY_SET_KEY)? {
 		Some(authority_set) => authority_set,
 		None => {
@@ -538,7 +538,7 @@ fn on_post_finalization_error(error: ClientError, value_type: &str) -> Consensus
 pub mod tests {
 	use super::*;
 	use consensus_common::ForkChoiceStrategy;
-	use substrate_primitives::H256;
+	use primitives::H256;
 	use test_client::client::in_mem::Blockchain as InMemoryAuxStore;
 	use test_client::runtime::{Block, Header};
 	use crate::tests::TestApi;

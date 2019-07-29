@@ -21,7 +21,7 @@ use std::fs::File;
 use std::path::PathBuf;
 use serde::{Serialize, Deserialize};
 use primitives::storage::{StorageKey, StorageData};
-use runtime_primitives::{BuildStorage, StorageOverlay, ChildrenStorageOverlay};
+use sr_primitives::{BuildStorage, StorageOverlay, ChildrenStorageOverlay};
 use serde_json as json;
 use crate::components::RuntimeGenesis;
 use network::Multiaddr;

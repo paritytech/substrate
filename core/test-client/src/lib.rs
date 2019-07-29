@@ -31,7 +31,7 @@ pub use keyring::{
 	sr25519::Keyring as Sr25519Keyring,
 };
 pub use primitives::Blake2Hasher;
-pub use runtime_primitives::{StorageOverlay, ChildrenStorageOverlay};
+pub use sr_primitives::{StorageOverlay, ChildrenStorageOverlay};
 pub use state_machine::ExecutionStrategy;
 
 use std::sync::Arc;
@@ -39,7 +39,7 @@ use std::collections::HashMap;
 use futures::future::Ready;
 use hash_db::Hasher;
 use primitives::storage::well_known_keys;
-use runtime_primitives::traits::{
+use sr_primitives::traits::{
 	Block as BlockT, NumberFor
 };
 use client::LocalCallExecutor;

@@ -8,7 +8,7 @@ edition = "2018"
 [dependencies]
 parity-codec = { version = "4.1.1", default-features = false }
 client = { package = "substrate-client", path = "../../../client", default-features = false }
-sr-primitives = { package = "sr-primitives", path = "../../../sr-primitives", default-features = false }
+sr-primitives = { path = "../../../sr-primitives", default-features = false }
 rstd = { package = "sr-std", path = "../../../sr-std", default-features = false }
 
 [features]

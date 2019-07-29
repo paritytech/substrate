@@ -24,7 +24,7 @@ use std::{path::PathBuf, net::SocketAddr};
 use transaction_pool;
 use crate::chain_spec::ChainSpec;
 use primitives::crypto::Protected;
-use runtime_primitives::BuildStorage;
+use sr_primitives::BuildStorage;
 use serde::{Serialize, de::DeserializeOwned};
 use target_info::Target;
 use tel::TelemetryEndpoints;

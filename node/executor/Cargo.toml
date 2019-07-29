@@ -19,7 +19,7 @@ node-runtime = { path = "../runtime" }
 [dev-dependencies]
 test-client = { package = "substrate-test-client", path = "../../core/test-client" }
 keyring = { package = "substrate-keyring", path = "../../core/keyring" }
-runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
+sr-primitives = { path = "../../core/sr-primitives" }
 runtime_support = { package = "srml-support", path = "../../srml/support" }
 balances = { package = "srml-balances", path = "../../srml/balances" }
 session = { package = "srml-session", path = "../../srml/session" }

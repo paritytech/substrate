@@ -25,7 +25,7 @@ use std::sync::Arc;
 use client::{BlockchainEvents, BlockBody};
 use futures::prelude::*;
 use transaction_pool::txpool::{Pool as TransactionPool, ChainApi as PoolChainApi};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, BlockNumberToHash};
+use sr_primitives::traits::{Block as BlockT, Header as HeaderT, BlockNumberToHash};
 
 use tokio::executor::current_thread::TaskExecutor as LocalThreadHandle;
 use tokio::runtime::TaskExecutor as ThreadPoolHandle;

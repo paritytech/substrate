@@ -23,7 +23,7 @@ pub use state_machine::OverlayedChanges;
 #[cfg(feature = "std")]
 pub use primitives::NativeOrEncoded;
 #[doc(hidden)]
-pub use runtime_primitives::{
+pub use sr_primitives::{
 	traits::{
 		Block as BlockT, GetNodeBlockType, GetRuntimeBlockType,
 		Header as HeaderT, ApiRef, RuntimeApiInfo, Hash as HashT,

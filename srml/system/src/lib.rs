@@ -77,16 +77,16 @@ use rstd::prelude::*;
 #[cfg(any(feature = "std", test))]
 use rstd::map;
 use rstd::marker::PhantomData;
-use primitives::generic::{self, Era};
-use primitives::Perbill;
-use primitives::weights::{Weight, DispatchInfo, DispatchClass, WeightMultiplier, SimpleDispatchInfo};
-use primitives::transaction_validity::{ValidTransaction, TransactionPriority, TransactionLongevity};
-use primitives::traits::{self, CheckEqual, SimpleArithmetic, Zero, SignedExtension, Convert,
+use sr_primitives::generic::{self, Era};
+use sr_primitives::Perbill;
+use sr_primitives::weights::{Weight, DispatchInfo, DispatchClass, WeightMultiplier, SimpleDispatchInfo};
+use sr_primitives::transaction_validity::{ValidTransaction, TransactionPriority, TransactionLongevity};
+use sr_primitives::traits::{self, CheckEqual, SimpleArithmetic, Zero, SignedExtension, Convert,
 	SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, CurrentHeight, BlockNumberToHash,
 	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded,
 	Lookup, DispatchError, SaturatedConversion,
 };
-use substrate_primitives::storage::well_known_keys;
+use primitives::storage::well_known_keys;
 use srml_support::{
 	storage, decl_module, decl_event, decl_storage, StorageDoubleMap, StorageValue, StorageMap,
 	Parameter, for_each_tuple, traits::{Contains, Get}
@@ -98,7 +98,7 @@ use parity_codec::{Encode, Decode};
 use runtime_io::{twox_128, TestExternalities, Blake2Hasher};
 
 #[cfg(any(feature = "std", test))]
-use substrate_primitives::ChangesTrieConfiguration;
+use primitives::ChangesTrieConfiguration;
 
 /// Handler for when a new account has been created.
 pub trait OnNewAccount<AccountId> {
@@ -401,10 +401,14 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
-		#[serde(with = "substrate_primitives::bytes")]
+		#[serde(with = "primitives::bytes")]
 		config(code): Vec<u8>;
 
-		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig| {
+		build(
+			|storage: &mut sr_primitives::StorageOverlay,
+			_: &mut sr_primitives::ChildrenStorageOverlay,
+			config: &GenesisConfig|
+		{
 			use parity_codec::Encode;
 
 			storage.insert(well_known_keys::CODE.to_vec(), config.code.clone());
@@ -1042,8 +1046,8 @@ impl<T: Trait> BlockNumberToHash for ChainContext<T> {
 mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
-	use substrate_primitives::H256;
-	use primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+	use primitives::H256;
+	use sr_primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 	use srml_support::{impl_outer_origin, parameter_types};
 
 	impl_outer_origin!{

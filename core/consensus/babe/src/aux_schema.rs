@@ -21,7 +21,7 @@ use parity_codec::{Decode, Encode};
 
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
-use runtime_primitives::traits::Block as BlockT;
+use sr_primitives::traits::Block as BlockT;
 
 use super::{EpochChanges, SharedEpochChanges};
 
