@@ -164,7 +164,8 @@ decl_module! {
 		/// The expected average block time at which BABE should be creating
 		/// blocks. Since BABE is probabilistic it is not trivial to figure out
 		/// what the expected average block time should be based on the slot
-		/// duration and the security parameter `c`.
+		/// duration and the security parameter `c` (where `1 - c` represents
+		/// the probability of a slot being empty).
 		const ExpectedBlockTime: T::Moment = T::ExpectedBlockTime::get();
 
 		/// Initialization

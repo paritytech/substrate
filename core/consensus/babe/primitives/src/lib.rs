@@ -104,7 +104,10 @@ pub struct BabeConfiguration {
 
 	/// A constant value that is used in the threshold calculation formula.
 	/// Expressed as a fraction where the first member of the tuple is the
-	/// numerator and the second is the denominator.
+	/// numerator and the second is the denominator. The fraction should
+	/// represent a value between 0 and 1.
+	/// In the threshold formula calculation, `1 - c` represents the probability
+	/// of a slot being empty.
 	pub c: (u64, u64),
 
 	/// The minimum number of blocks that must be received before running the
