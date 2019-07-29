@@ -157,6 +157,10 @@ decl_storage! {
 decl_module! {
 	/// The BABE SRML module
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		/// The number of **slots** that an epoch takes. We couple sessions to
+		/// epochs, i.e. we start a new session once the new epoch begins.
+		const EpochDuration: u64 = T::EpochDuration::get();
+
 		/// The expected average block time at which BABE should be creating
 		/// blocks. Since BABE is probabilistic it is not trivial to figure out
 		/// what the expected average block time should be based on the slot
