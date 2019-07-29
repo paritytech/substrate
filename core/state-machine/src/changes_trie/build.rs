@@ -123,7 +123,16 @@ fn prepare_digest_input<'a, H, Number>(
 		H::Out: 'a,
 		Number: BlockNumber,
 {
-	digest_build_iterator(&config.config, config.zero.clone(), block.clone())
+	let build_skewed_digest = config.end.as_ref() == Some(&block);
+	let block_for_digest = if build_skewed_digest {
+		config.config.next_max_level_digest_block(config.zero.clone(), block.clone())
+			.unwrap_or_else(|| block.clone())
+	} else {
+		block.clone()
+	};
+
+	digest_build_iterator(config, block_for_digest)
+//		.take_while(|digest_build_block| config.end.as_ref().map(|end| digest_build_block <= end).unwrap_or(true))
 		.try_fold(BTreeMap::new(), move |mut map, digest_build_block| {
 			let trie_root = storage.root(parent, digest_build_block.clone())?;
 			let trie_root = trie_root.ok_or_else(|| format!("No changes trie root for block {}", digest_build_block.clone()))?;
@@ -327,6 +336,46 @@ mod test {
 			InputPair::DigestIndex(DigestIndex { block: 16, key: vec![102] }, vec![4]),
 			InputPair::DigestIndex(DigestIndex { block: 16, key: vec![103] }, vec![4]),
 			InputPair::DigestIndex(DigestIndex { block: 16, key: vec![105] }, vec![4, 8]),
+		]);
+	}
+
+	#[test]
+	fn build_changes_trie_nodes_on_skewed_digest_block() {
+		let (backend, storage, changes, config) = prepare_for_build();
+		let parent = AnchorBlockId { hash: Default::default(), number: 10 };
+
+		let mut configuration_range = configuration_range(&config, 0); // TODO: test other cases
+		let changes_trie_nodes = prepare_input(
+			&backend,
+			&storage,
+			configuration_range.clone(),
+			&changes,
+			&parent,
+		).unwrap();
+		assert_eq!(changes_trie_nodes.collect::<Vec<InputPair<u64>>>(), vec![
+			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 11, key: vec![100] }, vec![0, 2, 3]),
+			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 11, key: vec![101] }, vec![1]),
+			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 11, key: vec![103] }, vec![0, 1]),
+		]);
+
+		configuration_range.end = Some(11);
+		let changes_trie_nodes = prepare_input(
+			&backend,
+			&storage,
+			configuration_range,
+			&changes,
+			&parent,
+		).unwrap();
+		assert_eq!(changes_trie_nodes.collect::<Vec<InputPair<u64>>>(), vec![
+			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 11, key: vec![100] }, vec![0, 2, 3]),
+			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 11, key: vec![101] }, vec![1]),
+			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 11, key: vec![103] }, vec![0, 1]),
+
+			InputPair::DigestIndex(DigestIndex { block: 11, key: vec![100] }, vec![4]),
+			InputPair::DigestIndex(DigestIndex { block: 11, key: vec![101] }, vec![4]),
+			InputPair::DigestIndex(DigestIndex { block: 11, key: vec![102] }, vec![4]),
+			InputPair::DigestIndex(DigestIndex { block: 11, key: vec![103] }, vec![4]),
+			InputPair::DigestIndex(DigestIndex { block: 11, key: vec![105] }, vec![4, 8]),
 		]);
 	}
 
