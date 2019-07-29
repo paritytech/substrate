@@ -324,7 +324,7 @@ impl<T: Trait> Module<T> {
 mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
-	use substrate_primitives::{H256, Blake2Hasher};
+	use primitives::{H256, Blake2Hasher};
 	use sr_primitives::traits::{BlakeTwo256, IdentityLookup};
 	use sr_primitives::testing::Header;
 	use sr_primitives::generic::DigestItem;

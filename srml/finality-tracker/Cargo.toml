@@ -14,7 +14,7 @@ srml-support = { path = "../support", default-features = false }
 srml-system = { path = "../system", default-features = false }
 
 [dev-dependencies]
-substrate-primitives = { path = "../../core/primitives", default-features = false }
+primitives = { package = "substrate-primitives",  path = "../../core/primitives", default-features = false }
 sr-io = { path = "../../core/sr-io", default-features = false }
 
 [features]

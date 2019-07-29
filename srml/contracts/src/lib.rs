@@ -95,7 +95,7 @@ pub use crate::gas::Gas;
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
-use substrate_primitives::crypto::UncheckedFrom;
+use primitives::crypto::UncheckedFrom;
 use rstd::{prelude::*, marker::PhantomData};
 use parity_codec::{Codec, Encode, Decode};
 use runtime_io::blake2_256;
@@ -109,7 +109,7 @@ use srml_support::{
 };
 use srml_support::traits::{OnFreeBalanceZero, OnUnbalanced, Currency, Get};
 use system::{ensure_signed, RawOrigin, ensure_root};
-use substrate_primitives::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
+use primitives::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
 use timestamp;
 
 pub type CodeHash<T> = <T as system::Trait>::Hash;

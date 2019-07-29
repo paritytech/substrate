@@ -25,7 +25,7 @@ use grandpa::voter_set::VoterSet;
 use grandpa::{Error as GrandpaError};
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{NumberFor, Block as BlockT, Header as HeaderT};
-use substrate_primitives::{H256, Blake2Hasher};
+use primitives::{H256, Blake2Hasher};
 use fg_primitives::AuthorityId;
 
 use crate::{Commit, Error};

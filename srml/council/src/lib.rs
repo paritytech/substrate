@@ -41,7 +41,7 @@ mod tests {
 	pub use runtime_io::with_externalities;
 	use srml_support::{impl_outer_origin, impl_outer_event, impl_outer_dispatch, parameter_types};
 	use srml_support::traits::Get;
-	pub use substrate_primitives::{H256, Blake2Hasher, u32_trait::{_1, _2, _3, _4}};
+	pub use primitives::{H256, Blake2Hasher, u32_trait::{_1, _2, _3, _4}};
 	pub use sr_primitives::traits::{BlakeTwo256, IdentityLookup};
 	pub use sr_primitives::testing::{Digest, DigestItem, Header};
 	pub use sr_primitives::Perbill;

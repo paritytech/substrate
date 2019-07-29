@@ -68,7 +68,7 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use substrate_primitives::{
+use primitives::{
 	crypto::TypedKey, offchain::CryptoKey,
 	offchain::OpaqueNetworkState,
 	offchain::StorageKind,

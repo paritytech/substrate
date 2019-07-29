@@ -1116,7 +1116,7 @@ mod tests {
 	use std::cell::RefCell;
 	use srml_support::{assert_ok, assert_err, assert_noop, parameter_types};
 	use runtime_io::with_externalities;
-	use substrate_primitives::{H256, Blake2Hasher};
+	use primitives::{H256, Blake2Hasher};
 	use sr_primitives::{
 		Perbill, traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header, BuildStorage
 	};

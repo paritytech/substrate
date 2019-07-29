@@ -990,7 +990,7 @@ mod tests {
 		impl_outer_origin, impl_outer_dispatch, assert_noop, assert_ok, parameter_types,
 		traits::Contains
 	};
-	use substrate_primitives::{H256, Blake2Hasher};
+	use primitives::{H256, Blake2Hasher};
 	use sr_primitives::{traits::{BlakeTwo256, IdentityLookup, Bounded}, testing::Header};
 	use sr_primitives::Perbill;
 	use balances::BalanceLock;

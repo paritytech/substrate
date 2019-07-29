@@ -27,7 +27,7 @@ use log::{debug, info, warn};
 use consensus_common::SelectChain;
 use client::{CallExecutor, Client, backend::Backend};
 use sr_primitives::traits::{NumberFor, Block as BlockT};
-use substrate_primitives::{H256, Blake2Hasher};
+use primitives::{H256, Blake2Hasher};
 
 use crate::{
 	global_communication, CommandOrError, CommunicationIn, Config, environment,

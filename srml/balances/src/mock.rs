@@ -19,7 +19,7 @@
 #![cfg(test)]
 
 use sr_primitives::{Perbill, traits::{Convert, IdentityLookup}, testing::Header, weights::{DispatchInfo, Weight}};
-use substrate_primitives::{H256, Blake2Hasher};
+use primitives::{H256, Blake2Hasher};
 use runtime_io;
 use srml_support::{impl_outer_origin, parameter_types};
 use srml_support::traits::Get;

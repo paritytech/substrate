@@ -17,7 +17,7 @@
 //! Private implementation details of BABE digests.
 
 #[cfg(feature = "std")]
-use substrate_primitives::sr25519::Signature;
+use primitives::sr25519::Signature;
 #[cfg(feature = "std")]
 use super::{BABE_ENGINE_ID, Epoch};
 #[cfg(not(feature = "std"))]

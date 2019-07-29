@@ -1249,7 +1249,7 @@ mod tests {
 		use crate::authorities::AuthoritySet;
 		use crate::environment::{CompletedRound, CompletedRounds, HasVoted, VoterSetState};
 		use grandpa::round::State as RoundState;
-		use substrate_primitives::H256;
+		use primitives::H256;
 
 		let state = RoundState::genesis((H256::zero(), 0));
 		let base = state.prevote_ghost.unwrap();

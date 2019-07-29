@@ -265,7 +265,7 @@ mod tests {
 	use super::*;
 
 	use sr_io::{with_externalities, TestExternalities};
-	use substrate_primitives::H256;
+	use primitives::H256;
 	use sr_primitives::traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT};
 	use sr_primitives::testing::Header;
 	use sr_primitives::Perbill;

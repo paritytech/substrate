@@ -17,7 +17,7 @@ substrate-trie = { path = "../../core/trie", default-features = false, optional 
 runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
 
 [dev-dependencies]
-substrate-primitives = { path = "../../core/primitives" }
+primitives = { package = "substrate-primitives",  path = "../../core/primitives" }
 lazy_static = "1.0"
 
 [features]

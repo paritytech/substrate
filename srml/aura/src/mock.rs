@@ -24,7 +24,7 @@ use sr_primitives::{
 };
 use srml_support::{impl_outer_origin, parameter_types};
 use runtime_io;
-use substrate_primitives::{H256, Blake2Hasher};
+use primitives::{H256, Blake2Hasher};
 use crate::{Trait, Module, GenesisConfig};
 
 impl_outer_origin!{

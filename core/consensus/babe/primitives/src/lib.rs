@@ -24,7 +24,7 @@ mod digest;
 use parity_codec::{Encode, Decode};
 use rstd::vec::Vec;
 use sr_primitives::ConsensusEngineId;
-use substrate_primitives::sr25519;
+use primitives::sr25519;
 use substrate_client::decl_runtime_apis;
 
 #[cfg(feature = "std")]

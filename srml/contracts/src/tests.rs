@@ -38,8 +38,8 @@ use srml_support::{
 };
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use substrate_primitives::storage::well_known_keys;
-use substrate_primitives::Blake2Hasher;
+use primitives::storage::well_known_keys;
+use primitives::Blake2Hasher;
 use system::{self, EventRecord, Phase};
 use {balances, wabt};
 
@@ -196,7 +196,7 @@ impl ContractAddressFor<H256, u64> for DummyContractAddressFor {
 pub struct DummyTrieIdGenerator;
 impl TrieIdGenerator<u64> for DummyTrieIdGenerator {
 	fn trie_id(account_id: &u64) -> TrieId {
-		use substrate_primitives::storage::well_known_keys;
+		use primitives::storage::well_known_keys;
 
 		let new_seed = super::AccountCounter::mutate(|v| {
 			*v = v.wrapping_add(1);

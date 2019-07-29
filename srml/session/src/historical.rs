@@ -312,7 +312,7 @@ impl<T: Trait, D: AsRef<[u8]>> srml_support::traits::KeyOwnerProofSystem<(KeyTyp
 mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
-	use substrate_primitives::Blake2Hasher;
+	use primitives::Blake2Hasher;
 	use sr_primitives::{
 		traits::OnInitialize,
 		testing::{UintAuthorityId, UINT_DUMMY_KEY},

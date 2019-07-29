@@ -356,7 +356,7 @@ mod tests {
 	use super::*;
 	use balances::Call;
 	use runtime_io::with_externalities;
-	use substrate_primitives::{H256, Blake2Hasher};
+	use primitives::{H256, Blake2Hasher};
 	use sr_primitives::generic::Era;
 	use sr_primitives::Perbill;
 	use sr_primitives::weights::Weight;
@@ -391,7 +391,7 @@ mod tests {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
-		type Hash = substrate_primitives::H256;
+		type Hash = primitives::H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<u64>;

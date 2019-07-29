@@ -38,7 +38,7 @@ use sr_primitives::traits::{
 };
 use fg_primitives::{GrandpaApi, AuthorityId};
 use sr_primitives::generic::BlockId;
-use substrate_primitives::{H256, Blake2Hasher};
+use primitives::{H256, Blake2Hasher};
 
 use crate::aux_schema::load_decode;
 use crate::consensus_changes::ConsensusChanges;
@@ -538,7 +538,7 @@ fn on_post_finalization_error(error: ClientError, value_type: &str) -> Consensus
 pub mod tests {
 	use super::*;
 	use consensus_common::ForkChoiceStrategy;
-	use substrate_primitives::H256;
+	use primitives::H256;
 	use test_client::client::in_mem::Blockchain as InMemoryAuxStore;
 	use test_client::runtime::{Block, Header};
 	use crate::tests::TestApi;

@@ -456,7 +456,7 @@ pub(crate) fn load_authorities<B: AuxStore, H: Decode, N: Decode>(backend: &B)
 
 #[cfg(test)]
 mod test {
-	use substrate_primitives::H256;
+	use primitives::H256;
 	use test_client;
 	use super::*;
 

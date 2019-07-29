@@ -21,7 +21,7 @@
 #![recursion_limit="128"]
 
 use rstd::{prelude::*, result};
-use substrate_primitives::u32_trait::Value as U32;
+use primitives::u32_trait::Value as U32;
 use sr_primitives::traits::{Hash, EnsureOrigin};
 use sr_primitives::weights::SimpleDispatchInfo;
 use srml_support::{
@@ -397,7 +397,7 @@ mod tests {
 	use system::{EventRecord, Phase};
 	use hex_literal::hex;
 	use runtime_io::with_externalities;
-	use substrate_primitives::{H256, Blake2Hasher};
+	use primitives::{H256, Blake2Hasher};
 	use sr_primitives::{
 		Perbill, traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header, BuildStorage
 	};

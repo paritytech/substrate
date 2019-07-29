@@ -20,7 +20,7 @@ use std::{collections::HashSet, cell::RefCell};
 use sr_primitives::Perbill;
 use sr_primitives::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize};
 use sr_primitives::testing::{Header, UintAuthorityId};
-use substrate_primitives::{H256, Blake2Hasher};
+use primitives::{H256, Blake2Hasher};
 use runtime_io;
 use srml_support::{assert_ok, impl_outer_origin, parameter_types, EnumerableStorageMap};
 use srml_support::traits::{Currency, Get, FindAuthor};

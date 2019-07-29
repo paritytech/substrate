@@ -19,7 +19,7 @@
 use super::*;
 use std::cell::RefCell;
 use srml_support::{impl_outer_origin, parameter_types};
-use substrate_primitives::H256;
+use primitives::H256;
 use sr_primitives::{
 	Perbill,
 	traits::{BlakeTwo256, IdentityLookup, ConvertInto},

@@ -562,7 +562,7 @@ mod tests {
 	use super::*;
 	use srml_support::assert_ok;
 	use runtime_io::with_externalities;
-	use substrate_primitives::Blake2Hasher;
+	use primitives::Blake2Hasher;
 	use sr_primitives::{
 		traits::OnInitialize,
 		testing::UintAuthorityId,
