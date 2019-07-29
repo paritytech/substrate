@@ -244,7 +244,7 @@ export_api! {
 		fn network_state() -> Result<OpaqueNetworkState, ()>;
 
 		/// Get the cryptokey whose pubkey and appkeys are those given.
-		fn find_key(pubkey: &[u8], app_id: KeyTypeId) -> Result<CryptoKey, ()>;
+		fn find_key(pubkey: &[u8], app_id: KeyTypeId) -> Result<CryptoKey, ()> { Err(()) }    // TODO: implement this.
 
 		/// Returns the currently configured authority public key, if available.
 		fn pubkey(key: CryptoKey) -> Result<Vec<u8>, ()>;

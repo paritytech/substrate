@@ -244,21 +244,22 @@ impl<T: Trait> Module<T> {
 	fn offchain(new: T::BlockNumber) {
 		fn gossip_at<T: Trait>(block_number: T::BlockNumber) -> Result<(), OffchainErr> {
 			// we run only when a local authority key is configured
+			let key_type: KeyTypeId = b"imon".into();
 			let authorities = Keys::get();
-			let authority = authorities.into_iter().find(|id| )
-			if let Ok(key) = sr_io::pubkey(CryptoKey { key_type: b"imon".into(), id: CryptoKind::Ed25519 }) {
-				let authority_id = <T as Trait>::AuthorityId::decode(&mut &key[..])
-					.ok_or(OffchainErr::DecodeAuthorityId)?;
+			let maybe_key = authorities.into_iter()
+				.enumerate()
+				.filter_map(|(i, id)| sr_io::find_key(id, key_type).ok().map(|x| (i, x)));
+			if let Some((authority_index, key)) = maybe_key {
 				let network_state =
 					sr_io::network_state().map_err(|_| OffchainErr::NetworkState)?;
 				let heartbeat_data = Heartbeat {
 					block_number,
 					network_state,
 					session_index: <session::Module<T>>::current_index(),
-					authority_id,
+					authority_index,
 				};
 
-				let signature = sr_io::sign(CryptoKey::AuthorityKey, &heartbeat_data.encode())
+				let signature = sr_io::sign(CryptoKey { key_type, id }, &heartbeat_data.encode())
 					.map_err(|_| OffchainErr::FailedSigning)?;
 				let call = Call::heartbeat(heartbeat_data, signature);
 				let ex = T::UncheckedExtrinsic::new_unsigned(call.into())
