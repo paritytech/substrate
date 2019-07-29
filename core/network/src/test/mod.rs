@@ -134,57 +134,57 @@ pub type PeersLightClient =
 
 #[derive(Clone)]
 pub enum PeersClient {
-	Full(Arc<PeersFullClient>),
-	Light(Arc<PeersLightClient>),
+	Full(Arc<PeersFullClient>, Arc<test_client::Backend>),
+	Light(Arc<PeersLightClient>, Arc<test_client::LightBackend>),
 }
 
 impl PeersClient {
 	pub fn as_full(&self) -> Option<Arc<PeersFullClient>> {
 		match *self {
-			PeersClient::Full(ref client) => Some(client.clone()),
+			PeersClient::Full(ref client, ref _backend) => Some(client.clone()),
 			_ => None,
 		}
 	}
 
 	pub fn as_block_import(&self) -> BoxBlockImport<Block> {
 		match *self {
-			PeersClient::Full(ref client) => Box::new(client.clone()) as _,
-			PeersClient::Light(ref client) => Box::new(client.clone()) as _,
+			PeersClient::Full(ref client, ref _backend) => Box::new(client.clone()) as _,
+			PeersClient::Light(ref client, ref _backend) => Box::new(client.clone()) as _,
 		}
 	}
 
 	pub fn get_aux(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
 		match *self {
-			PeersClient::Full(ref client) => client.get_aux(key),
-			PeersClient::Light(ref client) => client.get_aux(key),
+			PeersClient::Full(ref client, ref _backend) => client.get_aux(key),
+			PeersClient::Light(ref client, ref _backend) => client.get_aux(key),
 		}
 	}
 
 	pub fn info(&self) -> ClientInfo<Block> {
 		match *self {
-			PeersClient::Full(ref client) => client.info(),
-			PeersClient::Light(ref client) => client.info(),
+			PeersClient::Full(ref client, ref _backend) => client.info(),
+			PeersClient::Light(ref client, ref _backend) => client.info(),
 		}
 	}
 
 	pub fn header(&self, block: &BlockId<Block>) -> ClientResult<Option<<Block as BlockT>::Header>> {
 		match *self {
-			PeersClient::Full(ref client) => client.header(block),
-			PeersClient::Light(ref client) => client.header(block),
+			PeersClient::Full(ref client, ref _backend) => client.header(block),
+			PeersClient::Light(ref client, ref _backend) => client.header(block),
 		}
 	}
 
 	pub fn justification(&self, block: &BlockId<Block>) -> ClientResult<Option<Justification>> {
 		match *self {
-			PeersClient::Full(ref client) => client.justification(block),
-			PeersClient::Light(ref client) => client.justification(block),
+			PeersClient::Full(ref client, ref _backend) => client.justification(block),
+			PeersClient::Light(ref client, ref _backend) => client.justification(block),
 		}
 	}
 
 	pub fn finality_notification_stream(&self) -> FinalityNotifications<Block> {
 		match *self {
-			PeersClient::Full(ref client) => client.finality_notification_stream(),
-			PeersClient::Light(ref client) => client.finality_notification_stream(),
+			PeersClient::Full(ref client, ref _backend) => client.finality_notification_stream(),
+			PeersClient::Light(ref client, ref _backend) => client.finality_notification_stream(),
 		}
 	}
 
@@ -195,8 +195,8 @@ impl PeersClient {
 		notify: bool
 	) -> ClientResult<()> {
 		match *self {
-			PeersClient::Full(ref client) => client.finalize_block(id, justification, notify),
-			PeersClient::Light(ref client) => client.finalize_block(id, justification, notify),
+			PeersClient::Full(ref client, ref _backend) => client.finalize_block(id, justification, notify),
+			PeersClient::Light(ref client, ref _backend) => client.finalize_block(id, justification, notify),
 		}
 	}
 }
@@ -465,9 +465,9 @@ pub trait TestNetFactory: Sized {
 		let backend = test_client_builder.backend();
 		let (c, longest_chain) = test_client_builder.build_with_longest_chain();
 		let client = Arc::new(c);
-		let verifier = self.make_verifier(PeersClient::Full(client.clone()), config);
+		let verifier = self.make_verifier(PeersClient::Full(client.clone(), backend.clone()), config);
 		let (block_import, justification_import, finality_proof_import, finality_proof_request_builder, data)
-			= self.make_block_import(PeersClient::Full(client.clone()));
+			= self.make_block_import(PeersClient::Full(client.clone(), backend.clone()));
 		let block_import = BlockImportAdapter(Arc::new(Mutex::new(block_import)));
 
 		let import_queue = Box::new(BasicQueue::new(
@@ -487,7 +487,7 @@ pub trait TestNetFactory: Sized {
 				..NetworkConfiguration::default()
 			},
 			chain: client.clone(),
-			finality_proof_provider: self.make_finality_proof_provider(PeersClient::Full(client.clone())),
+			finality_proof_provider: self.make_finality_proof_provider(PeersClient::Full(client.clone(), backend.clone())),
 			finality_proof_request_builder,
 			on_demand: None,
 			transaction_pool: Arc::new(EmptyTransactionPool),
@@ -508,7 +508,7 @@ pub trait TestNetFactory: Sized {
 
 			peers.push(Peer {
 				data,
-				client: PeersClient::Full(client),
+				client: PeersClient::Full(client, backend.clone()),
 				select_chain: Some(longest_chain),
 				backend: Some(backend),
 				imported_blocks_stream,
@@ -525,10 +525,11 @@ pub trait TestNetFactory: Sized {
 		let mut config = config.clone();
 		config.roles = Roles::LIGHT;
 
-		let client = Arc::new(test_client::new_light());
-		let verifier = self.make_verifier(PeersClient::Light(client.clone()), &config);
+		let (c, backend) = test_client::new_light();
+		let client = Arc::new(c);
+		let verifier = self.make_verifier(PeersClient::Light(client.clone(), backend.clone()), &config);
 		let (block_import, justification_import, finality_proof_import, finality_proof_request_builder, data)
-			= self.make_block_import(PeersClient::Light(client.clone()));
+			= self.make_block_import(PeersClient::Light(client.clone(), backend.clone()));
 		let block_import = BlockImportAdapter(Arc::new(Mutex::new(block_import)));
 
 		let import_queue = Box::new(BasicQueue::new(
@@ -548,7 +549,7 @@ pub trait TestNetFactory: Sized {
 				..NetworkConfiguration::default()
 			},
 			chain: client.clone(),
-			finality_proof_provider: self.make_finality_proof_provider(PeersClient::Light(client.clone())),
+			finality_proof_provider: self.make_finality_proof_provider(PeersClient::Light(client.clone(), backend.clone())),
 			finality_proof_request_builder,
 			on_demand: None,
 			transaction_pool: Arc::new(EmptyTransactionPool),
@@ -573,7 +574,7 @@ pub trait TestNetFactory: Sized {
 				select_chain: None,
 				backend: None,
 				block_import: Box::new(block_import),
-				client: PeersClient::Light(client),
+				client: PeersClient::Light(client, backend),
 				imported_blocks_stream,
 				finality_notification_stream,
 				network,

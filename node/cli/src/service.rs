@@ -109,7 +109,7 @@ construct_service_factory! {
 					.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
 				// spawn any futures that were created in the previous setup steps
-				if let Some(tasks) = service.config.custom.tasks_to_spawn.take() {
+				if let Some(tasks) = state.custom.tasks_to_spawn.take() {
 					for task in tasks {
 						service.spawn_task(
 							task.select(service.on_exit())

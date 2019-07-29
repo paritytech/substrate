@@ -647,7 +647,7 @@ pub mod tests {
 		new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 		justification: Option<Justification>,
 	) -> ImportResult {
-		let client = test_client::new_light();
+		let (client, _backend) = test_client::new_light();
 		let mut import_data = LightImportData {
 			last_finalized: Default::default(),
 			authority_set: LightAuthoritySet::genesis(vec![(AuthorityId::from_raw([1; 32]), 1)]),

@@ -103,7 +103,7 @@ impl TestNetFactory for GrandpaTestNet {
 		Arc::new(PassThroughVerifier(false)) // use non-instant finality.
 	}
 
-	fn make_block_import(&self, peer: GrandpaPeer)
+	fn make_block_import(&self, client: PeersClient)
 		-> (
 			BoxBlockImport<Block>,
 			Option<BoxJustificationImport<Block>>,
@@ -113,17 +113,17 @@ impl TestNetFactory for GrandpaTestNet {
 		)
 	{
 		match client {
-			PeersClient::Full(ref client) => {
+			PeersClient::Full(ref client, ref backend) => {
 				let (import, link) = block_import(
 					client.clone(),
 					Arc::new(self.test_config.clone()),
-					LongestChain::new(self.backend()),
+					LongestChain::new(backend.clone()),
 				).expect("Could not create block import for fresh peer.");
 				let justification_import = Box::new(import.clone());
 				let block_import = Box::new(import);
 				(block_import, Some(justification_import), None, None, Mutex::new(Some(link)))
 			},
-			PeersClient::Light(ref client) => {
+			PeersClient::Light(ref client, ref backend) => {
 				use crate::light_import::tests::light_block_import_without_justifications;
 
 				let authorities_provider = Arc::new(self.test_config.clone());
@@ -131,7 +131,7 @@ impl TestNetFactory for GrandpaTestNet {
 				// => light clients will try to fetch finality proofs
 				let import = light_block_import_without_justifications(
 					client.clone(),
-					backend,
+					backend.clone(),
 					authorities_provider,
 					Arc::new(self.test_config.clone())
 				).expect("Could not create block import for fresh peer.");
@@ -148,7 +148,7 @@ impl TestNetFactory for GrandpaTestNet {
 		client: PeersClient
 	) -> Option<Arc<dyn network::FinalityProofProvider<Block>>> {
 		match client {
-			PeersClient::Full(ref client) => {
+			PeersClient::Full(ref client, _)  => {
 				let authorities_provider = Arc::new(self.test_config.clone());
 				Some(Arc::new(FinalityProofProvider::new(client.clone(), authorities_provider)))
 			},
@@ -565,9 +565,7 @@ fn transition_3_voters_twice_1_full_observer() {
 		assert_eq!(full_client.info().chain.best_number, 1,
 					"Peer #{} failed to sync", i);
 
-		let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(
-			&**full_client
-		).unwrap();
+		let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(&*full_client).unwrap();
 
 		assert_eq!(set.current(), (0, make_ids(peers_a).as_slice()));
 		assert_eq!(set.pending_changes().count(), 0);
@@ -657,9 +655,7 @@ fn transition_3_voters_twice_1_full_observer() {
 				.for_each(move |_| Ok(()))
 				.map(move |()| {
 					let full_client = client.as_full().expect("only full clients are used in test");
-					let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(
-						&**full_client
-					).unwrap();
+					let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(&*full_client).unwrap();
 
 					assert_eq!(set.current(), (2, make_ids(peers_c).as_slice()));
 					assert_eq!(set.pending_changes().count(), 0);
@@ -934,9 +930,7 @@ fn force_change_to_new_set() {
 				"Peer #{} failed to sync", i);
 
 		let full_client = peer.client().as_full().expect("only full clients are used in test");
-		let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(
-			&**full_client
-		).unwrap();
+		let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(&*full_client).unwrap();
 
 		assert_eq!(set.current(), (1, voters.as_slice()));
 		assert_eq!(set.pending_changes().count(), 0);
