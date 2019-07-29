@@ -51,7 +51,7 @@ mod utils;
 /// use version::create_runtime_str;
 /// # extern crate test_client;
 /// # extern crate sr_primitives;
-/// # extern crate substrate_primitives;
+/// # extern crate primitives;
 /// #
 /// # use sr_primitives::traits::GetNodeBlockType;
 /// # use test_client::runtime::{Block, Header};
