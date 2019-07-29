@@ -88,6 +88,7 @@
 
 use sr_std::prelude::*;
 use sr_primitives::traits::StaticLookup;
+use sr_primitives::weights::SimpleDispatchInfo;
 use srml_support::{
 	StorageValue, Parameter, Dispatchable, decl_module, decl_event,
 	decl_storage, ensure
@@ -116,6 +117,7 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - No DB writes.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedOperational(1_000_000)]
 		fn sudo(origin, proposal: Box<T::Proposal>) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;

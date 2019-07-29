@@ -13,8 +13,8 @@ keyring = { package = "substrate-keyring", path = "../keyring", optional = true 
 substrate-client = { path = "../client", default-features = false }
 primitives = { package = "substrate-primitives", path = "../primitives", default-features = false }
 inherents = { package = "substrate-inherents", path = "../inherents", default-features = false }
-consensus_aura = { package = "substrate-consensus-aura-primitives", path = "../consensus/aura/primitives", default-features = false }
-consensus_babe = { package = "substrate-consensus-babe-primitives", path = "../consensus/babe/primitives", default-features = false }
+aura-primitives = { package = "substrate-consensus-aura-primitives", path = "../consensus/aura/primitives", default-features = false }
+babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../consensus/babe/primitives", default-features = false }
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
 runtime_io = { package = "sr-io", path = "../sr-io", default-features = false }
 runtime_primitives = { package = "sr-primitives", path = "../sr-primitives", default-features = false }
@@ -25,10 +25,14 @@ trie-db = { version = "0.14.0", default-features = false }
 offchain-primitives = { package = "substrate-offchain-primitives", path = "../offchain/primitives", default-features = false}
 executive = { package = "srml-executive", path = "../../srml/executive", default-features = false }
 cfg-if = "0.1.6"
+srml-babe = { path = "../../srml/babe", default-features = false }
+srml-timestamp = { path = "../../srml/timestamp", default-features = false }
+srml-system = { path = "../../srml/system", default-features = false }
 
 [dev-dependencies]
 substrate-executor = { path = "../executor" }
 substrate-test-runtime-client = { path = "./client" }
+state_machine = { package = "substrate-state-machine", path = "../state-machine" }
 
 [build-dependencies]
 wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.2", path = "../utils/wasm-builder-runner" }
@@ -51,11 +55,14 @@ std = [
 	"inherents/std",
 	"runtime_primitives/std",
 	"runtime_version/std",
-	"consensus_aura/std",
-	"consensus_babe/std",
+	"aura-primitives/std",
+	"babe-primitives/std",
 	"primitives/std",
 	"substrate-trie/std",
 	"trie-db/std",
 	"offchain-primitives/std",
 	"executive/std",
+	"srml-babe/std",
+	"srml-timestamp/std",
+	"srml-system/std",
 ]

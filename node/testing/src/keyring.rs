@@ -16,11 +16,10 @@
 
 //! Test accounts.
 
-use keyring::{AccountKeyring, AuthorityKeyring};
+use keyring::{AccountKeyring, Sr25519Keyring, Ed25519Keyring};
 use node_primitives::AccountId;
 use node_runtime::{CheckedExtrinsic, UncheckedExtrinsic, SessionKeys};
 use parity_codec::Encode;
-use runtime_primitives::generic::Era;
 
 /// Alice's account id.
 pub fn alice() -> AccountId {
@@ -52,20 +51,22 @@ pub fn ferdie() -> AccountId {
 	AccountKeyring::Ferdie.into()
 }
 
-/// Convert given `AuthorityKeyring` into `SessionKeys`
-pub fn to_session_keys(ring: &AuthorityKeyring) -> SessionKeys {
+/// Convert keyrings into `SessionKeys`.
+pub fn to_session_keys(
+	ed25519_keyring: &Ed25519Keyring,
+	sr25519_keyring: &Sr25519Keyring,
+) -> SessionKeys {
 	SessionKeys {
-		ed25519: ring.to_owned().into(),
+		ed25519: ed25519_keyring.to_owned().into(),
+		sr25519: sr25519_keyring.to_owned().into(),
 	}
 }
-
 
 /// Sign given `CheckedExtrinsic`.
 pub fn sign(xt: CheckedExtrinsic, genesis_hash: [u8; 32]) -> UncheckedExtrinsic {
 	match xt.signed {
-		Some((signed, index)) => {
-			let era = Era::mortal(256, 0);
-			let payload = (index.into(), xt.function, era, genesis_hash);
+		Some((signed, extra)) => {
+			let payload = (xt.function, extra.clone(), genesis_hash);
 			let key = AccountKeyring::from_public(&signed).unwrap();
 			let signature = payload.using_encoded(|b| {
 				if b.len() > 256 {
@@ -75,8 +76,8 @@ pub fn sign(xt: CheckedExtrinsic, genesis_hash: [u8; 32]) -> UncheckedExtrinsic 
 				}
 			}).into();
 			UncheckedExtrinsic {
-				signature: Some((indices::address::Address::Id(signed), signature, payload.0, era)),
-				function: payload.1,
+				signature: Some((indices::address::Address::Id(signed), signature, extra)),
+				function: payload.0,
 			}
 		}
 		None => UncheckedExtrinsic {

@@ -31,7 +31,7 @@ use runtime_io;
 use runtime_io::with_externalities;
 use runtime_primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, H256};
 use runtime_primitives::traits::{BlakeTwo256, Hash, IdentityLookup};
-use runtime_primitives::BuildStorage;
+use runtime_primitives::{Perbill, BuildStorage};
 use srml_support::{
 	assert_ok, assert_err, impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types,
 	storage::child,	StorageMap, StorageValue, traits::{Currency, Get},
@@ -96,8 +96,11 @@ impl Get<u64> for BlockGasLimit {
 pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
+	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const BalancesTransactionBaseFee: u64 = 0;
 	pub const BalancesTransactionByteFee: u64 = 0;
+	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl system::Trait for Test {
 	type Origin = Origin;
@@ -111,6 +114,9 @@ impl system::Trait for Test {
 	type WeightMultiplierUpdate = ();
 	type Event = MetaEvent;
 	type BlockHashCount = BlockHashCount;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type AvailableBlockRatio = AvailableBlockRatio;
+	type MaximumBlockLength = MaximumBlockLength;
 }
 impl balances::Trait for Test {
 	type Balance = u64;
@@ -125,6 +131,7 @@ impl balances::Trait for Test {
 	type CreationFee = CreationFee;
 	type TransactionBaseFee = BalancesTransactionBaseFee;
 	type TransactionByteFee = BalancesTransactionByteFee;
+	type WeightToFee = ();
 }
 parameter_types! {
 	pub const MinimumPeriod: u64 = 1;

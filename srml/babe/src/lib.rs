@@ -18,31 +18,28 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unused_must_use, unsafe_code, unused_variables, dead_code)]
+
 pub use timestamp;
 
 use rstd::{result, prelude::*};
 use srml_support::{decl_storage, decl_module, StorageValue, traits::FindAuthor, traits::Get};
-use timestamp::{OnTimestampSet, Trait};
-use primitives::{
-	generic::DigestItem,
-	traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon}
-};
-use primitives::ConsensusEngineId;
+use timestamp::{OnTimestampSet};
+use primitives::{generic::DigestItem, ConsensusEngineId};
+use primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert};
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
 use parity_codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-use babe_primitives::{BABE_ENGINE_ID, ConsensusLog};
-pub use babe_primitives::{AuthorityId, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH, PUBLIC_KEY_LENGTH};
+use babe_primitives::{BABE_ENGINE_ID, ConsensusLog, BabeWeight, Epoch, RawBabePreDigest};
+pub use babe_primitives::{AuthorityId, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH};
 
 /// The BABE inherent identifier.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"babeslot";
 
 /// The type of the BABE inherent.
 pub type InherentType = u64;
-
 /// Auxiliary trait to extract BABE inherent data.
 pub trait BabeInherentData {
 	/// Get BABE inherent data.
@@ -101,8 +98,8 @@ impl ProvideInherentData for InherentDataProvider {
 		inherent_data: &mut InherentData,
 	) -> result::Result<(), RuntimeString> {
 		let timestamp = inherent_data.timestamp_inherent_data()?;
-		let slot_num = timestamp / self.slot_duration;
-		inherent_data.put_data(INHERENT_IDENTIFIER, &slot_num)
+		let slot_number = timestamp / self.slot_duration;
+		inherent_data.put_data(INHERENT_IDENTIFIER, &slot_number)
 	}
 
 	fn error_to_string(&self, error: &[u8]) -> Option<String> {
@@ -110,18 +107,30 @@ impl ProvideInherentData for InherentDataProvider {
 	}
 }
 
+pub trait Trait: timestamp::Trait {
+	type EpochDuration: Get<u64>;
+}
+
 /// The length of the BABE randomness
 pub const RANDOMNESS_LENGTH: usize = 32;
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Babe {
-		/// The last timestamp.
-		LastTimestamp get(last): T::Moment;
+		/// Current epoch index.
+		pub EpochIndex get(epoch_index): u64;
 
-		/// The current authorities set.
-		Authorities get(authorities): Vec<AuthorityId>;
+		/// Current epoch authorities.
+		pub Authorities get(authorities) config(): Vec<(AuthorityId, BabeWeight)>;
 
-		/// The epoch randomness.
+		/// Slot at which the current epoch started. It is possible that no
+		/// block was authored at the given slot and the epoch change was
+		/// signalled later than this.
+		pub EpochStartSlot get(epoch_start_slot): u64;
+
+		/// Current slot number.
+		pub CurrentSlot get(current_slot): u64;
+
+		/// The epoch randomness for the *current* epoch.
 		///
 		/// # Security
 		///
@@ -131,16 +140,16 @@ decl_storage! {
 		/// (like everything else on-chain) it is public. For example, it can be
 		/// used where a number is needed that cannot have been chosen by an
 		/// adversary, for purposes such as public-coin zero-knowledge proofs.
-		EpochRandomness get(epoch_randomness): [u8; VRF_OUTPUT_LENGTH];
+		// NOTE: the following fields don't use the constants to define the
+		// array size because the metadata API currently doesn't resolve the
+		// variable to its underlying value.
+		pub Randomness get(randomness): [u8; 32 /* RANDOMNESS_LENGTH */];
 
-		/// The randomness under construction
-		UnderConstruction: [u8; VRF_OUTPUT_LENGTH];
+		/// Next epoch randomness.
+		NextRandomness: [u8; 32 /* RANDOMNESS_LENGTH */];
 
-		/// The randomness for the next epoch
-		NextEpochRandomness: [u8; VRF_OUTPUT_LENGTH];
-
-		/// The current epoch
-		EpochIndex get(epoch_index): u64;
+		/// Randomness under construction.
+		UnderConstruction: [u8; 32 /* VRF_OUTPUT_LENGTH */];
 	}
 }
 
@@ -149,16 +158,24 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// Initialization
 		fn on_initialize() {
-			for i in Self::get_inherent_digests()
+			for digest in Self::get_inherent_digests()
 				.logs
 				.iter()
 				.filter_map(|s| s.as_pre_runtime())
 				.filter_map(|(id, mut data)| if id == BABE_ENGINE_ID {
-					<[u8; VRF_OUTPUT_LENGTH]>::decode(&mut data)
+					RawBabePreDigest::decode(&mut data)
 				} else {
 					None
-				}) {
-				Self::deposit_vrf_output(&i);
+				})
+			{
+				if EpochStartSlot::get() == 0 {
+					EpochStartSlot::put(digest.slot_number);
+				}
+
+				CurrentSlot::put(digest.slot_number);
+				Self::deposit_vrf_output(&digest.vrf_output);
+
+				return;
 			}
 		}
 	}
@@ -166,7 +183,7 @@ decl_module! {
 
 impl<T: Trait> RandomnessBeacon for Module<T> {
 	fn random() -> [u8; VRF_OUTPUT_LENGTH] {
-		Self::epoch_randomness()
+		Self::randomness()
 	}
 }
 
@@ -179,23 +196,25 @@ impl<T: Trait> FindAuthor<u64> for Module<T> {
 	{
 		for (id, mut data) in digests.into_iter() {
 			if id == BABE_ENGINE_ID {
-				let (_, _, i): (
-					[u8; VRF_OUTPUT_LENGTH],
-					[u8; VRF_PROOF_LENGTH],
-					u64,
-				) = Decode::decode(&mut data)?;
-				return Some(i)
+				return Some(RawBabePreDigest::decode(&mut data)?.authority_index);
 			}
 		}
-		return None
+		return None;
 	}
 }
 
-impl<T: timestamp::Trait> IsMember<AuthorityId> for Module<T> {
+impl<T: Trait> IsMember<AuthorityId> for Module<T> {
 	fn is_member(authority_id: &AuthorityId) -> bool {
 		<Module<T>>::authorities()
 			.iter()
-			.any(|id| id == authority_id)
+			.any(|id| &id.0 == authority_id)
+	}
+}
+
+impl<T: Trait> session::ShouldEndSession<T::BlockNumber> for Module<T> {
+	fn should_end_session(_: T::BlockNumber) -> bool {
+		let diff = CurrentSlot::get().saturating_sub(EpochStartSlot::get());
+		diff >= T::EpochDuration::get()
 	}
 }
 
@@ -207,63 +226,123 @@ impl<T: Trait> Module<T> {
 		<T as timestamp::Trait>::MinimumPeriod::get().saturating_mul(2.into())
 	}
 
-	fn change_authorities(new: Vec<AuthorityId>) {
-		Authorities::put(&new);
-
+	fn deposit_consensus<U: Encode>(new: U) {
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(BABE_ENGINE_ID, new.encode());
-		<system::Module<T>>::deposit_log(log.into());
+		<system::Module<T>>::deposit_log(log.into())
+	}
+
+	fn get_inherent_digests() -> system::DigestOf<T> {
+		<system::Module<T>>::digest()
 	}
 
 	fn deposit_vrf_output(vrf_output: &[u8; VRF_OUTPUT_LENGTH]) {
 		UnderConstruction::mutate(|z| z.iter_mut().zip(vrf_output).for_each(|(x, y)| *x^=y))
 	}
 
-	fn get_inherent_digests() -> system::DigestOf<T> {
-		<system::Module<T>>::digest()
+	/// Call this function exactly once when an epoch changes, to update the
+	/// randomness. Returns the new randomness.
+	fn randomness_change_epoch(next_epoch_index: u64) -> [u8; RANDOMNESS_LENGTH] {
+		let this_randomness = NextRandomness::get();
+		let next_randomness = compute_randomness(
+			this_randomness,
+			next_epoch_index,
+			UnderConstruction::get(),
+		);
+		UnderConstruction::put(&[0; RANDOMNESS_LENGTH]);
+		NextRandomness::put(&next_randomness);
+		this_randomness
 	}
+
 }
 
 impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 	fn on_timestamp_set(_moment: T::Moment) { }
 }
 
-impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
+impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = AuthorityId;
-
-	fn on_new_session<'a, I: 'a>(changed: bool, validators: I)
+	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, queued_validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
-		// instant changes
-		if changed {
-			let next_authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
-			let last_authorities = <Module<T>>::authorities();
-			if next_authorities != last_authorities {
-				Self::change_authorities(next_authorities);
-			}
-		}
+		use staking::BalanceOf;
+		let to_votes = |b: BalanceOf<T>| {
+			<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b)
+		};
 
-		let rho = UnderConstruction::get();
-		UnderConstruction::put([0; 32]);
-		let last_epoch_randomness = EpochRandomness::get();
+		// Update epoch index
 		let epoch_index = EpochIndex::get()
 			.checked_add(1)
 			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
+
 		EpochIndex::put(epoch_index);
-		EpochRandomness::put(NextEpochRandomness::get());
-		let mut s = [0; 72];
-		s[..32].copy_from_slice(&last_epoch_randomness);
-		s[32..40].copy_from_slice(&epoch_index.to_le_bytes());
-		s[40..].copy_from_slice(&rho);
-		NextEpochRandomness::put(runtime_io::blake2_256(&s))
+
+		// Update authorities.
+		let authorities = validators.map(|(account, k)| {
+			(k, to_votes(staking::Module::<T>::stakers(account).total))
+		}).collect::<Vec<_>>();
+
+		Authorities::put(authorities);
+
+		// Update epoch start slot.
+		let now = CurrentSlot::get();
+		EpochStartSlot::mutate(|previous| {
+			loop {
+				// on the first epoch we must account for skipping at least one
+				// whole epoch, in case the first block is authored with a slot
+				// number far in the past.
+				if now.saturating_sub(*previous) < T::EpochDuration::get() {
+					break;
+				}
+
+				*previous = previous.saturating_add(T::EpochDuration::get());
+			}
+		});
+
+		// Update epoch randomness.
+		let next_epoch_index = epoch_index
+			.checked_add(1)
+			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
+
+		// Returns randomness for the current epoch and computes the *next*
+		// epoch randomness.
+		let randomness = Self::randomness_change_epoch(next_epoch_index);
+		Randomness::put(randomness);
+
+		// After we update the current epoch, we signal the *next* epoch change
+		// so that nodes can track changes.
+		let next_authorities = queued_validators.map(|(account, k)| {
+			(k, to_votes(staking::Module::<T>::stakers(account).total))
+		}).collect::<Vec<_>>();
+
+		let next_epoch_start_slot = EpochStartSlot::get().saturating_add(T::EpochDuration::get());
+		let next_randomness = NextRandomness::get();
+
+		let next = Epoch {
+			epoch_index: next_epoch_index,
+			start_slot: next_epoch_start_slot,
+			duration: T::EpochDuration::get(),
+			authorities: next_authorities,
+			randomness: next_randomness,
+		};
+
+		Self::deposit_consensus(ConsensusLog::NextEpochData(next))
 	}
 
 	fn on_disabled(i: usize) {
-		let log: DigestItem<T::Hash> = DigestItem::Consensus(
-			BABE_ENGINE_ID,
-			ConsensusLog::OnDisabled(i as u64).encode(),
-		);
-		<system::Module<T>>::deposit_log(log.into());
+		Self::deposit_consensus(ConsensusLog::OnDisabled(i as u64))
 	}
+}
+
+fn compute_randomness(
+	last_epoch_randomness: [u8; RANDOMNESS_LENGTH],
+	epoch_index: u64,
+	rho: [u8; VRF_OUTPUT_LENGTH],
+) -> [u8; RANDOMNESS_LENGTH] {
+	let mut s = [0; 40 + VRF_OUTPUT_LENGTH];
+	s[..32].copy_from_slice(&last_epoch_randomness);
+	s[32..40].copy_from_slice(&epoch_index.to_le_bytes());
+	s[40..].copy_from_slice(&rho);
+	runtime_io::blake2_256(&s)
 }
 
 impl<T: Trait> ProvideInherent for Module<T> {
@@ -283,10 +362,11 @@ impl<T: Trait> ProvideInherent for Module<T> {
 
 		let timestamp_based_slot = (timestamp / Self::slot_duration()).saturated_into::<u64>();
 		let seal_slot = data.babe_inherent_data()?;
+
 		if timestamp_based_slot == seal_slot {
 			Ok(())
 		} else {
-			Err(RuntimeString::from("timestamp set in block doesn’t match slot in seal").into())
+			Err(RuntimeString::from("timestamp set in block doesn't match slot in seal").into())
 		}
 	}
 }

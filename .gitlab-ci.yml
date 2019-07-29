@@ -95,7 +95,7 @@ cargo-check-benches:
   stage:                           test
   <<:                              *docker-env
   script:
-    - BUILD_DUMMY_WASM_BINARY=1 time cargo check --benches
+    - BUILD_DUMMY_WASM_BINARY=1 time cargo check --benches --all
     - sccache -s
 
 
@@ -106,7 +106,7 @@ cargo-check-subkey:
     - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
   script:
     - cd ./subkey
-    - BUILD_DUMMY_WASM_BINARY=1 time cargo check --release   # makes sense to save artifacts for building it
+    - BUILD_DUMMY_WASM_BINARY=1 time cargo check --release
     - sccache -s
 
 
@@ -214,7 +214,7 @@ check-web-wasm:
 
 #### stage:                        build
 
-build-linux-release:
+build-linux-substrate:
   stage:                           build
   <<:                              *collect-artifacts
   <<:                              *docker-env
@@ -224,27 +224,27 @@ build-linux-release:
       - $DEPLOY_TAG
   script:
     - time cargo build --release --verbose
-    - mkdir -p ./artifacts
-    - mv ./target/release/substrate ./artifacts/.
+    - mkdir -p ./artifacts/substrate/
+    - mv ./target/release/substrate ./artifacts/substrate/.
     - echo -n "Substrate version = "
     - if [ "${CI_COMMIT_TAG}" ]; then
-        echo "${CI_COMMIT_TAG}" | tee ./artifacts/VERSION;
+        echo "${CI_COMMIT_TAG}" | tee ./artifacts/substrate/VERSION;
       else
-        ./artifacts/substrate --version |
-        sed -n -r 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
-        tee ./artifacts/VERSION;
+        ./artifacts/substrate/substrate --version |
+          sed -n -r 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
+          tee ./artifacts/substrate/VERSION;
       fi
-    - sha256sum ./artifacts/substrate | tee ./artifacts/substrate.sha256
+    - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
     - printf '\n# building node-template\n\n'
-    - ./scripts/node-template-release.sh ./artifacts/substrate-node-template.tar.gz
-    - cp -r scripts/docker/* ./artifacts
+    - ./scripts/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
+    - cp -r scripts/docker/substrate.Dockerfile ./artifacts/substrate/
     - sccache -s
 
 build-linux-subkey:
   stage:                           build
   <<:                              *collect-artifacts
   <<:                              *docker-env
-  # <<:                              *build-only
+  <<:                              *build-only
   except:
     variables:
       - $DEPLOY_TAG
@@ -252,15 +252,16 @@ build-linux-subkey:
     - cd ./subkey
     - BUILD_DUMMY_WASM_BINARY=1 time cargo build --release --verbose
     - cd ..
-    # - time cargo build --release
     - sccache -s
-    - mkdir -p ./artifacts
-    - mv ./target/release/subkey ./artifacts/.
+    - mkdir -p ./artifacts/subkey
+    - mv ./target/release/subkey ./artifacts/subkey/.
     - echo -n "Subkey version = "
-    - ./artifacts/subkey --version |
+    - ./artifacts/subkey/subkey --version |
         sed -n -r 's/^subkey ([0-9.]+.*)/\1/p' |
-        tee ./artifacts/SUBKEY-VERSION;
-    - sha256sum ./artifacts/subkey | tee ./artifacts/subkey.sha256
+          tee ./artifacts/subkey/VERSION;
+    - sha256sum ./artifacts/subkey/subkey | tee ./artifacts/subkey/subkey.sha256
+    - cp -r scripts/docker/subkey.Dockerfile ./artifacts/subkey/
+    - sccache -s
 
 build-rust-doc-release:
   stage:                           build
@@ -282,65 +283,81 @@ build-rust-doc-release:
 
 #### stage:                        publish
 
-.publish-build:                    &publish-build
-  stage:                           publish
-  dependencies:
-    - build-linux-release
-    - build-linux-subkey
+.publish-docker-release:           &publish-docker-release
   <<:                              *build-only
   <<:                              *kubernetes-build
-
-publish-docker-release:
-  <<:                              *publish-build
   image:                           docker:stable
   services:
     - docker:dind
-  # collect VERSION artifact here to pass it on to kubernetes
-  <<:                              *collect-artifacts
-  variables:
-    DOCKER_HOST:                   tcp://localhost:2375
-    DOCKER_DRIVER:                 overlay2
-    GIT_STRATEGY:                  none
-    # DOCKERFILE:                  scripts/docker/Dockerfile
-    CONTAINER_IMAGE:               parity/substrate
   before_script:
     - test "$Docker_Hub_User_Parity" -a "$Docker_Hub_Pass_Parity"
         || ( echo "no docker credentials provided"; exit 1 )
     - docker login -u "$Docker_Hub_User_Parity" -p "$Docker_Hub_Pass_Parity"
     - docker info
   script:
-    - VERSION="$(cat ./artifacts/VERSION)"
-    - echo "Substrate version = ${VERSION}"
+    - cd ./artifacts/$PRODUCT/
+    - VERSION="$(cat ./VERSION)"
+    - echo "${PRODUCT} version = ${VERSION}"
     - test -z "${VERSION}" && exit 1
-    - cd ./artifacts
     - docker build
       --build-arg VCS_REF="${CI_COMMIT_SHA}"
       --build-arg BUILD_DATE="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
       --tag $CONTAINER_IMAGE:$VERSION
-      --tag $CONTAINER_IMAGE:latest .
+      --tag $CONTAINER_IMAGE:latest
+      --file $DOCKERFILE .
     - docker push $CONTAINER_IMAGE:$VERSION
     - docker push $CONTAINER_IMAGE:latest
+
+publish-docker-substrate:          
+  stage:                           publish
+  <<:                              *publish-docker-release
+  # collect VERSION artifact here to pass it on to kubernetes
+  <<:                              *collect-artifacts
+  dependencies:
+    - build-linux-substrate
+  variables:
+    DOCKER_HOST:                   tcp://localhost:2375
+    DOCKER_DRIVER:                 overlay2
+    GIT_STRATEGY:                  none
+    PRODUCT:                       substrate
+    DOCKERFILE:                    $PRODUCT.Dockerfile
+    CONTAINER_IMAGE:               parity/$PRODUCT
   after_script:
     - docker logout
     # only VERSION information is needed for the deployment
-    - find ./artifacts/ -depth -not -name VERSION -not -name artifacts -delete
+    - find ./artifacts/ -depth -not -name VERSION -type f -delete
+
+publish-docker-subkey:
+  stage:                           publish
+  <<:                              *publish-docker-release
+  dependencies:
+    - build-linux-subkey
+  variables:
+    DOCKER_HOST:                   tcp://localhost:2375
+    DOCKER_DRIVER:                 overlay2
+    GIT_STRATEGY:                  none
+    PRODUCT:                       subkey
+    DOCKERFILE:                    $PRODUCT.Dockerfile
+    CONTAINER_IMAGE:               parity/$PRODUCT
+  after_script:
+    - docker logout
 
 publish-s3-release:
-  <<:                              *publish-build
+  stage:                           publish
+  <<:                              *build-only
+  <<:                              *kubernetes-build
+  dependencies:
+    - build-linux-substrate
+    - build-linux-subkey
   image:                           parity/awscli:latest
   variables:
     GIT_STRATEGY:                  none
     BUCKET:                        "releases.parity.io"
     PREFIX:                        "substrate/${ARCH}-${DOCKER_OS}"
   script:
-    - aws s3 sync ./artifacts/ s3://${BUCKET}/${PREFIX}/$(cat ./artifacts/VERSION)/
+    - aws s3 sync ./artifacts/ s3://${BUCKET}/${PREFIX}/$(cat ./artifacts/substrate/VERSION)/
     - echo "update objects in latest path"
-    - for file in ./artifacts/*; do
-      name="$(basename ${file})";
-      aws s3api copy-object
-        --copy-source ${BUCKET}/${PREFIX}/$(cat ./artifacts/VERSION)/${name}
-        --bucket ${BUCKET} --key ${PREFIX}/latest/${name};
-      done
+    - aws s3 sync s3://${BUCKET}/${PREFIX}/$(cat ./artifacts/substrate/VERSION)/ s3://${BUCKET}/${PREFIX}/latest/
   after_script:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/latest/
         --recursive --human-readable --summarize
@@ -423,8 +440,8 @@ publish-gh-doc:
     - kubernetes-parity-build
   before_script:
     - test -z "${DEPLOY_TAG}" &&
-      test -f ./artifacts/VERSION &&
-      DEPLOY_TAG="$(cat ./artifacts/VERSION)"
+        test -f ./artifacts/substrate/VERSION &&
+        DEPLOY_TAG="$(cat ./artifacts/substrate/VERSION)"
     - test "${DEPLOY_TAG}" || ( echo "Neither DEPLOY_TAG nor VERSION information available"; exit 1 )
   script:
     - echo "Substrate version = ${DEPLOY_TAG}"
@@ -450,7 +467,7 @@ publish-gh-doc:
 .deploy-cibuild:                   &deploy-cibuild
   <<:                              *deploy
   dependencies:
-    - publish-docker-release
+    - publish-docker-substrate
 
 .deploy-tag:                       &deploy-tag
   <<:                              *deploy
@@ -483,7 +500,7 @@ deploy-ue1-tag:
 .validator-deploy:                 &validator-deploy
   stage:                           flaming-fir
   dependencies:
-    - build-linux-release
+    - build-linux-substrate
   image:                           parity/azure-ansible:v1
   allow_failure:                   true
   when:                            manual

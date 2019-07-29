@@ -17,18 +17,14 @@
 //! Operation on unhashed runtime storage
 
 use crate::rstd::borrow::Borrow;
-use super::{Codec, Encode, Decode, KeyedVec, Vec, IncrementalInput};
+use super::{Codec, Encode, Decode, KeyedVec, Vec};
 
 pub mod generator;
 
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Decode + Sized>(key: &[u8]) -> Option<T> {
-	runtime_io::read_storage(key, &mut [0; 0][..], 0).map(|_| {
-		let mut input = IncrementalInput {
-			key,
-			pos: 0,
-		};
-		Decode::decode(&mut input).expect("storage is not null, therefore must be a valid type")
+	runtime_io::storage(key).map(|val| {
+		Decode::decode(&mut &val[..]).expect("storage is not null, therefore must be a valid type")
 	})
 }
 
@@ -51,7 +47,7 @@ pub fn get_or_else<T: Decode + Sized, F: FnOnce() -> T>(key: &[u8], default_valu
 }
 
 /// Put `value` in storage under `key`.
-pub fn put<T: Encode>(key: &[u8], value: &T) {
+pub fn put<T: Encode + ?Sized>(key: &[u8], value: &T) {
 	value.using_encoded(|slice| runtime_io::set_storage(key, slice));
 }
 

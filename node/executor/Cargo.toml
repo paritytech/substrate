@@ -33,3 +33,4 @@ wabt = "~0.7.4"
 
 [features]
 benchmarks = []
+stress-test = []

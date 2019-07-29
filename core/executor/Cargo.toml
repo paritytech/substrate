@@ -14,7 +14,8 @@ serializer = { package = "substrate-serializer", path = "../serializer" }
 state_machine = { package = "substrate-state-machine", path = "../state-machine"  }
 runtime_version = { package = "sr-version", path = "../sr-version" }
 panic-handler = { package = "substrate-panic-handler", path = "../panic-handler" }
-wasmi = { version = "0.4.3" }
+wasmi = "0.5.0"
+parity-wasm = "0.31"
 byteorder = "1.3"
 lazy_static = "1.3"
 parking_lot = "0.8.0"

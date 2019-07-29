@@ -69,8 +69,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use substrate_primitives::{
-	crypto::TypedKey, offchain::CryptoKind,
-	crypto::key_types,
+	crypto::TypedKey, offchain::CryptoKey,
 	offchain::OpaqueNetworkState,
 	offchain::StorageKind,
 	sr25519, ed25519,
@@ -78,7 +77,7 @@ use substrate_primitives::{
 use parity_codec::{Encode, Decode};
 use primitives::{
 	ApplyError, traits::{Member, IsMember, Extrinsic as ExtrinsicT},
-	transaction_validity::{TransactionValidity, TransactionLongevity},
+	transaction_validity::{TransactionValidity, TransactionLongevity, ValidTransaction},
 };
 use rstd::prelude::*;
 use session::SessionIndex;
@@ -113,7 +112,6 @@ enum OffchainErr {
 	FailedSigning,
 	NetworkState,
 	SubmitTransaction,
-	UnknownCryptoKind,
 }
 
 impl Printable for OffchainErr {
@@ -125,7 +123,6 @@ impl Printable for OffchainErr {
 			OffchainErr::FailedSigning => print("Offchain error: signing failed!"),
 			OffchainErr::NetworkState => print("Offchain error: fetching network state failed!"),
 			OffchainErr::SubmitTransaction => print("Offchain error: submitting transaction failed!"),
-			OffchainErr::UnknownCryptoKind => print("Offchain error: the CryptoKind is unknown!"),
 		}
 	}
 }
@@ -203,27 +200,21 @@ decl_module! {
 			ensure_none(origin)?;
 
 			let current_session = <session::Module<T>>::current_index();
-			let exists = <ReceivedHeartbeats<T>>::exists(current_session, &heartbeat.authority_id);
+			let exists = <ReceivedHeartbeats<T>>::exists(&current_session, &heartbeat.authority_id);
 			if !exists {
 				let now = <system::Module<T>>::block_number();
 				Self::deposit_event(RawEvent::HeartbeatReceived(now, heartbeat.authority_id.clone()));
 
 				let network_state = heartbeat.network_state.encode();
-				<ReceivedHeartbeats<T>>::insert(current_session, &heartbeat.authority_id, network_state);
+				<ReceivedHeartbeats<T>>::insert(&current_session, &heartbeat.authority_id, &network_state);
 			}
 		}
 
 		// Runs after every block.
 		fn offchain_worker(now: T::BlockNumber) {
 			fn gossip_at<T: Trait>(block_number: T::BlockNumber) -> Result<(), OffchainErr> {
-				let kind = match <T::AuthorityId as TypedKey>::KEY_TYPE {
-					key_types::SR25519 => CryptoKind::Sr25519,
-					key_types::ED25519 => CryptoKind::Ed25519,
-					_ => return Err(OffchainErr::UnknownCryptoKind),
-				};
-
 				// we run only when a local authority key is configured
-				if let Ok(key) = sr_io::authority_pubkey(kind) {
+				if let Ok(key) = sr_io::pubkey(CryptoKey::AuthorityKey) {
 					let authority_id = <T as Trait>::AuthorityId::decode(&mut &key[..])
 						.ok_or(OffchainErr::DecodeAuthorityId)?;
 					let network_state =
@@ -235,34 +226,62 @@ decl_module! {
 						authority_id,
 					};
 
-					let signature = sr_io::sign(None, kind, &heartbeat_data.encode())
+					let signature = sr_io::sign(CryptoKey::AuthorityKey, &heartbeat_data.encode())
 						.map_err(|_| OffchainErr::FailedSigning)?;
 					let call = Call::heartbeat(heartbeat_data, signature);
 					let ex = T::UncheckedExtrinsic::new_unsigned(call.into())
 						.ok_or(OffchainErr::ExtrinsicCreation)?;
 					sr_io::submit_transaction(&ex)
 						.map_err(|_| OffchainErr::SubmitTransaction)?;
+
+					// once finished we set the worker status without comparing
+					// if the existing value changed in the meantime. this is
+					// because at this point the heartbeat was definitely submitted.
 					set_worker_status::<T>(block_number, true);
 				}
 				Ok(())
 			}
 
-			fn set_worker_status<T: Trait>(gossipping_at: T::BlockNumber, done: bool) {
+			fn compare_and_set_worker_status<T: Trait>(
+				gossipping_at: T::BlockNumber,
+				done: bool,
+				curr_worker_status: Option<Vec<u8>>,
+			) -> bool {
 				let enc = WorkerStatus {
 					done,
 					gossipping_at,
 				};
-				sr_io::local_storage_set(StorageKind::PERSISTENT, DB_KEY, &enc.encode());
+				sr_io::local_storage_compare_and_set(
+					StorageKind::PERSISTENT,
+					DB_KEY,
+					curr_worker_status.as_ref().map(Vec::as_slice),
+					&enc.encode()
+				)
 			}
 
-			fn was_not_yet_gossipped<T: Trait>(
+			fn set_worker_status<T: Trait>(
+				gossipping_at: T::BlockNumber,
+				done: bool,
+			) {
+				let enc = WorkerStatus {
+					done,
+					gossipping_at,
+				};
+				sr_io::local_storage_set(
+					StorageKind::PERSISTENT, DB_KEY, &enc.encode());
+			}
+
+			// Checks if a heartbeat gossip already occurred at this block number.
+			// Returns a tuple of `(current worker status, bool)`, whereby the bool
+			// is true if not yet gossipped.
+			fn check_not_yet_gossipped<T: Trait>(
 				now: T::BlockNumber,
 				next_gossip: T::BlockNumber,
-			) -> Result<bool, OffchainErr> {
+			) -> Result<(Option<Vec<u8>>, bool), OffchainErr> {
 				let last_gossip = sr_io::local_storage_get(StorageKind::PERSISTENT, DB_KEY);
 				match last_gossip {
-					Some(l) => {
-						let worker_status: WorkerStatus<T::BlockNumber> = Decode::decode(&mut &l[..])
+					Some(last) => {
+						let worker_status: WorkerStatus<T::BlockNumber> = Decode::decode(&mut &last[..])
 							.ok_or(OffchainErr::DecodeWorkerStatus)?;
 
 						let was_aborted = !worker_status.done && worker_status.gossipping_at < now;
@@ -275,22 +294,29 @@ decl_module! {
 							worker_status.done && worker_status.gossipping_at < next_gossip;
 
 						let ret = (was_aborted && !already_submitting) || not_yet_gossipped;
-						Ok(ret)
+						Ok((Some(last), ret))
 					},
-					None => Ok(true),
+					None => Ok((None, true)),
 				}
 			}
 
 			let next_gossip = <GossipAt<T>>::get();
-			let not_yet_gossipped = match was_not_yet_gossipped::<T>(now, next_gossip) {
-				Ok(v) => v,
+			let check = check_not_yet_gossipped::<T>(now, next_gossip);
+			let (curr_worker_status, not_yet_gossipped) = match check {
+				Ok((s, v)) => (s, v),
 				Err(err) => {
 					print(err);
 					return;
 				},
 			};
 			if next_gossip < now && not_yet_gossipped {
-				set_worker_status::<T>(now, false);
+				let value_set = compare_and_set_worker_status::<T>(now, false, curr_worker_status);
+				if !value_set {
+					// value could not be set in local storage, since the value was
+					// different from `curr_worker_status`. this indicates that
+					// another worker was running in parallel.
+					return;
+				}
 
 				match gossip_at::<T>(now) {
 					Ok(_) => {},
@@ -310,13 +336,13 @@ impl<T: Trait> Module<T> {
 			Some(start) => {
 				// iterate over every session
 				for index in start..curr  {
-					if <ReceivedHeartbeats<T>>::exists(index, authority_id) {
+					if <ReceivedHeartbeats<T>>::exists(&index, authority_id) {
 						return true;
 					}
 				}
 				false
 			},
-			None => <ReceivedHeartbeats<T>>::exists(curr, authority_id),
+			None => <ReceivedHeartbeats<T>>::exists(&curr, authority_id),
 		}
 	}
 
@@ -324,7 +350,7 @@ impl<T: Trait> Module<T> {
 	/// during the current session. Otherwise `false`.
 	pub fn is_online_in_current_session(authority_id: &T::AuthorityId) -> bool {
 		let current_session = <session::Module<T>>::current_index();
-		<ReceivedHeartbeats<T>>::exists(current_session, authority_id)
+		<ReceivedHeartbeats<T>>::exists(&current_session, authority_id)
 	}
 
 	/// Session has just changed.
@@ -354,10 +380,10 @@ impl<T: Trait> Module<T> {
 		match LastNewEraStart::get() {
 			Some(start) => {
 				for index in start..curr {
-					<ReceivedHeartbeats<T>>::remove_prefix(index);
+					<ReceivedHeartbeats<T>>::remove_prefix(&index);
 				}
 			},
-			None => <ReceivedHeartbeats<T>>::remove_prefix(curr),
+			None => <ReceivedHeartbeats<T>>::remove_prefix(&curr),
 		}
 	}
 }
@@ -365,7 +391,7 @@ impl<T: Trait> Module<T> {
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = <T as Trait>::AuthorityId;
 
-	fn on_new_session<'a, I: 'a>(_changed: bool, _validators: I) {
+	fn on_new_session<'a, I: 'a>(_changed: bool, _validators: I, _next_validators: I) {
 		Self::new_session();
 	}
 
@@ -420,13 +446,13 @@ impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
 				return TransactionValidity::Invalid(ApplyError::BadSignature as i8);
 			}
 
-			return srml_support::unsigned::TransactionValidity::Valid {
+			return TransactionValidity::Valid(ValidTransaction {
 				priority: 0,
 				requires: vec![],
 				provides: vec![encoded_heartbeat],
 				longevity: TransactionLongevity::max_value(),
 				propagate: true,
-			}
+			})
 		}
 		TransactionValidity::Invalid(0)
 	}

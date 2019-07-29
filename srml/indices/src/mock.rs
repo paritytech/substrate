@@ -21,6 +21,7 @@
 use std::collections::HashSet;
 use ref_thread_local::{ref_thread_local, RefThreadLocal};
 use primitives::testing::Header;
+use primitives::Perbill;
 use substrate_primitives::{H256, Blake2Hasher};
 use srml_support::{impl_outer_origin, parameter_types};
 use {runtime_io, system};
@@ -66,6 +67,9 @@ impl ResolveHint<u64, u64> for TestResolveHint {
 pub struct Runtime;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
+	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockLength: u32 = 2 * 1024;
+	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl system::Trait for Runtime {
 	type Origin = Origin;
@@ -79,6 +83,9 @@ impl system::Trait for Runtime {
 	type WeightMultiplierUpdate = ();
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type MaximumBlockLength = MaximumBlockLength;
+	type AvailableBlockRatio = AvailableBlockRatio;
 }
 impl Trait for Runtime {
 	type AccountIndex = u64;

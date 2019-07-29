@@ -23,7 +23,8 @@ use runtime_support::storage::{self, StorageValue, StorageMap};
 use runtime_support::storage_items;
 use runtime_primitives::traits::{Hash as HashT, BlakeTwo256, Header as _};
 use runtime_primitives::generic;
-use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult, transaction_validity::TransactionValidity};
+use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult};
+use runtime_primitives::transaction_validity::{TransactionValidity, ValidTransaction};
 use parity_codec::{KeyedVec, Encode};
 use super::{
 	AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest, AuthorityId
@@ -175,13 +176,13 @@ pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 		p
 	};
 
-	TransactionValidity::Valid {
+	TransactionValidity::Valid(ValidTransaction {
 		priority: tx.amount,
 		requires,
 		provides,
 		longevity: 64,
 		propagate: true,
-	}
+	})
 }
 
 /// Execute a transaction outside of the block execution function.
@@ -312,16 +313,16 @@ mod tests {
 	use super::*;
 
 	use runtime_io::{with_externalities, TestExternalities};
-	use substrate_test_runtime_client::{AuthorityKeyring, AccountKeyring};
+	use substrate_test_runtime_client::{AccountKeyring, Sr25519Keyring};
 	use crate::{Header, Transfer, WASM_BINARY};
 	use primitives::{Blake2Hasher, map};
 	use substrate_executor::WasmExecutor;
 
 	fn new_test_ext() -> TestExternalities<Blake2Hasher> {
 		let authorities = vec![
-			AuthorityKeyring::Alice.to_raw_public(),
-			AuthorityKeyring::Bob.to_raw_public(),
-			AuthorityKeyring::Charlie.to_raw_public()
+			Sr25519Keyring::Alice.to_raw_public(),
+			Sr25519Keyring::Bob.to_raw_public(),
+			Sr25519Keyring::Charlie.to_raw_public()
 		];
 		TestExternalities::new(map![
 			twox_128(b"latest").to_vec() => vec![69u8; 32],

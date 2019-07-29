@@ -25,6 +25,7 @@ use client::{blockchain, CallExecutor, Client};
 use client::blockchain::HeaderBackend;
 use client::backend::Backend;
 use client::runtime_api::ApiExt;
+use client::utils::is_descendent_of;
 use consensus_common::{
 	BlockImport, Error as ConsensusError,
 	BlockImportParams, ImportResult, JustificationImport, well_known_cache_keys,
@@ -42,7 +43,7 @@ use substrate_primitives::{H256, Blake2Hasher};
 use crate::{Error, CommandOrError, NewAuthoritySet, VoterCommand};
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, DelayKind, PendingChange};
 use crate::consensus_changes::SharedConsensusChanges;
-use crate::environment::{finalize_block, is_descendent_of};
+use crate::environment::finalize_block;
 use crate::justification::GrandpaJustification;
 
 /// A block-import handler for GRANDPA.
@@ -424,7 +425,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> BlockImport<Block>
 
 		// we don't want to finalize on `inner.import_block`
 		let mut justification = block.justification.take();
-		let enacts_consensus_change = !new_cache.is_empty();
+		let enacts_consensus_change = new_cache.contains_key(&well_known_cache_keys::AUTHORITIES);
 		let import_result = (&*self.inner).import_block(block, new_cache);
 
 		let mut imported_aux = {

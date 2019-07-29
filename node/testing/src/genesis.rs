@@ -17,11 +17,12 @@
 //! Genesis Configuration.
 
 use crate::keyring::*;
-use keyring::AuthorityKeyring;
+use keyring::{Ed25519Keyring, Sr25519Keyring};
 use node_runtime::{
 	GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, SystemConfig,
-	GrandpaConfig, IndicesConfig, ContractsConfig, DOLLARS, MILLICENTS, WASM_BINARY,
+	GrandpaConfig, IndicesConfig, ContractsConfig, WASM_BINARY,
 };
+use node_runtime::constants::currency::*;
 use primitives::ChangesTrieConfiguration;
 use runtime_primitives::Perbill;
 
@@ -29,7 +30,7 @@ use runtime_primitives::Perbill;
 /// Create genesis runtime configuration for tests.
 pub fn config(support_changes_trie: bool) -> GenesisConfig {
 	GenesisConfig {
-		aura: Some(Default::default()),
+		babe: Some(Default::default()),
 		system: Some(SystemConfig {
 			changes_trie_config: if support_changes_trie { Some(ChangesTrieConfiguration {
 				digest_interval: 2,
@@ -53,10 +54,19 @@ pub fn config(support_changes_trie: bool) -> GenesisConfig {
 		}),
 		session: Some(SessionConfig {
 			keys: vec![
-				(alice(), to_session_keys(&AuthorityKeyring::Alice)),
-				(bob(), to_session_keys(&AuthorityKeyring::Bob)),
-				(charlie(), to_session_keys(&AuthorityKeyring::Charlie)),
-			]
+				(alice(), to_session_keys(
+						&Ed25519Keyring::Alice,
+						&Sr25519Keyring::Alice,
+				)),
+				(bob(), to_session_keys(
+						&Ed25519Keyring::Bob,
+						&Sr25519Keyring::Bob,
+				)),
+				(charlie(), to_session_keys(
+						&Ed25519Keyring::Charlie,
+						&Sr25519Keyring::Charlie,
+				)),
+			],
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
@@ -68,8 +78,6 @@ pub fn config(support_changes_trie: bool) -> GenesisConfig {
 			validator_count: 3,
 			minimum_validator_count: 0,
 			offline_slash: Perbill::zero(),
-			session_reward: Perbill::zero(),
-			current_session_reward: 0,
 			offline_slash_grace: 0,
 			invulnerables: vec![alice(), bob(), charlie()],
 		}),
