@@ -727,14 +727,6 @@ impl<T: Trait> Module<T> {
 		if result.is_ok() {
 			// Commit all changes that made it thus far into the persistent storage.
 			DirectAccountDb.commit(ctx.overlay.into_change_set());
-
-			// Then deposit all events produced.
-			ctx.events.into_iter().for_each(|indexed_event| {
-				<system::Module<T>>::deposit_event_indexed(
-					&*indexed_event.topics,
-					<T as Trait>::Event::from(indexed_event.event).into(),
-				);
-			});
 		}
 
 		// Refund cost of the unused gas.
@@ -743,10 +735,24 @@ impl<T: Trait> Module<T> {
 		// can alter the balance of the caller.
 		gas::refund_unused_gas::<T>(&origin, gas_meter, imbalance);
 
-		// Dispatch every recorded call with an appropriate origin.
-		ctx.calls.into_iter().for_each(|(who, call)| {
-			let result = call.dispatch(RawOrigin::Signed(who.clone()).into());
-			Self::deposit_event(RawEvent::Dispatched(who, result.is_ok()));
+		ctx.deferred.into_iter().for_each(|deferred| {
+			use self::exec::DeferredAction::*;
+			match deferred {
+				DepositEvent {
+					topics,
+					event,
+				} => <system::Module<T>>::deposit_event_indexed(
+					&*topics,
+					<T as Trait>::Event::from(event).into(),
+				),
+				DispatchRuntimeCall {
+					origin,
+					call,
+				} => {
+					let result = call.dispatch(RawOrigin::Signed(origin.clone()).into());
+					Self::deposit_event(RawEvent::Dispatched(origin, result.is_ok()));
+				}
+			}
 		});
 
 		result

@@ -254,13 +254,28 @@ impl<T: Trait> Token<T> for ExecFeeToken {
 	}
 }
 
+#[cfg_attr(any(feature = "std", test), derive(Debug, PartialEq, Eq, Clone))]
+pub enum DeferredAction<T: Trait> {
+	DepositEvent {
+		/// A list of topics this event will be deposited with.
+		topics: Vec<T::Hash>,
+		/// The event to deposit.
+		event: Event<T>,
+	},
+	DispatchRuntimeCall {
+		/// The account id of the contract who dispatched this call.
+		origin: T::AccountId,
+		/// The call to dispatch.
+		call: T::Call,
+	},
+}
+
 pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
 	pub self_account: T::AccountId,
 	pub self_trie_id: Option<TrieId>,
 	pub overlay: OverlayAccountDb<'a, T>,
 	pub depth: usize,
-	pub events: Vec<IndexedEvent<T>>,
-	pub calls: Vec<(T::AccountId, T::Call)>,
+	pub deferred: Vec<DeferredAction<T>>,
 	pub config: &'a Config<T>,
 	pub vm: &'a V,
 	pub loader: &'a L,
@@ -284,8 +299,7 @@ where
 			self_account: origin,
 			overlay: OverlayAccountDb::<T>::new(&DirectAccountDb),
 			depth: 0,
-			events: Vec::new(),
-			calls: Vec::new(),
+			deferred: Vec::new(),
 			config: &cfg,
 			vm: &vm,
 			loader: &loader,
@@ -302,8 +316,7 @@ where
 			self_account: dest,
 			overlay: OverlayAccountDb::new(&self.overlay),
 			depth: self.depth + 1,
-			events: Vec::new(),
-			calls: Vec::new(),
+			deferred: Vec::new(),
 			config: self.config,
 			vm: self.vm,
 			loader: self.loader,
@@ -435,7 +448,7 @@ where
 				.into_result()?;
 
 			// Deposit an instantiation event.
-			nested.events.push(IndexedEvent {
+			nested.deferred.push(DeferredAction::DepositEvent {
 				event: RawEvent::Instantiated(caller.clone(), dest.clone()),
 				topics: Vec::new(),
 			});
@@ -464,15 +477,14 @@ where
 		-> Result<Vec<u8>, &'static str>
 		where F: FnOnce(&mut ExecutionContext<T, V, L>) -> Result<Vec<u8>, &'static str>
 	{
-		let (output_data, change_set, events, calls) = {
+		let (output_data, change_set, deferred) = {
 			let mut nested = self.nested(dest, trie_id);
 			let output_data = func(&mut nested)?;
-			(output_data, nested.overlay.into_change_set(), nested.events, nested.calls)
+			(output_data, nested.overlay.into_change_set(), nested.deferred)
 		};
 
 		self.overlay.commit(change_set);
-		self.events.extend(events);
-		self.calls.extend(calls);
+		self.deferred.extend(deferred);
 
 		Ok(output_data)
 	}
@@ -592,7 +604,7 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 	if transactor != dest {
 		ctx.overlay.set_balance(transactor, new_from_balance);
 		ctx.overlay.set_balance(dest, new_to_balance);
-		ctx.events.push(IndexedEvent {
+		ctx.deferred.push(DeferredAction::DepositEvent {
 			event: RawEvent::Transfer(transactor.clone(), dest.clone(), value),
 			topics: Vec::new(),
 		});
@@ -658,9 +670,10 @@ where
 
 	/// Notes a call dispatch.
 	fn note_dispatch_call(&mut self, call: CallOf<Self::T>) {
-		self.ctx.calls.push(
-			(self.ctx.self_account.clone(), call)
-		);
+		self.ctx.deferred.push(DeferredAction::DispatchRuntimeCall {
+			origin: self.ctx.self_account.clone(),
+			call,
+		});
 	}
 
 	fn address(&self) -> &T::AccountId {
@@ -688,7 +701,7 @@ where
 	}
 
 	fn deposit_event(&mut self, topics: Vec<T::Hash>, data: Vec<u8>) {
-		self.ctx.events.push(IndexedEvent {
+		self.ctx.deferred.push(DeferredAction::DepositEvent {
 			topics,
 			event: RawEvent::Contract(self.ctx.self_account.clone(), data),
 		});
@@ -724,7 +737,7 @@ where
 mod tests {
 	use super::{
 		BalanceOf, ExecFeeToken, ExecutionContext, Ext, Loader, EmptyOutputBuf, TransferFeeKind, TransferFeeToken,
-		Vm, VmExecResult, InstantiateReceipt, RawEvent, IndexedEvent,
+		Vm, VmExecResult, InstantiateReceipt, RawEvent, DeferredAction,
 	};
 	use crate::account_db::AccountDb;
 	use crate::gas::GasMeter;
@@ -740,6 +753,21 @@ mod tests {
 	const ALICE: u64 = 1;
 	const BOB: u64 = 2;
 	const CHARLIE: u64 = 3;
+
+	impl<'a, T, V, L> ExecutionContext<'a, T, V, L>
+		where T: crate::Trait
+	{
+		fn events(&self) -> Vec<DeferredAction<T>> {
+			self.deferred
+				.iter()
+				.filter(|action| match *action {
+					DeferredAction::DepositEvent { .. } => true,
+					_ => false,
+				})
+				.cloned()
+				.collect()
+		}
+	}
 
 	struct MockCtx<'a> {
 		ext: &'a mut dyn Ext<T = Test>,
@@ -1326,12 +1354,12 @@ mod tests {
 				// Check that the newly created account has the expected code hash and
 				// there are instantiation event.
 				assert_eq!(ctx.overlay.get_code_hash(&created_contract_address).unwrap(), dummy_ch);
-				assert_eq!(&ctx.events, &[
-					IndexedEvent {
+				assert_eq!(&ctx.events(), &[
+					DeferredAction::DepositEvent {
 						event: RawEvent::Transfer(ALICE, created_contract_address, 100),
 						topics: Vec::new(),
 					},
-					IndexedEvent {
+					DeferredAction::DepositEvent {
 						event: RawEvent::Instantiated(ALICE, created_contract_address),
 						topics: Vec::new(),
 					}
@@ -1384,16 +1412,16 @@ mod tests {
 				// Check that the newly created account has the expected code hash and
 				// there are instantiation event.
 				assert_eq!(ctx.overlay.get_code_hash(&created_contract_address).unwrap(), dummy_ch);
-				assert_eq!(&ctx.events, &[
-					IndexedEvent {
+				assert_eq!(&ctx.events(), &[
+					DeferredAction::DepositEvent {
 						event: RawEvent::Transfer(ALICE, BOB, 20),
 						topics: Vec::new(),
 					},
-					IndexedEvent {
+					DeferredAction::DepositEvent {
 						event: RawEvent::Transfer(BOB, created_contract_address, 15),
 						topics: Vec::new(),
 					},
-					IndexedEvent {
+					DeferredAction::DepositEvent {
 						event: RawEvent::Instantiated(BOB, created_contract_address),
 						topics: Vec::new(),
 					},
@@ -1441,8 +1469,8 @@ mod tests {
 
 				// The contract wasn't created so we don't expect to see an instantiation
 				// event here.
-				assert_eq!(&ctx.events, &[
-					IndexedEvent {
+				assert_eq!(&ctx.events(), &[
+					DeferredAction::DepositEvent {
 						event: RawEvent::Transfer(ALICE, BOB, 20),
 						topics: Vec::new(),
 					},
