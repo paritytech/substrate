@@ -107,11 +107,3 @@ is-it-maintained-open-issues = { repository = "paritytech/substrate" }
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
-
-[patch.crates-io]
-jsonrpc-derive = { git = "https://github.com/paritytech/jsonrpc", branch = "master" }
-jsonrpc-core-client = { git = "https://github.com/paritytech/jsonrpc", branch = "master" }
-jsonrpc-core = { git = "https://github.com/paritytech/jsonrpc", branch = "master" }
-jsonrpc-pubsub = { git = "https://github.com/paritytech/jsonrpc", branch = "master" }
-jsonrpc-http-server = { git = "https://github.com/paritytech/jsonrpc", branch = "master" }
-jsonrpc-ws-server = { git = "https://github.com/paritytech/jsonrpc", branch = "master" }
