@@ -256,6 +256,7 @@ impl offchain::Externalities for NeverOffchainExt {
 	fn new_crypto_key(
 		&mut self,
 		_crypto: offchain::CryptoKind,
+		_key_type: offchain::KeyTypeId,
 	) -> Result<offchain::CryptoKey, ()> {
 		unreachable!()
 	}

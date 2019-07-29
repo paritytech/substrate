@@ -29,6 +29,7 @@ use primitives::offchain::{
 	HttpRequestStatus as RequestStatus,
 	Timestamp,
 	CryptoKind,
+	KeyTypeId,
 	CryptoKey,
 	StorageKind,
 	OpaqueNetworkState,
@@ -148,7 +149,7 @@ impl offchain::Externalities for TestOffchainExt {
 		unimplemented!("not needed in tests so far")
 	}
 
-	fn new_crypto_key(&mut self, _crypto: CryptoKind) -> Result<CryptoKey, ()> {
+	fn new_crypto_key(&mut self, _crypto: CryptoKind, _key_type: KeyTypeId) -> Result<CryptoKey, ()> {
 		unimplemented!("not needed in tests so far")
 	}
 

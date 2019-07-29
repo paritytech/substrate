@@ -36,7 +36,7 @@ pub use primitives::Blake2Hasher;
 use primitives::offchain::{
 	Timestamp,
 	HttpRequestId, HttpRequestStatus, HttpError,
-	CryptoKind, CryptoKey,
+	CryptoKind, CryptoKey, KeyTypeId,
 	StorageKind,
 	OpaqueNetworkState,
 };
@@ -243,13 +243,16 @@ export_api! {
 		/// Returns information about the local node's network state.
 		fn network_state() -> Result<OpaqueNetworkState, ()>;
 
+		/// Get the cryptokey whose pubkey and appkeys are those given.
+		fn find_key(pubkey: &[u8], app_id: KeyTypeId) -> Result<CryptoKey, ()>;
+
 		/// Returns the currently configured authority public key, if available.
 		fn pubkey(key: CryptoKey) -> Result<Vec<u8>, ()>;
 
 		/// Create new key(pair) for signing/encryption/decryption.
 		///
 		/// Returns an error if given crypto kind is not supported.
-		fn new_crypto_key(crypto: CryptoKind) -> Result<CryptoKey, ()>;
+		fn new_crypto_key(crypto: CryptoKind, app_id: KeyTypeId) -> Result<CryptoKey, ()>;
 
 		/// Encrypt a piece of data using given crypto key.
 		///
@@ -266,8 +269,6 @@ export_api! {
 		fn decrypt(key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()>;
 
 		/// Sign a piece of data using given crypto key.
-		///
-		/// If `key` is `None`, it will attempt to use current authority key.
 		///
 		/// Returns an error if `key` is not available or does not exist.
 		fn sign(key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()>;

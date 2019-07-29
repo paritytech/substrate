@@ -416,9 +416,9 @@ pub mod ext {
 		///
 		/// # Returns
 		///
-		/// - A crypto key id (if the value is less than u16::max_value)
-		/// - `u32::max_value` in case the crypto is not supported
-		fn ext_new_crypto_key(crypto: u32) -> u64;
+		/// - A crypto key id (if the value is less than u64::max_value)
+		/// - `u64::max_value` in case the crypto is not supported
+		fn ext_new_crypto_key(crypto: u32, key_type: u32) -> u64;
 
 		/// Encrypt a piece of data using given crypto key.
 		///
@@ -942,10 +942,13 @@ impl OffchainApi for () {
 		}
 	}
 
-	fn new_crypto_key(crypto: offchain::CryptoKind) -> Result<offchain::CryptoKey, ()> {
+	fn new_crypto_key(
+		crypto: offchain::CryptoKind,
+		key_type: offchain::KeyType,
+	) -> Result<offchain::CryptoKey, ()> {
 		let crypto = crypto.into();
 		let ret = unsafe {
-			ext_new_crypto_key.get()(crypto)
+			ext_new_crypto_key.get()(crypto, key_type)
 		};
 		offchain::CryptoKey::try_from(ret)
 	}

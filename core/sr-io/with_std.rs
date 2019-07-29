@@ -281,10 +281,11 @@ impl OffchainApi for () {
 		}, "authority_pubkey can be called only in the offchain worker context")
 	}
 
-	fn new_crypto_key(crypto: offchain::CryptoKind) -> Result<offchain::CryptoKey, ()> {
+	fn new_crypto_key(crypto: offchain::CryptoKind, key_type: offchain::KeyTypeId) -> Result<offchain::CryptoKey, ()> {
 		with_offchain(|ext| {
-			ext.new_crypto_key(crypto)
+			ext.new_crypto_key(crypto, key_type)
 		}, "new_crypto_key can be called only in the offchain worker context")
+			.and_then(|x| x.ok_or(()))
 	}
 
 	fn encrypt(

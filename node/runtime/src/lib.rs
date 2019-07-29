@@ -47,6 +47,7 @@ use elections::VoteIndex;
 use version::NativeVersion;
 use substrate_primitives::OpaqueMetadata;
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
+use im_online::{AuthorityId as ImOnlineId};
 use finality_tracker::{DEFAULT_REPORT_LATENCY, DEFAULT_WINDOW_SIZE};
 
 #[cfg(any(feature = "std", test))]
@@ -187,7 +188,7 @@ impl authorship::Trait for Runtime {
 	type EventHandler = ();
 }
 
-type SessionHandlers = (Grandpa, Babe);
+type SessionHandlers = (Grandpa, Babe, ImOnline);
 
 impl_opaque_keys! {
 	pub struct SessionKeys {
@@ -195,6 +196,8 @@ impl_opaque_keys! {
 		pub grandpa: GrandpaId,
 		#[id(key_types::BABE)]
 		pub babe: BabeId,
+		#[id(key_types::IM_ONLINE)]
+		pub babe: ImOnlineId,
 	}
 }
 
@@ -369,12 +372,10 @@ impl sudo::Trait for Runtime {
 }
 
 impl im_online::Trait for Runtime {
-	type AuthorityId = BabeId;
 	type Call = Call;
 	type Event = Event;
 	type SessionsPerEra = SessionsPerEra;
 	type UncheckedExtrinsic = UncheckedExtrinsic;
-	type IsValidAuthorityId = Babe;
 }
 
 impl grandpa::Trait for Runtime {

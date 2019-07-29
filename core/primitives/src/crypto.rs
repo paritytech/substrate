@@ -677,10 +677,12 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 #[cfg_attr(feature = "std", derive(Debug))]
 #[repr(u32)]
 pub enum Kind {
+	/// User-level crypto. We (core) can't handle it directly.
+	User = 0,
 	/// SR25519 crypto (Schnorrkel)
-	Sr25519 = 0,
+	Sr25519 = 1,
 	/// ED25519 crypto (Edwards)
-	Ed25519 = 1,
+	Ed25519 = 2,
 
 	/// Dummy kind, just for testing.
 	#[cfg(feature = "std")]
@@ -692,8 +694,11 @@ impl TryFrom<u32> for Kind {
 
 	fn try_from(kind: u32) -> Result<Self, Self::Error> {
 		Ok(match kind {
+			e if e == Kind::User as usize as u32 => Kind::User,
 			e if e == Kind::Sr25519 as usize as u32 => Kind::Sr25519,
 			e if e == Kind::Ed25519 as usize as u32 => Kind::Ed25519,
+			#[cfg(feature = "std")]
+			e if e == Kind::Dummy as usize as u32 => Kind::Dummy,
 			_ => Err(())?,
 		})
 	}
@@ -1049,7 +1054,21 @@ pub trait CryptoType {
 ///
 /// Values whose first character is `_` are reserved for private use and won't conflict with any
 /// public modules.
-pub type KeyTypeId = [u8; 4];
+#[derive(Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct KeyTypeId([u8; 4]);
+
+impl From<u32> for KeyTypeId {
+	fn from(x: u32) -> Self {
+		Self(x.to_le_bytes())
+	}
+}
+
+impl From<KeyTypeId> for u32 {
+	fn from(x: KeyTypeId) -> Self {
+		u32::from_le_bytes(x.0)
+	}
+}
 
 /// Known key types; this also functions as a global registry of key types for projects wishing to
 /// avoid collisions with each other.
@@ -1060,20 +1079,22 @@ pub mod key_types {
 	use super::KeyTypeId;
 
 	/// Key type for generic S/R 25519 key.
-	pub const SR25519: KeyTypeId = *b"sr25";
+	pub const SR25519: KeyTypeId = KeyTypeId(*b"sr25");
 	/// Key type for generic Ed25519 key.
-	pub const ED25519: KeyTypeId = *b"ed25";
+	pub const ED25519: KeyTypeId = KeyTypeId(*b"ed25");
 	/// Key type for Babe module, build-in.
-	pub const BABE: KeyTypeId = *b"babe";
+	pub const BABE: KeyTypeId = KeyTypeId(*b"babe");
 	/// Key type for Grandpa module, build-in.
-	pub const GRANDPA: KeyTypeId = *b"gran";
+	pub const GRANDPA: KeyTypeId = KeyTypeId(*b"gran");
 	/// Key type for controlling an account in a Substrate runtime, built-in.
-	pub const ACCOUNT: KeyTypeId = *b"acco";
+	pub const ACCOUNT: KeyTypeId = KeyTypeId(*b"acco");
 	/// Key type for Aura module, built-in.
-	pub const AURA: KeyTypeId = *b"acco";
+	pub const AURA: KeyTypeId = KeyTypeId(*b"aura");
+	/// Key type for ImOnline module, built-in.
+	pub const IM_ONLINE: KeyTypeId = KeyTypeId(*b"imon");
 	/// A key type ID useful for tests.
 	#[cfg(feature = "std")]
-	pub const DUMMY: KeyTypeId = *b"dumy";
+	pub const DUMMY: KeyTypeId = KeyTypeId(*b"dumy");
 }
 
 /*impl TryFrom<KeyTypeId> for Kind {

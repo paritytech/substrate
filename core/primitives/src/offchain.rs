@@ -20,7 +20,7 @@ use parity_codec::{Encode, Decode};
 use rstd::prelude::{Vec, Box};
 use rstd::convert::TryFrom;
 
-pub use crate::crypto::Kind as CryptoKind;
+pub use crate::crypto::{Kind as CryptoKind, KeyTypeId};
 
 /// A type of supported crypto.
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
@@ -60,48 +60,27 @@ impl From<StorageKind> for u32 {
 }
 
 /// Key to use in the offchain worker crypto api.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub enum CryptoKey {
-	/// Use a key from the offchain workers local storage.
-	LocalKey {
-		/// The id of the key.
-		id: u16,
-		/// The kind of the key.
-		kind: CryptoKind,
-	},
-	/// Use the key the block authoring algorithm uses.
-	AuthorityKey,
-	/// Use the key the finality gadget uses.
-	FgAuthorityKey,
+pub struct CryptoKey {
+	/// The kind of the key.
+	key_type: KeyTypeId,
+	/// The id of the key.
+	id: u32,
 }
 
 impl TryFrom<u64> for CryptoKey {
 	type Error = ();
 
 	fn try_from(key: u64) -> Result<Self, Self::Error> {
-		match key & 0xFF {
-			0 => {
-				let id = (key >> 8 & 0xFFFF) as u16;
-				let kind = CryptoKind::try_from((key >> 32) as u32)?;
-				Ok(CryptoKey::LocalKey { id, kind })
-			}
-			1 => Ok(CryptoKey::AuthorityKey),
-			2 => Ok(CryptoKey::FgAuthorityKey),
-			_ => Err(()),
-		}
+		key.using_encoded(|d| Self::decode(&mut d)).ok_or(())
 	}
 }
 
 impl From<CryptoKey> for u64 {
 	fn from(key: CryptoKey) -> u64 {
-		match key {
-			CryptoKey::LocalKey { id, kind } => {
-				((kind as u64) << 32) | ((id as u64) << 8)
-			}
-			CryptoKey::AuthorityKey => 1,
-			CryptoKey::FgAuthorityKey => 2,
-		}
+		/// Should never fail since u64 is eight bytes and the `CryptoKey` is eight bytes.
+		key.using_encoded(|d| Self::decode(&mut d)).unwrap_or(0)
 	}
 }
 
@@ -289,7 +268,7 @@ pub trait Externalities {
 	/// Create new key(pair) for signing/encryption/decryption.
 	///
 	/// Returns an error if given crypto kind is not supported.
-	fn new_crypto_key(&mut self, crypto: CryptoKind) -> Result<CryptoKey, ()>;
+	fn new_crypto_key(&mut self, crypto: CryptoKind, key_type: KeyTypeId) -> Result<CryptoKey, ()>;
 
 	/// Returns the locally configured authority public key, if available.
 	fn pubkey(&self, key: CryptoKey) -> Result<Vec<u8>, ()>;
@@ -438,8 +417,8 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		(&mut **self).submit_transaction(ex)
 	}
 
-	fn new_crypto_key(&mut self, crypto: CryptoKind) -> Result<CryptoKey, ()> {
-		(&mut **self).new_crypto_key(crypto)
+	fn new_crypto_key(&mut self, crypto: CryptoKind, key_type: KeyTypeId) -> Result<CryptoKey, ()> {
+		(&mut **self).new_crypto_key(crypto, key_type)
 	}
 
 	fn encrypt(&mut self, key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()> {

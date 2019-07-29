@@ -57,8 +57,8 @@ struct StoredKey {
 }
 
 impl StoredKey {
-	fn generate_with_phrase(kind: CryptoKind, password: Option<&str>) -> Self {
-		match kind {
+	fn generate_with_phrase(kind: CryptoKind, password: Option<&str>) -> Option<Self> {
+		Ok(match kind {
 			CryptoKind::Ed25519 => {
 				let phrase = ed25519::Pair::generate_with_phrase(password).1;
 				Self { kind, phrase }
@@ -68,7 +68,8 @@ impl StoredKey {
 				Self { kind, phrase }
 			}
 			CryptoKind::Dummy => Self { kind, phrase: String::new() },
-		}
+			CryptoKind::User => return None,
+		})
 	}
 
 	fn to_local_key(&self, password: Option<&str>) -> Result<LocalKey, ()> {
@@ -81,7 +82,7 @@ impl StoredKey {
 				sr25519::Pair::from_phrase(&self.phrase, password)
 					.map(|x| LocalKey::Sr25519(x.0))
 			}
-			CryptoKind::Dummy => Err(())?,
+			_ => Err(())?,
 		}
 		.map_err(|e| {
 			warn!("Error recovering Offchain Worker key. Password invalid? {:?}", e);
@@ -130,57 +131,6 @@ impl LocalKey {
 	}
 }
 
-/// A key.
-enum Key<ConsensusPair, FinalityPair> {
-	LocalKey(LocalKey),
-	AuthorityKey(ConsensusPair),
-	FgAuthorityKey(FinalityPair),
-}
-
-impl<ConsensusPair: Pair, FinalityPair: Pair> Key<ConsensusPair, FinalityPair> {
-	fn public(&self) -> Result<Vec<u8>, ()> {
-		match self {
-			Key::LocalKey(local) => {
-				local.public()
-			}
-			Key::AuthorityKey(pair) => {
-				Ok(pair.public().to_raw_vec())
-			}
-			Key::FgAuthorityKey(pair) => {
-				Ok(pair.public().to_raw_vec())
-			}
-		}
-	}
-
-	fn sign(&self, data: &[u8]) -> Result<Vec<u8>, ()> {
-		match self {
-			Key::LocalKey(local) => {
-				local.sign(data)
-			}
-			Key::AuthorityKey(pair) => {
-				Ok(pair.sign(data).as_ref().to_vec())
-			}
-			Key::FgAuthorityKey(pair) => {
-				Ok(pair.sign(data).as_ref().to_vec())
-			}
-		}
-	}
-
-	fn verify(&self, msg: &[u8], signature: &[u8]) -> Result<bool, ()> {
-		match self {
-			Key::LocalKey(local) => {
-				local.verify(msg, signature)
-			}
-			Key::AuthorityKey(pair) => {
-				Ok(ConsensusPair::verify_weak(signature, msg, pair.public()))
-			}
-			Key::FgAuthorityKey(pair) => {
-				Ok(FinalityPair::verify_weak(signature, msg, pair.public()))
-			}
-		}
-	}
-}
-
 /// Asynchronous offchain API.
 ///
 /// NOTE this is done to prevent recursive calls into the runtime (which are not supported currently).
@@ -217,36 +167,21 @@ impl<Storage, KeyProvider, Block> Api<Storage, KeyProvider, Block> where
 	fn read_key(
 		&self,
 		key: CryptoKey,
-	) -> Result<Key<KeyProvider::ConsensusPair, KeyProvider::FinalityPair>, ()> {
-		match key {
-			CryptoKey::LocalKey { id, kind } => {
-				let key = self.db.get(KEYS_PREFIX, &id.encode())
-					.and_then(|key| StoredKey::decode(&mut &*key))
-					.ok_or(())?;
-				if key.kind != kind {
-					warn!(
-						"Invalid crypto kind (got: {:?}, expected: {:?}), when requesting key {:?}",
-						key.kind,
-						kind,
-						id
-					);
-					return Err(())
-				}
-				Ok(Key::LocalKey(key.to_local_key(self.password())?))
-			}
-			CryptoKey::AuthorityKey => {
-				let key = self.key_provider
-					.authority_key(&self.at)
-					.ok_or(())?;
-				Ok(Key::AuthorityKey(key))
-			}
-			CryptoKey::FgAuthorityKey => {
-				let key = self.key_provider
-					.fg_authority_key(&self.at)
-					.ok_or(())?;
-				Ok(Key::FgAuthorityKey(key))
-			}
+	) -> Result<LocalKey, ()> {
+		let CryptoKey { id, kind } = key;
+		let key = id.using_encoded(|id| self.db.get(KEYS_PREFIX, id))
+			.and_then(|key| StoredKey::decode(&mut &*key))
+			.ok_or(())?;
+		if key.kind != kind {
+			warn!(
+				"Invalid crypto kind (got: {:?}, expected: {:?}), when requesting key {:?}",
+				key.kind,
+				kind,
+				id
+			);
+			return Err(())
 		}
+		Ok(key.to_local_key(self.password())?)
 	}
 }
 
@@ -263,8 +198,8 @@ where
 			.map_err(|_| ())
 	}
 
-	fn new_crypto_key(&mut self, kind: CryptoKind) -> Result<CryptoKey, ()> {
-		let key = StoredKey::generate_with_phrase(kind, self.password());
+	fn new_crypto_key(&mut self, crypto: Kind, key_type: KeyTypeId) -> Result<CryptoKey, ()> {
+		let key = StoredKey::generate_with_phrase(crypto, self.password());
 		let (id, id_encoded) = loop {
 			let encoded = self.db.get(KEYS_PREFIX, NEXT_ID);
 			let encoded_slice = encoded.as_ref().map(|x| x.as_slice());
@@ -690,7 +625,8 @@ mod tests {
 			let msg = b"Hello world!";
 
 			// when
-			let key = api.new_crypto_key(kind).unwrap();
+			let key_type = primitives::crypto::key_types::DUMMY;
+			let key = api.new_crypto_key(kind, key_type).unwrap();
 			let signature = api.sign(key, msg).unwrap();
 
 			// then
