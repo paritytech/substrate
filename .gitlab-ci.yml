@@ -91,17 +91,6 @@ cargo-audit:
   allow_failure:                   true
 
 
-# check-warnings:
-#   stage:                           test
-#   <<:                              *docker-env
-#   only:
-#     - /^[0-9]+$/
-#   script:
-#     - RUSTFLAGS="-D warnings" time cargo check --all --release --verbose
-#     - sccache -s
-#   allow_failure:                   true
-
-
 cargo-check-benches:
   stage:                           test
   <<:                              *docker-env
@@ -127,12 +116,13 @@ test-linux-stable:                 &test-linux
   variables:
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
-    RUSTFLAGS: -Cdebug-assertions=y
+    # warning == error
+    RUSTFLAGS: -Cdebug-assertions=y -Dwarnings
   except:
     variables:
       - $DEPLOY_TAG
   script:
-    - RUSTFLAGS="-D warnings" time cargo test --all --release --verbose --locked
+    - time cargo test --all --release --verbose --locked
     - sccache -s
 
 
