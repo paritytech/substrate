@@ -30,7 +30,7 @@ use tel::TelemetryEndpoints;
 
 enum GenesisSource<G> {
 	File(PathBuf),
-	Embedded(Cow<'static, [u8]>),
+	Binary(Cow<'static, [u8]>),
 	Factory(fn() -> G),
 }
 
@@ -38,7 +38,7 @@ impl<G: RuntimeGenesis> Clone for GenesisSource<G> {
 	fn clone(&self) -> Self {
 		match *self {
 			GenesisSource::File(ref path) => GenesisSource::File(path.clone()),
-			GenesisSource::Embedded(ref d) => GenesisSource::Embedded(d.clone()),
+			GenesisSource::Binary(ref d) => GenesisSource::Binary(d.clone()),
 			GenesisSource::Factory(f) => GenesisSource::Factory(f),
 		}
 	}
@@ -58,7 +58,7 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 					json::from_reader(file).map_err(|e| format!("Error parsing spec file: {}", e))?;
 				Ok(genesis.genesis)
 			},
-			GenesisSource::Embedded(buf) => {
+			GenesisSource::Binary(buf) => {
 				let genesis: GenesisContainer<G> =
 					json::from_reader(buf.as_ref()).map_err(|e| format!("Error parsing embedded file: {}", e))?;
 				Ok(genesis.genesis)
@@ -171,7 +171,7 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 		let spec = json::from_slice(json.as_ref()).map_err(|e| format!("Error parsing spec file: {}", e))?;
 		Ok(ChainSpec {
 			spec,
-			genesis: GenesisSource::Embedded(json),
+			genesis: GenesisSource::Binary(json),
 		})
 	}
 
