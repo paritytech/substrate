@@ -411,7 +411,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			let written = std::cmp::min(value_len as usize, value.len());
 			this.memory.set(value_data, &value[..written])
 				.map_err(|_| "Invalid attempt to set value in ext_get_storage_into")?;
-			Ok(written as u32)
+			Ok(value.len() as u32)
 		} else {
 			Ok(u32::max_value())
 		}
@@ -458,10 +458,10 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		if let Some(value) = maybe_value {
 			let value = &value[value_offset as usize..];
-			let written = ::std::cmp::min(value_len as usize, value.len());
+			let written = std::cmp::min(value_len as usize, value.len());
 			this.memory.set(value_data, &value[..written])
 				.map_err(|_| "Invalid attempt to set value in ext_get_child_storage_into")?;
-			Ok(written as u32)
+			Ok(value.len() as u32)
 		} else {
 			Ok(u32::max_value())
 		}

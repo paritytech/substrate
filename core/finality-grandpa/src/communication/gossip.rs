@@ -82,7 +82,7 @@
 //!
 //! We only send polite messages to peers,
 
-use runtime_primitives::traits::{NumberFor, Block as BlockT, Zero};
+use sr_primitives::traits::{NumberFor, Block as BlockT, Zero};
 use network::consensus_gossip::{self as network_gossip, MessageIntent, ValidatorContext};
 use network::{config::Roles, PeerId};
 use parity_codec::{Encode, Decode};
@@ -1249,7 +1249,7 @@ mod tests {
 		use crate::authorities::AuthoritySet;
 		use crate::environment::{CompletedRound, CompletedRounds, HasVoted, VoterSetState};
 		use grandpa::round::State as RoundState;
-		use substrate_primitives::H256;
+		use primitives::H256;
 
 		let state = RoundState::genesis((H256::zero(), 0));
 		let base = state.prevote_ghost.unwrap();

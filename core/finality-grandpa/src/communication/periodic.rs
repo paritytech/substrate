@@ -19,7 +19,7 @@
 use super::{gossip::{NeighborPacket, GossipMessage}, Network};
 use futures::prelude::*;
 use futures::sync::mpsc;
-use runtime_primitives::traits::{NumberFor, Block as BlockT};
+use sr_primitives::traits::{NumberFor, Block as BlockT};
 use network::PeerId;
 use tokio_timer::Delay;
 use log::warn;

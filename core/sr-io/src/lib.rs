@@ -104,16 +104,18 @@ export_api! {
 		/// Get `key` from child storage and return a `Vec`, empty if there's a problem.
 		fn child_storage(storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>>;
 
-		/// Get `key` from storage, placing the value into `value_out` (as much of it as possible) and return
-		/// the number of bytes that the entry in storage had beyond the offset or None if the storage entry
-		/// doesn't exist at all. Note that if the buffer is smaller than the storage entry length, the returned
-		/// number of bytes is not equal to the number of bytes written to the `value_out`.
+		/// Get `key` from storage, placing the value into `value_out` and return the number of
+		/// bytes that the entry in storage has beyond the offset or `None` if the storage entry
+		/// doesn't exist at all.
+		/// If `value_out` length is smaller than the returned length, only `value_out` length bytes
+		/// are copied into `value_out`.
 		fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize>;
 
-		/// Get `key` from child storage, placing the value into `value_out` (as much of it as possible) and return
-		/// the number of bytes that the entry in storage had beyond the offset or None if the storage entry
-		/// doesn't exist at all. Note that if the buffer is smaller than the storage entry length, the returned
-		/// number of bytes is not equal to the number of bytes written to the `value_out`.
+		/// Get `key` from child storage, placing the value into `value_out` and return the number
+		/// of bytes that the entry in storage has beyond the offset or `None` if the storage entry
+		/// doesn't exist at all.
+		/// If `value_out` length is smaller than the returned length, only `value_out` length bytes
+		/// are copied into `value_out`.
 		fn read_child_storage(storage_key: &[u8], key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize>;
 
 		/// Set the storage of some particular key to Some value.

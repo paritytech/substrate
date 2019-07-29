@@ -122,10 +122,10 @@ construct_service_factory! {
 				if let Some(babe_key) = service.authority_key() {
 					info!("Using BABE key {}", babe_key.public());
 
-					let proposer = Arc::new(substrate_basic_authorship::ProposerFactory {
+					let proposer = substrate_basic_authorship::ProposerFactory {
 						client: service.client(),
 						transaction_pool: service.transaction_pool(),
-					});
+					};
 
 					let client = service.client();
 					let select_chain = service.select_chain()
@@ -355,10 +355,10 @@ mod tests {
 
 			let parent_id = BlockId::number(service.client().info().chain.best_number);
 			let parent_header = service.client().header(&parent_id).unwrap().unwrap();
-			let proposer_factory = Arc::new(substrate_basic_authorship::ProposerFactory {
+			let mut proposer_factory = substrate_basic_authorship::ProposerFactory {
 				client: service.client(),
 				transaction_pool: service.transaction_pool(),
-			});
+			};
 
 			let mut digest = Digest::<H256>::default();
 
@@ -381,7 +381,7 @@ mod tests {
 
 			digest.push(<DigestItem as CompatibleDigestItem>::babe_pre_digest(babe_pre_digest));
 
-			let proposer = proposer_factory.init(&parent_header).unwrap();
+			let mut proposer = proposer_factory.init(&parent_header).unwrap();
 			let new_block = futures03::executor::block_on(proposer.propose(
 				inherent_data,
 				digest,

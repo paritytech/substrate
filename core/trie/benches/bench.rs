@@ -20,8 +20,8 @@ criterion_main!(benches);
 
 fn benchmark(c: &mut Criterion) {
 	trie_bench::standard_benchmark::<
-		substrate_primitives::Blake2Hasher,
-		substrate_trie::NodeCodec<substrate_primitives::Blake2Hasher>,
+		primitives::Blake2Hasher,
+		substrate_trie::NodeCodec<primitives::Blake2Hasher>,
 		substrate_trie::TrieStream,
 	>(c, "substrate-blake2");
 	trie_bench::standard_benchmark::<

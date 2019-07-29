@@ -35,7 +35,7 @@ pub use paste;
 pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 
 use rstd::{prelude::*, ops, convert::TryInto};
-use substrate_primitives::{crypto, ed25519, sr25519, hash::{H256, H512}};
+use primitives::{crypto, ed25519, sr25519, hash::{H256, H512}};
 use codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
@@ -52,7 +52,7 @@ pub mod transaction_validity;
 pub use generic::{DigestItem, Digest};
 
 /// Re-export this since it's part of the API of this crate.
-pub use substrate_primitives::crypto::{key_types, KeyTypeId};
+pub use primitives::crypto::{key_types, KeyTypeId};
 
 /// A message indicating an invalid signature in extrinsic.
 pub const BAD_SIGNATURE: &str = "bad signature in extrinsic";
@@ -868,14 +868,14 @@ pub struct OpaqueExtrinsic(pub Vec<u8>);
 #[cfg(feature = "std")]
 impl std::fmt::Debug for OpaqueExtrinsic {
 	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-		write!(fmt, "{}", substrate_primitives::hexdisplay::HexDisplay::from(&self.0))
+		write!(fmt, "{}", primitives::hexdisplay::HexDisplay::from(&self.0))
 	}
 }
 
 #[cfg(feature = "std")]
 impl ::serde::Serialize for OpaqueExtrinsic {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
-		codec::Encode::using_encoded(&self.0, |bytes| ::substrate_primitives::bytes::serialize(bytes, seq))
+		codec::Encode::using_encoded(&self.0, |bytes| ::primitives::bytes::serialize(bytes, seq))
 	}
 }
 

@@ -7,10 +7,10 @@ edition = "2018"
 [dependencies]
 serde = { version = "1.0", optional = true, features = ["derive"] }
 parity-codec = { version = "4.1.1", default-features = false, features = ["derive"] }
-substrate-primitives = { path = "../../core/primitives", default-features = false }
+primitives = { package = "substrate-primitives",  path = "../../core/primitives", default-features = false }
 substrate-finality-grandpa-primitives = { path = "../../core/finality-grandpa/primitives", default-features = false }
 rstd = { package = "sr-std", path = "../../core/sr-std", default-features = false }
-primitives = { package = "sr-primitives", path = "../../core/sr-primitives", default-features = false }
+sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 srml-support = { path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 session = { package = "srml-session", path = "../session", default-features = false }
@@ -24,11 +24,11 @@ default = ["std"]
 std = [
 	"serde",
 	"parity-codec/std",
-	"substrate-primitives/std",
+	"primitives/std",
 	"substrate-finality-grandpa-primitives/std",
 	"rstd/std",
 	"srml-support/std",
-	"primitives/std",
+	"sr-primitives/std",
 	"system/std",
 	"session/std",
 	"finality-tracker/std",

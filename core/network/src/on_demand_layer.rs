@@ -25,7 +25,7 @@ use client::error::Error as ClientError;
 use client::light::fetcher::{Fetcher, FetchChecker, RemoteHeaderRequest,
 	RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest,
 	RemoteReadChildRequest, RemoteBodyRequest};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use sr_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 
 /// Implements the `Fetcher` trait of the client. Makes it possible for the light client to perform
 /// network requests for some state.

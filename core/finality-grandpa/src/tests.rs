@@ -35,9 +35,9 @@ use consensus_common::import_queue::{BoxBlockImport, BoxJustificationImport, Box
 use std::collections::{HashMap, HashSet};
 use std::result;
 use parity_codec::Decode;
-use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT};
-use runtime_primitives::generic::BlockId;
-use substrate_primitives::{NativeOrEncoded, ExecutionContext};
+use sr_primitives::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT};
+use sr_primitives::generic::BlockId;
+use primitives::{NativeOrEncoded, ExecutionContext};
 use fg_primitives::AuthorityId;
 
 use authorities::AuthoritySet;
@@ -273,7 +273,7 @@ impl GrandpaApi<Block> for RuntimeApi {
 		_: ExecutionContext,
 		_: Option<()>,
 		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<Vec<(substrate_primitives::ed25519::Public, u64)>>> {
+	) -> Result<NativeOrEncoded<Vec<(primitives::ed25519::Public, u64)>>> {
 		Ok(self.inner.genesis_authorities.clone()).map(NativeOrEncoded::Native)
 	}
 
@@ -342,7 +342,7 @@ impl AuthoritySetForFinalityChecker<Block> for TestApi {
 
 const TEST_GOSSIP_DURATION: Duration = Duration::from_millis(500);
 
-fn make_ids(keys: &[Ed25519Keyring]) -> Vec<(substrate_primitives::ed25519::Public, u64)> {
+fn make_ids(keys: &[Ed25519Keyring]) -> Vec<(primitives::ed25519::Public, u64)> {
 	keys.iter()
 		.map(|key| AuthorityId::from_raw(key.to_raw_public()))
 		.map(|id| (id, 1))
@@ -704,7 +704,7 @@ fn justification_is_emitted_when_consensus_data_changes() {
 	let mut net = GrandpaTestNet::new(TestApi::new(make_ids(peers)), 3);
 
 	// import block#1 WITH consensus data change
-	let new_authorities = vec![substrate_primitives::sr25519::Public::from_raw([42; 32])];
+	let new_authorities = vec![primitives::sr25519::Public::from_raw([42; 32])];
 	net.peer(0).push_authorities_change_block(new_authorities);
 	net.block_until_sync(&mut runtime);
 	let net = Arc::new(Mutex::new(net));
@@ -1320,7 +1320,7 @@ fn finality_proof_is_fetched_by_light_client_when_consensus_data_changes() {
 
 	// import block#1 WITH consensus data change. Light client ignores justification
 	// && instead fetches finality proof for block #1
-	net.peer(0).push_authorities_change_block(vec![substrate_primitives::sr25519::Public::from_raw([42; 32])]);
+	net.peer(0).push_authorities_change_block(vec![primitives::sr25519::Public::from_raw([42; 32])]);
 	let net = Arc::new(Mutex::new(net));
 	run_to_completion(&mut runtime, 1, net.clone(), peers);
 	net.lock().block_until_sync(&mut runtime);
@@ -1383,7 +1383,7 @@ fn empty_finality_proof_is_returned_to_light_client_when_authority_set_is_differ
 	// normally it will reach light client, but because of the forced change, it will not
 	net.lock().peer(0).push_blocks(8, false); // best is #9
 	net.lock().peer(0).push_authorities_change_block(
-		vec![substrate_primitives::sr25519::Public::from_raw([42; 32])]
+		vec![primitives::sr25519::Public::from_raw([42; 32])]
 	); // #10
 	net.lock().peer(0).push_blocks(1, false); // best is #11
 	net.lock().block_until_sync(&mut runtime);

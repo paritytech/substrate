@@ -23,7 +23,7 @@ use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
 use fork_tree::ForkTree;
 use grandpa::round::State as RoundState;
-use runtime_primitives::traits::{Block as BlockT, NumberFor};
+use sr_primitives::traits::{Block as BlockT, NumberFor};
 use log::{info, warn};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 use fg_primitives::AuthorityId;
@@ -456,7 +456,7 @@ pub(crate) fn load_authorities<B: AuxStore, H: Decode, N: Decode>(backend: &B)
 
 #[cfg(test)]
 mod test {
-	use substrate_primitives::H256;
+	use primitives::H256;
 	use test_client;
 	use super::*;
 

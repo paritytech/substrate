@@ -7,7 +7,7 @@ error: `Block: BlockT` generic parameter will be added automatically by the `dec
 error: unused import: `runtime_primitives::traits::Block as BlockT`
  --> $DIR/declaring_own_block_with_different_name.rs:1:5
   |
-1 | use runtime_primitives::traits::Block as BlockT;
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+1 | use sr_primitives::traits::Block as BlockT;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |
   = note: `-D unused-imports` implied by `-D warnings`
