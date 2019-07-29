@@ -140,7 +140,6 @@ struct BlocksRange<Number: BlockNumber> {
 
 impl<Number: BlockNumber> BlocksRange<Number> {
 	pub fn new(begin: Number, end: Number, step: Number) -> Self {
-println!("=== {} {} {}", begin, end, step);
 		BlocksRange {
 			current: begin,
 			end,
