@@ -161,11 +161,6 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 	}
 
 	/// Parse json content into a `ChainSpec`
-	pub fn from_embedded(json: &'static [u8]) -> Result<Self, String> {
-		Self::from_json_bytes(json)
-	}
-
-	/// Parse json content into a `ChainSpec`
 	pub fn from_json_bytes(json: impl Into<Cow<'static, [u8]>>) -> Result<Self, String> {
 		let json = json.into();
 		let spec = json::from_slice(json.as_ref()).map_err(|e| format!("Error parsing spec file: {}", e))?;
