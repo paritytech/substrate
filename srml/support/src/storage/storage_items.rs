@@ -809,6 +809,10 @@ mod test_append_and_len {
 	crate::decl_storage! {
 		trait Store for Module<T: Trait> as Test {
 			JustVec: Vec<u32>;
+			JustVecWithDefault: Vec<u32> = vec![6, 9];
+			OptionVec: Option<Vec<u32>>;
+			 // this (option with default) is stupid in practice. Just to show a point in tests.
+			OptionVecWithDefault: Option<Vec<u32>> = Some(vec![6, 9]);
 			MapVec: map u32 => Vec<u32>;
 		}
 	}
@@ -836,22 +840,35 @@ mod test_append_and_len {
 	#[test]
 	fn len_works() {
 		with_externalities(&mut TestExternalities::default(), || {
-			JustVec::put(&vec![1, 2, 3, 4, 5]);
+			JustVec::put(&vec![1, 2, 3, 4]);
+			OptionVec::put(&vec![1u32, 2, 3, 4, 5]);
 			MapVec::insert(1, &vec![1, 2, 3, 4, 5, 6]);
 
-			assert_eq!(JustVec::len().unwrap(), 5);
+			assert_eq!(JustVec::len().unwrap(), 4);
+			assert_eq!(OptionVec::len().unwrap(), 5);
 			assert_eq!(MapVec::len(1).unwrap(), 6);
 		});
 	}
 
 	#[test]
-	fn len_works_for_uninitialized() {
-		// both to vec and vec will return Default::default() in case the key does not exists.
-		// the ::len() should behave accordingly.
+	fn len_works_for_uninitialized_map() {
 		with_externalities(&mut TestExternalities::default(), || {
-			assert_eq!(JustVec::len().unwrap(), 0);
-			assert_eq!(MapVec::len(0).unwrap(), 0);
-			assert_eq!(MapVec::len(2).unwrap(), 0);
+			assert_eq!(JustVec::get(), vec![]);
+			assert_eq!(JustVec::len(), Some(0));
+
+			assert_eq!(OptionVec::get(), None);
+			// TODO: this must be fixed. What is not executed is wrong.
+			assert_eq!(OptionVec::len(), Some(0));
+			// assert_eq!(OptionVec::len(), None);
+
+			// TODO: this must be WARNED and documented to the upmost extent.
+			assert_eq!(JustVecWithDefault::get(), vec![6u32, 9]);
+			assert_eq!(JustVecWithDefault::len(), Some(0));
+			assert_eq!(OptionVecWithDefault::get(), Some(vec![6u32, 9]));
+			assert_eq!(OptionVecWithDefault::len(), Some(0));
+
+			assert_eq!(MapVec::len(0), Some(0));
+			assert_eq!(MapVec::len(2), Some(0));
 		});
 	}
 }

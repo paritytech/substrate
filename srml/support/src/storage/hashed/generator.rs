@@ -217,13 +217,13 @@ pub trait StorageValue<T: codec::Codec> {
 	///
 	/// `T` is required to implement `Codec::DecodeLength`.
 	fn len<S: HashedStorage<Twox128>>(storage: &mut S)
-		-> Result<usize, &'static str> where T: codec::DecodeLength
+		-> Option<usize> where T: codec::DecodeLength
 	{
+		// attempt to get the length directly.
 		if let Some(k) = storage.get_raw(Self::key()) {
 			<T as codec::DecodeLength>::len(&k)
-				.ok_or_else(|| "Could not read len (value)")
 		} else {
-			Ok(Default::default())
+			Some(Default::default())
 		}
 	}
 }
@@ -312,14 +312,13 @@ pub trait DecodeLengthStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K
 	///
 	/// `V` is required to implement `Codec::DecodeLength`.
 	fn len<S: HashedStorage<Self::Hasher>>(key: &K, storage: &mut S)
-		-> Result<usize, &'static str> where V: codec::DecodeLength
+		-> Option<usize> where V: codec::DecodeLength
 	{
 		let k = Self::key_for(key);
 		if let Some(v) = storage.get_raw(&k[..]) {
 			<V as codec::DecodeLength>::len(&v)
-				.ok_or_else(|| "Could not read len (map)")
 		} else {
-			Ok(Default::default())
+			Some(Default::default())
 		}
 	}
 }

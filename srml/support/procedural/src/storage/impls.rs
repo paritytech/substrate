@@ -68,6 +68,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 		} = self;
 		let DeclStorageTypeInfos { typ, value_type, is_option, .. } = type_infos;
 		let option_simple_1 = option_unwrap(is_option);
+		let value_type_has_len = ext::type_contains_ident(value_type, &Ident::new("Vec", proc_macro2::Span::call_site()));
 
 		let mutate_impl = if !is_option {
 			quote!{
@@ -81,6 +82,20 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				}
 			}
 		};
+
+		let len_impl = if is_option {
+			quote! {
+				fn len<S: #scrate::HashedStorage<#scrate::Twox128>>(storage: &mut S)
+					-> Option<usize> where #typ: #scrate::codec::DecodeLength
+				{
+					if let Some(k) = storage.get_raw(<Self as #scrate::storage::hashed::generator::StorageValue<#typ>>::key()) {
+						<#typ as #scrate::codec::DecodeLength>::len(&k)
+					} else {
+						None
+					}
+				}
+			}
+		} else { quote! {} };
 
 		let InstanceOpts {
 			equal_default_instance,
@@ -155,6 +170,8 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					#mutate_impl ;
 					ret
 				}
+
+				// #len_impl
 			}
 		}
 	}
