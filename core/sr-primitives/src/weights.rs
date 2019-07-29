@@ -93,7 +93,7 @@ pub trait GetDispatchInfo {
 	fn get_dispatch_info(&self) -> DispatchInfo;
 }
 
-/// To enable using `()` is a call type of needed for testing.
+/// To enable using `()` as a call type if needed for testing.
 #[cfg(feature = "std")]
 impl GetDispatchInfo for () {
 	fn get_dispatch_info(&self) -> DispatchInfo { Default::default() }

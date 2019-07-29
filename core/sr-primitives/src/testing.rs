@@ -244,7 +244,8 @@ impl<Call: Codec + Sync + Send, Extra> traits::Extrinsic for TestXt<Call, Extra>
 }
 
 impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
-	Call: 'static + Sized + Send + Sync + Clone + Eq + Codec + Debug + Dispatchable<Origin=Origin> + GetDispatchInfo,
+	Call: 'static + Sized + Send + Sync + Clone + Eq + Codec + Debug
+		+ Dispatchable<Origin=Origin> + GetDispatchInfo,
 	Extra: SignedExtension<AccountId=u64, Call=Call>,
 	Origin: From<Option<u64>>
 {
