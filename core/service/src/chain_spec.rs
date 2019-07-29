@@ -33,7 +33,7 @@ enum GenesisSource<G> {
 	Factory(fn() -> G),
 }
 
-impl<G: RuntimeGenesis> Clone for GenesisSource<G> {
+impl<G> Clone for GenesisSource<G> {
 	fn clone(&self) -> Self {
 		match *self {
 			GenesisSource::File(ref path) => GenesisSource::File(path.clone()),
@@ -101,12 +101,12 @@ struct ChainSpecFile {
 pub type Properties = json::map::Map<String, json::Value>;
 
 /// A configuration of a chain. Can be used to build a genesis block.
-pub struct ChainSpec<G: RuntimeGenesis> {
+pub struct ChainSpec<G> {
 	spec: ChainSpecFile,
 	genesis: GenesisSource<G>,
 }
 
-impl<G: RuntimeGenesis> Clone for ChainSpec<G> {
+impl<G> Clone for ChainSpec<G> {
 	fn clone(&self) -> Self {
 		ChainSpec {
 			spec: self.spec.clone(),
@@ -115,7 +115,7 @@ impl<G: RuntimeGenesis> Clone for ChainSpec<G> {
 	}
 }
 
-impl<G: RuntimeGenesis> ChainSpec<G> {
+impl<G> ChainSpec<G> {
 	/// A list of bootnode addresses.
 	pub fn boot_nodes(&self) -> &[String] {
 		&self.spec.boot_nodes
@@ -202,7 +202,9 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 			genesis: GenesisSource::Factory(constructor),
 		}
 	}
+}
 
+impl<G: RuntimeGenesis> ChainSpec<G> {
 	/// Dump to json string.
 	pub fn to_json(self, raw: bool) -> Result<String, String> {
 		#[derive(Serialize, Deserialize)]
