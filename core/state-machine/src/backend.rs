@@ -24,7 +24,7 @@ use log::warn;
 use hash_db::Hasher;
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::TrieBackendStorage;
-use trie::{TrieMut, MemoryDB, child_trie_root, default_child_trie_root, TrieOps};
+use trie::{TrieMut, MemoryDB, child_trie_root, default_child_trie_root, TrieConfiguration};
 use trie::trie_types::{TrieDBMut, Layout};
 
 /// A state backend is used to read state data and can have changes committed

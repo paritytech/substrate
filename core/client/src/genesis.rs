@@ -71,7 +71,7 @@ mod tests {
 		state_root: Hash,
 		txs: Vec<Transfer>
 	) -> (Vec<u8>, Hash) {
-		use trie::{TrieOps, trie_types::Layout};
+		use trie::{TrieConfiguration, trie_types::Layout};
 
 		let transactions = txs.into_iter().map(|tx| tx.into_signed_tx()).collect::<Vec<_>>();
 

@@ -78,7 +78,7 @@ pub fn compute_root<Header, Hasher, I>(
 		Hasher::Out: Ord,
 		I: IntoIterator<Item=ClientResult<Option<Header::Hash>>>,
 {
-	use trie::TrieOps;
+	use trie::TrieConfiguration;
 	Ok(trie::trie_types::Layout::<Hasher>::trie_root(
 		build_pairs::<Header, I>(cht_size, cht_num, hashes)?
 	))

@@ -59,7 +59,7 @@ impl<
 			NodeHeader::Branch(has_value, nibble_count) => {
 				let number_nibble_encoded = nibble_count % N::NIBBLE_PER_BYTE;
 				if number_nibble_encoded > 0
-					&& N::masked_left((N::NIBBLE_PER_BYTE - number_nibble_encoded) as u8, input[0]) != 0 {
+					&& N::pad_left((N::NIBBLE_PER_BYTE - number_nibble_encoded) as u8, input[0]) != 0 {
 					return Err(Error::BadFormat);
 				}
 				let nibble_data = take(input, (nibble_count + (N::NIBBLE_PER_BYTE - 1)) / N::NIBBLE_PER_BYTE)
@@ -90,7 +90,7 @@ impl<
 			NodeHeader::Leaf(nibble_count) => {
 				let number_nibble_encoded = nibble_count % N::NIBBLE_PER_BYTE;
 				if number_nibble_encoded > 0
-					&& N::masked_left((N::NIBBLE_PER_BYTE - number_nibble_encoded) as u8, input[0]) != 0 {
+					&& N::pad_left((N::NIBBLE_PER_BYTE - number_nibble_encoded) as u8, input[0]) != 0 {
 					return Err(Error::BadFormat);
 				}
 				let nibble_data = take(input, (nibble_count + (N::NIBBLE_PER_BYTE - 1)) / N::NIBBLE_PER_BYTE)
@@ -213,7 +213,7 @@ fn partial_encode<N: NibbleOps>(partial: Partial, node_kind: NodeKind) -> Vec<u8
 		NodeKind::BranchNoValue => NodeHeader::Branch(false, nibble_count).encode_to(&mut output),
 	};
 	if number_nibble_encoded > 0 {
-		output.push(N::masked_right(number_nibble_encoded as u8, (partial.0).1));
+		output.push(N::pad_right(number_nibble_encoded as u8, (partial.0).1));
 	}
 	output.extend_from_slice(&partial.1[..]);
 	output

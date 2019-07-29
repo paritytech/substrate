@@ -20,7 +20,7 @@ use std::collections::HashMap;
 use std::iter::FromIterator;
 use crate::backend::{Backend, InMemory};
 use hash_db::Hasher;
-use trie::TrieOps;
+use trie::TrieConfiguration;
 use trie::trie_types::Layout;
 use primitives::offchain;
 use primitives::storage::well_known_keys::{HEAP_PAGES, is_child_storage_key};

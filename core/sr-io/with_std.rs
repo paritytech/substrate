@@ -29,7 +29,7 @@ pub use substrate_state_machine::{
 
 use environmental::environmental;
 use primitives::{offchain, hexdisplay::HexDisplay, H256};
-use trie::{TrieOps, trie_types::Layout};
+use trie::{TrieConfiguration, trie_types::Layout};
 
 #[cfg(feature = "std")]
 use std::collections::HashMap;
