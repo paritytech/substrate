@@ -839,7 +839,7 @@ pub trait SignedExtension:
 	/// also perform any pre-signature-verification checks and return an error if needed.
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str>;
 
-		/// Validate a signed transaction for the transaction queue.
+	/// Validate a signed transaction for the transaction queue.
 	fn validate(
 		&self,
 		_who: &Self::AccountId,
@@ -868,6 +868,12 @@ pub trait SignedExtension:
 		info: DispatchInfo,
 		len: usize,
 	) -> Result<(), DispatchError> { Self::validate_unsigned(info, len).map(|_| ()) }
+
+	/// Do any post-flight stuff for a transaction.
+	fn post_dispatch(
+		_info: DispatchInfo,
+		_len: usize,
+	) { }
 }
 
 macro_rules! tuple_impl_indexed {
@@ -915,6 +921,12 @@ macro_rules! tuple_impl_indexed {
 			) -> Result<(), DispatchError> {
 				$($direct::pre_dispatch_unsigned(info, len)?;)+
 				Ok(())
+			}
+			fn post_dispatch(
+				info: DispatchInfo,
+				len: usize,
+			) {
+				$($direct::post_dispatch(info, len);)+
 			}
 		}
 

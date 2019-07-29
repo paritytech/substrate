@@ -85,7 +85,9 @@ where
 			Extra::pre_dispatch_unsigned(info, len)?;
 			None
 		};
-		Ok(self.function.dispatch(Origin::from(maybe_who)))
+		let res = self.function.dispatch(Origin::from(maybe_who));
+		Extra::post_dispatch(info, len);
+		Ok(res)
 	}
 }
 
