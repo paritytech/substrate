@@ -23,7 +23,7 @@
 //! The changes are journaled in the DB.
 
 use std::collections::{HashMap, HashSet, VecDeque};
-use crate::codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use crate::{CommitSet, Error, MetaDb, to_meta_key, Hash};
 use log::{trace, warn};
 
