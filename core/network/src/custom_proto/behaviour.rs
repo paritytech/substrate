@@ -16,13 +16,15 @@
 
 use crate::{DiscoveryNetBehaviour, config::ProtocolId};
 use crate::custom_proto::handler::{CustomProtoHandlerProto, CustomProtoHandlerOut, CustomProtoHandlerIn};
-use crate::custom_proto::upgrade::{CustomMessage, RegisteredProtocol};
+use crate::custom_proto::upgrade::RegisteredProtocol;
+use crate::protocol::message::Message;
 use fnv::FnvHashMap;
 use futures::prelude::*;
 use futures03::{compat::Compat, TryFutureExt as _, StreamExt as _, TryStreamExt as _};
 use libp2p::core::{ConnectedPoint, Multiaddr, PeerId};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use log::{debug, error, trace, warn};
+use runtime_primitives::traits::Block as BlockT;
 use smallvec::SmallVec;
 use std::{borrow::Cow, collections::hash_map::Entry, cmp, error, marker::PhantomData, mem, pin::Pin};
 use std::time::{Duration, Instant};
@@ -58,9 +60,9 @@ use tokio_io::{AsyncRead, AsyncWrite};
 /// Note that this "banning" system is not an actual ban. If a "banned" node tries to connect to
 /// us, we accept the connection. The "banning" system is only about delaying dialing attempts.
 ///
-pub struct CustomProto<TMessage, TSubstream> {
+pub struct CustomProto<B: BlockT, TSubstream> {
 	/// List of protocols to open with peers. Never modified.
-	protocol: RegisteredProtocol<TMessage>,
+	protocol: RegisteredProtocol<B>,
 
 	/// Receiver for instructions about who to connect to or disconnect from.
 	peerset: peerset::Peerset,
@@ -77,7 +79,7 @@ pub struct CustomProto<TMessage, TSubstream> {
 	next_incoming_index: peerset::IncomingIndex,
 
 	/// Events to produce from `poll()`.
-	events: SmallVec<[NetworkBehaviourAction<CustomProtoHandlerIn<TMessage>, CustomProtoOut<TMessage>>; 4]>,
+	events: SmallVec<[NetworkBehaviourAction<CustomProtoHandlerIn<B>, CustomProtoOut<B>>; 4]>,
 
 	/// Marker to pin the generics.
 	marker: PhantomData<TSubstream>,
@@ -186,7 +188,7 @@ struct IncomingPeer {
 
 /// Event that can be emitted by the `CustomProto`.
 #[derive(Debug)]
-pub enum CustomProtoOut<TMessage> {
+pub enum CustomProtoOut<B: BlockT> {
 	/// Opened a custom protocol with the remote.
 	CustomProtocolOpen {
 		/// Version of the protocol that has been opened.
@@ -210,7 +212,7 @@ pub enum CustomProtoOut<TMessage> {
 		/// Id of the peer the message came from.
 		peer_id: PeerId,
 		/// Message that has been received.
-		message: TMessage,
+		message: Message<B>,
 	},
 
 	/// The substream used by the protocol is pretty large. We should print avoid sending more
@@ -219,11 +221,11 @@ pub enum CustomProtoOut<TMessage> {
 		/// Id of the peer which is clogged.
 		peer_id: PeerId,
 		/// Copy of the messages that are within the buffer, for further diagnostic.
-		messages: Vec<TMessage>,
+		messages: Vec<Message<B>>,
 	},
 }
 
-impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
+impl<B: BlockT, TSubstream> CustomProto<B, TSubstream> {
 	/// Creates a `CustomProtos`.
 	pub fn new(
 		protocol: impl Into<ProtocolId>,
@@ -347,7 +349,8 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 	///
 	/// Also note that even we have a valid open substream, it may in fact be already closed
 	/// without us knowing, in which case the packet will not be received.
-	pub fn send_packet(&mut self, target: &PeerId, message: TMessage) {
+	pub fn send_packet(&mut self, target: &PeerId, message: Message<B>)
+	where B: BlockT {
 		if !self.is_open(target) {
 			return;
 		}
@@ -603,7 +606,7 @@ impl<TMessage, TSubstream> CustomProto<TMessage, TSubstream> {
 	}
 }
 
-impl<TMessage, TSubstream> DiscoveryNetBehaviour for CustomProto<TMessage, TSubstream> {
+impl<B: BlockT, TSubstream> DiscoveryNetBehaviour for CustomProto<B, TSubstream> {
 	fn add_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
 		self.peerset.discovered(peer_ids.into_iter().map(|peer_id| {
 			debug!(target: "sub-libp2p", "PSM <= Discovered({:?})", peer_id);
@@ -612,13 +615,13 @@ impl<TMessage, TSubstream> DiscoveryNetBehaviour for CustomProto<TMessage, TSubs
 	}
 }
 
-impl<TMessage, TSubstream> NetworkBehaviour for CustomProto<TMessage, TSubstream>
+impl<B, TSubstream> NetworkBehaviour for CustomProto<B, TSubstream>
 where
 	TSubstream: AsyncRead + AsyncWrite,
-	TMessage: CustomMessage,
+	B: BlockT,
 {
-	type ProtocolsHandler = CustomProtoHandlerProto<TMessage, TSubstream>;
-	type OutEvent = CustomProtoOut<TMessage>;
+	type ProtocolsHandler = CustomProtoHandlerProto<B, TSubstream>;
+	type OutEvent = CustomProtoOut<B>;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
 		CustomProtoHandlerProto::new(self.protocol.clone())
@@ -816,7 +819,7 @@ where
 	fn inject_node_event(
 		&mut self,
 		source: PeerId,
-		event: CustomProtoHandlerOut<TMessage>,
+		event: CustomProtoHandlerOut<B>,
 	) {
 		match event {
 			CustomProtoHandlerOut::CustomProtocolClosed { reason } => {
@@ -945,7 +948,7 @@ where
 		_params: &mut impl PollParameters,
 	) -> Async<
 		NetworkBehaviourAction<
-			CustomProtoHandlerIn<TMessage>,
+			CustomProtoHandlerIn<B>,
 			Self::OutEvent,
 		>,
 	> {

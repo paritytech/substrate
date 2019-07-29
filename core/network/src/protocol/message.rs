@@ -125,7 +125,6 @@ pub struct RemoteReadResponse {
 
 /// Generic types.
 pub mod generic {
-	use crate::custom_proto::CustomMessage;
 	use parity_codec::{Encode, Decode};
 	use runtime_primitives::Justification;
 	use crate::config::Roles;
@@ -208,18 +207,6 @@ pub mod generic {
 		/// Chain-specific message.
 		#[codec(index = "255")]
 		ChainSpecific(Vec<u8>),
-	}
-
-	impl<Header, Hash, Number, Extrinsic> CustomMessage for Message<Header, Hash, Number, Extrinsic>
-		where Self: Decode + Encode
-	{
-		fn into_bytes(self) -> Vec<u8> {
-			self.encode()
-		}
-
-		fn from_bytes(bytes: &[u8]) -> Result<Self, ()> {
-			Decode::decode(&mut &bytes[..]).ok_or(())
-		}
 	}
 
 	/// Status sent on connection.
