@@ -1063,21 +1063,21 @@ pub trait OpaqueKeys: Clone {
 struct TrailingZeroInput<'a>(&'a [u8]);
 impl<'a> codec::Input for TrailingZeroInput<'a> {
 	fn remaining_len(&mut self) -> Result<usize, codec::Error> {
-		use codec::Input;
-		self.0.remaining_len()
+		// TODO TODO: this might not be super correct: remaining_len change during execution
+		// Also this gives attack possibility no ?
+		Ok(u32::max_value() as usize)
 	}
 
 	fn read(&mut self, into: &mut [u8]) -> Result<(), codec::Error> {
-		// let len = into.len().min(self.0.len());
-		// into[..len].copy_from_slice(&self.0[..len]);
-		// TODO TODO: into len must be less or equal to input len!
-		// for i in &mut into[len..] {
-		// 	*i = 0;
-		// }
-		// self.0 = &self.0[len..];
-		// into.len()
+		// TODO TODO: inconsistent with remaining_len
+		let len = into.len().min(self.0.len());
+		into[..len].copy_from_slice(&self.0[..len]);
+		for i in &mut into[len..] {
+			*i = 0;
+		}
+		self.0 = &self.0[len..];
 
-		self.0.read(into)
+		Ok(())
 	}
 }
 
@@ -1116,18 +1116,16 @@ pub trait TypeId {
 /// fill AccountId.
 impl<T: Encode + Decode + Default, Id: Encode + Decode + TypeId> AccountIdConversion<T> for Id {
 	fn into_sub_account<S: Encode>(&self, sub: S) -> T {
-		// TODO TODO: I can't understand that
-		Default::default()
-		// (Id::TYPE_ID, self, sub).using_encoded(|b|
-		// 	T::decode(&mut TrailingZeroInput(b))
-		// ).unwrap_or_default()
+		(Id::TYPE_ID, self, sub).using_encoded(|b|
+			T::decode(&mut TrailingZeroInput(b))
+		).unwrap_or_default()
+
 	}
 
 	fn try_from_sub_account<S: Decode>(x: &T) -> Option<(Self, S)> {
 		x.using_encoded(|d| {
 			if &d[0..4] != Id::TYPE_ID { return None }
 			let mut cursor = &d[4..];
-			// TODO TODO: maybe better error
 			let result = Decode::decode(&mut cursor).ok()?;
 			if cursor.iter().all(|x| *x == 0) {
 				Some(result)

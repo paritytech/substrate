@@ -164,7 +164,10 @@ impl TestNetFactory for BabeTestNet {
 #[test]
 fn can_serialize_block() {
 	let _ = env_logger::try_init();
-	assert_eq!(BabePreDigest::decode(&mut &b""[..]).err().unwrap().what(), "TODO TODO");
+	assert_eq!(
+		BabePreDigest::decode(&mut &b""[..]).err().unwrap().what(),
+		"Error decoding field RawBabePreDigest.slot_number"
+	);
 }
 
 #[test]

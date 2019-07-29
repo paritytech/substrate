@@ -1269,8 +1269,11 @@ impl WasmExecutor {
 		method: &str,
 		data: &[u8],
 	) -> Result<Vec<u8>> {
+		dbg!();
 		let module = ::wasmi::Module::from_buffer(code)?;
+		dbg!();
 		let module = self.prepare_module(ext, heap_pages, &module)?;
+		dbg!();
 		self.call_in_wasm_module(ext, &module, method, data)
 	}
 
@@ -1353,6 +1356,7 @@ impl WasmExecutor {
 		create_parameters: F,
 		filter_result: FR,
 	) -> Result<R> {
+		dbg!();
 		// extract a reference to a linear memory, optional reference to a table
 		// and then initialize FunctionExecutor.
 		let memory = Self::get_mem_instance(module_instance)?;
@@ -1362,18 +1366,22 @@ impl WasmExecutor {
 
 		let low = memory.lowest_used();
 		let used_mem = memory.used_size();
+		dbg!();
 		let mut fec = FunctionExecutor::new(memory.clone(), table, ext)?;
+		dbg!();
 		let parameters = create_parameters(&mut |data: &[u8]| {
 			let offset = fec.heap.allocate(data.len() as u32)?;
 			memory.set(offset, &data)?;
 			Ok(offset)
 		})?;
+		dbg!();
 
 		let result = module_instance.invoke_export(
 			method,
 			&parameters,
 			&mut fec
 		);
+		dbg!();
 		let result = match result {
 			Ok(val) => match filter_result(val, &memory)? {
 				Some(val) => Ok(val),
@@ -1384,14 +1392,18 @@ impl WasmExecutor {
 				Err(e.into())
 			},
 		};
+		dbg!();
 
 		// cleanup module instance for next use
 		let new_low = memory.lowest_used();
+		dbg!();
 		if new_low < low {
 			memory.zero(new_low as usize, (low - new_low) as usize)?;
 			memory.reset_lowest_used(low);
 		}
+		dbg!();
 		memory.with_direct_access_mut(|buf| buf.resize(used_mem.0, 0));
+		dbg!();
 		result
 	}
 
