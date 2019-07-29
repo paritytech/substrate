@@ -19,6 +19,7 @@ support = { package = "srml-support", path = "../../srml/support", default-featu
 authorship = { package = "srml-authorship", path = "../../srml/authorship", default-features = false }
 babe = { package = "srml-babe", path = "../../srml/babe", default-features = false }
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../core/consensus/babe/primitives", default-features = false }
+consensus-primitives = { package = "substrate-consensus-common-primitives", path = "../../core/consensus/common/primitives", default-features = false }
 balances = { package = "srml-balances", path = "../../srml/balances", default-features = false }
 contracts = { package = "srml-contracts", path = "../../srml/contracts", default-features = false }
 collective = { package = "srml-collective", path = "../../srml/collective", default-features = false }
@@ -57,6 +58,7 @@ std = [
 	"authorship/std",
 	"babe/std",
 	"babe-primitives/std",
+	"consensus-primitives/std",
 	"balances/std",
 	"contracts/std",
 	"collective/std",

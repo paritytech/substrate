@@ -2365,6 +2365,7 @@ dependencies = [
  "srml-treasury 2.0.0",
  "substrate-client 2.0.0",
  "substrate-consensus-babe-primitives 2.0.0",
+ "substrate-consensus-common-primitives 2.0.0",
  "substrate-keyring 2.0.0",
  "substrate-offchain-primitives 2.0.0",
  "substrate-primitives 2.0.0",
@@ -4383,6 +4384,16 @@ dependencies = [
  "substrate-inherents 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-test-runtime-client 2.0.0",
+]
+
+[[package]]
+name = "substrate-consensus-common-primitives"
+version = "2.0.0"
+dependencies = [
+ "parity-codec 4.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 2.0.0",
+ "sr-std 2.0.0",
+ "substrate-client 2.0.0",
 ]
 
 [[package]]
