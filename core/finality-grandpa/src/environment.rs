@@ -96,7 +96,7 @@ impl<Block: BlockT> Encode for CompletedRounds<Block> {
 }
 
 impl<Block: BlockT> Decode for CompletedRounds<Block> {
-	fn decode<I: parity_scale_codec::Input>(value: &mut I) -> Result<Self, codec::Error> {
+	fn decode<I: codec::Input>(value: &mut I) -> Result<Self, codec::Error> {
 		<(Vec<CompletedRound<Block>>, u64, Vec<AuthorityId>)>::decode(value)
 			.map(|(rounds, set_id, voters)| CompletedRounds {
 				rounds: rounds.into(),
