@@ -31,7 +31,7 @@ use tel::TelemetryEndpoints;
 
 /// Service configuration.
 #[derive(Clone)]
-pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
+pub struct Configuration<C, G> {
 	/// Implementation name
 	pub impl_name: &'static str,
 	/// Implementation version
