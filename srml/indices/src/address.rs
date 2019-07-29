@@ -126,7 +126,7 @@ impl<AccountId, AccountIndex> Default for Address<AccountId, AccountIndex> where
 
 #[cfg(test)]
 mod tests {
-	use crate::{Encode, Decode};
+	use parity_scale_codec::{Encode, Decode};
 
 	type Address = super::Address<[u8; 8], u32>;
 	fn index(i: u32) -> Address { super::Address::Index(i) }

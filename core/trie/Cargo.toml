@@ -21,7 +21,7 @@ memory-db = { version = "0.14.0", default-features = false }
 substrate-primitives = { path = "../primitives", default-features = false }
 
 [dev-dependencies]
-trie-bench = { version = "0.14.0" }
+trie-bench = { version = "0.14.0", path = "/home/thiolliere/Developpement/trie/test-support/trie-bench" }
 trie-standardmap = { version = "0.14.0" }
 keccak-hasher = { version = "0.14.0" }
 criterion = "0.2"
