@@ -339,6 +339,8 @@ fn sync_after_fork_works() {
 	(net.peers()[1].blockchain_canon_equals(peer1));
 	(net.peers()[2].blockchain_canon_equals(peer1));
 }
+
+#[test]
 fn syncs_all_forks() {
 	let _ = ::env_logger::try_init();
 	let mut runtime = current_thread::Runtime::new().unwrap();
@@ -371,6 +373,8 @@ fn own_blocks_are_announced() {
 	assert!(net.peers()[1].blockchain_canon_equals(peer0));
 	(net.peers()[2].blockchain_canon_equals(peer0));
 }
+
+#[test]
 fn blocks_are_not_announced_by_light_nodes() {
 	let _ = ::env_logger::try_init();
 	let mut runtime = current_thread::Runtime::new().unwrap();

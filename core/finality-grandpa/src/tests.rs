@@ -112,14 +112,12 @@ impl TestNetFactory for GrandpaTestNet {
 			PeerData,
 		)
 	{
-		let client = peer.client();
-		let backend = self.backend();
 		match client {
 			PeersClient::Full(ref client) => {
 				let (import, link) = block_import(
 					client.clone(),
 					Arc::new(self.test_config.clone()),
-					peer.select_chain().expect("Full Client has select chain"),
+					LongestChain::new(self.backend()),
 				).expect("Could not create block import for fresh peer.");
 				let justification_import = Box::new(import.clone());
 				let block_import = Box::new(import);
@@ -958,9 +956,8 @@ fn allows_reimporting_change_blocks() {
 	let api = TestApi::new(voters);
 	let mut net = GrandpaTestNet::new(api.clone(), 3);
 
-	let peer = net.peer(0);
-	let client = peer.client().clone();
-	let (mut block_import, ..) = net.make_block_import(peer);
+	let client = net.peer(0).client().clone();
+	let (mut block_import, ..) = net.make_block_import(client);
 
 	let full_client = client.as_full().unwrap();
 	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
@@ -1008,9 +1005,8 @@ fn test_bad_justification() {
 	let api = TestApi::new(voters);
 	let mut net = GrandpaTestNet::new(api.clone(), 3);
 
-	let peer = net.peer(0);
-	let client = peer.client().clone();
-	let (mut block_import, ..) = net.make_block_import(peer);
+	let client = net.peer(0).client().clone();
+	let (mut block_import, ..) = net.make_block_import(client);
 
 	let full_client = client.as_full().expect("only full clients are used in test");
 	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
@@ -1088,7 +1084,7 @@ fn voter_persists_its_votes() {
 		let client = client.clone();
 
 		let voter = future::loop_fn(voter_rx, move |rx| {
-			let (_block_import, _, _, _, link) = net.lock().make_block_import(peer);
+			let (_block_import, _, _, _, link) = net.lock().make_block_import(client);
 			let link = link.lock().take().unwrap();
 
 			let grandpa_params = GrandpaParams {
@@ -1152,7 +1148,7 @@ fn voter_persists_its_votes() {
 		};
 
 		let set_state = {
-			let (_, _, _, _, link) = net.lock().make_block_import(peer);
+			let (_, _, _, _, link) = net.lock().make_block_import(client);
 			let LinkHalf { persistent_data, .. } = link.lock().take().unwrap();
 			let PersistentData { set_state, .. } = persistent_data;
 			set_state
