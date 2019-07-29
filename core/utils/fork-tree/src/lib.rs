@@ -228,7 +228,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 			let node = root.find_node_where(hash, number, is_descendent_of, predicate)?;
 
 			// found the node, early exit
-			if node.is_some() {
+			if let Some(node) = node {
 				return Ok(node);
 			}
 		}
@@ -498,7 +498,7 @@ mod node_implementation {
 			number: &N,
 			is_descendent_of: &F,
 			predicate: &P,
-		) -> Result<Option<&Node<H, N, V>>, Error<E>>
+		) -> Result<Option<Option<&Node<H, N, V>>>, Error<E>>
 			where E: std::error::Error,
 				  F: Fn(&H, &H) -> Result<bool, E>,
 				  P: Fn(&V) -> bool,
@@ -519,10 +519,18 @@ mod node_implementation {
 			}
 
 			// node not found in any of the descendents, if the node we're
-			// searching for is a descendent of this node and it passes the
-			// predicate, then it is this one.
-			if predicate(&self.data) && is_descendent_of(&self.hash, hash)? {
-				Ok(Some(self))
+			// searching for is a descendent of this node then we will stop the
+			// search here, since there aren't any more children and we found
+			// the correct node so we don't want to backtrack.
+			if is_descendent_of(&self.hash, hash)? {
+				// if the predicate passes we return the node
+				if predicate(&self.data) {
+					Ok(Some(Some(self)))
+
+				// otherwise we stop the search returning `None`
+				} else {
+					Ok(Some(None))
+				}
 			} else {
 				Ok(None)
 			}
@@ -1032,5 +1040,39 @@ mod test {
 			tree.iter().map(|(hash, _, _)| *hash).collect::<Vec<_>>(),
 			vec!["C", "D", "E"],
 		);
+	}
+
+	#[test]
+	fn find_node_doesnt_backtrack_after_finding_highest_descending_node() {
+		let mut tree = ForkTree::new();
+
+		//
+		// A - B
+		//  \
+		//   — C
+		//
+		let is_descendent_of = |base: &&str, block: &&str| -> Result<bool, TestError> {
+			match (*base, *block) {
+				("A", b) => Ok(b == "B" || b == "C" || b == "D"),
+				("B", b) | ("C", b) => Ok(b == "D"),
+				("0", _) => Ok(true),
+				_ => Ok(false),
+			}
+		};
+
+		tree.import("A", 1, 1, &is_descendent_of).unwrap();
+		tree.import("B", 2, 4, &is_descendent_of).unwrap();
+		tree.import("C", 2, 4, &is_descendent_of).unwrap();
+
+		// when searching the tree we reach both node `B` and `C`, but the
+		// predicate doesn't pass. still, we should not backtrack to node `A`.
+		let node = tree.find_node_where(
+			&"D",
+			&3,
+			&is_descendent_of,
+			&|data| *data < 3,
+		).unwrap();
+
+		assert_eq!(node, None);
 	}
 }

@@ -32,7 +32,6 @@ use keyring::sr25519::Keyring;
 use super::generic::DigestItem;
 use client::BlockchainEvents;
 use test_client;
-use futures::Async;
 use log::debug;
 use std::{time::Duration, borrow::Borrow, cell::RefCell};
 type Item = generic::DigestItem<Hash>;
@@ -53,7 +52,7 @@ impl Environment<TestBlock> for DummyFactory {
 	type Proposer = DummyProposer;
 	type Error = Error;
 
-	fn init(&self, parent_header: &<TestBlock as BlockT>::Header)
+	fn init(&mut self, parent_header: &<TestBlock as BlockT>::Header)
 		-> Result<DummyProposer, Error>
 	{
 		Ok(DummyProposer(parent_header.number + 1, self.0.clone()))
@@ -62,10 +61,15 @@ impl Environment<TestBlock> for DummyFactory {
 
 impl Proposer<TestBlock> for DummyProposer {
 	type Error = Error;
-	type Create = Result<TestBlock, Error>;
+	type Create = future::Ready<Result<TestBlock, Error>>;
 
-	fn propose(&self, _: InherentData, digests: DigestFor<TestBlock>, _: Duration) -> Result<TestBlock, Error> {
-		self.1.new_block(digests).unwrap().bake().map_err(|e| e.into())
+	fn propose(
+		&mut self,
+		_: InherentData,
+		digests: DigestFor<TestBlock>,
+		_: Duration,
+	) -> Self::Create {
+		future::ready(self.1.new_block(digests).unwrap().bake().map_err(|e| e.into()))
 	}
 }
 
@@ -198,12 +202,11 @@ fn run_one_test() {
 	let mut runtime = current_thread::Runtime::new().unwrap();
 	for (peer_id, key) in peers {
 		let client = net.lock().peer(*peer_id).client().as_full().unwrap();
-		let environ = Arc::new(DummyFactory(client.clone()));
+		let environ = DummyFactory(client.clone());
 		import_notifications.push(
 			client.import_notification_stream()
-				.map(|v| Ok::<_, ()>(v)).compat()
-				.take_while(|n| Ok(n.header.number() < &5))
-				.for_each(move |_| Ok(()))
+				.take_while(|n| future::ready(!(n.origin != BlockOrigin::Own && n.header.number() < &5)))
+				.for_each(move |_| future::ready(()))
 		);
 
 		let config = Config::get_or_compute(&*client)
@@ -224,7 +227,7 @@ fn run_one_test() {
 			block_import: client.clone(),
 			select_chain,
 			client,
-			env: environ.clone(),
+			env: environ,
 			sync_oracle: DummyOracle,
 			inherent_data_providers,
 			force_authoring: false,
@@ -232,11 +235,13 @@ fn run_one_test() {
 		}).expect("Starts babe"));
 	}
 
-	// wait for all finalized on each.
-	let wait_for = futures::future::join_all(import_notifications);
-
-	let drive_to_completion = futures::future::poll_fn(|| { net.lock().poll(); Ok(Async::NotReady) });
-	let _ = runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
+	runtime.spawn(futures01::future::poll_fn(move || {
+		net.lock().poll();
+		Ok::<_, ()>(futures01::Async::NotReady::<()>)
+	}));
+	
+	runtime.block_on(future::join_all(import_notifications)
+		.map(|_| Ok::<(), ()>(())).compat()).unwrap();
 }
 
 #[test]
@@ -309,17 +314,17 @@ fn sig_is_not_pre_digest() {
 #[test]
 fn can_author_block() {
 	let _ = env_logger::try_init();
-	let randomness = &[];
 	let (pair, _) = sr25519::Pair::generate();
 	let mut i = 0;
 	let epoch = Epoch {
-		authorities: vec![(pair.public(), 0)],
+		start_slot: 0,
+		authorities: vec![(pair.public(), 1)],
 		randomness: [0; 32],
 		epoch_index: 1,
 		duration: 100,
 	};
 	loop {
-		match claim_slot(randomness, i, 0, epoch.clone(), &pair, u64::MAX / 10) {
+		match claim_slot(i, epoch.clone(), &pair, (3, 10)) {
 			None => i += 1,
 			Some(s) => {
 				debug!(target: "babe", "Authored block {:?}", s);

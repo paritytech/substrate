@@ -16,8 +16,9 @@ runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitiv
 offchain-primitives = { package = "substrate-offchain-primitives", path = "../../core/offchain/primitives", default-features = false }
 version = { package = "sr-version", path = "../../core/sr-version", default-features = false }
 support = { package = "srml-support", path = "../../srml/support", default-features = false }
-aura = { package = "srml-aura", path = "../../srml/aura", default-features = false }
 authorship = { package = "srml-authorship", path = "../../srml/authorship", default-features = false }
+babe = { package = "srml-babe", path = "../../srml/babe", default-features = false }
+babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../core/consensus/babe/primitives", default-features = false }
 balances = { package = "srml-balances", path = "../../srml/balances", default-features = false }
 contracts = { package = "srml-contracts", path = "../../srml/contracts", default-features = false }
 collective = { package = "srml-collective", path = "../../srml/collective", default-features = false }
@@ -35,7 +36,6 @@ treasury = { package = "srml-treasury", path = "../../srml/treasury", default-fe
 sudo = { package = "srml-sudo", path = "../../srml/sudo", default-features = false }
 im-online = { package = "srml-im-online", path = "../../srml/im-online", default-features = false }
 node-primitives = { path = "../primitives", default-features = false }
-consensus_aura = { package = "substrate-consensus-aura-primitives", path = "../../core/consensus/aura/primitives", default-features = false }
 rustc-hex = { version = "2.0", optional = true }
 serde = { version = "1.0", optional = true }
 substrate-keyring = { path = "../../core/keyring", optional = true }
@@ -54,8 +54,9 @@ std = [
 	"rstd/std",
 	"runtime_primitives/std",
 	"support/std",
-	"aura/std",
 	"authorship/std",
+	"babe/std",
+	"babe-primitives/std",
 	"balances/std",
 	"contracts/std",
 	"collective/std",
@@ -76,7 +77,6 @@ std = [
 	"serde",
 	"safe-mix/std",
 	"client/std",
-	"consensus_aura/std",
 	"rustc-hex",
 	"substrate-keyring",
 	"offchain-primitives/std",

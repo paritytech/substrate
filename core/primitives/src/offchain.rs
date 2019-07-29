@@ -384,7 +384,7 @@ pub trait Externalities {
 		&mut self,
 		kind: StorageKind,
 		key: &[u8],
-		old_value: &[u8],
+		old_value: Option<&[u8]>,
 		new_value: &[u8],
 	) -> bool;
 
@@ -514,7 +514,7 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		&mut self,
 		kind: StorageKind,
 		key: &[u8],
-		old_value: &[u8],
+		old_value: Option<&[u8]>,
 		new_value: &[u8],
 	) -> bool {
 		(&mut **self).local_storage_compare_and_set(kind, key, old_value, new_value)

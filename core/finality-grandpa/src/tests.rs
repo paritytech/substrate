@@ -23,7 +23,7 @@ use network::config::{ProtocolConfig, Roles, BoxFinalityProofRequestBuilder};
 use parking_lot::Mutex;
 use futures03::{StreamExt as _, TryStreamExt as _};
 use tokio::runtime::current_thread;
-use keyring::ed25519::{Keyring as AuthorityKeyring};
+use keyring::Ed25519Keyring;
 use client::{
 	error::Result,
 	runtime_api::{Core, RuntimeVersion, ApiExt},
@@ -342,7 +342,7 @@ impl AuthoritySetForFinalityChecker<Block> for TestApi {
 
 const TEST_GOSSIP_DURATION: Duration = Duration::from_millis(500);
 
-fn make_ids(keys: &[AuthorityKeyring]) -> Vec<(substrate_primitives::ed25519::Public, u64)> {
+fn make_ids(keys: &[Ed25519Keyring]) -> Vec<(substrate_primitives::ed25519::Public, u64)> {
 	keys.iter()
 		.map(|key| AuthorityId::from_raw(key.to_raw_public()))
 		.map(|id| (id, 1))
@@ -355,7 +355,7 @@ fn run_to_completion_with<F>(
 	runtime: &mut current_thread::Runtime,
 	blocks: u64,
 	net: Arc<Mutex<GrandpaTestNet>>,
-	peers: &[AuthorityKeyring],
+	peers: &[Ed25519Keyring],
 	with: F,
 ) -> u64 where
 	F: FnOnce(current_thread::Handle) -> Option<Box<dyn Future<Item=(), Error=()>>>
@@ -437,7 +437,7 @@ fn run_to_completion(
 	runtime: &mut current_thread::Runtime,
 	blocks: u64,
 	net: Arc<Mutex<GrandpaTestNet>>,
-	peers: &[AuthorityKeyring]
+	peers: &[Ed25519Keyring]
 ) -> u64 {
 	run_to_completion_with(runtime, blocks, net, peers, |_| None)
 }
@@ -446,7 +446,7 @@ fn run_to_completion(
 fn finalize_3_voters_no_observers() {
 	let _ = env_logger::try_init();
 	let mut runtime = current_thread::Runtime::new().unwrap();
-	let peers = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
+	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let voters = make_ids(peers);
 
 	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3);
@@ -470,7 +470,7 @@ fn finalize_3_voters_no_observers() {
 fn finalize_3_voters_1_full_observer() {
 	let mut runtime = current_thread::Runtime::new().unwrap();
 
-	let peers = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
+	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let voters = make_ids(peers);
 
 	let mut net = GrandpaTestNet::new(TestApi::new(voters), 4);
@@ -533,24 +533,24 @@ fn finalize_3_voters_1_full_observer() {
 fn transition_3_voters_twice_1_full_observer() {
 	let _ = env_logger::try_init();
 	let peers_a = &[
-		AuthorityKeyring::Alice,
-		AuthorityKeyring::Bob,
-		AuthorityKeyring::Charlie,
+		Ed25519Keyring::Alice,
+		Ed25519Keyring::Bob,
+		Ed25519Keyring::Charlie,
 	];
 
 	let peers_b = &[
-		AuthorityKeyring::Dave,
-		AuthorityKeyring::Eve,
-		AuthorityKeyring::Ferdie,
+		Ed25519Keyring::Dave,
+		Ed25519Keyring::Eve,
+		Ed25519Keyring::Ferdie,
 	];
 
 	let peers_c = &[
-		AuthorityKeyring::Alice,
-		AuthorityKeyring::Eve,
-		AuthorityKeyring::Two,
+		Ed25519Keyring::Alice,
+		Ed25519Keyring::Eve,
+		Ed25519Keyring::Two,
 	];
 
-	let observer = &[AuthorityKeyring::One];
+	let observer = &[Ed25519Keyring::One];
 
 	let genesis_voters = make_ids(peers_a);
 
@@ -700,7 +700,7 @@ fn transition_3_voters_twice_1_full_observer() {
 #[test]
 fn justification_is_emitted_when_consensus_data_changes() {
 	let mut runtime = current_thread::Runtime::new().unwrap();
-	let peers = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
+	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let mut net = GrandpaTestNet::new(TestApi::new(make_ids(peers)), 3);
 
 	// import block#1 WITH consensus data change
@@ -718,7 +718,7 @@ fn justification_is_emitted_when_consensus_data_changes() {
 #[test]
 fn justification_is_generated_periodically() {
 	let mut runtime = current_thread::Runtime::new().unwrap();
-	let peers = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
+	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let voters = make_ids(peers);
 
 	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3);
@@ -757,8 +757,8 @@ fn consensus_changes_works() {
 #[test]
 fn sync_justifications_on_change_blocks() {
 	let mut runtime = current_thread::Runtime::new().unwrap();
-	let peers_a = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
-	let peers_b = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob];
+	let peers_a = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
+	let peers_b = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob];
 	let voters = make_ids(peers_b);
 
 	// 4 peers, 3 of them are authorities and participate in grandpa
@@ -813,13 +813,13 @@ fn finalizes_multiple_pending_changes_in_order() {
 	let _ = env_logger::try_init();
 	let mut runtime = current_thread::Runtime::new().unwrap();
 
-	let peers_a = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
-	let peers_b = &[AuthorityKeyring::Dave, AuthorityKeyring::Eve, AuthorityKeyring::Ferdie];
-	let peers_c = &[AuthorityKeyring::Dave, AuthorityKeyring::Alice, AuthorityKeyring::Bob];
+	let peers_a = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
+	let peers_b = &[Ed25519Keyring::Dave, Ed25519Keyring::Eve, Ed25519Keyring::Ferdie];
+	let peers_c = &[Ed25519Keyring::Dave, Ed25519Keyring::Alice, Ed25519Keyring::Bob];
 
 	let all_peers = &[
-		AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie,
-		AuthorityKeyring::Dave, AuthorityKeyring::Eve, AuthorityKeyring::Ferdie,
+		Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie,
+		Ed25519Keyring::Dave, Ed25519Keyring::Eve, Ed25519Keyring::Ferdie,
 	];
 	let genesis_voters = make_ids(peers_a);
 
@@ -872,7 +872,7 @@ fn finalizes_multiple_pending_changes_in_order() {
 #[test]
 fn doesnt_vote_on_the_tip_of_the_chain() {
 	let mut runtime = current_thread::Runtime::new().unwrap();
-	let peers_a = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
+	let peers_a = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let voters = make_ids(peers_a);
 	let api = TestApi::new(voters);
 	let mut net = GrandpaTestNet::new(api, 3);
@@ -898,8 +898,14 @@ fn force_change_to_new_set() {
 	let _ = env_logger::try_init();
 	let mut runtime = current_thread::Runtime::new().unwrap();
 	// two of these guys are offline.
-	let genesis_authorities = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie, AuthorityKeyring::One, AuthorityKeyring::Two];
-	let peers_a = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
+	let genesis_authorities = &[
+		Ed25519Keyring::Alice,
+		Ed25519Keyring::Bob,
+		Ed25519Keyring::Charlie,
+		Ed25519Keyring::One,
+		Ed25519Keyring::Two,
+	];
+	let peers_a = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let api = TestApi::new(make_ids(genesis_authorities));
 
 	let voters = make_ids(peers_a);
@@ -950,8 +956,8 @@ fn force_change_to_new_set() {
 
 #[test]
 fn allows_reimporting_change_blocks() {
-	let peers_a = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
-	let peers_b = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob];
+	let peers_a = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
+	let peers_b = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob];
 	let voters = make_ids(peers_a);
 	let api = TestApi::new(voters);
 	let mut net = GrandpaTestNet::new(api.clone(), 3);
@@ -999,8 +1005,8 @@ fn allows_reimporting_change_blocks() {
 
 #[test]
 fn test_bad_justification() {
-	let peers_a = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
-	let peers_b = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob];
+	let peers_a = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
+	let peers_b = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob];
 	let voters = make_ids(peers_a);
 	let api = TestApi::new(voters);
 	let mut net = GrandpaTestNet::new(api.clone(), 3);
@@ -1058,7 +1064,7 @@ fn voter_persists_its_votes() {
 
 	// we have two authorities but we'll only be running the voter for alice
 	// we are going to be listening for the prevotes it casts
-	let peers = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob];
+	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob];
 	let voters = make_ids(peers);
 
 	// alice has a chain with 20 blocks
@@ -1264,7 +1270,7 @@ fn voter_persists_its_votes() {
 fn finalize_3_voters_1_light_observer() {
 	let _ = env_logger::try_init();
 	let mut runtime = current_thread::Runtime::new().unwrap();
-	let authorities = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
+	let authorities = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let voters = make_ids(authorities);
 
 	let mut net = GrandpaTestNet::new(TestApi::new(voters), 4);
@@ -1308,7 +1314,7 @@ fn finality_proof_is_fetched_by_light_client_when_consensus_data_changes() {
 	let _ = ::env_logger::try_init();
 	let mut runtime = current_thread::Runtime::new().unwrap();
 
-	let peers = &[AuthorityKeyring::Alice];
+	let peers = &[Ed25519Keyring::Alice];
 	let mut net = GrandpaTestNet::new(TestApi::new(make_ids(peers)), 1);
 	net.add_light_peer(&GrandpaTestNet::default_config());
 
@@ -1341,20 +1347,20 @@ fn empty_finality_proof_is_returned_to_light_client_when_authority_set_is_differ
 	// two of these guys are offline.
 	let genesis_authorities = if FORCE_CHANGE {
 		vec![
-			AuthorityKeyring::Alice,
-			AuthorityKeyring::Bob,
-			AuthorityKeyring::Charlie,
-			AuthorityKeyring::One,
-			AuthorityKeyring::Two,
+			Ed25519Keyring::Alice,
+			Ed25519Keyring::Bob,
+			Ed25519Keyring::Charlie,
+			Ed25519Keyring::One,
+			Ed25519Keyring::Two,
 		]
 	} else {
 		vec![
-			AuthorityKeyring::Alice,
-			AuthorityKeyring::Bob,
-			AuthorityKeyring::Charlie,
+			Ed25519Keyring::Alice,
+			Ed25519Keyring::Bob,
+			Ed25519Keyring::Charlie,
 		]
 	};
-	let peers_a = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
+	let peers_a = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let api = TestApi::new(make_ids(&genesis_authorities));
 
 	let voters = make_ids(peers_a);
@@ -1401,7 +1407,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 	let _ = env_logger::try_init();
 	let mut runtime = current_thread::Runtime::new().unwrap();
 
-	let peers = &[AuthorityKeyring::Alice, AuthorityKeyring::Bob];
+	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob];
 	let voters = make_ids(peers);
 
 	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3);

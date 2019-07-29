@@ -15,11 +15,12 @@ primitives = { package = "sr-primitives", path = "../../core/sr-primitives", def
 srml-support = { path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 session = { package = "srml-session", path = "../session", default-features = false, features = ["historical"] }
+authorship = { package = "srml-authorship", path = "../authorship", default-features = false }
 
 [dev-dependencies]
 substrate-primitives = { path = "../../core/primitives" }
-timestamp = { package = "srml-timestamp", path = "../timestamp" }
 balances = { package = "srml-balances", path = "../balances" }
+timestamp = { package = "srml-timestamp", path = "../timestamp" }
 rand = "0.6.5"
 
 [features]
@@ -37,4 +38,5 @@ std = [
 	"primitives/std",
 	"session/std",
 	"system/std",
+	"authorship/std",
 ]

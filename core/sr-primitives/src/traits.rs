@@ -166,7 +166,6 @@ impl<T> Convert<T, T> for Identity {
 
 /// A structure that performs standard conversion using the standard Rust conversion traits.
 pub struct ConvertInto;
-
 impl<A, B: From<A>> Convert<A, B> for ConvertInto {
 	fn convert(a: A) -> B { a.into() }
 }
@@ -771,6 +770,9 @@ pub enum DispatchError {
 	/// General error to do with the inability to pay some fees (e.g. account balance too low).
 	Payment,
 
+	/// General error to do with the exhaustion of block resources.
+	Resource,
+
 	/// General error to do with the permissions of the sender.
 	NoPermission,
 
@@ -794,11 +796,12 @@ impl From<DispatchError> for i8 {
 	fn from(e: DispatchError) -> i8 {
 		match e {
 			DispatchError::Payment => -64,
-			DispatchError::NoPermission => -65,
-			DispatchError::BadState => -66,
-			DispatchError::Stale => -67,
-			DispatchError::Future => -68,
-			DispatchError::BadProof => -69,
+			DispatchError::Resource => -65,
+			DispatchError::NoPermission => -66,
+			DispatchError::BadState => -67,
+			DispatchError::Stale => -68,
+			DispatchError::Future => -69,
+			DispatchError::BadProof => -70,
 		}
 	}
 }

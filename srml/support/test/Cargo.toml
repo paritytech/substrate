@@ -12,6 +12,7 @@ srml-support = { version = "2", path = "../", default-features = false }
 inherents = { package = "substrate-inherents", path = "../../../core/inherents", default-features = false }
 primitives = { package = "substrate-primitives", path = "../../../core/primitives", default-features = false }
 trybuild = "1"
+pretty_assertions = "0.6.1"
 
 [features]
 default = ["std"]

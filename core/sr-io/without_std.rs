@@ -1055,14 +1055,27 @@ impl OffchainApi for () {
 		}
 	}
 
-	fn local_storage_compare_and_set(kind: offchain::StorageKind, key: &[u8], old_value: &[u8], new_value: &[u8]) -> bool {
+	fn local_storage_compare_and_set(
+		kind: offchain::StorageKind,
+		key: &[u8],
+		old_value: Option<&[u8]>,
+		new_value: &[u8],
+	) -> bool {
+		let (ptr, len) = match old_value {
+			Some(old_value) => (
+				old_value.as_ptr(),
+				old_value.len() as u32,
+			),
+			None => (0 as *const u8, u32::max_value()),
+		};
+
 		unsafe {
 			ext_local_storage_compare_and_set.get()(
 				kind.into(),
 				key.as_ptr(),
 				key.len() as u32,
-				old_value.as_ptr(),
-				old_value.len() as u32,
+				ptr,
+				len,
 				new_value.as_ptr(),
 				new_value.len() as u32,
 			) == 0
