@@ -46,13 +46,13 @@ use consensus::error::{ErrorKind as CommonErrorKind};
 use consensus::{Authorities, BlockImport, Environment, Proposer as BaseProposer};
 use client::{Client as SubstrateClient, CallExecutor};
 use client::runtime_api::{Core, BlockBuilder as BlockBuilderAPI, OldTxQueue, BlockBuilderError};
-use runtime_primitives::generic::{BlockId, Era, ImportResult, BlockImportParams, BlockOrigin};
-use runtime_primitives::traits::{Block, Header};
-use runtime_primitives::traits::{
+use sr_primitives::generic::{BlockId, Era, ImportResult, BlockImportParams, BlockOrigin};
+use sr_primitives::traits::{Block, Header};
+use sr_primitives::traits::{
 	Block as BlockT, Hash as HashT, Header as HeaderT,
 	BlockNumberToHash, SaturatedConversion
 };
-use runtime_primitives::Justification;
+use sr_primitives::Justification;
 use primitives::{AuthorityId, ed25519, Blake2Hasher, ed25519::LocalizedSignature};
 use srml_system::Trait as SystemT;
 
@@ -982,7 +982,7 @@ impl<N, C, A> consensus::Environment<<C as AuthoringApi>::Block> for ProposerFac
 		authorities: &[AuthorityId],
 		sign_with: Arc<ed25519::Pair>,
 	) -> Result<Self::Proposer, Error> {
-		use runtime_primitives::traits::Hash as HashT;
+		use sr_primitives::traits::Hash as HashT;
 		let parent_hash = parent_header.hash();
 
 		let id = BlockId::hash(parent_hash);
@@ -1061,7 +1061,7 @@ impl<C, A> BaseProposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 	type Evaluate = Box<Future<Item=bool, Error=Error>>;
 
 	fn propose(&self) -> Self::Create {
-		use runtime_primitives::traits::BlakeTwo256;
+		use sr_primitives::traits::BlakeTwo256;
 
 		const MAX_VOTE_OFFLINE_SECONDS: Duration = Duration::from_secs(60);
 
@@ -1237,7 +1237,7 @@ impl<C, A> LocalProposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 		_misbehavior: Vec<(AuthorityId, Misbehavior<<<C as AuthoringApi>::Block as BlockT>::Hash>)>
 	) {
 		use rhododendron::Misbehavior as GenericMisbehavior;
-		use runtime_primitives::bft::{MisbehaviorKind, MisbehaviorReport};
+		use sr_primitives::bft::{MisbehaviorKind, MisbehaviorReport};
 		use node_runtime::{Call, UncheckedExtrinsic, ConsensusCall};
 
 		let mut next_index = {
@@ -1329,7 +1329,7 @@ mod tests {
 	use std::collections::HashSet;
 	use std::marker::PhantomData;
 
-	use runtime_primitives::testing::{Block as GenericTestBlock, Header as TestHeader};
+	use sr_primitives::testing::{Block as GenericTestBlock, Header as TestHeader};
 	use primitives::H256;
 	use keyring::Ed25519Keyring;
 

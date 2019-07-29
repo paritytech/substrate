@@ -24,8 +24,8 @@
 #![recursion_limit="128"]
 
 use rstd::prelude::*;
-use primitives::traits::{Zero, One, StaticLookup, Bounded, Saturating};
-use primitives::weights::SimpleDispatchInfo;
+use sr_primitives::traits::{Zero, One, StaticLookup, Bounded, Saturating};
+use sr_primitives::weights::SimpleDispatchInfo;
 use runtime_io::print;
 use srml_support::{
 	StorageValue, StorageMap,
@@ -1116,8 +1116,8 @@ mod tests {
 	use std::cell::RefCell;
 	use srml_support::{assert_ok, assert_err, assert_noop, parameter_types};
 	use runtime_io::with_externalities;
-	use substrate_primitives::{H256, Blake2Hasher};
-	use primitives::{
+	use primitives::{H256, Blake2Hasher};
+	use sr_primitives::{
 		Perbill, traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header, BuildStorage
 	};
 	use crate as elections;
@@ -1234,8 +1234,8 @@ mod tests {
 		type DecayRatio = DecayRatio;
 	}
 
-	pub type Block = primitives::generic::Block<Header, UncheckedExtrinsic>;
-	pub type UncheckedExtrinsic = primitives::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
+	pub type Block = sr_primitives::generic::Block<Header, UncheckedExtrinsic>;
+	pub type UncheckedExtrinsic = sr_primitives::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
 
 	srml_support::construct_runtime!(
 		pub enum Test where

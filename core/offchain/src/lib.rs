@@ -45,7 +45,7 @@ use primitives::{
 	ExecutionContext,
 	crypto,
 };
-use runtime_primitives::{
+use sr_primitives::{
 	generic::BlockId,
 	traits::{self, ProvideRuntimeApi},
 };

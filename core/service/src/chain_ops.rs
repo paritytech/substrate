@@ -21,8 +21,8 @@ use futures::prelude::*;
 use futures03::TryFutureExt as _;
 use log::{info, warn};
 
-use runtime_primitives::generic::{SignedBlock, BlockId};
-use runtime_primitives::traits::{SaturatedConversion, Zero, One, Block, Header, NumberFor};
+use sr_primitives::generic::{SignedBlock, BlockId};
+use sr_primitives::traits::{SaturatedConversion, Zero, One, Block, Header, NumberFor};
 use consensus_common::import_queue::{ImportQueue, IncomingBlock, Link, BlockImportError, BlockImportResult};
 use network::message;
 

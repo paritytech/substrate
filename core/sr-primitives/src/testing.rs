@@ -25,9 +25,9 @@ use crate::traits::{
 };
 use crate::{generic, KeyTypeId};
 use crate::weights::{GetDispatchInfo, DispatchInfo};
-pub use substrate_primitives::H256;
-use substrate_primitives::U256;
-use substrate_primitives::ed25519::{Public as AuthorityId};
+pub use primitives::H256;
+use primitives::U256;
+use primitives::ed25519::{Public as AuthorityId};
 use crate::transaction_validity::TransactionValidity;
 
 /// Authority Id

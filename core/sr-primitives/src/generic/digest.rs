@@ -105,7 +105,7 @@ pub enum DigestItem<Hash> {
 impl<Hash: Encode> ::serde::Serialize for DigestItem<Hash> {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
 		self.using_encoded(|bytes| {
-			::substrate_primitives::bytes::serialize(bytes, seq)
+			::primitives::bytes::serialize(bytes, seq)
 		})
 	}
 }

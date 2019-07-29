@@ -10,7 +10,7 @@ futures = "0.1"
 log = "0.4"
 parking_lot = "0.8.0"
 serde = { version = "1.0", features = ["derive"] }
-substrate-primitives = { path = "../../primitives" }
+primitives = { package = "substrate-primitives",  path = "../../primitives" }
 sr-primitives = { path = "../../sr-primitives" }
 
 [dev-dependencies]

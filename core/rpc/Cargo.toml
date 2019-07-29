@@ -23,7 +23,7 @@ network = { package = "substrate-network", path = "../network" }
 primitives = { package = "substrate-primitives", path = "../primitives" }
 state_machine = { package = "substrate-state-machine", path = "../state-machine" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../transaction-pool" }
-runtime_primitives = { package = "sr-primitives", path = "../sr-primitives" }
+sr-primitives = {  path = "../sr-primitives" }
 runtime_version = { package = "sr-version", path = "../sr-version" }
 
 [dev-dependencies]

@@ -29,10 +29,10 @@ use consensus_common::{evaluation};
 use inherents::InherentData;
 use log::{error, info, debug, trace};
 use primitives::{H256, Blake2Hasher, ExecutionContext};
-use runtime_primitives::{ApplyError, generic::BlockId};
-use runtime_primitives::traits::{
-	Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi,
-	DigestFor, BlakeTwo256,
+use sr_primitives::{
+	traits::{Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi, DigestFor, BlakeTwo256},
+	generic::BlockId,
+	ApplyError,
 };
 use transaction_pool::txpool::{self, Pool as TransactionPool};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};

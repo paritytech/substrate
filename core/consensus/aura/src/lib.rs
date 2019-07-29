@@ -46,8 +46,8 @@ use client::{
 	backend::AuxStore,
 };
 
-use runtime_primitives::{generic::{self, BlockId, OpaqueDigestItemId}, Justification};
-use runtime_primitives::traits::{Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi, Zero, Member};
+use sr_primitives::{generic::{self, BlockId, OpaqueDigestItemId}, Justification};
+use sr_primitives::traits::{Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi, Zero, Member};
 
 use primitives::Pair;
 use inherents::{InherentDataProviders, InherentData};
@@ -716,7 +716,7 @@ mod tests {
 	use consensus_common::NoNetwork as DummyOracle;
 	use network::test::*;
 	use network::test::{Block as TestBlock, PeersClient, PeersFullClient};
-	use runtime_primitives::traits::{Block as BlockT, DigestFor};
+	use sr_primitives::traits::{Block as BlockT, DigestFor};
 	use network::config::ProtocolConfig;
 	use parking_lot::Mutex;
 	use tokio::runtime::current_thread;

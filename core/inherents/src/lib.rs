@@ -44,7 +44,7 @@ use parking_lot::RwLock;
 #[cfg(feature = "std")]
 use std::{sync::Arc, format};
 
-pub use runtime_primitives::RuntimeString;
+pub use sr_primitives::RuntimeString;
 
 /// An identifier for an inherent.
 pub type InherentIdentifier = [u8; 8];

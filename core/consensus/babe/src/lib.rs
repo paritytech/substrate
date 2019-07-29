@@ -27,8 +27,8 @@ use consensus_common::import_queue::{
 	BoxJustificationImport, BoxFinalityProofImport,
 };
 use consensus_common::well_known_cache_keys::Id as CacheKeyId;
-use runtime_primitives::{generic, generic::{BlockId, OpaqueDigestItemId}, Justification};
-use runtime_primitives::traits::{
+use sr_primitives::{generic, generic::{BlockId, OpaqueDigestItemId}, Justification};
+use sr_primitives::traits::{
 	Block as BlockT, Header, DigestItemFor, NumberFor, ProvideRuntimeApi,
 	SimpleBitOps, Zero,
 };

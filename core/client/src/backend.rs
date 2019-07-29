@@ -19,8 +19,8 @@
 use std::collections::HashMap;
 use crate::error;
 use primitives::ChangesTrieConfiguration;
-use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
-use runtime_primitives::traits::{Block as BlockT, NumberFor};
+use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
+use sr_primitives::traits::{Block as BlockT, NumberFor};
 use state_machine::backend::Backend as StateBackend;
 use state_machine::ChangesTrieStorage as StateChangesTrieStorage;
 use consensus::well_known_cache_keys;

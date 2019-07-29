@@ -19,8 +19,8 @@
 use super::*;
 use std::cell::RefCell;
 use srml_support::{impl_outer_origin, parameter_types};
-use substrate_primitives::H256;
-use primitives::{
+use primitives::H256;
+use sr_primitives::{
 	Perbill,
 	traits::{BlakeTwo256, IdentityLookup, ConvertInto},
 	testing::{Header, UintAuthorityId}
@@ -159,7 +159,7 @@ impl Trait for Test {
 #[cfg(feature = "historical")]
 impl crate::historical::Trait for Test {
 	type FullIdentification = u64;
-	type FullIdentificationOf = primitives::traits::ConvertInto;
+	type FullIdentificationOf = sr_primitives::traits::ConvertInto;
 }
 
 pub type System = system::Module<Test>;

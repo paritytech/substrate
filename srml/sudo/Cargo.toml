@@ -16,7 +16,7 @@ system = { package = "srml-system", path = "../system", default-features = false
 
 [dev-dependencies]
 sr-io = { path = "../../core/sr-io", default-features = false }
-substrate-primitives = { path = "../../core/primitives" }
+primitives = { package = "substrate-primitives",  path = "../../core/primitives" }
 
 [features]
 default = ["std"]

@@ -46,9 +46,9 @@ mod tests {
 	use state_machine::{CodeExecutor, Externalities, TestExternalities as CoreTestExternalities};
 	use primitives::{ twox_128, blake2_256, Blake2Hasher, ChangesTrieConfiguration, NeverNativeValue, NativeOrEncoded};
 	use node_primitives::{Hash, BlockNumber, AccountId, Balance, Index};
-	use runtime_primitives::traits::{Header as HeaderT, Hash as HashT, Convert};
-	use runtime_primitives::{generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
-	use runtime_primitives::weights::{WeightMultiplier, GetDispatchInfo};
+	use sr_primitives::traits::{Header as HeaderT, Hash as HashT, Convert};
+	use sr_primitives::{generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
+	use sr_primitives::weights::{WeightMultiplier, GetDispatchInfo};
 	use contracts::ContractAddressFor;
 	use system::{EventRecord, Phase};
 	use node_runtime::{

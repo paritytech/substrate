@@ -19,7 +19,7 @@
 use super::*;
 use runtime_io::with_externalities;
 use phragmen;
-use primitives::traits::OnInitialize;
+use sr_primitives::traits::OnInitialize;
 use srml_support::{assert_ok, assert_noop, assert_eq_uvec, EnumerableStorageMap};
 use mock::*;
 use srml_support::traits::{Currency, ReservableCurrency};

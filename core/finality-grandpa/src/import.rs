@@ -32,13 +32,13 @@ use consensus_common::{
 	SelectChain,
 };
 use fg_primitives::GrandpaApi;
-use runtime_primitives::Justification;
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{
+use sr_primitives::Justification;
+use sr_primitives::generic::BlockId;
+use sr_primitives::traits::{
 	Block as BlockT, DigestFor,
 	Header as HeaderT, NumberFor, ProvideRuntimeApi,
 };
-use substrate_primitives::{H256, Blake2Hasher};
+use primitives::{H256, Blake2Hasher};
 
 use crate::{Error, CommandOrError, NewAuthoritySet, VoterCommand};
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, DelayKind, PendingChange};
