@@ -346,7 +346,7 @@ mod tests {
 		let block_factory = |service: &SyncService<<Factory as ServiceFactory>::FullService>| {
 			let service = service.get();
 			let mut inherent_data = service
-				.config
+				.config()
 				.custom
 				.inherent_data_providers
 				.create_inherent_data()
