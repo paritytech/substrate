@@ -4390,7 +4390,7 @@ dependencies = [
 name = "substrate-consensus-common-primitives"
 version = "2.0.0"
 dependencies = [
- "parity-codec 4.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 4.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
  "substrate-client 2.0.0",
