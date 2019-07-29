@@ -577,6 +577,12 @@ impl<Factory: ServiceFactory> Deref for LightComponents<Factory> {
 	}
 }
 
+impl<Factory: ServiceFactory> DerefMut for LightComponents<Factory> {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.service
+	}
+}
+
 impl<Factory: ServiceFactory> Future for LightComponents<Factory> {
 	type Item = ();
 	type Error = ();
