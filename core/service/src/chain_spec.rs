@@ -54,11 +54,13 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 		match self {
 			GenesisSource::File(path) => {
 				let file = File::open(path).map_err(|e| format!("Error opening spec file: {}", e))?;
-				let genesis: GenesisContainer<G> = json::from_reader(file).map_err(|e| format!("Error parsing spec file: {}", e))?;
+				let genesis: GenesisContainer<G> =
+					json::from_reader(file).map_err(|e| format!("Error parsing spec file: {}", e))?;
 				Ok(genesis.genesis)
 			},
 			GenesisSource::Embedded(buf) => {
-				let genesis: GenesisContainer<G> = json::from_reader(buf.as_ref()).map_err(|e| format!("Error parsing embedded file: {}", e))?;
+				let genesis: GenesisContainer<G> =
+					json::from_reader(buf.as_ref()).map_err(|e| format!("Error parsing embedded file: {}", e))?;
 				Ok(genesis.genesis)
 			},
 			GenesisSource::Factory(f) => Ok(Genesis::Runtime(f())),
