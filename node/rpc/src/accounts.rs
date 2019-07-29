@@ -115,7 +115,7 @@ mod tests {
 	use parity_codec::Decode;
 	use node_testing::{
 		client::{ClientExt, TestClientBuilder, TestClientBuilderExt},
-		keyring::{self, alice},
+		keyring::{self, alice, signed_extra},
 	};
 
 	#[test]
@@ -125,9 +125,9 @@ mod tests {
 		let client = Arc::new(TestClientBuilder::new().build());
 		let pool = Arc::new(Pool::new(Default::default(), transaction_pool::ChainApi::new(client.clone())));
 
-		let new_transaction = |index| {
+		let new_transaction = |extra| {
 			let ex = CheckedExtrinsic {
-				signed: Some((alice().into(), index)),
+				signed: Some((alice().into(), extra)),
 				function: Call::Timestamp(TimestampCall::set(5)),
 			};
 			let xt = keyring::sign(ex, client.genesis_hash().into());
@@ -136,9 +136,9 @@ mod tests {
 			node_primitives::UncheckedExtrinsic::decode(&mut &*encoded).unwrap()
 		};
 		// Populate the pool
-		let ext0 = new_transaction(0);
+		let ext0 = new_transaction(signed_extra(0, 0));
 		pool.submit_one(&BlockId::number(0), ext0).unwrap();
-		let ext1 = new_transaction(1);
+		let ext1 = new_transaction(signed_extra(1, 0));
 		pool.submit_one(&BlockId::number(0), ext1).unwrap();
 
 		let accounts = Accounts::new(client, pool);

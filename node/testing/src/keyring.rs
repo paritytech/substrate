@@ -17,8 +17,9 @@
 //! Test accounts.
 
 use keyring::{AccountKeyring, Sr25519Keyring, Ed25519Keyring};
-use node_primitives::AccountId;
-use node_runtime::{CheckedExtrinsic, UncheckedExtrinsic, SessionKeys};
+use node_primitives::{AccountId, Balance, Index};
+use node_runtime::{CheckedExtrinsic, UncheckedExtrinsic, SessionKeys, SignedExtra};
+use runtime_primitives::generic::Era;
 use parity_codec::Encode;
 
 /// Alice's account id.
@@ -60,6 +61,16 @@ pub fn to_session_keys(
 		ed25519: ed25519_keyring.to_owned().into(),
 		sr25519: sr25519_keyring.to_owned().into(),
 	}
+}
+
+/// Returns transaction extra.
+pub fn signed_extra(nonce: Index, extra_fee: Balance) -> SignedExtra {
+	(
+		system::CheckEra::from(Era::mortal(256, 0)),
+		system::CheckNonce::from(nonce),
+		system::CheckWeight::from(),
+		balances::TakeFees::from(extra_fee)
+	)
 }
 
 /// Sign given `CheckedExtrinsic`.

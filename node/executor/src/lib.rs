@@ -98,15 +98,6 @@ mod tests {
 		length_fee + weight_fee + TransferFee::get()
 	}
 
-	fn signed_extra(nonce: Index, extra_fee: Balance) -> SignedExtra {
-		(
-			system::CheckEra::from(Era::mortal(256, 0)),
-			system::CheckNonce::from(nonce),
-			system::CheckWeight::from(),
-			balances::TakeFees::from(extra_fee)
-		)
-	}
-
 	fn default_transfer_call() -> balances::Call<Runtime> {
 		balances::Call::transfer::<Runtime>(bob().into(), 69 * DOLLARS)
 	}
