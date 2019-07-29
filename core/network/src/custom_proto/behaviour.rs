@@ -24,7 +24,7 @@ use futures03::{compat::Compat, TryFutureExt as _, StreamExt as _, TryStreamExt 
 use libp2p::core::{ConnectedPoint, Multiaddr, PeerId};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use log::{debug, error, trace, warn};
-use runtime_primitives::traits::Block as BlockT;
+use sr_primitives::traits::Block as BlockT;
 use smallvec::SmallVec;
 use std::{borrow::Cow, collections::hash_map::Entry, cmp, error, marker::PhantomData, mem, pin::Pin};
 use std::time::{Duration, Instant};
