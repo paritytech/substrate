@@ -189,12 +189,31 @@ pub fn build_changes_trie<'a, B: Backend<H>, H: Hasher, Number: BlockNumber>(
 		None => return Ok(None),
 	};
 
-	// build_anchor error should not be considered fatal
+	// build_anchor error should not be considered fatal (passed parent_hash may be incorrect)
 	let parent = state.storage.build_anchor(parent_hash).map_err(|_| ())?;
 
+	// prepare configuration range - we already know zero block. Current block may be the end block if configuration
+	// has been changed in this block
+	// TODO: ^^^ this won't work for forced digests
+	let is_config_changed = match changes.storage(primitives::storage::well_known_keys::CHANGES_TRIE_CONFIG) {
+		Some(Some(new_config)) => new_config != &state.config.encode()[..],
+		Some(None) => true,
+		None => false,
+	};
+	let config_range = ConfigurationRange {
+		config: &state.config,
+		zero: state.config_activation_block.clone(),
+		end: if is_config_changed { Some(parent.number.clone() + One::one()) } else { None },
+	};
+
 	// storage errors are considered fatal (similar to situations when runtime fetches values from storage)
-	let input_pairs = prepare_input::<B, H, Number>(backend, state.storage, state.config_activation_block.clone(), &state.config, changes, &parent)
-		.expect("changes trie: storage access is not allowed to fail within runtime");
+	let input_pairs = prepare_input::<B, H, Number>(
+		backend,
+		state.storage,
+		config_range,
+		changes,
+		&parent,
+	).expect("changes trie: storage access is not allowed to fail within runtime");
 	let mut root = Default::default();
 	let mut mdb = MemoryDB::default();
 	{

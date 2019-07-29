@@ -26,7 +26,7 @@ use crate::overlayed_changes::OverlayedChanges;
 use crate::trie_backend_essence::TrieBackendEssence;
 use crate::changes_trie::build_iterator::digest_build_iterator;
 use crate::changes_trie::input::{InputKey, InputPair, DigestIndex, ExtrinsicIndex};
-use crate::changes_trie::{AnchorBlockId, Configuration, Storage, BlockNumber};
+use crate::changes_trie::{AnchorBlockId, ConfigurationRange, Storage, BlockNumber};
 
 /// Prepare input pairs for building a changes trie of given block.
 ///
@@ -37,8 +37,7 @@ use crate::changes_trie::{AnchorBlockId, Configuration, Storage, BlockNumber};
 pub fn prepare_input<'a, B, H, Number>(
 	backend: &'a B,
 	storage: &'a Storage<H, Number>,
-	config_activation_block: Number,
-	config: &'a Configuration,
+	config: ConfigurationRange<'a, Number>,
 	changes: &'a OverlayedChanges,
 	parent: &'a AnchorBlockId<H::Out, Number>,
 ) -> Result<impl Iterator<Item=InputPair<Number>> + 'a, String>
@@ -54,7 +53,6 @@ pub fn prepare_input<'a, B, H, Number>(
 		changes)?;
 	let digest_input = prepare_digest_input::<H, Number>(
 		parent,
-		config_activation_block,
 		config,
 		number,
 		storage)?;
@@ -116,8 +114,7 @@ fn prepare_extrinsics_input<'a, B, H, Number>(
 /// Prepare DigestIndex input pairs.
 fn prepare_digest_input<'a, H, Number>(
 	parent: &'a AnchorBlockId<H::Out, Number>,
-	config_activation_block: Number,
-	config: &Configuration,
+	config: ConfigurationRange<'a, Number>,
 	block: Number,
 	storage: &'a Storage<H, Number>,
 ) -> Result<impl Iterator<Item=InputPair<Number>> + 'a, String>
@@ -126,7 +123,7 @@ fn prepare_digest_input<'a, H, Number>(
 		H::Out: 'a,
 		Number: BlockNumber,
 {
-	digest_build_iterator(config, config_activation_block, block.clone())
+	digest_build_iterator(&config.config, config.zero.clone(), block.clone())
 		.try_fold(BTreeMap::new(), move |mut map, digest_build_block| {
 			let trie_root = storage.root(parent, digest_build_block.clone())?;
 			let trie_root = trie_root.ok_or_else(|| format!("No changes trie root for block {}", digest_build_block.clone()))?;
@@ -180,6 +177,7 @@ mod test {
 	use primitives::Blake2Hasher;
 	use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
 	use crate::backend::InMemory;
+	use crate::changes_trie::Configuration;
 	use crate::changes_trie::storage::InMemoryStorage;
 	use crate::overlayed_changes::OverlayedValue;
 	use super::*;
@@ -259,6 +257,14 @@ mod test {
 		(backend, storage, changes, config)
 	}
 
+	fn configuration_range<'a>(config: &'a Configuration, zero: u64) -> ConfigurationRange<'a, u64> {
+		ConfigurationRange {
+			config,
+			zero,
+			end: None,
+		}
+	}
+
 	#[test]
 	fn build_changes_trie_nodes_on_non_digest_block() {
 		let (backend, storage, changes, config) = prepare_for_build();
@@ -266,8 +272,7 @@ mod test {
 		let changes_trie_nodes = prepare_input(
 			&backend,
 			&storage,
-			0, // TODO: test other cases
-			&config,
+			configuration_range(&config, 0), // TODO: test other cases
 			&changes,
 			&parent,
 		).unwrap();
@@ -285,8 +290,7 @@ mod test {
 		let changes_trie_nodes = prepare_input(
 			&backend,
 			&storage,
-			0, // TODO: test other cases
-			&config,
+			configuration_range(&config, 0), // TODO: test other cases
 			&changes,
 			&parent,
 		).unwrap();
@@ -309,8 +313,7 @@ mod test {
 		let changes_trie_nodes = prepare_input(
 			&backend,
 			&storage,
-			0, // TODO: test other cases
-			&config,
+			configuration_range(&config, 0), // TODO: test other cases
 			&changes,
 			&parent,
 		).unwrap();
@@ -341,8 +344,7 @@ mod test {
 		let changes_trie_nodes = prepare_input(
 			&backend,
 			&storage,
-			0, // TODO: test other cases
-			&config,
+			configuration_range(&config, 0), // TODO: test other cases
 			&changes,
 			&parent,
 		).unwrap();
