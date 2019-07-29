@@ -56,8 +56,6 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub state_cache_child_ratio: Option<usize>,
 	/// Pruning settings.
 	pub pruning: PruningMode,
-	/// Additional key seeds.
-	pub keys: Vec<String>,
 	/// Chain configuration.
 	pub chain_spec: ChainSpec<G>,
 	/// Custom configuration.
@@ -92,6 +90,12 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub grandpa_voter: bool,
 	/// Node keystore's password
 	pub password: Protected<String>,
+	/// Development key seed.
+	///
+	/// When running in development mode, the seed will be used to generate authority keys by the keystore.
+	///
+	/// Should only be set when `node` is running development mode.
+	pub dev_key_seed: Option<String>,
 }
 
 impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C, G> {
@@ -111,7 +115,6 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			database_cache_size: Default::default(),
 			state_cache_size: Default::default(),
 			state_cache_child_ratio: Default::default(),
-			keys: Default::default(),
 			custom: Default::default(),
 			pruning: PruningMode::default(),
 			execution_strategies: Default::default(),
@@ -127,6 +130,7 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			disable_grandpa: false,
 			grandpa_voter: false,
 			password: "".to_string().into(),
+			dev_key_seed: None,
 		};
 		configuration.network.boot_nodes = configuration.chain_spec.boot_nodes().to_vec();
 

@@ -444,7 +444,6 @@ where
 	config.disable_grandpa = cli.no_grandpa;
 	config.grandpa_voter = cli.grandpa_voter;
 
-
 	let is_dev = cli.shared_params.dev;
 
 	let client_id = config.client_id();
@@ -462,16 +461,10 @@ where
 		cli.pool_config,
 	)?;
 
-	if let Some(key) = cli.key {
-		config.keys.push(key);
-	}
-
-	if cli.shared_params.dev && cli.keyring.account.is_none() {
-		config.keys.push("//Alice".into());
-	}
-
-	if let Some(account) = cli.keyring.account {
-		config.keys.push(format!("//{}", account));
+	if cli.shared_params.dev {
+		config.dev_key_seed = cli.keyring.account
+			.map(|a| format!("//{}", a))
+			.or_else(|| Some("//Alice".into()));
 	}
 
 	let rpc_interface: &str = if cli.rpc_external { "0.0.0.0" } else { "127.0.0.1" };

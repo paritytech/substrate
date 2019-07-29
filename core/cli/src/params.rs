@@ -310,10 +310,6 @@ pub struct RunCmd {
 	#[structopt(long = "keystore-path", value_name = "PATH", parse(from_os_str))]
 	pub keystore_path: Option<PathBuf>,
 
-	/// Specify additional key seed
-	#[structopt(long = "key", value_name = "STRING")]
-	pub key: Option<String>,
-
 	/// Enable validator mode
 	#[structopt(long = "validator")]
 	pub validator: bool,
@@ -443,7 +439,7 @@ lazy_static::lazy_static! {
 			let conflicts_with = keyring::Sr25519Keyring::iter()
 				.filter(|b| a != *b)
 				.map(|b| b.to_string().to_lowercase())
-				.chain(["name", "key"].iter().map(ToString::to_string))
+				.chain(["name"].iter().map(ToString::to_string))
 				.collect::<Vec<_>>();
 			let name = a.to_string().to_lowercase();
 
@@ -485,6 +481,7 @@ impl AugmentClap for Keyring {
 					.long(&a.name)
 					.help(&a.help)
 					.conflicts_with_all(&conflicts_with_strs)
+					.requires("dev")
 					.takes_value(false)
 			)
 		})
