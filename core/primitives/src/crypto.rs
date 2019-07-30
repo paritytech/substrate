@@ -1130,7 +1130,7 @@ pub mod key_types {
 	pub const DUMMY: KeyTypeId = KeyTypeId(*b"dumy");
 }
 
-/*impl TryFrom<KeyTypeId> for Kind {
+impl TryFrom<KeyTypeId> for Kind {
 	type Error = ();
 
 	fn try_from(kind: KeyTypeId) -> Result<Self, Self::Error> {
@@ -1156,9 +1156,10 @@ impl TryFrom<Kind> for KeyTypeId {
 			Kind::Ed25519 => key_types::ED25519,
 			#[cfg(feature = "std")]
 			Kind::Dummy => key_types::DUMMY,
+			Kind::User => return Err(()),
 		})
 	}
-}*/
+}
 
 #[cfg(test)]
 mod tests {
