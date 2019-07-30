@@ -1,0 +1,34 @@
+[package]
+name = "srml-elections"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+serde = { version = "1.0", optional = true }
+safe-mix = { version = "1.0", default-features = false}
+parity-codec = { version = "4.1.1", default-features = false, features = ["derive"] }
+primitives = { package = "substrate-primitives",  path = "../../core/primitives", default-features = false }
+rstd = { package = "sr-std", path = "../../core/sr-std", default-features = false }
+runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
+sr-primitives = { path = "../../core/sr-primitives", default-features = false }
+srml-support = { path = "../support", default-features = false }
+system = { package = "srml-system", path = "../system", default-features = false }
+
+[dev-dependencies]
+hex-literal = "0.2.0"
+balances = { package = "srml-balances", path = "../balances" }
+
+[features]
+default = ["std"]
+std = [
+	"safe-mix/std",
+	"parity-codec/std",
+	"primitives/std",
+	"rstd/std",
+	"serde",
+	"runtime_io/std",
+	"srml-support/std",
+	"sr-primitives/std",
+	"system/std",
+]

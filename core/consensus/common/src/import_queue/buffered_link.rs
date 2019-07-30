@@ -20,21 +20,27 @@
 //!
 //! # Example
 //!
-//! ```no_run
+//! ```
 //! use substrate_consensus_common::import_queue::Link;
 //! # use substrate_consensus_common::import_queue::buffered_link::buffered_link;
 //! # use test_client::runtime::Block;
 //! # struct DummyLink; impl Link<Block> for DummyLink {}
 //! # let mut my_link = DummyLink;
 //! let (mut tx, mut rx) = buffered_link::<Block>();
-//! tx.blocks_processed(vec![], false);
-//! rx.poll_actions(&mut my_link);	// Calls `my_link.blocks_processed(vec![], false)`
+//! tx.blocks_processed(0, 0, vec![]);
+//!
+//! // Calls `my_link.blocks_processed(0, 0, vec![])` when polled.
+//! let _fut = futures::future::poll_fn(move |cx| {
+//! 	rx.poll_actions(cx, &mut my_link);
+//! 	std::task::Poll::Pending::<()>
+//! });
 //! ```
 //!
 
-use futures::{prelude::*, sync::mpsc};
-use runtime_primitives::traits::{Block as BlockT, NumberFor};
-use crate::import_queue::{Origin, Link, SharedFinalityProofRequestBuilder};
+use futures::{prelude::*, channel::mpsc};
+use sr_primitives::traits::{Block as BlockT, NumberFor};
+use std::{pin::Pin, task::Context, task::Poll};
+use crate::import_queue::{Origin, Link, BlockImportResult, BlockImportError};
 
 /// Wraps around an unbounded channel from the `futures` crate. The sender implements `Link` and
 /// can be used to buffer commands, and the receiver can be used to poll said commands and transfer
@@ -51,27 +57,40 @@ pub struct BufferedLinkSender<B: BlockT> {
 	tx: mpsc::UnboundedSender<BlockImportWorkerMsg<B>>,
 }
 
+impl<B: BlockT> BufferedLinkSender<B> {
+	/// Returns true if the sender points to nowhere.
+	///
+	/// Once `true` is returned, it is pointless to use the sender anymore.
+	pub fn is_closed(&self) -> bool {
+		self.tx.is_closed()
+	}
+}
+
+impl<B: BlockT> Clone for BufferedLinkSender<B> {
+	fn clone(&self) -> Self {
+		BufferedLinkSender {
+			tx: self.tx.clone(),
+		}
+	}
+}
+
 /// Internal buffered message.
 enum BlockImportWorkerMsg<B: BlockT> {
-	BlockImported(B::Hash, NumberFor<B>),
-	BlocksProcessed(Vec<B::Hash>, bool),
+	BlocksProcessed(usize, usize, Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>),
 	JustificationImported(Origin, B::Hash, NumberFor<B>, bool),
-	ClearJustificationRequests,
 	RequestJustification(B::Hash, NumberFor<B>),
 	FinalityProofImported(Origin, (B::Hash, NumberFor<B>), Result<(B::Hash, NumberFor<B>), ()>),
 	RequestFinalityProof(B::Hash, NumberFor<B>),
-	SetFinalityProofRequestBuilder(SharedFinalityProofRequestBuilder<B>),
-	ReportPeer(Origin, i32),
-	Restart,
 }
 
 impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
-	fn block_imported(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::BlockImported(hash.clone(), number));
-	}
-
-	fn blocks_processed(&mut self, processed_blocks: Vec<B::Hash>, has_error: bool) {
-		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::BlocksProcessed(processed_blocks, has_error));
+	fn blocks_processed(
+		&mut self,
+		imported: usize,
+		count: usize,
+		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
+	) {
+		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::BlocksProcessed(imported, count, results));
 	}
 
 	fn justification_imported(
@@ -83,10 +102,6 @@ impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
 	) {
 		let msg = BlockImportWorkerMsg::JustificationImported(who, hash.clone(), number, success);
 		let _ = self.tx.unbounded_send(msg);
-	}
-
-	fn clear_justification_requests(&mut self) {
-		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::ClearJustificationRequests);
 	}
 
 	fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
@@ -106,18 +121,6 @@ impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
 	fn request_finality_proof(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::RequestFinalityProof(hash.clone(), number));
 	}
-
-	fn set_finality_proof_request_builder(&mut self, request_builder: SharedFinalityProofRequestBuilder<B>) {
-		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::SetFinalityProofRequestBuilder(request_builder));
-	}
-
-	fn report_peer(&mut self, who: Origin, reputation_change: i32) {
-		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::ReportPeer(who, reputation_change));
-	}
-
-	fn restart(&mut self) {
-		let _ = self.tx.unbounded_send(BlockImportWorkerMsg::Restart);
-	}
 }
 
 /// See [`buffered_link`].
@@ -131,37 +134,40 @@ impl<B: BlockT> BufferedLinkReceiver<B> {
 	///
 	/// This method should behave in a way similar to `Future::poll`. It can register the current
 	/// task and notify later when more actions are ready to be polled. To continue the comparison,
-	/// it is as if this method always returned `Ok(Async::NotReady)`.
-	pub fn poll_actions(&mut self, link: &mut dyn Link<B>) {
+	/// it is as if this method always returned `Poll::Pending`.
+	pub fn poll_actions(&mut self, cx: &mut Context, link: &mut dyn Link<B>) {
 		loop {
-			let msg = if let Ok(Async::Ready(Some(msg))) = self.rx.poll() {
+			let msg = if let Poll::Ready(Some(msg)) = Stream::poll_next(Pin::new(&mut self.rx), cx) {
 				msg
 			} else {
 				break
 			};
 
 			match msg {
-				BlockImportWorkerMsg::BlockImported(hash, number) =>
-					link.block_imported(&hash, number),
-				BlockImportWorkerMsg::BlocksProcessed(blocks, has_error) =>
-					link.blocks_processed(blocks, has_error),
+				BlockImportWorkerMsg::BlocksProcessed(imported, count, results) =>
+					link.blocks_processed(imported, count, results),
 				BlockImportWorkerMsg::JustificationImported(who, hash, number, success) =>
 					link.justification_imported(who, &hash, number, success),
-				BlockImportWorkerMsg::ClearJustificationRequests =>
-					link.clear_justification_requests(),
 				BlockImportWorkerMsg::RequestJustification(hash, number) =>
 					link.request_justification(&hash, number),
 				BlockImportWorkerMsg::FinalityProofImported(who, block, result) =>
 					link.finality_proof_imported(who, block, result),
 				BlockImportWorkerMsg::RequestFinalityProof(hash, number) =>
 					link.request_finality_proof(&hash, number),
-				BlockImportWorkerMsg::SetFinalityProofRequestBuilder(builder) =>
-					link.set_finality_proof_request_builder(builder),
-				BlockImportWorkerMsg::ReportPeer(who, reput) =>
-					link.report_peer(who, reput),
-				BlockImportWorkerMsg::Restart =>
-					link.restart(),
 			}
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use test_client::runtime::Block;
+
+	#[test]
+	fn is_closed() {
+		let (tx, rx) = super::buffered_link::<Block>();
+		assert!(!tx.is_closed());
+		drop(rx);
+		assert!(tx.is_closed());
 	}
 }

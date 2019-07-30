@@ -17,7 +17,7 @@
 //! The overlayed changes to state.
 
 #[cfg(test)] use std::iter::FromIterator;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, BTreeSet};
 use parity_codec::Decode;
 use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
 use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
@@ -63,7 +63,8 @@ pub struct OverlayedValue {
 	/// Current value. None if value has been deleted.
 	pub value: Option<Vec<u8>>,
 	/// The set of extinsic indices where the values has been changed.
-	pub extrinsics: Option<HashSet<u32>>,
+	/// Is filled only if runtime has announced changes trie support.
+	pub extrinsics: Option<BTreeSet<u32>>,
 }
 
 /// History of value that are related to a state history (eg field `history` of
@@ -384,7 +385,7 @@ impl History<OverlayedValue> {
 				}, state);
 			}
 		} else {
-			let mut extrinsics: Option<HashSet<u32>> = None;
+			let mut extrinsics: Option<BTreeSet<u32>> = None;
 			extrinsics.get_or_insert_with(Default::default)
 				.insert(extrinsic_index);
 
@@ -509,6 +510,17 @@ impl OverlayedChangeSet {
 	/// Iterator over current state of the overlay.
 	pub fn child_iter(&self, storage_key: &[u8]) -> impl Iterator<Item = (&Vec<u8>, Option<&Vec<u8>>)> {
 		self.child_iter_overlay(storage_key).map(|(k, v)| (k, v.value.as_ref()))
+	}
+
+	/// Iterator over current state of the overlay.
+	pub fn children_iter_overlay(
+		&self,
+	) -> impl Iterator<Item=(&Vec<u8>, impl Iterator<Item = (&Vec<u8>, &OverlayedValue)>)> {
+		self.children.iter()
+			.map(move |(storage_key, child)| (storage_key, child.iter()
+				.filter_map(move |(k, v)|
+					v.get(self.history.as_slice()).map(|v| (k, v)))
+			))
 	}
 
 	/// Test only method to access current prospective changes.

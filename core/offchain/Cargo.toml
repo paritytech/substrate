@@ -14,8 +14,9 @@ offchain-primitives = { package = "substrate-offchain-primitives", path = "./pri
 parity-codec = { version = "4.1.1", features = ["derive"] }
 parking_lot = "0.8.0"
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
-runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
+sr-primitives = { path = "../../core/sr-primitives" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
+network = { package = "substrate-network", path = "../../core/network" }
 
 [dev-dependencies]
 env_logger = "0.6"

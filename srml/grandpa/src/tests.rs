@@ -18,8 +18,8 @@
 
 #![cfg(test)]
 
-use primitives::testing::Digest;
-use primitives::traits::{Header, OnFinalize};
+use sr_primitives::testing::Digest;
+use sr_primitives::traits::{Header, OnFinalize};
 use runtime_io::with_externalities;
 use crate::mock::*;
 use system::{EventRecord, Phase};
@@ -200,5 +200,85 @@ fn dispatch_forced_change() {
 			header = System::finalize();
 		}
 		let _ = header;
+	});
+}
+
+#[test]
+fn schedule_pause_only_when_live() {
+	with_externalities(&mut new_test_ext(vec![(1, 1), (2, 1), (3, 1)]), || {
+		// we schedule a pause at block 1 with delay of 1
+		System::initialize(&1, &Default::default(), &Default::default(), &Default::default());
+		Grandpa::schedule_pause(1).unwrap();
+
+		// we've switched to the pending pause state
+		assert_eq!(
+			Grandpa::state(),
+			StoredState::PendingPause {
+				scheduled_at: 1u64,
+				delay: 1,
+			},
+		);
+
+		Grandpa::on_finalize(1);
+		let _ = System::finalize();
+
+		System::initialize(&2, &Default::default(), &Default::default(), &Default::default());
+
+		// signaling a pause now should fail
+		assert!(Grandpa::schedule_pause(1).is_err());
+
+		Grandpa::on_finalize(2);
+		let _ = System::finalize();
+
+		// after finalizing block 2 the set should have switched to paused state
+		assert_eq!(
+			Grandpa::state(),
+			StoredState::Paused,
+		);
+	});
+}
+
+#[test]
+fn schedule_resume_only_when_paused() {
+	with_externalities(&mut new_test_ext(vec![(1, 1), (2, 1), (3, 1)]), || {
+		System::initialize(&1, &Default::default(), &Default::default(), &Default::default());
+
+		// the set is currently live, resuming it is an error
+		assert!(Grandpa::schedule_resume(1).is_err());
+
+		assert_eq!(
+			Grandpa::state(),
+			StoredState::Live,
+		);
+
+		// we schedule a pause to be applied instantly
+		Grandpa::schedule_pause(0).unwrap();
+		Grandpa::on_finalize(1);
+		let _ = System::finalize();
+
+		assert_eq!(
+			Grandpa::state(),
+			StoredState::Paused,
+		);
+
+		// we schedule the set to go back live in 2 blocks
+		System::initialize(&2, &Default::default(), &Default::default(), &Default::default());
+		Grandpa::schedule_resume(2).unwrap();
+		Grandpa::on_finalize(2);
+		let _ = System::finalize();
+
+		System::initialize(&3, &Default::default(), &Default::default(), &Default::default());
+		Grandpa::on_finalize(3);
+		let _ = System::finalize();
+
+		System::initialize(&4, &Default::default(), &Default::default(), &Default::default());
+		Grandpa::on_finalize(4);
+		let _ = System::finalize();
+
+		// it should be live at block 4
+		assert_eq!(
+			Grandpa::state(),
+			StoredState::Live,
+		);
 	});
 }

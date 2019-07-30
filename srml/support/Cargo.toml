@@ -11,7 +11,7 @@ srml-metadata = { path = "../metadata", default-features = false }
 sr-std = { path = "../../core/sr-std", default-features = false }
 runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
-substrate-primitives = { path = "../../core/primitives", default-features = false }
+primitives = { package = "substrate-primitives",  path = "../../core/primitives", default-features = false }
 inherents = { package = "substrate-inherents", path = "../../core/inherents", default-features = false }
 srml-support-procedural = { path = "./procedural" }
 paste = "0.1"
@@ -20,7 +20,7 @@ bitmask = { version = "0.5", default-features = false }
 
 [dev-dependencies]
 pretty_assertions = "0.6.1"
-srml-system = { path = "../system", default-features = false }
+srml-system = { path = "../system" }
 
 [features]
 default = ["std"]

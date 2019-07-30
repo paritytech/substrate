@@ -21,7 +21,7 @@ use std::collections::{HashMap, BTreeMap};
 use std::collections::hash_map::Entry;
 use log::trace;
 use libp2p::PeerId;
-use runtime_primitives::traits::{Block as BlockT, NumberFor, One};
+use sr_primitives::traits::{Block as BlockT, NumberFor, One};
 use crate::message;
 
 const MAX_PARALLEL_DOWNLOADS: u32 = 1;
@@ -202,7 +202,7 @@ impl<B: BlockT> BlockCollection<B> {
 mod test {
 	use super::{BlockCollection, BlockData, BlockRangeState};
 	use crate::{message, PeerId};
-	use runtime_primitives::testing::{Block as RawBlock, ExtrinsicWrapper};
+	use sr_primitives::testing::{Block as RawBlock, ExtrinsicWrapper};
 	use primitives::H256;
 
 	type Block = RawBlock<ExtrinsicWrapper<u64>>;

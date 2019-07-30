@@ -16,10 +16,11 @@
 
 //! Block import helpers.
 
-use runtime_primitives::traits::{Block as BlockT, DigestItemFor, Header as HeaderT, NumberFor};
-use runtime_primitives::Justification;
+use sr_primitives::traits::{Block as BlockT, DigestItemFor, Header as HeaderT, NumberFor};
+use sr_primitives::Justification;
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::sync::Arc;
 use crate::well_known_cache_keys;
 
 use crate::import_queue::Verifier;
@@ -96,7 +97,7 @@ pub enum ForkChoiceStrategy {
 }
 
 /// Data required to import a Block
-pub struct ImportBlock<Block: BlockT> {
+pub struct BlockImportParams<Block: BlockT> {
 	/// Origin of the Block
 	pub origin: BlockOrigin,
 	/// The header, without consensus post-digests applied. This should be in the same
@@ -129,7 +130,7 @@ pub struct ImportBlock<Block: BlockT> {
 	pub fork_choice: ForkChoiceStrategy,
 }
 
-impl<Block: BlockT> ImportBlock<Block> {
+impl<Block: BlockT> BlockImportParams<Block> {
 	/// Deconstruct the justified header into parts.
 	pub fn into_inner(self)
 		-> (
@@ -175,7 +176,7 @@ pub trait BlockImport<B: BlockT> {
 
 	/// Check block preconditions.
 	fn check_block(
-		&self,
+		&mut self,
 		hash: B::Hash,
 		parent_hash: B::Hash,
 	) -> Result<ImportResult, Self::Error>;
@@ -184,10 +185,32 @@ pub trait BlockImport<B: BlockT> {
 	///
 	/// Cached data can be accessed through the blockchain cache.
 	fn import_block(
-		&self,
-		block: ImportBlock<B>,
+		&mut self,
+		block: BlockImportParams<B>,
 		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error>;
+}
+
+impl<B: BlockT, T, E: ::std::error::Error + Send + 'static> BlockImport<B> for Arc<T>
+where for<'r> &'r T: BlockImport<B, Error = E>
+{
+	type Error = E;
+
+	fn check_block(
+		&mut self,
+		hash: B::Hash,
+		parent_hash: B::Hash,
+	) -> Result<ImportResult, Self::Error> {
+		(&**self).check_block(hash, parent_hash)
+	}
+
+	fn import_block(
+		&mut self,
+		block: BlockImportParams<B>,
+		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
+	) -> Result<ImportResult, Self::Error> {
+		(&**self).import_block(block, cache)
+	}
 }
 
 /// Justification import trait
@@ -196,11 +219,11 @@ pub trait JustificationImport<B: BlockT> {
 
 	/// Called by the import queue when it is started. Returns a list of justifications to request
 	/// from the network.
-	fn on_start(&self) -> Vec<(B::Hash, NumberFor<B>)> { Vec::new() }
+	fn on_start(&mut self) -> Vec<(B::Hash, NumberFor<B>)> { Vec::new() }
 
 	/// Import a Block justification and finalize the given block.
 	fn import_justification(
-		&self,
+		&mut self,
 		hash: B::Hash,
 		number: NumberFor<B>,
 		justification: Justification,
@@ -213,20 +236,14 @@ pub trait FinalityProofImport<B: BlockT> {
 
 	/// Called by the import queue when it is started. Returns a list of finality proofs to request
 	/// from the network.
-	fn on_start(&self) -> Vec<(B::Hash, NumberFor<B>)> { Vec::new() }
+	fn on_start(&mut self) -> Vec<(B::Hash, NumberFor<B>)> { Vec::new() }
 
 	/// Import a Block justification and finalize the given block. Returns finalized block or error.
 	fn import_finality_proof(
-		&self,
+		&mut self,
 		hash: B::Hash,
 		number: NumberFor<B>,
 		finality_proof: Vec<u8>,
 		verifier: &dyn Verifier<B>,
 	) -> Result<(B::Hash, NumberFor<B>), Self::Error>;
-}
-
-/// Finality proof request builder.
-pub trait FinalityProofRequestBuilder<B: BlockT>: Send {
-	/// Build data blob, associated with the request.
-	fn build_request_data(&self, hash: &B::Hash) -> Vec<u8>;
 }

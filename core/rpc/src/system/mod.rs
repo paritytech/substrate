@@ -26,7 +26,7 @@ use crate::helpers::Receiver;
 use futures::sync::{mpsc, oneshot};
 use jsonrpc_derive::rpc;
 use network;
-use runtime_primitives::traits::{self, Header as HeaderT};
+use sr_primitives::traits::{self, Header as HeaderT};
 
 use self::error::Result;
 pub use self::helpers::{Properties, SystemInfo, Health, PeerInfo};

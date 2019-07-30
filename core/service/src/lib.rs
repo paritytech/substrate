@@ -26,22 +26,24 @@ pub mod chain_ops;
 pub mod error;
 
 use std::io;
+use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::collections::HashMap;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use futures::sync::mpsc;
 use parking_lot::Mutex;
 
 use client::{BlockchainEvents, backend::Backend, runtime_api::BlockT};
 use exit_future::Signal;
 use futures::prelude::*;
+use futures03::stream::{StreamExt as _, TryStreamExt as _};
 use keystore::Store as Keystore;
-use network::NetworkState;
-use log::{info, warn, debug, error};
+use network::{NetworkState, NetworkStateInfo};
+use log::{log, info, warn, debug, error, Level};
 use parity_codec::{Encode, Decode};
-use primitives::{Pair, Public, crypto::TypedKey, ed25519};
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Header, NumberFor, SaturatedConversion};
+use primitives::{Pair, ed25519, sr25519, crypto};
+use sr_primitives::generic::BlockId;
+use sr_primitives::traits::{Header, NumberFor, SaturatedConversion, Zero};
 use substrate_executor::NativeExecutor;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
@@ -54,18 +56,20 @@ pub use transaction_pool::txpool::{
 };
 pub use client::FinalityNotifications;
 
-pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
+pub use components::{
+	ServiceFactory, FullBackend, FullExecutor, LightBackend, ComponentAuthorityKeyProvider,
 	LightExecutor, Components, PoolApi, ComponentClient, ComponentOffchainStorage,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
 	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock,
 	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
-	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic
+	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic,
+	ComponentConsensusPair, ComponentFinalityPair,
 };
 use components::{StartRPC, MaintainTransactionPool, OffchainWorker};
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
-pub use network::{FinalityProofProvider, OnDemand};
+pub use network::{FinalityProofProvider, OnDemand, config::BoxFinalityProofRequestBuilder};
 #[doc(hidden)]
 pub use futures::future::Executor;
 
@@ -74,14 +78,14 @@ const DEFAULT_PROTOCOL_ID: &str = "sup";
 /// Substrate service.
 pub struct Service<Components: components::Components> {
 	client: Arc<ComponentClient<Components>>,
-	select_chain: Option<<Components as components::Components>::SelectChain>,
+	select_chain: Option<Components::SelectChain>,
 	network: Arc<components::NetworkService<Components>>,
 	/// Sinks to propagate network status updates.
 	network_status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<(
 		NetworkStatus<ComponentBlock<Components>>, NetworkState
 	)>>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
-	keystore: Option<Keystore>,
+	keystore: ComponentAuthorityKeyProvider<Components>,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
 	/// Sender for futures that must be spawned as background tasks.
@@ -101,6 +105,7 @@ pub struct Service<Components: components::Components> {
 	_offchain_workers: Option<Arc<offchain::OffchainWorkers<
 		ComponentClient<Components>,
 		ComponentOffchainStorage<Components>,
+		ComponentAuthorityKeyProvider<Components>,
 		ComponentBlock<Components>>
 	>>,
 }
@@ -187,12 +192,13 @@ impl<Components: components::Components> Service<Components> {
 		if let Some(keystore) = keystore.as_mut() {
 			for seed in &config.keys {
 				keystore.generate_from_seed::<ed25519::Pair>(seed)?;
+				keystore.generate_from_seed::<sr25519::Pair>(seed)?;
 			}
 
 			public_key = match keystore.contents::<ed25519::Public>()?.get(0) {
 				Some(public_key) => public_key.to_string(),
 				None => {
-					let key: ed25519::Pair = keystore.generate(&config.password)?;
+					let key: ed25519::Pair = keystore.generate(&config.password.as_ref())?;
 					let public_key = key.public();
 					info!("Generated a new keypair: {:?}", public_key);
 					public_key.to_string()
@@ -204,11 +210,12 @@ impl<Components: components::Components> Service<Components> {
 
 		let (client, on_demand) = Components::build_client(&config, executor)?;
 		let select_chain = Components::build_select_chain(&mut config, client.clone())?;
-		let import_queue = Box::new(Components::build_import_queue(
+		let (import_queue, finality_proof_request_builder) = Components::build_import_queue(
 			&mut config,
 			client.clone(),
 			select_chain.clone(),
-		)?);
+		)?;
+		let import_queue = Box::new(import_queue);
 		let finality_proof_provider = Components::build_finality_proof_provider(client.clone())?;
 		let chain_info = client.info().chain;
 
@@ -247,6 +254,7 @@ impl<Components: components::Components> Service<Components> {
 			network_config: config.network.clone(),
 			chain: client.clone(),
 			finality_proof_provider,
+			finality_proof_request_builder,
 			on_demand,
 			transaction_pool: transaction_pool_adapter.clone() as _,
 			import_queue,
@@ -259,6 +267,13 @@ impl<Components: components::Components> Service<Components> {
 		let network = network_mut.service().clone();
 		let network_status_sinks = Arc::new(Mutex::new(Vec::new()));
 
+		let keystore_authority_key = AuthorityKeyProvider {
+			_marker: PhantomData,
+			roles: config.roles,
+			password: config.password.clone(),
+			keystore: keystore.map(Arc::new),
+		};
+
 		#[allow(deprecated)]
 		let offchain_storage = client.backend().offchain_storage();
 		let offchain_workers = match (config.offchain_worker, offchain_storage) {
@@ -266,6 +281,8 @@ impl<Components: components::Components> Service<Components> {
 				Some(Arc::new(offchain::OffchainWorkers::new(
 					client.clone(),
 					db,
+					keystore_authority_key.clone(),
+					config.password.clone(),
 				)))
 			},
 			(true, None) => {
@@ -281,8 +298,10 @@ impl<Components: components::Components> Service<Components> {
 			let wclient = Arc::downgrade(&client);
 			let offchain = offchain_workers.as_ref().map(Arc::downgrade);
 			let to_spawn_tx_ = to_spawn_tx.clone();
+			let network_state_info: Arc<dyn NetworkStateInfo + Send + Sync> = network.clone();
 
 			let events = client.import_notification_stream()
+				.map(|v| Ok::<_, ()>(v)).compat()
 				.for_each(move |notification| {
 					let number = *notification.header.number();
 
@@ -299,6 +318,7 @@ impl<Components: components::Components> Service<Components> {
 							&number,
 							&offchain,
 							&txpool,
+							&network_state_info,
 						).map_err(|e| warn!("Offchain workers error processing new block: {:?}", e))?;
 						let _ = to_spawn_tx_.unbounded_send(future);
 					}
@@ -433,6 +453,8 @@ impl<Components: components::Components> Service<Components> {
 				wasm_external_transport: config.telemetry_external_transport.take(),
 			});
 			let future = telemetry.clone()
+				.map(|ev| Ok::<_, ()>(ev))
+				.compat()
 				.for_each(move |event| {
 					// Safe-guard in case we add more events in the future.
 					let tel::TelemetryEvent::Connected = event;
@@ -469,7 +491,7 @@ impl<Components: components::Components> Service<Components> {
 			to_spawn_tx,
 			to_spawn_rx,
 			to_poll: Vec::new(),
-			keystore,
+			keystore: keystore_authority_key,
 			config,
 			exit,
 			rpc_handlers,
@@ -481,23 +503,17 @@ impl<Components: components::Components> Service<Components> {
 	}
 
 	/// give the authority key, if we are an authority and have a key
-	pub fn authority_key<TPair>(&self) -> Option<TPair>
-	where
-		TPair: Pair + TypedKey,
-		<TPair as Pair>::Public: Public + TypedKey,
-	{
-		if self.config.roles != Roles::AUTHORITY { return None }
-		if let Some(keystore) = &self.keystore {
-			if let Ok(Some(Ok(key))) =  keystore.contents::<TPair::Public>().map(|keys| keys.get(0)
-					.map(|k| keystore.load::<TPair>(k, &self.config.password)))
-			{
-				Some(key)
-			} else {
-				None
-			}
-		} else {
-			None
-		}
+	pub fn authority_key(&self) -> Option<ComponentConsensusPair<Components>> {
+		use offchain::AuthorityKeyProvider;
+
+		self.keystore.authority_key(&BlockId::Number(Zero::zero()))
+	}
+
+	/// give the authority key, if we are an authority and have a key
+	pub fn fg_authority_key(&self) -> Option<ComponentFinalityPair<Components>> {
+		use offchain::AuthorityKeyProvider;
+
+		self.keystore.fg_authority_key(&BlockId::Number(Zero::zero()))
 	}
 
 	/// return a shared instance of Telemetry (if enabled)
@@ -527,7 +543,8 @@ impl<Components: components::Components> Service<Components> {
 	/// If the request subscribes you to events, the `Sender` in the `RpcSession` object is used to
 	/// send back spontaneous events.
 	pub fn rpc_query(&self, mem: &RpcSession, request: &str)
-	-> impl Future<Item = Option<String>, Error = ()> {
+		-> impl Future<Item = Option<String>, Error = ()>
+	{
 		self.rpc_handlers.handle_request(request, mem.metadata.clone())
 	}
 
@@ -625,10 +642,14 @@ fn build_network_future<
 	const STATUS_INTERVAL: Duration = Duration::from_millis(5000);
 	let mut status_interval = tokio_timer::Interval::new_interval(STATUS_INTERVAL);
 
-	let mut imported_blocks_stream = client.import_notification_stream().fuse();
-	let mut finality_notification_stream = client.finality_notification_stream().fuse();
+	let mut imported_blocks_stream = client.import_notification_stream().fuse()
+		.map(|v| Ok::<_, ()>(v)).compat();
+	let mut finality_notification_stream = client.finality_notification_stream().fuse()
+		.map(|v| Ok::<_, ()>(v)).compat();
 
 	futures::future::poll_fn(move || {
+		let before_polling = Instant::now();
+
 		// We poll `imported_blocks_stream`.
 		while let Ok(Async::Ready(Some(notification))) = imported_blocks_stream.poll() {
 			network.on_block_imported(notification.hash, notification.header);
@@ -687,10 +708,22 @@ fn build_network_future<
 		}
 
 		// Main network polling.
-		network.poll()
-			.map_err(|err| {
-				warn!(target: "service", "Error in network: {:?}", err);
-			})
+		match network.poll() {
+			Ok(Async::NotReady) => {}
+			Err(err) => warn!(target: "service", "Error in network: {:?}", err),
+			Ok(Async::Ready(())) => warn!(target: "service", "Network service finished"),
+		}
+
+		// Now some diagnostic for performances.
+		let polling_dur = before_polling.elapsed();
+		log!(
+			target: "service",
+			if polling_dur >= Duration::from_millis(50) { Level::Warn } else { Level::Trace },
+			"Polling the network future took {:?}",
+			polling_dur
+		);
+
+		Ok(Async::NotReady)
 	})
 }
 
@@ -727,7 +760,7 @@ impl<Components> Drop for Service<Components> where Components: components::Comp
 fn start_rpc_servers<F: ServiceFactory, H: FnMut() -> rpc::RpcHandler>(
 	config: &FactoryFullConfiguration<F>,
 	mut gen_handler: H
-) -> Result<Box<std::any::Any + Send + Sync>, error::Error> {
+) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	fn maybe_start_server<T, F>(address: Option<SocketAddr>, mut start: F) -> Result<Option<T>, io::Error>
 		where F: FnMut(&SocketAddr) -> Result<T, io::Error>,
 	{
@@ -813,7 +846,7 @@ fn transactions_to_propagate<PoolApi, B, H, E>(pool: &TransactionPool<PoolApi>)
 where
 	PoolApi: ChainApi<Block=B, Hash=H, Error=E>,
 	B: BlockT,
-	H: std::hash::Hash + Eq + runtime_primitives::traits::Member + serde::Serialize,
+	H: std::hash::Hash + Eq + sr_primitives::traits::Member + serde::Serialize,
 	E: txpool::error::IntoPoolError + From<txpool::error::Error>,
 {
 	pool.ready()
@@ -870,6 +903,73 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 	}
 }
 
+#[derive(Clone)]
+/// A provider of current authority key.
+pub struct AuthorityKeyProvider<Block, ConsensusPair, FinalityPair> {
+	_marker: PhantomData<(Block, ConsensusPair, FinalityPair)>,
+	roles: Roles,
+	keystore: Option<Arc<Keystore>>,
+	password: crypto::Protected<String>,
+}
+
+impl<Block, ConsensusPair, FinalityPair>
+	offchain::AuthorityKeyProvider<Block>
+	for AuthorityKeyProvider<Block, ConsensusPair, FinalityPair>
+where
+	Block: sr_primitives::traits::Block,
+	ConsensusPair: Pair,
+	FinalityPair: Pair,
+{
+	type ConsensusPair = ConsensusPair;
+	type FinalityPair = FinalityPair;
+
+	fn authority_key(&self, _at: &BlockId<Block>) -> Option<Self::ConsensusPair> {
+		if self.roles != Roles::AUTHORITY {
+			return None
+		}
+
+		let keystore = match self.keystore {
+			Some(ref keystore) => keystore,
+			None => return None
+		};
+
+		let loaded_key = keystore
+			.contents()
+			.map(|keys| keys.get(0)
+				 .map(|k| keystore.load(k, self.password.as_ref()))
+			);
+
+		if let Ok(Some(Ok(key))) = loaded_key {
+			Some(key)
+		} else {
+			None
+		}
+	}
+
+	fn fg_authority_key(&self, _at: &BlockId<Block>) -> Option<Self::FinalityPair> {
+		if self.roles != Roles::AUTHORITY {
+			return None
+		}
+
+		let keystore = match self.keystore {
+			Some(ref keystore) => keystore,
+			None => return None
+		};
+
+		let loaded_key = keystore
+			.contents()
+			.map(|keys| keys.get(0)
+				 .map(|k| keystore.load(k, self.password.as_ref()))
+			);
+
+		if let Ok(Some(Ok(key))) = loaded_key {
+			Some(key)
+		} else {
+			None
+		}
+	}
+}
+
 /// Constructs a service factory with the given name that implements the `ServiceFactory` trait.
 /// The required parameters are required to be given in the exact order. Some parameters are followed
 /// by `{}` blocks. These blocks are required and used to initialize the given parameter.
@@ -884,15 +984,15 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 /// # 	FullComponents, LightComponents, FactoryFullConfiguration, FullClient
 /// # };
 /// # use transaction_pool::{self, txpool::{Pool as TransactionPool}};
-/// # use network::construct_simple_protocol;
+/// # use network::{config::DummyFinalityProofRequestBuilder, construct_simple_protocol};
 /// # use client::{self, LongestChain};
 /// # use consensus_common::import_queue::{BasicQueue, Verifier};
-/// # use consensus_common::{BlockOrigin, ImportBlock, well_known_cache_keys::Id as CacheKeyId};
+/// # use consensus_common::{BlockOrigin, BlockImportParams, well_known_cache_keys::Id as CacheKeyId};
 /// # use node_runtime::{GenesisConfig, RuntimeApi};
 /// # use std::sync::Arc;
 /// # use node_primitives::Block;
-/// # use runtime_primitives::Justification;
-/// # use runtime_primitives::traits::Block as BlockT;
+/// # use sr_primitives::Justification;
+/// # use sr_primitives::traits::Block as BlockT;
 /// # use grandpa;
 /// # construct_simple_protocol! {
 /// # 	pub struct NodeProtocol where Block = Block { }
@@ -905,7 +1005,7 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 /// # 		header: B::Header,
 /// # 		justification: Option<Justification>,
 /// # 		body: Option<Vec<B::Extrinsic>>,
-/// # 	) -> Result<(ImportBlock<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+/// # 	) -> Result<(BlockImportParams<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 /// # 		unimplemented!();
 /// # 	}
 /// # }
@@ -918,6 +1018,8 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 /// 	struct Factory {
 /// 		// Declare the block type
 /// 		Block = Block,
+///		ConsensusPair = primitives::ed25519::Pair,
+///		FinalityPair = primitives::ed25519::Pair,
 /// 		RuntimeApi = RuntimeApi,
 /// 		// Declare the network protocol and give an initializer.
 /// 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
@@ -938,9 +1040,12 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 /// 		LightService = LightComponents<Self>
 /// 			{ |config| <LightComponents<Factory>>::new(config) },
 /// 		FullImportQueue = BasicQueue<Block>
-/// 			{ |_, client, _| Ok(BasicQueue::new(Arc::new(MyVerifier), client, None, None, None)) },
+/// 			{ |_, client, _| Ok(BasicQueue::new(Arc::new(MyVerifier), Box::new(client), None, None)) },
 /// 		LightImportQueue = BasicQueue<Block>
-/// 			{ |_, client| Ok(BasicQueue::new(Arc::new(MyVerifier), client, None, None, None)) },
+/// 			{ |_, client| {
+/// 				let fprb = Box::new(DummyFinalityProofRequestBuilder::default()) as Box<_>;
+/// 				Ok((BasicQueue::new(Arc::new(MyVerifier), Box::new(client), None, None), fprb))
+/// 			}},
 /// 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>
 /// 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {
 /// 				#[allow(deprecated)]
@@ -958,6 +1063,8 @@ macro_rules! construct_service_factory {
 		$(#[$attr:meta])*
 		struct $name:ident {
 			Block = $block:ty,
+			ConsensusPair = $consensus_pair:ty,
+			FinalityPair = $finality_pair:ty,
 			RuntimeApi = $runtime_api:ty,
 			NetworkProtocol = $protocol:ty { $( $protocol_init:tt )* },
 			RuntimeDispatch = $dispatch:ty,
@@ -983,6 +1090,8 @@ macro_rules! construct_service_factory {
 		#[allow(unused_variables)]
 		impl $crate::ServiceFactory for $name {
 			type Block = $block;
+			type ConsensusPair = $consensus_pair;
+			type FinalityPair = $finality_pair;
 			type RuntimeApi = $runtime_api;
 			type NetworkProtocol = $protocol;
 			type RuntimeDispatch = $dispatch;
@@ -1036,7 +1145,7 @@ macro_rules! construct_service_factory {
 			fn build_light_import_queue(
 				config: &mut FactoryFullConfiguration<Self>,
 				client: Arc<$crate::LightClient<Self>>,
-			) -> Result<Self::LightImportQueue, $crate::Error> {
+			) -> Result<(Self::LightImportQueue, $crate::BoxFinalityProofRequestBuilder<$block>), $crate::Error> {
 				( $( $light_import_queue_init )* ) (config, client)
 			}
 
@@ -1069,7 +1178,7 @@ macro_rules! construct_service_factory {
 mod tests {
 	use super::*;
 	use consensus_common::SelectChain;
-	use runtime_primitives::traits::BlindCheckable;
+	use sr_primitives::traits::BlindCheckable;
 	use substrate_test_runtime_client::{prelude::*, runtime::{Extrinsic, Transfer}};
 
 	#[test]

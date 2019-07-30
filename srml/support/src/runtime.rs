@@ -194,10 +194,10 @@ macro_rules! construct_runtime {
 		#[derive(Clone, Copy, PartialEq, Eq)]
 		#[cfg_attr(feature = "std", derive(Debug))]
 		pub struct $runtime;
-		impl $crate::runtime_primitives::traits::GetNodeBlockType for $runtime {
+		impl $crate::sr_primitives::traits::GetNodeBlockType for $runtime {
 			type NodeBlock = $node_block;
 		}
-		impl $crate::runtime_primitives::traits::GetRuntimeBlockType for $runtime {
+		impl $crate::sr_primitives::traits::GetRuntimeBlockType for $runtime {
 			type RuntimeBlock = $block;
 		}
 		$crate::__decl_outer_event!(
@@ -576,7 +576,9 @@ macro_rules! __decl_runtime_metadata {
 			$runtime;
 			{
 				$( $parsed )*
-				$module $( < $module_instance > )?  { $( $( $leading_module )* )? $( $modules )* }
+				$module $( < $module_instance > )? as $name {
+					$( $( $leading_module )* )? $( $modules )*
+				}
 			};
 			$( $rest )*
 		);
@@ -618,11 +620,18 @@ macro_rules! __decl_runtime_metadata {
 	// end of decl
 	(
 		$runtime:ident;
-		{ $( $parsed_modules:ident $( < $module_instance:ident > )? { $( $withs:ident )* } )* };
+		{
+			$(
+				$parsed_modules:ident $( < $module_instance:ident > )? as $parsed_name:ident {
+					$( $withs:ident )*
+				}
+			)*
+		};
 	) => {
 		$crate::impl_runtime_metadata!(
 			for $runtime with modules
-				$( $parsed_modules::Module $( < $module_instance > )? with $( $withs )* , )*
+				$( $parsed_modules::Module $( < $module_instance > )? as $parsed_name
+					with $( $withs )* , )*
 		);
 	}
 }
@@ -689,7 +698,7 @@ macro_rules! __decl_outer_config {
 		};
 	) => {
 		$crate::paste::item! {
-			$crate::runtime_primitives::impl_outer_config!(
+			$crate::sr_primitives::impl_outer_config!(
 				pub struct GenesisConfig for $runtime {
 					$(
 						[< $parsed_name Config >] =>

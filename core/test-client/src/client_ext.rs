@@ -18,13 +18,13 @@
 
 use client::{self, Client};
 use consensus::{
-	ImportBlock, BlockImport, BlockOrigin, Error as ConsensusError,
+	BlockImportParams, BlockImport, BlockOrigin, Error as ConsensusError,
 	ForkChoiceStrategy,
 };
 use hash_db::Hasher;
-use runtime_primitives::Justification;
-use runtime_primitives::traits::{Block as BlockT};
-use runtime_primitives::generic::BlockId;
+use sr_primitives::Justification;
+use sr_primitives::traits::{Block as BlockT};
+use sr_primitives::generic::BlockId;
 use primitives::Blake2Hasher;
 use parity_codec::alloc::collections::hash_map::HashMap;
 
@@ -57,14 +57,14 @@ impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 	where
 		B: client::backend::Backend<Block, Blake2Hasher>,
 		E: client::CallExecutor<Block, Blake2Hasher>,
-		Self: BlockImport<Block, Error=ConsensusError>,
+		for<'r> &'r Self: BlockImport<Block, Error=ConsensusError>,
 		Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
 {
 	fn import(&self, origin: BlockOrigin, block: Block)
 		-> Result<(), ConsensusError>
 	{
 		let (header, extrinsics) = block.deconstruct();
-		let import = ImportBlock {
+		let import = BlockImportParams {
 			origin,
 			header,
 			justification: None,
@@ -75,7 +75,7 @@ impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 			fork_choice: ForkChoiceStrategy::LongestChain,
 		};
 
-		self.import_block(import, HashMap::new()).map(|_| ())
+		BlockImport::import_block(&mut (&*self), import, HashMap::new()).map(|_| ())
 	}
 
 	fn import_justified(
@@ -85,7 +85,7 @@ impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 		justification: Justification,
 	) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
-		let import = ImportBlock {
+		let import = BlockImportParams {
 			origin,
 			header,
 			justification: Some(justification),
@@ -96,7 +96,7 @@ impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 			fork_choice: ForkChoiceStrategy::LongestChain,
 		};
 
-		self.import_block(import, HashMap::new()).map(|_| ())
+		BlockImport::import_block(&mut (&*self), import, HashMap::new()).map(|_| ())
 	}
 
 	fn finalize_block(

@@ -20,11 +20,9 @@
 
 use crate::rstd::{result, marker::PhantomData, ops::Div};
 use crate::codec::{Codec, Encode, Decode};
-use substrate_primitives::u32_trait::Value as U32;
-use crate::runtime_primitives::traits::{
-	MaybeSerializeDebug, SimpleArithmetic, Saturating
-};
-use crate::runtime_primitives::ConsensusEngineId;
+use primitives::u32_trait::Value as U32;
+use crate::sr_primitives::traits::{MaybeSerializeDebug, SimpleArithmetic, Saturating};
+use crate::sr_primitives::ConsensusEngineId;
 
 use super::for_each_tuple;
 
@@ -89,19 +87,6 @@ pub enum UpdateBalanceOutcome {
 	Updated,
 	/// The update led to killing the account.
 	AccountKilled,
-}
-
-/// Simple trait designed for hooking into a transaction payment.
-///
-/// It operates over a single generic `AccountId` type.
-pub trait MakePayment<AccountId> {
-	/// Make transaction payment from `who` for an extrinsic of encoded length
-	/// `encoded_len` bytes. Return `Ok` iff the payment was successful.
-	fn make_payment(who: &AccountId, encoded_len: usize) -> Result<(), &'static str>;
-}
-
-impl<T> MakePayment<T> for () {
-	fn make_payment(_: &T, _: usize) -> Result<(), &'static str> { Ok(()) }
 }
 
 /// A trait for finding the author of a block header based on the `PreRuntime` digests contained
@@ -630,3 +615,28 @@ bitmask! {
 	}
 }
 
+pub trait Time {
+	type Moment: SimpleArithmetic + Codec + Clone + Default;
+
+	fn now() -> Self::Moment;
+}
+
+impl WithdrawReasons {
+	/// Choose all variants except for `one`.
+	pub fn except(one: WithdrawReason) -> WithdrawReasons {
+		let mut mask = Self::all();
+		mask.toggle(one);
+		mask
+	}
+}
+
+/// Trait for type that can handle incremental changes to a set of account IDs.
+pub trait ChangeMembers<AccountId> {
+	/// A number of members `_incoming` just joined the set and replaced some `_outgoing` ones. The
+	/// new set is thus given by `_new`.
+	fn change_members(_incoming: &[AccountId], _outgoing: &[AccountId], _new: &[AccountId]);
+}
+
+impl<T> ChangeMembers<T> for () {
+	fn change_members(_incoming: &[T], _outgoing: &[T], _new_set: &[T]) {}
+}

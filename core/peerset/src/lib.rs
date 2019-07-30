@@ -20,10 +20,11 @@
 mod peersstate;
 
 use std::{collections::{HashSet, HashMap}, collections::VecDeque, time::Instant};
-use futures::{prelude::*, sync::mpsc, try_ready};
+use futures::{prelude::*, channel::mpsc};
 use libp2p::PeerId;
 use log::{debug, error, trace};
 use serde_json::json;
+use std::{pin::Pin, task::Context, task::Poll};
 
 /// We don't accept nodes whose reputation is under this value.
 const BANNED_THRESHOLD: i32 = 82 * (i32::min_value() / 100);
@@ -155,7 +156,11 @@ pub struct Peerset {
 	data: peersstate::PeersState,
 	/// If true, we only accept reserved nodes.
 	reserved_only: bool,
+	/// Receiver for messages from the `PeersetHandle` and from `tx`.
 	rx: mpsc::UnboundedReceiver<Action>,
+	/// Sending side of `rx`.
+	tx: mpsc::UnboundedSender<Action>,
+	/// Queue of messages to be emitted when the `Peerset` is polled.
 	message_queue: VecDeque<Message>,
 	/// When the `Peerset` was created.
 	created: Instant,
@@ -169,11 +174,12 @@ impl Peerset {
 		let (tx, rx) = mpsc::unbounded();
 
 		let handle = PeersetHandle {
-			tx,
+			tx: tx.clone(),
 		};
 
 		let mut peerset = Peerset {
 			data: peersstate::PeersState::new(config.in_peers, config.out_peers),
+			tx,
 			rx,
 			reserved_only: config.reserved_only,
 			message_queue: VecDeque::new(),
@@ -423,6 +429,14 @@ impl Peerset {
 		}
 	}
 
+	/// Reports an adjustment to the reputation of the given peer.
+	pub fn report_peer(&mut self, peer_id: PeerId, score_diff: i32) {
+		// We don't immediately perform the adjustments in order to have state consistency. We
+		// don't want the reporting here to take priority over messages sent using the
+		// `PeersetHandle`.
+		let _ = self.tx.unbounded_send(Action::ReportPeer(peer_id, score_diff));
+	}
+
 	/// Produces a JSON object containing the state of the peerset manager, for debugging purposes.
 	pub fn debug_info(&mut self) -> serde_json::Value {
 		self.update_time();
@@ -457,24 +471,34 @@ impl Peerset {
 
 impl Stream for Peerset {
 	type Item = Message;
-	type Error = ();
 
-	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
 		loop {
 			if let Some(message) = self.message_queue.pop_front() {
-				return Ok(Async::Ready(Some(message)));
+				return Poll::Ready(Some(message));
 			}
-			match try_ready!(self.rx.poll()) {
-				None => return Ok(Async::NotReady),
-				Some(action) => match action {
-					Action::AddReservedPeer(peer_id) => self.on_add_reserved_peer(peer_id),
-					Action::RemoveReservedPeer(peer_id) => self.on_remove_reserved_peer(peer_id),
-					Action::SetReservedOnly(reserved) => self.on_set_reserved_only(reserved),
-					Action::ReportPeer(peer_id, score_diff) => self.on_report_peer(peer_id, score_diff),
-					Action::SetPriorityGroup(group_id, peers) => self.on_set_priority_group(&group_id, peers),
-					Action::AddToPriorityGroup(group_id, peer_id) => self.on_add_to_priority_group(&group_id, peer_id),
-					Action::RemoveFromPriorityGroup(group_id, peer_id) => self.on_remove_from_priority_group(&group_id, peer_id),
-				}
+
+			let action = match Stream::poll_next(Pin::new(&mut self.rx), cx) {
+				Poll::Pending => return Poll::Pending,
+				Poll::Ready(Some(event)) => event,
+				Poll::Ready(None) => return Poll::Pending,
+			};
+
+			match action {
+				Action::AddReservedPeer(peer_id) =>
+					self.on_add_reserved_peer(peer_id),
+				Action::RemoveReservedPeer(peer_id) =>
+					self.on_remove_reserved_peer(peer_id),
+				Action::SetReservedOnly(reserved) =>
+					self.on_set_reserved_only(reserved),
+				Action::ReportPeer(peer_id, score_diff) =>
+					self.on_report_peer(peer_id, score_diff),
+				Action::SetPriorityGroup(group_id, peers) =>
+					self.on_set_priority_group(&group_id, peers),
+				Action::AddToPriorityGroup(group_id, peer_id) =>
+					self.on_add_to_priority_group(&group_id, peer_id),
+				Action::RemoveFromPriorityGroup(group_id, peer_id) =>
+					self.on_remove_from_priority_group(&group_id, peer_id),
 			}
 		}
 	}
@@ -485,7 +509,7 @@ mod tests {
 	use libp2p::PeerId;
 	use futures::prelude::*;
 	use super::{PeersetConfig, Peerset, Message, IncomingIndex, BANNED_THRESHOLD};
-	use std::{thread, time::Duration};
+	use std::{pin::Pin, task::Poll, thread, time::Duration};
 
 	fn assert_messages(mut peerset: Peerset, messages: Vec<Message>) -> Peerset {
 		for expected_message in messages {
@@ -497,10 +521,8 @@ mod tests {
 		peerset
 	}
 
-	fn next_message(peerset: Peerset) -> Result<(Message, Peerset), ()> {
-		let (next, peerset) = peerset.into_future()
-			.wait()
-			.map_err(|_| ())?;
+	fn next_message(mut peerset: Peerset) -> Result<(Message, Peerset), ()> {
+		let next = futures::executor::block_on_stream(&mut peerset).next();
 		let message = next.ok_or_else(|| ())?;
 		Ok((message, peerset))
 	}
@@ -598,13 +620,13 @@ mod tests {
 		let peer_id = PeerId::random();
 		handle.report_peer(peer_id.clone(), BANNED_THRESHOLD - 1);
 
-		let fut = futures::future::poll_fn(move || -> Result<_, ()> {
+		let fut = futures::future::poll_fn(move |cx| {
 			// We need one polling for the message to be processed.
-			assert_eq!(peerset.poll().unwrap(), Async::NotReady);
+			assert_eq!(Stream::poll_next(Pin::new(&mut peerset), cx), Poll::Pending);
 
 			// Check that an incoming connection from that node gets refused.
 			peerset.incoming(peer_id.clone(), IncomingIndex(1));
-			if let Async::Ready(msg) = peerset.poll().unwrap() {
+			if let Poll::Ready(msg) = Stream::poll_next(Pin::new(&mut peerset), cx) {
 				assert_eq!(msg.unwrap(), Message::Reject(IncomingIndex(1)));
 			} else {
 				panic!()
@@ -615,14 +637,14 @@ mod tests {
 
 			// Try again. This time the node should be accepted.
 			peerset.incoming(peer_id.clone(), IncomingIndex(2));
-			while let Async::Ready(msg) = peerset.poll().unwrap() {
+			while let Poll::Ready(msg) = Stream::poll_next(Pin::new(&mut peerset), cx) {
 				assert_eq!(msg.unwrap(), Message::Accept(IncomingIndex(2)));
 			}
 
-			Ok(Async::Ready(()))
+			Poll::Ready(())
 		});
 
-		tokio::runtime::current_thread::Runtime::new().unwrap().block_on(fut).unwrap();
+		futures::executor::block_on(fut);
 	}
 }
 

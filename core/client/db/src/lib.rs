@@ -49,11 +49,11 @@ use trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
 use parking_lot::{Mutex, RwLock};
 use primitives::{H256, Blake2Hasher, ChangesTrieConfiguration, convert_hash};
 use primitives::storage::well_known_keys;
-use runtime_primitives::{
+use sr_primitives::{
 	generic::{BlockId, DigestItem}, Justification, StorageOverlay, ChildrenStorageOverlay,
 	BuildStorage
 };
-use runtime_primitives::traits::{
+use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero, One, SaturatedConversion
 };
 use state_machine::backend::Backend as StateBackend;
@@ -883,7 +883,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 					transaction,
 					columns::KEY_LOOKUP,
 					r.number
-				);
+				)?;
 			}
 
 			// canonicalize: set the number lookup to map to this block's hash.
@@ -894,18 +894,18 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 					columns::KEY_LOOKUP,
 					e.number,
 					e.hash
-				);
+				)?;
 			}
 		}
 
-		let lookup_key = utils::number_and_hash_to_lookup_key(best_to.0, &best_to.1);
+		let lookup_key = utils::number_and_hash_to_lookup_key(best_to.0, &best_to.1)?;
 		transaction.put(columns::META, meta_keys::BEST_BLOCK, &lookup_key);
 		utils::insert_number_to_key_mapping(
 			transaction,
 			columns::KEY_LOOKUP,
 			best_to.0,
 			best_to.1,
-		);
+		)?;
 
 		Ok((enacted, retracted))
 	}
@@ -946,7 +946,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		if let Some(justification) = justification {
 			transaction.put(
 				columns::JUSTIFICATION,
-				&utils::number_and_hash_to_lookup_key(number, hash),
+				&utils::number_and_hash_to_lookup_key(number, hash)?,
 				&justification.encode(),
 			);
 		}
@@ -1021,7 +1021,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			let number = pending_block.header.number().clone();
 
 			// blocks are keyed by number + hash.
-			let lookup_key = utils::number_and_hash_to_lookup_key(number, hash);
+			let lookup_key = utils::number_and_hash_to_lookup_key(number, hash)?;
 
 			let (enacted, retracted) = if pending_block.leaf_state.is_best() {
 				self.set_head_with_transaction(&mut transaction, parent_hash, (number, hash))?
@@ -1034,7 +1034,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				columns::KEY_LOOKUP,
 				number,
 				hash,
-			);
+			)?;
 
 			transaction.put(columns::HEADER, &lookup_key, &pending_block.header.encode());
 			if let Some(body) = pending_block.body {
@@ -1118,6 +1118,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 					hash.clone(),
 					(number.clone(), hash.clone())
 				)?;
+				meta_updates.push((hash, *number, true, false));
 			} else {
 				return Err(client::error::Error::UnknownBlock(format!("Cannot set head {:?}", set_head)))
 			}
@@ -1176,7 +1177,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		if self.storage.state_db.best_canonical().map(|c| f_num.saturated_into::<u64>() > c).unwrap_or(true) {
 			let parent_hash = f_header.parent_hash().clone();
 
-			let lookup_key = utils::number_and_hash_to_lookup_key(f_num, f_hash.clone());
+			let lookup_key = utils::number_and_hash_to_lookup_key(f_num, f_hash.clone())?;
 			transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
 
 			let commit = self.storage.state_db.canonicalize_block(&f_hash)
@@ -1343,7 +1344,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 					let hash = self.blockchain.hash(best)?.ok_or_else(
 						|| client::error::Error::UnknownBlock(
 							format!("Error reverting to {}. Block hash not found.", best)))?;
-					let key = utils::number_and_hash_to_lookup_key(best.clone(), &hash);
+					let key = utils::number_and_hash_to_lookup_key(best.clone(), &hash)?;
 					transaction.put(columns::META, meta_keys::BEST_BLOCK, &key);
 					transaction.delete(columns::KEY_LOOKUP, removed.hash().as_ref());
 					children::remove_children(&mut transaction, columns::META, meta_keys::CHILDREN_PREFIX, hash);
@@ -1426,8 +1427,8 @@ mod tests {
 	use client::backend::Backend as BTrait;
 	use client::blockchain::Backend as BLBTrait;
 	use client::backend::BlockImportOperation as Op;
-	use runtime_primitives::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
-	use runtime_primitives::traits::{Hash, BlakeTwo256};
+	use sr_primitives::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
+	use sr_primitives::traits::{Hash, BlakeTwo256};
 	use state_machine::{TrieMut, TrieDBMut, ChangesTrieRootsStorage, ChangesTrieStorage};
 	use test_client;
 
@@ -1456,7 +1457,7 @@ mod tests {
 		changes: Vec<(Vec<u8>, Vec<u8>)>,
 		extrinsics_root: H256,
 	) -> H256 {
-		use runtime_primitives::testing::Digest;
+		use sr_primitives::testing::Digest;
 
 		let (changes_root, changes_trie_update) = prepare_changes(changes);
 		let digest = Digest {
