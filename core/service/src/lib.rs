@@ -1000,7 +1000,7 @@ where
 /// # struct MyVerifier;
 /// # impl<B: BlockT> Verifier<B> for MyVerifier {
 /// # 	fn verify(
-/// # 		&self,
+/// # 		&mut self,
 /// # 		origin: BlockOrigin,
 /// # 		header: B::Header,
 /// # 		justification: Option<Justification>,
