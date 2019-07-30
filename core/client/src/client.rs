@@ -2739,4 +2739,44 @@ pub(crate) mod tests {
 		client.import_as_best(BlockOrigin::Own, a2.bake().unwrap()).unwrap();
 		assert_eq!(980, current_balance());
 	}
+
+	#[test]
+	fn state_reverted_on_set_head() {
+		let _ = env_logger::try_init();
+		let client = test_client::new();
+
+		let alice = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into())).to_vec();
+		let current_balance = ||
+			u64::decode(
+				&mut client.storage(&BlockId::number(client.current_height()), &StorageKey(alice.clone()))
+				.unwrap().unwrap().0.as_slice()
+			).unwrap();
+
+		// G -> A1
+		//   \
+		//    -> B1
+		let mut a1 = client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
+		a1.push_transfer(Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Bob.into(),
+			amount: 10,
+			nonce: 0,
+		}).unwrap();
+		let a1 = a1.bake().unwrap();
+		client.import(BlockOrigin::Own, a1.clone()).unwrap();
+
+		let mut b1 = client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
+		b1.push_transfer(Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
+			amount: 50,
+			nonce: 0,
+		}).unwrap();
+		let b1 = b1.bake().unwrap();
+		client.import(BlockOrigin::Own, b1.clone()).unwrap();
+		assert_eq!(990, current_balance());
+		// Set B1 as new best
+		client.set_head(BlockId::hash(b1.hash())).unwrap();
+		assert_eq!(950, current_balance());
+	}
 }
