@@ -151,6 +151,65 @@ impl<B: BlockT, H: Hasher> Cache<B, H> {
 			+ self.lru_child_storage.used_size()
 			//  ignore small hashes storage and self.lru_hashes.used_size()
 	}
+
+	/// Synchronize the shared cache with the best block state.
+	/// This function updates the shared cache by removing entries
+	/// that are invalidated by chain reorganization. It should be
+	/// be called when chain reorg happens without importing a new block.
+	pub fn sync(&mut self, enacted: &[B::Hash], retracted: &[B::Hash]) {
+		trace!("Syncing shared cache, enacted = {:?}, retracted = {:?}", enacted, retracted);
+
+		// Purge changes from re-enacted and retracted blocks.
+		// Filter out commiting block if any.
+		let mut clear = false;
+		for block in enacted {
+			clear = clear || {
+				if let Some(ref mut m) = self.modifications.iter_mut().find(|m| &m.hash == block) {
+					trace!("Reverting enacted block {:?}", block);
+					m.is_canon = true;
+					for a in &m.storage {
+						trace!("Reverting enacted key {:?}", a);
+						self.lru_storage.remove(a);
+					}
+					for a in &m.child_storage {
+						trace!("Reverting enacted child key {:?}", a);
+						self.lru_child_storage.remove(a);
+					}
+					false
+				} else {
+					true
+				}
+			};
+		}
+
+		for block in retracted {
+			clear = clear || {
+				if let Some(ref mut m) = self.modifications.iter_mut().find(|m| &m.hash == block) {
+					trace!("Retracting block {:?}", block);
+					m.is_canon = false;
+					for a in &m.storage {
+						trace!("Retracted key {:?}", a);
+						self.lru_storage.remove(a);
+					}
+					for a in &m.child_storage {
+						trace!("Retracted child key {:?}", a);
+						self.lru_child_storage.remove(a);
+					}
+					false
+				} else {
+					true
+				}
+			};
+		}
+		if clear {
+			// We don't know anything about the block; clear everything
+			trace!("Wiping cache");
+			self.lru_storage.clear();
+			self.lru_child_storage.clear();
+			self.lru_hashes.clear();
+			self.modifications.clear();
+		}
+	}
 }
 
 pub type SharedCache<B, H> = Arc<Mutex<Cache<B, H>>>;
@@ -247,58 +306,12 @@ impl<H: Hasher, B: BlockT> CacheChanges<H, B> {
 		let is_best = is_best();
 		trace!("Syncing cache, id = (#{:?}, {:?}), parent={:?}, best={}", commit_number, commit_hash, self.parent_hash, is_best);
 		let cache = &mut *cache;
-
-		// Purge changes from re-enacted and retracted blocks.
-		// Filter out commiting block if any.
-		let mut clear = false;
-		for block in enacted.iter().filter(|h| commit_hash.as_ref().map_or(true, |p| *h != p)) {
-			clear = clear || {
-				if let Some(ref mut m) = cache.modifications.iter_mut().find(|m| &m.hash == block) {
-					trace!("Reverting enacted block {:?}", block);
-					m.is_canon = true;
-					for a in &m.storage {
-						trace!("Reverting enacted key {:?}", a);
-						cache.lru_storage.remove(a);
-					}
-					for a in &m.child_storage {
-						trace!("Reverting enacted child key {:?}", a);
-						cache.lru_child_storage.remove(a);
-					}
-					false
-				} else {
-					true
-				}
-			};
-		}
-
-		for block in retracted {
-			clear = clear || {
-				if let Some(ref mut m) = cache.modifications.iter_mut().find(|m| &m.hash == block) {
-					trace!("Retracting block {:?}", block);
-					m.is_canon = false;
-					for a in &m.storage {
-						trace!("Retracted key {:?}", a);
-						cache.lru_storage.remove(a);
-					}
-					for a in &m.child_storage {
-						trace!("Retracted child key {:?}", a);
-						cache.lru_child_storage.remove(a);
-					}
-					false
-				} else {
-					true
-				}
-			};
-		}
-		if clear {
-			// We don't know anything about the block; clear everything
-			trace!("Wiping cache");
-			cache.lru_storage.clear();
-			cache.lru_child_storage.clear();
-			cache.lru_hashes.clear();
-			cache.modifications.clear();
-		}
-
+		let enacted: Vec<_> = enacted
+			.iter()
+			.filter(|h| commit_hash.as_ref().map_or(true, |p| *h != p))
+			.cloned()
+			.collect();
+		cache.sync(&enacted, retracted);
 		// Propagate cache only if committing on top of the latest canonical state
 		// blocks are ordered by number and only one block with a given number is marked as canonical
 		// (contributed to canonical state cache)
