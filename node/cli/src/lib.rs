@@ -234,10 +234,6 @@ fn run_until_exit<T, C, E>(
 	let informant = cli::informant::build(&service);
 	runtime.executor().spawn(exit.until(informant).map(|_| ()));
 
-	// we eagerly drop the service so that the internal exit future is fired,
-	// but we need to keep holding a reference to the global telemetry guard
-	let _telemetry = service.telemetry();
-
 	let _ = runtime.block_on(service.select(e.into_exit()));
 	exit_send.fire();
 

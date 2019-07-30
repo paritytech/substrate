@@ -100,7 +100,6 @@ pub struct Service<Components: components::Components> {
 	pub config: FactoryFullConfiguration<Components::Factory>,
 	rpc_handlers: rpc::RpcHandler,
 	_rpc: Box<dyn std::any::Any + Send + Sync>,
-	_telemetry: Option<tel::Telemetry>,
 	_telemetry_on_connect_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>>,
 	_offchain_workers: Option<Arc<offchain::OffchainWorkers<
 		ComponentClient<Components>,
@@ -440,7 +439,7 @@ impl<Components: components::Components> Service<Components> {
 		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();
 
 		// Telemetry
-		let telemetry = config.telemetry_endpoints.clone().map(|endpoints| {
+		if let Some(rx) = config.telemetry_connected_report.take() {
 			let is_authority = config.roles == Roles::AUTHORITY;
 			let network_id = network.local_peer_id().to_base58();
 			let name = config.name.clone();
@@ -448,17 +447,8 @@ impl<Components: components::Components> Service<Components> {
 			let version = version.clone();
 			let chain_name = config.chain_spec.name().to_owned();
 			let telemetry_connection_sinks_ = telemetry_connection_sinks.clone();
-			let telemetry = tel::init_telemetry(tel::TelemetryConfig {
-				endpoints,
-				wasm_external_transport: config.telemetry_external_transport.take(),
-			});
-			let future = telemetry.clone()
-				.map(|ev| Ok::<_, ()>(ev))
-				.compat()
-				.for_each(move |event| {
-					// Safe-guard in case we add more events in the future.
-					let tel::TelemetryEvent::Connected = event;
-
+			let future = rx
+				.for_each(move |()| {
 					telemetry!(SUBSTRATE_INFO; "system.connected";
 						"name" => name.clone(),
 						"implementation" => impl_name.clone(),
@@ -478,8 +468,7 @@ impl<Components: components::Components> Service<Components> {
 			let _ = to_spawn_tx.unbounded_send(Box::new(future
 				.select(exit.clone())
 				.then(|_| Ok(()))));
-			telemetry
-		});
+		}
 
 		Ok(Service {
 			client,
@@ -496,7 +485,6 @@ impl<Components: components::Components> Service<Components> {
 			exit,
 			rpc_handlers,
 			_rpc: rpc,
-			_telemetry: telemetry,
 			_offchain_workers: offchain_workers,
 			_telemetry_on_connect_sinks: telemetry_connection_sinks.clone(),
 		})
@@ -514,11 +502,6 @@ impl<Components: components::Components> Service<Components> {
 		use offchain::AuthorityKeyProvider;
 
 		self.keystore.fg_authority_key(&BlockId::Number(Zero::zero()))
-	}
-
-	/// return a shared instance of Telemetry (if enabled)
-	pub fn telemetry(&self) -> Option<tel::Telemetry> {
-		self._telemetry.as_ref().map(|t| t.clone())
 	}
 
 	/// Spawns a task in the background that runs the future passed as parameter.

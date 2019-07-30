@@ -38,7 +38,7 @@ use primitives::H256;
 
 use std::{
 	io::{Write, Read, stdin, stdout, ErrorKind}, iter, fs::{self, File}, net::{Ipv4Addr, SocketAddr},
-	path::{Path, PathBuf}, str::FromStr,
+	path::{Path, PathBuf}, thread, str::FromStr,
 };
 
 use names::{Generator, Name};
@@ -57,7 +57,8 @@ use app_dirs::{AppInfo, AppDataType};
 use log::info;
 use lazy_static::lazy_static;
 
-use futures::Future;
+use futures::{Future, Stream as _, sync::mpsc};
+use futures03::{StreamExt as _, TryStreamExt as _};
 use substrate_telemetry::TelemetryEndpoints;
 
 /// The maximum number of characters for a node name.
@@ -498,13 +499,6 @@ where
 		])
 	}).into();
 
-	// Override telemetry
-	if cli.no_telemetry {
-		config.telemetry_endpoints = None;
-	} else if !cli.telemetry_endpoints.is_empty() {
-		config.telemetry_endpoints = Some(TelemetryEndpoints::new(cli.telemetry_endpoints));
-	}
-
 	// Imply forced authoring on --dev
 	config.force_authoring = cli.shared_params.dev || cli.force_authoring;
 
@@ -526,7 +520,40 @@ where
 	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 	RS: FnOnce(E, RunCmd, RP, FactoryFullConfiguration<F>) -> Result<(), String>,
  {
-	let config = create_run_node_config::<F, _>(cli.left.clone(), spec_factory, impl_name, version)?;
+	let mut config =
+		create_run_node_config::<F, _>(cli.left.clone(), spec_factory, impl_name, version)?;
+
+	// Find out about the telemetry endpoints.
+	let telemetry_endpoints = if cli.left.no_telemetry {
+		None
+	} else if !cli.left.telemetry_endpoints.is_empty() {
+		Some(TelemetryEndpoints::new(cli.left.telemetry_endpoints.clone()))
+	} else {
+		config.chain_spec.telemetry_endpoints().clone()
+	};
+
+	// Start the telemetry.
+	if let Some(endpoints) = telemetry_endpoints {
+		let telemetry = substrate_telemetry::init_telemetry(substrate_telemetry::TelemetryConfig {
+			endpoints,
+			wasm_external_transport: None,
+		});
+
+		let (mut tx, rx) = mpsc::channel(1);
+		config.telemetry_connected_report = Some(rx);
+
+		let future = telemetry.clone()
+			.map(|ev| Ok::<_, ()>(ev))
+			.compat()
+			.for_each(move |substrate_telemetry::TelemetryEvent::Connected| {
+				let _ = tx.try_send(());
+				Ok(())
+			});
+
+		thread::spawn(move || {
+			let _ = tokio::runtime::current_thread::block_on_all(future);
+		});
+	}
 
 	run_service(exit, cli.left, cli.right, config).map_err(Into::into)
 }

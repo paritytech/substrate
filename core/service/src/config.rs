@@ -21,16 +21,15 @@ pub use client_db::PruningMode;
 pub use network::config::{ExtTransport, NetworkConfiguration, Roles};
 
 use std::{path::PathBuf, net::SocketAddr};
+use futures::sync::mpsc;
 use transaction_pool;
 use crate::chain_spec::ChainSpec;
 use primitives::crypto::Protected;
 use sr_primitives::BuildStorage;
 use serde::{Serialize, de::DeserializeOwned};
 use target_info::Target;
-use tel::TelemetryEndpoints;
 
 /// Service configuration.
-#[derive(Clone)]
 pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	/// Implementation name
 	pub impl_name: &'static str,
@@ -74,11 +73,25 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub rpc_ws_max_connections: Option<usize>,
 	/// CORS settings for HTTP & WS servers. `None` if all origins are allowed.
 	pub rpc_cors: Option<Vec<String>>,
-	/// Telemetry service URL. `None` if disabled.
-	pub telemetry_endpoints: Option<TelemetryEndpoints>,
-	/// External WASM transport for the telemetry. If `Some`, when connection to a telemetry
-	/// endpoint, this transport will be tried in priority before all others.
-	pub telemetry_external_transport: Option<ExtTransport>,
+	/// Channel that will receive dummy data. Whenever the service will detect a message being
+	/// pushed on this channel, it will send out to the telemetry a `"system.connected"` message.
+	///
+	/// # Context
+	///
+	/// The telemetry works by sending out messages with the `slog` library. The owner of the
+	/// `Service` is expected to setup the `slog` logger the correct way in order to propagate
+	/// these messages to the telemetry server.
+	///
+	/// However, whenever we successfully connect to a telemetry server, we want to immediately
+	/// send a message to this server containing some information about our node.
+	///
+	/// The proper way to do this would be to add a method on the `Service` struct to instruct it
+	/// to do so (or alternatively, add a getter for the `Service` to generate the message to send).
+	/// However this is currently not possible without refactoring most of the `substrate-cli`
+	/// crate. This channel is a work-around. Whenever we connect to a new telemetry server, we
+	/// send a dummy message to this channel, and the service, when receive a message, sends out
+	/// a log (using `slog`) containing the given message.
+	pub telemetry_connected_report: Option<mpsc::Receiver<()>>,
 	/// The default number of 64KB pages to allocate for Wasm execution
 	pub default_heap_pages: Option<u64>,
 	/// Should offchain workers be executed.
@@ -119,8 +132,7 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			rpc_ws: None,
 			rpc_ws_max_connections: None,
 			rpc_cors: Some(vec![]),
-			telemetry_endpoints: None,
-			telemetry_external_transport: None,
+			telemetry_connected_report: None,
 			default_heap_pages: None,
 			offchain_worker: Default::default(),
 			force_authoring: false,
@@ -129,8 +141,6 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			password: "".to_string().into(),
 		};
 		configuration.network.boot_nodes = configuration.chain_spec.boot_nodes().to_vec();
-
-		configuration.telemetry_endpoints = configuration.chain_spec.telemetry_endpoints().clone();
 
 		configuration
 	}
