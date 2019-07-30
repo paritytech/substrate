@@ -488,7 +488,7 @@ impl TraitPair for Pair {
 			Ok(pk) => pk.verify(
 				signing_context(SIGNING_CTX).bytes(message.as_ref()),
 				&signature,
-			).map(|_| true).unwrap_or(false),
+			).is_ok(),
 			Err(_) => false,
 		}
 	}
@@ -503,7 +503,7 @@ impl TraitPair for Pair {
 			Ok(pk) => pk.verify(
 				signing_context(SIGNING_CTX).bytes(message.as_ref()),
 				&signature,
-			).map(|_| true).unwrap_or(false),
+			).is_ok(),
 			Err(_) => false,
 		}
 	}
