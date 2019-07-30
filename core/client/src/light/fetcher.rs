@@ -29,8 +29,9 @@ use runtime_primitives::traits::{
 	SimpleArithmetic, CheckedConversion, Zero,
 };
 use state_machine::{CodeExecutor, ChangesTrieRootsStorage, ChangesTrieAnchorBlockId,
-	TrieBackend, read_proof_check, key_changes_proof_check,
-	create_proof_check_backend_storage, read_child_proof_check};
+	ChangesTrieConfigurationRange, TrieBackend, read_proof_check, key_changes_proof_check,
+	create_proof_check_backend_storage, read_child_proof_check,
+};
 
 use crate::cht;
 use crate::error::{Error as ClientError, Result as ClientResult};
@@ -284,14 +285,18 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 		}
 
 		// and now check the key changes proof + get the changes
+		let config_range = ChangesTrieConfigurationRange {
+			config: &request.changes_trie_config,
+			zero: Zero::zero(), // TODO: wrong
+			end: None, // TODO: wrong
+		};
 		key_changes_proof_check::<H, _>(
-			&request.changes_trie_config,
+			config_range,
 			&RootsStorage {
 				roots: (request.tries_roots.0, &request.tries_roots.2),
 				prev_roots: remote_roots,
 			},
 			remote_proof,
-			Zero::zero(), // TODO: wrong
 			request.first_block.0,
 			&ChangesTrieAnchorBlockId {
 				hash: convert_hash(&request.last_block.1),

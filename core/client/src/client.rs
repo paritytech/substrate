@@ -53,7 +53,8 @@ use primitives::storage::well_known_keys;
 use parity_codec::{Encode, Decode};
 use state_machine::{
 	DBValue, Backend as StateBackend, CodeExecutor, ChangesTrieAnchorBlockId,
-	ExecutionStrategy, ExecutionManager, prove_read, prove_child_read,
+	ChangesTrieConfigurationRange, ExecutionStrategy, ExecutionManager,
+	prove_read, prove_child_read,
 	ChangesTrieRootsStorage, ChangesTrieStorage,
 	key_changes, key_changes_proof, OverlayedChanges, NeverOffchainExt,
 };
@@ -538,10 +539,14 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let last_number = self.backend.blockchain().expect_block_number_from_id(&last)?;
 		let last_hash = self.backend.blockchain().expect_block_hash_from_id(&last)?;
 
+		let config_range = ChangesTrieConfigurationRange {
+			config: &config,
+			zero: activation_block,
+			end: None, // TODO: wrong
+		};
 		key_changes::<Blake2Hasher, _>(
-			&config,
+			config_range,
 			storage.storage(),
-			activation_block,
 			first,
 			&ChangesTrieAnchorBlockId {
 				hash: convert_hash(&last_hash),
@@ -645,10 +650,14 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			.expect_block_number_from_id(&BlockId::Hash(first))?;
 		let last_number = self.backend.blockchain()
 			.expect_block_number_from_id(&BlockId::Hash(last))?;
+		let config_range = ChangesTrieConfigurationRange {
+			config: &config,
+			zero: activation_block,
+			end: None, // TODO: wrong
+		};
 		let key_changes_proof = key_changes_proof::<Blake2Hasher, _>(
-			&config,
+			config_range,
 			&recording_storage,
-			activation_block,
 			first_number,
 			&ChangesTrieAnchorBlockId {
 				hash: convert_hash(&last),
