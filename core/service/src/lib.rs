@@ -26,7 +26,6 @@ pub mod chain_ops;
 pub mod error;
 
 use std::io;
-use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -41,9 +40,8 @@ use keystore::Store as Keystore;
 use network::{NetworkState, NetworkStateInfo};
 use log::{log, info, warn, debug, error, Level};
 use parity_codec::{Encode, Decode};
-use primitives::{crypto::{self, AppKey, AppPair}};
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Header, NumberFor, SaturatedConversion, Zero};
+use sr_primitives::generic::BlockId;
+use sr_primitives::traits::{Header, NumberFor, SaturatedConversion};
 use substrate_executor::NativeExecutor;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
@@ -57,7 +55,7 @@ pub use transaction_pool::txpool::{
 pub use client::FinalityNotifications;
 
 pub use components::{
-	ServiceFactory, FullBackend, FullExecutor, LightBackend, ComponentAuthorityKeyProvider,
+	ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	LightExecutor, Components, PoolApi, ComponentClient, ComponentOffchainStorage,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
 	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock,
@@ -85,7 +83,7 @@ pub struct Service<Components: components::Components> {
 		NetworkStatus<ComponentBlock<Components>>, NetworkState
 	)>>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
-	keystore: ComponentAuthorityKeyProvider<Components>,
+	keystore: Arc<Option<Keystore>>,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
 	/// Sender for futures that must be spawned as background tasks.
@@ -105,7 +103,6 @@ pub struct Service<Components: components::Components> {
 	_offchain_workers: Option<Arc<offchain::OffchainWorkers<
 		ComponentClient<Components>,
 		ComponentOffchainStorage<Components>,
-		ComponentAuthorityKeyProvider<Components>,
 		ComponentBlock<Components>>
 	>>,
 }
@@ -212,6 +209,7 @@ impl<Components: components::Components> Service<Components> {
 		}
 		*/
 		public_key = format!("<disabled-keystore>");
+		let keystore = Arc::new(keystore);
 
 		let (client, on_demand) = Components::build_client(&config, executor)?;
 		let select_chain = Components::build_select_chain(&mut config, client.clone())?;
@@ -272,13 +270,6 @@ impl<Components: components::Components> Service<Components> {
 		let network = network_mut.service().clone();
 		let network_status_sinks = Arc::new(Mutex::new(Vec::new()));
 
-		let keystore_authority_key = AuthorityKeyProvider {
-			_marker: PhantomData,
-			roles: config.roles,
-			password: config.password.clone(),
-			keystore: keystore.map(Arc::new),
-		};
-
 		#[allow(deprecated)]
 		let offchain_storage = client.backend().offchain_storage();
 		let offchain_workers = match (config.offchain_worker, offchain_storage) {
@@ -286,8 +277,7 @@ impl<Components: components::Components> Service<Components> {
 				Some(Arc::new(offchain::OffchainWorkers::new(
 					client.clone(),
 					db,
-					keystore_authority_key.clone(),
-					config.password.clone(),
+					keystore.clone(),
 				)))
 			},
 			(true, None) => {
@@ -496,7 +486,7 @@ impl<Components: components::Components> Service<Components> {
 			to_spawn_tx,
 			to_spawn_rx,
 			to_poll: Vec::new(),
-			keystore: keystore_authority_key,
+			keystore,
 			config,
 			exit,
 			rpc_handlers,
@@ -505,20 +495,6 @@ impl<Components: components::Components> Service<Components> {
 			_offchain_workers: offchain_workers,
 			_telemetry_on_connect_sinks: telemetry_connection_sinks.clone(),
 		})
-	}
-
-	/// give the authority key, if we are an authority and have a key
-	pub fn authority_key(&self) -> Option<ComponentConsensusPair<Components>> {
-		use offchain::AuthorityKeyProvider;
-
-		self.keystore.authority_key(&BlockId::Number(Zero::zero()))
-	}
-
-	/// give the authority key, if we are an authority and have a key
-	pub fn fg_authority_key(&self) -> Option<ComponentFinalityPair<Components>> {
-		use offchain::AuthorityKeyProvider;
-
-		self.keystore.fg_authority_key(&BlockId::Number(Zero::zero()))
 	}
 
 	/// return a shared instance of Telemetry (if enabled)
@@ -905,78 +881,6 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 
 	fn on_broadcasted(&self, propagations: HashMap<ComponentExHash<C>, Vec<String>>) {
 		self.pool.on_broadcasted(propagations)
-	}
-}
-
-#[derive(Clone)]
-/// A provider of current authority key.
-pub struct AuthorityKeyProvider<Block, ConsensusPair, FinalityPair> {
-	_marker: PhantomData<(Block, ConsensusPair, FinalityPair)>,
-	roles: Roles,
-	keystore: Option<Arc<Keystore>>,
-	password: crypto::Protected<String>,
-}
-
-impl<Block, ConsensusPair, FinalityPair>
-	offchain::AuthorityKeyProvider<Block>
-for
-	AuthorityKeyProvider<Block, ConsensusPair, FinalityPair>
-where
-	Block: sr_primitives::traits::Block,
-	ConsensusPair: AppPair,
-	FinalityPair: AppPair,
-{
-	type ConsensusPair = ConsensusPair;
-	type FinalityPair = FinalityPair;
-
-	fn authority_key(&self, _at: &BlockId<Block>) -> Option<ConsensusPair> {
-		if self.roles != Roles::AUTHORITY {
-			return None
-		}
-
-		let keystore = match self.keystore {
-			Some(ref keystore) => keystore,
-			None => return None
-		};
-
-		let loaded_key = keystore
-			.contents::<<ConsensusPair as AppKey>::Public>()
-			.map(|keys| keys.get(0)
-				 .map(|k|
-					 keystore.load::<ConsensusPair>(k, self.password.as_ref())
-				 )
-			);
-
-		if let Ok(Some(Ok(key))) = loaded_key {
-			Some(key)
-		} else {
-			None
-		}
-	}
-
-	fn fg_authority_key(&self, _at: &BlockId<Block>) -> Option<FinalityPair> {
-		if self.roles != Roles::AUTHORITY {
-			return None
-		}
-
-		let keystore = match self.keystore {
-			Some(ref keystore) => keystore,
-			None => return None
-		};
-
-		let loaded_key = keystore
-			.contents::<<FinalityPair as AppKey>::Public>()
-			.map(|keys| keys.get(0)
-				 .map(|k|
-					 keystore.load::<FinalityPair>(k, self.password.as_ref())
-				 )
-			);
-
-		if let Ok(Some(Ok(key))) = loaded_key {
-			Some(key)
-		} else {
-			None
-		}
 	}
 }
 

@@ -221,7 +221,7 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 struct BabeWorker<C, E, I, SO> {
 	client: Arc<C>,
 	block_import: Arc<Mutex<I>>,
-	env: Arc<E>,
+	env: E,
 	local_key: Arc<AuthorityPair>,
 	sync_oracle: SO,
 	force_authoring: bool,
@@ -1225,10 +1225,10 @@ fn authority<C>(client: &C, keystore: Arc<Store>) -> Option<AuthorityPair> where
 {
 	let owned = keystore.contents::<AuthorityId>().ok()?;
 	let at = BlockId::Number(client.info().best_number);
-	/// The list of authority keys that is current. By default this will just use the state of
-	/// the best block, but you might want it to use some other block's state instead if it's
-	/// more sophisticated. Grandpa, for example, will probably want to use the state of the last
-	/// finalised block.
+	// The list of authority keys that is current. By default this will just use the state of
+	// the best block, but you might want it to use some other block's state instead if it's
+	// more sophisticated. Grandpa, for example, will probably want to use the state of the last
+	// finalised block.
 	let authorities = authorities_at::<C>(client, &at).ok()?;
 	let maybe_pub = owned.into_iter()
 		.find(|i| authorities.contains(i));

@@ -199,7 +199,7 @@ impl_opaque_keys! {
 		#[id(key_types::BABE)]
 		pub babe: BabeId,
 		#[id(key_types::IM_ONLINE)]
-		pub babe: ImOnlineId,
+		pub im_online: ImOnlineId,
 	}
 }
 
@@ -376,7 +376,6 @@ impl sudo::Trait for Runtime {
 impl im_online::Trait for Runtime {
 	type Call = Call;
 	type Event = Event;
-	type SessionsPerEra = SessionsPerEra;
 	type UncheckedExtrinsic = UncheckedExtrinsic;
 }
 
@@ -418,7 +417,7 @@ construct_runtime!(
 		Treasury: treasury::{Module, Call, Storage, Event<T>},
 		Contracts: contracts,
 		Sudo: sudo,
-		ImOnline: im_online::{default, ValidateUnsigned},
+		ImOnline: im_online::{Module, Call, Storage, Event, OfflineWorker, ValidateUnsigned},
 	}
 );
 

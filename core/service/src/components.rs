@@ -21,7 +21,7 @@ use serde::{Serialize, de::DeserializeOwned};
 use crate::chain_spec::ChainSpec;
 use client_db;
 use client::{self, Client, runtime_api};
-use crate::{error, Service, AuthorityKeyProvider};
+use crate::{error, Service};
 use consensus_common::{import_queue::ImportQueue, SelectChain};
 use network::{self, OnDemand, FinalityProofProvider, NetworkStateInfo, config::BoxFinalityProofRequestBuilder};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
@@ -134,10 +134,6 @@ pub type ComponentConsensusPair<C> = <<C as Components>::Factory as ServiceFacto
 /// FinalityPair type for `Components`
 pub type ComponentFinalityPair<C> = <<C as Components>::Factory as ServiceFactory>::FinalityPair;
 
-/// AuthorityKeyProvider type for `Components`
-pub type ComponentAuthorityKeyProvider<C> =
-	AuthorityKeyProvider<ComponentBlock<C>, ComponentConsensusPair<C>, ComponentFinalityPair<C>>;
-
 /// Extrinsic hash type for `Components`
 pub type ComponentExHash<C> = <<C as Components>::TransactionPoolApi as txpool::ChainApi>::Hash;
 
@@ -241,7 +237,6 @@ pub trait OffchainWorker<C: Components> {
 		offchain: &offchain::OffchainWorkers<
 			ComponentClient<C>,
 			ComponentOffchainStorage<C>,
-			ComponentAuthorityKeyProvider<C>,
 			ComponentBlock<C>
 		>,
 		pool: &Arc<TransactionPool<C::TransactionPoolApi>>,
@@ -258,7 +253,6 @@ impl<C: Components> OffchainWorker<Self> for C where
 		offchain: &offchain::OffchainWorkers<
 			ComponentClient<C>,
 			ComponentOffchainStorage<C>,
-			ComponentAuthorityKeyProvider<C>,
 			ComponentBlock<C>
 		>,
 		pool: &Arc<TransactionPool<C::TransactionPoolApi>>,

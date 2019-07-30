@@ -28,7 +28,7 @@ use keystore::Store as Keystore;
 use log::{info, debug, warn, error};
 use network::{PeerId, Multiaddr, NetworkStateInfo};
 use parity_codec::{Encode, Decode};
-use primitives::crypto::{Pair, Public};
+use primitives::crypto::{self, Pair, Public};
 use primitives::offchain::{
 	CryptoKind, CryptoKey, KeyTypeId,
 	Externalities as OffchainExt,
@@ -96,7 +96,7 @@ impl KnownCryptoKey {
 pub(crate) struct Api<Storage, Block: traits::Block> {
 	sender: mpsc::UnboundedSender<ExtMessage>,
 	db: Storage,
-	keystore: Arc<Keystore>,
+	keystore: Arc<Option<Keystore>>,
 	network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
 	at: BlockId<Block>,
 }
@@ -107,6 +107,10 @@ fn unavailable_yet<R: Default>(name: &str) -> R {
 	Default::default()
 }
 
+fn log_error(err: keystore::Error) -> () {
+	warn!("Keystore error when accessing keys from offchain worker: {}", err);
+}
+
 const LOCAL_DB: &str = "LOCAL (fork-aware) DB";
 const STORAGE_PREFIX: &[u8] = b"storage";
 
@@ -115,25 +119,50 @@ impl<Storage, Block> Api<Storage, Block> where
 	Block: traits::Block,
 {
 	fn check_allowed(&self, key_type: &KeyTypeId) -> Result<(), ()> {
-		// TODO [ToDr] whitelist or blacklist?
-		Ok(())
+		let blacklist = vec![
+			crypto::key_types::SR25519,
+			crypto::key_types::ED25519,
+			crypto::key_types::BABE,
+			crypto::key_types::GRANDPA,
+			crypto::key_types::ACCOUNT,
+			crypto::key_types::AURA,
+		];
+
+		if blacklist.contains(key_type) {
+			Err(())
+		} else {
+			Ok(())
+		}
 	}
 
 	fn keys(
 		&self,
 		kind: CryptoKind,
 		key_type: KeyTypeId,
-	) -> Result<CryptoKey, ()> {
+	) -> Result<Vec<CryptoKey>, ()> {
 		self.check_allowed(&key_type)?;
 
+		let keystore = (&*self.keystore).as_ref().ok_or(())?;
 		match kind {
 			CryptoKind::Sr25519 => {
-				//self.keystore.contents_by_type(key_type)
-				unimplemented!()
+				Ok(keystore.contents_by_type::<sr25519::Public>(key_type)
+					.map_err(log_error)?
+					.into_iter()
+					.map(|key| CryptoKey {
+						public: key.to_raw_vec(),
+						key_type,
+						kind,
+					}).collect())
 			},
 			CryptoKind::Ed25519 => {
-				//self.keystore.contents_by_type(key_type)
-				unimplemented!()
+				Ok(keystore.contents_by_type::<ed25519::Public>(key_type)
+					.map_err(log_error)?
+					.into_iter()
+					.map(|key| CryptoKey {
+						public: key.to_raw_vec(),
+						key_type,
+						kind,
+					}).collect())
 			},
 			CryptoKind::User => {
 				unavailable_yet::<()>("custom crypto");
@@ -150,7 +179,34 @@ impl<Storage, Block> Api<Storage, Block> where
 		&self,
 		key: CryptoKey,
 	) -> Result<KnownCryptoKey, ()> {
-		unimplemented!()
+		self.check_allowed(&key.key_type)?;
+
+		// TODO [ToDr] Remove
+		let keystore = (&*self.keystore).as_ref().ok_or(())?;
+		let pass = "".into();
+
+		match key.kind {
+			CryptoKind::Sr25519 => {
+				let public = sr25519::Public::from_slice(&key.public);
+				keystore.load_by_type(&public, pass, key.key_type)
+					.map_err(log_error)
+					.map(KnownCryptoKey::Sr25519)
+			},
+			CryptoKind::Ed25519 => {
+				let public = ed25519::Public::from_slice(&key.public);
+				keystore.load_by_type(&public, pass, key.key_type)
+					.map_err(log_error)
+					.map(KnownCryptoKey::Ed25519)
+			},
+			CryptoKind::User => {
+				unavailable_yet::<()>("custom crypto");
+				Err(())
+			},
+			CryptoKind::Dummy => {
+				unavailable_yet::<()>("dummy crypto");
+				Err(())
+			},
+		}
 	}
 }
 
@@ -182,8 +238,7 @@ where
 	}
 
 	fn public_keys(&self, crypto: CryptoKind, key_type: KeyTypeId) -> Result<Vec<CryptoKey>, ()> {
-		// TODO
-		unimplemented!()
+		self.keys(crypto, key_type)
 	}
 
 	fn encrypt(&self, _key: CryptoKey, _data: &[u8]) -> Result<Vec<u8>, ()> {
@@ -400,7 +455,7 @@ impl<A: ChainApi> AsyncApi<A> {
 	pub fn new<S: OffchainStorage>(
 		transaction_pool: Arc<Pool<A>>,
 		db: S,
-		keystore: Arc<Keystore>,
+		keystore: Arc<Option<Keystore>>,
 		at: BlockId<A::Block>,
 		network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
 	) -> (Api<S, A::Block>, AsyncApi<A>) {
