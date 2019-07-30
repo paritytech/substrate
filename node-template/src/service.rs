@@ -70,10 +70,10 @@ construct_service_factory! {
 			|service: Self::FullService| {
 				if let Some(key) = service.authority_key() {
 					info!("Using authority key {}", key.public());
-					let proposer = Arc::new(ProposerFactory {
+					let proposer = ProposerFactory {
 						client: service.client(),
 						transaction_pool: service.transaction_pool(),
-					});
+					};
 					let client = service.client();
 					let select_chain = service.select_chain()
 						.ok_or_else(|| ServiceError::SelectChainRequired)?;

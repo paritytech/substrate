@@ -777,7 +777,7 @@ fn signed_extension_take_fees_is_bounded() {
 			.monied(true)
 			.build(),
 		|| {
-			use primitives::weights::Weight;
+			use sr_primitives::weights::Weight;
 
 			// maximum weight possible
 			assert!(TakeFees::<Runtime>::from(0).pre_dispatch(&1, CALL, info_from_weight(Weight::max_value()), 10).is_ok());

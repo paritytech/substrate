@@ -1858,7 +1858,7 @@ pub(crate) mod tests {
 	use std::collections::HashMap;
 	use super::*;
 	use primitives::blake2_256;
-	use runtime_primitives::DigestItem;
+	use sr_primitives::DigestItem;
 	use consensus::{BlockOrigin, SelectChain};
 	use test_client::{
 		prelude::*,

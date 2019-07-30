@@ -21,7 +21,7 @@
 use parity_codec::{Encode, Decode, Codec};
 use substrate_client::decl_runtime_apis;
 use rstd::vec::Vec;
-use runtime_primitives::ConsensusEngineId;
+use sr_primitives::ConsensusEngineId;
 
 mod app_sr25519 {
 	use substrate_primitives::{app_crypto, crypto::key_types::AURA, sr25519};

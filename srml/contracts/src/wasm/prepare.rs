@@ -22,11 +22,11 @@ use crate::wasm::env_def::ImportSatisfyCheck;
 use crate::wasm::PrefabWasmModule;
 use crate::Schedule;
 
-use parity_wasm::elements::{self, Internal, External, MemoryType, Type};
+use parity_wasm::elements::{self, Internal, External, MemoryType, Type, ValueType};
 use pwasm_utils;
 use pwasm_utils::rules;
 use rstd::prelude::*;
-use runtime_primitives::traits::{SaturatedConversion};
+use sr_primitives::traits::{SaturatedConversion};
 
 struct ContractModule<'a> {
 	/// A deserialized module. The module is valid (this is Guaranteed by `new` method).
@@ -90,6 +90,50 @@ impl<'a> ContractModule<'a> {
 				}
 			}
 		}
+		Ok(())
+	}
+
+	/// Ensures that no floating point types are in use.
+	fn ensure_no_floating_types(&self) -> Result<(), &'static str> {
+		if let Some(global_section) = self.module.global_section() {
+			for global in global_section.entries() {
+				match global.global_type().content_type() {
+					ValueType::F32 | ValueType::F64 =>
+						return Err("use of floating point type in globals is forbidden"),
+					_ => {}
+				}
+			}
+		}
+
+		if let Some(code_section) = self.module.code_section() {
+			for func_body in code_section.bodies() {
+				for local in func_body.locals() {
+					match local.value_type() {
+						ValueType::F32 | ValueType::F64 =>
+							return Err("use of floating point type in locals is forbidden"),
+						_ => {}
+					}
+				}
+			}
+		}
+
+		if let Some(type_section) = self.module.type_section() {
+			for wasm_type in type_section.types() {
+				match wasm_type {
+					Type::Function(func_type) => {
+						let return_type = func_type.return_type();
+						for value_type in func_type.params().iter().chain(return_type.iter()) {
+							match value_type {
+								ValueType::F32 | ValueType::F64 =>
+									return Err("use of floating point type in function types is forbidden"),
+								_ => {}
+							}
+						}
+					}
+				}
+			}
+		}
+
 		Ok(())
 	}
 
@@ -291,6 +335,7 @@ pub fn prepare_contract<C: ImportSatisfyCheck>(
 	contract_module.scan_exports()?;
 	contract_module.ensure_no_internal_memory()?;
 	contract_module.ensure_table_size_limit(schedule.max_table_size)?;
+	contract_module.ensure_no_floating_types()?;
 
 	struct MemoryDefinition {
 		initial: u32,
@@ -739,6 +784,50 @@ mod tests {
 			)
 			"#,
 			Err("unknown export: expecting only deploy and call functions")
+		);
+
+		prepare_test!(global_float,
+			r#"
+			(module
+				(global $x f32 (f32.const 0))
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
+			Err("use of floating point type in globals is forbidden")
+		);
+
+		prepare_test!(local_float,
+			r#"
+			(module
+				(func $foo (local f32))
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
+			Err("use of floating point type in locals is forbidden")
+		);
+
+		prepare_test!(param_float,
+			r#"
+			(module
+				(func $foo (param f32))
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
+			Err("use of floating point type in function types is forbidden")
+		);
+
+		prepare_test!(result_float,
+			r#"
+			(module
+				(func $foo (result f32) (f32.const 0))
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
+			Err("use of floating point type in function types is forbidden")
 		);
 	}
 }

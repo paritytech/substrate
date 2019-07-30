@@ -27,8 +27,8 @@ use srml_support::traits::{FindAuthor, VerifySeal, Get};
 use srml_support::dispatch::Result as DispatchResult;
 use parity_codec::{Encode, Decode};
 use system::ensure_none;
-use primitives::traits::{SimpleArithmetic, Header as HeaderT, One, Zero};
-use primitives::weights::SimpleDispatchInfo;
+use sr_primitives::traits::{SimpleArithmetic, Header as HeaderT, One, Zero};
+use sr_primitives::weights::SimpleDispatchInfo;
 
 pub trait Trait: system::Trait {
 	/// Find the author of a block.
@@ -324,11 +324,11 @@ impl<T: Trait> Module<T> {
 mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
-	use substrate_primitives::{H256, Blake2Hasher};
-	use primitives::traits::{BlakeTwo256, IdentityLookup};
-	use primitives::testing::Header;
-	use primitives::generic::DigestItem;
-	use primitives::Perbill;
+	use primitives::{H256, Blake2Hasher};
+	use sr_primitives::traits::{BlakeTwo256, IdentityLookup};
+	use sr_primitives::testing::Header;
+	use sr_primitives::generic::DigestItem;
+	use sr_primitives::Perbill;
 	use srml_support::{parameter_types, impl_outer_origin, ConsensusEngineId};
 
 	impl_outer_origin!{

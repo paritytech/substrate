@@ -24,7 +24,7 @@ use super::{BABE_ENGINE_ID, Epoch};
 use super::{VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH};
 use super::SlotNumber;
 #[cfg(feature = "std")]
-use runtime_primitives::{DigestItem, generic::OpaqueDigestItemId};
+use sr_primitives::{DigestItem, generic::OpaqueDigestItemId};
 #[cfg(feature = "std")]
 use std::fmt::Debug;
 use parity_codec::{Decode, Encode};

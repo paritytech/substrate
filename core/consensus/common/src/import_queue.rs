@@ -26,7 +26,7 @@
 //! queues to be instantiated simply.
 
 use std::{sync::Arc, collections::HashMap};
-use runtime_primitives::{Justification, traits::{Block as BlockT, Header as _, NumberFor}};
+use sr_primitives::{Justification, traits::{Block as BlockT, Header as _, NumberFor}};
 use crate::{error::Error as ConsensusError, well_known_cache_keys::Id as CacheKeyId};
 use crate::block_import::{
 	BlockImport, BlockOrigin, BlockImportParams, ImportedAux, JustificationImport, ImportResult,

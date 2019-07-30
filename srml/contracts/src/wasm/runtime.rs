@@ -27,7 +27,7 @@ use system;
 use rstd::prelude::*;
 use rstd::mem;
 use parity_codec::{Decode, Encode};
-use runtime_primitives::traits::{Bounded, SaturatedConversion};
+use sr_primitives::traits::{Bounded, SaturatedConversion};
 
 /// Enumerates all possible *special* trap conditions.
 ///

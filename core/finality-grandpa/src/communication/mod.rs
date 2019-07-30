@@ -36,9 +36,9 @@ use futures::sync::{oneshot, mpsc};
 use log::{debug, trace};
 use tokio_executor::Executor;
 use parity_codec::{Encode, Decode};
-use substrate_primitives::Pair;
+use substrate_primitivesa::{ed25519, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
-use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
+use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
 use network::{consensus_gossip as network_gossip, NetworkService};
 use network_gossip::ConsensusMessage;
 

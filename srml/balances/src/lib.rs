@@ -112,7 +112,7 @@
 //!
 //! ```
 //! use srml_support::traits::{WithdrawReasons, LockableCurrency};
-//! use primitives::traits::Bounded;
+//! use sr_primitives::traits::Bounded;
 //! pub trait Trait: system::Trait {
 //! 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 //! }
@@ -159,12 +159,12 @@ use srml_support::traits::{
 	Imbalance, SignedImbalance, ReservableCurrency, Get,
 };
 use srml_support::dispatch::Result;
-use primitives::traits::{
+use sr_primitives::traits::{
 	Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug,
 	Saturating, Bounded, SignedExtension, SaturatedConversion, DispatchError, Convert,
 };
-use primitives::transaction_validity::{TransactionPriority, ValidTransaction};
-use primitives::weights::{DispatchInfo, SimpleDispatchInfo, Weight};
+use sr_primitives::transaction_validity::{TransactionPriority, ValidTransaction};
+use sr_primitives::weights::{DispatchInfo, SimpleDispatchInfo, Weight};
 use system::{IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
 
 mod mock;
@@ -344,7 +344,7 @@ decl_storage! {
 						// Total genesis `balance` minus `liquid` equals funds locked for vesting
 						let locked = balance.saturating_sub(liquid);
 						// Number of units unlocked per block after `begin`
-						let per_block = locked / length.max(primitives::traits::One::one());
+						let per_block = locked / length.max(sr_primitives::traits::One::one());
 
 						(who.clone(), VestingSchedule {
 							locked: locked,

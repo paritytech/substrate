@@ -17,7 +17,7 @@
 //! Network packet message types. These get serialized and put into the lower level protocol payload.
 
 use bitflags::bitflags;
-use runtime_primitives::{ConsensusEngineId, traits::{Block as BlockT, Header as HeaderT}};
+use sr_primitives::{ConsensusEngineId, traits::{Block as BlockT, Header as HeaderT}};
 use parity_codec::{Encode, Decode, Input, Output};
 pub use self::generic::{
 	BlockAnnounce, RemoteCallRequest, RemoteReadRequest,
@@ -125,9 +125,8 @@ pub struct RemoteReadResponse {
 
 /// Generic types.
 pub mod generic {
-	use crate::custom_proto::CustomMessage;
 	use parity_codec::{Encode, Decode};
-	use runtime_primitives::Justification;
+	use sr_primitives::Justification;
 	use crate::config::Roles;
 	use super::{
 		RemoteReadResponse, Transactions, Direction,
@@ -208,18 +207,6 @@ pub mod generic {
 		/// Chain-specific message.
 		#[codec(index = "255")]
 		ChainSpecific(Vec<u8>),
-	}
-
-	impl<Header, Hash, Number, Extrinsic> CustomMessage for Message<Header, Hash, Number, Extrinsic>
-		where Self: Decode + Encode
-	{
-		fn into_bytes(self) -> Vec<u8> {
-			self.encode()
-		}
-
-		fn from_bytes(bytes: &[u8]) -> Result<Self, ()> {
-			Decode::decode(&mut &bytes[..]).ok_or(())
-		}
 	}
 
 	/// Status sent on connection.

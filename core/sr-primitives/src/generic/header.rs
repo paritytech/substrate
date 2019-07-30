@@ -48,7 +48,7 @@ pub struct Header<Number: Copy + Into<u128>, Hash: HashT> {
 
 #[cfg(feature = "std")]
 pub fn serialize_number<S, T: Copy + Into<u128>>(val: &T, s: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
-	use substrate_primitives::uint::U256;
+	use primitives::uint::U256;
 	let v: u128 = (*val).into();
 	let lower = U256::from(v as u64);
 	let upper = U256::from(v.rotate_left(64) as u64) << 64;

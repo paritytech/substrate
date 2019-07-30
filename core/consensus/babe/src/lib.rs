@@ -29,8 +29,8 @@ use consensus_common::import_queue::{
 	BoxJustificationImport, BoxFinalityProofImport,
 };
 use consensus_common::well_known_cache_keys::Id as CacheKeyId;
-use runtime_primitives::{generic, generic::{BlockId, OpaqueDigestItemId}, Justification};
-use runtime_primitives::traits::{
+use sr_primitives::{generic, generic::{BlockId, OpaqueDigestItemId}, Justification};
+use sr_primitives::traits::{
 	Block as BlockT, Header, DigestItemFor, NumberFor, ProvideRuntimeApi,
 	SimpleBitOps, Zero,
 };
@@ -155,7 +155,7 @@ pub struct BabeParams<C, E, I, SO, SC> {
 	pub block_import: I,
 
 	/// The environment
-	pub env: Arc<E>,
+	pub env: E,
 
 	/// A sync oracle
 	pub sync_oracle: SO,
@@ -246,14 +246,13 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 	type OnSlot = Pin<Box<dyn Future<Output = Result<(), consensus_common::Error>> + Send>>;
 
 	fn on_slot(
-		&self,
+		&mut self,
 		chain_head: B::Header,
 		slot_info: SlotInfo,
 	) -> Self::OnSlot {
 		let pair = self.local_key.clone();
 		let ref client = self.client;
 		let block_import = self.block_import.clone();
-		let ref env = self.env;
 
 		let (timestamp, slot_number, slot_duration) =
 			(slot_info.timestamp, slot_info.number, slot_info.duration);
@@ -306,7 +305,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			);
 
 			// we are the slot author. make a block and sign it.
-			let proposer = match env.init(&chain_head) {
+			let mut proposer = match self.env.init(&chain_head) {
 				Ok(p) => p,
 				Err(e) => {
 					warn!(target: "babe",

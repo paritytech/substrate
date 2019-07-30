@@ -16,7 +16,7 @@
 
 //! Tool for creating the genesis block.
 
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, Zero};
+use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, Zero};
 
 /// Create a genesis block, given the initial storage.
 pub fn construct_genesis_block<
@@ -41,7 +41,7 @@ pub fn construct_genesis_block<
 mod tests {
 	use super::*;
 	use parity_codec::{Encode, Decode, Joiner};
-	use executor::{NativeExecutionDispatch, native_executor_instance};
+	use executor::native_executor_instance;
 	use state_machine::{self, OverlayedChanges, ExecutionStrategy, InMemoryChangesTrieStorage};
 	use state_machine::backend::InMemory;
 	use test_client::{
@@ -49,7 +49,7 @@ mod tests {
 		runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest},
 		AccountKeyring, Sr25519Keyring,
 	};
-	use runtime_primitives::traits::BlakeTwo256;
+	use sr_primitives::traits::BlakeTwo256;
 	use primitives::Blake2Hasher;
 	use hex::*;
 
@@ -61,7 +61,7 @@ mod tests {
 	);
 
 	fn executor() -> executor::NativeExecutor<Executor> {
-		NativeExecutionDispatch::new(None)
+		executor::NativeExecutor::new(None)
 	}
 
 	fn construct_block(
@@ -226,7 +226,7 @@ mod tests {
 			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
 			state_machine::NeverOffchainExt::new(),
 			&mut overlay,
-			&Executor::new(None),
+			&executor(),
 			"Core_execute_block",
 			&b1data,
 		).execute(

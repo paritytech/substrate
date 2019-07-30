@@ -49,11 +49,11 @@ use trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
 use parking_lot::{Mutex, RwLock};
 use primitives::{H256, Blake2Hasher, ChangesTrieConfiguration, convert_hash};
 use primitives::storage::well_known_keys;
-use runtime_primitives::{
+use sr_primitives::{
 	generic::{BlockId, DigestItem}, Justification, StorageOverlay, ChildrenStorageOverlay,
 	BuildStorage
 };
-use runtime_primitives::traits::{
+use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero, One, SaturatedConversion
 };
 use state_machine::backend::Backend as StateBackend;
@@ -1427,8 +1427,8 @@ mod tests {
 	use client::backend::Backend as BTrait;
 	use client::blockchain::Backend as BLBTrait;
 	use client::backend::BlockImportOperation as Op;
-	use runtime_primitives::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
-	use runtime_primitives::traits::{Hash, BlakeTwo256};
+	use sr_primitives::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
+	use sr_primitives::traits::{Hash, BlakeTwo256};
 	use state_machine::{TrieMut, TrieDBMut, ChangesTrieRootsStorage, ChangesTrieStorage};
 	use test_client;
 
@@ -1457,7 +1457,7 @@ mod tests {
 		changes: Vec<(Vec<u8>, Vec<u8>)>,
 		extrinsics_root: H256,
 	) -> H256 {
-		use runtime_primitives::testing::Digest;
+		use sr_primitives::testing::Digest;
 
 		let (changes_root, changes_trie_update) = prepare_changes(changes);
 		let digest = Digest {

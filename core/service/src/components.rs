@@ -26,7 +26,7 @@ use consensus_common::{import_queue::ImportQueue, SelectChain};
 use network::{self, OnDemand, FinalityProofProvider, NetworkStateInfo, config::BoxFinalityProofRequestBuilder};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
-use runtime_primitives::{
+use sr_primitives::{
 	BuildStorage, traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi}, generic::BlockId
 };
 use crate::config::Configuration;

@@ -24,7 +24,7 @@ use rstd::prelude::*;
 use support::{
 	construct_runtime, parameter_types, traits::{SplitTwoWays, Currency}
 };
-use substrate_primitives::u32_trait::{_1, _2, _3, _4};
+use primitives::u32_trait::{_1, _2, _3, _4};
 use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
 	Moment, Signature,
@@ -35,27 +35,27 @@ use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
 	runtime_api as client_api, impl_runtime_apis
 };
-use runtime_primitives::{ApplyResult, impl_opaque_keys, generic, create_runtime_str, key_types};
-use runtime_primitives::transaction_validity::TransactionValidity;
-use runtime_primitives::weights::Weight;
-use runtime_primitives::traits::{
+use sr_primitives::{ApplyResult, impl_opaque_keys, generic, create_runtime_str, key_types};
+use sr_primitives::transaction_validity::TransactionValidity;
+use sr_primitives::weights::Weight;
+use sr_primitives::traits::{
 	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup,
 };
 use version::RuntimeVersion;
 use elections::VoteIndex;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
-use substrate_primitives::OpaqueMetadata;
+use primitives::OpaqueMetadata;
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
 use im_online::{AuthorityId as ImOnlineId};
 use finality_tracker::{DEFAULT_REPORT_LATENCY, DEFAULT_WINDOW_SIZE};
 
 #[cfg(any(feature = "std", test))]
-pub use runtime_primitives::BuildStorage;
+pub use sr_primitives::BuildStorage;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use contracts::Gas;
-pub use runtime_primitives::{Permill, Perbill};
+pub use sr_primitives::{Permill, Perbill};
 pub use support::StorageValue;
 pub use staking::StakerStatus;
 
@@ -80,8 +80,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 122,
-	impl_version: 122,
+	spec_version: 123,
+	impl_version: 124,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -130,10 +130,12 @@ impl system::Trait for Runtime {
 
 parameter_types! {
 	pub const EpochDuration: u64 = EPOCH_DURATION_IN_SLOTS;
+	pub const ExpectedBlockTime: Moment = MILLISECS_PER_BLOCK;
 }
 
 impl babe::Trait for Runtime {
 	type EpochDuration = EpochDuration;
+	type ExpectedBlockTime = ExpectedBlockTime;
 }
 
 impl indices::Trait for Runtime {
@@ -185,7 +187,7 @@ impl authorship::Trait for Runtime {
 	type FindAuthor = ();
 	type UncleGenerations = UncleGenerations;
 	type FilterUncle = ();
-	type EventHandler = ();
+	type EventHandler = Staking;
 }
 
 type SessionHandlers = (Grandpa, Babe, ImOnline);
@@ -519,9 +521,10 @@ impl_runtime_apis! {
 
 	impl babe_primitives::BabeApi<Block> for Runtime {
 		fn startup_data() -> babe_primitives::BabeConfiguration {
-			// The choice of `c` parameter is done in accordance to
-			// the slot duration and expected target block time, for
-			// safely resisting network delays of maximum two seconds.
+			// The choice of `c` parameter (where `1 - c` represents the
+			// probability of a slot being empty), is done in accordance to the
+			// slot duration and expected target block time, for safely
+			// resisting network delays of maximum two seconds.
 			// <https://research.web3.foundation/en/latest/polkadot/BABE/Babe/#6-practical-results>
 			babe_primitives::BabeConfiguration {
 				median_required_blocks: 1000,
@@ -538,6 +541,12 @@ impl_runtime_apis! {
 				randomness: Babe::randomness(),
 				duration: EpochDuration::get(),
 			}
+		}
+	}
+
+	impl consensus_primitives::ConsensusApi<Block, babe_primitives::AuthorityId> for Runtime {
+		fn authorities() -> Vec<babe_primitives::AuthorityId> {
+			Babe::authorities().into_iter().map(|(a, _)| a).collect()
 		}
 	}
 }
