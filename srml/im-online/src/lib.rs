@@ -37,7 +37,6 @@
 //!
 //! ### Public Functions
 //!
-//! - `is_online_in_current_era` - True if the validator sent a heartbeat in the current era.
 //! - `is_online_in_current_session` - True if the validator sent a heartbeat in the current session.
 //!
 //! ## Usage
@@ -51,9 +50,9 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		pub fn is_online(origin, authority_id: T::AuthorityId) -> Result {
+//! 		pub fn is_online(origin, authority_index: u32) -> Result {
 //! 			let _sender = ensure_signed(origin)?;
-//! 			let _is_online = <im_online::Module<T>>::is_online_in_current_era(&authority_id);
+//! 			let _is_online = <im_online::Module<T>>::is_online_in_current_session(&authority_index);
 //! 			Ok(())
 //! 		}
 //! 	}
@@ -69,30 +68,27 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use primitives::{
-	crypto::{AppKey, CryptoType},
-	offchain::CryptoKey,
-	offchain::OpaqueNetworkState,
-	offchain::StorageKind,
-	sr25519,
-	ed25519,
+	crypto::{CryptoType, KeyTypeId},
+	offchain::{OpaqueNetworkState, StorageKind},
 };
 use parity_codec::{Encode, Decode};
 use sr_primitives::{
-	ApplyError, traits::{Member, IsMember, Extrinsic as ExtrinsicT},
+	ApplyError, traits::{Extrinsic as ExtrinsicT},
 	transaction_validity::{TransactionValidity, TransactionLongevity, ValidTransaction},
 };
 use rstd::prelude::*;
 use session::SessionIndex;
 use sr_io::Printable;
 use srml_support::{
-	Parameter, StorageValue, decl_module, decl_event, decl_storage,
-	traits::Get, StorageDoubleMap, print,
+	StorageValue, decl_module, decl_event, decl_storage,
+	StorageDoubleMap, print,
 };
 use system::ensure_none;
-use substrate_primitives::offchain::CryptoKind;
 
 mod app {
-	use substrate_primitives::{app_crypto, crypto::key_types::IM_ONLINE, sr25519};
+	pub use primitives::sr25519 as crypto;
+	use primitives::{app_crypto, crypto::key_types::IM_ONLINE, sr25519};
+
 	app_crypto!(sr25519, IM_ONLINE);
 }
 
@@ -128,6 +124,7 @@ struct WorkerStatus<BlockNumber> {
 enum OffchainErr {
 	DecodeAuthorityId,
 	DecodeWorkerStatus,
+	NoKeys,
 	ExtrinsicCreation,
 	FailedSigning,
 	NetworkState,
@@ -139,6 +136,7 @@ impl Printable for OffchainErr {
 		match self {
 			OffchainErr::DecodeAuthorityId => print("Offchain error: decoding AuthorityId failed!"),
 			OffchainErr::DecodeWorkerStatus => print("Offchain error: decoding WorkerStatus failed!"),
+			OffchainErr::NoKeys => print("Offchain error: could not find local keys!"),
 			OffchainErr::ExtrinsicCreation => print("Offchain error: extrinsic creation failed!"),
 			OffchainErr::FailedSigning => print("Offchain error: signing failed!"),
 			OffchainErr::NetworkState => print("Offchain error: fetching network state failed!"),
@@ -157,13 +155,13 @@ pub struct Heartbeat<BlockNumber>
 {
 	block_number: BlockNumber,
 	network_state: OpaqueNetworkState,
-	session_index: session::SessionIndex,
+	session_index: SessionIndex,
 	authority_index: AuthIndex,
 }
 
 pub trait Trait: system::Trait + session::Trait {
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
 
 	/// The function call.
 	type Call: From<Call<Self>>;
@@ -174,9 +172,7 @@ pub trait Trait: system::Trait + session::Trait {
 }
 
 decl_event!(
-	pub enum Event<T> where
-		<T as system::Trait>::BlockNumber,
-	{
+	pub enum Event {
 		/// A new heartbeat was received from `AuthorityId`
 		HeartbeatReceived(AuthorityId),
 	}
@@ -190,37 +186,37 @@ decl_storage! {
 		/// The current set of keys that may issue a heartbeat.
 		Keys get(keys) config(): Vec<AuthorityId>;
 
-		/// For each session index we keep a mapping of `AuthorityId` to
-		/// `offchain::OpaqueNetworkState`.
-		ReceivedHeartbeats get(received_heartbeats):
-			double_map session::SessionIndex, AuthIndex => Vec<u8>;
+		/// For each session index we keep a mapping of `AuthorityId`
+		/// to `offchain::OpaqueNetworkState`.
+		ReceivedHeartbeats get(received_heartbeats): double_map SessionIndex,
+			blake2_256(AuthIndex) => Vec<u8>;
 	}
 }
 
+
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		/// Number of sessions per era.
-		const SessionsPerEra: session::SessionIndex = T::SessionsPerEra::get();
-
-		fn deposit_event<T>() = default;
+		fn deposit_event() = default;
 
 		fn heartbeat(
 			origin,
 			heartbeat: Heartbeat<T::BlockNumber>,
-			_signature: AuthoritySignature,
+			_signature: AuthoritySignature
 		) {
 			ensure_none(origin)?;
 
 			let current_session = <session::Module<T>>::current_index();
-			let exists = <ReceivedHeartbeats<T>>::exists(
+			let exists = <ReceivedHeartbeats>::exists(
 				&current_session,
 				&heartbeat.authority_index
 			);
-			if !exists {
-				Self::deposit_event(RawEvent::HeartbeatReceived(heartbeat.authority_id.clone()));
+			let keys = Keys::get();
+			let public = keys.get(heartbeat.authority_index as usize);
+			if let (true, Some(public)) = (!exists, public) {
+				Self::deposit_event(Event::HeartbeatReceived(public.clone()));
 
 				let network_state = heartbeat.network_state.encode();
-				<ReceivedHeartbeats<T>>::insert(
+				<ReceivedHeartbeats>::insert(
 					&current_session,
 					&heartbeat.authority_index,
 					&network_state
@@ -240,103 +236,12 @@ impl<T: Trait> Module<T> {
 	/// the authorities series, during the current session. Otherwise `false`.
 	pub fn is_online_in_current_session(authority_index: AuthIndex) -> bool {
 		let current_session = <session::Module<T>>::current_index();
-		<ReceivedHeartbeats<T>>::exists(&current_session, authority_index)
+		<ReceivedHeartbeats>::exists(&current_session, &authority_index)
 	}
 
-	fn offchain(new: T::BlockNumber) {
-		fn gossip_at<T: Trait>(block_number: T::BlockNumber) -> Result<(), OffchainErr> {
-			// we run only when a local authority key is configured
-			let key_type: KeyTypeId = b"imon".into();
-			let authorities = Keys::get();
-			let maybe_key = authorities.into_iter()
-				.enumerate()
-				.filter_map(|(i, id)| sr_io::find_key(id, key_type).ok().map(|x| (i, x)));
-			if let Some((authority_index, key)) = maybe_key {
-				let network_state =
-					sr_io::network_state().map_err(|_| OffchainErr::NetworkState)?;
-				let heartbeat_data = Heartbeat {
-					block_number,
-					network_state,
-					session_index: <session::Module<T>>::current_index(),
-					authority_index,
-				};
-
-				let signature = sr_io::sign(CryptoKey { key_type, id }, &heartbeat_data.encode())
-					.map_err(|_| OffchainErr::FailedSigning)?;
-				let call = Call::heartbeat(heartbeat_data, signature);
-				let ex = T::UncheckedExtrinsic::new_unsigned(call.into())
-					.ok_or(OffchainErr::ExtrinsicCreation)?;
-				sr_io::submit_transaction(&ex)
-					.map_err(|_| OffchainErr::SubmitTransaction)?;
-
-				// once finished we set the worker status without comparing
-				// if the existing value changed in the meantime. this is
-				// because at this point the heartbeat was definitely submitted.
-				set_worker_status::<T>(block_number, true);
-			}
-			Ok(())
-		}
-
-		fn compare_and_set_worker_status<T: Trait>(
-			gossipping_at: T::BlockNumber,
-			done: bool,
-			curr_worker_status: Option<Vec<u8>>,
-		) -> bool {
-			let enc = WorkerStatus {
-				done,
-				gossipping_at,
-			};
-			sr_io::local_storage_compare_and_set(
-				StorageKind::PERSISTENT,
-				DB_KEY,
-				curr_worker_status.as_ref().map(Vec::as_slice),
-				&enc.encode()
-			)
-		}
-
-		fn set_worker_status<T: Trait>(
-			gossipping_at: T::BlockNumber,
-			done: bool,
-		) {
-			let enc = WorkerStatus {
-				done,
-				gossipping_at,
-			};
-			sr_io::local_storage_set(
-				StorageKind::PERSISTENT, DB_KEY, &enc.encode());
-		}
-
-		// Checks if a heartbeat gossip already occurred at this block number.
-		// Returns a tuple of `(current worker status, bool)`, whereby the bool
-		// is true if not yet gossipped.
-		fn check_not_yet_gossipped<T: Trait>(
-			now: T::BlockNumber,
-			next_gossip: T::BlockNumber,
-		) -> Result<(Option<Vec<u8>>, bool), OffchainErr> {
-			let last_gossip = sr_io::local_storage_get(StorageKind::PERSISTENT, DB_KEY);
-			match last_gossip {
-				Some(last) => {
-					let worker_status: WorkerStatus<T::BlockNumber> = Decode::decode(&mut &last[..])
-						.ok_or(OffchainErr::DecodeWorkerStatus)?;
-
-					let was_aborted = !worker_status.done && worker_status.gossipping_at < now;
-
-					// another off-chain worker is currently in the process of submitting
-					let already_submitting =
-						!worker_status.done && worker_status.gossipping_at == now;
-
-					let not_yet_gossipped =
-						worker_status.done && worker_status.gossipping_at < next_gossip;
-
-					let ret = (was_aborted && !already_submitting) || not_yet_gossipped;
-					Ok((Some(last), ret))
-				},
-				None => Ok((None, true)),
-			}
-		}
-
+	fn offchain(now: T::BlockNumber) {
 		let next_gossip = <GossipAt<T>>::get();
-		let check = check_not_yet_gossipped::<T>(now, next_gossip);
+		let check = Self::check_not_yet_gossipped(now, next_gossip);
 		let (curr_worker_status, not_yet_gossipped) = match check {
 			Ok((s, v)) => (s, v),
 			Err(err) => {
@@ -345,7 +250,7 @@ impl<T: Trait> Module<T> {
 			},
 		};
 		if next_gossip < now && not_yet_gossipped {
-			let value_set = compare_and_set_worker_status::<T>(now, false, curr_worker_status);
+			let value_set = Self::compare_and_set_worker_status(now, false, curr_worker_status);
 			if !value_set {
 				// value could not be set in local storage, since the value was
 				// different from `curr_worker_status`. this indicates that
@@ -353,12 +258,117 @@ impl<T: Trait> Module<T> {
 				return;
 			}
 
-			match gossip_at::<T>(now) {
+			match Self::do_gossip_at(now) {
 				Ok(_) => {},
 				Err(err) => print(err),
 			}
 		}
 	}
+
+	fn do_gossip_at(block_number: T::BlockNumber) -> Result<(), OffchainErr> {
+		// we run only when a local authority key is configured
+		let key_type = KeyTypeId(*b"imon");
+		let authorities = Keys::get();
+		let local_keys = sr_io::public_keys(AuthorityId::KIND, key_type)
+			.map_err(|_| OffchainErr::NoKeys)?;
+		let maybe_key = authorities.into_iter()
+			.enumerate()
+			.filter_map(|(index, id)| {
+				let id = app::crypto::Public::from(id);
+				let id_slice: &[u8] = id.as_ref();
+
+				local_keys
+					.iter()
+					.find(|k| &*k.public == id_slice)
+					.map(|key| (index as u32, key.clone()))
+			})
+			.next();
+		if let Some((authority_index, key)) = maybe_key {
+			let network_state =
+				sr_io::network_state().map_err(|_| OffchainErr::NetworkState)?;
+			let heartbeat_data = Heartbeat {
+				block_number,
+				network_state,
+				session_index: <session::Module<T>>::current_index(),
+				authority_index,
+			};
+
+			let signature = sr_io::sign(key, &heartbeat_data.encode())
+				.map_err(|_| OffchainErr::FailedSigning)?;
+			let signature = AuthoritySignature::decode(&mut &*signature)
+					.ok_or(OffchainErr::ExtrinsicCreation)?;
+			let call = Call::heartbeat(heartbeat_data, signature);
+			let ex = T::UncheckedExtrinsic::new_unsigned(call.into())
+				.ok_or(OffchainErr::ExtrinsicCreation)?;
+			sr_io::submit_transaction(&ex)
+				.map_err(|_| OffchainErr::SubmitTransaction)?;
+
+			// once finished we set the worker status without comparing
+			// if the existing value changed in the meantime. this is
+			// because at this point the heartbeat was definitely submitted.
+			Self::set_worker_status(block_number, true);
+		}
+		Ok(())
+	}
+
+	fn compare_and_set_worker_status(
+		gossipping_at: T::BlockNumber,
+		done: bool,
+		curr_worker_status: Option<Vec<u8>>,
+	) -> bool {
+		let enc = WorkerStatus {
+			done,
+			gossipping_at,
+		};
+		sr_io::local_storage_compare_and_set(
+			StorageKind::PERSISTENT,
+			DB_KEY,
+			curr_worker_status.as_ref().map(Vec::as_slice),
+			&enc.encode()
+		)
+	}
+
+	fn set_worker_status(
+		gossipping_at: T::BlockNumber,
+		done: bool,
+	) {
+		let enc = WorkerStatus {
+			done,
+			gossipping_at,
+		};
+		sr_io::local_storage_set(
+			StorageKind::PERSISTENT, DB_KEY, &enc.encode());
+	}
+
+	// Checks if a heartbeat gossip already occurred at this block number.
+	// Returns a tuple of `(current worker status, bool)`, whereby the bool
+	// is true if not yet gossipped.
+	fn check_not_yet_gossipped(
+		now: T::BlockNumber,
+		next_gossip: T::BlockNumber,
+	) -> Result<(Option<Vec<u8>>, bool), OffchainErr> {
+		let last_gossip = sr_io::local_storage_get(StorageKind::PERSISTENT, DB_KEY);
+		match last_gossip {
+			Some(last) => {
+				let worker_status: WorkerStatus<T::BlockNumber> = Decode::decode(&mut &last[..])
+					.ok_or(OffchainErr::DecodeWorkerStatus)?;
+
+				let was_aborted = !worker_status.done && worker_status.gossipping_at < now;
+
+				// another off-chain worker is currently in the process of submitting
+				let already_submitting =
+					!worker_status.done && worker_status.gossipping_at == now;
+
+				let not_yet_gossipped =
+					worker_status.done && worker_status.gossipping_at < next_gossip;
+
+				let ret = (was_aborted && !already_submitting) || not_yet_gossipped;
+				Ok((Some(last), ret))
+			},
+			None => Ok((None, true)),
+		}
+	}
+
 }
 
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
@@ -367,14 +377,14 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	fn on_new_session<'a, I: 'a>(_changed: bool, _validators: I, next_validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
-		/// Reset heartbeats
-		<ReceivedHeartbeats<T>>::remove_prefix(<session::Module<T>>::current_index());
+		// Reset heartbeats
+		<ReceivedHeartbeats>::remove_prefix(&<session::Module<T>>::current_index());
 
-		/// Tell the offchain worker to start making the next session's heartbeats.
+		// Tell the offchain worker to start making the next session's heartbeats.
 		<GossipAt<T>>::put(<system::Module<T>>::block_number());
 
-		/// Remember who the authorities are for the new session.
-		Keys::put(next_validators.map(|x| x.1).collect());
+		// Remember who the authorities are for the new session.
+		Keys::put(next_validators.map(|x| x.1).collect::<Vec<_>>());
 	}
 
 	fn on_disabled(_i: usize) {
@@ -387,7 +397,7 @@ impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
 
 	fn validate_unsigned(call: &Self::Call) -> srml_support::unsigned::TransactionValidity {
 		if let Call::heartbeat(heartbeat, signature) = call {
-			if <Module<T>>::is_online_in_current_session(&heartbeat.authority_index) {
+			if <Module<T>>::is_online_in_current_session(heartbeat.authority_index) {
 				// we already received a heartbeat for this authority
 				return TransactionValidity::Invalid(ApplyError::Stale as i8);
 			}
@@ -399,19 +409,21 @@ impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
 			}
 
 			// verify that the incoming (unverified) pubkey is actually an authority id
-			let authority_id = match Keys::get().get(heartbeat.authority_index as usize) {
+			let keys = Keys::get();
+			let authority_id = match keys.get(heartbeat.authority_index as usize) {
 				Some(id) => id,
 				None => return TransactionValidity::Invalid(ApplyError::BadSignature as i8),
 			};
 
 			// check signature (this is expensive so we do it last).
-			let signature_valid = heartbeat.using_encoded(|encoded_heartbeat|
+			let signature_valid = heartbeat.using_encoded(|encoded_heartbeat| {
+				let sig: &app::crypto::Signature = signature.as_ref();
 				sr_io::sr25519_verify(
-					signature.as_ref(),
+					sig.as_ref(),
 					encoded_heartbeat,
 					&authority_id
 				)
-			);
+			});
 			if !signature_valid {
 				return TransactionValidity::Invalid(ApplyError::BadSignature as i8);
 			}
@@ -419,11 +431,12 @@ impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
 			return TransactionValidity::Valid(ValidTransaction {
 				priority: 0,
 				requires: vec![],
-				provides: vec![encoded_heartbeat],
+				provides: vec![(current_session, authority_id).encode()],
 				longevity: TransactionLongevity::max_value(),
 				propagate: true,
 			})
 		}
+
 		TransactionValidity::Invalid(0)
 	}
 }
