@@ -535,7 +535,7 @@ where
 /// In-memory backend. Keeps all states and blocks in memory.
 ///
 /// > **Warning**: Doesn't support all the features necessary for a proper database. Only use this
-/// > struct for testing purposes.
+/// > struct for testing purposes. Do **NOT** use in production.
 pub struct Backend<Block, H>
 where
 	Block: BlockT,
