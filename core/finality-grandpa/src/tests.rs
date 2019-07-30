@@ -97,10 +97,8 @@ impl TestNetFactory for GrandpaTestNet {
 		}
 	}
 
-	fn make_verifier(&self, _client: PeersClient, _cfg: &ProtocolConfig)
-		-> Arc<Self::Verifier>
-	{
-		Arc::new(PassThroughVerifier(false)) // use non-instant finality.
+	fn make_verifier(&self, _client: PeersClient, _cfg: &ProtocolConfig) -> Self::Verifier {
+		PassThroughVerifier(false) // use non-instant finality.
 	}
 
 	fn make_block_import(&self, client: PeersClient)
