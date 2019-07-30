@@ -56,7 +56,7 @@ pub struct Pair(Keypair);
 impl Clone for Pair {
 	fn clone(&self) -> Self {
 		Pair(schnorrkel::Keypair {
-			public: self.0.public.clone(),
+			public: self.0.public,
 			secret: schnorrkel::SecretKey::from_bytes(&self.0.secret.to_bytes()[..])
 				.expect("key is always the correct size; qed")
 		})
@@ -112,14 +112,14 @@ impl UncheckedFrom<H256> for Public {
 }
 
 #[cfg(feature = "std")]
-impl ::std::fmt::Display for Public {
+impl std::fmt::Display for Public {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
 		write!(f, "{}", self.to_ss58check())
 	}
 }
 
 #[cfg(feature = "std")]
-impl ::std::fmt::Debug for Public {
+impl std::fmt::Debug for Public {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
 		let s = self.to_ss58check();
 		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
@@ -142,7 +142,7 @@ impl<'de> Deserialize<'de> for Public {
 }
 
 #[cfg(feature = "std")]
-impl ::std::hash::Hash for Public {
+impl std::hash::Hash for Public {
 	fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
 		self.0.hash(state);
 	}
@@ -170,7 +170,7 @@ impl Default for Signature {
 
 impl PartialEq for Signature {
 	fn eq(&self, b: &Self) -> bool {
-		&self.0[..] == &b.0[..]
+		self.0[..] == b.0[..]
 	}
 }
 
@@ -376,7 +376,7 @@ impl AsRef<schnorrkel::Keypair> for Pair {
 /// Derive a single hard junction.
 #[cfg(feature = "std")]
 fn derive_hard_junction(secret: &SecretKey, cc: &[u8; CHAIN_CODE_LENGTH]) -> SecretKey {
-	secret.hard_derive_mini_secret_key(Some(ChainCode(cc.clone())), b"").0.expand()
+	secret.hard_derive_mini_secret_key(Some(ChainCode(*cc)), b"").0.expand()
 }
 
 /// The raw secret seed, which can be used to recreate the `Pair`.
@@ -475,15 +475,20 @@ impl TraitPair for Pair {
 	}
 
 	/// Verify a signature on a message. Returns true if the signature is good.
-	fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: P) -> bool {
+	fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(
+		sig: &Self::Signature,
+		message: M,
+		pubkey: P
+	) -> bool {
 		let signature: schnorrkel::Signature = match schnorrkel::Signature::from_bytes(&sig.as_ref()) {
 			Ok(some_signature) => some_signature,
 			Err(_) => return false
 		};
 		match PublicKey::from_bytes(pubkey.as_ref().as_slice()) {
 			Ok(pk) => pk.verify(
-				signing_context(SIGNING_CTX).bytes(message.as_ref()), &signature
-			),
+				signing_context(SIGNING_CTX).bytes(message.as_ref()),
+				&signature,
+			).is_ok(),
 			Err(_) => false,
 		}
 	}
@@ -496,8 +501,9 @@ impl TraitPair for Pair {
 		};
 		match PublicKey::from_bytes(pubkey.as_ref()) {
 			Ok(pk) => pk.verify(
-				signing_context(SIGNING_CTX).bytes(message.as_ref()), &signature
-			),
+				signing_context(SIGNING_CTX).bytes(message.as_ref()),
+				&signature,
+			).is_ok(),
 			Err(_) => false,
 		}
 	}
@@ -570,7 +576,7 @@ mod test {
 		);
 		assert_eq!(
 			Pair::from_string("/Alice", None).unwrap().public(),
-			Public::from_string("/Alice").unwrap()
+			Public::from_string("/Alice").unwrap(),
 		);
 	}
 
@@ -624,10 +630,11 @@ mod test {
 			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 		));
 		let public = pair.public();
+
 		assert_eq!(
 			public,
 			Public::from_raw(hex!(
-				"44a996beb1eef7bdcab976ab6d2ca26104834164ecf28fb375600576fcc6eb0f"
+				"dad55a57ecb21977bebe0cbf898c3e3f7572207209b097db369282a0ef9f7354"
 			))
 		);
 		let message = b"";
@@ -646,13 +653,13 @@ mod test {
 
 	#[test]
 	fn seeded_pair_should_work() {
-
 		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();
+
 		assert_eq!(
 			public,
 			Public::from_raw(hex!(
-				"741c08a06f41c596608f6774259bd9043304adfa5d3eea62760bd9be97634d63"
+				"46ba66b7d19b0be8050209efe63264519327386425bd3c719e2a8925dfc4b052"
 			))
 		);
 		let message = hex!("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000200d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000");
@@ -680,7 +687,7 @@ mod test {
 		);
 		let public = pk.public();
 		let js_signature = Signature::from_raw(
-			hex!("28a854d54903e056f89581c691c1f7d2ff39f8f896c9e9c22475e60902cc2b3547199e0e91fa32902028f2ca2355e8cdd16cfe19ba5e8b658c94aa80f3b81a00")
+			hex!("d2b776d10d3ba8ea160df887fe1ade3c2a5d38cef72ec1ae58eb9a75017d954f6eaefc2ad6f94e5831f4298f974c98da76075f280769ceaf8b86b89deb028682")
 		);
 		assert!(Pair::verify(&js_signature, b"SUBSTRATE", public));
 	}
