@@ -109,6 +109,7 @@ impl ProvideInherentData for InherentDataProvider {
 
 pub trait Trait: timestamp::Trait {
 	type EpochDuration: Get<u64>;
+	type ExpectedBlockTime: Get<Self::Moment>;
 }
 
 /// The length of the BABE randomness
@@ -156,6 +157,17 @@ decl_storage! {
 decl_module! {
 	/// The BABE SRML module
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		/// The number of **slots** that an epoch takes. We couple sessions to
+		/// epochs, i.e. we start a new session once the new epoch begins.
+		const EpochDuration: u64 = T::EpochDuration::get();
+
+		/// The expected average block time at which BABE should be creating
+		/// blocks. Since BABE is probabilistic it is not trivial to figure out
+		/// what the expected average block time should be based on the slot
+		/// duration and the security parameter `c` (where `1 - c` represents
+		/// the probability of a slot being empty).
+		const ExpectedBlockTime: T::Moment = T::ExpectedBlockTime::get();
+
 		/// Initialization
 		fn on_initialize() {
 			for digest in Self::get_inherent_digests()

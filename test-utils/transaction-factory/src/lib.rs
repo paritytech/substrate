@@ -21,7 +21,6 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::ops::Mul;
 use std::cmp::PartialOrd;
 use std::fmt::Display;
 
@@ -51,7 +50,7 @@ mod simple_modes;
 
 pub trait RuntimeAdapter {
 	type AccountId: Display;
-	type Balance: Display + Mul;
+	type Balance: Display + SimpleArithmetic + From<Self::Number>;
 	type Block: BlockT;
 	type Index: Copy;
 	type Number: Display + PartialOrd + SimpleArithmetic + Zero + One;
@@ -77,13 +76,13 @@ pub trait RuntimeAdapter {
 		sender: &Self::AccountId,
 		key: &Self::Secret,
 		destination: &Self::AccountId,
-		amount: &Self::Number,
+		amount: &Self::Balance,
 		prior_block_hash: &<Self::Block as BlockT>::Hash,
 	) -> <Self::Block as BlockT>::Extrinsic;
 
 	fn inherent_extrinsics(&self) -> InherentData;
 
-	fn minimum_balance() -> Self::Number;
+	fn minimum_balance() -> Self::Balance;
 	fn master_account_id() -> Self::AccountId;
 	fn master_account_secret() -> Self::Secret;
 	fn extract_index(&self, account_id: &Self::AccountId, block_hash: &<Self::Block as BlockT>::Hash) -> Self::Index;
