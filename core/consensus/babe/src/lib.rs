@@ -581,6 +581,7 @@ impl<C> BabeVerifier<C> {
 	}
 }
 
+#[allow(unused)]
 fn median_algorithm(
 	median_required_blocks: u64,
 	slot_duration: u64,
@@ -612,8 +613,12 @@ fn median_algorithm(
 			.get(num_timestamps / 2)
 			.expect("we have at least one timestamp, so this is a valid index; qed");
 
+		let now = Instant::now();
+		if now >= median {
+			time_source.0.replace(now - median);
+		}
+
 		time_source.1.clear();
-		time_source.0.replace(Instant::now() - median);
 	} else {
 		time_source.1.push((Instant::now(), slot_now))
 	}
