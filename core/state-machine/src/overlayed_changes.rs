@@ -95,8 +95,6 @@ pub struct OverlayedChangeSet {
 	/// `commit_transaction` or `discard_transaction`
 	/// will change this state.
 	pub(crate) history: Vec<TransactionState>,
-	/// Current state in history.
-	pub(crate) state: usize,
 	/// Top level storage changes.
 	pub(crate) top: HashMap<Vec<u8>, History<OverlayedValue>>,
 	/// Child storage changes.
@@ -107,7 +105,6 @@ impl Default for OverlayedChangeSet {
 	fn default() -> Self {
 		OverlayedChangeSet {
 			history: vec![TransactionState::Pending],
-			state: 0,
 			top: Default::default(),
 			children: Default::default(),
 		}
@@ -336,7 +333,8 @@ impl<V> History<V> {
 }
 
 impl History<OverlayedValue> {
-	fn set_ext(&mut self, history: &[TransactionState], state: usize, val: Option<Vec<u8>>, extrinsic_index: Option<u32>) {
+	fn set_ext(&mut self, history: &[TransactionState], val: Option<Vec<u8>>, extrinsic_index: Option<u32>) {
+    let state = history.len() - 1;
 		if let Some((mut current, c_ix)) = self.get_mut(history) {
 
 				if c_ix == state {
@@ -378,14 +376,13 @@ impl OverlayedChangeSet {
 	/// Clear the change set.
 	pub fn clear(&mut self) {
 		self.history = vec![TransactionState::Pending];
-		self.state = 0;
 		self.top.clear();
 		self.children.clear();
 	}
 
 	/// Discard prospective changes to state.
 	pub fn discard_prospective(&mut self) {
-		let mut i = self.state + 1;
+		let mut i = self.history.len();
 		while i > 0 {
 			i -= 1;
 			match self.history[i] {
@@ -399,13 +396,12 @@ impl OverlayedChangeSet {
 			}
 		}
 		self.history.push(TransactionState::Pending);
-		self.state = self.history.len() - 1;
 	}
 
 	/// Commit prospective changes to state.
 	pub fn commit_prospective(&mut self) {
 		debug_assert!(self.history.len() > 0);
-		let mut i = self.state + 1;
+		let mut i = self.history.len();
 		while i > 0 {
 			i -= 1;
 			match self.history[i] {
@@ -418,20 +414,17 @@ impl OverlayedChangeSet {
 		}
 		// TODO EMCH can use offset and a GC state
 		self.history.push(TransactionState::Pending);
-		self.state = self.history.len() - 1;
 	}
 
 	/// Create a new transactional layer.
 	pub fn start_transaction(&mut self) {
 		self.history.push(TransactionState::TxPending);
-		self.state = self.history.len() - 1;
 	}
 
 	/// Discard a transactional layer.
 	/// A transaction is always running (history always end with pending).
 	pub fn discard_transaction(&mut self) {
-		debug_assert!(self.history.len() > self.state);
-		let mut i = self.state + 1;
+		let mut i = self.history.len();
 		// revert state to previuos pending (or create new pending)
 		while i > 0 {
 			i -= 1;
@@ -447,13 +440,11 @@ impl OverlayedChangeSet {
 			}
 		}
 		self.history.push(TransactionState::Pending);
-		self.state = self.history.len() - 1;
 	}
 
 	/// Commit a transactional layer.
 	pub fn commit_transaction(&mut self) {
-		debug_assert!(self.history.len() > self.state);
-		let mut i = self.state + 1;
+		let mut i = self.history.len();
 		while i > 0 {
 			i -= 1;
 			match self.history[i] {
@@ -468,7 +459,6 @@ impl OverlayedChangeSet {
 			}
 		}
 		self.history.push(TransactionState::Pending);
-		self.state = self.history.len() - 1;
 	}
 
 	/// Iterator over current state of the overlay.
@@ -590,7 +580,7 @@ impl OverlayedChanges {
 	pub(crate) fn set_storage(&mut self, key: Vec<u8>, val: Option<Vec<u8>>) {
 		let extrinsic_index = self.extrinsic_index();
 		let entry = self.changes.top.entry(key).or_default();
-		entry.set_ext(self.changes.history.as_slice(), self.changes.state, val, extrinsic_index);
+		entry.set_ext(self.changes.history.as_slice(), val, extrinsic_index);
 	}
 
 	/// Inserts the given key-value pair into the prospective child change set.
@@ -600,7 +590,7 @@ impl OverlayedChanges {
 		let extrinsic_index = self.extrinsic_index();
 		let map_entry = self.changes.children.entry(storage_key).or_default();
 		let entry = map_entry.entry(key).or_default();
-		entry.set_ext(self.changes.history.as_slice(), self.changes.state, val, extrinsic_index);
+		entry.set_ext(self.changes.history.as_slice(), val, extrinsic_index);
 	}
 
 	/// Clear child storage of given storage key.
@@ -612,10 +602,9 @@ impl OverlayedChanges {
 	pub(crate) fn clear_child_storage(&mut self, storage_key: &[u8]) {
 		let extrinsic_index = self.extrinsic_index();
 		let history = self.changes.history.as_slice();
-		let state = self.changes.state;
 		let map_entry = self.changes.children.entry(storage_key.to_vec()).or_default();
 
-		map_entry.values_mut().for_each(|e| e.set_ext(history, state, None, extrinsic_index));
+		map_entry.values_mut().for_each(|e| e.set_ext(history, None, extrinsic_index));
 	}
 
 	/// Removes all key-value pairs which keys share the given prefix.
@@ -629,7 +618,7 @@ impl OverlayedChanges {
 
 		for (key, entry) in self.changes.top.iter_mut() {
 			if key.starts_with(prefix) {
-				entry.set_ext(self.changes.history.as_slice(), self.changes.state, None, extrinsic_index);
+				entry.set_ext(self.changes.history.as_slice(), None, extrinsic_index);
 			}
 		}
 	}
@@ -690,7 +679,7 @@ impl OverlayedChanges {
 	
 		let value = extrinsic_index.encode();
 		let entry = self.changes.top.entry(EXTRINSIC_INDEX.to_vec()).or_default();
-		entry.set_ext(self.changes.history.as_slice(), self.changes.state, Some(value), None);
+		entry.set_ext(self.changes.history.as_slice(), Some(value), None);
 	}
 
 	/// Test only method to build from committed info and prospective.

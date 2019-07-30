@@ -196,7 +196,6 @@ mod test {
 			changes_trie_config: Some(Configuration { digest_interval: 4, digest_levels: 2 }),
 			changes:OverlayedChangeSet {
 				history: vec![TransactionState::Committed, TransactionState::Pending],
-				state: 1,
 				children: Default::default(),
 				top: vec![
 					(EXTRINSIC_INDEX.to_vec(), History::from_vec(vec![
