@@ -80,8 +80,7 @@ pub struct StoredPendingChange<N> {
 impl<N: Decode> Decode for StoredPendingChange<N> {
 	fn decode<I: codec::Input>(value: &mut I) -> core::result::Result<Self, Error> {
 		let old = OldStoredPendingChange::decode(value)?;
-		// TODO TODO: ? is this an issue ?
-		let forced = <Option<N>>::decode(value).unwrap_or(None);
+		let forced = <Option<N>>::decode(value)?;
 
 		Ok(StoredPendingChange {
 			scheduled_at: old.scheduled_at,
