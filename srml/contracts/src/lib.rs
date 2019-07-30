@@ -669,11 +669,11 @@ impl<T: Trait> Module<T> {
 					<T as Trait>::Event::from(event).into(),
 				),
 				DispatchRuntimeCall {
-					origin,
+					origin: who,
 					call,
 				} => {
-					let result = call.dispatch(RawOrigin::Signed(origin.clone()).into());
-					Self::deposit_event(RawEvent::Dispatched(origin, result.is_ok()));
+					let result = call.dispatch(RawOrigin::Signed(who.clone()).into());
+					Self::deposit_event(RawEvent::Dispatched(who, result.is_ok()));
 				}
 				RestoreTo {
 					donor,

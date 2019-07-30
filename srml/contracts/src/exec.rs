@@ -278,12 +278,12 @@ pub enum DeferredAction<T: Trait> {
 		call: T::Call,
 	},
 	RestoreTo {
-		/// The account id of a contract which sacrificed itself to restore the to be restored
-		/// contract.
+		/// The account id of the contract which is removed during the restoration and transfers
+		/// its storage to the restored contract.
 		donor: T::AccountId,
-		/// The account id of the to be restored contract.
+		/// The account id of the restored contract.
 		dest: T::AccountId,
-		/// The code hash of the to be restored contract.
+		/// The code hash of the restored contract.
 		code_hash: CodeHash<T>,
 		/// The initial rent allowance to set.
 		rent_allowance: BalanceOf<T>,
