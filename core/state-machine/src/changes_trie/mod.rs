@@ -41,6 +41,7 @@ mod changes_iterator;
 mod input;
 mod prune;
 mod storage;
+mod surface_iterator;
 
 pub use self::storage::InMemoryStorage;
 pub use self::changes_iterator::{key_changes, key_changes_proof, key_changes_proof_check};
