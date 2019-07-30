@@ -1358,32 +1358,45 @@ pub mod tests {
 	}
 
 	#[test]
-	fn ancient_entries_are_pruned() {
-		let cache = ListCache::new(DummyStorage::new()
-			.with_id(10, H256::from_low_u64_be(10))
-			.with_id(20, H256::from_low_u64_be(20))
-			.with_id(30, H256::from_low_u64_be(30))
-			.with_entry(test_id(10), StorageEntry { prev_valid_from: None, value: 10 })
-			.with_entry(test_id(20), StorageEntry { prev_valid_from: Some(test_id(10)), value: 20 })
-			.with_entry(test_id(30), StorageEntry { prev_valid_from: Some(test_id(20)), value: 30 }),
-		PruningStrategy::ByDepth(10), test_id(9));
-		let mut tx = DummyTransaction::new();
+	fn ancient_entries_are_pruned_when_pruning_enabled() {
+		fn do_test(strategy: PruningStrategy<u64>) {
+			let cache = ListCache::new(DummyStorage::new()
+				.with_id(10, H256::from_low_u64_be(10))
+				.with_id(20, H256::from_low_u64_be(20))
+				.with_id(30, H256::from_low_u64_be(30))
+				.with_entry(test_id(10), StorageEntry { prev_valid_from: None, value: 10 })
+				.with_entry(test_id(20), StorageEntry { prev_valid_from: Some(test_id(10)), value: 20 })
+				.with_entry(test_id(30), StorageEntry { prev_valid_from: Some(test_id(20)), value: 30 }),
+			strategy, test_id(9));
+			let mut tx = DummyTransaction::new();
 
-		// when finalizing entry #10: no entries pruned
-		cache.prune_finalized_entries(&mut tx, &test_id(10));
-		assert!(tx.removed_entries().is_empty());
-		assert!(tx.inserted_entries().is_empty());
-		// when finalizing entry #19: no entries pruned
-		cache.prune_finalized_entries(&mut tx, &test_id(19));
-		assert!(tx.removed_entries().is_empty());
-		assert!(tx.inserted_entries().is_empty());
-		// when finalizing entry #20: no entries pruned
-		cache.prune_finalized_entries(&mut tx, &test_id(20));
-		assert!(tx.removed_entries().is_empty());
-		assert!(tx.inserted_entries().is_empty());
-		// when finalizing entry #30: entry 10 pruned + entry 20 is truncated
-		cache.prune_finalized_entries(&mut tx, &test_id(30));
-		assert_eq!(*tx.removed_entries(), vec![test_id(10).hash].into_iter().collect());
-		assert_eq!(*tx.inserted_entries(), vec![test_id(20).hash].into_iter().collect());
+			// when finalizing entry #10: no entries pruned
+			cache.prune_finalized_entries(&mut tx, &test_id(10));
+			assert!(tx.removed_entries().is_empty());
+			assert!(tx.inserted_entries().is_empty());
+			// when finalizing entry #19: no entries pruned
+			cache.prune_finalized_entries(&mut tx, &test_id(19));
+			assert!(tx.removed_entries().is_empty());
+			assert!(tx.inserted_entries().is_empty());
+			// when finalizing entry #20: no entries pruned
+			cache.prune_finalized_entries(&mut tx, &test_id(20));
+			assert!(tx.removed_entries().is_empty());
+			assert!(tx.inserted_entries().is_empty());
+			// when finalizing entry #30: entry 10 pruned + entry 20 is truncated (if pruning is enabled)
+			cache.prune_finalized_entries(&mut tx, &test_id(30));
+			match strategy {
+				PruningStrategy::NeverPrune => {
+					assert!(tx.removed_entries().is_empty());
+					assert!(tx.inserted_entries().is_empty());
+				},
+				PruningStrategy::ByDepth(_) => {
+					assert_eq!(*tx.removed_entries(), vec![test_id(10).hash].into_iter().collect());
+					assert_eq!(*tx.inserted_entries(), vec![test_id(20).hash].into_iter().collect());
+				},
+			}
+		}
+
+		do_test(PruningStrategy::ByDepth(10));
+		do_test(PruningStrategy::NeverPrune)
 	}
 }
