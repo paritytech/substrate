@@ -82,6 +82,14 @@ impl<T: Zeroize> AsRef<T> for Protected<T> {
 	}
 }
 
+impl<T: Zeroize> rstd::ops::Deref for Protected<T> {
+	type Target = T;
+
+	fn deref(&self) -> &T {
+		&self.0
+	}
+}
+
 #[cfg(feature = "std")]
 impl<T: Zeroize> std::fmt::Debug for Protected<T> {
 	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -706,7 +714,7 @@ impl TryFrom<u32> for Kind {
 			e if e == Kind::Sr25519 as usize as u32 => Kind::Sr25519,
 			e if e == Kind::Ed25519 as usize as u32 => Kind::Ed25519,
 			e if e == Kind::Dummy as usize as u32 => Kind::Dummy,
-			_ => Err(())?,
+			_ => return Err(()),
 		})
 	}
 }
@@ -980,7 +988,7 @@ macro_rules! app_crypto {
 			}
 		}
 		#[cfg(feature = "std")]
-		impl ::std::fmt::Display for Public {
+		impl std::fmt::Display for Public {
 			fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
 				use $crate::crypto::Ss58Codec;
 				write!(f, "{}", self.0.to_ss58check())

@@ -502,27 +502,4 @@ mod tests {
 		assert_eq!(t.sub(Duration::from_millis(10)), Timestamp(0));
 		assert_eq!(t.diff(&Timestamp(3)), Duration(2));
 	}
-
-	#[test]
-	fn crypto_key_to_from_u64() {
-		let key = CryptoKey::AuthorityKey;
-		let uint: u64 = key.clone().into();
-		let key2 = CryptoKey::try_from(uint).unwrap();
-		assert_eq!(key, key2);
-
-		let key = CryptoKey::FgAuthorityKey;
-		let uint: u64 = key.clone().into();
-		let key2 = CryptoKey::try_from(uint).unwrap();
-		assert_eq!(key, key2);
-
-		let key = CryptoKey::LocalKey { id: 0, kind: CryptoKind::Ed25519 };
-		let uint: u64 = key.clone().into();
-		let key2 = CryptoKey::try_from(uint).unwrap();
-		assert_eq!(key, key2);
-
-		let key = CryptoKey::LocalKey { id: 10, kind: CryptoKind::Sr25519 };
-		let uint: u64 = key.clone().into();
-		let key2 = CryptoKey::try_from(uint).unwrap();
-		assert_eq!(key, key2);
-	}
 }

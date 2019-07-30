@@ -145,7 +145,7 @@ impl<Storage, Block> Api<Storage, Block> where
 		let keystore = (&*self.keystore).as_ref().ok_or(())?;
 		match kind {
 			CryptoKind::Sr25519 => {
-				Ok(keystore.contents_by_type::<sr25519::Public>(key_type)
+				Ok(keystore.public_keys_by_type::<sr25519::Public>(key_type)
 					.map_err(log_error)?
 					.into_iter()
 					.map(|key| CryptoKey {
@@ -155,7 +155,7 @@ impl<Storage, Block> Api<Storage, Block> where
 					}).collect())
 			},
 			CryptoKind::Ed25519 => {
-				Ok(keystore.contents_by_type::<ed25519::Public>(key_type)
+				Ok(keystore.public_keys_by_type::<ed25519::Public>(key_type)
 					.map_err(log_error)?
 					.into_iter()
 					.map(|key| CryptoKey {
@@ -183,18 +183,17 @@ impl<Storage, Block> Api<Storage, Block> where
 
 		// TODO [ToDr] Remove
 		let keystore = (&*self.keystore).as_ref().ok_or(())?;
-		let pass = "".into();
 
 		match key.kind {
 			CryptoKind::Sr25519 => {
 				let public = sr25519::Public::from_slice(&key.public);
-				keystore.load_by_type(&public, pass, key.key_type)
+				keystore.key_pair_by_type(&public, key.key_type)
 					.map_err(log_error)
 					.map(KnownCryptoKey::Sr25519)
 			},
 			CryptoKind::Ed25519 => {
 				let public = ed25519::Public::from_slice(&key.public);
-				keystore.load_by_type(&public, pass, key.key_type)
+				keystore.key_pair_by_type(&public, key.key_type)
 					.map_err(log_error)
 					.map(KnownCryptoKey::Ed25519)
 			},

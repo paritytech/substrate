@@ -83,8 +83,7 @@ pub struct Service<Components: components::Components> {
 		NetworkStatus<ComponentBlock<Components>>, NetworkState
 	)>>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
-	keystore: Arc<Option<Keystore>>,
-	exit: ::exit_future::Exit,
+	exit: exit_future::Exit,
 	signal: Option<Signal>,
 	/// Sender for futures that must be spawned as background tasks.
 	to_spawn_tx: mpsc::UnboundedSender<Box<dyn Future<Item = (), Error = ()> + Send>>,
@@ -170,7 +169,7 @@ impl<Components: components::Components> Service<Components> {
 		let executor = NativeExecutor::new(config.default_heap_pages);
 
 		let keystore = if let Some(keystore_path) = config.keystore_path.as_ref() {
-			match Keystore::open(keystore_path.clone()) {
+			match Keystore::open(keystore_path.clone(), config.keystore_password.clone()) {
 				Ok(ks) => Some(ks),
 				Err(err) => {
 					error!("Failed to initialize keystore: {}", err);
@@ -181,34 +180,6 @@ impl<Components: components::Components> Service<Components> {
 			None
 		};
 
-		// Keep the public key for telemetry
-		let public_key: String;
-
-		/*
-		// This is meant to be for testing only
-		// FIXME #1063 remove this
-		if let Some(keystore) = keystore.as_mut() {
-			for seed in &config.keys {
-				// this won't work as desired since it's only generating "plain"
-				// keys here, not app-specific keys as the engines will need.
-				keystore.generate_from_seed::<ed25519::AppPair>(seed)?;
-				keystore.generate_from_seed::<sr25519::AppPair>(seed)?;
-			}
-
-			public_key = match keystore.contents::<ed25519::Public>()?.get(0) {
-				Some(public_key) => public_key.to_string(),
-				None => {
-					let key: ed25519::Pair = keystore.generate(&config.password.as_ref())?;
-					let public_key = key.public();
-					info!("Generated a new keypair: {:?}", public_key);
-					public_key.to_string()
-				}
-			}
-		} else {
-			public_key = format!("<disabled-keystore>");
-		}
-		*/
-		public_key = format!("<disabled-keystore>");
 		let keystore = Arc::new(keystore);
 
 		let (client, on_demand) = Components::build_client(&config, executor)?;
@@ -460,7 +431,6 @@ impl<Components: components::Components> Service<Components> {
 						"version" => version.clone(),
 						"config" => "",
 						"chain" => chain_name.clone(),
-						"pubkey" => &public_key,
 						"authority" => is_authority,
 						"network_id" => network_id.clone()
 					);
@@ -486,7 +456,6 @@ impl<Components: components::Components> Service<Components> {
 			to_spawn_tx,
 			to_spawn_rx,
 			to_poll: Vec::new(),
-			keystore,
 			config,
 			exit,
 			rpc_handlers,

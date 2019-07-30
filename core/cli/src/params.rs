@@ -306,14 +306,6 @@ pub struct ExecutionStrategies {
 /// The `run` command used to run a node.
 #[derive(Debug, StructOpt, Clone)]
 pub struct RunCmd {
-	/// Specify custom keystore path
-	#[structopt(long = "keystore-path", value_name = "PATH", parse(from_os_str))]
-	pub keystore_path: Option<PathBuf>,
-
-	/// Specify additional key seed
-	#[structopt(long = "key", value_name = "STRING")]
-	pub key: Option<String>,
-
 	/// Enable validator mode
 	#[structopt(long = "validator")]
 	pub validator: bool,
@@ -422,9 +414,32 @@ pub struct RunCmd {
 	#[structopt(long = "force-authoring")]
 	pub force_authoring: bool,
 
-	/// Interactive password for validator key.
-	#[structopt(short = "i")]
-	pub interactive_password: bool,
+	/// Specify custom keystore path.
+	#[structopt(long = "keystore-path", value_name = "PATH", parse(from_os_str))]
+	pub keystore_path: Option<PathBuf>,
+
+	/// Use interactive shell for entering the password used by the keystore.
+	#[structopt(
+		long = "password-interactive",
+		raw(conflicts_with_all = r#"&[ "password", "password-filename" ]"#)
+	)]
+	pub password_interactive: bool,
+
+	/// Password used by the keystore.
+	#[structopt(
+		long = "password"
+		raw(conflicts_with_all = r#"&[ "password-interactive", "password-filename" ]"#)
+	)]
+	pub password: Option<String>,
+
+	/// File that contains the password used by the keystore.
+	#[structopt(
+		long = "password-filename",
+		value_name = "PATH",
+		parse(from_os_str),
+		raw(conflicts_with_all = r#"&[ "password-interactive", "password" ]"#)
+	)]
+	pub password_filename: Option<PathBuf>
 }
 
 /// Stores all required Cli values for a keyring test account.

@@ -366,6 +366,22 @@ fn input_keystore_password() -> Result<String, String> {
 		.map_err(|e| format!("{:?}", e))
 }
 
+/// Fill the password field of the given config instance.
+fn fill_config_keystore_password(
+	config: &mut service::Configuration,
+	cli: &RunCmd,
+) -> Result<(), String> {
+	config.keystore_password = if cli.password_interactive {
+		Some(input_keystore_password()?.into());
+	} else if let Some(file) = cli.password_filename {
+		Some(fs::read_to_string(file)?.into());
+	} else if let Some(password) = cli.password {
+		Some(password.into());
+	};
+
+	Ok(())
+}
+
 fn create_run_node_config<F, S>(
 	cli: RunCmd, spec_factory: S, impl_name: &'static str, version: &VersionInfo
 ) -> error::Result<FactoryFullConfiguration<F>>
@@ -375,9 +391,6 @@ where
 {
 	let spec = load_spec(&cli.shared_params, spec_factory)?;
 	let mut config = service::Configuration::default_with_spec(spec.clone());
-	if cli.interactive_password {
-		config.password = input_keystore_password()?.into()
-	}
 
 	config.impl_name = impl_name;
 	config.impl_commit = version.commit;
@@ -402,6 +415,7 @@ where
 	let base_path = base_path(&cli.shared_params, version);
 
 	config.keystore_path = cli.keystore_path.or_else(|| Some(keystore_path(&base_path, config.chain_spec.id())));
+	fill_config_keystore_password(&mut config, &cli)?;
 
 	config.database_path = db_path(&base_path, config.chain_spec.id());
 	config.database_cache_size = cli.database_cache_size;
