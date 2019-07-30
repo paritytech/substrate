@@ -42,7 +42,6 @@ finality_tracker = { package = "srml-finality-tracker", path = "../../srml/final
 contracts = { package = "srml-contracts", path = "../../srml/contracts" }
 system = { package = "srml-system", path = "../../srml/system" }
 balances = { package = "srml-balances", path = "../../srml/balances" }
-support = { package = "srml-support", path = "../../srml/support", default-features = false }
 
 [dev-dependencies]
 babe = { package = "substrate-consensus-babe", path = "../../core/consensus/babe", features = ["test-helpers"] }
