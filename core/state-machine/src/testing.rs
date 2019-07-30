@@ -232,6 +232,19 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 			.as_mut()
 			.map(|x| &mut **x as _)
 	}
+
+	fn start_transaction(&mut self) {
+		self.overlay.start_transaction()
+	}
+
+	fn discard_transaction(&mut self) {
+		self.overlay.discard_transaction()
+	}
+
+	fn commit_transaction(&mut self) {
+		self.overlay.commit_transaction()
+	}
+	
 }
 
 #[cfg(test)]

@@ -160,6 +160,19 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 		warn!("Call to non-existent out offchain externalities set.");
 		None
 	}
+
+	fn start_transaction(&mut self) {
+		self.changes.start_transaction()
+	}
+
+	fn discard_transaction(&mut self) {
+		self.changes.discard_transaction()
+	}
+
+	fn commit_transaction(&mut self) {
+		self.changes.commit_transaction()
+	}
+
 }
 
 #[cfg(test)]

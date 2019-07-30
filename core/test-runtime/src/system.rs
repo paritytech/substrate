@@ -71,6 +71,35 @@ pub fn take_block_number() -> Option<BlockNumber> {
 	Number::take()
 }
 
+/// Return 1 if test successfull, 0 otherwhise.
+pub fn test_transactions() -> u64 {
+	let origin_value: Option<u32> = storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX);
+	let result: Result<(), _> = storage::with_transaction(|| {
+		if let Ok(val) = storage::with_transaction(|| {
+			storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &99u32);
+			if storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX) == Some(99u32) {
+				Ok(99u32)
+			} else {
+				Err("Error setting value will revert")
+			}
+		}) {
+			if storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX) == Some(val) {
+				Err("expected revert for test")
+			} else {
+				Err("Unexpected revert")
+			}
+		} else {
+			Err("Unexpected revert")
+		}
+	});
+	if result == Err("expected revert for test") {
+		if storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX) == origin_value {
+			return 1;
+		}
+	}
+	0
+}
+
 #[derive(Copy, Clone)]
 enum Mode {
 	Verify,
@@ -206,7 +235,7 @@ pub fn finalize_block() -> Header {
 	let mut digest = <StorageDigest>::take().expect("StorageDigest is set by `initialize_block`");
 
 	let o_new_authorities = <NewAuthorities>::take();
-	// This MUST come after all changes to storage are done.  Otherwise we will fail the
+	// This MUST come after all changes to storage are done. Otherwise we will fail the
 	// “Storage root does not match that calculated” assertion.
 	let storage_root = BlakeTwo256::storage_root();
 	let storage_changes_root = BlakeTwo256::storage_changes_root(parent_hash);

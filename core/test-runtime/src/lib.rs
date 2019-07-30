@@ -248,8 +248,10 @@ cfg_if! {
 				fn function_signature_changed() -> u64;
 				fn fail_on_native() -> u64;
 				fn fail_on_wasm() -> u64;
-				/// trie no_std testing
+				/// Trie no_std testing.
 				fn use_trie() -> u64;
+				/// Transactional tests.
+				fn use_transactions() -> u64;
 				fn benchmark_indirect_call() -> u64;
 				fn benchmark_direct_call() -> u64;
 				/// Returns the initialized block number.
@@ -281,6 +283,8 @@ cfg_if! {
 				fn fail_on_wasm() -> u64;
 				/// trie no_std testing
 				fn use_trie() -> u64;
+				/// Transactional tests.
+				fn use_transactions() -> u64;
 				fn benchmark_indirect_call() -> u64;
 				fn benchmark_direct_call() -> u64;
 				/// Returns the initialized block number.
@@ -442,6 +446,10 @@ cfg_if! {
 					code_using_trie()
 				}
 
+				fn use_transactions() -> u64 {
+					system::test_transactions()
+				}
+
 				fn benchmark_indirect_call() -> u64 {
 					let function = benchmark_add_one;
 					(0..1000).fold(0, |p, i| p + function(i))
@@ -585,6 +593,10 @@ cfg_if! {
 
 				fn use_trie() -> u64 {
 					code_using_trie()
+				}
+
+				fn use_transactions() -> u64 {
+					system::test_transactions()
 				}
 
 				fn benchmark_indirect_call() -> u64 {

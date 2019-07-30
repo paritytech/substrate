@@ -421,7 +421,7 @@ impl OverlayedChangeSet {
 		self.state = self.history.len() - 1;
 	}
 
-	/// Create a new transactional layer
+	/// Create a new transactional layer.
 	pub fn start_transaction(&mut self) {
 		self.history.push(TransactionState::TxPending);
 		self.state = self.history.len() - 1;
@@ -644,6 +644,22 @@ impl OverlayedChanges {
 		self.changes.commit_prospective();
 	}
 
+	/// Create a new transactional layer.
+	pub fn start_transaction(&mut self) {
+		self.changes.start_transaction();
+	}
+
+	/// Discard a transactional layer.
+	/// A transaction is always running (history always end with pending).
+	pub fn discard_transaction(&mut self) {
+		self.changes.discard_transaction();
+	}
+
+	/// Commit a transactional layer.
+	pub fn commit_transaction(&mut self) {
+		self.changes.commit_transaction();
+	}
+	
 	/// Consume `OverlayedChanges` and take committed set.
 	///
 	/// Panics:
@@ -942,64 +958,64 @@ mod tests {
 		overlayed.set_storage(key.clone(), Some(vec![1, 2, 3]));
 		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3][..]));
 
-		overlayed.changes.discard_transaction();
+		overlayed.discard_transaction();
 		assert_eq!(overlayed.storage(&key), None);
 
-		overlayed.changes.discard_prospective();
+		overlayed.discard_prospective();
 		assert_eq!(overlayed.storage(&key), None);
 
 		overlayed.set_storage(key.clone(), Some(vec![1, 2, 3]));
 		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3][..]));
 
-		overlayed.changes.commit_transaction();
+		overlayed.commit_transaction();
 		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3][..]));
 
 
-		overlayed.changes.discard_transaction();
+		overlayed.discard_transaction();
 		assert_eq!(overlayed.storage(&key), None);
 		// basic transaction test
 		// tx:1
 		overlayed.set_storage(key.clone(), Some(vec![1, 2, 3]));
 		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3][..]));
 
-		overlayed.changes.start_transaction();
+		overlayed.start_transaction();
 		// tx:2
 		overlayed.set_storage(key.clone(), Some(vec![1, 2, 3, 4]));
 		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3, 4][..]));
 
-		overlayed.changes.start_transaction();
+		overlayed.start_transaction();
 		// tx:3
 		overlayed.set_storage(key.clone(), None);
 		assert_eq!(overlayed.storage(&key).unwrap(), None);
 
-		overlayed.changes.discard_transaction();
+		overlayed.discard_transaction();
 		// tx:2
 		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3, 4][..]));
 
-		overlayed.changes.start_transaction();
+		overlayed.start_transaction();
 		// tx:3
 		overlayed.set_storage(key.clone(), None);
 		assert_eq!(overlayed.storage(&key).unwrap(), None);
 
-		overlayed.changes.commit_transaction();
+		overlayed.commit_transaction();
 		// tx:2
 		assert_eq!(overlayed.storage(&key).unwrap(), None);
 
-		overlayed.changes.discard_transaction();
+		overlayed.discard_transaction();
 		// tx:1
 		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3][..]));
-		overlayed.changes.discard_prospective();
+		overlayed.discard_prospective();
 		assert_eq!(overlayed.storage(&key), None);
 
 		// multiple transaction end up to prospective value
-		overlayed.changes.start_transaction();
+		overlayed.start_transaction();
 		overlayed.set_storage(key.clone(), Some(vec![1]));
-		overlayed.changes.start_transaction();
+		overlayed.start_transaction();
 		overlayed.set_storage(key.clone(), Some(vec![1, 2]));
-		overlayed.changes.start_transaction();
+		overlayed.start_transaction();
 		overlayed.set_storage(key.clone(), Some(vec![1, 2, 3]));
 
-		overlayed.changes.commit_prospective();
+		overlayed.commit_prospective();
 		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3][..]));
 	}
 

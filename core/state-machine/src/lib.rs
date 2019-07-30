@@ -225,6 +225,17 @@ pub trait Externalities<H: Hasher> {
 
 	/// Returns offchain externalities extension if present.
 	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities>;
+
+	/// Create a new transactional layer.
+	fn start_transaction(&mut self);
+
+	/// Discard a transactional layer, pending changes of every trasaction below this layer are
+  /// dropped (including committed changes) .
+	fn discard_transaction(&mut self);
+
+	/// Commit a transactional layer. The changes stay attached to parent transaction layer.
+	fn commit_transaction(&mut self);
+	
 }
 
 /// An implementation of offchain extensions that should never be triggered.

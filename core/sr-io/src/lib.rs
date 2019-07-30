@@ -148,6 +148,15 @@ export_api! {
 		/// "Commit" all existing operations and get the resultant storage change root.
 		fn storage_changes_root(parent_hash: [u8; 32]) -> Option<[u8; 32]>;
 
+		/// Start a new transaction.
+		fn start_transaction();
+
+		/// Discard a transactional layer.
+		fn discard_transaction();
+
+		/// Commit a transactional layer.
+		fn commit_transaction();
+	
 		/// A trie root formed from the enumerated items.
 		/// TODO [#2382] remove (just use `ordered_trie_root` (NOTE currently not implemented for without_std))
 		fn enumerated_trie_root<H>(input: &[&[u8]]) -> H::Out

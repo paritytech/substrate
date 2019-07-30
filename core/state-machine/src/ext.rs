@@ -335,6 +335,22 @@ where
 	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities> {
 		self.offchain_externalities.as_mut().map(|x| &mut **x as _)
 	}
+
+	fn start_transaction(&mut self) {
+		let _guard = panic_handler::AbortGuard::new(true);
+		self.overlay.start_transaction()
+	}
+
+	fn discard_transaction(&mut self) {
+		let _guard = panic_handler::AbortGuard::new(true);
+		self.overlay.discard_transaction()
+	}
+
+	fn commit_transaction(&mut self) {
+		let _guard = panic_handler::AbortGuard::new(true);
+		self.overlay.commit_transaction()
+	}
+	
 }
 
 #[cfg(test)]
