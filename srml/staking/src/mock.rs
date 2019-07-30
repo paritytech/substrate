@@ -75,8 +75,8 @@ impl session::SessionHandler<AccountId> for TestSessionHandler {
 	}
 }
 
-pub fn is_disabled(validator: AccountId) -> bool {
-	let stash = Staking::ledger(&validator).unwrap().stash;
+pub fn is_disabled(controller: AccountId) -> bool {
+	let stash = Staking::ledger(&controller).unwrap().stash;
 	SESSION.with(|d| d.borrow().1.contains(&stash))
 }
 

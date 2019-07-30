@@ -108,6 +108,8 @@ impl<T: ReporterTrait> BabeEquivocationReporter<T> {
 	}
 }
 
+// think of this a `decl_mod!` which have some events
+// such as `Misbehavior(Self::kind())`,
 pub struct BabeEquivocation<T, DS, AS>(PhantomData<(T, DS, AS)>);
 
 impl_base_severity!(BabeEquivocation<T, DS, AS>, Perbill: Perbill::zero());
@@ -115,8 +117,12 @@ impl_kind!(BabeEquivocation<T, DS, AS>, Kind: Kind::One);
 
 impl<T, DS, AS> BabeEquivocation<T, DS, AS> {
 	pub fn as_misconduct_level(severity: Perbill) -> u8 {
-		if severity >= Perbill::from_percent(1) {
+		if severity > Perbill::from_percent(10) {
+			4
+		} else if severity > Perbill::from_percent(1) {
 			3
+		} else if severity > Perbill::from_rational_approximation(1_u32, 1000_u32) {
+			2
 		} else {
 			1
 		}
@@ -143,36 +149,56 @@ where
 		// example how to estimate severity
 		// 3k / n^2
 		let severity = Perbill::from_rational_approximation(3 * num_violations, n * n);
-		println!("num_violations: {:?}", num_violations);
+		let misconduct_level = Self::as_misconduct_level(severity);
+		println!("num_violations: {:?}, misconduct_level: {:?}", num_violations, misconduct_level);
 
 		DS::do_slash(who.clone(), reporter, severity, kind)?;
-		AS::after_slash(Self::as_misconduct_level(severity), who);
+		AS::after_slash(misconduct_level, who);
 
 		Ok(())
 	}
 }
 
 #[test]
-fn it_works() {
+fn simple_with_after_slash() {
 	with_externalities(&mut ExtBuilder::default()
 		.build(),
 	|| {
-		let who: AccountId = 0;
+		let who = 11;
+		let controller = 10;
+		let nom = 101;
+		let exp = Staking::stakers(who);
+
+        // who is stash and controller is controller
+		assert_eq!(Staking::bonded(&who), Some(controller));
+		assert!(<Validators<Test>>::exists(&who));
+		assert_eq!(
+			exp,
+			Exposure { total: 1250, own: 1000, others: vec![ IndividualExposure { who: nom, value: 250 }] }
+		);
 
 		EXPOSURES.with(|x| {
-			let exp = Exposure {
-				own: 1000,
-				total: 1000,
-				others: Vec::new(),
-			};
 			x.borrow_mut().insert(who, exp)
 		});
 
-		let _ = Balances::make_free_balance_be(&who, 1000);
-		assert_eq!(Balances::free_balance(&who), 1000);
-
+		let nominator_balance = Balances::free_balance(&nom);
 		assert_ok!(BabeEquivocationReporter::<Test>::report_equivocation(FakeProof::new(who), vec![]));
-		assert_eq!(Balances::free_balance(&who), 999);
+		assert_eq!(Balances::free_balance(&who), 999, "slash 0.12%");
+		assert_eq!(Balances::free_balance(&nom), nominator_balance, "0.12% of 250 is zero, don't slash anythin");
+
+		assert!(is_disabled(controller), "severity higher than 0.1%");
+		assert!(!<Validators<Test>>::exists(&who), "remove from the `wannabe` validators");
+
+		// increase severity to level 3
+		for _ in 0..10 {
+			assert_ok!(BabeEquivocationReporter::<Test>::report_equivocation(FakeProof::new(who), vec![]));
+		}
+
+		for v in Staking::nominators(nom) {
+			assert!(v != who, "slashed validators on level 3 should not be trusted");
+		}
+
+		assert_eq!(Staking::stakers(who).total, 0);
 	});
 }
 
@@ -207,7 +233,7 @@ fn slash_should_keep_state_and_increase_slash_for_history_without_nominators() {
 
 #[test]
 fn slash_with_nominators_simple() {
-	let misbehaved = 0;
+	let misbehaved = 1;
 
 	let nom_1 = 11;
 	let nom_2 = 12;
@@ -227,8 +253,8 @@ fn slash_with_nominators_simple() {
 				own: 9_000,
 				total: 11_200,
 				others: vec![
-					IndividualExposure { who: 11, value: 1500 },
-					IndividualExposure { who: 12, value: 700 },
+					IndividualExposure { who: nom_1, value: 1500 },
+					IndividualExposure { who: nom_2, value: 700 },
 				],
 			};
 			x.borrow_mut().insert(misbehaved, exp);
@@ -278,9 +304,9 @@ fn slash_should_keep_state_and_increase_slash_for_history_with_nominators() {
 			assert_ok!(BabeEquivocationReporter::<Test>::report_equivocation(FakeProof::new(*who), vec![]));
 		}
 
-		assert_eq!(Balances::free_balance(&0), 997, "should slash 0.36%");
-		assert_eq!(Balances::free_balance(&1), 997, "should slash 0.36%");
-		assert_eq!(Balances::free_balance(&2), 997, "should slash 0.36%");
+		for who in &misbehaved {
+			assert_eq!(Balances::free_balance(who), 997, "should slash 0.36%");
+		}
 		// (300 * 0.0036) * 3 = 3
 		assert_eq!(Balances::free_balance(&nom_1), 9_997, "should slash 0.36%");
 		// (200 * 0.0036) * 3 = 0

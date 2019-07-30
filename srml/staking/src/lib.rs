@@ -1619,7 +1619,7 @@ impl<T: Trait> SelectInitialValidators<T::AccountId> for Module<T> {
 	}
 }
 
-/// Type for slashing and receiving events after slashing
+/// Type for handling slashing and rewarding
 pub struct StakingSlasher<T>(rstd::marker::PhantomData<T>);
 
 impl<T: Trait, Reporters>
@@ -1666,16 +1666,24 @@ impl<T: Trait> AfterSlash<u8, (T::AccountId, Exposure<T::AccountId, BalanceOf<T>
 {
 	fn after_slash(
 		level: u8,
-		(who, _exposure): (T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)
+		(who, exposure): (T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)
 	) {
-		//TODO: remove `who` NPoS validator election
+		// Remove from the validator from next NPoS election
+		<Validators<T>>::remove(&who);
 
+		// Disable the validator
 		if level >= 2 {
 			let _ = T::SessionInterface::disable_validator(&who);
 		}
 
+		// Remove the validator from nominators' lists of trusted candidates
+		// TODO(niklasad1): not sure if this is correct
 		if level >= 3 {
-			//TODO: remove all the nominators' lists of trusted candidates
+			for nominator in &exposure.others {
+				// make sure that duplicated entries are removed to
+				<Nominators<T>>::mutate(&nominator.who, |validators| validators.retain(|v| v != &who));
+			}
+			<Stakers<T>>::remove(&who);
 		}
 	}
 }
