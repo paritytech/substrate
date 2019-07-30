@@ -77,7 +77,7 @@ mod tests {
 	use keyring::Ed25519Keyring;
 	use rhododendron;
 
-	use runtime_primitives::testing::{H256, Block as RawBlock};
+	use sr_primitives::testing::{H256, Block as RawBlock};
 
 	type Block = RawBlock<u64>;
 

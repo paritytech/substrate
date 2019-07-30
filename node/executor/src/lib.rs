@@ -22,6 +22,7 @@
 #[cfg(feature = "benchmarks")] extern crate test;
 
 pub use substrate_executor::NativeExecutor;
+pub use substrate_executor::RuntimesCache;
 use substrate_executor::native_executor_instance;
 
 // Declare an instance of the native executor named `Executor`. Include the wasm binary as the
@@ -38,16 +39,16 @@ mod tests {
 	use super::Executor;
 	use {balances, contracts, indices, staking, system, timestamp};
 	use runtime_io;
-	use substrate_executor::{WasmExecutor, NativeExecutionDispatch};
+	use substrate_executor::WasmExecutor;
 	use parity_codec::{Encode, Decode, Joiner};
 	use keyring::{AccountKeyring, Ed25519Keyring, Sr25519Keyring};
 	use runtime_support::{Hashable, StorageValue, StorageMap, assert_eq_error_rate, traits::Currency};
 	use state_machine::{CodeExecutor, Externalities, TestExternalities as CoreTestExternalities};
 	use primitives::{ twox_128, blake2_256, Blake2Hasher, ChangesTrieConfiguration, NeverNativeValue, NativeOrEncoded};
 	use node_primitives::{Hash, BlockNumber, AccountId, Balance, Index};
-	use runtime_primitives::traits::{Header as HeaderT, Hash as HashT, Convert};
-	use runtime_primitives::{generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
-	use runtime_primitives::weights::{WeightMultiplier, GetDispatchInfo};
+	use sr_primitives::traits::{Header as HeaderT, Hash as HashT, Convert};
+	use sr_primitives::{generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
+	use sr_primitives::weights::{WeightMultiplier, GetDispatchInfo};
 	use contracts::ContractAddressFor;
 	use system::{EventRecord, Phase};
 	use node_runtime::{
@@ -421,7 +422,7 @@ mod tests {
 		};
 
 		// execute the block to get the real header.
-		Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
+		executor().call::<_, NeverNativeValue, fn() -> _>(
 			env,
 			"Core_initialize_block",
 			&header.encode(),
@@ -430,7 +431,7 @@ mod tests {
 		).0.unwrap();
 
 		for i in extrinsics.iter() {
-			Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
+			executor().call::<_, NeverNativeValue, fn() -> _>(
 				env,
 				"BlockBuilder_apply_extrinsic",
 				&i.encode(),
@@ -439,7 +440,7 @@ mod tests {
 			).0.unwrap();
 		}
 
-		let header = match Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
+		let header = match executor().call::<_, NeverNativeValue, fn() -> _>(
 			env,
 			"BlockBuilder_finalize_block",
 			&[0u8;0],
@@ -462,7 +463,7 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(timestamp::Call::set(42)),
+					function: Call::Timestamp(timestamp::Call::set(42 * 1000)),
 				},
 				CheckedExtrinsic {
 					signed: Some((alice(), signed_extra(0, 0))),
@@ -484,7 +485,7 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(timestamp::Call::set(42)),
+					function: Call::Timestamp(timestamp::Call::set(42 * 1000)),
 				},
 				CheckedExtrinsic {
 					signed: Some((alice(), signed_extra(0, 0))),
@@ -499,7 +500,7 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(timestamp::Call::set(52)),
+					function: Call::Timestamp(timestamp::Call::set(52 * 1000)),
 				},
 				CheckedExtrinsic {
 					signed: Some((bob(), signed_extra(0, 0))),
@@ -527,7 +528,7 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(timestamp::Call::set(time)),
+					function: Call::Timestamp(timestamp::Call::set(time * 1000)),
 				},
 				CheckedExtrinsic {
 					signed: Some((alice(), signed_extra(nonce, 0))),
@@ -783,7 +784,7 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(timestamp::Call::set(42)),
+					function: Call::Timestamp(timestamp::Call::set(42 * 1000)),
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), signed_extra(0, 0))),
@@ -845,7 +846,7 @@ mod tests {
 	fn native_big_block_import_succeeds() {
 		let mut t = new_test_ext(COMPACT_CODE, false);
 
-		Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
+		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
 			&block_with_size(42, 0, 120_000).0,
@@ -859,7 +860,7 @@ mod tests {
 		let mut t = new_test_ext(COMPACT_CODE, false);
 
 		assert!(
-			Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
+			executor().call::<_, NeverNativeValue, fn() -> _>(
 				&mut t,
 				"Core_execute_block",
 				&block_with_size(42, 0, 120_000).0,
@@ -925,7 +926,7 @@ mod tests {
 		let block = Block::decode(&mut &block_data[..]).unwrap();
 
 		let mut t = new_test_ext(COMPACT_CODE, true);
-		Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
+		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
 			&block.encode(),
@@ -982,7 +983,7 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(timestamp::Call::set(42)),
+				function: Call::Timestamp(timestamp::Call::set(42 * 1000)),
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), signed_extra(0, 0))),
@@ -999,7 +1000,7 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(timestamp::Call::set(52)),
+				function: Call::Timestamp(timestamp::Call::set(52 * 1000)),
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), signed_extra(1, 0))),
@@ -1146,7 +1147,7 @@ mod tests {
 
 			xts.insert(0, CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(timestamp::Call::set(time)),
+				function: Call::Timestamp(timestamp::Call::set(time * 1000)),
 			});
 
 			// NOTE: this is super slow. Can probably be improved.
@@ -1212,7 +1213,7 @@ mod tests {
 				vec![
 					CheckedExtrinsic {
 						signed: None,
-						function: Call::Timestamp(timestamp::Call::set(time)),
+						function: Call::Timestamp(timestamp::Call::set(time * 1000)),
 					},
 					CheckedExtrinsic {
 						signed: Some((charlie(), signed_extra(nonce, 0))),

@@ -21,7 +21,7 @@ use consensus::import_queue::{
 };
 use test_client::{self, prelude::*};
 use test_client::runtime::{Block, Hash};
-use runtime_primitives::generic::BlockId;
+use sr_primitives::generic::BlockId;
 use super::*;
 
 fn prepare_good_block() -> (TestClient, Hash, u64, PeerId, IncomingBlock<Block>) {

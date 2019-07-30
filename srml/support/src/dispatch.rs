@@ -749,7 +749,7 @@ macro_rules! decl_module {
 		fn on_initialize() { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::runtime_primitives::traits::OnInitialize<$trait_instance::BlockNumber>
+			$crate::sr_primitives::traits::OnInitialize<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_initialize(_block_number_not_used: $trait_instance::BlockNumber) { $( $impl )* }
@@ -762,7 +762,7 @@ macro_rules! decl_module {
 		fn on_initialize($param:ident : $param_ty:ty) { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::runtime_primitives::traits::OnInitialize<$trait_instance::BlockNumber>
+			$crate::sr_primitives::traits::OnInitialize<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_initialize($param: $param_ty) { $( $impl )* }
@@ -774,7 +774,7 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::runtime_primitives::traits::OnInitialize<$trait_instance::BlockNumber>
+			$crate::sr_primitives::traits::OnInitialize<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{}
 	};
@@ -785,7 +785,7 @@ macro_rules! decl_module {
 		fn on_finalize() { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::runtime_primitives::traits::OnFinalize<$trait_instance::BlockNumber>
+			$crate::sr_primitives::traits::OnFinalize<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_finalize(_block_number_not_used: $trait_instance::BlockNumber) { $( $impl )* }
@@ -798,7 +798,7 @@ macro_rules! decl_module {
 		fn on_finalize($param:ident : $param_ty:ty) { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::runtime_primitives::traits::OnFinalize<$trait_instance::BlockNumber>
+			$crate::sr_primitives::traits::OnFinalize<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_finalize($param: $param_ty) { $( $impl )* }
@@ -810,7 +810,7 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::runtime_primitives::traits::OnFinalize<$trait_instance::BlockNumber>
+			$crate::sr_primitives::traits::OnFinalize<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 		}
@@ -822,7 +822,7 @@ macro_rules! decl_module {
 		fn offchain_worker() { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::runtime_primitives::traits::OffchainWorker<$trait_instance::BlockNumber>
+			$crate::sr_primitives::traits::OffchainWorker<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn generate_extrinsics(_block_number_not_used: $trait_instance::BlockNumber) { $( $impl )* }
@@ -835,7 +835,7 @@ macro_rules! decl_module {
 		fn offchain_worker($param:ident : $param_ty:ty) { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::runtime_primitives::traits::OffchainWorker<$trait_instance::BlockNumber>
+			$crate::sr_primitives::traits::OffchainWorker<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn generate_extrinsics($param: $param_ty) { $( $impl )* }
@@ -847,7 +847,7 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::runtime_primitives::traits::OffchainWorker<$trait_instance::BlockNumber>
+			$crate::sr_primitives::traits::OffchainWorker<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{}
 	};
@@ -1595,7 +1595,7 @@ macro_rules! __check_reserved_fn_name {
 #[allow(dead_code)]
 mod tests {
 	use super::*;
-	use crate::runtime_primitives::traits::{OnInitialize, OnFinalize};
+	use crate::sr_primitives::traits::{OnInitialize, OnFinalize};
 	use sr_primitives::weights::{DispatchInfo, DispatchClass};
 
 	pub trait Trait: system::Trait + Sized where Self::AccountId: From<u32> {

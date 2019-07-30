@@ -24,8 +24,8 @@ pub use timestamp;
 use rstd::{result, prelude::*};
 use srml_support::{decl_storage, decl_module, StorageValue, traits::FindAuthor, traits::Get};
 use timestamp::{OnTimestampSet};
-use primitives::{generic::DigestItem, ConsensusEngineId};
-use primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert};
+use sr_primitives::{generic::DigestItem, ConsensusEngineId};
+use sr_primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert};
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
 use parity_codec::{Encode, Decode};

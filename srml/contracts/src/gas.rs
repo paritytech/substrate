@@ -16,8 +16,8 @@
 
 use crate::{GasSpent, Module, Trait, BalanceOf, NegativeImbalanceOf};
 use rstd::convert::TryFrom;
-use runtime_primitives::BLOCK_FULL;
-use runtime_primitives::traits::{CheckedMul, Zero, SaturatedConversion, SimpleArithmetic, UniqueSaturatedInto};
+use sr_primitives::BLOCK_FULL;
+use sr_primitives::traits::{CheckedMul, Zero, SaturatedConversion, SimpleArithmetic, UniqueSaturatedInto};
 use srml_support::StorageValue;
 use srml_support::traits::{Currency, ExistenceRequirement, Get, Imbalance, OnUnbalanced, WithdrawReason};
 

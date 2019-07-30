@@ -38,8 +38,8 @@ pub enum Error {
 	#[display(fmt="Method not found: '{}'", _0)]
 	MethodNotFound(String),
 	/// Code is invalid (expected single byte)
-	#[display(fmt="Invalid Code: {:?}", _0)]
-	InvalidCode(Vec<u8>),
+	#[display(fmt="Invalid Code")]
+	InvalidCode,
 	/// Could not get runtime version.
 	#[display(fmt="On-chain runtime does not specify version")]
 	VersionInvalid,
@@ -58,6 +58,13 @@ pub enum Error {
 	/// Invalid memory reference.
 	#[display(fmt="Invalid memory reference")]
 	InvalidMemoryReference,
+	/// The runtime must provide a global named `__heap_base` of type i32 for specifying where the
+	/// allocator is allowed to place its data.
+	#[display(fmt="The runtime doesn't provide a global named `__heap_base`")]
+	HeapBaseNotFoundOrInvalid,
+	/// The runtime WebAssembly module is not allowed to have the `start` function.
+	#[display(fmt="The runtime has the `start` function")]
+	RuntimeHasStartFn,
 	/// Some other error occurred
 	Other(&'static str),
 	/// Some error occurred in the allocator

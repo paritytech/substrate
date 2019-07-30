@@ -53,7 +53,7 @@ pub use timestamp;
 use rstd::{result, prelude::*};
 use parity_codec::Encode;
 use srml_support::{decl_storage, decl_module, Parameter, storage::StorageValue, traits::Get};
-use primitives::{
+use sr_primitives::{
 	traits::{SaturatedConversion, Saturating, Zero, One, Member, IsMember, TypedKey},
 	generic::DigestItem,
 };

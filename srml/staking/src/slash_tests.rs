@@ -1,16 +1,17 @@
 #![cfg(test)]
 
 use crate::*;
-use std::marker::PhantomData;
-use srml_support::{assert_ok, traits::{ReportSlash, DoSlash, AfterSlash, KeyOwnerProofSystem}};
 use crate::mock::*;
-use runtime_io::with_externalities;
-use srml_rolling_window::{Module as RollingWindow, MisbehaviorReporter, GetMisbehaviors,
-	impl_base_severity, impl_kind};
-use substrate_primitives::H256;
-use primitives::traits::Hash;
-use std::collections::HashMap;
+use primitives::H256;
 use rstd::cell::RefCell;
+use runtime_io::with_externalities;
+use sr_primitives::traits::Hash;
+use srml_rolling_window::{
+	Module as RollingWindow, MisbehaviorReporter, GetMisbehaviors,impl_base_severity, impl_kind
+};
+use srml_support::{assert_ok, traits::{ReportSlash, DoSlash, AfterSlash, KeyOwnerProofSystem}};
+use std::collections::HashMap;
+use std::marker::PhantomData;
 
 type Balances = balances::Module<Test>;
 
