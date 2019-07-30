@@ -390,7 +390,8 @@ fn find_pre_digest<B: BlockT, P: Pair>(header: &B::Header) -> Result<u64, String
 ///
 /// This digest item will always return `Some` when used with `as_aura_seal`.
 //
-// FIXME #1018 needs misbehavior types
+// FIXME #1018 needs misbehavior types. The `transaction_pool` parameter will be 
+// used to submit such misbehavior reports.
 fn check_header<C, B: BlockT, P: Pair, T>(
 	client: &C,
 	slot_now: u64,
