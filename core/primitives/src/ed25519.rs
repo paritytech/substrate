@@ -29,11 +29,11 @@ use substrate_bip39::seed_from_entropy;
 #[cfg(feature = "std")]
 use bip39::{Mnemonic, Language, MnemonicType};
 #[cfg(feature = "std")]
-use crate::crypto::{Pair as TraitPair, DeriveJunction, SecretStringError, Derive, Ss58Codec};
+use crate::crypto::{Pair as TraitPair, DeriveJunction, SecretStringError, Ss58Codec};
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
 use crate::{impl_as_ref_mut, crypto::{
-	Public as TraitPublic, UncheckedFrom, CryptoType, Kind
+	Public as TraitPublic, UncheckedFrom, CryptoType, Kind, Derive
 }};
 
 /// A secret seed. It's not called a "secret key" because ring doesn't expose the secret keys
@@ -306,7 +306,6 @@ impl TraitPublic for Public {
 	}
 }
 
-#[cfg(feature = "std")]
 impl Derive for Public {}
 
 /// Derive a single hard junction.
@@ -468,11 +467,13 @@ impl Pair {
 
 impl CryptoType for Public {
 	const KIND: Kind = Kind::Ed25519;
+	#[cfg(feature="std")]
 	type Pair = Pair;
 }
 
 impl CryptoType for Signature {
 	const KIND: Kind = Kind::Ed25519;
+	#[cfg(feature="std")]
 	type Pair = Pair;
 }
 
@@ -484,12 +485,13 @@ impl CryptoType for Pair {
 
 mod app {
 	use crate::crypto::key_types::ED25519;
-	crate::app_crypto!(super::Pair, super::Public, super::Signature, ED25519);
+	crate::app_crypto!(super, ED25519);
 }
 
 pub use app::Public as AppPublic;
-pub use app::Pair as AppPair;
 pub use app::Signature as AppSignature;
+#[cfg(feature="std")]
+pub use app::Pair as AppPair;
 
 #[cfg(test)]
 mod test {

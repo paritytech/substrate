@@ -32,7 +32,7 @@ pub use digest::{BABE_VRF_PREFIX, RawBabePreDigest};
 
 mod app {
 	use primitives::{app_crypto, crypto::key_types::BABE, sr25519};
-	app_crypto!(sr25519::Pair, sr25519::Public, sr25519::Signature, BABE);
+	app_crypto!(sr25519, BABE);
 }
 
 /// A Babe authority keypair. Necessarily equivalent to the schnorrkel public key used in

@@ -19,7 +19,7 @@ pub use rstd;
 pub use rstd::{mem, slice};
 
 use core::{intrinsics, panic::PanicInfo};
-use rstd::{vec::Vec, cell::Cell, convert::TryInto, convert::TryFrom};
+use rstd::{vec::Vec, cell::Cell, convert::TryInto};
 use primitives::{offchain, Blake2Hasher};
 
 #[cfg(not(feature = "no_panic_handler"))]
@@ -927,9 +927,10 @@ impl OffchainApi for () {
 
 	fn new_key(
 		crypto: offchain::CryptoKind,
-		key_type: offchain::KeyType,
+		key_type: offchain::KeyTypeId,
 	) -> Result<offchain::CryptoKey, ()> {
 		let crypto = crypto.into();
+		let key_type = key_type.into();
 		let mut len = 0_u32;
 		let raw_result = unsafe {
 			let ptr = ext_new_key.get()(
@@ -949,9 +950,10 @@ impl OffchainApi for () {
 
 	fn public_keys(
 		crypto: offchain::CryptoKind,
-		key_type: offchain::KeyType,
+		key_type: offchain::KeyTypeId,
 	) -> Result<Vec<offchain::CryptoKey>, ()> {
 		let crypto = crypto.into();
+		let key_type = key_type.into();
 		let mut len = 0u32;
 		let raw_result = unsafe {
 			let ptr = ext_public_keys.get()(
@@ -973,7 +975,7 @@ impl OffchainApi for () {
 		key: offchain::CryptoKey,
 		data: &[u8],
 	) -> Result<Vec<u8>, ()> {
-		let key = key.encode();
+		let key = codec::Encode::encode(&key);
 		let mut len = 0_u32;
 		unsafe {
 			let ptr = ext_encrypt.get()(
@@ -992,7 +994,7 @@ impl OffchainApi for () {
 		key: offchain::CryptoKey,
 		data: &[u8],
 	) -> Result<Vec<u8>, ()> {
-		let key = key.encode();
+		let key = codec::Encode::encode(&key);
 		let mut len = 0_u32;
 		unsafe {
 			let ptr = ext_decrypt.get()(
@@ -1011,7 +1013,7 @@ impl OffchainApi for () {
 		key: offchain::CryptoKey,
 		data: &[u8],
 	) -> Result<Vec<u8>, ()> {
-		let key = key.encode();
+		let key = codec::Encode::encode(&key);
 		let mut len = 0_u32;
 		unsafe {
 			let ptr = ext_sign.get()(
@@ -1031,7 +1033,7 @@ impl OffchainApi for () {
 		msg: &[u8],
 		signature: &[u8],
 	) -> Result<bool, ()> {
-		let key = key.encode();
+		let key = codec::Encode::encode(&key);
 		let val = unsafe {
 			ext_verify.get()(
 				key.as_ptr(),

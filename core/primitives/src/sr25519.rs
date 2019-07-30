@@ -31,9 +31,9 @@ use substrate_bip39::mini_secret_from_entropy;
 use bip39::{Mnemonic, Language, MnemonicType};
 #[cfg(feature = "std")]
 use crate::crypto::{
-	Pair as TraitPair, DeriveJunction, Infallible, SecretStringError, Derive, Ss58Codec
+	Pair as TraitPair, DeriveJunction, Infallible, SecretStringError, Ss58Codec
 };
-use crate::{impl_as_ref_mut, crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Kind}};
+use crate::{impl_as_ref_mut, crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Kind, Derive}};
 use crate::hash::{H256, H512};
 use parity_codec::{Encode, Decode};
 
@@ -266,11 +266,11 @@ impl Signature {
 	}
 }
 
-#[cfg(feature = "std")]
 impl Derive for Public {
 	/// Derive a child key from a series of given junctions.
 	///
 	/// `None` if there are any hard junctions in there.
+	#[cfg(feature = "std")]
 	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, path: Iter) -> Option<Public> {
 		let mut acc = PublicKey::from_bytes(self.as_ref()).ok()?;
 		for j in path {
@@ -505,11 +505,13 @@ impl Pair {
 
 impl CryptoType for Public {
 	const KIND: Kind = Kind::Sr25519;
+	#[cfg(feature="std")]
 	type Pair = Pair;
 }
 
 impl CryptoType for Signature {
 	const KIND: Kind = Kind::Sr25519;
+	#[cfg(feature="std")]
 	type Pair = Pair;
 }
 
@@ -521,12 +523,13 @@ impl CryptoType for Pair {
 
 mod app {
 	use crate::crypto::key_types::SR25519;
-	crate::app_crypto!(super::Pair, super::Public, super::Signature, SR25519);
+	crate::app_crypto!(super, SR25519);
 }
 
 pub use app::Public as AppPublic;
-pub use app::Pair as AppPair;
 pub use app::Signature as AppSignature;
+#[cfg(feature = "std")]
+pub use app::Pair as AppPair;
 
 #[cfg(test)]
 mod test {

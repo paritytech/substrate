@@ -29,8 +29,8 @@ use client::decl_runtime_apis;
 use rstd::vec::Vec;
 
 mod app {
-	use substrate_primitives::{app_crypto, crypto::key_types::GRANDPA, ed25519};
-	app_crypto!(ed25519::Pair, ed25519::Public, ed25519::Signature, GRANDPA);
+	use primitives::{app_crypto, crypto::key_types::GRANDPA, ed25519};
+	app_crypto!(ed25519, GRANDPA);
 }
 
 /// The grandpa crypto scheme defined via the keypair type.

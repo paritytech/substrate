@@ -24,8 +24,8 @@ use rstd::vec::Vec;
 use sr_primitives::ConsensusEngineId;
 
 mod app_sr25519 {
-	use substrate_primitives::{app_crypto, crypto::key_types::AURA, sr25519};
-	app_crypto!(sr25519::Pair, sr25519::Public, sr25519::Signature, AURA);
+	use primitives::{app_crypto, crypto::key_types::AURA, sr25519};
+	app_crypto!(sr25519, AURA);
 }
 
 pub mod sr25519 {
@@ -42,7 +42,7 @@ pub mod sr25519 {
 
 mod app_ed25519 {
 	use substrate_primitives::{app_crypto, crypto::key_types::AURA, ed25519};
-	app_crypto!(ed25519::Pair, ed25519::Public, ed25519::Signature, AURA);
+	app_crypto!(ed25519, AURA);
 }
 
 pub mod ed25519 {

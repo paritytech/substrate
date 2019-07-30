@@ -278,12 +278,12 @@ pub trait Ss58Codec: Sized {
 	}
 }
 
-//#[cfg(feature = "std")]
 /// Derivable key trait.
 pub trait Derive: Sized {
 	/// Derive a child key from a series of given junctions.
 	///
 	/// Will be `None` for public keys if there are any hard junctions in there.
+	#[cfg(feature = "std")]
 	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, _path: Iter) -> Option<Self> {
 		None
 	}
@@ -471,74 +471,81 @@ pub trait Public: AsRef<[u8]> + AsMut<[u8]> + Default + Derive + CryptoType + Pa
 	fn as_slice(&self) -> &[u8] { self.as_ref() }
 }
 
-/// Dummy cryptography. Doesn't do anything.
-#[derive(Clone, Hash, Default, Eq, PartialEq)]
-pub struct Dummy;
+#[cfg(feature = "std")]
+pub use self::dummy::*;
 
-impl AsRef<[u8]> for Dummy {
-	fn as_ref(&self) -> &[u8] { &b""[..] }
-}
+#[cfg(feature = "std")]
+mod dummy {
+	use super::*;
 
-impl AsMut<[u8]> for Dummy {
-	fn as_mut(&mut self) -> &mut[u8] {
-		unsafe {
-			#[allow(mutable_transmutes)]
-			rstd::mem::transmute::<_, &'static mut [u8]>(&b""[..])
+	/// Dummy cryptography. Doesn't do anything.
+	#[derive(Clone, Hash, Default, Eq, PartialEq)]
+	pub struct Dummy;
+
+	impl AsRef<[u8]> for Dummy {
+		fn as_ref(&self) -> &[u8] { &b""[..] }
+	}
+
+	impl AsMut<[u8]> for Dummy {
+		fn as_mut(&mut self) -> &mut[u8] {
+			unsafe {
+				#[allow(mutable_transmutes)]
+				rstd::mem::transmute::<_, &'static mut [u8]>(&b""[..])
+			}
 		}
 	}
-}
 
-impl CryptoType for Dummy {
-	const KIND: Kind = Kind::Dummy;
-	type Pair = Dummy;
-}
-
-impl Derive for Dummy {}
-
-/// Trait suitable for typical cryptographic PKI key public type.
-impl Public for Dummy {
-	fn from_slice(_: &[u8]) -> Self { Self }
-	#[cfg(feature = "std")]
-	fn to_raw_vec(&self) -> Vec<u8> { vec![] }
-	fn as_slice(&self) -> &[u8] { b"" }
-}
-#[cfg(feature = "std")]
-impl Pair for Dummy {
-	type Public = Dummy;
-	type Seed = Dummy;
-	type Signature = Dummy;
-	type DeriveError = ();
-	fn generate_with_phrase(_: Option<&str>) -> (Self, String, Self::Seed) { Default::default() }
-	fn from_phrase(_: &str, _: Option<&str>)
-		-> Result<(Self, Self::Seed), SecretStringError>
-	{
-		Ok(Default::default())
+	impl CryptoType for Dummy {
+		const KIND: Kind = Kind::Dummy;
+		type Pair = Dummy;
 	}
-	fn derive<
-		Iter: Iterator<Item=DeriveJunction>
-	>(&self, _: Iter) -> Result<Self, Self::DeriveError> { Ok(Self) }
-	fn from_seed(_: &Self::Seed) -> Self { Self }
-	fn from_seed_slice(_: &[u8]) -> Result<Self, SecretStringError> { Ok(Self) }
-	fn from_standard_components<
-		I: Iterator<Item=DeriveJunction>
-	>(
-		_: &str,
-		_: Option<&str>,
-		_: I
-	) -> Result<Self, SecretStringError> { Ok(Self) }
-	fn sign(&self, _: &[u8]) -> Self::Signature { Self }
-	fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(
-		_: &Self::Signature,
-		_: M,
-		_: P
-	) -> bool { true }
-	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(
-		_: &[u8],
-		_: M,
-		_: P
-	) -> bool { true }
-	fn public(&self) -> Self::Public { Self }
-	fn to_raw_vec(&self) -> Vec<u8> { vec![] }
+
+	impl Derive for Dummy {}
+
+	impl Public for Dummy {
+		fn from_slice(_: &[u8]) -> Self { Self }
+		#[cfg(feature = "std")]
+		fn to_raw_vec(&self) -> Vec<u8> { vec![] }
+		fn as_slice(&self) -> &[u8] { b"" }
+	}
+
+	impl Pair for Dummy {
+		type Public = Dummy;
+		type Seed = Dummy;
+		type Signature = Dummy;
+		type DeriveError = ();
+		fn generate_with_phrase(_: Option<&str>) -> (Self, String, Self::Seed) { Default::default() }
+		fn from_phrase(_: &str, _: Option<&str>)
+			-> Result<(Self, Self::Seed), SecretStringError>
+		{
+			Ok(Default::default())
+		}
+		fn derive<
+			Iter: Iterator<Item=DeriveJunction>
+		>(&self, _: Iter) -> Result<Self, Self::DeriveError> { Ok(Self) }
+		fn from_seed(_: &Self::Seed) -> Self { Self }
+		fn from_seed_slice(_: &[u8]) -> Result<Self, SecretStringError> { Ok(Self) }
+		fn from_standard_components<
+			I: Iterator<Item=DeriveJunction>
+		>(
+			_: &str,
+			_: Option<&str>,
+			_: I
+		) -> Result<Self, SecretStringError> { Ok(Self) }
+		fn sign(&self, _: &[u8]) -> Self::Signature { Self }
+		fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(
+			_: &Self::Signature,
+			_: M,
+			_: P
+		) -> bool { true }
+		fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(
+			_: &[u8],
+			_: M,
+			_: P
+		) -> bool { true }
+		fn public(&self) -> Self::Public { Self }
+		fn to_raw_vec(&self) -> Vec<u8> { vec![] }
+	}
 }
 
 /// Trait suitable for typical cryptographic PKI key pair type.
@@ -689,6 +696,7 @@ pub enum Kind {
 	Dummy = !0,
 }
 
+#[cfg(feature = "std")]
 impl TryFrom<u32> for Kind {
 	type Error = ();
 
@@ -697,7 +705,6 @@ impl TryFrom<u32> for Kind {
 			e if e == Kind::User as usize as u32 => Kind::User,
 			e if e == Kind::Sr25519 as usize as u32 => Kind::Sr25519,
 			e if e == Kind::Ed25519 as usize as u32 => Kind::Ed25519,
-			#[cfg(feature = "std")]
 			e if e == Kind::Dummy as usize as u32 => Kind::Dummy,
 			_ => Err(())?,
 		})
@@ -754,6 +761,7 @@ pub trait AppKey: 'static + Send + Sync + Sized + CryptoType + Clone {
 	type Public: AppPublic;
 
 	/// The corresponding key pair type in this application scheme.
+	#[cfg(feature="std")]
 	type Pair: AppPair;
 
 	/// The corresponding signature type in this application scheme.
@@ -772,6 +780,8 @@ impl<T: std::fmt::Debug + std::hash::Hash> MaybeDebugHash for T {}
 /// Type which implements Debug and Hash in std, not when no-std (no-std variant).
 #[cfg(not(feature = "std"))]
 pub trait MaybeDebugHash {}
+#[cfg(not(feature = "std"))]
+impl<T> MaybeDebugHash for T {}
 
 /// A application's public key.
 pub trait AppPublic: AppKey + Public + Ord + PartialOrd + Eq + PartialEq + MaybeDebugHash + Codec {
@@ -781,6 +791,7 @@ pub trait AppPublic: AppKey + Public + Ord + PartialOrd + Eq + PartialEq + Maybe
 }
 
 /// A application's public key.
+#[cfg(feature = "std")]
 pub trait AppPair: AppKey + Pair<Public=<Self as AppKey>::Public> {
 	/// The wrapped type which is just a plain instance of `Pair`.
 	type Generic: IsWrappedBy<Self> + Pair<Public=<<Self as AppKey>::Public as AppPublic>::Generic>;
@@ -866,74 +877,14 @@ macro_rules! wrap {
 /// ```
 #[macro_export]
 macro_rules! app_crypto {
+	($module:ident, $key_type:expr) => {
+		#[cfg(feature="std")]
+		$crate::app_crypto!($module::Pair, $module::Public, $module::Signature, $key_type);
+		#[cfg(not(feature="std"))]
+		$crate::app_crypto!($module::Public, $module::Signature, $key_type);
+	};
 	($pair:ty, $public:ty, $sig:ty, $key_type:expr) => {
-		$crate::wrap!{
-			/// A generic `AppPublic` wrapper type over Ed25519 crypto; this has no specific App.
-			#[derive(Clone, Default, Eq, PartialEq, Ord, PartialOrd, $crate::Encode, $crate::Decode)]
-			#[cfg_attr(feature = "std", derive(Debug, Hash))]
-			pub struct Public($public);
-		}
-		// TODO: needed for verify since it takes an AsRef, but should be removed once that is
-		// refactored.
-		$crate::impl_as_ref_mut!(Public);
-
-		#[cfg(feature = "std")]
-		impl $crate::crypto::Derive for Public {
-			fn derive<Iter: Iterator<Item=$crate::crypto::DeriveJunction>>(&self,
-				path: Iter
-			) -> Option<Self> {
-				self.0.derive(path).map(Self)
-			}
-		}
-		#[cfg(feature = "std")]
-		impl ::std::fmt::Display for Public {
-			fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-				use $crate::crypto::Ss58Codec;
-				write!(f, "{}", self.0.to_ss58check())
-			}
-		}
-		#[cfg(feature = "std")]
-		impl $crate::serde::Serialize for Public {
-			fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> where
-				S: $crate::serde::Serializer
-			{
-				use $crate::crypto::Ss58Codec;
-				serializer.serialize_str(&self.to_ss58check())
-			}
-		}
-		#[cfg(feature = "std")]
-		impl<'de> $crate::serde::Deserialize<'de> for Public {
-			fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error> where
-				D: $crate::serde::Deserializer<'de>
-			{
-				use $crate::crypto::Ss58Codec;
-				Public::from_ss58check(&String::deserialize(deserializer)?)
-					.map_err(|e| $crate::serde::de::Error::custom(format!("{:?}", e)))
-			}
-		}
-		impl AsRef<[u8]> for Public {
-			fn as_ref(&self) -> &[u8] { self.0.as_ref() }
-		}
-		impl AsMut<[u8]> for Public {
-			fn as_mut(&mut self) -> &mut [u8] { self.0.as_mut() }
-		}
-		impl $crate::crypto::CryptoType for Public {
-			const KIND: $crate::crypto::Kind = <$pair as $crate::crypto::CryptoType>::KIND;
-			type Pair = Pair;
-		}
-		impl $crate::crypto::Public for Public {
-			fn from_slice(x: &[u8]) -> Self { Self(<$public>::from_slice(x)) }
-		}
-		impl $crate::crypto::AppKey for Public {
-			type UntypedGeneric = $public;
-			type Public = Public;
-			type Pair = Pair;
-			type Signature = Signature;
-			const ID: $crate::crypto::KeyTypeId = $key_type;
-		}
-		impl $crate::crypto::AppPublic for Public {
-			type Generic = $public;
-		}
+		$crate::app_crypto!($public, $sig, $key_type);
 
 		$crate::wrap!{
 			/// A generic `AppPublic` wrapper type over Ed25519 crypto; this has no specific App.
@@ -1008,6 +959,77 @@ macro_rules! app_crypto {
 		impl $crate::crypto::AppPair for Pair {
 			type Generic = $pair;
 		}
+	};
+	($public:ty, $sig:ty, $key_type:expr) => {
+		$crate::wrap!{
+			/// A generic `AppPublic` wrapper type over Ed25519 crypto; this has no specific App.
+			#[derive(Clone, Default, Eq, PartialEq, Ord, PartialOrd, $crate::Encode, $crate::Decode)]
+			#[cfg_attr(feature = "std", derive(Debug, Hash))]
+			pub struct Public($public);
+		}
+		// TODO: needed for verify since it takes an AsRef, but should be removed once that is
+		// refactored.
+		$crate::impl_as_ref_mut!(Public);
+
+		impl $crate::crypto::Derive for Public {
+			#[cfg(feature = "std")]
+			fn derive<Iter: Iterator<Item=$crate::crypto::DeriveJunction>>(&self,
+				path: Iter
+			) -> Option<Self> {
+				self.0.derive(path).map(Self)
+			}
+		}
+		#[cfg(feature = "std")]
+		impl ::std::fmt::Display for Public {
+			fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+				use $crate::crypto::Ss58Codec;
+				write!(f, "{}", self.0.to_ss58check())
+			}
+		}
+		#[cfg(feature = "std")]
+		impl $crate::serde::Serialize for Public {
+			fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> where
+				S: $crate::serde::Serializer
+			{
+				use $crate::crypto::Ss58Codec;
+				serializer.serialize_str(&self.to_ss58check())
+			}
+		}
+		#[cfg(feature = "std")]
+		impl<'de> $crate::serde::Deserialize<'de> for Public {
+			fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error> where
+				D: $crate::serde::Deserializer<'de>
+			{
+				use $crate::crypto::Ss58Codec;
+				Public::from_ss58check(&String::deserialize(deserializer)?)
+					.map_err(|e| $crate::serde::de::Error::custom(format!("{:?}", e)))
+			}
+		}
+		impl AsRef<[u8]> for Public {
+			fn as_ref(&self) -> &[u8] { self.0.as_ref() }
+		}
+		impl AsMut<[u8]> for Public {
+			fn as_mut(&mut self) -> &mut [u8] { self.0.as_mut() }
+		}
+		impl $crate::crypto::CryptoType for Public {
+			const KIND: $crate::crypto::Kind = <$public as $crate::crypto::CryptoType>::KIND;
+			#[cfg(feature="std")]
+			type Pair = Pair;
+		}
+		impl $crate::crypto::Public for Public {
+			fn from_slice(x: &[u8]) -> Self { Self(<$public>::from_slice(x)) }
+		}
+		impl $crate::crypto::AppKey for Public {
+			type UntypedGeneric = $public;
+			type Public = Public;
+			#[cfg(feature="std")]
+			type Pair = Pair;
+			type Signature = Signature;
+			const ID: $crate::crypto::KeyTypeId = $key_type;
+		}
+		impl $crate::crypto::AppPublic for Public {
+			type Generic = $public;
+		}
 
 		$crate::wrap!{
 			/// A generic `AppPublic` wrapper type over Ed25519 crypto; this has no specific App.
@@ -1020,12 +1042,14 @@ macro_rules! app_crypto {
 			fn as_ref(&self) -> &[u8] { self.0.as_ref() }
 		}
 		impl $crate::crypto::CryptoType for Signature {
-			const KIND: $crate::crypto::Kind = <$pair as $crate::crypto::CryptoType>::KIND;
+			const KIND: $crate::crypto::Kind = <$public as $crate::crypto::CryptoType>::KIND;
+			#[cfg(feature="std")]
 			type Pair = Pair;
 		}
 		impl $crate::crypto::AppKey for Signature {
 			type UntypedGeneric = $sig;
 			type Public = Public;
+			#[cfg(feature="std")]
 			type Pair = Pair;
 			type Signature = Signature;
 			const ID: $crate::crypto::KeyTypeId = $key_type;
@@ -1044,6 +1068,7 @@ pub trait CryptoType {
 	const KIND: Kind;
 
 	/// The pair key type of this crypto.
+	#[cfg(feature="std")]
 	type Pair: Pair;
 }
 

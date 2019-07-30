@@ -93,7 +93,7 @@ use substrate_primitives::offchain::CryptoKind;
 
 mod app {
 	use substrate_primitives::{app_crypto, crypto::key_types::IM_ONLINE, sr25519};
-	app_crypto!(sr25519::Pair, sr25519::Public, sr25519::Signature, IM_ONLINE);
+	app_crypto!(sr25519, IM_ONLINE);
 }
 
 /// A Babe authority keypair. Necessarily equivalent to the schnorrkel public key used in
