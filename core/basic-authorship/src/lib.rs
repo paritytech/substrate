@@ -21,7 +21,7 @@
 //! ```
 //! # use substrate_basic_authorship::ProposerFactory;
 //! # use consensus_common::{Environment, Proposer};
-//! # use runtime_primitives::generic::BlockId;
+//! # use sr_primitives::generic::BlockId;
 //! # use std::{sync::Arc, time::Duration};
 //! # use test_client::{self, runtime::{Extrinsic, Transfer}, AccountKeyring};
 //! # use transaction_pool::txpool::{self, Pool as TransactionPool};

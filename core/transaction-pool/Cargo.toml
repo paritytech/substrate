@@ -12,7 +12,7 @@ parity-codec = "4.1.1"
 parking_lot = "0.8.0"
 sr-primitives = { path = "../sr-primitives" }
 client = { package = "substrate-client", path = "../client" }
-substrate-primitives = { path = "../primitives" }
+primitives = { package = "substrate-primitives",  path = "../primitives" }
 txpool = { package = "substrate-transaction-graph", path = "./graph" }
 
 [dev-dependencies]

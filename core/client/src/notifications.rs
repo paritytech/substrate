@@ -24,7 +24,7 @@ use std::{
 use fnv::{FnvHashSet, FnvHashMap};
 use futures::channel::mpsc;
 use primitives::storage::{StorageKey, StorageData};
-use runtime_primitives::traits::Block as BlockT;
+use sr_primitives::traits::Block as BlockT;
 
 /// Storage change set
 #[derive(Debug)]
@@ -307,7 +307,7 @@ impl<Block: BlockT> StorageNotifications<Block> {
 
 #[cfg(test)]
 mod tests {
-	use runtime_primitives::testing::{H256 as Hash, Block as RawBlock, ExtrinsicWrapper};
+	use sr_primitives::testing::{H256 as Hash, Block as RawBlock, ExtrinsicWrapper};
 	use super::*;
 	use std::iter::{empty, Empty};
 

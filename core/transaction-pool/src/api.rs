@@ -23,7 +23,7 @@ use std::{
 use client::{runtime_api::TaggedTransactionQueue, blockchain::HeaderBackend};
 use parity_codec::Encode;
 use txpool;
-use substrate_primitives::{
+use primitives::{
 	H256,
 	Blake2Hasher,
 	Hasher,

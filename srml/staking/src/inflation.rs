@@ -16,7 +16,7 @@
 
 //! http://research.web3.foundation/en/latest/polkadot/Token%20Economics/#inflation-model
 
-use primitives::{Perbill, traits::SimpleArithmetic};
+use sr_primitives::{Perbill, traits::SimpleArithmetic};
 
 /// Linear function truncated to positive part `y = max(0, b [+ or -] a*x)` for PNPoS usage
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
