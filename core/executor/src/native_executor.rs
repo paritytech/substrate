@@ -34,7 +34,7 @@ fn safe_call<F, U>(f: F) -> Result<U>
 	where F: UnwindSafe + FnOnce() -> U
 {
 	// Substrate uses custom panic hook that terminates process on panic. Disable termination for the native call.
-	let _guard = panic_handler::AbortGuard::new(false);
+	let _guard = panic_handler::AbortGuard::force_unwind();
 	::std::panic::catch_unwind(f).map_err(|_| Error::Runtime)
 }
 
