@@ -148,11 +148,11 @@ impl TestNetFactory for GrandpaTestNet {
 		client: PeersClient
 	) -> Option<Arc<dyn network::FinalityProofProvider<Block>>> {
 		match client {
-			PeersClient::Full(ref client, _)  => {
+			PeersClient::Full(_, ref backend)  => {
 				let authorities_provider = Arc::new(self.test_config.clone());
-				Some(Arc::new(FinalityProofProvider::new(client.clone(), authorities_provider)))
+				Some(Arc::new(FinalityProofProvider::new(backend.clone(), authorities_provider)))
 			},
-			PeersClient::Light(_) => None,
+			PeersClient::Light(_, _) => None,
 		}
 	}
 
@@ -951,7 +951,7 @@ fn allows_reimporting_change_blocks() {
 	let mut net = GrandpaTestNet::new(api.clone(), 3);
 
 	let client = net.peer(0).client().clone();
-	let (mut block_import, ..) = net.make_block_import(client);
+	let (mut block_import, ..) = net.make_block_import(client.clone());
 
 	let full_client = client.as_full().unwrap();
 	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
@@ -1000,7 +1000,7 @@ fn test_bad_justification() {
 	let mut net = GrandpaTestNet::new(api.clone(), 3);
 
 	let client = net.peer(0).client().clone();
-	let (mut block_import, ..) = net.make_block_import(client);
+	let (mut block_import, ..) = net.make_block_import(client.clone());
 
 	let full_client = client.as_full().expect("only full clients are used in test");
 	let builder = full_client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
@@ -1078,7 +1078,7 @@ fn voter_persists_its_votes() {
 		let client = client.clone();
 
 		let voter = future::loop_fn(voter_rx, move |rx| {
-			let (_block_import, _, _, _, link) = net.lock().make_block_import(client);
+			let (_block_import, _, _, _, link) = net.lock().make_block_import(client.clone());
 			let link = link.lock().take().unwrap();
 
 			let grandpa_params = GrandpaParams {

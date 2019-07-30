@@ -786,7 +786,7 @@ mod tests {
 			-> Arc<Self::Verifier>
 		{
 			match client {
-				PeersClient::Full(client) => {
+				PeersClient::Full(client, _) => {
 					let slot_duration = SlotDuration::get_or_compute(&*client)
 						.expect("slot duration available");
 					let inherent_data_providers = InherentDataProviders::new();
@@ -802,7 +802,7 @@ mod tests {
 						phantom: Default::default(),
 					})
 				},
-				PeersClient::Light(_) => unreachable!("No (yet) tests for light client + Aura"),
+				PeersClient::Light(_, _) => unreachable!("No (yet) tests for light client + Aura"),
 			}
 		}
 
