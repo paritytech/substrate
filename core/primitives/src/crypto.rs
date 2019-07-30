@@ -278,7 +278,7 @@ pub trait Ss58Codec: Sized {
 	}
 }
 
-#[cfg(feature = "std")]
+//#[cfg(feature = "std")]
 /// Derivable key trait.
 pub trait Derive: Sized {
 	/// Derive a child key from a series of given junctions.

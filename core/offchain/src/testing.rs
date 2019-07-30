@@ -145,16 +145,24 @@ impl offchain::Externalities for TestOffchainExt {
 		unimplemented!("not needed in tests so far")
 	}
 
-	fn pubkey(&self, _key: CryptoKey) -> Result<Vec<u8>, ()> {
+	fn new_key(
+		&mut self,
+		_crypto: CryptoKind,
+		_key_type: KeyTypeId
+	) -> Result<CryptoKey, ()> {
 		unimplemented!("not needed in tests so far")
 	}
 
-	fn new_crypto_key(&mut self, _crypto: CryptoKind, _key_type: KeyTypeId) -> Result<CryptoKey, ()> {
+	fn public_keys(
+		&self,
+		_crypto: CryptoKind,
+		_key_type: KeyTypeId,
+	) -> Result<Vec<CryptoKey>, ()> {
 		unimplemented!("not needed in tests so far")
 	}
 
 	fn encrypt(
-		&mut self,
+		&self,
 		_key: CryptoKey,
 		_data: &[u8],
 	) -> Result<Vec<u8>, ()> {
@@ -162,7 +170,7 @@ impl offchain::Externalities for TestOffchainExt {
 	}
 
 	fn decrypt(
-		&mut self,
+		&self,
 		_key: CryptoKey,
 		_data: &[u8],
 	) -> Result<Vec<u8>, ()> {
@@ -170,7 +178,7 @@ impl offchain::Externalities for TestOffchainExt {
 	}
 
 	fn sign(
-		&mut self,
+		&self,
 		_key: CryptoKey,
 		_data: &[u8],
 	) -> Result<Vec<u8>, ()> {
@@ -178,7 +186,7 @@ impl offchain::Externalities for TestOffchainExt {
 	}
 
 	fn verify(
-		&mut self,
+		&self,
 		_key: CryptoKey,
 		_msg: &[u8],
 		_signature: &[u8],

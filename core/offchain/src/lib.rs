@@ -40,18 +40,16 @@ use std::{
 };
 
 use client::runtime_api::ApiExt;
+use futures::future::Future;
+use keystore::Store as Keystore;
 use log::{debug, warn};
-use primitives::{
-	ExecutionContext,
-	crypto,
-};
+use network::NetworkStateInfo;
+use primitives::{ExecutionContext, crypto,};
 use sr_primitives::{
 	generic::BlockId,
 	traits::{self, ProvideRuntimeApi},
 };
-use futures::future::Future;
 use transaction_pool::txpool::{Pool, ChainApi};
-use network::NetworkStateInfo;
 
 mod api;
 
@@ -59,61 +57,41 @@ pub mod testing;
 
 pub use offchain_primitives::OffchainWorkerApi;
 
-/// Provides currently configured authority key.
-pub trait AuthorityKeyProvider<Block: traits::Block>: Clone + 'static {
-	/// The crypto used by the block authoring algorithm.
-	type ConsensusPair: crypto::Pair;
-	/// The crypto used by the finality gadget.
-	type FinalityPair: crypto::Pair;
-
-	/// Returns currently configured authority key.
-	fn authority_key(&self, block_id: &BlockId<Block>) -> Option<Self::ConsensusPair>;
-
-	/// Returns currently configured finality gadget authority key.
-	fn fg_authority_key(&self, block_id: &BlockId<Block>) -> Option<Self::FinalityPair>;
-}
-
 /// An offchain workers manager.
 pub struct OffchainWorkers<
 	Client,
 	Storage,
-	KeyProvider,
 	Block: traits::Block,
 > {
 	client: Arc<Client>,
 	db: Storage,
-	authority_key: KeyProvider,
-	keys_password: crypto::Protected<String>,
+	keystore: Arc<Keystore>,
 	_block: PhantomData<Block>,
 }
 
-impl<Client, Storage, KeyProvider, Block: traits::Block> OffchainWorkers<
+impl<Client, Storage, Block: traits::Block> OffchainWorkers<
 	Client,
 	Storage,
-	KeyProvider,
 	Block,
 > {
 	/// Creates new `OffchainWorkers`.
 	pub fn new(
 		client: Arc<Client>,
 		db: Storage,
-		authority_key: KeyProvider,
-		keys_password: crypto::Protected<String>,
+		keystore: Arc<Keystore>,
 	) -> Self {
 		Self {
 			client,
 			db,
-			authority_key,
-			keys_password,
+			keystore,
 			_block: PhantomData,
 		}
 	}
 }
 
-impl<Client, Storage, KeyProvider, Block: traits::Block> fmt::Debug for OffchainWorkers<
+impl<Client, Storage, Block: traits::Block> fmt::Debug for OffchainWorkers<
 	Client,
 	Storage,
-	KeyProvider,
 	Block,
 > {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -121,16 +99,14 @@ impl<Client, Storage, KeyProvider, Block: traits::Block> fmt::Debug for Offchain
 	}
 }
 
-impl<Client, Storage, KeyProvider, Block> OffchainWorkers<
+impl<Client, Storage, Block> OffchainWorkers<
 	Client,
 	Storage,
-	KeyProvider,
 	Block,
 > where
 	Block: traits::Block,
 	Client: ProvideRuntimeApi + Send + Sync + 'static,
 	Client::Api: OffchainWorkerApi<Block>,
-	KeyProvider: AuthorityKeyProvider<Block> + Send,
 	Storage: client::backend::OffchainStorage + 'static,
 {
 	/// Start the offchain workers after given block.
@@ -152,8 +128,7 @@ impl<Client, Storage, KeyProvider, Block> OffchainWorkers<
 			let (api, runner) = api::AsyncApi::new(
 				pool.clone(),
 				self.db.clone(),
-				self.keys_password.clone(),
-				self.authority_key.clone(),
+				self.keystore.clone(),
 				at.clone(),
 				network_state.clone(),
 			);
@@ -212,36 +187,6 @@ mod tests {
 		}
 	}
 
-	#[derive(Clone)]
-	pub(crate) struct TestProvider<Block> {
-		_marker: PhantomData<Block>,
-		pub(crate) sr_key: Option<sr25519::Pair>,
-		pub(crate) ed_key: Option<ed25519::Pair>,
-	}
-
-	impl<Block: traits::Block> Default for TestProvider<Block> {
-		fn default() -> Self {
-			Self {
-				_marker: PhantomData,
-				sr_key: None,
-				ed_key: None,
-			}
-		}
-	}
-
-	impl<Block: traits::Block> AuthorityKeyProvider<Block> for TestProvider<Block> {
-		type ConsensusPair = ed25519::Pair;
-		type FinalityPair = sr25519::Pair;
-
-		fn authority_key(&self, _: &BlockId<Block>) -> Option<Self::ConsensusPair> {
-			self.ed_key.clone()
-		}
-
-		fn fg_authority_key(&self, _: &BlockId<Block>) -> Option<Self::FinalityPair> {
-			self.sr_key.clone()
-		}
-	}
-
 	#[test]
 	fn should_call_into_runtime_and_produce_extrinsic() {
 		// given
@@ -250,11 +195,13 @@ mod tests {
 		let client = Arc::new(test_client::new());
 		let pool = Arc::new(Pool::new(Default::default(), ::transaction_pool::ChainApi::new(client.clone())));
 		let db = client_db::offchain::LocalStorage::new_test();
-		let mock = Arc::new(MockNetworkStateInfo());
+		let network_state = Arc::new(MockNetworkStateInfo());
+		// TODO Test keystore
+		let keystore = unimplemented!();
 
 		// when
-		let offchain = OffchainWorkers::new(client, db, TestProvider::default(), "".to_owned().into());
-		runtime.executor().spawn(offchain.on_block_imported(&0u64, &pool, mock.clone()));
+		let offchain = OffchainWorkers::new(client, db, keystore, "".to_owned().into());
+		runtime.executor().spawn(offchain.on_block_imported(&0u64, &pool, network_state.clone()));
 
 		// then
 		runtime.shutdown_on_idle().wait().unwrap();
