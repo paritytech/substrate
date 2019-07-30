@@ -137,7 +137,6 @@ where
 		// will be a prefix of vector length (we don't need
 		// to use this).
 		let _length_do_not_remove_me_see_above: Vec<()> = Decode::decode(input)?;
-		// TODO TODO: is this correct ? can it work ?
 
 		let version = input.read_byte()?;
 
