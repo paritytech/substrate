@@ -565,7 +565,7 @@ mod tests {
 	use super::*;
 	use srml_support::assert_ok;
 	use runtime_io::with_externalities;
-	use primitives::Blake2Hasher;
+	use primitives::{Blake2Hasher, crypto::key_types::DUMMY};
 	use sr_primitives::{
 		traits::OnInitialize,
 		testing::UintAuthorityId,
@@ -614,12 +614,12 @@ mod tests {
 			assert_eq!(Session::validators(), vec![1, 2, 3]);
 			assert_eq!(Session::load_keys(&1), Some(UintAuthorityId(1)));
 
-			let id = <UintAuthorityId as AppKey>::ID;
-			assert_eq!(Session::key_owner(id, UintAuthorityId(1).get_raw(&id.0)), Some(1));
+			let id = DUMMY;
+			assert_eq!(Session::key_owner(id, UintAuthorityId(1).get_raw(id)), Some(1));
 
 			Session::on_free_balance_zero(&1);
 			assert_eq!(Session::load_keys(&1), None);
-			assert_eq!(Session::key_owner(id, UintAuthorityId(1).get_raw(&id.0)), None);
+			assert_eq!(Session::key_owner(id, UintAuthorityId(1).get_raw(id)), None);
 
 			assert!(Changed::get());
 		})

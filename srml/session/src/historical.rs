@@ -312,11 +312,8 @@ impl<T: Trait, D: AsRef<[u8]>> srml_support::traits::KeyOwnerProofSystem<(KeyTyp
 mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
-	use primitives::Blake2Hasher;
-	use sr_primitives::{
-		traits::OnInitialize,
-		testing::{UintAuthorityId, UINT_DUMMY_KEY},
-	};
+	use primitives::{Blake2Hasher, crypto::key_types::DUMMY};
+	use sr_primitives::{traits::OnInitialize, testing::UintAuthorityId};
 	use crate::mock::{
 		NEXT_VALIDATORS, force_new_session,
 		set_next_validators, Test, System, Session,
@@ -346,15 +343,10 @@ mod tests {
 			Session::on_initialize(1);
 
 			let encoded_key_1 = UintAuthorityId(1).encode();
-			let proof = Historical::prove((UINT_DUMMY_KEY, &encoded_key_1[..])).unwrap();
+			let proof = Historical::prove((DUMMY, &encoded_key_1[..])).unwrap();
 
 			// proof-checking in the same session is OK.
-			assert!(
-				Historical::check_proof(
-					(UINT_DUMMY_KEY, &encoded_key_1[..]),
-					proof.clone(),
-				).is_some()
-			);
+			assert!(Historical::check_proof((DUMMY, &encoded_key_1[..]), proof.clone()).is_some());
 
 			set_next_validators(vec![1, 2, 4]);
 			force_new_session();
@@ -370,12 +362,7 @@ mod tests {
 			assert!(Session::current_index() > proof.session);
 
 			// proof-checking in the next session is also OK.
-			assert!(
-				Historical::check_proof(
-					(UINT_DUMMY_KEY, &encoded_key_1[..]),
-					proof.clone(),
-				).is_some()
-			);
+			assert!(Historical::check_proof((DUMMY, &encoded_key_1[..]), proof.clone()).is_some());
 
 			set_next_validators(vec![1, 2, 5]);
 

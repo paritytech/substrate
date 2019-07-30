@@ -19,13 +19,12 @@
 use super::*;
 use std::cell::RefCell;
 use srml_support::{impl_outer_origin, parameter_types};
-use primitives::H256;
+use primitives::{crypto::key_types::DUMMY, H256};
 use sr_primitives::{
 	Perbill,
 	traits::{BlakeTwo256, IdentityLookup, ConvertInto},
 	testing::{Header, UintAuthorityId}
 };
-
 
 impl_outer_origin! {
 	pub enum Origin for Test {}
@@ -58,7 +57,9 @@ impl SessionHandler<u64> for TestSessionHandler {
 	) {
 		SESSION_CHANGED.with(|l| *l.borrow_mut() = changed);
 		AUTHORITIES.with(|l|
-			*l.borrow_mut() = validators.iter().map(|(_, id)| id.get::<UintAuthorityId>(0).unwrap_or_default()).collect()
+			*l.borrow_mut() = validators.iter()
+				.map(|(_, id)| id.get::<UintAuthorityId>(DUMMY).unwrap_or_default())
+				.collect()
 		);
 	}
 	fn on_disabled(_validator_index: usize) {}
