@@ -706,15 +706,6 @@ impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
 					fork_choice: ForkChoiceStrategy::LongestChain,
 				};
 
-				// FIXME: this should eventually be moved to BabeBlockImport
-				median_algorithm(
-					self.config.0.median_required_blocks,
-					self.config.get(),
-					slot_number,
-					slot_now,
-					&mut *self.time_source.0.lock(),
-				);
-
 				Ok((import_block, Default::default()))
 			}
 			CheckedHeader::Deferred(a, b) => {
