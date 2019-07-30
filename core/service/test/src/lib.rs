@@ -188,6 +188,7 @@ fn node_config<F: ServiceFactory> (
 		rpc_ws: None,
 		rpc_ws_max_connections: None,
 		rpc_cors: None,
+		telemetry_connected_report: None,
 		default_heap_pages: None,
 		offchain_worker: false,
 		force_authoring: false,
