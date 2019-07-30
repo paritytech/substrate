@@ -52,7 +52,7 @@
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 //! 		pub fn is_online(origin, authority_index: u32) -> Result {
 //! 			let _sender = ensure_signed(origin)?;
-//! 			let _is_online = <im_online::Module<T>>::is_online_in_current_session(&authority_index);
+//! 			let _is_online = <im_online::Module<T>>::is_online_in_current_session(authority_index);
 //! 			Ok(())
 //! 		}
 //! 	}
@@ -122,7 +122,6 @@ struct WorkerStatus<BlockNumber> {
 
 // Error which may occur while executing the off-chain code.
 enum OffchainErr {
-	DecodeAuthorityId,
 	DecodeWorkerStatus,
 	NoKeys,
 	ExtrinsicCreation,
@@ -134,7 +133,6 @@ enum OffchainErr {
 impl Printable for OffchainErr {
 	fn print(self) {
 		match self {
-			OffchainErr::DecodeAuthorityId => print("Offchain error: decoding AuthorityId failed!"),
 			OffchainErr::DecodeWorkerStatus => print("Offchain error: decoding WorkerStatus failed!"),
 			OffchainErr::NoKeys => print("Offchain error: could not find local keys!"),
 			OffchainErr::ExtrinsicCreation => print("Offchain error: extrinsic creation failed!"),
