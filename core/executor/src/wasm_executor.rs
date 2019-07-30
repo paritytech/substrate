@@ -711,29 +711,82 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		Ok(if res.is_ok() { 0 } else { 1 })
 	},
-	ext_new_crypto_key(crypto: u32, app: u32) -> u64 => {
+	ext_network_state(written_out: *mut u32) -> *mut u8 => {
+		let res = this.ext.offchain()
+			.map(|api| api.network_state())
+			.ok_or_else(|| "Calling unavailable API ext_network_state: wasm")?;
+
+		let encoded = res.encode();
+		let len = encoded.len() as u32;
+		let offset = this.heap.allocate(len)? as u32;
+		this.memory.set(offset, &encoded)
+			.map_err(|_| "Invalid attempt to set memory in ext_network_state")?;
+
+		this.memory.write_primitive(written_out, len)
+			.map_err(|_| "Invalid attempt to write written_out in ext_network_state")?;
+
+		Ok(offset)
+	},
+	ext_new_key(
+		crypto: u32,
+		key_type: u32,
+		written_out: *mut u32
+	) -> *mut u8 => {
 		let kind = offchain::CryptoKind::try_from(crypto)
-			.map_err(|_| "crypto kind OOB while ext_new_crypto_key: wasm")?;
-		let key_type = offchain::KeyType::try_from(app)
-			.map_err(|_| "crypto kind OOB while ext_new_crypto_key: wasm")?;
+			.map_err(|_| "crypto kind OOB while ext_new_key: wasm")?;
+		let key_type = offchain::KeyTypeId::try_from(key_type)
+			.map_err(|_| "crypto kind OOB while ext_new_key: wasm")?;
 
 		let res = this.ext.offchain()
-			.map(|api| api.new_crypto_key(kind, key_type))
-			.ok_or_else(|| "Calling unavailable API ext_new_crypto_key: wasm")?;
+			.map(|api| api.new_key(kind, key_type))
+			.ok_or_else(|| "Calling unavailable API ext_new_key: wasm")?;
 
-		match res {
-			Ok(key) => Ok(key.into()),
-			Err(()) => Ok(u64::max_value()),
-		}
+		let encoded = res.encode();
+		let len = encoded.len() as u32;
+		let offset = this.heap.allocate(len)? as u32;
+		this.memory.set(offset, &encoded)
+			.map_err(|_| "Invalid attempt to set memory in ext_new_key")?;
+		this.memory.write_primitive(written_out, len)
+			.map_err(|_| "Invalid attempt to write written_out in ext_new_key")?;
+		Ok(offset)
 	},
+	ext_public_keys(
+		crypto: u32,
+		key_type: u32,
+		written_out: *mut u32
+	) -> *mut u8 => {
+		let kind = offchain::CryptoKind::try_from(crypto)
+			.map_err(|_| "crypto kind OOB while ext_public_keys: wasm")?;
+		let key_type = offchain::KeyTypeId::try_from(key_type)
+			.map_err(|_| "crypto kind OOB while ext_public_keys: wasm")?;
+
+		let res = this.ext.offchain()
+			.map(|api| api.public_keys(kind, key_type))
+			.ok_or_else(|| "Calling unavailable API ext_public_keys: wasm")?;
+
+		let encoded = res.encode();
+		let len = encoded.len() as u32;
+		let offset = this.heap.allocate(len)? as u32;
+		this.memory.set(offset, &encoded)
+			.map_err(|_| "Invalid attempt to set memory in ext_public_keys")?;
+		this.memory.write_primitive(written_out, len)
+			.map_err(|_| "Invalid attempt to write written_out in ext_public_keys")?;
+		Ok(offset)
+	},
+
 	ext_encrypt(
-		key: u64,
+		key: *const u8,
+		key_len: u32,
 		data: *const u8,
 		data_len: u32,
 		msg_len: *mut u32
 	) -> *mut u8 => {
-		let key = offchain::CryptoKey::try_from(key)
-			.map_err(|_| "Key OOB while ext_encrypt: wasm")?;
+		use parity_codec::Decode;
+
+		let key = this.memory.get(key, key_len as usize)
+			.ok()
+			.and_then(|x| offchain::CryptoKey::decode(&mut &*x))
+			.ok_or("Key OOB while ext_encrypt: wasm")?;
 		let message = this.memory.get(data, data_len as usize)
 			.map_err(|_| "OOB while ext_encrypt: wasm")?;
 
@@ -757,49 +810,19 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		Ok(offset)
 	},
-	ext_network_state(written_out: *mut u32) -> *mut u8 => {
-		let res = this.ext.offchain()
-			.map(|api| api.network_state())
-			.ok_or_else(|| "Calling unavailable API ext_network_state: wasm")?;
-
-		let encoded = res.encode();
-		let len = encoded.len() as u32;
-		let offset = this.heap.allocate(len)? as u32;
-		this.memory.set(offset, &encoded)
-			.map_err(|_| "Invalid attempt to set memory in ext_network_state")?;
-
-		this.memory.write_primitive(written_out, len)
-			.map_err(|_| "Invalid attempt to write written_out in ext_network_state")?;
-
-		Ok(offset)
-	},
-	ext_pubkey(
-		key: u64,
-		written_out: *mut u32
-	) -> *mut u8 => {
-		let key = offchain::CryptoKey::try_from(key)
-			.map_err(|_| "Key OOB while ext_decrypt: wasm")?;
-		let res = this.ext.offchain()
-			.map(|api| api.pubkey(key))
-			.ok_or_else(|| "Calling unavailable API ext_authority_pubkey: wasm")?;
-
-		let encoded = res.encode();
-		let len = encoded.len() as u32;
-		let offset = this.heap.allocate(len)? as u32;
-		this.memory.set(offset, &encoded)
-			.map_err(|_| "Invalid attempt to set memory in ext_authority_pubkey")?;
-		this.memory.write_primitive(written_out, len)
-			.map_err(|_| "Invalid attempt to write written_out in ext_authority_pubkey")?;
-		Ok(offset)
-	},
 	ext_decrypt(
-		key: u64,
+		key: *const u8,
+		key_len: u32,
 		data: *const u8,
 		data_len: u32,
 		msg_len: *mut u32
 	) -> *mut u8 => {
-		let key = offchain::CryptoKey::try_from(key)
-			.map_err(|_| "Key OOB while ext_decrypt: wasm")?;
+		use parity_codec::Decode;
+
+		let key = this.memory.get(key, key_len as usize)
+			.ok()
+			.and_then(|x| offchain::CryptoKey::decode(&mut &*x))
+			.ok_or("Key OOB while ext_decrypt: wasm")?;
 		let message = this.memory.get(data, data_len as usize)
 			.map_err(|_| "OOB while ext_decrypt: wasm")?;
 
@@ -824,13 +847,18 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(offset)
 	},
 	ext_sign(
-		key: u64,
+		key: *const u8,
+		key_len: u32,
 		data: *const u8,
 		data_len: u32,
 		sig_data_len: *mut u32
 	) -> *mut u8  => {
-		let key = offchain::CryptoKey::try_from(key)
-			.map_err(|_| "Key OOB while ext_sign: wasm")?;
+		use parity_codec::Decode;
+
+		let key = this.memory.get(key, key_len as usize)
+			.ok()
+			.and_then(|x| offchain::CryptoKey::decode(&mut &*x))
+			.ok_or("Key OOB while ext_sign: wasm")?;
 		let message = this.memory.get(data, data_len as usize)
 			.map_err(|_| "OOB while ext_sign: wasm")?;
 
@@ -855,14 +883,19 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(offset)
 	},
 	ext_verify(
-		key: u64,
+		key: *const u8,
+		key_len: u32,
 		msg: *const u8,
 		msg_len: u32,
 		signature: *const u8,
 		signature_len: u32
 	) -> u32 => {
-		let key = offchain::CryptoKey::try_from(key)
-			.map_err(|_| "Key OOB while ext_verify: wasm")?;
+		use parity_codec::Decode;
+
+		let key = this.memory.get(key, key_len as usize)
+			.ok()
+			.and_then(|x| offchain::CryptoKey::decode(&mut &*x))
+			.ok_or("Key OOB while ext_verify: wasm")?;
 		let message = this.memory.get(msg, msg_len as usize)
 			.map_err(|_| "OOB while ext_verify: wasm")?;
 		let signature = this.memory.get(signature, signature_len as usize)

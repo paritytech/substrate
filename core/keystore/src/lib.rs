@@ -168,7 +168,7 @@ impl Store {
 			if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
 				match hex::decode(name) {
 					Ok(ref hex) => {
-						if hex[0..4] != key_type { continue	}
+						if &hex[0..4] != &key_type.0 { continue	}
 						let public = TPublic::from_slice(&hex[4..]);
 						public_keys.push(public);
 					}
@@ -195,7 +195,7 @@ impl Store {
 
 	fn key_file_path<TPair: Pair>(&self, public: &TPair::Public, key_type: KeyTypeId) -> PathBuf {
 		let mut buf = self.path.clone();
-		let key_type = hex::encode(key_type);
+		let key_type = hex::encode(key_type.0);
 		let key = hex::encode(public.as_slice());
 		buf.push(key_type + key.as_str());
 		buf

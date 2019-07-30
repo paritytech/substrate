@@ -22,7 +22,6 @@
 mod digest;
 
 use parity_codec::{Encode, Decode};
-use primitives::sr25519;
 use rstd::vec::Vec;
 use sr_primitives::ConsensusEngineId;
 use substrate_client::decl_runtime_apis;
@@ -32,7 +31,7 @@ pub use digest::{BabePreDigest, CompatibleDigestItem};
 pub use digest::{BABE_VRF_PREFIX, RawBabePreDigest};
 
 mod app {
-	use substrate_primitives::{app_crypto, crypto::key_types::BABE, sr25519};
+	use primitives::{app_crypto, crypto::key_types::BABE, sr25519};
 	app_crypto!(sr25519::Pair, sr25519::Public, sr25519::Signature, BABE);
 }
 

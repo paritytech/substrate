@@ -398,31 +398,33 @@ pub mod ext {
 		/// runtime code can always rely on it.
 		fn ext_network_state(written_out: *mut u32) -> *mut u8;
 
-		/// Returns the locally configured authority public key, if available.
-		/// The `crypto` argument is `offchain::CryptoKind` converted to `u32`.
+		/// Create new key pair for signing/encryption/decryption.
 		///
 		/// # Returns
 		///
-		/// The encoded `Result<PublicKey encoded to Vec<u8>, ()>`.
+		/// The encoded `Result<CryptoKey encoded to Vec<u8>, ()>`.
 		/// `written_out` contains the length of the message.
 		///
 		/// The ownership of the returned buffer is transferred to the runtime
 		/// code and the runtime is responsible for freeing it. This is always
 		/// a properly allocated pointer (which cannot be NULL), hence the
 		/// runtime code can always rely on it.
-		fn ext_pubkey(key: u64, written_out: *mut u32) -> *mut u8;
+		fn ext_new_key(crypto: u32, key_type: u32, written_out: *mut u32) -> *mut u8;
 
-		/// Create new key(pair) for signing/encryption/decryption.
+		/// Get a list of public keys matching given `crypto` and `key_type`.
 		///
 		/// # Returns
 		///
-		/// - A crypto key id (if the value is less than u64::max_value)
-		/// - `u64::max_value` in case the crypto is not supported
-		fn ext_new_crypto_key(crypto: u32, key_type: u32) -> u64;
+		/// The encoded `Result<Vec<CryptoKey encoded to Vec<u8>>, ()>`.
+		/// `written_out` contains the length of the message.
+		///
+		/// The ownership of the returned buffer is transferred to the runtime
+		/// code and the runtime is responsible for freeing it. This is always
+		/// a properly allocated pointer (which cannot be NULL), hence the
+		/// runtime code can always rely on it.
+		fn ext_public_keys(crypto: u32, key_type: u32, written_out: *mut u32) -> *mut u8;
 
 		/// Encrypt a piece of data using given crypto key.
-		///
-		/// If `key` is `0`, it will attempt to use current authority key of given `kind`.
 		///
 		/// # Returns
 		///
@@ -430,15 +432,14 @@ pub mod ext {
 		/// - Otherwise, pointer to the encrypted message in memory,
 		///	`msg_len` contains the length of the message.
 		fn ext_encrypt(
-			key: u64,
+			key: *const u8,
+			key_len: u32,
 			data: *const u8,
 			data_len: u32,
 			msg_len: *mut u32
 		) -> *mut u8;
 
 		/// Decrypt a piece of data using given crypto key.
-		///
-		/// If `key` is `0`, it will attempt to use current authority key of given `kind`.
 		///
 		/// # Returns
 		///
@@ -447,15 +448,14 @@ pub mod ext {
 		/// - Otherwise, pointer to the decrypted message in memory,
 		///	`msg_len` contains the length of the message.
 		fn ext_decrypt(
-			key: u64,
+			key: *const u8,
+			key_len: u32,
 			data: *const u8,
 			data_len: u32,
 			msg_len: *mut u32
 		) -> *mut u8;
 
 		/// Sign a piece of data using given crypto key.
-		///
-		/// If `key` is `0`, it will attempt to use current authority key of given `kind`.
 		///
 		/// # Returns
 		///
@@ -464,7 +464,8 @@ pub mod ext {
 		/// - Otherwise, pointer to the signature in memory,
 		///	`sig_data_len` contains the length of the signature.
 		fn ext_sign(
-			key: u64,
+			key: *const u8,
+			key_len: u32,
 			data: *const u8,
 			data_len: u32,
 			sig_data_len: *mut u32
@@ -472,14 +473,13 @@ pub mod ext {
 
 		/// Verifies that `signature` for `msg` matches given `key`.
 		///
-		/// If `key` is `0`, it will attempt to use current authority key of given `kind`.
-		///
 		/// # Returns
 		/// - `0` in case the signature is correct
 		/// - `1` in case it doesn't match the key
 		/// - `u32::max_value` if the key is invalid.
 		fn ext_verify(
-			key: u64,
+			key: *const u8,
+			key_len: u32,
 			msg: *const u8,
 			msg_len: u32,
 			signature: *const u8,
@@ -925,11 +925,38 @@ impl OffchainApi for () {
 		}
 	}
 
-	fn pubkey(key: CryptoKey) -> Result<Vec<u8>, ()> {
+	fn new_key(
+		crypto: offchain::CryptoKind,
+		key_type: offchain::KeyType,
+	) -> Result<offchain::CryptoKey, ()> {
+		let crypto = crypto.into();
+		let mut len = 0_u32;
+		let raw_result = unsafe {
+			let ptr = ext_new_key.get()(
+				crypto,
+				key_type,
+				&mut len
+			);
+
+			from_raw_parts(ptr, len)
+		};
+
+		match raw_result {
+			Some(raw_result) => codec::Decode::decode(&mut &*raw_result).unwrap_or(Err(())),
+			None => Err(())
+		}
+	}
+
+	fn public_keys(
+		crypto: offchain::CryptoKind,
+		key_type: offchain::KeyType,
+	) -> Result<Vec<offchain::CryptoKey>, ()> {
+		let crypto = crypto.into();
 		let mut len = 0u32;
 		let raw_result = unsafe {
-			let ptr = ext_pubkey.get()(
-				key.into(),
+			let ptr = ext_public_keys.get()(
+				crypto,
+				key_type,
 				&mut len,
 			);
 
@@ -942,25 +969,16 @@ impl OffchainApi for () {
 		}
 	}
 
-	fn new_crypto_key(
-		crypto: offchain::CryptoKind,
-		key_type: offchain::KeyType,
-	) -> Result<offchain::CryptoKey, ()> {
-		let crypto = crypto.into();
-		let ret = unsafe {
-			ext_new_crypto_key.get()(crypto, key_type)
-		};
-		offchain::CryptoKey::try_from(ret)
-	}
-
 	fn encrypt(
 		key: offchain::CryptoKey,
 		data: &[u8],
 	) -> Result<Vec<u8>, ()> {
+		let key = key.encode();
 		let mut len = 0_u32;
 		unsafe {
 			let ptr = ext_encrypt.get()(
-				key.into(),
+				key.as_ptr(),
+				key.len() as u32,
 				data.as_ptr(),
 				data.len() as u32,
 				&mut len
@@ -974,10 +992,12 @@ impl OffchainApi for () {
 		key: offchain::CryptoKey,
 		data: &[u8],
 	) -> Result<Vec<u8>, ()> {
+		let key = key.encode();
 		let mut len = 0_u32;
 		unsafe {
 			let ptr = ext_decrypt.get()(
-				key.into(),
+				key.as_ptr(),
+				key.len() as u32,
 				data.as_ptr(),
 				data.len() as u32,
 				&mut len
@@ -991,10 +1011,12 @@ impl OffchainApi for () {
 		key: offchain::CryptoKey,
 		data: &[u8],
 	) -> Result<Vec<u8>, ()> {
+		let key = key.encode();
 		let mut len = 0_u32;
 		unsafe {
 			let ptr = ext_sign.get()(
-				key.into(),
+				key.as_ptr(),
+				key.len() as u32,
 				data.as_ptr(),
 				data.len() as u32,
 				&mut len
@@ -1009,9 +1031,11 @@ impl OffchainApi for () {
 		msg: &[u8],
 		signature: &[u8],
 	) -> Result<bool, ()> {
+		let key = key.encode();
 		let val = unsafe {
 			ext_verify.get()(
-				key.into(),
+				key.as_ptr(),
+				key.len() as u32,
 				msg.as_ptr(),
 				msg.len() as u32,
 				signature.as_ptr(),

@@ -198,27 +198,29 @@ where
 			.map_err(|_| ())
 	}
 
-	fn new_crypto_key(&mut self, crypto: Kind, key_type: KeyTypeId) -> Result<CryptoKey, ()> {
-		let key = StoredKey::generate_with_phrase(crypto, self.password());
-		let (id, id_encoded) = loop {
-			let encoded = self.db.get(KEYS_PREFIX, NEXT_ID);
-			let encoded_slice = encoded.as_ref().map(|x| x.as_slice());
-			let new_id = encoded_slice.and_then(|mut x| u16::decode(&mut x)).unwrap_or_default()
-				.checked_add(1)
-				.ok_or(())?;
-			let new_id_encoded = new_id.encode();
-
-			if self.db.compare_and_set(KEYS_PREFIX, NEXT_ID, encoded_slice, &new_id_encoded) {
-				break (new_id, new_id_encoded);
-			}
-		};
-
-		self.db.set(KEYS_PREFIX, &id_encoded, &key.encode());
-
-		Ok(CryptoKey::LocalKey { id, kind })
+	fn new_key(&self, crypto: Kind, key_type: KeyTypeId) -> Result<CryptoKey, ()> {
+		// let key = StoredKey::generate_with_phrase(crypto, self.password());
+		// let (id, id_encoded) = loop {
+		// 	let encoded = self.db.get(KEYS_PREFIX, NEXT_ID);
+		// 	let encoded_slice = encoded.as_ref().map(|x| x.as_slice());
+		// 	let new_id = encoded_slice.and_then(|mut x| u16::decode(&mut x)).unwrap_or_default()
+		// 		.checked_add(1)
+		// 		.ok_or(())?;
+		// 	let new_id_encoded = new_id.encode();
+        //
+		// 	if self.db.compare_and_set(KEYS_PREFIX, NEXT_ID, encoded_slice, &new_id_encoded) {
+		// 		break (new_id, new_id_encoded);
+		// 	}
+		// };
+        //
+		// self.db.set(KEYS_PREFIX, &id_encoded, &key.encode());
+        //
+		// Ok(CryptoKey::LocalKey { id, kind })
+		unavailable_yet::<()>("new_key");
+		Err(())
 	}
 
-	fn pubkey(&self, key: CryptoKey) -> Result<Vec<u8>, ()> {
+	fn public_key(&self, crypto: Kind, key_type: KeyTypeId) -> Result<CryptoKey, ()> {
 		self.read_key(key)?.public()
 	}
 

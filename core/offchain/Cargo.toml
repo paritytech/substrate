@@ -17,6 +17,7 @@ primitives = { package = "substrate-primitives", path = "../../core/primitives" 
 sr-primitives = { path = "../../core/sr-primitives" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
 network = { package = "substrate-network", path = "../../core/network" }
+keystore = { package = "substrate-keystore", path = "../keystore" }
 
 [dev-dependencies]
 env_logger = "0.6"

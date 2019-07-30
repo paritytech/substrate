@@ -246,14 +246,7 @@ impl offchain::Externalities for NeverOffchainExt {
 		unreachable!()
 	}
 
-	fn pubkey(
-		&self,
-		_key: offchain::CryptoKey,
-	) -> Result<Vec<u8>, ()> {
-		unreachable!()
-	}
-
-	fn new_crypto_key(
+	fn new_key(
 		&mut self,
 		_crypto: offchain::CryptoKind,
 		_key_type: offchain::KeyTypeId,
@@ -261,8 +254,16 @@ impl offchain::Externalities for NeverOffchainExt {
 		unreachable!()
 	}
 
+	fn public_keys(
+		&self,
+		_crypto: offchain::CryptoKind,
+		_key_type: offchain::KeyTypeId,
+	) -> Result<Vec<offchain::CryptoKey>, ()> {
+		unreachable!()
+	}
+
 	fn encrypt(
-		&mut self,
+		&self,
 		_key: offchain::CryptoKey,
 		_data: &[u8],
 	) -> Result<Vec<u8>, ()> {
@@ -270,7 +271,7 @@ impl offchain::Externalities for NeverOffchainExt {
 	}
 
 	fn decrypt(
-		&mut self,
+		&self,
 		_key: offchain::CryptoKey,
 		_data: &[u8],
 	) -> Result<Vec<u8>, ()> {
@@ -278,7 +279,7 @@ impl offchain::Externalities for NeverOffchainExt {
 	}
 
 	fn sign(
-		&mut self,
+		&self,
 		_key: offchain::CryptoKey,
 		_data: &[u8],
 	) -> Result<Vec<u8>, ()> {
@@ -286,7 +287,7 @@ impl offchain::Externalities for NeverOffchainExt {
 	}
 
 	fn verify(
-		&mut self,
+		&self,
 		_key: offchain::CryptoKey,
 		_msg: &[u8],
 		_signature: &[u8],

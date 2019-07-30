@@ -1056,7 +1056,7 @@ pub trait CryptoType {
 /// public modules.
 #[derive(Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct KeyTypeId([u8; 4]);
+pub struct KeyTypeId(pub [u8; 4]);
 
 impl From<u32> for KeyTypeId {
 	fn from(x: u32) -> Self {
@@ -1160,9 +1160,6 @@ mod tests {
 			vec![]
 		}
 	}
-	impl TypedKey for TestPublic {
-		const KEY_TYPE: KeyTypeId = TEST_KEY_TYPE;
-	}
 	impl Pair for TestPair {
 		type Public = TestPublic;
 		type Seed = [u8; 0];
@@ -1218,9 +1215,6 @@ mod tests {
 		fn to_raw_vec(&self) -> Vec<u8> {
 			vec![]
 		}
-	}
-	impl TypedKey for TestPair {
-		const KEY_TYPE: u32 = 4242;
 	}
 
 	#[test]

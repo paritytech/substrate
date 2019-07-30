@@ -31,7 +31,7 @@ use primitives::{
 	storage::{StorageKey, StorageData, well_known_keys}, NativeOrEncoded
 };
 use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
-use runtime_primitives::{
+use sr_primitives::{
 	Justification, BuildStorage,
 	generic::{BlockId, SignedBlock, DigestItem},
 	traits::{

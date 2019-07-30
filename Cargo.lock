@@ -4608,6 +4608,7 @@ dependencies = [
  "sr-primitives 2.0.0",
  "substrate-client 2.0.0",
  "substrate-client-db 2.0.0",
+ "substrate-keystore 2.0.0",
  "substrate-network 2.0.0",
  "substrate-offchain-primitives 2.0.0",
  "substrate-primitives 2.0.0",

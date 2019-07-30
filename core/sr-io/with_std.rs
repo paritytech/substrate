@@ -275,17 +275,16 @@ impl OffchainApi for () {
 		}, "network_state can be called only in the offchain worker context")
 	}
 
-	fn pubkey(key: offchain::CryptoKey) -> Result<Vec<u8>, ()> {
+	fn public_keys(crypto: offchain::CryptoKind, app_id: offchain::KeyTypeId) -> Result<Vec<offchain::CryptoKey>, ()> {
 		with_offchain(|ext| {
-			ext.pubkey(key)
-		}, "authority_pubkey can be called only in the offchain worker context")
+			ext.public_keys(crypto, app_id)
+		}, "public_keys can be called only in the offchain worker context")
 	}
 
-	fn new_crypto_key(crypto: offchain::CryptoKind, key_type: offchain::KeyTypeId) -> Result<offchain::CryptoKey, ()> {
+	fn new_key(crypto: offchain::CryptoKind, key_type: offchain::KeyTypeId) -> Result<offchain::CryptoKey, ()> {
 		with_offchain(|ext| {
-			ext.new_crypto_key(crypto, key_type)
-		}, "new_crypto_key can be called only in the offchain worker context")
-			.and_then(|x| x.ok_or(()))
+			ext.new_key(crypto, key_type)
+		}, "new_key can be called only in the offchain worker context")
 	}
 
 	fn encrypt(
