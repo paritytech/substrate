@@ -23,6 +23,8 @@
 use num_traits::One;
 use crate::changes_trie::{ConfigurationRange, BlockNumber};
 
+pub const SKEWED_DIGEST_LEVEL: u32 = 0xFFFFFFFF; // TODO: replace with Option<u32>
+
 /// Returns surface iterator for given range of blocks.
 pub fn surface_iterator<'a, Number: BlockNumber>(
 	config: ConfigurationRange<'a, Number>,
@@ -30,6 +32,8 @@ pub fn surface_iterator<'a, Number: BlockNumber>(
 	begin: Number,
 	end: Number,
 ) -> Result<SurfaceIterator<'a, Number>, String> {
+	// TODO: check that end <= config.end
+
 	let (current, current_begin, digest_step, digest_level) = lower_bound_max_digest(
 		config.clone(),
 		max.clone(),
@@ -116,6 +120,7 @@ fn lower_bound_max_digest<'a, Number: BlockNumber>(
 	let mut current_begin = begin.clone();
 	if current_begin != current {
 		while digest_level != config.config.digest_levels {
+			// try to use next level digest
 			let new_digest_level = digest_level + 1;
 			let new_digest_step = digest_step * config.config.digest_interval;
 			let new_digest_interval = config.config.digest_interval * {
@@ -126,6 +131,21 @@ fn lower_bound_max_digest<'a, Number: BlockNumber>(
 			let new_digest_end = new_digest_begin.clone() + new_digest_interval.into();
 			let new_current = new_digest_begin.clone() + new_digest_interval.into();
 
+			// check if we met skewed digest
+			if let Some(skewed_digest_end) = config.end.as_ref() {
+				if new_digest_end > *skewed_digest_end {
+					let skewed_digest_start = config.config.prev_max_level_digest_block(config.zero.clone(), skewed_digest_end.clone()).expect("TODO");
+					let skewed_digest_range = (skewed_digest_end.clone() - skewed_digest_start.clone()).try_into().ok().expect("TODO");
+					return Ok((
+						skewed_digest_end.clone(),
+						skewed_digest_start,
+						skewed_digest_range,
+						SKEWED_DIGEST_LEVEL,
+					));
+				}
+			}
+
+			// we can't use next level digest if it touches any unknown (> max) blocks
 			if new_digest_end > max {
 				if begin < new_digest_begin {
 					current_begin = new_digest_begin;
@@ -133,12 +153,14 @@ fn lower_bound_max_digest<'a, Number: BlockNumber>(
 				break;
 			}
 
+			// we can (and will) use this digest
 			digest_level = new_digest_level;
 			digest_step = new_digest_step;
 			digest_interval = new_digest_interval;
 			current = new_current;
 			current_begin = new_digest_begin;
 
+			// if current digest covers the whole range => no need to use next level digest
 			if current_begin <= begin && new_digest_end >= end {
 				break;
 			}
@@ -218,5 +240,17 @@ mod tests {
 
 	#[test]
 	fn surface_iterator_works_with_skewed_digest() {
+		let config = Configuration { digest_interval: 4, digest_levels: 2 };
+		let mut config_range = configuration_range(&config, 0u64);
+
+		// when config activates at 0 AND ends at 170
+		config_range.end = Some(170);
+		assert_eq!(
+			surface_iterator(config_range, 100_000u64, 40u64, 170u64).unwrap().collect::<Vec<_>>(),
+			vec![
+				Ok((170, SKEWED_DIGEST_LEVEL)), Ok((160, 2)), Ok((144, 2)), Ok((128, 2)), Ok((112, 2)),
+				Ok((96, 2)), Ok((80, 2)), Ok((64, 2)), Ok((48, 2)),
+			],
+		);
 	}
 }

@@ -21,11 +21,12 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use parity_codec::{Decode, Encode};
 use hash_db::{HashDB, Hasher};
+use num_traits::Zero;
 use trie::{Recorder, MemoryDB};
 use crate::changes_trie::{AnchorBlockId, ConfigurationRange, RootsStorage, Storage, BlockNumber};
 use crate::changes_trie::input::{DigestIndex, ExtrinsicIndex, DigestIndexValue, ExtrinsicIndexValue};
 use crate::changes_trie::storage::{TrieBackendAdapter, InMemoryStorage};
-use crate::changes_trie::surface_iterator::{surface_iterator, SurfaceIterator};
+use crate::changes_trie::surface_iterator::{surface_iterator, SurfaceIterator, SKEWED_DIGEST_LEVEL};
 use crate::proving_backend::ProvingBackendEssence;
 use crate::trie_backend_essence::{TrieBackendEssence};
 
@@ -50,6 +51,7 @@ pub fn key_changes<'a, H: Hasher, Number: BlockNumber>(
 			storage,
 			begin: begin.clone(),
 			end,
+			config: config.clone(),
 			surface: surface_iterator(
 				config,
 				max,
@@ -85,6 +87,7 @@ pub fn key_changes_proof<'a, H: Hasher, Number: BlockNumber>(
 			storage,
 			begin: begin.clone(),
 			end,
+			config: config.clone(),
 			surface: surface_iterator(
 				config,
 				max,
@@ -136,6 +139,7 @@ pub fn key_changes_proof_check<'a, H: Hasher, Number: BlockNumber>(
 			storage: &proof_db,
 			begin: begin.clone(),
 			end,
+			config: config.clone(),
 			surface: surface_iterator(
 				config,
 				max,
@@ -164,6 +168,7 @@ pub struct DrilldownIteratorEssence<'a, H, Number>
 	storage: &'a dyn Storage<H, Number>,
 	begin: Number,
 	end: &'a AnchorBlockId<H::Out, Number>,
+	config: ConfigurationRange<'a, Number>,
 	surface: SurfaceIterator<'a, Number>,
 
 	extrinsics: VecDeque<(Number, u32)>,
@@ -229,10 +234,21 @@ impl<'a, H, Number> DrilldownIteratorEssence<'a, H, Number>
 						// AND digest block changes could also include changes for out-of-range blocks
 						let begin = self.begin.clone();
 						let end = self.end.number.clone();
+						let is_skewed_digest = level == SKEWED_DIGEST_LEVEL;
+						let config = self.config.clone();
 						self.blocks.extend(blocks.into_iter()
 							.rev()
 							.filter(|b| level > 1 || (*b >= begin && *b <= end))
-							.map(|b| (b, level - 1))
+							.map(|b| {
+								let prev_level = if is_skewed_digest {
+									config.config.digest_level_at_block(config.zero.clone(), b.clone())
+										.map(|(level, _, _)| level)
+										.unwrap_or_else(|| Zero::zero())
+								} else {
+									level - 1
+								};
+								(b, prev_level)
+							})
 						);
 					}
 				}
@@ -241,7 +257,7 @@ impl<'a, H, Number> DrilldownIteratorEssence<'a, H, Number>
 			}
 
 			match self.surface.next() {
-				Some(Ok(block)) => { println!("=== XXX: {}", block.0); self.blocks.push_back(block) },
+				Some(Ok(block)) => self.blocks.push_back(block),
 				Some(Err(err)) => return Err(err),
 				None => return Ok(None),
 			}
@@ -447,5 +463,33 @@ mod tests {
 
 		// check that drilldown result is the same as if it was happening at the full node
 		assert_eq!(local_result, Ok(vec![(8, 2), (8, 1), (6, 3), (3, 0)]));
+	}
+
+	#[test]
+	fn drilldown_iterator_works_with_skewed_digest() {
+		let config = Configuration { digest_interval: 4, digest_levels: 3 };
+		let mut config_range = configuration_range(&config, 0);
+		config_range.end = Some(91);
+
+		// when 4^3 deactivates at block 91:
+		// last L3 digest has been created at block#64
+		// skewed digest covers:
+		// L2 digests at blocks: 80
+		// L1 digests at blocks: 84, 88
+		// regular blocks: 89, 90, 91
+		let mut input = (1u64..92u64).map(|b| (b, vec![])).collect::<Vec<_>>();
+		// changed at block#63 and covered by L3 digest at block#64
+		input[63 - 1].1.push(InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 63, key: vec![42] }, vec![0]));
+		input[64 - 1].1.push(InputPair::DigestIndex(DigestIndex { block: 64, key: vec![42] }, vec![63]));
+		// changed at block#79 and covered by L2 digest at block#80 + skewed digest at block#91
+		input[79 - 1].1.push(InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 79, key: vec![42] }, vec![1]));
+		input[80 - 1].1.push(InputPair::DigestIndex(DigestIndex { block: 80, key: vec![42] }, vec![79]));
+		input[91 - 1].1.push(InputPair::DigestIndex(DigestIndex { block: 91, key: vec![42] }, vec![80]));
+		let storage = InMemoryStorage::with_inputs(input);
+
+		let drilldown_result = key_changes::<Blake2Hasher, u64>(
+			config_range, &storage, 0, &AnchorBlockId { hash: Default::default(), number: 91 }, 100_000u64, &[42])
+			.and_then(Result::from_iter);
+		assert_eq!(drilldown_result, Ok(vec![(79, 1), (63, 0)]));
 	}
 }

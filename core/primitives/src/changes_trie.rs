@@ -75,6 +75,28 @@ impl ChangesTrieConfiguration {
 		}
 	}
 
+	/// Returns max level digest block number that must be created at block <= passed block number.
+	pub fn prev_max_level_digest_block<Number>(
+		&self,
+		zero: Number,
+		block: Number,
+	) -> Option<Number>
+		where
+			Number: Clone + From<u32> + PartialEq + ::rstd::ops::Add<Output=Number> + ::rstd::ops::Sub<Output=Number> + ::rstd::ops::Div<Output=Number> + ::rstd::ops::Mul<Output=Number> + Zero,
+	{
+		if !self.is_digest_build_enabled() {
+			return None;
+		}
+
+		let max_digest_interval: Number = self.max_digest_interval().into();
+		let max_digests_since_zero = (block.clone() - zero.clone()) / max_digest_interval.clone();
+		let last_max_digest_block = zero + max_digests_since_zero * max_digest_interval.clone();
+		if last_max_digest_block.is_zero() {
+			None
+		} else {
+			Some(last_max_digest_block)
+		}
+	}
 	/// Returns max level digest block number that must be created at block >= passed block number.
 	pub fn next_max_level_digest_block<Number>(
 		&self,
@@ -215,6 +237,18 @@ mod tests {
 		assert_eq!(config(32, 1).next_max_level_digest_block(0u64, 16), Some(32));
 		assert_eq!(config(2, 3).next_max_level_digest_block(0u64, 10), Some(16));
 		assert_eq!(config(2, 3).next_max_level_digest_block(0u64, 8), Some(8));
+		// TODO: more test cases
+	}
+
+	#[test]
+	fn prev_max_level_digest_block_works() {
+		assert_eq!(config(0, 0).prev_max_level_digest_block(0u64, 16), None);
+		assert_eq!(config(1, 1).prev_max_level_digest_block(0u64, 16), None);
+		assert_eq!(config(2, 1).prev_max_level_digest_block(0u64, 16), Some(16));
+		assert_eq!(config(4, 1).prev_max_level_digest_block(0u64, 16), Some(16));
+		assert_eq!(config(32, 1).prev_max_level_digest_block(0u64, 16), None);
+		assert_eq!(config(2, 3).prev_max_level_digest_block(0u64, 10), Some(8));
+		assert_eq!(config(2, 3).prev_max_level_digest_block(0u64, 8), Some(8));
 		// TODO: more test cases
 	}
 

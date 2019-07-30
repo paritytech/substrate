@@ -47,6 +47,7 @@ pub use self::storage::InMemoryStorage;
 pub use self::changes_iterator::{key_changes, key_changes_proof, key_changes_proof_check};
 pub use self::prune::{prune, oldest_non_pruned_trie};
 
+use std::convert::TryInto;
 use hash_db::Hasher;
 use crate::backend::Backend;
 use num_traits::{One, Zero};
@@ -64,7 +65,7 @@ pub trait BlockNumber:
 	Send + Sync + 'static +
 	::std::fmt::Display +
 	Clone +
-	From<u32> + One + Zero +
+	From<u32> + TryInto<u32> + One + Zero +
 	PartialEq + Ord +
 	::std::ops::Add<Self, Output=Self> + ::std::ops::Sub<Self, Output=Self> +
 	::std::ops::Mul<Self, Output=Self> + ::std::ops::Div<Self, Output=Self> +
@@ -78,7 +79,7 @@ impl<T> BlockNumber for T where T:
 	Send + Sync + 'static +
 	::std::fmt::Display +
 	Clone +
-	From<u32> + One + Zero +
+	From<u32> + TryInto<u32> + One + Zero +
 	PartialEq + Ord +
 	::std::ops::Add<Self, Output=Self> + ::std::ops::Sub<Self, Output=Self> +
 	::std::ops::Mul<Self, Output=Self> + ::std::ops::Div<Self, Output=Self> +
