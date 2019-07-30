@@ -36,8 +36,9 @@ pub use primitives::Blake2Hasher;
 use primitives::offchain::{
 	Timestamp,
 	HttpRequestId, HttpRequestStatus, HttpError,
-	CryptoKind, CryptoKeyId,
+	CryptoKind, CryptoKey,
 	StorageKind,
+	OpaqueNetworkState,
 };
 
 /// Error verifying ECDSA signature
@@ -103,16 +104,18 @@ export_api! {
 		/// Get `key` from child storage and return a `Vec`, empty if there's a problem.
 		fn child_storage(storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>>;
 
-		/// Get `key` from storage, placing the value into `value_out` (as much of it as possible) and return
-		/// the number of bytes that the entry in storage had beyond the offset or None if the storage entry
-		/// doesn't exist at all. Note that if the buffer is smaller than the storage entry length, the returned
-		/// number of bytes is not equal to the number of bytes written to the `value_out`.
+		/// Get `key` from storage, placing the value into `value_out` and return the number of
+		/// bytes that the entry in storage has beyond the offset or `None` if the storage entry
+		/// doesn't exist at all.
+		/// If `value_out` length is smaller than the returned length, only `value_out` length bytes
+		/// are copied into `value_out`.
 		fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize>;
 
-		/// Get `key` from child storage, placing the value into `value_out` (as much of it as possible) and return
-		/// the number of bytes that the entry in storage had beyond the offset or None if the storage entry
-		/// doesn't exist at all. Note that if the buffer is smaller than the storage entry length, the returned
-		/// number of bytes is not equal to the number of bytes written to the `value_out`.
+		/// Get `key` from child storage, placing the value into `value_out` and return the number
+		/// of bytes that the entry in storage has beyond the offset or `None` if the storage entry
+		/// doesn't exist at all.
+		/// If `value_out` length is smaller than the returned length, only `value_out` length bytes
+		/// are copied into `value_out`.
 		fn read_child_storage(storage_key: &[u8], key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize>;
 
 		/// Set the storage of some particular key to Some value.
@@ -239,43 +242,44 @@ export_api! {
 		/// The transaction will end up in the pool.
 		fn submit_transaction<T: codec::Encode>(data: &T) -> Result<(), ()>;
 
+		/// Returns information about the local node's network state.
+		fn network_state() -> Result<OpaqueNetworkState, ()>;
+
+		/// Returns the currently configured authority public key, if available.
+		fn pubkey(key: CryptoKey) -> Result<Vec<u8>, ()>;
+
 		/// Create new key(pair) for signing/encryption/decryption.
 		///
 		/// Returns an error if given crypto kind is not supported.
-		fn new_crypto_key(crypto: CryptoKind) -> Result<CryptoKeyId, ()>;
+		fn new_crypto_key(crypto: CryptoKind) -> Result<CryptoKey, ()>;
 
 		/// Encrypt a piece of data using given crypto key.
 		///
 		/// If `key` is `None`, it will attempt to use current authority key.
 		///
 		/// Returns an error if `key` is not available or does not exist.
-		fn encrypt(key: Option<CryptoKeyId>, kind: CryptoKind, data: &[u8]) -> Result<Vec<u8>, ()>;
+		fn encrypt(key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()>;
 
 		/// Decrypt a piece of data using given crypto key.
 		///
 		/// If `key` is `None`, it will attempt to use current authority key.
 		///
 		/// Returns an error if data cannot be decrypted or the `key` is not available or does not exist.
-		fn decrypt(key: Option<CryptoKeyId>, kind: CryptoKind, data: &[u8]) -> Result<Vec<u8>, ()>;
+		fn decrypt(key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()>;
 
 		/// Sign a piece of data using given crypto key.
 		///
 		/// If `key` is `None`, it will attempt to use current authority key.
 		///
 		/// Returns an error if `key` is not available or does not exist.
-		fn sign(key: Option<CryptoKeyId>, kind: CryptoKind, data: &[u8]) -> Result<Vec<u8>, ()>;
+		fn sign(key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()>;
 
 		/// Verifies that `signature` for `msg` matches given `key`.
 		///
 		/// Returns an `Ok` with `true` in case it does, `false` in case it doesn't.
 		/// Returns an error in case the key is not available or does not exist or the parameters
 		/// lengths are incorrect.
-		fn verify(
-			key: Option<CryptoKeyId>,
-			kind: CryptoKind,
-			msg: &[u8],
-			signature: &[u8]
-		) -> Result<bool, ()>;
+		fn verify(key: CryptoKey, msg: &[u8], signature: &[u8]) -> Result<bool, ()>;
 
 		/// Returns current UNIX timestamp (in millis)
 		fn timestamp() -> Timestamp;
@@ -304,7 +308,12 @@ export_api! {
 		///
 		/// Note this storage is not part of the consensus, it's only accessible by
 		/// offchain worker tasks running on the same machine. It IS persisted between runs.
-		fn local_storage_compare_and_set(kind: StorageKind, key: &[u8], old_value: &[u8], new_value: &[u8]) -> bool;
+		fn local_storage_compare_and_set(
+			kind: StorageKind,
+			key: &[u8],
+			old_value: Option<&[u8]>,
+			new_value: &[u8]
+		) -> bool;
 
 		/// Gets a value from the local storage.
 		///
@@ -313,7 +322,7 @@ export_api! {
 		/// offchain worker tasks running on the same machine. It IS persisted between runs.
 		fn local_storage_get(kind: StorageKind, key: &[u8]) -> Option<Vec<u8>>;
 
-		/// Initiaties a http request given HTTP verb and the URL.
+		/// Initiates a http request given HTTP verb and the URL.
 		///
 		/// Meta is a future-reserved field containing additional, parity-codec encoded parameters.
 		/// Returns the id of newly started request.

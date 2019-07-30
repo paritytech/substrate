@@ -18,7 +18,7 @@
 //! Proc macro of Support code for the runtime.
 // end::description[]
 
-#![recursion_limit="256"]
+#![recursion_limit="512"]
 
 extern crate proc_macro;
 
@@ -82,6 +82,14 @@ use proc_macro::TokenStream;
 ///
 ///   If the second key is untrusted, a cryptographic `hasher` such as `blake2_256` must be used.
 ///   Otherwise, other items in storage with the same first key can be compromised.
+///
+/// Supported hashers (ordered from least to best security):
+///
+/// * `twox_64_concat` - TwoX with 64bit + key concatenated.
+/// * `twox_128` - TwoX with 128bit.
+/// * `twox_256` - TwoX with with 256bit.
+/// * `blake2_128` - Blake2 with 128bit.
+/// * `blake2_256` - Blake2 with 256bit.
 ///
 /// Basic storage can be extended as such:
 ///

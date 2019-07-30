@@ -14,6 +14,6 @@ fdlimit = "0.1"
 service = { package = "substrate-service", path = "../../../core/service" }
 network = { package = "substrate-network", path = "../../../core/network" }
 consensus = { package = "substrate-consensus-common", path = "../../../core/consensus/common" }
-primitives = { package = "substrate-primitives", path = "../../../core/primitives" }
 client = { package = "substrate-client", path = "../../../core/client" }
 sr-primitives = { path = "../../../core/sr-primitives" }
+primitives = { package = "substrate-primitives", path = "../../../core/primitives" }

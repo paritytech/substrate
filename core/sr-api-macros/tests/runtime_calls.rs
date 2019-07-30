@@ -16,9 +16,10 @@
 
 use test_client::{
 	prelude::*,
+	DefaultTestClientBuilderExt, TestClientBuilder,
 	runtime::{TestAPI, DecodeFails, Transfer, Header},
 };
-use runtime_primitives::{
+use sr_primitives::{
 	generic::BlockId,
 	traits::{ProvideRuntimeApi, Header as HeaderT, Hash as HashT},
 };
@@ -104,7 +105,7 @@ fn calling_with_both_strategy_and_fail_on_native_should_work() {
 
 
 #[test]
-fn calling_with_native_else_wasm_and_faild_on_wasm_should_work() {
+fn calling_with_native_else_wasm_and_fail_on_wasm_should_work() {
 	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::NativeElseWasm).build();
 	let runtime_api = client.runtime_api();
 	let block_id = BlockId::Number(client.info().chain.best_number);

@@ -23,7 +23,7 @@ use inherents::{
 	InherentData, MakeFatalError,
 };
 use srml_support::StorageValue;
-use primitives::traits::{One, Zero, SaturatedConversion};
+use sr_primitives::traits::{One, Zero, SaturatedConversion};
 use rstd::{prelude::*, result, cmp, vec};
 use parity_codec::Decode;
 use srml_support::{decl_module, decl_storage, for_each_tuple};
@@ -265,9 +265,10 @@ mod tests {
 	use super::*;
 
 	use sr_io::{with_externalities, TestExternalities};
-	use substrate_primitives::H256;
-	use primitives::traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT};
-	use primitives::testing::Header;
+	use primitives::H256;
+	use sr_primitives::traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT};
+	use sr_primitives::testing::Header;
+	use sr_primitives::Perbill;
 	use srml_support::{assert_ok, impl_outer_origin, parameter_types};
 	use srml_system as system;
 	use std::cell::RefCell;
@@ -299,6 +300,9 @@ mod tests {
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
+		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockLength: u32 = 2 * 1024;
+		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl system::Trait for Test {
 		type Origin = Origin;
@@ -309,8 +313,12 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
+		type WeightMultiplierUpdate = ();
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type AvailableBlockRatio = AvailableBlockRatio;
+		type MaximumBlockLength = MaximumBlockLength;
 	}
 	parameter_types! {
 		pub const WindowSize: u64 = 11;

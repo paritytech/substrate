@@ -138,13 +138,14 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		&instance_opts.instance,
 		&storage_lines,
 	);
-	let (store_default_struct, store_functions_to_metadata) = store_functions_to_metadata(
+	let (store_default_struct, store_metadata) = store_functions_to_metadata(
 		&scrate,
 		&traitinstance,
 		&traittype,
 		&instance_opts,
 		&storage_lines,
 		&where_clause,
+		&cratename,
 	);
 
 	let InstanceOpts {
@@ -153,7 +154,6 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		..
 	} = instance_opts;
 
-	let cratename_string = cratename.to_string();
 	let expanded = quote! {
 		#scrate_decl
 		#decl_storage_items
@@ -171,12 +171,8 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		{
 			#impl_store_fns
 			#[doc(hidden)]
-			pub fn store_metadata_functions() -> &'static [#scrate::metadata::StorageEntryMetadata] {
-				#store_functions_to_metadata
-			}
-			#[doc(hidden)]
-			pub fn store_metadata_name() -> &'static str {
-				#cratename_string
+			pub fn storage_metadata() -> #scrate::metadata::StorageMetadata {
+				#store_metadata
 			}
 		}
 
@@ -535,8 +531,8 @@ fn decl_store_extra_genesis(
 			impl#fparam_impl GenesisConfig#sparam #genesis_where_clause {
 				pub fn build_storage #fn_generic (self) -> std::result::Result<
 					(
-						#scrate::runtime_primitives::StorageOverlay,
-						#scrate::runtime_primitives::ChildrenStorageOverlay,
+						#scrate::sr_primitives::StorageOverlay,
+						#scrate::sr_primitives::ChildrenStorageOverlay,
 					),
 					String
 				> #fn_where_clause {
@@ -549,8 +545,8 @@ fn decl_store_extra_genesis(
 				/// Assimilate the storage for this module into pre-existing overlays.
 				pub fn assimilate_storage #fn_generic (
 					self,
-					r: &mut #scrate::runtime_primitives::StorageOverlay,
-					c: &mut #scrate::runtime_primitives::ChildrenStorageOverlay,
+					r: &mut #scrate::sr_primitives::StorageOverlay,
+					c: &mut #scrate::sr_primitives::ChildrenStorageOverlay,
 				) -> std::result::Result<(), String> #fn_where_clause {
 					let storage = r;
 
@@ -563,13 +559,13 @@ fn decl_store_extra_genesis(
 			}
 
 			#[cfg(feature = "std")]
-			impl#build_storage_impl #scrate::runtime_primitives::#impl_trait
+			impl#build_storage_impl #scrate::sr_primitives::#impl_trait
 				for GenesisConfig#sparam #build_storage_where_clause
 			{
 				fn build_module_genesis_storage(
 					self,
-					r: &mut #scrate::runtime_primitives::StorageOverlay,
-					c: &mut #scrate::runtime_primitives::ChildrenStorageOverlay,
+					r: &mut #scrate::sr_primitives::StorageOverlay,
+					c: &mut #scrate::sr_primitives::ChildrenStorageOverlay,
 				) -> std::result::Result<(), String> {
 					self.assimilate_storage::<#fn_traitinstance> (r, c)
 				}
@@ -583,21 +579,24 @@ fn decl_store_extra_genesis(
 }
 
 fn create_and_impl_instance(
-	prefix: &str,
+	instance_prefix: &str,
 	ident: &Ident,
 	doc: &TokenStream2,
 	const_names: &[(Ident, String)],
 	scrate: &TokenStream2,
 	instantiable: &Ident,
+	cratename: &Ident,
 ) -> TokenStream2 {
 	let mut const_impls = TokenStream2::new();
 
 	for (const_name, partial_const_value) in const_names {
-		let const_value = format!("{}{}", partial_const_value, prefix);
+		let const_value = format!("{}{}", instance_prefix, partial_const_value);
 		const_impls.extend(quote! {
 			const #const_name: &'static str = #const_value;
 		});
 	}
+
+	let prefix = format!("{}{}", instance_prefix, cratename.to_string());
 
 	quote! {
 		// Those trait are derived because of wrong bounds for generics
@@ -606,6 +605,7 @@ fn create_and_impl_instance(
 		#doc
 		pub struct #ident;
 		impl #instantiable for #ident {
+			const PREFIX: &'static str = #prefix;
 			#const_impls
 		}
 	}
@@ -620,7 +620,6 @@ fn decl_storage_items(
 	storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
 	where_clause: &Option<WhereClause>,
 ) -> TokenStream2 {
-
 	let mut impls = TokenStream2::new();
 
 	let InstanceOpts {
@@ -686,6 +685,8 @@ fn decl_storage_items(
 			/// Defines storage prefixes, they must be unique.
 			#hide
 			pub trait #instantiable: 'static {
+				/// The prefix used by any storage entry of an instance.
+				const PREFIX: &'static str;
 				#const_impls
 			}
 		});
@@ -707,9 +708,11 @@ fn decl_storage_items(
 			);
 
 		// Impl Instance trait for instances
-		for (prefix, ident, doc) in instances {
+		for (instance_prefix, ident, doc) in instances {
 			impls.extend(
-				create_and_impl_instance(&prefix, &ident, &doc, &const_names, scrate, &instantiable)
+				create_and_impl_instance(
+					&instance_prefix, &ident, &doc, &const_names, scrate, &instantiable, cratename
+				)
 			);
 		}
 	}
@@ -725,7 +728,13 @@ fn decl_storage_items(
 	} else {
 		impls.extend(
 			create_and_impl_instance(
-				"", &inherent_instance, &quote!(#[doc(hidden)]), &const_names, scrate, &instantiable
+				"",
+				&inherent_instance,
+				&quote!(#[doc(hidden)]),
+				&const_names,
+				scrate,
+				&instantiable,
+				cratename,
 			)
 		);
 	}
@@ -780,10 +789,7 @@ fn decl_storage_items(
 	impls
 }
 
-
-fn decl_store_items(
-	storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
-) -> TokenStream2 {
+fn decl_store_items(storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>) -> TokenStream2 {
 	storage_lines.inner.iter().map(|sline| &sline.name)
 		.fold(TokenStream2::new(), |mut items, name| {
 		items.extend(quote!(type #name;));
@@ -905,15 +911,17 @@ fn impl_store_fns(
 					};
 
 					quote!{
-						pub fn #get_fn<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> #value_type
+						pub fn #get_fn<KArg1, KArg2>(k1: &KArg1, k2: &KArg2) -> #value_type
 						where
-							KArg1: #scrate::rstd::borrow::Borrow<#key1_type>,
-							KArg2: #scrate::rstd::borrow::Borrow<#key2_type>,
+							#key1_type: #scrate::rstd::borrow::Borrow<KArg1>,
+							#key2_type: #scrate::rstd::borrow::Borrow<KArg2>,
+							KArg1: ?Sized + #scrate::codec::Encode,
+							KArg2: ?Sized + #scrate::codec::Encode,
 						{
 							<
 								#name<#struct_trait #instance> as
 								#scrate::storage::unhashed::generator::StorageDoubleMap<#key1_type, #key2_type, #typ>
-							>::get(k1.borrow(), k2.borrow(), &#scrate::storage::RuntimeStorage)
+							>::get(k1, k2, &#scrate::storage::RuntimeStorage)
 						}
 					}
 				}
@@ -931,8 +939,8 @@ fn store_functions_to_metadata (
 	instance_opts: &InstanceOpts,
 	storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
 	where_clause: &Option<WhereClause>,
+	cratename: &Ident,
 ) -> (TokenStream2, TokenStream2) {
-
 	let InstanceOpts {
 		comma_instance,
 		equal_default_instance,
@@ -1075,11 +1083,14 @@ fn store_functions_to_metadata (
 
 		default_getter_struct_def.extend(def_get);
 	}
+
+	let prefix = cratename.to_string();
+	let prefix = instance.as_ref().map_or_else(|| quote!(#prefix), |i| quote!(#i::PREFIX));
+
 	(default_getter_struct_def, quote!{
-		{
-			&[
-				#items
-			]
+		#scrate::metadata::StorageMetadata {
+			prefix: #scrate::metadata::DecodeDifferent::Encode(#prefix),
+			entries: #scrate::metadata::DecodeDifferent::Encode(&[ #items ][..]),
 		}
 	})
 }

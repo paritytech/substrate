@@ -27,7 +27,7 @@ pub use generic_test_client::*;
 pub use runtime;
 
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT};
+use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT};
 
 /// A prelude to import in tests.
 pub mod prelude {
@@ -39,7 +39,7 @@ pub mod prelude {
 		Executor, LightExecutor, LocalExecutor, NativeExecutor,
 	};
 	// Keyring
-	pub use super::{AccountKeyring, AuthorityKeyring};
+	pub use super::{AccountKeyring, Sr25519Keyring};
 }
 
 mod local_executor {
@@ -95,11 +95,12 @@ pub type LightExecutor = client::light::call_executor::RemoteOrLocalCallExecutor
 #[derive(Default)]
 pub struct GenesisParameters {
 	support_changes_trie: bool,
+	heap_pages_override: Option<u64>,
 }
 
 impl generic_test_client::GenesisInit for GenesisParameters {
 	fn genesis_storage(&self) -> (StorageOverlay, ChildrenStorageOverlay) {
-		let mut storage = genesis_config(self.support_changes_trie).genesis_map();
+		let mut storage = genesis_config(self.support_changes_trie, self.heap_pages_override).genesis_map();
 
 		let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
 			storage.clone().into_iter()
@@ -145,6 +146,9 @@ pub trait TestClientBuilderExt<B>: Sized {
 	/// Enable or disable support for changes trie in genesis.
 	fn set_support_changes_trie(self, support_changes_trie: bool) -> Self;
 
+	/// Override the default value for Wasm heap pages.
+	fn set_heap_pages(self, heap_pages: u64) -> Self;
+
 	/// Build the test client.
 	fn build(self) -> Client<B> {
 		self.build_with_longest_chain().0
@@ -160,6 +164,11 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 > where
 	B: client::backend::Backend<runtime::Block, Blake2Hasher>,
 {
+	fn set_heap_pages(mut self, heap_pages: u64) -> Self {
+		self.genesis_init_mut().heap_pages_override = Some(heap_pages);
+		self
+	}
+
 	fn set_support_changes_trie(mut self, support_changes_trie: bool) -> Self {
 		self.genesis_init_mut().support_changes_trie = support_changes_trie;
 		self
@@ -170,17 +179,20 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 	}
 }
 
-fn genesis_config(support_changes_trie: bool) -> GenesisConfig {
-	GenesisConfig::new(support_changes_trie, vec![
-		AuthorityKeyring::Alice.into(),
-		AuthorityKeyring::Bob.into(),
-		AuthorityKeyring::Charlie.into(),
-	], vec![
-		AccountKeyring::Alice.into(),
-		AccountKeyring::Bob.into(),
-		AccountKeyring::Charlie.into(),
-	],
-		1000
+fn genesis_config(support_changes_trie: bool, heap_pages_override: Option<u64>) -> GenesisConfig {
+	GenesisConfig::new(
+		support_changes_trie,
+		vec![
+			Sr25519Keyring::Alice.into(),
+			Sr25519Keyring::Bob.into(),
+			Sr25519Keyring::Charlie.into(),
+		], vec![
+			AccountKeyring::Alice.into(),
+			AccountKeyring::Bob.into(),
+			AccountKeyring::Charlie.into(),
+		],
+		1000,
+		heap_pages_override,
 	)
 }
 

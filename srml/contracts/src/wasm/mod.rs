@@ -109,7 +109,7 @@ impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a> {
 	fn execute<E: Ext<T = T>>(
 		&self,
 		exec: &WasmExecutable,
-		ext: &mut E,
+		mut ext: E,
 		input_data: &[u8],
 		empty_output_buf: EmptyOutputBuf,
 		gas_meter: &mut GasMeter<E::T>,
@@ -133,7 +133,7 @@ impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a> {
 		});
 
 		let mut runtime = Runtime::new(
-			ext,
+			&mut ext,
 			input_data.to_vec(),
 			empty_output_buf,
 			&self.schedule,
@@ -173,7 +173,7 @@ impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a> {
 mod tests {
 	use super::*;
 	use std::collections::HashMap;
-	use substrate_primitives::H256;
+	use primitives::H256;
 	use crate::exec::{CallReceipt, Ext, InstantiateReceipt, EmptyOutputBuf, StorageKey};
 	use crate::gas::{Gas, GasMeter};
 	use crate::tests::{Test, Call};
@@ -215,8 +215,11 @@ mod tests {
 		fn get_storage(&self, key: &StorageKey) -> Option<Vec<u8>> {
 			self.storage.get(key).cloned()
 		}
-		fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) {
+		fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>)
+			-> Result<(), &'static str>
+		{
 			*self.storage.entry(key).or_insert(Vec::new()) = value.unwrap_or(Vec::new());
+			Ok(())
 		}
 		fn instantiate(
 			&mut self,
@@ -291,13 +294,84 @@ mod tests {
 		fn rent_allowance(&self) -> u64 {
 			self.rent_allowance
 		}
+
+		fn block_number(&self) -> u64 { 121 }
+
+		fn max_value_size(&self) -> u32 { 16_384 }
+	}
+	impl Ext for &mut MockExt {
+		type T = <MockExt as Ext>::T;
+
+		fn get_storage(&self, key: &[u8; 32]) -> Option<Vec<u8>> {
+			(**self).get_storage(key)
+		}
+		fn set_storage(&mut self, key: [u8; 32], value: Option<Vec<u8>>)
+			-> Result<(), &'static str>
+		{
+			(**self).set_storage(key, value)
+		}
+		fn instantiate(
+			&mut self,
+			code: &CodeHash<Test>,
+			value: u64,
+			gas_meter: &mut GasMeter<Test>,
+			input_data: &[u8]
+		) -> Result<InstantiateReceipt<u64>, &'static str> {
+			(**self).instantiate(code, value, gas_meter, input_data)
+		}
+		fn call(
+			&mut self,
+			to: &u64,
+			value: u64,
+			gas_meter: &mut GasMeter<Test>,
+			input_data: &[u8],
+			empty_output_buf: EmptyOutputBuf
+		) -> Result<CallReceipt, &'static str> {
+			(**self).call(to, value, gas_meter, input_data, empty_output_buf)
+		}
+		fn note_dispatch_call(&mut self, call: Call) {
+			(**self).note_dispatch_call(call)
+		}
+		fn caller(&self) -> &u64 {
+			(**self).caller()
+		}
+		fn address(&self) -> &u64 {
+			(**self).address()
+		}
+		fn balance(&self) -> u64 {
+			(**self).balance()
+		}
+		fn value_transferred(&self) -> u64 {
+			(**self).value_transferred()
+		}
+		fn now(&self) -> &u64 {
+			(**self).now()
+		}
+		fn random(&self, subject: &[u8]) -> H256 {
+			(**self).random(subject)
+		}
+		fn deposit_event(&mut self, topics: Vec<H256>, data: Vec<u8>) {
+			(**self).deposit_event(topics, data)
+		}
+		fn set_rent_allowance(&mut self, rent_allowance: u64) {
+			(**self).set_rent_allowance(rent_allowance)
+		}
+		fn rent_allowance(&self) -> u64 {
+			(**self).rent_allowance()
+		}
+		fn block_number(&self) -> u64 {
+			(**self).block_number()
+		}
+		fn max_value_size(&self) -> u32 {
+			(**self).max_value_size()
+		}
 	}
 
 	fn execute<E: Ext>(
 		wat: &str,
 		input_data: &[u8],
 		output_data: &mut Vec<u8>,
-		ext: &mut E,
+		ext: E,
 		gas_meter: &mut GasMeter<E::T>,
 	) -> Result<(), &'static str> {
 		use crate::exec::Vm;
@@ -591,7 +665,7 @@ mod tests {
 			CODE_GET_STORAGE,
 			&[],
 			&mut return_buf,
-			&mut mock_ext,
+			mock_ext,
 			&mut GasMeter::with_limit(50_000, 1),
 		)
 		.unwrap();
@@ -653,12 +727,11 @@ mod tests {
 
 	#[test]
 	fn caller() {
-		let mut mock_ext = MockExt::default();
 		execute(
 			CODE_CALLER,
 			&[],
 			&mut Vec::new(),
-			&mut mock_ext,
+			MockExt::default(),
 			&mut GasMeter::with_limit(50_000, 1),
 		)
 		.unwrap();
@@ -718,12 +791,11 @@ mod tests {
 
 	#[test]
 	fn address() {
-		let mut mock_ext = MockExt::default();
 		execute(
 			CODE_ADDRESS,
 			&[],
 			&mut Vec::new(),
-			&mut mock_ext,
+			MockExt::default(),
 			&mut GasMeter::with_limit(50_000, 1),
 		)
 		.unwrap();
@@ -780,13 +852,12 @@ mod tests {
 
 	#[test]
 	fn balance() {
-		let mut mock_ext = MockExt::default();
 		let mut gas_meter = GasMeter::with_limit(50_000, 1);
 		execute(
 			CODE_BALANCE,
 			&[],
 			&mut Vec::new(),
-			&mut mock_ext,
+			MockExt::default(),
 			&mut gas_meter,
 		)
 		.unwrap();
@@ -843,13 +914,12 @@ mod tests {
 
 	#[test]
 	fn gas_price() {
-		let mut mock_ext = MockExt::default();
 		let mut gas_meter = GasMeter::with_limit(50_000, 1312);
 		execute(
 			CODE_GAS_PRICE,
 			&[],
 			&mut Vec::new(),
-			&mut mock_ext,
+			MockExt::default(),
 			&mut gas_meter,
 		)
 		.unwrap();
@@ -904,7 +974,6 @@ mod tests {
 
 	#[test]
 	fn gas_left() {
-		let mut mock_ext = MockExt::default();
 		let mut gas_meter = GasMeter::with_limit(50_000, 1312);
 
 		let mut return_buf = Vec::new();
@@ -912,7 +981,7 @@ mod tests {
 			CODE_GAS_LEFT,
 			&[],
 			&mut return_buf,
-			&mut mock_ext,
+			MockExt::default(),
 			&mut gas_meter,
 		)
 		.unwrap();
@@ -973,13 +1042,12 @@ mod tests {
 
 	#[test]
 	fn value_transferred() {
-		let mut mock_ext = MockExt::default();
 		let mut gas_meter = GasMeter::with_limit(50_000, 1);
 		execute(
 			CODE_VALUE_TRANSFERRED,
 			&[],
 			&mut Vec::new(),
-			&mut mock_ext,
+			MockExt::default(),
 			&mut gas_meter,
 		)
 		.unwrap();
@@ -1050,13 +1118,12 @@ mod tests {
 
 	#[test]
 	fn return_from_start_fn() {
-		let mut mock_ext = MockExt::default();
 		let mut output_data = Vec::new();
 		execute(
 			CODE_RETURN_FROM_START_FN,
 			&[],
 			&mut output_data,
-			&mut mock_ext,
+			MockExt::default(),
 			&mut GasMeter::with_limit(50_000, 1),
 		)
 		.unwrap();
@@ -1115,13 +1182,12 @@ mod tests {
 
 	#[test]
 	fn now() {
-		let mut mock_ext = MockExt::default();
 		let mut gas_meter = GasMeter::with_limit(50_000, 1);
 		execute(
 			CODE_TIMESTAMP_NOW,
 			&[],
 			&mut Vec::new(),
-			&mut mock_ext,
+			MockExt::default(),
 			&mut gas_meter,
 		)
 		.unwrap();
@@ -1186,7 +1252,6 @@ mod tests {
 
 	#[test]
 	fn random() {
-		let mut mock_ext = MockExt::default();
 		let mut gas_meter = GasMeter::with_limit(50_000, 1);
 
 		let mut return_buf = Vec::new();
@@ -1194,7 +1259,7 @@ mod tests {
 			CODE_RANDOM,
 			&[],
 			&mut return_buf,
-			&mut mock_ext,
+			MockExt::default(),
 			&mut gas_meter,
 		)
 		.unwrap();
@@ -1284,7 +1349,6 @@ mod tests {
 	#[test]
 	fn deposit_event_max_topics() {
 		// Checks that the runtime traps if there are more than `max_topic_events` topics.
-		let mut mock_ext = MockExt::default();
 		let mut gas_meter = GasMeter::with_limit(50_000, 1);
 
 		assert_eq!(
@@ -1292,7 +1356,7 @@ mod tests {
 				CODE_DEPOSIT_EVENT_MAX_TOPICS,
 				&[],
 				&mut Vec::new(),
-				&mut mock_ext,
+				MockExt::default(),
 				&mut gas_meter
 			),
 			Err("during execution"),
@@ -1328,7 +1392,6 @@ mod tests {
 	#[test]
 	fn deposit_event_duplicates() {
 		// Checks that the runtime traps if there are duplicates.
-		let mut mock_ext = MockExt::default();
 		let mut gas_meter = GasMeter::with_limit(50_000, 1);
 
 		assert_eq!(
@@ -1336,10 +1399,75 @@ mod tests {
 				CODE_DEPOSIT_EVENT_DUPLICATES,
 				&[],
 				&mut Vec::new(),
-				&mut mock_ext,
+				MockExt::default(),
 				&mut gas_meter
 			),
 			Err("during execution"),
 		);
 	}
+
+	/// calls `ext_block_number`, loads the current block number from the scratch buffer and
+	/// compares it with the constant 121.
+	const CODE_BLOCK_NUMBER: &str = r#"
+(module
+	(import "env" "ext_block_number" (func $ext_block_number))
+	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
+	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+
+	(func (export "call")
+		;; This stores the block height in the scratch buffer
+		(call $ext_block_number)
+
+		;; assert $ext_scratch_size == 8
+		(call $assert
+			(i32.eq
+				(call $ext_scratch_size)
+				(i32.const 8)
+			)
+		)
+
+		;; copy contents of the scratch buffer into the contract's memory.
+		(call $ext_scratch_copy
+			(i32.const 8)		;; Pointer in memory to the place where to copy.
+			(i32.const 0)		;; Offset from the start of the scratch buffer.
+			(i32.const 8)		;; Count of bytes to copy.
+		)
+
+		;; assert that contents of the buffer is equal to the i64 value of 121.
+		(call $assert
+			(i64.eq
+				(i64.load
+					(i32.const 8)
+				)
+				(i64.const 121)
+			)
+		)
+	)
+
+	(func (export "deploy"))
+)
+"#;
+
+	#[test]
+	fn block_number() {
+		execute(
+			CODE_BLOCK_NUMBER,
+			&[],
+			&mut Vec::new(),
+			MockExt::default(),
+			&mut GasMeter::with_limit(50_000, 1),
+		)
+		.unwrap();
+	}
+
 }

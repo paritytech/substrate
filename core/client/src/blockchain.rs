@@ -18,9 +18,9 @@
 
 use std::sync::Arc;
 
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::Justification;
+use sr_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use sr_primitives::generic::BlockId;
+use sr_primitives::Justification;
 use consensus::well_known_cache_keys;
 
 use crate::error::{Error, Result};
@@ -196,7 +196,7 @@ pub fn tree_route<Block: BlockT, Backend: HeaderBackend<Block>>(
 	from: BlockId<Block>,
 	to: BlockId<Block>,
 ) -> Result<TreeRoute<Block>> {
-	use runtime_primitives::traits::Header;
+	use sr_primitives::traits::Header;
 
 	let load_header = |id: BlockId<Block>| {
 		match backend.header(id) {

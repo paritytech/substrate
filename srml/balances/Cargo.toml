@@ -10,13 +10,13 @@ safe-mix = { version = "1.0", default-features = false}
 parity-codec = { version = "4.1.1", default-features = false, features = ["derive"] }
 substrate-keyring = { path = "../../core/keyring", optional = true }
 rstd = { package = "sr-std", path = "../../core/sr-std", default-features = false }
-primitives = { package = "sr-primitives", path = "../../core/sr-primitives", default-features = false }
+sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 srml-support = { path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 
 [dev-dependencies]
-runtime_io = { package = "sr-io", path = "../../core/sr-io" }
-substrate-primitives = { path = "../../core/primitives" }
+runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
+primitives = { package = "substrate-primitives",  path = "../../core/primitives" }
 
 [features]
 default = ["std"]
@@ -27,6 +27,6 @@ std = [
 	"parity-codec/std",
 	"rstd/std",
 	"srml-support/std",
-	"primitives/std",
+	"sr-primitives/std",
 	"system/std",
 ]

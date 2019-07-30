@@ -27,7 +27,8 @@ use srml_support::traits::{FindAuthor, VerifySeal, Get};
 use srml_support::dispatch::Result as DispatchResult;
 use parity_codec::{Encode, Decode};
 use system::ensure_none;
-use primitives::traits::{SimpleArithmetic, Header as HeaderT, One, Zero};
+use sr_primitives::traits::{SimpleArithmetic, Header as HeaderT, One, Zero};
+use sr_primitives::weights::SimpleDispatchInfo;
 
 pub trait Trait: system::Trait {
 	/// Find the author of a block.
@@ -217,6 +218,7 @@ decl_module! {
 		}
 
 		/// Provide a set of uncles.
+		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn set_uncles(origin, new_uncles: Vec<T::Header>) -> DispatchResult {
 			ensure_none(origin)?;
 
@@ -322,10 +324,11 @@ impl<T: Trait> Module<T> {
 mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
-	use substrate_primitives::{H256, Blake2Hasher};
-	use primitives::traits::{BlakeTwo256, IdentityLookup};
-	use primitives::testing::Header;
-	use primitives::generic::DigestItem;
+	use primitives::{H256, Blake2Hasher};
+	use sr_primitives::traits::{BlakeTwo256, IdentityLookup};
+	use sr_primitives::testing::Header;
+	use sr_primitives::generic::DigestItem;
+	use sr_primitives::Perbill;
 	use srml_support::{parameter_types, impl_outer_origin, ConsensusEngineId};
 
 	impl_outer_origin!{
@@ -337,6 +340,9 @@ mod tests {
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
+		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockLength: u32 = 2 * 1024;
+		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 
 	impl system::Trait for Test {
@@ -348,8 +354,12 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
+		type WeightMultiplierUpdate = ();
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type AvailableBlockRatio = AvailableBlockRatio;
+		type MaximumBlockLength = MaximumBlockLength;
 	}
 
 	impl Trait for Test {
@@ -543,7 +553,6 @@ mod tests {
 			// old uncles can't get in.
 			{
 				assert_eq!(System::block_number(), 8);
-				assert_eq!(<Test as Trait>::UncleGenerations::get(), 5);
 
 				let gen_2 = seal_header(
 					create_header(2, canon_chain.canon_hash(1), [3; 32].into()),

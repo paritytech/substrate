@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-//! Auxilliaries to help with managing partial changes to accounts state.
+//! Auxiliaries to help with managing partial changes to accounts state.
 
 use super::{
 	AliveContractInfo, BalanceOf, CodeHash, ContractInfo, ContractInfoOf, Trait, TrieId,
@@ -25,7 +25,7 @@ use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use rstd::prelude::*;
 use runtime_io::blake2_256;
-use runtime_primitives::traits::{Bounded, Zero};
+use sr_primitives::traits::{Bounded, Zero};
 use srml_support::traits::{Currency, Get, Imbalance, SignedImbalance, UpdateBalanceOutcome};
 use srml_support::{storage::child, StorageMap};
 use system;

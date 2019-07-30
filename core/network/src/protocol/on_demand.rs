@@ -29,7 +29,7 @@ use client::light::fetcher::{FetchChecker, RemoteHeaderRequest,
 use crate::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
 use libp2p::PeerId;
 use crate::config::Roles;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use sr_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 
 /// Remote request timeout.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
@@ -637,7 +637,7 @@ pub mod tests {
 	use std::sync::Arc;
 	use std::time::Instant;
 	use futures::{Future, sync::oneshot};
-	use runtime_primitives::traits::{Block as BlockT, NumberFor, Header as HeaderT};
+	use sr_primitives::traits::{Block as BlockT, NumberFor, Header as HeaderT};
 	use client::{error::{Error as ClientError, Result as ClientResult}};
 	use client::light::fetcher::{FetchChecker, RemoteHeaderRequest,
 		ChangesProof,	RemoteCallRequest, RemoteReadRequest,
@@ -898,8 +898,6 @@ pub mod tests {
 
 	#[test]
 	fn receives_remote_failure_after_retry_count_failures() {
-		use parking_lot::{Condvar, Mutex};
-
 		let retry_count = 2;
 		let peer_ids = (0 .. retry_count + 1).map(|_| PeerId::random()).collect::<Vec<_>>();
 		let mut on_demand = dummy(false);
@@ -908,10 +906,7 @@ pub mod tests {
 			on_demand.on_connect(&mut network_interface, peer_ids[i].clone(), Roles::FULL, 1000);
 		}
 
-		let sync = Arc::new((Mutex::new(0), Mutex::new(0), Condvar::new()));
-		let thread_sync = sync.clone();
-
-		let (tx, response) = oneshot::channel();
+		let (tx, mut response) = oneshot::channel();
 		on_demand.add_request(&mut network_interface, RequestData::RemoteCall(RemoteCallRequest {
 			block: Default::default(),
 			header: dummy_header(),
@@ -919,25 +914,13 @@ pub mod tests {
 			call_data: vec![],
 			retry_count: Some(retry_count)
 		}, tx));
-		let thread = ::std::thread::spawn(move || {
-			let &(ref current, ref finished_at, ref finished) = &*thread_sync;
-			let _ = response.wait().unwrap().unwrap_err();
-			*finished_at.lock() = *current.lock();
-			finished.notify_one();
-		});
 
-		let &(ref current, ref finished_at, ref finished) = &*sync;
-		for i in 0..retry_count+1 {
-			let mut current = current.lock();
-			*current = *current + 1;
+		for i in 0..retry_count {
+			assert!(response.try_recv().unwrap().is_none());
 			receive_call_response(&mut network_interface, &mut on_demand, peer_ids[i].clone(), i as u64);
 		}
 
-		let mut finished_at = finished_at.lock();
-		assert!(!finished.wait_for(&mut finished_at, ::std::time::Duration::from_millis(1000)).timed_out());
-		assert_eq!(*finished_at, retry_count + 1);
-
-		thread.join().unwrap();
+		assert!(response.try_recv().unwrap().unwrap().is_err());
 	}
 
 	#[test]
@@ -955,13 +938,9 @@ pub mod tests {
 			call_data: vec![],
 			retry_count: None,
 		}, tx));
-		let thread = ::std::thread::spawn(move || {
-			let result = response.wait().unwrap().unwrap();
-			assert_eq!(result, vec![42]);
-		});
 
 		receive_call_response(&mut network_interface, &mut on_demand, peer0.clone(), 0);
-		thread.join().unwrap();
+		assert_eq!(response.wait().unwrap().unwrap(), vec![42]);
 	}
 
 	#[test]
@@ -978,16 +957,12 @@ pub mod tests {
 			key: b":key".to_vec(),
 			retry_count: None,
 		}, tx));
-		let thread = ::std::thread::spawn(move || {
-			let result = response.wait().unwrap().unwrap();
-			assert_eq!(result, Some(vec![42]));
-		});
 
 		on_demand.on_remote_read_response(&mut network_interface, peer0.clone(), message::RemoteReadResponse {
 			id: 0,
 			proof: vec![vec![2]],
 		});
-		thread.join().unwrap();
+		assert_eq!(response.wait().unwrap().unwrap(), Some(vec![42]));
 	}
 
 	#[test]
@@ -1005,17 +980,13 @@ pub mod tests {
 			key: b":key".to_vec(),
 			retry_count: None,
 		}, tx));
-		let thread = ::std::thread::spawn(move || {
-			let result = response.wait().unwrap().unwrap();
-			assert_eq!(result, Some(vec![42]));
-		});
 
 		on_demand.on_remote_read_response(&mut network_interface,
 			peer0.clone(), message::RemoteReadResponse {
 				id: 0,
 				proof: vec![vec![2]],
 		});
-		thread.join().unwrap();
+		assert_eq!(response.wait().unwrap().unwrap(), Some(vec![42]));
 	}
 
 	#[test]
@@ -1031,14 +1002,6 @@ pub mod tests {
 			block: 1,
 			retry_count: None,
 		}, tx));
-		let thread = ::std::thread::spawn(move || {
-			let result = response.wait().unwrap().unwrap();
-			assert_eq!(
-				result.hash(),
-				"6443a0b46e0412e626363028115a9f2c\
-				 f963eeed526b8b33e5316f08b50d0dc3".parse().unwrap()
-			);
-		});
 
 		on_demand.on_remote_header_response(&mut network_interface, peer0.clone(), message::RemoteHeaderResponse {
 			id: 0,
@@ -1051,7 +1014,10 @@ pub mod tests {
 			}),
 			proof: vec![vec![2]],
 		});
-		thread.join().unwrap();
+		assert_eq!(
+			response.wait().unwrap().unwrap().hash(),
+			"6443a0b46e0412e626363028115a9f2cf963eeed526b8b33e5316f08b50d0dc3".parse().unwrap(),
+		);
 	}
 
 	#[test]
@@ -1071,10 +1037,6 @@ pub mod tests {
 			key: vec![],
 			retry_count: None,
 		}, tx));
-		let thread = ::std::thread::spawn(move || {
-			let result = response.wait().unwrap().unwrap();
-			assert_eq!(result, vec![(100, 2)]);
-		});
 
 		on_demand.on_remote_changes_response(&mut network_interface, peer0.clone(), message::RemoteChangesResponse {
 			id: 0,
@@ -1083,7 +1045,7 @@ pub mod tests {
 			roots: vec![],
 			roots_proof: vec![],
 		});
-		thread.join().unwrap();
+		assert_eq!(response.wait().unwrap().unwrap(), vec![(100, 2)]);
 	}
 
 	#[test]

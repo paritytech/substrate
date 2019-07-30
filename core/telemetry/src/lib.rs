@@ -48,7 +48,7 @@
 //!
 //! // The `telemetry` object implements `Stream` and must be processed.
 //! std::thread::spawn(move || {
-//! 	tokio::run(telemetry.for_each(|_| Ok(())));
+//! 	futures::executor::block_on(telemetry.for_each(|_| future::ready(())));
 //! });
 //!
 //! // Sends a message on the telemetry.
@@ -58,13 +58,12 @@
 //! ```
 //!
 
-use futures::{prelude::*, task::AtomicTask};
+use futures::{prelude::*, task::AtomicWaker};
 use libp2p::{Multiaddr, wasm_ext};
 use log::warn;
 use parking_lot::Mutex;
 use serde::{Serialize, Deserialize};
-use std::sync::{Arc, Weak};
-use std::time::{Duration, Instant};
+use std::{pin::Pin, sync::{Arc, Weak}, task::{Context, Poll}, time::{Duration, Instant}};
 
 pub use slog_scope::with_logger;
 pub use slog;
@@ -131,8 +130,8 @@ pub struct Telemetry {
 struct TelemetryInner {
 	/// Worker for the telemetry.
 	worker: Mutex<worker::TelemetryWorker>,
-	/// Task to wake up when we add a log entry to the worker.
-	polling_task: AtomicTask,
+	/// Waker to wake up when we add a log entry to the worker.
+	polling_waker: AtomicWaker,
 }
 
 /// Implements `slog::Drain`.
@@ -156,7 +155,7 @@ pub fn init_telemetry(config: TelemetryConfig) -> Telemetry {
 
 	let inner = Arc::new(TelemetryInner {
 		worker: Mutex::new(worker::TelemetryWorker::new(endpoints, config.wasm_external_transport)),
-		polling_task: AtomicTask::new(),
+		polling_waker: AtomicWaker::new(),
 	});
 
 	let guard = {
@@ -181,13 +180,12 @@ pub enum TelemetryEvent {
 
 impl Stream for Telemetry {
 	type Item = TelemetryEvent;
-	type Error = ();
 
-	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
 		let before = Instant::now();
 
 		let mut has_connected = false;
-		while let Async::Ready(event) = self.inner.worker.lock().poll() {
+		while let Poll::Ready(event) = self.inner.worker.lock().poll(cx) {
 			// Right now we only have one possible event. This line is here in order to not
 			// forget to handle any possible new event type.
 			let worker::TelemetryWorkerEvent::Connected = event;
@@ -199,10 +197,10 @@ impl Stream for Telemetry {
 		}
 
 		if has_connected {
-			Ok(Async::Ready(Some(TelemetryEvent::Connected)))
+			Poll::Ready(Some(TelemetryEvent::Connected))
 		} else {
-			self.inner.polling_task.register();
-			Ok(Async::NotReady)
+			self.inner.polling_waker.register(cx.waker());
+			Poll::Pending
 		}
 	}
 }
@@ -215,7 +213,7 @@ impl slog::Drain for TelemetryDrain {
 		if let Some(inner) = self.inner.0.upgrade() {
 			let before = Instant::now();
 			let result = inner.worker.lock().log(record, values);
-			inner.polling_task.notify();
+			inner.polling_waker.wake();
 			if before.elapsed() > Duration::from_millis(50) {
 				warn!(target: "telemetry", "Writing a telemetry log took more than 50ms");
 			}

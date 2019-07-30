@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-substrate-primitives = { version = "*", path = "../core/primitives" }
+primitives = { package = "substrate-primitives",  version = "*", path = "../core/primitives" }
 node-runtime = { version = "*", path = "../node/runtime" }
 node-primitives = { version = "*", path = "../node/primitives" }
 sr-primitives = { version = "*", path = "../core/sr-primitives" }
@@ -18,6 +18,8 @@ schnorrkel = "0.1.1"
 hex = "0.3"
 hex-literal = "0.2"
 parity-codec = "4.1.1"
+system = { package = "srml-system", path = "../srml/system" }
+balances = { package = "srml-balances", path = "../srml/balances" }
 
 [features]
 bench = []

@@ -8,14 +8,14 @@ edition = "2018"
 serde = { version = "1.0", optional = true }
 parity-codec = { version = "4.1.1", default-features = false }
 # Needed for various traits. In our case, `OnFinalize`.
-primitives = { package = "sr-primitives", path = "../../core/sr-primitives", default-features = false }
+sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 # Needed for type-safe access to storage DB.
 srml-support = { path = "../support", default-features = false }
 # `system` module provides us with all sorts of useful stuff and macros depend on it being around.
 system = { package = "srml-system", path = "../system", default-features = false }
 
 [dev-dependencies]
-substrate-primitives = { path = "../../core/primitives" }
+primitives = { package = "substrate-primitives",  path = "../../core/primitives" }
 sr-std = { path = "../../core/sr-std" }
 runtime_io = { package = "sr-io", path = "../../core/sr-io" }
 
@@ -24,7 +24,7 @@ default = ["std"]
 std = [
 	"serde",
 	"parity-codec/std",
-	"primitives/std",
+	"sr-primitives/std",
 	"srml-support/std",
 	"system/std",
 ]
