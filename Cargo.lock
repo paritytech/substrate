@@ -2251,6 +2251,7 @@ dependencies = [
  "srml-balances 2.0.0",
  "srml-contracts 2.0.0",
  "srml-finality-tracker 2.0.0",
+ "srml-im-online 0.1.0",
  "srml-indices 2.0.0",
  "srml-support 2.0.0",
  "srml-system 2.0.0",

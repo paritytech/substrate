@@ -29,18 +29,18 @@
 
 use std::sync::Arc;
 
-use grandpa::{voter, voter_set::VoterSet};
-use grandpa::Message::{Prevote, Precommit, PrimaryPropose};
 use futures::prelude::*;
 use futures::sync::{oneshot, mpsc};
+use grandpa::Message::{Prevote, Precommit, PrimaryPropose};
+use grandpa::{voter, voter_set::VoterSet};
 use log::{debug, trace};
-use tokio_executor::Executor;
-use parity_codec::{Encode, Decode};
-use substrate_primitivesa::{ed25519, Pair};
-use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
-use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
 use network::{consensus_gossip as network_gossip, NetworkService};
 use network_gossip::ConsensusMessage;
+use parity_codec::{Encode, Decode};
+use primitives::Pair;
+use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
+use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
+use tokio_executor::Executor;
 
 use crate::{
 	CatchUp, Commit, CommunicationIn, CommunicationOut, CompactCommit, Error,
