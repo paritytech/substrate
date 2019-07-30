@@ -241,13 +241,13 @@ decl_storage! {
 		/// Basic information about a voter.
 		pub VoterInfoOf get(voter_info): map T::AccountId => Option<VoterInfo<BalanceOf<T>>>;
 		/// The present voter list (chunked and capped at [`VOTER_SET_SIZE`]).
-		pub Voters get(voters): map SetIndex => Vec<Option<T::AccountId>>;
+		pub Voters get(voters) decode_len(): map SetIndex => Vec<Option<T::AccountId>>;
 		/// the next free set to store a voter in. This will keep growing.
 		pub NextVoterSet get(next_nonfull_voter_set): SetIndex = 0;
 		/// Current number of Voters.
 		pub VoterCount get(voter_count): SetIndex = 0;
 		/// The present candidate list.
-		pub Candidates get(candidates): Vec<T::AccountId>; // has holes
+		pub Candidates get(candidates) decode_len(): Vec<T::AccountId>; // has holes
 		/// Current number of active candidates
 		pub CandidateCount get(candidate_count): u32;
 
@@ -720,11 +720,16 @@ impl<T: Trait> Module<T> {
 		<VoterInfoOf<T>>::remove(voter);
 	}
 
+	fn safe_add_voter(set: SetIndex, voter: &T::AccountId) {
+		<Voters<T>>::append(set, &[Some(voter.clone())])
+			.unwrap_or_else(|_| <Voters<T>>::mutate(set, |v| v.push(Some(voter.clone()))))
+	}
+
 	/// Actually do the voting.
 	///
 	/// The voter index must be provided as explained in [`voter_at`] function.
 	fn do_set_approvals(who: T::AccountId, votes: Vec<bool>, index: VoteIndex, hint: SetIndex) -> Result {
-		let candidates_len = <Self as Store>::Candidates::len().expect("vec always has a len; qed");
+		let candidates_len = <Self as Store>::Candidates::decode_len().unwrap_or_default();
 
 		ensure!(!Self::presentation_active(), "no approval changes during presentation period");
 		ensure!(index == Self::vote_index(), "incorrect vote index");
@@ -765,7 +770,7 @@ impl<T: Trait> Module<T> {
 				CellStatus::Head | CellStatus::Occupied => {
 					// Either occupied or out-of-range.
 					let next = Self::next_nonfull_voter_set();
-					let set_len = <Voters<T>>::len(next).expect("map to vec always has len; qed");
+					let set_len = <Voters<T>>::decode_len(next).unwrap_or(0_usize);
 					// Caused a new set to be created. Pay for it.
 					// This is the last potential error. Writes will begin afterwards.
 					if set_len == 0 {
@@ -782,8 +787,7 @@ impl<T: Trait> Module<T> {
 					if set_len + 1 == VOTER_SET_SIZE {
 						NextVoterSet::put(next + 1);
 					}
-					<Voters<T>>::append(next, &[Some(who.clone())])
-						.expect("map to vec can always append; qed");
+					Self::safe_add_voter(next, &who);
 				}
 			}
 

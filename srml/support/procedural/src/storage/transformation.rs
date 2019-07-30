@@ -746,6 +746,7 @@ fn decl_storage_items(
 			storage_type,
 			default_value,
 			visibility,
+			decode_len,
 			..
 		} = sline;
 
@@ -764,6 +765,7 @@ fn decl_storage_items(
 			type_infos,
 			fielddefault: default_value.inner.as_ref().map(|d| &d.expr).map(|d| quote!( #d ))
 				.unwrap_or_else(|| quote!{ Default::default() }),
+			has_len: decode_len.inner.is_some(),
 			prefix: build_prefix(cratename, name),
 			name,
 			attrs,

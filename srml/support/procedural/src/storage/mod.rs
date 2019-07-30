@@ -32,6 +32,7 @@ mod keyword {
 	syn::custom_keyword!(add_extra_genesis);
 	syn::custom_keyword!(extra_genesis_skip_phantom_data_field);
 	syn::custom_keyword!(config);
+	syn::custom_keyword!(decode_len);
 	syn::custom_keyword!(build);
 	syn::custom_keyword!(get);
 	syn::custom_keyword!(map);
@@ -114,6 +115,7 @@ struct DeclStorageLine {
 	pub getter: ext::Opt<DeclStorageGetter>,
 	pub config: ext::Opt<DeclStorageConfig>,
 	pub build: ext::Opt<DeclStorageBuild>,
+	pub decode_len: ext::Opt<DeclStorageDecodeLength>,
 	pub coldot_token: Token![:],
 	pub storage_type: DeclStorageType,
 	pub default_value: ext::Opt<DeclStorageDefault>,
@@ -129,6 +131,12 @@ struct DeclStorageGetter {
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageConfig {
 	pub config_keyword: keyword::config,
+	pub expr: ext::Parens<Option<syn::Ident>>,
+}
+
+#[derive(Parse, ToTokens, Debug)]
+struct DeclStorageDecodeLength {
+	pub len_keyword: keyword::decode_len,
 	pub expr: ext::Parens<Option<syn::Ident>>,
 }
 

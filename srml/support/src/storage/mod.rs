@@ -141,8 +141,84 @@ pub trait StorageValue<T: Codec> {
 
 	/// Read the length of the value in a fast way, without decoding the entire value.
 	///
+	/// - If the value is an option and does not exists, `None` will be returned.
+	/// - If the value does not exists and and is not an option, `Default::default()` of the return
+	///   type is returned (`Some(0_usize)`).
+	///
+	///
+	/// The default implementation will always return `None`.
+	/// Once `decode_len()` is passed into the storage item line, this will be overloaded with the
+	/// real implementation.
+	///
+	/// Example:
+	///
+	/// ```rust
+	/// # pub trait Trait {
+	/// # 	type Origin;
+	/// # 	type BlockNumber;
+	/// # }
+	/// # srml_support::decl_module! {
+	/// # 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+	/// # }
+	/// srml_support_procedural::decl_storage! {
+	/// 	trait Store for Module<T: Trait> as Test {
+	/// 		// calling `::decode_len()` on this will always return `None`.
+	/// 		aVce: Vec<u32>;
+	/// 		// this will have the proper implementation.
+	/// 		aVecLen decode_len(): Vec<u32>;
+	/// 	}
+	/// }
+	/// # fn main() {}
+	/// ```
+	///
 	/// `T` is required to implement `Codec::DecodeLength`.
-	fn len() -> Option<usize>
+	///
+	/// ```rust,compile_fail
+	/// # pub trait Trait {
+	/// # 	type Origin;
+	/// # 	type BlockNumber;
+	/// # }
+	/// # srml_support::decl_module! {
+	/// # 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+	/// # }
+	/// srml_support_procedural::decl_storage! {
+	/// 	trait Store for Module<T: Trait> as Test {
+	///			// u32 cannot have `decode_len`.
+	/// 		aNumber decode_len(): u32;
+	/// 	}
+	/// }
+	/// # fn main() {}
+	/// ```
+	///
+	/// ### CRITICAL NOTE:
+	///
+	/// This function only reads the length based on an encoded prefix, implemented internally by
+	/// parity-scale-codec. It has __no understanding of the value type itself__. This means that
+	/// an uninitialized vector in storage with a default value `vec![1, 2, 3]`, will have length
+	/// `0` from this function's point of view because the value is not decoded at all.
+	///
+	/// ```rust
+	/// # pub trait Trait {
+	/// # 	type Origin;
+	/// # 	type BlockNumber;
+	/// # }
+	/// # srml_support::decl_module! {
+	/// # 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+	/// # }
+	/// srml_support_procedural::decl_storage! {
+	/// 	trait Store for Module<T: Trait> as Test {
+	/// 		pub SomeVec decode_len(): Vec<u32> = vec![1, 2, 3];
+	/// 	}
+	/// }
+	/// # use srml_support::StorageValue;
+	/// # fn main() {
+	/// // returns the default value.
+	/// // assert_eq!(SomeVec::get(), vec![1, 2, 3]);
+	/// // but it is not decode length.
+	/// // assert_eq!(SomeVec::decode_len(), Some(0));
+	/// # }
+	/// ```
+	fn decode_len() -> Option<usize>
 		where T: codec::DecodeLength;
 }
 
@@ -178,10 +254,10 @@ impl<T: Codec, U> StorageValue<T> for U where U: hashed::generator::StorageValue
 	{
 		U::append(items, &mut RuntimeStorage)
 	}
-	fn len() -> Option<usize>
+	fn decode_len() -> Option<usize>
 		where T: codec::DecodeLength
 	{
-		U::len(&mut RuntimeStorage)
+		U::decode_len(&mut RuntimeStorage)
 	}
 }
 
@@ -283,17 +359,19 @@ pub trait DecodeLengthStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
 	/// Read the length of the value in a fast way, without decoding the entire value.
 	///
 	/// `T` is required to implement `Codec::DecodeLength`.
-	fn len<KeyArg: Borrow<K>>(key: KeyArg) -> Option<usize>
+	///
+	/// Has the same logic as [`StorageValue`](trait.StorageValue.html).
+	fn decode_len<KeyArg: Borrow<K>>(key: KeyArg) -> Option<usize>
 		where V: codec::DecodeLength;
 }
 
 impl <K: Codec, V: Codec, U> DecodeLengthStorageMap<K, V> for U
 	where U: hashed::generator::DecodeLengthStorageMap<K, V>
 {
-	fn len<KeyArg: Borrow<K>>(key: KeyArg) -> Option<usize>
+	fn decode_len<KeyArg: Borrow<K>>(key: KeyArg) -> Option<usize>
 		where V: codec::DecodeLength
 	{
-		U::len(key.borrow(), &mut RuntimeStorage)
+		U::decode_len(key.borrow(), &mut RuntimeStorage)
 	}
 }
 

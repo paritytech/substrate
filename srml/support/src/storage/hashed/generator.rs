@@ -216,16 +216,9 @@ pub trait StorageValue<T: codec::Codec> {
 	/// Read the length of the value in a fast way, without decoding the entire value.
 	///
 	/// `T` is required to implement `Codec::DecodeLength`.
-	fn len<S: HashedStorage<Twox128>>(storage: &mut S)
-		-> Option<usize> where T: codec::DecodeLength
-	{
-		// attempt to get the length directly.
-		if let Some(k) = storage.get_raw(Self::key()) {
-			<T as codec::DecodeLength>::len(&k)
-		} else {
-			Some(Default::default())
-		}
-	}
+	fn decode_len<S: HashedStorage<Twox128>>(_: &mut S)
+
+		-> Option<usize> where T: codec::DecodeLength { None }
 }
 
 /// A strongly-typed map in storage.
@@ -311,14 +304,8 @@ pub trait DecodeLengthStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K
 	/// Read the length of the value in a fast way, without decoding the entire value.
 	///
 	/// `V` is required to implement `Codec::DecodeLength`.
-	fn len<S: HashedStorage<Self::Hasher>>(key: &K, storage: &mut S)
-		-> Option<usize> where V: codec::DecodeLength
-	{
-		let k = Self::key_for(key);
-		if let Some(v) = storage.get_raw(&k[..]) {
-			<V as codec::DecodeLength>::len(&v)
-		} else {
-			Some(Default::default())
-		}
-	}
+	///
+	/// Has the same logic as [`StorageValue`](trait.StorageValue.html).
+	fn decode_len<S: HashedStorage<Self::Hasher>>(_: &K, _: &mut S)
+		-> Option<usize> where V: codec::DecodeLength { None }
 }

@@ -19,7 +19,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::prelude::*;
-use rstd::{result, convert::TryFrom};
+use rstd::{result, convert::TryFrom, marker::PhantomData};
 use primitives::traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin, Hash};
 use primitives::weights::SimpleDispatchInfo;
 use parity_codec::{Encode, Decode, Input, Output};
@@ -375,8 +375,8 @@ decl_module! {
 			PublicPropCount::put(index + 1);
 			<DepositOf<T>>::insert(index, (value, vec![who.clone()]));
 
-			<PublicProps<T>>::append(&[(index, (*proposal).clone(), who)])
-				.expect("vec can always append; qed");
+			let new_prop = (index, (*proposal).clone(), who);
+			safe_append_value(PublicProps(PhantomData::<(T,)>), new_prop);
 
 			Self::deposit_event(RawEvent::Proposed(index, value));
 		}
@@ -802,7 +802,7 @@ impl<T: Trait> Module<T> {
 	fn do_vote(who: T::AccountId, ref_index: ReferendumIndex, vote: Vote) -> Result {
 		ensure!(Self::is_active_referendum(ref_index), "vote given for invalid referendum.");
 		if !<VoteOf<T>>::exists(&(ref_index, who.clone())) {
-			<VotersFor<T>>::append(ref_index, &[who.clone()]).expect("vec can always append; qed");
+			safe_append_map(VotersFor(PhantomData::<(T,)>), ref_index, who.clone());
 		}
 		<VoteOf<T>>::insert(&(ref_index, who), vote);
 		Ok(())
@@ -940,10 +940,11 @@ impl<T: Trait> Module<T> {
 			if info.delay.is_zero() {
 				Self::enact_proposal(info.proposal, index);
 			} else {
-				<DispatchQueue<T>>::append(
+				safe_append_map(
+					DispatchQueue(PhantomData::<(T,)>),
 					now + info.delay,
-					&[Some((info.proposal, index))]
-				).expect("map to vec can always append; qed");
+					Some((info.proposal, index))
+				);
 			}
 		} else {
 			Self::deposit_event(RawEvent::NotPassed(index));
@@ -979,6 +980,24 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		<Proxy<T>>::remove(who)
 	}
+}
+
+fn safe_append_value<V, S>(_: S, value: V)
+where
+	V: Encode + Decode + Clone,
+	S: StorageValue<Vec<V>, Query=Vec<V>>,
+{
+	S::append(&[value.clone()]).unwrap_or_else(|_| S::mutate(|st| st.push(value)))
+}
+
+fn safe_append_map<K, V, S>(_: S, key: K, value: V)
+where
+	K: Encode + Decode + Copy,
+	V: Encode + Decode + Clone,
+	S: AppendableStorageMap<K, Vec<V>, Query=Vec<V>>,
+{
+	S::append(key, &[value.clone()])
+			.unwrap_or_else(|_| S::mutate(key, |v| v.push(value)));
 }
 
 #[cfg(test)]
