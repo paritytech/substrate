@@ -23,7 +23,7 @@ use std::path::PathBuf;
 use std::fs::{self, File};
 use std::io::{self, Write};
 
-use primitives::crypto::{KeyTypeId, AppPublic, AppPair, Pair, Public, IsWrappedBy};
+use primitives::crypto::{KeyTypeId, AppKey, AppPublic, AppPair, Pair, Public, IsWrappedBy};
 
 /// Keystore error.
 #[derive(Debug, derive_more::Display, derive_more::From)]

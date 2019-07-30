@@ -18,8 +18,7 @@
 //! Cryptographic utilities.
 // end::description[]
 
-#[cfg(feature = "std")]
-use std::convert::{TryFrom, TryInto};
+use rstd::convert::{TryFrom, TryInto};
 #[cfg(feature = "std")]
 use parking_lot::Mutex;
 #[cfg(feature = "std")]
@@ -456,7 +455,25 @@ impl<T: AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 }
 
 /// Trait suitable for typical cryptographic PKI key public type.
+#[cfg(feature = "std")]
 pub trait Public: AsRef<[u8]> + AsMut<[u8]> + Default + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync {
+	/// A new instance from the given slice that should be 32 bytes long.
+	///
+	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
+	/// you are certain that the array actually is a pubkey. GIGO!
+	fn from_slice(data: &[u8]) -> Self;
+
+	/// Return a `Vec<u8>` filled with raw data.
+	#[cfg(feature = "std")]
+	fn to_raw_vec(&self) -> Vec<u8> { self.as_slice().to_owned() }
+
+	/// Return a slice filled with raw data.
+	fn as_slice(&self) -> &[u8] { self.as_ref() }
+}
+
+/// Trait suitable for typical cryptographic PKI key public type.
+#[cfg(not(feature = "std"))]
+pub trait Public: AsRef<[u8]> + AsMut<[u8]> + Default + CryptoType + PartialEq + Eq + Clone + Send + Sync {
 	/// A new instance from the given slice that should be 32 bytes long.
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
@@ -493,6 +510,7 @@ impl CryptoType for Dummy {
 	type Pair = Dummy;
 }
 
+#[cfg(feature = "std")]
 impl Derive for Dummy {}
 
 /// Trait suitable for typical cryptographic PKI key public type.
@@ -502,6 +520,7 @@ impl Public for Dummy {
 	fn to_raw_vec(&self) -> Vec<u8> { vec![] }
 	fn as_slice(&self) -> &[u8] { b"" }
 }
+
 #[cfg(feature = "std")]
 impl Pair for Dummy {
 	type Public = Dummy;
@@ -547,7 +566,7 @@ impl Pair for Dummy {
 #[cfg(feature = "std")]
 pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	/// The type which is used to encode a public key.
-	type Public: Public + Hash;
+	type Public: Public + Hash + Derive;
 
 	/// The type used to (minimally) encode the data required to securely create
 	/// a new key pair.
@@ -1070,7 +1089,7 @@ pub mod key_types {
 	/// Key type for controlling an account in a Substrate runtime, built-in.
 	pub const ACCOUNT: KeyTypeId = *b"acco";
 	/// Key type for Aura module, built-in.
-	pub const AURA: KeyTypeId = *b"acco";
+	pub const AURA: KeyTypeId = *b"aura";
 	/// A key type ID useful for tests.
 	#[cfg(feature = "std")]
 	pub const DUMMY: KeyTypeId = *b"dumy";
@@ -1121,13 +1140,31 @@ mod tests {
 		Seed(Vec<u8>),
 	}
 
-	#[derive(Clone, PartialEq, Eq, Hash)]
+	impl CryptoType for TestPair {
+		const KIND: Kind = Kind::Dummy;
+		type Pair = TestPair;
+	}
+
+	#[derive(Clone, PartialEq, Eq, Hash, Default)]
 	struct TestPublic;
+	impl Derive for TestPublic {}
+	impl CryptoType for TestPublic {
+		const KIND: Kind = Kind::Dummy;
+		type Pair = TestPair;
+	}
+
 	impl AsRef<[u8]> for TestPublic {
 		fn as_ref(&self) -> &[u8] {
 			&[]
 		}
 	}
+
+	impl AsMut<[u8]> for TestPublic {
+		fn as_mut(&mut self) -> &mut[u8] {
+			&mut[]
+		}
+	}
+
 	impl Public for TestPublic {
 		fn from_slice(_bytes: &[u8]) -> Self {
 			Self
@@ -1139,9 +1176,7 @@ mod tests {
 			vec![]
 		}
 	}
-	impl TypedKey for TestPublic {
-		const KEY_TYPE: KeyTypeId = TEST_KEY_TYPE;
-	}
+
 	impl Pair for TestPair {
 		type Public = TestPublic;
 		type Seed = [u8; 0];
@@ -1197,9 +1232,6 @@ mod tests {
 		fn to_raw_vec(&self) -> Vec<u8> {
 			vec![]
 		}
-	}
-	impl TypedKey for TestPair {
-		const KEY_TYPE: u32 = 4242;
 	}
 
 	#[test]
