@@ -365,13 +365,13 @@ mod tests {
 				state: 0,
 				children: Default::default(),
 				top: vec![
-					(EXTRINSIC_INDEX.to_vec(), History(vec![
+					(EXTRINSIC_INDEX.to_vec(), History::from_vec(vec![
 						(OverlayedValue {
 							value: Some(3u32.encode()),
 							extrinsics: Some(vec![1].into_iter().collect())
 						}, 0),
 					])),
-					(vec![1], History(vec![
+					(vec![1], History::from_vec(vec![
 						(OverlayedValue {
 							value: Some(vec![100]),
 							extrinsics: Some(vec![1].into_iter().collect())

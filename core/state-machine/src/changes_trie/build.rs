@@ -199,13 +199,13 @@ mod test {
 				state: 1,
 				children: Default::default(),
 				top: vec![
-					(EXTRINSIC_INDEX.to_vec(), History(vec![
+					(EXTRINSIC_INDEX.to_vec(), History::from_vec(vec![
 						(OverlayedValue {
 							value: Some(3u32.encode()),
 							extrinsics: None,
 						}, 0),
 					])),
-					(vec![100], History(vec![
+					(vec![100], History::from_vec(vec![
 						(OverlayedValue {
 							value: Some(vec![202]),
 							extrinsics: Some(vec![3].into_iter().collect())
@@ -215,13 +215,13 @@ mod test {
 							extrinsics: Some(vec![3, 0, 2].into_iter().collect())
 						}, 1),
 					])),
-					(vec![101], History(vec![
+					(vec![101], History::from_vec(vec![
 						(OverlayedValue {
 						value: Some(vec![203]),
 						extrinsics: Some(vec![1].into_iter().collect())
 						}, 0),
 					])),
-					(vec![103], History(vec![
+					(vec![103], History::from_vec(vec![
 						(OverlayedValue {
 						value: None,
 						extrinsics: Some(vec![0, 1].into_iter().collect())
@@ -304,7 +304,7 @@ mod test {
 		let (backend, storage, mut changes) = prepare_for_build();
 
 		// 110: missing from backend, set to None in overlay
-		changes.changes.top.insert(vec![110], History(vec![
+		changes.changes.top.insert(vec![110], History::from_vec(vec![
 			(OverlayedValue {
 				value: None,
 				extrinsics: Some(vec![1].into_iter().collect()),
