@@ -178,13 +178,13 @@ pub fn import_blocks<F, E, R>(
 				};
 				// import queue handles verification and importing it into the client
 				queue.import_blocks(BlockOrigin::File, vec![
-									IncomingBlock::<F::Block>{
-										hash: block.hash,
-										header: block.header,
-										body: block.body,
-										justification: block.justification,
-										origin: None,
-									}
+					IncomingBlock::<F::Block>{
+						hash: block.hash,
+						header: block.header,
+						body: block.body,
+						justification: block.justification,
+						origin: None,
+					}
 				]);
 			}
 			Err(e) => {

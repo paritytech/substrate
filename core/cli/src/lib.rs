@@ -628,6 +628,7 @@ where
 	).map_err(Into::into)
 }
 
+/// Internal trait used to cast to a dynamic type that implements Read and Seek.
 trait ReadPlusSeek: Read + Seek {}
 
 impl<T: Read + Seek> ReadPlusSeek for T {}
