@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 derive_more = "0.15.0"
-codec = { package = "parity-scale-codec", path = "/home/thiolliere/Developpement/parity-scale-codec" }
+codec = { package = "parity-scale-codec", version = "1.0.3" }
 runtime_io = { package = "sr-io", path = "../sr-io" }
 primitives = { package = "substrate-primitives", path = "../primitives" }
 trie = { package = "substrate-trie", path = "../trie" }

@@ -8,7 +8,7 @@ edition = "2018"
 [dependencies]
 derive_more = "0.14.0"
 futures = "0.1.17"
-codec = { package = "parity-scale-codec", path = "/home/thiolliere/Developpement/parity-scale-codec", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.0.3", features = ["derive"] }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 consensus = { package = "substrate-consensus-common", path = "../common" }
 client = { package = "substrate-client", path = "../../client" }
@@ -21,7 +21,7 @@ runtime_io = { package = "sr-io", path = "../../sr-io" }
 tokio = "0.1.7"
 parking_lot = "0.8.0"
 log = "0.4"
-rhododendron = { path = "/home/thiolliere/Developpement/rhododendron", features = ["codec"] }
+rhododendron = { version = "0.7.0", features = ["codec"] }
 exit-future = "0.1"
 
 [dev-dependencies]
