@@ -1166,14 +1166,33 @@ mod tests {
 		Standard{phrase: String, password: Option<String>, path: Vec<DeriveJunction>},
 		Seed(Vec<u8>),
 	}
+	impl Default for TestPair {
+		fn default() -> Self {
+			TestPair::Generated
+		}
+	}
+	impl CryptoType for TestPair {
+		const KIND: Kind = Kind::Dummy;
+		type Pair = Self;
+	}
 
-	#[derive(Clone, PartialEq, Eq, Hash)]
+	#[derive(Clone, PartialEq, Eq, Hash, Default)]
 	struct TestPublic;
 	impl AsRef<[u8]> for TestPublic {
 		fn as_ref(&self) -> &[u8] {
 			&[]
 		}
 	}
+	impl AsMut<[u8]> for TestPublic {
+		fn as_mut(&mut self) -> &mut [u8] {
+			&mut []
+		}
+	}
+	impl CryptoType for TestPublic {
+		const KIND: Kind = Kind::Dummy;
+		type Pair = TestPair;
+	}
+	impl Derive for TestPublic {}
 	impl Public for TestPublic {
 		fn from_slice(_bytes: &[u8]) -> Self {
 			Self

@@ -41,7 +41,7 @@ pub mod sr25519 {
 }
 
 mod app_ed25519 {
-	use substrate_primitives::{app_crypto, crypto::key_types::AURA, ed25519};
+	use primitives::{app_crypto, crypto::key_types::AURA, ed25519};
 	app_crypto!(ed25519, AURA);
 }
 
