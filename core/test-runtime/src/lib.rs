@@ -362,10 +362,12 @@ impl srml_timestamp::Trait for Runtime {
 
 parameter_types! {
 	pub const EpochDuration: u64 = 6;
+	pub const ExpectedBlockTime: u64 = 10_000;
 }
 
 impl srml_babe::Trait for Runtime {
 	type EpochDuration = EpochDuration;
+	type ExpectedBlockTime = ExpectedBlockTime;
 }
 
 /// Adds one to the given input and returns the final result.
