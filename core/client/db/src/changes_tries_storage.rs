@@ -157,7 +157,7 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 		};
 
 		// prune changes tries that are created using newest configuration
-		let (activation_num, _, newest_config) = self.configuration_at(&BlockId::Hash(parent_hash))?;
+		let ((activation_num, _), _, newest_config) = self.configuration_at(&BlockId::Hash(parent_hash))?;
 		if let Some(config) = newest_config {
 			state_machine::prune_changes_tries(
 				activation_num,
@@ -189,7 +189,7 @@ where
 	fn configuration_at(
 		&self,
 		at: &BlockId<Block>,
-	) -> ClientResult<(NumberFor<Block>, Block::Hash, Option<ChangesTrieConfiguration>)> {
+	) -> ClientResult<((NumberFor<Block>, Block::Hash), Option<(NumberFor<Block>, Block::Hash)>, Option<ChangesTrieConfiguration>)> {
 		self.cache
 			.get_at(&well_known_cache_keys::CHANGES_TRIE_CONFIG, at)
 			.and_then(|(number, hash, encoded)| Decode::decode(&mut &encoded[..]).map(|config| (number, hash, config)))

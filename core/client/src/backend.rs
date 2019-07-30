@@ -225,8 +225,8 @@ pub trait PrunableStateChangesTrieStorage<Block: BlockT, H: Hasher>:
 	fn storage(&self) -> &dyn StateChangesTrieStorage<H, NumberFor<Block>>;
 	/// Get coniguration at given block.
 	fn configuration_at(&self, at: &BlockId<Block>) -> error::Result<(
-		NumberFor<Block>,
-		Block::Hash,
+		(NumberFor<Block>, Block::Hash),
+		Option<(NumberFor<Block>, Block::Hash)>,
 		Option<ChangesTrieConfiguration>,
 	)>;
 	/// Get number block of oldest, non-pruned changes trie.

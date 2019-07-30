@@ -17,7 +17,7 @@
 //! Substrate Client
 
 use std::{
-	marker::PhantomData, collections::{HashSet, BTreeMap, HashMap}, sync::Arc,
+	marker::PhantomData, collections::{HashSet, BTreeMap, HashMap, VecDeque}, sync::Arc,
 	panic::UnwindSafe, result, cell::RefCell, rc::Rc,
 };
 use crate::error::Error;
@@ -510,17 +510,22 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		first: NumberFor<Block>,
 		last: BlockId<Block>,
 	) -> error::Result<Option<(NumberFor<Block>, BlockId<Block>)>> {
-		let (activation_block, config, storage) = match self.require_changes_trie().ok() {
-			Some((activation_block, config, storage)) => (activation_block, config, storage),
-			None => return Ok(None),
-		};
-		let last_num = self.backend.blockchain().expect_block_number_from_id(&last)?;
-		if first > last_num {
+		let last_number = self.backend.blockchain().expect_block_number_from_id(&last)?;
+		let last_hash = self.backend.blockchain().expect_block_hash_from_id(&last)?;
+		if first > last_number {
 			return Err(error::Error::ChangesTrieAccessFailed("Invalid changes trie range".into()));
 		}
+
+		let (storage, mut configs) = match self.require_changes_trie(first, last_hash).ok() {
+			Some((storage, configs)) => (storage, configs),
+			None => return Ok(None),
+		};
+
+		// TODO: we only work with the last config range here!!!
+		let (config_zero_number, _, config) = configs.pop_back().expect("TODO");
 		let finalized_number = self.backend.blockchain().info().finalized_number;
-		let oldest = storage.oldest_changes_trie_block(activation_block, config, finalized_number);
-		let oldest = ::std::cmp::max(activation_block + One::one(), oldest);
+		let oldest = storage.oldest_changes_trie_block(config_zero_number, config, finalized_number);
+		let oldest = ::std::cmp::max(config_zero_number + One::one(), oldest);
 		let first = ::std::cmp::max(first, oldest);
 		Ok(Some((first, last)))
 	}
@@ -535,27 +540,33 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		last: BlockId<Block>,
 		key: &StorageKey
 	) -> error::Result<Vec<(NumberFor<Block>, u32)>> {
-		let (activation_block, config, storage) = self.require_changes_trie()?;
 		let last_number = self.backend.blockchain().expect_block_number_from_id(&last)?;
 		let last_hash = self.backend.blockchain().expect_block_hash_from_id(&last)?;
+		let (storage, configs) = self.require_changes_trie(first, last_hash)?;
 
-		let config_range = ChangesTrieConfigurationRange {
-			config: &config,
-			zero: activation_block,
-			end: None, // TODO: wrong
-		};
-		key_changes::<Blake2Hasher, _>(
-			config_range,
-			storage.storage(),
-			first,
-			&ChangesTrieAnchorBlockId {
-				hash: convert_hash(&last_hash),
-				number: last_number,
-			},
-			self.backend.blockchain().info().best_number,
-			&key.0)
-		.and_then(|r| r.map(|r| r.map(|(block, tx)| (block, tx))).collect::<Result<_, _>>())
-		.map_err(|err| error::Error::ChangesTrieAccessFailed(err))
+		let mut result = Vec::new();
+		for (config_zero, config_end, config) in configs {
+			let config_range = ChangesTrieConfigurationRange {
+				config: &config,
+				zero: config_zero.clone(),
+				end: config_end.clone(),
+			};
+			let result_range: Vec<(NumberFor<Block>, u32)> = key_changes::<Blake2Hasher, _>(
+				config_range,
+				storage.storage(),
+				first,
+				&ChangesTrieAnchorBlockId {
+					hash: convert_hash(&last_hash),
+					number: last_number,
+				},
+				self.backend.blockchain().info().best_number,
+				&key.0)
+			.and_then(|r| r.map(|r| r.map(|(block, tx)| (block, tx))).collect::<Result<_, _>>())
+			.map_err(|err| error::Error::ChangesTrieAccessFailed(err))?;
+			result.extend(result_range);
+		}
+
+		Ok(result)
 	}
 
 	/// Get proof for computation of (block, extrinsic) pairs where key has been changed at given blocks range.
@@ -631,7 +642,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			}
 		}
 
-		let (activation_block, config, storage) = self.require_changes_trie()?;
+		let first_number = self.backend.blockchain()
+			.expect_block_number_from_id(&BlockId::Hash(first))?;
+		let (storage, configs) = self.require_changes_trie(first_number, last)?;
 		let min_number = self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(min))?;
 
 		let recording_storage = AccessedRootsRecorder::<Block> {
@@ -646,27 +659,29 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		);
 
 		// fetch key changes proof
-		let first_number = self.backend.blockchain()
-			.expect_block_number_from_id(&BlockId::Hash(first))?;
-		let last_number = self.backend.blockchain()
-			.expect_block_number_from_id(&BlockId::Hash(last))?;
-		let config_range = ChangesTrieConfigurationRange {
-			config: &config,
-			zero: activation_block,
-			end: None, // TODO: wrong
-		};
-		let key_changes_proof = key_changes_proof::<Blake2Hasher, _>(
-			config_range,
-			&recording_storage,
-			first_number,
-			&ChangesTrieAnchorBlockId {
-				hash: convert_hash(&last),
-				number: last_number,
-			},
-			max_number,
-			&key.0
-		)
-		.map_err(|err| error::Error::from(error::Error::ChangesTrieAccessFailed(err)))?;
+		let mut proof = Vec::new();
+		for (config_zero, config_end, config) in configs {
+			let last_number = self.backend.blockchain()
+				.expect_block_number_from_id(&BlockId::Hash(last))?;
+			let config_range = ChangesTrieConfigurationRange {
+				config: &config,
+				zero: config_zero,
+				end: config_end,
+			};
+			let proof_range = key_changes_proof::<Blake2Hasher, _>(
+				config_range,
+				&recording_storage,
+				first_number,
+				&ChangesTrieAnchorBlockId {
+					hash: convert_hash(&last),
+					number: last_number,
+				},
+				max_number,
+				&key.0
+			)
+			.map_err(|err| error::Error::from(error::Error::ChangesTrieAccessFailed(err)))?;
+			proof.extend(proof_range);
+		}
 
 		// now gather proofs for all changes tries roots that were touched during key_changes_proof
 		// execution AND are unknown (i.e. replaced with CHT) to the requester
@@ -675,7 +690,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 		Ok(ChangesProof {
 			max_block: max_number,
-			proof: key_changes_proof,
+			proof,
 			roots: roots.into_iter().map(|(n, h)| (n, convert_hash(&h))).collect(),
 			roots_proof,
 		})
@@ -721,18 +736,39 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(proof)
 	}
 
-	/// Returns changes trie configuration and storage or an error if it is not supported.
-	fn require_changes_trie(&self) -> error::Result<(NumberFor<Block>, ChangesTrieConfiguration, &PrunableStateChangesTrieStorage<Block, Blake2Hasher>)> {
-		let best_block = self.backend.blockchain().info().best_hash;
+	/// Returns changes trie storage and all configurations that have been active in the range [first; last].
+	///
+	/// Fails if or an error if it is not supported.
+	fn require_changes_trie(
+		&self,
+		first: NumberFor<Block>,
+		last: Block::Hash,
+	) -> error::Result<(
+		&PrunableStateChangesTrieStorage<Block, Blake2Hasher>,
+		VecDeque<(NumberFor<Block>, Option<NumberFor<Block>>, ChangesTrieConfiguration)>,
+	)> {
 		let storage = match self.backend.changes_trie_storage() {
 			Some(storage) => storage,
 			None => return Err(error::Error::ChangesTriesNotSupported),
 		};
-		let (activation_block, _, config) = storage.configuration_at(&BlockId::Hash(best_block))?;
-		match config {
-			Some(config) => Ok((activation_block, config, storage)),
-			None => Err(error::Error::ChangesTriesNotSupported.into()),
+
+		let mut configs = VecDeque::with_capacity(1);
+		let mut current = last;
+		loop {
+			let ((config_zero_number, config_zero_hash), config_end, config) = storage.configuration_at(&BlockId::Hash(current))?;
+			match config {
+				Some(config) => configs.push_front((config_zero_number, config_end.map(|(config_end_number, _)| config_end_number), config)),
+				None => return Err(error::Error::ChangesTriesNotSupported),
+			}
+
+			if config_zero_number < first {
+				break;
+			}
+
+			current = config_zero_hash;
 		}
+
+		Ok((storage, configs))
 	}
 
 	/// Create a new block, built on the head of the chain.

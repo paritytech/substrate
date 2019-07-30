@@ -106,7 +106,11 @@ pub trait Cache<Block: BlockT>: Send + Sync {
 	fn initialize(&self, key: &well_known_cache_keys::Id, value_at_genesis: Vec<u8>) -> Result<()>;
 	/// For given key and block, returns cached value actual at this block AND block where this value
 	/// has been originally set.
-	fn get_at(&self, key: &well_known_cache_keys::Id, block: &BlockId<Block>) -> Option<(NumberFor<Block>, Block::Hash, Vec<u8>)>;
+	fn get_at(&self, key: &well_known_cache_keys::Id, block: &BlockId<Block>) -> Option<(
+		(NumberFor<Block>, Block::Hash),
+		Option<(NumberFor<Block>, Block::Hash)>,
+		Vec<u8>,
+	)>;
 }
 
 /// Blockchain info
