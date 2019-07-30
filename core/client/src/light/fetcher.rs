@@ -26,7 +26,7 @@ use parity_codec::{Decode, Encode};
 use primitives::{ChangesTrieConfiguration, convert_hash};
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
-	SimpleArithmetic, CheckedConversion, Zero,
+	SimpleArithmetic, CheckedConversion,
 };
 use state_machine::{CodeExecutor, ChangesTrieRootsStorage, ChangesTrieAnchorBlockId,
 	ChangesTrieConfigurationRange, TrieBackend, read_proof_check, key_changes_proof_check,
@@ -95,8 +95,8 @@ pub struct RemoteReadChildRequest<Header: HeaderT> {
 /// Remote key changes read request.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RemoteChangesRequest<Header: HeaderT> {
-	/// Changes trie configuration.
-	pub changes_trie_config: ChangesTrieConfiguration,
+	/// All changes trie configurations that are valid within [first_block; last_block].
+	pub changes_trie_configs: Vec<(Header::Number, Option<Header::Number>, ChangesTrieConfiguration)>,
 	/// Query changes from range of blocks, starting (and including) with this hash...
 	pub first_block: (Header::Number, Header::Hash),
 	/// ...ending (and including) with this hash. Should come after first_block and
@@ -285,26 +285,32 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 		}
 
 		// and now check the key changes proof + get the changes
-		let config_range = ChangesTrieConfigurationRange {
-			config: &request.changes_trie_config,
-			zero: Zero::zero(), // TODO: wrong
-			end: None, // TODO: wrong
-		};
-		key_changes_proof_check::<H, _>(
-			config_range,
-			&RootsStorage {
-				roots: (request.tries_roots.0, &request.tries_roots.2),
-				prev_roots: remote_roots,
-			},
-			remote_proof,
-			request.first_block.0,
-			&ChangesTrieAnchorBlockId {
-				hash: convert_hash(&request.last_block.1),
-				number: request.last_block.0,
-			},
-			remote_max_block,
-			&request.key)
-		.map_err(|err| ClientError::ChangesTrieAccessFailed(err))
+		let mut key_changes = Vec::new();
+		for (config_zero, config_end, config) in &request.changes_trie_configs {
+			let config_range = ChangesTrieConfigurationRange {
+				config,
+				zero: config_zero.clone(),
+				end: config_end.clone(),
+			};
+			let key_changes_range = key_changes_proof_check::<H, _>(
+				config_range,
+				&RootsStorage {
+					roots: (request.tries_roots.0, &request.tries_roots.2),
+					prev_roots: &remote_roots,
+				},
+				remote_proof.clone(), // TODO: use prepared MDB instead of creating it on every loop iter
+				request.first_block.0,
+				&ChangesTrieAnchorBlockId {
+					hash: convert_hash(&request.last_block.1),
+					number: request.last_block.0,
+				},
+				remote_max_block,
+				&request.key)
+			.map_err(|err| ClientError::ChangesTrieAccessFailed(err))?;
+			key_changes.extend(key_changes_range);
+		}
+
+		Ok(key_changes)
 	}
 
 	/// Check CHT-based proof for changes tries roots.
@@ -448,7 +454,7 @@ impl<E, Block, H, S, F> FetchChecker<Block> for LightDataChecker<E, H, Block, S,
 /// A view of BTreeMap<Number, Hash> as a changes trie roots storage.
 struct RootsStorage<'a, Number: SimpleArithmetic, Hash: 'a> {
 	roots: (Number, &'a [Hash]),
-	prev_roots: BTreeMap<Number, Hash>,
+	prev_roots: &'a BTreeMap<Number, Hash>,
 }
 
 impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H, Number> for RootsStorage<'a, Number, Hash>
@@ -690,7 +696,7 @@ pub mod tests {
 			// check proof on local client
 			let local_roots_range = local_roots.clone()[(begin - 1) as usize..].to_vec();
 			let request = RemoteChangesRequest::<Header> {
-				changes_trie_config: runtime::changes_trie_config(),
+				changes_trie_configs: vec![(0, None, runtime::changes_trie_config())],
 				first_block: (begin, begin_hash),
 				last_block: (end, end_hash),
 				max_block: (max, max_hash),
@@ -744,7 +750,7 @@ pub mod tests {
 
 		// check proof on local client
 		let request = RemoteChangesRequest::<Header> {
-			changes_trie_config: runtime::changes_trie_config(),
+			changes_trie_configs: vec![(0, None, runtime::changes_trie_config())],
 			first_block: (1, b1),
 			last_block: (4, b4),
 			max_block: (4, b4),
@@ -784,7 +790,7 @@ pub mod tests {
 
 		let local_roots_range = local_roots.clone()[(begin - 1) as usize..].to_vec();
 		let request = RemoteChangesRequest::<Header> {
-			changes_trie_config: runtime::changes_trie_config(),
+			changes_trie_configs: vec![(0, None, runtime::changes_trie_config())],
 			first_block: (begin, begin_hash),
 			last_block: (end, end_hash),
 			max_block: (max, max_hash),

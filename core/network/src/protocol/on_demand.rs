@@ -1063,7 +1063,7 @@ pub mod tests {
 
 		let (tx, response) = oneshot::channel();
 		on_demand.add_request(&mut network_interface, RequestData::RemoteChanges(RemoteChangesRequest {
-			changes_trie_config: changes_trie_config(),
+			changes_trie_configs: vec![(0, None, changes_trie_config())],
 			first_block: (1, Default::default()),
 			last_block: (100, Default::default()),
 			max_block: (100, Default::default()),
