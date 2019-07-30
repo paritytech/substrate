@@ -463,7 +463,8 @@ fn find_next_epoch_digest<B: BlockT>(header: &B::Header) -> Result<Option<Epoch>
 /// unsigned.  This is required for security and must not be changed.
 ///
 /// This digest item will always return `Some` when used with `as_babe_pre_digest`.
-// FIXME #1018 needs misbehavior types
+// FIXME #1018 needs misbehavior types. The `transaction_pool` parameter will be 
+// used to submit such misbehavior reports.
 fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 	client: &C,
 	slot_now: u64,
