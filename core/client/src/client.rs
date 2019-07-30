@@ -2696,11 +2696,9 @@ pub(crate) mod tests {
 		let _ = env_logger::try_init();
 		let client = test_client::new();
 
-		let alice = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into())).to_vec();
 		let current_balance = ||
-			u64::decode(
-				&mut client.storage(&BlockId::number(client.current_height()), &StorageKey(alice.clone()))
-				.unwrap().unwrap().0.as_slice()
+			client.runtime_api().balance_of(
+				&BlockId::number(client.current_height()), AccountKeyring::Alice.into()
 			).unwrap();
 
 		// G -> A1 -> A2
@@ -2745,11 +2743,9 @@ pub(crate) mod tests {
 		let _ = env_logger::try_init();
 		let client = test_client::new();
 
-		let alice = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into())).to_vec();
 		let current_balance = ||
-			u64::decode(
-				&mut client.storage(&BlockId::number(client.current_height()), &StorageKey(alice.clone()))
-				.unwrap().unwrap().0.as_slice()
+			client.runtime_api().balance_of(
+				&BlockId::number(client.current_height()), AccountKeyring::Alice.into()
 			).unwrap();
 
 		// G -> A1
