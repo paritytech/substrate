@@ -17,7 +17,7 @@
 //! Network packet message types. These get serialized and put into the lower level protocol payload.
 
 use bitflags::bitflags;
-use runtime_primitives::{ConsensusEngineId, traits::{Block as BlockT, Header as HeaderT}};
+use sr_primitives::{ConsensusEngineId, traits::{Block as BlockT, Header as HeaderT}};
 use parity_codec::{Encode, Decode, Input, Output};
 pub use self::generic::{
 	BlockAnnounce, RemoteCallRequest, RemoteReadRequest,
@@ -126,7 +126,7 @@ pub struct RemoteReadResponse {
 /// Generic types.
 pub mod generic {
 	use parity_codec::{Encode, Decode};
-	use runtime_primitives::Justification;
+	use sr_primitives::Justification;
 	use crate::config::Roles;
 	use super::{
 		RemoteReadResponse, Transactions, Direction,

@@ -83,13 +83,8 @@ where
 	let seed = factory_state.start_number() + factory_state.block_no();
 	let to = RA::gen_random_account_id(&seed);
 
-	let amount;
-	if factory_state.round() == RA::Number::zero() {
-		amount = RA::minimum_balance() * factory_state.rounds();
-	} else {
-		let rounds_left = factory_state.rounds() - factory_state.round();
-		amount = RA::minimum_balance() * rounds_left;
-	};
+	let rounds_left = factory_state.rounds() - factory_state.round();
+	let amount = RA::minimum_balance() * rounds_left.into();
 
 	let transfer = factory_state.transfer_extrinsic(
 		&from.0,

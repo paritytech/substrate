@@ -27,8 +27,8 @@
 
 use rstd::prelude::*;
 use parity_codec::{Encode, Decode};
-use primitives::KeyTypeId;
-use primitives::traits::{Convert, OpaqueKeys, Hash as HashT};
+use sr_primitives::KeyTypeId;
+use sr_primitives::traits::{Convert, OpaqueKeys, Hash as HashT};
 use srml_support::{
 	StorageValue, StorageMap, decl_module, decl_storage,
 };
@@ -312,8 +312,8 @@ impl<T: Trait, D: AsRef<[u8]>> srml_support::traits::KeyOwnerProofSystem<(KeyTyp
 mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
-	use substrate_primitives::Blake2Hasher;
-	use primitives::{
+	use primitives::Blake2Hasher;
+	use sr_primitives::{
 		traits::OnInitialize,
 		testing::{UintAuthorityId, UINT_DUMMY_KEY},
 	};

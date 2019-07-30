@@ -173,7 +173,7 @@ impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a> {
 mod tests {
 	use super::*;
 	use std::collections::HashMap;
-	use substrate_primitives::H256;
+	use primitives::H256;
 	use crate::exec::{CallReceipt, Ext, InstantiateReceipt, EmptyOutputBuf, StorageKey};
 	use crate::gas::{Gas, GasMeter};
 	use crate::tests::{Test, Call};

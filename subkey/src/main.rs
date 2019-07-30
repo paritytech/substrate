@@ -22,7 +22,7 @@ use std::{str::FromStr, io::{stdin, Read}, convert::TryInto};
 use hex_literal::hex;
 use clap::load_yaml;
 use bip39::{Mnemonic, Language, MnemonicType};
-use substrate_primitives::{
+use primitives::{
 	ed25519, sr25519, hexdisplay::HexDisplay, Pair, Public, blake2_256,
 	crypto::{Ss58Codec, set_default_ss58_version, Ss58AddressFormat}
 };

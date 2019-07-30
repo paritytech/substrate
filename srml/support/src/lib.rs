@@ -35,7 +35,6 @@ pub use codec;
 pub use once_cell;
 #[doc(hidden)]
 pub use paste;
-pub use sr_primitives as runtime_primitives;
 
 pub use self::storage::hashed::generator::{
 	HashedStorage, Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat
@@ -69,7 +68,7 @@ pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
 pub use self::double_map::StorageDoubleMapWithHasher;
 pub use runtime_io::{print, storage_root};
-pub use runtime_primitives::ConsensusEngineId;
+pub use sr_primitives::{self, ConsensusEngineId};
 
 /// Macro for easily creating a new implementation of the `Get` trait. Use similarly to
 /// how you would declare a `const`:

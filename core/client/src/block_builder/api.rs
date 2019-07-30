@@ -16,7 +16,7 @@
 
 //! The runtime api for building blocks.
 
-use runtime_primitives::{traits::Block as BlockT, ApplyResult};
+use sr_primitives::{traits::Block as BlockT, ApplyResult};
 use rstd::vec::Vec;
 use sr_api_macros::decl_runtime_apis;
 pub use inherents::{InherentData, CheckInherentsResult};
