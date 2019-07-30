@@ -22,19 +22,17 @@ use parity_codec::Decode;
 use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
 use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
 
-#[derive(Debug, Clone)]
-#[cfg_attr(test, derive(PartialEq))]
+#[derive(Debug, Clone, PartialEq)]
 /// State of a transaction, the state are stored
 /// and updated in a linear indexed way.
 pub(crate) enum TransactionState {
 	/// Overlay is under change.
-	/// Is not necessarilly the last change.
-	/// Contains an index to commit position
 	Pending,
+	/// A former transaction pending.
+	TxPending,
 	/// Information is committed, but can still be dropped.
 	Prospective,
-	/// Committed is information that cannot
-	/// be dropped.
+	/// Committed is information that cannot be dropped.
 	Committed,
 	/// Transaction or prospective has been dropped.
 	Dropped,
@@ -94,7 +92,7 @@ pub struct OverlayedChangeSet {
 	/// Indexed changes history.
 	/// First index is initial state,
 	/// operation such as `init_transaction`,
-	/// `commit_transaction` or `drop_transaction`
+	/// `commit_transaction` or `discard_transaction`
 	/// will change this state.
 	pub(crate) history: Vec<TransactionState>,
 	/// Current state in history.
@@ -183,7 +181,6 @@ impl<V> History<V> {
 	}
 
 	// should only be call after a get_mut check
-	// TODO EMCH use a pair.
 	fn push(&mut self, val:V, tx_ix: usize) {
 		if self.0 < ALLOCATED_HISTORY {
 			self.1[self.0] = Some((val, tx_ix));
@@ -211,6 +208,7 @@ impl<V> History<V> {
 			let hix = self.ix(ix).1;
 			match history[hix] {
 				TransactionState::Pending
+				| TransactionState::TxPending
 				| TransactionState::Prospective
 				| TransactionState::Committed =>
 					return Some(&self.ix(ix).0),
@@ -233,6 +231,7 @@ impl<V> History<V> {
 			let hix = self.ix(ix).1;
 			match history[hix] {
 				TransactionState::Pending
+				| TransactionState::TxPending
 				| TransactionState::Prospective =>
 					return Some(&self.ix(ix).0),
 				TransactionState::Committed
@@ -257,14 +256,13 @@ impl<V> History<V> {
 				TransactionState::Committed =>
 					return Some(&self.ix(ix).0),
 				TransactionState::Pending
+				| TransactionState::TxPending
 				| TransactionState::Prospective
 				| TransactionState::Dropped => (), 
 			}
 		}
 		None
 	}
-
-
 
 	fn into_committed(mut self, history: &[TransactionState]) -> Option<V> {
 		// ix is never 0, 
@@ -285,6 +283,7 @@ impl<V> History<V> {
 					return self.pop().map(|v| v.0);
 				},
 				TransactionState::Pending
+				| TransactionState::TxPending
 				| TransactionState::Prospective
 				| TransactionState::Dropped => (), 
 			}
@@ -307,20 +306,11 @@ impl<V> History<V> {
 			let hix = self.ix(ix).1;
 			match history[hix] {
 				TransactionState::Pending
+				| TransactionState::TxPending
+				| TransactionState::Committed
 				| TransactionState::Prospective => {
 					let tx = self.ix(ix).1;
 					return Some((&mut self.ix_mut(ix).0, tx))
-				},
-				| TransactionState::Committed => {
-					// No need for previous state
-					if ix > 0 {
-						self.truncate(ix + 1);
-						let tv = self.pop().expect("just checked");
-						*self.ix_mut(0) = tv;
-						self.truncate(1);
-					}
-					let tx = self.ix(0).1;
-					return Some((&mut self.ix_mut(0).0, tx))
 				},
 				TransactionState::Dropped => { let _ = self.pop(); },
 			}
@@ -400,6 +390,7 @@ impl OverlayedChangeSet {
 			i -= 1;
 			match self.history[i] {
 				TransactionState::Pending
+				| TransactionState::TxPending
 				| TransactionState::Prospective => self.history[i] = TransactionState::Dropped,
 				// can have dropped from transaction -> TODO make Dropped perspective variant? = earliest
 				// stop in some case
@@ -414,15 +405,25 @@ impl OverlayedChangeSet {
 	/// Commit prospective changes to state.
 	pub fn commit_prospective(&mut self) {
 		debug_assert!(self.history.len() > 0);
+		let mut i = self.state + 1;
+		while i > 0 {
+			i -= 1;
+			match self.history[i] {
+				TransactionState::Prospective
+				| TransactionState::TxPending
+				| TransactionState::Pending => self.history[i] = TransactionState::Committed,
+				TransactionState::Dropped => (), 
+				| TransactionState::Committed => break,
+			}
+		}
 		// TODO EMCH can use offset and a GC state
-		self.history[self.state] = TransactionState::Committed;
 		self.history.push(TransactionState::Pending);
 		self.state = self.history.len() - 1;
 	}
 
-	/// Create a new transactional layre
+	/// Create a new transactional layer
 	pub fn start_transaction(&mut self) {
-		self.history.push(TransactionState::Pending);
+		self.history.push(TransactionState::TxPending);
 		self.state = self.history.len() - 1;
 	}
 
@@ -430,19 +431,19 @@ impl OverlayedChangeSet {
 	/// A transaction is always running (history always end with pending).
 	pub fn discard_transaction(&mut self) {
 		debug_assert!(self.history.len() > self.state);
-		self.history[self.state] = TransactionState::Dropped;
-		let mut i = self.state;
+		let mut i = self.state + 1;
 		// revert state to previuos pending (or create new pending)
 		while i > 0 {
 			i -= 1;
 			match self.history[i] {
-				TransactionState::Pending => {
-					self.state = i;
-					return;
+				TransactionState::Prospective
+				| TransactionState::Pending => self.history[i] = TransactionState::Dropped,
+				TransactionState::TxPending => {
+					self.history[i] = TransactionState::Dropped;
+					break;
 				},
 				TransactionState::Dropped => (), 
-				TransactionState::Prospective
-				| TransactionState::Committed => break,
+				TransactionState::Committed => break,
 			}
 		}
 		self.history.push(TransactionState::Pending);
@@ -452,7 +453,20 @@ impl OverlayedChangeSet {
 	/// Commit a transactional layer.
 	pub fn commit_transaction(&mut self) {
 		debug_assert!(self.history.len() > self.state);
-		self.history[self.state] = TransactionState::Prospective;
+		let mut i = self.state + 1;
+		while i > 0 {
+			i -= 1;
+			match self.history[i] {
+				TransactionState::Dropped => (), 
+				TransactionState::Pending => self.history[i] = TransactionState::Prospective,
+				TransactionState::TxPending => {
+					self.history[i] = TransactionState::Prospective;
+					break;
+				},
+				TransactionState::Prospective
+				| TransactionState::Committed => break,
+			}
+		}
 		self.history.push(TransactionState::Pending);
 		self.state = self.history.len() - 1;
 	}
@@ -913,4 +927,80 @@ mod tests {
 		assert_eq!(overlay.changes.top_prospective(),
 			Default::default());
 	}
+
+
+	#[test]
+	fn overlayed_storage_transactions() {
+		let mut overlayed = OverlayedChanges::default();
+
+		let key = vec![42, 69, 169, 142];
+
+		assert!(overlayed.storage(&key).is_none());
+
+		// discard transaction similar to discard prospective if no transaction.
+ 
+		overlayed.set_storage(key.clone(), Some(vec![1, 2, 3]));
+		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3][..]));
+
+		overlayed.changes.discard_transaction();
+		assert_eq!(overlayed.storage(&key), None);
+
+		overlayed.changes.discard_prospective();
+		assert_eq!(overlayed.storage(&key), None);
+
+		overlayed.set_storage(key.clone(), Some(vec![1, 2, 3]));
+		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3][..]));
+
+		overlayed.changes.commit_transaction();
+		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3][..]));
+
+
+		overlayed.changes.discard_transaction();
+		assert_eq!(overlayed.storage(&key), None);
+		// basic transaction test
+		// tx:1
+		overlayed.set_storage(key.clone(), Some(vec![1, 2, 3]));
+		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3][..]));
+
+		overlayed.changes.start_transaction();
+		// tx:2
+		overlayed.set_storage(key.clone(), Some(vec![1, 2, 3, 4]));
+		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3, 4][..]));
+
+		overlayed.changes.start_transaction();
+		// tx:3
+		overlayed.set_storage(key.clone(), None);
+		assert_eq!(overlayed.storage(&key).unwrap(), None);
+
+		overlayed.changes.discard_transaction();
+		// tx:2
+		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3, 4][..]));
+
+		overlayed.changes.start_transaction();
+		// tx:3
+		overlayed.set_storage(key.clone(), None);
+		assert_eq!(overlayed.storage(&key).unwrap(), None);
+
+		overlayed.changes.commit_transaction();
+		// tx:2
+		assert_eq!(overlayed.storage(&key).unwrap(), None);
+
+		overlayed.changes.discard_transaction();
+		// tx:1
+		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3][..]));
+		overlayed.changes.discard_prospective();
+		assert_eq!(overlayed.storage(&key), None);
+
+		// multiple transaction end up to prospective value
+		overlayed.changes.start_transaction();
+		overlayed.set_storage(key.clone(), Some(vec![1]));
+		overlayed.changes.start_transaction();
+		overlayed.set_storage(key.clone(), Some(vec![1, 2]));
+		overlayed.changes.start_transaction();
+		overlayed.set_storage(key.clone(), Some(vec![1, 2, 3]));
+
+		overlayed.changes.commit_prospective();
+		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3][..]));
+	}
+
 }
