@@ -389,9 +389,6 @@ fn find_pre_digest<B: BlockT, P: Pair>(header: &B::Header) -> Result<u64, String
 /// if it's successful, returns the pre-header and the digest item containing the seal.
 ///
 /// This digest item will always return `Some` when used with `as_aura_seal`.
-//
-// FIXME #1018 needs misbehavior types. The `transaction_pool` parameter will be 
-// used to submit such misbehavior reports.
 fn check_header<C, B: BlockT, P: Pair, T>(
 	client: &C,
 	slot_now: u64,
@@ -710,6 +707,7 @@ pub fn import_queue<B, C, P, T>(
 	let verifier = AuraVerifier {
 		client: client.clone(),
 		inherent_data_providers,
+		transaction_pool,
 		phantom: PhantomData,
 		transaction_pool,
 	};
