@@ -90,6 +90,15 @@ pub trait Ext {
 	/// Notes a call dispatch.
 	fn note_dispatch_call(&mut self, call: CallOf<Self::T>);
 
+	/// Notes a restoration request.
+	fn note_restore_to(
+		&mut self,
+		dest: AccountIdOf<Self::T>,
+		code_hash: CodeHash<Self::T>,
+		rent_allowance: BalanceOf<Self::T>,
+		delta: Vec<StorageKey>,
+	);
+
 	/// Returns a reference to the account id of the caller.
 	fn caller(&self) -> &AccountIdOf<Self::T>;
 
@@ -267,6 +276,19 @@ pub enum DeferredAction<T: Trait> {
 		origin: T::AccountId,
 		/// The call to dispatch.
 		call: T::Call,
+	},
+	RestoreTo {
+		/// The account id of a contract which sacrificed itself to restore the to be restored
+		/// contract.
+		donor: T::AccountId,
+		/// The account id of the to be restored contract.
+		dest: T::AccountId,
+		/// The code hash of the to be restored contract.
+		code_hash: CodeHash<T>,
+		/// The initial rent allowance to set.
+		rent_allowance: BalanceOf<T>,
+		/// The keys to delete upon restoration.
+		delta: Vec<StorageKey>,
 	},
 }
 
@@ -668,11 +690,26 @@ where
 			.call(to.clone(), value, gas_meter, input_data, empty_output_buf)
 	}
 
-	/// Notes a call dispatch.
 	fn note_dispatch_call(&mut self, call: CallOf<Self::T>) {
 		self.ctx.deferred.push(DeferredAction::DispatchRuntimeCall {
 			origin: self.ctx.self_account.clone(),
 			call,
+		});
+	}
+
+	fn note_restore_to(
+		&mut self,
+		dest: AccountIdOf<Self::T>,
+		code_hash: CodeHash<Self::T>,
+		rent_allowance: BalanceOf<Self::T>,
+		delta: Vec<StorageKey>,
+	) {
+		self.ctx.deferred.push(DeferredAction::RestoreTo {
+			donor: self.ctx.self_account.clone(),
+			dest,
+			code_hash,
+			rent_allowance,
+			delta,
 		});
 	}
 
