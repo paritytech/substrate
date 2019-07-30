@@ -101,12 +101,14 @@ pub fn export_blocks<F, E, W>(
 
 struct WaitLink {
 	imported_blocks: u64,
+	has_error: bool,
 }
 
 impl WaitLink {
 	fn new() -> WaitLink {
 		WaitLink {
 			imported_blocks: 0,
+			has_error: false,
 		}
 	}
 }
@@ -115,12 +117,17 @@ impl<B: Block> Link<B> for WaitLink {
 	fn blocks_processed(
 		&mut self,
 		imported: usize,
-		count: usize,
+		_count: usize,
 		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
 	) {
 		self.imported_blocks += imported as u64;
-		if results.iter().any(|(r, _)| r.is_err()) {
-			warn!("There was an error importing {} blocks", count);
+
+		for result in results {
+			if let (Err(err), hash) = result {
+				warn!("There was an error importing block with hash {:?}: {:?}", hash, err);
+				self.has_error = true;
+				break;
+			}
 		}
 	}
 }
@@ -198,6 +205,13 @@ pub fn import_blocks<F, E, R>(
 			queue.poll_actions(cx, &mut link);
 			std::task::Poll::Pending::<Result<(), ()>>
 		}).compat().poll();
+		if link.has_error {
+			info!(
+				"Stopping after #{} blocks because of an error",
+				link.imported_blocks,
+			);
+			return Ok(Async::Ready(()));
+		}
 		if link.imported_blocks / 1000 != blocks_before / 1000 {
 			info!(
 				"#{} blocks were imported (#{} left)",
