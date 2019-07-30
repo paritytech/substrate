@@ -99,15 +99,16 @@ construct_service_factory! {
 				config: &mut FactoryFullConfiguration<Self>,
 				client: Arc<FullClient<Self>>,
 				_select_chain: Self::SelectChain,
-				_transaction_pool: Option<Arc<TransactionPool<Self::FullTransactionPoolApi>>>,
+				transaction_pool: Option<Arc<TransactionPool<Self::FullTransactionPoolApi>>>,
 			| {
-					import_queue::<_, _, aura_primitives::sr25519::AuthorityPair>(
+					import_queue::<_, _, aura_primitives::sr25519::AuthorityPair, _>(
 						SlotDuration::get_or_compute(&*client)?,
 						Box::new(client.clone()),
 						None,
 						None,
 						client,
 						config.custom.inherent_data_providers.clone(),
+						transaction_pool,
 					).map_err(Into::into)
 				}
 			},
@@ -116,13 +117,14 @@ construct_service_factory! {
 		>
 			{ |config: &mut FactoryFullConfiguration<Self>, client: Arc<LightClient<Self>>| {
 					let fprb = Box::new(DummyFinalityProofRequestBuilder::default()) as Box<_>;
-					import_queue::<_, _, AuraAuthorityPair>(
+					import_queue::<_, _, AuraAuthorityPair, TransactionPool<Self::FullTransactionPoolApi>>(
 						SlotDuration::get_or_compute(&*client)?,
 						Box::new(client.clone()),
 						None,
 						None,
 						client,
 						config.custom.inherent_data_providers.clone(),
+						None,
 					).map(|q| (q, fprb)).map_err(Into::into)
 				}
 			},

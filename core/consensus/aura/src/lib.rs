@@ -781,7 +781,7 @@ mod tests {
 
 	impl TestNetFactory for AuraTestNet {
 		type Specialization = DummySpecialization;
-		type Verifier = AuraVerifier<PeersFullClient, AuthorityPair>;
+		type Verifier = AuraVerifier<PeersFullClient, AuthorityPair, ()>;
 		type PeerData = ();
 
 		/// Create new test network with peers and given config.
@@ -808,6 +808,7 @@ mod tests {
 					AuraVerifier {
 						client,
 						inherent_data_providers,
+						transaction_pool: Default::default(),
 						phantom: Default::default(),
 					}
 				},
