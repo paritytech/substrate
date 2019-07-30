@@ -38,7 +38,7 @@ use zeroize::Zeroize;
 pub const DEV_PHRASE: &str = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
 
 /// The address of the associated root phrase for our publicly known keys.
-pub const DEV_ADDRESS: &str = "5DfhGyQdFobKM8NsWvEeAKk5EQQgYe9AydgJ7rMB6E1EqRzV";
+pub const DEV_ADDRESS: &str = "5H3ZzXYeCi95F7FUfMWdCVMoaXMbcWgi3E98TqcS18fZ3vn3";
 
 /// The infallible type.
 #[derive(Debug)]
@@ -400,6 +400,7 @@ impl<T: AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 			// Invalid checksum.
 			return Err(PublicError::InvalidChecksum);
 		}
+
 		res.as_mut().copy_from_slice(&d[1..len+1]);
 		Ok((res, ver))
 	}

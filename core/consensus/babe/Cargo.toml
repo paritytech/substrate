@@ -28,7 +28,7 @@ futures01 = { package = "futures", version = "0.1" }
 futures-timer = "0.2.1"
 parking_lot = "0.8.0"
 log = "0.4.6"
-schnorrkel = "0.1.1"
+schnorrkel = "0.7.0"
 rand = "0.6.5"
 merlin = "1.0.3"
 
