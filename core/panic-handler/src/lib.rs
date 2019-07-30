@@ -76,7 +76,7 @@ pub struct AbortGuard {
 
 impl AbortGuard {
 	/// Create a new guard. While the guard is alive, panics that happen in the current thread will
-	/// unwind the stack (unless another guard is is created afterwards).
+	/// unwind the stack (unless another guard is created afterwards).
 	pub fn force_unwind() -> AbortGuard {
 		AbortGuard {
 			previous_val: set_abort(false),
@@ -85,7 +85,7 @@ impl AbortGuard {
 	}
 
 	/// Create a new guard. While the guard is alive, panics that happen in the current thread will
-	/// abort the process (unless another guard is is created afterwards).
+	/// abort the process (unless another guard is created afterwards).
 	pub fn force_abort() -> AbortGuard {
 		AbortGuard {
 			previous_val: set_abort(true),
