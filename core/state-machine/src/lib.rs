@@ -972,7 +972,6 @@ where
 mod tests {
 	use std::collections::HashMap;
 	use parity_codec::Encode;
-	use overlayed_changes::OverlayedValue;
 	use super::*;
 	use super::backend::InMemory;
 	use super::ext::Ext;
@@ -1143,7 +1142,7 @@ mod tests {
 			vec![
 				(b"abd".to_vec(), Some(b"69".to_vec())),
 				(b"bbd".to_vec(), Some(b"42".to_vec())),
-			]);
+			], None);
 
 		{
 			let changes_trie_storage = InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new();

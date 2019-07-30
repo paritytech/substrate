@@ -380,13 +380,13 @@ mod tests {
 				history: vec![TransactionState::Pending],
 				children: Default::default(),
 				top: vec![
-					(EXTRINSIC_INDEX.to_vec(), History::from_vec(vec![
+					(EXTRINSIC_INDEX.to_vec(), History::from_iter(vec![
 						(OverlayedValue {
 							value: Some(3u32.encode()),
 							extrinsics: Some(vec![1].into_iter().collect())
 						}, 0),
 					])),
-					(vec![1], History::from_vec(vec![
+					(vec![1], History::from_iter(vec![
 						(OverlayedValue {
 							value: Some(vec![100]),
 							extrinsics: Some(vec![1].into_iter().collect())

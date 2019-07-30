@@ -71,7 +71,7 @@ fn prepare_extrinsics_input<B, H, Number>(
 		Number: BlockNumber,
 {
 	let mut extrinsic_map = BTreeMap::<Vec<u8>, BTreeSet<u32>>::new();
-	for (key, val) in changes.changes.top_iter_ext() {
+	for (key, val) in changes.changes.top_iter_overlay() {
 		let extrinsics = match val.extrinsics {
 			Some(ref extrinsics) => extrinsics,
 			None => continue,
@@ -198,13 +198,13 @@ mod test {
 				history: vec![TransactionState::Committed, TransactionState::Pending],
 				children: Default::default(),
 				top: vec![
-					(EXTRINSIC_INDEX.to_vec(), History::from_vec(vec![
+					(EXTRINSIC_INDEX.to_vec(), History::from_iter(vec![
 						(OverlayedValue {
 							value: Some(3u32.encode()),
 							extrinsics: None,
 						}, 0),
 					])),
-					(vec![100], History::from_vec(vec![
+					(vec![100], History::from_iter(vec![
 						(OverlayedValue {
 							value: Some(vec![202]),
 							extrinsics: Some(vec![3].into_iter().collect())
@@ -214,13 +214,13 @@ mod test {
 							extrinsics: Some(vec![3, 0, 2].into_iter().collect())
 						}, 1),
 					])),
-					(vec![101], History::from_vec(vec![
+					(vec![101], History::from_iter(vec![
 						(OverlayedValue {
 						value: Some(vec![203]),
 						extrinsics: Some(vec![1].into_iter().collect())
 						}, 0),
 					])),
-					(vec![103], History::from_vec(vec![
+					(vec![103], History::from_iter(vec![
 						(OverlayedValue {
 						value: None,
 						extrinsics: Some(vec![0, 1].into_iter().collect())
@@ -303,7 +303,7 @@ mod test {
 		let (backend, storage, mut changes) = prepare_for_build();
 
 		// 110: missing from backend, set to None in overlay
-		changes.changes.top.insert(vec![110], History::from_vec(vec![
+		changes.changes.top.insert(vec![110], History::from_iter(vec![
 			(OverlayedValue {
 				value: None,
 				extrinsics: Some(vec![1].into_iter().collect()),
