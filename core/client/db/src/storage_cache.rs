@@ -155,7 +155,7 @@ impl<B: BlockT, H: Hasher> Cache<B, H> {
 	/// Synchronize the shared cache with the best block state.
 	/// This function updates the shared cache by removing entries
 	/// that are invalidated by chain reorganization. It should be
-	/// be called when chain reorg rappens without importing a new block.
+	/// be called when chain reorg happens without importing a new block.
 	pub fn sync(&mut self, enacted: &[B::Hash], retracted: &[B::Hash]) {
 		trace!("Syncing shared cache, enacted = {:?}, retracted = {:?}", enacted, retracted);
 
