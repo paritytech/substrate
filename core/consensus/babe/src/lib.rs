@@ -19,7 +19,6 @@
 //! BABE (Blind Assignment for Blockchain Extension) consensus in Substrate.
 
 #![forbid(unsafe_code, missing_docs, unused_must_use, unused_imports, unused_variables)]
-#![cfg_attr(not(test), forbid(dead_code))]
 pub use babe_primitives::*;
 pub use consensus_common::SyncOracle;
 use consensus_common::ImportResult;
@@ -581,7 +580,7 @@ impl<C> BabeVerifier<C> {
 	}
 }
 
-#[allow(unused)]
+#[allow(dead_code)]
 fn median_algorithm(
 	median_required_blocks: u64,
 	slot_duration: u64,
