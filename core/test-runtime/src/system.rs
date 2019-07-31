@@ -29,7 +29,7 @@ use parity_codec::{KeyedVec, Encode};
 use super::{
 	AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest, AuthorityId
 };
-use primitives::{Blake2Hasher, storage::well_known_keys};
+use primitives::{Blake2Hasher, storage::well_known_keys, ChangesTrieConfiguration};
 
 const NONCE_OF: &[u8] = b"nonce:";
 const BALANCE_OF: &[u8] = b"balance:";
@@ -40,6 +40,7 @@ storage_items! {
 	Number: b"sys:num" => BlockNumber;
 	ParentHash: b"sys:pha" => required Hash;
 	NewAuthorities: b"sys:new_auth" => Vec<AuthorityId>;
+	NewChangesTrieConfig: b"sys:new_changes_trie_config" => Option<ChangesTrieConfiguration>;
 	StorageDigest: b"sys:digest" => Digest;
 	Authorities get(authorities): b"sys:auth" => default Vec<AuthorityId>;
 }
@@ -112,6 +113,7 @@ fn execute_block_with_state_root_handler(
 	});
 
 	let o_new_authorities = <NewAuthorities>::take();
+	let new_changes_trie_config = <NewChangesTrieConfig>::take();
 
 	if let Mode::Overwrite = mode {
 		header.state_root = storage_root().into();
@@ -130,6 +132,11 @@ fn execute_block_with_state_root_handler(
 	if let Some(new_authorities) = o_new_authorities {
 		digest.push(generic::DigestItem::Consensus(*b"aura", new_authorities.encode()));
 		digest.push(generic::DigestItem::Consensus(*b"babe", new_authorities.encode()));
+	}
+	if let Some(new_config) = new_changes_trie_config {
+		digest.push(generic::DigestItem::ChangesTrieSignal(
+			generic::ChangesTrieSignal::NewConfiguration(new_config)
+		));
 	}
 }
 
@@ -207,6 +214,8 @@ pub fn finalize_block() -> Header {
 	let mut digest = <StorageDigest>::take().expect("StorageDigest is set by `initialize_block`");
 
 	let o_new_authorities = <NewAuthorities>::take();
+	let new_changes_trie_config = <NewChangesTrieConfig>::take();
+
 	// This MUST come after all changes to storage are done.  Otherwise we will fail the
 	// “Storage root does not match that calculated” assertion.
 	let storage_root = BlakeTwo256::storage_root();
@@ -219,6 +228,12 @@ pub fn finalize_block() -> Header {
 	if let Some(new_authorities) = o_new_authorities {
 		digest.push(generic::DigestItem::Consensus(*b"aura", new_authorities.encode()));
 		digest.push(generic::DigestItem::Consensus(*b"babe", new_authorities.encode()));
+	}
+
+	if let Some(new_config) = new_changes_trie_config {
+		digest.push(generic::DigestItem::ChangesTrieSignal(
+			generic::ChangesTrieSignal::NewConfiguration(new_config)
+		));
 	}
 
 	Header {
@@ -244,6 +259,8 @@ fn execute_transaction_backend(utx: &Extrinsic) -> ApplyResult {
 		Extrinsic::AuthoritiesChange(ref new_auth) => execute_new_authorities_backend(new_auth),
 		Extrinsic::IncludeData(_) => Ok(ApplyOutcome::Success),
 		Extrinsic::StorageChange(key, value) => execute_storage_change(key, value.as_ref().map(|v| &**v)),
+		Extrinsic::ChangesTrieConfigUpdate(ref new_config) =>
+			execute_changes_trie_config_update(new_config.clone()),
 	}
 }
 
@@ -284,6 +301,18 @@ fn execute_storage_change(key: &[u8], value: Option<&[u8]>) -> ApplyResult {
 		Some(value) => storage::unhashed::put_raw(key, value),
 		None => storage::unhashed::kill(key),
 	}
+	Ok(ApplyOutcome::Success)
+}
+
+fn execute_changes_trie_config_update(new_config: Option<ChangesTrieConfiguration>) -> ApplyResult {
+	match new_config.clone() {
+		Some(new_config) => storage::unhashed::put_raw(
+			well_known_keys::CHANGES_TRIE_CONFIG,
+			&new_config.encode(),
+		),
+		None => storage::unhashed::kill(well_known_keys::CHANGES_TRIE_CONFIG),
+	}
+	<NewChangesTrieConfig>::put(new_config);
 	Ok(ApplyOutcome::Success)
 }
 

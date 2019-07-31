@@ -104,6 +104,7 @@ where
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	>(&self,
 		state: &S,
+		state_block: &BlockId<B>,
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8],
@@ -191,7 +192,7 @@ where
 		let state = self.backend.state_at(*id)?;
 		let return_data = state_machine::new(
 			&state,
-			backend::changes_tries_state_at_block(&*self.backend, id)?,
+			backend::changes_tries_state_at_block(id, self.backend.changes_trie_storage())?,
 			side_effects_handler,
 			&mut changes,
 			&self.executor,
@@ -240,7 +241,7 @@ where
 		}
 
 		let mut state = self.backend.state_at(*at)?;
-		let changes_trie_state = backend::changes_tries_state_at_block(&*self.backend, at)?;
+		let changes_trie_state = backend::changes_tries_state_at_block(at, self.backend.changes_trie_storage())?;
 
 		match recorder {
 			Some(recorder) => {
@@ -294,7 +295,7 @@ where
 	fn runtime_version(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
-		let changes_trie_state = backend::changes_tries_state_at_block(&*self.backend, id)?;
+		let changes_trie_state = backend::changes_tries_state_at_block(id, self.backend.changes_trie_storage())?;
 		let mut ext = Ext::new(&mut overlay, &state, changes_trie_state.as_ref(), NeverOffchainExt::new());
 		self.executor.runtime_version(&mut ext).ok_or(error::Error::VersionInvalid.into())
 	}
@@ -311,6 +312,7 @@ where
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	>(&self,
 		state: &S,
+		state_block: &BlockId<Block>,
 		changes: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8],
@@ -322,13 +324,10 @@ where
 		(S::Transaction, <Blake2Hasher as Hasher>::Out),
 		Option<MemoryDB<Blake2Hasher>>,
 	)> {
-		let changes_trie_state = match self.backend.changes_trie_storage() {
-			Some(changes_trie_storage) => backend::changes_tries_state_at_state::<_, Block, _>(
-				state,
-				changes_trie_storage.storage(),
-			)?,
-			None => None,
-		};
+		let changes_trie_state = backend::changes_tries_state_at_block::<Block, _>(
+			state_block,
+			self.backend.changes_trie_storage(),
+		)?;
 		state_machine::new(
 			state,
 			changes_trie_state,

@@ -16,6 +16,7 @@
 
 //! Block Builder extensions for tests.
 
+use primitives::ChangesTrieConfiguration;
 use runtime;
 use runtime_primitives::traits::ProvideRuntimeApi;
 use generic_test_client::client;
@@ -27,6 +28,11 @@ pub trait BlockBuilderExt {
 	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), client::error::Error>;
 	/// Add storage change extrinsic to the block.
 	fn push_storage_change(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) -> Result<(), client::error::Error>;
+	/// Add changes trie configuration update extrinsic to the block.
+	fn push_changes_trie_configuration_update(
+		&mut self,
+		new_config: Option<ChangesTrieConfiguration>,
+	) -> Result<(), client::error::Error>;
 }
 
 impl<'a, A> BlockBuilderExt for client::block_builder::BlockBuilder<'a, runtime::Block, A> where
@@ -39,5 +45,12 @@ impl<'a, A> BlockBuilderExt for client::block_builder::BlockBuilder<'a, runtime:
 
 	fn push_storage_change(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) -> Result<(), client::error::Error> {
 		self.push(runtime::Extrinsic::StorageChange(key, value))
+	}
+
+	fn push_changes_trie_configuration_update(
+		&mut self,
+		new_config: Option<ChangesTrieConfiguration>,
+	) -> Result<(), client::error::Error> {
+		self.push(runtime::Extrinsic::ChangesTrieConfigUpdate(new_config))
 	}
 }

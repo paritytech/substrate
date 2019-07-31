@@ -112,6 +112,13 @@ fn lower_bound_max_digest<'a, Number: BlockNumber>(
 	if end > max || begin > end {
 		return Err(format!("invalid changes range: {}..{}/{}", begin, end, max));
 	}
+	if begin <= config.zero || config.end.as_ref().map(|config_end| end > *config_end).unwrap_or(false) {
+		return Err(format!("changes trie range is not covered by configuration: {}..{}/{}..{}",
+			begin, end, config.zero, match config.end.as_ref() {
+				Some(config_end) => format!("{}", config_end),
+				None => "None".into(),
+			}));
+	}
 
 	let mut digest_level = 0u32;
 	let mut digest_step = 1u32;
@@ -200,8 +207,8 @@ mod tests {
 
 		// when config activates at 30
 		assert_eq!(
-			lower_bound_max_digest(configuration_range(&config, 30u64), 100_000u64, 20u64, 180u64).unwrap(),
-			(190, 174, 16, 2),
+			lower_bound_max_digest(configuration_range(&config, 30u64), 100_000u64, 50u64, 210u64).unwrap(),
+			(222, 206, 16, 2),
 		);
 	}
 

@@ -146,7 +146,7 @@ mod tests {
 
 	#[test]
 	fn construct_genesis_should_work_with_native() {
-		let mut storage = GenesisConfig::new(false,
+		let mut storage = GenesisConfig::new(None,
 			vec![AuthorityKeyring::One.into(), AuthorityKeyring::Two.into()],
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			1000
@@ -175,7 +175,7 @@ mod tests {
 
 	#[test]
 	fn construct_genesis_should_work_with_wasm() {
-		let mut storage = GenesisConfig::new(false,
+		let mut storage = GenesisConfig::new(None,
 			vec![AuthorityKeyring::One.into(), AuthorityKeyring::Two.into()],
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			1000
@@ -204,7 +204,7 @@ mod tests {
 
 	#[test]
 	fn construct_genesis_with_bad_transaction_should_panic() {
-		let mut storage = GenesisConfig::new(false,
+		let mut storage = GenesisConfig::new(None,
 			vec![AuthorityKeyring::One.into(), AuthorityKeyring::Two.into()],
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			68

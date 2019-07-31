@@ -17,7 +17,7 @@
 //! Substrate Client
 
 use std::{
-	marker::PhantomData, collections::{HashSet, BTreeMap, HashMap, VecDeque}, sync::Arc,
+	marker::PhantomData, collections::{HashSet, BTreeMap, HashMap}, sync::Arc,
 	panic::UnwindSafe, result, cell::RefCell, rc::Rc,
 };
 use crate::error::Error;
@@ -522,7 +522,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		};
 
 		// TODO: we only work with the last config range here!!!
-		let (config_zero_number, _, config) = configs.pop_back().expect("TODO");
+		let (config_zero_number, _, config) = configs.pop().expect("TODO");
 		let finalized_number = self.backend.blockchain().info().finalized_number;
 		let oldest = storage.oldest_changes_trie_block(config_zero_number, config, finalized_number);
 		let oldest = ::std::cmp::max(config_zero_number + One::one(), oldest);
@@ -545,21 +545,29 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let (storage, configs) = self.require_changes_trie(first, last_hash)?;
 
 		let mut result = Vec::new();
+		let best_number = self.backend.blockchain().info().best_number;
 		for (config_zero, config_end, config) in configs {
+			let range_first = ::std::cmp::max(first, config_zero + One::one());
+			let range_anchor = match config_end {
+				Some((config_end_number, config_end_hash)) => if last_number > config_end_number {
+					ChangesTrieAnchorBlockId { hash: config_end_hash, number: config_end_number }
+				} else {
+					ChangesTrieAnchorBlockId { hash: convert_hash(&last_hash), number: last_number }
+				},
+				None => ChangesTrieAnchorBlockId { hash: convert_hash(&last_hash), number: last_number },
+			};
+
 			let config_range = ChangesTrieConfigurationRange {
 				config: &config,
 				zero: config_zero.clone(),
-				end: config_end.clone(),
+				end: config_end.map(|(config_end_number, _)| config_end_number),
 			};
 			let result_range: Vec<(NumberFor<Block>, u32)> = key_changes::<Blake2Hasher, _>(
 				config_range,
 				storage.storage(),
-				first,
-				&ChangesTrieAnchorBlockId {
-					hash: convert_hash(&last_hash),
-					number: last_number,
-				},
-				self.backend.blockchain().info().best_number,
+				range_first,
+				&range_anchor,
+				best_number,
 				&key.0)
 			.and_then(|r| r.map(|r| r.map(|(block, tx)| (block, tx))).collect::<Result<_, _>>())
 			.map_err(|err| error::Error::ChangesTrieAccessFailed(err))?;
@@ -666,7 +674,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			let config_range = ChangesTrieConfigurationRange {
 				config: &config,
 				zero: config_zero,
-				end: config_end,
+				end: config_end.map(|(config_end_number, _)| config_end_number),
 			};
 			let proof_range = key_changes_proof::<Blake2Hasher, _>(
 				config_range,
@@ -745,19 +753,19 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		last: Block::Hash,
 	) -> error::Result<(
 		&PrunableStateChangesTrieStorage<Block, Blake2Hasher>,
-		VecDeque<(NumberFor<Block>, Option<NumberFor<Block>>, ChangesTrieConfiguration)>,
+		Vec<(NumberFor<Block>, Option<(NumberFor<Block>, Block::Hash)>, ChangesTrieConfiguration)>,
 	)> {
 		let storage = match self.backend.changes_trie_storage() {
 			Some(storage) => storage,
 			None => return Err(error::Error::ChangesTriesNotSupported),
 		};
 
-		let mut configs = VecDeque::with_capacity(1);
+		let mut configs = Vec::with_capacity(1);
 		let mut current = last;
 		loop {
 			let ((config_zero_number, config_zero_hash), config_end, config) = storage.configuration_at(&BlockId::Hash(current))?;
 			match config {
-				Some(config) => configs.push_front((config_zero_number, config_end.map(|(config_end_number, _)| config_end_number), config)),
+				Some(config) => configs.push((config_zero_number, config_end, config)),
 				None => return Err(error::Error::ChangesTriesNotSupported),
 			}
 
@@ -765,7 +773,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				break;
 			}
 
-			current = config_zero_hash;
+			current = *self.backend.blockchain().expect_header(BlockId::Hash(config_zero_hash))?.parent_hash();
 		}
 
 		Ok((storage, configs))
@@ -978,7 +986,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		}
 
 		// FIXME #1232: correct path logic for when to execute this function
-		let (storage_update,changes_update,storage_changes) = self.block_execution(&operation.op, &import_headers, origin, hash, body.clone())?;
+		let (storage_update,changes_update,storage_changes) = self.block_execution(&operation.op, &import_headers, origin, hash, parent_hash, body.clone())?;
 
 		let is_new_best = finalized || match fork_choice {
 			ForkChoiceStrategy::LongestChain => import_headers.post().number() > &last_best_number,
@@ -1031,6 +1039,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		import_headers: &PrePostHeader<Block::Header>,
 		origin: BlockOrigin,
 		hash: Block::Hash,
+		parent_hash: Block::Hash,
 		body: Option<Vec<Block::Extrinsic>>,
 	) -> error::Result<(
 		Option<StorageUpdate<B, Block>>,
@@ -1068,6 +1077,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				};
 				let (_, storage_update, changes_update) = self.executor.call_at_state::<_, _, _, NeverNativeValue, fn() -> _>(
 					transaction_state,
+					&BlockId::Hash(parent_hash),
 					&mut overlay,
 					"Core_execute_block",
 					&<Block as BlockT>::new(import_headers.pre().clone(), body.unwrap_or_default()).encode(),
@@ -1927,7 +1937,8 @@ pub(crate) mod tests {
 
 		// prepare client ang import blocks
 		let mut local_roots = Vec::new();
-		let remote_client = TestClientBuilder::new().set_support_changes_trie(true).build();
+		let config = Some(ChangesTrieConfiguration::new(4, 2));
+		let remote_client = TestClientBuilder::new().changes_trie_config(config).build();
 		let mut nonces: HashMap<_, u64> = Default::default();
 		for (i, block_transfers) in blocks_transfers.into_iter().enumerate() {
 			let mut builder = remote_client.new_block(Default::default()).unwrap();
@@ -2738,5 +2749,94 @@ pub(crate) mod tests {
 		// trying to convert
 		let id = BlockId::<Block>::Number(72340207214430721);
 		client.header(&id).expect_err("invalid block number overflows u32");
+	}
+
+	#[test]
+	fn imports_blocks_with_changes_tries_config_change() {
+		// create client with initial 4^2 configuration
+		let client = TestClientBuilder::with_default_backend()
+			.changes_trie_config(Some(ChangesTrieConfiguration {
+				digest_interval: 4,
+				digest_levels: 2,
+			})).build();
+
+		// ===================================================================
+		// blocks 1,2,3,4,5,6,7,8,9,10 are empty
+		// block 11 changes the key
+		// block 12 is the L1 digest that covers this change
+		// blocks 13,14,15,16,17,18,19,20,21,22 are empty
+		// block 23 changes the configuration to 5^1 AND is skewed digest
+		// ===================================================================
+		// blocks 24,25 are changing the key
+		// block 26 is empty
+		// block 27 changes the key
+		// block 28 is the L1 digest (NOT SKEWED!!!) that covers changes AND changes configuration to 3^1
+		// ===================================================================
+		// block 29 is empty
+		// block 30 changes the key
+		// block 31 is L1 digest that covers this change
+		// ===================================================================
+		(1..11).for_each(|number| {
+			let block = client.new_block_at(&BlockId::Number(number - 1), Default::default()).unwrap().bake().unwrap();
+			client.import(BlockOrigin::Own, block).unwrap();
+		});
+		(11..12).for_each(|number| {
+			let mut block = client.new_block_at(&BlockId::Number(number - 1), Default::default()).unwrap();
+			block.push_storage_change(vec![42], Some(number.to_le_bytes().to_vec())).unwrap();
+			client.import(BlockOrigin::Own, block.bake().unwrap()).unwrap();
+		});
+		(12..23).for_each(|number| {
+			let block = client.new_block_at(&BlockId::Number(number - 1), Default::default()).unwrap().bake().unwrap();
+			client.import(BlockOrigin::Own, block).unwrap();
+		});
+		(23..24).for_each(|number| {
+			let mut block = client.new_block_at(&BlockId::Number(number - 1), Default::default()).unwrap();
+			block.push_changes_trie_configuration_update(Some(ChangesTrieConfiguration {
+				digest_interval: 5,
+				digest_levels: 1,
+			})).unwrap();
+			client.import(BlockOrigin::Own, block.bake().unwrap()).unwrap();
+		});
+		(24..26).for_each(|number| {
+			let mut block = client.new_block_at(&BlockId::Number(number - 1), Default::default()).unwrap();
+			block.push_storage_change(vec![42], Some(number.to_le_bytes().to_vec())).unwrap();
+			client.import(BlockOrigin::Own, block.bake().unwrap()).unwrap();
+		});
+		(26..27).for_each(|number| {
+			let block = client.new_block_at(&BlockId::Number(number - 1), Default::default()).unwrap().bake().unwrap();
+			client.import(BlockOrigin::Own, block).unwrap();
+		});
+		(27..28).for_each(|number| {
+			let mut block = client.new_block_at(&BlockId::Number(number - 1), Default::default()).unwrap();
+			block.push_storage_change(vec![42], Some(number.to_le_bytes().to_vec())).unwrap();
+			client.import(BlockOrigin::Own, block.bake().unwrap()).unwrap();
+		});
+		(28..29).for_each(|number| {
+			let mut block = client.new_block_at(&BlockId::Number(number - 1), Default::default()).unwrap();
+			block.push_changes_trie_configuration_update(Some(ChangesTrieConfiguration {
+				digest_interval: 3,
+				digest_levels: 1,
+			})).unwrap();
+			client.import(BlockOrigin::Own, block.bake().unwrap()).unwrap();
+		});
+		(29..30).for_each(|number| {
+			let block = client.new_block_at(&BlockId::Number(number - 1), Default::default()).unwrap().bake().unwrap();
+			client.import(BlockOrigin::Own, block).unwrap();
+		});
+		(30..31).for_each(|number| {
+			let mut block = client.new_block_at(&BlockId::Number(number - 1), Default::default()).unwrap();
+			block.push_storage_change(vec![42], Some(number.to_le_bytes().to_vec())).unwrap();
+			client.import(BlockOrigin::Own, block.bake().unwrap()).unwrap();
+		});
+		(31..32).for_each(|number| {
+			let block = client.new_block_at(&BlockId::Number(number - 1), Default::default()).unwrap().bake().unwrap();
+			client.import(BlockOrigin::Own, block).unwrap();
+		});
+
+		// now check that configuration cache works
+		assert_eq!(
+			client.key_changes(1, BlockId::Number(31), &StorageKey(vec![42])).unwrap(),
+			vec![(30, 0), (27, 0), (25, 0), (24, 0), (11, 0)]
+		);
 	}
 }

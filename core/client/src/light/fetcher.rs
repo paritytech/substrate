@@ -695,8 +695,9 @@ pub mod tests {
 
 			// check proof on local client
 			let local_roots_range = local_roots.clone()[(begin - 1) as usize..].to_vec();
+			let config = ChangesTrieConfiguration::new(4, 2);
 			let request = RemoteChangesRequest::<Header> {
-				changes_trie_configs: vec![(0, None, runtime::changes_trie_config())],
+				changes_trie_configs: vec![(0, None, config)],
 				first_block: (begin, begin_hash),
 				last_block: (end, end_hash),
 				max_block: (max, max_hash),
@@ -749,8 +750,9 @@ pub mod tests {
 		);
 
 		// check proof on local client
+		let config = ChangesTrieConfiguration::new(4, 2);
 		let request = RemoteChangesRequest::<Header> {
-			changes_trie_configs: vec![(0, None, runtime::changes_trie_config())],
+			changes_trie_configs: vec![(0, None, config)],
 			first_block: (1, b1),
 			last_block: (4, b4),
 			max_block: (4, b4),
@@ -789,8 +791,9 @@ pub mod tests {
 			begin_hash, end_hash, begin_hash, max_hash, &key).unwrap();
 
 		let local_roots_range = local_roots.clone()[(begin - 1) as usize..].to_vec();
+		let config = ChangesTrieConfiguration::new(4, 2);
 		let request = RemoteChangesRequest::<Header> {
-			changes_trie_configs: vec![(0, None, runtime::changes_trie_config())],
+			changes_trie_configs: vec![(0, None, config)],
 			first_block: (begin, begin_hash),
 			last_block: (end, end_hash),
 			max_block: (max, max_hash),

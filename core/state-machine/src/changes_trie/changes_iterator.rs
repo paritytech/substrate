@@ -392,22 +392,22 @@ mod tests {
 	fn drilldown_iterator_works() {
 		let (config, storage) = prepare_for_drilldown();
 		let drilldown_result = key_changes::<Blake2Hasher, u64>(
-			configuration_range(&config, 0), &storage, 0, &AnchorBlockId { hash: Default::default(), number: 16 }, 16, &[42])
+			configuration_range(&config, 0), &storage, 1, &AnchorBlockId { hash: Default::default(), number: 16 }, 16, &[42])
 			.and_then(Result::from_iter);
 		assert_eq!(drilldown_result, Ok(vec![(8, 2), (8, 1), (6, 3), (3, 0)]));
 
 		let drilldown_result = key_changes::<Blake2Hasher, u64>(
-			configuration_range(&config, 0), &storage, 0, &AnchorBlockId { hash: Default::default(), number: 2 }, 4, &[42])
+			configuration_range(&config, 0), &storage, 1, &AnchorBlockId { hash: Default::default(), number: 2 }, 4, &[42])
 			.and_then(Result::from_iter);
 		assert_eq!(drilldown_result, Ok(vec![]));
 
 		let drilldown_result = key_changes::<Blake2Hasher, u64>(
-			configuration_range(&config, 0), &storage, 0, &AnchorBlockId { hash: Default::default(), number: 3 }, 4, &[42])
+			configuration_range(&config, 0), &storage, 1, &AnchorBlockId { hash: Default::default(), number: 3 }, 4, &[42])
 			.and_then(Result::from_iter);
 		assert_eq!(drilldown_result, Ok(vec![(3, 0)]));
 
 		let drilldown_result = key_changes::<Blake2Hasher, u64>(
-			configuration_range(&config, 0), &storage, 0, &AnchorBlockId { hash: Default::default(), number: 7 }, 7, &[42])
+			configuration_range(&config, 0), &storage, 1, &AnchorBlockId { hash: Default::default(), number: 7 }, 7, &[42])
 			.and_then(Result::from_iter);
 		assert_eq!(drilldown_result, Ok(vec![(6, 3), (3, 0)]));
 
@@ -428,7 +428,7 @@ mod tests {
 		storage.clear_storage();
 
 		assert!(key_changes::<Blake2Hasher, u64>(
-			configuration_range(&config, 0), &storage, 0, &AnchorBlockId { hash: Default::default(), number: 100 }, 1000, &[42])
+			configuration_range(&config, 0), &storage, 1, &AnchorBlockId { hash: Default::default(), number: 100 }, 1000, &[42])
 			.and_then(|i| i.collect::<Result<Vec<_>, _>>()).is_err());
 	}
 
@@ -436,7 +436,7 @@ mod tests {
 	fn drilldown_iterator_fails_when_range_is_invalid() {
 		let (config, storage) = prepare_for_drilldown();
 		assert!(key_changes::<Blake2Hasher, u64>(
-			configuration_range(&config, 0), &storage, 0, &AnchorBlockId { hash: Default::default(), number: 100 }, 50, &[42]).is_err());
+			configuration_range(&config, 0), &storage, 1, &AnchorBlockId { hash: Default::default(), number: 100 }, 50, &[42]).is_err());
 		assert!(key_changes::<Blake2Hasher, u64>(
 			configuration_range(&config, 0), &storage, 20, &AnchorBlockId { hash: Default::default(), number: 10 }, 100, &[42]).is_err());
 	}
@@ -450,7 +450,7 @@ mod tests {
 		let (remote_config, remote_storage) = prepare_for_drilldown();
 		let remote_proof = key_changes_proof::<Blake2Hasher, u64>(
 			configuration_range(&remote_config, 0), &remote_storage,
-			0, &AnchorBlockId { hash: Default::default(), number: 16 }, 16, &[42]).unwrap();
+			1, &AnchorBlockId { hash: Default::default(), number: 16 }, 16, &[42]).unwrap();
 
 		// happens on local light node:
 
@@ -459,7 +459,7 @@ mod tests {
 		local_storage.clear_storage();
 		let local_result = key_changes_proof_check::<Blake2Hasher, u64>(
 			configuration_range(&local_config, 0), &local_storage, remote_proof,
-			0, &AnchorBlockId { hash: Default::default(), number: 16 }, 16, &[42]);
+			1, &AnchorBlockId { hash: Default::default(), number: 16 }, 16, &[42]);
 
 		// check that drilldown result is the same as if it was happening at the full node
 		assert_eq!(local_result, Ok(vec![(8, 2), (8, 1), (6, 3), (3, 0)]));
@@ -488,7 +488,7 @@ mod tests {
 		let storage = InMemoryStorage::with_inputs(input);
 
 		let drilldown_result = key_changes::<Blake2Hasher, u64>(
-			config_range, &storage, 0, &AnchorBlockId { hash: Default::default(), number: 91 }, 100_000u64, &[42])
+			config_range, &storage, 1, &AnchorBlockId { hash: Default::default(), number: 91 }, 100_000u64, &[42])
 			.and_then(Result::from_iter);
 		assert_eq!(drilldown_result, Ok(vec![(79, 1), (63, 0)]));
 	}

@@ -39,6 +39,11 @@ pub struct ChangesTrieConfiguration {
 }
 
 impl ChangesTrieConfiguration {
+	/// Create new configuration given digest interval and levels.
+	pub fn new(digest_interval: u32, digest_levels: u32) -> Self {
+		Self { digest_interval, digest_levels }
+	}
+
 	/// Is digest build enabled?
 	pub fn is_digest_build_enabled(&self) -> bool {
 		self.digest_interval > 1 && self.digest_levels > 0

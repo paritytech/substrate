@@ -18,10 +18,9 @@
 
 use std::collections::HashMap;
 use crate::error;
-use parity_codec::Decode;
-use primitives::{storage::well_known_keys::CHANGES_TRIE_CONFIG, ChangesTrieConfiguration};
+use primitives::ChangesTrieConfiguration;
 use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
-use runtime_primitives::traits::{Block as BlockT, Zero, NumberFor};
+use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use state_machine::backend::Backend as StateBackend;
 use state_machine::{ChangesTrieStorage as StateChangesTrieStorage, ChangesTrieState};
 use crate::blockchain::well_known_cache_keys;
@@ -256,29 +255,21 @@ where
 }
 
 /// Return changes tries state at given block.
-pub fn changes_tries_state_at_block<'a, B: Backend<Block, H>, Block: BlockT, H: Hasher>(
-	backend: &'a B,
+pub fn changes_tries_state_at_block<'a, Block: BlockT, H: Hasher>(
 	block: &BlockId<Block>,
+	maybe_storage: Option<&'a dyn PrunableStateChangesTrieStorage<Block, H>>,
 ) -> error::Result<Option<ChangesTrieState<'a, H, NumberFor<Block>>>>
 	where
 		H: Hasher<Out=Block::Hash>,
 {
-	let changes_trie_storage = match backend.changes_trie_storage() {
-		Some(changes_trie_storage) => changes_trie_storage.storage(),
+	let storage = match maybe_storage {
+		Some(storage) => storage,
 		None => return Ok(None),
 	};
 
-	let state = backend.state_at(*block)?;
-	changes_tries_state_at_state::<_, Block, _>(&state, changes_trie_storage)
-}
-
-/// Return changes tries state at given state.
-pub fn changes_tries_state_at_state<'a, S: StateBackend<H>, Block: BlockT, H: Hasher>(
-	state: &S,
-	storage: &'a dyn StateChangesTrieStorage<H, NumberFor<Block>>,
-) -> error::Result<Option<ChangesTrieState<'a, H, NumberFor<Block>>>> {
-	Ok(state.storage(CHANGES_TRIE_CONFIG)
-		.map_err(|e| error::Error::from_state(Box::new(e)))?
-		.and_then(|v| Decode::decode(&mut &v[..]))
-		.map(|config| ChangesTrieState::new(config, Zero::zero(), storage)))
+	let ((zero, _), _, config) = storage.configuration_at(block)?;
+	match config {
+		Some(config) => Ok(Some(ChangesTrieState::new(config, zero, storage.storage()))),
+		None => Ok(None),
+	}
 }

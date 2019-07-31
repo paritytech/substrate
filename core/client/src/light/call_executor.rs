@@ -163,6 +163,7 @@ where
 		NC: FnOnce() -> result::Result<R, &'static str>,
 	>(&self,
 		_state: &S,
+		_state_block: &BlockId<Block>,
 		_changes: &mut OverlayedChanges,
 		_method: &str,
 		_call_data: &[u8],
@@ -340,6 +341,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	>(&self,
 		state: &S,
+		state_block: &BlockId<Block>,
 		changes: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8],
@@ -366,6 +368,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 			>(
 				&self.remote,
 				state,
+				state_block,
 				changes,
 				method,
 				call_data,

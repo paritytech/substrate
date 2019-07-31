@@ -25,7 +25,7 @@ pub mod system;
 use rstd::{prelude::*, marker::PhantomData};
 use parity_codec::{Encode, Decode, Input};
 
-use primitives::Blake2Hasher;
+use primitives::{Blake2Hasher, ChangesTrieConfiguration};
 use trie_db::{TrieMut, Trie};
 use substrate_trie::{TrieDB, TrieDBMut, PrefixedMemoryDB};
 
@@ -111,6 +111,7 @@ pub enum Extrinsic {
 	Transfer(Transfer, AccountSignature),
 	IncludeData(Vec<u8>),
 	StorageChange(Vec<u8>, Option<Vec<u8>>),
+	ChangesTrieConfigUpdate(Option<ChangesTrieConfiguration>),
 }
 
 #[cfg(feature = "std")]
@@ -135,6 +136,8 @@ impl BlindCheckable for Extrinsic {
 			},
 			Extrinsic::IncludeData(_) => Err(runtime_primitives::BAD_SIGNATURE),
 			Extrinsic::StorageChange(key, value) => Ok(Extrinsic::StorageChange(key, value)),
+			Extrinsic::ChangesTrieConfigUpdate(new_config) =>
+				Ok(Extrinsic::ChangesTrieConfigUpdate(new_config)),
 		}
 	}
 }
@@ -193,14 +196,6 @@ pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
 	let stxs = block.extrinsics.iter().map(Encode::encode).collect::<Vec<_>>();
 	print("reserialized transactions.");
 	[stxs.len() as u8].encode()
-}
-
-/// Changes trie configuration (optionally) used in tests.
-pub fn changes_trie_config() -> primitives::ChangesTrieConfiguration {
-	primitives::ChangesTrieConfiguration {
-		digest_interval: 4,
-		digest_levels: 2,
-	}
 }
 
 /// A type that can not be decoded.

@@ -28,6 +28,7 @@ pub use runtime;
 
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT};
+use primitives::ChangesTrieConfiguration;
 
 /// A prelude to import in tests.
 pub mod prelude {
@@ -94,12 +95,12 @@ pub type LightExecutor = client::light::call_executor::RemoteOrLocalCallExecutor
 /// Parameters of test-client builder with test-runtime.
 #[derive(Default)]
 pub struct GenesisParameters {
-	support_changes_trie: bool,
+	changes_trie_config: Option<ChangesTrieConfiguration>,
 }
 
 impl generic_test_client::GenesisInit for GenesisParameters {
 	fn genesis_storage(&self) -> (StorageOverlay, ChildrenStorageOverlay) {
-		let mut storage = genesis_config(self.support_changes_trie).genesis_map();
+		let mut storage = genesis_config(self.changes_trie_config.clone()).genesis_map();
 
 		let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
 			storage.clone().into_iter()
@@ -142,8 +143,8 @@ impl DefaultTestClientBuilderExt for TestClientBuilder<
 
 /// A `test-runtime` extensions to `TestClientBuilder`.
 pub trait TestClientBuilderExt<B>: Sized {
-	/// Enable or disable support for changes trie in genesis.
-	fn set_support_changes_trie(self, support_changes_trie: bool) -> Self;
+	/// Set changes trie configuration for genesis.
+	fn changes_trie_config(self, config: Option<ChangesTrieConfiguration>) -> Self;
 
 	/// Build the test client.
 	fn build(self) -> Client<B> {
@@ -160,8 +161,8 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 > where
 	B: client::backend::Backend<runtime::Block, Blake2Hasher>,
 {
-	fn set_support_changes_trie(mut self, support_changes_trie: bool) -> Self {
-		self.genesis_init_mut().support_changes_trie = support_changes_trie;
+	fn changes_trie_config(mut self, config: Option<ChangesTrieConfiguration>) -> Self {
+		self.genesis_init_mut().changes_trie_config = config;
 		self
 	}
 
@@ -170,8 +171,8 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 	}
 }
 
-fn genesis_config(support_changes_trie: bool) -> GenesisConfig {
-	GenesisConfig::new(support_changes_trie, vec![
+fn genesis_config(changes_trie_config: Option<ChangesTrieConfiguration>) -> GenesisConfig {
+	GenesisConfig::new(changes_trie_config, vec![
 		AuthorityKeyring::Alice.into(),
 		AuthorityKeyring::Bob.into(),
 		AuthorityKeyring::Charlie.into(),
