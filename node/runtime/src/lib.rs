@@ -128,10 +128,12 @@ impl system::Trait for Runtime {
 
 parameter_types! {
 	pub const EpochDuration: u64 = EPOCH_DURATION_IN_SLOTS;
+	pub const ExpectedBlockTime: Moment = MILLISECS_PER_BLOCK;
 }
 
 impl babe::Trait for Runtime {
 	type EpochDuration = EpochDuration;
+	type ExpectedBlockTime = ExpectedBlockTime;
 }
 
 impl indices::Trait for Runtime {
@@ -524,9 +526,10 @@ impl_runtime_apis! {
 
 	impl babe_primitives::BabeApi<Block> for Runtime {
 		fn startup_data() -> babe_primitives::BabeConfiguration {
-			// The choice of `c` parameter is done in accordance to
-			// the slot duration and expected target block time, for
-			// safely resisting network delays of maximum two seconds.
+			// The choice of `c` parameter (where `1 - c` represents the
+			// probability of a slot being empty), is done in accordance to the
+			// slot duration and expected target block time, for safely
+			// resisting network delays of maximum two seconds.
 			// <https://research.web3.foundation/en/latest/polkadot/BABE/Babe/#6-practical-results>
 			babe_primitives::BabeConfiguration {
 				median_required_blocks: 1000,
