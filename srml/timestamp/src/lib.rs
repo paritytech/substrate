@@ -98,8 +98,8 @@ use parity_codec::Decode;
 use inherents::ProvideInherentData;
 use srml_support::{StorageValue, Parameter, decl_storage, decl_module, for_each_tuple};
 use srml_support::traits::{Time, Get};
-use runtime_primitives::traits::{SimpleArithmetic, Zero, SaturatedConversion};
-use runtime_primitives::weights::SimpleDispatchInfo;
+use sr_primitives::traits::{SimpleArithmetic, Zero, SaturatedConversion};
+use sr_primitives::weights::SimpleDispatchInfo;
 use system::ensure_none;
 use inherents::{RuntimeString, InherentIdentifier, ProvideInherent, IsFatalError, InherentData};
 
@@ -339,8 +339,8 @@ mod tests {
 
 	use srml_support::{impl_outer_origin, assert_ok, parameter_types};
 	use runtime_io::{with_externalities, TestExternalities};
-	use substrate_primitives::H256;
-	use runtime_primitives::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+	use primitives::H256;
+	use sr_primitives::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}

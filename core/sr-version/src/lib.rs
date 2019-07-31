@@ -25,13 +25,13 @@ use std::fmt;
 #[cfg(feature = "std")]
 use std::collections::HashSet;
 #[cfg(feature = "std")]
-use runtime_primitives::traits::RuntimeApiInfo;
+use sr_primitives::traits::RuntimeApiInfo;
 
 use parity_codec::Encode;
 #[cfg(feature = "std")]
 use parity_codec::Decode;
-use runtime_primitives::RuntimeString;
-pub use runtime_primitives::create_runtime_str;
+use sr_primitives::RuntimeString;
+pub use sr_primitives::create_runtime_str;
 
 /// The identity of a particular API interface that the runtime might provide.
 pub type ApiId = [u8; 8];

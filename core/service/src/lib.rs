@@ -42,8 +42,8 @@ use network::{NetworkState, NetworkStateInfo};
 use log::{log, info, warn, debug, error, Level};
 use parity_codec::{Encode, Decode};
 use primitives::{Pair, ed25519, sr25519, crypto};
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Header, NumberFor, SaturatedConversion, Zero};
+use sr_primitives::generic::BlockId;
+use sr_primitives::traits::{Header, NumberFor, SaturatedConversion, Zero};
 use substrate_executor::NativeExecutor;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
@@ -722,7 +722,7 @@ fn build_network_future<
 			"Polling the network future took {:?}",
 			polling_dur
 		);
-		
+
 		Ok(Async::NotReady)
 	})
 }
@@ -846,7 +846,7 @@ fn transactions_to_propagate<PoolApi, B, H, E>(pool: &TransactionPool<PoolApi>)
 where
 	PoolApi: ChainApi<Block=B, Hash=H, Error=E>,
 	B: BlockT,
-	H: std::hash::Hash + Eq + runtime_primitives::traits::Member + serde::Serialize,
+	H: std::hash::Hash + Eq + sr_primitives::traits::Member + serde::Serialize,
 	E: txpool::error::IntoPoolError + From<txpool::error::Error>,
 {
 	pool.ready()
@@ -916,7 +916,7 @@ impl<Block, ConsensusPair, FinalityPair>
 	offchain::AuthorityKeyProvider<Block>
 	for AuthorityKeyProvider<Block, ConsensusPair, FinalityPair>
 where
-	Block: runtime_primitives::traits::Block,
+	Block: sr_primitives::traits::Block,
 	ConsensusPair: Pair,
 	FinalityPair: Pair,
 {
@@ -991,8 +991,8 @@ where
 /// # use node_runtime::{GenesisConfig, RuntimeApi};
 /// # use std::sync::Arc;
 /// # use node_primitives::Block;
-/// # use runtime_primitives::Justification;
-/// # use runtime_primitives::traits::Block as BlockT;
+/// # use sr_primitives::Justification;
+/// # use sr_primitives::traits::Block as BlockT;
 /// # use grandpa;
 /// # construct_simple_protocol! {
 /// # 	pub struct NodeProtocol where Block = Block { }
@@ -1178,7 +1178,7 @@ macro_rules! construct_service_factory {
 mod tests {
 	use super::*;
 	use consensus_common::SelectChain;
-	use runtime_primitives::traits::BlindCheckable;
+	use sr_primitives::traits::BlindCheckable;
 	use substrate_test_runtime_client::{prelude::*, runtime::{Extrinsic, Transfer}};
 
 	#[test]

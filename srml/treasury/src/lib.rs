@@ -75,11 +75,11 @@ use srml_support::traits::{
 	Currency, ExistenceRequirement, Get, Imbalance, OnDilution, OnUnbalanced,
 	ReservableCurrency, WithdrawReason
 };
-use runtime_primitives::{Permill, ModuleId};
-use runtime_primitives::traits::{
+use sr_primitives::{Permill, ModuleId};
+use sr_primitives::traits::{
 	Zero, EnsureOrigin, StaticLookup, CheckedSub, CheckedMul, AccountIdConversion
 };
-use runtime_primitives::weights::SimpleDispatchInfo;
+use sr_primitives::weights::SimpleDispatchInfo;
 use parity_codec::{Encode, Decode};
 use system::ensure_signed;
 
@@ -363,8 +363,8 @@ mod tests {
 
 	use runtime_io::with_externalities;
 	use srml_support::{assert_noop, assert_ok, impl_outer_origin, parameter_types};
-	use substrate_primitives::{H256, Blake2Hasher};
-	use runtime_primitives::{Perbill, traits::{BlakeTwo256, OnFinalize, IdentityLookup}, testing::Header};
+	use primitives::{H256, Blake2Hasher};
+	use sr_primitives::{Perbill, traits::{BlakeTwo256, OnFinalize, IdentityLookup}, testing::Header};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}

@@ -30,7 +30,7 @@ use parity_codec::Encode;
 use trie;
 
 use primitives::{H256, convert_hash};
-use runtime_primitives::traits::{Header as HeaderT, SimpleArithmetic, Zero, One};
+use sr_primitives::traits::{Header as HeaderT, SimpleArithmetic, Zero, One};
 use state_machine::backend::InMemory as InMemoryState;
 use state_machine::{MemoryDB, TrieBackend, Backend as StateBackend,
 	prove_read_on_trie_backend, read_proof_check, read_proof_check_on_proving_backend};

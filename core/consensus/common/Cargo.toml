@@ -15,7 +15,7 @@ futures-preview = "0.3.0-alpha.17"
 futures-timer = "0.2.1"
 rstd = { package = "sr-std", path = "../../sr-std" }
 runtime_version = { package = "sr-version", path = "../../sr-version" }
-runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
+sr-primitives = {  path = "../../sr-primitives" }
 parity-codec = { version = "4.1.1", features = ["derive"] }
 parking_lot = "0.8.0"
 

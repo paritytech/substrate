@@ -21,7 +21,7 @@ use runtime_io::{blake2_256, twox_128};
 use super::{AuthorityId, AccountId, WASM_BINARY};
 use parity_codec::{Encode, KeyedVec, Joiner};
 use primitives::{ChangesTrieConfiguration, map, storage::well_known_keys};
-use runtime_primitives::traits::Block;
+use sr_primitives::traits::Block;
 
 /// Configuration of a general Substrate test genesis block.
 pub struct GenesisConfig {

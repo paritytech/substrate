@@ -25,7 +25,7 @@ use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use rstd::prelude::*;
 use runtime_io::blake2_256;
-use runtime_primitives::traits::{Bounded, Zero};
+use sr_primitives::traits::{Bounded, Zero};
 use srml_support::traits::{Currency, Get, Imbalance, SignedImbalance, UpdateBalanceOutcome};
 use srml_support::{storage::child, StorageMap};
 use system;

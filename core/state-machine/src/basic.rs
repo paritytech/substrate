@@ -23,8 +23,7 @@ use hash_db::Hasher;
 use trie::TrieConfiguration;
 use trie::trie_types::Layout;
 use primitives::offchain;
-use primitives::storage::well_known_keys::{HEAP_PAGES, is_child_storage_key};
-use parity_codec::Encode;
+use primitives::storage::well_known_keys::is_child_storage_key;
 use super::{ChildStorageKey, Externalities};
 use log::warn;
 
@@ -43,10 +42,9 @@ impl BasicExternalities {
 
 	/// Create a new instance of `BasicExternalities` with children
 	pub fn new_with_children(
-		mut top: HashMap<Vec<u8>, Vec<u8>>,
+		top: HashMap<Vec<u8>, Vec<u8>>,
 		children: HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
 	) -> Self {
-		top.insert(HEAP_PAGES.to_vec(), 8u64.encode());
 		BasicExternalities {
 			top,
 			children,
@@ -189,7 +187,7 @@ mod tests {
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
-		const ROOT: [u8; 32] = hex!("555d4777b52e9196e3f6373c556cc661e79cd463f881ab9e921e70fc30144bf4");
+		const ROOT: [u8; 32] = hex!("39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa");
 
 		assert_eq!(ext.storage_root(), H256::from(ROOT));
 	}
@@ -232,5 +230,13 @@ mod tests {
 
 		ext.kill_child_storage(child());
 		assert_eq!(ext.child_storage(child(), b"doe"), None);
+	}
+
+	#[test]
+	fn basic_externalities_is_empty() {
+		// Make sure no values are set by default in `BasicExternalities`.
+		let (storage, child_storage) = BasicExternalities::new(Default::default()).into_storages();
+		assert!(storage.is_empty());
+		assert!(child_storage.is_empty());
 	}
 }

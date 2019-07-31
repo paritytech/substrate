@@ -23,7 +23,7 @@ use log::warn;
 use std::{collections::VecDeque, io, marker::PhantomData, vec::IntoIter as VecIntoIter};
 use futures::{prelude::*, future, stream};
 use parity_codec::{Decode, Encode};
-use runtime_primitives::traits::Block as BlockT;
+use sr_primitives::traits::Block as BlockT;
 use tokio_io::{AsyncRead, AsyncWrite};
 use unsigned_varint::codec::UviBytes;
 

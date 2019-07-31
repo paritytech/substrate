@@ -17,10 +17,10 @@
 //! Test utilities
 
 use std::{collections::HashSet, cell::RefCell};
-use primitives::Perbill;
-use primitives::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize};
-use primitives::testing::{Header, UintAuthorityId};
-use substrate_primitives::{H256, Blake2Hasher};
+use sr_primitives::Perbill;
+use sr_primitives::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize};
+use sr_primitives::testing::{Header, UintAuthorityId};
+use primitives::{H256, Blake2Hasher};
 use runtime_io;
 use srml_support::{assert_ok, impl_outer_origin, parameter_types, EnumerableStorageMap};
 use srml_support::traits::{Currency, Get, FindAuthor};
@@ -111,7 +111,7 @@ impl system::Trait for Test {
 	type Index = u64;
 	type BlockNumber = BlockNumber;
 	type Hash = H256;
-	type Hashing = ::primitives::traits::BlakeTwo256;
+	type Hashing = ::sr_primitives::traits::BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
