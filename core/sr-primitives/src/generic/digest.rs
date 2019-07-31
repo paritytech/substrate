@@ -221,6 +221,8 @@ impl<Hash: Encode> Encode for DigestItem<Hash> {
 	}
 }
 
+impl<Hash: Encode> codec::EncodeLike for DigestItem<Hash> {}
+
 impl<Hash: Decode> Decode for DigestItem<Hash> {
 	#[allow(deprecated)]
 	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
@@ -339,6 +341,8 @@ impl<'a, Hash: Encode> Encode for DigestItemRef<'a, Hash> {
 		v
 	}
 }
+
+impl<'a, Hash: Encode> codec::EncodeLike for DigestItemRef<'a, Hash> {}
 
 #[cfg(test)]
 mod tests {

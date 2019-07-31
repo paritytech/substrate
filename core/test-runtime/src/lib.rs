@@ -213,6 +213,8 @@ impl<B: BlockT> Encode for DecodeFails<B> {
 	}
 }
 
+impl<B: BlockT> codec::EncodeLike for DecodeFails<B> {}
+
 impl<B: BlockT> DecodeFails<B> {
 	/// Create a new instance.
 	pub fn new() -> DecodeFails<B> {

@@ -284,6 +284,8 @@ impl<AccountId: Encode> Encode for PermissionVersions<AccountId> {
 	}
 }
 
+impl<AccountId: Encode> codec::EncodeLike for PermissionVersions<AccountId> {}
+
 impl<AccountId: Decode> Decode for PermissionVersions<AccountId> {
 	fn decode<I: Input>(input: &mut I) -> core::result::Result<Self, Error> {
 		let version = PermissionVersionNumber::decode(input)?;

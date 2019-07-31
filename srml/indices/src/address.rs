@@ -115,6 +115,11 @@ impl<AccountId, AccountIndex> Encode for Address<AccountId, AccountIndex> where
 	}
 }
 
+impl<AccountId, AccountIndex> codec::EncodeLike for Address<AccountId, AccountIndex> where
+	AccountId: Member + Encode,
+	AccountIndex: Member + Encode + PartialOrd<AccountIndex> + Ord + Copy + From<u32> + TryInto<u32>,
+{}
+
 impl<AccountId, AccountIndex> Default for Address<AccountId, AccountIndex> where
 	AccountId: Member + Default,
 	AccountIndex: Member,

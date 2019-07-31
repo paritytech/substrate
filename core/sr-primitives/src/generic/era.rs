@@ -111,6 +111,8 @@ impl Encode for Era {
 	}
 }
 
+impl codec::EncodeLike for Era {}
+
 impl Decode for Era {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
 		let first = input.read_byte()?;

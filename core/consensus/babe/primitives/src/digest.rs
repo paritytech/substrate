@@ -79,6 +79,9 @@ impl Encode for BabePreDigest {
 }
 
 #[cfg(feature = "std")]
+impl codec::EncodeLike for BabePreDigest {}
+
+#[cfg(feature = "std")]
 impl Decode for BabePreDigest {
 	fn decode<R: Input>(i: &mut R) -> Result<Self, Error> {
 		let RawBabePreDigest { vrf_output, vrf_proof, authority_index, slot_number } = Decode::decode(i)?;

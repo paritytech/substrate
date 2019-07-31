@@ -55,6 +55,8 @@ impl Encode for NodeHeader {
 	}
 }
 
+impl codec::EncodeLike for NodeHeader {}
+
 impl Decode for NodeHeader {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
 		Ok(match input.read_byte()? {

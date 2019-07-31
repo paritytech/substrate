@@ -59,6 +59,8 @@ impl<B, O> Encode for DecodeDifferent<B, O> where B: Encode + 'static, O: Encode
 	}
 }
 
+impl<B, O> codec::EncodeLike for DecodeDifferent<B, O> where B: Encode + 'static, O: Encode + 'static {}
+
 #[cfg(feature = "std")]
 impl<B, O> Decode for DecodeDifferent<B, O> where B: 'static, O: Decode + 'static {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
@@ -144,6 +146,8 @@ impl<E: Encode> Encode for FnEncode<E> {
 	}
 }
 
+impl<E: Encode> codec::EncodeLike for FnEncode<E> {}
+
 impl<E: Encode + PartialEq> PartialEq for FnEncode<E> {
 	fn eq(&self, other: &Self) -> bool {
 		self.0().eq(&other.0())
@@ -222,6 +226,8 @@ impl Encode for DefaultByteGetter {
 		self.0.default_byte().encode_to(dest)
 	}
 }
+
+impl codec::EncodeLike for DefaultByteGetter {}
 
 impl PartialEq<DefaultByteGetter> for DefaultByteGetter {
 	fn eq(&self, other: &DefaultByteGetter) -> bool {
@@ -332,6 +338,8 @@ pub enum RuntimeMetadataDeprecated { }
 impl Encode for RuntimeMetadataDeprecated {
 	fn encode_to<W: Output>(&self, _dest: &mut W) {}
 }
+
+impl codec::EncodeLike for RuntimeMetadataDeprecated {}
 
 #[cfg(feature = "std")]
 impl Decode for RuntimeMetadataDeprecated {

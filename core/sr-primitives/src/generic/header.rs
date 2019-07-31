@@ -85,6 +85,12 @@ impl<Number, Hash> Encode for Header<Number, Hash> where
 	}
 }
 
+impl<Number, Hash> codec::EncodeLike for Header<Number, Hash> where
+	Number: HasCompact + Copy + Into<u128>,
+	Hash: HashT,
+	Hash::Output: Encode,
+{}
+
 impl<Number, Hash> traits::Header for Header<Number, Hash> where
 	Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + MaybeDisplay + SimpleArithmetic + Codec + Copy + Into<u128>,
 	Hash: HashT,

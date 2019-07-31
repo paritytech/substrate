@@ -191,6 +191,9 @@ impl codec::Encode for NeverNativeValue {
 }
 
 #[cfg(feature = "std")]
+impl codec::EncodeLike for NeverNativeValue {}
+
+#[cfg(feature = "std")]
 impl codec::Decode for NeverNativeValue {
 	fn decode<I: codec::Input>(_: &mut I) -> Result<Self, codec::Error> {
 		Err("Never native value cannot be decoded".into())

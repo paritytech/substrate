@@ -95,6 +95,8 @@ impl<Number: BlockNumber> Encode for ExtrinsicIndex<Number> {
 	}
 }
 
+impl<Number: BlockNumber> codec::EncodeLike for ExtrinsicIndex<Number> {}
+
 impl<Number: BlockNumber> DigestIndex<Number> {
 	pub fn key_neutral_prefix(block: Number) -> Vec<u8> {
 		let mut prefix = vec![2];
@@ -111,6 +113,8 @@ impl<Number: BlockNumber> Encode for DigestIndex<Number> {
 		self.key.encode_to(dest);
 	}
 }
+
+impl<Number: BlockNumber> codec::EncodeLike for DigestIndex<Number> {}
 
 impl<Number: BlockNumber> Decode for InputKey<Number> {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {

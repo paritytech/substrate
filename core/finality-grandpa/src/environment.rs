@@ -95,6 +95,8 @@ impl<Block: BlockT> Encode for CompletedRounds<Block> {
 	}
 }
 
+impl<Block: BlockT> codec::EncodeLike for CompletedRounds<Block> {}
+
 impl<Block: BlockT> Decode for CompletedRounds<Block> {
 	fn decode<I: codec::Input>(value: &mut I) -> Result<Self, codec::Error> {
 		<(Vec<CompletedRound<Block>>, u64, Vec<AuthorityId>)>::decode(value)

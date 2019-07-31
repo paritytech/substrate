@@ -90,6 +90,8 @@ impl Encode for BlockAttributes {
 	}
 }
 
+impl codec::EncodeLike for BlockAttributes {}
+
 impl Decode for BlockAttributes {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
 		Self::from_bits(input.read_byte()?).ok_or_else(|| Error::from("Invalid bytes"))

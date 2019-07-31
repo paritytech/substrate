@@ -154,6 +154,8 @@ impl Encode for Vote {
 	}
 }
 
+impl codec::EncodeLike for Vote {}
+
 impl Decode for Vote {
 	fn decode<I: Input>(input: &mut I) -> core::result::Result<Self, Error> {
 		let b = input.read_byte()?;

@@ -114,6 +114,8 @@ impl codec::Encode for Roles {
 	}
 }
 
+impl codec::EncodeLike for Roles {}
+
 impl codec::Decode for Roles {
 	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
 		Self::from_bits(input.read_byte()?).ok_or_else(|| codec::Error::from("Invalid bytes"))
