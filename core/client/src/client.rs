@@ -1021,7 +1021,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		}
 
 		let route_from_finalized = crate::blockchain::tree_route(
-			|id| self.header(&id)?.ok_or(Error::UnknownBlock(format!("Unknown block {:?}", id))),
+			|id| self.header(&id)?.ok_or_else(|| Error::UnknownBlock(format!("Unknown block {:?}", id))),
 			BlockId::Hash(last_finalized),
 			BlockId::Hash(block),
 		)?;
@@ -1034,7 +1034,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		}
 
 		let route_from_best = crate::blockchain::tree_route(
-			|id| self.header(&id)?.ok_or(Error::UnknownBlock(format!("Unknown block {:?}", id))),
+			|id| self.header(&id)?.ok_or_else(|| Error::UnknownBlock(format!("Unknown block {:?}", id))),
 			BlockId::Hash(best_block),
 			BlockId::Hash(block),
 		)?;
@@ -1883,7 +1883,7 @@ pub mod utils {
 			}
 
 			let tree_route = blockchain::tree_route(
-				|id| client.header(&id)?.ok_or(Error::UnknownBlock(format!("Unknown block {:?}", id))),
+				|id| client.header(&id)?.ok_or_else(|| Error::UnknownBlock(format!("Unknown block {:?}", id))),
 				BlockId::Hash(*hash),
 				BlockId::Hash(*base),
 			)?;
