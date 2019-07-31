@@ -581,6 +581,7 @@ pub(crate) mod tests {
 	use test_client::client::{backend::NewBlockState};
 	use test_client::client::in_mem::Blockchain as InMemoryBlockchain;
 	use super::*;
+	use primitives::crypto::Public;
 
 	type FinalityProof = super::FinalityProof<Header>;
 
@@ -739,7 +740,7 @@ pub(crate) mod tests {
 		let proof_of_4 = prove_finality::<_, _, TestJustification>(
 			&blockchain,
 			&(
-				|_| Ok(vec![(AuthorityId::from_raw([1u8; 32]), 1u64)]),
+				|_| Ok(vec![(AuthorityId::from_slice(&[1u8; 32]), 1u64)]),
 				|_| unreachable!("authorities didn't change => ProveAuthorities won't be called"),
 			),
 			0,
@@ -762,7 +763,7 @@ pub(crate) mod tests {
 		let proof_of_5: FinalityProof = Decode::decode(&mut &prove_finality::<_, _, TestJustification>(
 			&blockchain,
 			&(
-				|_| Ok(vec![(AuthorityId::from_raw([1u8; 32]), 1u64)]),
+				|_| Ok(vec![(AuthorityId::from_slice(&[1u8; 32]), 1u64)]),
 				|_| unreachable!("should return before calling ProveAuthorities"),
 			),
 			0,
@@ -788,7 +789,7 @@ pub(crate) mod tests {
 		let proof_of_5: FinalityProof = Decode::decode(&mut &prove_finality::<_, _, TestJustification>(
 			&blockchain,
 			&(
-				|_| Ok(vec![(AuthorityId::from_raw([1u8; 32]), 1u64)]),
+				|_| Ok(vec![(AuthorityId::from_slice(&[1u8; 32]), 1u64)]),
 				|_| unreachable!("should return before calling ProveAuthorities"),
 			),
 			0,
@@ -820,10 +821,12 @@ pub(crate) mod tests {
 			&blockchain,
 			&(
 				|block_id| match block_id {
-					BlockId::Hash(h) if h == header(3).hash() => Ok(vec![(AuthorityId::from_raw([3u8; 32]), 1u64)]),
-					BlockId::Number(3) => Ok(vec![(AuthorityId::from_raw([3u8; 32]), 1u64)]),
-					BlockId::Number(4) => Ok(vec![(AuthorityId::from_raw([4u8; 32]), 1u64)]),
-					BlockId::Number(6) => Ok(vec![(AuthorityId::from_raw([6u8; 32]), 1u64)]),
+					BlockId::Hash(h) if h == header(3).hash() => Ok(
+						vec![(AuthorityId::from_slice(&[3u8; 32]), 1u64)]
+					),
+					BlockId::Number(3) => Ok(vec![(AuthorityId::from_slice(&[3u8; 32]), 1u64)]),
+					BlockId::Number(4) => Ok(vec![(AuthorityId::from_slice(&[4u8; 32]), 1u64)]),
+					BlockId::Number(6) => Ok(vec![(AuthorityId::from_slice(&[6u8; 32]), 1u64)]),
 					_ => unreachable!("no other authorities should be fetched: {:?}", block_id),
 				},
 				|block_id| match block_id {
@@ -864,7 +867,7 @@ pub(crate) mod tests {
 		do_check_finality_proof::<_, _, TestJustification>(
 			&blockchain,
 			1,
-			vec![(AuthorityId::from_raw([3u8; 32]), 1u64)],
+			vec![(AuthorityId::from_slice(&[3u8; 32]), 1u64)],
 			&ClosureAuthoritySetForFinalityChecker(|_, _, _| unreachable!("returns before CheckAuthoritiesProof")),
 			vec![42],
 		).unwrap_err();
@@ -878,7 +881,7 @@ pub(crate) mod tests {
 		do_check_finality_proof::<_, _, TestJustification>(
 			&blockchain,
 			1,
-			vec![(AuthorityId::from_raw([3u8; 32]), 1u64)],
+			vec![(AuthorityId::from_slice(&[3u8; 32]), 1u64)],
 			&ClosureAuthoritySetForFinalityChecker(|_, _, _| unreachable!("returns before CheckAuthoritiesProof")),
 			Vec::<TestJustification>::new().encode(),
 		).unwrap_err();
@@ -892,7 +895,7 @@ pub(crate) mod tests {
 		do_check_finality_proof::<_, _, TestJustification>(
 			&blockchain,
 			1,
-			vec![(AuthorityId::from_raw([3u8; 32]), 1u64)],
+			vec![(AuthorityId::from_slice(&[3u8; 32]), 1u64)],
 			&ClosureAuthoritySetForFinalityChecker(|_, _, _| unreachable!("returns before CheckAuthoritiesProof")),
 			vec![FinalityProofFragment {
 				block: header(4).hash(),
@@ -916,7 +919,7 @@ pub(crate) mod tests {
 		do_check_finality_proof::<_, _, TestJustification>(
 			&blockchain,
 			1,
-			vec![(AuthorityId::from_raw([3u8; 32]), 1u64)],
+			vec![(AuthorityId::from_slice(&[3u8; 32]), 1u64)],
 			&ClosureAuthoritySetForFinalityChecker(|_, _, _| unreachable!("returns before CheckAuthoritiesProof")),
 			vec![FinalityProofFragment {
 				block: header(4).hash(),
@@ -939,8 +942,8 @@ pub(crate) mod tests {
 		let effects = do_check_finality_proof::<_, _, TestJustification>(
 			&blockchain,
 			1,
-			vec![(AuthorityId::from_raw([3u8; 32]), 1u64)],
-			&ClosureAuthoritySetForFinalityChecker(|_, _, _| Ok(vec![(AuthorityId::from_raw([4u8; 32]), 1u64)])),
+			vec![(AuthorityId::from_slice(&[3u8; 32]), 1u64)],
+			&ClosureAuthoritySetForFinalityChecker(|_, _, _| Ok(vec![(AuthorityId::from_slice(&[4u8; 32]), 1u64)])),
 			vec![FinalityProofFragment {
 				block: header(2).hash(),
 				justification: TestJustification(true, vec![7]).encode(),
@@ -958,7 +961,7 @@ pub(crate) mod tests {
 			block: header(4).hash(),
 			justification: TestJustification(true, vec![8]).encode(),
 			new_set_id: 2,
-			new_authorities: vec![(AuthorityId::from_raw([4u8; 32]), 1u64)],
+			new_authorities: vec![(AuthorityId::from_slice(&[4u8; 32]), 1u64)],
 		});
 	}
 
@@ -975,7 +978,7 @@ pub(crate) mod tests {
 		let proof_of_4 = prove_finality::<_, _, TestJustification>(
 			&blockchain,
 			&(
-				|_| Ok(vec![(AuthorityId::from_raw([1u8; 32]), 1u64)]),
+				|_| Ok(vec![(AuthorityId::from_slice(&[1u8; 32]), 1u64)]),
 				|_| unreachable!("should return before calling ProveAuthorities"),
 			),
 			0,

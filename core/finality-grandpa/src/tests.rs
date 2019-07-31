@@ -37,7 +37,7 @@ use std::result;
 use parity_codec::Decode;
 use sr_primitives::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT};
 use sr_primitives::generic::BlockId;
-use primitives::{NativeOrEncoded, ExecutionContext};
+use primitives::{NativeOrEncoded, ExecutionContext, crypto::Public};
 use fg_primitives::AuthorityId;
 
 use authorities::AuthoritySet;
@@ -273,7 +273,7 @@ impl GrandpaApi<Block> for RuntimeApi {
 		_: ExecutionContext,
 		_: Option<()>,
 		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<Vec<(primitives::ed25519::Public, u64)>>> {
+	) -> Result<NativeOrEncoded<Vec<(AuthorityId, u64)>>> {
 		Ok(self.inner.genesis_authorities.clone()).map(NativeOrEncoded::Native)
 	}
 
@@ -342,11 +342,8 @@ impl AuthoritySetForFinalityChecker<Block> for TestApi {
 
 const TEST_GOSSIP_DURATION: Duration = Duration::from_millis(500);
 
-fn make_ids(keys: &[Ed25519Keyring]) -> Vec<(primitives::ed25519::Public, u64)> {
-	keys.iter()
-		.map(|key| AuthorityId::from_raw(key.to_raw_public()))
-		.map(|id| (id, 1))
-		.collect()
+fn make_ids(keys: &[Ed25519Keyring]) -> Vec<(AuthorityId, u64)> {
+	keys.iter().map(|key| key.clone().public().into()).map(|id| (id, 1)).collect()
 }
 
 // run the voters to completion. provide a closure to be invoked after
@@ -405,7 +402,7 @@ fn run_to_completion_with<F>(
 			config: Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				justification_period: 32,
-				local_key: Some(Arc::new(key.clone().into())),
+				local_key: Some(Arc::new(key.clone().pair().into())),
 				name: Some(format!("peer#{}", peer_id)),
 			},
 			link: link,
@@ -482,7 +479,7 @@ fn finalize_3_voters_1_full_observer() {
 
 	let all_peers = peers.iter()
 		.cloned()
-		.map(|key| Some(Arc::new(key.into())))
+		.map(|key| Some(Arc::new(key.pair().into())))
 		.chain(::std::iter::once(None));
 
 	for (peer_id, local_key) in all_peers.enumerate() {
@@ -521,7 +518,7 @@ fn finalize_3_voters_1_full_observer() {
 	}
 
 	// wait for all finalized on each.
-	let wait_for = ::futures::future::join_all(finality_notifications)
+	let wait_for = futures::future::join_all(finality_notifications)
 		.map(|_| ())
 		.map_err(|_| ());
 
@@ -640,7 +637,7 @@ fn transition_3_voters_twice_1_full_observer() {
 		.cloned()
 		.collect::<HashSet<_>>() // deduplicate
 		.into_iter()
-		.map(|key| Some(Arc::new(key.into())))
+		.map(|key| Some(Arc::new(key.pair().into())))
 		.enumerate();
 
 	for (peer_id, local_key) in all_peers {
@@ -704,7 +701,7 @@ fn justification_is_emitted_when_consensus_data_changes() {
 	let mut net = GrandpaTestNet::new(TestApi::new(make_ids(peers)), 3);
 
 	// import block#1 WITH consensus data change
-	let new_authorities = vec![primitives::sr25519::Public::from_raw([42; 32])];
+	let new_authorities = vec![babe_primitives::AuthorityId::from_slice(&[42; 32])];
 	net.peer(0).push_authorities_change_block(new_authorities);
 	net.block_until_sync(&mut runtime);
 	let net = Arc::new(Mutex::new(net));
@@ -1095,10 +1092,10 @@ fn voter_persists_its_votes() {
 				config: Config {
 					gossip_duration: TEST_GOSSIP_DURATION,
 					justification_period: 32,
-					local_key: Some(Arc::new(peers[0].clone().into())),
+					local_key: Some(Arc::new(peers[0].clone().pair().into())),
 					name: Some(format!("peer#{}", 0)),
 				},
-				link: link,
+				link,
 				network: net.lock().peers[0].network_service().clone(),
 				inherent_data_providers: InherentDataProviders::new(),
 				on_exit: Exit,
@@ -1147,7 +1144,7 @@ fn voter_persists_its_votes() {
 		let config = Config {
 			gossip_duration: TEST_GOSSIP_DURATION,
 			justification_period: 32,
-			local_key: Some(Arc::new(peers[1].clone().into())),
+			local_key: Some(Arc::new(peers[1].clone().pair().into())),
 			name: Some(format!("peer#{}", 1)),
 		};
 
@@ -1320,7 +1317,7 @@ fn finality_proof_is_fetched_by_light_client_when_consensus_data_changes() {
 
 	// import block#1 WITH consensus data change. Light client ignores justification
 	// && instead fetches finality proof for block #1
-	net.peer(0).push_authorities_change_block(vec![primitives::sr25519::Public::from_raw([42; 32])]);
+	net.peer(0).push_authorities_change_block(vec![babe_primitives::AuthorityId::from_slice(&[42; 32])]);
 	let net = Arc::new(Mutex::new(net));
 	run_to_completion(&mut runtime, 1, net.clone(), peers);
 	net.lock().block_until_sync(&mut runtime);
@@ -1383,7 +1380,7 @@ fn empty_finality_proof_is_returned_to_light_client_when_authority_set_is_differ
 	// normally it will reach light client, but because of the forced change, it will not
 	net.lock().peer(0).push_blocks(8, false); // best is #9
 	net.lock().peer(0).push_authorities_change_block(
-		vec![primitives::sr25519::Public::from_raw([42; 32])]
+		vec![babe_primitives::AuthorityId::from_slice(&[42; 32])]
 	); // #10
 	net.lock().peer(0).push_blocks(1, false); // best is #11
 	net.lock().block_until_sync(&mut runtime);
@@ -1425,7 +1422,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 				local_key,
 				name: Some(format!("peer#{}", peer_id)),
 			},
-			link: link,
+			link,
 			network: net.lock().peer(peer_id).network_service().clone(),
 			inherent_data_providers: InherentDataProviders::new(),
 			on_exit: Exit,
@@ -1453,7 +1450,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 				.for_each(move |_| Ok(()))
 		);
 
-		let voter = voter(Some(Arc::new((*key).into())), peer_id, link, net.clone());
+		let voter = voter(Some(Arc::new(key.pair().into())), peer_id, link, net.clone());
 
 		runtime.spawn(voter);
 	}

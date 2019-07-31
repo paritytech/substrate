@@ -431,6 +431,7 @@ impl<H, N: Add<Output=N> + Clone> PendingChange<H, N> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use primitives::crypto::Public;
 
 	fn static_is_descendent_of<A>(value: bool)
 		-> impl Fn(&A, &A) -> Result<bool, std::io::Error>
@@ -520,8 +521,8 @@ mod tests {
 			pending_forced_changes: Vec::new(),
 		};
 
-		let set_a = vec![(AuthorityId::from_raw([1; 32]), 5)];
-		let set_b = vec![(AuthorityId::from_raw([2; 32]), 5)];
+		let set_a = vec![(AuthorityId::from_slice(&[1; 32]), 5)];
+		let set_b = vec![(AuthorityId::from_slice(&[2; 32]), 5)];
 
 		// two competing changes at the same height on different forks
 		let change_a = PendingChange {
@@ -585,8 +586,8 @@ mod tests {
 			pending_forced_changes: Vec::new(),
 		};
 
-		let set_a = vec![(AuthorityId::from_raw([1; 32]), 5)];
-		let set_c = vec![(AuthorityId::from_raw([2; 32]), 5)];
+		let set_a = vec![(AuthorityId::from_slice(&[1; 32]), 5)];
+		let set_c = vec![(AuthorityId::from_slice(&[2; 32]), 5)];
 
 		// two competing changes at the same height on different forks
 		let change_a = PendingChange {
@@ -651,7 +652,7 @@ mod tests {
 			pending_forced_changes: Vec::new(),
 		};
 
-		let set_a = vec![(AuthorityId::from_raw([1; 32]), 5)];
+		let set_a = vec![(AuthorityId::from_slice(&[1; 32]), 5)];
 
 		let change_a = PendingChange {
 			next_authorities: set_a.clone(),
@@ -717,8 +718,8 @@ mod tests {
 			pending_forced_changes: Vec::new(),
 		};
 
-		let set_a = vec![(AuthorityId::from_raw([1; 32]), 5)];
-		let set_b = vec![(AuthorityId::from_raw([2; 32]), 5)];
+		let set_a = vec![(AuthorityId::from_slice(&[1; 32]), 5)];
+		let set_b = vec![(AuthorityId::from_slice(&[2; 32]), 5)];
 
 		let change_a = PendingChange {
 			next_authorities: set_a.clone(),

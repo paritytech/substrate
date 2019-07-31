@@ -204,7 +204,7 @@ fn make_test_network() -> (
 
 fn make_ids(keys: &[Ed25519Keyring]) -> Vec<(AuthorityId, u64)> {
 	keys.iter()
-		.map(|key| AuthorityId(key.to_raw_public()))
+		.map(|key| key.clone().public().into())
 		.map(|id| (id, 1))
 		.collect()
 }
@@ -242,7 +242,7 @@ fn good_commit_leads_to_relay() {
 		for (i, key) in private.iter().enumerate() {
 			precommits.push(precommit.clone());
 
-			let signature = key.sign(&payload[..]);
+			let signature = fg_primitives::AuthoritySignature::from(key.sign(&payload[..]));
 			auth_data.push((signature, public[i].0.clone()))
 		}
 
@@ -357,7 +357,7 @@ fn bad_commit_leads_to_report() {
 		for (i, key) in private.iter().enumerate() {
 			precommits.push(precommit.clone());
 
-			let signature = key.sign(&payload[..]);
+			let signature = fg_primitives::AuthoritySignature::from(key.sign(&payload[..]));
 			auth_data.push((signature, public[i].0.clone()))
 		}
 

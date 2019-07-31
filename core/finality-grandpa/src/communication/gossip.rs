@@ -1233,6 +1233,7 @@ mod tests {
 	use super::environment::SharedVoterSetState;
 	use network_gossip::Validator as GossipValidatorT;
 	use network::test::Block;
+	use primitives::crypto::Public;
 
 	// some random config (not really needed)
 	fn config() -> crate::Config {
@@ -1452,7 +1453,7 @@ mod tests {
 			voter_set_state(),
 		);
 		let set_id = 1;
-		let auth = AuthorityId::from_raw([1u8; 32]);
+		let auth = AuthorityId::from_slice(&[1u8; 32]);
 		let peer = PeerId::random();
 
 		val.note_set(SetId(set_id), vec![auth.clone()], |_, _| {});
@@ -1468,7 +1469,7 @@ mod tests {
 					target_number: 10,
 				}),
 				signature: Default::default(),
-				id: AuthorityId::from_raw([2u8; 32]),
+				id: AuthorityId::from_slice(&[2u8; 32]),
 			}
 		});
 
@@ -1497,7 +1498,7 @@ mod tests {
 		);
 
 		let set_id = 1;
-		let auth = AuthorityId::from_raw([1u8; 32]);
+		let auth = AuthorityId::from_slice(&[1u8; 32]);
 		let peer = PeerId::random();
 
 		val.note_set(SetId(set_id), vec![auth.clone()], |_, _| {});
@@ -1562,7 +1563,7 @@ mod tests {
 		);
 
 		let set_id = 1;
-		let auth = AuthorityId::from_raw([1u8; 32]);
+		let auth = AuthorityId::from_slice(&[1u8; 32]);
 		let peer = PeerId::random();
 
 		val.note_set(SetId(set_id), vec![auth.clone()], |_, _| {});
