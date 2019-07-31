@@ -20,7 +20,9 @@
 // https://github.com/paritytech/substrate/issues/2532
 #![allow(deprecated)]
 use super::*;
+use super::generic::DigestItem;
 
+use babe_primitives::AuthorityPair;
 use client::{LongestChain, block_builder::BlockBuilder};
 use consensus_common::NoNetwork as DummyOracle;
 use network::test::*;
@@ -29,7 +31,6 @@ use sr_primitives::traits::{Block as BlockT, DigestFor};
 use network::config::ProtocolConfig;
 use tokio::runtime::current_thread;
 use keyring::sr25519::Keyring;
-use super::generic::DigestItem;
 use client::BlockchainEvents;
 use test_client;
 use log::debug;
@@ -220,7 +221,7 @@ fn run_one_test() {
 
 		runtime.spawn(start_babe(BabeParams {
 			config,
-			local_key: Arc::new(key.clone().into()),
+			local_key: Arc::new(key.clone().pair().into()),
 			block_import: client.clone(),
 			select_chain,
 			client,
@@ -236,7 +237,7 @@ fn run_one_test() {
 		net.lock().poll();
 		Ok::<_, ()>(futures01::Async::NotReady::<()>)
 	}));
-	
+
 	runtime.block_on(future::join_all(import_notifications)
 		.map(|_| Ok::<(), ()>(())).compat()).unwrap();
 }
@@ -286,8 +287,8 @@ fn rejects_missing_consensus_digests() {
 #[test]
 fn wrong_consensus_engine_id_rejected() {
 	let _ = env_logger::try_init();
-	let sig = sr25519::Pair::generate().0.sign(b"");
-	let bad_seal: Item = DigestItem::Seal([0; 4], sig.0.to_vec());
+	let sig = AuthorityPair::generate().0.sign(b"");
+	let bad_seal: Item = DigestItem::Seal([0; 4], sig.to_vec());
 	assert!(bad_seal.as_babe_pre_digest().is_none());
 	assert!(bad_seal.as_babe_seal().is_none())
 }
@@ -302,8 +303,8 @@ fn malformed_pre_digest_rejected() {
 #[test]
 fn sig_is_not_pre_digest() {
 	let _ = env_logger::try_init();
-	let sig = sr25519::Pair::generate().0.sign(b"");
-	let bad_seal: Item = DigestItem::Seal(BABE_ENGINE_ID, sig.0.to_vec());
+	let sig = AuthorityPair::generate().0.sign(b"");
+	let bad_seal: Item = DigestItem::Seal(BABE_ENGINE_ID, sig.to_vec());
 	assert!(bad_seal.as_babe_pre_digest().is_none());
 	assert!(bad_seal.as_babe_seal().is_some())
 }
@@ -311,7 +312,7 @@ fn sig_is_not_pre_digest() {
 #[test]
 fn can_author_block() {
 	let _ = env_logger::try_init();
-	let (pair, _) = sr25519::Pair::generate();
+	let (pair, _) = AuthorityPair::generate();
 	let mut i = 0;
 	let epoch = Epoch {
 		start_slot: 0,
@@ -338,8 +339,8 @@ fn authorities_call_works() {
 
 	assert_eq!(client.info().chain.best_number, 0);
 	assert_eq!(epoch(&client, &BlockId::Number(0)).unwrap().authorities, vec![
-		(Keyring::Alice.into(), 1),
-		(Keyring::Bob.into(), 1),
-		(Keyring::Charlie.into(), 1),
+		(Keyring::Alice.public().into(), 1),
+		(Keyring::Bob.public().into(), 1),
+		(Keyring::Charlie.public().into(), 1),
 	]);
 }

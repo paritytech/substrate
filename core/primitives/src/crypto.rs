@@ -32,6 +32,8 @@ use base58::{FromBase58, ToBase58};
 #[cfg(feature = "std")]
 use std::hash::Hash;
 use zeroize::Zeroize;
+#[doc(hidden)]
+pub use rstd::ops::Deref;
 
 /// The root phrase for our publicly known keys.
 pub const DEV_PHRASE: &str = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
@@ -987,6 +989,7 @@ macro_rules! app_crypto {
 				self.0.derive(path).map(Self)
 			}
 		}
+
 		#[cfg(feature = "std")]
 		impl std::fmt::Display for Public {
 			fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
@@ -1013,12 +1016,15 @@ macro_rules! app_crypto {
 					.map_err(|e| $crate::serde::de::Error::custom(format!("{:?}", e)))
 			}
 		}
+
 		impl AsRef<[u8]> for Public {
 			fn as_ref(&self) -> &[u8] { self.0.as_ref() }
 		}
+
 		impl AsMut<[u8]> for Public {
 			fn as_mut(&mut self) -> &mut [u8] { self.0.as_mut() }
 		}
+
 		impl $crate::crypto::CryptoType for Public {
 			const KIND: $crate::crypto::Kind = <$public as $crate::crypto::CryptoType>::KIND;
 			#[cfg(feature="std")]
@@ -1027,6 +1033,7 @@ macro_rules! app_crypto {
 		impl $crate::crypto::Public for Public {
 			fn from_slice(x: &[u8]) -> Self { Self(<$public>::from_slice(x)) }
 		}
+
 		impl $crate::crypto::AppKey for Public {
 			type UntypedGeneric = $public;
 			type Public = Public;
@@ -1035,6 +1042,7 @@ macro_rules! app_crypto {
 			type Signature = Signature;
 			const ID: $crate::crypto::KeyTypeId = $key_type;
 		}
+
 		impl $crate::crypto::AppPublic for Public {
 			type Generic = $public;
 		}
@@ -1046,14 +1054,22 @@ macro_rules! app_crypto {
 			pub struct Signature($sig);
 		}
 
+		impl $crate::crypto::Deref for Signature {
+			type Target = [u8];
+
+			fn deref(&self) -> &Self::Target { self.0.as_ref() }
+		}
+
 		impl AsRef<[u8]> for Signature {
 			fn as_ref(&self) -> &[u8] { self.0.as_ref() }
 		}
+
 		impl $crate::crypto::CryptoType for Signature {
 			const KIND: $crate::crypto::Kind = <$public as $crate::crypto::CryptoType>::KIND;
 			#[cfg(feature="std")]
 			type Pair = Pair;
 		}
+
 		impl $crate::crypto::AppKey for Signature {
 			type UntypedGeneric = $sig;
 			type Public = Public;
@@ -1062,6 +1078,7 @@ macro_rules! app_crypto {
 			type Signature = Signature;
 			const ID: $crate::crypto::KeyTypeId = $key_type;
 		}
+
 		impl $crate::crypto::AppSignature for Signature {
 			type Generic = $sig;
 		}
