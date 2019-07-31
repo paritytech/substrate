@@ -594,7 +594,7 @@ decl_storage! {
 		pub CurrentEraStartSessionIndex get(current_era_start_session_index): SessionIndex;
 
 		/// Rewards for the current era. Using indices of current elected set.
-		pub CurrentEraRewards: EraRewards;
+		CurrentEraRewards get(current_era_reward): EraRewards;
 
 		/// The amount of balance actively at stake for each validator slot, currently.
 		///
