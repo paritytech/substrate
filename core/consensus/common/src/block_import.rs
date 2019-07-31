@@ -16,8 +16,8 @@
 
 //! Block import helpers.
 
-use runtime_primitives::traits::{Block as BlockT, DigestItemFor, Header as HeaderT, NumberFor};
-use runtime_primitives::Justification;
+use sr_primitives::traits::{Block as BlockT, DigestItemFor, Header as HeaderT, NumberFor};
+use sr_primitives::Justification;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -97,7 +97,7 @@ pub enum ForkChoiceStrategy {
 }
 
 /// Data required to import a Block
-pub struct ImportBlock<Block: BlockT> {
+pub struct BlockImportParams<Block: BlockT> {
 	/// Origin of the Block
 	pub origin: BlockOrigin,
 	/// The header, without consensus post-digests applied. This should be in the same
@@ -130,7 +130,7 @@ pub struct ImportBlock<Block: BlockT> {
 	pub fork_choice: ForkChoiceStrategy,
 }
 
-impl<Block: BlockT> ImportBlock<Block> {
+impl<Block: BlockT> BlockImportParams<Block> {
 	/// Deconstruct the justified header into parts.
 	pub fn into_inner(self)
 		-> (
@@ -186,7 +186,7 @@ pub trait BlockImport<B: BlockT> {
 	/// Cached data can be accessed through the blockchain cache.
 	fn import_block(
 		&mut self,
-		block: ImportBlock<B>,
+		block: BlockImportParams<B>,
 		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error>;
 }
@@ -206,7 +206,7 @@ where for<'r> &'r T: BlockImport<B, Error = E>
 
 	fn import_block(
 		&mut self,
-		block: ImportBlock<B>,
+		block: BlockImportParams<B>,
 		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		(&**self).import_block(block, cache)

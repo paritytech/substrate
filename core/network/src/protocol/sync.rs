@@ -39,7 +39,7 @@ use either::Either;
 use extra_requests::ExtraRequests;
 use libp2p::PeerId;
 use log::{debug, trace, warn, info, error};
-use runtime_primitives::{
+use sr_primitives::{
 	Justification,
 	generic::BlockId,
 	traits::{Block as BlockT, Header, NumberFor, Zero, One, CheckedSub, SaturatedConversion}
@@ -1189,4 +1189,3 @@ fn peer_block_request<B: BlockT>(
 		None
 	}
 }
-

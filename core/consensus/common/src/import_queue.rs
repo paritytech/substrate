@@ -26,10 +26,10 @@
 //! queues to be instantiated simply.
 
 use std::{sync::Arc, collections::HashMap};
-use runtime_primitives::{Justification, traits::{Block as BlockT, Header as _, NumberFor}};
+use sr_primitives::{Justification, traits::{Block as BlockT, Header as _, NumberFor}};
 use crate::{error::Error as ConsensusError, well_known_cache_keys::Id as CacheKeyId};
 use crate::block_import::{
-	BlockImport, BlockOrigin, ImportBlock, ImportedAux, JustificationImport, ImportResult,
+	BlockImport, BlockOrigin, BlockImportParams, ImportedAux, JustificationImport, ImportResult,
 	FinalityProofImport,
 };
 
@@ -67,7 +67,7 @@ pub struct IncomingBlock<B: BlockT> {
 
 /// Verify a justification of a block
 pub trait Verifier<B: BlockT>: Send + Sync {
-	/// Verify the given data and return the ImportBlock and an optional
+	/// Verify the given data and return the BlockImportParams and an optional
 	/// new set of validators to import. If not, err with an Error-Message
 	/// presented to the User in the logs.
 	fn verify(
@@ -76,7 +76,7 @@ pub trait Verifier<B: BlockT>: Send + Sync {
 		header: B::Header,
 		justification: Option<Justification>,
 		body: Option<Vec<B::Extrinsic>>,
-	) -> Result<(ImportBlock<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String>;
+	) -> Result<(BlockImportParams<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String>;
 }
 
 /// Blocks import queue API.
@@ -106,8 +106,8 @@ pub trait ImportQueue<B: BlockT>: Send {
 	///
 	/// This method should behave in a way similar to `Future::poll`. It can register the current
 	/// task and notify later when more actions are ready to be polled. To continue the comparison,
-	/// it is as if this method always returned `Ok(Async::NotReady)`.
-	fn poll_actions(&mut self, link: &mut dyn Link<B>);
+	/// it is as if this method always returned `Poll::Pending`.
+	fn poll_actions(&mut self, cx: &mut futures::task::Context, link: &mut dyn Link<B>);
 }
 
 /// Hooks that the verification queue can use to influence the synchronization

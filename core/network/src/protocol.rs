@@ -17,15 +17,16 @@
 use crate::{DiscoveryNetBehaviour, config::ProtocolId};
 use crate::custom_proto::{CustomProto, CustomProtoOut};
 use futures::prelude::*;
+use futures03::{StreamExt as _, TryStreamExt as _};
 use libp2p::{Multiaddr, PeerId};
-use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourAction, PollParameters};
-use libp2p::core::{nodes::Substream, muxing::StreamMuxerBox};
-use libp2p::core::protocols_handler::{ProtocolsHandler, IntoProtocolsHandler};
+use libp2p::core::{ConnectedPoint, nodes::Substream, muxing::StreamMuxerBox};
+use libp2p::swarm::{ProtocolsHandler, IntoProtocolsHandler};
+use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use primitives::storage::StorageKey;
 use primitives::child_trie::ChildTrieRead;
 use consensus::{import_queue::IncomingBlock, import_queue::Origin, BlockOrigin};
-use runtime_primitives::{generic::BlockId, ConsensusEngineId, Justification};
-use runtime_primitives::traits::{
+use sr_primitives::{generic::BlockId, ConsensusEngineId, Justification};
+use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
 	CheckedSub, SaturatedConversion
 };
@@ -92,9 +93,9 @@ const RPC_FAILED_REPUTATION_CHANGE: i32 = -(1 << 12);
 // Lock must always be taken in order declared here.
 pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	/// Interval at which we call `tick`.
-	tick_timeout: tokio_timer::Interval,
+	tick_timeout: Box<dyn Stream<Item = (), Error = ()> + Send>,
 	/// Interval at which we call `propagate_extrinsics`.
-	propagate_timeout: tokio_timer::Interval,
+	propagate_timeout: Box<dyn Stream<Item = (), Error = ()> + Send>,
 	config: ProtocolConfig,
 	/// Handler for on-demand requests.
 	on_demand_core: OnDemandCore<B>,
@@ -111,7 +112,7 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	/// When asked for a proof of finality, we use this struct to build one.
 	finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
 	/// Handles opening the unique substream and sending and receiving raw messages.
-	behaviour: CustomProto<Message<B>, Substream<StreamMuxerBox>>,
+	behaviour: CustomProto<B, Substream<StreamMuxerBox>>,
 }
 
 /// A peer that we are connected to
@@ -150,7 +151,7 @@ pub struct PeerInfo<B: BlockT> {
 }
 
 struct OnDemandIn<'a, B: BlockT> {
-	behaviour: &'a mut CustomProto<Message<B>, Substream<StreamMuxerBox>>,
+	behaviour: &'a mut CustomProto<B, Substream<StreamMuxerBox>>,
 	peerset: peerset::PeersetHandle,
 }
 
@@ -281,7 +282,7 @@ pub trait Context<B: BlockT> {
 
 /// Protocol context.
 struct ProtocolContext<'a, B: 'a + BlockT, H: 'a + ExHashT> {
-	behaviour: &'a mut CustomProto<Message<B>, Substream<StreamMuxerBox>>,
+	behaviour: &'a mut CustomProto<B, Substream<StreamMuxerBox>>,
 	context_data: &'a mut ContextData<B, H>,
 	peerset_handle: &'a peerset::PeersetHandle,
 }
@@ -289,7 +290,7 @@ struct ProtocolContext<'a, B: 'a + BlockT, H: 'a + ExHashT> {
 impl<'a, B: BlockT + 'a, H: 'a + ExHashT> ProtocolContext<'a, B, H> {
 	fn new(
 		context_data: &'a mut ContextData<B, H>,
-		behaviour: &'a mut CustomProto<Message<B>, Substream<StreamMuxerBox>>,
+		behaviour: &'a mut CustomProto<B, Substream<StreamMuxerBox>>,
 		peerset_handle: &'a peerset::PeersetHandle,
 	) -> Self {
 		ProtocolContext { context_data, peerset_handle, behaviour }
@@ -366,8 +367,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		let behaviour = CustomProto::new(protocol_id, versions, peerset);
 
 		let protocol = Protocol {
-			tick_timeout: tokio_timer::Interval::new_interval(TICK_TIMEOUT),
-			propagate_timeout: tokio_timer::Interval::new_interval(PROPAGATE_TIMEOUT),
+			tick_timeout: Box::new(futures_timer::Interval::new(TICK_TIMEOUT).map(|v| Ok::<_, ()>(v)).compat()),
+			propagate_timeout: Box::new(futures_timer::Interval::new(PROPAGATE_TIMEOUT).map(|v| Ok::<_, ()>(v)).compat()),
 			config: config,
 			context_data: ContextData {
 				peers: HashMap::new(),
@@ -1479,7 +1480,7 @@ pub enum CustomMessageOutcome<B: BlockT> {
 }
 
 fn send_message<B: BlockT, H: ExHashT>(
-	behaviour: &mut CustomProto<Message<B>, Substream<StreamMuxerBox>>,
+	behaviour: &mut CustomProto<B, Substream<StreamMuxerBox>>,
 	peers: &mut HashMap<PeerId, Peer<B, H>>,
 	who: PeerId,
 	mut message: Message<B>,
@@ -1500,7 +1501,7 @@ fn send_message<B: BlockT, H: ExHashT>(
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviour for
 Protocol<B, S, H> {
-	type ProtocolsHandler = <CustomProto<Message<B>, Substream<StreamMuxerBox>> as NetworkBehaviour>::ProtocolsHandler;
+	type ProtocolsHandler = <CustomProto<B, Substream<StreamMuxerBox>> as NetworkBehaviour>::ProtocolsHandler;
 	type OutEvent = CustomMessageOutcome<B>;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {

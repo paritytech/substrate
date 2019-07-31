@@ -18,13 +18,13 @@
 
 #![cfg(test)]
 
-use primitives::{
-	traits::IdentityLookup,
+use sr_primitives::{
+	traits::IdentityLookup, Perbill,
 	testing::{Header, UintAuthorityId},
 };
 use srml_support::{impl_outer_origin, parameter_types};
 use runtime_io;
-use substrate_primitives::{H256, Blake2Hasher};
+use primitives::{H256, Blake2Hasher};
 use crate::{Trait, Module, GenesisConfig};
 
 impl_outer_origin!{
@@ -37,6 +37,9 @@ pub struct Test;
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
+	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockLength: u32 = 2 * 1024;
+	pub const AvailableBlockRatio: Perbill = Perbill::one();
 	pub const MinimumPeriod: u64 = 1;
 }
 
@@ -45,12 +48,16 @@ impl system::Trait for Test {
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type Hashing = ::primitives::traits::BlakeTwo256;
+	type Hashing = ::sr_primitives::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
+	type WeightMultiplierUpdate = ();
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type AvailableBlockRatio = AvailableBlockRatio;
+	type MaximumBlockLength = MaximumBlockLength;
 }
 
 impl timestamp::Trait for Test {

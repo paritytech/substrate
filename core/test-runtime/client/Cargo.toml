@@ -8,7 +8,7 @@ edition = "2018"
 generic-test-client = { package = "substrate-test-client", path = "../../test-client" }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 runtime = { package = "substrate-test-runtime", path = "../../test-runtime", default-features = false }
-runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
+sr-primitives = {  path = "../../sr-primitives" }
 
 [features]
 default = [

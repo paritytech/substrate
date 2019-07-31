@@ -21,13 +21,14 @@ use runtime_io::{blake2_256, twox_128};
 use super::{AuthorityId, AccountId, WASM_BINARY};
 use parity_codec::{Encode, KeyedVec, Joiner};
 use primitives::{ChangesTrieConfiguration, map, storage::well_known_keys};
-use runtime_primitives::traits::Block;
+use sr_primitives::traits::Block;
 
 /// Configuration of a general Substrate test genesis block.
 pub struct GenesisConfig {
 	pub changes_trie_config: Option<ChangesTrieConfiguration>,
 	pub authorities: Vec<AuthorityId>,
 	pub balances: Vec<(AccountId, u64)>,
+	pub heap_pages_override: Option<u64>,
 }
 
 impl GenesisConfig {
@@ -35,7 +36,8 @@ impl GenesisConfig {
 		support_changes_trie: bool,
 		authorities: Vec<AuthorityId>,
 		endowed_accounts: Vec<AccountId>,
-		balance: u64
+		balance: u64,
+		heap_pages_override: Option<u64>,
 	) -> Self {
 		GenesisConfig {
 			changes_trie_config: match support_changes_trie {
@@ -44,6 +46,7 @@ impl GenesisConfig {
 			},
 			authorities: authorities.clone(),
 			balances: endowed_accounts.into_iter().map(|a| (a, balance)).collect(),
+			heap_pages_override,
 		}
 	}
 
@@ -54,7 +57,10 @@ impl GenesisConfig {
 			.map(|(k, v)| (blake2_256(&k[..])[..].to_vec(), v.to_vec()))
 			.chain(vec![
 				(well_known_keys::CODE.into(), wasm_runtime),
-				(well_known_keys::HEAP_PAGES.into(), vec![].and(&(16 as u64))),
+				(
+					well_known_keys::HEAP_PAGES.into(),
+					vec![].and(&(self.heap_pages_override.unwrap_or(16 as u64))),
+				),
 			].into_iter())
 			.collect();
 		if let Some(ref changes_trie_config) = self.changes_trie_config {

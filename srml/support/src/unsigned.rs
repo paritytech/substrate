@@ -15,11 +15,11 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 #[doc(hidden)]
-pub use crate::runtime_primitives::traits::ValidateUnsigned;
+pub use crate::sr_primitives::traits::ValidateUnsigned;
 #[doc(hidden)]
-pub use crate::runtime_primitives::transaction_validity::TransactionValidity;
+pub use crate::sr_primitives::transaction_validity::TransactionValidity;
 #[doc(hidden)]
-pub use crate::runtime_primitives::ApplyError;
+pub use crate::sr_primitives::ApplyError;
 
 
 /// Implement `ValidateUnsigned` for `Runtime`.

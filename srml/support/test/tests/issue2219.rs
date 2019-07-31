@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use srml_support::runtime_primitives::generic;
-use srml_support::runtime_primitives::traits::{BlakeTwo256, Block as _, Verify};
+use srml_support::sr_primitives::generic;
+use srml_support::sr_primitives::traits::{BlakeTwo256, Block as _, Verify};
 use srml_support::codec::{Encode, Decode};
 use primitives::{H256, sr25519};
 use serde::{Serialize, Deserialize};
@@ -152,7 +152,7 @@ pub type BlockNumber = u64;
 pub type Index = u64;
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = generic::UncheckedMortalCompactExtrinsic<u32, Index, Call, Signature>;
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
 
 impl system::Trait for Runtime {
 	type Hash = H256;

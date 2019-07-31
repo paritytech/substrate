@@ -23,7 +23,7 @@ mod node_header;
 mod node_codec;
 mod trie_stream;
 
-use substrate_primitives::child_trie::{ChildTrieReadRef, KeySpace, keyspace_as_prefix_alloc};
+use primitives::child_trie::{ChildTrieReadRef, KeySpace, keyspace_as_prefix_alloc};
 use rstd::boxed::Box;
 use rstd::vec::Vec;
 use rstd::marker::PhantomData;
@@ -38,7 +38,7 @@ pub use node_codec::NodeCodec;
 pub use trie_db::{Trie, TrieMut, DBValue, Recorder, Query};
 /// Various re-exports from the `memory-db` crate.
 pub use memory_db::KeyFunction;
-pub use substrate_primitives::child_trie::prefixed_key;
+pub use primitives::child_trie::prefixed_key;
 /// Various re-exports from the `hash-db` crate.
 pub use hash_db::HashDB as HashDBT;
 
@@ -146,7 +146,7 @@ pub fn ordered_trie_root<H: Hasher, I, A>(input: I) -> H::Out where
 	)
 }
 
-/// This function returns the default child trie root.
+/// Determine the default child trie root.
 /// see issue FIXME #2741, this is not efficient.
 pub fn default_child_trie_root<H: Hasher>() -> Vec<u8> {
 	trie_root::<H, _, Vec<u8>, Vec<u8>>(core::iter::empty()).as_ref().iter().cloned().collect()
@@ -429,7 +429,7 @@ fn branch_node(has_value: bool, has_children: impl Iterator<Item = bool>) -> [u8
 mod tests {
 	use super::*;
 	use codec::{Encode, Compact};
-	use substrate_primitives::Blake2Hasher;
+	use primitives::Blake2Hasher;
 	use hash_db::{HashDB, Hasher};
 	use trie_db::{DBValue, TrieMut, Trie};
 	use trie_standardmap::{Alphabet, ValueMode, StandardMap};

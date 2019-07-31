@@ -10,7 +10,8 @@ parity-codec = { version = "4.1.1", default-features = false, features = ["deriv
 serde = { version = "1.0.93", optional = true }
 inherents = { package = "substrate-inherents", path = "../../core/inherents", default-features = false }
 rstd = { package = "sr-std", path = "../../core/sr-std", default-features = false }
-primitives = { package = "sr-primitives", path = "../../core/sr-primitives", default-features = false }
+sr-primitives = { path = "../../core/sr-primitives", default-features = false }
+staking = { package = "srml-staking", path = "../staking", default-features = false }
 srml-support = { path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 timestamp = { package = "srml-timestamp", path = "../timestamp", default-features = false }
@@ -21,7 +22,7 @@ runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = 
 [dev-dependencies]
 lazy_static = "1.3.0"
 parking_lot = "0.8.0"
-substrate-primitives = { path = "../../core/primitives" }
+primitives = { package = "substrate-primitives",  path = "../../core/primitives" }
 
 [features]
 default = ["std"]
@@ -30,11 +31,12 @@ std = [
 	"parity-codec/std",
 	"rstd/std",
 	"srml-support/std",
-	"primitives/std",
+	"sr-primitives/std",
 	"system/std",
 	"timestamp/std",
 	"inherents/std",
 	"babe-primitives/std",
 	"session/std",
 	"runtime_io/std",
+	"staking/std",
 ]

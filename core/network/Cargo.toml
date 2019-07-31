@@ -16,17 +16,18 @@ bitflags = "1.0"
 fnv = "1.0"
 futures = "0.1.17"
 futures03 = { package = "futures-preview", version = "0.3.0-alpha.17", features = ["compat"] }
+futures-timer = "0.2.1"
 linked-hash-map = "0.5"
 linked_hash_set = "0.1.3"
 lru-cache = "0.1.1"
 rustc-hex = "2.0"
 rand = "0.6"
-libp2p = { version = "0.10.0", default-features = false, features = ["secp256k1", "libp2p-websocket"] }
+libp2p = { version = "0.11.0", default-features = false, features = ["secp256k1", "libp2p-websocket"] }
 fork-tree = { path = "../../core/utils/fork-tree" }
-primitives = { package = "substrate-primitives", path = "../../core/primitives" }
 consensus = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 client = { package = "substrate-client", path = "../../core/client" }
-runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
+sr-primitives = { path = "../../core/sr-primitives" }
+primitives = { package = "substrate-primitives", path = "../../core/primitives" }
 parity-codec = { version = "4.1.1", features = ["derive"] }
 peerset = { package = "substrate-peerset", path = "../../core/peerset" }
 serde = { version = "1.0.70", features = ["derive"] }
@@ -35,7 +36,6 @@ slog = { version = "^2", features = ["nested-values"] }
 slog_derive = "0.1.1"
 smallvec = "0.6"
 tokio-io = "0.1"
-tokio-timer = "0.2.11"
 tokio = { version = "0.1.11", optional = true }
 unsigned-varint = { version = "0.2.1", features = ["codec"] }
 keyring = { package = "substrate-keyring", path = "../../core/keyring", optional = true }

@@ -23,7 +23,7 @@ use std::path::PathBuf;
 use std::fs::{self, File};
 use std::io::{self, Write};
 
-use substrate_primitives::crypto::{KeyTypeId, Pair, Public};
+use primitives::crypto::{KeyTypeId, Pair, Public};
 
 /// Keystore error.
 #[derive(Debug, derive_more::Display, derive_more::From)]
@@ -165,8 +165,8 @@ impl Store {
 mod tests {
 	use super::*;
 	use tempdir::TempDir;
-	use substrate_primitives::ed25519;
-	use substrate_primitives::crypto::Ss58Codec;
+	use primitives::ed25519;
+	use primitives::crypto::Ss58Codec;
 
 	#[test]
 	fn basic_store() {

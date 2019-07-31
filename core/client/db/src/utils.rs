@@ -29,8 +29,8 @@ use log::debug;
 use client;
 use parity_codec::Decode;
 use trie::DBValue;
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{
+use sr_primitives::generic::BlockId;
+use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Zero,
 	UniqueSaturatedFrom, UniqueSaturatedInto,
 };
@@ -187,7 +187,7 @@ pub fn block_id_to_lookup_key<Block>(
 	id: BlockId<Block>
 ) -> Result<Option<Vec<u8>>, client::error::Error> where
 	Block: BlockT,
-	::runtime_primitives::traits::NumberFor<Block>: UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64>,
+	::sr_primitives::traits::NumberFor<Block>: UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64>,
 {
 	let res = match id {
 		BlockId::Number(n) => db.get(
@@ -332,7 +332,7 @@ pub fn read_meta<Block>(db: &dyn KeyValueDB, col_meta: Option<u32>, col_header: 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_primitives::testing::{Block as RawBlock, ExtrinsicWrapper};
+	use sr_primitives::testing::{Block as RawBlock, ExtrinsicWrapper};
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
 
 	#[test]

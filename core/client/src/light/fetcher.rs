@@ -25,7 +25,7 @@ use hash_db::{HashDB, Hasher};
 use parity_codec::{Decode, Encode};
 use primitives::{ChangesTrieConfiguration, convert_hash};
 use primitives::child_trie::ChildTrieRead;
-use runtime_primitives::traits::{
+use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
 	SimpleArithmetic, CheckedConversion,
 };
@@ -490,7 +490,7 @@ pub mod tests {
 	use parking_lot::Mutex;
 	use parity_codec::Decode;
 	use crate::client::tests::prepare_client_with_key_changes;
-	use executor::{self, NativeExecutionDispatch};
+	use executor::{self, NativeExecutor};
 	use crate::error::Error as ClientError;
 	use test_client::{
 		self, ClientExt, blockchain::HeaderBackend, AccountKeyring,
@@ -504,7 +504,7 @@ pub mod tests {
 	use crate::light::blockchain::tests::{DummyStorage, DummyBlockchain};
 	use primitives::{blake2_256, Blake2Hasher, H256};
 	use primitives::storage::{well_known_keys, StorageKey};
-	use runtime_primitives::generic::BlockId;
+	use sr_primitives::generic::BlockId;
 	use state_machine::Backend;
 	use super::*;
 
@@ -580,7 +580,7 @@ pub mod tests {
 			None,
 			crate::backend::NewBlockState::Final,
 		).unwrap();
-		let local_executor = test_client::LocalExecutor::new(None);
+		let local_executor = NativeExecutor::<test_client::LocalExecutor>::new(None);
 		let local_checker = LightDataChecker::new(Arc::new(DummyBlockchain::new(DummyStorage::new())), local_executor);
 		(local_checker, remote_block_header, remote_read_proof, heap_pages)
 	}
@@ -606,7 +606,7 @@ pub mod tests {
 		if insert_cht {
 			local_storage.insert_cht_root(1, local_cht_root);
 		}
-		let local_executor = test_client::LocalExecutor::new(None);
+		let local_executor = NativeExecutor::<test_client::LocalExecutor>::new(None);
 		let local_checker = LightDataChecker::new(Arc::new(DummyBlockchain::new(DummyStorage::new())), local_executor);
 		(local_checker, local_cht_root, remote_block_header, remote_header_proof)
 	}
@@ -667,7 +667,7 @@ pub mod tests {
 		let (remote_client, local_roots, test_cases) = prepare_client_with_key_changes();
 		let local_checker = TestChecker::new(
 			Arc::new(DummyBlockchain::new(DummyStorage::new())),
-			test_client::LocalExecutor::new(None)
+			NativeExecutor::<test_client::LocalExecutor>::new(None)
 		);
 		let local_checker = &local_checker as &dyn FetchChecker<Block>;
 		let max = remote_client.info().chain.best_number;
@@ -735,7 +735,7 @@ pub mod tests {
 		local_storage.changes_tries_cht_roots.insert(0, local_cht_root);
 		let local_checker = TestChecker::new(
 			Arc::new(DummyBlockchain::new(local_storage)),
-			test_client::LocalExecutor::new(None)
+			NativeExecutor::<test_client::LocalExecutor>::new(None)
 		);
 
 		// check proof on local client
@@ -763,7 +763,7 @@ pub mod tests {
 		let (remote_client, local_roots, test_cases) = prepare_client_with_key_changes();
 		let local_checker = TestChecker::new(
 			Arc::new(DummyBlockchain::new(DummyStorage::new())),
-			test_client::LocalExecutor::new(None)
+			NativeExecutor::<test_client::LocalExecutor>::new(None)
 		);
 		let local_checker = &local_checker as &dyn FetchChecker<Block>;
 		let max = remote_client.info().chain.best_number;
@@ -844,7 +844,7 @@ pub mod tests {
 		// fails when changes trie CHT is missing from the local db
 		let local_checker = TestChecker::new(
 			Arc::new(DummyBlockchain::new(DummyStorage::new())),
-			test_client::LocalExecutor::new(None)
+			NativeExecutor::<test_client::LocalExecutor>::new(None)
 		);
 		assert!(local_checker.check_changes_tries_proof(4, &remote_proof.roots,
 			remote_proof.roots_proof.clone()).is_err());
@@ -854,7 +854,7 @@ pub mod tests {
 		local_storage.changes_tries_cht_roots.insert(0, local_cht_root);
 		let local_checker = TestChecker::new(
 			Arc::new(DummyBlockchain::new(local_storage)),
-			test_client::LocalExecutor::new(None)
+			NativeExecutor::<test_client::LocalExecutor>::new(None)
 		);
 		assert!(local_checker.check_changes_tries_proof(4, &remote_proof.roots, vec![]).is_err());
 	}
@@ -868,7 +868,7 @@ pub mod tests {
 
 		let local_checker = TestChecker::new(
 			Arc::new(DummyBlockchain::new(DummyStorage::new())),
-			test_client::LocalExecutor::new(None)
+			NativeExecutor::<test_client::LocalExecutor>::new(None)
 		);
 
 		let body_request = RemoteBodyRequest {
@@ -891,7 +891,7 @@ pub mod tests {
 
 		let local_checker = TestChecker::new(
 			Arc::new(DummyBlockchain::new(DummyStorage::new())),
-			test_client::LocalExecutor::new(None)
+			NativeExecutor::<test_client::LocalExecutor>::new(None)
 		);
 
 		let body_request = RemoteBodyRequest {

@@ -120,14 +120,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
-use parity_codec::{Decode, Encode};
-use primitives::KeyTypeId;
-use primitives::traits::{Convert, Zero, Member, OpaqueKeys, TypedKey, Hash};
+use parity_codec::Decode;
+use sr_primitives::KeyTypeId;
+use sr_primitives::weights::SimpleDispatchInfo;
+use sr_primitives::traits::{Convert, Zero, Member, OpaqueKeys, TypedKey};
 use srml_support::{
-	dispatch::Result,
-	storage,
-	ConsensusEngineId, StorageValue, for_each_tuple, decl_module,
-	decl_event, decl_storage,
+	dispatch::Result, ConsensusEngineId, StorageValue, StorageDoubleMap, for_each_tuple,
+	decl_module, decl_event, decl_storage,
 };
 use srml_support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor}, Parameter};
 use system::{self, ensure_signed};
@@ -186,7 +185,11 @@ impl<A> OnSessionEnding<A> for () {
 /// Handler for when a session keys set changes.
 pub trait SessionHandler<ValidatorId> {
 	/// Session set has changed; act appropriately.
-	fn on_new_session<Ks: OpaqueKeys>(changed: bool, validators: &[(ValidatorId, Ks)]);
+	fn on_new_session<Ks: OpaqueKeys>(
+		changed: bool,
+		validators: &[(ValidatorId, Ks)],
+		queued_validators: &[(ValidatorId, Ks)],
+	);
 
 	/// A validator got disabled. Act accordingly until a new session begins.
 	fn on_disabled(validator_index: usize);
@@ -197,7 +200,7 @@ pub trait OneSessionHandler<ValidatorId> {
 	/// The key type expected.
 	type Key: Decode + Default + TypedKey;
 
-	fn on_new_session<'a, I: 'a>(changed: bool, validators: I)
+	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, queued_validators: I)
 		where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
 	fn on_disabled(i: usize);
 }
@@ -205,19 +208,26 @@ pub trait OneSessionHandler<ValidatorId> {
 macro_rules! impl_session_handlers {
 	() => (
 		impl<AId> SessionHandler<AId> for () {
-			fn on_new_session<Ks: OpaqueKeys>(_: bool, _: &[(AId, Ks)]) {}
+			fn on_new_session<Ks: OpaqueKeys>(_: bool, _: &[(AId, Ks)], _: &[(AId, Ks)]) {}
 			fn on_disabled(_: usize) {}
 		}
 	);
 
 	( $($t:ident)* ) => {
 		impl<AId, $( $t: OneSessionHandler<AId> ),*> SessionHandler<AId> for ( $( $t , )* ) {
-			fn on_new_session<Ks: OpaqueKeys>(changed: bool, validators: &[(AId, Ks)]) {
+			fn on_new_session<Ks: OpaqueKeys>(
+				changed: bool,
+				validators: &[(AId, Ks)],
+				queued_validators: &[(AId, Ks)],
+			) {
 				$(
-					let our_keys = validators.iter()
+					let our_keys: Box<dyn Iterator<Item=_>> = Box::new(validators.iter()
 						.map(|k| (&k.0, k.1.get::<$t::Key>(<$t::Key as TypedKey>::KEY_TYPE)
-							.unwrap_or_default()));
-					$t::on_new_session(changed, our_keys);
+							.unwrap_or_default())));
+					let queued_keys: Box<dyn Iterator<Item=_>> = Box::new(queued_validators.iter()
+						.map(|k| (&k.0, k.1.get::<$t::Key>(<$t::Key as TypedKey>::KEY_TYPE)
+							.unwrap_or_default())));
+					$t::on_new_session(changed, our_keys, queued_keys);
 				)*
 			}
 			fn on_disabled(i: usize) {
@@ -272,8 +282,7 @@ pub trait Trait: system::Trait {
 	type SelectInitialValidators: SelectInitialValidators<Self::ValidatorId>;
 }
 
-const DEDUP_KEY_LEN: usize = 13;
-const DEDUP_KEY_PREFIX: &[u8; DEDUP_KEY_LEN] = b":session:keys";
+const DEDUP_KEY_PREFIX: &[u8] = b":session:keys";
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Session {
@@ -293,12 +302,23 @@ decl_storage! {
 		/// will be used to determine the validator's session keys.
 		QueuedKeys get(queued_keys): Vec<(T::ValidatorId, T::Keys)>;
 
+		/// The next session keys for a validator.
+		///
+		/// The first key is always `DEDUP_KEY_PREFIX` to have all the data in the same branch of
+		/// the trie. Having all data in the same branch should prevent slowing down other queries.
+		NextKeys: double_map hasher(twox_64_concat) Vec<u8>, blake2_256(T::ValidatorId) => Option<T::Keys>;
+
+		/// The owner of a key. The second key is the `KeyTypeId` + the encoded key.
+		///
+		/// The first key is always `DEDUP_KEY_PREFIX` to have all the data in the same branch of
+		/// the trie. Having all data in the same branch should prevent slowing down other queries.
+		KeyOwner: double_map hasher(twox_64_concat) Vec<u8>, blake2_256((KeyTypeId, Vec<u8>)) => Option<T::ValidatorId>;
 	}
 	add_extra_genesis {
 		config(keys): Vec<(T::ValidatorId, T::Keys)>;
 		build(|
-			storage: &mut primitives::StorageOverlay,
-			_: &mut primitives::ChildrenStorageOverlay,
+			storage: &mut sr_primitives::StorageOverlay,
+			_: &mut sr_primitives::ChildrenStorageOverlay,
 			config: &GenesisConfig<T>
 		| {
 			runtime_io::with_storage(storage, || {
@@ -343,6 +363,10 @@ decl_event!(
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		/// Used as first key for `NextKeys` and `KeyOwner` to put all the data into the same branch
+		/// of the trie.
+		const DEDUP_KEY_PREFIX: &[u8] = DEDUP_KEY_PREFIX;
+
 		fn deposit_event() = default;
 
 		/// Sets the session key(s) of the function caller to `key`.
@@ -355,6 +379,7 @@ decl_module! {
 		/// - O(log n) in number of accounts.
 		/// - One extra DB entry.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(150_000)]
 		fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) -> Result {
 			let who = ensure_signed(origin)?;
 
@@ -420,14 +445,14 @@ impl<T: Trait> Module<T> {
 			.map(|a| { let k = Self::load_keys(&a).unwrap_or_default(); (a, k) })
 			.collect::<Vec<_>>();
 
-		<QueuedKeys<T>>::put(queued_amalgamated);
+		<QueuedKeys<T>>::put(queued_amalgamated.clone());
 		QueuedChanged::put(next_changed);
 
 		// Record that this happened.
 		Self::deposit_event(Event::NewSession(session_index));
 
 		// Tell everyone about the new session keys.
-		T::SessionHandler::on_new_session::<T::Keys>(changed, &session_keys);
+		T::SessionHandler::on_new_session::<T::Keys>(changed, &session_keys, &queued_amalgamated);
 	}
 
 	/// Disable the validator of index `i`.
@@ -483,45 +508,29 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	// Child trie storage.
-
 	fn load_keys(v: &T::ValidatorId) -> Option<T::Keys> {
-		storage::unhashed::get(&dedup_trie_key::<T, _>(v))
+		<NextKeys<T>>::get(DEDUP_KEY_PREFIX, v)
 	}
 
 	fn take_keys(v: &T::ValidatorId) -> Option<T::Keys> {
-		storage::unhashed::take(&dedup_trie_key::<T, _>(v))
+		<NextKeys<T>>::take(DEDUP_KEY_PREFIX, v)
 	}
 
 	fn put_keys(v: &T::ValidatorId, keys: &T::Keys) {
-		storage::unhashed::put(&dedup_trie_key::<T, _>(v), keys)
+		<NextKeys<T>>::insert(DEDUP_KEY_PREFIX, v, keys);
 	}
 
 	fn key_owner(id: KeyTypeId, key_data: &[u8]) -> Option<T::ValidatorId> {
-		storage::unhashed::get(&dedup_trie_key::<T, _>(&(id, key_data)))
+		<KeyOwner<T>>::get(DEDUP_KEY_PREFIX, &(id, key_data.to_vec()))
 	}
 
 	fn put_key_owner(id: KeyTypeId, key_data: &[u8], v: &T::ValidatorId) {
-		storage::unhashed::put(&dedup_trie_key::<T, _>(&(id, key_data)), v);
+		<KeyOwner<T>>::insert(DEDUP_KEY_PREFIX, &(id, key_data.to_vec()), v)
 	}
 
 	fn clear_key_owner(id: KeyTypeId, key_data: &[u8]) {
-		storage::unhashed::kill(&dedup_trie_key::<T, _>(&(id, key_data)));
+		<KeyOwner<T>>::remove(DEDUP_KEY_PREFIX, &(id, key_data.to_vec()));
 	}
-}
-
-fn dedup_trie_key<T: Trait, K: Encode>(key: &K) -> [u8; 32 + DEDUP_KEY_LEN] {
-	key.using_encoded(|s| {
-		// take at most 32 bytes from the hash of the value.
-		let hash = <T as system::Trait>::Hashing::hash(s);
-		let hash: &[u8] = hash.as_ref();
-		let len = rstd::cmp::min(hash.len(), 32);
-
-		let mut data = [0; 32 + DEDUP_KEY_LEN];
-		data[..DEDUP_KEY_LEN].copy_from_slice(DEDUP_KEY_PREFIX);
-		data[DEDUP_KEY_LEN..][..len].copy_from_slice(hash);
-		data
-	})
 }
 
 impl<T: Trait> OnFreeBalanceZero<T::ValidatorId> for Module<T> {
@@ -553,8 +562,8 @@ mod tests {
 	use super::*;
 	use srml_support::assert_ok;
 	use runtime_io::with_externalities;
-	use substrate_primitives::Blake2Hasher;
-	use primitives::{
+	use primitives::Blake2Hasher;
+	use sr_primitives::{
 		traits::OnInitialize,
 		testing::UintAuthorityId,
 	};

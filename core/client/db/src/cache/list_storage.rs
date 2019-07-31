@@ -22,8 +22,8 @@ use kvdb::{KeyValueDB, DBTransaction};
 
 use client::error::{Error as ClientError, Result as ClientResult};
 use parity_codec::{Encode, Decode};
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use sr_primitives::generic::BlockId;
+use sr_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use crate::utils::{self, db_err, meta_keys};
 
 use crate::cache::{CacheItemT, ComplexBlockId};

@@ -46,13 +46,13 @@ use consensus::error::{ErrorKind as CommonErrorKind};
 use consensus::{Authorities, BlockImport, Environment, Proposer as BaseProposer};
 use client::{Client as SubstrateClient, CallExecutor};
 use client::runtime_api::{Core, BlockBuilder as BlockBuilderAPI, OldTxQueue, BlockBuilderError};
-use runtime_primitives::generic::{BlockId, Era, ImportResult, ImportBlock, BlockOrigin};
-use runtime_primitives::traits::{Block, Header};
-use runtime_primitives::traits::{
+use sr_primitives::generic::{BlockId, Era, ImportResult, BlockImportParams, BlockOrigin};
+use sr_primitives::traits::{Block, Header};
+use sr_primitives::traits::{
 	Block as BlockT, Hash as HashT, Header as HeaderT,
 	BlockNumberToHash, SaturatedConversion
 };
-use runtime_primitives::Justification;
+use sr_primitives::Justification;
 use primitives::{AuthorityId, ed25519, Blake2Hasher, ed25519::LocalizedSignature};
 use srml_system::Trait as SystemT;
 
@@ -391,7 +391,7 @@ impl<B, P, I, InStream, OutSink> Future for BftFuture<B, P, I, InStream, OutSink
 				justified_block.header().number(), hash);
 			let just: Justification = UncheckedJustification(committed.justification.uncheck()).into();
 			let (header, body) = justified_block.deconstruct();
-			let import_block = ImportBlock {
+			let import_block = BlockImportParams {
 				origin: BlockOrigin::ConsensusBroadcast,
 				header: header,
 				justification: Some(just),
@@ -982,7 +982,7 @@ impl<N, C, A> consensus::Environment<<C as AuthoringApi>::Block> for ProposerFac
 		authorities: &[AuthorityId],
 		sign_with: Arc<ed25519::Pair>,
 	) -> Result<Self::Proposer, Error> {
-		use runtime_primitives::traits::Hash as HashT;
+		use sr_primitives::traits::Hash as HashT;
 		let parent_hash = parent_header.hash();
 
 		let id = BlockId::hash(parent_hash);
@@ -1061,7 +1061,7 @@ impl<C, A> BaseProposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 	type Evaluate = Box<Future<Item=bool, Error=Error>>;
 
 	fn propose(&self) -> Self::Create {
-		use runtime_primitives::traits::BlakeTwo256;
+		use sr_primitives::traits::BlakeTwo256;
 
 		const MAX_VOTE_OFFLINE_SECONDS: Duration = Duration::from_secs(60);
 
@@ -1237,7 +1237,7 @@ impl<C, A> LocalProposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 		_misbehavior: Vec<(AuthorityId, Misbehavior<<<C as AuthoringApi>::Block as BlockT>::Hash>)>
 	) {
 		use rhododendron::Misbehavior as GenericMisbehavior;
-		use runtime_primitives::bft::{MisbehaviorKind, MisbehaviorReport};
+		use sr_primitives::bft::{MisbehaviorKind, MisbehaviorReport};
 		use node_runtime::{Call, UncheckedExtrinsic, ConsensusCall};
 
 		let mut next_index = {
@@ -1329,9 +1329,9 @@ mod tests {
 	use std::collections::HashSet;
 	use std::marker::PhantomData;
 
-	use runtime_primitives::testing::{Block as GenericTestBlock, Header as TestHeader};
+	use sr_primitives::testing::{Block as GenericTestBlock, Header as TestHeader};
 	use primitives::H256;
-	use keyring::AuthorityKeyring;
+	use keyring::Ed25519Keyring;
 
 	type TestBlock = GenericTestBlock<()>;
 
@@ -1344,7 +1344,7 @@ mod tests {
 		type Error = Error;
 
 		fn import_block(&self,
-			block: ImportBlock<TestBlock>,
+			block: BlockImportParams<TestBlock>,
 			_new_authorities: Option<Vec<AuthorityId>>
 		) -> Result<ImportResult, Self::Error> {
 			assert!(self.imported_heights.lock().insert(block.header.number));
@@ -1392,7 +1392,7 @@ mod tests {
 		type Proposer = DummyProposer;
 		type Error = Error;
 
-		fn init(&self, parent_header: &TestHeader, _authorities: &[AuthorityId], _sign_with: Arc<ed25519::Pair>)
+		fn init(&mut self, parent_header: &TestHeader, _authorities: &[AuthorityId], _sign_with: Arc<ed25519::Pair>)
 			-> Result<DummyProposer, Error>
 		{
 			Ok(DummyProposer(parent_header.number + 1))
@@ -1436,7 +1436,7 @@ mod tests {
 				start_round: 0,
 			})),
 			round_timeout_multiplier: 10,
-			key: Arc::new(AuthorityKeyring::One.into()),
+			key: Arc::new(Ed25519Keyring::One.into()),
 			factory: DummyFactory
 		}
 	}
@@ -1462,10 +1462,10 @@ mod tests {
 	fn future_gets_preempted() {
 		let client = FakeClient {
 			authorities: vec![
-				AuthorityKeyring::One.into(),
-				AuthorityKeyring::Two.into(),
-				AuthorityKeyring::Alice.into(),
-				AuthorityKeyring::Eve.into(),
+				Ed25519Keyring::One.into(),
+				Ed25519Keyring::Two.into(),
+				Ed25519Keyring::Alice.into(),
+				Ed25519Keyring::Eve.into(),
 			],
 			imported_heights: Mutex::new(HashSet::new()),
 		};
@@ -1509,17 +1509,17 @@ mod tests {
 		let hash = [0xff; 32].into();
 
 		let authorities = vec![
-			AuthorityKeyring::One.into(),
-			AuthorityKeyring::Two.into(),
-			AuthorityKeyring::Alice.into(),
-			AuthorityKeyring::Eve.into(),
+			Ed25519Keyring::One.into(),
+			Ed25519Keyring::Two.into(),
+			Ed25519Keyring::Alice.into(),
+			Ed25519Keyring::Eve.into(),
 		];
 
 		let authorities_keys = vec![
-			AuthorityKeyring::One.into(),
-			AuthorityKeyring::Two.into(),
-			AuthorityKeyring::Alice.into(),
-			AuthorityKeyring::Eve.into(),
+			Ed25519Keyring::One.into(),
+			Ed25519Keyring::Two.into(),
+			Ed25519Keyring::Alice.into(),
+			Ed25519Keyring::Eve.into(),
 		];
 
 		let unchecked = UncheckedJustification(rhododendron::UncheckedJustification {
@@ -1570,8 +1570,8 @@ mod tests {
 		let parent_hash = Default::default();
 
 		let authorities = vec![
-			AuthorityKeyring::Alice.into(),
-			AuthorityKeyring::Eve.into(),
+			Ed25519Keyring::Alice.into(),
+			Ed25519Keyring::Eve.into(),
 		];
 
 		let block = TestBlock {
@@ -1579,7 +1579,11 @@ mod tests {
 			extrinsics: Default::default()
 		};
 
-		let proposal = sign_message(rhododendron::Message::Propose(1, block.clone()), &AuthorityKeyring::Alice.pair(), parent_hash);;
+		let proposal = sign_message(
+			rhododendron::Message::Propose(1, block.clone()),
+			&Ed25519Keyring::Alice.pair(),
+			parent_hash,
+		);
 		if let rhododendron::LocalizedMessage::Propose(proposal) = proposal {
 			assert!(check_proposal(&authorities, &parent_hash, &proposal).is_ok());
 			let mut invalid_round = proposal.clone();
@@ -1593,7 +1597,11 @@ mod tests {
 		}
 
 		// Not an authority
-		let proposal = sign_message::<TestBlock>(rhododendron::Message::Propose(1, block), &AuthorityKeyring::Bob.pair(), parent_hash);;
+		let proposal = sign_message::<TestBlock>(
+			rhododendron::Message::Propose(1, block),
+			&Ed25519Keyring::Bob.pair(),
+			parent_hash,
+		);
 		if let rhododendron::LocalizedMessage::Propose(proposal) = proposal {
 			assert!(check_proposal(&authorities, &parent_hash, &proposal).is_err());
 		} else {
@@ -1607,8 +1615,8 @@ mod tests {
 		let hash: H256 = [0xff; 32].into();
 
 		let authorities = vec![
-			AuthorityKeyring::Alice.into(),
-			AuthorityKeyring::Eve.into(),
+			Ed25519Keyring::Alice.into(),
+			Ed25519Keyring::Eve.into(),
 		];
 
 		let vote = sign_message::<TestBlock>(rhododendron::Message::Vote(rhododendron::Vote::Prepare(1, hash)), &Keyring::Alice.pair(), parent_hash);;
@@ -1634,10 +1642,10 @@ mod tests {
 	fn drop_bft_future_does_not_deadlock() {
 		let client = FakeClient {
 			authorities: vec![
-				AuthorityKeyring::One.into(),
-				AuthorityKeyring::Two.into(),
-				AuthorityKeyring::Alice.into(),
-				AuthorityKeyring::Eve.into(),
+				Ed25519Keyring::One.into(),
+				Ed25519Keyring::Two.into(),
+				Ed25519Keyring::Alice.into(),
+				Ed25519Keyring::Eve.into(),
 			],
 			imported_heights: Mutex::new(HashSet::new()),
 		};
@@ -1659,10 +1667,10 @@ mod tests {
 	fn bft_can_build_though_skipped() {
 		let client = FakeClient {
 			authorities: vec![
-				AuthorityKeyring::One.into(),
-				AuthorityKeyring::Two.into(),
-				AuthorityKeyring::Alice.into(),
-				AuthorityKeyring::Eve.into(),
+				Ed25519Keyring::One.into(),
+				Ed25519Keyring::Two.into(),
+				Ed25519Keyring::Alice.into(),
+				Ed25519Keyring::Eve.into(),
 			],
 			imported_heights: Mutex::new(HashSet::new()),
 		};

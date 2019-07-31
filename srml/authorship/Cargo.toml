@@ -6,10 +6,10 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-substrate-primitives = { path = "../../core/primitives", default-features = false }
+primitives = { package = "substrate-primitives",  path = "../../core/primitives", default-features = false }
 parity-codec = { version = "4.1.1", default-features = false, features = ["derive"] }
 rstd = { package = "sr-std", path = "../../core/sr-std", default-features = false }
-primitives = { package = "sr-primitives", path = "../../core/sr-primitives", default-features = false }
+sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 srml-support = { path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
@@ -18,10 +18,10 @@ runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = 
 default = ["std"]
 std = [
 	"parity-codec/std",
-	"substrate-primitives/std",
+	"primitives/std",
+	"sr-primitives/std",
 	"rstd/std",
 	"srml-support/std",
-	"primitives/std",
 	"system/std",
 	"runtime_io/std",
 ]

@@ -77,6 +77,7 @@ members = [
 	"srml/finality-tracker",
 	"srml/generic-asset",
 	"srml/grandpa",
+	"srml/im-online",
 	"srml/indices",
 	"srml/metadata",
 	"srml/session",

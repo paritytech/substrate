@@ -7,8 +7,11 @@ edition = "2018"
 
 [dependencies]
 parity-codec = { version = "4.1.1", features = ["derive"] }
-babe_primitives = { package = "substrate-consensus-babe-primitives", path = "primitives" }
+babe-primitives = { package = "substrate-consensus-babe-primitives", path = "primitives" }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
+num-bigint = "0.2"
+num-rational = "0.2"
+num-traits = "0.2"
 runtime_support = { package = "srml-support", path = "../../../srml/support" }
 runtime_version = { package = "sr-version", path = "../../sr-version" }
 runtime_io = { package = "sr-io", path = "../../sr-io" }
@@ -18,9 +21,11 @@ srml-babe = { path = "../../../srml/babe" }
 client = { package = "substrate-client", path = "../../client" }
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
 slots = { package = "substrate-consensus-slots", path = "../slots"  }
-runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
-futures = "0.1.26"
-tokio-timer = "0.2.11"
+sr-primitives = {  path = "../../sr-primitives" }
+fork-tree = { path = "../../utils/fork-tree" }
+futures-preview = { version = "0.3.0-alpha.17", features = ["compat"] }
+futures01 = { package = "futures", version = "0.1" }
+futures-timer = "0.2.1"
 parking_lot = "0.8.0"
 log = "0.4.6"
 schnorrkel = "0.1.1"
@@ -28,7 +33,6 @@ rand = "0.6.5"
 merlin = "1.0.3"
 
 [dev-dependencies]
-futures03 = { package = "futures-preview", version = "0.3.0-alpha.17", features = ["compat"] }
 keyring = { package = "substrate-keyring", path = "../../keyring" }
 substrate-executor = { path = "../../executor" }
 network = { package = "substrate-network", path = "../../network", features = ["test-helpers"]}
@@ -36,3 +40,6 @@ service = { package = "substrate-service", path = "../../service" }
 test-client = { package = "substrate-test-runtime-client", path = "../../test-runtime/client" }
 tokio = "0.1.18"
 env_logger = "0.6.1"
+
+[features]
+test-helpers = []

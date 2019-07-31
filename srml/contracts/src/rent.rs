@@ -16,7 +16,7 @@
 
 use crate::{BalanceOf, ContractInfo, ContractInfoOf, TombstoneContractInfo,
 	Trait, contract_child_trie, AliveContractInfo};
-use runtime_primitives::traits::{Bounded, CheckedDiv, CheckedMul, Saturating, Zero,
+use sr_primitives::traits::{Bounded, CheckedDiv, CheckedMul, Saturating, Zero,
 	SaturatedConversion, Hash as HashT};
 use srml_support::traits::{Currency, ExistenceRequirement, Get, WithdrawReason};
 use srml_support::StorageMap;

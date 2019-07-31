@@ -189,6 +189,7 @@ pub mod test;
 pub use chain::{Client as ClientHandle, FinalityProofProvider};
 pub use service::{
 	NetworkService, NetworkWorker, TransactionPool, ExHashT, ReportHandle,
+	NetworkStateInfo,
 };
 pub use protocol::{PeerInfo, Context, consensus_gossip, message, specialization};
 pub use protocol::sync::SyncState;
@@ -201,9 +202,9 @@ pub use on_demand_layer::{OnDemand, RemoteResponse};
 
 // Used by the `construct_simple_protocol!` macro.
 #[doc(hidden)]
-pub use runtime_primitives::traits::Block as BlockT;
+pub use sr_primitives::traits::Block as BlockT;
 
-use libp2p::core::nodes::ConnectedPoint;
+use libp2p::core::ConnectedPoint;
 use serde::{Deserialize, Serialize};
 use slog_derive::SerdeValue;
 use std::{collections::{HashMap, HashSet}, time::Duration};

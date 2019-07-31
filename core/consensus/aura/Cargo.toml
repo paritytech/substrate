@@ -18,14 +18,14 @@ srml-aura = { path = "../../../srml/aura" }
 client = { package = "substrate-client", path = "../../client" }
 substrate-telemetry = { path = "../../telemetry" }
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
-runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
-futures = "0.1.17"
-tokio-timer = "0.2.11"
+sr-primitives = {  path = "../../sr-primitives" }
+futures-preview = { version = "0.3.0-alpha.17", features = ["compat"] }
+futures01 = { package = "futures", version = "0.1" }
+futures-timer = "0.2.1"
 parking_lot = "0.8.0"
 log = "0.4"
 
 [dev-dependencies]
-futures03 = { package = "futures-preview", version = "0.3.0-alpha.17", features = ["compat"] }
 keyring = { package = "substrate-keyring", path = "../../keyring" }
 substrate-executor = { path = "../../executor" }
 network = { package = "substrate-network", path = "../../network", features = ["test-helpers"]}

@@ -38,7 +38,7 @@ use consensus::import_queue::{
 };
 use consensus::block_import::{BlockImport, ImportResult};
 use consensus::{Error as ConsensusError, well_known_cache_keys::{self, Id as CacheKeyId}};
-use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
+use consensus::{BlockOrigin, ForkChoiceStrategy, BlockImportParams, JustificationImport};
 use futures::prelude::*;
 use futures03::{StreamExt as _, TryStreamExt as _};
 use crate::{NetworkWorker, NetworkService, config::ProtocolId};
@@ -47,9 +47,9 @@ use libp2p::PeerId;
 use parking_lot::Mutex;
 use primitives::{H256, Blake2Hasher};
 use crate::protocol::{Context, ProtocolConfig};
-use runtime_primitives::generic::{BlockId, OpaqueDigestItemId};
-use runtime_primitives::traits::{Block as BlockT, Header, NumberFor};
-use runtime_primitives::Justification;
+use sr_primitives::generic::{BlockId, OpaqueDigestItemId};
+use sr_primitives::traits::{Block as BlockT, Header, NumberFor};
+use sr_primitives::Justification;
 use crate::service::TransactionPool;
 use crate::specialization::NetworkSpecialization;
 use test_client::{self, AccountKeyring};
@@ -73,14 +73,14 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 		header: B::Header,
 		justification: Option<Justification>,
 		body: Option<Vec<B::Extrinsic>>
-	) -> Result<(ImportBlock<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+	) -> Result<(BlockImportParams<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		let maybe_keys = header.digest()
 			.log(|l| l.try_as_raw(OpaqueDigestItemId::Consensus(b"aura"))
 				.or_else(|| l.try_as_raw(OpaqueDigestItemId::Consensus(b"babe")))
 			)
 			.map(|blob| vec![(well_known_cache_keys::AUTHORITIES, blob.to_vec())]);
 
-		Ok((ImportBlock {
+		Ok((BlockImportParams {
 			origin,
 			header,
 			body,
@@ -388,7 +388,7 @@ impl<T: ?Sized + BlockImport<Block>> BlockImport<Block> for BlockImportAdapter<T
 
 	fn import_block(
 		&mut self,
-		block: ImportBlock<Block>,
+		block: BlockImportParams<Block>,
 		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		self.0.lock().import_block(block, cache)
