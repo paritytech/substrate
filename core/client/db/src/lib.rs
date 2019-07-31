@@ -870,7 +870,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		// cannot find tree route with empty DB.
 		if meta.best_hash != Default::default() {
 			let tree_route = ::client::blockchain::tree_route(
-				|id| self.blockchain.header(id)?.ok_or(client::error::Error::UnknownBlock(format!("Unknown block {:?}", id))),
+				|id| self.blockchain.header(id)?.ok_or_else(|| client::error::Error::UnknownBlock(format!("Unknown block {:?}", id))),
 				BlockId::Hash(meta.best_hash),
 				BlockId::Hash(route_to),
 			)?;
@@ -2018,7 +2018,7 @@ mod tests {
 
 		{
 			let tree_route = ::client::blockchain::tree_route(
-				|id| blockchain.header(id)?.ok_or(client::error::Error::UnknownBlock(format!("Unknown block {:?}", id))),
+				|id| blockchain.header(id)?.ok_or_else(|| client::error::Error::UnknownBlock(format!("Unknown block {:?}", id))),
 				BlockId::Hash(a3),
 				BlockId::Hash(b2)
 			).unwrap();
@@ -2030,7 +2030,7 @@ mod tests {
 
 		{
 			let tree_route = ::client::blockchain::tree_route(
-				|id| blockchain.header(id)?.ok_or(client::error::Error::UnknownBlock(format!("Unknown block {:?}", id))),
+				|id| blockchain.header(id)?.ok_or_else(|| client::error::Error::UnknownBlock(format!("Unknown block {:?}", id))),
 				BlockId::Hash(a1),
 				BlockId::Hash(a3),
 			).unwrap();
@@ -2042,7 +2042,7 @@ mod tests {
 
 		{
 			let tree_route = ::client::blockchain::tree_route(
-				|id| blockchain.header(id)?.ok_or(client::error::Error::UnknownBlock(format!("Unknown block {:?}", id))),
+				|id| blockchain.header(id)?.ok_or_else(|| client::error::Error::UnknownBlock(format!("Unknown block {:?}", id))),
 				BlockId::Hash(a3),
 				BlockId::Hash(a1),
 			).unwrap();
@@ -2054,7 +2054,7 @@ mod tests {
 
 		{
 			let tree_route = ::client::blockchain::tree_route(
-				|id| blockchain.header(id)?.ok_or(client::error::Error::UnknownBlock(format!("Unknown block {:?}", id))),
+				|id| blockchain.header(id)?.ok_or_else(|| client::error::Error::UnknownBlock(format!("Unknown block {:?}", id))),
 				BlockId::Hash(a2),
 				BlockId::Hash(a2),
 			).unwrap();
@@ -2075,7 +2075,7 @@ mod tests {
 
 		{
 			let tree_route = ::client::blockchain::tree_route(
-				|id| blockchain.header(id)?.ok_or(client::error::Error::UnknownBlock(format!("Unknown block {:?}", id))),
+				|id| blockchain.header(id)?.ok_or_else(|| client::error::Error::UnknownBlock(format!("Unknown block {:?}", id))),
 				BlockId::Hash(block0),
 				BlockId::Hash(block1),
 			).unwrap();
