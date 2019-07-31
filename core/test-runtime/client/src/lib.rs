@@ -203,7 +203,10 @@ pub fn new() -> Client<Backend> {
 }
 
 /// Creates new light client instance used for tests.
-pub fn new_light() -> (client::Client<LightBackend, LightExecutor, runtime::Block, runtime::RuntimeApi>, Arc<LightBackend>) {
+pub fn new_light() -> (
+	client::Client<LightBackend, LightExecutor, runtime::Block, runtime::RuntimeApi>,
+	Arc<LightBackend>
+) {
 
 	let storage = client_db::light::LightStorage::new_test();
 	let blockchain = Arc::new(client::light::blockchain::Blockchain::new(storage));
