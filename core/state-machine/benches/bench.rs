@@ -17,7 +17,6 @@
 use criterion::{Criterion, black_box, Bencher};
 use criterion::{criterion_group, criterion_main};
 use substrate_state_machine::OverlayedChanges;
-use substrate_state_machine::BenchOverlay;
 
 const CONTENT_KEY_SIZE: usize = 32;
 
@@ -55,15 +54,15 @@ fn commit_drop_commit(b: &mut Bencher, input: &Vec<u8>) {
 	b.iter(move || {
 		let mut overlayed = OverlayedChanges::default();
 		for i in key_vals.iter() {
-			BenchOverlay(&mut overlayed).bench_set_storage(i.0.clone(), Some(i.1.clone()));
+			overlayed.set_storage(i.0.clone(), Some(i.1.clone()));
 		}
 		overlayed.commit_prospective();
 		for i in key_vals.iter() {
-			BenchOverlay(&mut overlayed).bench_set_storage(i.0.clone(), Some(i.1.clone()));
+			overlayed.set_storage(i.0.clone(), Some(i.1.clone()));
 		}
 		overlayed.discard_prospective();
 		for i in key_vals.iter() {
-			BenchOverlay(&mut overlayed).bench_set_storage(i.0.clone(), Some(i.1.clone()));
+			overlayed.set_storage(i.0.clone(), Some(i.1.clone()));
 		}
 		overlayed.commit_prospective();
 	});
@@ -74,14 +73,14 @@ fn commit_drop_commit_and_get(b: &mut Bencher, input: &Vec<u8>) {
 	b.iter(move || {
 		let mut overlayed = OverlayedChanges::default();
 		for i in key_vals.iter() {
-			BenchOverlay(&mut overlayed).bench_set_storage(i.0.clone(), Some(i.1.clone()));
+			overlayed.set_storage(i.0.clone(), Some(i.1.clone()));
 		}
 		for i in key_vals.iter() {
 			black_box(overlayed.storage(&i.0));
 		}
 		overlayed.commit_prospective();
 		for i in key_vals.iter() {
-			BenchOverlay(&mut overlayed).bench_set_storage(i.0.clone(), Some(i.1.clone()));
+			overlayed.set_storage(i.0.clone(), Some(i.1.clone()));
 		}
 		for i in key_vals.iter() {
 			black_box(overlayed.storage(&i.0));
@@ -91,7 +90,7 @@ fn commit_drop_commit_and_get(b: &mut Bencher, input: &Vec<u8>) {
 			black_box(overlayed.storage(&i.0));
 		}
 		for i in key_vals.iter() {
-			BenchOverlay(&mut overlayed).bench_set_storage(i.0.clone(), Some(i.1.clone()));
+			overlayed.set_storage(i.0.clone(), Some(i.1.clone()));
 		}
 		overlayed.commit_prospective();
 	});

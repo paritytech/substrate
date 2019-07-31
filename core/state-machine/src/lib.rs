@@ -53,8 +53,6 @@ pub use changes_trie::{
 	oldest_non_pruned_trie as oldest_non_pruned_changes_trie
 };
 pub use overlayed_changes::OverlayedChanges;
-#[cfg(feature = "bench")]
-pub use overlayed_changes::BenchOverlay;
 pub use proving_backend::{
 	create_proof_check_backend, create_proof_check_backend_storage,
 	Recorder as ProofRecorder, ProvingBackend,
@@ -227,14 +225,14 @@ pub trait Externalities<H: Hasher> {
 	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities>;
 
 	/// Create a new transactional layer.
-	fn start_transaction(&mut self);
+	fn storage_start_transaction(&mut self);
 
 	/// Discard a transactional layer, pending changes of every trasaction below this layer are
 	/// dropped (including committed changes) .
-	fn discard_transaction(&mut self);
+	fn storage_discard_transaction(&mut self);
 
 	/// Commit a transactional layer. The changes stay attached to parent transaction layer.
-	fn commit_transaction(&mut self);
+	fn storage_commit_transaction(&mut self);
 	
 }
 

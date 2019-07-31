@@ -255,15 +255,15 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 			.map(|x| &mut **x as _)
 	}
 
-	fn start_transaction(&mut self) {
+	fn storage_start_transaction(&mut self) {
 		self.overlay.start_transaction()
 	}
 
-	fn discard_transaction(&mut self) {
+	fn storage_discard_transaction(&mut self) {
 		self.overlay.discard_transaction()
 	}
 
-	fn commit_transaction(&mut self) {
+	fn storage_commit_transaction(&mut self) {
 		self.overlay.commit_transaction()
 	}
 	

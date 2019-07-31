@@ -28,18 +28,19 @@ pub mod unhashed;
 pub mod hashed;
 
 /// Execute under a transactional layer.
+///
 /// If the result of execution is an error,
 /// the transactional layer get reverted; otherwhise
 /// it is committed.
-pub fn with_transaction<R>(f: impl FnOnce() -> Result<R, &'static str>) -> Result<R, &'static str> {
-	runtime_io::start_transaction();
+pub fn with_transaction<R, E>(f: impl FnOnce() -> Result<R, E>) -> Result<R, E> {
+	runtime_io::storage_start_transaction();
 	match f() {
 		Ok(r) => {
-			runtime_io::commit_transaction();
+			runtime_io::storage_commit_transaction();
 			Ok(r)
 		},
 		Err(e) => {
-			runtime_io::discard_transaction();
+			runtime_io::storage_discard_transaction();
 			Err(e)
 		}
 	}

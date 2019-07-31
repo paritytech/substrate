@@ -173,15 +173,15 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 		None
 	}
 
-	fn start_transaction(&mut self) {
-		warn!("No support for transaction");
+	fn storage_start_transaction(&mut self) {
+		warn!("No support for storage transaction");
 	}
 
-	fn discard_transaction(&mut self) {
-		panic!("No support for transaction");
+	fn storage_discard_transaction(&mut self) {
+		panic!("No support for storage transaction");
 	}
 
-	fn commit_transaction(&mut self) {
+	fn storage_commit_transaction(&mut self) {
 		// no need to fail in this case
 	}
 

@@ -164,16 +164,16 @@ impl StorageApi for () {
 		).unwrap_or(Ok(None)).expect("Invalid parent hash passed to storage_changes_root")
 	}
 
-	fn start_transaction() {
-		ext::with(|ext| ext.start_transaction());
+	fn storage_start_transaction() {
+		ext::with(|ext| ext.storage_start_transaction());
 	}
 
-	fn discard_transaction() {
-		ext::with(|ext| ext.discard_transaction());
+	fn storage_discard_transaction() {
+		ext::with(|ext| ext.storage_discard_transaction());
 	}
 
-	fn commit_transaction() {
-		ext::with(|ext| ext.commit_transaction());
+	fn storage_commit_transaction() {
+		ext::with(|ext| ext.storage_commit_transaction());
 	}
 	
 	fn enumerated_trie_root<H>(input: &[&[u8]]) -> H::Out

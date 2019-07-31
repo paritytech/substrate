@@ -629,14 +629,14 @@ pub mod ext {
 		// Transactional Context
 		//================================
 
-		/// Open an new transactional context.
-		fn ext_start_transaction();
+		/// Open a new transactional storage layer.
+		fn ext_storage_start_transaction();
 
-		/// Close and dissmiss current transactional context.
-		fn ext_discard_transaction();
+		/// Close and dismiss current transactional storage layer.
+		fn ext_storage_discard_transaction();
 
-		/// Close and commit current transactional context.
-		fn ext_commit_transaction();
+		/// Close and commit current transactional storage layer.
+		fn ext_storage_commit_transaction();
 
 	}
 
@@ -821,21 +821,21 @@ impl StorageApi for () {
 		unimplemented!()
 	}
 
-	fn start_transaction() {
+	fn storage_start_transaction() {
 		unsafe {
-			ext_start_transaction.get()()
+			ext_storage_start_transaction.get()()
 		}
 	}
 
-	fn discard_transaction() {
+	fn storage_discard_transaction() {
 		unsafe {
-			ext_discard_transaction.get()()
+			ext_storage_discard_transaction.get()()
 		}
 	}
 
-	fn commit_transaction() {
+	fn storage_commit_transaction() {
 		unsafe {
-			ext_commit_transaction.get()()
+			ext_storage_commit_transaction.get()()
 		}
 	}
 

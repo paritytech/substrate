@@ -610,7 +610,7 @@ impl OverlayedChanges {
 	/// Inserts the given key-value pair into the prospective change set.
 	///
 	/// `None` can be used to delete a value specified by the given key.
-	pub(crate) fn set_storage(&mut self, key: Vec<u8>, val: Option<Vec<u8>>) {
+	pub fn set_storage(&mut self, key: Vec<u8>, val: Option<Vec<u8>>) {
 		let extrinsic_index = self.extrinsic_index();
 		let entry = self.changes.top.entry(key).or_default();
 		entry.set_with_extrinsic(self.changes.history.as_slice(), val, extrinsic_index);
@@ -750,19 +750,6 @@ impl OverlayedChanges {
 					.unwrap_or(NO_EXTRINSIC_INDEX)),
 			false => None,
 		}
-	}
-}
-
-#[cfg(feature = "bench")]
-/// Expose private function of overlay for benching.
-pub struct BenchOverlay<'a>(pub &'a mut OverlayedChanges);
-
-
-#[cfg(feature = "bench")]
-impl<'a> BenchOverlay<'a> {
-	/// Call to set storage for benches.
-	pub fn bench_set_storage(&mut self, key: Vec<u8>, val: Option<Vec<u8>>) {
-		self.0.set_storage(key, val)
 	}
 }
 

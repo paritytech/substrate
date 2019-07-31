@@ -322,17 +322,17 @@ where
 		self.offchain_externalities.as_mut().map(|x| &mut **x as _)
 	}
 
-	fn start_transaction(&mut self) {
+	fn storage_start_transaction(&mut self) {
 		let _guard = panic_handler::AbortGuard::new(true);
 		self.overlay.start_transaction()
 	}
 
-	fn discard_transaction(&mut self) {
+	fn storage_discard_transaction(&mut self) {
 		let _guard = panic_handler::AbortGuard::new(true);
 		self.overlay.discard_transaction()
 	}
 
-	fn commit_transaction(&mut self) {
+	fn storage_commit_transaction(&mut self) {
 		let _guard = panic_handler::AbortGuard::new(true);
 		self.overlay.commit_transaction()
 	}
@@ -362,7 +362,7 @@ mod tests {
 				digest_interval: 0,
 				digest_levels: 0,
 			}),
-			changes:OverlayedChangeSet {
+			changes: OverlayedChangeSet {
 				history: vec![TransactionState::Pending],
 				children: Default::default(),
 				top: vec![
