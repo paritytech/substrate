@@ -44,15 +44,15 @@ mod tests {
 	use runtime_support::{Hashable, StorageValue, StorageMap, assert_eq_error_rate, traits::Currency};
 	use state_machine::{CodeExecutor, Externalities, TestExternalities as CoreTestExternalities};
 	use primitives::{ twox_128, blake2_256, Blake2Hasher, NeverNativeValue, NativeOrEncoded};
-	use node_primitives::{Hash, BlockNumber, AccountId, Balance, Index};
+	use node_primitives::{Hash, BlockNumber, Balance};
 	use sr_primitives::traits::{Header as HeaderT, Hash as HashT, Convert};
-	use sr_primitives::{generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
+	use sr_primitives::{ApplyOutcome, ApplyError, ApplyResult};
 	use sr_primitives::weights::{WeightMultiplier, GetDispatchInfo};
 	use contracts::ContractAddressFor;
 	use system::{EventRecord, Phase};
 	use node_runtime::{
 		Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances, BuildStorage,
-		System, Event, SignedExtra,
+		System, Event,
 		TransferFee, TransactionBaseFee, TransactionByteFee,
 	};
 	use node_runtime::constants::currency::*;
