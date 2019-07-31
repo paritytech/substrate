@@ -237,19 +237,15 @@ impl slog::Drain for TelemetryDrain {
 		let serialized = slog_async::AsyncRecord::from(record, values);
 		// Note: interestingly, `try_send` requires a `&mut` because it modifies some internal value, while `clone()`
 		// is lock-free.
-		let result = match self.sender.clone().try_send(serialized) {
-			Ok(()) => Ok(()),
-			Err(err) => {
-				warn!(target: "telemetry", "Ignored telemetry message because of error on channel: {:?}", err);
-				Err(())
-			}
-		};
+		if let Err(err) = self.sender.clone().try_send(serialized) {
+			warn!(target: "telemetry", "Ignored telemetry message because of error on channel: {:?}", err);
+		}
 
 		if before.elapsed() > Duration::from_millis(50) {
 			warn!(target: "telemetry", "Writing a telemetry log took more than 50ms");
 		}
 
-		result
+		Ok(())
 	}
 }
 
