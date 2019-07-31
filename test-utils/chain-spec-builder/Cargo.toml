@@ -7,5 +7,5 @@ edition = "2018"
 [dependencies]
 clap = { version = "~2.32", features = ["yaml"] }
 node-cli = { path = "../../node/cli" }
-substrate-primitives = { path = "../../core/primitives" }
+primitives = { package = "substrate-primitives",  path = "../../core/primitives" }
 substrate-service = { path = "../../core/service" }

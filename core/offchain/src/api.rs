@@ -36,7 +36,7 @@ use primitives::offchain::{
 };
 use primitives::crypto::{Pair, Public, Protected};
 use primitives::{ed25519, sr25519};
-use runtime_primitives::{
+use sr_primitives::{
 	generic::BlockId,
 	traits::{self, Extrinsic},
 };
@@ -569,7 +569,7 @@ impl<A: ChainApi> AsyncApi<A> {
 mod tests {
 	use super::*;
 	use std::convert::TryFrom;
-	use runtime_primitives::traits::Zero;
+	use sr_primitives::traits::Zero;
 	use client_db::offchain::LocalStorage;
 	use crate::tests::TestProvider;
 	use network::PeerId;

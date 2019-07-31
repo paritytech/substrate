@@ -17,8 +17,8 @@ node-primitives = { path = "../primitives" }
 node-runtime = { path = "../runtime" }
 parity-codec = "4.1.1"
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
-runtime_io = { package = "sr-io", path = "../../core/sr-io" }
-runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
+sr-io = { path = "../../core/sr-io" }
+sr-primitives = { path = "../../core/sr-primitives" }
 runtime_support = { package = "srml-support", path = "../../srml/support" }
 session = { package = "srml-session", path = "../../srml/session" }
 staking = { package = "srml-staking", path = "../../srml/staking" }

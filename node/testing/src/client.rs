@@ -16,7 +16,7 @@
 
 //! Utilites to build a `TestClient` for `node-runtime`.
 
-use runtime_primitives::BuildStorage;
+use sr_primitives::BuildStorage;
 
 /// Re-export test-client utilities.
 pub use test_client::*;

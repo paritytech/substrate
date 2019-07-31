@@ -19,7 +19,7 @@
 use keyring::{AccountKeyring, Sr25519Keyring, Ed25519Keyring};
 use node_primitives::{AccountId, Balance, Index};
 use node_runtime::{CheckedExtrinsic, UncheckedExtrinsic, SessionKeys, SignedExtra};
-use runtime_primitives::generic::Era;
+use sr_primitives::generic::Era;
 use parity_codec::Encode;
 
 /// Alice's account id.
@@ -81,7 +81,7 @@ pub fn sign(xt: CheckedExtrinsic, genesis_hash: [u8; 32]) -> UncheckedExtrinsic 
 			let key = AccountKeyring::from_public(&signed).unwrap();
 			let signature = payload.using_encoded(|b| {
 				if b.len() > 256 {
-					key.sign(&runtime_io::blake2_256(b))
+					key.sign(&sr_io::blake2_256(b))
 				} else {
 					key.sign(b)
 				}

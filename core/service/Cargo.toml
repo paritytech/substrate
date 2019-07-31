@@ -21,7 +21,7 @@ sysinfo = "0.9.0"
 target_info = "0.1"
 keystore = { package = "substrate-keystore", path = "../../core/keystore" }
 sr-io = { path = "../../core/sr-io" }
-runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
+sr-primitives = { path = "../../core/sr-primitives" }
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
 consensus_common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 network = { package = "substrate-network", path = "../../core/network" }

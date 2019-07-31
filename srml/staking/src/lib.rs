@@ -293,14 +293,14 @@ use srml_support::{
 	}
 };
 use session::{historical::OnSessionEnding, SelectInitialValidators, SessionIndex};
-use primitives::Perbill;
-use primitives::weights::SimpleDispatchInfo;
-use primitives::traits::{
+use sr_primitives::Perbill;
+use sr_primitives::weights::SimpleDispatchInfo;
+use sr_primitives::traits::{
 	Convert, Zero, One, StaticLookup, CheckedSub, CheckedShl, Saturating, Bounded,
 	SaturatedConversion, SimpleArithmetic
 };
 #[cfg(feature = "std")]
-use primitives::{Serialize, Deserialize};
+use sr_primitives::{Serialize, Deserialize};
 use system::{ensure_signed, ensure_root};
 
 use phragmen::{elect, ACCURACY, ExtendedBalance, equalize};
@@ -621,8 +621,8 @@ decl_storage! {
 		config(stakers):
 			Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>;
 		build(|
-			storage: &mut primitives::StorageOverlay,
-			_: &mut primitives::ChildrenStorageOverlay,
+			storage: &mut sr_primitives::StorageOverlay,
+			_: &mut sr_primitives::ChildrenStorageOverlay,
 			config: &GenesisConfig<T>
 		| {
 			with_storage(storage, || {

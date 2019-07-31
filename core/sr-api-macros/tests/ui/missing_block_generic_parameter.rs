@@ -1,4 +1,4 @@
-use runtime_primitives::traits::GetNodeBlockType;
+use sr_primitives::traits::GetNodeBlockType;
 use test_client::runtime::Block;
 use client::{decl_runtime_apis, impl_runtime_apis};
 

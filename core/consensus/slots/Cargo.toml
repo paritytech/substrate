@@ -9,7 +9,7 @@ edition = "2018"
 codec = { package = "parity-codec", version = "4.1.1" }
 client = { package = "substrate-client", path = "../../client" }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
-runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
+sr-primitives = {  path = "../../sr-primitives" }
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
 futures-preview = "0.3.0-alpha.17"

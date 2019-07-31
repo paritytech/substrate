@@ -17,7 +17,7 @@
 use std::{mem, pin::Pin, sync::Arc, time::Duration};
 use futures::{prelude::*, channel::mpsc, task::SpawnExt as _, task::Context, task::Poll};
 use futures_timer::Delay;
-use runtime_primitives::{Justification, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
+use sr_primitives::{Justification, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
 
 use crate::block_import::BlockOrigin;
 use crate::import_queue::{

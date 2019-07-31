@@ -33,8 +33,8 @@ use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use log::warn;
 use primitives::{H256, Blake2Hasher};
-use runtime_primitives::generic::{BlockId, SignedBlock};
-use runtime_primitives::traits::{Block as BlockT, Header, NumberFor};
+use sr_primitives::generic::{BlockId, SignedBlock};
+use sr_primitives::traits::{Block as BlockT, Header, NumberFor};
 use self::error::Result;
 
 pub use self::gen_client::Client as ChainClient;
