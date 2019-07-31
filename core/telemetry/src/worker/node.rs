@@ -112,7 +112,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 		let mut socket = mem::replace(&mut self.socket, NodeSocket::Poisoned);
 		self.socket = loop {
 			match socket {
-				NodeSocket::Connected(mut conn) => 
+				NodeSocket::Connected(mut conn) =>
 					match NodeSocketConnected::poll(Pin::new(&mut conn), cx, &self.addr) {
 						Poll::Ready(Ok(v)) => match v {}
 						Poll::Pending => break NodeSocket::Connected(conn),
@@ -202,7 +202,7 @@ where TTrans::Output: Sink<BytesMut, Error = TSinkErr> + Unpin {
 				self.need_flush = true;
 			} else if self.need_flush {
 				match Sink::poll_flush(Pin::new(&mut self.sink), cx) {
-					Poll::Pending => {}
+					Poll::Pending => return Poll::Pending,
 					Poll::Ready(Err(err)) => return Poll::Ready(Err(err)),
 					Poll::Ready(Ok(())) => self.need_flush = false,
 				}
