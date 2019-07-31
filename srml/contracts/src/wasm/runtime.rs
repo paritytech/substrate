@@ -301,7 +301,7 @@ define_env!(Env, <E: Ext>,
 	// Make a call to another contract.
 	//
 	// Returns 0 on the successful execution and puts the result data returned by the callee into
-	// the scratch buffer. Otherwise, returns a non-zero code and clears the scratch buffer.
+	// the scratch buffer. Otherwise, returns a non-zero value and clears the scratch buffer.
 	//
 	// - callee_ptr: a pointer to the address of the callee contract.
 	//   Should be decodable as an `T::AccountId`. Traps otherwise.
