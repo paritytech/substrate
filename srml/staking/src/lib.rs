@@ -1403,7 +1403,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// At the end of the era each the total payout will be distributed among validator
 	/// relatively to their points.
-	fn add_reward_points_to_validator(validator: T::AccountId, points: u32) {
+	pub fn add_reward_points_to_validator(validator: T::AccountId, points: u32) {
 		<Module<T>>::current_elected().iter()
 			.position(|elected| *elected == validator)
 			.map(|index| {
