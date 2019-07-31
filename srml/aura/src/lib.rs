@@ -53,10 +53,9 @@ pub use timestamp;
 use rstd::{result, prelude::*};
 use parity_codec::Encode;
 use srml_support::{decl_storage, decl_module, Parameter, storage::StorageValue, traits::Get};
-use substrate_primitives::crypto::AppPublic;
+use primitives::crypto::AppPublic;
 use sr_primitives::{
-	traits::{SaturatedConversion, Saturating, Zero, One, Member, IsMember},
-	generic::DigestItem,
+	traits::{SaturatedConversion, Saturating, Zero, One, Member, IsMember}, generic::DigestItem,
 };
 use timestamp::OnTimestampSet;
 #[cfg(feature = "std")]

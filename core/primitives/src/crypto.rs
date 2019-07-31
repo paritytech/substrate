@@ -1130,7 +1130,7 @@ pub mod key_types {
 	pub const DUMMY: KeyTypeId = KeyTypeId(*b"dumy");
 }
 
-impl TryFrom<KeyTypeId> for Kind {
+impl rstd::convert::TryFrom<KeyTypeId> for Kind {
 	type Error = ();
 
 	fn try_from(kind: KeyTypeId) -> Result<Self, Self::Error> {
@@ -1141,13 +1141,13 @@ impl TryFrom<KeyTypeId> for Kind {
 			e if e == key_types::GRANDPA => Kind::Ed25519,
 			#[cfg(feature = "std")]
 			e if e == key_types::DUMMY => Kind::Dummy,
-			_ => Err(())?,
+			_ => return Err(()),
 		})
 	}
 }
 
 // This doesn't make much sense and should be reconsidered.
-impl TryFrom<Kind> for KeyTypeId {
+impl rstd::convert::TryFrom<Kind> for KeyTypeId {
 	type Error = ();
 
 	fn try_from(kind: Kind) -> Result<Self, Self::Error> {
