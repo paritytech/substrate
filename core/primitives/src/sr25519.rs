@@ -481,8 +481,9 @@ impl TraitPair for Pair {
 			Err(_) => return false
 		};
 		match PublicKey::from_bytes(pubkey.as_ref().as_slice()) {
-			Ok(pk) => pk.verify(
-				signing_context(SIGNING_CTX).bytes(message.as_ref()),
+			Ok(pk) => pk.verify_simple(
+				SIGNING_CTX,
+				message.as_ref(),
 				&signature,
 			).is_ok(),
 			Err(_) => false,
@@ -496,8 +497,9 @@ impl TraitPair for Pair {
 			Err(_) => return false
 		};
 		match PublicKey::from_bytes(pubkey.as_ref()) {
-			Ok(pk) => pk.verify(
-				signing_context(SIGNING_CTX).bytes(message.as_ref()),
+			Ok(pk) => pk.verify_simple(
+				SIGNING_CTX,
+				message.as_ref(),
 				&signature,
 			).is_ok(),
 			Err(_) => false,
@@ -638,6 +640,19 @@ mod test {
 	}
 
 	#[test]
+	fn verify_known_message_should_work() {
+		let public = Public::from_raw(hex!(
+			"b4bfa1f7a5166695eb75299fd1c4c03ea212871c342f2c5dfea0902b2c246918"
+		));
+		let signature = Signature::from_raw(hex!(
+			"5a9755f069939f45d96aaf125cf5ce7ba1db998686f87f2fb3cbdea922078741a73891ba265f70c31436e18a9acd14d189d73c12317ab6c313285cd938453202"
+		));
+		let message = b"Verifying that I am the owner of 5G9hQLdsKQswNPgB499DeA5PkFBbgkLPJWkkS6FAM6xGQ8xD. Hash: 221455a3\n";
+
+		assert!(Pair::verify(&signature, &message[..], &public));
+	}
+
+	#[test]
 	fn generated_pair_should_work() {
 		let (pair, _) = Pair::generate();
 		let public = pair.public();
@@ -648,7 +663,6 @@ mod test {
 
 	#[test]
 	fn seeded_pair_should_work() {
-
 		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();
 		assert_eq!(
