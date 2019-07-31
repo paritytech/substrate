@@ -25,6 +25,9 @@ mod params;
 pub mod error;
 pub mod informant;
 
+use sr_primitives::BuildStorage;
+use serde::{Serialize, de::DeserializeOwned};
+
 use client::ExecutionStrategies;
 use service::{
 	ServiceFactory, FactoryFullConfiguration, RuntimeGenesis,
@@ -367,16 +370,18 @@ fn input_keystore_password() -> Result<String, String> {
 }
 
 /// Fill the password field of the given config instance.
-fn fill_config_keystore_password(
-	config: &mut service::Configuration,
+fn fill_config_keystore_password<C, G: Serialize + DeserializeOwned + BuildStorage>(
+	config: &mut service::Configuration<C, G>,
 	cli: &RunCmd,
 ) -> Result<(), String> {
 	config.keystore_password = if cli.password_interactive {
-		Some(input_keystore_password()?.into());
-	} else if let Some(file) = cli.password_filename {
-		Some(fs::read_to_string(file)?.into());
-	} else if let Some(password) = cli.password {
-		Some(password.into());
+		Some(input_keystore_password()?.into())
+	} else if let Some(ref file) = cli.password_filename {
+		Some(fs::read_to_string(file).map_err(|e| format!("{}", e))?.into())
+	} else if let Some(ref password) = cli.password {
+		Some(password.clone().into())
+	} else {
+		None
 	};
 
 	Ok(())
@@ -391,6 +396,8 @@ where
 {
 	let spec = load_spec(&cli.shared_params, spec_factory)?;
 	let mut config = service::Configuration::default_with_spec(spec.clone());
+
+	fill_config_keystore_password(&mut config, &cli)?;
 
 	config.impl_name = impl_name;
 	config.impl_commit = version.commit;
@@ -415,7 +422,6 @@ where
 	let base_path = base_path(&cli.shared_params, version);
 
 	config.keystore_path = cli.keystore_path.or_else(|| Some(keystore_path(&base_path, config.chain_spec.id())));
-	fill_config_keystore_password(&mut config, &cli)?;
 
 	config.database_path = db_path(&base_path, config.chain_spec.id());
 	config.database_cache_size = cli.database_cache_size;
@@ -475,10 +481,6 @@ where
 		&mut config,
 		cli.pool_config,
 	)?;
-
-	if let Some(key) = cli.key {
-		config.keys.push(key);
-	}
 
 	if cli.shared_params.dev && cli.keyring.account.is_none() {
 		config.keys.push("//Alice".into());

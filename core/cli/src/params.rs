@@ -36,9 +36,13 @@ arg_enum! {
 	#[allow(missing_docs)]
 	#[derive(Debug, Clone, Copy)]
 	pub enum ExecutionStrategy {
+		// Execute with native build (if available, WebAssembly otherwise).
 		Native,
+		// Only execute with the WebAssembly build.
 		Wasm,
+		// Execute with both native (where available) and WebAssembly builds.
 		Both,
+		// Execute with the native build if possible; if it fails, then execute with WebAssembly.
 		NativeElseWasm,
 	}
 }
@@ -55,7 +59,8 @@ impl Into<client::ExecutionStrategy> for ExecutionStrategy {
 }
 
 arg_enum! {
-	/// How to execute blocks
+	/// Whether off-chain workers are enabled.
+	#[allow(missing_docs)]
 	#[derive(Debug, Clone)]
 	pub enum OffchainWorkerEnabled {
 		Always,
@@ -421,14 +426,14 @@ pub struct RunCmd {
 	/// Use interactive shell for entering the password used by the keystore.
 	#[structopt(
 		long = "password-interactive",
-		raw(conflicts_with_all = r#"&[ "password", "password-filename" ]"#)
+		raw(conflicts_with_all = "&[ \"password\", \"password-filename\" ]")
 	)]
 	pub password_interactive: bool,
 
 	/// Password used by the keystore.
 	#[structopt(
-		long = "password"
-		raw(conflicts_with_all = r#"&[ "password-interactive", "password-filename" ]"#)
+		long = "password",
+		raw(conflicts_with_all = "&[ \"password-interactive\", \"password-filename\" ]")
 	)]
 	pub password: Option<String>,
 

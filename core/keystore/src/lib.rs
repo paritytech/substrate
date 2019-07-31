@@ -77,7 +77,7 @@ impl Store {
 	}
 
 	/// Get the public/private key pair for the given public key and key type.
-	fn get_pair<Pair: PairT>(
+	fn get_additional_pair<Pair: PairT>(
 		&self,
 		public: &Pair::Public,
 		key_type: KeyTypeId,
@@ -138,7 +138,7 @@ impl Store {
 		public: &Pair::Public,
 		key_type: KeyTypeId,
 	) -> Result<Pair> {
-		if let Some(pair) = self.get_pair(public, key_type)? {
+		if let Some(pair) = self.get_additional_pair(public, key_type)? {
 			return Ok(pair)
 		}
 

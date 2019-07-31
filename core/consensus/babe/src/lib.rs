@@ -1223,7 +1223,7 @@ fn authority<C>(client: &C, keystore: Arc<Store>) -> Option<AuthorityPair> where
 	+ HeaderBackend<<C as BlockOf>::Type>,
 	C::Api: BabeApi<<C as BlockOf>::Type>
 {
-	let owned = keystore.contents::<AuthorityId>().ok()?;
+	let owned = keystore.public_keys::<AuthorityId>().ok()?;
 	let at = BlockId::Number(client.info().best_number);
 	// The list of authority keys that is current. By default this will just use the state of
 	// the best block, but you might want it to use some other block's state instead if it's
@@ -1232,7 +1232,7 @@ fn authority<C>(client: &C, keystore: Arc<Store>) -> Option<AuthorityPair> where
 	let authorities = authorities_at::<C>(client, &at).ok()?;
 	let maybe_pub = owned.into_iter()
 		.find(|i| authorities.contains(i));
-	maybe_pub.and_then(|public| keystore.load(&public, "").ok())
+	maybe_pub.and_then(|public| keystore.key_pair(&public).ok())
 }
 
 /// Type of source for block sealing. Different consensus algorithms have different sealing

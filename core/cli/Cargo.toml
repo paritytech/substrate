@@ -20,6 +20,7 @@ tokio = "0.1.7"
 futures = "0.1.17"
 futures03 = { package = "futures-preview", version = "0.3.0-alpha.17", features = ["compat"] }
 fdlimit = "0.1"
+serde = { version = "1.0", features = ["derive"] }
 exit-future = "0.1"
 serde_json = "1.0"
 panic-handler = { package = "substrate-panic-handler", path = "../../core/panic-handler" }
