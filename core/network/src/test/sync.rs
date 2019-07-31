@@ -353,8 +353,8 @@ fn syncs_all_forks() {
 
 	net.block_until_sync(&mut runtime);
 	// Check that all peers have all of the blocks.
-	assert_eq!(9, net.peer(0).client.info().chain.best_number);
-	assert_eq!(9, net.peer(1).client.info().chain.best_number);
+	assert_eq!(9, net.peer(0).blocks_count());
+	assert_eq!(9, net.peer(1).blocks_count());
 }
 
 #[test]
