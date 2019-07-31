@@ -33,7 +33,6 @@ test-client = { package = "substrate-test-runtime-client", path = "../test-runti
 kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
 
 [features]
-test-helpers = []
 default = ["std"]
 std = [
 	"rstd/std",

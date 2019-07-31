@@ -780,7 +780,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 
 	/// Apply a checked and validated block to an operation. If a justification is provided
-	/// then `fed` *must* be true.
+	/// then `finalized` *must* be true.
 	fn apply_block(
 		&self,
 		operation: &mut ClientImportOperation<Block, Blake2Hasher, B>,
@@ -1473,18 +1473,7 @@ impl<B, E, Block, RA> Finalizer<Block, Blake2Hasher, B> for Client<B, E, Block, 
 		let to_finalize_hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
 		self.apply_finality_with_block_hash(operation, to_finalize_hash, justification, last_best, notify)
 	}
-	
-	/// Finalize a block. This will implicitly finalize all blocks up to it and
-	/// fire finality notifications.
-	///
-	/// If the block being finalized is on a different fork from the current
-	/// best block the finalized block is set as best, this might be slightly
-	/// innacurate (i.e. outdated), usages that require determining an accurate
-	/// best block should use `SelectChain` instead of the client.
-	///
-	/// Pass a flag to indicate whether finality notifications should be propagated.
-	/// This is usually tied to some synchronization state, where we don't send notifications
-	/// while performing major synchronization work.
+
 	fn finalize_block(&self, id: BlockId<Block>, justification: Option<Justification>, notify: bool) -> error::Result<()> {
 		self.lock_import_and_run(|operation| {
 			let last_best = self.backend.blockchain().info().best_hash;
@@ -1811,8 +1800,8 @@ impl<B, E, Block, RA> backend::AuxStore for &Client<B, E, Block, RA>
 		B: backend::Backend<Block, Blake2Hasher>,
 		E: CallExecutor<Block, Blake2Hasher>,
 		Block: BlockT<Hash=H256>,
-{
-	/// Insert auxiliary data into key-value store.
+{ 
+
 	fn insert_aux<
 		'a,
 		'b: 'a,
@@ -1822,7 +1811,7 @@ impl<B, E, Block, RA> backend::AuxStore for &Client<B, E, Block, RA>
 	>(&self, insert: I, delete: D) -> error::Result<()> {
 		(**self).insert_aux(insert, delete)
 	}
-	/// Query auxiliary data from key-value store.
+
 	fn get_aux(&self, key: &[u8]) -> error::Result<Option<Vec<u8>>> {
 		(**self).get_aux(key)
 	}
