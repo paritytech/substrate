@@ -1062,22 +1062,26 @@ pub trait OpaqueKeys: Clone {
 	fn ownership_proof_is_valid(&self, _proof: &[u8]) -> bool { true }
 }
 
-struct TrailingZeroInput<'a>(&'a [u8]);
+/// Input that adds given number of zero after wrapped input.
+struct TrailingZeroInput<'a> {
+	input: &'a [u8],
+	trailing_zeros: usize,
+}
+
 impl<'a> codec::Input for TrailingZeroInput<'a> {
 	fn remaining_len(&mut self) -> Result<usize, codec::Error> {
-		// TODO TODO: this might not be super correct: remaining_len change during execution
-		// Also this gives attack possibility no ?
-		Ok(u32::max_value() as usize)
+		Ok(self.input.len() + self.trailing_zeros)
 	}
 
 	fn read(&mut self, into: &mut [u8]) -> Result<(), codec::Error> {
-		// TODO TODO: inconsistent with remaining_len
-		let len = into.len().min(self.0.len());
-		into[..len].copy_from_slice(&self.0[..len]);
-		for i in &mut into[len..] {
+		let len_from_input = into.len().min(self.input.len());
+		into[..len_from_input].copy_from_slice(&self.input[..len_from_input]);
+		for i in &mut into[len_from_input..] {
 			*i = 0;
 		}
-		self.0 = &self.0[len..];
+		self.input = &self.input[len_from_input..];
+		self.trailing_zeros = self.trailing_zeros.checked_sub(into.len() - len_from_input)
+			.ok_or_else(|| codec::Error::from("Not enough data in input"))?;
 
 		Ok(())
 	}
@@ -1119,7 +1123,10 @@ pub trait TypeId {
 impl<T: Encode + Decode + Default, Id: Encode + Decode + TypeId> AccountIdConversion<T> for Id {
 	fn into_sub_account<S: Encode>(&self, sub: S) -> T {
 		(Id::TYPE_ID, self, sub).using_encoded(|b|
-			T::decode(&mut TrailingZeroInput(b))
+			T::decode(&mut TrailingZeroInput {
+				input: b,
+				trailing_zeros: 32*1024,
+			})
 		).unwrap_or_default()
 	}
 
@@ -1140,7 +1147,7 @@ impl<T: Encode + Decode + Default, Id: Encode + Decode + TypeId> AccountIdConver
 #[cfg(test)]
 mod tests {
 	use super::AccountIdConversion;
-	use crate::codec::{Encode, Decode};
+	use crate::codec::{Encode, Decode, Input};
 
 	#[derive(Encode, Decode, Default, PartialEq, Debug)]
 	struct U32Value(u32);
@@ -1188,6 +1195,26 @@ mod tests {
 		assert!(r.is_none());
 		let r = U16Value::try_from_account(&0x0100_c0da_f00dcafe_u64);
 		assert!(r.is_none());
+	}
+
+	#[test]
+	fn trailing_zero_should_work() {
+		let mut t = super::TrailingZeroInput {
+			input: &[1, 2, 3],
+			trailing_zeros: 4,
+		};
+		assert_eq!(t.remaining_len(), Ok(7));
+		let mut buffer = [0u8; 2];
+		assert_eq!(t.read(&mut buffer), Ok(()));
+		assert_eq!(t.remaining_len(), Ok(5));
+		assert_eq!(buffer, [1, 2]);
+		assert_eq!(t.read(&mut buffer), Ok(()));
+		assert_eq!(t.remaining_len(), Ok(3));
+		assert_eq!(buffer, [3, 0]);
+		assert_eq!(t.read(&mut buffer), Ok(()));
+		assert_eq!(t.remaining_len(), Ok(1));
+		assert_eq!(buffer, [0, 0]);
+		assert!(t.read(&mut buffer).err().is_some())
 	}
 }
 
