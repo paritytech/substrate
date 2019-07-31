@@ -341,7 +341,7 @@ impl AsRef<Pair> for Pair {
 #[cfg(feature = "std")]
 impl From<MiniSecretKey> for Pair {
 	fn from(sec: MiniSecretKey) -> Pair {
-		Pair(sec.expand_to_keypair())
+		Pair(sec.expand_ed25519_to_keypair())
 	}
 }
 
@@ -376,7 +376,7 @@ impl AsRef<schnorrkel::Keypair> for Pair {
 /// Derive a single hard junction.
 #[cfg(feature = "std")]
 fn derive_hard_junction(secret: &SecretKey, cc: &[u8; CHAIN_CODE_LENGTH]) -> SecretKey {
-	secret.hard_derive_mini_secret_key(Some(ChainCode(cc.clone())), b"").0.expand()
+	secret.hard_derive_mini_secret_key(Some(ChainCode(cc.clone())), b"").0.expand_ed25519()
 }
 
 /// The raw secret seed, which can be used to recreate the `Pair`.
@@ -417,7 +417,7 @@ impl TraitPair for Pair {
 				Ok(Pair(
 					MiniSecretKey::from_bytes(seed)
 						.map_err(|_| SecretStringError::InvalidSeed)?
-						.expand_to_keypair()
+						.expand_ed25519_to_keypair()
 				))
 			}
 			SECRET_KEY_LENGTH => {
@@ -482,8 +482,9 @@ impl TraitPair for Pair {
 		};
 		match PublicKey::from_bytes(pubkey.as_ref().as_slice()) {
 			Ok(pk) => pk.verify(
-				signing_context(SIGNING_CTX).bytes(message.as_ref()), &signature
-			),
+				signing_context(SIGNING_CTX).bytes(message.as_ref()),
+				&signature,
+			).is_ok(),
 			Err(_) => false,
 		}
 	}
@@ -496,8 +497,9 @@ impl TraitPair for Pair {
 		};
 		match PublicKey::from_bytes(pubkey.as_ref()) {
 			Ok(pk) => pk.verify(
-				signing_context(SIGNING_CTX).bytes(message.as_ref()), &signature
-			),
+				signing_context(SIGNING_CTX).bytes(message.as_ref()),
+				&signature,
+			).is_ok(),
 			Err(_) => false,
 		}
 	}
@@ -518,7 +520,7 @@ impl Pair {
 		let mini_key: MiniSecretKey = mini_secret_from_entropy(entropy, password.unwrap_or(""))
 			.expect("32 bytes can always build a key; qed");
 
-		let kp = mini_key.expand_to_keypair();
+		let kp = mini_key.expand_ed25519_to_keypair();
 		(Pair(kp), mini_key.to_bytes())
 	}
 }
@@ -680,7 +682,7 @@ mod test {
 		);
 		let public = pk.public();
 		let js_signature = Signature::from_raw(
-			hex!("28a854d54903e056f89581c691c1f7d2ff39f8f896c9e9c22475e60902cc2b3547199e0e91fa32902028f2ca2355e8cdd16cfe19ba5e8b658c94aa80f3b81a00")
+			hex!("3a6caf0e96c51a8182241fe94ad4828f84a5aa69f9da33adf10afd7a97591d5a352bc745ba68f69060e14e5cbaa23c568523ec4bfb8c8a908a5703b62c89cf85")
 		);
 		assert!(Pair::verify(&js_signature, b"SUBSTRATE", public));
 	}
