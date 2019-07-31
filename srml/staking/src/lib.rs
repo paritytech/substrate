@@ -275,25 +275,23 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-#[cfg(test)]
-mod slash_tests;
-
 mod phragmen;
 mod inflation;
+mod slash;
 
 #[cfg(all(feature = "bench", test))]
 mod benches;
 
 #[cfg(feature = "std")]
 use runtime_io::with_storage;
-use rstd::{prelude::*, result, collections::{btree_map::BTreeMap, btree_set::BTreeSet}};
-use parity_codec::{Codec, HasCompact, Encode, Decode};
+use rstd::{prelude::*, result, collections::{btree_map::BTreeMap}};
+use parity_codec::{HasCompact, Encode, Decode};
 use srml_support::{
 	StorageValue, StorageMap, EnumerableStorageMap, decl_module, decl_event,
 	decl_storage, ensure, traits::{
 		Currency, OnFreeBalanceZero, OnDilution, LockIdentifier, LockableCurrency,
-		WithdrawReasons, WithdrawReason, OnUnbalanced, Imbalance, Get, DoSlash, Time,
-		WindowLength, AfterSlash,
+		WithdrawReasons, WithdrawReason, OnUnbalanced, Imbalance, Get, Time,
+		AfterSlash,
 	}
 };
 use session::{historical::OnSessionEnding, SelectInitialValidators, SessionIndex};
@@ -301,7 +299,7 @@ use sr_primitives::Perbill;
 use sr_primitives::weights::SimpleDispatchInfo;
 use sr_primitives::traits::{
 	Convert, Zero, One, StaticLookup, CheckedSub, CheckedShl, Saturating, Bounded,
-	SaturatedConversion, SimpleArithmetic, MaybeSerializeDebug
+	SaturatedConversion, SimpleArithmetic
 };
 #[cfg(feature = "std")]
 use sr_primitives::{Serialize, Deserialize};
@@ -560,18 +558,10 @@ pub trait Trait: system::Trait {
 
 	/// Interface for interacting with a session module.
 	type SessionInterface: self::SessionInterface<Self::AccountId>;
-
-	/// Slash kind for keeping track of different classes of slashes in history
-	type SlashKind: Copy + Clone + Codec + MaybeSerializeDebug + WindowLength<u32>;
 }
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Staking {
-
-		/// Slashing history
-		pub SlashHistory get(slash_history): linked_map T::SlashKind =>
-			BTreeMap<T::AccountId, SlashState<T::AccountId, BalanceOf<T>>>;
-
 		/// The ideal number of staking participants.
 		pub ValidatorCount get(validator_count) config(): u32;
 		/// Minimum number of staking participants before emergency conditions are imposed.
@@ -1443,93 +1433,6 @@ impl<T: Trait> Module<T> {
 				});
 			});
 	}
-
-
-	/// Tries to adjust the `slash` based on `new_slash` and `prev_slash`
-	///
-	/// Returns the slashed amount
-	fn adjust_slash(who: &T::AccountId, new_slash: BalanceOf<T>, prev_slash: BalanceOf<T>) -> BalanceOf<T> {
-		if new_slash > prev_slash {
-			T::Currency::slash(who, new_slash - prev_slash);
-			new_slash
-		} else {
-			prev_slash
-		}
-	}
-
-	/// Update exposure for an already known validator and its nominators
-	fn update_exposure_for_known(
-		who: &T::AccountId,
-		prev_state: &mut SlashState<T::AccountId, BalanceOf<T>>,
-		exposure: &Exposure<T::AccountId, BalanceOf<T>>,
-		severity: Perbill
-	) {
-		let new_slash = severity * exposure.own;
-
-		T::Currency::slash(&who, new_slash - prev_state.slashed_amount.own);
-
-		let intersection: BTreeSet<T::AccountId> = exposure.others
-			.iter()
-			.filter_map(|e1| prev_state.exposure.others.iter().find(|e2| e1.who == e2.who))
-			.map(|e| e.who.clone())
-			.collect();
-
-		let previous_slash = rstd::mem::replace(&mut prev_state.slashed_amount.others, BTreeMap::new());
-
-		for nominator in &exposure.others {
-			let new_slash = severity * nominator.value;
-
-			// Make sure that we are not double slashing and only apply the difference
-			// if the nominator was already slashed
-			if intersection.contains(&nominator.who) {
-				previous_slash.get(&nominator.who).map(|prev| Self::adjust_slash(&nominator.who, new_slash, *prev));
-			} else {
-				T::Currency::slash(&nominator.who, new_slash);
-			};
-
-			prev_state.slashed_amount.others.insert(nominator.who.clone(), new_slash);
-		}
-
-		prev_state.exposure = exposure.clone();
-		prev_state.slashed_amount.own = new_slash;
-	}
-
-	/// Updates the history of slashes based on the new severity and applies
-	/// the new slash if the estimated `slash_amount` exceeds the `previous slash_amount`
-	///
-	/// Returns the `true` if `who` was already in the history otherwise `false`
-	fn mutate_slash_history(
-		who: &T::AccountId,
-		exposure: &Exposure<T::AccountId, BalanceOf<T>>,
-		severity: Perbill,
-		kind: T::SlashKind,
-	) -> bool {
-		<SlashHistory<T>>::mutate(kind, |state| {
-
-			let mut in_history = false;
-
-			for (stash, s) in state.iter_mut() {
-				if stash == who {
-					Self::update_exposure_for_known(stash, s, exposure, severity);
-					in_history = true;
-				} else {
-					s.slashed_amount.own = Self::adjust_slash(stash, severity * s.exposure.own, s.slashed_amount.own);
-
-					for nominator in &s.exposure.others {
-						let new_slash = severity * nominator.value;
-						if let Some(prev_slash) = s.slashed_amount.others.get_mut(&nominator.who) {
-							*prev_slash = Self::adjust_slash(&nominator.who, new_slash, *prev_slash);
-						} else {
-							s.slashed_amount.others.insert(nominator.who.clone(), new_slash);
-							T::Currency::slash(&nominator.who, new_slash);
-						}
-					}
-				}
-			}
-
-			in_history
-		})
-	}
 }
 
 impl<T: Trait> session::OnSessionEnding<T::AccountId> for Module<T> {
@@ -1619,71 +1522,33 @@ impl<T: Trait> SelectInitialValidators<T::AccountId> for Module<T> {
 	}
 }
 
-/// Type for handling slashing and rewarding
-pub struct StakingSlasher<T>(rstd::marker::PhantomData<T>);
+/// A type for taking action after slashing and rewarding occurred
+pub struct AfterSlashing<T>(rstd::marker::PhantomData<T>);
 
-impl<T: Trait, Reporters>
-	DoSlash<
-		(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>),
-		Reporters,
-		Perbill,
-		T::SlashKind
-	> for StakingSlasher<T>
+/// Update state after slashing occurred
+impl<T: Trait, Who> AfterSlash<Who, u8> for AfterSlashing<T>
 where
-	Reporters: IntoIterator<Item = (T::AccountId, Perbill)>,
+	Who: IntoIterator<Item = (T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>,
 {
-	// TODO: #3166 pay out rewards to the reporters
-	// Perbill is priority for the reporter
-	fn do_slash(
-		(who, exposure): (T::AccountId, Exposure<T::AccountId, BalanceOf<T>>),
-		_reporters: Reporters,
-		severity: Perbill,
-		kind: T::SlashKind,
-	) -> Result<(), ()> {
-		let who_exist = <Module<T>>::mutate_slash_history(&who, &exposure, severity, kind);
+	fn after_slash(misbehaved: Who, level: u8) {
+		for (who, exposure) in misbehaved {
+			// Remove from the validator from next NPoS election
+			<Validators<T>>::remove(&who);
 
-		if !who_exist {
-			let amount = severity * exposure.own;
-			T::Currency::slash(&who, amount);
-			let mut slashed_amount = SlashAmount { own: amount, others: BTreeMap::new() };
-
-			for nominator in &exposure.others {
-				let amount = severity * nominator.value;
-				T::Currency::slash(&nominator.who, amount);
-				slashed_amount.others.insert(nominator.who.clone(), amount);
+			// Disable the validator
+			if level >= 2 {
+				let _ = T::SessionInterface::disable_validator(&who);
 			}
 
-			<SlashHistory<T>>::mutate(kind, |state| {
-				state.insert(who, SlashState { exposure, slashed_amount });
-			});
-		}
-		Ok(())
-	}
-}
-
-impl<T: Trait> AfterSlash<u8, (T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>
-	for StakingSlasher<T>
-{
-	fn after_slash(
-		level: u8,
-		(who, exposure): (T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)
-	) {
-		// Remove from the validator from next NPoS election
-		<Validators<T>>::remove(&who);
-
-		// Disable the validator
-		if level >= 2 {
-			let _ = T::SessionInterface::disable_validator(&who);
-		}
-
-		// Remove the validator from nominators' lists of trusted candidates
-		// TODO(niklasad1): not sure if this is correct
-		if level >= 3 {
-			for nominator in &exposure.others {
-				// make sure that duplicated entries are removed to
-				<Nominators<T>>::mutate(&nominator.who, |validators| validators.retain(|v| v != &who));
+			// Remove the validator from nominators' lists of trusted candidates
+			// TODO(niklasad1): not sure if this is correct
+			if level >= 3 {
+				for nominator in &exposure.others {
+					// use `retain` to make sure that duplicated entries are removed too
+					<Nominators<T>>::mutate(&nominator.who, |validators| validators.retain(|v| v != &who));
+				}
+				<Stakers<T>>::remove(&who);
 			}
-			<Stakers<T>>::remove(&who);
 		}
 	}
 }

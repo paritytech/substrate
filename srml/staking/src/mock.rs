@@ -196,7 +196,6 @@ impl Trait for Test {
 	type SessionsPerEra = SessionsPerEra;
 	type BondingDuration = BondingDuration;
 	type SessionInterface = Self;
-	type SlashKind = Kind;
 }
 
 impl srml_rolling_window::Trait for Test {
