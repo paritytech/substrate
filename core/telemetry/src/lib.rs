@@ -203,16 +203,23 @@ impl Stream for Telemetry {
 			}
 		};
 
-		while let Poll::Ready(Some(log_entry)) = Stream::poll_next(Pin::new(&mut inner.receiver), cx) {
-			log_entry.as_record_values(|rec, val| { let _ = inner.worker.log(rec, val); });
-		}
-
 		let mut has_connected = false;
-		while let Poll::Ready(event) = inner.worker.poll(cx) {
-			// Right now we only have one possible event. This line is here in order to not
-			// forget to handle any possible new event type.
-			let worker::TelemetryWorkerEvent::Connected = event;
-			has_connected = true;
+
+		// The polling pattern is: poll the worker so that it processes its queue, then add one
+		// message from the receiver (if possible), then poll the worker again, and so on.
+		loop {
+			while let Poll::Ready(event) = inner.worker.poll(cx) {
+				// Right now we only have one possible event. This line is here in order to not
+				// forget to handle any possible new event type.
+				let worker::TelemetryWorkerEvent::Connected = event;
+				has_connected = true;
+			}
+
+			if let Poll::Ready(Some(log_entry)) = Stream::poll_next(Pin::new(&mut inner.receiver), cx) {
+				log_entry.as_record_values(|rec, val| { let _ = inner.worker.log(rec, val); });
+			} else {
+				break;
+			}
 		}
 
 		if before.elapsed() > Duration::from_millis(200) {
