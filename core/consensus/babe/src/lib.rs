@@ -19,7 +19,6 @@
 //! BABE (Blind Assignment for Blockchain Extension) consensus in Substrate.
 
 #![forbid(unsafe_code, missing_docs, unused_must_use, unused_imports, unused_variables)]
-#![cfg_attr(not(test), forbid(dead_code))]
 pub use babe_primitives::*;
 pub use consensus_common::SyncOracle;
 use consensus_common::ImportResult;
@@ -581,6 +580,7 @@ impl<C> BabeVerifier<C> {
 	}
 }
 
+#[allow(dead_code)]
 fn median_algorithm(
 	median_required_blocks: u64,
 	slot_duration: u64,
@@ -612,8 +612,12 @@ fn median_algorithm(
 			.get(num_timestamps / 2)
 			.expect("we have at least one timestamp, so this is a valid index; qed");
 
+		let now = Instant::now();
+		if now >= median {
+			time_source.0.replace(now - median);
+		}
+
 		time_source.1.clear();
-		time_source.0.replace(Instant::now() - median);
 	} else {
 		time_source.1.push((Instant::now(), slot_now))
 	}
@@ -705,15 +709,6 @@ impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
 					auxiliary: Vec::new(),
 					fork_choice: ForkChoiceStrategy::LongestChain,
 				};
-
-				// FIXME: this should eventually be moved to BabeBlockImport
-				median_algorithm(
-					self.config.0.median_required_blocks,
-					self.config.get(),
-					slot_number,
-					slot_now,
-					&mut *self.time_source.0.lock(),
-				);
 
 				Ok((import_block, Default::default()))
 			}

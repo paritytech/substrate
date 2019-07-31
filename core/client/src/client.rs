@@ -2690,4 +2690,89 @@ pub(crate) mod tests {
 		let id = BlockId::<Block>::Number(72340207214430721);
 		client.header(&id).expect_err("invalid block number overflows u32");
 	}
+
+	#[test]
+	fn state_reverted_on_reorg() {
+		let _ = env_logger::try_init();
+		let client = test_client::new();
+
+		let current_balance = ||
+			client.runtime_api().balance_of(
+				&BlockId::number(client.current_height()), AccountKeyring::Alice.into()
+			).unwrap();
+
+		// G -> A1 -> A2
+		//   \
+		//    -> B1
+		let mut a1 = client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
+		a1.push_transfer(Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Bob.into(),
+			amount: 10,
+			nonce: 0,
+		}).unwrap();
+		let a1 = a1.bake().unwrap();
+		client.import(BlockOrigin::Own, a1.clone()).unwrap();
+
+		let mut b1 = client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
+		b1.push_transfer(Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
+			amount: 50,
+			nonce: 0,
+		}).unwrap();
+		let b1 = b1.bake().unwrap();
+		// Reorg to B1
+		client.import_as_best(BlockOrigin::Own, b1.clone()).unwrap();
+
+		assert_eq!(950, current_balance());
+		let mut a2 = client.new_block_at(&BlockId::Hash(a1.hash()), Default::default()).unwrap();
+		a2.push_transfer(Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Charlie.into(),
+			amount: 10,
+			nonce: 1,
+		}).unwrap();
+		// Re-org to A2
+		client.import_as_best(BlockOrigin::Own, a2.bake().unwrap()).unwrap();
+		assert_eq!(980, current_balance());
+	}
+
+	#[test]
+	fn state_reverted_on_set_head() {
+		let _ = env_logger::try_init();
+		let client = test_client::new();
+
+		let current_balance = ||
+			client.runtime_api().balance_of(
+				&BlockId::number(client.current_height()), AccountKeyring::Alice.into()
+			).unwrap();
+
+		// G -> A1
+		//   \
+		//    -> B1
+		let mut a1 = client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
+		a1.push_transfer(Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Bob.into(),
+			amount: 10,
+			nonce: 0,
+		}).unwrap();
+		let a1 = a1.bake().unwrap();
+		client.import(BlockOrigin::Own, a1.clone()).unwrap();
+
+		let mut b1 = client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
+		b1.push_transfer(Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
+			amount: 50,
+			nonce: 0,
+		}).unwrap();
+		let b1 = b1.bake().unwrap();
+		client.import(BlockOrigin::Own, b1.clone()).unwrap();
+		assert_eq!(990, current_balance());
+		// Set B1 as new best
+		client.set_head(BlockId::hash(b1.hash())).unwrap();
+		assert_eq!(950, current_balance());
+	}
 }
