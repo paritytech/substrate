@@ -37,18 +37,7 @@ pub enum Keyring {
 
 impl Keyring {
 	pub fn from_public(who: &Public) -> Option<Keyring> {
-		[
-			Keyring::Alice,
-			Keyring::Bob,
-			Keyring::Charlie,
-			Keyring::Dave,
-			Keyring::Eve,
-			Keyring::Ferdie,
-			Keyring::One,
-			Keyring::Two,
-		].iter()
-			.map(|i| *i)
-			.find(|&k| &Public::from(k) == who)
+		Self::iter().find(|&k| &Public::from(k) == who)
 	}
 
 	pub fn from_raw_public(who: [u8; 32]) -> Option<Keyring> {
@@ -84,6 +73,10 @@ impl Keyring {
 	pub fn iter() -> impl Iterator<Item=Keyring> {
 		<Self as strum::IntoEnumIterator>::iter()
 	}
+
+	pub fn public(self) -> Public {
+		self.pair().public()
+	}
 }
 
 impl From<Keyring> for &'static str {
@@ -109,16 +102,7 @@ impl From<Keyring> for sr_primitives::MultiSigner {
 
 lazy_static! {
 	static ref PRIVATE_KEYS: HashMap<Keyring, Pair> = {
-		[
-			Keyring::Alice,
-			Keyring::Bob,
-			Keyring::Charlie,
-			Keyring::Dave,
-			Keyring::Eve,
-			Keyring::Ferdie,
-			Keyring::One,
-			Keyring::Two,
-		].iter().map(|&i| (i, i.pair())).collect()
+		Keyring::iter().map(|i| (i, i.pair())).collect()
 	};
 
 	static ref PUBLIC_KEYS: HashMap<Keyring, Public> = {

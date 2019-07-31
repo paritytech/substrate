@@ -76,7 +76,9 @@ impl_outer_event!{
 }
 
 pub fn to_authorities(vec: Vec<(u64, u64)>) -> Vec<(AuthorityId, u64)> {
-	vec.into_iter().map(|(id, weight)| (UintAuthorityId(id).into(), weight)).collect()
+	vec.into_iter()
+		.map(|(id, weight)| (UintAuthorityId(id).to_public_key::<AuthorityId>(), weight))
+		.collect()
 }
 
 pub fn new_test_ext(authorities: Vec<(u64, u64)>) -> runtime_io::TestExternalities<Blake2Hasher> {

@@ -168,7 +168,7 @@ impl<Components: components::Components> Service<Components> {
 		// Create client
 		let executor = NativeExecutor::new(config.default_heap_pages);
 
-		let keystore = if let Some(keystore_path) = config.keystore_path.as_ref() {
+		let mut keystore = if let Some(keystore_path) = config.keystore_path.as_ref() {
 			match Keystore::open(keystore_path.clone(), config.keystore_password.clone()) {
 				Ok(ks) => Some(ks),
 				Err(err) => {
@@ -179,6 +179,12 @@ impl<Components: components::Components> Service<Components> {
 		} else {
 			None
 		};
+
+		//TODO: Make sure we generate for all types and apps
+		if let Some((keystore, seed)) = keystore.and_then(|k| config.dev_key_seed.map(|s| (k, s))) {
+			keystore.generate_from_seed_by_type(&seed, primitives::crypto::key_types::ED25519);
+			keystore.generate_from_seed_by_type(&seed, primitives::crypto::key_types::SR25519);
+		}
 
 		let keystore = Arc::new(keystore);
 

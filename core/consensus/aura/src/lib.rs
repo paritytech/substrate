@@ -690,11 +690,10 @@ pub trait AuthorityProvider: AppPair {
 		+ HeaderBackend<<C as BlockOf>::Type>,
 		C::Api: AuraApi<<C as BlockOf>::Type, <Self as AppKey>::Public>
 	{
-		let owned = keystore.contents::<<Self as AppKey>::Public>().ok()?;
+		let owned = keystore.public_keys::<<Self as AppKey>::Public>().ok()?;
 		let authorities = Self::authorities(client).ok()?;
-		let maybe_pub = owned.into_iter()
-			.find(|i| authorities.contains(i));
-		maybe_pub.and_then(|public| keystore.load(&public, "").ok())
+		let maybe_pub = owned.into_iter().find(|i| authorities.contains(i));
+		maybe_pub.and_then(|public| keystore.key_pair(&public).ok())
 	}
 }
 

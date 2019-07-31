@@ -26,17 +26,18 @@ use crate::traits::{
 use crate::{generic, KeyTypeId};
 use crate::weights::{GetDispatchInfo, DispatchInfo};
 pub use primitives::H256;
-use primitives::{crypto::{Kind, CryptoType, Dummy, key_types}, U256};
-use primitives::ed25519::{Public as AuthorityId};
+use primitives::{crypto::{Kind, CryptoType, Dummy, key_types, Public}, U256};
 use crate::transaction_validity::TransactionValidity;
 
 /// Authority Id
 #[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug, Hash, Serialize, Deserialize)]
 pub struct UintAuthorityId(pub u64);
-impl Into<AuthorityId> for UintAuthorityId {
-	fn into(self) -> AuthorityId {
+
+impl UintAuthorityId {
+	/// Convert this authority id into a public key.
+	pub fn to_public_key<T: Public>(&self) -> T {
 		let bytes: [u8; 32] = U256::from(self.0).into();
-		AuthorityId(bytes)
+		T::from_slice(&bytes)
 	}
 }
 

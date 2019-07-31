@@ -58,7 +58,7 @@ pub struct Pair(Keypair);
 impl Clone for Pair {
 	fn clone(&self) -> Self {
 		Pair(schnorrkel::Keypair {
-			public: self.0.public.clone(),
+			public: self.0.public,
 			secret: schnorrkel::SecretKey::from_bytes(&self.0.secret.to_bytes()[..])
 				.expect("key is always the correct size; qed")
 		})
@@ -140,8 +140,8 @@ impl<'de> Deserialize<'de> for Public {
 }
 
 #[cfg(feature = "std")]
-impl ::std::hash::Hash for Public {
-	fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
+impl std::hash::Hash for Public {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
 		self.0.hash(state);
 	}
 }
@@ -168,7 +168,7 @@ impl Default for Signature {
 
 impl PartialEq for Signature {
 	fn eq(&self, b: &Self) -> bool {
-		&self.0[..] == &b.0[..]
+		self.0[..] == b.0[..]
 	}
 }
 

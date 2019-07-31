@@ -55,8 +55,7 @@ use parity_codec::Encode;
 use srml_support::{decl_storage, decl_module, Parameter, storage::StorageValue, traits::Get};
 use primitives::crypto::AppPublic;
 use sr_primitives::{
-	traits::{SaturatedConversion, Saturating, Zero, One, Member, IsMember},
-	generic::DigestItem,
+	traits::{SaturatedConversion, Saturating, Zero, One, Member, IsMember}, generic::DigestItem,
 };
 use timestamp::OnTimestampSet;
 #[cfg(feature = "std")]
