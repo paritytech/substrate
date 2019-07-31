@@ -237,6 +237,10 @@ impl staking::Trait for Runtime {
 	type SessionsPerEra = SessionsPerEra;
 	type BondingDuration = BondingDuration;
 	type SessionInterface = Self;
+}
+
+impl staking::slash::Trait for Runtime {
+	type Currency = Balances;
 	type SlashKind = Misbehavior;
 }
 

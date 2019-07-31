@@ -121,7 +121,6 @@ impl srml_staking::Trait for Test {
 	type BondingDuration = BondingDuration;
 	type SessionInterface = Self;
 	type Time = timestamp::Module<Self>;
-	type SlashKind = Kind;
 }
 
 impl srml_session::Trait for Test {

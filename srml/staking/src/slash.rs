@@ -15,10 +15,8 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Slashing mod
-
-// Ensure we're `no_std` when compiling for Wasm.
-#![cfg_attr(not(feature = "std"), no_std)]
-#![warn(missing_docs, rust_2018_idioms)]
+//!
+//! This is currently located in `Staking` because it has dependency to `Exposure`
 
 use crate::Exposure;
 use srml_support::{
@@ -26,7 +24,7 @@ use srml_support::{
 	traits::{Currency, WindowLength, DoSlash}
 };
 use parity_codec::{HasCompact, Codec, Decode, Encode};
-use rstd::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
+use rstd::{vec::Vec, collections::{btree_map::BTreeMap, btree_set::BTreeSet}};
 use sr_primitives::{Perbill, traits::MaybeSerializeDebug};
 
 type BalanceOf<T> =
@@ -99,7 +97,7 @@ impl<T: Trait> Module<T> {
 			.map(|e| e.who.clone())
 			.collect();
 
-		let previous_slash = std::mem::replace(&mut prev_state.slashed_amount.others, BTreeMap::new());
+		let previous_slash = rstd::mem::replace(&mut prev_state.slashed_amount.others, BTreeMap::new());
 
 		for nominator in &exposure.others {
 			let new_slash = severity * nominator.value;

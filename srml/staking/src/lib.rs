@@ -277,7 +277,7 @@ mod tests;
 
 mod phragmen;
 mod inflation;
-mod slash;
+pub mod slash;
 
 #[cfg(all(feature = "bench", test))]
 mod benches;
@@ -452,22 +452,6 @@ pub struct Exposure<AccountId, Balance: HasCompact> {
 	pub own: Balance,
 	/// The portions of nominators stashes that are exposed.
 	pub others: Vec<IndividualExposure<AccountId, Balance>>,
-}
-
-/// State of a slashed entity
-#[derive(Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub struct SlashState<AccountId, Balance: HasCompact> {
-	exposure: Exposure<AccountId, Balance>,
-	slashed_amount: SlashAmount<AccountId, Balance>,
-}
-
-/// Slashed amount for a entity including its nominators
-#[derive(Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub struct SlashAmount<AccountId, Balance> {
-	own: Balance,
-	others: BTreeMap<AccountId, Balance>,
 }
 
 pub type BalanceOf<T> =
