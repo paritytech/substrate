@@ -474,7 +474,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 	randomness: [u8; 32],
 	epoch_index: u64,
 	c: (u64, u64),
-	_transaction_pool: &T,
+	_transaction_pool: Option<&T>,
 ) -> Result<CheckedHeader<B::Header, (DigestItemFor<B>, DigestItemFor<B>)>, String> where
 	DigestItemFor<B>: CompatibleDigestItem,
 	T: Send + Sync + 'static,
@@ -667,7 +667,7 @@ impl<B: BlockT, C, T> Verifier<B> for BabeVerifier<C, T> where
 
 		// We add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of headers
-		let checked_header = check_header::<B, C, Option<Arc<T>>>(
+		let checked_header = check_header::<B, C, T>(
 			&self.api,
 			slot_now + 1,
 			header,
@@ -676,7 +676,7 @@ impl<B: BlockT, C, T> Verifier<B> for BabeVerifier<C, T> where
 			randomness,
 			epoch_index,
 			self.config.c(),
-			&self.transaction_pool,
+			self.transaction_pool.as_ref().map(|x| &**x),
 		)?;
 
 		match checked_header {

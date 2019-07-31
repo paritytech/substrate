@@ -398,7 +398,7 @@ fn check_header<C, B: BlockT, P: Pair, T>(
 	mut header: B::Header,
 	hash: B::Hash,
 	authorities: &[AuthorityId<P>],
-	_transaction_pool: &T,
+	_transaction_pool: Option<&T>,
 ) -> Result<CheckedHeader<B::Header, (u64, DigestItemFor<B>)>, String> where
 	DigestItemFor<B>: CompatibleDigestItem<P>,
 	P::Signature: Decode,
@@ -541,13 +541,13 @@ impl<B: BlockT, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
 		// we add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of
 		// headers
-		let checked_header = check_header::<C, B, P, Option<Arc<T>>>(
+		let checked_header = check_header::<C, B, P, T>(
 			&self.client,
 			slot_now + 1,
 			header,
 			hash,
 			&authorities[..],
-			&self.transaction_pool,
+			self.transaction_pool.as_ref().map(|x| &**x),
 		)?;
 		match checked_header {
 			CheckedHeader::Checked(pre_header, (slot_num, seal)) => {
