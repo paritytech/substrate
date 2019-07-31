@@ -172,7 +172,6 @@ fn spawn_worker(f: impl FnOnce() -> () + Send + 'static) {
 mod tests {
 	use super::*;
 	use futures::Future;
-	use primitives::{ed25519, sr25519};
 	use network::{Multiaddr, PeerId};
 
 	struct MockNetworkStateInfo();
@@ -197,10 +196,10 @@ mod tests {
 		let db = client_db::offchain::LocalStorage::new_test();
 		let network_state = Arc::new(MockNetworkStateInfo());
 		// TODO Test keystore
-		let keystore = unimplemented!();
+		let keystore = Arc::new(None);
 
 		// when
-		let offchain = OffchainWorkers::new(client, db, keystore, "".to_owned().into());
+		let offchain = OffchainWorkers::new(client, db, keystore);
 		runtime.executor().spawn(offchain.on_block_imported(&0u64, &pool, network_state.clone()));
 
 		// then

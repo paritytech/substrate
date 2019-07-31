@@ -30,18 +30,11 @@ use network::{PeerId, Multiaddr, NetworkStateInfo};
 use parity_codec::{Encode, Decode};
 use primitives::crypto::{self, Pair, Public};
 use primitives::offchain::{
-	CryptoKind, CryptoKey, KeyTypeId,
-	Externalities as OffchainExt,
-	HttpRequestId, HttpRequestStatus, HttpError,
-	OpaqueNetworkState, OpaquePeerId, OpaqueMultiaddr,
-	StorageKind,
-	Timestamp,
+	CryptoKind, CryptoKey, KeyTypeId, Externalities as OffchainExt, HttpRequestId, Timestamp,
+	HttpRequestStatus, HttpError, OpaqueNetworkState, OpaquePeerId, OpaqueMultiaddr, StorageKind,
 };
 use primitives::{ed25519, sr25519};
-use sr_primitives::{
-	generic::BlockId,
-	traits::{self, Extrinsic},
-};
+use sr_primitives::{generic::BlockId, traits::{self, Extrinsic}};
 use transaction_pool::txpool::{Pool, ChainApi};
 
 /// A message between the offchain extension and the processing thread.
@@ -514,7 +507,6 @@ mod tests {
 	use std::convert::TryFrom;
 	use sr_primitives::traits::Zero;
 	use client_db::offchain::LocalStorage;
-	use crate::tests::TestProvider;
 	use network::PeerId;
 	use test_client::runtime::Block;
 
@@ -530,7 +522,7 @@ mod tests {
 		}
 	}
 
-	fn offchain_api() -> (Api<LocalStorage, TestProvider<Block>, Block>, AsyncApi<impl ChainApi>) {
+	fn offchain_api() -> (Api<LocalStorage, Block>, AsyncApi<impl ChainApi>) {
 		let _ = env_logger::try_init();
 		let db = LocalStorage::new_test();
 		let client = Arc::new(test_client::new());
@@ -539,7 +531,13 @@ mod tests {
 		);
 
 		let mock = Arc::new(MockNetworkStateInfo());
-		AsyncApi::new(pool, db, "pass".to_owned().into(), TestProvider::default(), BlockId::Number(Zero::zero()), mock)
+		AsyncApi::new(
+			pool,
+			db,
+			Arc::new(None),
+			BlockId::Number(Zero::zero()),
+			mock,
+		)
 	}
 
 	#[test]
@@ -621,50 +619,6 @@ mod tests {
 		// then
 		assert_eq!(res, true);
 		assert_eq!(api.local_storage_get(kind, key), Some(b"value".to_vec()));
-	}
-
-	#[test]
-	fn should_create_a_new_key_and_sign_and_verify_stuff() {
-		let test = |kind: CryptoKind| {
-			// given
-			let mut api = offchain_api().0;
-			let msg = b"Hello world!";
-
-			// when
-			let key_type = primitives::crypto::key_types::DUMMY;
-			let key = api.new_crypto_key(kind, key_type).unwrap();
-			let signature = api.sign(key, msg).unwrap();
-
-			// then
-			let res = api.verify(key, msg, &signature).unwrap();
-			assert_eq!(res, true);
-			let res = api.verify(key, msg, &[]).unwrap();
-			assert_eq!(res, false);
-			let res = api.verify(key, b"Different msg", &signature).unwrap();
-			assert_eq!(res, false);
-		};
-
-		test(CryptoKind::Ed25519);
-		test(CryptoKind::Sr25519);
-	}
-
-	#[test]
-	fn should_sign_and_verify_with_authority_key() {
-		// given
-		let mut api = offchain_api().0;
-		api.key_provider.ed_key = Some(ed25519::Pair::generate().0);
-		let msg = b"Hello world!";
-
-		// when
-		let signature = api.sign(CryptoKey::AuthorityKey, msg).unwrap();
-
-		// then
-		let res = api.verify(CryptoKey::AuthorityKey, msg, &signature).unwrap();
-		assert_eq!(res, true);
-		let res = api.verify(CryptoKey::AuthorityKey, msg, &[]).unwrap();
-		assert_eq!(res, false);
-		let res = api.verify(CryptoKey::AuthorityKey, b"Different msg", &signature).unwrap();
-		assert_eq!(res, false);
 	}
 
 	#[test]
