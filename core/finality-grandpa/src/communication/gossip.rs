@@ -94,6 +94,7 @@ use futures::prelude::*;
 use futures::sync::mpsc;
 
 use crate::{environment, CatchUp, CompactCommit, SignedMessage};
+use grandpa::Message::{Precommit,Prevote, PrimaryPropose};
 use super::{cost, benefit, Round, SetId};
 
 use std::collections::{HashMap, VecDeque};
