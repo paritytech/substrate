@@ -180,10 +180,12 @@ impl<Components: components::Components> Service<Components> {
 			None
 		};
 
-		//TODO: Make sure we generate for all types and apps
-		if let Some((keystore, seed)) = keystore.and_then(|k| config.dev_key_seed.map(|s| (k, s))) {
-			keystore.generate_from_seed_by_type(&seed, primitives::crypto::key_types::ED25519);
-			keystore.generate_from_seed_by_type(&seed, primitives::crypto::key_types::SR25519);
+		if let Some((keystore, seed)) = keystore.as_mut()
+			.and_then(|k| config.dev_key_seed.clone().map(|s| (k, s)))
+		{
+			//TODO: Make sure we generate for all types and apps
+			keystore.generate_from_seed::<primitives::ed25519::AppPair>(&seed)?;
+			keystore.generate_from_seed::<primitives::sr25519::AppPair>(&seed)?;
 		}
 
 		let keystore = Arc::new(keystore);

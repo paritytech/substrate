@@ -442,7 +442,7 @@ pub struct RunCmd {
 		long = "password-filename",
 		value_name = "PATH",
 		parse(from_os_str),
-		raw(conflicts_with_all = r#"&[ "password-interactive", "password" ]"#)
+		raw(conflicts_with_all = "&[ \"password-interactive\", \"password\" ]")
 	)]
 	pub password_filename: Option<PathBuf>
 }

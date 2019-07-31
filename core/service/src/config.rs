@@ -31,7 +31,7 @@ use tel::TelemetryEndpoints;
 
 /// Service configuration.
 #[derive(Clone)]
-pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
+pub struct Configuration<C, G> {
 	/// Implementation name
 	pub impl_name: &'static str,
 	/// Implementation version
@@ -56,8 +56,6 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub state_cache_child_ratio: Option<usize>,
 	/// Pruning settings.
 	pub pruning: PruningMode,
-	/// Additional key seeds.
-	pub keys: Vec<String>,
 	/// Chain configuration.
 	pub chain_spec: ChainSpec<G>,
 	/// Custom configuration.
@@ -117,7 +115,6 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			database_cache_size: Default::default(),
 			state_cache_size: Default::default(),
 			state_cache_child_ratio: Default::default(),
-			keys: Default::default(),
 			custom: Default::default(),
 			pruning: PruningMode::default(),
 			execution_strategies: Default::default(),

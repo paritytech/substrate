@@ -25,9 +25,6 @@ mod params;
 pub mod error;
 pub mod informant;
 
-use sr_primitives::BuildStorage;
-use serde::{Serialize, de::DeserializeOwned};
-
 use client::ExecutionStrategies;
 use service::{
 	ServiceFactory, FactoryFullConfiguration, RuntimeGenesis,
@@ -370,7 +367,7 @@ fn input_keystore_password() -> Result<String, String> {
 }
 
 /// Fill the password field of the given config instance.
-fn fill_config_keystore_password<C, G: Serialize + DeserializeOwned + BuildStorage>(
+fn fill_config_keystore_password<C, G>(
 	config: &mut service::Configuration<C, G>,
 	cli: &RunCmd,
 ) -> Result<(), String> {
@@ -482,13 +479,13 @@ where
 		cli.pool_config,
 	)?;
 
-	if cli.shared_params.dev && cli.keyring.account.is_none() {
-		config.keys.push("//Alice".into());
+
+	if cli.shared_params.dev {
+		config.dev_key_seed = cli.keyring.account
+			.map(|a| format!("//{}", a))
+			.or_else(|| Some("//Alice".into()));
 	}
 
-	if let Some(account) = cli.keyring.account {
-		config.keys.push(format!("//{}", account));
-	}
 
 	let rpc_interface: &str = if cli.rpc_external { "0.0.0.0" } else { "127.0.0.1" };
 	let ws_interface: &str = if cli.ws_external { "0.0.0.0" } else { "127.0.0.1" };
