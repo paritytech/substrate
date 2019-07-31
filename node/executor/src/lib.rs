@@ -320,8 +320,9 @@ mod tests {
 		sr25519_keyring: &Sr25519Keyring,
 	) -> SessionKeys {
 		SessionKeys {
-			ed25519: ed25519_keyring.to_owned().into(),
-			sr25519: sr25519_keyring.to_owned().into(),
+			grandpa: ed25519_keyring.to_owned().public().into(),
+			babe: sr25519_keyring.to_owned().public().into(),
+			im_online: sr25519_keyring.to_owned().public().into(),
 		}
 	}
 

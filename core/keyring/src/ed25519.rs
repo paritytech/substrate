@@ -36,18 +36,7 @@ pub enum Keyring {
 
 impl Keyring {
 	pub fn from_public(who: &Public) -> Option<Keyring> {
-		[
-			Keyring::Alice,
-			Keyring::Bob,
-			Keyring::Charlie,
-			Keyring::Dave,
-			Keyring::Eve,
-			Keyring::Ferdie,
-			Keyring::One,
-			Keyring::Two,
-		].iter()
-			.map(|i| *i)
-			.find(|&k| &Public::from(k) == who)
+		Self::iter().find(|&k| &Public::from(k) == who)
 	}
 
 	pub fn from_raw_public(who: [u8; 32]) -> Option<Keyring> {
@@ -82,6 +71,10 @@ impl Keyring {
 	/// Returns an iterator over all test accounts.
 	pub fn iter() -> impl Iterator<Item=Keyring> {
 		<Self as strum::IntoEnumIterator>::iter()
+	}
+
+	pub fn public(self) -> Public {
+		self.pair().public()
 	}
 }
 
