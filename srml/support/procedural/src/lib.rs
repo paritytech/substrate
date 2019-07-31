@@ -101,11 +101,6 @@ use proc_macro::TokenStream;
 /// * [optional] `config(#field_name)`: `field_name` is optional if get is set.
 /// Will include the item in `GenesisConfig`.
 /// * [optional] `build(#closure)`: Closure called with storage overlays.
-/// * [optional] `decode_len()`: implements a function named `decode_len()` for types that implement
-///   `DecodeLength` in codec. This enables the length of a collection to be read in an efficient
-///   way. Typical uses cases can be:
-///     - `pub Simple decode_len(): Vec<_>`.
-///     - `pub Map decode_len(): map u32 => Vec<_>`
 /// * `#type`: Storage type.
 /// * [optional] `#default`: Value returned when none.
 ///

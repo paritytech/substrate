@@ -48,7 +48,6 @@ pub(crate) struct Impls<'a, I: Iterator<Item=syn::Meta>> {
 	pub name: &'a syn::Ident,
 	pub attrs: I,
 	pub where_clause: &'a Option<syn::WhereClause>,
-	pub has_len: bool,
 }
 
 impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
@@ -65,7 +64,6 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			name,
 			attrs,
 			where_clause,
-			has_len,
 			..
 		} = self;
 		let DeclStorageTypeInfos { typ, value_type, is_option, .. } = type_infos;
@@ -83,21 +81,6 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				}
 			}
 		};
-
-		let maybe_len_impl = if has_len {
-			let len_default = if is_option { quote! { None } } else { quote! { Some(Default::default()) } };
-			quote! {
-				fn decode_len<S: #scrate::HashedStorage<#scrate::Twox128>>(storage: &mut S)
-					-> Option<usize> where #typ: #scrate::codec::DecodeLength
-				{
-					if let Some(k) = storage.get_raw(<Self as #scrate::storage::hashed::generator::StorageValue<#typ>>::key()) {
-						<#typ as #scrate::codec::DecodeLength>::len(&k)
-					} else {
-						#len_default
-					}
-				}
-			}
-		} else { quote! {} };
 
 		let InstanceOpts {
 			equal_default_instance,
@@ -172,8 +155,6 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					#mutate_impl ;
 					ret
 				}
-
-				#maybe_len_impl
 			}
 		}
 	}
@@ -191,7 +172,6 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			name,
 			attrs,
 			where_clause,
-			has_len,
 			..
 		} = self;
 		let DeclStorageTypeInfos { typ, value_type, is_option, .. } = type_infos;
@@ -211,22 +191,6 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				}
 			}
 		};
-
-		let maybe_len_impl = if has_len {
-			let len_default = if is_option { quote! { None } } else { quote! { Some(Default::default()) } };
-			quote! {
-				fn decode_len<S: #scrate::HashedStorage<#scrate::#hasher>>(key: &#kty, storage: &mut S)
-					-> Option<usize> where #typ: #scrate::codec::DecodeLength
-				{
-					let k = #as_map::key_for(key);
-					if let Some(v) = storage.get_raw(&k[..]) {
-						<#typ as #scrate::codec::DecodeLength>::len(&v)
-					} else {
-						#len_default
-					}
-				}
-			}
-		} else { quote! {} };
 
 		let InstanceOpts {
 			equal_default_instance,
@@ -319,7 +283,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 
 			impl<#impl_trait> #scrate::storage::hashed::generator::DecodeLengthStorageMap<#kty, #typ>
 				for #name<#trait_and_instance> #where_clause
-			{ #maybe_len_impl }
+			{}
 		}
 	}
 

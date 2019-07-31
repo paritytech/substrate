@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Abstract storage to use on HashedStorage trait
+//! Abstract storage to use on HashedStorage trait. Please refer to the
+//! [top level docs](../../index.html) for more detailed documentation about storage traits and functions.
 
 use crate::codec::{self, Encode};
 use crate::rstd::prelude::{Vec, Box};
@@ -203,8 +204,11 @@ pub trait StorageValue<T: codec::Codec> {
 	///
 	/// `T` is required to implement `codec::EncodeAppend`.
 	fn append<S: HashedStorage<Twox128>, I: codec::Encode>(
-		items: &[I], storage: &mut S
-	) -> Result<(), &'static str> where T: codec::EncodeAppend<Item=I> {
+		items: &[I],
+		storage: &mut S
+	) -> Result<(), &'static str>
+		where T: codec::EncodeAppend<Item=I>
+	{
 		let new_val = <T as codec::EncodeAppend>::append(
 			storage.get_raw(Self::key()).unwrap_or_default(),
 			items,
@@ -213,12 +217,33 @@ pub trait StorageValue<T: codec::Codec> {
 		Ok(())
 	}
 
+	/// Safely append the given items to the value in the storage.
+	///
+	/// `T` is required to implement `codec::EncodeAppend`.
+	fn safe_append<'a, S: HashedStorage<Twox128>, I>(
+		items: &'a[I],
+		storage: &mut S
+	) where
+		T: codec::EncodeAppend<Item=I> + From<&'a[I]>,
+		I: 'a + codec::Encode + Clone,
+	{
+		Self::append(items, storage).unwrap_or_else(|_| Self::put(&items.clone().into(), storage));
+	}
+
 	/// Read the length of the value in a fast way, without decoding the entire value.
 	///
 	/// `T` is required to implement `Codec::DecodeLength`.
-	fn decode_len<S: HashedStorage<Twox128>>(_: &mut S)
-
-		-> Option<usize> where T: codec::DecodeLength { None }
+	fn decode_len<S: HashedStorage<Twox128>>(storage: &mut S) -> Result<usize, &'static str>
+		where T: codec::DecodeLength
+	{
+		// attempt to get the length directly.
+		if let Some(k) = storage.get_raw(Self::key()) {
+			<T as codec::DecodeLength>::len(&k)
+				.ok_or_else(|| "could not decode length")
+		} else {
+			Err("could not find item to decode length")
+		}
+	}
 }
 
 /// A strongly-typed map in storage.
@@ -287,8 +312,12 @@ pub trait AppendableStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, 
 	///
 	/// `V` is required to implement `codec::EncodeAppend`.
 	fn append<S: HashedStorage<Self::Hasher>, I: codec::Encode>(
-		key : &K, items: &[I], storage: &mut S
-	) -> Result<(), &'static str> where V: codec::EncodeAppend<Item=I> {
+		key : &K,
+		items: &[I],
+		storage: &mut S
+	) -> Result<(), &'static str>
+		where V: codec::EncodeAppend<Item=I>
+	{
 		let k = Self::key_for(key);
 		let new_val = <V as codec::EncodeAppend>::append(
 			storage.get_raw(&k[..]).unwrap_or_default(),
@@ -297,15 +326,38 @@ pub trait AppendableStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, 
 		storage.put_raw(&k[..], &new_val);
 		Ok(())
 	}
+
+	/// Safely append the given items to the value in the storage.
+	///
+	/// `T` is required to implement `codec::EncodeAppend`.
+	fn safe_append<'a, S, I>(
+		key : &K,
+		items: &'a[I],
+		storage: &mut S,
+	) where
+		S: HashedStorage<Self::Hasher>,
+		I: codec::Encode + Clone,
+		V: codec::EncodeAppend<Item=I> + From<&'a[I]>,
+	{
+		Self::append(key, items, storage)
+			.unwrap_or_else(|_| Self::insert(key, &items.clone().into(), storage));
+	}
 }
 
 /// A storage map with a decodable length.
 pub trait DecodeLengthStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, V> {
 	/// Read the length of the value in a fast way, without decoding the entire value.
 	///
-	/// `V` is required to implement `Codec::DecodeLength`.
-	///
-	/// Has the same logic as [`StorageValue`](trait.StorageValue.html).
-	fn decode_len<S: HashedStorage<Self::Hasher>>(_: &K, _: &mut S)
-		-> Option<usize> where V: codec::DecodeLength { None }
+	/// `T` is required to implement `Codec::DecodeLength`.
+	fn decode_len<S: HashedStorage<Self::Hasher>>(key: &K, storage: &mut S) -> Result<usize, &'static str>
+		where V: codec::DecodeLength
+	{
+		let k = Self::key_for(key);
+		if let Some(v) = storage.get_raw(&k[..]) {
+			<V as codec::DecodeLength>::len(&v)
+				.ok_or_else(|| "could not decode length")
+		} else {
+			Err("could not find item to decode length")
+		}
+	}
 }
