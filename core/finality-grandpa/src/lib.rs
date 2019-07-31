@@ -58,14 +58,14 @@ use futures::sync::mpsc;
 use client::{BlockchainEvents, CallExecutor, Client, backend::Backend, error::Error as ClientError};
 use client::blockchain::HeaderBackend;
 use parity_codec::Encode;
-use runtime_primitives::traits::{
+use sr_primitives::traits::{
 	NumberFor, Block as BlockT, DigestFor, ProvideRuntimeApi,
 };
 use fg_primitives::GrandpaApi;
 use inherents::InherentDataProviders;
-use runtime_primitives::generic::BlockId;
+use sr_primitives::generic::BlockId;
 use consensus_common::SelectChain;
-use substrate_primitives::{ed25519, H256, Pair, Blake2Hasher};
+use primitives::{ed25519, H256, Pair, Blake2Hasher};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_WARN};
 use serde_json;
 
@@ -355,7 +355,7 @@ where
 	PRA::Api: GrandpaApi<Block>,
 	SC: SelectChain<Block>,
 {
-	use runtime_primitives::traits::Zero;
+	use sr_primitives::traits::Zero;
 
 	let chain_info = client.info();
 	let genesis_hash = chain_info.chain.genesis_hash;

@@ -25,7 +25,7 @@ use client::block_builder::BlockBuilder;
 use consensus_common::NoNetwork as DummyOracle;
 use network::test::*;
 use network::test::{Block as TestBlock, PeersClient};
-use runtime_primitives::traits::{Block as BlockT, DigestFor};
+use sr_primitives::traits::{Block as BlockT, DigestFor};
 use network::config::ProtocolConfig;
 use tokio::runtime::current_thread;
 use keyring::sr25519::Keyring;
@@ -52,7 +52,7 @@ impl Environment<TestBlock> for DummyFactory {
 	type Proposer = DummyProposer;
 	type Error = Error;
 
-	fn init(&self, parent_header: &<TestBlock as BlockT>::Header)
+	fn init(&mut self, parent_header: &<TestBlock as BlockT>::Header)
 		-> Result<DummyProposer, Error>
 	{
 		Ok(DummyProposer(parent_header.number + 1, self.0.clone()))
@@ -64,7 +64,7 @@ impl Proposer<TestBlock> for DummyProposer {
 	type Create = future::Ready<Result<TestBlock, Error>>;
 
 	fn propose(
-		&self,
+		&mut self,
 		_: InherentData,
 		digests: DigestFor<TestBlock>,
 		_: Duration,
@@ -202,7 +202,7 @@ fn run_one_test() {
 		let peer = net.peer(*peer_id);
 		let client = peer.client().as_full().expect("full clients are created").clone();
 		let select_chain = peer.select_chain().expect("full client has select chain");
-		let environ = Arc::new(DummyFactory(client.clone()));
+		let environ = DummyFactory(client.clone());
 		import_notifications.push(
 			client.import_notification_stream()
 				.take_while(|n| future::ready(!(n.origin != BlockOrigin::Own && n.header.number() < &5)))
@@ -223,7 +223,7 @@ fn run_one_test() {
 			block_import: client.clone(),
 			select_chain,
 			client,
-			env: environ.clone(),
+			env: environ,
 			sync_oracle: DummyOracle,
 			inherent_data_providers,
 			force_authoring: false,
@@ -235,7 +235,7 @@ fn run_one_test() {
 		net.lock().poll();
 		Ok::<_, ()>(futures01::Async::NotReady::<()>)
 	}));
-
+	
 	runtime.block_on(future::join_all(import_notifications)
 		.map(|_| Ok::<(), ()>(())).compat()).unwrap();
 }

@@ -18,9 +18,9 @@
 
 use std::sync::Arc;
 
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::Justification;
+use sr_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use sr_primitives::generic::BlockId;
+use sr_primitives::Justification;
 use consensus::well_known_cache_keys;
 
 use crate::error::{Error, Result};

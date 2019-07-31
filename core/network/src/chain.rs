@@ -20,9 +20,9 @@ use client::{self, Client as SubstrateClient, ClientInfo, BlockStatus, CallExecu
 use client::error::Error;
 use client::light::fetcher::ChangesProof;
 use consensus::{BlockImport, Error as ConsensusError};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
-use runtime_primitives::generic::{BlockId};
-use runtime_primitives::Justification;
+use sr_primitives::traits::{Block as BlockT, Header as HeaderT};
+use sr_primitives::generic::{BlockId};
+use sr_primitives::Justification;
 use primitives::{H256, Blake2Hasher, storage::StorageKey};
 
 /// Local client abstraction for the network.

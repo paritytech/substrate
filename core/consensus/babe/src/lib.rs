@@ -19,7 +19,6 @@
 //! BABE (Blind Assignment for Blockchain Extension) consensus in Substrate.
 
 #![forbid(unsafe_code, missing_docs, unused_must_use, unused_imports, unused_variables)]
-#![cfg_attr(not(test), forbid(dead_code))]
 pub use babe_primitives::*;
 pub use consensus_common::SyncOracle;
 use consensus_common::ImportResult;
@@ -27,8 +26,8 @@ use consensus_common::import_queue::{
 	BoxJustificationImport, BoxFinalityProofImport,
 };
 use consensus_common::well_known_cache_keys::Id as CacheKeyId;
-use runtime_primitives::{generic, generic::{BlockId, OpaqueDigestItemId}, Justification};
-use runtime_primitives::traits::{
+use sr_primitives::{generic, generic::{BlockId, OpaqueDigestItemId}, Justification};
+use sr_primitives::traits::{
 	Block as BlockT, Header, DigestItemFor, NumberFor, ProvideRuntimeApi,
 	SimpleBitOps, Zero,
 };
@@ -154,7 +153,7 @@ pub struct BabeParams<C, E, I, SO, SC> {
 	pub block_import: I,
 
 	/// The environment
-	pub env: Arc<E>,
+	pub env: E,
 
 	/// A sync oracle
 	pub sync_oracle: SO,
@@ -220,7 +219,7 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 struct BabeWorker<C, E, I, SO> {
 	client: Arc<C>,
 	block_import: Arc<Mutex<I>>,
-	env: Arc<E>,
+	env: E,
 	local_key: Arc<sr25519::Pair>,
 	sync_oracle: SO,
 	force_authoring: bool,
@@ -245,14 +244,13 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 	type OnSlot = Pin<Box<dyn Future<Output = Result<(), consensus_common::Error>> + Send>>;
 
 	fn on_slot(
-		&self,
+		&mut self,
 		chain_head: B::Header,
 		slot_info: SlotInfo,
 	) -> Self::OnSlot {
 		let pair = self.local_key.clone();
 		let ref client = self.client;
 		let block_import = self.block_import.clone();
-		let ref env = self.env;
 
 		let (timestamp, slot_number, slot_duration) =
 			(slot_info.timestamp, slot_info.number, slot_info.duration);
@@ -305,7 +303,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			);
 
 			// we are the slot author. make a block and sign it.
-			let proposer = match env.init(&chain_head) {
+			let mut proposer = match self.env.init(&chain_head) {
 				Ok(p) => p,
 				Err(e) => {
 					warn!(target: "babe",
@@ -582,6 +580,7 @@ impl<C> BabeVerifier<C> {
 	}
 }
 
+#[allow(dead_code)]
 fn median_algorithm(
 	median_required_blocks: u64,
 	slot_duration: u64,
@@ -613,8 +612,12 @@ fn median_algorithm(
 			.get(num_timestamps / 2)
 			.expect("we have at least one timestamp, so this is a valid index; qed");
 
+		let now = Instant::now();
+		if now >= median {
+			time_source.0.replace(now - median);
+		}
+
 		time_source.1.clear();
-		time_source.0.replace(Instant::now() - median);
 	} else {
 		time_source.1.push((Instant::now(), slot_now))
 	}
@@ -706,15 +709,6 @@ impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
 					auxiliary: Vec::new(),
 					fork_choice: ForkChoiceStrategy::LongestChain,
 				};
-
-				// FIXME: this should eventually be moved to BabeBlockImport
-				median_algorithm(
-					self.config.0.median_required_blocks,
-					self.config.get(),
-					slot_number,
-					slot_now,
-					&mut *self.time_source.0.lock(),
-				);
 
 				Ok((import_block, Default::default()))
 			}

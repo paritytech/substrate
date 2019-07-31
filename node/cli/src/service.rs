@@ -122,10 +122,10 @@ construct_service_factory! {
 				if let Some(babe_key) = service.authority_key() {
 					info!("Using BABE key {}", babe_key.public());
 
-					let proposer = Arc::new(substrate_basic_authorship::ProposerFactory {
+					let proposer = substrate_basic_authorship::ProposerFactory {
 						client: service.client(),
 						transaction_pool: service.transaction_pool(),
-					});
+					};
 
 					let client = service.client();
 					let select_chain = service.select_chain()
@@ -333,6 +333,125 @@ mod tests {
 			extrinsic_factory,
 		);
 	}
+
+	// #[test]
+	// #[ignore]
+	// fn test_sync() {
+	// 	let chain_spec = crate::chain_spec::tests::integration_test_config_with_single_authority();
+
+	// 	let alice = Arc::new(Sr25519Keyring::Alice.pair());
+	// 	let mut slot_num = 1u64;
+	// 	let block_factory = |service: &SyncService<<Factory as ServiceFactory>::FullService>| {
+	// 		let service = service.get();
+	// 		let mut inherent_data = service
+	// 			.config
+	// 			.custom
+	// 			.inherent_data_providers
+	// 			.create_inherent_data()
+	// 			.expect("Creates inherent data.");
+	// 		inherent_data.replace_data(finality_tracker::INHERENT_IDENTIFIER, &1u64);
+
+	// 		let parent_id = BlockId::number(service.client().info().chain.best_number);
+	// 		let parent_header = service.client().header(&parent_id).unwrap().unwrap();
+	// 		let mut proposer_factory = substrate_basic_authorship::ProposerFactory {
+	// 			client: service.client(),
+	// 			transaction_pool: service.transaction_pool(),
+	// 		};
+
+	// 		let mut digest = Digest::<H256>::default();
+
+	// 		// even though there's only one authority some slots might be empty,
+	// 		// so we must keep trying the next slots until we can claim one.
+	// 		let babe_pre_digest = loop {
+	// 			inherent_data.replace_data(timestamp::INHERENT_IDENTIFIER, &(slot_num * SLOT_DURATION));
+	// 			if let Some(babe_pre_digest) = babe::test_helpers::claim_slot(
+	// 				&*service.client(),
+	// 				&parent_id,
+	// 				slot_num,
+	// 				&alice,
+	// 				(278, 1000),
+	// 			) {
+	// 				break babe_pre_digest;
+	// 			}
+
+	// 			slot_num += 1;
+	// 		};
+
+	// 		digest.push(<DigestItem as CompatibleDigestItem>::babe_pre_digest(babe_pre_digest));
+
+	// 		let mut proposer = proposer_factory.init(&parent_header).unwrap();
+	// 		let new_block = futures03::executor::block_on(proposer.propose(
+	// 			inherent_data,
+	// 			digest,
+	// 			std::time::Duration::from_secs(1),
+	// 		)).expect("Error making test block");
+
+	// 		let (new_header, new_body) = new_block.deconstruct();
+	// 		let pre_hash = new_header.hash();
+	// 		// sign the pre-sealed hash of the block and then
+	// 		// add it to a digest item.
+	// 		let to_sign = pre_hash.encode();
+	// 		let signature = alice.sign(&to_sign[..]);
+	// 		let item = <DigestItem as CompatibleDigestItem>::babe_seal(
+	// 			signature,
+	// 		);
+	// 		slot_num += 1;
+
+	// 		BlockImportParams {
+	// 			origin: BlockOrigin::File,
+	// 			header: new_header,
+	// 			justification: None,
+	// 			post_digests: vec![item],
+	// 			body: Some(new_body),
+	// 			finalized: true,
+	// 			auxiliary: Vec::new(),
+	// 			fork_choice: ForkChoiceStrategy::LongestChain,
+	// 		}
+	// 	};
+
+	// 	let bob = Arc::new(AccountKeyring::Bob.pair());
+	// 	let charlie = Arc::new(AccountKeyring::Charlie.pair());
+
+	// 	let mut index = 0;
+	// 	let extrinsic_factory = |service: &SyncService<<Factory as ServiceFactory>::FullService>| {
+	// 		let amount = 5 * CENTS;
+	// 		let to = AddressPublic::from_raw(bob.public().0);
+	// 		let from = AddressPublic::from_raw(charlie.public().0);
+	// 		let genesis_hash = service.get().client().block_hash(0).unwrap().unwrap();
+	// 		let signer = charlie.clone();
+
+	// 		let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
+
+	// 		let check_era = system::CheckEra::from(Era::Immortal);
+	// 		let check_nonce = system::CheckNonce::from(index);
+	// 		let check_weight = system::CheckWeight::from();
+	// 		let take_fees = balances::TakeFees::from(0);
+	// 		let extra = (check_era, check_nonce, check_weight, take_fees);
+
+	// 		let raw_payload = (function, extra.clone(), genesis_hash);
+	// 		let signature = raw_payload.using_encoded(|payload| if payload.len() > 256 {
+	// 			signer.sign(&blake2_256(payload)[..])
+	// 		} else {
+	// 			signer.sign(payload)
+	// 		});
+	// 		let xt = UncheckedExtrinsic::new_signed(
+	// 			raw_payload.0,
+	// 			from.into(),
+	// 			signature.into(),
+	// 			extra,
+	// 		).encode();
+	// 		let v: Vec<u8> = Decode::decode(&mut xt.as_slice()).unwrap();
+
+	// 		index += 1;
+	// 		OpaqueExtrinsic(v)
+	// 	};
+
+	// 	service_test::sync::<Factory, _, _>(
+	// 		chain_spec,
+	// 		block_factory,
+	// 		extrinsic_factory,
+	// 	);
+	// }
 
 	#[test]
 	#[ignore]

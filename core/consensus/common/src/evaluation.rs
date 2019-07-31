@@ -19,7 +19,7 @@
 use super::MAX_BLOCK_SIZE;
 
 use parity_codec::Encode;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, One, CheckedConversion};
+use sr_primitives::traits::{Block as BlockT, Header as HeaderT, One, CheckedConversion};
 
 // This is just a best effort to encode the number. None indicated that it's too big to encode
 // in a u128.

@@ -144,7 +144,7 @@ where
 ///
 /// `child_trie_root` and `child_delta_trie_root` can panic if invalid value is provided to them.
 pub fn is_child_trie_key_valid<H: Hasher>(storage_key: &[u8]) -> bool {
-	use substrate_primitives::storage::well_known_keys;
+	use primitives::storage::well_known_keys;
 	let has_right_prefix = storage_key.starts_with(b":child_storage:default:");
 	if has_right_prefix {
 		// This is an attempt to catch a change of `is_child_storage_key`, which
@@ -332,7 +332,7 @@ fn branch_node(has_value: bool, has_children: impl Iterator<Item = bool>) -> [u8
 mod tests {
 	use super::*;
 	use codec::{Encode, Compact};
-	use substrate_primitives::Blake2Hasher;
+	use primitives::Blake2Hasher;
 	use hash_db::{HashDB, Hasher};
 	use trie_db::{DBValue, TrieMut, Trie};
 	use trie_standardmap::{Alphabet, ValueMode, StandardMap};

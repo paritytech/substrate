@@ -17,7 +17,7 @@
 //! Block Builder extensions for tests.
 
 use runtime;
-use runtime_primitives::traits::ProvideRuntimeApi;
+use sr_primitives::traits::ProvideRuntimeApi;
 use generic_test_client::client;
 use generic_test_client::client::block_builder::api::BlockBuilder;
 

@@ -20,8 +20,7 @@ use client::BlockchainEvents;
 use futures::{Future, Stream};
 use futures03::{StreamExt as _, TryStreamExt as _};
 use log::{info, warn};
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::Header;
+use sr_primitives::{generic::BlockId, traits::Header};
 use service::{Service, Components};
 use tokio::runtime::TaskExecutor;
 
@@ -49,15 +48,15 @@ where C: Components {
 	});
 
 	let client = service.client();
-	let mut last = {
+	let mut last_best = {
 		let info = client.info();
 		Some((info.chain.best_number, info.chain.best_hash))
 	};
 
 	let display_block_import = client.import_notification_stream().map(|v| Ok::<_, ()>(v)).compat().for_each(move |n| {
 		// detect and log reorganizations.
-		if let Some((ref last_num, ref last_hash)) = last {
-			if n.header.parent_hash() != last_hash {
+		if let Some((ref last_num, ref last_hash)) = last_best {
+			if n.header.parent_hash() != last_hash && n.is_new_best  {
 				let tree_route = ::client::blockchain::tree_route(
 					|id| client.header(&id)?.ok_or(::client::error::Error::UnknownBlock(format!("Unknown block {:?}", id))),
 					BlockId::Hash(last_hash.clone()),
@@ -77,7 +76,9 @@ where C: Components {
 			}
 		}
 
-		last = Some((n.header.number().clone(), n.hash.clone()));
+		if n.is_new_best {
+			last_best = Some((n.header.number().clone(), n.hash.clone()));
+		}
 
 		info!(target: "substrate", "Imported #{} ({})", n.header.number(), n.hash);
 		Ok(())

@@ -27,7 +27,7 @@ use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess};
 use libp2p::core::{nodes::Substream, muxing::StreamMuxerBox};
 use libp2p::multihash::Multihash;
 use log::warn;
-use runtime_primitives::traits::Block as BlockT;
+use sr_primitives::traits::Block as BlockT;
 use std::iter;
 use void;
 

@@ -22,7 +22,7 @@
 use rstd::{prelude::*, result, marker::PhantomData, convert::TryInto};
 use parity_codec::{Encode, Decode, Codec, Input, Output};
 use srml_support::{StorageValue, StorageMap, Parameter, decl_module, decl_event, decl_storage};
-use primitives::traits::{One, SimpleArithmetic, StaticLookup, Member};
+use sr_primitives::traits::{One, SimpleArithmetic, StaticLookup, Member};
 use system::{IsDeadAccount, OnNewAccount};
 
 use self::address::Address as RawAddress;
