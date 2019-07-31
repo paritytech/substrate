@@ -980,7 +980,7 @@ where
 /// ```
 /// # use substrate_service::{
 /// # 	construct_service_factory, Service, FullBackend, FullExecutor, LightBackend, LightExecutor,
-/// # 	FullComponents, LightComponents, FactoryFullConfiguration, FullClient
+/// # 	FullComponents, LightComponents, FactoryFullConfiguration, FullClient, FullComponentsSetupState
 /// # };
 /// # use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 /// # use network::{config::DummyFinalityProofRequestBuilder, construct_simple_protocol};
@@ -1017,8 +1017,8 @@ where
 /// 	struct Factory {
 /// 		// Declare the block type
 /// 		Block = Block,
-///		ConsensusPair = primitives::ed25519::Pair,
-///		FinalityPair = primitives::ed25519::Pair,
+///			ConsensusPair = primitives::ed25519::Pair,
+///			FinalityPair = primitives::ed25519::Pair,
 /// 		RuntimeApi = RuntimeApi,
 /// 		// Declare the network protocol and give an initializer.
 /// 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
@@ -1031,10 +1031,11 @@ where
 /// 		SetupState = (),
 /// 		Configuration = (),
 /// 		FullService = FullComponents<Self>
-/// 			{ |config| <FullComponents<Factory>>::new(config) },
+/// 			{ |config: FactoryFullConfiguration<Self>|
+///					<FullComponents<Factory>>::new(config) },
 /// 		// Setup as Consensus Authority (if the role and key are given)
 /// 		AuthoritySetup = {
-/// 			|service: Self::FullService| {
+/// 			|service: Self::FullService, state: FullComponentsSetupState<Self>| {
 /// 				Ok(service)
 /// 			}},
 /// 		LightService = LightComponents<Self>
@@ -1047,11 +1048,10 @@ where
 /// 				Ok((BasicQueue::new(Arc::new(MyVerifier), Box::new(client), None, None), fprb))
 /// 			}},
 /// 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>
-/// 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {
-/// 				#[allow(deprecated)]
-/// 				Ok(LongestChain::new(client.backend().clone()))
+/// 			{ |state: &FullComponentsSetupState<Self>, client: Arc<FullClient<Self>>| {
+/// 				Ok(LongestChain::new(state.backend.clone()))
 /// 			}},
-/// 		FinalityProofProvider = { |state| {
+/// 		FinalityProofProvider = { |state: &mut FullComponentsSetupState<Self>, client: Arc<FullClient<Self>>| {
 /// 				Ok(Some(Arc::new(grandpa::FinalityProofProvider::new(state.backend.clone(), client)) as _))
 /// 			}},
 /// 	}
