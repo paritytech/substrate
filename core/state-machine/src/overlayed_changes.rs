@@ -21,6 +21,7 @@ use std::collections::{HashMap, BTreeSet};
 use parity_codec::Decode;
 use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
 use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
+use smallvec::SmallVec;
 
 #[derive(Debug, Clone, PartialEq)]
 /// State of a transaction, the states are stored
@@ -76,19 +77,11 @@ pub struct OverlayedValue {
 /// Values are always paired with a state history index.
 #[derive(Debug, Clone)]
 #[cfg_attr(test, derive(PartialEq))]
-pub(crate) struct History<V> {
-	length: usize,
-	static_content: [Option<(V, usize)>; ALLOCATED_HISTORY],
-	dyn_content: Vec<(V, usize)>
-}
+pub(crate) struct History<V> (SmallVec<[(V, usize); ALLOCATED_HISTORY]>);
 
 impl<V> Default for History<V> {
 	fn default() -> Self {
-		History {
-			length: 0,
-			static_content: Default::default(),
-			dyn_content: Vec::new(),
-		}
+		History(SmallVec::new())
 	}
 }
 
@@ -143,21 +136,13 @@ impl FromIterator<(Vec<u8>, OverlayedValue)> for OverlayedChangeSet {
 impl<V> std::ops::Index<usize> for History<V> {
 	type Output = (V, usize);
 	fn index(&self, index: usize) -> &Self::Output {
-		if index >= ALLOCATED_HISTORY {
-			&self.dyn_content[index - ALLOCATED_HISTORY]
-		} else {
-			self.static_content[index].as_ref().expect("Index api fail on non existing value")
-		}
+		self.0.index(index)
 	}
 }
 
 impl<V> std::ops::IndexMut<usize> for History<V> {
 	fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-		if index >= ALLOCATED_HISTORY {
-			&mut self.dyn_content[index - ALLOCATED_HISTORY]
-		} else {
-			self.static_content[index].as_mut().expect("Index api fail on non existing value")
-		}
+		self.0.index_mut(index)
 	}
 }
 
@@ -174,38 +159,20 @@ impl<V> History<V> {
 	}
 
 	fn len(&self) -> usize {
-		self.length
+		self.0.len()
 	}
 
 	fn truncate(&mut self, index: usize) {
-		if index >= ALLOCATED_HISTORY {
-			self.dyn_content.truncate(index);
-		}
-		self.length = index;
+		self.0.truncate(index)
 	}
 
 	fn pop(&mut self) -> Option<(V, usize)> {
-		if self.length > ALLOCATED_HISTORY {
-			self.length -= 1;
-			self.dyn_content.pop()
-		} else {
-			if self.length > 0 {
-				self.length -= 1;
-				std::mem::replace(&mut self.static_content[self.length], None)
-			} else {
-				None
-			}
-		}
+		self.0.pop()
 	}
 
 	// should only be call after a get_mut check
 	fn push(&mut self, val: V, tx_index: usize) {
-		if self.length < ALLOCATED_HISTORY {
-			self.static_content[self.length] = Some((val, tx_index));
-		} else {
-			self.dyn_content.push((val, tx_index));
-		}
-		self.length += 1;
+		self.0.push((val, tx_index))
 	}
 
 	/// When possible please prefer `get_mut` as it will free
