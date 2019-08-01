@@ -2100,3 +2100,16 @@ fn reward_from_authorship_event_handler_works() {
 		assert_eq!(CurrentEraRewards::get().total, 25);
 	})
 }
+
+#[test]
+fn unbonded_balance_is_not_slashable() {
+	with_externalities(&mut ExtBuilder::default().build(), || {
+		// total amount staked is slashable.
+		assert_eq!(Staking::slashable_balance_of(&11), 1000);
+
+		assert_ok!(Staking::unbond(Origin::signed(10),  800));
+
+		// only the active portion.
+		assert_eq!(Staking::slashable_balance_of(&11), 200);
+	})
+}

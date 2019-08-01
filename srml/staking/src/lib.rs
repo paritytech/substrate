@@ -1202,7 +1202,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
-		Self::bonded(stash).and_then(Self::ledger).map(|l| l.total).unwrap_or_default()
+		Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
 	}
 
 	/// Select a new validator set from the assembled stakers and their role preferences.
