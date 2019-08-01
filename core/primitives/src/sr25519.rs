@@ -417,7 +417,7 @@ impl TraitPair for Pair {
 				Ok(Pair(
 					MiniSecretKey::from_bytes(seed)
 						.map_err(|_| SecretStringError::InvalidSeed)?
-						.expand_to_keypair(ExpansionMode::ExpansionMode)
+						.expand_to_keypair(ExpansionMode::Ed25519)
 				))
 			}
 			SECRET_KEY_LENGTH => {
@@ -513,7 +513,7 @@ impl Pair {
 		let mini_key: MiniSecretKey = mini_secret_from_entropy(entropy, password.unwrap_or(""))
 			.expect("32 bytes can always build a key; qed");
 
-		let kp = mini_key.expand_ed25519_to_keypair();
+		let kp = mini_key.expand_to_keypair(ExpansionMode::Ed25519);
 		(Pair(kp), mini_key.to_bytes())
 	}
 }
