@@ -476,15 +476,12 @@ impl TraitPair for Pair {
 
 	/// Verify a signature on a message. Returns true if the signature is good.
 	fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: P) -> bool {
-		let signature: schnorrkel::Signature = match schnorrkel::Signature::from_bytes(&sig.as_ref()) {
-			Ok(some_signature) => some_signature,
-			Err(_) => return false
-		};
+		// Match both schnorrkel 0.1.1 and 0.8.0+ signatures, supporting both wallets
+		// that have not been upgraded and those that have. To swap to 0.8.0 only,
+		// create `schnorrkel::Signature` and pass that into `verify_simple`
 		match PublicKey::from_bytes(pubkey.as_ref().as_slice()) {
-			Ok(pk) => pk.verify_simple(
-				SIGNING_CTX,
-				message.as_ref(),
-				&signature,
+			Ok(pk) => pk.verify_simple_preaudit_deprecated(
+				SIGNING_CTX, message.as_ref(), &sig.as_ref(),
 			).is_ok(),
 			Err(_) => false,
 		}
@@ -492,15 +489,9 @@ impl TraitPair for Pair {
 
 	/// Verify a signature on a message. Returns true if the signature is good.
 	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool {
-		let signature: schnorrkel::Signature = match schnorrkel::Signature::from_bytes(sig) {
-			Ok(some_signature) => some_signature,
-			Err(_) => return false
-		};
 		match PublicKey::from_bytes(pubkey.as_ref()) {
-			Ok(pk) => pk.verify_simple(
-				SIGNING_CTX,
-				message.as_ref(),
-				&signature,
+			Ok(pk) => pk.verify_simple_preaudit_deprecated(
+				SIGNING_CTX, message.as_ref(), &signature,
 			).is_ok(),
 			Err(_) => false,
 		}
@@ -623,6 +614,42 @@ mod test {
 	}
 
 	#[test]
+	fn derive_soft_known_pair_should_work() {
+		let path = Some(DeriveJunction::soft(hex!(
+			"0c666f6f00000000000000000000000000000000000000000000000000000000"
+		)));
+		let pair = Pair::from_seed(&hex!(
+			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
+		));
+		let expected = hex!("40b9675df90efa6069ff623b0fdfcf706cd47ca7452a5056c7ad58194d23440a");
+		assert_eq!(pair.derive(path.into_iter()).unwrap().public().to_raw_vec(), expected);
+	}
+
+	#[test]
+	fn derive_soft_known_public_should_work() {
+		let path = Some(DeriveJunction::hard(hex!(
+			"0c666f6f00000000000000000000000000000000000000000000000000000000"
+		)));
+		let public = Public::from_raw(hex!(
+			"46ebddef8cd9bb167dc30878d7113b7e168e6f0646beffd77d69d39bad76b47a"
+		));
+		let expected = hex!("40b9675df90efa6069ff623b0fdfcf706cd47ca7452a5056c7ad58194d23440a");
+		assert_eq!(public.derive(path.into_iter()).unwrap().to_raw_vec(), expected);
+	}
+
+	#[test]
+	fn derive_hard_known_pair_should_work() {
+		let path = Some(DeriveJunction::hard(hex!(
+			"14416c6963650000000000000000000000000000000000000000000000000000"
+		)));
+		let pair = Pair::from_seed(&hex!(
+			"fac7959dbfe72f052e5a0c3c8d6530f202b02fd8f9f5ca3580ec8deb7797479e"
+		));
+		let expected = hex!("d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d");
+		assert_eq!(pair.derive(path.into_iter()).unwrap().public().to_raw_vec(), expected);
+	}
+
+	#[test]
 	fn sr_test_vector_should_work() {
 		let pair = Pair::from_seed(&hex!(
 			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
@@ -648,7 +675,6 @@ mod test {
 			"5a9755f069939f45d96aaf125cf5ce7ba1db998686f87f2fb3cbdea922078741a73891ba265f70c31436e18a9acd14d189d73c12317ab6c313285cd938453202"
 		));
 		let message = b"Verifying that I am the owner of 5G9hQLdsKQswNPgB499DeA5PkFBbgkLPJWkkS6FAM6xGQ8xD. Hash: 221455a3\n";
-
 		assert!(Pair::verify(&signature, &message[..], &public));
 	}
 
