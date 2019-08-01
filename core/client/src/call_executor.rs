@@ -300,7 +300,6 @@ where
 		self.executor.runtime_version(&mut ext).ok_or(error::Error::VersionInvalid.into())
 	}
 
-	// TODO: probably remove this method???
 	fn call_at_state<
 		O: offchain::Externalities,
 		S: state_machine::Backend<Blake2Hasher>,
