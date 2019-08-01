@@ -690,7 +690,7 @@ mod tests {
 	;; ) -> u32
 	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "deploy")
 	)
@@ -705,7 +705,7 @@ mod tests {
 				)
 			)
 
-			(call $ext_scratch_copy
+			(call $ext_scratch_read
 				(i32.const 0)
 				(i32.const 0)
 				(i32.const 4)

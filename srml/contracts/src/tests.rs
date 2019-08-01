@@ -698,7 +698,7 @@ const CODE_SET_RENT: &str = r#"
 	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32 i32)))
 	(import "env" "ext_set_rent_allowance" (func $ext_set_rent_allowance (param i32 i32)))
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; insert a value of 4 bytes into storage
@@ -781,7 +781,7 @@ const CODE_SET_RENT: &str = r#"
 			(i32.const 0)
 			(i32.const 4)
 		)
-		(call $ext_scratch_copy
+		(call $ext_scratch_read
 			(i32.const 0)
 			(i32.const 0)
 			(get_local $input_size)
@@ -1173,7 +1173,7 @@ const CODE_CHECK_DEFAULT_RENT_ALLOWANCE: &str = r#"
 (module
 	(import "env" "ext_rent_allowance" (func $ext_rent_allowance))
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(func $assert (param i32)
@@ -1200,7 +1200,7 @@ const CODE_CHECK_DEFAULT_RENT_ALLOWANCE: &str = r#"
 		)
 
 		;; copy contents of the scratch buffer into the contract's memory.
-		(call $ext_scratch_copy
+		(call $ext_scratch_read
 			(i32.const 8)		;; Pointer in memory to the place where to copy.
 			(i32.const 0)		;; Offset from the start of the scratch buffer.
 			(i32.const 8)		;; Count of bytes to copy.
@@ -1304,10 +1304,10 @@ const CODE_RESTORATION: &str = r#"
 	;; Address of bob
 	(data (i32.const 256) "\02\00\00\00\00\00\00\00")
 
-	;; Code hash of SET_CODE
+	;; Code hash of SET_RENT
 	(data (i32.const 264)
-		"\69\ae\df\b4\f6\c1\c3\98\e9\7f\8a\52\04\de\0f\95"
-		"\ad\5e\7d\c3\54\09\60\be\ab\11\a8\6c\56\9f\bf\cf"
+		"\14\eb\65\3c\86\98\d6\b2\3d\8d\3c\4a\54\c6\c4\71"
+		"\b9\fc\19\36\df\ca\a0\a1\f2\dc\ad\9d\e5\36\0b\25"
 	)
 
 	;; Rent allowance
@@ -1340,6 +1340,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 	let (restoration_wasm, restoration_code_hash) =
 		compile_module::<Test>(CODE_RESTORATION).unwrap();
 
+	println!("{:?}", set_rent_code_hash);
 	with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),
 		|| {
@@ -1462,7 +1463,7 @@ const CODE_STORAGE_SIZE: &str = r#"
 	(import "env" "ext_get_storage" (func $ext_get_storage (param i32) (result i32)))
 	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32 i32)))
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
 	(import "env" "memory" (memory 16 16))
 
 	(func $assert (param i32)
@@ -1484,7 +1485,7 @@ const CODE_STORAGE_SIZE: &str = r#"
 		)
 
 		;; copy contents of the scratch buffer into the contract's memory.
-		(call $ext_scratch_copy
+		(call $ext_scratch_read
 			(i32.const 32)		;; Pointer in memory to the place where to copy.
 			(i32.const 0)		;; Offset from the start of the scratch buffer.
 			(i32.const 4)		;; Count of bytes to copy.

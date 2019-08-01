@@ -625,7 +625,7 @@ mod tests {
 (module
 	(import "env" "ext_get_storage" (func $ext_get_storage (param i32) (result i32)))
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
 	(import "env" "ext_return" (func $ext_return (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
@@ -661,7 +661,7 @@ mod tests {
 		)
 
 		;; Copy scratch buffer into this contract memory.
-		(call $ext_scratch_copy
+		(call $ext_scratch_read
 			(i32.const 36)		;; The pointer where to store the scratch buffer contents,
 								;; 36 = 4 + 32
 			(i32.const 0)		;; Offset from the start of the scratch buffer.
@@ -715,7 +715,7 @@ mod tests {
 (module
 	(import "env" "ext_caller" (func $ext_caller))
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(func $assert (param i32)
@@ -740,7 +740,7 @@ mod tests {
 		)
 
 		;; copy contents of the scratch buffer into the contract's memory.
-		(call $ext_scratch_copy
+		(call $ext_scratch_read
 			(i32.const 8)		;; Pointer in memory to the place where to copy.
 			(i32.const 0)		;; Offset from the start of the scratch buffer.
 			(i32.const 8)		;; Count of bytes to copy.
@@ -779,7 +779,7 @@ mod tests {
 (module
 	(import "env" "ext_address" (func $ext_address))
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(func $assert (param i32)
@@ -804,7 +804,7 @@ mod tests {
 		)
 
 		;; copy contents of the scratch buffer into the contract's memory.
-		(call $ext_scratch_copy
+		(call $ext_scratch_read
 			(i32.const 8)		;; Pointer in memory to the place where to copy.
 			(i32.const 0)		;; Offset from the start of the scratch buffer.
 			(i32.const 8)		;; Count of bytes to copy.
@@ -841,7 +841,7 @@ mod tests {
 (module
 	(import "env" "ext_balance" (func $ext_balance))
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(func $assert (param i32)
@@ -866,7 +866,7 @@ mod tests {
 		)
 
 		;; copy contents of the scratch buffer into the contract's memory.
-		(call $ext_scratch_copy
+		(call $ext_scratch_read
 			(i32.const 8)		;; Pointer in memory to the place where to copy.
 			(i32.const 0)		;; Offset from the start of the scratch buffer.
 			(i32.const 8)		;; Count of bytes to copy.
@@ -903,7 +903,7 @@ mod tests {
 (module
 	(import "env" "ext_gas_price" (func $ext_gas_price))
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(func $assert (param i32)
@@ -928,7 +928,7 @@ mod tests {
 		)
 
 		;; copy contents of the scratch buffer into the contract's memory.
-		(call $ext_scratch_copy
+		(call $ext_scratch_read
 			(i32.const 8)		;; Pointer in memory to the place where to copy.
 			(i32.const 0)		;; Offset from the start of the scratch buffer.
 			(i32.const 8)		;; Count of bytes to copy.
@@ -965,7 +965,7 @@ mod tests {
 (module
 	(import "env" "ext_gas_left" (func $ext_gas_left))
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
 	(import "env" "ext_return" (func $ext_return (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
@@ -991,7 +991,7 @@ mod tests {
 		)
 
 		;; copy contents of the scratch buffer into the contract's memory.
-		(call $ext_scratch_copy
+		(call $ext_scratch_read
 			(i32.const 8)		;; Pointer in memory to the place where to copy.
 			(i32.const 0)		;; Offset from the start of the scratch buffer.
 			(i32.const 8)		;; Count of bytes to copy.
@@ -1031,7 +1031,7 @@ mod tests {
 (module
 	(import "env" "ext_value_transferred" (func $ext_value_transferred))
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(func $assert (param i32)
@@ -1056,7 +1056,7 @@ mod tests {
 		)
 
 		;; copy contents of the scratch buffer into the contract's memory.
-		(call $ext_scratch_copy
+		(call $ext_scratch_read
 			(i32.const 8)		;; Pointer in memory to the place where to copy.
 			(i32.const 0)		;; Offset from the start of the scratch buffer.
 			(i32.const 8)		;; Count of bytes to copy.
@@ -1171,7 +1171,7 @@ mod tests {
 (module
 	(import "env" "ext_now" (func $ext_now))
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(func $assert (param i32)
@@ -1196,7 +1196,7 @@ mod tests {
 		)
 
 		;; copy contents of the scratch buffer into the contract's memory.
-		(call $ext_scratch_copy
+		(call $ext_scratch_read
 			(i32.const 8)		;; Pointer in memory to the place where to copy.
 			(i32.const 0)		;; Offset from the start of the scratch buffer.
 			(i32.const 8)		;; Count of bytes to copy.
@@ -1233,7 +1233,7 @@ mod tests {
 (module
 	(import "env" "ext_random" (func $ext_random (param i32 i32)))
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
 	(import "env" "ext_return" (func $ext_return (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
@@ -1262,7 +1262,7 @@ mod tests {
 		)
 
 		;; copy contents of the scratch buffer into the contract's memory.
-		(call $ext_scratch_copy
+		(call $ext_scratch_read
 			(i32.const 8)		;; Pointer in memory to the place where to copy.
 			(i32.const 0)		;; Offset from the start of the scratch buffer.
 			(i32.const 32)		;; Count of bytes to copy.
@@ -1448,7 +1448,7 @@ mod tests {
 (module
 	(import "env" "ext_block_number" (func $ext_block_number))
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(func $assert (param i32)
@@ -1473,7 +1473,7 @@ mod tests {
 		)
 
 		;; copy contents of the scratch buffer into the contract's memory.
-		(call $ext_scratch_copy
+		(call $ext_scratch_read
 			(i32.const 8)		;; Pointer in memory to the place where to copy.
 			(i32.const 0)		;; Offset from the start of the scratch buffer.
 			(i32.const 8)		;; Count of bytes to copy.

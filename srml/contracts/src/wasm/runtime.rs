@@ -658,7 +658,7 @@ define_env!(Env, <E: Ext>,
 
 	// Returns the size of the scratch buffer.
 	//
-	// For more details on the scratch buffer see `ext_scratch_copy`.
+	// For more details on the scratch buffer see `ext_scratch_read`.
 	ext_scratch_size(ctx) -> u32 => {
 		Ok(ctx.scratch_buf.len() as u32)
 	},
@@ -669,7 +669,7 @@ define_env!(Env, <E: Ext>,
 	// In order to get size of the scratch buffer use `ext_scratch_size`. At the start of contract
 	// execution, the scratch buffer is filled with the input data. Whenever a contract calls
 	// function that uses the scratch buffer the contents of the scratch buffer are overwritten.
-	ext_scratch_copy(ctx, dest_ptr: u32, offset: u32, len: u32) => {
+	ext_scratch_read(ctx, dest_ptr: u32, offset: u32, len: u32) => {
 		let offset = offset as usize;
 		if offset > ctx.scratch_buf.len() {
 			// Offset can't be larger than scratch buffer length.
