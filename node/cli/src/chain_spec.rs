@@ -354,7 +354,7 @@ pub(crate) mod tests {
 			vec![
 				get_authority_keys_from_seed("Alice"),
 			],
-			get_from_seed("Alice"),
+			get_from_seed::<AccountId>("Alice"),
 			None,
 			false,
 		)
@@ -376,7 +376,16 @@ pub(crate) mod tests {
 
 	/// Local testnet config (multivalidator Alice + Bob)
 	pub fn integration_test_config_with_two_authorities() -> ChainSpec {
-		ChainSpec::from_genesis("Integration Test", "test", local_testnet_genesis, vec![], None, None, None, None)
+		ChainSpec::from_genesis(
+			"Integration Test",
+			"test",
+			local_testnet_genesis,
+			vec![],
+			None,
+			None,
+			None,
+			None,
+		)
 	}
 
 	#[test]

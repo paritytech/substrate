@@ -346,7 +346,7 @@ mod tests {
 	fn test_sync() {
 		let chain_spec = crate::chain_spec::tests::integration_test_config_with_single_authority();
 
-		let alice = Arc::new(Sr25519Keyring::Alice.pair());
+		let alice = Sr25519Keyring::Alice.pair();
 		let mut slot_num = 1u64;
 		let block_factory = |service: &SyncService<<Factory as ServiceFactory>::FullService>| {
 			let service = service.get();
@@ -375,7 +375,7 @@ mod tests {
 					&*service.client(),
 					&parent_id,
 					slot_num,
-					&alice,
+					&alice.clone().into(),
 					(278, 1000),
 				) {
 					break babe_pre_digest;
@@ -400,7 +400,7 @@ mod tests {
 			let to_sign = pre_hash.encode();
 			let signature = alice.sign(&to_sign[..]);
 			let item = <DigestItem as CompatibleDigestItem>::babe_seal(
-				signature,
+				signature.into(),
 			);
 			slot_num += 1;
 
