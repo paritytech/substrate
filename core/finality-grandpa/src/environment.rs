@@ -962,10 +962,10 @@ pub(crate) fn canonical_at_height<B, E, Block: BlockT<Hash=H256>, RA>(
 		if base_is_canonical {
 			return Ok(Some(base.0));
 		} else {
-			return Ok(client.block_number_to_hash(height));
+			return Ok(client.block_hash(height).unwrap_or(None));
 		}
 	} else if base_is_canonical {
-		return Ok(client.block_number_to_hash(height));
+		return Ok(client.block_hash(height).unwrap_or(None));
 	}
 
 	let one = NumberFor::<Block>::one();
