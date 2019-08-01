@@ -637,6 +637,7 @@ pub mod tests {
 	use std::sync::Arc;
 	use std::time::Instant;
 	use futures::{Future, sync::oneshot};
+	use primitives::ChangesTrieConfiguration;
 	use runtime_primitives::traits::{Block as BlockT, NumberFor, Header as HeaderT};
 	use client::{error::{Error as ClientError, Result as ClientResult}};
 	use client::light::fetcher::{FetchChecker, RemoteHeaderRequest,
@@ -646,7 +647,7 @@ pub mod tests {
 	use crate::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
 	use libp2p::PeerId;
 	use super::{REQUEST_TIMEOUT, OnDemandCore, OnDemandNetwork, RequestData};
-	use test_client::runtime::{changes_trie_config, Block, Extrinsic, Header};
+	use test_client::runtime::{Block, Extrinsic, Header};
 
 	struct DummyFetchChecker { ok: bool }
 
@@ -1063,7 +1064,7 @@ pub mod tests {
 
 		let (tx, response) = oneshot::channel();
 		on_demand.add_request(&mut network_interface, RequestData::RemoteChanges(RemoteChangesRequest {
-			changes_trie_configs: vec![(0, None, changes_trie_config())],
+			changes_trie_configs: vec![(0, None, ChangesTrieConfiguration::new(4, 2))],
 			first_block: (1, Default::default()),
 			last_block: (100, Default::default()),
 			max_block: (100, Default::default()),

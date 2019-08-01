@@ -18,7 +18,7 @@ use super::*;
 use self::error::Error;
 
 use assert_matches::assert_matches;
-use primitives::storage::well_known_keys;
+use primitives::{ChangesTrieConfiguration, storage::well_known_keys};
 use sr_io::blake2_256;
 use test_client::{
 	prelude::*,
@@ -236,7 +236,9 @@ fn should_query_storage() {
 	}
 
 	run_tests(Arc::new(test_client::new()));
-	run_tests(Arc::new(TestClientBuilder::new().set_support_changes_trie(true).build()));
+	run_tests(Arc::new(TestClientBuilder::new()
+		.changes_trie_config(Some(ChangesTrieConfiguration::new(4, 2)))
+		.build()));
 }
 
 #[test]
