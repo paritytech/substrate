@@ -117,7 +117,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 						Poll::Ready(Ok(v)) => match v {}
 						Poll::Pending => break NodeSocket::Connected(conn),
 						Poll::Ready(Err(err)) => {
-							debug!(target: "telemetry", "Disconnected from {}: {:?}", self.addr, err);
+							warn!(target: "telemetry", "Disconnected from {}: {:?}", self.addr, err);
 							let timeout = gen_rand_reconnect_delay();
 							self.socket = NodeSocket::WaitingReconnect(timeout);
 							return Poll::Ready(NodeEvent::Disconnected(err))
@@ -132,7 +132,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 					},
 					Poll::Pending => break NodeSocket::Dialing(s),
 					Poll::Ready(Err(err)) => {
-						debug!(target: "telemetry", "Error while dialing {}: {:?}", self.addr, err);
+						warn!(target: "telemetry", "Error while dialing {}: {:?}", self.addr, err);
 						let timeout = gen_rand_reconnect_delay();
 						socket = NodeSocket::WaitingReconnect(timeout);
 					}
@@ -143,7 +143,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 						socket = NodeSocket::Dialing(d.compat());
 					}
 					Err(err) => {
-						debug!(target: "telemetry", "Error while dialing {}: {:?}", self.addr, err);
+						warn!(target: "telemetry", "Error while dialing {}: {:?}", self.addr, err);
 						let timeout = gen_rand_reconnect_delay();
 						socket = NodeSocket::WaitingReconnect(timeout);
 					}
