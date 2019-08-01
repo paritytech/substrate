@@ -52,7 +52,7 @@ use cfg_if::cfg_if;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
 pub use babe_primitives::AuthorityId;
-pub type AuraId = AuthorityId;
+pub type AuraId = aura_primitives::sr25519::AuthorityId;
 
 // Inlucde the WASM binary
 #[cfg(feature = "std")]
@@ -544,7 +544,12 @@ cfg_if! {
 
 			impl aura_primitives::AuraApi<Block, AuraId> for Runtime {
 				fn slot_duration() -> u64 { 1000 }
-				fn authorities() -> Vec<AuraId> { system::authorities() }
+				fn authorities() -> Vec<AuraId> {
+					system::authorities().into_iter().map(|a| {
+						let authority: sr25519::Public = a.into();
+						AuraId::from(authority)
+					}).collect()
+				}
 			}
 
 			impl babe_primitives::BabeApi<Block> for Runtime {
@@ -735,7 +740,12 @@ cfg_if! {
 
 			impl aura_primitives::AuraApi<Block, AuraId> for Runtime {
 				fn slot_duration() -> u64 { 1000 }
-				fn authorities() -> Vec<AuraId> { system::authorities() }
+				fn authorities() -> Vec<AuraId> {
+					system::authorities().into_iter().map(|a| {
+						let authority: sr25519::Public = a.into();
+						AuraId::from(authority)
+					}).collect()
+				}
 			}
 
 			impl babe_primitives::BabeApi<Block> for Runtime {

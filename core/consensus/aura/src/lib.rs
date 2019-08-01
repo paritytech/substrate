@@ -785,9 +785,9 @@ mod tests {
 	use parking_lot::Mutex;
 	use tokio::runtime::current_thread;
 	use keyring::sr25519::Keyring;
-	use primitives::sr25519;
 	use client::{LongestChain, BlockchainEvents};
 	use test_client;
+	use aura_primitives::sr25519::AuthorityPair;
 
 	type Error = client::error::Error;
 
@@ -835,7 +835,7 @@ mod tests {
 
 	impl TestNetFactory for AuraTestNet {
 		type Specialization = DummySpecialization;
-		type Verifier = AuraVerifier<PeersFullClient, sr25519::Pair>;
+		type Verifier = AuraVerifier<PeersFullClient, AuthorityPair>;
 		type PeerData = ();
 
 		/// Create new test network with peers and given config.
@@ -919,9 +919,9 @@ mod tests {
 				&inherent_data_providers, slot_duration.get()
 			).expect("Registers aura inherent data provider");
 
-			let aura = start_aura::<_, _, _, _, _, sr25519::Pair, _, _, _>(
+			let aura = start_aura::<_, _, _, _, _, AuthorityPair, _, _, _>(
 				slot_duration,
-				Arc::new(key.clone().into()),
+				Arc::new(key.clone().pair().into()),
 				client.clone(),
 				select_chain,
 				client,
@@ -949,9 +949,9 @@ mod tests {
 
 		assert_eq!(client.info().chain.best_number, 0);
 		assert_eq!(authorities(&client, &BlockId::Number(0)).unwrap(), vec![
-			Keyring::Alice.into(),
-			Keyring::Bob.into(),
-			Keyring::Charlie.into()
+			Keyring::Alice.public().into(),
+			Keyring::Bob.public().into(),
+			Keyring::Charlie.public().into()
 		]);
 	}
 }
