@@ -18,17 +18,19 @@
 
 use sr_primitives::{Perbill, traits::SimpleArithmetic};
 
-/// Linear function truncated to positive part `y = max(0, b [+ or -] a*x)` for PNPoS usage
+/// Linear function truncated to positive part `y = max(0, b [+ or -] a*x)` for PNPoS usage.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 struct Linear {
+	// Negate the `a*x` term.
 	negative_a: bool,
-	// Perbill
+	// Per billion representation of the value.
 	a: u32,
-	// Perbill
+	// Per billion representation of the value.
 	b: u32,
 }
 
 impl Linear {
+	/// Compute f(n/d)*d. This is useful not to loose precision.
 	fn calculate_for_fraction_times_denominator<N>(&self, n: N, d: N) -> N
 	where
 		N: SimpleArithmetic + Clone
@@ -44,13 +46,19 @@ impl Linear {
 /// Piecewise Linear function for PNPoS usage
 #[derive(Debug, PartialEq, Eq)]
 struct PiecewiseLinear {
-	/// Array of tuple of Abscisse in Perbill and Linear.
+	/// Array of tuple of an abscisse in a per billions representation and a linear function.
 	///
-	/// Each piece start with at the abscisse up to the abscisse of the next piece.
+	/// Abscisses in the array must be in order from the lowest to the highest.
+	///
+	/// The array defines a piecewise linear function as such:
+	/// * the n-th piece start at the abscisse of the n-th element until the abscisse of the
+	/// n-th + 1 element, and is defined by the linear function of n-th element
+	/// * last piece doesn't end
 	pieces: [(u32, Linear); 20],
 }
 
 impl PiecewiseLinear {
+	/// Compute f(n/d)*d. This is useful not to loose precision.
 	fn calculate_for_fraction_times_denominator<N>(&self, n: N, d: N) -> N
 	where
 		N: SimpleArithmetic + Clone
@@ -64,7 +72,7 @@ impl PiecewiseLinear {
 	}
 }
 
-// Piecewise linear approximation of I_NPoS.
+/// Piecewise linear approximation of I_NPoS.
 const I_NPOS: PiecewiseLinear = PiecewiseLinear {
 	pieces: [
 		(0, Linear { negative_a: false, a: 150000000, b: 25000000 }),
@@ -147,19 +155,19 @@ mod test_inflation {
 	const x_ideal: f64 = 0.5;
 	const d: f64 = 0.05;
 
-	// Part left to 0.5
+	// Part left to x_ideal
 	fn I_left(x: f64) -> f64 {
 		I_0 + x * (i_ideal - I_0/x_ideal)
 	}
 
-	// Part right to 0.5
+	// Part right to x_ideal
 	fn I_right(x: f64) -> f64 {
 		I_0 + (i_ideal*x_ideal - I_0) * 2_f64.powf((x_ideal-x)/d)
 	}
 
 	// Definition of I_NPoS in float
 	fn I_full(x: f64) -> f64 {
-		if x <= 0.5 {
+		if x <= x_ideal {
 			I_left(x)
 		} else {
 			I_right(x)
@@ -172,11 +180,11 @@ mod test_inflation {
 
 		// Points for left part
 		points.push((0.0, I_0));
-		points.push((0.5, I_left(0.5)));
+		points.push((x_ideal, I_left(x_ideal)));
 
 		// Approximation for right part.
 		//
-		// We start from 0.5 (x0) and we try to find the next point (x1) for which the linear
+		// We start from x_ideal (x0) and we try to find the next point (x1) for which the linear
 		// approximation of (x0, x1) doesn't deviate from float definition by an error of
 		// GEN_ERROR.
 
@@ -186,7 +194,7 @@ mod test_inflation {
 		// Max error used for generating points.
 		const GEN_ERROR: f64 = 0.000_1;
 
-		let mut x0: f64 = 0.5;
+		let mut x0: f64 = x_ideal;
 		let mut x1: f64 = x0;
 
 		// This is just a step used to find next x1:
