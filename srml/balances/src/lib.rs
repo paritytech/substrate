@@ -1213,8 +1213,10 @@ impl<T: Trait<I>, I: Instance> rstd::fmt::Debug for TakeFees<T, I> {
 
 impl<T: Trait<I>, I: Instance + Clone + Eq> SignedExtension for TakeFees<T, I> {
 	type AccountId = T::AccountId;
-	type AdditionalSigned = ();
-	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
+	type AdditionalSigned = T::Balance;
+	fn additional_signed(&self) -> rstd::result::Result<T::Balance, &'static str> {
+		Ok(self.0)
+	}
 
 	fn validate(
 		&self,
