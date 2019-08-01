@@ -51,7 +51,7 @@ struct PiecewiseLinear {
 	/// Abscissas in the array must be in order from the lowest to the highest.
 	///
 	/// The array defines a piecewise linear function as such:
-	/// * the n-th piece start at the abscisse of the n-th element until the abscisse of the
+	/// * the n-th piece start at the abscissa of the n-th element until the abscissa of the
 	///     n-th + 1 element, and is defined by the linear function of n-th element
 	/// * last piece doesn't end
 	pieces: [(u32, Linear); 20],
@@ -64,7 +64,7 @@ impl PiecewiseLinear {
 		N: SimpleArithmetic + Clone
 	{
 		let part = self.pieces.iter()
-			.take_while(|(abscisse, _)| n > Perbill::from_parts(*abscisse) * d.clone())
+			.take_while(|(abscissa, _)| n > Perbill::from_parts(*abscissa) * d.clone())
 			.last()
 			.unwrap_or(&self.pieces[0]);
 
