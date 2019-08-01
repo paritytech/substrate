@@ -615,33 +615,13 @@ mod test {
 
 	#[test]
 	fn derive_soft_known_pair_should_work() {
-		let path = Some(DeriveJunction::soft(hex!(
-			"0c666f6f00000000000000000000000000000000000000000000000000000000"
-		)));
-		let pair = Pair::from_seed(&hex!(
-			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
-		));
-		let expected = hex!("40b9675df90efa6069ff623b0fdfcf706cd47ca7452a5056c7ad58194d23440a");
-		assert_eq!(pair.derive(path.into_iter()).unwrap().public().to_raw_vec(), expected);
-	}
-
-	#[test]
-	fn derive_soft_known_public_should_work() {
-		let path = Some(DeriveJunction::hard(hex!(
-			"0c666f6f00000000000000000000000000000000000000000000000000000000"
-		)));
-		let public = Public::from_raw(hex!(
-			"46ebddef8cd9bb167dc30878d7113b7e168e6f0646beffd77d69d39bad76b47a"
-		));
-		let expected = hex!("40b9675df90efa6069ff623b0fdfcf706cd47ca7452a5056c7ad58194d23440a");
-		assert_eq!(public.derive(path.into_iter()).unwrap().to_raw_vec(), expected);
+		let pair = Pair::from_string(&format!("{}/Alice", DEV_PHRASE), None).unwrap();
+		let expected = hex!("d6c71059dbbe9ad2b0ed3f289738b800836eb425544ce694825285b958ca755e");
+		assert_eq!(pair.public().to_raw_vec(), expected);
 	}
 
 	#[test]
 	fn derive_hard_known_pair_should_work() {
-		// let path = Some(DeriveJunction::hard(hex!(
-		// 	"14416c6963650000000000000000000000000000000000000000000000000000"
-		// )));
 		let pair = Pair::from_string(&format!("{}//Alice", DEV_PHRASE), None).unwrap();
 		let expected = hex!("d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d");
 		assert_eq!(pair.public().to_raw_vec(), expected);
