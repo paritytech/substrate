@@ -22,7 +22,7 @@
 // end::description[]
 
 #[cfg(feature = "std")]
-use schnorrkel::{signing_context, Keypair, SecretKey, MiniSecretKey, PublicKey,
+use schnorrkel::{signing_context, ExpansionMode, Keypair, SecretKey, MiniSecretKey, PublicKey,
 	derive::{Derivation, ChainCode, CHAIN_CODE_LENGTH}
 };
 #[cfg(feature = "std")]
@@ -341,7 +341,7 @@ impl AsRef<Pair> for Pair {
 #[cfg(feature = "std")]
 impl From<MiniSecretKey> for Pair {
 	fn from(sec: MiniSecretKey) -> Pair {
-		Pair(sec.expand_ed25519_to_keypair())
+		Pair(sec.expand_to_keypair(ExpansionMode::Ed25519))
 	}
 }
 
@@ -376,7 +376,7 @@ impl AsRef<schnorrkel::Keypair> for Pair {
 /// Derive a single hard junction.
 #[cfg(feature = "std")]
 fn derive_hard_junction(secret: &SecretKey, cc: &[u8; CHAIN_CODE_LENGTH]) -> SecretKey {
-	secret.hard_derive_mini_secret_key(Some(ChainCode(cc.clone())), b"").0.expand_ed25519()
+	secret.hard_derive_mini_secret_key(Some(ChainCode(cc.clone())), b"").0.expand(ExpansionMode::Ed25519)
 }
 
 /// The raw secret seed, which can be used to recreate the `Pair`.
@@ -417,7 +417,7 @@ impl TraitPair for Pair {
 				Ok(Pair(
 					MiniSecretKey::from_bytes(seed)
 						.map_err(|_| SecretStringError::InvalidSeed)?
-						.expand_ed25519_to_keypair()
+						.expand_to_keypair(ExpansionMode::ExpansionMode)
 				))
 			}
 			SECRET_KEY_LENGTH => {
@@ -491,7 +491,7 @@ impl TraitPair for Pair {
 	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool {
 		match PublicKey::from_bytes(pubkey.as_ref()) {
 			Ok(pk) => pk.verify_simple_preaudit_deprecated(
-				SIGNING_CTX, message.as_ref(), &signature,
+				SIGNING_CTX, message.as_ref(), &sig,
 			).is_ok(),
 			Err(_) => false,
 		}
@@ -639,14 +639,12 @@ mod test {
 
 	#[test]
 	fn derive_hard_known_pair_should_work() {
-		let path = Some(DeriveJunction::hard(hex!(
-			"14416c6963650000000000000000000000000000000000000000000000000000"
-		)));
-		let pair = Pair::from_seed(&hex!(
-			"fac7959dbfe72f052e5a0c3c8d6530f202b02fd8f9f5ca3580ec8deb7797479e"
-		));
+		// let path = Some(DeriveJunction::hard(hex!(
+		// 	"14416c6963650000000000000000000000000000000000000000000000000000"
+		// )));
+		let pair = Pair::from_string(&format!("{}//Alice", DEV_PHRASE), None).unwrap();
 		let expected = hex!("d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d");
-		assert_eq!(pair.derive(path.into_iter()).unwrap().public().to_raw_vec(), expected);
+		assert_eq!(pair.public().to_raw_vec(), expected);
 	}
 
 	#[test]
@@ -721,9 +719,9 @@ mod test {
 			&hex!("0000000000000000000000000000000000000000000000000000000000000000")
 		);
 		let public = pk.public();
-		let js_signature = Signature::from_raw(
-			hex!("3a6caf0e96c51a8182241fe94ad4828f84a5aa69f9da33adf10afd7a97591d5a352bc745ba68f69060e14e5cbaa23c568523ec4bfb8c8a908a5703b62c89cf85")
-		);
+		let js_signature = Signature::from_raw(hex!(
+			"28a854d54903e056f89581c691c1f7d2ff39f8f896c9e9c22475e60902cc2b3547199e0e91fa32902028f2ca2355e8cdd16cfe19ba5e8b658c94aa80f3b81a00"
+		));
 		assert!(Pair::verify(&js_signature, b"SUBSTRATE", public));
 	}
 }
