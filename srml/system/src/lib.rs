@@ -1025,7 +1025,6 @@ impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckGenesis<T> {
 
 impl<T: Trait + Send + Sync> SignedExtension for CheckGenesis<T> {
 	type AccountId = T::AccountId;
-	type Call = T::Call;
 	type AdditionalSigned = T::Hash;
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str> {
 		Ok(<Module<T>>::block_hash(Zero::zero()))
