@@ -57,7 +57,7 @@ pub use params::{NoCustom, CoreParams};
 pub use traits::{GetLogFilter, AugmentClap};
 use app_dirs::{AppInfo, AppDataType};
 use error_chain::bail;
-use log::info;
+use log::{info, SetLoggerError};
 use lazy_static::lazy_static;
 
 use futures::Future;
@@ -223,7 +223,7 @@ where
 		.get_matches_from(args);
 	let cli_args = CoreParams::<CC, RP>::from_clap(&matches);
 
-	init_logger(cli_args.get_log_filter().as_ref().map(|v| v.as_ref()).unwrap_or(""));
+	let _ = init_logger(cli_args.get_log_filter().as_ref().map(|v| v.as_ref()).unwrap_or(""));
 	fdlimit::raise_fd_limit();
 
 	match cli_args {
@@ -723,7 +723,7 @@ fn network_path(base_path: &Path, chain_id: &str) -> PathBuf {
 	path
 }
 
-fn init_logger(pattern: &str) {
+fn init_logger(pattern: &str) -> Result<(), SetLoggerError> {
 	use ansi_term::Colour;
 
 	let mut builder = env_logger::Builder::new();
@@ -776,7 +776,7 @@ fn init_logger(pattern: &str) {
 		writeln!(buf, "{}", output)
 	});
 
-	builder.init();
+	builder.try_init()
 }
 
 fn kill_color(s: &str) -> String {
