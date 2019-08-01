@@ -23,8 +23,6 @@
 use num_traits::One;
 use crate::changes_trie::{ConfigurationRange, BlockNumber};
 
-pub const SKEWED_DIGEST_LEVEL: u32 = 0xFFFFFFFF; // TODO: replace with Option<u32>
-
 /// Returns surface iterator for given range of blocks.
 pub fn surface_iterator<'a, Number: BlockNumber>(
 	config: ConfigurationRange<'a, Number>,
@@ -32,8 +30,6 @@ pub fn surface_iterator<'a, Number: BlockNumber>(
 	begin: Number,
 	end: Number,
 ) -> Result<SurfaceIterator<'a, Number>, String> {
-	// TODO: check that end <= config.end
-
 	let (current, current_begin, digest_step, digest_level) = lower_bound_max_digest(
 		config.clone(),
 		max.clone(),
@@ -53,6 +49,10 @@ pub fn surface_iterator<'a, Number: BlockNumber>(
 
 /// Surface iterator - only traverses top-level digests from given range and tries to find
 /// all valid digest changes.
+///
+/// Iterator item is the tuple of (last block of the current point + digest level of the current point).
+/// Digest level is Some(0) when it is regular block, is Some(non-zero) when it is digest block and None
+/// if it is skewed digest block.
 pub struct SurfaceIterator<'a, Number: BlockNumber> {
 	config: ConfigurationRange<'a, Number>,
 	begin: Number,
@@ -60,11 +60,11 @@ pub struct SurfaceIterator<'a, Number: BlockNumber> {
 	current: Option<Number>,
 	current_begin: Number,
 	digest_step: u32,
-	digest_level: u32,
+	digest_level: Option<u32>,
 }
 
 impl<'a, Number: BlockNumber> Iterator for SurfaceIterator<'a, Number> {
-	type Item = Result<(Number, u32), String>;
+	type Item = Result<(Number, Option<u32>), String>;
 
 	fn next(&mut self) -> Option<Self::Item> {
 		let current = self.current.clone()?;
@@ -108,7 +108,7 @@ fn lower_bound_max_digest<'a, Number: BlockNumber>(
 	max: Number,
 	begin: Number,
 	end: Number,
-) -> Result<(Number, Number, u32, u32), String> {
+) -> Result<(Number, Number, u32, Option<u32>), String> {
 	if end > max || begin > end {
 		return Err(format!("invalid changes range: {}..{}/{}", begin, end, max));
 	}
@@ -141,14 +141,22 @@ fn lower_bound_max_digest<'a, Number: BlockNumber>(
 			// check if we met skewed digest
 			if let Some(skewed_digest_end) = config.end.as_ref() {
 				if new_digest_end > *skewed_digest_end {
-					let skewed_digest_start = config.config.prev_max_level_digest_block(config.zero.clone(), skewed_digest_end.clone()).expect("TODO");
-					let skewed_digest_range = (skewed_digest_end.clone() - skewed_digest_start.clone()).try_into().ok().expect("TODO");
-					return Ok((
+					let skewed_digest_start = config.config.prev_max_level_digest_block(
+						config.zero.clone(),
 						skewed_digest_end.clone(),
-						skewed_digest_start,
-						skewed_digest_range,
-						SKEWED_DIGEST_LEVEL,
-					));
+					);
+					if let Some(skewed_digest_start) = skewed_digest_start {
+						let skewed_digest_range = (skewed_digest_end.clone() - skewed_digest_start.clone())
+							.try_into().ok()
+							.expect("skewed digest range is always <= max level digest range;\
+								max level digest range always fits u32; qed");
+						return Ok((
+							skewed_digest_end.clone(),
+							skewed_digest_start,
+							skewed_digest_range,
+							None,
+						));
+					}
 				}
 			}
 
@@ -178,7 +186,7 @@ fn lower_bound_max_digest<'a, Number: BlockNumber>(
 		current,
 		current_begin,
 		digest_step,
-		digest_level,
+		Some(digest_level),
 	))
 }
 
@@ -202,13 +210,13 @@ mod tests {
 		// when config activates at 0
 		assert_eq!(
 			lower_bound_max_digest(configuration_range(&config, 0u64), 100_000u64, 20u64, 180u64).unwrap(),
-			(192, 176, 16, 2),
+			(192, 176, 16, Some(2)),
 		);
 
 		// when config activates at 30
 		assert_eq!(
 			lower_bound_max_digest(configuration_range(&config, 30u64), 100_000u64, 50u64, 210u64).unwrap(),
-			(222, 206, 16, 2),
+			(222, 206, 16, Some(2)),
 		);
 	}
 
@@ -220,8 +228,9 @@ mod tests {
 		assert_eq!(
 			surface_iterator(configuration_range(&config, 0u64), 100_000u64, 40u64, 180u64).unwrap().collect::<Vec<_>>(),
 			vec![
-				Ok((192, 2)), Ok((176, 2)), Ok((160, 2)), Ok((144, 2)), Ok((128, 2)), Ok((112, 2)),
-				Ok((96, 2)), Ok((80, 2)), Ok((64, 2)), Ok((48, 2)),
+				Ok((192, Some(2))), Ok((176, Some(2))), Ok((160, Some(2))), Ok((144, Some(2))),
+				Ok((128, Some(2))), Ok((112, Some(2))), Ok((96, Some(2))), Ok((80, Some(2))),
+				Ok((64, Some(2))), Ok((48, Some(2))),
 			],
 		);
 
@@ -229,8 +238,8 @@ mod tests {
 		assert_eq!(
 			surface_iterator(configuration_range(&config, 30u64), 100_000u64, 40u64, 180u64).unwrap().collect::<Vec<_>>(),
 			vec![
-				Ok((190, 2)), Ok((174, 2)), Ok((158, 2)), Ok((142, 2)), Ok((126, 2)), Ok((110, 2)),
-				Ok((94, 2)), Ok((78, 2)), Ok((62, 2)), Ok((46, 2)),
+				Ok((190, Some(2))), Ok((174, Some(2))), Ok((158, Some(2))), Ok((142, Some(2))), Ok((126, Some(2))),
+				Ok((110, Some(2))), Ok((94, Some(2))), Ok((78, Some(2))), Ok((62, Some(2))), Ok((46, Some(2))),
 			],
 		);
 
@@ -238,9 +247,9 @@ mod tests {
 		assert_eq!(
 			surface_iterator(configuration_range(&config, 0u64), 183u64, 40u64, 183u64).unwrap().collect::<Vec<_>>(),
 			vec![
-				Ok((183, 0)), Ok((182, 0)), Ok((181, 0)), Ok((180, 1)),
-				Ok((176, 2)), Ok((160, 2)), Ok((144, 2)), Ok((128, 2)), Ok((112, 2)),
-				Ok((96, 2)), Ok((80, 2)), Ok((64, 2)), Ok((48, 2)),
+				Ok((183, Some(0))), Ok((182, Some(0))), Ok((181, Some(0))), Ok((180, Some(1))),
+				Ok((176, Some(2))), Ok((160, Some(2))), Ok((144, Some(2))), Ok((128, Some(2))), Ok((112, Some(2))),
+				Ok((96, Some(2))), Ok((80, Some(2))), Ok((64, Some(2))), Ok((48, Some(2))),
 			],
 		);
 	}
@@ -255,8 +264,8 @@ mod tests {
 		assert_eq!(
 			surface_iterator(config_range, 100_000u64, 40u64, 170u64).unwrap().collect::<Vec<_>>(),
 			vec![
-				Ok((170, SKEWED_DIGEST_LEVEL)), Ok((160, 2)), Ok((144, 2)), Ok((128, 2)), Ok((112, 2)),
-				Ok((96, 2)), Ok((80, 2)), Ok((64, 2)), Ok((48, 2)),
+				Ok((170, None)), Ok((160, Some(2))), Ok((144, Some(2))), Ok((128, Some(2))), Ok((112, Some(2))),
+				Ok((96, Some(2))), Ok((80, Some(2))), Ok((64, Some(2))), Ok((48, Some(2))),
 			],
 		);
 	}

@@ -48,7 +48,7 @@ struct InMemoryStorageData<H: Hasher, Number: BlockNumber> {
 }
 
 impl<H: Hasher, Number: BlockNumber> InMemoryStorage<H, Number> {
-	/// Create the storage from given in-memory database.
+	/// Creates storage from given in-memory database.
 	pub fn with_db(mdb: MemoryDB<H>) -> Self {
 		Self {
 			data: RwLock::new(InMemoryStorageData {
@@ -58,12 +58,23 @@ impl<H: Hasher, Number: BlockNumber> InMemoryStorage<H, Number> {
 		}
 	}
 
-	/// Create the storage with empty database.
+	/// Creates storage with empty database.
 	pub fn new() -> Self {
 		Self::with_db(Default::default())
 	}
 
-	/// Create the storage with given blocks.
+	/// Creates storage with given proof.
+	pub fn with_proof(proof: Vec<Vec<u8>>) -> Self {
+		use hash_db::HashDB;
+
+		let mut proof_db = MemoryDB::<H>::default();
+		for item in proof {
+			proof_db.insert(&[], &item);
+		}
+		Self::with_db(proof_db)
+	}
+
+	/// Creates storage with given blocks.
 	pub fn with_blocks(blocks: Vec<(Number, H::Out)>) -> Self {
 		Self {
 			data: RwLock::new(InMemoryStorageData {

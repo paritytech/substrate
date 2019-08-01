@@ -521,7 +521,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			None => return Ok(None),
 		};
 
-		// TODO: we only work with the last config range here!!!
+		// TODO: we only work with the last config range here!!! Need to stabilize pruning before fixing this.
 		let (config_zero_number, _, config) = configs.pop().expect("TODO");
 		let finalized_number = self.backend.blockchain().info().finalized_number;
 		let oldest = storage.oldest_changes_trie_block(config_zero_number, config, finalized_number);

@@ -29,7 +29,8 @@ use runtime_primitives::traits::{
 	SimpleArithmetic, CheckedConversion,
 };
 use state_machine::{CodeExecutor, ChangesTrieRootsStorage, ChangesTrieAnchorBlockId,
-	ChangesTrieConfigurationRange, TrieBackend, read_proof_check, key_changes_proof_check,
+	ChangesTrieConfigurationRange, TrieBackend, InMemoryChangesTrieStorage,
+	read_proof_check, key_changes_proof_check_with_db,
 	create_proof_check_backend_storage, read_child_proof_check,
 };
 
@@ -286,19 +287,20 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 
 		// and now check the key changes proof + get the changes
 		let mut result = Vec::new();
+		let proof_storage = InMemoryChangesTrieStorage::with_proof(remote_proof);
 		for (config_zero, config_end, config) in &request.changes_trie_configs {
 			let config_range = ChangesTrieConfigurationRange {
 				config,
 				zero: config_zero.clone(),
 				end: config_end.clone(),
 			};
-			let result_range = key_changes_proof_check::<H, _>(
+			let result_range = key_changes_proof_check_with_db::<H, _>(
 				config_range,
 				&RootsStorage {
 					roots: (request.tries_roots.0, &request.tries_roots.2),
 					prev_roots: &remote_roots,
 				},
-				remote_proof.clone(), // TODO: use prepared MDB instead of creating it on every loop iter
+				&proof_storage,
 				request.first_block.0,
 				&ChangesTrieAnchorBlockId {
 					hash: convert_hash(&request.last_block.1),

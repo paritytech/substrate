@@ -200,7 +200,6 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 		debug_assert!(entry_type != EntryType::Final || self.best_finalized_block.hash == parent.hash);
 
 		// we do not store any values behind finalized
-// TODO: how this works with CT configuration???
 		if block.number != Zero::zero() && self.best_finalized_block.number >= block.number {
 			return Ok(None);
 		}
@@ -685,7 +684,6 @@ pub mod tests {
 
 	#[test]
 	fn list_value_at_block_works() {
-// TODO: check that value_at_block actually returns correct value!!!
 		// when block is earlier than best finalized block AND it is not finalized
 		// --- 50 ---
 		// ----------> [100]

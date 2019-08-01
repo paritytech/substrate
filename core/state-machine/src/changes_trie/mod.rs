@@ -44,7 +44,10 @@ mod storage;
 mod surface_iterator;
 
 pub use self::storage::InMemoryStorage;
-pub use self::changes_iterator::{key_changes, key_changes_proof, key_changes_proof_check};
+pub use self::changes_iterator::{
+	key_changes, key_changes_proof,
+	key_changes_proof_check, key_changes_proof_check_with_db,
+};
 pub use self::prune::{prune, oldest_non_pruned_trie};
 
 use std::convert::TryInto;
@@ -196,7 +199,6 @@ pub fn build_changes_trie<'a, B: Backend<H>, H: Hasher, Number: BlockNumber>(
 
 	// prepare configuration range - we already know zero block. Current block may be the end block if configuration
 	// has been changed in this block
-	// TODO: ^^^ this won't work for forced digests
 	let is_config_changed = match changes.storage(primitives::storage::well_known_keys::CHANGES_TRIE_CONFIG) {
 		Some(Some(new_config)) => new_config != &state.config.encode()[..],
 		Some(None) => true,

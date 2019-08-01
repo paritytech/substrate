@@ -80,7 +80,10 @@ impl ChangesTrieConfiguration {
 		}
 	}
 
-	/// Returns max level digest block number that must be created at block <= passed block number.
+	/// Returns max level digest block number that has been created at block <= passed block number.
+	///
+	/// Returns None if digests are not created at all.
+	/// This could return Some(zero), even though changes trie isn't ever created at this block.
 	pub fn prev_max_level_digest_block<Number>(
 		&self,
 		zero: Number,

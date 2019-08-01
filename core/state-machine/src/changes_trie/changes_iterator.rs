@@ -20,13 +20,13 @@
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use parity_codec::{Decode, Encode};
-use hash_db::{HashDB, Hasher};
+use hash_db::Hasher;
 use num_traits::Zero;
-use trie::{Recorder, MemoryDB};
+use trie::Recorder;
 use crate::changes_trie::{AnchorBlockId, ConfigurationRange, RootsStorage, Storage, BlockNumber};
 use crate::changes_trie::input::{DigestIndex, ExtrinsicIndex, DigestIndexValue, ExtrinsicIndexValue};
 use crate::changes_trie::storage::{TrieBackendAdapter, InMemoryStorage};
-use crate::changes_trie::surface_iterator::{surface_iterator, SurfaceIterator, SKEWED_DIGEST_LEVEL};
+use crate::changes_trie::surface_iterator::{surface_iterator, SurfaceIterator};
 use crate::proving_backend::ProvingBackendEssence;
 use crate::trie_backend_essence::{TrieBackendEssence};
 
@@ -123,20 +123,35 @@ pub fn key_changes_proof_check<'a, H: Hasher, Number: BlockNumber>(
 	max: Number,
 	key: &[u8]
 ) -> Result<Vec<(Number, u32)>, String> {
+	key_changes_proof_check_with_db(
+		config,
+		roots_storage,
+		&InMemoryStorage::with_proof(proof),
+		begin,
+		end,
+		max,
+		key,
+	)
+}
+
+/// Similar to the `key_changes_proof_check` function, but works with prepared proof storage.
+pub fn key_changes_proof_check_with_db<'a, H: Hasher, Number: BlockNumber>(
+	config: ConfigurationRange<'a, Number>,
+	roots_storage: &dyn RootsStorage<H, Number>,
+	proof_db: &InMemoryStorage<H, Number>,
+	begin: Number,
+	end: &AnchorBlockId<H::Out, Number>,
+	max: Number,
+	key: &[u8]
+) -> Result<Vec<(Number, u32)>, String> {
 	// we can't query any roots before root
 	let max = ::std::cmp::min(max.clone(), end.number.clone());
 
-	let mut proof_db = MemoryDB::<H>::default();
-	for item in proof {
-		proof_db.insert(&[], &item);
-	}
-
-	let proof_db = InMemoryStorage::with_db(proof_db);
 	DrilldownIterator {
 		essence: DrilldownIteratorEssence {
 			key,
 			roots_storage,
-			storage: &proof_db,
+			storage: proof_db,
 			begin: begin.clone(),
 			end,
 			config: config.clone(),
@@ -172,7 +187,7 @@ pub struct DrilldownIteratorEssence<'a, H, Number>
 	surface: SurfaceIterator<'a, Number>,
 
 	extrinsics: VecDeque<(Number, u32)>,
-	blocks: VecDeque<(Number, u32)>,
+	blocks: VecDeque<(Number, Option<u32>)>,
 
 	_hasher: ::std::marker::PhantomData<H>,
 }
@@ -234,19 +249,17 @@ impl<'a, H, Number> DrilldownIteratorEssence<'a, H, Number>
 						// AND digest block changes could also include changes for out-of-range blocks
 						let begin = self.begin.clone();
 						let end = self.end.number.clone();
-						let is_skewed_digest = level == SKEWED_DIGEST_LEVEL;
 						let config = self.config.clone();
 						self.blocks.extend(blocks.into_iter()
 							.rev()
-							.filter(|b| level > 1 || (*b >= begin && *b <= end))
+							.filter(|b| level.map(|level| level > 1).unwrap_or(true) || (*b >= begin && *b <= end))
 							.map(|b| {
-								let prev_level = if is_skewed_digest {
-									config.config.digest_level_at_block(config.zero.clone(), b.clone())
-										.map(|(level, _, _)| level)
-										.unwrap_or_else(|| Zero::zero())
-								} else {
-									level - 1
-								};
+								let prev_level = level
+									.map(|level| Some(level - 1))
+									.unwrap_or_else(||
+										Some(config.config.digest_level_at_block(config.zero.clone(), b.clone())
+											.map(|(level, _, _)| level)
+											.unwrap_or_else(|| Zero::zero())));
 								(b, prev_level)
 							})
 						);

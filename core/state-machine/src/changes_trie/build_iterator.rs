@@ -51,7 +51,7 @@ pub struct DigestBuildIterator<Number: BlockNumber> {
 	end: Number,
 	/// Interval of L1 digest blocks.
 	digest_interval: u32,
-	/// Max step valid that could be used when digest is created
+	/// Max step that could be used when digest is created.
 	max_step: u32,
 
 	// Mutable data below:

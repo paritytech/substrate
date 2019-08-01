@@ -132,7 +132,6 @@ fn prepare_digest_input<'a, H, Number>(
 	};
 
 	digest_build_iterator(config, block_for_digest)
-//		.take_while(|digest_build_block| config.end.as_ref().map(|end| digest_build_block <= end).unwrap_or(true))
 		.try_fold(BTreeMap::new(), move |mut map, digest_build_block| {
 			let trie_root = storage.root(parent, digest_build_block.clone())?;
 			let trie_root = trie_root.ok_or_else(|| format!("No changes trie root for block {}", digest_build_block.clone()))?;
@@ -191,7 +190,12 @@ mod test {
 	use crate::overlayed_changes::OverlayedValue;
 	use super::*;
 
-	fn prepare_for_build() -> (InMemory<Blake2Hasher>, InMemoryStorage<Blake2Hasher, u64>, OverlayedChanges, Configuration) {
+	fn prepare_for_build(zero: u64) -> (
+		InMemory<Blake2Hasher>,
+		InMemoryStorage<Blake2Hasher, u64>,
+		OverlayedChanges,
+		Configuration,
+	) {
 		let backend: InMemory<_> = vec![
 			(vec![100], vec![255]),
 			(vec![101], vec![255]),
@@ -201,38 +205,38 @@ mod test {
 			(vec![105], vec![255]),
 		].into_iter().collect::<::std::collections::HashMap<_, _>>().into();
 		let storage = InMemoryStorage::with_inputs(vec![
-			(1, vec![
-				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 1, key: vec![100] }, vec![1, 3]),
-				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 1, key: vec![101] }, vec![0, 2]),
-				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 1, key: vec![105] }, vec![0, 2, 4]),
+			(zero + 1, vec![
+				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 1, key: vec![100] }, vec![1, 3]),
+				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 1, key: vec![101] }, vec![0, 2]),
+				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 1, key: vec![105] }, vec![0, 2, 4]),
 			]),
-			(2, vec![
-				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 2, key: vec![102] }, vec![0]),
+			(zero + 2, vec![
+				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 2, key: vec![102] }, vec![0]),
 			]),
-			(3, vec![
-				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 3, key: vec![100] }, vec![0]),
-				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 3, key: vec![105] }, vec![1]),
+			(zero + 3, vec![
+				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 3, key: vec![100] }, vec![0]),
+				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 3, key: vec![105] }, vec![1]),
 			]),
-			(4, vec![
-				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![100] }, vec![0, 2, 3]),
-				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![101] }, vec![1]),
-				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![103] }, vec![0, 1]),
+			(zero + 4, vec![
+				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 4, key: vec![100] }, vec![0, 2, 3]),
+				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 4, key: vec![101] }, vec![1]),
+				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 4, key: vec![103] }, vec![0, 1]),
 
-				InputPair::DigestIndex(DigestIndex { block: 4, key: vec![100] }, vec![1, 3]),
-				InputPair::DigestIndex(DigestIndex { block: 4, key: vec![101] }, vec![1]),
-				InputPair::DigestIndex(DigestIndex { block: 4, key: vec![102] }, vec![2]),
-				InputPair::DigestIndex(DigestIndex { block: 4, key: vec![105] }, vec![1, 3]),
+				InputPair::DigestIndex(DigestIndex { block: zero + 4, key: vec![100] }, vec![zero + 1, zero + 3]),
+				InputPair::DigestIndex(DigestIndex { block: zero + 4, key: vec![101] }, vec![zero + 1]),
+				InputPair::DigestIndex(DigestIndex { block: zero + 4, key: vec![102] }, vec![zero + 2]),
+				InputPair::DigestIndex(DigestIndex { block: zero + 4, key: vec![105] }, vec![zero + 1, zero + 3]),
 			]),
-			(5, Vec::new()),
-			(6, vec![
-				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 6, key: vec![105] }, vec![2]),
+			(zero + 5, Vec::new()),
+			(zero + 6, vec![
+				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 6, key: vec![105] }, vec![2]),
 			]),
-			(7, Vec::new()),
-			(8, vec![
-				InputPair::DigestIndex(DigestIndex { block: 8, key: vec![105] }, vec![6]),
+			(zero + 7, Vec::new()),
+			(zero + 8, vec![
+				InputPair::DigestIndex(DigestIndex { block: zero + 8, key: vec![105] }, vec![zero + 6]),
 			]),
-			(9, Vec::new()), (10, Vec::new()), (11, Vec::new()), (12, Vec::new()), (13, Vec::new()),
-			(14, Vec::new()), (15, Vec::new()),
+			(zero + 9, Vec::new()), (zero + 10, Vec::new()), (zero + 11, Vec::new()), (zero + 12, Vec::new()),
+			(zero + 13, Vec::new()), (zero + 14, Vec::new()), (zero + 15, Vec::new()),
 		]);
 		let changes = OverlayedChanges {
 			prospective: vec![
@@ -276,136 +280,166 @@ mod test {
 
 	#[test]
 	fn build_changes_trie_nodes_on_non_digest_block() {
-		let (backend, storage, changes, config) = prepare_for_build();
-		let parent = AnchorBlockId { hash: Default::default(), number: 4 };
-		let changes_trie_nodes = prepare_input(
-			&backend,
-			&storage,
-			configuration_range(&config, 0), // TODO: test other cases
-			&changes,
-			&parent,
-		).unwrap();
-		assert_eq!(changes_trie_nodes.collect::<Vec<InputPair<u64>>>(), vec![
-			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 5, key: vec![100] }, vec![0, 2, 3]),
-			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 5, key: vec![101] }, vec![1]),
-			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 5, key: vec![103] }, vec![0, 1]),
-		]);
+		fn test_with_zero(zero: u64) {
+			let (backend, storage, changes, config) = prepare_for_build(zero);
+			let parent = AnchorBlockId { hash: Default::default(), number: zero + 4 };
+			let changes_trie_nodes = prepare_input(
+				&backend,
+				&storage,
+				configuration_range(&config, zero),
+				&changes,
+				&parent,
+			).unwrap();
+			assert_eq!(changes_trie_nodes.collect::<Vec<InputPair<u64>>>(), vec![
+				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 5, key: vec![100] }, vec![0, 2, 3]),
+				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 5, key: vec![101] }, vec![1]),
+				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 5, key: vec![103] }, vec![0, 1]),
+			]);
+		}
+
+		test_with_zero(0);
+		test_with_zero(16);
+		test_with_zero(17);
 	}
 
 	#[test]
 	fn build_changes_trie_nodes_on_digest_block_l1() {
-		let (backend, storage, changes, config) = prepare_for_build();
-		let parent = AnchorBlockId { hash: Default::default(), number: 3 };
-		let changes_trie_nodes = prepare_input(
-			&backend,
-			&storage,
-			configuration_range(&config, 0), // TODO: test other cases
-			&changes,
-			&parent,
-		).unwrap();
-		assert_eq!(changes_trie_nodes.collect::<Vec<InputPair<u64>>>(), vec![
-			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![100] }, vec![0, 2, 3]),
-			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![101] }, vec![1]),
-			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![103] }, vec![0, 1]),
+		fn test_with_zero(zero: u64) {
+			let (backend, storage, changes, config) = prepare_for_build(zero);
+			let parent = AnchorBlockId { hash: Default::default(), number: zero + 3 };
+			let changes_trie_nodes = prepare_input(
+				&backend,
+				&storage,
+				configuration_range(&config, zero),
+				&changes,
+				&parent,
+			).unwrap();
+			assert_eq!(changes_trie_nodes.collect::<Vec<InputPair<u64>>>(), vec![
+				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 4, key: vec![100] }, vec![0, 2, 3]),
+				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 4, key: vec![101] }, vec![1]),
+				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 4, key: vec![103] }, vec![0, 1]),
 
-			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![100] }, vec![1, 3]),
-			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![101] }, vec![1]),
-			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![102] }, vec![2]),
-			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![105] }, vec![1, 3]),
-		]);
+				InputPair::DigestIndex(DigestIndex { block: zero + 4, key: vec![100] }, vec![zero + 1, zero + 3]),
+				InputPair::DigestIndex(DigestIndex { block: zero + 4, key: vec![101] }, vec![zero + 1]),
+				InputPair::DigestIndex(DigestIndex { block: zero + 4, key: vec![102] }, vec![zero + 2]),
+				InputPair::DigestIndex(DigestIndex { block: zero + 4, key: vec![105] }, vec![zero + 1, zero + 3]),
+			]);
+		}
+
+		test_with_zero(0);
+		test_with_zero(16);
+		test_with_zero(17);
 	}
 
 	#[test]
 	fn build_changes_trie_nodes_on_digest_block_l2() {
-		let (backend, storage, changes, config) = prepare_for_build();
-		let parent = AnchorBlockId { hash: Default::default(), number: 15 };
-		let changes_trie_nodes = prepare_input(
-			&backend,
-			&storage,
-			configuration_range(&config, 0), // TODO: test other cases
-			&changes,
-			&parent,
-		).unwrap();
-		assert_eq!(changes_trie_nodes.collect::<Vec<InputPair<u64>>>(), vec![
-			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 16, key: vec![100] }, vec![0, 2, 3]),
-			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 16, key: vec![101] }, vec![1]),
-			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 16, key: vec![103] }, vec![0, 1]),
+		fn test_with_zero(zero: u64) {
+			let (backend, storage, changes, config) = prepare_for_build(zero);
+			let parent = AnchorBlockId { hash: Default::default(), number: zero + 15 };
+			let changes_trie_nodes = prepare_input(
+				&backend,
+				&storage,
+				configuration_range(&config, zero),
+				&changes,
+				&parent,
+			).unwrap();
+			assert_eq!(changes_trie_nodes.collect::<Vec<InputPair<u64>>>(), vec![
+				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 16, key: vec![100] }, vec![0, 2, 3]),
+				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 16, key: vec![101] }, vec![1]),
+				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 16, key: vec![103] }, vec![0, 1]),
 
-			InputPair::DigestIndex(DigestIndex { block: 16, key: vec![100] }, vec![4]),
-			InputPair::DigestIndex(DigestIndex { block: 16, key: vec![101] }, vec![4]),
-			InputPair::DigestIndex(DigestIndex { block: 16, key: vec![102] }, vec![4]),
-			InputPair::DigestIndex(DigestIndex { block: 16, key: vec![103] }, vec![4]),
-			InputPair::DigestIndex(DigestIndex { block: 16, key: vec![105] }, vec![4, 8]),
-		]);
+				InputPair::DigestIndex(DigestIndex { block: zero + 16, key: vec![100] }, vec![zero + 4]),
+				InputPair::DigestIndex(DigestIndex { block: zero + 16, key: vec![101] }, vec![zero + 4]),
+				InputPair::DigestIndex(DigestIndex { block: zero + 16, key: vec![102] }, vec![zero + 4]),
+				InputPair::DigestIndex(DigestIndex { block: zero + 16, key: vec![103] }, vec![zero + 4]),
+				InputPair::DigestIndex(DigestIndex { block: zero + 16, key: vec![105] }, vec![zero + 4, zero + 8]),
+			]);
+		}
+
+		test_with_zero(0);
+		test_with_zero(16);
+		test_with_zero(17);
 	}
 
 	#[test]
 	fn build_changes_trie_nodes_on_skewed_digest_block() {
-		let (backend, storage, changes, config) = prepare_for_build();
-		let parent = AnchorBlockId { hash: Default::default(), number: 10 };
+		fn test_with_zero(zero: u64) {
+			let (backend, storage, changes, config) = prepare_for_build(zero);
+			let parent = AnchorBlockId { hash: Default::default(), number: zero + 10 };
 
-		let mut configuration_range = configuration_range(&config, 0); // TODO: test other cases
-		let changes_trie_nodes = prepare_input(
-			&backend,
-			&storage,
-			configuration_range.clone(),
-			&changes,
-			&parent,
-		).unwrap();
-		assert_eq!(changes_trie_nodes.collect::<Vec<InputPair<u64>>>(), vec![
-			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 11, key: vec![100] }, vec![0, 2, 3]),
-			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 11, key: vec![101] }, vec![1]),
-			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 11, key: vec![103] }, vec![0, 1]),
-		]);
+			let mut configuration_range = configuration_range(&config, zero);
+			let changes_trie_nodes = prepare_input(
+				&backend,
+				&storage,
+				configuration_range.clone(),
+				&changes,
+				&parent,
+			).unwrap();
+			assert_eq!(changes_trie_nodes.collect::<Vec<InputPair<u64>>>(), vec![
+				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 11, key: vec![100] }, vec![0, 2, 3]),
+				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 11, key: vec![101] }, vec![1]),
+				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 11, key: vec![103] }, vec![0, 1]),
+			]);
 
-		configuration_range.end = Some(11);
-		let changes_trie_nodes = prepare_input(
-			&backend,
-			&storage,
-			configuration_range,
-			&changes,
-			&parent,
-		).unwrap();
-		assert_eq!(changes_trie_nodes.collect::<Vec<InputPair<u64>>>(), vec![
-			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 11, key: vec![100] }, vec![0, 2, 3]),
-			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 11, key: vec![101] }, vec![1]),
-			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 11, key: vec![103] }, vec![0, 1]),
+			configuration_range.end = Some(zero + 11);
+			let changes_trie_nodes = prepare_input(
+				&backend,
+				&storage,
+				configuration_range,
+				&changes,
+				&parent,
+			).unwrap();
+			assert_eq!(changes_trie_nodes.collect::<Vec<InputPair<u64>>>(), vec![
+				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 11, key: vec![100] }, vec![0, 2, 3]),
+				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 11, key: vec![101] }, vec![1]),
+				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 11, key: vec![103] }, vec![0, 1]),
 
-			InputPair::DigestIndex(DigestIndex { block: 11, key: vec![100] }, vec![4]),
-			InputPair::DigestIndex(DigestIndex { block: 11, key: vec![101] }, vec![4]),
-			InputPair::DigestIndex(DigestIndex { block: 11, key: vec![102] }, vec![4]),
-			InputPair::DigestIndex(DigestIndex { block: 11, key: vec![103] }, vec![4]),
-			InputPair::DigestIndex(DigestIndex { block: 11, key: vec![105] }, vec![4, 8]),
-		]);
+				InputPair::DigestIndex(DigestIndex { block: zero + 11, key: vec![100] }, vec![zero + 4]),
+				InputPair::DigestIndex(DigestIndex { block: zero + 11, key: vec![101] }, vec![zero + 4]),
+				InputPair::DigestIndex(DigestIndex { block: zero + 11, key: vec![102] }, vec![zero + 4]),
+				InputPair::DigestIndex(DigestIndex { block: zero + 11, key: vec![103] }, vec![zero + 4]),
+				InputPair::DigestIndex(DigestIndex { block: zero + 11, key: vec![105] }, vec![zero + 4, zero + 8]),
+			]);
+		}
+
+		test_with_zero(0);
+		test_with_zero(16);
+		test_with_zero(17);
 	}
 
 	#[test]
 	fn build_changes_trie_nodes_ignores_temporary_storage_values() {
-		let (backend, storage, mut changes, config) = prepare_for_build();
+		fn test_with_zero(zero: u64) {
+			let (backend, storage, mut changes, config) = prepare_for_build(zero);
 
-		// 110: missing from backend, set to None in overlay
-		changes.prospective.top.insert(vec![110], OverlayedValue {
-			value: None,
-			extrinsics: Some(vec![1].into_iter().collect())
-		});
+			// 110: missing from backend, set to None in overlay
+			changes.prospective.top.insert(vec![110], OverlayedValue {
+				value: None,
+				extrinsics: Some(vec![1].into_iter().collect())
+			});
 
-		let parent = AnchorBlockId { hash: Default::default(), number: 3 };
-		let changes_trie_nodes = prepare_input(
-			&backend,
-			&storage,
-			configuration_range(&config, 0), // TODO: test other cases
-			&changes,
-			&parent,
-		).unwrap();
-		assert_eq!(changes_trie_nodes.collect::<Vec<InputPair<u64>>>(), vec![
-			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![100] }, vec![0, 2, 3]),
-			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![101] }, vec![1]),
-			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![103] }, vec![0, 1]),
+			let parent = AnchorBlockId { hash: Default::default(), number: zero + 3 };
+			let changes_trie_nodes = prepare_input(
+				&backend,
+				&storage,
+				configuration_range(&config, zero),
+				&changes,
+				&parent,
+			).unwrap();
+			assert_eq!(changes_trie_nodes.collect::<Vec<InputPair<u64>>>(), vec![
+				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 4, key: vec![100] }, vec![0, 2, 3]),
+				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 4, key: vec![101] }, vec![1]),
+				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 4, key: vec![103] }, vec![0, 1]),
 
-			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![100] }, vec![1, 3]),
-			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![101] }, vec![1]),
-			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![102] }, vec![2]),
-			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![105] }, vec![1, 3]),
-		]);
+				InputPair::DigestIndex(DigestIndex { block: zero + 4, key: vec![100] }, vec![zero + 1, zero + 3]),
+				InputPair::DigestIndex(DigestIndex { block: zero + 4, key: vec![101] }, vec![zero + 1]),
+				InputPair::DigestIndex(DigestIndex { block: zero + 4, key: vec![102] }, vec![zero + 2]),
+				InputPair::DigestIndex(DigestIndex { block: zero + 4, key: vec![105] }, vec![zero + 1, zero + 3]),
+			]);
+		}
+
+		test_with_zero(0);
+		test_with_zero(16);
+		test_with_zero(17);
 	}
 }
