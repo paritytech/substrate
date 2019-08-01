@@ -222,7 +222,7 @@ pub trait StorageValue<T: codec::Codec> {
 	/// `T` is required to implement `codec::EncodeAppend`.
 	fn safe_append<'a, S: HashedStorage<Twox128>, I>(
 		items: &'a[I],
-		storage: &mut S
+		storage: &mut S,
 	) where
 		T: codec::EncodeAppend<Item=I> + From<&'a[I]>,
 		I: 'a + codec::Encode + Clone,
