@@ -837,7 +837,7 @@ fn claim_slot(
 	let threshold = calculate_threshold(c, authorities, authority_index);
 
 	get_keypair(key)
-		.vrf_sign_after_check(transcript, |inout| check(inout, threshold))
+		.vrf_sign_n_check(transcript, |inout| check(inout, threshold))
 		.map(|s|(s, authority_index))
 }
 
