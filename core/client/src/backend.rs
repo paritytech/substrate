@@ -216,6 +216,16 @@ pub trait OffchainStorage: Clone + Send + Sync {
 	) -> bool;
 }
 
+/// Changes trie configuration range.
+pub struct ChangesTrieConfigurationRange<Block: BlockT> {
+	/// Zero block of this configuration. First trie that uses this configuration is build at the next block.
+	pub zero: (NumberFor<Block>, Block::Hash),
+	/// End block where last trie that uses this configuration has been build. None if configuration is active.
+	pub end: Option<(NumberFor<Block>, Block::Hash)>,
+	/// Configuration itself. None if changes tries are disabled within this range.
+	pub config: Option<ChangesTrieConfiguration>,
+}
+
 /// Changes trie storage that supports pruning.
 pub trait PrunableStateChangesTrieStorage<Block: BlockT, H: Hasher>:
 	StateChangesTrieStorage<H, NumberFor<Block>>
@@ -223,11 +233,7 @@ pub trait PrunableStateChangesTrieStorage<Block: BlockT, H: Hasher>:
 	/// Get reference to StateChangesTrieStorage.
 	fn storage(&self) -> &dyn StateChangesTrieStorage<H, NumberFor<Block>>;
 	/// Get coniguration at given block.
-	fn configuration_at(&self, at: &BlockId<Block>) -> error::Result<(
-		(NumberFor<Block>, Block::Hash),
-		Option<(NumberFor<Block>, Block::Hash)>,
-		Option<ChangesTrieConfiguration>,
-	)>;
+	fn configuration_at(&self, at: &BlockId<Block>) -> error::Result<ChangesTrieConfigurationRange<Block>>;
 	/// Get number block of oldest, non-pruned changes trie.
 	fn oldest_changes_trie_block(
 		&self,
@@ -267,9 +273,9 @@ pub fn changes_tries_state_at_block<'a, Block: BlockT, H: Hasher>(
 		None => return Ok(None),
 	};
 
-	let ((zero, _), _, config) = storage.configuration_at(block)?;
-	match config {
-		Some(config) => Ok(Some(ChangesTrieState::new(config, zero, storage.storage()))),
+	let config_range = storage.configuration_at(block)?;
+	match config_range.config {
+		Some(config) => Ok(Some(ChangesTrieState::new(config, config_range.zero.0, storage.storage()))),
 		None => Ok(None),
 	}
 }

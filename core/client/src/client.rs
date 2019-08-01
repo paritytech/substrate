@@ -763,17 +763,17 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let mut configs = Vec::with_capacity(1);
 		let mut current = last;
 		loop {
-			let ((config_zero_number, config_zero_hash), config_end, config) = storage.configuration_at(&BlockId::Hash(current))?;
-			match config {
-				Some(config) => configs.push((config_zero_number, config_end, config)),
+			let config_range = storage.configuration_at(&BlockId::Hash(current))?;
+			match config_range.config {
+				Some(config) => configs.push((config_range.zero.0, config_range.end, config)),
 				None => return Err(error::Error::ChangesTriesNotSupported),
 			}
 
-			if config_zero_number < first {
+			if config_range.zero.0 < first {
 				break;
 			}
 
-			current = *self.backend.blockchain().expect_header(BlockId::Hash(config_zero_hash))?.parent_hash();
+			current = *self.backend.blockchain().expect_header(BlockId::Hash(config_range.zero.1))?.parent_hash();
 		}
 
 		Ok((storage, configs))

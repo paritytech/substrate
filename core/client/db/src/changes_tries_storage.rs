@@ -23,7 +23,7 @@ use parity_codec::Encode;
 use parking_lot::{RwLock, RwLockWriteGuard};
 use client::error::{Error as ClientError, Result as ClientResult};
 use trie::MemoryDB;
-use client::backend::PrunableStateChangesTrieStorage;
+use client::backend::{PrunableStateChangesTrieStorage, ChangesTrieConfigurationRange};
 use client::blockchain::{Cache, well_known_cache_keys};
 use parity_codec::Decode;
 use primitives::{H256, Blake2Hasher, ChangesTrieConfiguration, convert_hash};
@@ -157,10 +157,10 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 		};
 
 		// prune changes tries that are created using newest configuration
-		let ((activation_num, _), _, newest_config) = self.configuration_at(&BlockId::Hash(parent_hash))?;
-		if let Some(config) = newest_config {
+		let config_range = self.configuration_at(&BlockId::Hash(parent_hash))?;
+		if let Some(config) = config_range.config {
 			state_machine::prune_changes_tries(
-				activation_num,
+				config_range.zero.0,
 				&config,
 				&*self,
 				min_blocks_to_keep.into(),
@@ -186,13 +186,11 @@ where
 		self
 	}
 
-	fn configuration_at(
-		&self,
-		at: &BlockId<Block>,
-	) -> ClientResult<((NumberFor<Block>, Block::Hash), Option<(NumberFor<Block>, Block::Hash)>, Option<ChangesTrieConfiguration>)> {
+	fn configuration_at(&self, at: &BlockId<Block>) -> ClientResult<ChangesTrieConfigurationRange<Block>> {
 		self.cache
 			.get_at(&well_known_cache_keys::CHANGES_TRIE_CONFIG, at)
-			.and_then(|(number, hash, encoded)| Decode::decode(&mut &encoded[..]).map(|config| (number, hash, config)))
+			.and_then(|(zero, end, encoded)| Decode::decode(&mut &encoded[..])
+				.map(|config| ChangesTrieConfigurationRange { zero, end, config }))
 			.ok_or_else(|| ClientError::ErrorReadingChangesTriesConfig)
 	}
 
@@ -631,31 +629,31 @@ mod tests {
 		// test configuration cache
 		let storage = &backend.changes_tries_storage;
 		assert_eq!(
-			storage.configuration_at(&BlockId::Hash(block1)).unwrap().2,
+			storage.configuration_at(&BlockId::Hash(block1)).unwrap().config,
 			config_at_1.clone(),
 		);
 		assert_eq!(
-			storage.configuration_at(&BlockId::Hash(block2)).unwrap().2,
+			storage.configuration_at(&BlockId::Hash(block2)).unwrap().config,
 			config_at_1.clone(),
 		);
 		assert_eq!(
-			storage.configuration_at(&BlockId::Hash(block3)).unwrap().2,
+			storage.configuration_at(&BlockId::Hash(block3)).unwrap().config,
 			config_at_3.clone(),
 		);
 		assert_eq!(
-			storage.configuration_at(&BlockId::Hash(block4)).unwrap().2,
+			storage.configuration_at(&BlockId::Hash(block4)).unwrap().config,
 			config_at_3.clone(),
 		);
 		assert_eq!(
-			storage.configuration_at(&BlockId::Hash(block5)).unwrap().2,
+			storage.configuration_at(&BlockId::Hash(block5)).unwrap().config,
 			config_at_5.clone(),
 		);
 		assert_eq!(
-			storage.configuration_at(&BlockId::Hash(block6)).unwrap().2,
+			storage.configuration_at(&BlockId::Hash(block6)).unwrap().config,
 			config_at_5.clone(),
 		);
 		assert_eq!(
-			storage.configuration_at(&BlockId::Hash(block7)).unwrap().2,
+			storage.configuration_at(&BlockId::Hash(block7)).unwrap().config,
 			config_at_7.clone(),
 		);
 	}
