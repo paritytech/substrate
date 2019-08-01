@@ -71,9 +71,6 @@ pub struct OverlayedValue {
 /// History of value that are related to a state history (eg field `history` of
 /// an `OverlayedChangeSet`).
 ///
-/// First field is the current size of the history.
-/// Second field are statically allocated values for performance purpose.
-/// Third field are dynamically allocated values.
 /// Values are always paired with a state history index.
 #[derive(Debug, Clone)]
 #[cfg_attr(test, derive(PartialEq))]
@@ -371,6 +368,7 @@ impl History<OverlayedValue> {
 
 		}
 	}
+
 }
 
 impl OverlayedChangeSet {
@@ -421,7 +419,6 @@ impl OverlayedChangeSet {
 	/// A transaction is always running (history always end with pending).
 	pub fn discard_transaction(&mut self) {
 		let mut i = self.history.len();
-		// revert state to previuos pending (or create new pending)
 		while i > 0 {
 			i -= 1;
 			match self.history[i] {
@@ -444,14 +441,14 @@ impl OverlayedChangeSet {
 		while i > 0 {
 			i -= 1;
 			match self.history[i] {
-				TransactionState::Dropped => (), 
+				TransactionState::Prospective
+				| TransactionState::Dropped => (), 
 				TransactionState::Pending => self.history[i] = TransactionState::Prospective,
 				TransactionState::TxPending => {
 					self.history[i] = TransactionState::Prospective;
 					break;
 				},
-				TransactionState::Prospective
-				| TransactionState::Committed => break,
+				TransactionState::Committed => break,
 			}
 		}
 		self.history.push(TransactionState::Pending);
@@ -726,6 +723,12 @@ impl OverlayedChanges {
 			false => None,
 		}
 	}
+
+	/// Iterator over current state of the overlay.
+	pub fn top_iter(&self) -> impl Iterator<Item = (&[u8], Option<&[u8]>)> {
+		self.changes.top_iter()
+	}
+
 }
 
 #[cfg(test)]
