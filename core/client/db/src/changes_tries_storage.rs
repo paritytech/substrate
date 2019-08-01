@@ -171,7 +171,7 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 				|node| tx.delete(self.changes_tries_column, node.as_ref()));
 		}
 
-		// TODO: prune tries that were created using previous configurations
+		// TODO (#3282): prune tries that were created using previous configurations
 
 		Ok(())
 	}

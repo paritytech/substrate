@@ -521,7 +521,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			None => return Ok(None),
 		};
 
-		// TODO: we only work with the last config range here!!! Need to stabilize pruning before fixing this.
+		// TODO (#3282): we only work with the last config range here!!! Need to stabilize pruning before fixing this.
 		match configs.pop() {
 			Some((zero, _, config)) => {
 				let finalized_number = self.backend.blockchain().info().finalized_number;
