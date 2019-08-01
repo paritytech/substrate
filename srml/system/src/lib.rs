@@ -1012,6 +1012,26 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 	}
 }
 
+/// Nonce check and increment to give replay protection for transactions.
+#[derive(Default, Encode, Decode, Clone, Eq, PartialEq)]
+pub struct CheckGenesis<T: Trait + Send + Sync>(rstd::marker::PhantomData<T>);
+
+#[cfg(feature = "std")]
+impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckGenesis<T> {
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		Ok(())
+	}
+}
+
+impl<T: Trait + Send + Sync> SignedExtension for CheckGenesis<T> {
+	type AccountId = T::AccountId;
+	type Call = T::Call;
+	type AdditionalSigned = T::Hash;
+	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str> {
+		Ok(<Module<T>>::block_hash(Zero::zero()))
+	}
+}
+
 pub struct ChainContext<T>(::rstd::marker::PhantomData<T>);
 impl<T> Default for ChainContext<T> {
 	fn default() -> Self {
