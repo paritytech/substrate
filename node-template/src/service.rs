@@ -68,7 +68,7 @@ construct_service_factory! {
 			},
 		AuthoritySetup = {
 			|service: Self::FullService| {
-				if let Some(key) = service.authority_key() {
+				if let Some(key) = None::<aura_primitives::sr25519::AuthorityPair> /* service.authority_key() */ {
 					info!("Using authority key {}", key.public());
 					let proposer = ProposerFactory {
 						client: service.client(),

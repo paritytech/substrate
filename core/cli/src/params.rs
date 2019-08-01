@@ -426,14 +426,14 @@ pub struct RunCmd {
 	/// Use interactive shell for entering the password used by the keystore.
 	#[structopt(
 		long = "password-interactive",
-		raw(conflicts_with_all = "&[ \"password\", \"password-filename\" ]")
+		raw(conflicts_with_all = "&[ \"password\", \"password_filename\" ]")
 	)]
 	pub password_interactive: bool,
 
 	/// Password used by the keystore.
 	#[structopt(
 		long = "password",
-		raw(conflicts_with_all = "&[ \"password-interactive\", \"password-filename\" ]")
+		raw(conflicts_with_all = "&[ \"password_interactive\", \"password_filename\" ]")
 	)]
 	pub password: Option<String>,
 
@@ -442,7 +442,7 @@ pub struct RunCmd {
 		long = "password-filename",
 		value_name = "PATH",
 		parse(from_os_str),
-		raw(conflicts_with_all = "&[ \"password-interactive\", \"password\" ]")
+		raw(conflicts_with_all = "&[ \"password_interactive\", \"password\" ]")
 	)]
 	pub password_filename: Option<PathBuf>
 }
@@ -463,7 +463,7 @@ lazy_static::lazy_static! {
 			let conflicts_with = keyring::Sr25519Keyring::iter()
 				.filter(|b| a != *b)
 				.map(|b| b.to_string().to_lowercase())
-				.chain(["name", "key"].iter().map(ToString::to_string))
+				.chain(std::iter::once("name".to_string()))
 				.collect::<Vec<_>>();
 			let name = a.to_string().to_lowercase();
 
@@ -505,6 +505,7 @@ impl AugmentClap for Keyring {
 					.long(&a.name)
 					.help(&a.help)
 					.conflicts_with_all(&conflicts_with_strs)
+					.requires("dev")
 					.takes_value(false)
 			)
 		})
