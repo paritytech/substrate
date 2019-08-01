@@ -374,12 +374,10 @@ define_env!(Env, <E: Ext>,
 	// Instantiate a contract with the specified code hash.
 	//
 	// This function creates an account and executes the constructor defined in the code specified
-	// by the code hash. After the execution, the returned buffer is saved as the code of the
-	// created account.
+	// by the code hash.
 	//
-	// Returns 0 on the successful contract creation and puts the address
-	// of the created contract into the scratch buffer.
-	// Otherwise, returns non-zero value and clears the scratch buffer.
+	// Returns 0 on the successful contract creation and puts the address of the created contract
+	// into the scratch buffer. Otherwise, returns non-zero value and clears the scratch buffer.
 	//
 	// - code_hash_ptr: a pointer to the buffer that contains the initializer code.
 	// - code_hash_len: length of the initializer code buffer.
