@@ -929,7 +929,10 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			let changes_trie_cache_ops = self.changes_tries_storage.commit(
 				&mut transaction,
 				changes_trie_updates,
-				cache::ComplexBlockId::new(*header.parent_hash(), if number.is_zero() { Zero::zero() } else { number - One::one() }),
+				cache::ComplexBlockId::new(
+					*header.parent_hash(),
+					if number.is_zero() { Zero::zero() } else { number - One::one() },
+				),
 				cache::ComplexBlockId::new(hash, number),
 				finalized,
 				changes_trie_config_update,
@@ -992,7 +995,16 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 
 		let write_result = self.storage.db.write(transaction).map_err(db_err);
 
-		if let Some((number, hash, enacted, retracted, displaced_leaf, is_best, mut cache, changes_trie_cache_ops)) = imported {
+		if let Some((
+			number,
+			hash,
+			enacted,
+			retracted,
+			displaced_leaf,
+			is_best,
+			mut cache,
+			changes_trie_cache_ops,
+		)) = imported {
 			if let Err(e) = write_result {
 				let mut leaves = self.blockchain.leaves.write();
 				let mut undo = leaves.undo();

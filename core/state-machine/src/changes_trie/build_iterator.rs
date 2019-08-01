@@ -215,10 +215,26 @@ mod tests {
 			assert_eq!(digest_build_iterator_basic(0, 16, zero, zero + 64), empty, "digest_interval is 0");
 			assert_eq!(digest_build_iterator_basic(1, 16, zero, zero + 64), empty, "digest_interval is 1");
 			assert_eq!(digest_build_iterator_basic(4, 0, zero, zero + 64), empty, "digest_levels is 0");
-			assert_eq!(digest_build_iterator_basic(4, 16, zero, zero + 1), empty, "digest is not required for this block");
-			assert_eq!(digest_build_iterator_basic(4, 16, zero, zero + 2), empty, "digest is not required for this block");
-			assert_eq!(digest_build_iterator_basic(4, 16, zero, zero + 15), empty, "digest is not required for this block");
-			assert_eq!(digest_build_iterator_basic(4, 16, zero, zero + 17), empty, "digest is not required for this block");
+			assert_eq!(
+				digest_build_iterator_basic(4, 16, zero, zero + 1),
+				empty,
+				"digest is not required for this block",
+			);
+			assert_eq!(
+				digest_build_iterator_basic(4, 16, zero, zero + 2),
+				empty,
+				"digest is not required for this block",
+			);
+			assert_eq!(
+				digest_build_iterator_basic(4, 16, zero, zero + 15),
+				empty,
+				"digest is not required for this block",
+			);
+			assert_eq!(
+				digest_build_iterator_basic(4, 16, zero, zero + 17),
+				empty,
+				"digest is not required for this block",
+			);
 			assert_eq!(digest_build_iterator_basic(
 				::std::u32::MAX / 2 + 1,
 				16,
@@ -237,10 +253,26 @@ mod tests {
 	#[test]
 	fn suggest_digest_inclusion_returns_level1_iterator() {
 		fn test_with_zero(zero: u64) {
-			assert_eq!(digest_build_iterator_basic(16, 1, zero, zero + 16), (zero + 16, 16, 1), "!(block % interval) && first digest level == block");
-			assert_eq!(digest_build_iterator_basic(16, 1, zero, zero + 256), (zero + 256, 16, 1), "!(block % interval^2), but there's only 1 digest level");
-			assert_eq!(digest_build_iterator_basic(16, 2, zero, zero + 32), (zero + 32, 16, 1), "second level digest is not required for this block");
-			assert_eq!(digest_build_iterator_basic(16, 3, zero, zero + 4080), (zero + 4080, 16, 1), "second && third level digest are not required for this block");
+			assert_eq!(
+				digest_build_iterator_basic(16, 1, zero, zero + 16),
+				(zero + 16, 16, 1),
+				"!(block % interval) && first digest level == block",
+			);
+			assert_eq!(
+				digest_build_iterator_basic(16, 1, zero, zero + 256),
+				(zero + 256, 16, 1),
+				"!(block % interval^2), but there's only 1 digest level",
+			);
+			assert_eq!(
+				digest_build_iterator_basic(16, 2, zero, zero + 32),
+				(zero + 32, 16, 1),
+				"second level digest is not required for this block",
+			);
+			assert_eq!(
+				digest_build_iterator_basic(16, 3, zero, zero + 4080),
+				(zero + 4080, 16, 1),
+				"second && third level digest are not required for this block",
+			);
 		}
 
 		test_with_zero(0);
@@ -251,8 +283,16 @@ mod tests {
 	#[test]
 	fn suggest_digest_inclusion_returns_level2_iterator() {
 		fn test_with_zero(zero: u64) {
-			assert_eq!(digest_build_iterator_basic(16, 2, zero, zero + 256), (zero + 256, 16, 16), "second level digest");
-			assert_eq!(digest_build_iterator_basic(16, 2, zero, zero + 4096), (zero + 4096, 16, 16), "!(block % interval^3), but there's only 2 digest levels");
+			assert_eq!(
+				digest_build_iterator_basic(16, 2, zero, zero + 256),
+				(zero + 256, 16, 16),
+				"second level digest",
+			);
+			assert_eq!(
+				digest_build_iterator_basic(16, 2, zero, zero + 4096),
+				(zero + 4096, 16, 16),
+				"!(block % interval^3), but there's only 2 digest levels",
+			);
 		}
 
 		test_with_zero(0);
@@ -263,8 +303,16 @@ mod tests {
 	#[test]
 	fn suggest_digest_inclusion_returns_level3_iterator() {
 		fn test_with_zero(zero: u64) {
-			assert_eq!(digest_build_iterator_basic(16, 3, zero, zero + 4096), (zero + 4096, 16, 256), "third level digest: beginning");
-			assert_eq!(digest_build_iterator_basic(16, 3, zero, zero + 8192), (zero + 8192, 16, 256), "third level digest: next");
+			assert_eq!(
+				digest_build_iterator_basic(16, 3, zero, zero + 4096),
+				(zero + 4096, 16, 256),
+				"third level digest: beginning",
+			);
+			assert_eq!(
+				digest_build_iterator_basic(16, 3, zero, zero + 8192),
+				(zero + 8192, 16, 256),
+				"third level digest: next",
+			);
 		}
 
 		test_with_zero(0);
@@ -276,13 +324,17 @@ mod tests {
 	fn digest_iterator_returns_level1_blocks() {
 		fn test_with_zero(zero: u64) {
 			assert_eq!(digest_build_iterator_blocks(16, 1, zero, zero + 16, None),
-				[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].iter().map(|item| zero + item).collect::<Vec<_>>());
+				[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+					.iter().map(|item| zero + item).collect::<Vec<_>>());
 			assert_eq!(digest_build_iterator_blocks(16, 1, zero, zero + 256, None),
-				[241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255].iter().map(|item| zero + item).collect::<Vec<_>>());
+				[241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255]
+					.iter().map(|item| zero + item).collect::<Vec<_>>());
 			assert_eq!(digest_build_iterator_blocks(16, 2, zero, zero + 32, None),
-				[17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31].iter().map(|item| zero + item).collect::<Vec<_>>());
+				[17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
+					.iter().map(|item| zero + item).collect::<Vec<_>>());
 			assert_eq!(digest_build_iterator_blocks(16, 3, zero, zero + 4080, None),
-				[4065, 4066, 4067, 4068, 4069, 4070, 4071, 4072, 4073, 4074, 4075, 4076, 4077, 4078, 4079].iter().map(|item| zero + item).collect::<Vec<_>>());
+				[4065, 4066, 4067, 4068, 4069, 4070, 4071, 4072, 4073, 4074, 4075, 4076, 4077, 4078, 4079]
+					.iter().map(|item| zero + item).collect::<Vec<_>>());
 		}
 
 		test_with_zero(0);

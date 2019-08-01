@@ -56,7 +56,9 @@ impl ChangesTrieConfiguration {
 		block: Number,
 	) -> bool
 		where
-			Number: From<u32> + PartialEq + ::rstd::ops::Rem<Output=Number> + ::rstd::ops::Sub<Output=Number> + ::rstd::cmp::PartialOrd + Zero,
+			Number: From<u32> + PartialEq +
+			::rstd::ops::Rem<Output=Number> + ::rstd::ops::Sub<Output=Number> +
+			::rstd::cmp::PartialOrd + Zero,
 	{
 		block > zero
 			&& self.is_digest_build_enabled()
@@ -90,7 +92,9 @@ impl ChangesTrieConfiguration {
 		block: Number,
 	) -> Option<Number>
 		where
-			Number: Clone + From<u32> + PartialEq + ::rstd::ops::Add<Output=Number> + ::rstd::ops::Sub<Output=Number> + ::rstd::ops::Div<Output=Number> + ::rstd::ops::Mul<Output=Number> + Zero,
+			Number: Clone + From<u32> + PartialEq +
+			::rstd::ops::Add<Output=Number> + ::rstd::ops::Sub<Output=Number> +
+			::rstd::ops::Div<Output=Number> + ::rstd::ops::Mul<Output=Number> + Zero,
 	{
 		if !self.is_digest_build_enabled() {
 			return None;
@@ -112,7 +116,9 @@ impl ChangesTrieConfiguration {
 		block: Number,
 	) -> Option<Number>
 		where
-			Number: Clone + From<u32> + PartialEq + ::rstd::ops::Add<Output=Number> + ::rstd::ops::Sub<Output=Number> + ::rstd::ops::Div<Output=Number> + ::rstd::ops::Mul<Output=Number>,
+			Number: Clone + From<u32> + PartialEq +
+			::rstd::ops::Add<Output=Number> + ::rstd::ops::Sub<Output=Number> +
+			::rstd::ops::Div<Output=Number> + ::rstd::ops::Mul<Output=Number>,
 	{
 		if !self.is_digest_build_enabled() {
 			return None;
@@ -137,7 +143,9 @@ impl ChangesTrieConfiguration {
 	/// )
 	pub fn digest_level_at_block<Number>(&self, zero: Number, block: Number) -> Option<(u32, u32, u32)>
 		where
-			Number: Clone + From<u32> + PartialEq + ::rstd::ops::Rem<Output=Number> + ::rstd::ops::Sub<Output=Number> + ::rstd::cmp::PartialOrd + Zero,
+			Number: Clone + From<u32> + PartialEq +
+			::rstd::ops::Rem<Output=Number> + ::rstd::ops::Sub<Output=Number> +
+			::rstd::cmp::PartialOrd + Zero,
 	{
 		if !self.is_digest_build_required_at_block(zero.clone(), block.clone()) {
 			return None;

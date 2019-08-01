@@ -405,33 +405,63 @@ mod tests {
 	fn drilldown_iterator_works() {
 		let (config, storage) = prepare_for_drilldown();
 		let drilldown_result = key_changes::<Blake2Hasher, u64>(
-			configuration_range(&config, 0), &storage, 1, &AnchorBlockId { hash: Default::default(), number: 16 }, 16, &[42])
-			.and_then(Result::from_iter);
+			configuration_range(&config, 0),
+			&storage,
+			1,
+			&AnchorBlockId { hash: Default::default(), number: 16 },
+			16,
+			&[42],
+		).and_then(Result::from_iter);
 		assert_eq!(drilldown_result, Ok(vec![(8, 2), (8, 1), (6, 3), (3, 0)]));
 
 		let drilldown_result = key_changes::<Blake2Hasher, u64>(
-			configuration_range(&config, 0), &storage, 1, &AnchorBlockId { hash: Default::default(), number: 2 }, 4, &[42])
-			.and_then(Result::from_iter);
+			configuration_range(&config, 0),
+			&storage,
+			1,
+			&AnchorBlockId { hash: Default::default(), number: 2 },
+			4,
+			&[42],
+		).and_then(Result::from_iter);
 		assert_eq!(drilldown_result, Ok(vec![]));
 
 		let drilldown_result = key_changes::<Blake2Hasher, u64>(
-			configuration_range(&config, 0), &storage, 1, &AnchorBlockId { hash: Default::default(), number: 3 }, 4, &[42])
-			.and_then(Result::from_iter);
+			configuration_range(&config, 0),
+			&storage,
+			1,
+			&AnchorBlockId { hash: Default::default(), number: 3 },
+			4,
+			&[42],
+		).and_then(Result::from_iter);
 		assert_eq!(drilldown_result, Ok(vec![(3, 0)]));
 
 		let drilldown_result = key_changes::<Blake2Hasher, u64>(
-			configuration_range(&config, 0), &storage, 1, &AnchorBlockId { hash: Default::default(), number: 7 }, 7, &[42])
-			.and_then(Result::from_iter);
+			configuration_range(&config, 0),
+			&storage,
+			1,
+			&AnchorBlockId { hash: Default::default(), number: 7 },
+			7,
+			&[42],
+		).and_then(Result::from_iter);
 		assert_eq!(drilldown_result, Ok(vec![(6, 3), (3, 0)]));
 
 		let drilldown_result = key_changes::<Blake2Hasher, u64>(
-			configuration_range(&config, 0), &storage, 7, &AnchorBlockId { hash: Default::default(), number: 8 }, 8, &[42])
-			.and_then(Result::from_iter);
+			configuration_range(&config, 0),
+			&storage,
+			7,
+			&AnchorBlockId { hash: Default::default(), number: 8 },
+			8,
+			&[42],
+		).and_then(Result::from_iter);
 		assert_eq!(drilldown_result, Ok(vec![(8, 2), (8, 1)]));
 
 		let drilldown_result = key_changes::<Blake2Hasher, u64>(
-			configuration_range(&config, 0), &storage, 5, &AnchorBlockId { hash: Default::default(), number: 7 }, 8, &[42])
-			.and_then(Result::from_iter);
+			configuration_range(&config, 0),
+			&storage,
+			5,
+			&AnchorBlockId { hash: Default::default(), number: 7 },
+			8,
+			&[42],
+		).and_then(Result::from_iter);
 		assert_eq!(drilldown_result, Ok(vec![(6, 3)]));
 	}
 
@@ -441,17 +471,34 @@ mod tests {
 		storage.clear_storage();
 
 		assert!(key_changes::<Blake2Hasher, u64>(
-			configuration_range(&config, 0), &storage, 1, &AnchorBlockId { hash: Default::default(), number: 100 }, 1000, &[42])
-			.and_then(|i| i.collect::<Result<Vec<_>, _>>()).is_err());
+			configuration_range(&config, 0),
+			&storage,
+			1,
+			&AnchorBlockId { hash: Default::default(), number: 100 },
+			1000,
+			&[42],
+		).and_then(|i| i.collect::<Result<Vec<_>, _>>()).is_err());
 	}
 
 	#[test]
 	fn drilldown_iterator_fails_when_range_is_invalid() {
 		let (config, storage) = prepare_for_drilldown();
 		assert!(key_changes::<Blake2Hasher, u64>(
-			configuration_range(&config, 0), &storage, 1, &AnchorBlockId { hash: Default::default(), number: 100 }, 50, &[42]).is_err());
+			configuration_range(&config, 0),
+			&storage,
+			1,
+			&AnchorBlockId { hash: Default::default(), number: 100 },
+			50,
+			&[42],
+		).is_err());
 		assert!(key_changes::<Blake2Hasher, u64>(
-			configuration_range(&config, 0), &storage, 20, &AnchorBlockId { hash: Default::default(), number: 10 }, 100, &[42]).is_err());
+			configuration_range(&config, 0),
+			&storage,
+			20,
+			&AnchorBlockId { hash: Default::default(), number: 10 },
+			100,
+			&[42],
+		).is_err());
 	}
 
 

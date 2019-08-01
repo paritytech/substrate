@@ -180,7 +180,10 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 	}
 }
 
-fn genesis_config(changes_trie_config: Option<ChangesTrieConfiguration>, heap_pages_override: Option<u64>) -> GenesisConfig {
+fn genesis_config(
+	changes_trie_config: Option<ChangesTrieConfiguration>,
+	heap_pages_override: Option<u64>,
+) -> GenesisConfig {
 	GenesisConfig::new(
 		changes_trie_config,
 		vec![

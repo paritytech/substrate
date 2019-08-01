@@ -986,7 +986,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		}
 
 		// FIXME #1232: correct path logic for when to execute this function
-		let (storage_update,changes_update,storage_changes) = self.block_execution(&operation.op, &import_headers, origin, hash, parent_hash, body.clone())?;
+		let (storage_update,changes_update,storage_changes) =
+			self.block_execution(&operation.op, &import_headers, origin, hash, parent_hash, body.clone())?;
 
 		let is_new_best = finalized || match fork_choice {
 			ForkChoiceStrategy::LongestChain => import_headers.post().number() > &last_best_number,

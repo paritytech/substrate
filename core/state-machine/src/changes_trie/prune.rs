@@ -35,7 +35,8 @@ pub fn oldest_non_pruned_trie<Number: BlockNumber>(
 	best_finalized_block: Number,
 ) -> Number {
 	let max_digest_interval = config.max_digest_interval();
-	let best_finalized_block_rem = (best_finalized_block.clone() - config_activation_block.clone()) % max_digest_interval.into();
+	let best_finalized_block_rem =
+		(best_finalized_block.clone() - config_activation_block.clone()) % max_digest_interval.into();
 	let max_digest_block = best_finalized_block - best_finalized_block_rem;
 	match pruning_range(config_activation_block.clone(), config, min_blocks_to_keep, max_digest_block) {
 		Some((_, last_pruned_block)) => last_pruned_block + One::one(),
@@ -56,7 +57,8 @@ pub fn prune<S: Storage<H, Number>, H: Hasher, Number: BlockNumber, F: FnMut(H::
 	mut remove_trie_node: F,
 ) {
 	// select range for pruning
-	let (first, last) = match pruning_range(config_activation_block, config, min_blocks_to_keep, current_block.number.clone()) {
+	let range = pruning_range(config_activation_block, config, min_blocks_to_keep, current_block.number.clone());
+	let (first, last) = match range {
 		Some((first, last)) => (first, last),
 		None => return,
 	};
@@ -193,7 +195,8 @@ mod tests {
 		current_block: u64,
 	) -> HashSet<H::Out> {
 		let mut pruned_trie_nodes = HashSet::new();
-		prune(zero, config, storage, min_blocks_to_keep, &AnchorBlockId { hash: Default::default(), number: current_block },
+		let anchor = AnchorBlockId { hash: Default::default(), number: current_block };
+		prune(zero, config, storage, min_blocks_to_keep, &anchor,
 			|node| { pruned_trie_nodes.insert(node); });
 		pruned_trie_nodes
 	}
@@ -204,11 +207,20 @@ mod tests {
 			let mut mdb1 = MemoryDB::<Blake2Hasher>::default();
 			let root1 = insert_into_memory_db::<Blake2Hasher, _>(&mut mdb1, vec![(vec![10], vec![20])]).unwrap();
 			let mut mdb2 = MemoryDB::<Blake2Hasher>::default();
-			let root2 = insert_into_memory_db::<Blake2Hasher, _>(&mut mdb2, vec![(vec![11], vec![21]), (vec![12], vec![22])]).unwrap();
+			let root2 = insert_into_memory_db::<Blake2Hasher, _>(
+				&mut mdb2,
+				vec![(vec![11], vec![21]), (vec![12], vec![22])],
+			).unwrap();
 			let mut mdb3 = MemoryDB::<Blake2Hasher>::default();
-			let root3 = insert_into_memory_db::<Blake2Hasher, _>(&mut mdb3, vec![(vec![13], vec![23]), (vec![14], vec![24])]).unwrap();
+			let root3 = insert_into_memory_db::<Blake2Hasher, _>(
+				&mut mdb3,
+				vec![(vec![13], vec![23]), (vec![14], vec![24])],
+			).unwrap();
 			let mut mdb4 = MemoryDB::<Blake2Hasher>::default();
-			let root4 = insert_into_memory_db::<Blake2Hasher, _>(&mut mdb4, vec![(vec![15], vec![25])]).unwrap();
+			let root4 = insert_into_memory_db::<Blake2Hasher, _>(
+				&mut mdb4,
+				vec![(vec![15], vec![25])],
+			).unwrap();
 			let storage = InMemoryStorage::new();
 			storage.insert(zero + 65, root1, mdb1);
 			storage.insert(zero + 66, root2, mdb2);
