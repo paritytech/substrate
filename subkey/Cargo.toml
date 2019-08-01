@@ -14,7 +14,7 @@ clap = { version = "~2.32", features = ["yaml"] }
 tiny-bip39 = "0.6.0"
 rustc-hex = "2.0"
 substrate-bip39 = "0.3.1"
-schnorrkel = "0.8.0"
+schnorrkel = { version = "0.8.1", features = ["preaudit_deprecated"] }
 hex = "0.3"
 hex-literal = "0.2"
 parity-codec = "4.1.1"
