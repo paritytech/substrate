@@ -329,13 +329,17 @@ be `NODE_RUNTIME`.
 [[flaming-fir]]
 === Joining the Flaming Fir Testnet
 
-Flaming Fir is the new testnet for Substrate master (2.0). Please note that master is not compatible with the BBQ-Birch, Charred-Cherry, Dried-Danta or Emberic-Elm testnets. Ensure you have the dependencies listed above before compiling.
-The master branch might have breaking changes as development progresses, therefore you should make sure you have a reasonably updated client when trying to sync Flaming Fir.
+Flaming Fir is the new testnet for Substrate master (2.0) to test the latest development features. Please note that master is not compatible with the BBQ Birch, Charred Cherry, Dried Danta or Emberic Elm testnets. Ensure you have the dependencies listed above before compiling.
+
+Since Flaming Fir is targeting the master branch we make absolutely no guarantees of stability and/or persistence of the network. We might reset the chain at any time if it is necessary to deploy new changes. Currently, the validators are running with a client built from `d013bd900`, if you build from this commit you should be able to successfully sync, later commits may not work as new breaking changes may be introduced in master.
+
+Latest known working version: `d013bd900`
 
 [source, shell]
 ----
 git clone https://github.com/paritytech/substrate.git
 cd substrate
+git checkout -b flaming-fir d013bd900
 ----
 
 You can run the tests if you like:
@@ -362,7 +366,7 @@ If you are successful, you will see your node syncing at https://telemetry.polka
 
 === Joining the Emberic Elm Testnet
 
-Emberic Elm is the testnet for Substrate 1.0. Please note that 1.0 is not compatible with the BBQ-Birch, Charred-Cherry, Dried-Danta or Flaming-Fir testnets.
+Emberic Elm is the testnet for Substrate 1.0. Please note that 1.0 is not compatible with the BBQ Birch, Charred Cherry, Dried Danta or Flaming Fir testnets.
 In order to join the Emberic Elm testnet you should build from the `v1.0` branch. Ensure you have the dependencies listed above before compiling.
 
 [source, shell]
