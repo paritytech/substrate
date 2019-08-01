@@ -213,9 +213,13 @@ where
 	Reporters: IntoIterator<Item = (T::AccountId, Perbill)>,
 {
 	fn do_reward(reporters: Reporters, reward: BalanceOf<T>) -> Result<(), ()> {
+		let mut reward_pot = reward;
+
 		for (reporter, fraction) in reporters {
+			let amount = rstd::cmp::min(fraction * reward, reward_pot);
+			reward_pot -= amount;
 			// This will fail in the account is not existing ignore it for now
-			let _ = T::Currency::deposit_into_existing(&reporter, fraction * reward);
+			let _ = T::Currency::deposit_into_existing(&reporter, amount);
 		}
 		Ok(())
 	}
@@ -364,6 +368,7 @@ mod tests {
 		DS: DoSlash<Who, Perbill, Kind>,
 		DR: DoReward<Reporters, DS::SlashedAmount>,
 		AS: AfterSlash<DS::SlashedEntries, u8>,
+		DS::SlashedAmount: rstd::fmt::Debug,
 	{
 		fn slash(footprint: T::Hash, reporters: Reporters, who: Who) -> Result<(), ()> {
 			let kind = Self::kind();
@@ -398,10 +403,12 @@ mod tests {
 	#[test]
 	fn slash_should_keep_state_and_increase_slash_for_history_without_nominators() {
 		let misbehaved: Vec<u64> = (0..10).collect();
+		let reporter = (99_u64, Perbill::one());
 
 		with_externalities(&mut ExtBuilder::default()
 			.build(),
 		|| {
+			let _ = Balances::make_free_balance_be(&reporter.0, 50);
 			EXPOSURES.with(|x| {
 				for who in &misbehaved {
 					let exp = Exposure {
@@ -414,13 +421,26 @@ mod tests {
 				}
 			});
 
-			for who in &misbehaved {
-				assert_ok!(BabeEquivocationReporter::<Test>::report_equivocation(FakeProof::new(*who), vec![]));
+
+			let mut last_slash = 0;
+			let mut last_balance = 50;
+
+			// after every slash, the slash history and slash that occurred should be included in the reward
+			for (i, who) in misbehaved.iter().enumerate() {
+				let i = i as u64;
+				assert_ok!(BabeEquivocationReporter::<Test>::report_equivocation(FakeProof::new(*who), vec![reporter]));
+				let slash = Perbill::from_rational_approximation(3 * (i + 1), 2500_u64) * 1000;
+				let total_slash = slash + (slash - last_slash) * i;
+				let reward = Perbill::from_percent(10) * total_slash;
+				assert_eq!(Balances::free_balance(&reporter.0), last_balance + reward);
+				last_balance = Balances::free_balance(&reporter.0);
+				last_slash = slash;
 			}
 
 			for who in &misbehaved {
 				assert_eq!(Balances::free_balance(who), 988, "should slash 1.2%");
 			}
+
 		});
 	}
 
@@ -567,6 +587,7 @@ mod tests {
 		});
 	}
 
+	// note, this test hooks in the `staking` and uses its `AfterSlash` implementation
 	#[test]
 	fn simple_with_after_slash() {
 		with_externalities(&mut ExtBuilder::default()
@@ -641,6 +662,47 @@ mod tests {
 
 			assert_eq!(Staking::stakers(m1).total, 0);
 			assert_eq!(Staking::stakers(m2).total, 0);
+		});
+	}
+
+	#[test]
+	fn rewarding() {
+		with_externalities(&mut ExtBuilder::default()
+			.build(),
+		|| {
+
+			let m = 0;
+			let balance = u32::max_value() as u64;
+			let _ = Balances::make_free_balance_be(&m, balance);
+
+			EXPOSURES.with(|x| x.borrow_mut().insert(m, Exposure {
+				own: balance,
+				total: balance,
+				others: vec![],
+			}));
+
+			let reporters = vec![
+				(1, Perbill::from_percent(50)),
+				(2, Perbill::from_percent(20)),
+				(3, Perbill::from_percent(15)),
+				(4, Perbill::from_percent(10)),
+				(5, Perbill::from_percent(50)),
+			];
+
+			// reset balance to 1 for the reporter
+			for who in 1..=5 {
+				let _ = Balances::make_free_balance_be(&who, 1);
+			}
+
+			// slashed amount: 5153960 (0,0132 * 4294967295) will be slashed
+			// 515396 (0.1 * 5153961) will be shared among the reporters
+			assert_ok!(BabeEquivocationReporter::<Test>::report_equivocation(FakeProof::new(m), reporters));
+
+			assert_eq!(Balances::free_balance(&1), 257698 + 1);
+			assert_eq!(Balances::free_balance(&2), 103079 + 1);
+			assert_eq!(Balances::free_balance(&3), 77309 + 1);
+			assert_eq!(Balances::free_balance(&4), 51539 + 1);
+			assert_eq!(Balances::free_balance(&5), 25771 + 1, "should only get what's left in the pot; 5% not 50%");
 		});
 	}
 }
