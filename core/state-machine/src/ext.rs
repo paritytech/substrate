@@ -154,7 +154,7 @@ where
 
 		self.backend.pairs().iter()
 			.map(|&(ref k, ref v)| (k.to_vec(), Some(v.to_vec())))
-			.chain(self.overlay.changes.top_iter().map(|(k, v)| (k.clone(), v.cloned())))
+			.chain(self.overlay.changes.top_iter().map(|(k, v)| (k.to_vec(), v.map(|s| s.to_vec()))))
 			.collect::<HashMap<_, _>>()
 			.into_iter()
 			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
@@ -273,11 +273,11 @@ where
 
 		let child_delta_iter = child_storage_keys.map(|storage_key|
 			(storage_key.clone(), self.overlay.changes.child_iter(storage_key)
-				.map(|(k, v)| (k.clone(), v.cloned()))));
+				.map(|(k, v)| (k.to_vec(), v.map(|s| s.to_vec())))));
 
 
 		// compute and memoize
-		let delta = self.overlay.changes.top_iter().map(|(k, v)| (k.clone(), v.cloned()));
+		let delta = self.overlay.changes.top_iter().map(|(k, v)| (k.to_vec(), v.map(|s| s.to_vec())));
 
 		let (root, transaction) = self.backend.full_storage_root(delta, child_delta_iter);
 		self.storage_transaction = Some((transaction, root));
@@ -296,7 +296,7 @@ where
 			let storage_key = storage_key.as_ref();
 
 			let delta = self.overlay.changes.child_iter(storage_key)
-				.map(|(k, v)| (k.clone(), v.cloned()));
+				.map(|(k, v)| (k.to_vec(), v.map(|s| s.to_vec())));
 
 			let root = self.backend.child_storage_root(storage_key, delta).0;
 

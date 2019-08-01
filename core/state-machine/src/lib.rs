@@ -1168,7 +1168,7 @@ mod tests {
 
 		overlay.discard_prospective();
 		let values: HashMap<_, _>	= overlay.changes.top_iter()
-			.map(|(k, v)| (k.clone(), v.cloned())).collect();
+			.map(|(k, v)| (k.to_vec(), v.map(|s| s.to_vec()))).collect();
 		assert_eq!(
 			values,
 			map![

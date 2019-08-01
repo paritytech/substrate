@@ -458,43 +458,43 @@ impl OverlayedChangeSet {
 	}
 
 	/// Iterator over current state of the overlay.
-	pub fn top_iter_overlay(&self) -> impl Iterator<Item = (&Vec<u8>, &OverlayedValue)> {
+	pub fn top_iter_overlay(&self) -> impl Iterator<Item = (&[u8], &OverlayedValue)> {
 		self.top.iter()
 			.filter_map(move |(k, v)|
-				v.get(self.history.as_slice()).map(|v| (k, v)))
+				v.get(self.history.as_slice()).map(|v| (k.as_slice(), v)))
 	}
 
 	/// Iterator over current state of the overlay.
-	pub fn top_iter(&self) -> impl Iterator<Item = (&Vec<u8>, Option<&Vec<u8>>)> {
-		self.top_iter_overlay().map(|(k, v)| (k, v.value.as_ref()))
+	pub fn top_iter(&self) -> impl Iterator<Item = (&[u8], Option<&[u8]>)> {
+		self.top_iter_overlay().map(|(k, v)| (k, v.value.as_ref().map(|v| v.as_slice())))
 	}
 
 	/// Iterator over current state of the overlay.
 	pub fn child_iter_overlay(
 		&self,
 		storage_key: &[u8],
-	) -> impl Iterator<Item = (&Vec<u8>, &OverlayedValue)> {
+	) -> impl Iterator<Item = (&[u8], &OverlayedValue)> {
 		self.children.get(storage_key)
 			.into_iter()
 			.flat_map(move |child| child.iter()
 				.filter_map(move |(k, v)|
-					v.get(self.history.as_slice()).map(|v| (k, v)))
+					v.get(self.history.as_slice()).map(|v| (k.as_slice(), v)))
 			)
 	}
 
 	/// Iterator over current state of the overlay.
-	pub fn child_iter(&self, storage_key: &[u8]) -> impl Iterator<Item = (&Vec<u8>, Option<&Vec<u8>>)> {
-		self.child_iter_overlay(storage_key).map(|(k, v)| (k, v.value.as_ref()))
+	pub fn child_iter(&self, storage_key: &[u8]) -> impl Iterator<Item = (&[u8], Option<&[u8]>)> {
+		self.child_iter_overlay(storage_key).map(|(k, v)| (k, v.value.as_ref().map(|v| v.as_slice())))
 	}
 
 	/// Iterator over current state of the overlay.
 	pub fn children_iter_overlay(
 		&self,
-	) -> impl Iterator<Item=(&Vec<u8>, impl Iterator<Item = (&Vec<u8>, &OverlayedValue)>)> {
+	) -> impl Iterator<Item=(&[u8], impl Iterator<Item = (&[u8], &OverlayedValue)>)> {
 		self.children.iter()
-			.map(move |(storage_key, child)| (storage_key, child.iter()
+			.map(move |(storage_key, child)| (storage_key.as_slice(), child.iter()
 				.filter_map(move |(k, v)|
-					v.get(self.history.as_slice()).map(|v| (k, v)))
+					v.get(self.history.as_slice()).map(|v| (k.as_slice(), v)))
 			))
 	}
 

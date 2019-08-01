@@ -105,11 +105,11 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	/// Return a new backend with all pending value.
 	pub fn commit_all(&self) -> InMemory<H> {
 		let top = self.overlay.changes.top_iter_overlay()
-			.map(|(k, v)| (None, k.clone(), v.value.clone()));
+			.map(|(k, v)| (None, k.to_vec(), v.value.clone()));
 
 		let children = self.overlay.changes.children_iter_overlay()
 			.flat_map(|(keyspace, map)| map
-				.map(|(k, v)| (Some(keyspace.clone()), k.clone(), v.value.clone()))
+				.map(|(k, v)| (Some(keyspace.to_vec()), k.to_vec(), v.value.clone()))
 				.collect::<Vec<_>>()
 			);
 
@@ -223,7 +223,7 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 
 	fn storage_root(&mut self) -> H::Out {
 		// compute and memoize
-		let delta = self.overlay.changes.top_iter().map(|(k, v)| (k.clone(), v.cloned()));
+		let delta = self.overlay.changes.top_iter().map(|(k, v)| (k.to_vec(), v.map(|s| s.to_vec())));
 
 		self.backend.storage_root(delta).0
 	}
@@ -233,7 +233,7 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 
 		let (root, _, _) = {
 			let delta = self.overlay.changes.child_iter(storage_key)
-				.map(|(k, v)| (k.clone(), v.cloned()));
+				.map(|(k, v)| (k.to_vec(), v.map(|s| s.to_vec())));
 			self.backend.child_storage_root(storage_key, delta)
 		};
 		self.overlay.set_storage(storage_key.into(), Some(root.clone()));
