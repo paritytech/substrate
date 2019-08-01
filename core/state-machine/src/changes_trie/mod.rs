@@ -108,7 +108,7 @@ pub struct State<'a, H, Number> {
 	/// Configuration activation block number. Zero if it is the first coonfiguration on the chain,
 	/// or number of the block that have emit NewConfiguration signal (thus activating configuration
 	/// starting from the **next** block).
-	pub config_activation_block: Number,
+	pub zero: Number,
 	/// Underlying changes tries storage reference.
 	pub storage: &'a dyn Storage<H, Number>,
 }
@@ -159,12 +159,12 @@ impl<'a, H, Number> State<'a, H, Number> {
 	/// Create state with given config and storage.
 	pub fn new(
 		config: Configuration,
-		config_activation_block: Number,
+		zero: Number,
 		storage: &'a dyn Storage<H, Number>,
 	) -> Self {
 		Self {
 			config,
-			config_activation_block,
+			zero,
 			storage,
 		}
 	}
@@ -206,7 +206,7 @@ pub fn build_changes_trie<'a, B: Backend<H>, H: Hasher, Number: BlockNumber>(
 	};
 	let config_range = ConfigurationRange {
 		config: &state.config,
-		zero: state.config_activation_block.clone(),
+		zero: state.zero.clone(),
 		end: if is_config_changed { Some(parent.number.clone() + One::one()) } else { None },
 	};
 

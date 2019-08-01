@@ -29,18 +29,18 @@ use crate::changes_trie::storage::TrieBackendAdapter;
 /// given changes trie configuration, pruning parameter and number of
 /// best finalized block.
 pub fn oldest_non_pruned_trie<Number: BlockNumber>(
-	config_activation_block: Number,
+	zero: Number,
 	config: &Configuration,
 	min_blocks_to_keep: Number,
 	best_finalized_block: Number,
 ) -> Number {
 	let max_digest_interval = config.max_digest_interval();
 	let best_finalized_block_rem =
-		(best_finalized_block.clone() - config_activation_block.clone()) % max_digest_interval.into();
+		(best_finalized_block.clone() - zero.clone()) % max_digest_interval.into();
 	let max_digest_block = best_finalized_block - best_finalized_block_rem;
-	match pruning_range(config_activation_block.clone(), config, min_blocks_to_keep, max_digest_block) {
+	match pruning_range(zero.clone(), config, min_blocks_to_keep, max_digest_block) {
 		Some((_, last_pruned_block)) => last_pruned_block + One::one(),
-		None => config_activation_block + One::one(),
+		None => zero + One::one(),
 	}
 }
 
@@ -49,7 +49,7 @@ pub fn oldest_non_pruned_trie<Number: BlockNumber>(
 /// `min_blocks_to_keep` blocks. We only prune changes tries at `max_digest_interval`
 /// ranges.
 pub fn prune<S: Storage<H, Number>, H: Hasher, Number: BlockNumber, F: FnMut(H::Out)>(
-	config_activation_block: Number,
+	zero: Number,
 	config: &Configuration,
 	storage: &S,
 	min_blocks_to_keep: Number,
@@ -57,7 +57,7 @@ pub fn prune<S: Storage<H, Number>, H: Hasher, Number: BlockNumber, F: FnMut(H::
 	mut remove_trie_node: F,
 ) {
 	// select range for pruning
-	let range = pruning_range(config_activation_block, config, min_blocks_to_keep, current_block.number.clone());
+	let range = pruning_range(zero, config, min_blocks_to_keep, current_block.number.clone());
 	let (first, last) = match range {
 		Some((first, last)) => (first, last),
 		None => return,
@@ -105,7 +105,7 @@ pub fn prune<S: Storage<H, Number>, H: Hasher, Number: BlockNumber, F: FnMut(H::
 
 /// Select blocks range (inclusive from both ends) for pruning changes tries in.
 fn pruning_range<Number: BlockNumber>(
-	config_activation_block: Number,
+	zero: Number,
 	config: &Configuration,
 	min_blocks_to_keep: Number,
 	block: Number,
@@ -113,7 +113,7 @@ fn pruning_range<Number: BlockNumber>(
 	// compute number of changes tries we actually want to keep
 	let (prune_interval, blocks_to_keep) = if config.is_digest_build_enabled() {
 		// we only CAN prune at block where max-level-digest is created
-		let max_digest_interval = match config.digest_level_at_block(config_activation_block.clone(), block.clone()) {
+		let max_digest_interval = match config.digest_level_at_block(zero.clone(), block.clone()) {
 			Some((digest_level, digest_interval, _)) if digest_level == config.digest_levels =>
 				digest_interval,
 			_ => return None,
@@ -136,7 +136,7 @@ fn pruning_range<Number: BlockNumber>(
 
 	// last block for which changes trie is pruned
 	let last_block_to_prune = match blocks_to_keep.and_then(|b| block.checked_sub(&b)) {
-		Some(last_block_to_prune) => if last_block_to_prune > config_activation_block {
+		Some(last_block_to_prune) => if last_block_to_prune > zero {
 			last_block_to_prune
 		} else {
 			return None;

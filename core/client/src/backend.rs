@@ -237,7 +237,7 @@ pub trait PrunableStateChangesTrieStorage<Block: BlockT, H: Hasher>:
 	/// Get number block of oldest, non-pruned changes trie.
 	fn oldest_changes_trie_block(
 		&self,
-		config_activation_block: NumberFor<Block>,
+		zero: NumberFor<Block>,
 		config: ChangesTrieConfiguration,
 		best_finalized: NumberFor<Block>,
 	) -> NumberFor<Block>;

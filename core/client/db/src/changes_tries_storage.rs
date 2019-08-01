@@ -196,13 +196,13 @@ where
 
 	fn oldest_changes_trie_block(
 		&self,
-		config_activation_block: NumberFor<Block>,
+		zero: NumberFor<Block>,
 		config: ChangesTrieConfiguration,
 		best_finalized_block: NumberFor<Block>,
 	) -> NumberFor<Block> {
 		match self.min_blocks_to_keep {
 			Some(min_blocks_to_keep) => state_machine::oldest_non_pruned_changes_trie(
-				config_activation_block,
+				zero,
 				&config,
 				min_blocks_to_keep.into(),
 				best_finalized_block,
