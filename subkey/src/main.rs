@@ -95,7 +95,7 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 			system::CheckGenesis::<Runtime>::new(),
 			system::CheckEra::<Runtime>::from(Era::Immortal),
 			system::CheckNonce::<Runtime>::from(i),
-			system::CheckWeight::<Runtime>::from(),
+			system::CheckWeight::<Runtime>::new(),
 			balances::TakeFees::<Runtime>::from(f),
 		)
 	};
