@@ -74,7 +74,7 @@ pub struct OverlayedValue {
 /// Values are always paired with a state history index.
 #[derive(Debug, Clone)]
 #[cfg_attr(test, derive(PartialEq))]
-pub(crate) struct History<V> (SmallVec<[(V, usize); ALLOCATED_HISTORY]>);
+pub(crate) struct History<V>(SmallVec<[(V, usize); ALLOCATED_HISTORY]>);
 
 impl<V> Default for History<V> {
 	fn default() -> Self {
