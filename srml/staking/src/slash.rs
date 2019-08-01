@@ -21,11 +21,11 @@
 use crate::Exposure;
 use srml_support::{
 	StorageMap, decl_module, decl_storage,
-	traits::{Currency, WindowLength, DoSlash}
+	traits::{Currency, WindowLength, DoSlash, DoReward}
 };
 use parity_codec::{HasCompact, Codec, Decode, Encode};
 use rstd::{vec::Vec, collections::{btree_map::BTreeMap, btree_set::BTreeSet}};
-use sr_primitives::{Perbill, traits::MaybeSerializeDebug};
+use sr_primitives::{Perbill, traits::{MaybeSerializeDebug, Zero}};
 
 type BalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
@@ -72,9 +72,16 @@ impl<T: Trait> Module<T> {
 	/// Tries to adjust the `slash` based on `new_slash` and `prev_slash`
 	///
 	/// Returns the total slashed amount
-	fn adjust_slash(who: &T::AccountId, new_slash: BalanceOf<T>, prev_slash: BalanceOf<T>) -> BalanceOf<T> {
+	fn adjust_slash(
+		who: &T::AccountId,
+		new_slash: BalanceOf<T>,
+		prev_slash: BalanceOf<T>,
+		slashed_amount: &mut BalanceOf<T>,
+	) -> BalanceOf<T> {
 		if new_slash > prev_slash {
-			T::Currency::slash(who, new_slash - prev_slash);
+			let amount = new_slash - prev_slash;
+			T::Currency::slash(who, amount);
+			*slashed_amount = *slashed_amount + amount;
 			new_slash
 		} else {
 			prev_slash
@@ -85,11 +92,12 @@ impl<T: Trait> Module<T> {
 		who: &T::AccountId,
 		prev_state: &mut SlashState<T::AccountId, BalanceOf<T>>,
 		exposure: &Exposure<T::AccountId, BalanceOf<T>>,
-		severity: Perbill
+		severity: Perbill,
+		slashed_amount: &mut BalanceOf<T>,
 	) {
 		let new_slash = severity * exposure.own;
 
-		T::Currency::slash(&who, new_slash - prev_state.slashed_amount.own);
+		Self::adjust_slash(&who, new_slash, prev_state.slashed_amount.own, slashed_amount);
 
 		let intersection: BTreeSet<T::AccountId> = exposure.others
 			.iter()
@@ -103,12 +111,13 @@ impl<T: Trait> Module<T> {
 			let new_slash = severity * nominator.value;
 
 			// make sure that we are not double slashing
-			if intersection.contains(&nominator.who) {
-				previous_slash.get(&nominator.who).map(|prev| Self::adjust_slash(&nominator.who, new_slash, *prev));
+			let prev = if intersection.contains(&nominator.who) {
+				previous_slash.get(&nominator.who).cloned().unwrap_or_else(|| Zero::zero())
 			} else {
-				T::Currency::slash(&nominator.who, new_slash);
+				Zero::zero()
 			};
 
+			Self::adjust_slash(&nominator.who, new_slash, prev, slashed_amount);
 			prev_state.slashed_amount.others.insert(nominator.who.clone(), new_slash);
 		}
 
@@ -124,7 +133,8 @@ impl<T: Trait> Module<T> {
 		who: &T::AccountId,
 		exposure: &Exposure<T::AccountId, BalanceOf<T>>,
 		severity: Perbill,
-		kind: T::SlashKind
+		kind: T::SlashKind,
+		total_slash: &mut BalanceOf<T>,
 	) -> bool {
 		<SlashHistory<T>>::mutate(kind, |state| {
 
@@ -132,18 +142,23 @@ impl<T: Trait> Module<T> {
 
 			for (stash, s) in state.iter_mut() {
 				if stash == who {
-					Self::update_exposure_for_known(stash, s, exposure, severity);
+					Self::update_exposure_for_known(stash, s, exposure, severity, total_slash);
 					in_history = true;
 				} else {
-					s.slashed_amount.own = Self::adjust_slash(stash, severity * s.exposure.own, s.slashed_amount.own);
+					s.slashed_amount.own = Self::adjust_slash(
+						stash,
+						severity * s.exposure.own,
+						s.slashed_amount.own,
+						total_slash
+					);
 
 					for nominator in &s.exposure.others {
 						let new_slash = severity * nominator.value;
-						if let Some(prev_slash) = s.slashed_amount.others.get_mut(&nominator.who) {
-							*prev_slash = Self::adjust_slash(&nominator.who, new_slash, *prev_slash);
+						if let Some(prev) = s.slashed_amount.others.get_mut(&nominator.who) {
+							*prev = Self::adjust_slash(&nominator.who, new_slash, *prev, total_slash);
 						} else {
+							Self::adjust_slash(&nominator.who, new_slash, Zero::zero(), total_slash);
 							s.slashed_amount.others.insert(nominator.who.clone(), new_slash);
-							T::Currency::slash(&nominator.who, new_slash);
 						}
 					}
 				}
@@ -154,37 +169,28 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait, Reporters>
-	DoSlash<
-		(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>),
-		Reporters,
-		Perbill,
-		T::SlashKind
-	> for Module<T>
-where
-	Reporters: IntoIterator<Item = (T::AccountId, Perbill)>,
+impl<T: Trait> DoSlash<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>), Perbill, T::SlashKind> for Module<T>
 {
-	type Slashed = Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>;
+	type SlashedEntries = Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>;
+	type SlashedAmount = BalanceOf<T>;
 
-	// TODO: #3166 pay out rewards to the reporters
-	// Perbill is priority for the reporter
 	fn do_slash(
 		(who, exposure): (T::AccountId, Exposure<T::AccountId, BalanceOf<T>>),
-		_reporters: Reporters,
 		severity: Perbill,
 		kind: T::SlashKind,
-	) -> Result<Self::Slashed, ()> {
+	) -> Result<(Self::SlashedEntries, Self::SlashedAmount), ()> {
 
-		let who_exist = <Module<T>>::mutate_slash_history(&who, &exposure, severity, kind);
+		let mut total_slash = Zero::zero();
+		let who_exist = <Module<T>>::mutate_slash_history(&who, &exposure, severity, kind, &mut total_slash);
 
 		if !who_exist {
 			let amount = severity * exposure.own;
-			T::Currency::slash(&who, amount);
+			Self::adjust_slash(&who, amount, Zero::zero(), &mut total_slash);
 			let mut slashed_amount = SlashAmount { own: amount, others: BTreeMap::new() };
 
 			for nominator in &exposure.others {
 				let amount = severity * nominator.value;
-				T::Currency::slash(&nominator.who, amount);
+				Self::adjust_slash(&nominator.who, amount, Zero::zero(), &mut total_slash);
 				slashed_amount.others.insert(nominator.who.clone(), amount);
 			}
 
@@ -193,12 +199,25 @@ where
 			});
 		}
 
-		let slashed = <SlashHistory<T>>::get(kind)
+		let slashed_entities = <SlashHistory<T>>::get(kind)
 			.iter()
 			.map(|(who, state)| (who.clone(), state.exposure.clone()))
 			.collect();
 
-		Ok(slashed)
+		Ok((slashed_entities, total_slash))
+	}
+}
+
+impl<T: Trait, Reporters> DoReward<Reporters, BalanceOf<T>> for Module<T>
+where
+	Reporters: IntoIterator<Item = (T::AccountId, Perbill)>,
+{
+	fn do_reward(reporters: Reporters, reward: BalanceOf<T>) -> Result<(), ()> {
+		for (reporter, fraction) in reporters {
+			// This will fail in the account is not existing ignore it for now
+			let _ = T::Currency::deposit_into_existing(&reporter, fraction * reward);
+		}
+		Ok(())
 	}
 }
 
@@ -249,7 +268,9 @@ mod tests {
 
 	impl ReporterTrait for Test {
 		type KeyOwner = FakeProver<Test>;
-		type BabeEquivocation = BabeEquivocation<Self, SlashingModule<Test>, crate::AfterSlashing<Test>>;
+		type BabeEquivocation = BabeEquivocation<
+			Self, SlashingModule<Test>, SlashingModule<Test>, crate::AfterSlashing<Test>
+		>;
 		type Reporter = Vec<(u64, Perbill)>;
 	}
 
@@ -317,12 +338,16 @@ mod tests {
 		}
 	}
 
-	pub struct BabeEquivocation<T, DS, AS>(PhantomData<(T, DS, AS)>);
+	/// This should be something similar to `decl_module!` macro
+	///
+	/// It would probably be nice to have `DoSlash`, `DoReward` and `AfterSlash`
+	/// as associated types instead
+	pub struct BabeEquivocation<T, DS, DR, AS>(PhantomData<(T, DS, DR, AS)>);
 
-	impl_base_severity!(BabeEquivocation<T, DS, AS>, Perbill: Perbill::zero());
-	impl_kind!(BabeEquivocation<T, DS, AS>, Kind: Kind::One);
+	impl_base_severity!(BabeEquivocation<T, DS, DR, AS>, Perbill: Perbill::zero());
+	impl_kind!(BabeEquivocation<T, DS, DR, AS>, Kind: Kind::One);
 
-	impl<T, DS, AS> BabeEquivocation<T, DS, AS> {
+	impl<T, DS, DR, AS> BabeEquivocation<T, DS, DR, AS> {
 		pub fn as_misconduct_level(severity: Perbill) -> u8 {
 			if severity > Perbill::from_percent(10) {
 				4
@@ -336,14 +361,15 @@ mod tests {
 		}
 	}
 
-	impl<T, Reporter, Who, DS, AS> ReportSlash<T::Hash, Reporter, Who> for BabeEquivocation<T, DS, AS>
+	impl<T, Reporters, Who, DS, DR, AS> ReportSlash<T::Hash, Reporters, Who> for BabeEquivocation<T, DS, DR, AS>
 	where
 		Who: Clone,
 		T: ReporterTrait,
-		DS: DoSlash<Who, Reporter, Perbill, Kind>,
-		AS: AfterSlash<DS::Slashed, u8>,
+		DS: DoSlash<Who, Perbill, Kind>,
+		DR: DoReward<Reporters, DS::SlashedAmount>,
+		AS: AfterSlash<DS::SlashedEntries, u8>,
 	{
-		fn slash(footprint: T::Hash, reporter: Reporter, who: Who) -> Result<(), ()> {
+		fn slash(footprint: T::Hash, reporters: Reporters, who: Who) -> Result<(), ()> {
 			let kind = Self::kind();
 			let _base_seve = Self::base_severity();
 
@@ -356,8 +382,19 @@ mod tests {
 			// example how to estimate severity
 			// 3k / n^2
 			let severity = Perbill::from_rational_approximation(3 * num_violations, n * n);
-			let slashed = DS::do_slash(who, reporter, severity, kind)?;
-			AS::after_slash(slashed, Self::as_misconduct_level(severity));
+
+			let misconduct_level = Self::as_misconduct_level(severity);
+			let (slashed, total_slash) = DS::do_slash(who, severity, kind)?;
+
+			// hard code to reward 10% of the total amount
+			// different misconducts might want to handle rewarding differently...
+			let reward_amount = Perbill::from_percent(10) * total_slash;
+
+			// the remaining 90% should go somewhere else, perhaps the `treasory module`?!
+
+			// ignore if rewarding failed, because we need still to update the state of the validators
+			let _ = DR::do_reward(reporters, reward_amount);
+			AS::after_slash(slashed, misconduct_level);
 
 			Ok(())
 		}

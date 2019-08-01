@@ -650,17 +650,26 @@ pub trait ReportSlash<Misbehaved, Reporters, Hash> {
 	fn slash(to_slash: Misbehaved, to_reward: Reporters, footprint: Hash) -> Result<(), ()>;
 }
 
-/// A generic trait for enacting slashes.
-pub trait DoSlash<Misbehaved, Reporters, Severity, Kind> {
-	/// The slashed entries which may include history of previous slashes
-	type Slashed;
+/// A generic trait for enacting slashes
+pub trait DoSlash<Misbehaved, Severity, Kind> {
+	/// The slashed entries
+	type SlashedEntries;
 
-	/// Performs the actual slashing and rewarding based on severity
+	/// The total slashed amount
+	type SlashedAmount: Copy + Clone + Codec + SimpleArithmetic;
+
+	/// Performs the actual slashing based on severity
 	///
 	/// Return the slashes entities which may not be the same as `to_slash`
 	/// because history slashes of the same kind may be included
-	fn do_slash(to_slash: Misbehaved, to_reward: Reporters, severity: Severity, kind: Kind)
-		-> Result<Self::Slashed, ()>;
+	fn do_slash(to_slash: Misbehaved, severity: Severity, kind: Kind)
+		-> Result<(Self::SlashedEntries, Self::SlashedAmount), ()>;
+}
+
+/// A generic trait for paying out rewards
+pub trait DoReward<Reporters, Reward> {
+	/// Payout reward to reporters
+	fn do_reward(reporters: Reporters, total_reward: Reward) -> Result<(), ()>;
 }
 
 /// A generic event handler trait after slashing occured
