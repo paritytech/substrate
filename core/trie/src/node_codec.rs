@@ -59,13 +59,13 @@ impl<H: Hasher> NodeCodecT<H> for NodeCodec<H> {
 					return Err(Error::BadFormat);
 				}
 				let nibble_data = take(
-          input,
-          (nibble_count + (nibble_ops::NIBBLE_PER_BYTE - 1)) / nibble_ops::NIBBLE_PER_BYTE,
-        ).ok_or(Error::BadFormat)?;
+					input,
+					(nibble_count + (nibble_ops::NIBBLE_PER_BYTE - 1)) / nibble_ops::NIBBLE_PER_BYTE,
+				).ok_or(Error::BadFormat)?;
 				let nibble_slice = NibbleSlice::new_offset(
-          nibble_data,
-          nibble_ops::number_padding(nibble_count),
-        );
+					nibble_data,
+					nibble_ops::number_padding(nibble_count),
+				);
 				let bitmap_slice = take(input, BITMAP_LENGTH).ok_or(Error::BadFormat)?;
 				let bitmap = Bitmap::decode(&bitmap_slice[..])?;
 				let value = if has_value {
@@ -91,13 +91,13 @@ impl<H: Hasher> NodeCodecT<H> for NodeCodec<H> {
 					return Err(Error::BadFormat);
 				}
 				let nibble_data = take(
-          input,
-          (nibble_count + (nibble_ops::NIBBLE_PER_BYTE - 1)) / nibble_ops::NIBBLE_PER_BYTE,
-        ).ok_or(Error::BadFormat)?;
+					input,
+					(nibble_count + (nibble_ops::NIBBLE_PER_BYTE - 1)) / nibble_ops::NIBBLE_PER_BYTE,
+				).ok_or(Error::BadFormat)?;
 				let nibble_slice = NibbleSlice::new_offset(
-          nibble_data,
+					nibble_data,
 					nibble_ops::number_padding(nibble_count),
-        );
+				);
 				let count = <Compact<u32>>::decode(input).ok_or(Error::BadFormat)?.0 as usize;
 				Ok(Node::Leaf(nibble_slice, take(input, count).ok_or(Error::BadFormat)?))
 			}
