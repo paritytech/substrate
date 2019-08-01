@@ -185,18 +185,6 @@ fn create_wasm_workspace_project(wasm_workspace: &Path) {
 
 				[workspace]
 				members = [ {members} ]
-
-[patch.crates-io]
-trie-db = {{ git = "https://github.com/paritytech/trie.git", branch = "ec-simple-codec" }}
-trie-root = {{ git = "https://github.com/paritytech/trie.git", branch = "ec-simple-codec" }}
-hash-db = {{ git = "https://github.com/paritytech/trie.git", branch = "ec-simple-codec" }}
-memory-db = {{ git = "https://github.com/paritytech/trie.git", branch = "ec-simple-codec" }}
-keccak-hasher = {{ git = "https://github.com/paritytech/trie.git", branch = "ec-simple-codec" }}
-trie-bench = {{ git = "https://github.com/paritytech/trie.git", branch = "ec-simple-codec" }}
-hash256-std-hasher = {{ git = "https://github.com/paritytech/trie.git", branch = "ec-simple-codec" }}
-trie-standardmap = {{ git = "https://github.com/paritytech/trie.git", branch = "ec-simple-codec" }}
-
-
 			"#,
 			members = members,
 		)
