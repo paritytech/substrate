@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+// TODO TODO: well but this is so much keeping the old interface how can I get something that work
+// with this as well ????
 //! Strongly typed wrappers around values in storage.
 //!
 //! This crate exports a macro `storage_items!` and traits describing behavior of generated
@@ -165,107 +167,146 @@ macro_rules! __storage_items_internal {
 	// generator for values.
 	(($($vis:tt)*) ($get_fn:ident) ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $key:expr => $ty:ty) => {
 		$crate::__storage_items_internal!{ ($($vis)*) () ($wraptype $gettype) ($getter) ($taker) $name : $key => $ty }
-		pub fn $get_fn() -> $gettype { <$name as $crate::storage::hashed::generator::StorageValue<$ty>> :: get(&$crate::storage::RuntimeStorage) }
+		pub fn $get_fn() -> $gettype { <$name as $crate::storage::StorageValue<$ty>> :: get() }
 	};
 	(($($vis:tt)*) () ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $key:expr => $ty:ty) => {
 		$($vis)* struct $name;
 
-		impl $crate::storage::hashed::generator::StorageValue<$ty> for $name {
+		impl $crate::storage::StorageValue<$ty> for $name {
 			type Query = $gettype;
 
-			/// Get the storage key.
-			fn key() -> &'static [u8] {
-				$key
+			fn exists() -> bool {
+				$crate::storage::hashed::exists::<$crate::Twox128>($key)
 			}
 
-			/// Load the value from the provided storage instance.
-			fn get<S: $crate::HashedStorage<$crate::Twox128>>(storage: &S) -> Self::Query {
-				storage.$getter($key)
+			fn get() -> Self::Query {
+				$crate::storage::hashed::$getter::<$crate::Twox128>($key)
 			}
 
-			/// Take a value from storage, removing it afterwards.
-			fn take<S: $crate::HashedStorage<$crate::Twox128>>(storage: &mut S) -> Self::Query {
-				storage.$taker($key)
+			fn put<Arg: Borrow<T>>(val: Arg) {
+				$crate::storage::hashed::put::<$crate::Twox128>($key, val)
 			}
 
-			/// Mutate this value.
-			fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: $crate::HashedStorage<$crate::Twox128>>(f: F, storage: &mut S) -> R {
-				let mut val = <Self as $crate::storage::hashed::generator::StorageValue<$ty>>::get(storage);
+			fn put_ref<Arg: ?Sized + Encode>(val: &Arg) where T: AsRef<Arg> {
+				$crate::storage::hashed::put::<$crate::Twox128>($key, val)
+			}
+
+			fn mutate<R, F: FnOnce(&mut Self::Query) -> R>(f: F) -> R {
+				let mut val = <Self as $crate::storage::StorageValue<$ty>>::get(storage);
 
 				let ret = f(&mut val);
 
 				$crate::__handle_wrap_internal!($wraptype {
 					// raw type case
-					<Self as $crate::storage::hashed::generator::StorageValue<$ty>>::put(&val, storage)
+					<Self as $crate::storage::StorageValue<$ty>>::put(&val)
 				} {
 					// Option<> type case
 					match val {
-						Some(ref val) => <Self as $crate::storage::hashed::generator::StorageValue<$ty>>::put(&val, storage),
-						None => <Self as $crate::storage::hashed::generator::StorageValue<$ty>>::kill(storage),
+						Some(ref val) => <Self as $crate::storage::StorageValue<$ty>>::put(&val),
+						None => <Self as $crate::storage::StorageValue<$ty>>::kill(),
 					}
 				});
 
 				ret
+			}
+
+			fn kill() {
+				$crate::storage::hashed::kill::<$crate::Twox128>($key)
+			}
+
+			fn take() -> Self::Query {
+				$crate::storage::hashed::$taker::<$crate::Twox128>($key)
+			}
+
+			fn append<I: Encode>(items: &[I]) -> Result<(), &'static str>
+				where T: EncodeAppend<Item=I>
+			{
+				let new_val = <T as $crate::codec::EncodeAppend>::append(
+					$crate::storage::hashed::get_raw::<$crate::Twox128>($key).unwrap_or_default(),
+					items,
+					).ok_or_else(|| "Could not append given item")?;
+				$crate::storage::hashed::put_raw::<$crate::Twox128>($key, &new_val);
+				Ok(())
 			}
 		}
 	};
 	// generator for maps.
 	(($($vis:tt)*) ($get_fn:ident) ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
 		$crate::__storage_items_internal!{ ($($vis)*) () ($wraptype $gettype) ($getter) ($taker) $name : $prefix => map [$kty => $ty] }
-		pub fn $get_fn<K: $crate::storage::generator::Borrow<$kty>>(key: K) -> $gettype {
-			<$name as $crate::storage::hashed::generator::StorageMap<$kty, $ty>> :: get(key.borrow(), &$crate::storage::RuntimeStorage)
+		pub fn $get_fn<K: $crate::storage::storage_items::Borrow<$kty>>(key: K) -> $gettype {
+			<$name as $crate::storage::StorageMap<$kty, $ty>> :: get(key.borrow())
 		}
 	};
 	(($($vis:tt)*) () ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
 		$($vis)* struct $name;
 
-		impl $crate::storage::hashed::generator::StorageMap<$kty, $ty> for $name {
-			type Query = $gettype;
-
-			type Hasher = $crate::Blake2_256;
-
-			/// Get the prefix key in storage.
-			fn prefix() -> &'static [u8] {
-				$prefix
-			}
-
-			/// Get the storage key used to fetch a value corresponding to a specific key.
-			fn key_for(x: &$kty) -> $crate::rstd::vec::Vec<u8> {
+		impl $name {
+			/// Private method used by storage map implementation.
+			fn __storage_items_key_for<KeyArg: $crate::rstd::borrow::Borrow<$kty>(x: KeyArg)
+				-> $crate::rstd::vec::Vec<u8>
+			{
 				let mut key = $prefix.to_vec();
-				$crate::codec::Encode::encode_to(x, &mut key);
+				$crate::codec::Encode::encode_to(x.borrow(), &mut key);
 				key
 			}
+		}
 
-			/// Load the value associated with the given key from the map.
-			fn get<S: $crate::HashedStorage<Self::Hasher>>(key: &$kty, storage: &S) -> Self::Query {
-				let key = <$name as $crate::storage::hashed::generator::StorageMap<$kty, $ty>>::key_for(key);
-				storage.$getter(&key[..])
+		impl $crate::storage::StorageMap<$kty, $ty> for $name {
+			type Query = $gettype;
+
+			fn exists<KeyArg: Borrow<K>>(key: KeyArg) -> bool {
+				$crate::storage::$hashed::exists::<$crate::Blake2_256>(&Self::__storage_items_key_for(key))
 			}
 
-			/// Take the value, reading and removing it.
-			fn take<S: $crate::HashedStorage<Self::Hasher>>(key: &$kty, storage: &mut S) -> Self::Query {
-				let key = <$name as $crate::storage::hashed::generator::StorageMap<$kty, $ty>>::key_for(key);
-				storage.$taker(&key[..])
+			fn get<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query {
+				$crate::storage::$hashed::$getter::<$crate::Blake2_256>(&Self::__storage_items_key_for(key))
 			}
 
-			/// Mutate the value under a key.
-			fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: $crate::HashedStorage<Self::Hasher>>(key: &$kty, f: F, storage: &mut S) -> R {
-				let mut val = <Self as $crate::storage::hashed::generator::StorageMap<$kty, $ty>>::take(key, storage);
+			fn insert<KeyArg: Borrow<K>, ValArg: Borrow<V>>(key: KeyArg, val: ValArg) {
+				$crate::storage::$hashed::put::<$crate::Blake2_256>(&Self::__storage_items_key_for(key), val)
+			}
+
+			fn insert_ref<KeyArg: Borrow<K>, ValArg: ?Sized + Encode>(key: KeyArg, val: &ValArg) where V: AsRef<ValArg> {
+				$crate::storage::$hashed::put::<$crate::Blake2_256>(&Self::__storage_items_key_for(key), val)
+			}
+
+			fn remove<KeyArg: Borrow<K>>(key: KeyArg) {
+				$crate::storage::$hashed::remove::<$crate::Blake2_256>(&Self::__storage_items_key_for(key), val)
+			}
+
+			fn mutate<KeyArg: Borrow<K>, R, F: FnOnce(&mut Self::Query) -> R>(key: KeyArg, f: F) -> R {
+				let mut val = <Self as $crate::storage::StorageMap<$kty, $ty>>::take(key, storage);
 
 				let ret = f(&mut val);
 
 				$crate::__handle_wrap_internal!($wraptype {
 					// raw type case
-					<Self as $crate::storage::hashed::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage)
+					<Self as $crate::storage::StorageMap<$kty, $ty>>::insert(key, &val, storage)
 				} {
 					// Option<> type case
 					match val {
-						Some(ref val) => <Self as $crate::storage::hashed::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage),
-						None => <Self as $crate::storage::hashed::generator::StorageMap<$kty, $ty>>::remove(key, storage),
+						Some(ref val) => <Self as $crate::storage::StorageMap<$kty, $ty>>::insert(key, &val, storage),
+						None => <Self as $crate::storage::StorageMap<$kty, $ty>>::remove(key, storage),
 					}
 				});
 
 				ret
+			}
+
+			fn take<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query {
+				$crate::storage::$hashed::$taker::<$crate::Blake2_256>(&Self::__storage_items_key_for(key), val)
+			}
+
+			fn append<KeyArg: Borrow<K>, I: Encode>(key: KeyArg, items: &[I]) -> Result<(), &'static str>
+				where V: EncodeAppend<Item=I>
+			{
+				let k = Self::__storage_items_key_for(key);
+				let new_val = <V as codec::EncodeAppend>::append(
+					$crate::storage::hashed::get_raw::<Blake2_256>(&k[..]).unwrap_or_default(),
+					items,
+					).ok_or_else(|| "Could not append given item")?;
+				$crate::storage::hashed::put_raw::<Blake2_256>(&k[..], &new_val);
+				Ok(())
 			}
 		}
 	};
@@ -833,5 +874,3 @@ mod test_map_vec_append {
 		});
 	}
 }
-
-
