@@ -20,6 +20,10 @@ use consensus::BlockOrigin;
 use futures03::TryFutureExt as _;
 use std::time::Duration;
 use tokio::runtime::current_thread;
+use libp2p::multihash::Hash;
+use crate::protocol::event::DhtEvent;
+use crate::service::NetworkStateInfo;
+use futures::{sync::oneshot, future::{Future}};
 use super::*;
 
 fn test_ancestor_search_when_common_is(n: usize) {
@@ -526,4 +530,40 @@ fn light_peer_imports_header_from_announce() {
 	// check that KNOWN STALE block is imported from announce message
 	let known_stale_hash = net.peer(0).push_blocks_at(BlockId::Number(0), 1, true);
 	import_with_announce(&mut net, &mut runtime, known_stale_hash);
+}
+
+// TODO: This function should probably go into a separate file.
+#[test]
+fn test_network_worker_get_value() {
+	let _ = ::env_logger::try_init();
+	let mut runtime = current_thread::Runtime::new().unwrap();
+	let mut net = TestNet::new(1);
+	let h = libp2p::multihash::encode(Hash::SHA2256, b"hello world").unwrap();
+
+	let mut expect_dht_event = |net: &mut TestNet, mut f: Box<Future<Item=_, Error=_>>, expected_event| {
+		let mut deadline = futures_timer::Delay::new(Duration::from_secs(5)).compat();
+
+		runtime.block_on(futures::future::poll_fn::<(), String, _>(|| {
+			net.poll();
+
+			match f.poll() {
+				Ok(futures::Async::Ready(received_event)) => {
+					if received_event != expected_event {
+						panic!(format!("expected event {:?}, got {:?}", expected_event, received_event));
+					}
+
+					return Ok(futures::Async::Ready(()));
+				}
+				Ok(futures::Async::NotReady) => {},
+				Err(e) => panic!(format!("expected no error on poll: {}", e)),
+			};
+
+			deadline.poll()
+				.map_err(|e| e.to_string())
+				.and_then(|_| Err(format!("waiting for dht event {:?} timed out", expected_event)))
+		})).unwrap();
+	};
+
+	let get_fut = Box::new(net.peer(0).network_service().get_value(&h));
+	expect_dht_event(&mut net, get_fut, DhtEvent::ValueNotFound(h.clone()));
 }

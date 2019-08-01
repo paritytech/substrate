@@ -47,7 +47,7 @@ use crate::config::{Params, TransportConfig};
 use crate::error::Error;
 use crate::protocol::{self, Protocol, Context, CustomMessageOutcome, PeerInfo};
 use crate::protocol::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
-use crate::protocol::{event::Event, on_demand::{AlwaysBadChecker, RequestData}};
+use crate::protocol::{event::{Event, DhtEvent}, on_demand::{AlwaysBadChecker, RequestData}};
 use crate::protocol::specialization::NetworkSpecialization;
 use crate::protocol::sync::SyncState;
 
@@ -242,6 +242,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			import_queue: params.import_queue,
 			from_worker,
 			on_demand_in: params.on_demand.and_then(|od| od.extract_receiver()),
+			dht_event_subscribers: HashMap::new(),
 		})
 	}
 
@@ -299,6 +300,48 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 	/// You must call this when a new block is finalized by the client.
 	pub fn on_block_finalized(&mut self, hash: B::Hash, header: B::Header) {
 		self.network_service.user_protocol_mut().on_block_finalized(hash, &header);
+	}
+
+	fn notify_dht_event_subscribers(&mut self, e: DhtEvent) {
+		match e {
+			DhtEvent::ValueFound(vs) => {
+				// ValueFound event contains multiple (Multihash, Vec<u8>) tuples. Let's sort them into buckets by
+				// Multihash first and then pass them on to the right subscribers.
+				let mut value_buckets = HashMap::<Multihash, Vec<Vec<u8>>>::new();
+
+				for (h, v) in vs.into_iter() {
+					value_buckets.entry(h).and_modify(|values| values.push(v));
+				}
+
+				for (h, vs) in value_buckets.into_iter() {
+					let subscribers = self.dht_event_subscribers.remove(&h);
+
+					match subscribers {
+						Some(subscribers) => {
+							for s in subscribers.into_iter() {
+								s.send(DhtEvent::ValueFound(vs.clone().into_iter().map(|v| (h.clone(), v)).collect())).unwrap();
+							}
+						}
+						None => {},
+					}
+				}
+			},
+			DhtEvent::ValueNotFound(h) => {
+				let subscribers = self.dht_event_subscribers.remove(&h);
+
+				match subscribers {
+					Some(subscribers) => {
+						for s in subscribers.into_iter() {
+							s.send(DhtEvent::ValueNotFound(h.clone())).unwrap();
+						}
+					}
+					None => {
+					},
+				}
+			},
+			// TODO: Should we also offer a subscription way for putting values?
+			DhtEvent::ValuePut(_) | DhtEvent::ValuePutFailed(_) => {},
+		}
 	}
 
 	/// Get network state.
@@ -451,10 +494,13 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	///
 	/// This will generate either a `ValueFound` or a `ValueNotFound` event and pass it to
 	/// `on_event` on the network specialization.
-	pub fn get_value(&self, key: &Multihash) {
+	pub fn get_value(&self, key: &Multihash) -> impl futures::Future<Item=DhtEvent, Error=futures::sync::oneshot::Canceled> {
+		let (tx, rx) = futures::sync::oneshot::channel::<DhtEvent>();
 		let _ = self
 			.to_worker
-			.unbounded_send(ServerToWorkerMsg::GetValue(key.clone()));
+			.unbounded_send(ServerToWorkerMsg::GetValue(( tx, key.clone() )));
+
+		rx
 	}
 
 	/// Start putting a value in the DHT.
@@ -561,7 +607,7 @@ enum ServerToWorkerMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	ExecuteWithSpec(Box<dyn FnOnce(&mut S, &mut dyn Context<B>) + Send>),
 	ExecuteWithGossip(Box<dyn FnOnce(&mut ConsensusGossip<B>, &mut dyn Context<B>) + Send>),
 	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>, GossipMessageRecipient),
-	GetValue(Multihash),
+	GetValue((futures::sync::oneshot::Sender<DhtEvent>, Multihash)),
 	PutValue(Multihash, Vec<u8>),
 	AddKnownAddress(PeerId, Multiaddr),
 }
@@ -587,6 +633,9 @@ pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: Ex
 	from_worker: mpsc::UnboundedReceiver<ServerToWorkerMsg<B, S>>,
 	/// Receiver for queries from the on-demand that must be processed.
 	on_demand_in: Option<mpsc::UnboundedReceiver<RequestData<B>>>,
+	/// DHT event subscribers.
+	// TODO: We probably need to differentiate in *get* and *put* event subscribers.
+	dht_event_subscribers: HashMap<Multihash, Vec<futures::sync::oneshot::Sender<DhtEvent>>>,
 }
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for NetworkWorker<B, S, H> {
@@ -636,8 +685,14 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 					self.network_service.user_protocol_mut().request_justification(&hash, number),
 				ServerToWorkerMsg::PropagateExtrinsics =>
 					self.network_service.user_protocol_mut().propagate_extrinsics(),
-				ServerToWorkerMsg::GetValue(key) =>
-					self.network_service.get_value(&key),
+				ServerToWorkerMsg::GetValue(( tx, key )) => {
+					self.dht_event_subscribers.entry(key.clone())
+						.or_insert(vec![])
+						.push(tx);
+
+
+					self.network_service.get_value(&key);
+				}
 				ServerToWorkerMsg::PutValue(key, value) =>
 					self.network_service.put_value(key, value),
 				ServerToWorkerMsg::AddKnownAddress(peer_id, addr) =>
@@ -653,6 +708,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 				Ok(Async::NotReady) => break,
 				Ok(Async::Ready(Some(BehaviourOut::SubstrateAction(outcome)))) => outcome,
 				Ok(Async::Ready(Some(BehaviourOut::Dht(ev)))) => {
+					self.notify_dht_event_subscribers(ev.clone());
 					self.network_service.user_protocol_mut()
 						.on_event(Event::Dht(ev));
 					CustomMessageOutcome::None
