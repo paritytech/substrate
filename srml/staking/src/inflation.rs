@@ -30,7 +30,7 @@ struct Linear {
 }
 
 impl Linear {
-	/// Compute f(n/d)*d. This is useful not to loose precision.
+	/// Compute `f(n/d)*d`. This is useful not to lose precision.
 	fn calculate_for_fraction_times_denominator<N>(&self, n: N, d: N) -> N
 	where
 		N: SimpleArithmetic + Clone
@@ -46,19 +46,19 @@ impl Linear {
 /// Piecewise Linear function for PNPoS usage
 #[derive(Debug, PartialEq, Eq)]
 struct PiecewiseLinear {
-	/// Array of tuple of an abscisse in a per billions representation and a linear function.
+	/// Array of tuple of abscissa in a per billions representation and a linear function.
 	///
-	/// Abscisses in the array must be in order from the lowest to the highest.
+	/// Abscissas in the array must be in order from the lowest to the highest.
 	///
 	/// The array defines a piecewise linear function as such:
 	/// * the n-th piece start at the abscisse of the n-th element until the abscisse of the
-	/// n-th + 1 element, and is defined by the linear function of n-th element
+	///     n-th + 1 element, and is defined by the linear function of n-th element
 	/// * last piece doesn't end
 	pieces: [(u32, Linear); 20],
 }
 
 impl PiecewiseLinear {
-	/// Compute f(n/d)*d. This is useful not to loose precision.
+	/// Compute `f(n/d)*d`. This is useful not to lose precision.
 	fn calculate_for_fraction_times_denominator<N>(&self, n: N, d: N) -> N
 	where
 		N: SimpleArithmetic + Clone
@@ -72,7 +72,7 @@ impl PiecewiseLinear {
 	}
 }
 
-/// Piecewise linear approximation of I_NPoS.
+/// Piecewise linear approximation of `I_NPoS`.
 const I_NPOS: PiecewiseLinear = PiecewiseLinear {
 	pieces: [
 		(0, Linear { negative_a: false, a: 150000000, b: 25000000 }),
@@ -155,12 +155,12 @@ mod test_inflation {
 	const x_ideal: f64 = 0.5;
 	const d: f64 = 0.05;
 
-	// Part left to x_ideal
+	// Part left of `x_ideal`
 	fn I_left(x: f64) -> f64 {
 		I_0 + x * (i_ideal - I_0/x_ideal)
 	}
 
-	// Part right to x_ideal
+	// Part right of `x_ideal`
 	fn I_right(x: f64) -> f64 {
 		I_0 + (i_ideal*x_ideal - I_0) * 2_f64.powf((x_ideal-x)/d)
 	}
