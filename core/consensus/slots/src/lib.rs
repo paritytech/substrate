@@ -32,12 +32,12 @@ pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
 
 use codec::{Decode, Encode};
 use consensus_common::{SyncOracle, SelectChain};
-use futures::{prelude::*, future::{self, Either}, task::Poll};
+use futures::{prelude::*, future::{self, Either}};
 use inherents::{InherentData, InherentDataProviders};
 use log::{debug, error, info, warn};
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{ApiRef, Block as BlockT, ProvideRuntimeApi};
-use std::{fmt::Debug, ops::Deref, panic, pin::Pin};
+use std::{fmt::Debug, ops::Deref};
 
 /// A worker that should be invoked at every new slot.
 pub trait SlotWorker<B: BlockT> {
@@ -86,7 +86,7 @@ where
 	let SlotDuration(slot_duration) = slot_duration;
 
 	// rather than use a timer interval, we schedule our waits ourselves
-	let mut authorship = Slots::<SC>::new(
+	Slots::<SC>::new(
 		slot_duration.slot_duration(),
 		inherent_data_providers,
 		timestamp_extractor,
@@ -109,28 +109,16 @@ where
 			};
 
 			Either::Left(worker.on_slot(chain_head, slot_info).map_err(
-				|e| { warn!(target: "slots", "Encountered consensus error: {:?}", e); e }
-			))
-		});
-
-	future::poll_fn(move |cx| {
-		loop {
-			match panic::catch_unwind(panic::AssertUnwindSafe(|| Future::poll(Pin::new(&mut authorship), cx))) {
-				Ok(Poll::Ready(Ok(()))) =>
-					warn!(target: "slots", "Slots stream has terminated unexpectedly."),
-				Ok(Poll::Pending) => break Poll::Pending,
-				Ok(Poll::Ready(Err(_err))) =>
-					warn!(target: "slots", "Authorship task terminated unexpectedly. Restarting"),
-				Err(e) => {
-					if let Some(s) = e.downcast_ref::<&'static str>() {
-						warn!(target: "slots", "Authorship task panicked at {:?}", s);
-					}
-
-					warn!(target: "slots", "Restarting authorship task");
-				}
+				|e| {
+					warn!(target: "slots", "Encountered consensus error: {:?}", e);
+				}).or_else(|_| future::ready(Ok(())))
+			)
+		}).then(|res| {
+			if let Err(err) = res {
+				warn!(target: "slots", "Slots stream terminated with an error: {:?}", err);
 			}
-		}
-	})
+			future::ready(())
+		})
 }
 
 /// A header which has been checked
