@@ -163,10 +163,8 @@ impl<T> ClassifyDispatch<T> for SimpleDispatchInfo {
 
 impl Default for SimpleDispatchInfo {
 	fn default() -> Self {
-		// This implies that the weight is currently equal to 100, nothing more
-		// for all substrate transactions that do NOT explicitly annotate weight.
-		// TODO #2431 needs to be updated with proper max values.
-		SimpleDispatchInfo::FixedNormal(100)
+		// Default weight of all transactions.
+		SimpleDispatchInfo::FixedNormal(10_000)
 	}
 }
 

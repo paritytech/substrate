@@ -6,15 +6,15 @@ edition = "2018"
 
 [dependencies]
 log = "0.4"
+futures-preview = "0.3.0-alpha.17"
 codec = { package = "parity-codec", version = "4.1.1" }
-runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
-client = { package = "substrate-client", path = "../../core/client" }
-aura_primitives = { package = "substrate-consensus-aura-primitives", path = "../../core/consensus/aura/primitives" }
-consensus_common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
+sr-primitives = { path = "../../core/sr-primitives" }
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
+client = { package = "substrate-client", path = "../../core/client" }
+consensus_common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 inherents = { package = "substrate-inherents", path = "../inherents" }
-transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
 substrate-telemetry = { path = "../telemetry" }
+transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
 
 [dev-dependencies]
 test-client = { package = "substrate-test-runtime-client", path = "../../core/test-runtime/client" }

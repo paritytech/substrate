@@ -27,7 +27,7 @@ use std::{
 
 use log::{trace, debug, warn};
 use serde::Serialize;
-use substrate_primitives::hexdisplay::HexDisplay;
+use primitives::hexdisplay::HexDisplay;
 use sr_primitives::traits::Member;
 use sr_primitives::transaction_validity::{
 	TransactionTag as Tag,

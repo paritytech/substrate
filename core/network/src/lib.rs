@@ -202,9 +202,9 @@ pub use on_demand_layer::{OnDemand, RemoteResponse};
 
 // Used by the `construct_simple_protocol!` macro.
 #[doc(hidden)]
-pub use runtime_primitives::traits::Block as BlockT;
+pub use sr_primitives::traits::Block as BlockT;
 
-use libp2p::core::nodes::ConnectedPoint;
+use libp2p::core::ConnectedPoint;
 use serde::{Deserialize, Serialize};
 use slog_derive::SerdeValue;
 use std::{collections::{HashMap, HashSet}, time::Duration};

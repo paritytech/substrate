@@ -21,7 +21,7 @@ use parity_codec::Encode;
 use futures::sync::mpsc;
 use parking_lot::RwLockWriteGuard;
 
-use client::{blockchain, CallExecutor, Client};
+use client::{blockchain, CallExecutor, Client, well_known_cache_keys};
 use client::blockchain::HeaderBackend;
 use client::backend::Backend;
 use client::runtime_api::ApiExt;
@@ -32,13 +32,13 @@ use consensus_common::{
 	SelectChain, import_queue::CacheKeyId,
 };
 use fg_primitives::GrandpaApi;
-use runtime_primitives::Justification;
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{
+use sr_primitives::Justification;
+use sr_primitives::generic::BlockId;
+use sr_primitives::traits::{
 	Block as BlockT, DigestFor,
 	Header as HeaderT, NumberFor, ProvideRuntimeApi,
 };
-use substrate_primitives::{H256, Blake2Hasher};
+use primitives::{H256, Blake2Hasher};
 
 use crate::{Error, CommandOrError, NewAuthoritySet, VoterCommand};
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, DelayKind, PendingChange};
@@ -425,7 +425,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> BlockImport<Block>
 
 		// we don't want to finalize on `inner.import_block`
 		let mut justification = block.justification.take();
-		let enacts_consensus_change = !new_cache.is_empty();
+		let enacts_consensus_change = new_cache.contains_key(&well_known_cache_keys::AUTHORITIES);
 		let import_result = (&*self.inner).import_block(block, new_cache);
 
 		let mut imported_aux = {

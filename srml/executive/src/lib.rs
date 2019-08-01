@@ -50,7 +50,7 @@
 //! `Executive` type declaration from the node template.
 //!
 //! ```
-//! # use primitives::generic;
+//! # use sr_primitives::generic;
 //! # use srml_executive as executive;
 //! # pub struct UncheckedExtrinsic {};
 //! # pub struct Header {};
@@ -59,8 +59,8 @@
 //! # pub type Balances = u64;
 //! # pub type AllModules = u64;
 //! # pub enum Runtime {};
-//! # use primitives::transaction_validity::TransactionValidity;
-//! # use primitives::traits::ValidateUnsigned;
+//! # use sr_primitives::transaction_validity::TransactionValidity;
+//! # use sr_primitives::traits::ValidateUnsigned;
 //! # impl ValidateUnsigned for Runtime {
 //! # 	type Call = ();
 //! #
@@ -77,19 +77,19 @@
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use rstd::result;
-use primitives::{generic::Digest, traits::{
+use sr_primitives::{generic::Digest, traits::{
 	self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize,
 	OnInitialize, NumberFor, Block as BlockT, OffchainWorker, ValidateUnsigned
 }};
 use srml_support::Dispatchable;
 use parity_codec::{Codec, Encode};
 use system::{extrinsics_root, DigestOf};
-use primitives::{ApplyOutcome, ApplyError};
-use primitives::transaction_validity::TransactionValidity;
-use primitives::weights::GetDispatchInfo;
+use sr_primitives::{ApplyOutcome, ApplyError};
+use sr_primitives::transaction_validity::TransactionValidity;
+use sr_primitives::weights::GetDispatchInfo;
 
 mod internal {
-	use primitives::traits::DispatchError;
+	use sr_primitives::traits::DispatchError;
 
 	pub enum ApplyError {
 		BadSignature(&'static str),
@@ -108,6 +108,7 @@ mod internal {
 		fn from(d: DispatchError) -> Self {
 			match d {
 				DispatchError::Payment => ApplyError::CantPay,
+				DispatchError::Resource => ApplyError::FullBlock,
 				DispatchError::NoPermission => ApplyError::CantPay,
 				DispatchError::BadState => ApplyError::CantPay,
 				DispatchError::Stale => ApplyError::Stale,
@@ -291,7 +292,7 @@ where
 		<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32);
 
 		r.map(|_| internal::ApplyOutcome::Success).or_else(|e| match e {
-			primitives::BLOCK_FULL => Err(internal::ApplyError::FullBlock),
+			sr_primitives::BLOCK_FULL => Err(internal::ApplyError::FullBlock),
 			e => Ok(internal::ApplyOutcome::Fail(e))
 		})
 	}
@@ -335,7 +336,7 @@ where
 			Err("invalid account index") => return TransactionValidity::Unknown(INVALID_INDEX),
 			// Technically a bad signature could also imply an out-of-date account index, but
 			// that's more of an edge case.
-			Err(primitives::BAD_SIGNATURE) => return TransactionValidity::Invalid(ApplyError::BadSignature as i8),
+			Err(sr_primitives::BAD_SIGNATURE) => return TransactionValidity::Invalid(ApplyError::BadSignature as i8),
 			Err(_) => return TransactionValidity::Invalid(UNKNOWN_ERROR),
 		};
 
@@ -355,12 +356,14 @@ mod tests {
 	use super::*;
 	use balances::Call;
 	use runtime_io::with_externalities;
-	use substrate_primitives::{H256, Blake2Hasher};
-	use primitives::generic::Era;
-	use primitives::traits::{Header as HeaderT, BlakeTwo256, IdentityLookup};
-	use primitives::testing::{Digest, Header, Block};
+	use primitives::{H256, Blake2Hasher};
+	use sr_primitives::generic::Era;
+	use sr_primitives::Perbill;
+	use sr_primitives::weights::Weight;
+	use sr_primitives::traits::{Header as HeaderT, BlakeTwo256, IdentityLookup, ConvertInto};
+	use sr_primitives::testing::{Digest, Header, Block};
 	use srml_support::{impl_outer_event, impl_outer_origin, parameter_types};
-	use srml_support::traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons, WithdrawReason, Get};
+	use srml_support::traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons, WithdrawReason};
 	use system;
 	use hex_literal::hex;
 
@@ -382,12 +385,13 @@ mod tests {
 		pub const BlockHashCount: u64 = 250;
 		pub const MaximumBlockWeight: u32 = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
+		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl system::Trait for Runtime {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
-		type Hash = substrate_primitives::H256;
+		type Hash = primitives::H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<u64>;
@@ -396,6 +400,7 @@ mod tests {
 		type BlockHashCount = BlockHashCount;
 		type WeightMultiplierUpdate = ();
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 	}
 	parameter_types! {
@@ -418,6 +423,7 @@ mod tests {
 		type CreationFee = CreationFee;
 		type TransactionBaseFee = TransactionBaseFee;
 		type TransactionByteFee = TransactionByteFee;
+		type WeightToFee = ConvertInto;
 	}
 
 	impl ValidateUnsigned for Runtime {
@@ -437,7 +443,7 @@ mod tests {
 		system::CheckWeight<Runtime>,
 		balances::TakeFees<Runtime>
 	);
-	type TestXt = primitives::testing::TestXt<Call<Runtime>, SignedExtra>;
+	type TestXt = sr_primitives::testing::TestXt<Call<Runtime>, SignedExtra>;
 	type Executive = super::Executive<Runtime, Block<TestXt>, system::ChainContext<Runtime>, Runtime, ()>;
 
 	fn extra(nonce: u64, fee: u64) -> SignedExtra {
@@ -457,10 +463,10 @@ mod tests {
 	fn balance_transfer_dispatch_works() {
 		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 		balances::GenesisConfig::<Runtime> {
-			balances: vec![(1, 111)],
+			balances: vec![(1, 211)],
 			vesting: vec![],
 		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
-		let xt = primitives::testing::TestXt(sign_extra(1, 0, 0), Call::transfer(2, 69));
+		let xt = sr_primitives::testing::TestXt(sign_extra(1, 0, 0), Call::transfer(2, 69));
 		let weight = xt.get_dispatch_info().weight as u64;
 		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new_with_children(t);
 		with_externalities(&mut t, || {
@@ -473,7 +479,7 @@ mod tests {
 			));
 			let r = Executive::apply_extrinsic(xt);
 			assert_eq!(r, Ok(ApplyOutcome::Success));
-			assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 42 - 10 - weight);
+			assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 142 - 10 - weight);
 			assert_eq!(<balances::Module<Runtime>>::total_balance(&2), 69);
 		});
 	}
@@ -541,7 +547,7 @@ mod tests {
 	fn bad_extrinsic_not_inserted() {
 		let mut t = new_test_ext(1);
 		// bad nonce check!
-		let xt = primitives::testing::TestXt(sign_extra(1, 30, 0), Call::transfer(33, 69));
+		let xt = sr_primitives::testing::TestXt(sign_extra(1, 30, 0), Call::transfer(33, 69));
 		with_externalities(&mut t, || {
 			Executive::initialize_block(&Header::new(
 				1,
@@ -559,10 +565,10 @@ mod tests {
 	fn block_weight_limit_enforced() {
 		let mut t = new_test_ext(10000);
 		// given: TestXt uses the encoded len as fixed Len:
-		let xt = primitives::testing::TestXt(sign_extra(1, 0, 0), Call::transfer::<Runtime>(33, 0));
+		let xt = sr_primitives::testing::TestXt(sign_extra(1, 0, 0), Call::transfer::<Runtime>(33, 0));
 		let encoded = xt.encode();
-		let encoded_len = encoded.len() as u32;
-		let limit = <MaximumBlockWeight as Get<u32>>::get() / 4;
+		let encoded_len = encoded.len() as Weight;
+		let limit = AvailableBlockRatio::get() * MaximumBlockWeight::get();
 		let num_to_exhaust_block = limit / encoded_len;
 		with_externalities(&mut t, || {
 			Executive::initialize_block(&Header::new(
@@ -575,14 +581,14 @@ mod tests {
 			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
 
 			for nonce in 0..=num_to_exhaust_block {
-				let xt = primitives::testing::TestXt(sign_extra(1, nonce.into(), 0), Call::transfer::<Runtime>(33, 0));
+				let xt = sr_primitives::testing::TestXt(sign_extra(1, nonce.into(), 0), Call::transfer::<Runtime>(33, 0));
 				let res = Executive::apply_extrinsic(xt);
 				if nonce != num_to_exhaust_block {
 					assert_eq!(res.unwrap(), ApplyOutcome::Success);
 					assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), encoded_len * (nonce + 1));
-					assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(nonce + 1));
+					assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(nonce as u32 + 1));
 				} else {
-					assert_eq!(res, Err(ApplyError::CantPay));
+					assert_eq!(res, Err(ApplyError::FullBlock));
 				}
 			}
 		});
@@ -590,9 +596,9 @@ mod tests {
 
 	#[test]
 	fn block_weight_and_size_is_stored_per_tx() {
-		let xt = primitives::testing::TestXt(sign_extra(1, 0, 0), Call::transfer(33, 0));
-		let x1 = primitives::testing::TestXt(sign_extra(1, 1, 0), Call::transfer(33, 0));
-		let x2 = primitives::testing::TestXt(sign_extra(1, 2, 0), Call::transfer(33, 0));
+		let xt = sr_primitives::testing::TestXt(sign_extra(1, 0, 0), Call::transfer(33, 0));
+		let x1 = sr_primitives::testing::TestXt(sign_extra(1, 1, 0), Call::transfer(33, 0));
+		let x2 = sr_primitives::testing::TestXt(sign_extra(1, 2, 0), Call::transfer(33, 0));
 		let len = xt.clone().encode().len() as u32;
 		let mut t = new_test_ext(1);
 		with_externalities(&mut t, || {
@@ -604,7 +610,7 @@ mod tests {
 			assert_eq!(Executive::apply_extrinsic(x2.clone()).unwrap(), ApplyOutcome::Success);
 
 			// default weight for `TestXt` == encoded length.
-			assert_eq!( <system::Module<Runtime>>::all_extrinsics_weight(), 3 * len);
+			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), (3 * len).into());
 			assert_eq!(<system::Module<Runtime>>::all_extrinsics_len(), 3 * len);
 
 			let _ = <system::Module<Runtime>>::finalize();
@@ -616,7 +622,7 @@ mod tests {
 
 	#[test]
 	fn validate_unsigned() {
-		let xt = primitives::testing::TestXt(None, Call::set_balance(33, 69, 69));
+		let xt = sr_primitives::testing::TestXt(None, Call::set_balance(33, 69, 69));
 		let valid = TransactionValidity::Valid(Default::default());
 		let mut t = new_test_ext(1);
 
@@ -639,7 +645,7 @@ mod tests {
 					10,
 					lock,
 				);
-				let xt = primitives::testing::TestXt(sign_extra(1, 0, 0), Call::transfer(2, 10));
+				let xt = sr_primitives::testing::TestXt(sign_extra(1, 0, 0), Call::transfer(2, 10));
 				let weight = xt.get_dispatch_info().weight as u64;
 				Executive::initialize_block(&Header::new(
 					1,

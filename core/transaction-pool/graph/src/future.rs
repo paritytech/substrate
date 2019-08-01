@@ -22,7 +22,7 @@ use std::{
 	time,
 };
 
-use substrate_primitives::hexdisplay::HexDisplay;
+use primitives::hexdisplay::HexDisplay;
 use sr_primitives::transaction_validity::{
 	TransactionTag as Tag,
 };

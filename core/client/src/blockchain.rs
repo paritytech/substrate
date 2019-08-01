@@ -18,9 +18,9 @@
 
 use std::sync::Arc;
 
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::Justification;
+use sr_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use sr_primitives::generic::BlockId;
+use sr_primitives::Justification;
 
 use crate::error::{Error, Result};
 
@@ -200,7 +200,7 @@ pub fn tree_route<Block: BlockT, Backend: HeaderBackend<Block>>(
 	from: BlockId<Block>,
 	to: BlockId<Block>,
 ) -> Result<TreeRoute<Block>> {
-	use runtime_primitives::traits::Header;
+	use sr_primitives::traits::Header;
 
 	let load_header = |id: BlockId<Block>| {
 		match backend.header(id) {
@@ -270,6 +270,9 @@ pub mod well_known_cache_keys {
 
 	/// A list of authorities.
 	pub const AUTHORITIES: Id = *b"auth";
+
+	/// Current Epoch data.
+	pub const EPOCH: Id = *b"epch";
 
 	/// Changes trie configuration.
 	pub const CHANGES_TRIE_CONFIG: Id = *b"chtr";

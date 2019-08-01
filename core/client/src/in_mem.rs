@@ -20,10 +20,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use parking_lot::{RwLock, Mutex};
 use primitives::storage::well_known_keys;
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor};
-use runtime_primitives::{Justification, StorageOverlay, ChildrenStorageOverlay};
-use state_machine::{self, backend::{Backend as StateBackend, InMemory}};
+use sr_primitives::generic::BlockId;
+use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor};
+use sr_primitives::{Justification, StorageOverlay, ChildrenStorageOverlay};
+use state_machine::backend::{Backend as StateBackend, InMemory};
 use hash_db::Hasher;
 use trie::MemoryDB;
 
@@ -623,17 +623,6 @@ where
 			let hash = header.hash();
 
 			self.states.write().insert(hash, operation.new_state.unwrap_or_else(|| old_state.clone()));
-
-/*			let maybe_changes_trie_root = header.digest().log(DigestItem::as_changes_trie_root).cloned();
-			if let Some(changes_trie_root) = maybe_changes_trie_root {
-				if let Some(changes_trie_update) = operation.changes_trie_update {
-					self.changes_trie_storage.0.insert(
-						*header.number(),
-						changes_trie_root,
-						changes_trie_update
-					);
-				}
-			}*/
 
 			self.blockchain.insert(hash, header, justification, body, pending_block.state)?;
 		}

@@ -25,9 +25,13 @@ pub use client_db::{Backend, self};
 pub use client_ext::ClientExt;
 pub use consensus;
 pub use executor::{NativeExecutor, self};
-pub use keyring::{sr25519::Keyring as AuthorityKeyring, AccountKeyring};
+pub use keyring::{
+	AccountKeyring,
+	ed25519::Keyring as Ed25519Keyring,
+	sr25519::Keyring as Sr25519Keyring,
+};
 pub use primitives::Blake2Hasher;
-pub use runtime_primitives::{StorageOverlay, ChildrenStorageOverlay};
+pub use sr_primitives::{StorageOverlay, ChildrenStorageOverlay};
 pub use state_machine::ExecutionStrategy;
 
 use std::sync::Arc;
@@ -35,7 +39,7 @@ use std::collections::HashMap;
 use futures::future::Ready;
 use hash_db::Hasher;
 use primitives::storage::well_known_keys;
-use runtime_primitives::traits::{
+use sr_primitives::traits::{
 	Block as BlockT, NumberFor
 };
 use client::LocalCallExecutor;

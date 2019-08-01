@@ -21,7 +21,7 @@ use serde::Serialize;
 
 use rstd::prelude::*;
 
-use substrate_primitives::ChangesTrieConfiguration;
+use primitives::ChangesTrieConfiguration;
 use crate::ConsensusEngineId;
 use crate::codec::{Decode, Encode, Input};
 
@@ -128,7 +128,7 @@ pub enum ChangesTrieSignal {
 impl<Hash: Encode> ::serde::Serialize for DigestItem<Hash> {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
 		self.using_encoded(|bytes| {
-			::substrate_primitives::bytes::serialize(bytes, seq)
+			::primitives::bytes::serialize(bytes, seq)
 		})
 	}
 }

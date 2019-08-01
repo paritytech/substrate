@@ -50,11 +50,11 @@ use trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
 use parking_lot::{Mutex, RwLock};
 use primitives::{H256, Blake2Hasher, ChangesTrieConfiguration};
 use primitives::storage::well_known_keys;
-use runtime_primitives::{
+use sr_primitives::{
 	generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay,
 	BuildStorage
 };
-use runtime_primitives::traits::{
+use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero, One, SaturatedConversion
 };
 use state_machine::backend::Backend as StateBackend;
@@ -971,21 +971,24 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			None
 		};
 
-		if let Some(set_head) = operation.set_head {
+		let cache_update = if let Some(set_head) = operation.set_head {
 			if let Some(header) = ::client::blockchain::HeaderBackend::header(&self.blockchain, set_head)? {
 				let number = header.number();
 				let hash = header.hash();
 
-				self.set_head_with_transaction(
+				let (enacted, retracted) = self.set_head_with_transaction(
 					&mut transaction,
 					hash.clone(),
 					(number.clone(), hash.clone())
 				)?;
 				meta_updates.push((hash, *number, true, false));
+				Some((enacted, retracted))
 			} else {
 				return Err(client::error::Error::UnknownBlock(format!("Cannot set head {:?}", set_head)))
 			}
-		}
+		} else {
+			None
+		};
 
 		let write_result = self.storage.db.write(transaction).map_err(db_err);
 
@@ -1015,6 +1018,10 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				Some(number),
 				|| is_best,
 			);
+		}
+
+		if let Some((enacted, retracted)) = cache_update {
+			self.shared_cache.lock().sync(&enacted, &retracted);
 		}
 
 		for (hash, number, is_best, is_finalized) in meta_updates {
@@ -1291,9 +1298,9 @@ pub(crate) mod tests {
 	use client::backend::Backend as BTrait;
 	use client::blockchain::Backend as BLBTrait;
 	use client::backend::BlockImportOperation as Op;
-	use runtime_primitives::generic::DigestItem;
-	use runtime_primitives::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
-	use runtime_primitives::traits::{Hash, BlakeTwo256};
+	use sr_primitives::generic::DigestItem;
+	use sr_primitives::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
+	use sr_primitives::traits::{Hash, BlakeTwo256};
 	use state_machine::{TrieMut, TrieDBMut};
 	use test_client;
 
@@ -1322,7 +1329,7 @@ pub(crate) mod tests {
 		changes: Vec<(Vec<u8>, Vec<u8>)>,
 		extrinsics_root: H256,
 	) -> H256 {
-		use runtime_primitives::testing::Digest;
+		use sr_primitives::testing::Digest;
 
 		let (changes_root, changes_trie_update) = prepare_changes(changes);
 		let digest = Digest {

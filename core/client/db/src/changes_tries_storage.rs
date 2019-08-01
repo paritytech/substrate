@@ -27,10 +27,10 @@ use client::backend::PrunableStateChangesTrieStorage;
 use client::blockchain::{Cache, well_known_cache_keys};
 use parity_codec::Decode;
 use primitives::{H256, Blake2Hasher, ChangesTrieConfiguration, convert_hash};
-use runtime_primitives::traits::{
+use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One,
 };
-use runtime_primitives::generic::{BlockId, DigestItem, ChangesTrieSignal};
+use sr_primitives::generic::{BlockId, DigestItem, ChangesTrieSignal};
 use state_machine::DBValue;
 use crate::utils::{self, Meta};
 use crate::cache::{DbCacheSync, DbCache, DbCacheTransactionOps, ComplexBlockId, EntryType as CacheEntryType};
@@ -300,8 +300,8 @@ where
 mod tests {
 	use client::backend::{Backend as ClientBackend, NewBlockState, BlockImportOperation};
 	use client::blockchain::HeaderBackend as BlockchainHeaderBackend;
-	use runtime_primitives::testing::Header;
-	use runtime_primitives::traits::{Hash, BlakeTwo256};
+	use sr_primitives::testing::Header;
+	use sr_primitives::traits::{Hash, BlakeTwo256};
 	use state_machine::{ChangesTrieRootsStorage, ChangesTrieStorage};
 	use crate::Backend;
 	use crate::tests::{Block, insert_header, prepare_changes};
@@ -569,7 +569,7 @@ mod tests {
 			changes: Vec<(Vec<u8>, Vec<u8>)>,
 			new_configuration: Option<ChangesTrieConfiguration>,
 		) -> H256 {
-			use runtime_primitives::testing::Digest;
+			use sr_primitives::testing::Digest;
 
 			let (changes_root, changes_trie_update) = prepare_changes(changes);
 			let digest = Digest {

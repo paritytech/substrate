@@ -16,9 +16,10 @@
 
 use test_client::{
 	prelude::*,
+	DefaultTestClientBuilderExt, TestClientBuilder,
 	runtime::{TestAPI, DecodeFails, Transfer, Header},
 };
-use runtime_primitives::{
+use sr_primitives::{
 	generic::BlockId,
 	traits::{ProvideRuntimeApi, Header as HeaderT, Hash as HashT},
 };

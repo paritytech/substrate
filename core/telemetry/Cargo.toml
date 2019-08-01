@@ -11,11 +11,14 @@ parking_lot = "0.8.0"
 futures01 = { package = "futures", version = "0.1" }
 futures-preview = { version = "0.3.0-alpha.17", features = ["compat"] }
 futures-timer = "0.2.1"
-libp2p = { version = "0.10.0", default-features = false, features = ["libp2p-websocket"] }
+libp2p = { version = "0.11.0", default-features = false, features = ["libp2p-websocket"] }
 log = "0.4"
 rand = "0.6"
 serde = { version = "1.0.81", features = ["derive"] }
 slog = { version = "^2", features = ["nested-values"] }
+# TODO: we're using slog-async just to be able to clone records; See https://github.com/slog-rs/slog/issues/221,
+# https://github.com/paritytech/substrate/issues/2823 and https://github.com/paritytech/substrate/issues/3260
+slog-async = { git = "https://github.com/paritytech/slog-async", features = ["nested-values"] }
 slog-json = { version = "^2", features = ["nested-values"] }
 slog-scope = "^4"
 tokio-io = "0.1"

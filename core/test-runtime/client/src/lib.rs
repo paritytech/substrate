@@ -27,7 +27,7 @@ pub use generic_test_client::*;
 pub use runtime;
 
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT};
+use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT};
 use primitives::ChangesTrieConfiguration;
 
 /// A prelude to import in tests.
@@ -40,7 +40,7 @@ pub mod prelude {
 		Executor, LightExecutor, LocalExecutor, NativeExecutor,
 	};
 	// Keyring
-	pub use super::{AccountKeyring, AuthorityKeyring};
+	pub use super::{AccountKeyring, Sr25519Keyring};
 }
 
 mod local_executor {
@@ -96,11 +96,12 @@ pub type LightExecutor = client::light::call_executor::RemoteOrLocalCallExecutor
 #[derive(Default)]
 pub struct GenesisParameters {
 	changes_trie_config: Option<ChangesTrieConfiguration>,
+	heap_pages_override: Option<u64>,
 }
 
 impl generic_test_client::GenesisInit for GenesisParameters {
 	fn genesis_storage(&self) -> (StorageOverlay, ChildrenStorageOverlay) {
-		let mut storage = genesis_config(self.changes_trie_config.clone()).genesis_map();
+		let mut storage = genesis_config(self.changes_trie_config.clone(), self.heap_pages_override).genesis_map();
 
 		let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
 			storage.clone().into_iter()
@@ -146,6 +147,9 @@ pub trait TestClientBuilderExt<B>: Sized {
 	/// Set changes trie configuration for genesis.
 	fn changes_trie_config(self, config: Option<ChangesTrieConfiguration>) -> Self;
 
+	/// Override the default value for Wasm heap pages.
+	fn set_heap_pages(self, heap_pages: u64) -> Self;
+
 	/// Build the test client.
 	fn build(self) -> Client<B> {
 		self.build_with_longest_chain().0
@@ -166,22 +170,30 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 		self
 	}
 
+	fn set_heap_pages(mut self, heap_pages: u64) -> Self {
+		self.genesis_init_mut().heap_pages_override = Some(heap_pages);
+		self
+	}
+
 	fn build_with_longest_chain(self) -> (Client<B>, client::LongestChain<B, runtime::Block>) {
 		self.build_with_native_executor(None)
 	}
 }
 
-fn genesis_config(changes_trie_config: Option<ChangesTrieConfiguration>) -> GenesisConfig {
-	GenesisConfig::new(changes_trie_config, vec![
-		AuthorityKeyring::Alice.into(),
-		AuthorityKeyring::Bob.into(),
-		AuthorityKeyring::Charlie.into(),
-	], vec![
-		AccountKeyring::Alice.into(),
-		AccountKeyring::Bob.into(),
-		AccountKeyring::Charlie.into(),
-	],
-		1000
+fn genesis_config(changes_trie_config: Option<ChangesTrieConfiguration>, heap_pages_override: Option<u64>) -> GenesisConfig {
+	GenesisConfig::new(
+		changes_trie_config,
+		vec![
+			Sr25519Keyring::Alice.into(),
+			Sr25519Keyring::Bob.into(),
+			Sr25519Keyring::Charlie.into(),
+		], vec![
+			AccountKeyring::Alice.into(),
+			AccountKeyring::Bob.into(),
+			AccountKeyring::Charlie.into(),
+		],
+		1000,
+		heap_pages_override,
 	)
 }
 

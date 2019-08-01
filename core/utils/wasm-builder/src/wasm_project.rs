@@ -259,7 +259,7 @@ fn is_release_build() -> bool {
 /// Build the project to create the WASM binary.
 fn build_project(project: &Path) {
 	let manifest_path = project.join("Cargo.toml");
-	let mut build_cmd = crate::get_nightly_cargo();
+	let mut build_cmd = crate::get_nightly_cargo().command();
 
 	let rustflags = format!(
 		"-C link-arg=--export-table {}",

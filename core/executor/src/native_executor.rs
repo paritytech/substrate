@@ -14,93 +14,27 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{borrow::BorrowMut, result, cell::{RefMut, RefCell}};
+use std::{result, cell::RefCell, panic::UnwindSafe};
 use crate::error::{Error, Result};
 use state_machine::{CodeExecutor, Externalities};
 use crate::wasm_executor::WasmExecutor;
-use wasmi::{Module as WasmModule, ModuleRef as WasmModuleInstanceRef};
 use runtime_version::{NativeVersion, RuntimeVersion};
-use std::{collections::HashMap, panic::UnwindSafe};
 use parity_codec::{Decode, Encode};
 use crate::RuntimeInfo;
 use primitives::{Blake2Hasher, NativeOrEncoded};
-use primitives::storage::well_known_keys;
 use log::trace;
 
-/// Default num of pages for the heap
-const DEFAULT_HEAP_PAGES: u64 = 1024;
-
-// For the internal Runtime Cache:
-// Is it compatible enough to run this natively or do we need to fall back on the WasmModule
-
-enum RuntimePreproc {
-	InvalidCode,
-	ValidCode(WasmModuleInstanceRef, Option<RuntimeVersion>),
-}
-
-type CacheType = HashMap<[u8; 32], RuntimePreproc>;
+use crate::RuntimesCache;
 
 thread_local! {
-	static RUNTIMES_CACHE: RefCell<CacheType> = RefCell::new(HashMap::new());
-}
-
-/// fetch a runtime version from the cache or if there is no cached version yet, create
-/// the runtime version entry for `code`, determines whether `Compatibility::IsCompatible`
-/// can be used by comparing returned RuntimeVersion to `ref_version`
-fn fetch_cached_runtime_version<'a, E: Externalities<Blake2Hasher>>(
-	wasm_executor: &WasmExecutor,
-	cache: &'a mut RefMut<CacheType>,
-	ext: &mut E,
-	default_heap_pages: Option<u64>,
-) -> Result<(&'a WasmModuleInstanceRef, &'a Option<RuntimeVersion>)> {
-	let code_hash = match ext.original_storage_hash(well_known_keys::CODE) {
-		Some(code_hash) => code_hash,
-		None => return Err(Error::InvalidCode(vec![])),
-	};
-
-	let maybe_runtime_preproc = cache.borrow_mut().entry(code_hash.into())
-		.or_insert_with(|| {
-			let code = match ext.original_storage(well_known_keys::CODE) {
-				Some(code) => code,
-				None => return RuntimePreproc::InvalidCode,
-			};
-			let heap_pages = ext.storage(well_known_keys::HEAP_PAGES)
-				.and_then(|pages| u64::decode(&mut &pages[..]))
-				.or(default_heap_pages)
-				.unwrap_or(DEFAULT_HEAP_PAGES);
-			match WasmModule::from_buffer(code)
-				.map_err(|_| Error::InvalidCode(vec![]))
-				.and_then(|module| wasm_executor.prepare_module(ext, heap_pages as usize, &module))
-			{
-				Ok(module) => {
-					let version = wasm_executor.call_in_wasm_module(ext, &module, "Core_version", &[])
-						.ok()
-						.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()));
-					RuntimePreproc::ValidCode(module, version)
-				}
-				Err(e) => {
-					trace!(target: "executor", "Invalid code presented to executor ({:?})", e);
-					RuntimePreproc::InvalidCode
-				}
-			}
-		});
-
-	match maybe_runtime_preproc {
-		RuntimePreproc::InvalidCode => {
-			let code = ext.original_storage(well_known_keys::CODE).unwrap_or(vec![]);
-			Err(Error::InvalidCode(code))
-		},
-		RuntimePreproc::ValidCode(m, v) => {
-			Ok((m, v))
-		}
-	}
+	static RUNTIMES_CACHE: RefCell<RuntimesCache> = RefCell::new(RuntimesCache::new());
 }
 
 fn safe_call<F, U>(f: F) -> Result<U>
 	where F: UnwindSafe + FnOnce() -> U
 {
 	// Substrate uses custom panic hook that terminates process on panic. Disable termination for the native call.
-	let _guard = panic_handler::AbortGuard::new(false);
+	let _guard = panic_handler::AbortGuard::force_unwind();
 	::std::panic::catch_unwind(f).map_err(|_| Error::Runtime)
 }
 
@@ -118,16 +52,11 @@ pub trait NativeExecutionDispatch: Send + Sync {
 	/// Get the wasm code that the native dispatch will be equivalent to.
 	fn native_equivalent() -> &'static [u8];
 
-	/// Dispatch a method and input data to be executed natively. Returns `Some` result or `None`
-	/// if the `method` is unknown. Panics if there's an unrecoverable error.
-	// fn dispatch<H: hash_db::Hasher>(ext: &mut Externalities<H>, method: &str, data: &[u8]) -> Result<Vec<u8>>;
+	/// Dispatch a method and input data to be executed natively.
 	fn dispatch(ext: &mut dyn Externalities<Blake2Hasher>, method: &str, data: &[u8]) -> Result<Vec<u8>>;
 
 	/// Provide native runtime version.
 	fn native_version() -> NativeVersion;
-
-	/// Construct corresponding `NativeExecutor`
-	fn new(default_heap_pages: Option<u64>) -> NativeExecutor<Self> where Self: Sized;
 }
 
 /// A generic `CodeExecutor` implementation that uses a delegate to determine wasm code equivalence
@@ -140,7 +69,7 @@ pub struct NativeExecutor<D> {
 	fallback: WasmExecutor,
 	/// Native runtime version info.
 	native_version: NativeVersion,
-	/// The default number of 64KB pages to allocate for Wasm execution.
+	/// The number of 64KB pages to allocate for Wasm execution.
 	default_heap_pages: Option<u64>,
 }
 
@@ -151,7 +80,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 			_dummy: Default::default(),
 			fallback: WasmExecutor::new(),
 			native_version: D::native_version(),
-			default_heap_pages,
+			default_heap_pages: default_heap_pages,
 		}
 	}
 }
@@ -176,10 +105,11 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 		&self,
 		ext: &mut E,
 	) -> Option<RuntimeVersion> {
-		RUNTIMES_CACHE.with(|c|
-			fetch_cached_runtime_version(&self.fallback, &mut c.borrow_mut(), ext, self.default_heap_pages)
-				.ok()?.1.clone()
-		)
+		RUNTIMES_CACHE.with(|cache| {
+			let cache = &mut cache.borrow_mut();
+			cache.fetch_runtime(&self.fallback, ext, self.default_heap_pages)
+				.ok()?.version().clone()
+		})
 	}
 }
 
@@ -198,14 +128,16 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 		data: &[u8],
 		use_native: bool,
 		native_call: Option<NC>,
-	) -> (Result<NativeOrEncoded<R>>, bool) {
-		RUNTIMES_CACHE.with(|c| {
-			let mut c = c.borrow_mut();
-			let (module, onchain_version) = match fetch_cached_runtime_version(
-				&self.fallback, &mut c, ext, self.default_heap_pages) {
-					Ok((module, onchain_version)) => (module, onchain_version),
-					Err(e) => return (Err(e), false),
+	) -> (Result<NativeOrEncoded<R>>, bool){
+		RUNTIMES_CACHE.with(|cache| {
+			let cache = &mut cache.borrow_mut();
+			let cached_runtime = match cache.fetch_runtime(
+				&self.fallback, ext, self.default_heap_pages,
+			) {
+				Ok(cached_runtime) => cached_runtime,
+				Err(e) => return (Err(e), false),
 			};
+			let onchain_version = cached_runtime.version();
 			match (
 				use_native,
 				onchain_version
@@ -223,17 +155,21 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 							.map_or_else(||"<None>".into(), |v| format!("{}", v))
 					);
 					(
-						self.fallback
-							.call_in_wasm_module(ext, module, method, data)
-							.map(NativeOrEncoded::Encoded),
+						cached_runtime.with(|module|
+							self.fallback
+								.call_in_wasm_module(ext, module, method, data)
+								.map(NativeOrEncoded::Encoded)
+						),
 						false
 					)
 				}
 				(false, _, _) => {
 					(
-						self.fallback
-							.call_in_wasm_module(ext, module, method, data)
-							.map(NativeOrEncoded::Encoded),
+						cached_runtime.with(|module|
+							self.fallback
+								.call_in_wasm_module(ext, module, method, data)
+								.map(NativeOrEncoded::Encoded)
+						),
 						false
 					)
 				}
@@ -281,17 +217,18 @@ macro_rules! native_executor_instance {
 				// get a proper build script, this must be strictly adhered to or things will go wrong.
 				$code
 			}
-			fn dispatch(ext: &mut $crate::Externalities<$crate::Blake2Hasher>, method: &str, data: &[u8]) -> $crate::error::Result<Vec<u8>> {
+
+			fn dispatch(
+				ext: &mut $crate::Externalities<$crate::Blake2Hasher>,
+				method: &str,
+				data: &[u8]
+			) -> $crate::error::Result<Vec<u8>> {
 				$crate::with_native_environment(ext, move || $dispatcher(method, data))?
 					.ok_or_else(|| $crate::error::Error::MethodNotFound(method.to_owned()))
 			}
 
 			fn native_version() -> $crate::NativeVersion {
 				$version()
-			}
-
-			fn new(default_heap_pages: Option<u64>) -> $crate::NativeExecutor<$name> {
-				$crate::NativeExecutor::new(default_heap_pages)
 			}
 		}
 	}

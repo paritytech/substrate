@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use runtime_primitives::traits::{GetNodeBlockType, Block as BlockT};
-use runtime_primitives::generic::BlockId;
+use sr_primitives::traits::{GetNodeBlockType, Block as BlockT};
+use sr_primitives::generic::BlockId;
 use client::runtime_api::{self, RuntimeApiInfo};
 use client::{error::Result, decl_runtime_apis, impl_runtime_apis};
 use test_client::runtime::Block;

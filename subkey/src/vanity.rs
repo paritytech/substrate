@@ -16,7 +16,7 @@
 
 use rand::{rngs::OsRng, RngCore};
 use super::Crypto;
-use substrate_primitives::Pair;
+use primitives::Pair;
 
 fn good_waypoint(done: u64) -> u64 {
 	match done {
@@ -103,7 +103,7 @@ pub(super) fn generate_key<C: Crypto>(desired: &str) -> Result<KeyPair<C>, &str>
 mod tests {
 	use super::*;
 	use super::super::Ed25519;
-	use substrate_primitives::{Pair, crypto::Ss58Codec};
+	use primitives::{Pair, crypto::Ss58Codec};
 	#[cfg(feature = "bench")]
 	use test::Bencher;
 

@@ -25,9 +25,9 @@ use crate::traits::{
 };
 use crate::{generic, KeyTypeId};
 use crate::weights::{GetDispatchInfo, DispatchInfo};
-pub use substrate_primitives::H256;
-use substrate_primitives::U256;
-use substrate_primitives::ed25519::{Public as AuthorityId};
+pub use primitives::H256;
+use primitives::U256;
+use primitives::ed25519::{Public as AuthorityId};
 use crate::transaction_validity::TransactionValidity;
 
 /// Authority Id
@@ -282,7 +282,7 @@ impl<Call: Encode, Extra: Encode> GetDispatchInfo for TestXt<Call, Extra> {
 	fn get_dispatch_info(&self) -> DispatchInfo {
 		// for testing: weight == size.
 		DispatchInfo {
-			weight: self.encode().len() as u32,
+			weight: self.encode().len() as _,
 			..Default::default()
 		}
 	}

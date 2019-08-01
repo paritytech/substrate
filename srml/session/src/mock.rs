@@ -19,8 +19,9 @@
 use super::*;
 use std::cell::RefCell;
 use srml_support::{impl_outer_origin, parameter_types};
-use substrate_primitives::H256;
-use primitives::{
+use primitives::H256;
+use sr_primitives::{
+	Perbill,
 	traits::{BlakeTwo256, IdentityLookup, ConvertInto},
 	testing::{Header, UintAuthorityId}
 };
@@ -116,6 +117,7 @@ parameter_types! {
 	pub const MaximumBlockWeight: u32 = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const MinimumPeriod: u64 = 5;
+	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl system::Trait for Test {
 	type Origin = Origin;
@@ -130,6 +132,7 @@ impl system::Trait for Test {
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
+	type AvailableBlockRatio = AvailableBlockRatio;
 	type MaximumBlockLength = MaximumBlockLength;
 }
 impl timestamp::Trait for Test {
@@ -156,7 +159,7 @@ impl Trait for Test {
 #[cfg(feature = "historical")]
 impl crate::historical::Trait for Test {
 	type FullIdentification = u64;
-	type FullIdentificationOf = primitives::traits::ConvertInto;
+	type FullIdentificationOf = sr_primitives::traits::ConvertInto;
 }
 
 pub type System = system::Module<Test>;

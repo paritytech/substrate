@@ -31,7 +31,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use runtime_primitives::traits::{Block as BlockT, DigestFor};
+use sr_primitives::traits::{Block as BlockT, DigestFor};
 use futures::prelude::*;
 pub use inherents::InherentData;
 
@@ -61,7 +61,7 @@ pub trait Environment<B: BlockT> {
 
 	/// Initialize the proposal logic on top of a specific header. Provide
 	/// the authorities at that header.
-	fn init(&self, parent_header: &B::Header)
+	fn init(&mut self, parent_header: &B::Header)
 		-> Result<Self::Proposer, Self::Error>;
 }
 
@@ -75,10 +75,10 @@ pub trait Proposer<B: BlockT> {
 	/// Error type which can occur when proposing or evaluating.
 	type Error: From<Error> + ::std::fmt::Debug + 'static;
 	/// Future that resolves to a committed proposal.
-	type Create: IntoFuture<Item=B, Error=Self::Error>;
+	type Create: Future<Output = Result<B, Self::Error>>;
 	/// Create a proposal.
 	fn propose(
-		&self,
+		&mut self,
 		inherent_data: InherentData,
 		inherent_digests: DigestFor<B>,
 		max_duration: Duration,
@@ -92,10 +92,10 @@ pub trait Proposer<B: BlockT> {
 pub trait SyncOracle {
 	/// Whether the synchronization service is undergoing major sync.
 	/// Returns true if so.
-	fn is_major_syncing(&self) -> bool;
+	fn is_major_syncing(&mut self) -> bool;
 	/// Whether the synchronization service is offline.
 	/// Returns true if so.
-	fn is_offline(&self) -> bool;
+	fn is_offline(&mut self) -> bool;
 }
 
 /// A synchronization oracle for when there is no network.
@@ -103,15 +103,17 @@ pub trait SyncOracle {
 pub struct NoNetwork;
 
 impl SyncOracle for NoNetwork {
-	fn is_major_syncing(&self) -> bool { false }
-	fn is_offline(&self) -> bool { false }
+	fn is_major_syncing(&mut self) -> bool { false }
+	fn is_offline(&mut self) -> bool { false }
 }
 
-impl<T: SyncOracle> SyncOracle for Arc<T> {
-	fn is_major_syncing(&self) -> bool {
-		T::is_major_syncing(&*self)
+impl<T> SyncOracle for Arc<T>
+where T: ?Sized, for<'r> &'r T: SyncOracle
+{
+	fn is_major_syncing(&mut self) -> bool {
+		<&T>::is_major_syncing(&mut &**self)
 	}
-	fn is_offline(&self) -> bool {
-		T::is_offline(&*self)
+	fn is_offline(&mut self) -> bool {
+		<&T>::is_offline(&mut &**self)
 	}
 }

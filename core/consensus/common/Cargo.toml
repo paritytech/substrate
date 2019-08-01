@@ -7,16 +7,15 @@ edition = "2018"
 
 [dependencies]
 derive_more = "0.14.0"
-libp2p = { version = "0.10.0", default-features = false }
+libp2p = { version = "0.11.0", default-features = false }
 log = "0.4"
 primitives = { package = "substrate-primitives", path= "../../primitives" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
-futures = "0.1"
+futures-preview = "0.3.0-alpha.17"
+futures-timer = "0.2.1"
 rstd = { package = "sr-std", path = "../../sr-std" }
 runtime_version = { package = "sr-version", path = "../../sr-version" }
-runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
-tokio-executor = "0.1.6"
-tokio-timer = "0.2"
+sr-primitives = {  path = "../../sr-primitives" }
 parity-codec = { version = "4.1.1", features = ["derive"] }
 parking_lot = "0.8.0"
 
