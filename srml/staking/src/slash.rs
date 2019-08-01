@@ -56,7 +56,7 @@ pub struct SlashAmount<AccountId, Balance> {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as RollingWindow {
-		/// Misbehavior reports
+		/// Slashing history
 		SlashHistory get(misbehavior_reports): linked_map T::SlashKind =>
 			BTreeMap<T::AccountId, SlashState<T::AccountId, BalanceOf<T>>>;
 	}
@@ -339,9 +339,6 @@ mod tests {
 	}
 
 	/// This should be something similar to `decl_module!` macro
-	///
-	/// It would probably be nice to have `DoSlash`, `DoReward` and `AfterSlash`
-	/// as associated types instead
 	pub struct BabeEquivocation<T, DS, DR, AS>(PhantomData<(T, DS, DR, AS)>);
 
 	impl_base_severity!(BabeEquivocation<T, DS, DR, AS>, Perbill: Perbill::zero());
@@ -363,7 +360,6 @@ mod tests {
 
 	impl<T, Reporters, Who, DS, DR, AS> ReportSlash<T::Hash, Reporters, Who> for BabeEquivocation<T, DS, DR, AS>
 	where
-		Who: Clone,
 		T: ReporterTrait,
 		DS: DoSlash<Who, Perbill, Kind>,
 		DR: DoReward<Reporters, DS::SlashedAmount>,
@@ -386,8 +382,7 @@ mod tests {
 			let misconduct_level = Self::as_misconduct_level(severity);
 			let (slashed, total_slash) = DS::do_slash(who, severity, kind)?;
 
-			// hard code to reward 10% of the total amount
-			// different misconducts might want to handle rewarding differently...
+			// hard code reward to 10% of the total amount
 			let reward_amount = Perbill::from_percent(10) * total_slash;
 
 			// the remaining 90% should go somewhere else, perhaps the `treasory module`?!
