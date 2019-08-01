@@ -187,6 +187,25 @@ impl TelemetryWorker {
 /// For some context, we put this object around the `wasm_ext::ExtTransport` in order to make sure
 /// that each telemetry message maps to one single call to `write` in the WASM FFI.
 struct StreamSink<T>(T);
+
+impl<T: tokio_io::AsyncRead> futures01::Stream for StreamSink<T> {
+	type Item = BytesMut;
+	type Error = io::Error;
+
+	fn poll(&mut self) -> futures01::Poll<Option<Self::Item>, Self::Error> {
+		let mut buf = [0; 128];
+		Ok(self.0.poll_read(&mut buf)?
+			.map(|n|
+				if n == 0 {
+					None
+				} else {
+					let buf: BytesMut = buf[..n].into();
+					Some(buf)
+				}
+			))
+	}
+}
+
 impl<T: tokio_io::AsyncWrite> futures01::Sink for StreamSink<T> {
 	type SinkItem = BytesMut;
 	type SinkError = io::Error;
