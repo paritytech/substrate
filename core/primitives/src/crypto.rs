@@ -833,8 +833,8 @@ macro_rules! impl_as_ref_mut {
 /// where .
 ///
 /// ```rust
-/// impl_wrapper! {
-///     pub struct Outer(Inner);
+/// substrate_primitives::wrap! {
+///     pub struct Wrapper(u32);
 /// }
 /// ```
 #[macro_export]
@@ -880,9 +880,10 @@ macro_rules! wrap {
 /// Application-specific types whose identifier is `$key_type`.
 ///
 /// ```rust
+///# use substrate_primitives::{app_crypto, wrap, ed25519, crypto::KeyTypeId};
 /// // Declare a new set of crypto types using Ed25519 logic that identifies as `KeyTypeId`
 /// // of value `b"fuba"`.
-/// app_crypto!(ed25519, *b"fuba");
+/// app_crypto!(ed25519, KeyTypeId(*b"_uba"));
 /// ```
 #[macro_export]
 macro_rules! app_crypto {
