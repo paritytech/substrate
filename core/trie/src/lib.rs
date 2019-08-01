@@ -34,7 +34,7 @@ pub use trie_stream::TrieStream;
 pub use node_codec::NodeCodec;
 /// Various re-exports from the `trie-db` crate.
 pub use trie_db::{Trie, TrieMut, DBValue, Recorder, CError,
-	Query, TrieLayout, TrieConfiguration, NibbleHalf, Cache16, NibbleOps};
+	Query, TrieLayout, TrieConfiguration, nibble_ops};
 /// Various re-exports from the `memory-db` crate.
 pub use memory_db::KeyFunction;
 pub use memory_db::prefixed_key;
@@ -49,9 +49,7 @@ pub struct Layout<H>(rstd::marker::PhantomData<H>);
 impl<H: Hasher> TrieLayout for Layout<H> {
 	const USE_EXTENSION: bool = false;
 	type Hash = H;
-	type Codec = NodeCodec<Self::Hash, Self::Nibble, node_codec::BitMap16>;
-	type Nibble = NibbleHalf;
-	type Cache = Cache16;
+	type Codec = NodeCodec<Self::Hash>;
 }
 
 impl<H: Hasher> TrieConfiguration for Layout<H> {
@@ -344,7 +342,7 @@ mod tests {
 	type Layout = super::Layout<Blake2Hasher>;
 
 	fn hashed_null_node<T: TrieConfiguration>() -> TrieHash<T> {
-		<T::Codec as NodeCodecT<_, _>>::hashed_null_node()
+		<T::Codec as NodeCodecT<_>>::hashed_null_node()
 	}
 
 	fn check_equivalent<T: TrieConfiguration>(input: &Vec<(&[u8], &[u8])>) {

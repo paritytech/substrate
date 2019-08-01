@@ -1108,12 +1108,12 @@ dependencies = [
 [[package]]
 name = "hash-db"
 version = "0.15.0"
-source = "git+https://github.com/paritytech/trie.git?branch=ec-simple-codec#fb0e822f3ac0d711e006d3b7f5d37e3f45e8569e"
+source = "git+https://github.com/paritytech/trie.git?branch=ec-simple-codec#d9a12d0636a3751096a6bc619d14cb0b4059969c"
 
 [[package]]
 name = "hash256-std-hasher"
 version = "0.15.0"
-source = "git+https://github.com/paritytech/trie.git?branch=ec-simple-codec#fb0e822f3ac0d711e006d3b7f5d37e3f45e8569e"
+source = "git+https://github.com/paritytech/trie.git?branch=ec-simple-codec#d9a12d0636a3751096a6bc619d14cb0b4059969c"
 dependencies = [
  "crunchy 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -1475,7 +1475,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "keccak-hasher"
 version = "0.15.0"
-source = "git+https://github.com/paritytech/trie.git?branch=ec-simple-codec#fb0e822f3ac0d711e006d3b7f5d37e3f45e8569e"
+source = "git+https://github.com/paritytech/trie.git?branch=ec-simple-codec#d9a12d0636a3751096a6bc619d14cb0b4059969c"
 dependencies = [
  "hash-db 0.15.0 (git+https://github.com/paritytech/trie.git?branch=ec-simple-codec)",
  "hash256-std-hasher 0.15.0 (git+https://github.com/paritytech/trie.git?branch=ec-simple-codec)",
@@ -2060,7 +2060,7 @@ dependencies = [
 [[package]]
 name = "memory-db"
 version = "0.15.0"
-source = "git+https://github.com/paritytech/trie.git?branch=ec-simple-codec#fb0e822f3ac0d711e006d3b7f5d37e3f45e8569e"
+source = "git+https://github.com/paritytech/trie.git?branch=ec-simple-codec#d9a12d0636a3751096a6bc619d14cb0b4059969c"
 dependencies = [
  "hash-db 0.15.0 (git+https://github.com/paritytech/trie.git?branch=ec-simple-codec)",
  "hashmap_core 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5375,7 +5375,7 @@ dependencies = [
 [[package]]
 name = "trie-bench"
 version = "0.15.0"
-source = "git+https://github.com/paritytech/trie.git?branch=ec-simple-codec#fb0e822f3ac0d711e006d3b7f5d37e3f45e8569e"
+source = "git+https://github.com/paritytech/trie.git?branch=ec-simple-codec#d9a12d0636a3751096a6bc619d14cb0b4059969c"
 dependencies = [
  "criterion 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "hash-db 0.15.0 (git+https://github.com/paritytech/trie.git?branch=ec-simple-codec)",
@@ -5390,7 +5390,7 @@ dependencies = [
 [[package]]
 name = "trie-db"
 version = "0.15.0"
-source = "git+https://github.com/paritytech/trie.git?branch=ec-simple-codec#fb0e822f3ac0d711e006d3b7f5d37e3f45e8569e"
+source = "git+https://github.com/paritytech/trie.git?branch=ec-simple-codec#d9a12d0636a3751096a6bc619d14cb0b4059969c"
 dependencies = [
  "elastic-array 0.10.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hash-db 0.15.0 (git+https://github.com/paritytech/trie.git?branch=ec-simple-codec)",
@@ -5402,7 +5402,7 @@ dependencies = [
 [[package]]
 name = "trie-root"
 version = "0.15.0"
-source = "git+https://github.com/paritytech/trie.git?branch=ec-simple-codec#fb0e822f3ac0d711e006d3b7f5d37e3f45e8569e"
+source = "git+https://github.com/paritytech/trie.git?branch=ec-simple-codec#d9a12d0636a3751096a6bc619d14cb0b4059969c"
 dependencies = [
  "hash-db 0.15.0 (git+https://github.com/paritytech/trie.git?branch=ec-simple-codec)",
 ]
@@ -5410,7 +5410,7 @@ dependencies = [
 [[package]]
 name = "trie-standardmap"
 version = "0.15.0"
-source = "git+https://github.com/paritytech/trie.git?branch=ec-simple-codec#fb0e822f3ac0d711e006d3b7f5d37e3f45e8569e"
+source = "git+https://github.com/paritytech/trie.git?branch=ec-simple-codec#d9a12d0636a3751096a6bc619d14cb0b4059969c"
 dependencies = [
  "hash-db 0.15.0 (git+https://github.com/paritytech/trie.git?branch=ec-simple-codec)",
  "keccak-hasher 0.15.0 (git+https://github.com/paritytech/trie.git?branch=ec-simple-codec)",

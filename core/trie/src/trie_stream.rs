@@ -22,8 +22,7 @@ use codec::Encode;
 use rstd::vec::Vec;
 use crate::trie_constants;
 use crate::node_header::{NodeKind, size_and_prefix_iterator};
-use crate::node_codec::BitMap16;
-use trie_db::BitMap;
+use crate::node_codec::Bitmap;
 
 const BRANCH_NODE_NO_VALUE: u8 = 254;
 const BRANCH_NODE_WITH_VALUE: u8 = 255;
@@ -122,13 +121,12 @@ impl trie_root::TrieStream for TrieStream {
 
 fn branch_node(has_value: bool, has_children: impl Iterator<Item = bool>) -> [u8; 3] {
 	let mut result = [0, 0, 0];
-	branch_node_buffered::<BitMap16, _>(has_value, has_children, &mut result[..]);
+	branch_node_buffered(has_value, has_children, &mut result[..]);
 	result
 }
 
-fn branch_node_buffered<BM, I>(has_value: bool, has_children: I, dest: &mut[u8]) 
+fn branch_node_buffered<I>(has_value: bool, has_children: I, output: &mut[u8]) 
 	where
-		BM: BitMap,
 		I: Iterator<Item = bool>,
 {
 	let first = if has_value {
@@ -136,6 +134,6 @@ fn branch_node_buffered<BM, I>(has_value: bool, has_children: I, dest: &mut[u8])
 	} else {
 		BRANCH_NODE_NO_VALUE
 	};
-	dest[0] = first;
-	BM::encode(has_children, &mut dest[1..]);
+	output[0] = first;
+	Bitmap::encode(has_children, &mut output[1..]);
 }
