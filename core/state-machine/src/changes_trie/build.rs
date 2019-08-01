@@ -225,7 +225,7 @@ mod test {
 		]);
 		let changes = OverlayedChanges {
 			changes_trie_config: Some(Configuration { digest_interval: 4, digest_levels: 2 }),
-			changes:OverlayedChangeSet {
+			changes: OverlayedChangeSet {
 				history: vec![TransactionState::Committed, TransactionState::Pending],
 				children: Default::default(),
 				top: vec![

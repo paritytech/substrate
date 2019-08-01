@@ -150,7 +150,7 @@ impl<V> History<V> {
 
 	#[cfg(test)]
 	/// Create an history from an existing history.
-	pub fn from_iter(input: impl IntoIterator<Item= (V, usize)>) -> Self {
+	pub fn from_iter(input: impl IntoIterator<Item = (V, usize)>) -> Self {
 		let mut history = History::default();
 		for v in input {
 			history.push(v.0, v.1);
@@ -175,8 +175,9 @@ impl<V> History<V> {
 		self.0.push((val, tx_index))
 	}
 
-	/// When possible please prefer `get_mut` as it will free
-	/// memory.
+	/// Access to latest pending value (non dropped state in history).
+	/// When possible please prefer `get_mut` as it can free
+	/// some memory.
 	fn get(&self, history: &[TransactionState]) -> Option<&V> {
 		// index is never 0, 
 		let mut index = self.len();
@@ -272,6 +273,9 @@ impl<V> History<V> {
 		None
 	}
 
+	/// Access to latest pending value (non dropped state in history).
+	/// This method uses `get_mut` and do remove pending
+	/// This method remove latest dropped value up to the latest valid value.
 	fn get_mut(&mut self, history: &[TransactionState]) -> Option<(&mut V, usize)> {
 
 		let mut index = self.len();
@@ -299,18 +303,15 @@ impl<V> History<V> {
 		None
 	}
 
+	/// Set a value, it uses a state history as parameter.
+	/// This method uses `get_mut` and do remove pending
+	/// dropped value.
 	fn set(&mut self, history: &[TransactionState], val: V) {
-			// TODO EMCH : this is not optimal : can end get_mut as soon as index < state
-			// needs a variant for get_mut.
-		match self.get_mut(history) {
-			Some((v, index)) => {
-				let state = history.len() - 1;
-				if index == state {
-					*v = val;
-					return;
-				}
-			},
-			None => (),
+		if let Some((v, index)) = self.get_mut(history) {
+			if index == history.len() - 1 {
+				*v = val;
+				return;
+			}
 		}
 		self.push(val, history.len() - 1);
 	}
@@ -318,6 +319,9 @@ impl<V> History<V> {
 }
 
 impl History<OverlayedValue> {
+
+	/// Variant of `set` value that update extrinsics.
+	/// It does remove latest dropped values.
 	fn set_with_extrinsic(
 		&mut self, history: &[TransactionState],
 		val: Option<Vec<u8>>,
