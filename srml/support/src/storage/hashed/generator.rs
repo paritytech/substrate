@@ -239,7 +239,6 @@ pub trait StorageValue<T: codec::Codec> {
 		// attempt to get the length directly.
 		if let Some(k) = storage.get_raw(Self::key()) {
 			<T as codec::DecodeLength>::len(&k)
-				.ok_or_else(|| "could not decode length")
 		} else {
 			Err("could not find item to decode length")
 		}
