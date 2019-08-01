@@ -17,7 +17,7 @@
 //! Substrate chain configurations.
 
 use primitives::{Pair, Public, crypto::UncheckedInto};
-use node_primitives::{AccountId, Balance};
+pub use node_primitives::{AccountId, Balance};
 use node_runtime::{
 	BabeConfig,	BalancesConfig, ContractsConfig, CouncilConfig, DemocracyConfig,
 	ElectionsConfig, GrandpaConfig, ImOnlineConfig, IndicesConfig, Perbill,
