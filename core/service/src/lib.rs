@@ -1040,11 +1040,11 @@ where
 /// 		LightService = LightComponents<Self>
 /// 			{ |config| <LightComponents<Factory>>::new(config) },
 /// 		FullImportQueue = BasicQueue<Block>
-/// 			{ |_, client, _| Ok(BasicQueue::new(Arc::new(MyVerifier), Box::new(client), None, None)) },
+/// 			{ |_, client, _| Ok(BasicQueue::new(MyVerifier, Box::new(client), None, None)) },
 /// 		LightImportQueue = BasicQueue<Block>
 /// 			{ |_, client| {
 /// 				let fprb = Box::new(DummyFinalityProofRequestBuilder::default()) as Box<_>;
-/// 				Ok((BasicQueue::new(Arc::new(MyVerifier), Box::new(client), None, None), fprb))
+/// 				Ok((BasicQueue::new(MyVerifier, Box::new(client), None, None), fprb))
 /// 			}},
 /// 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>
 /// 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {
