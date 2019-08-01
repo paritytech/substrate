@@ -4615,7 +4615,7 @@ name = "substrate-offchain"
 version = "2.0.0"
 dependencies = [
  "env_logger 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.28 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures-preview 0.3.0-alpha.17 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 4.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4627,7 +4627,6 @@ dependencies = [
  "substrate-primitives 2.0.0",
  "substrate-test-runtime-client 2.0.0",
  "substrate-transaction-pool 2.0.0",
- "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

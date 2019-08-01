@@ -33,6 +33,7 @@ use crate::config::Configuration;
 use primitives::{Blake2Hasher, H256, Pair};
 use rpc::{self, apis::system::SystemInfo};
 use futures::{prelude::*, future::Executor, sync::mpsc};
+use futures03::{FutureExt as _, compat::Compat};
 
 // Type aliases.
 // These exist mainly to avoid typing `<F as Factory>::Foo` all over the code.
@@ -264,7 +265,9 @@ impl<C: Components> OffchainWorker<Self> for C where
 		pool: &Arc<TransactionPool<C::TransactionPoolApi>>,
 		network_state: &Arc<dyn NetworkStateInfo + Send + Sync>,
 	) -> error::Result<Box<dyn Future<Item = (), Error = ()> + Send>> {
-		Ok(Box::new(offchain.on_block_imported(number, pool, network_state.clone())))
+		let future = offchain.on_block_imported(number, pool, network_state.clone())
+			.map(|()| Ok(()));
+		Ok(Box::new(Compat::new(future)))
 	}
 }
 
