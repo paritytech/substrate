@@ -1,0 +1,24 @@
+
+[package]
+name = "substrate-state-machine-fuzz"
+version = "0.0.1"
+authors = []
+publish = false
+edition = "2018"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies.substrate-state-machine]
+path = ".."
+
+[dependencies.libfuzzer-sys]
+git = "https://github.com/rust-fuzz/libfuzzer-sys.git"
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "fuzz_transactions"
+path = "fuzz_targets/fuzz_transactions.rs"
