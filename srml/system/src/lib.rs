@@ -79,12 +79,15 @@ use rstd::map;
 use rstd::marker::PhantomData;
 use sr_primitives::generic::{self, Era};
 use sr_primitives::Perbill;
-use sr_primitives::weights::{Weight, DispatchInfo, DispatchClass, WeightMultiplier, SimpleDispatchInfo};
-use sr_primitives::transaction_validity::{ValidTransaction, TransactionPriority, TransactionLongevity};
+use sr_primitives::weights::{
+	Weight, DispatchInfo, DispatchClass, WeightMultiplier, SimpleDispatchInfo
+};
+use sr_primitives::transaction_validity::{
+	ValidTransaction, TransactionPriority, TransactionLongevity
+};
 use sr_primitives::traits::{self, CheckEqual, SimpleArithmetic, Zero, SignedExtension, Convert,
-	SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, CurrentHeight, BlockNumberToHash,
-	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded,
-	Lookup, DispatchError, SaturatedConversion,
+	SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, DispatchError, SaturatedConversion,
+	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded, Lookup,
 };
 use primitives::storage::well_known_keys;
 use srml_support::{
@@ -866,7 +869,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 
 	/// Utility constructor for tests and client code.
 	#[cfg(feature = "std")]
-	pub fn from() -> Self {
+	pub fn new() -> Self {
 		Self(PhantomData)
 	}
 }
@@ -1013,13 +1016,20 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 }
 
 /// Nonce check and increment to give replay protection for transactions.
-#[derive(Default, Encode, Decode, Clone, Eq, PartialEq)]
+#[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckGenesis<T: Trait + Send + Sync>(rstd::marker::PhantomData<T>);
 
 #[cfg(feature = "std")]
 impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckGenesis<T> {
-	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+	fn fmt(&self, _f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
 		Ok(())
+	}
+}
+
+#[cfg(feature = "std")]
+impl<T: Trait + Send + Sync> CheckGenesis<T> {
+	pub fn new() -> Self {
+		Self(std::marker::PhantomData)
 	}
 }
 
@@ -1027,7 +1037,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckGenesis<T> {
 	type AccountId = T::AccountId;
 	type AdditionalSigned = T::Hash;
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str> {
-		Ok(<Module<T>>::block_hash(Zero::zero()))
+		Ok(<Module<T>>::block_hash(T::BlockNumber::zero()))
 	}
 }
 
@@ -1043,21 +1053,6 @@ impl<T: Trait> Lookup for ChainContext<T> {
 	type Target = <T::Lookup as StaticLookup>::Target;
 	fn lookup(&self, s: Self::Source) -> rstd::result::Result<Self::Target, &'static str> {
 		<T::Lookup as StaticLookup>::lookup(s)
-	}
-}
-
-impl<T: Trait> CurrentHeight for ChainContext<T> {
-	type BlockNumber = T::BlockNumber;
-	fn current_height(&self) -> Self::BlockNumber {
-		<Module<T>>::block_number()
-	}
-}
-
-impl<T: Trait> BlockNumberToHash for ChainContext<T> {
-	type BlockNumber = T::BlockNumber;
-	type Hash = T::Hash;
-	fn block_number_to_hash(&self, n: Self::BlockNumber) -> Option<Self::Hash> {
-		Some(<Module<T>>::block_hash(n))
 	}
 }
 

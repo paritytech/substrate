@@ -36,7 +36,7 @@ use srml_support::{
 	decl_event, decl_storage, decl_module, dispatch::Result, storage::StorageValue
 };
 use sr_primitives::{
-	generic::{DigestItem, OpaqueDigestItemId}, traits::{CurrentHeight, Zero},
+	generic::{DigestItem, OpaqueDigestItemId}, traits::Zero,
 };
 use fg_primitives::{ScheduledChange, ConsensusLog, GRANDPA_ENGINE_ID};
 pub use fg_primitives::{AuthorityId, AuthorityWeight};

@@ -92,8 +92,8 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 {
 	let extra = |i: Index, f: Balance| {
 		(
+			system::CheckGenesis::<Runtime>::new(),
 			system::CheckEra::<Runtime>::from(Era::Immortal),
-			system::CheckGenesis::<Runtime>::default(),
 			system::CheckNonce::<Runtime>::from(i),
 			system::CheckWeight::<Runtime>::from(),
 			balances::TakeFees::<Runtime>::from(f),
