@@ -326,6 +326,7 @@ fn rewards_should_work() {
 		let _ = Balances::make_free_balance_be(&2, 500);
 
 		let delay = 1;
+		let orig_issuance = Balances::total_issuance();
 		let init_balance_2 = Balances::total_balance(&2);
 		let init_balance_10 = Balances::total_balance(&10);
 		let init_balance_11 = Balances::total_balance(&11);
@@ -391,6 +392,7 @@ fn rewards_should_work() {
 		assert_eq!(Balances::total_balance(&2), init_balance_2 + total_payout/3);
 		assert_eq!(Balances::total_balance(&10), init_balance_10 + total_payout/3);
 		assert_eq!(Balances::total_balance(&11), init_balance_11);
+		assert_eq!(Balances::total_issuance() - orig_issuance, total_payout);
 	});
 }
 

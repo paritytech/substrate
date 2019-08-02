@@ -288,7 +288,7 @@ use parity_codec::{HasCompact, Encode, Decode};
 use srml_support::{
 	StorageValue, StorageMap, EnumerableStorageMap, decl_module, decl_event,
 	decl_storage, ensure, traits::{
-		Currency, OnFreeBalanceZero, OnDilution, LockIdentifier, LockableCurrency,
+		Currency, OnFreeBalanceZero, LockIdentifier, LockableCurrency,
 		WithdrawReasons, WithdrawReason, OnUnbalanced, Imbalance, Get, Time
 	}
 };
@@ -520,8 +520,9 @@ pub trait Trait: system::Trait {
 	/// The post-processing needs it but will be moved to off-chain.
 	type CurrencyToVote: Convert<BalanceOf<Self>, u64> + Convert<u128, BalanceOf<Self>>;
 
-	/// Some tokens minted.
-	type OnRewardMinted: OnDilution<BalanceOf<Self>>;
+	/// What to do with the rest of the amount that is minted for inflation but which isn't used
+	/// for the reward.
+	type RestOfInflation: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -1147,7 +1148,7 @@ impl<T: Trait> Module<T> {
 			let validator_len: BalanceOf<T> = (validators.len() as u32).into();
 			let total_rewarded_stake = Self::slot_stake() * validator_len;
 
-			let total_payout = inflation::compute_total_payout(
+			let (real_payout, rest_payout) = inflation::compute_total_payout(
 				total_rewarded_stake.clone(),
 				T::Currency::total_issuance(),
 				// Era of duration more than u32::MAX is rewarded as u32::MAX.
@@ -1159,7 +1160,7 @@ impl<T: Trait> Module<T> {
 			let total_points = rewards.total;
 			for (v, points) in validators.iter().zip(rewards.rewards.into_iter()) {
 				if points != 0 {
-					let reward = multiply_by_rational(total_payout, points, total_points);
+					let reward = multiply_by_rational(real_payout, points, total_points);
 					total_imbalance.subsume(Self::reward_validator(v, reward));
 				}
 			}
@@ -1167,7 +1168,7 @@ impl<T: Trait> Module<T> {
 			let total_reward = total_imbalance.peek();
 			Self::deposit_event(RawEvent::Reward(total_reward));
 			T::Reward::on_unbalanced(total_imbalance);
-			T::OnRewardMinted::on_dilution(total_reward, total_rewarded_stake);
+			T::RestOfInflation::on_unbalanced(T::Currency::issue(rest_payout));
 		}
 
 		// Increment current era.

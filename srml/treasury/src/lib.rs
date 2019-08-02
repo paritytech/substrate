@@ -72,7 +72,7 @@ use serde::{Serialize, Deserialize};
 use rstd::prelude::*;
 use srml_support::{StorageValue, StorageMap, decl_module, decl_storage, decl_event, ensure, print};
 use srml_support::traits::{
-	Currency, ExistenceRequirement, Get, Imbalance, OnDilution, OnUnbalanced,
+	Currency, ExistenceRequirement, Get, Imbalance, OnUnbalanced,
 	ReservableCurrency, WithdrawReason
 };
 use sr_primitives::{Permill, ModuleId};
@@ -338,22 +338,6 @@ impl<T: Trait> Module<T> {
 impl<T: Trait> OnUnbalanced<NegativeImbalanceOf<T>> for Module<T> {
 	fn on_unbalanced(amount: NegativeImbalanceOf<T>) {
 		T::Currency::resolve_creating(&Self::account_id(), amount);
-	}
-}
-
-impl<T: Trait> OnDilution<BalanceOf<T>> for Module<T> {
-	fn on_dilution(minted: BalanceOf<T>, portion: BalanceOf<T>) {
-		// Mint extra funds for the treasury to keep the ratio of portion to total_issuance equal
-		// pre dilution and post-dilution.
-		if !minted.is_zero() && !portion.is_zero() {
-			let total_issuance = T::Currency::total_issuance();
-			if let Some(funding) = total_issuance.checked_sub(&portion) {
-				let funding = funding / portion;
-				if let Some(funding) = funding.checked_mul(&minted) {
-					Self::on_unbalanced(T::Currency::issue(funding));
-				}
-			}
-		}
 	}
 }
 

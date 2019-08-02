@@ -230,7 +230,7 @@ impl staking::Trait for Runtime {
 	type Currency = Balances;
 	type Time = Timestamp;
 	type CurrencyToVote = CurrencyToVoteHandler;
-	type OnRewardMinted = Treasury;
+	type RestOfInflation = Treasury;
 	type Event = Event;
 	type Slash = ();
 	type Reward = ();

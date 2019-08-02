@@ -89,6 +89,8 @@ const I_NPOS: PiecewiseLinear = PiecewiseLinear {
 		(881691659, Linear { negative_a: true, a: 2572702, b: 27645944 })
 	]
 };
+// The maximum inflation (in percent), assuming the
+const MAX_INFLATION_PERCENT: u32 = 10;
 
 /// Second per year for the Julian year (365.25 days)
 const SECOND_PER_YEAR: u32 = 3600*24*36525/100;
@@ -102,13 +104,17 @@ const SECOND_PER_YEAR: u32 = 3600*24*36525/100;
 /// i.e.  `P_NPoS(x) = I_NPoS(x) * current_total_token * era_duration / year_duration`
 ///
 /// I_NPoS is the desired yearly inflation rate for nominated proof of stake.
-pub fn compute_total_payout<N>(npos_token_staked: N, total_tokens: N, era_duration: N) -> N
+///
+/// Returns the total payout for all validators and the ideal payout, assuming all staking amounts
+/// were optimal.
+pub fn compute_total_payout<N>(npos_token_staked: N, total_tokens: N, era_duration: N) -> (N, N)
 where
-	N: SimpleArithmetic + Clone
+	N: SimpleArithmetic + Clone + Copy
 {
+	let real = I_NPOS.calculate_for_fraction_times_denominator(npos_token_staked, total_tokens);
+	let ideal = Perbill::from_percent(MAX_INFLATION_PERCENT) * total_tokens;
 	let year_duration: N = SECOND_PER_YEAR.into();
-	I_NPOS.calculate_for_fraction_times_denominator(npos_token_staked, total_tokens)
-		* era_duration / year_duration
+	(real * era_duration / year_duration, ideal.saturating_sub(real) * era_duration / year_duration)
 }
 
 #[allow(non_upper_case_globals, non_snake_case)] // To stick with paper notations
