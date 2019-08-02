@@ -785,14 +785,14 @@ pub fn prove_child_read<B, H>(
 	mut backend: B,
 	child_trie: ChildTrieReadRef,
 	key: &[u8]
-) -> Result<(Option<Vec<u8>>, Vec<Vec<u8>>), Box<Error>>
+) -> Result<(Option<Vec<u8>>, Vec<Vec<u8>>), Box<dyn Error>>
 where
 	B: Backend<H>,
 	H: Hasher,
 	H::Out: Ord
 {
 	let trie_backend = backend.as_trie_backend()
-		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<Error>)?;
+		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<dyn Error>)?;
 	prove_child_read_on_trie_backend(&trie_backend, child_trie, key)
 }
 

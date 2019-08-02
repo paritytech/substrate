@@ -175,7 +175,7 @@ where
 	N: crate::changes_trie::BlockNumber,
 {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		let _guard = panic_handler::AbortGuard::new(true);
+		let _guard = panic_handler::AbortGuard::force_abort();
 		match self.overlay.storage(key) {
 			OverlayedValueResult::NotFound =>
 				self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL),
@@ -185,7 +185,7 @@ where
 	}
 
 	fn storage_hash(&self, key: &[u8]) -> Option<H::Out> {
-		let _guard = panic_handler::AbortGuard::new(true);
+		let _guard = panic_handler::AbortGuard::force_abort();
 		match self.overlay.storage(key) {
 			OverlayedValueResult::NotFound =>
 				self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL),
@@ -195,23 +195,23 @@ where
 	}
 
 	fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		let _guard = panic_handler::AbortGuard::new(true);
+		let _guard = panic_handler::AbortGuard::force_abort();
 		self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
 	}
 
 	fn original_storage_hash(&self, key: &[u8]) -> Option<H::Out> {
-		let _guard = panic_handler::AbortGuard::new(true);
+		let _guard = panic_handler::AbortGuard::force_abort();
 		self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
 	}
 
 	fn child_trie(&self, storage_key: &[u8]) -> Option<ChildTrie> {
-		let _guard = panic_handler::AbortGuard::new(true);
+		let _guard = panic_handler::AbortGuard::force_abort();
 		self.overlay.child_trie(storage_key).unwrap_or_else(||
 			self.backend.child_trie(storage_key).expect(EXT_NOT_ALLOWED_TO_FAIL))
 	}
 
 	fn child_storage(&self, child_trie: ChildTrieReadRef, key: &[u8]) -> Option<Vec<u8>> {
-		let _guard = panic_handler::AbortGuard::new(true);
+		let _guard = panic_handler::AbortGuard::force_abort();
 		match self.overlay.child_storage(child_trie.clone(), key) {
 			OverlayedValueResult::NotFound =>
 				self.backend.child_storage(child_trie, key).expect(EXT_NOT_ALLOWED_TO_FAIL),
@@ -221,7 +221,7 @@ where
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> bool {
-		let _guard = panic_handler::AbortGuard::new(true);
+		let _guard = panic_handler::AbortGuard::force_abort();
 		match self.overlay.storage(key) {
 			OverlayedValueResult::NotFound =>
 				self.backend.exists_storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL),
@@ -231,7 +231,7 @@ where
 	}
 
 	fn exists_child_storage(&self, child_trie: ChildTrieReadRef, key: &[u8]) -> bool {
-		let _guard = panic_handler::AbortGuard::new(true);
+		let _guard = panic_handler::AbortGuard::force_abort();
 		match self.overlay.child_storage(child_trie.clone(), key) {
 			OverlayedValueResult::NotFound =>
 				self.backend.exists_child_storage(child_trie, key).expect(EXT_NOT_ALLOWED_TO_FAIL),
@@ -241,7 +241,7 @@ where
 	}
 
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) {
-		let _guard = panic_handler::AbortGuard::new(true);
+		let _guard = panic_handler::AbortGuard::force_abort();
 		if is_child_storage_key(&key) {
 			warn!(target: "trie", "Refuse to directly set child storage key");
 			return;
@@ -252,14 +252,14 @@ where
 	}
 
 	fn place_child_storage(&mut self, child_trie: &ChildTrie, key: Vec<u8>, value: Option<Vec<u8>>) {
-		let _guard = panic_handler::AbortGuard::new(true);
+		let _guard = panic_handler::AbortGuard::force_abort();
 
 		self.mark_dirty();
 		self.overlay.set_child_storage(child_trie, key, value);
 	}
 
 	fn set_child_trie(&mut self, ct: ChildTrie) -> bool {
-		let _guard = panic_handler::AbortGuard::new(true);
+		let _guard = panic_handler::AbortGuard::force_abort();
 		// do check for backend, theorically this could be skip
 		// (`ChildTrie` being initiated from backend, this is
 		// still here for safety but removal can be considered
@@ -281,7 +281,7 @@ where
 	}
 
 	fn kill_child_storage(&mut self, child_trie: &ChildTrie) {
-		let _guard = panic_handler::AbortGuard::new(true);
+		let _guard = panic_handler::AbortGuard::force_abort();
 
 		self.mark_dirty();
 		self.overlay.clear_child_storage(child_trie);
@@ -291,7 +291,7 @@ where
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
-		let _guard = panic_handler::AbortGuard::new(true);
+		let _guard = panic_handler::AbortGuard::force_abort();
 		if is_child_storage_key(prefix) {
 			warn!(target: "trie", "Refuse to directly clear prefix that is part of child storage key");
 			return;
@@ -309,7 +309,7 @@ where
 	}
 
 	fn storage_root(&mut self) -> H::Out {
-		let _guard = panic_handler::AbortGuard::new(true);
+		let _guard = panic_handler::AbortGuard::force_abort();
 		if let Some((_, ref root)) = self.storage_transaction {
 			return root.clone();
 		}
@@ -341,7 +341,7 @@ where
 	}
 
 	fn child_storage_root(&mut self, child_trie: &ChildTrie) -> Vec<u8> {
-		let _guard = panic_handler::AbortGuard::new(true);
+		let _guard = panic_handler::AbortGuard::force_abort();
 
 		if self.storage_transaction.is_some() {
 			self.child_trie(child_trie.parent_slice())
@@ -367,7 +367,7 @@ where
 	}
 
 	fn storage_changes_root(&mut self, parent_hash: H::Out) -> Result<Option<H::Out>, ()> {
-		let _guard = panic_handler::AbortGuard::new(true);
+		let _guard = panic_handler::AbortGuard::force_abort();
 		self.changes_trie_transaction = build_changes_trie::<_, T, H, N>(
 			self.backend,
 			self.changes_trie_storage.clone(),
