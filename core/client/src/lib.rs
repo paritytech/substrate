@@ -49,7 +49,7 @@
 //! use std::sync::Arc;
 //! use substrate_client::{Client, in_mem::Backend, LocalCallExecutor};
 //! use primitives::Blake2Hasher;
-//! use sr_primitives::{StorageOverlay, ChildrenStorageOverlay};
+//! use sr_primitives::{MapTransaction};
 //! use executor::NativeExecutor;
 //!
 //! // In this example, we're using the `Block` and `RuntimeApi` types from the
@@ -66,7 +66,7 @@
 //! 		NativeExecutor::<LocalExecutor>::new(None)
 //!		),
 //! 	// This parameter provides the storage for the chain genesis.
-//! 	<(StorageOverlay, ChildrenStorageOverlay)>::default(),
+//! 	MapTransaction::default(),
 //! 	Default::default()
 //! );
 //! ```
