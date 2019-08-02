@@ -81,7 +81,7 @@ impl module::Trait for Runtime {
 }
 
 fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-	system::GenesisConfig::<Runtime>::default().build_storage().unwrap().into()
+	system::GenesisConfig::default().build_storage::<Runtime>().unwrap().into()
 }
 
 fn deposit_events(n: usize) {
