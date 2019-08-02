@@ -265,11 +265,10 @@ where
 		// still here for safety but removal can be considered
 		// in the future).
 		let ct = match self.child_trie(ct.parent_slice()) {
-			Some(ct_old) => if ct_old.root_initial_value() != ct.root_initial_value() ||
-				ct_old.keyspace() != ct.keyspace() {
-				return false;
-			} else {
+			Some(ct_old) => if ct_old.is_updatable_with(&ct) {
 				ct
+			} else {
+				return false;
 			},
 			None => if ct.is_new() {
 				ct

@@ -284,6 +284,14 @@ impl ChildTrie {
 		&self.extension[..]
 	}
 
+	/// Is it possible to overwrite an existing chid trie with
+	/// a new one.
+	pub fn is_updatable_with(&self, old_ct: &ChildTrie) -> bool {
+		old_ct.root_initial_value() == self.root_initial_value()
+			&& old_ct.keyspace() == self.keyspace()
+			&& old_ct.parent_slice() == self.parent_slice()
+	}
+
 	/// Encoder for the child trie, with a new root value.
 	/// The child trie current root value is not updated (if
 	/// content is commited the child trie will need to be fetch

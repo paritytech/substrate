@@ -245,16 +245,14 @@ impl OverlayedChanges {
 				.expect("pending entry always have a children association; qed");
 			let exts = &mut old_ct.extrinsics;
 			let old_ct = &mut old_ct.child_trie;
-			if old_ct.root_initial_value() != child_trie.root_initial_value()
-				|| old_ct.keyspace() != child_trie.keyspace()
-				|| old_ct.parent_slice() != child_trie.parent_slice() {
-				return false;
-			} else {
+			if old_ct.is_updatable_with(&child_trie) {
 				*old_ct = child_trie;
 				if let Some(extrinsic) = extrinsic_index {
 					exts.get_or_insert_with(Default::default)
 						.insert(extrinsic);
 				}
+			} else {
+				return false;
 			}
 		} else {
 			let mut exts = if let Some(old_ct) = self.committed.pending_child

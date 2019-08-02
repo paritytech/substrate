@@ -164,12 +164,10 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 	fn set_child_trie(&mut self, child_trie: ChildTrie) -> bool {
 		let keyspace = child_trie.keyspace();
 		if let Some((_, old_ct)) = self.children.get_mut(keyspace) {
-			if old_ct.root_initial_value() != child_trie.root_initial_value()
-				|| old_ct.keyspace() != child_trie.keyspace()
-				|| old_ct.parent_slice() != child_trie.parent_slice() {
-				return false;
-			} else {
+			if old_ct.is_updatable_with(&child_trie) {
 				*old_ct = child_trie;
+			} else {
+				return false;
 			}
 		} else {
 			self.pending_child.insert(child_trie.parent_slice().to_vec(), Some(child_trie.keyspace().clone()));
@@ -259,7 +257,7 @@ mod tests {
 					b"doe".to_vec() => b"reindeer".to_vec()
 				], child_trie.clone())
 			],
-    });
+		});
 
 		let ext = &mut ext as &mut dyn Externalities<Blake2Hasher>;
 
