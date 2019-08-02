@@ -60,7 +60,7 @@ impl<H: Hasher> TrieConfiguration for Layout<H> {
 	{
 		trie_root::trie_root_no_extension::<H, TrieStream, _, _, _>(input)
 	}
-	
+
 	fn trie_root_unhashed<I, A, B>(input: I) -> Vec<u8> where
 		I: IntoIterator<Item = (A, B)>,
 		A: AsRef<[u8]> + Ord,
@@ -68,13 +68,13 @@ impl<H: Hasher> TrieConfiguration for Layout<H> {
 	{
 		trie_root::unhashed_trie_no_extension::<H, TrieStream, _, _, _>(input)
 	}
-	
+
 	fn encode_index(input: u32) -> Vec<u8> {
 		codec::Encode::encode(&codec::Compact(input))
 	}
 }
 
-/// TrieDB error over `TrieConfiguration` trait. 
+/// TrieDB error over `TrieConfiguration` trait.
 pub type TrieError<L> = trie_db::TrieError<TrieHash<L>, CError<L>>;
 /// Reexport from `hash_db`, with genericity set for `Hasher` trait.
 pub trait AsHashDB<H: Hasher>: hash_db::AsHashDB<H, trie_db::DBValue> {}
@@ -218,7 +218,7 @@ pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB>(
 {
 	let mut root = TrieHash::<L>::default();
 	// root is fetched from DB, not writable by runtime, so it's always valid.
-	root.as_mut().copy_from_slice(&root_vec); 
+	root.as_mut().copy_from_slice(&root_vec);
 
 	{
 		let mut trie = TrieDBMut::<L>::from_existing(&mut *db, &mut root)?;
@@ -296,7 +296,7 @@ pub fn read_child_trie_value<L: TrieConfiguration, DB>(
 {
 	let mut root = TrieHash::<L>::default();
 	// root is fetched from DB, not writable by runtime, so it's always valid.
-	root.as_mut().copy_from_slice(root_slice); 
+	root.as_mut().copy_from_slice(root_slice);
 
 	Ok(TrieDB::<L>::new(&*db, &root)?.get(key).map(|x| x.map(|val| val.to_vec()))?)
 }
@@ -310,7 +310,7 @@ pub fn read_child_trie_value_with<L: TrieConfiguration, Q: Query<L::Hash, Item=D
 	query: Q
 ) -> Result<Option<Vec<u8>>, Box<TrieError<L>>>
 	where
-		DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue> 
+		DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>
 			+ hash_db::PlainDBRef<TrieHash<L>, trie_db::DBValue>,
 {
 	let mut root = TrieHash::<L>::default();
