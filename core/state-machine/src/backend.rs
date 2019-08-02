@@ -24,7 +24,9 @@ use log::warn;
 use hash_db::Hasher;
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::TrieBackendStorage;
-use trie::{TrieDBMut, TrieMut, MemoryDB, trie_root, child_trie_root, default_child_trie_root,	KeySpacedDBMut};
+use trie::{TrieMut, MemoryDB, child_trie_root, default_child_trie_root, KeySpacedDBMut,
+	TrieConfiguration};
+use trie::trie_types::{TrieDBMut, Layout};
 use primitives::child_trie::{KeySpace, ChildTrie, ChildTrieReadRef};
 
 /// A set of key value pairs for storage.
@@ -415,7 +417,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		let map_input = existing_pairs.chain(transaction.iter().cloned())
 			.collect::<HashMap<_, _>>();
 
-		let root = trie_root::<H, _, _, _>(map_input
+		let root = Layout::<H>::trie_root(map_input
 			.into_iter()
 			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
 		);
@@ -437,7 +439,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		let existing_pairs = self.inner.children.get(
 			child_trie.keyspace()
 		).into_iter().flat_map(|map| map.0.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
-		let root = child_trie_root::<H, _, _, _>(
+		let root = child_trie_root::<Layout<H>, _, _, _>(
 			existing_pairs.chain(transaction.iter().cloned())
 				.collect::<HashMap<_, _>>()
 				.into_iter()
@@ -448,7 +450,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		// trie should be done by the same child trie instance; can prove problematic?
 		let full_transaction = transaction.into_iter().map(|(k, v)| (Some(child_trie.clone()), k, v)).collect();
 
-		let is_default = root == default_child_trie_root::<H>();
+		let is_default = root == default_child_trie_root::<Layout<H>>();
 
 		(root, is_default && child_trie.extension().is_empty(), full_transaction)
 	}

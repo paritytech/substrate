@@ -22,7 +22,7 @@ use rstd::ptr;
 use crate::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
 #[cfg(feature = "std")]
 pub use impl_serde::serialize as bytes;
-use hash_db::Hasher;
+use hash_db::Prefix;
 
 /// `KeySpace` type contains a unique child trie identifier.
 /// It is used to isolate a child trie in its backing database.
@@ -65,21 +65,12 @@ pub fn produce_keyspace(child_counter: u128) -> Vec<u8> {
 // Simplest would be to put an additional optional field in prefix.
 /// Utility function used for merging `KeySpace` data and `prefix` data
 /// before calling key value database primitives.
-pub fn keyspace_as_prefix_alloc(ks: Option<&KeySpace>, prefix: &[u8]) -> Vec<u8> {
+pub fn keyspace_as_prefix_alloc(ks: Option<&KeySpace>, prefix: Prefix) -> (Vec<u8>, Option<u8>) {
 	let ks = ks.map(|ks| ks.as_slice()).unwrap_or(&NO_CHILD_KEYSPACE[..]);
-	let mut res = rstd::vec![0; ks.len() + prefix.len()];
-	res[..ks.len()].copy_from_slice(ks);
-	res[ks.len()..].copy_from_slice(prefix);
-	res
-}
-
-/// Make database key from hash and prefix.
-/// (here prefix already contains optional keyspace).
-pub fn prefixed_key<H: Hasher>(key: &H::Out, prefix: &[u8]) -> Vec<u8> {
-	let mut res = Vec::with_capacity(prefix.len() + key.as_ref().len());
-	res.extend_from_slice(prefix);
-	res.extend_from_slice(key.as_ref());
-	res
+	let mut result = rstd::vec![0; ks.len() + prefix.0.len()];
+	result[..ks.len()].copy_from_slice(ks);
+	result[ks.len()..].copy_from_slice(prefix.0);
+	(result, prefix.1)
 }
 
 /// Parent trie origin. This type contains all information

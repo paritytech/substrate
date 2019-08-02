@@ -36,7 +36,7 @@ use srml_support::{
 	decl_event, decl_storage, decl_module, dispatch::Result, storage::StorageValue
 };
 use sr_primitives::{
-	generic::{DigestItem, OpaqueDigestItemId}, traits::{CurrentHeight, Zero},
+	generic::{DigestItem, OpaqueDigestItemId}, traits::Zero,
 };
 use fg_primitives::{ScheduledChange, ConsensusLog, GRANDPA_ENGINE_ID};
 pub use fg_primitives::{AuthorityId, AuthorityWeight};
@@ -232,7 +232,7 @@ impl<T: Trait> Module<T> {
 
 	pub fn schedule_pause(in_blocks: T::BlockNumber) -> Result {
 		if let StoredState::Live = <State<T>>::get() {
-			let scheduled_at = system::ChainContext::<T>::default().current_height();
+			let scheduled_at = <system::Module<T>>::block_number();
 			<State<T>>::put(StoredState::PendingPause {
 				delay: in_blocks,
 				scheduled_at,
@@ -247,7 +247,7 @@ impl<T: Trait> Module<T> {
 
 	pub fn schedule_resume(in_blocks: T::BlockNumber) -> Result {
 		if let StoredState::Paused = <State<T>>::get() {
-			let scheduled_at = system::ChainContext::<T>::default().current_height();
+			let scheduled_at = <system::Module<T>>::block_number();
 			<State<T>>::put(StoredState::PendingResume {
 				delay: in_blocks,
 				scheduled_at,
@@ -280,7 +280,7 @@ impl<T: Trait> Module<T> {
 		forced: Option<T::BlockNumber>,
 	) -> Result {
 		if !<PendingChange<T>>::exists() {
-			let scheduled_at = system::ChainContext::<T>::default().current_height();
+			let scheduled_at = <system::Module<T>>::block_number();
 
 			if let Some(_) = forced {
 				if Self::next_forced().map_or(false, |next| next > scheduled_at) {

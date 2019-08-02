@@ -18,12 +18,12 @@
 
 use std::{cell::RefCell, rc::Rc};
 use log::debug;
-use hash_db::Hasher;
-use hash_db::HashDB;
+use hash_db::{Hasher, HashDB, EMPTY_PREFIX};
 use trie::{
-	MemoryDB, PrefixedMemoryDB, TrieError, Recorder,
+	MemoryDB, PrefixedMemoryDB, Recorder,
 	read_trie_value_with, read_child_trie_value_with, record_all_keys
 };
+pub use trie::trie_types::{Layout, TrieError};
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
 use crate::{Error, ExecutionError, Backend};
@@ -50,10 +50,20 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		read_trie_value_with::<H, _, Ephemeral<S, H>>(&eph, self.backend.root(), key, &mut *self.proof_recorder).map_err(map_e)
+		read_trie_value_with::<Layout<H>, _, Ephemeral<S, H>>(
+			&eph,
+			self.backend.root(),
+			key,
+			&mut *self.proof_recorder
+		).map_err(map_e)
 	}
 
-	pub fn child_storage(&mut self, child_trie: ChildTrieReadRef, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
+	pub fn child_storage(
+		&mut self,
+		child_trie: ChildTrieReadRef,
+		key: &[u8]
+	) -> Result<Option<Vec<u8>>, String> {
+
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral::new(
 			self.backend.backend_storage(),
@@ -62,7 +72,12 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		read_child_trie_value_with(child_trie, &eph, key, &mut *self.proof_recorder).map_err(map_e)
+		read_child_trie_value_with::<Layout<H>, _, _>(
+			child_trie,
+			&eph,
+			key,
+			&mut *self.proof_recorder
+		).map_err(map_e)
 	}
 
 	pub fn record_all_keys(&mut self) {
@@ -74,7 +89,7 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 
 		let mut iter = move || -> Result<(), Box<TrieError<H::Out>>> {
 			let root = self.backend.root();
-			record_all_keys::<H, _>(&eph, root, &mut *self.proof_recorder)
+			record_all_keys::<Layout<H>, _>(&eph, root, &mut *self.proof_recorder)
 		};
 
 		if let Err(e) = iter() {
@@ -197,7 +212,7 @@ where
 {
 	let db = create_proof_check_backend_storage(proof);
 
-	if db.contains(&root, &[]) {
+	if db.contains(&root, EMPTY_PREFIX) {
 		Ok(TrieBackend::new(db, root))
 	} else {
 		Err(Box::new(ExecutionError::InvalidProof))
@@ -213,7 +228,7 @@ where
 {
 	let mut db = MemoryDB::default();
 	for item in proof {
-		db.insert(&[], &item);
+		db.insert(EMPTY_PREFIX, &item);
 	}
 	db
 }

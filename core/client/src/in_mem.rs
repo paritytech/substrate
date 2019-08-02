@@ -25,7 +25,7 @@ use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor}
 use sr_primitives::{Justification, StorageOverlay, ChildrenStorageOverlay};
 use state_machine::backend::{Backend as StateBackend, InMemory};
 use state_machine::{self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId};
-use hash_db::Hasher;
+use hash_db::{Hasher, Prefix};
 use trie::MemoryDB;
 use consensus::well_known_cache_keys::Id as CacheKeyId;
 
@@ -755,8 +755,8 @@ impl<Block, H> state_machine::ChangesTrieStorage<H, NumberFor<Block>> for Change
 		Block: BlockT,
 		H: Hasher,
 {
-	fn get(&self, _key: &H::Out, _prefix: &[u8]) -> Result<Option<state_machine::DBValue>, String> {
-		Err("Dummy implementation".into())
+	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<state_machine::DBValue>, String> {
+		self.0.get(key, prefix)
 	}
 }
 

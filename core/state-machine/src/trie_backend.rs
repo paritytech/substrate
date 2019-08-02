@@ -18,7 +18,8 @@
 
 use log::{warn, debug};
 use hash_db::Hasher;
-use trie::{TrieDB, TrieError, Trie, delta_trie_root, default_child_trie_root, child_delta_trie_root};
+use trie::{Trie, delta_trie_root, default_child_trie_root, child_delta_trie_root};
+use trie::trie_types::{TrieDB, TrieError, Layout};
 use trie::KeySpacedDB;
 use crate::trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral};
 use crate::Backend;
@@ -141,7 +142,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 				&mut write_overlay,
 			);
 
-			match delta_trie_root::<H, _, _, _, _>(&mut eph, root, delta) {
+			match delta_trie_root::<Layout<H>, _, _, _, _>(&mut eph, root, delta) {
 				Ok(ret) => root = ret,
 				Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
 			}
@@ -155,7 +156,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord
 	{
-		let default_root = default_child_trie_root::<H>();
+		let default_root = default_child_trie_root::<Layout<H>>();
 		let mut root = default_root.clone();
 
 		let mut write_overlay = S::Overlay::default();
@@ -166,7 +167,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 				&mut write_overlay,
 			);
 
-			match child_delta_trie_root::<H, _, _, _, _>(
+			match child_delta_trie_root::<Layout<H>, _, _, _, _>(
 				child_trie.node_ref(),
 				&mut eph,
 				default_root.as_slice(),
@@ -190,7 +191,8 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 pub mod tests {
 	use std::collections::HashSet;
 	use primitives::{Blake2Hasher, H256};
-	use trie::{TrieMut, TrieDBMut, PrefixedMemoryDB, KeySpacedDBMut};
+	use trie::{TrieMut, PrefixedMemoryDB, KeySpacedDBMut};
+	use trie::trie_types::TrieDBMut;
 	use super::*;
 
 

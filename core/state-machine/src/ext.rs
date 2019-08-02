@@ -27,6 +27,7 @@ use primitives::storage::well_known_keys::is_child_storage_key;
 use primitives::child_trie::ChildTrie;
 use primitives::child_trie::ChildTrieReadRef;
 use trie::{MemoryDB, default_child_trie_root};
+use trie::trie_types::Layout;
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
 
@@ -345,7 +346,7 @@ where
 		if self.storage_transaction.is_some() {
 			self.child_trie(child_trie.parent_slice())
 				.and_then(|child_trie| child_trie.root_initial_value().clone())
-				.unwrap_or(default_child_trie_root::<H>())
+				.unwrap_or(default_child_trie_root::<Layout<H>>())
 		} else {
 			let keyspace = child_trie.keyspace();
 			let delta = self.overlay.committed.children.get(keyspace)
@@ -441,8 +442,10 @@ mod tests {
 		let storage = TestChangesTrieStorage::with_blocks(vec![(99, Default::default())]);
 		let backend = TestBackend::default();
 		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage), None);
+		let root = hex!("bb0c2ef6e1d36d5490f9766cfcc7dfe2a6ca804504c3bb206053890d6dd02376").into();
+
 		assert_eq!(ext.storage_changes_root(Default::default()).unwrap(),
-			Some(hex!("5b829920b9c8d554a19ee2a1ba593c4f2ee6fc32822d083e04236d693e8358d5").into()));
+			Some(root));
 	}
 
 	#[test]
@@ -452,7 +455,9 @@ mod tests {
 		let storage = TestChangesTrieStorage::with_blocks(vec![(99, Default::default())]);
 		let backend = TestBackend::default();
 		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage), None);
+		let root = hex!("96f5aae4690e7302737b6f9b7f8567d5bbb9eac1c315f80101235a92d9ec27f4").into();
+
 		assert_eq!(ext.storage_changes_root(Default::default()).unwrap(),
-			Some(hex!("bcf494e41e29a15c9ae5caa053fe3cb8b446ee3e02a254efbdec7a19235b76e4").into()));
+			Some(root));
 	}
 }

@@ -38,7 +38,8 @@ mod trie_backend;
 mod trie_backend_essence;
 
 use overlayed_changes::{OverlayedChangeSet, OverlayedValueResult};
-pub use trie::{TrieMut, TrieDBMut, DBValue, MemoryDB, Recorder as ProofRecorder};
+pub use trie::{TrieMut, DBValue, MemoryDB, Recorder as ProofRecorder};
+pub use trie::trie_types::{Layout, TrieDBMut};
 pub use testing::TestExternalities;
 pub use basic::BasicExternalities;
 pub use ext::Ext;
