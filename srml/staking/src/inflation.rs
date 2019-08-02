@@ -155,12 +155,12 @@ mod test_inflation {
 	const x_ideal: f64 = 0.5;
 	const d: f64 = 0.05;
 
-	// Part left of `x_ideal`
+	// Left part from `x_ideal`
 	fn I_left(x: f64) -> f64 {
 		I_0 + x * (i_ideal - I_0/x_ideal)
 	}
 
-	// Part right of `x_ideal`
+	// Right part from `x_ideal`
 	fn I_right(x: f64) -> f64 {
 		I_0 + (i_ideal*x_ideal - I_0) * 2_f64.powf((x_ideal-x)/d)
 	}
