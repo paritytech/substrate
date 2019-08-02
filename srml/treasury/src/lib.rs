@@ -77,7 +77,7 @@ use srml_support::traits::{
 };
 use sr_primitives::{Permill, ModuleId};
 use sr_primitives::traits::{
-	Zero, EnsureOrigin, StaticLookup, CheckedSub, CheckedMul, AccountIdConversion
+	Zero, EnsureOrigin, StaticLookup, AccountIdConversion
 };
 use sr_primitives::weights::SimpleDispatchInfo;
 use parity_codec::{Encode, Decode};
@@ -442,7 +442,7 @@ mod tests {
 	fn minting_works() {
 		with_externalities(&mut new_test_ext(), || {
 			// Check that accumulate works when we have Some value in Dummy already.
-			Treasury::on_dilution(100, 100);
+			Treasury::on_unbalanced(Balances::issue(100));
 			assert_eq!(Treasury::pot(), 100);
 		});
 	}
@@ -475,7 +475,7 @@ mod tests {
 	#[test]
 	fn accepted_spend_proposal_ignored_outside_spend_period() {
 		with_externalities(&mut new_test_ext(), || {
-			Treasury::on_dilution(100, 100);
+			Treasury::on_unbalanced(Balances::issue(100));
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
@@ -489,7 +489,7 @@ mod tests {
 	#[test]
 	fn unused_pot_should_diminish() {
 		with_externalities(&mut new_test_ext(), || {
-			Treasury::on_dilution(100, 100);
+			Treasury::on_unbalanced(Balances::issue(100));
 
 			<Treasury as OnFinalize<u64>>::on_finalize(2);
 			assert_eq!(Treasury::pot(), 50);
@@ -499,7 +499,7 @@ mod tests {
 	#[test]
 	fn rejected_spend_proposal_ignored_on_spend_period() {
 		with_externalities(&mut new_test_ext(), || {
-			Treasury::on_dilution(100, 100);
+			Treasury::on_unbalanced(Balances::issue(100));
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0));
@@ -513,7 +513,7 @@ mod tests {
 	#[test]
 	fn reject_already_rejected_spend_proposal_fails() {
 		with_externalities(&mut new_test_ext(), || {
-			Treasury::on_dilution(100, 100);
+			Treasury::on_unbalanced(Balances::issue(100));
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0));
@@ -538,7 +538,7 @@ mod tests {
 	#[test]
 	fn accept_already_rejected_spend_proposal_fails() {
 		with_externalities(&mut new_test_ext(), || {
-			Treasury::on_dilution(100, 100);
+			Treasury::on_unbalanced(Balances::issue(100));
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0));
@@ -549,7 +549,7 @@ mod tests {
 	#[test]
 	fn accepted_spend_proposal_enacted_on_spend_period() {
 		with_externalities(&mut new_test_ext(), || {
-			Treasury::on_dilution(100, 100);
+			Treasury::on_unbalanced(Balances::issue(100));
 			assert_eq!(Treasury::pot(), 100);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
@@ -562,40 +562,9 @@ mod tests {
 	}
 
 	#[test]
-	// Note: This test demonstrates that `on_dilution` does not increase the pot with good resolution
-	// with large amounts of the network staked. https://github.com/paritytech/substrate/issues/2579
-	// A fix to 2579 should include a change of this test.
-	fn on_dilution_quantization_effects() {
-		with_externalities(&mut new_test_ext(), || {
-			// minted = 1% of total issuance for all cases
-			assert_eq!(Balances::total_issuance(), 200);
-
-			Treasury::on_dilution(2, 66);   // portion = 33% of total issuance
-			assert_eq!(Treasury::pot(), 4); // should increase by 4 (200 - 66) / 66 * 2
-			Balances::make_free_balance_be(&Treasury::account_id(), 0);
-
-			Treasury::on_dilution(2, 67);   // portion = 33+eps% of total issuance
-			assert_eq!(Treasury::pot(), 2); // should increase by 2 (200 - 67) / 67 * 2
-			Balances::make_free_balance_be(&Treasury::account_id(), 0);
-
-			Treasury::on_dilution(2, 100);  // portion = 50% of total issuance
-			assert_eq!(Treasury::pot(), 2); // should increase by 2 (200 - 100) / 100 * 2
-			Balances::make_free_balance_be(&Treasury::account_id(), 0);
-
-			// If any more than 50% of the network is staked (i.e. (2 * portion) > total_issuance)
-			// then the pot will not increase.
-			Treasury::on_dilution(2, 101);  // portion = 50+eps% of total issuance
-			assert_eq!(Treasury::pot(), 0); // should increase by 0 (200 - 101) / 101 * 2
-
-			Treasury::on_dilution(2, 134);  // portion = 67% of total issuance
-			assert_eq!(Treasury::pot(), 0); // should increase by 0 (200 - 134) / 134 * 2
-		});
-	}
-
-	#[test]
 	fn pot_underflow_should_not_diminish() {
 		with_externalities(&mut new_test_ext(), || {
-			Treasury::on_dilution(100, 100);
+			Treasury::on_unbalanced(Balances::issue(100));
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 150, 3));
 			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
@@ -603,7 +572,7 @@ mod tests {
 			<Treasury as OnFinalize<u64>>::on_finalize(2);
 			assert_eq!(Treasury::pot(), 100);
 
-			Treasury::on_dilution(100, 100);
+			Treasury::on_unbalanced(Balances::issue(100));
 			<Treasury as OnFinalize<u64>>::on_finalize(4);
 			assert_eq!(Balances::free_balance(&3), 150);
 			assert_eq!(Treasury::pot(), 75);
