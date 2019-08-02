@@ -24,7 +24,7 @@ use srml_support::{
 	traits::{Currency, WindowLength, DoSlash, DoReward}
 };
 use parity_codec::{HasCompact, Codec, Decode, Encode};
-use rstd::{vec::Vec, collections::{btree_map::BTreeMap, btree_set::BTreeSet}};
+use rstd::{prelude::*, vec::Vec, collections::{btree_map::BTreeMap, btree_set::BTreeSet}};
 use sr_primitives::{Perbill, traits::{MaybeSerializeDebug, Zero}};
 
 type Timestamp = u128;

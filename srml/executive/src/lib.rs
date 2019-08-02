@@ -450,7 +450,7 @@ mod tests {
 		(
 			system::CheckEra::from(Era::Immortal),
 			system::CheckNonce::from(nonce),
-			system::CheckWeight::from(),
+			system::CheckWeight::new(),
 			balances::TakeFees::from(fee)
 		)
 	}

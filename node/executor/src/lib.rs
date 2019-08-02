@@ -122,7 +122,7 @@ mod tests {
 	fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
 		match xt.signed {
 			Some((signed, extra)) => {
-				let payload = (xt.function, extra.clone(), GENESIS_HASH);
+				let payload = (xt.function, extra.clone(), GENESIS_HASH, GENESIS_HASH);
 				let key = AccountKeyring::from_public(&signed).unwrap();
 				let signature = payload.using_encoded(|b| {
 					if b.len() > 256 {
@@ -145,9 +145,10 @@ mod tests {
 
 	fn signed_extra(nonce: Index, extra_fee: Balance) -> SignedExtra {
 		(
+			system::CheckGenesis::new(),
 			system::CheckEra::from(Era::mortal(256, 0)),
 			system::CheckNonce::from(nonce),
-			system::CheckWeight::from(),
+			system::CheckWeight::new(),
 			balances::TakeFees::from(extra_fee)
 		)
 	}

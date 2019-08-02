@@ -153,6 +153,12 @@ pub enum Misbehavior {
 	ParachainInvalidity(u32),
 }
 
+impl Default for Misbehavior {
+	fn default() -> Self {
+		Misbehavior::Unresponsiveness(10)
+	}
+}
+
 impl WindowLength<u32> for Misbehavior {
 	fn window_length(&self) -> &u32 {
 		match self {
