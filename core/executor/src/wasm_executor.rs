@@ -163,17 +163,17 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	},
 	ext_child_trie(
 		storage_key_data: *const u8,
-		storage_key_len: u32,
-		k: *mut *mut u8,
-		kl: *mut u32,
-		r: *mut *mut u8,
-		rl: *mut u32,
-		p: *mut *mut u8,
-		pl: *mut u32,
-		e: *mut *mut u8,
-		el: *mut u32
+		storage_key_length: u32,
+		key: *mut *mut u8,
+		key_length: *mut u32,
+		root: *mut *mut u8,
+		root_length: *mut u32,
+		parent: *mut *mut u8,
+		parent_length: *mut u32,
+		extension: *mut *mut u8,
+		extension_length: *mut u32
 	) -> u32 => {
-		let storage_key = this.memory.get(storage_key_data, storage_key_len as usize)
+		let storage_key = this.memory.get(storage_key_data, storage_key_length as usize)
 			.map_err(|_| "Invalid attempt to determine storage_key in ext_get_child_trie")?;
 
 		Ok(if let Some(ct) = this.ext.child_trie(&storage_key) {
@@ -195,10 +195,10 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				Ok(())
 			};
 			let fields = ct.to_ptr_vec();
-			alloc_vec(Some(fields.0), k, kl)?;
-			alloc_vec(fields.1, r, rl)?;
-			alloc_vec(Some(fields.2), p, pl)?;
-			alloc_vec(Some(fields.3), e, el)?;
+			alloc_vec(Some(fields.0), key, key_length)?;
+			alloc_vec(fields.1, root, root_length)?;
+			alloc_vec(Some(fields.2), parent, parent_length)?;
+			alloc_vec(Some(fields.3), extension, extension_length)?;
 			1
 		} else {
 			0
@@ -574,8 +574,9 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	) -> *mut u8 => {
 		let storage_key = this.memory.get(storage_key_data, storage_key_len as usize)
 			.map_err(|_| "Invalid attempt to determine storage_key in ext_child_storage_root")?;
-		let value = this.with_child_trie(&storage_key[..], |this, child_trie|
-			this.ext.child_storage_root(&child_trie)
+		let value = this.with_child_trie(
+			&storage_key[..],
+			|this, child_trie| this.ext.child_storage_root(&child_trie),
 		)?;
 
 		let offset = this.heap.allocate(value.len() as u32)? as u32;
@@ -921,7 +922,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		data: *const u8,
 		data_len: u32,
 		sig_data_len: *mut u32
-	) -> *mut u8  => {
+	) -> *mut u8 => {
 		let key = offchain::CryptoKey::try_from(key)
 			.map_err(|_| "Key OOB while ext_sign: wasm")?;
 		let message = this.memory.get(data, data_len as usize)

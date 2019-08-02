@@ -29,9 +29,6 @@ hex-literal = "0.2.0"
 
 [features]
 default = ["std"]
-# use legacy trie implementation
-# not compatible with child trie
-legacy-trie = []
 std = [
 	"rstd/std",
 	"codec/std",

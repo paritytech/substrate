@@ -24,27 +24,40 @@ use crate::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
 pub use impl_serde::serialize as bytes;
 use hash_db::Hasher;
 
-/// `KeySpace` type contains a unique identifier to use for accessing
-/// child trie node in a underlying key value database.
-/// From a `TrieDB` perspective, accessing a child trie content requires
-/// both the child trie root, but also the `KeySpace` used to store
-/// this child trie.
-/// The `KeySpace` of a child trie must be unique for the canonical chain
-/// in order to avoid key collision at a key value database level.
-/// This id is unique is currently build from a simple counter in state.
+/// `KeySpace` type contains a unique child trie identifier.
+/// It is used to isolate a child trie in its backing database.
+/// This is done by prefixing its key with this value.
+///
+/// A keyspace byte representation must not be the start of another
+/// keyspace byte representation (otherwhise conflict may happen).
+/// This guaranty is provided by the fact that keyspace is a scale
+/// encoded representation.
+///
+/// From a `TrieDB` perspective, accessing a child trie content 
+/// will requires both the child trie root, but also the `KeySpace`.
+///
+/// The `KeySpace` of a child trie must be unique for the canonical chain.
+/// This unicity is currently guaranted by build from a simple counter.
+///
+/// If a child trie was to be moved between two chains, the underlying
+/// key value would be all the keyvaluedb prefixed by this keyspace.
+/// Moving those key will still need for every content to change keyspace
+/// of the origin chain with a new keyspace of a destination chain.
+/// Please notice that usage of keyspace on ALL data makes it possible,
+/// 
+/// The same thing is true for a child trie deletion, there is no need to
+/// remove all historic of state child trie keypair from a multiple TrieDB
+/// perspective, but simply all keyvaluedb content with a key starting with
+/// this keyspace.
 pub type KeySpace = Vec<u8>;
 
 
-#[cfg(not(feature = "legacy-trie"))]
 /// Keyspace to use for the parent trie key.
 pub const NO_CHILD_KEYSPACE: [u8;1] = [0];
-#[cfg(feature = "legacy-trie")]
-// Keyspace to use for the parent trie key.
-const NO_CHILD_KEYSPACE: [u8;0] = [];
 
 
-/// Generate a new keyspace for a child trie.
-pub fn generate_keyspace(child_counter: u128) -> Vec<u8> {
+/// Produce a new keyspace from current state counter.
+pub fn produce_keyspace(child_counter: u128) -> Vec<u8> {
 	parity_codec::Encode::encode(&Compact(child_counter))
 }
 
@@ -52,8 +65,6 @@ pub fn generate_keyspace(child_counter: u128) -> Vec<u8> {
 // Simplest would be to put an additional optional field in prefix.
 /// Utility function used for merging `KeySpace` data and `prefix` data
 /// before calling key value database primitives.
-/// Note that it currently does a costly append operation resulting in bigger
-/// key length but possibly allowing prefix related operation at lower level.
 pub fn keyspace_as_prefix_alloc(ks: Option<&KeySpace>, prefix: &[u8]) -> Vec<u8> {
 	let ks = ks.map(|ks| ks.as_slice()).unwrap_or(&NO_CHILD_KEYSPACE[..]);
 	let mut res = rstd::vec![0; ks.len() + prefix.len()];
@@ -72,10 +83,10 @@ pub fn prefixed_key<H: Hasher>(key: &H::Out, prefix: &[u8]) -> Vec<u8> {
 }
 
 /// Parent trie origin. This type contains all information
-/// needed to access a parent trie.
+/// needed to access a child trie from a root state.
 /// Currently only a single depth is supported for child trie,
 /// so it only contains the top trie key to the child trie.
-/// Internally this contains a full path key (with
+/// Internally this contains a full path key (including
 /// `well_known_keys::CHILD_STORAGE_KEY_PREFIX`).
 pub type ParentTrie = Vec<u8>;
 
@@ -200,7 +211,7 @@ impl ChildTrie {
 			.unwrap_or_else(|| {
 			let parent = Self::prefix_parent_key(parent);
 			let ct = ChildTrie {
-				keyspace: generate_keyspace(child_trie_next_counter()),
+				keyspace: produce_keyspace(child_trie_next_counter()),
 				root: Default::default(),
 				parent,
 				extension: Default::default(),
@@ -365,8 +376,7 @@ impl AsRef<ChildTrie> for ChildTrie {
 
 #[test]
 fn encode_empty_prefix() {
-	let empt = generate_keyspace(0);
+	let empty = produce_keyspace(0);
 
-	// this ensure root trie can be move to be a child trie
-	assert_eq!(&NO_CHILD_KEYSPACE[..], &empt[..]);
+	assert_eq!(&NO_CHILD_KEYSPACE[..], &empty[..]);
 }
