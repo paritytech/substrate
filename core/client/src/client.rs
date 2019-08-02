@@ -57,7 +57,7 @@ use state_machine::{
 	ChangesTrieRootsStorage, ChangesTrieStorage,
 	key_changes, key_changes_proof, OverlayedChanges, NeverOffchainExt,
 };
-use hash_db::Hasher;
+use hash_db::{Hasher, Prefix};
 
 use crate::backend::{
 	self, BlockImportOperation, PrunableStateChangesTrieStorage,
@@ -614,7 +614,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		}
 
 		impl<'a, Block: BlockT> ChangesTrieStorage<Blake2Hasher, NumberFor<Block>> for AccessedRootsRecorder<'a, Block> {
-			fn get(&self, key: &H256, prefix: &[u8]) -> Result<Option<DBValue>, String> {
+			fn get(&self, key: &H256, prefix: Prefix) -> Result<Option<DBValue>, String> {
 				self.storage.get(key, prefix)
 			}
 		}

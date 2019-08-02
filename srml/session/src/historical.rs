@@ -33,8 +33,8 @@ use srml_support::{
 	StorageValue, StorageMap, decl_module, decl_storage,
 };
 use srml_support::{Parameter, print};
-use substrate_trie::{MemoryDB, Trie, TrieMut, TrieDBMut, TrieDB, Recorder};
-
+use substrate_trie::{MemoryDB, Trie, TrieMut, Recorder, EMPTY_PREFIX};
+use substrate_trie::trie_types::{TrieDBMut, TrieDB};
 use super::{SessionIndex, Module as SessionModule};
 
 /// Trait necessary for the historical module.
@@ -219,7 +219,7 @@ impl<T: Trait> ProvingTrie<T> {
 
 		let mut memory_db = MemoryDB::default();
 		for node in nodes {
-			HashDBT::insert(&mut memory_db, &[], &node[..]);
+			HashDBT::insert(&mut memory_db, EMPTY_PREFIX, &node[..]);
 		}
 
 		ProvingTrie {
