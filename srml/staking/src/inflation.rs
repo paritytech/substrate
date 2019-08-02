@@ -23,14 +23,14 @@ use sr_primitives::{Perbill, traits::SimpleArithmetic};
 struct Linear {
 	// Negate the `a*x` term.
 	negative_a: bool,
-	// Per billion representation of the value.
+	// Per-billion representation of `a`, the x coefficient.
 	a: u32,
-	// Per billion representation of the value.
+	// Per-billion representation of `b`, the intercept.
 	b: u32,
 }
 
 impl Linear {
-	/// Compute `f(n/d)*d`. This is useful not to lose precision.
+	/// Compute `f(n/d)*d`. This is useful to avoid loss of precision.
 	fn calculate_for_fraction_times_denominator<N>(&self, n: N, d: N) -> N
 	where
 		N: SimpleArithmetic + Clone
@@ -46,19 +46,19 @@ impl Linear {
 /// Piecewise Linear function for PNPoS usage
 #[derive(Debug, PartialEq, Eq)]
 struct PiecewiseLinear {
-	/// Array of tuple of abscissa in a per billions representation and a linear function.
+	/// Array of tuples of an abscissa in a per-billion representation and a linear function.
 	///
 	/// Abscissas in the array must be in order from the lowest to the highest.
 	///
 	/// The array defines a piecewise linear function as such:
-	/// * the n-th piece start at the abscissa of the n-th element until the abscissa of the
-	///     n-th + 1 element, and is defined by the linear function of n-th element
-	/// * last piece doesn't end
+	/// * the n-th segment starts at the abscissa of the n-th element until the abscissa of the
+	///     n-th + 1 element, and is defined by the linear function of the n-th element
+	/// * last segment doesn't end
 	pieces: [(u32, Linear); 20],
 }
 
 impl PiecewiseLinear {
-	/// Compute `f(n/d)*d`. This is useful not to lose precision.
+	/// Compute `f(n/d)*d`. This is useful to avoid loss of precision.
 	fn calculate_for_fraction_times_denominator<N>(&self, n: N, d: N) -> N
 	where
 		N: SimpleArithmetic + Clone
