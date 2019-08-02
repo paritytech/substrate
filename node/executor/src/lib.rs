@@ -145,9 +145,10 @@ mod tests {
 
 	fn signed_extra(nonce: Index, extra_fee: Balance) -> SignedExtra {
 		(
+			system::CheckGenesis::new(),
 			system::CheckEra::from(Era::mortal(256, 0)),
 			system::CheckNonce::from(nonce),
-			system::CheckWeight::from(),
+			system::CheckWeight::new(),
 			balances::TakeFees::from(extra_fee)
 		)
 	}

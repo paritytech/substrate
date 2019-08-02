@@ -2673,7 +2673,7 @@ pub(crate) mod tests {
 
 		let current_balance = ||
 			client.runtime_api().balance_of(
-				&BlockId::number(client.current_height()), AccountKeyring::Alice.into()
+				&BlockId::number(client.info().chain.best_number), AccountKeyring::Alice.into()
 			).unwrap();
 
 		// G -> A1 -> A2
@@ -2720,7 +2720,7 @@ pub(crate) mod tests {
 
 		let current_balance = ||
 			client.runtime_api().balance_of(
-				&BlockId::number(client.current_height()), AccountKeyring::Alice.into()
+				&BlockId::number(client.info().chain.best_number), AccountKeyring::Alice.into()
 			).unwrap();
 
 		// G -> A1

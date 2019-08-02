@@ -391,7 +391,6 @@ fn rewards_should_work() {
 		assert_eq!(Balances::total_balance(&2), init_balance_2 + total_payout/3);
 		assert_eq!(Balances::total_balance(&10), init_balance_10 + total_payout/3);
 		assert_eq!(Balances::total_balance(&11), init_balance_11);
-		assert_eq!(Balances)
 	});
 }
 
