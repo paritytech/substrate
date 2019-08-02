@@ -255,8 +255,13 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 		let (timestamp, slot_number, slot_duration) =
 			(slot_info.timestamp, slot_info.number, slot_info.duration);
 
-		let epoch = match epoch(client.as_ref(), &BlockId::Hash(chain_head.hash())) {
-			Ok(authorities) => authorities,
+		// we assume that the SlotWorker only works in environment that has no consensus cache (on full nodes)
+		// => we always expect a regular epoch entry here
+		let regular_epoch = epoch(client.as_ref(), &BlockId::Hash(chain_head.hash()))
+			.and_then(|epoch| epoch.into_regular().ok_or(consensus_common::Error::InvalidAuthoritiesSet));
+
+		let epoch = match regular_epoch {
+			Ok(epoch) => epoch,
 			Err(e) => {
 				error!(
 					target: "babe",
@@ -654,23 +659,50 @@ impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
 
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
-		let Epoch { authorities, randomness, epoch_index, .. } =
-			epoch(self.api.as_ref(), &BlockId::Hash(parent_hash))
-				.map_err(|e| format!("Could not fetch epoch at {:?}: {:?}", parent_hash, e))?;
+
+		let epoch = epoch(self.api.as_ref(), &BlockId::Hash(parent_hash))
+			.map_err(|e| format!("Could not fetch epoch at {:?}: {:?}", parent_hash, e))?;
+		let (epoch, maybe_next_epoch) = epoch.deconstruct();
+		let Epoch { authorities, randomness, epoch_index, .. } = epoch;
 
 		// We add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of headers
-		let checked_header = check_header::<B, C>(
+println!("=== CHECKING #{}: {} {:?} {:?}", header.number(), epoch_index, authorities, randomness);
+		let mut checked_header = check_header::<B, C>(
 			&self.api,
 			slot_now + 1,
-			header,
+			header.clone(),
 			hash,
 			&authorities,
 			randomness,
 			epoch_index,
 			self.config.c(),
-		)?;
+		);
 
+		// if we have failed to check header using (presumably) current epoch AND we're probably in the next epoch
+		// => check using next epoch
+		if checked_header.is_err() {
+			if let Some(Epoch { authorities, randomness, epoch_index, .. }) = maybe_next_epoch {
+println!("=== RETRYING #{}: {} {:?} {:?}", header.number(), epoch_index, authorities, randomness);
+				let checked_header_next = check_header::<B, C>(
+					&self.api,
+					slot_now + 1,
+					header,
+					hash,
+					&authorities,
+					randomness,
+					epoch_index,
+					self.config.c(),
+				);
+
+				match checked_header_next {
+					Ok(checked_header_next) => checked_header = Ok(checked_header_next),
+					Err(_) => (),
+				}
+			}
+		}
+
+		let checked_header = checked_header?;
 		match checked_header {
 			CheckedHeader::Checked(pre_header, (pre_digest, seal)) => {
 				let BabePreDigest { slot_number, .. } = pre_digest.as_babe_pre_digest()
@@ -723,31 +755,74 @@ impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
 	}
 }
 
+/// Regular BABE epoch or spanned genesis epoch.
+#[derive(Decode, Encode)]
+enum MaybeSpanEpoch {
+	/// Genesis entry. Has the data for epoch#0 and epoch#1.
+	Genesis(Epoch, Epoch),
+	/// Regular entry. Has the data for the epoch after next (i.e. current epoch + 2).
+	Regular(Epoch),
+}
+
+impl MaybeSpanEpoch {
+	pub fn deconstruct(self) -> (Epoch, Option<Epoch>) {
+		match self {
+			MaybeSpanEpoch::Genesis(epoch0, epoch1) => (epoch0, Some(epoch1)),
+			MaybeSpanEpoch::Regular(epoch) => (epoch, None),
+		}
+	}
+
+	pub fn into_regular(self) -> Option<Epoch> {
+		match self {
+			MaybeSpanEpoch::Regular(epoch) => Some(epoch),
+			_ => None,
+		}
+	}
+}
+
 /// Extract current epoch data from cache and fallback to querying the runtime
 /// if the cache isn't populated.
-fn epoch<B, C>(client: &C, at: &BlockId<B>) -> Result<Epoch, ConsensusError> where
+fn epoch<B, C>(client: &C, at: &BlockId<B>) -> Result<MaybeSpanEpoch, ConsensusError> where
 	B: BlockT,
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: BabeApi<B>,
 {
-	client
-		.cache()
-		.and_then(|cache| cache.get_at(&well_known_cache_keys::EPOCH, at)
-			.and_then(|(_, _, v)| Decode::decode(&mut &v[..])))
-		.or_else(|| {
-			if client.runtime_api().has_api::<dyn BabeApi<B>>(at).unwrap_or(false) {
-				let s = BabeApi::epoch(&*client.runtime_api(), at).ok()?;
-				if s.authorities.is_empty() {
-					error!("No authorities!");
-					None
-				} else {
-					Some(s)
-				}
-			} else {
-				error!("bad api!");
-				None
-			}
-		}).ok_or(consensus_common::Error::InvalidAuthoritiesSet)
+	epoch_from_cache(client, at)
+		.or_else(|| epoch_from_runtime(client, at).map(MaybeSpanEpoch::Regular))
+		.ok_or(consensus_common::Error::InvalidAuthoritiesSet)
+}
+
+/// Extract current epoch data from cache.
+fn epoch_from_cache<B, C>(client: &C, at: &BlockId<B>) -> Option<MaybeSpanEpoch> where
+	B: BlockT,
+	C: ProvideCache<B>,
+{
+	// the epoch that is BABE-valid at the block is not the epoch that is cache-valid at the block
+	// we need to go back for maximum two steps
+	client.cache()
+		.and_then(|cache| cache
+			.get_at_and_skip(2, &well_known_cache_keys::EPOCH, at)
+			.and_then(|(_, _, _, v)| Decode::decode(&mut &v[..])))
+}
+
+/// Extract current epoch from runtime.
+fn epoch_from_runtime<B, C>(client: &C, at: &BlockId<B>) -> Option<Epoch> where
+	B: BlockT,
+	C: ProvideRuntimeApi,
+	C::Api: BabeApi<B>,
+{
+	if client.runtime_api().has_api::<dyn BabeApi<B>>(at).unwrap_or(false) {
+		let s = BabeApi::epoch(&*client.runtime_api(), at).ok()?;
+		if s.authorities.is_empty() {
+			error!("No authorities!");
+			None
+		} else {
+			Some(s)
+		}
+	} else {
+		error!("bad api!");
+		None
+	}
 }
 
 /// The BABE import queue type.
@@ -854,7 +929,7 @@ fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> 
 
 	// check if we already have initialized the cache
 	let genesis_id = BlockId::Number(Zero::zero());
-	let genesis_epoch: Option<Epoch> = cache
+	let genesis_epoch: Option<MaybeSpanEpoch> = cache
 		.get_at(&well_known_cache_keys::EPOCH, &genesis_id)
 		.and_then(|(_, _, v)| Decode::decode(&mut &v[..]));
 	if genesis_epoch.is_some() {
@@ -867,7 +942,11 @@ fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> 
 			error,
 		)));
 
-	let genesis_epoch = epoch(client, &genesis_id)?;
+	let epoch0 = epoch_from_runtime(client, &genesis_id).ok_or(consensus_common::Error::InvalidAuthoritiesSet)?;
+	let mut epoch1 = epoch0.clone();
+	epoch1.epoch_index = 1;
+
+	let genesis_epoch = MaybeSpanEpoch::Genesis(epoch0, epoch1);
 	cache.initialize(&well_known_cache_keys::EPOCH, genesis_epoch.encode())
 		.map_err(map_err)
 }
@@ -1060,7 +1139,13 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 					enacted_epoch.encode(),
 				);
 
+				// we really could ignore epoch0 here, because the change epoch0 -> epoch1 doesn't emit any digest
+				// => we'll never reach this code
 				let current_epoch = epoch(&*self.api, &BlockId::Hash(parent_hash))?;
+				let authorities_changed = match current_epoch {
+					MaybeSpanEpoch::Genesis(_, epoch1) => epoch1.authorities != enacted_epoch.authorities,
+					MaybeSpanEpoch::Regular(epoch) => epoch.authorities != enacted_epoch.authorities,
+				};
 
 				// if the authorities have changed then we populate the
 				// `AUTHORITIES` key with the enacted epoch, so that the inner
@@ -1068,7 +1153,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 				// e.g. in the case of GRANDPA it would require a justification
 				// for the block, expecting that the authorities actually
 				// changed.
-				if current_epoch.authorities != enacted_epoch.authorities {
+				if authorities_changed {
 					new_cache.insert(
 						well_known_cache_keys::AUTHORITIES,
 						enacted_epoch.encode(),
