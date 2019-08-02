@@ -20,7 +20,7 @@ use super::*;
 use runtime_io::with_externalities;
 use phragmen;
 use sr_primitives::traits::OnInitialize;
-use srml_support::{assert_ok, assert_noop, assert_eq_uvec, EnumerableStorageMap};
+use srml_support::{assert_ok, assert_noop, assert_eq_uvec, assert_eq_error_rate, EnumerableStorageMap};
 use mock::*;
 use srml_support::traits::{Currency, ReservableCurrency};
 
@@ -388,8 +388,8 @@ fn rewards_should_work() {
 		assert_eq!(Session::current_index(), 3);
 
 		// 11 validator has 2/3 of the total rewards and half half for it and its nominator
-		assert_eq!(Balances::total_balance(&2), init_balance_2 + total_payout/3);
-		assert_eq!(Balances::total_balance(&10), init_balance_10 + total_payout/3);
+		assert_eq_error_rate!(Balances::total_balance(&2), init_balance_2 + total_payout/3, 1);
+		assert_eq_error_rate!(Balances::total_balance(&10), init_balance_10 + total_payout/3, 1);
 		assert_eq!(Balances::total_balance(&11), init_balance_11);
 	});
 }
@@ -725,19 +725,19 @@ fn nominating_and_rewards_should_work() {
 			assert_eq!(Balances::total_balance(&4), initial_balance + payout_for_20/5 + payout_for_10*3/10);
 
 			// Validator 10: got 1000 / 2000 external stake.
-			assert_eq!(Balances::total_balance(&10), initial_balance + payout_for_10/2);
+			assert_eq_error_rate!(Balances::total_balance(&10), initial_balance + payout_for_10/2, 1);
 			// Validator 20: got 1000 / 2000 external stake.
-			assert_eq!(Balances::total_balance(&20), initial_balance + payout_for_20/2);
+			assert_eq_error_rate!(Balances::total_balance(&20), initial_balance + payout_for_20/2, 1);
 		} else {
 			// Nominator 2: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
-			assert_eq!(Balances::total_balance(&2), initial_balance + (2*payout_for_10/9 + 3*payout_for_20/11) - 2);
+			assert_eq_error_rate!(Balances::total_balance(&2), initial_balance + (2*payout_for_10/9 + 3*payout_for_20/11) - 2, 1);
 			// Nominator 4: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
-			assert_eq!(Balances::total_balance(&4), initial_balance + (2*payout_for_10/9 + 3*payout_for_20/11) - 2);
+			assert_eq_error_rate!(Balances::total_balance(&4), initial_balance + (2*payout_for_10/9 + 3*payout_for_20/11) - 2, 1);
 
 			// Validator 10: got 800 / 1800 external stake => 8/18 =? 4/9 => Validator's share = 5/9
-			assert_eq!(Balances::total_balance(&10), initial_balance + 5*payout_for_10/9 - 1);
+			assert_eq_error_rate!(Balances::total_balance(&10), initial_balance + 5*payout_for_10/9 - 1, 1);
 			// Validator 20: got 1200 / 2200 external stake => 12/22 =? 6/11 => Validator's share = 5/11
-			assert_eq!(Balances::total_balance(&20), initial_balance + 5*payout_for_20/11);
+			assert_eq_error_rate!(Balances::total_balance(&20), initial_balance + 5*payout_for_20/11, 1);
 		}
 
 		check_exposure_all();
@@ -1786,7 +1786,7 @@ fn bond_with_little_staked_value_bounded_by_slot_stake() {
 		assert_eq!(Staking::slot_stake(), 1);
 
 		// Old ones are rewarded.
-		assert_eq!(Balances::free_balance(&10), init_balance_10 + total_payout_0/3);
+		assert_eq_error_rate!(Balances::free_balance(&10), init_balance_10 + total_payout_0 / 3, 2);
 		// no rewards paid to 2. This was initial election.
 		assert_eq!(Balances::free_balance(&2), init_balance_2);
 
@@ -1798,8 +1798,8 @@ fn bond_with_little_staked_value_bounded_by_slot_stake() {
 		assert_eq_uvec!(validator_controllers(), vec![20, 10, 2]);
 		assert_eq!(Staking::slot_stake(), 1);
 
-		assert_eq!(Balances::free_balance(&2), init_balance_2 + total_payout_1/3);
-		assert_eq!(Balances::free_balance(&10), init_balance_10 + total_payout_0/3 + total_payout_1/3);
+		assert_eq_error_rate!(Balances::free_balance(&2), init_balance_2 + total_payout_1 / 3, 2);
+		assert_eq_error_rate!(Balances::free_balance(&10), init_balance_10 + total_payout_0/3 + total_payout_1 / 3, 2);
 		check_exposure_all();
 		check_nominator_all();
 	});

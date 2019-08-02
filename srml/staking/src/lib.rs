@@ -297,7 +297,7 @@ use sr_primitives::Perbill;
 use sr_primitives::weights::SimpleDispatchInfo;
 use sr_primitives::traits::{
 	Convert, Zero, One, StaticLookup, CheckedSub, CheckedShl, Saturating, Bounded,
-	SaturatedConversion, SimpleArithmetic
+	SaturatedConversion,
 };
 #[cfg(feature = "std")]
 use sr_primitives::{Serialize, Deserialize};
@@ -551,7 +551,7 @@ decl_storage! {
 		pub MinimumValidatorCount get(minimum_validator_count) config():
 			u32 = DEFAULT_MINIMUM_VALIDATOR_COUNT;
 		/// Slash, per validator that is taken for the first time they are found to be offline.
-		pub OfflineSlash get(offline_slash) config(): Perbill = Perbill::from_millionths(1000);
+		pub OfflineSlash get(offline_slash) config(): Perbill = Perbill::from_rational_approximation(1u32, 1000);
 		/// Number of instances of offline reports before slashing begins for validators.
 		pub OfflineSlashGrace get(offline_slash_grace) config(): u32;
 
@@ -1159,7 +1159,8 @@ impl<T: Trait> Module<T> {
 			let total_points = rewards.total;
 			for (v, points) in validators.iter().zip(rewards.rewards.into_iter()) {
 				if points != 0 {
-					let reward = multiply_by_rational(total_payout, points, total_points);
+					// let reward = multiply_by_rational(total_payout, points, total_points);
+					let reward = Perbill::from_rational_approximation(points, total_points) * total_payout;
 					total_imbalance.subsume(Self::reward_validator(v, reward));
 				}
 			}
@@ -1450,31 +1451,6 @@ impl<T: Trait + authorship::Trait> authorship::EventHandler<T::AccountId, T::Blo
 		Self::add_reward_points_to_validator(<authorship::Module<T>>::author(), 2);
 		Self::add_reward_points_to_validator(author, 1);
 	}
-}
-
-// This is guarantee not to overflow on whatever values.
-// `num` must be inferior to `den` otherwise it will be reduce to `den`.
-fn multiply_by_rational<N>(value: N, num: u32, den: u32) -> N
-	where N: SimpleArithmetic + Clone
-{
-	let num = num.min(den);
-
-	let result_divisor_part = value.clone() / den.into() * num.into();
-
-	let result_remainder_part = {
-		let rem = value % den.into();
-
-		// Fits into u32 because den is u32 and remainder < den
-		let rem_u32 = rem.saturated_into::<u32>();
-
-		// Multiplication fits into u64 as both term are u32
-		let rem_part = rem_u32 as u64 * num as u64 / den as u64;
-
-		// Result fits into u32 as num < total_points
-		(rem_part as u32).into()
-	};
-
-	result_divisor_part + result_remainder_part
 }
 
 /// A `Convert` implementation that finds the stash of the given controller account,

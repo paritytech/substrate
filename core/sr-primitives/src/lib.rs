@@ -33,7 +33,7 @@ pub use paste;
 #[cfg(feature = "std")]
 pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 
-use rstd::{prelude::*, ops, convert::TryInto};
+use rstd::prelude::*;
 use primitives::{crypto, ed25519, sr25519, hash::{H256, H512}};
 use codec::{Encode, Decode};
 
@@ -46,8 +46,6 @@ pub mod generic;
 pub mod transaction_validity;
 pub mod sr_arithmetic;
 
-use traits::{SaturatedConversion, UniqueSaturatedInto, Saturating, Bounded, CheckedSub, CheckedAdd};
-
 /// Re-export these since they're only "kind of" generic.
 pub use generic::{DigestItem, Digest};
 
@@ -55,7 +53,7 @@ pub use generic::{DigestItem, Digest};
 pub use primitives::crypto::{key_types, KeyTypeId};
 
 /// Export arithmetic stuff.
-pub use sr_arithmetic::{Perbill, Permill};
+pub use sr_arithmetic::{Perbill, Permill, Percent, PerU128, Fixed64};
 
 /// A message indicating an invalid signature in extrinsic.
 pub const BAD_SIGNATURE: &str = "bad signature in extrinsic";
@@ -169,177 +167,6 @@ impl BuildStorage for (StorageOverlay, ChildrenStorageOverlay) {
 
 /// Consensus engine unique ID.
 pub type ConsensusEngineId = [u8; 4];
-
-
-/// A fixed point number by the scale of 1 billion.
-///
-/// cannot hold a value larger than +-`9223372036854775807 / 1_000_000_000` (~9 billion).
-#[cfg_attr(feature = "std", derive(Debug))]
-#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Fixed64(i64);
-
-/// The maximum value of the `Fixed64` type
-const DIV: i64 = 1_000_000_000;
-
-impl Fixed64 {
-	/// creates self from a natural number.
-	///
-	/// Note that this might be lossy.
-	pub fn from_natural(int: i64) -> Self {
-		Self(int.saturating_mul(DIV))
-	}
-
-	/// Return the accuracy of the type. Given that this function returns the value `X`, it means
-	/// that an instance composed of `X` parts (`Fixed64::from_parts(X)`) is equal to `1`.
-	pub fn accuracy() -> i64 {
-		DIV
-	}
-
-	/// creates self from a rational number. Equal to `n/d`.
-	///
-	/// Note that this might be lossy.
-	pub fn from_rational(n: i64, d: u64) -> Self {
-		Self((n as i128 * DIV as i128 / (d as i128).max(1)).try_into().unwrap_or(Bounded::max_value()))
-	}
-
-	/// Performs a saturated multiply and accumulate.
-	///
-	/// Returns a saturated `n + (self * n)`.
-	/// TODO: generalize this to any weight type. #3189
-	pub fn saturated_multiply_accumulate(&self, int: u32) -> u32 {
-		let parts = self.0;
-		let positive = parts > 0;
-
-		// natural parts might overflow.
-		let natural_parts = self.clone().saturated_into::<u32>();
-		// fractional parts can always fit into u32.
-		let perbill_parts = (parts.abs() % DIV) as u32;
-
-		let n = int.saturating_mul(natural_parts);
-		let p = Perbill::from_parts(perbill_parts) * int;
-		// everything that needs to be either added or subtracted from the original weight.
-		let excess = n.saturating_add(p);
-
-		if positive {
-			int.saturating_add(excess)
-		} else {
-			int.saturating_sub(excess)
-		}
-	}
-
-	/// Raw constructor. Equal to `parts / 1_000_000_000`.
-	pub fn from_parts(parts: i64) -> Self {
-		Self(parts)
-	}
-}
-
-impl UniqueSaturatedInto<u32> for Fixed64 {
-	/// Note that the maximum value of Fixed64 might be more than what can fit in u32. This is hence,
-	/// expected to be lossy.
-	fn unique_saturated_into(self) -> u32 {
-		(self.0.abs() / DIV).try_into().unwrap_or(Bounded::max_value())
-	}
-}
-
-impl Saturating for Fixed64 {
-	fn saturating_add(self, rhs: Self) -> Self {
-		Self(self.0.saturating_add(rhs.0))
-	}
-	fn saturating_mul(self, rhs: Self) -> Self {
-		Self(self.0.saturating_mul(rhs.0) / DIV)
-	}
-	fn saturating_sub(self, rhs: Self) -> Self {
-		Self(self.0.saturating_sub(rhs.0))
-	}
-}
-
-/// Note that this is a standard, _potentially-panicking_, implementation. Use `Saturating` trait
-/// for safe addition.
-impl ops::Add for Fixed64 {
-	type Output = Self;
-
-	fn add(self, rhs: Self) -> Self::Output {
-		Self(self.0 + rhs.0)
-	}
-}
-
-/// Note that this is a standard, _potentially-panicking_, implementation. Use `Saturating` trait
-/// for safe subtraction.
-impl ops::Sub for Fixed64 {
-	type Output = Self;
-
-	fn sub(self, rhs: Self) -> Self::Output {
-		Self(self.0 - rhs.0)
-	}
-}
-
-impl CheckedSub for Fixed64 {
-	fn checked_sub(&self, rhs: &Self) -> Option<Self> {
-		if let Some(v) = self.0.checked_sub(rhs.0) {
-			Some(Self(v))
-		} else {
-			None
-		}
-	}
-}
-
-impl CheckedAdd for Fixed64 {
-	fn checked_add(&self, rhs: &Self) -> Option<Self> {
-		if let Some(v) = self.0.checked_add(rhs.0) {
-			Some(Self(v))
-		} else {
-			None
-		}
-	}
-}
-
-/// PerU128 is parts-per-u128-max-value. It stores a value between 0 and 1 in fixed point.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
-pub struct PerU128(u128);
-
-const U128: u128 = u128::max_value();
-
-impl PerU128 {
-	/// Nothing.
-	pub fn zero() -> Self { Self(0) }
-
-	/// `true` if this is nothing.
-	pub fn is_zero(&self) -> bool { self.0 == 0 }
-
-	/// Everything.
-	pub fn one() -> Self { Self(U128) }
-
-	/// From an explicitly defined number of parts per maximum of the type.
-	pub fn from_parts(x: u128) -> Self { Self(x) }
-
-	/// Construct new instance where `x` is denominator and the nominator is 1.
-	pub fn from_xth(x: u128) -> Self { Self(U128/x.max(1)) }
-}
-
-impl ::rstd::ops::Deref for PerU128 {
-	type Target = u128;
-
-	fn deref(&self) -> &u128 {
-		&self.0
-	}
-}
-
-impl codec::CompactAs for PerU128 {
-	type As = u128;
-	fn encode_as(&self) -> &u128 {
-		&self.0
-	}
-	fn decode_from(x: u128) -> PerU128 {
-		Self(x)
-	}
-}
-
-impl From<codec::Compact<PerU128>> for PerU128 {
-	fn from(x: codec::Compact<PerU128>) -> PerU128 {
-		x.0
-	}
-}
 
 /// Signature verify that can work with any known signature types..
 #[derive(Eq, PartialEq, Clone, Encode, Decode)]

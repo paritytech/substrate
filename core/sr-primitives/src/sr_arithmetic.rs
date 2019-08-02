@@ -16,13 +16,14 @@
 
 //! Minimal, mostly not efficient, fixed point arithmetic primitives for runtime.
 
-use rstd::{prelude::*, ops};
-use codec::{Encode, Decode};
+#[cfg(feature = "std")]
 use crate::serde::{Serialize, Deserialize};
-use crate::traits::{self, SaturatedConversion};
+use rstd::{prelude::*, ops, convert::{TryInto, TryFrom}};
+use codec::{Encode, Decode};
+use crate::traits::{SimpleArithmetic, SaturatedConversion, CheckedSub, CheckedAdd, Bounded, UniqueSaturatedInto, Saturating};
 
 macro_rules! implement_per_thing {
-	($name:ident, $test_mod:ident, $max:expr, $type:ty, $upper_type:ty, $title:expr) => {
+	($name:ident, $test_mod:ident, $max:tt, $type:ty, $upper_type:ty, $title:expr) => {
 		/// A fixed point representation of a number between in the range [0, 1].
 		///
 		#[doc = $title]
@@ -58,22 +59,24 @@ macro_rules! implement_per_thing {
 
 			/// Approximate the fraction `p/q` into a per million fraction.
 			///
-			/// The computation of this approximation is performed in the generic type `N`. to
-			/// ensure overflow wont' happen, TODO TODO.
+			/// The computation of this approximation is performed in the generic type `N`.
+			///
+			/// Should never overflow.
 			pub fn from_rational_approximation<N>(p: N, q: N) -> Self
-				where N: traits::SimpleArithmetic + Clone
+				where N: SimpleArithmetic + Clone
 			{
 				// q cannot be zero.
 				let q = q.max(1u32.into());
 				// p should not be bigger than q.
 				let p = p.min(q.clone());
+
 				let factor = (q.clone() / $max.into()).max((1 as $type).into());
 
-				// Conversion can't overflow as p < q so ( p / (q/million)) < million
+				// q cannot overflow: (q / (q/$max)) < $max. p < q hence p also cannot overflow.
 				let p_reduce: $type = (p / factor.clone()).try_into().unwrap_or_else(|_| panic!());
 				let q_reduce: $type = (q / factor.clone()).try_into().unwrap_or_else(|_| panic!());
 				// `p_reduced` and `q_reduced` are withing $type. Mul by another $max will always
-				// fit in $upper_type. TODO test for this.
+				// fit in $upper_type. This is guaranteed by the macro tests.
 				let part = p_reduce as $upper_type * ($max as $upper_type) / q_reduce as $upper_type;
 
 				$name(part as $type)
@@ -82,10 +85,10 @@ macro_rules! implement_per_thing {
 
 		/// Overflow-prune multiplication.
 		///
-		/// tailored to be used with a balance type.
+		/// tailored to be used with a balance type. Never overflows.
 		impl<N> ops::Mul<N> for $name
 		where
-			N: Clone + From<u32> + traits::UniqueSaturatedInto<u32> + ops::Rem<N, Output=N>
+			N: Clone + From<u32> + UniqueSaturatedInto<u32> + ops::Rem<N, Output=N>
 				+ ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N>,
 		{
 			type Output = N;
@@ -96,14 +99,15 @@ macro_rules! implement_per_thing {
 				let rem_multiplied_divided = {
 					let rem = b.clone().rem(maximum.clone());
 
-					// `rem` is inferior to $max, thus it fits into $type (assured by a test)
+					// `rem_sized` is inferior to $max, thus it fits into $type. This is assured by
+					// a test.
 					let rem_sized = rem.saturated_into::<$type>();
 
-					// `self` and `rem` are inferior to $max, thus the product is less than 10^12
-					// and fits into u64
+					// `self` and `rem_sized` are inferior to $max, thus the product is less than
+					// $max^2 and fits into $upper_type. This is assured by a test.
 					let rem_multiplied_upper = rem_sized as $upper_type * self.0 as $upper_type;
 
-					// `rem_multiplied_upper` is less than 10^12 therefore divided by $max it fits into
+					// `rem_multiplied_upper` is less than $max^2 therefore divided by $max it fits into
 					// u32
 					let rem_multiplied_divided_sized = (rem_multiplied_upper / ($max as $upper_type)) as u32;
 
@@ -145,7 +149,9 @@ macro_rules! implement_per_thing {
 			fn macro_expanded_correctly() {
 				assert!($max < <$type>::max_value());
 				assert!(($max as $upper_type) < <$upper_type>::max_value());
-				assert!((<$type>::max_value() as $upper_type) < <$upper_type>::max_value());
+				// for something like percent they can be the same.
+				assert!((<$type>::max_value() as $upper_type) <= <$upper_type>::max_value());
+				assert!(($max as $upper_type).checked_mul($max.into()).is_some());
 			}
 
 			#[test]
@@ -204,54 +210,221 @@ macro_rules! implement_per_thing {
 
 			macro_rules! per_thing_from_rationale_approx_test {
 				($num_type:tt) => {
+					// within accuracy boundary
+					assert_eq!(
+						$name::from_rational_approximation(1 as $num_type, 0),
+						$name::one(),
+					);
+					assert_eq!(
+						$name::from_rational_approximation(1 as $num_type, 1),
+						$name::one(),
+					);
+					assert_eq!(
+						$name::from_rational_approximation(1 as $num_type, 3),
+						$name::from_fraction(0.33333333333333333333333333333),
+					);
+					assert_eq!(
+						$name::from_rational_approximation(1 as $num_type, 10),
+						$name::from_percent(10),
+					);
 
+					// almost at the edge
+					assert_eq!(
+						$name::from_rational_approximation($max - 1, $max + 1),
+						$name::from_parts($max - 2),
+					);
+					assert_eq!(
+						$name::from_rational_approximation(1, $max-1),
+						$name::from_parts(1),
+					);
+					assert_eq!(
+						$name::from_rational_approximation(1, $max),
+						$name::from_parts(1),
+					);
+					assert_eq!(
+						$name::from_rational_approximation(1, $max+1),
+						$name::zero(),
+					);
+
+					// no accurate anymore but won't overflow.
+					assert_eq!(
+						$name::from_rational_approximation($num_type::max_value() - 1, $num_type::max_value()),
+						$name::one(),
+					);
+					assert_eq!(
+						$name::from_rational_approximation($num_type::max_value() / 3, $num_type::max_value()),
+						$name::from_parts($name::one().0 / 3),
+					);
+					assert_eq!(
+						$name::from_rational_approximation(1, $num_type::max_value()),
+						$name::zero(),
+					);
 				};
 			}
+
 			#[test]
 			fn per_thing_from_rationale_approx_works() {
-				assert_eq!(
-					$name::from_rational_approximation(1u128, 1),
-					$name::one(),
-				);
-				assert_eq!(
-					$name::from_rational_approximation(1u128, 3),
-					$name::from_fraction(0.33333333333333),
-				);
-				assert_eq!(
-					$name::from_rational_approximation(1u128, 10),
-					$name::from_percent(10),
-				);
-				assert_eq!(
-					$name::from_rational_approximation(u128::max_value() - 1, u128::max_value()),
-					$name::one(),
-				);
-				assert_eq!(
-					$name::from_rational_approximation(u128::max_value() / 3, u128::max_value()),
-					$name::from_parts($name::one().0 / 3),
-				);
-				assert_eq!(
-					$name::from_rational_approximation(1, u128::max_value()),
-					$name::zero(),
-				);
+				per_thing_from_rationale_approx_test!(u32);
+				per_thing_from_rationale_approx_test!(u64);
+				per_thing_from_rationale_approx_test!(u128);
+			}
 
+			#[test]
+			fn per_thing_multiplication_with_large_number() {
+				use primitive_types::U256;
+				let max_minus_one = $max - 1;
+				assert_eq!(
+					$name::from_parts(max_minus_one) * std::u128::MAX,
+					((Into::<U256>::into(std::u128::MAX) * max_minus_one) / $max).as_u128()
+				);
+			}
 
+			#[test]
+			fn per_things_mul_operates_in_output_type() {
+				assert_eq!($name::from_percent(50) * 100u32, 50u32);
+				assert_eq!($name::from_percent(50) * 100u64, 50u64);
+				assert_eq!($name::from_percent(50) * 100u128, 50u128);
 			}
 		}
-
-
 	};
 }
 
 implement_per_thing!(Permill, test_permill, 1_000_000u32, u32, u64, "_Parts per Million_");
-implement_per_thing!(PerFoo, test_perfoo, 1_000_000_000u32, u32, u64, "_Parts per Foo_");
+implement_per_thing!(Perbill, test_perbill, 1_000_000_000u32, u32, u64, "_Parts per Billion_");
+implement_per_thing!(Percent, test_per_cent, 100u32, u32, u32, "_Percent_");
 
-/// Perbill is parts-per-billion. It stores a value between 0 and 1 in fixed point and
-/// provides a means to multiply some other value by that.
+/// An unsigned fixed point number. Can hold any value in the range [-9_223_372_036, 9_223_372_036]
+/// with fixed point accuracy of one billion.
+#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Fixed64(i64);
+
+/// The maximum value of the `Fixed64` type
+const DIV: i64 = 1_000_000_000;
+
+impl Fixed64 {
+	/// creates self from a natural number.
+	///
+	/// Note that this might be lossy.
+	pub fn from_natural(int: i64) -> Self {
+		Self(int.saturating_mul(DIV))
+	}
+
+	/// Return the accuracy of the type. Given that this function returns the value `X`, it means
+	/// that an instance composed of `X` parts (`Fixed64::from_parts(X)`) is equal to `1`.
+	pub fn accuracy() -> i64 {
+		DIV
+	}
+
+	/// Raw constructor. Equal to `parts / 1_000_000_000`.
+	pub fn from_parts(parts: i64) -> Self {
+		Self(parts)
+	}
+
+	/// creates self from a rational number. Equal to `n/d`.
+	///
+	/// Note that this might be lossy.
+	pub fn from_rational(n: i64, d: u64) -> Self {
+		Self(
+			((n as i128).saturating_mul(DIV as i128) / (d as i128).max(1))
+			.try_into()
+			.unwrap_or(Bounded::max_value())
+		)
+	}
+
+	/// Performs a saturated multiply and accumulate by unsigned number.
+	///
+	/// Returns a saturated `n + (self * n)`.
+	pub fn saturated_multiply_accumulate<N>(&self, int: N) -> N
+	where
+		N: TryFrom<u64> + From<u32> + UniqueSaturatedInto<u32> + Bounded + Clone + Saturating +
+		ops::Rem<N, Output=N> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> +
+		ops::Add<N, Output=N>,
+	{
+		let parts = self.0;
+		let positive = parts > 0;
+
+		// will always fit.
+		let natural_parts: u64 = (parts / DIV) as u64;
+		// might saturate.
+		let natural_parts: N = natural_parts.saturated_into();
+		// fractional parts can always fit into u32.
+		let perbill_parts = (parts.abs() % DIV) as u32;
+
+		let n = int.clone().saturating_mul(natural_parts);
+		let p = Perbill::from_parts(perbill_parts) * int.clone();
+
+		// everything that needs to be either added or subtracted from the original weight.
+		let excess = n.saturating_add(p);
+
+		if positive {
+			int.saturating_add(excess)
+		} else {
+			int.saturating_sub(excess)
+		}
+	}
+}
+
+impl Saturating for Fixed64 {
+	fn saturating_add(self, rhs: Self) -> Self {
+		Self(self.0.saturating_add(rhs.0))
+	}
+	fn saturating_mul(self, rhs: Self) -> Self {
+		Self(self.0.saturating_mul(rhs.0) / DIV)
+	}
+	fn saturating_sub(self, rhs: Self) -> Self {
+		Self(self.0.saturating_sub(rhs.0))
+	}
+}
+
+/// Note that this is a standard, _potentially-panicking_, implementation. Use `Saturating` trait
+/// for safe addition.
+impl ops::Add for Fixed64 {
+	type Output = Self;
+
+	fn add(self, rhs: Self) -> Self::Output {
+		Self(self.0 + rhs.0)
+	}
+}
+
+/// Note that this is a standard, _potentially-panicking_, implementation. Use `Saturating` trait
+/// for safe subtraction.
+impl ops::Sub for Fixed64 {
+	type Output = Self;
+
+	fn sub(self, rhs: Self) -> Self::Output {
+		Self(self.0 - rhs.0)
+	}
+}
+
+impl CheckedSub for Fixed64 {
+	fn checked_sub(&self, rhs: &Self) -> Option<Self> {
+		if let Some(v) = self.0.checked_sub(rhs.0) {
+			Some(Self(v))
+		} else {
+			None
+		}
+	}
+}
+
+impl CheckedAdd for Fixed64 {
+	fn checked_add(&self, rhs: &Self) -> Option<Self> {
+		if let Some(v) = self.0.checked_add(rhs.0) {
+			Some(Self(v))
+		} else {
+			None
+		}
+	}
+}
+
+/// PerU128 is parts-per-u128-max-value. It stores a value between 0 and 1 in fixed point.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
-pub struct Perbill(u32);
+#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
+pub struct PerU128(u128);
 
-impl Perbill {
+const U128: u128 = u128::max_value();
+
+impl PerU128 {
 	/// Nothing.
 	pub fn zero() -> Self { Self(0) }
 
@@ -259,126 +432,72 @@ impl Perbill {
 	pub fn is_zero(&self) -> bool { self.0 == 0 }
 
 	/// Everything.
-	pub fn one() -> Self { Self(1_000_000_000) }
-
-	/// create a new raw instance. This can be called at compile time.
-	pub const fn from_const_parts(parts: u32) -> Self {
-		Self([parts, 1_000_000_000][(parts > 1_000_000_000) as usize])
-	}
+	pub fn one() -> Self { Self(U128) }
 
 	/// From an explicitly defined number of parts per maximum of the type.
-	pub fn from_parts(parts: u32) -> Self { Self::from_const_parts(parts) }
+	pub fn from_parts(x: u128) -> Self { Self(x) }
 
-	/// Converts from a percent. Equal to `x / 100`.
-	pub const fn from_percent(x: u32) -> Self { Self([x, 100][(x > 100) as usize] * 10_000_000) }
-
-	/// Construct new instance where `x` is in millionths. Value equivalent to `x / 1,000,000`.
-	pub fn from_millionths(x: u32) -> Self { Self(x.min(1_000_000) * 1000) }
-
-	#[cfg(feature = "std")]
-	/// Construct new instance whose value is equal to `x` (between 0 and 1).
-	pub fn from_fraction(x: f64) -> Self { Self((x.max(0.0).min(1.0) * 1_000_000_000.0) as u32) }
-
-	/// Approximate the fraction `p/q` into a per billion fraction
-	pub fn from_rational_approximation<N>(p: N, q: N) -> Self
-		where N: traits::SimpleArithmetic + Clone
-	{
-		let p = p.min(q.clone());
-		let factor = (q.clone() / 1_000_000_000u32.into()).max(1u32.into());
-
-		// Conversion can't overflow as p < q so ( p / (q/billion)) < billion
-		let p_reduce: u32 = (p / factor.clone()).try_into().unwrap_or_else(|_| panic!());
-		let q_reduce: u32 = (q / factor.clone()).try_into().unwrap_or_else(|_| panic!());
-		let part = p_reduce as u64 * 1_000_000_000u64 / q_reduce as u64;
-
-		Perbill(part as u32)
-	}
+	/// Construct new instance where `x` is denominator and the nominator is 1.
+	pub fn from_xth(x: u128) -> Self { Self(U128/x.max(1)) }
 }
 
-impl<N> ops::Mul<N> for Perbill
-where
-	N: Clone + From<u32> + traits::UniqueSaturatedInto<u32> + ops::Rem<N, Output=N>
-	+ ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N>,
-{
-	type Output = N;
-	fn mul(self, b: N) -> Self::Output {
-		let billion: N = 1_000_000_000.into();
-		let part: N = self.0.into();
+impl ::rstd::ops::Deref for PerU128 {
+	type Target = u128;
 
-		let rem_multiplied_divided = {
-			let rem = b.clone().rem(billion.clone());
-
-			// `rem` is inferior to one billion, thus it fits into u32
-			let rem_u32 = rem.saturated_into::<u32>();
-
-			// `self` and `rem` are inferior to one billion, thus the product is less than 10^18
-			// and fits into u64
-			let rem_multiplied_u64 = rem_u32 as u64 * self.0 as u64;
-
-			// `rem_multiplied_u64` is less than 10^18 therefore divided by a billion it fits into
-			// u32
-			let rem_multiplied_divided_u32 = (rem_multiplied_u64 / 1_000_000_000) as u32;
-
-			// `rem_multiplied_divided` is inferior to b, thus it can be converted back to N type
-			rem_multiplied_divided_u32.into()
-		};
-
-		(b / billion) * part + rem_multiplied_divided
-	}
-}
-
-#[cfg(feature = "std")]
-impl From<f64> for Perbill {
-	fn from(x: f64) -> Perbill {
-		Perbill::from_fraction(x)
-	}
-}
-
-#[cfg(feature = "std")]
-impl From<f32> for Perbill {
-	fn from(x: f32) -> Perbill {
-		Perbill::from_fraction(x as f64)
-	}
-}
-
-impl codec::CompactAs for Perbill {
-	type As = u32;
-	fn encode_as(&self) -> &u32 {
+	fn deref(&self) -> &u128 {
 		&self.0
 	}
-	fn decode_from(x: u32) -> Perbill {
-		Perbill(x)
+}
+
+impl codec::CompactAs for PerU128 {
+	type As = u128;
+	fn encode_as(&self) -> &u128 {
+		&self.0
+	}
+	fn decode_from(x: u128) -> PerU128 {
+		Self(x)
 	}
 }
 
-impl From<codec::Compact<Perbill>> for Perbill {
-	fn from(x: codec::Compact<Perbill>) -> Perbill {
+impl From<codec::Compact<PerU128>> for PerU128 {
+	fn from(x: codec::Compact<PerU128>) -> PerU128 {
 		x.0
 	}
 }
 
 #[cfg(test)]
-mod per_thing_tests {
-	use super::{Perbill, Permill};
+mod tests {
+	use super::*;
 
-	#[test]
-	fn per_things_operate_in_output_type() {
-		assert_eq!(Perbill::one() * 255_u64, 255);
+	fn max() -> Fixed64 {
+		Fixed64::from_parts(i64::max_value())
 	}
 
 	#[test]
-	fn per_things_one_minus_one_part() {
-		use primitive_types::U256;
+	fn fixed64_semantics() {
+		assert_eq!(Fixed64::from_rational(5, 2).0, 5 * 1_000_000_000 / 2);
+		assert_eq!(Fixed64::from_rational(5, 2), Fixed64::from_rational(10, 4));
+		assert_eq!(Fixed64::from_rational(5, 0), Fixed64::from_rational(5, 1));
 
-		assert_eq!(
-			Perbill::from_parts(999_999_999) * std::u128::MAX,
-			((Into::<U256>::into(std::u128::MAX) * 999_999_999u32) / 1_000_000_000u32).as_u128()
-		);
+		// biggest value that can be created.
+		assert_ne!(max(), Fixed64::from_natural(9_223_372_036));
+		assert_eq!(max(), Fixed64::from_natural(9_223_372_037));
+	}
 
-		assert_eq!(
-			Permill::from_parts(999_999) * std::u128::MAX,
-			((Into::<U256>::into(std::u128::MAX) * 999_999u32) / 1_000_000u32).as_u128()
-		);
+	macro_rules! saturating_mul_acc_test {
+		($num_type:tt) => {
+			assert_eq!(Fixed64::from_rational(100, 1).saturated_multiply_accumulate(10 as $num_type), 1010);
+			assert_eq!(Fixed64::from_rational(100, 2).saturated_multiply_accumulate(10 as $num_type), 510);
+			assert_eq!(Fixed64::from_rational(100, 3).saturated_multiply_accumulate(0 as $num_type), 0);
+			assert_eq!(Fixed64::from_rational(5, 1).saturated_multiply_accumulate($num_type::max_value()), $num_type::max_value());
+			assert_eq!(max().saturated_multiply_accumulate($num_type::max_value()), $num_type::max_value());
+		}
+	}
+
+	#[test]
+	fn fixed64_multiply_accumulate_works() {
+		saturating_mul_acc_test!(u32);
+		saturating_mul_acc_test!(u64);
+		saturating_mul_acc_test!(u128);
 	}
 }
-
