@@ -544,7 +544,7 @@ impl<T: Trait> OnFreeBalanceZero<T::ValidatorId> for Module<T> {
 /// registering account-ID of that session key index.
 pub struct FindAccountFromAuthorIndex<T, Inner>(rstd::marker::PhantomData<(T, Inner)>);
 
-impl<T: Trait, Inner: FindAuthor<u32>> FindAuthor<T::ValidatorId>
+impl<T: Trait, Inner: FindAuthor<u64>> FindAuthor<T::ValidatorId>
 	for FindAccountFromAuthorIndex<T, Inner>
 {
 	fn find_author<'a, I>(digests: I) -> Option<T::ValidatorId>
