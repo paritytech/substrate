@@ -25,7 +25,7 @@ use crate::codec::{Decode, Encode, Input};
 use crate::traits::{self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic};
 use super::CheckedExtrinsic;
 
-const TRANSACTION_VERSION: u8 = 2;
+const TRANSACTION_VERSION: u8 = 3;
 
 /// A extrinsic right from the external world. This is unchecked and so
 /// can contain a signature.
@@ -205,7 +205,7 @@ mod tests {
 	use super::*;
 	use runtime_io::blake2_256;
 	use crate::codec::{Encode, Decode};
-	use crate::traits::{SignedExtension, BlockNumberToHash, Lookup, CurrentHeight};
+	use crate::traits::{SignedExtension, Lookup};
 	use serde::{Serialize, Deserialize};
 
 	struct TestContext;
@@ -213,15 +213,6 @@ mod tests {
 		type Source = u64;
 		type Target = u64;
 		fn lookup(&self, s: u64) -> Result<u64, &'static str> { Ok(s) }
-	}
-	impl CurrentHeight for TestContext {
-		type BlockNumber = u64;
-		fn current_height(&self) -> u64 { 42 }
-	}
-	impl BlockNumberToHash for TestContext {
-		type BlockNumber = u64;
-		type Hash = u64;
-		fn block_number_to_hash(&self, n: u64) -> Option<u64> { Some(n) }
 	}
 
 	#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Encode, Decode)]
