@@ -140,20 +140,21 @@ struct ChildTrieReadDecode {
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Hash, PartialOrd, Ord))]
 /// This struct contains information needed to access a child trie.
-/// When doing a remote query.
+/// Mainly use for doing remote queries (after accessing a child trie
+/// content).
 pub struct ChildTrieRead {
 	/// Child trie parent key.
-	pub parent: ParentTrie,
-	/// Child trie root hash
+	pub keyspace: KeySpace,
+	/// Child trie root hash.
 	pub root: Vec<u8>,
 }
 
 impl ChildTrieRead {
 	/// Use `ChildTrieRead` as a `ChildTrieReadRef`,
 	/// forcing root field to an existing value.
-	pub fn node_ref<'a>(&'a self, keyspace: &'a KeySpace) -> ChildTrieReadRef<'a> {
+	pub fn node_ref<'a>(&'a self) -> ChildTrieReadRef<'a> {
 		debug_assert!(self.root.len() > 0);
-		ChildTrieReadRef::Existing(&self.root[..], keyspace)
+		ChildTrieReadRef::Existing(&self.root[..], &self.keyspace)
 	}
 }
 
@@ -188,6 +189,7 @@ impl ChildTrie {
 		key_full.extend_from_slice(parent);
 		key_full
 	}
+
 	/// Function to access the current key to a child trie.
 	/// This does not include `well_known_keys::CHILD_STORAGE_KEY_PREFIX`.
 	pub fn parent_key_slice(p: &ParentTrie) -> &[u8] {
@@ -220,6 +222,7 @@ impl ChildTrie {
 			ct
 		})
 	}
+
 	/// Get a reference to the child trie information
 	/// needed for a read only query.
 	pub fn node_ref(&self) -> ChildTrieReadRef {
@@ -229,6 +232,7 @@ impl ChildTrie {
 			ChildTrieReadRef::New(&self.keyspace)
 		}
 	}
+
 	/// Instantiate child trie from its encoded value and location.
 	/// Please do not use this function with encoded content
 	/// which is not fetch from an existing child trie.
@@ -246,29 +250,35 @@ impl ChildTrie {
 				extension: (*input).to_vec(),
 		}})
 	}
+
 	/// Return true when the child trie is new and does not contain a root.
 	pub fn is_new(&self) -> bool {
 		self.root.is_none()
 	}
+
 	/// See [`parent_key_slice`].
 	pub fn parent_slice(&self) -> &[u8] {
 		Self::parent_key_slice(&self.parent)
 	}
+
 	/// Function to access the full key buffer pointing to
 	/// a child trie. This contains technical information
 	/// and should only be used for backend implementation.
 	pub fn parent_trie(&self) -> &ParentTrie {
 		&self.parent
 	}
+
 	/// Getter function to the original root value of this
 	/// child trie.
 	pub fn root_initial_value(&self) -> &Option<Vec<u8>> {
 		&self.root
 	}
+
 	/// Getter function for the `KeySpace` of this child trie.
 	pub fn keyspace(&self) -> &KeySpace {
 		&self.keyspace
 	}
+
 	/// Getter function for extension content of child trie.
 	pub fn extension(&self) -> &[u8] {
 		&self.extension[..]
@@ -317,19 +327,19 @@ impl ChildTrie {
 	/// child trie object: duplicate keyspace or invalid root.
 	pub fn unsafe_from_ptr_child_trie(
 		keyspace: *mut u8,
-		kl: u32,
+		keyspace_length: u32,
 		root: *mut u8,
-		rl: u32,
+		root_length: u32,
 		parent: *mut u8,
-		pl: u32,
+		parent_length: u32,
 		extension: *mut u8,
-		el: u32,
+		extension_length: u32,
 	) -> Self {
 		unsafe {
-			let keyspace = from_raw_parts(keyspace, kl).expect("non optional; qed");
-			let root = from_raw_parts(root, rl);
-			let parent = from_raw_parts(parent, pl).expect("non optional; qed");
-			let extension = from_raw_parts(extension, el).expect("non optional; qed");
+			let keyspace = from_raw_parts(keyspace, keyspace_length).expect("non optional; qed");
+			let root = from_raw_parts(root, root_length);
+			let parent = from_raw_parts(parent, parent_length).expect("non optional; qed");
+			let extension = from_raw_parts(extension, extension_length).expect("non optional; qed");
 			ChildTrie { keyspace, root, parent, extension }
 		}
 	}
