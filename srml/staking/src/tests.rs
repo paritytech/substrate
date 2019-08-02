@@ -357,12 +357,12 @@ fn rewards_should_work() {
 		Session::on_initialize(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 1);
-		<Module<Test>>::add_reward_points_to_validator(11, 50);
-		<Module<Test>>::add_reward_points_to_validator(11, 50);
+		<Module<Test>>::add_reward_points_to_validators(vec![(11, 50)]);
+		<Module<Test>>::add_reward_points_to_validators(vec![(11, 50)]);
 		// This is the second validator of the current elected set.
-		<Module<Test>>::add_reward_points_to_validator(21, 50);
+		<Module<Test>>::add_reward_points_to_validators(vec![(21, 50)]);
 		// This must be no-op as it is not an elected validator.
-		<Module<Test>>::add_reward_points_to_validator(1001, 10_000);
+		<Module<Test>>::add_reward_points_to_validators(vec![(1001, 10_000)]);
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout = current_total_payout_for_duration(9*5);
@@ -412,7 +412,7 @@ fn multi_era_reward_should_work() {
 		let total_payout_0 = current_total_payout_for_duration(3);
 		assert!(total_payout_0 > 10); // Test is meaningfull if reward something
 		dbg!(<Module<Test>>::slot_stake());
-		<Module<Test>>::add_reward_points_to_validator(11, 1);
+		<Module<Test>>::add_reward_points_to_validators(vec![(11, 1)]);
 
 		start_session(0);
 		start_session(1);
@@ -426,7 +426,7 @@ fn multi_era_reward_should_work() {
 
 		let total_payout_1 = current_total_payout_for_duration(3);
 		assert!(total_payout_1 > 10); // Test is meaningfull if reward something
-		<Module<Test>>::add_reward_points_to_validator(11, 101);
+		<Module<Test>>::add_reward_points_to_validators(vec![(11, 101)]);
 
 		// new era is triggered here.
 		start_session(5);
@@ -631,10 +631,10 @@ fn nominating_and_rewards_should_work() {
 		// the total reward for era 0
 		let total_payout_0 = current_total_payout_for_duration(3);
 		assert!(total_payout_0 > 100); // Test is meaningfull if reward something
-		<Module<Test>>::add_reward_points_to_validator(41, 1);
-		<Module<Test>>::add_reward_points_to_validator(31, 1);
-		<Module<Test>>::add_reward_points_to_validator(21, 10); // must be no-op
-		<Module<Test>>::add_reward_points_to_validator(11, 10); // must be no-op
+		<Module<Test>>::add_reward_points_to_validators(vec![(41, 1)]);
+		<Module<Test>>::add_reward_points_to_validators(vec![(31, 1)]);
+		<Module<Test>>::add_reward_points_to_validators(vec![(21, 10)]); // must be no-op
+		<Module<Test>>::add_reward_points_to_validators(vec![(11, 10)]); // must be no-op
 
 		start_era(1);
 
@@ -706,10 +706,10 @@ fn nominating_and_rewards_should_work() {
 		// the total reward for era 1
 		let total_payout_1 = current_total_payout_for_duration(3);
 		assert!(total_payout_1 > 100); // Test is meaningfull if reward something
-		<Module<Test>>::add_reward_points_to_validator(41, 10); // must be no-op
-		<Module<Test>>::add_reward_points_to_validator(31, 10); // must be no-op
-		<Module<Test>>::add_reward_points_to_validator(21, 2);
-		<Module<Test>>::add_reward_points_to_validator(11, 1);
+		<Module<Test>>::add_reward_points_to_validators(vec![(41, 10)]); // must be no-op
+		<Module<Test>>::add_reward_points_to_validators(vec![(31, 10)]); // must be no-op
+		<Module<Test>>::add_reward_points_to_validators(vec![(21, 2)]);
+		<Module<Test>>::add_reward_points_to_validators(vec![(11, 1)]);
 
 		start_era(2);
 
@@ -772,7 +772,7 @@ fn nominators_also_get_slashed() {
 
 		let total_payout = current_total_payout_for_duration(3);
 		assert!(total_payout > 100); // Test is meaningfull if reward something
-		<Module<Test>>::add_reward_points_to_validator(11, 1);
+		<Module<Test>>::add_reward_points_to_validators(vec![(11, 1)]);
 
 		// new era, pay rewards,
 		start_era(1);
@@ -967,7 +967,7 @@ fn reward_destination_works() {
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_0 = current_total_payout_for_duration(3);
 		assert!(total_payout_0 > 100); // Test is meaningfull if reward something
-		<Module<Test>>::add_reward_points_to_validator(11, 1);
+		<Module<Test>>::add_reward_points_to_validators(vec![(11, 1)]);
 
 		start_era(1);
 
@@ -989,7 +989,7 @@ fn reward_destination_works() {
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_1 = current_total_payout_for_duration(3);
 		assert!(total_payout_1 > 100); // Test is meaningfull if reward something
-		<Module<Test>>::add_reward_points_to_validator(11, 1);
+		<Module<Test>>::add_reward_points_to_validators(vec![(11, 1)]);
 
 		start_era(2);
 
@@ -1016,7 +1016,7 @@ fn reward_destination_works() {
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_2 = current_total_payout_for_duration(3);
 		assert!(total_payout_2 > 100); // Test is meaningfull if reward something
-		<Module<Test>>::add_reward_points_to_validator(11, 1);
+		<Module<Test>>::add_reward_points_to_validators(vec![(11, 1)]);
 
 		start_era(3);
 
@@ -1070,7 +1070,7 @@ fn validator_payment_prefs_work() {
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_0 = current_total_payout_for_duration(3);
 		assert!(total_payout_0 > 100); // Test is meaningfull if reward something
-		<Module<Test>>::add_reward_points_to_validator(11, 1);
+		<Module<Test>>::add_reward_points_to_validators(vec![(11, 1)]);
 
 		start_era(1);
 
@@ -1284,8 +1284,8 @@ fn slot_stake_is_least_staked_validator_and_exposure_defines_maximum_punishment(
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_0 = current_total_payout_for_duration(3);
 		assert!(total_payout_0 > 100); // Test is meaningfull if reward something
-		<Module<Test>>::add_reward_points_to_validator(11, 1);
-		<Module<Test>>::add_reward_points_to_validator(21, 1);
+		<Module<Test>>::add_reward_points_to_validators(vec![(11, 1)]);
+		<Module<Test>>::add_reward_points_to_validators(vec![(21, 1)]);
 
 		// New era --> rewards are paid --> stakes are changed
 		start_era(1);

@@ -1399,22 +1399,29 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Add reward points to validator.
+	/// Add reward points to validators. Using their stash account ID.
+	///
+	/// Validators are keyed by stash account ID and must be in the current elected set.
+	///
+	/// For each element in the iterator the given number of points in u32 is added to the
+	/// validator, thus duplicates are handled.
 	///
 	/// At the end of the era each the total payout will be distributed among validator
-	/// relatively to their points.
-	pub fn add_reward_points_to_validator(validator: T::AccountId, points: u32) {
-		<Module<T>>::current_elected().iter()
-			.position(|elected| *elected == validator)
-			.map(|index| {
-				CurrentEraRewards::mutate(|rewards| {
-					if let Some(new_total) = rewards.total.checked_add(points) {
-						rewards.total = new_total;
-						rewards.rewards.resize((index + 1).max(rewards.rewards.len()), 0);
-						rewards.rewards[index] += points; // Addition is less than total
+-	/// relatively to their points.
+	pub fn add_reward_points_to_validators(validators_points: Vec<(T::AccountId, u32)>) {
+		CurrentEraRewards::mutate(|rewards| {
+			for (index, elected) in <Module<T>>::current_elected().iter().enumerate() {
+				for (validator, points) in &validators_points {
+					if *validator == *elected {
+						if let Some(new_total) = rewards.total.checked_add(*points) {
+							rewards.total = new_total;
+							rewards.rewards.resize((index + 1).max(rewards.rewards.len()), 0);
+							rewards.rewards[index] += *points; // Addition is less than total
+						}
 					}
-				});
-			});
+				}
+			}
+		});
 	}
 }
 
@@ -1444,11 +1451,13 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 /// * 1 point to the producer of each referenced uncle block.
 impl<T: Trait + authorship::Trait> authorship::EventHandler<T::AccountId, T::BlockNumber> for Module<T> {
 	fn note_author(author: T::AccountId) {
-		Self::add_reward_points_to_validator(author, 20);
+		Self::add_reward_points_to_validators(vec![(author, 20)]);
 	}
 	fn note_uncle(author: T::AccountId, _age: T::BlockNumber) {
-		Self::add_reward_points_to_validator(<authorship::Module<T>>::author(), 2);
-		Self::add_reward_points_to_validator(author, 1);
+		Self::add_reward_points_to_validators(vec![
+			(<authorship::Module<T>>::author(), 2),
+			(author, 1)
+		])
 	}
 }
 
