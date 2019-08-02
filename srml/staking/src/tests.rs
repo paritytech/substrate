@@ -365,8 +365,8 @@ fn rewards_should_work() {
 		<Module<Test>>::add_reward_points_to_validator(1001, 10_000);
 
 		// Compute total payout now for whole duration as other parameter won't change
-		let total_payout = current_total_payout_for_duration(9*5);
-		assert!(total_payout > 10); // Test is meaningfull if reward something
+		let total_payout = current_total_payout_for_duration(9 * 5);
+		assert!(total_payout > 10); // Test is meaningful if reward something
 
 		// No reward yet
 		assert_eq!(Balances::total_balance(&2), init_balance_2);
@@ -391,6 +391,7 @@ fn rewards_should_work() {
 		assert_eq!(Balances::total_balance(&2), init_balance_2 + total_payout/3);
 		assert_eq!(Balances::total_balance(&10), init_balance_10 + total_payout/3);
 		assert_eq!(Balances::total_balance(&11), init_balance_11);
+		assert_eq!(Balances)
 	});
 }
 

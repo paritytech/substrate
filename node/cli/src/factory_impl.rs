@@ -135,6 +135,7 @@ impl RuntimeAdapter for FactoryState<Number> {
 		key: &Self::Secret,
 		destination: &Self::AccountId,
 		amount: &Self::Balance,
+		genesis_hash: &<Self::Block as BlockT>::Hash,
 		prior_block_hash: &<Self::Block as BlockT>::Hash,
 	) -> <Self::Block as BlockT>::Extrinsic {
 		let index = self.extract_index(&sender, prior_block_hash);
@@ -148,7 +149,7 @@ impl RuntimeAdapter for FactoryState<Number> {
 					(*amount).into()
 				)
 			)
-		}, key, (prior_block_hash.clone(), (), (), ()))
+		}, key, (genesis_hash.clone(), prior_block_hash.clone(), (), (), ()))
 	}
 
 	fn inherent_extrinsics(&self) -> InherentData {
