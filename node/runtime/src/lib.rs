@@ -180,9 +180,8 @@ parameter_types! {
 	pub const UncleGenerations: u64 = 0;
 }
 
-// TODO: #2986 implement this properly
 impl authorship::Trait for Runtime {
-	type FindAuthor = ();
+	type FindAuthor = session::FindAccountFromAuthorIndex<Self, Babe>;
 	type UncleGenerations = UncleGenerations;
 	type FilterUncle = ();
 	type EventHandler = Staking;
