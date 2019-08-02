@@ -424,9 +424,10 @@ mod tests {
 
 			let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
 
+			let check_genesis = system::CheckEra::new();
 			let check_era = system::CheckEra::from(Era::Immortal);
 			let check_nonce = system::CheckNonce::from(index);
-			let check_weight = system::CheckWeight::from();
+			let check_weight = system::CheckWeight::new();
 			let take_fees = balances::TakeFees::from(0);
 			let extra = (check_era, check_nonce, check_weight, take_fees);
 
