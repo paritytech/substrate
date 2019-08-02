@@ -87,7 +87,7 @@ impl<TTrans: Transport> Node<TTrans> {
 
 impl<TTrans: Transport, TSinkErr> Node<TTrans>
 where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
-	TTrans::Output: Sink<BytesMut, Error = TSinkErr> + Unpin, TSinkErr: fmt::Debug {
+	TTrans::Output: Sink<BytesMut, Error = TSinkErr> + Stream + Unpin, TSinkErr: fmt::Debug {
 	/// Sends a WebSocket frame to the node. Returns an error if we are not connected to the node.
 	///
 	/// After calling this method, you should call `poll` in order for it to be properly processed.
@@ -112,12 +112,12 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 		let mut socket = mem::replace(&mut self.socket, NodeSocket::Poisoned);
 		self.socket = loop {
 			match socket {
-				NodeSocket::Connected(mut conn) => 
+				NodeSocket::Connected(mut conn) =>
 					match NodeSocketConnected::poll(Pin::new(&mut conn), cx, &self.addr) {
 						Poll::Ready(Ok(v)) => match v {}
 						Poll::Pending => break NodeSocket::Connected(conn),
 						Poll::Ready(Err(err)) => {
-							debug!(target: "telemetry", "Disconnected from {}: {:?}", self.addr, err);
+							warn!(target: "telemetry", "Disconnected from {}: {:?}", self.addr, err);
 							let timeout = gen_rand_reconnect_delay();
 							self.socket = NodeSocket::WaitingReconnect(timeout);
 							return Poll::Ready(NodeEvent::Disconnected(err))
@@ -132,7 +132,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 					},
 					Poll::Pending => break NodeSocket::Dialing(s),
 					Poll::Ready(Err(err)) => {
-						debug!(target: "telemetry", "Error while dialing {}: {:?}", self.addr, err);
+						warn!(target: "telemetry", "Error while dialing {}: {:?}", self.addr, err);
 						let timeout = gen_rand_reconnect_delay();
 						socket = NodeSocket::WaitingReconnect(timeout);
 					}
@@ -143,7 +143,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 						socket = NodeSocket::Dialing(d.compat());
 					}
 					Err(err) => {
-						debug!(target: "telemetry", "Error while dialing {}: {:?}", self.addr, err);
+						warn!(target: "telemetry", "Error while dialing {}: {:?}", self.addr, err);
 						let timeout = gen_rand_reconnect_delay();
 						socket = NodeSocket::WaitingReconnect(timeout);
 					}
@@ -175,7 +175,7 @@ fn gen_rand_reconnect_delay() -> Delay {
 }
 
 impl<TTrans: Transport, TSinkErr> NodeSocketConnected<TTrans>
-where TTrans::Output: Sink<BytesMut, Error = TSinkErr> + Unpin {
+where TTrans::Output: Sink<BytesMut, Error = TSinkErr> + Stream + Unpin {
 	/// Processes the queue of messages for the connected socket.
 	///
 	/// The address is passed for logging purposes only.
@@ -200,12 +200,18 @@ where TTrans::Output: Sink<BytesMut, Error = TSinkErr> + Unpin {
 					item_len, my_addr
 				);
 				self.need_flush = true;
+
 			} else if self.need_flush {
 				match Sink::poll_flush(Pin::new(&mut self.sink), cx) {
-					Poll::Pending => {}
+					Poll::Pending => return Poll::Pending,
 					Poll::Ready(Err(err)) => return Poll::Ready(Err(err)),
 					Poll::Ready(Ok(())) => self.need_flush = false,
 				}
+
+			} else if let Poll::Ready(_) = Stream::poll_next(Pin::new(&mut self.sink), cx) {
+				// We poll the telemetry `Stream` because the underlying implementation relies on
+				// this in order to answer PINGs.
+				// We don't do anything with incoming messages, however.
 
 			} else {
 				break
