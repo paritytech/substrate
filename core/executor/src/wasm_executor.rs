@@ -32,7 +32,7 @@ use primitives::offchain;
 use primitives::hexdisplay::HexDisplay;
 use primitives::sandbox as sandbox_primitives;
 use primitives::{H256, Blake2Hasher};
-use trie::ordered_trie_root;
+use trie::{TrieConfiguration, trie_types::Layout};
 use crate::sandbox;
 use crate::allocator;
 use log::trace;
@@ -528,7 +528,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 					)
 			)
 			.collect::<Result<Vec<_>>>()?;
-		let r = ordered_trie_root::<Blake2Hasher, _, _>(values.into_iter());
+		let r = Layout::<Blake2Hasher>::ordered_trie_root(values.into_iter());
 		this.memory.set(result, &r[..])
 			.map_err(|_| "Invalid attempt to set memory in ext_blake2_256_enumerated_trie_root")?;
 		Ok(())
@@ -1629,10 +1629,11 @@ mod tests {
 	#[test]
 	fn enumerated_trie_root_should_work() {
 		let mut ext = TestExternalities::<Blake2Hasher>::default();
+		let trie_input = vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()];
 		let test_code = WASM_BINARY;
 		assert_eq!(
 			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_enumerated_trie_root", &[]).unwrap(),
-			ordered_trie_root::<Blake2Hasher, _, _>(vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()].iter()).as_fixed_bytes().encode()
+			Layout::<Blake2Hasher>::ordered_trie_root(trie_input.iter()).as_fixed_bytes().encode()
 		);
 	}
 

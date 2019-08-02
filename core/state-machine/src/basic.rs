@@ -20,7 +20,8 @@ use std::collections::HashMap;
 use std::iter::FromIterator;
 use crate::backend::{Backend, InMemory};
 use hash_db::Hasher;
-use trie::trie_root;
+use trie::TrieConfiguration;
+use trie::trie_types::Layout;
 use primitives::offchain;
 use primitives::storage::well_known_keys::is_child_storage_key;
 use super::{ChildStorageKey, Externalities};
@@ -149,7 +150,7 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 	fn chain_id(&self) -> u64 { 42 }
 
 	fn storage_root(&mut self) -> H::Out {
-		trie_root::<H, _, _, _>(self.top.clone())
+		Layout::<H>::trie_root(self.top.clone())
 	}
 
 	fn child_storage_root(&mut self, storage_key: ChildStorageKey<H>) -> Vec<u8> {
@@ -186,7 +187,8 @@ mod tests {
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
-		const ROOT: [u8; 32] = hex!("0b41e488cccbd67d1f1089592c2c235f5c5399b053f7fe9152dd4b5f279914cd");
+		const ROOT: [u8; 32] = hex!("39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa");
+
 		assert_eq!(ext.storage_root(), H256::from(ROOT));
 	}
 

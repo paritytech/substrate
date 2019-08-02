@@ -403,13 +403,13 @@ mod tests {
 		parent_hash: Hash,
 		extrinsics: Vec<CheckedExtrinsic>,
 	) -> (Vec<u8>, Hash) {
-		use trie::ordered_trie_root;
+		use trie::{TrieConfiguration, trie_types::Layout};
 
 		// sign extrinsics.
 		let extrinsics = extrinsics.into_iter().map(sign).collect::<Vec<_>>();
 
 		// calculate the header fields that we can.
-		let extrinsics_root = ordered_trie_root::<Blake2Hasher, _, _>(
+		let extrinsics_root = Layout::<Blake2Hasher>::ordered_trie_root(
 				extrinsics.iter().map(Encode::encode)
 			).to_fixed_bytes()
 			.into();
