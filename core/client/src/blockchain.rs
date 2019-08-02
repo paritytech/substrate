@@ -112,7 +112,21 @@ pub trait Cache<Block: BlockT>: Send + Sync {
 		&self,
 		key: &well_known_cache_keys::Id,
 		block: &BlockId<Block>,
-	) -> Option<((NumberFor<Block>, Block::Hash), Option<(NumberFor<Block>, Block::Hash)>, Vec<u8>)>;
+	) -> Option<((NumberFor<Block>, Block::Hash), Option<(NumberFor<Block>, Block::Hash)>, Vec<u8>)> {
+		self.get_at_and_skip(0, key, block)
+			.map(|(_, begin, end, value)| (begin, end, value))
+	}
+	/// Returns cached value that is relative to the value at given block.
+	///
+	/// When previous_step is 0, the value valid at given block is returned.
+	/// When previous_step is -1, then previous value is returned.
+	/// When previous_step is -2, then previous-to-previous value is returned.
+	fn get_at_and_skip(
+		&self,
+		skip: usize,
+		key: &well_known_cache_keys::Id,
+		block: &BlockId<Block>,
+	) -> Option<(usize, (NumberFor<Block>, Block::Hash), Option<(NumberFor<Block>, Block::Hash)>, Vec<u8>)>;
 }
 
 /// Blockchain info

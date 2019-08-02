@@ -130,10 +130,21 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 	}
 
 	/// Get value valid at block.
+	#[cfg(test)]
 	pub fn value_at_block(
 		&self,
 		at: &ComplexBlockId<Block>,
 	) -> ClientResult<Option<(ComplexBlockId<Block>, Option<ComplexBlockId<Block>>, T)>> {
+		self.value_at_block_with_skip(0, at)
+			.map(|result| result.map(|(_, begin, end, value)| (begin, end, value)))
+	}
+
+	/// Get valid at block and then skips several values.
+	pub fn value_at_block_with_skip(
+		&self,
+		skip: usize,
+		at: &ComplexBlockId<Block>,
+	) -> ClientResult<Option<(usize, ComplexBlockId<Block>, Option<ComplexBlockId<Block>>, T)>> {
 		let head = if at.number <= self.best_finalized_block.number {
 			// if the block is older than the best known finalized block
 			// => we're should search for the finalized value
@@ -166,8 +177,8 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 		};
 
 		match head {
-			Some(head) => head.search_best_before(&self.storage, at.number)
-				.map(|e| e.map(|e| (e.0.valid_from, e.1, e.0.value))),
+			Some(head) => head.search_best_before(&self.storage, skip, at.number)
+				.map(|e| e.map(|e| (e.0, e.1.valid_from, e.2, e.1.value))),
 			None => Ok(None),
 		}
 	}
