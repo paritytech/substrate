@@ -18,7 +18,7 @@ tokio = "0.1"
 exit-future = "0.1"
 parking_lot = "0.8.0"
 parity-codec = "4.1.1"
-trie-root = "0.14.0"
+trie-root = "0.15.0"
 sr-io = { path = "../core/sr-io" }
 substrate-cli = { path = "../core/cli" }
 primitives = { package = "substrate-primitives", path = "../core/primitives" }

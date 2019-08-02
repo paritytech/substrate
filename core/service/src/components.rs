@@ -32,7 +32,8 @@ use sr_primitives::{
 use crate::config::Configuration;
 use primitives::{Blake2Hasher, H256, Pair};
 use rpc::{self, apis::system::SystemInfo};
-use futures::{prelude::*, future::Executor, sync::mpsc};
+use futures::{prelude::*, future::Executor};
+use futures03::channel::mpsc;
 
 // Type aliases.
 // These exist mainly to avoid typing `<F as Factory>::Foo` all over the code.

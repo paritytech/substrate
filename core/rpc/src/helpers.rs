@@ -14,11 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use futures::{prelude::*, sync::oneshot};
+use futures::prelude::*;
+use futures03::{channel::oneshot, compat::Compat};
 
 /// Wraps around `oneshot::Receiver` and adjusts the error type to produce an internal error if the
 /// sender gets dropped.
-pub struct Receiver<T>(pub oneshot::Receiver<T>);
+pub struct Receiver<T>(pub Compat<oneshot::Receiver<T>>);
 
 impl<T> Future for Receiver<T> {
 	type Item = T;

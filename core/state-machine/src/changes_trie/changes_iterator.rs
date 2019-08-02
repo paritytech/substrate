@@ -20,7 +20,7 @@
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use parity_codec::{Decode, Encode};
-use hash_db::{HashDB, Hasher};
+use hash_db::{HashDB, Hasher, EMPTY_PREFIX};
 use num_traits::One;
 use trie::{Recorder, MemoryDB};
 use crate::changes_trie::{AnchorBlockId, Configuration, RootsStorage, Storage, BlockNumber};
@@ -115,7 +115,7 @@ pub fn key_changes_proof_check<S: RootsStorage<H, Number>, H: Hasher, Number: Bl
 
 	let mut proof_db = MemoryDB::<H>::default();
 	for item in proof {
-		proof_db.insert(&[], &item);
+		proof_db.insert(EMPTY_PREFIX, &item);
 	}
 
 	let proof_db = InMemoryStorage::with_db(proof_db);
