@@ -642,16 +642,16 @@ impl<T> ChangeMembers<T> for () {
 }
 
 /// A generic trait for reporting slashing violations.
-pub trait ReportSlash<Misbehaved, Reporters, Hash> {
+pub trait ReportSlash<Misbehaved, Reporters, Hash, Timestamp> {
 	/// Reports slashing for a misconduct where `to_slash` are the misbehaved entities and
 	/// `to_reward` are the entities that detected and reported the misbehavior
 	///
 	/// Returns `Ok` if the misconduct was unique otherwise `Err`
-	fn slash(to_slash: Misbehaved, to_reward: Reporters, footprint: Hash) -> Result<(), ()>;
+	fn slash(to_slash: Misbehaved, to_reward: Reporters, footprint: Hash, timestamp: Timestamp) -> Result<(), ()>;
 }
 
 /// A generic trait for enacting slashes
-pub trait DoSlash<Misbehaved, Severity, Kind> {
+pub trait DoSlash<Misbehaved, Severity, Kind, Timestamp> {
 	/// The slashed entries
 	type SlashedEntries;
 
@@ -662,14 +662,14 @@ pub trait DoSlash<Misbehaved, Severity, Kind> {
 	///
 	/// Return the slashes entities which may not be the same as `to_slash`
 	/// because history slashes of the same kind may be included
-	fn do_slash(to_slash: Misbehaved, severity: Severity, kind: Kind)
+	fn do_slash(to_slash: Misbehaved, severity: Severity, kind: Kind, timestamp: Timestamp)
 		-> Result<(Self::SlashedEntries, Self::SlashedAmount), ()>;
 }
 
 /// A generic trait for paying out rewards
-pub trait DoReward<Reporters, Reward> {
+pub trait DoReward<Reporters, Reward, Timestamp> {
 	/// Payout reward to reporters
-	fn do_reward(reporters: Reporters, total_reward: Reward) -> Result<(), ()>;
+	fn do_reward(reporters: Reporters, total_reward: Reward, timestamp: Timestamp) -> Result<(), ()>;
 }
 
 /// A generic event handler trait after slashing occured

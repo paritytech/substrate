@@ -222,6 +222,12 @@ impl WindowLength<u32> for Kind {
 	}
 }
 
+impl Default for Kind {
+	fn default() -> Self {
+		Kind::One
+	}
+}
+
 pub struct ExtBuilder {
 	existential_deposit: u64,
 	validator_pool: bool,

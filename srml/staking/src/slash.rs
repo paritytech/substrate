@@ -20,45 +20,77 @@
 
 use crate::Exposure;
 use srml_support::{
-	StorageMap, decl_module, decl_storage,
+	EnumerableStorageMap, StorageMap, decl_module, decl_storage,
 	traits::{Currency, WindowLength, DoSlash, DoReward}
 };
 use parity_codec::{HasCompact, Codec, Decode, Encode};
 use rstd::{vec::Vec, collections::{btree_map::BTreeMap, btree_set::BTreeSet}};
 use sr_primitives::{Perbill, traits::{MaybeSerializeDebug, Zero}};
 
+type Timestamp = u128;
 type BalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
 /// Slashing trait
 pub trait Trait: system::Trait {
 	/// Slashing kind
-	type SlashKind: Copy + Clone + Codec + MaybeSerializeDebug + WindowLength<u32>;
+	type SlashKind: Copy + Clone + Codec + Default + PartialEq + MaybeSerializeDebug + WindowLength<u32>;
 	/// Currency
 	type Currency: Currency<Self::AccountId>;
 }
 
-/// State of a slashed entity
-#[derive(Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub struct SlashState<AccountId, Balance: HasCompact> {
-	exposure: Exposure<AccountId, Balance>,
-	slashed_amount: SlashAmount<AccountId, Balance>,
-}
-
 /// Slashed amount for a entity including its nominators
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct SlashAmount<AccountId, Balance> {
+pub struct SlashAmount<AccountId, Balance>
+where
+	AccountId: Default + Ord,
+	Balance: Default + HasCompact,
+{
 	own: Balance,
 	others: BTreeMap<AccountId, Balance>,
 }
 
+/// A misconduct kind with timestamp when it occurred
+#[derive(Encode, Decode, Default)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct MisconductsByTime<Kind: Default>(Vec<(Timestamp, Kind)>);
+
+impl<Kind: Default + PartialEq> MisconductsByTime<Kind> {
+	fn contains_kind(&self, kind: Kind) -> bool {
+		self.0.iter().any(|(_, k)| *k == kind)
+	}
+
+	fn multiple_misbehaviors_at_same_time(&self, time: Timestamp, kind: Kind) -> bool {
+		self.0.iter().any(|(t, k)| *t == time && *k != kind)
+	}
+}
+
+/// State of a validator
+#[derive(Encode, Decode, Default)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct ValidatorState<AccountId, Balance, Kind>
+where
+	AccountId: Default + Ord,
+	Balance: Default + HasCompact,
+	Kind: Default,
+{
+	/// The misconducts the validator has conducted
+	// TODO: replace this with BTreeSet sorted ordered by latest timestamp...smallest
+	misconducts: MisconductsByTime<Kind>,
+	/// The rewards that the validator has received
+	rewards: Vec<(Timestamp, Balance)>,
+	/// Its own balance and the weight of the nominators that supports the validator
+	exposure: Exposure<AccountId, Balance>,
+	/// The slashed amounts both for the validator and its nominators
+	slashed_amount: SlashAmount<AccountId, Balance>,
+}
+
 decl_storage! {
 	trait Store for Module<T: Trait> as RollingWindow {
-		/// Slashing history
-		SlashHistory get(misbehavior_reports): linked_map T::SlashKind =>
-			BTreeMap<T::AccountId, SlashState<T::AccountId, BalanceOf<T>>>;
+		/// Slashing history for a given validator
+		SlashHistory get(misbehavior_reports): linked_map T::AccountId =>
+			ValidatorState<T::AccountId, BalanceOf<T>, T::SlashKind>;
 	}
 }
 
@@ -80,7 +112,7 @@ impl<T: Trait> Module<T> {
 	) -> BalanceOf<T> {
 		if new_slash > prev_slash {
 			let amount = new_slash - prev_slash;
-			T::Currency::slash(who, amount);
+			T::Currency::slash(&who, amount);
 			*slashed_amount = *slashed_amount + amount;
 			new_slash
 		} else {
@@ -88,41 +120,74 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	fn update_exposure_for_known(
+	/// Updates the state of an existing validator which implies updating exposure and
+	/// update the slashable amount
+	fn update_known_validator(
 		who: &T::AccountId,
-		prev_state: &mut SlashState<T::AccountId, BalanceOf<T>>,
-		exposure: &Exposure<T::AccountId, BalanceOf<T>>,
+		exposure: Exposure<T::AccountId, BalanceOf<T>>,
 		severity: Perbill,
-		slashed_amount: &mut BalanceOf<T>,
+		kind: T::SlashKind,
+		timestamp: u128,
+		total_slash: &mut BalanceOf<T>,
 	) {
-		let new_slash = severity * exposure.own;
+		<SlashHistory<T>>::mutate(who, |mut state| {
+			let new_slash = severity * exposure.own;
 
-		Self::adjust_slash(&who, new_slash, prev_state.slashed_amount.own, slashed_amount);
+			Self::adjust_slash(who, new_slash, state.slashed_amount.own, total_slash);
 
-		let intersection: BTreeSet<T::AccountId> = exposure.others
-			.iter()
-			.filter_map(|e1| prev_state.exposure.others.iter().find(|e2| e1.who == e2.who))
-			.map(|e| e.who.clone())
-			.collect();
+			let intersection: BTreeSet<T::AccountId> = exposure.others
+				.iter()
+				.filter_map(|e1| state.exposure.others.iter().find(|e2| e1.who == e2.who))
+				.map(|e| e.who.clone())
+				.collect();
 
-		let previous_slash = rstd::mem::replace(&mut prev_state.slashed_amount.others, BTreeMap::new());
+			let previous_slash = rstd::mem::replace(&mut state.slashed_amount.others, BTreeMap::new());
+
+			for nominator in &exposure.others {
+				let new_slash = severity * nominator.value;
+
+				// make sure that we are not double slashing
+				let prev = if intersection.contains(&nominator.who) {
+					previous_slash.get(&nominator.who).cloned().unwrap_or_else(Zero::zero)
+				} else {
+					Zero::zero()
+				};
+
+				Self::adjust_slash(&nominator.who, new_slash, prev, total_slash);
+				state.slashed_amount.others.insert(nominator.who.clone(), new_slash);
+			}
+
+			state.misconducts.0.push((timestamp, kind));
+			state.exposure = exposure;
+			state.slashed_amount.own = new_slash;
+		});
+	}
+
+	/// Inserts a new validator in the slashing history and applies the slash
+	fn insert_new_validator(
+		who: T::AccountId,
+		exposure: Exposure<T::AccountId, BalanceOf<T>>,
+		severity: Perbill,
+		kind: T::SlashKind,
+		timestamp: u128,
+		total_slash: &mut BalanceOf<T>,
+	) {
+		let amount = severity * exposure.own;
+		Self::adjust_slash(&who, amount, Zero::zero(), total_slash);
+		let mut slashed_amount = SlashAmount { own: amount, others: BTreeMap::new() };
 
 		for nominator in &exposure.others {
-			let new_slash = severity * nominator.value;
-
-			// make sure that we are not double slashing
-			let prev = if intersection.contains(&nominator.who) {
-				previous_slash.get(&nominator.who).cloned().unwrap_or_else(|| Zero::zero())
-			} else {
-				Zero::zero()
-			};
-
-			Self::adjust_slash(&nominator.who, new_slash, prev, slashed_amount);
-			prev_state.slashed_amount.others.insert(nominator.who.clone(), new_slash);
+			let amount = severity * nominator.value;
+			Self::adjust_slash(&nominator.who, amount, Zero::zero(), total_slash);
+			slashed_amount.others.insert(nominator.who.clone(), amount);
 		}
 
-		prev_state.exposure = exposure.clone();
-		prev_state.slashed_amount.own = new_slash;
+		<SlashHistory<T>>::insert(who, ValidatorState {
+			misconducts: MisconductsByTime(vec![(timestamp, kind)]),
+			rewards: Vec::new(),
+			exposure: exposure,
+			slashed_amount,
+		});
 	}
 
 	/// Updates the history of slashes based on the new severity and only apply new slash
@@ -134,42 +199,44 @@ impl<T: Trait> Module<T> {
 		exposure: &Exposure<T::AccountId, BalanceOf<T>>,
 		severity: Perbill,
 		kind: T::SlashKind,
+		slashed_entries: &mut Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>,
 		total_slash: &mut BalanceOf<T>,
 	) -> bool {
-		<SlashHistory<T>>::mutate(kind, |state| {
+		let mut in_history = false;
 
-			let mut in_history = false;
+		for (other_who, _) in <SlashHistory<T>>::enumerate() {
+			<SlashHistory<T>>::mutate(&other_who, |mut state| {
+				if state.misconducts.contains_kind(kind) {
+					if &other_who == who {
+						in_history = true;
+					} else {
+						slashed_entries.push((other_who.clone(), exposure.clone()));
+						state.slashed_amount.own = Self::adjust_slash(
+							&other_who,
+							severity * state.exposure.own,
+							state.slashed_amount.own,
+							total_slash
+						);
 
-			for (stash, s) in state.iter_mut() {
-				if stash == who {
-					Self::update_exposure_for_known(stash, s, exposure, severity, total_slash);
-					in_history = true;
-				} else {
-					s.slashed_amount.own = Self::adjust_slash(
-						stash,
-						severity * s.exposure.own,
-						s.slashed_amount.own,
-						total_slash
-					);
-
-					for nominator in &s.exposure.others {
-						let new_slash = severity * nominator.value;
-						if let Some(prev) = s.slashed_amount.others.get_mut(&nominator.who) {
-							*prev = Self::adjust_slash(&nominator.who, new_slash, *prev, total_slash);
-						} else {
-							Self::adjust_slash(&nominator.who, new_slash, Zero::zero(), total_slash);
-							s.slashed_amount.others.insert(nominator.who.clone(), new_slash);
+						for nominator in &state.exposure.others {
+							let new_slash = severity * nominator.value;
+							if let Some(prev) = state.slashed_amount.others.get_mut(&nominator.who) {
+								*prev = Self::adjust_slash(&nominator.who, new_slash, *prev, total_slash);
+							} else {
+								Self::adjust_slash(&nominator.who, new_slash, Zero::zero(), total_slash);
+								state.slashed_amount.others.insert(nominator.who.clone(), new_slash);
+							}
 						}
 					}
 				}
-			}
+			});
+		}
 
-			in_history
-		})
+		in_history
 	}
 }
 
-impl<T: Trait> DoSlash<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>), Perbill, T::SlashKind> for Module<T>
+impl<T: Trait> DoSlash<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>), Perbill, T::SlashKind, u128> for Module<T>
 {
 	type SlashedEntries = Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>;
 	type SlashedAmount = BalanceOf<T>;
@@ -178,48 +245,54 @@ impl<T: Trait> DoSlash<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>), Per
 		(who, exposure): (T::AccountId, Exposure<T::AccountId, BalanceOf<T>>),
 		severity: Perbill,
 		kind: T::SlashKind,
+		timestamp: u128,
 	) -> Result<(Self::SlashedEntries, Self::SlashedAmount), ()> {
 
+		// mutable state
+		let mut slashed_entries: Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)> = Vec::new();
 		let mut total_slash = Zero::zero();
-		let who_exist = <Module<T>>::mutate_slash_history(&who, &exposure, severity, kind, &mut total_slash);
 
-		if !who_exist {
-			let amount = severity * exposure.own;
-			Self::adjust_slash(&who, amount, Zero::zero(), &mut total_slash);
-			let mut slashed_amount = SlashAmount { own: amount, others: BTreeMap::new() };
+		let who_exist = <Module<T>>::mutate_slash_history(
+			&who,
+			&exposure,
+			severity,
+			kind,
+			&mut slashed_entries,
+			&mut total_slash,
+		);
 
-			for nominator in &exposure.others {
-				let amount = severity * nominator.value;
-				Self::adjust_slash(&nominator.who, amount, Zero::zero(), &mut total_slash);
-				slashed_amount.others.insert(nominator.who.clone(), amount);
-			}
+		let seve = if <SlashHistory<T>>::get(&who).misconducts.multiple_misbehaviors_at_same_time(timestamp, kind) {
+			Perbill::one()
+		} else {
+			severity
+		};
 
-			<SlashHistory<T>>::mutate(kind, |state| {
-				state.insert(who, SlashState { exposure, slashed_amount });
-			});
+		if who_exist {
+			Self::update_known_validator(&who, exposure.clone(), seve, kind, timestamp, &mut total_slash);
+		} else {
+			Self::insert_new_validator(who.clone(), exposure.clone(), seve, kind, timestamp, &mut total_slash);
 		}
 
-		let slashed_entities = <SlashHistory<T>>::get(kind)
-			.iter()
-			.map(|(who, state)| (who.clone(), state.exposure.clone()))
-			.collect();
-
-		Ok((slashed_entities, total_slash))
+		slashed_entries.push((who, exposure));
+		Ok((slashed_entries, total_slash))
 	}
 }
 
-impl<T: Trait, Reporters> DoReward<Reporters, BalanceOf<T>> for Module<T>
+impl<T: Trait, Reporters> DoReward<Reporters, BalanceOf<T>, u128> for Module<T>
 where
 	Reporters: IntoIterator<Item = (T::AccountId, Perbill)>,
 {
-	fn do_reward(reporters: Reporters, reward: BalanceOf<T>) -> Result<(), ()> {
+	fn do_reward(reporters: Reporters, reward: BalanceOf<T>, timestamp: u128) -> Result<(), ()> {
 		let mut reward_pot = reward;
 
 		for (reporter, fraction) in reporters {
 			let amount = rstd::cmp::min(fraction * reward, reward_pot);
 			reward_pot -= amount;
-			// This will fail in the account is not existing ignore it for now
-			let _ = T::Currency::deposit_into_existing(&reporter, amount);
+			// This will fail if the account is not existing ignore it for now
+			if T::Currency::deposit_into_existing(&reporter, amount).is_ok() {
+				<SlashHistory<T>>::mutate(reporter, |state| state.rewards.push((timestamp, amount)));
+			}
+
 		}
 		Ok(())
 	}
@@ -249,6 +322,8 @@ mod tests {
 	thread_local! {
 		static EXPOSURES: RefCell<HashMap<AccountId, Exposure<AccountId, Balance>>> =
 			RefCell::new(Default::default());
+		static CURRENT_TIME: RefCell<u128> = RefCell::new(0);
+		static CURRENT_KIND: RefCell<Kind> = RefCell::new(Kind::One);
 	}
 
 	/// Trait for reporting slashes
@@ -256,12 +331,15 @@ mod tests {
 		/// Key that identifies the owner
 		type KeyOwner: KeyOwnerProofSystem<Self::AccountId>;
 
+		/// Report of the misconduct
 		type Reporter;
 
+		/// Slash
 		type BabeEquivocation: ReportSlash<
 			Self::Hash,
 			Self::Reporter,
-			<<Self as ReporterTrait>::KeyOwner as KeyOwnerProofSystem<Self::AccountId>>::FullIdentification
+			<<Self as ReporterTrait>::KeyOwner as KeyOwnerProofSystem<Self::AccountId>>::FullIdentification,
+			u128,
 		>;
 	}
 
@@ -328,6 +406,7 @@ mod tests {
 				T::AccountId
 			>,
 			reporters: <T as ReporterTrait>::Reporter,
+			timestamp: u128,
 		) -> Result<(), ()> {
 			let identification = match T::KeyOwner::check_proof(proof.author.clone(), proof.membership_proof) {
 				Some(id) => id,
@@ -338,7 +417,7 @@ mod tests {
 			let nonce = H256::random();
 			let footprint = T::Hashing::hash_of(&(0xbabe, proof.author, nonce));
 
-			T::BabeEquivocation::slash(footprint, reporters, identification)
+			T::BabeEquivocation::slash(footprint, reporters, identification, timestamp)
 		}
 	}
 
@@ -362,16 +441,17 @@ mod tests {
 		}
 	}
 
-	impl<T, Reporters, Who, DS, DR, AS> ReportSlash<T::Hash, Reporters, Who> for BabeEquivocation<T, DS, DR, AS>
+	impl<T, Reporters, Who, DS, DR, AS> ReportSlash<T::Hash, Reporters, Who, u128> for BabeEquivocation<T, DS, DR, AS>
 	where
 		T: ReporterTrait,
-		DS: DoSlash<Who, Perbill, Kind>,
-		DR: DoReward<Reporters, DS::SlashedAmount>,
+		DS: DoSlash<Who, Perbill, Kind, u128>,
+		DR: DoReward<Reporters, DS::SlashedAmount, u128>,
 		AS: AfterSlash<DS::SlashedEntries, u8>,
 		DS::SlashedAmount: rstd::fmt::Debug,
+		DS::SlashedEntries: rstd::fmt::Debug,
 	{
-		fn slash(footprint: T::Hash, reporters: Reporters, who: Who) -> Result<(), ()> {
-			let kind = Self::kind();
+		fn slash(footprint: T::Hash, reporters: Reporters, who: Who, timestamp: u128) -> Result<(), ()> {
+			let kind = get_current_misconduct_kind();
 			let _base_seve = Self::base_severity();
 
 			RollingWindow::<T>::report_misbehavior(kind, footprint, 0)?;
@@ -385,7 +465,7 @@ mod tests {
 			let severity = Perbill::from_rational_approximation(3 * num_violations, n * n);
 
 			let misconduct_level = Self::as_misconduct_level(severity);
-			let (slashed, total_slash) = DS::do_slash(who, severity, kind)?;
+			let (slashed, total_slash) = DS::do_slash(who, severity, kind, timestamp)?;
 
 			// hard code reward to 10% of the total amount
 			let reward_amount = Perbill::from_percent(10) * total_slash;
@@ -393,11 +473,28 @@ mod tests {
 			// the remaining 90% should go somewhere else, perhaps the `treasory module`?!
 
 			// ignore if rewarding failed, because we need still to update the state of the validators
-			let _ = DR::do_reward(reporters, reward_amount);
+			let _ = DR::do_reward(reporters, reward_amount, timestamp);
 			AS::after_slash(slashed, misconduct_level);
 
 			Ok(())
 		}
+	}
+
+
+	fn get_current_time() -> u128 {
+		CURRENT_TIME.with(|t| *t.borrow())
+	}
+
+	fn increase_current_time() {
+		CURRENT_TIME.with(|t| *t.borrow_mut() += 1);
+	}
+
+	fn get_current_misconduct_kind() -> Kind {
+		CURRENT_KIND.with(|t| *t.borrow())
+	}
+
+	fn set_current_misconduct_kind(kind: Kind) {
+		CURRENT_KIND.with(|t| *t.borrow_mut() = kind);
 	}
 
 	#[test]
@@ -428,13 +525,19 @@ mod tests {
 			// after every slash, the slash history and slash that occurred should be included in the reward
 			for (i, who) in misbehaved.iter().enumerate() {
 				let i = i as u64;
-				assert_ok!(BabeEquivocationReporter::<Test>::report_equivocation(FakeProof::new(*who), vec![reporter]));
+				assert_ok!(BabeEquivocationReporter::<Test>::report_equivocation(
+						FakeProof::new(*who),
+						vec![reporter],
+						get_current_time()
+					)
+				);
 				let slash = Perbill::from_rational_approximation(3 * (i + 1), 2500_u64) * 1000;
 				let total_slash = slash + (slash - last_slash) * i;
 				let reward = Perbill::from_percent(10) * total_slash;
 				assert_eq!(Balances::free_balance(&reporter.0), last_balance + reward);
 				last_balance = Balances::free_balance(&reporter.0);
 				last_slash = slash;
+				increase_current_time();
 			}
 
 			for who in &misbehaved {
@@ -473,7 +576,7 @@ mod tests {
 				x.borrow_mut().insert(misbehaved, exp);
 			});
 
-			assert_ok!(BabeEquivocationReporter::<Test>::report_equivocation(FakeProof::new(misbehaved), vec![]));
+			assert_ok!(BabeEquivocationReporter::<Test>::report_equivocation(FakeProof::new(misbehaved), vec![], 0));
 
 			assert_eq!(Balances::free_balance(&misbehaved), 8_990, "should slash 0.12%");
 			assert_eq!(Balances::free_balance(&nom_1), 9_999, "should slash 0.12% of exposure not total balance");
@@ -514,7 +617,13 @@ mod tests {
 			}
 
 			for who in &misbehaved {
-				assert_ok!(BabeEquivocationReporter::<Test>::report_equivocation(FakeProof::new(*who), vec![]));
+				assert_ok!(BabeEquivocationReporter::<Test>::report_equivocation(
+						FakeProof::new(*who),
+						vec![],
+						get_current_time()
+					)
+				);
+				increase_current_time();
 			}
 
 			for who in &misbehaved {
@@ -555,7 +664,7 @@ mod tests {
 
 			EXPOSURES.with(|x| x.borrow_mut().insert(misbehaved, exp1));
 
-			assert_ok!(BabeEquivocationReporter::<Test>::report_equivocation(FakeProof::new(misbehaved), vec![]));
+			assert_ok!(BabeEquivocationReporter::<Test>::report_equivocation(FakeProof::new(misbehaved), vec![], 0));
 
 			assert_eq!(Balances::free_balance(&misbehaved), 999, "should slash 0.12%");
 			assert_eq!(Balances::free_balance(&nom_1), 9_994, "should slash 0.12%");
@@ -572,9 +681,9 @@ mod tests {
 					],
 			};
 
-			// change exposure for `misbehaved
+			// change exposure for `misbehaved`
 			EXPOSURES.with(|x| x.borrow_mut().insert(misbehaved, exp2));
-			assert_ok!(BabeEquivocationReporter::<Test>::report_equivocation(FakeProof::new(misbehaved), vec![]));
+			assert_ok!(BabeEquivocationReporter::<Test>::report_equivocation(FakeProof::new(misbehaved), vec![], 1));
 
 			// exposure is 999 so slashed based on that amount but revert previous slash
 			// -> 999 * 0.0024 = 2, -> 1000 - 2 = 998
@@ -587,7 +696,7 @@ mod tests {
 		});
 	}
 
-	// note, this test hooks in the `staking` and uses its `AfterSlash` implementation
+	// note, this test hooks in to the `staking` and uses its `AfterSlash` implementation
 	#[test]
 	fn simple_with_after_slash() {
 		with_externalities(&mut ExtBuilder::default()
@@ -625,7 +734,9 @@ mod tests {
 				x.borrow_mut().insert(m2, exp2)
 			});
 
-			assert_ok!(BabeEquivocationReporter::<Test>::report_equivocation(FakeProof::new(m1), vec![]));
+			assert_ok!(
+				BabeEquivocationReporter::<Test>::report_equivocation(FakeProof::new(m1), vec![], get_current_time())
+			);
 			assert_eq!(Balances::free_balance(&m1), initial_balance_m1 - 1, "should slash 0.12% of 1000");
 			assert_eq!(Balances::free_balance(&m2), initial_balance_m2, "no misconducts yet; no slash");
 			assert_eq!(Balances::free_balance(&nom), initial_balance_nom, "0.12% of 250 is zero, don't slash anything");
@@ -635,7 +746,10 @@ mod tests {
 			assert!(!is_disabled(c2), "m2 is not a misconducter; still available");
 			assert!(<Validators<Test>>::exists(&m2), "no misconducts yet; still a candidate");
 
-			assert_ok!(BabeEquivocationReporter::<Test>::report_equivocation(FakeProof::new(m2), vec![]));
+			increase_current_time();
+			assert_ok!(
+				BabeEquivocationReporter::<Test>::report_equivocation(FakeProof::new(m2), vec![], get_current_time())
+			);
 
 			assert_eq!(Balances::free_balance(&m1), initial_balance_m1 - 2, "should slash 0.24% of 1000");
 			assert_eq!(Balances::free_balance(&m2), initial_balance_m2 - 2, "should slash 0.24% of 1000");
@@ -649,11 +763,19 @@ mod tests {
 			// ensure m1 and m2 are still trusted by its nominator
 			assert_eq!(Staking::nominators(nom).contains(&m1), true);
 			assert_eq!(Staking::nominators(nom).contains(&m2), true);
+			increase_current_time();
 
 			// increase severity to level 3
 			// note, this only reports misconducts from `m2` but `m1` should be updated as well.
 			for _ in 0..10 {
-				assert_ok!(BabeEquivocationReporter::<Test>::report_equivocation(FakeProof::new(m2), vec![]));
+				assert_ok!(
+					BabeEquivocationReporter::<Test>::report_equivocation(
+						FakeProof::new(m2),
+						vec![],
+						get_current_time()
+					)
+				);
+				increase_current_time();
 			}
 
 			// ensure m1 and m2 are not trusted by its nominator anymore
@@ -696,13 +818,92 @@ mod tests {
 
 			// slashed amount: 5153960 (0,0132 * 4294967295) will be slashed
 			// 515396 (0.1 * 5153961) will be shared among the reporters
-			assert_ok!(BabeEquivocationReporter::<Test>::report_equivocation(FakeProof::new(m), reporters));
+			assert_ok!(BabeEquivocationReporter::<Test>::report_equivocation(FakeProof::new(m), reporters, 0));
 
 			assert_eq!(Balances::free_balance(&1), 257698 + 1);
 			assert_eq!(Balances::free_balance(&2), 103079 + 1);
 			assert_eq!(Balances::free_balance(&3), 77309 + 1);
 			assert_eq!(Balances::free_balance(&4), 51539 + 1);
 			assert_eq!(Balances::free_balance(&5), 25771 + 1, "should only get what's left in the pot; 5% not 50%");
+		});
+	}
+
+
+	#[test]
+	fn severity_is_based_on_kind() {
+		with_externalities(&mut ExtBuilder::default()
+			.build(),
+		|| {
+
+			let exp = Exposure {
+					own: 1_000,
+					total: 1_000,
+					others: Vec::new(),
+			};
+
+			let m1 = 0;
+			let m2 = 1;
+			let _ = Balances::make_free_balance_be(&m1, 1000);
+			let _ = Balances::make_free_balance_be(&m2, 1000);
+
+			EXPOSURES.with(|x| {
+				x.borrow_mut().insert(m1, exp.clone());
+				x.borrow_mut().insert(m2, exp)
+			});
+
+			for t in 0..100 {
+				assert_ok!(BabeEquivocationReporter::<Test>::report_equivocation(FakeProof::new(m1), vec![], t));
+			}
+
+			assert_eq!(Balances::free_balance(&m1), 880, "should be slashed by 12%");
+			assert_eq!(Balances::free_balance(&m2), 1000);
+
+			set_current_misconduct_kind(Kind::Two);
+
+			assert_ok!(BabeEquivocationReporter::<Test>::report_equivocation(FakeProof::new(m1), vec![], 3000));
+			assert_ok!(BabeEquivocationReporter::<Test>::report_equivocation(FakeProof::new(m2), vec![], 3001));
+
+			assert_eq!(Balances::free_balance(&m1), 878, "should be slashed by severity on Kind::Two");
+			assert_eq!(Balances::free_balance(&m2), 998);
+		});
+	}
+
+	#[test]
+	fn multiple_misbehaviors_at_the_same_time() {
+		with_externalities(&mut ExtBuilder::default()
+			.build(),
+		|| {
+
+			let exp = Exposure {
+					own: 1_000,
+					total: 1_000,
+					others: Vec::new(),
+			};
+
+			let m1 = 0;
+			let m2 = 1;
+			let _ = Balances::make_free_balance_be(&m1, 1000);
+			let _ = Balances::make_free_balance_be(&m2, 1000);
+
+			EXPOSURES.with(|x| {
+				x.borrow_mut().insert(m1, exp.clone());
+				x.borrow_mut().insert(m2, exp)
+			});
+
+			assert_ok!(BabeEquivocationReporter::<Test>::report_equivocation(FakeProof::new(m1), vec![], 0));
+
+			assert_eq!(Balances::free_balance(&m1), 999, "should be slashed by 0.12%");
+			assert_eq!(Balances::free_balance(&m2), 1000);
+
+			set_current_misconduct_kind(Kind::Two);
+			assert_ok!(BabeEquivocationReporter::<Test>::report_equivocation(FakeProof::new(m2), vec![], 0));
+			assert_eq!(Balances::free_balance(&m1), 999, "should not be slashed be slashed by Kind::Two");
+			assert_eq!(Balances::free_balance(&m2), 999, "should be slashed by 0.12%");
+
+			assert_ok!(BabeEquivocationReporter::<Test>::report_equivocation(FakeProof::new(m1), vec![], 0));
+
+			assert_eq!(Balances::free_balance(&m1), 0, "multiple misbehavior at the same time");
+			assert_eq!(Balances::free_balance(&m2), 998, "should be slashed 0.24%");
 		});
 	}
 }
