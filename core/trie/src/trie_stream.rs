@@ -16,16 +16,19 @@
 
 //! `TrieStream` implementation for Substrate's trie format.
 
-use rstd::iter::once;
 use hash_db::Hasher;
 use trie_root;
 use codec::Encode;
 use rstd::vec::Vec;
+use crate::trie_constants;
+use crate::node_header::{NodeKind, size_and_prefix_iterator};
+use crate::node_codec::Bitmap;
 
-use super::{EMPTY_TRIE, LEAF_NODE_OFFSET, LEAF_NODE_BIG, EXTENSION_NODE_OFFSET,
-	EXTENSION_NODE_BIG, branch_node};
+const BRANCH_NODE_NO_VALUE: u8 = 254;
+const BRANCH_NODE_WITH_VALUE: u8 = 255;
 
-/// Codec-flavored TrieStream
+#[derive(Default, Clone)]
+/// Codec-flavored TrieStream.
 pub struct TrieStream {
 	buffer: Vec<u8>,
 }
@@ -35,62 +38,102 @@ impl TrieStream {
 	pub fn as_raw(&self) -> &[u8] { &self.buffer }
 }
 
-/// Create a leaf/extension node, encoding a number of nibbles. Note that this
-/// cannot handle a number of nibbles that is zero or greater than 127 and if
-/// you attempt to do so *IT WILL PANIC*.
-fn fuse_nibbles_node<'a>(nibbles: &'a [u8], leaf: bool) -> impl Iterator<Item = u8> + 'a {
-	debug_assert!(nibbles.len() < 255 + 126, "nibbles length too long. what kind of size of key are you trying to include in the trie!?!");
-	// We use two ranges of possible values; one for leafs and the other for extensions.
-	// Each range encodes zero following nibbles up to some maximum. If the maximum is
-	// reached, then it is considered "big" and a second byte follows it in order to
-	// encode a further offset to the number of nibbles of up to 255. Beyond that, we
-	// cannot encode. This shouldn't be a problem though since that allows for keys of
-	// up to 380 nibbles (190 bytes) and we expect key sizes to be generally 128-bit (16
-	// bytes) or, at a push, 384-bit (48 bytes).
+fn branch_node_bit_mask(has_children: impl Iterator<Item = bool>) -> (u8, u8) {
+	let mut bitmap: u16 = 0;
+	let mut cursor: u16 = 1;
+	for v in has_children {
+		if v { bitmap |= cursor }
+		cursor <<= 1;
+	}
+	((bitmap % 256 ) as u8, (bitmap / 256 ) as u8)
+}
 
-	let (first_byte_small, big_threshold) = if leaf {
-		(LEAF_NODE_OFFSET, (LEAF_NODE_BIG - LEAF_NODE_OFFSET) as usize)
-	} else {
-		(EXTENSION_NODE_OFFSET, (EXTENSION_NODE_BIG - EXTENSION_NODE_OFFSET) as usize)
+
+/// Create a leaf/branch node, encoding a number of nibbles.
+fn fuse_nibbles_node<'a>(nibbles: &'a [u8], kind: NodeKind) -> impl Iterator<Item = u8> + 'a {
+	let size = rstd::cmp::min(trie_constants::NIBBLE_SIZE_BOUND, nibbles.len());
+
+	let iter_start = match kind {
+		NodeKind::Leaf => size_and_prefix_iterator(size, trie_constants::LEAF_PREFIX_MASK),
+		NodeKind::BranchNoValue => size_and_prefix_iterator(size, trie_constants::BRANCH_WITHOUT_MASK),
+		NodeKind::BranchWithValue => size_and_prefix_iterator(size, trie_constants::BRANCH_WITH_MASK),
 	};
-	let first_byte = first_byte_small + nibbles.len().min(big_threshold) as u8;
-	once(first_byte)
-		.chain(if nibbles.len() >= big_threshold { Some((nibbles.len() - big_threshold) as u8) } else { None })
+	iter_start
 		.chain(if nibbles.len() % 2 == 1 { Some(nibbles[0]) } else { None })
 		.chain(nibbles[nibbles.len() % 2..].chunks(2).map(|ch| ch[0] << 4 | ch[1]))
 }
 
+
 impl trie_root::TrieStream for TrieStream {
-	fn new() -> Self { Self {buffer: Vec::new() } }
+
+	fn new() -> Self {
+		TrieStream {
+			buffer: Vec::new()
+		}
+	}
+
 	fn append_empty_data(&mut self) {
-		self.buffer.push(EMPTY_TRIE);
+		self.buffer.push(trie_constants::EMPTY_TRIE);
 	}
 
 	fn append_leaf(&mut self, key: &[u8], value: &[u8]) {
-		self.buffer.extend(fuse_nibbles_node(key, true));
+		self.buffer.extend(fuse_nibbles_node(key, NodeKind::Leaf));
 		value.encode_to(&mut self.buffer);
 	}
-	fn begin_branch(&mut self, maybe_value: Option<&[u8]>, has_children: impl Iterator<Item = bool>) {
-		self.buffer.extend(&branch_node(maybe_value.is_some(), has_children));
-		// Push the value if one exists.
+
+	fn begin_branch(
+		&mut self,
+		maybe_partial: Option<&[u8]>,
+		maybe_value: Option<&[u8]>,
+		has_children: impl Iterator<Item = bool>,
+	) {
+		if let Some(partial) = maybe_partial {
+			if maybe_value.is_some() {
+				self.buffer.extend(fuse_nibbles_node(partial, NodeKind::BranchWithValue));
+			} else {
+				self.buffer.extend(fuse_nibbles_node(partial, NodeKind::BranchNoValue));
+			}
+			let bm = branch_node_bit_mask(has_children);
+			self.buffer.extend([bm.0,bm.1].iter());
+		} else {
+			debug_assert!(false, "trie stream codec only for no extension trie");
+			self.buffer.extend(&branch_node(maybe_value.is_some(), has_children));
+		}
 		if let Some(value) = maybe_value {
 			value.encode_to(&mut self.buffer);
 		}
 	}
-	fn append_extension(&mut self, key: &[u8]) {
-		self.buffer.extend(fuse_nibbles_node(key, false));
+
+	fn append_extension(&mut self, _key: &[u8]) {
+		debug_assert!(false, "trie stream codec only for no extension trie");
 	}
+
 	fn append_substream<H: Hasher>(&mut self, other: Self) {
 		let data = other.out();
 		match data.len() {
-			0..=31 => {
-				data.encode_to(&mut self.buffer)
-			},
-			_ => {
-				H::hash(&data).as_ref().encode_to(&mut self.buffer)
-			}
+			0..=31 => data.encode_to(&mut self.buffer),
+			_ => H::hash(&data).as_ref().encode_to(&mut self.buffer),
 		}
 	}
 
 	fn out(self) -> Vec<u8> { self.buffer }
+}
+
+fn branch_node(has_value: bool, has_children: impl Iterator<Item = bool>) -> [u8; 3] {
+	let mut result = [0, 0, 0];
+	branch_node_buffered(has_value, has_children, &mut result[..]);
+	result
+}
+
+fn branch_node_buffered<I>(has_value: bool, has_children: I, output: &mut[u8]) 
+	where
+		I: Iterator<Item = bool>,
+{
+	let first = if has_value {
+		BRANCH_NODE_WITH_VALUE
+	} else {
+		BRANCH_NODE_NO_VALUE
+	};
+	output[0] = first;
+	Bitmap::encode(has_children, &mut output[1..]);
 }

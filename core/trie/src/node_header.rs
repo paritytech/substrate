@@ -16,62 +16,105 @@
 
 //! The node header.
 
+use crate::trie_constants;
 use codec::{Encode, Decode, Input, Output};
-use super::{EMPTY_TRIE, LEAF_NODE_OFFSET, LEAF_NODE_BIG, EXTENSION_NODE_OFFSET,
-	EXTENSION_NODE_BIG, BRANCH_NODE_NO_VALUE, BRANCH_NODE_WITH_VALUE, LEAF_NODE_THRESHOLD,
-	EXTENSION_NODE_THRESHOLD, LEAF_NODE_SMALL_MAX, EXTENSION_NODE_SMALL_MAX};
+use rstd::iter::once;
 
-/// A node header.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub enum NodeHeader {
+/// A node header
+#[derive(Copy, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub(crate) enum NodeHeader {
 	Null,
-	Branch(bool),
-	Extension(usize),
+	Branch(bool, usize),
 	Leaf(usize),
+}
+
+/// NodeHeader without content
+pub(crate) enum NodeKind {
+	Leaf,
+	BranchNoValue,
+	BranchWithValue,
 }
 
 impl Encode for NodeHeader {
 	fn encode_to<T: Output>(&self, output: &mut T) {
 		match self {
-			NodeHeader::Null => output.push_byte(EMPTY_TRIE),
-
-			NodeHeader::Branch(true) => output.push_byte(BRANCH_NODE_WITH_VALUE),
-			NodeHeader::Branch(false) => output.push_byte(BRANCH_NODE_NO_VALUE),
-
-			NodeHeader::Leaf(nibble_count) if *nibble_count < LEAF_NODE_THRESHOLD as usize =>
-				output.push_byte(LEAF_NODE_OFFSET + *nibble_count as u8),
-			NodeHeader::Leaf(nibble_count) => {
-				output.push_byte(LEAF_NODE_BIG);
-				output.push_byte((*nibble_count - LEAF_NODE_THRESHOLD as usize) as u8);
-			}
-
-			NodeHeader::Extension(nibble_count) if *nibble_count < EXTENSION_NODE_THRESHOLD as usize =>
-				output.push_byte(EXTENSION_NODE_OFFSET + *nibble_count as u8),
-			NodeHeader::Extension(nibble_count) => {
-				output.push_byte(EXTENSION_NODE_BIG);
-				output.push_byte((*nibble_count - EXTENSION_NODE_THRESHOLD as usize) as u8);
-			}
+			NodeHeader::Null => output.push_byte(trie_constants::EMPTY_TRIE),
+			NodeHeader::Branch(true, nibble_count)	=>
+				encode_size_and_prefix(*nibble_count, trie_constants::BRANCH_WITH_MASK, output),
+			NodeHeader::Branch(false, nibble_count) =>
+				encode_size_and_prefix(*nibble_count, trie_constants::BRANCH_WITHOUT_MASK, output),
+			NodeHeader::Leaf(nibble_count) =>
+				encode_size_and_prefix(*nibble_count, trie_constants::LEAF_PREFIX_MASK, output),
 		}
 	}
 }
 
 impl Decode for NodeHeader {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Some(match input.read_byte()? {
-			EMPTY_TRIE => NodeHeader::Null,							// 0
-
-			i @ LEAF_NODE_OFFSET ..= LEAF_NODE_SMALL_MAX =>			// 1 ... (127 - 1)
-				NodeHeader::Leaf((i - LEAF_NODE_OFFSET) as usize),
-			LEAF_NODE_BIG =>										// 127
-				NodeHeader::Leaf(input.read_byte()? as usize + LEAF_NODE_THRESHOLD as usize),
-
-			i @ EXTENSION_NODE_OFFSET ..= EXTENSION_NODE_SMALL_MAX =>// 128 ... (253 - 1)
-				NodeHeader::Extension((i - EXTENSION_NODE_OFFSET) as usize),
-			EXTENSION_NODE_BIG =>									// 253
-				NodeHeader::Extension(input.read_byte()? as usize + EXTENSION_NODE_THRESHOLD as usize),
-
-			BRANCH_NODE_NO_VALUE => NodeHeader::Branch(false),		// 254
-			BRANCH_NODE_WITH_VALUE => NodeHeader::Branch(true),		// 255
-		})
+		let i = input.read_byte()?;
+		if i == trie_constants::EMPTY_TRIE {
+			return Some(NodeHeader::Null);
+		}
+		match i & (0b11 << 6) {
+			trie_constants::LEAF_PREFIX_MASK => Some(NodeHeader::Leaf(decode_size(i, input)?)),
+			trie_constants::BRANCH_WITHOUT_MASK => Some(NodeHeader::Branch(false, decode_size(i, input)?)),
+			trie_constants::BRANCH_WITH_MASK => Some(NodeHeader::Branch(true, decode_size(i, input)?)),
+			// do not allow any special encoding
+			_ => None,
+		}
 	}
+}
+
+/// Returns an iterator over encoded bytes for node header and size.
+/// Size encoding allows unlimited, length unefficient, representation, but
+/// is bounded to 16 bit maximum value to avoid possible DOS.
+pub(crate) fn size_and_prefix_iterator(size: usize, prefix: u8) -> impl Iterator<Item = u8> {
+	let size = rstd::cmp::min(trie_constants::NIBBLE_SIZE_BOUND, size);
+
+	let l1 = rstd::cmp::min(62, size);
+	let (first_byte, mut rem) = if size == l1 {
+		(once(prefix + l1 as u8), 0)
+	} else {
+		(once(prefix + 63), size - l1)
+	};
+	let next_bytes = move || {
+		if rem > 0 {
+			if rem < 256 {
+				let result = rem - 1;
+				rem = 0;
+				Some(result as u8)
+			} else {
+				rem = rem.saturating_sub(255);
+				Some(255)
+			}
+		} else {
+			None
+		}
+	};
+	first_byte.chain(rstd::iter::from_fn(next_bytes))
+}
+
+/// Encodes size and prefix to a stream output.
+fn encode_size_and_prefix(size: usize, prefix: u8, out: &mut impl Output) {
+	for b in size_and_prefix_iterator(size, prefix) {
+		out.push_byte(b)
+	}
+}
+
+/// Decode size only from stream input and header byte.
+fn decode_size(first: u8, input: &mut impl Input) -> Option<usize> {
+	let mut result = (first & 255u8 >> 2) as usize;
+	if result < 63 {
+		return Some(result);
+	}
+	result -= 1;
+	while result <= trie_constants::NIBBLE_SIZE_BOUND {
+		let n = input.read_byte()? as usize;
+		if n < 255 {
+			return Some(result + n + 1);
+		}
+		result += 255;
+	}
+	Some(trie_constants::NIBBLE_SIZE_BOUND)
 }

@@ -300,9 +300,8 @@ define_env!(Env, <E: Ext>,
 
 	// Make a call to another contract.
 	//
-	// Returns 0 on the successful execution and puts the result data returned
-	// by the callee into the scratch buffer. Otherwise, returns 1 and clears the scratch
-	// buffer.
+	// Returns 0 on the successful execution and puts the result data returned by the callee into
+	// the scratch buffer. Otherwise, returns a non-zero value and clears the scratch buffer.
 	//
 	// - callee_ptr: a pointer to the address of the callee contract.
 	//   Should be decodable as an `T::AccountId`. Traps otherwise.
@@ -372,17 +371,16 @@ define_env!(Env, <E: Ext>,
 		}
 	},
 
-	// Instantiate a contract with code returned by the specified initializer code.
+	// Instantiate a contract with the specified code hash.
 	//
-	// This function creates an account and executes initializer code. After the execution,
-	// the returned buffer is saved as the code of the created account.
+	// This function creates an account and executes the constructor defined in the code specified
+	// by the code hash.
 	//
-	// Returns 0 on the successful contract creation and puts the address
-	// of the created contract into the scratch buffer.
-	// Otherwise, returns 1 and clears the scratch buffer.
+	// Returns 0 on the successful contract creation and puts the address of the created contract
+	// into the scratch buffer. Otherwise, returns non-zero value and clears the scratch buffer.
 	//
-	// - init_code_ptr: a pointer to the buffer that contains the initializer code.
-	// - init_code_len: length of the initializer code buffer.
+	// - code_hash_ptr: a pointer to the buffer that contains the initializer code.
+	// - code_hash_len: length of the initializer code buffer.
 	// - gas: how much gas to devote to the execution of the initializer code.
 	// - value_ptr: a pointer to the buffer with value, how much value to send.
 	//   Should be decodable as a `T::Balance`. Traps otherwise.
@@ -391,8 +389,8 @@ define_env!(Env, <E: Ext>,
 	// - input_data_len: length of the input data buffer.
 	ext_create(
 		ctx,
-		init_code_ptr: u32,
-		init_code_len: u32,
+		code_hash_ptr: u32,
+		code_hash_len: u32,
 		gas: u64,
 		value_ptr: u32,
 		value_len: u32,
@@ -400,7 +398,7 @@ define_env!(Env, <E: Ext>,
 		input_data_len: u32
 	) -> u32 => {
 		let code_hash = {
-			let code_hash_buf = read_sandbox_memory(ctx, init_code_ptr, init_code_len)?;
+			let code_hash_buf = read_sandbox_memory(ctx, code_hash_ptr, code_hash_len)?;
 			<CodeHash<<E as Ext>::T>>::decode(&mut &code_hash_buf[..]).ok_or_else(|| sandbox::HostError)?
 		};
 		let value = {
