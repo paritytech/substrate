@@ -886,6 +886,8 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 /// # use node_runtime::{GenesisConfig, RuntimeApi};
 /// # use std::sync::Arc;
 /// # use node_primitives::Block;
+/// # use babe_primitives::AuthorityPair as BabePair;
+/// # use grandpa_primitives::AuthorityPair as GrandpaPair;
 /// # use sr_primitives::Justification;
 /// # use sr_primitives::traits::Block as BlockT;
 /// # use grandpa;
@@ -913,8 +915,8 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 /// 	struct Factory {
 /// 		// Declare the block type
 /// 		Block = Block,
-///		ConsensusPair = primitives::ed25519::Pair,
-///		FinalityPair = primitives::ed25519::Pair,
+/// 		ConsensusPair = BabePair,
+/// 		FinalityPair = GrandpaPair,
 /// 		RuntimeApi = RuntimeApi,
 /// 		// Declare the network protocol and give an initializer.
 /// 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },

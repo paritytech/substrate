@@ -23,11 +23,11 @@ use std::time::Duration;
 
 use babe::{import_queue, start_babe, BabeImportQueue, Config};
 use babe_primitives::AuthorityPair as BabePair;
+use grandpa_primitives::AuthorityPair as GrandpaPair;
 use client::{self, LongestChain};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use node_executor;
 use primitives::Pair;
-use grandpa_primitives::AuthorityPair as GrandpaPair;
 use futures::prelude::*;
 use node_primitives::Block;
 use node_runtime::{GenesisConfig, RuntimeApi};
