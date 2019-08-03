@@ -42,6 +42,7 @@ use log::{log, info, warn, debug, error, Level};
 use parity_codec::{Encode, Decode};
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{Header, NumberFor, SaturatedConversion};
+use primitives::traits::KeyStorePtr;
 use substrate_executor::NativeExecutor;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
@@ -107,15 +108,16 @@ pub struct Service<Components: components::Components> {
 }
 
 /// Creates bare client without any networking.
-pub fn new_client<Factory: components::ServiceFactory>(config: &FactoryFullConfiguration<Factory>)
-	-> Result<Arc<ComponentClient<components::FullComponents<Factory>>>, error::Error>
-{
+pub fn new_client<Factory: components::ServiceFactory>(
+	config: &FactoryFullConfiguration<Factory>,
+) -> Result<Arc<ComponentClient<components::FullComponents<Factory>>>, error::Error> {
 	let executor = NativeExecutor::new(config.default_heap_pages);
-	let (client, _) = components::FullComponents::<Factory>::build_client(
+
+	components::FullComponents::<Factory>::build_client(
 		config,
 		executor,
-	)?;
-	Ok(client)
+		None,
+	).map(|r| r.0)
 }
 
 /// An handle for spawning tasks in the service.
@@ -168,9 +170,17 @@ impl<Components: components::Components> Service<Components> {
 		// Create client
 		let executor = NativeExecutor::new(config.default_heap_pages);
 
-		let mut keystore = if let Some(keystore_path) = config.keystore_path.as_ref() {
+		let keystore: Option<KeyStorePtr> = if let Some(keystore_path) = config.keystore_path.as_ref() {
 			match Keystore::open(keystore_path.clone(), config.keystore_password.clone()) {
-				Ok(ks) => Some(ks),
+				Ok(mut ks) => {
+					if let Some(ref seed) = config.dev_key_seed {
+						//TODO: Make sure we generate for all types and apps
+						ks.generate_from_seed::<primitives::ed25519::AppPair>(&seed)?;
+						ks.generate_from_seed::<primitives::sr25519::AppPair>(&seed)?;
+					}
+
+					Some(Arc::new(parking_lot::RwLock::new(ks)))
+				},
 				Err(err) => {
 					error!("Failed to initialize keystore: {}", err);
 					None
@@ -180,17 +190,7 @@ impl<Components: components::Components> Service<Components> {
 			None
 		};
 
-		if let Some((keystore, seed)) = keystore.as_mut()
-			.and_then(|k| config.dev_key_seed.clone().map(|s| (k, s)))
-		{
-			//TODO: Make sure we generate for all types and apps
-			keystore.generate_from_seed::<primitives::ed25519::AppPair>(&seed)?;
-			keystore.generate_from_seed::<primitives::sr25519::AppPair>(&seed)?;
-		}
-
-		let keystore = Arc::new(keystore);
-
-		let (client, on_demand) = Components::build_client(&config, executor)?;
+		let (client, on_demand) = Components::build_client(&config, executor, keystore.clone())?;
 		let select_chain = Components::build_select_chain(&mut config, client.clone())?;
 		let (import_queue, finality_proof_request_builder) = Components::build_import_queue(
 			&mut config,
@@ -203,7 +203,9 @@ impl<Components: components::Components> Service<Components> {
 
 		let version = config.full_version();
 		info!("Highest known block at #{}", chain_info.best_number);
-		telemetry!(SUBSTRATE_INFO; "node.start";
+		telemetry!(
+			SUBSTRATE_INFO;
+			"node.start";
 			"height" => chain_info.best_number.saturated_into::<u64>(),
 			"best" => ?chain_info.best_hash
 		);

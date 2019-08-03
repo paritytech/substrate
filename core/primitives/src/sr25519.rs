@@ -97,6 +97,20 @@ impl From<Public> for H256 {
 	}
 }
 
+impl rstd::convert::TryFrom<&[u8]> for Public {
+	type Error = ();
+
+	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
+		if data.len() == 32 {
+			let mut inner = [0u8; 32];
+			inner.copy_from_slice(data);
+			Ok(Public(inner))
+		} else {
+			Err(())
+		}
+	}
+}
+
 impl UncheckedFrom<[u8; 32]> for Public {
 	fn unchecked_from(x: [u8; 32]) -> Self {
 		Public::from_raw(x)
@@ -110,15 +124,15 @@ impl UncheckedFrom<H256> for Public {
 }
 
 #[cfg(feature = "std")]
-impl ::std::fmt::Display for Public {
-	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+impl std::fmt::Display for Public {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		write!(f, "{}", self.to_ss58check())
 	}
 }
 
 #[cfg(feature = "std")]
-impl ::std::fmt::Debug for Public {
-	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+impl std::fmt::Debug for Public {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> ::std::fmt::Result {
 		let s = self.to_ss58check();
 		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
 	}

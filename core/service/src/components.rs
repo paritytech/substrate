@@ -23,14 +23,16 @@ use client_db;
 use client::{self, Client, runtime_api};
 use crate::{error, Service};
 use consensus_common::{import_queue::ImportQueue, SelectChain};
-use network::{self, OnDemand, FinalityProofProvider, NetworkStateInfo, config::BoxFinalityProofRequestBuilder};
+use network::{
+	self, OnDemand, FinalityProofProvider, NetworkStateInfo, config::BoxFinalityProofRequestBuilder
+};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
 use sr_primitives::{
 	BuildStorage, traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi}, generic::BlockId
 };
 use crate::config::Configuration;
-use primitives::{Blake2Hasher, H256, crypto::AppPair};
+use primitives::{Blake2Hasher, H256, crypto::AppPair, traits::KeyStorePtr};
 use rpc::{self, apis::system::SystemInfo};
 use futures::{prelude::*, future::Executor};
 use futures03::channel::mpsc;
@@ -406,6 +408,7 @@ pub trait Components: Sized + 'static {
 	fn build_client(
 		config: &FactoryFullConfiguration<Self::Factory>,
 		executor: CodeExecutor<Self::Factory>,
+		keystore: Option<KeyStorePtr>,
 	) -> Result<
 		(
 			Arc<ComponentClient<Self>>,
@@ -492,11 +495,11 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	fn build_client(
 		config: &FactoryFullConfiguration<Factory>,
 		executor: CodeExecutor<Self::Factory>,
-	)
-		-> Result<(
-			Arc<ComponentClient<Self>>,
-			Option<Arc<OnDemand<FactoryBlock<Self::Factory>>>>
-		), error::Error>
+		keystore: Option<KeyStorePtr>,
+	) -> Result<
+			(Arc<ComponentClient<Self>>, Option<Arc<OnDemand<FactoryBlock<Self::Factory>>>>),
+			error::Error,
+		>
 	{
 		let db_settings = client_db::DatabaseSettings {
 			cache_size: config.database_cache_size.map(|u| u as usize),
@@ -506,12 +509,19 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 			path: config.database_path.clone(),
 			pruning: config.pruning.clone(),
 		};
-		Ok((Arc::new(client_db::new_client(
-			db_settings,
-			executor,
-			&config.chain_spec,
-			config.execution_strategies.clone(),
-		)?), None))
+
+		Ok((
+			Arc::new(
+				client_db::new_client(
+					db_settings,
+					executor,
+					&config.chain_spec,
+					config.execution_strategies.clone(),
+					keystore,
+				)?
+			),
+			None,
+		))
 	}
 
 	fn build_transaction_pool(
@@ -594,6 +604,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 	fn build_client(
 		config: &FactoryFullConfiguration<Factory>,
 		executor: CodeExecutor<Self::Factory>,
+		_: Option<KeyStorePtr>,
 	)
 		-> Result<
 			(
@@ -609,9 +620,12 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 			path: config.database_path.clone(),
 			pruning: config.pruning.clone(),
 		};
+
 		let db_storage = client_db::light::LightStorage::new(db_settings)?;
 		let light_blockchain = client::light::new_light_blockchain(db_storage);
-		let fetch_checker = Arc::new(client::light::new_fetch_checker(light_blockchain.clone(), executor.clone()));
+		let fetch_checker = Arc::new(
+			client::light::new_fetch_checker(light_blockchain.clone(), executor.clone())
+		);
 		let fetcher = Arc::new(network::OnDemand::new(fetch_checker));
 		let client_backend = client::light::new_light_backend(light_blockchain, fetcher.clone());
 		let client = client::light::new_light(client_backend, fetcher.clone(), &config.chain_spec, executor)?;

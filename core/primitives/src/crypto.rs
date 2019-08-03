@@ -935,7 +935,7 @@ macro_rules! app_crypto {
 			>(
 				seed: &str,
 				password: Option<&str>,
-				path: I
+				path: I,
 			) -> Result<Self, $crate::crypto::SecretStringError> {
 				<$pair>::from_standard_components::<I>(seed, password, path).map(Self)
 			}
@@ -945,14 +945,14 @@ macro_rules! app_crypto {
 			fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(
 				sig: &Self::Signature,
 				message: M,
-				pubkey: P
+				pubkey: P,
 			) -> bool {
 				<$pair>::verify(&sig.0, message, &pubkey.as_ref().0)
 			}
 			fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(
 				sig: &[u8],
 				message: M,
-				pubkey: P
+				pubkey: P,
 			) -> bool {
 				<$pair>::verify_weak(sig, message, pubkey)
 			}
@@ -1030,6 +1030,7 @@ macro_rules! app_crypto {
 			#[cfg(feature="std")]
 			type Pair = Pair;
 		}
+
 		impl $crate::crypto::Public for Public {
 			fn from_slice(x: &[u8]) -> Self { Self(<$public>::from_slice(x)) }
 		}
@@ -1047,7 +1048,7 @@ macro_rules! app_crypto {
 			type Generic = $public;
 		}
 
-		$crate::wrap!{
+		$crate::wrap! {
 			/// A generic `AppPublic` wrapper type over Ed25519 crypto; this has no specific App.
 			#[derive(Clone, Default, Eq, PartialEq, $crate::Encode, $crate::Decode)]
 			#[cfg_attr(feature = "std", derive(Debug, Hash))]

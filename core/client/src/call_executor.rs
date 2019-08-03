@@ -150,14 +150,20 @@ where
 pub struct LocalCallExecutor<B, E> {
 	backend: Arc<B>,
 	executor: E,
+	keystore: Option<primitives::traits::KeyStorePtr>,
 }
 
 impl<B, E> LocalCallExecutor<B, E> {
 	/// Creates new instance of local call executor.
-	pub fn new(backend: Arc<B>, executor: E) -> Self {
+	pub fn new(
+		backend: Arc<B>,
+		executor: E,
+		keystore: Option<primitives::traits::KeyStorePtr>,
+	) -> Self {
 		LocalCallExecutor {
 			backend,
 			executor,
+			keystore,
 		}
 	}
 }
@@ -167,6 +173,7 @@ impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
 		LocalCallExecutor {
 			backend: self.backend.clone(),
 			executor: self.executor.clone(),
+			keystore: self.keystore.clone(),
 		}
 	}
 }
@@ -197,6 +204,7 @@ where
 			&self.executor,
 			method,
 			call_data,
+			self.keystore.clone(),
 		).execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
 			strategy.get_manager(),
 			false,
@@ -262,6 +270,7 @@ where
 					&self.executor,
 					method,
 					call_data,
+					self.keystore.clone(),
 				)
 				.execute_using_consensus_failure_handler(
 					execution_manager,
@@ -279,6 +288,7 @@ where
 				&self.executor,
 				method,
 				call_data,
+				self.keystore.clone(),
 			)
 			.execute_using_consensus_failure_handler(
 				execution_manager,
@@ -293,7 +303,13 @@ where
 	fn runtime_version(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
-		let mut ext = Ext::new(&mut overlay, &state, self.backend.changes_trie_storage(), NeverOffchainExt::new());
+		let mut ext = Ext::new(
+			&mut overlay,
+			&state,
+			self.backend.changes_trie_storage(),
+			NeverOffchainExt::new(),
+			None,
+		);
 		self.executor.runtime_version(&mut ext).ok_or(error::Error::VersionInvalid.into())
 	}
 
@@ -327,6 +343,7 @@ where
 			&self.executor,
 			method,
 			call_data,
+			self.keystore.clone(),
 		).execute_using_consensus_failure_handler(
 			manager,
 			true,
@@ -353,6 +370,7 @@ where
 			&self.executor,
 			method,
 			call_data,
+			self.keystore.clone(),
 		)
 		.map_err(Into::into)
 	}

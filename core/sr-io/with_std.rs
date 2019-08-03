@@ -31,8 +31,7 @@ use environmental::environmental;
 use primitives::{offchain, hexdisplay::HexDisplay, H256};
 use trie::{TrieConfiguration, trie_types::Layout};
 
-#[cfg(feature = "std")]
-use std::collections::HashMap;
+use std::{collections::HashMap, convert::TryFrom};
 
 environmental!(ext: trait Externalities<Blake2Hasher>);
 
@@ -208,11 +207,63 @@ impl OtherApi for () {
 }
 
 impl CryptoApi for () {
-	fn ed25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> bool {
+	fn ed25519_generate(id: KeyTypeId) -> [u8; 32] {
+		ext::with(|ext| {
+			ext.keystore()
+				.expect("No `keystore` associated for the current context!")
+				.write()
+				.ed25519_generate_new(id, None)
+				.expect("`ed25519_generate` failed")
+		}).expect("`ed25519_generate` cannot be called outside of an Externalities-provided environment.")
+	}
+
+	fn ed25519_sign<P: AsRef<[u8]>, M: AsRef<[u8]>>(
+		id: KeyTypeId,
+		pubkey: &P,
+		msg: &M,
+	) -> Option<[u8; 64]> {
+		let pub_key = ed25519::Public::try_from(pubkey.as_ref()).ok()?;
+
+		ext::with(|ext| {
+			ext.keystore()
+				.expect("No `keystore` associated for the current context!")
+				.read()
+				.ed25519_key_pair(id, &pub_key)
+				.map(|k| k.sign(msg.as_ref()).into())
+		}).expect("`ed25519_sign` cannot be called outside of an Externalities-provided environment.")
+	}
+
+	fn ed25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: &P) -> bool {
 		ed25519::Pair::verify_weak(sig, msg, pubkey)
 	}
 
-	fn sr25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> bool {
+	fn sr25519_generate(id: KeyTypeId) -> [u8; 32] {
+		ext::with(|ext| {
+			ext.keystore()
+				.expect("No `keystore` associated for the current context!")
+				.write()
+				.sr25519_generate_new(id, None)
+				.expect("`sr25519_generate` failed")
+		}).expect("`sr25519_generate` cannot be called outside of an Externalities-provided environment.")
+	}
+
+	fn sr25519_sign<P: AsRef<[u8]>, M: AsRef<[u8]>>(
+		id: KeyTypeId,
+		pubkey: &P,
+		msg: &M,
+	) -> Option<[u8; 64]> {
+		let pub_key = sr25519::Public::try_from(pubkey.as_ref()).ok()?;
+
+		ext::with(|ext| {
+			ext.keystore()
+				.expect("No `keystore` associated for the current context!")
+				.read()
+				.sr25519_key_pair(id, &pub_key)
+				.map(|k| k.sign(msg.as_ref()).into())
+		}).expect("`sr25519_sign` cannot be called outside of an Externalities-provided environment.")
+	}
+
+	fn sr25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: &P) -> bool {
 		sr25519::Pair::verify_weak(sig, msg, pubkey)
 	}
 

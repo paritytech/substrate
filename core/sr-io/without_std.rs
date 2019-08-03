@@ -158,7 +158,7 @@ pub mod ext {
 		(
 			$(
 				$( #[$attr:meta] )*
-				fn $name:ident ( $( $arg:ident : $arg_ty:ty ),* ) $( -> $ret:ty )?;
+				fn $name:ident ( $( $arg:ident : $arg_ty:ty ),* $(,)? ) $( -> $ret:ty )?;
 			)*
 		) => {
 			$(
@@ -352,25 +352,66 @@ pub mod ext {
 		fn ext_twox_256(data: *const u8, len: u32, out: *mut u8);
 		/// Keccak256 hash
 		fn ext_keccak_256(data: *const u8, len: u32, out: *mut u8);
-		/// Note: ext_ed25519_verify returns 0 if the signature is correct, nonzero otherwise.
+
+		/// Note: `ext_ed25519_verify` returns `0` if the signature is correct, nonzero otherwise.
 		fn ext_ed25519_verify(
 			msg_data: *const u8,
 			msg_len: u32,
 			sig_data: *const u8,
-			pubkey_data: *const u8
+			pubkey_data: *const u8,
 		) -> u32;
-		/// Note: ext_sr25519_verify returns 0 if the signature is correct, nonzero otherwise.
+
+		/// Generate an `ed25519` key pair for the given key type id and store the public key
+		/// in `out`.
+		fn ext_ed25519_generate(id: *const u8, out: *mut u8);
+
+		/// Sign the given `msg` with the `ed25519` key pair that corresponds to then given key
+		/// type id and public key. The raw signature is stored in `out`.
+		///
+		/// # Returns
+		///
+		/// - `0` on success
+		/// - nonezero if something failed, e.g. retrieving of the key.
+		fn ext_ed25519_sign(
+			id: *const u8,
+			pubkey: *const u8,
+			msg: *const u8,
+			msg_len: u32,
+			out: *mut u8,
+		) -> u32;
+
+		/// Note: `ext_sr25519_verify` returns 0 if the signature is correct, nonzero otherwise.
 		fn ext_sr25519_verify(
 			msg_data: *const u8,
 			msg_len: u32,
 			sig_data: *const u8,
-			pubkey_data: *const u8
+			pubkey_data: *const u8,
 		) -> u32;
+
+		/// Generate an `sr25519` key pair for the given key type id and store the public
+		/// key in `out`.
+		fn ext_sr25519_generate(id: *const u8, out: *mut u8);
+
+		/// Sign the given `msg` with the `sr25519` key pair that corresponds to then given key
+		/// type id and public key. The raw signature is stored in `out`.
+		///
+		/// # Returns
+		///
+		/// - `0` on success
+		/// - nonezero if something failed, e.g. retrieving of the key.
+		fn ext_sr25519_sign(
+			id: *const u8,
+			pubkey: *const u8,
+			msg: *const u8,
+			msg_len: u32,
+			out: *mut u8,
+		) -> u32;
+
 		/// Note: ext_secp256k1_ecdsa_recover returns 0 if the signature is correct, nonzero otherwise.
 		fn ext_secp256k1_ecdsa_recover(
 			msg_data: *const u8,
 			sig_data: *const u8,
-			pubkey_data: *mut u8
+			pubkey_data: *mut u8,
 		) -> u32;
 
 		//================================
@@ -871,15 +912,83 @@ impl HashingApi for () {
 }
 
 impl CryptoApi for () {
-	fn ed25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> bool {
-		unsafe {
-			ext_ed25519_verify.get()(msg.as_ptr(), msg.len() as u32, sig.as_ptr(), pubkey.as_ref().as_ptr()) == 0
+	fn ed25519_generate(id: KeyTypeId) -> [u8; 32] {
+		let mut res = [0u8; 32];
+		unsafe { ext_ed25519_generate.get()(id.0.as_ptr(), res.as_mut_ptr()) };
+		res
+	}
+
+	fn ed25519_sign<P: AsRef<[u8]>, M: AsRef<[u8]>>(
+		id: KeyTypeId,
+		pubkey: &P,
+		msg: &M,
+	) -> Option<[u8; 64]> {
+		let mut res = [0u8; 64];
+		let success = unsafe {
+			ext_ed25519_sign.get()(
+				id.0.as_ptr(),
+				pubkey.as_ref().as_ptr(),
+				msg.as_ref().as_ptr(),
+				msg.as_ref().len() as u32,
+				res.as_mut_ptr(),
+			) == 0
+		};
+
+		if success {
+			Some(res)
+		} else {
+			None
 		}
 	}
 
-	fn sr25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> bool {
+	fn ed25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: &P) -> bool {
 		unsafe {
-			ext_sr25519_verify.get()(msg.as_ptr(), msg.len() as u32, sig.as_ptr(), pubkey.as_ref().as_ptr()) == 0
+			ext_ed25519_verify.get()(
+				msg.as_ptr(),
+				msg.len() as u32,
+				sig.as_ptr(),
+				pubkey.as_ref().as_ptr(),
+			) == 0
+		}
+	}
+
+	fn sr25519_generate(id: KeyTypeId) -> [u8; 32] {
+		let mut res = [0u8;32];
+		unsafe { ext_sr25519_generate.get()(id.0.as_ptr(), res.as_mut_ptr()) };
+		res
+	}
+
+	fn sr25519_sign<P: AsRef<[u8]>, M: AsRef<[u8]>>(
+		id: KeyTypeId,
+		pubkey: &P,
+		msg: &M,
+	) -> Option<[u8; 64]> {
+		let mut res = [0u8; 64];
+		let success = unsafe {
+			ext_sr25519_sign.get()(
+				id.0.as_ptr(),
+				pubkey.as_ref().as_ptr(),
+				msg.as_ref().as_ptr(),
+				msg.as_ref().len() as u32,
+				res.as_mut_ptr(),
+			) == 0
+		};
+
+		if success {
+			Some(res)
+		} else {
+			None
+		}
+	}
+
+	fn sr25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: &P) -> bool {
+		unsafe {
+			ext_sr25519_verify.get()(
+				msg.as_ptr(),
+				msg.len() as u32,
+				sig.as_ptr(),
+				pubkey.as_ref().as_ptr(),
+			) == 0
 		}
 	}
 
