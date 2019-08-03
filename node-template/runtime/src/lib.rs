@@ -124,7 +124,7 @@ impl system::Trait for Runtime {
 	type Origin = Origin;
 	/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 	type BlockHashCount = BlockHashCount;
-	/// Maximum weight of each block. With a default weight system of 1byte == 1weight, 4mb is ok.
+	/// Maximum weight of each block.
 	type MaximumBlockWeight = MaximumBlockWeight;
 	/// Maximum size of all encoded transactions (in bytes) that are allowed in one block.
 	type MaximumBlockLength = MaximumBlockLength;
