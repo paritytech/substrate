@@ -108,7 +108,7 @@ fn no_offline_should_work() {
 		assert_eq!(Staking::slash_count(&10), 0);
 		assert_eq!(Balances::free_balance(&10), 1);
 		// New era is not being forced
-		assert!(!Staking::forcing_new_era());
+		assert_eq!(Staking::forcing_new_era(), None);
 	});
 }
 
@@ -163,7 +163,7 @@ fn invulnerability_should_work() {
 		assert!(<Validators<Test>>::exists(&11));
 		// New era not being forced
 		// NOTE: new era is always forced once slashing happens -> new validators need to be chosen.
-		assert!(!Staking::forcing_new_era());
+		assert_eq!(Staking::forcing_new_era(), None);
 	});
 }
 
@@ -844,43 +844,83 @@ fn double_controlling_should_fail() {
 fn session_and_eras_work() {
 	with_externalities(&mut ExtBuilder::default()
 		.build(),
+		|| {
+			assert_eq!(Staking::current_era(), 0);
+
+			// Block 1: No change.
+			start_session(0);
+			assert_eq!(Session::current_index(), 1);
+			assert_eq!(Staking::current_era(), 0);
+
+			// Block 2: Simple era change.
+			start_session(2);
+			assert_eq!(Session::current_index(), 3);
+			assert_eq!(Staking::current_era(), 1);
+
+			// Block 3: Schedule an era length change; no visible changes.
+			start_session(3);
+			assert_eq!(Session::current_index(), 4);
+			assert_eq!(Staking::current_era(), 1);
+
+			// Block 4: Era change kicks in.
+			start_session(5);
+			assert_eq!(Session::current_index(), 6);
+			assert_eq!(Staking::current_era(), 2);
+
+			// Block 5: No change.
+			start_session(6);
+			assert_eq!(Session::current_index(), 7);
+			assert_eq!(Staking::current_era(), 2);
+
+			// Block 6: No change.
+			start_session(7);
+			assert_eq!(Session::current_index(), 8);
+			assert_eq!(Staking::current_era(), 2);
+
+			// Block 7: Era increment.
+			start_session(8);
+			assert_eq!(Session::current_index(), 9);
+			assert_eq!(Staking::current_era(), 3);
+		});
+}
+
+#[test]
+fn forcing_eras_works() {
+	with_externalities(&mut ExtBuilder::default()
+		.build(),
 	|| {
 		assert_eq!(Staking::current_era(), 0);
+
+		// Suspend eras.
+		assert_ok!(Staking::suspend_eras(system::RawOrigin::Root.into()));
 
 		// Block 1: No change.
 		start_session(0);
 		assert_eq!(Session::current_index(), 1);
 		assert_eq!(Staking::current_era(), 0);
 
-		// Block 2: Simple era change.
-		start_session(2);
-		assert_eq!(Session::current_index(), 3);
-		assert_eq!(Staking::current_era(), 1);
-
-		// Block 3: Schedule an era length change; no visible changes.
-		start_session(3);
-		assert_eq!(Session::current_index(), 4);
-		assert_eq!(Staking::current_era(), 1);
-
-		// Block 4: Era change kicks in.
+		// Run through two eras worth of sessions. No change.
 		start_session(5);
 		assert_eq!(Session::current_index(), 6);
-		assert_eq!(Staking::current_era(), 2);
+		assert_eq!(Staking::current_era(), 0);
 
-		// Block 5: No change.
+		// Restart eras.
+		assert_ok!(Staking::force_new_era(system::RawOrigin::Root.into()));
+
+		// Next session after re-enabling is a new era.
 		start_session(6);
 		assert_eq!(Session::current_index(), 7);
-		assert_eq!(Staking::current_era(), 2);
+		assert_eq!(Staking::current_era(), 1);
 
-		// Block 6: No change.
+		// Session after it is not an era boundary, so doesn't progress.
 		start_session(7);
 		assert_eq!(Session::current_index(), 8);
-		assert_eq!(Staking::current_era(), 2);
+		assert_eq!(Staking::current_era(), 1);
 
-		// Block 7: Era increment.
+		// Session after it is, so does.
 		start_session(8);
 		assert_eq!(Session::current_index(), 9);
-		assert_eq!(Staking::current_era(), 3);
+		assert_eq!(Staking::current_era(), 2);
 	});
 }
 

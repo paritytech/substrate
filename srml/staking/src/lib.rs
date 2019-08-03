@@ -611,8 +611,9 @@ decl_storage! {
 		/// many instances they were offline for).
 		pub RecentlyOffline get(recently_offline): Vec<(T::AccountId, T::BlockNumber, u32)>;
 
-		/// True if the next session change will be a new era regardless of index.
-		pub ForceNewEra get(forcing_new_era): bool;
+		/// If `Some`, then will either force a new era (`true`) or never a new era (`false`),
+		/// regardless of the session index.
+		pub ForceNewEra get(forcing_new_era): Option<bool>;
 
 		/// A mapping from still-bonded eras to the first session index of that era.
 		BondedEras: Vec<(EraIndex, SessionIndex)>;
@@ -967,27 +968,38 @@ decl_module! {
 			}
 		}
 
-		/// The ideal number of validators.
+		// ----- Root calls.
+
+		/// Set the ideal number of validators.
 		#[weight = SimpleDispatchInfo::FixedOperational(150_000)]
 		fn set_validator_count(origin, #[compact] new: u32) {
 			ensure_root(origin)?;
 			ValidatorCount::put(new);
 		}
 
-		// ----- Root calls.
-
-		/// Force there to be a new era. This also forces a new session immediately after.
-		/// `apply_rewards` should be true for validators to get the session reward.
+		/// Force there to be a new era. This will happen at the end of the next session. It's a one
+		/// time thing - after the next new era, it will be back to normal.
 		///
 		/// # <weight>
-		/// - Independent of the arguments.
-		/// - Triggers the Phragmen election. Expensive but not user-controlled.
-		/// - Depends on state: `O(|edges| * |validators|)`.
+		/// - One storage write.
+		/// - NOTE: Triggers the Phragmen election.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn force_new_era(origin) {
 			ensure_root(origin)?;
-			Self::apply_force_new_era()
+			ForceNewEra::put(true)
+		}
+
+		/// Force there to be no new eras. This state remains indefinitely; to return to normal era
+		/// progression, use `force_new_era`.
+		///
+		/// # <weight>
+		/// - One storage write.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		fn suspend_eras(origin) {
+			ensure_root(origin)?;
+			ForceNewEra::put(false)
 		}
 
 		/// Set the offline slash grace period.
@@ -1117,16 +1129,25 @@ impl<T: Trait> Module<T> {
 	fn new_session(session_index: SessionIndex)
 		-> Option<(Vec<T::AccountId>, Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>)>
 	{
-		if ForceNewEra::take() || session_index % T::SessionsPerEra::get() == 0 {
-			let validators = T::SessionInterface::validators();
-			let prior = validators.into_iter()
-				.map(|v| { let e = Self::stakers(&v); (v, e) })
-				.collect();
-
-			Self::new_era(session_index).map(move |new| (new, prior))
+		if let Some(forcing) = ForceNewEra::get() {
+			if forcing {
+				ForceNewEra::kill();
+			} else {
+				// Bail if we're forcing no-new-eras right now.
+				return None
+			}
 		} else {
-			None
-		}
+			if session_index % T::SessionsPerEra::get() != 0 {
+				// Bail if not on an era boundary.
+				return None
+			}
+		};
+		let validators = T::SessionInterface::validators();
+		let prior = validators.into_iter()
+			.map(|v| { let e = Self::stakers(&v); (v, e) })
+			.collect();
+
+		Self::new_era(session_index).map(move |new| (new, prior))
 	}
 
 	/// The era has changed - enact new staking set.
@@ -1321,10 +1342,6 @@ impl<T: Trait> Module<T> {
 			// TODO: #2494
 			(Self::slot_stake(), None)
 		}
-	}
-
-	fn apply_force_new_era() {
-		ForceNewEra::put(true);
 	}
 
 	/// Remove all associated data of a stash account from the staking system.
