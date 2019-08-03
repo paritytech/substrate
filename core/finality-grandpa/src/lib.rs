@@ -55,16 +55,20 @@
 use futures::prelude::*;
 use log::{debug, info, warn};
 use futures::sync::mpsc;
-use client::{BlockchainEvents, CallExecutor, Client, backend::Backend, error::Error as ClientError};
+use client::{
+	BlockchainEvents, CallExecutor, Client, backend::Backend, error::Error as ClientError, BlockOf,
+	blockchain::ProvideCache
+};
 use client::blockchain::HeaderBackend;
-use parity_codec::Encode;
+use parity_codec::{Encode, Decode};
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{
-	NumberFor, Block as BlockT, DigestFor, ProvideRuntimeApi,
+	NumberFor, Block as BlockT, DigestFor, ProvideRuntimeApi
 };
 use fg_primitives::{GrandpaApi, AuthorityPair};
+use substrate_keystore::Store;
 use inherents::InherentDataProviders;
-use consensus_common::SelectChain;
+use consensus_common::{SelectChain, well_known_cache_keys, Error as ConsensusError};
 use primitives::{H256, Pair, Blake2Hasher};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_WARN};
 use serde_json;
@@ -776,4 +780,42 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 	X: Future<Item=(),Error=()> + Clone + Send + 'static,
 {
 	run_grandpa_voter(grandpa_params)
+}
+
+/// Provide a list of authority keys that is current as of a given block.
+#[allow(deprecated)]
+fn authorities_at<C>(client: &C, at: &BlockId<<C as BlockOf>::Type>)
+	-> Result<Vec<AuthorityId>, ConsensusError>
+where
+	C: ProvideRuntimeApi + BlockOf + ProvideCache<<C as BlockOf>::Type>,
+	C::Api: GrandpaApi<<C as BlockOf>::Type>
+{
+	client
+		.cache()
+		.and_then(|cache| cache
+			.get_at(&well_known_cache_keys::AUTHORITIES, at)
+			.and_then(|v| Decode::decode(&mut &v[..]))
+		)
+		.or_else(|| GrandpaApi::grandpa_authorities(&*client.runtime_api(), at).ok()
+			.map(|authorities| authorities.into_iter().map(|x| x.0).collect())
+		)
+		.ok_or_else(|| consensus_common::Error::InvalidAuthoritiesSet.into())
+}
+
+/// Provide the authority key, if any, that is controlled by this node as of the given block.
+fn authority<C>(client: &C, keystore: Arc<Store>) -> Option<AuthorityPair> where
+	C: ProvideRuntimeApi + BlockOf + ProvideCache<<C as BlockOf>::Type>
+		+ HeaderBackend<<C as BlockOf>::Type>,
+	C::Api: GrandpaApi<<C as BlockOf>::Type>
+{
+	let owned = keystore.public_keys::<AuthorityId>().ok()?;
+	let at = BlockId::Number(client.info().best_number);
+	// The list of authority keys that is current. By default this will just use the state of
+	// the best block, but you might want it to use some other block's state instead if it's
+	// more sophisticated. Grandpa, for example, will probably want to use the state of the last
+	// finalised block.
+	let authorities = authorities_at::<C>(client, &at).ok()?;
+	let maybe_pub = owned.into_iter()
+		.find(|i| authorities.contains(i));
+	maybe_pub.and_then(|public| keystore.key_pair(&public).ok())
 }
