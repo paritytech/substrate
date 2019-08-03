@@ -28,8 +28,7 @@
 //! Creating a [`Client`] is done by calling the `new` method and passing to it a
 //! [`Backend`](backend::Backend) and an [`Executor`](CallExecutor).
 //!
-//! The former is typically provided by the `substrate-client-db` crate, but [`in_mem::Backend`]
-//! can be used for testing purposes.
+//! The former is typically provided by the `substrate-client-db` crate.
 //!
 //! The latter typically requires passing one of:
 //!
