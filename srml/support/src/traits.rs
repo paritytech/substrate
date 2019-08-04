@@ -666,8 +666,9 @@ pub trait DoSlash<Misbehaved, Severity, Kind, Timestamp> {
 		-> Result<(Self::SlashedEntries, Self::SlashedAmount), ()>;
 }
 
-/// A generic trait for paying out rewards
-pub trait DoReward<Reporters, Reward, Timestamp> {
+/// A generic trait for paying out rewards to entities that
+/// has reported misbehaviors as basis for slashing
+pub trait DoRewardSlashReporter<Reporters, Reward, Timestamp> {
 	/// Payout reward to reporters
 	fn do_reward(reporters: Reporters, total_reward: Reward, timestamp: Timestamp) -> Result<(), ()>;
 }
@@ -678,8 +679,11 @@ pub trait AfterSlash<Who, MisconductLevel> {
 	fn after_slash(who: Who, misconduct_level: MisconductLevel);
 }
 
-/// Trait for representing window length
-pub trait WindowLength<T> {
-	/// Fetch window length
-	fn window_length(&self) -> &T;
+/// Trait for representing an unique slashing offence
+pub trait SlashingOffence {
+	/// Unique identifier of the misconduct
+	const ID: [u8; 16];
+
+	/// Window length
+	const WINDOW_LENGTH: u32;
 }
