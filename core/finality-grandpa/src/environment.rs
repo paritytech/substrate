@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::BTreeMap;
 use std::iter::FromIterator;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -74,11 +74,12 @@ pub struct CompletedRound<Block: BlockT> {
 	pub votes: Vec<SignedMessage<Block>>,
 }
 
-// Data about last completed rounds within a single voter set. Stores NUM_LAST_COMPLETED_ROUNDS and always
-// contains data about at least one round (genesis).
+// Data about last completed rounds within a single voter set. Stores
+// NUM_LAST_COMPLETED_ROUNDS and always contains data about at least one round
+// (genesis).
 #[derive(Debug, Clone, PartialEq)]
 pub struct CompletedRounds<Block: BlockT> {
-	rounds: VecDeque<CompletedRound<Block>>,
+	rounds: Vec<CompletedRound<Block>>,
 	set_id: u64,
 	voters: Vec<AuthorityId>,
 }
@@ -115,8 +116,8 @@ impl<Block: BlockT> CompletedRounds<Block> {
 	)
 		-> CompletedRounds<Block>
 	{
-		let mut rounds = VecDeque::with_capacity(NUM_LAST_COMPLETED_ROUNDS);
-		rounds.push_back(genesis);
+		let mut rounds = Vec::with_capacity(NUM_LAST_COMPLETED_ROUNDS);
+		rounds.push(genesis);
 
 		let voters = voters.current().1.iter().map(|(a, _)| a.clone()).collect();
 		CompletedRounds { rounds, set_id, voters }
@@ -134,24 +135,26 @@ impl<Block: BlockT> CompletedRounds<Block> {
 
 	/// Returns the last (latest) completed round.
 	pub fn last(&self) -> &CompletedRound<Block> {
-		self.rounds.back()
+		self.rounds.first()
 			.expect("inner is never empty; always contains at least genesis; qed")
 	}
 
-	/// Push a new completed round, returns false if the given round is older
-	/// than the last completed round.
-	pub fn push(&mut self, completed_round: CompletedRound<Block>) -> bool {
-		if self.last().number >= completed_round.number {
-			return false;
+	/// Push a new completed round, oldest round is evicted if number of rounds
+	/// is higher than `NUM_LAST_COMPLETED_ROUNDS`.
+	pub fn push(&mut self, completed_round: CompletedRound<Block>) {
+		use std::cmp::Reverse;
+
+		match self.rounds.binary_search_by_key(
+			&Reverse(completed_round.number),
+			|completed_round| Reverse(completed_round.number),
+		) {
+			Ok(idx) => self.rounds[idx] = completed_round,
+			Err(idx) => self.rounds.insert(idx, completed_round),
+		};
+
+		if self.rounds.len() > NUM_LAST_COMPLETED_ROUNDS {
+			self.rounds.pop();
 		}
-
-		if self.rounds.len() == NUM_LAST_COMPLETED_ROUNDS {
-			self.rounds.pop_front();
-		}
-
-		self.rounds.push_back(completed_round);
-
-		true
 	}
 }
 
@@ -746,24 +749,24 @@ where
 			let (completed_rounds, current_rounds) = voter_set_state.with_current_round(round)?;
 
 			let mut completed_rounds = completed_rounds.clone();
+
+			// TODO: Future integration will store the prevote and precommit index. See #2611.
+			let votes = historical_votes.seen().clone();
+
+			completed_rounds.push(CompletedRound {
+				number: round,
+				state: state.clone(),
+				base,
+				votes,
+			});
+
+			// remove the round from live rounds and start tracking the next round
 			let mut current_rounds = current_rounds.clone();
 			current_rounds.remove(&round)
 				.expect("`with_current_round` verifies that round exists; \
 						 got `current_rounds` from `with_current_round`; qed");
 
-			// TODO: Future integration will store the prevote and precommit index. See #2611.
-			let votes = historical_votes.seen().clone();
-
-			// NOTE: the Environment assumes that rounds are *always* completed in-order.
-			if !completed_rounds.push(CompletedRound {
-				number: round,
-				state: state.clone(),
-				base,
-				votes,
-			}) {
-				let msg = "Voter completed round that is older than the last completed round.";
-				return Err(Error::Safety(msg.to_string()));
-			};
+			current_rounds.insert(round + 1, HasVoted::No);
 
 			let set_state = VoterSetState::<Block>::Live {
 				completed_rounds,
