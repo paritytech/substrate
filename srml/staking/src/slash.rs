@@ -21,7 +21,7 @@
 use crate::Exposure;
 use srml_support::{
 	EnumerableStorageMap, StorageMap, decl_module, decl_storage,
-	traits::{Currency, WindowLength, DoSlash, DoReward}
+	traits::{Currency, DoSlash, DoRewardSlashReporter}
 };
 use parity_codec::{HasCompact, Codec, Decode, Encode};
 use rstd::{prelude::*, vec::Vec, collections::{btree_map::BTreeMap, btree_set::BTreeSet}};
@@ -31,10 +31,10 @@ type Timestamp = u128;
 type BalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
+type Id = [u8; 16];
+
 /// Slashing trait
 pub trait Trait: system::Trait {
-	/// Slashing kind
-	type SlashKind: Copy + Clone + Codec + Default + PartialEq + MaybeSerializeDebug + WindowLength<u32>;
 	/// Currency
 	type Currency: Currency<Self::AccountId>;
 }
@@ -54,30 +54,29 @@ where
 /// A misconduct kind with timestamp when it occurred
 #[derive(Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct MisconductsByTime<Kind: Default>(Vec<(Timestamp, Kind)>);
+pub struct MisconductsByTime(Vec<(Timestamp, Id)>);
 
-impl<Kind: Default + PartialEq> MisconductsByTime<Kind> {
-	fn contains_kind(&self, kind: Kind) -> bool {
-		self.0.iter().any(|(_, k)| *k == kind)
+impl MisconductsByTime {
+	fn contains_kind(&self, id: Id) -> bool {
+		self.0.iter().any(|(_, k)| *k == id)
 	}
 
-	fn multiple_misbehaviors_at_same_time(&self, time: Timestamp, kind: Kind) -> bool {
-		self.0.iter().any(|(t, k)| *t == time && *k != kind)
+	fn multiple_misbehaviors_at_same_time(&self, time: Timestamp, id: Id) -> bool {
+		self.0.iter().any(|(t, k)| *t == time && *k != id)
 	}
 }
 
 /// State of a validator
 #[derive(Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct ValidatorState<AccountId, Balance, Kind>
+pub struct ValidatorState<AccountId, Balance>
 where
 	AccountId: Default + Ord,
 	Balance: Default + HasCompact,
-	Kind: Default,
 {
 	/// The misconducts the validator has conducted
 	// TODO: replace this with BTreeSet sorted ordered by latest timestamp...smallest
-	misconducts: MisconductsByTime<Kind>,
+	misconducts: MisconductsByTime,
 	/// The rewards that the validator has received
 	rewards: Vec<(Timestamp, Balance)>,
 	/// Its own balance and the weight of the nominators that supports the validator
@@ -90,7 +89,7 @@ decl_storage! {
 	trait Store for Module<T: Trait> as RollingWindow {
 		/// Slashing history for a given validator
 		SlashHistory get(misbehavior_reports): linked_map T::AccountId =>
-			ValidatorState<T::AccountId, BalanceOf<T>, T::SlashKind>;
+			ValidatorState<T::AccountId, BalanceOf<T>>;
 	}
 }
 
@@ -126,7 +125,7 @@ impl<T: Trait> Module<T> {
 		who: &T::AccountId,
 		exposure: Exposure<T::AccountId, BalanceOf<T>>,
 		severity: Perbill,
-		kind: T::SlashKind,
+		kind: Id,
 		timestamp: u128,
 		total_slash: &mut BalanceOf<T>,
 	) {
@@ -168,7 +167,7 @@ impl<T: Trait> Module<T> {
 		who: T::AccountId,
 		exposure: Exposure<T::AccountId, BalanceOf<T>>,
 		severity: Perbill,
-		kind: T::SlashKind,
+		kind: Id,
 		timestamp: u128,
 		total_slash: &mut BalanceOf<T>,
 	) {
@@ -198,7 +197,7 @@ impl<T: Trait> Module<T> {
 		who: &T::AccountId,
 		exposure: &Exposure<T::AccountId, BalanceOf<T>>,
 		severity: Perbill,
-		kind: T::SlashKind,
+		kind: Id,
 		slashed_entries: &mut Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>,
 		total_slash: &mut BalanceOf<T>,
 	) -> bool {
@@ -236,7 +235,7 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> DoSlash<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>), Perbill, T::SlashKind, u128> for Module<T>
+impl<T: Trait> DoSlash<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>), Perbill, Id, u128> for Module<T>
 {
 	type SlashedEntries = Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>;
 	type SlashedAmount = BalanceOf<T>;
@@ -244,7 +243,7 @@ impl<T: Trait> DoSlash<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>), Per
 	fn do_slash(
 		(who, exposure): (T::AccountId, Exposure<T::AccountId, BalanceOf<T>>),
 		severity: Perbill,
-		kind: T::SlashKind,
+		kind: Id,
 		timestamp: u128,
 	) -> Result<(Self::SlashedEntries, Self::SlashedAmount), ()> {
 
@@ -278,7 +277,7 @@ impl<T: Trait> DoSlash<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>), Per
 	}
 }
 
-impl<T: Trait, Reporters> DoReward<Reporters, BalanceOf<T>, u128> for Module<T>
+impl<T: Trait, Reporters> DoRewardSlashReporter<Reporters, BalanceOf<T>, u128> for Module<T>
 where
 	Reporters: IntoIterator<Item = (T::AccountId, Perbill)>,
 {
@@ -312,7 +311,7 @@ mod tests {
 	use srml_rolling_window::{
 		Module as RollingWindow, MisbehaviorReporter, GetMisbehaviors, impl_base_severity, impl_kind
 	};
-	use srml_support::{assert_ok, traits::{ReportSlash, DoSlash, AfterSlash, KeyOwnerProofSystem}};
+	use srml_support::{assert_ok, traits::{ReportSlash, DoSlash, AfterSlash, KeyOwnerProofSystem, SlashingOffence}};
 	use std::collections::HashMap;
 	use std::marker::PhantomData;
 	use primitives::H256;
@@ -323,11 +322,11 @@ mod tests {
 		static EXPOSURES: RefCell<HashMap<AccountId, Exposure<AccountId, Balance>>> =
 			RefCell::new(Default::default());
 		static CURRENT_TIME: RefCell<u128> = RefCell::new(0);
-		static CURRENT_KIND: RefCell<Kind> = RefCell::new(Kind::One);
+		static CURRENT_KIND: RefCell<[u8; 16]> = RefCell::new([0; 16]);
 	}
 
 	/// Trait for reporting slashes
-	pub trait ReporterTrait: srml_rolling_window::Trait<MisbehaviorKind = Kind> + Trait {
+	pub trait ReporterTrait: srml_rolling_window::Trait + Trait {
 		/// Key that identifies the owner
 		type KeyOwner: KeyOwnerProofSystem<Self::AccountId>;
 
@@ -344,7 +343,6 @@ mod tests {
 	}
 
 	impl Trait for Test {
-		type SlashKind = Kind;
 		type Currency = Balances;
 	}
 
@@ -424,9 +422,6 @@ mod tests {
 	/// This should be something similar to `decl_module!` macro
 	pub struct BabeEquivocation<T, DS, DR, AS>(PhantomData<(T, DS, DR, AS)>);
 
-	impl_base_severity!(BabeEquivocation<T, DS, DR, AS>, Perbill: Perbill::zero());
-	impl_kind!(BabeEquivocation<T, DS, DR, AS>, Kind: Kind::One);
-
 	impl<T, DS, DR, AS> BabeEquivocation<T, DS, DR, AS> {
 		pub fn as_misconduct_level(severity: Perbill) -> u8 {
 			if severity > Perbill::from_percent(10) {
@@ -441,20 +436,36 @@ mod tests {
 		}
 	}
 
-	impl<T, Reporters, Who, DS, DR, AS> ReportSlash<T::Hash, Reporters, Who, u128> for BabeEquivocation<T, DS, DR, AS>
+	impl<T, DS, DR, AS> SlashingOffence for BabeEquivocation<T, DS, DR, AS> {
+		const ID: [u8; 16] = [0; 16];
+		const WINDOW_LENGTH: u32 = 5;
+	}
+
+	impl<T, Reporters, Who, DS, DR, AS> ReportSlash<
+		T::Hash,
+		Reporters,
+		Who,
+		u128
+	> for BabeEquivocation<T, DS, DR, AS>
 	where
 		T: ReporterTrait,
-		DS: DoSlash<Who, Perbill, Kind, u128>,
-		DR: DoReward<Reporters, DS::SlashedAmount, u128>,
+		DS: DoSlash<Who, Perbill, Id, u128>,
+		DR: DoRewardSlashReporter<Reporters, DS::SlashedAmount, u128>,
 		AS: AfterSlash<DS::SlashedEntries, u8>,
 		DS::SlashedAmount: rstd::fmt::Debug,
 		DS::SlashedEntries: rstd::fmt::Debug,
 	{
-		fn slash(footprint: T::Hash, reporters: Reporters, who: Who, timestamp: u128) -> Result<(), ()> {
+		fn slash(
+			footprint: T::Hash,
+			reporters: Reporters,
+			who: Who,
+			timestamp: u128
+		) -> Result<(), ()> {
+			// kind is supposed to be `const` but in this case it is mocked and we want change it
+			// in order to test with separate kinds
 			let kind = get_current_misconduct_kind();
-			let _base_seve = Self::base_severity();
 
-			RollingWindow::<T>::report_misbehavior(kind, footprint, 0)?;
+			RollingWindow::<T>::report_misbehavior(kind, Self::WINDOW_LENGTH, footprint, 0)?;
 			let num_violations = RollingWindow::<T>::get_misbehaviors(kind);
 
 			// number of validators
@@ -480,7 +491,6 @@ mod tests {
 		}
 	}
 
-
 	fn get_current_time() -> u128 {
 		CURRENT_TIME.with(|t| *t.borrow())
 	}
@@ -489,12 +499,12 @@ mod tests {
 		CURRENT_TIME.with(|t| *t.borrow_mut() += 1);
 	}
 
-	fn get_current_misconduct_kind() -> Kind {
+	fn get_current_misconduct_kind() -> Id {
 		CURRENT_KIND.with(|t| *t.borrow())
 	}
 
-	fn set_current_misconduct_kind(kind: Kind) {
-		CURRENT_KIND.with(|t| *t.borrow_mut() = kind);
+	fn set_current_misconduct_kind(id: Id) {
+		CURRENT_KIND.with(|t| *t.borrow_mut() = id);
 	}
 
 	#[test]
@@ -858,7 +868,7 @@ mod tests {
 			assert_eq!(Balances::free_balance(&m1), 880, "should be slashed by 12%");
 			assert_eq!(Balances::free_balance(&m2), 1000);
 
-			set_current_misconduct_kind(Kind::Two);
+			set_current_misconduct_kind([1; 16]);
 
 			assert_ok!(BabeEquivocationReporter::<Test>::report_equivocation(FakeProof::new(m1), vec![], 3000));
 			assert_ok!(BabeEquivocationReporter::<Test>::report_equivocation(FakeProof::new(m2), vec![], 3001));
@@ -895,7 +905,7 @@ mod tests {
 			assert_eq!(Balances::free_balance(&m1), 999, "should be slashed by 0.12%");
 			assert_eq!(Balances::free_balance(&m2), 1000);
 
-			set_current_misconduct_kind(Kind::Two);
+			set_current_misconduct_kind([1; 16]);
 			assert_ok!(BabeEquivocationReporter::<Test>::report_equivocation(FakeProof::new(m2), vec![], 0));
 			assert_eq!(Balances::free_balance(&m1), 999, "should not be slashed be slashed by Kind::Two");
 			assert_eq!(Balances::free_balance(&m2), 999, "should be slashed by 0.12%");

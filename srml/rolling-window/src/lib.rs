@@ -35,7 +35,7 @@ mod mock;
 
 use srml_support::{
 	StorageMap, Parameter, EnumerableStorageMap, decl_module, decl_storage,
-	traits::WindowLength
+	traits::SlashingOffence,
 };
 use parity_codec::{Codec, Decode, Encode};
 use rstd::vec::Vec;
@@ -44,12 +44,12 @@ use srml_session::{SessionIndex, OneSessionHandler};
 
 /// Rolling Window trait
 pub trait Trait: system::Trait {
-	/// MisbehaviorKind to report with window length
-	type MisbehaviorKind: Copy + Clone + Codec + MaybeSerializeDebug + WindowLength<u32>;
-
 	/// Identifier type to implement `OneSessionHandler`
 	type SessionKey: Member + Parameter + Default + TypedKey + Decode + Encode + AsRef<[u8]>;
 }
+
+type Id = [u8; 16];
+type WindowLength = u32;
 
 decl_storage! {
 	trait Store for Module<T: Trait> as RollingWindow {
@@ -57,7 +57,7 @@ decl_storage! {
 		///
 		/// It stores every unique misbehavior of a kind
 		// TODO [#3149]: optimize how to shrink the window when sessions expire
-		MisbehaviorReports get(misbehavior_reports): linked_map T::MisbehaviorKind => Vec<SessionIndex>;
+		MisbehaviorReports get(misbehavior_reports): linked_map Id => Vec<(SessionIndex, WindowLength)>;
 
 		/// Bonding Uniqueness
 		///
@@ -76,26 +76,32 @@ decl_module! {
 }
 
 /// Trait for getting the number of misbehaviors in the current window
-pub trait GetMisbehaviors<MisbehaviorKind> {
+pub trait GetMisbehaviors {
 	/// Get number of misbehavior's in the current window for a kind
-	fn get_misbehaviors(kind: MisbehaviorKind) -> u64;
+	fn get_misbehaviors(id: Id) -> u64;
 }
 
-impl<T: Trait> GetMisbehaviors<T::MisbehaviorKind> for Module<T> {
-	fn get_misbehaviors(kind: T::MisbehaviorKind) -> u64 {
-		<MisbehaviorReports<T>>::get(kind).len() as u64
+impl<T: Trait> GetMisbehaviors for Module<T> {
+	fn get_misbehaviors(id: Id) -> u64 {
+		MisbehaviorReports::get(id).len() as u64
 	}
 }
 
 /// Trait for reporting misbehavior's
-pub trait MisbehaviorReporter<MisbehaviorKind, Hash> {
+pub trait MisbehaviorReporter<Hash> {
 	/// Report misbehavior for a kind
-	fn report_misbehavior(kind: MisbehaviorKind, footprint: Hash, current_session: SessionIndex) -> Result<(), ()>;
+	fn report_misbehavior(
+		id: Id,
+		window_length: WindowLength,
+		footprint: Hash,
+		current_session: SessionIndex
+	) -> Result<(), ()>;
 }
 
-impl<T: Trait> MisbehaviorReporter<T::MisbehaviorKind, T::Hash> for Module<T> {
+impl<T: Trait> MisbehaviorReporter<T::Hash> for Module<T> {
 	fn report_misbehavior(
-		kind: T::MisbehaviorKind,
+		id: Id,
+		window_length: WindowLength,
 		footprint: T::Hash,
 		current_session: SessionIndex,
 	) -> Result<(), ()> {
@@ -103,7 +109,7 @@ impl<T: Trait> MisbehaviorReporter<T::MisbehaviorKind, T::Hash> for Module<T> {
 			Err(())
 		} else {
 			<BondingUniqueness<T>>::insert(footprint, current_session);
-			<MisbehaviorReports<T>>::mutate(kind, |entry| entry.push(current_session));
+			MisbehaviorReports::mutate(id, |entry| entry.push((current_session, window_length)));
 			Ok(())
 		}
 	}
@@ -119,11 +125,10 @@ impl<T: Trait> OneSessionHandler<T::SessionKey> for Module<T>
 		_validators: I,
 		_queued_validators: I,
 	) {
-		for (kind, _) in <MisbehaviorReports<T>>::enumerate() {
-			let window_length = kind.window_length();
-			<MisbehaviorReports<T>>::mutate(kind, |reports| {
+		for (kind, _) in MisbehaviorReports::enumerate() {
+			MisbehaviorReports::mutate(kind, |reports| {
 				// it is guaranteed that `reported_session` happened in the same session or before `ending`
-				reports.retain(|reported_session| {
+				reports.retain(|(reported_session, window_length)| {
 					let diff = ended_session.wrapping_sub(*reported_session);
 					diff < *window_length
 				});
