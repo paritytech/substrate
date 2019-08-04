@@ -20,13 +20,9 @@ use node_primitives::Balance;
 use sr_primitives::weights::{Weight, WeightMultiplier};
 use sr_primitives::traits::{Convert, Saturating};
 use sr_primitives::Fixed64;
-use parity_codec::{Encode, Decode};
-use support::traits::{OnUnbalanced, Currency, WindowLength};
+use support::traits::{OnUnbalanced, Currency};
 use crate::{Balances, Authorship, MaximumBlockWeight, NegativeImbalance};
 use crate::constants::fee::TARGET_BLOCK_FULLNESS;
-
-#[cfg(any(feature = "std", test))]
-use serde::{Serialize, Deserialize};
 
 pub struct Author;
 impl OnUnbalanced<NegativeImbalance> for Author {
@@ -128,47 +124,6 @@ impl Convert<(Weight, WeightMultiplier), WeightMultiplier> for WeightMultiplierU
 				// transactions have no weight fee. We stop here and only increase if the network
 				// became more busy.
 				.max(WeightMultiplier::from_rational(-1, 1))
-		}
-	}
-}
-
-/// Misbehavior type which takes window length as input
-/// Each variant and its data is a seperate kind
-#[derive(Copy, Clone, Eq, Hash, PartialEq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-pub enum Misbehavior {
-	/// Validator is not online
-	Unresponsiveness(u32),
-	/// Unjustified vote
-	UnjustifiedVote(u32),
-	/// Rejecting set of votes
-	RejectSetVotes(u32),
-	/// Equivocation
-	Equivocation(u32),
-	/// Invalid Vote
-	InvalidVote(u32),
-	/// Invalid block
-	InvalidBlock(u32),
-	/// Parachain Invalid validity statement
-	ParachainInvalidity(u32),
-}
-
-impl Default for Misbehavior {
-	fn default() -> Self {
-		Misbehavior::Unresponsiveness(10)
-	}
-}
-
-impl WindowLength<u32> for Misbehavior {
-	fn window_length(&self) -> &u32 {
-		match self {
-			Misbehavior::Unresponsiveness(len) => len,
-			Misbehavior::UnjustifiedVote(len) => len,
-			Misbehavior::RejectSetVotes(len) => len,
-			Misbehavior::Equivocation(len) => len,
-			Misbehavior::InvalidVote(len) => len,
-			Misbehavior::InvalidBlock(len) => len,
-			Misbehavior::ParachainInvalidity(len) => len,
 		}
 	}
 }

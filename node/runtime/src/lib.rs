@@ -60,7 +60,7 @@ pub use staking::StakerStatus;
 
 /// Implementations of some helper traits passed into runtime modules as associated types.
 pub mod impls;
-use impls::{CurrencyToVoteHandler, WeightMultiplierUpdateHandler, Author, WeightToFee, Misbehavior};
+use impls::{CurrencyToVoteHandler, WeightMultiplierUpdateHandler, Author, WeightToFee};
 
 /// Constant values used within the runtime.
 pub mod constants;
@@ -241,7 +241,6 @@ impl staking::Trait for Runtime {
 
 impl staking::slash::Trait for Runtime {
 	type Currency = Balances;
-	type SlashKind = Misbehavior;
 }
 
 parameter_types! {
@@ -384,7 +383,6 @@ impl im_online::Trait for Runtime {
 }
 
 impl rolling_window::Trait for Runtime {
-	type MisbehaviorKind = Misbehavior;
 	type SessionKey = primitives::sr25519::Public;
 }
 
