@@ -79,8 +79,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 126,
-	impl_version: 126,
+	spec_version: 127,
+	impl_version: 128,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -180,9 +180,8 @@ parameter_types! {
 	pub const UncleGenerations: u64 = 0;
 }
 
-// TODO: #2986 implement this properly
 impl authorship::Trait for Runtime {
-	type FindAuthor = ();
+	type FindAuthor = session::FindAccountFromAuthorIndex<Self, Babe>;
 	type UncleGenerations = UncleGenerations;
 	type FilterUncle = ();
 	type EventHandler = Staking;
