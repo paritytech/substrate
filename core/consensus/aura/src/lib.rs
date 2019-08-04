@@ -51,7 +51,8 @@ use substrate_keystore::Store;
 use sr_primitives::{generic::{self, BlockId, OpaqueDigestItemId}, Justification};
 use sr_primitives::traits::{Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi, Zero, Member};
 
-use primitives::crypto::{Pair, AppPair, AppKey};
+use primitives::crypto::Pair;
+use app_crypto::{AppPair, AppKey};
 use inherents::{InherentDataProviders, InherentData};
 
 use futures::{prelude::*, future};

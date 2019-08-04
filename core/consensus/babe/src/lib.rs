@@ -1243,7 +1243,7 @@ pub trait SealingSource {
 	fn format(&self) -> String;
 }
 
-impl<T: primitives::crypto::AppPublic> SealingSource for T {
+impl<T: app_crypto::AppPublic> SealingSource for T {
 	const SEALER_TYPE: &'static str = "Key";
 	fn format(&self) -> String { use primitives::crypto::Ss58Codec; self.to_ss58check() }
 }

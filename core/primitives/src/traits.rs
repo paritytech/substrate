@@ -16,6 +16,7 @@
 
 //! Shareable Substrate traits.
 
+#[cfg(feature = "std")]
 use crate::{crypto::KeyTypeId, ed25519, sr25519};
 
 /// Something that generates, stores and provides access to keys.

@@ -32,7 +32,8 @@ use sr_primitives::{
 	BuildStorage, traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi}, generic::BlockId
 };
 use crate::config::Configuration;
-use primitives::{Blake2Hasher, H256, crypto::AppPair, traits::KeyStorePtr};
+use primitives::{Blake2Hasher, H256, traits::KeyStorePtr};
+use app_crypto::AppPair;
 use rpc::{self, apis::system::SystemInfo};
 use futures::{prelude::*, future::Executor};
 use futures03::channel::mpsc;

@@ -31,7 +31,7 @@ pub use digest::{BabePreDigest, CompatibleDigestItem};
 pub use digest::{BABE_VRF_PREFIX, RawBabePreDigest};
 
 mod app {
-	use primitives::{app_crypto, crypto::key_types::BABE, sr25519};
+	use app_crypto::{app_crypto, key_types::BABE, sr25519};
 	app_crypto!(sr25519, BABE);
 }
 

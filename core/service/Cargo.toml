@@ -22,7 +22,8 @@ target_info = "0.1"
 keystore = { package = "substrate-keystore", path = "../../core/keystore" }
 sr-io = { path = "../../core/sr-io" }
 sr-primitives = { path = "../../core/sr-primitives" }
-primitives = { package = "substrate-primitives", path = "../../core/primitives" }
+primitives = { package = "substrate-primitives", path = "../primitives" }
+app-crypto = { package = "substrate-application-crypto", path = "../application-crypto" }
 consensus_common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 network = { package = "substrate-network", path = "../../core/network" }
 client = { package = "substrate-client", path = "../../core/client" }

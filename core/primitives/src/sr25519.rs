@@ -535,16 +535,6 @@ impl CryptoType for Pair {
 	type Pair = Pair;
 }
 
-mod app {
-	use crate::crypto::key_types::SR25519;
-	crate::app_crypto!(super, SR25519);
-}
-
-pub use app::Public as AppPublic;
-pub use app::Signature as AppSignature;
-#[cfg(feature = "std")]
-pub use app::Pair as AppPair;
-
 #[cfg(test)]
 mod test {
 	use super::*;

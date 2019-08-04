@@ -8,6 +8,7 @@ edition = "2018"
 [dependencies]
 parity-codec = "4.1.1"
 primitives = { package = "substrate-primitives", path = "../../primitives" }
+app-crypto = { package = "substrate-application-crypto", path = "../../application-crypto" }
 runtime_support = { package = "srml-support", path = "../../../srml/support" }
 runtime_version = { package = "sr-version", path = "../../sr-version" }
 runtime_io = { package = "sr-io", path = "../../sr-io" }

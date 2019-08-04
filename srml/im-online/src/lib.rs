@@ -86,8 +86,8 @@ use srml_support::{
 use system::ensure_none;
 
 mod app {
-	pub use primitives::sr25519 as crypto;
-	use primitives::{app_crypto, crypto::key_types::IM_ONLINE, sr25519};
+	pub use app_crypto::sr25519 as crypto;
+	use app_crypto::{app_crypto, key_types::IM_ONLINE, sr25519};
 
 	app_crypto!(sr25519, IM_ONLINE);
 }

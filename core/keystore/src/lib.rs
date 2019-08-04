@@ -21,9 +21,10 @@
 use std::{collections::HashMap, path::PathBuf, fs::{self, File}, io::{self, Write}};
 
 use primitives::{
-	crypto::{KeyTypeId, AppPublic, AppKey, AppPair, Pair as PairT, Public, IsWrappedBy, Protected},
-	traits::KeyStore, ed25519, sr25519,
+	crypto::{KeyTypeId, Pair as PairT, Public, IsWrappedBy, Protected}, traits::KeyStore,
 };
+
+use app_crypto::{AppKey, AppPublic, AppPair, ed25519, sr25519};
 
 /// Keystore error.
 #[derive(Debug, derive_more::Display, derive_more::From)]
@@ -257,7 +258,6 @@ impl KeyStore for Store {
 mod tests {
 	use super::*;
 	use tempdir::TempDir;
-	use primitives::{ed25519, sr25519};
 	use primitives::crypto::Ss58Codec;
 
 	#[test]

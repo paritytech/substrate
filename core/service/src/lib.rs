@@ -175,8 +175,8 @@ impl<Components: components::Components> Service<Components> {
 				Ok(mut ks) => {
 					if let Some(ref seed) = config.dev_key_seed {
 						//TODO: Make sure we generate for all types and apps
-						ks.generate_from_seed::<primitives::ed25519::AppPair>(&seed)?;
-						ks.generate_from_seed::<primitives::sr25519::AppPair>(&seed)?;
+						ks.generate_from_seed::<app_crypto::ed25519::AppPair>(&seed)?;
+						ks.generate_from_seed::<app_crypto::sr25519::AppPair>(&seed)?;
 					}
 
 					Some(Arc::new(parking_lot::RwLock::new(ks)))
