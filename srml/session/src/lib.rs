@@ -120,7 +120,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
-use parity_codec::Decode;
+use parity_codec::{Encode, Decode};
+use primitives::storage::well_known_keys;
 use sr_primitives::KeyTypeId;
 use sr_primitives::weights::SimpleDispatchInfo;
 use sr_primitives::traits::{Convert, Zero, Member, OpaqueKeys, TypedKey};
@@ -332,8 +333,11 @@ decl_storage! {
 						.expect("genesis config must not contain duplicates; qed");
 				}
 
-				let initial_validators = T::SelectInitialValidators::select_initial_validators()
-					.unwrap_or_else(|| config.keys.iter().map(|(ref v, _)| v.clone()).collect());
+				let initial_validators = T::SelectInitialValidators::select_initial_validators();
+				let (validators_selected, initial_validators) = match initial_validators {
+					Some(initial_validators) => (true, initial_validators),
+					None => (false, config.keys.iter().map(|(ref v, _)| v.clone()).collect()),
+				};
 
 				assert!(!initial_validators.is_empty(), "Empty validator set in genesis block!");
 
@@ -345,6 +349,20 @@ decl_storage! {
 						<Module<T>>::load_keys(&v).unwrap_or_default(),
 					))
 					.collect();
+
+				// There are some other modules (BABE, for example) that are maintaining similar validators/authorities
+				// lists and may work standalone OR in conjunction with session module.
+				// When working in conjunction with session module, they tend to maintain the same list as the session
+				// module.
+				// But session module can mutate this list in genesis, using SelectInitialValidators.
+				// To notify other modules about this mutation (so they could use mutated list), let's write this
+				// mutated list into well-known-key.
+				if validators_selected {
+					srml_support::storage::unhashed::put_raw(
+						well_known_keys::MUTATED_SESSION_VALIDATORS_KEYS,
+						&queued_keys.encode(),
+					);
+				}
 
 				<Validators<T>>::put(initial_validators);
 				<QueuedKeys<T>>::put(queued_keys);
@@ -414,7 +432,7 @@ impl<T: Trait> Module<T> {
 	/// equivocation punishment after a fork.
 	pub fn rotate_session() {
 		let session_index = CurrentIndex::get();
-
+println!("=== Session.RotateSession");
 		let changed = QueuedChanged::get();
 		let mut next_changed = Changed::take();
 

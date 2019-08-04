@@ -61,6 +61,9 @@ pub mod well_known_keys {
 	/// Current extrinsic index (u32) is stored under this key.
 	pub const EXTRINSIC_INDEX: &'static [u8] = b":extrinsic_index";
 
+	/// Mutated initial (genesis) validators list from the session module.
+	pub const MUTATED_SESSION_VALIDATORS_KEYS: &'static [u8] = b":mutated_session_validators_keys";
+
 	/// Changes trie configuration is stored under this key.
 	pub const CHANGES_TRIE_CONFIG: &'static [u8] = b":changes_trie";
 

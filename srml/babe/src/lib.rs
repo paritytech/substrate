@@ -22,10 +22,13 @@
 pub use timestamp;
 
 use rstd::{result, prelude::*};
-use srml_support::{decl_storage, decl_module, StorageValue, traits::FindAuthor, traits::Get};
+use srml_support::{decl_storage, decl_module, StorageValue, traits::FindAuthor, traits::Get, Parameter};
 use timestamp::{OnTimestampSet};
+use primitives::storage::well_known_keys;
 use sr_primitives::{generic::DigestItem, ConsensusEngineId};
-use sr_primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert};
+use sr_primitives::traits::{
+	IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert, OpaqueKeys, Member, TypedKey,
+};
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
 use parity_codec::{Encode, Decode};
@@ -110,6 +113,9 @@ impl ProvideInherentData for InherentDataProvider {
 pub trait Trait: timestamp::Trait {
 	type EpochDuration: Get<u64>;
 	type ExpectedBlockTime: Get<Self::Moment>;
+
+	/// The keys. Used when BABE is used with session module to decode inital validators set of session module.
+	type Keys: OpaqueKeys + Member + Parameter;
 }
 
 /// The length of the BABE randomness
@@ -121,7 +127,7 @@ decl_storage! {
 		pub EpochIndex get(epoch_index): u64;
 
 		/// Current epoch authorities.
-		pub Authorities get(authorities) config(): Vec<(AuthorityId, BabeWeight)>;
+		pub Authorities get(authorities): Vec<(AuthorityId, BabeWeight)>;
 
 		/// Slot at which the current epoch started. It is possible that no
 		/// block was authored at the given slot and the epoch change was
@@ -152,6 +158,52 @@ decl_storage! {
 		/// Randomness under construction.
 		UnderConstruction: [u8; 32 /* VRF_OUTPUT_LENGTH */];
 	}
+	add_extra_genesis {
+		config(authorities): Vec<(AuthorityId, BabeWeight)>;
+		build(|
+			storage: &mut sr_primitives::StorageOverlay,
+			_: &mut sr_primitives::ChildrenStorageOverlay,
+			config: &GenesisConfig,
+		| {
+			runtime_io::with_storage(storage, || {
+				let mut authorities = config.authorities.clone();
+
+				// if session module is here AND it has mutated initial validators list, then we want to sync
+				// it with our authorities list
+				let session_validators_keys: Vec<(T::AccountId, T::Keys)> = srml_support::storage::unhashed::get_raw(
+					well_known_keys::MUTATED_SESSION_VALIDATORS_KEYS,
+				).and_then(|v| Decode::decode(&mut &v[..]))
+					.expect("unable to decode initial session validators keys");
+
+				// we expect that the validators set passed received from session will have the same set or subset
+				// of authorities passed to the BABE module
+
+				assert!(
+					session_validators_keys.len() <= authorities.len(),
+					"Trying to select unknown BABE authorities for genesis block",
+				);
+
+				let session_validators_keys_len = session_validators_keys.len();
+				for (idx, session_validator_keys) in session_validators_keys.into_iter().enumerate() {
+					let session_validator_key = session_validator_keys.1.get(AuthorityId::KEY_TYPE)
+						.expect("TODO");
+					let authority_position = authorities.iter().position(|(a, _)| *a == session_validator_key);
+					match authority_position {
+						Some(position) if position == idx => (),
+						Some(position) if position < idx => panic!(
+							"Trying to select duplicate BABE authority for genesis block",
+						),
+						Some(position) => authorities.swap(position, idx),
+						None => panic!("Trying to select unknown BABE authority for genesis block"),
+					}
+				}
+
+				authorities.truncate(session_validators_keys_len);
+
+				Authorities::put(authorities);
+			});
+		});
+	}
 }
 
 decl_module! {
@@ -170,6 +222,7 @@ decl_module! {
 
 		/// Initialization
 		fn on_initialize() {
+println!("=== Babe.OnInitialize");
 			for digest in Self::get_inherent_digests()
 				.logs
 				.iter()
@@ -183,7 +236,7 @@ decl_module! {
 				if EpochStartSlot::get() == 0 {
 					EpochStartSlot::put(digest.slot_number);
 				}
-
+println!("=== Babe.OnInitialize: {}", digest.slot_number);
 				CurrentSlot::put(digest.slot_number);
 				Self::deposit_vrf_output(&digest.vrf_output);
 
@@ -226,6 +279,7 @@ impl<T: Trait> IsMember<AuthorityId> for Module<T> {
 impl<T: Trait> session::ShouldEndSession<T::BlockNumber> for Module<T> {
 	fn should_end_session(_: T::BlockNumber) -> bool {
 		let diff = CurrentSlot::get().saturating_sub(EpochStartSlot::get());
+println!("=== Babe.should_end_session: {} - {} = {} >= {}", CurrentSlot::get(), EpochStartSlot::get(), diff, T::EpochDuration::get());
 		diff >= T::EpochDuration::get()
 	}
 }
@@ -276,6 +330,7 @@ impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Mod
 	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, queued_validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
+println!("=== Session.OnNewSession");
 		use staking::BalanceOf;
 		let to_votes = |b: BalanceOf<T>| {
 			<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b)
@@ -336,7 +391,7 @@ impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Mod
 			authorities: next_authorities,
 			randomness: next_randomness,
 		};
-
+println!("=== Session.NextEpochData: {:?}", next);
 		Self::deposit_consensus(ConsensusLog::NextEpochData(next))
 	}
 
