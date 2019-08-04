@@ -320,7 +320,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 					return Box::pin(future::ready(Ok(())))
 				}
 			};
-println!("=== Babe.OnSlot: {}", slot_number);
+
 			let inherent_digest = BabePreDigest {
 				vrf_proof,
 				vrf_output: inout.to_output(),
@@ -1076,7 +1076,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 			&is_descendent_of,
 			&|epoch| epoch.start_slot <= slot_number,
 		).map_err(|e| ConsensusError::from(ConsensusError::ClientImport(e.to_string())))?;
-println!("=== Babe.ImportBlock.slot={} enacted_epoch={:?}", slot_number, enacted_epoch);
+println!("=== ENACTED_EPOCH: {:?}", enacted_epoch);
 		let check_roots = || -> Result<bool, ConsensusError> {
 			// this can only happen when the chain starts, since there's no
 			// epoch change at genesis. afterwards every time we expect an epoch
@@ -1137,8 +1137,13 @@ println!("=== Babe.ImportBlock.slot={} enacted_epoch={:?}", slot_number, enacted
 					enacted_epoch.encode(),
 				);
 
-				let current_epoch = epoch_from_runtime(&*self.api, &BlockId::Hash(parent_hash))
-					.ok_or(consensus_common::Error::InvalidAuthoritiesSet)?;
+				// we really could ignore epoch0 here, because the change epoch0 -> epoch1 doesn't emit any digest
+				// => we'll never reach this code
+				let current_epoch = epoch(&*self.api, &BlockId::Hash(parent_hash))?;
+				let authorities_changed = match current_epoch {
+					MaybeSpanEpoch::Genesis(_, epoch1) => epoch1.authorities != enacted_epoch.authorities,
+					MaybeSpanEpoch::Regular(epoch) => epoch.authorities != enacted_epoch.authorities,
+				};
 
 				// if the authorities have changed then we populate the
 				// `AUTHORITIES` key with the enacted epoch, so that the inner
@@ -1146,7 +1151,7 @@ println!("=== Babe.ImportBlock.slot={} enacted_epoch={:?}", slot_number, enacted
 				// e.g. in the case of GRANDPA it would require a justification
 				// for the block, expecting that the authorities actually
 				// changed.
-				if current_epoch.authorities != enacted_epoch.authorities {
+				if authorities_changed {
 					new_cache.insert(
 						well_known_cache_keys::AUTHORITIES,
 						enacted_epoch.authorities.encode(),
@@ -1157,7 +1162,6 @@ println!("=== Babe.ImportBlock.slot={} enacted_epoch={:?}", slot_number, enacted
 			old_epoch_changes = Some(epoch_changes.clone());
 
 			// track the epoch change in the fork tree
-println!("=== Babe.ImportBlock.ImportNextEpoch: {:?}", next_epoch);
 			epoch_changes.import(
 				hash,
 				number,

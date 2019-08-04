@@ -222,26 +222,11 @@ decl_module! {
 
 		/// Initialization
 		fn on_initialize() {
-println!("=== Babe.OnInitialize");
-			for digest in Self::get_inherent_digests()
-				.logs
-				.iter()
-				.filter_map(|s| s.as_pre_runtime())
-				.filter_map(|(id, mut data)| if id == BABE_ENGINE_ID {
-					RawBabePreDigest::decode(&mut data)
-				} else {
-					None
-				})
-			{
-				if EpochStartSlot::get() == 0 {
-					EpochStartSlot::put(digest.slot_number);
-				}
-println!("=== Babe.OnInitialize: {}", digest.slot_number);
-				CurrentSlot::put(digest.slot_number);
-				Self::deposit_vrf_output(&digest.vrf_output);
-
-				return;
-			}
+			// TODO: this could be safely removed (in current implementation), because:
+			// 1) session.on_initialize is called first
+			// 2) session.on_initialize calls should_end_session
+			// 3) should_end_session calls do_initialize
+			Self::do_initialize();
 		}
 	}
 }
@@ -278,8 +263,10 @@ impl<T: Trait> IsMember<AuthorityId> for Module<T> {
 
 impl<T: Trait> session::ShouldEndSession<T::BlockNumber> for Module<T> {
 	fn should_end_session(_: T::BlockNumber) -> bool {
+		use sr_primitives::traits::OnInitialize;
+		Self::do_initialize();
+
 		let diff = CurrentSlot::get().saturating_sub(EpochStartSlot::get());
-println!("=== Babe.should_end_session: {} - {} = {} >= {}", CurrentSlot::get(), EpochStartSlot::get(), diff, T::EpochDuration::get());
 		diff >= T::EpochDuration::get()
 	}
 }
@@ -303,6 +290,28 @@ impl<T: Trait> Module<T> {
 
 	fn deposit_vrf_output(vrf_output: &[u8; VRF_OUTPUT_LENGTH]) {
 		UnderConstruction::mutate(|z| z.iter_mut().zip(vrf_output).for_each(|(x, y)| *x^=y))
+	}
+
+	fn do_initialize() {
+		for digest in Self::get_inherent_digests()
+			.logs
+			.iter()
+			.filter_map(|s| s.as_pre_runtime())
+			.filter_map(|(id, mut data)| if id == BABE_ENGINE_ID {
+				RawBabePreDigest::decode(&mut data)
+			} else {
+				None
+			})
+		{
+			if EpochStartSlot::get() == 0 {
+				EpochStartSlot::put(digest.slot_number);
+			}
+
+			CurrentSlot::put(digest.slot_number);
+			Self::deposit_vrf_output(&digest.vrf_output);
+
+			return;
+		}
 	}
 
 	/// Call this function exactly once when an epoch changes, to update the
@@ -330,7 +339,6 @@ impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Mod
 	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, queued_validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
-println!("=== Session.OnNewSession");
 		use staking::BalanceOf;
 		let to_votes = |b: BalanceOf<T>| {
 			<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b)
@@ -391,7 +399,7 @@ println!("=== Session.OnNewSession");
 			authorities: next_authorities,
 			randomness: next_randomness,
 		};
-println!("=== Session.NextEpochData: {:?}", next);
+
 		Self::deposit_consensus(ConsensusLog::NextEpochData(next))
 	}
 

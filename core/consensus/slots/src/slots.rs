@@ -162,7 +162,7 @@ impl<SC: SlotCompatible + Unpin> Stream for Slots<SC> {
 			// never yield the same slot twice.
 			if slot_num > self.last_slot {
 				self.last_slot = slot_num;
-println!("=== slot_ready: {}", slot_num);
+
 				break Poll::Ready(Some(Ok(SlotInfo {
 					number: slot_num,
 					duration: self.slot_duration,
