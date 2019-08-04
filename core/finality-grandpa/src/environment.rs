@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use std::iter::FromIterator;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -155,6 +155,10 @@ impl<Block: BlockT> CompletedRounds<Block> {
 	}
 }
 
+/// A map with voter status information for currently live rounds,
+/// which votes have we cast and what are they.
+pub type CurrentRounds<Block> = BTreeMap<u64, HasVoted<Block>>;
+
 /// The state of the current voter set, whether it is currently active or not
 /// and information related to the previously completed rounds. Current round
 /// voting status is used when restarting the voter, i.e. it will re-use the
@@ -166,8 +170,8 @@ pub enum VoterSetState<Block: BlockT> {
 	Live {
 		/// The previously completed rounds.
 		completed_rounds: CompletedRounds<Block>,
-		/// Vote status for the current round.
-		current_round: HasVoted<Block>,
+		/// Voter status for the currently live rounds.
+		current_rounds: CurrentRounds<Block>,
 	},
 	/// The voter is paused, i.e. not casting or importing any votes.
 	Paused {
@@ -177,6 +181,35 @@ pub enum VoterSetState<Block: BlockT> {
 }
 
 impl<Block: BlockT> VoterSetState<Block> {
+	/// Create a new live VoterSetState with round 0 as a completed round using
+	/// the given genesis state and the given authorities. Round 1 is added as a
+	/// current round (with state `HasVoted::No`).
+	pub(crate) fn live(
+		set_id: u64,
+		authority_set: &AuthoritySet<Block::Hash, NumberFor<Block>>,
+		genesis_state: (Block::Hash, NumberFor<Block>),
+	) -> VoterSetState<Block> {
+		let state = RoundState::genesis((genesis_state.0, genesis_state.1));
+		let completed_rounds = CompletedRounds::new(
+			CompletedRound {
+				number: 0,
+				state,
+				base: (genesis_state.0, genesis_state.1),
+				votes: Vec::new(),
+			},
+			set_id,
+			authority_set,
+		);
+
+		let mut current_rounds = CurrentRounds::new();
+		current_rounds.insert(1, HasVoted::No);
+
+		VoterSetState::Live {
+			completed_rounds,
+			current_rounds,
+		}
+	}
+
 	/// Returns the last completed rounds.
 	pub(crate) fn completed_rounds(&self) -> CompletedRounds<Block> {
 		match self {
@@ -196,10 +229,28 @@ impl<Block: BlockT> VoterSetState<Block> {
 				completed_rounds.last().clone(),
 		}
 	}
+
+	/// Returns the voter set state validating that it includes the given round
+	/// in current rounds and that the voter isn't paused.
+	pub fn with_current_round(&self, round: u64)
+		-> Result<(&CompletedRounds<Block>, &CurrentRounds<Block>), Error>
+	{
+		if let VoterSetState::Live { completed_rounds, current_rounds } = self {
+			if current_rounds.contains_key(&round) {
+				return Ok((completed_rounds, current_rounds));
+			} else {
+				let msg = "Voter acting on a live round we are not tracking.";
+				return Err(Error::Safety(msg.to_string()));
+			}
+		} else {
+			let msg = "Voter acting while in paused state.";
+			return Err(Error::Safety(msg.to_string()));
+		}
+	}
 }
 
 /// Whether we've voted already during a prior run of the program.
-#[derive(Debug, Decode, Encode, PartialEq)]
+#[derive(Clone, Debug, Decode, Encode, PartialEq)]
 pub enum HasVoted<Block: BlockT> {
 	/// Has not voted already in this round.
 	No,
@@ -288,10 +339,16 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 	}
 
 	/// Return vote status information for the current round.
-	pub(crate) fn has_voted(&self) -> HasVoted<Block> {
+	pub(crate) fn has_voted(&self, round: u64) -> HasVoted<Block> {
 		match &*self.inner.read() {
-			VoterSetState::Live { current_round: HasVoted::Yes(id, vote), .. } =>
-				HasVoted::Yes(id.clone(), vote.clone()),
+			VoterSetState::Live { current_rounds, .. } => {
+				current_rounds.get(&round).and_then(|has_voted| match has_voted {
+					HasVoted::Yes(id, vote) =>
+						Some(HasVoted::Yes(id.clone(), vote.clone())),
+					_ => None,
+				})
+				.unwrap_or(HasVoted::No)
+			},
 			_ => HasVoted::No,
 		}
 	}
@@ -506,7 +563,7 @@ where
 			crate::communication::SetId(self.set_id),
 			self.voters.clone(),
 			local_key.cloned(),
-			self.voter_set_state.has_voted(),
+			self.voter_set_state.has_voted(round),
 		);
 
 		// schedule incoming messages from the network to be held until
@@ -529,7 +586,7 @@ where
 		}
 	}
 
-	fn proposed(&self, _round: u64, propose: PrimaryPropose<Block>) -> Result<(), Self::Error> {
+	fn proposed(&self, round: u64, propose: PrimaryPropose<Block>) -> Result<(), Self::Error> {
 		let local_id = self.config.local_key.as_ref()
 			.map(|pair| pair.public().into())
 			.filter(|id| self.voters.contains_key(&id));
@@ -540,23 +597,26 @@ where
 		};
 
 		self.update_voter_set_state(|voter_set_state| {
-			let completed_rounds = match voter_set_state {
-				VoterSetState::Live { completed_rounds, current_round: HasVoted::No } => completed_rounds,
-				VoterSetState::Live { current_round, .. } if !current_round.can_propose() => {
-					// we've already proposed in this round (in a previous run),
-					// ignore the given vote and don't update the voter set
-					// state
-					return Ok(None);
-				},
-				_ => {
-					let msg = "Voter proposing after prevote/precommit or while paused.";
-					return Err(Error::Safety(msg.to_string()));
-				},
-			};
+			let (completed_rounds, current_rounds) = voter_set_state.with_current_round(round)?;
+			let current_round = current_rounds.get(&round)
+				.expect("checked in with_current_round that key exists; qed.");
+
+			if !current_round.can_propose() {
+				// we've already proposed in this round (in a previous run),
+				// ignore the given vote and don't update the voter set
+				// state
+				return Ok(None);
+			}
+
+			let mut current_rounds = current_rounds.clone();
+			let current_round = current_rounds.get_mut(&round)
+				.expect("checked previously that key exists; qed.");
+
+			*current_round = HasVoted::Yes(local_id, Vote::Propose(propose));
 
 			let set_state = VoterSetState::<Block>::Live {
 				completed_rounds: completed_rounds.clone(),
-				current_round: HasVoted::Yes(local_id, Vote::Propose(propose)),
+				current_rounds,
 			};
 
 			#[allow(deprecated)]
@@ -568,7 +628,7 @@ where
 		Ok(())
 	}
 
-	fn prevoted(&self, _round: u64, prevote: Prevote<Block>) -> Result<(), Self::Error> {
+	fn prevoted(&self, round: u64, prevote: Prevote<Block>) -> Result<(), Self::Error> {
 		let local_id = self.config.local_key.as_ref()
 			.map(|pair| pair.public().into())
 			.filter(|id| self.voters.contains_key(&id));
@@ -579,26 +639,28 @@ where
 		};
 
 		self.update_voter_set_state(|voter_set_state| {
-			let (completed_rounds, propose) = match voter_set_state {
-				VoterSetState::Live { completed_rounds, current_round: HasVoted::No } =>
-					(completed_rounds, None),
-				VoterSetState::Live { completed_rounds, current_round: HasVoted::Yes(_, Vote::Propose(propose)) } =>
-					(completed_rounds, Some(propose)),
-				VoterSetState::Live { current_round, .. } if !current_round.can_prevote() => {
-					// we've already prevoted in this round (in a previous run),
-					// ignore the given vote and don't update the voter set
-					// state
-					return Ok(None);
-				},
-				_ => {
-					let msg = "Voter prevoting after precommit or while paused.";
-					return Err(Error::Safety(msg.to_string()));
-				},
-			};
+			let (completed_rounds, current_rounds) = voter_set_state.with_current_round(round)?;
+			let current_round = current_rounds.get(&round)
+				.expect("checked in with_current_round that key exists; qed.");
+
+			if !current_round.can_prevote() {
+				// we've already prevoted in this round (in a previous run),
+				// ignore the given vote and don't update the voter set
+				// state
+				return Ok(None);
+			}
+
+			let propose = current_round.propose();
+
+			let mut current_rounds = current_rounds.clone();
+			let current_round = current_rounds.get_mut(&round)
+				.expect("checked previously that key exists; qed.");
+
+			*current_round = HasVoted::Yes(local_id, Vote::Prevote(propose.cloned(), prevote));
 
 			let set_state = VoterSetState::<Block>::Live {
 				completed_rounds: completed_rounds.clone(),
-				current_round: HasVoted::Yes(local_id, Vote::Prevote(propose.cloned(), prevote)),
+				current_rounds,
 			};
 
 			#[allow(deprecated)]
@@ -610,7 +672,7 @@ where
 		Ok(())
 	}
 
-	fn precommitted(&self, _round: u64, precommit: Precommit<Block>) -> Result<(), Self::Error> {
+	fn precommitted(&self, round: u64, precommit: Precommit<Block>) -> Result<(), Self::Error> {
 		let local_id = self.config.local_key.as_ref()
 			.map(|pair| pair.public().into())
 			.filter(|id| self.voters.contains_key(&id));
@@ -621,24 +683,38 @@ where
 		};
 
 		self.update_voter_set_state(|voter_set_state| {
-			let (completed_rounds, propose, prevote) = match voter_set_state {
-				VoterSetState::Live { completed_rounds, current_round: HasVoted::Yes(_, Vote::Prevote(propose, prevote)) } =>
-					(completed_rounds, propose, prevote),
-				VoterSetState::Live { current_round, .. } if !current_round.can_precommit() => {
-					// we've already precommitted in this round (in a previous run),
-					// ignore the given vote and don't update the voter set
-					// state
-					return Ok(None);
-				},
+			let (completed_rounds, current_rounds) = voter_set_state.with_current_round(round)?;
+			let current_round = current_rounds.get(&round)
+				.expect("checked in with_current_round that key exists; qed.");
+
+			if !current_round.can_precommit() {
+				// we've already precommitted in this round (in a previous run),
+				// ignore the given vote and don't update the voter set
+				// state
+				return Ok(None);
+			}
+
+			let propose = current_round.propose();
+			let prevote = match current_round {
+				HasVoted::Yes(_, Vote::Prevote(_, prevote)) => prevote,
 				_ => {
-					let msg = "Voter precommitting while paused.";
+					let msg = "Voter precommitting before prevoting.";
 					return Err(Error::Safety(msg.to_string()));
-				}
+				},
 			};
+
+			let mut current_rounds = current_rounds.clone();
+			let current_round = current_rounds.get_mut(&round)
+				.expect("checked previously that key exists; qed.");
+
+			*current_round = HasVoted::Yes(
+				local_id,
+				Vote::Precommit(propose.cloned(), prevote.clone(), precommit),
+			);
 
 			let set_state = VoterSetState::<Block>::Live {
 				completed_rounds: completed_rounds.clone(),
-				current_round: HasVoted::Yes(local_id, Vote::Precommit(propose.clone(), prevote.clone(), precommit)),
+				current_rounds,
 			};
 
 			#[allow(deprecated)]
@@ -667,7 +743,13 @@ where
 		);
 
 		self.update_voter_set_state(|voter_set_state| {
-			let mut completed_rounds = voter_set_state.completed_rounds();
+			let (completed_rounds, current_rounds) = voter_set_state.with_current_round(round)?;
+
+			let mut completed_rounds = completed_rounds.clone();
+			let mut current_rounds = current_rounds.clone();
+			current_rounds.remove(&round)
+				.expect("`with_current_round` verifies that round exists; \
+						 got `current_rounds` from `with_current_round`; qed");
 
 			// TODO: Future integration will store the prevote and precommit index. See #2611.
 			let votes = historical_votes.seen().clone();
@@ -685,7 +767,7 @@ where
 
 			let set_state = VoterSetState::<Block>::Live {
 				completed_rounds,
-				current_round: HasVoted::No,
+				current_rounds,
 			};
 
 			#[allow(deprecated)]

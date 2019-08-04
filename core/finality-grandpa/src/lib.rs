@@ -72,7 +72,7 @@ use serde_json;
 use srml_finality_tracker;
 
 use grandpa::Error as GrandpaError;
-use grandpa::{voter, round::State as RoundState, BlockNumberOps, voter_set::VoterSet};
+use grandpa::{voter, BlockNumberOps, voter_set::VoterSet};
 
 use std::fmt;
 use std::sync::Arc;
@@ -100,7 +100,7 @@ pub use light_import::light_block_import;
 pub use observer::run_grandpa_observer;
 
 use aux_schema::PersistentData;
-use environment::{CompletedRound, CompletedRounds, Environment, HasVoted, SharedVoterSetState, VoterSetState};
+use environment::{Environment, HasVoted, SharedVoterSetState, VoterSetState};
 use import::GrandpaBlockImport;
 use until_imported::UntilGlobalMessageBlocksImported;
 use communication::NetworkBridge;
@@ -570,22 +570,23 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 
 	initial_environment.update_voter_set_state(|voter_set_state| {
 		match voter_set_state {
-			VoterSetState::Live { current_round: HasVoted::Yes(id, _), completed_rounds } => {
+			VoterSetState::Live { current_rounds, completed_rounds } => {
 				let local_id = config.local_key.clone().map(|pair| pair.public());
-				let has_voted = match local_id {
-					Some(local_id) => if *id == local_id {
-						// keep the previous votes
-						return Ok(None);
-					} else {
-						HasVoted::No
-					},
-					_ => HasVoted::No,
-				};
+
+				// keep all current rounds where we voted with the current local identity
+				// or where we didn't vote at all
+				let current_rounds = current_rounds.iter().filter(|(_, state)| {
+					match state {
+						HasVoted::Yes(id, _) if Some(id) == local_id.as_ref() => true,
+						HasVoted::No => true,
+						_ => false,
+					}
+				}).map(|(round, state)| (*round, state.clone())).collect();
 
 				// NOTE: only updated on disk when the voter first
 				// proposes/prevotes/precommits or completes a round.
 				Ok(Some(VoterSetState::Live {
-					current_round: has_voted,
+					current_rounds,
 					completed_rounds: completed_rounds.clone(),
 				}))
 			},
@@ -662,22 +663,11 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 
 					// start the new authority set using the block where the
 					// set changed (not where the signal happened!) as the base.
-					let genesis_state = RoundState::genesis((new.canon_hash, new.canon_number));
-
-					let set_state = VoterSetState::Live {
-						// always start at round 0 when changing sets.
-						completed_rounds: CompletedRounds::new(
-							CompletedRound {
-								number: 0,
-								state: genesis_state,
-								base: (new.canon_hash, new.canon_number),
-								votes: Vec::new(),
-							},
-							new.set_id,
-							&*authority_set.inner().read(),
-						),
-						current_round: HasVoted::No,
-					};
+					let set_state = VoterSetState::live(
+						new.set_id,
+						&*authority_set.inner().read(),
+						(new.canon_hash, new.canon_number),
+					);
 
 					#[allow(deprecated)]
 					aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
