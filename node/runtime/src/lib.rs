@@ -419,7 +419,7 @@ construct_runtime!(
 		Treasury: treasury::{Module, Call, Storage, Event<T>},
 		Contracts: contracts,
 		Sudo: sudo,
-		ImOnline: im_online::{default, ValidateUnsigned},
+		ImOnline: im_online::{Module, Call, Event<T>, ValidateUnsigned},
 	}
 );
 

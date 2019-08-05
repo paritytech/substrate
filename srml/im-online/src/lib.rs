@@ -79,7 +79,7 @@ use primitives::{
 use parity_codec::{Encode, Decode};
 use sr_primitives::{
 	ApplyError, traits::{
-		Convert, DisableValidator, Member, IsMember, Extrinsic as ExtrinsicT,
+		Convert, DisableValidator, Member, IsMember, Extrinsic as ExtrinsicT, Zero,
 	},
 	transaction_validity::{TransactionValidity, TransactionLongevity, ValidTransaction},
 };
@@ -183,10 +183,10 @@ decl_event!(
 decl_storage! {
 	trait Store for Module<T: Trait> as ImOnline {
 		// The block number when we should gossip.
-		GossipAt get(gossip_at) config(): T::BlockNumber;
+		GossipAt get(gossip_at) build(|_| T::BlockNumber::zero()): T::BlockNumber;
 
 		// The session index when the last new era started.
-		LastNewEraStart get(last_new_era_start) config(): Option<session::SessionIndex>;
+		LastNewEraStart get(last_new_era_start): Option<session::SessionIndex>;
 
 		// For each session index we keep a mapping of `AuthorityId` to
 		// `offchain::OpaqueNetworkState`.
