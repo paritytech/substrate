@@ -185,6 +185,13 @@ mod tests {
 	#[derive(Debug, PartialEq, Eq)]
 	struct DispatchEntry(Call);
 	#[derive(Debug, PartialEq, Eq)]
+	struct RestoreEntry {
+		dest: u64,
+		code_hash: H256,
+		rent_allowance: u64,
+		delta: Vec<StorageKey>,
+	}
+	#[derive(Debug, PartialEq, Eq)]
 	struct CreateEntry {
 		code_hash: H256,
 		endowment: u64,
@@ -205,6 +212,7 @@ mod tests {
 		creates: Vec<CreateEntry>,
 		transfers: Vec<TransferEntry>,
 		dispatches: Vec<DispatchEntry>,
+		restores: Vec<RestoreEntry>,
 		// (topics, data)
 		events: Vec<(Vec<H256>, Vec<u8>)>,
 		next_account_id: u64,
@@ -261,6 +269,20 @@ mod tests {
 		}
 		fn note_dispatch_call(&mut self, call: Call) {
 			self.dispatches.push(DispatchEntry(call));
+		}
+		fn note_restore_to(
+			&mut self,
+			dest: u64,
+			code_hash: H256,
+			rent_allowance: u64,
+			delta: Vec<StorageKey>,
+		) {
+			self.restores.push(RestoreEntry {
+				dest,
+				code_hash,
+				rent_allowance,
+				delta,
+			});
 		}
 		fn caller(&self) -> &u64 {
 			&42
@@ -331,6 +353,20 @@ mod tests {
 		}
 		fn note_dispatch_call(&mut self, call: Call) {
 			(**self).note_dispatch_call(call)
+		}
+		fn note_restore_to(
+			&mut self,
+			dest: u64,
+			code_hash: H256,
+			rent_allowance: u64,
+			delta: Vec<StorageKey>,
+		) {
+			(**self).note_restore_to(
+				dest,
+				code_hash,
+				rent_allowance,
+				delta,
+			)
 		}
 		fn caller(&self) -> &u64 {
 			(**self).caller()

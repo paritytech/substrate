@@ -372,7 +372,8 @@ mod tests {
 			Some(&changes_trie_storage),
 			crate::NeverOffchainExt::new(),
 		);
-		const ROOT: [u8; 32] = hex!("0b41e488cccbd67d1f1089592c2c235f5c5399b053f7fe9152dd4b5f279914cd");
+		const ROOT: [u8; 32] = hex!("39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa");
+
 		assert_eq!(ext.storage_root(), H256::from(ROOT));
 	}
 

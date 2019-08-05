@@ -53,7 +53,7 @@ pub const VRF_PROOF_LENGTH: usize = 64;
 pub const PUBLIC_KEY_LENGTH: usize = 32;
 
 /// The index of an authority.
-pub type AuthorityIndex = u64;
+pub type AuthorityIndex = u32;
 
 /// A slot number.
 pub type SlotNumber = u64;

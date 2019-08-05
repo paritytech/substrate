@@ -202,8 +202,8 @@ impl<T: Trait> RandomnessBeacon for Module<T> {
 /// A BABE public key
 pub type BabeKey = [u8; PUBLIC_KEY_LENGTH];
 
-impl<T: Trait> FindAuthor<u64> for Module<T> {
-	fn find_author<'a, I>(digests: I) -> Option<u64> where
+impl<T: Trait> FindAuthor<u32> for Module<T> {
+	fn find_author<'a, I>(digests: I) -> Option<u32> where
 		I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
 	{
 		for (id, mut data) in digests.into_iter() {
@@ -341,7 +341,7 @@ impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Mod
 	}
 
 	fn on_disabled(i: usize) {
-		Self::deposit_consensus(ConsensusLog::OnDisabled(i as u64))
+		Self::deposit_consensus(ConsensusLog::OnDisabled(i as u32))
 	}
 }
 

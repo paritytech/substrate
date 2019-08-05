@@ -38,7 +38,8 @@ mod trie_backend;
 mod trie_backend_essence;
 
 use overlayed_changes::OverlayedChangeSet;
-pub use trie::{TrieMut, TrieDBMut, DBValue, MemoryDB};
+pub use trie::{TrieMut, DBValue, MemoryDB};
+pub use trie::trie_types::{Layout, TrieDBMut};
 pub use testing::TestExternalities;
 pub use basic::BasicExternalities;
 pub use ext::Ext;
@@ -71,7 +72,7 @@ pub struct ChildStorageKey<'a, H: Hasher> {
 
 impl<'a, H: Hasher> ChildStorageKey<'a, H> {
 	fn new(storage_key: Cow<'a, [u8]>) -> Option<Self> {
-		if !trie::is_child_trie_key_valid::<H>(&storage_key) {
+		if !trie::is_child_trie_key_valid::<Layout<H>>(&storage_key) {
 			return None;
 		}
 

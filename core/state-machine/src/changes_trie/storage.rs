@@ -17,7 +17,7 @@
 //! Changes trie storage utilities.
 
 use std::collections::BTreeMap;
-use hash_db::Hasher;
+use hash_db::{Hasher, Prefix};
 use trie::DBValue;
 use trie::MemoryDB;
 use parking_lot::RwLock;
@@ -101,7 +101,7 @@ impl<H: Hasher, Number: BlockNumber> InMemoryStorage<H, Number> {
 	pub fn remove_from_storage(&self, keys: &HashSet<H::Out>) {
 		let mut data = self.data.write();
 		for key in keys {
-			data.mdb.remove_and_purge(key, &[]);
+			data.mdb.remove_and_purge(key, hash_db::EMPTY_PREFIX);
 		}
 	}
 
@@ -132,7 +132,7 @@ impl<H: Hasher, Number: BlockNumber> RootsStorage<H, Number> for InMemoryStorage
 }
 
 impl<H: Hasher, Number: BlockNumber> Storage<H, Number> for InMemoryStorage<H, Number> {
-	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<DBValue>, String> {
+	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		MemoryDB::<H>::get(&self.data.read().mdb, key, prefix)
 	}
 }
@@ -151,7 +151,7 @@ impl<'a, H, Number, S> TrieBackendStorage<H> for TrieBackendAdapter<'a, H, Numbe
 {
 	type Overlay = MemoryDB<H>;
 
-	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<DBValue>, String> {
+	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		self.storage.get(key, prefix)
 	}
 }

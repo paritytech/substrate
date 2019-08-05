@@ -77,6 +77,7 @@ pub trait RuntimeAdapter {
 		key: &Self::Secret,
 		destination: &Self::AccountId,
 		amount: &Self::Balance,
+		genesis_hash: &<Self::Block as BlockT>::Hash,
 		prior_block_hash: &<Self::Block as BlockT>::Hash,
 	) -> <Self::Block as BlockT>::Extrinsic;
 
@@ -118,12 +119,24 @@ where
 		select_chain.best_chain().map_err(|e| format!("{:?}", e).into());
 	let mut best_hash = best_header?.hash();
 	let best_block_id = BlockId::<F::Block>::hash(best_hash);
+	let genesis_hash = client.block_hash(Zero::zero())?
+		.expect("Genesis block always exists; qed").into();
 
 	while let Some(block) = match factory_state.mode() {
-		Mode::MasterToNToM =>
-			complex_mode::next::<F, RA>(&mut factory_state, &client, best_hash.into(), best_block_id),
-		_ =>
-			simple_modes::next::<F, RA>(&mut factory_state, &client, best_hash.into(), best_block_id)
+		Mode::MasterToNToM => complex_mode::next::<F, RA>(
+			&mut factory_state,
+			&client,
+			genesis_hash,
+			best_hash.into(),
+			best_block_id,
+		),
+		_ => simple_modes::next::<F, RA>(
+			&mut factory_state,
+			&client,
+			genesis_hash,
+			best_hash.into(),
+			best_block_id,
+		),
 	} {
 		best_hash = block.header().hash();
 		import_block::<F>(&client, block);

@@ -407,7 +407,7 @@ impl<Components: components::Components> Service<Components> {
 		let _ = to_spawn_tx.unbounded_send(Box::new(tel_task));
 
 		// RPC
-		let (system_rpc_tx, system_rpc_rx) = mpsc::unbounded();
+		let (system_rpc_tx, system_rpc_rx) = futures03::channel::mpsc::unbounded();
 		let gen_handler = || {
 			let system_info = rpc::apis::system::SystemInfo {
 				chain_name: config.chain_spec.name().into(),
@@ -635,9 +635,13 @@ fn build_network_future<
 	mut network: network::NetworkWorker<ComponentBlock<Components>, S, H>,
 	client: Arc<ComponentClient<Components>>,
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<(NetworkStatus<ComponentBlock<Components>>, NetworkState)>>>>,
-	mut rpc_rx: mpsc::UnboundedReceiver<rpc::apis::system::Request<ComponentBlock<Components>>>,
+	rpc_rx: futures03::channel::mpsc::UnboundedReceiver<rpc::apis::system::Request<ComponentBlock<Components>>>,
 	should_have_peers: bool,
 ) -> impl Future<Item = (), Error = ()> {
+	// Compatibility shim while we're transitionning to stable Futures.
+	// See https://github.com/paritytech/substrate/issues/3099
+	let mut rpc_rx = futures03::compat::Compat::new(rpc_rx.map(|v| Ok::<_, ()>(v)));
+
 	// Interval at which we send status updates on the status stream.
 	const STATUS_INTERVAL: Duration = Duration::from_millis(5000);
 	let mut status_interval = tokio_timer::Interval::new_interval(STATUS_INTERVAL);
