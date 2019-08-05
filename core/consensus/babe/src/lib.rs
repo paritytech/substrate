@@ -754,7 +754,7 @@ println!("=== RETRYING #{}: {} {:?} {:?}", header.number(), epoch_index, authori
 }
 
 /// Regular BABE epoch or spanned genesis epoch.
-#[derive(Decode, Encode)]
+#[derive(Debug, Decode, Encode)]
 enum MaybeSpanEpoch {
 	/// Genesis entry. Has the data for epoch#0 and epoch#1.
 	Genesis(Epoch, Epoch),
@@ -799,7 +799,7 @@ fn epoch_from_cache<B, C>(client: &C, at: &BlockId<B>) -> Option<MaybeSpanEpoch>
 	// we need to go back for maximum two steps
 	client.cache()
 		.and_then(|cache| cache
-			.get_at_and_skip(2, &well_known_cache_keys::EPOCH, at)
+			.get_at_and_skip(0, &well_known_cache_keys::EPOCH, at)
 			.and_then(|(_, _, _, v)| Decode::decode(&mut &v[..])))
 }
 
@@ -1134,7 +1134,7 @@ println!("=== ENACTED_EPOCH: {:?}", enacted_epoch);
 				// update the current epoch in the client cache
 				new_cache.insert(
 					well_known_cache_keys::EPOCH,
-					enacted_epoch.encode(),
+					MaybeSpanEpoch::Regular(enacted_epoch.clone()).encode(),
 				);
 
 				// we really could ignore epoch0 here, because the change epoch0 -> epoch1 doesn't emit any digest
