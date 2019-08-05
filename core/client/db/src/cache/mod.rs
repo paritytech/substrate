@@ -294,12 +294,11 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 		Ok(())
 	}
 
-	fn get_at_and_skip(
+	fn get_at(
 		&self,
-		skip: usize,
 		key: &CacheKeyId,
 		at: &BlockId<Block>,
-	) -> Option<(usize, (NumberFor<Block>, Block::Hash), Option<(NumberFor<Block>, Block::Hash)>, Vec<u8>)> {
+	) -> Option<((NumberFor<Block>, Block::Hash), Option<(NumberFor<Block>, Block::Hash)>, Vec<u8>)> {
 		let cache = self.0.read();
 		let storage = cache.cache_at.get(key)?.storage();
 		let db = storage.db();
@@ -324,10 +323,9 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 		};
 
 		cache.cache_at.get(key)?
-			.value_at_block_with_skip(skip, &at)
-			.map(|block_and_value| block_and_value.map(|(skipped, begin_block, end_block, value)|
+			.value_at_block(&at)
+			.map(|block_and_value| block_and_value.map(|(begin_block, end_block, value)|
 				(
-					skipped,
 					(begin_block.number, begin_block.hash),
 					end_block.map(|end_block| (end_block.number, end_block.hash)),
 					value,
