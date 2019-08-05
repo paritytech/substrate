@@ -22,7 +22,7 @@
 pub use timestamp;
 
 use rstd::{result, prelude::*};
-use srml_support::{decl_storage, decl_module, StorageValue, traits::FindAuthor, traits::Get};
+use srml_support::{decl_storage, decl_module, StorageValue, StorageMap, traits::FindAuthor, traits::Get};
 use timestamp::{OnTimestampSet};
 use sr_primitives::{generic::DigestItem, ConsensusEngineId};
 use sr_primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert};
@@ -113,7 +113,7 @@ pub trait Trait: timestamp::Trait {
 }
 
 /// The length of the BABE randomness
-pub const RANDOMNESS_LENGTH: u32 = 32;
+pub const RANDOMNESS_LENGTH: usize = 32;
 
 const UNDER_CONSTRUCTION_SEGMENT_LENGTH: usize = 256;
 
@@ -263,12 +263,12 @@ impl<T: Trait> Module<T> {
 		let mut segment = <UnderConstruction>::get(&segment_idx);
 		if segment.len() < UNDER_CONSTRUCTION_SEGMENT_LENGTH {
 			// push onto current segment: not full.
-			segment.push(vrf_output);
+			segment.push(*vrf_output);
 			<UnderConstruction>::insert(&segment_idx, &segment);
 		} else {
 			// move onto the next segment and update the index.
 			let segment_idx = segment_idx + 1;
-			<UnderConstruction>::insert(&segment_idx, &[vrf_output]);
+			<UnderConstruction>::insert(&segment_idx, vec![*vrf_output].as_ref());
 			<SegmentIndex>::put(&segment_idx);
 		}
 	}
@@ -277,10 +277,10 @@ impl<T: Trait> Module<T> {
 	/// randomness. Returns the new randomness.
 	fn randomness_change_epoch(next_epoch_index: u64) -> [u8; RANDOMNESS_LENGTH] {
 		let this_randomness = NextRandomness::get();
-		let segment_idx = <SegmentIndex>::mutate(|s| rstd::mem::replace(s, 0));
+		let segment_idx: u32 = <SegmentIndex>::mutate(|s| rstd::mem::replace(s, 0));
 
 		// overestimate to the segment being full.
-		let rho_size = segment_idx.saturating_add(1) * UNDER_CONSTRUCTION_SEGMENT_LENGTH;
+		let rho_size = segment_idx.saturating_add(1) as usize * UNDER_CONSTRUCTION_SEGMENT_LENGTH;
 
 		let next_randomness = compute_randomness(
 			this_randomness,
