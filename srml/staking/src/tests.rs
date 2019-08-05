@@ -2090,14 +2090,16 @@ fn reward_from_authorship_event_handler_works() {
 		// An uncle author that is not currently elected doesn't get rewards,
 		// but the block producer does get reward for referencing it.
 		<Module<Test>>::note_uncle(31, 1);
+		// Rewarding the same two times works.
+		<Module<Test>>::note_uncle(11, 1);
 
 		// Not mandatory but must be coherent with rewards
 		assert_eq!(<CurrentElected<Test>>::get(), vec![21, 11]);
 
-		// 21 is rewarded as an uncle procuder
-		// 11 is rewarded as a block procuder and unclde referencer
-		assert_eq!(CurrentEraRewards::get().rewards, vec![1, 20+2*2]);
-		assert_eq!(CurrentEraRewards::get().total, 25);
+		// 21 is rewarded as an uncle producer
+		// 11 is rewarded as a block procuder and uncle referencer and uncle producer
+		assert_eq!(CurrentEraRewards::get().rewards, vec![1, 20+2*3 + 1]);
+		assert_eq!(CurrentEraRewards::get().total, 28);
 	})
 }
 

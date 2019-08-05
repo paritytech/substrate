@@ -175,7 +175,7 @@
 //!
 //! Total reward is split among validators and their nominators depending on the number of points
 //! they received during the era. Points are added to a validator using
-//! [`add_reward_points_to_validator`](./enum.Call.html#variant.add_reward_points_to_validator).
+//! [`add_reward_points_to_validators`](./enum.Call.html#variant.add_reward_points_to_validators).
 //!
 //! [`Module`](./struct.Module.html) implements
 //! [`authorship::EventHandler`](../srml_authorship/trait.EventHandler.html) to add reward points
@@ -1407,7 +1407,7 @@ impl<T: Trait> Module<T> {
 	/// validator, thus duplicates are handled.
 	///
 	/// At the end of the era each the total payout will be distributed among validator
--	/// relatively to their points.
+	/// relatively to their points.
 	pub fn add_reward_points_to_validators(validators_points: Vec<(T::AccountId, u32)>) {
 		CurrentEraRewards::mutate(|rewards| {
 			for (index, elected) in <Module<T>>::current_elected().iter().enumerate() {
