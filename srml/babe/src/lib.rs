@@ -43,6 +43,9 @@ use babe_primitives::{
 };
 pub use babe_primitives::{AuthorityId, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH};
 
+#[cfg(all(feature = "std", test))]
+mod tests;
+
 /// The BABE inherent identifier.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"babeslot";
 
