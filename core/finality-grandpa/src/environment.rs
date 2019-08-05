@@ -35,7 +35,7 @@ use grandpa::{
 };
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{
-	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, BlockNumberToHash,
+	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
 };
 use primitives::{Blake2Hasher, ed25519, H256, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
@@ -962,10 +962,10 @@ pub(crate) fn canonical_at_height<B, E, Block: BlockT<Hash=H256>, RA>(
 		if base_is_canonical {
 			return Ok(Some(base.0));
 		} else {
-			return Ok(client.block_number_to_hash(height));
+			return Ok(client.block_hash(height).unwrap_or(None));
 		}
 	} else if base_is_canonical {
-		return Ok(client.block_number_to_hash(height));
+		return Ok(client.block_hash(height).unwrap_or(None));
 	}
 
 	let one = NumberFor::<Block>::one();
