@@ -186,7 +186,7 @@ decl_storage! {
 				let session_validators_keys_len = session_validators_keys.len();
 				for (idx, session_validator_keys) in session_validators_keys.into_iter().enumerate() {
 					let session_validator_key = session_validator_keys.1.get(AuthorityId::KEY_TYPE)
-						.expect("TODO");
+						.expect("Unable to get required key for BABE authority at genesis block");
 					let authority_position = authorities.iter().position(|(a, _)| *a == session_validator_key);
 					match authority_position {
 						Some(position) if position == idx => (),
@@ -302,12 +302,18 @@ impl<T: Trait> Module<T> {
 				None
 			})
 		{
-			if EpochStartSlot::get() == 0 {
-				EpochStartSlot::put(digest.slot_number);
-			}
+			// since do_initialize can be called twice (if session module is present)
+			// => let's ensure that we only modify the storage once per block by checking
+			// current slot number
+			let current_slot = CurrentSlot::get();
+			if current_slot != digest.slot_number {
+				if EpochStartSlot::get() == 0 {
+					EpochStartSlot::put(digest.slot_number);
+				}
 
-			CurrentSlot::put(digest.slot_number);
-			Self::deposit_vrf_output(&digest.vrf_output);
+				CurrentSlot::put(digest.slot_number);
+				Self::deposit_vrf_output(&digest.vrf_output);
+			}
 
 			return;
 		}
