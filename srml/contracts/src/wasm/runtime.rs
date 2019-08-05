@@ -17,7 +17,10 @@
 //! Environment definition of the wasm smart-contract runtime.
 
 use crate::{Schedule, Trait, CodeHash, ComputeDispatchFee, BalanceOf};
-use crate::exec::{Ext, VmExecResult, CallReceipt, InstantiateReceipt, StorageKey, TopicOf};
+use crate::exec::{
+	Ext, ExecResult, ExecError, ExecReturnValue, CallReceipt, InstantiateReceipt,
+	StorageKey, TopicOf,
+};
 use crate::gas::{Gas, GasMeter, Token, GasMeterResult, approx_gas_for_balance};
 use sandbox;
 use system;
@@ -71,19 +74,26 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 pub(crate) fn to_execution_result<E: Ext>(
 	runtime: Runtime<E>,
 	sandbox_err: Option<sandbox::Error>,
-) -> VmExecResult {
-	// Check the exact type of the error. It could be plain trap or
-	// special runtime trap the we must recognize.
-	match (sandbox_err, runtime.special_trap) {
+) -> ExecResult {
+	// Special case. The trap was the result of the execution `return` host function.
+	if let Some(SpecialTrap::Return(data)) = runtime.special_trap {
+		return Ok(ExecReturnValue { data });
+	}
+
+	// Check the exact type of the error.
+	match sandbox_err {
 		// No traps were generated. Proceed normally.
-		(None, None) => VmExecResult::Ok,
-		// Special case. The trap was the result of the execution `return` host function.
-		(Some(sandbox::Error::Execution), Some(SpecialTrap::Return(buf))) => VmExecResult::Returned(buf),
+		None => Ok(ExecReturnValue { data: Vec::new() }),
+		// `Error::Module` is returned only if instantiation or linking failed (i.e.
+		// wasm binary tried to import a function that is not provided by the host).
+		// This shouldn't happen because validation process ought to reject such binaries.
+		//
+		// Because panics are really undesirable in the runtime code, we treat this as
+		// a trap for now. Eventually, we might want to revisit this.
+		Some(sandbox::Error::Module) => Err(ExecError { reason: "validation error" }),
 		// Any other kind of a trap should result in a failure.
-		(Some(_), _) => VmExecResult::Trap("during execution"),
-		// Any other case (such as special trap flag without actual trap) signifies
-		// a logic error.
-		_ => unreachable!(),
+		Some(sandbox::Error::Execution) | Some(sandbox::Error::OutOfBounds) =>
+			Err(ExecError { reason: "during execution" }),
 	}
 }
 

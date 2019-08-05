@@ -19,7 +19,7 @@
 
 use crate::{CodeHash, Schedule, Trait};
 use crate::wasm::env_def::FunctionImplProvider;
-use crate::exec::{Ext, VmExecResult};
+use crate::exec::{Ext, ExecResult};
 use crate::gas::GasMeter;
 
 use rstd::prelude::*;
@@ -112,7 +112,7 @@ impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a> {
 		mut ext: E,
 		input_data: Vec<u8>,
 		gas_meter: &mut GasMeter<E::T>,
-	) -> VmExecResult {
+	) -> ExecResult {
 		let memory =
 			sandbox::Memory::new(exec.prefab_module.initial, Some(exec.prefab_module.maximum))
 				.unwrap_or_else(|_| {
@@ -139,31 +139,11 @@ impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a> {
 			gas_meter,
 		);
 
-		// Instantiate the instance from the instrumented module code.
-		match sandbox::Instance::new(&exec.prefab_module.code, &imports, &mut runtime) {
-			// No errors or traps were generated on instantiation! That
-			// means we can now invoke the contract entrypoint.
-			Ok(mut instance) => {
-				let err = instance
-					.invoke(exec.entrypoint_name, &[], &mut runtime)
-					.err();
-				to_execution_result(runtime, err)
-			}
-			// `start` function trapped. Treat it in the same manner as an execution error.
-			Err(err @ sandbox::Error::Execution) => to_execution_result(runtime, Some(err)),
-			Err(_err @ sandbox::Error::Module) => {
-				// `Error::Module` is returned only if instantiation or linking failed (i.e.
-				// wasm binary tried to import a function that is not provided by the host).
-				// This shouldn't happen because validation process ought to reject such binaries.
-				//
-				// Because panics are really undesirable in the runtime code, we treat this as
-				// a trap for now. Eventually, we might want to revisit this.
-				return VmExecResult::Trap("validation error");
-			}
-			// Other instantiation errors.
-			// Return without executing anything.
-			Err(_) => return VmExecResult::Trap("during start function"),
-		}
+		// Instantiate the instance from the instrumented module code and invoke the contract
+		// entrypoint.
+		let result = sandbox::Instance::new(&exec.prefab_module.code, &imports, &mut runtime)
+			.and_then(|mut instance| instance.invoke(exec.entrypoint_name, &[], &mut runtime));
+		to_execution_result(runtime, result.err())
 	}
 }
 
@@ -172,13 +152,16 @@ mod tests {
 	use super::*;
 	use std::collections::HashMap;
 	use primitives::H256;
-	use crate::exec::{CallReceipt, Ext, InstantiateReceipt, StorageKey};
+	use crate::exec::{
+		CallReceipt, Ext, InstantiateReceipt, StorageKey, ExecError, ExecReturnValue,
+	};
 	use crate::gas::{Gas, GasMeter};
 	use crate::tests::{Test, Call};
 	use crate::wasm::prepare::prepare_contract;
 	use crate::CodeHash;
 	use wabt;
 	use hex_literal::hex;
+	use assert_matches::assert_matches;
 
 	#[derive(Debug, PartialEq, Eq)]
 	struct DispatchEntry(Call);
@@ -233,7 +216,7 @@ mod tests {
 			endowment: u64,
 			gas_meter: &mut GasMeter<Test>,
 			data: Vec<u8>,
-		) -> Result<InstantiateReceipt<u64>, &'static str> {
+		) -> Result<InstantiateReceipt<u64>, ExecError> {
 			self.creates.push(CreateEntry {
 				code_hash: code_hash.clone(),
 				endowment,
@@ -251,7 +234,7 @@ mod tests {
 			value: u64,
 			gas_meter: &mut GasMeter<Test>,
 			data: Vec<u8>,
-		) -> Result<CallReceipt, &'static str> {
+		) -> Result<CallReceipt, ExecError> {
 			self.transfers.push(TransferEntry {
 				to: *to,
 				value,
@@ -335,7 +318,7 @@ mod tests {
 			value: u64,
 			gas_meter: &mut GasMeter<Test>,
 			input_data: Vec<u8>,
-		) -> Result<InstantiateReceipt<u64>, &'static str> {
+		) -> Result<InstantiateReceipt<u64>, ExecError> {
 			(**self).instantiate(code, value, gas_meter, input_data)
 		}
 		fn call(
@@ -344,7 +327,7 @@ mod tests {
 			value: u64,
 			gas_meter: &mut GasMeter<Test>,
 			input_data: Vec<u8>,
-		) -> Result<CallReceipt, &'static str> {
+		) -> Result<CallReceipt, ExecError> {
 			(**self).call(to, value, gas_meter, input_data)
 		}
 		fn note_dispatch_call(&mut self, call: Call) {
@@ -404,7 +387,7 @@ mod tests {
 		input_data: Vec<u8>,
 		ext: E,
 		gas_meter: &mut GasMeter<E::T>,
-	) -> Result<Vec<u8>, &'static str> {
+	) -> ExecResult {
 		use crate::exec::Vm;
 
 		let wasm = wabt::wat2wasm(wat).unwrap();
@@ -421,11 +404,7 @@ mod tests {
 		let cfg = Default::default();
 		let vm = WasmVm::new(&cfg);
 
-		let output_data = vm
-			.execute(&exec, ext, input_data, gas_meter)
-			.into_result()?;
-
-		Ok(output_data)
+		vm.execute(&exec, ext, input_data, gas_meter)
 	}
 
 	const CODE_TRANSFER: &str = r#"
@@ -685,14 +664,14 @@ mod tests {
 			.storage
 			.insert([0x11; 32], [0x22; 32].to_vec());
 
-		let return_buf = execute(
+		let output = execute(
 			CODE_GET_STORAGE,
 			vec![],
 			mock_ext,
 			&mut GasMeter::with_limit(50_000, 1),
 		).unwrap();
 
-		assert_eq!(return_buf, [0x22; 32].to_vec());
+		assert_eq!(output, ExecReturnValue { data: [0x22; 32].to_vec() });
 	}
 
 	/// calls `ext_caller`, loads the address from the scratch buffer and
@@ -990,14 +969,14 @@ mod tests {
 	fn gas_left() {
 		let mut gas_meter = GasMeter::with_limit(50_000, 1312);
 
-		let return_buf = execute(
+		let output = execute(
 			CODE_GAS_LEFT,
 			vec![],
 			MockExt::default(),
 			&mut gas_meter,
 		).unwrap();
 
-		let gas_left = Gas::decode(&mut &return_buf[..]).unwrap();
+		let gas_left = Gas::decode(&mut output.data.as_slice()).unwrap();
 		assert!(gas_left < 50_000, "gas_left must be less than initial");
 		assert!(gas_left > gas_meter.gas_left(), "gas_left must be greater than final");
 	}
@@ -1125,14 +1104,14 @@ mod tests {
 
 	#[test]
 	fn return_from_start_fn() {
-		let output_data = execute(
+		let output = execute(
 			CODE_RETURN_FROM_START_FN,
 			vec![],
 			MockExt::default(),
 			&mut GasMeter::with_limit(50_000, 1),
 		).unwrap();
 
-		assert_eq!(output_data, vec![1, 2, 3, 4]);
+		assert_eq!(output, ExecReturnValue { data: vec![1, 2, 3, 4] });
 	}
 
 	const CODE_TIMESTAMP_NOW: &str = r#"
@@ -1256,7 +1235,7 @@ mod tests {
 	fn random() {
 		let mut gas_meter = GasMeter::with_limit(50_000, 1);
 
-		let return_buf = execute(
+		let output = execute(
 			CODE_RANDOM,
 			vec![],
 			MockExt::default(),
@@ -1265,8 +1244,10 @@ mod tests {
 
 		// The mock ext just returns the same data that was passed as the subject.
 		assert_eq!(
-			&return_buf,
-			&hex!("000102030405060708090A0B0C0D0E0F000102030405060708090A0B0C0D0E0F")
+			output,
+			ExecReturnValue {
+				data: hex!("000102030405060708090A0B0C0D0E0F000102030405060708090A0B0C0D0E0F").to_vec(),
+			},
 		);
 	}
 
@@ -1348,14 +1329,14 @@ mod tests {
 		// Checks that the runtime traps if there are more than `max_topic_events` topics.
 		let mut gas_meter = GasMeter::with_limit(50_000, 1);
 
-		assert_eq!(
+		assert_matches!(
 			execute(
 				CODE_DEPOSIT_EVENT_MAX_TOPICS,
 				vec![],
 				MockExt::default(),
 				&mut gas_meter
 			),
-			Err("during execution"),
+			Err(ExecError { reason: "during execution" })
 		);
 	}
 
@@ -1390,14 +1371,14 @@ mod tests {
 		// Checks that the runtime traps if there are duplicates.
 		let mut gas_meter = GasMeter::with_limit(50_000, 1);
 
-		assert_eq!(
+		assert_matches!(
 			execute(
 				CODE_DEPOSIT_EVENT_DUPLICATES,
 				vec![],
 				MockExt::default(),
 				&mut gas_meter
 			),
-			Err("during execution"),
+			Err(ExecError { reason: "during execution" })
 		);
 	}
 
