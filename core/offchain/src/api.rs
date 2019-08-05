@@ -33,7 +33,7 @@ use primitives::offchain::{
 	CryptoKind, CryptoKey, KeyTypeId, Externalities as OffchainExt, HttpRequestId, Timestamp,
 	HttpRequestStatus, HttpError, OpaqueNetworkState, OpaquePeerId, OpaqueMultiaddr, StorageKind,
 };
-use primitives::{ed25519, sr25519};
+use primitives::{ed25519, sr25519, traits::KeyStorePtr};
 use sr_primitives::{generic::BlockId, traits::{self, Extrinsic}};
 use transaction_pool::txpool::{Pool, ChainApi};
 
@@ -89,7 +89,7 @@ impl KnownCryptoKey {
 pub(crate) struct Api<Storage, Block: traits::Block> {
 	sender: mpsc::UnboundedSender<ExtMessage>,
 	db: Storage,
-	keystore: Arc<Option<Keystore>>,
+	keystore: Option<KeyStorePtr>,
 	network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
 	at: BlockId<Block>,
 }
@@ -107,10 +107,7 @@ fn log_error(err: keystore::Error) -> () {
 const LOCAL_DB: &str = "LOCAL (fork-aware) DB";
 const STORAGE_PREFIX: &[u8] = b"storage";
 
-impl<Storage, Block> Api<Storage, Block> where
-	Storage: OffchainStorage,
-	Block: traits::Block,
-{
+impl<Storage, Block> Api<Storage, Block> where Storage: OffchainStorage, Block: traits::Block {
 	fn check_allowed(&self, key_type: &KeyTypeId) -> Result<(), ()> {
 		let blacklist = vec![
 			crypto::key_types::SR25519,
@@ -134,38 +131,8 @@ impl<Storage, Block> Api<Storage, Block> where
 		key_type: KeyTypeId,
 	) -> Result<Vec<CryptoKey>, ()> {
 		self.check_allowed(&key_type)?;
-
-		let keystore = (&*self.keystore).as_ref().ok_or(())?;
-		match kind {
-			CryptoKind::Sr25519 => {
-				Ok(keystore.public_keys_by_type::<sr25519::Public>(key_type)
-					.map_err(log_error)?
-					.into_iter()
-					.map(|key| CryptoKey {
-						public: key.to_raw_vec(),
-						key_type,
-						kind,
-					}).collect())
-			},
-			CryptoKind::Ed25519 => {
-				Ok(keystore.public_keys_by_type::<ed25519::Public>(key_type)
-					.map_err(log_error)?
-					.into_iter()
-					.map(|key| CryptoKey {
-						public: key.to_raw_vec(),
-						key_type,
-						kind,
-					}).collect())
-			},
-			CryptoKind::User => {
-				unavailable_yet::<()>("custom crypto");
-				Err(())
-			},
-			CryptoKind::Dummy => {
-				unavailable_yet::<()>("dummy crypto");
-				Err(())
-			},
-		}
+		unavailable_yet::<()>("keys");
+		Err(())
 	}
 
 	fn get_key(
@@ -174,31 +141,8 @@ impl<Storage, Block> Api<Storage, Block> where
 	) -> Result<KnownCryptoKey, ()> {
 		self.check_allowed(&key.key_type)?;
 
-		// TODO [ToDr] Remove
-		let keystore = (&*self.keystore).as_ref().ok_or(())?;
-
-		match key.kind {
-			CryptoKind::Sr25519 => {
-				let public = sr25519::Public::from_slice(&key.public);
-				keystore.key_pair_by_type(&public, key.key_type)
-					.map_err(log_error)
-					.map(KnownCryptoKey::Sr25519)
-			},
-			CryptoKind::Ed25519 => {
-				let public = ed25519::Public::from_slice(&key.public);
-				keystore.key_pair_by_type(&public, key.key_type)
-					.map_err(log_error)
-					.map(KnownCryptoKey::Ed25519)
-			},
-			CryptoKind::User => {
-				unavailable_yet::<()>("custom crypto");
-				Err(())
-			},
-			CryptoKind::Dummy => {
-				unavailable_yet::<()>("dummy crypto");
-				Err(())
-			},
-		}
+		unavailable_yet::<()>("get key");
+		Err(())
 	}
 }
 
@@ -447,7 +391,7 @@ impl<A: ChainApi> AsyncApi<A> {
 	pub fn new<S: OffchainStorage>(
 		transaction_pool: Arc<Pool<A>>,
 		db: S,
-		keystore: Arc<Option<Keystore>>,
+		keystore: Option<KeyStorePtr>,
 		at: BlockId<A::Block>,
 		network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
 	) -> (Api<S, A::Block>, AsyncApi<A>) {
@@ -534,7 +478,7 @@ mod tests {
 		AsyncApi::new(
 			pool,
 			db,
-			Arc::new(None),
+			None,
 			BlockId::Number(Zero::zero()),
 			mock,
 		)

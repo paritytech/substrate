@@ -29,7 +29,7 @@ use client::decl_runtime_apis;
 use rstd::vec::Vec;
 
 mod app {
-	use primitives::{app_crypto, crypto::key_types::GRANDPA, ed25519};
+	use app_crypto::{app_crypto, key_types::GRANDPA, ed25519};
 	app_crypto!(ed25519, GRANDPA);
 }
 

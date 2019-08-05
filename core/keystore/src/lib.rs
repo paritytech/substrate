@@ -20,9 +20,11 @@
 
 use std::{collections::HashMap, path::PathBuf, fs::{self, File}, io::{self, Write}};
 
-use primitives::crypto::{
-	KeyTypeId, AppPublic, AppKey, AppPair, Pair as PairT, Public, IsWrappedBy, Protected,
+use primitives::{
+	crypto::{KeyTypeId, Pair as PairT, Public, IsWrappedBy, Protected}, traits::KeyStore,
 };
+
+use app_crypto::{AppKey, AppPublic, AppPair, ed25519, sr25519};
 
 /// Keystore error.
 #[derive(Debug, derive_more::Display, derive_more::From)]
@@ -216,11 +218,46 @@ impl Store {
 	}
 }
 
+impl KeyStore for Store {
+	fn sr25519_generate_new(
+		&mut self,
+		id: KeyTypeId,
+		seed: Option<&str>,
+	) -> std::result::Result<[u8; 32], String> {
+		let pair = match seed {
+			Some(seed) => self.generate_from_seed_by_type::<sr25519::Pair>(seed, id),
+			None => self.generate_by_type::<sr25519::Pair>(id),
+		}.map_err(|e| e.to_string())?;
+
+		Ok(pair.public().into())
+	}
+
+	fn sr25519_key_pair(&self, id: KeyTypeId, pub_key: &sr25519::Public) -> Option<sr25519::Pair> {
+		self.key_pair_by_type::<sr25519::Pair>(pub_key, id).ok()
+	}
+
+	fn ed25519_generate_new(
+		&mut self,
+		id: KeyTypeId,
+		seed: Option<&str>,
+	) -> std::result::Result<[u8; 32], String> {
+		let pair = match seed {
+			Some(seed) => self.generate_from_seed_by_type::<ed25519::Pair>(seed, id),
+			None => self.generate_by_type::<ed25519::Pair>(id),
+		}.map_err(|e| e.to_string())?;
+
+		Ok(pair.public().into())
+	}
+
+	fn ed25519_key_pair(&self, id: KeyTypeId, pub_key: &ed25519::Public) -> Option<ed25519::Pair> {
+		self.key_pair_by_type::<ed25519::Pair>(pub_key, id).ok()
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use tempdir::TempDir;
-	use primitives::{ed25519, sr25519};
 	use primitives::crypto::Ss58Codec;
 
 	#[test]

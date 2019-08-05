@@ -27,11 +27,10 @@ use wasmi::{
 use state_machine::{Externalities, ChildStorageKey};
 use crate::error::{Error, Result};
 use parity_codec::Encode;
-use primitives::{blake2_128, blake2_256, twox_64, twox_128, twox_256, ed25519, sr25519, Pair};
-use primitives::offchain;
-use primitives::hexdisplay::HexDisplay;
-use primitives::sandbox as sandbox_primitives;
-use primitives::{H256, Blake2Hasher};
+use primitives::{
+	blake2_128, blake2_256, twox_64, twox_128, twox_256, ed25519, sr25519, Pair, crypto::KeyTypeId,
+	offchain, hexdisplay::HexDisplay, sandbox as sandbox_primitives, H256, Blake2Hasher,
+};
 use trie::{TrieConfiguration, trie_types::Layout};
 use crate::sandbox;
 use crate::allocator;
@@ -641,7 +640,12 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.memory.set(out, &result).map_err(|_| "Invalid attempt to set result in ext_keccak_256")?;
 		Ok(())
 	},
-	ext_ed25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32 => {
+	ext_ed25519_verify(
+		msg_data: *const u8,
+		msg_len: u32,
+		sig_data: *const u8,
+		pubkey_data: *const u8,
+	) -> u32 => {
 		let mut sig = [0u8; 64];
 		this.memory.get_into(sig_data, &mut sig[..])
 			.map_err(|_| "Invalid attempt to get signature in ext_ed25519_verify")?;
@@ -657,7 +661,54 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			5
 		})
 	},
-	ext_sr25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32 => {
+	ext_ed25519_generate(id_data: *const u8, out: *mut u8) => {
+		let mut id = [0u8; 4];
+		this.memory.get_into(id_data, &mut id[..])
+			.map_err(|_| "Invalid attempt to get id in ext_ed25519_generate")?;
+		let key_type = KeyTypeId(id);
+
+		let pubkey = runtime_io::ed25519_generate(key_type);
+
+		this.memory.set(out, pubkey.as_ref())
+			.map_err(|_| "Invalid attempt to set out in ext_ed25519_generate".into())
+	},
+	ext_ed25519_sign(
+		id_data: *const u8,
+		pubkey_data: *const u8,
+		msg_data: *const u8,
+		msg_len: u32,
+		out: *mut u8,
+	) -> u32 => {
+		let mut id = [0u8; 4];
+		this.memory.get_into(id_data, &mut id[..])
+			.map_err(|_| "Invalid attempt to get id in ext_ed25519_sign")?;
+		let key_type = KeyTypeId(id);
+
+		let mut pubkey = [0u8; 32];
+		this.memory.get_into(pubkey_data, &mut pubkey[..])
+			.map_err(|_| "Invalid attempt to get pubkey in ext_ed25519_sign")?;
+
+		let msg = this.memory.get(msg_data, msg_len as usize)
+			.map_err(|_| "Invalid attempt to get message in ext_ed25519_sign")?;
+
+		let signature = runtime_io::ed25519_sign(key_type, &pubkey, &msg);
+
+		match signature {
+			Some(signature) => {
+				this.memory
+					.set(out, signature.as_ref())
+					.map_err(|_| "Invalid attempt to set out in ext_ed25519_sign")?;
+				Ok(0)
+			},
+			None => Ok(1),
+		}
+	},
+	ext_sr25519_verify(
+		msg_data: *const u8,
+		msg_len: u32,
+		sig_data: *const u8,
+		pubkey_data: *const u8,
+	) -> u32 => {
 		let mut sig = [0u8; 64];
 		this.memory.get_into(sig_data, &mut sig[..])
 			.map_err(|_| "Invalid attempt to get signature in ext_sr25519_verify")?;
@@ -672,6 +723,47 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		} else {
 			5
 		})
+	},
+	ext_sr25519_generate(id_data: *const u8, out: *mut u8) => {
+		let mut id = [0u8; 4];
+		this.memory.get_into(id_data, &mut id[..])
+			.map_err(|_| "Invalid attempt to get id in ext_sr25519_generate")?;
+		let key_type = KeyTypeId(id);
+
+		let pubkey = runtime_io::sr25519_generate(key_type);
+
+		this.memory.set(out, pubkey.as_ref())
+			.map_err(|_| "Invalid attempt to set out in ext_sr25519_generate".into())
+	},
+	ext_sr25519_sign(
+		id_data: *const u8,
+		pubkey_data: *const u8,
+		msg_data: *const u8,
+		msg_len: u32,
+		out: *mut u8,
+	) -> u32 => {
+		let mut id = [0u8; 4];
+		this.memory.get_into(id_data, &mut id[..])
+			.map_err(|_| "Invalid attempt to get id in ext_sr25519_sign")?;
+		let key_type = KeyTypeId(id);
+
+		let mut pubkey = [0u8; 32];
+		this.memory.get_into(pubkey_data, &mut pubkey[..])
+			.map_err(|_| "Invalid attempt to get pubkey in ext_sr25519_sign")?;
+
+		let msg = this.memory.get(msg_data, msg_len as usize)
+			.map_err(|_| "Invalid attempt to get message in ext_sr25519_sign")?;
+
+		let signature = runtime_io::sr25519_sign(key_type, &pubkey, &msg);
+
+		match signature {
+			Some(signature) => {
+				this.memory.set(out, signature.as_ref())
+					.map_err(|_| "Invalid attempt to set out in ext_sr25519_sign")?;
+				Ok(0)
+			},
+			None => Ok(1),
+		}
 	},
 	ext_secp256k1_ecdsa_recover(msg_data: *const u8, sig_data: *const u8, pubkey_data: *mut u8) -> u32 => {
 		let mut sig = [0u8; 65];

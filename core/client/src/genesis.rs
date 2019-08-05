@@ -96,6 +96,7 @@ mod tests {
 			&executor(),
 			"Core_initialize_block",
 			&header.encode(),
+			None,
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
@@ -109,6 +110,7 @@ mod tests {
 				&executor(),
 				"BlockBuilder_apply_extrinsic",
 				&tx.encode(),
+				None,
 			).execute(
 				ExecutionStrategy::NativeElseWasm,
 			).unwrap();
@@ -122,6 +124,7 @@ mod tests {
 			&executor(),
 			"BlockBuilder_finalize_block",
 			&[],
+			None,
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
@@ -170,6 +173,7 @@ mod tests {
 			&executor(),
 			"Core_execute_block",
 			&b1data,
+			None,
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
@@ -200,6 +204,7 @@ mod tests {
 			&executor(),
 			"Core_execute_block",
 			&b1data,
+			None,
 		).execute(
 			ExecutionStrategy::AlwaysWasm,
 		).unwrap();
@@ -230,6 +235,7 @@ mod tests {
 			&executor(),
 			"Core_execute_block",
 			&b1data,
+			None,
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		);

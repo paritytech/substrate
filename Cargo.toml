@@ -19,6 +19,7 @@ vergen = "3"
 
 [workspace]
 members = [
+	"core/application-crypto",
 	"core/cli",
 	"core/client",
 	"core/client/db",

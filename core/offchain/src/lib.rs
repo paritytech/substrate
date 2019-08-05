@@ -44,7 +44,7 @@ use futures::future::Future;
 use keystore::Store as Keystore;
 use log::{debug, warn};
 use network::NetworkStateInfo;
-use primitives::ExecutionContext;
+use primitives::{ExecutionContext, traits::KeyStorePtr};
 use sr_primitives::{
 	generic::BlockId,
 	traits::{self, ProvideRuntimeApi},
@@ -58,14 +58,10 @@ pub mod testing;
 pub use offchain_primitives::OffchainWorkerApi;
 
 /// An offchain workers manager.
-pub struct OffchainWorkers<
-	Client,
-	Storage,
-	Block: traits::Block,
-> {
+pub struct OffchainWorkers<Client, Storage, Block: traits::Block> {
 	client: Arc<Client>,
 	db: Storage,
-	keystore: Arc<Option<Keystore>>,
+	keystore: Option<KeyStorePtr>,
 	_block: PhantomData<Block>,
 }
 
@@ -75,11 +71,7 @@ impl<Client, Storage, Block: traits::Block> OffchainWorkers<
 	Block,
 > {
 	/// Creates new `OffchainWorkers`.
-	pub fn new(
-		client: Arc<Client>,
-		db: Storage,
-		keystore: Arc<Option<Keystore>>,
-	) -> Self {
+	pub fn new(client: Arc<Client>, db: Storage, keystore: Option<KeyStorePtr>) -> Self {
 		Self {
 			client,
 			db,
@@ -196,10 +188,8 @@ mod tests {
 		let db = client_db::offchain::LocalStorage::new_test();
 		let network_state = Arc::new(MockNetworkStateInfo());
 		// TODO Test keystore
-		let keystore = Arc::new(None);
-
 		// when
-		let offchain = OffchainWorkers::new(client, db, keystore);
+		let offchain = OffchainWorkers::new(client, db, None);
 		runtime.executor().spawn(offchain.on_block_imported(&0u64, &pool, network_state.clone()));
 
 		// then

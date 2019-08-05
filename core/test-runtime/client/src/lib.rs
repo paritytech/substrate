@@ -211,9 +211,16 @@ pub fn new_light() -> client::Client<LightBackend, LightExecutor, runtime::Block
 	let backend = Arc::new(LightBackend::new(blockchain.clone()));
 	let executor = NativeExecutor::new(None);
 	let fetcher = Arc::new(LightFetcher);
-	let remote_call_executor = client::light::call_executor::RemoteCallExecutor::new(blockchain.clone(), fetcher);
-	let local_call_executor = client::LocalCallExecutor::new(backend.clone(), executor);
-	let call_executor = LightExecutor::new(backend.clone(), remote_call_executor, local_call_executor);
+	let remote_call_executor = client::light::call_executor::RemoteCallExecutor::new(
+		blockchain.clone(),
+		fetcher,
+	);
+	let local_call_executor = client::LocalCallExecutor::new(backend.clone(), executor, None);
+	let call_executor = LightExecutor::new(
+		backend.clone(),
+		remote_call_executor,
+		local_call_executor,
+	);
 
 	TestClientBuilder::with_backend(backend)
 		.build_with_executor(call_executor)

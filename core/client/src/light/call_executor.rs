@@ -463,6 +463,7 @@ pub fn check_execution_proof<Header, E, H>(
 		executor,
 		"Core_initialize_block",
 		&next_block.encode(),
+		None,
 	)?;
 
 	// execute method
@@ -472,6 +473,7 @@ pub fn check_execution_proof<Header, E, H>(
 		executor,
 		&request.method,
 		&request.call_data,
+		None,
 	)?;
 
 	Ok(local_result)

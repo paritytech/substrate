@@ -253,6 +253,7 @@ impl<H> PrePostHeader<H> {
 pub fn new_in_mem<E, Block, S, RA>(
 	executor: E,
 	genesis_storage: S,
+	keystore: Option<primitives::traits::KeyStorePtr>,
 ) -> error::Result<Client<
 	in_mem::Backend<Block, Blake2Hasher>,
 	LocalCallExecutor<in_mem::Backend<Block, Blake2Hasher>, E>,
@@ -263,7 +264,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	S: BuildStorage,
 	Block: BlockT<Hash=H256>,
 {
-	new_with_backend(Arc::new(in_mem::Backend::new()), executor, genesis_storage)
+	new_with_backend(Arc::new(in_mem::Backend::new()), executor, genesis_storage, keystore)
 }
 
 /// Create a client with the explicitly provided backend.
@@ -272,6 +273,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	backend: Arc<B>,
 	executor: E,
 	build_genesis_storage: S,
+	keystore: Option<primitives::traits::KeyStorePtr>,
 ) -> error::Result<Client<B, LocalCallExecutor<B, E>, Block, RA>>
 	where
 		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
@@ -279,7 +281,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		Block: BlockT<Hash=H256>,
 		B: backend::LocalBackend<Block, Blake2Hasher>
 {
-	let call_executor = LocalCallExecutor::new(backend.clone(), executor);
+	let call_executor = LocalCallExecutor::new(backend.clone(), executor, keystore);
 	Client::new(backend, call_executor, build_genesis_storage, Default::default())
 }
 

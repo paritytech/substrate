@@ -62,7 +62,8 @@
 //! 	backend.clone(),
 //! 	LocalCallExecutor::new(
 //! 		backend.clone(),
-//! 		NativeExecutor::<LocalExecutor>::new(None)
+//! 		NativeExecutor::<LocalExecutor>::new(None),
+//! 		None,
 //!		),
 //! 	// This parameter provides the storage for the chain genesis.
 //! 	<(StorageOverlay, ChildrenStorageOverlay)>::default(),

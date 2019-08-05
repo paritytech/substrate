@@ -63,6 +63,8 @@ pub mod sandbox;
 pub mod storage;
 pub mod uint;
 mod changes_trie;
+pub mod traits;
+pub mod testing;
 
 #[cfg(test)]
 mod tests;
@@ -149,7 +151,7 @@ impl<R: parity_codec::Encode> ::std::fmt::Debug for NativeOrEncoded<R> {
 #[cfg(feature = "std")]
 impl<R: parity_codec::Encode> NativeOrEncoded<R> {
 	/// Return the value as the encoded format.
-	pub fn as_encoded<'a>(&'a self) -> Cow<'a, [u8]> {
+	pub fn as_encoded(&self) -> Cow<'_, [u8]> {
 		match self {
 			NativeOrEncoded::Encoded(e) => Cow::Borrowed(e.as_slice()),
 			NativeOrEncoded::Native(n) => Cow::Owned(n.encode()),
@@ -198,3 +200,4 @@ impl parity_codec::Decode for NeverNativeValue {
 		None
 	}
 }
+

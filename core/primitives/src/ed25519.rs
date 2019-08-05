@@ -79,6 +79,20 @@ impl AsMut<[u8]> for Public {
 	}
 }
 
+impl rstd::convert::TryFrom<&[u8]> for Public {
+	type Error = ();
+
+	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
+		if data.len() == 32 {
+			let mut inner = [0u8; 32];
+			inner.copy_from_slice(data);
+			Ok(Public(inner))
+		} else {
+			Err(())
+		}
+	}
+}
+
 impl From<Public> for [u8; 32] {
 	fn from(x: Public) -> Self {
 		x.0
@@ -111,15 +125,15 @@ impl UncheckedFrom<H256> for Public {
 }
 
 #[cfg(feature = "std")]
-impl ::std::fmt::Display for Public {
-	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+impl std::fmt::Display for Public {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		write!(f, "{}", self.to_ss58check())
 	}
 }
 
 #[cfg(feature = "std")]
-impl ::std::fmt::Debug for Public {
-	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+impl std::fmt::Debug for Public {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		let s = self.to_ss58check();
 		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
 	}
@@ -141,8 +155,8 @@ impl<'de> Deserialize<'de> for Public {
 }
 
 #[cfg(feature = "std")]
-impl ::std::hash::Hash for Public {
-	fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
+impl std::hash::Hash for Public {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
 		self.0.hash(state);
 	}
 }
@@ -167,7 +181,7 @@ impl Default for Signature {
 
 impl PartialEq for Signature {
 	fn eq(&self, b: &Self) -> bool {
-		&self.0[..] == &b.0[..]
+		self.0[..] == b.0[..]
 	}
 }
 
@@ -204,16 +218,16 @@ impl AsMut<[u8]> for Signature {
 }
 
 #[cfg(feature = "std")]
-impl ::std::fmt::Debug for Signature {
-	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+impl std::fmt::Debug for Signature {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		write!(f, "{}", crate::hexdisplay::HexDisplay::from(&self.0))
 	}
 }
 
 #[cfg(feature = "std")]
-impl ::std::hash::Hash for Signature {
-	fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
-		::std::hash::Hash::hash(&self.0[..], state);
+impl std::hash::Hash for Signature {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+		std::hash::Hash::hash(&self.0[..], state);
 	}
 }
 
@@ -482,16 +496,6 @@ impl CryptoType for Pair {
 	const KIND: Kind = Kind::Ed25519;
 	type Pair = Pair;
 }
-
-mod app {
-	use crate::crypto::key_types::ED25519;
-	crate::app_crypto!(super, ED25519);
-}
-
-pub use app::Public as AppPublic;
-pub use app::Signature as AppSignature;
-#[cfg(feature="std")]
-pub use app::Pair as AppPair;
 
 #[cfg(test)]
 mod test {

@@ -25,7 +25,9 @@ pub mod system;
 use rstd::{prelude::*, marker::PhantomData};
 use parity_codec::{Encode, Decode, Input};
 
-use primitives::Blake2Hasher;
+use primitives::{Blake2Hasher, OpaqueMetadata};
+use app_crypto::{ed25519, sr25519, RuntimeAppPublic};
+pub use app_crypto;
 use trie_db::{TrieMut, Trie};
 use substrate_trie::PrefixedMemoryDB;
 use substrate_trie::trie_types::{TrieDB, TrieDBMut};
@@ -44,7 +46,6 @@ use sr_primitives::{
 };
 use runtime_version::RuntimeVersion;
 pub use primitives::hash::H256;
-use primitives::{sr25519, OpaqueMetadata};
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
 use runtime_support::{impl_outer_origin, parameter_types};
@@ -266,6 +267,14 @@ cfg_if! {
 				/// Returns if no block was initialized.
 				#[skip_initialize_block]
 				fn without_initialize_block() -> bool;
+				/// Test that `ed25519` crypto works in the runtime.
+				///
+				/// Returns the signature generated for the message `ed25519`.
+				fn test_ed25519_crypto() -> ed25519::AppSignature;
+				/// Test that `sr25519` crypto works in the runtime.
+				///
+				/// Returns the signature generated for the message `sr25519`.
+				fn test_sr25519_crypto() -> sr25519::AppSignature;
 			}
 		}
 	} else {
@@ -299,6 +308,14 @@ cfg_if! {
 				/// Returns if no block was initialized.
 				#[skip_initialize_block]
 				fn without_initialize_block() -> bool;
+				/// Test that `ed25519` crypto works in the runtime.
+				///
+				/// Returns the signature generated for the message `ed25519`.
+				fn test_ed25519_crypto() -> ed25519::AppSignature;
+				/// Test that `sr25519` crypto works in the runtime.
+				///
+				/// Returns the signature generated for the message `sr25519`.
+				fn test_sr25519_crypto() -> sr25519::AppSignature;
 			}
 		}
 	}
@@ -545,6 +562,14 @@ cfg_if! {
 				fn take_block_number() -> Option<u64> {
 					system::take_block_number()
 				}
+
+				fn test_ed25519_crypto() -> ed25519::AppSignature {
+					test_ed25519_crypto()
+				}
+
+				fn test_sr25519_crypto() -> sr25519::AppSignature {
+					test_sr25519_crypto()
+				}
 			}
 
 			impl aura_primitives::AuraApi<Block, AuraId> for Runtime {
@@ -741,6 +766,14 @@ cfg_if! {
 				fn take_block_number() -> Option<u64> {
 					system::take_block_number()
 				}
+
+				fn test_ed25519_crypto() -> ed25519::AppSignature {
+					test_ed25519_crypto()
+				}
+
+				fn test_sr25519_crypto() -> sr25519::AppSignature {
+					test_sr25519_crypto()
+				}
 			}
 
 			impl aura_primitives::AuraApi<Block, AuraId> for Runtime {
@@ -784,6 +817,20 @@ cfg_if! {
 			}
 		}
 	}
+}
+
+fn test_ed25519_crypto() -> ed25519::AppSignature {
+	let public = ed25519::AppPublic::generate_pair();
+	let signature = public.sign(&"ed25519").expect("Generates a valid `ed25519` signature.");
+	assert!(public.verify(&"ed25519", &signature));
+	signature
+}
+
+fn test_sr25519_crypto() -> sr25519::AppSignature {
+	let public = sr25519::AppPublic::generate_pair();
+	let signature = public.sign(&"sr25519").expect("Generates a valid `sr25519` signature.");
+	assert!(public.verify(&"sr25519", &signature));
+	signature
 }
 
 #[cfg(test)]
