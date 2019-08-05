@@ -745,6 +745,15 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
+	// Copy data from contract memory starting from `src_ptr` with length `len` into the scratch
+	// buffer. This overwrites the entire scratch buffer and resizes to `len`. Specifying a `len`
+	// of zero clears the scratch buffer.
+	//
+	// This should be used before exiting a call or instantiation in order to set the return data.
+	ext_scratch_write(ctx, src_ptr: u32, len: u32) => {
+		read_sandbox_memory_into_scratch(ctx, src_ptr, len)
+	},
+
 	// Deposit a contract event with the data buffer and optional list of topics. There is a limit
 	// on the maximum number of topics specified by `max_event_topics`.
 	//
