@@ -665,7 +665,6 @@ impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
 
 		// We add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of headers
-println!("=== CHECKING #{}: {} {:?} {:?}", header.number(), epoch_index, authorities, randomness);
 		let mut checked_header = check_header::<B, C>(
 			&self.api,
 			slot_now + 1,
@@ -679,9 +678,9 @@ println!("=== CHECKING #{}: {} {:?} {:?}", header.number(), epoch_index, authori
 
 		// if we have failed to check header using (presumably) current epoch AND we're probably in the next epoch
 		// => check using next epoch
-		if checked_header.is_err() {
+		// (this is only possible on the light client at epoch#0)
+		if epoch_index == 0 && checked_header.is_err() {
 			if let Some(Epoch { authorities, randomness, epoch_index, .. }) = maybe_next_epoch {
-println!("=== RETRYING #{}: {} {:?} {:?}", header.number(), epoch_index, authorities, randomness);
 				let checked_header_next = check_header::<B, C>(
 					&self.api,
 					slot_now + 1,

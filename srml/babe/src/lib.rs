@@ -259,7 +259,6 @@ impl<T: Trait> IsMember<AuthorityId> for Module<T> {
 
 impl<T: Trait> session::ShouldEndSession<T::BlockNumber> for Module<T> {
 	fn should_end_session(_: T::BlockNumber) -> bool {
-		use sr_primitives::traits::OnInitialize;
 		Self::do_initialize();
 
 		let diff = CurrentSlot::get().saturating_sub(EpochStartSlot::get());
