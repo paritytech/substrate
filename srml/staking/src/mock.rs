@@ -426,7 +426,7 @@ pub fn add_reward_points_to_all_elected() {
 		.map(|v| (*v, 1))
 		.collect::<Vec<_>>();
 
-	<Module<Test>>::add_reward_points_to_validators(rewards)
+	<Module<Test>>::add_reward_points(rewards)
 }
 
 pub fn validator_controllers() -> Vec<AccountId> {
