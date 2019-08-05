@@ -188,6 +188,7 @@ where
 		side_effects_handler: Option<&mut O>,
 	) -> error::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
+    changes.change_settings(self.backend.overlay_settings());
 		let state = self.backend.state_at(*id)?;
 		let return_data = state_machine::new(
 			&state,

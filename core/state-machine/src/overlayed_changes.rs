@@ -45,23 +45,41 @@ pub(crate) enum TransactionState {
 }
 
 
-/// Treshold of operation before running a garbage colletion
-/// on a transaction operation.
-/// Should be same as `TRIGGER_COMMIT_GC` or higher
-/// (we most likely do not want lower as transaction are
-/// possibly more frequent than commit).
 const TRIGGER_TRANSACTION_GC: usize = 10_000;
 
-/// Treshold of operation before running a garbage colletion
-/// on a commit operation.
-/// We may want a lower value than for a transaction, even
-/// a 1 if we want to do it between every operation.
 const TRIGGER_COMMIT_GC: usize = 1_000;
 
-/// Used to count big content as multiple operation.
-/// This is a number of octet.
-/// Set to 0 to ignore.
 const ADD_CONTENT_SIZE_UNIT: usize = 64;
+
+#[derive(Debug, Clone)]
+/// Settings regarding overlayed changes internal (mainly gc).
+pub struct OverlayedSettings {
+	/// Treshold of operation before running a garbage colletion
+	/// on a transaction operation.
+	/// Should be same as `TRIGGER_COMMIT_GC` or higher
+	/// (we most likely do not want lower as transaction are
+	/// possibly more frequent than commit).
+	pub trigger_transaction_gc: usize,
+	/// Treshold of operation before running a garbage colletion
+	/// on a commit operation.
+	/// We may want a lower value than for a transaction, even
+	/// a 1 if we want to do it between every operation.
+	pub trigger_commit_gc: usize,
+	/// Used to count big content as multiple operation.
+	/// This is a number of octet.
+	/// Set to 0 to ignore.
+	pub add_content_size_unit: usize,
+}
+
+impl Default for OverlayedSettings {
+	fn default() -> Self {
+		OverlayedSettings {
+			trigger_transaction_gc: TRIGGER_TRANSACTION_GC,
+			trigger_commit_gc: TRIGGER_COMMIT_GC,
+			add_content_size_unit: ADD_CONTENT_SIZE_UNIT,
+		}
+	}
+}
 
 /// The overlayed changes to state to be queried on top of the backend.
 ///
@@ -74,6 +92,8 @@ pub struct OverlayedChanges {
 	/// Changes trie configuration. None by default, but could be installed by the
 	/// runtime if it supports change tries.
 	pub(crate) changes_trie_config: Option<ChangesTrieConfig>,
+	/// Settings regarding overlayed changes internal (mainly gc).
+	pub(crate) settings: OverlayedSettings,
 	/// Counter of number of operation between garbage collection.
 	/// Add or delete cost one, additional cost per size by counting a fix size
 	/// as a unit.
@@ -652,6 +672,13 @@ impl OverlayedChangeSet {
 }
 
 impl OverlayedChanges {
+
+	/// Change overlayed change settings. 
+	pub fn change_settings(&mut self, settings: OverlayedSettings) {
+		self.settings = settings;
+	}
+
+
 	/// Whether the overlayed changes are empty.
 	pub fn is_empty(&self) -> bool {
 		self.changes.is_empty()
@@ -707,8 +734,8 @@ impl OverlayedChanges {
 	}
 
 	fn add_cost_op(&mut self, val: &Option<Vec<u8>>) {
-		let content_cost = if ADD_CONTENT_SIZE_UNIT > 0 {
-			val.as_ref().map(|s| s.len() / ADD_CONTENT_SIZE_UNIT).unwrap_or(0)
+		let content_cost = if self.settings.add_content_size_unit > 0 {
+			val.as_ref().map(|s| s.len() / self.settings.add_content_size_unit).unwrap_or(0)
 		} else { 0 };
 		self.operation_from_last_gc += 1 + content_cost;
 	}
@@ -772,7 +799,7 @@ impl OverlayedChanges {
 	/// Discard prospective changes to state.
 	pub fn discard_prospective(&mut self) {
 		self.changes.discard_prospective();
-		if self.operation_from_last_gc > TRIGGER_COMMIT_GC {
+		if self.operation_from_last_gc > self.settings.trigger_commit_gc {
 			self.operation_from_last_gc = 0;
 			self.gc(true);
 		}
@@ -781,7 +808,7 @@ impl OverlayedChanges {
 	/// Commit prospective changes to state.
 	pub fn commit_prospective(&mut self) {
 		self.changes.commit_prospective();
-		if self.operation_from_last_gc > TRIGGER_COMMIT_GC {
+		if self.operation_from_last_gc > self.settings.trigger_commit_gc {
 			self.operation_from_last_gc = 0;
 			self.gc(true);
 		}
@@ -790,7 +817,7 @@ impl OverlayedChanges {
 	/// Create a new transactional layer.
 	pub fn start_transaction(&mut self) {
 		self.changes.start_transaction();
-		if self.operation_from_last_gc > TRIGGER_TRANSACTION_GC {
+		if self.operation_from_last_gc > self.settings.trigger_transaction_gc {
 			self.operation_from_last_gc = 0;
 			self.gc(true);
 		}
@@ -800,7 +827,7 @@ impl OverlayedChanges {
 	/// A transaction is always running (history always end with pending).
 	pub fn discard_transaction(&mut self) {
 		self.changes.discard_transaction();
-		if self.operation_from_last_gc > TRIGGER_TRANSACTION_GC {
+		if self.operation_from_last_gc > self.settings.trigger_transaction_gc {
 			self.operation_from_last_gc = 0;
 			self.gc(true);
 		}
@@ -859,6 +886,7 @@ impl OverlayedChanges {
 		let mut result = OverlayedChanges {
 			changes,
 			changes_trie_config,
+			settings: Default::default(),
 			operation_from_last_gc: 0,
 		};
 		committed.into_iter().for_each(|(k, v)| result.set_storage(k, v));

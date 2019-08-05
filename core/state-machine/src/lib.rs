@@ -52,7 +52,7 @@ pub use changes_trie::{
 	prune as prune_changes_tries,
 	oldest_non_pruned_trie as oldest_non_pruned_changes_trie
 };
-pub use overlayed_changes::OverlayedChanges;
+pub use overlayed_changes::{OverlayedChanges, OverlayedSettings};
 pub use proving_backend::{
 	create_proof_check_backend, create_proof_check_backend_storage,
 	Recorder as ProofRecorder, ProvingBackend,
