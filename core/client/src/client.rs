@@ -35,9 +35,8 @@ use consensus::{
 	SelectChain, self,
 };
 use sr_primitives::traits::{
-	Block as BlockT, Header as HeaderT, Zero, NumberFor, CurrentHeight,
-	BlockNumberToHash, ApiRef, ProvideRuntimeApi,
-	SaturatedConversion, One, DigestFor,
+	Block as BlockT, Header as HeaderT, Zero, NumberFor,
+	ApiRef, ProvideRuntimeApi, SaturatedConversion, One, DigestFor,
 };
 use sr_primitives::generic::DigestItem;
 use sr_primitives::BuildStorage;
@@ -58,7 +57,7 @@ use state_machine::{
 	ChangesTrieRootsStorage, ChangesTrieStorage,
 	key_changes, key_changes_proof, OverlayedChanges, NeverOffchainExt,
 };
-use hash_db::Hasher;
+use hash_db::{Hasher, Prefix};
 
 use crate::backend::{
 	self, BlockImportOperation, PrunableStateChangesTrieStorage,
@@ -615,7 +614,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		}
 
 		impl<'a, Block: BlockT> ChangesTrieStorage<Blake2Hasher, NumberFor<Block>> for AccessedRootsRecorder<'a, Block> {
-			fn get(&self, key: &H256, prefix: &[u8]) -> Result<Option<DBValue>, String> {
+			fn get(&self, key: &H256, prefix: Prefix) -> Result<Option<DBValue>, String> {
 				self.storage.get(key, prefix)
 			}
 		}
@@ -1520,30 +1519,6 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 		(&*self).check_block(hash, parent_hash)
 	}
 }
-
-impl<B, E, Block, RA> CurrentHeight for Client<B, E, Block, RA> where
-	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT<Hash=H256>,
-{
-	type BlockNumber = <Block::Header as HeaderT>::Number;
-	fn current_height(&self) -> Self::BlockNumber {
-		self.backend.blockchain().info().best_number
-	}
-}
-
-impl<B, E, Block, RA> BlockNumberToHash for Client<B, E, Block, RA> where
-	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT<Hash=H256>,
-{
-	type BlockNumber = <Block::Header as HeaderT>::Number;
-	type Hash = Block::Hash;
-	fn block_number_to_hash(&self, n: Self::BlockNumber) -> Option<Self::Hash> {
-		self.block_hash(n).unwrap_or(None)
-	}
-}
-
 
 impl<B, E, Block, RA> BlockchainEvents<Block> for Client<B, E, Block, RA>
 where
@@ -2698,7 +2673,7 @@ pub(crate) mod tests {
 
 		let current_balance = ||
 			client.runtime_api().balance_of(
-				&BlockId::number(client.current_height()), AccountKeyring::Alice.into()
+				&BlockId::number(client.info().chain.best_number), AccountKeyring::Alice.into()
 			).unwrap();
 
 		// G -> A1 -> A2
@@ -2745,7 +2720,7 @@ pub(crate) mod tests {
 
 		let current_balance = ||
 			client.runtime_api().balance_of(
-				&BlockId::number(client.current_height()), AccountKeyring::Alice.into()
+				&BlockId::number(client.info().chain.best_number), AccountKeyring::Alice.into()
 			).unwrap();
 
 		// G -> A1

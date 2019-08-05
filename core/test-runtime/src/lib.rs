@@ -27,7 +27,8 @@ use parity_codec::{Encode, Decode, Input};
 
 use primitives::Blake2Hasher;
 use trie_db::{TrieMut, Trie};
-use substrate_trie::{TrieDB, TrieDBMut, PrefixedMemoryDB};
+use substrate_trie::PrefixedMemoryDB;
+use substrate_trie::trie_types::{TrieDB, TrieDBMut};
 
 use substrate_client::{
 	runtime_api as client_api, block_builder::api as block_builder_api, decl_runtime_apis,
@@ -394,20 +395,24 @@ fn code_using_trie() -> u64 {
 		for i in 0..v.len() {
 			let key: &[u8]= &v[i].0;
 			let val: &[u8] = &v[i].1;
-			t.insert(key, val).expect("static input");
+			if !t.insert(key, val).is_ok() {
+				return 101;
+			}
 		}
 		t
 	};
 
-	let trie = TrieDB::<Blake2Hasher>::new(&mdb, &root).expect("on memory with static content");
-
-	let iter = trie.iter().expect("static input");
-	let mut iter_pairs = Vec::new();
-	for pair in iter {
-		let (key, value) = pair.expect("on memory with static content");
-		iter_pairs.push((key, value.to_vec()));
-	}
-	iter_pairs.len() as u64
+	if let Ok(trie) = TrieDB::<Blake2Hasher>::new(&mdb, &root) {
+		if let Ok(iter) = trie.iter() {
+			let mut iter_pairs = Vec::new();
+			for pair in iter {
+				if let Ok((key, value)) = pair {
+					iter_pairs.push((key, value.to_vec()));
+				}
+			}
+			iter_pairs.len() as u64
+		} else { 102 }
+	} else { 103 }
 }
 
 #[cfg(not(feature = "std"))]
