@@ -20,5 +20,9 @@ git = "https://github.com/rust-fuzz/libfuzzer-sys.git"
 members = ["."]
 
 [[bin]]
-name = "fuzz_transactions"
+name = "fuzz_transactions_no_gc"
 path = "fuzz_targets/fuzz_transactions.rs"
+
+[[bin]]
+name = "fuzz_transactions_with_gc"
+path = "fuzz_targets/fuzz_transactions_with_gc.rs"

@@ -639,10 +639,6 @@ impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 		}
 	}
 
-	// TODO EMCH in all exec the prospective is replace by the full state (commited included)
-	// -> TODO bench over using a check point approach (expect ctommit prospective to not be call),
-	// or agains a gc checkpoint approach.
-
 	/// Execute a call using the given state backend, overlayed changes, and call executor.
 	/// Produces a state-backend-specific "transaction" which can be used to apply the changes
 	/// to the backing store, such as the disk.

@@ -287,9 +287,14 @@ impl<V> History<V> {
 			index -= 1;
 			let history_index = self[index].1;
 			match history[history_index] {
+				TransactionState::Committed => {
+					// here we could gc all preceding values but that is additional cost
+					// and get_mut should stop at pending following committed.
+					let tx = self[index].1;
+					return Some((&mut self[index].0, tx))
+				},
 				TransactionState::Pending
 				| TransactionState::TxPending
-				| TransactionState::Committed
 				| TransactionState::Prospective => {
 					let tx = self[index].1;
 					return Some((&mut self[index].0, tx))
@@ -313,6 +318,82 @@ impl<V> History<V> {
 		self.push(val, history.len() - 1);
 	}
 
+	/// Garbage collect a history, act as a `get_mut` with additional cost.
+	/// If `eager` is true, all dropped value are removed even if it means shifting
+	/// array byte. Otherwhise we mainly ensure collection up to last Commit state
+	/// (truncate left size).
+	fn gc(
+		&mut self,
+		history: &[TransactionState],
+		tx_index: Option<&[usize]>,
+	) -> Option<(&mut V, usize)> {
+		if let Some(tx_index) = tx_index {
+			let mut tx_index = &tx_index[..];
+			let mut index = self.len();
+			if index == 0 {
+				return None;
+			}
+			let mut bellow_value = usize::max_value();
+			let mut result: Option<usize> = None;
+			// internal method: should be use properly
+			// (history of the right overlay change set
+			// is size aligned).
+			debug_assert!(history.len() >= index); 
+			while index > 0 {
+				index -= 1;
+				let history_index = self[index].1;
+				match history[history_index] {
+					TransactionState::Committed => {
+						for _ in 0..index {
+							let _ = self.0.remove(0);
+						}
+						result = Some(result.map(|i| i - index).unwrap_or(0));
+						index = 0;
+					},
+					TransactionState::Pending
+					| TransactionState::Prospective => {
+						if history_index >= bellow_value {
+							let _ = self.0.remove(index);
+							result.as_mut().map(|i| *i = *i - 1);
+						} else {
+							if result.is_none() {
+								result = Some(index);
+							}
+							while bellow_value > history_index {
+								// bellow_value = pop
+								let split = tx_index.split_last()
+									.map(|(v, sl)| (*v, sl))
+									.unwrap_or((0, &[]));
+								bellow_value = split.0;
+								tx_index = split.1;
+							}
+						}
+					},
+					TransactionState::TxPending => {
+						if history_index >= bellow_value {
+							let _ = self.0.remove(index);
+							result.as_mut().map(|i| *i = *i - 1);
+						} else {
+							if result.is_none() {
+								result = Some(index);
+							}
+						}
+						bellow_value = usize::max_value();
+					},
+					TransactionState::Dropped => {
+						let _ = self.0.remove(index);
+					},
+				}
+			}
+			if let Some(index) = result {
+				let tx = self[index].1.clone();
+				Some((&mut self[index].0, tx))
+			} else { None }
+
+		} else {
+			return self.get_mut(history);
+		}
+	}
 }
 
 impl History<OverlayedValue> {
@@ -372,6 +453,29 @@ impl History<OverlayedValue> {
 }
 
 impl OverlayedChangeSet {
+	/// Garbage collect.
+	fn gc(&mut self, eager: bool) {
+		let eager = if eager {
+			let mut tx_ixs = Vec::new();
+			for (i, h) in self.history.iter().enumerate() {
+				if &TransactionState::TxPending == h {
+					tx_ixs.push(i);
+				}
+			}
+			Some(tx_ixs)
+		} else {
+			None
+		};
+		let history = self.history.as_slice();
+		// retain does change values
+		self.top.retain(|_, h| h.gc(history, eager.as_ref().map(|t| t.as_slice())).is_some());
+		self.children.retain(|_, m| {
+			m.retain(|_, h| h.gc(history, eager.as_ref().map(|t| t.as_slice())).is_some());
+			m.len() > 0
+		});
+	}
+
+
 	/// Whether the change set is empty.
 	pub fn is_empty(&self) -> bool {
 		self.top.is_empty() && self.children.is_empty()
@@ -729,6 +833,22 @@ impl OverlayedChanges {
 		self.changes.top_iter()
 	}
 
+	/// Count (slow) the number of key value, history included.
+	/// Only for debugging or testing usage.
+	pub fn top_count_keyvalue_pair(&self) -> usize {
+		let mut result = 0;
+		for (_, v) in self.changes.top.iter() {
+			result += v.0.len()
+		}
+		result
+	}
+
+	/// costy garbage collection of unneeded memory from
+	/// key values. Eager set to true will remove more
+	/// key value but allows more costy memory changes.
+	pub fn gc(&mut self, eager: bool) {
+		self.changes.gc(eager);
+	}
 }
 
 #[cfg(test)]

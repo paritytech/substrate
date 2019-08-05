@@ -26,7 +26,7 @@ const KEY_SPACE: u8 = 20;
 /// Size of key, max 255
 const VALUE_SPACE: u8 = 50;
 
-pub fn fuzz_transactions(input: &[u8]) {
+fn fuzz_transactions_inner(input: &[u8], check_gc: bool) {
 	let mut input_index: usize = 0;
 	let mut overlayed = OverlayedChanges::default();
 	let mut ref_overlayed = RefOverlayedChanges::default();
@@ -77,6 +77,40 @@ pub fn fuzz_transactions(input: &[u8]) {
 		}
 
 	}
+
+	let mut success = true;
+
+	let (check_value, len) = check_values(&overlayed, &ref_overlayed);
+	success &= check_value;
+
+	if check_gc {
+		let reference_size = ref_overlayed.total_length();
+		overlayed.gc(true);
+		let size = overlayed.top_count_keyvalue_pair();
+		if reference_size != size {
+			println!("inconsistent gc {} {}", size, reference_size);
+			success = false;
+		}
+		let (check_value, len_gc) = check_values(&overlayed, &ref_overlayed);
+		success &= check_value;
+		success &= len_gc == len;
+	}
+	ref_overlayed.commit_prospective();
+	let ref_len = ref_overlayed.committed.len();
+	if len != ref_len {
+		println!("inconsistent length {} {}", len, ref_len);
+		success = false;
+	}
+	if !success {
+		println!("fuzzing: \n {:x?}", (&actions, &values));
+		println!("input: \n {:?}", &input);
+	}
+
+
+	assert!(success);
+}
+
+fn check_values(overlayed: &OverlayedChanges, ref_overlayed: &RefOverlayedChanges) -> (bool, usize) {
 	let mut len = 0;
 	let mut success = true;
 	for (key, value) in overlayed.top_iter() {
@@ -88,18 +122,15 @@ pub fn fuzz_transactions(input: &[u8]) {
 		}
 		len += 1;
 	}
+	(success, len)
+}
 
-	ref_overlayed.commit_prospective();
-	let ref_len = ref_overlayed.committed.len();
-	if len != ref_len {
-		println!("inconsistant length {} {}", len, ref_len);
-		success = false;
-	}
-	if !success {
-		println!("fuzzing: \n {:x?}", (&actions, &values));
-		println!("input: \n {:?}", &input);
-	}
-	assert!(success);
+pub fn fuzz_transactions(input: &[u8]) {
+	fuzz_transactions_inner(input, false);
+}
+
+pub fn fuzz_transactions_then_gc(input: &[u8]) {
+	fuzz_transactions_inner(input, true);
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -185,6 +216,7 @@ impl RefOverlayedChanges {
 			self.prospective.insert(key, val.expect("fuzzer do not delete"));
 		}
 	}
+
 	pub fn storage(&self, key: &[u8]) -> Option<Option<&[u8]>> {
 		for t in self.transactions.iter().rev() {
 			if let Some(v) = t.get(key) {
@@ -200,11 +232,24 @@ impl RefOverlayedChanges {
 		None
 	}
 
+	pub fn total_length(&self) -> usize {
+		let tr_len: usize = self.transactions.iter()
+			.map(|l| l.len()).sum();
+		self.committed.len() + self.prospective.len() + tr_len
+	}
 }
 
 #[test]
 fn debug_that() {
+//50, 208, 50, 38, 46, 58, 209, 50, 216, 255, 255
+
+//238, 0, 36, 43, 50, 46, 38, 211, 0, 0, 61
+
+//50, 255, 38, 38, 186, 35, 46, 43, 46, 35, 255, 255, 102, 67
+
+//0x6e,0xff,0xf7,0x0,0x6e,0xff,0xff,0x2d,0xff,0xff,0xff,0xe
+
 	let input = vec![
 	];
-	fuzz_transactions(&input[..]);
+	fuzz_transactions_inner(&input[..], true);
 }
