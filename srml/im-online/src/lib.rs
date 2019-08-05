@@ -357,7 +357,7 @@ impl<T: Trait> Module<T> {
 				for index in start..curr  {
 					let got_heartbeat = <ReceivedHeartbeats<T>>::exists(&index, authority_id);
 					let was_author = <BlockAuthors<T>>::exists(&index, authority_id);
-					if  got_heartbeat || was_author {
+					if got_heartbeat || was_author {
 						return true;
 					}
 				}
