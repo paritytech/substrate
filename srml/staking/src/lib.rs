@@ -325,6 +325,17 @@ pub struct EraRewards {
 	rewards: Vec<u32>,
 }
 
+impl EraRewards {
+	/// add the reward to the validator at index given. Index must valid.
+	fn add_points_to_index(&mut self, index: u32, points: u32) {
+		if let Some(new_total) = self.total.checked_add(points) {
+			self.total = new_total;
+			self.rewards.resize((index as usize + 1).max(self.rewards.len()), 0);
+			self.rewards[index as usize] += points; // Addition is less than total
+		}
+	}
+}
+
 /// Indicates the initial status of the staker.
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub enum StakerStatus<AccountId> {
@@ -1413,12 +1424,25 @@ impl<T: Trait> Module<T> {
 			for (index, elected) in <Module<T>>::current_elected().iter().enumerate() {
 				for (validator, points) in &validators_points {
 					if *validator == *elected {
-						if let Some(new_total) = rewards.total.checked_add(*points) {
-							rewards.total = new_total;
-							rewards.rewards.resize((index + 1).max(rewards.rewards.len()), 0);
-							rewards.rewards[index] += *points; // Addition is less than total
-						}
+						rewards.add_points_to_index(index as u32, *points);
 					}
+				}
+			}
+		});
+	}
+
+	/// Add reward points to validators. Using their validator index.
+	///
+	/// For each element in the iterator the given number of points in u32 is added to the
+	/// validator, thus duplicates are handled.
+	pub fn add_reward_points_to_validators_using_index(validators_points: Vec<(u32, u32)>) {
+		// TODO: This can be optimised once #3302 is implemented.
+		let current_elected_len = <Module<T>>::current_elected().len() as u32;
+
+		CurrentEraRewards::mutate(|rewards| {
+			for (validator_index, points) in validators_points {
+				if validator_index < current_elected_len {
+					rewards.add_points_to_index(validator_index, points);
 				}
 			}
 		});

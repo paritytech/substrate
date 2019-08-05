@@ -2104,6 +2104,34 @@ fn reward_from_authorship_event_handler_works() {
 }
 
 #[test]
+fn add_reward_points_fns_works() {
+	with_externalities(&mut ExtBuilder::default()
+		.build(),
+	|| {
+		let validators = <Module<Test>>::current_elected();
+		// Not mandatory but must be coherent with rewards
+		assert_eq!(validators, vec![21, 11]);
+
+		<Module<Test>>::add_reward_points_to_validators_using_index(vec![
+			(0, 1),
+			(1, 1),
+			(2, 1),
+			(1, 1),
+		]);
+
+		<Module<Test>>::add_reward_points_to_validators(vec![
+			(21, 1),
+			(11, 1),
+			(31, 1),
+			(11, 1),
+		]);
+
+		assert_eq!(CurrentEraRewards::get().rewards, vec![2, 4]);
+		assert_eq!(CurrentEraRewards::get().total, 6);
+	})
+}
+
+#[test]
 fn unbonded_balance_is_not_slashable() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		// total amount staked is slashable.
