@@ -4243,6 +4243,7 @@ version = "2.0.0"
 dependencies = [
  "parity-codec 4.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.97 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 2.0.0",
  "sr-std 2.0.0",
  "substrate-primitives 2.0.0",
 ]

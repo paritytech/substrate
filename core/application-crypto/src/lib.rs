@@ -35,35 +35,11 @@ pub use serde;
 #[doc(hidden)]
 pub use rstd::ops::Deref;
 
-/// `ed25519` crypto types.
-pub mod ed25519 {
-	pub use primitives::ed25519::*;
+pub mod ed25519;
+pub mod sr25519;
+mod traits;
 
-	mod app {
-		use crate::key_types::ED25519;
-		crate::app_crypto!(super, ED25519);
-	}
-
-	pub use app::Public as AppPublic;
-	pub use app::Signature as AppSignature;
-	#[cfg(feature="std")]
-	pub use app::Pair as AppPair;
-}
-
-/// `sr25519` crypto types.
-pub mod sr25519 {
-	pub use primitives::sr25519::*;
-
-	mod app {
-		use crate::key_types::SR25519;
-		crate::app_crypto!(super, SR25519);
-	}
-
-	pub use app::Public as AppPublic;
-	pub use app::Signature as AppSignature;
-	#[cfg(feature="std")]
-	pub use app::Pair as AppPair;
-}
+pub use traits::*;
 
 /// Declares Public, Pair, Signature types which are functionally equivalent to `$pair`, but are new
 /// Application-specific types whose identifier is `$key_type`.
@@ -241,6 +217,26 @@ macro_rules! app_crypto {
 			type Generic = $public;
 		}
 
+		impl $crate::RuntimeAppPublic for Public where $public: $crate::RuntimePublic<Signature=$sig> {
+			type Signature = Signature;
+
+			fn generate_pair() -> Self {
+				Self(<$public as $crate::RuntimePublic>::generate_pair($key_type))
+			}
+
+			fn sign<M: AsRef<[u8]>>(&self, msg: &M) -> Option<Self::Signature> {
+				<$public as $crate::RuntimePublic>::sign(
+					self.as_ref(),
+					$key_type,
+					msg,
+				).map(Signature)
+			}
+
+			fn verify<M: AsRef<[u8]>>(&self, msg: &M, signature: &Self::Signature) -> bool {
+				<$public as $crate::RuntimePublic>::verify(self.as_ref(), msg, &signature.as_ref())
+			}
+		}
+
 		$crate::wrap! {
 			/// A generic `AppPublic` wrapper type over Ed25519 crypto; this has no specific App.
 			#[derive(Clone, Default, Eq, PartialEq, $crate::codec::Encode, $crate::codec::Decode)]
@@ -323,55 +319,4 @@ macro_rules! wrap {
 			}
 		}
 	}
-}
-
-/// An application-specific key.
-pub trait AppKey: 'static + Send + Sync + Sized + CryptoType + Clone {
-	/// The corresponding type as a generic crypto type.
-	type UntypedGeneric: IsWrappedBy<Self>;
-
-	/// The corresponding public key type in this application scheme.
-	type Public: AppPublic;
-
-	/// The corresponding key pair type in this application scheme.
-	#[cfg(feature="std")]
-	type Pair: AppPair;
-
-	/// The corresponding signature type in this application scheme.
-	type Signature: AppSignature;
-
-	/// An identifier for this application-specific key type.
-	const ID: KeyTypeId;
-}
-
-/// Type which implements Debug and Hash in std, not when no-std (std variant).
-#[cfg(feature = "std")]
-pub trait MaybeDebugHash: std::fmt::Debug + std::hash::Hash {}
-#[cfg(feature = "std")]
-impl<T: std::fmt::Debug + std::hash::Hash> MaybeDebugHash for T {}
-
-/// Type which implements Debug and Hash in std, not when no-std (no-std variant).
-#[cfg(not(feature = "std"))]
-pub trait MaybeDebugHash {}
-#[cfg(not(feature = "std"))]
-impl<T> MaybeDebugHash for T {}
-
-/// A application's public key.
-pub trait AppPublic: AppKey + Public + Ord + PartialOrd + Eq + PartialEq + MaybeDebugHash + codec::Codec {
-	/// The wrapped type which is just a plain instance of `Public`.
-	type Generic:
-		IsWrappedBy<Self> + Public + Ord + PartialOrd + Eq + PartialEq + MaybeDebugHash + codec::Codec;
-}
-
-/// A application's public key.
-#[cfg(feature = "std")]
-pub trait AppPair: AppKey + Pair<Public=<Self as AppKey>::Public> {
-	/// The wrapped type which is just a plain instance of `Pair`.
-	type Generic: IsWrappedBy<Self> + Pair<Public=<<Self as AppKey>::Public as AppPublic>::Generic>;
-}
-
-/// A application's public key.
-pub trait AppSignature: AppKey + Eq + PartialEq + MaybeDebugHash {
-	/// The wrapped type which is just a plain instance of `Signature`.
-	type Generic: IsWrappedBy<Self> + Eq + PartialEq + MaybeDebugHash;
 }
