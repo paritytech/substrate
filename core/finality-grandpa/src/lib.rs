@@ -809,7 +809,7 @@ fn authority<C>(client: &C, keystore: Arc<Store>) -> Option<AuthorityPair> where
 	C::Api: GrandpaApi<<C as BlockOf>::Type>
 {
 	let owned = keystore.public_keys::<AuthorityId>().ok()?;
-	let at = BlockId::Number(client.info().best_number);
+	let at = BlockId::Number(client.info().finalized_number);
 	// The list of authority keys that is current. By default this will just use the state of
 	// the best block, but you might want it to use some other block's state instead if it's
 	// more sophisticated. Grandpa, for example, will probably want to use the state of the last
