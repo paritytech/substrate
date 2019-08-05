@@ -18,10 +18,11 @@
 
 use std::sync::Arc;
 
+use client::blockchain::HeaderBackend;
 use jsonrpc_core::{Result, Error, ErrorCode};
 use jsonrpc_derive::rpc;
 use node_primitives::{
-	AccountId, Index, AccountNonceApi, Block, BlockId, BlockNumber
+	AccountId, Index, AccountNonceApi, Block, BlockId,
 };
 use parity_codec::Encode;
 use sr_primitives::traits;
@@ -63,14 +64,15 @@ impl<P: txpool::ChainApi, C> Accounts<P, C> {
 impl<P, C> AccountsApi for Accounts<P, C>
 where
 	C: traits::ProvideRuntimeApi,
-	C: traits::CurrentHeight<BlockNumber=BlockNumber>,
+	C: HeaderBackend<Block>,
 	C: Send + Sync + 'static,
 	C::Api: AccountNonceApi<Block>,
 	P: txpool::ChainApi + Sync + Send + 'static,
 {
 	fn nonce(&self, account: AccountId) -> Result<Index> {
 		let api = self.client.runtime_api();
-		let at = BlockId::number(self.client.current_height());
+		let best = self.client.info().best_hash;
+		let at = BlockId::hash(best);
 
 		let nonce = api.account_nonce(&at, account.clone()).map_err(|e| Error {
 			code: ErrorCode::ServerError(RUNTIME_ERROR),

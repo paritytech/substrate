@@ -66,6 +66,7 @@ pub fn to_session_keys(
 /// Returns transaction extra.
 pub fn signed_extra(nonce: Index, extra_fee: Balance) -> SignedExtra {
 	(
+		system::CheckGenesis::new(),
 		system::CheckEra::from(Era::mortal(256, 0)),
 		system::CheckNonce::from(nonce),
 		system::CheckWeight::from(),

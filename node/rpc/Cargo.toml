@@ -5,6 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
+client = { package = "substrate-client", path = "../../core/client" }
 jsonrpc-core = "13.0.0"
 jsonrpc-core-client = "13.0.0"
 jsonrpc-derive = "13.0.0"
