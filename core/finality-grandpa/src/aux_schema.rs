@@ -509,6 +509,9 @@ mod test {
 			},
 		);
 
+		let mut current_rounds = CurrentRounds::new();
+		current_rounds.insert(round_number + 1, HasVoted::No);
+
 		assert_eq!(
 			&*set_state.read(),
 			&VoterSetState::Live {
@@ -522,7 +525,7 @@ mod test {
 					set_id,
 					&*authority_set.inner().read(),
 				),
-				current_round: HasVoted::No,
+				current_rounds,
 			},
 		);
 	}
@@ -596,6 +599,9 @@ mod test {
 			},
 		);
 
+		let mut current_rounds = CurrentRounds::new();
+		current_rounds.insert(round_number + 1, HasVoted::No);
+
 		assert_eq!(
 			&*set_state.read(),
 			&VoterSetState::Live {
@@ -609,7 +615,7 @@ mod test {
 					set_id,
 					&*authority_set.inner().read(),
 				),
-				current_round: HasVoted::No,
+				current_rounds,
 			},
 		);
 	}

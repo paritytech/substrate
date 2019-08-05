@@ -141,26 +141,18 @@ fn config() -> crate::Config {
 // dummy voter set state
 fn voter_set_state() -> SharedVoterSetState<Block> {
 	use crate::authorities::AuthoritySet;
-	use crate::environment::{CompletedRound, CompletedRounds, HasVoted, VoterSetState};
+	use crate::environment::VoterSetState;
 	use grandpa::round::State as RoundState;
 	use primitives::H256;
 
 	let state = RoundState::genesis((H256::zero(), 0));
 	let base = state.prevote_ghost.unwrap();
 	let voters = AuthoritySet::genesis(Vec::new());
-	let set_state = VoterSetState::Live {
-		completed_rounds: CompletedRounds::new(
-			CompletedRound {
-				state,
-				number: 0,
-				votes: Vec::new(),
-				base,
-			},
-			0,
-			&voters,
-		),
-		current_round: HasVoted::No,
-	};
+	let set_state = VoterSetState::live(
+		0,
+		&voters,
+		base,
+	);
 
 	set_state.into()
 }

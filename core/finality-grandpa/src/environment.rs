@@ -130,7 +130,7 @@ impl<Block: BlockT> CompletedRounds<Block> {
 
 	/// Iterate over all completed rounds.
 	pub fn iter(&self) -> impl Iterator<Item=&CompletedRound<Block>> {
-		self.rounds.iter()
+		self.rounds.iter().rev()
 	}
 
 	/// Returns the last (latest) completed round.
