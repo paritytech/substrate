@@ -259,6 +259,10 @@ impl<T: Trait> IsMember<AuthorityId> for Module<T> {
 
 impl<T: Trait> session::ShouldEndSession<T::BlockNumber> for Module<T> {
 	fn should_end_session(_: T::BlockNumber) -> bool {
+		// it might be (and it is in current implementation) that session module is calling
+		// should_end_session() from it's own on_initialize() handler
+		// => because session on_initialize() is called earlier than ours, let's ensure
+		// that we have synced with digest before checking if session should be ended
 		Self::do_initialize();
 
 		let diff = CurrentSlot::get().saturating_sub(EpochStartSlot::get());
