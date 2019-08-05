@@ -382,8 +382,13 @@ impl<T: Trait> Module<T> {
 
 	/// Returns `true` if a heartbeat has been received for `AuthorityId`
 	/// during the previous session. Otherwise `false`.
-	pub fn is_online_in_previous_session(authority_id: &T::AuthorityId) -> bool {
-		let index = <session::Module<T>>::current_index() - 1;
+	pub fn was_online_in_previous_session(authority_id: &T::AuthorityId) -> bool {
+		let curr = <session::Module<T>>::current_index();
+		if curr == 0 {
+			return false;
+		}
+
+		let index = curr - 1;
 		let got_heartbeat = <ReceivedHeartbeats<T>>::exists(&index, authority_id);
 		let was_author = <BlockAuthors<T>>::exists(&index, authority_id);
 		got_heartbeat || was_author
@@ -394,7 +399,7 @@ impl<T: Trait> Module<T> {
 		<Module<T>>::current_session_validators()
 			.iter()
 			.for_each(|(validator_id, authority_id)| {
-				if !Self::is_online_in_previous_session(authority_id) {
+				if !Self::was_online_in_previous_session(authority_id) {
 					let _ = T::DisableValidator::disable(validator_id);
 				}
 			});
