@@ -165,6 +165,7 @@ mod tests {
 
 	#[derive(Debug, PartialEq, Eq)]
 	struct DispatchEntry(Call);
+
 	#[derive(Debug, PartialEq, Eq)]
 	struct RestoreEntry {
 		dest: u64,
@@ -172,6 +173,7 @@ mod tests {
 		rent_allowance: u64,
 		delta: Vec<StorageKey>,
 	}
+
 	#[derive(Debug, PartialEq, Eq)]
 	struct CreateEntry {
 		code_hash: H256,
@@ -179,6 +181,7 @@ mod tests {
 		data: Vec<u8>,
 		gas_left: u64,
 	}
+
 	#[derive(Debug, PartialEq, Eq)]
 	struct TransferEntry {
 		to: u64,
@@ -186,6 +189,7 @@ mod tests {
 		data: Vec<u8>,
 		gas_left: u64,
 	}
+
 	#[derive(Default)]
 	pub struct MockExt {
 		storage: HashMap<StorageKey, Vec<u8>>,
@@ -198,6 +202,7 @@ mod tests {
 		events: Vec<(Vec<H256>, Vec<u8>)>,
 		next_account_id: u64,
 	}
+
 	impl Ext for MockExt {
 		type T = Test;
 
@@ -301,6 +306,7 @@ mod tests {
 
 		fn max_value_size(&self) -> u32 { 16_384 }
 	}
+
 	impl Ext for &mut MockExt {
 		type T = <MockExt as Ext>::T;
 
@@ -1336,7 +1342,7 @@ mod tests {
 				MockExt::default(),
 				&mut gas_meter
 			),
-			Err(ExecError { reason: "during execution" })
+			Err(ExecError { reason: "during execution", buffer: _ })
 		);
 	}
 
@@ -1378,7 +1384,7 @@ mod tests {
 				MockExt::default(),
 				&mut gas_meter
 			),
-			Err(ExecError { reason: "during execution" })
+			Err(ExecError { reason: "during execution", buffer: _ })
 		);
 	}
 
@@ -1444,4 +1450,61 @@ mod tests {
 		).unwrap();
 	}
 
+	// asserts that the size of the input data is 4.
+	const CODE_SIMPLE_ASSERT: &str = r#"
+(module
+	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
+
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+
+	(func (export "deploy"))
+
+	(func (export "call")
+		(call $assert
+			(i32.eq
+				(call $ext_scratch_size)
+				(i32.const 4)
+			)
+		)
+	)
+)
+"#;
+
+	#[test]
+	fn output_buffer_capacity_preserved_on_success() {
+		let mut input_data = Vec::with_capacity(1_234);
+		input_data.extend_from_slice(&[1, 2, 3, 4][..]);
+
+		let output = execute(
+			CODE_SIMPLE_ASSERT,
+			input_data,
+			MockExt::default(),
+			&mut GasMeter::with_limit(50_000, 1),
+		).unwrap();
+
+		assert_eq!(output.data.len(), 0);
+		assert_eq!(output.data.capacity(), 1_234);
+	}
+
+	#[test]
+	fn output_buffer_capacity_preserved_on_failure() {
+		let mut input_data = Vec::with_capacity(1_234);
+		input_data.extend_from_slice(&[1, 2, 3, 4, 5][..]);
+
+		let error = execute(
+			CODE_SIMPLE_ASSERT,
+			input_data,
+			MockExt::default(),
+			&mut GasMeter::with_limit(50_000, 1),
+		).err().unwrap();
+
+		assert_eq!(error.buffer.capacity(), 1_234);
+	}
 }

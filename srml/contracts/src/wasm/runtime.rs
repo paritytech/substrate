@@ -83,17 +83,22 @@ pub(crate) fn to_execution_result<E: Ext>(
 	// Check the exact type of the error.
 	match sandbox_err {
 		// No traps were generated. Proceed normally.
-		None => Ok(ExecReturnValue { data: Vec::new() }),
+		None => {
+			let mut buffer = runtime.scratch_buf;
+			buffer.clear();
+			Ok(ExecReturnValue { data: buffer })
+		},
 		// `Error::Module` is returned only if instantiation or linking failed (i.e.
 		// wasm binary tried to import a function that is not provided by the host).
 		// This shouldn't happen because validation process ought to reject such binaries.
 		//
 		// Because panics are really undesirable in the runtime code, we treat this as
 		// a trap for now. Eventually, we might want to revisit this.
-		Some(sandbox::Error::Module) => Err(ExecError { reason: "validation error" }),
+		Some(sandbox::Error::Module) =>
+			Err(ExecError { reason: "validation error", buffer: runtime.scratch_buf }),
 		// Any other kind of a trap should result in a failure.
 		Some(sandbox::Error::Execution) | Some(sandbox::Error::OutOfBounds) =>
-			Err(ExecError { reason: "during execution" }),
+			Err(ExecError { reason: "during execution", buffer: runtime.scratch_buf }),
 	}
 }
 
@@ -386,10 +391,10 @@ define_env!(Env, <E: Ext>,
 						nested_meter,
 						input_data,
 					)
-					.map_err(|_| ())
+					.map_err(|err| err.buffer)
 				}
 				// there is not enough gas to allocate for the nested call.
-				None => Err(()),
+				None => Err(input_data),
 			}
 		});
 
@@ -398,7 +403,11 @@ define_env!(Env, <E: Ext>,
 				ctx.scratch_buf = output_data;
 				Ok(0)
 			},
-			Err(_) => Ok(1),
+			Err(mut buffer) => {
+				buffer.clear();
+				ctx.scratch_buf = buffer;
+				Ok(1)
+			},
 		}
 	},
 
@@ -452,10 +461,10 @@ define_env!(Env, <E: Ext>,
 						nested_meter,
 						input_data
 					)
-					.map_err(|_| ())
+					.map_err(|err| err.buffer)
 				}
 				// there is not enough gas to allocate for the nested call.
-				None => Err(()),
+				None => Err(input_data),
 			}
 		});
 		match instantiate_outcome {
@@ -464,7 +473,11 @@ define_env!(Env, <E: Ext>,
 				address.encode_to(&mut ctx.scratch_buf);
 				Ok(0)
 			},
-			Err(_) => Ok(1),
+			Err(mut buffer) => {
+				buffer.clear();
+				ctx.scratch_buf = buffer;
+				Ok(1)
+			},
 		}
 	},
 
