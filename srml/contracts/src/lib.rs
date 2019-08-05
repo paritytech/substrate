@@ -560,7 +560,7 @@ decl_module! {
 			let dest = T::Lookup::lookup(dest)?;
 
 			Self::execute_wasm(origin, gas_limit, |ctx, gas_meter| {
-				ctx.call(dest, value, gas_meter, &data, exec::EmptyOutputBuf::new()).map(|_| ())
+				ctx.call(dest, value, gas_meter, data).map(|_| ())
 			})
 		}
 
@@ -584,7 +584,7 @@ decl_module! {
 			let origin = ensure_signed(origin)?;
 
 			Self::execute_wasm(origin, gas_limit, |ctx, gas_meter| {
-				ctx.instantiate(endowment, gas_meter, &code_hash, &data).map(|_| ())
+				ctx.instantiate(endowment, gas_meter, &code_hash, data).map(|_| ())
 			})
 		}
 

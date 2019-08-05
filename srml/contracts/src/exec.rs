@@ -74,7 +74,7 @@ pub trait Ext {
 		code: &CodeHash<Self::T>,
 		value: BalanceOf<Self::T>,
 		gas_meter: &mut GasMeter<Self::T>,
-		input_data: &[u8],
+		input_data: Vec<u8>,
 	) -> Result<InstantiateReceipt<AccountIdOf<Self::T>>, &'static str>;
 
 	/// Call (possibly transferring some amount of funds) into the specified account.
@@ -83,8 +83,7 @@ pub trait Ext {
 		to: &AccountIdOf<Self::T>,
 		value: BalanceOf<Self::T>,
 		gas_meter: &mut GasMeter<Self::T>,
-		input_data: &[u8],
-		empty_output_buf: EmptyOutputBuf,
+		input_data: Vec<u8>,
 	) -> Result<CallReceipt, &'static str>;
 
 	/// Notes a call dispatch.
@@ -150,47 +149,10 @@ pub trait Loader<T: Trait> {
 	fn load_main(&self, code_hash: &CodeHash<T>) -> Result<Self::Executable, &'static str>;
 }
 
-/// An `EmptyOutputBuf` is used as an optimization for reusing empty vectors when
-/// available.
-///
-/// You can create this structure from a spare vector if you have any and then
-/// you can fill it (only once), converting it to `OutputBuf`.
-pub struct EmptyOutputBuf(Vec<u8>);
-
-impl EmptyOutputBuf {
-	/// Create an output buffer from a spare vector which is not longer needed.
-	///
-	/// All contents are discarded, but capacity is preserved.
-	pub fn from_spare_vec(mut v: Vec<u8>) -> Self {
-		v.clear();
-		EmptyOutputBuf(v)
-	}
-
-	/// Create an output buffer ready for receiving a result.
-	///
-	/// Use this function to create output buffer if you don't have a spare
-	/// vector. Otherwise, use `from_spare_vec`.
-	pub fn new() -> Self {
-		EmptyOutputBuf(Vec::new())
-	}
-
-	/// Write to the buffer result of the specified size.
-	///
-	/// Calls closure with the buffer of the requested size.
-	pub fn fill<E, F: FnOnce(&mut [u8]) -> Result<(), E>>(mut self, size: usize, f: F) -> Result<OutputBuf, E> {
-		assert!(self.0.len() == 0, "the vector is always cleared; it's written only once");
-		self.0.resize(size, 0);
-		f(&mut self.0).map(|()| OutputBuf(self.0))
-	}
-}
-
-/// `OutputBuf` is the end result of filling an `EmptyOutputBuf`.
-pub struct OutputBuf(Vec<u8>);
-
 #[must_use]
 pub enum VmExecResult {
 	Ok,
-	Returned(OutputBuf),
+	Returned(Vec<u8>),
 	/// A program executed some forbidden operation.
 	///
 	/// This can include, e.g.: division by 0, OOB access or failure to satisfy some precondition
@@ -204,7 +166,7 @@ impl VmExecResult {
 	pub fn into_result(self) -> Result<Vec<u8>, &'static str> {
 		match self {
 			VmExecResult::Ok => Ok(Vec::new()),
-			VmExecResult::Returned(buf) => Ok(buf.0),
+			VmExecResult::Returned(buf) => Ok(buf),
 			VmExecResult::Trap(description) => Err(description),
 		}
 	}
@@ -227,9 +189,6 @@ pub struct IndexedEvent<T: Trait> {
 ///
 /// Execution of code can end by either implicit termination (that is, reached the end of
 /// executable), explicit termination via returning a buffer or termination due to a trap.
-///
-/// You can optionally provide a vector for collecting output if a spare is available. If you don't have
-/// it will be created anyway.
 pub trait Vm<T: Trait> {
 	type Executable;
 
@@ -237,8 +196,7 @@ pub trait Vm<T: Trait> {
 		&self,
 		exec: &Self::Executable,
 		ext: E,
-		input_data: &[u8],
-		empty_output_buf: EmptyOutputBuf,
+		input_data: Vec<u8>,
 		gas_meter: &mut GasMeter<T>,
 	) -> VmExecResult;
 }
@@ -353,8 +311,7 @@ where
 		dest: T::AccountId,
 		value: BalanceOf<T>,
 		gas_meter: &mut GasMeter<T>,
-		input_data: &[u8],
-		empty_output_buf: EmptyOutputBuf,
+		input_data: Vec<u8>,
 	) -> Result<CallReceipt, &'static str> {
 		if self.depth == self.config.max_depth as usize {
 			return Err("reached maximum depth, cannot make a call");
@@ -402,7 +359,6 @@ where
 							&executable,
 							nested.new_call_context(caller, value),
 							input_data,
-							empty_output_buf,
 							gas_meter,
 						)
 						.into_result()?
@@ -421,7 +377,7 @@ where
 		endowment: BalanceOf<T>,
 		gas_meter: &mut GasMeter<T>,
 		code_hash: &CodeHash<T>,
-		input_data: &[u8],
+		input_data: Vec<u8>,
 	) -> Result<InstantiateReceipt<T::AccountId>, &'static str> {
 		if self.depth == self.config.max_depth as usize {
 			return Err("reached maximum depth, cannot create");
@@ -437,7 +393,7 @@ where
 		let caller = self.self_account.clone();
 		let dest = T::DetermineContractAddress::contract_address_for(
 			code_hash,
-			input_data,
+			&input_data,
 			&caller,
 		);
 
@@ -464,7 +420,6 @@ where
 					&executable,
 					nested.new_call_context(caller.clone(), endowment),
 					input_data,
-					EmptyOutputBuf::new(),
 					gas_meter,
 				)
 				.into_result()?;
@@ -673,7 +628,7 @@ where
 		code_hash: &CodeHash<T>,
 		endowment: BalanceOf<T>,
 		gas_meter: &mut GasMeter<T>,
-		input_data: &[u8],
+		input_data: Vec<u8>,
 	) -> Result<InstantiateReceipt<AccountIdOf<T>>, &'static str> {
 		self.ctx.instantiate(endowment, gas_meter, code_hash, input_data)
 	}
@@ -683,11 +638,10 @@ where
 		to: &T::AccountId,
 		value: BalanceOf<T>,
 		gas_meter: &mut GasMeter<T>,
-		input_data: &[u8],
-		empty_output_buf: EmptyOutputBuf,
+		input_data: Vec<u8>,
 	) -> Result<CallReceipt, &'static str> {
 		self.ctx
-			.call(to.clone(), value, gas_meter, input_data, empty_output_buf)
+			.call(to.clone(), value, gas_meter, input_data)
 	}
 
 	fn note_dispatch_call(&mut self, call: CallOf<Self::T>) {
@@ -773,7 +727,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::{
-		BalanceOf, ExecFeeToken, ExecutionContext, Ext, Loader, EmptyOutputBuf, TransferFeeKind, TransferFeeToken,
+		BalanceOf, ExecFeeToken, ExecutionContext, Ext, Loader, TransferFeeKind, TransferFeeToken,
 		Vm, VmExecResult, InstantiateReceipt, RawEvent, DeferredAction,
 	};
 	use crate::account_db::AccountDb;
@@ -808,8 +762,7 @@ mod tests {
 
 	struct MockCtx<'a> {
 		ext: &'a mut dyn Ext<T = Test>,
-		input_data: &'a [u8],
-		empty_output_buf: Option<EmptyOutputBuf>,
+		input_data: Vec<u8>,
 		gas_meter: &'a mut GasMeter<Test>,
 	}
 
@@ -879,14 +832,12 @@ mod tests {
 			&self,
 			exec: &MockExecutable,
 			mut ext: E,
-			input_data: &[u8],
-			empty_output_buf: EmptyOutputBuf,
+			input_data: Vec<u8>,
 			gas_meter: &mut GasMeter<Test>,
 		) -> VmExecResult {
 			(exec.0)(MockCtx {
 				ext: &mut ext,
 				input_data,
-				empty_output_buf: Some(empty_output_buf),
 				gas_meter,
 			})
 		}
@@ -914,7 +865,7 @@ mod tests {
 			ctx.overlay.create_contract(&BOB, exec_ch).unwrap();
 
 			assert_matches!(
-				ctx.call(BOB, value, &mut gas_meter, &data, EmptyOutputBuf::new()),
+				ctx.call(BOB, value, &mut gas_meter, data),
 				Ok(_)
 			);
 		});
@@ -938,7 +889,7 @@ mod tests {
 
 			let mut gas_meter = GasMeter::<Test>::with_limit(1000, 1);
 
-			let result = ctx.call(dest, 0, &mut gas_meter, &[], EmptyOutputBuf::new());
+			let result = ctx.call(dest, 0, &mut gas_meter, vec![]);
 			assert_matches!(result, Ok(_));
 
 			let mut toks = gas_meter.tokens().iter();
@@ -958,7 +909,7 @@ mod tests {
 
 			let mut gas_meter = GasMeter::<Test>::with_limit(1000, 1);
 
-			let result = ctx.instantiate(0, &mut gas_meter, &code, &[]);
+			let result = ctx.instantiate(0, &mut gas_meter, &code, vec![]);
 			assert_matches!(result, Ok(_));
 
 			let mut toks = gas_meter.tokens().iter();
@@ -986,8 +937,7 @@ mod tests {
 				dest,
 				55,
 				&mut GasMeter::<Test>::with_limit(1000, 1),
-				&[],
-				EmptyOutputBuf::new(),
+				vec![],
 			);
 			assert_matches!(result, Ok(_));
 			assert_eq!(ctx.overlay.get_balance(&origin), 45);
@@ -1015,7 +965,7 @@ mod tests {
 
 				let mut gas_meter = GasMeter::<Test>::with_limit(1000, 1);
 
-				let result = ctx.call(dest, 50, &mut gas_meter, &[], EmptyOutputBuf::new());
+				let result = ctx.call(dest, 50, &mut gas_meter, vec![]);
 				assert_matches!(result, Ok(_));
 
 				let mut toks = gas_meter.tokens().iter();
@@ -1044,7 +994,7 @@ mod tests {
 
 				let mut gas_meter = GasMeter::<Test>::with_limit(1000, 1);
 
-				let result = ctx.call(dest, 50, &mut gas_meter, &[], EmptyOutputBuf::new());
+				let result = ctx.call(dest, 50, &mut gas_meter, vec![]);
 				assert_matches!(result, Ok(_));
 
 				let mut toks = gas_meter.tokens().iter();
@@ -1076,7 +1026,7 @@ mod tests {
 
 				let mut gas_meter = GasMeter::<Test>::with_limit(1000, 1);
 
-				let result = ctx.instantiate(50, &mut gas_meter, &code, &[]);
+				let result = ctx.instantiate(50, &mut gas_meter, &code, vec![]);
 				assert_matches!(result, Ok(_));
 
 				let mut toks = gas_meter.tokens().iter();
@@ -1111,8 +1061,7 @@ mod tests {
 				dest,
 				100,
 				&mut GasMeter::<Test>::with_limit(1000, 1),
-				&[],
-				EmptyOutputBuf::new(),
+				vec![],
 			);
 
 			assert_matches!(result, Err("balance too low to send value"));
@@ -1130,18 +1079,7 @@ mod tests {
 
 		let vm = MockVm::new();
 		let mut loader = MockLoader::empty();
-		let return_ch = loader.insert(|mut ctx| {
-			#[derive(Debug)]
-			enum Void {}
-			let empty_output_buf = ctx.empty_output_buf.take().unwrap();
-			let output_buf =
-				empty_output_buf.fill::<Void, _>(4, |data| {
-					data.copy_from_slice(&[1, 2, 3, 4]);
-					Ok(())
-				})
-				.expect("Ok is always returned");
-			VmExecResult::Returned(output_buf)
-		});
+		let return_ch = loader.insert(|_| VmExecResult::Returned(vec![1, 2, 3, 4]));
 
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
@@ -1152,8 +1090,7 @@ mod tests {
 				dest,
 				0,
 				&mut GasMeter::<Test>::with_limit(1000, 1),
-				&[],
-				EmptyOutputBuf::new(),
+				vec![],
 			);
 
 			let output_data = result.unwrap().output_data;
@@ -1180,8 +1117,7 @@ mod tests {
 				BOB,
 				0,
 				&mut GasMeter::<Test>::with_limit(10000, 1),
-				&[1, 2, 3, 4],
-				EmptyOutputBuf::new(),
+				vec![1, 2, 3, 4],
 			);
 			assert_matches!(result, Ok(_));
 		});
@@ -1195,7 +1131,7 @@ mod tests {
 				0,
 				&mut GasMeter::<Test>::with_limit(10000, 1),
 				&input_data_ch,
-				&[1, 2, 3, 4],
+				vec![1, 2, 3, 4],
 			);
 			assert_matches!(result, Ok(_));
 		});
@@ -1212,9 +1148,7 @@ mod tests {
 		let mut loader = MockLoader::empty();
 		let recurse_ch = loader.insert(|ctx| {
 			// Try to call into yourself.
-			let r = ctx
-				.ext
-				.call(&BOB, 0, ctx.gas_meter, &[], EmptyOutputBuf::new());
+			let r = ctx.ext.call(&BOB, 0, ctx.gas_meter, vec![]);
 
 			let mut reached_bottom = reached_bottom.borrow_mut();
 			if !*reached_bottom {
@@ -1239,8 +1173,7 @@ mod tests {
 				BOB,
 				value,
 				&mut GasMeter::<Test>::with_limit(100000, 1),
-				&[],
-				EmptyOutputBuf::new(),
+				vec![],
 			);
 
 			assert_matches!(result, Ok(_));
@@ -1264,8 +1197,7 @@ mod tests {
 
 			// Call into CHARLIE contract.
 			assert_matches!(
-				ctx.ext
-					.call(&CHARLIE, 0, ctx.gas_meter, &[], EmptyOutputBuf::new()),
+				ctx.ext.call(&CHARLIE, 0, ctx.gas_meter, vec![]),
 				Ok(_)
 			);
 			VmExecResult::Ok
@@ -1287,8 +1219,7 @@ mod tests {
 				dest,
 				0,
 				&mut GasMeter::<Test>::with_limit(10000, 1),
-				&[],
-				EmptyOutputBuf::new(),
+				vec![],
 			);
 
 			assert_matches!(result, Ok(_));
@@ -1309,8 +1240,7 @@ mod tests {
 
 			// Call into charlie contract.
 			assert_matches!(
-				ctx.ext
-					.call(&CHARLIE, 0, ctx.gas_meter, &[], EmptyOutputBuf::new()),
+				ctx.ext.call(&CHARLIE, 0, ctx.gas_meter, vec![]),
 				Ok(_)
 			);
 			VmExecResult::Ok
@@ -1330,8 +1260,7 @@ mod tests {
 				BOB,
 				0,
 				&mut GasMeter::<Test>::with_limit(10000, 1),
-				&[],
-				EmptyOutputBuf::new(),
+				vec![],
 			);
 
 			assert_matches!(result, Ok(_));
@@ -1356,7 +1285,7 @@ mod tests {
 						0, // <- zero endowment
 						&mut GasMeter::<Test>::with_limit(10000, 1),
 						&dummy_ch,
-						&[],
+						vec![],
 					),
 					Err(_)
 				);
@@ -1383,7 +1312,7 @@ mod tests {
 						100,
 						&mut GasMeter::<Test>::with_limit(10000, 1),
 						&dummy_ch,
-						&[],
+						vec![],
 					),
 					Ok(InstantiateReceipt { address }) => address
 				);
@@ -1422,7 +1351,7 @@ mod tests {
 						&dummy_ch,
 						15u64,
 						ctx.gas_meter,
-						&[]
+						vec![]
 					)
 					.unwrap()
 					.address.into();
@@ -1440,7 +1369,7 @@ mod tests {
 				ctx.overlay.create_contract(&BOB, creator_ch).unwrap();
 
 				assert_matches!(
-					ctx.call(BOB, 20, &mut GasMeter::<Test>::with_limit(1000, 1), &[], EmptyOutputBuf::new()),
+					ctx.call(BOB, 20, &mut GasMeter::<Test>::with_limit(1000, 1), vec![]),
 					Ok(_)
 				);
 
@@ -1482,7 +1411,7 @@ mod tests {
 						&dummy_ch,
 						15u64,
 						ctx.gas_meter,
-						&[]
+						vec![]
 					),
 					Err("It's a trap!")
 				);
@@ -1500,7 +1429,7 @@ mod tests {
 				ctx.overlay.create_contract(&BOB, creator_ch).unwrap();
 
 				assert_matches!(
-					ctx.call(BOB, 20, &mut GasMeter::<Test>::with_limit(1000, 1), &[], EmptyOutputBuf::new()),
+					ctx.call(BOB, 20, &mut GasMeter::<Test>::with_limit(1000, 1), vec![]),
 					Ok(_)
 				);
 
@@ -1535,7 +1464,7 @@ mod tests {
 				0,
 				&mut GasMeter::<Test>::with_limit(10000, 1),
 				&rent_allowance_ch,
-				&[],
+				vec![],
 			);
 			assert_matches!(result, Ok(_));
 		});

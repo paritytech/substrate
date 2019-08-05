@@ -17,10 +17,7 @@
 //! Environment definition of the wasm smart-contract runtime.
 
 use crate::{Schedule, Trait, CodeHash, ComputeDispatchFee, BalanceOf};
-use crate::exec::{
-	Ext, VmExecResult, OutputBuf, EmptyOutputBuf, CallReceipt, InstantiateReceipt, StorageKey,
-	TopicOf,
-};
+use crate::exec::{Ext, VmExecResult, CallReceipt, InstantiateReceipt, StorageKey, TopicOf};
 use crate::gas::{Gas, GasMeter, Token, GasMeterResult, approx_gas_for_balance};
 use sandbox;
 use system;
@@ -35,15 +32,12 @@ use sr_primitives::traits::{Bounded, SaturatedConversion};
 /// to just terminate quickly in some cases.
 enum SpecialTrap {
 	/// Signals that trap was generated in response to call `ext_return` host function.
-	Return(OutputBuf),
+	Return(Vec<u8>),
 }
 
 /// Can only be used for one call.
 pub(crate) struct Runtime<'a, E: Ext + 'a> {
 	ext: &'a mut E,
-	// A VM can return a result only once and only by value. So
-	// we wrap output buffer to make it possible to take the buffer out.
-	empty_output_buf: Option<EmptyOutputBuf>,
 	scratch_buf: Vec<u8>,
 	schedule: &'a Schedule,
 	memory: sandbox::Memory,
@@ -54,14 +48,12 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 	pub(crate) fn new(
 		ext: &'a mut E,
 		input_data: Vec<u8>,
-		empty_output_buf: EmptyOutputBuf,
 		schedule: &'a Schedule,
 		memory: sandbox::Memory,
 		gas_meter: &'a mut GasMeter<E::T>,
 	) -> Self {
 		Runtime {
 			ext,
-			empty_output_buf: Some(empty_output_buf),
 			// Put the input data into the scratch buffer immediately.
 			scratch_buf: input_data,
 			schedule,
@@ -186,12 +178,32 @@ fn read_sandbox_memory<E: Ext>(
 ) -> Result<Vec<u8>, sandbox::HostError> {
 	charge_gas(ctx.gas_meter, ctx.schedule, RuntimeToken::ReadMemory(len))?;
 
-	let mut buf = Vec::new();
-	buf.resize(len as usize, 0);
-
-	ctx.memory().get(ptr, &mut buf)?;
-
+	let mut buf = vec![0u8; len as usize];
+	ctx.memory().get(ptr, buf.as_mut_slice()).map_err(|_| sandbox::HostError)?;
 	Ok(buf)
+}
+
+/// Read designated chunk from the sandbox memory into the scratch buffer, consuming an
+/// appropriate amount of gas. Resizes the scratch buffer to the specified length on success.
+///
+/// Returns `Err` if one of the following conditions occurs:
+///
+/// - calculating the gas cost resulted in overflow.
+/// - out of gas
+/// - requested buffer is not within the bounds of the sandbox memory.
+fn read_sandbox_memory_into_scratch<E: Ext>(
+	ctx: &mut Runtime<E>,
+	ptr: u32,
+	len: u32,
+) -> Result<(), sandbox::HostError> {
+	charge_gas(ctx.gas_meter, ctx.schedule, RuntimeToken::ReadMemory(len))?;
+
+	let mut buf = mem::replace(&mut ctx.scratch_buf, Vec::new());
+	buf.resize(len as usize, 0);
+	ctx.memory().get(ptr, buf.as_mut_slice()).map_err(|_| sandbox::HostError)?;
+	let _  = mem::replace(&mut ctx.scratch_buf, buf);
+
+	Ok(())
 }
 
 /// Read designated chunk from the sandbox memory into the supplied buffer, consuming
@@ -344,12 +356,10 @@ define_env!(Env, <E: Ext>,
 			read_sandbox_memory_as(ctx, callee_ptr, callee_len)?;
 		let value: BalanceOf<<E as Ext>::T> =
 			read_sandbox_memory_as(ctx, value_ptr, value_len)?;
-		let input_data = read_sandbox_memory(ctx, input_data_ptr, input_data_len)?;
 
-		// Grab the scratch buffer and put in its' place an empty one.
-		// We will use it for creating `EmptyOutputBuf` container for the call.
-		let scratch_buf = mem::replace(&mut ctx.scratch_buf, Vec::new());
-		let empty_output_buf = EmptyOutputBuf::from_spare_vec(scratch_buf);
+		// Read input data into the scratch buffer, then take ownership of it.
+		read_sandbox_memory_into_scratch(ctx, input_data_ptr, input_data_len)?;
+		let input_data = mem::replace(&mut ctx.scratch_buf, Vec::new());
 
 		let nested_gas_limit = if gas == 0 {
 			ctx.gas_meter.gas_left()
@@ -364,8 +374,7 @@ define_env!(Env, <E: Ext>,
 						&callee,
 						value,
 						nested_meter,
-						&input_data,
-						empty_output_buf
+						input_data,
 					)
 					.map_err(|_| ())
 				}
@@ -413,10 +422,10 @@ define_env!(Env, <E: Ext>,
 			read_sandbox_memory_as(ctx, code_hash_ptr, code_hash_len)?;
 		let value: BalanceOf<<E as Ext>::T> =
 			read_sandbox_memory_as(ctx, value_ptr, value_len)?;
-		let input_data = read_sandbox_memory(ctx, input_data_ptr, input_data_len)?;
 
-		// Clear the scratch buffer in any case.
-		ctx.scratch_buf.clear();
+		// Read input data into the scratch buffer, then take ownership of it.
+		read_sandbox_memory_into_scratch(ctx, input_data_ptr, input_data_len)?;
+		let input_data = mem::replace(&mut ctx.scratch_buf, Vec::new());
 
 		let nested_gas_limit = if gas == 0 {
 			ctx.gas_meter.gas_left()
@@ -431,7 +440,7 @@ define_env!(Env, <E: Ext>,
 						&code_hash,
 						value,
 						nested_meter,
-						&input_data
+						input_data
 					)
 					.map_err(|_| ())
 				}
@@ -454,33 +463,11 @@ define_env!(Env, <E: Ext>,
 	//
 	// This is the only way to return a data buffer to the caller.
 	ext_return(ctx, data_ptr: u32, data_len: u32) => {
-		match ctx
-			.gas_meter
-			.charge(
-				ctx.schedule,
-				RuntimeToken::ReturnData(data_len)
-			)
-		{
-			GasMeterResult::Proceed => (),
-			GasMeterResult::OutOfGas => return Err(sandbox::HostError),
-		}
+		charge_gas(ctx.gas_meter, ctx.schedule, RuntimeToken::ReturnData(data_len))?;
 
-		let empty_output_buf = ctx
-			.empty_output_buf
-			.take()
-			.expect(
-				"`empty_output_buf` is taken only here;
-				`ext_return` traps;
-				`Runtime` can only be used only for one execution;
-				qed"
-			);
-		let output_buf = empty_output_buf.fill(
-			data_len as usize,
-			|slice_mut| {
-				// Read the memory at the specified pointer to the provided slice.
-				ctx.memory.get(data_ptr, slice_mut)
-			}
-		)?;
+		read_sandbox_memory_into_scratch(ctx, data_ptr, data_len)?;
+		let output_buf = mem::replace(&mut ctx.scratch_buf, Vec::new());
+
 		ctx.special_trap = Some(SpecialTrap::Return(output_buf));
 
 		// The trap mechanism is used to immediately terminate the execution.
@@ -720,16 +707,11 @@ define_env!(Env, <E: Ext>,
 
 		let event_data = read_sandbox_memory(ctx, data_ptr, data_len)?;
 
-		match ctx
-			.gas_meter
-			.charge(
-				ctx.schedule,
-				RuntimeToken::DepositEvent(topics.len() as u32, data_len)
-			)
-		{
-			GasMeterResult::Proceed => (),
-			GasMeterResult::OutOfGas => return Err(sandbox::HostError),
-		}
+		charge_gas(
+			ctx.gas_meter,
+			ctx.schedule,
+			RuntimeToken::DepositEvent(topics.len() as u32, data_len)
+		)?;
 		ctx.ext.deposit_event(topics, event_data);
 
 		Ok(())
