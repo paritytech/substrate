@@ -45,3 +45,31 @@ impl RuntimePublic for Public {
 		rio::sr25519_verify(&signature.0, msg.as_ref(), self)
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use sr_primitives::{generic::BlockId, traits::ProvideRuntimeApi};
+	use primitives::{testing::KeyStore, crypto::Pair};
+	use test_client::{
+		TestClientBuilder, DefaultTestClientBuilderExt, TestClientBuilderExt,
+		runtime::{TestAPI, app_crypto::sr25519::AppPair},
+	};
+
+	#[test]
+	fn sr25519_works_in_runtime() {
+		let keystore = KeyStore::new();
+		let test_client = TestClientBuilder::new().set_keystore(keystore.clone()).build();
+		let signature = test_client.runtime_api()
+			.test_sr25519_crypto(&BlockId::Number(0))
+			.expect("Tests `sr25519` crypto.");
+
+		let key_pair: AppPair = keystore.read()
+			.sr25519_pairs(crate::key_types::SR25519)
+			.get(0)
+			.expect("There should be at least one `sr25519` key in the keystore.")
+			.clone()
+			.into();
+
+		assert!(AppPair::verify(&signature, "sr25519", key_pair.public()));
+	}
+}

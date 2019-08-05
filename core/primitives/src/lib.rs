@@ -64,6 +64,7 @@ pub mod storage;
 pub mod uint;
 mod changes_trie;
 pub mod traits;
+pub mod testing;
 
 #[cfg(test)]
 mod tests;

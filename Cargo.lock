@@ -4244,8 +4244,10 @@ dependencies = [
  "parity-codec 4.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.97 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
+ "sr-primitives 2.0.0",
  "sr-std 2.0.0",
  "substrate-primitives 2.0.0",
+ "substrate-test-runtime-client 2.0.0",
 ]
 
 [[package]]
@@ -4983,6 +4985,7 @@ dependencies = [
  "srml-support 2.0.0",
  "srml-system 2.0.0",
  "srml-timestamp 2.0.0",
+ "substrate-application-crypto 2.0.0",
  "substrate-client 2.0.0",
  "substrate-consensus-aura-primitives 2.0.0",
  "substrate-consensus-babe-primitives 2.0.0",
