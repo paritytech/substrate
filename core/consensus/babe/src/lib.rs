@@ -770,6 +770,7 @@ impl MaybeSpanEpoch {
 		}
 	}
 
+	#[cfg(test)]
 	pub fn into_regular(self) -> Option<Epoch> {
 		match self {
 			MaybeSpanEpoch::Regular(epoch) => Some(epoch),
@@ -799,8 +800,8 @@ fn epoch_from_cache<B, C>(client: &C, at: &BlockId<B>) -> Option<MaybeSpanEpoch>
 	// we need to go back for maximum two steps
 	client.cache()
 		.and_then(|cache| cache
-			.get_at_and_skip(0, &well_known_cache_keys::EPOCH, at)
-			.and_then(|(_, _, _, v)| Decode::decode(&mut &v[..])))
+			.get_at(&well_known_cache_keys::EPOCH, at)
+			.and_then(|v| Decode::decode(&mut &v[..])))
 }
 
 /// Extract current epoch from runtime.
@@ -929,7 +930,7 @@ fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> 
 	let genesis_id = BlockId::Number(Zero::zero());
 	let genesis_epoch: Option<MaybeSpanEpoch> = cache
 		.get_at(&well_known_cache_keys::EPOCH, &genesis_id)
-		.and_then(|(_, _, v)| Decode::decode(&mut &v[..]));
+		.and_then(|v| Decode::decode(&mut &v[..]));
 	if genesis_epoch.is_some() {
 		return Ok(());
 	}
@@ -1076,7 +1077,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 			&is_descendent_of,
 			&|epoch| epoch.start_slot <= slot_number,
 		).map_err(|e| ConsensusError::from(ConsensusError::ClientImport(e.to_string())))?;
-println!("=== ENACTED_EPOCH: {:?}", enacted_epoch);
+
 		let check_roots = || -> Result<bool, ConsensusError> {
 			// this can only happen when the chain starts, since there's no
 			// epoch change at genesis. afterwards every time we expect an epoch
