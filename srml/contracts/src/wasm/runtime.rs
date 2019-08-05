@@ -24,6 +24,7 @@ use crate::gas::{Gas, GasMeter, Token, GasMeterResult, approx_gas_for_balance};
 use sandbox;
 use system;
 use rstd::prelude::*;
+use rstd::convert::TryInto;
 use rstd::mem;
 use codec::{Decode, Encode};
 use sr_primitives::traits::{Bounded, SaturatedConversion};
@@ -77,7 +78,7 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 
 pub(crate) fn to_execution_result<E: Ext>(
 	runtime: Runtime<E>,
-	sandbox_err: Option<sandbox::Error>,
+	sandbox_result: Result<sandbox::ReturnValue, sandbox::Error>,
 ) -> ExecResult {
 	// Special case. The trap was the result of the execution `return` host function.
 	if let Some(SpecialTrap::Return(data)) = runtime.special_trap {
@@ -85,23 +86,33 @@ pub(crate) fn to_execution_result<E: Ext>(
 	}
 
 	// Check the exact type of the error.
-	match sandbox_err {
+	match sandbox_result {
 		// No traps were generated. Proceed normally.
-		None => {
+		Ok(sandbox::ReturnValue::Unit) => {
 			let mut buffer = runtime.scratch_buf;
 			buffer.clear();
 			Ok(ExecReturnValue { status: STATUS_SUCCESS, data: buffer })
-		},
+		}
+		Ok(sandbox::ReturnValue::Value(sandbox::TypedValue::I32(exit_code))) => {
+			let status = (exit_code & 0xFF).try_into()
+				.expect("exit_code is masked into the range of a u8; qed");
+			Ok(ExecReturnValue { status, data: runtime.scratch_buf })
+		}
+		// This should never happen as the return type of exported functions should have been
+		// validated by the code preparation process. However, because panics are really
+		// undesirable in the runtime code, we treat this as a trap for now. Eventually, we might
+		// want to revisit this.
+		Ok(_) => Err(ExecError { reason: "return type error", buffer: runtime.scratch_buf }),
 		// `Error::Module` is returned only if instantiation or linking failed (i.e.
 		// wasm binary tried to import a function that is not provided by the host).
 		// This shouldn't happen because validation process ought to reject such binaries.
 		//
 		// Because panics are really undesirable in the runtime code, we treat this as
 		// a trap for now. Eventually, we might want to revisit this.
-		Some(sandbox::Error::Module) =>
+		Err(sandbox::Error::Module) =>
 			Err(ExecError { reason: "validation error", buffer: runtime.scratch_buf }),
 		// Any other kind of a trap should result in a failure.
-		Some(sandbox::Error::Execution) | Some(sandbox::Error::OutOfBounds) =>
+		Err(sandbox::Error::Execution) | Err(sandbox::Error::OutOfBounds) =>
 			Err(ExecError { reason: "during execution", buffer: runtime.scratch_buf }),
 	}
 }
@@ -416,7 +427,7 @@ define_env!(Env, <E: Ext>,
 			},
 			Err(buffer) => {
 				ctx.scratch_buf = buffer;
-				buffer.clear();
+				ctx.scratch_buf.clear();
 				Ok(TRAP_RETURN_CODE)
 			},
 		}
@@ -505,7 +516,7 @@ define_env!(Env, <E: Ext>,
 			},
 			Err(buffer) => {
 				ctx.scratch_buf = buffer;
-				buffer.clear();
+				ctx.scratch_buf.clear();
 				Ok(TRAP_RETURN_CODE)
 			},
 		}

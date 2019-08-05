@@ -143,7 +143,7 @@ impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a> {
 		// entrypoint.
 		let result = sandbox::Instance::new(&exec.prefab_module.code, &imports, &mut runtime)
 			.and_then(|mut instance| instance.invoke(exec.entrypoint_name, &[], &mut runtime));
-		to_execution_result(runtime, result.err())
+		to_execution_result(runtime, result)
 	}
 }
 
