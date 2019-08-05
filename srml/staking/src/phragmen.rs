@@ -16,22 +16,50 @@
 
 //! Rust implementation of the Phragmén election algorithm.
 
-use rstd::{prelude::*, collections::btree_map::BTreeMap};
-use sr_primitives::{PerU128};
+use rstd::{prelude::*, cmp::Ordering, collections::btree_map::BTreeMap};
+use sr_primitives::{PerU128, Perbill};
 use sr_primitives::traits::{Zero, Convert, Saturating};
 use crate::{BalanceOf, RawAssignment, ExpoMap, Trait, ValidatorPrefs, IndividualExposure};
 
-type Fraction = PerU128;
 /// Wrapper around the type used as the _safe_ wrapper around a `balance`.
 pub type ExtendedBalance = u128;
 
 // this is only used while creating the candidate score. Due to reasons explained below
 // The more accurate this is, the less likely we choose a wrong candidate.
 const SCALE_FACTOR: ExtendedBalance = u32::max_value() as ExtendedBalance + 1;
-/// These are used to expose a fixed accuracy to the caller function. The bigger they are,
-/// the more accurate we get, but the more likely it is for us to overflow. The case of overflow
-/// is handled but accuracy will be lost. 32 or 16 are reasonable values.
-pub const ACCURACY: ExtendedBalance = u32::max_value() as ExtendedBalance + 1;
+
+#[derive(Clone, Default)]
+#[cfg_attr(feature = "std", derive(Debug))]
+struct Rational(ExtendedBalance, ExtendedBalance);
+
+impl Rational {
+	fn zero() -> Self {
+		Self(0, 1);
+	}
+
+	fn to_den(self, den: u128) -> Self {
+		let x = den / self.1 * self.0;
+		Self(x, den);
+	}
+}
+
+impl Ord for Rational {
+	fn cmp(&self, other: &Self) -> Ordering {
+		// take both to type::max_value() as common denumenator
+		let self_scaled = self.to_den(u128::max_value());
+		let other_scaled = other.to_den(u128::max_value());
+		self_scaled.0.cmp(other_scaled.0)
+	}
+}
+
+impl PartialEq for Rational {
+    fn eq(&self, other: &Self) -> bool {
+        if self.to_den(u128::max_value()).0 == other.to_den(u128::max_value()).0 { return true; }
+		return false;
+    }
+}
+
+impl Eq for Rational { }
 
 /// Wrapper around validation candidates some metadata.
 #[derive(Clone, Default)]
@@ -40,7 +68,7 @@ pub struct Candidate<AccountId> {
 	/// The validator's account
 	pub who: AccountId,
 	/// Intermediary value used to sort candidates.
-	pub score: Fraction,
+	pub score: Rational,
 	/// Accumulator of the stake of this candidate based on received votes.
 	approval_stake: ExtendedBalance,
 	/// Flag for being elected.
@@ -58,7 +86,7 @@ pub struct Nominator<AccountId> {
 	/// the stake amount proposed by the nominator as a part of the vote.
 	budget: ExtendedBalance,
 	/// Incremented each time a nominee that this nominator voted for has been elected.
-	load: Fraction,
+	load: Rational,
 }
 
 /// Wrapper around a nominator vote and the load of that vote.
@@ -68,7 +96,7 @@ pub struct Edge<AccountId> {
 	/// Account being voted for
 	who: AccountId,
 	/// Load of this vote.
-	load: Fraction,
+	load: Rational,
 	/// Equal to `edge.load / nom.load`. Stored only to be used with post-processing.
 	ratio: ExtendedBalance,
 	/// Index of the candidate stored in the 'candidates' vector.
@@ -125,7 +153,7 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 			who: c.who.clone(),
 			edges: vec![ Edge { who: c.who.clone(), candidate_index: idx, ..Default::default() }],
 			budget: to_votes(s),
-			load: Fraction::zero(),
+			load: Rational::zero(),
 		});
 		c_idx_cache.insert(c.who.clone(), idx);
 		c
@@ -149,7 +177,7 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 			who,
 			edges: edges,
 			budget: to_votes(nominator_stake),
-			load: Fraction::zero(),
+			load: Rational::zero(),
 		}
 	}));
 
@@ -164,7 +192,7 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 			// Loop 1: initialize score
 			for c in &mut candidates {
 				if !c.elected {
-					c.score = Fraction::from_xth(c.approval_stake);
+					c.score = Rational(1, c.approval_stake);
 				}
 			}
 			// Loop 2: increment score.
@@ -172,15 +200,9 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 				for e in &n.edges {
 					let c = &mut candidates[e.candidate_index];
 					if !c.elected && !c.approval_stake.is_zero() {
-						// Basic fixed-point shifting by 32.
-						// `n.budget.saturating_mul(SCALE_FACTOR)` will never saturate
-						// since n.budget cannot exceed u64,despite being stored in u128. yet,
-						// `*n.load / SCALE_FACTOR` might collapse to zero. Hence, 32 or 16 bits are better scale factors.
-						// Note that left-associativity in operators precedence is crucially important here.
-						let temp =
-							n.budget.saturating_mul(SCALE_FACTOR) / c.approval_stake
-							* (*n.load / SCALE_FACTOR);
-						c.score = Fraction::from_parts((*c.score).saturating_add(temp));
+						// This can be simplified
+						let temp = c.score.1 * n.budget * n.load.0 / c.approval_stake / n.load.1;
+						c.score = Rational(c.score.0 + temp, c.score.1);
 					}
 				}
 			}
@@ -189,7 +211,7 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 			if let Some(winner) = candidates
 				.iter_mut()
 				.filter(|c| !c.elected)
-				.min_by_key(|c| *c.score)
+				.min_by_key(|c| c.score)
 			{
 				// loop 3: update nominator and edge load
 				winner.elected = true;
@@ -201,7 +223,6 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 						}
 					}
 				}
-
 				elected_candidates.push(winner.who.clone());
 			} else {
 				break

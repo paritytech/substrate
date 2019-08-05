@@ -22,6 +22,8 @@ use rstd::{prelude::*, ops, convert::{TryInto, TryFrom}};
 use codec::{Encode, Decode};
 use crate::traits::{SimpleArithmetic, SaturatedConversion, CheckedSub, CheckedAdd, Bounded, UniqueSaturatedInto, Saturating};
 
+
+
 macro_rules! implement_per_thing {
 	($name:ident, $test_mod:ident, $max:tt, $type:ty, $upper_type:ty, $title:expr) => {
 		/// A fixed point representation of a number between in the range [0, 1].
@@ -83,6 +85,23 @@ macro_rules! implement_per_thing {
 			}
 		}
 
+		impl Saturating for $name {
+			fn saturating_add(self, rhs: Self) -> Self {
+				Self::from_parts(self.0 + rhs.0)
+			}
+			fn saturating_sub(self, rhs: Self) -> Self {
+				Self::from_parts(self.0.saturating_sub(rhs.0))
+			}
+			fn saturating_mul(self, rhs: Self) -> Self {
+				let a = self.0 as $upper_type;
+				let b = rhs.0 as $upper_type;
+				let m = $max as $upper_type;
+				let parts = a * b / m;
+				// This will always fit into $type.
+				Self::from_parts(parts as $type)
+			}
+		}
+
 		/// Overflow-prune multiplication.
 		///
 		/// tailored to be used with a balance type. Never overflows.
@@ -138,7 +157,7 @@ macro_rules! implement_per_thing {
 		#[cfg(test)]
 		mod $test_mod {
 			use codec::{Encode, Decode};
-			use super::$name;
+			use super::{$name, Saturating};
 
 			#[derive(Encode, Decode, PartialEq, Eq, Debug)]
 			struct WithCompact<T: crate::codec::HasCompact> {
@@ -284,6 +303,21 @@ macro_rules! implement_per_thing {
 				assert_eq!($name::from_percent(50) * 100u32, 50u32);
 				assert_eq!($name::from_percent(50) * 100u64, 50u64);
 				assert_eq!($name::from_percent(50) * 100u128, 50u128);
+			}
+
+			#[test]
+			fn per_thing_saturating_op_works() {
+				assert_eq!($name::from_percent(50).saturating_add($name::from_percent(40)), $name::from_percent(90));
+				assert_eq!($name::from_percent(50).saturating_add($name::from_percent(50)), $name::from_percent(100));
+				assert_eq!($name::from_percent(60).saturating_add($name::from_percent(50)), $name::from_percent(100));
+
+				assert_eq!($name::from_percent(60).saturating_sub($name::from_percent(50)), $name::from_percent(10));
+				assert_eq!($name::from_percent(60).saturating_sub($name::from_percent(60)), $name::from_percent(0));
+				assert_eq!($name::from_percent(60).saturating_sub($name::from_percent(70)), $name::from_percent(0));
+
+				assert_eq!($name::from_percent(50).saturating_mul($name::from_percent(50)), $name::from_percent(25));
+				assert_eq!($name::from_percent(20).saturating_mul($name::from_percent(20)), $name::from_percent(4));
+				assert_eq!($name::from_percent(10).saturating_mul($name::from_percent(10)), $name::from_percent(1));
 			}
 		}
 	};
