@@ -25,8 +25,8 @@ use log::{trace, debug};
 use futures::sync::mpsc;
 use lru_cache::LruCache;
 use libp2p::PeerId;
-use runtime_primitives::traits::{Block as BlockT, Hash, HashFor};
-use runtime_primitives::ConsensusEngineId;
+use sr_primitives::traits::{Block as BlockT, Hash, HashFor};
+use sr_primitives::ConsensusEngineId;
 pub use crate::message::generic::{Message, ConsensusMessage};
 use crate::protocol::Context;
 use crate::config::Roles;
@@ -556,7 +556,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 #[cfg(test)]
 mod tests {
-	use runtime_primitives::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
+	use sr_primitives::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
 	use futures::Stream;
 
 	use super::*;

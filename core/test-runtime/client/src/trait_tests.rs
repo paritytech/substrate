@@ -28,8 +28,8 @@ use crate::{AccountKeyring, ClientExt, TestClientBuilder, TestClientBuilderExt};
 use generic_test_client::consensus::BlockOrigin;
 use primitives::Blake2Hasher;
 use runtime::{self, Transfer};
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::Block as BlockT;
+use sr_primitives::generic::BlockId;
+use sr_primitives::traits::Block as BlockT;
 
 /// helper to test the `leaves` implementation for various backends
 pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where

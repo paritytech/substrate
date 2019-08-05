@@ -24,8 +24,8 @@ pub use timestamp;
 use rstd::{result, prelude::*};
 use srml_support::{decl_storage, decl_module, StorageValue, traits::FindAuthor, traits::Get};
 use timestamp::{OnTimestampSet};
-use primitives::{generic::DigestItem, ConsensusEngineId};
-use primitives::traits::{
+use sr_primitives::{generic::DigestItem, ConsensusEngineId};
+use sr_primitives::traits::{
 	CurrentSessionKeys, IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert,
 	TypedKey,
 };
@@ -113,6 +113,8 @@ impl ProvideInherentData for InherentDataProvider {
 pub trait Trait: timestamp::Trait {
 	type EpochDuration: Get<u64>;
 
+	type ExpectedBlockTime: Get<Self::Moment>;
+
 	/// Retrieve the current session keys.
 	type CurrentSessionKeys: CurrentSessionKeys<Self::AccountId>;
 }
@@ -162,6 +164,17 @@ decl_storage! {
 decl_module! {
 	/// The BABE SRML module
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		/// The number of **slots** that an epoch takes. We couple sessions to
+		/// epochs, i.e. we start a new session once the new epoch begins.
+		const EpochDuration: u64 = T::EpochDuration::get();
+
+		/// The expected average block time at which BABE should be creating
+		/// blocks. Since BABE is probabilistic it is not trivial to figure out
+		/// what the expected average block time should be based on the slot
+		/// duration and the security parameter `c` (where `1 - c` represents
+		/// the probability of a slot being empty).
+		const ExpectedBlockTime: T::Moment = T::ExpectedBlockTime::get();
+
 		/// Initialization
 		fn on_initialize() {
 			for digest in Self::get_inherent_digests()
@@ -196,8 +209,8 @@ impl<T: Trait> RandomnessBeacon for Module<T> {
 /// A BABE public key
 pub type BabeKey = [u8; PUBLIC_KEY_LENGTH];
 
-impl<T: Trait> FindAuthor<u64> for Module<T> {
-	fn find_author<'a, I>(digests: I) -> Option<u64> where
+impl<T: Trait> FindAuthor<u32> for Module<T> {
+	fn find_author<'a, I>(digests: I) -> Option<u32> where
 		I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
 	{
 		for (id, mut data) in digests.into_iter() {
@@ -356,7 +369,7 @@ impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Mod
 	}
 
 	fn on_disabled(i: usize) {
-		Self::deposit_consensus(ConsensusLog::OnDisabled(i as u64))
+		Self::deposit_consensus(ConsensusLog::OnDisabled(i as u32))
 	}
 }
 

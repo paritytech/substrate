@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 derive_more = "0.14.0"
-substrate-primitives = { path = "../primitives" }
+primitives = { package = "substrate-primitives",  path = "../primitives" }
 hex = "0.3"
 rand = "0.6"
 serde_json = "1.0"

@@ -20,7 +20,7 @@ pub use crate::protocol::event::{DhtEvent, Event};
 
 use crate::protocol::Context;
 use libp2p::PeerId;
-use runtime_primitives::traits::Block as BlockT;
+use sr_primitives::traits::Block as BlockT;
 
 /// A specialization of the substrate network protocol. Handles events and sends messages.
 pub trait NetworkSpecialization<B: BlockT>: Send + Sync + 'static {

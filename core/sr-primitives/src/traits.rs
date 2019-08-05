@@ -21,12 +21,12 @@ use rstd::{self, result, marker::PhantomData, convert::{TryFrom, TryInto}};
 use runtime_io;
 #[cfg(feature = "std")] use std::fmt::{Debug, Display};
 #[cfg(feature = "std")] use serde::{Serialize, Deserialize, de::DeserializeOwned};
-use substrate_primitives::{self, Hasher, Blake2Hasher};
+use primitives::{self, Hasher, Blake2Hasher};
 use crate::codec::{Codec, Encode, Decode, HasCompact};
 use crate::transaction_validity::{ValidTransaction, TransactionValidity};
 use crate::generic::{Digest, DigestItem};
 use crate::weights::DispatchInfo;
-pub use substrate_primitives::crypto::TypedKey;
+pub use primitives::crypto::TypedKey;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
@@ -57,15 +57,15 @@ pub trait Verify {
 	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool;
 }
 
-impl Verify for substrate_primitives::ed25519::Signature {
-	type Signer = substrate_primitives::ed25519::Public;
+impl Verify for primitives::ed25519::Signature {
+	type Signer = primitives::ed25519::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
 		runtime_io::ed25519_verify(self.as_ref(), msg.get(), signer)
 	}
 }
 
-impl Verify for substrate_primitives::sr25519::Signature {
-	type Signer = substrate_primitives::sr25519::Public;
+impl Verify for primitives::sr25519::Signature {
+	type Signer = primitives::sr25519::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
 		runtime_io::sr25519_verify(self.as_ref(), msg.get(), signer)
 	}
@@ -120,32 +120,6 @@ impl<T> Lookup for IdentityLookup<T> {
 	type Source = T;
 	type Target = T;
 	fn lookup(&self, x: T) -> result::Result<T, &'static str> { Ok(x) }
-}
-
-/// Get the "current" block number.
-pub trait CurrentHeight {
-	/// The type of the block number.
-	type BlockNumber;
-
-	/// Return the current block number. Not allowed to fail.
-	fn current_height(&self) -> Self::BlockNumber;
-}
-
-/// Translate a block number into a hash.
-pub trait BlockNumberToHash {
-	/// The type of the block number.
-	type BlockNumber: Zero;
-
-	/// The type of the hash.
-	type Hash: Encode;
-
-	/// Get the hash for a given block number, or `None` if unknown.
-	fn block_number_to_hash(&self, n: Self::BlockNumber) -> Option<Self::Hash>;
-
-	/// Get the genesis block hash; this should always be known.
-	fn genesis_hash(&self) -> Self::Hash {
-		self.block_number_to_hash(Zero::zero()).expect("All blockchains must know their genesis block hash; qed")
-	}
 }
 
 /// Extensible conversion trait. Generic over both source and destination types.
@@ -458,7 +432,7 @@ pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stup
 pub struct BlakeTwo256;
 
 impl Hash for BlakeTwo256 {
-	type Output = substrate_primitives::H256;
+	type Output = primitives::H256;
 	type Hasher = Blake2Hasher;
 	fn hash(s: &[u8]) -> Self::Output {
 		runtime_io::blake2_256(s).into()
@@ -493,10 +467,10 @@ pub trait CheckEqual {
 	fn check_equal(&self, other: &Self);
 }
 
-impl CheckEqual for substrate_primitives::H256 {
+impl CheckEqual for primitives::H256 {
 	#[cfg(feature = "std")]
 	fn check_equal(&self, other: &Self) {
-		use substrate_primitives::hexdisplay::HexDisplay;
+		use primitives::hexdisplay::HexDisplay;
 		if self != other {
 			println!("Hash: given={}, expected={}", HexDisplay::from(self.as_fixed_bytes()), HexDisplay::from(other.as_fixed_bytes()));
 		}

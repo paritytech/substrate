@@ -15,7 +15,7 @@ client = { package = "substrate-client", path = "../../client" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../transaction-pool" }
 runtime_support = { package = "srml-support", path = "../../../srml/support" }
 srml-system = { path = "../../../srml/system" }
-runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
+sr-primitives = {  path = "../../sr-primitives" }
 runtime_version = { package = "sr-version", path = "../../sr-version" }
 runtime_io = { package = "sr-io", path = "../../sr-io" }
 tokio = "0.1.7"
@@ -32,6 +32,6 @@ default = ["std"]
 std = [
 	"primitives/std",
 	"runtime_support/std",
-	"runtime_primitives/std",
+	"sr-primitives/std",
 	"runtime_version/std",
 ]
