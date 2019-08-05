@@ -120,8 +120,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
-use parity_codec::{Encode, Decode};
-use primitives::storage::well_known_keys;
+use parity_codec::Decode;
 use sr_primitives::KeyTypeId;
 use sr_primitives::weights::SimpleDispatchInfo;
 use sr_primitives::traits::{Convert, Zero, Member, OpaqueKeys, TypedKey};
@@ -322,6 +321,9 @@ decl_storage! {
 			_: &mut sr_primitives::ChildrenStorageOverlay,
 			config: &GenesisConfig<T>
 		| {
+			use parity_codec::Encode;
+			use primitives::storage::well_known_keys;
+
 			runtime_io::with_storage(storage, || {
 				for (who, keys) in config.keys.iter().cloned() {
 					assert!(

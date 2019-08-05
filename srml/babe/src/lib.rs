@@ -24,10 +24,9 @@ pub use timestamp;
 use rstd::{result, prelude::*};
 use srml_support::{decl_storage, decl_module, StorageValue, traits::FindAuthor, traits::Get, Parameter};
 use timestamp::{OnTimestampSet};
-use primitives::storage::well_known_keys;
 use sr_primitives::{generic::DigestItem, ConsensusEngineId};
 use sr_primitives::traits::{
-	IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert, OpaqueKeys, Member, TypedKey,
+	IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert, OpaqueKeys, Member,
 };
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
@@ -165,6 +164,9 @@ decl_storage! {
 			_: &mut sr_primitives::ChildrenStorageOverlay,
 			config: &GenesisConfig,
 		| {
+			use primitives::storage::well_known_keys;
+			use sr_primitives::traits::TypedKey;
+
 			runtime_io::with_storage(storage, || {
 				let mut authorities = config.authorities.clone();
 

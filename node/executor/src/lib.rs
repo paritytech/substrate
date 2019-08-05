@@ -55,7 +55,7 @@ mod tests {
 		Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances, BuildStorage,
 		GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System, SystemConfig,
 		GrandpaConfig, IndicesConfig, ContractsConfig, Event, SessionKeys, SignedExtra,
-		TransferFee, TransactionBaseFee, TransactionByteFee,
+		TransferFee, TransactionBaseFee, TransactionByteFee, BabeConfig,
 	};
 	use node_runtime::constants::currency::*;
 	use node_runtime::impls::WeightToFee;
@@ -327,7 +327,13 @@ mod tests {
 
 	fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<Blake2Hasher> {
 		let mut ext = TestExternalities::new_with_code_with_children(code, GenesisConfig {
-			babe: Some(Default::default()),
+			babe: Some(BabeConfig {
+				authorities: vec![
+					(Sr25519Keyring::Dave.into(), 0),
+					(Sr25519Keyring::Eve.into(), 0),
+					(Sr25519Keyring::Ferdie.into(), 0),
+				]
+			}),
 			system: Some(SystemConfig {
 				changes_trie_config: if support_changes_trie { Some(ChangesTrieConfiguration {
 					digest_interval: 2,
@@ -351,17 +357,17 @@ mod tests {
 			}),
 			session: Some(SessionConfig {
 				keys: vec![
-					(alice(), to_session_keys(
-						&Ed25519Keyring::Alice,
-						&Sr25519Keyring::Alice,
+					(dave(), to_session_keys(
+						&Ed25519Keyring::Dave,
+						&Sr25519Keyring::Dave,
 					)),
-					(bob(), to_session_keys(
-						&Ed25519Keyring::Bob,
-						&Sr25519Keyring::Bob,
+					(eve(), to_session_keys(
+						&Ed25519Keyring::Eve,
+						&Sr25519Keyring::Eve,
 					)),
-					(charlie(), to_session_keys(
-						&Ed25519Keyring::Charlie,
-						&Sr25519Keyring::Charlie,
+					(ferdie(), to_session_keys(
+						&Ed25519Keyring::Ferdie,
+						&Sr25519Keyring::Ferdie,
 					)),
 				]
 			}),

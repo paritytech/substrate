@@ -38,7 +38,7 @@ use sr_primitives::{
 	transaction_validity::{TransactionValidity, ValidTransaction},
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup
+		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup, OpaqueKeys,
 	},
 };
 use runtime_version::RuntimeVersion;
@@ -368,6 +368,19 @@ parameter_types! {
 impl srml_babe::Trait for Runtime {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
+	type Keys = DummyKeys;
+}
+
+#[derive(Clone, Encode, Decode, Eq, PartialEq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct DummyKeys;
+
+impl OpaqueKeys for DummyKeys {
+	type KeyTypeIds = ::rstd::iter::Empty<u32>;
+
+	fn key_ids() -> Self::KeyTypeIds { ::rstd::iter::empty() }
+	fn get_raw(&self, _: u32) -> &[u8] { unreachable!("never used") }
+	fn get<T: Decode>(&self, _: u32) -> Option<T> { None }
 }
 
 /// Adds one to the given input and returns the final result.
