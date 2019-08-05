@@ -222,10 +222,6 @@ decl_module! {
 
 		/// Initialization
 		fn on_initialize() {
-			// TODO: this could be safely removed (in current implementation), because:
-			// 1) session.on_initialize is called first
-			// 2) session.on_initialize calls should_end_session
-			// 3) should_end_session calls do_initialize
 			Self::do_initialize();
 		}
 	}

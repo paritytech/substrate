@@ -1121,6 +1121,16 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 		// this way we can revert it if there's any error
 		let mut old_epoch_changes = None;
 
+		if let Some(enacted_epoch) = enacted_epoch.as_ref() {
+			let enacted_epoch = &enacted_epoch.data;
+
+			// update the current epoch in the client cache
+			new_cache.insert(
+				well_known_cache_keys::EPOCH,
+				MaybeSpanEpoch::Regular(enacted_epoch.clone()).encode(),
+			);
+		}
+
 		if let Some(next_epoch) = next_epoch_digest {
 			if let Some(enacted_epoch) = enacted_epoch {
 				let enacted_epoch = &enacted_epoch.data;
@@ -1130,33 +1140,6 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 						enacted_epoch.epoch_index.saturating_add(1),
 						next_epoch.epoch_index,
 					)));
-				}
-
-				// update the current epoch in the client cache
-				new_cache.insert(
-					well_known_cache_keys::EPOCH,
-					MaybeSpanEpoch::Regular(enacted_epoch.clone()).encode(),
-				);
-
-				// we really could ignore epoch0 here, because the change epoch0 -> epoch1 doesn't emit any digest
-				// => we'll never reach this code
-				let current_epoch = epoch(&*self.api, &BlockId::Hash(parent_hash))?;
-				let authorities_changed = match current_epoch {
-					MaybeSpanEpoch::Genesis(_, epoch1) => epoch1.authorities != enacted_epoch.authorities,
-					MaybeSpanEpoch::Regular(epoch) => epoch.authorities != enacted_epoch.authorities,
-				};
-
-				// if the authorities have changed then we populate the
-				// `AUTHORITIES` key with the enacted epoch, so that the inner
-				// `ImportBlock` can process it (`EPOCH` is specific to BABE).
-				// e.g. in the case of GRANDPA it would require a justification
-				// for the block, expecting that the authorities actually
-				// changed.
-				if authorities_changed {
-					new_cache.insert(
-						well_known_cache_keys::AUTHORITIES,
-						enacted_epoch.authorities.encode(),
-					);
 				}
 			}
 
