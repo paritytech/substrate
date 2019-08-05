@@ -17,7 +17,9 @@
 //! Environment definition of the wasm smart-contract runtime.
 
 use crate::{Schedule, Trait, CodeHash, ComputeDispatchFee, BalanceOf};
-use crate::exec::{Ext, ExecResult, ExecError, ExecReturnValue, StorageKey, TopicOf};
+use crate::exec::{
+	Ext, ExecResult, ExecError, ExecReturnValue, StorageKey, TopicOf, STATUS_SUCCESS,
+};
 use crate::gas::{Gas, GasMeter, Token, GasMeterResult, approx_gas_for_balance};
 use sandbox;
 use system;
@@ -25,6 +27,11 @@ use rstd::prelude::*;
 use rstd::mem;
 use codec::{Decode, Encode};
 use sr_primitives::traits::{Bounded, SaturatedConversion};
+
+/// The value returned from ext_call and ext_create contract external functions if the call or
+/// instantiation traps. This value is chosen as if the execution does not trap, the return value
+/// will always be an 8-bit integer, so 0x0100 is the smallest value that could not be returned.
+const TRAP_RETURN_CODE: u32 = 0x0100;
 
 /// Enumerates all possible *special* trap conditions.
 ///
@@ -74,7 +81,7 @@ pub(crate) fn to_execution_result<E: Ext>(
 ) -> ExecResult {
 	// Special case. The trap was the result of the execution `return` host function.
 	if let Some(SpecialTrap::Return(data)) = runtime.special_trap {
-		return Ok(ExecReturnValue { data });
+		return Ok(ExecReturnValue { status: STATUS_SUCCESS, data });
 	}
 
 	// Check the exact type of the error.
@@ -83,7 +90,7 @@ pub(crate) fn to_execution_result<E: Ext>(
 		None => {
 			let mut buffer = runtime.scratch_buf;
 			buffer.clear();
-			Ok(ExecReturnValue { data: buffer })
+			Ok(ExecReturnValue { status: STATUS_SUCCESS, data: buffer })
 		},
 		// `Error::Module` is returned only if instantiation or linking failed (i.e.
 		// wasm binary tried to import a function that is not provided by the host).
@@ -342,8 +349,15 @@ define_env!(Env, <E: Ext>,
 
 	// Make a call to another contract.
 	//
-	// Returns 0 on the successful execution and puts the result data returned by the callee into
-	// the scratch buffer. Otherwise, returns a non-zero value and clears the scratch buffer.
+	// If the called contract runs to completion, then this returns the status code the callee
+	// returns on exit in the bottom 8 bits of the return value. The top 24 bits are 0s. A status
+	// code of 0 indicates success, and any other code indicates a failure. On failure, any state
+	// changes made by the called contract are reverted. The scratch buffer is filled with the
+	// output data returned by the called contract, even in the case of a failure status.
+	//
+	// If the contract traps during execution or otherwise fails to complete successfully, then
+	// this function clears the scratch buffer and returns 0x0100. As with a failure status, any
+	// state changes made by the called contract are reverted.
 	//
 	// - callee_ptr: a pointer to the address of the callee contract.
 	//   Should be decodable as an `T::AccountId`. Traps otherwise.
@@ -398,12 +412,12 @@ define_env!(Env, <E: Ext>,
 		match call_outcome {
 			Ok(output) => {
 				ctx.scratch_buf = output.data;
-				Ok(0)
+				Ok(output.status.into())
 			},
-			Err(mut buffer) => {
-				buffer.clear();
+			Err(buffer) => {
 				ctx.scratch_buf = buffer;
-				Ok(1)
+				buffer.clear();
+				Ok(TRAP_RETURN_CODE)
 			},
 		}
 	},
@@ -412,6 +426,20 @@ define_env!(Env, <E: Ext>,
 	//
 	// This function creates an account and executes the constructor defined in the code specified
 	// by the code hash.
+	//
+	// If the constructor runs to completion, then this returns the status code that the newly
+	// created contract returns on exit in the bottom 8 bits of the return value. The top 24 bits
+	// are 0s. A status code of 0 indicates success, and any other code indicates a failure. On
+	// failure, any state changes made by the called contract are reverted and the contract is not
+	// instantiated. On a success status, the scratch buffer is filled with the encoded address of
+	// the newly created contract. In the case of a failure status, the scratch buffer is cleared.
+	//
+	// If the contract traps during execution or otherwise fails to complete successfully, then
+	// this function clears the scratch buffer and returns 0x0100. As with a failure status, any
+	// state changes made by the called contract are reverted.
+
+	// This function creates an account and executes initializer code. After the execution,
+	// the returned buffer is saved as the code of the created account.
 	//
 	// Returns 0 on the successful contract creation and puts the address of the created contract
 	// into the scratch buffer. Otherwise, returns non-zero value and clears the scratch buffer.
@@ -465,15 +493,20 @@ define_env!(Env, <E: Ext>,
 			}
 		});
 		match instantiate_outcome {
-			Ok((address, _output)) => {
-				// Write the address to the scratch buffer.
-				address.encode_to(&mut ctx.scratch_buf);
-				Ok(0)
+			Ok((address, output)) => {
+				let is_success = output.is_success();
+				ctx.scratch_buf = output.data;
+				ctx.scratch_buf.clear();
+				if is_success {
+					// Write the address to the scratch buffer.
+					address.encode_to(&mut ctx.scratch_buf);
+				}
+				Ok(output.status.into())
 			},
-			Err(mut buffer) => {
-				buffer.clear();
+			Err(buffer) => {
 				ctx.scratch_buf = buffer;
-				Ok(1)
+				buffer.clear();
+				Ok(TRAP_RETURN_CODE)
 			},
 		}
 	},

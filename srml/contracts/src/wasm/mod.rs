@@ -152,7 +152,7 @@ mod tests {
 	use super::*;
 	use std::collections::HashMap;
 	use primitives::H256;
-	use crate::exec::{Ext, StorageKey, ExecError, ExecReturnValue};
+	use crate::exec::{Ext, StorageKey, ExecError, ExecReturnValue, STATUS_SUCCESS};
 	use crate::gas::{Gas, GasMeter};
 	use crate::tests::{Test, Call};
 	use crate::wasm::prepare::prepare_contract;
@@ -229,7 +229,7 @@ mod tests {
 			let address = self.next_account_id;
 			self.next_account_id += 1;
 
-			Ok((address, ExecReturnValue { data: Vec::new() }))
+			Ok((address, ExecReturnValue { status: STATUS_SUCCESS, data: Vec::new() }))
 		}
 		fn call(
 			&mut self,
@@ -246,7 +246,7 @@ mod tests {
 			});
 			// Assume for now that it was just a plain transfer.
 			// TODO: Add tests for different call outcomes.
-			Ok(ExecReturnValue { data: Vec::new() })
+			Ok(ExecReturnValue { status: STATUS_SUCCESS, data: Vec::new() })
 		}
 		fn note_dispatch_call(&mut self, call: Call) {
 			self.dispatches.push(DispatchEntry(call));
@@ -673,7 +673,7 @@ mod tests {
 			&mut GasMeter::with_limit(50_000, 1),
 		).unwrap();
 
-		assert_eq!(output, ExecReturnValue { data: [0x22; 32].to_vec() });
+		assert_eq!(output, ExecReturnValue { status: STATUS_SUCCESS, data: [0x22; 32].to_vec() });
 	}
 
 	/// calls `ext_caller`, loads the address from the scratch buffer and
@@ -1113,7 +1113,7 @@ mod tests {
 			&mut GasMeter::with_limit(50_000, 1),
 		).unwrap();
 
-		assert_eq!(output, ExecReturnValue { data: vec![1, 2, 3, 4] });
+		assert_eq!(output, ExecReturnValue { status: STATUS_SUCCESS, data: vec![1, 2, 3, 4] });
 	}
 
 	const CODE_TIMESTAMP_NOW: &str = r#"
@@ -1248,6 +1248,7 @@ mod tests {
 		assert_eq!(
 			output,
 			ExecReturnValue {
+				status: STATUS_SUCCESS,
 				data: hex!("000102030405060708090A0B0C0D0E0F000102030405060708090A0B0C0D0E0F").to_vec(),
 			},
 		);

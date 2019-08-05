@@ -34,10 +34,27 @@ pub type BlockNumberOf<T> = <T as system::Trait>::BlockNumber;
 /// A type that represents a topic of an event. At the moment a hash is used.
 pub type TopicOf<T> = <T as system::Trait>::Hash;
 
+/// A status code return to the source of a contract call or instantiation indicating success or
+/// failure. A code of 0 indicates success and that changes are applied. All other codes indicate
+/// failure and that changes are reverted. The particular code in the case of failure is opaque and
+/// may be interpreted by the calling contract.
+pub type StatusCode = u8;
+
+/// The status code indicating success.
+pub const STATUS_SUCCESS: StatusCode = 0;
+
 /// Output of a contract call or instantiation which ran to completion.
 #[cfg_attr(test, derive(PartialEq, Eq, Debug))]
 pub struct ExecReturnValue {
+	pub status: StatusCode,
 	pub data: Vec<u8>,
+}
+
+impl ExecReturnValue {
+	/// Returns whether the call or instantiation exited with a successful status code.
+	pub fn is_success(&self) -> bool {
+		self.status == STATUS_SUCCESS
+	}
 }
 
 /// An error indicating some failure to execute a contract call or instantiation. This can include
@@ -376,7 +393,7 @@ where
 							gas_meter,
 						)
 				}
-				None => Ok(ExecReturnValue { data: Vec::new() }),
+				None => Ok(ExecReturnValue { status: STATUS_SUCCESS, data: Vec::new() }),
 			}
 		})
 	}
@@ -477,16 +494,18 @@ where
 		-> ExecResult
 		where F: FnOnce(&mut ExecutionContext<T, V, L>) -> ExecResult
 	{
-		let (output_data, change_set, deferred) = {
+		let (output, change_set, deferred) = {
 			let mut nested = self.nested(dest, trie_id);
-			let output_data = func(&mut nested)?;
-			(output_data, nested.overlay.into_change_set(), nested.deferred)
+			let output = func(&mut nested)?;
+			(output, nested.overlay.into_change_set(), nested.deferred)
 		};
 
-		self.overlay.commit(change_set);
-		self.deferred.extend(deferred);
+		if output.is_success() {
+			self.overlay.commit(change_set);
+			self.deferred.extend(deferred);
+		}
 
-		Ok(output_data)
+		Ok(output)
 	}
 }
 
@@ -753,7 +772,7 @@ mod tests {
 		Vm, ExecResult, RawEvent, DeferredAction,
 	};
 	use crate::account_db::AccountDb;
-	use crate::exec::{ExecReturnValue, ExecError};
+	use crate::exec::{ExecReturnValue, ExecError, STATUS_SUCCESS};
 	use crate::gas::GasMeter;
 	use crate::tests::{ExtBuilder, Test};
 	use crate::{CodeHash, Config};
@@ -867,7 +886,7 @@ mod tests {
 	}
 
 	fn exec_success() -> ExecResult {
-		Ok(ExecReturnValue { data: Vec::new() })
+		Ok(ExecReturnValue { status: STATUS_SUCCESS, data: Vec::new() })
 	}
 
 	#[test]
@@ -1109,7 +1128,9 @@ mod tests {
 
 		let vm = MockVm::new();
 		let mut loader = MockLoader::empty();
-		let return_ch = loader.insert(|_| Ok(ExecReturnValue { data: vec![1, 2, 3, 4] }));
+		let return_ch = loader.insert(
+			|_| Ok(ExecReturnValue { status: STATUS_SUCCESS, data: vec![1, 2, 3, 4] })
+		);
 
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
