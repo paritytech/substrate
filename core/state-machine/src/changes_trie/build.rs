@@ -259,6 +259,7 @@ mod test {
 					])),
 				].into_iter().collect(),
 			},
+			operation_from_last_gc: 0,
 		};
 
 		(backend, storage, changes)

@@ -44,6 +44,25 @@ pub(crate) enum TransactionState {
 	Dropped,
 }
 
+
+/// Treshold of operation before running a garbage colletion
+/// on a transaction operation.
+/// Should be same as `TRIGGER_COMMIT_GC` or higher
+/// (we most likely do not want lower as transaction are
+/// possibly more frequent than commit).
+const TRIGGER_TRANSACTION_GC: usize = 10_000;
+
+/// Treshold of operation before running a garbage colletion
+/// on a commit operation.
+/// We may want a lower value than for a transaction, even
+/// a 1 if we want to do it between every operation.
+const TRIGGER_COMMIT_GC: usize = 1_000;
+
+/// Used to count big content as multiple operation.
+/// This is a number of octet.
+/// Set to 0 to ignore.
+const ADD_CONTENT_SIZE_UNIT: usize = 64;
+
 /// The overlayed changes to state to be queried on top of the backend.
 ///
 /// A transaction shares all prospective changes within an inner overlay
@@ -55,6 +74,10 @@ pub struct OverlayedChanges {
 	/// Changes trie configuration. None by default, but could be installed by the
 	/// runtime if it supports change tries.
 	pub(crate) changes_trie_config: Option<ChangesTrieConfig>,
+	/// Counter of number of operation between garbage collection.
+	/// Add or delete cost one, additional cost per size by counting a fix size
+	/// as a unit.
+	pub(crate) operation_from_last_gc: usize,
 }
 
 /// The storage value, used inside OverlayedChanges.
@@ -683,10 +706,18 @@ impl OverlayedChanges {
 		None
 	}
 
+	fn add_cost_op(&mut self, val: &Option<Vec<u8>>) {
+		let content_cost = if ADD_CONTENT_SIZE_UNIT > 0 {
+			val.as_ref().map(|s| s.len() / ADD_CONTENT_SIZE_UNIT).unwrap_or(0)
+		} else { 0 };
+		self.operation_from_last_gc += 1 + content_cost;
+	}
+
 	/// Inserts the given key-value pair into the prospective change set.
 	///
 	/// `None` can be used to delete a value specified by the given key.
 	pub fn set_storage(&mut self, key: Vec<u8>, val: Option<Vec<u8>>) {
+		self.add_cost_op(&val);
 		let extrinsic_index = self.extrinsic_index();
 		let entry = self.changes.top.entry(key).or_default();
 		entry.set_with_extrinsic(self.changes.history.as_slice(), val, extrinsic_index);
@@ -696,6 +727,7 @@ impl OverlayedChanges {
 	///
 	/// `None` can be used to delete a value specified by the given key.
 	pub(crate) fn set_child_storage(&mut self, storage_key: Vec<u8>, key: Vec<u8>, val: Option<Vec<u8>>) {
+		self.add_cost_op(&val);
 		let extrinsic_index = self.extrinsic_index();
 		let map_entry = self.changes.children.entry(storage_key).or_default();
 		let entry = map_entry.entry(key).or_default();
@@ -713,6 +745,7 @@ impl OverlayedChanges {
 		let history = self.changes.history.as_slice();
 		let map_entry = self.changes.children.entry(storage_key.to_vec()).or_default();
 
+		self.operation_from_last_gc += map_entry.len();
 		map_entry.values_mut().for_each(|e| e.set_with_extrinsic(history, None, extrinsic_index));
 	}
 
@@ -725,32 +758,52 @@ impl OverlayedChanges {
 	pub(crate) fn clear_prefix(&mut self, prefix: &[u8]) {
 		let extrinsic_index = self.extrinsic_index();
 
+		let mut nb_remove = 0;
 		for (key, entry) in self.changes.top.iter_mut() {
 			if key.starts_with(prefix) {
+				nb_remove += 1;
 				entry.set_with_extrinsic(self.changes.history.as_slice(), None, extrinsic_index);
 			}
 		}
+
+		self.operation_from_last_gc += nb_remove;
 	}
 
 	/// Discard prospective changes to state.
 	pub fn discard_prospective(&mut self) {
 		self.changes.discard_prospective();
+		if self.operation_from_last_gc > TRIGGER_COMMIT_GC {
+			self.operation_from_last_gc = 0;
+			self.gc(true);
+		}
 	}
 
 	/// Commit prospective changes to state.
 	pub fn commit_prospective(&mut self) {
 		self.changes.commit_prospective();
+		if self.operation_from_last_gc > TRIGGER_COMMIT_GC {
+			self.operation_from_last_gc = 0;
+			self.gc(true);
+		}
 	}
 
 	/// Create a new transactional layer.
 	pub fn start_transaction(&mut self) {
 		self.changes.start_transaction();
+		if self.operation_from_last_gc > TRIGGER_TRANSACTION_GC {
+			self.operation_from_last_gc = 0;
+			self.gc(true);
+		}
 	}
 
 	/// Discard a transactional layer.
 	/// A transaction is always running (history always end with pending).
 	pub fn discard_transaction(&mut self) {
 		self.changes.discard_transaction();
+		if self.operation_from_last_gc > TRIGGER_TRANSACTION_GC {
+			self.operation_from_last_gc = 0;
+			self.gc(true);
+		}
 	}
 
 	/// Commit a transactional layer.
@@ -803,7 +856,11 @@ impl OverlayedChanges {
 		changes_trie_config: Option<ChangesTrieConfig>,
 	) -> Self {
 		let changes = OverlayedChangeSet::default();
-		let mut result = OverlayedChanges { changes, changes_trie_config };
+		let mut result = OverlayedChanges {
+			changes,
+			changes_trie_config,
+			operation_from_last_gc: 0,
+		};
 		committed.into_iter().for_each(|(k, v)| result.set_storage(k, v));
 		result.changes.commit_prospective();
 		prospective.into_iter().for_each(|(k, v)| result.set_storage(k, v));
