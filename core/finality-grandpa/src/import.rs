@@ -18,7 +18,7 @@ use std::{sync::Arc, collections::HashMap};
 
 use log::{debug, trace, info};
 use codec::Encode;
-use futures::sync::mpsc;
+use futures::channel::mpsc;
 use parking_lot::RwLockWriteGuard;
 
 use client::{blockchain, CallExecutor, Client, well_known_cache_keys};

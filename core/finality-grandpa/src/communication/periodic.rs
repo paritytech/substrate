@@ -17,13 +17,13 @@
 //! Periodic rebroadcast of neighbor packets.
 
 use std::collections::VecDeque;
-use std::time::{Instant, Duration};
+use std::{pin::Pin, time::Duration, task::{Context, Poll}};
 
 use codec::Encode;
 use futures::prelude::*;
-use futures::sync::mpsc;
+use futures::channel::mpsc;
 use log::{debug, warn};
-use tokio_timer::Delay;
+use futures_timer::Delay;
 
 use network::PeerId;
 use sr_primitives::traits::{NumberFor, Block as BlockT};
@@ -36,10 +36,6 @@ const REBROADCAST_AFTER: Duration = Duration::from_secs(2 * 60);
 /// keep around for announcement. The current value should be enough for 3
 /// rounds assuming we have prevoted and precommited on different blocks.
 const LATEST_VOTED_BLOCKS_TO_ANNOUNCE: usize = 6;
-
-fn rebroadcast_instant() -> Instant {
-	Instant::now() + REBROADCAST_AFTER
-}
 
 /// A sender used to send neighbor packets to a background job.
 #[derive(Clone)]
@@ -65,7 +61,7 @@ impl<B: BlockT> NeighborPacketSender<B> {
 /// It may rebroadcast the last neighbor packet periodically when no
 /// progress is made.
 pub(super) fn neighbor_packet_worker<B, N>(net: N) -> (
-	impl Future<Item = (), Error = ()> + Send + 'static,
+	impl Future<Output = ()> + Unpin + Send + 'static,
 	NeighborPacketSender<B>,
 ) where
 	B: BlockT,
@@ -73,41 +69,41 @@ pub(super) fn neighbor_packet_worker<B, N>(net: N) -> (
 {
 	let mut last = None;
 	let (tx, mut rx) = mpsc::unbounded::<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>();
-	let mut delay = Delay::new(rebroadcast_instant());
+	let mut delay = Delay::new(REBROADCAST_AFTER);
 
-	let work = futures::future::poll_fn(move || {
+	let work = futures::future::poll_fn(move |cx| {
 		loop {
-			match rx.poll().expect("unbounded receivers do not error; qed") {
-				Async::Ready(None) => return Ok(Async::Ready(())),
-				Async::Ready(Some((to, packet))) => {
+			match Stream::poll_next(Pin::new(&mut rx), cx) {
+				Poll::Ready(None) => return Poll::Ready(()),
+				Poll::Ready(Some((to, packet))) => {
 					// send to peers.
 					net.send_message(to.clone(), GossipMessage::<B>::from(packet.clone()).encode());
 
 					// rebroadcasting network.
-					delay.reset(rebroadcast_instant());
+					delay.reset(REBROADCAST_AFTER);
 					last = Some((to, packet));
 				}
-				Async::NotReady => break,
+				Poll::Pending => break,
 			}
 		}
 
 		// has to be done in a loop because it needs to be polled after
 		// re-scheduling.
 		loop {
-			match delay.poll() {
-				Err(e) => {
+			match Future::poll(Pin::new(&mut delay), cx) {
+				Poll::Ready(Err(e)) => {
 					warn!(target: "afg", "Could not rebroadcast neighbor packets: {:?}", e);
-					delay.reset(rebroadcast_instant());
+					delay.reset(REBROADCAST_AFTER);
 				}
-				Ok(Async::Ready(())) => {
-					delay.reset(rebroadcast_instant());
+				Poll::Ready(Ok(())) => {
+					delay.reset(REBROADCAST_AFTER);
 
 					if let Some((ref to, ref packet)) = last {
 						// send to peers.
 						net.send_message(to.clone(), GossipMessage::<B>::from(packet.clone()).encode());
 					}
 				}
-				Ok(Async::NotReady) => return Ok(Async::NotReady),
+				Poll::Pending => return Poll::Pending,
 			}
 		}
 	});
@@ -129,7 +125,7 @@ struct BlockAnnouncer<B: BlockT, N> {
 /// blocks to all peers if no new blocks to announce are noted (i.e. presumably
 /// GRANDPA progress is stalled).
 pub(super) fn block_announce_worker<B: BlockT, N: Network<B>>(net: N) -> (
-	impl Future<Item = (), Error = ()>,
+	impl Future<Output = ()> + Unpin,
 	BlockAnnounceSender<B>,
 ) {
 	block_announce_worker_aux(net, REBROADCAST_AFTER)
@@ -140,7 +136,7 @@ pub(super) fn block_announce_worker_with_delay<B: BlockT, N: Network<B>>(
 	net: N,
 	reannounce_after: Duration,
 ) -> (
-	impl Future<Item = (), Error = ()>,
+	impl Future<Output = ()> + Unpin,
 	BlockAnnounceSender<B>,
 ) {
 	block_announce_worker_aux(net, reannounce_after)
@@ -150,7 +146,7 @@ fn block_announce_worker_aux<B: BlockT, N: Network<B>>(
 	net: N,
 	reannounce_after: Duration,
 ) -> (
-	impl Future<Item = (), Error = ()>,
+	impl Future<Output = ()> + Unpin,
 	BlockAnnounceSender<B>,
 ) {
 	let latest_voted_blocks = VecDeque::with_capacity(LATEST_VOTED_BLOCKS_TO_ANNOUNCE);
@@ -162,7 +158,7 @@ fn block_announce_worker_aux<B: BlockT, N: Network<B>>(
 		block_rx,
 		latest_voted_blocks,
 		reannounce_after,
-		delay: Delay::new(Instant::now() + reannounce_after),
+		delay: Delay::new(reannounce_after),
 	};
 
 	(announcer, BlockAnnounceSender(block_tx))
@@ -185,41 +181,40 @@ impl<B: BlockT, N> BlockAnnouncer<B, N> {
 	}
 
 	fn reset_delay(&mut self) {
-		self.delay.reset(Instant::now() + self.reannounce_after);
+		self.delay.reset(self.reannounce_after);
 	}
 }
 
 impl<B: BlockT, N: Network<B>> Future for BlockAnnouncer<B, N> {
-	type Item = ();
-	type Error = ();
+	type Output = ();
 
-	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		// note any new blocks to announce and announce them
 		loop {
-			match self.block_rx.poll().expect("unbounded receivers do not error; qed") {
-				Async::Ready(None) => return Ok(Async::Ready(())),
-				Async::Ready(Some(block)) => {
+			match Stream::poll_next(Pin::new(&mut self.block_rx), cx) {
+				Poll::Ready(None) => return Poll::Ready(()),
+				Poll::Ready(Some(block)) => {
 					if self.note_block(block.0) {
 						self.net.announce(block.0, block.1);
 						self.reset_delay();
 					}
 				},
-				Async::NotReady => break,
+				Poll::Pending => break,
 			}
 		}
 
 		// check the reannouncement delay timer, has to be done in a loop
 		// because it needs to be polled after re-scheduling.
 		loop {
-			match self.delay.poll() {
-				Err(e) => {
+			match Future::poll(Pin::new(&mut self.delay), cx) {
+				Poll::Ready(Err(e)) => {
 					warn!(target: "afg", "Error in periodic block announcer timer: {:?}", e);
 					self.reset_delay();
 				},
 				// after the delay fires announce all blocks that we have
 				// stored. note that this only happens if we don't receive any
 				// new blocks above for the duration of `reannounce_after`.
-				Ok(Async::Ready(())) => {
+				Poll::Ready(Ok(())) => {
 					self.reset_delay();
 
 					debug!(
@@ -232,10 +227,13 @@ impl<B: BlockT, N: Network<B>> Future for BlockAnnouncer<B, N> {
 						self.net.announce(*block, Vec::new());
 					}
 				},
-				Ok(Async::NotReady) => return Ok(Async::NotReady),
+				Poll::Pending => return Poll::Pending,
 			}
 		}
 	}
+}
+
+impl<B: BlockT, N> Unpin for BlockAnnouncer<B, N> {
 }
 
 /// A sender used to send block hashes to announce to a background job.

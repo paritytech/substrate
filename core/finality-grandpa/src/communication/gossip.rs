@@ -89,14 +89,16 @@ use codec::{Encode, Decode};
 use fg_primitives::AuthorityId;
 
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG};
-use log::{trace, debug, warn};
+use log::{trace, debug};
 use futures::prelude::*;
-use futures::sync::mpsc;
+use futures::channel::mpsc;
 
 use crate::{environment, CatchUp, CompactCommit, SignedMessage};
 use super::{cost, benefit, Round, SetId};
 
 use std::collections::{HashMap, VecDeque};
+use std::pin::Pin;
+use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
 const REBROADCAST_AFTER: Duration = Duration::from_secs(60 * 5);
@@ -1218,7 +1220,7 @@ impl ReportStream {
 	/// Consume the report stream, converting it into a future that
 	/// handles all reports.
 	pub(super) fn consume<B, N>(self, net: N)
-		-> impl Future<Item=(),Error=()> + Send + 'static
+		-> impl Future<Output=()> + Send + 'static + Unpin
 	where
 		B: BlockT,
 		N: super::Network<B> + Send + 'static,
@@ -1240,23 +1242,21 @@ struct ReportingTask<B, N> {
 }
 
 impl<B: BlockT, N: super::Network<B>> Future for ReportingTask<B, N> {
-	type Item = ();
-	type Error = ();
+	type Output = ();
 
-	fn poll(&mut self) -> Poll<(), ()> {
+	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<()> {
 		loop {
-			match self.reports.poll() {
-				Err(_) => {
-					warn!(target: "afg", "Report stream terminated unexpectedly");
-					return Ok(Async::Ready(()))
-				}
-				Ok(Async::Ready(None)) => return Ok(Async::Ready(())),
-				Ok(Async::Ready(Some(PeerReport { who, cost_benefit }))) =>
+			match Stream::poll_next(Pin::new(&mut self.reports), cx) {
+				Poll::Ready(None) => return Poll::Ready(()),
+				Poll::Ready(Some(PeerReport { who, cost_benefit })) =>
 					self.net.report(who, cost_benefit),
-				Ok(Async::NotReady) => return Ok(Async::NotReady),
+				Poll::Pending => return Poll::Pending,
 			}
 		}
 	}
+}
+
+impl<B, N> Unpin for ReportingTask<B, N> {
 }
 
 #[cfg(test)]

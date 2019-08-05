@@ -10,6 +10,7 @@ edition = "2018"
 log = "0.4.8"
 tokio = "0.1.22"
 futures = "0.1.29"
+futures03 = { package = "futures-preview", version = "0.3.0-alpha.19", features = ["compat"] }
 exit-future = "0.1.4"
 jsonrpc-core = "13.2.0"
 cli = { package = "substrate-cli", path = "../../core/cli" }
@@ -59,7 +60,6 @@ keystore = { package = "substrate-keystore", path = "../../core/keystore" }
 babe = { package = "substrate-consensus-babe", path = "../../core/consensus/babe", features = ["test-helpers"] }
 consensus-common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 service-test = { package = "substrate-service-test", path = "../../core/service/test" }
-futures03 = { package = "futures-preview", version = "0.3.0-alpha.19" }
 tempfile = "3.1.0"
 
 [build-dependencies]

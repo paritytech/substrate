@@ -98,7 +98,7 @@ pub struct NewService<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	rpc_handlers: rpc_servers::RpcHandler<rpc::Metadata>,
 	_rpc: Box<dyn std::any::Any + Send + Sync>,
 	_telemetry: Option<tel::Telemetry>,
-	_telemetry_on_connect_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>>,
+	_telemetry_on_connect_sinks: Arc<Mutex<Vec<futures03::channel::mpsc::UnboundedSender<()>>>>,
 	_offchain_workers: Option<Arc<TOc>>,
 	keystore: keystore::KeyStorePtr,
 	marker: PhantomData<TBl>,
@@ -393,7 +393,7 @@ macro_rules! new_impl {
 			.select(exit.clone())
 			.then(|_| Ok(()))));
 
-		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();
+		let telemetry_connection_sinks: Arc<Mutex<Vec<futures03::channel::mpsc::UnboundedSender<()>>>> = Default::default();
 
 		// Telemetry
 		let telemetry = $config.telemetry_endpoints.clone().map(|endpoints| {
@@ -480,7 +480,7 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	type NetworkSpecialization: NetworkSpecialization<Self::Block>;
 
 	/// Get event stream for telemetry connection established events.
-	fn telemetry_on_connect_stream(&self) -> mpsc::UnboundedReceiver<()>;
+	fn telemetry_on_connect_stream(&self) -> futures03::channel::mpsc::UnboundedReceiver<()>;
 
 	/// return a shared instance of Telemetry (if enabled)
 	fn telemetry(&self) -> Option<tel::Telemetry>;
@@ -550,8 +550,8 @@ where
 	type TransactionPoolApi = TExPoolApi;
 	type NetworkSpecialization = TNetSpec;
 
-	fn telemetry_on_connect_stream(&self) -> mpsc::UnboundedReceiver<()> {
-		let (sink, stream) = mpsc::unbounded();
+	fn telemetry_on_connect_stream(&self) -> futures03::channel::mpsc::UnboundedReceiver<()> {
+		let (sink, stream) = futures03::channel::mpsc::unbounded();
 		self._telemetry_on_connect_sinks.lock().push(sink);
 		stream
 	}

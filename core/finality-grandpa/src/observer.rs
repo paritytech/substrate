@@ -14,10 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll};
 
-use futures::prelude::*;
-use futures::{future, sync::mpsc};
+use futures::{prelude::*, channel::mpsc, compat::Compat01As03};
 
 use grandpa::{
 	BlockNumberOps, Error as GrandpaError, voter, voter_set::VoterSet
@@ -64,14 +65,13 @@ fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S, F>(
 	last_finalized_number: NumberFor<Block>,
 	commits: S,
 	note_round: F,
-) -> impl Future<Item=(), Error=CommandOrError<H256, NumberFor<Block>>> where
+) -> impl Future<Output=Result<(), CommandOrError<H256, NumberFor<Block>>>> where
 	NumberFor<Block>: BlockNumberOps,
 	B: Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
 	RA: Send + Sync,
 	S: Stream<
-		Item = CommunicationIn<Block>,
-		Error = CommandOrError<Block::Hash, NumberFor<Block>>,
+		Item = Result<CommunicationIn<Block>, CommandOrError<Block::Hash, NumberFor<Block>>>,
 	>,
 	F: Fn(u64),
 {
@@ -80,7 +80,7 @@ fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S, F>(
 	let client = client.clone();
 	let voters = voters.clone();
 
-	let observer = commits.fold(last_finalized_number, move |last_finalized_number, global| {
+	let observer = commits.try_fold(last_finalized_number, move |last_finalized_number, global| {
 		let (round, commit, callback) = match global {
 			voter::CommunicationIn::Commit(round, commit, callback) => {
 				let commit = grandpa::Commit::from(commit);
@@ -143,7 +143,7 @@ fn grandpa_observer<B, E, Block: BlockT<Hash=H256>, RA, S, F>(
 		}
 	});
 
-	observer.map(|_| ())
+	observer.map_ok(|_| ())
 }
 
 /// Run a GRANDPA observer as a task, the observer will finalize blocks only by
@@ -154,8 +154,8 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 	config: Config,
 	link: LinkHalf<B, E, Block, RA, SC>,
 	network: N,
-	on_exit: impl Future<Item=(),Error=()> + Clone + Send + 'static,
-) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
+	on_exit: impl futures01::Future<Item = (), Error = ()> + Clone + Unpin + Send + 'static,
+) -> ::client::error::Result<impl Future<Output = ()> + Unpin + Send + 'static> where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	N: Network<Block> + Send + Sync + 'static,
@@ -188,20 +188,20 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 	);
 
 	let observer_work = observer_work
-		.map(|_| ())
+		.map_ok(|_| ())
 		.map_err(|e| {
 			warn!("GRANDPA Observer failed: {:?}", e);
 		});
 
-	let observer_work = network_startup.and_then(move |()| observer_work);
+	let observer_work = network_startup.then(move |()| future::ready(observer_work));
 
-	Ok(observer_work.select(on_exit).map(|_| ()).map_err(|_| ()))
+	Ok(future::select(observer_work, Compat01As03::new(on_exit)).map(|_| ()))
 }
 
 /// Future that powers the observer.
 #[must_use]
 struct ObserverWork<B: BlockT<Hash=H256>, N: Network<B>, E, Backend, RA> {
-	observer: Box<dyn Future<Item = (), Error = CommandOrError<B::Hash, NumberFor<B>>> + Send>,
+	observer: Pin<Box<dyn Future<Output = Result<(), CommandOrError<B::Hash, NumberFor<B>>>> + Send>>,
 	client: Arc<Client<Backend, E, B, RA>>,
 	network: NetworkBridge<B, N>,
 	persistent_data: PersistentData<B>,
@@ -230,7 +230,7 @@ where
 		let mut work = ObserverWork {
 			// `observer` is set to a temporary value and replaced below when
 			// calling `rebuild_observer`.
-			observer: Box::new(futures::empty()) as Box<_>,
+			observer: Box::pin(future::pending()) as Pin<Box<_>>,
 			client,
 			network,
 			persistent_data,
@@ -285,7 +285,7 @@ where
 			note_round,
 		);
 
-		self.observer = Box::new(observer);
+		self.observer = Box::pin(observer);
 	}
 
 	fn handle_voter_command(
@@ -335,44 +335,43 @@ where
 	E: CallExecutor<B, Blake2Hasher> + Send + Sync + 'static,
 	Bk: Backend<B, Blake2Hasher> + 'static,
 {
-	type Item = ();
-	type Error = Error;
+	type Output = Result<(), Error>;
 
-	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-		match self.observer.poll() {
-			Ok(Async::NotReady) => {}
-			Ok(Async::Ready(())) => {
+	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+		match Future::poll(Pin::new(&mut self.observer), cx) {
+			Poll::Pending => {}
+			Poll::Ready(Ok(())) => {
 				// observer commit stream doesn't conclude naturally; this could reasonably be an error.
-				return Ok(Async::Ready(()))
+				return Poll::Ready(Ok(()))
 			}
-			Err(CommandOrError::Error(e)) => {
+			Poll::Ready(Err(CommandOrError::Error(e))) => {
 				// return inner observer error
-				return Err(e)
+				return Poll::Ready(Err(e))
 			}
-			Err(CommandOrError::VoterCommand(command)) => {
+			Poll::Ready(Err(CommandOrError::VoterCommand(command))) => {
 				// some command issued internally
 				self.handle_voter_command(command)?;
-				futures::task::current().notify();
+				cx.waker().wake_by_ref();
 			}
 		}
 
-		match self.voter_commands_rx.poll() {
-			Ok(Async::NotReady) => {}
-			Err(_) => {
-				// the `voter_commands_rx` stream should not fail.
-				return Ok(Async::Ready(()))
-			}
-			Ok(Async::Ready(None)) => {
+		match Stream::poll_next(Pin::new(&mut self.voter_commands_rx), cx) {
+			Poll::Pending => {}
+			Poll::Ready(None) => {
 				// the `voter_commands_rx` stream should never conclude since it's never closed.
-				return Ok(Async::Ready(()))
+				return Poll::Ready(Ok(()))
 			}
-			Ok(Async::Ready(Some(command))) => {
+			Poll::Ready(Some(command)) => {
 				// some command issued externally
 				self.handle_voter_command(command)?;
-				futures::task::current().notify();
+				cx.waker().wake_by_ref();
 			}
 		}
 
-		Ok(Async::NotReady)
+		Poll::Pending
 	}
+}
+
+impl<B: BlockT<Hash=H256>, N: Network<B>, E, Backend, RA> Unpin for
+ObserverWork<B, N, E, Backend, RA> {
 }

@@ -23,6 +23,7 @@ use std::sync::Arc;
 use babe;
 use client::{self, LongestChain};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
+use futures03::prelude::*;
 use node_executor;
 use node_primitives::Block;
 use node_runtime::{GenesisConfig, RuntimeApi};
@@ -195,7 +196,7 @@ macro_rules! new_full {
 					grandpa_link,
 					service.network(),
 					service.on_exit(),
-				)?);
+				)?.map(|()| Ok::<(), ()>(())).compat());
 			},
 			(true, false) => {
 				// start the full GRANDPA voter
@@ -210,7 +211,8 @@ macro_rules! new_full {
 				};
 				// the GRANDPA voter task is considered infallible, i.e.
 				// if it fails we take down the service with it.
-				service.spawn_essential_task(grandpa::run_grandpa_voter(grandpa_config)?);
+				service.spawn_essential_task(grandpa::run_grandpa_voter(grandpa_config)?
+					.map(|()| Ok::<(), ()>(())).compat());
 			},
 			(_, true) => {
 				grandpa::setup_disabled_grandpa(

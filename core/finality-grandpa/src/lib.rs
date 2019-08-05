@@ -52,9 +52,9 @@
 //! or prune any signaled changes based on whether the signaling block is
 //! included in the newly-finalized chain.
 
-use futures::prelude::*;
-use log::{debug, error, info};
-use futures::sync::mpsc;
+use futures::{prelude::*, compat::Compat01As03};
+use log::{debug, info};
+use futures::channel::mpsc;
 use client::{
 	BlockchainEvents, CallExecutor, Client, backend::Backend, error::Error as ClientError,
 };
@@ -69,7 +69,7 @@ use keystore::KeyStorePtr;
 use inherents::InherentDataProviders;
 use consensus_common::SelectChain;
 use primitives::{H256, Blake2Hasher, Pair};
-use substrate_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_WARN};
+use substrate_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG};
 use serde_json;
 
 use srml_finality_tracker;
@@ -77,9 +77,7 @@ use srml_finality_tracker;
 use grandpa::Error as GrandpaError;
 use grandpa::{voter, BlockNumberOps, voter_set::VoterSet};
 
-use std::fmt;
-use std::sync::Arc;
-use std::time::Duration;
+use std::{fmt, io, pin::Pin, sync::Arc, task::{Context, Poll}, time::Duration};
 
 mod authorities;
 mod aux_schema;
@@ -172,15 +170,6 @@ type CommunicationInH<Block, H> = grandpa::voter::CommunicationIn<
 	AuthorityId,
 >;
 
-/// A global communication sink for commits. Not exposed publicly, used
-/// internally to simplify types in the communication layer.
-type CommunicationOut<Block> = grandpa::voter::CommunicationOut<
-	<Block as BlockT>::Hash,
-	NumberFor<Block>,
-	AuthoritySignature,
-	AuthorityId,
->;
-
 /// Global communication sink for commits with the hash type not being derived
 /// from the block, useful for forcing the hash to some type (e.g. `H256`) when
 /// the compiler can't do the inference.
@@ -226,7 +215,7 @@ pub enum Error {
 	/// An invariant has been violated (e.g. not finalizing pending change blocks in-order)
 	Safety(String),
 	/// A timer failed to fire.
-	Timer(tokio_timer::Error),
+	Timer(io::Error),
 }
 
 impl From<GrandpaError> for Error {
@@ -403,13 +392,12 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	keystore: &Option<KeyStorePtr>,
 ) -> (
 	impl Stream<
-		Item = CommunicationInH<Block, H256>,
-		Error = CommandOrError<H256, NumberFor<Block>>,
+		Item = Result<CommunicationInH<Block, H256>, CommandOrError<H256, NumberFor<Block>>>,
 	>,
 	impl Sink<
-		SinkItem = CommunicationOutH<Block, H256>,
-		SinkError = CommandOrError<H256, NumberFor<Block>>,
-	>,
+		CommunicationOutH<Block, H256>,
+		Error = CommandOrError<H256, NumberFor<Block>>,
+	> + Unpin,
 ) where
 	B: Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
@@ -491,7 +479,7 @@ pub struct GrandpaParams<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X> {
 /// block import worker that has already been instantiated with `block_import`.
 pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, VR, X>,
-) -> client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
+) -> client::error::Result<impl Future<Output = ()> + Unpin + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
@@ -502,7 +490,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
 	RA: Send + Sync + 'static,
-	X: Future<Item=(),Error=()> + Clone + Send + 'static,
+	X: futures01::Future<Item = (), Error = ()> + Clone + Unpin + Send + 'static,
 {
 	let GrandpaParams {
 		config,
@@ -551,12 +539,12 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 							.expect("authorities is always at least an empty vector; elements are always of type string")
 					}
 				);
-				Ok(())
+				future::ready(())
 			})
-			.then(|_| -> Result<(), ()> { Ok(()) });
-		futures::future::Either::A(events)
+			.then(|_| { future::ready(()) });
+		future::Either::Left(events)
 	} else {
-		futures::future::Either::B(futures::future::empty())
+		future::Either::Right(future::pending())
 	};
 
 	let voter_work = VoterWork::new(
@@ -570,25 +558,21 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 	);
 
 	let voter_work = voter_work
-		.map(|_| ())
-		.map_err(|e| {
-			error!("GRANDPA Voter failed: {:?}", e);
-			telemetry!(CONSENSUS_WARN; "afg.voter_failed"; "e" => ?e);
-		});
+		.map(|_| ());
 
-	let voter_work = network_startup.and_then(move |()| voter_work);
+	let voter_work = network_startup.then(move |()| future::ready(voter_work));
 
 	// Make sure that `telemetry_task` doesn't accidentally finish and kill grandpa.
 	let telemetry_task = telemetry_task
-		.then(|_| futures::future::empty::<(), ()>());
+		.then(|_| future::pending::<()>());
 
-	Ok(voter_work.select(on_exit).select2(telemetry_task).then(|_| Ok(())))
+	Ok(future::select(future::select(voter_work, Compat01As03::new(on_exit)), telemetry_task).then(|_| future::ready(())))
 }
 
 /// Future that powers the voter.
 #[must_use]
 struct VoterWork<B, E, Block: BlockT, N: Network<Block>, RA, SC, VR> {
-	voter: Box<dyn Future<Item = (), Error = CommandOrError<Block::Hash, NumberFor<Block>>> + Send>,
+	voter: Pin<Box<dyn Future<Output = Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>> + Send>>,
 	env: Arc<Environment<B, E, Block, N, RA, SC, VR>>,
 	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 }
@@ -632,7 +616,7 @@ where
 		let mut work = VoterWork {
 			// `voter` is set to a temporary value and replaced below when
 			// calling `rebuild_voter`.
-			voter: Box::new(futures::empty()) as Box<_>,
+			voter: Box::pin(future::pending()),
 			env,
 			voter_commands_rx,
 		};
@@ -696,10 +680,10 @@ where
 					last_finalized,
 				);
 
-				self.voter = Box::new(voter);
+				self.voter = Box::pin(voter);
 			},
 			VoterSetState::Paused { .. } =>
-				self.voter = Box::new(futures::empty()),
+				self.voter = Box::pin(future::pending()),
 		};
 	}
 
@@ -780,52 +764,47 @@ where
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
 {
-	type Item = ();
-	type Error = Error;
+	type Output = Result<(), Error>;
 
-	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-		match self.voter.poll() {
-			Ok(Async::NotReady) => {}
-			Ok(Async::Ready(())) => {
+	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+		match Future::poll(Pin::new(&mut self.voter), cx) {
+			Poll::Pending => {}
+			Poll::Ready(Ok(())) => {
 				// voters don't conclude naturally
-				return Err(Error::Safety("GRANDPA voter has concluded.".into()))
+				return Poll::Ready(Err(Error::Safety("GRANDPA voter has concluded.".into())))
 			}
-			Err(CommandOrError::Error(e)) => {
+			Poll::Ready(Err(CommandOrError::Error(e))) => {
 				// return inner observer error
-				return Err(e)
+				return Poll::Ready(Err(e))
 			}
-			Err(CommandOrError::VoterCommand(command)) => {
+			Poll::Ready(Err(CommandOrError::VoterCommand(command))) => {
 				// some command issued internally
 				self.handle_voter_command(command)?;
-				futures::task::current().notify();
+				cx.waker().wake_by_ref();
 			}
 		}
 
-		match self.voter_commands_rx.poll() {
-			Ok(Async::NotReady) => {}
-			Err(_) => {
-				// the `voter_commands_rx` stream should not fail.
-				return Ok(Async::Ready(()))
-			}
-			Ok(Async::Ready(None)) => {
+		match Stream::poll_next(Pin::new(&mut self.voter_commands_rx), cx) {
+			Poll::Pending => {}
+			Poll::Ready(None) => {
 				// the `voter_commands_rx` stream should never conclude since it's never closed.
-				return Ok(Async::Ready(()))
+				return Poll::Ready(Ok(()))
 			}
-			Ok(Async::Ready(Some(command))) => {
+			Poll::Ready(Some(command)) => {
 				// some command issued externally
 				self.handle_voter_command(command)?;
-				futures::task::current().notify();
+				cx.waker().wake_by_ref();
 			}
 		}
 
-		Ok(Async::NotReady)
+		Poll::Pending
 	}
 }
 
 #[deprecated(since = "1.1.0", note = "Please switch to run_grandpa_voter.")]
 pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, VR, X>,
-) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
+) -> ::client::error::Result<impl Future<Output = ()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
@@ -836,7 +815,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 	DigestFor<Block>: Encode,
 	RA: Send + Sync + 'static,
 	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
-	X: Future<Item=(),Error=()> + Clone + Send + 'static,
+	X: futures01::Future<Item = (), Error = ()> + Clone + Unpin + Send + 'static,
 {
 	run_grandpa_voter(grandpa_params)
 }

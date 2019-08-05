@@ -23,17 +23,17 @@
 use super::{BlockStatus, CommunicationIn, Error, SignedMessage};
 
 use log::{debug, warn};
-use client::{BlockImportNotification, ImportNotifications};
-use futures::prelude::*;
-use futures::stream::Fuse;
-use futures03::{StreamExt as _, TryStreamExt as _};
+use client::ImportNotifications;
+use futures::{prelude::*, stream::Fuse};
 use grandpa::voter;
 use parking_lot::Mutex;
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use tokio_timer::Interval;
+use futures_timer::Interval;
 
 use std::collections::{HashMap, VecDeque};
+use std::pin::Pin;
 use std::sync::{atomic::{AtomicUsize, Ordering}, Arc};
+use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 use fg_primitives::AuthorityId;
 
@@ -65,7 +65,7 @@ pub(crate) trait BlockUntilImported<Block: BlockT>: Sized {
 
 /// Buffering imported messages until blocks with given hashes are imported.
 pub(crate) struct UntilImported<Block: BlockT, Status, I, M: BlockUntilImported<Block>> {
-	import_notifications: Fuse<Box<dyn Stream<Item = BlockImportNotification<Block>, Error = ()> + Send>>,
+	import_notifications: Fuse<ImportNotifications<Block>>,
 	status_check: Status,
 	inner: Fuse<I>,
 	ready: VecDeque<M::Blocked>,
@@ -90,18 +90,13 @@ impl<Block: BlockT, Status, I: Stream, M> UntilImported<Block, Status, I, M>
 		// the import notifications interval takes care of most of this; this is
 		// used in the event of missed import notifications
 		const CHECK_PENDING_INTERVAL: Duration = Duration::from_secs(5);
-		let now = Instant::now();
 
-		let check_pending = Interval::new(now + CHECK_PENDING_INTERVAL, CHECK_PENDING_INTERVAL);
 		UntilImported {
-			import_notifications: {
-				let stream = import_notifications.map::<_, fn(_) -> _>(|v| Ok::<_, ()>(v)).compat();
-				Box::new(stream) as Box<dyn Stream<Item = _, Error = _> + Send>
-			}.fuse(),
+			import_notifications: import_notifications.fuse(),
 			status_check,
 			inner: stream.fuse(),
 			ready: VecDeque::new(),
-			check_pending,
+			check_pending: Interval::new(CHECK_PENDING_INTERVAL),
 			pending: HashMap::new(),
 			identifier,
 		}
@@ -110,24 +105,28 @@ impl<Block: BlockT, Status, I: Stream, M> UntilImported<Block, Status, I, M>
 
 impl<Block: BlockT, Status, I, M> Stream for UntilImported<Block, Status, I, M> where
 	Status: BlockStatus<Block>,
-	I: Stream<Item=M::Blocked,Error=Error>,
+	I: Stream<Item = Result<M::Blocked, Error>> + Unpin,
 	M: BlockUntilImported<Block>,
 {
-	type Item = M::Blocked;
-	type Error = Error;
+	type Item = Result<M::Blocked, Error>;
 
-	fn poll(&mut self) -> Poll<Option<M::Blocked>, Error> {
+	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+		// We are using a `this` variable in order to allow multiple simultaneous mutable borrow
+		// to `self`.
+		let this = &mut *self;
+
 		loop {
-			match self.inner.poll()? {
-				Async::Ready(None) => return Ok(Async::Ready(None)),
-				Async::Ready(Some(input)) => {
+			match Stream::poll_next(Pin::new(&mut this.inner), cx) {
+				Poll::Ready(None) => return Poll::Ready(None),
+				Poll::Ready(Some(Err(err))) => return Poll::Ready(Some(Err(err.into()))),
+				Poll::Ready(Some(Ok(input))) => {
 					// new input: schedule wait of any parts which require
 					// blocks to be known.
-					let ready = &mut self.ready;
-					let pending = &mut self.pending;
+					let ready = &mut this.ready;
+					let pending = &mut this.pending;
 					M::schedule_wait(
 						input,
-						&self.status_check,
+						&this.status_check,
 						|target_hash, wait| pending
 							.entry(target_hash)
 							.or_insert_with(|| (Instant::now(), Vec::new()))
@@ -136,37 +135,36 @@ impl<Block: BlockT, Status, I, M> Stream for UntilImported<Block, Status, I, M> 
 						|ready_item| ready.push_back(ready_item),
 					)?;
 				}
-				Async::NotReady => break,
+				Poll::Pending => break,
 			}
 		}
 
 		loop {
-			match self.import_notifications.poll() {
-				Err(_) => return Err(Error::Network(format!("Failed to get new message"))),
-				Ok(Async::Ready(None)) => return Ok(Async::Ready(None)),
-				Ok(Async::Ready(Some(notification))) => {
+			match Stream::poll_next(Pin::new(&mut this.import_notifications), cx) {
+				Poll::Ready(None) => return Poll::Ready(None),
+				Poll::Ready(Some(notification)) => {
 					// new block imported. queue up all messages tied to that hash.
-					if let Some((_, messages)) = self.pending.remove(&notification.hash) {
+					if let Some((_, messages)) = this.pending.remove(&notification.hash) {
 						let canon_number = notification.header.number().clone();
 						let ready_messages = messages.into_iter()
 							.filter_map(|m| m.wait_completed(canon_number));
 
-						self.ready.extend(ready_messages);
+						this.ready.extend(ready_messages);
 				 	}
 				}
-				Ok(Async::NotReady) => break,
+				Poll::Pending => break,
 			}
 		}
 
 		let mut update_interval = false;
-		while let Async::Ready(Some(_)) = self.check_pending.poll().map_err(Error::Timer)? {
+		while let Poll::Ready(Some(())) = Stream::poll_next(Pin::new(&mut this.check_pending), cx) {
 			update_interval = true;
 		}
 
 		if update_interval {
 			let mut known_keys = Vec::new();
-			for (&block_hash, &mut (ref mut last_log, ref v)) in &mut self.pending {
-				if let Some(number) = self.status_check.block_number(block_hash)? {
+			for (&block_hash, &mut (ref mut last_log, ref v)) in &mut this.pending {
+				if let Some(number) = this.status_check.block_number(block_hash)? {
 					known_keys.push((block_hash, number));
 				} else {
 					let next_log = *last_log + LOG_PENDING_INTERVAL;
@@ -177,7 +175,7 @@ impl<Block: BlockT, Status, I, M> Stream for UntilImported<Block, Status, I, M> 
 							Possible fork?",
 							block_hash,
 							v.len(),
-							self.identifier,
+							this.identifier,
 						);
 
 						*last_log = next_log;
@@ -186,25 +184,28 @@ impl<Block: BlockT, Status, I, M> Stream for UntilImported<Block, Status, I, M> 
 			}
 
 			for (known_hash, canon_number) in known_keys {
-				if let Some((_, pending_messages)) = self.pending.remove(&known_hash) {
+				if let Some((_, pending_messages)) = this.pending.remove(&known_hash) {
 					let ready_messages = pending_messages.into_iter()
 						.filter_map(|m| m.wait_completed(canon_number));
 
-					self.ready.extend(ready_messages);
+					this.ready.extend(ready_messages);
 				}
 			}
 		}
 
-		if let Some(ready) = self.ready.pop_front() {
-			return Ok(Async::Ready(Some(ready)))
+		if let Some(ready) = this.ready.pop_front() {
+			return Poll::Ready(Some(Ok(ready)))
 		}
 
-		if self.import_notifications.is_done() && self.inner.is_done() {
-			Ok(Async::Ready(None))
+		if this.import_notifications.is_done() && this.inner.is_done() {
+			Poll::Ready(None)
 		} else {
-			Ok(Async::NotReady)
+			Poll::Pending
 		}
 	}
+}
+
+impl<Block: BlockT, Status, I, M: BlockUntilImported<Block>> Unpin for UntilImported<Block, Status, I, M> {
 }
 
 fn warn_authority_wrong_target<H: ::std::fmt::Display>(hash: H, id: AuthorityId) {

@@ -16,13 +16,14 @@
 
 use std::collections::BTreeMap;
 use std::iter::FromIterator;
+use std::pin::Pin;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use log::{debug, warn, info};
 use codec::{Decode, Encode};
 use futures::prelude::*;
-use tokio_timer::Delay;
+use futures_timer::Delay;
 use parking_lot::RwLock;
 
 use client::{
@@ -553,19 +554,21 @@ where
 	VR: VotingRule<Block, Client<B, E, Block, RA>>,
 	NumberFor<Block>: BlockNumberOps,
 {
-	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
+	type Timer = Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send>>;
 	type Id = AuthorityId;
 	type Signature = AuthoritySignature;
 
 	// regular round message streams
-	type In = Box<dyn Stream<
-		Item = ::grandpa::SignedMessage<Block::Hash, NumberFor<Block>, Self::Signature, Self::Id>,
+	type In = Pin<Box<dyn Stream<
+		Item = Result<
+			::grandpa::SignedMessage<Block::Hash, NumberFor<Block>, Self::Signature, Self::Id>,
+			Self::Error
+		>
+	> + Send>>;
+	type Out = Pin<Box<dyn Sink<
+		::grandpa::Message<Block::Hash, NumberFor<Block>>,
 		Error = Self::Error,
-	> + Send>;
-	type Out = Box<dyn Sink<
-		SinkItem = ::grandpa::Message<Block::Hash, NumberFor<Block>>,
-		SinkError = Self::Error,
-	> + Send>;
+	> + Send>>;
 
 	type Error = CommandOrError<Block::Hash, NumberFor<Block>>;
 
@@ -573,9 +576,8 @@ where
 		&self,
 		round: RoundNumber,
 	) -> voter::RoundData<Self::Id, Self::Timer, Self::In, Self::Out> {
-		let now = Instant::now();
-		let prevote_timer = Delay::new(now + self.config.gossip_duration * 2);
-		let precommit_timer = Delay::new(now + self.config.gossip_duration * 4);
+		let prevote_timer = Delay::new(self.config.gossip_duration * 2);
+		let precommit_timer = Delay::new(self.config.gossip_duration * 4);
 
 		let local_key = crate::is_voter(&self.voters, &self.config.keystore);
 
@@ -600,7 +602,7 @@ where
 
 		// schedule incoming messages from the network to be held until
 		// corresponding blocks are imported.
-		let incoming = Box::new(UntilVoteTargetImported::new(
+		let incoming = Box::pin(UntilVoteTargetImported::new(
 			self.inner.import_notification_stream(),
 			self.inner.clone(),
 			incoming,
@@ -608,12 +610,12 @@ where
 		).map_err(Into::into));
 
 		// schedule network message cleanup when sink drops.
-		let outgoing = Box::new(outgoing.sink_map_err(Into::into));
+		let outgoing = Box::pin(outgoing.sink_err_into());
 
 		voter::RoundData {
 			voter_id: local_key.map(|pair| pair.public()),
-			prevote_timer: Box::new(prevote_timer.map_err(|e| Error::Timer(e).into())),
-			precommit_timer: Box::new(precommit_timer.map_err(|e| Error::Timer(e).into())),
+			prevote_timer: Box::pin(prevote_timer.map_err(|e| Error::Timer(e).into())),
+			precommit_timer: Box::pin(precommit_timer.map_err(|e| Error::Timer(e).into())),
 			incoming,
 			outgoing,
 		}
@@ -831,9 +833,7 @@ where
 
 		//random between 0-1 seconds.
 		let delay: u64 = thread_rng().gen_range(0, 1000);
-		Box::new(Delay::new(
-			Instant::now() + Duration::from_millis(delay)
-		).map_err(|e| Error::Timer(e).into()))
+		Box::pin(Delay::new(Duration::from_millis(delay)).map_err(|e| Error::Timer(e).into()))
 	}
 
 	fn prevote_equivocation(

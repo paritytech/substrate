@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 use substrate_client::LongestChain;
-use futures::prelude::*;
+use futures03::prelude::*;
 use node_template_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi};
 use substrate_service::{error::{Error as ServiceError}, AbstractService, Configuration, ServiceBuilder};
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
@@ -136,7 +136,7 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 				grandpa_link,
 				service.network(),
 				service.on_exit(),
-			)?);
+			)?.map(|()| Ok::<(), ()>(())).compat());
 		},
 		(true, false) => {
 			// start the full GRANDPA voter
@@ -152,7 +152,8 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 
 			// the GRANDPA voter task is considered infallible, i.e.
 			// if it fails we take down the service with it.
-			service.spawn_essential_task(grandpa::run_grandpa_voter(voter_config)?);
+			service.spawn_essential_task(grandpa::run_grandpa_voter(voter_config)?
+				.map(|()| Ok::<(), ()>(())).compat());
 		},
 		(_, true) => {
 			grandpa::setup_disabled_grandpa(

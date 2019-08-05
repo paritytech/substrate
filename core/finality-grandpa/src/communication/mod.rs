@@ -27,25 +27,23 @@
 //! In the future, there will be a fallback for allowing sending the same message
 //! under certain conditions that are used to un-stick the protocol.
 
-use std::sync::Arc;
+use std::{pin::Pin, sync::Arc, task::{Poll, Context}};
 
-use futures::prelude::*;
-use futures::sync::{oneshot, mpsc};
-use futures03::stream::{StreamExt, TryStreamExt};
+use futures::{channel::{oneshot, mpsc}, compat::Compat01As03, prelude::*};
 use grandpa::Message::{Prevote, Precommit, PrimaryPropose};
 use grandpa::{voter, voter_set::VoterSet};
 use log::{debug, trace};
 use network::{consensus_gossip as network_gossip, NetworkService};
 use network_gossip::ConsensusMessage;
 use codec::{Encode, Decode};
-use primitives::Pair;
-use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
+use primitives::{H256, Pair};
+use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use tokio_executor::Executor;
 
 use crate::{
-	CatchUp, Commit, CommunicationIn, CommunicationOut, CompactCommit, Error,
-	Message, SignedMessage,
+	CatchUp, Commit, CommunicationIn, CommunicationOutH,
+	CompactCommit, Error, Message, SignedMessage,
 };
 use crate::environment::HasVoted;
 use gossip::{
@@ -101,7 +99,7 @@ mod benefit {
 /// Intended to be a lightweight handle such as an `Arc`.
 pub trait Network<Block: BlockT>: Clone + Send + 'static {
 	/// A stream of input messages for a topic.
-	type In: Stream<Item = network_gossip::TopicNotification, Error = ()>;
+	type In: Stream<Item = Result<network_gossip::TopicNotification, ()>> + Unpin;
 
 	/// Get a stream of messages for a specific gossip topic.
 	fn messages_for(&self, topic: Block::Hash) -> Self::In;
@@ -147,7 +145,7 @@ impl<B, S, H> Network<B> for Arc<NetworkService<B, S, H>> where
 	H: network::ExHashT,
 {
 	type In = NetworkStream<
-		Box<dyn Stream<Item = network_gossip::TopicNotification, Error = ()> + Send + 'static>,
+		Pin<Box<dyn Stream<Item = Result<network_gossip::TopicNotification, ()>> + Send + 'static>>,
 	>;
 
 	fn messages_for(&self, topic: B::Hash) -> Self::In {
@@ -162,11 +160,8 @@ impl<B, S, H> Network<B> for Arc<NetworkService<B, S, H>> where
 		// waiting for the oneshot to resolve and from there on acting like a normal message channel.
 		let (tx, rx) = oneshot::channel();
 		self.with_gossip(move |gossip, _| {
-			let inner_rx: Box<dyn Stream<Item = _, Error = ()> + Send> = Box::new(gossip
-				.messages_for(GRANDPA_ENGINE_ID, topic)
-				.map(|x| Ok(x))
-				.compat()
-			);
+			let inner_rx: Pin<Box<dyn Stream<Item = _> + Send>> =
+				Box::pin(gossip.messages_for(GRANDPA_ENGINE_ID, topic).map(Result::Ok));
 			let _ = tx.send(inner_rx);
 		});
 		NetworkStream::PollingOneshot(rx)
@@ -234,29 +229,31 @@ pub enum NetworkStream<R> {
 
 impl<R> Stream for NetworkStream<R>
 where
-	R: Stream<Item = network_gossip::TopicNotification, Error = ()>,
+	R: Stream<Item = Result<network_gossip::TopicNotification, ()>> + Unpin,
 {
-	type Item = R::Item;
-	type Error = ();
+	type Item = Result<network_gossip::TopicNotification, ()>;
 
-	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-		match self {
-			NetworkStream::PollingOneshot(oneshot) => {
-				match oneshot.poll() {
-					Ok(futures::Async::Ready(mut stream)) => {
-						let poll_result = stream.poll();
+	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+		match *self {
+			NetworkStream::PollingOneshot(ref mut oneshot) => {
+				match Future::poll(Pin::new(oneshot), cx) {
+					Poll::Ready(Ok(mut stream)) => {
+						let poll_result = Stream::poll_next(Pin::new(&mut stream), cx);
 						*self = NetworkStream::PollingTopicNotifications(stream);
 						poll_result
 					},
-					Ok(futures::Async::NotReady) => Ok(futures::Async::NotReady),
-					Err(_) => Err(())
+					Poll::Ready(Err(_)) => Poll::Ready(Some(Err(()))),
+					Poll::Pending => Poll::Pending,
 				}
 			},
-			NetworkStream::PollingTopicNotifications(stream) => {
-				stream.poll()
+			NetworkStream::PollingTopicNotifications(ref mut stream) => {
+				Stream::poll_next(Pin::new(stream), cx)
 			},
 		}
 	}
+}
+
+impl<R> Unpin for NetworkStream<R> {
 }
 
 /// Bridge between the underlying network service, gossiping consensus messages and Grandpa
@@ -267,7 +264,7 @@ pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
 	announce_sender: periodic::BlockAnnounceSender<B>,
 }
 
-impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
+impl<B: BlockT<Hash = H256>, N: Network<B>> NetworkBridge<B, N> {
 	/// Create a new NetworkBridge to the given NetworkService. Returns the service
 	/// handle and a future that must be polled to completion to finish startup.
 	/// On creation it will register previous rounds' votes with the gossip
@@ -276,11 +273,11 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		service: N,
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,
-		on_exit: impl Future<Item = (), Error = ()> + Clone + Send + 'static,
+		on_exit: impl futures01::Future<Item = (), Error = ()> + Clone + Unpin + Send + 'static,
 		catch_up_enabled: bool,
 	) -> (
 		Self,
-		impl Future<Item = (), Error = ()> + Send + 'static,
+		impl Future<Output = ()> + Send + 'static,
 	) {
 
 		let (validator, report_stream) = GossipValidator::new(
@@ -336,17 +333,16 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 
 		let bridge = NetworkBridge { service, validator, neighbor_sender, announce_sender };
 
-		let startup_work = futures::future::lazy(move || {
+		let startup_work = future::lazy(move |_cx| {
 			// lazily spawn these jobs onto their own tasks. the lazy future has access
 			// to tokio globals, which aren't available outside.
 			let mut executor = tokio_executor::DefaultExecutor::current();
-			executor.spawn(Box::new(rebroadcast_job.select(on_exit.clone()).then(|_| Ok(()))))
+			executor.spawn(Box::new(future::select(rebroadcast_job, Compat01As03::new(on_exit.clone())).then(|_| future::ok(())).compat()))
 				.expect("failed to spawn grandpa rebroadcast job task");
-			executor.spawn(Box::new(announce_job.select(on_exit.clone()).then(|_| Ok(()))))
+			executor.spawn(Box::new(future::select(announce_job, Compat01As03::new(on_exit.clone())).then(|_| future::ok(())).compat()))
 				.expect("failed to spawn grandpa block announce job task");
-			executor.spawn(Box::new(reporting_job.select(on_exit.clone()).then(|_| Ok(()))))
+			executor.spawn(Box::new(future::select(reporting_job, Compat01As03::new(on_exit.clone())).then(|_| future::ok(())).compat()))
 				.expect("failed to spawn grandpa reporting job task");
-			Ok(())
 		});
 
 		(bridge, startup_work)
@@ -382,8 +378,8 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		local_key: Option<AuthorityPair>,
 		has_voted: HasVoted<B>,
 	) -> (
-		impl Stream<Item=SignedMessage<B>,Error=Error>,
-		impl Sink<SinkItem=Message<B>,SinkError=Error>,
+		impl Stream<Item = Result<SignedMessage<B>, Error>>,
+		impl Sink<grandpa::Message<H256, NumberFor<B>>, Error = Error> + Unpin,
 	) {
 		self.note_round(
 			round,
@@ -402,20 +398,20 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 
 		let topic = round_topic::<B>(round.0, set_id.0);
 		let incoming = self.service.messages_for(topic)
-			.filter_map(|notification| {
+			.try_filter_map(|notification| {
 				let decoded = GossipMessage::<B>::decode(&mut &notification.message[..]);
 				if let Err(ref e) = decoded {
 					debug!(target: "afg", "Skipping malformed message {:?}: {}", notification, e);
 				}
-				decoded.ok()
+				future::ok(decoded.ok())
 			})
-			.and_then(move |msg| {
+			.map_ok(move |msg| {
 				match msg {
 					GossipMessage::Vote(msg) => {
 						// check signature.
 						if !voters.contains_key(&msg.message.id) {
 							debug!(target: "afg", "Skipping message from unknown voter {}", msg.message.id);
-							return Ok(None);
+							return None;
 						}
 
 						match &msg.message.message {
@@ -442,15 +438,15 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 							},
 						};
 
-						Ok(Some(msg.message))
+						Some(msg.message)
 					}
 					_ => {
 						debug!(target: "afg", "Skipping unknown message type");
-						return Ok(None);
+						None
 					}
 				}
 			})
-			.filter_map(|x| x)
+			.try_filter_map(|x| future::ok(x))
 			.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")));
 
 		let (tx, out_rx) = mpsc::unbounded();
@@ -464,11 +460,11 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			has_voted,
 		};
 
-		let out_rx = out_rx.map_err(move |()| Error::Network(
+		let out_rx = out_rx.map(Result::Ok).map_err(move |()| Error::Network(
 			format!("Failed to receive on unbounded receiver for round {}", round.0)
 		));
 
-		let incoming = incoming.select(out_rx);
+		let incoming = stream::select(incoming, out_rx);
 
 		(incoming, outgoing)
 	}
@@ -480,8 +476,8 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		voters: Arc<VoterSet<AuthorityId>>,
 		is_voter: bool,
 	) -> (
-		impl Stream<Item = CommunicationIn<B>, Error = Error>,
-		impl Sink<SinkItem = CommunicationOut<B>, SinkError = Error>,
+		impl Stream<Item = Result<CommunicationIn<B>, Error>>,
+		impl Sink<CommunicationOutH<B, H256>, Error = Error> + Unpin,
 	) {
 		self.validator.note_set(
 			set_id,
@@ -509,7 +505,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 
 		let outgoing = outgoing.with(|out| {
 			let voter::CommunicationOut::Commit(round, commit) = out;
-			Ok((round, commit))
+			future::ok((round, commit))
 		});
 
 		(incoming, outgoing)
@@ -522,7 +518,7 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 	voters: Arc<VoterSet<AuthorityId>>,
 	gossip_validator: Arc<GossipValidator<B>>,
 	neighbor_sender: periodic::NeighborPacketSender<B>,
-) -> impl Stream<Item = CommunicationIn<B>, Error = Error> {
+) -> impl Stream<Item = Result<CommunicationIn<B>, Error>> {
 	let process_commit = move |
 		msg: FullCommitMessage<B>,
 		mut notification: network_gossip::TopicNotification,
@@ -624,25 +620,25 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 	};
 
 	service.messages_for(topic)
-		.filter_map(|notification| {
+		.try_filter_map(|notification| {
 			// this could be optimized by decoding piecewise.
 			let decoded = GossipMessage::<B>::decode(&mut &notification.message[..]);
 			if let Err(ref e) = decoded {
 				trace!(target: "afg", "Skipping malformed commit message {:?}: {}", notification, e);
 			}
-			decoded.map(move |d| (notification, d)).ok()
+			future::ok(decoded.map(move |d| (notification, d)).ok())
 		})
-		.filter_map(move |(notification, msg)| {
-			match msg {
+		.try_filter_map(move |(notification, msg)| {
+			future::ok(match msg {
 				GossipMessage::Commit(msg) =>
 					process_commit(msg, notification, &mut service, &gossip_validator, &*voters),
 				GossipMessage::CatchUp(msg) =>
 					process_catch_up(msg, notification, &mut service, &gossip_validator, &*voters),
 				_ => {
 					debug!(target: "afg", "Skipping unknown message type");
-					return None;
+					None
 				}
-			}
+			})
 		})
 		.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")))
 }
@@ -705,12 +701,15 @@ struct OutgoingMessages<Block: BlockT, N: Network<Block>> {
 	has_voted: HasVoted<Block>,
 }
 
-impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
+impl<Block: BlockT, N: Network<Block>> Sink<Message<Block>> for OutgoingMessages<Block, N>
 {
-	type SinkItem = Message<Block>;
-	type SinkError = Error;
+	type Error = Error;
 
-	fn start_send(&mut self, mut msg: Message<Block>) -> StartSend<Message<Block>, Error> {
+	fn poll_ready(self: Pin<&mut Self>, _: &mut Context) -> Poll<Result<(), Self::Error>> {
+		Poll::Ready(Ok(()))
+	}
+
+	fn start_send(self: Pin<&mut Self>, mut msg: Message<Block>) -> Result<(), Self::Error> {
 		// if we've voted on this round previously under the same key, send that vote instead
 		match &mut msg {
 			grandpa::Message::PrimaryPropose(ref mut vote) =>
@@ -769,15 +768,21 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 			let _ = self.sender.unbounded_send(signed);
 		}
 
-		Ok(AsyncSink::Ready)
+		Ok(())
 	}
 
-	fn poll_complete(&mut self) -> Poll<(), Error> { Ok(Async::Ready(())) }
+	fn poll_flush(self: Pin<&mut Self>, _: &mut Context) -> Poll<Result<(), Self::Error>> {
+		Poll::Ready(Ok(()))
+ 	}
 
-	fn close(&mut self) -> Poll<(), Error> {
-		// ignore errors since we allow this inner sender to be closed already.
-		self.sender.close().or_else(|_| Ok(Async::Ready(())))
+	fn poll_close(mut self: Pin<&mut Self>, _: &mut Context) -> Poll<Result<(), Self::Error>> {
+ 		// ignore errors since we allow this inner sender to be closed already.
+		self.sender.disconnect();
+		Poll::Ready(Ok(()))
 	}
+}
+
+impl<Block: BlockT, N: Network<Block>> Unpin for OutgoingMessages<Block, N> {
 }
 
 // checks a compact commit. returns the cost associated with processing it if
@@ -976,13 +981,16 @@ impl<Block: BlockT, N: Network<Block>> CommitsOut<Block, N> {
 	}
 }
 
-impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
-	type SinkItem = (RoundNumber, Commit<Block>);
-	type SinkError = Error;
+impl<Block: BlockT, N: Network<Block>> Sink<(RoundNumber, Commit<Block>)> for CommitsOut<Block, N> {
+	type Error = Error;
 
-	fn start_send(&mut self, input: (RoundNumber, Commit<Block>)) -> StartSend<Self::SinkItem, Error> {
+	fn poll_ready(self: Pin<&mut Self>, _: &mut Context) -> Poll<Result<(), Self::Error>> {
+		Poll::Ready(Ok(()))
+	}
+
+	fn start_send(self: Pin<&mut Self>, input: (RoundNumber, Commit<Block>)) -> Result<(), Self::Error> {
 		if !self.is_voter {
-			return Ok(AsyncSink::Ready);
+			return Ok(());
 		}
 
 		let (round, commit) = input;
@@ -1018,9 +1026,17 @@ impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
 		);
 		self.network.gossip_message(topic, message.encode(), false);
 
-		Ok(AsyncSink::Ready)
+		Ok(())
 	}
 
-	fn close(&mut self) -> Poll<(), Error> { Ok(Async::Ready(())) }
-	fn poll_complete(&mut self) -> Poll<(), Error> { Ok(Async::Ready(())) }
+	fn poll_close(self: Pin<&mut Self>, _: &mut Context) -> Poll<Result<(), Self::Error>> {
+		Poll::Ready(Ok(()))
+	}
+
+	fn poll_flush(self: Pin<&mut Self>, _: &mut Context) -> Poll<Result<(), Self::Error>> {
+		Poll::Ready(Ok(()))
+	}
+}
+
+impl<Block: BlockT, N: Network<Block>> Unpin for CommitsOut<Block, N> {
 }
