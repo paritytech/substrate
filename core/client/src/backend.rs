@@ -23,7 +23,6 @@ use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenSto
 use sr_primitives::traits::{Block as BlockT, NumberFor};
 use state_machine::backend::Backend as StateBackend;
 use state_machine::ChangesTrieStorage as StateChangesTrieStorage;
-use state_machine::OverlayedSettings;
 use consensus::well_known_cache_keys;
 use hash_db::Hasher;
 use trie::MemoryDB;
@@ -197,9 +196,6 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	/// something that the import of a block would interfere with, e.g. importing
 	/// a new block or calculating the best head.
 	fn get_import_lock(&self) -> &Mutex<()>;
-
-	/// Settings to use with overlay.
-	fn overlay_settings(&self) -> OverlayedSettings;
 }
 
 /// Offchain workers local storage.

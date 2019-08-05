@@ -259,7 +259,6 @@ mod test {
 					])),
 				].into_iter().collect(),
 			},
-			settings: Default::default(),
 			operation_from_last_gc: 0,
 		};
 
