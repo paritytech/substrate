@@ -152,9 +152,7 @@ mod tests {
 	use super::*;
 	use std::collections::HashMap;
 	use primitives::H256;
-	use crate::exec::{
-		CallReceipt, Ext, InstantiateReceipt, StorageKey, ExecError, ExecReturnValue,
-	};
+	use crate::exec::{Ext, StorageKey, ExecError, ExecReturnValue};
 	use crate::gas::{Gas, GasMeter};
 	use crate::tests::{Test, Call};
 	use crate::wasm::prepare::prepare_contract;
@@ -221,7 +219,7 @@ mod tests {
 			endowment: u64,
 			gas_meter: &mut GasMeter<Test>,
 			data: Vec<u8>,
-		) -> Result<InstantiateReceipt<u64>, ExecError> {
+		) -> Result<(u64, ExecReturnValue), ExecError> {
 			self.creates.push(CreateEntry {
 				code_hash: code_hash.clone(),
 				endowment,
@@ -231,7 +229,7 @@ mod tests {
 			let address = self.next_account_id;
 			self.next_account_id += 1;
 
-			Ok(InstantiateReceipt { address })
+			Ok((address, ExecReturnValue { data: Vec::new() }))
 		}
 		fn call(
 			&mut self,
@@ -239,7 +237,7 @@ mod tests {
 			value: u64,
 			gas_meter: &mut GasMeter<Test>,
 			data: Vec<u8>,
-		) -> Result<CallReceipt, ExecError> {
+		) -> ExecResult {
 			self.transfers.push(TransferEntry {
 				to: *to,
 				value,
@@ -248,9 +246,7 @@ mod tests {
 			});
 			// Assume for now that it was just a plain transfer.
 			// TODO: Add tests for different call outcomes.
-			Ok(CallReceipt {
-				output_data: Vec::new(),
-			})
+			Ok(ExecReturnValue { data: Vec::new() })
 		}
 		fn note_dispatch_call(&mut self, call: Call) {
 			self.dispatches.push(DispatchEntry(call));
@@ -324,7 +320,7 @@ mod tests {
 			value: u64,
 			gas_meter: &mut GasMeter<Test>,
 			input_data: Vec<u8>,
-		) -> Result<InstantiateReceipt<u64>, ExecError> {
+		) -> Result<(u64, ExecReturnValue), ExecError> {
 			(**self).instantiate(code, value, gas_meter, input_data)
 		}
 		fn call(
@@ -333,7 +329,7 @@ mod tests {
 			value: u64,
 			gas_meter: &mut GasMeter<Test>,
 			input_data: Vec<u8>,
-		) -> Result<CallReceipt, ExecError> {
+		) -> ExecResult {
 			(**self).call(to, value, gas_meter, input_data)
 		}
 		fn note_dispatch_call(&mut self, call: Call) {

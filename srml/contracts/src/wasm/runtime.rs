@@ -17,10 +17,7 @@
 //! Environment definition of the wasm smart-contract runtime.
 
 use crate::{Schedule, Trait, CodeHash, ComputeDispatchFee, BalanceOf};
-use crate::exec::{
-	Ext, ExecResult, ExecError, ExecReturnValue, CallReceipt, InstantiateReceipt,
-	StorageKey, TopicOf,
-};
+use crate::exec::{Ext, ExecResult, ExecError, ExecReturnValue, StorageKey, TopicOf};
 use crate::gas::{Gas, GasMeter, Token, GasMeterResult, approx_gas_for_balance};
 use sandbox;
 use system;
@@ -399,8 +396,8 @@ define_env!(Env, <E: Ext>,
 		});
 
 		match call_outcome {
-			Ok(CallReceipt { output_data }) => {
-				ctx.scratch_buf = output_data;
+			Ok(output) => {
+				ctx.scratch_buf = output.data;
 				Ok(0)
 			},
 			Err(mut buffer) => {
@@ -468,7 +465,7 @@ define_env!(Env, <E: Ext>,
 			}
 		});
 		match instantiate_outcome {
-			Ok(InstantiateReceipt { address }) => {
+			Ok((address, _output)) => {
 				// Write the address to the scratch buffer.
 				address.encode_to(&mut ctx.scratch_buf);
 				Ok(0)
