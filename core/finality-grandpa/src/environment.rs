@@ -746,7 +746,16 @@ where
 		);
 
 		self.update_voter_set_state(|voter_set_state| {
-			let (completed_rounds, current_rounds) = voter_set_state.with_current_round(round)?;
+			// NOTE: we don't use `with_current_round` here, it is possible that
+			// we are not currently tracking this round if it is a round we
+			// caught up to.
+			let (completed_rounds, current_rounds) =
+				if let VoterSetState::Live { completed_rounds, current_rounds } = voter_set_state {
+					(completed_rounds, current_rounds)
+				} else {
+					let msg = "Voter acting while in paused state.";
+					return Err(Error::Safety(msg.to_string()));
+				};
 
 			let mut completed_rounds = completed_rounds.clone();
 
@@ -762,10 +771,7 @@ where
 
 			// remove the round from live rounds and start tracking the next round
 			let mut current_rounds = current_rounds.clone();
-			current_rounds.remove(&round)
-				.expect("`with_current_round` verifies that round exists; \
-						 got `current_rounds` from `with_current_round`; qed");
-
+			current_rounds.remove(&round);
 			current_rounds.insert(round + 1, HasVoted::No);
 
 			let set_state = VoterSetState::<Block>::Live {
