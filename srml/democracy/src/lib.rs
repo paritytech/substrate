@@ -20,8 +20,8 @@
 
 use rstd::prelude::*;
 use rstd::{result, convert::TryFrom};
-use primitives::traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin, Hash};
-use primitives::weights::SimpleDispatchInfo;
+use sr_primitives::traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin, Hash};
+use sr_primitives::weights::SimpleDispatchInfo;
 use parity_codec::{Encode, Decode, Input, Output};
 use srml_support::{
 	decl_module, decl_storage, decl_event, ensure,
@@ -990,9 +990,9 @@ mod tests {
 		impl_outer_origin, impl_outer_dispatch, assert_noop, assert_ok, parameter_types,
 		traits::Contains
 	};
-	use substrate_primitives::{H256, Blake2Hasher};
-	use primitives::{traits::{BlakeTwo256, IdentityLookup, Bounded}, testing::Header};
-	use primitives::Perbill;
+	use primitives::{H256, Blake2Hasher};
+	use sr_primitives::{traits::{BlakeTwo256, IdentityLookup, Bounded}, testing::Header};
+	use sr_primitives::Perbill;
 	use balances::BalanceLock;
 	use system::EnsureSignedBy;
 

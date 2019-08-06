@@ -19,7 +19,7 @@ use test_client::{
     DefaultTestClientBuilderExt, TestClientBuilder,
     TestClientBuilderExt, runtime::TestAPI,
 };
-use runtime_primitives::{generic::BlockId, traits::ProvideRuntimeApi};
+use sr_primitives::{generic::BlockId, traits::ProvideRuntimeApi};
 use state_machine::ExecutionStrategy;
 
 fn sr_api_benchmark(c: &mut Criterion) {

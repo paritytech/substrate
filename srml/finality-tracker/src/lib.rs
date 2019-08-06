@@ -23,7 +23,7 @@ use inherents::{
 	InherentData, MakeFatalError,
 };
 use srml_support::StorageValue;
-use primitives::traits::{One, Zero, SaturatedConversion};
+use sr_primitives::traits::{One, Zero, SaturatedConversion};
 use rstd::{prelude::*, result, cmp, vec};
 use parity_codec::Decode;
 use srml_support::{decl_module, decl_storage, for_each_tuple};
@@ -265,10 +265,10 @@ mod tests {
 	use super::*;
 
 	use sr_io::{with_externalities, TestExternalities};
-	use substrate_primitives::H256;
-	use primitives::traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT};
-	use primitives::testing::Header;
-	use primitives::Perbill;
+	use primitives::H256;
+	use sr_primitives::traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT};
+	use sr_primitives::testing::Header;
+	use sr_primitives::Perbill;
 	use srml_support::{assert_ok, impl_outer_origin, parameter_types};
 	use srml_system as system;
 	use std::cell::RefCell;

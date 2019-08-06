@@ -93,7 +93,7 @@ impl_stubs!(
 		[sr25519_verify(&sig, &msg[..], &pubkey) as u8].to_vec()
 	},
 	test_enumerated_trie_root => |_| {
-		enumerated_trie_root::<substrate_primitives::Blake2Hasher>(
+		enumerated_trie_root::<primitives::Blake2Hasher>(
 			&[
 				&b"zero"[..],
 				&b"one"[..],
@@ -138,19 +138,29 @@ impl_stubs!(
 		[code].to_vec()
 	},
 	test_offchain_local_storage => |_| {
-		let kind = substrate_primitives::offchain::StorageKind::PERSISTENT;
+		let kind = primitives::offchain::StorageKind::PERSISTENT;
 		assert_eq!(runtime_io::local_storage_get(kind, b"test"), None);
 		runtime_io::local_storage_set(kind, b"test", b"asd");
 		assert_eq!(runtime_io::local_storage_get(kind, b"test"), Some(b"asd".to_vec()));
 
-		let res = runtime_io::local_storage_compare_and_set(kind, b"test", b"asd", b"");
+		let res = runtime_io::local_storage_compare_and_set(kind, b"test", Some(b"asd"), b"");
 		assert_eq!(res, true);
 		assert_eq!(runtime_io::local_storage_get(kind, b"test"), Some(b"".to_vec()));
 
 		[0].to_vec()
 	},
+	test_offchain_local_storage_with_none => |_| {
+		let kind = primitives::offchain::StorageKind::PERSISTENT;
+		assert_eq!(runtime_io::local_storage_get(kind, b"test"), None);
+
+		let res = runtime_io::local_storage_compare_and_set(kind, b"test", None, b"value");
+		assert_eq!(res, true);
+		assert_eq!(runtime_io::local_storage_get(kind, b"test"), Some(b"value".to_vec()));
+
+		[0].to_vec()
+	},
 	test_offchain_http => |_| {
-		use substrate_primitives::offchain::HttpRequestStatus;
+		use primitives::offchain::HttpRequestStatus;
 		let run = || -> Option<()> {
 			let id = runtime_io::http_request_start("POST", "http://localhost:12345", &[]).ok()?;
 			runtime_io::http_request_add_header(id, "X-Auth", "test").ok()?;

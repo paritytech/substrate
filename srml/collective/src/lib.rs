@@ -21,9 +21,9 @@
 #![recursion_limit="128"]
 
 use rstd::{prelude::*, result};
-use substrate_primitives::u32_trait::Value as U32;
-use primitives::traits::{Hash, EnsureOrigin};
-use primitives::weights::SimpleDispatchInfo;
+use primitives::u32_trait::Value as U32;
+use sr_primitives::traits::{Hash, EnsureOrigin};
+use sr_primitives::weights::SimpleDispatchInfo;
 use srml_support::{
 	dispatch::{Dispatchable, Parameter}, codec::{Encode, Decode}, traits::ChangeMembers,
 	StorageValue, StorageMap, decl_module, decl_event, decl_storage, ensure
@@ -397,8 +397,8 @@ mod tests {
 	use system::{EventRecord, Phase};
 	use hex_literal::hex;
 	use runtime_io::with_externalities;
-	use substrate_primitives::{H256, Blake2Hasher};
-	use primitives::{
+	use primitives::{H256, Blake2Hasher};
+	use sr_primitives::{
 		Perbill, traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header, BuildStorage
 	};
 	use crate as collective;
@@ -436,8 +436,8 @@ mod tests {
 		type Event = Event;
 	}
 
-	pub type Block = primitives::generic::Block<Header, UncheckedExtrinsic>;
-	pub type UncheckedExtrinsic = primitives::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
+	pub type Block = sr_primitives::generic::Block<Header, UncheckedExtrinsic>;
+	pub type UncheckedExtrinsic = sr_primitives::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
 
 	srml_support::construct_runtime!(
 		pub enum Test where

@@ -32,7 +32,7 @@ use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use log::warn;
 use parity_codec::{Encode, Decode};
 use primitives::{Bytes, Blake2Hasher, H256};
-use runtime_primitives::{generic, traits};
+use sr_primitives::{generic, traits};
 use self::error::Result;
 use transaction_pool::{
 	txpool::{

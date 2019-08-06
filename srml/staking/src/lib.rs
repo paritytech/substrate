@@ -293,14 +293,14 @@ use srml_support::{
 	}
 };
 use session::{historical::OnSessionEnding, SelectInitialValidators, SessionIndex};
-use primitives::Perbill;
-use primitives::weights::SimpleDispatchInfo;
-use primitives::traits::{
+use sr_primitives::Perbill;
+use sr_primitives::weights::SimpleDispatchInfo;
+use sr_primitives::traits::{
 	Convert, Zero, One, StaticLookup, CheckedSub, CheckedShl, Saturating, Bounded,
 	SaturatedConversion, SimpleArithmetic
 };
 #[cfg(feature = "std")]
-use primitives::{Serialize, Deserialize};
+use sr_primitives::{Serialize, Deserialize};
 use system::{ensure_signed, ensure_root};
 
 use phragmen::{elect, ACCURACY, ExtendedBalance, equalize};
@@ -594,7 +594,7 @@ decl_storage! {
 		pub CurrentEraStartSessionIndex get(current_era_start_session_index): SessionIndex;
 
 		/// Rewards for the current era. Using indices of current elected set.
-		pub CurrentEraRewards: EraRewards;
+		CurrentEraRewards get(current_era_reward): EraRewards;
 
 		/// The amount of balance actively at stake for each validator slot, currently.
 		///
@@ -621,7 +621,7 @@ decl_storage! {
 		config(stakers):
 			Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>;
 		build(|
-			storage: &mut (primitives::StorageOverlay, primitives::ChildrenStorageOverlay),
+			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
 			config: &GenesisConfig<T>
 		| {
 			with_storage(storage, || {
@@ -1201,7 +1201,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
-		Self::bonded(stash).and_then(Self::ledger).map(|l| l.total).unwrap_or_default()
+		Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
 	}
 
 	/// Select a new validator set from the assembled stakers and their role preferences.
@@ -1402,7 +1402,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// At the end of the era each the total payout will be distributed among validator
 	/// relatively to their points.
-	fn add_reward_points_to_validator(validator: T::AccountId, points: u32) {
+	pub fn add_reward_points_to_validator(validator: T::AccountId, points: u32) {
 		<Module<T>>::current_elected().iter()
 			.position(|elected| *elected == validator)
 			.map(|index| {

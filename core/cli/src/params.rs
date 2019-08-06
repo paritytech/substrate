@@ -33,6 +33,7 @@ macro_rules! impl_get_log_filter {
 
 arg_enum! {
 	/// How to execute blocks
+	#[allow(missing_docs)]
 	#[derive(Debug, Clone, Copy)]
 	pub enum ExecutionStrategy {
 		Native,
@@ -610,6 +611,18 @@ pub struct ImportBlocksCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
+
+	/// The means of execution used when calling into the runtime while importing blocks.
+	#[structopt(
+		long = "execution",
+		value_name = "STRATEGY",
+		raw(
+			possible_values = "&ExecutionStrategy::variants()",
+			case_insensitive = "true",
+			default_value = r#""NativeElseWasm""#
+		)
+	)]
+	pub execution: ExecutionStrategy,
 }
 
 impl_get_log_filter!(ImportBlocksCmd);

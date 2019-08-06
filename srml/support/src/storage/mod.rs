@@ -18,7 +18,7 @@
 
 use crate::rstd::prelude::*;
 use crate::rstd::borrow::Borrow;
-use codec::{Codec, Encode, Decode, KeyedVec, Input, EncodeAppend};
+use codec::{Codec, Encode, Decode, KeyedVec, EncodeAppend};
 use hashed::generator::{HashedStorage, StorageHasher};
 use unhashed::generator::UnhashedStorage;
 
@@ -26,35 +26,6 @@ use unhashed::generator::UnhashedStorage;
 pub mod storage_items;
 pub mod unhashed;
 pub mod hashed;
-
-struct IncrementalInput<'a> {
-	key: &'a [u8],
-	pos: usize,
-}
-
-impl<'a> Input for IncrementalInput<'a> {
-	fn read(&mut self, into: &mut [u8]) -> usize {
-		let len = runtime_io::read_storage(self.key, into, self.pos).unwrap_or(0);
-		let read = crate::rstd::cmp::min(len, into.len());
-		self.pos += read;
-		read
-	}
-}
-
-struct IncrementalChildInput<'a> {
-	storage_key: &'a [u8],
-	key: &'a [u8],
-	pos: usize,
-}
-
-impl<'a> Input for IncrementalChildInput<'a> {
-	fn read(&mut self, into: &mut [u8]) -> usize {
-		let len = runtime_io::read_child_storage(self.storage_key, self.key, into, self.pos).unwrap_or(0);
-		let read = crate::rstd::cmp::min(len, into.len());
-		self.pos += read;
-		read
-	}
-}
 
 /// The underlying runtime storage.
 pub struct RuntimeStorage;
@@ -522,17 +493,12 @@ where
 /// Note that `storage_key` must be unique and strong (strong in the sense of being long enough to
 /// avoid collision from a resistant hash function (which unique implies)).
 pub mod child {
-	use super::{Codec, Decode, Vec, IncrementalChildInput};
+	use super::{Codec, Decode, Vec};
 
 	/// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 	pub fn get<T: Codec + Sized>(storage_key: &[u8], key: &[u8]) -> Option<T> {
-		runtime_io::read_child_storage(storage_key, key, &mut [0; 0][..], 0).map(|_| {
-			let mut input = IncrementalChildInput {
-				storage_key,
-				key,
-				pos: 0,
-			};
-			Decode::decode(&mut input).expect("storage is not null, therefore must be a valid type")
+		runtime_io::child_storage(storage_key, key).map(|v| {
+			Decode::decode(&mut &v[..]).expect("storage is not null, therefore must be a valid type")
 		})
 	}
 

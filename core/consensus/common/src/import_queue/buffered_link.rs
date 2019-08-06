@@ -38,7 +38,7 @@
 //!
 
 use futures::{prelude::*, channel::mpsc};
-use runtime_primitives::traits::{Block as BlockT, NumberFor};
+use sr_primitives::traits::{Block as BlockT, NumberFor};
 use std::{pin::Pin, task::Context, task::Poll};
 use crate::import_queue::{Origin, Link, BlockImportResult, BlockImportError};
 
@@ -63,6 +63,14 @@ impl<B: BlockT> BufferedLinkSender<B> {
 	/// Once `true` is returned, it is pointless to use the sender anymore.
 	pub fn is_closed(&self) -> bool {
 		self.tx.is_closed()
+	}
+}
+
+impl<B: BlockT> Clone for BufferedLinkSender<B> {
+	fn clone(&self) -> Self {
+		BufferedLinkSender {
+			tx: self.tx.clone(),
+		}
 	}
 }
 

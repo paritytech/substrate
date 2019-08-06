@@ -122,10 +122,10 @@ construct_service_factory! {
 				if let Some(babe_key) = service.authority_key() {
 					info!("Using BABE key {}", babe_key.public());
 
-					let proposer = Arc::new(substrate_basic_authorship::ProposerFactory {
+					let proposer = substrate_basic_authorship::ProposerFactory {
 						client: service.client(),
 						transaction_pool: service.transaction_pool(),
-					});
+					};
 
 					let client = service.client();
 					let select_chain = service.select_chain()
@@ -264,7 +264,7 @@ mod tests {
 	use consensus_common::{Environment, Proposer, BlockImportParams, BlockOrigin, ForkChoiceStrategy};
 	use node_primitives::DigestItem;
 	use node_runtime::{BalancesCall, Call, UncheckedExtrinsic};
-	use node_runtime::constants::{currency::CENTS, time::SECS_PER_BLOCK};
+	use node_runtime::constants::{currency::CENTS, time::SLOT_DURATION};
 	use parity_codec::{Encode, Decode};
 	use primitives::{
 		crypto::Pair as CryptoPair, blake2_256,
@@ -355,23 +355,23 @@ mod tests {
 
 			let parent_id = BlockId::number(service.client().info().chain.best_number);
 			let parent_header = service.client().header(&parent_id).unwrap().unwrap();
-			let proposer_factory = Arc::new(substrate_basic_authorship::ProposerFactory {
+			let mut proposer_factory = substrate_basic_authorship::ProposerFactory {
 				client: service.client(),
 				transaction_pool: service.transaction_pool(),
-			});
+			};
 
 			let mut digest = Digest::<H256>::default();
 
 			// even though there's only one authority some slots might be empty,
 			// so we must keep trying the next slots until we can claim one.
 			let babe_pre_digest = loop {
-				inherent_data.replace_data(timestamp::INHERENT_IDENTIFIER, &(slot_num * SECS_PER_BLOCK));
+				inherent_data.replace_data(timestamp::INHERENT_IDENTIFIER, &(slot_num * SLOT_DURATION));
 				if let Some(babe_pre_digest) = babe::test_helpers::claim_slot(
 					&*service.client(),
 					&parent_id,
 					slot_num,
 					&alice,
-					(3, 10),
+					(278, 1000),
 				) {
 					break babe_pre_digest;
 				}
@@ -381,7 +381,7 @@ mod tests {
 
 			digest.push(<DigestItem as CompatibleDigestItem>::babe_pre_digest(babe_pre_digest));
 
-			let proposer = proposer_factory.init(&parent_header).unwrap();
+			let mut proposer = proposer_factory.init(&parent_header).unwrap();
 			let new_block = futures03::executor::block_on(proposer.propose(
 				inherent_data,
 				digest,
@@ -424,13 +424,14 @@ mod tests {
 
 			let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
 
+			let check_genesis = system::CheckGenesis::new();
 			let check_era = system::CheckEra::from(Era::Immortal);
 			let check_nonce = system::CheckNonce::from(index);
-			let check_weight = system::CheckWeight::from();
+			let check_weight = system::CheckWeight::new();
 			let take_fees = balances::TakeFees::from(0);
-			let extra = (check_era, check_nonce, check_weight, take_fees);
+			let extra = (check_genesis, check_era, check_nonce, check_weight, take_fees);
 
-			let raw_payload = (function, extra.clone(), genesis_hash);
+			let raw_payload = (function, extra.clone(), genesis_hash, genesis_hash);
 			let signature = raw_payload.using_encoded(|payload| if payload.len() > 256 {
 				signer.sign(&blake2_256(payload)[..])
 			} else {

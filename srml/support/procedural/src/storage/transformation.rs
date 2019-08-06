@@ -531,8 +531,8 @@ fn decl_store_extra_genesis(
 			impl#fparam_impl GenesisConfig#sparam #genesis_where_clause {
 				pub fn build_storage #fn_generic (self) -> std::result::Result<
 					(
-						#scrate::runtime_primitives::StorageOverlay,
-						#scrate::runtime_primitives::ChildrenStorageOverlay,
+						#scrate::sr_primitives::StorageOverlay,
+						#scrate::sr_primitives::ChildrenStorageOverlay,
 					),
 					String
 				> #fn_where_clause {
@@ -545,8 +545,8 @@ fn decl_store_extra_genesis(
 				pub fn assimilate_storage #fn_generic (
 					self,
 					tuple_storage: &mut (
-						#scrate::runtime_primitives::StorageOverlay,
-						#scrate::runtime_primitives::ChildrenStorageOverlay,
+						#scrate::sr_primitives::StorageOverlay,
+						#scrate::sr_primitives::ChildrenStorageOverlay,
 					),
 				) -> std::result::Result<(), String> #fn_where_clause {
 					let storage = &mut tuple_storage.0;
@@ -560,14 +560,14 @@ fn decl_store_extra_genesis(
 			}
 
 			#[cfg(feature = "std")]
-			impl#build_storage_impl #scrate::runtime_primitives::#impl_trait
+			impl#build_storage_impl #scrate::sr_primitives::#impl_trait
 				for GenesisConfig#sparam #build_storage_where_clause
 			{
 				fn build_module_genesis_storage(
 					self,
 					storage: &mut (
-						#scrate::runtime_primitives::StorageOverlay,
-						#scrate::runtime_primitives::ChildrenStorageOverlay,
+						#scrate::sr_primitives::StorageOverlay,
+						#scrate::sr_primitives::ChildrenStorageOverlay,
 					),
 				) -> std::result::Result<(), String> {
 					self.assimilate_storage::<#fn_traitinstance> (storage)

@@ -28,7 +28,7 @@ use crate::service::{ExHashT, TransactionPool};
 use bitflags::bitflags;
 use consensus::import_queue::ImportQueue;
 use parity_codec;
-use runtime_primitives::traits::{Block as BlockT};
+use sr_primitives::traits::{Block as BlockT};
 use std::sync::Arc;
 use libp2p::identity::{Keypair, secp256k1, ed25519};
 use libp2p::wasm_ext;

@@ -29,6 +29,7 @@ pub use substrate_state_machine::{
 
 use environmental::environmental;
 use primitives::{offchain, hexdisplay::HexDisplay, H256};
+use trie::{TrieConfiguration, trie_types::Layout};
 
 #[cfg(feature = "std")]
 use std::collections::HashMap;
@@ -176,7 +177,7 @@ impl StorageApi for () {
 		H: Hasher,
 		H::Out: Ord,
 	{
-		trie::ordered_trie_root::<H, _, _>(input.iter())
+		Layout::<H>::ordered_trie_root(input)
 	}
 
 	fn trie_root<H, I, A, B>(input: I) -> H::Out
@@ -187,7 +188,7 @@ impl StorageApi for () {
 		H: Hasher,
 		H::Out: Ord,
 	{
-		trie::trie_root::<H, _, _, _>(input)
+		Layout::<H>::trie_root(input)
 	}
 
 	fn ordered_trie_root<H, I, A>(input: I) -> H::Out
@@ -197,7 +198,7 @@ impl StorageApi for () {
 		H: Hasher,
 		H::Out: Ord,
 	{
-		trie::ordered_trie_root::<H, _, _>(input)
+		Layout::<H>::ordered_trie_root(input)
 	}
 }
 
@@ -358,7 +359,7 @@ impl OffchainApi for () {
 	fn local_storage_compare_and_set(
 		kind: offchain::StorageKind,
 		key: &[u8],
-		old_value: &[u8],
+		old_value: Option<&[u8]>,
 		new_value: &[u8],
 	) -> bool {
 		with_offchain(|ext| {

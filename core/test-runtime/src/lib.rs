@@ -27,13 +27,14 @@ use parity_codec::{Encode, Decode, Input};
 
 use primitives::Blake2Hasher;
 use trie_db::{TrieMut, Trie};
-use substrate_trie::{TrieDB, TrieDBMut, PrefixedMemoryDB};
+use substrate_trie::PrefixedMemoryDB;
+use substrate_trie::trie_types::{TrieDB, TrieDBMut};
 
 use substrate_client::{
 	runtime_api as client_api, block_builder::api as block_builder_api, decl_runtime_apis,
 	impl_runtime_apis,
 };
-use runtime_primitives::{
+use sr_primitives::{
 	ApplyResult, create_runtime_str, Perbill,
 	transaction_validity::{TransactionValidity, ValidTransaction},
 	traits::{
@@ -125,13 +126,13 @@ impl BlindCheckable for Extrinsic {
 		match self {
 			Extrinsic::AuthoritiesChange(new_auth) => Ok(Extrinsic::AuthoritiesChange(new_auth)),
 			Extrinsic::Transfer(transfer, signature) => {
-				if runtime_primitives::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
+				if sr_primitives::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
 					Ok(Extrinsic::Transfer(transfer, signature))
 				} else {
-					Err(runtime_primitives::BAD_SIGNATURE)
+					Err(sr_primitives::BAD_SIGNATURE)
 				}
 			},
-			Extrinsic::IncludeData(_) => Err(runtime_primitives::BAD_SIGNATURE),
+			Extrinsic::IncludeData(_) => Err(sr_primitives::BAD_SIGNATURE),
 			Extrinsic::StorageChange(key, value) => Ok(Extrinsic::StorageChange(key, value)),
 		}
 	}
@@ -173,13 +174,13 @@ pub type BlockNumber = u64;
 /// Index of a transaction.
 pub type Index = u64;
 /// The item of a block digest.
-pub type DigestItem = runtime_primitives::generic::DigestItem<H256>;
+pub type DigestItem = sr_primitives::generic::DigestItem<H256>;
 /// The digest of a block.
-pub type Digest = runtime_primitives::generic::Digest<H256>;
+pub type Digest = sr_primitives::generic::Digest<H256>;
 /// A test block.
-pub type Block = runtime_primitives::generic::Block<Header, Extrinsic>;
+pub type Block = sr_primitives::generic::Block<Header, Extrinsic>;
 /// A test block's header.
-pub type Header = runtime_primitives::generic::Header<BlockNumber, BlakeTwo256>;
+pub type Header = sr_primitives::generic::Header<BlockNumber, BlakeTwo256>;
 
 /// Run whatever tests we have.
 pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
@@ -354,7 +355,7 @@ impl srml_system::Trait for Runtime {
 }
 
 impl srml_timestamp::Trait for Runtime {
-	/// A timestamp: seconds since the unix epoch.
+	/// A timestamp: milliseconds since the unix epoch.
 	type Moment = u64;
 	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
@@ -362,10 +363,12 @@ impl srml_timestamp::Trait for Runtime {
 
 parameter_types! {
 	pub const EpochDuration: u64 = 6;
+	pub const ExpectedBlockTime: u64 = 10_000;
 }
 
 impl srml_babe::Trait for Runtime {
 	type EpochDuration = EpochDuration;
+	type ExpectedBlockTime = ExpectedBlockTime;
 }
 
 /// Adds one to the given input and returns the final result.
@@ -392,20 +395,24 @@ fn code_using_trie() -> u64 {
 		for i in 0..v.len() {
 			let key: &[u8]= &v[i].0;
 			let val: &[u8] = &v[i].1;
-			t.insert(key, val).expect("static input");
+			if !t.insert(key, val).is_ok() {
+				return 101;
+			}
 		}
 		t
 	};
 
-	let trie = TrieDB::<Blake2Hasher>::new(&mdb, &root).expect("on memory with static content");
-
-	let iter = trie.iter().expect("static input");
-	let mut iter_pairs = Vec::new();
-	for pair in iter {
-		let (key, value) = pair.expect("on memory with static content");
-		iter_pairs.push((key, value.to_vec()));
-	}
-	iter_pairs.len() as u64
+	if let Ok(trie) = TrieDB::<Blake2Hasher>::new(&mdb, &root) {
+		if let Ok(iter) = trie.iter() {
+			let mut iter_pairs = Vec::new();
+			for pair in iter {
+				if let Ok((key, value)) = pair {
+					iter_pairs.push((key, value.to_vec()));
+				}
+			}
+			iter_pairs.len() as u64
+		} else { 102 }
+	} else { 103 }
 }
 
 #[cfg(not(feature = "std"))]
@@ -540,7 +547,7 @@ cfg_if! {
 			}
 
 			impl aura_primitives::AuraApi<Block, AuraId> for Runtime {
-				fn slot_duration() -> u64 { 1 }
+				fn slot_duration() -> u64 { 1000 }
 				fn authorities() -> Vec<AuraId> { system::authorities() }
 			}
 
@@ -548,7 +555,7 @@ cfg_if! {
 				fn startup_data() -> babe_primitives::BabeConfiguration {
 					babe_primitives::BabeConfiguration {
 						median_required_blocks: 0,
-						slot_duration: 3,
+						slot_duration: 3000,
 						c: (3, 10),
 					}
 				}
@@ -731,7 +738,7 @@ cfg_if! {
 			}
 
 			impl aura_primitives::AuraApi<Block, AuraId> for Runtime {
-				fn slot_duration() -> u64 { 1 }
+				fn slot_duration() -> u64 { 1000 }
 				fn authorities() -> Vec<AuraId> { system::authorities() }
 			}
 
@@ -739,7 +746,7 @@ cfg_if! {
 				fn startup_data() -> babe_primitives::BabeConfiguration {
 					babe_primitives::BabeConfiguration {
 						median_required_blocks: 0,
-						slot_duration: 1,
+						slot_duration: 1000,
 						c: (3, 10),
 					}
 				}
@@ -775,7 +782,7 @@ mod tests {
 		DefaultTestClientBuilderExt, TestClientBuilder,
 		runtime::TestAPI,
 	};
-	use runtime_primitives::{
+	use sr_primitives::{
 		generic::BlockId,
 		traits::ProvideRuntimeApi,
 	};

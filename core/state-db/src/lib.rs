@@ -292,8 +292,11 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 	}
 
 	pub fn pin(&mut self, hash: &BlockHash) {
-		trace!(target: "state-db", "Pinned block: {:?}", hash);
-		*self.pinned.entry(hash.clone()).or_default() += 1;
+		let refs = self.pinned.entry(hash.clone()).or_default();
+		if *refs == 0 {
+			trace!(target: "state-db", "Pinned block: {:?}", hash);
+		}
+		*refs += 1
 	}
 
 	pub fn unpin(&mut self, hash: &BlockHash) {

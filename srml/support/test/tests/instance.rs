@@ -18,7 +18,7 @@
 use runtime_io::{with_externalities, Blake2Hasher};
 use srml_support::{
 	Parameter, traits::Get, parameter_types,
-	runtime_primitives::{generic, BuildStorage, traits::{BlakeTwo256, Block as _, Verify}},
+	sr_primitives::{generic, BuildStorage, traits::{BlakeTwo256, Block as _, Verify}},
 	metadata::{
 		DecodeDifferent, StorageMetadata, StorageEntryModifier, StorageEntryType, DefaultByteGetter,
 		StorageEntryMetadata, StorageHasher

@@ -121,9 +121,9 @@
 
 use rstd::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use parity_codec::Decode;
-use primitives::KeyTypeId;
-use primitives::weights::SimpleDispatchInfo;
-use primitives::traits::{Convert, Zero, Member, OpaqueKeys, TypedKey};
+use sr_primitives::KeyTypeId;
+use sr_primitives::weights::SimpleDispatchInfo;
+use sr_primitives::traits::{Convert, Zero, Member, OpaqueKeys, TypedKey};
 use srml_support::{
 	dispatch::Result, ConsensusEngineId, StorageValue, StorageDoubleMap, for_each_tuple,
 	decl_module, decl_event, decl_storage,
@@ -317,7 +317,7 @@ decl_storage! {
 	add_extra_genesis {
 		config(keys): Vec<(T::ValidatorId, T::Keys)>;
 		build(|
-			storage: &mut (primitives::StorageOverlay, primitives::ChildrenStorageOverlay),
+			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
 			config: &GenesisConfig<T>
 		| {
 			runtime_io::with_storage(storage, || {
@@ -561,8 +561,8 @@ mod tests {
 	use super::*;
 	use srml_support::assert_ok;
 	use runtime_io::with_externalities;
-	use substrate_primitives::Blake2Hasher;
-	use primitives::{
+	use primitives::Blake2Hasher;
+	use sr_primitives::{
 		traits::OnInitialize,
 		testing::UintAuthorityId,
 	};

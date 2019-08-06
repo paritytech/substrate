@@ -27,7 +27,7 @@ use system;
 use rstd::prelude::*;
 use rstd::mem;
 use parity_codec::{Decode, Encode};
-use runtime_primitives::traits::{Bounded, SaturatedConversion};
+use sr_primitives::traits::{Bounded, SaturatedConversion};
 
 /// Enumerates all possible *special* trap conditions.
 ///
@@ -300,9 +300,8 @@ define_env!(Env, <E: Ext>,
 
 	// Make a call to another contract.
 	//
-	// Returns 0 on the successful execution and puts the result data returned
-	// by the callee into the scratch buffer. Otherwise, returns 1 and clears the scratch
-	// buffer.
+	// Returns 0 on the successful execution and puts the result data returned by the callee into
+	// the scratch buffer. Otherwise, returns a non-zero value and clears the scratch buffer.
 	//
 	// - callee_ptr: a pointer to the address of the callee contract.
 	//   Should be decodable as an `T::AccountId`. Traps otherwise.
@@ -372,17 +371,16 @@ define_env!(Env, <E: Ext>,
 		}
 	},
 
-	// Instantiate a contract with code returned by the specified initializer code.
+	// Instantiate a contract with the specified code hash.
 	//
-	// This function creates an account and executes initializer code. After the execution,
-	// the returned buffer is saved as the code of the created account.
+	// This function creates an account and executes the constructor defined in the code specified
+	// by the code hash.
 	//
-	// Returns 0 on the successful contract creation and puts the address
-	// of the created contract into the scratch buffer.
-	// Otherwise, returns 1 and clears the scratch buffer.
+	// Returns 0 on the successful contract creation and puts the address of the created contract
+	// into the scratch buffer. Otherwise, returns non-zero value and clears the scratch buffer.
 	//
-	// - init_code_ptr: a pointer to the buffer that contains the initializer code.
-	// - init_code_len: length of the initializer code buffer.
+	// - code_hash_ptr: a pointer to the buffer that contains the initializer code.
+	// - code_hash_len: length of the initializer code buffer.
 	// - gas: how much gas to devote to the execution of the initializer code.
 	// - value_ptr: a pointer to the buffer with value, how much value to send.
 	//   Should be decodable as a `T::Balance`. Traps otherwise.
@@ -391,8 +389,8 @@ define_env!(Env, <E: Ext>,
 	// - input_data_len: length of the input data buffer.
 	ext_create(
 		ctx,
-		init_code_ptr: u32,
-		init_code_len: u32,
+		code_hash_ptr: u32,
+		code_hash_len: u32,
 		gas: u64,
 		value_ptr: u32,
 		value_len: u32,
@@ -400,7 +398,7 @@ define_env!(Env, <E: Ext>,
 		input_data_len: u32
 	) -> u32 => {
 		let code_hash = {
-			let code_hash_buf = read_sandbox_memory(ctx, init_code_ptr, init_code_len)?;
+			let code_hash_buf = read_sandbox_memory(ctx, code_hash_ptr, code_hash_len)?;
 			<CodeHash<<E as Ext>::T>>::decode(&mut &code_hash_buf[..]).ok_or_else(|| sandbox::HostError)?
 		};
 		let value = {
@@ -582,6 +580,87 @@ define_env!(Env, <E: Ext>,
 		charge_gas(&mut ctx.gas_meter, ctx.schedule, RuntimeToken::ComputedDispatchFee(fee))?;
 
 		ctx.ext.note_dispatch_call(call);
+
+		Ok(())
+	},
+
+	// Record a request to restore the caller contract to the specified contract.
+	//
+	// At the finalization stage, i.e. when all changes from the extrinsic that invoked this
+	// contract are commited, this function will compute a tombstone hash from the caller's
+	// storage and the given code hash and if the hash matches the hash found in the tombstone at
+	// the specified address - kill the caller contract and restore the destination contract and set
+	// the specified `rent_allowance`. All caller's funds are transfered to the destination.
+	//
+	// This function doesn't perform restoration right away but defers it to the end of the
+	// transaction. If there is no tombstone in the destination address or if the hashes don't match
+	// then restoration is cancelled and no changes are made.
+	//
+	// `dest_ptr`, `dest_len` - the pointer and the length of a buffer that encodes `T::AccountId`
+	// with the address of the to be restored contract.
+	// `code_hash_ptr`, `code_hash_len` - the pointer and the length of a buffer that encodes
+	// a code hash of the to be restored contract.
+	// `rent_allowance_ptr`, `rent_allowance_len` - the pointer and the length of a buffer that
+	// encodes the rent allowance that must be set in the case of successful restoration.
+	// `delta_ptr` is the pointer to the start of a buffer that has `delta_count` storage keys
+	// laid out sequentially.
+	ext_restore_to(
+		ctx,
+		dest_ptr: u32,
+		dest_len: u32,
+		code_hash_ptr: u32,
+		code_hash_len: u32,
+		rent_allowance_ptr: u32,
+		rent_allowance_len: u32,
+		delta_ptr: u32,
+		delta_count: u32
+	) => {
+		let dest = {
+			let dest_buf = read_sandbox_memory(ctx, dest_ptr, dest_len)?;
+			<<E as Ext>::T as system::Trait>::AccountId::decode(&mut &dest_buf[..])
+				.ok_or_else(|| sandbox::HostError)?
+		};
+		let code_hash = {
+			let code_hash_buf = read_sandbox_memory(ctx, code_hash_ptr, code_hash_len)?;
+			<CodeHash<<E as Ext>::T>>::decode(&mut &code_hash_buf[..])
+				.ok_or_else(|| sandbox::HostError)?
+		};
+		let rent_allowance = {
+			let rent_allowance_buf = read_sandbox_memory(
+				ctx,
+				rent_allowance_ptr,
+				rent_allowance_len
+			)?;
+			BalanceOf::<<E as Ext>::T>::decode(&mut &rent_allowance_buf[..])
+				.ok_or_else(|| sandbox::HostError)?
+		};
+		let delta = {
+			// We don't use `with_capacity` here to not eagerly allocate the user specified amount
+			// of memory.
+			let mut delta = Vec::new();
+			let mut key_ptr = delta_ptr;
+
+			for _ in 0..delta_count {
+				const KEY_SIZE: usize = 32;
+
+				// Read the delta into the provided buffer and collect it into the buffer.
+				let mut delta_key: StorageKey = [0; KEY_SIZE];
+				read_sandbox_memory_into_buf(ctx, key_ptr, &mut delta_key)?;
+				delta.push(delta_key);
+
+				// Offset key_ptr to the next element.
+				key_ptr = key_ptr.checked_add(KEY_SIZE as u32).ok_or_else(|| sandbox::HostError)?;
+			}
+
+			delta
+		};
+
+		ctx.ext.note_restore_to(
+			dest,
+			code_hash,
+			rent_allowance,
+			delta,
+		);
 
 		Ok(())
 	},
