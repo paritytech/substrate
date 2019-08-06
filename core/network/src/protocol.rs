@@ -452,8 +452,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}, rq);
 	}
 
-	fn is_light_rq_response(&self, who: &PeerId, response_id: message::RequestId) -> bool {
-		self.light_dispatch.is_light_rq_response(&who, response_id)
+	fn is_light_response(&self, who: &PeerId, response_id: message::RequestId) -> bool {
+		self.light_dispatch.is_light_response(&who, response_id)
 	}
 
 	fn handle_response(
@@ -506,7 +506,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::BlockRequest(r) => self.on_block_request(who, r),
 			GenericMessage::BlockResponse(r) => {
 				// Note, this is safe because only `ordinary bodies` and `remote bodies` are received in this matter.
-				if self.is_light_rq_response(&who, r.id) {
+				if self.is_light_response(&who, r.id) {
 					self.on_remote_body_response(who, r);
 				} else {
 					if let Some(request) = self.handle_response(who.clone(), &r) {

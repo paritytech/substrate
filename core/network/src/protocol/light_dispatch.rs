@@ -489,7 +489,7 @@ impl<B: BlockT> LightDispatch<B> where
 		})
 	}
 
-	pub fn is_light_rq_response(&self, peer: &PeerId, request_id: message::RequestId) -> bool {
+	pub fn is_light_response(&self, peer: &PeerId, request_id: message::RequestId) -> bool {
 		self.active_peers.get(&peer).map_or(false, |r| r.id == request_id)
 	}
 
