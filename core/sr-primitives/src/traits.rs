@@ -1036,26 +1036,21 @@ pub trait OpaqueKeys: Clone {
 	fn ownership_proof_is_valid(&self, _proof: &[u8]) -> bool { true }
 }
 
-/// Input that adds given number of zero after wrapped input.
-struct TrailingZeroInput<'a> {
-	input: &'a [u8],
-	trailing_zeros: usize,
-}
+/// Input that adds infinite number of zero after wrapped input.
+struct TrailingZeroInput<'a>(&'a [u8]);
 
 impl<'a> codec::Input for TrailingZeroInput<'a> {
-	fn remaining_len(&mut self) -> Result<usize, codec::Error> {
-		Ok(self.input.len() + self.trailing_zeros)
+	fn remaining_len(&mut self) -> Result<Option<usize>, codec::Error> {
+		Ok(None)
 	}
 
 	fn read(&mut self, into: &mut [u8]) -> Result<(), codec::Error> {
-		let len_from_input = into.len().min(self.input.len());
-		into[..len_from_input].copy_from_slice(&self.input[..len_from_input]);
-		for i in &mut into[len_from_input..] {
+		let len_from_inner = into.len().min(self.0.len());
+		into[..len_from_inner].copy_from_slice(&self.0[..len_from_inner]);
+		for i in &mut into[len_from_inner..] {
 			*i = 0;
 		}
-		self.input = &self.input[len_from_input..];
-		self.trailing_zeros = self.trailing_zeros.checked_sub(into.len() - len_from_input)
-			.ok_or_else(|| codec::Error::from("Not enough data in input"))?;
+		self.0 = &self.0[len_from_inner..];
 
 		Ok(())
 	}
@@ -1097,10 +1092,7 @@ pub trait TypeId {
 impl<T: Encode + Decode + Default, Id: Encode + Decode + TypeId> AccountIdConversion<T> for Id {
 	fn into_sub_account<S: Encode>(&self, sub: S) -> T {
 		(Id::TYPE_ID, self, sub).using_encoded(|b|
-			T::decode(&mut TrailingZeroInput {
-				input: b,
-				trailing_zeros: 32*1024,
-			})
+			T::decode(&mut TrailingZeroInput(b))
 		).unwrap_or_default()
 	}
 
@@ -1173,22 +1165,18 @@ mod tests {
 
 	#[test]
 	fn trailing_zero_should_work() {
-		let mut t = super::TrailingZeroInput {
-			input: &[1, 2, 3],
-			trailing_zeros: 4,
-		};
-		assert_eq!(t.remaining_len(), Ok(7));
+		let mut t = super::TrailingZeroInput(&[1, 2, 3]);
+		assert_eq!(t.remaining_len(), Ok(None));
 		let mut buffer = [0u8; 2];
 		assert_eq!(t.read(&mut buffer), Ok(()));
-		assert_eq!(t.remaining_len(), Ok(5));
+		assert_eq!(t.remaining_len(), Ok(None));
 		assert_eq!(buffer, [1, 2]);
 		assert_eq!(t.read(&mut buffer), Ok(()));
-		assert_eq!(t.remaining_len(), Ok(3));
+		assert_eq!(t.remaining_len(), Ok(None));
 		assert_eq!(buffer, [3, 0]);
 		assert_eq!(t.read(&mut buffer), Ok(()));
-		assert_eq!(t.remaining_len(), Ok(1));
+		assert_eq!(t.remaining_len(), Ok(None));
 		assert_eq!(buffer, [0, 0]);
-		assert!(t.read(&mut buffer).err().is_some())
 	}
 }
 
