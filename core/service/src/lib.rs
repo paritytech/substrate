@@ -42,7 +42,6 @@ use log::{log, info, warn, debug, error, Level};
 use parity_codec::{Encode, Decode};
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{Header, NumberFor, SaturatedConversion};
-use primitives::traits::KeyStorePtr;
 use substrate_executor::NativeExecutor;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
@@ -169,21 +168,13 @@ impl<Components: components::Components> Service<Components> {
 		// Create client
 		let executor = NativeExecutor::new(config.default_heap_pages);
 
-		let keystore: Option<KeyStorePtr> = if let Some(keystore_path) = config.keystore_path.as_ref() {
-			match Keystore::open(keystore_path.clone(), config.keystore_password.clone()) {
-				Ok(ks) => {
-					Some(Arc::new(parking_lot::RwLock::new(ks)))
-				},
-				Err(err) => {
-					error!("Failed to initialize keystore: {}", err);
-					None
-				}
-			}
-		} else {
-			None
-		};
+		let keystore = Arc::new(
+			parking_lot::RwLock::new(
+				Keystore::open(config.keystore_path.clone(	), config.keystore_password.clone())?
+			)
+		);
 
-		let (client, on_demand) = Components::build_client(&config, executor, keystore.clone())?;
+		let (client, on_demand) = Components::build_client(&config, executor, Some(keystore.clone()))?;
 		let select_chain = Components::build_select_chain(&mut config, client.clone())?;
 		let (import_queue, finality_proof_request_builder) = Components::build_import_queue(
 			&mut config,
@@ -256,7 +247,7 @@ impl<Components: components::Components> Service<Components> {
 				Some(Arc::new(offchain::OffchainWorkers::new(
 					client.clone(),
 					db,
-					keystore.clone(),
+					Some(keystore.clone()),
 				)))
 			},
 			(true, None) => {

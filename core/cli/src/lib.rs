@@ -418,7 +418,9 @@ where
 
 	let base_path = base_path(&cli.shared_params, version);
 
-	config.keystore_path = cli.keystore_path.or_else(|| Some(keystore_path(&base_path, config.chain_spec.id())));
+	config.keystore_path = cli.keystore_path.unwrap_or_else(
+		|| keystore_path(&base_path, config.chain_spec.id())
+	);
 
 	config.database_path = db_path(&base_path, config.chain_spec.id());
 	config.database_cache_size = cli.database_cache_size;
