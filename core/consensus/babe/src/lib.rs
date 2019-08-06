@@ -76,13 +76,15 @@ use futures::{prelude::*, future};
 use futures01::Stream as _;
 use futures_timer::Delay;
 use log::{error, warn, debug, info, trace};
+use srml_session::historical::Proof;
+use consensus_common_primitives::AuthorshipEquivocationProof;
 
 use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible, SignedDuration};
 
 mod aux_schema;
 #[cfg(test)]
 mod tests;
-pub use babe_primitives::{AuthorityId, AuthorityPair, AuthoritySignature};
+pub use babe_primitives::{AuthorityId, AuthorityPair, AuthoritySignature, BabeEquivocationProof};
 
 /// A slot duration. Create with `get_or_compute`.
 // FIXME: Once Rust has higher-kinded types, the duplication between this
@@ -522,7 +524,9 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 									  threshold {} exceeded", author, threshold));
 			}
 
-			if let Some(equivocation_proof) = check_equivocation(
+			if let Some(equivocation_proof) = check_equivocation::<
+				_, _, BabeEquivocationProof<B::Header, _, _, Proof>, _, _
+			>(
 				client,
 				slot_now,
 				slot_number,

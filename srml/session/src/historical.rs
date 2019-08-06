@@ -271,7 +271,7 @@ impl<T: Trait> ProvingTrie<T> {
 }
 
 /// Proof of ownership of a specific key.
-#[derive(Encode, Decode, Clone)]
+#[derive(Encode, Decode, Clone, PartialEq)]
 pub struct Proof {
 	session: SessionIndex,
 	trie_nodes: Vec<Vec<u8>>,

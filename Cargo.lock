@@ -4475,11 +4475,13 @@ dependencies = [
  "sr-primitives 2.0.0",
  "sr-version 2.0.0",
  "srml-babe 2.0.0",
+ "srml-session 2.0.0",
  "srml-support 2.0.0",
  "substrate-application-crypto 2.0.0",
  "substrate-client 2.0.0",
  "substrate-consensus-babe-primitives 2.0.0",
  "substrate-consensus-common 2.0.0",
+ "substrate-consensus-common-primitives 2.0.0",
  "substrate-consensus-slots 2.0.0",
  "substrate-consensus-uncles 2.0.0",
  "substrate-executor 2.0.0",
@@ -4505,6 +4507,7 @@ dependencies = [
  "sr-std 2.0.0",
  "substrate-application-crypto 2.0.0",
  "substrate-client 2.0.0",
+ "substrate-consensus-common-primitives 2.0.0",
  "substrate-consensus-slots 2.0.0",
 ]
 

@@ -13,6 +13,7 @@ app-crypto = { package = "substrate-application-crypto", path = "../../../applic
 slots = { package = "substrate-consensus-slots", path = "../../slots", optional = true }
 schnorrkel = { version = "0.8.4", features = ["preaudit_deprecated"], optional = true }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
+consensus_common_primitives = { package = "substrate-consensus-common-primitives", path = "../../common/primitives", default-features = false }
 
 [features]
 default = ["std"]
@@ -24,4 +25,5 @@ std = [
 	"schnorrkel",
 	"slots",
 	"app-crypto/std",
+	"consensus_common_primitives/std",
 ]

@@ -21,10 +21,12 @@
 
 mod digest;
 
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, Codec};
 use rstd::vec::Vec;
-use sr_primitives::ConsensusEngineId;
+use sr_primitives::{ConsensusEngineId, traits::{Verify, Header}};
+use primitives::sr25519;
 use substrate_client::decl_runtime_apis;
+use consensus_common_primitives::AuthorshipEquivocationProof;
 
 #[cfg(feature = "std")]
 pub use digest::{BabePreDigest, CompatibleDigestItem};
@@ -139,6 +141,116 @@ impl slots::SlotData for BabeConfiguration {
 
 	const SLOT_KEY: &'static [u8] = b"babe_bootstrap_data";
 }
+
+/// Represents an Babe equivocation proof.
+#[derive(Debug, Clone, Encode, Decode, PartialEq)]
+pub struct BabeEquivocationProof<H, S, I, P> {
+	identity: I,
+	identity_proof: Option<P>,
+	slot: u64,
+	first_header: H,
+	second_header: H,
+	first_signature: S,
+	second_signature: S,
+}
+
+impl<H, S, I, P> AuthorshipEquivocationProof for BabeEquivocationProof<H, S, I, P>
+where
+	H: Header,
+	S: Verify<Signer=I> + Codec,
+	I: Codec,
+	P: Codec,
+{
+	type Header = H;
+	type Signature = S;
+	type Identity = I;
+	type InclusionProof = P;
+
+	/// Create a new Babe equivocation proof.
+	fn new(
+		identity: I,
+		identity_proof: Option<P>,
+		slot: u64,
+		first_header: H,
+		second_header: H,
+		first_signature: S,
+		second_signature: S,
+	) -> Self {
+		BabeEquivocationProof {
+			identity,
+			identity_proof,
+			slot,
+			first_header,
+			second_header,
+			first_signature,
+			second_signature,
+		}
+	}
+
+	/// Get the slot where the equivocation happened.
+	fn slot(&self) -> u64 {
+		self.slot
+	}
+
+	/// Check the validity of the equivocation proof.
+	fn is_valid(&self) -> bool {
+		// let first_header = self.first_header();
+		// let second_header = self.second_header();
+
+		// if first_header == second_header {
+		// 	return false
+		// }
+
+		// let maybe_first_slot = get_slot::<H>(first_header);
+		// let maybe_second_slot = get_slot::<H>(second_header);
+
+		// if maybe_first_slot.is_ok() && maybe_first_slot == maybe_second_slot {
+		// 	// TODO: Check that author matches slot author (improve HistoricalSession).
+		// 	let author = self.identity();
+
+		// 	if !self.first_signature().verify(first_header.hash().as_ref(), author) {
+		// 		return false
+		// 	}
+
+		// 	if !self.second_signature().verify(second_header.hash().as_ref(), author) {
+		// 		return false
+		// 	}
+
+		// 	return true;
+		// }
+
+		false
+	}
+
+	/// Get the identity of the suspect of equivocating.
+	fn identity(&self) -> &I {
+		&self.identity
+	}
+
+	/// Get the identity proof.
+	fn identity_proof(&self) -> Option<&P> {
+		self.identity_proof.as_ref()
+	}
+
+	/// Get the first header involved in the equivocation.
+	fn first_header(&self) -> &H {
+		&self.first_header
+	}
+
+	/// Get the second header involved in the equivocation.
+	fn second_header(&self) -> &H {
+		&self.second_header
+	}
+
+	fn first_signature(&self) -> &S {
+		&self.first_signature
+	}
+
+	fn second_signature(&self) -> &S {
+		&self.second_signature
+	}
+}
+
 
 decl_runtime_apis! {
 	/// API necessary for block authorship with BABE.
