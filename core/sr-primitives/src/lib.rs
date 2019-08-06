@@ -47,6 +47,7 @@ use traits::{SaturatedConversion, UniqueSaturatedInto, Saturating, Bounded, Chec
 
 pub mod generic;
 pub mod transaction_validity;
+pub mod offence;
 
 /// Re-export these since they're only "kind of" generic.
 pub use generic::{DigestItem, Digest};

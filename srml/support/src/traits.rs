@@ -22,7 +22,7 @@ use crate::rstd::{result, marker::PhantomData, ops::Div};
 use crate::codec::{Codec, Encode, Decode};
 use substrate_primitives::u32_trait::Value as U32;
 use crate::runtime_primitives::traits::{MaybeSerializeDebug, SimpleArithmetic, Saturating};
-use crate::runtime_primitives::{ConsensusEngineId, Perbill};
+use crate::runtime_primitives::ConsensusEngineId;
 
 use super::for_each_tuple;
 
@@ -639,45 +639,4 @@ pub trait ChangeMembers<AccountId> {
 
 impl<T> ChangeMembers<T> for () {
 	fn change_members(_incoming: &[T], _outgoing: &[T], _new_set: &[T]) {}
-}
-
-/// A trait implemented by an offence report.
-///
-/// Examples of offences include: a BABE equivocation or a GRANDPA unjustified vote.
-pub trait Offence<Offender> {
-	/// Identifier which is unique for this kind of an offence.
-	const ID: [u8; 16];
-
-	/// The list of all offenders involved in this incident.
-	///
-	/// The list has no duplicates, so it is rather a set.
-	fn offenders(&self) -> Vec<Offender>;
-
-	/// What is the session index this offence happened in.
-	///
-	/// The value returned by this function is going to be used for querying the validator set for
-	/// for the `slash_percentage` function. If the session index cannot be pinpointed precisely (as
-	/// in case with GRANDPA offences) then this function should return the closest session index
-	/// with the same validator set.
-	fn session_index(&self) -> u32; // TODO [slashing]: Should be a SessionIndex.
-
-	/// A point in time when this offence happened.
-	///
-	/// The timescale is abstract and it doesn't have to be the same across different
-	/// implementations of this trait. For example, for GRANDPA it could represent a round number
-	/// and for BABE it could be a slot number.
-	fn time_slot(&self) -> u128; // TODO [slashing]: Should be a TimeSlot.
-
-	/// A percentage of the total exposure that should be slashed for this
-	/// particular offence kind for the given parameters.
-	///
-	/// `offenders` - the number of offences of this kind at the particular `time_slot`.
-	/// `validators_count` - the cardinality of the validator set at the time of offence.
-	fn slash_percentage(&self, offenders: u32, validators_count: u32) -> Perbill;
-}
-
-/// A trait for decoupling offence reporters from the actual handling of offence reports.
-pub trait ReportOffence<Reporter, Offender, O: Offence<Offender>> {
-	/// Report an `offence` from the given `reporters`.
-	fn report_offence(reporters: &[Reporter], offence: &O);
 }

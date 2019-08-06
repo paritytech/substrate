@@ -24,26 +24,19 @@
 
 use srml_support::{
 	StorageDoubleMap, Parameter, decl_module, decl_storage,
-	traits::{Offence, ReportOffence},
 };
 use parity_codec::{Decode, Encode};
 use rstd::vec::Vec;
-use sr_primitives::traits::{Member, TypedKey};
+use sr_primitives::{
+	traits::{Member, TypedKey},
+	offence::{Offence, ReportOffence, TimeSlot, Kind},
+};
 
 /// Offences trait
 pub trait Trait: system::Trait {
 	/// The identifier type for an authority.
 	type AuthorityId: Member + Parameter + Default + TypedKey + Decode + Encode + AsRef<[u8]>;
 }
-
-// The kind of offence, is a binary representing some kind identifier
-// e.g. `b"im-online:off"`, `b"babe:equivocatio"`
-// TODO [slashing]: Is there something better we can have here that is more natural but still
-// flexible? as you see in examples, they get cut off with long names.
-type Kind = [u8; 16];
-// The TimeSlot is the integer identifying for which timeslot this offence matters. For grandpa this
-// is a Round ID, for babe it's a block number, for offline it's a SessionIndex.
-type TimeSlot = u128;
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Offences {
@@ -62,12 +55,12 @@ decl_module! {
 impl<T: Trait, O: Offence<T::AuthorityId>> ReportOffence<T::AuthorityId, T::AuthorityId, O>
 	for Module<T>
 {
-	// Implementation of report_offence, where it checks if an offence is already reported for an
-	// authority and otherwise stores that report.
 	fn report_offence(_reporters: &[T::AuthorityId], offence: &O) {
 		let offenders = offence.offenders();
 		let time_slot = offence.time_slot();
 
+		// Check if an offence is already reported for the offender authorities and otherwise stores
+		// that report.
 		<OffenceReports<T>>::mutate(&O::ID, &time_slot, |offending_authorities| {
 			for offender in offenders {
 				if !offending_authorities.contains(&offender) {
