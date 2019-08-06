@@ -1005,8 +1005,8 @@ impl<T: Trait> Module<T> {
 			let own_slash = exposure.own.min(slash);
 			let (mut imbalance, missing) = T::Currency::slash(&stash, own_slash);
 			let own_slash = own_slash - missing;
-			// The amount remaining that we can't slash from the validator, that must be taken from the
-			// nominators.
+			// The amount remaining that we can't slash from the validator,
+			// that must be taken from the nominators.
 			let rest_slash = slash - own_slash;
 			if !rest_slash.is_zero() {
 				// The total to be slashed from the nominators.
@@ -1021,6 +1021,7 @@ impl<T: Trait> Module<T> {
 			}
 			T::Slash::on_unbalanced(imbalance);
 			let _ = T::SessionInterface::disable_validator(&stash);
+			Self::apply_force_new_era();
 		}
 	}
 
