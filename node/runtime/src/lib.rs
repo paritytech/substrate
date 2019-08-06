@@ -29,8 +29,9 @@ use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
 	Moment, Signature,
 };
+use parity_codec::{Encode, Decode, Codec};
 use babe::{AuthorityId as BabeId};
-use grandpa::fg_primitives::{self, ScheduledChange};
+use grandpa::fg_primitives::{self, ScheduledChange, GrandpaEquivocationFrom};
 use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
 	runtime_api as client_api, impl_runtime_apis
@@ -55,6 +56,7 @@ use session::historical::{self, Proof};
 pub use sr_primitives::BuildStorage;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
+pub use grandpa::Call as GrandpaCall;
 pub use contracts::Gas;
 pub use sr_primitives::{Permill, Perbill};
 pub use support::StorageValue;
@@ -547,6 +549,17 @@ impl_runtime_apis! {
 
 		fn grandpa_authorities() -> Vec<(GrandpaId, GrandpaWeight)> {
 			Grandpa::grandpa_authorities()
+		}
+
+		fn construct_equivocation_report_call(
+			equivocation: GrandpaEquivocationFrom<Block>
+		) -> Option<Vec<u8>> {
+			// let proof = Historical::prove((key_types::ED25519, equivocation.identity.encode()))?;
+			// let mut proved_equivocation = equivocation.clone();
+			// proved_equivocation.identity_proof = Some(proof);
+			let grandpa_call = GrandpaCall::report_equivocation(equivocation);
+			let call = Call::Grandpa(grandpa_call);
+			Some(call.encode())
 		}
 	}
 

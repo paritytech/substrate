@@ -58,7 +58,7 @@ mod periodic;
 #[cfg(test)]
 mod tests;
 
-pub use fg_primitives::GRANDPA_ENGINE_ID;
+pub use fg_primitives::{GRANDPA_ENGINE_ID, localized_payload};
 
 // cost scalars for reporting peers.
 mod cost {
@@ -610,10 +610,6 @@ impl<B: BlockT, N: Network<B>> Clone for NetworkBridge<B, N> {
 			neighbor_sender: self.neighbor_sender.clone(),
 		}
 	}
-}
-
-fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec<u8> {
-	(message, round, set_id).encode()
 }
 
 /// Type-safe wrapper around u64 when indicating that it's a round number.

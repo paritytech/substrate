@@ -54,29 +54,30 @@ pub type AuthorityWeight = u64;
 /// The index of an authority.
 pub type AuthorityIndex = u64;
 
-// #[cfg_attr(feature = "std", derive(Debug, Serialize))]
+pub fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec<u8> {
+	(message, round, set_id).encode()
+}
+
+#[cfg_attr(feature = "std", derive(Debug))]
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
-pub struct GrandpaEquivocation<H, N, S, I, P> {
+pub struct GrandpaEquivocation<H, N> {
 	/// The set id.
 	pub set_id: u64,
 	/// The round number equivocated in.
 	pub round_number: u64,
 	/// The identity of the equivocator.
-	pub identity: I,
+	pub identity: AuthorityId,
 	/// The proof of identity inclusion.
-	pub identity_proof: Option<P>,
+	pub identity_proof: Option<Proof>,
 	/// The first vote in the equivocation.
-	pub	first: (Message<H, N>, S),
+	pub	first: (Message<H, N>, AuthoritySignature),
 	/// The second vote in the equivocation.
-	pub second: (Message<H, N>, S),
+	pub second: (Message<H, N>, AuthoritySignature),
 }
 
 pub type GrandpaEquivocationFrom<Block> = GrandpaEquivocation<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
-	AuthoritySignature,
-	AuthorityId,
-	Proof,
 >;
 
 /// A scheduled change of authority set.
@@ -230,5 +231,10 @@ decl_runtime_apis! {
 		/// used to finalize descendants of this block (B+1, B+2, ...). The block B itself
 		/// is finalized by the authorities from block B-1.
 		fn grandpa_authorities() -> Vec<(AuthorityId, AuthorityWeight)>;
+
+		/// Construct a call to report the equivocation.
+		fn construct_equivocation_report_call(
+			proof: GrandpaEquivocationFrom<Block>
+		) -> Option<Vec<u8>>;
 	}
 }
