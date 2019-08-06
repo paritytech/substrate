@@ -326,7 +326,8 @@ pub struct EraRewards {
 }
 
 impl EraRewards {
-	/// add the reward to the validator at index given. Index must valid.
+	/// Add the reward to the validator at the given index. Index must be valid
+	/// (i.e. `index < current_elected.len()`).
 	fn add_points_to_index(&mut self, index: u32, points: u32) {
 		if let Some(new_total) = self.total.checked_add(points) {
 			self.total = new_total;
@@ -1410,7 +1411,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Add reward points to validators. Using their stash account ID.
+	/// Add reward points to validators using their stash account ID.
 	///
 	/// Validators are keyed by stash account ID and must be in the current elected set.
 	///
@@ -1431,7 +1432,7 @@ impl<T: Trait> Module<T> {
 		});
 	}
 
-	/// Add reward points to validators. Using their validator index.
+	/// Add reward points to validators using their validator index.
 	///
 	/// For each element in the iterator the given number of points in u32 is added to the
 	/// validator, thus duplicates are handled.
