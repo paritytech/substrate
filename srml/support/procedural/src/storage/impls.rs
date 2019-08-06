@@ -634,7 +634,6 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 						None => Self::new_head_linkage(storage, key),
 					};
 					storage.put(key_for, &(val, linkage))
-					// val.using_encoded(|b| storage.put_raw(&Self::key_for(key)[..], b))
 				}
 
 				/// Mutate the value under a key
