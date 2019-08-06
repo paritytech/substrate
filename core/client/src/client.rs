@@ -177,6 +177,13 @@ pub trait BlockBody<Block: BlockT> {
 	) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
 }
 
+/// Provide a list of potential uncle headers for a given block.
+pub trait ProvideUncles<Block: BlockT> {
+	/// Gets the uncles of the block with `target_hash` going back `max_generation` ancestors.
+	fn uncles(&self, target_hash: Block::Hash, max_generation: NumberFor<Block>)
+		-> error::Result<Vec<Block::Header>>;
+}
+
 /// Client info
 #[derive(Debug)]
 pub struct ClientInfo<Block: BlockT> {
@@ -1319,7 +1326,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			ancestor_hash = *current.parent_hash();
 			ancestor = load_header(ancestor_hash)?;
 		}
-
+		trace!("Collected {} uncles", uncles.len());
 		Ok(uncles)
 	}
 
@@ -1340,6 +1347,20 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			parent_header.hash(),
 			Default::default(),
 		))
+	}
+}
+
+impl<B, E, Block, RA> ProvideUncles<Block> for Client<B, E, Block, RA> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
+	Block: BlockT<Hash=H256>,
+{
+	fn uncles(&self, target_hash: Block::Hash, max_generation: NumberFor<Block>) -> error::Result<Vec<Block::Header>> {
+		Client::uncles(self, target_hash, max_generation)?
+			.into_iter()
+			.map(|hash| Client::header(self, &BlockId::Hash(hash))
+				.map(|maybe_header| maybe_header.expect("Each uncle exists in the database; qed")))
+			.collect()
 	}
 }
 
