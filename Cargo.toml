@@ -80,6 +80,7 @@ members = [
 	"srml/im-online",
 	"srml/indices",
 	"srml/metadata",
+	"srml/offences",
 	"srml/session",
 	"srml/staking",
 	"srml/sudo",
