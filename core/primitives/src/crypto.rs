@@ -24,7 +24,7 @@ use rstd::convert::{TryFrom, TryInto};
 use parking_lot::Mutex;
 #[cfg(feature = "std")]
 use rand::{RngCore, rngs::OsRng};
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use regex::Regex;
 #[cfg(feature = "std")]

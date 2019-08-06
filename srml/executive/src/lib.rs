@@ -82,7 +82,7 @@ use sr_primitives::{generic::Digest, traits::{
 	OnInitialize, NumberFor, Block as BlockT, OffchainWorker, ValidateUnsigned
 }};
 use srml_support::Dispatchable;
-use parity_codec::{Codec, Encode};
+use codec::{Codec, Encode};
 use system::{extrinsics_root, DigestOf};
 use sr_primitives::{ApplyOutcome, ApplyError};
 use sr_primitives::transaction_validity::TransactionValidity;

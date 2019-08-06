@@ -151,7 +151,7 @@
 
 use rstd::prelude::*;
 use rstd::{cmp, result, mem};
-use parity_codec::{Codec, Encode, Decode};
+use codec::{Codec, Encode, Decode};
 use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module};
 use srml_support::traits::{
 	UpdateBalanceOutcome, Currency, OnFreeBalanceZero, OnUnbalanced,

@@ -35,7 +35,7 @@ use srml_support::{
 		OnUnbalanced, ReservableCurrency, WithdrawReason, WithdrawReasons, ChangeMembers
 	}
 };
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use system::{self, ensure_signed, ensure_root};
 
 // no polynomial attacks:

@@ -59,7 +59,7 @@ use client::{
 	BlockchainEvents, CallExecutor, Client, backend::Backend, error::Error as ClientError,
 };
 use client::blockchain::HeaderBackend;
-use parity_codec::Encode;
+use codec::Encode;
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{
 	NumberFor, Block as BlockT, DigestFor, ProvideRuntimeApi
