@@ -134,7 +134,7 @@ impl<Client, Storage, Block> OffchainWorkers<
 				let run = runtime.offchain_worker_with_context(
 					&at,
 					ExecutionContext::OffchainWorker(api),
-					number
+					number,
 				);
 				if let Err(e) =	run {
 					log::error!("Error running offchain workers at {:?}: {:?}", at, e);

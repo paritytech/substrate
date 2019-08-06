@@ -81,7 +81,6 @@ pub use hash_db::Hasher;
 pub use self::hasher::blake2::Blake2Hasher;
 
 /// Context for executing a call into the runtime.
-#[repr(u8)]
 pub enum ExecutionContext {
 	/// Context for general importing (including own blocks).
 	Importing,
@@ -93,6 +92,17 @@ pub enum ExecutionContext {
 	OffchainWorker(Box<dyn offchain::Externalities>),
 	/// Context used for other calls.
 	Other,
+}
+
+impl ExecutionContext {
+	/// Returns if the keystore should be enabled for the current context.
+	pub fn enable_keystore(&self) -> bool {
+		use ExecutionContext::*;
+		match self {
+			Importing | Syncing | BlockConstruction => false,
+			OffchainWorker(_) | Other => true,
+		}
+	}
 }
 
 /// Hex-serialized shim for `Vec<u8>`.
