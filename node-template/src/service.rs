@@ -43,8 +43,6 @@ construct_simple_protocol! {
 construct_service_factory! {
 	struct Factory {
 		Block = Block,
-		ConsensusPair = aura_primitives::sr25519::AuthorityPair,
-		FinalityPair = grandpa_primitives::AuthorityPair,
 		RuntimeApi = RuntimeApi,
 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
 		RuntimeDispatch = Executor,

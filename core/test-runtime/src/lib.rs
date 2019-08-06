@@ -820,14 +820,14 @@ cfg_if! {
 }
 
 fn test_ed25519_crypto() -> ed25519::AppSignature {
-	let public = ed25519::AppPublic::generate_pair();
+	let public = ed25519::AppPublic::generate_pair(None);
 	let signature = public.sign(&"ed25519").expect("Generates a valid `ed25519` signature.");
 	assert!(public.verify(&"ed25519", &signature));
 	signature
 }
 
 fn test_sr25519_crypto() -> sr25519::AppSignature {
-	let public = sr25519::AppPublic::generate_pair();
+	let public = sr25519::AppPublic::generate_pair(None);
 	let signature = public.sign(&"sr25519").expect("Generates a valid `sr25519` signature.");
 	assert!(public.verify(&"sr25519", &signature));
 	signature

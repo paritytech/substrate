@@ -220,8 +220,8 @@ macro_rules! app_crypto {
 		impl $crate::RuntimeAppPublic for Public where $public: $crate::RuntimePublic<Signature=$sig> {
 			type Signature = Signature;
 
-			fn generate_pair() -> Self {
-				Self(<$public as $crate::RuntimePublic>::generate_pair($key_type))
+			fn generate_pair(seed: Option<&str>) -> Self {
+				Self(<$public as $crate::RuntimePublic>::generate_pair($key_type, seed))
 			}
 
 			fn sign<M: AsRef<[u8]>>(&self, msg: &M) -> Option<Self::Signature> {

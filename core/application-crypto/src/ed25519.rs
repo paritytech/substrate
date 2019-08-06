@@ -33,8 +33,8 @@ pub use app::Pair as AppPair;
 impl RuntimePublic for Public {
 	type Signature = Signature;
 
-	fn generate_pair(key_type: KeyTypeId) -> Self {
-		Self::from_raw(rio::ed25519_generate(key_type))
+	fn generate_pair(key_type: KeyTypeId, seed: Option<&str>) -> Self {
+		Self::from_raw(rio::ed25519_generate(key_type, seed))
 	}
 
 	fn sign<M: AsRef<[u8]>>(&self, key_type: KeyTypeId, msg: &M) -> Option<Self::Signature> {

@@ -17,7 +17,7 @@
 //! Types that should only be used for testing!
 
 #[cfg(feature = "std")]
-use crate::{ed25519, sr25519, crypto::{Public, Pair, KeyTypeId}, traits::KeyStorePtr};
+use crate::{ed25519, sr25519, crypto::{Public, Pair, KeyTypeId}};
 
 /// A keystore implementation usable in tests.
 #[cfg(feature = "std")]

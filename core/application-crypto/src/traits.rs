@@ -77,7 +77,7 @@ pub trait RuntimePublic: Sized {
 	/// Generate a public/private pair for the given key type and store it in the keystore.
 	///
 	/// Returns the generated public key.
-	fn generate_pair(key_type: KeyTypeId) -> Self;
+	fn generate_pair(key_type: KeyTypeId, seed: Option<&str>) -> Self;
 
 	/// Sign the given message with the corresponding private key of this public key.
 	///
@@ -99,7 +99,7 @@ pub trait RuntimeAppPublic: Sized {
 	/// Generate a public/private pair and store it in the keystore.
 	///
 	/// Returns the generated public key.
-	fn generate_pair() -> Self;
+	fn generate_pair(seed: Option<&str>) -> Self;
 
 	/// Sign the given message with the corresponding private key of this public key.
 	///

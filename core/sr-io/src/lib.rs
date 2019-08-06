@@ -203,7 +203,7 @@ export_api! {
 		/// Generate an ed22519 key for the given key type and store it in the keystore.
 		///
 		/// Returns the raw public key.
-		fn ed25519_generate(id: KeyTypeId) -> [u8; 32];
+		fn ed25519_generate(id: KeyTypeId, seed: Option<&str>) -> [u8; 32];
 		/// Sign the given `msg` with the ed25519 key that corresponds to the given public key and
 		/// key type in the keystore.
 		///
@@ -221,7 +221,7 @@ export_api! {
 		/// Generate an sr22519 key for the given key type and store it in the keystore.
 		///
 		/// Returns the raw public key.
-		fn sr25519_generate(id: KeyTypeId) -> [u8; 32];
+		fn sr25519_generate(id: KeyTypeId, seed: Option<&str>) -> [u8; 32];
 		/// Sign the given `msg` with the sr25519 key that corresponds to the given public key and
 		/// key type in the keystore.
 		///
