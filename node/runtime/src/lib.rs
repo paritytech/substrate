@@ -552,11 +552,10 @@ impl_runtime_apis! {
 		}
 
 		fn construct_equivocation_report_call(
-			equivocation: GrandpaEquivocationFrom<Block>
+			equivocation: GrandpaEquivocationFrom<Block>,
+			proof: Proof,
 		) -> Option<Vec<u8>> {
-			// let proof = Historical::prove((key_types::ED25519, equivocation.identity.encode()))?;
-			// let mut proved_equivocation = equivocation.clone();
-			// proved_equivocation.identity_proof = Some(proof);
+			// TODO: Check proof.
 			let grandpa_call = GrandpaCall::report_equivocation(equivocation);
 			let call = Call::Grandpa(grandpa_call);
 			Some(call.encode())

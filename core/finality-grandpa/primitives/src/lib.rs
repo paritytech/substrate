@@ -234,7 +234,8 @@ decl_runtime_apis! {
 
 		/// Construct a call to report the equivocation.
 		fn construct_equivocation_report_call(
-			proof: GrandpaEquivocationFrom<Block>
+			equivocation: GrandpaEquivocationFrom<Block>,
+			proof: Proof
 		) -> Option<Vec<u8>>;
 	}
 }
