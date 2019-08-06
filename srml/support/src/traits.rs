@@ -673,3 +673,8 @@ pub trait SlashingOffence<Offender> {
 	/// `validators_count` - the cardinality of the validator set at the time of offence.
 	fn slash_percentage(&self, offenders: u32, validators_count: u32) -> Perbill;
 }
+
+pub trait ReportOffence<Reporter, Offender, Offence: SlashingOffence<Offender>> {
+	/// Report an offence from the given `reporters`.
+	fn report_offence(reporters: &[Reporter], offence: &Offence);
+}

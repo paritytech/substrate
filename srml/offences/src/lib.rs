@@ -20,10 +20,11 @@
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
-#![warn(missing_docs, rust_2018_idioms)]
+#![warn(missing_docs)]
 
 use srml_support::{
 	StorageDoubleMap, Parameter, decl_module, decl_storage,
+	traits::{SlashingOffence, ReportOffence},
 };
 use parity_codec::{Decode, Encode};
 use rstd::vec::Vec;
@@ -58,29 +59,21 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 }
 
-/// Trait for reporting offences
-pub trait OffenceReporter<AuthorityId> {
-	/// Report offence for a kind, time_slot and authority
-	fn report_offence(
-		kind: Kind,
-		time_slot: TimeSlot,
-		authority: AuthorityId,
-	) -> ();
-}
-
-impl<T: Trait> OffenceReporter<T::AuthorityId> for Module<T> {
+impl<T: Trait, O: SlashingOffence<T::AuthorityId>> ReportOffence<T::AuthorityId, T::AuthorityId, O>
+	for Module<T>
+{
 	// Implementation of report_offence, where it checks if an offence is already reported for an
 	// authority and otherwise stores that report.
-	// TODO [slashing]: This should probably then trigger the `on_offence` to those listening?
-	fn report_offence(
-		kind: Kind,
-		time_slot: TimeSlot,
-		authority: T::AuthorityId,
-	) -> () {
-		let mut offending_authorities = <OffenceReports<T>>::get(&kind, &time_slot);
-		if !offending_authorities.contains(&authority) {
-			offending_authorities.push(authority);
-			<OffenceReports<T>>::insert(&kind, &time_slot, &offending_authorities);
-		}
+	fn report_offence(_reporters: &[T::AuthorityId], offence: &O) {
+		let offenders = offence.offenders();
+		let time_slot = offence.time_slot();
+
+		<OffenceReports<T>>::mutate(&O::ID, &time_slot, |offending_authorities| {
+			for offender in offenders {
+				if !offending_authorities.contains(&offender) {
+					offending_authorities.push(offender);
+				}
+			}
+		});
 	}
 }
