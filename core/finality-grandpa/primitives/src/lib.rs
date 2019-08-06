@@ -23,7 +23,7 @@ extern crate alloc;
 
 #[cfg(feature = "std")]
 use serde::Serialize;
-use parity_codec::{Encode, Decode, Codec};
+use codec::{Encode, Decode, Codec};
 use sr_primitives::{ConsensusEngineId, traits::{DigestFor, NumberFor}};
 use client::decl_runtime_apis;
 use rstd::vec::Vec;

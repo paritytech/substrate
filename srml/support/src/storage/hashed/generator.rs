@@ -208,7 +208,7 @@ pub trait StorageValue<T: codec::Codec> {
 		let new_val = <T as codec::EncodeAppend>::append(
 			storage.get_raw(Self::key()).unwrap_or_default(),
 			items,
-		).ok_or_else(|| "Could not append given item")?;
+		).map_err(|_| "Could not append given item")?;
 		storage.put_raw(Self::key(), &new_val);
 		Ok(())
 	}
@@ -286,7 +286,7 @@ pub trait AppendableStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, 
 		let new_val = <V as codec::EncodeAppend>::append(
 			storage.get_raw(&k[..]).unwrap_or_default(),
 			items,
-		).ok_or_else(|| "Could not append given item")?;
+		).map_err(|_| "Could not append given item")?;
 		storage.put_raw(&k[..], &new_val);
 		Ok(())
 	}

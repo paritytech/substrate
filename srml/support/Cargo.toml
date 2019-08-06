@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 serde = { version = "1.0", optional = true, features = ["derive"] }
-codec = { package = "parity-codec", version = "4.1.1", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 srml-metadata = { path = "../metadata", default-features = false }
 sr-std = { path = "../../core/sr-std", default-features = false }
 runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = false }

@@ -22,7 +22,7 @@ use std::{fmt, panic::UnwindSafe, result, marker::PhantomData};
 use std::borrow::Cow;
 use log::warn;
 use hash_db::Hasher;
-use parity_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use primitives::{
 	storage::well_known_keys, NativeOrEncoded, NeverNativeValue, offchain,
 };
@@ -938,7 +938,7 @@ pub(crate) fn set_changes_trie_config(
 ) -> Result<(), Box<dyn Error>> {
 	let config = match config {
 		Some(v) => Some(Decode::decode(&mut &v[..])
-			.ok_or_else(|| Box::new("Failed to decode changes trie configuration".to_owned()) as Box<dyn Error>)?),
+			.map_err(|_| Box::new("Failed to decode changes trie configuration".to_owned()) as Box<dyn Error>)?),
 		None => None,
 	};
 
@@ -972,7 +972,7 @@ where
 #[cfg(test)]
 mod tests {
 	use std::collections::HashMap;
-	use parity_codec::Encode;
+	use codec::Encode;
 	use overlayed_changes::OverlayedValue;
 	use super::*;
 	use super::backend::InMemory;
