@@ -148,7 +148,7 @@
 //!			/// Slash a validator for an offence.
 //! 		pub fn slash_myself(origin) -> Result {
 //! 			let reported = ensure_signed(origin)?;
-//! 			<staking::Module<T>>::slash_validator(reported, 1_000);
+//! 			<staking::Module<T>>::slash_validator(reported, 1_000.into());
 //! 			Ok(())
 //! 		}
 //! 	}
