@@ -34,7 +34,7 @@ use message::{BlockAttributes, Direction, FromBlock, Message, RequestId};
 use message::generic::{Message as GenericMessage, ConsensusMessage};
 use event::Event;
 use consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
-use light_server::{LightServer, LightServerNetwork, RequestData};
+use light_dispatch::{LightDispatch, LightDispatchNetwork, RequestData};
 use specialization::NetworkSpecialization;
 use sync::{ChainSync, SyncState};
 use crate::service::{TransactionPool, ExHashT};
@@ -53,7 +53,7 @@ mod util;
 pub mod consensus_gossip;
 pub mod message;
 pub mod event;
-pub mod light_server;
+pub mod light_dispatch;
 pub mod specialization;
 pub mod sync;
 
@@ -97,7 +97,7 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	propagate_timeout: Box<dyn Stream<Item = (), Error = ()> + Send>,
 	config: ProtocolConfig,
 	/// Handler for light client requests.
-	light_server: LightServer<B>,
+	light_dispatch: LightDispatch<B>,
 	genesis_hash: B::Hash,
 	sync: ChainSync<B>,
 	specialization: S,
@@ -149,12 +149,12 @@ pub struct PeerInfo<B: BlockT> {
 	pub best_number: <B::Header as HeaderT>::Number,
 }
 
-struct LightServerIn<'a, B: BlockT> {
+struct LightDispatchIn<'a, B: BlockT> {
 	behaviour: &'a mut CustomProto<B, Substream<StreamMuxerBox>>,
 	peerset: peerset::PeersetHandle,
 }
 
-impl<'a, B: BlockT> LightServerNetwork<B> for LightServerIn<'a, B> {
+impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a, B> {
 	fn report_peer(&mut self, who: &PeerId, reputation: i32) {
 		self.peerset.report_peer(who.clone(), reputation)
 	}
@@ -373,7 +373,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				peers: HashMap::new(),
 				chain,
 			},
-			light_server: LightServer::new(checker),
+			light_dispatch: LightDispatch::new(checker),
 			genesis_hash: info.chain.genesis_hash,
 			sync,
 			specialization: specialization,
@@ -446,14 +446,14 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	///
 	/// The parameter contains a `Sender` where the result, once received, must be sent.
 	pub(crate) fn add_light_client_request(&mut self, rq: RequestData<B>) {
-		self.light_server.add_request(LightServerIn {
+		self.light_dispatch.add_request(LightDispatchIn {
 			behaviour: &mut self.behaviour,
 			peerset: self.peerset_handle.clone(),
 		}, rq);
 	}
 
 	fn is_light_rq_response(&self, who: &PeerId, response_id: message::RequestId) -> bool {
-		self.light_server.is_light_rq_response(&who, response_id)
+		self.light_dispatch.is_light_rq_response(&who, response_id)
 	}
 
 	fn handle_response(
@@ -629,7 +629,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			}
 			self.sync.peer_disconnected(peer.clone());
 			self.specialization.on_disconnect(&mut context, peer.clone());
-			self.light_server.on_disconnect(LightServerIn {
+			self.light_dispatch.on_disconnect(LightDispatchIn {
 				behaviour: &mut self.behaviour,
 				peerset: self.peerset_handle.clone(),
 			}, peer);
@@ -793,7 +793,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle)
 		);
 		self.maintain_peers();
-		self.light_server.maintain_peers(LightServerIn {
+		self.light_dispatch.maintain_peers(LightDispatchIn {
 			behaviour: &mut self.behaviour,
 			peerset: self.peerset_handle.clone(),
 		});
@@ -914,7 +914,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		};
 
 		let info = self.context_data.peers.get(&who).expect("We just inserted above; QED").info.clone();
-		self.light_server.on_connect(LightServerIn {
+		self.light_dispatch.on_connect(LightDispatchIn {
 			behaviour: &mut self.behaviour,
 			peerset: self.peerset_handle.clone(),
 		}, who.clone(), status.roles, status.best_number);
@@ -1053,7 +1053,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				peer.known_blocks.insert(hash.clone());
 			}
 		}
-		self.light_server.update_best_number(LightServerIn {
+		self.light_dispatch.update_best_number(LightDispatchIn {
 			behaviour: &mut self.behaviour,
 			peerset: self.peerset_handle.clone(),
 		}, who.clone(), *header.number());
@@ -1253,7 +1253,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		response: message::RemoteCallResponse
 	) {
 		trace!(target: "sync", "Remote call response {} from {}", response.id, who);
-		self.light_server.on_remote_call_response(LightServerIn {
+		self.light_dispatch.on_remote_call_response(LightDispatchIn {
 			behaviour: &mut self.behaviour,
 			peerset: self.peerset_handle.clone(),
 		}, who, response);
@@ -1294,7 +1294,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		response: message::RemoteReadResponse
 	) {
 		trace!(target: "sync", "Remote read response {} from {}", response.id, who);
-		self.light_server.on_remote_read_response(LightServerIn {
+		self.light_dispatch.on_remote_read_response(LightDispatchIn {
 			behaviour: &mut self.behaviour,
 			peerset: self.peerset_handle.clone(),
 		}, who, response);
@@ -1335,7 +1335,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		response: message::RemoteHeaderResponse<B::Header>,
 	) {
 		trace!(target: "sync", "Remote header proof response {} from {}", response.id, who);
-		self.light_server.on_remote_header_response(LightServerIn {
+		self.light_dispatch.on_remote_header_response(LightDispatchIn {
 			behaviour: &mut self.behaviour,
 			peerset: self.peerset_handle.clone(),
 		}, who, response);
@@ -1401,7 +1401,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			who,
 			response.max
 		);
-		self.light_server.on_remote_changes_response(LightServerIn {
+		self.light_dispatch.on_remote_changes_response(LightDispatchIn {
 			behaviour: &mut self.behaviour,
 			peerset: self.peerset_handle.clone(),
 		}, who, response);
@@ -1462,7 +1462,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		peer: PeerId,
 		response: message::BlockResponse<B>
 	) {
-		self.light_server.on_remote_body_response(LightServerIn {
+		self.light_dispatch.on_remote_body_response(LightDispatchIn {
 			behaviour: &mut self.behaviour,
 			peerset: self.peerset_handle.clone(),
 		}, peer, response);
