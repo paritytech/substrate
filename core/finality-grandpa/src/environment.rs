@@ -498,15 +498,25 @@ where
 		let prevote_timer = Delay::new(now + self.config.gossip_duration * 2);
 		let precommit_timer = Delay::new(now + self.config.gossip_duration * 4);
 
-		let local_key = self.config.local_key.as_ref()
-			.filter(|pair| self.voters.contains_key(&pair.public().into()));
+		let local_key = crate::is_voter(&self.voters, &self.config.keystore);
+
+		let has_voted = match self.voter_set_state.has_voted() {
+			HasVoted::Yes(id, vote) => {
+				if local_key.as_ref().map(|k| k.public() == id).unwrap_or(false) {
+					HasVoted::Yes(id, vote)
+				} else {
+					HasVoted::No
+				}
+			},
+			HasVoted::No => HasVoted::No,
+		};
 
 		let (incoming, outgoing) = self.network.round_communication(
 			crate::communication::Round(round),
 			crate::communication::SetId(self.set_id),
 			self.voters.clone(),
-			local_key.cloned(),
-			self.voter_set_state.has_voted(),
+			local_key.clone(),
+			has_voted,
 		);
 
 		// schedule incoming messages from the network to be held until
@@ -521,7 +531,7 @@ where
 		let outgoing = Box::new(outgoing.sink_map_err(Into::into));
 
 		voter::RoundData {
-			voter_id: self.config.local_key.as_ref().map(|pair| pair.public().clone()),
+			voter_id: local_key.map(|pair| pair.public()),
 			prevote_timer: Box::new(prevote_timer.map_err(|e| Error::Timer(e).into())),
 			precommit_timer: Box::new(precommit_timer.map_err(|e| Error::Timer(e).into())),
 			incoming,
@@ -530,12 +540,10 @@ where
 	}
 
 	fn proposed(&self, _round: u64, propose: PrimaryPropose<Block>) -> Result<(), Self::Error> {
-		let local_id = self.config.local_key.as_ref()
-			.map(|pair| pair.public().into())
-			.filter(|id| self.voters.contains_key(&id));
+		let local_id = crate::is_voter(&self.voters, &self.config.keystore);
 
 		let local_id = match local_id {
-			Some(id) => id,
+			Some(id) => id.public(),
 			None => return Ok(()),
 		};
 
@@ -569,12 +577,10 @@ where
 	}
 
 	fn prevoted(&self, _round: u64, prevote: Prevote<Block>) -> Result<(), Self::Error> {
-		let local_id = self.config.local_key.as_ref()
-			.map(|pair| pair.public().into())
-			.filter(|id| self.voters.contains_key(&id));
+		let local_id = crate::is_voter(&self.voters, &self.config.keystore);
 
 		let local_id = match local_id {
-			Some(id) => id,
+			Some(id) => id.public(),
 			None => return Ok(()),
 		};
 
@@ -611,12 +617,10 @@ where
 	}
 
 	fn precommitted(&self, _round: u64, precommit: Precommit<Block>) -> Result<(), Self::Error> {
-		let local_id = self.config.local_key.as_ref()
-			.map(|pair| pair.public().into())
-			.filter(|id| self.voters.contains_key(&id));
+		let local_id = crate::is_voter(&self.voters, &self.config.keystore);
 
 		let local_id = match local_id {
-			Some(id) => id,
+			Some(id) => id.public(),
 			None => return Ok(()),
 		};
 

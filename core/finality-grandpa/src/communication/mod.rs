@@ -341,7 +341,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		round: Round,
 		set_id: SetId,
 		voters: Arc<VoterSet<AuthorityId>>,
-		local_key: Option<Arc<AuthorityPair>>,
+		local_key: Option<AuthorityPair>,
 		has_voted: HasVoted<B>,
 	) -> (
 		impl Stream<Item=SignedMessage<B>,Error=Error>,
@@ -652,7 +652,7 @@ pub(crate) fn check_message_sig<Block: BlockT>(
 struct OutgoingMessages<Block: BlockT, N: Network<Block>> {
 	round: u64,
 	set_id: u64,
-	locals: Option<(Arc<AuthorityPair>, AuthorityId)>,
+	locals: Option<(AuthorityPair, AuthorityId)>,
 	sender: mpsc::UnboundedSender<SignedMessage<Block>>,
 	network: N,
 	has_voted: HasVoted<Block>,
