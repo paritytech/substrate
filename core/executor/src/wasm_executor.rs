@@ -661,13 +661,28 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			5
 		})
 	},
-	ext_ed25519_generate(id_data: *const u8, out: *mut u8) => {
+	ext_ed25519_generate(id_data: *const u8, seed: *const u8, seed_len: u32, out: *mut u8) => {
 		let mut id = [0u8; 4];
 		this.memory.get_into(id_data, &mut id[..])
 			.map_err(|_| "Invalid attempt to get id in ext_ed25519_generate")?;
 		let key_type = KeyTypeId(id);
 
-		let pubkey = runtime_io::ed25519_generate(key_type);
+		let seed = if seed_len == 0 {
+			None
+		} else {
+			Some(
+				this.memory.get(seed, seed_len as usize)
+					.map_err(|_| "Invalid attempt to get seed in ext_ed25519_generate")?
+			)
+		};
+
+		let seed = seed.as_ref()
+			.map(|seed|
+				std::str::from_utf8(&seed)
+					.map_err(|_| "Seed not a valid utf8 string in ext_sr25119_generate")
+			).transpose()?;
+
+		let pubkey = runtime_io::ed25519_generate(key_type, seed);
 
 		this.memory.set(out, pubkey.as_ref())
 			.map_err(|_| "Invalid attempt to set out in ext_ed25519_generate".into())
@@ -724,13 +739,28 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			5
 		})
 	},
-	ext_sr25519_generate(id_data: *const u8, out: *mut u8) => {
+	ext_sr25519_generate(id_data: *const u8, seed: *const u8, seed_len: u32, out: *mut u8) => {
 		let mut id = [0u8; 4];
 		this.memory.get_into(id_data, &mut id[..])
 			.map_err(|_| "Invalid attempt to get id in ext_sr25519_generate")?;
 		let key_type = KeyTypeId(id);
+		let seed = if seed_len == 0 {
+			None
+		} else {
+			Some(
+				this.memory.get(seed, seed_len as usize)
+					.map_err(|_| "Invalid attempt to get seed in ext_sr25519_generate")?
+			)
+		};
 
-		let pubkey = runtime_io::sr25519_generate(key_type);
+		let seed = seed.as_ref()
+			.map(|seed|
+				std::str::from_utf8(&seed)
+					.map_err(|_| "Seed not a valid utf8 string in ext_sr25119_generate")
+			)
+			.transpose()?;
+
+		let pubkey = runtime_io::sr25519_generate(key_type, seed);
 
 		this.memory.set(out, pubkey.as_ref())
 			.map_err(|_| "Invalid attempt to set out in ext_sr25519_generate".into())

@@ -363,7 +363,7 @@ pub mod ext {
 
 		/// Generate an `ed25519` key pair for the given key type id and store the public key
 		/// in `out`.
-		fn ext_ed25519_generate(id: *const u8, out: *mut u8);
+		fn ext_ed25519_generate(id: *const u8, seed: *const u8, seed_len: u32, out: *mut u8);
 
 		/// Sign the given `msg` with the `ed25519` key pair that corresponds to then given key
 		/// type id and public key. The raw signature is stored in `out`.
@@ -390,7 +390,7 @@ pub mod ext {
 
 		/// Generate an `sr25519` key pair for the given key type id and store the public
 		/// key in `out`.
-		fn ext_sr25519_generate(id: *const u8, out: *mut u8);
+		fn ext_sr25519_generate(id: *const u8, seed: *const u8, seed_len: u32, out: *mut u8);
 
 		/// Sign the given `msg` with the `sr25519` key pair that corresponds to then given key
 		/// type id and public key. The raw signature is stored in `out`.
@@ -912,9 +912,12 @@ impl HashingApi for () {
 }
 
 impl CryptoApi for () {
-	fn ed25519_generate(id: KeyTypeId) -> [u8; 32] {
+	fn ed25519_generate(id: KeyTypeId, seed: Option<&str>) -> [u8; 32] {
 		let mut res = [0u8; 32];
-		unsafe { ext_ed25519_generate.get()(id.0.as_ptr(), res.as_mut_ptr()) };
+		let seed = seed.as_ref().map(|s| s.as_bytes()).unwrap_or(&[]);
+		unsafe {
+			ext_ed25519_generate.get()(id.0.as_ptr(), seed.as_ptr(), seed.len() as u32, res.as_mut_ptr())
+		};
 		res
 	}
 
@@ -952,9 +955,12 @@ impl CryptoApi for () {
 		}
 	}
 
-	fn sr25519_generate(id: KeyTypeId) -> [u8; 32] {
+	fn sr25519_generate(id: KeyTypeId, seed: Option<&str>) -> [u8; 32] {
 		let mut res = [0u8;32];
-		unsafe { ext_sr25519_generate.get()(id.0.as_ptr(), res.as_mut_ptr()) };
+		let seed = seed.as_ref().map(|s| s.as_bytes()).unwrap_or(&[]);
+		unsafe {
+			ext_sr25519_generate.get()(id.0.as_ptr(), seed.as_ptr(), seed.len() as u32, res.as_mut_ptr())
+		};
 		res
 	}
 

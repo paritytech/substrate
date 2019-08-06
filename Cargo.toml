@@ -43,6 +43,7 @@ members = [
 	"core/serializer",
 	"core/service",
 	"core/service/test",
+	"core/session",
 	"core/sr-api-macros",
 	"core/sr-io",
 	"core/sr-primitives",

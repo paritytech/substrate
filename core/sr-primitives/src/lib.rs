@@ -31,6 +31,9 @@ pub use rstd;
 #[doc(hidden)]
 pub use paste;
 
+#[doc(hidden)]
+pub use app_crypto;
+
 #[cfg(feature = "std")]
 pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 

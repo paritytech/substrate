@@ -207,12 +207,12 @@ impl OtherApi for () {
 }
 
 impl CryptoApi for () {
-	fn ed25519_generate(id: KeyTypeId) -> [u8; 32] {
+	fn ed25519_generate(id: KeyTypeId, seed: Option<&str>) -> [u8; 32] {
 		ext::with(|ext| {
 			ext.keystore()
 				.expect("No `keystore` associated for the current context!")
 				.write()
-				.ed25519_generate_new(id, None)
+				.ed25519_generate_new(id, seed)
 				.expect("`ed25519_generate` failed")
 		}).expect("`ed25519_generate` cannot be called outside of an Externalities-provided environment.")
 	}
@@ -237,12 +237,12 @@ impl CryptoApi for () {
 		ed25519::Pair::verify_weak(sig, msg, pubkey)
 	}
 
-	fn sr25519_generate(id: KeyTypeId) -> [u8; 32] {
+	fn sr25519_generate(id: KeyTypeId, seed: Option<&str>) -> [u8; 32] {
 		ext::with(|ext| {
 			ext.keystore()
 				.expect("No `keystore` associated for the current context!")
 				.write()
-				.sr25519_generate_new(id, None)
+				.sr25519_generate_new(id, seed)
 				.expect("`sr25519_generate` failed")
 		}).expect("`sr25519_generate` cannot be called outside of an Externalities-provided environment.")
 	}

@@ -1199,14 +1199,14 @@ macro_rules! count {
 /// just the bytes of the key.
 ///
 /// ```rust
-/// use sr_primitives::{impl_opaque_keys, key_types, KeyTypeId};
+/// use sr_primitives::{impl_opaque_keys, key_types, KeyTypeId, app_crypto::{sr25519, ed25519}};
 ///
 /// impl_opaque_keys! {
 /// 	pub struct Keys {
 /// 		#[id(key_types::ED25519)]
-/// 		pub ed25519: [u8; 32],
+/// 		pub ed25519: ed25519::AppPublic,
 /// 		#[id(key_types::SR25519)]
-/// 		pub sr25519: [u8; 32],
+/// 		pub sr25519: sr25519::AppPublic,
 /// 	}
 /// }
 /// ```
@@ -1228,22 +1228,34 @@ macro_rules! impl_opaque_keys {
 			)*
 		}
 
+		impl $name {
+			/// Generate a set of keys with optionally using the given seed.
+			///
+			/// The generated key pairs are stored in the keystore.
+			///
+			/// Returns the concatenated SCALE encoded public keys.
+			pub fn generate(seed: Option<&str>) -> $crate::rstd::vec::Vec<u8> {
+				let mut keys = $crate::rstd::vec::Vec::new();
+				$({
+					let key = <$type as $crate::app_crypto::RuntimeAppPublic>::generate_pair(seed);
+					$crate::codec::Encode::encode_to(&key, &mut keys);
+				})*
+				keys
+			}
+		}
+
 		impl $crate::traits::OpaqueKeys for $name {
 			type KeyTypeIds = $crate::rstd::iter::Cloned<
 				$crate::rstd::slice::Iter<'static, $crate::KeyTypeId>
 			>;
 
 			fn key_ids() -> Self::KeyTypeIds {
-				[
-					$($key_id),*
-				].iter().cloned()
+				[ $($key_id),* ].iter().cloned()
 			}
 
 			fn get_raw(&self, i: $crate::KeyTypeId) -> &[u8] {
 				match i {
-					$(
-						i if i == $key_id => self.$field.as_ref(),
-					)*
+					$( i if i == $key_id => self.$field.as_ref(), )*
 					_ => &[],
 				}
 			}
