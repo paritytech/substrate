@@ -298,6 +298,7 @@ impl<B: BlockT> LightServer<B> where
 		self.dispatch(network);
 	}
 
+	/// Call this when we connect to a node on the network.
 	pub fn on_connect(
 		&mut self,
 		network: impl LightServerNetwork<B>,
@@ -321,11 +322,13 @@ impl<B: BlockT> LightServer<B> where
 		self.dispatch(network);
 	}
 
+	/// Call this when we disconnect from a node.
 	pub fn on_disconnect(&mut self, network: impl LightServerNetwork<B>, peer: PeerId) {
 		self.remove_peer(peer);
 		self.dispatch(network);
 	}
 
+	/// Must be called periodically in order to perform maintenance.
 	pub fn maintain_peers(&mut self, mut network: impl LightServerNetwork<B>) {
 		let now = Instant::now();
 
@@ -344,6 +347,7 @@ impl<B: BlockT> LightServer<B> where
 		self.dispatch(network);
 	}
 
+	/// Handles a remote header response message from on the network.
 	pub fn on_remote_header_response(
 		&mut self,
 		network: impl LightServerNetwork<B>,
@@ -367,6 +371,7 @@ impl<B: BlockT> LightServer<B> where
 		})
 	}
 
+	/// Handles a remote read response message from on the network.
 	pub fn on_remote_read_response(
 		&mut self,
 		network: impl LightServerNetwork<B>,
@@ -402,6 +407,7 @@ impl<B: BlockT> LightServer<B> where
 		})
 	}
 
+	/// Handles a remote call response message from on the network.
 	pub fn on_remote_call_response(
 		&mut self,
 		network: impl LightServerNetwork<B>,
@@ -421,6 +427,7 @@ impl<B: BlockT> LightServer<B> where
 		})
 	}
 
+	/// Handles a remote changes response message from on the network.
 	pub fn on_remote_changes_response(
 		&mut self,
 		network: impl LightServerNetwork<B>,
@@ -446,6 +453,7 @@ impl<B: BlockT> LightServer<B> where
 		})
 	}
 
+	/// Handles a remote body response message from on the network.
 	pub fn on_remote_body_response(
 		&mut self,
 		network: impl LightServerNetwork<B>,
@@ -498,7 +506,10 @@ impl<B: BlockT> LightServer<B> where
 		}
 	}
 
-	pub fn remove_peer(&mut self, peer: PeerId) {
+	/// Removes a peer from the list of known peers.
+	///
+	/// Puts back the active request that this node was performing into `pending_requests`.
+	fn remove_peer(&mut self, peer: PeerId) {
 		self.best_blocks.remove(&peer);
 
 		if let Some(request) = self.active_peers.remove(&peer) {
@@ -566,6 +577,8 @@ impl<B: BlockT> LightServer<B> where
 }
 
 impl<Block: BlockT> Request<Block> {
+	/// Returns the block that the remote needs to have in order to be able to fulfill
+	/// this request.
 	fn required_block(&self) -> NumberFor<Block> {
 		match self.data {
 			RequestData::RemoteHeader(ref data, _) => data.block,
