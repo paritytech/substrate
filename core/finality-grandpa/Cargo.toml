@@ -25,6 +25,7 @@ inherents = { package = "substrate-inherents", path = "../../core/inherents" }
 network = { package = "substrate-network", path = "../network" }
 service = { package = "substrate-service", path = "../service", optional = true }
 srml-finality-tracker = { path = "../../srml/finality-tracker" }
+srml-session = { path = "../../srml/session" }
 fg_primitives = { package = "substrate-finality-grandpa-primitives", path = "primitives" }
 grandpa = { package = "finality-grandpa", path = "/home/marcio/repos/finality-grandpa", features = ["derive-codec"] }
 # grandpa = { package = "finality-grandpa", version = "0.8.1", features = ["derive-codec"] }

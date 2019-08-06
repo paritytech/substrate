@@ -75,7 +75,6 @@ pub fn check_equivocation<C, H, E, V, P>(
 			Header=H,
 			Signature=V,
 			Identity=<V as Verify>::Signer,
-			InclusionProof=P
 		>,
 {
 	// We don't check equivocations for old headers out of our capacity.
@@ -107,7 +106,6 @@ pub fn check_equivocation<C, H, E, V, P>(
 			if header.hash() != prev_header.hash() {
 				return Ok(Some(AuthorshipEquivocationProof::new(
 					signer.clone(),
-					None,
 					slot,
 					prev_header.clone(),
 					header.clone(),

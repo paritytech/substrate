@@ -14,6 +14,7 @@ slots = { package = "substrate-consensus-slots", path = "../../slots", optional 
 schnorrkel = { version = "0.8.4", features = ["preaudit_deprecated"], optional = true }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
 consensus_common_primitives = { package = "substrate-consensus-common-primitives", path = "../../common/primitives", default-features = false }
+srml-session = { path = "../../../../srml/session", default-features = false }
 
 [features]
 default = ["std"]

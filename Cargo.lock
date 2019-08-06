@@ -4514,7 +4514,11 @@ dependencies = [
  "schnorrkel 0.8.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
+<<<<<<< HEAD
  "substrate-application-crypto 2.0.0",
+=======
+ "srml-session 2.0.0",
+>>>>>>> add construct report to babe
  "substrate-client 2.0.0",
  "substrate-consensus-common-primitives 2.0.0",
  "substrate-consensus-slots 2.0.0",
@@ -4659,6 +4663,7 @@ dependencies = [
  "serde_json 1.0.40 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 2.0.0",
  "srml-finality-tracker 2.0.0",
+ "srml-session 2.0.0",
  "substrate-client 2.0.0",
  "substrate-consensus-babe-primitives 2.0.0",
  "substrate-consensus-common 2.0.0",

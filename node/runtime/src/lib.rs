@@ -31,6 +31,7 @@ use node_primitives::{
 };
 use parity_codec::{Encode, Decode, Codec};
 use babe::{AuthorityId as BabeId};
+use babe_primitives::BabeEquivocationProof;
 use grandpa::fg_primitives::{self, ScheduledChange, GrandpaEquivocationFrom};
 use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
@@ -56,6 +57,7 @@ use session::historical::{self, Proof};
 pub use sr_primitives::BuildStorage;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
+pub use babe::Call as BabeCall;
 pub use grandpa::Call as GrandpaCall;
 pub use contracts::Gas;
 pub use sr_primitives::{Permill, Perbill};
@@ -584,6 +586,16 @@ impl_runtime_apis! {
 				randomness: Babe::randomness(),
 				duration: EpochDuration::get(),
 			}
+		}
+
+		fn construct_equivocation_report_call(
+			equivocation: BabeEquivocationProof<<Block as BlockT>::Header>,
+			proof: Proof,
+		) -> Option<Vec<u8>> {
+			// TODO: Check proof.
+			let babe_call = BabeCall::report_equivocation(equivocation);
+			let call = Call::Babe(babe_call);
+			Some(call.encode())
 		}
 	}
 

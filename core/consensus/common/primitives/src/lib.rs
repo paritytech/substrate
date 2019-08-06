@@ -39,12 +39,10 @@ pub trait AuthorshipEquivocationProof {
 	type Header: Header;
 	type Signature: Verify;
 	type Identity: Codec;
-	type InclusionProof: Codec;
 
 	/// Create an equivocation proof for AuRa or Babe.
 	fn new(
 		identity: Self::Identity,
-		identity_proof: Option<Self::InclusionProof>,
 		slot: u64,
 		first_header: Self::Header,
 		second_header: Self::Header,
@@ -57,9 +55,6 @@ pub trait AuthorshipEquivocationProof {
 
 	/// Get the identity of the suspect of equivocating.
 	fn identity(&self) -> &Self::Identity;
-
-	/// Get the proof of inclusion of the identity in the validator set.
-	fn identity_proof(&self) -> Option<&Self::InclusionProof>;
 
 	/// Get the first header involved in the equivocation.
 	fn first_header(&self) -> &Self::Header;

@@ -56,8 +56,6 @@ pub use babe_primitives::{AuthorityId, AuthoritySignature, VRF_OUTPUT_LENGTH, PU
 /// The BABE inherent identifier.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"babeslot";
 
-/// The type of the BABE equivocation.
-pub type BabeEquivocation<Header> = BabeEquivocationProof<Header, AuthoritySignature, AuthorityId, Proof>;
 /// The type of the BABE inherent.
 pub type InherentType = u64;
 /// Auxiliary trait to extract BABE inherent data.
@@ -186,7 +184,7 @@ decl_storage! {
 	}
 }
 
-fn equivocation_is_valid<T: Trait>(equivocation: BabeEquivocation<T::Header>) -> bool {
+fn equivocation_is_valid<T: Trait>(equivocation: BabeEquivocationProof<T::Header>) -> bool {
 	let first_header = equivocation.first_header();
 	let second_header = equivocation.second_header();
 
@@ -255,19 +253,11 @@ decl_module! {
 			}
 		}
 
-		fn report_equivocation(origin, equivocation: BabeEquivocation<T::Header>) {
+		fn report_equivocation(origin, equivocation: BabeEquivocationProof<T::Header>) {
 			let _who = ensure_signed(origin)?;
 			
-			if let Some(identity) = equivocation.identity_proof() {
-
-				let _to_punish = <T as Trait>::KeyOwnerSystem::check_proof(
-					(key_types::SR25519, equivocation.identity().encode()),
-					identity.clone(),
-				);
-
-				if equivocation_is_valid::<T>(equivocation) {
-					// TODO: Slash `to_punish` and reward `who`.
-				}
+			if equivocation_is_valid::<T>(equivocation) {
+				// TODO: Slash `to_punish` and reward `who`.
 			}
 		}
 	}

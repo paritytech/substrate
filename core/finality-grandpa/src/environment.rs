@@ -46,6 +46,7 @@ use crate::{
 };
 
 use consensus_common::SelectChain;
+use srml_session::historical::Proof;
 
 use crate::authorities::{AuthoritySet, SharedAuthoritySet};
 use crate::consensus_changes::SharedConsensusChanges;
@@ -850,7 +851,7 @@ where
 		let grandpa_equivocation = GrandpaEquivocationFrom::<Block> {
 			round_number: equivocation.round_number,
 			identity: equivocation.identity,
-			identity_proof: None,
+			identity_proof: Proof::default(),
 			first: (first_vote, first_signature),
 			second: (second_vote, second_signature),
 			set_id: self.set_id,
@@ -891,7 +892,7 @@ where
 		let grandpa_equivocation = GrandpaEquivocationFrom::<Block> {
 			round_number: equivocation.round_number,
 			identity: equivocation.identity,
-			identity_proof: None,
+			identity_proof: Proof::default(),
 			first: (first_vote, first_signature),
 			second: (second_vote, second_signature),
 			set_id: self.set_id,

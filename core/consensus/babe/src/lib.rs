@@ -76,7 +76,6 @@ use futures::{prelude::*, future};
 use futures01::Stream as _;
 use futures_timer::Delay;
 use log::{error, warn, debug, info, trace};
-use srml_session::historical::Proof;
 use consensus_common_primitives::AuthorshipEquivocationProof;
 
 use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible, SignedDuration};
@@ -508,7 +507,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 			}
 
 			if let Some(equivocation_proof) = check_equivocation::<
-				_, _, BabeEquivocationProof<B::Header, _, _, Proof>, _, _
+				_, _, BabeEquivocationProof<B::Header>, _, _
 			>(
 				client,
 				slot_now,

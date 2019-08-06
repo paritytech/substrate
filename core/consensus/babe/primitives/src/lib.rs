@@ -23,10 +23,11 @@ mod digest;
 
 use codec::{Encode, Decode, Codec};
 use rstd::vec::Vec;
-use sr_primitives::{ConsensusEngineId, traits::{Verify, Header}};
+use sr_primitives::{ConsensusEngineId, traits::Header};
 use primitives::sr25519;
 use substrate_client::decl_runtime_apis;
 use consensus_common_primitives::AuthorshipEquivocationProof;
+use srml_session::historical::Proof;
 
 #[cfg(feature = "std")]
 pub use digest::BabePreDigest;
@@ -146,42 +147,35 @@ impl slots::SlotData for BabeConfiguration {
 }
 
 /// Represents an Babe equivocation proof.
-#[derive(Debug, Clone, Encode, Decode, PartialEq)]
-pub struct BabeEquivocationProof<H, S, I, P> {
-	identity: I,
-	identity_proof: Option<P>,
+#[derive(Clone, Encode, Decode, PartialEq)]
+pub struct BabeEquivocationProof<H> {
+	identity: AuthorityId,
 	slot: u64,
 	first_header: H,
 	second_header: H,
-	first_signature: S,
-	second_signature: S,
+	first_signature: AuthoritySignature,
+	second_signature: AuthoritySignature,
 }
 
-impl<H, S, I, P> AuthorshipEquivocationProof for BabeEquivocationProof<H, S, I, P>
+impl<H> AuthorshipEquivocationProof for BabeEquivocationProof<H>
 where
 	H: Header,
-	S: Verify<Signer=I> + Codec,
-	I: Codec,
-	P: Codec,
 {
 	type Header = H;
-	type Signature = S;
-	type Identity = I;
-	type InclusionProof = P;
+	type Signature = AuthoritySignature;
+	type Identity = AuthorityId;
 
 	/// Create a new Babe equivocation proof.
 	fn new(
-		identity: I,
-		identity_proof: Option<P>,
+		identity: Self::Identity,
 		slot: u64,
 		first_header: H,
 		second_header: H,
-		first_signature: S,
-		second_signature: S,
+		first_signature: Self::Signature,
+		second_signature: Self::Signature,
 	) -> Self {
 		BabeEquivocationProof {
 			identity,
-			identity_proof,
 			slot,
 			first_header,
 			second_header,
@@ -196,13 +190,8 @@ where
 	}
 
 	/// Get the identity of the suspect of equivocating.
-	fn identity(&self) -> &I {
+	fn identity(&self) -> &Self::Identity {
 		&self.identity
-	}
-
-	/// Get the identity proof.
-	fn identity_proof(&self) -> Option<&P> {
-		self.identity_proof.as_ref()
 	}
 
 	/// Get the first header involved in the equivocation.
@@ -215,11 +204,11 @@ where
 		&self.second_header
 	}
 
-	fn first_signature(&self) -> &S {
+	fn first_signature(&self) -> &Self::Signature {
 		&self.first_signature
 	}
 
-	fn second_signature(&self) -> &S {
+	fn second_signature(&self) -> &Self::Signature {
 		&self.second_signature
 	}
 }
@@ -236,5 +225,11 @@ decl_runtime_apis! {
 
 		/// Get the current epoch data for Babe.
 		fn epoch() -> Epoch;
+
+		/// Construct a call to report the equivocation.
+		fn construct_equivocation_report_call(
+			equivocation: BabeEquivocationProof<Block::Header>,
+			proof: Proof
+		) -> Option<Vec<u8>>;
 	}
 }
