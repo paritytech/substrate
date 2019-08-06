@@ -29,9 +29,7 @@ use sr_primitives::{DigestItem, generic::OpaqueDigestItemId};
 use std::fmt::Debug;
 use codec::{Decode, Encode};
 #[cfg(feature = "std")]
-use codec::Error;
-#[cfg(feature = "std")]
-use codec::{Codec, Input};
+use codec::{Codec, Input, Error};
 #[cfg(feature = "std")]
 use schnorrkel::vrf::{VRFProof, VRFOutput, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH};
 

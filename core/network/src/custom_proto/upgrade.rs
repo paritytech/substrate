@@ -203,7 +203,7 @@ where TSubstream: AsyncRead + AsyncWrite, B: BlockT {
 					.map_err(|err| {
 						warn!(
 							target: "sub-libp2p",
-							"Couldn't decode packet sent by the remote: {:?}: {}", data, err.what()
+							"Couldn't decode packet sent by the remote: {:?}: {}", data, err.what(),
 						);
 						io::ErrorKind::InvalidData
 					})?;

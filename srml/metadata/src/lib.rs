@@ -344,7 +344,7 @@ impl codec::EncodeLike for RuntimeMetadataDeprecated {}
 #[cfg(feature = "std")]
 impl Decode for RuntimeMetadataDeprecated {
 	fn decode<I: Input>(_input: &mut I) -> Result<Self, Error> {
-		unimplemented!()
+		Err("Decoding is not supported".into())
 	}
 }
 
