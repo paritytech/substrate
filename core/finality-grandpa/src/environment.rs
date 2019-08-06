@@ -367,7 +367,7 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 }
 
 /// The environment we run GRANDPA in.
-pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, SC> {
+pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, SC, T> {
 	pub(crate) inner: Arc<Client<B, E, Block, RA>>,
 	pub(crate) select_chain: SC,
 	pub(crate) voters: Arc<VoterSet<AuthorityId>>,
@@ -377,9 +377,10 @@ pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, SC> {
 	pub(crate) network: crate::communication::NetworkBridge<Block, N>,
 	pub(crate) set_id: u64,
 	pub(crate) voter_set_state: SharedVoterSetState<Block>,
+	pub(crate) transaction_pool: Arc<T>,
 }
 
-impl<B, E, Block: BlockT, N: Network<Block>, RA, SC> Environment<B, E, Block, N, RA, SC> {
+impl<B, E, Block: BlockT, N: Network<Block>, RA, SC, T> Environment<B, E, Block, N, RA, SC, T> {
 	/// Updates the voter set state using the given closure. The write lock is
 	/// held during evaluation of the closure and the environment's voter set
 	/// state is set to its result if successful.
@@ -395,9 +396,9 @@ impl<B, E, Block: BlockT, N: Network<Block>, RA, SC> Environment<B, E, Block, N,
 	}
 }
 
-impl<Block: BlockT<Hash=H256>, B, E, N, RA, SC>
+impl<Block: BlockT<Hash=H256>, B, E, N, RA, SC, T>
 	grandpa::Chain<Block::Hash, NumberFor<Block>>
-for Environment<B, E, Block, N, RA, SC>
+for Environment<B, E, Block, N, RA, SC, T>
 where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -523,9 +524,9 @@ pub(crate) fn ancestry<B, Block: BlockT<Hash=H256>, E, RA>(
 	Ok(tree_route.retracted().iter().skip(1).map(|e| e.hash).collect())
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, N, RA, SC>
+impl<B, E, Block: BlockT<Hash=H256>, N, RA, SC, T>
 	voter::Environment<Block::Hash, NumberFor<Block>>
-for Environment<B, E, Block, N, RA, SC>
+for Environment<B, E, Block, N, RA, SC, T>
 where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,

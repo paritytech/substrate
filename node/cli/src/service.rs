@@ -189,6 +189,7 @@ construct_service_factory! {
 								service.config().custom.inherent_data_providers.clone(),
 							on_exit: service.on_exit(),
 							telemetry_on_connect: Some(telemetry_on_connect),
+							transaction_pool: service.transaction_pool(),
 						};
 
 						// the GRANDPA voter task is considered infallible, i.e.
