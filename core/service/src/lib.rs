@@ -61,7 +61,7 @@ pub use components::{
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
 	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock,
 	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
-	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic,
+	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic, InitialSessionKeys,
 };
 use components::{StartRPC, MaintainTransactionPool, OffchainWorker};
 #[doc(hidden)]
@@ -171,13 +171,7 @@ impl<Components: components::Components> Service<Components> {
 
 		let keystore: Option<KeyStorePtr> = if let Some(keystore_path) = config.keystore_path.as_ref() {
 			match Keystore::open(keystore_path.clone(), config.keystore_password.clone()) {
-				Ok(mut ks) => {
-					if let Some(ref seed) = config.dev_key_seed {
-						//TODO: Make sure we generate for all types and apps
-						ks.generate_from_seed::<app_crypto::ed25519::AppPair>(&seed)?;
-						ks.generate_from_seed::<app_crypto::sr25519::AppPair>(&seed)?;
-					}
-
+				Ok(ks) => {
 					Some(Arc::new(parking_lot::RwLock::new(ks)))
 				},
 				Err(err) => {
@@ -200,6 +194,11 @@ impl<Components: components::Components> Service<Components> {
 		let finality_proof_provider = Components::build_finality_proof_provider(client.clone())?;
 		let chain_info = client.info().chain;
 
+		Components::RuntimeServices::generate_intial_session_keys(
+			client.clone(),
+			config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
+		)?;
+
 		let version = config.full_version();
 		info!("Highest known block at #{}", chain_info.best_number);
 		telemetry!(
@@ -217,7 +216,7 @@ impl<Components: components::Components> Service<Components> {
 			imports_external_transactions: !config.roles.is_light(),
 			pool: transaction_pool.clone(),
 			client: client.clone(),
-		 });
+		});
 
 		let protocol_id = {
 			let protocol_id_full = match config.chain_spec.protocol_id() {

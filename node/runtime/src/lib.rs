@@ -570,7 +570,7 @@ impl_runtime_apis! {
 	}
 
 	impl substrate_session::SessionKeys<Block> for Runtime {
-		fn generate(seed: Option<Vec<u8>>) -> Vec<u8> {
+		fn generate_session_keys(seed: Option<Vec<u8>>) -> Vec<u8> {
 			let seed = seed.as_ref().map(|s| rstd::str::from_utf8(&s).expect("Seed is an utf8 string"));
 			SessionKeys::generate(seed)
 		}

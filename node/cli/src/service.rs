@@ -23,7 +23,6 @@ use std::time::Duration;
 
 use babe::{import_queue, start_babe, BabeImportQueue, Config};
 use babe_primitives::AuthorityPair as BabePair;
-use grandpa_primitives::AuthorityPair as GrandpaPair;
 use client::{self, LongestChain};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use node_executor;

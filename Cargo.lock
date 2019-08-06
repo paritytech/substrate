@@ -4890,6 +4890,7 @@ dependencies = [
  "substrate-offchain 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-rpc-servers 2.0.0",
+ "substrate-session 2.0.0",
  "substrate-telemetry 2.0.0",
  "substrate-test-runtime-client 2.0.0",
  "substrate-transaction-pool 2.0.0",
@@ -4921,8 +4922,10 @@ dependencies = [
 name = "substrate-session"
 version = "2.0.0"
 dependencies = [
+ "sr-primitives 2.0.0",
  "sr-std 2.0.0",
  "substrate-client 2.0.0",
+ "substrate-primitives 2.0.0",
 ]
 
 [[package]]
