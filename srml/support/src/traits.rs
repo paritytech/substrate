@@ -642,9 +642,14 @@ impl<T> ChangeMembers<T> for () {
 }
 
 /// A trait that is implemented by each kind of offence.
-pub trait SlashingOffence {
+pub trait SlashingOffence<Offender> {
 	/// Identifier which is unique for this kind of an offence.
 	const ID: [u8; 16];
+
+	/// The list of all offenders involved in this incident.
+	///
+	/// The list has no duplicates, so it is rather a set.
+	fn offenders(&self) -> Vec<Offender>;
 
 	/// What is the session index this offence happened in.
 	///
