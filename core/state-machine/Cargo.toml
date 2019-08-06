@@ -8,9 +8,9 @@ edition = "2018"
 [dependencies]
 log = "0.4"
 parking_lot = "0.8.0"
-hash-db = "0.14.0"
-trie-db = "0.14.0"
-trie-root = "0.14.0"
+hash-db = "0.15.0"
+trie-db = "0.15.0"
+trie-root = "0.15.0"
 trie = { package = "substrate-trie", path = "../trie" }
 primitives = { package = "substrate-primitives", path = "../primitives" }
 panic-handler = { package = "substrate-panic-handler", path = "../panic-handler" }
@@ -19,3 +19,6 @@ num-traits = "0.2"
 
 [dev-dependencies]
 hex-literal = "0.2.0"
+
+[features]
+default = []
