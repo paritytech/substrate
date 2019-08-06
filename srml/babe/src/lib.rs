@@ -179,6 +179,7 @@ decl_storage! {
 		build(|
 			storage: &mut sr_primitives::StorageOverlay,
 			_: &mut sr_primitives::ChildrenStorageOverlay,
+			temp_storage: &mut sr_primitives::StorageOverlay,
 			config: &GenesisConfig,
 		| {
 			use primitives::storage::well_known_keys;
@@ -189,35 +190,40 @@ decl_storage! {
 
 				// if session module is here AND it has mutated initial validators list, then we want to sync
 				// it with our authorities list
-				let session_validators_keys: Vec<(T::AccountId, T::Keys)> = srml_support::storage::unhashed::get_raw(
-					well_known_keys::MUTATED_SESSION_VALIDATORS_KEYS,
-				).and_then(|v| Decode::decode(&mut &v[..]))
-					.expect("unable to decode initial session validators keys");
-
-				// we expect that the validators set passed received from session will have the same set or subset
-				// of authorities passed to the BABE module
-
-				assert!(
-					session_validators_keys.len() <= authorities.len(),
-					"Trying to select unknown BABE authorities for genesis block",
+				let session_validators_keys = temp_storage.get(
+					well_known_keys::temp::MUTATED_SESSION_VALIDATORS_KEYS,
 				);
 
-				let session_validators_keys_len = session_validators_keys.len();
-				for (idx, session_validator_keys) in session_validators_keys.into_iter().enumerate() {
-					let session_validator_key = session_validator_keys.1.get(AuthorityId::KEY_TYPE)
-						.expect("Unable to get required key for BABE authority at genesis block");
-					let authority_position = authorities.iter().position(|(a, _)| *a == session_validator_key);
-					match authority_position {
-						Some(position) if position == idx => (),
-						Some(position) if position < idx => panic!(
-							"Trying to select duplicate BABE authority for genesis block",
-						),
-						Some(position) => authorities.swap(position, idx),
-						None => panic!("Trying to select unknown BABE authority for genesis block"),
-					}
-				}
+				if let Some(session_validators_keys) = session_validators_keys {
+					let session_validators_keys: Vec<(T::AccountId, T::Keys)> = Decode::decode(
+						&mut &session_validators_keys[..],
+					).expect("unable to decode initial session validators keys");
 
-				authorities.truncate(session_validators_keys_len);
+					// we expect that the validators set passed received from session will have the same set or subset
+					// of authorities passed to the BABE module
+
+					assert!(
+						session_validators_keys.len() <= authorities.len(),
+						"Trying to select unknown BABE authorities for genesis block",
+					);
+
+					let session_validators_keys_len = session_validators_keys.len();
+					for (idx, session_validator_keys) in session_validators_keys.into_iter().enumerate() {
+						let session_validator_key = session_validator_keys.1.get(AuthorityId::KEY_TYPE)
+							.expect("Unable to get required key for BABE authority at genesis block");
+						let authority_position = authorities.iter().position(|(a, _)| *a == session_validator_key);
+						match authority_position {
+							Some(position) if position == idx => (),
+							Some(position) if position < idx => panic!(
+								"Trying to select duplicate BABE authority for genesis block",
+							),
+							Some(position) => authorities.swap(position, idx),
+							None => panic!("Trying to select unknown BABE authority for genesis block"),
+						}
+					}
+
+					authorities.truncate(session_validators_keys_len);
+				}
 
 				Authorities::put(authorities);
 			});

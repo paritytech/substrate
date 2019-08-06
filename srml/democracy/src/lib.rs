@@ -1102,7 +1102,12 @@ mod tests {
 			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
 			vesting: vec![],
 		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
-		GenesisConfig::default().assimilate_storage(&mut t.0, &mut t.1).unwrap();
+		GenesisConfig::default().assimilate_storage(
+			&mut t.0,
+			&mut t.1,
+			&mut Default::default(),
+			&mut Default::default(),
+		).unwrap();
 		runtime_io::TestExternalities::new_with_children(t)
 	}
 

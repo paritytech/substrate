@@ -75,7 +75,7 @@ mod module1 {
 
 		add_extra_genesis {
 			config(test) : T::BlockNumber;
-			build(|_, _, config: &Self| {
+			build(|_, _, _, config: &Self| {
 				println!("{}", config.test);
 			});
 		}

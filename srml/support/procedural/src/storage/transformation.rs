@@ -380,7 +380,7 @@ fn decl_store_extra_genesis(
 	}
 
 	let mut has_scall = false;
-	let mut scall = quote!{ ( |_, _, _| {} ) };
+	let mut scall = quote!{ ( |_, _, _, _| {} ) };
 	let mut genesis_extrafields = TokenStream2::new();
 	let mut genesis_extrafields_default = TokenStream2::new();
 
@@ -538,7 +538,8 @@ fn decl_store_extra_genesis(
 				> #fn_where_clause {
 					let mut storage = Default::default();
 					let mut child_storage = Default::default();
-					self.assimilate_storage::<#fn_traitinstance>(&mut storage, &mut child_storage)?;
+					let mut temp_storage = Default::default();
+					self.assimilate_storage::<#fn_traitinstance>(&mut storage, &mut child_storage, &mut temp_storage)?;
 					Ok((storage, child_storage))
 				}
 
@@ -547,12 +548,13 @@ fn decl_store_extra_genesis(
 					self,
 					r: &mut #scrate::sr_primitives::StorageOverlay,
 					c: &mut #scrate::sr_primitives::ChildrenStorageOverlay,
+					t: &mut #scrate::sr_primitives::StorageOverlay,
 				) -> std::result::Result<(), String> #fn_where_clause {
 					let storage = r;
 
 					#builders
 
-					#scall(storage, c, &self);
+					#scall(storage, c, t, &self);
 
 					Ok(())
 				}
@@ -566,8 +568,9 @@ fn decl_store_extra_genesis(
 					self,
 					r: &mut #scrate::sr_primitives::StorageOverlay,
 					c: &mut #scrate::sr_primitives::ChildrenStorageOverlay,
+					t: &mut #scrate::sr_primitives::StorageOverlay,
 				) -> std::result::Result<(), String> {
-					self.assimilate_storage::<#fn_traitinstance> (r, c)
+					self.assimilate_storage::<#fn_traitinstance> (r, c, t)
 				}
 			}
 		};

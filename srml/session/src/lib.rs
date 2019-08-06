@@ -319,6 +319,7 @@ decl_storage! {
 		build(|
 			storage: &mut sr_primitives::StorageOverlay,
 			_: &mut sr_primitives::ChildrenStorageOverlay,
+			temp_storage: &mut sr_primitives::StorageOverlay,
 			config: &GenesisConfig<T>
 		| {
 			use parity_codec::Encode;
@@ -360,9 +361,9 @@ decl_storage! {
 				// To notify other modules about this mutation (so they could use mutated list), let's write this
 				// mutated list into well-known-key.
 				if validators_selected {
-					srml_support::storage::unhashed::put_raw(
-						well_known_keys::MUTATED_SESSION_VALIDATORS_KEYS,
-						&queued_keys.encode(),
+					temp_storage.insert(
+						well_known_keys::temp::MUTATED_SESSION_VALIDATORS_KEYS.to_vec(),
+						queued_keys.encode(),
 					);
 				}
 
@@ -597,7 +598,7 @@ mod tests {
 			keys: NEXT_VALIDATORS.with(|l|
 				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i))).collect()
 			),
-		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
+		}.assimilate_storage(&mut t.0, &mut t.1, &mut Default::default()).unwrap();
 		runtime_io::TestExternalities::new_with_children(t)
 	}
 

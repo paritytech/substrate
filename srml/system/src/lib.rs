@@ -410,6 +410,7 @@ decl_storage! {
 		build(
 			|storage: &mut sr_primitives::StorageOverlay,
 			_: &mut sr_primitives::ChildrenStorageOverlay,
+			_: &mut sr_primitives::StorageOverlay,
 			config: &GenesisConfig|
 		{
 			use parity_codec::Encode;
