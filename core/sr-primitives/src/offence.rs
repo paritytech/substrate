@@ -35,6 +35,8 @@ pub type TimeSlot = u128;
 
 /// A trait implemented by an offence report.
 ///
+/// This trait assumes that the offence is legitimate and was validated already.
+///
 /// Examples of offences include: a BABE equivocation or a GRANDPA unjustified vote.
 pub trait Offence<Offender> {
 	/// Identifier which is unique for this kind of an offence.
