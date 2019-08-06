@@ -431,7 +431,7 @@ mod tests {
 			let take_fees = balances::TakeFees::from(0);
 			let extra = (check_genesis, check_era, check_nonce, check_weight, take_fees);
 
-			let raw_payload = (function, extra.clone(), genesis_hash);
+			let raw_payload = (function, extra.clone(), genesis_hash, genesis_hash);
 			let signature = raw_payload.using_encoded(|payload| if payload.len() > 256 {
 				signer.sign(&blake2_256(payload)[..])
 			} else {
