@@ -49,6 +49,7 @@ use primitives::OpaqueMetadata;
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
 use im_online::{AuthorityId as ImOnlineId};
 use finality_tracker::{DEFAULT_REPORT_LATENCY, DEFAULT_WINDOW_SIZE};
+use session::historical::{self, Proof};
 
 #[cfg(any(feature = "std", test))]
 pub use sr_primitives::BuildStorage;
@@ -136,6 +137,7 @@ parameter_types! {
 impl babe::Trait for Runtime {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
+	type KeyOwnerSystem = Historical;
 }
 
 impl indices::Trait for Runtime {
@@ -432,6 +434,7 @@ construct_runtime!(
 		Authorship: authorship::{Module, Call, Storage, Inherent},
 		Indices: indices,
 		Balances: balances,
+		Historical: historical::{Module},
 		Staking: staking::{default, OfflineWorker},
 		Session: session::{Module, Call, Storage, Event, Config<T>},
 		Democracy: democracy::{Module, Call, Storage, Config, Event<T>},
