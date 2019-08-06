@@ -172,7 +172,12 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 		voter_commands_rx,
 	} = link;
 
-	let (network, network_startup) = NetworkBridge::new(network, config.clone(), persistent_data.set_state.clone(), on_exit.clone());
+	let (network, network_startup) = NetworkBridge::new(
+		network,
+		config.clone(),
+		persistent_data.set_state.clone(),
+		on_exit.clone()
+	);
 	let observer_work = ObserverWork::new(client, network, persistent_data, voter_commands_rx);
 
 	let observer_work = observer_work
