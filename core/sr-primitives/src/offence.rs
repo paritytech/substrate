@@ -47,13 +47,9 @@ pub trait Offence<Offender> {
 	/// The list has no duplicates, so it is rather a set.
 	fn offenders(&self) -> rstd::vec::Vec<Offender>;
 
-	/// What is the session index this offence happened in.
-	///
-	/// The value returned by this function is going to be used for querying the validator set for
-	/// for the `slash_fraction` function. If the session index cannot be pinpointed precisely (as
-	/// in case with GRANDPA offences) then this function should return the closest session index
-	/// with the same validator set.
-	fn session_index(&self) -> u32; // TODO [slashing]: Should be a SessionIndex.
+	/// The session index which is used for querying the validator set for the `slash_fraction`
+	/// function.
+	fn current_era_start_session_index(&self) -> u32; // TODO [slashing]: Should be a SessionIndex.
 
 	/// A point in time when this offence happened.
 	///

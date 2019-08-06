@@ -228,8 +228,8 @@ impl<T: Trait> session::ShouldEndSession<T::BlockNumber> for Module<T> {
 struct BabeEquivocationOffence {
 	/// A babe slot number in which this incident happened.
 	slot: u64,
-	/// The index of the session during which this incident heppened.
-	session_index: u32, // TODO [slashing]: Should be a SessionIndex.
+	/// The session index that starts an era in which the incident happened.
+	current_era_start_session_index: u32, // TODO [slashing]: Should be a SessionIndex.
 	/// The authority which produced the equivocation.
 	offender: AuthorityId,
 }
@@ -243,8 +243,8 @@ impl Offence<AuthorityId> for BabeEquivocationOffence {
 		offender
 	}
 
-	fn session_index(&self) -> u32 { // TODO [slashing]: Should be a SessionIndex.
-		self.session_index
+	fn current_era_start_session_index(&self) -> u32 { // TODO [slashing]: Should be a SessionIndex.
+		self.current_era_start_session_index
 	}
 
 	fn time_slot(&self) -> TimeSlot {

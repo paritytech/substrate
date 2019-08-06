@@ -384,14 +384,10 @@ impl<T: Trait> finality_tracker::OnFinalizationStalled<T::BlockNumber> for Modul
 /// A grandpa equivocation offence report.
 #[allow(dead_code)]
 struct GrandpaEquivocationOffence {
-	/// Round in which the incident happened.
+	/// A round in which the incident happened.
 	round: u64,
-	/// This is the approximate session index (most likely the start of the era).
-	///
-	/// We use an approximate session index since GRANDPA is progressing asynchronously w.r.t.
-	/// to block production algorithm. But an offence still has to provide session index for
-	/// querying the historical validator set for reports for previous eras.
-	approx_session_index: u32, // TODO [slashing]: Should be a SessionIndex.
+	/// The session index that starts an era in which the incident happened.
+	current_era_start_session_index: u32, // TODO [slashing]: Should be a SessionIndex.
 	/// The authority which produced this equivocation.
 	offender: AuthorityId,
 }
@@ -405,8 +401,8 @@ impl Offence<AuthorityId> for GrandpaEquivocationOffence {
 		offender
 	}
 
-	fn session_index(&self) -> u32 { // TODO [slashing]: Should be a SessionIndex.
-		self.approx_session_index
+	fn current_era_start_session_index(&self) -> u32 { // TODO [slashing]: Should be a SessionIndex.
+		self.current_era_start_session_index
 	}
 
 	fn time_slot(&self) -> TimeSlot {
