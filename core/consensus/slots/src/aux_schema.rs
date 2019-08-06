@@ -16,10 +16,12 @@
 
 //! Schema for slots in the aux-db.
 
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, Codec};
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
-use sr_primitives::traits::Header;
+use sr_primitives::traits::{Header, Verify};
+use consensus_common_primitives::AuthorshipEquivocationProof;
+use std::ops::Deref;
 
 const SLOT_HEADER_MAP_KEY: &[u8] = b"slot_header_map";
 const SLOT_HEADER_START: &[u8] = b"slot_header_start";
@@ -52,37 +54,29 @@ pub struct EquivocationProof<H> {
 	snd_header: H,
 }
 
-impl<H> EquivocationProof<H> {
-	/// Get the slot number where the equivocation happened.
-	pub fn slot(&self) -> u64 {
-		self.slot
-	}
-
-	/// Get the first header involved in the equivocation.
-	pub fn fst_header(&self) -> &H {
-		&self.fst_header
-	}
-
-	/// Get the second header involved in the equivocation.
-	pub fn snd_header(&self) -> &H {
-		&self.snd_header
-	}
-}
-
 /// Checks if the header is an equivocation and returns the proof in that case.
 ///
 /// Note: it detects equivocations only when slot_now - slot <= MAX_SLOT_CAPACITY.
-pub fn check_equivocation<C, H, P>(
+pub fn check_equivocation<C, H, E, V, P>(
 	backend: &C,
 	slot_now: u64,
 	slot: u64,
 	header: &H,
-	signer: &P,
-) -> ClientResult<Option<EquivocationProof<H>>>
+	signature: V,
+	signer: &V::Signer,
+) -> ClientResult<Option<E>>
 	where
 		H: Header,
 		C: AuxStore,
 		P: Clone + Encode + Decode + PartialEq,
+		V: Verify + Codec + Clone,
+		<V as Verify>::Signer: Clone + Codec + PartialEq,
+		E: AuthorshipEquivocationProof<
+			Header=H,
+			Signature=V,
+			Identity=<V as Verify>::Signer,
+			InclusionProof=P
+		>,
 {
 	// We don't check equivocations for old headers out of our capacity.
 	if slot_now - slot > MAX_SLOT_CAPACITY {
@@ -90,29 +84,36 @@ pub fn check_equivocation<C, H, P>(
 	}
 
 	// Key for this slot.
-	let mut curr_slot_key = SLOT_HEADER_MAP_KEY.to_vec();
-	slot.using_encoded(|s| curr_slot_key.extend(s));
+	let mut current_slot_key = SLOT_HEADER_MAP_KEY.to_vec();
+	slot.using_encoded(|s| current_slot_key.extend(s));
 
 	// Get headers of this slot.
-	let mut headers_with_sig = load_decode::<_, Vec<(H, P)>>(backend, &curr_slot_key[..])?
-		.unwrap_or_else(Vec::new);
+	let mut headers_with_signature = load_decode::<_, Vec<(H, V, V::Signer)>>(
+		backend.deref(),
+		&current_slot_key[..],
+	)?
+	.unwrap_or_else(Vec::new);
 
 	// Get first slot saved.
 	let slot_header_start = SLOT_HEADER_START.to_vec();
 	let first_saved_slot = load_decode::<_, u64>(backend, &slot_header_start[..])?
 		.unwrap_or(slot);
 
-	for (prev_header, prev_signer) in headers_with_sig.iter() {
+	for (prev_header, prev_signature, prev_signer) in headers_with_signature.iter() {
 		// A proof of equivocation consists of two headers:
 		// 1) signed by the same voter,
 		if prev_signer == signer {
 			// 2) with different hash
 			if header.hash() != prev_header.hash() {
-				return Ok(Some(EquivocationProof {
-					slot, // 3) and mentioning the same slot.
-					fst_header: prev_header.clone(),
-					snd_header: header.clone(),
-				}));
+				return Ok(Some(AuthorshipEquivocationProof::new(
+					signer.clone(),
+					None,
+					slot,
+					prev_header.clone(),
+					header.clone(),
+					prev_signature.clone(),
+					signature.clone(),
+				)));
 			} else {
 				//  We don't need to continue in case of duplicated header,
 				// since it's already saved and a possible equivocation
@@ -136,11 +137,11 @@ pub fn check_equivocation<C, H, P>(
 		}
 	}
 
-	headers_with_sig.push((header.clone(), signer.clone()));
+	headers_with_signature.push((header.clone(), signature.clone(), signer.clone()));
 
 	backend.insert_aux(
 		&[
-			(&curr_slot_key[..], headers_with_sig.encode().as_slice()),
+			(&current_slot_key[..], headers_with_signature.encode().as_slice()),
 			(&slot_header_start[..], new_first_saved_slot.encode().as_slice()),
 		],
 		&keys_to_delete.iter().map(|k| &k[..]).collect::<Vec<&[u8]>>()[..],

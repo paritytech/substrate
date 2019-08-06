@@ -11,6 +11,7 @@ client = { package = "substrate-client", path = "../../client" }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 sr-primitives = {  path = "../../sr-primitives" }
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
+consensus_common_primitives = { package = "substrate-consensus-common-primitives", path = "../common/primitives" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
 futures-preview = "=0.3.0-alpha.17"
 futures-timer = "0.2.1"

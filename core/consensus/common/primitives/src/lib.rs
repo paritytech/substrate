@@ -21,6 +21,11 @@
 use codec::Codec;
 use client::decl_runtime_apis;
 use rstd::vec::Vec;
+use parity_codec::{Encode, Decode, Codec};
+#[cfg(feature = "std")]
+use serde::Serialize;
+use sr_primitives::{traits::{Header, Verify}};
+
 
 decl_runtime_apis! {
 	/// Common consensus runtime api.
@@ -28,4 +33,47 @@ decl_runtime_apis! {
 		/// Returns the set of authorities of the currently active consensus mechanism.
 		fn authorities() -> Vec<AuthorityId>;
 	}
+}
+
+pub trait AuthorshipEquivocationProof {
+	type Header: Header;
+	type Signature: Verify;
+	type Identity: Codec;
+	type InclusionProof: Codec;
+
+	/// Create an equivocation proof for AuRa or Babe.
+	fn new(
+		identity: Self::Identity,
+		identity_proof: Option<Self::InclusionProof>,
+		slot: u64,
+		first_header: Self::Header,
+		second_header: Self::Header,
+		first_signature: Self::Signature, 
+		second_signature: Self::Signature,
+	) -> Self;
+
+	/// Get the slot where the equivocation happened.
+	fn slot(&self) -> u64;
+
+	/// Check the validity of the equivocation.
+	/// Includes checking signatures, identity inclusion, same slot and distinct headers.
+	fn is_valid(&self) -> bool;
+
+	/// Get the identity of the suspect of equivocating.
+	fn identity(&self) -> &Self::Identity;
+
+	/// Get the proof of inclusion of the identity in the validator set.
+	fn identity_proof(&self) -> Option<&Self::InclusionProof>;
+
+	/// Get the first header involved in the equivocation.
+	fn first_header(&self) -> &Self::Header;
+
+	/// Get the second header involved in the equivocation.
+	fn second_header(&self) -> &Self::Header;
+
+	/// Get signature for the first header involved in the equivocation.
+	fn first_signature(&self) -> &Self::Signature;
+
+	/// Get signature for the second header involved in the equivocation.
+	fn second_signature(&self) -> &Self::Signature;
 }

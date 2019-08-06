@@ -527,14 +527,15 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 				slot_now,
 				slot_number,
 				&header,
+				sig,
 				author,
 			).map_err(|e| e.to_string())? {
 				info!(
 					"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
 					author,
 					slot_number,
-					equivocation_proof.fst_header().hash(),
-					equivocation_proof.snd_header().hash(),
+					equivocation_proof.first_header().hash(),
+					equivocation_proof.second_header().hash(),
 				);
 			}
 
