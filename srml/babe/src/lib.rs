@@ -251,7 +251,7 @@ impl Offence<AuthorityId> for BabeEquivocationOffence {
 		self.slot as TimeSlot
 	}
 
-	fn slash_percentage(&self, offenders: u32, validators_count: u32) -> Perbill {
+	fn slash_fraction(&self, offenders: u32, validators_count: u32) -> Perbill {
 		// the formula is min((3k / n)^2, 1)
 		let x = Perbill::from_rational_approximation(3 * offenders, validators_count);
 

@@ -50,7 +50,7 @@ pub trait Offence<Offender> {
 	/// What is the session index this offence happened in.
 	///
 	/// The value returned by this function is going to be used for querying the validator set for
-	/// for the `slash_percentage` function. If the session index cannot be pinpointed precisely (as
+	/// for the `slash_fraction` function. If the session index cannot be pinpointed precisely (as
 	/// in case with GRANDPA offences) then this function should return the closest session index
 	/// with the same validator set.
 	fn session_index(&self) -> u32; // TODO [slashing]: Should be a SessionIndex.
@@ -62,12 +62,12 @@ pub trait Offence<Offender> {
 	/// and for BABE it could be a slot number.
 	fn time_slot(&self) -> TimeSlot;
 
-	/// A percentage of the total exposure that should be slashed for this
+	/// A slash fraction of the total exposure that should be slashed for this
 	/// particular offence kind for the given parameters.
 	///
 	/// `offenders` - the number of offences of this kind at the particular `time_slot`.
 	/// `validators_count` - the cardinality of the validator set at the time of offence.
-	fn slash_percentage(&self, offenders: u32, validators_count: u32) -> Perbill;
+	fn slash_fraction(&self, offenders: u32, validators_count: u32) -> Perbill;
 }
 
 /// A trait for decoupling offence reporters from the actual handling of offence reports.

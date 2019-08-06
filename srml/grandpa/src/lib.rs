@@ -36,7 +36,9 @@ use srml_support::{
 	decl_event, decl_storage, decl_module, dispatch::Result, storage::StorageValue
 };
 use primitives::{
-	generic::{DigestItem, OpaqueDigestItemId}, traits::CurrentHeight
+	generic::{DigestItem, OpaqueDigestItemId}, traits::CurrentHeight,
+	Perbill,
+	offence::{TimeSlot, Offence, Kind},
 };
 use fg_primitives::{ScheduledChange, ConsensusLog, GRANDPA_ENGINE_ID};
 pub use fg_primitives::{AuthorityId, AuthorityWeight};
@@ -411,7 +413,7 @@ impl Offence<AuthorityId> for GrandpaEquivocationOffence {
 		self.round as TimeSlot
 	}
 
-	fn slash_percentage(&self, offenders: u32, validators_count: u32) -> Perbill {
+	fn slash_fraction(&self, offenders: u32, validators_count: u32) -> Perbill {
 		// the formula is min((3k / n)^2, 1)
 		let x = Perbill::from_rational_approximation(3 * offenders, validators_count);
 
