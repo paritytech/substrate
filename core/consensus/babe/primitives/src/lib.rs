@@ -49,6 +49,9 @@ pub type AuthoritySignature = app::Signature;
 /// the main Babe module. If that ever changes, then this must, too.
 pub type AuthorityId = app::Public;
 
+/// A Babe authority signature.
+pub type AuthoritySignature = sr25519::Signature;
+
 /// The `ConsensusEngineId` of BABE.
 pub const BABE_ENGINE_ID: ConsensusEngineId = *b"BABE";
 

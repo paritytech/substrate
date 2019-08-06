@@ -17,6 +17,7 @@ srml-support = { path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 timestamp = { package = "srml-timestamp", path = "../timestamp", default-features = false }
 session = { package = "srml-session", path = "../session", default-features = false }
+consensus-common-primitives = { package = "substrate-consensus-common-primitives", path = "../../core/consensus/common/primitives", default-features = false }
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../core/consensus/babe/primitives", default-features = false }
 runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = false, features = [ "wasm-nice-panic-message" ] }
 

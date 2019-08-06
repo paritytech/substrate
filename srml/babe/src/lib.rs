@@ -25,9 +25,12 @@
 pub use timestamp;
 
 use rstd::{result, prelude::*};
-use srml_support::{decl_storage, decl_module, StorageValue, StorageMap, traits::FindAuthor, traits::Get};
+use srml_support::{
+	decl_storage, decl_module, StorageValue, StorageMap,
+	traits::{FindAuthor, Get, KeyOwnerProofSystem}
+};
 use timestamp::{OnTimestampSet};
-use sr_primitives::{generic::DigestItem, ConsensusEngineId, Perbill};
+use sr_primitives::{generic::DigestItem, ConsensusEngineId, Perbill, key_types, KeyTypeId};
 use sr_primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert};
 use sr_staking_primitives::{
 	SessionIndex,
@@ -39,12 +42,17 @@ use codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-use babe_primitives::{BABE_ENGINE_ID, ConsensusLog, BabeWeight, Epoch, RawBabePreDigest};
-pub use babe_primitives::{AuthorityId, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH};
+use session::historical::Proof;
+use system::ensure_signed;
+use consensus_common_primitives::AuthorshipEquivocationProof;
+use babe_primitives::{BABE_ENGINE_ID, ConsensusLog, BabeWeight, Epoch, RawBabePreDigest, BabeEquivocationProof};
+pub use babe_primitives::{AuthorityId, AuthoritySignature, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH};
 
 /// The BABE inherent identifier.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"babeslot";
 
+/// The type of the BABE equivocation.
+pub type BabeEquivocation<Header> = BabeEquivocationProof<Header, AuthoritySignature, AuthorityId, Proof>;
 /// The type of the BABE inherent.
 pub type InherentType = u64;
 /// Auxiliary trait to extract BABE inherent data.
@@ -117,6 +125,7 @@ impl ProvideInherentData for InherentDataProvider {
 pub trait Trait: timestamp::Trait {
 	type EpochDuration: Get<u64>;
 	type ExpectedBlockTime: Get<Self::Moment>;
+	type KeyOwnerSystem: KeyOwnerProofSystem<(KeyTypeId, Vec<u8>), Proof=Proof>;
 }
 
 /// The length of the BABE randomness
@@ -206,6 +215,20 @@ decl_module! {
 				Self::deposit_vrf_output(&digest.vrf_output);
 
 				return;
+			}
+		}
+
+		fn report_equivocation(origin, equivocation: BabeEquivocation<T::Header>) {
+			let _who = ensure_signed(origin)?;
+			if let Some(identity) = equivocation.identity_proof() {
+				let _to_punish = <T as Trait>::KeyOwnerSystem::check_proof(
+					(key_types::SR25519, equivocation.identity().encode()),
+					identity.clone(),
+				);
+
+				if equivocation.is_valid() {
+					// TODO: Slash.
+				}
 			}
 		}
 	}

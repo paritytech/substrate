@@ -3762,6 +3762,7 @@ dependencies = [
  "srml-system 2.0.0",
  "srml-timestamp 2.0.0",
  "substrate-consensus-babe-primitives 2.0.0",
+ "substrate-consensus-common-primitives 2.0.0",
  "substrate-inherents 2.0.0",
  "substrate-primitives 2.0.0",
 ]

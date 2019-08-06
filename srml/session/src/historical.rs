@@ -17,7 +17,7 @@
 //! An opt-in utility for tracking historical sessions in SRML-session.
 //!
 //! This is generally useful when implementing blockchains that require accountable
-//! safety where validators from some amount f prior sessions must remain slashable.
+//! safety where validators from some amount of prior sessions must remain slashable.
 //!
 //! Rather than store the full session data for any given session, we instead commit
 //! to the roots of merkle tries containing the session data.
@@ -27,6 +27,8 @@
 
 use rstd::prelude::*;
 use codec::{Encode, Decode};
+#[cfg(feature = "std")]
+use serde::Serialize;
 use sr_primitives::KeyTypeId;
 use sr_primitives::traits::{Convert, OpaqueKeys, Hash as HashT};
 use srml_support::{
@@ -271,6 +273,7 @@ impl<T: Trait> ProvingTrie<T> {
 }
 
 /// Proof of ownership of a specific key.
+#[cfg_attr(feature = "std", derive(Serialize, Debug))]
 #[derive(Encode, Decode, Clone, PartialEq)]
 pub struct Proof {
 	session: SessionIndex,
