@@ -218,6 +218,9 @@ pub trait DefaultByte {
 #[derive(Clone)]
 pub struct DefaultByteGetter(pub &'static dyn DefaultByte);
 
+unsafe impl Send for DefaultByteGetter {}
+unsafe impl Sync for DefaultByteGetter {}
+
 /// Decode different for static lazy initiated byte value.
 pub type ByteGetter = DecodeDifferent<DefaultByteGetter, Vec<u8>>;
 
