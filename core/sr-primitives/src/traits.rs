@@ -1099,7 +1099,7 @@ impl<T: Encode + Decode + Default, Id: Encode + Decode + TypeId> AccountIdConver
 		(Id::TYPE_ID, self, sub).using_encoded(|b|
 			T::decode(&mut TrailingZeroInput {
 				input: b,
-				trailing_zeros: 32*1024,
+				trailing_zeros: 32 * 1024,
 			})
 		).unwrap_or_default()
 	}
