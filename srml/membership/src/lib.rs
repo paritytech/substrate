@@ -22,8 +22,7 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sr_std as rstd;
-use sr_io::with_storage;
+use sr_std::prelude::*;
 use srml_support::{
 	StorageValue, decl_module, decl_storage, decl_event,
 	traits::{ChangeMembers}
@@ -33,7 +32,7 @@ use sr_primitives::{traits::EnsureOrigin, weights::SimpleDispatchInfo};
 
 pub trait Trait<I=DefaultInstance>: system::Trait {
 	/// The overarching event type.
-	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
 
 	/// Required origin for adding a member (though can always be Root).
 	type AddOrigin: EnsureOrigin<Self::Origin>;
@@ -63,13 +62,13 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(members): Vec<T::AccountId>;
-		config(phantom): rstd::marker::PhantomData<I>;
+		config(phantom): sr_std::marker::PhantomData<I>;
 		build(|
 			storage: &mut sr_primitives::StorageOverlay,
 			_: &mut sr_primitives::ChildrenStorageOverlay,
 			config: &GenesisConfig<T, I>
 		| {
-			with_storage(storage, || {
+			sr_io::with_storage(storage, || {
 				let mut members = config.members.clone();
 				members.sort();
 				T::MembershipInitialized::set_members_sorted(&members[..], &[]);
@@ -80,7 +79,9 @@ decl_storage! {
 }
 
 decl_event!(
-	pub enum Event {
+	pub enum Event<T, I=DefaultInstance> where
+		<T as system::Trait>::AccountId,
+	{
 		/// The given member was added; see the transaction for who.
 		MemberAdded,
 		/// The given member was removed; see the transaction for who.
@@ -89,6 +90,8 @@ decl_event!(
 		MembersSwapped,
 		/// The membership was reset; see the transaction for who the new set is.
 		MembersReset,
+		/// Phantom member, never used.
+		Dummy(sr_std::marker::PhantomData<(AccountId, I)>),
 	}
 );
 
@@ -97,7 +100,7 @@ decl_module! {
 		for enum Call
 		where origin: T::Origin
 	{
-		fn deposit_event() = default;
+		fn deposit_event<T, I>() = default;
 
 		/// Add a member `who` to the set.
 		///
@@ -116,7 +119,7 @@ decl_module! {
 
 			T::MembershipChanged::change_members_sorted(&[who], &[], &members[..]);
 
-			Self::deposit_event(Event::MemberAdded);
+			Self::deposit_event(RawEvent::MemberAdded);
 		}
 
 		/// Remove a member `who` from the set.
@@ -136,7 +139,7 @@ decl_module! {
 
 			T::MembershipChanged::change_members_sorted(&[], &[who], &members[..]);
 
-			Self::deposit_event(Event::MemberRemoved);
+			Self::deposit_event(RawEvent::MemberRemoved);
 		}
 
 		/// Swap out one member `remove` for another `add`.
@@ -164,7 +167,7 @@ decl_module! {
 				&members[..],
 			);
 
-			Self::deposit_event(Event::MembersSwapped);
+			Self::deposit_event(RawEvent::MembersSwapped);
 		}
 
 		/// Change the membership to a new set, disregarding the existing membership. Be nice and
@@ -185,7 +188,7 @@ decl_module! {
 				*m = members;
 			});
 
-			Self::deposit_event(Event::MembersReset);
+			Self::deposit_event(RawEvent::MembersReset);
 		}
 	}
 }

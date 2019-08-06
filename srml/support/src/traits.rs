@@ -18,7 +18,7 @@
 //!
 //! NOTE: If you're looking for `parameter_types`, it has moved in to the top-level module.
 
-use crate::rstd::{result, marker::PhantomData, ops::Div};
+use crate::rstd::{prelude::*, result, marker::PhantomData, ops::Div};
 use crate::codec::{Codec, Encode, Decode};
 use primitives::u32_trait::Value as U32;
 use crate::sr_primitives::traits::{MaybeSerializeDebug, SimpleArithmetic, Saturating};
@@ -654,8 +654,8 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 	fn set_members_sorted(new_members: &[AccountId], old_members: &[AccountId]) {
 		let mut old_iter = old_members.iter();
 		let mut new_iter = new_members.iter();
-		let mut incoming = vec![];
-		let mut outgoing = vec![];
+		let mut incoming = Vec::new();
+		let mut outgoing = Vec::new();
 		let mut old_i = old_iter.next();
 		let mut new_i = new_iter.next();
 		loop {

@@ -261,25 +261,25 @@ impl democracy::Trait for Runtime {
 	type EmergencyVotingPeriod = EmergencyVotingPeriod;
 	type MinimumDeposit = MinimumDeposit;
 	/// A straight majority of the council can decide what their next motion is.
-	type ExternalOrigin = collective::EnsureProportionAtLeast<_1, _2, AccountId, CouncilInstance>;
+	type ExternalOrigin = collective::EnsureProportionAtLeast<_1, _2, AccountId, CouncilCollective>;
 	/// A super-majority can have the next scheduled referendum be a straight majority-carries vote.
-	type ExternalMajorityOrigin = collective::EnsureProportionAtLeast<_3, _4, AccountId, CouncilInstance>;
+	type ExternalMajorityOrigin = collective::EnsureProportionAtLeast<_3, _4, AccountId, CouncilCollective>;
 	/// A unanimous council can have the next scheduled referendum be a straight default-carries
 	/// (NTB) vote.
-	type ExternalDefaultOrigin = collective::EnsureProportionAtLeast<_1, _1, AccountId, CouncilInstance>;
+	type ExternalDefaultOrigin = collective::EnsureProportionAtLeast<_1, _1, AccountId, CouncilCollective>;
 	/// Two thirds of the technical committee can have an ExternalMajority/ExternalDefault vote
 	/// be tabled immediately and with a shorter voting/enactment period.
-	type FastTrackOrigin = collective::EnsureProportionAtLeast<_2, _3, AccountId, TechnicalInstance>;
+	type FastTrackOrigin = collective::EnsureProportionAtLeast<_2, _3, AccountId, TechnicalCollective>;
 	// To cancel a proposal which has been passed, 2/3 of the council must agree to it.
-	type CancellationOrigin = collective::EnsureProportionAtLeast<_2, _3, AccountId, CouncilInstance>;
+	type CancellationOrigin = collective::EnsureProportionAtLeast<_2, _3, AccountId, CouncilCollective>;
 	// Any single technical committee member may veto a coming council proposal, however they can
 	// only do it once and it lasts only for the cooloff period.
-	type VetoOrigin = collective::EnsureMember<AccountId, TechnicalInstance>;
+	type VetoOrigin = collective::EnsureMember<AccountId, TechnicalCollective>;
 	type CooloffPeriod = CooloffPeriod;
 }
 
-type CouncilInstance = collective::Instance1;
-impl collective::Trait<CouncilInstance> for Runtime {
+type CouncilCollective = collective::Instance1;
+impl collective::Trait<CouncilCollective> for Runtime {
 	type Origin = Origin;
 	type Proposal = Call;
 	type Event = Event;
@@ -315,11 +315,21 @@ impl elections::Trait for Runtime {
 	type DecayRatio = DecayRatio;
 }
 
-type TechnicalInstance = collective::Instance2;
-impl collective::Trait<TechnicalInstance> for Runtime {
+type TechnicalCollective = collective::Instance2;
+impl collective::Trait<TechnicalCollective> for Runtime {
 	type Origin = Origin;
 	type Proposal = Call;
 	type Event = Event;
+}
+
+impl membership::Trait<membership::Instance1> for Runtime {
+	type Event = Event;
+	type AddOrigin = collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
+	type RemoveOrigin = collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
+	type SwapOrigin = collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
+	type ResetOrigin = collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
+	type MembershipInitialized = TechnicalCommittee;
+	type MembershipChanged = TechnicalCommittee;
 }
 
 parameter_types! {
@@ -331,8 +341,8 @@ parameter_types! {
 
 impl treasury::Trait for Runtime {
 	type Currency = Balances;
-	type ApproveOrigin = collective::EnsureMembers<_4, AccountId, CouncilInstance>;
-	type RejectOrigin = collective::EnsureMembers<_2, AccountId, CouncilInstance>;
+	type ApproveOrigin = collective::EnsureMembers<_4, AccountId, CouncilCollective>;
+	type RejectOrigin = collective::EnsureMembers<_2, AccountId, CouncilCollective>;
 	type Event = Event;
 	type MintedForSpending = ();
 	type ProposalRejection = ();
@@ -420,6 +430,7 @@ construct_runtime!(
 		Council: collective::<Instance1>::{Module, Call, Storage, Origin<T>, Event<T>, Config<T>},
 		TechnicalCommittee: collective::<Instance2>::{Module, Call, Storage, Origin<T>, Event<T>, Config<T>},
 		Elections: elections::{Module, Call, Storage, Event<T>, Config<T>},
+		TechnicalMembership: membership::<Instance1>::{Module, Call, Storage, Event<T>, Config<T>},
 		FinalityTracker: finality_tracker::{Module, Call, Inherent},
 		Grandpa: grandpa::{Module, Call, Storage, Config, Event},
 		Treasury: treasury::{Module, Call, Storage, Event<T>},
