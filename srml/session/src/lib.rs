@@ -168,6 +168,7 @@ impl<
 }
 
 /// An event handler for when the session is ending.
+/// TODO [slashing] consider renaming to OnSessionStarting
 pub trait OnSessionEnding<ValidatorId> {
 	/// Handle the fact that the session is ending, and optionally provide the new validator set.
 	///
@@ -182,7 +183,7 @@ impl<A> OnSessionEnding<A> for () {
 	fn on_session_ending(_: SessionIndex, _: SessionIndex) -> Option<Vec<A>> { None }
 }
 
-/// Handler for when a session keys set changes.
+/// Handler for session lifecycle events.
 pub trait SessionHandler<ValidatorId> {
 	/// Session set has changed; act appropriately.
 	fn on_new_session<Ks: OpaqueKeys>(
@@ -191,24 +192,45 @@ pub trait SessionHandler<ValidatorId> {
 		queued_validators: &[(ValidatorId, Ks)],
 	);
 
+	/// A notification for end of the session.
+	///
+	/// Note it is triggered before any `OnSessionEnding` handlers,
+	/// so we can still affect the validator set.
+	fn on_before_session_ending();
+
 	/// A validator got disabled. Act accordingly until a new session begins.
 	fn on_disabled(validator_index: usize);
 }
 
-/// One session-key type handler.
+/// A session handler for specific key type.
 pub trait OneSessionHandler<ValidatorId> {
 	/// The key type expected.
 	type Key: Decode + Default + TypedKey;
 
-	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, queued_validators: I)
-		where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
-	fn on_disabled(i: usize);
+	/// Session set has changed; act appropriately.
+	fn on_new_session<'a, I: 'a>(
+		_changed: bool,
+		_validators: I,
+		_queued_validators: I
+	) where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
+
+
+	/// A notification for end of the session.
+	///
+	/// Note it is triggered before any `OnSessionEnding` handlers,
+	/// so we can still affect the validator set.
+	fn on_before_session_ending();
+
+	/// A validator got disabled. Act accordingly until a new session begins.
+	fn on_disabled(_validator_index: usize);
+
 }
 
 macro_rules! impl_session_handlers {
 	() => (
 		impl<AId> SessionHandler<AId> for () {
 			fn on_new_session<Ks: OpaqueKeys>(_: bool, _: &[(AId, Ks)], _: &[(AId, Ks)]) {}
+			fn on_before_session_ending() {}
 			fn on_disabled(_: usize) {}
 		}
 	);
@@ -230,6 +252,13 @@ macro_rules! impl_session_handlers {
 					$t::on_new_session(changed, our_keys, queued_keys);
 				)*
 			}
+
+			fn on_before_session_ending() {
+				$(
+					$t::on_before_session_ending();
+				)*
+			}
+
 			fn on_disabled(i: usize) {
 				$(
 					$t::on_disabled(i);
