@@ -24,9 +24,11 @@ extern crate alloc;
 #[cfg(feature = "std")]
 use serde::Serialize;
 use codec::{Encode, Decode, Codec};
-use sr_primitives::{ConsensusEngineId, traits::{DigestFor, NumberFor}};
+use sr_primitives::{ConsensusEngineId, traits::{DigestFor, NumberFor, Block as BlockT}};
 use client::decl_runtime_apis;
 use rstd::vec::Vec;
+use grandpa::Message;
+use session::historical::Proof;
 
 mod app {
 	use app_crypto::{app_crypto, key_types::GRANDPA, ed25519};
@@ -51,6 +53,31 @@ pub type AuthorityWeight = u64;
 
 /// The index of an authority.
 pub type AuthorityIndex = u64;
+
+// #[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+pub struct GrandpaEquivocation<H, N, S, I, P> {
+	/// The set id.
+	pub set_id: u64,
+	/// The round number equivocated in.
+	pub round_number: u64,
+	/// The identity of the equivocator.
+	pub identity: I,
+	/// The proof of identity inclusion.
+	pub identity_proof: Option<P>,
+	/// The first vote in the equivocation.
+	pub	first: (Message<H, N>, S),
+	/// The second vote in the equivocation.
+	pub second: (Message<H, N>, S),
+}
+
+pub type GrandpaEquivocationFrom<Block> = GrandpaEquivocation<
+	<Block as BlockT>::Hash,
+	NumberFor<Block>,
+	AuthoritySignature,
+	AuthorityId,
+	Proof,
+>;
 
 /// A scheduled change of authority set.
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]

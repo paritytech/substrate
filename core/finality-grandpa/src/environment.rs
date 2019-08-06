@@ -31,7 +31,7 @@ use client::{
 };
 use grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
-	voter, voter_set::VoterSet,
+	voter, voter_set::VoterSet, Message
 };
 use primitives::{Blake2Hasher, H256, Pair};
 use sr_primitives::generic::BlockId;
@@ -51,7 +51,7 @@ use crate::authorities::{AuthoritySet, SharedAuthoritySet};
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
-use fg_primitives::{AuthorityId, AuthoritySignature};
+use fg_primitives::{AuthorityId, AuthoritySignature, GrandpaEquivocationFrom};
 
 type HistoricalVotes<Block> = grandpa::HistoricalVotes<
 	<Block as BlockT>::Hash,
@@ -841,7 +841,39 @@ where
 		equivocation: ::grandpa::Equivocation<Self::Id, Prevote<Block>, Self::Signature>
 	) {
 		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
-		// nothing yet; this could craft misbehavior reports of some kind.
+
+		let first_vote = Message::<Block::Hash, NumberFor<Block>>::Prevote(equivocation.first.0);
+		let second_vote = Message::<Block::Hash, NumberFor<Block>>::Prevote(equivocation.second.0);
+		let first_signature = equivocation.first.1;
+		let second_signature = equivocation.second.1;
+
+		let grandpa_equivocation = GrandpaEquivocationFrom::<Block> {
+			round_number: equivocation.round_number,
+			identity: equivocation.identity,
+			identity_proof: None,
+			first: (first_vote, first_signature),
+			second: (second_vote, second_signature),
+			set_id: self.set_id,
+		};
+
+		let block_id = BlockId::<Block>::number(self.inner.info().chain.best_number);
+		// let maybe_report_call = self.inner.runtime_api()
+		// 	.construct_equivocation_report_call(&block_id, grandpa_equivocation);
+
+		// if let Ok(Some(report_call)) = maybe_report_call {
+		// 	if let Some(session_key) = self.config.local_key.clone() {
+		// 		self.transaction_pool.submit_report_call(
+		// 			self.inner.deref(),
+		// 			session_key.deref(),
+		// 			report_call.as_slice(),
+		// 		);
+		// 		info!(target: "afg", "Equivocation report has been submitted");
+		// 	} else {
+		// 		error!(target: "afg", "Failed to get local key for equivocation report")
+		// 	}
+		// } else {
+		// 	error!(target: "afg", "Failed to construct equivocation report call")
+		// }
 	}
 
 	fn precommit_equivocation(
@@ -850,7 +882,24 @@ where
 		equivocation: Equivocation<Self::Id, Precommit<Block>, Self::Signature>
 	) {
 		warn!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
-		// nothing yet
+
+		let first_vote = Message::<Block::Hash, NumberFor<Block>>::Precommit(equivocation.first.0);
+		let second_vote = Message::<Block::Hash, NumberFor<Block>>::Precommit(equivocation.second.0);
+		let first_signature = equivocation.first.1;
+		let second_signature = equivocation.second.1;
+
+		let grandpa_equivocation = GrandpaEquivocationFrom::<Block> {
+			round_number: equivocation.round_number,
+			identity: equivocation.identity,
+			identity_proof: None,
+			first: (first_vote, first_signature),
+			second: (second_vote, second_signature),
+			set_id: self.set_id,
+		};
+
+		let block_id = BlockId::<Block>::number(self.inner.info().chain.best_number);
+
+
 	}
 }
 
