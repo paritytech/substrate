@@ -615,6 +615,27 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					storage.put(key_for, &(val, linkage))
 				}
 
+				/// Store a value under this key into the provided storage instance; this can take any reference
+				/// type that derefs to `T` (and has `Encode` implemented).
+				/// Store a value under this key into the provided storage instance.
+				fn insert_ref<Arg: ?Sized + Encode, S: HashedStorage<Twox128>>(
+					key: &K,
+					val: &Arg,
+					storage: &mut S
+				) where V: AsRef<Arg> {
+					use self::#inner_module::Utils;
+
+					let key_for = &*#as_map::key_for(key);
+					let linkage = match Self::read_with_linkage(storage, key_for) {
+						// overwrite but reuse existing linkage
+						Some((_data, linkage)) => linkage,
+						// create new linkage
+						None => Self::new_head_linkage(storage, key),
+					};
+					storage.put(key_for, &(val, linkage))
+					// val.using_encoded(|b| storage.put_raw(&Self::key_for(key)[..], b))
+				}
+
 				/// Mutate the value under a key
 				fn mutate<R, F, S>(key: &#kty, f: F, storage: &mut S) -> R
 				where
