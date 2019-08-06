@@ -81,6 +81,7 @@ members = [
 	"srml/grandpa",
 	"srml/im-online",
 	"srml/indices",
+	"srml/membership",
 	"srml/metadata",
 	"srml/session",
 	"srml/staking",
