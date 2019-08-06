@@ -196,7 +196,7 @@ pub trait SessionHandler<ValidatorId> {
 	///
 	/// Note it is triggered before any `OnSessionEnding` handlers,
 	/// so we can still affect the validator set.
-	fn on_before_session_ending();
+	fn on_before_session_ending() {}
 
 	/// A validator got disabled. Act accordingly until a new session begins.
 	fn on_disabled(validator_index: usize);
@@ -219,7 +219,7 @@ pub trait OneSessionHandler<ValidatorId> {
 	///
 	/// Note it is triggered before any `OnSessionEnding` handlers,
 	/// so we can still affect the validator set.
-	fn on_before_session_ending();
+	fn on_before_session_ending() {}
 
 	/// A validator got disabled. Act accordingly until a new session begins.
 	fn on_disabled(_validator_index: usize);

@@ -395,6 +395,10 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 		Self::new_session();
 	}
 
+	fn on_before_session_ending() {
+		// ignore
+	}
+
 	fn on_disabled(_i: usize) {
 		// ignore
 	}

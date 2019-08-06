@@ -63,10 +63,16 @@ impl<T: Trait, O: Offence<T::AuthorityId>> ReportOffence<T::AuthorityId, T::Auth
 		// that report.
 		<OffenceReports<T>>::mutate(&O::ID, &time_slot, |offending_authorities| {
 			for offender in offenders {
+				// TODO [slashing] This prevents slashing for multiple reports of the same kind at the same slot,
+				// note however that we might do that in the future if the reports are not exactly the same (dups).
+				// De-duplication of reports is tricky though, we need a canonical form of the report
+				// (for instance babe equivocation can have headers swapped).
 				if !offending_authorities.contains(&offender) {
 					offending_authorities.push(offender);
+					// TODO [slashing] trigger on_offence and calculate amounts
 				}
 			}
 		});
+
 	}
 }

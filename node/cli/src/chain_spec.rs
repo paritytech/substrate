@@ -21,7 +21,7 @@ use primitives::{ed25519, sr25519, Pair, crypto::UncheckedInto};
 use node_primitives::{AccountId, Balance};
 use node_runtime::{
 	BabeConfig,	BalancesConfig, ContractsConfig, CouncilConfig, DemocracyConfig,
-	ElectionsConfig, GrandpaConfig, ImOnlineConfig, IndicesConfig, Perbill,
+	ElectionsConfig, GrandpaConfig, ImOnlineConfig, IndicesConfig,
 	SessionConfig,	SessionKeys, StakerStatus, StakingConfig, SudoConfig, SystemConfig,
 	TechnicalCommitteeConfig, WASM_BINARY,
 };
@@ -127,9 +127,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
-			offline_slash: Perbill::from_parts(1_000_000),
 			validator_count: 7,
-			offline_slash_grace: 4,
 			minimum_validator_count: 4,
 			stakers: initial_authorities.iter().map(|x| {
 				(x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator)
@@ -267,8 +265,6 @@ pub fn testnet_genesis(
 			current_era: 0,
 			minimum_validator_count: 1,
 			validator_count: 2,
-			offline_slash: Perbill::zero(),
-			offline_slash_grace: 0,
 			stakers: initial_authorities.iter().map(|x| {
 				(x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator)
 			}).collect(),

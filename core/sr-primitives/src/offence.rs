@@ -43,7 +43,7 @@ pub trait Offence<Offender> {
 	/// The list of all offenders involved in this incident.
 	///
 	/// The list has no duplicates, so it is rather a set.
-	fn offenders(&self) -> Vec<Offender>;
+	fn offenders(&self) -> rstd::vec::Vec<Offender>;
 
 	/// What is the session index this offence happened in.
 	///
