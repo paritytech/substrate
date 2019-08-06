@@ -17,15 +17,19 @@
 //! Consensus extension module for BABE consensus.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![forbid(unused_must_use, unsafe_code, unused_variables, dead_code)]
+#![forbid(unused_must_use, unsafe_code, unused_variables)]
+
+// TODO: @marcio uncomment this when BabeEquivocation is integrated.
+// #![forbid(dead_code)]
 
 pub use timestamp;
 
 use rstd::{result, prelude::*};
 use srml_support::{decl_storage, decl_module, StorageValue, traits::FindAuthor, traits::Get};
 use timestamp::{OnTimestampSet};
-use primitives::{generic::DigestItem, ConsensusEngineId};
+use primitives::{generic::DigestItem, ConsensusEngineId, Perbill};
 use primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert};
+use primitives::offence::{Offence, TimeSlot, Kind};
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
 use parity_codec::{Encode, Decode};
@@ -215,6 +219,47 @@ impl<T: Trait> session::ShouldEndSession<T::BlockNumber> for Module<T> {
 	fn should_end_session(_: T::BlockNumber) -> bool {
 		let diff = CurrentSlot::get().saturating_sub(EpochStartSlot::get());
 		diff >= T::EpochDuration::get()
+	}
+}
+
+// TODO [slashing]: @marcio use this, remove the dead_code annotation.
+/// A BABE equivocation offence.
+#[allow(dead_code)]
+struct BabeEquivocationOffence {
+	/// A babe slot number in which this incident happened.
+	slot: u64,
+	/// The index of the session during which this incident heppened.
+	session_index: u32, // TODO [slashing]: Should be a SessionIndex.
+	/// The authority which produced the equivocation.
+	offender: AuthorityId,
+}
+
+impl Offence<AuthorityId> for BabeEquivocationOffence {
+	const ID: Kind = *b"babe:equivocatio";
+
+	fn offenders(&self) -> Vec<AuthorityId> {
+		let mut offender = Vec::with_capacity(1);
+		offender.push(self.offender.clone());
+		offender
+	}
+
+	fn session_index(&self) -> u32 { // TODO [slashing]: Should be a SessionIndex.
+		self.session_index
+	}
+
+	fn time_slot(&self) -> TimeSlot {
+		self.slot as TimeSlot
+	}
+
+	fn slash_percentage(&self, offenders: u32, validators_count: u32) -> Perbill {
+		// the formula is min((3k / n)^2, 1)
+		let x = Perbill::from_rational_approximation(3 * offenders, validators_count);
+
+		// For now, Perbill doesn't support taking the power of it. Until it does, do it manually.
+		// The conversion to u64 is performed to guarantee it fits.
+		let x = x.into_parts();
+		let x = ((x as u64 * x as u64) / 1_000_000_000) as u32;
+		Perbill::from_parts(x)
 	}
 }
 

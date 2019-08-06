@@ -324,6 +324,11 @@ impl Perbill {
 
 		Perbill(part as u32)
 	}
+
+	/// Take out the raw parts-per-billions.
+	pub fn into_parts(self) -> u32 {
+		self.0
+	}
 }
 
 impl<N> ops::Mul<N> for Perbill
