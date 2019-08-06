@@ -339,7 +339,9 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 		match read_db(&*self.db, columns::KEY_LOOKUP, columns::BODY, id)? {
 			Some(body) => match Decode::decode(&mut &body[..]) {
 				Ok(body) => Ok(Some(body)),
-				Err(err) => return Err(client::error::Error::Backend(format!("Error decoding body: {}", err))),
+				Err(err) => return Err(client::error::Error::Backend(
+					format!("Error decoding body: {}", err)
+				)),
 			}
 			None => Ok(None),
 		}
@@ -349,7 +351,9 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 		match read_db(&*self.db, columns::KEY_LOOKUP, columns::JUSTIFICATION, id)? {
 			Some(justification) => match Decode::decode(&mut &justification[..]) {
 				Ok(justification) => Ok(Some(justification)),
-				Err(err) => return Err(client::error::Error::Backend(format!("Error decoding justification: {}", err))),
+				Err(err) => return Err(client::error::Error::Backend(
+					format!("Error decoding justification: {}", err)
+				)),
 			}
 			None => Ok(None),
 		}
