@@ -334,8 +334,7 @@ impl<T: Trait> Module<T> {
 
 	fn do_initialize() {
 		// since do_initialize can be called twice (if session module is present)
-		// => let's ensure that we only modify the storage once per block by checking
-		// current block number
+		// => let's ensure that we only modify the storage once per block
 		let initialized = Self::initialized().unwrap_or(false);
 		if initialized {
 			return;
