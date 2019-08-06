@@ -253,7 +253,10 @@ decl_module! {
 			}
 		}
 
-		fn report_equivocation(origin, equivocation: BabeEquivocationProof<T::Header>) {
+		fn report_equivocation(
+			origin,
+			equivocation: BabeEquivocationProof<T::Header>
+		) {
 			let _who = ensure_signed(origin)?;
 			
 			if equivocation_is_valid::<T>(equivocation) {

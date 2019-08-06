@@ -147,9 +147,10 @@ impl slots::SlotData for BabeConfiguration {
 }
 
 /// Represents an Babe equivocation proof.
-#[derive(Clone, Encode, Decode, PartialEq)]
+#[derive(Debug, Clone, Encode, Decode, PartialEq)]
 pub struct BabeEquivocationProof<H> {
 	identity: AuthorityId,
+	identity_proof: Proof,
 	slot: u64,
 	first_header: H,
 	second_header: H,
@@ -168,6 +169,7 @@ where
 	/// Create a new Babe equivocation proof.
 	fn new(
 		identity: Self::Identity,
+		identity_proof: Proof,
 		slot: u64,
 		first_header: H,
 		second_header: H,
@@ -176,6 +178,7 @@ where
 	) -> Self {
 		BabeEquivocationProof {
 			identity,
+			identity_proof,
 			slot,
 			first_header,
 			second_header,
@@ -192,6 +195,11 @@ where
 	/// Get the identity of the suspect of equivocating.
 	fn identity(&self) -> &Self::Identity {
 		&self.identity
+	}
+
+	/// Get the identity of the suspect of equivocating.
+	fn identity_proof(&self) -> &Proof {
+		&self.identity_proof
 	}
 
 	/// Get the first header involved in the equivocation.

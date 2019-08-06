@@ -16,12 +16,13 @@
 
 //! Schema for slots in the aux-db.
 
+use std::ops::Deref;
 use codec::{Encode, Decode, Codec};
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
 use sr_primitives::traits::{Header, Verify};
 use consensus_common_primitives::AuthorshipEquivocationProof;
-use std::ops::Deref;
+use srml_session::historical::Proof;
 
 const SLOT_HEADER_MAP_KEY: &[u8] = b"slot_header_map";
 const SLOT_HEADER_START: &[u8] = b"slot_header_start";
@@ -57,7 +58,7 @@ pub struct EquivocationProof<H> {
 /// Checks if the header is an equivocation and returns the proof in that case.
 ///
 /// Note: it detects equivocations only when slot_now - slot <= MAX_SLOT_CAPACITY.
-pub fn check_equivocation<C, H, E, V, P>(
+pub fn check_equivocation<C, H, E, V>(
 	backend: &C,
 	slot_now: u64,
 	slot: u64,
@@ -68,7 +69,6 @@ pub fn check_equivocation<C, H, E, V, P>(
 	where
 		H: Header,
 		C: AuxStore,
-		P: Clone + Encode + Decode + PartialEq,
 		V: Verify + Codec + Clone,
 		<V as Verify>::Signer: Clone + Codec + PartialEq,
 		E: AuthorshipEquivocationProof<
@@ -106,6 +106,7 @@ pub fn check_equivocation<C, H, E, V, P>(
 			if header.hash() != prev_header.hash() {
 				return Ok(Some(AuthorshipEquivocationProof::new(
 					signer.clone(),
+					Proof::default(),
 					slot,
 					prev_header.clone(),
 					header.clone(),

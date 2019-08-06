@@ -13,7 +13,8 @@ sr-primitives = {  path = "../../sr-primitives" }
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
 consensus_common_primitives = { package = "substrate-consensus-common-primitives", path = "../common/primitives" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
-futures-preview = "=0.3.0-alpha.17"
+srml-session = { path = "../../../srml/session", default-features = false }
+futures-preview = "0.3.0-alpha.17"
 futures-timer = "0.2.1"
 parking_lot = "0.9.0"
 log = "0.4"

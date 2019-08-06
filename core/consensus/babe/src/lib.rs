@@ -507,7 +507,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 			}
 
 			if let Some(equivocation_proof) = check_equivocation::<
-				_, _, BabeEquivocationProof<B::Header>, _, _
+				_, _, BabeEquivocationProof<B::Header>, _
 			>(
 				client,
 				slot_now,

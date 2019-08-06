@@ -25,7 +25,7 @@ use parity_codec::Codec;
 #[cfg(feature = "std")]
 use serde::Serialize;
 use sr_primitives::{traits::{Header, Verify}};
-
+use srml_session::historical::Proof;
 
 decl_runtime_apis! {
 	/// Common consensus runtime api.
@@ -43,6 +43,7 @@ pub trait AuthorshipEquivocationProof {
 	/// Create an equivocation proof for AuRa or Babe.
 	fn new(
 		identity: Self::Identity,
+		identity_proof: Proof,
 		slot: u64,
 		first_header: Self::Header,
 		second_header: Self::Header,
@@ -52,6 +53,9 @@ pub trait AuthorshipEquivocationProof {
 
 	/// Get the slot where the equivocation happened.
 	fn slot(&self) -> u64;
+
+	/// Get the identity proof of the suspect of equivocating.
+	fn identity_proof(&self) -> &Proof;
 
 	/// Get the identity of the suspect of equivocating.
 	fn identity(&self) -> &Self::Identity;
