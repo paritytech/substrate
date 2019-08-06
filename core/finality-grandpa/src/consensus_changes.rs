@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::sync::Arc;
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 
 /// Consensus-related data changes tracker.
 #[derive(Clone, Debug, Encode, Decode)]

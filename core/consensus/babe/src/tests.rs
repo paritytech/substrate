@@ -166,12 +166,6 @@ impl TestNetFactory for BabeTestNet {
 }
 
 #[test]
-fn can_serialize_block() {
-	let _ = env_logger::try_init();
-	assert!(BabePreDigest::decode(&mut &b""[..]).is_none());
-}
-
-#[test]
 #[should_panic]
 fn rejects_empty_block() {
 	env_logger::try_init().unwrap();

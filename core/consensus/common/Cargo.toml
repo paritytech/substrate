@@ -16,7 +16,7 @@ futures-timer = "0.2.1"
 rstd = { package = "sr-std", path = "../../sr-std" }
 runtime_version = { package = "sr-version", path = "../../sr-version" }
 sr-primitives = {  path = "../../sr-primitives" }
-parity-codec = { version = "4.1.1", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 parking_lot = "0.8.0"
 
 [dev-dependencies]

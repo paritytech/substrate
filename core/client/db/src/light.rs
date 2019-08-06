@@ -29,7 +29,7 @@ use client::cht;
 use client::leaves::{LeafSet, FinalizationDisplaced};
 use client::error::{Error as ClientError, Result as ClientResult};
 use client::light::blockchain::Storage as LightBlockchainStorage;
-use parity_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use primitives::Blake2Hasher;
 use sr_primitives::generic::{DigestItem, BlockId};
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor};
@@ -360,7 +360,7 @@ impl<Block: BlockT> LightStorage<Block> {
 		let cht_start = cht::start_number(cht_size, cht_number);
 		self.db.get(columns::CHT, &cht_key(cht_type, cht_start)?).map_err(db_err)?
 			.ok_or_else(no_cht_for_block)
-			.and_then(|hash| Block::Hash::decode(&mut &*hash).ok_or_else(no_cht_for_block))
+			.and_then(|hash| Block::Hash::decode(&mut &*hash).map_err(|_| no_cht_for_block()))
 	}
 }
 
@@ -887,7 +887,8 @@ pub(crate) mod tests {
 		}
 
 		fn get_authorities(cache: &dyn BlockchainCache<Block>, at: BlockId<Block>) -> Option<Vec<AuthorityId>> {
-			cache.get_at(&well_known_cache_keys::AUTHORITIES, &at).and_then(|val| Decode::decode(&mut &val[..]))
+			cache.get_at(&well_known_cache_keys::AUTHORITIES, &at)
+				.and_then(|val| Decode::decode(&mut &val[..]).ok())
 		}
 
 		let auth1 = || AuthorityId::from_raw([1u8; 32]);

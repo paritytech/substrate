@@ -50,7 +50,7 @@ use primitives::{
 };
 use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use state_machine::{
 	DBValue, Backend as StateBackend, CodeExecutor, ChangesTrieAnchorBlockId,
 	ExecutionStrategy, ExecutionManager, prove_read, prove_child_read,
@@ -1327,7 +1327,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(self.backend.state_at(BlockId::Number(self.backend.blockchain().info().best_number))?
 			.storage(well_known_keys::CHANGES_TRIE_CONFIG)
 			.map_err(|e| error::Error::from_state(Box::new(e)))?
-			.and_then(|c| Decode::decode(&mut &*c)))
+			.and_then(|c| Decode::decode(&mut &*c).ok()))
 	}
 
 	/// Prepare in-memory header that is used in execution environment.

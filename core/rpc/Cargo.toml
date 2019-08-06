@@ -14,7 +14,7 @@ jsonrpc-pubsub = "12.0.0"
 jsonrpc-derive = "12.0.0"
 log = "0.4"
 parking_lot = "0.8.0"
-parity-codec = "4.1.1"
+codec = { package = "parity-scale-codec", version = "1.0.0" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 client = { package = "substrate-client", path = "../client" }
