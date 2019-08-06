@@ -33,7 +33,7 @@ use bip39::{Mnemonic, Language, MnemonicType};
 use crate::crypto::{Pair as TraitPair, DeriveJunction, Infallible, SecretStringError, Derive, Ss58Codec};
 use crate::crypto::{key_types, KeyTypeId, Public as TraitPublic, TypedKey, UncheckedFrom};
 use crate::hash::{H256, H512};
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};

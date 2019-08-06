@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 serde = { version = "1.0", optional = true, features = ["derive"] }
 safe-mix = { version = "1.0", default-features = false }
-parity-codec = { version = "4.1.1", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 rstd = { package = "sr-std", path = "../../core/sr-std", default_features = false }
 runtime-io = { package = "sr-io", path = "../../core/sr-io", default_features = false }
 version = { package = "sr-version", path = "../../core/sr-version", default_features = false }
@@ -31,7 +31,7 @@ wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.
 [features]
 default = ["std"]
 std = [
-	"parity-codec/std",
+	"codec/std",
 	"client/std",
 	"rstd/std",
 	"runtime-io/std",

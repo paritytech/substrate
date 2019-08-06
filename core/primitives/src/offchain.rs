@@ -17,7 +17,7 @@
 //! Offchain workers types
 
 use crate::crypto;
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use rstd::prelude::{Vec, Box};
 use rstd::convert::TryFrom;
 
@@ -397,7 +397,7 @@ pub trait Externalities {
 
 	/// Initiates a http request given HTTP verb and the URL.
 	///
-	/// Meta is a future-reserved field containing additional, parity-codec encoded parameters.
+	/// Meta is a future-reserved field containing additional, parity-scale-codec encoded parameters.
 	/// Returns the id of newly started request.
 	fn http_request_start(
 		&mut self,

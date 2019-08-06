@@ -20,7 +20,7 @@
 
 
 use crate::{hash::H256, hash::H512};
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
 use blake2_rfc;

@@ -42,7 +42,7 @@ use client::backend::NewBlockState;
 use client::blockchain::HeaderBackend;
 use client::ExecutionStrategies;
 use client::backend::{StorageCollection, ChildStorageCollection};
-use parity_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use hash_db::{Hasher, Prefix};
 use kvdb::{KeyValueDB, DBTransaction};
 use trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
@@ -338,8 +338,10 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 	fn body(&self, id: BlockId<Block>) -> Result<Option<Vec<Block::Extrinsic>>, client::error::Error> {
 		match read_db(&*self.db, columns::KEY_LOOKUP, columns::BODY, id)? {
 			Some(body) => match Decode::decode(&mut &body[..]) {
-				Some(body) => Ok(Some(body)),
-				None => return Err(client::error::Error::Backend("Error decoding body".into())),
+				Ok(body) => Ok(Some(body)),
+				Err(err) => return Err(client::error::Error::Backend(
+					format!("Error decoding body: {}", err)
+				)),
 			}
 			None => Ok(None),
 		}
@@ -348,8 +350,10 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 	fn justification(&self, id: BlockId<Block>) -> Result<Option<Justification>, client::error::Error> {
 		match read_db(&*self.db, columns::KEY_LOOKUP, columns::JUSTIFICATION, id)? {
 			Some(justification) => match Decode::decode(&mut &justification[..]) {
-				Some(justification) => Ok(Some(justification)),
-				None => return Err(client::error::Error::Backend("Error decoding justification".into())),
+				Ok(justification) => Ok(Some(justification)),
+				Err(err) => return Err(client::error::Error::Backend(
+					format!("Error decoding justification: {}", err)
+				)),
 			}
 			None => Ok(None),
 		}
@@ -838,7 +842,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				let changes_trie_config = self
 					.state_at(BlockId::Hash(block))?
 					.storage(well_known_keys::CHANGES_TRIE_CONFIG)?
-					.and_then(|v| Decode::decode(&mut &*v));
+					.and_then(|v| Decode::decode(&mut &*v).ok());
 				*cached_changes_trie_config = Some(changes_trie_config.clone());
 				Ok(changes_trie_config)
 			},

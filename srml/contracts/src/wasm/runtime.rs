@@ -26,7 +26,7 @@ use sandbox;
 use system;
 use rstd::prelude::*;
 use rstd::mem;
-use parity_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use sr_primitives::traits::{Bounded, SaturatedConversion};
 
 /// Enumerates all possible *special* trap conditions.
@@ -325,12 +325,12 @@ define_env!(Env, <E: Ext>,
 		let callee = {
 			let callee_buf = read_sandbox_memory(ctx, callee_ptr, callee_len)?;
 			<<E as Ext>::T as system::Trait>::AccountId::decode(&mut &callee_buf[..])
-				.ok_or_else(|| sandbox::HostError)?
+				.map_err(|_| sandbox::HostError)?
 		};
 		let value = {
 			let value_buf = read_sandbox_memory(ctx, value_ptr, value_len)?;
 			BalanceOf::<<E as Ext>::T>::decode(&mut &value_buf[..])
-				.ok_or_else(|| sandbox::HostError)?
+				.map_err(|_| sandbox::HostError)?
 		};
 		let input_data = read_sandbox_memory(ctx, input_data_ptr, input_data_len)?;
 
@@ -399,12 +399,12 @@ define_env!(Env, <E: Ext>,
 	) -> u32 => {
 		let code_hash = {
 			let code_hash_buf = read_sandbox_memory(ctx, code_hash_ptr, code_hash_len)?;
-			<CodeHash<<E as Ext>::T>>::decode(&mut &code_hash_buf[..]).ok_or_else(|| sandbox::HostError)?
+			<CodeHash<<E as Ext>::T>>::decode(&mut &code_hash_buf[..]).map_err(|_| sandbox::HostError)?
 		};
 		let value = {
 			let value_buf = read_sandbox_memory(ctx, value_ptr, value_len)?;
 			BalanceOf::<<E as Ext>::T>::decode(&mut &value_buf[..])
-				.ok_or_else(|| sandbox::HostError)?
+				.map_err(|_| sandbox::HostError)?
 		};
 		let input_data = read_sandbox_memory(ctx, input_data_ptr, input_data_len)?;
 
@@ -569,7 +569,7 @@ define_env!(Env, <E: Ext>,
 		let call = {
 			let call_buf = read_sandbox_memory(ctx, call_ptr, call_len)?;
 			<<<E as Ext>::T as Trait>::Call>::decode(&mut &call_buf[..])
-				.ok_or_else(|| sandbox::HostError)?
+				.map_err(|_| sandbox::HostError)?
 		};
 
 		// Charge gas for dispatching this call.
@@ -618,12 +618,12 @@ define_env!(Env, <E: Ext>,
 		let dest = {
 			let dest_buf = read_sandbox_memory(ctx, dest_ptr, dest_len)?;
 			<<E as Ext>::T as system::Trait>::AccountId::decode(&mut &dest_buf[..])
-				.ok_or_else(|| sandbox::HostError)?
+				.map_err(|_| sandbox::HostError)?
 		};
 		let code_hash = {
 			let code_hash_buf = read_sandbox_memory(ctx, code_hash_ptr, code_hash_len)?;
 			<CodeHash<<E as Ext>::T>>::decode(&mut &code_hash_buf[..])
-				.ok_or_else(|| sandbox::HostError)?
+				.map_err(|_| sandbox::HostError)?
 		};
 		let rent_allowance = {
 			let rent_allowance_buf = read_sandbox_memory(
@@ -632,7 +632,7 @@ define_env!(Env, <E: Ext>,
 				rent_allowance_len
 			)?;
 			BalanceOf::<<E as Ext>::T>::decode(&mut &rent_allowance_buf[..])
-				.ok_or_else(|| sandbox::HostError)?
+				.map_err(|_| sandbox::HostError)?
 		};
 		let delta = {
 			// We don't use `with_capacity` here to not eagerly allocate the user specified amount
@@ -717,7 +717,7 @@ define_env!(Env, <E: Ext>,
 			_ => {
 				let topics_buf = read_sandbox_memory(ctx, topics_ptr, topics_len)?;
 				Vec::<TopicOf<<E as Ext>::T>>::decode(&mut &topics_buf[..])
-					.ok_or_else(|| sandbox::HostError)?
+					.map_err(|_| sandbox::HostError)?
 			}
 		};
 
@@ -757,7 +757,7 @@ define_env!(Env, <E: Ext>,
 		let value = {
 			let value_buf = read_sandbox_memory(ctx, value_ptr, value_len)?;
 			BalanceOf::<<E as Ext>::T>::decode(&mut &value_buf[..])
-				.ok_or_else(|| sandbox::HostError)?
+				.map_err(|_| sandbox::HostError)?
 		};
 		ctx.ext.set_rent_allowance(value);
 

@@ -694,6 +694,8 @@ impl codec::Encode for ApplyOutcome {
 	}
 }
 
+impl codec::EncodeLike for ApplyOutcome {}
+
 #[derive(Eq, PartialEq, Clone, Copy, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[repr(u8)]
@@ -716,6 +718,8 @@ impl codec::Encode for ApplyError {
 		f(&[*self as u8])
 	}
 }
+
+impl codec::EncodeLike for ApplyError {}
 
 /// Result from attempt to apply an extrinsic.
 pub type ApplyResult = Result<ApplyOutcome, ApplyError>;
