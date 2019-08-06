@@ -31,7 +31,9 @@ use srml_support::{
 };
 use timestamp::{OnTimestampSet};
 use sr_primitives::{generic::DigestItem, ConsensusEngineId, Perbill, key_types, KeyTypeId};
-use sr_primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert};
+use sr_primitives::traits::{
+	IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert, Verify, Header
+};
 use sr_staking_primitives::{
 	SessionIndex,
 	offence::{Offence, TimeSlot, Kind},
@@ -46,8 +48,8 @@ use session::historical::Proof;
 use system::ensure_signed;
 use consensus_common_primitives::AuthorshipEquivocationProof;
 use babe_primitives::{
-	BABE_ENGINE_ID, ConsensusLog, BabeWeight, Epoch, RawBabePreDigest,
-	BabeEquivocationProof, find_pre_digest
+	BABE_ENGINE_ID, ConsensusLog, BabeWeight, Epoch, RawBabePreDigest, 
+	BabeEquivocationProof, get_slot
 };
 pub use babe_primitives::{AuthorityId, AuthoritySignature, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH};
 
@@ -192,16 +194,22 @@ fn equivocation_is_valid<T: Trait>(equivocation: BabeEquivocation<T::Header>) ->
 		return false
 	}
 
-	let maybe_first_slot = get_slot::<H>(first_header);
-	let maybe_second_slot = get_slot::<H>(second_header);
+	let maybe_first_slot = get_slot::<T::Header>(first_header);
+	let maybe_second_slot = get_slot::<T::Header>(second_header);
+	
+	if maybe_first_slot.is_err() || maybe_second_slot.is_err() {
+		return false
+	}
+	let first_slot = maybe_first_slot.expect("checked before; qed");
+	let second_slot = maybe_second_slot.expect("checked before; qed");
 
-	if maybe_first_slot.is_ok() && maybe_first_slot == maybe_second_slot {
-		let author = self.identity();
+	if equivocation.slot() == first_slot && first_slot == second_slot {
+		let author = equivocation.identity();
 
-		if !self.first_signature().verify(first_header.hash().as_ref(), author) {
+		if !equivocation.first_signature().verify(first_header.hash().as_ref(), author) {
 			return false
 		}
-		if !self.second_signature().verify(second_header.hash().as_ref(), author) {
+		if !equivocation.second_signature().verify(second_header.hash().as_ref(), author) {
 			return false
 		}
 		return true;
@@ -257,7 +265,7 @@ decl_module! {
 					identity.clone(),
 				);
 
-				if equivocation_is_valid(equivocation) {
+				if equivocation_is_valid::<T>(equivocation) {
 					// TODO: Slash `to_punish` and reward `who`.
 				}
 			}

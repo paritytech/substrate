@@ -29,8 +29,8 @@ use substrate_client::decl_runtime_apis;
 use consensus_common_primitives::AuthorshipEquivocationProof;
 
 #[cfg(feature = "std")]
-pub use digest::{BabePreDigest, CompatibleDigestItem};
-pub use digest::{BABE_VRF_PREFIX, RawBabePreDigest};
+pub use digest::BabePreDigest;
+pub use digest::{BABE_VRF_PREFIX, RawBabePreDigest, get_slot, CompatibleDigestItem, find_pre_digest};
 
 mod app {
 	use app_crypto::{app_crypto, key_types::BABE, sr25519};
@@ -143,22 +143,6 @@ impl slots::SlotData for BabeConfiguration {
 	}
 
 	const SLOT_KEY: &'static [u8] = b"babe_bootstrap_data";
-}
-
-/// Extract the BABE pre digest from the given header. Pre-runtime digests are
-/// mandatory, the function will return `Err` if none is found.
-pub fn find_pre_digest<H: Header>(header: &H) -> Result<BabePreDigest, &str>
-	where DigestItemForheader<H>: CompatibleDigestItem,
-{
-	let mut pre_digest: Option<_> = None;
-	for log in header.digest().logs() {
-		match (log.as_babe_pre_digest(), pre_digest.is_some()) {
-			(Some(_), true) => Err("Multiple BABE pre-runtime digests, rejecting!")?,
-			(None, _) => {},
-			(s, false) => pre_digest = s,
-		}
-	}
-	pre_digest.ok_or_else(|| "No BABE pre-runtime digest found")
 }
 
 /// Represents an Babe equivocation proof.

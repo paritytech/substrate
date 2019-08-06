@@ -16,15 +16,13 @@
 
 //! Private implementation details of BABE digests.
 
-#[cfg(feature = "std")]
-use super::AuthoritySignature;
-#[cfg(feature = "std")]
 use super::{BABE_ENGINE_ID, Epoch};
 #[cfg(not(feature = "std"))]
 use super::{VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH};
 use super::SlotNumber;
-#[cfg(feature = "std")]
 use sr_primitives::{DigestItem, generic::OpaqueDigestItemId};
+use sr_primitives::traits::{Header, DigestItemForHeader, Verify};
+use parity_codec::{Decode, Encode, Codec};
 #[cfg(feature = "std")]
 use std::fmt::Debug;
 use codec::{Decode, Encode};
@@ -48,6 +46,30 @@ pub struct BabePreDigest {
 	pub authority_index: super::AuthorityIndex,
 	/// Slot number
 	pub slot_number: SlotNumber,
+}
+
+/// Get the slot.
+pub fn get_slot<H: Header>(header: &H) -> Result<SlotNumber, &str>
+	where DigestItemForHeader<H>: CompatibleDigestItem,
+{
+	find_pre_digest::<H, RawBabePreDigest>(header)
+		.map(|raw_pre_digest| raw_pre_digest.slot_number)
+}
+
+/// Extract the BABE pre digest from the given header. Pre-runtime digests are
+/// mandatory, the function will return `Err` if none is found.
+pub fn find_pre_digest<H: Header, D: Codec>(header: &H) -> Result<D, &str>
+	where DigestItemForHeader<H>: CompatibleDigestItem,
+{
+	let mut pre_digest: Option<_> = None;
+	for log in header.digest().logs() {
+		match (log.as_babe_pre_digest(), pre_digest.is_some()) {
+			(Some(_), true) => Err("Multiple BABE pre-runtime digests, rejecting!")?,
+			(None, _) => {},
+			(s, false) => pre_digest = s,
+		}
+	}
+	pre_digest.ok_or_else(|| "No BABE pre-runtime digest found")
 }
 
 /// The prefix used by BABE for its VRF keys.
@@ -102,41 +124,40 @@ impl Decode for BabePreDigest {
 }
 
 /// A digest item which is usable with BABE consensus.
-#[cfg(feature = "std")]
+// #[cfg(feature = "std")]
 pub trait CompatibleDigestItem: Sized {
 	/// Construct a digest item which contains a BABE pre-digest.
-	fn babe_pre_digest(seal: BabePreDigest) -> Self;
+	fn babe_pre_digest<D: Codec>(seal: D) -> Self;
 
 	/// If this item is an BABE pre-digest, return it.
-	fn as_babe_pre_digest(&self) -> Option<BabePreDigest>;
+	fn as_babe_pre_digest<D: Codec>(&self) -> Option<D>;
 
 	/// Construct a digest item which contains a BABE seal.
-	fn babe_seal(signature: AuthoritySignature) -> Self;
+	fn babe_seal<S: Codec + Verify>(signature: S) -> Self;
 
 	/// If this item is a BABE signature, return the signature.
-	fn as_babe_seal(&self) -> Option<AuthoritySignature>;
+	fn as_babe_seal<S: Codec + Verify>(&self) -> Option<S>;
 
 	/// If this item is a BABE epoch, return it.
 	fn as_babe_epoch(&self) -> Option<Epoch>;
 }
 
-#[cfg(feature = "std")]
 impl<Hash> CompatibleDigestItem for DigestItem<Hash> where
-	Hash: Debug + Send + Sync + Eq + Clone + Codec + 'static
+	Hash: Send + Sync + Eq + Clone + Codec + 'static
 {
-	fn babe_pre_digest(digest: BabePreDigest) -> Self {
+	fn babe_pre_digest<D: Codec>(digest: D) -> Self {
 		DigestItem::PreRuntime(BABE_ENGINE_ID, digest.encode())
 	}
 
-	fn as_babe_pre_digest(&self) -> Option<BabePreDigest> {
+	fn as_babe_pre_digest<D: Codec>(&self) -> Option<D> {
 		self.try_to(OpaqueDigestItemId::PreRuntime(&BABE_ENGINE_ID))
 	}
 
-	fn babe_seal(signature: AuthoritySignature) -> Self {
+	fn babe_seal<S: Verify + Codec>(signature: S) -> Self {
 		DigestItem::Seal(BABE_ENGINE_ID, signature.encode())
 	}
 
-	fn as_babe_seal(&self) -> Option<AuthoritySignature> {
+	fn as_babe_seal<S: Verify + Codec>(&self) -> Option<S> {
 		self.try_to(OpaqueDigestItemId::Seal(&BABE_ENGINE_ID))
 	}
 

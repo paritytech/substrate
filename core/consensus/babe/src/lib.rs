@@ -474,7 +474,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 		babe_err!("Header {:?} has a bad seal", hash)
 	})?;
 
-	let pre_digest = find_pre_digest::<B>(&header)?;
+	let pre_digest = find_pre_digest::<B::Header, BabePreDigest>(&header)?;
 
 	let BabePreDigest { slot_number, authority_index, ref vrf_proof, ref vrf_output } = pre_digest;
 
@@ -980,7 +980,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 		}
 
 		let slot_number = {
-			let pre_digest = find_pre_digest::<Block>(&block.header)
+			let pre_digest = find_pre_digest::<Block::Header, BabePreDigest>(&block.header)
 				.expect("valid babe headers must contain a predigest; \
 						 header has been already verified; qed");
 			let BabePreDigest { slot_number, .. } = pre_digest;
