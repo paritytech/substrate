@@ -21,7 +21,7 @@ use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::future::Future;
 
-use hash_db::{HashDB, Hasher};
+use hash_db::{HashDB, Hasher, EMPTY_PREFIX};
 use parity_codec::{Decode, Encode};
 use primitives::{ChangesTrieConfiguration, convert_hash};
 use sr_primitives::traits::{
@@ -333,7 +333,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 				// we share the storage for multiple checks, do it here
 				let mut cht_root = H::Out::default();
 				cht_root.as_mut().copy_from_slice(local_cht_root.as_ref());
-				if !storage.contains(&cht_root, &[]) {
+				if !storage.contains(&cht_root, EMPTY_PREFIX) {
 					return Err(ClientError::InvalidCHTProof.into());
 				}
 
@@ -610,8 +610,9 @@ pub mod tests {
 	}
 
 	fn header_with_computed_extrinsics_root(extrinsics: Vec<Extrinsic>) -> Header {
-		let extrinsics_root =
-			trie::ordered_trie_root::<Blake2Hasher, _, _>(extrinsics.iter().map(Encode::encode));
+		use trie::{TrieConfiguration, trie_types::Layout};
+		let iter = extrinsics.iter().map(Encode::encode);
+		let extrinsics_root = Layout::<Blake2Hasher>::ordered_trie_root(iter);
 
 		// only care about `extrinsics_root`
 		Header::new(0, extrinsics_root, H256::zero(), H256::zero(), Default::default())

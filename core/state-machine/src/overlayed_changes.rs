@@ -50,13 +50,13 @@ pub(crate) enum TransactionState {
 /// Should be same as `TRIGGER_COMMIT_GC` or higher
 /// (we most likely do not want lower as transaction are
 /// possibly more frequent than commit).
-const TRIGGER_TRANSACTION_GC: usize = 10_000;
+const TRIGGER_TRANSACTION_GC: usize = 100_000;
 
 /// Treshold of operation before running a garbage colletion
 /// on a commit operation.
 /// We may want a lower value than for a transaction, even
 /// a 1 if we want to do it between every operation.
-const TRIGGER_COMMIT_GC: usize = 1_000;
+const TRIGGER_COMMIT_GC: usize = 10_000;
 
 /// Used to count big content as multiple operation.
 /// This is a number of octet.
@@ -986,7 +986,8 @@ mod tests {
 			Some(&changes_trie_storage),
 			crate::NeverOffchainExt::new(),
 		);
-		const ROOT: [u8; 32] = hex!("0b41e488cccbd67d1f1089592c2c235f5c5399b053f7fe9152dd4b5f279914cd");
+		const ROOT: [u8; 32] = hex!("39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa");
+
 		assert_eq!(ext.storage_root(), H256::from(ROOT));
 	}
 
