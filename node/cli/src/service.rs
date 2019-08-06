@@ -89,8 +89,6 @@ impl<F> Default for NodeConfig<F> where F: substrate_service::ServiceFactory {
 construct_service_factory! {
 	struct Factory {
 		Block = Block,
-		ConsensusPair = BabePair,
-		FinalityPair = GrandpaPair,
 		RuntimeApi = RuntimeApi,
 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
 		RuntimeDispatch = node_executor::Executor,

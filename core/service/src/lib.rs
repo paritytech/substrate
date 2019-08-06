@@ -62,7 +62,6 @@ pub use components::{
 	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock,
 	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
 	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic,
-	ComponentConsensusPair, ComponentFinalityPair,
 };
 use components::{StartRPC, MaintainTransactionPool, OffchainWorker};
 #[doc(hidden)]
@@ -917,8 +916,6 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 /// 	struct Factory {
 /// 		// Declare the block type
 /// 		Block = Block,
-/// 		ConsensusPair = BabePair,
-/// 		FinalityPair = GrandpaPair,
 /// 		RuntimeApi = RuntimeApi,
 /// 		// Declare the network protocol and give an initializer.
 /// 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
@@ -962,8 +959,6 @@ macro_rules! construct_service_factory {
 		$(#[$attr:meta])*
 		struct $name:ident {
 			Block = $block:ty,
-			ConsensusPair = $consensus_pair:ty,
-			FinalityPair = $finality_pair:ty,
 			RuntimeApi = $runtime_api:ty,
 			NetworkProtocol = $protocol:ty { $( $protocol_init:tt )* },
 			RuntimeDispatch = $dispatch:ty,
@@ -989,8 +984,6 @@ macro_rules! construct_service_factory {
 		#[allow(unused_variables)]
 		impl $crate::ServiceFactory for $name {
 			type Block = $block;
-			type ConsensusPair = $consensus_pair;
-			type FinalityPair = $finality_pair;
 			type RuntimeApi = $runtime_api;
 			type NetworkProtocol = $protocol;
 			type RuntimeDispatch = $dispatch;
