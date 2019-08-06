@@ -161,7 +161,8 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		}),
 		im_online: Some(ImOnlineConfig {
 			gossip_at: 0,
-			last_new_era_start: 0,
+			// TODO [slashing] merge with gav-in-progress
+			keys: vec![],
 		}),
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.iter().map(|x| (x.3.clone(), 1)).collect(),
@@ -300,9 +301,10 @@ pub fn testnet_genesis(
 		babe: Some(BabeConfig {
 			authorities: initial_authorities.iter().map(|x| (x.2.clone(), 1)).collect(),
 		}),
-		im_online: Some(ImOnlineConfig{
+		im_online: Some(ImOnlineConfig {
 			gossip_at: 0,
-			last_new_era_start: 0,
+			// TODO [slashing] merge with gav-in-progress
+			keys: vec![],
 		}),
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.iter().map(|x| (x.3.clone(), 1)).collect(),

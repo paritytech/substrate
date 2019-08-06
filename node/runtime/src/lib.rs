@@ -368,12 +368,9 @@ impl sudo::Trait for Runtime {
 }
 
 impl im_online::Trait for Runtime {
-	type AuthorityId = BabeId;
 	type Call = Call;
 	type Event = Event;
-	type SessionsPerEra = SessionsPerEra;
 	type UncheckedExtrinsic = UncheckedExtrinsic;
-	type IsValidAuthorityId = Babe;
 }
 
 impl grandpa::Trait for Runtime {
@@ -414,7 +411,7 @@ construct_runtime!(
 		Treasury: treasury::{Module, Call, Storage, Event<T>},
 		Contracts: contracts,
 		Sudo: sudo,
-		ImOnline: im_online::{default, ValidateUnsigned},
+		ImOnline: im_online::{Module, Call, Storage, Event, ValidateUnsigned, Config<T>},
 	}
 );
 
