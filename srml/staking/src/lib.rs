@@ -133,7 +133,8 @@
 //!
 //! ## Usage
 //!
-//! ### Example: Reporting Misbehavior
+//! ### Example: Slashing a particular validator.
+//! TODO [slashing] Figure out a better example.
 //!
 //! ```
 //! use srml_support::{decl_module, dispatch::Result};
@@ -144,10 +145,10 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//!			/// Report whoever calls this function as offline once.
-//! 		pub fn report_sender(origin) -> Result {
+//!			/// Slash a validator for an offence.
+//! 		pub fn slash_myself(origin) -> Result {
 //! 			let reported = ensure_signed(origin)?;
-//! 			<staking::Module<T>>::on_offline_validator(reported, 1);
+//! 			<staking::Module<T>>::slash_validator(reported, 1_000);
 //! 			Ok(())
 //! 		}
 //! 	}
@@ -201,28 +202,6 @@
 //! - Controller account, (obviously) not increasing the staked value.
 //! - Stash account, not increasing the staked value.
 //! - Stash account, also increasing the staked value.
-//!
-//! ### Slashing details
-//!
-//! A validator can be _reported_ to be offline at any point via the public function
-//! [`on_offline_validator`](enum.Call.html#variant.on_offline_validator). Each validator declares
-//! how many times it can be _reported_ before it actually gets slashed via its
-//! [`ValidatorPrefs::unstake_threshold`](./struct.ValidatorPrefs.html#structfield.unstake_threshold).
-//!
-//! On top of this, the Staking module also introduces an
-//! [`OfflineSlashGrace`](./struct.Module.html#method.offline_slash_grace), which applies
-//! to all validators and prevents them from getting immediately slashed.
-//!
-//! Essentially, a validator gets slashed once they have been reported more than
-//! [`OfflineSlashGrace`] + [`ValidatorPrefs::unstake_threshold`] times. Getting slashed due to
-//! offline report always leads to being _unstaked_ (_i.e._ removed as a validator candidate) as
-//! the consequence.
-//!
-//! The base slash value is computed _per slash-event_ by multiplying
-//! [`OfflineSlash`](./struct.Module.html#method.offline_slash) and the `total` `Exposure`. This
-//! value is then multiplied by `2.pow(unstake_threshold)` to obtain the final slash value. All
-//! individual accounts' punishments are capped at their total stake (NOTE: This cap should never
-//! come into force in a correctly implemented, non-corrupted, well-configured system).
 //!
 //! ### Additional Fund Management Operations
 //!
@@ -296,7 +275,7 @@ use session::{historical::OnSessionEnding, SelectInitialValidators, SessionIndex
 use primitives::Perbill;
 use primitives::weights::SimpleDispatchInfo;
 use primitives::traits::{
-	Convert, Zero, One, StaticLookup, CheckedSub, CheckedShl, Saturating, Bounded,
+	Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded,
 	SaturatedConversion, SimpleArithmetic
 };
 #[cfg(feature = "std")]
@@ -305,10 +284,8 @@ use system::{ensure_signed, ensure_root};
 
 use phragmen::{elect, ACCURACY, ExtendedBalance, equalize};
 
-const RECENT_OFFLINE_COUNT: usize = 32;
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 const MAX_NOMINATIONS: usize = 16;
-const MAX_UNSTAKE_THRESHOLD: u32 = 10;
 const MAX_UNLOCKING_CHUNKS: usize = 32;
 const STAKING_ID: LockIdentifier = *b"staking ";
 
@@ -358,9 +335,6 @@ impl Default for RewardDestination {
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct ValidatorPrefs<Balance: HasCompact> {
-	/// Validator should ensure this many more slashes than is necessary before being unstaked.
-	#[codec(compact)]
-	pub unstake_threshold: u32,
 	/// Reward that validator takes up-front; only the rest is split between themselves and
 	/// nominators.
 	#[codec(compact)]
@@ -370,7 +344,6 @@ pub struct ValidatorPrefs<Balance: HasCompact> {
 impl<B: Default + HasCompact + Copy> Default for ValidatorPrefs<B> {
 	fn default() -> Self {
 		ValidatorPrefs {
-			unstake_threshold: 3,
 			validator_payment: Default::default(),
 		}
 	}
@@ -550,10 +523,6 @@ decl_storage! {
 		/// Minimum number of staking participants before emergency conditions are imposed.
 		pub MinimumValidatorCount get(minimum_validator_count) config():
 			u32 = DEFAULT_MINIMUM_VALIDATOR_COUNT;
-		/// Slash, per validator that is taken for the first time they are found to be offline.
-		pub OfflineSlash get(offline_slash) config(): Perbill = Perbill::from_millionths(1000);
-		/// Number of instances of offline reports before slashing begins for validators.
-		pub OfflineSlashGrace get(offline_slash_grace) config(): u32;
 
 		/// Any validators that may never be slashed or forcibly kicked. It's a Vec since they're
 		/// easy to initialize and the performance hit is minimal (we expect no more than four
@@ -602,14 +571,6 @@ decl_storage! {
 		pub SlotStake get(slot_stake) build(|config: &GenesisConfig<T>| {
 			config.stakers.iter().map(|&(_, _, value, _)| value).min().unwrap_or_default()
 		}): BalanceOf<T>;
-
-		/// The number of times a given validator has been reported offline. This gets decremented
-		/// by one each era that passes.
-		pub SlashCount get(slash_count): map T::AccountId => u32;
-
-		/// Most recent `RECENT_OFFLINE_COUNT` instances. (Who it was, when it was reported, how
-		/// many instances they were offline for).
-		pub RecentlyOffline get(recently_offline): Vec<(T::AccountId, T::BlockNumber, u32)>;
 
 		/// True if the next session change will be a new era regardless of index.
 		pub ForceNewEra get(forcing_new_era): bool;
@@ -867,10 +828,6 @@ decl_module! {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
 			let stash = &ledger.stash;
-			ensure!(
-				prefs.unstake_threshold <= MAX_UNSTAKE_THRESHOLD,
-				"unstake threshold too large"
-			);
 			<Nominators<T>>::remove(stash);
 			<Validators<T>>::insert(stash, prefs);
 		}
@@ -990,13 +947,6 @@ decl_module! {
 			Self::apply_force_new_era()
 		}
 
-		/// Set the offline slash grace period.
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
-		fn set_offline_slash_grace(origin, #[compact] new: u32) {
-			ensure_root(origin)?;
-			OfflineSlashGrace::put(new);
-		}
-
 		/// Set the validators who cannot be slashed (if any).
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn set_invulnerables(origin, validators: Vec<T::AccountId>) {
@@ -1035,31 +985,43 @@ impl<T: Trait> Module<T> {
 
 	/// Slash a given validator by a specific amount. Removes the slash from the validator's
 	/// balance by preference, and reduces the nominators' balance if needed.
-	fn slash_validator(stash: &T::AccountId, slash: BalanceOf<T>) {
-		// The exposure (backing stake) information of the validator to be slashed.
-		let exposure = Self::stakers(stash);
-		// The amount we are actually going to slash (can't be bigger than the validator's total
-		// exposure)
-		let slash = slash.min(exposure.total);
-		// The amount we'll slash from the validator's stash directly.
-		let own_slash = exposure.own.min(slash);
-		let (mut imbalance, missing) = T::Currency::slash(stash, own_slash);
-		let own_slash = own_slash - missing;
-		// The amount remaining that we can't slash from the validator, that must be taken from the
-		// nominators.
-		let rest_slash = slash - own_slash;
-		if !rest_slash.is_zero() {
-			// The total to be slashed from the nominators.
-			let total = exposure.total - exposure.own;
-			if !total.is_zero() {
-				for i in exposure.others.iter() {
-					let per_u64 = Perbill::from_rational_approximation(i.value, total);
-					// best effort - not much that can be done on fail.
-					imbalance.subsume(T::Currency::slash(&i.who, per_u64 * rest_slash).0)
+	///
+	/// NOTE: This is called with the controller (not the stash) account id.
+	pub fn slash_validator(controller: T::AccountId, slash: BalanceOf<T>) {
+		if let Some(l) = Self::ledger(&controller) {
+			let stash = l.stash;
+
+			// Early exit if validator is invulnerable.
+			if Self::invulnerables().contains(&stash) {
+				return
+			}
+
+			// The exposure (backing stake) information of the validator to be slashed.
+			let exposure = Self::stakers(&stash);
+			// The amount we are actually going to slash (can't be bigger than the validator's total
+			// exposure)
+			let slash = slash.min(exposure.total);
+			// The amount we'll slash from the validator's stash directly.
+			let own_slash = exposure.own.min(slash);
+			let (mut imbalance, missing) = T::Currency::slash(&stash, own_slash);
+			let own_slash = own_slash - missing;
+			// The amount remaining that we can't slash from the validator, that must be taken from the
+			// nominators.
+			let rest_slash = slash - own_slash;
+			if !rest_slash.is_zero() {
+				// The total to be slashed from the nominators.
+				let total = exposure.total - exposure.own;
+				if !total.is_zero() {
+					for i in exposure.others.iter() {
+						let per_u64 = Perbill::from_rational_approximation(i.value, total);
+						// best effort - not much that can be done on fail.
+						imbalance.subsume(T::Currency::slash(&i.who, per_u64 * rest_slash).0)
+					}
 				}
 			}
+			T::Slash::on_unbalanced(imbalance);
+			let _ = T::SessionInterface::disable_validator(&stash);
 		}
-		T::Slash::on_unbalanced(imbalance);
 	}
 
 	/// Actually make a payment to a staker. This uses the currency's reward function
@@ -1287,13 +1249,9 @@ impl<T: Trait> Module<T> {
 				equalize::<T>(&mut assignments_with_votes, &mut exposures, tolerance, iterations);
 			}
 
-			// Clear Stakers and reduce their slash_count.
+			// Clear Stakers.
 			for v in Self::current_elected().iter() {
 				<Stakers<T>>::remove(v);
-				let slash_count = <SlashCount<T>>::take(v);
-				if slash_count > 1 {
-					<SlashCount<T>>::insert(v, slash_count - 1);
-				}
 			}
 
 			// Populate Stakers and figure out the minimum stake behind a slot.
@@ -1337,67 +1295,66 @@ impl<T: Trait> Module<T> {
 			<Ledger<T>>::remove(&controller);
 		}
 		<Payee<T>>::remove(stash);
-		<SlashCount<T>>::remove(stash);
 		<Validators<T>>::remove(stash);
 		<Nominators<T>>::remove(stash);
 	}
-
-	/// Call when a validator is determined to be offline. `count` is the
-	/// number of offenses the validator has committed.
-	///
-	/// NOTE: This is called with the controller (not the stash) account id.
-	pub fn on_offline_validator(controller: T::AccountId, count: usize) {
-		if let Some(l) = Self::ledger(&controller) {
-			let stash = l.stash;
-
-			// Early exit if validator is invulnerable.
-			if Self::invulnerables().contains(&stash) {
-				return
-			}
-
-			let slash_count = Self::slash_count(&stash);
-			let new_slash_count = slash_count + count as u32;
-			<SlashCount<T>>::insert(&stash, new_slash_count);
-			let grace = Self::offline_slash_grace();
-
-			if RECENT_OFFLINE_COUNT > 0 {
-				let item = (stash.clone(), <system::Module<T>>::block_number(), count as u32);
-				<RecentlyOffline<T>>::mutate(|v| if v.len() >= RECENT_OFFLINE_COUNT {
-					let index = v.iter()
-						.enumerate()
-						.min_by_key(|(_, (_, block, _))| block)
-						.expect("v is non-empty; qed")
-						.0;
-					v[index] = item;
-				} else {
-					v.push(item);
-				});
-			}
-
-			let prefs = Self::validators(&stash);
-			let unstake_threshold = prefs.unstake_threshold.min(MAX_UNSTAKE_THRESHOLD);
-			let max_slashes = grace + unstake_threshold;
-
-			let event = if new_slash_count > max_slashes {
-				let slash_exposure = Self::stakers(&stash).total;
-				let offline_slash_base = Self::offline_slash() * slash_exposure;
-				// They're bailing.
-				let slash = offline_slash_base
-					// Multiply slash_mantissa by 2^(unstake_threshold with upper bound)
-					.checked_shl(unstake_threshold)
-					.map(|x| x.min(slash_exposure))
-					.unwrap_or(slash_exposure);
-				let _ = Self::slash_validator(&stash, slash);
-				let _ = T::SessionInterface::disable_validator(&stash);
-
-				RawEvent::OfflineSlash(stash.clone(), slash)
-			} else {
-				RawEvent::OfflineWarning(stash.clone(), slash_count)
-			};
-
-			Self::deposit_event(event);
-		}
-	}
+    //
+	// /// Call when a validator is determined to be offline. `count` is the
+	// /// number of offenses the validator has committed.
+	// ///
+	// /// NOTE: This is called with the controller (not the stash) account id.
+	// pub fn on_offline_validator(controller: T::AccountId, count: usize) {
+	// 	if let Some(l) = Self::ledger(&controller) {
+	// 		let stash = l.stash;
+    //
+	// 		// Early exit if validator is invulnerable.
+	// 		if Self::invulnerables().contains(&stash) {
+	// 			return
+	// 		}
+    //
+	// 		let slash_count = Self::slash_count(&stash);
+	// 		let new_slash_count = slash_count + count as u32;
+	// 		<SlashCount<T>>::insert(&stash, new_slash_count);
+	// 		let grace = Self::offline_slash_grace();
+    //
+	// 		if RECENT_OFFLINE_COUNT > 0 {
+	// 			let item = (stash.clone(), <system::Module<T>>::block_number(), count as u32);
+	// 			<RecentlyOffline<T>>::mutate(|v| if v.len() >= RECENT_OFFLINE_COUNT {
+	// 				let index = v.iter()
+	// 					.enumerate()
+	// 					.min_by_key(|(_, (_, block, _))| block)
+	// 					.expect("v is non-empty; qed")
+	// 					.0;
+	// 				v[index] = item;
+	// 			} else {
+	// 				v.push(item);
+	// 			});
+	// 		}
+    //
+	// 		let prefs = Self::validators(&stash);
+	// 		let unstake_threshold = prefs.unstake_threshold.min(MAX_UNSTAKE_THRESHOLD);
+	// 		let max_slashes = grace + unstake_threshold;
+    //
+	// 		let event = if new_slash_count > max_slashes {
+	// 			let slash_exposure = Self::stakers(&stash).total;
+	// 			let offline_slash_base = Self::offline_slash() * slash_exposure;
+	// 			// They're bailing.
+	// 			let slash = offline_slash_base
+	// 				// Multiply slash_mantissa by 2^(unstake_threshold with upper bound)
+	// 				.checked_shl(unstake_threshold)
+	// 				.map(|x| x.min(slash_exposure))
+	// 				.unwrap_or(slash_exposure);
+	// 			let _ = Self::slash_validator(&stash, slash);
+	// 			let _ = T::SessionInterface::disable_validator(&stash);
+    //
+	// 			RawEvent::OfflineSlash(stash.clone(), slash)
+	// 		} else {
+	// 			RawEvent::OfflineWarning(stash.clone(), slash_count)
+	// 		};
+    //
+	// 		Self::deposit_event(event);
+	// 	}
+	// }
 
 	/// Add reward points to validator.
 	///

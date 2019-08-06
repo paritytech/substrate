@@ -14,7 +14,6 @@ substrate-primitives = { path = "../../core/primitives", default-features = fals
 srml-support = { path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 timestamp = { package = "srml-timestamp", path = "../timestamp", default-features = false }
-staking = { package = "srml-staking", path = "../staking", default-features = false }
 session = { package = "srml-session", path = "../session", default-features = false }
 substrate-consensus-aura-primitives = { path = "../../core/consensus/aura/primitives", default-features = false}
 
@@ -34,7 +33,6 @@ std = [
 	"substrate-primitives/std",
 	"system/std",
 	"timestamp/std",
-	"staking/std",
 	"inherents/std",
 	"substrate-consensus-aura-primitives/std",
 ]
