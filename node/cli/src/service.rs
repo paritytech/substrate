@@ -118,38 +118,33 @@ construct_service_factory! {
 
 				// TODO: key used should be automated and both of these should be plugins.
 
-				let maybe_babe_key: Option<BabePair> = None;//service.authority_key();
 				let maybe_grandpa_key = None;//service.fg_authority_key();
 
-				if let Some(babe_key) = maybe_babe_key {
-					info!("Using BABE key {}", babe_key.public());
+				let proposer = substrate_basic_authorship::ProposerFactory {
+					client: service.client(),
+					transaction_pool: service.transaction_pool(),
+				};
 
-					let proposer = substrate_basic_authorship::ProposerFactory {
-						client: service.client(),
-						transaction_pool: service.transaction_pool(),
-					};
+				let client = service.client();
+				let select_chain = service.select_chain()
+					.ok_or(ServiceError::SelectChainRequired)?;
 
-					let client = service.client();
-					let select_chain = service.select_chain()
-						.ok_or(ServiceError::SelectChainRequired)?;
+				let babe_config = babe::BabeParams {
+					config: Config::get_or_compute(&*client)?,
+					keystore: service.keystore(),
+					client,
+					select_chain,
+					block_import,
+					env: proposer,
+					sync_oracle: service.network(),
+					inherent_data_providers: service.config.custom.inherent_data_providers.clone(),
+					force_authoring: service.config.force_authoring,
+					time_source: babe_link,
+				};
 
-					let babe_config = babe::BabeParams {
-						config: Config::get_or_compute(&*client)?,
-						local_key: Arc::new(babe_key),
-						client,
-						select_chain,
-						block_import,
-						env: proposer,
-						sync_oracle: service.network(),
-						inherent_data_providers: service.config.custom.inherent_data_providers.clone(),
-						force_authoring: service.config.force_authoring,
-						time_source: babe_link,
-					};
-
-					let babe = start_babe(babe_config)?;
-					let select = babe.select(service.on_exit()).then(|_| Ok(()));
-					service.spawn_task(Box::new(select));
-				}
+				let babe = start_babe(babe_config)?;
+				let select = babe.select(service.on_exit()).then(|_| Ok(()));
+				service.spawn_task(Box::new(select));
 
 				let maybe_grandpa_key = if service.config.disable_grandpa {
 					None

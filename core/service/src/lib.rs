@@ -103,6 +103,7 @@ pub struct Service<Components: components::Components> {
 		ComponentOffchainStorage<Components>,
 		ComponentBlock<Components>>
 	>>,
+	keystore: keystore::KeyStorePtr,
 }
 
 /// Creates bare client without any networking.
@@ -168,11 +169,7 @@ impl<Components: components::Components> Service<Components> {
 		// Create client
 		let executor = NativeExecutor::new(config.default_heap_pages);
 
-		let keystore = Arc::new(
-			parking_lot::RwLock::new(
-				Keystore::open(config.keystore_path.clone(	), config.keystore_password.clone())?
-			)
-		);
+		let keystore = Keystore::open(config.keystore_path.clone(), config.keystore_password.clone())?;
 
 		let (client, on_demand) = Components::build_client(&config, executor, Some(keystore.clone()))?;
 		let select_chain = Components::build_select_chain(&mut config, client.clone())?;
@@ -462,12 +459,18 @@ impl<Components: components::Components> Service<Components> {
 			_telemetry: telemetry,
 			_offchain_workers: offchain_workers,
 			_telemetry_on_connect_sinks: telemetry_connection_sinks.clone(),
+			keystore,
 		})
 	}
 
-	/// return a shared instance of Telemetry (if enabled)
+	/// Return a shared instance of Telemetry (if enabled)
 	pub fn telemetry(&self) -> Option<tel::Telemetry> {
 		self._telemetry.as_ref().map(|t| t.clone())
+	}
+
+	/// Returns the keystore instance.
+	pub fn keystore(&self) -> keystore::KeyStorePtr {
+		self.keystore.clone()
 	}
 
 	/// Spawns a task in the background that runs the future passed as parameter.

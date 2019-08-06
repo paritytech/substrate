@@ -17,11 +17,11 @@ system = { package = "srml-system", path = "../system", default-features = false
 timestamp = { package = "srml-timestamp", path = "../timestamp", default-features = false }
 session = { package = "srml-session", path = "../session", default-features = false }
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../core/consensus/babe/primitives", default-features = false }
-runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
+runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = false, features = [ "wasm-nice-panic-message" ] }
 
 [dev-dependencies]
 lazy_static = "1.3.0"
-parking_lot = "0.8.0"
+parking_lot = "0.9.0"
 primitives = { package = "substrate-primitives",  path = "../../core/primitives" }
 
 [features]

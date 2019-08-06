@@ -18,13 +18,18 @@
 
 #![warn(missing_docs)]
 
-use std::{collections::HashMap, path::PathBuf, fs::{self, File}, io::{self, Write}};
+use std::{collections::HashMap, path::PathBuf, fs::{self, File}, io::{self, Write}, sync::Arc};
 
 use primitives::{
 	crypto::{KeyTypeId, Pair as PairT, Public, IsWrappedBy, Protected}, traits::KeyStore,
 };
 
 use app_crypto::{AppKey, AppPublic, AppPair, ed25519, sr25519};
+
+use parking_lot::RwLock;
+
+/// Keystore pointer
+pub type KeyStorePtr = Arc<RwLock<Store>>;
 
 /// Keystore error.
 #[derive(Debug, derive_more::Display, derive_more::From)]
@@ -72,10 +77,12 @@ impl Store {
 	/// Open the store at the given path.
 	///
 	/// Optionally takes a password that will be used to encrypt/decrypt the keys.
-	pub fn open<T: Into<PathBuf>>(path: T, password: Option<Protected<String>>) -> Result<Self> {
+	pub fn open<T: Into<PathBuf>>(path: T, password: Option<Protected<String>>) -> Result<KeyStorePtr> {
 		let path = path.into();
 		fs::create_dir_all(&path)?;
-		Ok(Self { path, additional: HashMap::new(), password })
+
+		let instance = Self { path, additional: HashMap::new(), password };
+		Ok(Arc::new(RwLock::new(instance)))
 	}
 
 	/// Get the public/private key pair for the given public key and key type.
