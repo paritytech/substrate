@@ -14,7 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! light client requests service.
+//! Light client requests service.
+//!
+//! Handles requests for data coming from our local light client and that must be answered by
+//! nodes on the network.
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
@@ -97,19 +100,30 @@ pub trait LightServerNetwork<B: BlockT> {
 	);
 }
 
-/// light client requests service. Dispatches requests to appropriate peers.
+/// Light client requests service. Dispatches requests to appropriate peers.
 pub struct LightServer<B: BlockT> {
+	/// Verifies that responses are correct. Passed at initialization.
 	checker: Arc<dyn FetchChecker<B>>,
+	/// Numeric ID to assign to the next outgoing request. Used to assign responses to their
+	/// corresponding request.
 	next_request_id: u64,
+	/// Requests that we have yet to send out on the network.
 	pending_requests: VecDeque<Request<B>>,
+	/// List of nodes to which we have sent a request and that are yet to answer.
 	active_peers: LinkedHashMap<PeerId, Request<B>>,
+	/// List of nodes that we know of that aren't doing anything and that are available for new
+	/// requests.
 	idle_peers: VecDeque<PeerId>,
+	/// Best known block for each node in `active_peers` and `idle_peers`.
 	best_blocks: HashMap<PeerId, NumberFor<B>>,
 }
 
 struct Request<Block: BlockT> {
 	id: u64,
+	/// When the request got created or sent out to the network.
 	timestamp: Instant,
+	/// Number of remaining attempts to fulfill this request. If it reaches 0, we interrupt the
+	/// attempt.
 	retry_count: usize,
 	data: RequestData<Block>,
 }
