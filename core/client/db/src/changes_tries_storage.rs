@@ -18,6 +18,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use hash_db::Prefix;
 use kvdb::{KeyValueDB, DBTransaction};
 use parity_codec::Encode;
 use parking_lot::{RwLock, RwLockWriteGuard};
@@ -288,7 +289,7 @@ where
 		self
 	}
 
-	fn get(&self, key: &H256, _prefix: &[u8]) -> Result<Option<DBValue>, String> {
+	fn get(&self, key: &H256, _prefix: Prefix) -> Result<Option<DBValue>, String> {
 		self.db.get(self.changes_tries_column, &key[..])
 			.map_err(|err| format!("{}", err))
 	}
@@ -296,6 +297,7 @@ where
 
 #[cfg(test)]
 mod tests {
+	use hash_db::EMPTY_PREFIX;
 	use client::backend::{Backend as ClientBackend, NewBlockState, BlockImportOperation};
 	use client::blockchain::HeaderBackend as BlockchainHeaderBackend;
 	use sr_primitives::testing::Header;
@@ -320,7 +322,7 @@ mod tests {
 
 			let storage = backend.changes_tries_storage.storage();
 			for (key, (val, _)) in changes_trie_update.drain() {
-				assert_eq!(storage.get(&key, &[]), Ok(Some(val)));
+				assert_eq!(storage.get(&key, EMPTY_PREFIX), Ok(Some(val)));
 			}
 		};
 
@@ -463,23 +465,23 @@ mod tests {
 		let mut tx = DBTransaction::new();
 		backend.changes_tries_storage.prune(&mut tx, blocks[0], Default::default(), 12).unwrap();
 		backend.storage.db.write(tx).unwrap();
-		assert!(backend.changes_tries_storage.get(&root1, &[]).unwrap().is_none());
-		assert!(backend.changes_tries_storage.get(&root2, &[]).unwrap().is_none());
-		assert!(backend.changes_tries_storage.get(&root3, &[]).unwrap().is_none());
-		assert!(backend.changes_tries_storage.get(&root4, &[]).unwrap().is_none());
-		assert!(backend.changes_tries_storage.get(&root5, &[]).unwrap().is_some());
-		assert!(backend.changes_tries_storage.get(&root6, &[]).unwrap().is_some());
-		assert!(backend.changes_tries_storage.get(&root7, &[]).unwrap().is_some());
-		assert!(backend.changes_tries_storage.get(&root8, &[]).unwrap().is_some());
+		assert!(backend.changes_tries_storage.get(&root1, EMPTY_PREFIX).unwrap().is_none());
+		assert!(backend.changes_tries_storage.get(&root2, EMPTY_PREFIX).unwrap().is_none());
+		assert!(backend.changes_tries_storage.get(&root3, EMPTY_PREFIX).unwrap().is_none());
+		assert!(backend.changes_tries_storage.get(&root4, EMPTY_PREFIX).unwrap().is_none());
+		assert!(backend.changes_tries_storage.get(&root5, EMPTY_PREFIX).unwrap().is_some());
+		assert!(backend.changes_tries_storage.get(&root6, EMPTY_PREFIX).unwrap().is_some());
+		assert!(backend.changes_tries_storage.get(&root7, EMPTY_PREFIX).unwrap().is_some());
+		assert!(backend.changes_tries_storage.get(&root8, EMPTY_PREFIX).unwrap().is_some());
 
 		// now simulate finalization of block#16, causing prune of tries at #5..#8
 		let mut tx = DBTransaction::new();
 		backend.changes_tries_storage.prune(&mut tx, blocks[0], Default::default(), 16).unwrap();
 		backend.storage.db.write(tx).unwrap();
-		assert!(backend.changes_tries_storage.get(&root5, &[]).unwrap().is_none());
-		assert!(backend.changes_tries_storage.get(&root6, &[]).unwrap().is_none());
-		assert!(backend.changes_tries_storage.get(&root7, &[]).unwrap().is_none());
-		assert!(backend.changes_tries_storage.get(&root8, &[]).unwrap().is_none());
+		assert!(backend.changes_tries_storage.get(&root5, EMPTY_PREFIX).unwrap().is_none());
+		assert!(backend.changes_tries_storage.get(&root6, EMPTY_PREFIX).unwrap().is_none());
+		assert!(backend.changes_tries_storage.get(&root7, EMPTY_PREFIX).unwrap().is_none());
+		assert!(backend.changes_tries_storage.get(&root8, EMPTY_PREFIX).unwrap().is_none());
 
 		// now "change" pruning mode to archive && simulate finalization of block#20
 		// => no changes tries are pruned, because we never prune in archive mode
@@ -487,10 +489,10 @@ mod tests {
 		let mut tx = DBTransaction::new();
 		backend.changes_tries_storage.prune(&mut tx, blocks[0], Default::default(), 20).unwrap();
 		backend.storage.db.write(tx).unwrap();
-		assert!(backend.changes_tries_storage.get(&root9, &[]).unwrap().is_some());
-		assert!(backend.changes_tries_storage.get(&root10, &[]).unwrap().is_some());
-		assert!(backend.changes_tries_storage.get(&root11, &[]).unwrap().is_some());
-		assert!(backend.changes_tries_storage.get(&root12, &[]).unwrap().is_some());
+		assert!(backend.changes_tries_storage.get(&root9, EMPTY_PREFIX).unwrap().is_some());
+		assert!(backend.changes_tries_storage.get(&root10, EMPTY_PREFIX).unwrap().is_some());
+		assert!(backend.changes_tries_storage.get(&root11, EMPTY_PREFIX).unwrap().is_some());
+		assert!(backend.changes_tries_storage.get(&root12, EMPTY_PREFIX).unwrap().is_some());
 	}
 
 	#[test]
@@ -547,15 +549,15 @@ mod tests {
 		let mut tx = DBTransaction::new();
 		backend.changes_tries_storage.prune(&mut tx, blocks[1], blocks[5], 5).unwrap();
 		backend.storage.db.write(tx).unwrap();
-		assert!(backend.changes_tries_storage.get(&root1, &[]).unwrap().is_none());
-		assert!(backend.changes_tries_storage.get(&root2, &[]).unwrap().is_some());
+		assert!(backend.changes_tries_storage.get(&root1, EMPTY_PREFIX).unwrap().is_none());
+		assert!(backend.changes_tries_storage.get(&root2, EMPTY_PREFIX).unwrap().is_some());
 
 		// now simulate finalization of block#6, causing prune of tries at #2
 		let mut tx = DBTransaction::new();
 		backend.changes_tries_storage.prune(&mut tx, blocks[1], blocks[6], 6).unwrap();
 		backend.storage.db.write(tx).unwrap();
-		assert!(backend.changes_tries_storage.get(&root2, &[]).unwrap().is_none());
-		assert!(backend.changes_tries_storage.get(&root3, &[]).unwrap().is_some());
+		assert!(backend.changes_tries_storage.get(&root2, EMPTY_PREFIX).unwrap().is_none());
+		assert!(backend.changes_tries_storage.get(&root3, EMPTY_PREFIX).unwrap().is_some());
 	}
 
 	#[test]

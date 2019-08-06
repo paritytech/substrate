@@ -24,6 +24,7 @@ use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor};
 use sr_primitives::{Justification, StorageOverlay, ChildrenStorageOverlay};
 use state_machine::backend::{Backend as StateBackend, InMemory};
+
 use hash_db::Hasher;
 use trie::MemoryDB;
 
@@ -530,7 +531,10 @@ where
 	}
 }
 
-/// In-memory backend. Keeps all states and blocks in memory. Useful for testing.
+/// In-memory backend. Keeps all states and blocks in memory.
+///
+/// > **Warning**: Doesn't support all the features necessary for a proper database. Only use this
+/// > struct for testing purposes. Do **NOT** use in production.
 pub struct Backend<Block, H>
 where
 	Block: BlockT,

@@ -44,7 +44,7 @@ use client::blockchain::HeaderBackend;
 use client::ExecutionStrategies;
 use client::backend::{StorageCollection, ChildStorageCollection, PrunableStateChangesTrieStorage};
 use parity_codec::{Decode, Encode};
-use hash_db::Hasher;
+use hash_db::{Hasher, Prefix};
 use kvdb::{KeyValueDB, DBTransaction};
 use trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
 use parking_lot::{Mutex, RwLock};
@@ -521,7 +521,7 @@ struct StorageDb<Block: BlockT> {
 }
 
 impl<Block: BlockT> state_machine::Storage<Blake2Hasher> for StorageDb<Block> {
-	fn get(&self, key: &H256, prefix: &[u8]) -> Result<Option<DBValue>, String> {
+	fn get(&self, key: &H256, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		let key = prefixed_key::<Blake2Hasher>(key, prefix);
 		self.state_db.get(&key, self).map(|r| r.map(|v| DBValue::from_slice(&v)))
 			.map_err(|e| format!("Database backend error: {:?}", e))
@@ -549,7 +549,7 @@ impl DbGenesisStorage {
 }
 
 impl state_machine::Storage<Blake2Hasher> for DbGenesisStorage {
-	fn get(&self, _key: &H256, _prefix: &[u8]) -> Result<Option<DBValue>, String> {
+	fn get(&self, _key: &H256, _prefix: Prefix) -> Result<Option<DBValue>, String> {
 		Ok(None)
 	}
 }
@@ -1304,7 +1304,7 @@ where Block: BlockT<Hash=H256> {}
 
 #[cfg(test)]
 pub(crate) mod tests {
-	use hash_db::HashDB;
+	use hash_db::{HashDB, EMPTY_PREFIX};
 	use super::*;
 	use crate::columns;
 	use client::backend::Backend as BTrait;
@@ -1531,7 +1531,7 @@ pub(crate) mod tests {
 
 			op.reset_storage(storage.iter().cloned().collect(), Default::default()).unwrap();
 
-			key = op.db_updates.insert(&[], b"hello");
+			key = op.db_updates.insert(EMPTY_PREFIX, b"hello");
 			op.set_block_data(
 				header,
 				Some(vec![]),
@@ -1540,8 +1540,10 @@ pub(crate) mod tests {
 			).unwrap();
 
 			backend.commit_operation(op).unwrap();
-
-			assert_eq!(backend.storage.db.get(columns::STATE, key.as_bytes()).unwrap().unwrap(), &b"hello"[..]);
+			assert_eq!(backend.storage.db.get(
+				columns::STATE,
+				&trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX)
+			).unwrap().unwrap(), &b"hello"[..]);
 			hash
 		};
 
@@ -1565,8 +1567,8 @@ pub(crate) mod tests {
 			).0.into();
 			let hash = header.hash();
 
-			op.db_updates.insert(&[], b"hello");
-			op.db_updates.remove(&key, &[]);
+			op.db_updates.insert(EMPTY_PREFIX, b"hello");
+			op.db_updates.remove(&key, EMPTY_PREFIX);
 			op.set_block_data(
 				header,
 				Some(vec![]),
@@ -1575,8 +1577,10 @@ pub(crate) mod tests {
 			).unwrap();
 
 			backend.commit_operation(op).unwrap();
-
-			assert_eq!(backend.storage.db.get(columns::STATE, key.as_bytes()).unwrap().unwrap(), &b"hello"[..]);
+			assert_eq!(backend.storage.db.get(
+				columns::STATE,
+				&trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX)
+			).unwrap().unwrap(), &b"hello"[..]);
 			hash
 		};
 
@@ -1600,7 +1604,7 @@ pub(crate) mod tests {
 			).0.into();
 			let hash = header.hash();
 
-			op.db_updates.remove(&key, &[]);
+			op.db_updates.remove(&key, EMPTY_PREFIX);
 			op.set_block_data(
 				header,
 				Some(vec![]),
@@ -1610,7 +1614,11 @@ pub(crate) mod tests {
 
 			backend.commit_operation(op).unwrap();
 
-			assert!(backend.storage.db.get(columns::STATE, key.as_bytes()).unwrap().is_some());
+
+			assert!(backend.storage.db.get(
+				columns::STATE,
+				&trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX)
+			).unwrap().is_some());
 			hash
 		};
 
@@ -1641,14 +1649,19 @@ pub(crate) mod tests {
 			).unwrap();
 
 			backend.commit_operation(op).unwrap();
-
-			assert!(backend.storage.db.get(columns::STATE, key.as_bytes()).unwrap().is_none());
+			assert!(backend.storage.db.get(
+				columns::STATE,
+				&trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX)
+			).unwrap().is_none());
 		}
 
 		backend.finalize_block(BlockId::Number(1), None).unwrap();
 		backend.finalize_block(BlockId::Number(2), None).unwrap();
 		backend.finalize_block(BlockId::Number(3), None).unwrap();
-		assert!(backend.storage.db.get(columns::STATE, key.as_bytes()).unwrap().is_none());
+		assert!(backend.storage.db.get(
+			columns::STATE,
+			&trie::prefixed_key::<Blake2Hasher>(&key, EMPTY_PREFIX)
+		).unwrap().is_none());
 	}
 
 	#[test]

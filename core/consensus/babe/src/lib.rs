@@ -321,7 +321,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			let inherent_digest = BabePreDigest {
 				vrf_proof,
 				vrf_output: inout.to_output(),
-				authority_index: authority_index as u64,
+				authority_index: authority_index as u32,
 				slot_number,
 			};
 
@@ -491,7 +491,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore>(
 	if slot_number > slot_now {
 		header.digest_mut().push(seal);
 		Ok(CheckedHeader::Deferred(header, slot_number))
-	} else if authority_index > authorities.len() as u64 {
+	} else if authority_index > authorities.len() as u32 {
 		Err(babe_err!("Slot author not found"))
 	} else {
 		let (pre_hash, author) = (header.hash(), &authorities[authority_index as usize].0);
@@ -1219,7 +1219,7 @@ pub mod test_helpers {
 			BabePreDigest {
 				vrf_proof,
 				vrf_output: inout.to_output(),
-				authority_index: authority_index as u64,
+				authority_index: authority_index as u32,
 				slot_number,
 			}
 		})

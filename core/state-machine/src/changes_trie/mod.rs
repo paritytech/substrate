@@ -51,14 +51,15 @@ pub use self::changes_iterator::{
 pub use self::prune::{prune, oldest_non_pruned_trie};
 
 use std::convert::TryInto;
-use hash_db::Hasher;
+use hash_db::{Hasher, Prefix};
 use crate::backend::Backend;
 use num_traits::{One, Zero};
 use parity_codec::{Decode, Encode};
 use primitives;
 use crate::changes_trie::build::prepare_input;
 use crate::overlayed_changes::OverlayedChanges;
-use trie::{MemoryDB, TrieDBMut, TrieMut, DBValue};
+use trie::{MemoryDB, DBValue, TrieMut};
+use trie::trie_types::TrieDBMut;
 
 /// Changes that are made outside of extrinsics are marked with this index;
 pub const NO_EXTRINSIC_INDEX: u32 = 0xffffffff;
@@ -127,7 +128,7 @@ pub trait Storage<H: Hasher, Number: BlockNumber>: RootsStorage<H, Number> {
 	/// Casts from self reference to RootsStorage reference.
 	fn as_roots_storage(&self) -> &dyn RootsStorage<H, Number>;
 	/// Get a trie node.
-	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<DBValue>, String>;
+	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String>;
 }
 
 /// Changes trie storage -> trie backend essence adapter.
@@ -136,7 +137,7 @@ pub struct TrieBackendStorageAdapter<'a, H: Hasher, Number: BlockNumber>(pub &'a
 impl<'a, H: Hasher, N: BlockNumber> crate::TrieBackendStorage<H> for TrieBackendStorageAdapter<'a, H, N> {
 	type Overlay = trie::MemoryDB<H>;
 
-	fn get(&self, key: &H::Out, prefix: &[u8]) -> Result<Option<DBValue>, String> {
+	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		self.0.get(key, prefix)
 	}
 }
