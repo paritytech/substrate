@@ -143,7 +143,7 @@ construct_service_factory! {
 					gossip_duration: Duration::from_millis(333),
 					justification_period: 4096,
 					name: Some(service.config.name.clone()),
-					keystore: service.keystore(),
+					keystore: Some(service.keystore()),
 				};
 
 				if service.config.roles.is_authority() {
@@ -252,7 +252,7 @@ mod tests {
 	use sr_primitives::{generic::{BlockId, Era, Digest}, traits::Block, OpaqueExtrinsic};
 	use timestamp;
 	use finality_tracker;
-	use keyring::{AccountKeyring, Sr25519Keyring};
+	use keyring::AccountKeyring;
 	use substrate_service::ServiceFactory;
 	use service_test::SyncService;
 	use crate::service::Factory;
@@ -318,9 +318,13 @@ mod tests {
 	#[test]
 	#[ignore]
 	fn test_sync() {
+		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
+		let keystore = keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
+		let alice = keystore.write().generate_from_seed::<babe::AuthorityPair>("//Alice")
+			.expect("Creates authority pair");
+
 		let chain_spec = crate::chain_spec::tests::integration_test_config_with_single_authority();
 
-		let alice = Sr25519Keyring::Alice.pair();
 		let mut slot_num = 1u64;
 		let block_factory = |service: &SyncService<<Factory as ServiceFactory>::FullService>| {
 			let service = service.get();
@@ -349,8 +353,8 @@ mod tests {
 					&*service.client(),
 					&parent_id,
 					slot_num,
-					&alice.clone().into(),
 					(278, 1000),
+					&keystore,
 				) {
 					break babe_pre_digest;
 				}

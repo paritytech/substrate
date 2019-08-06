@@ -204,7 +204,7 @@ pub struct Config {
 	/// Some local identifier of the voter.
 	pub name: Option<String>,
 	/// The keystore that manages the keys of this node.
-	pub keystore: keystore::KeyStorePtr,
+	pub keystore: Option<keystore::KeyStorePtr>,
 }
 
 impl Config {
@@ -403,7 +403,7 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	voters: &Arc<VoterSet<AuthorityId>>,
 	client: &Arc<Client<B, E, Block, RA>>,
 	network: &NetworkBridge<Block, N>,
-	keystore: &KeyStorePtr,
+	keystore: &Option<KeyStorePtr>,
 ) -> (
 	impl Stream<
 		Item = CommunicationInH<Block, H256>,
@@ -754,6 +754,13 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 /// Checks if this node is a voter in the given voter set.
 ///
 /// Returns the key pair of the node that is being used in the current voter set or `None`.
-fn is_voter(voters: &Arc<VoterSet<AuthorityId>>, keystore: &KeyStorePtr) -> Option<AuthorityPair> {
-	voters.voters().iter().find_map(|(p, _)| keystore.read().key_pair::<AuthorityPair>(&p).ok())
+fn is_voter(
+	voters: &Arc<VoterSet<AuthorityId>>,
+	keystore: &Option<KeyStorePtr>,
+) -> Option<AuthorityPair> {
+	match keystore {
+		Some(keystore) => voters.voters().iter()
+			.find_map(|(p, _)| keystore.read().key_pair::<AuthorityPair>(&p).ok()),
+		None => None,
+	}
 }

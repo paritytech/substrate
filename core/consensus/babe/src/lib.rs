@@ -33,7 +33,7 @@ use sr_primitives::traits::{
 	Block as BlockT, Header, DigestItemFor, NumberFor, ProvideRuntimeApi,
 	SimpleBitOps, Zero,
 };
-use substrate_keystore::KeyStorePtr;
+use keystore::KeyStorePtr;
 use runtime_support::serde::{Serialize, Deserialize};
 use parity_codec::{Decode, Encode};
 use parking_lot::{Mutex, MutexGuard};
@@ -1220,8 +1220,8 @@ pub mod test_helpers {
 		client: &C,
 		at: &BlockId<B>,
 		slot_number: u64,
-		key: &AuthorityPair,
 		c: (u64, u64),
+		keystore: &KeyStorePtr,
 	) -> Option<BabePreDigest> where
 		B: BlockT,
 		C: ProvideRuntimeApi + ProvideCache<B>,
@@ -1232,9 +1232,9 @@ pub mod test_helpers {
 		super::claim_slot(
 			slot_number,
 			epoch,
-			key,
 			c,
-		).map(|((inout, vrf_proof, _), authority_index)| {
+			keystore,
+		).map(|((inout, vrf_proof, _), authority_index, _)| {
 			BabePreDigest {
 				vrf_proof,
 				vrf_output: inout.to_output(),

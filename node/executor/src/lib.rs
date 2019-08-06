@@ -383,6 +383,7 @@ mod tests {
 			democracy: Some(Default::default()),
 			collective_Instance1: Some(Default::default()),
 			collective_Instance2: Some(Default::default()),
+			membership_Instance1: Some(Default::default()),
 			elections: Some(Default::default()),
 			contracts: Some(ContractsConfig {
 				current_schedule: Default::default(),

@@ -36,6 +36,7 @@ test-client = { package = "substrate-test-runtime-client", path = "../test-runti
 babe_primitives = { package = "substrate-consensus-babe-primitives", path = "../consensus/babe/primitives" }
 env_logger = "0.6"
 tokio = "0.1.17"
+tempfile = "3.1"
 
 [features]
 default = ["service-integration"]

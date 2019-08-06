@@ -76,6 +76,10 @@ impl Keyring {
 	pub fn public(self) -> Public {
 		self.pair().public()
 	}
+
+	pub fn to_seed(self) -> String {
+		format!("//{}", self)
+	}
 }
 
 impl From<Keyring> for &'static str {
