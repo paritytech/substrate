@@ -1053,7 +1053,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				peer.known_blocks.insert(hash.clone());
 			}
 		}
-		self.light_server.on_block_announce(LightServerIn {
+		self.light_server.update_best_number(LightServerIn {
 			behaviour: &mut self.behaviour,
 			peerset: self.peerset_handle.clone(),
 		}, who.clone(), *header.number());

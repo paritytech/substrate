@@ -315,7 +315,8 @@ impl<B: BlockT> LightServer<B> where
 		self.dispatch(network);
 	}
 
-	pub fn on_block_announce(&mut self, network: impl LightServerNetwork<B>, peer: PeerId, best_number: NumberFor<B>) {
+	/// Sets the best seen block for the given node.
+	pub fn update_best_number(&mut self, network: impl LightServerNetwork<B>, peer: PeerId, best_number: NumberFor<B>) {
 		self.best_blocks.insert(peer, best_number);
 		self.dispatch(network);
 	}
@@ -1092,12 +1093,12 @@ pub mod tests {
 		assert_eq!(vec![peer1.clone(), peer2.clone()], light_server.idle_peers.iter().cloned().collect::<Vec<_>>());
 		assert_eq!(light_server.pending_requests.len(), 3);
 
-		light_server.on_block_announce(&mut network_interface, peer1.clone(), 250);
+		light_server.update_best_number(&mut network_interface, peer1.clone(), 250);
 
 		assert_eq!(vec![peer2.clone()], light_server.idle_peers.iter().cloned().collect::<Vec<_>>());
 		assert_eq!(light_server.pending_requests.len(), 2);
 
-		light_server.on_block_announce(&mut network_interface, peer2.clone(), 250);
+		light_server.update_best_number(&mut network_interface, peer2.clone(), 250);
 
 		assert!(!light_server.idle_peers.iter().any(|_| true));
 		assert_eq!(light_server.pending_requests.len(), 1);
