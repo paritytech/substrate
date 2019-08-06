@@ -223,7 +223,7 @@ impl<T: Trait> session::ShouldEndSession<T::BlockNumber> for Module<T> {
 }
 
 // TODO [slashing]: @marcio use this, remove the dead_code annotation.
-/// A BABE equivocation offence.
+/// A BABE equivocation offence report.
 #[allow(dead_code)]
 struct BabeEquivocationOffence {
 	/// A babe slot number in which this incident happened.

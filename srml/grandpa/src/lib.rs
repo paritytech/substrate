@@ -377,3 +377,48 @@ impl<T: Trait> finality_tracker::OnFinalizationStalled<T::BlockNumber> for Modul
 		<Stalled<T>>::put((further_wait, median));
 	}
 }
+
+// TODO [slashing]: Integrate this.
+/// A grandpa equivocation offence report.
+#[allow(dead_code)]
+struct GrandpaEquivocationOffence {
+	/// Round in which the incident happened.
+	round: u64,
+	/// This is the approximate session index (most likely the start of the era).
+	///
+	/// We use an approximate session index since GRANDPA is progressing asynchronously w.r.t.
+	/// to block production algorithm. But an offence still has to provide session index for
+	/// querying the historical validator set for reports for previous eras.
+	approx_session_index: u32, // TODO [slashing]: Should be a SessionIndex.
+	/// The authority which produced this equivocation.
+	offender: AuthorityId,
+}
+
+impl Offence<AuthorityId> for GrandpaEquivocationOffence {
+	const ID: Kind = *b"grandpa:equivoca";
+
+	fn offenders(&self) -> Vec<AuthorityId> {
+		let mut offender = Vec::with_capacity(1);
+		offender.push(self.offender.clone());
+		offender
+	}
+
+	fn session_index(&self) -> u32 { // TODO [slashing]: Should be a SessionIndex.
+		self.approx_session_index
+	}
+
+	fn time_slot(&self) -> TimeSlot {
+		self.round as TimeSlot
+	}
+
+	fn slash_percentage(&self, offenders: u32, validators_count: u32) -> Perbill {
+		// the formula is min((3k / n)^2, 1)
+		let x = Perbill::from_rational_approximation(3 * offenders, validators_count);
+
+		// For now, Perbill doesn't support taking the power of it. Until it does, do it manually.
+		// The conversion to u64 is performed to guarantee it fits.
+		let x = x.into_parts();
+		let x = ((x as u64 * x as u64) / 1_000_000_000) as u32;
+		Perbill::from_parts(x)
+	}
+}
