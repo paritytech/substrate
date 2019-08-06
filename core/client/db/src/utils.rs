@@ -291,7 +291,7 @@ pub fn read_meta<Block>(db: &dyn KeyValueDB, col_meta: Option<u32>, col_header: 
 	let genesis_hash: Block::Hash = match db.get(col_meta, meta_keys::GENESIS_HASH).map_err(db_err)? {
 		Some(h) => match Decode::decode(&mut &h[..]) {
 			Ok(h) => h,
-			Err(_) => return Err(client::error::Error::Backend("Error decoding genesis hash".into())),
+			Err(err) => return Err(client::error::Error::Backend(format!("Error decoding genesis hash: {}", err))),
 		},
 		None => return Ok(Meta {
 			best_hash: Default::default(),

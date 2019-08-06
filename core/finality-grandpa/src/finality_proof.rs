@@ -81,8 +81,8 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> AuthoritySetForFinalityProver<Block> fo
 			ExecutionStrategy::NativeElseWasm,
 			NeverOffchainExt::new(),
 		).and_then(|call_result| Decode::decode(&mut &call_result[..])
-			.map_err(|_| ClientError::CallResultDecode(
-				"failed to decode GRANDPA authorities set proof".into(),
+			.map_err(|err| ClientError::CallResultDecode(
+				"failed to decode GRANDPA authorities set proof".into(), err
 			)))
 	}
 
@@ -121,8 +121,8 @@ impl<Block: BlockT> AuthoritySetForFinalityChecker<Block> for Arc<dyn FetchCheck
 		self.check_execution_proof(&request, proof)
 			.and_then(|authorities| {
 				let authorities: Vec<(AuthorityId, u64)> = Decode::decode(&mut &authorities[..])
-					.map_err(|_| ClientError::CallResultDecode(
-						"failed to decode GRANDPA authorities set proof".into(),
+					.map_err(|err| ClientError::CallResultDecode(
+						"failed to decode GRANDPA authorities set proof".into(), err
 					))?;
 				Ok(authorities.into_iter().collect())
 			})
