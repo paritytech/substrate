@@ -45,7 +45,10 @@ use inherents::{InherentDataProviders, ProvideInherentData};
 use session::historical::Proof;
 use system::ensure_signed;
 use consensus_common_primitives::AuthorshipEquivocationProof;
-use babe_primitives::{BABE_ENGINE_ID, ConsensusLog, BabeWeight, Epoch, RawBabePreDigest, BabeEquivocationProof};
+use babe_primitives::{
+	BABE_ENGINE_ID, ConsensusLog, BabeWeight, Epoch, RawBabePreDigest,
+	BabeEquivocationProof, find_pre_digest
+};
 pub use babe_primitives::{AuthorityId, AuthoritySignature, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH};
 
 /// The BABE inherent identifier.
@@ -181,6 +184,32 @@ decl_storage! {
 	}
 }
 
+fn equivocation_is_valid<T: Trait>(equivocation: BabeEquivocation<T::Header>) -> bool {
+	let first_header = equivocation.first_header();
+	let second_header = equivocation.second_header();
+
+	if first_header == second_header {
+		return false
+	}
+
+	let maybe_first_slot = get_slot::<H>(first_header);
+	let maybe_second_slot = get_slot::<H>(second_header);
+
+	if maybe_first_slot.is_ok() && maybe_first_slot == maybe_second_slot {
+		let author = self.identity();
+
+		if !self.first_signature().verify(first_header.hash().as_ref(), author) {
+			return false
+		}
+		if !self.second_signature().verify(second_header.hash().as_ref(), author) {
+			return false
+		}
+		return true;
+	}
+
+	false
+}
+
 decl_module! {
 	/// The BABE SRML module
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
@@ -220,14 +249,16 @@ decl_module! {
 
 		fn report_equivocation(origin, equivocation: BabeEquivocation<T::Header>) {
 			let _who = ensure_signed(origin)?;
+			
 			if let Some(identity) = equivocation.identity_proof() {
+
 				let _to_punish = <T as Trait>::KeyOwnerSystem::check_proof(
 					(key_types::SR25519, equivocation.identity().encode()),
 					identity.clone(),
 				);
 
-				if equivocation.is_valid() {
-					// TODO: Slash.
+				if equivocation_is_valid(equivocation) {
+					// TODO: Slash `to_punish` and reward `who`.
 				}
 			}
 		}

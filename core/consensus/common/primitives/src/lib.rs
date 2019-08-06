@@ -21,7 +21,7 @@
 use codec::Codec;
 use client::decl_runtime_apis;
 use rstd::vec::Vec;
-use parity_codec::{Encode, Decode, Codec};
+use parity_codec::Codec;
 #[cfg(feature = "std")]
 use serde::Serialize;
 use sr_primitives::{traits::{Header, Verify}};
@@ -54,10 +54,6 @@ pub trait AuthorshipEquivocationProof {
 
 	/// Get the slot where the equivocation happened.
 	fn slot(&self) -> u64;
-
-	/// Check the validity of the equivocation.
-	/// Includes checking signatures, identity inclusion, same slot and distinct headers.
-	fn is_valid(&self) -> bool;
 
 	/// Get the identity of the suspect of equivocating.
 	fn identity(&self) -> &Self::Identity;

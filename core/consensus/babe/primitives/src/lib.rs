@@ -145,6 +145,22 @@ impl slots::SlotData for BabeConfiguration {
 	const SLOT_KEY: &'static [u8] = b"babe_bootstrap_data";
 }
 
+/// Extract the BABE pre digest from the given header. Pre-runtime digests are
+/// mandatory, the function will return `Err` if none is found.
+pub fn find_pre_digest<H: Header>(header: &H) -> Result<BabePreDigest, &str>
+	where DigestItemForheader<H>: CompatibleDigestItem,
+{
+	let mut pre_digest: Option<_> = None;
+	for log in header.digest().logs() {
+		match (log.as_babe_pre_digest(), pre_digest.is_some()) {
+			(Some(_), true) => Err("Multiple BABE pre-runtime digests, rejecting!")?,
+			(None, _) => {},
+			(s, false) => pre_digest = s,
+		}
+	}
+	pre_digest.ok_or_else(|| "No BABE pre-runtime digest found")
+}
+
 /// Represents an Babe equivocation proof.
 #[derive(Debug, Clone, Encode, Decode, PartialEq)]
 pub struct BabeEquivocationProof<H, S, I, P> {
@@ -193,36 +209,6 @@ where
 	/// Get the slot where the equivocation happened.
 	fn slot(&self) -> u64 {
 		self.slot
-	}
-
-	/// Check the validity of the equivocation proof.
-	fn is_valid(&self) -> bool {
-		// let first_header = self.first_header();
-		// let second_header = self.second_header();
-
-		// if first_header == second_header {
-		// 	return false
-		// }
-
-		// let maybe_first_slot = get_slot::<H>(first_header);
-		// let maybe_second_slot = get_slot::<H>(second_header);
-
-		// if maybe_first_slot.is_ok() && maybe_first_slot == maybe_second_slot {
-		// 	// TODO: Check that author matches slot author (improve HistoricalSession).
-		// 	let author = self.identity();
-
-		// 	if !self.first_signature().verify(first_header.hash().as_ref(), author) {
-		// 		return false
-		// 	}
-
-		// 	if !self.second_signature().verify(second_header.hash().as_ref(), author) {
-		// 		return false
-		// 	}
-
-		// 	return true;
-		// }
-
-		false
 	}
 
 	/// Get the identity of the suspect of equivocating.
