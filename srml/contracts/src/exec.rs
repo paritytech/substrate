@@ -979,15 +979,49 @@ mod tests {
 			ctx.overlay.set_balance(&origin, 100);
 			ctx.overlay.set_balance(&dest, 0);
 
-			let result = ctx.call(
+			let output = ctx.call(
 				dest,
 				55,
 				&mut GasMeter::<Test>::with_limit(1000, 1),
 				vec![],
-			);
-			assert_matches!(result, Ok(_));
+			).unwrap();
+
+			assert!(output.is_success());
 			assert_eq!(ctx.overlay.get_balance(&origin), 45);
 			assert_eq!(ctx.overlay.get_balance(&dest), 55);
+		});
+	}
+
+	#[test]
+	fn changes_are_reverted_on_failing_call() {
+		// This test verifies that a contract is able to transfer
+		// some funds to another account.
+		let origin = ALICE;
+		let dest = BOB;
+
+		let vm = MockVm::new();
+		let mut loader = MockLoader::empty();
+		let return_ch = loader.insert(
+			|_| Ok(ExecReturnValue { status: 1, data: Vec::new() })
+		);
+
+		with_externalities(&mut ExtBuilder::default().build(), || {
+			let cfg = Config::preload();
+			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
+			ctx.overlay.create_contract(&BOB, return_ch).unwrap();
+			ctx.overlay.set_balance(&origin, 100);
+			ctx.overlay.set_balance(&dest, 0);
+
+			let output = ctx.call(
+				dest,
+				55,
+				&mut GasMeter::<Test>::with_limit(1000, 1),
+				vec![],
+			).unwrap();
+
+			assert!(!output.is_success());
+			assert_eq!(ctx.overlay.get_balance(&origin), 100);
+			assert_eq!(ctx.overlay.get_balance(&dest), 0);
 		});
 	}
 
@@ -1120,8 +1154,8 @@ mod tests {
 	}
 
 	#[test]
-	fn output_is_returned() {
-		// Verifies that if a contract returns data, this data
+	fn output_is_returned_on_success() {
+		// Verifies that if a contract returns data with a successful exit status, this data
 		// is returned from the execution context.
 		let origin = ALICE;
 		let dest = BOB;
@@ -1145,12 +1179,44 @@ mod tests {
 			);
 
 			let output = result.unwrap();
+			assert!(output.is_success());
 			assert_eq!(output.data, vec![1, 2, 3, 4]);
 		});
 	}
 
 	#[test]
-	fn input_data() {
+	fn output_is_returned_on_failure() {
+		// Verifies that if a contract returns data with a failing exit status, this data
+		// is returned from the execution context.
+		let origin = ALICE;
+		let dest = BOB;
+
+		let vm = MockVm::new();
+		let mut loader = MockLoader::empty();
+		let return_ch = loader.insert(
+			|_| Ok(ExecReturnValue { status: 1, data: vec![1, 2, 3, 4] })
+		);
+
+		with_externalities(&mut ExtBuilder::default().build(), || {
+			let cfg = Config::preload();
+			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
+			ctx.overlay.create_contract(&BOB, return_ch).unwrap();
+
+			let result = ctx.call(
+				dest,
+				0,
+				&mut GasMeter::<Test>::with_limit(1000, 1),
+				vec![],
+			);
+
+			let output = result.unwrap();
+			assert!(!output.is_success());
+			assert_eq!(output.data, vec![1, 2, 3, 4]);
+		});
+	}
+
+	#[test]
+	fn input_data_to_call() {
 		let vm = MockVm::new();
 		let mut loader = MockLoader::empty();
 		let input_data_ch = loader.insert(|ctx| {
@@ -1171,6 +1237,16 @@ mod tests {
 				vec![1, 2, 3, 4],
 			);
 			assert_matches!(result, Ok(_));
+		});
+	}
+
+	#[test]
+	fn input_data_to_instantiate() {
+		let vm = MockVm::new();
+		let mut loader = MockLoader::empty();
+		let input_data_ch = loader.insert(|ctx| {
+			assert_eq!(ctx.input_data, &[1, 2, 3, 4]);
+			exec_success()
 		});
 
 		// This one tests passing the input data into a contract via instantiate.
@@ -1348,11 +1424,13 @@ mod tests {
 	}
 
 	#[test]
-	fn instantiation() {
+	fn instantiation_work_with_success_output() {
 		let vm = MockVm::new();
 
 		let mut loader = MockLoader::empty();
-		let dummy_ch = loader.insert(|_| exec_success());
+		let dummy_ch = loader.insert(
+			|_| Ok(ExecReturnValue { status: STATUS_SUCCESS, data: vec![80, 65, 83, 83] })
+		);
 
 		with_externalities(
 			&mut ExtBuilder::default().existential_deposit(15).build(),
@@ -1368,7 +1446,7 @@ mod tests {
 						&dummy_ch,
 						vec![],
 					),
-					Ok((address, _)) => address
+					Ok((address, ref output)) if output.data == vec![80, 65, 83, 83] => address
 				);
 
 				// Check that the newly created account has the expected code hash and
@@ -1384,6 +1462,39 @@ mod tests {
 						topics: Vec::new(),
 					}
 				]);
+			}
+		);
+	}
+
+	#[test]
+	fn instantiation_fails_with_failing_output() {
+		let vm = MockVm::new();
+
+		let mut loader = MockLoader::empty();
+		let dummy_ch = loader.insert(
+			|_| Ok(ExecReturnValue { status: 1, data: vec![70, 65, 73, 76] })
+		);
+
+		with_externalities(
+			&mut ExtBuilder::default().existential_deposit(15).build(),
+			|| {
+				let cfg = Config::preload();
+				let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
+				ctx.overlay.set_balance(&ALICE, 1000);
+
+				let created_contract_address = assert_matches!(
+					ctx.instantiate(
+						100,
+						&mut GasMeter::<Test>::with_limit(10000, 1),
+						&dummy_ch,
+						vec![],
+					),
+					Ok((address, ref output)) if output.data == vec![70, 65, 73, 76] => address
+				);
+
+				// Check that the account has not been created.
+				assert!(ctx.overlay.get_code_hash(&created_contract_address).is_none());
+				assert!(ctx.events().is_empty());
 			}
 		);
 	}
@@ -1449,7 +1560,7 @@ mod tests {
 	}
 
 	#[test]
-	fn instantiation_fails() {
+	fn instantiation_traps() {
 		let vm = MockVm::new();
 
 		let mut loader = MockLoader::empty();
