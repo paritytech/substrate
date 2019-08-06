@@ -19,7 +19,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unused_must_use, unsafe_code, unused_variables)]
-
 pub use timestamp;
 
 use rstd::{result, prelude::*};
@@ -45,6 +44,9 @@ pub use babe_primitives::{AuthorityId, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH};
 
 #[cfg(all(feature = "std", test))]
 mod tests;
+
+#[cfg(all(test, feature = "std"))]
+mod mock;
 
 /// The BABE inherent identifier.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"babeslot";
