@@ -388,7 +388,6 @@ mod tests {
 				gas_price: 1 * MILLICENTS,
 			}),
 			sudo: Some(Default::default()),
-			im_online: Some(Default::default()),
 			grandpa: Some(GrandpaConfig {
 				authorities: vec![],
 			}),
