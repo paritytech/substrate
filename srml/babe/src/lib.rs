@@ -169,6 +169,10 @@ decl_storage! {
 		/// epoch.
 		SegmentIndex build(|_| 0): u32;
 		UnderConstruction: map u32 => Vec<[u8; 32 /* VRF_OUTPUT_LENGTH */]>;
+
+		/// Temporary value (cleared at block finalization) which is true
+		/// if per-block initialization has already been called for current block.
+		Initialized get(initialized): Option<bool>;
 	}
 	add_extra_genesis {
 		config(authorities): Vec<(AuthorityId, BabeWeight)>;
@@ -238,6 +242,11 @@ decl_module! {
 		/// Initialization
 		fn on_initialize() {
 			Self::do_initialize();
+		}
+
+		/// Block finalization
+		fn on_finalize() {
+			Initialized::kill();
 		}
 	}
 }
@@ -318,6 +327,15 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn do_initialize() {
+		// since do_initialize can be called twice (if session module is present)
+		// => let's ensure that we only modify the storage once per block by checking
+		// current block number
+		let initialized = Self::initialized().unwrap_or(false);
+		if initialized {
+			return;
+		}
+
+		Initialized::put(true);
 		for digest in Self::get_inherent_digests()
 			.logs
 			.iter()
@@ -328,18 +346,12 @@ impl<T: Trait> Module<T> {
 				None
 			})
 		{
-			// since do_initialize can be called twice (if session module is present)
-			// => let's ensure that we only modify the storage once per block by checking
-			// current slot number
-			let current_slot = CurrentSlot::get();
-			if current_slot != digest.slot_number {
-				if EpochStartSlot::get() == 0 {
-					EpochStartSlot::put(digest.slot_number);
-				}
-
-				CurrentSlot::put(digest.slot_number);
-				Self::deposit_vrf_output(&digest.vrf_output);
+			if EpochStartSlot::get() == 0 {
+				EpochStartSlot::put(digest.slot_number);
 			}
+
+			CurrentSlot::put(digest.slot_number);
+			Self::deposit_vrf_output(&digest.vrf_output);
 
 			return;
 		}
