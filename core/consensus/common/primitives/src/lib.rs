@@ -58,6 +58,9 @@ pub trait AuthorshipEquivocationProof {
 	/// Get the slot where the equivocation happened.
 	fn slot(&self) -> u64;
 
+	/// Get the identity proof of the suspect of equivocating.
+	fn identity_proof(&self) -> &Proof;
+
 	/// Get the identity of the suspect of equivocating.
 	fn identity(&self) -> &Self::Identity;
 
