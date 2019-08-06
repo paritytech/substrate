@@ -24,7 +24,7 @@
 
 use srml_support::{
 	StorageDoubleMap, Parameter, decl_module, decl_storage,
-	traits::{SlashingOffence, ReportOffence},
+	traits::{Offence, ReportOffence},
 };
 use parity_codec::{Decode, Encode};
 use rstd::vec::Vec;
@@ -59,7 +59,7 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 }
 
-impl<T: Trait, O: SlashingOffence<T::AuthorityId>> ReportOffence<T::AuthorityId, T::AuthorityId, O>
+impl<T: Trait, O: Offence<T::AuthorityId>> ReportOffence<T::AuthorityId, T::AuthorityId, O>
 	for Module<T>
 {
 	// Implementation of report_offence, where it checks if an offence is already reported for an

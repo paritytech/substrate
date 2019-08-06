@@ -641,8 +641,10 @@ impl<T> ChangeMembers<T> for () {
 	fn change_members(_incoming: &[T], _outgoing: &[T], _new_set: &[T]) {}
 }
 
-/// A trait that is implemented by each kind of offence.
-pub trait SlashingOffence<Offender> {
+/// A trait implemented by an offence report.
+///
+/// Examples of offences include: a BABE equivocation or a GRANDPA unjustified vote.
+pub trait Offence<Offender> {
 	/// Identifier which is unique for this kind of an offence.
 	const ID: [u8; 16];
 
@@ -674,7 +676,8 @@ pub trait SlashingOffence<Offender> {
 	fn slash_percentage(&self, offenders: u32, validators_count: u32) -> Perbill;
 }
 
-pub trait ReportOffence<Reporter, Offender, Offence: SlashingOffence<Offender>> {
-	/// Report an offence from the given `reporters`.
-	fn report_offence(reporters: &[Reporter], offence: &Offence);
+/// A trait for decoupling offence reporters from the actual handling of offence reports.
+pub trait ReportOffence<Reporter, Offender, O: Offence<Offender>> {
+	/// Report an `offence` from the given `reporters`.
+	fn report_offence(reporters: &[Reporter], offence: &O);
 }
