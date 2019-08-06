@@ -618,11 +618,12 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				/// Store a value under this key into the provided storage instance; this can take any reference
 				/// type that derefs to `T` (and has `Encode` implemented).
 				/// Store a value under this key into the provided storage instance.
-				fn insert_ref<Arg: ?Sized + Encode, S: HashedStorage<Twox128>>(
-					key: &K,
-					val: &Arg,
-					storage: &mut S
-				) where V: AsRef<Arg> {
+				fn insert_ref<Arg, S>(key: &#kty, val: &Arg, storage: &mut S)
+				where
+					#typ: AsRef<Arg>,
+					Arg: ?Sized + #scrate::codec::Encode,
+					S: #scrate::HashedStorage<#scrate::#hasher>
+				{
 					use self::#inner_module::Utils;
 
 					let key_for = &*#as_map::key_for(key);
