@@ -13,7 +13,7 @@ parking_lot = "0.8.0"
 tokio-executor = "0.1.7"
 tokio-timer = "0.2.11"
 rand = "0.6"
-codec = { package = "parity-scale-codec", version = "1.0.3", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 sr-primitives = {  path = "../sr-primitives" }
 consensus_common = { package = "substrate-consensus-common", path = "../consensus/common" }
 primitives = { package = "substrate-primitives",  path = "../primitives" }
