@@ -427,7 +427,7 @@ impl<FullIdentification: Clone> Offence<FullIdentification> for GrandpaEquivocat
 		// The conversion to u64 is performed to guarantee it fits.
 		// TODO: #3189 should fix this.
 		let x = x.into_parts();
-		let x = ((x as u64 * x as u64) / 1_000_000_000) as u32;
+		let x = ((x as u64 * x as u64) / (1_000_000_000 * 1_000_000_000)) as u32;
 		Perbill::from_parts(x)
 	}
 }
