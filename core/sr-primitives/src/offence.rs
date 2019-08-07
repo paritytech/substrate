@@ -103,7 +103,7 @@ pub trait OnOffenceHandler<Reporter, Offender> {
 	///
 	/// The vector of `slash_fraction` contains perbils
 	/// the authorities should be slashed and is computed
-	/// according to the `OffenceCount` already.
+	/// according to the `OffenceCount` already. This is of the same length as `offenders.`
 	fn on_offence(
 		offenders: &[OffenceDetails<Reporter, Offender>],
 		slash_fraction: &[Perbill],

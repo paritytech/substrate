@@ -1456,12 +1456,12 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 			// force a new era, to select a new validator set
 			Self::apply_force_new_era();
 			// actually slash the validator
-			let imbalance = Self::slash_validator(stash, amount, exposure);
+			let slashed_amount = Self::slash_validator(stash, amount, exposure);
 
 			// distribute the rewards according to the slash
-			let slash_reward = slash_reward_fraction * imbalance.peek();
+			let slash_reward = slash_reward_fraction * slashed_amount.peek();
 			if !slash_reward.is_zero() && !details.reporters.is_empty() {
-				let (mut reward, rest) = imbalance.split(slash_reward);
+				let (mut reward, rest) = slashed_amount.split(slash_reward);
 				// split the reward between reporters equally. Division cannot fail because
 				// we guarded against it in the enclosing if.
 				let per_reporter = reward.peek() / (details.reporters.len() as u32).into();
@@ -1474,7 +1474,7 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 				remaining_imbalance.subsume(reward);
 				remaining_imbalance.subsume(rest);
 			} else {
-				remaining_imbalance.subsume(imbalance);
+				remaining_imbalance.subsume(slashed_amount);
 			}
 		}
 
