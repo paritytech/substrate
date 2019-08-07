@@ -1871,7 +1871,7 @@ fn reward_validator_slashing_validator_doesnt_overflow() {
 		]});
 
 		// Check slashing
-		Staking::slash_validator(10, reward_slash);
+		let _ = Staking::slash_validator(&11, reward_slash, &Staking::stakers(&11));
 		assert_eq!(Balances::total_balance(&11), stake - 1);
 		assert_eq!(Balances::total_balance(&2), 1);
 	})
@@ -1945,11 +1945,7 @@ fn offence_forces_new_era() {
 			&[OffenceDetails {
 				offender: (
 					11,
-					Exposure {
-						own: 500,
-						total: 500,
-						others: vec![],
-					},
+					Staking::stakers(&11),
 				),
 				count: 1,
 				reporters: vec![],
