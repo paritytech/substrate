@@ -69,4 +69,4 @@ pub trait BareCryptoStore: Send + Sync {
 
 /// A pointer to the key store.
 #[cfg(feature = "std")]
-pub type BareCryptoStorePtr = std::sync::Arc<parking_lot::RwLock<dyn KeyStore>>;
+pub type BareCryptoStorePtr = std::sync::Arc<parking_lot::RwLock<dyn BareCryptoStore>>;
