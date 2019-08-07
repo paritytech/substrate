@@ -175,7 +175,8 @@
 //!
 //! Total reward is split among validators and their nominators depending on the number of points
 //! they received during the era. Points are added to a validator using
-//! [`add_reward_points_to_validator`](./enum.Call.html#variant.add_reward_points_to_validator).
+//! [`reward_by_ids`](./enum.Call.html#variant.reward_by_ids) or
+//! [`reward_by_indices`](./enum.Call.html#variant.reward_by_indices).
 //!
 //! [`Module`](./struct.Module.html) implements
 //! [`authorship::EventHandler`](../srml_authorship/trait.EventHandler.html) to add reward points
@@ -323,6 +324,18 @@ pub struct EraRewards {
 	/// Reward at one index correspond to reward for validator in current_elected of this index.
 	/// Thus this reward vec is only valid for one elected set.
 	rewards: Vec<u32>,
+}
+
+impl EraRewards {
+	/// Add the reward to the validator at the given index. Index must be valid
+	/// (i.e. `index < current_elected.len()`).
+	fn add_points_to_index(&mut self, index: u32, points: u32) {
+		if let Some(new_total) = self.total.checked_add(points) {
+			self.total = new_total;
+			self.rewards.resize((index as usize + 1).max(self.rewards.len()), 0);
+			self.rewards[index as usize] += points; // Addition is less than total
+		}
+	}
 }
 
 /// Indicates the initial status of the staker.
@@ -1399,22 +1412,46 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Add reward points to validator.
+	/// Add reward points to validators using their stash account ID.
+	///
+	/// Validators are keyed by stash account ID and must be in the current elected set.
+	///
+	/// For each element in the iterator the given number of points in u32 is added to the
+	/// validator, thus duplicates are handled.
 	///
 	/// At the end of the era each the total payout will be distributed among validator
 	/// relatively to their points.
-	pub fn add_reward_points_to_validator(validator: T::AccountId, points: u32) {
-		<Module<T>>::current_elected().iter()
-			.position(|elected| *elected == validator)
-			.map(|index| {
-				CurrentEraRewards::mutate(|rewards| {
-					if let Some(new_total) = rewards.total.checked_add(points) {
-						rewards.total = new_total;
-						rewards.rewards.resize((index + 1).max(rewards.rewards.len()), 0);
-						rewards.rewards[index] += points; // Addition is less than total
-					}
-				});
-			});
+	///
+	/// COMPLEXITY: Complexity is `number_of_validator_to_reward x current_elected_len`.
+	/// If you need to reward lots of validator consider using `reward_by_indices`.
+	pub fn reward_by_ids(validators_points: impl IntoIterator<Item = (T::AccountId, u32)>) {
+		CurrentEraRewards::mutate(|rewards| {
+			let current_elected = <Module<T>>::current_elected();
+			for (validator, points) in validators_points.into_iter() {
+				if let Some(index) = current_elected.iter()
+					.position(|elected| *elected == validator)
+				{
+					rewards.add_points_to_index(index as u32, points);
+				}
+			}
+		});
+	}
+
+	/// Add reward points to validators using their validator index.
+	///
+	/// For each element in the iterator the given number of points in u32 is added to the
+	/// validator, thus duplicates are handled.
+	pub fn reward_by_indices(validators_points: impl IntoIterator<Item = (u32, u32)>) {
+		// TODO: This can be optimised once #3302 is implemented.
+		let current_elected_len = <Module<T>>::current_elected().len() as u32;
+
+		CurrentEraRewards::mutate(|rewards| {
+			for (validator_index, points) in validators_points.into_iter() {
+				if validator_index < current_elected_len {
+					rewards.add_points_to_index(validator_index, points);
+				}
+			}
+		});
 	}
 }
 
@@ -1444,11 +1481,13 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 /// * 1 point to the producer of each referenced uncle block.
 impl<T: Trait + authorship::Trait> authorship::EventHandler<T::AccountId, T::BlockNumber> for Module<T> {
 	fn note_author(author: T::AccountId) {
-		Self::add_reward_points_to_validator(author, 20);
+		Self::reward_by_ids(vec![(author, 20)]);
 	}
 	fn note_uncle(author: T::AccountId, _age: T::BlockNumber) {
-		Self::add_reward_points_to_validator(<authorship::Module<T>>::author(), 2);
-		Self::add_reward_points_to_validator(author, 1);
+		Self::reward_by_ids(vec![
+			(<authorship::Module<T>>::author(), 2),
+			(author, 1)
+		])
 	}
 }
 
