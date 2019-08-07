@@ -14,21 +14,61 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! http://research.web3.foundation/en/latest/polkadot/Token%20Economics/#inflation-model
+//! This module expose one function `P_NPoS` (Payout NPoS) or `compute_total_payout` which returns
+//! the total payout for the era given the era duration and the staking rate in NPoS.
+//! The staking rate in NPoS is the total amount of tokens staked by nominators and validators,
+//! divided by the total token supply.
+//!
+//! This payout is computed from the desired yearly inflation `I_NPoS`.
+//!
+//! `I_NPoS` is defined as such:
+//!
+//! let's introduce some constant:
+//! * `I0` represents a tight upper-bound on our estimate of the operational costs of all
+//!    validators, expressed as a fraction of the total token supply. I_NPoS must be always
+//!    superior or equal to this value.
+//! * `x_ideal` the ideal staking rate in NPoS.
+//! * `i_ideal` the ideal yearly interest rate: the ideal total yearly amount of tokens minted to
+//!    pay all validators and nominators for NPoS, divided by the total amount of tokens staked by
+//!    them. `i(x) = I(x)/x` and `i(x_ideal) = i_deal`
+//! * `d` decay rate.
+//!
+//! We define I_NPoS as a linear function from 0 to `x_ideal` and an exponential decrease after
+//! `x_ideal` to 1. We choose exponential decrease for `I_NPoS` because this implies an exponential
+//! decrease for the yearly interest rate as well, and we want the interest rate to fall sharply
+//! beyond `x_ideal` to avoid illiquidity.
+//!
+//! Function is defined as such:
+//! ```nocompile
+//! for 0 < x < x_ideal: I_NPoS(x) = I0 + x*(i_ideal - I0/x_ideal)
+//! for x_ideal < x < 1: I_NPoS(x) = I0 + (i_ideal*x_ideal - I0)*2^((x_ideal-x)/d)
+//! ```
+//!
+//! Thus we have the following properties:
+//! * `I_NPoS > I0`
+//! * `I_NPoS(0) = I0`
+//! * `I_NPoS(x_ideal) = max(I_NPoS) = x_ideal*i_ideal`
+//! * `i(x)` is monotone decreasing
+//!
+//! More details can be found [here](http://research.web3.foundation/en/latest/polkadot/Token%20Eco
+//! nomics/#inflation-model)
+
 
 use sr_primitives::{Perbill, traits::SimpleArithmetic};
 
-/// Linear function truncated to positive part `y = max(0, b [+ or -] a*x)` for PNPoS usage
+/// Linear function truncated to positive part `y = max(0, b [+ or -] a*x)` for `P_NPoS` usage.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 struct Linear {
+	// Negate the `a*x` term.
 	negative_a: bool,
-	// Perbill
+	// Per-billion representation of `a`, the x coefficient.
 	a: u32,
-	// Perbill
+	// Per-billion representation of `b`, the intercept.
 	b: u32,
 }
 
 impl Linear {
+	/// Compute `f(n/d)*d`. This is useful to avoid loss of precision.
 	fn calculate_for_fraction_times_denominator<N>(&self, n: N, d: N) -> N
 	where
 		N: SimpleArithmetic + Clone
@@ -41,22 +81,28 @@ impl Linear {
 	}
 }
 
-/// Piecewise Linear function for PNPoS usage
+/// Piecewise Linear function for `P_NPoS` usage
 #[derive(Debug, PartialEq, Eq)]
 struct PiecewiseLinear {
-	/// Array of tuple of Abscisse in Perbill and Linear.
+	/// Array of tuples of an abscissa in a per-billion representation and a linear function.
 	///
-	/// Each piece start with at the abscisse up to the abscisse of the next piece.
+	/// Abscissas in the array must be in order from the lowest to the highest.
+	///
+	/// The array defines a piecewise linear function as such:
+	/// * the n-th segment starts at the abscissa of the n-th element until the abscissa of the
+	///     n-th + 1 element, and is defined by the linear function of the n-th element
+	/// * last segment doesn't end
 	pieces: [(u32, Linear); 20],
 }
 
 impl PiecewiseLinear {
+	/// Compute `f(n/d)*d`. This is useful to avoid loss of precision.
 	fn calculate_for_fraction_times_denominator<N>(&self, n: N, d: N) -> N
 	where
 		N: SimpleArithmetic + Clone
 	{
 		let part = self.pieces.iter()
-			.take_while(|(abscisse, _)| n > Perbill::from_parts(*abscisse) * d.clone())
+			.take_while(|(abscissa, _)| n > Perbill::from_parts(*abscissa) * d.clone())
 			.last()
 			.unwrap_or(&self.pieces[0]);
 
@@ -64,7 +110,16 @@ impl PiecewiseLinear {
 	}
 }
 
-// Piecewise linear approximation of I_NPoS.
+/// Piecewise linear approximation of `I_NPoS`.
+///
+/// Using the constants:
+/// * `I_0` = 0.025;
+/// * `i_ideal` = 0.2;
+/// * `x_ideal` = 0.5;
+/// * `d` = 0.05;
+///
+/// This approximation is tested to be close to real one by an error less than 1% see
+/// `i_npos_precision` test.
 const I_NPOS: PiecewiseLinear = PiecewiseLinear {
 	pieces: [
 		(0, Linear { negative_a: false, a: 150000000, b: 25000000 }),
@@ -90,7 +145,7 @@ const I_NPOS: PiecewiseLinear = PiecewiseLinear {
 	]
 };
 
-/// Second per year for the Julian year (365.25 days)
+/// Second per year for the Julian year (365.25 days).
 const SECOND_PER_YEAR: u32 = 3600*24*36525/100;
 
 /// The total payout to all validators (and their nominators) per era.
@@ -147,19 +202,19 @@ mod test_inflation {
 	const x_ideal: f64 = 0.5;
 	const d: f64 = 0.05;
 
-	// Part left to 0.5
+	// Left part from `x_ideal`
 	fn I_left(x: f64) -> f64 {
 		I_0 + x * (i_ideal - I_0/x_ideal)
 	}
 
-	// Part right to 0.5
+	// Right part from `x_ideal`
 	fn I_right(x: f64) -> f64 {
 		I_0 + (i_ideal*x_ideal - I_0) * 2_f64.powf((x_ideal-x)/d)
 	}
 
 	// Definition of I_NPoS in float
 	fn I_full(x: f64) -> f64 {
-		if x <= 0.5 {
+		if x <= x_ideal {
 			I_left(x)
 		} else {
 			I_right(x)
@@ -172,11 +227,11 @@ mod test_inflation {
 
 		// Points for left part
 		points.push((0.0, I_0));
-		points.push((0.5, I_left(0.5)));
+		points.push((x_ideal, I_left(x_ideal)));
 
 		// Approximation for right part.
 		//
-		// We start from 0.5 (x0) and we try to find the next point (x1) for which the linear
+		// We start from x_ideal (x0) and we try to find the next point (x1) for which the linear
 		// approximation of (x0, x1) doesn't deviate from float definition by an error of
 		// GEN_ERROR.
 
@@ -186,7 +241,7 @@ mod test_inflation {
 		// Max error used for generating points.
 		const GEN_ERROR: f64 = 0.000_1;
 
-		let mut x0: f64 = 0.5;
+		let mut x0: f64 = x_ideal;
 		let mut x1: f64 = x0;
 
 		// This is just a step used to find next x1:
