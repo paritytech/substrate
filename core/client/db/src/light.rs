@@ -26,7 +26,6 @@ use client::backend::{AuxStore, NewBlockState};
 use client::blockchain::{BlockStatus, Cache as BlockchainCache,
 	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo};
 use client::cht;
-use client::leaves::{LeafSet, FinalizationDisplaced};
 use client::error::{Error as ClientError, Result as ClientResult};
 use client::light::blockchain::Storage as LightBlockchainStorage;
 use codec::{Decode, Encode};
@@ -54,11 +53,10 @@ const HEADER_CHT_PREFIX: u8 = 0;
 const CHANGES_TRIE_CHT_PREFIX: u8 = 1;
 
 /// Light blockchain storage. Stores most recent headers + CHTs for older headers.
-/// Locks order: meta, leaves, cache.
+/// Locks order: meta, cache.
 pub struct LightStorage<Block: BlockT> {
 	db: Arc<dyn KeyValueDB>,
 	meta: RwLock<Meta<NumberFor<Block>, Block::Hash>>,
-	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
 	cache: Arc<DbCacheSync<Block>>,
 }
 
@@ -96,7 +94,6 @@ impl<Block> LightStorage<Block>
 
 	fn from_kvdb(db: Arc<dyn KeyValueDB>) -> ClientResult<Self> {
 		let meta = read_meta::<Block>(&*db, columns::META, columns::HEADER)?;
-		let leaves = LeafSet::read_from_db(&*db, columns::META, meta_keys::LEAF_PREFIX)?;
 		let cache = DbCache::new(
 			db.clone(),
 			columns::KEY_LOOKUP,
@@ -110,7 +107,6 @@ impl<Block> LightStorage<Block>
 			db,
 			meta: RwLock::new(meta),
 			cache: Arc::new(DbCacheSync(RwLock::new(cache))),
-			leaves: RwLock::new(leaves),
 		})
 	}
 
@@ -264,7 +260,6 @@ impl<Block: BlockT> LightStorage<Block> {
 		transaction: &mut DBTransaction,
 		header: &Block::Header,
 		hash: Block::Hash,
-		displaced: &mut Option<FinalizationDisplaced<Block::Hash, NumberFor<Block>>>,
 	) -> ClientResult<()> {
 		let meta = self.meta.read();
 		if &meta.finalized_hash != header.parent_hash() {
@@ -338,12 +333,6 @@ impl<Block: BlockT> LightStorage<Block> {
 			}
 		}
 
-		let new_displaced = self.leaves.write().finalize_height(header.number().clone());
-		match displaced {
-			x @ &mut None => *x = Some(new_displaced),
-			&mut Some(ref mut displaced) => displaced.merge(new_displaced),
-		}
-
 		Ok(())
 	}
 
@@ -399,7 +388,6 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		leaf_state: NewBlockState,
 		aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	) -> ClientResult<()> {
-		let mut finalization_displaced_leaves = None;
 		let mut transaction = DBTransaction::new();
 
 		let hash = header.hash();
@@ -445,14 +433,10 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 				&mut transaction,
 				&header,
 				hash,
-				&mut finalization_displaced_leaves,
 			)?;
 		}
 
 		{
-			let mut leaves = self.leaves.write();
-			let displaced_leaf = leaves.import(hash, number, parent_hash);
-
 			let mut cache = self.cache.0.write();
 			let cache_ops = cache.transaction(&mut transaction)
 				.on_block_insert(
@@ -464,23 +448,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 				.into_ops();
 
 			debug!("Light DB Commit {:?} ({})", hash, number);
-			let write_result = self.db.write(transaction).map_err(db_err);
-			if let Err(e) = write_result {
-				let mut leaves = self.leaves.write();
-				let mut undo = leaves.undo();
-
-				// revert leaves set update if there was one.
-				if let Some(displaced_leaf) = displaced_leaf {
-					undo.undo_import(displaced_leaf);
-				}
-
-				if let Some(finalization_displaced) = finalization_displaced_leaves {
-					undo.undo_finalization(finalization_displaced);
-				}
-
-				return Err(e);
-			}
-
+			self.db.write(transaction).map_err(db_err)?;
 			cache.commit(cache_ops);
 		}
 
@@ -522,11 +490,10 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 
 	fn finalize_header(&self, id: BlockId<Block>) -> ClientResult<()> {
 		if let Some(header) = self.header(id)? {
-			let mut displaced = None;
 			let mut transaction = DBTransaction::new();
 			let hash = header.hash();
 			let number = *header.number();
-			self.note_finalized(&mut transaction, &header, hash.clone(), &mut displaced)?;
+			self.note_finalized(&mut transaction, &header, hash.clone())?;
 			{
 				let mut cache = self.cache.0.write();
 				let cache_ops = cache.transaction(&mut transaction)
@@ -536,12 +503,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 					)?
 					.into_ops();
 
-				if let Err(e) = self.db.write(transaction).map_err(db_err) {
-					if let Some(displaced) = displaced {
-						self.leaves.write().undo().undo_finalization(displaced);
-					}
-					return Err(e);
-				}
+				self.db.write(transaction).map_err(db_err)?;
 				cache.commit(cache_ops);
 			}
 			self.update_meta(hash, header.number().clone(), false, true);
@@ -1064,30 +1026,6 @@ pub(crate) mod tests {
 		assert_eq!(db.get_aux(&[1]).unwrap(), None);
 		assert_eq!(db.get_aux(&[2]).unwrap(), Some(vec![102]));
 		assert_eq!(db.get_aux(&[3]).unwrap(), Some(vec![103]));
-	}
-
-	#[test]
-	fn test_leaves_pruned_on_finality() {
-		let db = LightStorage::<Block>::new_test();
-		let block0 = insert_block(&db, HashMap::new(), || default_header(&Default::default(), 0));
-
-		let block1_a = insert_block(&db, HashMap::new(), || default_header(&block0, 1));
-		let block1_b = insert_block(&db, HashMap::new(), || header_with_extrinsics_root(&block0, 1, [1; 32].into()));
-		let block1_c = insert_block(&db, HashMap::new(), || header_with_extrinsics_root(&block0, 1, [2; 32].into()));
-
-		assert_eq!(db.leaves.read().hashes(), vec![block1_a, block1_b, block1_c]);
-
-		let block2_a = insert_block(&db, HashMap::new(), || default_header(&block1_a, 2));
-		let block2_b = insert_block(&db, HashMap::new(), || header_with_extrinsics_root(&block1_b, 2, [1; 32].into()));
-		let block2_c = insert_block(&db, HashMap::new(), || header_with_extrinsics_root(&block1_b, 2, [2; 32].into()));
-
-		assert_eq!(db.leaves.read().hashes(), vec![block2_a, block2_b, block2_c, block1_c]);
-
-		db.finalize_header(BlockId::hash(block1_a)).unwrap();
-		db.finalize_header(BlockId::hash(block2_a)).unwrap();
-
-		// leaves at same height stay. Leaves at lower heights pruned.
-		assert_eq!(db.leaves.read().hashes(), vec![block2_a, block2_b, block2_c]);
 	}
 
 	#[test]
