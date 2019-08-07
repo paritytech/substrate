@@ -72,7 +72,7 @@ pub trait Offence<Offender> {
 	/// A slash fraction of the total exposure that should be slashed for this
 	/// particular offence kind for the given parameters.
 	///
-	/// `offenders_count` - the count of unique offending authorities
+	/// `offenders_count` - the count of unique offending authorities. It is >0.
 	/// `validators_count` - the cardinality of the validator set at the time of offence.
 	fn slash_fraction(
 		offenders_count: u32,
