@@ -61,6 +61,8 @@ pub fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec
 #[cfg_attr(feature = "std", derive(Debug))]
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
 pub struct GrandpaEquivocation<H, N> {
+	/// Reporter of the equivocation.
+	pub reporter: AuthorityId,
 	/// The set id.
 	pub set_id: u64,
 	/// The session id.

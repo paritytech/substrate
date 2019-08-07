@@ -98,6 +98,7 @@ pub fn check_equivocation<C, H, E, V>(
 			// 2) with different hash
 			if header.hash() != prev_header.hash() {
 				return Ok(Some(AuthorshipEquivocationProof::new(
+					signer.clone(), // TODO: this should be the reporter.
 					signer.clone(),
 					Proof::default(), // TODO: add the proof.
 					slot,

@@ -851,29 +851,34 @@ where
 		let first_signature = equivocation.first.1;
 		let second_signature = equivocation.second.1;
 
-		let grandpa_equivocation = GrandpaEquivocationFrom::<Block> {
-			round_number: equivocation.round_number,
-			session_index: SessionIndex::default(), // TODO: add session index.
-			identity: equivocation.identity,
-			identity_proof: Proof::default(), // TODO: add proof.
-			first: (first_vote, first_signature),
-			second: (second_vote, second_signature),
-			set_id: self.set_id,
-		};
+		if let Some(local_key) = crate::is_voter(&self.voters, &self.config.keystore) {
+			let reporter = local_key.public();
 
-		let block_id = BlockId::<Block>::number(self.inner.info().chain.best_number);
-		let maybe_report_call = self.inner.runtime_api()
-			.construct_equivocation_transaction(&block_id, grandpa_equivocation);
+			let grandpa_equivocation = GrandpaEquivocationFrom::<Block> {
+				reporter,
+				round_number: equivocation.round_number,
+				session_index: SessionIndex::default(), // TODO: add session index.
+				identity: equivocation.identity,
+				identity_proof: Proof::default(), // TODO: add proof.
+				first: (first_vote, first_signature),
+				second: (second_vote, second_signature),
+				set_id: self.set_id,
+			};
 
-		if let Ok(Some(report_call)) = maybe_report_call {
-			let uxt = Decode::decode(&mut report_call.as_slice())
-				.expect("Encoded extrinsic is valid; qed");
-			match self.transaction_pool.submit_one(&block_id, uxt) {
-				Err(e) => warn!("Error importing misbehavior report: {:?}", e),
-				Ok(hash) => info!("Misbehavior report imported to transaction pool: {:?}", hash),
+			let block_id = BlockId::<Block>::number(self.inner.info().chain.best_number);
+			let maybe_report_call = self.inner.runtime_api()
+				.construct_equivocation_transaction(&block_id, grandpa_equivocation);
+
+			if let Ok(Some(report_call)) = maybe_report_call {
+				let uxt = Decode::decode(&mut report_call.as_slice())
+					.expect("Encoded extrinsic is valid; qed");
+				match self.transaction_pool.submit_one(&block_id, uxt) {
+					Err(e) => warn!("Error importing misbehavior report: {:?}", e),
+					Ok(hash) => info!("Misbehavior report imported to transaction pool: {:?}", hash),
+				}
+			} else {
+				error!(target: "afg", "Failed to construct equivocation report call")
 			}
-		} else {
-			error!(target: "afg", "Failed to construct equivocation report call")
 		}
 	}
 
@@ -889,29 +894,33 @@ where
 		let first_signature = equivocation.first.1;
 		let second_signature = equivocation.second.1;
 
-		let grandpa_equivocation = GrandpaEquivocationFrom::<Block> {
-			round_number: equivocation.round_number,
-			session_index: SessionIndex::default(), // TODO: add session index.
-			identity: equivocation.identity,
-			identity_proof: Proof::default(), // TODO: add proof.
-			first: (first_vote, first_signature),
-			second: (second_vote, second_signature),
-			set_id: self.set_id,
-		};
+		if let Some(local_key) = crate::is_voter(&self.voters, &self.config.keystore) {
+			let reporter = local_key.public();
+			let grandpa_equivocation = GrandpaEquivocationFrom::<Block> {
+				reporter,
+				round_number: equivocation.round_number,
+				session_index: SessionIndex::default(), // TODO: add session index.
+				identity: equivocation.identity,
+				identity_proof: Proof::default(), // TODO: add proof.
+				first: (first_vote, first_signature),
+				second: (second_vote, second_signature),
+				set_id: self.set_id,
+			};
 
-		let block_id = BlockId::<Block>::number(self.inner.info().chain.best_number);
-		let maybe_report_call = self.inner.runtime_api()
-			.construct_equivocation_transaction(&block_id, grandpa_equivocation);
+			let block_id = BlockId::<Block>::number(self.inner.info().chain.best_number);
+			let maybe_report_call = self.inner.runtime_api()
+				.construct_equivocation_transaction(&block_id, grandpa_equivocation);
 
-		if let Ok(Some(report_call)) = maybe_report_call {
-			let uxt = Decode::decode(&mut report_call.as_slice())
-				.expect("Encoded extrinsic is valid; qed");
-			match self.transaction_pool.submit_one(&block_id, uxt) {
-				Err(e) => warn!("Error importing misbehavior report: {:?}", e),
-				Ok(hash) => info!("Misbehavior report imported to transaction pool: {:?}", hash),
+			if let Ok(Some(report_call)) = maybe_report_call {
+				let uxt = Decode::decode(&mut report_call.as_slice())
+					.expect("Encoded extrinsic is valid; qed");
+				match self.transaction_pool.submit_one(&block_id, uxt) {
+					Err(e) => warn!("Error importing misbehavior report: {:?}", e),
+					Ok(hash) => info!("Misbehavior report imported to transaction pool: {:?}", hash),
+				}
+			} else {
+				error!(target: "afg", "Failed to construct equivocation report call")
 			}
-		} else {
-			error!(target: "afg", "Failed to construct equivocation report call")
 		}
 	}
 }

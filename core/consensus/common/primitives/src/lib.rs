@@ -40,6 +40,7 @@ pub trait AuthorshipEquivocationProof {
 
 	/// Create an equivocation proof for AuRa or Babe.
 	fn new(
+		reporter: Self::Identity,
 		identity: Self::Identity,
 		identity_proof: Proof,
 		slot: u64,
@@ -49,6 +50,9 @@ pub trait AuthorshipEquivocationProof {
 		first_signature: Self::Signature, 
 		second_signature: Self::Signature,
 	) -> Self;
+
+	/// Get the reporter of the equivocation.
+	fn reporter(&self) -> &Self::Identity;
 
 	/// Get the session index where the equivocation happened.
 	fn session_index(&self) -> &SessionIndex;

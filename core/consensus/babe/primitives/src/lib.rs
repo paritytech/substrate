@@ -146,6 +146,7 @@ impl slots::SlotData for BabeConfiguration {
 #[derive(Clone, Encode, Decode, PartialEq)]
 #[cfg_attr(any(feature = "std", test), derive(Debug))]
 pub struct BabeEquivocationProof<H> {
+	reporter: AuthorityId,
 	identity: AuthorityId,
 	identity_proof: Proof,
 	slot: u64,
@@ -166,6 +167,7 @@ where
 
 	/// Create a new Babe equivocation proof.
 	fn new(
+		reporter: Self::Identity,
 		identity: Self::Identity,
 		identity_proof: Proof,
 		slot: u64,
@@ -176,6 +178,7 @@ where
 		second_signature: Self::Signature,
 	) -> Self {
 		BabeEquivocationProof {
+			reporter,
 			identity,
 			identity_proof,
 			slot,
@@ -185,6 +188,11 @@ where
 			first_signature,
 			second_signature,
 		}
+	}
+
+	/// Get the reporter of the equivocation.
+	fn reporter(&self) -> &Self::Identity {
+		&self.reporter
 	}
 
 	/// Get the slot where the equivocation happened.
