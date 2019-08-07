@@ -27,11 +27,10 @@ use wasmi::{
 use state_machine::{Externalities, ChildStorageKey};
 use crate::error::{Error, Result};
 use codec::Encode;
-use primitives::{blake2_128, blake2_256, twox_64, twox_128, twox_256, ed25519, sr25519, Pair};
-use primitives::offchain;
-use primitives::hexdisplay::HexDisplay;
-use primitives::sandbox as sandbox_primitives;
-use primitives::{H256, Blake2Hasher};
+use primitives::{
+	blake2_128, blake2_256, twox_64, twox_128, twox_256, ed25519, sr25519, Pair, crypto::KeyTypeId,
+	offchain, hexdisplay::HexDisplay, sandbox as sandbox_primitives, H256, Blake2Hasher,
+};
 use trie::{TrieConfiguration, trie_types::Layout};
 use crate::sandbox;
 use crate::allocator;
@@ -641,7 +640,30 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.memory.set(out, &result).map_err(|_| "Invalid attempt to set result in ext_keccak_256")?;
 		Ok(())
 	},
-	ext_ed25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32 => {
+	ext_ed25519_public_keys(id_data: *const u8, result_len: *mut u32) -> *mut u8 => {
+		let mut id = [0u8; 4];
+		this.memory.get_into(id_data, &mut id[..])
+			.map_err(|_| "Invalid attempt to get id in ext_ed25519_public_keys")?;
+		let key_type = KeyTypeId(id);
+
+		let keys = runtime_io::ed25519_public_keys(key_type).encode();
+
+		let len = keys.len() as u32;
+		let offset = this.heap.allocate(len)? as u32;
+
+		this.memory.set(offset, keys.as_ref())
+			.map_err(|_| "Invalid attempt to set memory in ext_ed25519_public_keys")?;
+		this.memory.write_primitive(result_len, len)
+			.map_err(|_| "Invalid attempt to write result_len in ext_ed25519_public_keys")?;
+
+		Ok(offset)
+	},
+	ext_ed25519_verify(
+		msg_data: *const u8,
+		msg_len: u32,
+		sig_data: *const u8,
+		pubkey_data: *const u8,
+	) -> u32 => {
 		let mut sig = [0u8; 64];
 		this.memory.get_into(sig_data, &mut sig[..])
 			.map_err(|_| "Invalid attempt to get signature in ext_ed25519_verify")?;
@@ -657,7 +679,87 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			5
 		})
 	},
-	ext_sr25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32 => {
+	ext_ed25519_generate(id_data: *const u8, seed: *const u8, seed_len: u32, out: *mut u8) => {
+		let mut id = [0u8; 4];
+		this.memory.get_into(id_data, &mut id[..])
+			.map_err(|_| "Invalid attempt to get id in ext_ed25519_generate")?;
+		let key_type = KeyTypeId(id);
+
+		let seed = if seed_len == 0 {
+			None
+		} else {
+			Some(
+				this.memory.get(seed, seed_len as usize)
+					.map_err(|_| "Invalid attempt to get seed in ext_ed25519_generate")?
+			)
+		};
+
+		let seed = seed.as_ref()
+			.map(|seed|
+				std::str::from_utf8(&seed)
+					.map_err(|_| "Seed not a valid utf8 string in ext_sr25119_generate")
+			).transpose()?;
+
+		let pubkey = runtime_io::ed25519_generate(key_type, seed);
+
+		this.memory.set(out, pubkey.as_ref())
+			.map_err(|_| "Invalid attempt to set out in ext_ed25519_generate".into())
+	},
+	ext_ed25519_sign(
+		id_data: *const u8,
+		pubkey_data: *const u8,
+		msg_data: *const u8,
+		msg_len: u32,
+		out: *mut u8,
+	) -> u32 => {
+		let mut id = [0u8; 4];
+		this.memory.get_into(id_data, &mut id[..])
+			.map_err(|_| "Invalid attempt to get id in ext_ed25519_sign")?;
+		let key_type = KeyTypeId(id);
+
+		let mut pubkey = [0u8; 32];
+		this.memory.get_into(pubkey_data, &mut pubkey[..])
+			.map_err(|_| "Invalid attempt to get pubkey in ext_ed25519_sign")?;
+
+		let msg = this.memory.get(msg_data, msg_len as usize)
+			.map_err(|_| "Invalid attempt to get message in ext_ed25519_sign")?;
+
+		let signature = runtime_io::ed25519_sign(key_type, &ed25519::Public(pubkey), &msg);
+
+		match signature {
+			Some(signature) => {
+				this.memory
+					.set(out, signature.as_ref())
+					.map_err(|_| "Invalid attempt to set out in ext_ed25519_sign")?;
+				Ok(0)
+			},
+			None => Ok(1),
+		}
+	},
+	ext_sr25519_public_keys(id_data: *const u8, result_len: *mut u32) -> *mut u8 => {
+		let mut id = [0u8; 4];
+		this.memory.get_into(id_data, &mut id[..])
+			.map_err(|_| "Invalid attempt to get id in ext_sr25519_public_keys")?;
+		let key_type = KeyTypeId(id);
+
+		let keys = runtime_io::sr25519_public_keys(key_type).encode();
+
+		let len = keys.len() as u32;
+		let offset = this.heap.allocate(len)? as u32;
+
+		this.memory.set(offset, keys.as_ref())
+			.map_err(|_| "Invalid attempt to set memory in ext_sr25519_public_keys")?;
+		this.memory.write_primitive(result_len, len)
+			.map_err(|_| "Invalid attempt to write result_len in ext_sr25519_public_keys")?;
+
+		Ok(offset)
+	},
+	ext_sr25519_verify(
+		msg_data: *const u8,
+		msg_len: u32,
+		sig_data: *const u8,
+		pubkey_data: *const u8,
+	) -> u32 => {
 		let mut sig = [0u8; 64];
 		this.memory.get_into(sig_data, &mut sig[..])
 			.map_err(|_| "Invalid attempt to get signature in ext_sr25519_verify")?;
@@ -672,6 +774,62 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		} else {
 			5
 		})
+	},
+	ext_sr25519_generate(id_data: *const u8, seed: *const u8, seed_len: u32, out: *mut u8) => {
+		let mut id = [0u8; 4];
+		this.memory.get_into(id_data, &mut id[..])
+			.map_err(|_| "Invalid attempt to get id in ext_sr25519_generate")?;
+		let key_type = KeyTypeId(id);
+		let seed = if seed_len == 0 {
+			None
+		} else {
+			Some(
+				this.memory.get(seed, seed_len as usize)
+					.map_err(|_| "Invalid attempt to get seed in ext_sr25519_generate")?
+			)
+		};
+
+		let seed = seed.as_ref()
+			.map(|seed|
+				std::str::from_utf8(&seed)
+					.map_err(|_| "Seed not a valid utf8 string in ext_sr25119_generate")
+			)
+			.transpose()?;
+
+		let pubkey = runtime_io::sr25519_generate(key_type, seed);
+
+		this.memory.set(out, pubkey.as_ref())
+			.map_err(|_| "Invalid attempt to set out in ext_sr25519_generate".into())
+	},
+	ext_sr25519_sign(
+		id_data: *const u8,
+		pubkey_data: *const u8,
+		msg_data: *const u8,
+		msg_len: u32,
+		out: *mut u8,
+	) -> u32 => {
+		let mut id = [0u8; 4];
+		this.memory.get_into(id_data, &mut id[..])
+			.map_err(|_| "Invalid attempt to get id in ext_sr25519_sign")?;
+		let key_type = KeyTypeId(id);
+
+		let mut pubkey = [0u8; 32];
+		this.memory.get_into(pubkey_data, &mut pubkey[..])
+			.map_err(|_| "Invalid attempt to get pubkey in ext_sr25519_sign")?;
+
+		let msg = this.memory.get(msg_data, msg_len as usize)
+			.map_err(|_| "Invalid attempt to get message in ext_sr25519_sign")?;
+
+		let signature = runtime_io::sr25519_sign(key_type, &sr25519::Public(pubkey), &msg);
+
+		match signature {
+			Some(signature) => {
+				this.memory.set(out, signature.as_ref())
+					.map_err(|_| "Invalid attempt to set out in ext_sr25519_sign")?;
+				Ok(0)
+			},
+			None => Ok(1),
+		}
 	},
 	ext_secp256k1_ecdsa_recover(msg_data: *const u8, sig_data: *const u8, pubkey_data: *mut u8) -> u32 => {
 		let mut sig = [0u8; 65];
@@ -711,50 +869,6 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		Ok(if res.is_ok() { 0 } else { 1 })
 	},
-	ext_new_crypto_key(crypto: u32) -> u64 => {
-		let kind = offchain::CryptoKind::try_from(crypto)
-			.map_err(|_| "crypto kind OOB while ext_new_crypto_key: wasm")?;
-
-		let res = this.ext.offchain()
-			.map(|api| api.new_crypto_key(kind))
-			.ok_or_else(|| "Calling unavailable API ext_new_crypto_key: wasm")?;
-
-		match res {
-			Ok(key) => Ok(key.into()),
-			Err(()) => Ok(u64::max_value()),
-		}
-	},
-	ext_encrypt(
-		key: u64,
-		data: *const u8,
-		data_len: u32,
-		msg_len: *mut u32
-	) -> *mut u8 => {
-		let key = offchain::CryptoKey::try_from(key)
-			.map_err(|_| "Key OOB while ext_encrypt: wasm")?;
-		let message = this.memory.get(data, data_len as usize)
-			.map_err(|_| "OOB while ext_encrypt: wasm")?;
-
-		let res = this.ext.offchain()
-			.map(|api| api.encrypt(key, &*message))
-			.ok_or_else(|| "Calling unavailable API ext_encrypt: wasm")?;
-
-		let (offset,len) = match res {
-			Ok(encrypted) => {
-				let len = encrypted.len() as u32;
-				let offset = this.heap.allocate(len)? as u32;
-				this.memory.set(offset, &encrypted)
-					.map_err(|_| "Invalid attempt to set memory in ext_encrypt")?;
-				(offset, len)
-			},
-			Err(()) => (0, u32::max_value()),
-		};
-
-		this.memory.write_primitive(msg_len, len)
-			.map_err(|_| "Invalid attempt to write msg_len in ext_encrypt")?;
-
-		Ok(offset)
-	},
 	ext_network_state(written_out: *mut u32) -> *mut u8 => {
 		let res = this.ext.offchain()
 			.map(|api| api.network_state())
@@ -770,111 +884,6 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			.map_err(|_| "Invalid attempt to write written_out in ext_network_state")?;
 
 		Ok(offset)
-	},
-	ext_pubkey(
-		key: u64,
-		written_out: *mut u32
-	) -> *mut u8 => {
-		let key = offchain::CryptoKey::try_from(key)
-			.map_err(|_| "Key OOB while ext_decrypt: wasm")?;
-		let res = this.ext.offchain()
-			.map(|api| api.pubkey(key))
-			.ok_or_else(|| "Calling unavailable API ext_authority_pubkey: wasm")?;
-
-		let encoded = res.encode();
-		let len = encoded.len() as u32;
-		let offset = this.heap.allocate(len)? as u32;
-		this.memory.set(offset, &encoded)
-			.map_err(|_| "Invalid attempt to set memory in ext_authority_pubkey")?;
-		this.memory.write_primitive(written_out, len)
-			.map_err(|_| "Invalid attempt to write written_out in ext_authority_pubkey")?;
-		Ok(offset)
-	},
-	ext_decrypt(
-		key: u64,
-		data: *const u8,
-		data_len: u32,
-		msg_len: *mut u32
-	) -> *mut u8 => {
-		let key = offchain::CryptoKey::try_from(key)
-			.map_err(|_| "Key OOB while ext_decrypt: wasm")?;
-		let message = this.memory.get(data, data_len as usize)
-			.map_err(|_| "OOB while ext_decrypt: wasm")?;
-
-		let res = this.ext.offchain()
-			.map(|api| api.decrypt(key, &*message))
-			.ok_or_else(|| "Calling unavailable API ext_decrypt: wasm")?;
-
-		let (offset,len) = match res {
-			Ok(decrypted) => {
-				let len = decrypted.len() as u32;
-				let offset = this.heap.allocate(len)? as u32;
-				this.memory.set(offset, &decrypted)
-					.map_err(|_| "Invalid attempt to set memory in ext_decrypt")?;
-				(offset, len)
-			},
-			Err(()) => (0, u32::max_value()),
-		};
-
-		this.memory.write_primitive(msg_len, len)
-			.map_err(|_| "Invalid attempt to write msg_len in ext_decrypt")?;
-
-		Ok(offset)
-	},
-	ext_sign(
-		key: u64,
-		data: *const u8,
-		data_len: u32,
-		sig_data_len: *mut u32
-	) -> *mut u8  => {
-		let key = offchain::CryptoKey::try_from(key)
-			.map_err(|_| "Key OOB while ext_sign: wasm")?;
-		let message = this.memory.get(data, data_len as usize)
-			.map_err(|_| "OOB while ext_sign: wasm")?;
-
-		let res = this.ext.offchain()
-			.map(|api| api.sign(key, &*message))
-			.ok_or_else(|| "Calling unavailable API ext_sign: wasm")?;
-
-		let (offset,len) = match res {
-			Ok(signature) => {
-				let len = signature.len() as u32;
-				let offset = this.heap.allocate(len)? as u32;
-				this.memory.set(offset, &signature)
-					.map_err(|_| "Invalid attempt to set memory in ext_sign")?;
-				(offset, len)
-			},
-			Err(()) => (0, u32::max_value()),
-		};
-
-		this.memory.write_primitive(sig_data_len, len)
-			.map_err(|_| "Invalid attempt to write sig_data_len in ext_sign")?;
-
-		Ok(offset)
-	},
-	ext_verify(
-		key: u64,
-		msg: *const u8,
-		msg_len: u32,
-		signature: *const u8,
-		signature_len: u32
-	) -> u32 => {
-		let key = offchain::CryptoKey::try_from(key)
-			.map_err(|_| "Key OOB while ext_verify: wasm")?;
-		let message = this.memory.get(msg, msg_len as usize)
-			.map_err(|_| "OOB while ext_verify: wasm")?;
-		let signature = this.memory.get(signature, signature_len as usize)
-			.map_err(|_| "OOB while ext_verify: wasm")?;
-
-		let res = this.ext.offchain()
-			.map(|api| api.verify(key, &*message, &*signature))
-			.ok_or_else(|| "Calling unavailable API ext_verify: wasm")?;
-
-		match res {
-			Ok(true) => Ok(0),
-			Ok(false) => Ok(1),
-			Err(()) => Ok(u32::max_value()),
-		}
 	},
 	ext_timestamp() -> u64 => {
 		let timestamp = this.ext.offchain()

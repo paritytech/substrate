@@ -57,7 +57,7 @@ use test_client::{self, AccountKeyring};
 pub use test_client::runtime::{Block, Extrinsic, Hash, Transfer};
 pub use test_client::TestClient;
 
-type AuthorityId = primitives::sr25519::Public;
+type AuthorityId = babe_primitives::AuthorityId;
 
 #[cfg(any(test, feature = "test-helpers"))]
 /// A Verifier that accepts all blocks and passes them on with the configured

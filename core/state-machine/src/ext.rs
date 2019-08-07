@@ -22,8 +22,7 @@ use crate::backend::Backend;
 use crate::changes_trie::{Storage as ChangesTrieStorage, build_changes_trie};
 use crate::{Externalities, OverlayedChanges, ChildStorageKey};
 use hash_db::Hasher;
-use primitives::offchain;
-use primitives::storage::well_known_keys::is_child_storage_key;
+use primitives::{offchain, storage::well_known_keys::is_child_storage_key, traits::BareCryptoStorePtr};
 use trie::{MemoryDB, default_child_trie_root};
 use trie::trie_types::Layout;
 
@@ -84,6 +83,8 @@ where
 	///
 	/// If None, some methods from the trait might not be supported.
 	offchain_externalities: Option<&'a mut O>,
+	/// The keystore that manages the keys of the node.
+	keystore: Option<BareCryptoStorePtr>,
 	/// Dummy usage of N arg.
 	_phantom: ::std::marker::PhantomData<N>,
 }
@@ -103,6 +104,7 @@ where
 		backend: &'a B,
 		changes_trie_storage: Option<&'a T>,
 		offchain_externalities: Option<&'a mut O>,
+		keystore: Option<BareCryptoStorePtr>,
 	) -> Self {
 		Ext {
 			overlay,
@@ -111,6 +113,7 @@ where
 			changes_trie_storage,
 			changes_trie_transaction: None,
 			offchain_externalities,
+			keystore,
 			_phantom: Default::default(),
 		}
 	}
@@ -333,6 +336,10 @@ where
 	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities> {
 		self.offchain_externalities.as_mut().map(|x| &mut **x as _)
 	}
+
+	fn keystore(&self) -> Option<BareCryptoStorePtr> {
+		self.keystore.clone()
+	}
 }
 
 #[cfg(test)]
@@ -375,7 +382,7 @@ mod tests {
 	fn storage_changes_root_is_none_when_storage_is_not_provided() {
 		let mut overlay = prepare_overlay_with_changes();
 		let backend = TestBackend::default();
-		let mut ext = TestExt::new(&mut overlay, &backend, None, None);
+		let mut ext = TestExt::new(&mut overlay, &backend, None, None, None);
 		assert_eq!(ext.storage_changes_root(Default::default()).unwrap(), None);
 	}
 
@@ -385,7 +392,7 @@ mod tests {
 		overlay.changes_trie_config = None;
 		let storage = TestChangesTrieStorage::with_blocks(vec![(100, Default::default())]);
 		let backend = TestBackend::default();
-		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage), None);
+		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage), None, None);
 		assert_eq!(ext.storage_changes_root(Default::default()).unwrap(), None);
 	}
 
@@ -394,11 +401,11 @@ mod tests {
 		let mut overlay = prepare_overlay_with_changes();
 		let storage = TestChangesTrieStorage::with_blocks(vec![(99, Default::default())]);
 		let backend = TestBackend::default();
-		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage), None);
-		let root = hex!("bb0c2ef6e1d36d5490f9766cfcc7dfe2a6ca804504c3bb206053890d6dd02376").into();
-
-		assert_eq!(ext.storage_changes_root(Default::default()).unwrap(),
-			Some(root));
+		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage), None, None);
+		assert_eq!(
+			ext.storage_changes_root(Default::default()).unwrap(),
+			Some(hex!("bb0c2ef6e1d36d5490f9766cfcc7dfe2a6ca804504c3bb206053890d6dd02376").into()),
+		);
 	}
 
 	#[test]
@@ -407,10 +414,10 @@ mod tests {
 		overlay.prospective.top.get_mut(&vec![1]).unwrap().value = None;
 		let storage = TestChangesTrieStorage::with_blocks(vec![(99, Default::default())]);
 		let backend = TestBackend::default();
-		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage), None);
-		let root = hex!("96f5aae4690e7302737b6f9b7f8567d5bbb9eac1c315f80101235a92d9ec27f4").into();
-
-		assert_eq!(ext.storage_changes_root(Default::default()).unwrap(),
-			Some(root));
+		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage), None, None);
+		assert_eq!(
+			ext.storage_changes_root(Default::default()).unwrap(),
+			Some(hex!("96f5aae4690e7302737b6f9b7f8567d5bbb9eac1c315f80101235a92d9ec27f4").into()),
+		);
 	}
 }

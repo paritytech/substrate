@@ -37,6 +37,18 @@ pub enum Error {
 	/// Incorrect extrinsic format.
 	#[display(fmt="Invalid extrinsic format: {}", _0)]
 	BadFormat(codec::Error),
+	/// Incorrect seed phrase.
+	#[display(fmt="Invalid seed phrase/SURI")]
+	BadSeedPhrase,
+	/// Key type ID has an unknown format.
+	#[display(fmt="Invalid key type ID format (should be of length four)")]
+	BadKeyType,
+	/// Key type ID has some unsupported crypto.
+	#[display(fmt="The crypto of key type ID is unknown")]
+	UnsupportedKeyType,
+	/// Some random issue with the key store. Shouldn't happen.
+	#[display(fmt="The key store is unavailable")]
+	KeyStoreUnavailable,
 }
 
 impl std::error::Error for Error {

@@ -17,7 +17,7 @@
 //! Private implementation details of BABE digests.
 
 #[cfg(feature = "std")]
-use primitives::sr25519::Signature;
+use super::AuthoritySignature;
 #[cfg(feature = "std")]
 use super::{BABE_ENGINE_ID, Epoch};
 #[cfg(not(feature = "std"))]
@@ -111,10 +111,10 @@ pub trait CompatibleDigestItem: Sized {
 	fn as_babe_pre_digest(&self) -> Option<BabePreDigest>;
 
 	/// Construct a digest item which contains a BABE seal.
-	fn babe_seal(signature: Signature) -> Self;
+	fn babe_seal(signature: AuthoritySignature) -> Self;
 
 	/// If this item is a BABE signature, return the signature.
-	fn as_babe_seal(&self) -> Option<Signature>;
+	fn as_babe_seal(&self) -> Option<AuthoritySignature>;
 
 	/// If this item is a BABE epoch, return it.
 	fn as_babe_epoch(&self) -> Option<Epoch>;
@@ -132,11 +132,11 @@ impl<Hash> CompatibleDigestItem for DigestItem<Hash> where
 		self.try_to(OpaqueDigestItemId::PreRuntime(&BABE_ENGINE_ID))
 	}
 
-	fn babe_seal(signature: Signature) -> Self {
+	fn babe_seal(signature: AuthoritySignature) -> Self {
 		DigestItem::Seal(BABE_ENGINE_ID, signature.encode())
 	}
 
-	fn as_babe_seal(&self) -> Option<Signature> {
+	fn as_babe_seal(&self) -> Option<AuthoritySignature> {
 		self.try_to(OpaqueDigestItemId::Seal(&BABE_ENGINE_ID))
 	}
 
@@ -153,6 +153,7 @@ fn convert_error(e: SignatureError) -> codec::Error {
 		EquationFalse => "Signature error: `EquationFalse`".into(),
 		PointDecompressionError => "Signature error: `PointDecompressionError`".into(),
 		ScalarFormatError => "Signature error: `ScalarFormatError`".into(),
+		NotMarkedSchnorrkel => "Signature error: `NotMarkedSchnorrkel`".into(),
 		BytesLengthError { .. } => "Signature error: `BytesLengthError`".into(),
 		MuSigAbsent { musig_stage: Commitment } =>
 			"Signature error: `MuSigAbsent` at stage `Commitment`".into(),
@@ -161,16 +162,16 @@ fn convert_error(e: SignatureError) -> codec::Error {
 		MuSigAbsent { musig_stage: Cosignature } =>
 			"Signature error: `MuSigAbsent` at stage `Commitment`".into(),
 		MuSigInconsistent { musig_stage: Commitment, duplicate: true } =>
-			"Signature error: `MuSigInconsistent` at strage `Commitment` on duplicate".into(),
+			"Signature error: `MuSigInconsistent` at stage `Commitment` on duplicate".into(),
 		MuSigInconsistent { musig_stage: Commitment, duplicate: false } =>
-			"Signature error: `MuSigInconsistent` at strage `Commitment` on not duplicate".into(),
+			"Signature error: `MuSigInconsistent` at stage `Commitment` on not duplicate".into(),
 		MuSigInconsistent { musig_stage: Reveal, duplicate: true } =>
-			"Signature error: `MuSigInconsistent` at strage `Reveal` on duplicate".into(),
+			"Signature error: `MuSigInconsistent` at stage `Reveal` on duplicate".into(),
 		MuSigInconsistent { musig_stage: Reveal, duplicate: false } =>
-			"Signature error: `MuSigInconsistent` at strage `Reveal` on not duplicate".into(),
+			"Signature error: `MuSigInconsistent` at stage `Reveal` on not duplicate".into(),
 		MuSigInconsistent { musig_stage: Cosignature, duplicate: true } =>
-			"Signature error: `MuSigInconsistent` at strage `Cosignature` on duplicate".into(),
+			"Signature error: `MuSigInconsistent` at stage `Cosignature` on duplicate".into(),
 		MuSigInconsistent { musig_stage: Cosignature, duplicate: false } =>
-			"Signature error: `MuSigInconsistent` at strage `Cosignature` on not duplicate".into(),
+			"Signature error: `MuSigInconsistent` at stage `Cosignature` on not duplicate".into(),
 	}
 }

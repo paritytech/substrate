@@ -96,6 +96,7 @@ mod tests {
 			&executor(),
 			"Core_initialize_block",
 			&header.encode(),
+			None,
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
@@ -109,6 +110,7 @@ mod tests {
 				&executor(),
 				"BlockBuilder_apply_extrinsic",
 				&tx.encode(),
+				None,
 			).execute(
 				ExecutionStrategy::NativeElseWasm,
 			).unwrap();
@@ -122,6 +124,7 @@ mod tests {
 			&executor(),
 			"BlockBuilder_finalize_block",
 			&[],
+			None,
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
@@ -148,7 +151,7 @@ mod tests {
 	#[test]
 	fn construct_genesis_should_work_with_native() {
 		let mut storage = GenesisConfig::new(false,
-			vec![Sr25519Keyring::One.into(), Sr25519Keyring::Two.into()],
+			vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			1000,
 			None,
@@ -170,6 +173,7 @@ mod tests {
 			&executor(),
 			"Core_execute_block",
 			&b1data,
+			None,
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
@@ -178,7 +182,7 @@ mod tests {
 	#[test]
 	fn construct_genesis_should_work_with_wasm() {
 		let mut storage = GenesisConfig::new(false,
-			vec![Sr25519Keyring::One.into(), Sr25519Keyring::Two.into()],
+			vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			1000,
 			None,
@@ -200,6 +204,7 @@ mod tests {
 			&executor(),
 			"Core_execute_block",
 			&b1data,
+			None,
 		).execute(
 			ExecutionStrategy::AlwaysWasm,
 		).unwrap();
@@ -208,7 +213,7 @@ mod tests {
 	#[test]
 	fn construct_genesis_with_bad_transaction_should_panic() {
 		let mut storage = GenesisConfig::new(false,
-			vec![Sr25519Keyring::One.into(), Sr25519Keyring::Two.into()],
+			vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			68,
 			None,
@@ -230,6 +235,7 @@ mod tests {
 			&executor(),
 			"Core_execute_block",
 			&b1data,
+			None,
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		);

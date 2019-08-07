@@ -47,7 +47,7 @@ use crate::config::{Params, TransportConfig};
 use crate::error::Error;
 use crate::protocol::{self, Protocol, Context, CustomMessageOutcome, PeerInfo};
 use crate::protocol::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
-use crate::protocol::{event::Event, on_demand::{AlwaysBadChecker, RequestData}};
+use crate::protocol::{event::Event, light_dispatch::{AlwaysBadChecker, RequestData}};
 use crate::protocol::specialization::NetworkSpecialization;
 use crate::protocol::sync::SyncState;
 
@@ -241,7 +241,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			service,
 			import_queue: params.import_queue,
 			from_worker,
-			on_demand_in: params.on_demand.and_then(|od| od.extract_receiver()),
+			light_client_rqs: params.on_demand.and_then(|od| od.extract_receiver()),
 		})
 	}
 
@@ -585,8 +585,8 @@ pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: Ex
 	import_queue: Box<dyn ImportQueue<B>>,
 	/// Messages from the `NetworkService` and that must be processed.
 	from_worker: mpsc::UnboundedReceiver<ServerToWorkerMsg<B, S>>,
-	/// Receiver for queries from the on-demand that must be processed.
-	on_demand_in: Option<mpsc::UnboundedReceiver<RequestData<B>>>,
+	/// Receiver for queries from the light client that must be processed.
+	light_client_rqs: Option<mpsc::UnboundedReceiver<RequestData<B>>>,
 }
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for NetworkWorker<B, S, H> {
@@ -602,10 +602,10 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 			std::task::Poll::Pending::<Result<(), ()>>
 		}).compat().poll();
 
-		// Check for new incoming on-demand requests.
-		if let Some(on_demand_in) = self.on_demand_in.as_mut() {
-			while let Ok(Async::Ready(Some(rq))) = on_demand_in.poll() {
-				self.network_service.user_protocol_mut().add_on_demand_request(rq);
+		// Check for new incoming light client requests.
+		if let Some(light_client_rqs) = self.light_client_rqs.as_mut() {
+			while let Ok(Async::Ready(Some(rq))) = light_client_rqs.poll() {
+				self.network_service.user_protocol_mut().add_light_client_request(rq);
 			}
 		}
 
