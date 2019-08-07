@@ -1454,32 +1454,39 @@ impl<T: Trait> SelectInitialValidators<T::AccountId> for Module<T> {
 	}
 }
 
-// TODO [ToDr] Should it be AccountId or AuthorityId?
-impl <T: Trait> OnOffenceHandler<T::AccountId, T::AccountId> for Module<T> {
+impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::IdentificationTuple<T>> for Module<T> where
+	T: session::Trait<ValidatorId = <T as system::Trait>::AccountId>,
+	T: session::historical::Trait<
+		FullIdentification = Exposure<<T as system::Trait>::AccountId, BalanceOf<T>>,
+		FullIdentificationOf = ExposureOf<T>,
+	>,
+	T::SessionHandler: session::SessionHandler<<T as system::Trait>::AccountId>,
+	T::OnSessionEnding: session::OnSessionEnding<<T as system::Trait>::AccountId>,
+	T::SelectInitialValidators: session::SelectInitialValidators<<T as system::Trait>::AccountId>,
+	T::ValidatorIdOf: Convert<<T as system::Trait>::AccountId, Option<<T as system::Trait>::AccountId>>
+{
 	fn on_offence(
-		offenders: &[OffenceDetails<T::AccountId, T::AccountId>],
+		offenders: &[OffenceDetails<T::AccountId, session::historical::IdentificationTuple<T>>],
 		slash_fraction: &[Perbill],
 	) {
 		for (details, slash_fraction) in offenders.iter().zip(slash_fraction) {
-			if let Some(l) = Self::ledger(&details.offender) {
-				let stash = l.stash;
+			let stash = &details.offender.0;
 
-				// Early exit if validator is invulnerable.
-				if Self::invulnerables().contains(&stash) {
-					return
-				}
-
-
-				// let slash_exposure = Self::stakers(&stash).total;
-				// let amount = offline_slash_base
-				//	// Multiply slash_mantissa by 2^(unstake_threshold with upper bound)
-				//	.checked_shl(unstake_threshold)
-				//	.map(|x| x.min(slash_exposure))
-				//	.unwrap_or(slash_exposure);
-				// Self::slash_validator(details.offender, amount)
-				let _ = T::SessionInterface::disable_validator(&stash);
-				Self::apply_force_new_era();
+			// Early exit if validator is invulnerable.
+			if Self::invulnerables().contains(stash) {
+				return
 			}
+
+
+			// let slash_exposure = Self::stakers(&stash).total;
+			// let amount = offline_slash_base
+			//	// Multiply slash_mantissa by 2^(unstake_threshold with upper bound)
+			//	.checked_shl(unstake_threshold)
+			//	.map(|x| x.min(slash_exposure))
+			//	.unwrap_or(slash_exposure);
+			// Self::slash_validator(details.offender, amount)
+			let _ = T::SessionInterface::disable_validator(stash);
+			Self::apply_force_new_era();
 		}
 	}
 }

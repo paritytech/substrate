@@ -23,7 +23,7 @@
 #![warn(missing_docs)]
 
 use rstd::vec::Vec;
-use session::{SessionIndex, historical};
+use session::{SessionIndex, historical::{self, IdentificationTuple}};
 use support::{
 	StorageDoubleMap, decl_module, decl_storage,
 };
@@ -35,10 +35,9 @@ use sr_primitives::{
 /// Offences trait
 pub trait Trait: system::Trait + historical::Trait {
 	/// A handler called for every offence report.
-	type OnOffenceHandler: OnOffenceHandler<Self::AccountId, Self::FullIdentification>;
+	type OnOffenceHandler: OnOffenceHandler<Self::AccountId, IdentificationTuple<Self>>;
 }
 
-/// The offences module.
 decl_storage! {
 	trait Store for Module<T: Trait> as Offences {
 		/// A mapping between unique `TimeSlots` within a particular session and the offence `Kind` into
@@ -48,7 +47,7 @@ decl_storage! {
 		/// timeslot since the slashing will increase based on the length of this vec.
 		OffenceReports get(offence_reports):
 			double_map Kind, blake2_256((SessionIndex, TimeSlot))
-				=> Vec<OffenceDetails<T::AccountId, T::FullIdentification>>;
+			=> Vec<OffenceDetails<T::AccountId, IdentificationTuple<T>>>;
 	}
 }
 
@@ -57,9 +56,9 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 }
 
-impl<T: Trait, O: Offence<T::FullIdentification>> ReportOffence<T::AccountId, T::FullIdentification, O>
+impl<T: Trait, O: Offence<IdentificationTuple<T>>> ReportOffence<T::AccountId, IdentificationTuple<T>, O>
 	for Module<T> where
-	T::FullIdentification: Clone,
+	IdentificationTuple<T>: Clone,
 {
 	fn report_offence(reporter: Option<T::AccountId>, offence: O) -> Result<(), ()> {
 		let offenders = offence.offenders();

@@ -117,8 +117,8 @@ pub trait VerifySeal<Header, Author> {
 pub trait KeyOwnerProofSystem<Key> {
 	/// The proof of membership itself.
 	type Proof: Codec;
-	/// The full identification of a key owner.
-	type FullIdentification: Codec;
+	/// The full identification of a key owner and the stash account.
+	type IdentificationTuple: Codec;
 
 	/// Prove membership of a key owner in the current block-state.
 	///
@@ -131,7 +131,7 @@ pub trait KeyOwnerProofSystem<Key> {
 
 	/// Check a proof of membership on-chain. Return `Some` iff the proof is
 	/// valid and recent enough to check.
-	fn check_proof(key: Key, proof: Self::Proof) -> Option<Self::FullIdentification>;
+	fn check_proof(key: Key, proof: Self::Proof) -> Option<Self::IdentificationTuple>;
 }
 
 /// Handler for when some currency "account" decreased in balance for

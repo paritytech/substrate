@@ -281,7 +281,7 @@ impl<T: Trait, D: AsRef<[u8]>> srml_support::traits::KeyOwnerProofSystem<(KeyTyp
 	for Module<T>
 {
 	type Proof = Proof;
-	type FullIdentification = IdentificationTuple<T>;
+	type IdentificationTuple = IdentificationTuple<T>;
 
 	fn prove(key: (KeyTypeId, D)) -> Option<Self::Proof> {
 		let session = <SessionModule<T>>::current_index();
