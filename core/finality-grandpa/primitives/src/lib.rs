@@ -71,8 +71,6 @@ pub struct GrandpaEquivocation<H, N> {
 	pub round_number: u64,
 	/// The identity of the equivocator.
 	pub identity: AuthorityId,
-	/// The proof of identity inclusion.
-	pub identity_proof: Proof,
 	/// The first vote in the equivocation.
 	pub	first: (Message<H, N>, AuthoritySignature),
 	/// The second vote in the equivocation.
