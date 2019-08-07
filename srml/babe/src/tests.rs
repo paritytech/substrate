@@ -18,7 +18,7 @@
 
 use super::*;
 use runtime_io::with_externalities;
-use mock::new_test_ext;
+use mock::{new_test_ext, System, Babe};
 
 #[test]
 fn empty_randomness_is_correct() {
@@ -29,6 +29,10 @@ fn empty_randomness_is_correct() {
 #[test]
 fn check_module() {
 	with_externalities(&mut new_test_ext(vec![0, 1, 2, 3]), || {
+		System::initialize(&1, &Default::default(), &Default::default(), &Default::default());
+		let _slot_duration = Babe::slot_duration();
+
+		let _header = System::finalize();
 		<Module<mock::Test>>::randomness_change_epoch(1);
 	})
 }
