@@ -25,7 +25,7 @@ use client::backend::OffchainStorage;
 use crate::AuthorityKeyProvider;
 use futures::{Stream, Future, sync::mpsc};
 use log::{info, debug, warn, error};
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use primitives::offchain::{
 	Timestamp,
 	HttpRequestId, HttpRequestStatus, HttpError,
@@ -219,7 +219,7 @@ impl<Storage, KeyProvider, Block> Api<Storage, KeyProvider, Block> where
 		match key {
 			CryptoKey::LocalKey { id, kind } => {
 				let key = self.db.get(KEYS_PREFIX, &id.encode())
-					.and_then(|key| StoredKey::decode(&mut &*key))
+					.and_then(|key| StoredKey::decode(&mut &*key).ok())
 					.ok_or(())?;
 				if key.kind != kind {
 					warn!(
@@ -266,7 +266,7 @@ where
 		let (id, id_encoded) = loop {
 			let encoded = self.db.get(KEYS_PREFIX, NEXT_ID);
 			let encoded_slice = encoded.as_ref().map(|x| x.as_slice());
-			let new_id = encoded_slice.and_then(|mut x| u16::decode(&mut x)).unwrap_or_default()
+			let new_id = encoded_slice.and_then(|mut x| u16::decode(&mut x).ok()).unwrap_or_default()
 				.checked_add(1)
 				.ok_or(())?;
 			let new_id_encoded = new_id.encode();
@@ -473,14 +473,14 @@ impl TryFrom<OpaqueNetworkState> for NetworkState {
 	fn try_from(state: OpaqueNetworkState) -> Result<Self, Self::Error> {
 		let inner_vec = state.peer_id.0;
 
-		let bytes: Vec<u8> = Decode::decode(&mut &inner_vec[..]).ok_or(())?;
+		let bytes: Vec<u8> = Decode::decode(&mut &inner_vec[..]).map_err(|_| ())?;
 		let peer_id = PeerId::from_bytes(bytes).map_err(|_| ())?;
 
 		let external_addresses: Result<Vec<Multiaddr>, Self::Error> = state.external_addresses
 			.iter()
 			.map(|enc_multiaddr| -> Result<Multiaddr, Self::Error> {
 				let inner_vec = &enc_multiaddr.0;
-				let bytes = <Vec<u8>>::decode(&mut &inner_vec[..]).ok_or(())?;
+				let bytes = <Vec<u8>>::decode(&mut &inner_vec[..]).map_err(|_| ())?;
 				let multiaddr_str = String::from_utf8(bytes).map_err(|_| ())?;
 				let multiaddr = Multiaddr::from_str(&multiaddr_str).map_err(|_| ())?;
 				Ok(multiaddr)
@@ -548,9 +548,9 @@ impl<A: ChainApi> AsyncApi<A> {
 
 	fn submit_extrinsic(&mut self, ext: Vec<u8>) {
 		let xt = match <A::Block as traits::Block>::Extrinsic::decode(&mut &*ext) {
-			Some(xt) => xt,
-			None => {
-				warn!("Unable to decode extrinsic: {:?}", ext);
+			Ok(xt) => xt,
+			Err(e) => {
+				warn!("Unable to decode extrinsic: {:?}: {}", ext, e.what());
 				return
 			},
 		};

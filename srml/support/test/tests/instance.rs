@@ -45,7 +45,7 @@ mod module1 {
 		type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
 		type Origin: From<Origin<Self, I>>;
 		type SomeParameter: Get<u32>;
-		type GenericType: Default + Clone + parity_codec::Codec;
+		type GenericType: Default + Clone + codec::Codec;
 	}
 
 	srml_support::decl_module! {

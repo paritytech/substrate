@@ -192,7 +192,7 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 		{
 			<R as #crate_::runtime_api::Decode>::decode(
 				&mut &#crate_::runtime_api::Encode::encode(input)[..]
-			).ok_or_else(|| error_desc)
+			).map_err(|_| error_desc)
 		}
 	));
 
@@ -682,9 +682,9 @@ impl<'a> ToClientSideDecl<'a> {
 								},
 								#crate_::runtime_api::NativeOrEncoded::Encoded(r) => {
 									<#ret_type as #crate_::runtime_api::Decode>::decode(&mut &r[..])
-										.ok_or_else(||
+										.map_err(|err|
 											#crate_::error::Error::CallResultDecode(
-												#function_name
+												#function_name, err
 											).into()
 										)
 								}

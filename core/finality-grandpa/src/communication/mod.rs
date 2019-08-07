@@ -35,7 +35,7 @@ use futures::prelude::*;
 use futures::sync::{oneshot, mpsc};
 use log::{debug, trace};
 use tokio_executor::Executor;
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use primitives::{ed25519, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
@@ -367,10 +367,10 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		let incoming = self.service.messages_for(topic)
 			.filter_map(|notification| {
 				let decoded = GossipMessage::<B>::decode(&mut &notification.message[..]);
-				if decoded.is_none() {
-					debug!(target: "afg", "Skipping malformed message {:?}", notification);
+				if let Err(ref e) = decoded {
+					debug!(target: "afg", "Skipping malformed message {:?}: {}", notification, e);
 				}
-				decoded
+				decoded.ok()
 			})
 			.and_then(move |msg| {
 				match msg {
@@ -583,10 +583,10 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 		.filter_map(|notification| {
 			// this could be optimized by decoding piecewise.
 			let decoded = GossipMessage::<B>::decode(&mut &notification.message[..]);
-			if decoded.is_none() {
-				trace!(target: "afg", "Skipping malformed commit message {:?}", notification);
+			if let Err(ref e) = decoded {
+				trace!(target: "afg", "Skipping malformed commit message {:?}: {}", notification, e);
 			}
-			decoded.map(move |d| (notification, d))
+			decoded.map(move |d| (notification, d)).ok()
 		})
 		.filter_map(move |(notification, msg)| {
 			match msg {

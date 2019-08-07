@@ -98,7 +98,7 @@ use crate::wasm::{WasmLoader, WasmVm};
 use serde::{Serialize, Deserialize};
 use primitives::crypto::UncheckedFrom;
 use rstd::{prelude::*, marker::PhantomData};
-use parity_codec::{Codec, Encode, Decode};
+use codec::{Codec, Encode, Decode};
 use runtime_io::blake2_256;
 use sr_primitives::traits::{
 	Hash, StaticLookup, Zero, MaybeSerializeDebug, Member

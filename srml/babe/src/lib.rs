@@ -28,7 +28,7 @@ use sr_primitives::{generic::DigestItem, ConsensusEngineId};
 use sr_primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert};
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
@@ -103,7 +103,7 @@ impl ProvideInherentData for InherentDataProvider {
 	}
 
 	fn error_to_string(&self, error: &[u8]) -> Option<String> {
-		RuntimeString::decode(&mut &error[..]).map(Into::into)
+		RuntimeString::decode(&mut &error[..]).map(Into::into).ok()
 	}
 }
 
@@ -186,7 +186,7 @@ decl_module! {
 				.iter()
 				.filter_map(|s| s.as_pre_runtime())
 				.filter_map(|(id, mut data)| if id == BABE_ENGINE_ID {
-					RawBabePreDigest::decode(&mut data)
+					RawBabePreDigest::decode(&mut data).ok()
 				} else {
 					None
 				})
@@ -219,7 +219,7 @@ impl<T: Trait> FindAuthor<u32> for Module<T> {
 	{
 		for (id, mut data) in digests.into_iter() {
 			if id == BABE_ENGINE_ID {
-				return Some(RawBabePreDigest::decode(&mut data)?.authority_index);
+				return Some(RawBabePreDigest::decode(&mut data).ok()?.authority_index);
 			}
 		}
 		return None;

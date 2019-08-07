@@ -18,7 +18,7 @@ use super::*;
 
 use std::sync::Arc;
 use assert_matches::assert_matches;
-use parity_codec::Encode;
+use codec::Encode;
 use transaction_pool::{
 	txpool::Pool,
 	ChainApi,
