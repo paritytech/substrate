@@ -23,9 +23,12 @@ use transaction_pool::{
 	txpool::Pool,
 	ChainApi,
 };
-use primitives::{H256, blake2_256, hexdisplay::HexDisplay};
+use primitives::{H256, blake2_256, hexdisplay::HexDisplay, traits::BareCryptoStore};
 use test_client::{self, AccountKeyring, runtime::{Extrinsic, Transfer}};
 use tokio::runtime;
+use std::collections::HashMap;
+use sr_primitives::KeyTypeId;
+use parking_lot::RwLock;
 
 fn uxt(sender: AccountKeyring, nonce: u64) -> Extrinsic {
 	let tx = Transfer {
@@ -37,14 +40,55 @@ fn uxt(sender: AccountKeyring, nonce: u64) -> Extrinsic {
 	tx.into_signed_tx()
 }
 
+#[derive(Default)]
+struct TestKeyStore {
+	keys: HashMap<KeyTypeId, HashMap<Vec<u8>, String>>,
+}
+
+impl BareCryptoStore for TestKeyStore {
+	fn sr25519_public_keys(&self, _id: KeyTypeId) -> Vec<sr25519::Public> { vec![] }
+	fn sr25519_generate_new(&mut self, _id: KeyTypeId, _seed: Option<&str>)
+		-> std::result::Result<sr25519::Public, String>
+	{
+		Err("unimplemented".into())
+	}
+	fn sr25519_key_pair(&self, _id: KeyTypeId, _pub_key: &sr25519::Public) -> Option<sr25519::Pair> {
+		None
+	}
+	fn ed25519_public_keys(&self, _id: KeyTypeId) -> Vec<ed25519::Public> { vec![] }
+	fn ed25519_generate_new(&mut self, _id: KeyTypeId, _seed: Option<&str>)
+		-> std::result::Result<ed25519::Public, String>
+	{
+		Err("unimplemented".into())
+	}
+	fn ed25519_key_pair(&self, _id: KeyTypeId, _pub_key: &ed25519::Public) -> Option<ed25519::Pair> {
+		None
+	}
+
+	fn insert_unknown(&mut self, key_type: KeyTypeId, suri: &str, public: &[u8])
+		-> std::result::Result<(), ()>
+	{
+		self.keys
+			.entry(key_type)
+			.or_default()
+			.insert(public.to_owned(), suri.to_owned());
+		Ok(())
+	}
+
+	fn password(&self) -> Option<&str> { None }
+}
+
 #[test]
 fn submit_transaction_should_not_cause_error() {
 	let runtime = runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
+	let keystore = TestKeyStore::default();
+	let keystore = Arc::new(RwLock::new(keystore));
 	let p = Author {
 		client: client.clone(),
 		pool: Arc::new(Pool::new(Default::default(), ChainApi::new(client))),
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
+		keystore: keystore.clone(),
 	};
 	let xt = uxt(AccountKeyring::Alice, 1).encode();
 	let h: H256 = blake2_256(&xt).into();
@@ -62,10 +106,12 @@ fn submit_transaction_should_not_cause_error() {
 fn submit_rich_transaction_should_not_cause_error() {
 	let runtime = runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
+	let keystore = Arc::new(RwLock::new(TestKeyStore::default()));
 	let p = Author {
 		client: client.clone(),
 		pool: Arc::new(Pool::new(Default::default(), ChainApi::new(client.clone()))),
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
+		keystore: keystore.clone(),
 	};
 	let xt = uxt(AccountKeyring::Alice, 0).encode();
 	let h: H256 = blake2_256(&xt).into();
@@ -85,10 +131,12 @@ fn should_watch_extrinsic() {
 	let mut runtime = runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
 	let pool = Arc::new(Pool::new(Default::default(), ChainApi::new(client.clone())));
+	let keystore = Arc::new(RwLock::new(TestKeyStore::default()));
 	let p = Author {
 		client,
 		pool: pool.clone(),
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
+		keystore: keystore.clone(),
 	};
 	let (subscriber, id_rx, data) = ::jsonrpc_pubsub::typed::Subscriber::new_test("test");
 
@@ -125,10 +173,12 @@ fn should_return_pending_extrinsics() {
 	let runtime = runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
 	let pool = Arc::new(Pool::new(Default::default(), ChainApi::new(client.clone())));
+	let keystore = Arc::new(RwLock::new(TestKeyStore::default()));
 	let p = Author {
 		client,
 		pool: pool.clone(),
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
+		keystore: keystore.clone(),
 	};
 	let ex = uxt(AccountKeyring::Alice, 0);
 	AuthorApi::submit_extrinsic(&p, ex.encode().into()).unwrap();
@@ -143,10 +193,12 @@ fn should_remove_extrinsics() {
 	let runtime = runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
 	let pool = Arc::new(Pool::new(Default::default(), ChainApi::new(client.clone())));
+	let keystore = Arc::new(RwLock::new(TestKeyStore::default()));
 	let p = Author {
 		client,
 		pool: pool.clone(),
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
+		keystore: keystore.clone(),
 	};
 	let ex1 = uxt(AccountKeyring::Alice, 0);
 	p.submit_extrinsic(ex1.encode().into()).unwrap();

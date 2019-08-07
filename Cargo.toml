@@ -19,6 +19,7 @@ vergen = "3"
 
 [workspace]
 members = [
+	"core/application-crypto",
 	"core/cli",
 	"core/client",
 	"core/client/db",
@@ -42,6 +43,7 @@ members = [
 	"core/serializer",
 	"core/service",
 	"core/service/test",
+	"core/session",
 	"core/sr-api-macros",
 	"core/sr-io",
 	"core/sr-primitives",
@@ -79,6 +81,7 @@ members = [
 	"srml/grandpa",
 	"srml/im-online",
 	"srml/indices",
+	"srml/membership",
 	"srml/metadata",
 	"srml/session",
 	"srml/staking",

@@ -44,12 +44,13 @@ use client::{
 	runtime_api::ApiExt,
 	error::Result as CResult,
 	backend::AuxStore,
+	BlockOf
 };
 
 use sr_primitives::{generic::{self, BlockId, OpaqueDigestItemId}, Justification};
 use sr_primitives::traits::{Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi, Zero, Member};
 
-use primitives::Pair;
+use primitives::crypto::Pair;
 use inherents::{InherentDataProviders, InherentData};
 
 use futures::{prelude::*, future};
@@ -141,7 +142,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 	force_authoring: bool,
 ) -> Result<impl futures01::Future<Item = (), Error = ()>, consensus_common::Error> where
 	B: BlockT<Header=H>,
-	C: ProvideRuntimeApi + ProvideCache<B> + AuxStore + Send + Sync,
+	C: ProvideRuntimeApi + BlockOf + ProvideCache<B> + AuxStore + Send + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	SC: SelectChain<B>,
 	E::Proposer: Proposer<B, Error=Error>,
@@ -188,7 +189,7 @@ struct AuraWorker<C, E, I, P, SO> {
 
 impl<H, B, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, SO> where
 	B: BlockT<Header=H>,
-	C: ProvideRuntimeApi + ProvideCache<B> + Sync,
+	C: ProvideRuntimeApi + BlockOf + ProvideCache<B> + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
@@ -397,7 +398,7 @@ fn check_header<C, B: BlockT, P: Pair>(
 	DigestItemFor<B>: CompatibleDigestItem<P>,
 	P::Signature: Decode,
 	C: client::backend::AuxStore,
-	P::Public: AsRef<P::Public> + Encode + Decode + PartialEq + Clone,
+	P::Public: Encode + Decode + PartialEq + Clone,
 {
 	let seal = match header.digest_mut().pop() {
 		Some(x) => x,
@@ -507,11 +508,11 @@ impl<C, P> AuraVerifier<C, P>
 
 #[forbid(deprecated)]
 impl<B: BlockT, C, P> Verifier<B> for AuraVerifier<C, P> where
-	C: ProvideRuntimeApi + Send + Sync + client::backend::AuxStore + ProvideCache<B>,
+	C: ProvideRuntimeApi + Send + Sync + client::backend::AuxStore + ProvideCache<B> + BlockOf,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>>,
 	DigestItemFor<B>: CompatibleDigestItem<P>,
 	P: Pair + Send + Sync + 'static,
-	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + AsRef<P::Public> + 'static,
+	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + 'static,
 	P::Signature: Encode + Decode,
 {
 	fn verify(
@@ -610,7 +611,7 @@ impl<B: BlockT, C, P> Verifier<B> for AuraVerifier<C, P> where
 fn initialize_authorities_cache<A, B, C>(client: &C) -> Result<(), ConsensusError> where
 	A: Codec,
 	B: BlockT,
-	C: ProvideRuntimeApi + ProvideCache<B>,
+	C: ProvideRuntimeApi + BlockOf + ProvideCache<B>,
 	C::Api: AuraApi<B, A>,
 {
 	// no cache => no initialization
@@ -644,7 +645,7 @@ fn initialize_authorities_cache<A, B, C>(client: &C) -> Result<(), ConsensusErro
 fn authorities<A, B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<A>, ConsensusError> where
 	A: Codec,
 	B: BlockT,
-	C: ProvideRuntimeApi + ProvideCache<B>,
+	C: ProvideRuntimeApi + BlockOf + ProvideCache<B>,
 	C::Api: AuraApi<B, A>,
 {
 	client
@@ -685,11 +686,11 @@ pub fn import_queue<B, C, P>(
 	inherent_data_providers: InherentDataProviders,
 ) -> Result<AuraImportQueue<B>, consensus_common::Error> where
 	B: BlockT,
-	C: 'static + ProvideRuntimeApi + ProvideCache<B> + Send + Sync + AuxStore,
+	C: 'static + ProvideRuntimeApi + BlockOf + ProvideCache<B> + Send + Sync + AuxStore,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>>,
 	DigestItemFor<B>: CompatibleDigestItem<P>,
 	P: Pair + Send + Sync + 'static,
-	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode + AsRef<P::Public>,
+	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode,
 	P::Signature: Encode + Decode,
 {
 	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
@@ -721,9 +722,9 @@ mod tests {
 	use parking_lot::Mutex;
 	use tokio::runtime::current_thread;
 	use keyring::sr25519::Keyring;
-	use primitives::sr25519;
 	use client::{LongestChain, BlockchainEvents};
 	use test_client;
+	use aura_primitives::sr25519::AuthorityPair;
 
 	type Error = client::error::Error;
 
@@ -771,7 +772,7 @@ mod tests {
 
 	impl TestNetFactory for AuraTestNet {
 		type Specialization = DummySpecialization;
-		type Verifier = AuraVerifier<PeersFullClient, sr25519::Pair>;
+		type Verifier = AuraVerifier<PeersFullClient, AuthorityPair>;
 		type PeerData = ();
 
 		/// Create new test network with peers and given config.
@@ -855,9 +856,9 @@ mod tests {
 				&inherent_data_providers, slot_duration.get()
 			).expect("Registers aura inherent data provider");
 
-			let aura = start_aura::<_, _, _, _, _, sr25519::Pair, _, _, _>(
+			let aura = start_aura::<_, _, _, _, _, AuthorityPair, _, _, _>(
 				slot_duration,
-				Arc::new(key.clone().into()),
+				Arc::new(key.clone().pair().into()),
 				client.clone(),
 				select_chain,
 				client,
@@ -885,9 +886,9 @@ mod tests {
 
 		assert_eq!(client.info().chain.best_number, 0);
 		assert_eq!(authorities(&client, &BlockId::Number(0)).unwrap(), vec![
-			Keyring::Alice.into(),
-			Keyring::Bob.into(),
-			Keyring::Charlie.into()
+			Keyring::Alice.public().into(),
+			Keyring::Bob.public().into(),
+			Keyring::Charlie.public().into()
 		]);
 	}
 }

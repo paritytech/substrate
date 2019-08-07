@@ -33,11 +33,13 @@ macro_rules! map {
 
 use rstd::prelude::*;
 use rstd::ops::Deref;
-use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use std::borrow::Cow;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
+#[cfg(feature = "std")]
+pub use serde;// << for macro
+pub use codec::{Encode, Decode};// << for macro
 
 #[cfg(feature = "std")]
 pub use impl_serde::serialize as bytes;
@@ -61,6 +63,8 @@ pub mod sandbox;
 pub mod storage;
 pub mod uint;
 mod changes_trie;
+pub mod traits;
+pub mod testing;
 
 #[cfg(test)]
 mod tests;
@@ -77,7 +81,6 @@ pub use hash_db::Hasher;
 pub use self::hasher::blake2::Blake2Hasher;
 
 /// Context for executing a call into the runtime.
-#[repr(u8)]
 pub enum ExecutionContext {
 	/// Context for general importing (including own blocks).
 	Importing,
@@ -89,6 +92,17 @@ pub enum ExecutionContext {
 	OffchainWorker(Box<dyn offchain::Externalities>),
 	/// Context used for other calls.
 	Other,
+}
+
+impl ExecutionContext {
+	/// Returns if the keystore should be enabled for the current context.
+	pub fn enable_keystore(&self) -> bool {
+		use ExecutionContext::*;
+		match self {
+			Importing | Syncing | BlockConstruction => false,
+			OffchainWorker(_) | Other => true,
+		}
+	}
 }
 
 /// Hex-serialized shim for `Vec<u8>`.
@@ -147,7 +161,7 @@ impl<R: codec::Encode> ::std::fmt::Debug for NativeOrEncoded<R> {
 #[cfg(feature = "std")]
 impl<R: codec::Encode> NativeOrEncoded<R> {
 	/// Return the value as the encoded format.
-	pub fn as_encoded<'a>(&'a self) -> Cow<'a, [u8]> {
+	pub fn as_encoded(&self) -> Cow<'_, [u8]> {
 		match self {
 			NativeOrEncoded::Encoded(e) => Cow::Borrowed(e.as_slice()),
 			NativeOrEncoded::Native(n) => Cow::Owned(n.encode()),
@@ -199,3 +213,4 @@ impl codec::Decode for NeverNativeValue {
 		Err("`NeverNativeValue` should never be decoded".into())
 	}
 }
+

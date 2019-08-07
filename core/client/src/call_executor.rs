@@ -83,6 +83,7 @@ where
 		native_call: Option<NC>,
 		side_effects_handler: Option<&mut O>,
 		proof_recorder: &Option<Rc<RefCell<ProofRecorder<B>>>>,
+		enable_keystore: bool,
 	) -> error::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
 
 	/// Extract RuntimeVersion of given block
@@ -150,14 +151,20 @@ where
 pub struct LocalCallExecutor<B, E> {
 	backend: Arc<B>,
 	executor: E,
+	keystore: Option<primitives::traits::BareCryptoStorePtr>,
 }
 
 impl<B, E> LocalCallExecutor<B, E> {
 	/// Creates new instance of local call executor.
-	pub fn new(backend: Arc<B>, executor: E) -> Self {
+	pub fn new(
+		backend: Arc<B>,
+		executor: E,
+		keystore: Option<primitives::traits::BareCryptoStorePtr>,
+	) -> Self {
 		LocalCallExecutor {
 			backend,
 			executor,
+			keystore,
 		}
 	}
 }
@@ -167,6 +174,7 @@ impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
 		LocalCallExecutor {
 			backend: self.backend.clone(),
 			executor: self.executor.clone(),
+			keystore: self.keystore.clone(),
 		}
 	}
 }
@@ -197,6 +205,7 @@ where
 			&self.executor,
 			method,
 			call_data,
+			self.keystore.clone(),
 		).execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
 			strategy.get_manager(),
 			false,
@@ -229,6 +238,7 @@ where
 		native_call: Option<NC>,
 		side_effects_handler: Option<&mut O>,
 		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
+		enable_keystore: bool,
 	) -> Result<NativeOrEncoded<R>, error::Error> where ExecutionManager<EM>: Clone {
 		match initialize_block {
 			InitializeBlock::Do(ref init_block)
@@ -238,6 +248,12 @@ where
 			// We don't need to initialize the runtime at a block.
 			_ => {},
 		}
+
+		let keystore = if enable_keystore {
+			self.keystore.clone()
+		} else {
+			None
+		};
 
 		let mut state = self.backend.state_at(*at)?;
 
@@ -262,6 +278,7 @@ where
 					&self.executor,
 					method,
 					call_data,
+					keystore,
 				)
 				.execute_using_consensus_failure_handler(
 					execution_manager,
@@ -279,6 +296,7 @@ where
 				&self.executor,
 				method,
 				call_data,
+				keystore,
 			)
 			.execute_using_consensus_failure_handler(
 				execution_manager,
@@ -294,7 +312,14 @@ where
 	fn runtime_version(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
-		let mut ext = Ext::new(&mut overlay, &state, self.backend.changes_trie_storage(), NeverOffchainExt::new());
+
+		let mut ext = Ext::new(
+			&mut overlay,
+			&state,
+			self.backend.changes_trie_storage(),
+			NeverOffchainExt::new(),
+			None,
+		);
 		let version = self.executor.runtime_version(&mut ext);
 		self.backend.destroy_state(state)?;
 		version.ok_or(error::Error::VersionInvalid.into())
@@ -330,6 +355,7 @@ where
 			&self.executor,
 			method,
 			call_data,
+			self.keystore.clone(),
 		).execute_using_consensus_failure_handler(
 			manager,
 			true,
@@ -356,6 +382,7 @@ where
 			&self.executor,
 			method,
 			call_data,
+			self.keystore.clone(),
 		)
 		.map_err(Into::into)
 	}

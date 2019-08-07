@@ -321,20 +321,20 @@ mod tests {
 		sr25519_keyring: &Sr25519Keyring,
 	) -> SessionKeys {
 		SessionKeys {
-			ed25519: ed25519_keyring.to_owned().into(),
-			sr25519: sr25519_keyring.to_owned().into(),
+			grandpa: ed25519_keyring.to_owned().public().into(),
+			babe: sr25519_keyring.to_owned().public().into(),
+			im_online: sr25519_keyring.to_owned().public().into(),
 		}
 	}
 
 	fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<Blake2Hasher> {
 		let mut ext = TestExternalities::new_with_code_with_children(code, GenesisConfig {
-			babe: Some(Default::default()),
 			system: Some(SystemConfig {
 				changes_trie_config: if support_changes_trie { Some(ChangesTrieConfiguration {
 					digest_interval: 2,
 					digest_levels: 2,
 				}) } else { None },
-				..Default::default()
+				.. Default::default()
 			}),
 			indices: Some(IndicesConfig {
 				ids: vec![alice(), bob(), charlie(), dave(), eve(), ferdie()],
@@ -379,19 +379,21 @@ mod tests {
 				offline_slash_grace: 0,
 				invulnerables: vec![alice(), bob(), charlie()],
 			}),
-			democracy: Some(Default::default()),
-			collective_Instance1: Some(Default::default()),
-			collective_Instance2: Some(Default::default()),
-			elections: Some(Default::default()),
 			contracts: Some(ContractsConfig {
 				current_schedule: Default::default(),
 				gas_price: 1 * MILLICENTS,
 			}),
-			sudo: Some(Default::default()),
-			im_online: Some(Default::default()),
+			babe: Some(Default::default()),
 			grandpa: Some(GrandpaConfig {
 				authorities: vec![],
 			}),
+			im_online: Some(Default::default()),
+			democracy: Some(Default::default()),
+			collective_Instance1: Some(Default::default()),
+			collective_Instance2: Some(Default::default()),
+			membership_Instance1: Some(Default::default()),
+			elections: Some(Default::default()),
+			sudo: Some(Default::default()),
 		}.build_storage().unwrap());
 		ext.changes_trie_storage().insert(0, GENESIS_HASH.into(), Default::default());
 		ext
