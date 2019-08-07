@@ -74,10 +74,11 @@ use substrate_primitives::{
 use codec::{Encode, Decode};
 use session::{
 	SessionIndex,
-	historical::IdentificationTuple
+	historical::IdentificationTuple,
 };
 use sr_primitives::{
-	Perbill, ApplyError, traits::{Extrinsic as ExtrinsicT, CurrentEraStartSessionIndex},
+	Perbill, ApplyError,
+	traits::{ValidatorIdByIndex, Extrinsic as ExtrinsicT, CurrentEraStartSessionIndex, Convert},
 	transaction_validity::{TransactionValidity, TransactionLongevity, ValidTransaction},
 	offence::{ReportOffence, Offence, TimeSlot, Kind},
 };
@@ -180,14 +181,18 @@ pub trait Trait: system::Trait + session::historical::Trait {
 	type UncheckedExtrinsic: ExtrinsicT<Call=<Self as Trait>::Call> + Encode + Decode;
 
 	/// A type that gives us ability to submit unresponsivness offence reports.
-	type ReportUnresponsivness: ReportOffence<
-		Self::AccountId,
-		IdentificationTuple<Self>,
-		UnresponsivnessOffence<IdentificationTuple<Self>>,
-	>;
+	type ReportUnresponsivness:
+		ReportOffence<
+			Self::AccountId,
+			IdentificationTuple<Self>,
+			UnresponsivnessOffence<IdentificationTuple<Self>>,
+		>;
 
 	/// A function that returns the session index that started the current era.
 	type CurrentEraStartSessionIndex: CurrentEraStartSessionIndex;
+
+	/// A type that returns a validator id from the current elected set of the era.
+	type ValidatorIdByIndex: ValidatorIdByIndex<<Self as session::Trait>::ValidatorId>;
 }
 
 decl_event!(
@@ -408,7 +413,8 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = AuthorityId;
 
 	fn on_new_session<'a, I: 'a>(_changed: bool, _validators: I, next_validators: I)
-		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
+	where
+		I: Iterator<Item = (&'a T::AccountId, AuthorityId)>,
 	{
 		// Reset heartbeats
 		<ReceivedHeartbeats>::remove_prefix(&<session::Module<T>>::current_index());
@@ -425,23 +431,39 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 
 		let keys = Keys::get();
 		let mut unresponsive = vec![];
-		for (auth_idx, auth_key) in keys.iter().enumerate() {
-			if !<ReceivedHeartbeats>::exists(&current_session, &(auth_idx as u32)) {
-				unresponsive.push(auth_key.clone());
+		for auth_idx in 0..keys.len() {
+			let auth_idx = auth_idx as u32;
+			if !<ReceivedHeartbeats>::exists(&current_session, &auth_idx) {
+				// Get the validator id by the index of its session key and then use this
+				// validator id to get the full identification. In practice it cannot return `None`
+				// since we are querying when the session hasn't yet ended.
+				let validator_id = T::ValidatorIdByIndex::validator_id_by_index(auth_idx).expect(
+					"auth_idx is an index `0..keys.len()`;
+						`keys` is populated from the current elected set;
+						`validator_id_by_index` queries validators from the current elected set;
+						thus it can't return `None`;
+						qed",
+				);
+				let full_identification = T::FullIdentificationOf::convert(validator_id.clone())
+					.expect(
+						"the validator id is from the current era;
+						the mapping between the validator id and its full identification should be valid;
+						thus it can't return `None`;
+						qed",
+					);
+
+				unresponsive.push((validator_id, full_identification));
 			}
 		}
 
 		let current_era_start_session_index =
 			T::CurrentEraStartSessionIndex::current_era_start_session_index();
 		let validators_count = keys.len() as u32;
-
 		let offence = UnresponsivnessOffence {
-			validators_count: keys.len() as u32,
 			session_index: current_session,
 			current_era_start_session_index,
 			validators_count,
-			// TODO [slashing] figure out the IdentificationTuples for offenders.
-			//offenders: unresponsive,
+			offenders: unresponsive,
 			offenders: vec![],
 		};
 
@@ -507,7 +529,7 @@ impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
 }
 
 /// An offense which is filed if a validator didn't send a heartbeat message.
-pub struct UnresponsivnessOffence<IdentificationTuple> {
+pub struct UnresponsivnessOffence<Offender> {
 	/// The session index that starts an era in which the incident happened.
 	current_era_start_session_index: u32, // TODO [slashing]: Should be a SessionIndex.
 	/// The session index at which we file this report.
@@ -517,14 +539,14 @@ pub struct UnresponsivnessOffence<IdentificationTuple> {
 	session_index: u32, // TODO [slashing]: Should be a SessionIndex.
 	/// The size of the validator set in current session/era.
 	validators_count: u32,
-	/// Authorities which were unresponsive during the current epoch.
+	/// Authorities which were unresponsive during the current era.
 	offenders: Vec<IdentificationTuple>,
 }
 
-impl<IdentificationTuple: Clone> Offence<IdentificationTuple> for UnresponsivnessOffence<IdentificationTuple> {
+impl<Offender: Clone> Offence<Offender> for UnresponsivnessOffence<Offender> {
 	const ID: Kind = *b"im-online:offlin";
 
-	fn offenders(&self) -> Vec<IdentificationTuple> {
+	fn offenders(&self) -> Vec<Offender> {
 		self.offenders.clone()
 	}
 

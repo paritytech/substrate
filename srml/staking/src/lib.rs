@@ -277,7 +277,7 @@ use sr_primitives::offence::{OnOffenceHandler, OffenceDetails};
 use sr_primitives::weights::SimpleDispatchInfo;
 use sr_primitives::traits::{
 	Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded,
-	SimpleArithmetic, SaturatedConversion,
+	SimpleArithmetic, SaturatedConversion, ValidatorIdByIndex,
 };
 #[cfg(feature = "std")]
 use sr_primitives::{Serialize, Deserialize};
@@ -1473,5 +1473,13 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 
 		// Handle the rest of imbalances
 		T::Slash::on_unbalanced(remaining_imbalance);
+	}
+}
+
+impl<T: Trait> ValidatorIdByIndex<T::AccountId> for Module<T> {
+	fn validator_id_by_index(validator_index: u32) -> Option<T::AccountId> {
+		Self::current_elected()
+			.get(validator_index as usize)
+			.cloned()
 	}
 }

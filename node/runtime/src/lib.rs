@@ -374,6 +374,7 @@ impl im_online::Trait for Runtime {
 	type UncheckedExtrinsic = UncheckedExtrinsic;
 	type ReportUnresponsivness = Offences;
 	type CurrentEraStartSessionIndex = Staking;
+	type ValidatorIdByIndex = Staking;
 }
 
 impl offences::Trait for Runtime {
