@@ -579,7 +579,7 @@ mod tests {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		GenesisConfig::<Test> {
 			keys: NEXT_VALIDATORS.with(|l|
-				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i))).collect()
+				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i).into())).collect()
 			),
 		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
 		runtime_io::TestExternalities::new_with_children(t)
@@ -602,8 +602,8 @@ mod tests {
 	#[test]
 	fn put_get_keys() {
 		with_externalities(&mut new_test_ext(), || {
-			Session::put_keys(&10, &UintAuthorityId(10));
-			assert_eq!(Session::load_keys(&10), Some(UintAuthorityId(10)));
+			Session::put_keys(&10, &UintAuthorityId(10).into());
+			assert_eq!(Session::load_keys(&10), Some(UintAuthorityId(10).into()));
 		})
 	}
 
@@ -612,7 +612,7 @@ mod tests {
 		let mut ext = new_test_ext();
 		with_externalities(&mut ext, || {
 			assert_eq!(Session::validators(), vec![1, 2, 3]);
-			assert_eq!(Session::load_keys(&1), Some(UintAuthorityId(1)));
+			assert_eq!(Session::load_keys(&1), Some(UintAuthorityId(1).into()));
 
 			let id = DUMMY;
 			assert_eq!(Session::key_owner(id, UintAuthorityId(1).get_raw(id)), Some(1));
@@ -632,8 +632,8 @@ mod tests {
 			force_new_session();
 			initialize_block(1);
 			assert_eq!(Session::queued_keys(), vec![
-				(1, UintAuthorityId(1)),
-				(2, UintAuthorityId(2)),
+				(1, UintAuthorityId(1).into()),
+				(2, UintAuthorityId(2).into()),
 			]);
 			assert_eq!(Session::validators(), vec![1, 2, 3]);
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
@@ -641,20 +641,20 @@ mod tests {
 			force_new_session();
 			initialize_block(2);
 			assert_eq!(Session::queued_keys(), vec![
-				(1, UintAuthorityId(1)),
-				(2, UintAuthorityId(2)),
+				(1, UintAuthorityId(1).into()),
+				(2, UintAuthorityId(2).into()),
 			]);
 			assert_eq!(Session::validators(), vec![1, 2]);
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2)]);
 
 			set_next_validators(vec![1, 2, 4]);
-			assert_ok!(Session::set_keys(Origin::signed(4), UintAuthorityId(4), vec![]));
+			assert_ok!(Session::set_keys(Origin::signed(4), UintAuthorityId(4).into(), vec![]));
 			force_new_session();
 			initialize_block(3);
 			assert_eq!(Session::queued_keys(), vec![
-				(1, UintAuthorityId(1)),
-				(2, UintAuthorityId(2)),
-				(4, UintAuthorityId(4)),
+				(1, UintAuthorityId(1).into()),
+				(2, UintAuthorityId(2).into()),
+				(4, UintAuthorityId(4).into()),
 			]);
 			assert_eq!(Session::validators(), vec![1, 2]);
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2)]);
@@ -662,9 +662,9 @@ mod tests {
 			force_new_session();
 			initialize_block(4);
 			assert_eq!(Session::queued_keys(), vec![
-				(1, UintAuthorityId(1)),
-				(2, UintAuthorityId(2)),
-				(4, UintAuthorityId(4)),
+				(1, UintAuthorityId(1).into()),
+				(2, UintAuthorityId(2).into()),
+				(4, UintAuthorityId(4).into()),
 			]);
 			assert_eq!(Session::validators(), vec![1, 2, 4]);
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(4)]);
@@ -707,7 +707,7 @@ mod tests {
 
 			// Block 3: Set new key for validator 2; no visible change.
 			initialize_block(3);
-			assert_ok!(Session::set_keys(Origin::signed(2), UintAuthorityId(5), vec![]));
+			assert_ok!(Session::set_keys(Origin::signed(2), UintAuthorityId(5).into(), vec![]));
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 
 			// Block 4: Session rollover; no visible change.
@@ -729,11 +729,11 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
 			Session::on_initialize(1);
-			assert!(Session::set_keys(Origin::signed(4), UintAuthorityId(1), vec![]).is_err());
-			assert!(Session::set_keys(Origin::signed(1), UintAuthorityId(10), vec![]).is_ok());
+			assert!(Session::set_keys(Origin::signed(4), UintAuthorityId(1).into(), vec![]).is_err());
+			assert!(Session::set_keys(Origin::signed(1), UintAuthorityId(10).into(), vec![]).is_ok());
 
 			// is fine now that 1 has migrated off.
-			assert!(Session::set_keys(Origin::signed(4), UintAuthorityId(1), vec![]).is_ok());
+			assert!(Session::set_keys(Origin::signed(4), UintAuthorityId(1).into(), vec![]).is_ok());
 		});
 	}
 
@@ -763,7 +763,7 @@ mod tests {
 			initialize_block(5);
 			assert!(!session_changed());
 
-			assert_ok!(Session::set_keys(Origin::signed(2), UintAuthorityId(5), vec![]));
+			assert_ok!(Session::set_keys(Origin::signed(2), UintAuthorityId(5).into(), vec![]));
 			force_new_session();
 			initialize_block(6);
 			assert!(!session_changed());
@@ -801,5 +801,19 @@ mod tests {
 		}
 
 		assert!(P::should_end_session(13));
+	}
+
+	#[test]
+	fn session_keys_generate_output_works_as_set_keys_input() {
+		with_externalities(&mut new_test_ext(), || {
+			let new_keys = mock::MockSessionKeys::generate(None);
+			assert_ok!(
+				Session::set_keys(
+					Origin::signed(2),
+					<mock::Test as Trait>::Keys::decode(&mut &new_keys[..]).expect("Decode keys"),
+					vec![],
+				)
+			);
+		});
 	}
 }

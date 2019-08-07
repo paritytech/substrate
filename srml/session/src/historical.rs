@@ -326,7 +326,7 @@ mod tests {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
 		let (storage, _child_storage) = crate::GenesisConfig::<Test> {
 			keys: NEXT_VALIDATORS.with(|l|
-				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i))).collect()
+				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i).into())).collect()
 			),
 		}.build_storage().unwrap();
 		t.extend(storage);

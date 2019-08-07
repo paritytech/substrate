@@ -1260,12 +1260,12 @@ macro_rules! impl_opaque_keys {
 			///
 			/// Returns the concatenated SCALE encoded public keys.
 			pub fn generate(seed: Option<&str>) -> $crate::rstd::vec::Vec<u8> {
-				let mut keys = $crate::rstd::vec::Vec::new();
-				$({
-					let key = <$type as $crate::app_crypto::RuntimeAppPublic>::generate_pair(seed);
-					$crate::codec::Encode::encode_to(&key, &mut keys);
-				})*
-				keys
+				let keys = Self{
+					$(
+						$field: <$type as $crate::app_crypto::RuntimeAppPublic>::generate_pair(seed),
+					)*
+				};
+				$crate::codec::Encode::encode(&keys)
 			}
 		}
 

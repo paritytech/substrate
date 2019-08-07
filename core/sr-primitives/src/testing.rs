@@ -46,6 +46,51 @@ impl CryptoType for UintAuthorityId {
 	type Pair = Dummy;
 }
 
+impl AsRef<[u8]> for UintAuthorityId {
+	fn as_ref(&self) -> &[u8] {
+		unsafe {
+			std::slice::from_raw_parts(&self.0 as *const u64 as *const _, std::mem::size_of::<u64>())
+		}
+	}
+}
+
+impl app_crypto::RuntimeAppPublic for UintAuthorityId {
+	type Signature = u64;
+
+	#[cfg(feature = "std")]
+	fn generate_pair(_: Option<&str>) -> Self {
+		use rand::RngCore;
+		UintAuthorityId(rand::thread_rng().next_u64())
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn generate_pair(_: Option<&str>) -> Self {
+		unimplemented!("`generate_pair` not implemented for `UIntAuthorityId` on `no_std`.")
+	}
+
+	fn sign<M: AsRef<[u8]>>(&self, msg: &M) -> Option<Self::Signature> {
+		let mut signature = [0u8; 8];
+		msg.as_ref().iter()
+			.chain(rstd::iter::repeat(&42u8))
+			.take(8)
+			.enumerate()
+			.for_each(|(i, v)| { signature[i] = *v; });
+
+		Some(u64::from_le_bytes(signature))
+	}
+
+	fn verify<M: AsRef<[u8]>>(&self, msg: &M, signature: &Self::Signature) -> bool {
+		let mut msg_signature = [0u8; 8];
+		msg.as_ref().iter()
+			.chain(rstd::iter::repeat(&42))
+			.take(8)
+			.enumerate()
+			.for_each(|(i, v)| { msg_signature[i] = *v; });
+
+		u64::from_le_bytes(msg_signature) == *signature
+	}
+}
+
 impl OpaqueKeys for UintAuthorityId {
 	type KeyTypeIds = std::iter::Cloned<std::slice::Iter<'static, KeyTypeId>>;
 
