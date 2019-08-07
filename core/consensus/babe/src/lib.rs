@@ -624,7 +624,7 @@ impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
 	C::Api: BlockBuilderApi<B> + BabeApi<B>,
 {
 	fn verify(
-		&self,
+		&mut self,
 		origin: BlockOrigin,
 		header: B::Header,
 		justification: Option<Justification>,
@@ -1182,7 +1182,7 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
 
 	let timestamp_core = verifier.time_source.clone();
 	let queue = BasicQueue::new(
-		Arc::new(verifier),
+		verifier,
 		Box::new(block_import.clone()),
 		justification_import,
 		finality_proof_import,

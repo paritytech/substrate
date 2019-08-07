@@ -97,7 +97,7 @@ impl Verifier<TestBlock> for TestVerifier {
 	/// new set of validators to import. If not, err with an Error-Message
 	/// presented to the User in the logs.
 	fn verify(
-		&self,
+		&mut self,
 		origin: BlockOrigin,
 		mut header: TestHeader,
 		justification: Option<Justification>,
@@ -124,7 +124,7 @@ impl TestNetFactory for BabeTestNet {
 
 	/// KLUDGE: this function gets the mutator from thread-local storage.
 	fn make_verifier(&self, client: PeersClient, _cfg: &ProtocolConfig)
-		-> Arc<Self::Verifier>
+		-> Self::Verifier
 	{
 		let api = client.as_full().expect("only full clients are used in test");
 		trace!(target: "babe", "Creating a verifier");
@@ -137,7 +137,7 @@ impl TestNetFactory for BabeTestNet {
 		).expect("Registers babe inherent data provider");
 		trace!(target: "babe", "Provider registered");
 
-		Arc::new(TestVerifier {
+		TestVerifier {
 			inner: BabeVerifier {
 				api,
 				inherent_data_providers,
@@ -145,7 +145,7 @@ impl TestNetFactory for BabeTestNet {
 				time_source: Default::default(),
 			},
 			mutator: MUTATOR.with(|s| s.borrow().clone()),
-		})
+		}
 	}
 
 	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData, DummySpecialization> {

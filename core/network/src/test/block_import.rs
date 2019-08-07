@@ -45,7 +45,7 @@ fn prepare_good_block() -> (TestClient, Hash, u64, PeerId, IncomingBlock<Block>)
 #[test]
 fn import_single_good_block_works() {
 	let (_, _hash, number, peer_id, block) = prepare_good_block();
-	match import_single_block(&mut test_client::new(), BlockOrigin::File, block, Arc::new(PassThroughVerifier(true))) {
+	match import_single_block(&mut test_client::new(), BlockOrigin::File, block, &mut PassThroughVerifier(true)) {
 		Ok(BlockImportResult::ImportedUnknown(ref num, ref aux, ref org))
 			if *num == number && *aux == Default::default() && *org == Some(peer_id) => {}
 		_ => panic!()
@@ -55,7 +55,7 @@ fn import_single_good_block_works() {
 #[test]
 fn import_single_good_known_block_is_ignored() {
 	let (mut client, _hash, number, _, block) = prepare_good_block();
-	match import_single_block(&mut client, BlockOrigin::File, block, Arc::new(PassThroughVerifier(true))) {
+	match import_single_block(&mut client, BlockOrigin::File, block, &mut PassThroughVerifier(true)) {
 		Ok(BlockImportResult::ImportedKnown(ref n)) if *n == number => {}
 		_ => panic!()
 	}
@@ -65,7 +65,7 @@ fn import_single_good_known_block_is_ignored() {
 fn import_single_good_block_without_header_fails() {
 	let (_, _, _, peer_id, mut block) = prepare_good_block();
 	block.header = None;
-	match import_single_block(&mut test_client::new(), BlockOrigin::File, block, Arc::new(PassThroughVerifier(true))) {
+	match import_single_block(&mut test_client::new(), BlockOrigin::File, block, &mut PassThroughVerifier(true)) {
 		Err(BlockImportError::IncompleteHeader(ref org)) if *org == Some(peer_id) => {}
 		_ => panic!()
 	}
@@ -75,7 +75,7 @@ fn import_single_good_block_without_header_fails() {
 fn async_import_queue_drops() {
 	// Perform this test multiple times since it exhibits non-deterministic behavior.
 	for _ in 0..100 {
-		let verifier = Arc::new(PassThroughVerifier(true));
+		let verifier = PassThroughVerifier(true);
 		let queue = BasicQueue::new(verifier, Box::new(test_client::new()), None, None);
 		drop(queue);
 	}
