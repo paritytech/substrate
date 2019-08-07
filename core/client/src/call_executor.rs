@@ -241,7 +241,7 @@ where
 
 		let mut state = self.backend.state_at(*at)?;
 
-		match recorder {
+		let result = match recorder {
 			Some(recorder) => {
 				let trie_state = state.as_trie_backend()
 					.ok_or_else(||
@@ -286,15 +286,18 @@ where
 				native_call,
 			)
 			.map(|(result, _, _)| result)
-			.map_err(Into::into)
-		}
+		}?;
+		self.backend.destroy_state(state)?;
+		Ok(result)
 	}
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
 		let mut ext = Ext::new(&mut overlay, &state, self.backend.changes_trie_storage(), NeverOffchainExt::new());
-		self.executor.runtime_version(&mut ext).ok_or(error::Error::VersionInvalid.into())
+		let version = self.executor.runtime_version(&mut ext);
+		self.backend.destroy_state(state)?;
+		version.ok_or(error::Error::VersionInvalid.into())
 	}
 
 	fn call_at_state<

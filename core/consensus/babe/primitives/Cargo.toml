@@ -11,8 +11,8 @@ rstd = { package = "sr-std", path = "../../../sr-std", default-features = false 
 sr-primitives = {  path = "../../../sr-primitives", default-features = false }
 primitives = { package = "substrate-primitives",  path = "../../../primitives", default-features = false }
 slots = { package = "substrate-consensus-slots", path = "../../slots", optional = true }
+schnorrkel = { version = "0.8.4", features = ["preaudit_deprecated"], optional = true }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
-schnorrkel = { version = "0.1.1", optional = true }
 
 [features]
 default = ["std"]
