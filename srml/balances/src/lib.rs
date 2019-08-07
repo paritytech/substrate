@@ -112,7 +112,7 @@
 //!
 //! ```
 //! use srml_support::traits::{WithdrawReasons, LockableCurrency};
-//! use primitives::traits::Bounded;
+//! use sr_primitives::traits::Bounded;
 //! pub trait Trait: system::Trait {
 //! 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 //! }
@@ -151,7 +151,7 @@
 
 use rstd::prelude::*;
 use rstd::{cmp, result, mem};
-use parity_codec::{Codec, Encode, Decode};
+use codec::{Codec, Encode, Decode};
 use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module};
 use srml_support::traits::{
 	UpdateBalanceOutcome, Currency, OnFreeBalanceZero, OnUnbalanced,
@@ -159,12 +159,12 @@ use srml_support::traits::{
 	Imbalance, SignedImbalance, ReservableCurrency, Get,
 };
 use srml_support::dispatch::Result;
-use primitives::traits::{
+use sr_primitives::traits::{
 	Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug,
 	Saturating, Bounded, SignedExtension, SaturatedConversion, DispatchError, Convert,
 };
-use primitives::transaction_validity::{TransactionPriority, ValidTransaction};
-use primitives::weights::{DispatchInfo, SimpleDispatchInfo, Weight};
+use sr_primitives::transaction_validity::{TransactionPriority, ValidTransaction};
+use sr_primitives::weights::{DispatchInfo, SimpleDispatchInfo, Weight};
 use system::{IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
 
 mod mock;
@@ -344,7 +344,7 @@ decl_storage! {
 						// Total genesis `balance` minus `liquid` equals funds locked for vesting
 						let locked = balance.saturating_sub(liquid);
 						// Number of units unlocked per block after `begin`
-						let per_block = locked / length.max(primitives::traits::One::one());
+						let per_block = locked / length.max(sr_primitives::traits::One::one());
 
 						(who.clone(), VestingSchedule {
 							locked: locked,
@@ -763,6 +763,7 @@ impl<T: Subtrait<I>, I: Instance> PartialEq for ElevatedTrait<T, I> {
 impl<T: Subtrait<I>, I: Instance> Eq for ElevatedTrait<T, I> {}
 impl<T: Subtrait<I>, I: Instance> system::Trait for ElevatedTrait<T, I> {
 	type Origin = T::Origin;
+	type Call = T::Call;
 	type Index = T::Index;
 	type BlockNumber = T::BlockNumber;
 	type Hash = T::Hash;
@@ -1213,12 +1214,14 @@ impl<T: Trait<I>, I: Instance> rstd::fmt::Debug for TakeFees<T, I> {
 
 impl<T: Trait<I>, I: Instance + Clone + Eq> SignedExtension for TakeFees<T, I> {
 	type AccountId = T::AccountId;
+	type Call = T::Call;
 	type AdditionalSigned = ();
 	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
 
 	fn validate(
 		&self,
 		who: &Self::AccountId,
+		_call: &Self::Call,
 		info: DispatchInfo,
 		len: usize,
 	) -> rstd::result::Result<ValidTransaction, DispatchError> {

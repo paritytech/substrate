@@ -22,13 +22,13 @@
 pub use timestamp;
 
 use rstd::{result, prelude::*};
-use srml_support::{decl_storage, decl_module, StorageValue, traits::FindAuthor, traits::Get};
+use srml_support::{decl_storage, decl_module, StorageValue, StorageMap, traits::FindAuthor, traits::Get};
 use timestamp::{OnTimestampSet};
-use primitives::{generic::DigestItem, ConsensusEngineId};
-use primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert};
+use sr_primitives::{generic::DigestItem, ConsensusEngineId};
+use sr_primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert};
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
@@ -103,16 +103,19 @@ impl ProvideInherentData for InherentDataProvider {
 	}
 
 	fn error_to_string(&self, error: &[u8]) -> Option<String> {
-		RuntimeString::decode(&mut &error[..]).map(Into::into)
+		RuntimeString::decode(&mut &error[..]).map(Into::into).ok()
 	}
 }
 
 pub trait Trait: timestamp::Trait {
 	type EpochDuration: Get<u64>;
+	type ExpectedBlockTime: Get<Self::Moment>;
 }
 
 /// The length of the BABE randomness
 pub const RANDOMNESS_LENGTH: usize = 32;
+
+const UNDER_CONSTRUCTION_SEGMENT_LENGTH: usize = 256;
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Babe {
@@ -149,13 +152,33 @@ decl_storage! {
 		NextRandomness: [u8; 32 /* RANDOMNESS_LENGTH */];
 
 		/// Randomness under construction.
-		UnderConstruction: [u8; 32 /* VRF_OUTPUT_LENGTH */];
+		///
+		/// We make a tradeoff between storage accesses and list length.
+		/// We store the under-construction randomness in segments of up to
+		/// `UNDER_CONSTRUCTION_SEGMENT_LENGTH`.
+		///
+		/// Once a segment reaches this length, we begin the next one.
+		/// We reset all segments and return to `0` at the beginning of every
+		/// epoch.
+		SegmentIndex build(|_| 0): u32;
+		UnderConstruction: map u32 => Vec<[u8; 32 /* VRF_OUTPUT_LENGTH */]>;
 	}
 }
 
 decl_module! {
 	/// The BABE SRML module
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		/// The number of **slots** that an epoch takes. We couple sessions to
+		/// epochs, i.e. we start a new session once the new epoch begins.
+		const EpochDuration: u64 = T::EpochDuration::get();
+
+		/// The expected average block time at which BABE should be creating
+		/// blocks. Since BABE is probabilistic it is not trivial to figure out
+		/// what the expected average block time should be based on the slot
+		/// duration and the security parameter `c` (where `1 - c` represents
+		/// the probability of a slot being empty).
+		const ExpectedBlockTime: T::Moment = T::ExpectedBlockTime::get();
+
 		/// Initialization
 		fn on_initialize() {
 			for digest in Self::get_inherent_digests()
@@ -163,7 +186,7 @@ decl_module! {
 				.iter()
 				.filter_map(|s| s.as_pre_runtime())
 				.filter_map(|(id, mut data)| if id == BABE_ENGINE_ID {
-					RawBabePreDigest::decode(&mut data)
+					RawBabePreDigest::decode(&mut data).ok()
 				} else {
 					None
 				})
@@ -190,13 +213,13 @@ impl<T: Trait> RandomnessBeacon for Module<T> {
 /// A BABE public key
 pub type BabeKey = [u8; PUBLIC_KEY_LENGTH];
 
-impl<T: Trait> FindAuthor<u64> for Module<T> {
-	fn find_author<'a, I>(digests: I) -> Option<u64> where
+impl<T: Trait> FindAuthor<u32> for Module<T> {
+	fn find_author<'a, I>(digests: I) -> Option<u32> where
 		I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
 	{
 		for (id, mut data) in digests.into_iter() {
 			if id == BABE_ENGINE_ID {
-				return Some(RawBabePreDigest::decode(&mut data)?.authority_index);
+				return Some(RawBabePreDigest::decode(&mut data).ok()?.authority_index);
 			}
 		}
 		return None;
@@ -236,19 +259,35 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn deposit_vrf_output(vrf_output: &[u8; VRF_OUTPUT_LENGTH]) {
-		UnderConstruction::mutate(|z| z.iter_mut().zip(vrf_output).for_each(|(x, y)| *x^=y))
+		let segment_idx = <SegmentIndex>::get();
+		let mut segment = <UnderConstruction>::get(&segment_idx);
+		if segment.len() < UNDER_CONSTRUCTION_SEGMENT_LENGTH {
+			// push onto current segment: not full.
+			segment.push(*vrf_output);
+			<UnderConstruction>::insert(&segment_idx, &segment);
+		} else {
+			// move onto the next segment and update the index.
+			let segment_idx = segment_idx + 1;
+			<UnderConstruction>::insert(&segment_idx, vec![*vrf_output].as_ref());
+			<SegmentIndex>::put(&segment_idx);
+		}
 	}
 
 	/// Call this function exactly once when an epoch changes, to update the
 	/// randomness. Returns the new randomness.
 	fn randomness_change_epoch(next_epoch_index: u64) -> [u8; RANDOMNESS_LENGTH] {
 		let this_randomness = NextRandomness::get();
+		let segment_idx: u32 = <SegmentIndex>::mutate(|s| rstd::mem::replace(s, 0));
+
+		// overestimate to the segment being full.
+		let rho_size = segment_idx.saturating_add(1) as usize * UNDER_CONSTRUCTION_SEGMENT_LENGTH;
+
 		let next_randomness = compute_randomness(
 			this_randomness,
 			next_epoch_index,
-			UnderConstruction::get(),
+			(0..segment_idx).flat_map(|i| <UnderConstruction>::take(&i)),
+			Some(rho_size),
 		);
-		UnderConstruction::put(&[0; RANDOMNESS_LENGTH]);
 		NextRandomness::put(&next_randomness);
 		this_randomness
 	}
@@ -329,19 +368,28 @@ impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Mod
 	}
 
 	fn on_disabled(i: usize) {
-		Self::deposit_consensus(ConsensusLog::OnDisabled(i as u64))
+		Self::deposit_consensus(ConsensusLog::OnDisabled(i as u32))
 	}
 }
 
+// compute randomness for a new epoch. rho is the concatenation of all
+// VRF outputs in the prior epoch.
+//
+// an optional size hint as to how many VRF outputs there were may be provided.
 fn compute_randomness(
 	last_epoch_randomness: [u8; RANDOMNESS_LENGTH],
 	epoch_index: u64,
-	rho: [u8; VRF_OUTPUT_LENGTH],
+	rho: impl Iterator<Item=[u8; VRF_OUTPUT_LENGTH]>,
+	rho_size_hint: Option<usize>,
 ) -> [u8; RANDOMNESS_LENGTH] {
-	let mut s = [0; 40 + VRF_OUTPUT_LENGTH];
-	s[..32].copy_from_slice(&last_epoch_randomness);
-	s[32..40].copy_from_slice(&epoch_index.to_le_bytes());
-	s[40..].copy_from_slice(&rho);
+	let mut s = Vec::with_capacity(40 + rho_size_hint.unwrap_or(0) * VRF_OUTPUT_LENGTH);
+	s.extend_from_slice(&last_epoch_randomness);
+	s.extend_from_slice(&epoch_index.to_le_bytes());
+
+	for vrf_output in rho {
+		s.extend_from_slice(&vrf_output[..]);
+	}
+
 	runtime_io::blake2_256(&s)
 }
 

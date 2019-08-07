@@ -217,9 +217,15 @@ macro_rules! dispatch_fn {
 /// Implements `wasmi::Externals` trait and `Resolver` for given struct.
 #[macro_export]
 macro_rules! impl_function_executor {
-	( $objectname:ident : $structname:ty,
-	  $( $name:ident ( $( $names:ident : $params:ty ),* ) $( -> $returns:ty )* => $body:tt , )*
-	  => $($pre:tt)+ ) => (
+	(
+		$objectname:ident : $structname:ty,
+		$(
+			$name:ident
+			( $( $names:ident : $params:ty ),* $(,)? )
+			$( -> $returns:ty )? => { $( $body:tt )* },
+		)*
+		=> $( $pre:tt )+
+	) => (
 		impl $( $pre ) + $structname {
 			#[allow(unused)]
 			fn resolver() -> &'static dyn $crate::wasmi::ModuleImportResolver {
@@ -230,7 +236,11 @@ macro_rules! impl_function_executor {
 						name: &str,
 						signature: &$crate::wasmi::Signature
 					) -> std::result::Result<$crate::wasmi::FuncRef, $crate::wasmi::Error> {
-						resolve_fn!(signature, name, $( $name( $( $params ),* ) $( -> $returns )* => )*);
+						resolve_fn!(
+							signature,
+							name,
+							$( $name( $( $params ),* ) $( -> $returns )? => )*
+						);
 
 						Err($crate::wasmi::Error::Instantiation(
 							format!("Export {} not found", name),
@@ -249,7 +259,12 @@ macro_rules! impl_function_executor {
 			) -> std::result::Result<Option<$crate::wasmi::RuntimeValue>, $crate::wasmi::Trap> {
 				let $objectname = self;
 				let mut args = args.as_ref().iter();
-				dispatch_fn!(index, $objectname, args, $( $name( $( $names : $params ),* ) $( -> $returns )* => $body ),*);
+				dispatch_fn! {
+					index,
+					$objectname,
+					args,
+					$( $name( $( $names : $params ),* ) $( -> $returns )? => { $( $body )* } ),*
+				};
 			}
 		}
 	);

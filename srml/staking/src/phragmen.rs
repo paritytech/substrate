@@ -17,8 +17,8 @@
 //! Rust implementation of the Phragmén election algorithm.
 
 use rstd::{prelude::*, collections::btree_map::BTreeMap};
-use primitives::{PerU128};
-use primitives::traits::{Zero, Convert, Saturating};
+use sr_primitives::{PerU128};
+use sr_primitives::traits::{Zero, Convert, Saturating};
 use crate::{BalanceOf, RawAssignment, ExpoMap, Trait, ValidatorPrefs, IndividualExposure};
 
 type Fraction = PerU128;
@@ -90,7 +90,7 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 	minimum_validator_count: usize,
 	validator_iter: FV,
 	nominator_iter: FN,
-	stash_of: FS,
+	slashable_balance_of: FS,
 ) -> Option<(Vec<T::AccountId>, Vec<(T::AccountId, Vec<RawAssignment<T>>)>)> where
 	FV: Iterator<Item=(T::AccountId, ValidatorPrefs<BalanceOf<T>>)>,
 	FN: Iterator<Item=(T::AccountId, Vec<T::AccountId>)>,
@@ -108,7 +108,7 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 	let mut nominators: Vec<Nominator<T::AccountId>> =
 		Vec::with_capacity(validator_iter.size_hint().0 + nominator_iter.size_hint().0);
 	let mut candidates = validator_iter.map(|(who, _)| {
-		let stash_balance = stash_of(&who);
+		let stash_balance = slashable_balance_of(&who);
 		(Candidate { who, ..Default::default() }, stash_balance)
 	})
 	.filter_map(|(mut c, s)| {
@@ -135,7 +135,7 @@ pub fn elect<T: Trait + 'static, FV, FN, FS>(
 	// 2- Collect the nominators with the associated votes.
 	// Also collect approval stake along the way.
 	nominators.extend(nominator_iter.map(|(who, nominees)| {
-		let nominator_stake = stash_of(&who);
+		let nominator_stake = slashable_balance_of(&who);
 		let mut edges: Vec<Edge<T::AccountId>> = Vec::with_capacity(nominees.len());
 		for n in &nominees {
 			if let Some(idx) = c_idx_cache.get(n) {

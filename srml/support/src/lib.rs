@@ -35,7 +35,6 @@ pub use codec;
 pub use once_cell;
 #[doc(hidden)]
 pub use paste;
-pub use sr_primitives as runtime_primitives;
 
 pub use self::storage::hashed::generator::{
 	HashedStorage, Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat
@@ -69,7 +68,7 @@ pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
 pub use self::double_map::StorageDoubleMapWithHasher;
 pub use runtime_io::{print, storage_root};
-pub use runtime_primitives::ConsensusEngineId;
+pub use sr_primitives::{self, ConsensusEngineId};
 
 /// Macro for easily creating a new implementation of the `Get` trait. Use similarly to
 /// how you would declare a `const`:
@@ -309,6 +308,7 @@ mod tests {
 	decl_storage! {
 		trait Store for Module<T: Trait> as Example {
 			pub Data get(data) build(|_| vec![(15u32, 42u64)]): linked_map hasher(twox_64_concat) u32 => u64;
+			pub OptionLinkedMap: linked_map u32 => Option<u32>;
 			pub GenericData get(generic_data): linked_map hasher(twox_128) T::BlockNumber => T::BlockNumber;
 			pub GenericData2 get(generic_data2): linked_map T::BlockNumber => Option<T::BlockNumber>;
 
@@ -331,6 +331,16 @@ mod tests {
 	}
 
 	type Map = Data;
+
+	#[test]
+	fn linked_map_issue_3318() {
+		with_externalities(&mut new_test_ext(), || {
+			OptionLinkedMap::insert(1, 1);
+			assert_eq!(OptionLinkedMap::get(1), Some(1));
+			OptionLinkedMap::insert(1, 2);
+			assert_eq!(OptionLinkedMap::get(1), Some(2));
+		});
+	}
 
 	#[test]
 	fn linked_map_basic_insert_remove_should_work() {
@@ -473,10 +483,26 @@ mod tests {
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Map{
 						hasher: StorageHasher::Twox64Concat,
-						key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("u64"), is_linked: true
+						key: DecodeDifferent::Encode("u32"),
+						value: DecodeDifferent::Encode("u64"),
+						is_linked: true,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructData(PhantomData::<Test>))
+					),
+					documentation: DecodeDifferent::Encode(&[]),
+				},
+				StorageEntryMetadata {
+					name: DecodeDifferent::Encode("OptionLinkedMap"),
+					modifier: StorageEntryModifier::Optional,
+					ty: StorageEntryType::Map {
+						hasher: StorageHasher::Blake2_256,
+						key: DecodeDifferent::Encode("u32"),
+						value: DecodeDifferent::Encode("u32"),
+						is_linked: true,
+					},
+					default: DecodeDifferent::Encode(
+						DefaultByteGetter(&__GetByteStructOptionLinkedMap(PhantomData::<Test>))
 					),
 					documentation: DecodeDifferent::Encode(&[]),
 				},
@@ -575,6 +601,6 @@ mod tests {
 	#[test]
 	fn store_metadata() {
 		let metadata = Module::<Test>::storage_metadata();
-		assert_eq!(EXPECTED_METADATA, metadata);
+		pretty_assertions::assert_eq!(EXPECTED_METADATA, metadata);
 	}
 }

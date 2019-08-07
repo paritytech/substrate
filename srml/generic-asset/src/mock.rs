@@ -20,8 +20,8 @@
 
 #![cfg(test)]
 
-use primitives::{Perbill, testing::Header, traits::{BlakeTwo256, IdentityLookup}};
-use substrate_primitives::{Blake2Hasher, H256};
+use sr_primitives::{Perbill, testing::Header, traits::{BlakeTwo256, IdentityLookup}};
+use primitives::{Blake2Hasher, H256};
 use support::{parameter_types, impl_outer_event, impl_outer_origin};
 
 use super::*;
@@ -45,6 +45,7 @@ impl system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
+	type Call = ();
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;

@@ -89,8 +89,6 @@
 //!
 //! The following multiplexing protocols are supported:
 //!
-//! - [Mplex](https://github.com/libp2p/specs/tree/master/mplex). Support for mplex will likely
-//! be deprecated in the future.
 //! - [Yamux](https://github.com/hashicorp/yamux/blob/master/spec.md).
 //!
 //! ## Substreams
@@ -202,7 +200,7 @@ pub use on_demand_layer::{OnDemand, RemoteResponse};
 
 // Used by the `construct_simple_protocol!` macro.
 #[doc(hidden)]
-pub use runtime_primitives::traits::Block as BlockT;
+pub use sr_primitives::traits::Block as BlockT;
 
 use libp2p::core::ConnectedPoint;
 use serde::{Deserialize, Serialize};

@@ -18,7 +18,7 @@
 
 use std::{self, error, result};
 use state_machine;
-use runtime_primitives::ApplyError;
+use sr_primitives::ApplyError;
 use consensus;
 use derive_more::{Display, From};
 
@@ -74,11 +74,11 @@ pub enum Error {
 	#[display(fmt = "Remote data fetch has been failed")]
 	RemoteFetchFailed,
 	/// Error decoding call result.
-	#[display(fmt = "Error decoding call result of {}", _0)]
-	CallResultDecode(&'static str),
+	#[display(fmt = "Error decoding call result of {}: {}", _0, _1)]
+	CallResultDecode(&'static str, codec::Error),
 	/// Error converting a parameter between runtime and node.
 	#[display(fmt = "Error converting `{}` between runtime and node", _0)]
-	RuntimeParamConversion(&'static str),
+	RuntimeParamConversion(String),
 	/// Changes tries are not supported.
 	#[display(fmt = "Changes tries are not supported by the runtime")]
 	ChangesTriesNotSupported,

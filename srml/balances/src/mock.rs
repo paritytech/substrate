@@ -18,8 +18,8 @@
 
 #![cfg(test)]
 
-use primitives::{Perbill, traits::{Convert, IdentityLookup}, testing::Header, weights::{DispatchInfo, Weight}};
-use substrate_primitives::{H256, Blake2Hasher};
+use sr_primitives::{Perbill, traits::{Convert, IdentityLookup}, testing::Header, weights::{DispatchInfo, Weight}};
+use primitives::{H256, Blake2Hasher};
 use runtime_io;
 use srml_support::{impl_outer_origin, parameter_types};
 use srml_support::traits::Get;
@@ -85,8 +85,9 @@ impl system::Trait for Runtime {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
+	type Call = ();
 	type Hash = H256;
-	type Hashing = ::primitives::traits::BlakeTwo256;
+	type Hashing = ::sr_primitives::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
@@ -207,6 +208,9 @@ impl ExtBuilder {
 
 pub type System = system::Module<Runtime>;
 pub type Balances = Module<Runtime>;
+
+
+pub const CALL: &<Runtime as system::Trait>::Call = &();
 
 /// create a transaction info struct from weight. Handy to avoid building the whole struct.
 pub fn info_from_weight(w: Weight) -> DispatchInfo {

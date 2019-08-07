@@ -24,8 +24,8 @@
 #![recursion_limit="128"]
 
 use rstd::prelude::*;
-use primitives::traits::{Zero, One, StaticLookup, Bounded, Saturating};
-use primitives::weights::SimpleDispatchInfo;
+use sr_primitives::traits::{Zero, One, StaticLookup, Bounded, Saturating};
+use sr_primitives::weights::SimpleDispatchInfo;
 use runtime_io::print;
 use srml_support::{
 	StorageValue, StorageMap,
@@ -35,7 +35,7 @@ use srml_support::{
 		OnUnbalanced, ReservableCurrency, WithdrawReason, WithdrawReasons, ChangeMembers
 	}
 };
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use system::{self, ensure_signed, ensure_root};
 
 // no polynomial attacks:
@@ -593,7 +593,7 @@ decl_module! {
 				.collect();
 			<Members<T>>::put(&new_set);
 			let new_set = new_set.into_iter().map(|x| x.0).collect::<Vec<_>>();
-			T::ChangeMembers::change_members(&[], &[who], &new_set[..]);
+			T::ChangeMembers::change_members(&[], &[who], new_set);
 		}
 
 		/// Set the presentation duration. If there is currently a vote being presented for, will
@@ -876,7 +876,7 @@ impl<T: Trait> Module<T> {
 		<Members<T>>::put(&new_set);
 
 		let new_set = new_set.into_iter().map(|x| x.0).collect::<Vec<_>>();
-		T::ChangeMembers::change_members(&incoming, &outgoing, &new_set[..]);
+		T::ChangeMembers::change_members(&incoming, &outgoing, new_set);
 
 		// clear all except runners-up from candidate list.
 		let candidates = Self::candidates();
@@ -1116,8 +1116,8 @@ mod tests {
 	use std::cell::RefCell;
 	use srml_support::{assert_ok, assert_err, assert_noop, parameter_types};
 	use runtime_io::with_externalities;
-	use substrate_primitives::{H256, Blake2Hasher};
-	use primitives::{
+	use primitives::{H256, Blake2Hasher};
+	use sr_primitives::{
 		Perbill, traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header, BuildStorage
 	};
 	use crate as elections;
@@ -1132,6 +1132,7 @@ mod tests {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
+		type Call = ();
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
@@ -1203,7 +1204,7 @@ mod tests {
 
 	pub struct TestChangeMembers;
 	impl ChangeMembers<u64> for TestChangeMembers {
-		fn change_members(incoming: &[u64], outgoing: &[u64], new: &[u64]) {
+		fn change_members_sorted(incoming: &[u64], outgoing: &[u64], new: &[u64]) {
 			let mut old_plus_incoming = MEMBERS.with(|m| m.borrow().to_vec());
 			old_plus_incoming.extend_from_slice(incoming);
 			old_plus_incoming.sort();
@@ -1234,8 +1235,8 @@ mod tests {
 		type DecayRatio = DecayRatio;
 	}
 
-	pub type Block = primitives::generic::Block<Header, UncheckedExtrinsic>;
-	pub type UncheckedExtrinsic = primitives::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
+	pub type Block = sr_primitives::generic::Block<Header, UncheckedExtrinsic>;
+	pub type UncheckedExtrinsic = sr_primitives::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
 
 	srml_support::construct_runtime!(
 		pub enum Test where

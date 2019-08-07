@@ -20,67 +20,59 @@ use std::{
 	marker::PhantomData, collections::{HashSet, BTreeMap, HashMap}, sync::Arc,
 	panic::UnwindSafe, result, cell::RefCell, rc::Rc,
 };
-use crate::error::Error;
+use log::{info, trace, warn};
 use futures::channel::mpsc;
 use parking_lot::{Mutex, RwLock};
-use primitives::NativeOrEncoded;
-use runtime_primitives::{
-	Justification,
-	generic::{BlockId, SignedBlock},
-};
-use consensus::{
-	Error as ConsensusError, BlockImportParams,
-	ImportResult, BlockOrigin, ForkChoiceStrategy,
-	well_known_cache_keys::Id as CacheKeyId,
-	SelectChain, self,
-};
-use runtime_primitives::traits::{
-	Block as BlockT, Header as HeaderT, Zero, NumberFor, CurrentHeight,
-	BlockNumberToHash, ApiRef, ProvideRuntimeApi,
-	SaturatedConversion, One, DigestFor,
-};
-use runtime_primitives::generic::DigestItem;
-use runtime_primitives::BuildStorage;
-use crate::runtime_api::{
-	CallRuntimeAt, ConstructRuntimeApi, Core as CoreApi, ProofRecorder,
-	InitializeBlock,
-};
+use codec::{Encode, Decode};
+use hash_db::{Hasher, Prefix};
 use primitives::{
 	Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash,
-	NeverNativeValue, ExecutionContext
+	NeverNativeValue, ExecutionContext,
+	storage::{StorageKey, StorageData, well_known_keys}, NativeOrEncoded
 };
-use primitives::storage::{StorageKey, StorageData};
-use primitives::storage::well_known_keys;
-use parity_codec::{Encode, Decode};
+use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
+use sr_primitives::{
+	Justification, BuildStorage,
+	generic::{BlockId, SignedBlock, DigestItem},
+	traits::{
+		Block as BlockT, Header as HeaderT, Zero, NumberFor,
+		ApiRef, ProvideRuntimeApi, SaturatedConversion, One, DigestFor,
+	},
+};
 use state_machine::{
 	DBValue, Backend as StateBackend, CodeExecutor, ChangesTrieAnchorBlockId,
 	ExecutionStrategy, ExecutionManager, prove_read, prove_child_read,
 	ChangesTrieRootsStorage, ChangesTrieStorage,
 	key_changes, key_changes_proof, OverlayedChanges, NeverOffchainExt,
 };
-use hash_db::Hasher;
-
-use crate::backend::{
-	self, BlockImportOperation, PrunableStateChangesTrieStorage,
-	StorageCollection, ChildStorageCollection
-};
-use crate::blockchain::{
-	self, Info as ChainInfo, Backend as ChainBackend,
-	HeaderBackend as ChainHeaderBackend, ProvideCache, Cache,
-};
-use crate::call_executor::{CallExecutor, LocalCallExecutor};
 use executor::{RuntimeVersion, RuntimeInfo};
-use crate::notifications::{StorageNotifications, StorageEventStream};
-use crate::light::{call_executor::prove_execution, fetcher::ChangesProof};
-use crate::cht;
-use crate::error;
-use crate::in_mem;
-use crate::block_builder::{self, api::BlockBuilder as BlockBuilderAPI};
-use crate::genesis;
-use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
+use consensus::{
+	Error as ConsensusError, BlockImportParams,
+	ImportResult, BlockOrigin, ForkChoiceStrategy,
+	well_known_cache_keys::Id as CacheKeyId,
+	SelectChain, self,
+};
 
-use log::{info, trace, warn};
-
+use crate::{
+	runtime_api::{
+		CallRuntimeAt, ConstructRuntimeApi, Core as CoreApi, ProofRecorder,
+		InitializeBlock,
+	},
+	backend::{
+		self, BlockImportOperation, PrunableStateChangesTrieStorage,
+		StorageCollection, ChildStorageCollection
+	},
+	blockchain::{
+		self, Info as ChainInfo, Backend as ChainBackend,
+		HeaderBackend as ChainHeaderBackend, ProvideCache, Cache,
+	},
+	call_executor::{CallExecutor, LocalCallExecutor},
+	notifications::{StorageNotifications, StorageEventStream},
+	light::{call_executor::prove_execution, fetcher::ChangesProof},
+	block_builder::{self, api::BlockBuilder as BlockBuilderAPI},
+	error::Error,
+	cht, error, in_mem, genesis
+};
 
 /// Type that implements `futures::Stream` of block import events.
 pub type ImportNotifications<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
@@ -261,6 +253,7 @@ impl<H> PrePostHeader<H> {
 pub fn new_in_mem<E, Block, S, RA>(
 	executor: E,
 	genesis_storage: S,
+	keystore: Option<primitives::traits::BareCryptoStorePtr>,
 ) -> error::Result<Client<
 	in_mem::Backend<Block, Blake2Hasher>,
 	LocalCallExecutor<in_mem::Backend<Block, Blake2Hasher>, E>,
@@ -271,7 +264,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	S: BuildStorage,
 	Block: BlockT<Hash=H256>,
 {
-	new_with_backend(Arc::new(in_mem::Backend::new()), executor, genesis_storage)
+	new_with_backend(Arc::new(in_mem::Backend::new()), executor, genesis_storage, keystore)
 }
 
 /// Create a client with the explicitly provided backend.
@@ -280,6 +273,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	backend: Arc<B>,
 	executor: E,
 	build_genesis_storage: S,
+	keystore: Option<primitives::traits::BareCryptoStorePtr>,
 ) -> error::Result<Client<B, LocalCallExecutor<B, E>, Block, RA>>
 	where
 		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
@@ -287,8 +281,22 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		Block: BlockT<Hash=H256>,
 		B: backend::LocalBackend<Block, Blake2Hasher>
 {
-	let call_executor = LocalCallExecutor::new(backend.clone(), executor);
+	let call_executor = LocalCallExecutor::new(backend.clone(), executor, keystore);
 	Client::new(backend, call_executor, build_genesis_storage, Default::default())
+}
+
+/// Figure out the block type for a given type (for now, just a `Client`).
+pub trait BlockOf {
+	/// The type of the block.
+	type Type: BlockT<Hash=H256>;
+}
+
+impl<B, E, Block, RA> BlockOf for Client<B, E, Block, RA> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
+	Block: BlockT<Hash=H256>,
+{
+	type Type = Block;
 }
 
 impl<B, E, Block, RA> Client<B, E, Block, RA> where
@@ -363,7 +371,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn storage(&self, id: &BlockId<Block>, key: &StorageKey) -> error::Result<Option<StorageData>> {
 		Ok(self.state_at(id)?
 			.storage(&key.0).map_err(|e| error::Error::from_state(Box::new(e)))?
-			.map(StorageData))
+			.map(StorageData)
+		)
 	}
 
 	/// Given a `BlockId` and a key, return the value under the hash in that block.
@@ -615,7 +624,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		}
 
 		impl<'a, Block: BlockT> ChangesTrieStorage<Blake2Hasher, NumberFor<Block>> for AccessedRootsRecorder<'a, Block> {
-			fn get(&self, key: &H256, prefix: &[u8]) -> Result<Option<DBValue>, String> {
+			fn get(&self, key: &H256, prefix: Prefix) -> Result<Option<DBValue>, String> {
 				self.storage.get(key, prefix)
 			}
 		}
@@ -1328,7 +1337,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(self.backend.state_at(BlockId::Number(self.backend.blockchain().info().best_number))?
 			.storage(well_known_keys::CHANGES_TRIE_CONFIG)
 			.map_err(|e| error::Error::from_state(Box::new(e)))?
-			.and_then(|c| Decode::decode(&mut &*c)))
+			.and_then(|c| Decode::decode(&mut &*c).ok()))
 	}
 
 	/// Prepare in-memory header that is used in execution environment.
@@ -1415,6 +1424,8 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 		context: ExecutionContext,
 		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
 	) -> error::Result<NativeOrEncoded<R>> {
+		let enable_keystore = context.enable_keystore();
+
 		let manager = match context {
 			ExecutionContext::BlockConstruction =>
 				self.execution_strategies.block_construction.get_manager(),
@@ -1444,6 +1455,7 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 			native_call,
 			offchain_extensions.as_mut(),
 			recorder,
+			enable_keystore,
 		)
 	}
 
@@ -1520,30 +1532,6 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 		(&*self).check_block(hash, parent_hash)
 	}
 }
-
-impl<B, E, Block, RA> CurrentHeight for Client<B, E, Block, RA> where
-	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT<Hash=H256>,
-{
-	type BlockNumber = <Block::Header as HeaderT>::Number;
-	fn current_height(&self) -> Self::BlockNumber {
-		self.backend.blockchain().info().best_number
-	}
-}
-
-impl<B, E, Block, RA> BlockNumberToHash for Client<B, E, Block, RA> where
-	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT<Hash=H256>,
-{
-	type BlockNumber = <Block::Header as HeaderT>::Number;
-	type Hash = Block::Hash;
-	fn block_number_to_hash(&self, n: Self::BlockNumber) -> Option<Self::Hash> {
-		self.block_hash(n).unwrap_or(None)
-	}
-}
-
 
 impl<B, E, Block, RA> BlockchainEvents<Block> for Client<B, E, Block, RA>
 where
@@ -1851,7 +1839,7 @@ pub(crate) mod tests {
 	use std::collections::HashMap;
 	use super::*;
 	use primitives::blake2_256;
-	use runtime_primitives::DigestItem;
+	use sr_primitives::DigestItem;
 	use consensus::{BlockOrigin, SelectChain};
 	use test_client::{
 		prelude::*,
@@ -2689,5 +2677,90 @@ pub(crate) mod tests {
 		// trying to convert
 		let id = BlockId::<Block>::Number(72340207214430721);
 		client.header(&id).expect_err("invalid block number overflows u32");
+	}
+
+	#[test]
+	fn state_reverted_on_reorg() {
+		let _ = env_logger::try_init();
+		let client = test_client::new();
+
+		let current_balance = ||
+			client.runtime_api().balance_of(
+				&BlockId::number(client.info().chain.best_number), AccountKeyring::Alice.into()
+			).unwrap();
+
+		// G -> A1 -> A2
+		//   \
+		//    -> B1
+		let mut a1 = client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
+		a1.push_transfer(Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Bob.into(),
+			amount: 10,
+			nonce: 0,
+		}).unwrap();
+		let a1 = a1.bake().unwrap();
+		client.import(BlockOrigin::Own, a1.clone()).unwrap();
+
+		let mut b1 = client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
+		b1.push_transfer(Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
+			amount: 50,
+			nonce: 0,
+		}).unwrap();
+		let b1 = b1.bake().unwrap();
+		// Reorg to B1
+		client.import_as_best(BlockOrigin::Own, b1.clone()).unwrap();
+
+		assert_eq!(950, current_balance());
+		let mut a2 = client.new_block_at(&BlockId::Hash(a1.hash()), Default::default()).unwrap();
+		a2.push_transfer(Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Charlie.into(),
+			amount: 10,
+			nonce: 1,
+		}).unwrap();
+		// Re-org to A2
+		client.import_as_best(BlockOrigin::Own, a2.bake().unwrap()).unwrap();
+		assert_eq!(980, current_balance());
+	}
+
+	#[test]
+	fn state_reverted_on_set_head() {
+		let _ = env_logger::try_init();
+		let client = test_client::new();
+
+		let current_balance = ||
+			client.runtime_api().balance_of(
+				&BlockId::number(client.info().chain.best_number), AccountKeyring::Alice.into()
+			).unwrap();
+
+		// G -> A1
+		//   \
+		//    -> B1
+		let mut a1 = client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
+		a1.push_transfer(Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Bob.into(),
+			amount: 10,
+			nonce: 0,
+		}).unwrap();
+		let a1 = a1.bake().unwrap();
+		client.import(BlockOrigin::Own, a1.clone()).unwrap();
+
+		let mut b1 = client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
+		b1.push_transfer(Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
+			amount: 50,
+			nonce: 0,
+		}).unwrap();
+		let b1 = b1.bake().unwrap();
+		client.import(BlockOrigin::Own, b1.clone()).unwrap();
+		assert_eq!(990, current_balance());
+		// Set B1 as new best
+		client.set_head(BlockId::hash(b1.hash())).unwrap();
+		assert_eq!(950, current_balance());
 	}
 }

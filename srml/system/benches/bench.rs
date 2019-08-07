@@ -18,8 +18,8 @@ use criterion::{Criterion, criterion_group, criterion_main, black_box};
 use srml_system as system;
 use srml_support::{decl_module, decl_event, impl_outer_origin, impl_outer_event};
 use runtime_io::{with_externalities, Blake2Hasher};
-use substrate_primitives::H256;
-use primitives::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+use primitives::H256;
+use sr_primitives::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 mod module {
 	use super::*;
@@ -63,6 +63,7 @@ impl system::Trait for Runtime {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
+	type Call = ();
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;

@@ -26,8 +26,8 @@ use log::{debug, info, warn};
 
 use consensus_common::SelectChain;
 use client::{CallExecutor, Client, backend::Backend};
-use runtime_primitives::traits::{NumberFor, Block as BlockT};
-use substrate_primitives::{H256, Blake2Hasher};
+use sr_primitives::traits::{NumberFor, Block as BlockT};
+use primitives::{H256, Blake2Hasher};
 
 use crate::{
 	global_communication, CommandOrError, CommunicationIn, Config, environment,
@@ -185,11 +185,11 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 
 		// start global communication stream for the current set
 		let (global_in, _) = global_communication(
-			None,
 			set_id,
 			&voters,
 			&client,
 			&network,
+			&config.keystore,
 		);
 
 		let last_finalized_number = client.info().chain.finalized_number;

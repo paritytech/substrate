@@ -24,8 +24,8 @@ use libp2p::swarm::{ProtocolsHandler, IntoProtocolsHandler};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use primitives::storage::StorageKey;
 use consensus::{import_queue::IncomingBlock, import_queue::Origin, BlockOrigin};
-use runtime_primitives::{generic::BlockId, ConsensusEngineId, Justification};
-use runtime_primitives::traits::{
+use sr_primitives::{generic::BlockId, ConsensusEngineId, Justification};
+use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
 	CheckedSub, SaturatedConversion
 };
@@ -34,7 +34,7 @@ use message::{BlockAttributes, Direction, FromBlock, Message, RequestId};
 use message::generic::{Message as GenericMessage, ConsensusMessage};
 use event::Event;
 use consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
-use on_demand::{OnDemandCore, OnDemandNetwork, RequestData};
+use light_dispatch::{LightDispatch, LightDispatchNetwork, RequestData};
 use specialization::NetworkSpecialization;
 use sync::{ChainSync, SyncState};
 use crate::service::{TransactionPool, ExHashT};
@@ -53,7 +53,7 @@ mod util;
 pub mod consensus_gossip;
 pub mod message;
 pub mod event;
-pub mod on_demand;
+pub mod light_dispatch;
 pub mod specialization;
 pub mod sync;
 
@@ -96,8 +96,8 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	/// Interval at which we call `propagate_extrinsics`.
 	propagate_timeout: Box<dyn Stream<Item = (), Error = ()> + Send>,
 	config: ProtocolConfig,
-	/// Handler for on-demand requests.
-	on_demand_core: OnDemandCore<B>,
+	/// Handler for light client requests.
+	light_dispatch: LightDispatch<B>,
 	genesis_hash: B::Hash,
 	sync: ChainSync<B>,
 	specialization: S,
@@ -111,7 +111,7 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	/// When asked for a proof of finality, we use this struct to build one.
 	finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
 	/// Handles opening the unique substream and sending and receiving raw messages.
-	behaviour: CustomProto<Message<B>, Substream<StreamMuxerBox>>,
+	behaviour: CustomProto<B, Substream<StreamMuxerBox>>,
 }
 
 /// A peer that we are connected to
@@ -149,12 +149,12 @@ pub struct PeerInfo<B: BlockT> {
 	pub best_number: <B::Header as HeaderT>::Number,
 }
 
-struct OnDemandIn<'a, B: BlockT> {
-	behaviour: &'a mut CustomProto<Message<B>, Substream<StreamMuxerBox>>,
+struct LightDispatchIn<'a, B: BlockT> {
+	behaviour: &'a mut CustomProto<B, Substream<StreamMuxerBox>>,
 	peerset: peerset::PeersetHandle,
 }
 
-impl<'a, B: BlockT> OnDemandNetwork<B> for OnDemandIn<'a, B> {
+impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a, B> {
 	fn report_peer(&mut self, who: &PeerId, reputation: i32) {
 		self.peerset.report_peer(who.clone(), reputation)
 	}
@@ -281,7 +281,7 @@ pub trait Context<B: BlockT> {
 
 /// Protocol context.
 struct ProtocolContext<'a, B: 'a + BlockT, H: 'a + ExHashT> {
-	behaviour: &'a mut CustomProto<Message<B>, Substream<StreamMuxerBox>>,
+	behaviour: &'a mut CustomProto<B, Substream<StreamMuxerBox>>,
 	context_data: &'a mut ContextData<B, H>,
 	peerset_handle: &'a peerset::PeersetHandle,
 }
@@ -289,7 +289,7 @@ struct ProtocolContext<'a, B: 'a + BlockT, H: 'a + ExHashT> {
 impl<'a, B: BlockT + 'a, H: 'a + ExHashT> ProtocolContext<'a, B, H> {
 	fn new(
 		context_data: &'a mut ContextData<B, H>,
-		behaviour: &'a mut CustomProto<Message<B>, Substream<StreamMuxerBox>>,
+		behaviour: &'a mut CustomProto<B, Substream<StreamMuxerBox>>,
 		peerset_handle: &'a peerset::PeersetHandle,
 	) -> Self {
 		ProtocolContext { context_data, peerset_handle, behaviour }
@@ -373,7 +373,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				peers: HashMap::new(),
 				chain,
 			},
-			on_demand_core: OnDemandCore::new(checker),
+			light_dispatch: LightDispatch::new(checker),
 			genesis_hash: info.chain.genesis_hash,
 			sync,
 			specialization: specialization,
@@ -445,15 +445,15 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Starts a new data demand request.
 	///
 	/// The parameter contains a `Sender` where the result, once received, must be sent.
-	pub(crate) fn add_on_demand_request(&mut self, rq: RequestData<B>) {
-		self.on_demand_core.add_request(OnDemandIn {
+	pub(crate) fn add_light_client_request(&mut self, rq: RequestData<B>) {
+		self.light_dispatch.add_request(LightDispatchIn {
 			behaviour: &mut self.behaviour,
 			peerset: self.peerset_handle.clone(),
 		}, rq);
 	}
 
-	fn is_on_demand_response(&self, who: &PeerId, response_id: message::RequestId) -> bool {
-		self.on_demand_core.is_on_demand_response(&who, response_id)
+	fn is_light_response(&self, who: &PeerId, response_id: message::RequestId) -> bool {
+		self.light_dispatch.is_light_response(&who, response_id)
 	}
 
 	fn handle_response(
@@ -506,7 +506,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::BlockRequest(r) => self.on_block_request(who, r),
 			GenericMessage::BlockResponse(r) => {
 				// Note, this is safe because only `ordinary bodies` and `remote bodies` are received in this matter.
-				if self.is_on_demand_response(&who, r.id) {
+				if self.is_light_response(&who, r.id) {
 					self.on_remote_body_response(who, r);
 				} else {
 					if let Some(request) = self.handle_response(who.clone(), &r) {
@@ -629,7 +629,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			}
 			self.sync.peer_disconnected(peer.clone());
 			self.specialization.on_disconnect(&mut context, peer.clone());
-			self.on_demand_core.on_disconnect(OnDemandIn {
+			self.light_dispatch.on_disconnect(LightDispatchIn {
 				behaviour: &mut self.behaviour,
 				peerset: self.peerset_handle.clone(),
 			}, peer);
@@ -793,7 +793,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle)
 		);
 		self.maintain_peers();
-		self.on_demand_core.maintain_peers(OnDemandIn {
+		self.light_dispatch.maintain_peers(LightDispatchIn {
 			behaviour: &mut self.behaviour,
 			peerset: self.peerset_handle.clone(),
 		});
@@ -914,7 +914,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		};
 
 		let info = self.context_data.peers.get(&who).expect("We just inserted above; QED").info.clone();
-		self.on_demand_core.on_connect(OnDemandIn {
+		self.light_dispatch.on_connect(LightDispatchIn {
 			behaviour: &mut self.behaviour,
 			peerset: self.peerset_handle.clone(),
 		}, who.clone(), status.roles, status.best_number);
@@ -1053,7 +1053,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				peer.known_blocks.insert(hash.clone());
 			}
 		}
-		self.on_demand_core.on_block_announce(OnDemandIn {
+		self.light_dispatch.update_best_number(LightDispatchIn {
 			behaviour: &mut self.behaviour,
 			peerset: self.peerset_handle.clone(),
 		}, who.clone(), *header.number());
@@ -1253,7 +1253,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		response: message::RemoteCallResponse
 	) {
 		trace!(target: "sync", "Remote call response {} from {}", response.id, who);
-		self.on_demand_core.on_remote_call_response(OnDemandIn {
+		self.light_dispatch.on_remote_call_response(LightDispatchIn {
 			behaviour: &mut self.behaviour,
 			peerset: self.peerset_handle.clone(),
 		}, who, response);
@@ -1294,7 +1294,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		response: message::RemoteReadResponse
 	) {
 		trace!(target: "sync", "Remote read response {} from {}", response.id, who);
-		self.on_demand_core.on_remote_read_response(OnDemandIn {
+		self.light_dispatch.on_remote_read_response(LightDispatchIn {
 			behaviour: &mut self.behaviour,
 			peerset: self.peerset_handle.clone(),
 		}, who, response);
@@ -1335,7 +1335,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		response: message::RemoteHeaderResponse<B::Header>,
 	) {
 		trace!(target: "sync", "Remote header proof response {} from {}", response.id, who);
-		self.on_demand_core.on_remote_header_response(OnDemandIn {
+		self.light_dispatch.on_remote_header_response(LightDispatchIn {
 			behaviour: &mut self.behaviour,
 			peerset: self.peerset_handle.clone(),
 		}, who, response);
@@ -1401,7 +1401,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			who,
 			response.max
 		);
-		self.on_demand_core.on_remote_changes_response(OnDemandIn {
+		self.light_dispatch.on_remote_changes_response(LightDispatchIn {
 			behaviour: &mut self.behaviour,
 			peerset: self.peerset_handle.clone(),
 		}, who, response);
@@ -1462,7 +1462,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		peer: PeerId,
 		response: message::BlockResponse<B>
 	) {
-		self.on_demand_core.on_remote_body_response(OnDemandIn {
+		self.light_dispatch.on_remote_body_response(LightDispatchIn {
 			behaviour: &mut self.behaviour,
 			peerset: self.peerset_handle.clone(),
 		}, peer, response);
@@ -1479,7 +1479,7 @@ pub enum CustomMessageOutcome<B: BlockT> {
 }
 
 fn send_message<B: BlockT, H: ExHashT>(
-	behaviour: &mut CustomProto<Message<B>, Substream<StreamMuxerBox>>,
+	behaviour: &mut CustomProto<B, Substream<StreamMuxerBox>>,
 	peers: &mut HashMap<PeerId, Peer<B, H>>,
 	who: PeerId,
 	mut message: Message<B>,
@@ -1500,7 +1500,7 @@ fn send_message<B: BlockT, H: ExHashT>(
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> NetworkBehaviour for
 Protocol<B, S, H> {
-	type ProtocolsHandler = <CustomProto<Message<B>, Substream<StreamMuxerBox>> as NetworkBehaviour>::ProtocolsHandler;
+	type ProtocolsHandler = <CustomProto<B, Substream<StreamMuxerBox>> as NetworkBehaviour>::ProtocolsHandler;
 	type OutEvent = CustomMessageOutcome<B>;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {

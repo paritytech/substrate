@@ -26,7 +26,7 @@ use runtime_io;
 fn check_message_sig<B: Codec, H: Codec>(
 	message: Message<B, H>,
 	signature: &Signature,
-	from: &AuthorityId
+	from: &AuthorityId,
 ) -> bool {
 	let msg: Vec<u8> = message.encode();
 	runtime_io::ed25519_verify(&signature.0, &msg, from)
@@ -77,7 +77,7 @@ mod tests {
 	use keyring::Ed25519Keyring;
 	use rhododendron;
 
-	use runtime_primitives::testing::{H256, Block as RawBlock};
+	use sr_primitives::testing::{H256, Block as RawBlock};
 
 	type Block = RawBlock<u64>;
 

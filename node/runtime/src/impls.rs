@@ -17,9 +17,9 @@
 //! Some configurable implementations as associated type for the substrate runtime.
 
 use node_primitives::Balance;
-use runtime_primitives::weights::{Weight, WeightMultiplier};
-use runtime_primitives::traits::{Convert, Saturating};
-use runtime_primitives::Fixed64;
+use sr_primitives::weights::{Weight, WeightMultiplier};
+use sr_primitives::traits::{Convert, Saturating};
+use sr_primitives::Fixed64;
 use support::traits::{OnUnbalanced, Currency};
 use crate::{Balances, Authorship, MaximumBlockWeight, NegativeImbalance};
 use crate::constants::fee::TARGET_BLOCK_FULLNESS;
@@ -131,8 +131,8 @@ impl Convert<(Weight, WeightMultiplier), WeightMultiplier> for WeightMultiplierU
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_primitives::weights::Weight;
-	use runtime_primitives::Perbill;
+	use sr_primitives::weights::Weight;
+	use sr_primitives::Perbill;
 	use crate::{MaximumBlockWeight, AvailableBlockRatio, Runtime};
 	use crate::constants::currency::*;
 

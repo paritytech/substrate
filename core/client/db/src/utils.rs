@@ -27,10 +27,10 @@ use kvdb_rocksdb::{Database, DatabaseConfig};
 use log::debug;
 
 use client;
-use parity_codec::Decode;
+use codec::Decode;
 use trie::DBValue;
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{
+use sr_primitives::generic::BlockId;
+use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Zero,
 	UniqueSaturatedFrom, UniqueSaturatedInto,
 };
@@ -187,7 +187,7 @@ pub fn block_id_to_lookup_key<Block>(
 	id: BlockId<Block>
 ) -> Result<Option<Vec<u8>>, client::error::Error> where
 	Block: BlockT,
-	::runtime_primitives::traits::NumberFor<Block>: UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64>,
+	::sr_primitives::traits::NumberFor<Block>: UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64>,
 {
 	let res = match id {
 		BlockId::Number(n) => db.get(
@@ -260,8 +260,8 @@ pub fn read_header<Block: BlockT>(
 ) -> client::error::Result<Option<Block::Header>> {
 	match read_db(db, col_index, col, id)? {
 		Some(header) => match Block::Header::decode(&mut &header[..]) {
-			Some(header) => Ok(Some(header)),
-			None => return Err(
+			Ok(header) => Ok(Some(header)),
+			Err(_) => return Err(
 				client::error::Error::Backend("Error decoding header".into())
 			),
 		}
@@ -290,8 +290,10 @@ pub fn read_meta<Block>(db: &dyn KeyValueDB, col_meta: Option<u32>, col_header: 
 {
 	let genesis_hash: Block::Hash = match db.get(col_meta, meta_keys::GENESIS_HASH).map_err(db_err)? {
 		Some(h) => match Decode::decode(&mut &h[..]) {
-			Some(h) => h,
-			None => return Err(client::error::Error::Backend("Error decoding genesis hash".into())),
+			Ok(h) => h,
+			Err(err) => return Err(client::error::Error::Backend(
+				format!("Error decoding genesis hash: {}", err)
+			)),
 		},
 		None => return Ok(Meta {
 			best_hash: Default::default(),
@@ -305,7 +307,7 @@ pub fn read_meta<Block>(db: &dyn KeyValueDB, col_meta: Option<u32>, col_header: 
 	let load_meta_block = |desc, key| -> Result<_, client::error::Error> {
 		if let Some(Some(header)) = db.get(col_meta, key).and_then(|id|
 			match id {
-				Some(id) => db.get(col_header, &id).map(|h| h.map(|b| Block::Header::decode(&mut &b[..]))),
+				Some(id) => db.get(col_header, &id).map(|h| h.map(|b| Block::Header::decode(&mut &b[..]).ok())),
 				None => Ok(None),
 			}).map_err(db_err)?
 		{
@@ -332,7 +334,7 @@ pub fn read_meta<Block>(db: &dyn KeyValueDB, col_meta: Option<u32>, col_header: 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_primitives::testing::{Block as RawBlock, ExtrinsicWrapper};
+	use sr_primitives::testing::{Block as RawBlock, ExtrinsicWrapper};
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
 
 	#[test]

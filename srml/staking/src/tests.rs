@@ -19,7 +19,7 @@
 use super::*;
 use runtime_io::with_externalities;
 use phragmen;
-use primitives::traits::OnInitialize;
+use sr_primitives::traits::OnInitialize;
 use srml_support::{assert_ok, assert_noop, assert_eq_uvec, EnumerableStorageMap};
 use mock::*;
 use srml_support::traits::{Currency, ReservableCurrency};
@@ -365,8 +365,8 @@ fn rewards_should_work() {
 		<Module<Test>>::add_reward_points_to_validator(1001, 10_000);
 
 		// Compute total payout now for whole duration as other parameter won't change
-		let total_payout = current_total_payout_for_duration(9*5);
-		assert!(total_payout > 10); // Test is meaningfull if reward something
+		let total_payout = current_total_payout_for_duration(9 * 5);
+		assert!(total_payout > 10); // Test is meaningful if reward something
 
 		// No reward yet
 		assert_eq!(Balances::total_balance(&2), init_balance_2);
@@ -2098,5 +2098,18 @@ fn reward_from_authorship_event_handler_works() {
 		// 11 is rewarded as a block procuder and unclde referencer
 		assert_eq!(CurrentEraRewards::get().rewards, vec![1, 20+2*2]);
 		assert_eq!(CurrentEraRewards::get().total, 25);
+	})
+}
+
+#[test]
+fn unbonded_balance_is_not_slashable() {
+	with_externalities(&mut ExtBuilder::default().build(), || {
+		// total amount staked is slashable.
+		assert_eq!(Staking::slashable_balance_of(&11), 1000);
+
+		assert_ok!(Staking::unbond(Origin::signed(10),  800));
+
+		// only the active portion.
+		assert_eq!(Staking::slashable_balance_of(&11), 200);
 	})
 }
