@@ -1431,6 +1431,14 @@ macro_rules! __impl_module_constants_metadata {
 							$crate::dispatch::Encode::encode(&value)
 						}
 					}
+
+					unsafe impl<$const_trait_instance: 'static + $const_trait_name $(
+						<I>, $const_instance: $const_instantiable)?
+					> Send for $default_byte_name <$const_trait_instance $(, $const_instance)?> {}
+
+					unsafe impl<$const_trait_instance: 'static + $const_trait_name $(
+						<I>, $const_instance: $const_instantiable)?
+					> Sync for $default_byte_name <$const_trait_instance $(, $const_instance)?> {}
 				)*
 				&[
 					$(
