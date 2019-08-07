@@ -576,6 +576,11 @@ decl_storage! {
 		/// True if the next session change will be a new era regardless of index.
 		pub ForceNewEra get(forcing_new_era): bool;
 
+		/// The percentage of the slash that is distributed to reporters.
+		///
+		/// The rest of the slashed value is handled by the `Slash`.
+		pub SlashRewardFraction get(slash_reward_fraction) config(): Perbill;
+
 		/// A mapping from still-bonded eras to the first session index of that era.
 		BondedEras: Vec<(EraIndex, SessionIndex)>;
 	}
@@ -622,11 +627,8 @@ decl_event!(
 	pub enum Event<T> where Balance = BalanceOf<T>, <T as system::Trait>::AccountId {
 		/// All validators have been rewarded by the given balance.
 		Reward(Balance),
-		/// One validator (and its nominators) has been given an offline-warning (it is still
-		/// within its grace). The accrued number of slashes is recorded, too.
-		OfflineWarning(AccountId, u32),
 		/// One validator (and its nominators) has been slashed by the given amount.
-		OfflineSlash(AccountId, Balance),
+		Slash(AccountId, Balance),
 	}
 );
 
@@ -984,17 +986,23 @@ impl<T: Trait> Module<T> {
 		<Ledger<T>>::insert(controller, ledger);
 	}
 
-	/// Slash a given validator by a specific amount. Removes the slash from the validator's
-	/// balance by preference, and reduces the nominators' balance if needed.
-	fn slash_validator(stash: T::AccountId, slash: BalanceOf<T>) {
-		// The exposure (backing stake) information of the validator to be slashed.
-		let exposure = Self::stakers(&stash);
+	/// Slash a given validator by a specific amount with given (historical) exposure.
+	///
+	/// Removes the slash from the validator's balance by preference,
+	/// and reduces the nominators' balance if needed.
+	///
+	/// Returns the resulting `NegativeImbalance` to allow distributing the slashed amount.
+	fn slash_validator(
+		stash: &T::AccountId,
+		slash: BalanceOf<T>,
+		exposure: &Exposure<T::AccountId, BalanceOf<T>>,
+	) -> NegativeImbalanceOf<T> {
 		// The amount we are actually going to slash (can't be bigger than the validator's total
 		// exposure)
 		let slash = slash.min(exposure.total);
 		// The amount we'll slash from the validator's stash directly.
 		let own_slash = exposure.own.min(slash);
-		let (mut imbalance, missing) = T::Currency::slash(&stash, own_slash);
+		let (mut imbalance, missing) = T::Currency::slash(stash, own_slash);
 		let own_slash = own_slash - missing;
 		// The amount remaining that we can't slash from the validator,
 		// that must be taken from the nominators.
@@ -1010,8 +1018,13 @@ impl<T: Trait> Module<T> {
 				}
 			}
 		}
-		// TODO [slashing] Distribute reward to reporters?
-		T::Slash::on_unbalanced(imbalance);
+
+		// trigger the event
+		Self::deposit_event(
+			RawEvent::Slash(stash.clone(), slash)
+		);
+
+		imbalance
 	}
 
 	/// Actually make a payment to a staker. This uses the currency's reward function
@@ -1289,63 +1302,6 @@ impl<T: Trait> Module<T> {
 		<Validators<T>>::remove(stash);
 		<Nominators<T>>::remove(stash);
 	}
-    //
-	// /// Call when a validator is determined to be offline. `count` is the
-	// /// number of offenses the validator has committed.
-	// ///
-	// /// NOTE: This is called with the controller (not the stash) account id.
-	// pub fn on_offline_validator(controller: T::AccountId, count: usize) {
-	// 	if let Some(l) = Self::ledger(&controller) {
-	// 		let stash = l.stash;
-    //
-	// 		// Early exit if validator is invulnerable.
-	// 		if Self::invulnerables().contains(&stash) {
-	// 			return
-	// 		}
-    //
-	// 		let slash_count = Self::slash_count(&stash);
-	// 		let new_slash_count = slash_count + count as u32;
-	// 		<SlashCount<T>>::insert(&stash, new_slash_count);
-	// 		let grace = Self::offline_slash_grace();
-    //
-	// 		if RECENT_OFFLINE_COUNT > 0 {
-	// 			let item = (stash.clone(), <system::Module<T>>::block_number(), count as u32);
-	// 			<RecentlyOffline<T>>::mutate(|v| if v.len() >= RECENT_OFFLINE_COUNT {
-	// 				let index = v.iter()
-	// 					.enumerate()
-	// 					.min_by_key(|(_, (_, block, _))| block)
-	// 					.expect("v is non-empty; qed")
-	// 					.0;
-	// 				v[index] = item;
-	// 			} else {
-	// 				v.push(item);
-	// 			});
-	// 		}
-    //
-	// 		let prefs = Self::validators(&stash);
-	// 		let unstake_threshold = prefs.unstake_threshold.min(MAX_UNSTAKE_THRESHOLD);
-	// 		let max_slashes = grace + unstake_threshold;
-    //
-	// 		let event = if new_slash_count > max_slashes {
-	// 			let slash_exposure = Self::stakers(&stash).total;
-	// 			let offline_slash_base = Self::offline_slash() * slash_exposure;
-	// 			// They're bailing.
-	// 			let slash = offline_slash_base
-	// 				// Multiply slash_mantissa by 2^(unstake_threshold with upper bound)
-	// 				.checked_shl(unstake_threshold)
-	// 				.map(|x| x.min(slash_exposure))
-	// 				.unwrap_or(slash_exposure);
-	// 			let _ = Self::slash_validator(&stash, slash);
-	// 			let _ = T::SessionInterface::disable_validator(&stash);
-    //
-	// 			RawEvent::OfflineSlash(stash.clone(), slash)
-	// 		} else {
-	// 			RawEvent::OfflineWarning(stash.clone(), slash_count)
-	// 		};
-    //
-	// 		Self::deposit_event(event);
-	// 	}
-	// }
 
 	/// Add reward points to validator.
 	///
@@ -1474,24 +1430,40 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 		offenders: &[OffenceDetails<T::AccountId, session::historical::IdentificationTuple<T>>],
 		slash_fraction: &[Perbill],
 	) {
+		let mut remaining_imbalance = <NegativeImbalanceOf<T>>::zero();
+		let slash_reward_fraction = SlashRewardFraction::get();
+
 		for (details, slash_fraction) in offenders.iter().zip(slash_fraction) {
 			let stash = &details.offender.0;
+			let exposure = &details.offender.1;
 
 			// Early exit if validator is invulnerable.
 			if Self::invulnerables().contains(stash) {
 				return
 			}
 
-
-			// let slash_exposure = Self::stakers(&stash).total;
-			// let amount = offline_slash_base
-			//	// Multiply slash_mantissa by 2^(unstake_threshold with upper bound)
-			//	.checked_shl(unstake_threshold)
-			//	.map(|x| x.min(slash_exposure))
-			//	.unwrap_or(slash_exposure);
-			// Self::slash_validator(details.offender, amount)
+			// make sure to disable validator in next sessions
 			let _ = T::SessionInterface::disable_validator(stash);
+			// force a new era, to select a new validator set
 			Self::apply_force_new_era();
+
+			// now slash the validator and distribute the rewards
+			let slash_exposure = exposure.total;
+			let amount = *slash_fraction * slash_exposure;
+			let imbalance = Self::slash_validator(stash, amount, exposure);
+
+			// distribute the rewards according to the slash
+			let slash_reward = slash_reward_fraction * imbalance.peek();
+			if !slash_reward.is_zero() {
+				let (reward, rest) = imbalance.split(slash_reward);
+				// TODO [slashing] split between reporters
+				remaining_imbalance.subsume(rest);
+			} else {
+				remaining_imbalance.subsume(imbalance);
+			}
 		}
+
+		// Handle the rest of imbalances
+		T::Slash::on_unbalanced(remaining_imbalance);
 	}
 }

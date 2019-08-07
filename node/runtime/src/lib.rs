@@ -377,7 +377,6 @@ impl im_online::Trait for Runtime {
 }
 
 impl offences::Trait for Runtime {
-	type AuthorityId = BabeId; // TODO [slashing]: What should this be???
 	type OnOffenceHandler = Staking;
 }
 
