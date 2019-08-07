@@ -562,7 +562,7 @@ impl_runtime_apis! {
 		) -> Option<Vec<u8>> {
 			// TODO: Check proof and create transaction.
 			let proof = Historical::prove((key_types::SR25519, equivocation.identity.encode()))?;
-			let grandpa_call = GrandpaCall::report_equivocation(equivocation);
+			let grandpa_call = GrandpaCall::report_equivocation(equivocation, proof);
 			let call = Call::Grandpa(grandpa_call);
 			Some(call.encode())
 		}
@@ -597,7 +597,7 @@ impl_runtime_apis! {
 		) -> Option<Vec<u8>> {
 			// TODO: Check proof and construct transaction.
 			let proof = Historical::prove((key_types::SR25519, equivocation.identity().encode()))?;
-			let babe_call = BabeCall::report_equivocation(equivocation);
+			let babe_call = BabeCall::report_equivocation(equivocation, proof);
 			let call = Call::Babe(babe_call);
 			Some(call.encode())
 		}

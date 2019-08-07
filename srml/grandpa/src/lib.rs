@@ -44,6 +44,7 @@ use fg_primitives::{
 	ScheduledChange, ConsensusLog, GRANDPA_ENGINE_ID, GrandpaEquivocation,
 	localized_payload
 };
+use session::historical::Proof;
 pub use fg_primitives::{AuthorityId, AuthorityWeight};
 use system::{ensure_signed, DigestOf};
 
@@ -199,7 +200,8 @@ decl_module! {
 		/// Report some misbehavior.
 		fn report_equivocation(
 			origin,
-			equivocation: GrandpaEquivocation<T::Hash, T::BlockNumber>
+			equivocation: GrandpaEquivocation<T::Hash, T::BlockNumber>,
+			_proof: Proof
 		) {
 			let _who = ensure_signed(origin)?;
 
