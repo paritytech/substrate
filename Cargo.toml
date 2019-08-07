@@ -84,6 +84,7 @@ members = [
 	"srml/indices",
 	"srml/membership",
 	"srml/metadata",
+	"srml/scored-pool",
 	"srml/session",
 	"srml/staking",
 	"srml/sudo",
