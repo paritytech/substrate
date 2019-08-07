@@ -190,7 +190,6 @@ fn node_config<F: ServiceFactory> (
 		offchain_worker: false,
 		force_authoring: false,
 		disable_grandpa: false,
-		grandpa_voter: false,
 		dev_key_seed: key_seed,
 	}
 }

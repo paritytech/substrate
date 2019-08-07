@@ -311,18 +311,9 @@ pub struct ExecutionStrategies {
 /// The `run` command used to run a node.
 #[derive(Debug, StructOpt, Clone)]
 pub struct RunCmd {
-	/// Enable validator mode
-	#[structopt(long = "validator")]
-	pub validator: bool,
-
 	/// Disable GRANDPA when running in validator mode
 	#[structopt(long = "no-grandpa")]
 	pub no_grandpa: bool,
-
-	/// Run GRANDPA voter even when no additional key seed via `--key` is specified. This can for example be of interest
-	/// when running a sentry node in front of a validator, thus needing to forward GRANDPA gossip messages.
-	#[structopt(long = "grandpa-voter")]
-	pub grandpa_voter: bool,
 
 	/// Experimental: Run in light client mode
 	#[structopt(long = "light")]
@@ -505,7 +496,6 @@ impl AugmentClap for Keyring {
 					.long(&a.name)
 					.help(&a.help)
 					.conflicts_with_all(&conflicts_with_strs)
-					.requires("dev")
 					.takes_value(false)
 			)
 		})

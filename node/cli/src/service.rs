@@ -146,26 +146,28 @@ construct_service_factory! {
 					keystore: Some(service.keystore()),
 				};
 
-				if service.config.roles.is_authority() {
-					let telemetry_on_connect = TelemetryOnConnect {
-						telemetry_connection_sinks: service.telemetry_on_connect_stream(),
-					};
-					let grandpa_config = grandpa::GrandpaParams {
-						config: config,
-						link: link_half,
-						network: service.network(),
-						inherent_data_providers: service.config.custom.inherent_data_providers.clone(),
-						on_exit: service.on_exit(),
-						telemetry_on_connect: Some(telemetry_on_connect),
-					};
-					service.spawn_task(Box::new(grandpa::run_grandpa_voter(grandpa_config)?));
-				} else if !service.config.grandpa_voter {
-					service.spawn_task(Box::new(grandpa::run_grandpa_observer(
-						config,
-						link_half,
-						service.network(),
-						service.on_exit(),
-					)?));
+				if !service.config.disable_grandpa {
+					if service.config.roles.is_authority() {
+						let telemetry_on_connect = TelemetryOnConnect {
+							telemetry_connection_sinks: service.telemetry_on_connect_stream(),
+						};
+						let grandpa_config = grandpa::GrandpaParams {
+							config: config,
+							link: link_half,
+							network: service.network(),
+							inherent_data_providers: service.config.custom.inherent_data_providers.clone(),
+							on_exit: service.on_exit(),
+							telemetry_on_connect: Some(telemetry_on_connect),
+						};
+						service.spawn_task(Box::new(grandpa::run_grandpa_voter(grandpa_config)?));
+					} else {
+						service.spawn_task(Box::new(grandpa::run_grandpa_observer(
+							config,
+							link_half,
+							service.network(),
+							service.on_exit(),
+						)?));
+					}
 				}
 
 				Ok(service)

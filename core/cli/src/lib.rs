@@ -433,14 +433,11 @@ where
 		),
 	};
 
-	let role =
-		if cli.light {
-			service::Roles::LIGHT
-		} else if cli.validator || cli.shared_params.dev {
-			service::Roles::AUTHORITY
-		} else {
-			service::Roles::FULL
-		};
+	let role = if cli.light {
+		service::Roles::LIGHT
+	} else {
+		service::Roles::AUTHORITY
+	};
 
 	let exec = cli.execution_strategies;
 	let exec_all_or = |strat: params::ExecutionStrategy| exec.execution.unwrap_or(strat).into();
@@ -461,8 +458,6 @@ where
 
 	config.roles = role;
 	config.disable_grandpa = cli.no_grandpa;
-	config.grandpa_voter = cli.grandpa_voter;
-
 
 	let is_dev = cli.shared_params.dev;
 
@@ -481,13 +476,8 @@ where
 		cli.pool_config,
 	)?;
 
-
-	if cli.shared_params.dev {
-		config.dev_key_seed = cli.keyring.account
-			.map(|a| format!("//{}", a))
-			.or_else(|| Some("//Alice".into()));
-	}
-
+	config.dev_key_seed = cli.keyring.account
+		.map(|a| format!("//{}", a));
 
 	let rpc_interface: &str = if cli.rpc_external { "0.0.0.0" } else { "127.0.0.1" };
 	let ws_interface: &str = if cli.ws_external { "0.0.0.0" } else { "127.0.0.1" };
