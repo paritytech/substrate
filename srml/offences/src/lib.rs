@@ -60,7 +60,7 @@ impl<T: Trait, O: Offence<IdentificationTuple<T>>> ReportOffence<T::AccountId, I
 	for Module<T> where
 	IdentificationTuple<T>: Clone,
 {
-	fn report_offence(reporter: Option<T::AccountId>, offence: O) -> Result<(), ()> {
+	fn report_offence(reporter: Option<T::AccountId>, offence: O) {
 		let offenders = offence.offenders();
 		let time_slot = offence.time_slot();
 		let session = offence.current_era_start_session_index();
@@ -121,8 +121,6 @@ impl<T: Trait, O: Offence<IdentificationTuple<T>>> ReportOffence<T::AccountId, I
 			&all_offenders,
 			&slash_perbil
 		);
-
-		return Ok(())
 	}
 }
 

@@ -1442,14 +1442,20 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 				return
 			}
 
+			// calculate the amount to slash
+			let slash_exposure = exposure.total;
+			let amount = *slash_fraction * slash_exposure;
+			// in some cases `slash_fraction` can be just `0`,
+			// which means we are not slashing this time.
+			if amount.is_zero() {
+				continue;
+			}
+
 			// make sure to disable validator in next sessions
 			let _ = T::SessionInterface::disable_validator(stash);
 			// force a new era, to select a new validator set
 			Self::apply_force_new_era();
-
-			// now slash the validator and distribute the rewards
-			let slash_exposure = exposure.total;
-			let amount = *slash_fraction * slash_exposure;
+			// actually slash the validator
 			let imbalance = Self::slash_validator(stash, amount, exposure);
 
 			// distribute the rewards according to the slash

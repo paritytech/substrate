@@ -86,7 +86,7 @@ pub trait Offence<Offender> {
 /// A trait for decoupling offence reporters from the actual handling of offence reports.
 pub trait ReportOffence<Reporter, Offender, O: Offence<Offender>> {
 	/// Report an `offence` and reward the `reporter`.
-	fn report_offence(reporter: Option<Reporter>, offence: O) -> Result<(), ()>;
+	fn report_offence(reporter: Option<Reporter>, offence: O);
 }
 
 /// A trait to take action on an offence.
