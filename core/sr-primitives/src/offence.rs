@@ -89,6 +89,10 @@ pub trait ReportOffence<Reporter, Offender, O: Offence<Offender>> {
 	fn report_offence(reporter: Option<Reporter>, offence: O);
 }
 
+impl<Reporter, Offender, O: Offence<Offender>> ReportOffence<Reporter, Offender, O> for () {
+	fn report_offence(_reporter: Option<Reporter>, _offence: O) {}
+}
+
 /// A trait to take action on an offence.
 ///
 /// Used to decouple the module that handles offences and
@@ -109,6 +113,13 @@ pub trait OnOffenceHandler<Reporter, Offender> {
 		offenders: &[OffenceDetails<Reporter, Offender>],
 		slash_fraction: &[Perbill],
 	);
+}
+
+impl<Reporter, Offender> OnOffenceHandler<Reporter, Offender> for () {
+	fn on_offence(
+		_offenders: &[OffenceDetails<Reporter, Offender>],
+		_slash_fraction: &[Perbill],
+	) {}
 }
 
 /// A details about an offending authority for a particular kind of offence.

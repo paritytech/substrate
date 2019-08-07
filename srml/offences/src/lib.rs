@@ -22,20 +22,28 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 
+mod mock;
+mod tests;
+
 use rstd::vec::Vec;
-use session::{SessionIndex, historical::{self, IdentificationTuple}};
 use support::{
-	StorageDoubleMap, decl_module, decl_storage,
+	StorageDoubleMap, decl_module, decl_storage, Parameter,
 };
 use sr_primitives::{
 	Perbill,
 	offence::{Offence, ReportOffence, TimeSlot, Kind, OnOffenceHandler, OffenceDetails},
 };
 
+/// A session index.
+/// TODO [slashing] move SessionIndex out of `srml-session` and use it here.
+pub type SessionIndex = u32;
+
 /// Offences trait
-pub trait Trait: system::Trait + historical::Trait {
+pub trait Trait: system::Trait {
+	/// Full identification of the validator.
+	type IdentificationTuple: Parameter;
 	/// A handler called for every offence report.
-	type OnOffenceHandler: OnOffenceHandler<Self::AccountId, IdentificationTuple<Self>>;
+	type OnOffenceHandler: OnOffenceHandler<Self::AccountId, Self::IdentificationTuple>;
 }
 
 decl_storage! {
@@ -47,7 +55,7 @@ decl_storage! {
 		/// timeslot since the slashing will increase based on the length of this vec.
 		OffenceReports get(offence_reports):
 			double_map Kind, blake2_256((SessionIndex, TimeSlot))
-			=> Vec<OffenceDetails<T::AccountId, IdentificationTuple<T>>>;
+			=> Vec<OffenceDetails<T::AccountId, T::IdentificationTuple>>;
 	}
 }
 
@@ -56,9 +64,9 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 }
 
-impl<T: Trait, O: Offence<IdentificationTuple<T>>> ReportOffence<T::AccountId, IdentificationTuple<T>, O>
+impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportOffence<T::AccountId, T::IdentificationTuple, O>
 	for Module<T> where
-	IdentificationTuple<T>: Clone,
+	T::IdentificationTuple: Clone,
 {
 	fn report_offence(reporter: Option<T::AccountId>, offence: O) {
 		let offenders = offence.offenders();
@@ -126,15 +134,3 @@ impl<T: Trait, O: Offence<IdentificationTuple<T>>> ReportOffence<T::AccountId, I
 		);
 	}
 }
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn should_trigger_on_offence_handler() {
-		// TODO [slashing] implement me
-		assert_eq!(true, false);
-	}
-}
-
