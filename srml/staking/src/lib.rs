@@ -175,7 +175,8 @@
 //!
 //! Total reward is split among validators and their nominators depending on the number of points
 //! they received during the era. Points are added to a validator using
-//! [`add_reward_points`](./enum.Call.html#variant.add_reward_points).
+//! [`reward_by_ids`](./enum.Call.html#variant.reward_by_ids) or
+//! [`reward_by_indices`](./enum.Call.html#variant.reward_by_indices).
 //!
 //! [`Module`](./struct.Module.html) implements
 //! [`authorship::EventHandler`](../srml_authorship/trait.EventHandler.html) to add reward points
@@ -1420,13 +1421,14 @@ impl<T: Trait> Module<T> {
 	///
 	/// At the end of the era each the total payout will be distributed among validator
 	/// relatively to their points.
-	pub fn add_reward_points(validators_points: Vec<(T::AccountId, u32)>) {
+	pub fn reward_by_ids(validators_points: impl IntoIterator<Item = (T::AccountId, u32)>) {
 		CurrentEraRewards::mutate(|rewards| {
-			for (index, elected) in <Module<T>>::current_elected().iter().enumerate() {
-				for (validator, points) in &validators_points {
-					if *validator == *elected {
-						rewards.add_points_to_index(index as u32, *points);
-					}
+			let current_elected = <Module<T>>::current_elected();
+			for (validator, points) in validators_points.into_iter() {
+				if let Some(index) = current_elected.iter()
+					.position(|elected| *elected == validator)
+				{
+					rewards.add_points_to_index(index as u32, points);
 				}
 			}
 		});
@@ -1436,12 +1438,12 @@ impl<T: Trait> Module<T> {
 	///
 	/// For each element in the iterator the given number of points in u32 is added to the
 	/// validator, thus duplicates are handled.
-	pub fn add_reward_points_using_index(validators_points: Vec<(u32, u32)>) {
+	pub fn reward_by_indices(validators_points: impl IntoIterator<Item = (u32, u32)>) {
 		// TODO: This can be optimised once #3302 is implemented.
 		let current_elected_len = <Module<T>>::current_elected().len() as u32;
 
 		CurrentEraRewards::mutate(|rewards| {
-			for (validator_index, points) in validators_points {
+			for (validator_index, points) in validators_points.into_iter() {
 				if validator_index < current_elected_len {
 					rewards.add_points_to_index(validator_index, points);
 				}
@@ -1476,10 +1478,10 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 /// * 1 point to the producer of each referenced uncle block.
 impl<T: Trait + authorship::Trait> authorship::EventHandler<T::AccountId, T::BlockNumber> for Module<T> {
 	fn note_author(author: T::AccountId) {
-		Self::add_reward_points(vec![(author, 20)]);
+		Self::reward_by_ids(vec![(author, 20)]);
 	}
 	fn note_uncle(author: T::AccountId, _age: T::BlockNumber) {
-		Self::add_reward_points(vec![
+		Self::reward_by_ids(vec![
 			(<authorship::Module<T>>::author(), 2),
 			(author, 1)
 		])
