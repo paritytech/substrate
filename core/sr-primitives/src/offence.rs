@@ -17,6 +17,9 @@
 //! Common traits and types that are useful for describing offences for usage in environments
 //! that use staking.
 
+use rstd::vec::Vec;
+
+use codec::{Encode, Decode};
 use crate::Perbill;
 
 /// The kind of an offence, is a byte string representing some kind identifier
@@ -24,6 +27,14 @@ use crate::Perbill;
 // TODO [slashing]: Is there something better we can have here that is more natural but still
 // flexible? as you see in examples, they get cut off with long names.
 pub type Kind = [u8; 16];
+
+/// Number of times the offence of this authority was already reported in the past.
+///
+/// Note we don't buffer offence reporting so everytime we see a new offence
+/// of the same kind, we will report past authorities again.
+/// This counter keeps track of how many times the authority was already reported in the past,
+/// so that we can slash it accordingly.
+pub type OffenceCount = u32;
 
 /// A type that represents a point in time on an abstract timescale.
 ///
@@ -45,7 +56,7 @@ pub trait Offence<Offender> {
 	/// The list of all offenders involved in this incident.
 	///
 	/// The list has no duplicates, so it is rather a set.
-	fn offenders(&self) -> rstd::vec::Vec<Offender>;
+	fn offenders(&self) -> Vec<Offender>;
 
 	/// The session index which is used for querying the validator set for the `slash_fraction`
 	/// function.
@@ -61,13 +72,55 @@ pub trait Offence<Offender> {
 	/// A slash fraction of the total exposure that should be slashed for this
 	/// particular offence kind for the given parameters.
 	///
-	/// `offenders` - the number of offences of this kind at the particular `time_slot`.
+	/// `offenders_count` - the count of unique offending authorities
 	/// `validators_count` - the cardinality of the validator set at the time of offence.
-	fn slash_fraction(&self, offenders: u32, validators_count: u32) -> Perbill;
+	fn slash_fraction(
+		&self,
+		offenders_count: u32,
+		validators_count: u32,
+	) -> Perbill;
 }
 
 /// A trait for decoupling offence reporters from the actual handling of offence reports.
 pub trait ReportOffence<Reporter, Offender, O: Offence<Offender>> {
-	/// Report an `offence` from the given `reporters`.
-	fn report_offence(reporters: &[Reporter], offence: &O);
+	/// Report an `offence` and reward the `reporter`.
+	fn report_offence(reporter: Option<Reporter>, offence: O) -> Result<(), ()>;
+}
+
+/// A trait to take action on an offence.
+///
+/// Used to decouple the module that handles offences and
+/// the one that should punish for those offences.
+pub trait OnOffenceHandler<Reporter, Offender> {
+	/// A handler for offence of particular kind.
+	///
+	/// Note that this contains a list of all previous offenders
+	/// as well. The implementer should cater for a case, where
+	/// the same authorities were reported for the same offence
+	/// in the past (see `OffenceCount`).
+	///
+	/// The vector of `slash_fraction` contains perbils
+	/// the authorities should be slashed and is computed
+	/// according to the `OffenceCount` already.
+	fn on_offence(
+		offenders: &[OffenceDetails<Reporter, Offender>],
+		slash_fraction: &[Perbill],
+	);
+}
+
+/// A details about an offending authority for a particular kind of offence.
+#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct OffenceDetails<Reporter, Offender> {
+	/// The offending authority id
+	pub offender: Offender,
+	/// A number of times the authority was already reported for this offence.
+	///
+	/// Since we punish all authorities for that made the same offence in the past as well
+	/// we keep track the "age" of the report, so that the slashes can be lowered
+	/// in case the authority was already slashed in the past.
+	/// Note that we don't buffer slashes and instead use this approach.
+	pub count: OffenceCount,
+	/// A list of reporters of offences of this authority id.
+	pub reporters: Vec<Reporter>,
 }

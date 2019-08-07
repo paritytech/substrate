@@ -251,9 +251,13 @@ impl Offence<AuthorityId> for BabeEquivocationOffence {
 		self.slot as TimeSlot
 	}
 
-	fn slash_fraction(&self, offenders: u32, validators_count: u32) -> Perbill {
+	fn slash_fraction(
+		&self,
+		offenders_count: u32,
+		validators_count: u32,
+	) -> Perbill {
 		// the formula is min((3k / n)^2, 1)
-		let x = Perbill::from_rational_approximation(3 * offenders, validators_count);
+		let x = Perbill::from_rational_approximation(3 * offenders_count, validators_count);
 
 		// _ ^ 2
 		// For now, Perbill doesn't support taking the power of it. Until it does, do it manually.

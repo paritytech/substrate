@@ -22,28 +22,36 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 
-use srml_support::{
-	StorageDoubleMap, Parameter, decl_module, decl_storage,
-};
 use parity_codec::{Decode, Encode};
 use rstd::vec::Vec;
+use session::{Module as Session, SessionIndex, historical};
+use support::{
+	StorageDoubleMap, Parameter, decl_module, decl_storage,
+};
 use sr_primitives::{
+	Perbill,
 	traits::{Member, TypedKey},
-	offence::{Offence, ReportOffence, TimeSlot, Kind},
+	offence::{Offence, ReportOffence, TimeSlot, Kind, OnOffenceHandler, OffenceDetails},
 };
 
 /// Offences trait
-pub trait Trait: system::Trait {
+pub trait Trait: system::Trait + session::Trait + historical::Trait {
 	/// The identifier type for an authority.
 	type AuthorityId: Member + Parameter + Default + TypedKey + Decode + Encode + AsRef<[u8]>;
+	/// A handler called for every offence report.
+	type OnOffenceHandler: OnOffenceHandler<Self::AccountId, Self::AuthorityId>;
 }
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Offences {
-		/// Offence reports is a double_map of the kind, timeslot to a vec of authorities.
+		/// A mapping between unique `TimeSlots` within a particular session and the offence `Kind` into
+		/// a vector of offending authorities.
+		///
 		/// It's important that we store all authorities reported for an offence for any kind and
 		/// timeslot since the slashing will increase based on the length of this vec.
-		OffenceReports get(offence_reports): double_map Kind, blake2_256(TimeSlot) => Vec<T::AuthorityId>;
+		OffenceReports get(offence_reports):
+			double_map Kind, blake2_256((SessionIndex, TimeSlot))
+				=> Vec<OffenceDetails<T::AccountId, T::AuthorityId>>;
 	}
 }
 
@@ -52,27 +60,93 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 }
 
-impl<T: Trait, O: Offence<T::AuthorityId>> ReportOffence<T::AuthorityId, T::AuthorityId, O>
+impl<T: Trait, O: Offence<T::AuthorityId>> ReportOffence<T::AccountId, T::AuthorityId, O>
 	for Module<T>
 {
-	fn report_offence(_reporters: &[T::AuthorityId], offence: &O) {
+	fn report_offence(reporter: Option<T::AccountId>, offence: O) -> Result<(), ()> {
 		let offenders = offence.offenders();
 		let time_slot = offence.time_slot();
+		let session = offence.current_era_start_session_index();
 
-		// Check if an offence is already reported for the offender authorities and otherwise stores
-		// that report.
-		<OffenceReports<T>>::mutate(&O::ID, &time_slot, |offending_authorities| {
-			for offender in offenders {
-				// TODO [slashing] This prevents slashing for multiple reports of the same kind at the same slot,
-				// note however that we might do that in the future if the reports are not exactly the same (dups).
-				// De-duplication of reports is tricky though, we need a canonical form of the report
-				// (for instance babe equivocation can have headers swapped).
-				if !offending_authorities.contains(&offender) {
-					offending_authorities.push(offender);
-					// TODO [slashing] trigger on_offence and calculate amounts
+		// Check if an offence is already reported for the offender authorities
+		// and otherwise stores that report.
+		let all_offenders = <OffenceReports<T>>
+			::mutate(&O::ID, &(session, time_slot), |offending_authorities| {
+				for offender in offenders {
+					// TODO [slashing] This prevents slashing for multiple reports of the same kind at the same slot,
+					// note however that we might do that in the future if the reports are not exactly the same (dups).
+					// De-duplication of reports is tricky though, we need a canonical form of the report
+					// (for instance babe equivocation can have headers swapped).
+					if let Some(details) = offending_authorities
+						.iter_mut()
+						.find(|details| details.offender == offender)
+					{
+						details.count += 1;
+						if let Some(ref reporter) = reporter {
+							if !details.reporters.contains(reporter) {
+								details.reporters.push(reporter.clone());
+							}
+						}
+					} else {
+						offending_authorities.push(OffenceDetails {
+							offender,
+							count: 0,
+							reporters: reporter.clone().into_iter().collect(),
+						});
+					}
 				}
-			}
-		});
 
+				offending_authorities.clone()
+			});
+
+		// TODO [slashing] Use CurrentEraStartSessionIndex from staking to figure out if it's in current session.
+		let validators_count = if session == <Session<T>>::current_index() {
+			<Session<T>>::validators().len() as u32
+		} else if let Some((_, count)) = <historical::Module<T>>::historical_root(session) {
+			count
+		} else {
+			// session index seems invalid, we should pprobably just return an error.
+			return Err(())
+		};
+
+
+		let offenders_count = all_offenders.len() as u32;
+		let expected_fraction = offence.slash_fraction(offenders_count, validators_count);
+		let slash_perbil = all_offenders
+			.iter()
+			.map(|details| {
+				if details.count > 0 {
+					let previous_fraction = offence.slash_fraction(
+						offenders_count.saturating_sub(details.count),
+						validators_count,
+					);
+					let perbil = expected_fraction
+						.into_parts()
+						.saturating_sub(previous_fraction.into_parts());
+					Perbill::from_parts(perbil)
+				} else {
+					expected_fraction.clone()
+				}
+			})
+			.collect::<Vec<_>>();
+
+		T::OnOffenceHandler::on_offence(
+			&all_offenders,
+			&slash_perbil
+		);
+
+		return Ok(())
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn should_trigger_on_offence_handler() {
+		// TODO [slashing] implement me
+		assert_eq!(true, false);
+	}
+}
+

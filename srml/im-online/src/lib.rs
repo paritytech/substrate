@@ -408,7 +408,7 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	}
 
 	fn on_before_session_ending() {
-		// ignore
+		// TODO [slashing] report validators
 	}
 
 	fn on_disabled(_i: usize) {

@@ -273,6 +273,7 @@ use srml_support::{
 };
 use session::{historical::OnSessionEnding, SelectInitialValidators, SessionIndex};
 use primitives::Perbill;
+use primitives::offence::{OnOffenceHandler, OffenceDetails};
 use primitives::weights::SimpleDispatchInfo;
 use primitives::traits::{
 	Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded,
@@ -985,44 +986,32 @@ impl<T: Trait> Module<T> {
 
 	/// Slash a given validator by a specific amount. Removes the slash from the validator's
 	/// balance by preference, and reduces the nominators' balance if needed.
-	///
-	/// NOTE: This is called with the controller (not the stash) account id.
-	pub fn slash_validator(controller: T::AccountId, slash: BalanceOf<T>) {
-		if let Some(l) = Self::ledger(&controller) {
-			let stash = l.stash;
-
-			// Early exit if validator is invulnerable.
-			if Self::invulnerables().contains(&stash) {
-				return
-			}
-
-			// The exposure (backing stake) information of the validator to be slashed.
-			let exposure = Self::stakers(&stash);
-			// The amount we are actually going to slash (can't be bigger than the validator's total
-			// exposure)
-			let slash = slash.min(exposure.total);
-			// The amount we'll slash from the validator's stash directly.
-			let own_slash = exposure.own.min(slash);
-			let (mut imbalance, missing) = T::Currency::slash(&stash, own_slash);
-			let own_slash = own_slash - missing;
-			// The amount remaining that we can't slash from the validator,
-			// that must be taken from the nominators.
-			let rest_slash = slash - own_slash;
-			if !rest_slash.is_zero() {
-				// The total to be slashed from the nominators.
-				let total = exposure.total - exposure.own;
-				if !total.is_zero() {
-					for i in exposure.others.iter() {
-						let per_u64 = Perbill::from_rational_approximation(i.value, total);
-						// best effort - not much that can be done on fail.
-						imbalance.subsume(T::Currency::slash(&i.who, per_u64 * rest_slash).0)
-					}
+	fn slash_validator(stash: T::AccountId, slash: BalanceOf<T>) {
+		// The exposure (backing stake) information of the validator to be slashed.
+		let exposure = Self::stakers(&stash);
+		// The amount we are actually going to slash (can't be bigger than the validator's total
+		// exposure)
+		let slash = slash.min(exposure.total);
+		// The amount we'll slash from the validator's stash directly.
+		let own_slash = exposure.own.min(slash);
+		let (mut imbalance, missing) = T::Currency::slash(&stash, own_slash);
+		let own_slash = own_slash - missing;
+		// The amount remaining that we can't slash from the validator,
+		// that must be taken from the nominators.
+		let rest_slash = slash - own_slash;
+		if !rest_slash.is_zero() {
+			// The total to be slashed from the nominators.
+			let total = exposure.total - exposure.own;
+			if !total.is_zero() {
+				for i in exposure.others.iter() {
+					let per_u64 = Perbill::from_rational_approximation(i.value, total);
+					// best effort - not much that can be done on fail.
+					imbalance.subsume(T::Currency::slash(&i.who, per_u64 * rest_slash).0)
 				}
 			}
-			T::Slash::on_unbalanced(imbalance);
-			let _ = T::SessionInterface::disable_validator(&stash);
-			Self::apply_force_new_era();
 		}
+		// TODO [slashing] Distribute reward to reporters?
+		T::Slash::on_unbalanced(imbalance);
 	}
 
 	/// Actually make a payment to a staker. This uses the currency's reward function
@@ -1080,6 +1069,8 @@ impl<T: Trait> Module<T> {
 	fn new_session(session_index: SessionIndex)
 		-> Option<(Vec<T::AccountId>, Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>)>
 	{
+		// TODO [slashing] The new era should be SessionsPerEra long, so
+		// we should use CurrentEraStartSessionIndexS to calculate end of the era.
 		if ForceNewEra::take() || session_index % T::SessionsPerEra::get() == 0 {
 			let validators = T::SessionInterface::validators();
 			let prior = validators.into_iter()
@@ -1460,5 +1451,35 @@ impl<T: Trait> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>>
 impl<T: Trait> SelectInitialValidators<T::AccountId> for Module<T> {
 	fn select_initial_validators() -> Option<Vec<T::AccountId>> {
 		<Module<T>>::select_validators().1
+	}
+}
+
+// TODO [ToDr] Should it be AccountId or AuthorityId?
+impl <T: Trait> OnOffenceHandler<T::AccountId, T::AccountId> for Module<T> {
+	fn on_offence(
+		offenders: &[OffenceDetails<T::AccountId, T::AccountId>],
+		slash_fraction: &[Perbill],
+	) {
+		for (details, slash_fraction) in offenders.iter().zip(slash_fraction) {
+			if let Some(l) = Self::ledger(&details.offender) {
+				let stash = l.stash;
+
+				// Early exit if validator is invulnerable.
+				if Self::invulnerables().contains(&stash) {
+					return
+				}
+
+
+				// let slash_exposure = Self::stakers(&stash).total;
+				// let amount = offline_slash_base
+				//	// Multiply slash_mantissa by 2^(unstake_threshold with upper bound)
+				//	.checked_shl(unstake_threshold)
+				//	.map(|x| x.min(slash_exposure))
+				//	.unwrap_or(slash_exposure);
+				// Self::slash_validator(details.offender, amount)
+				let _ = T::SessionInterface::disable_validator(&stash);
+				Self::apply_force_new_era();
+			}
+		}
 	}
 }
