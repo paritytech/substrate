@@ -46,22 +46,22 @@ struct TestKeyStore {
 }
 
 impl BareCryptoStore for TestKeyStore {
-	fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> { vec![] }
-	fn sr25519_generate_new(&mut self, id: KeyTypeId, seed: Option<&str>)
+	fn sr25519_public_keys(&self, _id: KeyTypeId) -> Vec<sr25519::Public> { vec![] }
+	fn sr25519_generate_new(&mut self, _id: KeyTypeId, _seed: Option<&str>)
 		-> std::result::Result<sr25519::Public, String>
 	{
 		Err("unimplemented".into())
 	}
-	fn sr25519_key_pair(&self, id: KeyTypeId, pub_key: &sr25519::Public) -> Option<sr25519::Pair> {
+	fn sr25519_key_pair(&self, _id: KeyTypeId, _pub_key: &sr25519::Public) -> Option<sr25519::Pair> {
 		None
 	}
-	fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public> { vec![] }
-	fn ed25519_generate_new(&mut self, id: KeyTypeId, seed: Option<&str>)
+	fn ed25519_public_keys(&self, _id: KeyTypeId) -> Vec<ed25519::Public> { vec![] }
+	fn ed25519_generate_new(&mut self, _id: KeyTypeId, _seed: Option<&str>)
 		-> std::result::Result<ed25519::Public, String>
 	{
 		Err("unimplemented".into())
 	}
-	fn ed25519_key_pair(&self, id: KeyTypeId, pub_key: &ed25519::Public) -> Option<ed25519::Pair> {
+	fn ed25519_key_pair(&self, _id: KeyTypeId, _pub_key: &ed25519::Public) -> Option<ed25519::Pair> {
 		None
 	}
 

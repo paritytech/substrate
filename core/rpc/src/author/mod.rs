@@ -33,7 +33,7 @@ use log::warn;
 use codec::{Encode, Decode};
 use primitives::{
 	Bytes, Blake2Hasher, H256, ed25519, sr25519, crypto::{Pair, Public, key_types},
-	traits::{BareCryptoStore, BareCryptoStorePtr}
+	traits::BareCryptoStorePtr
 };
 use sr_primitives::{generic, traits};
 use self::error::{Error, Result};
