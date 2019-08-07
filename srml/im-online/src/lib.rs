@@ -464,7 +464,6 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 			current_era_start_session_index,
 			validators_count,
 			offenders: unresponsive,
-			offenders: vec![],
 		};
 
 		// TODO [slashing]: Handle the result. Just write a proof?
@@ -540,7 +539,7 @@ pub struct UnresponsivnessOffence<Offender> {
 	/// The size of the validator set in current session/era.
 	validators_count: u32,
 	/// Authorities which were unresponsive during the current era.
-	offenders: Vec<IdentificationTuple>,
+	offenders: Vec<Offender>,
 }
 
 impl<Offender: Clone> Offence<Offender> for UnresponsivnessOffence<Offender> {
