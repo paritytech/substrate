@@ -372,6 +372,10 @@ impl im_online::Trait for Runtime {
 	type Call = Call;
 	type Event = Event;
 	type UncheckedExtrinsic = UncheckedExtrinsic;
+
+impl offences::Trait for Runtime {
+	type AuthorityId = BabeId; // TODO [slashing]: What should this be???
+	type OnOffenceHandler = Staking;
 }
 
 impl grandpa::Trait for Runtime {
@@ -413,6 +417,7 @@ construct_runtime!(
 		Contracts: contracts,
 		Sudo: sudo,
 		ImOnline: im_online::{Module, Call, Storage, Event, ValidateUnsigned, Config<T>},
+		Offences: offences::{Module, Call, Storage},
 	}
 );
 
