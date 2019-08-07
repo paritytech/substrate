@@ -176,6 +176,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.iter().map(|x| (x.2.clone(), 1)).collect(),
 		}),
+		membership_Instance1: Some(Default::default()),
 	}
 }
 
@@ -307,6 +308,7 @@ pub fn testnet_genesis(
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.iter().map(|x| (x.2.clone(), 1)).collect(),
 		}),
+		membership_Instance1: Some(Default::default()),
 	}
 }
 

@@ -23,7 +23,7 @@ use std::{
 use log::{info, trace, warn};
 use futures::channel::mpsc;
 use parking_lot::{Mutex, RwLock};
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use hash_db::{Hasher, Prefix};
 use primitives::{
 	Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash,
@@ -371,7 +371,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn storage(&self, id: &BlockId<Block>, key: &StorageKey) -> error::Result<Option<StorageData>> {
 		Ok(self.state_at(id)?
 			.storage(&key.0).map_err(|e| error::Error::from_state(Box::new(e)))?
-			.map(StorageData))
+			.map(StorageData)
+		)
 	}
 
 	/// Given a `BlockId` and a key, return the value under the hash in that block.
@@ -1336,7 +1337,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(self.backend.state_at(BlockId::Number(self.backend.blockchain().info().best_number))?
 			.storage(well_known_keys::CHANGES_TRIE_CONFIG)
 			.map_err(|e| error::Error::from_state(Box::new(e)))?
-			.and_then(|c| Decode::decode(&mut &*c)))
+			.and_then(|c| Decode::decode(&mut &*c).ok()))
 	}
 
 	/// Prepare in-memory header that is used in execution environment.
@@ -1423,6 +1424,8 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 		context: ExecutionContext,
 		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
 	) -> error::Result<NativeOrEncoded<R>> {
+		let enable_keystore = context.enable_keystore();
+
 		let manager = match context {
 			ExecutionContext::BlockConstruction =>
 				self.execution_strategies.block_construction.get_manager(),
@@ -1452,6 +1455,7 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 			native_call,
 			offchain_extensions.as_mut(),
 			recorder,
+			enable_keystore,
 		)
 	}
 

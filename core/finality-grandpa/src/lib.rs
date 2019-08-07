@@ -56,20 +56,19 @@ use futures::prelude::*;
 use log::{debug, info, warn};
 use futures::sync::mpsc;
 use client::{
-	BlockchainEvents, CallExecutor, Client, backend::Backend, error::Error as ClientError, BlockOf,
-	blockchain::ProvideCache
+	BlockchainEvents, CallExecutor, Client, backend::Backend, error::Error as ClientError,
 };
 use client::blockchain::HeaderBackend;
-use parity_codec::{Encode, Decode};
+use codec::Encode;
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{
 	NumberFor, Block as BlockT, DigestFor, ProvideRuntimeApi
 };
 use fg_primitives::{GrandpaApi, AuthorityPair};
-use substrate_keystore::Store;
+use keystore::KeyStorePtr;
 use inherents::InherentDataProviders;
-use consensus_common::{SelectChain, well_known_cache_keys, Error as ConsensusError};
-use primitives::{H256, Pair, Blake2Hasher};
+use consensus_common::SelectChain;
+use primitives::{H256, Blake2Hasher};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_WARN};
 use serde_json;
 
@@ -202,10 +201,10 @@ pub struct Config {
 	/// at least every justification_period blocks. There are some other events which might cause
 	/// justification generation.
 	pub justification_period: u32,
-	/// The local signing key.
-	pub local_key: Option<Arc<AuthorityPair>>,
 	/// Some local identifier of the voter.
 	pub name: Option<String>,
+	/// The keystore that manages the keys of this node.
+	pub keystore: Option<keystore::KeyStorePtr>,
 }
 
 impl Config {
@@ -400,11 +399,11 @@ where
 }
 
 fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
-	local_key: Option<&Arc<AuthorityPair>>,
 	set_id: u64,
 	voters: &Arc<VoterSet<AuthorityId>>,
 	client: &Arc<Client<B, E, Block, RA>>,
 	network: &NetworkBridge<Block, N>,
+	keystore: &Option<KeyStorePtr>,
 ) -> (
 	impl Stream<
 		Item = CommunicationInH<Block, H256>,
@@ -421,10 +420,7 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	RA: Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
 {
-
-	let is_voter = local_key
-		.map(|pair| voters.contains_key(&pair.public().into()))
-		.unwrap_or(false);
+	let is_voter = is_voter(voters, keystore).is_some();
 
 	// verification stream
 	let (global_in, global_out) = network.global_communication(
@@ -495,7 +491,7 @@ pub struct GrandpaParams<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X> {
 /// block import worker that has already been instantiated with `block_import`.
 pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, X>,
-) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
+) -> client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
@@ -572,31 +568,6 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 		voter_set_state: set_state.clone(),
 	});
 
-	initial_environment.update_voter_set_state(|voter_set_state| {
-		match voter_set_state {
-			VoterSetState::Live { current_round: HasVoted::Yes(id, _), completed_rounds } => {
-				let local_id = config.local_key.clone().map(|pair| pair.public());
-				let has_voted = match local_id {
-					Some(local_id) => if *id == local_id {
-						// keep the previous votes
-						return Ok(None);
-					} else {
-						HasVoted::No
-					},
-					_ => HasVoted::No,
-				};
-
-				// NOTE: only updated on disk when the voter first
-				// proposes/prevotes/precommits or completes a round.
-				Ok(Some(VoterSetState::Live {
-					current_round: has_voted,
-					completed_rounds: completed_rounds.clone(),
-				}))
-			},
-			_ => Ok(None),
-		}
-	}).expect("operation inside closure cannot fail; qed");
-
 	let initial_state = (initial_environment, voter_commands_rx.into_future());
 	let voter_work = future::loop_fn(initial_state, move |params| {
 		let (env, voter_commands_rx) = params;
@@ -615,20 +586,18 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 				);
 
 				let global_comms = global_communication(
-					config.local_key.as_ref(),
 					env.set_id,
 					&env.voters,
 					&client,
 					&network,
+					&config.keystore,
 				);
-
-				let voters = (*env.voters).clone();
 
 				let last_completed_round = completed_rounds.last();
 
 				Some(voter::Voter::new(
 					env.clone(),
-					voters,
+					(*env.voters).clone(),
 					global_comms,
 					last_completed_round.number,
 					last_completed_round.state.clone(),
@@ -782,40 +751,16 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 	run_grandpa_voter(grandpa_params)
 }
 
-/// Provide a list of authority keys that is current as of a given block.
-#[allow(deprecated)]
-fn authorities_at<C>(client: &C, at: &BlockId<<C as BlockOf>::Type>)
-	-> Result<Vec<AuthorityId>, ConsensusError>
-where
-	C: ProvideRuntimeApi + BlockOf + ProvideCache<<C as BlockOf>::Type>,
-	C::Api: GrandpaApi<<C as BlockOf>::Type>
-{
-	client
-		.cache()
-		.and_then(|cache| cache
-			.get_at(&well_known_cache_keys::AUTHORITIES, at)
-			.and_then(|v| Decode::decode(&mut &v[..]))
-		)
-		.or_else(|| GrandpaApi::grandpa_authorities(&*client.runtime_api(), at).ok()
-			.map(|authorities| authorities.into_iter().map(|x| x.0).collect())
-		)
-		.ok_or_else(|| consensus_common::Error::InvalidAuthoritiesSet.into())
-}
-
-/// Provide the authority key, if any, that is controlled by this node as of the given block.
-fn authority<C>(client: &C, keystore: Arc<Store>) -> Option<AuthorityPair> where
-	C: ProvideRuntimeApi + BlockOf + ProvideCache<<C as BlockOf>::Type>
-		+ HeaderBackend<<C as BlockOf>::Type>,
-	C::Api: GrandpaApi<<C as BlockOf>::Type>
-{
-	let owned = keystore.public_keys::<AuthorityId>().ok()?;
-	let at = BlockId::Number(client.info().finalized_number);
-	// The list of authority keys that is current. By default this will just use the state of
-	// the best block, but you might want it to use some other block's state instead if it's
-	// more sophisticated. Grandpa, for example, will probably want to use the state of the last
-	// finalised block.
-	let authorities = authorities_at::<C>(client, &at).ok()?;
-	let maybe_pub = owned.into_iter()
-		.find(|i| authorities.contains(i));
-	maybe_pub.and_then(|public| keystore.key_pair(&public).ok())
+/// Checks if this node is a voter in the given voter set.
+///
+/// Returns the key pair of the node that is being used in the current voter set or `None`.
+fn is_voter(
+	voters: &Arc<VoterSet<AuthorityId>>,
+	keystore: &Option<KeyStorePtr>,
+) -> Option<AuthorityPair> {
+	match keystore {
+		Some(keystore) => voters.voters().iter()
+			.find_map(|(p, _)| keystore.read().key_pair::<AuthorityPair>(&p).ok()),
+		None => None,
+	}
 }

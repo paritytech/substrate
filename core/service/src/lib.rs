@@ -39,10 +39,9 @@ use futures03::stream::{StreamExt as _, TryStreamExt as _};
 use keystore::Store as Keystore;
 use network::{NetworkState, NetworkStateInfo};
 use log::{log, info, warn, debug, error, Level};
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{Header, NumberFor, SaturatedConversion};
-use primitives::traits::KeyStorePtr;
 use substrate_executor::NativeExecutor;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
@@ -61,7 +60,7 @@ pub use components::{
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
 	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock,
 	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
-	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic,
+	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic, InitialSessionKeys,
 };
 use components::{StartRPC, MaintainTransactionPool, OffchainWorker};
 #[doc(hidden)]
@@ -104,6 +103,7 @@ pub struct Service<Components: components::Components> {
 		ComponentOffchainStorage<Components>,
 		ComponentBlock<Components>>
 	>>,
+	keystore: keystore::KeyStorePtr,
 }
 
 /// Creates bare client without any networking.
@@ -169,27 +169,9 @@ impl<Components: components::Components> Service<Components> {
 		// Create client
 		let executor = NativeExecutor::new(config.default_heap_pages);
 
-		let keystore: Option<KeyStorePtr> = if let Some(keystore_path) = config.keystore_path.as_ref() {
-			match Keystore::open(keystore_path.clone(), config.keystore_password.clone()) {
-				Ok(mut ks) => {
-					if let Some(ref seed) = config.dev_key_seed {
-						//TODO: Make sure we generate for all types and apps
-						ks.generate_from_seed::<app_crypto::ed25519::AppPair>(&seed)?;
-						ks.generate_from_seed::<app_crypto::sr25519::AppPair>(&seed)?;
-					}
+		let keystore = Keystore::open(config.keystore_path.clone(), config.keystore_password.clone())?;
 
-					Some(Arc::new(parking_lot::RwLock::new(ks)))
-				},
-				Err(err) => {
-					error!("Failed to initialize keystore: {}", err);
-					None
-				}
-			}
-		} else {
-			None
-		};
-
-		let (client, on_demand) = Components::build_client(&config, executor, keystore.clone())?;
+		let (client, on_demand) = Components::build_client(&config, executor, Some(keystore.clone()))?;
 		let select_chain = Components::build_select_chain(&mut config, client.clone())?;
 		let (import_queue, finality_proof_request_builder) = Components::build_import_queue(
 			&mut config,
@@ -199,6 +181,11 @@ impl<Components: components::Components> Service<Components> {
 		let import_queue = Box::new(import_queue);
 		let finality_proof_provider = Components::build_finality_proof_provider(client.clone())?;
 		let chain_info = client.info().chain;
+
+		Components::RuntimeServices::generate_intial_session_keys(
+			client.clone(),
+			config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
+		)?;
 
 		let version = config.full_version();
 		info!("Highest known block at #{}", chain_info.best_number);
@@ -217,7 +204,7 @@ impl<Components: components::Components> Service<Components> {
 			imports_external_transactions: !config.roles.is_light(),
 			pool: transaction_pool.clone(),
 			client: client.clone(),
-		 });
+		});
 
 		let protocol_id = {
 			let protocol_id_full = match config.chain_spec.protocol_id() {
@@ -257,7 +244,7 @@ impl<Components: components::Components> Service<Components> {
 				Some(Arc::new(offchain::OffchainWorkers::new(
 					client.clone(),
 					db,
-					keystore.clone(),
+					Some(keystore.clone()),
 				)))
 			},
 			(true, None) => {
@@ -472,12 +459,18 @@ impl<Components: components::Components> Service<Components> {
 			_telemetry: telemetry,
 			_offchain_workers: offchain_workers,
 			_telemetry_on_connect_sinks: telemetry_connection_sinks.clone(),
+			keystore,
 		})
 	}
 
-	/// return a shared instance of Telemetry (if enabled)
+	/// Return a shared instance of Telemetry (if enabled)
 	pub fn telemetry(&self) -> Option<tel::Telemetry> {
 		self._telemetry.as_ref().map(|t| t.clone())
+	}
+
+	/// Returns the keystore instance.
+	pub fn keystore(&self) -> keystore::KeyStorePtr {
+		self.keystore.clone()
 	}
 
 	/// Spawns a task in the background that runs the future passed as parameter.
@@ -836,28 +829,31 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 		}
 
 		let encoded = transaction.encode();
-		if let Some(uxt) = Decode::decode(&mut &encoded[..]) {
-			let best_block_id = self.best_block_id()?;
-			match self.pool.submit_one(&best_block_id, uxt) {
-				Ok(hash) => Some(hash),
-				Err(e) => match e.into_pool_error() {
-					Ok(txpool::error::Error::AlreadyImported(hash)) => {
-						hash.downcast::<ComponentExHash<C>>().ok()
-							.map(|x| x.as_ref().clone())
-					},
-					Ok(e) => {
-						debug!("Error adding transaction to the pool: {:?}", e);
-						None
-					},
-					Err(e) => {
-						debug!("Error converting pool error: {:?}", e);
-						None
-					},
+		match Decode::decode(&mut &encoded[..]) {
+			Ok(uxt) => {
+				let best_block_id = self.best_block_id()?;
+				match self.pool.submit_one(&best_block_id, uxt) {
+					Ok(hash) => Some(hash),
+					Err(e) => match e.into_pool_error() {
+						Ok(txpool::error::Error::AlreadyImported(hash)) => {
+							hash.downcast::<ComponentExHash<C>>().ok()
+								.map(|x| x.as_ref().clone())
+						},
+						Ok(e) => {
+							debug!("Error adding transaction to the pool: {:?}", e);
+							None
+						},
+						Err(e) => {
+							debug!("Error converting pool error: {:?}", e);
+							None
+						},
+					}
 				}
 			}
-		} else {
-			debug!("Error decoding transaction");
-			None
+			Err(e) => {
+				debug!("Error decoding transaction {}", e);
+				None
+			}
 		}
 	}
 

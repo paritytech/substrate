@@ -21,7 +21,7 @@
 
 mod digest;
 
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use rstd::vec::Vec;
 use sr_primitives::ConsensusEngineId;
 use substrate_client::decl_runtime_apis;

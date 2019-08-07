@@ -80,8 +80,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 127,
-	impl_version: 128,
+	spec_version: 129,
+	impl_version: 130,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -570,7 +570,7 @@ impl_runtime_apis! {
 	}
 
 	impl substrate_session::SessionKeys<Block> for Runtime {
-		fn generate(seed: Option<Vec<u8>>) -> Vec<u8> {
+		fn generate_session_keys(seed: Option<Vec<u8>>) -> Vec<u8> {
 			let seed = seed.as_ref().map(|s| rstd::str::from_utf8(&s).expect("Seed is an utf8 string"));
 			SessionKeys::generate(seed)
 		}

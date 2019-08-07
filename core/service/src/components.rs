@@ -144,6 +144,27 @@ pub type PoolApi<C> = <C as Components>::TransactionPoolApi;
 pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
 impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
 
+/// Something that can create initial session keys from given seeds.
+pub trait InitialSessionKeys<C: Components> {
+	/// Generate the initial session keys for the given seeds.
+	fn generate_intial_session_keys(
+		client: Arc<ComponentClient<C>>,
+		seeds: Vec<String>,
+	) -> error::Result<()>;
+}
+
+impl<C: Components> InitialSessionKeys<Self> for C where
+	ComponentClient<C>: ProvideRuntimeApi,
+	<ComponentClient<C> as ProvideRuntimeApi>::Api: substrate_session::SessionKeys<ComponentBlock<C>>,
+{
+	fn generate_intial_session_keys(
+		client: Arc<ComponentClient<C>>,
+		seeds: Vec<String>,
+	) -> error::Result<()> {
+		substrate_session::generate_initial_session_keys(client, seeds).map_err(Into::into)
+	}
+}
+
 /// Something that can start the RPC service.
 pub trait StartRPC<C: Components> {
 	fn start_rpc(
@@ -267,6 +288,7 @@ pub trait ServiceTrait<C: Components>:
 	+ StartRPC<C>
 	+ MaintainTransactionPool<C>
 	+ OffchainWorker<C>
+	+ InitialSessionKeys<C>
 {}
 impl<C: Components, T> ServiceTrait<C> for T where
 	T: Deref<Target = Service<C>>
@@ -275,6 +297,7 @@ impl<C: Components, T> ServiceTrait<C> for T where
 	+ StartRPC<C>
 	+ MaintainTransactionPool<C>
 	+ OffchainWorker<C>
+	+ InitialSessionKeys<C>
 {}
 
 /// Alias for a an implementation of `futures::future::Executor`.

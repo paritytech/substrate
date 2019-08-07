@@ -19,7 +19,7 @@
 use fork_tree::ForkTree;
 use parking_lot::RwLock;
 use grandpa::voter_set::VoterSet;
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use log::{debug, info};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 use fg_primitives::AuthorityId;
@@ -403,7 +403,7 @@ pub(crate) struct PendingChange<H, N> {
 }
 
 impl<H: Decode, N: Decode> Decode for PendingChange<H, N> {
-	fn decode<I: parity_codec::Input>(value: &mut I) -> Option<Self> {
+	fn decode<I: codec::Input>(value: &mut I) -> Result<Self, codec::Error> {
 		let next_authorities = Decode::decode(value)?;
 		let delay = Decode::decode(value)?;
 		let canon_height = Decode::decode(value)?;
@@ -411,7 +411,7 @@ impl<H: Decode, N: Decode> Decode for PendingChange<H, N> {
 
 		let delay_kind = DelayKind::decode(value).unwrap_or(DelayKind::Finalized);
 
-		Some(PendingChange {
+		Ok(PendingChange {
 			next_authorities,
 			delay,
 			canon_height,

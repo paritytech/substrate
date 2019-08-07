@@ -45,7 +45,7 @@ pub struct Configuration<C, G> {
 	/// Network configuration.
 	pub network: NetworkConfiguration,
 	/// Path to key files.
-	pub keystore_path: Option<PathBuf>,
+	pub keystore_path: PathBuf,
 	/// Path to the database.
 	pub database_path: PathBuf,
 	/// Cache Size for internal database in MiB

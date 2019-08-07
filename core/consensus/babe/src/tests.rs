@@ -167,12 +167,6 @@ impl TestNetFactory for BabeTestNet {
 }
 
 #[test]
-fn can_serialize_block() {
-	let _ = env_logger::try_init();
-	assert!(BabePreDigest::decode(&mut &b""[..]).is_none());
-}
-
-#[test]
 #[should_panic]
 fn rejects_empty_block() {
 	env_logger::try_init().unwrap();
@@ -190,15 +184,21 @@ fn run_one_test() {
 	let net = BabeTestNet::new(3);
 
 	let peers = &[
-		(0, Keyring::Alice),
-		(1, Keyring::Bob),
-		(2, Keyring::Charlie),
+		(0, "//Alice"),
+		(1, "//Bob"),
+		(2, "//Charlie"),
 	];
 
 	let net = Arc::new(Mutex::new(net));
 	let mut import_notifications = Vec::new();
 	let mut runtime = current_thread::Runtime::new().unwrap();
-	for (peer_id, key) in peers {
+	let mut keystore_paths = Vec::new();
+	for (peer_id, seed) in peers {
+		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
+		let keystore = keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
+		keystore.write().generate_from_seed::<AuthorityPair>(seed).expect("Generates authority key");
+		keystore_paths.push(keystore_path);
+
 		let client = net.lock().peer(*peer_id).client().as_full().unwrap();
 		let environ = DummyFactory(client.clone());
 		import_notifications.push(
@@ -207,21 +207,18 @@ fn run_one_test() {
 				.for_each(move |_| future::ready(()))
 		);
 
-		let config = Config::get_or_compute(&*client)
-			.expect("slot duration available");
+		let config = Config::get_or_compute(&*client).expect("slot duration available");
 
 		let inherent_data_providers = InherentDataProviders::new();
 		register_babe_inherent_data_provider(
 			&inherent_data_providers, config.get()
 		).expect("Registers babe inherent data provider");
 
-
 		#[allow(deprecated)]
 		let select_chain = LongestChain::new(client.backend().clone());
 
 		runtime.spawn(start_babe(BabeParams {
 			config,
-			local_key: Arc::new(key.clone().pair().into()),
 			block_import: client.clone(),
 			select_chain,
 			client,
@@ -230,6 +227,7 @@ fn run_one_test() {
 			inherent_data_providers,
 			force_authoring: false,
 			time_source: Default::default(),
+			keystore,
 		}).expect("Starts babe"));
 	}
 
@@ -312,7 +310,11 @@ fn sig_is_not_pre_digest() {
 #[test]
 fn can_author_block() {
 	let _ = env_logger::try_init();
-	let (pair, _) = AuthorityPair::generate();
+	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
+	let keystore = keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
+	let pair = keystore.write().generate_from_seed::<AuthorityPair>("//Alice")
+		.expect("Generates authority pair");
+
 	let mut i = 0;
 	let epoch = Epoch {
 		start_slot: 0,
@@ -322,10 +324,10 @@ fn can_author_block() {
 		duration: 100,
 	};
 	loop {
-		match claim_slot(i, epoch.clone(), &pair, (3, 10)) {
+		match claim_slot(i, epoch.clone(), (3, 10), &keystore) {
 			None => i += 1,
 			Some(s) => {
-				debug!(target: "babe", "Authored block {:?}", s);
+				debug!(target: "babe", "Authored block {:?}", s.0);
 				break
 			}
 		}

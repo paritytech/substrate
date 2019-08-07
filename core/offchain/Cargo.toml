@@ -11,7 +11,7 @@ client = { package = "substrate-client", path = "../../core/client" }
 futures = "0.1.25"
 log = "0.4"
 offchain-primitives = { package = "substrate-offchain-primitives", path = "./primitives" }
-parity-codec = { version = "4.1.1", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 parking_lot = "0.8.0"
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
 sr-primitives = { path = "../../core/sr-primitives" }

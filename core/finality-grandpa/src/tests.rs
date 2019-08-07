@@ -34,7 +34,7 @@ use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImport
 use consensus_common::import_queue::{BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport};
 use std::collections::{HashMap, HashSet};
 use std::result;
-use parity_codec::Decode;
+use codec::Decode;
 use sr_primitives::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT};
 use sr_primitives::generic::BlockId;
 use primitives::{NativeOrEncoded, ExecutionContext, crypto::Public};
@@ -336,7 +336,7 @@ impl AuthoritySetForFinalityChecker<Block> for TestApi {
 		proof: Vec<Vec<u8>>,
 	) -> Result<Vec<(AuthorityId, u64)>> {
 		Decode::decode(&mut &proof[0][..])
-			.ok_or_else(|| unreachable!("incorrect value is passed as GRANDPA authorities proof"))
+			.map_err(|_| unreachable!("incorrect value is passed as GRANDPA authorities proof"))
 	}
 }
 
@@ -344,6 +344,15 @@ const TEST_GOSSIP_DURATION: Duration = Duration::from_millis(500);
 
 fn make_ids(keys: &[Ed25519Keyring]) -> Vec<(AuthorityId, u64)> {
 	keys.iter().map(|key| key.clone().public().into()).map(|id| (id, 1)).collect()
+}
+
+fn create_keystore(authority: Ed25519Keyring) -> (KeyStorePtr, tempfile::TempDir) {
+	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
+	let keystore = keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
+	keystore.write().generate_from_seed::<AuthorityPair>(&authority.to_seed())
+		.expect("Creates authority key");
+
+	(keystore, keystore_path)
 }
 
 // run the voters to completion. provide a closure to be invoked after
@@ -367,7 +376,11 @@ fn run_to_completion_with<F>(
 		wait_for.push(f);
 	};
 
+	let mut keystore_paths = Vec::new();
 	for (peer_id, key) in peers.iter().enumerate() {
+		let (keystore, keystore_path) = create_keystore(*key);
+		keystore_paths.push(keystore_path);
+
 		let highest_finalized = highest_finalized.clone();
 		let (client, net_service, link) = {
 			let net = net.lock();
@@ -402,7 +415,7 @@ fn run_to_completion_with<F>(
 			config: Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				justification_period: 32,
-				local_key: Some(Arc::new(key.clone().pair().into())),
+				keystore: Some(keystore),
 				name: Some(format!("peer#{}", peer_id)),
 			},
 			link: link,
@@ -459,8 +472,10 @@ fn finalize_3_voters_no_observers() {
 	run_to_completion(&mut runtime, 20, net.clone(), peers);
 
 	// normally there's no justification for finalized blocks
-	assert!(net.lock().peer(0).client().justification(&BlockId::Number(20)).unwrap().is_none(),
-		"Extra justification for block#1");
+	assert!(
+		net.lock().peer(0).client().justification(&BlockId::Number(20)).unwrap().is_none(),
+		"Extra justification for block#1",
+	);
 }
 
 #[test]
@@ -479,8 +494,10 @@ fn finalize_3_voters_1_full_observer() {
 
 	let all_peers = peers.iter()
 		.cloned()
-		.map(|key| Some(Arc::new(key.pair().into())))
-		.chain(::std::iter::once(None));
+		.map(Some)
+		.chain(std::iter::once(None));
+
+	let mut keystore_paths = Vec::new();
 
 	for (peer_id, local_key) in all_peers.enumerate() {
 		let (client, net_service, link) = {
@@ -499,11 +516,19 @@ fn finalize_3_voters_1_full_observer() {
 				.for_each(move |_| Ok(()))
 		);
 
+		let keystore = if let Some(local_key) = local_key {
+			let (keystore, keystore_path) = create_keystore(local_key);
+			keystore_paths.push(keystore_path);
+			Some(keystore)
+		} else {
+			None
+		};
+
 		let grandpa_params = GrandpaParams {
 			config: Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				justification_period: 32,
-				local_key,
+				keystore,
 				name: Some(format!("peer#{}", peer_id)),
 			},
 			link: link,
@@ -637,10 +662,13 @@ fn transition_3_voters_twice_1_full_observer() {
 		.cloned()
 		.collect::<HashSet<_>>() // deduplicate
 		.into_iter()
-		.map(|key| Some(Arc::new(key.pair().into())))
 		.enumerate();
 
+	let mut keystore_paths = Vec::new();
 	for (peer_id, local_key) in all_peers {
+		let (keystore, keystore_path) = create_keystore(local_key);
+		keystore_paths.push(keystore_path);
+
 		let (client, net_service, link) = {
 			let net = net.lock();
 			let link = net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
@@ -671,7 +699,7 @@ fn transition_3_voters_twice_1_full_observer() {
 			config: Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				justification_period: 32,
-				local_key,
+				keystore: Some(keystore),
 				name: Some(format!("peer#{}", peer_id)),
 			},
 			link: link,
@@ -1077,12 +1105,17 @@ fn voter_persists_its_votes() {
 
 	let (voter_tx, voter_rx) = mpsc::unbounded::<()>();
 
+	let mut keystore_paths = Vec::new();
+
 	// startup a grandpa voter for alice but also listen for messages on a
 	// channel. whenever a message is received the voter is restarted. when the
 	// sender is dropped the voter is stopped.
 	{
 		let net = net.clone();
 		let client = client.clone();
+
+		let (keystore, keystore_path) = create_keystore(peers[0]);
+		keystore_paths.push(keystore_path);
 
 		let voter = future::loop_fn(voter_rx, move |rx| {
 			let (_block_import, _, _, _, link) = net.lock().make_block_import(client.clone());
@@ -1092,7 +1125,7 @@ fn voter_persists_its_votes() {
 				config: Config {
 					gossip_duration: TEST_GOSSIP_DURATION,
 					justification_period: 32,
-					local_key: Some(Arc::new(peers[0].clone().pair().into())),
+					keystore: Some(keystore.clone()),
 					name: Some(format!("peer#{}", 0)),
 				},
 				link,
@@ -1141,10 +1174,13 @@ fn voter_persists_its_votes() {
 	// voter. instead we'll listen for the prevote that alice casts
 	// and cast our own manually
 	{
+		let (keystore, keystore_path) = create_keystore(peers[1]);
+		keystore_paths.push(keystore_path);
+
 		let config = Config {
 			gossip_duration: TEST_GOSSIP_DURATION,
 			justification_period: 32,
-			local_key: Some(Arc::new(peers[1].clone().pair().into())),
+			keystore: Some(keystore),
 			name: Some(format!("peer#{}", 1)),
 		};
 
@@ -1167,7 +1203,7 @@ fn voter_persists_its_votes() {
 			communication::Round(1),
 			communication::SetId(0),
 			Arc::new(VoterSet::from_iter(voters)),
-			Some(config.local_key.unwrap()),
+			Some(peers[1].pair().into()),
 			HasVoted::No,
 		);
 
@@ -1293,7 +1329,7 @@ fn finalize_3_voters_1_light_observer() {
 				Config {
 					gossip_duration: TEST_GOSSIP_DURATION,
 					justification_period: 32,
-					local_key: None,
+					keystore: None,
 					name: Some("observer".to_string()),
 				},
 				link,
@@ -1414,12 +1450,12 @@ fn voter_catches_up_to_latest_round_when_behind() {
 	let net = Arc::new(Mutex::new(net));
 	let mut finality_notifications = Vec::new();
 
-	let voter = |local_key, peer_id, link, net: Arc<Mutex<GrandpaTestNet>>| -> Box<dyn Future<Item=(), Error=()> + Send> {
+	let voter = |keystore, peer_id, link, net: Arc<Mutex<GrandpaTestNet>>| -> Box<dyn Future<Item=(), Error=()> + Send> {
 		let grandpa_params = GrandpaParams {
 			config: Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				justification_period: 32,
-				local_key,
+				keystore,
 				name: Some(format!("peer#{}", peer_id)),
 			},
 			link,
@@ -1431,6 +1467,8 @@ fn voter_catches_up_to_latest_round_when_behind() {
 
 		Box::new(run_grandpa_voter(grandpa_params).expect("all in order with client and network"))
 	};
+
+	let mut keystore_paths = Vec::new();
 
 	// spawn authorities
 	for (peer_id, key) in peers.iter().enumerate() {
@@ -1450,7 +1488,10 @@ fn voter_catches_up_to_latest_round_when_behind() {
 				.for_each(move |_| Ok(()))
 		);
 
-		let voter = voter(Some(Arc::new(key.pair().into())), peer_id, link, net.clone());
+		let (keystore, keystore_path) = create_keystore(*key);
+		keystore_paths.push(keystore_path);
+
+		let voter = voter(Some(keystore), peer_id, link, net.clone());
 
 		runtime.spawn(voter);
 	}

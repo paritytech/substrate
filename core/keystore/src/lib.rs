@@ -18,13 +18,18 @@
 
 #![warn(missing_docs)]
 
-use std::{collections::HashMap, path::PathBuf, fs::{self, File}, io::{self, Write}};
+use std::{collections::HashMap, path::PathBuf, fs::{self, File}, io::{self, Write}, sync::Arc};
 
 use primitives::{
 	crypto::{KeyTypeId, Pair as PairT, Public, IsWrappedBy, Protected}, traits::KeyStore,
 };
 
 use app_crypto::{AppKey, AppPublic, AppPair, ed25519, sr25519};
+
+use parking_lot::RwLock;
+
+/// Keystore pointer
+pub type KeyStorePtr = Arc<RwLock<Store>>;
 
 /// Keystore error.
 #[derive(Debug, derive_more::Display, derive_more::From)]
@@ -72,10 +77,12 @@ impl Store {
 	/// Open the store at the given path.
 	///
 	/// Optionally takes a password that will be used to encrypt/decrypt the keys.
-	pub fn open<T: Into<PathBuf>>(path: T, password: Option<Protected<String>>) -> Result<Self> {
+	pub fn open<T: Into<PathBuf>>(path: T, password: Option<Protected<String>>) -> Result<KeyStorePtr> {
 		let path = path.into();
 		fs::create_dir_all(&path)?;
-		Ok(Self { path, additional: HashMap::new(), password })
+
+		let instance = Self { path, additional: HashMap::new(), password };
+		Ok(Arc::new(RwLock::new(instance)))
 	}
 
 	/// Get the public/private key pair for the given public key and key type.
@@ -265,22 +272,23 @@ mod tests {
 		let temp_dir = TempDir::new("keystore").unwrap();
 		let store = Store::open(temp_dir.path(), None).unwrap();
 
-		assert!(store.public_keys::<ed25519::AppPublic>().unwrap().is_empty());
+		assert!(store.read().public_keys::<ed25519::AppPublic>().unwrap().is_empty());
 
-		let key: ed25519::AppPair = store.generate().unwrap();
-		let key2: ed25519::AppPair = store.key_pair(&key.public()).unwrap();
+		let key: ed25519::AppPair = store.write().generate().unwrap();
+		let key2: ed25519::AppPair = store.read().key_pair(&key.public()).unwrap();
 
 		assert_eq!(key.public(), key2.public());
 
-		assert_eq!(store.public_keys::<ed25519::AppPublic>().unwrap()[0], key.public());
+		assert_eq!(store.read().public_keys::<ed25519::AppPublic>().unwrap()[0], key.public());
 	}
 
 	#[test]
 	fn test_generate_from_seed() {
 		let temp_dir = TempDir::new("keystore").unwrap();
-		let mut store = Store::open(temp_dir.path(), None).unwrap();
+		let store = Store::open(temp_dir.path(), None).unwrap();
 
 		let pair: ed25519::AppPair = store
+			.write()
 			.generate_from_seed("0x3d97c819d68f9bafa7d6e79cb991eebcd77d966c5334c0b94d9e1fa7ad0869dc")
 			.unwrap();
 		assert_eq!(
@@ -291,7 +299,7 @@ mod tests {
 		drop(store);
 		let store = Store::open(temp_dir.path(), None).unwrap();
 		// Keys generated from seed should not be persisted!
-		assert!(store.key_pair::<ed25519::AppPair>(&pair.public()).is_err());
+		assert!(store.read().key_pair::<ed25519::AppPair>(&pair.public()).is_err());
 	}
 
 	#[test]
@@ -300,41 +308,41 @@ mod tests {
 		let temp_dir = TempDir::new("keystore").unwrap();
 		let store = Store::open(temp_dir.path(), Some(password.clone().into())).unwrap();
 
-		let pair: ed25519::AppPair = store.generate().unwrap();
+		let pair: ed25519::AppPair = store.write().generate().unwrap();
 		assert_eq!(
 			pair.public(),
-			store.key_pair::<ed25519::AppPair>(&pair.public()).unwrap().public(),
+			store.read().key_pair::<ed25519::AppPair>(&pair.public()).unwrap().public(),
 		);
 
 		// Without the password the key should not be retrievable
 		let store = Store::open(temp_dir.path(), None).unwrap();
-		assert!(store.key_pair::<ed25519::AppPair>(&pair.public()).is_err());
+		assert!(store.read().key_pair::<ed25519::AppPair>(&pair.public()).is_err());
 
 		let store = Store::open(temp_dir.path(), Some(password.into())).unwrap();
 		assert_eq!(
 			pair.public(),
-			store.key_pair::<ed25519::AppPair>(&pair.public()).unwrap().public(),
+			store.read().key_pair::<ed25519::AppPair>(&pair.public()).unwrap().public(),
 		);
 	}
 
 	#[test]
 	fn public_keys_are_returned() {
 		let temp_dir = TempDir::new("keystore").unwrap();
-		let mut store = Store::open(temp_dir.path(), None).unwrap();
+		let store = Store::open(temp_dir.path(), None).unwrap();
 
 		let mut public_keys = Vec::new();
 		for i in 0..10 {
-			public_keys.push(store.generate::<ed25519::AppPair>().unwrap().public());
-			public_keys.push(store.generate_from_seed::<ed25519::AppPair>(
+			public_keys.push(store.write().generate::<ed25519::AppPair>().unwrap().public());
+			public_keys.push(store.write().generate_from_seed::<ed25519::AppPair>(
 				&format!("0x3d97c819d68f9bafa7d6e79cb991eebcd7{}d966c5334c0b94d9e1fa7ad0869dc", i),
 			).unwrap().public());
 		}
 
 		// Generate a key of a different type
-		store.generate::<sr25519::AppPair>().unwrap();
+		store.write().generate::<sr25519::AppPair>().unwrap();
 
 		public_keys.sort();
-		let mut store_pubs = store.public_keys::<ed25519::AppPublic>().unwrap();
+		let mut store_pubs = store.read().public_keys::<ed25519::AppPublic>().unwrap();
 		store_pubs.sort();
 
 		assert_eq!(public_keys, store_pubs);

@@ -27,7 +27,7 @@ use futures::{Stream, Future, sync::mpsc};
 use keystore::Store as Keystore;
 use log::{info, debug, warn, error};
 use network::{PeerId, Multiaddr, NetworkStateInfo};
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use primitives::crypto::{self, Pair, Public};
 use primitives::offchain::{
 	CryptoKind, CryptoKey, KeyTypeId, Externalities as OffchainExt, HttpRequestId, Timestamp,
@@ -355,14 +355,14 @@ impl TryFrom<OpaqueNetworkState> for NetworkState {
 	fn try_from(state: OpaqueNetworkState) -> Result<Self, Self::Error> {
 		let inner_vec = state.peer_id.0;
 
-		let bytes: Vec<u8> = Decode::decode(&mut &inner_vec[..]).ok_or(())?;
+		let bytes: Vec<u8> = Decode::decode(&mut &inner_vec[..]).map_err(|_| ())?;
 		let peer_id = PeerId::from_bytes(bytes).map_err(|_| ())?;
 
 		let external_addresses: Result<Vec<Multiaddr>, Self::Error> = state.external_addresses
 			.iter()
 			.map(|enc_multiaddr| -> Result<Multiaddr, Self::Error> {
 				let inner_vec = &enc_multiaddr.0;
-				let bytes = <Vec<u8>>::decode(&mut &inner_vec[..]).ok_or(())?;
+				let bytes = <Vec<u8>>::decode(&mut &inner_vec[..]).map_err(|_| ())?;
 				let multiaddr_str = String::from_utf8(bytes).map_err(|_| ())?;
 				let multiaddr = Multiaddr::from_str(&multiaddr_str).map_err(|_| ())?;
 				Ok(multiaddr)
@@ -428,9 +428,9 @@ impl<A: ChainApi> AsyncApi<A> {
 
 	fn submit_extrinsic(&mut self, ext: Vec<u8>) {
 		let xt = match <A::Block as traits::Block>::Extrinsic::decode(&mut &*ext) {
-			Some(xt) => xt,
-			None => {
-				warn!("Unable to decode extrinsic: {:?}", ext);
+			Ok(xt) => xt,
+			Err(e) => {
+				warn!("Unable to decode extrinsic: {:?}: {}", ext, e.what());
 				return
 			},
 		};

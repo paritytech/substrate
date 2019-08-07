@@ -40,7 +40,7 @@ pub fn construct_genesis_block<
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use parity_codec::{Encode, Decode, Joiner};
+	use codec::{Encode, Decode, Joiner};
 	use executor::native_executor_instance;
 	use state_machine::{self, OverlayedChanges, ExecutionStrategy, InMemoryChangesTrieStorage};
 	use state_machine::backend::InMemory;

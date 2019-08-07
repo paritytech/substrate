@@ -20,6 +20,11 @@
 
 use rstd::vec::Vec;
 
+#[cfg(feature = "std")]
+use sr_primitives::traits::{ProvideRuntimeApi, Block as BlockT};
+#[cfg(feature = "std")]
+use primitives::{H256, Blake2Hasher};
+
 client::decl_runtime_apis! {
 	/// Session keys runtime api.
 	pub trait SessionKeys {
@@ -28,6 +33,37 @@ client::decl_runtime_apis! {
 		/// The seed needs to be a valid `utf8` string.
 		///
 		/// Returns the concatenated SCALE encoded public keys.
-		fn generate(seed: Option<Vec<u8>>) -> Vec<u8>;
+		fn generate_session_keys(seed: Option<Vec<u8>>) -> Vec<u8>;
 	}
+}
+
+/// Generate the initial session keys with the given seeds.
+#[cfg(feature = "std")]
+pub fn generate_initial_session_keys<B, E, Block, RA>(
+	client: std::sync::Arc<client::Client<B, E, Block, RA>>,
+	seeds: Vec<String>,
+) -> Result<(), client::error::Error>
+where
+	B: client::backend::Backend<Block, Blake2Hasher>,
+	E: client::CallExecutor<Block, Blake2Hasher>,
+	Block: BlockT<Hash=H256>,
+	client::Client<B, E, Block, RA>: ProvideRuntimeApi,
+	<client::Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: SessionKeys<Block>,
+{
+	let info = client.info().chain;
+	let runtime_api = client.runtime_api();
+
+	for seed in seeds {
+		let seed = seed.as_bytes();
+
+		// We need to generate the keys for the best block + the last finalized block.
+		for number in &[info.best_number, info.finalized_number] {
+			runtime_api.generate_session_keys(
+				&sr_primitives::generic::BlockId::Number(*number),
+				Some(seed.to_vec()),
+			)?;
+		}
+	}
+
+	Ok(())
 }

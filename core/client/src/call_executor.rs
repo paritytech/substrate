@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::{sync::Arc, cmp::Ord, panic::UnwindSafe, result, cell::RefCell, rc::Rc};
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sr_primitives::{
 	generic::BlockId, traits::Block as BlockT,
 };
@@ -83,6 +83,7 @@ where
 		native_call: Option<NC>,
 		side_effects_handler: Option<&mut O>,
 		proof_recorder: &Option<Rc<RefCell<ProofRecorder<B>>>>,
+		enable_keystore: bool,
 	) -> error::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
 
 	/// Extract RuntimeVersion of given block
@@ -237,6 +238,7 @@ where
 		native_call: Option<NC>,
 		side_effects_handler: Option<&mut O>,
 		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
+		enable_keystore: bool,
 	) -> Result<NativeOrEncoded<R>, error::Error> where ExecutionManager<EM>: Clone {
 		match initialize_block {
 			InitializeBlock::Do(ref init_block)
@@ -246,6 +248,12 @@ where
 			// We don't need to initialize the runtime at a block.
 			_ => {},
 		}
+
+		let keystore = if enable_keystore {
+			self.keystore.clone()
+		} else {
+			None
+		};
 
 		let mut state = self.backend.state_at(*at)?;
 
@@ -270,7 +278,7 @@ where
 					&self.executor,
 					method,
 					call_data,
-					self.keystore.clone(),
+					keystore,
 				)
 				.execute_using_consensus_failure_handler(
 					execution_manager,
@@ -288,7 +296,7 @@ where
 				&self.executor,
 				method,
 				call_data,
-				self.keystore.clone(),
+				keystore,
 			)
 			.execute_using_consensus_failure_handler(
 				execution_manager,

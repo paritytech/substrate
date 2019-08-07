@@ -26,7 +26,7 @@
 //! Afterwards, the proofs can be fed to a consensus module when reporting misbehavior.
 
 use rstd::prelude::*;
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sr_primitives::KeyTypeId;
 use sr_primitives::traits::{Convert, OpaqueKeys, Hash as HashT};
 use srml_support::{
@@ -235,13 +235,13 @@ impl<T: Trait> ProvingTrie<T> {
 		let val_idx = (key_id, key_data).using_encoded(|s| {
 			trie.get_with(s, &mut recorder)
 				.ok()?
-				.and_then(|raw| u32::decode(&mut &*raw))
+				.and_then(|raw| u32::decode(&mut &*raw).ok())
 		})?;
 
 		val_idx.using_encoded(|s| {
 			trie.get_with(s, &mut recorder)
 				.ok()?
-				.and_then(|raw| <IdentificationTuple<T>>::decode(&mut &*raw))
+				.and_then(|raw| <IdentificationTuple<T>>::decode(&mut &*raw).ok())
 		})?;
 
 		Some(recorder.drain().into_iter().map(|r| r.data).collect())
@@ -258,11 +258,11 @@ impl<T: Trait> ProvingTrie<T> {
 		let trie = TrieDB::new(&self.db, &self.root).ok()?;
 		let val_idx = (key_id, key_data).using_encoded(|s| trie.get(s))
 			.ok()?
-			.and_then(|raw| u32::decode(&mut &*raw))?;
+			.and_then(|raw| u32::decode(&mut &*raw).ok())?;
 
 		val_idx.using_encoded(|s| trie.get(s))
 			.ok()?
-			.and_then(|raw| <IdentificationTuple<T>>::decode(&mut &*raw))
+			.and_then(|raw| <IdentificationTuple<T>>::decode(&mut &*raw).ok())
 	}
 
 }

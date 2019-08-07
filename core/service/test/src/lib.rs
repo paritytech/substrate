@@ -173,7 +173,7 @@ fn node_config<F: ServiceFactory> (
 		roles: role,
 		transaction_pool: Default::default(),
 		network: network_config,
-		keystore_path: Some(root.join("key")),
+		keystore_path: root.join("key"),
 		keystore_password: None,
 		database_path: root.join("db"),
 		database_cache_size: None,

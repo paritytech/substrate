@@ -71,7 +71,7 @@ use primitives::{
 	crypto::{CryptoType, KeyTypeId},
 	offchain::{OpaqueNetworkState, StorageKind},
 };
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sr_primitives::{
 	ApplyError, traits::{Extrinsic as ExtrinsicT},
 	transaction_validity::{TransactionValidity, TransactionLongevity, ValidTransaction},
@@ -294,7 +294,7 @@ impl<T: Trait> Module<T> {
 			let signature = sr_io::sign(key, &heartbeat_data.encode())
 				.map_err(|_| OffchainErr::FailedSigning)?;
 			let signature = AuthoritySignature::decode(&mut &*signature)
-					.ok_or(OffchainErr::ExtrinsicCreation)?;
+					.map_err(|_| OffchainErr::ExtrinsicCreation)?;
 			let call = Call::heartbeat(heartbeat_data, signature);
 			let ex = T::UncheckedExtrinsic::new_unsigned(call.into())
 				.ok_or(OffchainErr::ExtrinsicCreation)?;
@@ -349,7 +349,7 @@ impl<T: Trait> Module<T> {
 		match last_gossip {
 			Some(last) => {
 				let worker_status: WorkerStatus<T::BlockNumber> = Decode::decode(&mut &last[..])
-					.ok_or(OffchainErr::DecodeWorkerStatus)?;
+					.map_err(|_| OffchainErr::DecodeWorkerStatus)?;
 
 				let was_aborted = !worker_status.done && worker_status.gossipping_at < now;
 

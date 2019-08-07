@@ -17,7 +17,7 @@ substrate-bip39 = "0.2.2"
 schnorrkel = "0.1.1"
 hex = "0.3"
 hex-literal = "0.2"
-parity-codec = "4.1.1"
+codec = { package = "parity-scale-codec", version = "1.0.0" }
 system = { package = "srml-system", path = "../srml/system" }
 balances = { package = "srml-balances", path = "../srml/balances" }
 

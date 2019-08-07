@@ -40,7 +40,7 @@ mod tests {
 	use {balances, contracts, indices, staking, system, timestamp};
 	use runtime_io;
 	use substrate_executor::WasmExecutor;
-	use parity_codec::{Encode, Decode, Joiner};
+	use codec::{Encode, Decode, Joiner};
 	use keyring::{AccountKeyring, Ed25519Keyring, Sr25519Keyring};
 	use runtime_support::{Hashable, StorageValue, StorageMap, assert_eq_error_rate, traits::Currency};
 	use state_machine::{CodeExecutor, Externalities, TestExternalities as CoreTestExternalities};
@@ -368,7 +368,7 @@ mod tests {
 			}),
 			staking: Some(StakingConfig {
 				current_era: 0,
-				stakers: vec![®
+				stakers: vec![
 					(dave(), alice(), 111 * DOLLARS, staking::StakerStatus::Validator),
 					(eve(), bob(), 100 * DOLLARS, staking::StakerStatus::Validator),
 					(ferdie(), charlie(), 100 * DOLLARS, staking::StakerStatus::Validator)

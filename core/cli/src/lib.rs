@@ -37,8 +37,8 @@ use network::{
 use primitives::H256;
 
 use std::{
-	io::{Write, Read, stdin, stdout, ErrorKind}, iter, fs::{self, File}, net::{Ipv4Addr, SocketAddr},
-	path::{Path, PathBuf}, str::FromStr,
+	io::{Write, Read, Seek, Cursor, stdin, stdout, ErrorKind}, iter, fs::{self, File},
+	net::{Ipv4Addr, SocketAddr}, path::{Path, PathBuf}, str::FromStr,
 };
 
 use names::{Generator, Name};
@@ -418,7 +418,9 @@ where
 
 	let base_path = base_path(&cli.shared_params, version);
 
-	config.keystore_path = cli.keystore_path.or_else(|| Some(keystore_path(&base_path, config.chain_spec.id())));
+	config.keystore_path = cli.keystore_path.unwrap_or_else(
+		|| keystore_path(&base_path, config.chain_spec.id())
+	);
 
 	config.database_path = db_path(&base_path, config.chain_spec.id());
 	config.database_cache_size = cli.database_cache_size;
@@ -641,6 +643,11 @@ where
 	).map_err(Into::into)
 }
 
+/// Internal trait used to cast to a dynamic type that implements Read and Seek.
+trait ReadPlusSeek: Read + Seek {}
+
+impl<T: Read + Seek> ReadPlusSeek for T {}
+
 fn import_blocks<F, E, S>(
 	cli: ImportBlocksCmd,
 	spec_factory: S,
@@ -659,9 +666,13 @@ where
 		..Default::default()
 	};
 
-	let file: Box<dyn Read> = match cli.input {
+	let file: Box<dyn ReadPlusSeek> = match cli.input {
 		Some(filename) => Box::new(File::open(filename)?),
-		None => Box::new(stdin()),
+		None => {
+			let mut buffer = Vec::new();
+			stdin().read_to_end(&mut buffer)?;
+			Box::new(Cursor::new(buffer))
+		},
 	};
 
 	let fut = service::chain_ops::import_blocks::<F, _, _>(config, exit.into_exit(), file)?;

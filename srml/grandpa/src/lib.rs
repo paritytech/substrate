@@ -31,7 +31,7 @@
 pub use substrate_finality_grandpa_primitives as fg_primitives;
 
 use rstd::prelude::*;
-use parity_codec::{self as codec, Encode, Decode};
+use codec::{self as codec, Encode, Decode, Error};
 use srml_support::{
 	decl_event, decl_storage, decl_module, dispatch::Result, storage::StorageValue
 };
@@ -78,11 +78,11 @@ pub struct StoredPendingChange<N> {
 }
 
 impl<N: Decode> Decode for StoredPendingChange<N> {
-	fn decode<I: codec::Input>(value: &mut I) -> Option<Self> {
+	fn decode<I: codec::Input>(value: &mut I) -> core::result::Result<Self, Error> {
 		let old = OldStoredPendingChange::decode(value)?;
 		let forced = <Option<N>>::decode(value).unwrap_or(None);
 
-		Some(StoredPendingChange {
+		Ok(StoredPendingChange {
 			scheduled_at: old.scheduled_at,
 			delay: old.delay,
 			next_authorities: old.next_authorities,
