@@ -62,7 +62,7 @@ macro_rules! app_crypto {
 		$crate::app_crypto!($public, $sig, $key_type);
 
 		$crate::wrap!{
-			/// A generic `AppPublic` wrapper type over Ed25519 crypto; this has no specific App.
+			/// A generic `AppPublic` wrapper type over $pair crypto; this has no specific App.
 			#[derive(Clone)]
 			pub struct Pair($pair);
 		}
@@ -137,7 +137,7 @@ macro_rules! app_crypto {
 	};
 	($public:ty, $sig:ty, $key_type:expr) => {
 		$crate::wrap!{
-			/// A generic `AppPublic` wrapper type over Ed25519 crypto; this has no specific App.
+			/// A generic `AppPublic` wrapper type over $public crypto; this has no specific App.
 			#[derive(
 				Clone, Default, Eq, PartialEq, Ord, PartialOrd, $crate::codec::Encode,
 				$crate::codec::Decode,
@@ -237,7 +237,7 @@ macro_rules! app_crypto {
 		}
 
 		$crate::wrap! {
-			/// A generic `AppPublic` wrapper type over Ed25519 crypto; this has no specific App.
+			/// A generic `AppPublic` wrapper type over $public crypto; this has no specific App.
 			#[derive(Clone, Default, Eq, PartialEq, $crate::codec::Encode, $crate::codec::Decode)]
 			#[cfg_attr(feature = "std", derive(Debug, Hash))]
 			pub struct Signature($sig);
