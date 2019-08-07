@@ -22,6 +22,7 @@ keystore = { package = "substrate-keystore", path = "../../keystore" }
 srml-babe = { path = "../../../srml/babe" }
 client = { package = "substrate-client", path = "../../client" }
 consensus-common = { package = "substrate-consensus-common", path = "../common" }
+uncles = { package = "substrate-consensus-uncles", path = "../uncles" }
 slots = { package = "substrate-consensus-slots", path = "../slots"  }
 sr-primitives = {  path = "../../sr-primitives" }
 fork-tree = { path = "../../utils/fork-tree" }

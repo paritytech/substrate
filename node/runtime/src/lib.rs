@@ -80,8 +80,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 131,
-	impl_version: 133,
+	spec_version: 134,
+	impl_version: 134,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -179,7 +179,7 @@ impl timestamp::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const UncleGenerations: u64 = 0;
+	pub const UncleGenerations: u64 = 5;
 }
 
 impl authorship::Trait for Runtime {
@@ -421,7 +421,7 @@ construct_runtime!(
 		System: system::{Module, Call, Storage, Config, Event},
 		Babe: babe::{Module, Call, Storage, Config, Inherent(Timestamp)},
 		Timestamp: timestamp::{Module, Call, Storage, Inherent},
-		Authorship: authorship::{Module, Call, Storage},
+		Authorship: authorship::{Module, Call, Storage, Inherent},
 		Indices: indices,
 		Balances: balances,
 		Staking: staking::{default, OfflineWorker},
