@@ -17,14 +17,14 @@
 use futures::prelude::*;
 use libp2p::{
 	InboundUpgradeExt, OutboundUpgradeExt, PeerId, Transport,
-	mplex, identity, secio, yamux, bandwidth, wasm_ext
+	identity, secio, yamux, bandwidth, wasm_ext
 };
 #[cfg(not(target_os = "unknown"))]
 use libp2p::{tcp, dns, websocket, noise};
 #[cfg(not(target_os = "unknown"))]
 use libp2p::core::{upgrade, either::EitherError, either::EitherOutput};
 use libp2p::core::{self, transport::boxed::Boxed, transport::OptionalTransport, muxing::StreamMuxerBox};
-use std::{io, sync::Arc, time::Duration, usize};
+use std::{io, sync::Arc, time::Duration};
 
 pub use self::bandwidth::BandwidthSinks;
 
@@ -55,9 +55,6 @@ pub fn build_transport(
 	let secio_config = secio::SecioConfig::new(keypair);
 
 	// Build configuration objects for multiplexing mechanisms.
-	let mut mplex_config = mplex::MplexConfig::new();
-	mplex_config.max_buffer_len_behaviour(mplex::MaxBufferBehaviour::Block);
-	mplex_config.max_buffer_len(usize::MAX);
 	let yamux_config = yamux::Config::default();
 
 	// Build the base layer of the transport.
@@ -116,7 +113,7 @@ pub fn build_transport(
 	// Multiplexing
 	let transport = transport.and_then(move |(stream, peer_id), endpoint| {
 			let peer_id2 = peer_id.clone();
-			let upgrade = core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
+			let upgrade = yamux_config
 				.map_inbound(move |muxer| (peer_id, muxer))
 				.map_outbound(move |muxer| (peer_id2, muxer));
 
