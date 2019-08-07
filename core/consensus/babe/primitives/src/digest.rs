@@ -22,12 +22,9 @@ use super::{VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH};
 use super::SlotNumber;
 use sr_primitives::{DigestItem, generic::OpaqueDigestItemId};
 use sr_primitives::traits::{Header, DigestItemForHeader, Verify};
-use parity_codec::{Decode, Encode, Codec};
+use codec::{Decode, Encode, Codec};
 #[cfg(feature = "std")]
-use std::fmt::Debug;
-use codec::{Decode, Encode};
-#[cfg(feature = "std")]
-use codec::{Codec, Input, Error};
+use codec::{Input, Error};
 #[cfg(feature = "std")]
 use schnorrkel::{
 	SignatureError, errors::MultiSignatureStage,

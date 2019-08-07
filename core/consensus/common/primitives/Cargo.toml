@@ -20,7 +20,7 @@ std = [
     "rstd/std",
     "client/std",
     "codec/std",
-    "sr-primitives/std"
+    "sr-primitives/std",
     "primitives/std",
     "serde"
 ]

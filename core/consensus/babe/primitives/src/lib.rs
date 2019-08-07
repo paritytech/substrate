@@ -21,7 +21,7 @@
 
 mod digest;
 
-use codec::{Encode, Decode, Codec};
+use codec::{Encode, Decode};
 use rstd::vec::Vec;
 use sr_primitives::{ConsensusEngineId, traits::Header};
 use primitives::sr25519;

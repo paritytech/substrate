@@ -29,7 +29,7 @@ use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
 	Moment, Signature,
 };
-use parity_codec::{Encode, Decode, Codec};
+use codec::{Encode, Decode, Codec};
 use babe::{AuthorityId as BabeId};
 use babe_primitives::BabeEquivocationProof;
 use grandpa::fg_primitives::{self, ScheduledChange, GrandpaEquivocationFrom};
