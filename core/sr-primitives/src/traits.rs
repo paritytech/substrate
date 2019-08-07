@@ -854,6 +854,7 @@ pub trait SignedExtension:
 
 	/// Do any post-flight stuff for a transaction.
 	fn post_dispatch(
+		_call: &Self::Call
 		_info: DispatchInfo,
 		_len: usize,
 	) { }
@@ -912,10 +913,11 @@ macro_rules! tuple_impl_indexed {
 				Ok(())
 			}
 			fn post_dispatch(
+				call: &Self::Call,
 				info: DispatchInfo,
 				len: usize,
 			) {
-				$($direct::post_dispatch(info, len);)+
+				$($direct::post_dispatch(call, info, len);)+
 			}
 		}
 
