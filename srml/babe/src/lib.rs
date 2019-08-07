@@ -263,9 +263,7 @@ impl<FullIdentification: Clone> Offence<FullIdentification> for BabeEquivocation
 	const ID: Kind = *b"babe:equivocatio";
 
 	fn offenders(&self) -> Vec<FullIdentification> {
-		let mut offender = Vec::with_capacity(1);
-		offender.push(self.offender.clone());
-		offender
+		vec![self.offender.clone()]
 	}
 
 	fn current_era_start_session_index(&self) -> u32 { // TODO [slashing]: Should be a SessionIndex.
