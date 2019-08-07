@@ -660,68 +660,6 @@ fn authorities<A, B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<A>, Consensus
 		.ok_or_else(|| consensus_common::Error::InvalidAuthoritiesSet.into())
 }
 
-/// Means of determining a list of authority keys, generally used to determine if we are an
-/// authority by cross-referencing this list against the keys in the store and finding one that
-/// appears in both.
-///
-/// This is implemented directly on the `AppPair` key type.
-pub trait AuthorityProvider: AppPair {
-	/// Provide a list of authority keys that is current as of a given block.
-	fn authorities_at<C>(client: &C, at: &BlockId<<C as BlockOf>::Type>)
-		-> Result<Vec<<Self as AppKey>::Public>, ConsensusError>
-	where
-		C: ProvideRuntimeApi + BlockOf + ProvideCache<<C as BlockOf>::Type>,
-		C::Api: AuraApi<<C as BlockOf>::Type, <Self as AppKey>::Public>;
-
-	/// Provide a list of authority keys that is current. By default this will just use the state of
-	/// the best block, but you might want it to use some other block's state instead if it's
-	/// more sophisticated. Grandpa, for example, will probably want to use the state of the last
-	/// finalised block.
-	fn authorities<C>(client: &C) -> Result<Vec<<Self as AppKey>::Public>, ConsensusError> where
-		C: ProvideRuntimeApi + BlockOf + ProvideCache<<C as BlockOf>::Type>
-			+ HeaderBackend<<C as BlockOf>::Type>,
-		C::Api: AuraApi<<C as BlockOf>::Type, <Self as AppKey>::Public>
-	{
-		Self::authorities_at::<C>(client, &BlockId::Number(client.info().best_number))
-	}
-
-	/// Provide the authority key, if any, that is controlled by this node as of the given block.
-	fn authority<C>(client: &C, keystore: Arc<Store>) -> Option<Self> where
-		C: ProvideRuntimeApi + BlockOf + ProvideCache<<C as BlockOf>::Type>
-		+ HeaderBackend<<C as BlockOf>::Type>,
-		C::Api: AuraApi<<C as BlockOf>::Type, <Self as AppKey>::Public>
-	{
-		let owned = keystore.public_keys::<<Self as AppKey>::Public>().ok()?;
-		let authorities = Self::authorities(client).ok()?;
-		let maybe_pub = owned.into_iter().find(|i| authorities.contains(i));
-		maybe_pub.and_then(|public| keystore.key_pair(&public).ok())
-	}
-}
-
-impl AuthorityProvider for aura_primitives::ed25519::AuthorityPair {
-	/// Provide a list of authority keys that is current as of a given block.
-	fn authorities_at<C>(client: &C, at: &BlockId<<C as BlockOf>::Type>)
-		-> Result<Vec<<Self as AppKey>::Public>, ConsensusError>
-	where
-		C: ProvideRuntimeApi + BlockOf + ProvideCache<<C as BlockOf>::Type>,
-		C::Api: AuraApi<<C as BlockOf>::Type, <Self as AppKey>::Public>,
-	{
-		authorities::<aura_primitives::ed25519::AuthorityId, _, _>(client, at)
-	}
-}
-
-impl AuthorityProvider for aura_primitives::sr25519::AuthorityPair {
-	/// Provide a list of authority keys that is current as of a given block.
-	fn authorities_at<C>(client: &C, at: &BlockId<<C as BlockOf>::Type>)
-		-> Result<Vec<<Self as AppKey>::Public>, ConsensusError>
-	where
-		C: ProvideRuntimeApi + BlockOf + ProvideCache<<C as BlockOf>::Type>,
-		C::Api: AuraApi<<C as BlockOf>::Type, <Self as AppKey>::Public>,
-	{
-		authorities::<aura_primitives::sr25519::AuthorityId, _, _>(client, at)
-	}
-}
-
 /// The Aura import queue type.
 pub type AuraImportQueue<B> = BasicQueue<B>;
 

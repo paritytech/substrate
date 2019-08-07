@@ -1191,24 +1191,6 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
 	Ok((queue, timestamp_core, block_import, pruning_task))
 }
 
-/// Type of source for block sealing. Different consensus algorithms have different sealing
-/// methods; for PoW it'll be a miner or mining instance. For PoA/PoS it'll be a key type.
-pub trait SealingSource {
-	/// Human-readable description of this general class.
-	///
-	/// e.g. `"ProgPoW"`, `"S/R 25519 Key"`.
-	const SEALER_TYPE: &'static str;
-	/// Human-readable description of this specific instance.
-	///
-	/// e.g. `"OpenCL GPU Radeon 8970 @ slot 1"`, `"5Gav1mbbo348grBREHTYgevvf4Gfe5GFE4"`.
-	fn format(&self) -> String;
-}
-
-impl<T: app_crypto::AppPublic> SealingSource for T {
-	const SEALER_TYPE: &'static str = "Key";
-	fn format(&self) -> String { use primitives::crypto::Ss58Codec; self.to_ss58check() }
-}
-
 /// BABE test helpers. Utility methods for manually authoring blocks.
 #[cfg(feature = "test-helpers")]
 pub mod test_helpers {
