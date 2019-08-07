@@ -329,13 +329,12 @@ mod tests {
 
 	fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<Blake2Hasher> {
 		let mut ext = TestExternalities::new_with_code_with_children(code, GenesisConfig {
-			babe: Some(Default::default()),
 			system: Some(SystemConfig {
 				changes_trie_config: if support_changes_trie { Some(ChangesTrieConfiguration {
 					digest_interval: 2,
 					digest_levels: 2,
 				}) } else { None },
-				..Default::default()
+				.. Default::default()
 			}),
 			indices: Some(IndicesConfig {
 				ids: vec![alice(), bob(), charlie(), dave(), eve(), ferdie()],
@@ -369,7 +368,7 @@ mod tests {
 			}),
 			staking: Some(StakingConfig {
 				current_era: 0,
-				stakers: vec![
+				stakers: vec![®
 					(dave(), alice(), 111 * DOLLARS, staking::StakerStatus::Validator),
 					(eve(), bob(), 100 * DOLLARS, staking::StakerStatus::Validator),
 					(ferdie(), charlie(), 100 * DOLLARS, staking::StakerStatus::Validator)
@@ -380,19 +379,14 @@ mod tests {
 				offline_slash_grace: 0,
 				invulnerables: vec![alice(), bob(), charlie()],
 			}),
-			democracy: Some(Default::default()),
-			collective_Instance1: Some(Default::default()),
-			collective_Instance2: Some(Default::default()),
-			elections: Some(Default::default()),
 			contracts: Some(ContractsConfig {
 				current_schedule: Default::default(),
 				gas_price: 1 * MILLICENTS,
 			}),
-			sudo: Some(Default::default()),
-			im_online: Some(Default::default()),
 			grandpa: Some(GrandpaConfig {
 				authorities: vec![],
 			}),
+			.. Some(Default::default())
 		}.build_storage().unwrap());
 		ext.changes_trie_storage().insert(0, GENESIS_HASH.into(), Default::default());
 		ext
