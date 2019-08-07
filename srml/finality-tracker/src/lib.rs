@@ -25,13 +25,13 @@ use inherents::{
 use srml_support::StorageValue;
 use sr_primitives::traits::{One, Zero, SaturatedConversion};
 use rstd::{prelude::*, result, cmp, vec};
-use parity_codec::Decode;
+use codec::Decode;
 use srml_support::{decl_module, decl_storage, for_each_tuple};
 use srml_support::traits::Get;
 use srml_system::{ensure_none, Trait as SystemTrait};
 
 #[cfg(feature = "std")]
-use parity_codec::Encode;
+use codec::Encode;
 
 /// The identifier for the `finalnum` inherent.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"finalnum";

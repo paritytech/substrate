@@ -26,7 +26,7 @@ use primitives::{
 	ed25519, sr25519, hexdisplay::HexDisplay, Pair, Public, blake2_256,
 	crypto::{Ss58Codec, set_default_ss58_version, Ss58AddressFormat}
 };
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sr_primitives::generic::Era;
 use node_primitives::{Balance, Index, Hash};
 use node_runtime::{Call, UncheckedExtrinsic, BalancesCall, Runtime};
@@ -165,7 +165,7 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 			let genesis_hash: Hash = match matches.value_of("genesis").unwrap_or("alex") {
 				"elm" => hex!["10c08714a10c7da78f40a60f6f732cf0dba97acfb5e2035445b032386157d5c3"].into(),
 				"alex" => hex!["dcd1346701ca8396496e52aa2785b1748deb6db09551b72159dcb3e08991025b"].into(),
-				h => hex::decode(h).ok().and_then(|x| Decode::decode(&mut &x[..]))
+				h => hex::decode(h).ok().and_then(|x| Decode::decode(&mut &x[..]).ok())
 					.expect("Invalid genesis hash or unrecognised chain identifier"),
 			};
 
@@ -203,12 +203,12 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 			let call = matches.value_of("call")
 				.expect("call is required; thus it can't be None; qed");
 			let function: Call = hex::decode(&call).ok()
-				.and_then(|x| Decode::decode(&mut &x[..])).unwrap();
+				.and_then(|x| Decode::decode(&mut &x[..]).ok()).unwrap();
 
 			let genesis_hash: Hash = match matches.value_of("genesis").unwrap_or("alex") {
 				"elm" => hex!["10c08714a10c7da78f40a60f6f732cf0dba97acfb5e2035445b032386157d5c3"].into(),
 				"alex" => hex!["dcd1346701ca8396496e52aa2785b1748deb6db09551b72159dcb3e08991025b"].into(),
-				h => hex::decode(h).ok().and_then(|x| Decode::decode(&mut &x[..]))
+				h => hex::decode(h).ok().and_then(|x| Decode::decode(&mut &x[..]).ok())
 					.expect("Invalid genesis hash or unrecognised chain identifier"),
 			};
 
@@ -289,7 +289,7 @@ mod tests {
 	fn should_work() {
 		let s = "0123456789012345678901234567890123456789012345678901234567890123";
 
-		let d1: Hash = hex::decode(s).ok().and_then(|x| Decode::decode(&mut &x[..])).unwrap();
+		let d1: Hash = hex::decode(s).ok().and_then(|x| Decode::decode(&mut &x[..]).ok()).unwrap();
 
 		let d2: Hash = {
 			let mut gh: [u8; 32] = Default::default();

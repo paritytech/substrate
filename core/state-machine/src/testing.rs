@@ -27,7 +27,7 @@ use crate::changes_trie::{
 };
 use primitives::offchain;
 use primitives::storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES};
-use parity_codec::Encode;
+use codec::Encode;
 use super::{ChildStorageKey, Externalities, OverlayedChanges};
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";

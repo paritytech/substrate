@@ -33,7 +33,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 
-use parity_codec as codec;
 use codec::{Encode, Decode};
 
 use rstd::{collections::btree_map::{BTreeMap, IntoIter, Entry}, vec::Vec};
@@ -52,7 +51,7 @@ pub type InherentIdentifier = [u8; 8];
 /// Inherent data to include in a block.
 #[derive(Clone, Default, Encode, Decode)]
 pub struct InherentData {
-	/// All inherent data encoded with parity-codec and an identifier.
+	/// All inherent data encoded with parity-scale-codec and an identifier.
 	data: BTreeMap<InherentIdentifier, Vec<u8>>
 }
 
@@ -111,7 +110,7 @@ impl InherentData {
 		match self.data.get(identifier) {
 			Some(inherent) =>
 				I::decode(&mut &inherent[..])
-					.ok_or_else(|| {
+					.map_err(|_| {
 						"Could not decode requested inherent type!".into()
 					})
 					.map(Some),

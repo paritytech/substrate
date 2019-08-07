@@ -40,7 +40,7 @@ use futures03::stream::{StreamExt as _, TryStreamExt as _};
 use keystore::Store as Keystore;
 use network::{NetworkState, NetworkStateInfo};
 use log::{log, info, warn, debug, error, Level};
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use primitives::{Pair, ed25519, sr25519, crypto};
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{Header, NumberFor, SaturatedConversion, Zero};
@@ -877,28 +877,31 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 		}
 
 		let encoded = transaction.encode();
-		if let Some(uxt) = Decode::decode(&mut &encoded[..]) {
-			let best_block_id = self.best_block_id()?;
-			match self.pool.submit_one(&best_block_id, uxt) {
-				Ok(hash) => Some(hash),
-				Err(e) => match e.into_pool_error() {
-					Ok(txpool::error::Error::AlreadyImported(hash)) => {
-						hash.downcast::<ComponentExHash<C>>().ok()
-							.map(|x| x.as_ref().clone())
-					},
-					Ok(e) => {
-						debug!("Error adding transaction to the pool: {:?}", e);
-						None
-					},
-					Err(e) => {
-						debug!("Error converting pool error: {:?}", e);
-						None
-					},
+		match Decode::decode(&mut &encoded[..]) {
+			Ok(uxt) => {
+				let best_block_id = self.best_block_id()?;
+				match self.pool.submit_one(&best_block_id, uxt) {
+					Ok(hash) => Some(hash),
+					Err(e) => match e.into_pool_error() {
+						Ok(txpool::error::Error::AlreadyImported(hash)) => {
+							hash.downcast::<ComponentExHash<C>>().ok()
+								.map(|x| x.as_ref().clone())
+						},
+						Ok(e) => {
+							debug!("Error adding transaction to the pool: {:?}", e);
+							None
+						},
+						Err(e) => {
+							debug!("Error converting pool error: {:?}", e);
+							None
+						},
+					}
 				}
 			}
-		} else {
-			debug!("Error decoding transaction");
-			None
+			Err(e) => {
+				debug!("Error decoding transaction {}", e);
+				None
+			}
 		}
 	}
 

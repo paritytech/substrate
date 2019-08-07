@@ -74,7 +74,7 @@ use primitives::{
 	offchain::StorageKind,
 	sr25519, ed25519,
 };
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sr_primitives::{
 	ApplyError, traits::{Member, IsMember, Extrinsic as ExtrinsicT},
 	transaction_validity::{TransactionValidity, TransactionLongevity, ValidTransaction},
@@ -216,7 +216,7 @@ decl_module! {
 				// we run only when a local authority key is configured
 				if let Ok(key) = sr_io::pubkey(CryptoKey::AuthorityKey) {
 					let authority_id = <T as Trait>::AuthorityId::decode(&mut &key[..])
-						.ok_or(OffchainErr::DecodeAuthorityId)?;
+						.map_err(|_| OffchainErr::DecodeAuthorityId)?;
 					let network_state =
 						sr_io::network_state().map_err(|_| OffchainErr::NetworkState)?;
 					let heartbeat_data = Heartbeat {
@@ -282,7 +282,7 @@ decl_module! {
 				match last_gossip {
 					Some(last) => {
 						let worker_status: WorkerStatus<T::BlockNumber> = Decode::decode(&mut &last[..])
-							.ok_or(OffchainErr::DecodeWorkerStatus)?;
+							.map_err(|_| OffchainErr::DecodeWorkerStatus)?;
 
 						let was_aborted = !worker_status.done && worker_status.gossipping_at < now;
 

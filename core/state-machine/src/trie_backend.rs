@@ -194,9 +194,8 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 pub mod tests {
 	use std::collections::HashSet;
 	use primitives::{Blake2Hasher, H256};
-	use parity_codec::Encode;
-	use trie::{TrieMut, PrefixedMemoryDB};
-	use trie::trie_types::TrieDBMut;
+	use codec::Encode;
+	use trie::{TrieMut, PrefixedMemoryDB, trie_types::TrieDBMut};
 	use super::*;
 
 	fn test_db() -> (PrefixedMemoryDB<Blake2Hasher>, H256) {

@@ -85,7 +85,7 @@
 use sr_primitives::traits::{NumberFor, Block as BlockT, Zero};
 use network::consensus_gossip::{self as network_gossip, MessageIntent, ValidatorContext};
 use network::{config::Roles, PeerId};
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use crate::ed25519::Public as AuthorityId;
 
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG};
@@ -977,10 +977,10 @@ impl<Block: BlockT> GossipValidator<Block> {
 
 		let action = {
 			match GossipMessage::<Block>::decode(&mut data) {
-				Some(GossipMessage::VoteOrPrecommit(ref message))
+				Ok(GossipMessage::VoteOrPrecommit(ref message))
 					=> self.inner.write().validate_round_message(who, message),
-				Some(GossipMessage::Commit(ref message)) => self.inner.write().validate_commit_message(who, message),
-				Some(GossipMessage::Neighbor(update)) => {
+				Ok(GossipMessage::Commit(ref message)) => self.inner.write().validate_commit_message(who, message),
+				Ok(GossipMessage::Neighbor(update)) => {
 					let (topics, action, catch_up, report) = self.inner.write().import_neighbor_message(
 						who,
 						update.into_neighbor_packet(),
@@ -994,9 +994,9 @@ impl<Block: BlockT> GossipValidator<Block> {
 					peer_reply = catch_up;
 					action
 				}
-				Some(GossipMessage::CatchUp(ref message))
+				Ok(GossipMessage::CatchUp(ref message))
 					=> self.inner.write().validate_catch_up_message(who, message),
-				Some(GossipMessage::CatchUpRequest(request)) => {
+				Ok(GossipMessage::CatchUpRequest(request)) => {
 					let (reply, action) = self.inner.write().handle_catch_up_request(
 						who,
 						request,
@@ -1006,8 +1006,8 @@ impl<Block: BlockT> GossipValidator<Block> {
 					peer_reply = reply;
 					action
 				}
-				None => {
-					debug!(target: "afg", "Error decoding message");
+				Err(e) => {
+					debug!(target: "afg", "Error decoding message: {}", e.what());
 					telemetry!(CONSENSUS_DEBUG; "afg.err_decoding_msg"; "" => "");
 
 					let len = std::cmp::min(i32::max_value() as usize, data.len()) as i32;
@@ -1127,17 +1127,17 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 			let peer_best_commit = peer.view.last_commit;
 
 			match GossipMessage::<Block>::decode(&mut data) {
-				None => false,
-				Some(GossipMessage::Commit(full)) => {
+				Err(_) => false,
+				Ok(GossipMessage::Commit(full)) => {
 					// we only broadcast our best commit and only if it's
 					// better than last received by peer.
 					Some(full.message.target_number) == our_best_commit
 					&& Some(full.message.target_number) > peer_best_commit
 				}
-				Some(GossipMessage::Neighbor(_)) => false,
-				Some(GossipMessage::CatchUpRequest(_)) => false,
-				Some(GossipMessage::CatchUp(_)) => false,
-				Some(GossipMessage::VoteOrPrecommit(_)) => false, // should not be the case.
+				Ok(GossipMessage::Neighbor(_)) => false,
+				Ok(GossipMessage::CatchUpRequest(_)) => false,
+				Ok(GossipMessage::CatchUp(_)) => false,
+				Ok(GossipMessage::VoteOrPrecommit(_)) => false, // should not be the case.
 			}
 		})
 	}
@@ -1162,10 +1162,10 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 			let best_commit = local_view.last_commit;
 
 			match GossipMessage::<Block>::decode(&mut data) {
-				None => true,
-				Some(GossipMessage::Commit(full))
+				Err(_) => true,
+				Ok(GossipMessage::Commit(full))
 					=> Some(full.message.target_number) != best_commit,
-				Some(_) => true,
+				Ok(_) => true,
 			}
 		})
 	}

@@ -80,7 +80,7 @@ use sr_primitives::traits::{
 	Zero, EnsureOrigin, StaticLookup, CheckedSub, CheckedMul, AccountIdConversion
 };
 use sr_primitives::weights::SimpleDispatchInfo;
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use system::ensure_signed;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
