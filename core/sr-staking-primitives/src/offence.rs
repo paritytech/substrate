@@ -20,7 +20,7 @@
 use rstd::vec::Vec;
 
 use codec::{Encode, Decode};
-use crate::Perbill;
+use sr_primitives::Perbill;
 
 /// The kind of an offence, is a byte string representing some kind identifier
 /// e.g. `b"im-online:offlin"`, `b"babe:equivocatio"`

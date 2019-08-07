@@ -273,13 +273,15 @@ use srml_support::{
 };
 use session::{historical::OnSessionEnding, SelectInitialValidators};
 use sr_primitives::Perbill;
-use sr_primitives::offence::{OnOffenceHandler, OffenceDetails};
 use sr_primitives::weights::SimpleDispatchInfo;
 use sr_primitives::traits::{
 	Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded,
 	SimpleArithmetic, SaturatedConversion, ValidatorIdByIndex,
 };
-use sr_staking_primitives::SessionIndex;
+use sr_staking_primitives::{
+	SessionIndex,
+	offence::{OnOffenceHandler, OffenceDetails},
+};
 #[cfg(feature = "std")]
 use sr_primitives::{Serialize, Deserialize};
 use system::{ensure_signed, ensure_root};

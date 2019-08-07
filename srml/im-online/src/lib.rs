@@ -75,11 +75,13 @@ use session::historical::IdentificationTuple;
 use sr_io::Printable;
 use sr_primitives::{
 	Perbill, ApplyError,
-	offence::{ReportOffence, Offence, TimeSlot, Kind},
 	traits::{ValidatorIdByIndex, Extrinsic as ExtrinsicT, CurrentEraStartSessionIndex, Convert},
 	transaction_validity::{TransactionValidity, TransactionLongevity, ValidTransaction},
 };
-use sr_staking_primitives::SessionIndex;
+use sr_staking_primitives::{
+	SessionIndex,
+	offence::{ReportOffence, Offence, TimeSlot, Kind},
+};
 use srml_support::{
 	StorageValue, decl_module, decl_event, decl_storage, StorageDoubleMap, print,
 };

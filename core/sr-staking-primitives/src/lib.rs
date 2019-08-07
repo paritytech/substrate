@@ -17,6 +17,8 @@
 //! A crate which contains primitives that are useful for implementation that uses staking
 //! approaches in general. Definitions related to sessions, slashing, etc go here.
 
+pub mod offence;
+
 /// Simple index type with which we can count sessions.
 pub type SessionIndex = u32;
 

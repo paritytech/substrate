@@ -29,7 +29,7 @@ use srml_support::{decl_storage, decl_module, StorageValue, StorageMap, traits::
 use timestamp::{OnTimestampSet};
 use sr_primitives::{generic::DigestItem, ConsensusEngineId, Perbill};
 use sr_primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert};
-use sr_primitives::offence::{Offence, TimeSlot, Kind};
+use sr_staking_primitives::offence::{Offence, TimeSlot, Kind};
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
 use codec::{Encode, Decode};

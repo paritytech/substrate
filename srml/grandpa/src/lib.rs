@@ -38,8 +38,8 @@ use srml_support::{
 use sr_primitives::{
 	generic::{DigestItem, OpaqueDigestItemId}, traits::Zero,
 	Perbill,
-	offence::{TimeSlot, Offence, Kind},
 };
+use sr_staking_primitives::offence::{TimeSlot, Offence, Kind};
 use fg_primitives::{ScheduledChange, ConsensusLog, GRANDPA_ENGINE_ID};
 pub use fg_primitives::{AuthorityId, AuthorityWeight};
 use system::{ensure_signed, DigestOf};
