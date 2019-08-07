@@ -217,6 +217,7 @@ pub trait OffchainStorage: Clone + Send + Sync {
 }
 
 /// Changes trie configuration range.
+#[derive(Debug)]
 pub struct ChangesTrieConfigurationRange<Block: BlockT> {
 	/// Zero block of this configuration. First trie that uses this configuration is build at the next block.
 	pub zero: (NumberFor<Block>, Block::Hash),
@@ -234,13 +235,10 @@ pub trait PrunableStateChangesTrieStorage<Block: BlockT, H: Hasher>:
 	fn storage(&self) -> &dyn StateChangesTrieStorage<H, NumberFor<Block>>;
 	/// Get coniguration at given block.
 	fn configuration_at(&self, at: &BlockId<Block>) -> error::Result<ChangesTrieConfigurationRange<Block>>;
-	/// Get number block of oldest, non-pruned changes trie.
-	fn oldest_changes_trie_block(
-		&self,
-		zero: NumberFor<Block>,
-		config: ChangesTrieConfiguration,
-		best_finalized: NumberFor<Block>,
-	) -> NumberFor<Block>;
+	/// Get end block (inclusive) of oldest pruned max-level (or skewed) digest trie blocks range.
+	/// It is guaranteed that we have no any changes tries before (and including) this block.
+	/// It is guaranteed that all existing changes tries after this block are not yet pruned (if created).
+	fn oldest_pruned_digest_range_end(&self) -> NumberFor<Block>;
 }
 
 /// Mark for all Backend implementations, that are making use of state data, stored locally.

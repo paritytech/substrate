@@ -522,9 +522,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 		// TODO (#3282): we only work with the last config range here!!! Need to stabilize pruning before fixing this.
 		match configs.pop() {
-			Some((zero, _, config)) => {
-				let finalized_number = self.backend.blockchain().info().finalized_number;
-				let oldest = storage.oldest_changes_trie_block(zero, config, finalized_number);
+			Some((zero, _, _)) => {
+				let oldest = storage.oldest_pruned_digest_range_end();
 				let oldest = ::std::cmp::max(zero + One::one(), oldest);
 				let first = ::std::cmp::max(first, oldest);
 				Ok(Some((first, last)))

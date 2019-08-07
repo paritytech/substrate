@@ -52,7 +52,6 @@ pub use changes_trie::{
 	key_changes, key_changes_proof,
 	key_changes_proof_check, key_changes_proof_check_with_db,
 	prune as prune_changes_tries,
-	oldest_non_pruned_trie as oldest_non_pruned_changes_trie,
 	disabled_state as disabled_changes_trie_state,
 };
 pub use overlayed_changes::OverlayedChanges;

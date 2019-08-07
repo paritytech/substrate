@@ -53,6 +53,8 @@ pub mod meta_keys {
 	pub const FINALIZED_BLOCK: &[u8; 5] = b"final";
 	/// Meta information prefix for list-based caches.
 	pub const CACHE_META_PREFIX: &[u8; 5] = b"cache";
+	/// Meta information for changes tries key.
+	pub const CHANGES_TRIES_META: &[u8; 5] = b"ctrie";
 	/// Genesis block hash.
 	pub const GENESIS_HASH: &[u8; 3] = b"gen";
 	/// Leaves prefix list key.

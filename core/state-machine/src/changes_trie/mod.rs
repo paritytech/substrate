@@ -48,7 +48,7 @@ pub use self::changes_iterator::{
 	key_changes, key_changes_proof,
 	key_changes_proof_check, key_changes_proof_check_with_db,
 };
-pub use self::prune::{prune, oldest_non_pruned_trie};
+pub use self::prune::prune;
 
 use std::convert::TryInto;
 use hash_db::{Hasher, Prefix};

@@ -227,6 +227,14 @@ mod meta {
 					unfinalized.remove(*fork_index);
 				}
 			},
+			CommitOperation::BlockReverted(ref forks) => {
+				for (fork_index, updated_fork) in forks.iter().rev() {
+					match updated_fork {
+						Some(updated_fork) => unfinalized[*fork_index] = &updated_fork.head().valid_from,
+						None => { unfinalized.remove(*fork_index); },
+					}
+				}
+			},
 		}
 
 		(finalized, unfinalized).encode()

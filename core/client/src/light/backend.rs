@@ -21,6 +21,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 use parking_lot::{RwLock, Mutex};
 
+use parity_codec::{Decode, Encode};
+use primitives::{ChangesTrieConfiguration, storage::well_known_keys};
 use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use state_machine::{Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState};
 use sr_primitives::traits::{Block as BlockT, NumberFor, Zero, Header};
@@ -54,6 +56,7 @@ pub struct ImportOperation<Block: BlockT, S, F, H: Hasher> {
 	finalized_blocks: Vec<BlockId<Block>>,
 	set_head: Option<BlockId<Block>>,
 	storage_update: Option<InMemoryState<H>>,
+	changes_trie_config_update: Option<Option<ChangesTrieConfiguration>>,
 	_phantom: ::std::marker::PhantomData<(S, F)>,
 }
 
@@ -126,6 +129,7 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 			finalized_blocks: Vec::new(),
 			set_head: None,
 			storage_update: None,
+			changes_trie_config_update: None,
 			_phantom: Default::default(),
 		})
 	}
@@ -147,6 +151,9 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 
 		if let Some(header) = operation.header {
 			let is_genesis_import = header.number().is_zero();
+			if let Some(new_config) = operation.changes_trie_config_update {
+				operation.cache.insert(well_known_cache_keys::CHANGES_TRIE_CONFIG, new_config.encode());
+			}
 			self.blockchain.storage().import_header(
 				header,
 				operation.cache,
@@ -285,6 +292,13 @@ where
 
 	fn reset_storage(&mut self, top: StorageOverlay, children: ChildrenStorageOverlay) -> ClientResult<H::Out> {
 		check_genesis_storage(&top, &children)?;
+
+		// changes trie configuration
+		let changes_trie_config = top.iter()
+			.find(|(k, _)| &k[..] == well_known_keys::CHANGES_TRIE_CONFIG)
+			.map(|(_, v)| Decode::decode(&mut &v[..])
+				.expect("changes trie configuration is encoded properly at genesis"));
+		self.changes_trie_config_update = Some(changes_trie_config);
 
 		// this is only called when genesis block is imported => shouldn't be performance bottleneck
 		let mut storage: HashMap<Option<Vec<u8>>, StorageOverlay> = HashMap::new();

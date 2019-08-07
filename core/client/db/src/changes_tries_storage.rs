@@ -16,25 +16,30 @@
 
 //! DB-backed changes tries storage.
 
+// TODO: use last non-pruned digest block!!!
+
 use std::collections::HashMap;
 use std::sync::Arc;
 use hash_db::Prefix;
 use kvdb::{KeyValueDB, DBTransaction};
 use parity_codec::Encode;
-use parking_lot::{RwLock, RwLockWriteGuard};
+use parking_lot::RwLock;
 use client::error::{Error as ClientError, Result as ClientResult};
 use trie::MemoryDB;
-use client::backend::{PrunableStateChangesTrieStorage, ChangesTrieConfigurationRange};
-use client::blockchain::{Cache, well_known_cache_keys};
+use client::backend::ChangesTrieConfigurationRange;
+use client::blockchain::well_known_cache_keys;
 use parity_codec::Decode;
 use primitives::{H256, Blake2Hasher, ChangesTrieConfiguration, convert_hash};
 use sr_primitives::traits::{
-	Block as BlockT, Header as HeaderT, NumberFor, One,
+	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, CheckedSub,
 };
 use sr_primitives::generic::{BlockId, DigestItem, ChangesTrieSignal};
 use state_machine::DBValue;
-use crate::utils::{self, Meta};
-use crate::cache::{DbCacheSync, DbCache, DbCacheTransactionOps, ComplexBlockId, EntryType as CacheEntryType};
+use crate::utils::{self, Meta, meta_keys, db_err};
+use crate::cache::{
+	DbCacheSync, DbCache, DbCacheTransactionOps,
+	ComplexBlockId, BlockIdOrHeader, EntryType as CacheEntryType,
+};
 
 /// Extract new changes trie configuration (if available) from the header.
 pub fn extract_new_configuration<Header: HeaderT>(header: &Header) -> Option<&Option<ChangesTrieConfiguration>> {
@@ -43,58 +48,77 @@ pub fn extract_new_configuration<Header: HeaderT>(header: &Header) -> Option<&Op
 		.and_then(ChangesTrieSignal::as_new_configuration)
 }
 
-/// Opaque configuration cache transaction.
-pub struct DbChangesTrieStorageTransaction<'a, Block: BlockT> {
-	/// Lock needs to be held between commit and post_commit calls.
-	lock: RwLockWriteGuard<'a, DbCache<Block>>,
-	/// Cache operations that needs to be performed once tx is committed.
-	ops: DbCacheTransactionOps<Block>,
-}
+/// Opaque configuration cache transaction. During its lifetime, noone should modify cache. This is currently
+/// guaranteed because import lock is held during block import/finalization.
+pub type DbChangesTrieStorageTransaction<Block> = DbCacheTransactionOps<Block>;
 
 /// Changes tries storage.
 ///
 /// Stores all tries in separate DB column.
+/// Lock order: meta, tries_meta, cache.
 pub struct DbChangesTrieStorage<Block: BlockT> {
 	db: Arc<dyn KeyValueDB>,
+	meta_column: Option<u32>,
 	changes_tries_column: Option<u32>,
 	key_lookup_column: Option<u32>,
 	header_column: Option<u32>,
 	meta: Arc<RwLock<Meta<NumberFor<Block>, Block::Hash>>>,
+	tries_meta: RwLock<ChangesTriesMeta<Block>>,
 	min_blocks_to_keep: Option<u32>,
 	cache: DbCacheSync<Block>,
+}
+
+/// Persistent struct that contains all the changes tries metadata.
+#[derive(Decode, Encode, Debug)]
+struct ChangesTriesMeta<Block: BlockT> {
+	/// Oldest unpruned max-level (or skewed) digest trie blocks range.
+	/// The range is inclusive from both sides.
+	/// Is None only if:
+	/// 1) we haven't yet finalized any blocks (except genesis)
+	/// 2) if best_finalized_block - min_blocks_to_keep points to the range where changes tries are disabled
+	/// 3) changes tries pruning is disabled
+	pub oldest_digest_range: Option<(NumberFor<Block>, NumberFor<Block>)>,
+	/// End block (inclusive) of oldest pruned max-level (or skewed) digest trie blocks range.
+	/// It is guaranteed that we have no any changes tries before (and including) this block.
+	/// It is guaranteed that all existing changes tries after this block are not yet pruned (if created).
+	pub oldest_pruned_digest_range_end: NumberFor<Block>,
 }
 
 impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 	/// Create new changes trie storage.
 	pub fn new(
 		db: Arc<dyn KeyValueDB>,
+		meta_column: Option<u32>,
 		changes_tries_column: Option<u32>,
 		key_lookup_column: Option<u32>,
 		header_column: Option<u32>,
 		cache_column: Option<u32>,
 		meta: Arc<RwLock<Meta<NumberFor<Block>, Block::Hash>>>,
 		min_blocks_to_keep: Option<u32>,
-	) -> Self {
+	) -> ClientResult<Self> {
 		let (finalized_hash, finalized_number, genesis_hash) = {
 			let meta = meta.read();
 			(meta.finalized_hash, meta.finalized_number, meta.genesis_hash)
 		};
-		Self {
+		let tries_meta = read_tries_meta(&*db, meta_column)?;
+		Ok(Self {
 			db: db.clone(),
+			meta_column,
 			changes_tries_column,
 			key_lookup_column,
 			header_column,
 			meta,
 			min_blocks_to_keep,
-			cache: DbCacheSync(RwLock::new(DbCache::new(
+			cache: DbCacheSync::new(DbCache::new(
 				db.clone(),
 				key_lookup_column,
 				header_column,
 				cache_column,
 				genesis_hash,
 				ComplexBlockId::new(finalized_hash, finalized_number),
-			))),
-		}
+			)),
+			tries_meta: RwLock::new(tries_meta),
+		})
 	}
 
 	/// Commit new changes trie.
@@ -104,52 +128,124 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 		mut changes_trie: MemoryDB<Blake2Hasher>,
 		parent_block: ComplexBlockId<Block>,
 		block: ComplexBlockId<Block>,
+		new_header: &Block::Header,
 		finalized: bool,
 		new_configuration: Option<Option<ChangesTrieConfiguration>>,
-	) -> ClientResult<Option<DbChangesTrieStorageTransaction<Block>>> {
+		cache_tx: Option<DbChangesTrieStorageTransaction<Block>>,
+	) -> ClientResult<DbChangesTrieStorageTransaction<Block>> {
 		// insert changes trie, associated with block, into DB
 		for (key, (val, _)) in changes_trie.drain() {
 			tx.put(self.changes_tries_column, &key[..], &val);
 		}
 
-		// if configuration has been changed, we need to update configuration cache as well
+		// if configuration has not been changed AND block is not finalized => nothing to do here
 		let new_configuration = match new_configuration {
 			Some(new_configuration) => new_configuration,
-			None => return Ok(None),
+			None if !finalized => return Ok(DbChangesTrieStorageTransaction::empty()),
+			None => return self.finalize(tx, parent_block.hash, block.hash, block.number, Some(new_header), cache_tx),
 		};
 
+		// update configuration cache
 		let mut cache_at = HashMap::new();
 		cache_at.insert(well_known_cache_keys::CHANGES_TRIE_CONFIG, new_configuration.encode());
+		Ok(match cache_tx {
+			Some(cache_tx) => {
+				self.cache.cache().write().transaction_with_ops(tx, cache_tx)
+					.on_block_insert(
+						parent_block,
+						block,
+						cache_at,
+						if finalized { CacheEntryType::Final } else { CacheEntryType::NonFinal },
+					)?
+					.into_ops()
+			},
+			None => {
+				self.cache.cache().write().transaction(tx)
+					.on_block_insert(
+						parent_block,
+						block,
+						cache_at,
+						if finalized { CacheEntryType::Final } else { CacheEntryType::NonFinal },
+					)?
+					.into_ops()
+			},
+		})
+	}
 
-		let mut cache = self.cache.0.write();
-		let cache_ops = cache.transaction(tx)
-			.on_block_insert(
-				parent_block,
-				block,
-				cache_at,
-				if finalized { CacheEntryType::Final } else { CacheEntryType::NonFinal },
-			)?
-			.into_ops();
-		Ok(Some(DbChangesTrieStorageTransaction {
-			lock: cache,
-			ops: cache_ops,
-		}))
+	/// Called when block is finalized.
+	pub fn finalize(
+		&self,
+		tx: &mut DBTransaction,
+		parent_block_hash: Block::Hash,
+		block_hash: Block::Hash,
+		block_num: NumberFor<Block>,
+		new_header: Option<&Block::Header>,
+		cache_tx: Option<DbChangesTrieStorageTransaction<Block>>,
+	) -> ClientResult<DbChangesTrieStorageTransaction<Block>> {
+		// prune obsolete changes tries
+		self.prune(tx, block_hash, block_num, new_header.clone())?;
+
+		// if we have inserted the block that we're finalizing in the same transaction
+		// => then we have already finalized it from the commit() call
+		if cache_tx.is_some() {
+			if let Some(new_header) = new_header {
+				if new_header.hash() == block_hash {
+					return Ok(cache_tx.expect("guarded by cache_tx.is_some(); qed"));
+				}
+			}
+		}
+
+		// and finalize configuration cache entries
+		let block = ComplexBlockId::new(block_hash, block_num);
+		let parent_block_num = block_num.checked_sub(&One::one()).unwrap_or_else(|| Zero::zero());
+		let parent_block = ComplexBlockId::new(parent_block_hash, parent_block_num);
+		Ok(match cache_tx {
+			Some(cache_tx) => {
+				self.cache.cache().write().transaction_with_ops(tx, cache_tx)
+					.on_block_finalize(
+						parent_block,
+						block,
+					)?
+					.into_ops()
+			},
+			None => {
+				self.cache.cache().write().transaction(tx)
+					.on_block_finalize(
+						parent_block,
+						block,
+					)?
+					.into_ops()
+			},
+		})
+	}
+
+	/// When block is reverted.
+	pub fn revert(
+		&self,
+		tx: &mut DBTransaction,
+		block: NumberFor<Block>,
+	) -> ClientResult<DbChangesTrieStorageTransaction<Block>> {
+		Ok(self.cache.cache().write().transaction(tx)
+			.on_block_revert(block)?
+			.into_ops())
 	}
 
 	/// When transaction has been committed.
 	pub fn post_commit(&self, tx: Option<DbChangesTrieStorageTransaction<Block>>) {
-		if let Some(mut tx) = tx {
-			tx.lock.commit(tx.ops);
+		if let Some(tx) = tx {
+			self.cache.cache().write().commit(tx)
+				.expect("only fails if cache with given name isn't loaded yet;\
+						cache is already loaded because there is tx; qed");
 		}
 	}
 
 	/// Prune obsolete changes tries.
-	pub fn prune(
+	fn prune(
 		&self,
 		tx: &mut DBTransaction,
-		parent_hash: Block::Hash,
 		block_hash: Block::Hash,
 		block_num: NumberFor<Block>,
+		new_header: Option<&Block::Header>,
 	) -> ClientResult<()> {
 		// never prune on archive nodes
 		let min_blocks_to_keep = match self.min_blocks_to_keep {
@@ -157,24 +253,80 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 			None => return Ok(()),
 		};
 
-		// prune changes tries that are created using newest configuration
-		let config_range = self.configuration_at(&BlockId::Hash(parent_hash))?;
-		if let Some(config) = config_range.config {
-			state_machine::prune_changes_tries(
-				config_range.zero.0,
-				&config,
-				&*self,
-				min_blocks_to_keep.into(),
-				&state_machine::ChangesTrieAnchorBlockId {
-					hash: convert_hash(&block_hash),
-					number: block_num,
-				},
-				|node| tx.delete(self.changes_tries_column, node.as_ref()));
+		let mut tries_meta = self.tries_meta.write();
+		let mut next_digest_range_start = block_num;
+		loop {
+			// prune oldest digest if it is known
+			// it could be unknown if:
+			// 1) either we're finalizing block#1
+			// 2) or we are (or were) in period where changes tries are disabled
+			if let Some((begin, end)) = tries_meta.oldest_digest_range {
+				if block_num <= end || block_num - end <= min_blocks_to_keep.into() {
+					break;
+				}
+
+				tries_meta.oldest_pruned_digest_range_end = end;
+				state_machine::prune_changes_tries(
+					&*self,
+					begin,
+					end,
+					&state_machine::ChangesTrieAnchorBlockId {
+						hash: convert_hash(&block_hash),
+						number: block_num,
+					},
+					|node| tx.delete(self.changes_tries_column, node.as_ref()),
+				);
+
+				next_digest_range_start = end + One::one();
+			}
+
+			// proceed to the next configuration range
+			let next_digest_range_start_hash = match block_num == next_digest_range_start {
+				true => block_hash,
+				false => utils::require_header::<Block>(
+					&*self.db,
+					self.key_lookup_column,
+					self.header_column,
+					BlockId::Number(next_digest_range_start),
+				)?.hash(),
+			};
+			let block_id = ComplexBlockId::new(next_digest_range_start_hash, next_digest_range_start);
+			let block_id_or_header = match new_header {
+				Some(ref new_header) if *new_header.number() == next_digest_range_start
+					=> BlockIdOrHeader::Header(*new_header),
+				_ => BlockIdOrHeader::Id(&block_id),
+			};
+			let next_config = self.configuration_at_block(block_id_or_header)?;
+			if let Some(config) = next_config.config {
+				let mut oldest_digest_range = config
+					.next_max_level_digest_range(next_config.zero.0, next_digest_range_start)
+					.unwrap_or_else(|| (next_digest_range_start, next_digest_range_start));
+
+				if let Some(end) = next_config.end {
+					if end.0 < oldest_digest_range.1 {
+						oldest_digest_range.1 = end.0;
+					}
+				}
+
+				tries_meta.oldest_digest_range = Some(oldest_digest_range);
+				continue;
+			}
+
+			tries_meta.oldest_digest_range = None;
+			break;
 		}
 
-		// TODO (#3282): prune tries that were created using previous configurations
-
+		write_tries_meta(tx, self.meta_column, &*tries_meta);
 		Ok(())
+	}
+
+	/// Return configuration at given block id or header.
+	fn configuration_at_block(&self, at: BlockIdOrHeader<Block>) -> ClientResult<ChangesTrieConfigurationRange<Block>> {
+		self.cache
+			.get_at_block(&well_known_cache_keys::CHANGES_TRIE_CONFIG, at)
+			.and_then(|(zero, end, encoded)| Decode::decode(&mut &encoded[..])
+				.map(|config| ChangesTrieConfigurationRange { zero, end, config }))
+			.ok_or_else(|| ClientError::ErrorReadingChangesTriesConfig)
 	}
 }
 
@@ -188,28 +340,12 @@ where
 	}
 
 	fn configuration_at(&self, at: &BlockId<Block>) -> ClientResult<ChangesTrieConfigurationRange<Block>> {
-		self.cache
-			.get_at(&well_known_cache_keys::CHANGES_TRIE_CONFIG, at)
-			.and_then(|(zero, end, encoded)| Decode::decode(&mut &encoded[..])
-				.map(|config| ChangesTrieConfigurationRange { zero, end, config }))
-			.ok_or_else(|| ClientError::ErrorReadingChangesTriesConfig)
+		self.cache.to_complex_id(at)
+			.and_then(|at| self.configuration_at_block((&at).into()))
 	}
 
-	fn oldest_changes_trie_block(
-		&self,
-		zero: NumberFor<Block>,
-		config: ChangesTrieConfiguration,
-		best_finalized_block: NumberFor<Block>,
-	) -> NumberFor<Block> {
-		match self.min_blocks_to_keep {
-			Some(min_blocks_to_keep) => state_machine::oldest_non_pruned_changes_trie(
-				zero,
-				&config,
-				min_blocks_to_keep.into(),
-				best_finalized_block,
-			),
-			None => One::one(),
-		}
+	fn oldest_pruned_digest_range_end(&self) -> NumberFor<Block> {
+		self.tries_meta.read().oldest_pruned_digest_range_end
 	}
 }
 
@@ -295,17 +431,88 @@ where
 	}
 }
 
+/// Read changes tries metadata from database.
+fn read_tries_meta<Block: BlockT>(
+	db: &dyn KeyValueDB,
+	meta_column: Option<u32>,
+) -> ClientResult<ChangesTriesMeta<Block>> {
+	match db.get(meta_column, meta_keys::CHANGES_TRIES_META).map_err(db_err)? {
+		Some(h) => match Decode::decode(&mut &h[..]) {
+			Some(h) => Ok(h),
+			None => Err(client::error::Error::Backend("Error decoding changes tries metadata".into())),
+		},
+		None => Ok(ChangesTriesMeta {
+			oldest_digest_range: None,
+			oldest_pruned_digest_range_end: Zero::zero(),
+		}),
+	}
+}
+
+/// Write changes tries metadata from database.
+fn write_tries_meta<Block: BlockT>(
+	tx: &mut DBTransaction,
+	meta_column: Option<u32>,
+	meta: &ChangesTriesMeta<Block>,
+) {
+	tx.put(meta_column, meta_keys::CHANGES_TRIES_META, &meta.encode());
+}
+
 #[cfg(test)]
 mod tests {
 	use hash_db::EMPTY_PREFIX;
-	use client::backend::{Backend as ClientBackend, NewBlockState, BlockImportOperation};
+	use client::backend::{
+		Backend as ClientBackend, NewBlockState, BlockImportOperation, PrunableStateChangesTrieStorage,
+	};
 	use client::blockchain::HeaderBackend as BlockchainHeaderBackend;
-	use sr_primitives::testing::Header;
+	use sr_primitives::testing::{Digest, Header};
 	use sr_primitives::traits::{Hash, BlakeTwo256};
 	use state_machine::{ChangesTrieRootsStorage, ChangesTrieStorage};
 	use crate::Backend;
 	use crate::tests::{Block, insert_header, prepare_changes};
 	use super::*;
+
+	fn changes(number: u64) -> Option<Vec<(Vec<u8>, Vec<u8>)>> {
+		Some(vec![(number.to_le_bytes().to_vec(), number.to_le_bytes().to_vec())])
+	}
+
+	fn insert_header_with_configuration_change(
+		backend: &Backend<Block>,
+		number: u64,
+		parent_hash: H256,
+		changes: Option<Vec<(Vec<u8>, Vec<u8>)>>,
+		new_configuration: Option<ChangesTrieConfiguration>,
+	) -> H256 {
+		let mut digest = Digest::default();
+		let mut changes_trie_update = Default::default();
+		if let Some(changes) = changes {
+			let (root, update) = prepare_changes(changes);
+			digest.push(DigestItem::ChangesTrieRoot(root));
+			changes_trie_update = update;
+		}
+		digest.push(DigestItem::ChangesTrieSignal(ChangesTrieSignal::NewConfiguration(new_configuration)));
+
+		let header = Header {
+			number,
+			parent_hash,
+			state_root: BlakeTwo256::trie_root::<_, &[u8], &[u8]>(Vec::new()),
+			digest,
+			extrinsics_root: Default::default(),
+		};
+		let header_hash = header.hash();
+
+		let block_id = if number == 0 {
+			BlockId::Hash(Default::default())
+		} else {
+			BlockId::Number(number - 1)
+		};
+		let mut op = backend.begin_operation().unwrap();
+		backend.begin_state_operation(&mut op, block_id).unwrap();
+		op.set_block_data(header, None, None, NewBlockState::Best).unwrap();
+		op.update_changes_trie(changes_trie_update).unwrap();
+		backend.commit_operation(op).unwrap();
+
+		header_hash
+	}
 
 	#[test]
 	fn changes_trie_storage_works() {
@@ -333,9 +540,9 @@ mod tests {
 		];
 		let changes2 = vec![(b"key_at_2".to_vec(), b"val_at_2".to_vec())];
 
-		let block0 = insert_header(&backend, 0, Default::default(), changes0.clone(), Default::default());
-		let block1 = insert_header(&backend, 1, block0, changes1.clone(), Default::default());
-		let _ = insert_header(&backend, 2, block1, changes2.clone(), Default::default());
+		let block0 = insert_header(&backend, 0, Default::default(), Some(changes0.clone()), Default::default());
+		let block1 = insert_header(&backend, 1, block0, Some(changes1.clone()), Default::default());
+		let _ = insert_header(&backend, 2, block1, Some(changes2.clone()), Default::default());
 
 		// check that the storage contains tries for all blocks
 		check_changes(&backend, 0, changes0);
@@ -350,19 +557,19 @@ mod tests {
 		let changes0 = vec![(b"k0".to_vec(), b"v0".to_vec())];
 		let changes1 = vec![(b"k1".to_vec(), b"v1".to_vec())];
 		let changes2 = vec![(b"k2".to_vec(), b"v2".to_vec())];
-		let block0 = insert_header(&backend, 0, Default::default(), changes0.clone(), Default::default());
-		let block1 = insert_header(&backend, 1, block0, changes1.clone(), Default::default());
-		let block2 = insert_header(&backend, 2, block1, changes2.clone(), Default::default());
+		let block0 = insert_header(&backend, 0, Default::default(), Some(changes0.clone()), Default::default());
+		let block1 = insert_header(&backend, 1, block0, Some(changes1.clone()), Default::default());
+		let block2 = insert_header(&backend, 2, block1, Some(changes2.clone()), Default::default());
 
 		let changes2_1_0 = vec![(b"k3".to_vec(), b"v3".to_vec())];
 		let changes2_1_1 = vec![(b"k4".to_vec(), b"v4".to_vec())];
-		let block2_1_0 = insert_header(&backend, 3, block2, changes2_1_0.clone(), Default::default());
-		let block2_1_1 = insert_header(&backend, 4, block2_1_0, changes2_1_1.clone(), Default::default());
+		let block2_1_0 = insert_header(&backend, 3, block2, Some(changes2_1_0.clone()), Default::default());
+		let block2_1_1 = insert_header(&backend, 4, block2_1_0, Some(changes2_1_1.clone()), Default::default());
 
 		let changes2_2_0 = vec![(b"k5".to_vec(), b"v5".to_vec())];
 		let changes2_2_1 = vec![(b"k6".to_vec(), b"v6".to_vec())];
-		let block2_2_0 = insert_header(&backend, 3, block2, changes2_2_0.clone(), Default::default());
-		let block2_2_1 = insert_header(&backend, 4, block2_2_0, changes2_2_1.clone(), Default::default());
+		let block2_2_0 = insert_header(&backend, 3, block2, Some(changes2_2_0.clone()), Default::default());
+		let block2_2_1 = insert_header(&backend, 4, block2_2_0, Some(changes2_2_1.clone()), Default::default());
 
 		// finalize block1
 		backend.changes_tries_storage.meta.write().finalized_number = 1;
@@ -400,207 +607,157 @@ mod tests {
 	}
 
 	#[test]
-	fn changes_tries_with_digest_are_pruned_on_finalization() {
+	fn changes_tries_are_pruned_on_finalization() {
 		let mut backend = Backend::<Block>::new_test(1000, 100);
-		let config = ChangesTrieConfiguration {
-			digest_interval: 2,
-			digest_levels: 2,
-		};
-
 		backend.changes_tries_storage.min_blocks_to_keep = Some(8);
 
-		// insert some blocks
-		let mut blocks = Vec::new();
-		let mut last_block = Default::default();
-		for i in 0u64..14u64 {
-			let key = i.to_le_bytes().to_vec();
-			let val = key.clone();
-			last_block = insert_header(
-				&backend,
-				i,
-				last_block,
-				vec![(key, val)],
-				Default::default(),
-			);
-			blocks.push(last_block);
-		}
-		backend.changes_tries_storage.meta.write().finalized_number = 13;
-		backend.changes_tries_storage.cache.initialize(
-			&well_known_cache_keys::CHANGES_TRIE_CONFIG,
-			Some(config).encode(),
-		).unwrap();
-
-		// check that roots of all tries are in the columns::CHANGES_TRIE
-		let anchor = state_machine::ChangesTrieAnchorBlockId { hash: blocks[13], number: 13 };
-		fn read_changes_trie_root(backend: &Backend<Block>, num: u64) -> H256 {
-			backend.blockchain().header(BlockId::Number(num)).unwrap().unwrap().digest().logs().iter()
-				.find(|i| i.as_changes_trie_root().is_some()).unwrap().as_changes_trie_root().unwrap().clone()
-		}
-		let root1 = read_changes_trie_root(&backend, 1);
-		assert_eq!(backend.changes_tries_storage.root(&anchor, 1).unwrap(), Some(root1));
-		let root2 = read_changes_trie_root(&backend, 2);
-		assert_eq!(backend.changes_tries_storage.root(&anchor, 2).unwrap(), Some(root2));
-		let root3 = read_changes_trie_root(&backend, 3);
-		assert_eq!(backend.changes_tries_storage.root(&anchor, 3).unwrap(), Some(root3));
-		let root4 = read_changes_trie_root(&backend, 4);
-		assert_eq!(backend.changes_tries_storage.root(&anchor, 4).unwrap(), Some(root4));
-		let root5 = read_changes_trie_root(&backend, 5);
-		assert_eq!(backend.changes_tries_storage.root(&anchor, 5).unwrap(), Some(root5));
-		let root6 = read_changes_trie_root(&backend, 6);
-		assert_eq!(backend.changes_tries_storage.root(&anchor, 6).unwrap(), Some(root6));
-		let root7 = read_changes_trie_root(&backend, 7);
-		assert_eq!(backend.changes_tries_storage.root(&anchor, 7).unwrap(), Some(root7));
-		let root8 = read_changes_trie_root(&backend, 8);
-		assert_eq!(backend.changes_tries_storage.root(&anchor, 8).unwrap(), Some(root8));
-		let root9 = read_changes_trie_root(&backend, 9);
-		assert_eq!(backend.changes_tries_storage.root(&anchor, 9).unwrap(), Some(root9));
-		let root10 = read_changes_trie_root(&backend, 10);
-		assert_eq!(backend.changes_tries_storage.root(&anchor, 10).unwrap(), Some(root10));
-		let root11 = read_changes_trie_root(&backend, 11);
-		assert_eq!(backend.changes_tries_storage.root(&anchor, 11).unwrap(), Some(root11));
-		let root12 = read_changes_trie_root(&backend, 12);
-		assert_eq!(backend.changes_tries_storage.root(&anchor, 12).unwrap(), Some(root12));
-
-		// now simulate finalization of block#12, causing prune of tries at #1..#4
-		let mut tx = DBTransaction::new();
-		backend.changes_tries_storage.prune(&mut tx, blocks[0], Default::default(), 12).unwrap();
-		backend.storage.db.write(tx).unwrap();
-		assert!(backend.changes_tries_storage.get(&root1, EMPTY_PREFIX).unwrap().is_none());
-		assert!(backend.changes_tries_storage.get(&root2, EMPTY_PREFIX).unwrap().is_none());
-		assert!(backend.changes_tries_storage.get(&root3, EMPTY_PREFIX).unwrap().is_none());
-		assert!(backend.changes_tries_storage.get(&root4, EMPTY_PREFIX).unwrap().is_none());
-		assert!(backend.changes_tries_storage.get(&root5, EMPTY_PREFIX).unwrap().is_some());
-		assert!(backend.changes_tries_storage.get(&root6, EMPTY_PREFIX).unwrap().is_some());
-		assert!(backend.changes_tries_storage.get(&root7, EMPTY_PREFIX).unwrap().is_some());
-		assert!(backend.changes_tries_storage.get(&root8, EMPTY_PREFIX).unwrap().is_some());
-
-		// now simulate finalization of block#16, causing prune of tries at #5..#8
-		let mut tx = DBTransaction::new();
-		backend.changes_tries_storage.prune(&mut tx, blocks[0], Default::default(), 16).unwrap();
-		backend.storage.db.write(tx).unwrap();
-		assert!(backend.changes_tries_storage.get(&root5, EMPTY_PREFIX).unwrap().is_none());
-		assert!(backend.changes_tries_storage.get(&root6, EMPTY_PREFIX).unwrap().is_none());
-		assert!(backend.changes_tries_storage.get(&root7, EMPTY_PREFIX).unwrap().is_none());
-		assert!(backend.changes_tries_storage.get(&root8, EMPTY_PREFIX).unwrap().is_none());
-
-		// now "change" pruning mode to archive && simulate finalization of block#20
-		// => no changes tries are pruned, because we never prune in archive mode
-		backend.changes_tries_storage.min_blocks_to_keep = None;
-		let mut tx = DBTransaction::new();
-		backend.changes_tries_storage.prune(&mut tx, blocks[0], Default::default(), 20).unwrap();
-		backend.storage.db.write(tx).unwrap();
-		assert!(backend.changes_tries_storage.get(&root9, EMPTY_PREFIX).unwrap().is_some());
-		assert!(backend.changes_tries_storage.get(&root10, EMPTY_PREFIX).unwrap().is_some());
-		assert!(backend.changes_tries_storage.get(&root11, EMPTY_PREFIX).unwrap().is_some());
-		assert!(backend.changes_tries_storage.get(&root12, EMPTY_PREFIX).unwrap().is_some());
-	}
-
-	#[test]
-	fn changes_tries_without_digest_are_pruned_on_finalization() {
-		let mut backend = Backend::<Block>::new_test(1000, 100);
-		let config = ChangesTrieConfiguration {
-			digest_interval: 0,
-			digest_levels: 0,
+		let parent_hash = |number| {
+			if number == 0 {
+				Default::default()
+			} else {
+				backend.blockchain().header(BlockId::Number(number - 1)).unwrap().unwrap().hash()
+			}
 		};
 
-		backend.changes_tries_storage.min_blocks_to_keep = Some(4);
-
-		// insert some blocks
-		let mut blocks = Vec::new();
-		let mut last_block = Default::default();
-		for i in 0u64..7u64 {
-			let key = i.to_le_bytes().to_vec();
-			let val = key.clone();
-			last_block = insert_header(
+		let insert_regular_header = |with_changes, number| {
+			insert_header(
 				&backend,
-				i,
-				last_block,
-				vec![(key, val)],
+				number,
+				parent_hash(number),
+				if with_changes { changes(number) } else { None },
 				Default::default(),
 			);
-			blocks.push(last_block);
-		}
-		backend.changes_tries_storage.cache.initialize(
-			&well_known_cache_keys::CHANGES_TRIE_CONFIG,
-			Some(config).encode(),
-		).unwrap();
+		};
 
-		// check that roots of all tries are in the columns::CHANGES_TRIE
-		let anchor = state_machine::ChangesTrieAnchorBlockId { hash: blocks[6], number: 6 };
-		fn read_changes_trie_root(backend: &Backend<Block>, num: u64) -> H256 {
-			backend.blockchain().header(BlockId::Number(num)).unwrap().unwrap().digest().logs().iter()
-				.find(|i| i.as_changes_trie_root().is_some()).unwrap().as_changes_trie_root().unwrap().clone()
-		}
+		let is_pruned = |number| {
+			let trie_root = backend
+				.blockchain()
+				.header(BlockId::Number(number))
+				.unwrap().unwrap()
+				.digest()
+				.log(DigestItem::as_changes_trie_root)
+				.cloned();
+			match trie_root {
+				Some(trie_root) => backend.changes_tries_storage.get(&trie_root, EMPTY_PREFIX).unwrap().is_none(),
+				None => true,
+			}
+		};
 
-		let root1 = read_changes_trie_root(&backend, 1);
-		assert_eq!(backend.changes_tries_storage.root(&anchor, 1).unwrap(), Some(root1));
-		let root2 = read_changes_trie_root(&backend, 2);
-		assert_eq!(backend.changes_tries_storage.root(&anchor, 2).unwrap(), Some(root2));
-		let root3 = read_changes_trie_root(&backend, 3);
-		assert_eq!(backend.changes_tries_storage.root(&anchor, 3).unwrap(), Some(root3));
-		let root4 = read_changes_trie_root(&backend, 4);
-		assert_eq!(backend.changes_tries_storage.root(&anchor, 4).unwrap(), Some(root4));
-		let root5 = read_changes_trie_root(&backend, 5);
-		assert_eq!(backend.changes_tries_storage.root(&anchor, 5).unwrap(), Some(root5));
-		let root6 = read_changes_trie_root(&backend, 6);
-		assert_eq!(backend.changes_tries_storage.root(&anchor, 6).unwrap(), Some(root6));
+		let finalize_block = |number| {
+			let header = backend.blockchain().header(BlockId::Number(number)).unwrap().unwrap();
+			let mut tx = DBTransaction::new();
+			let cache_ops = backend.changes_tries_storage.finalize(
+				&mut tx,
+				*header.parent_hash(),
+				header.hash(),
+				number,
+				None,
+				None,
+			).unwrap();
+			backend.storage.db.write(tx).unwrap();
+			backend.changes_tries_storage.post_commit(Some(cache_ops));
+		};
 
-		// now simulate finalization of block#5, causing prune of trie at #1
-		let mut tx = DBTransaction::new();
-		backend.changes_tries_storage.prune(&mut tx, blocks[1], blocks[5], 5).unwrap();
-		backend.storage.db.write(tx).unwrap();
-		assert!(backend.changes_tries_storage.get(&root1, EMPTY_PREFIX).unwrap().is_none());
-		assert!(backend.changes_tries_storage.get(&root2, EMPTY_PREFIX).unwrap().is_some());
+		// configuration ranges:
+		// (0; 6] - None
+		// [7; 17] - Some(2^2): D2 is built at #10, #14; SD is built at #17
+		// [18; 21] - None
+		// [22; 32] - Some(8^1): D1 is built at #29; SD is built at #32
+		// [33; ... - Some(1)
+		let config_at_6 = Some(ChangesTrieConfiguration::new(2, 2));
+		let config_at_17 = None;
+		let config_at_21 = Some(ChangesTrieConfiguration::new(8, 1));
+		let config_at_32 = Some(ChangesTrieConfiguration::new(1, 0));
 
-		// now simulate finalization of block#6, causing prune of tries at #2
-		let mut tx = DBTransaction::new();
-		backend.changes_tries_storage.prune(&mut tx, blocks[1], blocks[6], 6).unwrap();
-		backend.storage.db.write(tx).unwrap();
-		assert!(backend.changes_tries_storage.get(&root2, EMPTY_PREFIX).unwrap().is_none());
-		assert!(backend.changes_tries_storage.get(&root3, EMPTY_PREFIX).unwrap().is_some());
+		(0..6).for_each(|number| insert_regular_header(false, number));
+		insert_header_with_configuration_change(&backend, 6, parent_hash(6), None, config_at_6);
+		(7..17).for_each(|number| insert_regular_header(true, number));
+		insert_header_with_configuration_change(&backend, 17, parent_hash(17), changes(17), config_at_17);
+		(18..21).for_each(|number| insert_regular_header(false, number));
+		insert_header_with_configuration_change(&backend, 21, parent_hash(21), None, config_at_21);
+		(22..32).for_each(|number| insert_regular_header(true, number));
+		insert_header_with_configuration_change(&backend, 32, parent_hash(32), changes(32), config_at_32);
+		(33..50).for_each(|number| insert_regular_header(true, number));
+
+		// when only genesis is finalized, nothing is pruned
+		(0..=6).for_each(|number| assert!(is_pruned(number)));
+		(7..=17).for_each(|number| assert!(!is_pruned(number)));
+		(18..=21).for_each(|number| assert!(is_pruned(number)));
+		(22..50).for_each(|number| assert!(!is_pruned(number)));
+
+		// when blocks [1; 18] are finalized, nothing is pruned
+		(1..=18).for_each(|number| finalize_block(number));
+		(0..=6).for_each(|number| assert!(is_pruned(number)));
+		(7..=17).for_each(|number| assert!(!is_pruned(number)));
+		(18..=21).for_each(|number| assert!(is_pruned(number)));
+		(22..50).for_each(|number| assert!(!is_pruned(number)));
+
+		// when block 19 is finalized, changes tries for blocks [7; 10] are pruned
+		finalize_block(19);
+		(0..=10).for_each(|number| assert!(is_pruned(number)));
+		(11..=17).for_each(|number| assert!(!is_pruned(number)));
+		(18..=21).for_each(|number| assert!(is_pruned(number)));
+		(22..50).for_each(|number| assert!(!is_pruned(number)));
+
+		// when blocks [20; 22] are finalized, nothing is pruned
+		(20..=22).for_each(|number| finalize_block(number));
+		(0..=10).for_each(|number| assert!(is_pruned(number)));
+		(11..=17).for_each(|number| assert!(!is_pruned(number)));
+		(18..=21).for_each(|number| assert!(is_pruned(number)));
+		(22..50).for_each(|number| assert!(!is_pruned(number)));
+
+		// when block 23 is finalized, changes tries for blocks [11; 14] are pruned
+		finalize_block(23);
+		(0..=14).for_each(|number| assert!(is_pruned(number)));
+		(15..=17).for_each(|number| assert!(!is_pruned(number)));
+		(18..=21).for_each(|number| assert!(is_pruned(number)));
+		(22..50).for_each(|number| assert!(!is_pruned(number)));
+
+		// when blocks [24; 25] are finalized, nothing is pruned
+		(24..=25).for_each(|number| finalize_block(number));
+		(0..=14).for_each(|number| assert!(is_pruned(number)));
+		(15..=17).for_each(|number| assert!(!is_pruned(number)));
+		(18..=21).for_each(|number| assert!(is_pruned(number)));
+		(22..50).for_each(|number| assert!(!is_pruned(number)));
+
+		// when block 26 is finalized, changes tries for blocks [15; 17] are pruned
+		finalize_block(26);
+		(0..=21).for_each(|number| assert!(is_pruned(number)));
+		(22..50).for_each(|number| assert!(!is_pruned(number)));
+
+		// when blocks [27; 37] are finalized, nothing is pruned
+		(27..=37).for_each(|number| finalize_block(number));
+		(0..=21).for_each(|number| assert!(is_pruned(number)));
+		(22..50).for_each(|number| assert!(!is_pruned(number)));
+
+		// when block 38 is finalized, changes tries for blocks [22; 29] are pruned
+		finalize_block(38);
+		(0..=29).for_each(|number| assert!(is_pruned(number)));
+		(30..50).for_each(|number| assert!(!is_pruned(number)));
+
+		// when blocks [39; 40] are finalized, nothing is pruned
+		(39..=40).for_each(|number| finalize_block(number));
+		(0..=29).for_each(|number| assert!(is_pruned(number)));
+		(30..50).for_each(|number| assert!(!is_pruned(number)));
+
+		// when block 41 is finalized, changes tries for blocks [30; 32] are pruned
+		finalize_block(41);
+		(0..=32).for_each(|number| assert!(is_pruned(number)));
+		(33..50).for_each(|number| assert!(!is_pruned(number)));
+
+		// when block 42 is finalized, changes trie for block 33 is pruned
+		finalize_block(42);
+		(0..=33).for_each(|number| assert!(is_pruned(number)));
+		(34..50).for_each(|number| assert!(!is_pruned(number)));
+
+		// when block 43 is finalized, changes trie for block 34 is pruned
+		finalize_block(43);
+		(0..=34).for_each(|number| assert!(is_pruned(number)));
+		(35..50).for_each(|number| assert!(!is_pruned(number)));
 	}
 
 	#[test]
 	fn changes_tries_configuration_is_updated_on_block_insert() {
-		fn insert_header_with_configuration_change(
-			backend: &Backend<Block>,
-			number: u64,
-			parent_hash: H256,
-			changes: Vec<(Vec<u8>, Vec<u8>)>,
-			new_configuration: Option<ChangesTrieConfiguration>,
-		) -> H256 {
-			use sr_primitives::testing::Digest;
-
-			let (changes_root, changes_trie_update) = prepare_changes(changes);
-			let digest = Digest {
-				logs: vec![
-					DigestItem::ChangesTrieRoot(changes_root),
-					DigestItem::ChangesTrieSignal(ChangesTrieSignal::NewConfiguration(new_configuration)),
-				],
-			};
-			let header = Header {
-				number,
-				parent_hash,
-				state_root: BlakeTwo256::trie_root::<_, &[u8], &[u8]>(Vec::new()),
-				digest,
-				extrinsics_root: Default::default(),
-			};
-			let header_hash = header.hash();
-
-			let block_id = if number == 0 {
-				BlockId::Hash(Default::default())
-			} else {
-				BlockId::Number(number - 1)
-			};
-			let mut op = backend.begin_operation().unwrap();
-			backend.begin_state_operation(&mut op, block_id).unwrap();
-			op.set_block_data(header, None, None, NewBlockState::Best).unwrap();
-			op.update_changes_trie(changes_trie_update).unwrap();
-			backend.commit_operation(op).unwrap();
-
-			header_hash
-		}
-
 		let backend = Backend::<Block>::new_test(1000, 100);
 
 		// configurations at blocks
@@ -619,14 +776,14 @@ mod tests {
 		});
 
 		// insert some blocks
-		let block0 = insert_header(&backend, 0, Default::default(), Vec::new(), Default::default());
-		let block1 = insert_header_with_configuration_change(&backend, 1, block0, Vec::new(), config_at_1.clone());
-		let block2 = insert_header(&backend, 2, block1, Vec::new(), Default::default());
-		let block3 = insert_header_with_configuration_change(&backend, 3, block2, Vec::new(), config_at_3.clone());
-		let block4 = insert_header(&backend, 4, block3, Vec::new(), Default::default());
-		let block5 = insert_header_with_configuration_change(&backend, 5, block4, Vec::new(), config_at_5.clone());
-		let block6 = insert_header(&backend, 6, block5, Vec::new(), Default::default());
-		let block7 = insert_header_with_configuration_change(&backend, 7, block6, Vec::new(), config_at_7.clone());
+		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
+		let block1 = insert_header_with_configuration_change(&backend, 1, block0, None, config_at_1.clone());
+		let block2 = insert_header(&backend, 2, block1, None, Default::default());
+		let block3 = insert_header_with_configuration_change(&backend, 3, block2, None, config_at_3.clone());
+		let block4 = insert_header(&backend, 4, block3, None, Default::default());
+		let block5 = insert_header_with_configuration_change(&backend, 5, block4, None, config_at_5.clone());
+		let block6 = insert_header(&backend, 6, block5, None, Default::default());
+		let block7 = insert_header_with_configuration_change(&backend, 7, block6, None, config_at_7.clone());
 
 		// test configuration cache
 		let storage = &backend.changes_tries_storage;
@@ -657,6 +814,151 @@ mod tests {
 		assert_eq!(
 			storage.configuration_at(&BlockId::Hash(block7)).unwrap().config,
 			config_at_7.clone(),
+		);
+	}
+
+	#[test]
+	fn test_finalize_several_configuration_change_blocks_in_single_operation() {
+		let mut backend = Backend::<Block>::new_test(10, 10);
+		backend.changes_tries_storage.min_blocks_to_keep = Some(8);
+
+		let configs = (0..=7).map(|i| Some(ChangesTrieConfiguration::new(2, i))).collect::<Vec<_>>();
+
+		// insert unfinalized headers
+		let block0 = insert_header_with_configuration_change(&backend, 0, Default::default(), None, configs[0].clone());
+		let block1 = insert_header_with_configuration_change(&backend, 1, block0, changes(1), configs[1].clone());
+		let block2 = insert_header_with_configuration_change(&backend, 2, block1, changes(2), configs[2].clone());
+
+		let side_config2_1 = Some(ChangesTrieConfiguration::new(3, 2));
+		let side_config2_2 = Some(ChangesTrieConfiguration::new(3, 3));
+		let block2_1 = insert_header_with_configuration_change(&backend, 2, block1, changes(8), side_config2_1.clone());
+		let _ = insert_header_with_configuration_change(&backend, 3, block2_1, changes(9), side_config2_2.clone());
+
+		// insert finalized header => 4 headers are finalized at once
+		let header3 = Header {
+			number: 3,
+			parent_hash: block2,
+			state_root: Default::default(),
+			digest: Digest {
+				logs: vec![
+					DigestItem::ChangesTrieSignal(ChangesTrieSignal::NewConfiguration(configs[3].clone())),
+				],
+			},
+			extrinsics_root: Default::default(),
+		};
+		let block3 = header3.hash();
+		let mut op = backend.begin_operation().unwrap();
+		backend.begin_state_operation(&mut op, BlockId::Hash(block2)).unwrap();
+		op.mark_finalized(BlockId::Hash(block1), None).unwrap();
+		op.mark_finalized(BlockId::Hash(block2), None).unwrap();
+		op.set_block_data(header3, None, None, NewBlockState::Final).unwrap();
+		backend.commit_operation(op).unwrap();
+
+		// insert more unfinalized headers
+		let block4 = insert_header_with_configuration_change(&backend, 4, block3, changes(4), configs[4].clone());
+		let block5 = insert_header_with_configuration_change(&backend, 5, block4, changes(5), configs[5].clone());
+		let block6 = insert_header_with_configuration_change(&backend, 6, block5, changes(6), configs[6].clone());
+
+		// insert finalized header => 4 headers are finalized at once
+		let header7 = Header {
+			number: 7,
+			parent_hash: block6,
+			state_root: Default::default(),
+			digest: Digest {
+				logs: vec![
+					DigestItem::ChangesTrieSignal(ChangesTrieSignal::NewConfiguration(configs[7].clone())),
+				],
+			},
+			extrinsics_root: Default::default(),
+		};
+		let mut op = backend.begin_operation().unwrap();
+		backend.begin_state_operation(&mut op, BlockId::Hash(block6)).unwrap();
+		op.mark_finalized(BlockId::Hash(block4), None).unwrap();
+		op.mark_finalized(BlockId::Hash(block5), None).unwrap();
+		op.mark_finalized(BlockId::Hash(block6), None).unwrap();
+		op.set_block_data(header7, None, None, NewBlockState::Final).unwrap();
+		backend.commit_operation(op).unwrap();
+	}
+
+	#[test]
+	fn changes_tries_configuration_is_reverted() {
+		let backend = Backend::<Block>::new_test(10, 10);
+
+		let config0 = Some(ChangesTrieConfiguration::new(2, 5));
+		let block0 = insert_header_with_configuration_change(&backend, 0, Default::default(), None, config0);
+		let config1 = Some(ChangesTrieConfiguration::new(2, 6));
+		let block1 = insert_header_with_configuration_change(&backend, 1, block0, changes(0), config1);
+		backend.finalize_block(BlockId::Number(1), Some(vec![42])).unwrap();
+		let config2 = Some(ChangesTrieConfiguration::new(2, 7));
+		let block2 = insert_header_with_configuration_change(&backend, 2, block1, changes(1), config2);
+		let config2_1 = Some(ChangesTrieConfiguration::new(2, 8));
+		let _ = insert_header_with_configuration_change(&backend, 3, block2, changes(10), config2_1);
+		let config2_2 = Some(ChangesTrieConfiguration::new(2, 9));
+		let block2_2 = insert_header_with_configuration_change(&backend, 3, block2, changes(20), config2_2);
+		let config2_3 = Some(ChangesTrieConfiguration::new(2, 10));
+		let _ = insert_header_with_configuration_change(&backend, 4, block2_2, changes(30), config2_3);
+
+		// before truncate there are 2 unfinalized forks - block2_1+block2_3
+		assert_eq!(
+			backend.changes_tries_storage.cache.cache().write()
+				.get_cache(well_known_cache_keys::CHANGES_TRIE_CONFIG)
+				.unwrap()
+				.unfinalized()
+				.iter()
+				.map(|fork| fork.head().valid_from.number)
+				.collect::<Vec<_>>(),
+			vec![3, 4],
+		);
+
+		// after truncating block2_3 - there are 2 unfinalized forks - block2_1+block2_2
+		backend.revert(1).unwrap();
+		assert_eq!(
+			backend.changes_tries_storage.cache.cache().write()
+				.get_cache(well_known_cache_keys::CHANGES_TRIE_CONFIG)
+				.unwrap()
+				.unfinalized()
+				.iter()
+				.map(|fork| fork.head().valid_from.number)
+				.collect::<Vec<_>>(),
+			vec![3, 3],
+		);
+
+		// after truncating block2_1 && block2_2 - there are still two unfinalized forks (cache impl specifics),
+		// though they're pointing to the same block
+		backend.revert(1).unwrap();
+		assert_eq!(
+			backend.changes_tries_storage.cache.cache().write()
+				.get_cache(well_known_cache_keys::CHANGES_TRIE_CONFIG)
+				.unwrap()
+				.unfinalized()
+				.iter()
+				.map(|fork| fork.head().valid_from.number)
+				.collect::<Vec<_>>(),
+			vec![2, 2],
+		);
+		assert_eq!(
+			backend.changes_tries_storage.cache.cache().write()
+				.get_cache(well_known_cache_keys::CHANGES_TRIE_CONFIG)
+				.unwrap()
+				.unfinalized()
+				.iter()
+				.map(|fork| fork.head().valid_from.number)
+				.collect::<::std::collections::HashSet<_>>()
+				.len(),
+			1,
+		);
+
+		// after truncating block2 - there are no unfinalized forks
+		backend.revert(1).unwrap();
+		assert!(
+			backend.changes_tries_storage.cache.cache().write()
+				.get_cache(well_known_cache_keys::CHANGES_TRIE_CONFIG)
+				.unwrap()
+				.unfinalized()
+				.iter()
+				.map(|fork| fork.head().valid_from.number)
+				.collect::<Vec<_>>()
+				.is_empty(),
 		);
 	}
 }

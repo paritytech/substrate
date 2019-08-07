@@ -61,7 +61,7 @@ use state_machine::backend::Backend as StateBackend;
 use executor::RuntimeInfo;
 use state_machine::{CodeExecutor, DBValue};
 use crate::utils::{Meta, db_err, meta_keys, read_db, block_id_to_lookup_key, read_meta};
-use crate::changes_tries_storage::DbChangesTrieStorage;
+use crate::changes_tries_storage::{DbChangesTrieStorage, DbChangesTrieStorageTransaction};
 use client::leaves::{LeafSet, FinalizationDisplaced};
 use client::{children, well_known_cache_keys};
 use state_db::StateDb;
@@ -468,7 +468,10 @@ where Block: BlockT<Hash=H256>,
 		let (root, transaction) = self.old_state.full_storage_root(
 			top.into_iter().map(|(k, v)| {
 				if k == well_known_keys::CHANGES_TRIE_CONFIG {
-					changes_trie_config = Decode::decode(&mut &v[..]);
+					changes_trie_config = Some(
+						Decode::decode(&mut &v[..])
+							.expect("changes trie configuration is encoded properly at genesis")
+					);
 				}
 				(k, Some(v))
 			}),
@@ -627,13 +630,14 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		let offchain_storage = offchain::LocalStorage::new(db.clone());
 		let changes_tries_storage = DbChangesTrieStorage::new(
 			db,
+			columns::META,
 			columns::CHANGES_TRIE,
 			columns::KEY_LOOKUP,
 			columns::HEADER,
 			columns::CACHE,
 			meta,
 			if is_archive_pruning { None } else { Some(MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR) },
-		);
+		)?;
 
 		Ok(Backend {
 			storage: Arc::new(storage_db),
@@ -783,6 +787,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		header: &Block::Header,
 		last_finalized: Option<Block::Hash>,
 		justification: Option<Justification>,
+		changes_trie_cache_ops: &mut Option<DbChangesTrieStorageTransaction<Block>>,
 		finalization_displaced: &mut Option<FinalizationDisplaced<Block::Hash, NumberFor<Block>>>,
 	) -> Result<(Block::Hash, <Block::Header as HeaderT>::Number, bool, bool), client::error::Error> {
 		// TODO: ensure best chain contains this block.
@@ -790,8 +795,10 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		self.ensure_sequential_finalization(header, last_finalized)?;
 		self.note_finalized(
 			transaction,
+			false,
 			header,
 			*hash,
+			changes_trie_cache_ops,
 			finalization_displaced,
 		)?;
 
@@ -850,6 +857,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		let mut meta_updates = Vec::new();
 		let mut last_finalized_hash = self.blockchain.meta.read().finalized_hash;
 
+		let mut changes_trie_cache_ops = None;
 		if !operation.finalized_blocks.is_empty() {
 			for (block, justification) in operation.finalized_blocks {
 				let block_hash = self.blockchain.expect_block_hash_from_id(&block)?;
@@ -861,6 +869,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 					&block_header,
 					Some(last_finalized_hash),
 					justification,
+					&mut changes_trie_cache_ops,
 					&mut finalization_displaced_leaves,
 				)?);
 				last_finalized_hash = block_hash;
@@ -926,7 +935,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			let is_best = pending_block.leaf_state.is_best();
 			let changes_trie_updates = operation.changes_trie_updates;
 			let changes_trie_config_update = operation.changes_trie_config_update;
-			let changes_trie_cache_ops = self.changes_tries_storage.commit(
+			changes_trie_cache_ops = Some(self.changes_tries_storage.commit(
 				&mut transaction,
 				changes_trie_updates,
 				cache::ComplexBlockId::new(
@@ -934,9 +943,11 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 					if number.is_zero() { Zero::zero() } else { number - One::one() },
 				),
 				cache::ComplexBlockId::new(hash, number),
+				header,
 				finalized,
 				changes_trie_config_update,
-			)?;
+				changes_trie_cache_ops,
+			)?);
 			let cache = operation.old_state.release(); // release state reference so that it can be finalized
 
 			if finalized {
@@ -944,8 +955,10 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				self.ensure_sequential_finalization(header, Some(last_finalized_hash))?;
 				self.note_finalized(
 					&mut transaction,
+					true,
 					header,
 					hash,
+					&mut changes_trie_cache_ops,
 					&mut finalization_displaced_leaves,
 				)?;
 			} else {
@@ -1050,17 +1063,17 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	fn note_finalized(
 		&self,
 		transaction: &mut DBTransaction,
+		is_inserted: bool,
 		f_header: &Block::Header,
 		f_hash: Block::Hash,
-		displaced: &mut Option<FinalizationDisplaced<Block::Hash, NumberFor<Block>>>
+		changes_trie_cache_ops: &mut Option<DbChangesTrieStorageTransaction<Block>>,
+		displaced: &mut Option<FinalizationDisplaced<Block::Hash, NumberFor<Block>>>,
 	) -> Result<(), client::error::Error> where
 		Block: BlockT<Hash=H256>,
 	{
 		let f_num = f_header.number().clone();
 
 		if self.storage.state_db.best_canonical().map(|c| f_num.saturated_into::<u64>() > c).unwrap_or(true) {
-			let parent_hash = f_header.parent_hash().clone();
-
 			let lookup_key = utils::number_and_hash_to_lookup_key(f_num, f_hash.clone())?;
 			transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
 
@@ -1069,7 +1082,15 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			apply_state_commit(transaction, commit);
 
 			if !f_num.is_zero() {
-				self.changes_tries_storage.prune(transaction, parent_hash, f_hash, f_num)?;
+				let new_changes_trie_cache_ops = self.changes_tries_storage.finalize(
+					transaction,
+					*f_header.parent_hash(),
+					f_hash,
+					f_num,
+					if is_inserted { Some(&f_header) } else { None },
+					changes_trie_cache_ops.take(),
+				)?;
+				*changes_trie_cache_ops = Some(new_changes_trie_cache_ops);
 			}
 		}
 
@@ -1172,16 +1193,19 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		let header = self.blockchain.expect_header(block)?;
 		let mut displaced = None;
 		let commit = |displaced| {
+			let mut changes_trie_cache_ops = None;
 			let (hash, number, is_best, is_finalized) = self.finalize_block_with_transaction(
 				&mut transaction,
 				&hash,
 				&header,
 				None,
 				justification,
+				&mut changes_trie_cache_ops,
 				displaced,
 			)?;
 			self.storage.db.write(transaction).map_err(db_err)?;
 			self.blockchain.update_meta(hash, number, is_best, is_finalized);
+			self.changes_tries_storage.post_commit(changes_trie_cache_ops);
 			Ok(())
 		};
 		match commit(&mut displaced) {
@@ -1219,6 +1243,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			match self.storage.state_db.revert_one() {
 				Some(commit) => {
 					apply_state_commit(&mut transaction, commit);
+					let removed_number = best;
 					let removed = self.blockchain.header(BlockId::Number(best))?.ok_or_else(
 						|| client::error::Error::UnknownBlock(
 							format!("Error reverting to {}. Block hash not found.", best)))?;
@@ -1228,10 +1253,12 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 						|| client::error::Error::UnknownBlock(
 							format!("Error reverting to {}. Block hash not found.", best)))?;
 					let key = utils::number_and_hash_to_lookup_key(best.clone(), &hash)?;
+					let changes_trie_cache_ops = self.changes_tries_storage.revert(&mut transaction, removed_number)?;
 					transaction.put(columns::META, meta_keys::BEST_BLOCK, &key);
 					transaction.delete(columns::KEY_LOOKUP, removed.hash().as_ref());
 					children::remove_children(&mut transaction, columns::META, meta_keys::CHILDREN_PREFIX, hash);
 					self.storage.db.write(transaction).map_err(db_err)?;
+					self.changes_tries_storage.post_commit(Some(changes_trie_cache_ops));
 					self.blockchain.update_meta(hash, best, true, false);
 					self.blockchain.leaves.write().revert(removed.hash().clone(), removed.number().clone(), removed.parent_hash().clone());
 				}
@@ -1338,17 +1365,18 @@ pub(crate) mod tests {
 		backend: &Backend<Block>,
 		number: u64,
 		parent_hash: H256,
-		changes: Vec<(Vec<u8>, Vec<u8>)>,
+		changes: Option<Vec<(Vec<u8>, Vec<u8>)>>,
 		extrinsics_root: H256,
 	) -> H256 {
 		use sr_primitives::testing::Digest;
 
-		let (changes_root, changes_trie_update) = prepare_changes(changes);
-		let digest = Digest {
-			logs: vec![
-				DigestItem::ChangesTrieRoot(changes_root),
-			],
-		};
+		let mut digest = Digest::default();
+		let mut changes_trie_update = Default::default();
+		if let Some(changes) = changes {
+			let (root, update) = prepare_changes(changes);
+			digest.push(DigestItem::ChangesTrieRoot(root));
+			changes_trie_update = update;
+		}
 		let header = Header {
 			number,
 			parent_hash,
@@ -1667,16 +1695,16 @@ pub(crate) mod tests {
 	#[test]
 	fn tree_route_works() {
 		let backend = Backend::<Block>::new_test(1000, 100);
-		let block0 = insert_header(&backend, 0, Default::default(), Vec::new(), Default::default());
+		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
 
 		// fork from genesis: 3 prong.
-		let a1 = insert_header(&backend, 1, block0, Vec::new(), Default::default());
-		let a2 = insert_header(&backend, 2, a1, Vec::new(), Default::default());
-		let a3 = insert_header(&backend, 3, a2, Vec::new(), Default::default());
+		let a1 = insert_header(&backend, 1, block0, None, Default::default());
+		let a2 = insert_header(&backend, 2, a1, None, Default::default());
+		let a3 = insert_header(&backend, 3, a2, None, Default::default());
 
 		// fork from genesis: 2 prong.
-		let b1 = insert_header(&backend, 1, block0, Vec::new(), H256::from([1; 32]));
-		let b2 = insert_header(&backend, 2, b1, Vec::new(), Default::default());
+		let b1 = insert_header(&backend, 1, block0, None, H256::from([1; 32]));
+		let b2 = insert_header(&backend, 2, b1, None, Default::default());
 
 		{
 			let tree_route = ::client::blockchain::tree_route(
@@ -1731,8 +1759,8 @@ pub(crate) mod tests {
 	fn tree_route_child() {
 		let backend = Backend::<Block>::new_test(1000, 100);
 
-		let block0 = insert_header(&backend, 0, Default::default(), Vec::new(), Default::default());
-		let block1 = insert_header(&backend, 1, block0, Vec::new(), Default::default());
+		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
+		let block1 = insert_header(&backend, 1, block0, None, Default::default());
 
 		{
 			let tree_route = ::client::blockchain::tree_route(
@@ -1768,17 +1796,17 @@ pub(crate) mod tests {
 	#[test]
 	fn test_leaves_pruned_on_finality() {
 		let backend: Backend<Block> = Backend::new_test(10, 10);
-		let block0 = insert_header(&backend, 0, Default::default(), Default::default(), Default::default());
+		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
 
-		let block1_a = insert_header(&backend, 1, block0, Default::default(), Default::default());
-		let block1_b = insert_header(&backend, 1, block0, Default::default(), [1; 32].into());
-		let block1_c = insert_header(&backend, 1, block0, Default::default(), [2; 32].into());
+		let block1_a = insert_header(&backend, 1, block0, None, Default::default());
+		let block1_b = insert_header(&backend, 1, block0, None, [1; 32].into());
+		let block1_c = insert_header(&backend, 1, block0, None, [2; 32].into());
 
 		assert_eq!(backend.blockchain().leaves().unwrap(), vec![block1_a, block1_b, block1_c]);
 
-		let block2_a = insert_header(&backend, 2, block1_a, Default::default(), Default::default());
-		let block2_b = insert_header(&backend, 2, block1_b, Default::default(), Default::default());
-		let block2_c = insert_header(&backend, 2, block1_b, Default::default(), [1; 32].into());
+		let block2_a = insert_header(&backend, 2, block1_a, None, Default::default());
+		let block2_b = insert_header(&backend, 2, block1_b, None, Default::default());
+		let block2_c = insert_header(&backend, 2, block1_b, None, [1; 32].into());
 
 		assert_eq!(backend.blockchain().leaves().unwrap(), vec![block2_a, block2_b, block2_c, block1_c]);
 
@@ -1805,8 +1833,8 @@ pub(crate) mod tests {
 
 		let backend = Backend::<Block>::new_test(10, 10);
 
-		let block0 = insert_header(&backend, 0, Default::default(), Default::default(), Default::default());
-		let _ = insert_header(&backend, 1, block0, Default::default(), Default::default());
+		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
+		let _ = insert_header(&backend, 1, block0, None, Default::default());
 
 		let justification = Some(vec![1, 2, 3]);
 		backend.finalize_block(BlockId::Number(1), justification.clone()).unwrap();
@@ -1821,9 +1849,9 @@ pub(crate) mod tests {
 	fn test_finalize_multiple_blocks_in_single_op() {
 		let backend = Backend::<Block>::new_test(10, 10);
 
-		let block0 = insert_header(&backend, 0, Default::default(), Default::default(), Default::default());
-		let block1 = insert_header(&backend, 1, block0, Default::default(), Default::default());
-		let block2 = insert_header(&backend, 2, block1, Default::default(), Default::default());
+		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
+		let block1 = insert_header(&backend, 1, block0, None, Default::default());
+		let block2 = insert_header(&backend, 2, block1, None, Default::default());
 		{
 			let mut op = backend.begin_operation().unwrap();
 			backend.begin_state_operation(&mut op, BlockId::Hash(block0)).unwrap();
@@ -1837,9 +1865,9 @@ pub(crate) mod tests {
 	fn test_finalize_non_sequential() {
 		let backend = Backend::<Block>::new_test(10, 10);
 
-		let block0 = insert_header(&backend, 0, Default::default(), Default::default(), Default::default());
-		let block1 = insert_header(&backend, 1, block0, Default::default(), Default::default());
-		let block2 = insert_header(&backend, 2, block1, Default::default(), Default::default());
+		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
+		let block1 = insert_header(&backend, 1, block0, None, Default::default());
+		let block2 = insert_header(&backend, 2, block1, None, Default::default());
 		{
 			let mut op = backend.begin_operation().unwrap();
 			backend.begin_state_operation(&mut op, BlockId::Hash(block0)).unwrap();

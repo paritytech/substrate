@@ -92,7 +92,7 @@ impl ChangesTrieConfiguration {
 		block: Number,
 	) -> Option<Number>
 		where
-			Number: Clone + From<u32> + PartialEq +
+			Number: Clone + From<u32> + PartialOrd + PartialEq +
 			::rstd::ops::Add<Output=Number> + ::rstd::ops::Sub<Output=Number> +
 			::rstd::ops::Div<Output=Number> + ::rstd::ops::Mul<Output=Number> + Zero,
 	{
@@ -100,23 +100,27 @@ impl ChangesTrieConfiguration {
 			return None;
 		}
 
+		if block <= zero {
+			return None;
+		}
+
 		let max_digest_interval: Number = self.max_digest_interval().into();
 		let max_digests_since_zero = (block.clone() - zero.clone()) / max_digest_interval.clone();
-		let last_max_digest_block = zero + max_digests_since_zero * max_digest_interval.clone();
-		if last_max_digest_block.is_zero() {
+		let last_max_digest_block = zero.clone() + max_digests_since_zero * max_digest_interval.clone();
+		if last_max_digest_block == zero {
 			None
 		} else {
 			Some(last_max_digest_block)
 		}
 	}
 	/// Returns max level digest block number that must be created at block >= passed block number.
-	pub fn next_max_level_digest_block<Number>(
+	pub fn next_max_level_digest_range<Number>(
 		&self,
 		zero: Number,
-		block: Number,
-	) -> Option<Number>
+		mut block: Number,
+	) -> Option<(Number, Number)>
 		where
-			Number: Clone + From<u32> + PartialEq +
+			Number: Clone + From<u32> + PartialOrd + PartialEq +
 			::rstd::ops::Add<Output=Number> + ::rstd::ops::Sub<Output=Number> +
 			::rstd::ops::Div<Output=Number> + ::rstd::ops::Mul<Output=Number>,
 	{
@@ -124,13 +128,20 @@ impl ChangesTrieConfiguration {
 			return None;
 		}
 
+		if block <= zero {
+			block = zero.clone() + 1.into();
+		}
+
 		let max_digest_interval: Number = self.max_digest_interval().into();
 		let max_digests_since_zero = (block.clone() - zero.clone()) / max_digest_interval.clone();
+		if max_digests_since_zero == 0.into() {
+			return Some((zero.clone() + 1.into(), zero + max_digest_interval));
+		}
 		let last_max_digest_block = zero + max_digests_since_zero * max_digest_interval.clone();
 		Some(if block == last_max_digest_block {
-			block
+			(block.clone() - max_digest_interval + 1.into(), block)
 		} else {
-			last_max_digest_block + max_digest_interval
+			(last_max_digest_block.clone() + 1.into(), last_max_digest_block + max_digest_interval)
 		})
 	}
 
@@ -245,15 +256,18 @@ mod tests {
 	}
 
 	#[test]
-	fn next_max_level_digest_block_works() {
-		assert_eq!(config(0, 0).next_max_level_digest_block(0u64, 16), None);
-		assert_eq!(config(1, 1).next_max_level_digest_block(0u64, 16), None);
-		assert_eq!(config(2, 1).next_max_level_digest_block(0u64, 16), Some(16));
-		assert_eq!(config(4, 1).next_max_level_digest_block(0u64, 16), Some(16));
-		assert_eq!(config(32, 1).next_max_level_digest_block(0u64, 16), Some(32));
-		assert_eq!(config(2, 3).next_max_level_digest_block(0u64, 10), Some(16));
-		assert_eq!(config(2, 3).next_max_level_digest_block(0u64, 8), Some(8));
-		// TODO: more test cases
+	fn next_max_level_digest_range_works() {
+		assert_eq!(config(0, 0).next_max_level_digest_range(0u64, 16), None);
+		assert_eq!(config(1, 1).next_max_level_digest_range(0u64, 16), None);
+		assert_eq!(config(2, 1).next_max_level_digest_range(0u64, 16), Some((15, 16)));
+		assert_eq!(config(4, 1).next_max_level_digest_range(0u64, 16), Some((13, 16)));
+		assert_eq!(config(32, 1).next_max_level_digest_range(0u64, 16), Some((1, 32)));
+		assert_eq!(config(2, 3).next_max_level_digest_range(0u64, 10), Some((9, 16)));
+		assert_eq!(config(2, 3).next_max_level_digest_range(0u64, 8), Some((1, 8)));
+		assert_eq!(config(2, 1).next_max_level_digest_range(1u64, 1), Some((2, 3)));
+		assert_eq!(config(2, 2).next_max_level_digest_range(7u64, 9), Some((8, 11)));
+
+		assert_eq!(config(2, 2).next_max_level_digest_range(7u64, 5), Some((8, 11)));
 	}
 
 	#[test]
@@ -265,8 +279,8 @@ mod tests {
 		assert_eq!(config(32, 1).prev_max_level_digest_block(0u64, 16), None);
 		assert_eq!(config(2, 3).prev_max_level_digest_block(0u64, 10), Some(8));
 		assert_eq!(config(2, 3).prev_max_level_digest_block(0u64, 8), Some(8));
-		// TODO: more test cases
-	}
+		assert_eq!(config(2, 2).prev_max_level_digest_block(7u64, 8), None);
 
-	// TODO: test that it doesn't panic when zero > block
+		assert_eq!(config(2, 2).prev_max_level_digest_block(7u64, 5), None);
+	}
 }

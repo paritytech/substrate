@@ -125,7 +125,8 @@ fn prepare_digest_input<'a, H, Number>(
 {
 	let build_skewed_digest = config.end.as_ref() == Some(&block);
 	let block_for_digest = if build_skewed_digest {
-		config.config.next_max_level_digest_block(config.zero.clone(), block.clone())
+		config.config.next_max_level_digest_range(config.zero.clone(), block.clone())
+			.map(|(_, end)| end)
 			.unwrap_or_else(|| block.clone())
 	} else {
 		block.clone()

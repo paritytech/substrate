@@ -16,7 +16,7 @@
 
 //! DB-backed cache of blockchain data.
 
-use std::{sync::Arc, collections::HashMap};
+use std::{sync::Arc, collections::{HashMap, hash_map::Entry}};
 use parking_lot::RwLock;
 
 use kvdb::{KeyValueDB, DBTransaction};
@@ -52,8 +52,10 @@ pub enum EntryType {
 /// Block identifier that holds both hash and number.
 #[derive(Clone, Debug, Encode, Decode, PartialEq)]
 pub struct ComplexBlockId<Block: BlockT> {
-	hash: Block::Hash,
-	number: NumberFor<Block>,
+	/// Hash of the block.
+	pub(crate) hash: Block::Hash,
+	/// Number of the block.
+	pub(crate) number: NumberFor<Block>,
 }
 
 impl<Block: BlockT> ComplexBlockId<Block> {
@@ -66,6 +68,39 @@ impl<Block: BlockT> ComplexBlockId<Block> {
 impl<Block: BlockT> ::std::cmp::PartialOrd for ComplexBlockId<Block> {
 	fn partial_cmp(&self, other: &ComplexBlockId<Block>) -> Option<::std::cmp::Ordering> {
 		self.number.partial_cmp(&other.number)
+	}
+}
+
+/// Block id or header.
+#[derive(Debug, Clone)]
+pub enum BlockIdOrHeader<'a, Block: BlockT> {
+	/// Block id.
+	Id(&'a ComplexBlockId<Block>),
+	/// Block header.
+	Header(&'a Block::Header),
+}
+
+impl<'a, Block: BlockT> From<&'a ComplexBlockId<Block>> for BlockIdOrHeader<'a, Block> {
+	fn from(id: &'a ComplexBlockId<Block>) -> Self {
+		BlockIdOrHeader::Id(id)
+	}
+}
+
+impl<'a, Block: BlockT> BlockIdOrHeader<'a, Block> {
+	/// Get id of refrenced block.
+	pub fn id(&self) -> ComplexBlockId<Block> {
+		match *self {
+			BlockIdOrHeader::Id(id) => id.clone(),
+			BlockIdOrHeader::Header(header) => ComplexBlockId::new(header.hash(), *header.number()),
+		}
+	}
+
+	/// Get number of refrenced block.
+	pub fn number(&self) -> NumberFor<Block> {
+		match *self {
+			BlockIdOrHeader::Id(id) => id.number,
+			BlockIdOrHeader::Header(header) => *header.number(),
+		}
 	}
 }
 
@@ -116,23 +151,41 @@ impl<Block: BlockT> DbCache<Block> {
 		DbCacheTransaction {
 			cache: self,
 			tx,
-			cache_at_op: HashMap::new(),
+			cache_at_ops: HashMap::new(),
 			best_finalized_block: None,
 		}
 	}
 
+	/// Begin cache transaction with given ops.
+	pub fn transaction_with_ops<'a>(
+		&'a mut self,
+		tx: &'a mut DBTransaction,
+		ops: DbCacheTransactionOps<Block>,
+	) -> DbCacheTransaction<'a, Block> {
+		DbCacheTransaction {
+			cache: self,
+			tx,
+			cache_at_ops: ops.cache_at_ops,
+			best_finalized_block: ops.best_finalized_block,
+		}
+	}
+
 	/// Run post-commit cache operations.
-	pub fn commit(&mut self, ops: DbCacheTransactionOps<Block>) {
-		for (name, op) in ops.cache_at_op.into_iter() {
-			self.get_cache(name).on_transaction_commit(op);
+	pub fn commit(&mut self, ops: DbCacheTransactionOps<Block>) -> ClientResult<()> {
+		for (name, ops) in ops.cache_at_ops.into_iter() {
+			self.get_cache(name)?.on_transaction_commit(ops);
 		}
 		if let Some(best_finalized_block) = ops.best_finalized_block {
 			self.best_finalized_block = best_finalized_block;
 		}
+		Ok(())
 	}
 
 	/// Creates `ListCache` with the given name or returns a reference to the existing.
-	fn get_cache(&mut self, name: CacheKeyId) -> &mut ListCache<Block, Vec<u8>, self::list_storage::DbStorage> {
+	pub(crate) fn get_cache(
+		&mut self,
+		name: CacheKeyId,
+	) -> ClientResult<&mut ListCache<Block, Vec<u8>, self::list_storage::DbStorage>> {
 		get_cache_helper(
 			&mut self.cache_at,
 			name,
@@ -155,34 +208,49 @@ fn get_cache_helper<'a, Block: BlockT>(
 	header: Option<u32>,
 	cache: Option<u32>,
 	best_finalized_block: &ComplexBlockId<Block>,
-) -> &'a mut ListCache<Block, Vec<u8>, self::list_storage::DbStorage> {
-	cache_at.entry(name).or_insert_with(|| {
-		ListCache::new(
-			self::list_storage::DbStorage::new(name.to_vec(), db.clone(),
-				self::list_storage::DbColumns {
-					meta: COLUMN_META,
-					key_lookup,
-					header,
-					cache,
-				},
-			),
-			cache_pruning_strategy(name),
-			best_finalized_block.clone(),
-		)
-	})
+) -> ClientResult<&'a mut ListCache<Block, Vec<u8>, self::list_storage::DbStorage>> {
+	match cache_at.entry(name) {
+		Entry::Occupied(entry) => Ok(entry.into_mut()),
+		Entry::Vacant(entry) => {
+			let cache = ListCache::new(
+				self::list_storage::DbStorage::new(name.to_vec(), db.clone(),
+					self::list_storage::DbColumns {
+						meta: COLUMN_META,
+						key_lookup,
+						header,
+						cache,
+					},
+				),
+				cache_pruning_strategy(name),
+				best_finalized_block.clone(),
+			)?;
+			Ok(entry.insert(cache))
+		}
+	}
 }
 
 /// Cache operations that are to be committed after database transaction is committed.
+#[derive(Default)]
 pub struct DbCacheTransactionOps<Block: BlockT> {
-	cache_at_op: HashMap<CacheKeyId, self::list_cache::CommitOperation<Block, Vec<u8>>>,
+	cache_at_ops: HashMap<CacheKeyId, Vec<self::list_cache::CommitOperation<Block, Vec<u8>>>>,
 	best_finalized_block: Option<ComplexBlockId<Block>>,
+}
+
+impl<Block: BlockT> DbCacheTransactionOps<Block> {
+	/// Empty transaction ops.
+	pub fn empty() -> DbCacheTransactionOps<Block> {
+		DbCacheTransactionOps {
+			cache_at_ops: HashMap::new(),
+			best_finalized_block: None,
+		}
+	}
 }
 
 /// Database-backed blockchain data cache transaction valid for single block import.
 pub struct DbCacheTransaction<'a, Block: BlockT> {
 	cache: &'a mut DbCache<Block>,
 	tx: &'a mut DBTransaction,
-	cache_at_op: HashMap<CacheKeyId, self::list_cache::CommitOperation<Block, Vec<u8>>>,
+	cache_at_ops: HashMap<CacheKeyId, Vec<self::list_cache::CommitOperation<Block, Vec<u8>>>>,
 	best_finalized_block: Option<ComplexBlockId<Block>>,
 }
 
@@ -190,7 +258,7 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 	/// Convert transaction into post-commit operations set.
 	pub fn into_ops(self) -> DbCacheTransactionOps<Block> {
 		DbCacheTransactionOps {
-			cache_at_op: self.cache_at_op,
+			cache_at_ops: self.cache_at_ops,
 			best_finalized_block: self.best_finalized_block,
 		}
 	}
@@ -203,8 +271,6 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 		data_at: HashMap<CacheKeyId, Vec<u8>>,
 		entry_type: EntryType,
 	) -> ClientResult<Self> {
-		assert!(self.cache_at_op.is_empty());
-
 		// prepare list of caches that are not update
 		// (we might still need to do some cache maintenance in this case)
 		let missed_caches = self.cache.cache_at.keys()
@@ -213,7 +279,8 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 			.collect::<Vec<_>>();
 
 		let mut insert_op = |name: CacheKeyId, value: Option<Vec<u8>>| -> Result<(), client::error::Error> {
-			let cache = self.cache.get_cache(name);
+			let cache = self.cache.get_cache(name)?;
+			let mut cache_ops = self.cache_at_ops.remove(&name).unwrap_or_default();
 			let op = cache.on_block_insert(
 				&mut self::list_storage::DbStorageTransaction::new(
 					cache.storage(),
@@ -223,10 +290,11 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 				block.clone(),
 				value,
 				entry_type,
+				cache_ops.last(),
 			)?;
-			if let Some(op) = op {
-				self.cache_at_op.insert(name, op);
-			}
+
+			push_cache_op(&mut cache_ops, op);
+			self.cache_at_ops.insert(name, cache_ops);
 			Ok(())
 		};
 
@@ -246,37 +314,117 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 	pub fn on_block_finalize(
 		mut self,
 		parent: ComplexBlockId<Block>,
-		block: ComplexBlockId<Block>
+		block: ComplexBlockId<Block>,
 	) -> ClientResult<Self> {
-		assert!(self.cache_at_op.is_empty());
-
-		for (name, cache_at) in self.cache.cache_at.iter() {
-			let op = cache_at.on_block_finalize(
+		for (name, cache) in self.cache.cache_at.iter() {
+			let mut cache_ops = self.cache_at_ops.remove(name).unwrap_or_default();
+			let op = cache.on_block_finalize(
 				&mut self::list_storage::DbStorageTransaction::new(
-					cache_at.storage(),
+					cache.storage(),
 					&mut self.tx
 				),
 				parent.clone(),
 				block.clone(),
+				cache_ops.last(),
 			)?;
 
-			if let Some(op) = op {
-				self.cache_at_op.insert(name.to_owned(), op);
-			}
+			push_cache_op(&mut cache_ops, op);
+			self.cache_at_ops.insert(*name, cache_ops);
 		}
 
 		self.best_finalized_block = Some(block);
 
 		Ok(self)
 	}
+
+	/// When block is reverted.
+	pub fn on_block_revert(
+		mut self,
+		block: NumberFor<Block>,
+	) -> ClientResult<Self> {
+		for (name, cache) in self.cache.cache_at.iter() {
+			let mut cache_ops = self.cache_at_ops.remove(name).unwrap_or_default();
+			let op = cache.on_block_revert(
+				&mut self::list_storage::DbStorageTransaction::new(
+					cache.storage(),
+					&mut self.tx
+				),
+				block,
+			)?;
+
+			cache_ops.push(op);
+			self.cache_at_ops.insert(*name, cache_ops);
+		}
+
+		Ok(self)
+	}
 }
 
 /// Synchronous implementation of database-backed blockchain data cache.
-pub struct DbCacheSync<Block: BlockT>(pub RwLock<DbCache<Block>>);
+pub struct DbCacheSync<Block: BlockT> {
+	db: Arc<dyn KeyValueDB>,
+	key_lookup_column: Option<u32>,
+	header_column: Option<u32>,
+	cache: RwLock<DbCache<Block>>,
+}
+
+impl<Block: BlockT> DbCacheSync<Block> {
+	/// Create new sync cache.
+	pub fn new(cache: DbCache<Block>) -> Self {
+		Self {
+			db: cache.db.clone(),
+			key_lookup_column: cache.key_lookup_column.clone(),
+			header_column: cache.header_column.clone(),
+			cache: RwLock::new(cache),
+		}
+	}
+
+	/// Get reference to the cache.
+	pub(crate) fn cache(&self) -> &RwLock<DbCache<Block>> {
+		&self.cache
+	}
+
+	/// Convert block id into complex block id.
+	pub fn to_complex_id(&self, block: &BlockId<Block>) -> ClientResult<ComplexBlockId<Block>> {
+		Ok(match *block {
+			BlockId::Hash(hash) => {
+				let header = utils::require_header::<Block>(
+					&*self.db,
+					self.key_lookup_column,
+					self.header_column,
+					BlockId::Hash(hash.clone())
+				)?;
+				ComplexBlockId::new(hash, *header.number())
+			},
+			BlockId::Number(number) => {
+				let header = utils::require_header::<Block>(
+					&*self.db,
+					self.key_lookup_column,
+					self.header_column,
+					BlockId::Number(number.clone())
+				)?;
+				ComplexBlockId::new(header.hash(), number)
+			},
+		})
+	}
+
+	/// Get value at inserted or not yet inserted block.
+	pub fn get_at_block(
+		&self,
+		key: &CacheKeyId,
+		at: BlockIdOrHeader<Block>,
+	) -> Option<((NumberFor<Block>, Block::Hash), Option<(NumberFor<Block>, Block::Hash)>, Vec<u8>)> {
+		self.cache.read().cache_at.get(key)?
+			.value_at_block(at)
+			.map(|block_and_value| block_and_value.map(|(begin_block, end_block, value)|
+				((begin_block.number, begin_block.hash), end_block.map(|end_block| (end_block.number, end_block.hash)), value)))
+			.ok()?
+	}
+}
 
 impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 	fn initialize(&self, key: &CacheKeyId, data: Vec<u8>) -> ClientResult<()> {
-		let mut cache = self.0.write();
+		let mut cache = self.cache.write();
 		let genesis_hash = cache.genesis_hash;
 		let cache_contents = vec![(*key, data)].into_iter().collect();
 		let db = cache.db.clone();
@@ -290,7 +438,7 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 		)?;
 		let tx_ops = tx.into_ops();
 		db.write(dbtx).map_err(db_err)?;
-		cache.commit(tx_ops);
+		cache.commit(tx_ops)?;
 		Ok(())
 	}
 
@@ -299,34 +447,32 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 		key: &CacheKeyId,
 		at: &BlockId<Block>,
 	) -> Option<((NumberFor<Block>, Block::Hash), Option<(NumberFor<Block>, Block::Hash)>, Vec<u8>)> {
-		let cache = self.0.read();
-		let storage = cache.cache_at.get(key)?.storage();
-		let db = storage.db();
-		let columns = storage.columns();
-		let at = match *at {
-			BlockId::Hash(hash) => {
-				let header = utils::read_header::<Block>(
-					&**db,
-					columns.key_lookup,
-					columns.header,
-					BlockId::Hash(hash.clone())).ok()??;
-				ComplexBlockId::new(hash, *header.number())
-			},
-			BlockId::Number(number) => {
-				let hash = utils::read_header::<Block>(
-					&**db,
-					columns.key_lookup,
-					columns.header,
-					BlockId::Number(number.clone())).ok()??.hash();
-				ComplexBlockId::new(hash, number)
-			},
+		let id = {
+			let cache = self.cache.read();
+			let storage = cache.cache_at.get(key)?.storage();
+			let db = storage.db();
+			let columns = storage.columns();
+			match *at {
+				BlockId::Hash(hash) => {
+					let header = utils::read_header::<Block>(
+						&**db,
+						columns.key_lookup,
+						columns.header,
+						BlockId::Hash(hash.clone())).ok()??;
+					ComplexBlockId::new(hash, *header.number())
+				},
+				BlockId::Number(number) => {
+					let hash = utils::read_header::<Block>(
+						&**db,
+						columns.key_lookup,
+						columns.header,
+						BlockId::Number(number.clone())).ok()??.hash();
+					ComplexBlockId::new(hash, number)
+				},
+			}
 		};
 
-		cache.cache_at.get(key)?
-			.value_at_block(&at)
-			.map(|block_and_value| block_and_value.map(|(begin_block, end_block, value)|
-				((begin_block.number, begin_block.hash), end_block.map(|end_block| (end_block.number, end_block.hash)), value)))
-			.ok()?
+		self.get_at_block(key, (&id).into())
 	}
 }
 
@@ -335,5 +481,28 @@ fn cache_pruning_strategy<N: From<u32>>(cache: CacheKeyId) -> PruningStrategy<N>
 	match cache {
 		well_known_cache_keys::CHANGES_TRIE_CONFIG => PruningStrategy::NeverPrune,
 		_ => PruningStrategy::ByDepth(PRUNE_DEPTH.into()),
+	}
+}
+
+/// Push new operation to the operations vec.
+fn push_cache_op<Block: BlockT>(
+	cache_ops: &mut Vec<self::list_cache::CommitOperation<Block, Vec<u8>>>,
+	new_op: Option<self::list_cache::CommitOperation<Block, Vec<u8>>>,
+) {
+	if let Some(new_op) = new_op {
+		if let Some(prev_op) = cache_ops.pop() {
+			match prev_op.merge_with(new_op) {
+				(Some(merged_op), None) => {
+					cache_ops.push(merged_op);
+				},
+				(Some(prev_op), Some(new_op)) => {
+					cache_ops.push(prev_op);
+					cache_ops.push(new_op);
+				},
+				_ => unreachable!("merge of 2 ops can never lead to noop; qed"),
+			}
+		} else {
+			cache_ops.push(new_op);
+		}
 	}
 }

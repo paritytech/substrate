@@ -36,9 +36,7 @@ use crate::light::fetcher::{Fetcher, RemoteBodyRequest, RemoteHeaderRequest};
 /// Light client blockchain storage.
 pub trait Storage<Block: BlockT>: AuxStore + BlockchainHeaderBackend<Block> {
 	/// Store new header. Should refuse to revert any finalized blocks.
-	///
-	/// Takes new authorities, the leaf state of the new block, and
-	/// any auxiliary storage updates to place in the same operation.
+
 	fn import_header(
 		&self,
 		header: Block::Header,
