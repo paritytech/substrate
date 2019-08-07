@@ -466,7 +466,6 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 			offenders: unresponsive,
 		};
 
-		// TODO [slashing]: Handle the result. Just write a proof?
 		T::ReportUnresponsivness::report_offence(None, offence);
 	}
 
