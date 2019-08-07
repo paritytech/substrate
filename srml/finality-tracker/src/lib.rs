@@ -244,15 +244,16 @@ impl<T: Trait> ProvideInherent for Module<T> {
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 	fn create_inherent(data: &InherentData) -> Option<Self::Call> {
-		let final_num =
-			data.finalized_number().expect("Gets and decodes final number inherent data");
-
-		// make hint only when not same as last to avoid bloat.
-		Self::recent_hints().last().and_then(|last| if last == &final_num {
-			None
+		if let Ok(final_num) = data.finalized_number() {
+			// make hint only when not same as last to avoid bloat.
+			Self::recent_hints().last().and_then(|last| if last == &final_num {
+				None
+			} else {
+				Some(Call::final_hint(final_num))
+			})
 		} else {
-			Some(Call::final_hint(final_num))
-		})
+			None
+		}
 	}
 
 	fn check_inherent(_call: &Self::Call, _data: &InherentData) -> result::Result<(), Self::Error> {
