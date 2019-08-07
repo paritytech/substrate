@@ -22,7 +22,7 @@ pub mod hash;
 #[cfg(test)]
 mod tests;
 
-use std::{sync::Arc, convert::{TryFrom, TryInto}};
+use std::{sync::Arc, convert::TryInto};
 
 use client::{self, Client};
 use crate::rpc::futures::{Sink, Stream, Future};
@@ -32,7 +32,7 @@ use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use log::warn;
 use codec::{Encode, Decode};
 use primitives::{
-	Bytes, Blake2Hasher, H256, ed25519, sr25519, crypto::{Kind, Pair, Public},
+	Bytes, Blake2Hasher, H256, ed25519, sr25519, crypto::{Pair, Public, key_types},
 	traits::{BareCryptoStore, BareCryptoStorePtr}
 };
 use sr_primitives::{generic, traits};
@@ -152,12 +152,13 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 		let public = match maybe_public {
 			Some(public) => public.0,
 			None => {
-				let crypto_kind = Kind::try_from(key_type).map_err(|_| Error::UnsupportedKeyType)?;
-				let maybe_public = match crypto_kind {
-					Kind::Sr25519 => sr25519::Pair::from_string(&suri, maybe_password)
-						.map(|pair| pair.public().to_raw_vec()),
-					Kind::Ed25519 => ed25519::Pair::from_string(&suri, maybe_password)
-						.map(|pair| pair.public().to_raw_vec()),
+				let maybe_public = match key_type {
+					key_types::BABE | key_types::IM_ONLINE | key_types::SR25519 =>
+						sr25519::Pair::from_string(&suri, maybe_password)
+							.map(|pair| pair.public().to_raw_vec()),
+					key_types::GRANDPA | key_types::ED25519 =>
+						ed25519::Pair::from_string(&suri, maybe_password)
+							.map(|pair| pair.public().to_raw_vec()),
 					_ => Err(Error::UnsupportedKeyType)?,
 				};
 				maybe_public.map_err(|_| Error::BadSeedPhrase)?
