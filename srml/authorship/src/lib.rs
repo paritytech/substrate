@@ -395,28 +395,30 @@ impl<T: Trait> ProvideInherent for Module<T> {
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 	fn create_inherent(data: &InherentData) -> Option<Self::Call> {
-		let uncles = data.uncles().expect("Gets and decodes final number inherent data");
-
+		let uncles = data.uncles().unwrap_or_default();
 		let mut set_uncles = Vec::new();
-		let prev_uncles = <Self as Store>::Uncles::get();
-		let mut existing_hashes: Vec<_> = prev_uncles.into_iter().filter_map(|entry|
-			match entry {
-				UncleEntryItem::InclusionHeight(_) => None,
-				UncleEntryItem::Uncle(h, _) => Some(h),
-			}
-		).collect();
 
-		let mut acc: <T::FilterUncle as FilterUncle<_, _>>::Accumulator = Default::default();
-
-		for uncle in uncles {
-			match Self::verify_uncle(&uncle, &existing_hashes, &mut acc) {
-				Ok(_) => {
-					let hash = uncle.hash();
-					set_uncles.push(uncle);
-					existing_hashes.push(hash);
+		if !uncles.is_empty() {
+			let prev_uncles = <Self as Store>::Uncles::get();
+			let mut existing_hashes: Vec<_> = prev_uncles.into_iter().filter_map(|entry|
+				match entry {
+					UncleEntryItem::InclusionHeight(_) => None,
+					UncleEntryItem::Uncle(h, _) => Some(h),
 				}
-				Err(_) => {
-					// skip this uncle
+			).collect();
+
+			let mut acc: <T::FilterUncle as FilterUncle<_, _>>::Accumulator = Default::default();
+
+			for uncle in uncles {
+				match Self::verify_uncle(&uncle, &existing_hashes, &mut acc) {
+					Ok(_) => {
+						let hash = uncle.hash();
+						set_uncles.push(uncle);
+						existing_hashes.push(hash);
+					}
+					Err(_) => {
+						// skip this uncle
+					}
 				}
 			}
 		}
