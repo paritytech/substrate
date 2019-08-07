@@ -112,6 +112,29 @@ pub struct Pool<B: ChainApi> {
 	rotator: PoolRotator<ExHash<B>>,
 }
 
+/// Something that can submit an extrinsic.
+pub trait SubmitExtrinsic {
+	/// Concrete extrinsic validation and query logic.
+	type Api: ChainApi;
+
+	/// Imports one unverified extrinsic to the pool
+	fn submit_one(
+		&self,
+		at: &BlockId<<Self::Api as ChainApi>::Block>,
+		xt: ExtrinsicFor<Self::Api>,
+	) -> Result<ExHash<Self::Api>, <Self::Api as ChainApi>::Error>;
+}
+
+impl<B: ChainApi> SubmitExtrinsic for Pool<B> {
+	type Api = B;
+
+	fn submit_one(&self, at: &BlockId<B::Block>, xt: ExtrinsicFor<B>) -> Result<ExHash<B>, B::Error> {
+		Ok(self.submit_at(at, ::std::iter::once(xt))?
+			.pop()
+			.expect("One extrinsic passed; one result returned; qed")?)
+	}
+}
+
 impl<B: ChainApi> Pool<B> {
 	/// Imports a bunch of unverified extrinsics to the pool
 	pub fn submit_at<T>(&self, at: &BlockId<B::Block>, xts: T) -> Result<Vec<Result<ExHash<B>, B::Error>>, B::Error> where
@@ -202,11 +225,6 @@ impl<B: ChainApi> Pool<B> {
 		} else {
 			Default::default()
 		}
-	}
-
-	/// Imports one unverified extrinsic to the pool
-	pub fn submit_one(&self, at: &BlockId<B::Block>, xt: ExtrinsicFor<B>) -> Result<ExHash<B>, B::Error> {
-		Ok(self.submit_at(at, ::std::iter::once(xt))?.pop().expect("One extrinsic passed; one result returned; qed")?)
 	}
 
 	/// Import a single extrinsic and starts to watch their progress in the pool.
