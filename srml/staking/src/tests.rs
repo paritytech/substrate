@@ -2011,6 +2011,7 @@ fn reporters_receive_their_slice() {
 
 #[test]
 fn invulnerables_are_not_slashed() {
+	// For invulnerable validators no slashing is performed.
 	with_externalities(&mut ExtBuilder::default().invulnerables(vec![11]).build(), || {
 		assert_eq!(Balances::free_balance(&11), 1000);
 

@@ -104,6 +104,7 @@ pub trait OnOffenceHandler<Reporter, Offender> {
 	/// The vector of `slash_fraction` contains perbils
 	/// the authorities should be slashed and is computed
 	/// according to the `OffenceCount` already. This is of the same length as `offenders.`
+	/// Zero is a valid value for a fraction.
 	fn on_offence(
 		offenders: &[OffenceDetails<Reporter, Offender>],
 		slash_fraction: &[Perbill],
@@ -123,6 +124,7 @@ pub struct OffenceDetails<Reporter, Offender> {
 	/// in case the authority was already slashed in the past.
 	/// Note that we don't buffer slashes and instead use this approach.
 	pub count: OffenceCount,
-	/// A list of reporters of offences of this authority id.
+	/// A list of reporters of offences of this authority id. Possibily empty where there is no
+	/// particular reporters.
 	pub reporters: Vec<Reporter>,
 }
