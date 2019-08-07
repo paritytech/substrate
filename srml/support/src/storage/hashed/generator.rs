@@ -246,7 +246,7 @@ pub trait StorageMap<K: codec::Codec, V: codec::Codec> {
 	/// Store a value under this key into the provided storage instance; this can take any reference
 	/// type that derefs to `T` (and has `Encode` implemented).
 	/// Store a value under this key into the provided storage instance.
-	fn insert_ref<Arg: ?Sized + Encode, S: HashedStorage<Twox128>>(
+	fn insert_ref<Arg: ?Sized + Encode, S: HashedStorage<Self::Hasher>>(
 		key: &K,
 		val: &Arg,
 		storage: &mut S
