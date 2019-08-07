@@ -19,7 +19,7 @@ use crate::error::{Error, Result};
 use state_machine::{CodeExecutor, Externalities};
 use crate::wasm_executor::WasmExecutor;
 use runtime_version::{NativeVersion, RuntimeVersion};
-use parity_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use crate::RuntimeInfo;
 use primitives::{Blake2Hasher, NativeOrEncoded};
 use log::trace;

@@ -22,7 +22,7 @@ use std::marker::PhantomData;
 use std::future::Future;
 
 use hash_db::{HashDB, Hasher, EMPTY_PREFIX};
-use parity_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use primitives::{ChangesTrieConfiguration, convert_hash};
 use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
@@ -424,7 +424,6 @@ impl<E, Block, H, S, F> FetchChecker<Block> for LightDataChecker<E, H, Block, S,
 		request: &RemoteBodyRequest<Block::Header>,
 		body: Vec<Block::Extrinsic>
 	) -> ClientResult<Vec<Block::Extrinsic>> {
-
 		// TODO: #2621
 		let	extrinsics_root = HashFor::<Block>::ordered_trie_root(body.iter().map(Encode::encode));
 		if *request.header.extrinsics_root() == extrinsics_root {
@@ -486,7 +485,7 @@ impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H, Number> for RootsStorage<'a
 pub mod tests {
 	use futures::future::Ready;
 	use parking_lot::Mutex;
-	use parity_codec::Decode;
+	use codec::Decode;
 	use crate::client::tests::prepare_client_with_key_changes;
 	use executor::{self, NativeExecutor};
 	use crate::error::Error as ClientError;
@@ -566,7 +565,7 @@ pub mod tests {
 		// 'fetch' read proof from remote node
 		let heap_pages = remote_client.storage(&remote_block_id, &StorageKey(well_known_keys::HEAP_PAGES.to_vec()))
 			.unwrap()
-			.and_then(|v| Decode::decode(&mut &v.0[..])).unwrap();
+			.and_then(|v| Decode::decode(&mut &v.0[..]).ok()).unwrap();
 		let remote_read_proof = remote_client.read_proof(&remote_block_id, well_known_keys::HEAP_PAGES).unwrap();
 
 		// check remote read proof locally

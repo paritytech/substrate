@@ -20,7 +20,7 @@ use std::collections::BTreeMap;
 use std::cmp::Reverse;
 use kvdb::{KeyValueDB, DBTransaction};
 use sr_primitives::traits::SimpleArithmetic;
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use crate::error;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -84,12 +84,12 @@ impl<H, N> LeafSet<H, N> where
 			if !key.starts_with(prefix) { break }
 			let raw_hash = &mut &key[prefix.len()..];
 			let hash = match Decode::decode(raw_hash) {
-				Some(hash) => hash,
-				None => return Err(error::Error::Backend("Error decoding hash".into())),
+				Ok(hash) => hash,
+				Err(_) => return Err(error::Error::Backend("Error decoding hash".into())),
 			};
 			let number = match Decode::decode(&mut &value[..]) {
-				Some(number) => number,
-				None => return Err(error::Error::Backend("Error decoding number".into())),
+				Ok(number) => number,
+				Err(_) => return Err(error::Error::Backend("Error decoding number".into())),
 			};
 			storage.entry(Reverse(number)).or_insert_with(Vec::new).push(hash);
 		}
