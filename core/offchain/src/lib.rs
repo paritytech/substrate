@@ -176,7 +176,7 @@ mod tests {
 		let pool = Arc::new(Pool::new(Default::default(), transaction_pool::ChainApi::new(client.clone())));
 		let db = client_db::offchain::LocalStorage::new_test();
 		let network_state = Arc::new(MockNetworkStateInfo());
-		// TODO Test keystore
+
 		// when
 		let offchain = OffchainWorkers::new(client, db);
 		runtime.executor().spawn(offchain.on_block_imported(&0u64, &pool, network_state.clone()));

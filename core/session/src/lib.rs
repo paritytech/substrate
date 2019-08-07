@@ -54,15 +54,10 @@ where
 	let runtime_api = client.runtime_api();
 
 	for seed in seeds {
-		let seed = seed.as_bytes();
-
-		// We need to generate the keys for the best block + the last finalized block.
-		for number in &[info.best_number, info.finalized_number] {
-			runtime_api.generate_session_keys(
-				&sr_primitives::generic::BlockId::Number(*number),
-				Some(seed.to_vec()),
-			)?;
-		}
+		runtime_api.generate_session_keys(
+			&sr_primitives::generic::BlockId::Number(info.best_number),
+			Some(seed.as_bytes().to_vec()),
+		)?;
 	}
 
 	Ok(())
