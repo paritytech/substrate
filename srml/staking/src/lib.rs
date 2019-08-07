@@ -1455,8 +1455,16 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 			// distribute the rewards according to the slash
 			let slash_reward = slash_reward_fraction * imbalance.peek();
 			if !slash_reward.is_zero() {
-				let (reward, rest) = imbalance.split(slash_reward);
-				// TODO [slashing] split between reporters
+				let (mut reward, rest) = imbalance.split(slash_reward);
+				// split the reward between reporters equally.
+				let per_reporter = reward.peek() / (details.reporters.len() as u32).into();
+				for reporter in &details.reporters {
+					let (reporter_reward, rest) = reward.split(per_reporter);
+					reward = rest;
+					T::Currency::resolve_creating(reporter, reporter_reward);
+				}
+				// The rest goes to the treasury.
+				remaining_imbalance.subsume(reward);
 				remaining_imbalance.subsume(rest);
 			} else {
 				remaining_imbalance.subsume(imbalance);
