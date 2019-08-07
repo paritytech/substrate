@@ -1935,8 +1935,6 @@ fn era_is_always_same_length() {
 	});
 }
 
-// TODO: a slash is performed according to the exposure, not the current balance.
-
 #[test]
 fn offence_forces_new_era() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
@@ -1982,5 +1980,32 @@ fn slashing_performed_according_exposure() {
 
 		// The stash account should be slashed for 250 (50% of 500).
 		assert_eq!(Balances::free_balance(&11), 1000 - 250);
+	});
+}
+
+#[test]
+fn reporters_receive_their_slice() {
+	// This test verifies that the reporters of the offence receive their slice from the slashed
+	// amount.
+	with_externalities(&mut ExtBuilder::default().build(), || {
+		// The reporters' reward is calculated from the total exposure.
+		assert_eq!(Staking::stakers(&11).total, 1250);
+
+		// Handle an offence with a historical exposure.
+		Staking::on_offence(
+			&[OffenceDetails {
+				offender: (
+					11,
+					Staking::stakers(&11),
+				),
+				count: 1,
+				reporters: vec![1, 2],
+			}],
+			&[Perbill::from_percent(50)],
+		);
+
+		// 1250 x 50% (slash fraction) x 10% (rewards slice)
+		assert_eq!(Balances::free_balance(&1), 10 + 31);
+		assert_eq!(Balances::free_balance(&2), 20 + 31);
 	});
 }
