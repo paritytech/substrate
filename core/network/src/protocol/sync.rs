@@ -198,7 +198,9 @@ pub struct Status<B: BlockT> {
 	/// Target sync block number.
 	pub best_seen_block: Option<NumberFor<B>>,
 	/// Number of peers participating in syncing.
-	pub num_peers: u32
+	pub num_peers: u32,
+	/// Number of blocks queued for import
+	pub queued_blocks: u32,
 }
 
 /// A peer did not behave as expected and should be reported.
@@ -317,7 +319,8 @@ impl<B: BlockT> ChainSync<B> {
 		Status {
 			state: sync_state,
 			best_seen_block: best_seen,
-			num_peers: self.peers.len() as u32
+			num_peers: self.peers.len() as u32,
+			queued_blocks: self.queue_blocks.len() as u32,
 		}
 	}
 
