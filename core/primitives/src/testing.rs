@@ -58,7 +58,7 @@ impl KeyStore {
 }
 
 #[cfg(feature = "std")]
-impl crate::traits::KeyStore for KeyStore {
+impl crate::traits::BareCryptoStore for KeyStore {
 	fn sr25519_generate_new(&mut self, id: KeyTypeId, seed: Option<&str>) -> Result<[u8; 32], String> {
 		match seed {
 			Some(seed) => {

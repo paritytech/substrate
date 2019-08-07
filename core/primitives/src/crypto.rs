@@ -18,7 +18,6 @@
 //! Cryptographic utilities.
 // end::description[]
 
-#[cfg(feature ="std")]
 use rstd::convert::{TryFrom, TryInto};
 #[cfg(feature = "std")]
 use parking_lot::Mutex;
@@ -814,6 +813,19 @@ impl From<KeyTypeId> for u32 {
 	}
 }
 
+impl<'a> TryFrom<&'a str> for KeyTypeId {
+	type Error = ();
+	fn try_from(x: &'a str) -> Result<Self, ()> {
+		let b = x.as_bytes();
+		if b.len() != 4 {
+			return Err(());
+		}
+		let mut res = KeyTypeId::default();
+		res.0.copy_from_slice(&b[0..4]);
+		Ok(res)
+	}
+}
+
 /// Known key types; this also functions as a global registry of key types for projects wishing to
 /// avoid collisions with each other.
 ///
@@ -850,6 +862,7 @@ impl rstd::convert::TryFrom<KeyTypeId> for Kind {
 			e if e == key_types::ED25519 => Kind::Ed25519,
 			e if e == key_types::BABE => Kind::Sr25519,
 			e if e == key_types::GRANDPA => Kind::Ed25519,
+			e if e == key_types::IM_ONLINE => Kind::Sr25519,
 			#[cfg(feature = "std")]
 			e if e == key_types::DUMMY => Kind::Dummy,
 			_ => return Err(()),

@@ -151,7 +151,7 @@ where
 pub struct LocalCallExecutor<B, E> {
 	backend: Arc<B>,
 	executor: E,
-	keystore: Option<primitives::traits::KeyStorePtr>,
+	keystore: Option<primitives::traits::BareCryptoStorePtr>,
 }
 
 impl<B, E> LocalCallExecutor<B, E> {
@@ -159,7 +159,7 @@ impl<B, E> LocalCallExecutor<B, E> {
 	pub fn new(
 		backend: Arc<B>,
 		executor: E,
-		keystore: Option<primitives::traits::KeyStorePtr>,
+		keystore: Option<primitives::traits::BareCryptoStorePtr>,
 	) -> Self {
 		LocalCallExecutor {
 			backend,

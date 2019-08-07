@@ -22,7 +22,7 @@ use crate::backend::Backend;
 use crate::changes_trie::{Storage as ChangesTrieStorage, build_changes_trie};
 use crate::{Externalities, OverlayedChanges, ChildStorageKey};
 use hash_db::Hasher;
-use primitives::{offchain, storage::well_known_keys::is_child_storage_key, traits::KeyStorePtr};
+use primitives::{offchain, storage::well_known_keys::is_child_storage_key, traits::BareCryptoStorePtr};
 use trie::{MemoryDB, default_child_trie_root};
 use trie::trie_types::Layout;
 
@@ -84,7 +84,7 @@ where
 	/// If None, some methods from the trait might not be supported.
 	offchain_externalities: Option<&'a mut O>,
 	/// The keystore that manages the keys of the node.
-	keystore: Option<KeyStorePtr>,
+	keystore: Option<BareCryptoStorePtr>,
 	/// Dummy usage of N arg.
 	_phantom: ::std::marker::PhantomData<N>,
 }
@@ -104,7 +104,7 @@ where
 		backend: &'a B,
 		changes_trie_storage: Option<&'a T>,
 		offchain_externalities: Option<&'a mut O>,
-		keystore: Option<KeyStorePtr>,
+		keystore: Option<BareCryptoStorePtr>,
 	) -> Self {
 		Ext {
 			overlay,
@@ -337,7 +337,7 @@ where
 		self.offchain_externalities.as_mut().map(|x| &mut **x as _)
 	}
 
-	fn keystore(&self) -> Option<KeyStorePtr> {
+	fn keystore(&self) -> Option<BareCryptoStorePtr> {
 		self.keystore.clone()
 	}
 }

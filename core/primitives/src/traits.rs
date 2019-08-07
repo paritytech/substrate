@@ -21,7 +21,7 @@ use crate::{crypto::KeyTypeId, ed25519, sr25519};
 
 /// Something that generates, stores and provides access to keys.
 #[cfg(feature = "std")]
-pub trait KeyStore: Send + Sync {
+pub trait BareCryptoStore: Send + Sync {
 	/// Generate a new sr25519 key pair for the given key type and an optional seed.
 	///
 	/// If the given seed is `Some(_)`, the key pair will only be stored in memory.
@@ -40,8 +40,21 @@ pub trait KeyStore: Send + Sync {
 
 	/// Returns the ed25519 key pair for the given key type and public key combination.
 	fn ed25519_key_pair(&self, id: KeyTypeId, pub_key: &ed25519::Public) -> Option<ed25519::Pair>;
+
+	/// Insert a new key. This doesn't require any known of the crypto; but a public key must be
+	/// manually provided.
+	///
+	/// Places it into the file system store.
+	///
+	/// `Err` if there's some sort of weird filesystem error, but should generally be `Ok`.
+	fn insert_unknown(&mut self, _key_type: KeyTypeId, _suri: &str, _public: &[u8]) -> Result<(), ()> {
+		Err(())
+	}
+
+	/// Get the password for this store.
+	fn password(&self) -> Option<&str> { None }
 }
 
 /// A pointer to the key store.
 #[cfg(feature = "std")]
-pub type KeyStorePtr = std::sync::Arc<parking_lot::RwLock<dyn KeyStore>>;
+pub type BareCryptoStorePtr = std::sync::Arc<parking_lot::RwLock<dyn BareCryptoStore>>;

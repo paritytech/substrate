@@ -26,7 +26,7 @@ use crate::changes_trie::{
 	BlockNumber as ChangesTrieBlockNumber,
 };
 use primitives::{
-	storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES}, traits::KeyStorePtr, offchain
+	storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES}, traits::BareCryptoStorePtr, offchain
 };
 use codec::Encode;
 use super::{ChildStorageKey, Externalities, OverlayedChanges};
@@ -41,7 +41,7 @@ pub struct TestExternalities<H: Hasher, N: ChangesTrieBlockNumber> {
 	backend: InMemory<H>,
 	changes_trie_storage: ChangesTrieInMemoryStorage<H, N>,
 	offchain: Option<Box<dyn offchain::Externalities>>,
-	keystore: Option<KeyStorePtr>,
+	keystore: Option<BareCryptoStorePtr>,
 }
 
 impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
@@ -267,7 +267,7 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 			.map(|x| &mut **x as _)
 	}
 
-	fn keystore(&self) -> Option<KeyStorePtr> {
+	fn keystore(&self) -> Option<BareCryptoStorePtr> {
 		self.keystore.clone()
 	}
 }

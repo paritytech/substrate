@@ -44,7 +44,7 @@ use futures::future::Future;
 use keystore::Store as Keystore;
 use log::{debug, warn};
 use network::NetworkStateInfo;
-use primitives::{ExecutionContext, traits::KeyStorePtr};
+use primitives::{ExecutionContext, traits::BareCryptoStorePtr};
 use sr_primitives::{
 	generic::BlockId,
 	traits::{self, ProvideRuntimeApi},
@@ -61,7 +61,7 @@ pub use offchain_primitives::OffchainWorkerApi;
 pub struct OffchainWorkers<Client, Storage, Block: traits::Block> {
 	client: Arc<Client>,
 	db: Storage,
-	keystore: Option<KeyStorePtr>,
+	keystore: Option<BareCryptoStorePtr>,
 	_block: PhantomData<Block>,
 }
 
@@ -71,7 +71,7 @@ impl<Client, Storage, Block: traits::Block> OffchainWorkers<
 	Block,
 > {
 	/// Creates new `OffchainWorkers`.
-	pub fn new(client: Arc<Client>, db: Storage, keystore: Option<KeyStorePtr>) -> Self {
+	pub fn new(client: Arc<Client>, db: Storage, keystore: Option<BareCryptoStorePtr>) -> Self {
 		Self {
 			client,
 			db,

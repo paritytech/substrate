@@ -19,6 +19,7 @@
 use std::{sync::Arc, ops::Deref, ops::DerefMut};
 use serde::{Serialize, de::DeserializeOwned};
 use crate::chain_spec::ChainSpec;
+use keystore::KeyStorePtr;
 use client_db;
 use client::{self, Client, runtime_api};
 use crate::{error, Service};
@@ -32,7 +33,7 @@ use sr_primitives::{
 	BuildStorage, traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi}, generic::BlockId
 };
 use crate::config::Configuration;
-use primitives::{Blake2Hasher, H256, traits::KeyStorePtr};
+use primitives::{Blake2Hasher, H256, traits::BareCryptoStorePtr};
 use rpc::{self, apis::system::SystemInfo};
 use futures::{prelude::*, future::Executor};
 use futures03::channel::mpsc;
@@ -173,6 +174,7 @@ pub trait StartRPC<C: Components> {
 		system_info: SystemInfo,
 		task_executor: TaskExecutor,
 		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
+		keystore: KeyStorePtr,
 	) -> rpc::RpcHandler;
 }
 
@@ -186,11 +188,12 @@ impl<C: Components> StartRPC<Self> for C where
 		rpc_system_info: SystemInfo,
 		task_executor: TaskExecutor,
 		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
+		keystore: KeyStorePtr,
 	) -> rpc::RpcHandler {
 		let subscriptions = rpc::apis::Subscriptions::new(task_executor.clone());
 		let chain = rpc::apis::chain::Chain::new(client.clone(), subscriptions.clone());
 		let state = rpc::apis::state::State::new(client.clone(), subscriptions.clone());
-		let author = rpc::apis::author::Author::new(client, transaction_pool, subscriptions);
+		let author = rpc::apis::author::Author::new(client, transaction_pool, subscriptions, keystore);
 		let system = rpc::apis::system::System::new(rpc_system_info, system_send_back);
 		rpc::rpc_handler::<ComponentBlock<C>, ComponentExHash<C>, _, _, _, _>(
 			state,
@@ -421,7 +424,7 @@ pub trait Components: Sized + 'static {
 	fn build_client(
 		config: &FactoryFullConfiguration<Self::Factory>,
 		executor: CodeExecutor<Self::Factory>,
-		keystore: Option<KeyStorePtr>,
+		keystore: Option<BareCryptoStorePtr>,
 	) -> Result<
 		(
 			Arc<ComponentClient<Self>>,
@@ -508,7 +511,7 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	fn build_client(
 		config: &FactoryFullConfiguration<Factory>,
 		executor: CodeExecutor<Self::Factory>,
-		keystore: Option<KeyStorePtr>,
+		keystore: Option<BareCryptoStorePtr>,
 	) -> Result<
 			(Arc<ComponentClient<Self>>, Option<Arc<OnDemand<FactoryBlock<Self::Factory>>>>),
 			error::Error,
@@ -617,7 +620,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 	fn build_client(
 		config: &FactoryFullConfiguration<Factory>,
 		executor: CodeExecutor<Self::Factory>,
-		_: Option<KeyStorePtr>,
+		_: Option<BareCryptoStorePtr>,
 	)
 		-> Result<
 			(

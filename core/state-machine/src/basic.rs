@@ -172,7 +172,7 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 		None
 	}
 
-	fn keystore(&self) -> Option<primitives::traits::KeyStorePtr> {
+	fn keystore(&self) -> Option<primitives::traits::BareCryptoStorePtr> {
 		warn!("Call to non-existent keystore.");
 		None
 	}

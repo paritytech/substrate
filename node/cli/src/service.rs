@@ -320,7 +320,7 @@ mod tests {
 	fn test_sync() {
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 		let keystore = keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
-		let alice = keystore.write().generate_from_seed::<babe::AuthorityPair>("//Alice")
+		let alice = keystore.write().insert_ephemeral_from_seed::<babe::AuthorityPair>("//Alice")
 			.expect("Creates authority pair");
 
 		let chain_spec = crate::chain_spec::tests::integration_test_config_with_single_authority();

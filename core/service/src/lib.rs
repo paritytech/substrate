@@ -383,6 +383,7 @@ impl<Components: components::Components> Service<Components> {
 				system_info.clone(),
 				Arc::new(SpawnTaskHandle { sender: to_spawn_tx.clone() }),
 				transaction_pool.clone(),
+				keystore.clone(),
 			)
 		};
 		let rpc_handlers = gen_handler();

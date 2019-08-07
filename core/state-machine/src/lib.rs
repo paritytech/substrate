@@ -24,7 +24,8 @@ use log::warn;
 use hash_db::Hasher;
 use codec::{Decode, Encode};
 use primitives::{
-	storage::well_known_keys, NativeOrEncoded, NeverNativeValue, offchain, traits::KeyStorePtr,
+	storage::well_known_keys, NativeOrEncoded, NeverNativeValue, offchain,
+	traits::BareCryptoStorePtr,
 };
 
 pub mod backend;
@@ -227,7 +228,7 @@ pub trait Externalities<H: Hasher> {
 	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities>;
 
 	/// Returns the keystore.
-	fn keystore(&self) -> Option<KeyStorePtr>;
+	fn keystore(&self) -> Option<BareCryptoStorePtr>;
 }
 
 /// An implementation of offchain extensions that should never be triggered.
@@ -487,7 +488,7 @@ pub fn new<'a, H, N, B, T, O, Exec>(
 	exec: &'a Exec,
 	method: &'a str,
 	call_data: &'a [u8],
-	keystore: Option<KeyStorePtr>,
+	keystore: Option<BareCryptoStorePtr>,
 ) -> StateMachine<'a, H, N, B, T, O, Exec> {
 	StateMachine {
 		backend,
@@ -511,7 +512,7 @@ pub struct StateMachine<'a, H, N, B, T, O, Exec> {
 	exec: &'a Exec,
 	method: &'a str,
 	call_data: &'a [u8],
-	keystore: Option<KeyStorePtr>,
+	keystore: Option<BareCryptoStorePtr>,
 	_hasher: PhantomData<(H, N)>,
 }
 
@@ -717,7 +718,7 @@ pub fn prove_execution<B, H, Exec>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-	keystore: Option<KeyStorePtr>,
+	keystore: Option<BareCryptoStorePtr>,
 ) -> Result<(Vec<u8>, Vec<Vec<u8>>), Box<dyn Error>>
 where
 	B: Backend<H>,
@@ -745,7 +746,7 @@ pub fn prove_execution_on_trie_backend<S, H, Exec>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-	keystore: Option<KeyStorePtr>,
+	keystore: Option<BareCryptoStorePtr>,
 ) -> Result<(Vec<u8>, Vec<Vec<u8>>), Box<dyn Error>>
 where
 	S: trie_backend_essence::TrieBackendStorage<H>,
@@ -782,7 +783,7 @@ pub fn execution_proof_check<H, Exec>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-	keystore: Option<KeyStorePtr>,
+	keystore: Option<BareCryptoStorePtr>,
 ) -> Result<Vec<u8>, Box<dyn Error>>
 where
 	H: Hasher,
@@ -800,7 +801,7 @@ pub fn execution_proof_check_on_trie_backend<H, Exec>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-	keystore: Option<KeyStorePtr>,
+	keystore: Option<BareCryptoStorePtr>,
 ) -> Result<Vec<u8>, Box<dyn Error>>
 where
 	H: Hasher,

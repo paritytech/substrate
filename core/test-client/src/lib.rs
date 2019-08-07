@@ -30,7 +30,7 @@ pub use keyring::{
 	ed25519::Keyring as Ed25519Keyring,
 	sr25519::Keyring as Sr25519Keyring,
 };
-pub use primitives::{Blake2Hasher, traits::KeyStorePtr};
+pub use primitives::{Blake2Hasher, traits::BareCryptoStorePtr};
 pub use sr_primitives::{StorageOverlay, ChildrenStorageOverlay};
 pub use state_machine::ExecutionStrategy;
 
@@ -73,7 +73,7 @@ pub struct TestClientBuilder<Executor, Backend, G: GenesisInit = ()> {
 	child_storage_extension: HashMap<Vec<u8>, Vec<(Vec<u8>, Vec<u8>)>>,
 	backend: Arc<Backend>,
 	_executor: std::marker::PhantomData<Executor>,
-	keystore: Option<KeyStorePtr>,
+	keystore: Option<BareCryptoStorePtr>,
 }
 
 impl<Block, Executor> Default for TestClientBuilder<
@@ -115,7 +115,7 @@ impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> 
 	}
 
 	/// Set the keystore that should be used by the externalities.
-	pub fn set_keystore(mut self, keystore: KeyStorePtr) -> Self {
+	pub fn set_keystore(mut self, keystore: BareCryptoStorePtr) -> Self {
 		self.keystore = Some(keystore);
 		self
 	}

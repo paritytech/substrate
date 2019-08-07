@@ -349,7 +349,7 @@ fn make_ids(keys: &[Ed25519Keyring]) -> Vec<(AuthorityId, u64)> {
 fn create_keystore(authority: Ed25519Keyring) -> (KeyStorePtr, tempfile::TempDir) {
 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 	let keystore = keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
-	keystore.write().generate_from_seed::<AuthorityPair>(&authority.to_seed())
+	keystore.write().insert_ephemeral_from_seed::<AuthorityPair>(&authority.to_seed())
 		.expect("Creates authority key");
 
 	(keystore, keystore_path)

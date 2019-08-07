@@ -33,7 +33,7 @@ use primitives::offchain::{
 	CryptoKind, CryptoKey, KeyTypeId, Externalities as OffchainExt, HttpRequestId, Timestamp,
 	HttpRequestStatus, HttpError, OpaqueNetworkState, OpaquePeerId, OpaqueMultiaddr, StorageKind,
 };
-use primitives::{ed25519, sr25519, traits::KeyStorePtr};
+use primitives::{ed25519, sr25519, traits::BareCryptoStorePtr};
 use sr_primitives::{generic::BlockId, traits::{self, Extrinsic}};
 use transaction_pool::txpool::{Pool, ChainApi};
 
@@ -89,7 +89,7 @@ impl KnownCryptoKey {
 pub(crate) struct Api<Storage, Block: traits::Block> {
 	sender: mpsc::UnboundedSender<ExtMessage>,
 	db: Storage,
-	keystore: Option<KeyStorePtr>,
+	keystore: Option<BareCryptoStorePtr>,
 	network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
 	at: BlockId<Block>,
 }
@@ -391,7 +391,7 @@ impl<A: ChainApi> AsyncApi<A> {
 	pub fn new<S: OffchainStorage>(
 		transaction_pool: Arc<Pool<A>>,
 		db: S,
-		keystore: Option<KeyStorePtr>,
+		keystore: Option<BareCryptoStorePtr>,
 		at: BlockId<A::Block>,
 		network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
 	) -> (Api<S, A::Block>, AsyncApi<A>) {

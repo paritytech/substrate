@@ -21,7 +21,7 @@
 use std::{collections::HashMap, path::PathBuf, fs::{self, File}, io::{self, Write}, sync::Arc};
 
 use primitives::{
-	crypto::{KeyTypeId, Pair as PairT, Public, IsWrappedBy, Protected}, traits::KeyStore,
+	crypto::{KeyTypeId, Pair as PairT, Public, IsWrappedBy, Protected}, traits::BareCryptoStore,
 };
 
 use app_crypto::{AppKey, AppPublic, AppPair, ed25519, sr25519};
@@ -47,6 +47,9 @@ pub enum Error {
 	/// Invalid seed
 	#[display(fmt="Invalid seed")]
 	InvalidSeed,
+	/// Keystore unavailable
+	#[display(fmt="Keystore unavailable")]
+	Unavailable,
 }
 
 /// Keystore Result
@@ -99,9 +102,41 @@ impl Store {
 	}
 
 	/// Insert the given public/private key pair with the given key type.
-	fn insert_pair<Pair: PairT>(&mut self, pair: &Pair, key_type: KeyTypeId) {
+	/// 
+	/// Does not place it into the file system store.
+	fn insert_ephemeral_pair<Pair: PairT>(&mut self, pair: &Pair, key_type: KeyTypeId) {
 		let key = (key_type, pair.public().to_raw_vec());
 		self.additional.insert(key, pair.to_raw_vec());
+	}
+
+	/// Insert a new key with anonymous crypto.
+	///
+	/// Places it into the file system store.
+	fn insert_unknown(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<()> {
+		let mut file = File::create(self.key_file_path(public, key_type)).map_err(Error::Io)?;
+		serde_json::to_writer(&file, &suri).map_err(Error::Json)?;
+		file.flush().map_err(Error::Io)?;
+		Ok(())
+	}
+
+	/// Insert a new key.
+	///
+	/// Places it into the file system store.
+	pub fn insert_by_type<Pair: PairT>(&self, key_type: KeyTypeId, suri: &str) -> Result<Pair> {
+		let pair = Pair::from_string(
+			suri,
+			self.password.as_ref().map(|p| &***p)
+		).map_err(|_| Error::InvalidSeed)?;
+		self.insert_unknown(key_type, suri, pair.public().as_slice())
+			.map_err(|_| Error::Unavailable)?;
+		Ok(pair)
+	}
+
+	/// Insert a new key.
+	///
+	/// Places it into the file system store.
+	pub fn insert<Pair: AppPair>(&self, suri: &str) -> Result<Pair> {
+		self.insert_by_type::<Pair::Generic>(Pair::ID, suri).map(Into::into)
 	}
 
 	/// Generate a new key.
@@ -109,7 +144,7 @@ impl Store {
 	/// Places it into the file system store.
 	pub fn generate_by_type<Pair: PairT>(&self, key_type: KeyTypeId) -> Result<Pair> {
 		let (pair, phrase, _) = Pair::generate_with_phrase(self.password.as_ref().map(|p| &***p));
-		let mut file = File::create(self.key_file_path::<Pair>(&pair.public(), key_type))?;
+		let mut file = File::create(self.key_file_path(pair.public().as_slice(), key_type))?;
 		serde_json::to_writer(&file, &phrase)?;
 		file.flush()?;
 		Ok(pair)
@@ -125,21 +160,21 @@ impl Store {
 	/// Create a new key from seed.
 	///
 	/// Does not place it into the file system store.
-	pub fn generate_from_seed_by_type<Pair: PairT>(
+	pub fn insert_ephemeral_from_seed_by_type<Pair: PairT>(
 		&mut self,
 		seed: &str,
 		key_type: KeyTypeId,
 	) -> Result<Pair> {
 		let pair = Pair::from_string(seed, None).map_err(|_| Error::InvalidSeed)?;
-		self.insert_pair(&pair, key_type);
+		self.insert_ephemeral_pair(&pair, key_type);
 		Ok(pair)
 	}
 
 	/// Create a new key from seed.
 	///
 	/// Does not place it into the file system store.
-	pub fn generate_from_seed<Pair: AppPair>(&mut self, seed: &str) -> Result<Pair> {
-		self.generate_from_seed_by_type::<Pair::Generic>(seed, Pair::ID).map(Into::into)
+	pub fn insert_ephemeral_from_seed<Pair: AppPair>(&mut self, seed: &str) -> Result<Pair> {
+		self.insert_ephemeral_from_seed_by_type::<Pair::Generic>(seed, Pair::ID).map(Into::into)
 	}
 
 	/// Get a key pair for the given public key and key type.
@@ -151,7 +186,7 @@ impl Store {
 			return Ok(pair)
 		}
 
-		let path = self.key_file_path::<Pair>(public, key_type);
+		let path = self.key_file_path(public.as_slice(), key_type);
 		let file = File::open(path)?;
 
 		let phrase: String = serde_json::from_reader(&file)?;
@@ -216,23 +251,23 @@ impl Store {
 	}
 
 	/// Returns the file path for the given public key and key type.
-	fn key_file_path<Pair: PairT>(&self, public: &Pair::Public, key_type: KeyTypeId) -> PathBuf {
+	fn key_file_path(&self, public: &[u8], key_type: KeyTypeId) -> PathBuf {
 		let mut buf = self.path.clone();
 		let key_type = hex::encode(key_type.0);
-		let key = hex::encode(public.as_slice());
+		let key = hex::encode(public);
 		buf.push(key_type + key.as_str());
 		buf
 	}
 }
 
-impl KeyStore for Store {
+impl BareCryptoStore for Store {
 	fn sr25519_generate_new(
 		&mut self,
 		id: KeyTypeId,
 		seed: Option<&str>,
 	) -> std::result::Result<[u8; 32], String> {
 		let pair = match seed {
-			Some(seed) => self.generate_from_seed_by_type::<sr25519::Pair>(seed, id),
+			Some(seed) => self.insert_ephemeral_from_seed_by_type::<sr25519::Pair>(seed, id),
 			None => self.generate_by_type::<sr25519::Pair>(id),
 		}.map_err(|e| e.to_string())?;
 
@@ -249,7 +284,7 @@ impl KeyStore for Store {
 		seed: Option<&str>,
 	) -> std::result::Result<[u8; 32], String> {
 		let pair = match seed {
-			Some(seed) => self.generate_from_seed_by_type::<ed25519::Pair>(seed, id),
+			Some(seed) => self.insert_ephemeral_from_seed_by_type::<ed25519::Pair>(seed, id),
 			None => self.generate_by_type::<ed25519::Pair>(id),
 		}.map_err(|e| e.to_string())?;
 
@@ -258,6 +293,16 @@ impl KeyStore for Store {
 
 	fn ed25519_key_pair(&self, id: KeyTypeId, pub_key: &ed25519::Public) -> Option<ed25519::Pair> {
 		self.key_pair_by_type::<ed25519::Pair>(pub_key, id).ok()
+	}
+
+	fn insert_unknown(&mut self, key_type: KeyTypeId, suri: &str, public: &[u8])
+		-> std::result::Result<(), ()>
+	{
+		Store::insert_unknown(self, key_type, suri, public).map_err(|_| ())
+	}
+
+	fn password(&self) -> Option<&str> {
+		self.password.as_ref().map(|x| x.as_str())
 	}
 }
 
@@ -283,13 +328,13 @@ mod tests {
 	}
 
 	#[test]
-	fn test_generate_from_seed() {
+	fn test_insert_ephemeral_from_seed() {
 		let temp_dir = TempDir::new("keystore").unwrap();
 		let store = Store::open(temp_dir.path(), None).unwrap();
 
 		let pair: ed25519::AppPair = store
 			.write()
-			.generate_from_seed("0x3d97c819d68f9bafa7d6e79cb991eebcd77d966c5334c0b94d9e1fa7ad0869dc")
+			.insert_ephemeral_from_seed("0x3d97c819d68f9bafa7d6e79cb991eebcd77d966c5334c0b94d9e1fa7ad0869dc")
 			.unwrap();
 		assert_eq!(
 			"5DKUrgFqCPV8iAXx9sjy1nyBygQCeiUYRFWurZGhnrn3HJCA",
@@ -333,7 +378,7 @@ mod tests {
 		let mut public_keys = Vec::new();
 		for i in 0..10 {
 			public_keys.push(store.write().generate::<ed25519::AppPair>().unwrap().public());
-			public_keys.push(store.write().generate_from_seed::<ed25519::AppPair>(
+			public_keys.push(store.write().insert_ephemeral_from_seed::<ed25519::AppPair>(
 				&format!("0x3d97c819d68f9bafa7d6e79cb991eebcd7{}d966c5334c0b94d9e1fa7ad0869dc", i),
 			).unwrap().public());
 		}

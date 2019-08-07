@@ -195,7 +195,7 @@ pub fn new_client<E, S, Block, RA>(
 	executor: E,
 	genesis_storage: S,
 	execution_strategies: ExecutionStrategies,
-	keystore: Option<primitives::traits::KeyStorePtr>,
+	keystore: Option<primitives::traits::BareCryptoStorePtr>,
 ) -> Result<
 	client::Client<Backend<Block>,
 	client::LocalCallExecutor<Backend<Block>, E>, Block, RA>, client::error::Error

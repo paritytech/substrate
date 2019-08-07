@@ -196,7 +196,7 @@ fn run_one_test() {
 	for (peer_id, seed) in peers {
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 		let keystore = keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
-		keystore.write().generate_from_seed::<AuthorityPair>(seed).expect("Generates authority key");
+		keystore.write().insert_ephemeral_from_seed::<AuthorityPair>(seed).expect("Generates authority key");
 		keystore_paths.push(keystore_path);
 
 		let client = net.lock().peer(*peer_id).client().as_full().unwrap();
@@ -312,7 +312,7 @@ fn can_author_block() {
 	let _ = env_logger::try_init();
 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 	let keystore = keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
-	let pair = keystore.write().generate_from_seed::<AuthorityPair>("//Alice")
+	let pair = keystore.write().insert_ephemeral_from_seed::<AuthorityPair>("//Alice")
 		.expect("Generates authority pair");
 
 	let mut i = 0;
