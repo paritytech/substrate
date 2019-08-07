@@ -95,7 +95,7 @@ use srml_support::{
 	Parameter, for_each_tuple, traits::{Contains, Get}
 };
 use safe_mix::TripletMix;
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 
 #[cfg(any(feature = "std", test))]
 use runtime_io::{twox_128, TestExternalities, Blake2Hasher};
@@ -140,8 +140,8 @@ impl<AccountId> IsDeadAccount<AccountId> for () {
 }
 
 /// Compute the trie root of a list of extrinsics.
-pub fn extrinsics_root<H: Hash, E: parity_codec::Encode>(extrinsics: &[E]) -> H::Output {
-	extrinsics_data_root::<H>(extrinsics.iter().map(parity_codec::Encode::encode).collect())
+pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
+	extrinsics_data_root::<H>(extrinsics.iter().map(codec::Encode::encode).collect())
 }
 
 /// Compute the trie root of a list of extrinsics.
@@ -412,7 +412,7 @@ decl_storage! {
 			_: &mut sr_primitives::ChildrenStorageOverlay,
 			config: &GenesisConfig|
 		{
-			use parity_codec::Encode;
+			use codec::Encode;
 
 			storage.insert(well_known_keys::CODE.to_vec(), config.code.clone());
 			storage.insert(well_known_keys::EXTRINSIC_INDEX.to_vec(), 0u32.encode());

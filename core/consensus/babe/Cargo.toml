@@ -6,8 +6,8 @@ description = "BABE consensus algorithm for substrate"
 edition = "2018"
 
 [dependencies]
-parity-codec = { version = "4.1.1", features = ["derive"] }
-babe-primitives = { package = "substrate-consensus-babe-primitives", path = "primitives" }
+codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
+babe_primitives = { package = "substrate-consensus-babe-primitives", path = "primitives" }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 num-bigint = "0.2"
 num-rational = "0.2"
@@ -28,7 +28,7 @@ futures01 = { package = "futures", version = "0.1" }
 futures-timer = "0.2.1"
 parking_lot = "0.8.0"
 log = "0.4.6"
-schnorrkel = "0.1.1"
+schnorrkel = { version = "0.8.4", features = ["preaudit_deprecated"] }
 rand = "0.6.5"
 merlin = "1.0.3"
 

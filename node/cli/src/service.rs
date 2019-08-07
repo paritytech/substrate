@@ -265,7 +265,7 @@ mod tests {
 	use node_primitives::DigestItem;
 	use node_runtime::{BalancesCall, Call, UncheckedExtrinsic};
 	use node_runtime::constants::{currency::CENTS, time::SLOT_DURATION};
-	use parity_codec::{Encode, Decode};
+	use codec::{Encode, Decode};
 	use primitives::{
 		crypto::Pair as CryptoPair, blake2_256,
 		sr25519::Public as AddressPublic, H256,

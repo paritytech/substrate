@@ -151,7 +151,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use parity_codec::{Decode, Encode, HasCompact, Input, Output};
+use codec::{Decode, Encode, HasCompact, Input, Output, Error};
 
 use sr_primitives::traits::{
 	CheckedAdd, CheckedSub, MaybeSerializeDebug, Member, One, Saturating, SimpleArithmetic, Zero, Bounded
@@ -284,10 +284,12 @@ impl<AccountId: Encode> Encode for PermissionVersions<AccountId> {
 	}
 }
 
+impl<AccountId: Encode> codec::EncodeLike for PermissionVersions<AccountId> {}
+
 impl<AccountId: Decode> Decode for PermissionVersions<AccountId> {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+	fn decode<I: Input>(input: &mut I) -> core::result::Result<Self, Error> {
 		let version = PermissionVersionNumber::decode(input)?;
-		Some(
+		Ok(
 			match version {
 				PermissionVersionNumber::V1 => PermissionVersions::V1(Decode::decode(input)?)
 			}
@@ -484,7 +486,7 @@ decl_storage! {
 				config.endowed_accounts.iter().for_each(|account_id| {
 					storage.insert(
 						<FreeBalance<T>>::key_for(asset_id, account_id),
-						<T::Balance as parity_codec::Encode>::encode(&config.initial_balance)
+						<T::Balance as codec::Encode>::encode(&config.initial_balance)
 					);
 				});
 			});

@@ -25,7 +25,7 @@ use client::{
 	blockchain::HeaderBackend,
 	error::Error as ClientError,
 };
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use consensus_common::{
 	import_queue::Verifier, well_known_cache_keys,
 	BlockOrigin, BlockImport, FinalityProofImport, BlockImportParams, ImportResult, ImportedAux,
