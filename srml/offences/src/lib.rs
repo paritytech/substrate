@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -68,6 +68,7 @@ impl<T: Trait, O: Offence<IdentificationTuple<T>>> ReportOffence<T::AccountId, I
 
 		// Check if an offence is already reported for the offender authorities
 		// and otherwise stores that report.
+		let mut changed = false;
 		let all_offenders = <OffenceReports<T>>
 			::mutate(&O::ID, &(session, time_slot), |offending_authorities| {
 				for offender in offenders {
@@ -75,19 +76,8 @@ impl<T: Trait, O: Offence<IdentificationTuple<T>>> ReportOffence<T::AccountId, I
 					// note however that we might do that in the future if the reports are not exactly the same (dups).
 					// De-duplication of reports is tricky though, we need a canonical form of the report
 					// (for instance babe equivocation can have headers swapped).
-					if let Some(details) = offending_authorities
-						.iter_mut()
-						.find(|details| details.offender == offender)
-					{
-						// TODO [slashing] This is wrong, we should rather prevent having multiple reports here and
-						// increase count for ALL offending_authorities in case we insert new entry.
-						details.count += 1;
-						if let Some(ref reporter) = reporter {
-							if !details.reporters.contains(reporter) {
-								details.reporters.push(reporter.clone());
-							}
-						}
-					} else {
+					if !offending_authorities.iter().any(|details| details.offender == offender) {
+						changed = true;
 						offending_authorities.push(OffenceDetails {
 							offender,
 							count: 0,
@@ -96,17 +86,28 @@ impl<T: Trait, O: Offence<IdentificationTuple<T>>> ReportOffence<T::AccountId, I
 					}
 				}
 
+				if changed {
+					for details in offending_authorities.iter_mut() {
+						details.count += 1;
+					}
+				}
+
 				offending_authorities.clone()
 			});
+
+		if !changed {
+			// The report contained only duplicates, so there is no need to slash again.
+			return
+		}
 
 		let offenders_count = all_offenders.len() as u32;
 		let expected_fraction = O::slash_fraction(offenders_count, validators_count);
 		let slash_perbil = all_offenders
 			.iter()
 			.map(|details| {
-				if details.count > 0 {
+				if details.count > 1 {
 					let previous_fraction = O::slash_fraction(
-						offenders_count.saturating_sub(details.count),
+						offenders_count.saturating_sub(details.count - 1),
 						validators_count,
 					);
 					let perbil = expected_fraction

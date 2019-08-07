@@ -125,7 +125,6 @@ struct WorkerStatus<BlockNumber> {
 // Error which may occur while executing the off-chain code.
 enum OffchainErr {
 	DecodeWorkerStatus,
-	NoKeys,
 	ExtrinsicCreation,
 	FailedSigning,
 	NetworkState,
@@ -136,7 +135,6 @@ impl Printable for OffchainErr {
 	fn print(self) {
 		match self {
 			OffchainErr::DecodeWorkerStatus => print("Offchain error: decoding WorkerStatus failed!"),
-			OffchainErr::NoKeys => print("Offchain error: could not find local keys!"),
 			OffchainErr::ExtrinsicCreation => print("Offchain error: extrinsic creation failed!"),
 			OffchainErr::FailedSigning => print("Offchain error: signing failed!"),
 			OffchainErr::NetworkState => print("Offchain error: fetching network state failed!"),
