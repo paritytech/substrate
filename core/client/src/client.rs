@@ -1356,11 +1356,11 @@ impl<B, E, Block, RA> ProvideUncles<Block> for Client<B, E, Block, RA> where
 	Block: BlockT<Hash=H256>,
 {
 	fn uncles(&self, target_hash: Block::Hash, max_generation: NumberFor<Block>) -> error::Result<Vec<Block::Header>> {
-		Client::uncles(self, target_hash, max_generation)?
+		Ok(Client::uncles(self, target_hash, max_generation)?
 			.into_iter()
-			.map(|hash| Client::header(self, &BlockId::Hash(hash))
-				.map(|maybe_header| maybe_header.expect("Each uncle exists in the database; qed")))
+			.filter_map(|hash| Client::header(self, &BlockId::Hash(hash)).unwrap_or(None))
 			.collect()
+		)
 	}
 }
 
