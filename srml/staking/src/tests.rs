@@ -1991,7 +1991,6 @@ fn reporters_receive_their_slice() {
 		// The reporters' reward is calculated from the total exposure.
 		assert_eq!(Staking::stakers(&11).total, 1250);
 
-		// Handle an offence with a historical exposure.
 		Staking::on_offence(
 			&[OffenceDetails {
 				offender: (
@@ -2009,3 +2008,26 @@ fn reporters_receive_their_slice() {
 		assert_eq!(Balances::free_balance(&2), 20 + 31);
 	});
 }
+
+#[test]
+fn invulnerables_are_not_slashed() {
+	with_externalities(&mut ExtBuilder::default().invulnerables(vec![11]).build(), || {
+		assert_eq!(Balances::free_balance(&11), 1000);
+
+		Staking::on_offence(
+			&[OffenceDetails {
+				offender: (
+					11,
+					Staking::stakers(&11),
+				),
+				count: 1,
+				reporters: vec![],
+			}],
+			&[Perbill::from_percent(50)],
+		);
+
+		// The validator hasn't been slashed.
+		assert_eq!(Balances::free_balance(&11), 1000);
+	});
+}
+
