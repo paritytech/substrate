@@ -85,9 +85,6 @@ mod aux_schema;
 mod tests;
 pub use babe_primitives::AuthorityId;
 
-/// Maximum uncles generations we may provide to the runtime.
-const MAX_UNCLE_GENERATIONS: u32 = 8;
-
 /// A slot duration. Create with `get_or_compute`.
 // FIXME: Once Rust has higher-kinded types, the duplication between this
 // and `super::babe::Config` can be eliminated.
@@ -209,7 +206,7 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 		c: config.c(),
 	};
 	register_babe_inherent_data_provider(&inherent_data_providers, config.0.slot_duration())?;
-	register_uncles_inherent_data_provider(
+	uncles::register_uncles_inherent_data_provider(
 		client.clone(),
 		select_chain.clone(),
 		&inherent_data_providers,
@@ -775,41 +772,6 @@ fn register_babe_inherent_data_provider(
 	} else {
 		Ok(())
 	}
-}
-
-/// Register uncles inherent data provider, if not registered already.
-fn register_uncles_inherent_data_provider<B, C, SC>(
-	client: Arc<C>,
-	select_chain: SC,
-	inherent_data_providers: &InherentDataProviders,
-) -> Result<(), consensus_common::Error> where
-	B: BlockT,
-	C: ProvideUncles<B> + Send + Sync + 'static,
-	SC: SelectChain<B> + 'static,
-{
-	if !inherent_data_providers.has_provider(&srml_authorship::INHERENT_IDENTIFIER) {
-		inherent_data_providers
-			.register_provider(srml_authorship::InherentDataProvider::new(move || {
-				{
-					let chain_head = match select_chain.best_chain() {
-						Ok(x) => x,
-						Err(e) => {
-							warn!(target: "babe", "Unable to get chain head: {:?}", e);
-							return Vec::new();
-						}
-					};
-					match client.uncles(chain_head.hash(), MAX_UNCLE_GENERATIONS.into()) {
-						Ok(uncles) => uncles,
-						Err(e) => {
-							warn!(target: "babe", "Unable to get uncles: {:?}", e);
-							Vec::new()
-						}
-					}
-				}
-			}))
-		.map_err(|err| consensus_common::Error::InherentData(err.into()))?;
-	}
-	Ok(())
 }
 
 fn get_keypair(q: &sr25519::Pair) -> &Keypair {

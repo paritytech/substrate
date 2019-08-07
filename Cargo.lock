@@ -4399,13 +4399,13 @@ dependencies = [
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
  "sr-version 2.0.0",
- "srml-authorship 0.1.0",
  "srml-babe 2.0.0",
  "srml-support 2.0.0",
  "substrate-client 2.0.0",
  "substrate-consensus-babe-primitives 2.0.0",
  "substrate-consensus-common 2.0.0",
  "substrate-consensus-slots 2.0.0",
+ "substrate-consensus-uncles 2.0.0",
  "substrate-executor 2.0.0",
  "substrate-inherents 2.0.0",
  "substrate-keyring 2.0.0",
@@ -4498,6 +4498,19 @@ dependencies = [
  "substrate-inherents 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-test-runtime-client 2.0.0",
+]
+
+[[package]]
+name = "substrate-consensus-uncles"
+version = "2.0.0"
+dependencies = [
+ "log 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 2.0.0",
+ "srml-authorship 0.1.0",
+ "substrate-client 2.0.0",
+ "substrate-consensus-common 2.0.0",
+ "substrate-inherents 2.0.0",
+ "substrate-primitives 2.0.0",
 ]
 
 [[package]]
