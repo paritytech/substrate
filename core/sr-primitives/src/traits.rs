@@ -916,7 +916,7 @@ macro_rules! tuple_impl_indexed {
 				Ok(())
 			}
 			fn post_dispatch(
-				call: &Self::Call,
+				pre: &Self::Pre,
 				info: DispatchInfo,
 				len: usize,
 			) {
