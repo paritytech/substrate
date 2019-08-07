@@ -471,23 +471,16 @@ where
 		is_dev,
 	)?;
 
-	fill_transaction_pool_configuration::<F>(
-		&mut config,
-		cli.pool_config,
-	)?;
+	fill_transaction_pool_configuration::<F>(&mut config, cli.pool_config)?;
 
-	config.dev_key_seed = cli.keyring.account
-		.map(|a| format!("//{}", a));
+	config.dev_key_seed = cli.keyring.account.map(|a| format!("//{}", a));
 
 	let rpc_interface: &str = if cli.rpc_external { "0.0.0.0" } else { "127.0.0.1" };
 	let ws_interface: &str = if cli.ws_external { "0.0.0.0" } else { "127.0.0.1" };
 
-	config.rpc_http = Some(
-		parse_address(&format!("{}:{}", rpc_interface, 9933), cli.rpc_port)?
-	);
-	config.rpc_ws = Some(
-		parse_address(&format!("{}:{}", ws_interface, 9944), cli.ws_port)?
-	);
+	config.rpc_http = Some(parse_address(&format!("{}:{}", rpc_interface, 9933), cli.rpc_port)?);
+	config.rpc_ws = Some(parse_address(&format!("{}:{}", ws_interface, 9944), cli.ws_port)?);
+
 	config.rpc_ws_max_connections = cli.ws_max_connections;
 	config.rpc_cors = cli.rpc_cors.unwrap_or_else(|| if is_dev {
 		log::warn!("Running in --dev mode, RPC CORS has been disabled.");
