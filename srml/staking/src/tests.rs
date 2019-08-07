@@ -1936,7 +1936,6 @@ fn era_is_always_same_length() {
 }
 
 // TODO: a slash is performed according to the exposure, not the current balance.
-// TODO: a validator is disabled
 
 #[test]
 fn offence_forces_new_era() {
@@ -1954,5 +1953,34 @@ fn offence_forces_new_era() {
 		);
 
 		assert!(Staking::forcing_new_era());
+	});
+}
+
+#[test]
+fn slashing_performed_according_exposure() {
+	// This test checks that slashing is performed according the exposure (or more precisely,
+	// historical exposure), not the current balance.
+	with_externalities(&mut ExtBuilder::default().build(), || {
+		assert_eq!(Staking::stakers(&11).own, 1000);
+
+		// Handle an offence with a historical exposure.
+		Staking::on_offence(
+			&[OffenceDetails {
+				offender: (
+					11,
+					Exposure {
+						total: 500,
+						own: 500,
+						others: vec![],
+					},
+				),
+				count: 1,
+				reporters: vec![],
+			}],
+			&[Perbill::from_percent(50)],
+		);
+
+		// The stash account should be slashed for 250 (50% of 500).
+		assert_eq!(Balances::free_balance(&11), 1000 - 250);
 	});
 }
