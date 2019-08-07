@@ -22,7 +22,10 @@
 
 use rstd::prelude::*;
 use support::{
-	construct_runtime, parameter_types, traits::{SplitTwoWays, Currency}
+	construct_runtime, parameter_types,
+	traits::{
+		SplitTwoWays, Currency, KeyOwnerProofSystem
+	}
 };
 use primitives::u32_trait::{_1, _2, _3, _4};
 use node_primitives::{
@@ -30,6 +33,7 @@ use node_primitives::{
 	Moment, Signature,
 };
 use codec::{Encode, Decode, Codec};
+use consensus_primitives::AuthorshipEquivocationProof;
 use babe::{AuthorityId as BabeId};
 use babe_primitives::BabeEquivocationProof;
 use grandpa::fg_primitives::{self, ScheduledChange, GrandpaEquivocationFrom};
@@ -557,6 +561,7 @@ impl_runtime_apis! {
 			equivocation: GrandpaEquivocationFrom<Block>
 		) -> Option<Vec<u8>> {
 			// TODO: Check proof and create transaction.
+			let proof = Historical::prove((key_types::SR25519, equivocation.identity.encode()))?;
 			let grandpa_call = GrandpaCall::report_equivocation(equivocation);
 			let call = Call::Grandpa(grandpa_call);
 			Some(call.encode())
@@ -591,6 +596,7 @@ impl_runtime_apis! {
 			equivocation: BabeEquivocationProof<<Block as BlockT>::Header>,
 		) -> Option<Vec<u8>> {
 			// TODO: Check proof and construct transaction.
+			let proof = Historical::prove((key_types::SR25519, equivocation.identity().encode()))?;
 			let babe_call = BabeCall::report_equivocation(equivocation);
 			let call = Call::Babe(babe_call);
 			Some(call.encode())
