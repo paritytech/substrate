@@ -102,6 +102,11 @@ impl Roles {
 		self.intersects(Roles::FULL | Roles::AUTHORITY)
 	}
 
+	/// Does this role represents a client that does not participates in the consensus?
+	pub fn is_authority(&self) -> bool {
+		*self == Roles::AUTHORITY
+	}
+
 	/// Does this role represents a client that does not hold full chain data locally?
 	pub fn is_light(&self) -> bool {
 		!self.is_full()

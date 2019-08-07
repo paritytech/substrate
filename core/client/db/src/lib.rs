@@ -195,6 +195,7 @@ pub fn new_client<E, S, Block, RA>(
 	executor: E,
 	genesis_storage: S,
 	execution_strategies: ExecutionStrategies,
+	keystore: Option<primitives::traits::BareCryptoStorePtr>,
 ) -> Result<
 	client::Client<Backend<Block>,
 	client::LocalCallExecutor<Backend<Block>, E>, Block, RA>, client::error::Error
@@ -205,7 +206,7 @@ pub fn new_client<E, S, Block, RA>(
 		S: BuildStorage,
 {
 	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
-	let executor = client::LocalCallExecutor::new(backend.clone(), executor);
+	let executor = client::LocalCallExecutor::new(backend.clone(), executor, keystore);
 	Ok(client::Client::new(backend, executor, genesis_storage, execution_strategies)?)
 }
 

@@ -17,7 +17,7 @@
 //! Private implementation details of BABE digests.
 
 #[cfg(feature = "std")]
-use primitives::sr25519::Signature;
+use super::AuthoritySignature;
 #[cfg(feature = "std")]
 use super::{BABE_ENGINE_ID, Epoch};
 #[cfg(not(feature = "std"))]
@@ -111,10 +111,10 @@ pub trait CompatibleDigestItem: Sized {
 	fn as_babe_pre_digest(&self) -> Option<BabePreDigest>;
 
 	/// Construct a digest item which contains a BABE seal.
-	fn babe_seal(signature: Signature) -> Self;
+	fn babe_seal(signature: AuthoritySignature) -> Self;
 
 	/// If this item is a BABE signature, return the signature.
-	fn as_babe_seal(&self) -> Option<Signature>;
+	fn as_babe_seal(&self) -> Option<AuthoritySignature>;
 
 	/// If this item is a BABE epoch, return it.
 	fn as_babe_epoch(&self) -> Option<Epoch>;
@@ -132,11 +132,11 @@ impl<Hash> CompatibleDigestItem for DigestItem<Hash> where
 		self.try_to(OpaqueDigestItemId::PreRuntime(&BABE_ENGINE_ID))
 	}
 
-	fn babe_seal(signature: Signature) -> Self {
+	fn babe_seal(signature: AuthoritySignature) -> Self {
 		DigestItem::Seal(BABE_ENGINE_ID, signature.encode())
 	}
 
-	fn as_babe_seal(&self) -> Option<Signature> {
+	fn as_babe_seal(&self) -> Option<AuthoritySignature> {
 		self.try_to(OpaqueDigestItemId::Seal(&BABE_ENGINE_ID))
 	}
 

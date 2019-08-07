@@ -1050,6 +1050,7 @@ impl<T: Subtrait> PartialEq for ElevatedTrait<T> {
 impl<T: Subtrait> Eq for ElevatedTrait<T> {}
 impl<T: Subtrait> system::Trait for ElevatedTrait<T> {
 	type Origin = T::Origin;
+	type Call = T::Call;
 	type Index = T::Index;
 	type BlockNumber = T::BlockNumber;
 	type Hash = T::Hash;

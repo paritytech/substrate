@@ -20,46 +20,84 @@ use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializ
 use std::{fmt::Debug, ops::Deref, fmt};
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{
-	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys, TypedKey, DispatchError, DispatchResult,
+	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys, DispatchError, DispatchResult,
 	ValidateUnsigned, SignedExtension, Dispatchable,
 };
 use crate::{generic, KeyTypeId};
 use crate::weights::{GetDispatchInfo, DispatchInfo};
 pub use primitives::H256;
-use primitives::U256;
-use primitives::ed25519::{Public as AuthorityId};
+use primitives::{crypto::{CryptoType, Dummy, key_types, Public}, U256};
 use crate::transaction_validity::TransactionValidity;
 
 /// Authority Id
-#[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug, Hash, Serialize, Deserialize)]
 pub struct UintAuthorityId(pub u64);
-impl Into<AuthorityId> for UintAuthorityId {
-	fn into(self) -> AuthorityId {
+
+impl UintAuthorityId {
+	/// Convert this authority id into a public key.
+	pub fn to_public_key<T: Public>(&self) -> T {
 		let bytes: [u8; 32] = U256::from(self.0).into();
-		AuthorityId(bytes)
+		T::from_slice(&bytes)
 	}
 }
 
-/// The key-type of the `UintAuthorityId`
-pub const UINT_DUMMY_KEY: KeyTypeId = 0xdeadbeef;
-
-impl TypedKey for UintAuthorityId {
-	const KEY_TYPE: KeyTypeId = UINT_DUMMY_KEY;
+impl CryptoType for UintAuthorityId {
+	type Pair = Dummy;
 }
 
 impl AsRef<[u8]> for UintAuthorityId {
 	fn as_ref(&self) -> &[u8] {
-		let ptr = self.0 as *const _;
-		// It's safe to do this here since `UintAuthorityId` is `u64`.
-		unsafe { std::slice::from_raw_parts(ptr, 8) }
+		unsafe {
+			std::slice::from_raw_parts(&self.0 as *const u64 as *const _, std::mem::size_of::<u64>())
+		}
+	}
+}
+
+impl app_crypto::RuntimeAppPublic for UintAuthorityId {
+	type Signature = u64;
+
+	fn all() -> Vec<Self> {
+		unimplemented!("`all()` not available for `UintAuthorityId`.")
+	}
+
+	#[cfg(feature = "std")]
+	fn generate_pair(_: Option<&str>) -> Self {
+		use rand::RngCore;
+		UintAuthorityId(rand::thread_rng().next_u64())
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn generate_pair(_: Option<&str>) -> Self {
+		unimplemented!("`generate_pair` not implemented for `UIntAuthorityId` on `no_std`.")
+	}
+
+	fn sign<M: AsRef<[u8]>>(&self, msg: &M) -> Option<Self::Signature> {
+		let mut signature = [0u8; 8];
+		msg.as_ref().iter()
+			.chain(rstd::iter::repeat(&42u8))
+			.take(8)
+			.enumerate()
+			.for_each(|(i, v)| { signature[i] = *v; });
+
+		Some(u64::from_le_bytes(signature))
+	}
+
+	fn verify<M: AsRef<[u8]>>(&self, msg: &M, signature: &Self::Signature) -> bool {
+		let mut msg_signature = [0u8; 8];
+		msg.as_ref().iter()
+			.chain(rstd::iter::repeat(&42))
+			.take(8)
+			.enumerate()
+			.for_each(|(i, v)| { msg_signature[i] = *v; });
+
+		u64::from_le_bytes(msg_signature) == *signature
 	}
 }
 
 impl OpaqueKeys for UintAuthorityId {
 	type KeyTypeIds = std::iter::Cloned<std::slice::Iter<'static, KeyTypeId>>;
 
-	fn key_ids() -> Self::KeyTypeIds { [UINT_DUMMY_KEY].iter().cloned() }
+	fn key_ids() -> Self::KeyTypeIds { [key_types::DUMMY].iter().cloned() }
 	// Unsafe, i know, but it's test code and it's just there because it's really convenient to
 	// keep `UintAuthorityId` as a u64 under the hood.
 	fn get_raw(&self, _: KeyTypeId) -> &[u8] {
@@ -155,8 +193,7 @@ impl<Xt> traits::Extrinsic for ExtrinsicWrapper<Xt> {
 	}
 }
 
-impl<Xt: Encode> serde::Serialize for ExtrinsicWrapper<Xt>
-{
+impl<Xt: Encode> serde::Serialize for ExtrinsicWrapper<Xt> {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
 		self.using_encoded(|bytes| seq.serialize_bytes(bytes))
 	}
@@ -249,13 +286,13 @@ impl<Call: Codec + Sync + Send, Extra> traits::Extrinsic for TestXt<Call, Extra>
 
 impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 	Call: 'static + Sized + Send + Sync + Clone + Eq + Codec + Debug + Dispatchable<Origin=Origin>,
-	Extra: SignedExtension<AccountId=u64>,
+	Extra: SignedExtension<AccountId=u64, Call=Call>,
 	Origin: From<Option<u64>>
 {
 	type AccountId = u64;
 	type Call = Call;
 
-	fn sender(&self) -> Option<&u64> { self.0.as_ref().map(|x| &x.0) }
+	fn sender(&self) -> Option<&Self::AccountId> { self.0.as_ref().map(|x| &x.0) }
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
 	fn validate<U: ValidateUnsigned<Call=Self::Call>>(&self,
@@ -272,10 +309,10 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 		len: usize,
 	) -> Result<DispatchResult, DispatchError> {
 		let maybe_who = if let Some((who, extra)) = self.0 {
-			Extra::pre_dispatch(extra, &who, info, len)?;
+			Extra::pre_dispatch(extra, &who, &self.1, info, len)?;
 			Some(who)
 		} else {
-			Extra::pre_dispatch_unsigned(info, len)?;
+			Extra::pre_dispatch_unsigned(&self.1, info, len)?;
 			None
 		};
 		Ok(self.1.dispatch(maybe_who.into()))

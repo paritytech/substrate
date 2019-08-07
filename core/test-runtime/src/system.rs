@@ -274,8 +274,7 @@ fn execute_transfer_backend(tx: &Transfer) -> ApplyResult {
 }
 
 fn execute_new_authorities_backend(new_authorities: &[AuthorityId]) -> ApplyResult {
-	let new_authorities: Vec<AuthorityId> = new_authorities.iter().cloned().collect();
-	<NewAuthorities>::put(new_authorities);
+	NewAuthorities::put(new_authorities.to_vec());
 	Ok(ApplyOutcome::Success)
 }
 

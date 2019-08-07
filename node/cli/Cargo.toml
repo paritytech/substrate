@@ -30,7 +30,6 @@ grandpa = { package = "substrate-finality-grandpa", path = "../../core/finality-
 grandpa_primitives = { package = "substrate-finality-grandpa-primitives", path = "../../core/finality-grandpa/primitives" }
 sr-primitives = { path = "../../core/sr-primitives" }
 node-executor = { path = "../executor" }
-substrate-keystore = { path = "../../core/keystore" }
 substrate-telemetry = { package = "substrate-telemetry", path = "../../core/telemetry" }
 structopt = "0.2"
 transaction-factory = { path = "../../test-utils/transaction-factory" }
@@ -42,12 +41,16 @@ finality_tracker = { package = "srml-finality-tracker", path = "../../srml/final
 contracts = { package = "srml-contracts", path = "../../srml/contracts" }
 system = { package = "srml-system", path = "../../srml/system" }
 balances = { package = "srml-balances", path = "../../srml/balances" }
+support = { package = "srml-support", path = "../../srml/support", default-features = false }
+im_online = { package = "srml-im-online", path = "../../srml/im-online", default-features = false }
 
 [dev-dependencies]
+keystore = { package = "substrate-keystore", path = "../../core/keystore" }
 babe = { package = "substrate-consensus-babe", path = "../../core/consensus/babe", features = ["test-helpers"] }
 consensus-common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 service-test = { package = "substrate-service-test", path = "../../core/service/test" }
 futures03 = { package = "futures-preview", version = "0.3.0-alpha.17" }
+tempfile = "3.1"
 
 [build-dependencies]
 cli = { package = "substrate-cli", path = "../../core/cli" }

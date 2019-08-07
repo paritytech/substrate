@@ -93,6 +93,7 @@ mod tests {
 	}
 	impl system::Trait for Test {
 		type Origin = Origin;
+		type Call = ();
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;

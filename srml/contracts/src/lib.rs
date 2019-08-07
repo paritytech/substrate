@@ -333,7 +333,7 @@ pub trait Trait: timestamp::Trait {
 	///
 	/// It is recommended (though not required) for this function to return a fee that would be taken
 	/// by the Executive module for regular dispatch.
-	type ComputeDispatchFee: ComputeDispatchFee<Self::Call, BalanceOf<Self>>;
+	type ComputeDispatchFee: ComputeDispatchFee<<Self as Trait>::Call, BalanceOf<Self>>;
 
 	/// trie id generator
 	type TrieIdGenerator: TrieIdGenerator<Self::AccountId>;
@@ -427,8 +427,8 @@ where
 /// The default dispatch fee computor computes the fee in the same way that
 /// the implementation of `MakePayment` for the Balances module does.
 pub struct DefaultDispatchFeeComputor<T: Trait>(PhantomData<T>);
-impl<T: Trait> ComputeDispatchFee<T::Call, BalanceOf<T>> for DefaultDispatchFeeComputor<T> {
-	fn compute_dispatch_fee(call: &T::Call) -> BalanceOf<T> {
+impl<T: Trait> ComputeDispatchFee<<T as Trait>::Call, BalanceOf<T>> for DefaultDispatchFeeComputor<T> {
+	fn compute_dispatch_fee(call: &<T as Trait>::Call) -> BalanceOf<T> {
 		let encoded_len = call.using_encoded(|encoded| encoded.len() as u32);
 		let base_fee = T::TransactionBaseFee::get();
 		let byte_fee = T::TransactionByteFee::get();

@@ -593,7 +593,7 @@ decl_module! {
 				.collect();
 			<Members<T>>::put(&new_set);
 			let new_set = new_set.into_iter().map(|x| x.0).collect::<Vec<_>>();
-			T::ChangeMembers::change_members(&[], &[who], &new_set[..]);
+			T::ChangeMembers::change_members(&[], &[who], new_set);
 		}
 
 		/// Set the presentation duration. If there is currently a vote being presented for, will
@@ -876,7 +876,7 @@ impl<T: Trait> Module<T> {
 		<Members<T>>::put(&new_set);
 
 		let new_set = new_set.into_iter().map(|x| x.0).collect::<Vec<_>>();
-		T::ChangeMembers::change_members(&incoming, &outgoing, &new_set[..]);
+		T::ChangeMembers::change_members(&incoming, &outgoing, new_set);
 
 		// clear all except runners-up from candidate list.
 		let candidates = Self::candidates();
@@ -1132,6 +1132,7 @@ mod tests {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
+		type Call = ();
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
@@ -1203,7 +1204,7 @@ mod tests {
 
 	pub struct TestChangeMembers;
 	impl ChangeMembers<u64> for TestChangeMembers {
-		fn change_members(incoming: &[u64], outgoing: &[u64], new: &[u64]) {
+		fn change_members_sorted(incoming: &[u64], outgoing: &[u64], new: &[u64]) {
 			let mut old_plus_incoming = MEMBERS.with(|m| m.borrow().to_vec());
 			old_plus_incoming.extend_from_slice(incoming);
 			old_plus_incoming.sort();
