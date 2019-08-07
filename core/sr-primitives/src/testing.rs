@@ -57,6 +57,10 @@ impl AsRef<[u8]> for UintAuthorityId {
 impl app_crypto::RuntimeAppPublic for UintAuthorityId {
 	type Signature = u64;
 
+	fn all() -> Vec<Self> {
+		unimplemented!("`all()` not available for `UintAuthorityId`.")
+	}
+
 	#[cfg(feature = "std")]
 	fn generate_pair(_: Option<&str>) -> Self {
 		use rand::RngCore;

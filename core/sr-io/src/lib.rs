@@ -34,11 +34,11 @@ pub use codec;
 
 pub use primitives::Blake2Hasher;
 use primitives::{
-	crypto::KeyTypeId,
+	crypto::KeyTypeId, ed25519, sr25519,
 	offchain::{
 		Timestamp, HttpRequestId, HttpRequestStatus, HttpError, CryptoKind, CryptoKey, StorageKind,
 		OpaqueNetworkState,
-	}
+	},
 };
 
 /// Error verifying ECDSA signature
@@ -200,41 +200,45 @@ export_api! {
 
 export_api! {
 	pub(crate) trait CryptoApi {
+		/// Returns all ed25519 public keys for the given key id from the keystore.
+		fn ed25519_public_keys(id: KeyTypeId) -> Vec<ed25519::Public>;
 		/// Generate an ed22519 key for the given key type and store it in the keystore.
 		///
 		/// Returns the raw public key.
-		fn ed25519_generate(id: KeyTypeId, seed: Option<&str>) -> [u8; 32];
+		fn ed25519_generate(id: KeyTypeId, seed: Option<&str>) -> ed25519::Public;
 		/// Sign the given `msg` with the ed25519 key that corresponds to the given public key and
 		/// key type in the keystore.
 		///
 		/// Returns the raw signature.
-		fn ed25519_sign<P: AsRef<[u8]>, M: AsRef<[u8]>>(
+		fn ed25519_sign<M: AsRef<[u8]>>(
 			id: KeyTypeId,
-			pubkey: &P,
+			pubkey: &ed25519::Public,
 			msg: &M,
-		) -> Option<[u8; 64]>;
+		) -> Option<ed25519::Signature>;
 		/// Verify an ed25519 signature.
 		///
 		/// Returns `true` when the verification in successful.
-		fn ed25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: &P) -> bool;
+		fn ed25519_verify(sig: &ed25519::Signature, msg: &[u8], pubkey: &ed25519::Public) -> bool;
 
+		/// Returns all sr25519 public keys for the given key id from the keystore.
+		fn sr25519_public_keys(id: KeyTypeId) -> Vec<sr25519::Public>;
 		/// Generate an sr22519 key for the given key type and store it in the keystore.
 		///
 		/// Returns the raw public key.
-		fn sr25519_generate(id: KeyTypeId, seed: Option<&str>) -> [u8; 32];
+		fn sr25519_generate(id: KeyTypeId, seed: Option<&str>) -> sr25519::Public;
 		/// Sign the given `msg` with the sr25519 key that corresponds to the given public key and
 		/// key type in the keystore.
 		///
 		/// Returns the raw signature.
-		fn sr25519_sign<P: AsRef<[u8]>, M: AsRef<[u8]>>(
+		fn sr25519_sign<M: AsRef<[u8]>>(
 			id: KeyTypeId,
-			pubkey: &P,
+			pubkey: &sr25519::Public,
 			msg: &M,
-		) -> Option<[u8; 64]>;
+		) -> Option<sr25519::Signature>;
 		/// Verify an sr25519 signature.
 		///
 		/// Returns `true` when the verification in successful.
-		fn sr25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: &P) -> bool;
+		fn sr25519_verify(sig: &sr25519::Signature, msg: &[u8], pubkey: &sr25519::Public) -> bool;
 
 		/// Verify and recover a SECP256k1 ECDSA signature.
 		/// - `sig` is passed in RSV format. V should be either 0/1 or 27/28.

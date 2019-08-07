@@ -15,16 +15,12 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use primitives::{
-	blake2_128, blake2_256, twox_128, twox_256, twox_64, ed25519, Blake2Hasher,
-	sr25519, Pair
+	blake2_128, blake2_256, twox_128, twox_256, twox_64, ed25519, Blake2Hasher, sr25519, Pair,
 };
 // Switch to this after PoC-3
 // pub use primitives::BlakeHasher;
 pub use substrate_state_machine::{
-	Externalities,
-	BasicExternalities,
-	TestExternalities,
-	ChildStorageKey
+	Externalities, BasicExternalities, TestExternalities, ChildStorageKey,
 };
 
 use environmental::environmental;
@@ -207,7 +203,16 @@ impl OtherApi for () {
 }
 
 impl CryptoApi for () {
-	fn ed25519_generate(id: KeyTypeId, seed: Option<&str>) -> [u8; 32] {
+	fn ed25519_public_keys(id: KeyTypeId) -> Vec<ed25519::Public> {
+		ext::with(|ext| {
+			ext.keystore()
+				.expect("No `keystore` associated for the current context!")
+				.write()
+				.ed25519_public_keys(id)
+		}).expect("`ed25519_public_keys` cannot be called outside of an Externalities-provided environment.")
+	}
+
+	fn ed25519_generate(id: KeyTypeId, seed: Option<&str>) -> ed25519::Public {
 		ext::with(|ext| {
 			ext.keystore()
 				.expect("No `keystore` associated for the current context!")
@@ -217,11 +222,11 @@ impl CryptoApi for () {
 		}).expect("`ed25519_generate` cannot be called outside of an Externalities-provided environment.")
 	}
 
-	fn ed25519_sign<P: AsRef<[u8]>, M: AsRef<[u8]>>(
+	fn ed25519_sign<M: AsRef<[u8]>>(
 		id: KeyTypeId,
-		pubkey: &P,
+		pubkey: &ed25519::Public,
 		msg: &M,
-	) -> Option<[u8; 64]> {
+	) -> Option<ed25519::Signature> {
 		let pub_key = ed25519::Public::try_from(pubkey.as_ref()).ok()?;
 
 		ext::with(|ext| {
@@ -233,11 +238,20 @@ impl CryptoApi for () {
 		}).expect("`ed25519_sign` cannot be called outside of an Externalities-provided environment.")
 	}
 
-	fn ed25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: &P) -> bool {
-		ed25519::Pair::verify_weak(sig, msg, pubkey)
+	fn ed25519_verify(sig: &ed25519::Signature, msg: &[u8], pubkey: &ed25519::Public) -> bool {
+		ed25519::Pair::verify(sig, msg, pubkey)
 	}
 
-	fn sr25519_generate(id: KeyTypeId, seed: Option<&str>) -> [u8; 32] {
+	fn sr25519_public_keys(id: KeyTypeId) -> Vec<sr25519::Public> {
+		ext::with(|ext| {
+			ext.keystore()
+				.expect("No `keystore` associated for the current context!")
+				.write()
+				.sr25519_public_keys(id)
+		}).expect("`sr25519_public_keys` cannot be called outside of an Externalities-provided environment.")
+	}
+
+	fn sr25519_generate(id: KeyTypeId, seed: Option<&str>) -> sr25519::Public {
 		ext::with(|ext| {
 			ext.keystore()
 				.expect("No `keystore` associated for the current context!")
@@ -247,11 +261,11 @@ impl CryptoApi for () {
 		}).expect("`sr25519_generate` cannot be called outside of an Externalities-provided environment.")
 	}
 
-	fn sr25519_sign<P: AsRef<[u8]>, M: AsRef<[u8]>>(
+	fn sr25519_sign<M: AsRef<[u8]>>(
 		id: KeyTypeId,
-		pubkey: &P,
+		pubkey: &sr25519::Public,
 		msg: &M,
-	) -> Option<[u8; 64]> {
+	) -> Option<sr25519::Signature> {
 		let pub_key = sr25519::Public::try_from(pubkey.as_ref()).ok()?;
 
 		ext::with(|ext| {
@@ -263,8 +277,8 @@ impl CryptoApi for () {
 		}).expect("`sr25519_sign` cannot be called outside of an Externalities-provided environment.")
 	}
 
-	fn sr25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: &P) -> bool {
-		sr25519::Pair::verify_weak(sig, msg, pubkey)
+	fn sr25519_verify(sig: &sr25519::Signature, msg: &[u8], pubkey: &sr25519::Public) -> bool {
+		sr25519::Pair::verify(sig, msg, pubkey)
 	}
 
 	fn secp256k1_ecdsa_recover(sig: &[u8; 65], msg: &[u8; 32]) -> Result<[u8; 64], EcdsaVerifyError> {

@@ -84,6 +84,7 @@ use srml_support::{
 	StorageDoubleMap, print,
 };
 use system::ensure_none;
+use app_crypto::RuntimeAppPublic;
 
 mod app {
 	pub use app_crypto::sr25519 as crypto;
@@ -414,13 +415,9 @@ impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
 
 			// check signature (this is expensive so we do it last).
 			let signature_valid = heartbeat.using_encoded(|encoded_heartbeat| {
-				let sig: &app::crypto::Signature = signature.as_ref();
-				sr_io::sr25519_verify(
-					sig.as_ref(),
-					encoded_heartbeat,
-					&authority_id
-				)
+				authority_id.verify(&encoded_heartbeat, &signature)
 			});
+
 			if !signature_valid {
 				return TransactionValidity::Invalid(ApplyError::BadSignature as i8);
 			}

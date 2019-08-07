@@ -33,7 +33,7 @@ pub use codec;
 #[cfg(feature = "std")]
 pub use serde;
 #[doc(hidden)]
-pub use rstd::ops::Deref;
+pub use rstd::{ops::Deref, vec::Vec};
 
 pub mod ed25519;
 pub mod sr25519;
@@ -219,6 +219,10 @@ macro_rules! app_crypto {
 
 		impl $crate::RuntimeAppPublic for Public where $public: $crate::RuntimePublic<Signature=$sig> {
 			type Signature = Signature;
+
+			fn all() -> $crate::Vec<Self> {
+				<$public as $crate::RuntimePublic>::all($key_type).into_iter().map(Self).collect()
+			}
 
 			fn generate_pair(seed: Option<&str>) -> Self {
 				Self(<$public as $crate::RuntimePublic>::generate_pair($key_type, seed))

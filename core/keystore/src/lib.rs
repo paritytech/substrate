@@ -226,34 +226,42 @@ impl Store {
 }
 
 impl KeyStore for Store {
+	fn sr25519_public_keys(&self, key_type: KeyTypeId) -> Vec<sr25519::Public> {
+		self.public_keys_by_type::<sr25519::Public>(key_type).unwrap_or_default()
+	}
+
 	fn sr25519_generate_new(
 		&mut self,
 		id: KeyTypeId,
 		seed: Option<&str>,
-	) -> std::result::Result<[u8; 32], String> {
+	) -> std::result::Result<sr25519::Public, String> {
 		let pair = match seed {
 			Some(seed) => self.generate_from_seed_by_type::<sr25519::Pair>(seed, id),
 			None => self.generate_by_type::<sr25519::Pair>(id),
 		}.map_err(|e| e.to_string())?;
 
-		Ok(pair.public().into())
+		Ok(pair.public())
 	}
 
 	fn sr25519_key_pair(&self, id: KeyTypeId, pub_key: &sr25519::Public) -> Option<sr25519::Pair> {
 		self.key_pair_by_type::<sr25519::Pair>(pub_key, id).ok()
 	}
 
+	fn ed25519_public_keys(&self, key_type: KeyTypeId) -> Vec<ed25519::Public> {
+		self.public_keys_by_type::<ed25519::Public>(key_type).unwrap_or_default()
+	}
+
 	fn ed25519_generate_new(
 		&mut self,
 		id: KeyTypeId,
 		seed: Option<&str>,
-	) -> std::result::Result<[u8; 32], String> {
+	) -> std::result::Result<ed25519::Public, String> {
 		let pair = match seed {
 			Some(seed) => self.generate_from_seed_by_type::<ed25519::Pair>(seed, id),
 			None => self.generate_by_type::<ed25519::Pair>(id),
 		}.map_err(|e| e.to_string())?;
 
-		Ok(pair.public().into())
+		Ok(pair.public())
 	}
 
 	fn ed25519_key_pair(&self, id: KeyTypeId, pub_key: &ed25519::Public) -> Option<ed25519::Pair> {

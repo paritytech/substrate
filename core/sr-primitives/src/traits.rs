@@ -59,14 +59,14 @@ pub trait Verify {
 impl Verify for primitives::ed25519::Signature {
 	type Signer = primitives::ed25519::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
-		runtime_io::ed25519_verify(self.as_ref(), msg.get(), signer)
+		runtime_io::ed25519_verify(self, msg.get(), signer)
 	}
 }
 
 impl Verify for primitives::sr25519::Signature {
 	type Signer = primitives::sr25519::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
-		runtime_io::sr25519_verify(self.as_ref(), msg.get(), signer)
+		runtime_io::sr25519_verify(self, msg.get(), signer)
 	}
 }
 

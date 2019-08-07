@@ -640,6 +640,24 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.memory.set(out, &result).map_err(|_| "Invalid attempt to set result in ext_keccak_256")?;
 		Ok(())
 	},
+	ext_ed25519_public_keys(id_data: *const u8, result_len: *mut u32) -> *mut u8 => {
+		let mut id = [0u8; 4];
+		this.memory.get_into(id_data, &mut id[..])
+			.map_err(|_| "Invalid attempt to get id in ext_ed25519_public_keys")?;
+		let key_type = KeyTypeId(id);
+
+		let keys = runtime_io::ed25519_public_keys(key_type).encode();
+
+		let len = keys.len() as u32;
+		let offset = this.heap.allocate(len)? as u32;
+
+		this.memory.set(offset, keys.as_ref())
+			.map_err(|_| "Invalid attempt to set memory in ext_ed25519_public_keys")?;
+		this.memory.write_primitive(result_len, len)
+			.map_err(|_| "Invalid attempt to write result_len in ext_ed25519_public_keys")?;
+
+		Ok(offset)
+	},
 	ext_ed25519_verify(
 		msg_data: *const u8,
 		msg_len: u32,
@@ -706,7 +724,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let msg = this.memory.get(msg_data, msg_len as usize)
 			.map_err(|_| "Invalid attempt to get message in ext_ed25519_sign")?;
 
-		let signature = runtime_io::ed25519_sign(key_type, &pubkey, &msg);
+		let signature = runtime_io::ed25519_sign(key_type, &ed25519::Public(pubkey), &msg);
 
 		match signature {
 			Some(signature) => {
@@ -717,6 +735,24 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			},
 			None => Ok(1),
 		}
+	},
+	ext_sr25519_public_keys(id_data: *const u8, result_len: *mut u32) -> *mut u8 => {
+		let mut id = [0u8; 4];
+		this.memory.get_into(id_data, &mut id[..])
+			.map_err(|_| "Invalid attempt to get id in ext_sr25519_public_keys")?;
+		let key_type = KeyTypeId(id);
+
+		let keys = runtime_io::sr25519_public_keys(key_type).encode();
+
+		let len = keys.len() as u32;
+		let offset = this.heap.allocate(len)? as u32;
+
+		this.memory.set(offset, keys.as_ref())
+			.map_err(|_| "Invalid attempt to set memory in ext_sr25519_public_keys")?;
+		this.memory.write_primitive(result_len, len)
+			.map_err(|_| "Invalid attempt to write result_len in ext_sr25519_public_keys")?;
+
+		Ok(offset)
 	},
 	ext_sr25519_verify(
 		msg_data: *const u8,
@@ -784,7 +820,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let msg = this.memory.get(msg_data, msg_len as usize)
 			.map_err(|_| "Invalid attempt to get message in ext_sr25519_sign")?;
 
-		let signature = runtime_io::sr25519_sign(key_type, &pubkey, &msg);
+		let signature = runtime_io::sr25519_sign(key_type, &sr25519::Public(pubkey), &msg);
 
 		match signature {
 			Some(signature) => {

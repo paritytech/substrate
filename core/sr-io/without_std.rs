@@ -21,6 +21,7 @@ pub use rstd::{mem, slice};
 use core::{intrinsics, panic::PanicInfo};
 use rstd::{vec::Vec, cell::Cell, convert::TryInto};
 use primitives::{offchain, Blake2Hasher};
+use codec::Decode;
 
 #[cfg(not(feature = "no_panic_handler"))]
 #[panic_handler]
@@ -353,6 +354,9 @@ pub mod ext {
 		/// Keccak256 hash
 		fn ext_keccak_256(data: *const u8, len: u32, out: *mut u8);
 
+		/// Returns all `ed25519` public keys for the given key type from the keystore.
+		fn ext_ed25519_public_keys(id: *const u8, result_len: *mut u32) -> *mut u8;
+
 		/// Note: `ext_ed25519_verify` returns `0` if the signature is correct, nonzero otherwise.
 		fn ext_ed25519_verify(
 			msg_data: *const u8,
@@ -379,6 +383,9 @@ pub mod ext {
 			msg_len: u32,
 			out: *mut u8,
 		) -> u32;
+
+		/// Returns all `sr25519` public keys for the given key type from the keystore.
+		fn ext_sr25519_public_keys(id: *const u8, result_len: *mut u32) -> *mut u8;
 
 		/// Note: `ext_sr25519_verify` returns 0 if the signature is correct, nonzero otherwise.
 		fn ext_sr25519_verify(
@@ -912,25 +919,33 @@ impl HashingApi for () {
 }
 
 impl CryptoApi for () {
-	fn ed25519_generate(id: KeyTypeId, seed: Option<&str>) -> [u8; 32] {
+	fn ed25519_public_keys(id: KeyTypeId) -> Vec<ed25519::Public> {
+		let mut res_len = 0u32;
+		unsafe {
+			let res_ptr = ext_ed25519_public_keys.get()(id.0.as_ptr(), &mut res_len);
+			Vec::decode(&mut rstd::slice::from_raw_parts(res_ptr, res_len as usize)).unwrap_or_default()
+		}
+	}
+
+	fn ed25519_generate(id: KeyTypeId, seed: Option<&str>) -> ed25519::Public {
 		let mut res = [0u8; 32];
 		let seed = seed.as_ref().map(|s| s.as_bytes()).unwrap_or(&[]);
 		unsafe {
 			ext_ed25519_generate.get()(id.0.as_ptr(), seed.as_ptr(), seed.len() as u32, res.as_mut_ptr())
 		};
-		res
+		ed25519::Public(res)
 	}
 
-	fn ed25519_sign<P: AsRef<[u8]>, M: AsRef<[u8]>>(
+	fn ed25519_sign<M: AsRef<[u8]>>(
 		id: KeyTypeId,
-		pubkey: &P,
+		pubkey: &ed25519::Public,
 		msg: &M,
-	) -> Option<[u8; 64]> {
+	) -> Option<ed25519::Signature> {
 		let mut res = [0u8; 64];
 		let success = unsafe {
 			ext_ed25519_sign.get()(
 				id.0.as_ptr(),
-				pubkey.as_ref().as_ptr(),
+				pubkey.0.as_ptr(),
 				msg.as_ref().as_ptr(),
 				msg.as_ref().len() as u32,
 				res.as_mut_ptr(),
@@ -938,42 +953,50 @@ impl CryptoApi for () {
 		};
 
 		if success {
-			Some(res)
+			Some(ed25519::Signature(res))
 		} else {
 			None
 		}
 	}
 
-	fn ed25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: &P) -> bool {
+	fn ed25519_verify(sig: &ed25519::Signature, msg: &[u8], pubkey: &ed25519::Public) -> bool {
 		unsafe {
 			ext_ed25519_verify.get()(
 				msg.as_ptr(),
 				msg.len() as u32,
-				sig.as_ptr(),
-				pubkey.as_ref().as_ptr(),
+				sig.0.as_ptr(),
+				pubkey.0.as_ptr(),
 			) == 0
 		}
 	}
 
-	fn sr25519_generate(id: KeyTypeId, seed: Option<&str>) -> [u8; 32] {
+	fn sr25519_public_keys(id: KeyTypeId) -> Vec<sr25519::Public> {
+		let mut res_len = 0u32;
+		unsafe {
+			let res_ptr = ext_sr25519_public_keys.get()(id.0.as_ptr(), &mut res_len);
+			Vec::decode(&mut rstd::slice::from_raw_parts(res_ptr, res_len as usize)).unwrap_or_default()
+		}
+	}
+
+	fn sr25519_generate(id: KeyTypeId, seed: Option<&str>) -> sr25519::Public {
 		let mut res = [0u8;32];
 		let seed = seed.as_ref().map(|s| s.as_bytes()).unwrap_or(&[]);
 		unsafe {
 			ext_sr25519_generate.get()(id.0.as_ptr(), seed.as_ptr(), seed.len() as u32, res.as_mut_ptr())
 		};
-		res
+		sr25519::Public(res)
 	}
 
-	fn sr25519_sign<P: AsRef<[u8]>, M: AsRef<[u8]>>(
+	fn sr25519_sign<M: AsRef<[u8]>>(
 		id: KeyTypeId,
-		pubkey: &P,
+		pubkey: &sr25519::Public,
 		msg: &M,
-	) -> Option<[u8; 64]> {
+	) -> Option<sr25519::Signature> {
 		let mut res = [0u8; 64];
 		let success = unsafe {
 			ext_sr25519_sign.get()(
 				id.0.as_ptr(),
-				pubkey.as_ref().as_ptr(),
+				pubkey.0.as_ptr(),
 				msg.as_ref().as_ptr(),
 				msg.as_ref().len() as u32,
 				res.as_mut_ptr(),
@@ -981,19 +1004,19 @@ impl CryptoApi for () {
 		};
 
 		if success {
-			Some(res)
+			Some(sr25519::Signature(res))
 		} else {
 			None
 		}
 	}
 
-	fn sr25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: &P) -> bool {
+	fn sr25519_verify(sig: &sr25519::Signature, msg: &[u8], pubkey: &sr25519::Public) -> bool {
 		unsafe {
 			ext_sr25519_verify.get()(
 				msg.as_ptr(),
 				msg.len() as u32,
-				sig.as_ptr(),
-				pubkey.as_ref().as_ptr(),
+				sig.0.as_ptr(),
+				pubkey.0.as_ptr(),
 			) == 0
 		}
 	}

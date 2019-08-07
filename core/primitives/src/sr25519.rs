@@ -166,6 +166,20 @@ impl std::hash::Hash for Public {
 #[derive(Encode, Decode)]
 pub struct Signature(pub [u8; 64]);
 
+impl rstd::convert::TryFrom<&[u8]> for Signature {
+	type Error = ();
+
+	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
+		if data.len() == 64 {
+			let mut inner = [0u8; 64];
+			inner.copy_from_slice(data);
+			Ok(Signature(inner))
+		} else {
+			Err(())
+		}
+	}
+}
+
 impl Clone for Signature {
 	fn clone(&self) -> Self {
 		let mut r = [0u8; 64];
