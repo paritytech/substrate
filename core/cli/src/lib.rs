@@ -366,6 +366,24 @@ fn input_keystore_password() -> Result<String, String> {
 		.map_err(|e| format!("{:?}", e))
 }
 
+/// Fill the password field of the given config instance.
+fn fill_config_keystore_password<C, G>(
+	config: &mut service::Configuration<C, G>,
+	cli: &RunCmd,
+) -> Result<(), String> {
+	config.keystore_password = if cli.password_interactive {
+		Some(input_keystore_password()?.into())
+	} else if let Some(ref file) = cli.password_filename {
+		Some(fs::read_to_string(file).map_err(|e| format!("{}", e))?.into())
+	} else if let Some(ref password) = cli.password {
+		Some(password.clone().into())
+	} else {
+		None
+	};
+
+	Ok(())
+}
+
 fn create_run_node_config<F, S>(
 	cli: RunCmd, spec_factory: S, impl_name: &'static str, version: &VersionInfo
 ) -> error::Result<FactoryFullConfiguration<F>>
@@ -375,9 +393,8 @@ where
 {
 	let spec = load_spec(&cli.shared_params, spec_factory)?;
 	let mut config = service::Configuration::default_with_spec(spec.clone());
-	if cli.interactive_password {
-		config.password = input_keystore_password()?.into()
-	}
+
+	fill_config_keystore_password(&mut config, &cli)?;
 
 	config.impl_name = impl_name;
 	config.impl_commit = version.commit;
@@ -401,7 +418,9 @@ where
 
 	let base_path = base_path(&cli.shared_params, version);
 
-	config.keystore_path = cli.keystore_path.or_else(|| Some(keystore_path(&base_path, config.chain_spec.id())));
+	config.keystore_path = cli.keystore_path.unwrap_or_else(
+		|| keystore_path(&base_path, config.chain_spec.id())
+	);
 
 	config.database_path = db_path(&base_path, config.chain_spec.id());
 	config.database_cache_size = cli.database_cache_size;
@@ -462,17 +481,13 @@ where
 		cli.pool_config,
 	)?;
 
-	if let Some(key) = cli.key {
-		config.keys.push(key);
+
+	if cli.shared_params.dev {
+		config.dev_key_seed = cli.keyring.account
+			.map(|a| format!("//{}", a))
+			.or_else(|| Some("//Alice".into()));
 	}
 
-	if cli.shared_params.dev && cli.keyring.account.is_none() {
-		config.keys.push("//Alice".into());
-	}
-
-	if let Some(account) = cli.keyring.account {
-		config.keys.push(format!("//{}", account));
-	}
 
 	let rpc_interface: &str = if cli.rpc_external { "0.0.0.0" } else { "127.0.0.1" };
 	let ws_interface: &str = if cli.ws_external { "0.0.0.0" } else { "127.0.0.1" };

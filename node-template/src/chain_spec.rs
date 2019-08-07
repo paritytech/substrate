@@ -1,8 +1,9 @@
-use primitives::{ed25519, sr25519, Pair};
+use primitives::{sr25519, Pair};
 use node_template_runtime::{
 	AccountId, GenesisConfig, AuraConfig, BalancesConfig,
 	SudoConfig, IndicesConfig, SystemConfig, WASM_BINARY, AuraId
 };
+use aura_primitives::sr25519::AuthorityPair as AuraPair;
 use substrate_service;
 
 // Note this is the URL for the telemetry server
@@ -23,7 +24,7 @@ pub enum Alternative {
 }
 
 fn authority_key(s: &str) -> AuraId {
-	ed25519::Pair::from_string(&format!("//{}", s), None)
+	AuraPair::from_string(&format!("//{}", s), None)
 		.expect("static values are valid; qed")
 		.public()
 }

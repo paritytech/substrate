@@ -88,7 +88,7 @@ impl Crypto for Sr25519 {
 
 fn execute<C: Crypto>(matches: clap::ArgMatches) where
 	<<C as Crypto>::Pair as Pair>::Signature: AsRef<[u8]> + AsMut<[u8]> + Default,
-	<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec + AsRef<<<C as Crypto>::Pair as Pair>::Public>,
+	<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec,
 {
 	let extra = |i: Index, f: Balance| {
 		(

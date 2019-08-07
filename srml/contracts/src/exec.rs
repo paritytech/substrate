@@ -275,7 +275,7 @@ pub enum DeferredAction<T: Trait> {
 		/// The account id of the contract who dispatched this call.
 		origin: T::AccountId,
 		/// The call to dispatch.
-		call: T::Call,
+		call: <T as Trait>::Call,
 	},
 	RestoreTo {
 		/// The account id of the contract which is removed during the restoration and transfers

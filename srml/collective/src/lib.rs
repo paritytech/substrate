@@ -16,6 +16,9 @@
 
 //! Collective system: Members of a set of account IDs can make their collective feelings known
 //! through dispatched calls from one of two specialised origins.
+//!
+//! The membership can be provided in one of two ways: either directly, using the Root-dispatchable
+//! function `set_members`, or indirectly, through implementing the `ChangeMembers`
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit="128"]
@@ -119,7 +122,7 @@ decl_event!(
 	}
 );
 
-// Note: this module is not benchmarked. The weights are obtained based on the similarity fo the
+// Note: this module is not benchmarked. The weights are obtained based on the similarity of the
 // executed logic with other democracy function. Note that councillor operations are assigned to the
 // operational class.
 decl_module! {
@@ -133,41 +136,12 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
 		fn set_members(origin, new_members: Vec<T::AccountId>) {
 			ensure_root(origin)?;
-
-			// stable sorting since they will generally be provided sorted.
-			let mut old_members = <Members<T, I>>::get();
-			old_members.sort();
 			let mut new_members = new_members;
 			new_members.sort();
-			let mut old_iter = old_members.iter();
-			let mut new_iter = new_members.iter();
-			let mut incoming = vec![];
-			let mut outgoing = vec![];
-			let mut old_i = old_iter.next();
-			let mut new_i = new_iter.next();
-			loop {
-				match (old_i, new_i) {
-					(None, None) => break,
-					(Some(old), Some(new)) if old == new => {
-						old_i = old_iter.next();
-						new_i = new_iter.next();
-					}
-					(Some(old), Some(new)) if old < new => {
-						outgoing.push(old.clone());
-						old_i = old_iter.next();
-					}
-					(Some(old), None) => {
-						outgoing.push(old.clone());
-						old_i = old_iter.next();
-					}
-					(_, Some(new)) => {
-						incoming.push(new.clone());
-						new_i = new_iter.next();
-					}
-				}
-			}
-
-			Self::change_members(&incoming, &outgoing, &new_members);
+			<Members<T, I>>::mutate(|m| {
+				<Self as ChangeMembers<T::AccountId>>::set_members_sorted(&new_members[..], m);
+				*m = new_members;
+			});
 		}
 
 		/// Dispatch a proposal from a member using the `Member` origin.
@@ -287,18 +261,18 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 }
 
 impl<T: Trait<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
-	fn change_members(_incoming: &[T::AccountId], outgoing: &[T::AccountId], new: &[T::AccountId]) {
+	fn change_members_sorted(_incoming: &[T::AccountId], outgoing: &[T::AccountId], new: &[T::AccountId]) {
 		// remove accounts from all current voting in motions.
-		let mut old = outgoing.to_vec();
-		old.sort_unstable();
+		let mut outgoing = outgoing.to_vec();
+		outgoing.sort_unstable();
 		for h in Self::proposals().into_iter() {
 			<Voting<T, I>>::mutate(h, |v|
 				if let Some(mut votes) = v.take() {
 					votes.ayes = votes.ayes.into_iter()
-						.filter(|i| old.binary_search(i).is_err())
+						.filter(|i| outgoing.binary_search(i).is_err())
 						.collect();
 					votes.nays = votes.nays.into_iter()
-						.filter(|i| old.binary_search(i).is_err())
+						.filter(|i| outgoing.binary_search(i).is_err())
 						.collect();
 					*v = Some(votes);
 				}
@@ -413,6 +387,7 @@ mod tests {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
+		type Call = ();
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
@@ -486,7 +461,7 @@ mod tests {
 				Collective::voting(&hash),
 				Some(Votes { index: 0, threshold: 3, ayes: vec![1, 2], nays: vec![] })
 			);
-			Collective::change_members(&[4], &[1], &[2, 3, 4]);
+			Collective::change_members_sorted(&[4], &[1], &[2, 3, 4]);
 			assert_eq!(
 				Collective::voting(&hash),
 				Some(Votes { index: 0, threshold: 3, ayes: vec![2], nays: vec![] })
@@ -500,7 +475,7 @@ mod tests {
 				Collective::voting(&hash),
 				Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![3] })
 			);
-			Collective::change_members(&[], &[3], &[2, 4]);
+			Collective::change_members_sorted(&[], &[3], &[2, 4]);
 			assert_eq!(
 				Collective::voting(&hash),
 				Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![] })
