@@ -65,7 +65,9 @@ pub use self::storage::{
 	StorageValue, StorageMap, EnumerableStorageMap, StorageDoubleMap, AppendableStorageMap
 };
 pub use self::hashable::Hashable;
-pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
+pub use self::dispatch::{
+	Parameter, ModuleDispatchable, RuntimeDispatchable, Callable, IsSubType, ModuleDispatchError,
+};
 pub use self::double_map::StorageDoubleMapWithHasher;
 pub use runtime_io::{print, storage_root, Printable};
 pub use runtime_primitives::ConsensusEngineId;
@@ -144,7 +146,10 @@ macro_rules! ensure {
 #[macro_export]
 #[cfg(feature = "std")]
 macro_rules! assert_noop {
-	( $x:expr , $y:expr ) => {
+	(
+		$x:expr,
+		$y:expr $(,)?
+	) => {
 		let h = $crate::storage_root();
 		$crate::assert_err!($x, $y);
 		assert_eq!(h, $crate::storage_root());

@@ -612,6 +612,17 @@ pub struct DispatchError {
 	pub message: Option<&'static str>,
 }
 
+impl DispatchError {
+	/// Create a new instance of `DispatchError`.
+	pub fn new(module: u8, error: u8, message: Option<&'static str>) -> Self {
+		Self {
+			module,
+			error,
+			message,
+		}
+	}
+}
+
 impl Encode for DispatchError {
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		f(&[self.module, self.error])
@@ -625,6 +636,17 @@ impl Decode for DispatchError {
 			error: input.read_byte()?,
 			message: None,
 		})
+	}
+}
+
+impl runtime_io::Printable for DispatchError {
+	fn print(&self) {
+		"DispatchError".print();
+		self.module.print();
+		self.error.print();
+		if let Some(msg) = self.message {
+			msg.print();
+		}
 	}
 }
 

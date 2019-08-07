@@ -465,19 +465,19 @@ pub fn with_storage_and_children<R, F: FnOnce() -> R>(
 }
 
 impl<'a> Printable for &'a [u8] {
-	fn print(self) {
-		println!("Runtime: {}", HexDisplay::from(&self));
+	fn print(&self) {
+		println!("Runtime: {}", HexDisplay::from(self));
 	}
 }
 
 impl<'a> Printable for &'a str {
-	fn print(self) {
+	fn print(&self) {
 		println!("Runtime: {}", self);
 	}
 }
 
 impl Printable for u64 {
-	fn print(self) {
+	fn print(&self) {
 		println!("Runtime: {}", self);
 	}
 }

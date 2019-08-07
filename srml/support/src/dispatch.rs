@@ -25,7 +25,7 @@ pub use srml_metadata::{
 	FunctionMetadata, DecodeDifferent, DecodeDifferentArray, FunctionArgumentMetadata,
 	ModuleConstantMetadata, DefaultByte, DefaultByteGetter,
 };
-pub use sr_primitives::weights::{TransactionWeight, Weighable, Weight};
+pub use sr_primitives::{DispatchError, weights::{TransactionWeight, Weighable, Weight}};
 
 /// A type that cannot be instantiated.
 pub enum Never {}
@@ -37,22 +37,54 @@ pub type DispatchResult<Error> = result::Result<(), Error>;
 /// Result with string error message. This exists for backward compatibility purpose.
 pub type Result = DispatchResult<&'static str>;
 
-/// A lazy call (module function and argument values) that can be executed via its `dispatch`
+/// A lazy module call (module function and argument values) that can be executed via its `dispatch`
 /// method.
-pub trait Dispatchable {
+pub trait ModuleDispatchable {
 	/// Every function call from your runtime has an origin, which specifies where the extrinsic was
 	/// generated from. In the case of a signed extrinsic (transaction), the origin contains an
 	/// identifier for the caller. The origin can be empty in the case of an inherent extrinsic.
 	type Origin;
 	type Trait;
-	type Error;
+	type Error: ModuleDispatchError;
+
 	fn dispatch(self, origin: Self::Origin) -> DispatchResult<Self::Error>;
+}
+
+/// A lazy runtime call that can be executed via its `dispatch` method.
+pub trait RuntimeDispatchable {
+	/// Every function call from your runtime has an origin, which specifies where the extrinsic was
+	/// generated from. In the case of a signed extrinsic (transaction), the origin contains an
+	/// identifier for the caller. The origin can be empty in the case of an inherent extrinsic.
+	type Origin;
+	type Trait;
+
+	fn dispatch(self, origin: Self::Origin) -> DispatchResult<DispatchError>;
+}
+
+pub trait ModuleDispatchError {
+	/// Convert this error to an `u8`.
+	///
+	/// The `u8` corresponds to the index of the variant in the error enum.
+	fn as_u8(&self) -> u8;
+
+	/// Convert the error to a `&'static str`.
+	fn as_str(&self) -> &'static str;
+}
+
+impl ModuleDispatchError for &'static str {
+	fn as_u8(&self) -> u8 {
+		0
+	}
+
+	fn as_str(&self) -> &'static str {
+		self
+	}
 }
 
 /// Serializable version of Dispatchable.
 /// This value can be used as a "function" in an extrinsic.
 pub trait Callable<T> {
-	type Call: Dispatchable + Codec + Clone + PartialEq + Eq;
+	type Call: ModuleDispatchable + Codec + Clone + PartialEq + Eq;
 }
 
 // dirty hack to work around serde_derive issue
@@ -1296,7 +1328,7 @@ macro_rules! decl_module {
 			}
 		}
 
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Dispatchable
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::ModuleDispatchable
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
 			type Trait = $trait_instance;
@@ -1327,7 +1359,7 @@ macro_rules! decl_module {
 			where $( $other_where_bounds )*
 		{
 			#[doc(hidden)]
-			pub fn dispatch<D: $crate::dispatch::Dispatchable<Trait = $trait_instance>>(
+			pub fn dispatch<D: $crate::dispatch::ModuleDispatchable<Trait = $trait_instance>>(
 				d: D,
 				origin: D::Origin
 			) -> $crate::dispatch::DispatchResult<D::Error> {
@@ -1368,25 +1400,6 @@ macro_rules! impl_outer_dispatch {
 			)*
 		}
 	) => {
-		$crate::impl_outer_dispatch! {
-			$(#[$attr])*
-			pub enum $call_type for $runtime where origin: $origin {
-				type Error = &'static str;
-				$(
-					$module::$camelcase,
-				)*
-			}
-		}
-	};
-	(
-		$(#[$attr:meta])*
-		pub enum $call_type:ident for $runtime:ident where origin: $origin:ty {
-			type Error = $error_type:ty;
-			$(
-				$module:ident::$camelcase:ident,
-			)*
-		}
-	) => {
 		$(#[$attr])*
 		#[derive(Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
 		#[cfg_attr(feature = "std", derive(Debug))]
@@ -1402,13 +1415,22 @@ macro_rules! impl_outer_dispatch {
 				}
 			}
 		}
-		impl $crate::dispatch::Dispatchable for $call_type {
+		impl $crate::dispatch::RuntimeDispatchable for $call_type {
 			type Origin = $origin;
 			type Trait = $call_type;
-			type Error = $error_type;
-			fn dispatch(self, origin: $origin) -> $crate::dispatch::DispatchResult<Self::Error> {
-				match self {
-					$( $call_type::$camelcase(call) => call.dispatch(origin).map_err(Into::into), )*
+			fn dispatch(
+				self,
+				origin: $origin,
+			) -> $crate::dispatch::DispatchResult<$crate::dispatch::DispatchError> {
+				use $crate::{ModuleDispatchable, ModuleDispatchError};
+				$crate::impl_outer_dispatch! {
+					@DISPATCH_MATCH
+					self
+					$call_type
+					origin
+					{}
+					0;
+					$( $camelcase ),*
 				}
 			}
 		}
@@ -1430,6 +1452,41 @@ macro_rules! impl_outer_dispatch {
 				}
 			}
 		)*
+	};
+	(@DISPATCH_MATCH
+		$self:ident
+		$call_type:ident
+		$origin:ident
+		{ $( $generated:tt )* }
+		$index:expr;
+		$name:ident
+		$( , $rest:ident )*
+	) => {
+		$crate::impl_outer_dispatch! {
+			@DISPATCH_MATCH
+			$self
+			$call_type
+			$origin
+			{
+				$( $generated )*
+				$call_type::$name(call) => call.dispatch($origin).map_err(|e| {
+					$crate::dispatch::DispatchError::new($index, e.as_u8(), Some(e.as_str()))
+				}),
+			}
+			$index + 1;
+			$( $rest ),*
+		}
+	};
+	(@DISPATCH_MATCH
+		$self:ident
+		$call_type:ident
+		$origin:ident
+		{ $( $generated:tt )* }
+		$index:expr;
+	) => {
+		match $self {
+			$( $generated )*
+		}
 	}
 }
 

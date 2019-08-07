@@ -70,6 +70,7 @@
 //! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![feature(trace_macros)]
 
 #[cfg(feature = "std")]
 use serde::Serialize;
@@ -188,9 +189,6 @@ pub trait Trait: 'static + Eq + Clone {
 	/// The aggregated event type of the runtime.
 	type Event: Parameter + Member + From<Event>;
 
-	/// The aggregated error type of the runtime.
-	type Error: Member + From<Error> + From<&'static str> + runtime_io::Printable;
-
 	/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 	type BlockHashCount: Get<Self::BlockNumber>;
 }
@@ -203,7 +201,7 @@ pub type KeyValue = (Vec<u8>, Vec<u8>);
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		type Error = T::Error;
+		type Error = Error;
 
 		/// Deposits an event into this block's event record.
 		pub fn deposit_event(event: T::Event) {
@@ -862,7 +860,6 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = u16;
-		type Error = Error;
 		type BlockHashCount = BlockHashCount;
 	}
 

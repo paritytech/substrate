@@ -161,25 +161,22 @@ macro_rules! impl_outer_error {
 	}
 }
 
-
 #[macro_export]
 macro_rules! decl_error {
 	(
 		$(#[$attr:meta])*
-		pub enum Error {
+		pub enum $error:ident {
 			$(
-				$(#[$variant_attr:meta])*
+				$( #[$variant_attr:meta] )*
 				$name:ident
 			),*
 			$(,)?
 		}
 	) => {
-		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-		#[derive(Clone, PartialEq, Eq, $crate::codec::Encode)]
+		#[derive(Clone, PartialEq, Eq)]
 		#[cfg_attr(feature = "std", derive(Debug))]
 		$(#[$attr])*
-		#[allow(non_camel_case_types)]
-		pub enum Error {
+		pub enum $error {
 			Other(&'static str),
 			$(
 				$(#[$variant_attr])*
@@ -187,19 +184,63 @@ macro_rules! decl_error {
 			),*
 		}
 
-		impl From<&Error> for u8 {
-			fn from(err: &Error) -> u8 {
-				match err {
-					Error::Other(_) => 0,
-					_ => $crate::codec::Encode::using_encoded(err, |s| s[0]),
+		impl $crate::ModuleDispatchError for $error {
+			fn as_u8(&self) -> u8 {
+				$crate::decl_error! {
+					@GENERATE_AS_U8
+					self
+					$error
+					{}
+					1,
+					$( $name ),*
+				}
+			}
+
+			fn as_str(&self) -> &'static str {
+				match self {
+					$error::Other(err) => err,
+					$(
+						$error::$name => stringify!($name),
+					)*
 				}
 			}
 		}
 
-		impl From<&'static str> for Error {
-			fn from(val: &'static str) -> Error {
-				Error::Other(val)
+		impl From<&'static str> for $error {
+			fn from(val: &'static str) -> $error {
+				$error::Other(val)
 			}
+		}
+	};
+	(@GENERATE_AS_U8
+		$self:ident
+		$error:ident
+		{ $( $generated:tt )* }
+		$index:expr,
+		$name:ident
+		$( , $rest:ident )*
+	) => {
+		$crate::decl_error! {
+			@GENERATE_AS_U8
+			$self
+			$error
+			{
+				$( $generated )*
+				$error::$name => $index,
+			}
+			$index + 1,
+			$( $rest ),*
+		}
+	};
+	(@GENERATE_AS_U8
+		$self:ident
+		$error:ident
+		{ $( $generated:tt )* }
+		$index:expr,
+	) => {
+		match $self {
+			$error::Other(_) => 0,
+			$( $generated )*
 		}
 	}
 }

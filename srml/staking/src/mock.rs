@@ -22,7 +22,7 @@ use primitives::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize};
 use primitives::testing::{Header, UintAuthorityId};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
-use srml_support::{assert_ok, impl_outer_origin, impl_outer_error, parameter_types, EnumerableStorageMap};
+use srml_support::{assert_ok, impl_outer_origin, parameter_types, EnumerableStorageMap};
 use srml_support::traits::{Currency, Get};
 use crate::{EraIndex, GenesisConfig, Module, Trait, StakerStatus,
 	ValidatorPrefs, RewardDestination, Nominators
@@ -30,7 +30,6 @@ use crate::{EraIndex, GenesisConfig, Module, Trait, StakerStatus,
 
 /// The AccountId alias in this test module.
 pub type AccountId = u64;
-pub type BlockNumber = u64;
 pub type Balance = u64;
 
 /// Simple structure that exposes how u64 currency can be represented as... u64.
@@ -82,12 +81,6 @@ impl_outer_origin!{
 	pub enum Origin for Test {}
 }
 
-impl_outer_error! {
-	pub enum Error for Test {
-		balances
-	}
-}
-
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Test;
@@ -104,7 +97,6 @@ impl system::Trait for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = ();
-	type Error = Error;
 	type BlockHashCount = BlockHashCount;
 }
 parameter_types! {
@@ -121,7 +113,6 @@ impl balances::Trait for Test {
 	type TransactionPayment = ();
 	type TransferPayment = ();
 	type DustRemoval = ();
-	type Error = Error;
 	type ExistentialDeposit = ExistentialDeposit;
 	type TransferFee = TransferFee;
 	type CreationFee = CreationFee;
