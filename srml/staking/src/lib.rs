@@ -1421,6 +1421,9 @@ impl<T: Trait> Module<T> {
 	///
 	/// At the end of the era each the total payout will be distributed among validator
 	/// relatively to their points.
+	///
+	/// COMPLEXITY: Complexity is `number_of_validator_to_reward x current_elected_len`.
+	/// If you need to reward lots of validator consider using `reward_by_indices`.
 	pub fn reward_by_ids(validators_points: impl IntoIterator<Item = (T::AccountId, u32)>) {
 		CurrentEraRewards::mutate(|rewards| {
 			let current_elected = <Module<T>>::current_elected();
