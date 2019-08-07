@@ -238,6 +238,23 @@ pub trait StorageMap<K: codec::Codec, V: codec::Codec> {
 	/// Take the value under a key.
 	fn take<S: HashedStorage<Self::Hasher>>(key: &K, storage: &mut S) -> Self::Query;
 
+	/// Swap the values of two keys.
+	fn swap<S: HashedStorage<Self::Hasher>>(key1: &K, key2: &K, storage: &mut S) {
+		let k1 = Self::key_for(key1);
+		let k2 = Self::key_for(key2);
+		let v1 = storage.get_raw(&k1[..]);
+		if let Some(val) = storage.get_raw(&k2[..]) {
+			storage.put_raw(&k1[..], &val[..]);
+		} else {
+			storage.kill(&k1[..])
+		}
+		if let Some(val) = v1 {
+			storage.put_raw(&k2[..], &val[..]);
+		} else {
+			storage.kill(&k2[..])
+		}
+	}
+
 	/// Store a value to be associated with the given key from the map.
 	fn insert<S: HashedStorage<Self::Hasher>>(key: &K, val: &V, storage: &mut S) {
 		storage.put(&Self::key_for(key)[..], val);

@@ -18,9 +18,11 @@
 //!
 //! BABE (Blind Assignment for Blockchain Extension) consensus in Substrate.
 
-#![forbid(unsafe_code, missing_docs, unused_must_use, unused_imports, unused_variables)]
+#![forbid(unsafe_code, missing_docs)]
 pub use babe_primitives::*;
 pub use consensus_common::SyncOracle;
+use std::{collections::HashMap, sync::Arc, u64, fmt::{Debug, Display}, pin::Pin, time::{Instant, Duration}};
+use babe_primitives;
 use consensus_common::ImportResult;
 use consensus_common::import_queue::{
 	BoxJustificationImport, BoxFinalityProofImport,
@@ -31,11 +33,11 @@ use sr_primitives::traits::{
 	Block as BlockT, Header, DigestItemFor, NumberFor, ProvideRuntimeApi,
 	SimpleBitOps, Zero,
 };
-use std::{collections::HashMap, sync::Arc, u64, fmt::{Debug, Display}, pin::Pin, time::{Instant, Duration}};
+use keystore::KeyStorePtr;
 use runtime_support::serde::{Serialize, Deserialize};
 use codec::{Decode, Encode};
 use parking_lot::{Mutex, MutexGuard};
-use primitives::{Blake2Hasher, H256, Pair, Public, sr25519};
+use primitives::{Blake2Hasher, H256, Pair, Public};
 use merlin::Transcript;
 use inherents::{InherentDataProviders, InherentData};
 use substrate_telemetry::{
@@ -63,12 +65,8 @@ use consensus_common::{SelectChain, well_known_cache_keys};
 use consensus_common::import_queue::{Verifier, BasicQueue};
 use client::{
 	block_builder::api::BlockBuilder as BlockBuilderApi,
-	blockchain::{self, HeaderBackend, ProvideCache},
-	BlockchainEvents,
-	CallExecutor, Client,
-	runtime_api::ApiExt,
-	error::Result as ClientResult,
-	backend::{AuxStore, Backend},
+	blockchain::{self, HeaderBackend, ProvideCache}, BlockchainEvents, CallExecutor, Client,
+	runtime_api::ApiExt, error::Result as ClientResult, backend::{AuxStore, Backend},
 	utils::is_descendent_of,
 };
 use fork_tree::ForkTree;
@@ -135,13 +133,12 @@ impl SlotCompatible for BabeLink {
 
 /// Parameters for BABE.
 pub struct BabeParams<C, E, I, SO, SC> {
-
 	/// The configuration for BABE. Includes the slot duration, threshold, and
 	/// other parameters.
 	pub config: Config,
 
-	/// The key of the node we are running on.
-	pub local_key: Arc<sr25519::Pair>,
+	/// The keystore that manages the keys of the node.
+	pub keystore: KeyStorePtr,
 
 	/// The client to use
 	pub client: Arc<C>,
@@ -171,8 +168,8 @@ pub struct BabeParams<C, E, I, SO, SC> {
 /// Start the babe worker. The returned future should be run in a tokio runtime.
 pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 	config,
-	local_key,
 	client,
+	keystore,
 	select_chain,
 	block_import,
 	env,
@@ -200,10 +197,10 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 		client: client.clone(),
 		block_import: Arc::new(Mutex::new(block_import)),
 		env,
-		local_key,
 		sync_oracle: sync_oracle.clone(),
 		force_authoring,
 		c: config.c(),
+		keystore,
 	};
 	register_babe_inherent_data_provider(&inherent_data_providers, config.0.slot_duration())?;
 	Ok(slots::start_slot_worker(
@@ -220,10 +217,10 @@ struct BabeWorker<C, E, I, SO> {
 	client: Arc<C>,
 	block_import: Arc<Mutex<I>>,
 	env: E,
-	local_key: Arc<sr25519::Pair>,
 	sync_oracle: SO,
 	force_authoring: bool,
 	c: (u64, u64),
+	keystore: KeyStorePtr,
 }
 
 impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> where
@@ -248,7 +245,6 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 		chain_head: B::Header,
 		slot_info: SlotInfo,
 	) -> Self::OnSlot {
-		let pair = self.local_key.clone();
 		let ref client = self.client;
 		let block_import = self.block_import.clone();
 
@@ -288,10 +284,10 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 		let proposal_work = if let Some(claim) = claim_slot(
 			slot_info.number,
 			epoch,
-			&pair,
 			self.c,
+			&self.keystore,
 		) {
-			let ((inout, vrf_proof, _batchable_proof), authority_index) = claim;
+			let ((inout, vrf_proof, _batchable_proof), authority_index, key) = claim;
 
 			debug!(
 				target: "babe", "Starting authorship at slot {}; timestamp = {}",
@@ -340,7 +336,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 				Delay::new(remaining_duration)
 					.map_err(|err| consensus_common::Error::FaultyTimer(err).into())
 			).map(|v| match v {
-				futures::future::Either::Left((v, _)) => v,
+				futures::future::Either::Left((v, _)) => v.map(|v| (v, key)),
 				futures::future::Either::Right((Ok(_), _)) =>
 					Err(consensus_common::Error::ClientImport("Timeout in the BaBe proposer".into())),
 				futures::future::Either::Right((Err(err), _)) => Err(err),
@@ -349,7 +345,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			return Box::pin(future::ready(Ok(())));
 		};
 
-		Box::pin(proposal_work.map_ok(move |b| {
+		Box::pin(proposal_work.map_ok(move |(b, key)| {
 			// minor hack since we don't have access to the timestamp
 			// that is actually set by the proposer.
 			let slot_after_building = SignedDuration::default().slot_now(slot_duration);
@@ -372,7 +368,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			// sign the pre-sealed hash of the block and then
 			// add it to a digest item.
 			let header_hash = header.hash();
-			let signature = pair.sign(header_hash.as_ref());
+			let signature = key.sign(header_hash.as_ref());
 			let signature_digest_item = DigestItemFor::<B>::babe_seal(signature);
 
 			let import_block = BlockImportParams::<B> {
@@ -496,7 +492,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore>(
 	} else {
 		let (pre_hash, author) = (header.hash(), &authorities[authority_index as usize].0);
 
-		if sr25519::Pair::verify(&sig, pre_hash, author.clone()) {
+		if AuthorityPair::verify(&sig, pre_hash, &author) {
 			let (inout, _batchable_proof) = {
 				let transcript = make_transcript(
 					&randomness,
@@ -769,8 +765,9 @@ fn register_babe_inherent_data_provider(
 	}
 }
 
-fn get_keypair(q: &sr25519::Pair) -> &Keypair {
-	q.as_ref()
+fn get_keypair(q: &AuthorityPair) -> &Keypair {
+	use primitives::crypto::IsWrappedBy;
+	primitives::sr25519::Pair::from_ref(q).as_ref()
 }
 
 #[allow(deprecated)]
@@ -823,11 +820,15 @@ fn calculate_threshold(
 fn claim_slot(
 	slot_number: u64,
 	Epoch { ref authorities, ref randomness, epoch_index, .. }: Epoch,
-	key: &sr25519::Pair,
 	c: (u64, u64),
-) -> Option<((VRFInOut, VRFProof, VRFProofBatchable), usize)> {
-	let public = &key.public();
-	let authority_index = authorities.iter().position(|s| &s.0 == public)?;
+	keystore: &KeyStorePtr,
+) -> Option<((VRFInOut, VRFProof, VRFProofBatchable), usize, AuthorityPair)> {
+	let keystore = keystore.read();
+	let (key_pair, authority_index) = authorities.iter()
+		.enumerate()
+		.find_map(|(i, a)| {
+			keystore.key_pair::<AuthorityPair>(&a.0).ok().map(|kp| (kp, i))
+		})?;
 	let transcript = make_transcript(randomness, slot_number, epoch_index);
 
 	// Compute the threshold we will use.
@@ -836,9 +837,9 @@ fn claim_slot(
 	// be empty.  Therefore, this division in `calculate_threshold` is safe.
 	let threshold = calculate_threshold(c, authorities, authority_index);
 
-	get_keypair(key)
+	get_keypair(&key_pair)
 		.vrf_sign_after_check(transcript, |inout| check(inout, threshold))
-		.map(|s|(s, authority_index))
+		.map(|s|(s, authority_index, key_pair))
 }
 
 fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> where
@@ -1201,8 +1202,8 @@ pub mod test_helpers {
 		client: &C,
 		at: &BlockId<B>,
 		slot_number: u64,
-		key: &sr25519::Pair,
 		c: (u64, u64),
+		keystore: &KeyStorePtr,
 	) -> Option<BabePreDigest> where
 		B: BlockT,
 		C: ProvideRuntimeApi + ProvideCache<B>,
@@ -1213,9 +1214,9 @@ pub mod test_helpers {
 		super::claim_slot(
 			slot_number,
 			epoch,
-			key,
 			c,
-		).map(|((inout, vrf_proof, _), authority_index)| {
+			keystore,
+		).map(|((inout, vrf_proof, _), authority_index, _)| {
 			BabePreDigest {
 				vrf_proof,
 				vrf_output: inout.to_output(),

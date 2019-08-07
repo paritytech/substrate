@@ -12,6 +12,7 @@ codec = { package = "parity-scale-codec", version = "1.0.0", default-features = 
 keyring = { package = "substrate-keyring", path = "../keyring", optional = true }
 substrate-client = { path = "../client", default-features = false }
 primitives = { package = "substrate-primitives", path = "../primitives", default-features = false }
+app-crypto = { package = "substrate-application-crypto", path = "../application-crypto", default-features = false }
 inherents = { package = "substrate-inherents", path = "../inherents", default-features = false }
 aura-primitives = { package = "substrate-consensus-aura-primitives", path = "../consensus/aura/primitives", default-features = false }
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../consensus/babe/primitives", default-features = false }
@@ -67,4 +68,5 @@ std = [
 	"srml-babe/std",
 	"srml-timestamp/std",
 	"srml-system/std",
+	"app-crypto/std",
 ]

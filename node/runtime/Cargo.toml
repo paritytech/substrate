@@ -29,6 +29,7 @@ executive = { package = "srml-executive", path = "../../srml/executive", default
 finality-tracker = { package = "srml-finality-tracker", path = "../../srml/finality-tracker", default-features = false }
 grandpa = { package = "srml-grandpa", path = "../../srml/grandpa", default-features = false }
 indices = { package = "srml-indices", path = "../../srml/indices", default-features = false }
+membership = { package = "srml-membership", path = "../../srml/membership", default-features = false }
 session = { package = "srml-session", path = "../../srml/session", default-features = false, features = ["historical"] }
 staking = { package = "srml-staking", path = "../../srml/staking", default-features = false }
 system = { package = "srml-system", path = "../../srml/system", default-features = false }
@@ -40,6 +41,7 @@ node-primitives = { path = "../primitives", default-features = false }
 rustc-hex = { version = "2.0", optional = true }
 serde = { version = "1.0", optional = true }
 substrate-keyring = { path = "../../core/keyring", optional = true }
+substrate-session = { path = "../../core/session", default-features = false }
 
 [build-dependencies]
 wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.2", path = "../../core/utils/wasm-builder-runner" }
@@ -68,6 +70,7 @@ std = [
 	"finality-tracker/std",
 	"grandpa/std",
 	"indices/std",
+	"membership/std",
 	"session/std",
 	"staking/std",
 	"system/std",
@@ -83,4 +86,5 @@ std = [
 	"substrate-keyring",
 	"offchain-primitives/std",
 	"im-online/std",
+	"substrate-session/std",
 ]
