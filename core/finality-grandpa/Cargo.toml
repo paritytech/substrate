@@ -9,7 +9,7 @@ fork-tree = { path = "../../core/utils/fork-tree" }
 futures = "0.1"
 futures03 = { package = "futures-preview", version = "0.3.0-alpha.17", features = ["compat"] }
 log = "0.4"
-parking_lot = "0.8.0"
+parking_lot = "0.9.0"
 tokio-executor = "0.1.7"
 tokio-timer = "0.2.11"
 rand = "0.6"
@@ -18,6 +18,7 @@ sr-primitives = {  path = "../sr-primitives" }
 consensus_common = { package = "substrate-consensus-common", path = "../consensus/common" }
 primitives = { package = "substrate-primitives",  path = "../primitives" }
 substrate-telemetry = { path = "../telemetry" }
+keystore = { package = "substrate-keystore", path = "../keystore" }
 serde_json = "1.0"
 client = { package = "substrate-client", path = "../client" }
 inherents = { package = "substrate-inherents", path = "../../core/inherents" }
@@ -32,8 +33,10 @@ grandpa = { package = "finality-grandpa", version = "0.9.0", features = ["derive
 network = { package = "substrate-network", path = "../network", features = ["test-helpers"] }
 keyring = { package = "substrate-keyring", path = "../keyring" }
 test-client = { package = "substrate-test-runtime-client", path = "../test-runtime/client"}
+babe_primitives = { package = "substrate-consensus-babe-primitives", path = "../consensus/babe/primitives" }
 env_logger = "0.6"
 tokio = "0.1.17"
+tempfile = "3.1"
 
 [features]
 default = ["service-integration"]

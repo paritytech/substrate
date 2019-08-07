@@ -5,26 +5,28 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
+app-crypto = { package = "substrate-application-crypto", path = "../../core/application-crypto", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-substrate-primitives = { path = "../../core/primitives", default-features = false }
+primitives = { package="substrate-primitives", path = "../../core/primitives", default-features = false }
+rstd = { package = "sr-std", path = "../../core/sr-std", default-features = false }
 serde = { version = "1.0", optional = true }
 session = { package = "srml-session", path = "../session", default-features = false }
 sr-io = { path = "../../core/sr-io", default-features = false }
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
-sr-std = { path = "../../core/sr-std", default-features = false }
 srml-support = { path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 
 [features]
 default = ["std", "session/historical"]
 std = [
+	"app-crypto/std",
 	"codec/std",
+	"primitives/std",
+	"rstd/std",
 	"serde",
 	"session/std",
 	"sr-io/std",
 	"sr-primitives/std",
-	"sr-std/std",
 	"srml-support/std",
-	"substrate-primitives/std",
 	"system/std",
 ]

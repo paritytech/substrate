@@ -50,9 +50,9 @@ pub use timestamp;
 use rstd::{result, prelude::*};
 use codec::Encode;
 use srml_support::{decl_storage, decl_module, Parameter, storage::StorageValue, traits::Get};
+use app_crypto::AppPublic;
 use sr_primitives::{
-	traits::{SaturatedConversion, Saturating, Zero, One, Member, IsMember, TypedKey},
-	generic::DigestItem,
+	traits::{SaturatedConversion, Saturating, Zero, One, Member, IsMember}, generic::DigestItem,
 };
 use timestamp::OnTimestampSet;
 #[cfg(feature = "std")]
@@ -153,7 +153,7 @@ pub trait Trait: timestamp::Trait {
 	type HandleReport: HandleReport;
 
 	/// The identifier type for an authority.
-	type AuthorityId: Member + Parameter + TypedKey + Default;
+	type AuthorityId: Member + Parameter + AppPublic + Default;
 }
 
 decl_storage! {

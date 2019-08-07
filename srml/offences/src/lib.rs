@@ -79,6 +79,8 @@ impl<T: Trait, O: Offence<IdentificationTuple<T>>> ReportOffence<T::AccountId, I
 						.iter_mut()
 						.find(|details| details.offender == offender)
 					{
+						// TODO [slashing] This is wrong, we should rather prevent having multiple reports here and
+						// increase count for ALL offending_authorities in case we insert new entry.
 						details.count += 1;
 						if let Some(ref reporter) = reporter {
 							if !details.reporters.contains(reporter) {

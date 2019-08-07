@@ -15,24 +15,19 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use primitives::{
-	blake2_128, blake2_256, twox_128, twox_256, twox_64, ed25519, Blake2Hasher,
-	sr25519, Pair
+	blake2_128, blake2_256, twox_128, twox_256, twox_64, ed25519, Blake2Hasher, sr25519, Pair,
 };
 // Switch to this after PoC-3
 // pub use primitives::BlakeHasher;
 pub use substrate_state_machine::{
-	Externalities,
-	BasicExternalities,
-	TestExternalities,
-	ChildStorageKey
+	Externalities, BasicExternalities, TestExternalities, ChildStorageKey,
 };
 
 use environmental::environmental;
 use primitives::{offchain, hexdisplay::HexDisplay, H256};
 use trie::{TrieConfiguration, trie_types::Layout};
 
-#[cfg(feature = "std")]
-use std::collections::HashMap;
+use std::{collections::HashMap, convert::TryFrom};
 
 environmental!(ext: trait Externalities<Blake2Hasher>);
 
@@ -208,12 +203,82 @@ impl OtherApi for () {
 }
 
 impl CryptoApi for () {
-	fn ed25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> bool {
-		ed25519::Pair::verify_weak(sig, msg, pubkey)
+	fn ed25519_public_keys(id: KeyTypeId) -> Vec<ed25519::Public> {
+		ext::with(|ext| {
+			ext.keystore()
+				.expect("No `keystore` associated for the current context!")
+				.write()
+				.ed25519_public_keys(id)
+		}).expect("`ed25519_public_keys` cannot be called outside of an Externalities-provided environment.")
 	}
 
-	fn sr25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> bool {
-		sr25519::Pair::verify_weak(sig, msg, pubkey)
+	fn ed25519_generate(id: KeyTypeId, seed: Option<&str>) -> ed25519::Public {
+		ext::with(|ext| {
+			ext.keystore()
+				.expect("No `keystore` associated for the current context!")
+				.write()
+				.ed25519_generate_new(id, seed)
+				.expect("`ed25519_generate` failed")
+		}).expect("`ed25519_generate` cannot be called outside of an Externalities-provided environment.")
+	}
+
+	fn ed25519_sign<M: AsRef<[u8]>>(
+		id: KeyTypeId,
+		pubkey: &ed25519::Public,
+		msg: &M,
+	) -> Option<ed25519::Signature> {
+		let pub_key = ed25519::Public::try_from(pubkey.as_ref()).ok()?;
+
+		ext::with(|ext| {
+			ext.keystore()
+				.expect("No `keystore` associated for the current context!")
+				.read()
+				.ed25519_key_pair(id, &pub_key)
+				.map(|k| k.sign(msg.as_ref()).into())
+		}).expect("`ed25519_sign` cannot be called outside of an Externalities-provided environment.")
+	}
+
+	fn ed25519_verify(sig: &ed25519::Signature, msg: &[u8], pubkey: &ed25519::Public) -> bool {
+		ed25519::Pair::verify(sig, msg, pubkey)
+	}
+
+	fn sr25519_public_keys(id: KeyTypeId) -> Vec<sr25519::Public> {
+		ext::with(|ext| {
+			ext.keystore()
+				.expect("No `keystore` associated for the current context!")
+				.write()
+				.sr25519_public_keys(id)
+		}).expect("`sr25519_public_keys` cannot be called outside of an Externalities-provided environment.")
+	}
+
+	fn sr25519_generate(id: KeyTypeId, seed: Option<&str>) -> sr25519::Public {
+		ext::with(|ext| {
+			ext.keystore()
+				.expect("No `keystore` associated for the current context!")
+				.write()
+				.sr25519_generate_new(id, seed)
+				.expect("`sr25519_generate` failed")
+		}).expect("`sr25519_generate` cannot be called outside of an Externalities-provided environment.")
+	}
+
+	fn sr25519_sign<M: AsRef<[u8]>>(
+		id: KeyTypeId,
+		pubkey: &sr25519::Public,
+		msg: &M,
+	) -> Option<sr25519::Signature> {
+		let pub_key = sr25519::Public::try_from(pubkey.as_ref()).ok()?;
+
+		ext::with(|ext| {
+			ext.keystore()
+				.expect("No `keystore` associated for the current context!")
+				.read()
+				.sr25519_key_pair(id, &pub_key)
+				.map(|k| k.sign(msg.as_ref()).into())
+		}).expect("`sr25519_sign` cannot be called outside of an Externalities-provided environment.")
+	}
+
+	fn sr25519_verify(sig: &sr25519::Signature, msg: &[u8], pubkey: &sr25519::Public) -> bool {
+		sr25519::Pair::verify(sig, msg, pubkey)
 	}
 
 	fn secp256k1_ecdsa_recover(sig: &[u8; 65], msg: &[u8; 32]) -> Result<[u8; 64], EcdsaVerifyError> {
@@ -274,55 +339,6 @@ impl OffchainApi for () {
 		with_offchain(|ext| {
 			ext.network_state()
 		}, "network_state can be called only in the offchain worker context")
-	}
-
-	fn pubkey(key: offchain::CryptoKey) -> Result<Vec<u8>, ()> {
-		with_offchain(|ext| {
-			ext.pubkey(key)
-		}, "authority_pubkey can be called only in the offchain worker context")
-	}
-
-	fn new_crypto_key(crypto: offchain::CryptoKind) -> Result<offchain::CryptoKey, ()> {
-		with_offchain(|ext| {
-			ext.new_crypto_key(crypto)
-		}, "new_crypto_key can be called only in the offchain worker context")
-	}
-
-	fn encrypt(
-		key: offchain::CryptoKey,
-		data: &[u8],
-	) -> Result<Vec<u8>, ()> {
-		with_offchain(|ext| {
-			ext.encrypt(key, data)
-		}, "encrypt can be called only in the offchain worker context")
-	}
-
-	fn decrypt(
-		key: offchain::CryptoKey,
-		data: &[u8],
-	) -> Result<Vec<u8>, ()> {
-		with_offchain(|ext| {
-			ext.decrypt(key, data)
-		}, "decrypt can be called only in the offchain worker context")
-	}
-
-	fn sign(
-		key: offchain::CryptoKey,
-		data: &[u8],
-	) -> Result<Vec<u8>, ()> {
-		with_offchain(|ext| {
-			ext.sign(key, data)
-		}, "sign can be called only in the offchain worker context")
-	}
-
-	fn verify(
-		key: offchain::CryptoKey,
-		msg: &[u8],
-		signature: &[u8],
-	) -> Result<bool, ()> {
-		with_offchain(|ext| {
-			ext.verify(key, msg, signature)
-		}, "verify can be called only in the offchain worker context")
 	}
 
 	fn timestamp() -> offchain::Timestamp {

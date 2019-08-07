@@ -135,10 +135,6 @@ fn node_config<F: ServiceFactory> (
 ) -> FactoryFullConfiguration<F>
 {
 	let root = root.path().join(format!("node-{}", index));
-	let mut keys = Vec::new();
-	if let Some(seed) = key_seed {
-		keys.push(seed);
-	}
 
 	let config_path = Some(String::from(root.join("network").to_str().unwrap()));
 	let net_config_path = config_path.clone();
@@ -173,13 +169,13 @@ fn node_config<F: ServiceFactory> (
 		roles: role,
 		transaction_pool: Default::default(),
 		network: network_config,
-		keystore_path: Some(root.join("key")),
+		keystore_path: root.join("key"),
+		keystore_password: None,
 		database_path: root.join("db"),
 		database_cache_size: None,
 		state_cache_size: 16777216,
 		state_cache_child_ratio: None,
 		pruning: Default::default(),
-		keys: keys,
 		chain_spec: (*spec).clone(),
 		custom: Default::default(),
 		name: format!("Node {}", index),
@@ -195,7 +191,7 @@ fn node_config<F: ServiceFactory> (
 		force_authoring: false,
 		disable_grandpa: false,
 		grandpa_voter: false,
-		password: "".to_string().into(),
+		dev_key_seed: key_seed,
 	}
 }
 

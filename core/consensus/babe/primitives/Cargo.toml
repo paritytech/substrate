@@ -9,7 +9,7 @@ edition = "2018"
 substrate-client = { path = "../../../client", default-features = false }
 rstd = { package = "sr-std", path = "../../../sr-std", default-features = false }
 sr-primitives = {  path = "../../../sr-primitives", default-features = false }
-primitives = { package = "substrate-primitives",  path = "../../../primitives", default-features = false }
+app-crypto = { package = "substrate-application-crypto", path = "../../../application-crypto", default-features = false }
 slots = { package = "substrate-consensus-slots", path = "../../slots", optional = true }
 schnorrkel = { version = "0.8.4", features = ["preaudit_deprecated"], optional = true }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
@@ -23,4 +23,5 @@ std = [
 	"codec/std",
 	"schnorrkel",
 	"slots",
+	"app-crypto/std",
 ]

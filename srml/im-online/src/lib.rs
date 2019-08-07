@@ -67,41 +67,31 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use substrate_primitives::{
-	//crypto::{CryptoType, KeyTypeId},
-	offchain::{self, OpaqueNetworkState, StorageKind},
-};
+use app_crypto::RuntimeAppPublic;
 use codec::{Encode, Decode};
+use primitives::offchain::{OpaqueNetworkState, StorageKind};
+use rstd::prelude::*;
 use session::{
 	SessionIndex,
 	historical::IdentificationTuple,
 };
+use sr_io::Printable;
 use sr_primitives::{
 	Perbill, ApplyError,
+	offence::{ReportOffence, Offence, TimeSlot, Kind},
 	traits::{ValidatorIdByIndex, Extrinsic as ExtrinsicT, CurrentEraStartSessionIndex, Convert},
 	transaction_validity::{TransactionValidity, TransactionLongevity, ValidTransaction},
-	offence::{ReportOffence, Offence, TimeSlot, Kind},
 };
-use sr_std::prelude::*;
-use sr_io::Printable;
 use srml_support::{
-	StorageValue, decl_module, decl_event, decl_storage,
-	StorageDoubleMap, print,
+	StorageValue, decl_module, decl_event, decl_storage, StorageDoubleMap, print,
 };
 use system::ensure_none;
 
 mod app {
-// TODO [slashing] </switch to new key management>
-// 	pub use app_crypto::sr25519 as crypto;
-// 	use app_crypto::{app_crypto, key_types::IM_ONLINE, sr25519};
-//
-// 	app_crypto!(sr25519, IM_ONLINE);
-	pub use substrate_primitives::sr25519 as crypto;
-	#[cfg(feature = "std")]
-	pub use self::crypto::{Pair, Public, Signature};
-	#[cfg(not(feature = "std"))]
-	pub use self::crypto::{Public, Signature};
-// TODO [slashing] </switch to new key management>
+	pub use app_crypto::sr25519 as crypto;
+	use app_crypto::{app_crypto, key_types::IM_ONLINE, sr25519};
+
+	app_crypto!(sr25519, IM_ONLINE);
 }
 
 /// A Babe authority keypair. Necessarily equivalent to the schnorrkel public key used in
@@ -291,36 +281,19 @@ impl<T: Trait> Module<T> {
 
 	fn do_gossip_at(block_number: T::BlockNumber) -> Result<(), OffchainErr> {
 		// we run only when a local authority key is configured
-
-		// TODO [slashing] <switch to new key management>
-		// let key_type = KeyTypeId(*b"imon");
-		// let local_keys = sr_io::public_keys(AuthorityId::KIND, key_type)
-		// 	.map_err(|_| OffchainErr::NoKeys)?;
-		let local_keys = vec![
-			sr_io::pubkey(offchain::CryptoKey::AuthorityKey)
-				.map_err(|_| OffchainErr::NoKeys)?
-		];
-		// TODO [slashing] </switch to new key management>
-
 		let authorities = Keys::get();
-		let maybe_key = authorities.into_iter()
-			.enumerate()
-			.filter_map(|(index, id)| {
-				let id = app::crypto::Public::from(id);
-				let id_slice: &[u8] = id.as_ref();
+		let mut local_keys = app::Public::all();
+		local_keys.sort();
 
-				local_keys
-					.iter()
-					// TODO [slashing] <remove>
-					//.find(|k| &*k.public == id_slice)
-					.find(|k| k.as_slice() == id_slice)
-					// TODO [slashing] </remove>
-					.map(|key| (index as u32, key.clone()))
+		for (authority_index, key) in authorities.into_iter()
+			.enumerate()
+			.filter_map(|(index, authority)| {
+				local_keys.binary_search(&authority)
+					.ok()
+					.map(|location| (index as u32, &local_keys[location]))
 			})
-			.next();
-		if let Some((authority_index, key)) = maybe_key {
-			let network_state =
-				sr_io::network_state().map_err(|_| OffchainErr::NetworkState)?;
+		{
+			let network_state = sr_io::network_state().map_err(|_| OffchainErr::NetworkState)?;
 			let heartbeat_data = Heartbeat {
 				block_number,
 				network_state,
@@ -328,18 +301,11 @@ impl<T: Trait> Module<T> {
 				authority_index,
 			};
 
-			// TODO [slashing] <remove>
-			let key = offchain::CryptoKey::AuthorityKey;
-			// TODO [slashing] </remove>
-			let signature = sr_io::sign(key, &heartbeat_data.encode())
-				.map_err(|_| OffchainErr::FailedSigning)?;
-			let signature = AuthoritySignature::decode(&mut &*signature)
-					.map_err(|_| OffchainErr::ExtrinsicCreation)?;
+			let signature = key.sign(&heartbeat_data.encode()).ok_or(OffchainErr::FailedSigning)?;
 			let call = Call::heartbeat(heartbeat_data, signature);
 			let ex = T::UncheckedExtrinsic::new_unsigned(call.into())
 				.ok_or(OffchainErr::ExtrinsicCreation)?;
-			sr_io::submit_transaction(&ex)
-				.map_err(|_| OffchainErr::SubmitTransaction)?;
+			sr_io::submit_transaction(&ex).map_err(|_| OffchainErr::SubmitTransaction)?;
 
 			// once finished we set the worker status without comparing
 			// if the existing value changed in the meantime. this is
@@ -410,11 +376,11 @@ impl<T: Trait> Module<T> {
 }
 
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
+
 	type Key = AuthorityId;
 
 	fn on_new_session<'a, I: 'a>(_changed: bool, _validators: I, next_validators: I)
-	where
-		I: Iterator<Item = (&'a T::AccountId, AuthorityId)>,
+		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
 		// Reset heartbeats
 		<ReceivedHeartbeats>::remove_prefix(&<session::Module<T>>::current_index());
@@ -499,16 +465,9 @@ impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
 
 			// check signature (this is expensive so we do it last).
 			let signature_valid = heartbeat.using_encoded(|encoded_heartbeat| {
-				// TODO [slashing] <remove>
-				// let sig: &app::crypto::Signature = signature.as_ref();
-				let sig: &app::crypto::Signature = signature;
-				// TODO [slashing] </remove>
-				sr_io::sr25519_verify(
-					sig.as_ref(),
-					encoded_heartbeat,
-					&authority_id
-				)
+				authority_id.verify(&encoded_heartbeat, &signature)
 			});
+
 			if !signature_valid {
 				return TransactionValidity::Invalid(ApplyError::BadSignature as i8);
 			}

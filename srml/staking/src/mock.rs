@@ -110,6 +110,7 @@ impl system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = BlockNumber;
+	type Call = ();
 	type Hash = H256;
 	type Hashing = ::sr_primitives::traits::BlakeTwo256;
 	type AccountId = AccountId;

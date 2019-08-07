@@ -9,24 +9,26 @@ edition = "2018"
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 babe_primitives = { package = "substrate-consensus-babe-primitives", path = "primitives" }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
+app-crypto = { package = "substrate-application-crypto", path = "../../application-crypto" }
 num-bigint = "0.2"
 num-rational = "0.2"
 num-traits = "0.2"
-runtime_support = { package = "srml-support", path = "../../../srml/support" }
-runtime_version = { package = "sr-version", path = "../../sr-version" }
-runtime_io = { package = "sr-io", path = "../../sr-io" }
+runtime-support = { package = "srml-support", path = "../../../srml/support" }
+runtime-version = { package = "sr-version", path = "../../sr-version" }
+runtime-io = { package = "sr-io", path = "../../sr-io" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
 substrate-telemetry = { path = "../../telemetry" }
+keystore = { package = "substrate-keystore", path = "../../keystore" }
 srml-babe = { path = "../../../srml/babe" }
 client = { package = "substrate-client", path = "../../client" }
-consensus_common = { package = "substrate-consensus-common", path = "../common" }
+consensus-common = { package = "substrate-consensus-common", path = "../common" }
 slots = { package = "substrate-consensus-slots", path = "../slots"  }
 sr-primitives = {  path = "../../sr-primitives" }
 fork-tree = { path = "../../utils/fork-tree" }
 futures-preview = { version = "0.3.0-alpha.17", features = ["compat"] }
 futures01 = { package = "futures", version = "0.1" }
 futures-timer = "0.2.1"
-parking_lot = "0.8.0"
+parking_lot = "0.9.0"
 log = "0.4.6"
 schnorrkel = { version = "0.8.4", features = ["preaudit_deprecated"] }
 rand = "0.6.5"
@@ -40,6 +42,7 @@ service = { package = "substrate-service", path = "../../service" }
 test-client = { package = "substrate-test-runtime-client", path = "../../test-runtime/client" }
 tokio = "0.1.18"
 env_logger = "0.6.1"
+tempfile = "3.1"
 
 [features]
 test-helpers = []
