@@ -1926,7 +1926,7 @@ fn era_is_always_same_length() {
 
 		let session = Session::current_index();
 		ForceNewEra::put(true);
-		start_next_session();
+		advance_session();
 		assert_eq!(Staking::current_era(), 3);
 		assert_eq!(Staking::current_era_start_session_index(), session + 1);
 
@@ -1934,6 +1934,9 @@ fn era_is_always_same_length() {
 		assert_eq!(Staking::current_era_start_session_index(), session + SessionsPerEra::get() + 1);
 	});
 }
+
+// TODO: a slash is performed according to the exposure, not the current balance.
+// TODO: a validator is disabled
 
 #[test]
 fn offence_forces_new_era() {

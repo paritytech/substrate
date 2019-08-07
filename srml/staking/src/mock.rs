@@ -394,6 +394,11 @@ pub fn bond_nominator(acc: u64, val: u64, target: Vec<u64>) {
 	assert_ok!(Staking::nominate(Origin::signed(acc), target));
 }
 
+pub fn advance_session() {
+	let current_index = Session::current_index();
+	start_session(current_index + 1);
+}
+
 pub fn start_session(session_index: session::SessionIndex) {
 	// Compensate for session delay
 	let session_index = session_index + 1;
