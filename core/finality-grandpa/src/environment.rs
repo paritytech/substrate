@@ -863,7 +863,7 @@ where
 
 		let block_id = BlockId::<Block>::number(self.inner.info().chain.best_number);
 		let maybe_report_call = self.inner.runtime_api()
-			.construct_equivocation_report_call(&block_id, grandpa_equivocation);
+			.construct_equivocation_transaction(&block_id, grandpa_equivocation);
 
 		if let Ok(Some(report_call)) = maybe_report_call {
 			let uxt = Decode::decode(&mut report_call.as_slice())
@@ -901,7 +901,7 @@ where
 
 		let block_id = BlockId::<Block>::number(self.inner.info().chain.best_number);
 		let maybe_report_call = self.inner.runtime_api()
-			.construct_equivocation_report_call(&block_id, grandpa_equivocation);
+			.construct_equivocation_transaction(&block_id, grandpa_equivocation);
 
 		if let Ok(Some(report_call)) = maybe_report_call {
 			let uxt = Decode::decode(&mut report_call.as_slice())

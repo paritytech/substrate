@@ -553,10 +553,10 @@ impl_runtime_apis! {
 			Grandpa::grandpa_authorities()
 		}
 
-		fn construct_equivocation_report_call(
+		fn construct_equivocation_transaction(
 			equivocation: GrandpaEquivocationFrom<Block>
 		) -> Option<Vec<u8>> {
-			// TODO: Check proof.
+			// TODO: Check proof and create transaction.
 			let grandpa_call = GrandpaCall::report_equivocation(equivocation);
 			let call = Call::Grandpa(grandpa_call);
 			Some(call.encode())
@@ -587,10 +587,10 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn construct_equivocation_report_call(
+		fn construct_equivocation_transaction(
 			equivocation: BabeEquivocationProof<<Block as BlockT>::Header>,
 		) -> Option<Vec<u8>> {
-			// TODO: Check proof.
+			// TODO: Check proof and construct transaction.
 			let babe_call = BabeCall::report_equivocation(equivocation);
 			let call = Call::Babe(babe_call);
 			Some(call.encode())

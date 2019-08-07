@@ -234,8 +234,8 @@ decl_runtime_apis! {
 		/// is finalized by the authorities from block B-1.
 		fn grandpa_authorities() -> Vec<(AuthorityId, AuthorityWeight)>;
 
-		/// Construct a call to report the equivocation.
-		fn construct_equivocation_report_call(
+		/// Construct a transaction to report the equivocation.
+		fn construct_equivocation_transaction(
 			equivocation: GrandpaEquivocationFrom<Block>,
 		) -> Option<Vec<u8>>;
 	}

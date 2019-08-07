@@ -533,7 +533,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 				
 				let maybe_report_call = client
 					.runtime_api()
-					.construct_equivocation_report_call(&block_id, equivocation_proof);
+					.construct_equivocation_transaction(&block_id, equivocation_proof);
 				if let Ok(Some(report_call)) = maybe_report_call {
 						transaction_pool.as_ref().map(|txpool| {
 							let uxt = Decode::decode(&mut report_call.as_slice())
