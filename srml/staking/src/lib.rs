@@ -1460,9 +1460,10 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 
 			// distribute the rewards according to the slash
 			let slash_reward = slash_reward_fraction * imbalance.peek();
-			if !slash_reward.is_zero() {
+			if !slash_reward.is_zero() && !details.reporters.is_empty() {
 				let (mut reward, rest) = imbalance.split(slash_reward);
-				// split the reward between reporters equally.
+				// split the reward between reporters equally. Division cannot fail because
+				// we guarded against it in the enclosing if.
 				let per_reporter = reward.peek() / (details.reporters.len() as u32).into();
 				for reporter in &details.reporters {
 					let (reporter_reward, rest) = reward.split(per_reporter);
