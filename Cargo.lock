@@ -4474,8 +4474,8 @@ dependencies = [
 name = "substrate-consensus-babe-primitives"
 version = "2.0.0"
 dependencies = [
- "parity-scale-codec 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "schnorrkel 0.8.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
  "substrate-application-crypto 2.0.0",
