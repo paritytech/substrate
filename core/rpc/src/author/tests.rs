@@ -82,7 +82,7 @@ impl BareCryptoStore for TestKeyStore {
 fn submit_transaction_should_not_cause_error() {
 	let runtime = runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
-	let mut keystore = TestKeyStore::default();
+	let keystore = TestKeyStore::default();
 	let keystore = Arc::new(RwLock::new(keystore));
 	let p = Author {
 		client: client.clone(),
