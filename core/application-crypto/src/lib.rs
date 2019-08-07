@@ -25,7 +25,7 @@ pub use primitives::{self, crypto::{CryptoType, Public, Derive, IsWrappedBy, Wra
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use primitives::crypto::{SecretStringError, DeriveJunction, Ss58Codec, Pair};
-pub use primitives::{crypto::{KeyTypeId, key_types, Kind}};
+pub use primitives::{crypto::{KeyTypeId, key_types}};
 
 #[doc(hidden)]
 pub use codec;
@@ -68,7 +68,6 @@ macro_rules! app_crypto {
 		}
 
 		impl $crate::CryptoType for Pair {
-			const KIND: $crate::Kind = <$pair as $crate::CryptoType>::KIND;
 			type Pair = Pair;
 		}
 
@@ -195,7 +194,6 @@ macro_rules! app_crypto {
 		}
 
 		impl $crate::CryptoType for Public {
-			const KIND: $crate::Kind = <$public as $crate::CryptoType>::KIND;
 			#[cfg(feature="std")]
 			type Pair = Pair;
 		}
@@ -259,7 +257,6 @@ macro_rules! app_crypto {
 		}
 
 		impl $crate::CryptoType for Signature {
-			const KIND: $crate::Kind = <$public as $crate::CryptoType>::KIND;
 			#[cfg(feature="std")]
 			type Pair = Pair;
 		}

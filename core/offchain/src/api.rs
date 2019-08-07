@@ -28,12 +28,10 @@ use keystore::Store as Keystore;
 use log::{info, debug, warn, error};
 use network::{PeerId, Multiaddr, NetworkStateInfo};
 use codec::{Encode, Decode};
-use primitives::crypto::{self, Pair, Public};
 use primitives::offchain::{
-	CryptoKind, CryptoKey, KeyTypeId, Externalities as OffchainExt, HttpRequestId, Timestamp,
-	HttpRequestStatus, HttpError, OpaqueNetworkState, OpaquePeerId, OpaqueMultiaddr, StorageKind,
+	Externalities as OffchainExt, HttpRequestId, Timestamp, HttpRequestStatus, HttpError,
+	OpaqueNetworkState, OpaquePeerId, OpaqueMultiaddr, StorageKind,
 };
-use primitives::{ed25519, sr25519, traits::KeyStorePtr};
 use sr_primitives::{generic::BlockId, traits::{self, Extrinsic}};
 use transaction_pool::txpool::{Pool, ChainApi};
 
@@ -42,56 +40,14 @@ enum ExtMessage {
 	SubmitExtrinsic(Vec<u8>),
 }
 
-enum KnownCryptoKey {
-	Ed25519(ed25519::Pair),
-	Sr25519(sr25519::Pair),
-}
-
-impl KnownCryptoKey {
-	fn public(&self) -> Result<Vec<u8>, ()> {
-		match self {
-			KnownCryptoKey::Ed25519(pair) => Ok(pair.public().to_raw_vec()),
-			KnownCryptoKey::Sr25519(pair) => Ok(pair.public().to_raw_vec()),
-		}
-	}
-
-	fn sign(&self, data: &[u8]) -> Result<Vec<u8>, ()> {
-		match self {
-			KnownCryptoKey::Ed25519(pair) => {
-				let sig = pair.sign(data);
-				let bytes: &[u8] = sig.as_ref();
-				Ok(bytes.to_vec())
-			}
-			KnownCryptoKey::Sr25519(pair) => {
-				let sig = pair.sign(data);
-				let bytes: &[u8] = sig.as_ref();
-				Ok(bytes.to_vec())
-			}
-		}
-	}
-
-	fn verify(&self, msg: &[u8], signature: &[u8]) -> Result<bool, ()> {
-		match self {
-			KnownCryptoKey::Ed25519(pair) => {
-				Ok(ed25519::Pair::verify_weak(signature, msg, pair.public()))
-			}
-			KnownCryptoKey::Sr25519(pair) => {
-				Ok(sr25519::Pair::verify_weak(signature, msg, pair.public()))
-			}
-		}
-	}
-}
-
-
 /// Asynchronous offchain API.
 ///
 /// NOTE this is done to prevent recursive calls into the runtime (which are not supported currently).
 pub(crate) struct Api<Storage, Block: traits::Block> {
 	sender: mpsc::UnboundedSender<ExtMessage>,
 	db: Storage,
-	keystore: Option<KeyStorePtr>,
 	network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
-	at: BlockId<Block>,
+	_at: BlockId<Block>,
 }
 
 fn unavailable_yet<R: Default>(name: &str) -> R {
@@ -100,51 +56,8 @@ fn unavailable_yet<R: Default>(name: &str) -> R {
 	Default::default()
 }
 
-fn log_error(err: keystore::Error) -> () {
-	warn!("Keystore error when accessing keys from offchain worker: {}", err);
-}
-
 const LOCAL_DB: &str = "LOCAL (fork-aware) DB";
 const STORAGE_PREFIX: &[u8] = b"storage";
-
-impl<Storage, Block> Api<Storage, Block> where Storage: OffchainStorage, Block: traits::Block {
-	fn check_allowed(&self, key_type: &KeyTypeId) -> Result<(), ()> {
-		let blacklist = vec![
-			crypto::key_types::SR25519,
-			crypto::key_types::ED25519,
-			crypto::key_types::BABE,
-			crypto::key_types::GRANDPA,
-			crypto::key_types::ACCOUNT,
-			crypto::key_types::AURA,
-		];
-
-		if blacklist.contains(key_type) {
-			Err(())
-		} else {
-			Ok(())
-		}
-	}
-
-	fn keys(
-		&self,
-		kind: CryptoKind,
-		key_type: KeyTypeId,
-	) -> Result<Vec<CryptoKey>, ()> {
-		self.check_allowed(&key_type)?;
-		unavailable_yet::<()>("keys");
-		Err(())
-	}
-
-	fn get_key(
-		&self,
-		key: CryptoKey,
-	) -> Result<KnownCryptoKey, ()> {
-		self.check_allowed(&key.key_type)?;
-
-		unavailable_yet::<()>("get key");
-		Err(())
-	}
-}
 
 impl<Storage, Block> OffchainExt for Api<Storage, Block>
 where
@@ -166,34 +79,6 @@ where
 			external_addresses,
 		);
 		Ok(OpaqueNetworkState::from(state))
-	}
-
-	fn new_key(&mut self, _crypto: CryptoKind, _key_type: KeyTypeId) -> Result<CryptoKey, ()> {
-		unavailable_yet::<()>("new_key");
-		Err(())
-	}
-
-	fn public_keys(&self, crypto: CryptoKind, key_type: KeyTypeId) -> Result<Vec<CryptoKey>, ()> {
-		self.keys(crypto, key_type)
-	}
-
-	fn encrypt(&self, _key: CryptoKey, _data: &[u8]) -> Result<Vec<u8>, ()> {
-		unavailable_yet::<()>("encrypt");
-		Err(())
-	}
-
-	fn decrypt(&self, _key: CryptoKey, _data: &[u8]) -> Result<Vec<u8>, ()> {
-		unavailable_yet::<()>("decrypt");
-		Err(())
-
-	}
-
-	fn sign(&self, key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()> {
-		self.get_key(key)?.sign(data)
-	}
-
-	fn verify(&self, key: CryptoKey, msg: &[u8], signature: &[u8]) -> Result<bool, ()> {
-		self.get_key(key)?.verify(msg, signature)
 	}
 
 	fn timestamp(&mut self) -> Timestamp {
@@ -391,7 +276,6 @@ impl<A: ChainApi> AsyncApi<A> {
 	pub fn new<S: OffchainStorage>(
 		transaction_pool: Arc<Pool<A>>,
 		db: S,
-		keystore: Option<KeyStorePtr>,
 		at: BlockId<A::Block>,
 		network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
 	) -> (Api<S, A::Block>, AsyncApi<A>) {
@@ -400,9 +284,8 @@ impl<A: ChainApi> AsyncApi<A> {
 		let api = Api {
 			sender,
 			db,
-			keystore,
 			network_state,
-			at,
+			_at: at,
 		};
 
 		let async_api = AsyncApi {
@@ -478,7 +361,6 @@ mod tests {
 		AsyncApi::new(
 			pool,
 			db,
-			None,
 			BlockId::Number(Zero::zero()),
 			mock,
 		)

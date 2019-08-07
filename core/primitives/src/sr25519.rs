@@ -33,7 +33,7 @@ use bip39::{Mnemonic, Language, MnemonicType};
 use crate::crypto::{
 	Pair as TraitPair, DeriveJunction, Infallible, SecretStringError, Ss58Codec
 };
-use crate::{impl_as_ref_mut, crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Kind, Derive}};
+use crate::{impl_as_ref_mut, crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive}};
 use crate::hash::{H256, H512};
 use codec::{Encode, Decode};
 
@@ -527,20 +527,17 @@ impl Pair {
 }
 
 impl CryptoType for Public {
-	const KIND: Kind = Kind::Sr25519;
 	#[cfg(feature="std")]
 	type Pair = Pair;
 }
 
 impl CryptoType for Signature {
-	const KIND: Kind = Kind::Sr25519;
 	#[cfg(feature="std")]
 	type Pair = Pair;
 }
 
 #[cfg(feature = "std")]
 impl CryptoType for Pair {
-	const KIND: Kind = Kind::Sr25519;
 	type Pair = Pair;
 }
 

@@ -506,7 +506,6 @@ mod dummy {
 	}
 
 	impl CryptoType for Dummy {
-		const KIND: Kind = Kind::Dummy;
 		type Pair = Dummy;
 	}
 
@@ -689,44 +688,6 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	fn to_raw_vec(&self) -> Vec<u8>;
 }
 
-/// A type of supported crypto.
-#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
-#[repr(u32)]
-pub enum Kind {
-	/// User-level crypto. We (core) can't handle it directly.
-	User = 0,
-	/// SR25519 crypto (Schnorrkel)
-	Sr25519 = 1,
-	/// ED25519 crypto (Edwards)
-	Ed25519 = 2,
-
-	/// Dummy kind, just for testing.
-	#[cfg(feature = "std")]
-	Dummy = !0,
-}
-
-#[cfg(feature = "std")]
-impl TryFrom<u32> for Kind {
-	type Error = ();
-
-	fn try_from(kind: u32) -> Result<Self, Self::Error> {
-		Ok(match kind {
-			e if e == Kind::User as usize as u32 => Kind::User,
-			e if e == Kind::Sr25519 as usize as u32 => Kind::Sr25519,
-			e if e == Kind::Ed25519 as usize as u32 => Kind::Ed25519,
-			e if e == Kind::Dummy as usize as u32 => Kind::Dummy,
-			_ => return Err(()),
-		})
-	}
-}
-
-impl From<Kind> for u32 {
-	fn from(kind: Kind) -> Self {
-		kind as u32
-	}
-}
-
 /// One type is wrapped by another.
 pub trait IsWrappedBy<Outer>: From<Outer> + Into<Outer> {
 	/// Get a reference to the inner from the outer.
@@ -783,9 +744,6 @@ macro_rules! impl_as_ref_mut {
 
 /// Type which has a particular kind of crypto associated with it.
 pub trait CryptoType {
-	/// The kind of crypto it has.
-	const KIND: Kind;
-
 	/// The pair key type of this crypto.
 	#[cfg(feature="std")]
 	type Pair: Pair;
@@ -841,37 +799,6 @@ pub mod key_types {
 	pub const DUMMY: KeyTypeId = KeyTypeId(*b"dumy");
 }
 
-impl rstd::convert::TryFrom<KeyTypeId> for Kind {
-	type Error = ();
-
-	fn try_from(kind: KeyTypeId) -> Result<Self, Self::Error> {
-		Ok(match kind {
-			e if e == key_types::SR25519 => Kind::Sr25519,
-			e if e == key_types::ED25519 => Kind::Ed25519,
-			e if e == key_types::BABE => Kind::Sr25519,
-			e if e == key_types::GRANDPA => Kind::Ed25519,
-			#[cfg(feature = "std")]
-			e if e == key_types::DUMMY => Kind::Dummy,
-			_ => return Err(()),
-		})
-	}
-}
-
-// This doesn't make much sense and should be reconsidered.
-impl rstd::convert::TryFrom<Kind> for KeyTypeId {
-	type Error = ();
-
-	fn try_from(kind: Kind) -> Result<Self, Self::Error> {
-		Ok(match kind {
-			Kind::Sr25519 => key_types::SR25519,
-			Kind::Ed25519 => key_types::ED25519,
-			#[cfg(feature = "std")]
-			Kind::Dummy => key_types::DUMMY,
-			Kind::User => return Err(()),
-		})
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use crate::DeriveJunction;
@@ -892,7 +819,6 @@ mod tests {
 		}
 	}
 	impl CryptoType for TestPair {
-		const KIND: Kind = Kind::Dummy;
 		type Pair = Self;
 	}
 
@@ -909,7 +835,6 @@ mod tests {
 		}
 	}
 	impl CryptoType for TestPublic {
-		const KIND: Kind = Kind::Dummy;
 		type Pair = TestPair;
 	}
 	impl Derive for TestPublic {}

@@ -341,55 +341,6 @@ impl OffchainApi for () {
 		}, "network_state can be called only in the offchain worker context")
 	}
 
-	fn public_keys(crypto: offchain::CryptoKind, app_id: offchain::KeyTypeId) -> Result<Vec<offchain::CryptoKey>, ()> {
-		with_offchain(|ext| {
-			ext.public_keys(crypto, app_id)
-		}, "public_keys can be called only in the offchain worker context")
-	}
-
-	fn new_key(crypto: offchain::CryptoKind, key_type: offchain::KeyTypeId) -> Result<offchain::CryptoKey, ()> {
-		with_offchain(|ext| {
-			ext.new_key(crypto, key_type)
-		}, "new_key can be called only in the offchain worker context")
-	}
-
-	fn encrypt(
-		key: offchain::CryptoKey,
-		data: &[u8],
-	) -> Result<Vec<u8>, ()> {
-		with_offchain(|ext| {
-			ext.encrypt(key, data)
-		}, "encrypt can be called only in the offchain worker context")
-	}
-
-	fn decrypt(
-		key: offchain::CryptoKey,
-		data: &[u8],
-	) -> Result<Vec<u8>, ()> {
-		with_offchain(|ext| {
-			ext.decrypt(key, data)
-		}, "decrypt can be called only in the offchain worker context")
-	}
-
-	fn sign(
-		key: offchain::CryptoKey,
-		data: &[u8],
-	) -> Result<Vec<u8>, ()> {
-		with_offchain(|ext| {
-			ext.sign(key, data)
-		}, "sign can be called only in the offchain worker context")
-	}
-
-	fn verify(
-		key: offchain::CryptoKey,
-		msg: &[u8],
-		signature: &[u8],
-	) -> Result<bool, ()> {
-		with_offchain(|ext| {
-			ext.verify(key, msg, signature)
-		}, "verify can be called only in the offchain worker context")
-	}
-
 	fn timestamp() -> offchain::Timestamp {
 		with_offchain(|ext| {
 			ext.timestamp()

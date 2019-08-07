@@ -26,7 +26,7 @@ use crate::traits::{
 use crate::{generic, KeyTypeId};
 use crate::weights::{GetDispatchInfo, DispatchInfo};
 pub use primitives::H256;
-use primitives::{crypto::{Kind, CryptoType, Dummy, key_types, Public}, U256};
+use primitives::{crypto::{CryptoType, Dummy, key_types, Public}, U256};
 use crate::transaction_validity::TransactionValidity;
 
 /// Authority Id
@@ -42,7 +42,6 @@ impl UintAuthorityId {
 }
 
 impl CryptoType for UintAuthorityId {
-	const KIND: Kind = Kind::Dummy;
 	type Pair = Dummy;
 }
 

@@ -55,7 +55,7 @@ pub mod transaction_validity;
 pub use generic::{DigestItem, Digest};
 
 /// Re-export this since it's part of the API of this crate.
-pub use primitives::crypto::{key_types, KeyTypeId, Kind, CryptoType};
+pub use primitives::crypto::{key_types, KeyTypeId, CryptoType};
 pub use app_crypto::AppKey;
 
 /// A message indicating an invalid signature in extrinsic.

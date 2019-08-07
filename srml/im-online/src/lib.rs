@@ -67,10 +67,7 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use primitives::{
-	crypto::{CryptoType, KeyTypeId},
-	offchain::{OpaqueNetworkState, StorageKind},
-};
+use primitives::offchain::{OpaqueNetworkState, StorageKind};
 use codec::{Encode, Decode};
 use sr_primitives::{
 	ApplyError, traits::{Extrinsic as ExtrinsicT},
@@ -80,8 +77,7 @@ use rstd::prelude::*;
 use session::SessionIndex;
 use sr_io::Printable;
 use srml_support::{
-	StorageValue, decl_module, decl_event, decl_storage,
-	StorageDoubleMap, print,
+	StorageValue, decl_module, decl_event, decl_storage, StorageDoubleMap, print,
 };
 use system::ensure_none;
 use app_crypto::RuntimeAppPublic;
@@ -124,7 +120,6 @@ struct WorkerStatus<BlockNumber> {
 // Error which may occur while executing the off-chain code.
 enum OffchainErr {
 	DecodeWorkerStatus,
-	NoKeys,
 	ExtrinsicCreation,
 	FailedSigning,
 	NetworkState,
@@ -135,7 +130,6 @@ impl Printable for OffchainErr {
 	fn print(self) {
 		match self {
 			OffchainErr::DecodeWorkerStatus => print("Offchain error: decoding WorkerStatus failed!"),
-			OffchainErr::NoKeys => print("Offchain error: could not find local keys!"),
 			OffchainErr::ExtrinsicCreation => print("Offchain error: extrinsic creation failed!"),
 			OffchainErr::FailedSigning => print("Offchain error: signing failed!"),
 			OffchainErr::NetworkState => print("Offchain error: fetching network state failed!"),
@@ -266,24 +260,19 @@ impl<T: Trait> Module<T> {
 
 	fn do_gossip_at(block_number: T::BlockNumber) -> Result<(), OffchainErr> {
 		// we run only when a local authority key is configured
-		let key_type = KeyTypeId(*b"imon");
 		let authorities = Keys::get();
-		let mut local_keys = sr_io::public_keys(AuthorityId::KIND, key_type)
-			.map_err(|_| OffchainErr::NoKeys)?;
-		local_keys.sort_by(|a, b| a.public.cmp(&b.public));
+		let mut local_keys = app::Public::all();
+		local_keys.sort();
+
 		for (authority_index, key) in authorities.into_iter()
 			.enumerate()
 			.filter_map(|(index, authority)| {
-				let authority = app::crypto::Public::from(authority);
-				let authority: &[u8] = authority.as_ref();
-
-				local_keys.binary_search_by(|probe| probe.public[..].cmp(authority))
+				local_keys.binary_search(&authority)
 					.ok()
-					.map(|location| (index as u32, local_keys[location].clone()))
+					.map(|location| (index as u32, &local_keys[location]))
 			})
 		{
-			let network_state =
-				sr_io::network_state().map_err(|_| OffchainErr::NetworkState)?;
+			let network_state = sr_io::network_state().map_err(|_| OffchainErr::NetworkState)?;
 			let heartbeat_data = Heartbeat {
 				block_number,
 				network_state,
@@ -291,15 +280,11 @@ impl<T: Trait> Module<T> {
 				authority_index,
 			};
 
-			let signature = sr_io::sign(key, &heartbeat_data.encode())
-				.map_err(|_| OffchainErr::FailedSigning)?;
-			let signature = AuthoritySignature::decode(&mut &*signature)
-					.map_err(|_| OffchainErr::ExtrinsicCreation)?;
+			let signature = key.sign(&heartbeat_data.encode()).ok_or(OffchainErr::FailedSigning)?;
 			let call = Call::heartbeat(heartbeat_data, signature);
 			let ex = T::UncheckedExtrinsic::new_unsigned(call.into())
 				.ok_or(OffchainErr::ExtrinsicCreation)?;
-			sr_io::submit_transaction(&ex)
-				.map_err(|_| OffchainErr::SubmitTransaction)?;
+			sr_io::submit_transaction(&ex).map_err(|_| OffchainErr::SubmitTransaction)?;
 
 			// once finished we set the worker status without comparing
 			// if the existing value changed in the meantime. this is

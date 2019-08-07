@@ -20,7 +20,7 @@ use codec::{Encode, Decode};
 use rstd::prelude::{Vec, Box};
 use rstd::convert::TryFrom;
 
-pub use crate::crypto::{Kind as CryptoKind, KeyTypeId};
+pub use crate::crypto::KeyTypeId;
 
 /// A type of supported crypto.
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
@@ -57,18 +57,6 @@ impl From<StorageKind> for u32 {
 	fn from(c: StorageKind) -> Self {
 		c as u8 as u32
 	}
-}
-
-/// Key to use in the offchain worker crypto api.
-#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub struct CryptoKey {
-	/// Used cryptography.
-	pub kind: CryptoKind,
-	/// The app_id of the key.
-	pub key_type: KeyTypeId,
-	/// The public key.
-	pub public: Vec<u8>,
 }
 
 /// Opaque type for offchain http requests.
@@ -252,38 +240,6 @@ pub trait Externalities {
 	/// Returns information about the local node's network state.
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()>;
 
-	/// Create new key pair for signing/encryption/decryption.
-	///
-	/// Returns an error if given crypto kind is not supported.
-	fn new_key(&mut self, crypto: CryptoKind, app_id: KeyTypeId) -> Result<CryptoKey, ()>;
-
-	/// Get existing public keys for given `crypto` and `app_id`.
-	///
-	/// Return keys if they are available or an error if given `crypto` or `app_id` is not supported.
-	fn public_keys(&self, crypto: CryptoKind, app_id: KeyTypeId) -> Result<Vec<CryptoKey>, ()>;
-
-	/// Encrypt a piece of data using given crypto key.
-	///
-	/// Returns an error if `key` is not available or does not exist.
-	fn encrypt(&self, key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()>;
-
-	/// Decrypt a piece of data using given crypto key.
-	///
-	/// Returns an error if data cannot be decrypted or the `key` is not available or does not exist.
-	fn decrypt(&self, key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()>;
-
-	/// Sign a piece of data using given crypto key.
-	///
-	/// Returns an error if `key` is not available or does not exist.
-	fn sign(&self, key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()>;
-
-	/// Verifies that `signature` for `msg` matches given `key`.
-	///
-	/// Returns an `Ok` with `true` in case it does, `false` in case it doesn't.
-	/// Returns an error in case the key is not available or does not exist or the parameters
-	/// lengths are incorrect.
-	fn verify(&self, key: CryptoKey, msg: &[u8], signature: &[u8]) -> Result<bool, ()>;
-
 	/// Returns current UNIX timestamp (in millis)
 	fn timestamp(&mut self) -> Timestamp;
 
@@ -399,30 +355,6 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
 		(& **self).network_state()
-	}
-
-	fn new_key(&mut self, crypto: CryptoKind, key_type: KeyTypeId) -> Result<CryptoKey, ()> {
-		(&mut **self).new_key(crypto, key_type)
-	}
-
-	fn public_keys(&self, crypto: CryptoKind, key_type: KeyTypeId) -> Result<Vec<CryptoKey>, ()> {
-		(&**self).public_keys(crypto, key_type)
-	}
-
-	fn encrypt(&self, key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()> {
-		(&**self).encrypt(key, data)
-	}
-
-	fn decrypt(&self, key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()> {
-		(&**self).decrypt(key, data)
-	}
-
-	fn sign(&self, key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()> {
-		(&**self).sign(key, data)
-	}
-
-	fn verify(&self, key: CryptoKey, msg: &[u8], signature: &[u8]) -> Result<bool, ()> {
-		(&**self).verify(key, msg, signature)
 	}
 
 	fn timestamp(&mut self) -> Timestamp {

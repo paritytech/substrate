@@ -36,8 +36,7 @@ pub use primitives::Blake2Hasher;
 use primitives::{
 	crypto::KeyTypeId, ed25519, sr25519,
 	offchain::{
-		Timestamp, HttpRequestId, HttpRequestStatus, HttpError, CryptoKind, CryptoKey, StorageKind,
-		OpaqueNetworkState,
+		Timestamp, HttpRequestId, HttpRequestStatus, HttpError, StorageKind, OpaqueNetworkState,
 	},
 };
 
@@ -278,38 +277,6 @@ export_api! {
 
 		/// Returns information about the local node's network state.
 		fn network_state() -> Result<OpaqueNetworkState, ()>;
-
-		/// Create new key pair for signing/encryption/decryption.
-		///
-		/// Returns an error if given crypto kind is not supported.
-		fn new_key(crypto: CryptoKind, app_id: KeyTypeId) -> Result<CryptoKey, ()>;
-
-		/// Get existing public keys for given `crypto` and `app_id`.
-		///
-		/// Return keys if they are available or an error if given `crypto` or `app_id` is not supported.
-		fn public_keys(crypto: CryptoKind, app_id: KeyTypeId) -> Result<Vec<CryptoKey>, ()>;
-
-		/// Encrypt a piece of data using given crypto key.
-		///
-		/// Returns an error if `key` is not available or does not exist.
-		fn encrypt(key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()>;
-
-		/// Decrypt a piece of data using given crypto key.
-		///
-		/// Returns an error if data cannot be decrypted or the `key` is not available or does not exist.
-		fn decrypt(key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()>;
-
-		/// Sign a piece of data using given crypto key.
-		///
-		/// Returns an error if `key` is not available or does not exist.
-		fn sign(key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()>;
-
-		/// Verifies that `signature` for `msg` matches given `key`.
-		///
-		/// Returns an `Ok` with `true` in case it does, `false` in case it doesn't.
-		/// Returns an error in case the key is not available or does not exist or the parameters
-		/// lengths are incorrect.
-		fn verify(key: CryptoKey, msg: &[u8], signature: &[u8]) -> Result<bool, ()>;
 
 		/// Returns current UNIX timestamp (in millis)
 		fn timestamp() -> Timestamp;

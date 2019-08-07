@@ -241,11 +241,7 @@ impl<Components: components::Components> Service<Components> {
 		let offchain_storage = client.backend().offchain_storage();
 		let offchain_workers = match (config.offchain_worker, offchain_storage) {
 			(true, Some(db)) => {
-				Some(Arc::new(offchain::OffchainWorkers::new(
-					client.clone(),
-					db,
-					Some(keystore.clone()),
-				)))
+				Some(Arc::new(offchain::OffchainWorkers::new(client.clone(), db)))
 			},
 			(true, None) => {
 				log::warn!("Offchain workers disabled, due to lack of offchain storage support in backend.");
