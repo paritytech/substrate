@@ -396,7 +396,6 @@ impl im_online::Trait for Runtime {
 	type Event = Event;
 	type UncheckedExtrinsic = UncheckedExtrinsic;
 	type ReportUnresponsivness = Offences;
-	type CurrentEraStartSessionIndex = Staking;
 	type ValidatorIdByIndex = Staking;
 }
 

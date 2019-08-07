@@ -75,11 +75,11 @@ use session::historical::IdentificationTuple;
 use sr_io::Printable;
 use sr_primitives::{
 	Perbill, ApplyError,
-	traits::{ValidatorIdByIndex, Extrinsic as ExtrinsicT, CurrentEraStartSessionIndex, Convert},
+	traits::{Extrinsic as ExtrinsicT, Convert},
 	transaction_validity::{TransactionValidity, TransactionLongevity, ValidTransaction},
 };
 use sr_staking_primitives::{
-	SessionIndex,
+	SessionIndex, ValidatorIdByIndex,
 	offence::{ReportOffence, Offence, TimeSlot, Kind},
 };
 use srml_support::{
@@ -175,9 +175,6 @@ pub trait Trait: system::Trait + session::historical::Trait {
 			IdentificationTuple<Self>,
 			UnresponsivnessOffence<IdentificationTuple<Self>>,
 		>;
-
-	/// A function that returns the session index that started the current era.
-	type CurrentEraStartSessionIndex: CurrentEraStartSessionIndex;
 
 	/// A type that returns a validator id from the current elected set of the era.
 	type ValidatorIdByIndex: ValidatorIdByIndex<<Self as session::Trait>::ValidatorId>;
@@ -420,12 +417,9 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 			}
 		}
 
-		let current_era_start_session_index =
-			T::CurrentEraStartSessionIndex::current_era_start_session_index();
 		let validators_count = keys.len() as u32;
 		let offence = UnresponsivnessOffence {
 			session_index: current_session,
-			current_era_start_session_index,
 			validators_count,
 			offenders: unresponsive,
 		};
@@ -485,9 +479,7 @@ impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
 
 /// An offense which is filed if a validator didn't send a heartbeat message.
 pub struct UnresponsivnessOffence<Offender> {
-	/// The session index that starts an era in which the incident happened.
-	current_era_start_session_index: u32, // TODO [slashing]: Should be a SessionIndex.
-	/// The session index at which we file this report.
+	/// The current session index in which we report the unresponsive validators.
 	///
 	/// It acts as a time measure for unresponsivness reports and effectively will always point
 	/// at the end of the session.
@@ -505,8 +497,8 @@ impl<Offender: Clone> Offence<Offender> for UnresponsivnessOffence<Offender> {
 		self.offenders.clone()
 	}
 
-	fn current_era_start_session_index(&self) -> u32 { // TODO [slashing]: Should be a SessionIndex.
-		self.current_era_start_session_index
+	fn session_index(&self) -> u32 { // TODO [slashing]: Should be a SessionIndex.
+		self.session_index
 	}
 
 	fn validators_count(&self) -> u32 {

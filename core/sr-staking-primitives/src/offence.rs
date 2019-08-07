@@ -60,7 +60,7 @@ pub trait Offence<Offender> {
 
 	/// The session index which is used for querying the validator set for the `slash_fraction`
 	/// function.
-	fn current_era_start_session_index(&self) -> u32; // TODO [slashing]: Should be a SessionIndex.
+	fn session_index(&self) -> u32; // TODO [slashing]: Should be a SessionIndex.
 
 	/// Return a validators count at the time when the offence took place.
 	fn validators_count(&self) -> u32;
@@ -69,7 +69,7 @@ pub trait Offence<Offender> {
 	///
 	/// The timescale is abstract and it doesn't have to be the same across different
 	/// implementations of this trait. For example, for GRANDPA it could represent a round number
-	/// and for BABE it could be a slot number.
+	/// and for BABE it could be a slot number. This is used for looking the `offenders_count`.
 	fn time_slot(&self) -> TimeSlot;
 
 	/// A slash fraction of the total exposure that should be slashed for this

@@ -1034,21 +1034,6 @@ pub trait ValidateUnsigned {
 	fn validate_unsigned(call: &Self::Call) -> TransactionValidity;
 }
 
-// TODO [slashing]: move into staking-primitives?
-/// A trait for fetching the session index which started the current era.
-pub trait CurrentEraStartSessionIndex {
-	/// Returns the session index which started the current era.
-	fn current_era_start_session_index() -> u32; // TODO [slashing]: Should be a SessionIndex.
-}
-
-// TODO [slashing]: move into staking-primitives?
-/// A trait for fetching a validator id by the given index.
-pub trait ValidatorIdByIndex<ValidatorId> {
-	/// Return a validator identification by the given index in the current elected set of the era,
-	// or `None` if `validator_index` is out of range.
-	fn validator_id_by_index(validator_index: u32) -> Option<ValidatorId>;
-}
-
 /// Opaque datatype that may be destructured into a series of raw byte slices (which represent
 /// individual keys).
 pub trait OpaqueKeys: Clone {

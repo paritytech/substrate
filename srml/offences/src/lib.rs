@@ -73,7 +73,7 @@ impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportOffence<T::AccountId, T
 	fn report_offence(reporter: Option<T::AccountId>, offence: O) {
 		let offenders = offence.offenders();
 		let time_slot = offence.time_slot();
-		let session = offence.current_era_start_session_index();
+		let session = offence.session_index();
 		let validators_count = offence.validators_count();
 
 		// Check if an offence is already reported for the offender authorities

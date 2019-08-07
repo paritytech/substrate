@@ -276,10 +276,10 @@ use sr_primitives::Perbill;
 use sr_primitives::weights::SimpleDispatchInfo;
 use sr_primitives::traits::{
 	Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded,
-	SimpleArithmetic, SaturatedConversion, ValidatorIdByIndex,
+	SimpleArithmetic, SaturatedConversion,
 };
 use sr_staking_primitives::{
-	SessionIndex,
+	SessionIndex, ValidatorIdByIndex,
 	offence::{OnOffenceHandler, OffenceDetails},
 };
 #[cfg(feature = "std")]
@@ -1342,12 +1342,6 @@ impl<T: Trait> OnSessionEnding<T::AccountId, Exposure<T::AccountId, BalanceOf<T>
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(stash: &T::AccountId) {
 		Self::kill_stash(stash);
-	}
-}
-
-impl<T: Trait> sr_primitives::traits::CurrentEraStartSessionIndex for Module<T> {
-	fn current_era_start_session_index() -> u32 {
-		CurrentEraStartSessionIndex::get()
 	}
 }
 

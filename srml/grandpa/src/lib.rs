@@ -386,7 +386,7 @@ struct GrandpaEquivocationOffence<FullIdentification> {
 	/// A round in which the incident happened.
 	round: u64,
 	/// The session index that starts an era in which the incident happened.
-	current_era_start_session_index: u32, // TODO [slashing]: Should be a SessionIndex.
+	session_index: u32, // TODO [slashing]: Should be a SessionIndex.
 	/// The size of the validator set at the time of the offence.
 	validators_count: u32,
 	/// The authority which produced this equivocation.
@@ -400,8 +400,8 @@ impl<FullIdentification: Clone> Offence<FullIdentification> for GrandpaEquivocat
 		vec![self.offender.clone()]
 	}
 
-	fn current_era_start_session_index(&self) -> u32 { // TODO [slashing]: Should be a SessionIndex.
-		self.current_era_start_session_index
+	fn session_index(&self) -> u32 { // TODO [slashing]: Should be a SessionIndex.
+		self.session_index
 	}
 
 	fn validators_count(&self) -> u32 {
