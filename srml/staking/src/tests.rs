@@ -2027,8 +2027,32 @@ fn invulnerables_are_not_slashed() {
 			&[Perbill::from_percent(50)],
 		);
 
-		// The validator hasn't been slashed.
+		// The validator hasn't been slashed. The new era is not forced.
 		assert_eq!(Balances::free_balance(&11), 1000);
+		assert!(!Staking::forcing_new_era());
 	});
 }
 
+#[test]
+fn dont_slash_if_fraction_is_zero() {
+	// Don't slash if the fraction is zero.
+	with_externalities(&mut ExtBuilder::default().build(), || {
+		assert_eq!(Balances::free_balance(&11), 1000);
+
+		Staking::on_offence(
+			&[OffenceDetails {
+				offender: (
+					11,
+					Staking::stakers(&11),
+				),
+				count: 1,
+				reporters: vec![],
+			}],
+			&[Perbill::from_percent(0)],
+		);
+
+		// The validator hasn't been slashed. The new era is not forced.
+		assert_eq!(Balances::free_balance(&11), 1000);
+		assert!(!Staking::forcing_new_era());
+	});
+}
