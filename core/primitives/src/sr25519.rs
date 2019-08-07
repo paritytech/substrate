@@ -22,7 +22,7 @@
 // end::description[]
 
 #[cfg(feature = "std")]
-use schnorrkel::{signing_context, Keypair, SecretKey, MiniSecretKey, PublicKey,
+use schnorrkel::{signing_context, ExpansionMode, Keypair, SecretKey, MiniSecretKey, PublicKey,
 	derive::{Derivation, ChainCode, CHAIN_CODE_LENGTH}
 };
 #[cfg(feature = "std")]
@@ -30,10 +30,12 @@ use substrate_bip39::mini_secret_from_entropy;
 #[cfg(feature = "std")]
 use bip39::{Mnemonic, Language, MnemonicType};
 #[cfg(feature = "std")]
-use crate::crypto::{Pair as TraitPair, DeriveJunction, Infallible, SecretStringError, Derive, Ss58Codec};
-use crate::crypto::{key_types, KeyTypeId, Public as TraitPublic, TypedKey, UncheckedFrom};
+use crate::crypto::{
+	Pair as TraitPair, DeriveJunction, Infallible, SecretStringError, Ss58Codec
+};
+use crate::{crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive}};
 use crate::hash::{H256, H512};
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
@@ -56,16 +58,10 @@ pub struct Pair(Keypair);
 impl Clone for Pair {
 	fn clone(&self) -> Self {
 		Pair(schnorrkel::Keypair {
-			public: self.0.public.clone(),
+			public: self.0.public,
 			secret: schnorrkel::SecretKey::from_bytes(&self.0.secret.to_bytes()[..])
 				.expect("key is always the correct size; qed")
 		})
-	}
-}
-
-impl AsRef<Public> for Public {
-	fn as_ref(&self) -> &Public {
-		&self
 	}
 }
 
@@ -99,6 +95,20 @@ impl From<Public> for H256 {
 	}
 }
 
+impl rstd::convert::TryFrom<&[u8]> for Public {
+	type Error = ();
+
+	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
+		if data.len() == 32 {
+			let mut inner = [0u8; 32];
+			inner.copy_from_slice(data);
+			Ok(Public(inner))
+		} else {
+			Err(())
+		}
+	}
+}
+
 impl UncheckedFrom<[u8; 32]> for Public {
 	fn unchecked_from(x: [u8; 32]) -> Self {
 		Public::from_raw(x)
@@ -112,15 +122,15 @@ impl UncheckedFrom<H256> for Public {
 }
 
 #[cfg(feature = "std")]
-impl ::std::fmt::Display for Public {
-	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+impl std::fmt::Display for Public {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		write!(f, "{}", self.to_ss58check())
 	}
 }
 
 #[cfg(feature = "std")]
-impl ::std::fmt::Debug for Public {
-	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+impl std::fmt::Debug for Public {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> ::std::fmt::Result {
 		let s = self.to_ss58check();
 		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
 	}
@@ -142,8 +152,8 @@ impl<'de> Deserialize<'de> for Public {
 }
 
 #[cfg(feature = "std")]
-impl ::std::hash::Hash for Public {
-	fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
+impl std::hash::Hash for Public {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
 		self.0.hash(state);
 	}
 }
@@ -153,6 +163,20 @@ impl ::std::hash::Hash for Public {
 /// Instead of importing it for the local module, alias it to be available as a public type
 #[derive(Encode, Decode)]
 pub struct Signature(pub [u8; 64]);
+
+impl rstd::convert::TryFrom<&[u8]> for Signature {
+	type Error = ();
+
+	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
+		if data.len() == 64 {
+			let mut inner = [0u8; 64];
+			inner.copy_from_slice(data);
+			Ok(Signature(inner))
+		} else {
+			Err(())
+		}
+	}
+}
 
 impl Clone for Signature {
 	fn clone(&self) -> Self {
@@ -170,7 +194,7 @@ impl Default for Signature {
 
 impl PartialEq for Signature {
 	fn eq(&self, b: &Self) -> bool {
-		&self.0[..] == &b.0[..]
+		self.0[..] == b.0[..]
 	}
 }
 
@@ -268,11 +292,11 @@ impl Signature {
 	}
 }
 
-#[cfg(feature = "std")]
 impl Derive for Public {
 	/// Derive a child key from a series of given junctions.
 	///
 	/// `None` if there are any hard junctions in there.
+	#[cfg(feature = "std")]
 	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, path: Iter) -> Option<Public> {
 		let mut acc = PublicKey::from_bytes(self.as_ref()).ok()?;
 		for j in path {
@@ -318,30 +342,12 @@ impl TraitPublic for Public {
 		r.copy_from_slice(data);
 		Public(r)
 	}
-
-	/// Return a `Vec<u8>` filled with raw data.
-	#[cfg(feature = "std")]
-	fn to_raw_vec(&self) -> Vec<u8> {
-		self.0.to_vec()
-	}
-
-	/// Return a slice filled with raw data.
-	fn as_slice(&self) -> &[u8] {
-		&self.0
-	}
-}
-
-#[cfg(feature = "std")]
-impl AsRef<Pair> for Pair {
-	fn as_ref(&self) -> &Pair {
-		&self
-	}
 }
 
 #[cfg(feature = "std")]
 impl From<MiniSecretKey> for Pair {
 	fn from(sec: MiniSecretKey) -> Pair {
-		Pair(sec.expand_to_keypair())
+		Pair(sec.expand_to_keypair(ExpansionMode::Ed25519))
 	}
 }
 
@@ -376,7 +382,7 @@ impl AsRef<schnorrkel::Keypair> for Pair {
 /// Derive a single hard junction.
 #[cfg(feature = "std")]
 fn derive_hard_junction(secret: &SecretKey, cc: &[u8; CHAIN_CODE_LENGTH]) -> SecretKey {
-	secret.hard_derive_mini_secret_key(Some(ChainCode(cc.clone())), b"").0.expand()
+	secret.hard_derive_mini_secret_key(Some(ChainCode(cc.clone())), b"").0.expand(ExpansionMode::Ed25519)
 }
 
 /// The raw secret seed, which can be used to recreate the `Pair`.
@@ -417,7 +423,7 @@ impl TraitPair for Pair {
 				Ok(Pair(
 					MiniSecretKey::from_bytes(seed)
 						.map_err(|_| SecretStringError::InvalidSeed)?
-						.expand_to_keypair()
+						.expand_to_keypair(ExpansionMode::Ed25519)
 				))
 			}
 			SECRET_KEY_LENGTH => {
@@ -475,29 +481,19 @@ impl TraitPair for Pair {
 	}
 
 	/// Verify a signature on a message. Returns true if the signature is good.
-	fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: P) -> bool {
-		let signature: schnorrkel::Signature = match schnorrkel::Signature::from_bytes(&sig.as_ref()) {
-			Ok(some_signature) => some_signature,
-			Err(_) => return false
-		};
-		match PublicKey::from_bytes(pubkey.as_ref().as_slice()) {
-			Ok(pk) => pk.verify(
-				signing_context(SIGNING_CTX).bytes(message.as_ref()), &signature
-			),
-			Err(_) => false,
-		}
+	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: &Self::Public) -> bool {
+		Self::verify_weak(&sig.0[..], message, pubkey)
 	}
 
 	/// Verify a signature on a message. Returns true if the signature is good.
 	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool {
-		let signature: schnorrkel::Signature = match schnorrkel::Signature::from_bytes(sig) {
-			Ok(some_signature) => some_signature,
-			Err(_) => return false
-		};
+		// Match both schnorrkel 0.1.1 and 0.8.0+ signatures, supporting both wallets
+		// that have not been upgraded and those that have. To swap to 0.8.0 only,
+		// create `schnorrkel::Signature` and pass that into `verify_simple`
 		match PublicKey::from_bytes(pubkey.as_ref()) {
-			Ok(pk) => pk.verify(
-				signing_context(SIGNING_CTX).bytes(message.as_ref()), &signature
-			),
+			Ok(pk) => pk.verify_simple_preaudit_deprecated(
+				SIGNING_CTX, message.as_ref(), &sig,
+			).is_ok(),
 			Err(_) => false,
 		}
 	}
@@ -518,22 +514,61 @@ impl Pair {
 		let mini_key: MiniSecretKey = mini_secret_from_entropy(entropy, password.unwrap_or(""))
 			.expect("32 bytes can always build a key; qed");
 
-		let kp = mini_key.expand_to_keypair();
+		let kp = mini_key.expand_to_keypair(ExpansionMode::Ed25519);
 		(Pair(kp), mini_key.to_bytes())
 	}
 }
 
-impl TypedKey for Public {
-	const KEY_TYPE: KeyTypeId = key_types::SR25519;
+impl CryptoType for Public {
+	#[cfg(feature="std")]
+	type Pair = Pair;
 }
 
-impl TypedKey for Signature {
-	const KEY_TYPE: KeyTypeId = key_types::SR25519;
+impl CryptoType for Signature {
+	#[cfg(feature="std")]
+	type Pair = Pair;
 }
 
 #[cfg(feature = "std")]
-impl TypedKey for Pair {
-	const KEY_TYPE: KeyTypeId = key_types::SR25519;
+impl CryptoType for Pair {
+	type Pair = Pair;
+}
+
+#[cfg(test)]
+mod compatibility_test {
+	use super::*;
+	use crate::crypto::{DEV_PHRASE};
+	use hex_literal::hex;
+
+	// NOTE: tests to ensure addresses that are created with the `0.1.x` version (pre-audit) are
+	// still functional.
+
+	#[test]
+	fn derive_soft_known_pair_should_work() {
+		let pair = Pair::from_string(&format!("{}/Alice", DEV_PHRASE), None).unwrap();
+		// known address of DEV_PHRASE with 1.1
+		let known = hex!("d6c71059dbbe9ad2b0ed3f289738b800836eb425544ce694825285b958ca755e");
+		assert_eq!(pair.public().to_raw_vec(), known);
+	}
+
+	#[test]
+	fn derive_hard_known_pair_should_work() {
+		let pair = Pair::from_string(&format!("{}//Alice", DEV_PHRASE), None).unwrap();
+		// known address of DEV_PHRASE with 1.1
+		let known = hex!("d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d");
+		assert_eq!(pair.public().to_raw_vec(), known);
+	}
+
+	#[test]
+	fn verify_known_message_should_work() {
+		let public = Public::from_raw(hex!("b4bfa1f7a5166695eb75299fd1c4c03ea212871c342f2c5dfea0902b2c246918"));
+		// signature generated by the 1.1 version with the same ^^ public key.
+		let signature = Signature::from_raw(hex!(
+			"5a9755f069939f45d96aaf125cf5ce7ba1db998686f87f2fb3cbdea922078741a73891ba265f70c31436e18a9acd14d189d73c12317ab6c313285cd938453202"
+		));
+		let message = b"Verifying that I am the owner of 5G9hQLdsKQswNPgB499DeA5PkFBbgkLPJWkkS6FAM6xGQ8xD. Hash: 221455a3\n";
+		assert!(Pair::verify(&signature, &message[..], &public));
+	}
 }
 
 #[cfg(test)]
@@ -646,7 +681,6 @@ mod test {
 
 	#[test]
 	fn seeded_pair_should_work() {
-
 		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();
 		assert_eq!(
@@ -679,9 +713,9 @@ mod test {
 			&hex!("0000000000000000000000000000000000000000000000000000000000000000")
 		);
 		let public = pk.public();
-		let js_signature = Signature::from_raw(
-			hex!("28a854d54903e056f89581c691c1f7d2ff39f8f896c9e9c22475e60902cc2b3547199e0e91fa32902028f2ca2355e8cdd16cfe19ba5e8b658c94aa80f3b81a00")
-		);
-		assert!(Pair::verify(&js_signature, b"SUBSTRATE", public));
+		let js_signature = Signature::from_raw(hex!(
+			"28a854d54903e056f89581c691c1f7d2ff39f8f896c9e9c22475e60902cc2b3547199e0e91fa32902028f2ca2355e8cdd16cfe19ba5e8b658c94aa80f3b81a00"
+		));
+		assert!(Pair::verify(&js_signature, b"SUBSTRATE", &public));
 	}
 }

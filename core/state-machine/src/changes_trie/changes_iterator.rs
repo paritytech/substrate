@@ -19,7 +19,7 @@
 
 use std::cell::RefCell;
 use std::collections::VecDeque;
-use parity_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use hash_db::{HashDB, Hasher, EMPTY_PREFIX};
 use num_traits::One;
 use trie::{Recorder, MemoryDB};
@@ -249,8 +249,7 @@ impl<'a, RS, S, H, Number> DrilldownIteratorEssence<'a, RS, S, H, Number>
 					let extrinsics_key = ExtrinsicIndex { block: block.clone(), key: self.key.to_vec() }.encode();
 					let extrinsics = trie_reader(&self.storage, trie_root, &extrinsics_key);
 					if let Some(extrinsics) = extrinsics? {
-						let extrinsics: Option<ExtrinsicIndexValue> = Decode::decode(&mut &extrinsics[..]);
-						if let Some(extrinsics) = extrinsics {
+						if let Ok(extrinsics) = ExtrinsicIndexValue::decode(&mut &extrinsics[..]) {
 							self.extrinsics.extend(extrinsics.into_iter().rev().map(|e| (block.clone(), e)));
 						}
 					}
@@ -259,8 +258,7 @@ impl<'a, RS, S, H, Number> DrilldownIteratorEssence<'a, RS, S, H, Number>
 				let blocks_key = DigestIndex { block: block.clone(), key: self.key.to_vec() }.encode();
 				let blocks = trie_reader(&self.storage, trie_root, &blocks_key);
 				if let Some(blocks) = blocks? {
-					let blocks: Option<DigestIndexValue<Number>> = Decode::decode(&mut &blocks[..]);
-					if let Some(blocks) = blocks {
+					if let Ok(blocks) = <DigestIndexValue<Number>>::decode(&mut &blocks[..]) {
 						// filter level0 blocks here because we tend to use digest blocks,
 						// AND digest block changes could also include changes for out-of-range blocks
 						let begin = self.begin.clone();

@@ -454,7 +454,7 @@ mod tests {
 	use super::*;
 	use sr_primitives::transaction_validity::ValidTransaction;
 	use futures::Stream;
-	use parity_codec::Encode;
+	use codec::Encode;
 	use test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
 	use assert_matches::assert_matches;
 	use crate::watcher;
