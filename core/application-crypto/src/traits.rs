@@ -74,6 +74,9 @@ pub trait RuntimePublic: Sized {
 	/// The signature that will be generated when signing with the corresponding private key.
 	type Signature;
 
+	/// Returns all public keys for the given key type in the keystore.
+	fn all(key_type: KeyTypeId) -> crate::Vec<Self>;
+
 	/// Generate a public/private pair for the given key type and store it in the keystore.
 	///
 	/// Returns the generated public key.
@@ -91,10 +94,13 @@ pub trait RuntimePublic: Sized {
 	fn verify<M: AsRef<[u8]>>(&self, msg: &M, signature: &Self::Signature) -> bool;
 }
 
-/// A runtime interface for a application's public key.
+/// A runtime interface for an application's public key.
 pub trait RuntimeAppPublic: Sized {
 	/// The signature that will be generated when signing with the corresponding private key.
 	type Signature;
+
+	/// Returns all public keys for this application in the keystore.
+	fn all() -> crate::Vec<Self>;
 
 	/// Generate a public/private pair and store it in the keystore.
 	///

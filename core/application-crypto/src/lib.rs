@@ -25,7 +25,7 @@ pub use primitives::{self, crypto::{CryptoType, Public, Derive, IsWrappedBy, Wra
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use primitives::crypto::{SecretStringError, DeriveJunction, Ss58Codec, Pair};
-pub use primitives::{crypto::{KeyTypeId, key_types, Kind}};
+pub use primitives::{crypto::{KeyTypeId, key_types}};
 
 #[doc(hidden)]
 pub use codec;
@@ -33,7 +33,7 @@ pub use codec;
 #[cfg(feature = "std")]
 pub use serde;
 #[doc(hidden)]
-pub use rstd::ops::Deref;
+pub use rstd::{ops::Deref, vec::Vec};
 
 pub mod ed25519;
 pub mod sr25519;
@@ -62,13 +62,12 @@ macro_rules! app_crypto {
 		$crate::app_crypto!($public, $sig, $key_type);
 
 		$crate::wrap!{
-			/// A generic `AppPublic` wrapper type over Ed25519 crypto; this has no specific App.
+			/// A generic `AppPublic` wrapper type over $pair crypto; this has no specific App.
 			#[derive(Clone)]
 			pub struct Pair($pair);
 		}
 
 		impl $crate::CryptoType for Pair {
-			const KIND: $crate::Kind = <$pair as $crate::CryptoType>::KIND;
 			type Pair = Pair;
 		}
 
@@ -108,12 +107,12 @@ macro_rules! app_crypto {
 			fn sign(&self, msg: &[u8]) -> Self::Signature {
 				Signature(self.0.sign(msg))
 			}
-			fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(
+			fn verify<M: AsRef<[u8]>>(
 				sig: &Self::Signature,
 				message: M,
-				pubkey: P,
+				pubkey: &Self::Public,
 			) -> bool {
-				<$pair>::verify(&sig.0, message, &pubkey.as_ref().0)
+				<$pair>::verify(&sig.0, message, pubkey.as_ref())
 			}
 			fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(
 				sig: &[u8],
@@ -138,7 +137,7 @@ macro_rules! app_crypto {
 	};
 	($public:ty, $sig:ty, $key_type:expr) => {
 		$crate::wrap!{
-			/// A generic `AppPublic` wrapper type over Ed25519 crypto; this has no specific App.
+			/// A generic `AppPublic` wrapper type over $public crypto; this has no specific App.
 			#[derive(
 				Clone, Default, Eq, PartialEq, Ord, PartialOrd, $crate::codec::Encode,
 				$crate::codec::Decode,
@@ -146,9 +145,6 @@ macro_rules! app_crypto {
 			#[cfg_attr(feature = "std", derive(Debug, Hash))]
 			pub struct Public($public);
 		}
-		// TODO: needed for verify since it takes an AsRef, but should be removed once that is
-		// refactored.
-		$crate::primitives::impl_as_ref_mut!(Public);
 
 		impl $crate::Derive for Public {
 			#[cfg(feature = "std")]
@@ -195,7 +191,6 @@ macro_rules! app_crypto {
 		}
 
 		impl $crate::CryptoType for Public {
-			const KIND: $crate::Kind = <$public as $crate::CryptoType>::KIND;
 			#[cfg(feature="std")]
 			type Pair = Pair;
 		}
@@ -220,6 +215,10 @@ macro_rules! app_crypto {
 		impl $crate::RuntimeAppPublic for Public where $public: $crate::RuntimePublic<Signature=$sig> {
 			type Signature = Signature;
 
+			fn all() -> $crate::Vec<Self> {
+				<$public as $crate::RuntimePublic>::all($key_type).into_iter().map(Self).collect()
+			}
+
 			fn generate_pair(seed: Option<&str>) -> Self {
 				Self(<$public as $crate::RuntimePublic>::generate_pair($key_type, seed))
 			}
@@ -238,7 +237,7 @@ macro_rules! app_crypto {
 		}
 
 		$crate::wrap! {
-			/// A generic `AppPublic` wrapper type over Ed25519 crypto; this has no specific App.
+			/// A generic `AppPublic` wrapper type over $public crypto; this has no specific App.
 			#[derive(Clone, Default, Eq, PartialEq, $crate::codec::Encode, $crate::codec::Decode)]
 			#[cfg_attr(feature = "std", derive(Debug, Hash))]
 			pub struct Signature($sig);
@@ -255,7 +254,6 @@ macro_rules! app_crypto {
 		}
 
 		impl $crate::CryptoType for Signature {
-			const KIND: $crate::Kind = <$public as $crate::CryptoType>::KIND;
 			#[cfg(feature="std")]
 			type Pair = Pair;
 		}

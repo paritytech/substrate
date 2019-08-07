@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -33,43 +33,36 @@ impl KeyStore {
 	pub fn new() -> std::sync::Arc<parking_lot::RwLock<Self>> {
 		std::sync::Arc::new(parking_lot::RwLock::new(Self::default()))
 	}
-
-	/// Returns all key pairs for a given key type as `sr25519` pairs.
-	pub fn sr25519_pairs(&self, id: KeyTypeId) -> Vec<sr25519::Pair> {
-		self.keys.get(&id)
-			.map(|keys|
-				keys.values()
-					.map(|s| sr25519::Pair::from_seed_slice(s).expect("`sr25519` seed slice is valid"))
-					.collect()
-			)
-			.unwrap_or_default()
-	}
-
-	/// Returns all key pairs for a given key type as `ed25519` pairs.
-	pub fn ed25519_pairs(&self, id: KeyTypeId) -> Vec<ed25519::Pair> {
-		self.keys.get(&id)
-			.map(|keys|
-				keys.values()
-					.map(|s| ed25519::Pair::from_seed_slice(s).expect("`ed25519` seed slice is valid"))
-					.collect()
-			)
-			.unwrap_or_default()
-	}
 }
 
 #[cfg(feature = "std")]
 impl crate::traits::BareCryptoStore for KeyStore {
-	fn sr25519_generate_new(&mut self, id: KeyTypeId, seed: Option<&str>) -> Result<[u8; 32], String> {
+	fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
+		self.keys.get(&id)
+			.map(|keys|
+				keys.values()
+					.map(|s| sr25519::Pair::from_seed_slice(s).expect("`sr25519` seed slice is valid"))
+					.map(|p| p.public())
+					.collect()
+			)
+			.unwrap_or_default()
+	}
+
+	fn sr25519_generate_new(
+		&mut self,
+		id: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<sr25519::Public, String> {
 		match seed {
 			Some(seed) => {
 				let pair = sr25519::Pair::from_string(seed, None).expect("Generates an `sr25519` pair.");
 				self.keys.entry(id).or_default().insert(pair.public().to_raw_vec(), pair.to_raw_vec());
-				Ok(pair.public().0)
+				Ok(pair.public())
 			},
 			None => {
 				let (pair, _) = sr25519::Pair::generate();
 				self.keys.entry(id).or_default().insert(pair.public().to_raw_vec(), pair.to_raw_vec());
-				Ok(pair.public().0)
+				Ok(pair.public())
 			}
 		}
 	}
@@ -82,17 +75,32 @@ impl crate::traits::BareCryptoStore for KeyStore {
 			)
 	}
 
-	fn ed25519_generate_new(&mut self, id: KeyTypeId, seed: Option<&str>) -> Result<[u8; 32], String> {
+	fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public> {
+		self.keys.get(&id)
+			.map(|keys|
+				keys.values()
+					.map(|s| ed25519::Pair::from_seed_slice(s).expect("`ed25519` seed slice is valid"))
+					.map(|p| p.public())
+					.collect()
+			)
+			.unwrap_or_default()
+	}
+
+	fn ed25519_generate_new(
+		&mut self,
+		id: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<ed25519::Public, String> {
 		match seed {
 			Some(seed) => {
 				let pair = ed25519::Pair::from_string(seed, None).expect("Generates an `ed25519` pair.");
 				self.keys.entry(id).or_default().insert(pair.public().to_raw_vec(), pair.to_raw_vec());
-				Ok(pair.public().0)
+				Ok(pair.public())
 			},
 			None => {
 				let (pair, _) = ed25519::Pair::generate();
 				self.keys.entry(id).or_default().insert(pair.public().to_raw_vec(), pair.to_raw_vec());
-				Ok(pair.public().0)
+				Ok(pair.public())
 			}
 		}
 	}

@@ -59,14 +59,14 @@ pub trait Verify {
 impl Verify for primitives::ed25519::Signature {
 	type Signer = primitives::ed25519::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
-		runtime_io::ed25519_verify(self.as_ref(), msg.get(), signer)
+		runtime_io::ed25519_verify(self, msg.get(), signer)
 	}
 }
 
 impl Verify for primitives::sr25519::Signature {
 	type Signer = primitives::sr25519::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
-		runtime_io::sr25519_verify(self.as_ref(), msg.get(), signer)
+		runtime_io::sr25519_verify(self, msg.get(), signer)
 	}
 }
 
@@ -1260,12 +1260,12 @@ macro_rules! impl_opaque_keys {
 			///
 			/// Returns the concatenated SCALE encoded public keys.
 			pub fn generate(seed: Option<&str>) -> $crate::rstd::vec::Vec<u8> {
-				let mut keys = $crate::rstd::vec::Vec::new();
-				$({
-					let key = <$type as $crate::app_crypto::RuntimeAppPublic>::generate_pair(seed);
-					$crate::codec::Encode::encode_to(&key, &mut keys);
-				})*
-				keys
+				let keys = Self{
+					$(
+						$field: <$type as $crate::app_crypto::RuntimeAppPublic>::generate_pair(seed),
+					)*
+				};
+				$crate::codec::Encode::encode(&keys)
 			}
 		}
 

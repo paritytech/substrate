@@ -505,7 +505,6 @@ mod dummy {
 	}
 
 	impl CryptoType for Dummy {
-		const KIND: Kind = Kind::Dummy;
 		type Pair = Dummy;
 	}
 
@@ -542,16 +541,8 @@ mod dummy {
 			_: I
 		) -> Result<Self, SecretStringError> { Ok(Self) }
 		fn sign(&self, _: &[u8]) -> Self::Signature { Self }
-		fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(
-			_: &Self::Signature,
-			_: M,
-			_: P
-		) -> bool { true }
-		fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(
-			_: &[u8],
-			_: M,
-			_: P
-		) -> bool { true }
+		fn verify<M: AsRef<[u8]>>(_: &Self::Signature, _: M, _: &Self::Public) -> bool { true }
+		fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(_: &[u8], _: M, _: P) -> bool { true }
 		fn public(&self) -> Self::Public { Self }
 		fn to_raw_vec(&self) -> Vec<u8> { vec![] }
 	}
@@ -623,7 +614,7 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	fn sign(&self, message: &[u8]) -> Self::Signature;
 
 	/// Verify a signature on a message. Returns true if the signature is good.
-	fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: P) -> bool;
+	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: &Self::Public) -> bool;
 
 	/// Verify a signature on a message. Returns true if the signature is good.
 	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool;
@@ -688,44 +679,6 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	fn to_raw_vec(&self) -> Vec<u8>;
 }
 
-/// A type of supported crypto.
-#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
-#[repr(u32)]
-pub enum Kind {
-	/// User-level crypto. We (core) can't handle it directly.
-	User = 0,
-	/// SR25519 crypto (Schnorrkel)
-	Sr25519 = 1,
-	/// ED25519 crypto (Edwards)
-	Ed25519 = 2,
-
-	/// Dummy kind, just for testing.
-	#[cfg(feature = "std")]
-	Dummy = !0,
-}
-
-#[cfg(feature = "std")]
-impl TryFrom<u32> for Kind {
-	type Error = ();
-
-	fn try_from(kind: u32) -> Result<Self, Self::Error> {
-		Ok(match kind {
-			e if e == Kind::User as usize as u32 => Kind::User,
-			e if e == Kind::Sr25519 as usize as u32 => Kind::Sr25519,
-			e if e == Kind::Ed25519 as usize as u32 => Kind::Ed25519,
-			e if e == Kind::Dummy as usize as u32 => Kind::Dummy,
-			_ => return Err(()),
-		})
-	}
-}
-
-impl From<Kind> for u32 {
-	fn from(kind: Kind) -> Self {
-		kind as u32
-	}
-}
-
 /// One type is wrapped by another.
 pub trait IsWrappedBy<Outer>: From<Outer> + Into<Outer> {
 	/// Get a reference to the inner from the outer.
@@ -761,30 +714,8 @@ impl<Inner, Outer, T> UncheckedFrom<T> for Outer where
 	}
 }
 
-/// Implement `AsRef<Self>` and `AsMut<Self>` for the provided type.
-#[macro_export]
-macro_rules! impl_as_ref_mut {
-	($name:ty) => {
-		impl AsMut<Self> for $name {
-			fn as_mut(&mut self) -> &mut Self {
-				self
-			}
-		}
-		impl AsRef<Self> for $name {
-			fn as_ref(&self) -> &Self {
-				&self
-			}
-		}
-	}
-}
-
-// TODO: remove default cryptos
-
 /// Type which has a particular kind of crypto associated with it.
 pub trait CryptoType {
-	/// The kind of crypto it has.
-	const KIND: Kind;
-
 	/// The pair key type of this crypto.
 	#[cfg(feature="std")]
 	type Pair: Pair;
@@ -853,38 +784,6 @@ pub mod key_types {
 	pub const DUMMY: KeyTypeId = KeyTypeId(*b"dumy");
 }
 
-impl rstd::convert::TryFrom<KeyTypeId> for Kind {
-	type Error = ();
-
-	fn try_from(kind: KeyTypeId) -> Result<Self, Self::Error> {
-		Ok(match kind {
-			e if e == key_types::SR25519 => Kind::Sr25519,
-			e if e == key_types::ED25519 => Kind::Ed25519,
-			e if e == key_types::BABE => Kind::Sr25519,
-			e if e == key_types::GRANDPA => Kind::Ed25519,
-			e if e == key_types::IM_ONLINE => Kind::Sr25519,
-			#[cfg(feature = "std")]
-			e if e == key_types::DUMMY => Kind::Dummy,
-			_ => return Err(()),
-		})
-	}
-}
-
-// This doesn't make much sense and should be reconsidered.
-impl rstd::convert::TryFrom<Kind> for KeyTypeId {
-	type Error = ();
-
-	fn try_from(kind: Kind) -> Result<Self, Self::Error> {
-		Ok(match kind {
-			Kind::Sr25519 => key_types::SR25519,
-			Kind::Ed25519 => key_types::ED25519,
-			#[cfg(feature = "std")]
-			Kind::Dummy => key_types::DUMMY,
-			Kind::User => return Err(()),
-		})
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use crate::DeriveJunction;
@@ -905,7 +804,6 @@ mod tests {
 		}
 	}
 	impl CryptoType for TestPair {
-		const KIND: Kind = Kind::Dummy;
 		type Pair = Self;
 	}
 
@@ -922,7 +820,6 @@ mod tests {
 		}
 	}
 	impl CryptoType for TestPublic {
-		const KIND: Kind = Kind::Dummy;
 		type Pair = TestPair;
 	}
 	impl Derive for TestPublic {}
@@ -962,11 +859,7 @@ mod tests {
 		}
 		fn from_seed(_seed: &<TestPair as Pair>::Seed) -> Self { TestPair::Seed(vec![]) }
 		fn sign(&self, _message: &[u8]) -> Self::Signature { [] }
-		fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(
-			_sig: &Self::Signature,
-			_message: M,
-			_pubkey: P
-		) -> bool { true }
+		fn verify<M: AsRef<[u8]>>(_: &Self::Signature, _: M, _: &Self::Public) -> bool { true }
 		fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(
 			_sig: &[u8],
 			_message: M,

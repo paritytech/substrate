@@ -18,6 +18,7 @@ runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = 
 
 [dev-dependencies]
 primitives = { package = "substrate-primitives",  path = "../../core/primitives" }
+app-crypto = { package = "substrate-application-crypto",  path = "../../core/application-crypto" }
 lazy_static = "1.0"
 
 [features]

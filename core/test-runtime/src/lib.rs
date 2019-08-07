@@ -270,12 +270,12 @@ cfg_if! {
 				fn without_initialize_block() -> bool;
 				/// Test that `ed25519` crypto works in the runtime.
 				///
-				/// Returns the signature generated for the message `ed25519`.
-				fn test_ed25519_crypto() -> ed25519::AppSignature;
+				/// Returns the signature generated for the message `ed25519` and the public key.
+				fn test_ed25519_crypto() -> (ed25519::AppSignature, ed25519::AppPublic);
 				/// Test that `sr25519` crypto works in the runtime.
 				///
 				/// Returns the signature generated for the message `sr25519`.
-				fn test_sr25519_crypto() -> sr25519::AppSignature;
+				fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic);
 			}
 		}
 	} else {
@@ -311,12 +311,12 @@ cfg_if! {
 				fn without_initialize_block() -> bool;
 				/// Test that `ed25519` crypto works in the runtime.
 				///
-				/// Returns the signature generated for the message `ed25519`.
-				fn test_ed25519_crypto() -> ed25519::AppSignature;
+				/// Returns the signature generated for the message `ed25519` and the public key.
+				fn test_ed25519_crypto() -> (ed25519::AppSignature, ed25519::AppPublic);
 				/// Test that `sr25519` crypto works in the runtime.
 				///
 				/// Returns the signature generated for the message `sr25519`.
-				fn test_sr25519_crypto() -> sr25519::AppSignature;
+				fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic);
 			}
 		}
 	}
@@ -564,11 +564,11 @@ cfg_if! {
 					system::take_block_number()
 				}
 
-				fn test_ed25519_crypto() -> ed25519::AppSignature {
+				fn test_ed25519_crypto() -> (ed25519::AppSignature, ed25519::AppPublic) {
 					test_ed25519_crypto()
 				}
 
-				fn test_sr25519_crypto() -> sr25519::AppSignature {
+				fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic) {
 					test_sr25519_crypto()
 				}
 			}
@@ -768,11 +768,11 @@ cfg_if! {
 					system::take_block_number()
 				}
 
-				fn test_ed25519_crypto() -> ed25519::AppSignature {
+				fn test_ed25519_crypto() -> (ed25519::AppSignature, ed25519::AppPublic) {
 					test_ed25519_crypto()
 				}
 
-				fn test_sr25519_crypto() -> sr25519::AppSignature {
+				fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic) {
 					test_sr25519_crypto()
 				}
 			}
@@ -820,18 +820,34 @@ cfg_if! {
 	}
 }
 
-fn test_ed25519_crypto() -> ed25519::AppSignature {
-	let public = ed25519::AppPublic::generate_pair(None);
-	let signature = public.sign(&"ed25519").expect("Generates a valid `ed25519` signature.");
-	assert!(public.verify(&"ed25519", &signature));
-	signature
+fn test_ed25519_crypto() -> (ed25519::AppSignature, ed25519::AppPublic) {
+	let public0 = ed25519::AppPublic::generate_pair(None);
+	let public1 = ed25519::AppPublic::generate_pair(None);
+	let public2 = ed25519::AppPublic::generate_pair(None);
+
+	let all = ed25519::AppPublic::all();
+	assert!(all.contains(&public0));
+	assert!(all.contains(&public1));
+	assert!(all.contains(&public2));
+
+	let signature = public0.sign(&"ed25519").expect("Generates a valid `ed25519` signature.");
+	assert!(public0.verify(&"ed25519", &signature));
+	(signature, public0)
 }
 
-fn test_sr25519_crypto() -> sr25519::AppSignature {
-	let public = sr25519::AppPublic::generate_pair(None);
-	let signature = public.sign(&"sr25519").expect("Generates a valid `sr25519` signature.");
-	assert!(public.verify(&"sr25519", &signature));
-	signature
+fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic) {
+	let public0 = sr25519::AppPublic::generate_pair(None);
+	let public1 = sr25519::AppPublic::generate_pair(None);
+	let public2 = sr25519::AppPublic::generate_pair(None);
+
+	let all = sr25519::AppPublic::all();
+	assert!(all.contains(&public0));
+	assert!(all.contains(&public1));
+	assert!(all.contains(&public2));
+
+	let signature = public0.sign(&"sr25519").expect("Generates a valid `sr25519` signature.");
+	assert!(public0.verify(&"sr25519", &signature));
+	(signature, public0)
 }
 
 #[cfg(test)]

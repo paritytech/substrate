@@ -33,7 +33,7 @@ use bip39::{Mnemonic, Language, MnemonicType};
 use crate::crypto::{
 	Pair as TraitPair, DeriveJunction, Infallible, SecretStringError, Ss58Codec
 };
-use crate::{impl_as_ref_mut, crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Kind, Derive}};
+use crate::{crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive}};
 use crate::hash::{H256, H512};
 use codec::{Encode, Decode};
 
@@ -64,8 +64,6 @@ impl Clone for Pair {
 		})
 	}
 }
-
-impl_as_ref_mut!(Public);
 
 impl AsRef<[u8; 32]> for Public {
 	fn as_ref(&self) -> &[u8; 32] {
@@ -165,6 +163,20 @@ impl std::hash::Hash for Public {
 /// Instead of importing it for the local module, alias it to be available as a public type
 #[derive(Encode, Decode)]
 pub struct Signature(pub [u8; 64]);
+
+impl rstd::convert::TryFrom<&[u8]> for Signature {
+	type Error = ();
+
+	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
+		if data.len() == 64 {
+			let mut inner = [0u8; 64];
+			inner.copy_from_slice(data);
+			Ok(Signature(inner))
+		} else {
+			Err(())
+		}
+	}
+}
 
 impl Clone for Signature {
 	fn clone(&self) -> Self {
@@ -469,20 +481,15 @@ impl TraitPair for Pair {
 	}
 
 	/// Verify a signature on a message. Returns true if the signature is good.
-	fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: P) -> bool {
-		// Match both schnorrkel 0.1.1 and 0.8.0+ signatures, supporting both wallets
-		// that have not been upgraded and those that have. To swap to 0.8.0 only,
-		// create `schnorrkel::Signature` and pass that into `verify_simple`
-		match PublicKey::from_bytes(pubkey.as_ref().as_slice()) {
-			Ok(pk) => pk.verify_simple_preaudit_deprecated(
-				SIGNING_CTX, message.as_ref(), &sig.as_ref(),
-			).is_ok(),
-			Err(_) => false,
-		}
+	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: &Self::Public) -> bool {
+		Self::verify_weak(&sig.0[..], message, pubkey)
 	}
 
 	/// Verify a signature on a message. Returns true if the signature is good.
 	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool {
+		// Match both schnorrkel 0.1.1 and 0.8.0+ signatures, supporting both wallets
+		// that have not been upgraded and those that have. To swap to 0.8.0 only,
+		// create `schnorrkel::Signature` and pass that into `verify_simple`
 		match PublicKey::from_bytes(pubkey.as_ref()) {
 			Ok(pk) => pk.verify_simple_preaudit_deprecated(
 				SIGNING_CTX, message.as_ref(), &sig,
@@ -513,20 +520,17 @@ impl Pair {
 }
 
 impl CryptoType for Public {
-	const KIND: Kind = Kind::Sr25519;
 	#[cfg(feature="std")]
 	type Pair = Pair;
 }
 
 impl CryptoType for Signature {
-	const KIND: Kind = Kind::Sr25519;
 	#[cfg(feature="std")]
 	type Pair = Pair;
 }
 
 #[cfg(feature = "std")]
 impl CryptoType for Pair {
-	const KIND: Kind = Kind::Sr25519;
 	type Pair = Pair;
 }
 
@@ -712,6 +716,6 @@ mod test {
 		let js_signature = Signature::from_raw(hex!(
 			"28a854d54903e056f89581c691c1f7d2ff39f8f896c9e9c22475e60902cc2b3547199e0e91fa32902028f2ca2355e8cdd16cfe19ba5e8b658c94aa80f3b81a00"
 		));
-		assert!(Pair::verify(&js_signature, b"SUBSTRATE", public));
+		assert!(Pair::verify(&js_signature, b"SUBSTRATE", &public));
 	}
 }

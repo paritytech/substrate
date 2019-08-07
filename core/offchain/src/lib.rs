@@ -41,14 +41,10 @@ use std::{
 
 use client::runtime_api::ApiExt;
 use futures::future::Future;
-use keystore::Store as Keystore;
 use log::{debug, warn};
 use network::NetworkStateInfo;
-use primitives::{ExecutionContext, traits::BareCryptoStorePtr};
-use sr_primitives::{
-	generic::BlockId,
-	traits::{self, ProvideRuntimeApi},
-};
+use primitives::ExecutionContext;
+use sr_primitives::{generic::BlockId, traits::{self, ProvideRuntimeApi}};
 use transaction_pool::txpool::{Pool, ChainApi};
 
 mod api;
@@ -61,21 +57,15 @@ pub use offchain_primitives::OffchainWorkerApi;
 pub struct OffchainWorkers<Client, Storage, Block: traits::Block> {
 	client: Arc<Client>,
 	db: Storage,
-	keystore: Option<BareCryptoStorePtr>,
 	_block: PhantomData<Block>,
 }
 
-impl<Client, Storage, Block: traits::Block> OffchainWorkers<
-	Client,
-	Storage,
-	Block,
-> {
+impl<Client, Storage, Block: traits::Block> OffchainWorkers<Client, Storage, Block> {
 	/// Creates new `OffchainWorkers`.
-	pub fn new(client: Arc<Client>, db: Storage, keystore: Option<BareCryptoStorePtr>) -> Self {
+	pub fn new(client: Arc<Client>, db: Storage) -> Self {
 		Self {
 			client,
 			db,
-			keystore,
 			_block: PhantomData,
 		}
 	}
@@ -120,7 +110,6 @@ impl<Client, Storage, Block> OffchainWorkers<
 			let (api, runner) = api::AsyncApi::new(
 				pool.clone(),
 				self.db.clone(),
-				self.keystore.clone(),
 				at.clone(),
 				network_state.clone(),
 			);
@@ -184,12 +173,12 @@ mod tests {
 		let _ = env_logger::try_init();
 		let runtime = tokio::runtime::Runtime::new().unwrap();
 		let client = Arc::new(test_client::new());
-		let pool = Arc::new(Pool::new(Default::default(), ::transaction_pool::ChainApi::new(client.clone())));
+		let pool = Arc::new(Pool::new(Default::default(), transaction_pool::ChainApi::new(client.clone())));
 		let db = client_db::offchain::LocalStorage::new_test();
 		let network_state = Arc::new(MockNetworkStateInfo());
-		// TODO Test keystore
+
 		// when
-		let offchain = OffchainWorkers::new(client, db, None);
+		let offchain = OffchainWorkers::new(client, db);
 		runtime.executor().spawn(offchain.on_block_imported(&0u64, &pool, network_state.clone()));
 
 		// then

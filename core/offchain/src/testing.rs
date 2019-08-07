@@ -28,9 +28,6 @@ use primitives::offchain::{
 	HttpRequestId as RequestId,
 	HttpRequestStatus as RequestStatus,
 	Timestamp,
-	CryptoKind,
-	KeyTypeId,
-	CryptoKey,
 	StorageKind,
 	OpaqueNetworkState,
 };
@@ -142,55 +139,6 @@ impl offchain::Externalities for TestOffchainExt {
 	}
 
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
-		unimplemented!("not needed in tests so far")
-	}
-
-	fn new_key(
-		&mut self,
-		_crypto: CryptoKind,
-		_key_type: KeyTypeId
-	) -> Result<CryptoKey, ()> {
-		unimplemented!("not needed in tests so far")
-	}
-
-	fn public_keys(
-		&self,
-		_crypto: CryptoKind,
-		_key_type: KeyTypeId,
-	) -> Result<Vec<CryptoKey>, ()> {
-		unimplemented!("not needed in tests so far")
-	}
-
-	fn encrypt(
-		&self,
-		_key: CryptoKey,
-		_data: &[u8],
-	) -> Result<Vec<u8>, ()> {
-		unimplemented!("not needed in tests so far")
-	}
-
-	fn decrypt(
-		&self,
-		_key: CryptoKey,
-		_data: &[u8],
-	) -> Result<Vec<u8>, ()> {
-		unimplemented!("not needed in tests so far")
-	}
-
-	fn sign(
-		&self,
-		_key: CryptoKey,
-		_data: &[u8],
-	) -> Result<Vec<u8>, ()> {
-		unimplemented!("not needed in tests so far")
-	}
-
-	fn verify(
-		&self,
-		_key: CryptoKey,
-		_msg: &[u8],
-		_signature: &[u8],
-	) -> Result<bool, ()> {
 		unimplemented!("not needed in tests so far")
 	}
 

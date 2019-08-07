@@ -32,9 +32,7 @@ use bip39::{Mnemonic, Language, MnemonicType};
 use crate::crypto::{Pair as TraitPair, DeriveJunction, SecretStringError, Ss58Codec};
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
-use crate::{impl_as_ref_mut, crypto::{
-	Public as TraitPublic, UncheckedFrom, CryptoType, Kind, Derive
-}};
+use crate::{crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive}};
 
 /// A secret seed. It's not called a "secret key" because ring doesn't expose the secret keys
 /// of the key pair (yeah, dumb); as such we're forced to remember the seed manually if we
@@ -164,6 +162,20 @@ impl std::hash::Hash for Public {
 /// A signature (a 512-bit value).
 #[derive(Encode, Decode)]
 pub struct Signature(pub [u8; 64]);
+
+impl rstd::convert::TryFrom<&[u8]> for Signature {
+	type Error = ();
+
+	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
+		if data.len() == 64 {
+			let mut inner = [0u8; 64];
+			inner.copy_from_slice(data);
+			Ok(Signature(inner))
+		} else {
+			Err(())
+		}
+	}
+}
 
 impl Clone for Signature {
 	fn clone(&self) -> Self {
@@ -306,8 +318,6 @@ impl Public {
 	}
 }
 
-impl_as_ref_mut!(Public);
-
 impl TraitPublic for Public {
 	/// A new instance from the given slice that should be 32 bytes long.
 	///
@@ -429,8 +439,8 @@ impl TraitPair for Pair {
 	}
 
 	/// Verify a signature on a message. Returns true if the signature is good.
-	fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: P) -> bool {
-		Self::verify_weak(&sig.0[..], message.as_ref(), &pubkey.as_ref().0[..])
+	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: &Self::Public) -> bool {
+		Self::verify_weak(&sig.0[..], message.as_ref(), pubkey)
 	}
 
 	/// Verify a signature on a message. Returns true if the signature is good.
@@ -480,20 +490,17 @@ impl Pair {
 }
 
 impl CryptoType for Public {
-	const KIND: Kind = Kind::Ed25519;
 	#[cfg(feature="std")]
 	type Pair = Pair;
 }
 
 impl CryptoType for Signature {
-	const KIND: Kind = Kind::Ed25519;
 	#[cfg(feature="std")]
 	type Pair = Pair;
 }
 
 #[cfg(feature = "std")]
 impl CryptoType for Pair {
-	const KIND: Kind = Kind::Ed25519;
 	type Pair = Pair;
 }
 
