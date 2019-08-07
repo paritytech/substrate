@@ -4462,7 +4462,11 @@ dependencies = [
  "substrate-service 2.0.0",
  "substrate-telemetry 2.0.0",
  "substrate-test-runtime-client 2.0.0",
+<<<<<<< HEAD
  "tempfile 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+=======
+ "substrate-transaction-pool 2.0.0",
+>>>>>>> Submit call from Babe
  "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

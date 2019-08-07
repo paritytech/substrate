@@ -21,6 +21,7 @@ substrate-telemetry = { path = "../../telemetry" }
 keystore = { package = "substrate-keystore", path = "../../keystore" }
 srml-babe = { path = "../../../srml/babe" }
 srml-session = { path = "../../../srml/session" }
+transaction_pool = { package = "substrate-transaction-pool", path = "../../transaction-pool" }
 
 client = { package = "substrate-client", path = "../../client" }
 uncles = { package = "substrate-consensus-uncles", path = "../uncles" }

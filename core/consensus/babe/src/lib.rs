@@ -70,6 +70,7 @@ use client::{
 	ProvideUncles,
 	utils::is_descendent_of,
 };
+use transaction_pool::txpool::{SubmitExtrinsic, ChainApi};
 use fork_tree::ForkTree;
 use slots::{CheckedHeader, check_equivocation};
 use futures::{prelude::*, future};
@@ -458,10 +459,13 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 	randomness: [u8; 32],
 	epoch_index: u64,
 	c: (u64, u64),
-	_transaction_pool: Option<&T>,
+	transaction_pool: Option<&T>,
 ) -> Result<CheckedHeader<B::Header, (DigestItemFor<B>, DigestItemFor<B>)>, String> where
 	DigestItemFor<B>: CompatibleDigestItem,
-	T: Send + Sync + 'static,
+	C: ProvideRuntimeApi + HeaderBackend<B>,
+	C::Api: BabeApi<B>,
+	T: SubmitExtrinsic + Send + Sync + 'static,
+	<T as SubmitExtrinsic>::Api: ChainApi<Block=B>,
 {
 	trace!(target: "babe", "Checking header");
 	let seal = match header.digest_mut().pop() {
@@ -523,6 +527,23 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 					equivocation_proof.first_header().hash(),
 					equivocation_proof.second_header().hash(),
 				);
+
+				// Submit a transaction reporting the equivocation.
+				let block_id = BlockId::number(client.info().best_number);
+				
+				let maybe_report_call = client
+					.runtime_api()
+					.construct_equivocation_report_call(&block_id, equivocation_proof);
+				if let Ok(Some(report_call)) = maybe_report_call {
+						transaction_pool.as_ref().map(|txpool| {
+							let uxt = Decode::decode(&mut report_call.as_slice())
+								.expect("Encoded extrinsic is valid; qed");
+							txpool.submit_one(&block_id, uxt)
+						});
+						info!(target: "afg", "Equivocation report has been submitted")
+				} else {
+					error!(target: "afg", "Error constructing equivocation report")
+				}
 			}
 
 			let pre_digest = CompatibleDigestItem::babe_pre_digest(pre_digest);
@@ -617,9 +638,10 @@ fn median_algorithm(
 }
 
 impl<B: BlockT, C, T> Verifier<B> for BabeVerifier<C, T> where
-	C: ProvideRuntimeApi + Send + Sync + AuxStore + ProvideCache<B>,
+	C: ProvideRuntimeApi + HeaderBackend<B> + Send + Sync + AuxStore + ProvideCache<B>,
 	C::Api: BlockBuilderApi<B> + BabeApi<B>,
-	T: Send + Sync + 'static,
+	T: SubmitExtrinsic + Send + Sync + 'static,
+	<T as SubmitExtrinsic>::Api: ChainApi<Block=B>,
 {
 	fn verify(
 		&mut self,
@@ -1142,9 +1164,10 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA, T>(
 	I::Error: Into<ConsensusError>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync + 'static,
 	RA: Send + Sync + 'static,
-	PRA: ProvideRuntimeApi + ProvideCache<Block> + Send + Sync + AuxStore + 'static,
+	PRA: ProvideRuntimeApi + HeaderBackend<Block> + ProvideCache<Block> + Send + Sync + AuxStore + 'static,
 	PRA::Api: BlockBuilderApi<Block> + BabeApi<Block>,
-	T: Send + Sync + 'static,
+	T: SubmitExtrinsic + Send + Sync + 'static,
+	<T as SubmitExtrinsic>::Api: ChainApi<Block=Block>,
 {
 	register_babe_inherent_data_provider(&inherent_data_providers, config.get())?;
 	initialize_authorities_cache(&*api)?;
