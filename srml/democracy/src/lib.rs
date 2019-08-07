@@ -25,7 +25,7 @@ use sr_primitives::weights::SimpleDispatchInfo;
 use parity_codec::{Encode, Decode, Input, Output};
 use srml_support::{
 	decl_module, decl_storage, decl_event, ensure,
-	StorageValue, StorageMap, Parameter, Dispatchable, IsSubType, EnumerableStorageMap,
+	StorageValue, StorageMap, StorageLinkedMap, Parameter, Dispatchable, IsSubType,
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier,
 		OnFreeBalanceZero, Get

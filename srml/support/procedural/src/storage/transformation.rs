@@ -325,16 +325,17 @@ fn decl_store_extra_genesis(
 					} else {
 						quote!()
 					};
+					// TODO TODO: execute this in a with_storage!!!
 
 					quote!{{
 						let v = (#builder)(&self);
 						<
 							#name<#struct_trait #instance> as
-							#scrate::storage::hashed::generator::StorageValue<#typ>
-						>::put(&v, storage);
+							#scrate::storage::StorageValue<#typ>
+						>::put(&v);
 					}}
 				},
-				DeclStorageTypeInfosKind::Map { key_type, .. } => {
+				DeclStorageTypeInfosKind::Map { key_type, is_linked, .. } => {
 					let struct_trait = if ext::type_contains_ident(&type_infos.value_type, traitinstance)
 						|| ext::type_contains_ident(key_type, traitinstance)
 					{
@@ -344,13 +345,19 @@ fn decl_store_extra_genesis(
 						quote!()
 					};
 
+					let map = if is_linked {
+						quote! { StorageLinkedMap }
+					} else {
+						quote! { StorageMap }
+					};
+
 					quote!{{
 						let data = (#builder)(&self);
 						data.into_iter().for_each(|(k, v)| {
 							<
 								#name<#struct_trait #instance> as
-								#scrate::storage::hashed::generator::StorageMap<#key_type, #typ>
-							>::insert(&k, &v, storage);
+								#scrate::storage::#map<#key_type, #typ>
+							>::insert(&k, &v);
 						});
 					}}
 				},
@@ -370,8 +377,8 @@ fn decl_store_extra_genesis(
 						data.into_iter().for_each(|(k1, k2, v)| {
 							<
 								#name<#struct_trait #instance> as
-								#scrate::storage::unhashed::generator::StorageDoubleMap<#key1_type, #key2_type, #typ>
-							>::insert(&k1, &k2, &v, storage);
+								#scrate::storage::StorageDoubleMap<#key1_type, #key2_type, #typ>
+							>::insert(&k1, &k2, &v);
 						});
 					}}
 				},
@@ -380,7 +387,7 @@ fn decl_store_extra_genesis(
 	}
 
 	let mut has_scall = false;
-	let mut scall = quote!{ ( |_, _, _| {} ) };
+	let mut scall = quote!{ ( |_| {} ) };
 	let mut genesis_extrafields = TokenStream2::new();
 	let mut genesis_extrafields_default = TokenStream2::new();
 
@@ -417,6 +424,7 @@ fn decl_store_extra_genesis(
 					}
 					assimilate_require_generic |= ext::expr_contains_ident(&expr.content, traitinstance);
 					let content = &expr.content;
+					// TODO TODO: add a type here to help user !
 					scall = quote!( ( #content ) );
 					has_scall = true;
 				},
@@ -548,13 +556,13 @@ fn decl_store_extra_genesis(
 					r: &mut #scrate::sr_primitives::StorageOverlay,
 					c: &mut #scrate::sr_primitives::ChildrenStorageOverlay,
 				) -> std::result::Result<(), String> #fn_where_clause {
-					let storage = r;
+					#scrate::with_storage_and_children(r, c, || {
+						#builders
 
-					#builders
+						#scall(&self);
 
-					#scall(storage, c, &self);
-
-					Ok(())
+						Ok(())
+					})
 				}
 			}
 
@@ -874,14 +882,14 @@ fn impl_store_fns(
 					quote!{
 						#( #[ #attrs ] )*
 						pub fn #get_fn() -> #value_type {
-							<#name<#struct_trait #instance> as
-								#scrate::storage::hashed::generator::StorageValue<#typ>> :: get(
-									&#scrate::storage::RuntimeStorage
-								)
+							<
+								#name<#struct_trait #instance> as
+								#scrate::storage::StorageValue<#typ>
+							>::get()
 						}
 					}
 				},
-				DeclStorageTypeInfosKind::Map { key_type, .. } => {
+				DeclStorageTypeInfosKind::Map { key_type, is_linked, .. } => {
 					let struct_trait = if ext::type_contains_ident(&type_infos.value_type, traitinstance)
 						|| ext::type_contains_ident(key_type, traitinstance)
 					{
@@ -890,13 +898,19 @@ fn impl_store_fns(
 						quote!()
 					};
 
+					let map = if is_linked {
+						quote! { StorageLinkedMap }
+					} else {
+						quote! { StorageMap }
+					};
+
 					quote!{
 						#( #[ #attrs ] )*
 						pub fn #get_fn<K: #scrate::rstd::borrow::Borrow<#key_type>>(key: K) -> #value_type {
 							<
 								#name<#struct_trait #instance> as
-								#scrate::storage::hashed::generator::StorageMap<#key_type, #typ>
-							>::get(key.borrow(), &#scrate::storage::RuntimeStorage)
+								#scrate::storage::#map<#key_type, #typ>
+							>::get(key.borrow())
 						}
 					}
 				}
@@ -920,8 +934,8 @@ fn impl_store_fns(
 						{
 							<
 								#name<#struct_trait #instance> as
-								#scrate::storage::unhashed::generator::StorageDoubleMap<#key1_type, #key2_type, #typ>
-							>::get(k1, k2, &#scrate::storage::RuntimeStorage)
+								#scrate::storage::StorageDoubleMap<#key1_type, #key2_type, #typ>
+							>::get(k1, k2)
 						}
 					}
 				}

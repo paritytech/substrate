@@ -200,6 +200,7 @@ where
 		assert!(header.extrinsics_root() == &xts_root, "Transaction trie root must be valid.");
 	}
 
+	// TODO TODO: maybe storage_items panic variant ?
 	/// Actually execute all transitions for `block`.
 	pub fn execute_block(block: Block) {
 		Self::initialize_block(block.header());

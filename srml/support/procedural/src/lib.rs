@@ -126,7 +126,7 @@ use proc_macro::TokenStream;
 ///			config(genesis_field): GenesisFieldType;
 ///			config(genesis_field2): GenesisFieldType;
 ///			...
-///			build(|_: &mut StorageOverlay, _: &mut ChildrenStorageOverlay, _: &GenesisConfig<T>| {
+///			build(|_: &GenesisConfig<T>| {
 ///				// Modification of storage
 ///			})
 ///		}

@@ -36,10 +36,7 @@ pub use once_cell;
 #[doc(hidden)]
 pub use paste;
 
-pub use self::storage::hashed::generator::{
-	HashedStorage, Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat
-};
-pub use self::storage::unhashed::generator::UnhashedStorage;
+pub use self::storage::hashed::{Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat};
 
 #[macro_use]
 pub mod dispatch;
@@ -69,6 +66,10 @@ pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
 pub use self::double_map::StorageDoubleMapWithHasher;
 pub use runtime_io::{print, storage_root};
 pub use sr_primitives::{self, ConsensusEngineId};
+
+#[doc(hidden)]
+#[cfg(feature = "std")]
+pub use runtime_io::with_storage_and_children;
 
 /// Macro for easily creating a new implementation of the `Get` trait. Use similarly to
 /// how you would declare a `const`:

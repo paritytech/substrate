@@ -19,95 +19,21 @@
 use crate::rstd::prelude::*;
 use crate::rstd::borrow::Borrow;
 use codec::{Codec, Encode, Decode, KeyedVec, EncodeAppend};
-use hashed::generator::{HashedStorage, StorageHasher};
-use unhashed::generator::UnhashedStorage;
 
 #[macro_use]
 pub mod storage_items;
 pub mod unhashed;
 pub mod hashed;
-mod generator;
-
-/// The underlying runtime storage.
-pub struct RuntimeStorage;
-
-impl<H: StorageHasher> HashedStorage<H> for RuntimeStorage {
-	fn exists(&self, key: &[u8]) -> bool {
-		hashed::exists(&H::hash, key)
-	}
-
-	/// Load the bytes of a key from storage. Can panic if the type is incorrect.
-	fn get<T: Decode>(&self, key: &[u8]) -> Option<T> {
-		hashed::get(&H::hash, key)
-	}
-
-	/// Put a value in under a key.
-	fn put<T: Encode>(&mut self, key: &[u8], val: &T) {
-		hashed::put(&H::hash, key, val)
-	}
-
-	/// Remove the bytes of a key from storage.
-	fn kill(&mut self, key: &[u8]) {
-		hashed::kill(&H::hash, key)
-	}
-
-	/// Take a value from storage, deleting it after reading.
-	fn take<T: Decode>(&mut self, key: &[u8]) -> Option<T> {
-		hashed::take(&H::hash, key)
-	}
-
-	fn get_raw(&self, key: &[u8]) -> Option<Vec<u8>> {
-		hashed::get_raw(&H::hash, key)
-	}
-
-	fn put_raw(&mut self, key: &[u8], value: &[u8]) {
-		hashed::put_raw(&H::hash, key, value)
-	}
-}
-
-impl UnhashedStorage for RuntimeStorage {
-	fn exists(&self, key: &[u8]) -> bool {
-		unhashed::exists(key)
-	}
-
-	/// Load the bytes of a key from storage. Can panic if the type is incorrect.
-	fn get<T: Decode>(&self, key: &[u8]) -> Option<T> {
-		unhashed::get(key)
-	}
-
-	/// Put a value in under a key.
-	fn put<T: Encode + ?Sized>(&mut self, key: &[u8], val: &T) {
-		unhashed::put(key, val)
-	}
-
-	/// Remove the bytes of a key from storage.
-	fn kill(&mut self, key: &[u8]) {
-		unhashed::kill(key)
-	}
-
-	/// Remove the bytes of a key from storage.
-	fn kill_prefix(&mut self, prefix: &[u8]) {
-		unhashed::kill_prefix(prefix)
-	}
-
-	/// Take a value from storage, deleting it after reading.
-	fn take<T: Decode>(&mut self, key: &[u8]) -> Option<T> {
-		unhashed::take(key)
-	}
-
-	fn get_raw(&self, key: &[u8]) -> Option<Vec<u8>> {
-		unhashed::get_raw(key)
-	}
-
-	fn put_raw(&mut self, key: &[u8], value: &[u8]) {
-		unhashed::put_raw(key, value)
-	}
-}
+pub mod child;
+pub mod generator;
 
 /// A trait for working with macro-generated storage values under the substrate storage API.
 pub trait StorageValue<T: Codec> {
 	/// The type that get/take return.
 	type Query;
+
+	/// Get the storage key.
+	fn key() -> Vec<u8>;
 
 	/// Does the value (explicitly) exist in storage?
 	fn exists() -> bool;
@@ -142,6 +68,9 @@ pub trait StorageValue<T: Codec> {
 pub trait StorageMap<K: Codec, V: Codec> {
 	/// The type that get/take return.
 	type Query;
+
+	/// Get the storage key used to fetch a value corresponding to a specific key.
+	fn key_for<KeyArg: Borrow<K>>(key: KeyArg) -> Vec<u8>;
 
 	/// Does the value (explicitly) exist in storage?
 	fn exists<KeyArg: Borrow<K>>(key: KeyArg) -> bool;
@@ -198,6 +127,9 @@ pub trait StorageLinkedMap<K: Codec, V: Codec> {
 
 	/// Take the value under a key.
 	fn take<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query;
+
+	/// Return current head element.
+	fn head() -> Option<K>;
 
 	/// Enumerate all elements in the map.
 	fn enumerate() -> Box<dyn Iterator<Item = (K, V)>> where K: 'static, V: 'static, Self: 'static;
@@ -278,97 +210,4 @@ pub trait StorageDoubleMap<K1: Encode, K2: Encode, V: Codec> {
 		KArg2: ?Sized + Encode,
 		I: codec::Encode,
 		V: EncodeAppend<Item=I>;
-}
-
-/// child storage NOTE could replace unhashed by having only one kind of storage (root being null storage
-/// key (storage_key can become Option<&[u8]>).
-/// This module is a currently only a variant of unhashed with additional `storage_key`.
-/// Note that `storage_key` must be unique and strong (strong in the sense of being long enough to
-/// avoid collision from a resistant hash function (which unique implies)).
-pub mod child {
-	use super::{Codec, Encode, Decode, Vec};
-
-	/// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
-	pub fn get<T: Decode + Sized>(storage_key: &[u8], key: &[u8]) -> Option<T> {
-		runtime_io::child_storage(storage_key, key).map(|v| {
-			Decode::decode(&mut &v[..]).expect("storage is not null, therefore must be a valid type")
-		})
-	}
-
-	/// Return the value of the item in storage under `key`, or the type's default if there is no
-	/// explicit entry.
-	pub fn get_or_default<T: Decode + Sized + Default>(storage_key: &[u8], key: &[u8]) -> T {
-		get(storage_key, key).unwrap_or_else(Default::default)
-	}
-
-	/// Return the value of the item in storage under `key`, or `default_value` if there is no
-	/// explicit entry.
-	pub fn get_or<T: Decode + Sized>(storage_key: &[u8], key: &[u8], default_value: T) -> T {
-		get(storage_key, key).unwrap_or(default_value)
-	}
-
-	/// Return the value of the item in storage under `key`, or `default_value()` if there is no
-	/// explicit entry.
-	pub fn get_or_else<T: Decode + Sized, F: FnOnce() -> T>(storage_key: &[u8], key: &[u8], default_value: F) -> T {
-		get(storage_key, key).unwrap_or_else(default_value)
-	}
-
-	/// Put `value` in storage under `key`.
-	pub fn put<T: Encode>(storage_key: &[u8], key: &[u8], value: &T) {
-		value.using_encoded(|slice| runtime_io::set_child_storage(storage_key, key, slice));
-	}
-
-	/// Remove `key` from storage, returning its value if it had an explicit entry or `None` otherwise.
-	pub fn take<T: Decode + Sized>(storage_key: &[u8], key: &[u8]) -> Option<T> {
-		let r = get(storage_key, key);
-		if r.is_some() {
-			kill(storage_key, key);
-		}
-		r
-	}
-
-	/// Remove `key` from storage, returning its value, or, if there was no explicit entry in storage,
-	/// the default for its type.
-	pub fn take_or_default<T: Codec + Sized + Default>(storage_key: &[u8], key: &[u8]) -> T {
-		take(storage_key, key).unwrap_or_else(Default::default)
-	}
-
-	/// Return the value of the item in storage under `key`, or `default_value` if there is no
-	/// explicit entry. Ensure there is no explicit entry on return.
-	pub fn take_or<T: Codec + Sized>(storage_key: &[u8],key: &[u8], default_value: T) -> T {
-		take(storage_key, key).unwrap_or(default_value)
-	}
-
-	/// Return the value of the item in storage under `key`, or `default_value()` if there is no
-	/// explicit entry. Ensure there is no explicit entry on return.
-	pub fn take_or_else<T: Codec + Sized, F: FnOnce() -> T>(storage_key: &[u8], key: &[u8], default_value: F) -> T {
-		take(storage_key, key).unwrap_or_else(default_value)
-	}
-
-	/// Check to see if `key` has an explicit entry in storage.
-	pub fn exists(storage_key: &[u8], key: &[u8]) -> bool {
-		runtime_io::read_child_storage(storage_key, key, &mut [0;0][..], 0).is_some()
-	}
-
-	/// Remove all `storage_key` key/values
-	pub fn kill_storage(storage_key: &[u8]) {
-		runtime_io::kill_child_storage(storage_key)
-	}
-
-	/// Ensure `key` has no explicit entry in storage.
-	pub fn kill(storage_key: &[u8], key: &[u8]) {
-		runtime_io::clear_child_storage(storage_key, key);
-	}
-
-	/// Get a Vec of bytes from storage.
-	pub fn get_raw(storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
-		runtime_io::child_storage(storage_key, key)
-	}
-
-	/// Put a raw byte slice into storage.
-	pub fn put_raw(storage_key: &[u8], key: &[u8], value: &[u8]) {
-		runtime_io::set_child_storage(storage_key, key, value)
-	}
-
-	pub use super::unhashed::StorageVec;
 }
