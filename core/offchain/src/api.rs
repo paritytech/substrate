@@ -24,7 +24,6 @@ use std::{
 
 use client::backend::OffchainStorage;
 use futures::{Stream, Future, sync::mpsc};
-use keystore::Store as Keystore;
 use log::{info, debug, warn, error};
 use network::{PeerId, Multiaddr, NetworkStateInfo};
 use codec::{Encode, Decode};

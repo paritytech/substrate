@@ -28,7 +28,6 @@ use primitives::offchain::{
 	HttpRequestId as RequestId,
 	HttpRequestStatus as RequestStatus,
 	Timestamp,
-	KeyTypeId,
 	StorageKind,
 	OpaqueNetworkState,
 };
