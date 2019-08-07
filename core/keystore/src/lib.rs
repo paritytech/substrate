@@ -190,10 +190,10 @@ impl Store {
 		let file = File::open(path)?;
 
 		let phrase: String = serde_json::from_reader(&file)?;
-		let pair = Pair::from_phrase(
+		let pair = Pair::from_string(
 			&phrase,
 			self.password.as_ref().map(|p| &***p),
-		).map_err(|_| Error::InvalidPhrase)?.0;
+		).map_err(|_| Error::InvalidPhrase)?;
 
 		if &pair.public() == public {
 			Ok(pair)
@@ -318,7 +318,7 @@ impl BareCryptoStore for Store {
 mod tests {
 	use super::*;
 	use tempdir::TempDir;
-	use primitives::crypto::Ss58Codec;
+	use primitives::crypto::{Ss58Codec, key_types};
 
 	#[test]
 	fn basic_store() {
@@ -399,5 +399,27 @@ mod tests {
 		store_pubs.sort();
 
 		assert_eq!(public_keys, store_pubs);
+	}
+
+	#[test]
+	fn store_unknown_and_extract_it() {
+		let temp_dir = TempDir::new("keystore").unwrap();
+		let store = Store::open(temp_dir.path(), None).unwrap();
+
+		let secret_uri = "//Alice";
+		let key_pair = sr25519::AppPair::from_string(secret_uri, None).expect("Generates key pair");
+
+		store.write().insert_unknown(
+			key_types::SR25519,
+			secret_uri,
+			key_pair.public().as_ref(),
+		).expect("Inserts unknown key");
+
+		let store_key_pair = store.read().key_pair_by_type::<sr25519::AppPair>(
+			&key_pair.public(),
+			key_types::SR25519,
+		).expect("Gets key pair from keystore");
+
+		assert_eq!(key_pair.public(), store_key_pair.public());
 	}
 }

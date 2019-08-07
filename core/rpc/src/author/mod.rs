@@ -141,7 +141,8 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 {
 	type Metadata = crate::metadata::Metadata;
 
-	fn insert_key(&self,
+	fn insert_key(
+		&self,
 		key_type: String,
 		suri: String,
 		maybe_public: Option<Bytes>,
