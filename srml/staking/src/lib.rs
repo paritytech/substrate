@@ -145,7 +145,7 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//!			/// Slash a validator for an offence.
+//!		/// Slash a validator for an offence.
 //! 		pub fn slash_myself(origin) -> Result {
 //! 			let reported = ensure_signed(origin)?;
 //! 			<staking::Module<T>>::slash_validator(reported, 1_000.into());
