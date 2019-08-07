@@ -22,7 +22,7 @@ use std::{fmt, panic::UnwindSafe, result, marker::PhantomData};
 use std::borrow::Cow;
 use log::warn;
 use hash_db::Hasher;
-use parity_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use primitives::{
 	storage::well_known_keys, NativeOrEncoded, NeverNativeValue, offchain,
 };
@@ -38,7 +38,8 @@ mod trie_backend;
 mod trie_backend_essence;
 
 use overlayed_changes::OverlayedChangeSet;
-pub use trie::{TrieMut, TrieDBMut, DBValue, MemoryDB};
+pub use trie::{TrieMut, DBValue, MemoryDB};
+pub use trie::trie_types::{Layout, TrieDBMut};
 pub use testing::TestExternalities;
 pub use basic::BasicExternalities;
 pub use ext::Ext;
@@ -71,7 +72,7 @@ pub struct ChildStorageKey<'a, H: Hasher> {
 
 impl<'a, H: Hasher> ChildStorageKey<'a, H> {
 	fn new(storage_key: Cow<'a, [u8]>) -> Option<Self> {
-		if !trie::is_child_trie_key_valid::<H>(&storage_key) {
+		if !trie::is_child_trie_key_valid::<Layout<H>>(&storage_key) {
 			return None;
 		}
 
@@ -937,7 +938,7 @@ pub(crate) fn set_changes_trie_config(
 ) -> Result<(), Box<dyn Error>> {
 	let config = match config {
 		Some(v) => Some(Decode::decode(&mut &v[..])
-			.ok_or_else(|| Box::new("Failed to decode changes trie configuration".to_owned()) as Box<dyn Error>)?),
+			.map_err(|_| Box::new("Failed to decode changes trie configuration".to_owned()) as Box<dyn Error>)?),
 		None => None,
 	};
 
@@ -971,7 +972,7 @@ where
 #[cfg(test)]
 mod tests {
 	use std::collections::HashMap;
-	use parity_codec::Encode;
+	use codec::Encode;
 	use overlayed_changes::OverlayedValue;
 	use super::*;
 	use super::backend::InMemory;

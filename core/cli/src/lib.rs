@@ -37,8 +37,8 @@ use network::{
 use primitives::H256;
 
 use std::{
-	io::{Write, Read, stdin, stdout, ErrorKind}, iter, fs::{self, File}, net::{Ipv4Addr, SocketAddr},
-	path::{Path, PathBuf}, str::FromStr,
+	io::{Write, Read, Seek, Cursor, stdin, stdout, ErrorKind}, iter, fs::{self, File},
+	net::{Ipv4Addr, SocketAddr}, path::{Path, PathBuf}, str::FromStr,
 };
 
 use names::{Generator, Name};
@@ -51,7 +51,7 @@ use params::{
 	NetworkConfigurationParams, MergeParameters, TransactionPoolParams,
 	NodeKeyParams, NodeKeyType, Cors,
 };
-pub use params::{NoCustom, CoreParams, SharedParams};
+pub use params::{NoCustom, CoreParams, SharedParams, ExecutionStrategy as ExecutionStrategyParam};
 pub use traits::{GetLogFilter, AugmentClap};
 use app_dirs::{AppInfo, AppDataType};
 use log::info;
@@ -628,6 +628,11 @@ where
 	).map_err(Into::into)
 }
 
+/// Internal trait used to cast to a dynamic type that implements Read and Seek.
+trait ReadPlusSeek: Read + Seek {}
+
+impl<T: Read + Seek> ReadPlusSeek for T {}
+
 fn import_blocks<F, E, S>(
 	cli: ImportBlocksCmd,
 	spec_factory: S,
@@ -639,11 +644,20 @@ where
 	E: IntoExit,
 	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 {
-	let config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params, version)?;
+	let mut config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params, version)?;
+	config.execution_strategies = ExecutionStrategies {
+		importing: cli.execution.into(),
+		other: cli.execution.into(),
+		..Default::default()
+	};
 
-	let file: Box<dyn Read> = match cli.input {
+	let file: Box<dyn ReadPlusSeek> = match cli.input {
 		Some(filename) => Box::new(File::open(filename)?),
-		None => Box::new(stdin()),
+		None => {
+			let mut buffer = Vec::new();
+			stdin().read_to_end(&mut buffer)?;
+			Box::new(Cursor::new(buffer))
+		},
 	};
 
 	let fut = service::chain_ops::import_blocks::<F, _, _>(config, exit.into_exit(), file)?;

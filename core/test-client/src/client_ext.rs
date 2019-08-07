@@ -22,16 +22,20 @@ use consensus::{
 	ForkChoiceStrategy,
 };
 use hash_db::Hasher;
-use runtime_primitives::Justification;
-use runtime_primitives::traits::{Block as BlockT};
-use runtime_primitives::generic::BlockId;
+use sr_primitives::Justification;
+use sr_primitives::traits::{Block as BlockT};
+use sr_primitives::generic::BlockId;
 use primitives::Blake2Hasher;
-use parity_codec::alloc::collections::hash_map::HashMap;
+use codec::alloc::collections::hash_map::HashMap;
 
 /// Extension trait for a test client.
 pub trait ClientExt<Block: BlockT>: Sized {
 	/// Import block to the chain. No finality.
 	fn import(&self, origin: BlockOrigin, block: Block)
+		-> Result<(), ConsensusError>;
+
+	/// Import a block and make it our best block if possible.
+	fn import_as_best(&self, origin: BlockOrigin, block: Block)
 		-> Result<(), ConsensusError>;
 
 	/// Import block with justification, finalizes block.
@@ -73,6 +77,24 @@ impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 			finalized: false,
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
+		};
+
+		BlockImport::import_block(&mut (&*self), import, HashMap::new()).map(|_| ())
+	}
+
+	fn import_as_best(&self, origin: BlockOrigin, block: Block)
+		-> Result<(), ConsensusError>
+	{
+		let (header, extrinsics) = block.deconstruct();
+		let import = BlockImportParams {
+			origin,
+			header,
+			justification: None,
+			post_digests: vec![],
+			body: Some(extrinsics),
+			finalized: false,
+			auxiliary: Vec::new(),
+			fork_choice: ForkChoiceStrategy::Custom(true),
 		};
 
 		BlockImport::import_block(&mut (&*self), import, HashMap::new()).map(|_| ())

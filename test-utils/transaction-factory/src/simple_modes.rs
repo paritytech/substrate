@@ -49,6 +49,7 @@ use crate::{Mode, RuntimeAdapter, create_block};
 pub fn next<F, RA>(
 	factory_state: &mut RA,
 	client: &Arc<ComponentClient<FullComponents<F>>>,
+	genesis_hash: <RA::Block as BlockT>::Hash,
 	prior_block_hash: <RA::Block as BlockT>::Hash,
 	prior_block_id: BlockId<F::Block>,
 ) -> Option<<F as ServiceFactory>::Block>
@@ -82,6 +83,7 @@ where
 		&from.1,
 		&to,
 		&amount,
+		&genesis_hash,
 		&prior_block_hash,
 	);
 

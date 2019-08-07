@@ -29,10 +29,10 @@ use client::cht;
 use client::leaves::{LeafSet, FinalizationDisplaced};
 use client::error::{Error as ClientError, Result as ClientResult};
 use client::light::blockchain::Storage as LightBlockchainStorage;
-use parity_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use primitives::Blake2Hasher;
-use runtime_primitives::generic::{DigestItem, BlockId};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor};
+use sr_primitives::generic::{DigestItem, BlockId};
+use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor};
 use consensus_common::well_known_cache_keys;
 use crate::cache::{DbCacheSync, DbCache, ComplexBlockId, EntryType as CacheEntryType};
 use crate::utils::{self, meta_keys, Meta, db_err, read_db, block_id_to_lookup_key, read_meta};
@@ -360,7 +360,7 @@ impl<Block: BlockT> LightStorage<Block> {
 		let cht_start = cht::start_number(cht_size, cht_number);
 		self.db.get(columns::CHT, &cht_key(cht_type, cht_start)?).map_err(db_err)?
 			.ok_or_else(no_cht_for_block)
-			.and_then(|hash| Block::Hash::decode(&mut &*hash).ok_or_else(no_cht_for_block))
+			.and_then(|hash| Block::Hash::decode(&mut &*hash).map_err(|_| no_cht_for_block()))
 	}
 }
 
@@ -571,8 +571,8 @@ fn cht_key<N: TryInto<u32>>(cht_type: u8, block: N) -> ClientResult<[u8; 5]> {
 #[cfg(test)]
 pub(crate) mod tests {
 	use client::cht;
-	use runtime_primitives::generic::DigestItem;
-	use runtime_primitives::testing::{H256 as Hash, Header, Block as RawBlock, ExtrinsicWrapper};
+	use sr_primitives::generic::DigestItem;
+	use sr_primitives::testing::{H256 as Hash, Header, Block as RawBlock, ExtrinsicWrapper};
 	use super::*;
 
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
@@ -887,7 +887,8 @@ pub(crate) mod tests {
 		}
 
 		fn get_authorities(cache: &dyn BlockchainCache<Block>, at: BlockId<Block>) -> Option<Vec<AuthorityId>> {
-			cache.get_at(&well_known_cache_keys::AUTHORITIES, &at).and_then(|val| Decode::decode(&mut &val[..]))
+			cache.get_at(&well_known_cache_keys::AUTHORITIES, &at)
+				.and_then(|val| Decode::decode(&mut &val[..]).ok())
 		}
 
 		let auth1 = || AuthorityId::from_raw([1u8; 32]);

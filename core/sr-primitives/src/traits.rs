@@ -21,12 +21,12 @@ use rstd::{self, result, marker::PhantomData, convert::{TryFrom, TryInto}};
 use runtime_io;
 #[cfg(feature = "std")] use std::fmt::{Debug, Display};
 #[cfg(feature = "std")] use serde::{Serialize, Deserialize, de::DeserializeOwned};
-use substrate_primitives::{self, Hasher, Blake2Hasher};
+use primitives::{self, Hasher, Blake2Hasher};
 use crate::codec::{Codec, Encode, Decode, HasCompact};
 use crate::transaction_validity::{ValidTransaction, TransactionValidity};
 use crate::generic::{Digest, DigestItem};
 use crate::weights::DispatchInfo;
-pub use substrate_primitives::crypto::TypedKey;
+pub use primitives::crypto::TypedKey;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
@@ -57,15 +57,15 @@ pub trait Verify {
 	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool;
 }
 
-impl Verify for substrate_primitives::ed25519::Signature {
-	type Signer = substrate_primitives::ed25519::Public;
+impl Verify for primitives::ed25519::Signature {
+	type Signer = primitives::ed25519::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
 		runtime_io::ed25519_verify(self.as_ref(), msg.get(), signer)
 	}
 }
 
-impl Verify for substrate_primitives::sr25519::Signature {
-	type Signer = substrate_primitives::sr25519::Public;
+impl Verify for primitives::sr25519::Signature {
+	type Signer = primitives::sr25519::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
 		runtime_io::sr25519_verify(self.as_ref(), msg.get(), signer)
 	}
@@ -120,32 +120,6 @@ impl<T> Lookup for IdentityLookup<T> {
 	type Source = T;
 	type Target = T;
 	fn lookup(&self, x: T) -> result::Result<T, &'static str> { Ok(x) }
-}
-
-/// Get the "current" block number.
-pub trait CurrentHeight {
-	/// The type of the block number.
-	type BlockNumber;
-
-	/// Return the current block number. Not allowed to fail.
-	fn current_height(&self) -> Self::BlockNumber;
-}
-
-/// Translate a block number into a hash.
-pub trait BlockNumberToHash {
-	/// The type of the block number.
-	type BlockNumber: Zero;
-
-	/// The type of the hash.
-	type Hash: Encode;
-
-	/// Get the hash for a given block number, or `None` if unknown.
-	fn block_number_to_hash(&self, n: Self::BlockNumber) -> Option<Self::Hash>;
-
-	/// Get the genesis block hash; this should always be known.
-	fn genesis_hash(&self) -> Self::Hash {
-		self.block_number_to_hash(Zero::zero()).expect("All blockchains must know their genesis block hash; qed")
-	}
 }
 
 /// Extensible conversion trait. Generic over both source and destination types.
@@ -458,7 +432,7 @@ pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stup
 pub struct BlakeTwo256;
 
 impl Hash for BlakeTwo256 {
-	type Output = substrate_primitives::H256;
+	type Output = primitives::H256;
 	type Hasher = Blake2Hasher;
 	fn hash(s: &[u8]) -> Self::Output {
 		runtime_io::blake2_256(s).into()
@@ -493,10 +467,10 @@ pub trait CheckEqual {
 	fn check_equal(&self, other: &Self);
 }
 
-impl CheckEqual for substrate_primitives::H256 {
+impl CheckEqual for primitives::H256 {
 	#[cfg(feature = "std")]
 	fn check_equal(&self, other: &Self) {
-		use substrate_primitives::hexdisplay::HexDisplay;
+		use primitives::hexdisplay::HexDisplay;
 		if self != other {
 			println!("Hash: given={}, expected={}", HexDisplay::from(self.as_fixed_bytes()), HexDisplay::from(other.as_fixed_bytes()));
 		}
@@ -1055,21 +1029,30 @@ pub trait OpaqueKeys: Clone {
 	/// Get the raw bytes of key with key-type ID `i`.
 	fn get_raw(&self, i: super::KeyTypeId) -> &[u8];
 	/// Get the decoded key with index `i`.
-	fn get<T: Decode>(&self, i: super::KeyTypeId) -> Option<T> { T::decode(&mut self.get_raw(i)) }
+	fn get<T: Decode>(&self, i: super::KeyTypeId) -> Option<T> {
+		T::decode(&mut self.get_raw(i)).ok()
+	}
 	/// Verify a proof of ownership for the keys.
 	fn ownership_proof_is_valid(&self, _proof: &[u8]) -> bool { true }
 }
 
+/// Input that adds infinite number of zero after wrapped input.
 struct TrailingZeroInput<'a>(&'a [u8]);
+
 impl<'a> codec::Input for TrailingZeroInput<'a> {
-	fn read(&mut self, into: &mut [u8]) -> usize {
-		let len = into.len().min(self.0.len());
-		into[..len].copy_from_slice(&self.0[..len]);
-		for i in &mut into[len..] {
+	fn remaining_len(&mut self) -> Result<Option<usize>, codec::Error> {
+		Ok(None)
+	}
+
+	fn read(&mut self, into: &mut [u8]) -> Result<(), codec::Error> {
+		let len_from_inner = into.len().min(self.0.len());
+		into[..len_from_inner].copy_from_slice(&self.0[..len_from_inner]);
+		for i in &mut into[len_from_inner..] {
 			*i = 0;
 		}
-		self.0 = &self.0[len..];
-		into.len()
+		self.0 = &self.0[len_from_inner..];
+
+		Ok(())
 	}
 }
 
@@ -1117,7 +1100,7 @@ impl<T: Encode + Decode + Default, Id: Encode + Decode + TypeId> AccountIdConver
 		x.using_encoded(|d| {
 			if &d[0..4] != Id::TYPE_ID { return None }
 			let mut cursor = &d[4..];
-			let result = Decode::decode(&mut cursor)?;
+			let result = Decode::decode(&mut cursor).ok()?;
 			if cursor.iter().all(|x| *x == 0) {
 				Some(result)
 			} else {
@@ -1130,7 +1113,7 @@ impl<T: Encode + Decode + Default, Id: Encode + Decode + TypeId> AccountIdConver
 #[cfg(test)]
 mod tests {
 	use super::AccountIdConversion;
-	use crate::codec::{Encode, Decode};
+	use crate::codec::{Encode, Decode, Input};
 
 	#[derive(Encode, Decode, Default, PartialEq, Debug)]
 	struct U32Value(u32);
@@ -1178,6 +1161,22 @@ mod tests {
 		assert!(r.is_none());
 		let r = U16Value::try_from_account(&0x0100_c0da_f00dcafe_u64);
 		assert!(r.is_none());
+	}
+
+	#[test]
+	fn trailing_zero_should_work() {
+		let mut t = super::TrailingZeroInput(&[1, 2, 3]);
+		assert_eq!(t.remaining_len(), Ok(None));
+		let mut buffer = [0u8; 2];
+		assert_eq!(t.read(&mut buffer), Ok(()));
+		assert_eq!(t.remaining_len(), Ok(None));
+		assert_eq!(buffer, [1, 2]);
+		assert_eq!(t.read(&mut buffer), Ok(()));
+		assert_eq!(t.remaining_len(), Ok(None));
+		assert_eq!(buffer, [3, 0]);
+		assert_eq!(t.read(&mut buffer), Ok(()));
+		assert_eq!(t.remaining_len(), Ok(None));
+		assert_eq!(buffer, [0, 0]);
 	}
 }
 

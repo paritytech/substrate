@@ -77,28 +77,31 @@ use rstd::prelude::*;
 #[cfg(any(feature = "std", test))]
 use rstd::map;
 use rstd::marker::PhantomData;
-use primitives::generic::{self, Era};
-use primitives::Perbill;
-use primitives::weights::{Weight, DispatchInfo, DispatchClass, WeightMultiplier, SimpleDispatchInfo};
-use primitives::transaction_validity::{ValidTransaction, TransactionPriority, TransactionLongevity};
-use primitives::traits::{self, CheckEqual, SimpleArithmetic, Zero, SignedExtension, Convert,
-	SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, CurrentHeight, BlockNumberToHash,
-	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded,
-	Lookup, DispatchError, SaturatedConversion,
+use sr_primitives::generic::{self, Era};
+use sr_primitives::Perbill;
+use sr_primitives::weights::{
+	Weight, DispatchInfo, DispatchClass, WeightMultiplier, SimpleDispatchInfo
 };
-use substrate_primitives::storage::well_known_keys;
+use sr_primitives::transaction_validity::{
+	ValidTransaction, TransactionPriority, TransactionLongevity
+};
+use sr_primitives::traits::{self, CheckEqual, SimpleArithmetic, Zero, SignedExtension, Convert,
+	SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, DispatchError, SaturatedConversion,
+	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded, Lookup,
+};
+use primitives::storage::well_known_keys;
 use srml_support::{
 	storage, decl_module, decl_event, decl_storage, StorageDoubleMap, StorageValue, StorageMap,
 	Parameter, for_each_tuple, traits::{Contains, Get}
 };
 use safe_mix::TripletMix;
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 
 #[cfg(any(feature = "std", test))]
 use runtime_io::{twox_128, TestExternalities, Blake2Hasher};
 
 #[cfg(any(feature = "std", test))]
-use substrate_primitives::ChangesTrieConfiguration;
+use primitives::ChangesTrieConfiguration;
 
 /// Handler for when a new account has been created.
 pub trait OnNewAccount<AccountId> {
@@ -137,8 +140,8 @@ impl<AccountId> IsDeadAccount<AccountId> for () {
 }
 
 /// Compute the trie root of a list of extrinsics.
-pub fn extrinsics_root<H: Hash, E: parity_codec::Encode>(extrinsics: &[E]) -> H::Output {
-	extrinsics_data_root::<H>(extrinsics.iter().map(parity_codec::Encode::encode).collect())
+pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
+	extrinsics_data_root::<H>(extrinsics.iter().map(codec::Encode::encode).collect())
 }
 
 /// Compute the trie root of a list of extrinsics.
@@ -401,11 +404,15 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
-		#[serde(with = "substrate_primitives::bytes")]
+		#[serde(with = "primitives::bytes")]
 		config(code): Vec<u8>;
 
-		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig| {
-			use parity_codec::Encode;
+		build(
+			|storage: &mut sr_primitives::StorageOverlay,
+			_: &mut sr_primitives::ChildrenStorageOverlay,
+			config: &GenesisConfig|
+		{
+			use codec::Encode;
 
 			storage.insert(well_known_keys::CODE.to_vec(), config.code.clone());
 			storage.insert(well_known_keys::EXTRINSIC_INDEX.to_vec(), 0u32.encode());
@@ -862,7 +869,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 
 	/// Utility constructor for tests and client code.
 	#[cfg(feature = "std")]
-	pub fn from() -> Self {
+	pub fn new() -> Self {
 		Self(PhantomData)
 	}
 }
@@ -1008,6 +1015,32 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 	}
 }
 
+/// Nonce check and increment to give replay protection for transactions.
+#[derive(Encode, Decode, Clone, Eq, PartialEq)]
+pub struct CheckGenesis<T: Trait + Send + Sync>(rstd::marker::PhantomData<T>);
+
+#[cfg(feature = "std")]
+impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckGenesis<T> {
+	fn fmt(&self, _f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		Ok(())
+	}
+}
+
+#[cfg(feature = "std")]
+impl<T: Trait + Send + Sync> CheckGenesis<T> {
+	pub fn new() -> Self {
+		Self(std::marker::PhantomData)
+	}
+}
+
+impl<T: Trait + Send + Sync> SignedExtension for CheckGenesis<T> {
+	type AccountId = T::AccountId;
+	type AdditionalSigned = T::Hash;
+	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str> {
+		Ok(<Module<T>>::block_hash(T::BlockNumber::zero()))
+	}
+}
+
 pub struct ChainContext<T>(::rstd::marker::PhantomData<T>);
 impl<T> Default for ChainContext<T> {
 	fn default() -> Self {
@@ -1023,27 +1056,12 @@ impl<T: Trait> Lookup for ChainContext<T> {
 	}
 }
 
-impl<T: Trait> CurrentHeight for ChainContext<T> {
-	type BlockNumber = T::BlockNumber;
-	fn current_height(&self) -> Self::BlockNumber {
-		<Module<T>>::block_number()
-	}
-}
-
-impl<T: Trait> BlockNumberToHash for ChainContext<T> {
-	type BlockNumber = T::BlockNumber;
-	type Hash = T::Hash;
-	fn block_number_to_hash(&self, n: Self::BlockNumber) -> Option<Self::Hash> {
-		Some(<Module<T>>::block_hash(n))
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
-	use substrate_primitives::H256;
-	use primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+	use primitives::H256;
+	use sr_primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 	use srml_support::{impl_outer_origin, parameter_types};
 
 	impl_outer_origin!{

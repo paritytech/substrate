@@ -29,10 +29,10 @@ use consensus_common::{evaluation};
 use inherents::InherentData;
 use log::{error, info, debug, trace};
 use primitives::{H256, Blake2Hasher, ExecutionContext};
-use runtime_primitives::{ApplyError, generic::BlockId};
-use runtime_primitives::traits::{
-	Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi,
-	DigestFor, BlakeTwo256,
+use sr_primitives::{
+	traits::{Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi, DigestFor, BlakeTwo256},
+	generic::BlockId,
+	ApplyError,
 };
 use transaction_pool::txpool::{self, Pool as TransactionPool};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
@@ -213,7 +213,7 @@ impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	wh
 			"hash" => ?<Block as BlockT>::Hash::from(block.header().hash()),
 		);
 
-		if Decode::decode(&mut block.encode().as_slice()).as_ref() != Some(&block) {
+		if Decode::decode(&mut block.encode().as_slice()).as_ref() != Ok(&block) {
 			error!("Failed to verify block encoding/decoding");
 		}
 

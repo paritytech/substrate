@@ -22,7 +22,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 
-use parity_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use rstd::vec::Vec;
 use session::{Module as Session, SessionIndex, historical};
 use support::{
@@ -111,12 +111,12 @@ impl<T: Trait, O: Offence<T::AuthorityId>> ReportOffence<T::AccountId, T::Author
 
 
 		let offenders_count = all_offenders.len() as u32;
-		let expected_fraction = offence.slash_fraction(offenders_count, validators_count);
+		let expected_fraction = O::slash_fraction(offenders_count, validators_count);
 		let slash_perbil = all_offenders
 			.iter()
 			.map(|details| {
 				if details.count > 0 {
-					let previous_fraction = offence.slash_fraction(
+					let previous_fraction = O::slash_fraction(
 						offenders_count.saturating_sub(details.count),
 						validators_count,
 					);

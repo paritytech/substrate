@@ -21,10 +21,10 @@ use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::future::Future;
 
-use hash_db::{HashDB, Hasher};
-use parity_codec::{Decode, Encode};
+use hash_db::{HashDB, Hasher, EMPTY_PREFIX};
+use codec::{Decode, Encode};
 use primitives::{ChangesTrieConfiguration, convert_hash};
-use runtime_primitives::traits::{
+use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
 	SimpleArithmetic, CheckedConversion,
 };
@@ -333,7 +333,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 				// we share the storage for multiple checks, do it here
 				let mut cht_root = H::Out::default();
 				cht_root.as_mut().copy_from_slice(local_cht_root.as_ref());
-				if !storage.contains(&cht_root, &[]) {
+				if !storage.contains(&cht_root, EMPTY_PREFIX) {
 					return Err(ClientError::InvalidCHTProof.into());
 				}
 
@@ -486,7 +486,7 @@ impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H, Number> for RootsStorage<'a
 pub mod tests {
 	use futures::future::Ready;
 	use parking_lot::Mutex;
-	use parity_codec::Decode;
+	use codec::Decode;
 	use crate::client::tests::prepare_client_with_key_changes;
 	use executor::{self, NativeExecutor};
 	use crate::error::Error as ClientError;
@@ -502,7 +502,7 @@ pub mod tests {
 	use crate::light::blockchain::tests::{DummyStorage, DummyBlockchain};
 	use primitives::{blake2_256, Blake2Hasher, H256};
 	use primitives::storage::{well_known_keys, StorageKey};
-	use runtime_primitives::generic::BlockId;
+	use sr_primitives::generic::BlockId;
 	use state_machine::Backend;
 	use super::*;
 
@@ -566,7 +566,7 @@ pub mod tests {
 		// 'fetch' read proof from remote node
 		let heap_pages = remote_client.storage(&remote_block_id, &StorageKey(well_known_keys::HEAP_PAGES.to_vec()))
 			.unwrap()
-			.and_then(|v| Decode::decode(&mut &v.0[..])).unwrap();
+			.and_then(|v| Decode::decode(&mut &v.0[..]).ok()).unwrap();
 		let remote_read_proof = remote_client.read_proof(&remote_block_id, well_known_keys::HEAP_PAGES).unwrap();
 
 		// check remote read proof locally
@@ -610,8 +610,9 @@ pub mod tests {
 	}
 
 	fn header_with_computed_extrinsics_root(extrinsics: Vec<Extrinsic>) -> Header {
-		let extrinsics_root =
-			trie::ordered_trie_root::<Blake2Hasher, _, _>(extrinsics.iter().map(Encode::encode));
+		use trie::{TrieConfiguration, trie_types::Layout};
+		let iter = extrinsics.iter().map(Encode::encode);
+		let extrinsics_root = Layout::<Blake2Hasher>::ordered_trie_root(iter);
 
 		// only care about `extrinsics_root`
 		Header::new(0, extrinsics_root, H256::zero(), H256::zero(), Default::default())

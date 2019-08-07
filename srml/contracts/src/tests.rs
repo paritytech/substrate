@@ -26,20 +26,20 @@ use crate::{
 };
 use assert_matches::assert_matches;
 use hex_literal::*;
-use parity_codec::{Decode, Encode, KeyedVec};
+use codec::{Decode, Encode, KeyedVec};
 use runtime_io;
 use runtime_io::with_externalities;
-use runtime_primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, H256};
-use runtime_primitives::traits::{BlakeTwo256, Hash, IdentityLookup};
-use runtime_primitives::{Perbill, BuildStorage};
+use sr_primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, H256};
+use sr_primitives::traits::{BlakeTwo256, Hash, IdentityLookup};
+use sr_primitives::{Perbill, BuildStorage};
 use srml_support::{
 	assert_ok, assert_err, impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types,
 	storage::child,	StorageMap, StorageValue, traits::{Currency, Get},
 };
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use substrate_primitives::storage::well_known_keys;
-use substrate_primitives::Blake2Hasher;
+use primitives::storage::well_known_keys;
+use primitives::Blake2Hasher;
 use system::{self, EventRecord, Phase};
 use {balances, wabt};
 
@@ -196,7 +196,7 @@ impl ContractAddressFor<H256, u64> for DummyContractAddressFor {
 pub struct DummyTrieIdGenerator;
 impl TrieIdGenerator<u64> for DummyTrieIdGenerator {
 	fn trie_id(account_id: &u64) -> TrieId {
-		use substrate_primitives::storage::well_known_keys;
+		use primitives::storage::well_known_keys;
 
 		let new_seed = super::AccountCounter::mutate(|v| {
 			*v = v.wrapping_add(1);
@@ -1256,17 +1256,24 @@ fn default_rent_allowance_on_create() {
 const CODE_RESTORATION: &str = r#"
 (module
 	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32 i32)))
-	(import "env" "ext_dispatch_call" (func $ext_dispatch_call (param i32 i32)))
+	(import "env" "ext_restore_to" (func $ext_restore_to (param i32 i32 i32 i32 i32 i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(func (export "call")
-		(call $ext_dispatch_call
-			;; Pointer to the start of the encoded call buffer
-			(i32.const 200)
-			;; The length of the encoded call buffer.
-			;;
-			;; NB: This is required to keep in sync with the values in `restoration`.
-			(i32.const 115)
+		(call $ext_restore_to
+			;; Pointer and length of the encoded dest buffer.
+			(i32.const 256)
+			(i32.const 8)
+			;; Pointer and length of the encoded code hash buffer
+			(i32.const 264)
+			(i32.const 32)
+			;; Pointer and length of the encoded rent_allowance buffer
+			(i32.const 296)
+			(i32.const 8)
+			;; Pointer and number of items in the delta buffer.
+			;; This buffer specifies multiple keys for removal before restoration.
+			(i32.const 100)
+			(i32.const 1)
 		)
 	)
 	(func (export "deploy")
@@ -1290,17 +1297,20 @@ const CODE_RESTORATION: &str = r#"
 	;; Data to restore
 	(data (i32.const 0) "\28")
 
-	;; ACL
+	;; Buffer that has ACL storage keys.
 	(data (i32.const 100) "\01")
 
-	;; Serialized version of `T::Call` that encodes a call to `restore_to` function. For more
-	;; details check out the `ENCODED_CALL_LITERAL`.
-	(data (i32.const 200)
-		"\01\05\02\00\00\00\00\00\00\00\69\ae\df\b4\f6\c1\c3\98\e9\7f\8a\52\04\de\0f\95\ad\5e\7d\c3"
-		"\54\09\60\be\ab\11\a8\6c\56\9f\bf\cf\32\00\00\00\00\00\00\00\08\01\00\00\00\00\00\00\00\00"
-		"\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\01\00\00\00\00\00\00"
-		"\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00"
+	;; Address of bob
+	(data (i32.const 256) "\02\00\00\00\00\00\00\00")
+
+	;; Code hash of SET_CODE
+	(data (i32.const 264)
+		"\69\ae\df\b4\f6\c1\c3\98\e9\7f\8a\52\04\de\0f\95"
+		"\ad\5e\7d\c3\54\09\60\be\ab\11\a8\6c\56\9f\bf\cf"
 	)
+
+	;; Rent allowance
+	(data (i32.const 296) "\32\00\00\00\00\00\00\00")
 )
 "#;
 
@@ -1325,45 +1335,9 @@ fn restoration_success() {
 }
 
 fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage: bool) {
+	let (set_rent_wasm, set_rent_code_hash) = compile_module::<Test>(CODE_SET_RENT).unwrap();
 	let (restoration_wasm, restoration_code_hash) =
 		compile_module::<Test>(CODE_RESTORATION).unwrap();
-	let (set_rent_wasm, set_rent_code_hash) = compile_module::<Test>(CODE_SET_RENT).unwrap();
-
-	let acl_key = {
-		let mut s = [0u8; 32];
-		s[0] = 1;
-		s
-	};
-
-	// This test can fail due to the encoding changes. In case it becomes too annoying
-	// let's rewrite so as we use this module controlled call or we serialize it in runtime.
-	let encoded = hex::encode(Encode::encode(&Call::Contract(super::Call::restore_to(
-		BOB,
-		set_rent_code_hash.into(),
-		<Test as balances::Trait>::Balance::from(50u32),
-		vec![acl_key, acl_key],
-	))));
-
-	// `ENCODED_CALL_LITERAL` is encoded `T::Call` represented as a byte array. There is an exact
-	// same copy of this (modulo hex notation differences) in `CODE_RESTORATION`.
-	//
-	// When this assert is triggered make sure that you update the literals here and in
-	// `CODE_RESTORATION`. Hopefully, we switch to automatic injection of the code.
-	const ENCODED_CALL_LITERAL: &str =
-		"0105020000000000000069aedfb4f6c1c398e97f8a5204de0f95ad5e7dc3540960beab11a86c569fbfcf320000\
-		0000000000080100000000000000000000000000000000000000000000000000000000000000010000000000000\
-		0000000000000000000000000000000000000000000000000";
-	assert_eq!(
-		encoded,
-		ENCODED_CALL_LITERAL,
-		"The literal was changed and requires updating here and in `CODE_RESTORATION`",
-	);
-	assert_eq!(
-		hex::decode(ENCODED_CALL_LITERAL).unwrap().len(),
-		115,
-		"The size of the literal was changed and requires updating in `CODE_RESTORATION`",
-	);
-
 
 	with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),

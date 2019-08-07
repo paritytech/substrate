@@ -15,9 +15,9 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::{
-	str::FromStr, 
-	sync::Arc, 
-	convert::{TryFrom, TryInto}, 
+	str::FromStr,
+	sync::Arc,
+	convert::{TryFrom, TryInto},
 	time::{SystemTime, Duration},
 	thread::sleep,
 };
@@ -25,7 +25,7 @@ use client::backend::OffchainStorage;
 use crate::AuthorityKeyProvider;
 use futures::{Stream, Future, sync::mpsc};
 use log::{info, debug, warn, error};
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use primitives::offchain::{
 	Timestamp,
 	HttpRequestId, HttpRequestStatus, HttpError,
@@ -36,7 +36,7 @@ use primitives::offchain::{
 };
 use primitives::crypto::{Pair, Public, Protected};
 use primitives::{ed25519, sr25519};
-use runtime_primitives::{
+use sr_primitives::{
 	generic::BlockId,
 	traits::{self, Extrinsic},
 };
@@ -219,7 +219,7 @@ impl<Storage, KeyProvider, Block> Api<Storage, KeyProvider, Block> where
 		match key {
 			CryptoKey::LocalKey { id, kind } => {
 				let key = self.db.get(KEYS_PREFIX, &id.encode())
-					.and_then(|key| StoredKey::decode(&mut &*key))
+					.and_then(|key| StoredKey::decode(&mut &*key).ok())
 					.ok_or(())?;
 				if key.kind != kind {
 					warn!(
@@ -266,7 +266,7 @@ where
 		let (id, id_encoded) = loop {
 			let encoded = self.db.get(KEYS_PREFIX, NEXT_ID);
 			let encoded_slice = encoded.as_ref().map(|x| x.as_slice());
-			let new_id = encoded_slice.and_then(|mut x| u16::decode(&mut x)).unwrap_or_default()
+			let new_id = encoded_slice.and_then(|mut x| u16::decode(&mut x).ok()).unwrap_or_default()
 				.checked_add(1)
 				.ok_or(())?;
 			let new_id_encoded = new_id.encode();
@@ -473,14 +473,14 @@ impl TryFrom<OpaqueNetworkState> for NetworkState {
 	fn try_from(state: OpaqueNetworkState) -> Result<Self, Self::Error> {
 		let inner_vec = state.peer_id.0;
 
-		let bytes: Vec<u8> = Decode::decode(&mut &inner_vec[..]).ok_or(())?;
+		let bytes: Vec<u8> = Decode::decode(&mut &inner_vec[..]).map_err(|_| ())?;
 		let peer_id = PeerId::from_bytes(bytes).map_err(|_| ())?;
 
 		let external_addresses: Result<Vec<Multiaddr>, Self::Error> = state.external_addresses
 			.iter()
 			.map(|enc_multiaddr| -> Result<Multiaddr, Self::Error> {
 				let inner_vec = &enc_multiaddr.0;
-				let bytes = <Vec<u8>>::decode(&mut &inner_vec[..]).ok_or(())?;
+				let bytes = <Vec<u8>>::decode(&mut &inner_vec[..]).map_err(|_| ())?;
 				let multiaddr_str = String::from_utf8(bytes).map_err(|_| ())?;
 				let multiaddr = Multiaddr::from_str(&multiaddr_str).map_err(|_| ())?;
 				Ok(multiaddr)
@@ -548,9 +548,9 @@ impl<A: ChainApi> AsyncApi<A> {
 
 	fn submit_extrinsic(&mut self, ext: Vec<u8>) {
 		let xt = match <A::Block as traits::Block>::Extrinsic::decode(&mut &*ext) {
-			Some(xt) => xt,
-			None => {
-				warn!("Unable to decode extrinsic: {:?}", ext);
+			Ok(xt) => xt,
+			Err(e) => {
+				warn!("Unable to decode extrinsic: {:?}: {}", ext, e.what());
 				return
 			},
 		};
@@ -569,7 +569,7 @@ impl<A: ChainApi> AsyncApi<A> {
 mod tests {
 	use super::*;
 	use std::convert::TryFrom;
-	use runtime_primitives::traits::Zero;
+	use sr_primitives::traits::Zero;
 	use client_db::offchain::LocalStorage;
 	use crate::tests::TestProvider;
 	use network::PeerId;
@@ -602,14 +602,14 @@ mod tests {
 	#[test]
 	fn should_get_timestamp() {
 		let mut api = offchain_api().0;
-		
+
 		// Get timestamp from std.
 		let now = SystemTime::now();
 		let d: u64 = now.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis().try_into().unwrap();
 
 		// Get timestamp from offchain api.
 		let timestamp = api.timestamp();
-		
+
 		// Compare.
 		assert!(timestamp.unix_millis() > 0);
 		assert_eq!(timestamp.unix_millis(), d);
@@ -627,7 +627,7 @@ mod tests {
 		// Act.
 		api.sleep_until(deadline);
 		let new_now = api.timestamp();
-		
+
 		// Assert.
 		// The diff could be more than the sleep duration.
 		assert!(new_now.unix_millis() - 100 >= now.unix_millis());

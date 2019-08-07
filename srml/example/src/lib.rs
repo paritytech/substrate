@@ -506,7 +506,7 @@ mod tests {
 
 	use srml_support::{assert_ok, impl_outer_origin, parameter_types};
 	use sr_io::with_externalities;
-	use substrate_primitives::{H256, Blake2Hasher};
+	use primitives::{H256, Blake2Hasher};
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
 	use sr_primitives::{

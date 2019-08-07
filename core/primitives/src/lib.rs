@@ -33,7 +33,7 @@ macro_rules! map {
 
 use rstd::prelude::*;
 use rstd::ops::Deref;
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use std::borrow::Cow;
 #[cfg(feature = "std")]
@@ -138,14 +138,14 @@ pub enum NativeOrEncoded<R> {
 }
 
 #[cfg(feature = "std")]
-impl<R: parity_codec::Encode> ::std::fmt::Debug for NativeOrEncoded<R> {
+impl<R: codec::Encode> ::std::fmt::Debug for NativeOrEncoded<R> {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
 		self.as_encoded().as_ref().fmt(f)
 	}
 }
 
 #[cfg(feature = "std")]
-impl<R: parity_codec::Encode> NativeOrEncoded<R> {
+impl<R: codec::Encode> NativeOrEncoded<R> {
 	/// Return the value as the encoded format.
 	pub fn as_encoded<'a>(&'a self) -> Cow<'a, [u8]> {
 		match self {
@@ -164,13 +164,13 @@ impl<R: parity_codec::Encode> NativeOrEncoded<R> {
 }
 
 #[cfg(feature = "std")]
-impl<R: PartialEq + parity_codec::Decode> PartialEq for NativeOrEncoded<R> {
+impl<R: PartialEq + codec::Decode> PartialEq for NativeOrEncoded<R> {
 	fn eq(&self, other: &Self) -> bool {
 		match (self, other) {
 			(NativeOrEncoded::Native(l), NativeOrEncoded::Native(r)) => l == r,
 			(NativeOrEncoded::Native(n), NativeOrEncoded::Encoded(e)) |
 			(NativeOrEncoded::Encoded(e), NativeOrEncoded::Native(n)) =>
-				Some(n) == parity_codec::Decode::decode(&mut &e[..]).as_ref(),
+				Some(n) == codec::Decode::decode(&mut &e[..]).ok().as_ref(),
 			(NativeOrEncoded::Encoded(l), NativeOrEncoded::Encoded(r)) => l == r,
 		}
 	}
@@ -183,7 +183,7 @@ impl<R: PartialEq + parity_codec::Decode> PartialEq for NativeOrEncoded<R> {
 pub enum NeverNativeValue {}
 
 #[cfg(feature = "std")]
-impl parity_codec::Encode for NeverNativeValue {
+impl codec::Encode for NeverNativeValue {
 	fn encode(&self) -> Vec<u8> {
 		// The enum is not constructable, so this function should never be callable!
 		unreachable!()
@@ -191,8 +191,11 @@ impl parity_codec::Encode for NeverNativeValue {
 }
 
 #[cfg(feature = "std")]
-impl parity_codec::Decode for NeverNativeValue {
-	fn decode<I: parity_codec::Input>(_: &mut I) -> Option<Self> {
-		None
+impl codec::EncodeLike for NeverNativeValue {}
+
+#[cfg(feature = "std")]
+impl codec::Decode for NeverNativeValue {
+	fn decode<I: codec::Input>(_: &mut I) -> Result<Self, codec::Error> {
+		Err("`NeverNativeValue` should never be decoded".into())
 	}
 }

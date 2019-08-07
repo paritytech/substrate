@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use log::{debug, warn, info};
-use parity_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use futures::prelude::*;
 use tokio_timer::Delay;
 use parking_lot::RwLock;
@@ -33,11 +33,11 @@ use grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
 	voter, voter_set::VoterSet,
 };
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{
-	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, BlockNumberToHash,
+use sr_primitives::generic::BlockId;
+use sr_primitives::traits::{
+	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
 };
-use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair};
+use primitives::{Blake2Hasher, ed25519, H256, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
 use crate::{
@@ -95,8 +95,10 @@ impl<Block: BlockT> Encode for CompletedRounds<Block> {
 	}
 }
 
+impl<Block: BlockT> codec::EncodeLike for CompletedRounds<Block> {}
+
 impl<Block: BlockT> Decode for CompletedRounds<Block> {
-	fn decode<I: parity_codec::Input>(value: &mut I) -> Option<Self> {
+	fn decode<I: codec::Input>(value: &mut I) -> Result<Self, codec::Error> {
 		<(Vec<CompletedRound<Block>>, u64, Vec<AuthorityId>)>::decode(value)
 			.map(|(rounds, set_id, voters)| CompletedRounds {
 				rounds: rounds.into(),
@@ -962,10 +964,10 @@ pub(crate) fn canonical_at_height<B, E, Block: BlockT<Hash=H256>, RA>(
 		if base_is_canonical {
 			return Ok(Some(base.0));
 		} else {
-			return Ok(client.block_number_to_hash(height));
+			return Ok(client.block_hash(height).unwrap_or(None));
 		}
 	} else if base_is_canonical {
-		return Ok(client.block_number_to_hash(height));
+		return Ok(client.block_hash(height).unwrap_or(None));
 	}
 
 	let one = NumberFor::<Block>::one();

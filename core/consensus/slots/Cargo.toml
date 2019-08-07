@@ -6,10 +6,10 @@ description = "Generic slots-based utilities for consensus"
 edition = "2018"
 
 [dependencies]
-codec = { package = "parity-codec", version = "4.1.1" }
+codec = { package = "parity-scale-codec", version = "1.0.0" }
 client = { package = "substrate-client", path = "../../client" }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
-runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
+sr-primitives = {  path = "../../sr-primitives" }
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
 futures-preview = "0.3.0-alpha.17"

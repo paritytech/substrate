@@ -16,7 +16,7 @@
 
 //! Tool for creating the genesis block.
 
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, Zero};
+use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, Zero};
 
 /// Create a genesis block, given the initial storage.
 pub fn construct_genesis_block<
@@ -40,7 +40,7 @@ pub fn construct_genesis_block<
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use parity_codec::{Encode, Decode, Joiner};
+	use codec::{Encode, Decode, Joiner};
 	use executor::native_executor_instance;
 	use state_machine::{self, OverlayedChanges, ExecutionStrategy, InMemoryChangesTrieStorage};
 	use state_machine::backend::InMemory;
@@ -49,7 +49,7 @@ mod tests {
 		runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest},
 		AccountKeyring, Sr25519Keyring,
 	};
-	use runtime_primitives::traits::BlakeTwo256;
+	use sr_primitives::traits::BlakeTwo256;
 	use primitives::Blake2Hasher;
 	use hex::*;
 
@@ -71,11 +71,12 @@ mod tests {
 		state_root: Hash,
 		txs: Vec<Transfer>
 	) -> (Vec<u8>, Hash) {
-		use trie::ordered_trie_root;
+		use trie::{TrieConfiguration, trie_types::Layout};
 
 		let transactions = txs.into_iter().map(|tx| tx.into_signed_tx()).collect::<Vec<_>>();
 
-		let extrinsics_root = ordered_trie_root::<Blake2Hasher, _, _>(transactions.iter().map(Encode::encode)).into();
+		let iter = transactions.iter().map(Encode::encode);
+		let extrinsics_root = Layout::<Blake2Hasher>::ordered_trie_root(iter).into();
 
 		let mut header = Header {
 			parent_hash,

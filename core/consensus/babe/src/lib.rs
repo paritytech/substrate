@@ -19,7 +19,6 @@
 //! BABE (Blind Assignment for Blockchain Extension) consensus in Substrate.
 
 #![forbid(unsafe_code, missing_docs, unused_must_use, unused_imports, unused_variables)]
-#![cfg_attr(not(test), forbid(dead_code))]
 pub use babe_primitives::*;
 pub use consensus_common::SyncOracle;
 use consensus_common::ImportResult;
@@ -27,14 +26,14 @@ use consensus_common::import_queue::{
 	BoxJustificationImport, BoxFinalityProofImport,
 };
 use consensus_common::well_known_cache_keys::Id as CacheKeyId;
-use runtime_primitives::{generic, generic::{BlockId, OpaqueDigestItemId}, Justification};
-use runtime_primitives::traits::{
+use sr_primitives::{generic, generic::{BlockId, OpaqueDigestItemId}, Justification};
+use sr_primitives::traits::{
 	Block as BlockT, Header, DigestItemFor, NumberFor, ProvideRuntimeApi,
 	SimpleBitOps, Zero,
 };
 use std::{collections::HashMap, sync::Arc, u64, fmt::{Debug, Display}, pin::Pin, time::{Instant, Duration}};
 use runtime_support::serde::{Serialize, Deserialize};
-use parity_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use parking_lot::{Mutex, MutexGuard};
 use primitives::{Blake2Hasher, H256, Pair, Public, sr25519};
 use merlin::Transcript;
@@ -322,7 +321,7 @@ impl<Hash, H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<C, E, I, SO> w
 			let inherent_digest = BabePreDigest {
 				vrf_proof,
 				vrf_output: inout.to_output(),
-				authority_index: authority_index as u64,
+				authority_index: authority_index as u32,
 				slot_number,
 			};
 
@@ -492,7 +491,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore>(
 	if slot_number > slot_now {
 		header.digest_mut().push(seal);
 		Ok(CheckedHeader::Deferred(header, slot_number))
-	} else if authority_index > authorities.len() as u64 {
+	} else if authority_index > authorities.len() as u32 {
 		Err(babe_err!("Slot author not found"))
 	} else {
 		let (pre_hash, author) = (header.hash(), &authorities[authority_index as usize].0);
@@ -581,6 +580,7 @@ impl<C> BabeVerifier<C> {
 	}
 }
 
+#[allow(dead_code)]
 fn median_algorithm(
 	median_required_blocks: u64,
 	slot_duration: u64,
@@ -612,8 +612,12 @@ fn median_algorithm(
 			.get(num_timestamps / 2)
 			.expect("we have at least one timestamp, so this is a valid index; qed");
 
+		let now = Instant::now();
+		if now >= median {
+			time_source.0.replace(now - median);
+		}
+
 		time_source.1.clear();
-		time_source.0.replace(Instant::now() - median);
 	} else {
 		time_source.1.push((Instant::now(), slot_now))
 	}
@@ -706,15 +710,6 @@ impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
 					fork_choice: ForkChoiceStrategy::LongestChain,
 				};
 
-				// FIXME: this should eventually be moved to BabeBlockImport
-				median_algorithm(
-					self.config.0.median_required_blocks,
-					self.config.get(),
-					slot_number,
-					slot_now,
-					&mut *self.time_source.0.lock(),
-				);
-
 				Ok((import_block, Default::default()))
 			}
 			CheckedHeader::Deferred(a, b) => {
@@ -738,7 +733,7 @@ fn epoch<B, C>(client: &C, at: &BlockId<B>) -> Result<Epoch, ConsensusError> whe
 	client
 		.cache()
 		.and_then(|cache| cache.get_at(&well_known_cache_keys::EPOCH, at)
-			.and_then(|v| Decode::decode(&mut &v[..])))
+			.and_then(|v| Decode::decode(&mut &v[..]).ok()))
 		.or_else(|| {
 			if client.runtime_api().has_api::<dyn BabeApi<B>>(at).unwrap_or(false) {
 				let s = BabeApi::epoch(&*client.runtime_api(), at).ok()?;
@@ -861,7 +856,7 @@ fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> 
 	let genesis_id = BlockId::Number(Zero::zero());
 	let genesis_epoch: Option<Epoch> = cache
 		.get_at(&well_known_cache_keys::EPOCH, &genesis_id)
-		.and_then(|v| Decode::decode(&mut &v[..]));
+		.and_then(|v| Decode::decode(&mut &v[..]).ok());
 	if genesis_epoch.is_some() {
 		return Ok(());
 	}
@@ -1224,7 +1219,7 @@ pub mod test_helpers {
 			BabePreDigest {
 				vrf_proof,
 				vrf_output: inout.to_output(),
-				authority_index: authority_index as u64,
+				authority_index: authority_index as u32,
 				slot_number,
 			}
 		})

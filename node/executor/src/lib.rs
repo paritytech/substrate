@@ -40,15 +40,15 @@ mod tests {
 	use {balances, contracts, indices, staking, system, timestamp};
 	use runtime_io;
 	use substrate_executor::WasmExecutor;
-	use parity_codec::{Encode, Decode, Joiner};
+	use codec::{Encode, Decode, Joiner};
 	use keyring::{AccountKeyring, Ed25519Keyring, Sr25519Keyring};
 	use runtime_support::{Hashable, StorageValue, StorageMap, assert_eq_error_rate, traits::Currency};
 	use state_machine::{CodeExecutor, Externalities, TestExternalities as CoreTestExternalities};
 	use primitives::{ twox_128, blake2_256, Blake2Hasher, ChangesTrieConfiguration, NeverNativeValue, NativeOrEncoded};
 	use node_primitives::{Hash, BlockNumber, AccountId, Balance, Index};
-	use runtime_primitives::traits::{Header as HeaderT, Hash as HashT, Convert};
-	use runtime_primitives::{generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
-	use runtime_primitives::weights::{WeightMultiplier, GetDispatchInfo};
+	use sr_primitives::traits::{Header as HeaderT, Hash as HashT, Convert};
+	use sr_primitives::{generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
+	use sr_primitives::weights::{WeightMultiplier, GetDispatchInfo};
 	use contracts::ContractAddressFor;
 	use system::{EventRecord, Phase};
 	use node_runtime::{
@@ -122,7 +122,7 @@ mod tests {
 	fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
 		match xt.signed {
 			Some((signed, extra)) => {
-				let payload = (xt.function, extra.clone(), GENESIS_HASH);
+				let payload = (xt.function, extra.clone(), GENESIS_HASH, GENESIS_HASH);
 				let key = AccountKeyring::from_public(&signed).unwrap();
 				let signature = payload.using_encoded(|b| {
 					if b.len() > 256 {
@@ -145,9 +145,10 @@ mod tests {
 
 	fn signed_extra(nonce: Index, extra_fee: Balance) -> SignedExtra {
 		(
+			system::CheckGenesis::new(),
 			system::CheckEra::from(Era::mortal(256, 0)),
 			system::CheckNonce::from(nonce),
-			system::CheckWeight::from(),
+			system::CheckWeight::new(),
 			balances::TakeFees::from(extra_fee)
 		)
 	}
@@ -402,13 +403,13 @@ mod tests {
 		parent_hash: Hash,
 		extrinsics: Vec<CheckedExtrinsic>,
 	) -> (Vec<u8>, Hash) {
-		use trie::ordered_trie_root;
+		use trie::{TrieConfiguration, trie_types::Layout};
 
 		// sign extrinsics.
 		let extrinsics = extrinsics.into_iter().map(sign).collect::<Vec<_>>();
 
 		// calculate the header fields that we can.
-		let extrinsics_root = ordered_trie_root::<Blake2Hasher, _, _>(
+		let extrinsics_root = Layout::<Blake2Hasher>::ordered_trie_root(
 				extrinsics.iter().map(Encode::encode)
 			).to_fixed_bytes()
 			.into();

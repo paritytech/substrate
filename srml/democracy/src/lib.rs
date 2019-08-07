@@ -20,9 +20,9 @@
 
 use rstd::prelude::*;
 use rstd::{result, convert::TryFrom};
-use primitives::traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin, Hash};
-use primitives::weights::SimpleDispatchInfo;
-use parity_codec::{Encode, Decode, Input, Output};
+use sr_primitives::traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin, Hash};
+use sr_primitives::weights::SimpleDispatchInfo;
+use codec::{Encode, Decode, Input, Output, Error};
 use srml_support::{
 	decl_module, decl_storage, decl_event, ensure,
 	StorageValue, StorageMap, Parameter, Dispatchable, IsSubType, EnumerableStorageMap,
@@ -154,12 +154,15 @@ impl Encode for Vote {
 	}
 }
 
+impl codec::EncodeLike for Vote {}
+
 impl Decode for Vote {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+	fn decode<I: Input>(input: &mut I) -> core::result::Result<Self, Error> {
 		let b = input.read_byte()?;
-		Some(Vote {
+		Ok(Vote {
 			aye: (b & 0b1000_0000) == 0b1000_0000,
-			conviction: Conviction::try_from(b & 0b0111_1111).ok()?,
+			conviction: Conviction::try_from(b & 0b0111_1111)
+				.map_err(|_| Error::from("Invalid conviction"))?,
 		})
 	}
 }
@@ -990,9 +993,9 @@ mod tests {
 		impl_outer_origin, impl_outer_dispatch, assert_noop, assert_ok, parameter_types,
 		traits::Contains
 	};
-	use substrate_primitives::{H256, Blake2Hasher};
-	use primitives::{traits::{BlakeTwo256, IdentityLookup, Bounded}, testing::Header};
-	use primitives::Perbill;
+	use primitives::{H256, Blake2Hasher};
+	use sr_primitives::{traits::{BlakeTwo256, IdentityLookup, Bounded}, testing::Header};
+	use sr_primitives::Perbill;
 	use balances::BalanceLock;
 	use system::EnsureSignedBy;
 

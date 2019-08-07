@@ -20,10 +20,10 @@ use std::collections::HashMap;
 use std::iter::FromIterator;
 use crate::backend::{Backend, InMemory};
 use hash_db::Hasher;
-use trie::trie_root;
+use trie::TrieConfiguration;
+use trie::trie_types::Layout;
 use primitives::offchain;
-use primitives::storage::well_known_keys::{HEAP_PAGES, is_child_storage_key};
-use parity_codec::Encode;
+use primitives::storage::well_known_keys::is_child_storage_key;
 use super::{ChildStorageKey, Externalities};
 use log::warn;
 
@@ -42,10 +42,9 @@ impl BasicExternalities {
 
 	/// Create a new instance of `BasicExternalities` with children
 	pub fn new_with_children(
-		mut top: HashMap<Vec<u8>, Vec<u8>>,
+		top: HashMap<Vec<u8>, Vec<u8>>,
 		children: HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
 	) -> Self {
-		top.insert(HEAP_PAGES.to_vec(), 8u64.encode());
 		BasicExternalities {
 			top,
 			children,
@@ -151,7 +150,7 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 	fn chain_id(&self) -> u64 { 42 }
 
 	fn storage_root(&mut self) -> H::Out {
-		trie_root::<H, _, _, _>(self.top.clone())
+		Layout::<H>::trie_root(self.top.clone())
 	}
 
 	fn child_storage_root(&mut self, storage_key: ChildStorageKey<H>) -> Vec<u8> {
@@ -188,7 +187,8 @@ mod tests {
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
-		const ROOT: [u8; 32] = hex!("0b33ed94e74e0f8e92a55923bece1ed02d16cf424e124613ddebc53ac3eeeabe");
+		const ROOT: [u8; 32] = hex!("39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa");
+
 		assert_eq!(ext.storage_root(), H256::from(ROOT));
 	}
 
@@ -230,5 +230,13 @@ mod tests {
 
 		ext.kill_child_storage(child());
 		assert_eq!(ext.child_storage(child(), b"doe"), None);
+	}
+
+	#[test]
+	fn basic_externalities_is_empty() {
+		// Make sure no values are set by default in `BasicExternalities`.
+		let (storage, child_storage) = BasicExternalities::new(Default::default()).into_storages();
+		assert!(storage.is_empty());
+		assert!(child_storage.is_empty());
 	}
 }

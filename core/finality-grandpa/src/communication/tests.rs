@@ -24,7 +24,7 @@ use network_gossip::Validator;
 use tokio::runtime::current_thread;
 use std::sync::Arc;
 use keyring::Ed25519Keyring;
-use parity_codec::Encode;
+use codec::Encode;
 
 use crate::environment::SharedVoterSetState;
 use super::gossip::{self, GossipValidator};
@@ -143,7 +143,7 @@ fn voter_set_state() -> SharedVoterSetState<Block> {
 	use crate::authorities::AuthoritySet;
 	use crate::environment::{CompletedRound, CompletedRounds, HasVoted, VoterSetState};
 	use grandpa::round::State as RoundState;
-	use substrate_primitives::H256;
+	use primitives::H256;
 
 	let state = RoundState::genesis((H256::zero(), 0));
 	let base = state.prevote_ghost.unwrap();

@@ -40,10 +40,10 @@ use futures03::stream::{StreamExt as _, TryStreamExt as _};
 use keystore::Store as Keystore;
 use network::{NetworkState, NetworkStateInfo};
 use log::{log, info, warn, debug, error, Level};
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use primitives::{Pair, ed25519, sr25519, crypto};
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Header, NumberFor, SaturatedConversion, Zero};
+use sr_primitives::generic::BlockId;
+use sr_primitives::traits::{Header, NumberFor, SaturatedConversion, Zero};
 use substrate_executor::NativeExecutor;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
@@ -407,7 +407,7 @@ impl<Components: components::Components> Service<Components> {
 		let _ = to_spawn_tx.unbounded_send(Box::new(tel_task));
 
 		// RPC
-		let (system_rpc_tx, system_rpc_rx) = mpsc::unbounded();
+		let (system_rpc_tx, system_rpc_rx) = futures03::channel::mpsc::unbounded();
 		let gen_handler = || {
 			let system_info = rpc::apis::system::SystemInfo {
 				chain_name: config.chain_spec.name().into(),
@@ -635,9 +635,13 @@ fn build_network_future<
 	mut network: network::NetworkWorker<ComponentBlock<Components>, S, H>,
 	client: Arc<ComponentClient<Components>>,
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<(NetworkStatus<ComponentBlock<Components>>, NetworkState)>>>>,
-	mut rpc_rx: mpsc::UnboundedReceiver<rpc::apis::system::Request<ComponentBlock<Components>>>,
+	rpc_rx: futures03::channel::mpsc::UnboundedReceiver<rpc::apis::system::Request<ComponentBlock<Components>>>,
 	should_have_peers: bool,
 ) -> impl Future<Item = (), Error = ()> {
+	// Compatibility shim while we're transitionning to stable Futures.
+	// See https://github.com/paritytech/substrate/issues/3099
+	let mut rpc_rx = futures03::compat::Compat::new(rpc_rx.map(|v| Ok::<_, ()>(v)));
+
 	// Interval at which we send status updates on the status stream.
 	const STATUS_INTERVAL: Duration = Duration::from_millis(5000);
 	let mut status_interval = tokio_timer::Interval::new_interval(STATUS_INTERVAL);
@@ -722,7 +726,7 @@ fn build_network_future<
 			"Polling the network future took {:?}",
 			polling_dur
 		);
-		
+
 		Ok(Async::NotReady)
 	})
 }
@@ -846,7 +850,7 @@ fn transactions_to_propagate<PoolApi, B, H, E>(pool: &TransactionPool<PoolApi>)
 where
 	PoolApi: ChainApi<Block=B, Hash=H, Error=E>,
 	B: BlockT,
-	H: std::hash::Hash + Eq + runtime_primitives::traits::Member + serde::Serialize,
+	H: std::hash::Hash + Eq + sr_primitives::traits::Member + serde::Serialize,
 	E: txpool::error::IntoPoolError + From<txpool::error::Error>,
 {
 	pool.ready()
@@ -873,28 +877,31 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 		}
 
 		let encoded = transaction.encode();
-		if let Some(uxt) = Decode::decode(&mut &encoded[..]) {
-			let best_block_id = self.best_block_id()?;
-			match self.pool.submit_one(&best_block_id, uxt) {
-				Ok(hash) => Some(hash),
-				Err(e) => match e.into_pool_error() {
-					Ok(txpool::error::Error::AlreadyImported(hash)) => {
-						hash.downcast::<ComponentExHash<C>>().ok()
-							.map(|x| x.as_ref().clone())
-					},
-					Ok(e) => {
-						debug!("Error adding transaction to the pool: {:?}", e);
-						None
-					},
-					Err(e) => {
-						debug!("Error converting pool error: {:?}", e);
-						None
-					},
+		match Decode::decode(&mut &encoded[..]) {
+			Ok(uxt) => {
+				let best_block_id = self.best_block_id()?;
+				match self.pool.submit_one(&best_block_id, uxt) {
+					Ok(hash) => Some(hash),
+					Err(e) => match e.into_pool_error() {
+						Ok(txpool::error::Error::AlreadyImported(hash)) => {
+							hash.downcast::<ComponentExHash<C>>().ok()
+								.map(|x| x.as_ref().clone())
+						},
+						Ok(e) => {
+							debug!("Error adding transaction to the pool: {:?}", e);
+							None
+						},
+						Err(e) => {
+							debug!("Error converting pool error: {:?}", e);
+							None
+						},
+					}
 				}
 			}
-		} else {
-			debug!("Error decoding transaction");
-			None
+			Err(e) => {
+				debug!("Error decoding transaction {}", e);
+				None
+			}
 		}
 	}
 
@@ -916,7 +923,7 @@ impl<Block, ConsensusPair, FinalityPair>
 	offchain::AuthorityKeyProvider<Block>
 	for AuthorityKeyProvider<Block, ConsensusPair, FinalityPair>
 where
-	Block: runtime_primitives::traits::Block,
+	Block: sr_primitives::traits::Block,
 	ConsensusPair: Pair,
 	FinalityPair: Pair,
 {
@@ -991,8 +998,8 @@ where
 /// # use node_runtime::{GenesisConfig, RuntimeApi};
 /// # use std::sync::Arc;
 /// # use node_primitives::Block;
-/// # use runtime_primitives::Justification;
-/// # use runtime_primitives::traits::Block as BlockT;
+/// # use sr_primitives::Justification;
+/// # use sr_primitives::traits::Block as BlockT;
 /// # use grandpa;
 /// # construct_simple_protocol! {
 /// # 	pub struct NodeProtocol where Block = Block { }
@@ -1178,7 +1185,7 @@ macro_rules! construct_service_factory {
 mod tests {
 	use super::*;
 	use consensus_common::SelectChain;
-	use runtime_primitives::traits::BlindCheckable;
+	use sr_primitives::traits::BlindCheckable;
 	use substrate_test_runtime_client::{prelude::*, runtime::{Extrinsic, Transfer}};
 
 	#[test]

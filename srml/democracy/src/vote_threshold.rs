@@ -18,8 +18,8 @@
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
-use parity_codec::{Encode, Decode};
-use primitives::traits::{Zero, IntegerSquareRoot};
+use codec::{Encode, Decode};
+use sr_primitives::traits::{Zero, IntegerSquareRoot};
 use rstd::ops::{Add, Mul, Div, Rem};
 
 /// A means of determining if a vote is past pass threshold.

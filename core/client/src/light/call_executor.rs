@@ -22,10 +22,10 @@ use std::{
 	marker::PhantomData, cell::RefCell, rc::Rc,
 };
 
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use primitives::{offchain, H256, Blake2Hasher, convert_hash, NativeOrEncoded};
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{One, Block as BlockT, Header as HeaderT};
+use sr_primitives::generic::BlockId;
+use sr_primitives::traits::{One, Block as BlockT, Header as HeaderT};
 use state_machine::{
 	self, Backend as StateBackend, CodeExecutor, OverlayedChanges,
 	ExecutionStrategy, create_proof_check_backend,
@@ -149,7 +149,7 @@ where
 	fn runtime_version(&self, id: &BlockId<Block>) -> ClientResult<RuntimeVersion> {
 		let call_result = self.call(id, "Core_version", &[], ExecutionStrategy::NativeElseWasm, NeverOffchainExt::new())?;
 		RuntimeVersion::decode(&mut call_result.as_slice())
-			.ok_or_else(|| ClientError::VersionInvalid.into())
+			.map_err(|_| ClientError::VersionInvalid.into())
 	}
 
 	fn call_at_state<

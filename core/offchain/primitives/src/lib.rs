@@ -20,7 +20,7 @@
 #![warn(missing_docs)]
 
 use client::decl_runtime_apis;
-use runtime_primitives::traits::NumberFor;
+use sr_primitives::traits::NumberFor;
 
 decl_runtime_apis! {
 	/// The offchain worker api.

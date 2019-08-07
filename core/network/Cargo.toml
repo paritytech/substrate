@@ -24,11 +24,11 @@ rustc-hex = "2.0"
 rand = "0.6"
 libp2p = { version = "0.11.0", default-features = false, features = ["secp256k1", "libp2p-websocket"] }
 fork-tree = { path = "../../core/utils/fork-tree" }
-primitives = { package = "substrate-primitives", path = "../../core/primitives" }
 consensus = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 client = { package = "substrate-client", path = "../../core/client" }
-runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
-parity-codec = { version = "4.1.1", features = ["derive"] }
+sr-primitives = { path = "../../core/sr-primitives" }
+primitives = { package = "substrate-primitives", path = "../../core/primitives" }
+codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 peerset = { package = "substrate-peerset", path = "../../core/peerset" }
 serde = { version = "1.0.70", features = ["derive"] }
 serde_json = "1.0.24"
