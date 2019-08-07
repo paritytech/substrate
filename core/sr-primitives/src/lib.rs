@@ -39,7 +39,7 @@ pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 
 use rstd::{prelude::*, ops, convert::{TryInto, TryFrom}};
 use primitives::{crypto, ed25519, sr25519, hash::{H256, H512}};
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, CompactAs};
 
 #[cfg(feature = "std")]
 pub mod testing;
@@ -173,7 +173,7 @@ pub type ConsensusEngineId = [u8; 4];
 
 /// Permill is parts-per-million (i.e. after multiplying by this, divide by 1000000).
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Ord, PartialOrd))]
-#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
+#[derive(Encode, Decode, CompactAs, Default, Copy, Clone, PartialEq, Eq)]
 pub struct Permill(u32);
 
 impl Permill {
@@ -263,26 +263,10 @@ impl From<f32> for Permill {
 	}
 }
 
-impl codec::CompactAs for Permill {
-	type As = u32;
-	fn encode_as(&self) -> &u32 {
-		&self.0
-	}
-	fn decode_from(x: u32) -> Permill {
-		Permill(x)
-	}
-}
-
-impl From<codec::Compact<Permill>> for Permill {
-	fn from(x: codec::Compact<Permill>) -> Permill {
-		x.0
-	}
-}
-
 /// Perbill is parts-per-billion. It stores a value between 0 and 1 in fixed point and
 /// provides a means to multiply some other value by that.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Encode, Decode, CompactAs, Default, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct Perbill(u32);
 
 impl Perbill {
@@ -374,23 +358,6 @@ impl From<f32> for Perbill {
 		Perbill::from_fraction(x as f64)
 	}
 }
-
-impl codec::CompactAs for Perbill {
-	type As = u32;
-	fn encode_as(&self) -> &u32 {
-		&self.0
-	}
-	fn decode_from(x: u32) -> Perbill {
-		Perbill(x)
-	}
-}
-
-impl From<codec::Compact<Perbill>> for Perbill {
-	fn from(x: codec::Compact<Perbill>) -> Perbill {
-		x.0
-	}
-}
-
 
 /// A fixed point number by the scale of 1 billion.
 ///
@@ -516,7 +483,7 @@ impl CheckedAdd for Fixed64 {
 
 /// PerU128 is parts-per-u128-max-value. It stores a value between 0 and 1 in fixed point.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
+#[derive(Encode, Decode, CompactAs, Default, Copy, Clone, PartialEq, Eq)]
 pub struct PerU128(u128);
 
 const U128: u128 = u128::max_value();
@@ -543,22 +510,6 @@ impl ::rstd::ops::Deref for PerU128 {
 
 	fn deref(&self) -> &u128 {
 		&self.0
-	}
-}
-
-impl codec::CompactAs for PerU128 {
-	type As = u128;
-	fn encode_as(&self) -> &u128 {
-		&self.0
-	}
-	fn decode_from(x: u128) -> PerU128 {
-		Self(x)
-	}
-}
-
-impl From<codec::Compact<PerU128>> for PerU128 {
-	fn from(x: codec::Compact<PerU128>) -> PerU128 {
-		x.0
 	}
 }
 
