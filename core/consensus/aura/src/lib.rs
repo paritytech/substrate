@@ -394,7 +394,7 @@ fn check_header<C, B: BlockT, P: Pair>(
 	DigestItemFor<B>: CompatibleDigestItem<P>,
 	P::Signature: Decode,
 	C: client::backend::AuxStore,
-	P::Public: AsRef<P::Public> + Encode + Decode + PartialEq + Clone,
+	P::Public: Encode + Decode + PartialEq + Clone,
 {
 	let seal = match header.digest_mut().pop() {
 		Some(x) => x,
@@ -508,7 +508,7 @@ impl<B: BlockT, C, P> Verifier<B> for AuraVerifier<C, P> where
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>>,
 	DigestItemFor<B>: CompatibleDigestItem<P>,
 	P: Pair + Send + Sync + 'static,
-	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + AsRef<P::Public> + 'static,
+	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + 'static,
 	P::Signature: Encode + Decode,
 {
 	fn verify(
@@ -686,7 +686,7 @@ pub fn import_queue<B, C, P>(
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>>,
 	DigestItemFor<B>: CompatibleDigestItem<P>,
 	P: Pair + Send + Sync + 'static,
-	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode + AsRef<P::Public>,
+	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode,
 	P::Signature: Encode + Decode,
 {
 	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;

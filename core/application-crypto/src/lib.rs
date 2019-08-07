@@ -107,12 +107,12 @@ macro_rules! app_crypto {
 			fn sign(&self, msg: &[u8]) -> Self::Signature {
 				Signature(self.0.sign(msg))
 			}
-			fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(
+			fn verify<M: AsRef<[u8]>>(
 				sig: &Self::Signature,
 				message: M,
-				pubkey: P,
+				pubkey: &Self::Public,
 			) -> bool {
-				<$pair>::verify(&sig.0, message, &pubkey.as_ref().0)
+				<$pair>::verify(&sig.0, message, pubkey.as_ref())
 			}
 			fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(
 				sig: &[u8],
@@ -145,9 +145,6 @@ macro_rules! app_crypto {
 			#[cfg_attr(feature = "std", derive(Debug, Hash))]
 			pub struct Public($public);
 		}
-		// TODO: needed for verify since it takes an AsRef, but should be removed once that is
-		// refactored.
-		$crate::primitives::impl_as_ref_mut!(Public);
 
 		impl $crate::Derive for Public {
 			#[cfg(feature = "std")]

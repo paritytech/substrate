@@ -169,8 +169,26 @@ mod tests {
 
 	#[test]
 	fn should_work() {
-		assert!(Pair::verify(&Keyring::Alice.sign(b"I am Alice!"), b"I am Alice!", Keyring::Alice));
-		assert!(!Pair::verify(&Keyring::Alice.sign(b"I am Alice!"), b"I am Bob!", Keyring::Alice));
-		assert!(!Pair::verify(&Keyring::Alice.sign(b"I am Alice!"), b"I am Alice!", Keyring::Bob));
+		assert!(
+			Pair::verify(
+				&Keyring::Alice.sign(b"I am Alice!"),
+				b"I am Alice!",
+				&Keyring::Alice.public(),
+			)
+		);
+		assert!(
+			!Pair::verify(
+				&Keyring::Alice.sign(b"I am Alice!"),
+				b"I am Bob!",
+				&Keyring::Alice.public(),
+			)
+		);
+		assert!(
+			!Pair::verify(
+				&Keyring::Alice.sign(b"I am Alice!"),
+				b"I am Alice!",
+				&Keyring::Bob.public(),
+			)
+		);
 	}
 }

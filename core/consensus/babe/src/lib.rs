@@ -492,7 +492,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore>(
 	} else {
 		let (pre_hash, author) = (header.hash(), &authorities[authority_index as usize].0);
 
-		if AuthorityPair::verify(&sig, pre_hash, author.clone()) {
+		if AuthorityPair::verify(&sig, pre_hash, &author) {
 			let (inout, _batchable_proof) = {
 				let transcript = make_transcript(
 					&randomness,

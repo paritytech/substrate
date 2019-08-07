@@ -70,6 +70,6 @@ mod tests {
 		let key_pair = keystore.read().sr25519_key_pair(crate::key_types::SR25519, public.as_ref())
 			.expect("There should be at a `sr25519` key in the keystore for the given public key.");
 
-		assert!(AppPair::verify(&signature, "sr25519", AppPublic::from(key_pair.public())));
+		assert!(AppPair::verify(&signature, "sr25519", &AppPublic::from(key_pair.public())));
 	}
 }

@@ -542,16 +542,8 @@ mod dummy {
 			_: I
 		) -> Result<Self, SecretStringError> { Ok(Self) }
 		fn sign(&self, _: &[u8]) -> Self::Signature { Self }
-		fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(
-			_: &Self::Signature,
-			_: M,
-			_: P
-		) -> bool { true }
-		fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(
-			_: &[u8],
-			_: M,
-			_: P
-		) -> bool { true }
+		fn verify<M: AsRef<[u8]>>(_: &Self::Signature, _: M, _: &Self::Public) -> bool { true }
+		fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(_: &[u8], _: M, _: P) -> bool { true }
 		fn public(&self) -> Self::Public { Self }
 		fn to_raw_vec(&self) -> Vec<u8> { vec![] }
 	}
@@ -623,7 +615,7 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	fn sign(&self, message: &[u8]) -> Self::Signature;
 
 	/// Verify a signature on a message. Returns true if the signature is good.
-	fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: P) -> bool;
+	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: &Self::Public) -> bool;
 
 	/// Verify a signature on a message. Returns true if the signature is good.
 	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool;
@@ -722,25 +714,6 @@ impl<Inner, Outer, T> UncheckedFrom<T> for Outer where
 		inner.into()
 	}
 }
-
-/// Implement `AsRef<Self>` and `AsMut<Self>` for the provided type.
-#[macro_export]
-macro_rules! impl_as_ref_mut {
-	($name:ty) => {
-		impl AsMut<Self> for $name {
-			fn as_mut(&mut self) -> &mut Self {
-				self
-			}
-		}
-		impl AsRef<Self> for $name {
-			fn as_ref(&self) -> &Self {
-				&self
-			}
-		}
-	}
-}
-
-// TODO: remove default cryptos
 
 /// Type which has a particular kind of crypto associated with it.
 pub trait CryptoType {
@@ -874,11 +847,7 @@ mod tests {
 		}
 		fn from_seed(_seed: &<TestPair as Pair>::Seed) -> Self { TestPair::Seed(vec![]) }
 		fn sign(&self, _message: &[u8]) -> Self::Signature { [] }
-		fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(
-			_sig: &Self::Signature,
-			_message: M,
-			_pubkey: P
-		) -> bool { true }
+		fn verify<M: AsRef<[u8]>>(_: &Self::Signature, _: M, _: &Self::Public) -> bool { true }
 		fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(
 			_sig: &[u8],
 			_message: M,
