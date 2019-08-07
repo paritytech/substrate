@@ -591,6 +591,9 @@ pub trait TestNetFactory: Sized {
 		// Return `NotReady` if there's a mismatch in the highest block number.
 		let mut highest = None;
 		for peer in self.peers().iter() {
+			if peer.is_major_syncing() || peer.network.num_queued_blocks() != 0 {
+				return Async::NotReady
+			}
 			match (highest, peer.client.info().chain.best_number) {
 				(None, b) => highest = Some(b),
 				(Some(ref a), ref b) if a == b => {},
