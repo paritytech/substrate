@@ -244,8 +244,7 @@ decl_runtime_apis! {
 
 		/// Construct a call to report the equivocation.
 		fn construct_equivocation_report_call(
-			equivocation: BabeEquivocationProof<Block::Header>,
-			proof: Proof
+			equivocation: BabeEquivocationProof<Block::Header>
 		) -> Option<Vec<u8>>;
 	}
 }

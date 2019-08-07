@@ -19,7 +19,7 @@ use std::iter::FromIterator;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use log::{debug, warn, info};
+use log::{debug, warn, info, error};
 use codec::{Decode, Encode};
 use futures::prelude::*;
 use tokio_timer::Delay;
@@ -27,7 +27,7 @@ use parking_lot::RwLock;
 
 use client::{
 	backend::Backend, BlockchainEvents, CallExecutor, Client, error::Error as ClientError,
-	utils::is_descendent_of,
+	utils::is_descendent_of, blockchain::HeaderBackend
 };
 use grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
@@ -36,7 +36,7 @@ use grandpa::{
 use primitives::{Blake2Hasher, H256, Pair};
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{
-	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
+	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, ProvideRuntimeApi
 };
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
@@ -47,12 +47,13 @@ use crate::{
 
 use consensus_common::SelectChain;
 use srml_session::{historical::Proof, SessionIndex};
+use transaction_pool::txpool::{SubmitExtrinsic, ChainApi};
 
 use crate::authorities::{AuthoritySet, SharedAuthoritySet};
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
-use fg_primitives::{AuthorityId, AuthoritySignature, GrandpaEquivocationFrom};
+use fg_primitives::{AuthorityId, AuthoritySignature, GrandpaEquivocationFrom, GrandpaApi};
 
 type HistoricalVotes<Block> = grandpa::HistoricalVotes<
 	<Block as BlockT>::Hash,
@@ -537,6 +538,10 @@ where
 	RA: 'static + Send + Sync,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
+	T: SubmitExtrinsic,
+	<T as SubmitExtrinsic>::Api: ChainApi<Block=Block>,
+	Client<B, E, Block, RA>: HeaderBackend<Block> + ProvideRuntimeApi,
+	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: GrandpaApi<Block>,
 {
 	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
 	type Id = AuthorityId;
@@ -797,8 +802,6 @@ where
 	}
 
 	fn finalize_block(&self, hash: Block::Hash, number: NumberFor<Block>, round: u64, commit: Commit<Block>) -> Result<(), Self::Error> {
-		use client::blockchain::HeaderBackend;
-
 		#[allow(deprecated)]
 		let blockchain = self.inner.backend().blockchain();
 		let status = blockchain.info();
@@ -852,30 +855,26 @@ where
 			round_number: equivocation.round_number,
 			session_index: SessionIndex::default(), // TODO: add session index.
 			identity: equivocation.identity,
-			identity_proof: Proof::default(),
+			identity_proof: Proof::default(), // TODO: add proof.
 			first: (first_vote, first_signature),
 			second: (second_vote, second_signature),
 			set_id: self.set_id,
 		};
 
 		let block_id = BlockId::<Block>::number(self.inner.info().chain.best_number);
-		// let maybe_report_call = self.inner.runtime_api()
-		// 	.construct_equivocation_report_call(&block_id, grandpa_equivocation);
+		let maybe_report_call = self.inner.runtime_api()
+			.construct_equivocation_report_call(&block_id, grandpa_equivocation);
 
-		// if let Ok(Some(report_call)) = maybe_report_call {
-		// 	if let Some(session_key) = self.config.local_key.clone() {
-		// 		self.transaction_pool.submit_report_call(
-		// 			self.inner.deref(),
-		// 			session_key.deref(),
-		// 			report_call.as_slice(),
-		// 		);
-		// 		info!(target: "afg", "Equivocation report has been submitted");
-		// 	} else {
-		// 		error!(target: "afg", "Failed to get local key for equivocation report")
-		// 	}
-		// } else {
-		// 	error!(target: "afg", "Failed to construct equivocation report call")
-		// }
+		if let Ok(Some(report_call)) = maybe_report_call {
+			let uxt = Decode::decode(&mut report_call.as_slice())
+				.expect("Encoded extrinsic is valid; qed");
+			match self.transaction_pool.submit_one(&block_id, uxt) {
+				Err(e) => warn!("Error importing misbehavior report: {:?}", e),
+				Ok(hash) => info!("Misbehavior report imported to transaction pool: {:?}", hash),
+			}
+		} else {
+			error!(target: "afg", "Failed to construct equivocation report call")
+		}
 	}
 
 	fn precommit_equivocation(
@@ -901,8 +900,19 @@ where
 		};
 
 		let block_id = BlockId::<Block>::number(self.inner.info().chain.best_number);
+		let maybe_report_call = self.inner.runtime_api()
+			.construct_equivocation_report_call(&block_id, grandpa_equivocation);
 
-
+		if let Ok(Some(report_call)) = maybe_report_call {
+			let uxt = Decode::decode(&mut report_call.as_slice())
+				.expect("Encoded extrinsic is valid; qed");
+			match self.transaction_pool.submit_one(&block_id, uxt) {
+				Err(e) => warn!("Error importing misbehavior report: {:?}", e),
+				Ok(hash) => info!("Misbehavior report imported to transaction pool: {:?}", hash),
+			}
+		} else {
+			error!(target: "afg", "Failed to construct equivocation report call")
+		}
 	}
 }
 

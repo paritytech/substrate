@@ -28,6 +28,7 @@ srml-finality-tracker = { path = "../../srml/finality-tracker" }
 srml-session = { path = "../../srml/session" }
 fg_primitives = { package = "substrate-finality-grandpa-primitives", path = "primitives" }
 grandpa = { package = "finality-grandpa", version = "0.9.0", features = ["derive-codec"] }
+transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
 
 [dev-dependencies]
 grandpa = { package = "finality-grandpa", version = "0.9.0", features = ["derive-codec", "test-helpers"] }
