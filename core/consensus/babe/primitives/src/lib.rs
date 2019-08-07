@@ -27,7 +27,7 @@ use sr_primitives::{ConsensusEngineId, traits::Header};
 use primitives::sr25519;
 use substrate_client::decl_runtime_apis;
 use consensus_common_primitives::AuthorshipEquivocationProof;
-use srml_session::historical::Proof;
+use srml_session::{historical::Proof, SessionIndex};
 
 #[cfg(feature = "std")]
 pub use digest::BabePreDigest;
@@ -152,6 +152,7 @@ pub struct BabeEquivocationProof<H> {
 	identity: AuthorityId,
 	identity_proof: Proof,
 	slot: u64,
+	session_index: SessionIndex,
 	first_header: H,
 	second_header: H,
 	first_signature: AuthoritySignature,
@@ -171,6 +172,7 @@ where
 		identity: Self::Identity,
 		identity_proof: Proof,
 		slot: u64,
+		session_index: SessionIndex,
 		first_header: H,
 		second_header: H,
 		first_signature: Self::Signature,
@@ -180,6 +182,7 @@ where
 			identity,
 			identity_proof,
 			slot,
+			session_index,
 			first_header,
 			second_header,
 			first_signature,
@@ -190,6 +193,11 @@ where
 	/// Get the slot where the equivocation happened.
 	fn slot(&self) -> u64 {
 		self.slot
+	}
+
+		/// Get the session index where the equivocation happened.
+	fn session_index(&self) -> &SessionIndex {
+		&self.session_index
 	}
 
 	/// Get the identity of the suspect of equivocating.

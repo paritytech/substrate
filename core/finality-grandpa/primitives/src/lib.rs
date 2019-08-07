@@ -28,7 +28,7 @@ use sr_primitives::{ConsensusEngineId, traits::{DigestFor, NumberFor, Block as B
 use client::decl_runtime_apis;
 use rstd::vec::Vec;
 use grandpa::Message;
-use session::historical::Proof;
+use session::{historical::Proof, SessionIndex};
 
 mod app {
 	use app_crypto::{app_crypto, key_types::GRANDPA, ed25519};
@@ -63,6 +63,8 @@ pub fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec
 pub struct GrandpaEquivocation<H, N> {
 	/// The set id.
 	pub set_id: u64,
+	/// The session id.
+	pub session_index: SessionIndex,
 	/// The round number equivocated in.
 	pub round_number: u64,
 	/// The identity of the equivocator.

@@ -22,7 +22,7 @@ use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
 use sr_primitives::traits::{Header, Verify};
 use consensus_common_primitives::AuthorshipEquivocationProof;
-use srml_session::historical::Proof;
+use srml_session::{historical::Proof, SessionIndex};
 
 const SLOT_HEADER_MAP_KEY: &[u8] = b"slot_header_map";
 const SLOT_HEADER_START: &[u8] = b"slot_header_start";
@@ -106,8 +106,9 @@ pub fn check_equivocation<C, H, E, V>(
 			if header.hash() != prev_header.hash() {
 				return Ok(Some(AuthorshipEquivocationProof::new(
 					signer.clone(),
-					Proof::default(),
+					Proof::default(), // TODO: add the proof.
 					slot,
+					SessionIndex::default(), // TODO: add session index.
 					prev_header.clone(),
 					header.clone(),
 					prev_signature.clone(),
