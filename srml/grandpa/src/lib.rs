@@ -382,19 +382,21 @@ impl<T: Trait> finality_tracker::OnFinalizationStalled<T::BlockNumber> for Modul
 // TODO [slashing]: Integrate this.
 /// A grandpa equivocation offence report.
 #[allow(dead_code)]
-struct GrandpaEquivocationOffence {
+struct GrandpaEquivocationOffence<FullIdentification> {
 	/// A round in which the incident happened.
 	round: u64,
 	/// The session index that starts an era in which the incident happened.
 	current_era_start_session_index: u32, // TODO [slashing]: Should be a SessionIndex.
+	/// The size of the validator set at the time of the offence.
+	validators_count: u32,
 	/// The authority which produced this equivocation.
-	offender: AuthorityId,
+	offender: FullIdentification,
 }
 
-impl Offence<AuthorityId> for GrandpaEquivocationOffence {
+impl<FullIdentification: Clone> Offence<FullIdentification> for GrandpaEquivocationOffence<FullIdentification> {
 	const ID: Kind = *b"grandpa:equivoca";
 
-	fn offenders(&self) -> Vec<AuthorityId> {
+	fn offenders(&self) -> Vec<FullIdentification> {
 		let mut offender = Vec::with_capacity(1);
 		offender.push(self.offender.clone());
 		offender
@@ -402,6 +404,10 @@ impl Offence<AuthorityId> for GrandpaEquivocationOffence {
 
 	fn current_era_start_session_index(&self) -> u32 { // TODO [slashing]: Should be a SessionIndex.
 		self.current_era_start_session_index
+	}
+
+	fn validators_count(&self) -> u32 {
+		self.validators_count
 	}
 
 	fn time_slot(&self) -> TimeSlot {

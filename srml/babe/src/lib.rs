@@ -248,19 +248,21 @@ impl<T: Trait> session::ShouldEndSession<T::BlockNumber> for Module<T> {
 // TODO [slashing]: @marcio use this, remove the dead_code annotation.
 /// A BABE equivocation offence report.
 #[allow(dead_code)]
-struct BabeEquivocationOffence {
+struct BabeEquivocationOffence<FullIdentification> {
 	/// A babe slot number in which this incident happened.
 	slot: u64,
 	/// The session index that starts an era in which the incident happened.
 	current_era_start_session_index: u32, // TODO [slashing]: Should be a SessionIndex.
+	/// The size of the validator set at the time of the offence.
+	validators_count: u32,
 	/// The authority which produced the equivocation.
-	offender: AuthorityId,
+	offender: FullIdentification,
 }
 
-impl Offence<AuthorityId> for BabeEquivocationOffence {
+impl<FullIdentification: Clone> Offence<FullIdentification> for BabeEquivocationOffence<FullIdentification> {
 	const ID: Kind = *b"babe:equivocatio";
 
-	fn offenders(&self) -> Vec<AuthorityId> {
+	fn offenders(&self) -> Vec<FullIdentification> {
 		let mut offender = Vec::with_capacity(1);
 		offender.push(self.offender.clone());
 		offender
@@ -268,6 +270,10 @@ impl Offence<AuthorityId> for BabeEquivocationOffence {
 
 	fn current_era_start_session_index(&self) -> u32 { // TODO [slashing]: Should be a SessionIndex.
 		self.current_era_start_session_index
+	}
+
+	fn validators_count(&self) -> u32 {
+		self.validators_count
 	}
 
 	fn time_slot(&self) -> TimeSlot {

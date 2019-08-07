@@ -62,6 +62,9 @@ pub trait Offence<Offender> {
 	/// function.
 	fn current_era_start_session_index(&self) -> u32; // TODO [slashing]: Should be a SessionIndex.
 
+	/// Return a validators count at the time when the offence took place.
+	fn validators_count(&self) -> u32;
+
 	/// A point in time when this offence happened.
 	///
 	/// The timescale is abstract and it doesn't have to be the same across different

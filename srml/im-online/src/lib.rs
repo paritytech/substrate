@@ -476,6 +476,8 @@ struct UnresponsivnessOffence {
 	///
 	/// It acts as a time measure for unresponsivness reports.
 	session_index: u32, // TODO [slashing]: Should be a SessionIndex.
+	/// The size of the validator set in current session/era.
+	validators_count: u32,
 	/// Authorities which were unresponsive during the current epoch.
 	offenders: Vec<AuthorityId>,
 }
@@ -489,6 +491,10 @@ impl Offence<AuthorityId> for UnresponsivnessOffence {
 
 	fn current_era_start_session_index(&self) -> u32 { // TODO [slashing]: Should be a SessionIndex.
 		self.current_era_start_session_index
+	}
+
+	fn validators_count(&self) -> u32 {
+		self.validators_count
 	}
 
 	fn time_slot(&self) -> TimeSlot {

@@ -22,26 +22,23 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 
-use codec::{Decode, Encode};
 use rstd::vec::Vec;
-use session::{Module as Session, SessionIndex, historical};
+use session::{SessionIndex, historical};
 use support::{
-	StorageDoubleMap, Parameter, decl_module, decl_storage,
+	StorageDoubleMap, decl_module, decl_storage,
 };
 use sr_primitives::{
 	Perbill,
-	traits::{Member, TypedKey},
 	offence::{Offence, ReportOffence, TimeSlot, Kind, OnOffenceHandler, OffenceDetails},
 };
 
 /// Offences trait
-pub trait Trait: system::Trait + session::Trait + historical::Trait {
-	/// The identifier type for an authority.
-	type AuthorityId: Member + Parameter + Default + TypedKey + Decode + Encode + AsRef<[u8]>;
+pub trait Trait: system::Trait + historical::Trait {
 	/// A handler called for every offence report.
-	type OnOffenceHandler: OnOffenceHandler<Self::AccountId, Self::AuthorityId>;
+	type OnOffenceHandler: OnOffenceHandler<Self::AccountId, Self::FullIdentification>;
 }
 
+/// The offences module.
 decl_storage! {
 	trait Store for Module<T: Trait> as Offences {
 		/// A mapping between unique `TimeSlots` within a particular session and the offence `Kind` into
@@ -51,7 +48,7 @@ decl_storage! {
 		/// timeslot since the slashing will increase based on the length of this vec.
 		OffenceReports get(offence_reports):
 			double_map Kind, blake2_256((SessionIndex, TimeSlot))
-				=> Vec<OffenceDetails<T::AccountId, T::AuthorityId>>;
+				=> Vec<OffenceDetails<T::AccountId, T::FullIdentification>>;
 	}
 }
 
@@ -60,13 +57,15 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 }
 
-impl<T: Trait, O: Offence<T::AuthorityId>> ReportOffence<T::AccountId, T::AuthorityId, O>
-	for Module<T>
+impl<T: Trait, O: Offence<T::FullIdentification>> ReportOffence<T::AccountId, T::FullIdentification, O>
+	for Module<T> where
+	T::FullIdentification: Clone,
 {
 	fn report_offence(reporter: Option<T::AccountId>, offence: O) -> Result<(), ()> {
 		let offenders = offence.offenders();
 		let time_slot = offence.time_slot();
 		let session = offence.current_era_start_session_index();
+		let validators_count = offence.validators_count();
 
 		// Check if an offence is already reported for the offender authorities
 		// and otherwise stores that report.
@@ -98,17 +97,6 @@ impl<T: Trait, O: Offence<T::AuthorityId>> ReportOffence<T::AccountId, T::Author
 
 				offending_authorities.clone()
 			});
-
-		// TODO [slashing] Use CurrentEraStartSessionIndex from staking to figure out if it's in current session.
-		let validators_count = if session == <Session<T>>::current_index() {
-			<Session<T>>::validators().len() as u32
-		} else if let Some((_, count)) = <historical::Module<T>>::historical_root(session) {
-			count
-		} else {
-			// session index seems invalid, we should pprobably just return an error.
-			return Err(())
-		};
-
 
 		let offenders_count = all_offenders.len() as u32;
 		let expected_fraction = O::slash_fraction(offenders_count, validators_count);
