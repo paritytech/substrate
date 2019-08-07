@@ -507,3 +507,28 @@ impl Offence<AuthorityId> for UnresponsivnessOffence {
 		Perbill::from_parts(p as u32)
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_unresponsivness_slash_fraction() {
+		// A single case of unresponsivness is not slashed.
+		assert_eq!(
+			UnresponsivnessOffence::slash_fraction(1, 50),
+			Perbill::zero(),
+		);
+
+		assert_eq!(
+			UnresponsivnessOffence::slash_fraction(3, 50),
+			Perbill::from_parts(6000000), // 0.6%
+		);
+
+		// One third offline should be punished around 5%.
+		assert_eq!(
+			UnresponsivnessOffence::slash_fraction(17, 50),
+			Perbill::from_parts(48000000), // 4.8%
+		);
+	}
+}
