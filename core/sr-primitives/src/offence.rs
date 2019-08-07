@@ -20,7 +20,7 @@
 use crate::Perbill;
 
 /// The kind of an offence, is a byte string representing some kind identifier
-/// e.g. `b"im-online:off"`, `b"babe:equivocatio"`
+/// e.g. `b"im-online:offlin"`, `b"babe:equivocatio"`
 // TODO [slashing]: Is there something better we can have here that is more natural but still
 // flexible? as you see in examples, they get cut off with long names.
 pub type Kind = [u8; 16];

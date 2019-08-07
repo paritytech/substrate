@@ -74,8 +74,9 @@ use substrate_primitives::{
 use parity_codec::{Encode, Decode};
 use session::SessionIndex;
 use sr_primitives::{
-	ApplyError, traits::{Extrinsic as ExtrinsicT},
+	Perbill, ApplyError, traits::{Extrinsic as ExtrinsicT},
 	transaction_validity::{TransactionValidity, TransactionLongevity, ValidTransaction},
+	offence::{Offence, TimeSlot, Kind},
 };
 use sr_std::prelude::*;
 use sr_io::Printable;
@@ -464,5 +465,45 @@ impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
 		}
 
 		TransactionValidity::Invalid(0)
+	}
+}
+
+/// An offense which is filed if a validator didn't send a heartbeat message.
+struct UnresponsivnessOffence {
+	/// The session index that starts an era in which the incident happened.
+	current_era_start_session_index: u32, // TODO [slashing]: Should be a SessionIndex.
+	/// The session index at which we file this report.
+	///
+	/// It acts as a time measure for unresponsivness reports.
+	session_index: u32, // TODO [slashing]: Should be a SessionIndex.
+	/// Authorities which were unresponsive during the current epoch.
+	offenders: Vec<AuthorityId>,
+}
+
+impl Offence<AuthorityId> for UnresponsivnessOffence {
+	const ID: Kind = *b"im-online:offlin";
+
+	fn offenders(&self) -> Vec<AuthorityId> {
+		self.offenders.clone()
+	}
+
+	fn current_era_start_session_index(&self) -> u32 { // TODO [slashing]: Should be a SessionIndex.
+		self.current_era_start_session_index
+	}
+
+	fn time_slot(&self) -> TimeSlot {
+		self.session_index as TimeSlot
+	}
+
+	fn slash_fraction(&self, offenders: u32, validators_count: u32) -> Perbill {
+		// the formula is min((3 * (k - 1)) / n, 1) * 0.05
+		let x = Perbill::from_rational_approximation(3 * (offenders - 1), validators_count);
+
+		// _ * 0.05
+		// For now, Perbill doesn't support multiplication other than an integer so we perform
+		// a manual scaling.
+		// TODO: #3189 should fix this.
+		let p = (x.into_parts() as u64 * 50_000_000u64) / 1_000_000_000u64;
+		Perbill::from_parts(p as u32)
 	}
 }
