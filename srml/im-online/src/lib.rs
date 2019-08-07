@@ -436,6 +436,7 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 		let validators_count = keys.len() as u32;
 
 		let offence = UnresponsivnessOffence {
+			validators_count: keys.len() as u32,
 			session_index: current_session,
 			current_era_start_session_index,
 			validators_count,
