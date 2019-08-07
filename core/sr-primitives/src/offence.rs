@@ -75,7 +75,6 @@ pub trait Offence<Offender> {
 	/// `offenders_count` - the count of unique offending authorities
 	/// `validators_count` - the cardinality of the validator set at the time of offence.
 	fn slash_fraction(
-		&self,
 		offenders_count: u32,
 		validators_count: u32,
 	) -> Perbill;

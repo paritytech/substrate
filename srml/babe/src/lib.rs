@@ -252,7 +252,6 @@ impl Offence<AuthorityId> for BabeEquivocationOffence {
 	}
 
 	fn slash_fraction(
-		&self,
 		offenders_count: u32,
 		validators_count: u32,
 	) -> Perbill {

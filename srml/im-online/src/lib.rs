@@ -495,7 +495,7 @@ impl Offence<AuthorityId> for UnresponsivnessOffence {
 		self.session_index as TimeSlot
 	}
 
-	fn slash_fraction(&self, offenders: u32, validators_count: u32) -> Perbill {
+	fn slash_fraction(offenders: u32, validators_count: u32) -> Perbill {
 		// the formula is min((3 * (k - 1)) / n, 1) * 0.05
 		let x = Perbill::from_rational_approximation(3 * (offenders - 1), validators_count);
 
