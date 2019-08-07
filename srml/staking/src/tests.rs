@@ -19,7 +19,10 @@
 use super::*;
 use runtime_io::with_externalities;
 use phragmen;
-use sr_primitives::traits::OnInitialize;
+use sr_primitives::{
+	traits::OnInitialize,
+	offence::{OffenceDetails, OnOffenceHandler},
+};
 use srml_support::{assert_ok, assert_noop, assert_eq_uvec, EnumerableStorageMap};
 use mock::*;
 use srml_support::traits::{Currency, ReservableCurrency};
@@ -555,6 +558,10 @@ fn nominating_and_rewards_should_work() {
 #[test]
 fn nominators_also_get_slashed() {
 	// A nominator should be slashed if the validator they nominated is slashed
+	// Here is the breakdown of roles:
+	// 10 - is the controller of 11
+	// 11 - is the stash.
+	// 2 - is the nominator of 20, 10
 	with_externalities(&mut ExtBuilder::default().nominate(false).build(), || {
 		assert_eq!(Staking::validator_count(), 2);
 
@@ -567,14 +574,10 @@ fn nominators_also_get_slashed() {
 			let _ = Balances::make_free_balance_be(i, initial_balance);
 		}
 
-		// 2 will nominate for 10
+		// 2 will nominate for 10, 20
 		let nominator_stake = 500;
 		assert_ok!(Staking::bond(Origin::signed(1), 2, nominator_stake, RewardDestination::default()));
 		assert_ok!(Staking::nominate(Origin::signed(2), vec![20, 10]));
-
-		let total_payout = current_total_payout_for_duration(3);
-		assert!(total_payout > 100); // Test is meaningfull if reward something
-		<Module<Test>>::add_reward_points_to_validator(11, 1);
 
 		// new era, pay rewards,
 		start_era(1);
@@ -583,16 +586,25 @@ fn nominators_also_get_slashed() {
 		assert_eq!(Balances::total_balance(&2), initial_balance);
 
 		// 10 goes offline
-		let slash = 4;
-		Staking::slash_validator(10, slash);
-		let expo = Staking::stakers(10);
-		let slash_value = slash * expo.total * 2_u64.pow(3);
+		Staking::on_offence(
+			&[OffenceDetails {
+				offender: (
+					11,
+					dbg!(Staking::stakers(&11)),
+				),
+				count: 1,
+				reporters: vec![],
+			}],
+			&[Perbill::from_percent(5)],
+		);
+		let expo = Staking::stakers(11);
+		let slash_value = 50;
 		let total_slash = expo.total.min(slash_value);
 		let validator_slash = expo.own.min(total_slash);
 		let nominator_slash = nominator_stake.min(total_slash - validator_slash);
 
 		// initial + first era reward + slash
-		assert_eq!(Balances::total_balance(&10), initial_balance + total_payout - validator_slash);
+		assert_eq!(Balances::total_balance(&11), initial_balance - validator_slash);
 		assert_eq!(Balances::total_balance(&2), initial_balance - nominator_slash);
 		check_exposure_all();
 		check_nominator_all();
@@ -1920,5 +1932,28 @@ fn era_is_always_same_length() {
 
 		start_era(4);
 		assert_eq!(Staking::current_era_start_session_index(), session + SessionsPerEra::get() + 1);
+	});
+}
+
+#[test]
+fn offence_forces_new_era() {
+	with_externalities(&mut ExtBuilder::default().build(), || {
+		Staking::on_offence(
+			&[OffenceDetails {
+				offender: (
+					11,
+					Exposure {
+						own: 500,
+						total: 500,
+						others: vec![],
+					},
+				),
+				count: 1,
+				reporters: vec![],
+			}],
+			&[Perbill::from_percent(5)],
+		);
+
+		assert!(Staking::forcing_new_era());
 	});
 }

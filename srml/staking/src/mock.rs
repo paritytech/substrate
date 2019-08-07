@@ -71,8 +71,8 @@ impl session::SessionHandler<AccountId> for TestSessionHandler {
 	}
 }
 
-pub fn is_disabled(validator: AccountId) -> bool {
-	let stash = Staking::ledger(&validator).unwrap().stash;
+pub fn is_disabled(controller: AccountId) -> bool {
+	let stash = Staking::ledger(&controller).unwrap().stash;
 	SESSION.with(|d| d.borrow().1.contains(&stash))
 }
 
@@ -297,6 +297,7 @@ impl ExtBuilder {
 		let _ = GenesisConfig::<Test>{
 			current_era: 0,
 			stakers: vec![
+				// (stash, controller, staked_amount, status)
 				(11, 10, balance_factor * 1000, StakerStatus::<AccountId>::Validator),
 				(21, 20, stake_21, StakerStatus::<AccountId>::Validator),
 				(31, 30, stake_31, StakerStatus::<AccountId>::Validator),
@@ -307,6 +308,7 @@ impl ExtBuilder {
 			validator_count: self.validator_count,
 			minimum_validator_count: self.minimum_validator_count,
 			invulnerables: vec![],
+			slash_reward_fraction: Perbill::from_percent(10),
 		}.assimilate_storage(&mut t, &mut c);
 
 		let _ = session::GenesisConfig::<Test> {
