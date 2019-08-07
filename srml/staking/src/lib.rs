@@ -1069,9 +1069,8 @@ impl<T: Trait> Module<T> {
 	fn new_session(session_index: SessionIndex)
 		-> Option<(Vec<T::AccountId>, Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>)>
 	{
-		// TODO [slashing] The new era should be SessionsPerEra long, so
-		// we should use CurrentEraStartSessionIndexS to calculate end of the era.
-		if ForceNewEra::take() || session_index % T::SessionsPerEra::get() == 0 {
+		let era_length = session_index.checked_sub(Self::current_era_start_session_index()).unwrap_or(0);
+		if ForceNewEra::take() || era_length == T::SessionsPerEra::get() {
 			let validators = T::SessionInterface::validators();
 			let prior = validators.into_iter()
 				.map(|v| { let e = Self::stakers(&v); (v, e) })
@@ -1387,7 +1386,7 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	}
 }
 
-impl<T: Trait> primitives::traits::CurrentEraStartSessionIndex for Module<T> {
+impl<T: Trait> sr_primitives::traits::CurrentEraStartSessionIndex for Module<T> {
 	fn current_era_start_session_index() -> u32 {
 		CurrentEraStartSessionIndex::get()
 	}

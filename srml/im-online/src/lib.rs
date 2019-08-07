@@ -426,10 +426,12 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 
 		let current_era_start_session_index =
 			T::CurrentEraStartSessionIndex::current_era_start_session_index();
+		let validators_count = keys.len() as u32;
 
 		let offence = UnresponsivnessOffence {
 			session_index: current_session,
 			current_era_start_session_index,
+			validators_count,
 			offenders: unresponsive,
 		};
 
