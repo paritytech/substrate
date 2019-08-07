@@ -152,8 +152,6 @@ fn spawn_worker(f: impl FnOnce() -> () + Send + 'static) {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::{ed25519, sr25519};
-	use futures::Future;
 	use network::{Multiaddr, PeerId};
 
 	struct MockNetworkStateInfo();
@@ -179,7 +177,7 @@ mod tests {
 
 		// when
 		let offchain = OffchainWorkers::new(client, db);
-		futures::executor::block_on(offchain.on_block_imported(&0u64, &pool, mock.clone()));
+		futures::executor::block_on(offchain.on_block_imported(&0u64, &pool, network_state));
 
 		// then
 		assert_eq!(pool.status().ready, 1);
