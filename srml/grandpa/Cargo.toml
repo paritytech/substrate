@@ -16,6 +16,7 @@ srml-support = { path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 session = { package = "srml-session", path = "../session", default-features = false }
 finality-tracker = { package = "srml-finality-tracker", path = "../finality-tracker", default-features = false }
+app-crypto = { package = "substrate-application-crypto", path = "../../core/application-crypto", default-features = false }
 
 [dev-dependencies]
 runtime_io = { package = "sr-io", path = "../../core/sr-io" }

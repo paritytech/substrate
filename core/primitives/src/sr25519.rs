@@ -136,20 +136,6 @@ impl std::fmt::Debug for Public {
 	}
 }
 
-#[cfg(not(feature = "std"))]
-impl ::core::fmt::Debug for Public {
-	fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-		write!(f, "")
-	}
-}
-
-#[cfg(not(feature = "std"))]
-impl ::core::fmt::Debug for Signature {
-	fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-		write!(f, "")
-	}
-}
-
 #[cfg(feature = "std")]
 impl Serialize for Public {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {

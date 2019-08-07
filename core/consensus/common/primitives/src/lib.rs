@@ -21,8 +21,9 @@
 use codec::Codec;
 use client::decl_runtime_apis;
 use rstd::vec::Vec;
-use sr_primitives::{traits::{Header, Verify}};
+use sr_primitives::{traits::Header};
 use srml_session::{historical::Proof, SessionIndex};
+use app_crypto::RuntimeAppPublic;
 
 decl_runtime_apis! {
 	/// Common consensus runtime api.
@@ -34,8 +35,8 @@ decl_runtime_apis! {
 
 pub trait AuthorshipEquivocationProof {
 	type Header: Header;
-	type Signature: Verify;
-	type Identity: Codec;
+	type Signature: Codec;
+	type Identity: Codec + RuntimeAppPublic;
 
 	/// Create an equivocation proof for AuRa or Babe.
 	fn new(

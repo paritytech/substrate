@@ -20,7 +20,8 @@ use std::ops::Deref;
 use codec::{Encode, Decode, Codec};
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
-use sr_primitives::traits::{Header, Verify};
+use sr_primitives::traits::Header;
+use app_crypto::RuntimeAppPublic;
 use consensus_common_primitives::AuthorshipEquivocationProof;
 use srml_session::{historical::Proof, SessionIndex};
 
@@ -47,14 +48,6 @@ fn load_decode<C, T>(backend: &C, key: &[u8]) -> ClientResult<Option<T>>
 	}
 }
 
-/// Represents an equivocation proof.
-#[derive(Debug, Clone)]
-pub struct EquivocationProof<H> {
-	slot: u64,
-	fst_header: H,
-	snd_header: H,
-}
-
 /// Checks if the header is an equivocation and returns the proof in that case.
 ///
 /// Note: it detects equivocations only when slot_now - slot <= MAX_SLOT_CAPACITY.
@@ -63,18 +56,18 @@ pub fn check_equivocation<C, H, E, V>(
 	slot_now: u64,
 	slot: u64,
 	header: &H,
-	signature: V,
-	signer: &V::Signer,
+	signature: V::Signature,
+	signer: &V,
 ) -> ClientResult<Option<E>>
 	where
 		H: Header,
 		C: AuxStore,
-		V: Verify + Codec + Clone,
-		<V as Verify>::Signer: Clone + Codec + PartialEq,
+	V: RuntimeAppPublic + Codec + Clone + PartialEq,
+		<V as RuntimeAppPublic>::Signature: Clone + Codec,
 		E: AuthorshipEquivocationProof<
 			Header=H,
-			Signature=V,
-			Identity=<V as Verify>::Signer,
+			Signature=<V as RuntimeAppPublic>::Signature,
+			Identity=V,
 		>,
 {
 	// We don't check equivocations for old headers out of our capacity.
@@ -87,7 +80,7 @@ pub fn check_equivocation<C, H, E, V>(
 	slot.using_encoded(|s| current_slot_key.extend(s));
 
 	// Get headers of this slot.
-	let mut headers_with_signature = load_decode::<_, Vec<(H, V, V::Signer)>>(
+	let mut headers_with_signature = load_decode::<_, Vec<(H, V::Signature, V)>>(
 		backend.deref(),
 		&current_slot_key[..],
 	)?

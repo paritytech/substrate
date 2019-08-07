@@ -21,7 +21,7 @@ use super::{BABE_ENGINE_ID, Epoch};
 use super::{VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH};
 use super::SlotNumber;
 use sr_primitives::{DigestItem, generic::OpaqueDigestItemId};
-use sr_primitives::traits::{Header, DigestItemForHeader, Verify};
+use sr_primitives::traits::{Header, DigestItemForHeader};
 use codec::{Decode, Encode, Codec};
 #[cfg(feature = "std")]
 use codec::{Input, Error};
@@ -130,10 +130,10 @@ pub trait CompatibleDigestItem: Sized {
 	fn as_babe_pre_digest<D: Codec>(&self) -> Option<D>;
 
 	/// Construct a digest item which contains a BABE seal.
-	fn babe_seal<S: Codec + Verify>(signature: S) -> Self;
+	fn babe_seal<S: Codec>(signature: S) -> Self;
 
 	/// If this item is a BABE signature, return the signature.
-	fn as_babe_seal<S: Codec + Verify>(&self) -> Option<S>;
+	fn as_babe_seal<S: Codec>(&self) -> Option<S>;
 
 	/// If this item is a BABE epoch, return it.
 	fn as_babe_epoch(&self) -> Option<Epoch>;
@@ -150,11 +150,11 @@ impl<Hash> CompatibleDigestItem for DigestItem<Hash> where
 		self.try_to(OpaqueDigestItemId::PreRuntime(&BABE_ENGINE_ID))
 	}
 
-	fn babe_seal<S: Verify + Codec>(signature: S) -> Self {
+	fn babe_seal<S: Codec>(signature: S) -> Self {
 		DigestItem::Seal(BABE_ENGINE_ID, signature.encode())
 	}
 
-	fn as_babe_seal<S: Verify + Codec>(&self) -> Option<S> {
+	fn as_babe_seal<S: Codec>(&self) -> Option<S> {
 		self.try_to(OpaqueDigestItemId::Seal(&BABE_ENGINE_ID))
 	}
 

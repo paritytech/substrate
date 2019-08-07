@@ -35,6 +35,7 @@ use codec::{self as codec, Encode, Decode, Error, Codec};
 use srml_support::{
 	decl_event, decl_storage, decl_module, dispatch::Result, storage::StorageValue
 };
+use app_crypto::RuntimeAppPublic;
 use sr_primitives::{
 	generic::{DigestItem, OpaqueDigestItemId}, traits::{Zero, Verify}, Perbill
 };
@@ -162,6 +163,8 @@ fn equivocation_is_valid<H: Codec + PartialEq, N: Codec + PartialEq>(
 	let second_vote = &equivocation.second.0;
 	let second_signature = &equivocation.second.1;
 
+	let identity = equivocation.identity;
+
 	if first_vote != second_vote {
 		let first_payload = localized_payload(
 			equivocation.round_number,
@@ -169,7 +172,7 @@ fn equivocation_is_valid<H: Codec + PartialEq, N: Codec + PartialEq>(
 			&first_vote,
 		);
 
-		if !first_signature.verify(first_payload.as_slice(), &equivocation.identity) {
+		if !identity.verify(&first_payload, &first_signature) {
 			return false
 		}
 
@@ -179,7 +182,7 @@ fn equivocation_is_valid<H: Codec + PartialEq, N: Codec + PartialEq>(
 			&second_vote,
 		);
 
-		if !second_signature.verify(second_payload.as_slice(), &equivocation.identity) {
+		if !identity.verify(&second_payload, &second_signature) {
 			return false
 		}
 

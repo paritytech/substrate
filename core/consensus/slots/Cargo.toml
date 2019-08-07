@@ -12,6 +12,7 @@ primitives = { package = "substrate-primitives", path = "../../primitives" }
 sr-primitives = {  path = "../../sr-primitives" }
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
 consensus_common_primitives = { package = "substrate-consensus-common-primitives", path = "../common/primitives" }
+app-crypto = { package = "substrate-application-crypto", path = "../../application-crypto", default-features = false }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
 srml-session = { path = "../../../srml/session", default-features = false }
 futures-preview = "0.3.0-alpha.17"

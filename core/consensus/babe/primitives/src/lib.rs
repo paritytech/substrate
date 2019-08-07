@@ -24,7 +24,6 @@ mod digest;
 use codec::{Encode, Decode};
 use rstd::vec::Vec;
 use sr_primitives::{ConsensusEngineId, traits::Header};
-use primitives::sr25519;
 use substrate_client::decl_runtime_apis;
 use consensus_common_primitives::AuthorshipEquivocationProof;
 use srml_session::{historical::Proof, SessionIndex};
@@ -49,9 +48,6 @@ pub type AuthoritySignature = app::Signature;
 /// A Babe authority identifier. Necessarily equivalent to the schnorrkel public key used in
 /// the main Babe module. If that ever changes, then this must, too.
 pub type AuthorityId = app::Public;
-
-/// A Babe authority signature.
-pub type AuthoritySignature = sr25519::Signature;
 
 /// The `ConsensusEngineId` of BABE.
 pub const BABE_ENGINE_ID: ConsensusEngineId = *b"BABE";
@@ -147,7 +143,8 @@ impl slots::SlotData for BabeConfiguration {
 }
 
 /// Represents an Babe equivocation proof.
-#[derive(Debug, Clone, Encode, Decode, PartialEq)]
+#[derive(Clone, Encode, Decode, PartialEq)]
+#[cfg_attr(any(feature = "std", test), derive(Debug))]
 pub struct BabeEquivocationProof<H> {
 	identity: AuthorityId,
 	identity_proof: Proof,
@@ -164,8 +161,8 @@ where
 	H: Header,
 {
 	type Header = H;
-	type Signature = AuthoritySignature;
 	type Identity = AuthorityId;
+	type Signature = AuthoritySignature;
 
 	/// Create a new Babe equivocation proof.
 	fn new(
