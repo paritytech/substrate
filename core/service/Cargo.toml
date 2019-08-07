@@ -8,7 +8,7 @@ edition = "2018"
 derive_more = "0.14.0"
 futures = "0.1.17"
 futures03 = { package = "futures-preview", version = "0.3.0-alpha.17", features = ["compat"] }
-parking_lot = "0.8.0"
+parking_lot = "0.9.0"
 lazy_static = "1.0"
 log = "0.4"
 slog = {version = "^2", features = ["nested-values"]}
@@ -22,7 +22,9 @@ target_info = "0.1"
 keystore = { package = "substrate-keystore", path = "../../core/keystore" }
 sr-io = { path = "../../core/sr-io" }
 sr-primitives = { path = "../../core/sr-primitives" }
-primitives = { package = "substrate-primitives", path = "../../core/primitives" }
+primitives = { package = "substrate-primitives", path = "../primitives" }
+app-crypto = { package = "substrate-application-crypto", path = "../application-crypto" }
+substrate-session = { path = "../session" }
 consensus_common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 network = { package = "substrate-network", path = "../../core/network" }
 client = { package = "substrate-client", path = "../../core/client" }
@@ -40,4 +42,6 @@ substrate-test-runtime-client = { path = "../test-runtime/client" }
 node-executor = { path = "../../node/executor" }
 node-primitives = { path = "../../node/primitives" }
 node-runtime = { path = "../../node/runtime" }
+babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../core/consensus/babe/primitives" }
 grandpa = { package = "substrate-finality-grandpa", path = "../../core/finality-grandpa" }
+grandpa-primitives = { package = "substrate-finality-grandpa-primitives", path = "../../core/finality-grandpa/primitives" }

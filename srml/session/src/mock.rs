@@ -19,13 +19,24 @@
 use super::*;
 use std::cell::RefCell;
 use srml_support::{impl_outer_origin, parameter_types};
-use primitives::H256;
+use primitives::{crypto::key_types::DUMMY, H256};
 use sr_primitives::{
-	Perbill,
-	traits::{BlakeTwo256, IdentityLookup, ConvertInto},
+	Perbill, impl_opaque_keys, traits::{BlakeTwo256, IdentityLookup, ConvertInto},
 	testing::{Header, UintAuthorityId}
 };
 
+impl_opaque_keys! {
+	pub struct MockSessionKeys {
+		#[id(DUMMY)]
+		pub dummy: UintAuthorityId,
+	}
+}
+
+impl From<UintAuthorityId> for MockSessionKeys {
+	fn from(dummy: UintAuthorityId) -> Self {
+		Self { dummy }
+	}
+}
 
 impl_outer_origin! {
 	pub enum Origin for Test {}
@@ -58,7 +69,9 @@ impl SessionHandler<u64> for TestSessionHandler {
 	) {
 		SESSION_CHANGED.with(|l| *l.borrow_mut() = changed);
 		AUTHORITIES.with(|l|
-			*l.borrow_mut() = validators.iter().map(|(_, id)| id.get::<UintAuthorityId>(0).unwrap_or_default()).collect()
+			*l.borrow_mut() = validators.iter()
+				.map(|(_, id)| id.get::<UintAuthorityId>(DUMMY).unwrap_or_default())
+				.collect()
 		);
 	}
 	fn on_disabled(_validator_index: usize) {}
@@ -119,10 +132,12 @@ parameter_types! {
 	pub const MinimumPeriod: u64 = 5;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
+
 impl system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
+	type Call = ();
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
@@ -135,12 +150,12 @@ impl system::Trait for Test {
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type MaximumBlockLength = MaximumBlockLength;
 }
+
 impl timestamp::Trait for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
 }
-
 
 impl Trait for Test {
 	type ShouldEndSession = TestShouldEndSession;
@@ -151,7 +166,7 @@ impl Trait for Test {
 	type SessionHandler = TestSessionHandler;
 	type ValidatorId = u64;
 	type ValidatorIdOf = ConvertInto;
-	type Keys = UintAuthorityId;
+	type Keys = MockSessionKeys;
 	type Event = ();
 	type SelectInitialValidators = ();
 }

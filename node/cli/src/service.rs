@@ -22,12 +22,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use babe::{import_queue, start_babe, BabeImportQueue, Config};
-use babe_primitives::AuthorityPair as BabePair;
 use client::{self, LongestChain};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use node_executor;
-use primitives::Pair;
-use grandpa_primitives::AuthorityPair as GrandpaPair;
 use futures::prelude::*;
 use node_primitives::Block;
 use node_runtime::{GenesisConfig, RuntimeApi};
@@ -40,7 +37,6 @@ use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use inherents::InherentDataProviders;
 use network::construct_simple_protocol;
 use substrate_service::construct_service_factory;
-use log::info;
 use substrate_service::TelemetryOnConnect;
 
 construct_simple_protocol! {
@@ -89,8 +85,6 @@ impl<F> Default for NodeConfig<F> where F: substrate_service::ServiceFactory {
 construct_service_factory! {
 	struct Factory {
 		Block = Block,
-		ConsensusPair = BabePair,
-		FinalityPair = GrandpaPair,
 		RuntimeApi = RuntimeApi,
 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
 		RuntimeDispatch = node_executor::Executor,
@@ -119,74 +113,59 @@ construct_service_factory! {
 					}
 				}
 
-				if let Some(babe_key) = service.authority_key() {
-					info!("Using BABE key {}", babe_key.public());
-
-					let proposer = substrate_basic_authorship::ProposerFactory {
-						client: service.client(),
-						transaction_pool: service.transaction_pool(),
-					};
-
-					let client = service.client();
-					let select_chain = service.select_chain()
-						.ok_or(ServiceError::SelectChainRequired)?;
-
-					let babe_config = babe::BabeParams {
-						config: Config::get_or_compute(&*client)?,
-						local_key: Arc::new(babe_key),
-						client,
-						select_chain,
-						block_import,
-						env: proposer,
-						sync_oracle: service.network(),
-						inherent_data_providers: service.config.custom.inherent_data_providers.clone(),
-						force_authoring: service.config.force_authoring,
-						time_source: babe_link,
-					};
-
-					let babe = start_babe(babe_config)?;
-					let select = babe.select(service.on_exit()).then(|_| Ok(()));
-					service.spawn_task(Box::new(select));
-				}
-
-				let grandpa_key = if service.config.disable_grandpa {
-					None
-				} else {
-					service.fg_authority_key()
+				let proposer = substrate_basic_authorship::ProposerFactory {
+					client: service.client(),
+					transaction_pool: service.transaction_pool(),
 				};
 
+				let client = service.client();
+				let select_chain = service.select_chain().ok_or(ServiceError::SelectChainRequired)?;
+
+				let babe_config = babe::BabeParams {
+					config: Config::get_or_compute(&*client)?,
+					keystore: service.keystore(),
+					client,
+					select_chain,
+					block_import,
+					env: proposer,
+					sync_oracle: service.network(),
+					inherent_data_providers: service.config.custom.inherent_data_providers.clone(),
+					force_authoring: service.config.force_authoring,
+					time_source: babe_link,
+				};
+
+				let babe = start_babe(babe_config)?;
+				let select = babe.select(service.on_exit()).then(|_| Ok(()));
+				service.spawn_task(Box::new(select));
+
 				let config = grandpa::Config {
-					local_key: grandpa_key.map(Arc::new),
 					// FIXME #1578 make this available through chainspec
 					gossip_duration: Duration::from_millis(333),
 					justification_period: 4096,
-					name: Some(service.config.name.clone())
+					name: Some(service.config.name.clone()),
+					keystore: Some(service.keystore()),
 				};
 
-				match config.local_key {
-					None if !service.config.grandpa_voter => {
-						service.spawn_task(Box::new(grandpa::run_grandpa_observer(
-							config,
-							link_half,
-							service.network(),
-							service.on_exit(),
-						)?));
-					},
-					// Either config.local_key is set, or user forced voter service via `--grandpa-voter` flag.
-					_ => {
-						let telemetry_on_connect = TelemetryOnConnect {
-							telemetry_connection_sinks: service.telemetry_on_connect_stream(),
-						};
-						let grandpa_config = grandpa::GrandpaParams {
-							config: config,
-							link: link_half,
-							network: service.network(),
-							inherent_data_providers: service.config.custom.inherent_data_providers.clone(),
-							on_exit: service.on_exit(),
-							telemetry_on_connect: Some(telemetry_on_connect),
-						};
-						service.spawn_task(Box::new(grandpa::run_grandpa_voter(grandpa_config)?));
-					},
+				if service.config.roles.is_authority() {
+					let telemetry_on_connect = TelemetryOnConnect {
+						telemetry_connection_sinks: service.telemetry_on_connect_stream(),
+					};
+					let grandpa_config = grandpa::GrandpaParams {
+						config: config,
+						link: link_half,
+						network: service.network(),
+						inherent_data_providers: service.config.custom.inherent_data_providers.clone(),
+						on_exit: service.on_exit(),
+						telemetry_on_connect: Some(telemetry_on_connect),
+					};
+					service.spawn_task(Box::new(grandpa::run_grandpa_voter(grandpa_config)?));
+				} else if !service.config.grandpa_voter {
+					service.spawn_task(Box::new(grandpa::run_grandpa_observer(
+						config,
+						link_half,
+						service.network(),
+						service.on_exit(),
+					)?));
 				}
 
 				Ok(service)
@@ -273,7 +252,7 @@ mod tests {
 	use sr_primitives::{generic::{BlockId, Era, Digest}, traits::Block, OpaqueExtrinsic};
 	use timestamp;
 	use finality_tracker;
-	use keyring::{AccountKeyring, Sr25519Keyring};
+	use keyring::AccountKeyring;
 	use substrate_service::ServiceFactory;
 	use service_test::SyncService;
 	use crate::service::Factory;
@@ -339,9 +318,13 @@ mod tests {
 	#[test]
 	#[ignore]
 	fn test_sync() {
+		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
+		let keystore = keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
+		let alice = keystore.write().insert_ephemeral_from_seed::<babe::AuthorityPair>("//Alice")
+			.expect("Creates authority pair");
+
 		let chain_spec = crate::chain_spec::tests::integration_test_config_with_single_authority();
 
-		let alice = Arc::new(Sr25519Keyring::Alice.pair());
 		let mut slot_num = 1u64;
 		let block_factory = |service: &SyncService<<Factory as ServiceFactory>::FullService>| {
 			let service = service.get();
@@ -370,8 +353,8 @@ mod tests {
 					&*service.client(),
 					&parent_id,
 					slot_num,
-					&alice,
 					(278, 1000),
+					&keystore,
 				) {
 					break babe_pre_digest;
 				}
@@ -395,7 +378,7 @@ mod tests {
 			let to_sign = pre_hash.encode();
 			let signature = alice.sign(&to_sign[..]);
 			let item = <DigestItem as CompatibleDigestItem>::babe_seal(
-				signature,
+				signature.into(),
 			);
 			slot_num += 1;
 
