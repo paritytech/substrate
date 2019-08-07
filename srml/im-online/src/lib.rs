@@ -74,9 +74,9 @@ use substrate_primitives::{
 use codec::{Encode, Decode};
 use session::SessionIndex;
 use sr_primitives::{
-	Perbill, ApplyError, traits::{Extrinsic as ExtrinsicT},
+	Perbill, ApplyError, traits::{Extrinsic as ExtrinsicT, CurrentEraStartSessionIndex},
 	transaction_validity::{TransactionValidity, TransactionLongevity, ValidTransaction},
-	offence::{Offence, TimeSlot, Kind},
+	offence::{ReportOffence, Offence, TimeSlot, Kind},
 };
 use sr_std::prelude::*;
 use sr_io::Printable;
@@ -175,6 +175,12 @@ pub trait Trait: system::Trait + session::Trait {
 	/// A extrinsic right from the external world. This is unchecked and so
 	/// can contain a signature.
 	type UncheckedExtrinsic: ExtrinsicT<Call=<Self as Trait>::Call> + Encode + Decode;
+
+	/// A type that gives us ability to submit unresponsivness offence reports.
+	type ReportUnresponsivness: ReportOffence<Self::AccountId, AuthorityId, UnresponsivnessOffence>;
+
+	/// A function that returns the session index that started the current era.
+	type CurrentEraStartSessionIndex: CurrentEraStartSessionIndex;
 }
 
 decl_event!(
@@ -408,7 +414,27 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	}
 
 	fn on_before_session_ending() {
-		// TODO [slashing] report validators
+		let current_session = <session::Module<T>>::current_index();
+
+		let keys = Keys::get();
+		let mut unresponsive = vec![];
+		for (auth_idx, auth_key) in keys.iter().enumerate() {
+			if !<ReceivedHeartbeats>::exists(&current_session, &(auth_idx as u32)) {
+				unresponsive.push(auth_key.clone());
+			}
+		}
+
+		let current_era_start_session_index =
+			T::CurrentEraStartSessionIndex::current_era_start_session_index();
+
+		let offence = UnresponsivnessOffence {
+			session_index: current_session,
+			current_era_start_session_index,
+			offenders: unresponsive,
+		};
+
+		// TODO [slashing]: Handle the result. Just write a proof?
+		T::ReportUnresponsivness::report_offence(None, offence);
 	}
 
 	fn on_disabled(_i: usize) {
@@ -469,12 +495,13 @@ impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
 }
 
 /// An offense which is filed if a validator didn't send a heartbeat message.
-struct UnresponsivnessOffence {
+pub struct UnresponsivnessOffence {
 	/// The session index that starts an era in which the incident happened.
 	current_era_start_session_index: u32, // TODO [slashing]: Should be a SessionIndex.
 	/// The session index at which we file this report.
 	///
-	/// It acts as a time measure for unresponsivness reports.
+	/// It acts as a time measure for unresponsivness reports and effectively will always point
+	/// at the end of the session.
 	session_index: u32, // TODO [slashing]: Should be a SessionIndex.
 	/// The size of the validator set in current session/era.
 	validators_count: u32,

@@ -372,6 +372,9 @@ impl im_online::Trait for Runtime {
 	type Call = Call;
 	type Event = Event;
 	type UncheckedExtrinsic = UncheckedExtrinsic;
+	type ReportUnresponsivness = Offences;
+	type CurrentEraStartSessionIndex = Staking;
+}
 
 impl offences::Trait for Runtime {
 	type AuthorityId = BabeId; // TODO [slashing]: What should this be???

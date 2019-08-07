@@ -1387,6 +1387,12 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	}
 }
 
+impl<T: Trait> primitives::traits::CurrentEraStartSessionIndex for Module<T> {
+	fn current_era_start_session_index() -> u32 {
+		CurrentEraStartSessionIndex::get()
+	}
+}
+
 /// Add reward points to block authors:
 /// * 20 points to the block producer for producing a (non-uncle) block in the relay chain,
 /// * 2 points to the block producer for each reference to a previously unreferenced uncle, and

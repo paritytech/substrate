@@ -1018,6 +1018,12 @@ pub trait ValidateUnsigned {
 	fn validate_unsigned(call: &Self::Call) -> TransactionValidity;
 }
 
+/// A trait for fetching the current era start session index.
+pub trait CurrentEraStartSessionIndex {
+	/// Returns a session index which is starts an era.
+	fn current_era_start_session_index() -> u32; // TODO [slashing]: Should be a SessionIndex.
+}
+
 /// Opaque datatype that may be destructured into a series of raw byte slices (which represent
 /// individual keys).
 pub trait OpaqueKeys: Clone {
