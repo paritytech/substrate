@@ -26,6 +26,7 @@ mod mock;
 mod tests;
 
 use rstd::vec::Vec;
+use session::historical::{self, IdentificationTuple};
 use support::{
 	StorageDoubleMap, decl_module, decl_storage, Parameter,
 };
@@ -33,6 +34,7 @@ use sr_primitives::{
 	Perbill,
 	offence::{Offence, ReportOffence, TimeSlot, Kind, OnOffenceHandler, OffenceDetails},
 };
+use sr_staking_primitives::SessionIndex;
 
 /// A session index.
 /// TODO [slashing] move SessionIndex out of `srml-session` and use it here.

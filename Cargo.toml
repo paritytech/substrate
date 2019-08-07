@@ -47,6 +47,7 @@ members = [
 	"core/sr-api-macros",
 	"core/sr-io",
 	"core/sr-primitives",
+	"core/sr-staking-primitives",
 	"core/sr-sandbox",
 	"core/sr-std",
 	"core/sr-version",

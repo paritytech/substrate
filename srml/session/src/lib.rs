@@ -124,6 +124,7 @@ use codec::Decode;
 use sr_primitives::{KeyTypeId, AppKey};
 use sr_primitives::weights::SimpleDispatchInfo;
 use sr_primitives::traits::{Convert, Zero, Member, OpaqueKeys};
+use sr_staking_primitives::SessionIndex;
 use srml_support::{
 	dispatch::Result, ConsensusEngineId, StorageValue, StorageDoubleMap, for_each_tuple,
 	decl_module, decl_event, decl_storage,
@@ -136,9 +137,6 @@ mod mock;
 
 #[cfg(feature = "historical")]
 pub mod historical;
-
-/// Simple index type with which we can count sessions.
-pub type SessionIndex = u32;
 
 /// Decides whether the session should be ended.
 pub trait ShouldEndSession<BlockNumber> {

@@ -71,10 +71,7 @@ use app_crypto::RuntimeAppPublic;
 use codec::{Encode, Decode};
 use primitives::offchain::{OpaqueNetworkState, StorageKind};
 use rstd::prelude::*;
-use session::{
-	SessionIndex,
-	historical::IdentificationTuple,
-};
+use session::historical::IdentificationTuple;
 use sr_io::Printable;
 use sr_primitives::{
 	Perbill, ApplyError,
@@ -82,6 +79,7 @@ use sr_primitives::{
 	traits::{ValidatorIdByIndex, Extrinsic as ExtrinsicT, CurrentEraStartSessionIndex, Convert},
 	transaction_validity::{TransactionValidity, TransactionLongevity, ValidTransaction},
 };
+use sr_staking_primitives::SessionIndex;
 use srml_support::{
 	StorageValue, decl_module, decl_event, decl_storage, StorageDoubleMap, print,
 };

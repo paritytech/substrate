@@ -20,6 +20,7 @@ use std::{collections::HashSet, cell::RefCell};
 use sr_primitives::Perbill;
 use sr_primitives::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize};
 use sr_primitives::testing::{Header, UintAuthorityId};
+use sr_staking_primitives::SessionIndex;
 use primitives::{H256, Blake2Hasher};
 use runtime_io;
 use srml_support::{assert_ok, impl_outer_origin, parameter_types, EnumerableStorageMap};
@@ -179,7 +180,7 @@ impl timestamp::Trait for Test {
 	type MinimumPeriod = MinimumPeriod;
 }
 parameter_types! {
-	pub const SessionsPerEra: session::SessionIndex = 3;
+	pub const SessionsPerEra: SessionIndex = 3;
 	pub const BondingDuration: EraIndex = 3;
 }
 impl Trait for Test {
@@ -406,7 +407,7 @@ pub fn advance_session() {
 	start_session(current_index + 1);
 }
 
-pub fn start_session(session_index: session::SessionIndex) {
+pub fn start_session(session_index: SessionIndex) {
 	// Compensate for session delay
 	let session_index = session_index + 1;
 	for i in Session::current_index()..session_index {

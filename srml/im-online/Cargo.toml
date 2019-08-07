@@ -13,6 +13,7 @@ serde = { version = "1.0", optional = true }
 session = { package = "srml-session", path = "../session", default-features = false }
 sr-io = { path = "../../core/sr-io", default-features = false }
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
+sr-staking-primitives = { path = "../../core/sr-staking-primitives", default-features = false }
 srml-support = { path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 
@@ -27,6 +28,7 @@ std = [
 	"session/std",
 	"sr-io/std",
 	"sr-primitives/std",
+	"sr-staking-primitives/std",
 	"srml-support/std",
 	"system/std",
 ]

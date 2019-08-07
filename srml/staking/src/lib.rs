@@ -271,7 +271,7 @@ use srml_support::{
 		WithdrawReasons, WithdrawReason, OnUnbalanced, Imbalance, Get, Time
 	}
 };
-use session::{historical::OnSessionEnding, SelectInitialValidators, SessionIndex};
+use session::{historical::OnSessionEnding, SelectInitialValidators};
 use sr_primitives::Perbill;
 use sr_primitives::offence::{OnOffenceHandler, OffenceDetails};
 use sr_primitives::weights::SimpleDispatchInfo;
@@ -279,6 +279,7 @@ use sr_primitives::traits::{
 	Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded,
 	SimpleArithmetic, SaturatedConversion, ValidatorIdByIndex,
 };
+use sr_staking_primitives::SessionIndex;
 #[cfg(feature = "std")]
 use sr_primitives::{Serialize, Deserialize};
 use system::{ensure_signed, ensure_root};
@@ -453,7 +454,7 @@ pub trait SessionInterface<AccountId>: system::Trait {
 	/// Get the validators from session.
 	fn validators() -> Vec<AccountId>;
 	/// Prune historical session tries up to but not including the given index.
-	fn prune_historical_up_to(up_to: session::SessionIndex);
+	fn prune_historical_up_to(up_to: SessionIndex);
 }
 
 impl<T: Trait> SessionInterface<<T as system::Trait>::AccountId> for T where
@@ -475,7 +476,7 @@ impl<T: Trait> SessionInterface<<T as system::Trait>::AccountId> for T where
 		<session::Module<T>>::validators()
 	}
 
-	fn prune_historical_up_to(up_to: session::SessionIndex) {
+	fn prune_historical_up_to(up_to: SessionIndex) {
 		<session::historical::Module<T>>::prune_up_to(up_to);
 	}
 }
