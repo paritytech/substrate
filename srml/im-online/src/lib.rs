@@ -267,21 +267,20 @@ impl<T: Trait> Module<T> {
 		// we run only when a local authority key is configured
 		let key_type = KeyTypeId(*b"imon");
 		let authorities = Keys::get();
-		let local_keys = sr_io::public_keys(AuthorityId::KIND, key_type)
+		let mut local_keys = sr_io::public_keys(AuthorityId::KIND, key_type)
 			.map_err(|_| OffchainErr::NoKeys)?;
-		let maybe_key = authorities.into_iter()
+		local_keys.sort_by(|a, b| a.public.cmp(&b.public));
+		for (authority_index, key) in authorities.into_iter()
 			.enumerate()
-			.filter_map(|(index, id)| {
-				let id = app::crypto::Public::from(id);
-				let id_slice: &[u8] = id.as_ref();
+			.filter_map(|(index, authority)| {
+				let authority = app::crypto::Public::from(authority);
+				let authority: &[u8] = authority.as_ref();
 
-				local_keys
-					.iter()
-					.find(|k| &*k.public == id_slice)
-					.map(|key| (index as u32, key.clone()))
+				local_keys.binary_search_by(|probe| probe.public[..].cmp(authority))
+					.ok()
+					.map(|location| (index as u32, local_keys[location].clone()))
 			})
-			.next();
-		if let Some((authority_index, key)) = maybe_key {
+		{
 			let network_state =
 				sr_io::network_state().map_err(|_| OffchainErr::NetworkState)?;
 			let heartbeat_data = Heartbeat {

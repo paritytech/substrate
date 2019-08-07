@@ -383,10 +383,17 @@ mod tests {
 				current_schedule: Default::default(),
 				gas_price: 1 * MILLICENTS,
 			}),
+			babe: Some(Default::default()),
 			grandpa: Some(GrandpaConfig {
 				authorities: vec![],
 			}),
-			.. Some(Default::default())
+			im_online: Some(Default::default()),
+			democracy: Some(Default::default()),
+			collective_Instance1: Some(Default::default()),
+			collective_Instance2: Some(Default::default()),
+			membership_Instance1: Some(Default::default()),
+			elections: Some(Default::default()),
+			sudo: Some(Default::default()),
 		}.build_storage().unwrap());
 		ext.changes_trie_storage().insert(0, GENESIS_HASH.into(), Default::default());
 		ext
