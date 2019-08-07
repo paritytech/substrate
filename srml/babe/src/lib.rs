@@ -29,7 +29,10 @@ use srml_support::{decl_storage, decl_module, StorageValue, StorageMap, traits::
 use timestamp::{OnTimestampSet};
 use sr_primitives::{generic::DigestItem, ConsensusEngineId, Perbill};
 use sr_primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert};
-use sr_staking_primitives::offence::{Offence, TimeSlot, Kind};
+use sr_staking_primitives::{
+	SessionIndex,
+	offence::{Offence, TimeSlot, Kind},
+};
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
 use codec::{Encode, Decode};
@@ -252,7 +255,7 @@ struct BabeEquivocationOffence<FullIdentification> {
 	/// A babe slot number in which this incident happened.
 	slot: u64,
 	/// The session index in which the incident happened.
-	session_index: u32, // TODO [slashing]: Should be a SessionIndex.
+	session_index: SessionIndex,
 	/// The size of the validator set at the time of the offence.
 	validators_count: u32,
 	/// The authority which produced the equivocation.
@@ -266,7 +269,7 @@ impl<FullIdentification: Clone> Offence<FullIdentification> for BabeEquivocation
 		vec![self.offender.clone()]
 	}
 
-	fn session_index(&self) -> u32 { // TODO [slashing]: Should be a SessionIndex.
+	fn session_index(&self) -> SessionIndex {
 		self.session_index
 	}
 

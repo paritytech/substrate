@@ -22,6 +22,8 @@ use rstd::vec::Vec;
 use codec::{Encode, Decode};
 use sr_primitives::Perbill;
 
+use crate::SessionIndex;
+
 /// The kind of an offence, is a byte string representing some kind identifier
 /// e.g. `b"im-online:offlin"`, `b"babe:equivocatio"`
 // TODO [slashing]: Is there something better we can have here that is more natural but still
@@ -60,7 +62,7 @@ pub trait Offence<Offender> {
 
 	/// The session index which is used for querying the validator set for the `slash_fraction`
 	/// function.
-	fn session_index(&self) -> u32; // TODO [slashing]: Should be a SessionIndex.
+	fn session_index(&self) -> SessionIndex;
 
 	/// Return a validators count at the time when the offence took place.
 	fn validators_count(&self) -> u32;

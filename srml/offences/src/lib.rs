@@ -36,10 +36,6 @@ use sr_staking_primitives::{
 	offence::{Offence, ReportOffence, TimeSlot, Kind, OnOffenceHandler, OffenceDetails},
 };
 
-/// A session index.
-/// TODO [slashing] move SessionIndex out of `srml-session` and use it here.
-pub type SessionIndex = u32;
-
 /// Offences trait
 pub trait Trait: system::Trait {
 	/// Full identification of the validator.

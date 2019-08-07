@@ -483,7 +483,7 @@ pub struct UnresponsivnessOffence<Offender> {
 	///
 	/// It acts as a time measure for unresponsivness reports and effectively will always point
 	/// at the end of the session.
-	session_index: u32, // TODO [slashing]: Should be a SessionIndex.
+	session_index: SessionIndex,
 	/// The size of the validator set in current session/era.
 	validators_count: u32,
 	/// Authorities which were unresponsive during the current era.
@@ -497,7 +497,7 @@ impl<Offender: Clone> Offence<Offender> for UnresponsivnessOffence<Offender> {
 		self.offenders.clone()
 	}
 
-	fn session_index(&self) -> u32 { // TODO [slashing]: Should be a SessionIndex.
+	fn session_index(&self) -> SessionIndex {
 		self.session_index
 	}
 
