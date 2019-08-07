@@ -16,7 +16,7 @@ srml-support = { path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 
 [features]
-default = ["std"]
+default = ["std", "session/historical"]
 std = [
 	"codec/std",
 	"serde",

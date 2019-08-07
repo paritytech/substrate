@@ -72,7 +72,10 @@ use substrate_primitives::{
 	offchain::{self, OpaqueNetworkState, StorageKind},
 };
 use codec::{Encode, Decode};
-use session::SessionIndex;
+use session::{
+	SessionIndex,
+	historical::IdentificationTuple
+};
 use sr_primitives::{
 	Perbill, ApplyError, traits::{Extrinsic as ExtrinsicT, CurrentEraStartSessionIndex},
 	transaction_validity::{TransactionValidity, TransactionLongevity, ValidTransaction},
@@ -165,7 +168,7 @@ pub struct Heartbeat<BlockNumber>
 	authority_index: AuthIndex,
 }
 
-pub trait Trait: system::Trait + session::Trait {
+pub trait Trait: system::Trait + session::historical::Trait {
 	/// The overarching event type.
 	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
 
@@ -177,7 +180,11 @@ pub trait Trait: system::Trait + session::Trait {
 	type UncheckedExtrinsic: ExtrinsicT<Call=<Self as Trait>::Call> + Encode + Decode;
 
 	/// A type that gives us ability to submit unresponsivness offence reports.
-	type ReportUnresponsivness: ReportOffence<Self::AccountId, AuthorityId, UnresponsivnessOffence>;
+	type ReportUnresponsivness: ReportOffence<
+		Self::AccountId,
+		IdentificationTuple<Self>,
+		UnresponsivnessOffence<IdentificationTuple<Self>>,
+	>;
 
 	/// A function that returns the session index that started the current era.
 	type CurrentEraStartSessionIndex: CurrentEraStartSessionIndex;
@@ -432,7 +439,9 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 			session_index: current_session,
 			current_era_start_session_index,
 			validators_count,
-			offenders: unresponsive,
+			// TODO [slashing] figure out the IdentificationTuples for offenders.
+			//offenders: unresponsive,
+			offenders: vec![],
 		};
 
 		// TODO [slashing]: Handle the result. Just write a proof?
@@ -497,7 +506,7 @@ impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
 }
 
 /// An offense which is filed if a validator didn't send a heartbeat message.
-pub struct UnresponsivnessOffence {
+pub struct UnresponsivnessOffence<IdentificationTuple> {
 	/// The session index that starts an era in which the incident happened.
 	current_era_start_session_index: u32, // TODO [slashing]: Should be a SessionIndex.
 	/// The session index at which we file this report.
@@ -508,13 +517,13 @@ pub struct UnresponsivnessOffence {
 	/// The size of the validator set in current session/era.
 	validators_count: u32,
 	/// Authorities which were unresponsive during the current epoch.
-	offenders: Vec<AuthorityId>,
+	offenders: Vec<IdentificationTuple>,
 }
 
-impl Offence<AuthorityId> for UnresponsivnessOffence {
+impl<IdentificationTuple: Clone> Offence<IdentificationTuple> for UnresponsivnessOffence<IdentificationTuple> {
 	const ID: Kind = *b"im-online:offlin";
 
-	fn offenders(&self) -> Vec<AuthorityId> {
+	fn offenders(&self) -> Vec<IdentificationTuple> {
 		self.offenders.clone()
 	}
 
