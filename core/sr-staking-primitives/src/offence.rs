@@ -40,10 +40,8 @@ pub type OffenceCount = u32;
 
 /// A type that represents a point in time on an abstract timescale.
 ///
-/// This type is not tied to a particular timescale and can be used for representing instants on
-/// different timescales. Examples of such timescales would be the following: for GRANDPA is a round
-/// ID, for BABE it's a slot number and for offline it's a session index. The only requirement is
-/// that such timescale could be represented by a single `u128` value.
+/// See `Offence::time_slot` for details. The only requirement is that such timescale could be
+/// represented by a single `u128` value.
 pub type TimeSlot = u128;
 
 /// A trait implemented by an offence report.
@@ -69,9 +67,15 @@ pub trait Offence<Offender> {
 
 	/// A point in time when this offence happened.
 	///
-	/// The timescale is abstract and it doesn't have to be the same across different
-	/// implementations of this trait. For example, for GRANDPA it could represent a round number
-	/// and for BABE it could be a slot number. This is used for looking the `offenders_count`.
+	/// This is used for looking up offences that happened at the "same time".
+	///
+	/// The timescale is abstract and doesn't have to be the same across different implementations
+	/// of this trait. The value doesn't represent absolute timescale though since it is interpreted
+	/// along with the `session_index`. Two offences considered to happen at the same time iff
+	/// both `session_index` and `time_slot` are equal.
+	///
+	/// As an example, for GRANDPA timescale could be a round number and for BABE it could be a slot
+	/// number. Note that for BABE the round number is reset each epoch.
 	fn time_slot(&self) -> TimeSlot;
 
 	/// A slash fraction of the total exposure that should be slashed for this
