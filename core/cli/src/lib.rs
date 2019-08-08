@@ -433,8 +433,12 @@ where
 		),
 	};
 
+	let is_dev = cli.shared_params.dev;
+
 	let role = if cli.light {
 		service::Roles::LIGHT
+	} else if cli.no_validator && !is_dev {
+		service::Roles::FULL
 	} else {
 		service::Roles::AUTHORITY
 	};
@@ -458,8 +462,6 @@ where
 
 	config.roles = role;
 	config.disable_grandpa = cli.no_grandpa;
-
-	let is_dev = cli.shared_params.dev;
 
 	let client_id = config.client_id();
 	fill_network_configuration(
