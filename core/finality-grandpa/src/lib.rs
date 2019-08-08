@@ -444,7 +444,7 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 
 /// Register the finality tracker inherent data provider (which is used by
 /// GRANDPA), if not registered already.
-fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H256>, RA>(
+pub fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H256>, RA>(
 	client: Arc<Client<B, E, Block, RA>>,
 	inherent_data_providers: &InherentDataProviders,
 ) -> Result<(), consensus_common::Error> where
