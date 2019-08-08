@@ -304,7 +304,7 @@ fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 
 #[test]
 fn storage_instance_independance() {
-	let mut storage = std::collections::HashMap::new();
+	let mut storage = (std::collections::HashMap::new(), std::collections::HashMap::new());
 	runtime_io::with_storage(&mut storage, || {
 		module2::Value::<Runtime>::put(0);
 		module2::Value::<Runtime, module2::Instance1>::put(0);
@@ -324,7 +324,7 @@ fn storage_instance_independance() {
 		module2::DoubleMap::<module2::Instance3>::insert(&0, &0, &0);
 	});
 	// 16 storage values + 4 linked_map head.
-	assert_eq!(storage.len(), 16 + 4);
+	assert_eq!(storage.0.len(), 16 + 4);
 }
 
 #[test]
