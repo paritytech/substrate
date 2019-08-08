@@ -442,6 +442,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		self.sync.status().num_peers
 	}
 
+	/// Number of blocks in the import queue.
+	pub fn num_queued_blocks(&self) -> u32 {
+		self.sync.status().queued_blocks
+	}
+
 	/// Starts a new data demand request.
 	///
 	/// The parameter contains a `Sender` where the result, once received, must be sent.

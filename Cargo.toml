@@ -28,6 +28,7 @@ members = [
 	"core/consensus/common",
 	"core/consensus/rhd",
 	"core/consensus/slots",
+	"core/consensus/uncles",
 	"core/executor",
 	"core/executor/runtime-test",
 	"core/finality-grandpa",

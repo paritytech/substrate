@@ -170,6 +170,13 @@ pub trait BlockBody<Block: BlockT> {
 	) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
 }
 
+/// Provide a list of potential uncle headers for a given block.
+pub trait ProvideUncles<Block: BlockT> {
+	/// Gets the uncles of the block with `target_hash` going back `max_generation` ancestors.
+	fn uncles(&self, target_hash: Block::Hash, max_generation: NumberFor<Block>)
+		-> error::Result<Vec<Block::Header>>;
+}
+
 /// Client info
 #[derive(Debug)]
 pub struct ClientInfo<Block: BlockT> {
@@ -1235,6 +1242,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			let last_best = self.backend.blockchain().info().best_hash;
 			let to_finalize_hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
 			self.apply_finality_with_block_hash(operation, to_finalize_hash, justification, last_best, notify)
+		}).map_err(|e| {
+			warn!("Block finalization error:\n{:?}", e);
+			e
 		})
 	}
 
@@ -1329,7 +1339,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			ancestor_hash = *current.parent_hash();
 			ancestor = load_header(ancestor_hash)?;
 		}
-
+		trace!("Collected {} uncles", uncles.len());
 		Ok(uncles)
 	}
 
@@ -1350,6 +1360,20 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			parent_header.hash(),
 			Default::default(),
 		))
+	}
+}
+
+impl<B, E, Block, RA> ProvideUncles<Block> for Client<B, E, Block, RA> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
+	Block: BlockT<Hash=H256>,
+{
+	fn uncles(&self, target_hash: Block::Hash, max_generation: NumberFor<Block>) -> error::Result<Vec<Block::Header>> {
+		Ok(Client::uncles(self, target_hash, max_generation)?
+			.into_iter()
+			.filter_map(|hash| Client::header(self, &BlockId::Hash(hash)).unwrap_or(None))
+			.collect()
+		)
 	}
 }
 
@@ -1480,7 +1504,10 @@ impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Blo
 	) -> Result<ImportResult, Self::Error> {
 		self.lock_import_and_run(|operation| {
 			self.apply_block(operation, import_block, new_cache)
-		}).map_err(|e| ConsensusError::ClientImport(e.to_string()).into())
+		}).map_err(|e| {
+			warn!("Block import error:\n{:?}", e);
+			ConsensusError::ClientImport(e.to_string()).into()
+		})
 	}
 
 	/// Check block preconditions.

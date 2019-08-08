@@ -77,14 +77,16 @@ where
 		info: DispatchInfo,
 		len: usize,
 	) -> Result<DispatchResult, DispatchError> {
-		let maybe_who = if let Some((id, extra)) = self.signed {
-			Extra::pre_dispatch(extra, &id, &self.function, info, len)?;
-			Some(id)
+		let (maybe_who, pre) = if let Some((id, extra)) = self.signed {
+			let pre = Extra::pre_dispatch(extra, &id, &self.function, info, len)?;
+			(Some(id), pre)
 		} else {
-			Extra::pre_dispatch_unsigned(&self.function, info, len)?;
-			None
+			let pre = Extra::pre_dispatch_unsigned(&self.function, info, len)?;
+			(None, pre)
 		};
-		Ok(self.function.dispatch(Origin::from(maybe_who)))
+		let res = self.function.dispatch(Origin::from(maybe_who));
+		Extra::post_dispatch(pre, info, len);
+		Ok(res)
 	}
 }
 
