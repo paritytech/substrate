@@ -680,11 +680,19 @@ impl<T: Trait> Module<T> {
 	/// Get the basic externalities for this module, useful for tests.
 	#[cfg(any(feature = "std", test))]
 	pub fn externalities() -> TestExternalities<Blake2Hasher> {
+<<<<<<< HEAD
 		TestExternalities::new(map![
 			<BlockHash<T>>::key_for(T::BlockNumber::zero()) => [69u8; 32].encode(),
 			<Number<T>>::key() => T::BlockNumber::one().encode(),
 			<ParentHash<T>>::key() => [69u8; 32].encode()
 		])
+=======
+		TestExternalities::new((map![
+			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),
+			twox_128(<Number<T>>::key()).to_vec() => T::BlockNumber::one().encode(),
+			twox_128(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode()
+		], map![]))
+>>>>>>> origin/master
 	}
 
 	/// Set the block number to something in particular. Can be used as an alternative to
@@ -800,13 +808,15 @@ impl<T: Trait> Module<T> {
 	/// To be called immediately after `note_applied_extrinsic` of the last extrinsic of the block
 	/// has been called.
 	pub fn note_finished_extrinsics() {
-		let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX).unwrap_or_default();
+		let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX)
+			.unwrap_or_default();
 		ExtrinsicCount::put(extrinsic_index);
 	}
 
 	/// Remove all extrinsic data and save the extrinsics trie root.
 	pub fn derive_extrinsics() {
-		let extrinsics = (0..ExtrinsicCount::get().unwrap_or_default()).map(ExtrinsicData::take).collect();
+		let extrinsics = (0..ExtrinsicCount::get().unwrap_or_default())
+			.map(ExtrinsicData::take).collect();
 		let xts_root = extrinsics_data_root::<T::Hashing>(extrinsics);
 		<ExtrinsicsRoot<T>>::put(xts_root);
 	}
@@ -1124,7 +1134,7 @@ mod tests {
 	const CALL: &<Test as Trait>::Call = &();
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		GenesisConfig::default().build_storage::<Test>().unwrap().0.into()
+		GenesisConfig::default().build_storage::<Test>().unwrap().into()
 	}
 
 	fn normal_weight_limit() -> Weight {

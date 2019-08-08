@@ -174,7 +174,7 @@ mod tests {
 
 	#[test]
 	fn panic_execution_with_foreign_code_gives_error() {
-		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, map![
+		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, (map![
 			<balances::FreeBalance<Runtime>>::key_for(alice()) => {
 				69_u128.encode()
 			},
@@ -187,7 +187,7 @@ mod tests {
 			<system::BlockHash<Runtime>>::key_for(0) => {
 				vec![0u8; 32]
 			}
-		]);
+		], map![]));
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
@@ -210,7 +210,7 @@ mod tests {
 
 	#[test]
 	fn bad_extrinsic_with_native_equivalent_code_gives_error() {
-		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, map![
+		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, (map![
 			<balances::FreeBalance<Runtime>>::key_for(alice()) => {
 				69_u128.encode()
 			},
@@ -223,7 +223,7 @@ mod tests {
 			<system::BlockHash<Runtime>>::key_for(0) => {
 				vec![0u8; 32]
 			}
-		]);
+		], map![]));
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
@@ -246,7 +246,7 @@ mod tests {
 
 	#[test]
 	fn successful_execution_with_native_equivalent_code_gives_ok() {
-		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, map![
+		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, (map![
 			<balances::FreeBalance<Runtime>>::key_for(alice()) => {
 				(111 * DOLLARS).encode()
 			},
@@ -255,7 +255,7 @@ mod tests {
 			},
 			<indices::NextEnumSet<Runtime>>::key() => vec![0u8; 16],
 			<system::BlockHash<Runtime>>::key_for(0) => vec![0u8; 32]
-		]);
+		], map![]));
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
@@ -282,7 +282,7 @@ mod tests {
 
 	#[test]
 	fn successful_execution_with_foreign_code_gives_ok() {
-		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, map![
+		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, (map![
 			<balances::FreeBalance<Runtime>>::key_for(alice()) => {
 				(111 * DOLLARS).encode()
 			},
@@ -291,7 +291,7 @@ mod tests {
 			},
 			<indices::NextEnumSet<Runtime>>::key() => vec![0u8; 16],
 			<system::BlockHash<Runtime>>::key_for(0) => vec![0u8; 32]
-		]);
+		], map![]));
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
@@ -328,7 +328,7 @@ mod tests {
 	}
 
 	fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<Blake2Hasher> {
-		let mut ext = TestExternalities::new_with_code_with_children(code, GenesisConfig {
+		let mut ext = TestExternalities::new_with_code(code, GenesisConfig {
 			system: Some(SystemConfig {
 				changes_trie_config: if support_changes_trie { Some(ChangesTrieConfiguration {
 					digest_interval: 2,
@@ -875,7 +875,7 @@ mod tests {
 
 	#[test]
 	fn panic_execution_gives_error() {
-		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, map![
+		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, (map![
 			<balances::FreeBalance<Runtime>>::key_for(alice()) => {
 				0_u128.encode()
 			},
@@ -884,7 +884,7 @@ mod tests {
 			},
 			<indices::NextEnumSet<Runtime>>::key() => vec![0u8; 16],
 			<system::BlockHash<Runtime>>::key_for(0) => vec![0u8; 32]
-		]);
+		], map![]));
 
 		let r = WasmExecutor::new()
 			.call(&mut t, 8, COMPACT_CODE, "Core_initialize_block", &vec![].and(&from_block_number(1u64)));
@@ -897,7 +897,7 @@ mod tests {
 
 	#[test]
 	fn successful_execution_gives_ok() {
-		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, map![
+		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, (map![
 			<balances::FreeBalance<Runtime>>::key_for(alice()) => {
 				(111 * DOLLARS).encode()
 			},
@@ -906,7 +906,7 @@ mod tests {
 			},
 			<indices::NextEnumSet<Runtime>>::key() => vec![0u8; 16],
 			<system::BlockHash<Runtime>>::key_for(0) => vec![0u8; 32]
-		]);
+		], map![]));
 
 		let r = WasmExecutor::new()
 			.call(&mut t, 8, COMPACT_CODE, "Core_initialize_block", &vec![].and(&from_block_number(1u64)));
@@ -1057,7 +1057,7 @@ mod tests {
 		//   - 1 MILLICENTS in substrate node.
 		//   - 1 milldot based on current polkadot runtime.
 		// (this baed on assigning 0.1 CENT to the cheapest tx with `weight = 100`)
-		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, map![
+		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, (map![
 			<balances::FreeBalance<Runtime>>::key_for(alice()) => {
 				(100 * DOLLARS).encode()
 			},
@@ -1069,7 +1069,7 @@ mod tests {
 			},
 			<indices::NextEnumSet<Runtime>>::key() => vec![0u8; 16],
 			<system::BlockHash<Runtime>>::key_for(0) => vec![0u8; 32]
-		]);
+		], map![]));
 
 		let tip = 1_000_000;
 		let xt = sign(CheckedExtrinsic {

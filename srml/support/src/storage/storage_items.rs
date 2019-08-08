@@ -721,7 +721,11 @@ mod test2 {
 		add_extra_genesis {
 			config(_marker) : ::std::marker::PhantomData<T>;
 			config(extra_field) : u32 = 32;
+<<<<<<< HEAD
 			build(|_| {});
+=======
+			build(|_, _| {});
+>>>>>>> origin/master
 		}
 	}
 

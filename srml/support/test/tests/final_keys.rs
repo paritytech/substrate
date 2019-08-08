@@ -53,7 +53,7 @@ impl Trait for Test {
 }
 
 fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-	GenesisConfig::<Test>::default().build_storage().unwrap().0.into()
+	GenesisConfig::<Test>::default().build_storage().unwrap().into()
 }
 
 #[test]

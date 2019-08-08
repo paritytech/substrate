@@ -542,19 +542,20 @@ fn decl_store_extra_genesis(
 					),
 					String
 				> #fn_where_clause {
-					let mut storage = Default::default();
-					let mut child_storage = Default::default();
-					self.assimilate_storage::<#fn_traitinstance>(&mut storage, &mut child_storage)?;
-					Ok((storage, child_storage))
+					let mut storage = (Default::default(), Default::default());
+					self.assimilate_storage::<#fn_traitinstance>(&mut storage)?;
+					Ok(storage)
 				}
 
 				/// Assimilate the storage for this module into pre-existing overlays.
 				pub fn assimilate_storage #fn_generic (
 					self,
-					r: &mut #scrate::sr_primitives::StorageOverlay,
-					c: &mut #scrate::sr_primitives::ChildrenStorageOverlay,
+					tuple_storage: &mut (
+						#scrate::sr_primitives::StorageOverlay,
+						#scrate::sr_primitives::ChildrenStorageOverlay,
+					),
 				) -> std::result::Result<(), String> #fn_where_clause {
-					#scrate::with_storage_and_children(r, c, || {
+					#scrate::with_storage(tuple_storage, || {
 						#builders
 
 						#scall(&self);
@@ -570,10 +571,12 @@ fn decl_store_extra_genesis(
 			{
 				fn build_module_genesis_storage(
 					self,
-					r: &mut #scrate::sr_primitives::StorageOverlay,
-					c: &mut #scrate::sr_primitives::ChildrenStorageOverlay,
+					storage: &mut (
+						#scrate::sr_primitives::StorageOverlay,
+						#scrate::sr_primitives::ChildrenStorageOverlay,
+					),
 				) -> std::result::Result<(), String> {
-					self.assimilate_storage::<#fn_traitinstance> (r, c)
+					self.assimilate_storage::<#fn_traitinstance> (storage)
 				}
 			}
 		};
