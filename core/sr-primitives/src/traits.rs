@@ -808,6 +808,9 @@ pub trait SignedExtension:
 	/// from the transaction using the `additional_signed` function.
 	type AdditionalSigned: Encode;
 
+	/// The type that encodes information that can be passed from pre_dispatch to post-dispatch.
+	type Pre: Default;
+
 	/// Construct any additional data that should be in the signed payload of the transaction. Can
 	/// also perform any pre-signature-verification checks and return an error if needed.
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str>;
@@ -830,8 +833,8 @@ pub trait SignedExtension:
 		call: &Self::Call,
 		info: DispatchInfo,
 		len: usize,
-	) -> Result<(), DispatchError> {
-		self.validate(who, call, info, len).map(|_| ())
+	) -> Result<Self::Pre, DispatchError> {
+		self.validate(who, call, info, len).map(|_| Self::Pre::default())
 	}
 
 	/// Validate an unsigned transaction for the transaction queue. Normally the default
@@ -848,9 +851,16 @@ pub trait SignedExtension:
 		call: &Self::Call,
 		info: DispatchInfo,
 		len: usize,
-	) -> Result<(), DispatchError> {
-		Self::validate_unsigned(call, info, len).map(|_| ())
+	) -> Result<Self::Pre, DispatchError> {
+		Self::validate_unsigned(call, info, len).map(|_| Self::Pre::default())
 	}
+
+	/// Do any post-flight stuff for a transaction.
+	fn post_dispatch(
+		_pre: Self::Pre,
+		_info: DispatchInfo,
+		_len: usize,
+	) { }
 }
 
 macro_rules! tuple_impl_indexed {
@@ -866,6 +876,7 @@ macro_rules! tuple_impl_indexed {
 			type AccountId = AccountId;
 			type Call = Call;
 			type AdditionalSigned = ($($direct::AdditionalSigned,)+);
+			type Pre =  ($($direct::Pre,)+);
 			fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str> {
 				Ok(( $(self.$index.additional_signed()?,)+ ))
 			}
@@ -885,9 +896,8 @@ macro_rules! tuple_impl_indexed {
 				call: &Self::Call,
 				info: DispatchInfo,
 				len: usize,
-			) -> Result<(), DispatchError> {
-				$(self.$index.pre_dispatch(who, call, info, len)?;)+
-				Ok(())
+			) -> Result<Self::Pre, DispatchError> {
+				Ok(($(self.$index.pre_dispatch(who, call, info, len)?,)+))
 			}
 			fn validate_unsigned(
 				call: &Self::Call,
@@ -901,9 +911,15 @@ macro_rules! tuple_impl_indexed {
 				call: &Self::Call,
 				info: DispatchInfo,
 				len: usize,
-			) -> Result<(), DispatchError> {
-				$($direct::pre_dispatch_unsigned(call, info, len)?;)+
-				Ok(())
+			) -> Result<Self::Pre, DispatchError> {
+				Ok(($($direct::pre_dispatch_unsigned(call, info, len)?,)+))
+			}
+			fn post_dispatch(
+				pre: Self::Pre,
+				info: DispatchInfo,
+				len: usize,
+			) {
+				$($direct::post_dispatch(pre.$index, info, len);)+
 			}
 		}
 
@@ -931,6 +947,7 @@ impl SignedExtension for () {
 	type AccountId = u64;
 	type AdditionalSigned = ();
 	type Call = ();
+	type Pre = ();
 	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
 }
 
