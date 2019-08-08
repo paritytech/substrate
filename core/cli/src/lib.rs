@@ -433,14 +433,11 @@ where
 		),
 	};
 
-	let role =
-		if cli.light {
-			service::Roles::LIGHT
-		} else if cli.validator || cli.shared_params.dev {
-			service::Roles::AUTHORITY
-		} else {
-			service::Roles::FULL
-		};
+	let role = if cli.light {
+		service::Roles::LIGHT
+	} else {
+		service::Roles::AUTHORITY
+	};
 
 	let exec = cli.execution_strategies;
 	let exec_all_or = |strat: params::ExecutionStrategy| exec.execution.unwrap_or(strat).into();
@@ -461,7 +458,6 @@ where
 
 	config.roles = role;
 	config.disable_grandpa = cli.no_grandpa;
-	config.grandpa_voter = cli.grandpa_voter;
 
 	let is_dev = cli.shared_params.dev;
 
@@ -475,26 +471,16 @@ where
 		is_dev,
 	)?;
 
-	fill_transaction_pool_configuration::<F>(
-		&mut config,
-		cli.pool_config,
-	)?;
+	fill_transaction_pool_configuration::<F>(&mut config, cli.pool_config)?;
 
-	if cli.shared_params.dev {
-		config.dev_key_seed = cli.keyring.account
-			.map(|a| format!("//{}", a))
-			.or_else(|| Some("//Alice".into()));
-	}
+	config.dev_key_seed = cli.keyring.account.map(|a| format!("//{}", a));
 
 	let rpc_interface: &str = if cli.rpc_external { "0.0.0.0" } else { "127.0.0.1" };
 	let ws_interface: &str = if cli.ws_external { "0.0.0.0" } else { "127.0.0.1" };
 
-	config.rpc_http = Some(
-		parse_address(&format!("{}:{}", rpc_interface, 9933), cli.rpc_port)?
-	);
-	config.rpc_ws = Some(
-		parse_address(&format!("{}:{}", ws_interface, 9944), cli.ws_port)?
-	);
+	config.rpc_http = Some(parse_address(&format!("{}:{}", rpc_interface, 9933), cli.rpc_port)?);
+	config.rpc_ws = Some(parse_address(&format!("{}:{}", ws_interface, 9944), cli.ws_port)?);
+
 	config.rpc_ws_max_connections = cli.ws_max_connections;
 	config.rpc_cors = cli.rpc_cors.unwrap_or_else(|| if is_dev {
 		log::warn!("Running in --dev mode, RPC CORS has been disabled.");
