@@ -50,18 +50,20 @@ impl Encode for NodeHeader {
 	}
 }
 
+impl codec::EncodeLike for NodeHeader {}
+
 impl Decode for NodeHeader {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+	fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
 		let i = input.read_byte()?;
 		if i == trie_constants::EMPTY_TRIE {
-			return Some(NodeHeader::Null);
+			return Ok(NodeHeader::Null);
 		}
 		match i & (0b11 << 6) {
-			trie_constants::LEAF_PREFIX_MASK => Some(NodeHeader::Leaf(decode_size(i, input)?)),
-			trie_constants::BRANCH_WITHOUT_MASK => Some(NodeHeader::Branch(false, decode_size(i, input)?)),
-			trie_constants::BRANCH_WITH_MASK => Some(NodeHeader::Branch(true, decode_size(i, input)?)),
+			trie_constants::LEAF_PREFIX_MASK => Ok(NodeHeader::Leaf(decode_size(i, input)?)),
+			trie_constants::BRANCH_WITHOUT_MASK => Ok(NodeHeader::Branch(false, decode_size(i, input)?)),
+			trie_constants::BRANCH_WITH_MASK => Ok(NodeHeader::Branch(true, decode_size(i, input)?)),
 			// do not allow any special encoding
-			_ => None,
+			_ => Err("Unallowed encoding".into()),
 		}
 	}
 }
@@ -103,18 +105,18 @@ fn encode_size_and_prefix(size: usize, prefix: u8, out: &mut impl Output) {
 }
 
 /// Decode size only from stream input and header byte.
-fn decode_size(first: u8, input: &mut impl Input) -> Option<usize> {
+fn decode_size(first: u8, input: &mut impl Input) -> Result<usize, codec::Error> {
 	let mut result = (first & 255u8 >> 2) as usize;
 	if result < 63 {
-		return Some(result);
+		return Ok(result);
 	}
 	result -= 1;
 	while result <= trie_constants::NIBBLE_SIZE_BOUND {
 		let n = input.read_byte()? as usize;
 		if n < 255 {
-			return Some(result + n + 1);
+			return Ok(result + n + 1);
 		}
 		result += 255;
 	}
-	Some(trie_constants::NIBBLE_SIZE_BOUND)
+	Ok(trie_constants::NIBBLE_SIZE_BOUND)
 }

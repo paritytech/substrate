@@ -25,7 +25,7 @@
 //! instantiated. The `BasicQueue` and `BasicVerifier` traits allow serial
 //! queues to be instantiated simply.
 
-use std::{sync::Arc, collections::HashMap};
+use std::collections::HashMap;
 use sr_primitives::{Justification, traits::{Block as BlockT, Header as _, NumberFor}};
 use crate::{error::Error as ConsensusError, well_known_cache_keys::Id as CacheKeyId};
 use crate::block_import::{
@@ -71,7 +71,7 @@ pub trait Verifier<B: BlockT>: Send + Sync {
 	/// new set of validators to import. If not, err with an Error-Message
 	/// presented to the User in the logs.
 	fn verify(
-		&self,
+		&mut self,
 		origin: BlockOrigin,
 		header: B::Header,
 		justification: Option<Justification>,
@@ -170,7 +170,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 	import_handle: &mut dyn BlockImport<B, Error = ConsensusError>,
 	block_origin: BlockOrigin,
 	block: IncomingBlock<B>,
-	verifier: Arc<V>,
+	verifier: &mut V,
 ) -> Result<BlockImportResult<NumberFor<B>>, BlockImportError> {
 	let peer = block.origin;
 

@@ -20,7 +20,7 @@ use futures::prelude::*;
 use futures::{future, sync::mpsc};
 
 use grandpa::{
-	BlockNumberOps, Error as GrandpaError, round::State as RoundState, voter, voter_set::VoterSet
+	BlockNumberOps, Error as GrandpaError, voter, voter_set::VoterSet
 };
 use log::{debug, info, warn};
 
@@ -36,7 +36,6 @@ use crate::{
 use crate::authorities::SharedAuthoritySet;
 use crate::communication::NetworkBridge;
 use crate::consensus_changes::SharedConsensusChanges;
-use crate::environment::{CompletedRound, CompletedRounds, HasVoted};
 use fg_primitives::AuthorityId;
 
 struct ObserverChain<'a, Block: BlockT, B, E, RA>(&'a Client<B, E, Block, RA>);
@@ -178,7 +177,13 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 		persistent_data.set_state.clone(),
 		on_exit.clone()
 	);
-	let observer_work = ObserverWork::new(client, network, persistent_data, voter_commands_rx);
+	let observer_work = ObserverWork::new(
+		client,
+		network,
+		persistent_data,
+		config.keystore.clone(),
+		voter_commands_rx
+	);
 
 	let observer_work = observer_work
 		.map(|_| ())
@@ -198,6 +203,7 @@ struct ObserverWork<B: BlockT<Hash=H256>, N: Network<B>, E, Backend, RA> {
 	client: Arc<Client<Backend, E, B, RA>>,
 	network: NetworkBridge<B, N>,
 	persistent_data: PersistentData<B>,
+	keystore: Option<keystore::KeyStorePtr>,
 	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
 }
 
@@ -215,6 +221,7 @@ where
 		client: Arc<Client<Bk, E, B, RA>>,
 		network: NetworkBridge<B, N>,
 		persistent_data: PersistentData<B>,
+		keystore: Option<keystore::KeyStorePtr>,
 		voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
 	) -> Self {
 
@@ -225,6 +232,7 @@ where
 			client,
 			network,
 			persistent_data,
+			keystore,
 			voter_commands_rx,
 		};
 		work.rebuild_observer();
@@ -238,11 +246,11 @@ where
 
 		// start global communication stream for the current set
 		let (global_in, _) = global_communication(
-			None,
 			set_id,
 			&voters,
 			&self.client,
 			&self.network,
+			&self.keystore,
 		);
 
 		let last_finalized_number = self.client.info().chain.finalized_number;
@@ -297,22 +305,11 @@ where
 			VoterCommand::ChangeAuthorities(new) => {
 				// start the new authority set using the block where the
 				// set changed (not where the signal happened!) as the base.
-				let genesis_state = RoundState::genesis((new.canon_hash, new.canon_number));
-
-				let set_state = VoterSetState::Live::<B> {
-					// always start at round 0 when changing sets.
-					completed_rounds: CompletedRounds::new(
-						CompletedRound {
-							number: 0,
-							state: genesis_state,
-							base: (new.canon_hash, new.canon_number),
-							votes: Vec::new(),
-						},
-						new.set_id,
-						&*self.persistent_data.authority_set.inner().read(),
-					),
-					current_round: HasVoted::No,
-				};
+				let set_state = VoterSetState::live(
+					new.set_id,
+					&*self.persistent_data.authority_set.inner().read(),
+					(new.canon_hash, new.canon_number),
+				);
 
 				#[allow(deprecated)]
 				crate::aux_schema::write_voter_set_state(&**self.client.backend(), &set_state)?;

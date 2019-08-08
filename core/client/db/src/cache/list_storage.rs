@@ -21,7 +21,7 @@ use std::sync::Arc;
 use kvdb::{KeyValueDB, DBTransaction};
 
 use client::error::{Error as ClientError, Result as ClientResult};
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use crate::utils::{self, db_err, meta_keys};
@@ -151,7 +151,7 @@ impl<Block: BlockT, T: CacheItemT> Storage<Block, T> for DbStorage {
 			.map_err(db_err)
 			.and_then(|entry| match entry {
 				Some(entry) => StorageEntry::<Block, T>::decode(&mut &entry[..])
-					.ok_or_else(|| ClientError::Backend("Failed to decode cache entry".into()))
+					.map_err(|_| ClientError::Backend("Failed to decode cache entry".into()))
 					.map(Some),
 				None => Ok(None),
 			})
@@ -236,9 +236,9 @@ mod meta {
 	pub fn decode<Block: BlockT>(encoded: &[u8]) -> ClientResult<Metadata<Block>> {
 		let input = &mut &*encoded;
 		let finalized: Option<ComplexBlockId<Block>> = Decode::decode(input)
-			.ok_or_else(|| ClientError::from(ClientError::Backend("Error decoding cache meta".into())))?;
+			.map_err(|_| ClientError::from(ClientError::Backend("Error decoding cache meta".into())))?;
 		let unfinalized: Vec<ComplexBlockId<Block>> = Decode::decode(input)
-			.ok_or_else(|| ClientError::from(ClientError::Backend("Error decoding cache meta".into())))?;
+			.map_err(|_| ClientError::from(ClientError::Backend("Error decoding cache meta".into())))?;
 
 		Ok(Metadata { finalized, unfinalized })
 	}

@@ -20,7 +20,7 @@
 
 
 use crate::{hash::H256, hash::H512};
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
 use blake2_rfc;
@@ -29,10 +29,10 @@ use substrate_bip39::seed_from_entropy;
 #[cfg(feature = "std")]
 use bip39::{Mnemonic, Language, MnemonicType};
 #[cfg(feature = "std")]
-use crate::crypto::{Pair as TraitPair, DeriveJunction, SecretStringError, Derive, Ss58Codec};
+use crate::crypto::{Pair as TraitPair, DeriveJunction, SecretStringError, Ss58Codec};
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
-use crate::crypto::{key_types, KeyTypeId, Public as TraitPublic, TypedKey, UncheckedFrom};
+use crate::{crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive}};
 
 /// A secret seed. It's not called a "secret key" because ring doesn't expose the secret keys
 /// of the key pair (yeah, dumb); as such we're forced to remember the seed manually if we
@@ -77,6 +77,20 @@ impl AsMut<[u8]> for Public {
 	}
 }
 
+impl rstd::convert::TryFrom<&[u8]> for Public {
+	type Error = ();
+
+	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
+		if data.len() == 32 {
+			let mut inner = [0u8; 32];
+			inner.copy_from_slice(data);
+			Ok(Public(inner))
+		} else {
+			Err(())
+		}
+	}
+}
+
 impl From<Public> for [u8; 32] {
 	fn from(x: Public) -> Self {
 		x.0
@@ -87,12 +101,6 @@ impl From<Public> for [u8; 32] {
 impl From<Pair> for Public {
 	fn from(x: Pair) -> Self {
 		x.public()
-	}
-}
-
-impl AsRef<Public> for Public {
-	fn as_ref(&self) -> &Public {
-		&self
 	}
 }
 
@@ -115,15 +123,15 @@ impl UncheckedFrom<H256> for Public {
 }
 
 #[cfg(feature = "std")]
-impl ::std::fmt::Display for Public {
-	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+impl std::fmt::Display for Public {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		write!(f, "{}", self.to_ss58check())
 	}
 }
 
 #[cfg(feature = "std")]
-impl ::std::fmt::Debug for Public {
-	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+impl std::fmt::Debug for Public {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		let s = self.to_ss58check();
 		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
 	}
@@ -145,8 +153,8 @@ impl<'de> Deserialize<'de> for Public {
 }
 
 #[cfg(feature = "std")]
-impl ::std::hash::Hash for Public {
-	fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
+impl std::hash::Hash for Public {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
 		self.0.hash(state);
 	}
 }
@@ -154,6 +162,20 @@ impl ::std::hash::Hash for Public {
 /// A signature (a 512-bit value).
 #[derive(Encode, Decode)]
 pub struct Signature(pub [u8; 64]);
+
+impl rstd::convert::TryFrom<&[u8]> for Signature {
+	type Error = ();
+
+	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
+		if data.len() == 64 {
+			let mut inner = [0u8; 64];
+			inner.copy_from_slice(data);
+			Ok(Signature(inner))
+		} else {
+			Err(())
+		}
+	}
+}
 
 impl Clone for Signature {
 	fn clone(&self) -> Self {
@@ -171,7 +193,7 @@ impl Default for Signature {
 
 impl PartialEq for Signature {
 	fn eq(&self, b: &Self) -> bool {
-		&self.0[..] == &b.0[..]
+		self.0[..] == b.0[..]
 	}
 }
 
@@ -208,16 +230,16 @@ impl AsMut<[u8]> for Signature {
 }
 
 #[cfg(feature = "std")]
-impl ::std::fmt::Debug for Signature {
-	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+impl std::fmt::Debug for Signature {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		write!(f, "{}", crate::hexdisplay::HexDisplay::from(&self.0))
 	}
 }
 
 #[cfg(feature = "std")]
-impl ::std::hash::Hash for Signature {
-	fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
-		::std::hash::Hash::hash(&self.0[..], state);
+impl std::hash::Hash for Signature {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+		std::hash::Hash::hash(&self.0[..], state);
 	}
 }
 
@@ -306,30 +328,9 @@ impl TraitPublic for Public {
 		r.copy_from_slice(data);
 		Public(r)
 	}
-
-	/// Return a `Vec<u8>` filled with raw data.
-	#[cfg(feature = "std")]
-	fn to_raw_vec(&self) -> Vec<u8> {
-		let r: &[u8; 32] = self.as_ref();
-		r.to_vec()
-	}
-
-	/// Return a slice filled with raw data.
-	fn as_slice(&self) -> &[u8] {
-		let r: &[u8; 32] = self.as_ref();
-		&r[..]
-	}
 }
 
-#[cfg(feature = "std")]
 impl Derive for Public {}
-
-#[cfg(feature = "std")]
-impl AsRef<Pair> for Pair {
-	fn as_ref(&self) -> &Pair {
-		&self
-	}
-}
 
 /// Derive a single hard junction.
 #[cfg(feature = "std")]
@@ -438,8 +439,8 @@ impl TraitPair for Pair {
 	}
 
 	/// Verify a signature on a message. Returns true if the signature is good.
-	fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: P) -> bool {
-		Self::verify_weak(&sig.0[..], message.as_ref(), &pubkey.as_ref().0[..])
+	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: &Self::Public) -> bool {
+		Self::verify_weak(&sig.0[..], message.as_ref(), pubkey)
 	}
 
 	/// Verify a signature on a message. Returns true if the signature is good.
@@ -488,17 +489,19 @@ impl Pair {
 	}
 }
 
-impl TypedKey for Public {
-	const KEY_TYPE: KeyTypeId = key_types::ED25519;
+impl CryptoType for Public {
+	#[cfg(feature="std")]
+	type Pair = Pair;
 }
 
-impl TypedKey for Signature {
-	const KEY_TYPE: KeyTypeId = key_types::ED25519;
+impl CryptoType for Signature {
+	#[cfg(feature="std")]
+	type Pair = Pair;
 }
 
 #[cfg(feature = "std")]
-impl TypedKey for Pair {
-	const KEY_TYPE: KeyTypeId = key_types::ED25519;
+impl CryptoType for Pair {
+	type Pair = Pair;
 }
 
 #[cfg(test)]
