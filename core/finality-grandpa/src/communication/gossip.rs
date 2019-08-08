@@ -86,7 +86,7 @@ use sr_primitives::traits::{NumberFor, Block as BlockT, Zero};
 use network::consensus_gossip::{self as network_gossip, MessageIntent, ValidatorContext};
 use network::{config::Roles, PeerId};
 use codec::{Encode, Decode};
-use crate::ed25519::Public as AuthorityId;
+use fg_primitives::AuthorityId;
 
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG};
 use log::{trace, debug, warn};
@@ -1233,13 +1233,14 @@ mod tests {
 	use super::environment::SharedVoterSetState;
 	use network_gossip::Validator as GossipValidatorT;
 	use network::test::Block;
+	use primitives::crypto::Public;
 
 	// some random config (not really needed)
 	fn config() -> crate::Config {
 		crate::Config {
 			gossip_duration: Duration::from_millis(10),
 			justification_period: 256,
-			local_key: None,
+			keystore: None,
 			name: None,
 		}
 	}
@@ -1247,26 +1248,16 @@ mod tests {
 	// dummy voter set state
 	fn voter_set_state() -> SharedVoterSetState<Block> {
 		use crate::authorities::AuthoritySet;
-		use crate::environment::{CompletedRound, CompletedRounds, HasVoted, VoterSetState};
-		use grandpa::round::State as RoundState;
+		use crate::environment::VoterSetState;
 		use primitives::H256;
 
-		let state = RoundState::genesis((H256::zero(), 0));
-		let base = state.prevote_ghost.unwrap();
+		let base = (H256::zero(), 0);
 		let voters = AuthoritySet::genesis(Vec::new());
-		let set_state = VoterSetState::Live {
-			completed_rounds: CompletedRounds::new(
-				CompletedRound {
-					state,
-					number: 0,
-					votes: Vec::new(),
-					base,
-				},
-				0,
-				&voters,
-			),
-			current_round: HasVoted::No,
-		};
+		let set_state = VoterSetState::live(
+			0,
+			&voters,
+			base,
+		);
 
 		set_state.into()
 	}
@@ -1452,7 +1443,7 @@ mod tests {
 			voter_set_state(),
 		);
 		let set_id = 1;
-		let auth = AuthorityId::from_raw([1u8; 32]);
+		let auth = AuthorityId::from_slice(&[1u8; 32]);
 		let peer = PeerId::random();
 
 		val.note_set(SetId(set_id), vec![auth.clone()], |_, _| {});
@@ -1468,7 +1459,7 @@ mod tests {
 					target_number: 10,
 				}),
 				signature: Default::default(),
-				id: AuthorityId::from_raw([2u8; 32]),
+				id: AuthorityId::from_slice(&[2u8; 32]),
 			}
 		});
 
@@ -1497,7 +1488,7 @@ mod tests {
 		);
 
 		let set_id = 1;
-		let auth = AuthorityId::from_raw([1u8; 32]);
+		let auth = AuthorityId::from_slice(&[1u8; 32]);
 		let peer = PeerId::random();
 
 		val.note_set(SetId(set_id), vec![auth.clone()], |_, _| {});
@@ -1541,16 +1532,19 @@ mod tests {
 		let set_state: SharedVoterSetState<Block> = {
 			let mut completed_rounds = voter_set_state().read().completed_rounds();
 
-			assert!(completed_rounds.push(environment::CompletedRound {
+			completed_rounds.push(environment::CompletedRound {
 				number: 1,
 				state: grandpa::round::State::genesis(Default::default()),
 				base: Default::default(),
 				votes: Default::default(),
-			}));
+			});
+
+			let mut current_rounds = environment::CurrentRounds::new();
+			current_rounds.insert(2, environment::HasVoted::No);
 
 			let set_state = environment::VoterSetState::<Block>::Live {
 				completed_rounds,
-				current_round: environment::HasVoted::No,
+				current_rounds,
 			};
 
 			set_state.into()
@@ -1562,7 +1556,7 @@ mod tests {
 		);
 
 		let set_id = 1;
-		let auth = AuthorityId::from_raw([1u8; 32]);
+		let auth = AuthorityId::from_slice(&[1u8; 32]);
 		let peer = PeerId::random();
 
 		val.note_set(SetId(set_id), vec![auth.clone()], |_, _| {});

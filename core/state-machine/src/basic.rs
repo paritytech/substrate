@@ -168,7 +168,12 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 	}
 
 	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities> {
-		warn!("Call to non-existent out offchain externalities set.");
+		warn!("Call to non-existent offchain externalities set.");
+		None
+	}
+
+	fn keystore(&self) -> Option<primitives::traits::BareCryptoStorePtr> {
+		warn!("Call to non-existent keystore.");
 		None
 	}
 }

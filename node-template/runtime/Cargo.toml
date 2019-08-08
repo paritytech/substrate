@@ -13,6 +13,7 @@ runtime-io = { package = "sr-io", path = "../../core/sr-io", default_features = 
 version = { package = "sr-version", path = "../../core/sr-version", default_features = false }
 support = { package = "srml-support", path = "../../srml/support", default_features = false }
 primitives = { package = "substrate-primitives", path = "../../core/primitives", default_features = false }
+substrate-session = { path = "../../core/session", default-features = false }
 balances = { package = "srml-balances", path = "../../srml/balances", default_features = false }
 aura = { package = "srml-aura", path = "../../srml/aura", default_features = false }
 executive = { package = "srml-executive", path = "../../srml/executive", default_features = false }
@@ -50,5 +51,6 @@ std = [
 	"safe-mix/std",
 	"consensus-aura/std",
 	"offchain-primitives/std",
+	"substrate-session/std",
 ]
 no_std = []

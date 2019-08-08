@@ -25,7 +25,9 @@ pub mod system;
 use rstd::{prelude::*, marker::PhantomData};
 use codec::{Encode, Decode, Input, Error};
 
-use primitives::Blake2Hasher;
+use primitives::{Blake2Hasher, OpaqueMetadata};
+use app_crypto::{ed25519, sr25519, RuntimeAppPublic};
+pub use app_crypto;
 use trie_db::{TrieMut, Trie};
 use substrate_trie::PrefixedMemoryDB;
 use substrate_trie::trie_types::{TrieDB, TrieDBMut};
@@ -35,16 +37,15 @@ use substrate_client::{
 	impl_runtime_apis,
 };
 use sr_primitives::{
-	ApplyResult, create_runtime_str, Perbill,
+	ApplyResult, create_runtime_str, Perbill, impl_opaque_keys,
 	transaction_validity::{TransactionValidity, ValidTransaction},
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup
+		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup,
 	},
 };
 use runtime_version::RuntimeVersion;
-pub use primitives::hash::H256;
-use primitives::{sr25519, OpaqueMetadata};
+pub use primitives::{hash::H256, crypto::key_types};
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
 use runtime_support::{impl_outer_origin, parameter_types};
@@ -53,7 +54,7 @@ use cfg_if::cfg_if;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
 pub use babe_primitives::AuthorityId;
-pub type AuraId = AuthorityId;
+pub type AuraId = aura_primitives::sr25519::AuthorityId;
 
 // Inlucde the WASM binary
 #[cfg(feature = "std")]
@@ -139,7 +140,7 @@ impl BlindCheckable for Extrinsic {
 }
 
 impl ExtrinsicT for Extrinsic {
-	type Call = ();
+	type Call = Extrinsic;
 
 	fn is_signed(&self) -> Option<bool> {
 		if let Extrinsic::IncludeData(_) = *self {
@@ -149,8 +150,8 @@ impl ExtrinsicT for Extrinsic {
 		}
 	}
 
-	fn new_unsigned(_call: Self::Call) -> Option<Self> {
-		None
+	fn new_unsigned(call: Self::Call) -> Option<Self> {
+		Some(call)
 	}
 }
 
@@ -267,6 +268,14 @@ cfg_if! {
 				/// Returns if no block was initialized.
 				#[skip_initialize_block]
 				fn without_initialize_block() -> bool;
+				/// Test that `ed25519` crypto works in the runtime.
+				///
+				/// Returns the signature generated for the message `ed25519` and the public key.
+				fn test_ed25519_crypto() -> (ed25519::AppSignature, ed25519::AppPublic);
+				/// Test that `sr25519` crypto works in the runtime.
+				///
+				/// Returns the signature generated for the message `sr25519`.
+				fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic);
 			}
 		}
 	} else {
@@ -300,6 +309,14 @@ cfg_if! {
 				/// Returns if no block was initialized.
 				#[skip_initialize_block]
 				fn without_initialize_block() -> bool;
+				/// Test that `ed25519` crypto works in the runtime.
+				///
+				/// Returns the signature generated for the message `ed25519` and the public key.
+				fn test_ed25519_crypto() -> (ed25519::AppSignature, ed25519::AppPublic);
+				/// Test that `sr25519` crypto works in the runtime.
+				///
+				/// Returns the signature generated for the message `sr25519`.
+				fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic);
 			}
 		}
 	}
@@ -340,6 +357,7 @@ parameter_types! {
 
 impl srml_system::Trait for Runtime {
 	type Origin = Origin;
+	type Call = Extrinsic;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -414,6 +432,15 @@ fn code_using_trie() -> u64 {
 			iter_pairs.len() as u64
 		} else { 102 }
 	} else { 103 }
+}
+
+impl_opaque_keys! {
+	pub struct SessionKeys {
+		#[id(key_types::ED25519)]
+		pub ed25519: ed25519::AppPublic,
+		#[id(key_types::SR25519)]
+		pub sr25519: sr25519::AppPublic,
+	}
 }
 
 #[cfg(not(feature = "std"))]
@@ -545,11 +572,24 @@ cfg_if! {
 				fn take_block_number() -> Option<u64> {
 					system::take_block_number()
 				}
+
+				fn test_ed25519_crypto() -> (ed25519::AppSignature, ed25519::AppPublic) {
+					test_ed25519_crypto()
+				}
+
+				fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic) {
+					test_sr25519_crypto()
+				}
 			}
 
 			impl aura_primitives::AuraApi<Block, AuraId> for Runtime {
 				fn slot_duration() -> u64 { 1000 }
-				fn authorities() -> Vec<AuraId> { system::authorities() }
+				fn authorities() -> Vec<AuraId> {
+					system::authorities().into_iter().map(|a| {
+						let authority: sr25519::Public = a.into();
+						AuraId::from(authority)
+					}).collect()
+				}
 			}
 
 			impl babe_primitives::BabeApi<Block> for Runtime {
@@ -579,6 +619,12 @@ cfg_if! {
 				fn offchain_worker(block: u64) {
 					let ex = Extrinsic::IncludeData(block.encode());
 					runtime_io::submit_transaction(&ex).unwrap();
+				}
+			}
+
+			impl session::SessionKeys<Block> for Runtime {
+				fn generate_session_keys(_: Option<Vec<u8>>) -> Vec<u8> {
+					SessionKeys::generate(None)
 				}
 			}
 		}
@@ -736,11 +782,24 @@ cfg_if! {
 				fn take_block_number() -> Option<u64> {
 					system::take_block_number()
 				}
+
+				fn test_ed25519_crypto() -> (ed25519::AppSignature, ed25519::AppPublic) {
+					test_ed25519_crypto()
+				}
+
+				fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic) {
+					test_sr25519_crypto()
+				}
 			}
 
 			impl aura_primitives::AuraApi<Block, AuraId> for Runtime {
 				fn slot_duration() -> u64 { 1000 }
-				fn authorities() -> Vec<AuraId> { system::authorities() }
+				fn authorities() -> Vec<AuraId> {
+					system::authorities().into_iter().map(|a| {
+						let authority: sr25519::Public = a.into();
+						AuraId::from(authority)
+					}).collect()
+				}
 			}
 
 			impl babe_primitives::BabeApi<Block> for Runtime {
@@ -772,8 +831,44 @@ cfg_if! {
 					runtime_io::submit_transaction(&ex).unwrap()
 				}
 			}
+
+			impl session::SessionKeys<Block> for Runtime {
+				fn generate_session_keys(_: Option<Vec<u8>>) -> Vec<u8> {
+					SessionKeys::generate(None)
+				}
+			}
 		}
 	}
+}
+
+fn test_ed25519_crypto() -> (ed25519::AppSignature, ed25519::AppPublic) {
+	let public0 = ed25519::AppPublic::generate_pair(None);
+	let public1 = ed25519::AppPublic::generate_pair(None);
+	let public2 = ed25519::AppPublic::generate_pair(None);
+
+	let all = ed25519::AppPublic::all();
+	assert!(all.contains(&public0));
+	assert!(all.contains(&public1));
+	assert!(all.contains(&public2));
+
+	let signature = public0.sign(&"ed25519").expect("Generates a valid `ed25519` signature.");
+	assert!(public0.verify(&"ed25519", &signature));
+	(signature, public0)
+}
+
+fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic) {
+	let public0 = sr25519::AppPublic::generate_pair(None);
+	let public1 = sr25519::AppPublic::generate_pair(None);
+	let public2 = sr25519::AppPublic::generate_pair(None);
+
+	let all = sr25519::AppPublic::all();
+	assert!(all.contains(&public0));
+	assert!(all.contains(&public1));
+	assert!(all.contains(&public2));
+
+	let signature = public0.sign(&"sr25519").expect("Generates a valid `sr25519` signature.");
+	assert!(public0.verify(&"sr25519", &signature));
+	(signature, public0)
 }
 
 #[cfg(test)]

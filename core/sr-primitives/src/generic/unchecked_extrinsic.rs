@@ -234,7 +234,10 @@ mod tests {
 	struct TestExtra;
 	impl SignedExtension for TestExtra {
 		type AccountId = u64;
+		type Call = ();
 		type AdditionalSigned = ();
+		type Pre = ();
+
 		fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
 	}
 

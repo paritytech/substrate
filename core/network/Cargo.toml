@@ -11,7 +11,7 @@ bytes = "0.4"
 derive_more = "0.14.0"
 either = "1.5.2"
 log = "0.4"
-parking_lot = "0.8.0"
+parking_lot = "0.9.0"
 bitflags = "1.0"
 fnv = "1.0"
 futures = "0.1.17"
@@ -44,6 +44,7 @@ test-client = { package = "substrate-test-runtime-client", path = "../../core/te
 erased-serde = "0.3.9"
 void = "1.0"
 zeroize = "0.9.0"
+babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../consensus/babe/primitives" }
 
 [dev-dependencies]
 env_logger = { version = "0.6" }

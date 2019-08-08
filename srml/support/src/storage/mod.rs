@@ -191,6 +191,9 @@ pub trait StorageMap<K: Codec, V: Codec> {
 	/// Load the value associated with the given key from the map.
 	fn get<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query;
 
+	/// Swap the values of two keys.
+	fn swap<KeyArg1: Borrow<K>, KeyArg2: Borrow<K>>(key1: KeyArg1, key2: KeyArg2);
+
 	/// Store a value to be associated with the given key from the map.
 	fn insert<KeyArg: Borrow<K>, ValArg: Borrow<V>>(key: KeyArg, val: ValArg);
 
@@ -225,6 +228,10 @@ impl<K: Codec, V: Codec, U> StorageMap<K, V> for U where U: hashed::generator::S
 
 	fn get<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query {
 		U::get(key.borrow(), &RuntimeStorage)
+	}
+
+	fn swap<KeyArg1: Borrow<K>, KeyArg2: Borrow<K>>(key1: KeyArg1, key2: KeyArg2) {
+		U::swap(key1.borrow(), key2.borrow(), &mut RuntimeStorage)
 	}
 
 	fn insert<KeyArg: Borrow<K>, ValArg: Borrow<V>>(key: KeyArg, val: ValArg) {

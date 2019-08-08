@@ -210,7 +210,7 @@ pub struct ModuleConstantMetadata {
 }
 
 /// A technical trait to store lazy initiated vec value as static dyn pointer.
-pub trait DefaultByte {
+pub trait DefaultByte: Send + Sync {
 	fn default_byte(&self) -> Vec<u8>;
 }
 

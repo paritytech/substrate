@@ -20,66 +20,59 @@ use std::{
 	marker::PhantomData, collections::{HashSet, BTreeMap, HashMap}, sync::Arc,
 	panic::UnwindSafe, result, cell::RefCell, rc::Rc,
 };
-use crate::error::Error;
+use log::{info, trace, warn};
 use futures::channel::mpsc;
 use parking_lot::{Mutex, RwLock};
-use primitives::NativeOrEncoded;
-use sr_primitives::{
-	Justification,
-	generic::{BlockId, SignedBlock},
-};
-use consensus::{
-	Error as ConsensusError, BlockImportParams,
-	ImportResult, BlockOrigin, ForkChoiceStrategy,
-	well_known_cache_keys::Id as CacheKeyId,
-	SelectChain, self,
-};
-use sr_primitives::traits::{
-	Block as BlockT, Header as HeaderT, Zero, NumberFor,
-	ApiRef, ProvideRuntimeApi, SaturatedConversion, One, DigestFor,
-};
-use sr_primitives::generic::DigestItem;
-use sr_primitives::BuildStorage;
-use crate::runtime_api::{
-	CallRuntimeAt, ConstructRuntimeApi, Core as CoreApi, ProofRecorder,
-	InitializeBlock,
-};
+use codec::{Encode, Decode};
+use hash_db::{Hasher, Prefix};
 use primitives::{
 	Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash,
-	NeverNativeValue, ExecutionContext
+	NeverNativeValue, ExecutionContext,
+	storage::{StorageKey, StorageData, well_known_keys}, NativeOrEncoded
 };
-use primitives::storage::{StorageKey, StorageData};
-use primitives::storage::well_known_keys;
-use codec::{Encode, Decode};
+use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
+use sr_primitives::{
+	Justification, BuildStorage,
+	generic::{BlockId, SignedBlock, DigestItem},
+	traits::{
+		Block as BlockT, Header as HeaderT, Zero, NumberFor,
+		ApiRef, ProvideRuntimeApi, SaturatedConversion, One, DigestFor,
+	},
+};
 use state_machine::{
 	DBValue, Backend as StateBackend, CodeExecutor, ChangesTrieAnchorBlockId,
 	ExecutionStrategy, ExecutionManager, prove_read, prove_child_read,
 	ChangesTrieRootsStorage, ChangesTrieStorage,
 	key_changes, key_changes_proof, OverlayedChanges, NeverOffchainExt,
 };
-use hash_db::{Hasher, Prefix};
-
-use crate::backend::{
-	self, BlockImportOperation, PrunableStateChangesTrieStorage,
-	StorageCollection, ChildStorageCollection
-};
-use crate::blockchain::{
-	self, Info as ChainInfo, Backend as ChainBackend,
-	HeaderBackend as ChainHeaderBackend, ProvideCache, Cache,
-};
-use crate::call_executor::{CallExecutor, LocalCallExecutor};
 use executor::{RuntimeVersion, RuntimeInfo};
-use crate::notifications::{StorageNotifications, StorageEventStream};
-use crate::light::{call_executor::prove_execution, fetcher::ChangesProof};
-use crate::cht;
-use crate::error;
-use crate::in_mem;
-use crate::block_builder::{self, api::BlockBuilder as BlockBuilderAPI};
-use crate::genesis;
-use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
+use consensus::{
+	Error as ConsensusError, BlockImportParams,
+	ImportResult, BlockOrigin, ForkChoiceStrategy,
+	well_known_cache_keys::Id as CacheKeyId,
+	SelectChain, self,
+};
 
-use log::{info, trace, warn};
-
+use crate::{
+	runtime_api::{
+		CallRuntimeAt, ConstructRuntimeApi, Core as CoreApi, ProofRecorder,
+		InitializeBlock,
+	},
+	backend::{
+		self, BlockImportOperation, PrunableStateChangesTrieStorage,
+		StorageCollection, ChildStorageCollection
+	},
+	blockchain::{
+		self, Info as ChainInfo, Backend as ChainBackend,
+		HeaderBackend as ChainHeaderBackend, ProvideCache, Cache,
+	},
+	call_executor::{CallExecutor, LocalCallExecutor},
+	notifications::{StorageNotifications, StorageEventStream},
+	light::{call_executor::prove_execution, fetcher::ChangesProof},
+	block_builder::{self, api::BlockBuilder as BlockBuilderAPI},
+	error::Error,
+	cht, error, in_mem, genesis
+};
 
 /// Type that implements `futures::Stream` of block import events.
 pub type ImportNotifications<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
@@ -177,6 +170,13 @@ pub trait BlockBody<Block: BlockT> {
 	) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
 }
 
+/// Provide a list of potential uncle headers for a given block.
+pub trait ProvideUncles<Block: BlockT> {
+	/// Gets the uncles of the block with `target_hash` going back `max_generation` ancestors.
+	fn uncles(&self, target_hash: Block::Hash, max_generation: NumberFor<Block>)
+		-> error::Result<Vec<Block::Header>>;
+}
+
 /// Client info
 #[derive(Debug)]
 pub struct ClientInfo<Block: BlockT> {
@@ -260,6 +260,7 @@ impl<H> PrePostHeader<H> {
 pub fn new_in_mem<E, Block, S, RA>(
 	executor: E,
 	genesis_storage: S,
+	keystore: Option<primitives::traits::BareCryptoStorePtr>,
 ) -> error::Result<Client<
 	in_mem::Backend<Block, Blake2Hasher>,
 	LocalCallExecutor<in_mem::Backend<Block, Blake2Hasher>, E>,
@@ -270,7 +271,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	S: BuildStorage,
 	Block: BlockT<Hash=H256>,
 {
-	new_with_backend(Arc::new(in_mem::Backend::new()), executor, genesis_storage)
+	new_with_backend(Arc::new(in_mem::Backend::new()), executor, genesis_storage, keystore)
 }
 
 /// Create a client with the explicitly provided backend.
@@ -279,6 +280,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	backend: Arc<B>,
 	executor: E,
 	build_genesis_storage: S,
+	keystore: Option<primitives::traits::BareCryptoStorePtr>,
 ) -> error::Result<Client<B, LocalCallExecutor<B, E>, Block, RA>>
 	where
 		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
@@ -286,8 +288,22 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		Block: BlockT<Hash=H256>,
 		B: backend::LocalBackend<Block, Blake2Hasher>
 {
-	let call_executor = LocalCallExecutor::new(backend.clone(), executor);
+	let call_executor = LocalCallExecutor::new(backend.clone(), executor, keystore);
 	Client::new(backend, call_executor, build_genesis_storage, Default::default())
+}
+
+/// Figure out the block type for a given type (for now, just a `Client`).
+pub trait BlockOf {
+	/// The type of the block.
+	type Type: BlockT<Hash=H256>;
+}
+
+impl<B, E, Block, RA> BlockOf for Client<B, E, Block, RA> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
+	Block: BlockT<Hash=H256>,
+{
+	type Type = Block;
 }
 
 impl<B, E, Block, RA> Client<B, E, Block, RA> where
@@ -362,7 +378,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn storage(&self, id: &BlockId<Block>, key: &StorageKey) -> error::Result<Option<StorageData>> {
 		Ok(self.state_at(id)?
 			.storage(&key.0).map_err(|e| error::Error::from_state(Box::new(e)))?
-			.map(StorageData))
+			.map(StorageData)
+		)
 	}
 
 	/// Given a `BlockId` and a key, return the value under the hash in that block.
@@ -1225,6 +1242,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			let last_best = self.backend.blockchain().info().best_hash;
 			let to_finalize_hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
 			self.apply_finality_with_block_hash(operation, to_finalize_hash, justification, last_best, notify)
+		}).map_err(|e| {
+			warn!("Block finalization error:\n{:?}", e);
+			e
 		})
 	}
 
@@ -1319,7 +1339,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			ancestor_hash = *current.parent_hash();
 			ancestor = load_header(ancestor_hash)?;
 		}
-
+		trace!("Collected {} uncles", uncles.len());
 		Ok(uncles)
 	}
 
@@ -1340,6 +1360,20 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			parent_header.hash(),
 			Default::default(),
 		))
+	}
+}
+
+impl<B, E, Block, RA> ProvideUncles<Block> for Client<B, E, Block, RA> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
+	Block: BlockT<Hash=H256>,
+{
+	fn uncles(&self, target_hash: Block::Hash, max_generation: NumberFor<Block>) -> error::Result<Vec<Block::Header>> {
+		Ok(Client::uncles(self, target_hash, max_generation)?
+			.into_iter()
+			.filter_map(|hash| Client::header(self, &BlockId::Hash(hash)).unwrap_or(None))
+			.collect()
+		)
 	}
 }
 
@@ -1414,6 +1448,8 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 		context: ExecutionContext,
 		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
 	) -> error::Result<NativeOrEncoded<R>> {
+		let enable_keystore = context.enable_keystore();
+
 		let manager = match context {
 			ExecutionContext::BlockConstruction =>
 				self.execution_strategies.block_construction.get_manager(),
@@ -1443,6 +1479,7 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 			native_call,
 			offchain_extensions.as_mut(),
 			recorder,
+			enable_keystore,
 		)
 	}
 
@@ -1467,7 +1504,10 @@ impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Blo
 	) -> Result<ImportResult, Self::Error> {
 		self.lock_import_and_run(|operation| {
 			self.apply_block(operation, import_block, new_cache)
-		}).map_err(|e| ConsensusError::ClientImport(e.to_string()).into())
+		}).map_err(|e| {
+			warn!("Block import error:\n{:?}", e);
+			ConsensusError::ClientImport(e.to_string()).into()
+		})
 	}
 
 	/// Check block preconditions.
