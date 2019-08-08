@@ -881,6 +881,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = ();
+	type Pre = ();
 
 	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
 
@@ -944,6 +945,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = ();
+	type Pre = ();
 
 	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
 
@@ -1017,6 +1019,8 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = T::Hash;
+	type Pre = ();
+
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str> {
 		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
 		let n = (self.0).0.birth(current_u64).saturated_into::<T::BlockNumber>();
@@ -1047,6 +1051,8 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckGenesis<T> {
 	type AccountId = T::AccountId;
 	type Call = <T as Trait>::Call;
 	type AdditionalSigned = T::Hash;
+	type Pre = ();
+
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str> {
 		Ok(<Module<T>>::block_hash(T::BlockNumber::zero()))
 	}
