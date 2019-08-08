@@ -436,7 +436,7 @@ fn code_using_trie() -> u64 {
 
 impl_opaque_keys! {
 	pub struct SessionKeys {
-		#[id(key_types::SR25519)]
+		#[id(key_types::ED25519)]
 		pub ed25519: ed25519::AppPublic,
 		#[id(key_types::SR25519)]
 		pub sr25519: sr25519::AppPublic,
