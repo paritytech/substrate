@@ -49,22 +49,6 @@ pub struct MapTransaction {
 }
 
 impl MapTransaction {
-	/// Equivalent to `Extend` rust trait, less flexible.
-	/// It merges both contents.
-  /// TODO EMCH delete
-	pub fn extend(&mut self, other: MapTransaction) {
-		self.top.extend(other.top);
-		for (k, (other_map, other_child_trie)) in other.children.into_iter() {
-			if let Some((map, child_trie)) = self.children.get_mut(&k) {
-				map.extend(other_map);
-				// warning this can result in loss of info if both map are not
-				// build other same backend.
-				*child_trie = other_child_trie;
-			} else {
-				self.children.insert(k, (other_map, other_child_trie));
-			}
-		}
-	}
 	/// Assimilate this map transaction into other storage.
 	/// This is pretty close to a reverse `extend`
 	pub fn assimilate_storage(
