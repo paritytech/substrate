@@ -35,6 +35,9 @@ pub use codec;
 pub use once_cell;
 #[doc(hidden)]
 pub use paste;
+#[cfg(feature = "std")]
+#[doc(hidden)]
+pub use runtime_io::with_storage_and_children;
 
 pub use self::storage::hashed::{Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat};
 
@@ -66,10 +69,6 @@ pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
 pub use self::double_map::StorageDoubleMapWithHasher;
 pub use runtime_io::{print, storage_root};
 pub use sr_primitives::{self, ConsensusEngineId};
-
-#[doc(hidden)]
-#[cfg(feature = "std")]
-pub use runtime_io::with_storage_and_children;
 
 /// Macro for easily creating a new implementation of the `Get` trait. Use similarly to
 /// how you would declare a `const`:

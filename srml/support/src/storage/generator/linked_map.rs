@@ -8,6 +8,8 @@ use crate::{
 	}
 };
 
+// TODO TODO: look again with https://github.com/paritytech/substrate/pull/3323#event-2540726461
+
 pub trait StorageLinkedMap<K: Codec, V: Codec> {
 	/// The type that get/take returns.
 	type Query;

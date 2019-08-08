@@ -22,6 +22,7 @@ use crate::rstd::borrow::Borrow;
 use crate::codec::{Codec, Encode, Decode, KeyedVec};
 use runtime_io::{self, twox_64, twox_128, blake2_128, twox_256, blake2_256};
 
+/// Possible hasher to use with
 pub trait StorageHasher: 'static {
 	type Output: AsRef<[u8]>;
 	fn hash(x: &[u8]) -> Self::Output;

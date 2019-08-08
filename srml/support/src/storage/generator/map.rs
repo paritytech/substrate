@@ -17,6 +17,7 @@ pub trait StorageMap<K: Codec, V: Codec> {
 	fn from_query_to_optional_value(v: Self::Query) -> Option<V>;
 }
 
+// TODO TODO: avoid this and instead use Hasher::Output
 fn storage_map_final_key<KeyArg, K, V, G>(key: KeyArg) -> impl AsRef<[u8]>
 where
 	KeyArg: Borrow<K>,

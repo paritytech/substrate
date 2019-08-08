@@ -314,10 +314,10 @@ fn storage_instance_independance() {
 		module2::Map::<module2::Instance1>::insert(0, 0);
 		module2::Map::<module2::Instance2>::insert(0, 0);
 		module2::Map::<module2::Instance3>::insert(0, 0);
-		module2::LinkedMap::<module2::DefaultInstance>::insert(0, 0);
-		module2::LinkedMap::<module2::Instance1>::insert(0, 0);
-		module2::LinkedMap::<module2::Instance2>::insert(0, 0);
-		module2::LinkedMap::<module2::Instance3>::insert(0, 0);
+		module2::LinkedMap::<module2::DefaultInstance>::insert(0, vec![]);
+		module2::LinkedMap::<module2::Instance1>::insert(0, vec![]);
+		module2::LinkedMap::<module2::Instance2>::insert(0, vec![]);
+		module2::LinkedMap::<module2::Instance3>::insert(0, vec![]);
 		module2::DoubleMap::<module2::DefaultInstance>::insert(&0, &0, &0);
 		module2::DoubleMap::<module2::Instance1>::insert(&0, &0, &0);
 		module2::DoubleMap::<module2::Instance2>::insert(&0, &0, &0);

@@ -481,11 +481,7 @@ decl_storage! {
 		build(|config: &GenesisConfig<T>| {
 			config.assets.iter().for_each(|asset_id| {
 				config.endowed_accounts.iter().for_each(|account_id| {
-					<FreeBalance<T>>::insert(
-						asset_id,
-						account_id,
-						&config.initial_balance,
-					);
+					<FreeBalance<T>>::insert(asset_id, account_id, &config.initial_balance);
 				});
 			});
 		});
