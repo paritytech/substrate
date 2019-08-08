@@ -269,6 +269,24 @@ fn read_sandbox_memory_as<E: Ext, D: Decode>(
 	D::decode(&mut &buf[..]).map_err(|_| sandbox::HostError)
 }
 
+/// Read designated chunk from the sandbox memory, consuming an appropriate amount of
+/// gas, and attempt to decode into the specified type.
+///
+/// Returns `Err` if one of the following conditions occurs:
+///
+/// - calculating the gas cost resulted in overflow.
+/// - out of gas
+/// - requested buffer is not within the bounds of the sandbox memory.
+/// - the buffer contents cannot be decoded as the required type.
+fn read_sandbox_memory_as<E: Ext, D: Decode>(
+	ctx: &mut Runtime<E>,
+	ptr: u32,
+	len: u32,
+) -> Result<D, sandbox::HostError> {
+	let buf = read_sandbox_memory(ctx, ptr, len)?;
+	D::decode(&mut &buf[..]).map_err(|_| sandbox::HostError)
+}
+
 /// Write the given buffer to the designated location in the sandbox memory, consuming
 /// an appropriate amount of gas.
 ///
