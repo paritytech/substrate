@@ -36,7 +36,6 @@ use futures::sync::mpsc;
 use parking_lot::Mutex;
 
 use client::{runtime_api::BlockT, Client};
-use consensus_common::block_validation::DefaultBlockAnnounceValidator;
 use exit_future::Signal;
 use futures::prelude::*;
 use futures03::stream::{StreamExt as _, TryStreamExt as _};
@@ -189,6 +188,9 @@ macro_rules! new_impl {
 			network::config::ProtocolId::from(protocol_id_full)
 		};
 
+		let block_announce_validator =
+			Box::new(consensus_common::block_validation::DefaultBlockAnnounceValidator::new(client.clone()));
+
 		let network_params = network::config::Params {
 			roles: $config.roles,
 			network_config: $config.network.clone(),
@@ -200,7 +202,7 @@ macro_rules! new_impl {
 			import_queue,
 			protocol_id,
 			specialization: network_protocol,
-			block_announce_validator: Box::new(DefaultBlockAnnounceValidator::new(client.clone()))
+			block_announce_validator,
 		};
 
 		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();

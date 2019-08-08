@@ -1073,10 +1073,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		match self.block_announce_validator.validate(&header, &announce.data) {
 			Ok(Validation::Success) => (),
 			Ok(Validation::Failure) => return CustomMessageOutcome::None,
-			Ok(Validation::Unknown) => (), // TODO: Is this correct?
 			Err(e) => {
-				error!(target: "sync", "block validation failed: {}", e);
-				return CustomMessageOutcome::None // TODO: not sure, `sync` maps this to "unknown block"
+				warn!(target: "sync", "block validation failed: {}", e);
+				return CustomMessageOutcome::None
 			}
 		}
 

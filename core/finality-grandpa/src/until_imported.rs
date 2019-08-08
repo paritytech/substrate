@@ -473,6 +473,7 @@ mod tests {
 				header,
 				is_new_best: false,
 				retracted: vec![],
+				associated_data: vec![],
 			}).unwrap();
 		}
 	}

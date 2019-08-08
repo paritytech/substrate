@@ -14,8 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Block announcement validation.
+
 use crate::BlockStatus;
-use sr_primitives::{generic::BlockId, traits::{Block, Header}};
+use sr_primitives::{generic::BlockId, traits::Block};
 use std::{error::Error, sync::Arc};
 
 /// A type which provides access to chain information.
@@ -39,8 +41,6 @@ pub enum Validation {
 	Success,
 	/// Invalid block announcement.
 	Failure,
-	/// At this moment, validation is inconclusive.
-	Unknown
 }
 
 /// Type which checks incoming block announcements.
@@ -49,6 +49,7 @@ pub trait BlockAnnounceValidator<B: Block> {
 	fn validate(&mut self, header: &B::Header, data: &[u8]) -> Result<Validation, Box<dyn Error + Send>>;
 }
 
+/// Default implementation of `BlockAnnounceValidator`.
 #[derive(Debug)]
 pub struct DefaultBlockAnnounceValidator<C> {
 	chain: C
@@ -61,7 +62,7 @@ impl<C> DefaultBlockAnnounceValidator<C> {
 }
 
 impl<B: Block, C: Chain<B>> BlockAnnounceValidator<B> for DefaultBlockAnnounceValidator<C> {
-	fn validate(&mut self, header: &B::Header, data: &[u8]) -> Result<Validation, Box<dyn Error + Send>> {
-		Ok(Validation::Success) // TODO: proper validation
+	fn validate(&mut self, _h: &B::Header, _d: &[u8]) -> Result<Validation, Box<dyn Error + Send>> {
+		Ok(Validation::Success)
 	}
 }

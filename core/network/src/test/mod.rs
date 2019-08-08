@@ -35,6 +35,7 @@ use client::error::Result as ClientResult;
 use client::block_builder::BlockBuilder;
 use client::backend::{AuxStore, Backend, Finalizer};
 use crate::config::Roles;
+use consensus::block_validation::DefaultBlockAnnounceValidator;
 use consensus::import_queue::BasicQueue;
 use consensus::import_queue::{
 	BoxBlockImport, BoxJustificationImport, Verifier, BoxFinalityProofImport,
@@ -245,8 +246,8 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	}
 
 	/// Announces an important block on the network.
-	pub fn announce_block(&self, hash: <Block as BlockT>::Hash) {
-		self.network.service().announce_block(hash);
+	pub fn announce_block(&self, hash: <Block as BlockT>::Hash, data: Vec<u8>) {
+		self.network.service().announce_block(hash, data);
 	}
 
 	/// Add blocks to the peer -- edit the block before adding
@@ -293,11 +294,11 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 				Default::default()
 			};
 			self.block_import.import_block(import_block, cache).expect("block_import failed");
-			self.network.on_block_imported(hash, header);
+			self.network.on_block_imported(hash, header, Vec::new()); // TODO
 			at = hash;
 		}
 
-		self.network.service().announce_block(at.clone());
+		self.network.service().announce_block(at.clone(), Vec::new()); // TODO
 		at
 	}
 
@@ -530,6 +531,7 @@ pub trait TestNetFactory: Sized {
 			protocol_id: ProtocolId::from(&b"test-protocol-name"[..]),
 			import_queue,
 			specialization: self::SpecializationFactory::create(),
+			block_announce_validator: Box::new(DefaultBlockAnnounceValidator::new(client.clone()))
 		}).unwrap();
 
 		self.mut_peers(|peers| {
@@ -593,6 +595,7 @@ pub trait TestNetFactory: Sized {
 			protocol_id: ProtocolId::from(&b"test-protocol-name"[..]),
 			import_queue,
 			specialization: self::SpecializationFactory::create(),
+			block_announce_validator: Box::new(DefaultBlockAnnounceValidator::new(client.clone()))
 		}).unwrap();
 
 		self.mut_peers(|peers| {
@@ -655,7 +658,7 @@ pub trait TestNetFactory: Sized {
 
 				// We poll `imported_blocks_stream`.
 				while let Ok(Async::Ready(Some(notification))) = peer.imported_blocks_stream.poll() {
-					peer.network.on_block_imported(notification.hash, notification.header);
+					peer.network.on_block_imported(notification.hash, notification.header, notification.associated_data);
 				}
 
 				// We poll `finality_notification_stream`, but we only take the last event.

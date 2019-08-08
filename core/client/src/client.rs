@@ -1002,7 +1002,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				is_new_best,
 				storage_changes,
 				retracted,
-				Vec::new(), // TODO
+				associated_data: Vec::new(), // TODO
 			})
 		}
 
@@ -1173,10 +1173,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(())
 	}
 
-	fn notify_imported(
-		&self,
-		notify_import: ImportSummary<Block>,
-	) -> error::Result<()> {
+	fn notify_imported(&self, notify_import: ImportSummary<Block>) -> error::Result<()> {
 		if let Some(storage_changes) = notify_import.storage_changes {
 			// TODO [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
 			self.storage_notifications.lock()
@@ -1193,7 +1190,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			header: notify_import.header,
 			is_new_best: notify_import.is_new_best,
 			retracted: notify_import.retracted,
-			associated_data: associated,
+			associated_data: notify_import.associated_data,
 		};
 
 		self.import_notification_sinks.lock()

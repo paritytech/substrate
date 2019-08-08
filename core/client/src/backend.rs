@@ -42,6 +42,7 @@ pub(crate) struct ImportSummary<Block: BlockT> {
 	pub(crate) is_new_best: bool,
 	pub(crate) storage_changes: Option<(StorageCollection, ChildStorageCollection)>,
 	pub(crate) retracted: Vec<Block::Hash>,
+	pub(crate) associated_data: Vec<u8>,
 }
 
 /// Import operation wrapper
@@ -144,7 +145,7 @@ pub trait Finalizer<Block: BlockT, H: Hasher<Out=Block::Hash>, B: Backend<Block,
 		notify: bool,
 	) -> error::Result<()>;
 
-		
+
 	/// Finalize a block. This will implicitly finalize all blocks up to it and
 	/// fire finality notifications.
 	///

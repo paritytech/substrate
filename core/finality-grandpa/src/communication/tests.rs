@@ -88,8 +88,8 @@ impl super::Network<Block> for TestNetwork {
 	}
 
 	/// Inform peers that a block with given hash should be downloaded.
-	fn announce(&self, block: Hash) {
-		let _ = self.sender.unbounded_send(Event::Announce(block));
+	fn announce(&self, block: Hash, associated_data: Vec<u8>) {
+		let _ = self.sender.unbounded_send(Event::Announce(block)); // TODO
 	}
 }
 
