@@ -22,6 +22,7 @@
 #[macro_use]
 mod traits;
 mod params;
+mod execution_strategy;
 pub mod error;
 pub mod informant;
 
