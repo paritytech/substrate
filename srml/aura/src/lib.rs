@@ -286,8 +286,9 @@ impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 /// A type for performing slashing based on Aura reports.
 pub struct StakingSlasher<T>(::rstd::marker::PhantomData<T>);
 
-impl<T: Trait> HandleReport for StakingSlasher<T> {
+impl<T: staking::Trait + Trait> HandleReport for StakingSlasher<T> {
 	fn handle_report(report: AuraReport) {
+		use staking::SessionInterface;
 		let validators = T::SessionInterface::validators();
 
 		report.punish(
