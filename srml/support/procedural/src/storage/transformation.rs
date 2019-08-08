@@ -386,7 +386,7 @@ fn decl_store_extra_genesis(
 	}
 
 	let mut has_scall = false;
-	let mut scall = quote!{ ( |_| {} ) };
+	let mut scall = quote!{ let scall: fn(&Self) = |_| {}; scall };
 	let mut genesis_extrafields = TokenStream2::new();
 	let mut genesis_extrafields_default = TokenStream2::new();
 
@@ -423,8 +423,7 @@ fn decl_store_extra_genesis(
 					}
 					assimilate_require_generic |= ext::expr_contains_ident(&expr.content, traitinstance);
 					let content = &expr.content;
-					// TODO TODO: add a type here to help user !
-					scall = quote!( ( #content ) );
+					scall = quote!( let scall: fn(&Self) = #content; scall );
 					has_scall = true;
 				},
 			}
