@@ -270,9 +270,6 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 
 		let DeclStorageTypeInfos { typ, value_type, is_option, .. } = type_infos;
 
-		// TODO TODO: how can linked_map works with is_option ???inserting a None will remove the
-		// value and you can't iterate on it. resolve this question after merging basti fix
-		// TODO TODO: also swap and does that actually remove the enumeration even on master
 		let from_optional_value_to_query = from_optional_value_to_query(is_option, fielddefault);
 		let from_query_to_optional_value = from_query_to_optional_value(is_option);
 

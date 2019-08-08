@@ -47,7 +47,6 @@ impl<T: Codec, G: StorageValue<T>> storage::StorageValue<T> for G {
 	}
 
 	fn mutate<R, F: FnOnce(&mut G::Query) -> R>(f: F) -> R {
-		// TODO TODO: avoid computing key everytime
 		let mut val = G::get();
 
 		let ret = f(&mut val);
