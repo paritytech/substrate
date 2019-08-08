@@ -49,6 +49,7 @@ use crate::protocol::{self, Protocol, Context, CustomMessageOutcome, PeerInfo};
 use crate::protocol::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use crate::protocol::{event::Event, light_dispatch::{AlwaysBadChecker, RequestData}};
 use crate::protocol::specialization::NetworkSpecialization;
+use crate::protocol::message::BlockAnnounce;
 use crate::protocol::sync::SyncState;
 
 /// Minimum Requirements for a Hash within Networking
@@ -296,8 +297,10 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 	}
 
 	/// You must call this when a new block is imported by the client.
-	pub fn on_block_imported(&mut self, hash: B::Hash, header: B::Header) {
-		self.network_service.user_protocol_mut().on_block_imported(hash, &header);
+	pub fn on_block_imported(&mut self, hash: B::Hash, header: B::Header, data: Vec<u8>) {
+		self.network_service
+			.user_protocol_mut()
+			.on_block_imported(hash, BlockAnnounce { header, data });
 	}
 
 	/// You must call this when a new block is finalized by the client.
@@ -393,8 +396,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	///
 	/// In chain-based consensus, we often need to make sure non-best forks are
 	/// at least temporarily synced. This function forces such an announcement.
-	pub fn announce_block(&self, hash: B::Hash) {
-		let _ = self.to_worker.unbounded_send(ServerToWorkerMsg::AnnounceBlock(hash));
+	pub fn announce_block(&self, hash: B::Hash, data: Vec<u8>) {
+		let _ = self.to_worker.unbounded_send(ServerToWorkerMsg::AnnounceBlock(hash, data));
 	}
 
 	/// Send a consensus message through the gossip
@@ -579,7 +582,7 @@ impl<B, S, H> NetworkStateInfo for NetworkService<B, S, H>
 enum ServerToWorkerMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	PropagateExtrinsics,
 	RequestJustification(B::Hash, NumberFor<B>),
-	AnnounceBlock(B::Hash),
+	AnnounceBlock(B::Hash, Vec<u8>),
 	ExecuteWithSpec(Box<dyn FnOnce(&mut S, &mut dyn Context<B>) + Send>),
 	ExecuteWithGossip(Box<dyn FnOnce(&mut ConsensusGossip<B>, &mut dyn Context<B>) + Send>),
 	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>, GossipMessageRecipient),
@@ -652,8 +655,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 				}
 				ServerToWorkerMsg::GossipConsensusMessage(topic, engine_id, message, recipient) =>
 					self.network_service.user_protocol_mut().gossip_consensus_message(topic, engine_id, message, recipient),
-				ServerToWorkerMsg::AnnounceBlock(hash) =>
-					self.network_service.user_protocol_mut().announce_block(hash),
+				ServerToWorkerMsg::AnnounceBlock(hash, data) =>
+					self.network_service.user_protocol_mut().announce_block(hash, data),
 				ServerToWorkerMsg::RequestJustification(hash, number) =>
 					self.network_service.user_protocol_mut().request_justification(&hash, number),
 				ServerToWorkerMsg::PropagateExtrinsics =>

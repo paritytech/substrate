@@ -115,6 +115,7 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
 	/// Handles opening the unique substream and sending and receiving raw messages.
 	behaviour: LegacyProto<B, Substream<StreamMuxerBox>>,
+	/// A type to check incoming block announcements.
 	block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send + Sync>
 }
 
@@ -1010,7 +1011,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	///
 	/// In chain-based consensus, we often need to make sure non-best forks are
 	/// at least temporarily synced.
-	pub fn announce_block(&mut self, hash: B::Hash) {
+	pub fn announce_block(&mut self, hash: B::Hash, data: Vec<u8>) {
 		let header = match self.context_data.chain.header(&BlockId::Hash(hash)) {
 			Ok(Some(header)) => header,
 			Ok(None) => {
@@ -1030,7 +1031,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 		let hash = header.hash();
 
-		let message = GenericMessage::BlockAnnounce(message::BlockAnnounce { header: header.clone() });
+		let message = GenericMessage::BlockAnnounce(message::BlockAnnounce {
+			header: header.clone(),
+			data
+		});
 
 		for (who, ref mut peer) in self.context_data.peers.iter_mut() {
 			trace!(target: "sync", "Reannouncing block {:?} to {}", hash, who);
@@ -1066,8 +1070,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			peerset: self.peerset_handle.clone(),
 		}, who.clone(), *header.number());
 
-		let associated_data = &[]; // TODO: add associated data to block announcement
-		match self.block_announce_validator.validate(&header, associated_data) {
+		match self.block_announce_validator.validate(&header, &announce.data) {
 			Ok(Validation::Success) => (),
 			Ok(Validation::Failure) => return CustomMessageOutcome::None,
 			Ok(Validation::Unknown) => (), // TODO: Is this correct?
@@ -1137,12 +1140,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	/// Call this when a block has been imported in the import queue and we should announce it on
 	/// the network.
-	pub fn on_block_imported(&mut self, hash: B::Hash, header: &B::Header) {
-		self.sync.update_chain_info(header);
+	pub fn on_block_imported(&mut self, hash: B::Hash, block: message::BlockAnnounce<B::Header>) {
+		self.sync.update_chain_info(&block.header);
 		self.specialization.on_block_imported(
 			&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle),
 			hash.clone(),
-			header,
+			&block.header,
 		);
 
 		// blocks are not announced by light clients
@@ -1152,7 +1155,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 		// send out block announcements
 
-		let message = GenericMessage::BlockAnnounce(message::BlockAnnounce { header: header.clone() });
+		let message = GenericMessage::BlockAnnounce(block);
 
 		for (who, ref mut peer) in self.context_data.peers.iter_mut() {
 			if peer.known_blocks.insert(hash.clone()) {
