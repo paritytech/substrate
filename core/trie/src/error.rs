@@ -12,22 +12,36 @@ use std::fmt;
 use std::error::Error as StdError;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-/// Error concerning the Parity-Codec based decoder.
+/// Error for trie node decoding.
 pub enum Error {
 	/// Bad format.
 	BadFormat,
+	/// Decoding error.
+	Decode(codec::Error)
+}
+
+impl From<codec::Error> for Error {
+	fn from(x: codec::Error) -> Self {
+		Error::Decode(x)
+	}
 }
 
 #[cfg(feature="std")]
 impl StdError for Error {
 	fn description(&self) -> &str {
-		"codec error"
+		match self {
+			Error::BadFormat => "Bad format error",
+			Error::Decode(_) => "Decoding error",
+		}
 	}
 }
 
 #[cfg(feature="std")]
 impl fmt::Display for Error {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		fmt::Debug::fmt(&self, f)
+		match self {
+			Error::Decode(e) => write!(f, "Decode error: {}", e.what()),
+			Error::BadFormat => write!(f, "Bad format"),
+		}
 	}
 }

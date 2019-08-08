@@ -32,7 +32,7 @@ use sr_primitives::traits::{
 };
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
@@ -107,7 +107,7 @@ impl ProvideInherentData for InherentDataProvider {
 	}
 
 	fn error_to_string(&self, error: &[u8]) -> Option<String> {
-		RuntimeString::decode(&mut &error[..]).map(Into::into)
+		RuntimeString::decode(&mut &error[..]).map(Into::into).ok()
 	}
 }
 
@@ -183,7 +183,7 @@ decl_storage! {
 			config: &GenesisConfig,
 		| {
 			use primitives::storage::well_known_keys;
-			use sr_primitives::traits::TypedKey;
+			use sr_primitives::AppKey;
 
 			runtime_io::with_storage(storage, || {
 				let mut authorities = config.authorities.clone();
@@ -209,7 +209,7 @@ decl_storage! {
 
 					let session_validators_keys_len = session_validators_keys.len();
 					for (idx, session_validator_keys) in session_validators_keys.into_iter().enumerate() {
-						let session_validator_key = session_validator_keys.1.get(AuthorityId::KEY_TYPE)
+						let session_validator_key = session_validator_keys.1.get(AuthorityId::ID)
 							.expect("Unable to get required key for BABE authority at genesis block");
 						let authority_position = authorities.iter().position(|(a, _)| *a == session_validator_key);
 						match authority_position {
@@ -272,7 +272,7 @@ impl<T: Trait> FindAuthor<u32> for Module<T> {
 	{
 		for (id, mut data) in digests.into_iter() {
 			if id == BABE_ENGINE_ID {
-				return Some(RawBabePreDigest::decode(&mut data)?.authority_index);
+				return Some(RawBabePreDigest::decode(&mut data).ok()?.authority_index);
 			}
 		}
 		return None;
@@ -346,7 +346,7 @@ impl<T: Trait> Module<T> {
 			.iter()
 			.filter_map(|s| s.as_pre_runtime())
 			.filter_map(|(id, mut data)| if id == BABE_ENGINE_ID {
-				RawBabePreDigest::decode(&mut data)
+				RawBabePreDigest::decode(&mut data).ok()
 			} else {
 				None
 			})

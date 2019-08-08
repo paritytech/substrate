@@ -110,6 +110,7 @@ impl system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = BlockNumber;
+	type Call = ();
 	type Hash = H256;
 	type Hashing = ::sr_primitives::traits::BlakeTwo256;
 	type AccountId = AccountId;
@@ -421,10 +422,12 @@ pub fn current_total_payout_for_duration(duration: u64) -> u64 {
 	res
 }
 
-pub fn add_reward_points_to_all_elected() {
-	for v in <Module<Test>>::current_elected() {
-		<Module<Test>>::add_reward_points_to_validator(v, 1);
-	}
+pub fn reward_all_elected() {
+	let rewards = <Module<Test>>::current_elected().iter()
+		.map(|v| (*v, 1))
+		.collect::<Vec<_>>();
+
+	<Module<Test>>::reward_by_ids(rewards)
 }
 
 pub fn validator_controllers() -> Vec<AccountId> {
