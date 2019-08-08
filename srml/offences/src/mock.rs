@@ -21,7 +21,7 @@
 use std::cell::RefCell;
 use crate::{Module, Trait};
 use sr_primitives::Perbill;
-use sr_primitives::offence::{self, OffenceDetails, TimeSlot};
+use sr_staking_primitives::offence::{self, OffenceDetails, TimeSlot};
 use sr_primitives::testing::Header;
 use sr_primitives::traits::{IdentityLookup, BlakeTwo256};
 use substrate_primitives::{H256, Blake2Hasher};
@@ -91,6 +91,7 @@ pub type Offences = Module<Runtime>;
 
 pub const KIND: [u8; 16] = *b"test_report_1234";
 
+#[derive(Clone)]
 pub struct Offence<T> {
 	pub validators_count: u32,
 	pub session_index: u32,
@@ -105,7 +106,7 @@ impl<T: Clone> offence::Offence<T> for Offence<T> {
 		self.offenders.clone()
 	}
 
-	fn current_era_start_session_index(&self) -> u32 {
+	fn session_index(&self) -> u32 {
 		self.session_index
 	}
 
@@ -121,6 +122,6 @@ impl<T: Clone> offence::Offence<T> for Offence<T> {
 		offenders_count: u32,
 		validators_count: u32,
 	) -> Perbill {
-		Perbill::from_percent(offenders_count * 100 / validators_count)
+		Perbill::from_percent(5 + offenders_count * 100 / validators_count)
 	}
 }
