@@ -268,43 +268,30 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 		let DeclStorageTypeInfos { typ, value_type, is_option, .. } = type_infos;
 
 		// TODO TODO: how can linked_map works with is_option ???inserting a None will remove the
-		// value and you can't iterate on it
+		// value and you can't iterate on it. resolve this question after merging basti fix
 		let from_optional_value_to_query = from_optional_value_to_query(is_option, fielddefault);
 		let from_query_to_optional_value = from_query_to_optional_value(is_option);
 
 		let trait_required = ext::type_contains_ident(value_type, traitinstance)
 			|| ext::type_contains_ident(kty, traitinstance);
 
-		let (struct_trait, impl_trait, trait_and_instance) = if trait_required {
+		let (struct_trait, impl_trait, trait_and_instance, where_clause) = if trait_required {
 			(
 				quote!(#traitinstance: #traittype, #instance #bound_instantiable #equal_default_instance),
 				quote!(#traitinstance: #traittype, #instance #bound_instantiable),
 				quote!(#traitinstance, #instance),
+				where_clause.clone(),
 			)
 		} else {
 			(
 				quote!(#instance #bound_instantiable #equal_default_instance),
 				quote!(#instance #bound_instantiable),
 				quote!(#instance),
-			)
-		};
-
-		// TODO TODO: remove unused trait_where_clause
-		let (where_clause, trait_where_clause) = if trait_required {
-			(
-				where_clause.clone(),
-				where_clause.clone().map(|mut wc| {
-					wc.predicates.push(syn::parse_quote!(#traitinstance: 'static));
-					wc
-				}).or_else(|| syn::parse_quote!(where #traitinstance: 'static)),
-			)
-		} else {
-			(
-				None,
 				None,
 			)
 		};
 
+		// generator for linked_map
 		quote! {
 			#( #[ #attrs ] )*
 			#visibility struct #name<#struct_trait>(
