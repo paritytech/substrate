@@ -26,7 +26,6 @@ mod mock;
 mod tests;
 
 use rstd::vec::Vec;
-use session::historical::{self, IdentificationTuple};
 use support::{
 	StorageDoubleMap, decl_module, decl_storage, Parameter,
 };
