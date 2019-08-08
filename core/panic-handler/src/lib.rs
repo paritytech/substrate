@@ -15,18 +15,31 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Custom panic hook with bug report link
+//!
+//! This crate provides the [`set`] function, which wraps around [`std::panic::set_hook`] and
+//! sets up a panic hook that prints a backtrace and invites the user to open an issue to the
+//! given URL.
+//!
+//! By default, the panic handler aborts the process by calling [`std::process::exit`]. This can
+//! temporarily be disabled by using an [`AbortGuard`].
 
 use backtrace::Backtrace;
 use std::io::{self, Write};
+use std::marker::PhantomData;
 use std::panic::{self, PanicInfo};
 use std::cell::Cell;
 use std::thread;
 
 thread_local! {
-	pub static ABORT: Cell<bool> = Cell::new(true);
+	static ABORT: Cell<bool> = Cell::new(true);
 }
 
-/// Set the panic hook
+/// Set the panic hook.
+///
+/// Calls [`std::panic::set_hook`] to set up the panic hook.
+///
+/// The `bug_url` parameter is an invitation for users to visit that URL to submit a bug report
+/// in the case where a panic happens.
 pub fn set(bug_url: &'static str) {
 	panic::set_hook(Box::new(move |c| panic_hook(c, bug_url)));
 }
@@ -39,7 +52,7 @@ This is a bug. Please report it at:
 ")}
 
 /// Set aborting flag. Returns previous value of the flag.
-pub fn set_abort(enabled: bool) -> bool {
+fn set_abort(enabled: bool) -> bool {
 	ABORT.with(|flag| {
 		let prev = flag.get();
 		flag.set(enabled);
@@ -47,22 +60,47 @@ pub fn set_abort(enabled: bool) -> bool {
 	})
 }
 
-/// Abort flag guard. Sets abort on construction and reverts to previous setting when dropped.
-pub struct AbortGuard(bool);
+/// RAII guard for whether panics in the current thread should unwind or abort.
+///
+/// Sets a thread-local abort flag on construction and reverts to the previous setting when dropped.
+/// Does not implement `Send` on purpose.
+///
+/// > **Note**: Because we restore the previous value when dropped, you are encouraged to leave
+/// > the `AbortGuard` on the stack and let it destroy itself naturally.
+pub struct AbortGuard {
+	/// Value that was in `ABORT` before we created this guard.
+	previous_val: bool,
+	/// Marker so that `AbortGuard` doesn't implement `Send`.
+	_not_send: PhantomData<std::rc::Rc<()>>
+}
 
 impl AbortGuard {
-	/// Create a new guard and set abort flag to specified value.
-	pub fn new(enable: bool) -> AbortGuard {
-		AbortGuard(set_abort(enable))
+	/// Create a new guard. While the guard is alive, panics that happen in the current thread will
+	/// unwind the stack (unless another guard is created afterwards).
+	pub fn force_unwind() -> AbortGuard {
+		AbortGuard {
+			previous_val: set_abort(false),
+			_not_send: PhantomData
+		}
+	}
+
+	/// Create a new guard. While the guard is alive, panics that happen in the current thread will
+	/// abort the process (unless another guard is created afterwards).
+	pub fn force_abort() -> AbortGuard {
+		AbortGuard {
+			previous_val: set_abort(true),
+			_not_send: PhantomData
+		}
 	}
 }
 
 impl Drop for AbortGuard {
 	fn drop(&mut self) {
-		set_abort(self.0);
+		set_abort(self.previous_val);
 	}
 }
 
+/// Function being called when a panic happens.
 fn panic_hook(info: &PanicInfo, report_url: &'static str) {
 	let location = info.location();
 	let file = location.as_ref().map(|l| l.file()).unwrap_or("<unknown>");
@@ -102,9 +140,14 @@ fn panic_hook(info: &PanicInfo, report_url: &'static str) {
 	})
 }
 
-#[test]
-fn does_not_abort() {
-	set("test");
-	let _guard = AbortGuard::new(false);
-	::std::panic::catch_unwind(|| panic!()).ok();
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn does_not_abort() {
+		set("test");
+		let _guard = AbortGuard::force_unwind();
+		::std::panic::catch_unwind(|| panic!()).ok();
+	}
 }

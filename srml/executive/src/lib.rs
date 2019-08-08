@@ -82,7 +82,7 @@ use sr_primitives::{generic::Digest, traits::{
 	OnInitialize, NumberFor, Block as BlockT, OffchainWorker, ValidateUnsigned
 }};
 use srml_support::Dispatchable;
-use parity_codec::{Codec, Encode};
+use codec::{Codec, Encode};
 use system::{extrinsics_root, DigestOf};
 use sr_primitives::{ApplyOutcome, ApplyError};
 use sr_primitives::transaction_validity::TransactionValidity;
@@ -108,7 +108,7 @@ mod internal {
 		fn from(d: DispatchError) -> Self {
 			match d {
 				DispatchError::Payment => ApplyError::CantPay,
-				DispatchError::Resource => ApplyError::FullBlock,
+				DispatchError::Exhausted => ApplyError::FullBlock,
 				DispatchError::NoPermission => ApplyError::CantPay,
 				DispatchError::BadState => ApplyError::CantPay,
 				DispatchError::Stale => ApplyError::Stale,
@@ -368,8 +368,7 @@ mod tests {
 	use hex_literal::hex;
 
 	impl_outer_origin! {
-		pub enum Origin for Runtime {
-		}
+		pub enum Origin for Runtime { }
 	}
 
 	impl_outer_event!{
@@ -390,6 +389,7 @@ mod tests {
 	impl system::Trait for Runtime {
 		type Origin = Origin;
 		type Index = u64;
+		type Call = Call<Runtime>;
 		type BlockNumber = u64;
 		type Hash = primitives::H256;
 		type Hashing = BlakeTwo256;
@@ -450,7 +450,7 @@ mod tests {
 		(
 			system::CheckEra::from(Era::Immortal),
 			system::CheckNonce::from(nonce),
-			system::CheckWeight::from(),
+			system::CheckWeight::new(),
 			balances::TakeFees::from(fee)
 		)
 	}
@@ -465,10 +465,10 @@ mod tests {
 		balances::GenesisConfig::<Runtime> {
 			balances: vec![(1, 211)],
 			vesting: vec![],
-		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
+		}.assimilate_storage(&mut t).unwrap();
 		let xt = sr_primitives::testing::TestXt(sign_extra(1, 0, 0), Call::transfer(2, 69));
 		let weight = xt.get_dispatch_info().weight as u64;
-		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new_with_children(t);
+		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new(t);
 		with_externalities(&mut t, || {
 			Executive::initialize_block(&Header::new(
 				1,
@@ -485,11 +485,11 @@ mod tests {
 	}
 
 	fn new_test_ext(balance_factor: u64) -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
-		t.extend(balances::GenesisConfig::<Runtime> {
+		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+		balances::GenesisConfig::<Runtime> {
 			balances: vec![(1, 111 * balance_factor)],
 			vesting: vec![],
-		}.build_storage().unwrap().0);
+		}.assimilate_storage(&mut t).unwrap();
 		t.into()
 	}
 
@@ -500,7 +500,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("ba811447b8ae3bf798a07a18f5355ea59926917c8a9cc7527ede20b261aacfdf").into(),
+					state_root: hex!("3e51b47b6cc8449eece93eee4b01f03b00a0ca7981c0b6c0447b6e0d50ca886d").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},

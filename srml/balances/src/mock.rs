@@ -18,7 +18,8 @@
 
 #![cfg(test)]
 
-use sr_primitives::{Perbill, traits::{Convert, IdentityLookup}, testing::Header, weights::{DispatchInfo, Weight}};
+use sr_primitives::{Perbill, traits::{Convert, IdentityLookup}, testing::Header,
+	weights::{DispatchInfo, Weight}};
 use primitives::{H256, Blake2Hasher};
 use runtime_io;
 use srml_support::{impl_outer_origin, parameter_types};
@@ -85,6 +86,7 @@ impl system::Trait for Runtime {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
+	type Call = ();
 	type Hash = H256;
 	type Hashing = ::sr_primitives::traits::BlakeTwo256;
 	type AccountId = u64;
@@ -178,8 +180,8 @@ impl ExtBuilder {
 	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 		self.set_associated_consts();
-		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
-		t.extend(GenesisConfig::<Runtime> {
+		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+		GenesisConfig::<Runtime> {
 			balances: if self.monied {
 				vec![
 					(1, 10 * self.existential_deposit),
@@ -200,13 +202,16 @@ impl ExtBuilder {
 			} else {
 				vec![]
 			},
-		}.build_storage().unwrap().0);
+		}.assimilate_storage(&mut t).unwrap();
 		t.into()
 	}
 }
 
 pub type System = system::Module<Runtime>;
 pub type Balances = Module<Runtime>;
+
+
+pub const CALL: &<Runtime as system::Trait>::Call = &();
 
 /// create a transaction info struct from weight. Handy to avoid building the whole struct.
 pub fn info_from_weight(w: Weight) -> DispatchInfo {

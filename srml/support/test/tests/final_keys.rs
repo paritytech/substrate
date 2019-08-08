@@ -17,7 +17,7 @@
 use runtime_io::{with_externalities, Blake2Hasher};
 use srml_support::{StorageValue, StorageMap, StorageDoubleMap};
 use srml_support::storage::unhashed;
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 
 pub trait Trait {
 	type Origin;
@@ -53,7 +53,7 @@ impl Trait for Test {
 }
 
 fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-	GenesisConfig::<Test>::default().build_storage().unwrap().0.into()
+	GenesisConfig::<Test>::default().build_storage().unwrap().into()
 }
 
 #[test]

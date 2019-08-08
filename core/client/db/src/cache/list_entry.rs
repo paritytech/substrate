@@ -18,7 +18,7 @@
 
 use client::error::Result as ClientResult;
 use sr_primitives::traits::{Block as BlockT, NumberFor};
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 
 use crate::cache::{CacheItemT, ComplexBlockId};
 use crate::cache::list_storage::{Storage};

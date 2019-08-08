@@ -45,11 +45,10 @@ for
 where
 	AccountId: Member + MaybeDisplay,
 	Call: Member + Dispatchable<Origin=Origin>,
-	Extra: SignedExtension<AccountId=AccountId>,
+	Extra: SignedExtension<AccountId=AccountId, Call=Call>,
 	Origin: From<Option<AccountId>>,
 {
 	type AccountId = AccountId;
-
 	type Call = Call;
 
 	fn sender(&self) -> Option<&Self::AccountId> {
@@ -61,9 +60,9 @@ where
 		len: usize,
 	) -> TransactionValidity {
 		if let Some((ref id, ref extra)) = self.signed {
-			Extra::validate(extra, id, info, len).into()
+			Extra::validate(extra, id, &self.function, info, len).into()
 		} else {
-			match Extra::validate_unsigned(info, len) {
+			match Extra::validate_unsigned(&self.function, info, len) {
 				Ok(extra) => match U::validate_unsigned(&self.function) {
 					TransactionValidity::Valid(v) =>
 						TransactionValidity::Valid(v.combine_with(extra)),
@@ -78,14 +77,16 @@ where
 		info: DispatchInfo,
 		len: usize,
 	) -> Result<DispatchResult, DispatchError> {
-		let maybe_who = if let Some((id, extra)) = self.signed {
-			Extra::pre_dispatch(extra, &id, info, len)?;
-			Some(id)
+		let (maybe_who, pre) = if let Some((id, extra)) = self.signed {
+			let pre = Extra::pre_dispatch(extra, &id, &self.function, info, len)?;
+			(Some(id), pre)
 		} else {
-			Extra::pre_dispatch_unsigned(info, len)?;
-			None
+			let pre = Extra::pre_dispatch_unsigned(&self.function, info, len)?;
+			(None, pre)
 		};
-		Ok(self.function.dispatch(Origin::from(maybe_who)))
+		let res = self.function.dispatch(Origin::from(maybe_who));
+		Extra::post_dispatch(pre, info, len);
+		Ok(res)
 	}
 }
 

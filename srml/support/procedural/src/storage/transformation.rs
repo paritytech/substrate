@@ -380,7 +380,7 @@ fn decl_store_extra_genesis(
 	}
 
 	let mut has_scall = false;
-	let mut scall = quote!{ ( |_, _, _| {} ) };
+	let mut scall = quote!{ ( |_, _| {} ) };
 	let mut genesis_extrafields = TokenStream2::new();
 	let mut genesis_extrafields_default = TokenStream2::new();
 
@@ -536,23 +536,24 @@ fn decl_store_extra_genesis(
 					),
 					String
 				> #fn_where_clause {
-					let mut storage = Default::default();
-					let mut child_storage = Default::default();
-					self.assimilate_storage::<#fn_traitinstance>(&mut storage, &mut child_storage)?;
-					Ok((storage, child_storage))
+					let mut storage = (Default::default(), Default::default());
+					self.assimilate_storage::<#fn_traitinstance>(&mut storage)?;
+					Ok(storage)
 				}
 
 				/// Assimilate the storage for this module into pre-existing overlays.
 				pub fn assimilate_storage #fn_generic (
 					self,
-					r: &mut #scrate::sr_primitives::StorageOverlay,
-					c: &mut #scrate::sr_primitives::ChildrenStorageOverlay,
+					tuple_storage: &mut (
+						#scrate::sr_primitives::StorageOverlay,
+						#scrate::sr_primitives::ChildrenStorageOverlay,
+					),
 				) -> std::result::Result<(), String> #fn_where_clause {
-					let storage = r;
+					let storage = &mut tuple_storage.0;
 
 					#builders
 
-					#scall(storage, c, &self);
+					#scall(tuple_storage, &self);
 
 					Ok(())
 				}
@@ -564,10 +565,12 @@ fn decl_store_extra_genesis(
 			{
 				fn build_module_genesis_storage(
 					self,
-					r: &mut #scrate::sr_primitives::StorageOverlay,
-					c: &mut #scrate::sr_primitives::ChildrenStorageOverlay,
+					storage: &mut (
+						#scrate::sr_primitives::StorageOverlay,
+						#scrate::sr_primitives::ChildrenStorageOverlay,
+					),
 				) -> std::result::Result<(), String> {
-					self.assimilate_storage::<#fn_traitinstance> (r, c)
+					self.assimilate_storage::<#fn_traitinstance> (storage)
 				}
 			}
 		};
@@ -1068,6 +1071,12 @@ fn store_functions_to_metadata (
 					}).clone()
 				}
 			}
+
+			unsafe impl<#traitinstance: #traittype, #instance #bound_instantiable> Send
+				for #struct_name<#traitinstance, #instance> #where_clause {}
+
+			unsafe impl<#traitinstance: #traittype, #instance #bound_instantiable> Sync
+				for #struct_name<#traitinstance, #instance> #where_clause {}
 
 			#[cfg(not(feature = "std"))]
 			impl<#traitinstance: #traittype, #instance #bound_instantiable> #scrate::metadata::DefaultByte

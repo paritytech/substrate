@@ -39,7 +39,7 @@ pub use rstd::{slice, mem};
 #[cfg(feature = "std")]
 use rstd::result;
 #[doc(hidden)]
-pub use parity_codec::{Encode, Decode};
+pub use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use crate::error;
 use sr_api_macros::decl_runtime_apis;

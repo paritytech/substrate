@@ -24,7 +24,8 @@ use log::warn;
 use hash_db::Hasher;
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::TrieBackendStorage;
-use trie::{TrieDBMut, TrieMut, MemoryDB, trie_root, child_trie_root, default_child_trie_root};
+use trie::{TrieMut, MemoryDB, child_trie_root, default_child_trie_root, TrieConfiguration};
+use trie::trie_types::{TrieDBMut, Layout};
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
@@ -69,9 +70,13 @@ pub trait Backend<H: Hasher> {
 	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F);
 
-	/// Retrieve all entries keys of which start with the given prefix and
+	/// Retrieve all entries keys which start with the given prefix and
 	/// call `f` for each of those keys.
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F);
+
+	/// Retrieve all child entries keys which start with the given prefix and
+	/// call `f` for each of those keys.
+	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], f: F);
 
 	/// Calculate the storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit.
@@ -102,11 +107,7 @@ pub trait Backend<H: Hasher> {
 	/// Get all keys of child storage with given prefix
 	fn child_keys(&self, child_storage_key: &[u8], prefix: &[u8]) -> Vec<Vec<u8>> {
 		let mut all = Vec::new();
-		self.for_keys_in_child_storage(child_storage_key, |k| {
-			if k.starts_with(prefix) {
-				all.push(k.to_vec());
-			}
-		});
+		self.for_child_keys_with_prefix(child_storage_key, prefix, |k| all.push(k.to_vec()));
 		all
 	}
 
@@ -247,6 +248,25 @@ impl<H: Hasher> From<HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>> for In
 	}
 }
 
+impl<H: Hasher> From<(
+		HashMap<Vec<u8>, Vec<u8>>,
+		HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
+)> for InMemory<H> {
+	fn from(inners: (
+		HashMap<Vec<u8>, Vec<u8>>,
+		HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
+	)) -> Self {
+		let mut inner: HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>
+			= inners.1.into_iter().map(|(k, v)| (Some(k), v)).collect();
+		inner.insert(None, inners.0);
+		InMemory {
+			inner: inner,
+			trie: None,
+			_hasher: PhantomData,
+		}
+	}
+}
+
 impl<H: Hasher> From<HashMap<Vec<u8>, Vec<u8>>> for InMemory<H> {
 	fn from(inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
 		let mut expanded = HashMap::new();
@@ -305,6 +325,11 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		self.inner.get(&Some(storage_key.to_vec())).map(|map| map.keys().for_each(|k| f(&k)));
 	}
 
+	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], f: F) {
+		self.inner.get(&Some(storage_key.to_vec()))
+			.map(|map| map.keys().filter(|key| key.starts_with(prefix)).map(|k| &**k).for_each(f));
+	}
+
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
@@ -315,7 +340,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 			.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
 
 		let transaction: Vec<_> = delta.into_iter().collect();
-		let root = trie_root::<H, _, _, _>(existing_pairs.chain(transaction.iter().cloned())
+		let root = Layout::<H>::trie_root(existing_pairs.chain(transaction.iter().cloned())
 			.collect::<HashMap<_, _>>()
 			.into_iter()
 			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
@@ -338,7 +363,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 			.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
 
 		let transaction: Vec<_> = delta.into_iter().collect();
-		let root = child_trie_root::<H, _, _, _>(
+		let root = child_trie_root::<Layout<H>, _, _, _>(
 			&storage_key,
 			existing_pairs.chain(transaction.iter().cloned())
 				.collect::<HashMap<_, _>>()
@@ -348,7 +373,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 
 		let full_transaction = transaction.into_iter().map(|(k, v)| (Some(storage_key.clone()), k, v)).collect();
 
-		let is_default = root == default_child_trie_root::<H>(&storage_key);
+		let is_default = root == default_child_trie_root::<Layout<H>>(&storage_key);
 
 		(root, is_default, full_transaction)
 	}

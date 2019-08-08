@@ -18,7 +18,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
-use parity_codec::Decode;
+use codec::Decode;
 use hash_db::Hasher;
 use num_traits::One;
 use crate::backend::Backend;
@@ -156,13 +156,13 @@ fn prepare_digest_input<'a, S, H, Number>(
 
 			let extrinsic_prefix = ExtrinsicIndex::key_neutral_prefix(digest_build_block.clone());
 			trie_storage.for_keys_with_prefix(&extrinsic_prefix, |key|
-				if let Some(InputKey::ExtrinsicIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
+				if let Ok(InputKey::ExtrinsicIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
 					insert_to_map(trie_key.key);
 				});
 
 			let digest_prefix = DigestIndex::key_neutral_prefix(digest_build_block.clone());
 			trie_storage.for_keys_with_prefix(&digest_prefix, |key|
-				if let Some(InputKey::DigestIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
+				if let Ok(InputKey::DigestIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
 					insert_to_map(trie_key.key);
 				});
 
@@ -173,7 +173,7 @@ fn prepare_digest_input<'a, S, H, Number>(
 
 #[cfg(test)]
 mod test {
-	use parity_codec::Encode;
+	use codec::Encode;
 	use primitives::Blake2Hasher;
 	use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
 	use crate::backend::InMemory;
