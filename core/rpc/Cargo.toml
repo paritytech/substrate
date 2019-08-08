@@ -21,6 +21,7 @@ client = { package = "substrate-client", path = "../client" }
 substrate-executor = { path = "../executor" }
 network = { package = "substrate-network", path = "../network" }
 primitives = { package = "substrate-primitives", path = "../primitives" }
+session = { package = "substrate-session", path = "../session" }
 state_machine = { package = "substrate-state-machine", path = "../state-machine" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../transaction-pool" }
 sr-primitives = { path = "../sr-primitives" }

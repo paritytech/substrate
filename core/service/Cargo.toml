@@ -23,8 +23,8 @@ keystore = { package = "substrate-keystore", path = "../../core/keystore" }
 sr-io = { path = "../../core/sr-io" }
 sr-primitives = { path = "../../core/sr-primitives" }
 primitives = { package = "substrate-primitives", path = "../primitives" }
+session = { package = "substrate-session", path = "../session" }
 app-crypto = { package = "substrate-application-crypto", path = "../application-crypto" }
-substrate-session = { path = "../session" }
 consensus_common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 network = { package = "substrate-network", path = "../../core/network" }
 client = { package = "substrate-client", path = "../../core/client" }
