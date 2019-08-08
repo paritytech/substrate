@@ -37,7 +37,7 @@ pub use once_cell;
 pub use paste;
 #[cfg(feature = "std")]
 #[doc(hidden)]
-pub use runtime_io::with_storage_and_children;
+pub use runtime_io::with_storage;
 
 pub use self::storage::hashed::{Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat};
 
