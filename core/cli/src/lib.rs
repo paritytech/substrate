@@ -473,7 +473,14 @@ where
 
 	fill_transaction_pool_configuration::<F>(&mut config, cli.pool_config)?;
 
-	config.dev_key_seed = cli.keyring.account.map(|a| format!("//{}", a));
+	config.dev_key_seed = cli.keyring.account
+		.map(|a| format!("//{}", a)).or_else(|| {
+			if is_dev {
+				Some("//Alice".into())
+			} else {
+				None
+			}
+		});
 
 	let rpc_interface: &str = if cli.rpc_external { "0.0.0.0" } else { "127.0.0.1" };
 	let ws_interface: &str = if cli.ws_external { "0.0.0.0" } else { "127.0.0.1" };
