@@ -83,8 +83,8 @@ construct_service_factory! {
 						client,
 						proposer,
 						service.network(),
-						service.config.custom.inherent_data_providers.clone(),
-						service.config.force_authoring,
+						service.config().custom.inherent_data_providers.clone(),
+						service.config().force_authoring,
 					)?;
 					service.spawn_task(Box::new(aura.select(service.on_exit()).then(|_| Ok(()))));
 				}
