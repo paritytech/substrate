@@ -133,8 +133,7 @@
 //!
 //! ## Usage
 //!
-//! ### Example: Slashing a particular validator.
-//! TODO [slashing] Figure out a better example.
+//! ### Example: Rewarding a validator by id.
 //!
 //! ```
 //! use srml_support::{decl_module, dispatch::Result};
@@ -145,10 +144,10 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//!		/// Slash a validator for an offence.
-//! 		pub fn slash_myself(origin) -> Result {
+//!			/// Reward a validator.
+//! 		pub fn reward_myself(origin) -> Result {
 //! 			let reported = ensure_signed(origin)?;
-//! 			<staking::Module<T>>::slash_validator(reported, 1_000.into());
+//! 			<staking::Module<T>>::reward_by_ids(vec![(reported, 10)]);
 //! 			Ok(())
 //! 		}
 //! 	}
