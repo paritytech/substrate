@@ -19,7 +19,9 @@
 #![cfg(test)]
 
 use super::*;
-use crate::mock::{Offences, System, Offence, TestEvent, KIND, new_test_ext, with_on_offence_fractions};
+use crate::mock::{
+	Offences, System, Offence, TestEvent, KIND, new_test_ext, with_on_offence_fractions,
+};
 use system::{EventRecord, Phase};
 use runtime_io::with_externalities;
 
@@ -217,3 +219,46 @@ fn doesnt_deposit_event_for_dups() {
 	});
 }
 
+#[test]
+fn should_properly_count_offences() {
+	// We report two different authorities for the same issue. Ultimately, the 1st authority
+	// should have `count` equal 2 and the count of the 2nd one should be equal to 1.
+	with_externalities(&mut new_test_ext(), || {
+		// given
+		let session_index = 5;
+		let time_slot = 42;
+		assert_eq!(Offences::offence_reports(&KIND, &(session_index, time_slot)), vec![]);
+
+		let offence1 = Offence {
+			validators_count: 5,
+			session_index,
+			time_slot,
+			offenders: vec![5],
+		};
+		let offence2 = Offence {
+			validators_count: 5,
+			session_index,
+			time_slot,
+			offenders: vec![4],
+		};
+		Offences::report_offence(None, offence1);
+		with_on_offence_fractions(|f| {
+			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
+			f.clear();
+		});
+
+		// when
+		// report for the second time
+		Offences::report_offence(None, offence2);
+
+		// then
+		// the 1st authority should have count 2 and the 2nd one should be reported only once.
+		assert_eq!(
+			Offences::offence_reports(&KIND, &(session_index, time_slot)),
+			vec![
+				OffenceDetails { offender: 5, count: 2, reporters: vec![] },
+				OffenceDetails { offender: 4, count: 1, reporters: vec![] },
+			]
+		);
+	});
+}
