@@ -473,7 +473,7 @@ where
 		is_dev,
 	)?;
 
-	fill_transaction_pool_configuration::<F>(&mut config, cli.pool_config)?;
+	fill_transaction_pool_configuration(&mut config, cli.pool_config)?;
 
 	config.dev_key_seed = cli.keyring.account
 		.map(|a| format!("//{}", a)).or_else(|| {

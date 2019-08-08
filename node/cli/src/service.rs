@@ -142,7 +142,7 @@ construct_service_factory! {
 					// FIXME #1578 make this available through chainspec
 					gossip_duration: Duration::from_millis(333),
 					justification_period: 4096,
-					name: Some(service.config.name.clone()),
+					name: Some(service.config().name.clone()),
 					keystore: Some(service.keystore()),
 				};
 

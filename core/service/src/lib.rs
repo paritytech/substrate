@@ -843,7 +843,7 @@ where
 		let encoded = transaction.encode();
 		match Decode::decode(&mut &encoded[..]) {
 			Ok(uxt) => {
-				let best_block_id = self.best_block_id()?;
+				let best_block_id = BlockId::hash(self.client.info().chain.best_hash);
 				match self.pool.submit_one(&best_block_id, uxt) {
 					Ok(hash) => Some(hash),
 					Err(e) => match e.into_pool_error() {
