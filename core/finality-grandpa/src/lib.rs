@@ -680,8 +680,8 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 
 		poll_voter.select2(voter_commands_rx).then(move |res| match res {
 			Ok(future::Either::A(((), _))) => {
-				// voters don't conclude naturally; this could reasonably be an error.
-				Ok(FutureLoop::Break(()))
+				// voters don't conclude naturally
+				Err(Error::Safety("GRANDPA voter has concluded.".into()))
 			},
 			Err(future::Either::B(_)) => {
 				// the `voter_commands_rx` stream should not fail.

@@ -28,6 +28,7 @@ pub mod error;
 use std::io;
 use std::net::SocketAddr;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use futures::sync::mpsc;
 use parking_lot::Mutex;
@@ -82,8 +83,14 @@ pub struct Service<Components: components::Components> {
 		NetworkStatus<ComponentBlock<Components>>, NetworkState
 	)>>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
-	exit: exit_future::Exit,
-	signal: Option<Signal>,
+	/// A future that resolves when the service has exited, this is useful to
+	/// make sure any internally spawned futures stop when the service does.
+	on_exit: exit_future::Exit,
+	/// A signal that makes the exit future above resolve, fired on service drop.
+	exit_signal: Option<Signal>,
+	/// When set to `true` the next time the service future is polled it should
+	/// be completed (i.e. returns `Async::Ready(())`).
+	should_exit: Arc<AtomicBool>,
 	/// Sender for futures that must be spawned as background tasks.
 	to_spawn_tx: mpsc::UnboundedSender<Box<dyn Future<Item = (), Error = ()> + Send>>,
 	/// Receiver for futures that must be spawned as background tasks.
@@ -153,7 +160,7 @@ impl<Components: components::Components> Service<Components> {
 	pub fn new(
 		mut config: FactoryFullConfiguration<Components::Factory>,
 	) -> Result<Self, error::Error> {
-		let (signal, exit) = ::exit_future::signal();
+		let (exit_signal, on_exit) = ::exit_future::signal();
 
 		// List of asynchronous tasks to spawn. We collect them, then spawn them all at once.
 		let (to_spawn_tx, to_spawn_rx) =
@@ -276,7 +283,7 @@ impl<Components: components::Components> Service<Components> {
 
 					Ok(())
 				})
-				.select(exit.clone())
+				.select(on_exit.clone())
 				.then(|_| Ok(()));
 			let _ = to_spawn_tx.unbounded_send(Box::new(events));
 		}
@@ -297,7 +304,7 @@ impl<Components: components::Components> Service<Components> {
 					);
 					Ok(())
 				})
-				.select(exit.clone())
+				.select(on_exit.clone())
 				.then(|_| Ok(()));
 
 			let _ = to_spawn_tx.unbounded_send(Box::new(events));
@@ -354,7 +361,7 @@ impl<Components: components::Components> Service<Components> {
 			);
 
 			Ok(())
-		}).select(exit.clone()).then(|_| Ok(()));
+		}).select(on_exit.clone()).then(|_| Ok(()));
 		let _ = to_spawn_tx.unbounded_send(Box::new(tel_task));
 
 		// RPC
@@ -386,14 +393,14 @@ impl<Components: components::Components> Service<Components> {
 			has_bootnodes
 		)
 			.map_err(|_| ())
-			.select(exit.clone())
+			.select(on_exit.clone())
 			.then(|_| Ok(()))));
 
 		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();
 
 		// Telemetry
 		let telemetry = config.telemetry_endpoints.clone().map(|endpoints| {
-			let is_authority = config.roles == Roles::AUTHORITY;
+			let is_authority = config.roles.is_authority();
 			let network_id = network.local_peer_id().to_base58();
 			let name = config.name.clone();
 			let impl_name = config.impl_name.to_owned();
@@ -427,7 +434,7 @@ impl<Components: components::Components> Service<Components> {
 					Ok(())
 				});
 			let _ = to_spawn_tx.unbounded_send(Box::new(future
-				.select(exit.clone())
+				.select(on_exit.clone())
 				.then(|_| Ok(()))));
 			telemetry
 		});
@@ -438,12 +445,13 @@ impl<Components: components::Components> Service<Components> {
 			network_status_sinks,
 			select_chain,
 			transaction_pool,
-			signal: Some(signal),
+			on_exit,
+			exit_signal: Some(exit_signal),
+			should_exit: Arc::new(AtomicBool::new(false)),
 			to_spawn_tx,
 			to_spawn_rx,
 			to_poll: Vec::new(),
 			config,
-			exit,
 			rpc_handlers,
 			_rpc: rpc,
 			_telemetry: telemetry,
@@ -487,6 +495,18 @@ impl<Components: components::Components> Service<Components> {
 	/// Spawns a task in the background that runs the future passed as parameter.
 	pub fn spawn_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
 		let _ = self.to_spawn_tx.unbounded_send(Box::new(task));
+	}
+
+	/// Spawns a task in the background that runs the future passed as
+	/// parameter. The given task is considered infallible, i.e. if it errors we
+	/// trigger a service exit.
+	pub fn spawn_infallible_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
+		let should_exit = self.should_exit.clone();
+		let infallible_task = Box::new(task.map_err(move |_| {
+			should_exit.store(true, Ordering::Relaxed)
+		}));
+
+		let _ = self.to_spawn_tx.unbounded_send(infallible_task);
 	}
 
 	/// Returns a handle for spawning tasks.
@@ -540,7 +560,7 @@ impl<Components: components::Components> Service<Components> {
 
 	/// Get a handle to a future that will resolve on exit.
 	pub fn on_exit(&self) -> ::exit_future::Exit {
-		self.exit.clone()
+		self.on_exit.clone()
 	}
 }
 
@@ -549,6 +569,10 @@ impl<Components> Future for Service<Components> where Components: components::Co
 	type Error = ();
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+		if self.should_exit.load(Ordering::Relaxed) {
+			return Ok(Async::Ready(()));
+		}
+
 		while let Ok(Async::Ready(Some(task_to_spawn))) = self.to_spawn_rx.poll() {
 			let executor = tokio_executor::DefaultExecutor::current();
 			if let Err(err) = executor.execute(task_to_spawn) {
@@ -717,7 +741,7 @@ pub struct NetworkStatus<B: BlockT> {
 impl<Components> Drop for Service<Components> where Components: components::Components {
 	fn drop(&mut self) {
 		debug!(target: "service", "Substrate service shutdown");
-		if let Some(signal) = self.signal.take() {
+		if let Some(signal) = self.exit_signal.take() {
 			signal.fire();
 		}
 	}

@@ -136,7 +136,10 @@ construct_service_factory! {
 
 				let babe = start_babe(babe_config)?;
 				let select = babe.select(service.on_exit()).then(|_| Ok(()));
-				service.spawn_task(Box::new(select));
+
+				// the BABE authoring task is considered infallible, i.e. if it
+				// fails we take down the service with it.
+				service.spawn_infallible_task(select);
 
 				let config = grandpa::Config {
 					// FIXME #1578 make this available through chainspec
@@ -159,14 +162,17 @@ construct_service_factory! {
 							on_exit: service.on_exit(),
 							telemetry_on_connect: Some(telemetry_on_connect),
 						};
-						service.spawn_task(Box::new(grandpa::run_grandpa_voter(grandpa_config)?));
+
+						// the GRANDPA voter task is considered infallible, i.e.
+						// if it fails we take down the service with it.
+						service.spawn_infallible_task(grandpa::run_grandpa_voter(grandpa_config)?);
 					} else {
-						service.spawn_task(Box::new(grandpa::run_grandpa_observer(
+						service.spawn_task(grandpa::run_grandpa_observer(
 							config,
 							link_half,
 							service.network(),
 							service.on_exit(),
-						)?));
+						)?);
 					}
 				}
 
