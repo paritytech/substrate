@@ -101,15 +101,22 @@ pub struct GenesisParameters {
 
 impl generic_test_client::GenesisInit for GenesisParameters {
 	fn genesis_storage(&self) -> (StorageOverlay, ChildrenStorageOverlay) {
+		use codec::Encode;
 		let mut storage = genesis_config(self.support_changes_trie, self.heap_pages_override).genesis_map();
 
+		let child_roots = storage.1.iter().map(|(sk, child_map)| {
+			let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
+				child_map.clone().into_iter()
+			);
+			(sk.clone(), state_root.encode())
+		});
 		let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
-			storage.clone().into_iter()
+			storage.0.clone().into_iter().chain(child_roots)
 		);
 		let block: runtime::Block = client::genesis::construct_genesis_block(state_root);
-		storage.extend(additional_storage_with_genesis(&block));
+		storage.0.extend(additional_storage_with_genesis(&block));
 
-		(storage, Default::default())
+		storage
 	}
 }
 
