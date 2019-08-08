@@ -155,11 +155,8 @@ pub struct TelemetryOnConnect {
 	pub telemetry_connection_sinks: TelemetryOnConnectNotifications,
 }
 
-impl<Components: components::Components> Service<Components> {
-	/// Creates a new service.
-	pub fn new(
-		mut config: FactoryFullConfiguration<Components::Factory>,
-	) -> Result<Self, error::Error> {
+macro_rules! new_impl {
+	($config:ident, $components:ty) => {{
 		let (signal, exit) = exit_future::signal();
 
 		// List of asynchronous tasks to spawn. We collect them, then spawn them all at once.
@@ -167,38 +164,38 @@ impl<Components: components::Components> Service<Components> {
 			mpsc::unbounded::<Box<dyn Future<Item = (), Error = ()> + Send>>();
 
 		// Create client
-		let executor = NativeExecutor::new(config.default_heap_pages);
+		let executor = NativeExecutor::new($config.default_heap_pages);
 
-		let keystore = Keystore::open(config.keystore_path.clone(), config.keystore_password.clone())?;
+		let keystore = Keystore::open($config.keystore_path.clone(), $config.keystore_password.clone())?;
 
-		let (client, on_demand) = Components::build_client(&config, executor, Some(keystore.clone()))?;
-		let select_chain = Components::build_select_chain(&mut config, client.clone())?;
+		let (client, on_demand) = <$components>::build_client(&$config, executor, Some(keystore.clone()))?;
+		let select_chain = <$components>::build_select_chain(&mut $config, client.clone())?;
 
 		let transaction_pool = Arc::new(
-			Components::build_transaction_pool(config.transaction_pool.clone(), client.clone())?
+			<$components>::build_transaction_pool($config.transaction_pool.clone(), client.clone())?
 		);
 		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
-			imports_external_transactions: !config.roles.is_light(),
+			imports_external_transactions: !$config.roles.is_light(),
 			pool: transaction_pool.clone(),
 			client: client.clone(),
 		});
 
-		let (import_queue, finality_proof_request_builder) = Components::build_import_queue(
-			&mut config,
+		let (import_queue, finality_proof_request_builder) = <$components>::build_import_queue(
+			&mut $config,
 			client.clone(),
 			select_chain.clone(),
 			Some(transaction_pool.clone()),
 		)?;
 		let import_queue = Box::new(import_queue);
-		let finality_proof_provider = Components::build_finality_proof_provider(client.clone())?;
+		let finality_proof_provider = <$components>::build_finality_proof_provider(client.clone())?;
 		let chain_info = client.info().chain;
 
-		Components::RuntimeServices::generate_initial_session_keys(
+		<$components>::RuntimeServices::generate_initial_session_keys(
 			client.clone(),
-			config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
+			$config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
 		)?;
 
-		let version = config.full_version();
+		let version = $config.full_version();
 		info!("Highest known block at #{}", chain_info.best_number);
 		telemetry!(
 			SUBSTRATE_INFO;
@@ -207,10 +204,10 @@ impl<Components: components::Components> Service<Components> {
 			"best" => ?chain_info.best_hash
 		);
 
-		let network_protocol = <Components::Factory>::build_network_protocol(&config)?;
+		let network_protocol = <<$components>::Factory>::build_network_protocol(&$config)?;
 
 		let protocol_id = {
-			let protocol_id_full = match config.chain_spec.protocol_id() {
+			let protocol_id_full = match $config.chain_spec.protocol_id() {
 				Some(pid) => pid,
 				None => {
 					warn!("Using default protocol ID {:?} because none is configured in the \
@@ -223,8 +220,8 @@ impl<Components: components::Components> Service<Components> {
 		};
 
 		let network_params = network::config::Params {
-			roles: config.roles,
-			network_config: config.network.clone(),
+			roles: $config.roles,
+			network_config: $config.network.clone(),
 			chain: client.clone(),
 			finality_proof_provider,
 			finality_proof_request_builder,
@@ -242,7 +239,7 @@ impl<Components: components::Components> Service<Components> {
 
 		#[allow(deprecated)]
 		let offchain_storage = client.backend().offchain_storage();
-		let offchain_workers = match (config.offchain_worker, offchain_storage) {
+		let offchain_workers = match ($config.offchain_worker, offchain_storage) {
 			(true, Some(db)) => {
 				Some(Arc::new(offchain::OffchainWorkers::new(client.clone(), db)))
 			},
@@ -260,7 +257,7 @@ impl<Components: components::Components> Service<Components> {
 			let offchain = offchain_workers.as_ref().map(Arc::downgrade);
 			let to_spawn_tx_ = to_spawn_tx.clone();
 			let network_state_info: Arc<dyn NetworkStateInfo + Send + Sync> = network.clone();
-			let is_validator = config.roles.is_authority();
+			let is_validator = $config.roles.is_authority();
 
 			let events = client.import_notification_stream()
 				.map(|v| Ok::<_, ()>(v)).compat()
@@ -268,7 +265,7 @@ impl<Components: components::Components> Service<Components> {
 					let number = *notification.header.number();
 
 					if let (Some(txpool), Some(client)) = (txpool.upgrade(), wclient.upgrade()) {
-						Components::RuntimeServices::maintain_transaction_pool(
+						<$components>::RuntimeServices::maintain_transaction_pool(
 							&BlockId::hash(notification.hash),
 							&*client,
 							&*txpool,
@@ -276,7 +273,7 @@ impl<Components: components::Components> Service<Components> {
 					}
 
 					if let (Some(txpool), Some(offchain)) = (txpool.upgrade(), offchain.as_ref().and_then(|o| o.upgrade())) {
-						let future = Components::RuntimeServices::offchain_workers(
+						let future = <$components>::RuntimeServices::offchain_workers(
 							&number,
 							&offchain,
 							&txpool,
@@ -321,7 +318,7 @@ impl<Components: components::Components> Service<Components> {
 		let client_ = client.clone();
 		let mut sys = System::new();
 		let self_pid = get_current_pid().ok();
-		let (netstat_tx, netstat_rx) = mpsc::unbounded::<(NetworkStatus<ComponentBlock<Components>>, NetworkState)>();
+		let (netstat_tx, netstat_rx) = mpsc::unbounded::<(NetworkStatus<ComponentBlock<$components>>, NetworkState)>();
 		network_status_sinks.lock().push(netstat_tx);
 		let tel_task = netstat_rx.for_each(move |(net_status, network_state)| {
 			let info = client_.info();
@@ -374,12 +371,12 @@ impl<Components: components::Components> Service<Components> {
 		let (system_rpc_tx, system_rpc_rx) = futures03::channel::mpsc::unbounded();
 		let gen_handler = || {
 			let system_info = rpc::system::SystemInfo {
-				chain_name: config.chain_spec.name().into(),
-				impl_name: config.impl_name.into(),
-				impl_version: config.impl_version.into(),
-				properties: config.chain_spec.properties(),
+				chain_name: $config.chain_spec.name().into(),
+				impl_name: $config.impl_name.into(),
+				impl_version: $config.impl_version.into(),
+				properties: $config.chain_spec.properties(),
 			};
-			Components::RuntimeServices::start_rpc(
+			<$components>::RuntimeServices::start_rpc(
 				client.clone(),
 				system_rpc_tx.clone(),
 				system_info.clone(),
@@ -390,7 +387,7 @@ impl<Components: components::Components> Service<Components> {
 			)
 		};
 		let rpc_handlers = gen_handler();
-		let rpc = start_rpc_servers(&config, gen_handler)?;
+		let rpc = start_rpc_servers(&$config, gen_handler)?;
 
 		let _ = to_spawn_tx.unbounded_send(Box::new(build_network_future(
 			network_mut,
@@ -406,17 +403,17 @@ impl<Components: components::Components> Service<Components> {
 		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();
 
 		// Telemetry
-		let telemetry = config.telemetry_endpoints.clone().map(|endpoints| {
-			let is_authority = config.roles.is_authority();
+		let telemetry = $config.telemetry_endpoints.clone().map(|endpoints| {
+			let is_authority = $config.roles.is_authority();
 			let network_id = network.local_peer_id().to_base58();
-			let name = config.name.clone();
-			let impl_name = config.impl_name.to_owned();
+			let name = $config.name.clone();
+			let impl_name = $config.impl_name.to_owned();
 			let version = version.clone();
-			let chain_name = config.chain_spec.name().to_owned();
+			let chain_name = $config.chain_spec.name().to_owned();
 			let telemetry_connection_sinks_ = telemetry_connection_sinks.clone();
 			let telemetry = tel::init_telemetry(tel::TelemetryConfig {
 				endpoints,
-				wasm_external_transport: config.telemetry_external_transport.take(),
+				wasm_external_transport: $config.telemetry_external_transport.take(),
 			});
 			let future = telemetry.clone()
 				.map(|ev| Ok::<_, ()>(ev))
@@ -458,7 +455,7 @@ impl<Components: components::Components> Service<Components> {
 			to_spawn_tx,
 			to_spawn_rx,
 			to_poll: Vec::new(),
-			config,
+			$config,
 			rpc_handlers,
 			_rpc: rpc,
 			_telemetry: telemetry,
@@ -466,6 +463,18 @@ impl<Components: components::Components> Service<Components> {
 			_telemetry_on_connect_sinks: telemetry_connection_sinks.clone(),
 			keystore,
 		})
+	}}
+}
+
+impl<Components: components::Components> Service<Components> {
+	/// Creates a new service.
+	pub fn new(
+		mut config: FactoryFullConfiguration<Components::Factory>,
+	) -> Result<Self, error::Error> {
+		new_impl!(
+			config,
+			Components
+		)
 	}
 
 	/// Returns a reference to the config passed at initialization.
