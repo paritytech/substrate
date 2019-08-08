@@ -1216,6 +1216,7 @@ impl<T: Trait<I>, I: Instance + Clone + Eq> SignedExtension for TakeFees<T, I> {
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = ();
+	type Pre = ();
 	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
 
 	fn validate(

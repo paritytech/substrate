@@ -807,7 +807,7 @@ pub trait SignedExtension:
 	/// Any additional data that will go into the signed payload. This may be created dynamically
 	/// from the transaction using the `additional_signed` function.
 	type AdditionalSigned: Encode;
-	
+
 	/// The type that encodes information that can be passed from pre_dispatch to post-dispatch.
 	type Pre: Default;
 
@@ -876,6 +876,7 @@ macro_rules! tuple_impl_indexed {
 			type AccountId = AccountId;
 			type Call = Call;
 			type AdditionalSigned = ($($direct::AdditionalSigned,)+);
+			type Pre =  ($($direct::Pre,)+);
 			fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str> {
 				Ok(( $(self.$index.additional_signed()?,)+ ))
 			}
@@ -895,9 +896,8 @@ macro_rules! tuple_impl_indexed {
 				call: &Self::Call,
 				info: DispatchInfo,
 				len: usize,
-			) -> Result<(), DispatchError> {
-				$(self.$index.pre_dispatch(who, call, info, len)?;)+
-				Ok(())
+			) -> Result<Self::Pre, DispatchError> {
+				Ok(($(self.$index.pre_dispatch(who, call, info, len)?,)+))
 			}
 			fn validate_unsigned(
 				call: &Self::Call,
@@ -911,16 +911,15 @@ macro_rules! tuple_impl_indexed {
 				call: &Self::Call,
 				info: DispatchInfo,
 				len: usize,
-			) -> Result<(), DispatchError> {
-				$($direct::pre_dispatch_unsigned(call, info, len)?;)+
-				Ok(())
+			) -> Result<Self::Pre, DispatchError> {
+				Ok(($($direct::pre_dispatch_unsigned(call, info, len)?,)+))
 			}
 			fn post_dispatch(
-				pre: &Self::Pre,
+				pre: Self::Pre,
 				info: DispatchInfo,
 				len: usize,
 			) {
-				$($direct::post_dispatch(call, info, len);)+
+				$($direct::post_dispatch(pre.$index, info, len);)+
 			}
 		}
 
@@ -948,6 +947,7 @@ impl SignedExtension for () {
 	type AccountId = u64;
 	type AdditionalSigned = ();
 	type Call = ();
+	type Pre = ();
 	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
 }
 
