@@ -35,6 +35,7 @@ use rstd::ops::{
 	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
 	RemAssign, Shl, Shr
 };
+use crate::AppKey;
 
 /// A lazy value.
 pub trait Lazy<T: ?Sized> {
@@ -67,6 +68,28 @@ impl Verify for primitives::sr25519::Signature {
 	type Signer = primitives::sr25519::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
 		runtime_io::sr25519_verify(self, msg.get(), signer)
+	}
+}
+
+/// Means of signature verification of an application key.
+pub trait AppVerify {
+	/// Type of the signer.
+	type Signer;
+	/// Verify a signature. Return `true` if signature is valid for the value.
+	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool;
+}
+
+impl<
+	S: Verify<Signer=<<T as AppKey>::Public as app_crypto::AppPublic>::Generic> + From<T>,
+	T: app_crypto::Wraps<Inner=S> + app_crypto::AppKey + app_crypto::AppSignature +
+		AsRef<S> + AsMut<S> + From<S>,
+> AppVerify for T {
+	type Signer = <T as AppKey>::Public;
+	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool {
+		use app_crypto::IsWrappedBy;
+		let inner: &S = self.as_ref();
+		let inner_pubkey = <Self::Signer as app_crypto::AppPublic>::Generic::from_ref(&signer);
+		Verify::verify(inner, msg, inner_pubkey)
 	}
 }
 
