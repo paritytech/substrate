@@ -256,7 +256,6 @@ macro_rules! __handle_wrap_internal {
 // Do not complain about unused `dispatch` and `dispatch_aux`.
 #[allow(dead_code)]
 mod tests {
-	use std::collections::HashMap;
 	use crate::metadata::*;
 	use crate::metadata::StorageHasher;
 	use crate::rstd::marker::PhantomData;
@@ -269,7 +268,7 @@ mod tests {
 
 	#[test]
 	fn value() {
-		runtime_io::with_storage(&mut HashMap::new(), || {
+		runtime_io::with_storage(&mut Default::default(), || {
 			assert!(Value::get().is_none());
 			Value::put(&100_000);
 			assert_eq!(Value::get(), Some(100_000));
@@ -280,7 +279,7 @@ mod tests {
 
 	#[test]
 	fn map() {
-		runtime_io::with_storage(&mut HashMap::new(), || {
+		runtime_io::with_storage(&mut Default::default(), || {
 			assert!(Map::get(&5).is_none());
 			Map::insert(&5, &[1; 32]);
 			assert_eq!(Map::get(&5), Some([1; 32]));
@@ -721,11 +720,7 @@ mod test2 {
 		add_extra_genesis {
 			config(_marker) : ::std::marker::PhantomData<T>;
 			config(extra_field) : u32 = 32;
-<<<<<<< HEAD
 			build(|_| {});
-=======
-			build(|_, _| {});
->>>>>>> origin/master
 		}
 	}
 
