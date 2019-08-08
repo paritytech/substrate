@@ -98,7 +98,7 @@ impl<Client, Storage, Block> OffchainWorkers<
 		number: &<Block::Header as traits::Header>::Number,
 		pool: &Arc<Pool<A>>,
 		network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
-	) -> impl Future<Item = (), Error = ()> where
+	) -> impl Future<Output = ()> where
 		A: ChainApi<Block=Block> + 'static,
 	{
 		let runtime = self.client.runtime_api();
@@ -129,9 +129,9 @@ impl<Client, Storage, Block> OffchainWorkers<
 					log::error!("Error running offchain workers at {:?}: {:?}", at, e);
 				}
 			});
-			futures::future::Either::A(runner.process())
+			futures::future::Either::Left(runner.process())
 		} else {
-			futures::future::Either::B(futures::future::ok(()))
+			futures::future::Either::Right(futures::future::ready(()))
 		}
 	}
 }
@@ -152,7 +152,6 @@ fn spawn_worker(f: impl FnOnce() -> () + Send + 'static) {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use futures::Future;
 	use network::{Multiaddr, PeerId};
 
 	struct MockNetworkStateInfo();
@@ -171,7 +170,6 @@ mod tests {
 	fn should_call_into_runtime_and_produce_extrinsic() {
 		// given
 		let _ = env_logger::try_init();
-		let runtime = tokio::runtime::Runtime::new().unwrap();
 		let client = Arc::new(test_client::new());
 		let pool = Arc::new(Pool::new(Default::default(), transaction_pool::ChainApi::new(client.clone())));
 		let db = client_db::offchain::LocalStorage::new_test();
@@ -179,10 +177,9 @@ mod tests {
 
 		// when
 		let offchain = OffchainWorkers::new(client, db);
-		runtime.executor().spawn(offchain.on_block_imported(&0u64, &pool, network_state.clone()));
+		futures::executor::block_on(offchain.on_block_imported(&0u64, &pool, network_state));
 
 		// then
-		runtime.shutdown_on_idle().wait().unwrap();
 		assert_eq!(pool.status().ready, 1);
 		assert_eq!(pool.ready().next().unwrap().is_propagateable(), false);
 	}
