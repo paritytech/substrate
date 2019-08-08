@@ -19,7 +19,7 @@
 #![cfg(test)]
 
 use super::*;
-use crate::mock::{Offences, Offence, KIND, new_test_ext, ON_OFFENCE_PERBILL};
+use crate::mock::{Offences, Offence, KIND, new_test_ext, with_on_offence_perbill};
 use runtime_io::with_externalities;
 
 #[test]
@@ -41,8 +41,8 @@ fn should_report_an_authority_and_trigger_on_offence() {
 		Offences::report_offence(None, offence);
 
 		// then
-		ON_OFFENCE_PERBILL.with(|f| {
-			assert_eq!(f.borrow().clone(), vec![Perbill::from_percent(25)]);
+		with_on_offence_perbill(|f| {
+			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
 		});
 	});
 }
@@ -69,15 +69,15 @@ fn should_calculate_the_fraction_corectly() {
 
 		// when
 		Offences::report_offence(None, offence1);
-		ON_OFFENCE_PERBILL.with(|f| {
-			assert_eq!(f.borrow().clone(), vec![Perbill::from_percent(25)]);
+		with_on_offence_perbill(|f| {
+			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
 		});
 
 		Offences::report_offence(None, offence2);
 
 		// then
-		ON_OFFENCE_PERBILL.with(|f| {
-			assert_eq!(f.borrow().clone(), vec![Perbill::from_percent(20), Perbill::from_percent(45)]);
+		with_on_offence_perbill(|f| {
+			assert_eq!(f.clone(), vec![Perbill::from_percent(20), Perbill::from_percent(45)]);
 		});
 	});
 }
@@ -97,9 +97,9 @@ fn should_not_report_the_same_authority_twice_in_the_same_slot() {
 			offenders: vec![5],
 		};
 		Offences::report_offence(None, offence.clone());
-		ON_OFFENCE_PERBILL.with(|f| {
-			assert_eq!(f.borrow().clone(), vec![Perbill::from_percent(25)]);
-			*f.borrow_mut() = vec![];
+		with_on_offence_perbill(|f| {
+			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
+			f.clear();
 		});
 
 		// when
@@ -107,8 +107,8 @@ fn should_not_report_the_same_authority_twice_in_the_same_slot() {
 		Offences::report_offence(None, offence);
 
 		// then
-		ON_OFFENCE_PERBILL.with(|f| {
-			assert_eq!(f.borrow().clone(), vec![]);
+		with_on_offence_perbill(|f| {
+			assert_eq!(f.clone(), vec![]);
 		});
 	});
 }
@@ -129,9 +129,9 @@ fn should_report_in_different_time_slot() {
 			offenders: vec![5],
 		};
 		Offences::report_offence(None, offence.clone());
-		ON_OFFENCE_PERBILL.with(|f| {
-			assert_eq!(f.borrow().clone(), vec![Perbill::from_percent(25)]);
-			*f.borrow_mut() = vec![];
+		with_on_offence_perbill(|f| {
+			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
+			f.clear();
 		});
 
 		// when
@@ -140,8 +140,8 @@ fn should_report_in_different_time_slot() {
 		Offences::report_offence(None, offence);
 
 		// then
-		ON_OFFENCE_PERBILL.with(|f| {
-			assert_eq!(f.borrow().clone(), vec![Perbill::from_percent(25)]);
+		with_on_offence_perbill(|f| {
+			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
 		});
 	});
 }
