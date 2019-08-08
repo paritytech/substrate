@@ -49,10 +49,9 @@ impl<Reporter, Offender> offence::OnOffenceHandler<Reporter, Offender> for OnOff
 	}
 }
 
-pub fn with_on_offence_perbill<R, F: FnOnce(&mut Vec<Perbill>) -> R>(f: F) -> R {
-	// Feel free to rename this to _mut and add a version that makes `borrow` if required.
-	ON_OFFENCE_PERBILL.with(|on_offence_perbill| {
-		f(&mut *on_offence_perbill.borrow_mut())
+pub fn with_on_offence_fractions<R, F: FnOnce(&mut Vec<Perbill>) -> R>(f: F) -> R {
+	ON_OFFENCE_PERBILL.with(|fractions| {
+		f(&mut *fractions.borrow_mut())
 	})
 }
 

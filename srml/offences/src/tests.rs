@@ -19,7 +19,7 @@
 #![cfg(test)]
 
 use super::*;
-use crate::mock::{Offences, System, Offence, TestEvent, KIND, new_test_ext, with_on_offence_perbill};
+use crate::mock::{Offences, System, Offence, TestEvent, KIND, new_test_ext, with_on_offence_fractions};
 use system::{EventRecord, Phase};
 use runtime_io::with_externalities;
 
@@ -42,7 +42,7 @@ fn should_report_an_authority_and_trigger_on_offence() {
 		Offences::report_offence(None, offence);
 
 		// then
-		with_on_offence_perbill(|f| {
+		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
 		});
 	});
@@ -70,14 +70,14 @@ fn should_calculate_the_fraction_corectly() {
 
 		// when
 		Offences::report_offence(None, offence1);
-		with_on_offence_perbill(|f| {
+		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
 		});
 
 		Offences::report_offence(None, offence2);
 
 		// then
-		with_on_offence_perbill(|f| {
+		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(20), Perbill::from_percent(45)]);
 		});
 	});
@@ -98,7 +98,7 @@ fn should_not_report_the_same_authority_twice_in_the_same_slot() {
 			offenders: vec![5],
 		};
 		Offences::report_offence(None, offence.clone());
-		with_on_offence_perbill(|f| {
+		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
 			f.clear();
 		});
@@ -108,7 +108,7 @@ fn should_not_report_the_same_authority_twice_in_the_same_slot() {
 		Offences::report_offence(None, offence);
 
 		// then
-		with_on_offence_perbill(|f| {
+		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![]);
 		});
 	});
@@ -130,7 +130,7 @@ fn should_report_in_different_time_slot() {
 			offenders: vec![5],
 		};
 		Offences::report_offence(None, offence.clone());
-		with_on_offence_perbill(|f| {
+		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
 			f.clear();
 		});
@@ -141,7 +141,7 @@ fn should_report_in_different_time_slot() {
 		Offences::report_offence(None, offence);
 
 		// then
-		with_on_offence_perbill(|f| {
+		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
 		});
 	});
@@ -195,7 +195,7 @@ fn doesnt_deposit_event_for_dups() {
 			offenders: vec![5],
 		};
 		Offences::report_offence(None, offence.clone());
-		with_on_offence_perbill(|f| {
+		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
 			f.clear();
 		});
