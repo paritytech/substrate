@@ -127,7 +127,7 @@ impl<G> Clone for ChainSpec<G> {
 	}
 }
 
-impl<G: RuntimeGenesis> ChainSpec<G> {
+impl<G> ChainSpec<G> {
 	/// A list of bootnode addresses.
 	pub fn boot_nodes(&self) -> &[String] {
 		&self.spec.boot_nodes
@@ -215,7 +215,9 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 			genesis: GenesisSource::Factory(constructor),
 		}
 	}
+}
 
+impl<G: RuntimeGenesis> ChainSpec<G> {
 	/// Dump to json string.
 	pub fn to_json(self, raw: bool) -> Result<String, String> {
 		#[derive(Serialize, Deserialize)]

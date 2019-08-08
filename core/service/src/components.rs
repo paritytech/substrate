@@ -506,6 +506,16 @@ impl<Factory: ServiceFactory> Future for FullComponents<Factory> {
 	}
 }
 
+impl<Factory: ServiceFactory> Executor<Box<dyn Future<Item = (), Error = ()> + Send>>
+for FullComponents<Factory> {
+	fn execute(
+		&self,
+		future: Box<dyn Future<Item = (), Error = ()> + Send>
+	) -> Result<(), futures::future::ExecuteError<Box<dyn Future<Item = (), Error = ()> + Send>>> {
+		self.service.execute(future)
+	}
+}
+
 impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	type Factory = Factory;
 	type Executor = FullExecutor<Factory>;
@@ -606,12 +616,28 @@ impl<Factory: ServiceFactory> Deref for LightComponents<Factory> {
 	}
 }
 
+impl<Factory: ServiceFactory> DerefMut for LightComponents<Factory> {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.service
+	}
+}
+
 impl<Factory: ServiceFactory> Future for LightComponents<Factory> {
 	type Item = ();
 	type Error = ();
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
 		self.service.poll()
+	}
+}
+
+impl<Factory: ServiceFactory> Executor<Box<dyn Future<Item = (), Error = ()> + Send>>
+for LightComponents<Factory> {
+	fn execute(
+		&self,
+		future: Box<dyn Future<Item = (), Error = ()> + Send>
+	) -> Result<(), futures::future::ExecuteError<Box<dyn Future<Item = (), Error = ()> + Send>>> {
+		self.service.execute(future)
 	}
 }
 

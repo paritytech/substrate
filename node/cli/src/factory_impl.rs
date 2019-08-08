@@ -26,10 +26,8 @@ use keyring::sr25519::Keyring;
 use node_runtime::{Call, CheckedExtrinsic, UncheckedExtrinsic, SignedExtra, BalancesCall, ExistentialDeposit};
 use primitives::{sr25519, crypto::Pair};
 use sr_primitives::{generic::Era, traits::{Block as BlockT, Header as HeaderT, SignedExtension}};
-use substrate_service::ServiceFactory;
 use transaction_factory::RuntimeAdapter;
 use transaction_factory::modes::Mode;
-use crate::service;
 use inherents::InherentData;
 use timestamp;
 use finality_tracker;
@@ -140,7 +138,7 @@ impl RuntimeAdapter for FactoryState<Number> {
 		let index = self.extract_index(&sender, prior_block_hash);
 		let phase = self.extract_phase(*prior_block_hash);
 
-		sign::<service::Factory, Self>(CheckedExtrinsic {
+		sign::<Self>(CheckedExtrinsic {
 			signed: Some((sender.clone(), Self::build_extra(index, phase))),
 			function: Call::Balances(
 				BalancesCall::transfer(
@@ -233,7 +231,7 @@ fn gen_seed_bytes(seed: u64) -> [u8; 32] {
 
 /// Creates an `UncheckedExtrinsic` containing the appropriate signature for
 /// a `CheckedExtrinsics`.
-fn sign<F: ServiceFactory, RA: RuntimeAdapter>(
+fn sign<RA: RuntimeAdapter>(
 	xt: CheckedExtrinsic,
 	key: &sr25519::Pair,
 	additional_signed: <SignedExtra as SignedExtension>::AdditionalSigned,
