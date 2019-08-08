@@ -33,9 +33,9 @@ use log::warn;
 use codec::{Encode, Decode};
 use primitives::{
 	Bytes, Blake2Hasher, H256, ed25519, sr25519, crypto::{Pair, Public, key_types},
-	traits::BareCryptoStorePtr
+	traits::BareCryptoStorePtr,
 };
-use sr_primitives::{generic, traits};
+use sr_primitives::{generic, traits::{self, ProvideRuntimeApi}};
 use self::error::{Error, Result};
 use transaction_pool::{
 	txpool::{
@@ -47,6 +47,7 @@ use transaction_pool::{
 		watcher::Status,
 	},
 };
+use session::SessionKeys;
 
 pub use self::gen_client::Client as AuthorClient;
 
@@ -67,6 +68,10 @@ pub trait AuthorApi<Hash, BlockHash> {
 		suri: String,
 		maybe_public: Option<Bytes>
 	) -> Result<Bytes>;
+
+	/// Generate new session keys and returns the corresponding public keys.
+	#[rpc(name = "author_rotateKeys")]
+	fn rotate_keys(&self) -> Result<Bytes>;
 
 	/// Returns all pending extrinsics, potentially grouped by sender.
 	#[rpc(name = "author_pendingExtrinsics")]
@@ -138,6 +143,8 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 	P::Block: traits::Block<Hash=H256>,
 	P::Error: 'static,
 	RA: Send + Sync + 'static,
+	Client<B, E, P::Block, RA>: ProvideRuntimeApi,
+	<Client<B, E, P::Block, RA> as ProvideRuntimeApi>::Api: SessionKeys<P::Block>,
 {
 	type Metadata = crate::metadata::Metadata;
 
@@ -168,6 +175,14 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 		keystore.insert_unknown(key_type, &suri, &public[..])
 			.map_err(|_| Error::KeyStoreUnavailable)?;
 		Ok(public.into())
+	}
+
+	fn rotate_keys(&self) -> Result<Bytes> {
+		let best_block_hash = self.client.info().chain.best_hash;
+		self.client.runtime_api().generate_session_keys(
+			&generic::BlockId::Hash(best_block_hash),
+			None,
+		).map(Into::into).map_err(Into::into)
 	}
 
 	fn submit_extrinsic(&self, ext: Bytes) -> Result<ExHash<P>> {

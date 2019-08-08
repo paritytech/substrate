@@ -156,13 +156,13 @@ pub trait InitialSessionKeys<C: Components> {
 
 impl<C: Components> InitialSessionKeys<Self> for C where
 	ComponentClient<C>: ProvideRuntimeApi,
-	<ComponentClient<C> as ProvideRuntimeApi>::Api: substrate_session::SessionKeys<ComponentBlock<C>>,
+	<ComponentClient<C> as ProvideRuntimeApi>::Api: session::SessionKeys<ComponentBlock<C>>,
 {
 	fn generate_intial_session_keys(
 		client: Arc<ComponentClient<C>>,
 		seeds: Vec<String>,
 	) -> error::Result<()> {
-		substrate_session::generate_initial_session_keys(client, seeds).map_err(Into::into)
+		session::generate_initial_session_keys(client, seeds).map_err(Into::into)
 	}
 }
 
@@ -180,7 +180,8 @@ pub trait StartRPC<C: Components> {
 
 impl<C: Components> StartRPC<Self> for C where
 	ComponentClient<C>: ProvideRuntimeApi,
-	<ComponentClient<C> as ProvideRuntimeApi>::Api: runtime_api::Metadata<ComponentBlock<C>>,
+	<ComponentClient<C> as ProvideRuntimeApi>::Api:
+		runtime_api::Metadata<ComponentBlock<C>> + session::SessionKeys<ComponentBlock<C>>,
 {
 	fn start_rpc(
 		client: Arc<ComponentClient<C>>,
@@ -193,7 +194,12 @@ impl<C: Components> StartRPC<Self> for C where
 		let subscriptions = rpc::apis::Subscriptions::new(task_executor.clone());
 		let chain = rpc::apis::chain::Chain::new(client.clone(), subscriptions.clone());
 		let state = rpc::apis::state::State::new(client.clone(), subscriptions.clone());
-		let author = rpc::apis::author::Author::new(client, transaction_pool, subscriptions, keystore);
+		let author = rpc::apis::author::Author::new(
+			client,
+			transaction_pool,
+			subscriptions,
+			keystore,
+		);
 		let system = rpc::apis::system::System::new(rpc_system_info, system_send_back);
 		rpc::rpc_handler::<ComponentBlock<C>, ComponentExHash<C>, _, _, _, _>(
 			state,

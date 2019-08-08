@@ -13,7 +13,7 @@ sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 
 [dev-dependencies]
 substrate-serializer = { path = "../../core/serializer" }
-pretty_assertions = "0.5"
+pretty_assertions = "0.6.1"
 
 [features]
 default = ["std"]

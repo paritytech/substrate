@@ -2339,7 +2339,7 @@ name = "node-primitives"
 version = "2.0.0"
 dependencies = [
  "parity-scale-codec 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "pretty_assertions 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pretty_assertions 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.97 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
@@ -2857,15 +2857,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "ppv-lite86"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-
-[[package]]
-name = "pretty_assertions"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-dependencies = [
- "ansi_term 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "difference 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
 
 [[package]]
 name = "pretty_assertions"
@@ -4837,6 +4828,7 @@ dependencies = [
  "substrate-keystore 2.0.0",
  "substrate-network 2.0.0",
  "substrate-primitives 2.0.0",
+ "substrate-session 2.0.0",
  "substrate-state-machine 2.0.0",
  "substrate-test-runtime-client 2.0.0",
  "substrate-transaction-pool 2.0.0",
@@ -5040,6 +5032,7 @@ dependencies = [
  "substrate-keyring 2.0.0",
  "substrate-offchain-primitives 2.0.0",
  "substrate-primitives 2.0.0",
+ "substrate-session 2.0.0",
  "substrate-state-machine 2.0.0",
  "substrate-test-runtime-client 2.0.0",
  "substrate-trie 2.0.0",
@@ -6364,7 +6357,6 @@ dependencies = [
 "checksum pin-utils 0.1.0-alpha.4 (registry+https://github.com/rust-lang/crates.io-index)" = "5894c618ce612a3fa23881b152b608bafb8c56cfc22f434a3ba3120b40f7b587"
 "checksum pkg-config 0.3.15 (registry+https://github.com/rust-lang/crates.io-index)" = "a7c1d2cfa5a714db3b5f24f0915e74fcdf91d09d496ba61329705dda7774d2af"
 "checksum ppv-lite86 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)" = "e3cbf9f658cdb5000fcf6f362b8ea2ba154b9f146a61c7a20d647034c6b6561b"
-"checksum pretty_assertions 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)" = "3a029430f0d744bc3d15dd474d591bed2402b645d024583082b9f63bb936dac6"
 "checksum pretty_assertions 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)" = "3f81e1644e1b54f5a68959a29aa86cde704219254669da328ecfdf6a1f09d427"
 "checksum primitive-types 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e44400d651ca5276415dc8e00541c5c9d03844f1f0a87ad28f0a8fadcb2300bc"
 "checksum proc-macro-crate 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)" = "e10d4b51f154c8a7fb96fd6dad097cb74b863943ec010ac94b9fd1be8861fe1e"
