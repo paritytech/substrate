@@ -90,7 +90,8 @@ fn remove_linkage<K: Codec, V: Codec, G: StorageLinkedMap<K, V>>(linkage: Linkag
 	if let Some(prev_key) = prev_key {
 		// Retrieve previous element and update `next`
 		let mut res = read_with_linkage::<_, _, G>(prev_key.as_ref())
-			.expect("Linkage is updated in case entry is removed; it always points to existing keys; qed");
+			.expect("Linkage is updated in case entry is removed;
+					it always points to existing keys; qed");
 		res.1.next = linkage.next;
 		unhashed::put(prev_key.as_ref(), &res);
 	} else {
@@ -100,7 +101,8 @@ fn remove_linkage<K: Codec, V: Codec, G: StorageLinkedMap<K, V>>(linkage: Linkag
 	if let Some(next_key) = next_key {
 		// Update previous of next element
 		let mut res = read_with_linkage::<_, _, G>(next_key.as_ref())
-			.expect("Linkage is updated in case entry is removed; it always points to existing keys; qed");
+			.expect("Linkage is updated in case entry is removed;
+					it always points to existing keys; qed");
 		res.1.previous = linkage.previous;
 		unhashed::put(next_key.as_ref(), &res);
 	}
@@ -129,10 +131,10 @@ where
 		// update previous head predecessor
 		{
 			let head_key = G::storage_linked_map_final_key(&head);
-			let (data, linkage) = read_with_linkage::<_, _, G>(head_key.as_ref()).expect(r#"
-								head is set when first element is inserted and unset when last element is removed;
-								if head is Some then it points to existing key; qed
-							"#);
+			let (data, linkage) = read_with_linkage::<_, _, G>(head_key.as_ref())
+				.expect("head is set when first element is inserted
+						and unset when last element is removed;
+						if head is Some then it points to existing key; qed");
 			unhashed::put(head_key.as_ref(), &(data, Linkage {
 				next: linkage.next.as_ref(),
 				previous: Some(key),
@@ -184,7 +186,8 @@ impl<K: Codec, V: Codec, G: StorageLinkedMap<K, V>> storage::StorageLinkedMap<K,
 	}
 
 	fn get<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query {
-		G::from_optional_value_to_query(unhashed::get(Self::storage_linked_map_final_key(key).as_ref()))
+		let val = unhashed::get(Self::storage_linked_map_final_key(key).as_ref())
+		G::from_optional_value_to_query(val)
 	}
 
 	fn insert<KeyArg: Borrow<K>, ValArg: Borrow<V>>(key: KeyArg, val: ValArg) {
@@ -198,7 +201,10 @@ impl<K: Codec, V: Codec, G: StorageLinkedMap<K, V>> storage::StorageLinkedMap<K,
 		unhashed::put(final_key.as_ref(), &(val.borrow(), linkage))
 	}
 
-	fn insert_ref<KeyArg: Borrow<K>, ValArg: ?Sized + Encode>(key: KeyArg, val: &ValArg) where V: AsRef<ValArg> {
+	fn insert_ref<KeyArg: Borrow<K>, ValArg: ?Sized + Encode>(key: KeyArg, val: &ValArg)
+	where
+		V: AsRef<ValArg>
+	{
 		let final_key = Self::storage_linked_map_final_key(key.borrow());
 		let linkage = match read_with_linkage::<_, _, G>(final_key.as_ref()) {
 			// overwrite but reuse existing linkage
@@ -245,7 +251,12 @@ impl<K: Codec, V: Codec, G: StorageLinkedMap<K, V>> storage::StorageLinkedMap<K,
 		G::from_optional_value_to_query(value)
 	}
 
-	fn enumerate() -> Box<dyn Iterator<Item = (K, V)>> where K: 'static, V: 'static, Self: 'static {
+	fn enumerate() -> Box<dyn Iterator<Item = (K, V)>>
+	where
+		K: 'static,
+		V: 'static,
+		Self: 'static
+	{
 		Box::new(Enumerator::<_, _, G> {
 			next: read_head::<_, _, G>(),
 			_phantom: Default::default(),
