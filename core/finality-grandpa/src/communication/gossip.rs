@@ -85,8 +85,8 @@
 use sr_primitives::traits::{NumberFor, Block as BlockT, Zero};
 use network::consensus_gossip::{self as network_gossip, MessageIntent, ValidatorContext};
 use network::{config::Roles, PeerId};
-use parity_codec::{Encode, Decode};
-use crate::ed25519::Public as AuthorityId;
+use codec::{Encode, Decode};
+use fg_primitives::AuthorityId;
 
 use substrate_telemetry::{telemetry, CONSENSUS_DEBUG};
 use log::{trace, debug, warn};
@@ -977,10 +977,10 @@ impl<Block: BlockT> GossipValidator<Block> {
 
 		let action = {
 			match GossipMessage::<Block>::decode(&mut data) {
-				Some(GossipMessage::VoteOrPrecommit(ref message))
+				Ok(GossipMessage::VoteOrPrecommit(ref message))
 					=> self.inner.write().validate_round_message(who, message),
-				Some(GossipMessage::Commit(ref message)) => self.inner.write().validate_commit_message(who, message),
-				Some(GossipMessage::Neighbor(update)) => {
+				Ok(GossipMessage::Commit(ref message)) => self.inner.write().validate_commit_message(who, message),
+				Ok(GossipMessage::Neighbor(update)) => {
 					let (topics, action, catch_up, report) = self.inner.write().import_neighbor_message(
 						who,
 						update.into_neighbor_packet(),
@@ -994,9 +994,9 @@ impl<Block: BlockT> GossipValidator<Block> {
 					peer_reply = catch_up;
 					action
 				}
-				Some(GossipMessage::CatchUp(ref message))
+				Ok(GossipMessage::CatchUp(ref message))
 					=> self.inner.write().validate_catch_up_message(who, message),
-				Some(GossipMessage::CatchUpRequest(request)) => {
+				Ok(GossipMessage::CatchUpRequest(request)) => {
 					let (reply, action) = self.inner.write().handle_catch_up_request(
 						who,
 						request,
@@ -1006,8 +1006,8 @@ impl<Block: BlockT> GossipValidator<Block> {
 					peer_reply = reply;
 					action
 				}
-				None => {
-					debug!(target: "afg", "Error decoding message");
+				Err(e) => {
+					debug!(target: "afg", "Error decoding message: {}", e.what());
 					telemetry!(CONSENSUS_DEBUG; "afg.err_decoding_msg"; "" => "");
 
 					let len = std::cmp::min(i32::max_value() as usize, data.len()) as i32;
@@ -1127,17 +1127,17 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 			let peer_best_commit = peer.view.last_commit;
 
 			match GossipMessage::<Block>::decode(&mut data) {
-				None => false,
-				Some(GossipMessage::Commit(full)) => {
+				Err(_) => false,
+				Ok(GossipMessage::Commit(full)) => {
 					// we only broadcast our best commit and only if it's
 					// better than last received by peer.
 					Some(full.message.target_number) == our_best_commit
 					&& Some(full.message.target_number) > peer_best_commit
 				}
-				Some(GossipMessage::Neighbor(_)) => false,
-				Some(GossipMessage::CatchUpRequest(_)) => false,
-				Some(GossipMessage::CatchUp(_)) => false,
-				Some(GossipMessage::VoteOrPrecommit(_)) => false, // should not be the case.
+				Ok(GossipMessage::Neighbor(_)) => false,
+				Ok(GossipMessage::CatchUpRequest(_)) => false,
+				Ok(GossipMessage::CatchUp(_)) => false,
+				Ok(GossipMessage::VoteOrPrecommit(_)) => false, // should not be the case.
 			}
 		})
 	}
@@ -1162,10 +1162,10 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 			let best_commit = local_view.last_commit;
 
 			match GossipMessage::<Block>::decode(&mut data) {
-				None => true,
-				Some(GossipMessage::Commit(full))
+				Err(_) => true,
+				Ok(GossipMessage::Commit(full))
 					=> Some(full.message.target_number) != best_commit,
-				Some(_) => true,
+				Ok(_) => true,
 			}
 		})
 	}
@@ -1233,13 +1233,14 @@ mod tests {
 	use super::environment::SharedVoterSetState;
 	use network_gossip::Validator as GossipValidatorT;
 	use network::test::Block;
+	use primitives::crypto::Public;
 
 	// some random config (not really needed)
 	fn config() -> crate::Config {
 		crate::Config {
 			gossip_duration: Duration::from_millis(10),
 			justification_period: 256,
-			local_key: None,
+			keystore: None,
 			name: None,
 		}
 	}
@@ -1247,26 +1248,16 @@ mod tests {
 	// dummy voter set state
 	fn voter_set_state() -> SharedVoterSetState<Block> {
 		use crate::authorities::AuthoritySet;
-		use crate::environment::{CompletedRound, CompletedRounds, HasVoted, VoterSetState};
-		use grandpa::round::State as RoundState;
+		use crate::environment::VoterSetState;
 		use primitives::H256;
 
-		let state = RoundState::genesis((H256::zero(), 0));
-		let base = state.prevote_ghost.unwrap();
+		let base = (H256::zero(), 0);
 		let voters = AuthoritySet::genesis(Vec::new());
-		let set_state = VoterSetState::Live {
-			completed_rounds: CompletedRounds::new(
-				CompletedRound {
-					state,
-					number: 0,
-					votes: Vec::new(),
-					base,
-				},
-				0,
-				&voters,
-			),
-			current_round: HasVoted::No,
-		};
+		let set_state = VoterSetState::live(
+			0,
+			&voters,
+			base,
+		);
 
 		set_state.into()
 	}
@@ -1452,7 +1443,7 @@ mod tests {
 			voter_set_state(),
 		);
 		let set_id = 1;
-		let auth = AuthorityId::from_raw([1u8; 32]);
+		let auth = AuthorityId::from_slice(&[1u8; 32]);
 		let peer = PeerId::random();
 
 		val.note_set(SetId(set_id), vec![auth.clone()], |_, _| {});
@@ -1468,7 +1459,7 @@ mod tests {
 					target_number: 10,
 				}),
 				signature: Default::default(),
-				id: AuthorityId::from_raw([2u8; 32]),
+				id: AuthorityId::from_slice(&[2u8; 32]),
 			}
 		});
 
@@ -1497,7 +1488,7 @@ mod tests {
 		);
 
 		let set_id = 1;
-		let auth = AuthorityId::from_raw([1u8; 32]);
+		let auth = AuthorityId::from_slice(&[1u8; 32]);
 		let peer = PeerId::random();
 
 		val.note_set(SetId(set_id), vec![auth.clone()], |_, _| {});
@@ -1541,16 +1532,19 @@ mod tests {
 		let set_state: SharedVoterSetState<Block> = {
 			let mut completed_rounds = voter_set_state().read().completed_rounds();
 
-			assert!(completed_rounds.push(environment::CompletedRound {
+			completed_rounds.push(environment::CompletedRound {
 				number: 1,
 				state: grandpa::round::State::genesis(Default::default()),
 				base: Default::default(),
 				votes: Default::default(),
-			}));
+			});
+
+			let mut current_rounds = environment::CurrentRounds::new();
+			current_rounds.insert(2, environment::HasVoted::No);
 
 			let set_state = environment::VoterSetState::<Block>::Live {
 				completed_rounds,
-				current_round: environment::HasVoted::No,
+				current_rounds,
 			};
 
 			set_state.into()
@@ -1562,7 +1556,7 @@ mod tests {
 		);
 
 		let set_id = 1;
-		let auth = AuthorityId::from_raw([1u8; 32]);
+		let auth = AuthorityId::from_slice(&[1u8; 32]);
 		let peer = PeerId::random();
 
 		val.note_set(SetId(set_id), vec![auth.clone()], |_, _| {});

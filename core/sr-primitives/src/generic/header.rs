@@ -20,7 +20,7 @@
 use serde::Serialize;
 #[cfg(feature = "std")]
 use log::debug;
-use crate::codec::{Decode, Encode, Codec, Input, Output, HasCompact, EncodeAsRef};
+use crate::codec::{Decode, Encode, Codec, Input, Output, HasCompact, EncodeAsRef, Error};
 use crate::traits::{
 	self, Member, SimpleArithmetic, SimpleBitOps, MaybeDisplay, Hash as HashT, MaybeSerializeDebug,
 	MaybeSerializeDebugButNotDeserialize
@@ -60,8 +60,8 @@ impl<Number, Hash> Decode for Header<Number, Hash> where
 	Hash: HashT,
 	Hash::Output: Decode,
 {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Some(Header {
+	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
+		Ok(Header {
 			parent_hash: Decode::decode(input)?,
 			number: <<Number as HasCompact>::Type>::decode(input)?.into(),
 			state_root: Decode::decode(input)?,
@@ -84,6 +84,12 @@ impl<Number, Hash> Encode for Header<Number, Hash> where
 		dest.push(&self.digest);
 	}
 }
+
+impl<Number, Hash> codec::EncodeLike for Header<Number, Hash> where
+	Number: HasCompact + Copy + Into<u128>,
+	Hash: HashT,
+	Hash::Output: Encode,
+{}
 
 impl<Number, Hash> traits::Header for Header<Number, Hash> where
 	Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + MaybeDisplay + SimpleArithmetic + Codec + Copy + Into<u128>,

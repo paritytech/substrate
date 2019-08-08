@@ -37,8 +37,8 @@ use network::{
 use primitives::H256;
 
 use std::{
-	io::{Write, Read, stdin, stdout, ErrorKind}, iter, fs::{self, File}, net::{Ipv4Addr, SocketAddr},
-	path::{Path, PathBuf}, str::FromStr,
+	io::{Write, Read, Seek, Cursor, stdin, stdout, ErrorKind}, iter, fs::{self, File},
+	net::{Ipv4Addr, SocketAddr}, path::{Path, PathBuf}, str::FromStr,
 };
 
 use names::{Generator, Name};
@@ -366,6 +366,24 @@ fn input_keystore_password() -> Result<String, String> {
 		.map_err(|e| format!("{:?}", e))
 }
 
+/// Fill the password field of the given config instance.
+fn fill_config_keystore_password<C, G>(
+	config: &mut service::Configuration<C, G>,
+	cli: &RunCmd,
+) -> Result<(), String> {
+	config.keystore_password = if cli.password_interactive {
+		Some(input_keystore_password()?.into())
+	} else if let Some(ref file) = cli.password_filename {
+		Some(fs::read_to_string(file).map_err(|e| format!("{}", e))?.into())
+	} else if let Some(ref password) = cli.password {
+		Some(password.clone().into())
+	} else {
+		None
+	};
+
+	Ok(())
+}
+
 fn create_run_node_config<F, S>(
 	cli: RunCmd, spec_factory: S, impl_name: &'static str, version: &VersionInfo
 ) -> error::Result<FactoryFullConfiguration<F>>
@@ -375,9 +393,8 @@ where
 {
 	let spec = load_spec(&cli.shared_params, spec_factory)?;
 	let mut config = service::Configuration::default_with_spec(spec.clone());
-	if cli.interactive_password {
-		config.password = input_keystore_password()?.into()
-	}
+
+	fill_config_keystore_password(&mut config, &cli)?;
 
 	config.impl_name = impl_name;
 	config.impl_commit = version.commit;
@@ -401,7 +418,9 @@ where
 
 	let base_path = base_path(&cli.shared_params, version);
 
-	config.keystore_path = cli.keystore_path.or_else(|| Some(keystore_path(&base_path, config.chain_spec.id())));
+	config.keystore_path = cli.keystore_path.unwrap_or_else(
+		|| keystore_path(&base_path, config.chain_spec.id())
+	);
 
 	config.database_path = db_path(&base_path, config.chain_spec.id());
 	config.database_cache_size = cli.database_cache_size;
@@ -414,14 +433,11 @@ where
 		),
 	};
 
-	let role =
-		if cli.light {
-			service::Roles::LIGHT
-		} else if cli.validator || cli.shared_params.dev {
-			service::Roles::AUTHORITY
-		} else {
-			service::Roles::FULL
-		};
+	let role = if cli.light {
+		service::Roles::LIGHT
+	} else {
+		service::Roles::AUTHORITY
+	};
 
 	let exec = cli.execution_strategies;
 	let exec_all_or = |strat: params::ExecutionStrategy| exec.execution.unwrap_or(strat).into();
@@ -442,8 +458,6 @@ where
 
 	config.roles = role;
 	config.disable_grandpa = cli.no_grandpa;
-	config.grandpa_voter = cli.grandpa_voter;
-
 
 	let is_dev = cli.shared_params.dev;
 
@@ -457,32 +471,23 @@ where
 		is_dev,
 	)?;
 
-	fill_transaction_pool_configuration::<F>(
-		&mut config,
-		cli.pool_config,
-	)?;
+	fill_transaction_pool_configuration::<F>(&mut config, cli.pool_config)?;
 
-	if let Some(key) = cli.key {
-		config.keys.push(key);
-	}
-
-	if cli.shared_params.dev && cli.keyring.account.is_none() {
-		config.keys.push("//Alice".into());
-	}
-
-	if let Some(account) = cli.keyring.account {
-		config.keys.push(format!("//{}", account));
-	}
+	config.dev_key_seed = cli.keyring.account
+		.map(|a| format!("//{}", a)).or_else(|| {
+			if is_dev {
+				Some("//Alice".into())
+			} else {
+				None
+			}
+		});
 
 	let rpc_interface: &str = if cli.rpc_external { "0.0.0.0" } else { "127.0.0.1" };
 	let ws_interface: &str = if cli.ws_external { "0.0.0.0" } else { "127.0.0.1" };
 
-	config.rpc_http = Some(
-		parse_address(&format!("{}:{}", rpc_interface, 9933), cli.rpc_port)?
-	);
-	config.rpc_ws = Some(
-		parse_address(&format!("{}:{}", ws_interface, 9944), cli.ws_port)?
-	);
+	config.rpc_http = Some(parse_address(&format!("{}:{}", rpc_interface, 9933), cli.rpc_port)?);
+	config.rpc_ws = Some(parse_address(&format!("{}:{}", ws_interface, 9944), cli.ws_port)?);
+
 	config.rpc_ws_max_connections = cli.ws_max_connections;
 	config.rpc_cors = cli.rpc_cors.unwrap_or_else(|| if is_dev {
 		log::warn!("Running in --dev mode, RPC CORS has been disabled.");
@@ -628,6 +633,11 @@ where
 	).map_err(Into::into)
 }
 
+/// Internal trait used to cast to a dynamic type that implements Read and Seek.
+trait ReadPlusSeek: Read + Seek {}
+
+impl<T: Read + Seek> ReadPlusSeek for T {}
+
 fn import_blocks<F, E, S>(
 	cli: ImportBlocksCmd,
 	spec_factory: S,
@@ -646,9 +656,13 @@ where
 		..Default::default()
 	};
 
-	let file: Box<dyn Read> = match cli.input {
+	let file: Box<dyn ReadPlusSeek> = match cli.input {
 		Some(filename) => Box::new(File::open(filename)?),
-		None => Box::new(stdin()),
+		None => {
+			let mut buffer = Vec::new();
+			stdin().read_to_end(&mut buffer)?;
+			Box::new(Cursor::new(buffer))
+		},
 	};
 
 	let fut = service::chain_ops::import_blocks::<F, _, _>(config, exit.into_exit(), file)?;

@@ -200,10 +200,13 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 		} = instance_opts;
 
 		let final_prefix = if let Some(instance) = instance {
-			let const_name = syn::Ident::new(&format!("{}{}", PREFIX_FOR, name.to_string()), proc_macro2::Span::call_site());
-			quote!{ #instance::#const_name.as_bytes() }
+			let const_name = syn::Ident::new(
+				&format!("{}{}", PREFIX_FOR, name.to_string()),
+				proc_macro2::Span::call_site(),
+			);
+			quote! { #instance::#const_name.as_bytes() }
 		} else {
-			quote!{ #prefix.as_bytes() }
+			quote! { #prefix.as_bytes() }
 		};
 
 		let trait_required = ext::type_contains_ident(value_type, traitinstance)
@@ -352,6 +355,12 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			}
 		};
 
+		let mutate_map = if type_infos.is_option {
+			quote! { .map(|(data, linkage)| (Some(data), Some(linkage))) }
+		} else {
+			quote! { .map(|(data, linkage)| (data, Some(linkage))) }
+		};
+
 		let trait_required = ext::type_contains_ident(value_type, traitinstance)
 			|| ext::type_contains_ident(kty, traitinstance);
 
@@ -442,7 +451,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					fn remove_linkage<S: #scrate::HashedStorage<#scrate::#hasher>>(linkage: Linkage<#kty>, storage: &mut S);
 
 					/// Read the contained data and it's linkage.
-					fn read_with_linkage<S>(storage: &S, key: &[u8]) -> Option<(#value_type, Linkage<#kty>)>
+					fn read_with_linkage<S>(storage: &S, key: &[u8]) -> Option<(#typ, Linkage<#kty>)>
 					where
 						S: #scrate::HashedStorage<#scrate::#hasher>;
 
@@ -504,7 +513,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				fn read_with_linkage<S: #scrate::HashedStorage<#scrate::#hasher>>(
 					storage: &S,
 					key: &[u8],
-				) -> Option<(#value_type, self::#inner_module::Linkage<#kty>)> {
+				) -> Option<(#typ, self::#inner_module::Linkage<#kty>)> {
 					storage.get(key)
 				}
 
@@ -586,14 +595,12 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				fn take<S: #scrate::HashedStorage<#scrate::#hasher>>(key: &#kty, storage: &mut S) -> Self::Query {
 					use self::#inner_module::Utils;
 
-					let res: Option<(#value_type, self::#inner_module::Linkage<#kty>)> = storage.take(&*#as_map::key_for(key));
-					match res {
-						Some((data, linkage)) => {
-							Self::remove_linkage(linkage, storage);
-							data
-						},
-						None => #fielddefault,
-					}
+					let res: Option<(#typ, self::#inner_module::Linkage<#kty>)> = storage.take(&*#as_map::key_for(key));
+
+					res.map(|(d, l)| {
+						Self::remove_linkage(l, storage);
+						d
+					}).#option_simple_1(|| #fielddefault)
 				}
 
 				/// Remove the value under a key.
@@ -602,7 +609,11 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				}
 
 				/// Store a value to be associated with the given key from the map.
-				fn insert<S: #scrate::HashedStorage<#scrate::#hasher>>(key: &#kty, val: &#typ, storage: &mut S) {
+				fn insert<S: #scrate::HashedStorage<#scrate::#hasher>>(
+					key: &#kty,
+					val: &#typ,
+					storage: &mut S,
+				) {
 					use self::#inner_module::Utils;
 
 					let key_for = &*#as_map::key_for(key);
@@ -612,6 +623,29 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 						// create new linkage
 						None => Self::new_head_linkage(storage, key),
 					};
+
+					storage.put(key_for, &(val, linkage))
+				}
+
+				/// Store a value under this key into the provided storage instance; this can take any reference
+				/// type that derefs to `T` (and has `Encode` implemented).
+				/// Store a value under this key into the provided storage instance.
+				fn insert_ref<Arg, S>(key: &#kty, val: &Arg, storage: &mut S)
+				where
+					#typ: AsRef<Arg>,
+					Arg: ?Sized + #scrate::codec::Encode,
+					S: #scrate::HashedStorage<#scrate::#hasher>
+				{
+					use self::#inner_module::Utils;
+
+					let key_for = &*#as_map::key_for(key);
+					let linkage = match Self::read_with_linkage(storage, key_for) {
+						// overwrite but reuse existing linkage
+						Some((_data, linkage)) => linkage,
+						// create new linkage
+						None => Self::new_head_linkage(storage, key),
+					};
+
 					storage.put(key_for, &(val, linkage))
 				}
 
@@ -625,11 +659,11 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 
 					let key_for = &*#as_map::key_for(key);
 					let (mut val, linkage) = Self::read_with_linkage(storage, key_for)
-						.map(|(data, linkage)| (data, Some(linkage)))
+						#mutate_map
 						.unwrap_or_else(|| (#fielddefault, None));
 
 					let ret = f(&mut val);
-					#mutate_impl ;
+					#mutate_impl;
 					ret
 				}
 			}

@@ -244,6 +244,6 @@ pub trait FinalityProofImport<B: BlockT> {
 		hash: B::Hash,
 		number: NumberFor<B>,
 		finality_proof: Vec<u8>,
-		verifier: &dyn Verifier<B>,
+		verifier: &mut dyn Verifier<B>,
 	) -> Result<(B::Hash, NumberFor<B>), Self::Error>;
 }

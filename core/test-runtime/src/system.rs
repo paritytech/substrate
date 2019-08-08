@@ -25,7 +25,7 @@ use sr_primitives::traits::{Hash as HashT, BlakeTwo256, Header as _};
 use sr_primitives::generic;
 use sr_primitives::{ApplyError, ApplyOutcome, ApplyResult};
 use sr_primitives::transaction_validity::{TransactionValidity, ValidTransaction};
-use parity_codec::{KeyedVec, Encode};
+use codec::{KeyedVec, Encode};
 use super::{
 	AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest, AuthorityId
 };
@@ -303,8 +303,7 @@ fn execute_transfer_backend(tx: &Transfer) -> ApplyResult {
 }
 
 fn execute_new_authorities_backend(new_authorities: &[AuthorityId]) -> ApplyResult {
-	let new_authorities: Vec<AuthorityId> = new_authorities.iter().cloned().collect();
-	<NewAuthorities>::put(new_authorities);
+	NewAuthorities::put(new_authorities.to_vec());
 	Ok(ApplyOutcome::Success)
 }
 

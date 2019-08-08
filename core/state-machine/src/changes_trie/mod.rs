@@ -49,7 +49,7 @@ pub use self::prune::{prune, oldest_non_pruned_trie};
 use hash_db::{Hasher, Prefix};
 use crate::backend::Backend;
 use num_traits::{One, Zero};
-use parity_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use primitives;
 use crate::changes_trie::build::prepare_input;
 use crate::overlayed_changes::OverlayedChanges;

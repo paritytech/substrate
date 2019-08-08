@@ -21,7 +21,7 @@ pub use primitive_types::U256;
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use parity_codec::{Encode, Decode};
+	use codec::{Encode, Decode};
 	use substrate_serializer as ser;
 
 	macro_rules! test {
@@ -78,10 +78,10 @@ mod tests {
 			res2);
 		assert_eq!(
 			U256::decode(&mut &res1[..]),
-			Some(U256::from(120)));
+			Ok(U256::from(120)));
 		assert_eq!(
 			U256::decode(&mut &res2[..]),
-			Some(U256::max_value()));
+			Ok(U256::max_value()));
 	}
 
 	#[test]
