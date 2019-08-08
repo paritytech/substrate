@@ -26,7 +26,7 @@ mod factory_impl;
 
 use tokio::prelude::Future;
 use tokio::runtime::{Builder as RuntimeBuilder, Runtime};
-pub use cli::{VersionInfo, IntoExit, NoCustom, SharedParams};
+pub use cli::{VersionInfo, IntoExit, NoCustom, SharedParams, ExecutionStrategyParam};
 use substrate_service::{ServiceFactory, Roles as ServiceRoles};
 use std::ops::Deref;
 use log::info;
@@ -34,6 +34,7 @@ use structopt::{StructOpt, clap::App};
 use cli::{AugmentClap, GetLogFilter};
 use crate::factory_impl::FactoryState;
 use transaction_factory::RuntimeAdapter;
+use client::ExecutionStrategies;
 
 /// The chain specification option.
 #[derive(Clone, Debug, PartialEq)]
@@ -102,6 +103,18 @@ pub struct FactoryCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
+
+	/// The means of execution used when calling into the runtime while importing blocks.
+	#[structopt(
+		long = "execution",
+		value_name = "STRATEGY",
+		raw(
+			possible_values = "&ExecutionStrategyParam::variants()",
+			case_insensitive = "true",
+			default_value = r#""NativeElseWasm""#
+		)
+	)]
+	pub execution: ExecutionStrategyParam,
 }
 
 impl AugmentClap for FactoryCmd {
@@ -173,11 +186,17 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 
 	match &ret {
 		Ok(Some(CustomSubcommands::Factory(cli_args))) => {
-			let config = cli::create_config_with_db_path::<service::Factory, _>(
+			let mut config = cli::create_config_with_db_path::<service::Factory, _>(
 				load_spec,
 				&cli_args.shared_params,
 				&version,
 			)?;
+			config.execution_strategies = ExecutionStrategies {
+				importing: cli_args.execution.into(),
+				block_construction: cli_args.execution.into(),
+				other: cli_args.execution.into(),
+				..Default::default()
+			};
 
 			match ChainSpec::from(config.chain_spec.id()) {
 				Some(ref c) if c == &ChainSpec::Development || c == &ChainSpec::LocalTestnet => {},

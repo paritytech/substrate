@@ -20,12 +20,12 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use parking_lot::{RwLock, Mutex};
 use primitives::{ChangesTrieConfiguration, storage::well_known_keys};
-use runtime_primitives::generic::{BlockId, DigestItem};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor};
-use runtime_primitives::{Justification, StorageOverlay, ChildrenStorageOverlay};
+use sr_primitives::generic::{BlockId, DigestItem};
+use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor};
+use sr_primitives::{Justification, StorageOverlay, ChildrenStorageOverlay};
 use state_machine::backend::{Backend as StateBackend, InMemory};
 use state_machine::{self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId, ChangesTrieTransaction};
-use hash_db::Hasher;
+use hash_db::{Hasher, Prefix};
 use trie::MemoryDB;
 use consensus::well_known_cache_keys::Id as CacheKeyId;
 
@@ -532,7 +532,10 @@ where
 	}
 }
 
-/// In-memory backend. Keeps all states and blocks in memory. Useful for testing.
+/// In-memory backend. Keeps all states and blocks in memory.
+///
+/// > **Warning**: Doesn't support all the features necessary for a proper database. Only use this
+/// > struct for testing purposes. Do **NOT** use in production.
 pub struct Backend<Block, H>
 where
 	Block: BlockT,
@@ -759,8 +762,8 @@ impl<Block, H> state_machine::ChangesTrieStorage<H, NumberFor<Block>> for Change
 		None
 	}
 
-	fn get(&self, _key: &H::Out, _prefix: &[u8]) -> Result<Option<state_machine::DBValue>, String> {
-		Err("Dummy implementation".into())
+	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<state_machine::DBValue>, String> {
+		self.0.get(key, prefix)
 	}
 }
 

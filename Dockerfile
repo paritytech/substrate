@@ -11,7 +11,7 @@ WORKDIR /substrate
 COPY . /substrate
 
 RUN apt-get update && \
-	apt-get upgrade -y && \
+	apt-get dist-upgrade -y && \
 	apt-get install -y cmake pkg-config libssl-dev git clang
 
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y && \
@@ -21,7 +21,7 @@ RUN curl https://sh.rustup.rs -sSf | sh -s -- -y && \
 	cargo install --git https://github.com/alexcrichton/wasm-gc && \
 	rustup default nightly && \
 	rustup default stable && \
-	cargo build --$PROFILE
+	cargo build "--$PROFILE"
 
 # ===== SECOND STAGE ======
 

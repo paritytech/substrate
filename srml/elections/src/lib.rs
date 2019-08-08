@@ -24,7 +24,8 @@
 #![recursion_limit="128"]
 
 use rstd::prelude::*;
-use primitives::traits::{Zero, One, StaticLookup, Bounded, Saturating};
+use sr_primitives::traits::{Zero, One, StaticLookup, Bounded, Saturating};
+use sr_primitives::weights::SimpleDispatchInfo;
 use runtime_io::print;
 use srml_support::{
 	StorageValue, StorageMap,
@@ -34,7 +35,7 @@ use srml_support::{
 		OnUnbalanced, ReservableCurrency, WithdrawReason, WithdrawReasons, ChangeMembers
 	}
 };
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use system::{self, ensure_signed, ensure_root};
 
 // no polynomial attacks:
@@ -300,6 +301,11 @@ decl_module! {
 		/// approval voting). A reasonable default value is 24.
 		const DecayRatio: u32 = T::DecayRatio::get();
 
+		/// The chunk size of the voter vector.
+		const VOTER_SET_SIZE: u32 = VOTER_SET_SIZE as u32;
+		/// The chunk size of the approval vector.
+		const APPROVAL_SET_SIZE: u32 = APPROVAL_SET_SIZE as u32;
+
 		fn deposit_event<T>() = default;
 
 		/// Set candidate approvals. Approval slots stay valid as long as candidates in those slots
@@ -326,6 +332,7 @@ decl_module! {
 		/// - Two extra DB entries, one DB change.
 		/// - Argument `votes` is limited in length to number of candidates.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(2_500_000)]
 		fn set_approvals(origin, votes: Vec<bool>, #[compact] index: VoteIndex, hint: SetIndex) -> Result {
 			let who = ensure_signed(origin)?;
 			Self::do_set_approvals(who, votes, index, hint)
@@ -337,6 +344,7 @@ decl_module! {
 		/// # <weight>
 		/// - Same as `set_approvals` with one additional storage read.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(2_500_000)]
 		fn proxy_set_approvals(origin,
 			votes: Vec<bool>,
 			#[compact] index: VoteIndex,
@@ -358,6 +366,7 @@ decl_module! {
 		/// - O(1).
 		/// - Two fewer DB entries, one DB change.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(2_500_000)]
 		fn reap_inactive_voter(
 			origin,
 			#[compact] reporter_index: u32,
@@ -431,6 +440,7 @@ decl_module! {
 		/// - O(1).
 		/// - Two fewer DB entries, one DB change.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(1_250_000)]
 		fn retract_voter(origin, #[compact] index: u32) {
 			let who = ensure_signed(origin)?;
 
@@ -458,6 +468,7 @@ decl_module! {
 		/// - Independent of input.
 		/// - Three DB changes.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(2_500_000)]
 		fn submit_candidacy(origin, #[compact] slot: u32) {
 			let who = ensure_signed(origin)?;
 
@@ -493,6 +504,7 @@ decl_module! {
 		/// - O(voters) compute.
 		/// - One DB change.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
 		fn present_winner(
 			origin,
 			candidate: <T::Lookup as StaticLookup>::Source,
@@ -561,6 +573,7 @@ decl_module! {
 		/// Set the desired member count; if lower than the current count, then seats will not be up
 		/// election when they expire. If more, then a new vote will be started if one is not
 		/// already in progress.
+		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn set_desired_seats(origin, #[compact] count: u32) {
 			ensure_root(origin)?;
 			DesiredSeats::put(count);
@@ -570,6 +583,7 @@ decl_module! {
 		///
 		/// Note: A tally should happen instantly (if not already in a presentation
 		/// period) to fill the seat if removal means that the desired members are not met.
+		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn remove_member(origin, who: <T::Lookup as StaticLookup>::Source) {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
@@ -579,11 +593,12 @@ decl_module! {
 				.collect();
 			<Members<T>>::put(&new_set);
 			let new_set = new_set.into_iter().map(|x| x.0).collect::<Vec<_>>();
-			T::ChangeMembers::change_members(&[], &[who], &new_set[..]);
+			T::ChangeMembers::change_members(&[], &[who], new_set);
 		}
 
 		/// Set the presentation duration. If there is currently a vote being presented for, will
 		/// invoke `finalize_vote`.
+		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn set_presentation_duration(origin, #[compact] count: T::BlockNumber) {
 			ensure_root(origin)?;
 			<PresentationDuration<T>>::put(count);
@@ -591,6 +606,7 @@ decl_module! {
 
 		/// Set the presentation duration. If there is current a vote being presented for, will
 		/// invoke `finalize_vote`.
+		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn set_term_duration(origin, #[compact] count: T::BlockNumber) {
 			ensure_root(origin)?;
 			<TermDuration<T>>::put(count);
@@ -860,7 +876,7 @@ impl<T: Trait> Module<T> {
 		<Members<T>>::put(&new_set);
 
 		let new_set = new_set.into_iter().map(|x| x.0).collect::<Vec<_>>();
-		T::ChangeMembers::change_members(&incoming, &outgoing, &new_set[..]);
+		T::ChangeMembers::change_members(&incoming, &outgoing, new_set);
 
 		// clear all except runners-up from candidate list.
 		let candidates = Self::candidates();
@@ -1100,9 +1116,9 @@ mod tests {
 	use std::cell::RefCell;
 	use srml_support::{assert_ok, assert_err, assert_noop, parameter_types};
 	use runtime_io::with_externalities;
-	use substrate_primitives::{H256, Blake2Hasher};
-	use primitives::{
-		traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header, BuildStorage
+	use primitives::{H256, Blake2Hasher};
+	use sr_primitives::{
+		Perbill, traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header, BuildStorage
 	};
 	use crate as elections;
 
@@ -1110,11 +1126,13 @@ mod tests {
 		pub const BlockHashCount: u64 = 250;
 		pub const MaximumBlockWeight: u32 = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
+		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
+		type Call = ();
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
@@ -1125,6 +1143,7 @@ mod tests {
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type MaximumBlockLength = MaximumBlockLength;
+		type AvailableBlockRatio = AvailableBlockRatio;
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
@@ -1146,6 +1165,7 @@ mod tests {
 		type CreationFee = CreationFee;
 		type TransactionBaseFee = TransactionBaseFee;
 		type TransactionByteFee = TransactionByteFee;
+		type WeightToFee = ();
 	}
 	parameter_types! {
 		pub const CandidacyBond: u64 = 3;
@@ -1184,7 +1204,7 @@ mod tests {
 
 	pub struct TestChangeMembers;
 	impl ChangeMembers<u64> for TestChangeMembers {
-		fn change_members(incoming: &[u64], outgoing: &[u64], new: &[u64]) {
+		fn change_members_sorted(incoming: &[u64], outgoing: &[u64], new: &[u64]) {
 			let mut old_plus_incoming = MEMBERS.with(|m| m.borrow().to_vec());
 			old_plus_incoming.extend_from_slice(incoming);
 			old_plus_incoming.sort();
@@ -1215,8 +1235,8 @@ mod tests {
 		type DecayRatio = DecayRatio;
 	}
 
-	pub type Block = primitives::generic::Block<Header, UncheckedExtrinsic>;
-	pub type UncheckedExtrinsic = primitives::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
+	pub type Block = sr_primitives::generic::Block<Header, UncheckedExtrinsic>;
+	pub type UncheckedExtrinsic = sr_primitives::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
 
 	srml_support::construct_runtime!(
 		pub enum Test where

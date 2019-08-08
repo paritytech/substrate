@@ -19,11 +19,11 @@
 use std::collections::HashMap;
 use std::ops::Deref;
 use lazy_static::lazy_static;
-use substrate_primitives::{sr25519::{Pair, Public, Signature}, Pair as PairT, Public as PublicT, H256};
-pub use substrate_primitives::sr25519;
+use primitives::{sr25519::{Pair, Public, Signature}, Pair as PairT, Public as PublicT, H256};
+pub use primitives::sr25519;
 
 /// Set of test accounts.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum_macros::Display, strum_macros::EnumIter)]
 pub enum Keyring {
 	Alice,
 	Bob,
@@ -37,18 +37,7 @@ pub enum Keyring {
 
 impl Keyring {
 	pub fn from_public(who: &Public) -> Option<Keyring> {
-		[
-			Keyring::Alice,
-			Keyring::Bob,
-			Keyring::Charlie,
-			Keyring::Dave,
-			Keyring::Eve,
-			Keyring::Ferdie,
-			Keyring::One,
-			Keyring::Two,
-		].iter()
-			.map(|i| *i)
-			.find(|&k| &Public::from(k) == who)
+		Self::iter().find(|&k| &Public::from(k) == who)
 	}
 
 	pub fn from_raw_public(who: [u8; 32]) -> Option<Keyring> {
@@ -79,6 +68,19 @@ impl Keyring {
 		Pair::from_string(&format!("//{}", <&'static str>::from(self)), None)
 			.expect("static values are known good; qed")
 	}
+
+	/// Returns an iterator over all test accounts.
+	pub fn iter() -> impl Iterator<Item=Keyring> {
+		<Self as strum::IntoEnumIterator>::iter()
+	}
+
+	pub fn public(self) -> Public {
+		self.pair().public()
+	}
+
+	pub fn to_seed(self) -> String {
+		format!("//{}", self)
+	}
 }
 
 impl From<Keyring> for &'static str {
@@ -104,16 +106,7 @@ impl From<Keyring> for sr_primitives::MultiSigner {
 
 lazy_static! {
 	static ref PRIVATE_KEYS: HashMap<Keyring, Pair> = {
-		[
-			Keyring::Alice,
-			Keyring::Bob,
-			Keyring::Charlie,
-			Keyring::Dave,
-			Keyring::Eve,
-			Keyring::Ferdie,
-			Keyring::One,
-			Keyring::Two,
-		].iter().map(|&i| (i, i.pair())).collect()
+		Keyring::iter().map(|i| (i, i.pair())).collect()
 	};
 
 	static ref PUBLIC_KEYS: HashMap<Keyring, Public> = {
@@ -173,12 +166,30 @@ impl Deref for Keyring {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use substrate_primitives::{sr25519::Pair, Pair as PairT};
+	use primitives::{sr25519::Pair, Pair as PairT};
 
 	#[test]
 	fn should_work() {
-		assert!(Pair::verify(&Keyring::Alice.sign(b"I am Alice!"), b"I am Alice!", Keyring::Alice));
-		assert!(!Pair::verify(&Keyring::Alice.sign(b"I am Alice!"), b"I am Bob!", Keyring::Alice));
-		assert!(!Pair::verify(&Keyring::Alice.sign(b"I am Alice!"), b"I am Alice!", Keyring::Bob));
+		assert!(
+			Pair::verify(
+				&Keyring::Alice.sign(b"I am Alice!"),
+				b"I am Alice!",
+				&Keyring::Alice.public(),
+			)
+		);
+		assert!(
+			!Pair::verify(
+				&Keyring::Alice.sign(b"I am Alice!"),
+				b"I am Bob!",
+				&Keyring::Alice.public(),
+			)
+		);
+		assert!(
+			!Pair::verify(
+				&Keyring::Alice.sign(b"I am Alice!"),
+				b"I am Alice!",
+				&Keyring::Bob.public(),
+			)
+		);
 	}
 }

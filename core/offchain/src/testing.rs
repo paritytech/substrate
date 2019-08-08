@@ -28,8 +28,6 @@ use primitives::offchain::{
 	HttpRequestId as RequestId,
 	HttpRequestStatus as RequestStatus,
 	Timestamp,
-	CryptoKind,
-	CryptoKey,
 	StorageKind,
 	OpaqueNetworkState,
 };
@@ -144,47 +142,6 @@ impl offchain::Externalities for TestOffchainExt {
 		unimplemented!("not needed in tests so far")
 	}
 
-	fn pubkey(&self, _key: CryptoKey) -> Result<Vec<u8>, ()> {
-		unimplemented!("not needed in tests so far")
-	}
-
-	fn new_crypto_key(&mut self, _crypto: CryptoKind) -> Result<CryptoKey, ()> {
-		unimplemented!("not needed in tests so far")
-	}
-
-	fn encrypt(
-		&mut self,
-		_key: CryptoKey,
-		_data: &[u8],
-	) -> Result<Vec<u8>, ()> {
-		unimplemented!("not needed in tests so far")
-	}
-
-	fn decrypt(
-		&mut self,
-		_key: CryptoKey,
-		_data: &[u8],
-	) -> Result<Vec<u8>, ()> {
-		unimplemented!("not needed in tests so far")
-	}
-
-	fn sign(
-		&mut self,
-		_key: CryptoKey,
-		_data: &[u8],
-	) -> Result<Vec<u8>, ()> {
-		unimplemented!("not needed in tests so far")
-	}
-
-	fn verify(
-		&mut self,
-		_key: CryptoKey,
-		_msg: &[u8],
-		_signature: &[u8],
-	) -> Result<bool, ()> {
-		unimplemented!("not needed in tests so far")
-	}
-
 	fn timestamp(&mut self) -> Timestamp {
 		unimplemented!("not needed in tests so far")
 	}
@@ -209,14 +166,14 @@ impl offchain::Externalities for TestOffchainExt {
 		&mut self,
 		kind: StorageKind,
 		key: &[u8],
-		old_value: &[u8],
+		old_value: Option<&[u8]>,
 		new_value: &[u8]
 	) -> bool {
 		let mut state = self.0.write();
 		match kind {
 			StorageKind::LOCAL => &mut state.local_storage,
 			StorageKind::PERSISTENT => &mut state.persistent_storage,
-		}.compare_and_set(b"", key, Some(old_value), new_value)
+		}.compare_and_set(b"", key, old_value, new_value)
 	}
 
 	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>> {

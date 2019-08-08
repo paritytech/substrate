@@ -21,9 +21,9 @@ use std::{
 	marker::PhantomData,
 };
 use client::{runtime_api::TaggedTransactionQueue, blockchain::HeaderBackend};
-use parity_codec::Encode;
+use codec::Encode;
 use txpool;
-use substrate_primitives::{
+use primitives::{
 	H256,
 	Blake2Hasher,
 	Hasher,

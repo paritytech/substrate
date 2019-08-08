@@ -20,14 +20,14 @@ use futures::prelude::*;
 use futures::future::{self, Loop as FutureLoop};
 
 use grandpa::{
-	BlockNumberOps, Error as GrandpaError, round::State as RoundState, voter, voter_set::VoterSet
+	BlockNumberOps, Error as GrandpaError, voter, voter_set::VoterSet
 };
 use log::{debug, info, warn};
 
 use consensus_common::SelectChain;
 use client::{CallExecutor, Client, backend::Backend};
-use runtime_primitives::traits::{NumberFor, Block as BlockT};
-use substrate_primitives::{H256, Blake2Hasher};
+use sr_primitives::traits::{NumberFor, Block as BlockT};
+use primitives::{H256, Blake2Hasher};
 
 use crate::{
 	global_communication, CommandOrError, CommunicationIn, Config, environment,
@@ -36,7 +36,6 @@ use crate::{
 use crate::authorities::SharedAuthoritySet;
 use crate::communication::NetworkBridge;
 use crate::consensus_changes::SharedConsensusChanges;
-use crate::environment::{CompletedRound, CompletedRounds, HasVoted};
 use fg_primitives::AuthorityId;
 
 struct ObserverChain<'a, Block: BlockT, B, E, RA>(&'a Client<B, E, Block, RA>);
@@ -185,11 +184,11 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 
 		// start global communication stream for the current set
 		let (global_in, _) = global_communication(
-			None,
 			set_id,
 			&voters,
 			&client,
 			&network,
+			&config.keystore,
 		);
 
 		let last_finalized_number = client.info().chain.finalized_number;
@@ -238,22 +237,11 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 				VoterCommand::ChangeAuthorities(new) => {
 					// start the new authority set using the block where the
 					// set changed (not where the signal happened!) as the base.
-					let genesis_state = RoundState::genesis((new.canon_hash, new.canon_number));
-
-					let set_state = VoterSetState::Live::<Block> {
-						// always start at round 0 when changing sets.
-						completed_rounds: CompletedRounds::new(
-							CompletedRound {
-								number: 0,
-								state: genesis_state,
-								base: (new.canon_hash, new.canon_number),
-								votes: Vec::new(),
-							},
-							new.set_id,
-							&*authority_set.inner().read(),
-						),
-						current_round: HasVoted::No,
-					};
+					let set_state = VoterSetState::live(
+						new.set_id,
+						&*authority_set.inner().read(),
+						(new.canon_hash, new.canon_number),
+					);
 
 					#[allow(deprecated)]
 					crate::aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;

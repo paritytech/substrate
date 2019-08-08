@@ -17,24 +17,23 @@
 #![cfg(test)]
 
 use futures::{future, prelude::*, try_ready};
-use libp2p::core::{nodes::Substream, swarm::Swarm};
-use libp2p::core::{transport::boxed::Boxed, muxing::StreamMuxerBox};
-use libp2p::core::{ProtocolsHandler, protocols_handler::IntoProtocolsHandler};
-use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourAction};
-use libp2p::core::swarm::PollParameters;
+use libp2p::core::nodes::Substream;
+use libp2p::core::{ConnectedPoint, transport::boxed::Boxed, muxing::StreamMuxerBox};
+use libp2p::swarm::{Swarm, ProtocolsHandler, IntoProtocolsHandler};
+use libp2p::swarm::{PollParameters, NetworkBehaviour, NetworkBehaviourAction};
 use libp2p::{PeerId, Multiaddr, Transport};
 use rand::seq::SliceRandom;
 use std::{io, time::Duration, time::Instant};
 use test_client::runtime::Block;
-use crate::message::{Message as MessageAlias, generic::Message};
-use crate::custom_proto::{CustomProto, CustomProtoOut, CustomMessage};
+use crate::message::generic::Message;
+use crate::legacy_proto::{LegacyProto, LegacyProtoOut};
 
 /// Builds two nodes that have each other as bootstrap nodes.
 /// This is to be used only for testing, and a panic will happen if something goes wrong.
-fn build_nodes<T: CustomMessage + Send + 'static>()
+fn build_nodes()
 -> (
-	Swarm<Boxed<(PeerId, StreamMuxerBox), io::Error>, CustomProtoWithAddr<T>>,
-	Swarm<Boxed<(PeerId, StreamMuxerBox), io::Error>, CustomProtoWithAddr<T>>
+	Swarm<Boxed<(PeerId, StreamMuxerBox), io::Error>, CustomProtoWithAddr>,
+	Swarm<Boxed<(PeerId, StreamMuxerBox), io::Error>, CustomProtoWithAddr>
 ) {
 	let mut out = Vec::with_capacity(2);
 
@@ -72,7 +71,7 @@ fn build_nodes<T: CustomMessage + Send + 'static>()
 		});
 
 		let behaviour = CustomProtoWithAddr {
-			inner: CustomProto::new(&b"test"[..], &[1], peerset),
+			inner: LegacyProto::new(&b"test"[..], &[1], peerset),
 			addrs: addrs
 				.iter()
 				.enumerate()
@@ -84,7 +83,7 @@ fn build_nodes<T: CustomMessage + Send + 'static>()
 				.collect(),
 		};
 
-		let mut swarm = libp2p::core::swarm::Swarm::new(
+		let mut swarm = Swarm::new(
 			transport,
 			behaviour,
 			keypairs[index].public().into_peer_id()
@@ -101,29 +100,29 @@ fn build_nodes<T: CustomMessage + Send + 'static>()
 }
 
 /// Wraps around the `CustomBehaviour` network behaviour, and adds hardcoded node addresses to it.
-struct CustomProtoWithAddr<T: CustomMessage + Send + 'static> {
-	inner: CustomProto<T, Substream<StreamMuxerBox>>,
+struct CustomProtoWithAddr {
+	inner: LegacyProto<Block, Substream<StreamMuxerBox>>,
 	addrs: Vec<(PeerId, Multiaddr)>,
 }
 
-impl<T: CustomMessage + Send + 'static> std::ops::Deref for CustomProtoWithAddr<T> {
-	type Target = CustomProto<T, Substream<StreamMuxerBox>>;
+impl std::ops::Deref for CustomProtoWithAddr {
+	type Target = LegacyProto<Block, Substream<StreamMuxerBox>>;
 
 	fn deref(&self) -> &Self::Target {
 		&self.inner
 	}
 }
 
-impl<T: CustomMessage + Send + 'static> std::ops::DerefMut for CustomProtoWithAddr<T> {
+impl std::ops::DerefMut for CustomProtoWithAddr {
 	fn deref_mut(&mut self) -> &mut Self::Target {
 		&mut self.inner
 	}
 }
 
-impl<T: CustomMessage + Send + 'static> NetworkBehaviour for CustomProtoWithAddr<T> {
+impl NetworkBehaviour for CustomProtoWithAddr {
 	type ProtocolsHandler =
-		<CustomProto<T, Substream<StreamMuxerBox>> as NetworkBehaviour>::ProtocolsHandler;
-	type OutEvent = <CustomProto<T, Substream<StreamMuxerBox>> as NetworkBehaviour>::OutEvent;
+		<LegacyProto<Block, Substream<StreamMuxerBox>> as NetworkBehaviour>::ProtocolsHandler;
+	type OutEvent = <LegacyProto<Block, Substream<StreamMuxerBox>> as NetworkBehaviour>::OutEvent;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
 		self.inner.new_handler()
@@ -201,12 +200,12 @@ fn two_nodes_transfer_lots_of_packets() {
 	// substreams allowed by the multiplexer.
 	const NUM_PACKETS: u32 = 5000;
 
-	let (mut service1, mut service2) = build_nodes::<MessageAlias<Block>>();
+	let (mut service1, mut service2) = build_nodes();
 
 	let fut1 = future::poll_fn(move || -> io::Result<_> {
 		loop {
 			match try_ready!(service1.poll()) {
-				Some(CustomProtoOut::CustomProtocolOpen { peer_id, .. }) => {
+				Some(LegacyProtoOut::CustomProtocolOpen { peer_id, .. }) => {
 					for n in 0 .. NUM_PACKETS {
 						service1.send_packet(
 							&peer_id,
@@ -223,8 +222,8 @@ fn two_nodes_transfer_lots_of_packets() {
 	let fut2 = future::poll_fn(move || -> io::Result<_> {
 		loop {
 			match try_ready!(service2.poll()) {
-				Some(CustomProtoOut::CustomProtocolOpen { .. }) => {},
-				Some(CustomProtoOut::CustomMessage { message: Message::ChainSpecific(message), .. }) => {
+				Some(LegacyProtoOut::CustomProtocolOpen { .. }) => {},
+				Some(LegacyProtoOut::CustomMessage { message: Message::ChainSpecific(message), .. }) => {
 					assert_eq!(message.len(), 1);
 					packet_counter += 1;
 					if packet_counter == NUM_PACKETS {
@@ -242,7 +241,7 @@ fn two_nodes_transfer_lots_of_packets() {
 
 #[test]
 fn basic_two_nodes_requests_in_parallel() {
-	let (mut service1, mut service2) = build_nodes::<MessageAlias<Block>>();
+	let (mut service1, mut service2) = build_nodes();
 
 	// Generate random messages with or without a request id.
 	let mut to_send = {
@@ -262,7 +261,7 @@ fn basic_two_nodes_requests_in_parallel() {
 	let fut1 = future::poll_fn(move || -> io::Result<_> {
 		loop {
 			match try_ready!(service1.poll()) {
-				Some(CustomProtoOut::CustomProtocolOpen { peer_id, .. }) => {
+				Some(LegacyProtoOut::CustomProtocolOpen { peer_id, .. }) => {
 					for msg in to_send.drain(..) {
 						service1.send_packet(&peer_id, msg);
 					}
@@ -275,8 +274,8 @@ fn basic_two_nodes_requests_in_parallel() {
 	let fut2 = future::poll_fn(move || -> io::Result<_> {
 		loop {
 			match try_ready!(service2.poll()) {
-				Some(CustomProtoOut::CustomProtocolOpen { .. }) => {},
-				Some(CustomProtoOut::CustomMessage { message, .. }) => {
+				Some(LegacyProtoOut::CustomProtocolOpen { .. }) => {},
+				Some(LegacyProtoOut::CustomMessage { message, .. }) => {
 					let pos = to_receive.iter().position(|m| *m == message).unwrap();
 					to_receive.remove(pos);
 					if to_receive.is_empty() {
@@ -297,7 +296,7 @@ fn reconnect_after_disconnect() {
 	// We connect two nodes together, then force a disconnect (through the API of the `Service`),
 	// check that the disconnect worked, and finally check whether they successfully reconnect.
 
-	let (mut service1, mut service2) = build_nodes::<MessageAlias<Block>>();
+	let (mut service1, mut service2) = build_nodes();
 
 	// We use the `current_thread` runtime because it doesn't require us to have `'static` futures.
 	let mut runtime = tokio::runtime::current_thread::Runtime::new().unwrap();
@@ -314,7 +313,7 @@ fn reconnect_after_disconnect() {
 			let mut service1_not_ready = false;
 
 			match service1.poll().unwrap() {
-				Async::Ready(Some(CustomProtoOut::CustomProtocolOpen { .. })) => {
+				Async::Ready(Some(LegacyProtoOut::CustomProtocolOpen { .. })) => {
 					match service1_state {
 						ServiceState::NotConnected => {
 							service1_state = ServiceState::FirstConnec;
@@ -326,7 +325,7 @@ fn reconnect_after_disconnect() {
 						ServiceState::FirstConnec | ServiceState::ConnectedAgain => panic!(),
 					}
 				},
-				Async::Ready(Some(CustomProtoOut::CustomProtocolClosed { .. })) => {
+				Async::Ready(Some(LegacyProtoOut::CustomProtocolClosed { .. })) => {
 					match service1_state {
 						ServiceState::FirstConnec => service1_state = ServiceState::Disconnected,
 						ServiceState::ConnectedAgain| ServiceState::NotConnected |
@@ -338,7 +337,7 @@ fn reconnect_after_disconnect() {
 			}
 
 			match service2.poll().unwrap() {
-				Async::Ready(Some(CustomProtoOut::CustomProtocolOpen { .. })) => {
+				Async::Ready(Some(LegacyProtoOut::CustomProtocolOpen { .. })) => {
 					match service2_state {
 						ServiceState::NotConnected => {
 							service2_state = ServiceState::FirstConnec;
@@ -350,7 +349,7 @@ fn reconnect_after_disconnect() {
 						ServiceState::FirstConnec | ServiceState::ConnectedAgain => panic!(),
 					}
 				},
-				Async::Ready(Some(CustomProtoOut::CustomProtocolClosed { .. })) => {
+				Async::Ready(Some(LegacyProtoOut::CustomProtocolClosed { .. })) => {
 					match service2_state {
 						ServiceState::FirstConnec => service2_state = ServiceState::Disconnected,
 						ServiceState::ConnectedAgain| ServiceState::NotConnected |

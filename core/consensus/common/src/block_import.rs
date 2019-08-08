@@ -16,8 +16,8 @@
 
 //! Block import helpers.
 
-use runtime_primitives::traits::{Block as BlockT, DigestItemFor, Header as HeaderT, NumberFor};
-use runtime_primitives::Justification;
+use sr_primitives::traits::{Block as BlockT, DigestItemFor, Header as HeaderT, NumberFor};
+use sr_primitives::Justification;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -244,6 +244,6 @@ pub trait FinalityProofImport<B: BlockT> {
 		hash: B::Hash,
 		number: NumberFor<B>,
 		finality_proof: Vec<u8>,
-		verifier: &dyn Verifier<B>,
+		verifier: &mut dyn Verifier<B>,
 	) -> Result<(B::Hash, NumberFor<B>), Self::Error>;
 }

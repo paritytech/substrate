@@ -20,12 +20,12 @@ use client::{CallExecutor, Client};
 use client::backend::Backend;
 use client::blockchain::HeaderBackend;
 use client::error::Error as ClientError;
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use grandpa::voter_set::VoterSet;
 use grandpa::{Error as GrandpaError};
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{NumberFor, Block as BlockT, Header as HeaderT};
-use substrate_primitives::{H256, Blake2Hasher};
+use sr_primitives::generic::BlockId;
+use sr_primitives::traits::{NumberFor, Block as BlockT, Header as HeaderT};
+use primitives::{H256, Blake2Hasher};
 use fg_primitives::AuthorityId;
 
 use crate::{Commit, Error};
@@ -104,7 +104,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 	{
 
 		let justification = GrandpaJustification::<Block>::decode(&mut &*encoded)
-			.ok_or(ClientError::JustificationDecode)?;
+			.map_err(|_| ClientError::JustificationDecode)?;
 
 		if (justification.commit.target_hash, justification.commit.target_number) != finalized_target {
 			let msg = "invalid commit target in grandpa justification".to_string();

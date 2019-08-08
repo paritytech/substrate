@@ -75,11 +75,12 @@ use srml_support::traits::{
 	Currency, ExistenceRequirement, Get, Imbalance, OnDilution, OnUnbalanced,
 	ReservableCurrency, WithdrawReason
 };
-use runtime_primitives::{Permill, ModuleId};
-use runtime_primitives::traits::{
+use sr_primitives::{Permill, ModuleId};
+use sr_primitives::traits::{
 	Zero, EnsureOrigin, StaticLookup, CheckedSub, CheckedMul, AccountIdConversion
 };
-use parity_codec::{Encode, Decode};
+use sr_primitives::weights::SimpleDispatchInfo;
+use codec::{Encode, Decode};
 use system::ensure_signed;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
@@ -153,6 +154,7 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - One DB change, one extra DB entry.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn propose_spend(
 			origin,
 			#[compact] value: BalanceOf<T>,
@@ -179,6 +181,7 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - One DB clear.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
 		fn reject_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::RejectOrigin::ensure_origin(origin)?;
 			let proposal = <Proposals<T>>::take(proposal_id).ok_or("No proposal at that index")?;
@@ -196,6 +199,7 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - One DB change.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
 		fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::ApproveOrigin::ensure_origin(origin)?;
 
@@ -359,8 +363,8 @@ mod tests {
 
 	use runtime_io::with_externalities;
 	use srml_support::{assert_noop, assert_ok, impl_outer_origin, parameter_types};
-	use substrate_primitives::{H256, Blake2Hasher};
-	use runtime_primitives::{traits::{BlakeTwo256, OnFinalize, IdentityLookup}, testing::Header};
+	use primitives::{H256, Blake2Hasher};
+	use sr_primitives::{Perbill, traits::{BlakeTwo256, OnFinalize, IdentityLookup}, testing::Header};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -372,11 +376,13 @@ mod tests {
 		pub const BlockHashCount: u64 = 250;
 		pub const MaximumBlockWeight: u32 = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
+		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
+		type Call = ();
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
@@ -386,6 +392,7 @@ mod tests {
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 	}
 	parameter_types! {
@@ -408,6 +415,7 @@ mod tests {
 		type CreationFee = CreationFee;
 		type TransactionBaseFee = TransactionBaseFee;
 		type TransactionByteFee = TransactionByteFee;
+		type WeightToFee = ();
 	}
 	parameter_types! {
 		pub const ProposalBond: Permill = Permill::from_percent(5);

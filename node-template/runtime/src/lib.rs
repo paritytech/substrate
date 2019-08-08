@@ -8,17 +8,14 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
-#[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
-use parity_codec::{Encode, Decode};
 use rstd::prelude::*;
-#[cfg(feature = "std")]
-use primitives::bytes;
-use primitives::{ed25519, sr25519, OpaqueMetadata};
+use primitives::{sr25519, OpaqueMetadata, crypto::key_types};
 use sr_primitives::{
 	ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
-	traits::{self, NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify}, weights::Weight,
+	impl_opaque_keys,
 };
+use sr_primitives::traits::{NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify, ConvertInto};
+use sr_primitives::weights::Weight;
 use client::{
 	block_builder::api::{CheckInherentsResult, InherentData, self as block_builder_api},
 	runtime_api, impl_runtime_apis
@@ -36,10 +33,10 @@ pub use sr_primitives::{Permill, Perbill};
 pub use support::{StorageValue, construct_runtime, parameter_types};
 
 /// Alias to the signature scheme used for Aura authority signatures.
-pub type AuraSignature = ed25519::Signature;
+pub type AuraSignature = consensus_aura::sr25519::AuthoritySignature;
 
 /// The Ed25519 pub key of an session that belongs to an Aura authority of the chain.
-pub type AuraId = ed25519::Public;
+pub type AuraId = consensus_aura::sr25519::AuthorityId;
 
 /// Alias to pubkey that identifies an account on the chain.
 pub type AccountId = <AccountSignature as Verify>::Signer;
@@ -77,8 +74,13 @@ pub mod opaque {
 	pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 	/// Opaque block identifier type.
 	pub type BlockId = generic::BlockId<Block>;
-	/// Opaque session key type.
-	pub type SessionKey = AuraId;
+
+	impl_opaque_keys! {
+		pub struct SessionKeys {
+			#[id(key_types::AURA)]
+			pub aura: AuraId,
+		}
+	}
 }
 
 /// This runtime version.
@@ -102,13 +104,16 @@ pub fn native_version() -> NativeVersion {
 
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 250;
-	pub const MaximumBlockWeight: Weight = 4 * 1024 * 1024;
-	pub const MaximumBlockLength: u32 = 4 * 1024 * 1024;
+	pub const MaximumBlockWeight: Weight = 1_000_000;
+	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
+	pub const MaximumBlockLength: u32 = 5 * 1024 * 1024;
 }
 
 impl system::Trait for Runtime {
 	/// The identifier used to distinguish between accounts.
 	type AccountId = AccountId;
+	/// The aggregated dispatch type that is available for extrinsics.
+	type Call = Call;
 	/// The lookup mechanism to get account ID from whatever is passed in dispatchers.
 	type Lookup = Indices;
 	/// The index type for storing how many extrinsics an account has signed.
@@ -133,6 +138,8 @@ impl system::Trait for Runtime {
 	type MaximumBlockWeight = MaximumBlockWeight;
 	/// Maximum size of all encoded transactions (in bytes) that are allowed in one block.
 	type MaximumBlockLength = MaximumBlockLength;
+	/// Portion of the block weight that is available to all normal transactions.
+	type AvailableBlockRatio = AvailableBlockRatio;
 }
 
 impl aura::Trait for Runtime {
@@ -153,10 +160,11 @@ impl indices::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const MinimumPeriod: u64 = 5;
+	pub const MinimumPeriod: u64 = 5000;
 }
+
 impl timestamp::Trait for Runtime {
-	/// A timestamp: seconds since the unix epoch.
+	/// A timestamp: milliseconds since the unix epoch.
 	type Moment = u64;
 	type OnTimestampSet = Aura;
 	type MinimumPeriod = MinimumPeriod;
@@ -166,8 +174,8 @@ parameter_types! {
 	pub const ExistentialDeposit: u128 = 500;
 	pub const TransferFee: u128 = 0;
 	pub const CreationFee: u128 = 0;
-	pub const TransactionBaseFee: u128 = 1;
-	pub const TransactionByteFee: u128 = 0;
+	pub const TransactionBaseFee: u128 = 0;
+	pub const TransactionByteFee: u128 = 1;
 }
 
 impl balances::Trait for Runtime {
@@ -188,6 +196,7 @@ impl balances::Trait for Runtime {
 	type CreationFee = CreationFee;
 	type TransactionBaseFee = TransactionBaseFee;
 	type TransactionByteFee = TransactionByteFee;
+	type WeightToFee = ConvertInto;
 }
 
 impl sudo::Trait for Runtime {
@@ -299,6 +308,13 @@ impl_runtime_apis! {
 	impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
 		fn offchain_worker(n: NumberFor<Block>) {
 			Executive::offchain_worker(n)
+		}
+	}
+
+	impl substrate_session::SessionKeys<Block> for Runtime {
+		fn generate_session_keys(seed: Option<Vec<u8>>) -> Vec<u8> {
+			let seed = seed.as_ref().map(|s| rstd::str::from_utf8(&s).expect("Seed is an utf8 string"));
+			opaque::SessionKeys::generate(seed)
 		}
 	}
 }

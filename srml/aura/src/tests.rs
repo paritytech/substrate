@@ -20,7 +20,7 @@
 
 use lazy_static::lazy_static;
 use crate::mock::{System, Aura, new_test_ext};
-use primitives::traits::Header;
+use sr_primitives::traits::Header;
 use runtime_io::with_externalities;
 use parking_lot::Mutex;
 use crate::{AuraReport, HandleReport};

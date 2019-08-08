@@ -20,8 +20,9 @@
 
 use std::collections::HashSet;
 use ref_thread_local::{ref_thread_local, RefThreadLocal};
-use primitives::testing::Header;
-use substrate_primitives::{H256, Blake2Hasher};
+use sr_primitives::testing::Header;
+use sr_primitives::Perbill;
+use primitives::{H256, Blake2Hasher};
 use srml_support::{impl_outer_origin, parameter_types};
 use {runtime_io, system};
 use crate::{GenesisConfig, Module, Trait, IsDeadAccount, OnNewAccount, ResolveHint};
@@ -68,13 +69,15 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const MaximumBlockWeight: u32 = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
+	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl system::Trait for Runtime {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
+	type Call = ();
 	type Hash = H256;
-	type Hashing = ::primitives::traits::BlakeTwo256;
+	type Hashing = ::sr_primitives::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = Indices;
 	type Header = Header;
@@ -83,6 +86,7 @@ impl system::Trait for Runtime {
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type MaximumBlockLength = MaximumBlockLength;
+	type AvailableBlockRatio = AvailableBlockRatio;
 }
 impl Trait for Runtime {
 	type AccountIndex = u64;

@@ -17,7 +17,7 @@
 
 use super::*;
 
-use parity_codec::Encode;
+use codec::Encode;
 use txpool::{self, Pool};
 use test_client::{runtime::{AccountId, Block, Hash, Index, Extrinsic, Transfer}, AccountKeyring::{self, *}};
 use sr_primitives::{

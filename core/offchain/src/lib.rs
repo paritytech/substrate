@@ -40,18 +40,12 @@ use std::{
 };
 
 use client::runtime_api::ApiExt;
-use log::{debug, warn};
-use primitives::{
-	ExecutionContext,
-	crypto,
-};
-use runtime_primitives::{
-	generic::BlockId,
-	traits::{self, ProvideRuntimeApi},
-};
 use futures::future::Future;
-use transaction_pool::txpool::{Pool, ChainApi};
+use log::{debug, warn};
 use network::NetworkStateInfo;
+use primitives::ExecutionContext;
+use sr_primitives::{generic::BlockId, traits::{self, ProvideRuntimeApi}};
+use transaction_pool::txpool::{Pool, ChainApi};
 
 mod api;
 
@@ -59,61 +53,27 @@ pub mod testing;
 
 pub use offchain_primitives::OffchainWorkerApi;
 
-/// Provides currently configured authority key.
-pub trait AuthorityKeyProvider<Block: traits::Block>: Clone + 'static {
-	/// The crypto used by the block authoring algorithm.
-	type ConsensusPair: crypto::Pair;
-	/// The crypto used by the finality gadget.
-	type FinalityPair: crypto::Pair;
-
-	/// Returns currently configured authority key.
-	fn authority_key(&self, block_id: &BlockId<Block>) -> Option<Self::ConsensusPair>;
-
-	/// Returns currently configured finality gadget authority key.
-	fn fg_authority_key(&self, block_id: &BlockId<Block>) -> Option<Self::FinalityPair>;
-}
-
 /// An offchain workers manager.
-pub struct OffchainWorkers<
-	Client,
-	Storage,
-	KeyProvider,
-	Block: traits::Block,
-> {
+pub struct OffchainWorkers<Client, Storage, Block: traits::Block> {
 	client: Arc<Client>,
 	db: Storage,
-	authority_key: KeyProvider,
-	keys_password: crypto::Protected<String>,
 	_block: PhantomData<Block>,
 }
 
-impl<Client, Storage, KeyProvider, Block: traits::Block> OffchainWorkers<
-	Client,
-	Storage,
-	KeyProvider,
-	Block,
-> {
+impl<Client, Storage, Block: traits::Block> OffchainWorkers<Client, Storage, Block> {
 	/// Creates new `OffchainWorkers`.
-	pub fn new(
-		client: Arc<Client>,
-		db: Storage,
-		authority_key: KeyProvider,
-		keys_password: crypto::Protected<String>,
-	) -> Self {
+	pub fn new(client: Arc<Client>, db: Storage) -> Self {
 		Self {
 			client,
 			db,
-			authority_key,
-			keys_password,
 			_block: PhantomData,
 		}
 	}
 }
 
-impl<Client, Storage, KeyProvider, Block: traits::Block> fmt::Debug for OffchainWorkers<
+impl<Client, Storage, Block: traits::Block> fmt::Debug for OffchainWorkers<
 	Client,
 	Storage,
-	KeyProvider,
 	Block,
 > {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -121,16 +81,14 @@ impl<Client, Storage, KeyProvider, Block: traits::Block> fmt::Debug for Offchain
 	}
 }
 
-impl<Client, Storage, KeyProvider, Block> OffchainWorkers<
+impl<Client, Storage, Block> OffchainWorkers<
 	Client,
 	Storage,
-	KeyProvider,
 	Block,
 > where
 	Block: traits::Block,
-	Client: ProvideRuntimeApi,
+	Client: ProvideRuntimeApi + Send + Sync + 'static,
 	Client::Api: OffchainWorkerApi<Block>,
-	KeyProvider: AuthorityKeyProvider<Block>,
 	Storage: client::backend::OffchainStorage + 'static,
 {
 	/// Start the offchain workers after given block.
@@ -140,7 +98,7 @@ impl<Client, Storage, KeyProvider, Block> OffchainWorkers<
 		number: &<Block::Header as traits::Header>::Number,
 		pool: &Arc<Pool<A>>,
 		network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
-	) -> impl Future<Item = (), Error = ()> where
+	) -> impl Future<Output = ()> where
 		A: ChainApi<Block=Block> + 'static,
 	{
 		let runtime = self.client.runtime_api();
@@ -152,26 +110,48 @@ impl<Client, Storage, KeyProvider, Block> OffchainWorkers<
 			let (api, runner) = api::AsyncApi::new(
 				pool.clone(),
 				self.db.clone(),
-				self.keys_password.clone(),
-				self.authority_key.clone(),
 				at.clone(),
 				network_state.clone(),
 			);
-			debug!("Running offchain workers at {:?}", at);
-			let api = Box::new(api);
-			runtime.offchain_worker_with_context(&at, ExecutionContext::OffchainWorker(api), *number).unwrap();
-			futures::future::Either::A(runner.process())
+			debug!("Spawning offchain workers at {:?}", at);
+			let number = *number;
+			let client = self.client.clone();
+			spawn_worker(move || {
+				let runtime = client.runtime_api();
+				let api = Box::new(api);
+				debug!("Running offchain workers at {:?}", at);
+				let run = runtime.offchain_worker_with_context(
+					&at,
+					ExecutionContext::OffchainWorker(api),
+					number,
+				);
+				if let Err(e) =	run {
+					log::error!("Error running offchain workers at {:?}: {:?}", at, e);
+				}
+			});
+			futures::future::Either::Left(runner.process())
 		} else {
-			futures::future::Either::B(futures::future::ok(()))
+			futures::future::Either::Right(futures::future::ready(()))
 		}
 	}
+}
+
+/// Spawns a new offchain worker.
+///
+/// We spawn offchain workers for each block in a separate thread,
+/// since they can run for a significant amount of time
+/// in a blocking fashion and we don't want to block the runtime.
+///
+/// Note that we should avoid that if we switch to future-based runtime in the future,
+/// alternatively:
+/// TODO [ToDr] (#1458) we can consider using a thread pool instead.
+fn spawn_worker(f: impl FnOnce() -> () + Send + 'static) {
+	std::thread::spawn(f);
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use futures::Future;
-	use primitives::{ed25519, sr25519};
 	use network::{Multiaddr, PeerId};
 
 	struct MockNetworkStateInfo();
@@ -186,52 +166,20 @@ mod tests {
 		}
 	}
 
-	#[derive(Clone)]
-	pub(crate) struct TestProvider<Block> {
-		_marker: PhantomData<Block>,
-		pub(crate) sr_key: Option<sr25519::Pair>,
-		pub(crate) ed_key: Option<ed25519::Pair>,
-	}
-
-	impl<Block: traits::Block> Default for TestProvider<Block> {
-		fn default() -> Self {
-			Self {
-				_marker: PhantomData,
-				sr_key: None,
-				ed_key: None,
-			}
-		}
-	}
-
-	impl<Block: traits::Block> AuthorityKeyProvider<Block> for TestProvider<Block> {
-		type ConsensusPair = ed25519::Pair;
-		type FinalityPair = sr25519::Pair;
-
-		fn authority_key(&self, _: &BlockId<Block>) -> Option<Self::ConsensusPair> {
-			self.ed_key.clone()
-		}
-
-		fn fg_authority_key(&self, _: &BlockId<Block>) -> Option<Self::FinalityPair> {
-			self.sr_key.clone()
-		}
-	}
-
 	#[test]
 	fn should_call_into_runtime_and_produce_extrinsic() {
 		// given
 		let _ = env_logger::try_init();
-		let runtime = tokio::runtime::Runtime::new().unwrap();
 		let client = Arc::new(test_client::new());
-		let pool = Arc::new(Pool::new(Default::default(), ::transaction_pool::ChainApi::new(client.clone())));
+		let pool = Arc::new(Pool::new(Default::default(), transaction_pool::ChainApi::new(client.clone())));
 		let db = client_db::offchain::LocalStorage::new_test();
-		let mock = Arc::new(MockNetworkStateInfo());
+		let network_state = Arc::new(MockNetworkStateInfo());
 
 		// when
-		let offchain = OffchainWorkers::new(client, db, TestProvider::default(), "".to_owned().into());
-		runtime.executor().spawn(offchain.on_block_imported(&0u64, &pool, mock.clone()));
+		let offchain = OffchainWorkers::new(client, db);
+		futures::executor::block_on(offchain.on_block_imported(&0u64, &pool, network_state));
 
 		// then
-		runtime.shutdown_on_idle().wait().unwrap();
 		assert_eq!(pool.status().ready, 1);
 		assert_eq!(pool.ready().next().unwrap().is_propagateable(), false);
 	}

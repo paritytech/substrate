@@ -21,12 +21,11 @@ use rstd::{self, result, marker::PhantomData, convert::{TryFrom, TryInto}};
 use runtime_io;
 #[cfg(feature = "std")] use std::fmt::{Debug, Display};
 #[cfg(feature = "std")] use serde::{Serialize, Deserialize, de::DeserializeOwned};
-use substrate_primitives::{self, Hasher, Blake2Hasher};
+use primitives::{self, Hasher, Blake2Hasher};
 use crate::codec::{Codec, Encode, Decode, HasCompact};
 use crate::transaction_validity::{ValidTransaction, TransactionValidity};
 use crate::generic::{Digest, DigestItem};
 use crate::weights::DispatchInfo;
-pub use substrate_primitives::crypto::TypedKey;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
@@ -57,17 +56,17 @@ pub trait Verify {
 	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool;
 }
 
-impl Verify for substrate_primitives::ed25519::Signature {
-	type Signer = substrate_primitives::ed25519::Public;
+impl Verify for primitives::ed25519::Signature {
+	type Signer = primitives::ed25519::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
-		runtime_io::ed25519_verify(self.as_ref(), msg.get(), signer)
+		runtime_io::ed25519_verify(self, msg.get(), signer)
 	}
 }
 
-impl Verify for substrate_primitives::sr25519::Signature {
-	type Signer = substrate_primitives::sr25519::Public;
+impl Verify for primitives::sr25519::Signature {
+	type Signer = primitives::sr25519::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
-		runtime_io::sr25519_verify(self.as_ref(), msg.get(), signer)
+		runtime_io::sr25519_verify(self, msg.get(), signer)
 	}
 }
 
@@ -122,32 +121,6 @@ impl<T> Lookup for IdentityLookup<T> {
 	fn lookup(&self, x: T) -> result::Result<T, &'static str> { Ok(x) }
 }
 
-/// Get the "current" block number.
-pub trait CurrentHeight {
-	/// The type of the block number.
-	type BlockNumber;
-
-	/// Return the current block number. Not allowed to fail.
-	fn current_height(&self) -> Self::BlockNumber;
-}
-
-/// Translate a block number into a hash.
-pub trait BlockNumberToHash {
-	/// The type of the block number.
-	type BlockNumber: Zero;
-
-	/// The type of the hash.
-	type Hash: Encode;
-
-	/// Get the hash for a given block number, or `None` if unknown.
-	fn block_number_to_hash(&self, n: Self::BlockNumber) -> Option<Self::Hash>;
-
-	/// Get the genesis block hash; this should always be known.
-	fn genesis_hash(&self) -> Self::Hash {
-		self.block_number_to_hash(Zero::zero()).expect("All blockchains must know their genesis block hash; qed")
-	}
-}
-
 /// Extensible conversion trait. Generic over both source and destination types.
 pub trait Convert<A, B> {
 	/// Make conversion.
@@ -166,7 +139,6 @@ impl<T> Convert<T, T> for Identity {
 
 /// A structure that performs standard conversion using the standard Rust conversion traits.
 pub struct ConvertInto;
-
 impl<A, B: From<A>> Convert<A, B> for ConvertInto {
 	fn convert(a: A) -> B { a.into() }
 }
@@ -459,7 +431,7 @@ pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stup
 pub struct BlakeTwo256;
 
 impl Hash for BlakeTwo256 {
-	type Output = substrate_primitives::H256;
+	type Output = primitives::H256;
 	type Hasher = Blake2Hasher;
 	fn hash(s: &[u8]) -> Self::Output {
 		runtime_io::blake2_256(s).into()
@@ -494,10 +466,10 @@ pub trait CheckEqual {
 	fn check_equal(&self, other: &Self);
 }
 
-impl CheckEqual for substrate_primitives::H256 {
+impl CheckEqual for primitives::H256 {
 	#[cfg(feature = "std")]
 	fn check_equal(&self, other: &Self) {
-		use substrate_primitives::hexdisplay::HexDisplay;
+		use primitives::hexdisplay::HexDisplay;
 		if self != other {
 			println!("Hash: given={}, expected={}", HexDisplay::from(self.as_fixed_bytes()), HexDisplay::from(other.as_fixed_bytes()));
 		}
@@ -771,6 +743,9 @@ pub enum DispatchError {
 	/// General error to do with the inability to pay some fees (e.g. account balance too low).
 	Payment,
 
+	/// General error to do with the exhaustion of block resources.
+	Exhausted,
+
 	/// General error to do with the permissions of the sender.
 	NoPermission,
 
@@ -785,20 +760,18 @@ pub enum DispatchError {
 
 	/// General error to do with the transaction's proofs (e.g. signature).
 	BadProof,
-
-/*	/// General error to do with actually executing the dispatched logic.
-	User(&'static str),*/
 }
 
 impl From<DispatchError> for i8 {
 	fn from(e: DispatchError) -> i8 {
 		match e {
 			DispatchError::Payment => -64,
-			DispatchError::NoPermission => -65,
-			DispatchError::BadState => -66,
-			DispatchError::Stale => -67,
-			DispatchError::Future => -68,
-			DispatchError::BadProof => -69,
+			DispatchError::Exhausted => -65,
+			DispatchError::NoPermission => -66,
+			DispatchError::BadState => -67,
+			DispatchError::Stale => -68,
+			DispatchError::Future => -69,
+			DispatchError::BadProof => -70,
 		}
 	}
 }
@@ -828,43 +801,66 @@ pub trait SignedExtension:
 	/// The type which encodes the sender identity.
 	type AccountId;
 
+	/// The type which encodes the call to be dispatched.
+	type Call;
+
 	/// Any additional data that will go into the signed payload. This may be created dynamically
 	/// from the transaction using the `additional_signed` function.
 	type AdditionalSigned: Encode;
+
+	/// The type that encodes information that can be passed from pre_dispatch to post-dispatch.
+	type Pre: Default;
 
 	/// Construct any additional data that should be in the signed payload of the transaction. Can
 	/// also perform any pre-signature-verification checks and return an error if needed.
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str>;
 
-		/// Validate a signed transaction for the transaction queue.
+	/// Validate a signed transaction for the transaction queue.
 	fn validate(
 		&self,
 		_who: &Self::AccountId,
+		_call: &Self::Call,
 		_info: DispatchInfo,
 		_len: usize,
-	) -> Result<ValidTransaction, DispatchError> { Ok(Default::default()) }
+	) -> Result<ValidTransaction, DispatchError> {
+		Ok(Default::default())
+	}
 
 	/// Do any pre-flight stuff for a signed transaction.
 	fn pre_dispatch(
 		self,
 		who: &Self::AccountId,
+		call: &Self::Call,
 		info: DispatchInfo,
 		len: usize,
-	) -> Result<(), DispatchError> { self.validate(who, info, len).map(|_| ()) }
+	) -> Result<Self::Pre, DispatchError> {
+		self.validate(who, call, info, len).map(|_| Self::Pre::default())
+	}
 
 	/// Validate an unsigned transaction for the transaction queue. Normally the default
 	/// implementation is fine since `ValidateUnsigned` is a better way of recognising and
 	/// validating unsigned transactions.
 	fn validate_unsigned(
+		_call: &Self::Call,
 		_info: DispatchInfo,
 		_len: usize,
 	) -> Result<ValidTransaction, DispatchError> { Ok(Default::default()) }
 
 	/// Do any pre-flight stuff for a unsigned transaction.
 	fn pre_dispatch_unsigned(
+		call: &Self::Call,
 		info: DispatchInfo,
 		len: usize,
-	) -> Result<(), DispatchError> { Self::validate_unsigned(info, len).map(|_| ()) }
+	) -> Result<Self::Pre, DispatchError> {
+		Self::validate_unsigned(call, info, len).map(|_| Self::Pre::default())
+	}
+
+	/// Do any post-flight stuff for a transaction.
+	fn post_dispatch(
+		_pre: Self::Pre,
+		_info: DispatchInfo,
+		_len: usize,
+	) { }
 }
 
 macro_rules! tuple_impl_indexed {
@@ -874,44 +870,56 @@ macro_rules! tuple_impl_indexed {
 	([$($direct:ident)+] ; [$($index:tt,)+]) => {
 		impl<
 			AccountId,
-			$($direct: SignedExtension<AccountId=AccountId>),+
+			Call,
+			$($direct: SignedExtension<AccountId=AccountId, Call=Call>),+
 		> SignedExtension for ($($direct),+,) {
 			type AccountId = AccountId;
+			type Call = Call;
 			type AdditionalSigned = ($($direct::AdditionalSigned,)+);
+			type Pre =  ($($direct::Pre,)+);
 			fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str> {
 				Ok(( $(self.$index.additional_signed()?,)+ ))
 			}
 			fn validate(
 				&self,
 				who: &Self::AccountId,
+				call: &Self::Call,
 				info: DispatchInfo,
 				len: usize,
 			) -> Result<ValidTransaction, DispatchError> {
-				let aggregator = vec![$(<$direct as SignedExtension>::validate(&self.$index, who, info, len)?),+];
+				let aggregator = vec![$(<$direct as SignedExtension>::validate(&self.$index, who, call, info, len)?),+];
 				Ok(aggregator.into_iter().fold(ValidTransaction::default(), |acc, a| acc.combine_with(a)))
 			}
 			fn pre_dispatch(
 				self,
 				who: &Self::AccountId,
+				call: &Self::Call,
 				info: DispatchInfo,
 				len: usize,
-			) -> Result<(), DispatchError> {
-				$(self.$index.pre_dispatch(who, info, len)?;)+
-				Ok(())
+			) -> Result<Self::Pre, DispatchError> {
+				Ok(($(self.$index.pre_dispatch(who, call, info, len)?,)+))
 			}
 			fn validate_unsigned(
+				call: &Self::Call,
 				info: DispatchInfo,
 				len: usize,
 			) -> Result<ValidTransaction, DispatchError> {
-				let aggregator = vec![$($direct::validate_unsigned(info, len)?),+];
+				let aggregator = vec![$($direct::validate_unsigned(call, info, len)?),+];
 				Ok(aggregator.into_iter().fold(ValidTransaction::default(), |acc, a| acc.combine_with(a)))
 			}
 			fn pre_dispatch_unsigned(
+				call: &Self::Call,
 				info: DispatchInfo,
 				len: usize,
-			) -> Result<(), DispatchError> {
-				$($direct::pre_dispatch_unsigned(info, len)?;)+
-				Ok(())
+			) -> Result<Self::Pre, DispatchError> {
+				Ok(($($direct::pre_dispatch_unsigned(call, info, len)?,)+))
+			}
+			fn post_dispatch(
+				pre: Self::Pre,
+				info: DispatchInfo,
+				len: usize,
+			) {
+				$($direct::post_dispatch(pre.$index, info, len);)+
 			}
 		}
 
@@ -933,11 +941,13 @@ macro_rules! tuple_impl_indexed {
 #[allow(non_snake_case)]
 tuple_impl_indexed!(A, B, C, D, E, F, G, H, I, J, ; 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,);
 
-/// Only for base bone testing when you don't care about signed extensions at all.\
+/// Only for bare bone testing when you don't care about signed extensions at all.
 #[cfg(feature = "std")]
 impl SignedExtension for () {
 	type AccountId = u64;
 	type AdditionalSigned = ();
+	type Call = ();
+	type Pre = ();
 	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
 }
 
@@ -1052,21 +1062,30 @@ pub trait OpaqueKeys: Clone {
 	/// Get the raw bytes of key with key-type ID `i`.
 	fn get_raw(&self, i: super::KeyTypeId) -> &[u8];
 	/// Get the decoded key with index `i`.
-	fn get<T: Decode>(&self, i: super::KeyTypeId) -> Option<T> { T::decode(&mut self.get_raw(i)) }
+	fn get<T: Decode>(&self, i: super::KeyTypeId) -> Option<T> {
+		T::decode(&mut self.get_raw(i)).ok()
+	}
 	/// Verify a proof of ownership for the keys.
 	fn ownership_proof_is_valid(&self, _proof: &[u8]) -> bool { true }
 }
 
+/// Input that adds infinite number of zero after wrapped input.
 struct TrailingZeroInput<'a>(&'a [u8]);
+
 impl<'a> codec::Input for TrailingZeroInput<'a> {
-	fn read(&mut self, into: &mut [u8]) -> usize {
-		let len = into.len().min(self.0.len());
-		into[..len].copy_from_slice(&self.0[..len]);
-		for i in &mut into[len..] {
+	fn remaining_len(&mut self) -> Result<Option<usize>, codec::Error> {
+		Ok(None)
+	}
+
+	fn read(&mut self, into: &mut [u8]) -> Result<(), codec::Error> {
+		let len_from_inner = into.len().min(self.0.len());
+		into[..len_from_inner].copy_from_slice(&self.0[..len_from_inner]);
+		for i in &mut into[len_from_inner..] {
 			*i = 0;
 		}
-		self.0 = &self.0[len..];
-		into.len()
+		self.0 = &self.0[len_from_inner..];
+
+		Ok(())
 	}
 }
 
@@ -1114,7 +1133,7 @@ impl<T: Encode + Decode + Default, Id: Encode + Decode + TypeId> AccountIdConver
 		x.using_encoded(|d| {
 			if &d[0..4] != Id::TYPE_ID { return None }
 			let mut cursor = &d[4..];
-			let result = Decode::decode(&mut cursor)?;
+			let result = Decode::decode(&mut cursor).ok()?;
 			if cursor.iter().all(|x| *x == 0) {
 				Some(result)
 			} else {
@@ -1127,7 +1146,7 @@ impl<T: Encode + Decode + Default, Id: Encode + Decode + TypeId> AccountIdConver
 #[cfg(test)]
 mod tests {
 	use super::AccountIdConversion;
-	use crate::codec::{Encode, Decode};
+	use crate::codec::{Encode, Decode, Input};
 
 	#[derive(Encode, Decode, Default, PartialEq, Debug)]
 	struct U32Value(u32);
@@ -1176,6 +1195,22 @@ mod tests {
 		let r = U16Value::try_from_account(&0x0100_c0da_f00dcafe_u64);
 		assert!(r.is_none());
 	}
+
+	#[test]
+	fn trailing_zero_should_work() {
+		let mut t = super::TrailingZeroInput(&[1, 2, 3]);
+		assert_eq!(t.remaining_len(), Ok(None));
+		let mut buffer = [0u8; 2];
+		assert_eq!(t.read(&mut buffer), Ok(()));
+		assert_eq!(t.remaining_len(), Ok(None));
+		assert_eq!(buffer, [1, 2]);
+		assert_eq!(t.read(&mut buffer), Ok(()));
+		assert_eq!(t.remaining_len(), Ok(None));
+		assert_eq!(buffer, [3, 0]);
+		assert_eq!(t.read(&mut buffer), Ok(()));
+		assert_eq!(t.remaining_len(), Ok(None));
+		assert_eq!(buffer, [0, 0]);
+	}
 }
 
 /// Calls a given macro a number of times with a set of fixed params and an incrementing numeral.
@@ -1206,14 +1241,14 @@ macro_rules! count {
 /// just the bytes of the key.
 ///
 /// ```rust
-/// use sr_primitives::{impl_opaque_keys, key_types, KeyTypeId};
+/// use sr_primitives::{impl_opaque_keys, key_types, KeyTypeId, app_crypto::{sr25519, ed25519}};
 ///
 /// impl_opaque_keys! {
 /// 	pub struct Keys {
 /// 		#[id(key_types::ED25519)]
-/// 		pub ed25519: [u8; 32],
+/// 		pub ed25519: ed25519::AppPublic,
 /// 		#[id(key_types::SR25519)]
-/// 		pub sr25519: [u8; 32],
+/// 		pub sr25519: sr25519::AppPublic,
 /// 	}
 /// }
 /// ```
@@ -1235,22 +1270,34 @@ macro_rules! impl_opaque_keys {
 			)*
 		}
 
+		impl $name {
+			/// Generate a set of keys with optionally using the given seed.
+			///
+			/// The generated key pairs are stored in the keystore.
+			///
+			/// Returns the concatenated SCALE encoded public keys.
+			pub fn generate(seed: Option<&str>) -> $crate::rstd::vec::Vec<u8> {
+				let keys = Self{
+					$(
+						$field: <$type as $crate::app_crypto::RuntimeAppPublic>::generate_pair(seed),
+					)*
+				};
+				$crate::codec::Encode::encode(&keys)
+			}
+		}
+
 		impl $crate::traits::OpaqueKeys for $name {
 			type KeyTypeIds = $crate::rstd::iter::Cloned<
 				$crate::rstd::slice::Iter<'static, $crate::KeyTypeId>
 			>;
 
 			fn key_ids() -> Self::KeyTypeIds {
-				[
-					$($key_id),*
-				].iter().cloned()
+				[ $($key_id),* ].iter().cloned()
 			}
 
 			fn get_raw(&self, i: $crate::KeyTypeId) -> &[u8] {
 				match i {
-					$(
-						i if i == $key_id => self.$field.as_ref(),
-					)*
+					$( i if i == $key_id => self.$field.as_ref(), )*
 					_ => &[],
 				}
 			}

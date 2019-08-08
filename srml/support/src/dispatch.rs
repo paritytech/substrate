@@ -749,7 +749,7 @@ macro_rules! decl_module {
 		fn on_initialize() { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::runtime_primitives::traits::OnInitialize<$trait_instance::BlockNumber>
+			$crate::sr_primitives::traits::OnInitialize<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_initialize(_block_number_not_used: $trait_instance::BlockNumber) { $( $impl )* }
@@ -762,7 +762,7 @@ macro_rules! decl_module {
 		fn on_initialize($param:ident : $param_ty:ty) { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::runtime_primitives::traits::OnInitialize<$trait_instance::BlockNumber>
+			$crate::sr_primitives::traits::OnInitialize<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_initialize($param: $param_ty) { $( $impl )* }
@@ -774,7 +774,7 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::runtime_primitives::traits::OnInitialize<$trait_instance::BlockNumber>
+			$crate::sr_primitives::traits::OnInitialize<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{}
 	};
@@ -785,7 +785,7 @@ macro_rules! decl_module {
 		fn on_finalize() { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::runtime_primitives::traits::OnFinalize<$trait_instance::BlockNumber>
+			$crate::sr_primitives::traits::OnFinalize<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_finalize(_block_number_not_used: $trait_instance::BlockNumber) { $( $impl )* }
@@ -798,7 +798,7 @@ macro_rules! decl_module {
 		fn on_finalize($param:ident : $param_ty:ty) { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::runtime_primitives::traits::OnFinalize<$trait_instance::BlockNumber>
+			$crate::sr_primitives::traits::OnFinalize<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_finalize($param: $param_ty) { $( $impl )* }
@@ -810,7 +810,7 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::runtime_primitives::traits::OnFinalize<$trait_instance::BlockNumber>
+			$crate::sr_primitives::traits::OnFinalize<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 		}
@@ -822,7 +822,7 @@ macro_rules! decl_module {
 		fn offchain_worker() { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::runtime_primitives::traits::OffchainWorker<$trait_instance::BlockNumber>
+			$crate::sr_primitives::traits::OffchainWorker<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn generate_extrinsics(_block_number_not_used: $trait_instance::BlockNumber) { $( $impl )* }
@@ -835,7 +835,7 @@ macro_rules! decl_module {
 		fn offchain_worker($param:ident : $param_ty:ty) { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::runtime_primitives::traits::OffchainWorker<$trait_instance::BlockNumber>
+			$crate::sr_primitives::traits::OffchainWorker<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn generate_extrinsics($param: $param_ty) { $( $impl )* }
@@ -847,7 +847,7 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::runtime_primitives::traits::OffchainWorker<$trait_instance::BlockNumber>
+			$crate::sr_primitives::traits::OffchainWorker<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{}
 	};
@@ -1431,6 +1431,14 @@ macro_rules! __impl_module_constants_metadata {
 							$crate::dispatch::Encode::encode(&value)
 						}
 					}
+
+					unsafe impl<$const_trait_instance: 'static + $const_trait_name $(
+						<I>, $const_instance: $const_instantiable)?
+					> Send for $default_byte_name <$const_trait_instance $(, $const_instance)?> {}
+
+					unsafe impl<$const_trait_instance: 'static + $const_trait_name $(
+						<I>, $const_instance: $const_instantiable)?
+					> Sync for $default_byte_name <$const_trait_instance $(, $const_instance)?> {}
 				)*
 				&[
 					$(
@@ -1595,7 +1603,7 @@ macro_rules! __check_reserved_fn_name {
 #[allow(dead_code)]
 mod tests {
 	use super::*;
-	use crate::runtime_primitives::traits::{OnInitialize, OnFinalize};
+	use crate::sr_primitives::traits::{OnInitialize, OnFinalize};
 	use sr_primitives::weights::{DispatchInfo, DispatchClass};
 
 	pub trait Trait: system::Trait + Sized where Self::AccountId: From<u32> {
@@ -1622,7 +1630,7 @@ mod tests {
 			fn aux_0(_origin) -> Result { unreachable!() }
 			fn aux_1(_origin, #[compact] _data: u32) -> Result { unreachable!() }
 			fn aux_2(_origin, _data: i32, _data2: String) -> Result { unreachable!() }
-			#[weight = SimpleDispatchInfo::FixedNormal(10)]
+			#[weight = SimpleDispatchInfo::FixedNormal(3)]
 			fn aux_3(_origin) -> Result { unreachable!() }
 			fn aux_4(_origin, _data: i32) -> Result { unreachable!() }
 			fn aux_5(_origin, _data: i32, #[compact] _data2: u32) -> Result { unreachable!() }
@@ -1772,7 +1780,7 @@ mod tests {
 
 	#[test]
 	fn weight_should_attach_to_call_enum() {
-		// max weight. not dependent on input.
+		// operational.
 		assert_eq!(
 			Call::<TraitImpl>::operational().get_dispatch_info(),
 			DispatchInfo { weight: 5, class: DispatchClass::Operational },
@@ -1780,12 +1788,12 @@ mod tests {
 		// default weight.
 		assert_eq!(
 			Call::<TraitImpl>::aux_0().get_dispatch_info(),
-			DispatchInfo { weight: 100, class: DispatchClass::Normal },
+			DispatchInfo { weight: 10_000, class: DispatchClass::Normal },
 		);
 		// custom basic
 		assert_eq!(
 			Call::<TraitImpl>::aux_3().get_dispatch_info(),
-			DispatchInfo { weight: 10, class: DispatchClass::Normal },
+			DispatchInfo { weight: 3, class: DispatchClass::Normal },
 		);
 	}
 }

@@ -21,11 +21,10 @@
 use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
 
-use parity_codec::Decode;
+use codec::{Encode, Decode};
 use keyring::sr25519::Keyring;
-use node_runtime::{Call, CheckedExtrinsic, UncheckedExtrinsic, SignedExtra, BalancesCall};
+use node_runtime::{Call, CheckedExtrinsic, UncheckedExtrinsic, SignedExtra, BalancesCall, ExistentialDeposit};
 use primitives::{sr25519, crypto::Pair};
-use parity_codec::Encode;
 use sr_primitives::{generic::Era, traits::{Block as BlockT, Header as HeaderT, SignedExtension}};
 use substrate_service::ServiceFactory;
 use transaction_factory::RuntimeAdapter;
@@ -54,9 +53,10 @@ type Number = <<node_primitives::Block as BlockT>::Header as HeaderT>::Number;
 impl<Number> FactoryState<Number> {
 	fn build_extra(index: node_primitives::Index, phase: u64) -> node_runtime::SignedExtra {
 		(
+			system::CheckGenesis::new(),
 			system::CheckEra::from(Era::mortal(256, phase)),
 			system::CheckNonce::from(index),
-			system::CheckWeight::from(),
+			system::CheckWeight::new(),
 			balances::TakeFees::from(0)
 		)
 	}
@@ -133,7 +133,8 @@ impl RuntimeAdapter for FactoryState<Number> {
 		sender: &Self::AccountId,
 		key: &Self::Secret,
 		destination: &Self::AccountId,
-		amount: &Self::Number,
+		amount: &Self::Balance,
+		genesis_hash: &<Self::Block as BlockT>::Hash,
 		prior_block_hash: &<Self::Block as BlockT>::Hash,
 	) -> <Self::Block as BlockT>::Extrinsic {
 		let index = self.extract_index(&sender, prior_block_hash);
@@ -147,7 +148,7 @@ impl RuntimeAdapter for FactoryState<Number> {
 					(*amount).into()
 				)
 			)
-		}, key, (prior_block_hash.clone(), (), (), ()))
+		}, key, (genesis_hash.clone(), prior_block_hash.clone(), (), (), ()))
 	}
 
 	fn inherent_extrinsics(&self) -> InherentData {
@@ -161,9 +162,9 @@ impl RuntimeAdapter for FactoryState<Number> {
 		inherent
 	}
 
-	fn minimum_balance() -> Self::Number {
+	fn minimum_balance() -> Self::Balance {
 		// TODO get correct amount via api. See #2587.
-		1337
+		ExistentialDeposit::get()
 	}
 
 	fn master_account_id() -> Self::AccountId {

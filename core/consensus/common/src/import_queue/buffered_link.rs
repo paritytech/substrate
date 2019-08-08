@@ -20,7 +20,7 @@
 //!
 //! # Example
 //!
-//! ```no_run
+//! ```
 //! use substrate_consensus_common::import_queue::Link;
 //! # use substrate_consensus_common::import_queue::buffered_link::buffered_link;
 //! # use test_client::runtime::Block;
@@ -28,12 +28,18 @@
 //! # let mut my_link = DummyLink;
 //! let (mut tx, mut rx) = buffered_link::<Block>();
 //! tx.blocks_processed(0, 0, vec![]);
-//! rx.poll_actions(&mut my_link);	// Calls `my_link.blocks_processed(0, 0, vec![])`
+//!
+//! // Calls `my_link.blocks_processed(0, 0, vec![])` when polled.
+//! let _fut = futures::future::poll_fn(move |cx| {
+//! 	rx.poll_actions(cx, &mut my_link);
+//! 	std::task::Poll::Pending::<()>
+//! });
 //! ```
 //!
 
-use futures::{prelude::*, sync::mpsc};
-use runtime_primitives::traits::{Block as BlockT, NumberFor};
+use futures::{prelude::*, channel::mpsc};
+use sr_primitives::traits::{Block as BlockT, NumberFor};
+use std::{pin::Pin, task::Context, task::Poll};
 use crate::import_queue::{Origin, Link, BlockImportResult, BlockImportError};
 
 /// Wraps around an unbounded channel from the `futures` crate. The sender implements `Link` and
@@ -57,6 +63,14 @@ impl<B: BlockT> BufferedLinkSender<B> {
 	/// Once `true` is returned, it is pointless to use the sender anymore.
 	pub fn is_closed(&self) -> bool {
 		self.tx.is_closed()
+	}
+}
+
+impl<B: BlockT> Clone for BufferedLinkSender<B> {
+	fn clone(&self) -> Self {
+		BufferedLinkSender {
+			tx: self.tx.clone(),
+		}
 	}
 }
 
@@ -120,10 +134,10 @@ impl<B: BlockT> BufferedLinkReceiver<B> {
 	///
 	/// This method should behave in a way similar to `Future::poll`. It can register the current
 	/// task and notify later when more actions are ready to be polled. To continue the comparison,
-	/// it is as if this method always returned `Ok(Async::NotReady)`.
-	pub fn poll_actions(&mut self, link: &mut dyn Link<B>) {
+	/// it is as if this method always returned `Poll::Pending`.
+	pub fn poll_actions(&mut self, cx: &mut Context, link: &mut dyn Link<B>) {
 		loop {
-			let msg = if let Ok(Async::Ready(Some(msg))) = self.rx.poll() {
+			let msg = if let Poll::Ready(Some(msg)) = Stream::poll_next(Pin::new(&mut self.rx), cx) {
 				msg
 			} else {
 				break

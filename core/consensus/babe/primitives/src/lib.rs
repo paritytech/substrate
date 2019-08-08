@@ -15,18 +15,37 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Primitives for BABE.
-#![deny(warnings, unsafe_code, missing_docs)]
+#![deny(warnings)]
+#![forbid(unsafe_code, missing_docs, unused_variables, unused_imports)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use parity_codec::{Encode, Decode};
+mod digest;
+
+use codec::{Encode, Decode};
 use rstd::vec::Vec;
-use runtime_primitives::ConsensusEngineId;
-use substrate_primitives::sr25519::Public;
+use sr_primitives::ConsensusEngineId;
 use substrate_client::decl_runtime_apis;
+
+#[cfg(feature = "std")]
+pub use digest::{BabePreDigest, CompatibleDigestItem};
+pub use digest::{BABE_VRF_PREFIX, RawBabePreDigest};
+
+mod app {
+	use app_crypto::{app_crypto, key_types::BABE, sr25519};
+	app_crypto!(sr25519, BABE);
+}
+
+/// A Babe authority keypair. Necessarily equivalent to the schnorrkel public key used in
+/// the main Babe module. If that ever changes, then this must, too.
+#[cfg(feature = "std")]
+pub type AuthorityPair = app::Pair;
+
+/// A Babe authority signature.
+pub type AuthoritySignature = app::Signature;
 
 /// A Babe authority identifier. Necessarily equivalent to the schnorrkel public key used in
 /// the main Babe module. If that ever changes, then this must, too.
-pub type AuthorityId = Public;
+pub type AuthorityId = app::Public;
 
 /// The `ConsensusEngineId` of BABE.
 pub const BABE_ENGINE_ID: ConsensusEngineId = *b"BABE";
@@ -41,23 +60,41 @@ pub const VRF_PROOF_LENGTH: usize = 64;
 pub const PUBLIC_KEY_LENGTH: usize = 32;
 
 /// The index of an authority.
-pub type AuthorityIndex = u64;
+pub type AuthorityIndex = u32;
 
 /// A slot number.
 pub type SlotNumber = u64;
 
 /// The weight of an authority.
-pub type Weight = u64;
+// NOTE: we use a unique name for the weight to avoid conflicts with other
+//       `Weight` types, since the metadata isn't able to disambiguate.
+pub type BabeWeight = u64;
+
+/// BABE epoch information
+#[derive(Decode, Encode, Default, PartialEq, Eq, Clone)]
+#[cfg_attr(any(feature = "std", test), derive(Debug))]
+pub struct Epoch {
+	/// The epoch index
+	pub epoch_index: u64,
+	/// The starting slot of the epoch,
+	pub start_slot: u64,
+	/// The duration of this epoch
+	pub duration: SlotNumber,
+	/// The authorities and their weights
+	pub authorities: Vec<(AuthorityId, BabeWeight)>,
+	/// Randomness for this epoch
+	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+}
 
 /// An consensus log item for BABE.
-#[derive(Decode, Encode)]
+#[derive(Decode, Encode, Clone, PartialEq, Eq)]
 pub enum ConsensusLog {
 	/// The epoch has changed. This provides information about the
 	/// epoch _after_ next: what slot number it will start at, who are the authorities (and their weights)
 	/// and the next epoch randomness. The information for the _next_ epoch should already
 	/// be available.
 	#[codec(index = "1")]
-	NextEpochData(SlotNumber, Vec<(AuthorityId, Weight)>, [u8; VRF_OUTPUT_LENGTH]),
+	NextEpochData(Epoch),
 	/// Disable the authority with given index.
 	#[codec(index = "2")]
 	OnDisabled(AuthorityIndex),
@@ -72,17 +109,13 @@ pub struct BabeConfiguration {
 	/// Dynamic slot duration may be supported in the future.
 	pub slot_duration: u64,
 
-	/// The expected block time in milliseconds for BABE. Currently,
-	/// only the value provided by this type at genesis will be used.
-	///
-	/// Dynamic expected block time may be supported in the future.
-	pub expected_block_time: u64,
-
-	/// The maximum permitted VRF output, or *threshold*, for BABE. Currently,
-	/// only the value provided by this type at genesis will be used.
-	///
-	/// Dynamic thresholds may be supported in the future.
-	pub threshold: u64,
+	/// A constant value that is used in the threshold calculation formula.
+	/// Expressed as a fraction where the first member of the tuple is the
+	/// numerator and the second is the denominator. The fraction should
+	/// represent a value between 0 and 1.
+	/// In the threshold formula calculation, `1 - c` represents the probability
+	/// of a slot being empty.
+	pub c: (u64, u64),
 
 	/// The minimum number of blocks that must be received before running the
 	/// median algorithm to compute the offset between the on-chain time and the
@@ -116,7 +149,7 @@ decl_runtime_apis! {
 		/// Dynamic configuration may be supported in the future.
 		fn startup_data() -> BabeConfiguration;
 
-		/// Get the current authorites for Babe.
-		fn authorities() -> Vec<AuthorityId>;
+		/// Get the current epoch data for Babe.
+		fn epoch() -> Epoch;
 	}
 }
