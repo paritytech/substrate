@@ -30,7 +30,7 @@ use network::{
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
 use sr_primitives::{
-	BuildStorage, traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi}, generic::BlockId
+	BuildStorage, traits::{Block as BlockT, Header as HeaderT, NumberFor, ProvideRuntimeApi}, generic::BlockId
 };
 use crate::config::Configuration;
 use primitives::{Blake2Hasher, H256, traits::BareCryptoStorePtr};
@@ -192,23 +192,42 @@ impl<C: Components> StartRPC<Self> for C where
 		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
 		keystore: KeyStorePtr,
 	) -> rpc::RpcHandler {
-		let subscriptions = rpc::apis::Subscriptions::new(task_executor.clone());
-		let chain = rpc::apis::chain::Chain::new(client.clone(), subscriptions.clone());
-		let state = rpc::apis::state::State::new(client.clone(), subscriptions.clone());
-		let author = rpc::apis::author::Author::new(
-			client,
-			transaction_pool,
-			subscriptions,
-			keystore,
-		);
-		let system = rpc::apis::system::System::new(rpc_system_info, system_send_back);
-		rpc::rpc_handler::<ComponentBlock<C>, ComponentExHash<C>, _, _, _, _>(
-			state,
-			chain,
-			author,
-			system,
-		)
+		start_rpc(client, system_send_back, rpc_system_info, task_executor, transaction_pool, keystore)
 	}
+}
+
+pub(crate) fn start_rpc<Api, Backend, Block, Executor, PoolApi>(
+	client: Arc<Client<Backend, Executor, Block, Api>>,
+	system_send_back: mpsc::UnboundedSender<rpc::apis::system::Request<Block>>,
+	rpc_system_info: SystemInfo,
+	task_executor: TaskExecutor,
+	transaction_pool: Arc<TransactionPool<PoolApi>>,
+	keystore: KeyStorePtr,
+) -> rpc::RpcHandler
+where
+	Block: BlockT<Hash = <Blake2Hasher as primitives::Hasher>::Out>,
+	Backend: client::backend::Backend<Block, Blake2Hasher> + 'static,
+	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi,
+	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api: runtime_api::Metadata<Block> + session::SessionKeys<Block>,
+	Api: Send + Sync + 'static,
+	Executor: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
+	PoolApi: txpool::ChainApi<Hash = Block::Hash, Block = Block> + 'static {
+	let subscriptions = rpc::apis::Subscriptions::new(task_executor.clone());
+	let chain = rpc::apis::chain::Chain::new(client.clone(), subscriptions.clone());
+	let state = rpc::apis::state::State::new(client.clone(), subscriptions.clone());
+	let author = rpc::apis::author::Author::new(
+		client,
+		transaction_pool,
+		subscriptions,
+		keystore,
+	);
+	let system = rpc::apis::system::System::new(rpc_system_info, system_send_back);
+	rpc::rpc_handler::<Block, <Block as BlockT>::Hash, _, _, _, _>(
+		state,
+		chain,
+		author,
+		system,
+	)
 }
 
 /// Something that can maintain transaction pool on every imported block.
@@ -220,7 +239,7 @@ pub trait MaintainTransactionPool<C: Components> {
 	) -> error::Result<()>;
 }
 
-fn maintain_transaction_pool<Api, Backend, Block, Executor, PoolApi>(
+pub(crate) fn maintain_transaction_pool<Api, Backend, Block, Executor, PoolApi>(
 	id: &BlockId<Block>,
 	client: &Client<Backend, Executor, Block, Api>,
 	transaction_pool: &TransactionPool<PoolApi>,
@@ -288,10 +307,34 @@ impl<C: Components> OffchainWorker<Self> for C where
 		network_state: &Arc<dyn NetworkStateInfo + Send + Sync>,
 		is_validator: bool,
 	) -> error::Result<Box<dyn Future<Item = (), Error = ()> + Send>> {
-		let future = offchain.on_block_imported(number, pool, network_state.clone(), is_validator)
-			.map(|()| Ok(()));
-		Ok(Box::new(Compat::new(future)))
+		offchain_workers(number, offchain, pool, network_state, is_validator)
 	}
+}
+
+pub(crate) fn offchain_workers<Api, Backend, Block, Executor, PoolApi>(
+	number: &NumberFor<Block>,
+	offchain: &offchain::OffchainWorkers<
+		Client<Backend, Executor, Block, Api>,
+		<Backend as client::backend::Backend<Block, Blake2Hasher>>::OffchainStorage,
+		Block
+	>,
+	pool: &Arc<TransactionPool<PoolApi>>,
+	network_state: &Arc<dyn NetworkStateInfo + Send + Sync>,
+	is_validator: bool,
+) -> error::Result<Box<dyn Future<Item = (), Error = ()> + Send>>
+where
+	Block: BlockT<Hash = <Blake2Hasher as primitives::Hasher>::Out>,
+	Backend: client::backend::Backend<Block, Blake2Hasher> + 'static,
+	Api: 'static,
+	<Backend as client::backend::Backend<Block, Blake2Hasher>>::OffchainStorage: 'static,
+	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi + Send + Sync,
+	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api: offchain::OffchainWorkerApi<Block>,
+	Executor: client::CallExecutor<Block, Blake2Hasher> + 'static,
+	PoolApi: txpool::ChainApi<Hash = Block::Hash, Block = Block> + 'static,
+{
+	let future = offchain.on_block_imported(number, pool, network_state.clone(), is_validator)
+		.map(|()| Ok(()));
+	Ok(Box::new(Compat::new(future)))
 }
 
 /// The super trait that combines all required traits a `Service` needs to implement.
