@@ -411,17 +411,16 @@ decl_storage! {
 		config(code): Vec<u8>;
 
 		build(
-			|storage: &mut sr_primitives::StorageOverlay,
-			_: &mut sr_primitives::ChildrenStorageOverlay,
+			|storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
 			config: &GenesisConfig|
 		{
 			use codec::Encode;
 
-			storage.insert(well_known_keys::CODE.to_vec(), config.code.clone());
-			storage.insert(well_known_keys::EXTRINSIC_INDEX.to_vec(), 0u32.encode());
+			storage.0.insert(well_known_keys::CODE.to_vec(), config.code.clone());
+			storage.0.insert(well_known_keys::EXTRINSIC_INDEX.to_vec(), 0u32.encode());
 
 			if let Some(ref changes_trie_config) = config.changes_trie_config {
-				storage.insert(
+				storage.0.insert(
 					well_known_keys::CHANGES_TRIE_CONFIG.to_vec(),
 					changes_trie_config.encode());
 			}
@@ -683,11 +682,11 @@ impl<T: Trait> Module<T> {
 	/// Get the basic externalities for this module, useful for tests.
 	#[cfg(any(feature = "std", test))]
 	pub fn externalities() -> TestExternalities<Blake2Hasher> {
-		TestExternalities::new(map![
+		TestExternalities::new((map![
 			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),
 			twox_128(<Number<T>>::key()).to_vec() => T::BlockNumber::one().encode(),
 			twox_128(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode()
-		])
+		], map![]))
 	}
 
 	/// Set the block number to something in particular. Can be used as an alternative to
@@ -803,13 +802,15 @@ impl<T: Trait> Module<T> {
 	/// To be called immediately after `note_applied_extrinsic` of the last extrinsic of the block
 	/// has been called.
 	pub fn note_finished_extrinsics() {
-		let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX).unwrap_or_default();
+		let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX)
+			.unwrap_or_default();
 		ExtrinsicCount::put(extrinsic_index);
 	}
 
 	/// Remove all extrinsic data and save the extrinsics trie root.
 	pub fn derive_extrinsics() {
-		let extrinsics = (0..ExtrinsicCount::get().unwrap_or_default()).map(ExtrinsicData::take).collect();
+		let extrinsics = (0..ExtrinsicCount::get().unwrap_or_default())
+			.map(ExtrinsicData::take).collect();
 		let xts_root = extrinsics_data_root::<T::Hashing>(extrinsics);
 		<ExtrinsicsRoot<T>>::put(xts_root);
 	}
@@ -1127,7 +1128,7 @@ mod tests {
 	const CALL: &<Test as Trait>::Call = &();
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		GenesisConfig::default().build_storage::<Test>().unwrap().0.into()
+		GenesisConfig::default().build_storage::<Test>().unwrap().into()
 	}
 
 	fn normal_weight_limit() -> Weight {

@@ -562,7 +562,7 @@ mod tests {
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
+		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		t.into()
 	}
 

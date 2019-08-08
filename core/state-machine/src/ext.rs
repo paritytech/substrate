@@ -204,6 +204,22 @@ where
 			self.backend.child_storage(storage_key.as_ref(), key).expect(EXT_NOT_ALLOWED_TO_FAIL))
 	}
 
+	fn child_storage_hash(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<H::Out> {
+		let _guard = panic_handler::AbortGuard::force_abort();
+		self.overlay.child_storage(storage_key.as_ref(), key).map(|x| x.map(|x| H::hash(x))).unwrap_or_else(||
+			self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL))
+	}
+
+	fn original_child_storage(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<Vec<u8>> {
+		let _guard = panic_handler::AbortGuard::force_abort();
+		self.backend.child_storage(storage_key.as_ref(), key).expect(EXT_NOT_ALLOWED_TO_FAIL)
+	}
+
+	fn original_child_storage_hash(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<H::Out> {
+		let _guard = panic_handler::AbortGuard::force_abort();
+		self.backend.child_storage_hash(storage_key.as_ref(), key).expect(EXT_NOT_ALLOWED_TO_FAIL)
+	}
+
 	fn exists_storage(&self, key: &[u8]) -> bool {
 		let _guard = panic_handler::AbortGuard::force_abort();
 		match self.overlay.storage(key) {
@@ -263,6 +279,16 @@ where
 		});
 	}
 
+	fn clear_child_prefix(&mut self, storage_key: ChildStorageKey<H>, prefix: &[u8]) {
+		let _guard = panic_handler::AbortGuard::force_abort();
+
+		self.mark_dirty();
+		self.overlay.clear_child_prefix(storage_key.as_ref(), prefix);
+		self.backend.for_child_keys_with_prefix(storage_key.as_ref(), prefix, |key| {
+			self.overlay.set_child_storage(storage_key.as_ref().to_vec(), key.to_vec(), None);
+		});
+	}
+
 	fn chain_id(&self) -> u64 {
 		42
 	}
@@ -276,7 +302,6 @@ where
 		let child_storage_keys =
 			self.overlay.prospective.children.keys()
 				.chain(self.overlay.committed.children.keys());
-
 		let child_delta_iter = child_storage_keys.map(|storage_key|
 			(storage_key.clone(), self.overlay.committed.children.get(storage_key)
 				.into_iter()

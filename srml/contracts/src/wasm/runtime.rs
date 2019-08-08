@@ -212,6 +212,24 @@ fn read_sandbox_memory_into_buf<E: Ext>(
 	ctx.memory().get(ptr, buf).map_err(Into::into)
 }
 
+/// Read designated chunk from the sandbox memory, consuming an appropriate amount of
+/// gas, and attempt to decode into the specified type.
+///
+/// Returns `Err` if one of the following conditions occurs:
+///
+/// - calculating the gas cost resulted in overflow.
+/// - out of gas
+/// - requested buffer is not within the bounds of the sandbox memory.
+/// - the buffer contents cannot be decoded as the required type.
+fn read_sandbox_memory_as<E: Ext, D: Decode>(
+	ctx: &mut Runtime<E>,
+	ptr: u32,
+	len: u32,
+) -> Result<D, sandbox::HostError> {
+	let buf = read_sandbox_memory(ctx, ptr, len)?;
+	D::decode(&mut &buf[..]).map_err(|_| sandbox::HostError)
+}
+
 /// Write the given buffer to the designated location in the sandbox memory, consuming
 /// an appropriate amount of gas.
 ///
@@ -322,16 +340,10 @@ define_env!(Env, <E: Ext>,
 		input_data_ptr: u32,
 		input_data_len: u32
 	) -> u32 => {
-		let callee = {
-			let callee_buf = read_sandbox_memory(ctx, callee_ptr, callee_len)?;
-			<<E as Ext>::T as system::Trait>::AccountId::decode(&mut &callee_buf[..])
-				.map_err(|_| sandbox::HostError)?
-		};
-		let value = {
-			let value_buf = read_sandbox_memory(ctx, value_ptr, value_len)?;
-			BalanceOf::<<E as Ext>::T>::decode(&mut &value_buf[..])
-				.map_err(|_| sandbox::HostError)?
-		};
+		let callee: <<E as Ext>::T as system::Trait>::AccountId =
+			read_sandbox_memory_as(ctx, callee_ptr, callee_len)?;
+		let value: BalanceOf<<E as Ext>::T> =
+			read_sandbox_memory_as(ctx, value_ptr, value_len)?;
 		let input_data = read_sandbox_memory(ctx, input_data_ptr, input_data_len)?;
 
 		// Grab the scratch buffer and put in its' place an empty one.
@@ -397,15 +409,10 @@ define_env!(Env, <E: Ext>,
 		input_data_ptr: u32,
 		input_data_len: u32
 	) -> u32 => {
-		let code_hash = {
-			let code_hash_buf = read_sandbox_memory(ctx, code_hash_ptr, code_hash_len)?;
-			<CodeHash<<E as Ext>::T>>::decode(&mut &code_hash_buf[..]).map_err(|_| sandbox::HostError)?
-		};
-		let value = {
-			let value_buf = read_sandbox_memory(ctx, value_ptr, value_len)?;
-			BalanceOf::<<E as Ext>::T>::decode(&mut &value_buf[..])
-				.map_err(|_| sandbox::HostError)?
-		};
+		let code_hash: CodeHash<<E as Ext>::T> =
+			read_sandbox_memory_as(ctx, code_hash_ptr, code_hash_len)?;
+		let value: BalanceOf<<E as Ext>::T> =
+			read_sandbox_memory_as(ctx, value_ptr, value_len)?;
 		let input_data = read_sandbox_memory(ctx, input_data_ptr, input_data_len)?;
 
 		// Clear the scratch buffer in any case.
@@ -566,11 +573,8 @@ define_env!(Env, <E: Ext>,
 	// All calls made it to the top-level context will be dispatched before
 	// finishing the execution of the calling extrinsic.
 	ext_dispatch_call(ctx, call_ptr: u32, call_len: u32) => {
-		let call = {
-			let call_buf = read_sandbox_memory(ctx, call_ptr, call_len)?;
-			<<<E as Ext>::T as Trait>::Call>::decode(&mut &call_buf[..])
-				.map_err(|_| sandbox::HostError)?
-		};
+		let call: <<E as Ext>::T as Trait>::Call =
+			read_sandbox_memory_as(ctx, call_ptr, call_len)?;
 
 		// Charge gas for dispatching this call.
 		let fee = {
@@ -615,25 +619,12 @@ define_env!(Env, <E: Ext>,
 		delta_ptr: u32,
 		delta_count: u32
 	) => {
-		let dest = {
-			let dest_buf = read_sandbox_memory(ctx, dest_ptr, dest_len)?;
-			<<E as Ext>::T as system::Trait>::AccountId::decode(&mut &dest_buf[..])
-				.map_err(|_| sandbox::HostError)?
-		};
-		let code_hash = {
-			let code_hash_buf = read_sandbox_memory(ctx, code_hash_ptr, code_hash_len)?;
-			<CodeHash<<E as Ext>::T>>::decode(&mut &code_hash_buf[..])
-				.map_err(|_| sandbox::HostError)?
-		};
-		let rent_allowance = {
-			let rent_allowance_buf = read_sandbox_memory(
-				ctx,
-				rent_allowance_ptr,
-				rent_allowance_len
-			)?;
-			BalanceOf::<<E as Ext>::T>::decode(&mut &rent_allowance_buf[..])
-				.map_err(|_| sandbox::HostError)?
-		};
+		let dest: <<E as Ext>::T as system::Trait>::AccountId =
+			read_sandbox_memory_as(ctx, dest_ptr, dest_len)?;
+		let code_hash: CodeHash<<E as Ext>::T> =
+			read_sandbox_memory_as(ctx, code_hash_ptr, code_hash_len)?;
+		let rent_allowance: BalanceOf<<E as Ext>::T> =
+			read_sandbox_memory_as(ctx, rent_allowance_ptr, rent_allowance_len)?;
 		let delta = {
 			// We don't use `with_capacity` here to not eagerly allocate the user specified amount
 			// of memory.
@@ -712,13 +703,9 @@ define_env!(Env, <E: Ext>,
 	// - data_ptr - a pointer to a raw data buffer which will saved along the event.
 	// - data_len - the length of the data buffer.
 	ext_deposit_event(ctx, topics_ptr: u32, topics_len: u32, data_ptr: u32, data_len: u32) => {
-		let mut topics = match topics_len {
+		let mut topics: Vec::<TopicOf<<E as Ext>::T>> = match topics_len {
 			0 => Vec::new(),
-			_ => {
-				let topics_buf = read_sandbox_memory(ctx, topics_ptr, topics_len)?;
-				Vec::<TopicOf<<E as Ext>::T>>::decode(&mut &topics_buf[..])
-					.map_err(|_| sandbox::HostError)?
-			}
+			_ => read_sandbox_memory_as(ctx, topics_ptr, topics_len)?,
 		};
 
 		// If there are more than `max_event_topics`, then trap.
@@ -754,11 +741,8 @@ define_env!(Env, <E: Ext>,
 	//   Should be decodable as a `T::Balance`. Traps otherwise.
 	// - value_len: length of the value buffer.
 	ext_set_rent_allowance(ctx, value_ptr: u32, value_len: u32) => {
-		let value = {
-			let value_buf = read_sandbox_memory(ctx, value_ptr, value_len)?;
-			BalanceOf::<<E as Ext>::T>::decode(&mut &value_buf[..])
-				.map_err(|_| sandbox::HostError)?
-		};
+		let value: BalanceOf<<E as Ext>::T> =
+			read_sandbox_memory_as(ctx, value_ptr, value_len)?;
 		ctx.ext.set_rent_allowance(value);
 
 		Ok(())
