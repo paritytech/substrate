@@ -112,9 +112,6 @@ pub trait StorageLinkedMap<K: Codec, V: Codec> {
 	/// Does the value (explicitly) exist in storage?
 	fn exists<KeyArg: Borrow<K>>(key: KeyArg) -> bool;
 
-	/// Swap the values of two keys.
-	fn swap<KeyArg1: Borrow<K>, KeyArg2: Borrow<K>>(key1: KeyArg1, key2: KeyArg2);
-
 	/// Load the value associated with the given key from the map.
 	fn get<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query;
 

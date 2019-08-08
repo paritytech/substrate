@@ -36,6 +36,23 @@ impl<K: Codec, V: Codec, G: StorageMap<K, V>> storage::StorageMap<K, V> for G {
 		storage_map_final_key::<_, _, _, G>(key).as_ref().to_vec()
 	}
 
+	fn swap<KeyArg1: Borrow<K>, KeyArg2: Borrow<K>>(key1: KeyArg1, key2: KeyArg2);
+		let k1 = storage_map_final_key::<_, _, _, G>(key1);
+		let k2 = storage_map_final_key::<_, _, _, G>(key2);
+
+		let v1 = unhashed::get_raw(&k1);
+		if let Some(val) = unhashed::get_raw(&k2) {
+			unhashed::put_raw(&k1, &val);
+		} else {
+			unhashed::kill(&k1)
+		}
+		if let Some(val) = v1 {
+			unhashed::put_raw(&k2, &val);
+		} else {
+			unhashed::kill(&k2)
+		}
+	}
+
 	fn exists<KeyArg: Borrow<K>>(key: KeyArg) -> bool {
 		unhashed::exists(storage_map_final_key::<_, _, _, G>(key).as_ref())
 	}
