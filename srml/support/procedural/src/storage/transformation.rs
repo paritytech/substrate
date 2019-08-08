@@ -1069,6 +1069,12 @@ fn store_functions_to_metadata (
 				}
 			}
 
+			unsafe impl<#traitinstance: #traittype, #instance #bound_instantiable> Send
+				for #struct_name<#traitinstance, #instance> #where_clause {}
+
+			unsafe impl<#traitinstance: #traittype, #instance #bound_instantiable> Sync
+				for #struct_name<#traitinstance, #instance> #where_clause {}
+
 			#[cfg(not(feature = "std"))]
 			impl<#traitinstance: #traittype, #instance #bound_instantiable> #scrate::metadata::DefaultByte
 				for #struct_name<#traitinstance, #instance> #where_clause

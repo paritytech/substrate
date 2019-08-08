@@ -4,7 +4,7 @@ RETRY_COUNT=10
 RETRY_ATTEMPT=0
 SLEEP_TIME=15
 TARGET_HOST="$1"
-COMMIT=$(cat artifacts/VERSION)
+COMMIT=$(cat artifacts/substrate/VERSION)
 DOWNLOAD_URL="https://releases.parity.io/substrate/x86_64-debian:stretch/${COMMIT}/substrate"
 POST_DATA='{"extra_vars":{"artifact_path":"'${DOWNLOAD_URL}'","target_host":"'${TARGET_HOST}'"}}'
 
