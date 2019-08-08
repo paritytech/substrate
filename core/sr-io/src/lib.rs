@@ -159,6 +159,9 @@ export_api! {
 		/// Clear the storage entries with a key that starts with the given prefix.
 		fn clear_prefix(prefix: &[u8]);
 
+		/// Clear the child storage entries with a key that starts with the given prefix.
+		fn clear_child_prefix(child_trie: &ChildTrie, prefix: &[u8]);
+
 		/// "Commit" all existing operations and compute the resultant storage root.
 		fn storage_root() -> [u8; 32];
 
@@ -419,7 +422,7 @@ mod imp {
 
 #[cfg(feature = "std")]
 pub use self::imp::{
-	StorageOverlay, ChildrenStorageOverlay, with_storage, with_storage_and_children,
+	StorageOverlay, ChildrenStorageOverlay, with_storage,
 	with_externalities, MapTransaction,
 };
 #[cfg(not(feature = "std"))]

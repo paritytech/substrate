@@ -440,10 +440,10 @@ mod tests {
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		t.extend(balances::GenesisConfig::<Test>{
+		balances::GenesisConfig::<Test>{
 			balances: vec![(0, 100), (1, 99), (2, 1)],
 			vesting: vec![],
-		}.build_storage().unwrap());
+		}.assimilate_storage(&mut t).unwrap();
 		t.into()
 	}
 

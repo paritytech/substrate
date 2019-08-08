@@ -8,7 +8,8 @@ edition = "2018"
 generic-test-client = { package = "substrate-test-client", path = "../../test-client" }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 runtime = { package = "substrate-test-runtime", path = "../../test-runtime", default-features = false }
-sr-primitives = {  path = "../../sr-primitives" }
+sr-primitives = { path = "../../sr-primitives" }
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
 
 [features]
 default = [

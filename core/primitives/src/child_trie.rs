@@ -61,6 +61,11 @@ pub fn produce_keyspace(child_counter: u128) -> Vec<u8> {
 	codec::Encode::encode(&Compact(child_counter))
 }
 
+/// Decode keyspace to original counter value.
+pub fn reverse_keyspace(keyspace: &[u8]) -> Result<u128, codec::Error> {
+	<Compact<u128>>::decode(&mut &keyspace[..]).map(|c| c.0)
+}
+
 // see FIXME #2741 for removal of this allocation on every operation.
 // Simplest would be to put an additional optional field in prefix.
 /// Utility function used for merging `KeySpace` data and `prefix` data
@@ -389,3 +394,14 @@ fn encode_empty_prefix() {
 
 	assert_eq!(&NO_CHILD_KEYSPACE[..], &empty[..]);
 }
+
+#[test]
+fn keyspace_codec() {
+	let sample: [u128; 3] = [0, 1, 1_000_000];
+	for s in sample.iter() {
+		let keyspace = produce_keyspace(*s);
+		let dec_keyspace = reverse_keyspace(keyspace.as_slice()).unwrap();
+		assert_eq!(*s, dec_keyspace);
+	}
+}
+

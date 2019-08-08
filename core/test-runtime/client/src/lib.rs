@@ -103,13 +103,20 @@ impl generic_test_client::GenesisInit for GenesisParameters {
 	fn genesis_storage(&self) -> MapTransaction {
 		let mut storage = genesis_config(self.support_changes_trie, self.heap_pages_override).genesis_map();
 
+		let child_roots = storage.children.iter().map(|(_, child)| {
+			let child_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
+				child.0.clone().into_iter()
+			);
+
+			(child.1.parent_trie().clone(), child.1.encoded_with_root(&child_root[..]))
+		});
 		let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
-			storage.clone().into_iter()
+			storage.top.clone().into_iter().chain(child_roots)
 		);
 		let block: runtime::Block = client::genesis::construct_genesis_block(state_root);
-		storage.extend(additional_storage_with_genesis(&block));
+		storage.top.extend(additional_storage_with_genesis(&block));
 
-		MapTransaction { top: storage, children: Default::default() }
+		storage
 	}
 }
 

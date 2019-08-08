@@ -324,13 +324,12 @@ mod tests {
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		let storage = crate::GenesisConfig::<Test> {
+		crate::GenesisConfig::<Test> {
 			keys: NEXT_VALIDATORS.with(|l|
 				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i).into())).collect()
 			),
-		}.build_storage().unwrap();
-		t.extend(storage);
-		runtime_io::TestExternalities::new_with_children(t)
+		}.assimilate_storage(&mut t).unwrap();
+		runtime_io::TestExternalities::new(t)
 	}
 
 	#[test]

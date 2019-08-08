@@ -29,6 +29,8 @@ use srml_support::{
 };
 use system::ensure_root;
 use sr_primitives::{traits::EnsureOrigin, weights::SimpleDispatchInfo};
+#[cfg(feature = "std")]
+use sr_primitives::MapTransaction;
 
 pub trait Trait<I=DefaultInstance>: system::Trait {
 	/// The overarching event type.
@@ -64,8 +66,7 @@ decl_storage! {
 		config(members): Vec<T::AccountId>;
 		config(phantom): sr_std::marker::PhantomData<I>;
 		build(|
-			storage: &mut sr_primitives::StorageOverlay,
-			_: &mut sr_primitives::ChildrenStorageOverlay,
+			storage: &mut MapTransaction,
 			config: &GenesisConfig<T, I>
 		| {
 			sr_io::with_storage(storage, || {
@@ -284,10 +285,10 @@ mod tests {
 	fn new_test_ext() -> sr_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
-		t.extend(GenesisConfig::<Test>{
+		GenesisConfig::<Test>{
 			members: vec![10, 20, 30],
 			.. Default::default()
-		}.build_storage().unwrap());
+		}.assimilate_storage(&mut t).unwrap();
 		t.into()
 	}
 

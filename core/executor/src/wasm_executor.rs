@@ -369,6 +369,24 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.ext.clear_prefix(&prefix);
 		Ok(())
 	},
+	ext_clear_child_prefix(
+		storage_key_data: *const u8,
+		storage_key_len: u32,
+		prefix_data: *const u8,
+		prefix_len: u32
+	) => {
+		let storage_key = this.memory.get(
+			storage_key_data,
+			storage_key_len as usize
+		).map_err(|_| "Invalid attempt to determine storage_key in ext_clear_child_prefix")?;
+		let prefix = this.memory.get(prefix_data, prefix_len as usize)
+			.map_err(|_| "Invalid attempt to determine prefix in ext_clear_child_prefix")?;
+		this.with_child_trie(
+			&storage_key[..],
+			|this, child_trie| this.ext.clear_child_prefix(&child_trie, &prefix),
+		)?;
+		Ok(())
+	},
 	ext_kill_child_storage(storage_key_data: *const u8, storage_key_len: u32) => {
 		let storage_key = this.memory.get(storage_key_data, storage_key_len as usize)
 			.map_err(|_| "Invalid attempt to determine storage_key in ext_kill_child_storage")?;
@@ -1555,6 +1573,7 @@ mod tests {
 	use hex_literal::hex;
 	use primitives::map;
 	use runtime_test::WASM_BINARY;
+	use runtime_io::MapTransaction;
 	use substrate_offchain::testing;
 
 	type TestExternalities<H> = CoreTestExternalities<H, u64>;
@@ -1593,11 +1612,11 @@ mod tests {
 
 		assert_eq!(output, b"all ok!".to_vec());
 
-		let expected = TestExternalities::new(map![
+		let expected = TestExternalities::new(MapTransaction { top: map![
 			b"input".to_vec() => b"Hello world".to_vec(),
 			b"foo".to_vec() => b"bar".to_vec(),
 			b"baz".to_vec() => b"bar".to_vec()
-		]);
+		], children: map![]});
 		assert_eq!(ext, expected);
 	}
 
@@ -1616,11 +1635,11 @@ mod tests {
 
 		assert_eq!(output, b"all ok!".to_vec());
 
-		let expected: TestExternalities<_> = map![
+		let expected = TestExternalities::new(MapTransaction { top: map![
 			b"aaa".to_vec() => b"1".to_vec(),
 			b"aab".to_vec() => b"2".to_vec(),
 			b"bbb".to_vec() => b"5".to_vec()
-		];
+		], children: map![]});
 		assert_eq!(expected, ext);
 	}
 

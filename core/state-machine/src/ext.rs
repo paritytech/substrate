@@ -223,8 +223,30 @@ where
 			OverlayedValueResult::NotFound =>
 				self.backend.child_storage(child_trie, key).expect(EXT_NOT_ALLOWED_TO_FAIL),
 			OverlayedValueResult::Deleted => None,
-			OverlayedValueResult::Modified(value) => Some( value.to_vec()),
+			OverlayedValueResult::Modified(value) => Some(value.to_vec()),
 		}
+	}
+
+	fn child_storage_hash(&self, child_trie: ChildTrieReadRef, key: &[u8]) -> Option<H::Out> {
+		let _guard = panic_handler::AbortGuard::force_abort();
+		match self.overlay.child_storage(child_trie.clone(), key) {
+			OverlayedValueResult::NotFound =>
+				self.backend.child_storage(child_trie, key)
+					.map(|x| x.map(|x| H::hash(x.as_slice())))
+					.expect(EXT_NOT_ALLOWED_TO_FAIL),
+			OverlayedValueResult::Deleted => None,
+			OverlayedValueResult::Modified(value) => Some(H::hash(value)),
+		}
+	}
+
+	fn original_child_storage(&self, child_trie: ChildTrieReadRef, key: &[u8]) -> Option<Vec<u8>> {
+		let _guard = panic_handler::AbortGuard::force_abort();
+		self.backend.child_storage(child_trie, key).expect(EXT_NOT_ALLOWED_TO_FAIL)
+	}
+
+	fn original_child_storage_hash(&self, child_trie: ChildTrieReadRef, key: &[u8]) -> Option<H::Out> {
+		let _guard = panic_handler::AbortGuard::force_abort();
+		self.backend.child_storage_hash(child_trie, key).expect(EXT_NOT_ALLOWED_TO_FAIL)
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> bool {
@@ -307,6 +329,16 @@ where
 		self.overlay.clear_prefix(prefix);
 		self.backend.for_keys_with_prefix(prefix, |key| {
 			self.overlay.set_storage(key.to_vec(), None);
+		});
+	}
+
+	fn clear_child_prefix(&mut self, child_trie: &ChildTrie, prefix: &[u8]) {
+		let _guard = panic_handler::AbortGuard::force_abort();
+
+		self.mark_dirty();
+		self.overlay.clear_child_prefix(child_trie, prefix);
+		self.backend.for_child_keys_with_prefix(child_trie.node_ref(), prefix, |key| {
+			self.overlay.set_child_storage(child_trie, key.to_vec(), None);
 		});
 	}
 

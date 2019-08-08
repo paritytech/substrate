@@ -17,6 +17,7 @@
 //! Tests and test helpers for GRANDPA.
 
 use super::*;
+use environment::HasVoted;
 use network::test::{Block, DummySpecialization, Hash, TestNetFactory, Peer, PeersClient};
 use network::test::{PassThroughVerifier};
 use network::config::{ProtocolConfig, Roles, BoxFinalityProofRequestBuilder};

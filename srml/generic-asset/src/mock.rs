@@ -20,7 +20,11 @@
 
 #![cfg(test)]
 
-use sr_primitives::{Perbill, testing::Header, traits::{BlakeTwo256, IdentityLookup}};
+use sr_primitives::{
+	Perbill,
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
+};
 use primitives::{Blake2Hasher, H256};
 use support::{parameter_types, impl_outer_event, impl_outer_origin};
 
@@ -116,8 +120,7 @@ impl ExtBuilder {
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
-		t.extend(
-			GenesisConfig::<Test> {
+		GenesisConfig::<Test> {
 				assets: vec![self.asset_id],
 				endowed_accounts: self.accounts,
 				initial_balance: self.initial_balance,
@@ -125,9 +128,7 @@ impl ExtBuilder {
 				staking_asset_id: 16000,
 				spending_asset_id: 16001,
 			}
-			.build_storage()
-			.unwrap()
-		);
+			.assimilate_storage(&mut t).unwrap();
 
 		t.into()
 	}

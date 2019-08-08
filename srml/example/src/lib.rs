@@ -577,13 +577,13 @@ mod tests {
 	fn new_test_ext() -> sr_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
-		t.extend(balances::GenesisConfig::<Test>::default().build_storage().unwrap());
-		t.extend(GenesisConfig::<Test>{
+		balances::GenesisConfig::<Test>::default().assimilate_storage(&mut t).unwrap();
+		GenesisConfig::<Test>{
 			dummy: 42,
 			// we configure the map with (key, value) pairs.
 			bar: vec![(1, 2), (2, 3)],
 			foo: 24,
-		}.build_storage().unwrap());
+		}.assimilate_storage(&mut t).unwrap();
 		t.into()
 	}
 

@@ -113,16 +113,14 @@ pub use serde::{Serialize, Deserialize, de::DeserializeOwned};
 pub trait BuildStorage: Sized {
 	/// Build the storage out of this builder.
 	fn build_storage(self) -> Result<MapTransaction, String> {
-		let mut top = Default::default();
-		let mut children = Default::default();
-		self.assimilate_storage(&mut top, &mut children)?;
-		Ok(MapTransaction{ top, children })
+		let mut storage = Default::default();
+		self.assimilate_storage(&mut storage)?;
+		Ok(storage)
 	}
 	/// Assimilate the storage for this module into pre-existing overlays.
 	fn assimilate_storage(
 		self,
-		storage: &mut StorageOverlay,
-		child_storage: &mut ChildrenStorageOverlay
+		storage: &mut MapTransaction,
 	) -> Result<(), String>;
 }
 
@@ -132,24 +130,8 @@ pub trait BuildModuleGenesisStorage<T, I>: Sized {
 	/// Create the module genesis storage into the given `storage` and `child_storage`.
 	fn build_module_genesis_storage(
 		self,
-		storage: &mut StorageOverlay,
-		child_storage: &mut ChildrenStorageOverlay
+		storage: &mut MapTransaction,
 	) -> Result<(), String>;
-}
-
-#[cfg(feature = "std")]
-impl BuildStorage for StorageOverlay {
-	fn build_storage(self) -> Result<MapTransaction, String> {
-		Ok(MapTransaction{ top: self, children: Default::default() })
-	}
-	fn assimilate_storage(
-		self,
-		storage: &mut StorageOverlay,
-		_child_storage: &mut ChildrenStorageOverlay
-	) -> Result<(), String> {
-		storage.extend(self);
-		Ok(())
-	}
 }
 
 #[cfg(feature = "std")]
@@ -159,10 +141,18 @@ impl BuildStorage for MapTransaction {
 	}
 	fn assimilate_storage(
 		self,
-		storage: &mut StorageOverlay,
-		child_storage: &mut ChildrenStorageOverlay
+		storage: &mut MapTransaction,
 	)-> Result<(), String> {
-		self.assimilate_storage(storage, child_storage);
+		storage.top.extend(self.top);
+		for (k, other_map) in self.children.into_iter() {
+			if let Some(map) = storage.children.get_mut(&k) {
+				map.0.extend(other_map.0);
+				// Unchecked child trie replacement
+				map.1 = other_map.1;
+			} else {
+				storage.children.insert(k, other_map);
+			}
+		}
 		Ok(())
 	}
 }
@@ -772,8 +762,7 @@ macro_rules! impl_outer_config {
 			impl $crate::BuildStorage for $main {
 				fn assimilate_storage(
 					self,
-					top: &mut $crate::StorageOverlay,
-					children: &mut $crate::ChildrenStorageOverlay
+					storage: &mut $crate::MapTransaction,
 				) -> std::result::Result<(), String> {
 					$(
 						if let Some(extra) = self.[< $snake $(_ $instance )? >] {
@@ -783,8 +772,7 @@ macro_rules! impl_outer_config {
 								$snake;
 								$( $instance )?;
 								extra;
-								top;
-								children;
+								storage;
 							}
 						}
 					)*
@@ -798,13 +786,11 @@ macro_rules! impl_outer_config {
 		$module:ident;
 		$instance:ident;
 		$extra:ident;
-		$top:ident;
-		$children:ident;
+		$storage:ident;
 	) => {
 		$crate::BuildModuleGenesisStorage::<$runtime, $module::$instance>::build_module_genesis_storage(
 			$extra,
-			$top,
-			$children,
+			$storage,
 		)?;
 	};
 	(@CALL_FN
@@ -812,13 +798,11 @@ macro_rules! impl_outer_config {
 		$module:ident;
 		;
 		$extra:ident;
-		$top:ident;
-		$children:ident;
+		$storage:ident;
 	) => {
 		$crate::BuildModuleGenesisStorage::<$runtime, $module::__InherentHiddenInstance>::build_module_genesis_storage(
 			$extra,
-			$top,
-			$children,
+			$storage,
 		)?;
 	}
 }

@@ -528,10 +528,10 @@ decl_module! {
 			code: Vec<u8>
 		) -> Result {
 			let origin = ensure_signed(origin)?;
-			let schedule = <Module<T>>::current_schedule();
 
 			let (mut gas_meter, imbalance) = gas::buy_gas::<T>(&origin, gas_limit)?;
 
+			let schedule = <Module<T>>::current_schedule();
 			let result = wasm::save_code::<T>(code, &mut gas_meter, &schedule);
 			if let Ok(code_hash) = result {
 				Self::deposit_event(RawEvent::CodeStored(code_hash));
@@ -828,11 +828,10 @@ fn prefixed_trie_id(trie_id: &[u8]) -> Vec<u8> {
 
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
-		if let Some(ContractInfo::Alive(info)) = <ContractInfoOf<T>>::get(who) {
+		if let Some(ContractInfo::Alive(info)) = <ContractInfoOf<T>>::take(who) {
 			contract_child_trie(&info.trie_id)
 				.map(|child_trie| child::kill_storage(&child_trie));
 		}
-		<ContractInfoOf<T>>::remove(who);
 	}
 }
 

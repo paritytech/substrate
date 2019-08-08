@@ -320,8 +320,7 @@ decl_storage! {
 	add_extra_genesis {
 		config(keys): Vec<(T::ValidatorId, T::Keys)>;
 		build(|
-			storage: &mut sr_primitives::StorageOverlay,
-			_: &mut sr_primitives::ChildrenStorageOverlay,
+			storage: &mut sr_primitives::MapTransaction,
 			config: &GenesisConfig<T>
 		| {
 			runtime_io::with_storage(storage, || {
@@ -581,8 +580,8 @@ mod tests {
 			keys: NEXT_VALIDATORS.with(|l|
 				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i).into())).collect()
 			),
-		}.assimilate_storage(&mut t.top, &mut t.children).unwrap();
-		runtime_io::TestExternalities::new_with_children(t)
+		}.assimilate_storage(&mut t).unwrap();
+		runtime_io::TestExternalities::new(t)
 	}
 
 	fn initialize_block(block: u64) {
