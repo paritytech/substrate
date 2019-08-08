@@ -953,7 +953,7 @@ decl_module! {
 			<Payee<T>>::insert(stash, payee);
 		}
 
-		/// (Re-)set the payment target for a controller.
+		/// (Re-)set the controller of a stash.
 		///
 		/// Effects will be felt at the beginning of the next era.
 		///
