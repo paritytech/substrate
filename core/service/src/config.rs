@@ -85,9 +85,6 @@ pub struct Configuration<C, G> {
 	pub force_authoring: bool,
 	/// Disable GRANDPA when running in validator mode
 	pub disable_grandpa: bool,
-	/// Run GRANDPA voter even when no additional key seed is specified. This can for example be of interest when
-	/// running a sentry node in front of a validator, thus needing to forward GRANDPA gossip messages.
-	pub grandpa_voter: bool,
 	/// Node keystore's password
 	pub keystore_password: Option<Protected<String>>,
 	/// Development key seed.
@@ -128,7 +125,6 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			offchain_worker: Default::default(),
 			force_authoring: false,
 			disable_grandpa: false,
-			grandpa_voter: false,
 			keystore_password: None,
 			dev_key_seed: None,
 		};
