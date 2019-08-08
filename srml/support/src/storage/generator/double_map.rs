@@ -156,7 +156,7 @@ impl<K1: Encode, K2: Encode, V: Codec, G: StorageDoubleMap<K1, K2, V>> storage::
 		let new_val = V::append(
 			encoded_value,
 			items,
-		).ok_or_else(|| "Could not append given item")?;
+		).map_err(|_| "Could not append given item")?;
 		unhashed::put_raw(&final_key, &new_val);
 
 		Ok(())

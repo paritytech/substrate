@@ -411,7 +411,7 @@ decl_storage! {
 		config(code): Vec<u8>;
 
 		build(|config: &GenesisConfig| {
-			use parity_codec::Encode;
+			use codec::Encode;
 
 			runtime_io::set_storage(well_known_keys::CODE, &config.code);
 			runtime_io::set_storage(well_known_keys::EXTRINSIC_INDEX, &0u32.encode());

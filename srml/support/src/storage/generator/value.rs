@@ -82,7 +82,7 @@ impl<T: Codec, G: StorageValue<T>> storage::StorageValue<T> for G {
 		let new_val = <T as EncodeAppend>::append(
 			encoded_value,
 			items,
-		).ok_or_else(|| "Could not append given item")?;
+		).map_err(|_| "Could not append given item")?;
 		unhashed::put_raw(key.as_ref(), &new_val);
 		Ok(())
 	}
