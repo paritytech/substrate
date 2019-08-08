@@ -1509,35 +1509,35 @@ fn voter_catches_up_to_latest_round_when_behind() {
 
 		wait_for_finality.and_then(move |_| {
 			let peer_id = 2;
-			let (client, link) = {
+			let link = {
 				let net = net.lock();
-				let link = net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
-				(
-					net.peers[peer_id].client().clone(),
-					link,
-				)
+				let mut link = net.peers[peer_id].data.lock();
+				link.take().expect("link initialized at startup; qed")
 			};
 
 			let set_state = link.persistent_data.set_state.clone();
-
-			let wait = client.finality_notification_stream()
-				.map(|v| Ok::<_, ()>(v)).compat()
-				.take_while(|n| Ok(n.header.number() < &50))
-				.collect()
-				.map(|_| set_state);
 
 			let voter = voter(None, peer_id, link, net);
 
 			runtime.spawn(voter).unwrap();
 
-			wait
+			let start_time = std::time::Instant::now();
+			let timeout = Duration::from_secs(5 * 60);
+			let wait_for_catch_up = futures::future::poll_fn(move || {
+				// The voter will start at round 1 and since everyone else is
+				// already at a later round the only way to get to round 4 (or
+				// later) is by issuing a catch up request.
+				if set_state.read().last_completed_round().number >= 4 {
+					Ok(Async::Ready(()))
+				} else if start_time.elapsed() > timeout {
+					panic!("Timed out while waiting for catch up to happen")
+				} else {
+					Ok(Async::NotReady)
+				}
+			});
+
+			wait_for_catch_up
 		})
-			.and_then(|set_state| {
-				// the last completed round in the new voter is higher than 4
-				// which means it caught up to the voters
-				assert!(set_state.read().last_completed_round().number >= 4);
-				Ok(())
-			})
 	};
 
 	let drive_to_completion = futures::future::poll_fn(|| { net.lock().poll(); Ok(Async::NotReady) });
