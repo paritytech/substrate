@@ -398,7 +398,7 @@ pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stup
 	fn hash(s: &[u8]) -> Self::Output;
 
 	/// Produce the hash of some codec-encodable value.
-	fn hash_of<S: Codec>(s: &S) -> Self::Output {
+	fn hash_of<S: Encode>(s: &S) -> Self::Output {
 		Encode::using_encoded(s, Self::hash)
 	}
 

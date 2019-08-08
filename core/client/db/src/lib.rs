@@ -144,6 +144,10 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 		self.state.for_keys_in_child_storage(storage_key, f)
 	}
 
+	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], f: F) {
+		self.state.for_child_keys_with_prefix(storage_key, prefix, f)
+	}
+
 	fn storage_root<I>(&self, delta: I) -> (H256, Self::Transaction)
 		where
 			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>

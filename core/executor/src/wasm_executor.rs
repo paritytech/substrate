@@ -281,6 +281,23 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.ext.clear_prefix(&prefix);
 		Ok(())
 	},
+	ext_clear_child_prefix(
+		storage_key_data: *const u8,
+		storage_key_len: u32,
+		prefix_data: *const u8,
+		prefix_len: u32
+	) => {
+		let storage_key = this.memory.get(
+			storage_key_data,
+			storage_key_len as usize
+		).map_err(|_| "Invalid attempt to determine storage_key in ext_clear_child_prefix")?;
+		let storage_key = ChildStorageKey::from_vec(storage_key)
+			.ok_or_else(|| "ext_clear_child_prefix: child storage key is not valid")?;
+		let prefix = this.memory.get(prefix_data, prefix_len as usize)
+			.map_err(|_| "Invalid attempt to determine prefix in ext_clear_child_prefix")?;
+		this.ext.clear_child_prefix(storage_key, &prefix);
+		Ok(())
+	},
 	ext_kill_child_storage(storage_key_data: *const u8, storage_key_len: u32) => {
 		let storage_key = this.memory.get(
 			storage_key_data,
@@ -1496,11 +1513,11 @@ mod tests {
 
 		assert_eq!(output, b"all ok!".to_vec());
 
-		let expected = TestExternalities::new(map![
+		let expected = TestExternalities::new((map![
 			b"input".to_vec() => b"Hello world".to_vec(),
 			b"foo".to_vec() => b"bar".to_vec(),
 			b"baz".to_vec() => b"bar".to_vec()
-		]);
+		], map![]));
 		assert_eq!(ext, expected);
 	}
 
@@ -1519,11 +1536,11 @@ mod tests {
 
 		assert_eq!(output, b"all ok!".to_vec());
 
-		let expected: TestExternalities<_> = map![
+		let expected = TestExternalities::new((map![
 			b"aaa".to_vec() => b"1".to_vec(),
 			b"aab".to_vec() => b"2".to_vec(),
 			b"bbb".to_vec() => b"5".to_vec()
-		];
+		], map![]));
 		assert_eq!(expected, ext);
 	}
 

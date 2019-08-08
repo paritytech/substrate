@@ -119,7 +119,27 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 	}
 
 	/// Execute given closure for all keys starting with prefix.
-	pub fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], mut f: F) {
+	pub fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], f: F) {
+		let root_vec = match self.storage(storage_key) {
+			Ok(v) => v.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key)),
+			Err(e) => {
+				debug!(target: "trie", "Error while iterating child storage: {}", e);
+				return;
+			}
+		};
+		let mut root = H::Out::default();
+		root.as_mut().copy_from_slice(&root_vec);
+
+		self.keys_with_prefix_inner(&root, prefix, f)
+	}
+
+	/// Execute given closure for all keys starting with prefix.
+	pub fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
+		self.keys_with_prefix_inner(&self.root, prefix, f)
+	}
+
+
+	fn keys_with_prefix_inner<F: FnMut(&[u8])>(&self, root: &H::Out, prefix: &[u8], mut f: F) {
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral {
 			storage: &self.storage,
@@ -127,7 +147,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 		};
 
 		let mut iter = move || -> Result<(), Box<TrieError<H::Out>>> {
-			let trie = TrieDB::<H>::new(&eph, &self.root)?;
+			let trie = TrieDB::<H>::new(&eph, root)?;
 			let mut iter = trie.iter()?;
 
 			iter.seek(prefix)?;
@@ -149,6 +169,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 			debug!(target: "trie", "Error while iterating by prefix: {}", e);
 		}
 	}
+
 }
 
 pub(crate) struct Ephemeral<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {

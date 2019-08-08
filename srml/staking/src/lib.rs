@@ -634,8 +634,7 @@ decl_storage! {
 		config(stakers):
 			Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>;
 		build(|
-			storage: &mut sr_primitives::StorageOverlay,
-			_: &mut sr_primitives::ChildrenStorageOverlay,
+			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
 			config: &GenesisConfig<T>
 		| {
 			with_storage(storage, || {
@@ -953,7 +952,7 @@ decl_module! {
 			<Payee<T>>::insert(stash, payee);
 		}
 
-		/// (Re-)set the payment target for a controller.
+		/// (Re-)set the controller of a stash.
 		///
 		/// Effects will be felt at the beginning of the next era.
 		///

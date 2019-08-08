@@ -99,11 +99,11 @@ construct_service_factory! {
 				FullComponents::<Factory>::new(config) },
 		AuthoritySetup = {
 			|mut service: Self::FullService| {
-				let (block_import, link_half, babe_link) = service.config.custom.import_setup.take()
+				let (block_import, link_half, babe_link) = service.config_mut().custom.import_setup.take()
 					.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
 				// spawn any futures that were created in the previous setup steps
-				if let Some(tasks) = service.config.custom.tasks_to_spawn.take() {
+				if let Some(tasks) = service.config_mut().custom.tasks_to_spawn.take() {
 					for task in tasks {
 						service.spawn_task(
 							task.select(service.on_exit())
@@ -157,7 +157,7 @@ construct_service_factory! {
 							config: config,
 							link: link_half,
 							network: service.network(),
-							inherent_data_providers: service.config.custom.inherent_data_providers.clone(),
+							inherent_data_providers: service.config().custom.inherent_data_providers.clone(),
 							on_exit: service.on_exit(),
 							telemetry_on_connect: Some(telemetry_on_connect),
 						};
@@ -333,7 +333,7 @@ mod tests {
 		let block_factory = |service: &SyncService<<Factory as ServiceFactory>::FullService>| {
 			let service = service.get();
 			let mut inherent_data = service
-				.config
+				.config()
 				.custom
 				.inherent_data_providers
 				.create_inherent_data()
