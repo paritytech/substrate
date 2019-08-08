@@ -27,9 +27,9 @@ use std::collections::HashSet;
 #[cfg(feature = "std")]
 use sr_primitives::traits::RuntimeApiInfo;
 
-use parity_codec::Encode;
+use codec::Encode;
 #[cfg(feature = "std")]
-use parity_codec::Decode;
+use codec::Decode;
 use sr_primitives::RuntimeString;
 pub use sr_primitives::create_runtime_str;
 

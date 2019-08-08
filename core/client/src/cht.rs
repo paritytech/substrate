@@ -26,7 +26,7 @@
 use std::collections::HashSet;
 
 use hash_db;
-use parity_codec::Encode;
+use codec::Encode;
 use trie;
 
 use primitives::{H256, convert_hash};
@@ -78,7 +78,8 @@ pub fn compute_root<Header, Hasher, I>(
 		Hasher::Out: Ord,
 		I: IntoIterator<Item=ClientResult<Option<Header::Hash>>>,
 {
-	Ok(trie::trie_root::<Hasher, _, _, _>(
+	use trie::TrieConfiguration;
+	Ok(trie::trie_types::Layout::<Hasher>::trie_root(
 		build_pairs::<Header, I>(cht_size, cht_num, hashes)?
 	))
 }

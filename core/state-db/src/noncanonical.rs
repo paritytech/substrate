@@ -23,7 +23,7 @@
 use std::fmt;
 use std::collections::{HashMap, VecDeque, hash_map::Entry};
 use super::{Error, DBValue, ChangeSet, CommitSet, MetaDb, Hash, to_meta_key};
-use crate::codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use log::trace;
 
 const NON_CANONICAL_JOURNAL: &[u8] = b"noncanonical_journal";
@@ -116,7 +116,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		let last_canonicalized = db.get_meta(&to_meta_key(LAST_CANONICAL, &()))
 			.map_err(|e| Error::Db(e))?;
 		let last_canonicalized = match last_canonicalized {
-			Some(buffer) => Some(<(BlockHash, u64)>::decode(&mut buffer.as_slice()).ok_or(Error::Decoding)?),
+			Some(buffer) => Some(<(BlockHash, u64)>::decode(&mut buffer.as_slice())?),
 			None => None,
 		};
 		let mut levels = VecDeque::new();
@@ -134,7 +134,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 					let journal_key = to_journal_key(block, index);
 					match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
 						Some(record) => {
-							let record: JournalRecord<BlockHash, Key> = Decode::decode(&mut record.as_slice()).ok_or(Error::Decoding)?;
+							let record: JournalRecord<BlockHash, Key> = Decode::decode(&mut record.as_slice())?;
 							let inserted = record.inserted.iter().map(|(k, _)| k.clone()).collect();
 							let overlay = BlockOverlay {
 								hash: record.hash.clone(),

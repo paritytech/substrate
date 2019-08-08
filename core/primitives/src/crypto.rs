@@ -19,13 +19,13 @@
 // end::description[]
 
 #[cfg(feature = "std")]
-use std::convert::{TryFrom, TryInto};
+use rstd::convert::TryInto;
+use rstd::convert::TryFrom;
 #[cfg(feature = "std")]
 use parking_lot::Mutex;
 #[cfg(feature = "std")]
 use rand::{RngCore, rngs::OsRng};
-#[cfg(feature = "std")]
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use regex::Regex;
 #[cfg(feature = "std")]
@@ -33,6 +33,8 @@ use base58::{FromBase58, ToBase58};
 #[cfg(feature = "std")]
 use std::hash::Hash;
 use zeroize::Zeroize;
+#[doc(hidden)]
+pub use rstd::ops::Deref;
 
 /// The root phrase for our publicly known keys.
 pub const DEV_PHRASE: &str = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
@@ -79,6 +81,14 @@ pub struct Protected<T: Zeroize>(T);
 
 impl<T: Zeroize> AsRef<T> for Protected<T> {
 	fn as_ref(&self) -> &T {
+		&self.0
+	}
+}
+
+impl<T: Zeroize> rstd::ops::Deref for Protected<T> {
+	type Target = T;
+
+	fn deref(&self) -> &T {
 		&self.0
 	}
 }
@@ -279,12 +289,12 @@ pub trait Ss58Codec: Sized {
 	}
 }
 
-#[cfg(feature = "std")]
 /// Derivable key trait.
 pub trait Derive: Sized {
 	/// Derive a child key from a series of given junctions.
 	///
 	/// Will be `None` for public keys if there are any hard junctions in there.
+	#[cfg(feature = "std")]
 	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, _path: Iter) -> Option<Self> {
 		None
 	}
@@ -457,8 +467,8 @@ impl<T: AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 }
 
 /// Trait suitable for typical cryptographic PKI key public type.
-pub trait Public: AsRef<[u8]> + TypedKey + PartialEq + Eq + Clone + Send + Sync {
-	/// A new instance from the given slice that should be 32 bytes long.
+pub trait Public: AsRef<[u8]> + AsMut<[u8]> + Default + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync {
+	/// A new instance from the given slice.
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
 	/// you are certain that the array actually is a pubkey. GIGO!
@@ -466,17 +476,85 @@ pub trait Public: AsRef<[u8]> + TypedKey + PartialEq + Eq + Clone + Send + Sync 
 
 	/// Return a `Vec<u8>` filled with raw data.
 	#[cfg(feature = "std")]
-	fn to_raw_vec(&self) -> Vec<u8>;
+	fn to_raw_vec(&self) -> Vec<u8> { self.as_slice().to_owned() }
 
 	/// Return a slice filled with raw data.
-	fn as_slice(&self) -> &[u8];
+	fn as_slice(&self) -> &[u8] { self.as_ref() }
+}
+
+#[cfg(feature = "std")]
+pub use self::dummy::*;
+
+#[cfg(feature = "std")]
+mod dummy {
+	use super::*;
+
+	/// Dummy cryptography. Doesn't do anything.
+	#[derive(Clone, Hash, Default, Eq, PartialEq)]
+	pub struct Dummy;
+
+	impl AsRef<[u8]> for Dummy {
+		fn as_ref(&self) -> &[u8] { &b""[..] }
+	}
+
+	impl AsMut<[u8]> for Dummy {
+		fn as_mut(&mut self) -> &mut[u8] {
+			unsafe {
+				#[allow(mutable_transmutes)]
+				rstd::mem::transmute::<_, &'static mut [u8]>(&b""[..])
+			}
+		}
+	}
+
+	impl CryptoType for Dummy {
+		type Pair = Dummy;
+	}
+
+	impl Derive for Dummy {}
+
+	impl Public for Dummy {
+		fn from_slice(_: &[u8]) -> Self { Self }
+		#[cfg(feature = "std")]
+		fn to_raw_vec(&self) -> Vec<u8> { vec![] }
+		fn as_slice(&self) -> &[u8] { b"" }
+	}
+
+	impl Pair for Dummy {
+		type Public = Dummy;
+		type Seed = Dummy;
+		type Signature = Dummy;
+		type DeriveError = ();
+		fn generate_with_phrase(_: Option<&str>) -> (Self, String, Self::Seed) { Default::default() }
+		fn from_phrase(_: &str, _: Option<&str>)
+			-> Result<(Self, Self::Seed), SecretStringError>
+		{
+			Ok(Default::default())
+		}
+		fn derive<
+			Iter: Iterator<Item=DeriveJunction>
+		>(&self, _: Iter) -> Result<Self, Self::DeriveError> { Ok(Self) }
+		fn from_seed(_: &Self::Seed) -> Self { Self }
+		fn from_seed_slice(_: &[u8]) -> Result<Self, SecretStringError> { Ok(Self) }
+		fn from_standard_components<
+			I: Iterator<Item=DeriveJunction>
+		>(
+			_: &str,
+			_: Option<&str>,
+			_: I
+		) -> Result<Self, SecretStringError> { Ok(Self) }
+		fn sign(&self, _: &[u8]) -> Self::Signature { Self }
+		fn verify<M: AsRef<[u8]>>(_: &Self::Signature, _: M, _: &Self::Public) -> bool { true }
+		fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(_: &[u8], _: M, _: P) -> bool { true }
+		fn public(&self) -> Self::Public { Self }
+		fn to_raw_vec(&self) -> Vec<u8> { vec![] }
+	}
 }
 
 /// Trait suitable for typical cryptographic PKI key pair type.
 ///
 /// For now it just specifies how to create a key from a phrase and derivation path.
 #[cfg(feature = "std")]
-pub trait Pair: TypedKey + Sized + Clone + Send + Sync + 'static {
+pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	/// The type which is used to encode a public key.
 	type Public: Public + Hash;
 
@@ -538,7 +616,7 @@ pub trait Pair: TypedKey + Sized + Clone + Send + Sync + 'static {
 	fn sign(&self, message: &[u8]) -> Self::Signature;
 
 	/// Verify a signature on a message. Returns true if the signature is good.
-	fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: P) -> bool;
+	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: &Self::Public) -> bool;
 
 	/// Verify a signature on a message. Returns true if the signature is good.
 	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool;
@@ -603,26 +681,109 @@ pub trait Pair: TypedKey + Sized + Clone + Send + Sync + 'static {
 	fn to_raw_vec(&self) -> Vec<u8>;
 }
 
+/// One type is wrapped by another.
+pub trait IsWrappedBy<Outer>: From<Outer> + Into<Outer> {
+	/// Get a reference to the inner from the outer.
+	fn from_ref(outer: &Outer) -> &Self;
+	/// Get a mutable reference to the inner from the outer.
+	fn from_mut(outer: &mut Outer) -> &mut Self;
+}
+
+/// Opposite of `IsWrappedBy` - denotes a type which is a simple wrapper around another type.
+pub trait Wraps: Sized {
+	/// The inner type it is wrapping.
+	type Inner: IsWrappedBy<Self>;
+}
+
+impl<T, Outer> IsWrappedBy<Outer> for T where
+	Outer: AsRef<Self> + AsMut<Self> + From<Self>,
+	T: From<Outer>,
+{
+	/// Get a reference to the inner from the outer.
+	fn from_ref(outer: &Outer) -> &Self { outer.as_ref() }
+
+	/// Get a mutable reference to the inner from the outer.
+	fn from_mut(outer: &mut Outer) -> &mut Self { outer.as_mut() }
+}
+
+impl<Inner, Outer, T> UncheckedFrom<T> for Outer where
+	Outer: Wraps<Inner=Inner>,
+	Inner: IsWrappedBy<Outer> + UncheckedFrom<T>,
+{
+	fn unchecked_from(t: T) -> Self {
+		let inner: Inner = t.unchecked_into();
+		inner.into()
+	}
+}
+
+/// Type which has a particular kind of crypto associated with it.
+pub trait CryptoType {
+	/// The pair key type of this crypto.
+	#[cfg(feature="std")]
+	type Pair: Pair;
+}
+
 /// An identifier for a type of cryptographic key.
 ///
-/// 0-1024 are reserved.
-pub type KeyTypeId = u32;
+/// To avoid clashes with other modules when distributing your module publically, register your
+/// `KeyTypeId` on the list here by making a PR.
+///
+/// Values whose first character is `_` are reserved for private use and won't conflict with any
+/// public modules.
+#[derive(Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct KeyTypeId(pub [u8; 4]);
 
-/// Constant key types.
+impl From<u32> for KeyTypeId {
+	fn from(x: u32) -> Self {
+		Self(x.to_le_bytes())
+	}
+}
+
+impl From<KeyTypeId> for u32 {
+	fn from(x: KeyTypeId) -> Self {
+		u32::from_le_bytes(x.0)
+	}
+}
+
+impl<'a> TryFrom<&'a str> for KeyTypeId {
+	type Error = ();
+	fn try_from(x: &'a str) -> Result<Self, ()> {
+		let b = x.as_bytes();
+		if b.len() != 4 {
+			return Err(());
+		}
+		let mut res = KeyTypeId::default();
+		res.0.copy_from_slice(&b[0..4]);
+		Ok(res)
+	}
+}
+
+/// Known key types; this also functions as a global registry of key types for projects wishing to
+/// avoid collisions with each other.
+///
+/// It's not universal in the sense that *all* key types need to be mentioned here, it's just a
+/// handy place to put common key types.
 pub mod key_types {
 	use super::KeyTypeId;
 
-	/// ED25519 public key.
-	pub const ED25519: KeyTypeId = 10;
-
-	/// SR25519 public key.
-	pub const SR25519: KeyTypeId = 20;
-}
-
-/// A trait for something that has a key type ID.
-pub trait TypedKey {
-	/// The type ID of this key.
-	const KEY_TYPE: KeyTypeId;
+	/// Key type for generic S/R 25519 key.
+	pub const SR25519: KeyTypeId = KeyTypeId(*b"sr25");
+	/// Key type for generic Ed25519 key.
+	pub const ED25519: KeyTypeId = KeyTypeId(*b"ed25");
+	/// Key type for Babe module, build-in.
+	pub const BABE: KeyTypeId = KeyTypeId(*b"babe");
+	/// Key type for Grandpa module, build-in.
+	pub const GRANDPA: KeyTypeId = KeyTypeId(*b"gran");
+	/// Key type for controlling an account in a Substrate runtime, built-in.
+	pub const ACCOUNT: KeyTypeId = KeyTypeId(*b"acco");
+	/// Key type for Aura module, built-in.
+	pub const AURA: KeyTypeId = KeyTypeId(*b"aura");
+	/// Key type for ImOnline module, built-in.
+	pub const IM_ONLINE: KeyTypeId = KeyTypeId(*b"imon");
+	/// A key type ID useful for tests.
+	#[cfg(feature = "std")]
+	pub const DUMMY: KeyTypeId = KeyTypeId(*b"dumy");
 }
 
 #[cfg(test)]
@@ -639,14 +800,31 @@ mod tests {
 		Standard{phrase: String, password: Option<String>, path: Vec<DeriveJunction>},
 		Seed(Vec<u8>),
 	}
+	impl Default for TestPair {
+		fn default() -> Self {
+			TestPair::Generated
+		}
+	}
+	impl CryptoType for TestPair {
+		type Pair = Self;
+	}
 
-	#[derive(Clone, PartialEq, Eq, Hash)]
+	#[derive(Clone, PartialEq, Eq, Hash, Default)]
 	struct TestPublic;
 	impl AsRef<[u8]> for TestPublic {
 		fn as_ref(&self) -> &[u8] {
 			&[]
 		}
 	}
+	impl AsMut<[u8]> for TestPublic {
+		fn as_mut(&mut self) -> &mut [u8] {
+			&mut []
+		}
+	}
+	impl CryptoType for TestPublic {
+		type Pair = TestPair;
+	}
+	impl Derive for TestPublic {}
 	impl Public for TestPublic {
 		fn from_slice(_bytes: &[u8]) -> Self {
 			Self
@@ -657,9 +835,6 @@ mod tests {
 		fn to_raw_vec(&self) -> Vec<u8> {
 			vec![]
 		}
-	}
-	impl TypedKey for TestPublic {
-		const KEY_TYPE: u32 = 4242;
 	}
 	impl Pair for TestPair {
 		type Public = TestPublic;
@@ -686,11 +861,7 @@ mod tests {
 		}
 		fn from_seed(_seed: &<TestPair as Pair>::Seed) -> Self { TestPair::Seed(vec![]) }
 		fn sign(&self, _message: &[u8]) -> Self::Signature { [] }
-		fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(
-			_sig: &Self::Signature,
-			_message: M,
-			_pubkey: P
-		) -> bool { true }
+		fn verify<M: AsRef<[u8]>>(_: &Self::Signature, _: M, _: &Self::Public) -> bool { true }
 		fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(
 			_sig: &[u8],
 			_message: M,
@@ -716,9 +887,6 @@ mod tests {
 		fn to_raw_vec(&self) -> Vec<u8> {
 			vec![]
 		}
-	}
-	impl TypedKey for TestPair {
-		const KEY_TYPE: u32 = 4242;
 	}
 
 	#[test]

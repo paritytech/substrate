@@ -21,24 +21,31 @@
 
 mod digest;
 
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use rstd::vec::Vec;
 use sr_primitives::ConsensusEngineId;
-use primitives::sr25519;
 use substrate_client::decl_runtime_apis;
 
 #[cfg(feature = "std")]
 pub use digest::{BabePreDigest, CompatibleDigestItem};
 pub use digest::{BABE_VRF_PREFIX, RawBabePreDigest};
 
+mod app {
+	use app_crypto::{app_crypto, key_types::BABE, sr25519};
+	app_crypto!(sr25519, BABE);
+}
+
 /// A Babe authority keypair. Necessarily equivalent to the schnorrkel public key used in
 /// the main Babe module. If that ever changes, then this must, too.
 #[cfg(feature = "std")]
-pub type AuthorityPair = sr25519::Pair;
+pub type AuthorityPair = app::Pair;
+
+/// A Babe authority signature.
+pub type AuthoritySignature = app::Signature;
 
 /// A Babe authority identifier. Necessarily equivalent to the schnorrkel public key used in
 /// the main Babe module. If that ever changes, then this must, too.
-pub type AuthorityId = sr25519::Public;
+pub type AuthorityId = app::Public;
 
 /// The `ConsensusEngineId` of BABE.
 pub const BABE_ENGINE_ID: ConsensusEngineId = *b"BABE";
@@ -53,7 +60,7 @@ pub const VRF_PROOF_LENGTH: usize = 64;
 pub const PUBLIC_KEY_LENGTH: usize = 32;
 
 /// The index of an authority.
-pub type AuthorityIndex = u64;
+pub type AuthorityIndex = u32;
 
 /// A slot number.
 pub type SlotNumber = u64;
@@ -104,7 +111,10 @@ pub struct BabeConfiguration {
 
 	/// A constant value that is used in the threshold calculation formula.
 	/// Expressed as a fraction where the first member of the tuple is the
-	/// numerator and the second is the denominator.
+	/// numerator and the second is the denominator. The fraction should
+	/// represent a value between 0 and 1.
+	/// In the threshold formula calculation, `1 - c` represents the probability
+	/// of a slot being empty.
 	pub c: (u64, u64),
 
 	/// The minimum number of blocks that must be received before running the

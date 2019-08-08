@@ -23,7 +23,7 @@
 //! The changes are journaled in the DB.
 
 use std::collections::{HashMap, HashSet, VecDeque};
-use crate::codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use crate::{CommitSet, Error, MetaDb, to_meta_key, Hash};
 use log::{trace, warn};
 
@@ -69,7 +69,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		let last_pruned = db.get_meta(&to_meta_key(LAST_PRUNED, &()))
 			.map_err(|e| Error::Db(e))?;
 		let pending_number: u64 = match last_pruned {
-			Some(buffer) => u64::decode(&mut buffer.as_slice()).ok_or(Error::Decoding)? + 1,
+			Some(buffer) => u64::decode(&mut buffer.as_slice())? + 1,
 			None => 0,
 		};
 		let mut block = pending_number;
@@ -86,7 +86,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 			let journal_key = to_journal_key(block);
 			match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
 				Some(record) => {
-					let record: JournalRecord<BlockHash, Key> = Decode::decode(&mut record.as_slice()).ok_or(Error::Decoding)?;
+					let record: JournalRecord<BlockHash, Key> = Decode::decode(&mut record.as_slice())?;
 					trace!(target: "state-db", "Pruning journal entry {} ({} inserted, {} deleted)", block, record.inserted.len(), record.deleted.len());
 					pruning.import(&record.hash, journal_key, record.inserted.into_iter(), record.deleted);
 				},

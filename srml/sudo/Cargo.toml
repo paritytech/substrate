@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 serde = { version = "1.0", optional = true }
-parity-codec = { version = "4.1.1", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 sr-std = { path = "../../core/sr-std", default-features = false }
 sr-io = { path = "../../core/sr-io", default-features = false }
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
@@ -22,7 +22,7 @@ primitives = { package = "substrate-primitives",  path = "../../core/primitives"
 default = ["std"]
 std = [
 	"serde",
-	"parity-codec/std",
+	"codec/std",
 	"sr-std/std",
 	"sr-io/std",
 	"sr-primitives/std",

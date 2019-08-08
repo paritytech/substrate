@@ -29,18 +29,18 @@
 
 use std::sync::Arc;
 
-use grandpa::{voter, voter_set::VoterSet};
-use grandpa::Message::{Prevote, Precommit, PrimaryPropose};
 use futures::prelude::*;
 use futures::sync::{oneshot, mpsc};
+use grandpa::Message::{Prevote, Precommit, PrimaryPropose};
+use grandpa::{voter, voter_set::VoterSet};
 use log::{debug, trace};
-use tokio_executor::Executor;
-use parity_codec::{Encode, Decode};
-use primitives::{ed25519, Pair};
-use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
-use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
 use network::{consensus_gossip as network_gossip, NetworkService};
 use network_gossip::ConsensusMessage;
+use codec::{Encode, Decode};
+use primitives::Pair;
+use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
+use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
+use tokio_executor::Executor;
 
 use crate::{
 	CatchUp, Commit, CommunicationIn, CommunicationOut, CompactCommit, Error,
@@ -50,7 +50,7 @@ use crate::environment::HasVoted;
 use gossip::{
 	GossipMessage, FullCatchUpMessage, FullCommitMessage, VoteOrPrecommitMessage, GossipValidator
 };
-use primitives::ed25519::{Public as AuthorityId, Signature as AuthoritySignature};
+use fg_primitives::{AuthorityPair, AuthorityId, AuthoritySignature};
 
 pub mod gossip;
 mod periodic;
@@ -341,7 +341,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		round: Round,
 		set_id: SetId,
 		voters: Arc<VoterSet<AuthorityId>>,
-		local_key: Option<Arc<ed25519::Pair>>,
+		local_key: Option<AuthorityPair>,
 		has_voted: HasVoted<B>,
 	) -> (
 		impl Stream<Item=SignedMessage<B>,Error=Error>,
@@ -354,8 +354,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		);
 
 		let locals = local_key.and_then(|pair| {
-			let public = pair.public();
-			let id = AuthorityId(public.0);
+			let id = pair.public();
 			if voters.contains_key(&id) {
 				Some((pair, id))
 			} else {
@@ -367,10 +366,10 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		let incoming = self.service.messages_for(topic)
 			.filter_map(|notification| {
 				let decoded = GossipMessage::<B>::decode(&mut &notification.message[..]);
-				if decoded.is_none() {
-					debug!(target: "afg", "Skipping malformed message {:?}", notification);
+				if let Err(ref e) = decoded {
+					debug!(target: "afg", "Skipping malformed message {:?}: {}", notification, e);
 				}
-				decoded
+				decoded.ok()
 			})
 			.and_then(move |msg| {
 				match msg {
@@ -583,10 +582,10 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 		.filter_map(|notification| {
 			// this could be optimized by decoding piecewise.
 			let decoded = GossipMessage::<B>::decode(&mut &notification.message[..]);
-			if decoded.is_none() {
-				trace!(target: "afg", "Skipping malformed commit message {:?}", notification);
+			if let Err(ref e) = decoded {
+				trace!(target: "afg", "Skipping malformed commit message {:?}: {}", notification, e);
 			}
-			decoded.map(move |d| (notification, d))
+			decoded.map(move |d| (notification, d)).ok()
 		})
 		.filter_map(move |(notification, msg)| {
 			match msg {
@@ -633,9 +632,9 @@ pub(crate) fn check_message_sig<Block: BlockT>(
 	round: u64,
 	set_id: u64,
 ) -> Result<(), ()> {
-	let as_public = AuthorityId::from_raw(id.0);
+	let as_public = id.clone();
 	let encoded_raw = localized_payload(round, set_id, message);
-	if ed25519::Pair::verify(signature, &encoded_raw, as_public) {
+	if AuthorityPair::verify(signature, &encoded_raw, &as_public) {
 		Ok(())
 	} else {
 		debug!(target: "afg", "Bad signature on message from {:?}", id);
@@ -653,7 +652,7 @@ pub(crate) fn check_message_sig<Block: BlockT>(
 struct OutgoingMessages<Block: BlockT, N: Network<Block>> {
 	round: u64,
 	set_id: u64,
-	locals: Option<(Arc<ed25519::Pair>, AuthorityId)>,
+	locals: Option<(AuthorityPair, AuthorityId)>,
 	sender: mpsc::UnboundedSender<SignedMessage<Block>>,
 	network: N,
 	has_voted: HasVoted<Block>,
