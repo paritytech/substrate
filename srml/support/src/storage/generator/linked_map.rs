@@ -186,7 +186,7 @@ impl<K: Codec, V: Codec, G: StorageLinkedMap<K, V>> storage::StorageLinkedMap<K,
 	}
 
 	fn get<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query {
-		let val = unhashed::get(Self::storage_linked_map_final_key(key).as_ref())
+		let val = unhashed::get(Self::storage_linked_map_final_key(key).as_ref());
 		G::from_optional_value_to_query(val)
 	}
 
@@ -237,16 +237,12 @@ impl<K: Codec, V: Codec, G: StorageLinkedMap<K, V>> storage::StorageLinkedMap<K,
 	fn take<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query {
 		let final_key = Self::storage_linked_map_final_key(key);
 
-		let full_value: Option<(V, Linkage<K>)> = unhashed::get(final_key.as_ref());
+		let full_value: Option<(V, Linkage<K>)> = unhashed::take(final_key.as_ref());
 
-		let value = match full_value {
-			Some((data, linkage)) => {
-				unhashed::kill(final_key.as_ref());
-				remove_linkage::<_, _, G>(linkage);
-				Some(data)
-			},
-			None => None,
-		};
+		let value = full_value.map(|(data, linkage)| {
+			remove_linkage::<_, _, G>(linkage);
+			data
+		});
 
 		G::from_optional_value_to_query(value)
 	}
