@@ -257,6 +257,7 @@ impl<Components: components::Components> Service<Components> {
 			let offchain = offchain_workers.as_ref().map(Arc::downgrade);
 			let to_spawn_tx_ = to_spawn_tx.clone();
 			let network_state_info: Arc<dyn NetworkStateInfo + Send + Sync> = network.clone();
+			let is_validator = true;
 
 			let events = client.import_notification_stream()
 				.map(|v| Ok::<_, ()>(v)).compat()
@@ -277,6 +278,7 @@ impl<Components: components::Components> Service<Components> {
 							&offchain,
 							&txpool,
 							&network_state_info,
+							is_validator,
 						).map_err(|e| warn!("Offchain workers error processing new block: {:?}", e))?;
 						let _ = to_spawn_tx_.unbounded_send(future);
 					}
