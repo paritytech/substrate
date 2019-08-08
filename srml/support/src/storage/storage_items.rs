@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// TODO TODO: well but this is so much keeping the old interface how can I get something that work
-// with this as well ????
 //! Strongly typed wrappers around values in storage.
 //!
 //! This crate exports a macro `storage_items!` and traits describing behavior of generated
@@ -63,7 +61,6 @@ pub fn unwrap_or_default<T: Default>(t: Option<T>) -> T {
 }
 
 #[doc(hidden)]
-// TODO TODO: pub(crate) ?
 pub fn wrap<T>(t: T) -> Option<T> {
 	Some(t)
 }

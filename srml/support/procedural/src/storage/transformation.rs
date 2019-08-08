@@ -325,7 +325,6 @@ fn decl_store_extra_genesis(
 					} else {
 						quote!()
 					};
-					// TODO TODO: execute this in a with_storage!!!
 
 					quote!{{
 						let v = (#builder)(&self);
