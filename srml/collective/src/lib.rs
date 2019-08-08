@@ -433,7 +433,7 @@ mod tests {
 				phantom: Default::default(),
 			}),
 			collective: None,
-		}.build_storage().unwrap().0.into()
+		}.build_storage().unwrap().into()
 	}
 
 	#[test]

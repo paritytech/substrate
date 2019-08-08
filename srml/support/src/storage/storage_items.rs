@@ -379,7 +379,7 @@ mod tests {
 			COMPLEXTYPE3: ([u32;25]);
 		}
 		add_extra_genesis {
-			build(|_, _, _| {});
+			build(|_, _| {});
 		}
 	}
 
@@ -755,7 +755,7 @@ mod test2 {
 		add_extra_genesis {
 			config(_marker) : ::std::marker::PhantomData<T>;
 			config(extra_field) : u32 = 32;
-			build(|_, _, _| {});
+			build(|_, _| {});
 		}
 	}
 
