@@ -37,15 +37,15 @@ use substrate_client::{
 	impl_runtime_apis,
 };
 use sr_primitives::{
-	ApplyResult, create_runtime_str, Perbill,
+	ApplyResult, create_runtime_str, Perbill, impl_opaque_keys,
 	transaction_validity::{TransactionValidity, ValidTransaction},
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup
+		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup,
 	},
 };
 use runtime_version::RuntimeVersion;
-pub use primitives::hash::H256;
+pub use primitives::{hash::H256, crypto::key_types};
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
 use runtime_support::{impl_outer_origin, parameter_types};
@@ -434,6 +434,15 @@ fn code_using_trie() -> u64 {
 	} else { 103 }
 }
 
+impl_opaque_keys! {
+	pub struct SessionKeys {
+		#[id(key_types::ED25519)]
+		pub ed25519: ed25519::AppPublic,
+		#[id(key_types::SR25519)]
+		pub sr25519: sr25519::AppPublic,
+	}
+}
+
 #[cfg(not(feature = "std"))]
 /// Mutable static variables should be always observed to have
 /// the initialized value at the start of a runtime call.
@@ -610,6 +619,12 @@ cfg_if! {
 				fn offchain_worker(block: u64) {
 					let ex = Extrinsic::IncludeData(block.encode());
 					runtime_io::submit_transaction(&ex).unwrap();
+				}
+			}
+
+			impl session::SessionKeys<Block> for Runtime {
+				fn generate_session_keys(_: Option<Vec<u8>>) -> Vec<u8> {
+					SessionKeys::generate(None)
 				}
 			}
 		}
@@ -814,6 +829,12 @@ cfg_if! {
 				fn offchain_worker(block: u64) {
 					let ex = Extrinsic::IncludeData(block.encode());
 					runtime_io::submit_transaction(&ex).unwrap()
+				}
+			}
+
+			impl session::SessionKeys<Block> for Runtime {
+				fn generate_session_keys(_: Option<Vec<u8>>) -> Vec<u8> {
+					SessionKeys::generate(None)
 				}
 			}
 		}

@@ -27,7 +27,10 @@ use primitives::{
 	H256, blake2_256, hexdisplay::HexDisplay, traits::BareCryptoStore, testing::KeyStore,
 	ed25519, crypto::key_types,
 };
-use test_client::{self, AccountKeyring, runtime::{Extrinsic, Transfer}};
+use test_client::{
+	self, AccountKeyring, runtime::{Extrinsic, Transfer, SessionKeys}, DefaultTestClientBuilderExt,
+	TestClientBuilderExt,
+};
 use tokio::runtime;
 
 fn uxt(sender: AccountKeyring, nonce: u64) -> Extrinsic {
@@ -203,4 +206,35 @@ fn should_insert_key() {
 		.ed25519_key_pair(key_types::ED25519, &key_pair.public()).expect("Key exists in store");
 
 	assert_eq!(key_pair.public(), store_key_pair.public());
+}
+
+#[test]
+fn should_rotate_keys() {
+	let runtime = runtime::Runtime::new().unwrap();
+	let keystore = KeyStore::new();
+	let client = Arc::new(test_client::TestClientBuilder::new().set_keystore(keystore.clone()).build());
+	let p = Author {
+		client: client.clone(),
+		pool: Arc::new(Pool::new(Default::default(), ChainApi::new(client))),
+		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
+		keystore: keystore.clone(),
+	};
+
+	let new_public_keys = p.rotate_keys().expect("Rotates the keys");
+
+	let session_keys = SessionKeys::decode(&mut &new_public_keys[..])
+		.expect("SessionKeys decode successfully");
+
+	let ed25519_key_pair = keystore.read().ed25519_key_pair(
+		key_types::ED25519,
+		&session_keys.ed25519.clone().into(),
+	).expect("ed25519 key exists in store");
+
+	let sr25519_key_pair = keystore.read().sr25519_key_pair(
+		key_types::SR25519,
+		&session_keys.sr25519.clone().into(),
+	).expect("sr25519 key exists in store");
+
+	assert_eq!(session_keys.ed25519, ed25519_key_pair.public().into());
+	assert_eq!(session_keys.sr25519, sr25519_key_pair.public().into());
 }
