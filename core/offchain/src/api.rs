@@ -23,7 +23,7 @@ use std::{
 };
 
 use client::backend::OffchainStorage;
-use futures::{Stream, Future, sync::mpsc};
+use futures::{StreamExt as _, Future, future, channel::mpsc};
 use log::{info, debug, warn, error};
 use network::{PeerId, Multiaddr, NetworkStateInfo};
 use codec::{Encode, Decode};
@@ -297,14 +297,14 @@ impl<A: ChainApi> AsyncApi<A> {
 	}
 
 	/// Run a processing task for the API
-	pub fn process(mut self) -> impl Future<Item=(), Error=()> {
+	pub fn process(mut self) -> impl Future<Output = ()> {
 		let receiver = self.receiver.take().expect("Take invoked only once.");
 
 		receiver.for_each(move |msg| {
 			match msg {
 				ExtMessage::SubmitExtrinsic(ext) => self.submit_extrinsic(ext),
 			}
-			Ok(())
+			future::ready(())
 		})
 	}
 
