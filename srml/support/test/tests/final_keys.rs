@@ -17,7 +17,7 @@
 use runtime_io::{with_externalities, Blake2Hasher};
 use srml_support::{StorageValue, StorageMap, StorageDoubleMap};
 use srml_support::storage::unhashed;
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 
 pub trait Trait {
 	type Origin;

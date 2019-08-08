@@ -21,11 +21,10 @@
 use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
 
-use parity_codec::Decode;
+use codec::{Encode, Decode};
 use keyring::sr25519::Keyring;
 use node_runtime::{Call, CheckedExtrinsic, UncheckedExtrinsic, SignedExtra, BalancesCall, ExistentialDeposit};
 use primitives::{sr25519, crypto::Pair};
-use parity_codec::Encode;
 use sr_primitives::{generic::Era, traits::{Block as BlockT, Header as HeaderT, SignedExtension}};
 use substrate_service::ServiceFactory;
 use transaction_factory::RuntimeAdapter;

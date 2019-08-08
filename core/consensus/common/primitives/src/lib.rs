@@ -18,7 +18,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use parity_codec::Codec;
+use codec::Codec;
 use client::decl_runtime_apis;
 use rstd::vec::Vec;
 

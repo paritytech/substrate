@@ -26,7 +26,7 @@ use crate::{
 };
 use assert_matches::assert_matches;
 use hex_literal::*;
-use parity_codec::{Decode, Encode, KeyedVec};
+use codec::{Decode, Encode, KeyedVec};
 use runtime_io;
 use runtime_io::with_externalities;
 use sr_primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, H256};
@@ -108,6 +108,7 @@ impl system::Trait for Test {
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
+	type Call = ();
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;

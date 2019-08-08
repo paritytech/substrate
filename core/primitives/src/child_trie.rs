@@ -16,7 +16,7 @@
 
 //! Child trie related struct
 
-use parity_codec::{Encode, Decode, Compact};
+use codec::{Encode, Decode, Compact};
 use rstd::prelude::*;
 use rstd::ptr;
 use crate::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
@@ -58,7 +58,7 @@ pub const NO_CHILD_KEYSPACE: [u8;1] = [0];
 
 /// Produce a new keyspace from current state counter.
 pub fn produce_keyspace(child_counter: u128) -> Vec<u8> {
-	parity_codec::Encode::encode(&Compact(child_counter))
+	codec::Encode::encode(&Compact(child_counter))
 }
 
 // see FIXME #2741 for removal of this allocation on every operation.
@@ -232,7 +232,7 @@ impl ChildTrie {
 		parent: ParentTrie,
 	) -> Option<Self> {
 		let input = &mut &encoded_node[..];
-		ChildTrieReadDecode::decode(input).map(|ChildTrieReadDecode { version, keyspace, root }| {
+		ChildTrieReadDecode::decode(input).ok().map(|ChildTrieReadDecode { version, keyspace, root }| {
 			debug_assert!(version == LAST_SUBTRIE_CODEC_VERSION);
 			ChildTrie {
 				keyspace,
@@ -288,7 +288,7 @@ impl ChildTrie {
 	/// content is commited the child trie will need to be fetch
 	/// again for update).
 	pub fn encoded_with_root(&self, new_root: &[u8]) -> Vec<u8> {
-		let mut enc = parity_codec::Encode::encode(&ChildTrieReadEncode{
+		let mut enc = codec::Encode::encode(&ChildTrieReadEncode{
 			version: LAST_SUBTRIE_CODEC_VERSION,
 			keyspace: &self.keyspace,
 			root: new_root,

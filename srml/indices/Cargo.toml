@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 serde = { version = "1.0", optional = true }
 safe-mix = { version = "1.0", default-features = false}
-parity-codec = { version = "4.1.1", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 substrate-keyring = { path = "../../core/keyring", optional = true }
 rstd = { package = "sr-std", path = "../../core/sr-std", default-features = false }
 runtime-io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
@@ -25,7 +25,7 @@ std = [
 	"serde",
 	"safe-mix/std",
 	"substrate-keyring",
-	"parity-codec/std",
+	"codec/std",
 	"primitives/std",
 	"rstd/std",
 	"runtime-io/std",

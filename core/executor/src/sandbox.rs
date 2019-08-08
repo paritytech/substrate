@@ -20,7 +20,7 @@
 
 use crate::error::{Result, Error};
 use std::{collections::HashMap, rc::Rc};
-use parity_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use primitives::sandbox as sandbox_primitives;
 use wasmi::{
 	Externals, FuncRef, ImportResolver, MemoryInstance, MemoryRef, Module, ModuleInstance,
@@ -193,7 +193,7 @@ fn trap(msg: &'static str) -> Trap {
 fn deserialize_result(serialized_result: &[u8]) -> std::result::Result<Option<RuntimeValue>, Trap> {
 	use self::sandbox_primitives::{HostError, ReturnValue};
 	let result_val = std::result::Result::<ReturnValue, HostError>::decode(&mut &serialized_result[..])
-		.ok_or_else(|| trap("Decoding Result<ReturnValue, HostError> failed!"))?;
+		.map_err(|_| trap("Decoding Result<ReturnValue, HostError> failed!"))?;
 
 	match result_val {
 		Ok(return_value) => Ok(match return_value {
@@ -361,7 +361,7 @@ fn decode_environment_definition(
 	memories: &[Option<MemoryRef>],
 ) -> std::result::Result<(Imports, GuestToSupervisorFunctionMapping), InstantiationError> {
 	let env_def = sandbox_primitives::EnvironmentDefinition::decode(&mut &raw_env_def[..])
-		.ok_or_else(|| InstantiationError::EnvironmentDefinitionCorrupted)?;
+		.map_err(|_| InstantiationError::EnvironmentDefinitionCorrupted)?;
 
 	let mut func_map = HashMap::new();
 	let mut memories_map = HashMap::new();

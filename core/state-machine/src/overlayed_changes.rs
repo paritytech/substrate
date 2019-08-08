@@ -18,7 +18,7 @@
 
 #[cfg(test)] use std::iter::FromIterator;
 use std::collections::{HashMap, BTreeSet};
-use parity_codec::Decode;
+use codec::Decode;
 use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
 use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
 use primitives::child_trie::{KeySpace, ChildTrie, ChildTrieReadRef};
@@ -407,7 +407,7 @@ impl OverlayedChanges {
 	/// Inserts storage entry responsible for current extrinsic index.
 	#[cfg(test)]
 	pub(crate) fn set_extrinsic_index(&mut self, extrinsic_index: u32) {
-		use parity_codec::Encode;
+		use codec::Encode;
 		self.prospective.top.insert(EXTRINSIC_INDEX.to_vec(), OverlayedValue {
 			value: Some(extrinsic_index.encode()),
 			extrinsics: None,
@@ -515,6 +515,7 @@ mod tests {
 			&backend,
 			Some(&changes_trie_storage),
 			crate::NeverOffchainExt::new(),
+			None,
 		);
 		const ROOT: [u8; 32] = hex!("39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa");
 
