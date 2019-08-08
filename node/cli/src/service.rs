@@ -113,7 +113,7 @@ construct_service_factory! {
 					}
 				}
 
-				if service.config.roles.is_authority() {
+				if service.config().roles.is_authority() {
 					let proposer = substrate_basic_authorship::ProposerFactory {
 						client: service.client(),
 						transaction_pool: service.transaction_pool(),
@@ -130,8 +130,8 @@ construct_service_factory! {
 						block_import,
 						env: proposer,
 						sync_oracle: service.network(),
-						inherent_data_providers: service.config.custom.inherent_data_providers.clone(),
-						force_authoring: service.config.force_authoring,
+						inherent_data_providers: service.config().custom.inherent_data_providers.clone(),
+						force_authoring: service.config().force_authoring,
 						time_source: babe_link,
 					};
 
@@ -140,16 +140,16 @@ construct_service_factory! {
 					service.spawn_task(Box::new(select));
 				}
 
-				if !service.config.disable_grandpa {
+				if !service.config().disable_grandpa {
 					let config = grandpa::Config {
 						// FIXME #1578 make this available through chainspec
 						gossip_duration: Duration::from_millis(333),
 						justification_period: 4096,
-						name: Some(service.config.name.clone()),
+						name: Some(service.config().name.clone()),
 						keystore: Some(service.keystore()),
 					};
 
-					if service.config.roles.is_authority() {
+					if service.config().roles.is_authority() {
 						let telemetry_on_connect = TelemetryOnConnect {
 							telemetry_connection_sinks: service.telemetry_on_connect_stream(),
 						};
