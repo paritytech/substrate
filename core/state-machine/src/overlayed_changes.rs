@@ -769,6 +769,21 @@ impl OverlayedChanges {
 		self.operation_from_last_gc += nb_remove;
 	}
 
+	pub(crate) fn clear_child_prefix(&mut self, storage_key: &[u8], prefix: &[u8]) {
+		let extrinsic_index = self.extrinsic_index();
+		if let Some(child_change) = self.changes.children.get_mut(storage_key) {
+			let mut nb_remove = 0;
+			for (key, entry) in child_change.iter_mut() {
+				if key.starts_with(prefix) {
+					nb_remove += 1;
+					entry.set_with_extrinsic(self.changes.history.as_slice(), None, extrinsic_index);
+				}
+			}
+
+			self.operation_from_last_gc += nb_remove;
+		}
+	}
+
 	/// Discard prospective changes to state.
 	pub fn discard_prospective(&mut self) {
 		self.changes.discard_prospective();

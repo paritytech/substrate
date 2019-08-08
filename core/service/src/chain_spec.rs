@@ -72,10 +72,16 @@ impl<'a, G: RuntimeGenesis> BuildStorage for &'a ChainSpec<G> {
 	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
 		match self.genesis.resolve()? {
 			Genesis::Runtime(gc) => gc.build_storage(),
-			Genesis::Raw(map) => Ok((map.into_iter().map(|(k, v)| (k.0, v.0)).collect(), Default::default())),
+			Genesis::Raw(map, children_map) => Ok((
+				map.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
+				children_map.into_iter().map(|(sk, map)| (
+					sk.0,
+					map.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
+				)).collect(),
+			)),
 		}
 	}
-	fn assimilate_storage(self, _: &mut StorageOverlay, _: &mut ChildrenStorageOverlay) -> Result<(), String> {
+	fn assimilate_storage(self, _: &mut (StorageOverlay, ChildrenStorageOverlay)) -> Result<(), String> {
 		Err("`assimilate_storage` not implemented for `ChainSpec`.".into())
 	}
 }
@@ -85,7 +91,10 @@ impl<'a, G: RuntimeGenesis> BuildStorage for &'a ChainSpec<G> {
 #[serde(deny_unknown_fields)]
 enum Genesis<G> {
 	Runtime(G),
-	Raw(HashMap<StorageKey, StorageData>),
+	Raw(
+		HashMap<StorageKey, StorageData>,
+		HashMap<StorageKey, HashMap<StorageKey, StorageData>>,
+	),
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -218,11 +227,20 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 		};
 		let genesis = match (raw, self.genesis.resolve()?) {
 			(true, Genesis::Runtime(g)) => {
-				let storage = g.build_storage()?.0.into_iter()
+				let storage = g.build_storage()?;
+				let top = storage.0.into_iter()
 					.map(|(k, v)| (StorageKey(k), StorageData(v)))
 					.collect();
+				let children = storage.1.into_iter()
+					.map(|(sk, child)| (
+							StorageKey(sk),
+							child.into_iter()
+								.map(|(k, v)| (StorageKey(k), StorageData(v)))
+								.collect(),
+					))
+					.collect();
 
-				Genesis::Raw(storage)
+				Genesis::Raw(top, children)
 			},
 			(_, genesis) => genesis,
 		};
