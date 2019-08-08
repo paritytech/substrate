@@ -27,8 +27,7 @@ mod factory_impl;
 use tokio::prelude::Future;
 use tokio::runtime::{Builder as RuntimeBuilder, Runtime};
 pub use cli::{VersionInfo, IntoExit, NoCustom, SharedParams, ExecutionStrategyParam};
-use substrate_service::{ServiceFactory, Roles as ServiceRoles};
-use std::ops::Deref;
+use substrate_service::{AbstractService, ServiceFactory, Roles as ServiceRoles};
 use log::info;
 use structopt::{StructOpt, clap::App};
 use cli::{AugmentClap, GetLogFilter, parse_and_prepare, ParseAndPrepare};
@@ -219,14 +218,13 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 	}
 }
 
-fn run_until_exit<T, C, E>(
+fn run_until_exit<T, E>(
 	mut runtime: Runtime,
 	service: T,
 	e: E,
-) -> error::Result<()> where
-	T: Deref<Target=substrate_service::Service<C>>,
-	T: Future<Item = (), Error = substrate_service::error::Error> + Send + 'static,
-	C: substrate_service::Components,
+) -> error::Result<()>
+where
+	T: AbstractService,
 	E: IntoExit,
 {
 	let (exit_send, exit) = exit_future::signal();

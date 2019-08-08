@@ -8,7 +8,7 @@ use node_template_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi, WASM
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
 	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor,
-	error::{Error as ServiceError},
+	error::{Error as ServiceError}, AbstractService,
 };
 use basic_authorship::ProposerFactory;
 use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration};

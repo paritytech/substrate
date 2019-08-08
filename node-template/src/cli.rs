@@ -4,9 +4,8 @@ use std::cell::RefCell;
 use tokio::runtime::Runtime;
 pub use substrate_cli::{VersionInfo, IntoExit, error};
 use substrate_cli::{informant, parse_and_prepare, ParseAndPrepare, NoCustom};
-use substrate_service::{ServiceFactory, Roles as ServiceRoles};
+use substrate_service::{AbstractService, ServiceFactory, Roles as ServiceRoles};
 use crate::chain_spec;
-use std::ops::Deref;
 use log::info;
 
 /// Parse command line arguments into service configuration.
@@ -55,14 +54,13 @@ fn load_spec(id: &str) -> Result<Option<chain_spec::ChainSpec>, String> {
 	})
 }
 
-fn run_until_exit<T, C, E>(
+fn run_until_exit<T, E>(
 	mut runtime: Runtime,
 	service: T,
 	e: E,
-) -> error::Result<()> where
-	T: Deref<Target=substrate_service::Service<C>>,
-	T: Future<Item = (), Error = substrate_service::error::Error> + Send + 'static,
-	C: substrate_service::Components,
+) -> error::Result<()>
+where
+	T: AbstractService,
 	E: IntoExit,
 {
 	let (exit_send, exit) = exit_future::signal();

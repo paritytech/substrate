@@ -29,6 +29,7 @@ use std::io;
 use std::net::SocketAddr;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::ops::DerefMut;
 use std::time::{Duration, Instant};
 use futures::sync::mpsc;
 use parking_lot::Mutex;
@@ -41,6 +42,7 @@ use keystore::Store as Keystore;
 use network::{NetworkState, NetworkStateInfo};
 use log::{log, info, warn, debug, error, Level};
 use codec::{Encode, Decode};
+use primitives::{Blake2Hasher, H256};
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{Header, NumberFor, SaturatedConversion};
 use substrate_executor::NativeExecutor;
@@ -495,62 +497,53 @@ impl<Components: components::Components> Service<Components> {
 			Components::RuntimeServices::start_rpc,
 		)
 	}
+}
 
-	/// Returns a reference to the config passed at initialization.
-	pub fn config(&self) -> &FactoryFullConfiguration<Components::Factory> {
-		&self.config
-	}
-
-	/// Returns a reference to the config passed at initialization.
-	///
-	/// > **Note**: This method is currently necessary because we extract some elements from the
-	/// >			configuration at the end of the service initialization. It is intended to be
-	/// >			removed.
-	pub fn config_mut(&mut self) -> &mut FactoryFullConfiguration<Components::Factory> {
-		&mut self.config
-	}
+/// Abstraction over a Substrate service.
+pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
+	Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send {
+	/// Type of block of this chain.
+	type Block: BlockT<Hash = H256>;
+	/// Backend storage for the client.
+	type Backend: 'static + client::backend::Backend<Self::Block, Blake2Hasher>;
+	/// How to execute calls towards the runtime.
+	type Executor: 'static + client::CallExecutor<Self::Block, Blake2Hasher> + Send + Sync + Clone;
+	/// API that the runtime provides.
+	type RuntimeApi: Send + Sync;
+	/// Configuration struct of the service.
+	type Config;
+	/// Chain selection algorithm.
+	type SelectChain;
+	/// API of the transaction pool.
+	type TransactionPoolApi: ChainApi;
+	/// Network service.
+	type NetworkService;
 
 	/// Get event stream for telemetry connection established events.
-	pub fn telemetry_on_connect_stream(&self) -> TelemetryOnConnectNotifications {
-		let (sink, stream) = mpsc::unbounded();
-		self._telemetry_on_connect_sinks.lock().push(sink);
-		stream
-	}
+	fn telemetry_on_connect_stream(&self) -> TelemetryOnConnectNotifications;
 
-	/// Return a shared instance of Telemetry (if enabled)
-	pub fn telemetry(&self) -> Option<tel::Telemetry> {
-		self._telemetry.as_ref().map(|t| t.clone())
-	}
+	/// Returns the configuration passed on construction.
+	fn config(&self) -> &Self::Config;
 
-	/// Returns the keystore instance.
-	pub fn keystore(&self) -> keystore::KeyStorePtr {
-		self.keystore.clone()
-	}
+	/// Returns the configuration passed on construction.
+	fn config_mut(&mut self) -> &mut Self::Config;
+
+	/// return a shared instance of Telemetry (if enabled)
+	fn telemetry(&self) -> Option<tel::Telemetry>;
 
 	/// Spawns a task in the background that runs the future passed as parameter.
-	pub fn spawn_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
-		let _ = self.to_spawn_tx.unbounded_send(Box::new(task));
-	}
+	fn spawn_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static);
 
 	/// Spawns a task in the background that runs the future passed as
 	/// parameter. The given task is considered essential, i.e. if it errors we
 	/// trigger a service exit.
-	pub fn spawn_essential_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
-		let essential_failed = self.essential_failed.clone();
-		let essential_task = Box::new(task.map_err(move |_| {
-			error!("Essential task failed. Shutting down service.");
-			essential_failed.store(true, Ordering::Relaxed);
-		}));
-
-		let _ = self.to_spawn_tx.unbounded_send(essential_task);
-	}
+	fn spawn_essential_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static);
 
 	/// Returns a handle for spawning tasks.
-	pub fn spawn_task_handle(&self) -> SpawnTaskHandle {
-		SpawnTaskHandle {
-			sender: self.to_spawn_tx.clone(),
-		}
-	}
+	fn spawn_task_handle(&self) -> SpawnTaskHandle;
+
+	/// Returns the keystore that stores keys.
+	fn keystore(&self) -> keystore::KeyStorePtr;
 
 	/// Starts an RPC query.
 	///
@@ -561,41 +554,107 @@ impl<Components: components::Components> Service<Components> {
 	///
 	/// If the request subscribes you to events, the `Sender` in the `RpcSession` object is used to
 	/// send back spontaneous events.
-	pub fn rpc_query(&self, mem: &RpcSession, request: &str)
-		-> impl Future<Item = Option<String>, Error = ()>
-	{
-		self.rpc_handlers.handle_request(request, mem.metadata.clone())
-	}
+	fn rpc_query(&self, mem: &RpcSession, request: &str) -> Box<dyn Future<Item = Option<String>, Error = ()> + Send>;
 
 	/// Get shared client instance.
-	pub fn client(&self) -> Arc<ComponentClient<Components>> {
+	fn client(&self) -> Arc<client::Client<Self::Backend, Self::Executor, Self::Block, Self::RuntimeApi>>;
+
+	/// Get clone of select chain.
+	fn select_chain(&self) -> Option<Self::SelectChain>;
+
+	/// Get shared network instance.
+	fn network(&self) -> Arc<Self::NetworkService>;
+
+	/// Returns a receiver that periodically receives a status of the network.
+	fn network_status(&self) -> mpsc::UnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)>;
+
+	/// Get shared transaction pool instance.
+	fn transaction_pool(&self) -> Arc<TransactionPool<Self::TransactionPoolApi>>;
+
+	/// Get a handle to a future that will resolve on exit.
+	fn on_exit(&self) -> ::exit_future::Exit;
+}
+
+impl<Components: components::Components> AbstractService for Service<Components>
+where FactoryFullConfiguration<Components::Factory>: Send {
+	type Block = ComponentBlock<Components>;
+	type Backend = <Components as components::Components>::Backend;
+	type Executor = <Components as components::Components>::Executor;
+	type RuntimeApi = <Components as components::Components>::RuntimeApi;
+	type Config = FactoryFullConfiguration<Components::Factory>;
+	type SelectChain = <Components as components::Components>::SelectChain;
+	type TransactionPoolApi = Components::TransactionPoolApi;
+	type NetworkService = components::NetworkService<Components>;
+
+	fn config(&self) -> &Self::Config {
+		&self.config
+	}
+
+	fn config_mut(&mut self) -> &mut Self::Config {
+		&mut self.config
+	}
+
+	fn telemetry_on_connect_stream(&self) -> TelemetryOnConnectNotifications {
+		let (sink, stream) = mpsc::unbounded();
+		self._telemetry_on_connect_sinks.lock().push(sink);
+		stream
+	}
+
+	fn telemetry(&self) -> Option<tel::Telemetry> {
+		self._telemetry.as_ref().map(|t| t.clone())
+	}
+
+	fn keystore(&self) -> keystore::KeyStorePtr {
+		self.keystore.clone()
+	}
+
+	fn spawn_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
+		let _ = self.to_spawn_tx.unbounded_send(Box::new(task));
+	}
+
+	fn spawn_essential_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
+		let essential_failed = self.essential_failed.clone();
+		let essential_task = Box::new(task.map_err(move |_| {
+			error!("Essential task failed. Shutting down service.");
+			essential_failed.store(true, Ordering::Relaxed);
+		}));
+
+		let _ = self.to_spawn_tx.unbounded_send(essential_task);
+	}
+
+	fn spawn_task_handle(&self) -> SpawnTaskHandle {
+		SpawnTaskHandle {
+			sender: self.to_spawn_tx.clone(),
+		}
+	}
+
+	fn rpc_query(&self, mem: &RpcSession, request: &str) -> Box<dyn Future<Item = Option<String>, Error = ()> + Send> {
+		Box::new(self.rpc_handlers.handle_request(request, mem.metadata.clone()))
+	}
+
+	fn client(&self) -> Arc<client::Client<Self::Backend, Self::Executor, Self::Block, Self::RuntimeApi>> {
 		self.client.clone()
 	}
 
-	/// Get clone of select chain.
-	pub fn select_chain(&self) -> Option<<Components as components::Components>::SelectChain> {
+	fn select_chain(&self) -> Option<Self::SelectChain> {
 		self.select_chain.clone()
 	}
 
-	/// Get shared network instance.
-	pub fn network(&self) -> Arc<components::NetworkService<Components>> {
+	fn network(&self) -> Arc<Self::NetworkService> {
 		self.network.clone()
 	}
 
-	/// Returns a receiver that periodically receives a status of the network.
-	pub fn network_status(&self) -> mpsc::UnboundedReceiver<(NetworkStatus<ComponentBlock<Components>>, NetworkState)> {
+	fn network_status(&self) -> mpsc::UnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)> {
 		let (sink, stream) = mpsc::unbounded();
 		self.network_status_sinks.lock().push(sink);
 		stream
 	}
 
-	/// Get shared transaction pool instance.
-	pub fn transaction_pool(&self) -> Arc<TransactionPool<Components::TransactionPoolApi>> {
+	fn transaction_pool(&self) -> Arc<TransactionPool<Self::TransactionPoolApi>> {
 		self.transaction_pool.clone()
 	}
 
-	/// Get a handle to a future that will resolve on exit.
-	pub fn on_exit(&self) -> ::exit_future::Exit {
+	fn on_exit(&self) -> ::exit_future::Exit {
 		self.exit.clone()
 	}
 }
@@ -644,6 +703,80 @@ impl<Components> Executor<Box<dyn Future<Item = (), Error = ()> + Send>>
 		} else {
 			Ok(())
 		}
+	}
+}
+
+impl<T> AbstractService for T
+where T: 'static + Deref + DerefMut + Future<Item = (), Error = Error> + Send +
+	Executor<Box<dyn Future<Item = (), Error = ()> + Send>>,
+	T::Target: AbstractService {
+	type Block = <<T as Deref>::Target as AbstractService>::Block;
+	type Backend = <<T as Deref>::Target as AbstractService>::Backend;
+	type Executor = <<T as Deref>::Target as AbstractService>::Executor;
+	type RuntimeApi = <<T as Deref>::Target as AbstractService>::RuntimeApi;
+	type Config = <<T as Deref>::Target as AbstractService>::Config;
+	type SelectChain = <<T as Deref>::Target as AbstractService>::SelectChain;
+	type TransactionPoolApi = <<T as Deref>::Target as AbstractService>::TransactionPoolApi;
+	type NetworkService = <<T as Deref>::Target as AbstractService>::NetworkService;
+
+	fn telemetry_on_connect_stream(&self) -> TelemetryOnConnectNotifications {
+		(**self).telemetry_on_connect_stream()
+	}
+
+	fn config(&self) -> &Self::Config {
+		(**self).config()
+	}
+
+	fn config_mut(&mut self) -> &mut Self::Config {
+		(&mut **self).config_mut()
+	}
+
+	fn telemetry(&self) -> Option<tel::Telemetry> {
+		(**self).telemetry()
+	}
+
+	fn spawn_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
+		(**self).spawn_task(task)
+	}
+
+	fn spawn_essential_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
+		(**self).spawn_essential_task(task)
+	}
+
+	fn spawn_task_handle(&self) -> SpawnTaskHandle {
+		(**self).spawn_task_handle()
+	}
+
+	fn keystore(&self) -> keystore::KeyStorePtr {
+		(**self).keystore()
+	}
+
+	fn rpc_query(&self, mem: &RpcSession, request: &str) -> Box<dyn Future<Item = Option<String>, Error = ()> + Send> {
+		(**self).rpc_query(mem, request)
+	}
+
+	fn client(&self) -> Arc<client::Client<Self::Backend, Self::Executor, Self::Block, Self::RuntimeApi>> {
+		(**self).client()
+	}
+
+	fn select_chain(&self) -> Option<Self::SelectChain> {
+		(**self).select_chain()
+	}
+
+	fn network(&self) -> Arc<Self::NetworkService> {
+		(**self).network()
+	}
+
+	fn network_status(&self) -> mpsc::UnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)> {
+		(**self).network_status()
+	}
+
+	fn transaction_pool(&self) -> Arc<TransactionPool<Self::TransactionPoolApi>> {
+		(**self).transaction_pool()
+	}
+
+	fn on_exit(&self) -> ::exit_future::Exit {
+		(**self).on_exit()
 	}
 }
 
