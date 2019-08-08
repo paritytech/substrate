@@ -28,8 +28,7 @@
 //! Creating a [`Client`] is done by calling the `new` method and passing to it a
 //! [`Backend`](backend::Backend) and an [`Executor`](CallExecutor).
 //!
-//! The former is typically provided by the `substrate-client-db` crate, but [`in_mem::Backend`]
-//! can be used for testing purposes.
+//! The former is typically provided by the `substrate-client-db` crate.
 //!
 //! The latter typically requires passing one of:
 //!
@@ -63,7 +62,8 @@
 //! 	backend.clone(),
 //! 	LocalCallExecutor::new(
 //! 		backend.clone(),
-//! 		NativeExecutor::<LocalExecutor>::new(None)
+//! 		NativeExecutor::<LocalExecutor>::new(None),
+//! 		None,
 //!		),
 //! 	// This parameter provides the storage for the chain genesis.
 //! 	<(StorageOverlay, ChildrenStorageOverlay)>::default(),
@@ -115,7 +115,7 @@ pub use crate::client::{
 	new_in_mem,
 	BlockBody, BlockStatus, ImportNotifications, FinalityNotifications, BlockchainEvents,
 	BlockImportNotification, Client, ClientInfo, ExecutionStrategies, FinalityNotification,
-	LongestChain,
+	LongestChain, BlockOf, ProvideUncles,
 	utils,
 };
 #[cfg(feature = "std")]

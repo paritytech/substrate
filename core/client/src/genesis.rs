@@ -40,7 +40,7 @@ pub fn construct_genesis_block<
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use parity_codec::{Encode, Decode, Joiner};
+	use codec::{Encode, Decode, Joiner};
 	use executor::native_executor_instance;
 	use state_machine::{self, OverlayedChanges, ExecutionStrategy, InMemoryChangesTrieStorage};
 	use state_machine::backend::InMemory;
@@ -71,11 +71,12 @@ mod tests {
 		state_root: Hash,
 		txs: Vec<Transfer>
 	) -> (Vec<u8>, Hash) {
-		use trie::ordered_trie_root;
+		use trie::{TrieConfiguration, trie_types::Layout};
 
 		let transactions = txs.into_iter().map(|tx| tx.into_signed_tx()).collect::<Vec<_>>();
 
-		let extrinsics_root = ordered_trie_root::<Blake2Hasher, _, _>(transactions.iter().map(Encode::encode)).into();
+		let iter = transactions.iter().map(Encode::encode);
+		let extrinsics_root = Layout::<Blake2Hasher>::ordered_trie_root(iter).into();
 
 		let mut header = Header {
 			parent_hash,
@@ -95,6 +96,7 @@ mod tests {
 			&executor(),
 			"Core_initialize_block",
 			&header.encode(),
+			None,
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
@@ -108,6 +110,7 @@ mod tests {
 				&executor(),
 				"BlockBuilder_apply_extrinsic",
 				&tx.encode(),
+				None,
 			).execute(
 				ExecutionStrategy::NativeElseWasm,
 			).unwrap();
@@ -121,6 +124,7 @@ mod tests {
 			&executor(),
 			"BlockBuilder_finalize_block",
 			&[],
+			None,
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
@@ -147,7 +151,7 @@ mod tests {
 	#[test]
 	fn construct_genesis_should_work_with_native() {
 		let mut storage = GenesisConfig::new(false,
-			vec![Sr25519Keyring::One.into(), Sr25519Keyring::Two.into()],
+			vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			1000,
 			None,
@@ -169,6 +173,7 @@ mod tests {
 			&executor(),
 			"Core_execute_block",
 			&b1data,
+			None,
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
@@ -177,7 +182,7 @@ mod tests {
 	#[test]
 	fn construct_genesis_should_work_with_wasm() {
 		let mut storage = GenesisConfig::new(false,
-			vec![Sr25519Keyring::One.into(), Sr25519Keyring::Two.into()],
+			vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			1000,
 			None,
@@ -199,6 +204,7 @@ mod tests {
 			&executor(),
 			"Core_execute_block",
 			&b1data,
+			None,
 		).execute(
 			ExecutionStrategy::AlwaysWasm,
 		).unwrap();
@@ -207,7 +213,7 @@ mod tests {
 	#[test]
 	fn construct_genesis_with_bad_transaction_should_panic() {
 		let mut storage = GenesisConfig::new(false,
-			vec![Sr25519Keyring::One.into(), Sr25519Keyring::Two.into()],
+			vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			68,
 			None,
@@ -229,6 +235,7 @@ mod tests {
 			&executor(),
 			"Core_execute_block",
 			&b1data,
+			None,
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		);

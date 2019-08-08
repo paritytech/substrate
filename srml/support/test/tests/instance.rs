@@ -45,7 +45,7 @@ mod module1 {
 		type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
 		type Origin: From<Origin<Self, I>>;
 		type SomeParameter: Get<u32>;
-		type GenericType: Default + Clone + parity_codec::Codec;
+		type GenericType: Default + Clone + codec::Codec;
 	}
 
 	srml_support::decl_module! {
@@ -140,7 +140,7 @@ mod module2 {
 		trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Module2 {
 			pub Value config(value): T::Amount;
 			pub Map config(map): map u64 => u64;
-			pub LinkedMap config(linked_map): linked_map u64 => u64;
+			pub LinkedMap config(linked_map): linked_map u64 => Vec<u8>;
 			pub DoubleMap config(double_map): double_map u64, blake2_256(u64) => u64;
 		}
 	}
@@ -288,13 +288,13 @@ fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		module2: Some(module2::GenesisConfig {
 			value: 4,
 			map: vec![(0, 0)],
-			linked_map: vec![(0, 0)],
+			linked_map: vec![(0, vec![0])],
 			double_map: vec![(0, 0, 0)],
 		}),
 		module2_Instance1: Some(module2::GenesisConfig {
 			value: 4,
 			map: vec![(0, 0)],
-			linked_map: vec![(0, 0)],
+			linked_map: vec![(0, vec![0])],
 			double_map: vec![(0, 0, 0)],
 		}),
 		module2_Instance2: None,
@@ -362,15 +362,23 @@ fn storage_with_instance_basic_operation() {
 
 		assert_eq!(LinkedMap::exists(0), true);
 		assert_eq!(LinkedMap::exists(key), false);
-		LinkedMap::insert(key, 1);
-		assert_eq!(LinkedMap::get(key), 1);
-		assert_eq!(LinkedMap::take(key), 1);
-		assert_eq!(LinkedMap::get(key), 0);
-		LinkedMap::mutate(key, |a| *a=2);
-		assert_eq!(LinkedMap::get(key), 2);
+		LinkedMap::insert(key, vec![1]);
+		assert_eq!(LinkedMap::enumerate().count(), 2);
+		assert_eq!(LinkedMap::get(key), vec![1]);
+		assert_eq!(LinkedMap::take(key), vec![1]);
+		assert_eq!(LinkedMap::enumerate().count(), 1);
+		assert_eq!(LinkedMap::get(key), vec![]);
+		LinkedMap::mutate(key, |a| *a=vec![2]);
+		assert_eq!(LinkedMap::enumerate().count(), 2);
+		assert_eq!(LinkedMap::get(key), vec![2]);
 		LinkedMap::remove(key);
+		assert_eq!(LinkedMap::enumerate().count(), 1);
 		assert_eq!(LinkedMap::exists(key), false);
-		assert_eq!(LinkedMap::get(key), 0);
+		assert_eq!(LinkedMap::get(key), vec![]);
+		assert_eq!(LinkedMap::exists(key), false);
+		assert_eq!(LinkedMap::enumerate().count(), 1);
+		LinkedMap::insert_ref(key, &vec![1]);
+		assert_eq!(LinkedMap::enumerate().count(), 2);
 
 		let key1 = 1;
 		let key2 = 1;
@@ -428,7 +436,7 @@ const EXPECTED_METADATA: StorageMetadata = StorageMetadata {
 				ty: StorageEntryType::Map {
 					hasher: StorageHasher::Blake2_256,
 					key: DecodeDifferent::Encode("u64"),
-					value: DecodeDifferent::Encode("u64"),
+					value: DecodeDifferent::Encode("Vec<u8>"),
 					is_linked: true,
 				},
 				default: DecodeDifferent::Encode(

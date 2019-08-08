@@ -17,7 +17,7 @@
 //! Schema for BABE epoch changes in the aux-db.
 
 use log::info;
-use parity_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
@@ -32,10 +32,12 @@ fn load_decode<B, T>(backend: &B, key: &[u8]) -> ClientResult<Option<T>>
 		B: AuxStore,
 		T: Decode,
 {
-	let corrupt = || ClientError::Backend(format!("BABE DB is corrupted.")).into();
+	let corrupt = |e: codec::Error| {
+		ClientError::Backend(format!("BABE DB is corrupted. Decode error: {}", e.what())).into()
+	};
 	match backend.get_aux(key)? {
 		None => Ok(None),
-		Some(t) => T::decode(&mut &t[..]).ok_or_else(corrupt).map(Some)
+		Some(t) => T::decode(&mut &t[..]).map(Some).map_err(corrupt)
 	}
 }
 

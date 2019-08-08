@@ -9,7 +9,7 @@ cli = { package = "substrate-cli", path = "../../core/cli" }
 client = { package = "substrate-client", path = "../../core/client" }
 consensus_common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 log = "0.4"
-parity-codec = { version = "4.1.1", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 primitives = { package = "substrate-primitives", path = "../../core/primitives", default-features = false }
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 substrate-service = { path = "../../core/service" }
@@ -17,6 +17,6 @@ substrate-service = { path = "../../core/service" }
 [features]
 default = ["std"]
 std = [
-	"parity-codec/std",
+	"codec/std",
 	"sr-primitives/std",
 ]

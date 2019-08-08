@@ -168,10 +168,13 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 		} = instance_opts;
 
 		let final_prefix = if let Some(instance) = instance {
-			let const_name = syn::Ident::new(&format!("{}{}", PREFIX_FOR, name.to_string()), proc_macro2::Span::call_site());
-			quote!{ #instance::#const_name.as_bytes() }
+			let const_name = syn::Ident::new(
+				&format!("{}{}", PREFIX_FOR, name.to_string()),
+				proc_macro2::Span::call_site(),
+			);
+			quote! { #instance::#const_name.as_bytes() }
 		} else {
-			quote!{ #prefix.as_bytes() }
+			quote! { #prefix.as_bytes() }
 		};
 
 		let trait_required = ext::type_contains_ident(value_type, traitinstance)
@@ -291,7 +294,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			)
 		};
 
-		// generator for linked_map
+		// generator for linked map
 		quote! {
 			#( #[ #attrs ] )*
 			#visibility struct #name<#struct_trait>(
