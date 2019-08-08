@@ -12,7 +12,7 @@ use node_template_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi, WASM
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
 	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor,
-	error::{Error as ServiceError},
+	error::{Error as ServiceError}, AbstractService,
 };
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use inherents::InherentDataProviders;
