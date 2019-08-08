@@ -1248,26 +1248,16 @@ mod tests {
 	// dummy voter set state
 	fn voter_set_state() -> SharedVoterSetState<Block> {
 		use crate::authorities::AuthoritySet;
-		use crate::environment::{CompletedRound, CompletedRounds, HasVoted, VoterSetState};
-		use grandpa::round::State as RoundState;
+		use crate::environment::VoterSetState;
 		use primitives::H256;
 
-		let state = RoundState::genesis((H256::zero(), 0));
-		let base = state.prevote_ghost.unwrap();
+		let base = (H256::zero(), 0);
 		let voters = AuthoritySet::genesis(Vec::new());
-		let set_state = VoterSetState::Live {
-			completed_rounds: CompletedRounds::new(
-				CompletedRound {
-					state,
-					number: 0,
-					votes: Vec::new(),
-					base,
-				},
-				0,
-				&voters,
-			),
-			current_round: HasVoted::No,
-		};
+		let set_state = VoterSetState::live(
+			0,
+			&voters,
+			base,
+		);
 
 		set_state.into()
 	}
@@ -1542,16 +1532,19 @@ mod tests {
 		let set_state: SharedVoterSetState<Block> = {
 			let mut completed_rounds = voter_set_state().read().completed_rounds();
 
-			assert!(completed_rounds.push(environment::CompletedRound {
+			completed_rounds.push(environment::CompletedRound {
 				number: 1,
 				state: grandpa::round::State::genesis(Default::default()),
 				base: Default::default(),
 				votes: Default::default(),
-			}));
+			});
+
+			let mut current_rounds = environment::CurrentRounds::new();
+			current_rounds.insert(2, environment::HasVoted::No);
 
 			let set_state = environment::VoterSetState::<Block>::Live {
 				completed_rounds,
-				current_round: environment::HasVoted::No,
+				current_rounds,
 			};
 
 			set_state.into()
