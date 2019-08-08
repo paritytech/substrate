@@ -18,7 +18,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::collections::btree_map::Entry;
-use parity_codec::Decode;
+use codec::Decode;
 use hash_db::Hasher;
 use num_traits::One;
 use crate::backend::Backend;
@@ -240,8 +240,8 @@ fn prepare_digest_input<'a, S, H, Number>(
 					);
 
 					trie_storage.for_key_values_with_prefix(&child_prefix, |key, value| {
-						if let Some(InputKey::ChildIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
-							if let Some(value) = <Vec<u8>>::decode(&mut &value[..]) {
+						if let Ok(InputKey::ChildIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
+							if let Ok(value) = <Vec<u8>>::decode(&mut &value[..]) {
 								let mut trie_root = <H as Hasher>::Out::default();
 								trie_root.as_mut().copy_from_slice(&value[..]);
 								children_roots.insert(trie_key.storage_key, trie_root);
@@ -251,12 +251,12 @@ fn prepare_digest_input<'a, S, H, Number>(
 
 
 					trie_storage.for_keys_with_prefix(&extrinsic_prefix, |key|
-						if let Some(InputKey::ExtrinsicIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
+						if let Ok(InputKey::ExtrinsicIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
 							insert_to_map(&mut map, trie_key.key);
 						});
 
 					trie_storage.for_keys_with_prefix(&digest_prefix, |key|
-						if let Some(InputKey::DigestIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
+						if let Ok(InputKey::DigestIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
 							insert_to_map(&mut map, trie_key.key);
 						});
 				}
@@ -274,12 +274,12 @@ fn prepare_digest_input<'a, S, H, Number>(
 						trie_root,
 					);
 					trie_storage.for_keys_with_prefix(&extrinsic_prefix, |key|
-						if let Some(InputKey::ExtrinsicIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
+						if let Ok(InputKey::ExtrinsicIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
 							insert_to_map(&mut map, trie_key.key);
 						});
 
 					trie_storage.for_keys_with_prefix(&digest_prefix, |key|
-						if let Some(InputKey::DigestIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
+						if let Ok(InputKey::DigestIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
 							insert_to_map(&mut map, trie_key.key);
 						});
 				}
@@ -296,7 +296,7 @@ fn prepare_digest_input<'a, S, H, Number>(
 
 #[cfg(test)]
 mod test {
-	use parity_codec::Encode;
+	use codec::Encode;
 	use primitives::Blake2Hasher;
 	use primitives::storage::well_known_keys::{EXTRINSIC_INDEX};
 	use crate::backend::InMemory;

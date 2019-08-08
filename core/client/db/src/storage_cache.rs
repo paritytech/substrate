@@ -21,7 +21,7 @@ use std::sync::Arc;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use linked_hash_map::{LinkedHashMap, Entry};
 use hash_db::Hasher;
-use runtime_primitives::traits::{Block, Header};
+use sr_primitives::traits::{Block as BlockT, Header};
 use state_machine::{backend::Backend as StateBackend, TrieBackend};
 use log::trace;
 use super::{StorageCollection, ChildStorageCollection};
@@ -33,7 +33,7 @@ type ChildStorageKey = (Vec<u8>, Vec<u8>);
 type StorageValue = Vec<u8>;
 
 /// Shared canonical state cache.
-pub struct Cache<B: Block, H: Hasher> {
+pub struct Cache<B: BlockT, H: Hasher> {
 	/// Storage cache. `None` indicates that key is known to be missing.
 	lru_storage: LRUMap<StorageKey, Option<StorageValue>>,
 	/// Storage hashes cache. `None` indicates that key is known to be missing.
@@ -105,7 +105,7 @@ impl<K: EstimateSize + Eq + StdHash, V: EstimateSize> LRUMap<K, V> {
 		// TODO assert k v size fit into limit?? to avoid insert remove?
 		match lmap.entry(k) {
 			Entry::Occupied(mut entry) => {
-				// note that in this case we are not running pure lru as 
+				// note that in this case we are not running pure lru as
 				// it would require to remove first
 				*storage_used_size -= entry.get().estimate_size();
 				entry.insert(v);
@@ -143,13 +143,72 @@ impl<K: EstimateSize + Eq + StdHash, V: EstimateSize> LRUMap<K, V> {
 	}
 
 }
- 
-impl<B: Block, H: Hasher> Cache<B, H> {
+
+impl<B: BlockT, H: Hasher> Cache<B, H> {
 	/// Returns the used memory size of the storage cache in bytes.
 	pub fn used_storage_cache_size(&self) -> usize {
 		self.lru_storage.used_size()
 			+ self.lru_child_storage.used_size()
 			//  ignore small hashes storage and self.lru_hashes.used_size()
+	}
+
+	/// Synchronize the shared cache with the best block state.
+	/// This function updates the shared cache by removing entries
+	/// that are invalidated by chain reorganization. It should be
+	/// be called when chain reorg happens without importing a new block.
+	pub fn sync(&mut self, enacted: &[B::Hash], retracted: &[B::Hash]) {
+		trace!("Syncing shared cache, enacted = {:?}, retracted = {:?}", enacted, retracted);
+
+		// Purge changes from re-enacted and retracted blocks.
+		// Filter out commiting block if any.
+		let mut clear = false;
+		for block in enacted {
+			clear = clear || {
+				if let Some(ref mut m) = self.modifications.iter_mut().find(|m| &m.hash == block) {
+					trace!("Reverting enacted block {:?}", block);
+					m.is_canon = true;
+					for a in &m.storage {
+						trace!("Reverting enacted key {:?}", a);
+						self.lru_storage.remove(a);
+					}
+					for a in &m.child_storage {
+						trace!("Reverting enacted child key {:?}", a);
+						self.lru_child_storage.remove(a);
+					}
+					false
+				} else {
+					true
+				}
+			};
+		}
+
+		for block in retracted {
+			clear = clear || {
+				if let Some(ref mut m) = self.modifications.iter_mut().find(|m| &m.hash == block) {
+					trace!("Retracting block {:?}", block);
+					m.is_canon = false;
+					for a in &m.storage {
+						trace!("Retracted key {:?}", a);
+						self.lru_storage.remove(a);
+					}
+					for a in &m.child_storage {
+						trace!("Retracted child key {:?}", a);
+						self.lru_child_storage.remove(a);
+					}
+					false
+				} else {
+					true
+				}
+			};
+		}
+		if clear {
+			// We don't know anything about the block; clear everything
+			trace!("Wiping cache");
+			self.lru_storage.clear();
+			self.lru_child_storage.clear();
+			self.lru_hashes.clear();
+			self.modifications.clear();
+		}
 	}
 }
 
@@ -159,7 +218,7 @@ pub type SharedCache<B, H> = Arc<Mutex<Cache<B, H>>>;
 const FIX_LRU_HASH_SIZE: usize = 65_536;
 
 /// Create a new shared cache instance with given max memory usage.
-pub fn new_shared_cache<B: Block, H: Hasher>(
+pub fn new_shared_cache<B: BlockT, H: Hasher>(
 	shared_cache_size: usize,
 	child_ratio: (usize, usize),
 ) -> SharedCache<B, H> {
@@ -202,7 +261,7 @@ struct LocalCache<H: Hasher> {
 }
 
 /// Cache changes.
-pub struct CacheChanges<H: Hasher, B: Block> {
+pub struct CacheChanges<H: Hasher, B: BlockT> {
 	/// Shared canonical state cache.
 	shared_cache: SharedCache<B, H>,
 	/// Local cache of values for this state.
@@ -219,14 +278,14 @@ pub struct CacheChanges<H: Hasher, B: Block> {
 /// For canonical instances local cache is accumulated and applied
 /// in `sync_cache` along with the change overlay.
 /// For non-canonical clones local cache and changes are dropped.
-pub struct CachingState<H: Hasher, S: StateBackend<H>, B: Block> {
+pub struct CachingState<H: Hasher, S: StateBackend<H>, B: BlockT> {
 	/// Backing state.
 	state: S,
 	/// Cache data.
 	pub cache: CacheChanges<H, B>
 }
 
-impl<H: Hasher, B: Block> CacheChanges<H, B> {
+impl<H: Hasher, B: BlockT> CacheChanges<H, B> {
 	/// Propagate local cache into the shared cache and synchronize
 	/// the shared cache with the best block state.
 	/// This function updates the shared cache by removing entries
@@ -247,58 +306,12 @@ impl<H: Hasher, B: Block> CacheChanges<H, B> {
 		let is_best = is_best();
 		trace!("Syncing cache, id = (#{:?}, {:?}), parent={:?}, best={}", commit_number, commit_hash, self.parent_hash, is_best);
 		let cache = &mut *cache;
-
-		// Purge changes from re-enacted and retracted blocks.
-		// Filter out commiting block if any.
-		let mut clear = false;
-		for block in enacted.iter().filter(|h| commit_hash.as_ref().map_or(true, |p| *h != p)) {
-			clear = clear || {
-				if let Some(ref mut m) = cache.modifications.iter_mut().find(|m| &m.hash == block) {
-					trace!("Reverting enacted block {:?}", block);
-					m.is_canon = true;
-					for a in &m.storage {
-						trace!("Reverting enacted key {:?}", a);
-						cache.lru_storage.remove(a);
-					}
-					for a in &m.child_storage {
-						trace!("Reverting enacted child key {:?}", a);
-						cache.lru_child_storage.remove(a);
-					}
-					false
-				} else {
-					true
-				}
-			};
-		}
-
-		for block in retracted {
-			clear = clear || {
-				if let Some(ref mut m) = cache.modifications.iter_mut().find(|m| &m.hash == block) {
-					trace!("Retracting block {:?}", block);
-					m.is_canon = false;
-					for a in &m.storage {
-						trace!("Retracted key {:?}", a);
-						cache.lru_storage.remove(a);
-					}
-					for a in &m.child_storage {
-						trace!("Retracted child key {:?}", a);
-						cache.lru_child_storage.remove(a);
-					}
-					false
-				} else {
-					true
-				}
-			};
-		}
-		if clear {
-			// We don't know anything about the block; clear everything
-			trace!("Wiping cache");
-			cache.lru_storage.clear();
-			cache.lru_child_storage.clear();
-			cache.lru_hashes.clear();
-			cache.modifications.clear();
-		}
-
+		let enacted: Vec<_> = enacted
+			.iter()
+			.filter(|h| commit_hash.as_ref().map_or(true, |p| *h != p))
+			.cloned()
+			.collect();
+		cache.sync(&enacted, retracted);
 		// Propagate cache only if committing on top of the latest canonical state
 		// blocks are ordered by number and only one block with a given number is marked as canonical
 		// (contributed to canonical state cache)
@@ -374,7 +387,7 @@ impl<H: Hasher, B: Block> CacheChanges<H, B> {
 
 }
 
-impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
+impl<H: Hasher, S: StateBackend<H>, B: BlockT> CachingState<H, S, B> {
 	/// Create a new instance wrapping generic State and shared cache.
 	pub fn new(state: S, shared_cache: SharedCache<B, H>, parent_hash: Option<B::Hash>) -> CachingState<H, S, B> {
 		CachingState {
@@ -447,7 +460,7 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 	}
 }
 
-impl<H: Hasher, S: StateBackend<H>, B:Block> StateBackend<H> for CachingState<H, S, B> {
+impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<H, S, B> {
 	type Error = S::Error;
 	type Transaction = S::Transaction;
 	type TrieBackendStorage = S::TrieBackendStorage;
@@ -567,7 +580,7 @@ impl<H: Hasher, S: StateBackend<H>, B:Block> StateBackend<H> for CachingState<H,
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_primitives::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
+	use sr_primitives::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
 	use state_machine::backend::InMemory;
 	use primitives::Blake2Hasher;
 

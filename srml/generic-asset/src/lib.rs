@@ -151,9 +151,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use parity_codec::{Decode, Encode, HasCompact, Input, Output};
+use codec::{Decode, Encode, HasCompact, Input, Output, Error};
 
-use primitives::traits::{
+use sr_primitives::traits::{
 	CheckedAdd, CheckedSub, MaybeSerializeDebug, Member, One, Saturating, SimpleArithmetic, Zero, Bounded
 };
 
@@ -284,10 +284,12 @@ impl<AccountId: Encode> Encode for PermissionVersions<AccountId> {
 	}
 }
 
+impl<AccountId: Encode> codec::EncodeLike for PermissionVersions<AccountId> {}
+
 impl<AccountId: Decode> Decode for PermissionVersions<AccountId> {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+	fn decode<I: Input>(input: &mut I) -> core::result::Result<Self, Error> {
 		let version = PermissionVersionNumber::decode(input)?;
-		Some(
+		Ok(
 			match version {
 				PermissionVersionNumber::V1 => PermissionVersions::V1(Decode::decode(input)?)
 			}
@@ -336,7 +338,7 @@ decl_module! {
 
 			<NextAssetId<T>>::put(next_id);
 			<TotalIssuance<T>>::insert(id, &options.initial_issuance);
-			<FreeBalance<T>>::insert(&id, &origin, options.initial_issuance);
+			<FreeBalance<T>>::insert(&id, &origin, &options.initial_issuance);
 			<Permissions<T>>::insert(&id, permissions);
 
 			Self::deposit_event(RawEvent::Created(id, origin, options));
@@ -477,14 +479,14 @@ decl_storage! {
 		config(endowed_accounts): Vec<T::AccountId>;
 
 		build(|
-			storage: &mut primitives::StorageOverlay,
-			_: &mut primitives::ChildrenStorageOverlay,
+			storage: &mut sr_primitives::StorageOverlay,
+			_: &mut sr_primitives::ChildrenStorageOverlay,
 			config: &GenesisConfig<T>| {
 			config.assets.iter().for_each(|asset_id| {
 				config.endowed_accounts.iter().for_each(|account_id| {
 					storage.insert(
 						<FreeBalance<T>>::key_for(asset_id, account_id),
-						<T::Balance as parity_codec::Encode>::encode(&config.initial_balance)
+						<T::Balance as codec::Encode>::encode(&config.initial_balance)
 					);
 				});
 			});
@@ -560,7 +562,7 @@ impl<T: Trait> Module<T> {
 		let permissions: PermissionVersions<T::AccountId> = options.permissions.clone().into();
 
 		<TotalIssuance<T>>::insert(asset_id, &options.initial_issuance);
-		<FreeBalance<T>>::insert(&asset_id, &account_id, options.initial_issuance);
+		<FreeBalance<T>>::insert(&asset_id, &account_id, &options.initial_issuance);
 		<Permissions<T>>::insert(&asset_id, permissions);
 
 		Self::deposit_event(RawEvent::Created(asset_id, account_id, options));
@@ -768,13 +770,13 @@ impl<T: Trait> Module<T> {
 	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
 	/// the caller will do this.
 	fn set_reserved_balance(asset_id: &T::AssetId, who: &T::AccountId, balance: T::Balance) {
-		<ReservedBalance<T>>::insert(asset_id, who, balance);
+		<ReservedBalance<T>>::insert(asset_id, who, &balance);
 	}
 
 	/// NOTE: LOW-LEVEL: This will not attempt to maintain total issuance. It is expected that
 	/// the caller will do this.
 	fn set_free_balance(asset_id: &T::AssetId, who: &T::AccountId, balance: T::Balance) {
-		<FreeBalance<T>>::insert(asset_id, who, balance);
+		<FreeBalance<T>>::insert(asset_id, who, &balance);
 	}
 
 	fn set_lock(
@@ -1048,6 +1050,7 @@ impl<T: Subtrait> PartialEq for ElevatedTrait<T> {
 impl<T: Subtrait> Eq for ElevatedTrait<T> {}
 impl<T: Subtrait> system::Trait for ElevatedTrait<T> {
 	type Origin = T::Origin;
+	type Call = T::Call;
 	type Index = T::Index;
 	type BlockNumber = T::BlockNumber;
 	type Hash = T::Hash;
@@ -1056,6 +1059,10 @@ impl<T: Subtrait> system::Trait for ElevatedTrait<T> {
 	type Lookup = T::Lookup;
 	type Header = T::Header;
 	type Event = ();
+	type MaximumBlockWeight = T::MaximumBlockWeight;
+	type MaximumBlockLength = T::MaximumBlockLength;
+	type AvailableBlockRatio = T::AvailableBlockRatio;
+	type WeightMultiplierUpdate = ();
 	type BlockHashCount = T::BlockHashCount;
 }
 impl<T: Subtrait> Trait for ElevatedTrait<T> {

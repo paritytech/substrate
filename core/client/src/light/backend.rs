@@ -21,9 +21,9 @@ use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 use parking_lot::{RwLock, Mutex};
 
-use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
+use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use state_machine::{Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState};
-use runtime_primitives::traits::{Block as BlockT, NumberFor, Zero, Header};
+use sr_primitives::traits::{Block as BlockT, NumberFor, Zero, Header};
 use crate::in_mem::{self, check_genesis_storage};
 use crate::backend::{
 	AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState,

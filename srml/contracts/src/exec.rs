@@ -21,7 +21,7 @@ use crate::gas::{Gas, GasMeter, Token, approx_gas_for_balance};
 use crate::rent;
 
 use rstd::prelude::*;
-use runtime_primitives::traits::{Bounded, CheckedAdd, CheckedSub, Zero};
+use sr_primitives::traits::{Bounded, CheckedAdd, CheckedSub, Zero};
 use srml_support::traits::{WithdrawReason, Currency};
 use timestamp;
 
@@ -61,10 +61,9 @@ pub trait Ext {
 	/// was deleted.
 	fn get_storage(&self, key: &StorageKey) -> Option<Vec<u8>>;
 
-	/// Sets the storage entry by the given key to the specified value.
-	///
-	/// If `value` is `None` then the storage entry is deleted.
-	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>);
+	/// Sets the storage entry by the given key to the specified value. If `value` is `None` then
+	/// the storage entry is deleted. Returns an Err if the value size is too large.
+	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) -> Result<(), &'static str>;
 
 	/// Instantiate a contract from the given code.
 	///
@@ -90,6 +89,15 @@ pub trait Ext {
 
 	/// Notes a call dispatch.
 	fn note_dispatch_call(&mut self, call: CallOf<Self::T>);
+
+	/// Notes a restoration request.
+	fn note_restore_to(
+		&mut self,
+		dest: AccountIdOf<Self::T>,
+		code_hash: CodeHash<Self::T>,
+		rent_allowance: BalanceOf<Self::T>,
+		delta: Vec<StorageKey>,
+	);
 
 	/// Returns a reference to the account id of the caller.
 	fn caller(&self) -> &AccountIdOf<Self::T>;
@@ -124,6 +132,9 @@ pub trait Ext {
 
 	/// Returns the current block number.
 	fn block_number(&self) -> BlockNumberOf<Self::T>;
+
+	/// Returns the maximum allowed size of a storage item.
+	fn max_value_size(&self) -> u32;
 }
 
 /// Loader is a companion of the `Vm` trait. It loads an appropriate abstract
@@ -225,7 +236,7 @@ pub trait Vm<T: Trait> {
 	fn execute<E: Ext<T = T>>(
 		&self,
 		exec: &Self::Executable,
-		ext: &mut E,
+		ext: E,
 		input_data: &[u8],
 		empty_output_buf: EmptyOutputBuf,
 		gas_meter: &mut GasMeter<T>,
@@ -252,16 +263,46 @@ impl<T: Trait> Token<T> for ExecFeeToken {
 	}
 }
 
+#[cfg_attr(any(feature = "std", test), derive(Debug, PartialEq, Eq, Clone))]
+pub enum DeferredAction<T: Trait> {
+	DepositEvent {
+		/// A list of topics this event will be deposited with.
+		topics: Vec<T::Hash>,
+		/// The event to deposit.
+		event: Event<T>,
+	},
+	DispatchRuntimeCall {
+		/// The account id of the contract who dispatched this call.
+		origin: T::AccountId,
+		/// The call to dispatch.
+		call: <T as Trait>::Call,
+	},
+	RestoreTo {
+		/// The account id of the contract which is removed during the restoration and transfers
+		/// its storage to the restored contract.
+		donor: T::AccountId,
+		/// The account id of the restored contract.
+		dest: T::AccountId,
+		/// The code hash of the restored contract.
+		code_hash: CodeHash<T>,
+		/// The initial rent allowance to set.
+		rent_allowance: BalanceOf<T>,
+		/// The keys to delete upon restoration.
+		delta: Vec<StorageKey>,
+	},
+}
+
 pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
 	pub self_account: T::AccountId,
 	pub self_trie_id: Option<TrieId>,
 	pub overlay: OverlayAccountDb<'a, T>,
 	pub depth: usize,
-	pub events: Vec<IndexedEvent<T>>,
-	pub calls: Vec<(T::AccountId, T::Call)>,
+	pub deferred: Vec<DeferredAction<T>>,
 	pub config: &'a Config<T>,
 	pub vm: &'a V,
 	pub loader: &'a L,
+	pub timestamp: T::Moment,
+	pub block_number: T::BlockNumber,
 }
 
 impl<'a, T, E, V, L> ExecutionContext<'a, T, V, L>
@@ -280,27 +321,29 @@ where
 			self_account: origin,
 			overlay: OverlayAccountDb::<T>::new(&DirectAccountDb),
 			depth: 0,
-			events: Vec::new(),
-			calls: Vec::new(),
+			deferred: Vec::new(),
 			config: &cfg,
 			vm: &vm,
 			loader: &loader,
+			timestamp: <timestamp::Module<T>>::now(),
+			block_number: <system::Module<T>>::block_number(),
 		}
 	}
 
-	fn nested(&self, overlay: OverlayAccountDb<'a, T>, dest: T::AccountId, trie_id: Option<TrieId>)
-		-> Self
+	fn nested<'b, 'c: 'b>(&'c self, dest: T::AccountId, trie_id: Option<TrieId>)
+		-> ExecutionContext<'b, T, V, L>
 	{
 		ExecutionContext {
 			self_trie_id: trie_id,
 			self_account: dest,
-			overlay,
+			overlay: OverlayAccountDb::new(&self.overlay),
 			depth: self.depth + 1,
-			events: Vec::new(),
-			calls: Vec::new(),
+			deferred: Vec::new(),
 			config: self.config,
 			vm: self.vm,
 			loader: self.loader,
+			timestamp: self.timestamp.clone(),
+			block_number: self.block_number.clone(),
 		}
 	}
 
@@ -334,54 +377,41 @@ where
 			return Err("contract has been evicted");
 		};
 
-		let mut output_data = Vec::new();
+		let caller = self.self_account.clone();
+		let dest_trie_id = contract_info.and_then(|i| i.as_alive().map(|i| i.trie_id.clone()));
 
-		let (change_set, events, calls) = {
-			let mut nested = self.nested(
-				OverlayAccountDb::new(&self.overlay),
-				dest.clone(),
-				contract_info.and_then(|i| i.as_alive().map(|i| i.trie_id.clone()))
-			);
-
+		let output_data = self.with_nested_context(dest.clone(), dest_trie_id, |nested| {
 			if value > BalanceOf::<T>::zero() {
 				transfer(
 					gas_meter,
 					TransferCause::Call,
-					&self.self_account,
+					&caller,
 					&dest,
 					value,
-					&mut nested,
+					nested,
 				)?;
 			}
 
 			// If code_hash is not none, then the destination account is a live contract, otherwise
 			// it is a regular account since tombstone accounts have already been rejected.
-			if let Some(dest_code_hash) = self.overlay.get_code_hash(&dest) {
-				let executable = self.loader.load_main(&dest_code_hash)?;
-				output_data = self
-					.vm
-					.execute(
-						&executable,
-						&mut CallContext {
-							ctx: &mut nested,
-							caller: self.self_account.clone(),
-							value_transferred: value,
-							timestamp: <timestamp::Module<T>>::now(),
-							block_number: <system::Module<T>>::block_number(),
-						},
-						input_data,
-						empty_output_buf,
-						gas_meter,
-					)
-					.into_result()?;
-			}
+			let output_data = match nested.overlay.get_code_hash(&dest) {
+				Some(dest_code_hash) => {
+					let executable = nested.loader.load_main(&dest_code_hash)?;
+					nested.vm
+						.execute(
+							&executable,
+							nested.new_call_context(caller, value),
+							input_data,
+							empty_output_buf,
+							gas_meter,
+						)
+						.into_result()?
+				}
+				None => Vec::new(),
+			};
 
-			(nested.overlay.into_change_set(), nested.events, nested.calls)
-		};
-
-		self.overlay.commit(change_set);
-		self.events.extend(events);
-		self.calls.extend(calls);
+			Ok(output_data)
+		})?;
 
 		Ok(CallReceipt { output_data })
 	}
@@ -404,42 +434,35 @@ where
 			return Err("not enough gas to pay base instantiate fee");
 		}
 
+		let caller = self.self_account.clone();
 		let dest = T::DetermineContractAddress::contract_address_for(
 			code_hash,
 			input_data,
-			&self.self_account,
+			&caller,
 		);
 
-		let (change_set, events, calls) = {
-			let mut overlay = OverlayAccountDb::new(&self.overlay);
+		// TrieId has not been generated yet and storage is empty since contract is new.
+		let dest_trie_id = None;
 
-			overlay.create_contract(&dest, code_hash.clone())?;
-
-			// TrieId has not been generated yet and storage is empty since contract is new.
-			let mut nested = self.nested(overlay, dest.clone(), None);
+		let _ = self.with_nested_context(dest.clone(), dest_trie_id, |nested| {
+			nested.overlay.create_contract(&dest, code_hash.clone())?;
 
 			// Send funds unconditionally here. If the `endowment` is below existential_deposit
 			// then error will be returned here.
 			transfer(
 				gas_meter,
 				TransferCause::Instantiate,
-				&self.self_account,
+				&caller,
 				&dest,
 				endowment,
-				&mut nested,
+				nested,
 			)?;
 
-			let executable = self.loader.load_init(&code_hash)?;
-			self.vm
+			let executable = nested.loader.load_init(&code_hash)?;
+			nested.vm
 				.execute(
 					&executable,
-					&mut CallContext {
-						ctx: &mut nested,
-						caller: self.self_account.clone(),
-						value_transferred: endowment,
-						timestamp: <timestamp::Module<T>>::now(),
-						block_number: <system::Module<T>>::block_number(),
-					},
+					nested.new_call_context(caller.clone(), endowment),
 					input_data,
 					EmptyOutputBuf::new(),
 					gas_meter,
@@ -447,19 +470,45 @@ where
 				.into_result()?;
 
 			// Deposit an instantiation event.
-			nested.events.push(IndexedEvent {
-				event: RawEvent::Instantiated(self.self_account.clone(), dest.clone()),
+			nested.deferred.push(DeferredAction::DepositEvent {
+				event: RawEvent::Instantiated(caller.clone(), dest.clone()),
 				topics: Vec::new(),
 			});
 
-			(nested.overlay.into_change_set(), nested.events, nested.calls)
+			Ok(Vec::new())
+		})?;
+
+		Ok(InstantiateReceipt { address: dest })
+	}
+
+	fn new_call_context<'b>(&'b mut self, caller: T::AccountId, value: BalanceOf<T>)
+		-> CallContext<'b, 'a, T, V, L>
+	{
+		let timestamp = self.timestamp.clone();
+		let block_number = self.block_number.clone();
+		CallContext {
+			ctx: self,
+			caller,
+			value_transferred: value,
+			timestamp,
+			block_number,
+		}
+	}
+
+	fn with_nested_context<F>(&mut self, dest: T::AccountId, trie_id: Option<TrieId>, func: F)
+		-> Result<Vec<u8>, &'static str>
+		where F: FnOnce(&mut ExecutionContext<T, V, L>) -> Result<Vec<u8>, &'static str>
+	{
+		let (output_data, change_set, deferred) = {
+			let mut nested = self.nested(dest, trie_id);
+			let output_data = func(&mut nested)?;
+			(output_data, nested.overlay.into_change_set(), nested.deferred)
 		};
 
 		self.overlay.commit(change_set);
-		self.events.extend(events);
-		self.calls.extend(calls);
+		self.deferred.extend(deferred);
 
-		Ok(InstantiateReceipt { address: dest })
+		Ok(output_data)
 	}
 }
 
@@ -577,7 +626,7 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 	if transactor != dest {
 		ctx.overlay.set_balance(transactor, new_from_balance);
 		ctx.overlay.set_balance(dest, new_to_balance);
-		ctx.events.push(IndexedEvent {
+		ctx.deferred.push(DeferredAction::DepositEvent {
 			event: RawEvent::Transfer(transactor.clone(), dest.clone(), value),
 			topics: Vec::new(),
 		});
@@ -606,10 +655,17 @@ where
 		self.ctx.overlay.get_storage(&self.ctx.self_account, self.ctx.self_trie_id.as_ref(), key)
 	}
 
-	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) {
+	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) -> Result<(), &'static str> {
+		if let Some(ref value) = value {
+			if self.max_value_size() < value.len() as u32 {
+				return Err("value size exceeds maximum");
+			}
+		}
+
 		self.ctx
 			.overlay
-			.set_storage(&self.ctx.self_account, key, value)
+			.set_storage(&self.ctx.self_account, key, value);
+		Ok(())
 	}
 
 	fn instantiate(
@@ -634,11 +690,27 @@ where
 			.call(to.clone(), value, gas_meter, input_data, empty_output_buf)
 	}
 
-	/// Notes a call dispatch.
 	fn note_dispatch_call(&mut self, call: CallOf<Self::T>) {
-		self.ctx.calls.push(
-			(self.ctx.self_account.clone(), call)
-		);
+		self.ctx.deferred.push(DeferredAction::DispatchRuntimeCall {
+			origin: self.ctx.self_account.clone(),
+			call,
+		});
+	}
+
+	fn note_restore_to(
+		&mut self,
+		dest: AccountIdOf<Self::T>,
+		code_hash: CodeHash<Self::T>,
+		rent_allowance: BalanceOf<Self::T>,
+		delta: Vec<StorageKey>,
+	) {
+		self.ctx.deferred.push(DeferredAction::RestoreTo {
+			donor: self.ctx.self_account.clone(),
+			dest,
+			code_hash,
+			rent_allowance,
+			delta,
+		});
 	}
 
 	fn address(&self) -> &T::AccountId {
@@ -666,7 +738,7 @@ where
 	}
 
 	fn deposit_event(&mut self, topics: Vec<T::Hash>, data: Vec<u8>) {
-		self.ctx.events.push(IndexedEvent {
+		self.ctx.deferred.push(DeferredAction::DepositEvent {
 			topics,
 			event: RawEvent::Contract(self.ctx.self_account.clone(), data),
 		});
@@ -682,6 +754,10 @@ where
 	}
 
 	fn block_number(&self) -> T::BlockNumber { self.block_number }
+
+	fn max_value_size(&self) -> u32 {
+		self.ctx.config.max_value_size
+	}
 }
 
 /// These tests exercise the executive layer.
@@ -698,7 +774,7 @@ where
 mod tests {
 	use super::{
 		BalanceOf, ExecFeeToken, ExecutionContext, Ext, Loader, EmptyOutputBuf, TransferFeeKind, TransferFeeToken,
-		Vm, VmExecResult, InstantiateReceipt, RawEvent, IndexedEvent,
+		Vm, VmExecResult, InstantiateReceipt, RawEvent, DeferredAction,
 	};
 	use crate::account_db::AccountDb;
 	use crate::gas::GasMeter;
@@ -714,6 +790,21 @@ mod tests {
 	const ALICE: u64 = 1;
 	const BOB: u64 = 2;
 	const CHARLIE: u64 = 3;
+
+	impl<'a, T, V, L> ExecutionContext<'a, T, V, L>
+		where T: crate::Trait
+	{
+		fn events(&self) -> Vec<DeferredAction<T>> {
+			self.deferred
+				.iter()
+				.filter(|action| match *action {
+					DeferredAction::DepositEvent { .. } => true,
+					_ => false,
+				})
+				.cloned()
+				.collect()
+		}
+	}
 
 	struct MockCtx<'a> {
 		ext: &'a mut dyn Ext<T = Test>,
@@ -787,13 +878,13 @@ mod tests {
 		fn execute<E: Ext<T = Test>>(
 			&self,
 			exec: &MockExecutable,
-			ext: &mut E,
+			mut ext: E,
 			input_data: &[u8],
 			empty_output_buf: EmptyOutputBuf,
 			gas_meter: &mut GasMeter<Test>,
 		) -> VmExecResult {
 			(exec.0)(MockCtx {
-				ext,
+				ext: &mut ext,
 				input_data,
 				empty_output_buf: Some(empty_output_buf),
 				gas_meter,
@@ -1300,12 +1391,12 @@ mod tests {
 				// Check that the newly created account has the expected code hash and
 				// there are instantiation event.
 				assert_eq!(ctx.overlay.get_code_hash(&created_contract_address).unwrap(), dummy_ch);
-				assert_eq!(&ctx.events, &[
-					IndexedEvent {
+				assert_eq!(&ctx.events(), &[
+					DeferredAction::DepositEvent {
 						event: RawEvent::Transfer(ALICE, created_contract_address, 100),
 						topics: Vec::new(),
 					},
-					IndexedEvent {
+					DeferredAction::DepositEvent {
 						event: RawEvent::Instantiated(ALICE, created_contract_address),
 						topics: Vec::new(),
 					}
@@ -1358,16 +1449,16 @@ mod tests {
 				// Check that the newly created account has the expected code hash and
 				// there are instantiation event.
 				assert_eq!(ctx.overlay.get_code_hash(&created_contract_address).unwrap(), dummy_ch);
-				assert_eq!(&ctx.events, &[
-					IndexedEvent {
+				assert_eq!(&ctx.events(), &[
+					DeferredAction::DepositEvent {
 						event: RawEvent::Transfer(ALICE, BOB, 20),
 						topics: Vec::new(),
 					},
-					IndexedEvent {
+					DeferredAction::DepositEvent {
 						event: RawEvent::Transfer(BOB, created_contract_address, 15),
 						topics: Vec::new(),
 					},
-					IndexedEvent {
+					DeferredAction::DepositEvent {
 						event: RawEvent::Instantiated(BOB, created_contract_address),
 						topics: Vec::new(),
 					},
@@ -1415,8 +1506,8 @@ mod tests {
 
 				// The contract wasn't created so we don't expect to see an instantiation
 				// event here.
-				assert_eq!(&ctx.events, &[
-					IndexedEvent {
+				assert_eq!(&ctx.events(), &[
+					DeferredAction::DepositEvent {
 						event: RawEvent::Transfer(ALICE, BOB, 20),
 						topics: Vec::new(),
 					},

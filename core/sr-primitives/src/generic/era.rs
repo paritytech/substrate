@@ -19,7 +19,7 @@
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 
-use crate::codec::{Decode, Encode, Input, Output};
+use crate::codec::{Decode, Encode, Input, Output, Error};
 
 /// Era period
 pub type Period = u64;
@@ -111,20 +111,22 @@ impl Encode for Era {
 	}
 }
 
+impl codec::EncodeLike for Era {}
+
 impl Decode for Era {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
 		let first = input.read_byte()?;
 		if first == 0 {
-			Some(Era::Immortal)
+			Ok(Era::Immortal)
 		} else {
 			let encoded = first as u64 + ((input.read_byte()? as u64) << 8);
 			let period = 2 << (encoded % (1 << 4));
 			let quantize_factor = (period >> 12).max(1);
 			let phase = (encoded >> 4) * quantize_factor;
 			if period >= 4 && phase < period {
-				Some(Era::Mortal(period, phase))
+				Ok(Era::Mortal(period, phase))
 			} else {
-				None
+				Err("Invalid period and phase".into())
 			}
 		}
 	}

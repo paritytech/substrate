@@ -26,12 +26,12 @@ use wasmi::{
 };
 use state_machine::{Externalities, ChildStorageKey};
 use crate::error::{Error, Result};
-use primitives::{blake2_128, blake2_256, twox_64, twox_128, twox_256, ed25519, sr25519, Pair};
-use primitives::offchain;
-use primitives::hexdisplay::HexDisplay;
-use primitives::sandbox as sandbox_primitives;
-use primitives::{H256, Blake2Hasher};
-use trie::ordered_trie_root;
+use codec::Encode;
+use primitives::{
+	blake2_128, blake2_256, twox_64, twox_128, twox_256, ed25519, sr25519, Pair, crypto::KeyTypeId,
+	offchain, hexdisplay::HexDisplay, sandbox as sandbox_primitives, H256, Blake2Hasher,
+};
+use trie::{TrieConfiguration, trie_types::Layout};
 use crate::sandbox;
 use crate::allocator;
 use log::trace;
@@ -55,10 +55,10 @@ struct FunctionExecutor<'e, E: Externalities<Blake2Hasher> + 'e> {
 }
 
 impl<'e, E: Externalities<Blake2Hasher>> FunctionExecutor<'e, E> {
-	fn new(m: MemoryRef, t: Option<TableRef>, e: &'e mut E) -> Result<Self> {
+	fn new(m: MemoryRef, heap_base: u32, t: Option<TableRef>, e: &'e mut E) -> Result<Self> {
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
-			heap: allocator::FreeingBumpHeapAllocator::new(m.clone()),
+			heap: allocator::FreeingBumpHeapAllocator::new(m.clone(), heap_base),
 			memory: m,
 			table: t,
 			ext: e,
@@ -118,16 +118,6 @@ fn deadline_to_timestamp(deadline: u64) -> Option<offchain::Timestamp> {
 		None
 	} else {
 		Some(offchain::Timestamp::from_unix_millis(deadline))
-	}
-}
-
-fn u32_to_key(key: u32) -> std::result::Result<Option<offchain::CryptoKeyId>, ()> {
-	if key > u16::max_value() as u32 {
-		Err(())
-	} else if key == 0 {
-		Ok(None)
-	} else {
-		Ok(Some(offchain::CryptoKeyId(key as u16)))
 	}
 }
 
@@ -420,7 +410,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			let written = std::cmp::min(value_len as usize, value.len());
 			this.memory.set(value_data, &value[..written])
 				.map_err(|_| "Invalid attempt to set value in ext_get_storage_into")?;
-			Ok(written as u32)
+			Ok(value.len() as u32)
 		} else {
 			Ok(u32::max_value())
 		}
@@ -467,10 +457,10 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		if let Some(value) = maybe_value {
 			let value = &value[value_offset as usize..];
-			let written = ::std::cmp::min(value_len as usize, value.len());
+			let written = std::cmp::min(value_len as usize, value.len());
 			this.memory.set(value_data, &value[..written])
 				.map_err(|_| "Invalid attempt to set value in ext_get_child_storage_into")?;
-			Ok(written as u32)
+			Ok(value.len() as u32)
 		} else {
 			Ok(u32::max_value())
 		}
@@ -537,7 +527,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 					)
 			)
 			.collect::<Result<Vec<_>>>()?;
-		let r = ordered_trie_root::<Blake2Hasher, _, _>(values.into_iter());
+		let r = Layout::<Blake2Hasher>::ordered_trie_root(values.into_iter());
 		this.memory.set(result, &r[..])
 			.map_err(|_| "Invalid attempt to set memory in ext_blake2_256_enumerated_trie_root")?;
 		Ok(())
@@ -650,7 +640,30 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.memory.set(out, &result).map_err(|_| "Invalid attempt to set result in ext_keccak_256")?;
 		Ok(())
 	},
-	ext_ed25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32 => {
+	ext_ed25519_public_keys(id_data: *const u8, result_len: *mut u32) -> *mut u8 => {
+		let mut id = [0u8; 4];
+		this.memory.get_into(id_data, &mut id[..])
+			.map_err(|_| "Invalid attempt to get id in ext_ed25519_public_keys")?;
+		let key_type = KeyTypeId(id);
+
+		let keys = runtime_io::ed25519_public_keys(key_type).encode();
+
+		let len = keys.len() as u32;
+		let offset = this.heap.allocate(len)? as u32;
+
+		this.memory.set(offset, keys.as_ref())
+			.map_err(|_| "Invalid attempt to set memory in ext_ed25519_public_keys")?;
+		this.memory.write_primitive(result_len, len)
+			.map_err(|_| "Invalid attempt to write result_len in ext_ed25519_public_keys")?;
+
+		Ok(offset)
+	},
+	ext_ed25519_verify(
+		msg_data: *const u8,
+		msg_len: u32,
+		sig_data: *const u8,
+		pubkey_data: *const u8,
+	) -> u32 => {
 		let mut sig = [0u8; 64];
 		this.memory.get_into(sig_data, &mut sig[..])
 			.map_err(|_| "Invalid attempt to get signature in ext_ed25519_verify")?;
@@ -666,7 +679,87 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			5
 		})
 	},
-	ext_sr25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32 => {
+	ext_ed25519_generate(id_data: *const u8, seed: *const u8, seed_len: u32, out: *mut u8) => {
+		let mut id = [0u8; 4];
+		this.memory.get_into(id_data, &mut id[..])
+			.map_err(|_| "Invalid attempt to get id in ext_ed25519_generate")?;
+		let key_type = KeyTypeId(id);
+
+		let seed = if seed_len == 0 {
+			None
+		} else {
+			Some(
+				this.memory.get(seed, seed_len as usize)
+					.map_err(|_| "Invalid attempt to get seed in ext_ed25519_generate")?
+			)
+		};
+
+		let seed = seed.as_ref()
+			.map(|seed|
+				std::str::from_utf8(&seed)
+					.map_err(|_| "Seed not a valid utf8 string in ext_sr25119_generate")
+			).transpose()?;
+
+		let pubkey = runtime_io::ed25519_generate(key_type, seed);
+
+		this.memory.set(out, pubkey.as_ref())
+			.map_err(|_| "Invalid attempt to set out in ext_ed25519_generate".into())
+	},
+	ext_ed25519_sign(
+		id_data: *const u8,
+		pubkey_data: *const u8,
+		msg_data: *const u8,
+		msg_len: u32,
+		out: *mut u8,
+	) -> u32 => {
+		let mut id = [0u8; 4];
+		this.memory.get_into(id_data, &mut id[..])
+			.map_err(|_| "Invalid attempt to get id in ext_ed25519_sign")?;
+		let key_type = KeyTypeId(id);
+
+		let mut pubkey = [0u8; 32];
+		this.memory.get_into(pubkey_data, &mut pubkey[..])
+			.map_err(|_| "Invalid attempt to get pubkey in ext_ed25519_sign")?;
+
+		let msg = this.memory.get(msg_data, msg_len as usize)
+			.map_err(|_| "Invalid attempt to get message in ext_ed25519_sign")?;
+
+		let signature = runtime_io::ed25519_sign(key_type, &ed25519::Public(pubkey), &msg);
+
+		match signature {
+			Some(signature) => {
+				this.memory
+					.set(out, signature.as_ref())
+					.map_err(|_| "Invalid attempt to set out in ext_ed25519_sign")?;
+				Ok(0)
+			},
+			None => Ok(1),
+		}
+	},
+	ext_sr25519_public_keys(id_data: *const u8, result_len: *mut u32) -> *mut u8 => {
+		let mut id = [0u8; 4];
+		this.memory.get_into(id_data, &mut id[..])
+			.map_err(|_| "Invalid attempt to get id in ext_sr25519_public_keys")?;
+		let key_type = KeyTypeId(id);
+
+		let keys = runtime_io::sr25519_public_keys(key_type).encode();
+
+		let len = keys.len() as u32;
+		let offset = this.heap.allocate(len)? as u32;
+
+		this.memory.set(offset, keys.as_ref())
+			.map_err(|_| "Invalid attempt to set memory in ext_sr25519_public_keys")?;
+		this.memory.write_primitive(result_len, len)
+			.map_err(|_| "Invalid attempt to write result_len in ext_sr25519_public_keys")?;
+
+		Ok(offset)
+	},
+	ext_sr25519_verify(
+		msg_data: *const u8,
+		msg_len: u32,
+		sig_data: *const u8,
+		pubkey_data: *const u8,
+	) -> u32 => {
 		let mut sig = [0u8; 64];
 		this.memory.get_into(sig_data, &mut sig[..])
 			.map_err(|_| "Invalid attempt to get signature in ext_sr25519_verify")?;
@@ -681,6 +774,62 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		} else {
 			5
 		})
+	},
+	ext_sr25519_generate(id_data: *const u8, seed: *const u8, seed_len: u32, out: *mut u8) => {
+		let mut id = [0u8; 4];
+		this.memory.get_into(id_data, &mut id[..])
+			.map_err(|_| "Invalid attempt to get id in ext_sr25519_generate")?;
+		let key_type = KeyTypeId(id);
+		let seed = if seed_len == 0 {
+			None
+		} else {
+			Some(
+				this.memory.get(seed, seed_len as usize)
+					.map_err(|_| "Invalid attempt to get seed in ext_sr25519_generate")?
+			)
+		};
+
+		let seed = seed.as_ref()
+			.map(|seed|
+				std::str::from_utf8(&seed)
+					.map_err(|_| "Seed not a valid utf8 string in ext_sr25119_generate")
+			)
+			.transpose()?;
+
+		let pubkey = runtime_io::sr25519_generate(key_type, seed);
+
+		this.memory.set(out, pubkey.as_ref())
+			.map_err(|_| "Invalid attempt to set out in ext_sr25519_generate".into())
+	},
+	ext_sr25519_sign(
+		id_data: *const u8,
+		pubkey_data: *const u8,
+		msg_data: *const u8,
+		msg_len: u32,
+		out: *mut u8,
+	) -> u32 => {
+		let mut id = [0u8; 4];
+		this.memory.get_into(id_data, &mut id[..])
+			.map_err(|_| "Invalid attempt to get id in ext_sr25519_sign")?;
+		let key_type = KeyTypeId(id);
+
+		let mut pubkey = [0u8; 32];
+		this.memory.get_into(pubkey_data, &mut pubkey[..])
+			.map_err(|_| "Invalid attempt to get pubkey in ext_sr25519_sign")?;
+
+		let msg = this.memory.get(msg_data, msg_len as usize)
+			.map_err(|_| "Invalid attempt to get message in ext_sr25519_sign")?;
+
+		let signature = runtime_io::sr25519_sign(key_type, &sr25519::Public(pubkey), &msg);
+
+		match signature {
+			Some(signature) => {
+				this.memory.set(out, signature.as_ref())
+					.map_err(|_| "Invalid attempt to set out in ext_sr25519_sign")?;
+				Ok(0)
+			},
+			None => Ok(1),
+		}
 	},
 	ext_secp256k1_ecdsa_recover(msg_data: *const u8, sig_data: *const u8, pubkey_data: *mut u8) -> u32 => {
 		let mut sig = [0u8; 65];
@@ -720,147 +869,21 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		Ok(if res.is_ok() { 0 } else { 1 })
 	},
-	ext_new_crypto_key(crypto: u32) -> u32 => {
-		let kind = offchain::CryptoKind::try_from(crypto)
-			.map_err(|_| "crypto kind OOB while ext_new_crypto_key: wasm")?;
-
+	ext_network_state(written_out: *mut u32) -> *mut u8 => {
 		let res = this.ext.offchain()
-			.map(|api| api.new_crypto_key(kind))
-			.ok_or_else(|| "Calling unavailable API ext_new_crypto_key: wasm")?;
+			.map(|api| api.network_state())
+			.ok_or_else(|| "Calling unavailable API ext_network_state: wasm")?;
 
-		match res {
-			Ok(key_id) => Ok(key_id.into()),
-			Err(()) => Ok(u32::max_value()),
-		}
-	},
-	ext_encrypt(
-		key: u32,
-		kind: u32,
-		data: *const u8,
-		data_len: u32,
-		msg_len: *mut u32
-	) -> *mut u8 => {
-		let key = u32_to_key(key)
-			.map_err(|_| "Key OOB while ext_encrypt: wasm")?;
-		let kind = offchain::CryptoKind::try_from(kind)
-			.map_err(|_| "crypto kind OOB while ext_encrypt: wasm")?;
-		let message = this.memory.get(data, data_len as usize)
-			.map_err(|_| "OOB while ext_encrypt: wasm")?;
+		let encoded = res.encode();
+		let len = encoded.len() as u32;
+		let offset = this.heap.allocate(len)? as u32;
+		this.memory.set(offset, &encoded)
+			.map_err(|_| "Invalid attempt to set memory in ext_network_state")?;
 
-		let res = this.ext.offchain()
-			.map(|api| api.encrypt(key, kind, &*message))
-			.ok_or_else(|| "Calling unavailable API ext_encrypt: wasm")?;
-
-		let (offset,len) = match res {
-			Ok(encrypted) => {
-				let len = encrypted.len() as u32;
-				let offset = this.heap.allocate(len)? as u32;
-				this.memory.set(offset, &encrypted)
-					.map_err(|_| "Invalid attempt to set memory in ext_encrypt")?;
-				(offset, len)
-			},
-			Err(()) => (0, u32::max_value()),
-		};
-
-		this.memory.write_primitive(msg_len, len)
-			.map_err(|_| "Invalid attempt to write msg_len in ext_encrypt")?;
+		this.memory.write_primitive(written_out, len)
+			.map_err(|_| "Invalid attempt to write written_out in ext_network_state")?;
 
 		Ok(offset)
-	},
-	ext_decrypt(
-		key: u32,
-		kind: u32,
-		data: *const u8,
-		data_len: u32,
-		msg_len: *mut u32
-	) -> *mut u8 => {
-		let key = u32_to_key(key)
-			.map_err(|_| "Key OOB while ext_decrypt: wasm")?;
-		let kind = offchain::CryptoKind::try_from(kind)
-			.map_err(|_| "crypto kind OOB while ext_decrypt: wasm")?;
-		let message = this.memory.get(data, data_len as usize)
-			.map_err(|_| "OOB while ext_decrypt: wasm")?;
-
-		let res = this.ext.offchain()
-			.map(|api| api.decrypt(key, kind, &*message))
-			.ok_or_else(|| "Calling unavailable API ext_decrypt: wasm")?;
-
-		let (offset,len) = match res {
-			Ok(decrypted) => {
-				let len = decrypted.len() as u32;
-				let offset = this.heap.allocate(len)? as u32;
-				this.memory.set(offset, &decrypted)
-					.map_err(|_| "Invalid attempt to set memory in ext_decrypt")?;
-				(offset, len)
-			},
-			Err(()) => (0, u32::max_value()),
-		};
-
-		this.memory.write_primitive(msg_len, len)
-			.map_err(|_| "Invalid attempt to write msg_len in ext_decrypt")?;
-
-		Ok(offset)
-	},
-	ext_sign(
-		key: u32,
-		kind: u32,
-		data: *const u8,
-		data_len: u32,
-		sig_data_len: *mut u32
-	) -> *mut u8  => {
-		let key = u32_to_key(key)
-			.map_err(|_| "Key OOB while ext_sign: wasm")?;
-		let kind = offchain::CryptoKind::try_from(kind)
-			.map_err(|_| "crypto kind OOB while ext_sign: wasm")?;
-		let message = this.memory.get(data, data_len as usize)
-			.map_err(|_| "OOB while ext_sign: wasm")?;
-
-		let res = this.ext.offchain()
-			.map(|api| api.sign(key, kind, &*message))
-			.ok_or_else(|| "Calling unavailable API ext_sign: wasm")?;
-
-		let (offset,len) = match res {
-			Ok(signature) => {
-				let len = signature.len() as u32;
-				let offset = this.heap.allocate(len)? as u32;
-				this.memory.set(offset, &signature)
-					.map_err(|_| "Invalid attempt to set memory in ext_sign")?;
-				(offset, len)
-			},
-			Err(()) => (0, u32::max_value()),
-		};
-
-		this.memory.write_primitive(sig_data_len, len)
-			.map_err(|_| "Invalid attempt to write sig_data_len in ext_sign")?;
-
-		Ok(offset)
-	},
-	ext_verify(
-		key: u32,
-		kind: u32,
-		msg: *const u8,
-		msg_len: u32,
-		signature: *const u8,
-		signature_len: u32
-	) -> u32 => {
-		let key = u32_to_key(key)
-			.map_err(|_| "Key OOB while ext_verify: wasm")?;
-		let kind = offchain::CryptoKind::try_from(kind)
-			.map_err(|_| "crypto kind OOB while ext_verify: wasm")?;
-		let message = this.memory.get(msg, msg_len as usize)
-			.map_err(|_| "OOB while ext_verify: wasm")?;
-		let signature = this.memory.get(signature, signature_len as usize)
-			.map_err(|_| "OOB while ext_verify: wasm")?;
-
-		let res = this.ext.offchain()
-			.map(|api| api.verify(key, kind, &*message, &*signature))
-			.ok_or_else(|| "Calling unavailable API ext_verify: wasm")?;
-
-		match res {
-			Ok(true) => Ok(0),
-			Ok(false) => Ok(1),
-			Err(()) => Ok(u32::max_value()),
-		}
 	},
 	ext_timestamp() -> u64 => {
 		let timestamp = this.ext.offchain()
@@ -935,17 +958,24 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				.map_err(|_| "storage kind OOB while ext_local_storage_compare_and_set: wasm")?;
 		let key = this.memory.get(key, key_len as usize)
 			.map_err(|_| "OOB while ext_local_storage_compare_and_set: wasm")?;
-		let old_value = this.memory.get(old_value, old_value_len as usize)
-			.map_err(|_| "OOB while ext_local_storage_compare_and_set: wasm")?;
 		let new_value = this.memory.get(new_value, new_value_len as usize)
 			.map_err(|_| "OOB while ext_local_storage_compare_and_set: wasm")?;
 
-		let res = this.ext.offchain()
-			.map(|api| api.local_storage_compare_and_set(kind, &key, &old_value, &new_value))
-			.ok_or_else(|| "Calling unavailable API ext_local_storage_compare_andset: wasm")?;
+		let res = {
+			if old_value == u32::max_value() {
+				this.ext.offchain()
+					.map(|api| api.local_storage_compare_and_set(kind, &key, None, &new_value))
+					.ok_or_else(|| "Calling unavailable API ext_local_storage_compare_and_set: wasm")?
+			} else {
+				let v = this.memory.get(old_value, old_value_len as  usize)
+					.map_err(|_| "OOB while ext_local_storage_compare_and_set: wasm")?;
+				this.ext.offchain()
+					.map(|api| api.local_storage_compare_and_set(kind, &key, Some(v.as_slice()), &new_value))
+					.ok_or_else(|| "Calling unavailable API ext_local_storage_compare_and_set: wasm")?
+			}
+		};
 
 		Ok(if res { 0 } else { 1 })
-
 	},
 	ext_http_request_start(
 		method: *const u8,
@@ -1060,7 +1090,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		request_id: u32,
 		written_out: *mut u32
 	) -> *mut u8 => {
-		use parity_codec::Encode;
+		use codec::Encode;
 
 		let headers = this.ext.offchain()
 			.map(|api| api.http_response_headers(offchain::HttpRequestId(request_id as u16)))
@@ -1151,7 +1181,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		return_val_len: usize,
 		state: usize
 	) -> u32 => {
-		use parity_codec::{Decode, Encode};
+		use codec::{Decode, Encode};
 
 		trace!(target: "sr-sandbox", "invoke, instance_idx={}", instance_idx);
 		let export = this.memory.get(export_ptr, export_len as usize)
@@ -1165,7 +1195,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let serialized_args = this.memory.get(args_ptr, args_len as usize)
 			.map_err(|_| "OOB while ext_sandbox_invoke: args")?;
 		let args = Vec::<sandbox_primitives::TypedValue>::decode(&mut &serialized_args[..])
-			.ok_or_else(|| "Can't decode serialized arguments for the invocation")?
+			.map_err(|_| "Can't decode serialized arguments for the invocation")?
 			.into_iter()
 			.map(Into::into)
 			.collect::<Vec<_>>();
@@ -1256,7 +1286,7 @@ impl WasmExecutor {
 		data: &[u8],
 	) -> Result<Vec<u8>> {
 		let module = ::wasmi::Module::from_buffer(code)?;
-		let module = self.prepare_module(ext, heap_pages, &module)?;
+		let module = Self::instantiate_module::<E>(heap_pages, &module)?;
 		self.call_in_wasm_module(ext, &module, method, data)
 	}
 
@@ -1278,7 +1308,7 @@ impl WasmExecutor {
 		filter_result: FR,
 	) -> Result<R> {
 		let module = wasmi::Module::from_buffer(code)?;
-		let module = self.prepare_module(ext, heap_pages, &module)?;
+		let module = Self::instantiate_module::<E>(heap_pages, &module)?;
 		self.call_in_wasm_module_with_custom_signature(
 			ext,
 			&module,
@@ -1295,6 +1325,22 @@ impl WasmExecutor {
 			.as_memory()
 			.ok_or_else(|| Error::InvalidMemoryReference)?
 			.clone())
+	}
+
+	/// Find the global named `__heap_base` in the given wasm module instance and
+	/// tries to get its value.
+	fn get_heap_base(module: &ModuleRef) -> Result<u32> {
+		let heap_base_val = module
+			.export_by_name("__heap_base")
+			.ok_or_else(|| Error::HeapBaseNotFoundOrInvalid)?
+			.as_global()
+			.ok_or_else(|| Error::HeapBaseNotFoundOrInvalid)?
+			.get();
+
+		Ok(match heap_base_val {
+			wasmi::RuntimeValue::I32(v) => v as u32,
+			_ => return Err(Error::HeapBaseNotFoundOrInvalid),
+		})
 	}
 
 	/// Call a given method in the given wasm-module runtime.
@@ -1345,10 +1391,9 @@ impl WasmExecutor {
 		let table: Option<TableRef> = module_instance
 			.export_by_name("__indirect_function_table")
 			.and_then(|e| e.as_table().cloned());
+		let heap_base = Self::get_heap_base(module_instance)?;
 
-		let low = memory.lowest_used();
-		let used_mem = memory.used_size();
-		let mut fec = FunctionExecutor::new(memory.clone(), table, ext)?;
+		let mut fec = FunctionExecutor::new(memory.clone(), heap_base, table, ext)?;
 		let parameters = create_parameters(&mut |data: &[u8]| {
 			let offset = fec.heap.allocate(data.len() as u32)?;
 			memory.set(offset, &data)?;
@@ -1371,24 +1416,14 @@ impl WasmExecutor {
 			},
 		};
 
-		// cleanup module instance for next use
-		let new_low = memory.lowest_used();
-		if new_low < low {
-			memory.zero(new_low as usize, (low - new_low) as usize)?;
-			memory.reset_lowest_used(low);
-		}
-		memory.with_direct_access_mut(|buf| buf.resize(used_mem.0, 0));
 		result
 	}
 
 	/// Prepare module instance
-	pub fn prepare_module<E: Externalities<Blake2Hasher>>(
-		&self,
-		ext: &mut E,
+	pub fn instantiate_module<E: Externalities<Blake2Hasher>>(
 		heap_pages: usize,
 		module: &Module,
-		) -> Result<ModuleRef>
-	{
+	) -> Result<ModuleRef> {
 		// start module instantiation. Don't run 'start' function yet.
 		let intermediate_instance = ModuleInstance::new(
 			module,
@@ -1396,18 +1431,19 @@ impl WasmExecutor {
 			.with_resolver("env", FunctionExecutor::<E>::resolver())
 		)?;
 
-		// extract a reference to a linear memory, optional reference to a table
-		// and then initialize FunctionExecutor.
+		// Verify that the module has the heap base global variable.
+		let _ = Self::get_heap_base(intermediate_instance.not_started_instance())?;
+
+		// Extract a reference to a linear memory.
 		let memory = Self::get_mem_instance(intermediate_instance.not_started_instance())?;
 		memory.grow(Pages(heap_pages)).map_err(|_| Error::Runtime)?;
-		let table: Option<TableRef> = intermediate_instance
-			.not_started_instance()
-			.export_by_name("__indirect_function_table")
-			.and_then(|e| e.as_table().cloned());
-		let mut fec = FunctionExecutor::new(memory.clone(), table, ext)?;
 
-		// finish instantiation by running 'start' function (if any).
-		Ok(intermediate_instance.run_start(&mut fec)?)
+		if intermediate_instance.has_start() {
+			// Runtime is not allowed to have the `start` function.
+			Err(Error::RuntimeHasStartFn)
+		} else {
+			Ok(intermediate_instance.assert_no_start())
+		}
 	}
 }
 
@@ -1416,7 +1452,7 @@ impl WasmExecutor {
 mod tests {
 	use super::*;
 
-	use parity_codec::Encode;
+	use codec::Encode;
 
 	use state_machine::TestExternalities as CoreTestExternalities;
 	use hex_literal::hex;
@@ -1602,10 +1638,11 @@ mod tests {
 	#[test]
 	fn enumerated_trie_root_should_work() {
 		let mut ext = TestExternalities::<Blake2Hasher>::default();
+		let trie_input = vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()];
 		let test_code = WASM_BINARY;
 		assert_eq!(
 			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_enumerated_trie_root", &[]).unwrap(),
-			ordered_trie_root::<Blake2Hasher, _, _>(vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()].iter()).as_fixed_bytes().encode()
+			Layout::<Blake2Hasher>::ordered_trie_root(trie_input.iter()).as_fixed_bytes().encode()
 		);
 	}
 

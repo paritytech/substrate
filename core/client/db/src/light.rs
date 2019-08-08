@@ -26,13 +26,12 @@ use client::backend::{AuxStore, NewBlockState};
 use client::blockchain::{BlockStatus, Cache as BlockchainCache,
 	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo};
 use client::cht;
-use client::leaves::{LeafSet, FinalizationDisplaced};
 use client::error::{Error as ClientError, Result as ClientResult};
 use client::light::blockchain::Storage as LightBlockchainStorage;
-use parity_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use primitives::Blake2Hasher;
-use runtime_primitives::generic::{DigestItem, BlockId};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor};
+use sr_primitives::generic::{DigestItem, BlockId};
+use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor};
 use consensus_common::well_known_cache_keys;
 use crate::cache::{DbCacheSync, DbCache, ComplexBlockId, EntryType as CacheEntryType};
 use crate::utils::{self, meta_keys, Meta, db_err, read_db, block_id_to_lookup_key, read_meta};
@@ -54,11 +53,10 @@ const HEADER_CHT_PREFIX: u8 = 0;
 const CHANGES_TRIE_CHT_PREFIX: u8 = 1;
 
 /// Light blockchain storage. Stores most recent headers + CHTs for older headers.
-/// Locks order: meta, leaves, cache.
+/// Locks order: meta, cache.
 pub struct LightStorage<Block: BlockT> {
 	db: Arc<dyn KeyValueDB>,
 	meta: RwLock<Meta<NumberFor<Block>, Block::Hash>>,
-	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
 	cache: Arc<DbCacheSync<Block>>,
 }
 
@@ -96,7 +94,6 @@ impl<Block> LightStorage<Block>
 
 	fn from_kvdb(db: Arc<dyn KeyValueDB>) -> ClientResult<Self> {
 		let meta = read_meta::<Block>(&*db, columns::META, columns::HEADER)?;
-		let leaves = LeafSet::read_from_db(&*db, columns::META, meta_keys::LEAF_PREFIX)?;
 		let cache = DbCache::new(
 			db.clone(),
 			columns::KEY_LOOKUP,
@@ -110,7 +107,6 @@ impl<Block> LightStorage<Block>
 			db,
 			meta: RwLock::new(meta),
 			cache: Arc::new(DbCacheSync(RwLock::new(cache))),
-			leaves: RwLock::new(leaves),
 		})
 	}
 
@@ -211,7 +207,7 @@ impl<Block: BlockT> LightStorage<Block> {
 	/// should be the parent of `best_to`. In the case where we set an existing block
 	/// to be best, `route_to` should equal to `best_to`.
 	fn set_head_with_transaction(&self, transaction: &mut DBTransaction, route_to: Block::Hash, best_to: (NumberFor<Block>, Block::Hash)) -> Result<(), client::error::Error> {
-		let lookup_key = utils::number_and_hash_to_lookup_key(best_to.0, &best_to.1);
+		let lookup_key = utils::number_and_hash_to_lookup_key(best_to.0, &best_to.1)?;
 
 		// handle reorg.
 		let meta = self.meta.read();
@@ -234,7 +230,7 @@ impl<Block: BlockT> LightStorage<Block> {
 					transaction,
 					columns::KEY_LOOKUP,
 					retracted.number
-				);
+				)?;
 			}
 
 			for enacted in tree_route.enacted() {
@@ -243,7 +239,7 @@ impl<Block: BlockT> LightStorage<Block> {
 					columns::KEY_LOOKUP,
 					enacted.number,
 					enacted.hash
-				);
+				)?;
 			}
 		}
 
@@ -253,7 +249,7 @@ impl<Block: BlockT> LightStorage<Block> {
 			columns::KEY_LOOKUP,
 			best_to.0,
 			best_to.1,
-		);
+		)?;
 
 		Ok(())
 	}
@@ -264,7 +260,6 @@ impl<Block: BlockT> LightStorage<Block> {
 		transaction: &mut DBTransaction,
 		header: &Block::Header,
 		hash: Block::Hash,
-		displaced: &mut Option<FinalizationDisplaced<Block::Hash, NumberFor<Block>>>,
 	) -> ClientResult<()> {
 		let meta = self.meta.read();
 		if &meta.finalized_hash != header.parent_hash() {
@@ -274,7 +269,7 @@ impl<Block: BlockT> LightStorage<Block> {
 			).into())
 		}
 
-		let lookup_key = utils::number_and_hash_to_lookup_key(header.number().clone(), hash);
+		let lookup_key = utils::number_and_hash_to_lookup_key(header.number().clone(), hash)?;
 		transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
 
 		// build new CHT(s) if required
@@ -293,7 +288,7 @@ impl<Block: BlockT> LightStorage<Block> {
 			)?;
 			transaction.put(
 				columns::CHT,
-				&cht_key(HEADER_CHT_PREFIX, new_cht_start),
+				&cht_key(HEADER_CHT_PREFIX, new_cht_start)?,
 				new_header_cht_root.as_ref()
 			);
 
@@ -311,7 +306,7 @@ impl<Block: BlockT> LightStorage<Block> {
 				)?;
 				transaction.put(
 					columns::CHT,
-					&cht_key(CHANGES_TRIE_CHT_PREFIX, new_cht_start),
+					&cht_key(CHANGES_TRIE_CHT_PREFIX, new_cht_start)?,
 					new_changes_trie_cht_root.as_ref()
 				);
 			}
@@ -331,17 +326,11 @@ impl<Block: BlockT> LightStorage<Block> {
 						columns::KEY_LOOKUP,
 						prune_block,
 						hash
-					);
+					)?;
 					transaction.delete(columns::HEADER, &lookup_key);
 				}
 				prune_block += One::one();
 			}
-		}
-
-		let new_displaced = self.leaves.write().finalize_height(header.number().clone());
-		match displaced {
-			x @ &mut None => *x = Some(new_displaced),
-			&mut Some(ref mut displaced) => displaced.merge(new_displaced),
 		}
 
 		Ok(())
@@ -358,9 +347,9 @@ impl<Block: BlockT> LightStorage<Block> {
 
 		let cht_number = cht::block_to_cht_number(cht_size, block).ok_or_else(no_cht_for_block)?;
 		let cht_start = cht::start_number(cht_size, cht_number);
-		self.db.get(columns::CHT, &cht_key(cht_type, cht_start)).map_err(db_err)?
+		self.db.get(columns::CHT, &cht_key(cht_type, cht_start)?).map_err(db_err)?
 			.ok_or_else(no_cht_for_block)
-			.and_then(|hash| Block::Hash::decode(&mut &*hash).ok_or_else(no_cht_for_block))
+			.and_then(|hash| Block::Hash::decode(&mut &*hash).map_err(|_| no_cht_for_block()))
 	}
 }
 
@@ -399,7 +388,6 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		leaf_state: NewBlockState,
 		aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	) -> ClientResult<()> {
-		let mut finalization_displaced_leaves = None;
 		let mut transaction = DBTransaction::new();
 
 		let hash = header.hash();
@@ -414,7 +402,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		}
 
 		// blocks are keyed by number + hash.
-		let lookup_key = utils::number_and_hash_to_lookup_key(number, &hash);
+		let lookup_key = utils::number_and_hash_to_lookup_key(number, &hash)?;
 
 		if leaf_state.is_best() {
 			self.set_head_with_transaction(&mut transaction, parent_hash, (number, hash))?;
@@ -425,7 +413,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 			columns::KEY_LOOKUP,
 			number,
 			hash,
-		);
+		)?;
 		transaction.put(columns::HEADER, &lookup_key, &header.encode());
 
 		let is_genesis = number.is_zero();
@@ -445,14 +433,10 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 				&mut transaction,
 				&header,
 				hash,
-				&mut finalization_displaced_leaves,
 			)?;
 		}
 
 		{
-			let mut leaves = self.leaves.write();
-			let displaced_leaf = leaves.import(hash, number, parent_hash);
-
 			let mut cache = self.cache.0.write();
 			let cache_ops = cache.transaction(&mut transaction)
 				.on_block_insert(
@@ -464,23 +448,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 				.into_ops();
 
 			debug!("Light DB Commit {:?} ({})", hash, number);
-			let write_result = self.db.write(transaction).map_err(db_err);
-			if let Err(e) = write_result {
-				let mut leaves = self.leaves.write();
-				let mut undo = leaves.undo();
-
-				// revert leaves set update if there was one.
-				if let Some(displaced_leaf) = displaced_leaf {
-					undo.undo_import(displaced_leaf);
-				}
-
-				if let Some(finalization_displaced) = finalization_displaced_leaves {
-					undo.undo_finalization(finalization_displaced);
-				}
-
-				return Err(e);
-			}
-
+			self.db.write(transaction).map_err(db_err)?;
 			cache.commit(cache_ops);
 		}
 
@@ -522,11 +490,10 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 
 	fn finalize_header(&self, id: BlockId<Block>) -> ClientResult<()> {
 		if let Some(header) = self.header(id)? {
-			let mut displaced = None;
 			let mut transaction = DBTransaction::new();
 			let hash = header.hash();
 			let number = *header.number();
-			self.note_finalized(&mut transaction, &header, hash.clone(), &mut displaced)?;
+			self.note_finalized(&mut transaction, &header, hash.clone())?;
 			{
 				let mut cache = self.cache.0.write();
 				let cache_ops = cache.transaction(&mut transaction)
@@ -536,12 +503,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 					)?
 					.into_ops();
 
-				if let Err(e) = self.db.write(transaction).map_err(db_err) {
-					if let Some(displaced) = displaced {
-						self.leaves.write().undo().undo_finalization(displaced);
-					}
-					return Err(e);
-				}
+				self.db.write(transaction).map_err(db_err)?;
 				cache.commit(cache_ops);
 			}
 			self.update_meta(hash, header.number().clone(), false, true);
@@ -562,17 +524,17 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 }
 
 /// Build the key for inserting header-CHT at given block.
-fn cht_key<N: TryInto<u32>>(cht_type: u8, block: N) -> [u8; 5] {
+fn cht_key<N: TryInto<u32>>(cht_type: u8, block: N) -> ClientResult<[u8; 5]> {
 	let mut key = [cht_type; 5];
-	key[1..].copy_from_slice(&utils::number_index_key(block));
-	key
+	key[1..].copy_from_slice(&utils::number_index_key(block)?);
+	Ok(key)
 }
 
 #[cfg(test)]
 pub(crate) mod tests {
 	use client::cht;
-	use runtime_primitives::generic::DigestItem;
-	use runtime_primitives::testing::{H256 as Hash, Header, Block as RawBlock, ExtrinsicWrapper};
+	use sr_primitives::generic::DigestItem;
+	use sr_primitives::testing::{H256 as Hash, Header, Block as RawBlock, ExtrinsicWrapper};
 	use super::*;
 
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
@@ -887,7 +849,8 @@ pub(crate) mod tests {
 		}
 
 		fn get_authorities(cache: &dyn BlockchainCache<Block>, at: BlockId<Block>) -> Option<Vec<AuthorityId>> {
-			cache.get_at(&well_known_cache_keys::AUTHORITIES, &at).and_then(|val| Decode::decode(&mut &val[..]))
+			cache.get_at(&well_known_cache_keys::AUTHORITIES, &at)
+				.and_then(|val| Decode::decode(&mut &val[..]).ok())
 		}
 
 		let auth1 = || AuthorityId::from_raw([1u8; 32]);
@@ -1063,30 +1026,6 @@ pub(crate) mod tests {
 		assert_eq!(db.get_aux(&[1]).unwrap(), None);
 		assert_eq!(db.get_aux(&[2]).unwrap(), Some(vec![102]));
 		assert_eq!(db.get_aux(&[3]).unwrap(), Some(vec![103]));
-	}
-
-	#[test]
-	fn test_leaves_pruned_on_finality() {
-		let db = LightStorage::<Block>::new_test();
-		let block0 = insert_block(&db, HashMap::new(), || default_header(&Default::default(), 0));
-
-		let block1_a = insert_block(&db, HashMap::new(), || default_header(&block0, 1));
-		let block1_b = insert_block(&db, HashMap::new(), || header_with_extrinsics_root(&block0, 1, [1; 32].into()));
-		let block1_c = insert_block(&db, HashMap::new(), || header_with_extrinsics_root(&block0, 1, [2; 32].into()));
-
-		assert_eq!(db.leaves.read().hashes(), vec![block1_a, block1_b, block1_c]);
-
-		let block2_a = insert_block(&db, HashMap::new(), || default_header(&block1_a, 2));
-		let block2_b = insert_block(&db, HashMap::new(), || header_with_extrinsics_root(&block1_b, 2, [1; 32].into()));
-		let block2_c = insert_block(&db, HashMap::new(), || header_with_extrinsics_root(&block1_b, 2, [2; 32].into()));
-
-		assert_eq!(db.leaves.read().hashes(), vec![block2_a, block2_b, block2_c, block1_c]);
-
-		db.finalize_header(BlockId::hash(block1_a)).unwrap();
-		db.finalize_header(BlockId::hash(block2_a)).unwrap();
-
-		// leaves at same height stay. Leaves at lower heights pruned.
-		assert_eq!(db.leaves.read().hashes(), vec![block2_a, block2_b, block2_c]);
 	}
 
 	#[test]

@@ -25,7 +25,7 @@ use crate::trie_backend_essence::TrieBackendEssence;
 use crate::changes_trie::{AnchorBlockId, Configuration, Storage, BlockNumber};
 use crate::changes_trie::storage::TrieBackendAdapter;
 use crate::changes_trie::input::{ChildIndex, InputKey};
-use parity_codec::Decode;
+use codec::Decode;
 
 /// Get number of oldest block for which changes trie is not pruned
 /// given changes trie configuration, pruning parameter and number of
@@ -92,8 +92,8 @@ pub fn prune<S: Storage<H, Number>, H: Hasher, Number: BlockNumber, F: FnMut(H::
 			let child_prefix = ChildIndex::key_neutral_prefix(block.clone());
 			let mut children_roots = Vec::new();
 			trie_storage.for_key_values_with_prefix(&child_prefix, |key, value| {
-				if let Some(InputKey::ChildIndex::<Number>(_trie_key)) = Decode::decode(&mut &key[..]) {
-					if let Some(value) = <Vec<u8>>::decode(&mut &value[..]) {
+				if let Ok(InputKey::ChildIndex::<Number>(_trie_key)) = Decode::decode(&mut &key[..]) {
+					if let Ok(value) = <Vec<u8>>::decode(&mut &value[..]) {
 						let mut trie_root = <H as Hasher>::Out::default();
 						trie_root.as_mut().copy_from_slice(&value[..]);
 						children_roots.push(trie_root);
@@ -204,7 +204,7 @@ mod tests {
 	use primitives::Blake2Hasher;
 	use crate::backend::insert_into_memory_db;
 	use crate::changes_trie::storage::InMemoryStorage;
-	use parity_codec::Encode;
+	use codec::Encode;
 	use super::*;
 
 	fn config(interval: u32, levels: u32) -> Configuration {

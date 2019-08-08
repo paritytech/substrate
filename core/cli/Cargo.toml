@@ -25,7 +25,7 @@ serde_json = "1.0"
 panic-handler = { package = "substrate-panic-handler", path = "../../core/panic-handler" }
 client = { package = "substrate-client", path = "../../core/client" }
 network = { package = "substrate-network", path = "../../core/network" }
-runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
+sr-primitives = { path = "../../core/sr-primitives" }
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
 service = { package = "substrate-service", path = "../../core/service" }
 state-machine = { package = "substrate-state-machine", path = "../../core/state-machine" }

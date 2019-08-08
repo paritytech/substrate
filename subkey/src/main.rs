@@ -18,15 +18,18 @@
 #[cfg(feature = "bench")]
 extern crate test;
 
-use std::{str::FromStr, io::{stdin, Read}};
+use std::{str::FromStr, io::{stdin, Read}, convert::TryInto};
 use hex_literal::hex;
 use clap::load_yaml;
 use bip39::{Mnemonic, Language, MnemonicType};
-use substrate_primitives::{ed25519, sr25519, hexdisplay::HexDisplay, Pair, Public, crypto::Ss58Codec, blake2_256};
-use parity_codec::{Encode, Decode, Compact};
+use primitives::{
+	ed25519, sr25519, hexdisplay::HexDisplay, Pair, Public, blake2_256,
+	crypto::{Ss58Codec, set_default_ss58_version, Ss58AddressFormat}
+};
+use codec::{Encode, Decode};
 use sr_primitives::generic::Era;
 use node_primitives::{Balance, Index, Hash};
-use node_runtime::{Call, UncheckedExtrinsic, BalancesCall};
+use node_runtime::{Call, UncheckedExtrinsic, BalancesCall, Runtime};
 
 mod vanity;
 
@@ -52,11 +55,12 @@ trait Crypto {
 				HexDisplay::from(&Self::public_from_pair(&pair)),
 				Self::ss58_from_pair(&pair)
 			);
-		} else if let Ok(public) = <Self::Pair as Pair>::Public::from_string(uri) {
-			println!("Public Key URI `{}` is account:\n  Public key (hex): 0x{}\n  Address (SS58): {}",
+		} else if let Ok((public, v)) = <Self::Pair as Pair>::Public::from_string_with_version(uri) {
+			println!("Public Key URI `{}` is account:\n  Network ID/version: {}\n  Public key (hex): 0x{}\n  Address (SS58): {}",
 				uri,
+				String::from(Ss58AddressFormat::from(v)),
 				HexDisplay::from(&public.as_ref()),
-				public.to_ss58check()
+				public.to_ss58check_with_version(v)
 			);
 		} else {
 			println!("Invalid phrase/URI given");
@@ -84,9 +88,24 @@ impl Crypto for Sr25519 {
 
 fn execute<C: Crypto>(matches: clap::ArgMatches) where
 	<<C as Crypto>::Pair as Pair>::Signature: AsRef<[u8]> + AsMut<[u8]> + Default,
-	<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec + AsRef<<<C as Crypto>::Pair as Pair>::Public>,
+	<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec,
 {
+	let extra = |i: Index, f: Balance| {
+		(
+			system::CheckGenesis::<Runtime>::new(),
+			system::CheckEra::<Runtime>::from(Era::Immortal),
+			system::CheckNonce::<Runtime>::from(i),
+			system::CheckWeight::<Runtime>::new(),
+			balances::TakeFees::<Runtime>::from(f),
+		)
+	};
 	let password = matches.value_of("password");
+	let maybe_network = matches.value_of("network");
+	if let Some(network) = maybe_network {
+		let v = network.try_into()
+			.expect("Invalid network name: must be polkadot/substrate/kusama");
+		set_default_ss58_version(v);
+	}
 	match matches.subcommand() {
 		("generate", Some(matches)) => {
 			// create a new randomly generated mnemonic phrase
@@ -146,14 +165,17 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 			let genesis_hash: Hash = match matches.value_of("genesis").unwrap_or("alex") {
 				"elm" => hex!["10c08714a10c7da78f40a60f6f732cf0dba97acfb5e2035445b032386157d5c3"].into(),
 				"alex" => hex!["dcd1346701ca8396496e52aa2785b1748deb6db09551b72159dcb3e08991025b"].into(),
-				h => hex::decode(h).ok().and_then(|x| Decode::decode(&mut &x[..]))
-          .expect("Invalid genesis hash or unrecognised chain identifier"),
+				h => hex::decode(h).ok().and_then(|x| Decode::decode(&mut &x[..]).ok())
+					.expect("Invalid genesis hash or unrecognised chain identifier"),
 			};
 
 			println!("Using a genesis hash of {}", HexDisplay::from(&genesis_hash.as_ref()));
 
-			let era = Era::immortal();
-			let raw_payload = (Compact(index), function, era, genesis_hash);
+			let raw_payload = (
+				function,
+				extra(index, 0),
+				(&genesis_hash, &genesis_hash),
+			);
 			let signature = raw_payload.using_encoded(|payload| if payload.len() > 256 {
 				signer.sign(&blake2_256(payload)[..])
 			} else {
@@ -161,11 +183,10 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 				signer.sign(payload)
 			});
 			let extrinsic = UncheckedExtrinsic::new_signed(
-				index,
-				raw_payload.1,
+				raw_payload.0,
 				signer.public().into(),
 				signature.into(),
-				era,
+				extra(index, 0),
 			);
 			println!("0x{}", hex::encode(&extrinsic.encode()));
 		}
@@ -182,17 +203,22 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 			let call = matches.value_of("call")
 				.expect("call is required; thus it can't be None; qed");
 			let function: Call = hex::decode(&call).ok()
-				.and_then(|x| Decode::decode(&mut &x[..])).unwrap();
+				.and_then(|x| Decode::decode(&mut &x[..]).ok()).unwrap();
 
-			let h = matches.value_of("prior-block-hash")
-				.expect("prior-block-hash is required; thus it can't be None; qed");
-			let prior_block_hash: Hash = hex::decode(h).ok()
-				.and_then(|x| Decode::decode(&mut &x[..]))
-				.expect("Invalid prior block hash");
+			let genesis_hash: Hash = match matches.value_of("genesis").unwrap_or("alex") {
+				"elm" => hex!["10c08714a10c7da78f40a60f6f732cf0dba97acfb5e2035445b032386157d5c3"].into(),
+				"alex" => hex!["dcd1346701ca8396496e52aa2785b1748deb6db09551b72159dcb3e08991025b"].into(),
+				h => hex::decode(h).ok().and_then(|x| Decode::decode(&mut &x[..]).ok())
+					.expect("Invalid genesis hash or unrecognised chain identifier"),
+			};
 
-			let era = Era::immortal();
+			println!("Using a genesis hash of {}", HexDisplay::from(&genesis_hash.as_ref()));
 
-			let raw_payload = (Compact(index), function, era, prior_block_hash);
+			let raw_payload = (
+				function,
+				extra(index, 0),
+				(&genesis_hash, &genesis_hash),
+			);
 			let signature = raw_payload.using_encoded(|payload|
 				if payload.len() > 256 {
 					signer.sign(&blake2_256(payload)[..])
@@ -202,11 +228,10 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 			);
 
 			let extrinsic = UncheckedExtrinsic::new_signed(
-				index,
-				raw_payload.1,
+				raw_payload.0,
 				signer.public().into(),
 				signature.into(),
-				era,
+				extra(index, 0),
 			);
 
 			println!("0x{}", hex::encode(&extrinsic.encode()));
@@ -264,7 +289,7 @@ mod tests {
 	fn should_work() {
 		let s = "0123456789012345678901234567890123456789012345678901234567890123";
 
-		let d1: Hash = hex::decode(s).ok().and_then(|x| Decode::decode(&mut &x[..])).unwrap();
+		let d1: Hash = hex::decode(s).ok().and_then(|x| Decode::decode(&mut &x[..]).ok()).unwrap();
 
 		let d2: Hash = {
 			let mut gh: [u8; 32] = Default::default();

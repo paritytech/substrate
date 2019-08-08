@@ -18,10 +18,11 @@
 
 #![cfg(test)]
 
-use primitives::{traits::{IdentityLookup}, testing::Header};
-use substrate_primitives::{H256, Blake2Hasher};
+use sr_primitives::{Perbill, traits::{Convert, IdentityLookup}, testing::Header, weights::{DispatchInfo, Weight}};
+use primitives::{H256, Blake2Hasher};
 use runtime_io;
-use srml_support::{impl_outer_origin, parameter_types, traits::Get};
+use srml_support::{impl_outer_origin, parameter_types};
+use srml_support::traits::Get;
 use std::cell::RefCell;
 use crate::{GenesisConfig, Module, Trait};
 
@@ -34,7 +35,9 @@ thread_local! {
 	static TRANSFER_FEE: RefCell<u64> = RefCell::new(0);
 	static CREATION_FEE: RefCell<u64> = RefCell::new(0);
 	static TRANSACTION_BASE_FEE: RefCell<u64> = RefCell::new(0);
-	static TRANSACTION_BYTE_FEE: RefCell<u64> = RefCell::new(0);
+	static TRANSACTION_BYTE_FEE: RefCell<u64> = RefCell::new(1);
+	static TRANSACTION_WEIGHT_FEE: RefCell<u64> = RefCell::new(1);
+	static WEIGHT_TO_FEE: RefCell<u64> = RefCell::new(1);
 }
 
 pub struct ExistentialDeposit;
@@ -62,23 +65,38 @@ impl Get<u64> for TransactionByteFee {
 	fn get() -> u64 { TRANSACTION_BYTE_FEE.with(|v| *v.borrow()) }
 }
 
+pub struct WeightToFee(u64);
+impl Convert<Weight, u64> for WeightToFee {
+	fn convert(t: Weight) -> u64 {
+		WEIGHT_TO_FEE.with(|v| *v.borrow() * (t as u64))
+	}
+}
+
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Runtime;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
+	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockLength: u32 = 2 * 1024;
+	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl system::Trait for Runtime {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
+	type Call = ();
 	type Hash = H256;
-	type Hashing = ::primitives::traits::BlakeTwo256;
+	type Hashing = ::sr_primitives::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
+	type WeightMultiplierUpdate = ();
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type MaximumBlockLength = MaximumBlockLength;
+	type AvailableBlockRatio = AvailableBlockRatio;
 }
 impl Trait for Runtime {
 	type Balance = u64;
@@ -93,11 +111,13 @@ impl Trait for Runtime {
 	type CreationFee = CreationFee;
 	type TransactionBaseFee = TransactionBaseFee;
 	type TransactionByteFee = TransactionByteFee;
+	type WeightToFee = WeightToFee;
 }
 
 pub struct ExtBuilder {
 	transaction_base_fee: u64,
 	transaction_byte_fee: u64,
+	weight_to_fee: u64,
 	existential_deposit: u64,
 	transfer_fee: u64,
 	creation_fee: u64,
@@ -109,6 +129,7 @@ impl Default for ExtBuilder {
 		Self {
 			transaction_base_fee: 0,
 			transaction_byte_fee: 0,
+			weight_to_fee: 0,
 			existential_deposit: 0,
 			transfer_fee: 0,
 			creation_fee: 0,
@@ -118,6 +139,12 @@ impl Default for ExtBuilder {
 	}
 }
 impl ExtBuilder {
+	pub fn transaction_fees(mut self, base_fee: u64, byte_fee: u64, weight_fee: u64) -> Self {
+		self.transaction_base_fee = base_fee;
+		self.transaction_byte_fee = byte_fee;
+		self.weight_to_fee = weight_fee;
+		self
+	}
 	pub fn existential_deposit(mut self, existential_deposit: u64) -> Self {
 		self.existential_deposit = existential_deposit;
 		self
@@ -129,11 +156,6 @@ impl ExtBuilder {
 	}
 	pub fn creation_fee(mut self, creation_fee: u64) -> Self {
 		self.creation_fee = creation_fee;
-		self
-	}
-	pub fn transaction_fees(mut self, base_fee: u64, byte_fee: u64) -> Self {
-		self.transaction_base_fee = base_fee;
-		self.transaction_byte_fee = byte_fee;
 		self
 	}
 	pub fn monied(mut self, monied: bool) -> Self {
@@ -153,6 +175,7 @@ impl ExtBuilder {
 		CREATION_FEE.with(|v| *v.borrow_mut() = self.creation_fee);
 		TRANSACTION_BASE_FEE.with(|v| *v.borrow_mut() = self.transaction_base_fee);
 		TRANSACTION_BYTE_FEE.with(|v| *v.borrow_mut() = self.transaction_byte_fee);
+		WEIGHT_TO_FEE.with(|v| *v.borrow_mut() = self.weight_to_fee);
 	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 		self.set_associated_consts();
@@ -185,3 +208,11 @@ impl ExtBuilder {
 
 pub type System = system::Module<Runtime>;
 pub type Balances = Module<Runtime>;
+
+
+pub const CALL: &<Runtime as system::Trait>::Call = &();
+
+/// create a transaction info struct from weight. Handy to avoid building the whole struct.
+pub fn info_from_weight(w: Weight) -> DispatchInfo {
+	DispatchInfo { weight: w, ..Default::default() }
+}

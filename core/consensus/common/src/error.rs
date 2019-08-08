@@ -33,7 +33,7 @@ pub enum Error {
 	IoTerminated,
 	/// Unable to schedule wakeup.
 	#[display(fmt="Timer error: {}", _0)]
-	FaultyTimer(tokio_timer::Error),
+	FaultyTimer(std::io::Error),
 	/// Error while working with inherent data.
 	#[display(fmt="InherentData error: {}", _0)]
 	InherentData(String),

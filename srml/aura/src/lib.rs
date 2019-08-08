@@ -51,11 +51,11 @@
 pub use timestamp;
 
 use rstd::{result, prelude::*};
-use parity_codec::Encode;
+use codec::Encode;
 use srml_support::{decl_storage, decl_module, Parameter, storage::StorageValue, traits::Get};
-use primitives::{
-	traits::{SaturatedConversion, Saturating, Zero, One, Member, TypedKey},
-	generic::DigestItem,
+use app_crypto::AppPublic;
+use sr_primitives::{
+	traits::{SaturatedConversion, Saturating, Zero, One, Member, IsMember}, generic::DigestItem,
 };
 use timestamp::OnTimestampSet;
 #[cfg(feature = "std")]
@@ -65,7 +65,7 @@ use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent
 use inherents::{InherentDataProviders, ProvideInherentData};
 use substrate_consensus_aura_primitives::{AURA_ENGINE_ID, ConsensusLog};
 #[cfg(feature = "std")]
-use parity_codec::Decode;
+use codec::Decode;
 
 mod mock;
 mod tests;
@@ -138,7 +138,7 @@ impl ProvideInherentData for InherentDataProvider {
 	}
 
 	fn error_to_string(&self, error: &[u8]) -> Option<String> {
-		RuntimeString::decode(&mut &error[..]).map(Into::into)
+		RuntimeString::decode(&mut &error[..]).map(Into::into).ok()
 	}
 }
 
@@ -156,7 +156,7 @@ pub trait Trait: timestamp::Trait {
 	type HandleReport: HandleReport;
 
 	/// The identifier type for an authority.
-	type AuthorityId: Member + Parameter + TypedKey + Default;
+	type AuthorityId: Member + Parameter + AppPublic + Default;
 }
 
 decl_storage! {
@@ -188,7 +188,7 @@ impl<T: Trait> Module<T> {
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = T::AuthorityId;
 
-	fn on_new_session<'a, I: 'a>(changed: bool, validators: I)
+	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, _queued_validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, T::AuthorityId)>
 	{
 		// instant changes
@@ -207,6 +207,14 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 		);
 
 		<system::Module<T>>::deposit_log(log.into());
+	}
+}
+
+impl<T: Trait> IsMember<T::AuthorityId> for Module<T> {
+	fn is_member(authority_id: &T::AuthorityId) -> bool {
+		Self::authorities()
+			.iter()
+			.any(|id| id == authority_id)
 	}
 }
 

@@ -17,8 +17,8 @@
 //! Network packet message types. These get serialized and put into the lower level protocol payload.
 
 use bitflags::bitflags;
-use runtime_primitives::{ConsensusEngineId, traits::{Block as BlockT, Header as HeaderT}};
-use parity_codec::{Encode, Decode, Input, Output};
+use sr_primitives::{ConsensusEngineId, traits::{Block as BlockT, Header as HeaderT}};
+use codec::{Encode, Decode, Input, Output, Error};
 pub use self::generic::{
 	BlockAnnounce, RemoteCallRequest, RemoteReadRequest,
 	RemoteHeaderRequest, RemoteHeaderResponse,
@@ -90,9 +90,11 @@ impl Encode for BlockAttributes {
 	}
 }
 
+impl codec::EncodeLike for BlockAttributes {}
+
 impl Decode for BlockAttributes {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Self::from_bits(input.read_byte()?)
+	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
+		Self::from_bits(input.read_byte()?).ok_or_else(|| Error::from("Invalid bytes"))
 	}
 }
 
@@ -125,9 +127,8 @@ pub struct RemoteReadResponse {
 
 /// Generic types.
 pub mod generic {
-	use crate::custom_proto::CustomMessage;
-	use parity_codec::{Encode, Decode};
-	use runtime_primitives::Justification;
+	use codec::{Encode, Decode};
+	use sr_primitives::Justification;
 	use crate::config::Roles;
 	use super::{
 		RemoteReadResponse, Transactions, Direction,
@@ -208,18 +209,6 @@ pub mod generic {
 		/// Chain-specific message.
 		#[codec(index = "255")]
 		ChainSpecific(Vec<u8>),
-	}
-
-	impl<Header, Hash, Number, Extrinsic> CustomMessage for Message<Header, Hash, Number, Extrinsic>
-		where Self: Decode + Encode
-	{
-		fn into_bytes(self) -> Vec<u8> {
-			self.encode()
-		}
-
-		fn from_bytes(bytes: &[u8]) -> Result<Self, ()> {
-			Decode::decode(&mut &bytes[..]).ok_or(())
-		}
 	}
 
 	/// Status sent on connection.

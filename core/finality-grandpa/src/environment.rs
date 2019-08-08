@@ -20,23 +20,24 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use log::{debug, warn, info};
-use parity_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use futures::prelude::*;
 use tokio_timer::Delay;
 use parking_lot::RwLock;
 
 use client::{
-	backend::Backend, BlockchainEvents, CallExecutor, Client, error::Error as ClientError
+	backend::Backend, BlockchainEvents, CallExecutor, Client, error::Error as ClientError,
+	utils::is_descendent_of,
 };
 use grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
 	voter, voter_set::VoterSet,
 };
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{
-	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, BlockNumberToHash,
+use primitives::{Blake2Hasher, H256, Pair};
+use sr_primitives::generic::BlockId;
+use sr_primitives::traits::{
+	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
 };
-use substrate_primitives::{Blake2Hasher, ed25519, H256, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
 use crate::{
@@ -94,8 +95,10 @@ impl<Block: BlockT> Encode for CompletedRounds<Block> {
 	}
 }
 
+impl<Block: BlockT> codec::EncodeLike for CompletedRounds<Block> {}
+
 impl<Block: BlockT> Decode for CompletedRounds<Block> {
-	fn decode<I: parity_codec::Input>(value: &mut I) -> Option<Self> {
+	fn decode<I: codec::Input>(value: &mut I) -> Result<Self, codec::Error> {
 		<(Vec<CompletedRound<Block>>, u64, Vec<AuthorityId>)>::decode(value)
 			.map(|(rounds, set_id, voters)| CompletedRounds {
 				rounds: rounds.into(),
@@ -475,7 +478,7 @@ where
 {
 	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
 	type Id = AuthorityId;
-	type Signature = ed25519::Signature;
+	type Signature = AuthoritySignature;
 
 	// regular round message streams
 	type In = Box<dyn Stream<
@@ -497,15 +500,25 @@ where
 		let prevote_timer = Delay::new(now + self.config.gossip_duration * 2);
 		let precommit_timer = Delay::new(now + self.config.gossip_duration * 4);
 
-		let local_key = self.config.local_key.as_ref()
-			.filter(|pair| self.voters.contains_key(&pair.public().into()));
+		let local_key = crate::is_voter(&self.voters, &self.config.keystore);
+
+		let has_voted = match self.voter_set_state.has_voted() {
+			HasVoted::Yes(id, vote) => {
+				if local_key.as_ref().map(|k| k.public() == id).unwrap_or(false) {
+					HasVoted::Yes(id, vote)
+				} else {
+					HasVoted::No
+				}
+			},
+			HasVoted::No => HasVoted::No,
+		};
 
 		let (incoming, outgoing) = self.network.round_communication(
 			crate::communication::Round(round),
 			crate::communication::SetId(self.set_id),
 			self.voters.clone(),
-			local_key.cloned(),
-			self.voter_set_state.has_voted(),
+			local_key.clone(),
+			has_voted,
 		);
 
 		// schedule incoming messages from the network to be held until
@@ -520,7 +533,7 @@ where
 		let outgoing = Box::new(outgoing.sink_map_err(Into::into));
 
 		voter::RoundData {
-			voter_id: self.config.local_key.as_ref().map(|pair| pair.public().clone()),
+			voter_id: local_key.map(|pair| pair.public()),
 			prevote_timer: Box::new(prevote_timer.map_err(|e| Error::Timer(e).into())),
 			precommit_timer: Box::new(precommit_timer.map_err(|e| Error::Timer(e).into())),
 			incoming,
@@ -529,12 +542,10 @@ where
 	}
 
 	fn proposed(&self, _round: u64, propose: PrimaryPropose<Block>) -> Result<(), Self::Error> {
-		let local_id = self.config.local_key.as_ref()
-			.map(|pair| pair.public().into())
-			.filter(|id| self.voters.contains_key(&id));
+		let local_id = crate::is_voter(&self.voters, &self.config.keystore);
 
 		let local_id = match local_id {
-			Some(id) => id,
+			Some(id) => id.public(),
 			None => return Ok(()),
 		};
 
@@ -568,12 +579,10 @@ where
 	}
 
 	fn prevoted(&self, _round: u64, prevote: Prevote<Block>) -> Result<(), Self::Error> {
-		let local_id = self.config.local_key.as_ref()
-			.map(|pair| pair.public().into())
-			.filter(|id| self.voters.contains_key(&id));
+		let local_id = crate::is_voter(&self.voters, &self.config.keystore);
 
 		let local_id = match local_id {
-			Some(id) => id,
+			Some(id) => id.public(),
 			None => return Ok(()),
 		};
 
@@ -610,12 +619,10 @@ where
 	}
 
 	fn precommitted(&self, _round: u64, precommit: Precommit<Block>) -> Result<(), Self::Error> {
-		let local_id = self.config.local_key.as_ref()
-			.map(|pair| pair.public().into())
-			.filter(|id| self.voters.contains_key(&id));
+		let local_id = crate::is_voter(&self.voters, &self.config.keystore);
 
 		let local_id = match local_id {
-			Some(id) => id,
+			Some(id) => id.public(),
 			None => return Ok(()),
 		};
 
@@ -961,10 +968,10 @@ pub(crate) fn canonical_at_height<B, E, Block: BlockT<Hash=H256>, RA>(
 		if base_is_canonical {
 			return Ok(Some(base.0));
 		} else {
-			return Ok(client.block_number_to_hash(height));
+			return Ok(client.block_hash(height).unwrap_or(None));
 		}
 	} else if base_is_canonical {
-		return Ok(client.block_number_to_hash(height));
+		return Ok(client.block_hash(height).unwrap_or(None));
 	}
 
 	let one = NumberFor::<Block>::one();
@@ -989,43 +996,4 @@ pub(crate) fn canonical_at_height<B, E, Block: BlockT<Hash=H256>, RA>(
 	}
 
 	Ok(Some(current.hash()))
-}
-
-/// Returns a function for checking block ancestry, the returned function will
-/// return `true` if the given hash (second parameter) is a descendent of the
-/// base (first parameter). If the `current` parameter is defined, it should
-/// represent the current block `hash` and its `parent hash`, if given the
-/// function that's returned will assume that `hash` isn't part of the local DB
-/// yet, and all searches in the DB will instead reference the parent.
-pub fn is_descendent_of<'a, B, E, Block: BlockT<Hash=H256>, RA>(
-	client: &'a Client<B, E, Block, RA>,
-	current: Option<(&'a H256, &'a H256)>,
-) -> impl Fn(&H256, &H256) -> Result<bool, client::error::Error> + 'a
-where B: Backend<Block, Blake2Hasher>,
-	  E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
-{
-	move |base, hash| {
-		if base == hash { return Ok(false); }
-
-		let mut hash = hash;
-		if let Some((current_hash, current_parent_hash)) = current {
-			if base == current_hash { return Ok(false); }
-			if hash == current_hash {
-				if base == current_parent_hash {
-					return Ok(true);
-				} else {
-					hash = current_parent_hash;
-				}
-			}
-		}
-
-		let tree_route = client::blockchain::tree_route(
-			#[allow(deprecated)]
-			client.backend().blockchain(),
-			BlockId::Hash(*hash),
-			BlockId::Hash(*base),
-		)?;
-
-		Ok(tree_route.common_block().hash == *base)
-	}
 }

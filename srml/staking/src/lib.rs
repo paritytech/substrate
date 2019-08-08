@@ -167,20 +167,31 @@
 //!
 //! ### Reward Calculation
 //!
-//! Rewards are recorded **per-session** and paid **per-era**. The value of the reward for each
-//! session is calculated at the end of the session based on the timeliness of the session, then
-//! accumulated to be paid later. The value of the new _per-session-reward_ is calculated at the end
-//! of each era by multiplying `SlotStake` and `SessionReward`  (`SessionReward` is the
-//! multiplication factor, represented by a number between 0 and 1). Once a new era is triggered,
-//! rewards are paid to the validators and their associated nominators.
+//! Validators and nominators are rewarded at the end of each era. The total reward of an era is
+//! calculated using the era duration and the staking rate (the total amount of tokens staked by
+//! nominators and validators, divided by the total token supply). It aims to incentivise toward a
+//! defined staking rate. The full specification can be found
+//! [here](https://research.web3.foundation/en/latest/polkadot/Token%20Economics/#inflation-model).
+//!
+//! Total reward is split among validators and their nominators depending on the number of points
+//! they received during the era. Points are added to a validator using
+//! [`reward_by_ids`](./enum.Call.html#variant.reward_by_ids) or
+//! [`reward_by_indices`](./enum.Call.html#variant.reward_by_indices).
+//!
+//! [`Module`](./struct.Module.html) implements
+//! [`authorship::EventHandler`](../srml_authorship/trait.EventHandler.html) to add reward points
+//! to block producer and block producer of referenced uncles.
+//!
+//! The validator and its nominator split their reward as following:
 //!
 //! The validator can declare an amount, named
 //! [`validator_payment`](./struct.ValidatorPrefs.html#structfield.validator_payment), that does not
 //! get shared with the nominators at each reward payout through its
 //! [`ValidatorPrefs`](./struct.ValidatorPrefs.html). This value gets deducted from the total reward
-//! that can be paid. The remaining portion is split among the validator and all of the nominators
-//! that nominated the validator, proportional to the value staked behind this validator (_i.e._
-//! dividing the [`own`](./struct.Exposure.html#structfield.own) or
+//! that is paid to the validator and its nominators. The remaining portion is split among the
+//! validator and all of the nominators that nominated the validator, proportional to the value
+//! staked behind this validator (_i.e._ dividing the
+//! [`own`](./struct.Exposure.html#structfield.own) or
 //! [`others`](./struct.Exposure.html#structfield.others) by
 //! [`total`](./struct.Exposure.html#structfield.total) in [`Exposure`](./struct.Exposure.html)).
 //!
@@ -266,6 +277,7 @@ mod mock;
 mod tests;
 
 mod phragmen;
+mod inflation;
 
 #[cfg(all(feature = "bench", test))]
 mod benches;
@@ -273,21 +285,23 @@ mod benches;
 #[cfg(feature = "std")]
 use runtime_io::with_storage;
 use rstd::{prelude::*, result, collections::btree_map::BTreeMap};
-use parity_codec::{HasCompact, Encode, Decode};
+use codec::{HasCompact, Encode, Decode};
 use srml_support::{
 	StorageValue, StorageMap, EnumerableStorageMap, decl_module, decl_event,
 	decl_storage, ensure, traits::{
 		Currency, OnFreeBalanceZero, OnDilution, LockIdentifier, LockableCurrency,
-		WithdrawReasons, WithdrawReason, OnUnbalanced, Imbalance, Get
+		WithdrawReasons, WithdrawReason, OnUnbalanced, Imbalance, Get, Time
 	}
 };
 use session::{historical::OnSessionEnding, SelectInitialValidators, SessionIndex};
-use primitives::Perbill;
-use primitives::traits::{
+use sr_primitives::Perbill;
+use sr_primitives::weights::SimpleDispatchInfo;
+use sr_primitives::traits::{
 	Convert, Zero, One, StaticLookup, CheckedSub, CheckedShl, Saturating, Bounded,
+	SaturatedConversion, SimpleArithmetic
 };
 #[cfg(feature = "std")]
-use primitives::{Serialize, Deserialize};
+use sr_primitives::{Serialize, Deserialize};
 use system::{ensure_signed, ensure_root};
 
 use phragmen::{elect, ACCURACY, ExtendedBalance, equalize};
@@ -301,6 +315,28 @@ const STAKING_ID: LockIdentifier = *b"staking ";
 
 /// Counter for the number of eras that have passed.
 pub type EraIndex = u32;
+
+/// Reward points of an era. Used to split era total payout between validators.
+#[derive(Encode, Decode, Default)]
+pub struct EraRewards {
+	/// Total number of points. Equals the sum of reward points for each validator.
+	total: u32,
+	/// Reward at one index correspond to reward for validator in current_elected of this index.
+	/// Thus this reward vec is only valid for one elected set.
+	rewards: Vec<u32>,
+}
+
+impl EraRewards {
+	/// Add the reward to the validator at the given index. Index must be valid
+	/// (i.e. `index < current_elected.len()`).
+	fn add_points_to_index(&mut self, index: u32, points: u32) {
+		if let Some(new_total) = self.total.checked_add(points) {
+			self.total = new_total;
+			self.rewards.resize((index as usize + 1).max(self.rewards.len()), 0);
+			self.rewards[index as usize] += points; // Addition is less than total
+		}
+	}
+}
 
 /// Indicates the initial status of the staker.
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
@@ -429,11 +465,13 @@ pub struct Exposure<AccountId, Balance: HasCompact> {
 	pub others: Vec<IndividualExposure<AccountId, Balance>>,
 }
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+pub type BalanceOf<T> =
+	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 type PositiveImbalanceOf<T> =
-<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::PositiveImbalance;
+	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::PositiveImbalance;
 type NegativeImbalanceOf<T> =
-<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
+	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
+type MomentOf<T>= <<T as Trait>::Time as Time>::Moment;
 
 type RawAssignment<T> = (<T as system::Trait>::AccountId, ExtendedBalance);
 type Assignment<T> = (<T as system::Trait>::AccountId, ExtendedBalance, BalanceOf<T>);
@@ -447,7 +485,7 @@ pub const DEFAULT_BONDING_DURATION: u32 = 1;
 
 /// Means for interacting with a specialized version of the `session` trait.
 ///
-/// This is needed because `Staking` sets the `ValidatorId` of the `session::Trait`
+/// This is needed because `Staking` sets the `ValidatorIdOf` of the `session::Trait`
 pub trait SessionInterface<AccountId>: system::Trait {
 	/// Disable a given validator by stash ID.
 	fn disable_validator(validator: &AccountId) -> Result<(), ()>;
@@ -484,6 +522,9 @@ impl<T: Trait> SessionInterface<<T as system::Trait>::AccountId> for T where
 pub trait Trait: system::Trait {
 	/// The staking balance.
 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
+
+	/// Time used for computing era duration.
+	type Time: Time;
 
 	/// Convert a balance into a number used for election calculation.
 	/// This must fit into a `u64` but is allowed to be sensibly lossy.
@@ -522,8 +563,6 @@ decl_storage! {
 		/// Minimum number of staking participants before emergency conditions are imposed.
 		pub MinimumValidatorCount get(minimum_validator_count) config():
 			u32 = DEFAULT_MINIMUM_VALIDATOR_COUNT;
-		/// Maximum reward, per validator, that is provided per acceptable session.
-		pub SessionReward get(session_reward) config(): Perbill = Perbill::from_parts(60);
 		/// Slash, per validator that is taken for the first time they are found to be offline.
 		pub OfflineSlash get(offline_slash) config(): Perbill = Perbill::from_millionths(1000);
 		/// Number of instances of offline reports before slashing begins for validators.
@@ -561,12 +600,14 @@ decl_storage! {
 		/// The current era index.
 		pub CurrentEra get(current_era) config(): EraIndex;
 
-		/// Maximum reward, per validator, that is provided per acceptable session.
-		pub CurrentSessionReward get(current_session_reward) config(): BalanceOf<T>;
+		/// The start of the current era.
+		pub CurrentEraStart get(current_era_start): MomentOf<T>;
 
-		/// The accumulated reward for the current era. Reset to zero at the beginning of the era
-		/// and increased for every successfully finished session.
-		pub CurrentEraReward get(current_era_reward): BalanceOf<T>;
+		/// The session index at which the current era started.
+		pub CurrentEraStartSessionIndex get(current_era_start_session_index): SessionIndex;
+
+		/// Rewards for the current era. Using indices of current elected set.
+		CurrentEraRewards get(current_era_reward): EraRewards;
 
 		/// The amount of balance actively at stake for each validator slot, currently.
 		///
@@ -593,8 +634,8 @@ decl_storage! {
 		config(stakers):
 			Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>;
 		build(|
-			storage: &mut primitives::StorageOverlay,
-			_: &mut primitives::ChildrenStorageOverlay,
+			storage: &mut sr_primitives::StorageOverlay,
+			_: &mut sr_primitives::ChildrenStorageOverlay,
 			config: &GenesisConfig<T>
 		| {
 			with_storage(storage, || {
@@ -650,6 +691,13 @@ decl_module! {
 
 		fn deposit_event<T>() = default;
 
+		fn on_finalize() {
+			// Set the start of the first era.
+			if !<CurrentEraStart<T>>::exists() {
+				<CurrentEraStart<T>>::put(T::Time::now());
+			}
+		}
+
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will
 		/// be the account that controls it.
 		///
@@ -665,6 +713,7 @@ decl_module! {
 		/// NOTE: Two of the storage writes (`Self::bonded`, `Self::payee`) are _never_ cleaned unless
 		/// the `origin` falls below _existential deposit_ and gets removed as dust.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn bond(origin,
 			controller: <T::Lookup as StaticLookup>::Source,
 			#[compact] value: BalanceOf<T>,
@@ -712,6 +761,7 @@ decl_module! {
 		/// - O(1).
 		/// - One DB entry.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn bond_extra(origin, #[compact] max_additional: BalanceOf<T>) {
 			let stash = ensure_signed(origin)?;
 
@@ -751,6 +801,7 @@ decl_module! {
 		///   The only way to clean the aforementioned storage item is also user-controlled via `withdraw_unbonded`.
 		/// - One DB entry.
 		/// </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(400_000)]
 		fn unbond(origin, #[compact] value: BalanceOf<T>) {
 			let controller = ensure_signed(origin)?;
 			let mut ledger = Self::ledger(&controller).ok_or("not a controller")?;
@@ -792,6 +843,7 @@ decl_module! {
 		/// - Contains a limited number of reads, yet the size of which could be large based on `ledger`.
 		/// - Writes are limited to the `origin` account key.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(400_000)]
 		fn withdraw_unbonded(origin) {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
@@ -823,6 +875,7 @@ decl_module! {
 		/// - Contains a limited number of reads.
 		/// - Writes are limited to the `origin` account key.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(750_000)]
 		fn validate(origin, prefs: ValidatorPrefs<BalanceOf<T>>) {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
@@ -846,6 +899,7 @@ decl_module! {
 		/// which is capped at `MAX_NOMINATIONS`.
 		/// - Both the reads and writes follow a similar pattern.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(750_000)]
 		fn nominate(origin, targets: Vec<<T::Lookup as StaticLookup>::Source>) {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
@@ -871,6 +925,7 @@ decl_module! {
 		/// - Contains one read.
 		/// - Writes are limited to the `origin` account key.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn chill(origin) {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
@@ -890,6 +945,7 @@ decl_module! {
 		/// - Contains a limited number of reads.
 		/// - Writes are limited to the `origin` account key.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn set_payee(origin, payee: RewardDestination) {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
@@ -908,6 +964,7 @@ decl_module! {
 		/// - Contains a limited number of reads.
 		/// - Writes are limited to the `origin` account key.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(750_000)]
 		fn set_controller(origin, controller: <T::Lookup as StaticLookup>::Source) {
 			let stash = ensure_signed(origin)?;
 			let old_controller = Self::bonded(&stash).ok_or("not a stash")?;
@@ -924,6 +981,7 @@ decl_module! {
 		}
 
 		/// The ideal number of validators.
+		#[weight = SimpleDispatchInfo::FixedOperational(150_000)]
 		fn set_validator_count(origin, #[compact] new: u32) {
 			ensure_root(origin)?;
 			ValidatorCount::put(new);
@@ -939,18 +997,21 @@ decl_module! {
 		/// - Triggers the Phragmen election. Expensive but not user-controlled.
 		/// - Depends on state: `O(|edges| * |validators|)`.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn force_new_era(origin) {
 			ensure_root(origin)?;
 			Self::apply_force_new_era()
 		}
 
 		/// Set the offline slash grace period.
+		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn set_offline_slash_grace(origin, #[compact] new: u32) {
 			ensure_root(origin)?;
 			OfflineSlashGrace::put(new);
 		}
 
 		/// Set the validators who cannot be slashed (if any).
+		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn set_invulnerables(origin, validators: Vec<T::AccountId>) {
 			ensure_root(origin)?;
 			<Invulnerables<T>>::put(validators);
@@ -1040,7 +1101,7 @@ impl<T: Trait> Module<T> {
 	/// Reward a given validator by a specific amount. Add the reward to the validator's, and its
 	/// nominators' balance, pro-rata based on their exposure, after having removed the validator's
 	/// pre-payout cut.
-	fn reward_validator(stash: &T::AccountId, reward: BalanceOf<T>) {
+	fn reward_validator(stash: &T::AccountId, reward: BalanceOf<T>) -> PositiveImbalanceOf<T> {
 		let off_the_table = reward.min(Self::validators(stash).validator_payment);
 		let reward = reward - off_the_table;
 		let mut imbalance = <PositiveImbalanceOf<T>>::zero();
@@ -1058,8 +1119,10 @@ impl<T: Trait> Module<T> {
 			let per_u64 = Perbill::from_rational_approximation(exposure.own, total);
 			per_u64 * reward
 		};
+
 		imbalance.maybe_subsume(Self::make_payout(stash, validator_cut + off_the_table));
-		T::Reward::on_unbalanced(imbalance);
+
+		imbalance
 	}
 
 	/// Session has just ended. Provide the validator set for the next session if it's an era-end, along
@@ -1067,10 +1130,6 @@ impl<T: Trait> Module<T> {
 	fn new_session(session_index: SessionIndex)
 		-> Option<(Vec<T::AccountId>, Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>)>
 	{
-		// accumulate good session reward
-		let reward = Self::current_session_reward();
-		<CurrentEraReward<T>>::mutate(|r| *r += reward);
-
 		if ForceNewEra::take() || session_index % T::SessionsPerEra::get() == 0 {
 			let validators = T::SessionInterface::validators();
 			let prior = validators.into_iter()
@@ -1089,22 +1148,46 @@ impl<T: Trait> Module<T> {
 	/// get a chance to set their session keys.
 	fn new_era(start_session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		// Payout
-		let reward = <CurrentEraReward<T>>::take();
-		if !reward.is_zero() {
+		let rewards = CurrentEraRewards::take();
+		let now = T::Time::now();
+		let previous_era_start = <CurrentEraStart<T>>::mutate(|v| {
+			rstd::mem::replace(v, now.clone())
+		});
+		let era_duration = now - previous_era_start;
+		if !era_duration.is_zero() {
 			let validators = Self::current_elected();
-			for v in validators.iter() {
-				Self::reward_validator(v, reward);
+
+			let validator_len: BalanceOf<T> = (validators.len() as u32).into();
+			let total_rewarded_stake = Self::slot_stake() * validator_len;
+
+			let total_payout = inflation::compute_total_payout(
+				total_rewarded_stake.clone(),
+				T::Currency::total_issuance(),
+				// Era of duration more than u32::MAX is rewarded as u32::MAX.
+				<BalanceOf<T>>::from(era_duration.saturated_into::<u32>()),
+			);
+
+			let mut total_imbalance = <PositiveImbalanceOf<T>>::zero();
+
+			let total_points = rewards.total;
+			for (v, points) in validators.iter().zip(rewards.rewards.into_iter()) {
+				if points != 0 {
+					let reward = multiply_by_rational(total_payout, points, total_points);
+					total_imbalance.subsume(Self::reward_validator(v, reward));
+				}
 			}
-			Self::deposit_event(RawEvent::Reward(reward));
-			let len = validators.len() as u32; // validators length can never overflow u64
-			let len: BalanceOf<T> = len.into();
-			let total_minted = reward * len;
-			let total_rewarded_stake = Self::slot_stake() * len;
-			T::OnRewardMinted::on_dilution(total_minted, total_rewarded_stake);
+
+			let total_reward = total_imbalance.peek();
+			Self::deposit_event(RawEvent::Reward(total_reward));
+			T::Reward::on_unbalanced(total_imbalance);
+			T::OnRewardMinted::on_dilution(total_reward, total_rewarded_stake);
 		}
 
 		// Increment current era.
 		let current_era = CurrentEra::mutate(|s| { *s += 1; *s });
+		CurrentEraStartSessionIndex::mutate(|v| {
+			*v = start_session_index;
+		});
 		let bonding_duration = T::BondingDuration::get();
 
 		if current_era > bonding_duration {
@@ -1126,16 +1209,13 @@ impl<T: Trait> Module<T> {
 		}
 
 		// Reassign all Stakers.
-		let (slot_stake, maybe_new_validators) = Self::select_validators();
-
-		// Update the balances for rewarding according to the stakes.
-		<CurrentSessionReward<T>>::put(Self::session_reward() * slot_stake);
+		let (_slot_stake, maybe_new_validators) = Self::select_validators();
 
 		maybe_new_validators
 	}
 
 	fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
-		Self::bonded(stash).and_then(Self::ledger).map(|l| l.total).unwrap_or_default()
+		Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
 	}
 
 	/// Select a new validator set from the assembled stakers and their role preferences.
@@ -1331,6 +1411,48 @@ impl<T: Trait> Module<T> {
 			Self::deposit_event(event);
 		}
 	}
+
+	/// Add reward points to validators using their stash account ID.
+	///
+	/// Validators are keyed by stash account ID and must be in the current elected set.
+	///
+	/// For each element in the iterator the given number of points in u32 is added to the
+	/// validator, thus duplicates are handled.
+	///
+	/// At the end of the era each the total payout will be distributed among validator
+	/// relatively to their points.
+	///
+	/// COMPLEXITY: Complexity is `number_of_validator_to_reward x current_elected_len`.
+	/// If you need to reward lots of validator consider using `reward_by_indices`.
+	pub fn reward_by_ids(validators_points: impl IntoIterator<Item = (T::AccountId, u32)>) {
+		CurrentEraRewards::mutate(|rewards| {
+			let current_elected = <Module<T>>::current_elected();
+			for (validator, points) in validators_points.into_iter() {
+				if let Some(index) = current_elected.iter()
+					.position(|elected| *elected == validator)
+				{
+					rewards.add_points_to_index(index as u32, points);
+				}
+			}
+		});
+	}
+
+	/// Add reward points to validators using their validator index.
+	///
+	/// For each element in the iterator the given number of points in u32 is added to the
+	/// validator, thus duplicates are handled.
+	pub fn reward_by_indices(validators_points: impl IntoIterator<Item = (u32, u32)>) {
+		// TODO: This can be optimised once #3302 is implemented.
+		let current_elected_len = <Module<T>>::current_elected().len() as u32;
+
+		CurrentEraRewards::mutate(|rewards| {
+			for (validator_index, points) in validators_points.into_iter() {
+				if validator_index < current_elected_len {
+					rewards.add_points_to_index(validator_index, points);
+				}
+			}
+		});
+	}
 }
 
 impl<T: Trait> session::OnSessionEnding<T::AccountId> for Module<T> {
@@ -1351,6 +1473,47 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(stash: &T::AccountId) {
 		Self::kill_stash(stash);
 	}
+}
+
+/// Add reward points to block authors:
+/// * 20 points to the block producer for producing a (non-uncle) block in the relay chain,
+/// * 2 points to the block producer for each reference to a previously unreferenced uncle, and
+/// * 1 point to the producer of each referenced uncle block.
+impl<T: Trait + authorship::Trait> authorship::EventHandler<T::AccountId, T::BlockNumber> for Module<T> {
+	fn note_author(author: T::AccountId) {
+		Self::reward_by_ids(vec![(author, 20)]);
+	}
+	fn note_uncle(author: T::AccountId, _age: T::BlockNumber) {
+		Self::reward_by_ids(vec![
+			(<authorship::Module<T>>::author(), 2),
+			(author, 1)
+		])
+	}
+}
+
+// This is guarantee not to overflow on whatever values.
+// `num` must be inferior to `den` otherwise it will be reduce to `den`.
+fn multiply_by_rational<N>(value: N, num: u32, den: u32) -> N
+	where N: SimpleArithmetic + Clone
+{
+	let num = num.min(den);
+
+	let result_divisor_part = value.clone() / den.into() * num.into();
+
+	let result_remainder_part = {
+		let rem = value % den.into();
+
+		// Fits into u32 because den is u32 and remainder < den
+		let rem_u32 = rem.saturated_into::<u32>();
+
+		// Multiplication fits into u64 as both term are u32
+		let rem_part = rem_u32 as u64 * num as u64 / den as u64;
+
+		// Result fits into u32 as num < total_points
+		(rem_part as u32).into()
+	};
+
+	result_divisor_part + result_remainder_part
 }
 
 /// A `Convert` implementation that finds the stash of the given controller account,

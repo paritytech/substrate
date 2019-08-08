@@ -50,10 +50,10 @@ mod utils;
 ///
 /// use version::create_runtime_str;
 /// # extern crate test_client;
-/// # extern crate runtime_primitives;
-/// # extern crate substrate_primitives;
+/// # extern crate sr_primitives;
+/// # extern crate primitives;
 /// #
-/// # use runtime_primitives::traits::GetNodeBlockType;
+/// # use sr_primitives::traits::GetNodeBlockType;
 /// # use test_client::runtime::{Block, Header};
 /// #
 /// # /// The declaration of the `Runtime` type and the implementation of the `GetNodeBlockType`

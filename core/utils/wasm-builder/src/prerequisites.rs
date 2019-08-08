@@ -44,21 +44,8 @@ pub fn check() -> Option<&'static str> {
 }
 
 fn check_nightly_installed() -> bool {
-	let version = Command::new("cargo")
-		.arg("--version")
-		.output()
-		.map_err(|_| ())
-		.and_then(|o| String::from_utf8(o.stdout).map_err(|_| ()))
-		.unwrap_or_default();
-
-	let version2 = Command::new("rustup")
-		.args(&["run", "nightly", "cargo", "--version"])
-		.output()
-		.map_err(|_| ())
-		.and_then(|o| String::from_utf8(o.stdout).map_err(|_| ()))
-		.unwrap_or_default();
-
-	version.contains("-nightly") || version2.contains("-nightly")
+	let command = crate::get_nightly_cargo();
+	command.is_nightly()
 }
 
 fn check_wasm_toolchain_installed() -> bool {
@@ -87,6 +74,7 @@ fn check_wasm_toolchain_installed() -> bool {
 
 	let manifest_path = manifest_path.display().to_string();
 	crate::get_nightly_cargo()
+		.command()
 		.args(&["build", "--target=wasm32-unknown-unknown", "--manifest-path", &manifest_path])
 		.stdout(Stdio::null())
 		.stderr(Stdio::null())

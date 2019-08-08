@@ -18,12 +18,12 @@
 
 use std::fmt::Debug;
 use std::sync::Arc;
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
 use fork_tree::ForkTree;
 use grandpa::round::State as RoundState;
-use runtime_primitives::traits::{Block as BlockT, NumberFor};
+use sr_primitives::traits::{Block as BlockT, NumberFor};
 use log::{info, warn};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 use fg_primitives::AuthorityId;
@@ -108,8 +108,8 @@ pub(crate) fn load_decode<B: AuxStore, T: Decode>(backend: &B, key: &[u8]) -> Cl
 	match backend.get_aux(key)? {
 		None => Ok(None),
 		Some(t) => T::decode(&mut &t[..])
-			.ok_or_else(
-				|| ClientError::Backend(format!("GRANDPA DB is corrupted.")),
+			.map_err(
+				|e| ClientError::Backend(format!("GRANDPA DB is corrupted: {}", e.what())),
 			)
 			.map(Some)
 	}
@@ -456,7 +456,7 @@ pub(crate) fn load_authorities<B: AuxStore, H: Decode, N: Decode>(backend: &B)
 
 #[cfg(test)]
 mod test {
-	use substrate_primitives::H256;
+	use primitives::H256;
 	use test_client;
 	use super::*;
 

@@ -37,7 +37,7 @@ use service::{
 use network::{multiaddr, Multiaddr};
 use network::config::{NetworkConfiguration, TransportConfig, NodeKeyConfig, Secret, NonReservedPeerMode};
 use sr_primitives::generic::BlockId;
-use consensus::{ImportBlock, BlockImport};
+use consensus::{BlockImportParams, BlockImport};
 
 /// Maximum duration of single wait call.
 const MAX_WAIT_TIME: Duration = Duration::from_secs(60 * 3);
@@ -135,10 +135,6 @@ fn node_config<F: ServiceFactory> (
 ) -> FactoryFullConfiguration<F>
 {
 	let root = root.path().join(format!("node-{}", index));
-	let mut keys = Vec::new();
-	if let Some(seed) = key_seed {
-		keys.push(seed);
-	}
 
 	let config_path = Some(String::from(root.join("network").to_str().unwrap()));
 	let net_config_path = config_path.clone();
@@ -173,13 +169,13 @@ fn node_config<F: ServiceFactory> (
 		roles: role,
 		transaction_pool: Default::default(),
 		network: network_config,
-		keystore_path: Some(root.join("key")),
+		keystore_path: root.join("key"),
+		keystore_password: None,
 		database_path: root.join("db"),
 		database_cache_size: None,
 		state_cache_size: 16777216,
 		state_cache_child_ratio: None,
 		pruning: Default::default(),
-		keys: keys,
 		chain_spec: (*spec).clone(),
 		custom: Default::default(),
 		name: format!("Node {}", index),
@@ -194,8 +190,7 @@ fn node_config<F: ServiceFactory> (
 		offchain_worker: false,
 		force_authoring: false,
 		disable_grandpa: false,
-		grandpa_voter: false,
-		password: "".to_string().into(),
+		dev_key_seed: key_seed,
 	}
 }
 
@@ -354,11 +349,12 @@ pub fn sync<F, B, E>(spec: FactoryChainSpec<F>, mut block_factory: B, mut extrin
 	F: ServiceFactory,
 	F::FullService: Future<Item=(), Error=()>,
 	F::LightService: Future<Item=(), Error=()>,
-	B: FnMut(&SyncService<F::FullService>) -> ImportBlock<F::Block>,
+	B: FnMut(&SyncService<F::FullService>) -> BlockImportParams<F::Block>,
 	E: FnMut(&SyncService<F::FullService>) -> FactoryExtrinsic<F>,
 {
 	const NUM_FULL_NODES: usize = 10;
-	const NUM_LIGHT_NODES: usize = 10;
+	// FIXME: BABE light client support is currently not working.
+	const NUM_LIGHT_NODES: usize = 0;
 	const NUM_BLOCKS: usize = 512;
 	let temp = TempDir::new("substrate-sync-test").expect("Error creating test dir");
 	let mut network = TestNet::<F>::new(

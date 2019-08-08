@@ -18,12 +18,15 @@ use super::*;
 
 use std::sync::Arc;
 use assert_matches::assert_matches;
-use parity_codec::Encode;
+use codec::Encode;
 use transaction_pool::{
 	txpool::Pool,
 	ChainApi,
 };
-use primitives::{H256, blake2_256, hexdisplay::HexDisplay};
+use primitives::{
+	H256, blake2_256, hexdisplay::HexDisplay, traits::BareCryptoStore, testing::KeyStore,
+	ed25519, crypto::key_types,
+};
 use test_client::{self, AccountKeyring, runtime::{Extrinsic, Transfer}};
 use tokio::runtime;
 
@@ -41,10 +44,12 @@ fn uxt(sender: AccountKeyring, nonce: u64) -> Extrinsic {
 fn submit_transaction_should_not_cause_error() {
 	let runtime = runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
+	let keystore = KeyStore::new();
 	let p = Author {
 		client: client.clone(),
 		pool: Arc::new(Pool::new(Default::default(), ChainApi::new(client))),
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
+		keystore: keystore.clone(),
 	};
 	let xt = uxt(AccountKeyring::Alice, 1).encode();
 	let h: H256 = blake2_256(&xt).into();
@@ -62,10 +67,12 @@ fn submit_transaction_should_not_cause_error() {
 fn submit_rich_transaction_should_not_cause_error() {
 	let runtime = runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
+	let keystore = KeyStore::new();
 	let p = Author {
 		client: client.clone(),
 		pool: Arc::new(Pool::new(Default::default(), ChainApi::new(client.clone()))),
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
+		keystore: keystore.clone(),
 	};
 	let xt = uxt(AccountKeyring::Alice, 0).encode();
 	let h: H256 = blake2_256(&xt).into();
@@ -85,10 +92,12 @@ fn should_watch_extrinsic() {
 	let mut runtime = runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
 	let pool = Arc::new(Pool::new(Default::default(), ChainApi::new(client.clone())));
+	let keystore = KeyStore::new();
 	let p = Author {
 		client,
 		pool: pool.clone(),
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
+		keystore: keystore.clone(),
 	};
 	let (subscriber, id_rx, data) = ::jsonrpc_pubsub::typed::Subscriber::new_test("test");
 
@@ -125,10 +134,12 @@ fn should_return_pending_extrinsics() {
 	let runtime = runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
 	let pool = Arc::new(Pool::new(Default::default(), ChainApi::new(client.clone())));
+	let keystore = KeyStore::new();
 	let p = Author {
 		client,
 		pool: pool.clone(),
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
+		keystore: keystore.clone(),
 	};
 	let ex = uxt(AccountKeyring::Alice, 0);
 	AuthorApi::submit_extrinsic(&p, ex.encode().into()).unwrap();
@@ -143,10 +154,12 @@ fn should_remove_extrinsics() {
 	let runtime = runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
 	let pool = Arc::new(Pool::new(Default::default(), ChainApi::new(client.clone())));
+	let keystore = KeyStore::new();
 	let p = Author {
 		client,
 		pool: pool.clone(),
 		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
+		keystore: keystore.clone(),
 	};
 	let ex1 = uxt(AccountKeyring::Alice, 0);
 	p.submit_extrinsic(ex1.encode().into()).unwrap();
@@ -164,4 +177,30 @@ fn should_remove_extrinsics() {
 	]).unwrap();
 
  	assert_eq!(removed.len(), 3);
+}
+
+#[test]
+fn should_insert_key() {
+	let runtime = runtime::Runtime::new().unwrap();
+	let client = Arc::new(test_client::new());
+	let keystore = KeyStore::new();
+	let p = Author {
+		client: client.clone(),
+		pool: Arc::new(Pool::new(Default::default(), ChainApi::new(client))),
+		subscriptions: Subscriptions::new(Arc::new(runtime.executor())),
+		keystore: keystore.clone(),
+	};
+
+	let suri = "//Alice";
+	let key_pair = ed25519::Pair::from_string(suri, None).expect("Generates keypair");
+	p.insert_key(
+		String::from_utf8(key_types::ED25519.0.to_vec()).expect("Keytype is a valid string"),
+		suri.to_string(),
+		Some(key_pair.public().0.to_vec().into()),
+	).expect("Insert key");
+
+	let store_key_pair = keystore.read()
+		.ed25519_key_pair(key_types::ED25519, &key_pair.public()).expect("Key exists in store");
+
+	assert_eq!(key_pair.public(), store_key_pair.public());
 }

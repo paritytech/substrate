@@ -25,9 +25,10 @@ use crate::changes_trie::{
 	build_changes_trie, InMemoryStorage as ChangesTrieInMemoryStorage,
 	BlockNumber as ChangesTrieBlockNumber,
 };
-use primitives::offchain;
-use primitives::storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES};
-use parity_codec::Encode;
+use primitives::{
+	storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES}, traits::BareCryptoStorePtr, offchain
+};
+use codec::Encode;
 use super::{ChildStorageKey, Externalities, OverlayedChanges};
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
@@ -40,6 +41,7 @@ pub struct TestExternalities<H: Hasher, N: ChangesTrieBlockNumber> {
 	backend: InMemory<H>,
 	changes_trie_storage: ChangesTrieInMemoryStorage<H, N>,
 	offchain: Option<Box<dyn offchain::Externalities>>,
+	keystore: Option<BareCryptoStorePtr>,
 }
 
 impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
@@ -84,6 +86,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
 			backend: backend.into(),
 			offchain: None,
+			keystore: None,
 		}
 	}
 
@@ -263,6 +266,10 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 			.as_mut()
 			.map(|x| &mut **x as _)
 	}
+
+	fn keystore(&self) -> Option<BareCryptoStorePtr> {
+		self.keystore.clone()
+	}
 }
 
 #[cfg(test)]
@@ -277,7 +284,7 @@ mod tests {
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
-		const ROOT: [u8; 32] = hex!("cc65c26c37ebd4abcdeb3f1ecd727527051620779a2f6c809bac0f8a87dbb816");
+		const ROOT: [u8; 32] = hex!("2a340d3dfd52f5992c6b117e9e45f479e6da5afffafeb26ab619cf137a95aeb8");
 		assert_eq!(ext.storage_root(), H256::from(ROOT));
 	}
 

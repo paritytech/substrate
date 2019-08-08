@@ -23,15 +23,15 @@ use inherents::{
 	InherentData, MakeFatalError,
 };
 use srml_support::StorageValue;
-use primitives::traits::{One, Zero, SaturatedConversion};
+use sr_primitives::traits::{One, Zero, SaturatedConversion};
 use rstd::{prelude::*, result, cmp, vec};
-use parity_codec::Decode;
+use codec::Decode;
 use srml_support::{decl_module, decl_storage, for_each_tuple};
 use srml_support::traits::Get;
 use srml_system::{ensure_none, Trait as SystemTrait};
 
 #[cfg(feature = "std")]
-use parity_codec::Encode;
+use codec::Encode;
 
 /// The identifier for the `finalnum` inherent.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"finalnum";
@@ -244,15 +244,16 @@ impl<T: Trait> ProvideInherent for Module<T> {
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 	fn create_inherent(data: &InherentData) -> Option<Self::Call> {
-		let final_num =
-			data.finalized_number().expect("Gets and decodes final number inherent data");
-
-		// make hint only when not same as last to avoid bloat.
-		Self::recent_hints().last().and_then(|last| if last == &final_num {
-			None
+		if let Ok(final_num) = data.finalized_number() {
+			// make hint only when not same as last to avoid bloat.
+			Self::recent_hints().last().and_then(|last| if last == &final_num {
+				None
+			} else {
+				Some(Call::final_hint(final_num))
+			})
 		} else {
-			Some(Call::final_hint(final_num))
-		})
+			None
+		}
 	}
 
 	fn check_inherent(_call: &Self::Call, _data: &InherentData) -> result::Result<(), Self::Error> {
@@ -265,9 +266,10 @@ mod tests {
 	use super::*;
 
 	use sr_io::{with_externalities, TestExternalities};
-	use substrate_primitives::H256;
-	use primitives::traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT};
-	use primitives::testing::Header;
+	use primitives::H256;
+	use sr_primitives::traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT};
+	use sr_primitives::testing::Header;
+	use sr_primitives::Perbill;
 	use srml_support::{assert_ok, impl_outer_origin, parameter_types};
 	use srml_system as system;
 	use std::cell::RefCell;
@@ -299,18 +301,26 @@ mod tests {
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
+		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockLength: u32 = 2 * 1024;
+		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
+		type Call = ();
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
+		type WeightMultiplierUpdate = ();
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type AvailableBlockRatio = AvailableBlockRatio;
+		type MaximumBlockLength = MaximumBlockLength;
 	}
 	parameter_types! {
 		pub const WindowSize: u64 = 11;
