@@ -23,18 +23,15 @@ pub trait StorageLinkedMap<K: Codec, V: Codec> {
 	fn from_optional_value_to_query(v: Option<V>) -> Self::Query;
 
 	fn from_query_to_optional_value(v: Self::Query) -> Option<V>;
-}
 
-fn storage_linked_map_final_key<KeyArg, K, V, G>(key: KeyArg) -> impl AsRef<[u8]>
-where
-	KeyArg: Borrow<K>,
-	K: Codec,
-	V: Codec,
-	G: StorageLinkedMap<K, V>
-{
-	let mut final_key = G::prefix().to_vec();
-	key.borrow().encode_to(&mut final_key);
-	G::Hasher::hash(&final_key)
+	fn storage_linked_map_final_key<KeyArg>(key: KeyArg) -> <Self::Hasher as StorageHasher>::Output
+	where
+		KeyArg: Borrow<K>,
+	{
+		let mut final_key = Self::prefix().to_vec();
+		key.borrow().encode_to(&mut final_key);
+		Self::Hasher::hash(&final_key)
+	}
 }
 
 /// Linkage data of an element (it's successor and predecessor)
@@ -67,7 +64,7 @@ impl<K: Codec, V: Codec, G: StorageLinkedMap<K, V>> Iterator for Enumerator<K, V
 	fn next(&mut self) -> Option<Self::Item> {
 		let next = self.next.take()?;
 		let (val, linkage): (V, Linkage<K>) = {
-			let next_full_key = storage_linked_map_final_key::<_, _, _, G>(&next);
+			let next_full_key = G::storage_linked_map_final_key(&next);
 			unhashed::get(next_full_key.as_ref())
 				.expect("previous/next only contain existing entires;
 						we enumerate using next; entry exists; qed")
@@ -84,10 +81,10 @@ impl<K: Codec, V: Codec, G: StorageLinkedMap<K, V>> Iterator for Enumerator<K, V
 /// as well as updates head if the element is first or last.
 fn remove_linkage<K: Codec, V: Codec, G: StorageLinkedMap<K, V>>(linkage: Linkage<K>) {
 	let next_key = linkage.next.as_ref()
-		.map(storage_linked_map_final_key::<_, _, _, G>)
+		.map(G::storage_linked_map_final_key)
 		.map(|x| x.as_ref().to_vec());
 	let prev_key = linkage.previous.as_ref()
-		.map(storage_linked_map_final_key::<_, _, _, G>)
+		.map(G::storage_linked_map_final_key)
 		.map(|x| x.as_ref().to_vec());
 
 	if let Some(prev_key) = prev_key {
@@ -131,7 +128,7 @@ where
 	if let Some(head) = read_head::<K, V, G>() {
 		// update previous head predecessor
 		{
-			let head_key = storage_linked_map_final_key::<_, _, _, G>(&head);
+			let head_key = G::storage_linked_map_final_key(&head);
 			let (data, linkage) = read_with_linkage::<K, V, G>(head_key.as_ref()).expect(r#"
 								head is set when first element is inserted and unset when last element is removed;
 								if head is Some then it points to existing key; qed
@@ -183,15 +180,15 @@ impl<K: Codec, V: Codec, G: StorageLinkedMap<K, V>> storage::StorageLinkedMap<K,
 	type Query = G::Query;
 
 	fn exists<KeyArg: Borrow<K>>(key: KeyArg) -> bool {
-		unhashed::exists(storage_linked_map_final_key::<_, _, _, G>(key).as_ref())
+		unhashed::exists(Self::storage_linked_map_final_key(key).as_ref())
 	}
 
 	fn get<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query {
-		G::from_optional_value_to_query(unhashed::get(storage_linked_map_final_key::<_, _, _, G>(key).as_ref()))
+		G::from_optional_value_to_query(unhashed::get(Self::storage_linked_map_final_key(key).as_ref()))
 	}
 
 	fn insert<KeyArg: Borrow<K>, ValArg: Borrow<V>>(key: KeyArg, val: ValArg) {
-		let final_key = storage_linked_map_final_key::<_, _, _, G>(key.borrow());
+		let final_key = Self::storage_linked_map_final_key(key.borrow());
 		let linkage = match read_with_linkage::<K, V, G>(final_key.as_ref()) {
 			// overwrite but reuse existing linkage
 			Some((_data, linkage)) => linkage,
@@ -202,7 +199,7 @@ impl<K: Codec, V: Codec, G: StorageLinkedMap<K, V>> storage::StorageLinkedMap<K,
 	}
 
 	fn insert_ref<KeyArg: Borrow<K>, ValArg: ?Sized + Encode>(key: KeyArg, val: &ValArg) where V: AsRef<ValArg> {
-		let final_key = storage_linked_map_final_key::<_, _, _, G>(key.borrow());
+		let final_key = Self::storage_linked_map_final_key(key.borrow());
 		let linkage = match read_with_linkage::<K, V, G>(final_key.as_ref()) {
 			// overwrite but reuse existing linkage
 			Some((_data, linkage)) => linkage,
@@ -217,7 +214,7 @@ impl<K: Codec, V: Codec, G: StorageLinkedMap<K, V>> storage::StorageLinkedMap<K,
 	}
 
 	fn mutate<KeyArg: Borrow<K>, R, F: FnOnce(&mut Self::Query) -> R>(key: KeyArg, f: F) -> R {
-		let final_key = storage_linked_map_final_key::<_, _, _, G>(key.borrow());
+		let final_key = Self::storage_linked_map_final_key(key.borrow());
 		// TODO TODO: rewrite those 3 lines a bit
 		let (mut val, _linkage) = read_with_linkage::<K, V, G>(final_key.as_ref())
 			.map(|(data, linkage)| (G::from_optional_value_to_query(Some(data)), Some(linkage)))
@@ -233,7 +230,7 @@ impl<K: Codec, V: Codec, G: StorageLinkedMap<K, V>> storage::StorageLinkedMap<K,
 	}
 
 	fn take<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query {
-		let final_key = storage_linked_map_final_key::<_, _, _, G>(key);
+		let final_key = Self::storage_linked_map_final_key(key);
 
 		let full_value: Option<(V, Linkage<K>)> = unhashed::get(final_key.as_ref());
 
@@ -248,8 +245,6 @@ impl<K: Codec, V: Codec, G: StorageLinkedMap<K, V>> storage::StorageLinkedMap<K,
 
 		G::from_optional_value_to_query(value)
 	}
-
-	// TODO TODO: we could implemented append by using a fixed size linkage.
 
 	fn enumerate() -> Box<dyn Iterator<Item = (K, V)>> where K: 'static, V: 'static, Self: 'static {
 		Box::new(Enumerator::<K, V, G> {

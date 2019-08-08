@@ -12,38 +12,38 @@ pub trait StorageValue<T: Codec> {
 	fn from_optional_value_to_query(v: Option<T>) -> Self::Query;
 
 	fn from_query_to_optional_value(v: Self::Query) -> Option<T>;
-}
 
-fn storage_value_final_key<T: Codec, S: StorageValue<T>>() -> impl AsRef<[u8]> {
-	Twox128::hash(S::key())
+	fn storage_value_final_key() -> [u8;16] {
+		Twox128::hash(Self::key())
+	}
 }
 
 impl<T: Codec, G: StorageValue<T>> storage::StorageValue<T> for G {
 	type Query = G::Query;
 
 	fn key() -> Vec<u8> {
-		storage_value_final_key::<_, G>().as_ref().to_vec()
+		Self::storage_value_final_key().to_vec()
 	}
 
 	fn exists() -> bool {
-		unhashed::exists(storage_value_final_key::<_, G>().as_ref())
+		unhashed::exists(&Self::storage_value_final_key())
 	}
 
 	fn get() -> Self::Query {
-		let value = unhashed::get(storage_value_final_key::<_, G>().as_ref());
+		let value = unhashed::get(&Self::storage_value_final_key());
 		G::from_optional_value_to_query(value)
 	}
 
 	fn put<Arg: Borrow<T>>(val: Arg) {
-		unhashed::put(storage_value_final_key::<_, G>().as_ref(), val.borrow())
+		unhashed::put(&Self::storage_value_final_key(), val.borrow())
 	}
 
 	fn put_ref<Arg: ?Sized + Encode>(val: &Arg) where T: AsRef<Arg> {
-		val.using_encoded(|b| unhashed::put_raw(storage_value_final_key::<_, G>().as_ref(), b))
+		val.using_encoded(|b| unhashed::put_raw(&Self::storage_value_final_key(), b))
 	}
 
 	fn kill() {
-		unhashed::kill(storage_value_final_key::<_, G>().as_ref())
+		unhashed::kill(&Self::storage_value_final_key())
 	}
 
 	fn mutate<R, F: FnOnce(&mut G::Query) -> R>(f: F) -> R {
@@ -59,10 +59,10 @@ impl<T: Codec, G: StorageValue<T>> storage::StorageValue<T> for G {
 	}
 
 	fn take() -> G::Query {
-		let key = storage_value_final_key::<_, G>();
-		let value = unhashed::get(key.as_ref());
+		let key = Self::storage_value_final_key();
+		let value = unhashed::get(&key);
 		if value.is_some() {
-			unhashed::kill(key.as_ref())
+			unhashed::kill(&key)
 		}
 		G::from_optional_value_to_query(value)
 	}
@@ -70,8 +70,8 @@ impl<T: Codec, G: StorageValue<T>> storage::StorageValue<T> for G {
 	fn append<I: Encode>(items: &[I]) -> Result<(), &'static str>
 		where T: EncodeAppend<Item=I>
 	{
-		let key = storage_value_final_key::<_, G>();
-		let encoded_value = unhashed::get_raw(key.as_ref())
+		let key = Self::storage_value_final_key();
+		let encoded_value = unhashed::get_raw(&key)
 			.unwrap_or_else(|| {
 				match G::from_query_to_optional_value(G::from_optional_value_to_query(None)) {
 					Some(value) => value.encode(),
@@ -83,7 +83,7 @@ impl<T: Codec, G: StorageValue<T>> storage::StorageValue<T> for G {
 			encoded_value,
 			items,
 		).map_err(|_| "Could not append given item")?;
-		unhashed::put_raw(key.as_ref(), &new_val);
+		unhashed::put_raw(&key, &new_val);
 		Ok(())
 	}
 }
