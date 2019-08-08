@@ -170,6 +170,14 @@ construct_service_factory! {
 					}
 				}
 
+				// regardless of whether grandpa is started or not, when
+				// authoring blocks we expect inherent data regarding what our
+				// last finalized block is, to be available.
+				grandpa::register_finality_tracker_inherent_data_provider(
+					service.client(),
+					&service.config().custom.inherent_data_providers,
+				)?;
+
 				Ok(service)
 			}
 		},
