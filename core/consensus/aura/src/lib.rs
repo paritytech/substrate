@@ -516,7 +516,7 @@ impl<B: BlockT, C, P> Verifier<B> for AuraVerifier<C, P> where
 	P::Signature: Encode + Decode,
 {
 	fn verify(
-		&self,
+		&mut self,
 		origin: BlockOrigin,
 		header: B::Header,
 		justification: Option<Justification>,
@@ -696,13 +696,11 @@ pub fn import_queue<B, C, P>(
 	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
 	initialize_authorities_cache(&*client)?;
 
-	let verifier = Arc::new(
-		AuraVerifier {
-			client: client.clone(),
-			inherent_data_providers,
-			phantom: PhantomData,
-		}
-	);
+	let verifier = AuraVerifier {
+		client: client.clone(),
+		inherent_data_providers,
+		phantom: PhantomData,
+	};
 	Ok(BasicQueue::new(
 		verifier,
 		block_import,
@@ -783,7 +781,7 @@ mod tests {
 		}
 
 		fn make_verifier(&self, client: PeersClient, _cfg: &ProtocolConfig)
-			-> Arc<Self::Verifier>
+			-> Self::Verifier
 		{
 			match client {
 				PeersClient::Full(client) => {
@@ -796,11 +794,11 @@ mod tests {
 					).expect("Registers aura inherent data provider");
 
 					assert_eq!(slot_duration.get(), SLOT_DURATION);
-					Arc::new(AuraVerifier {
+					AuraVerifier {
 						client,
 						inherent_data_providers,
 						phantom: Default::default(),
-					})
+					}
 				},
 				PeersClient::Light(_) => unreachable!("No (yet) tests for light client + Aura"),
 			}

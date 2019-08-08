@@ -67,6 +67,7 @@ use client::{
 	block_builder::api::BlockBuilder as BlockBuilderApi,
 	blockchain::{self, HeaderBackend, ProvideCache}, BlockchainEvents, CallExecutor, Client,
 	runtime_api::ApiExt, error::Result as ClientResult, backend::{AuxStore, Backend},
+	ProvideUncles,
 	utils::is_descendent_of,
 };
 use fork_tree::ForkTree;
@@ -182,9 +183,9 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 	consensus_common::Error,
 > where
 	B: BlockT<Header=H>,
-	C: ProvideRuntimeApi + ProvideCache<B>,
+	C: ProvideRuntimeApi + ProvideCache<B> + ProvideUncles<B> + Send + Sync + 'static,
 	C::Api: BabeApi<B>,
-	SC: SelectChain<B>,
+	SC: SelectChain<B> + 'static,
 	E::Proposer: Proposer<B, Error=Error>,
 	<E::Proposer as Proposer<B>>::Create: Unpin + Send + 'static,
 	H: Header<Hash=B::Hash>,
@@ -203,6 +204,11 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 		keystore,
 	};
 	register_babe_inherent_data_provider(&inherent_data_providers, config.0.slot_duration())?;
+	uncles::register_uncles_inherent_data_provider(
+		client.clone(),
+		select_chain.clone(),
+		&inherent_data_providers,
+	)?;
 	Ok(slots::start_slot_worker(
 		config.0,
 		select_chain,
@@ -624,7 +630,7 @@ impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
 	C::Api: BlockBuilderApi<B> + BabeApi<B>,
 {
 	fn verify(
-		&self,
+		&mut self,
 		origin: BlockOrigin,
 		header: B::Header,
 		justification: Option<Justification>,
@@ -1182,7 +1188,7 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
 
 	let timestamp_core = verifier.time_source.clone();
 	let queue = BasicQueue::new(
-		Arc::new(verifier),
+		verifier,
 		Box::new(block_import.clone()),
 		justification_import,
 		finality_proof_import,
