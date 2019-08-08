@@ -16,7 +16,7 @@
 
 //! Different types of changes trie input pairs.
 
-use parity_codec::{Decode, Encode, Input, Output};
+use codec::{Decode, Encode, Input, Output, Error};
 use crate::changes_trie::BlockNumber;
 
 /// Key of { changed key => set of extrinsic indices } mapping.
@@ -95,6 +95,8 @@ impl<Number: BlockNumber> Encode for ExtrinsicIndex<Number> {
 	}
 }
 
+impl<Number: BlockNumber> codec::EncodeLike for ExtrinsicIndex<Number> {}
+
 impl<Number: BlockNumber> DigestIndex<Number> {
 	pub fn key_neutral_prefix(block: Number) -> Vec<u8> {
 		let mut prefix = vec![2];
@@ -112,18 +114,20 @@ impl<Number: BlockNumber> Encode for DigestIndex<Number> {
 	}
 }
 
+impl<Number: BlockNumber> codec::EncodeLike for DigestIndex<Number> {}
+
 impl<Number: BlockNumber> Decode for InputKey<Number> {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
 		match input.read_byte()? {
-			1 => Some(InputKey::ExtrinsicIndex(ExtrinsicIndex {
+			1 => Ok(InputKey::ExtrinsicIndex(ExtrinsicIndex {
 				block: Decode::decode(input)?,
 				key: Decode::decode(input)?,
 			})),
-			2 => Some(InputKey::DigestIndex(DigestIndex {
+			2 => Ok(InputKey::DigestIndex(DigestIndex {
 				block: Decode::decode(input)?,
 				key: Decode::decode(input)?,
 			})),
-			_ => None,
+			_ => Err("Invalid input key variant".into()),
 		}
 	}
 }

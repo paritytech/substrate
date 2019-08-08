@@ -19,7 +19,7 @@
 #![cfg(test)]
 
 use super::*;
-use mock::{Balances, ExtBuilder, Runtime, System, info_from_weight};
+use mock::{Balances, ExtBuilder, Runtime, System, info_from_weight, CALL};
 use runtime_io::with_externalities;
 use srml_support::{
 	assert_noop, assert_ok, assert_err,
@@ -127,6 +127,7 @@ fn lock_reasons_should_work() {
 			assert!(<TakeFees<Runtime> as SignedExtension>::pre_dispatch(
 				TakeFees::from(1),
 				&1,
+				CALL,
 				info_from_weight(1),
 				0,
 			).is_ok());
@@ -140,6 +141,7 @@ fn lock_reasons_should_work() {
 			assert!(<TakeFees<Runtime> as SignedExtension>::pre_dispatch(
 				TakeFees::from(1),
 				&1,
+				CALL,
 				info_from_weight(1),
 				0,
 			).is_ok());
@@ -150,6 +152,7 @@ fn lock_reasons_should_work() {
 			assert!(<TakeFees<Runtime> as SignedExtension>::pre_dispatch(
 				TakeFees::from(1),
 				&1,
+				CALL,
 				info_from_weight(1),
 				0,
 			).is_err());
@@ -757,9 +760,9 @@ fn signed_extension_take_fees_work() {
 			.build(),
 		|| {
 			let len = 10;
-			assert!(TakeFees::<Runtime>::from(0).pre_dispatch(&1, info_from_weight(5), len).is_ok());
+			assert!(TakeFees::<Runtime>::from(0).pre_dispatch(&1, CALL, info_from_weight(5), len).is_ok());
 			assert_eq!(Balances::free_balance(&1), 100 - 20 - 25);
-			assert!(TakeFees::<Runtime>::from(5 /* tipped */).pre_dispatch(&1, info_from_weight(3), len).is_ok());
+			assert!(TakeFees::<Runtime>::from(5 /* tipped */).pre_dispatch(&1, CALL, info_from_weight(3), len).is_ok());
 			assert_eq!(Balances::free_balance(&1), 100 - 20 - 25 - 20 - 5 - 15);
 		}
 	);
@@ -777,7 +780,7 @@ fn signed_extension_take_fees_is_bounded() {
 			use sr_primitives::weights::Weight;
 
 			// maximum weight possible
-			assert!(TakeFees::<Runtime>::from(0).pre_dispatch(&1, info_from_weight(Weight::max_value()), 10).is_ok());
+			assert!(TakeFees::<Runtime>::from(0).pre_dispatch(&1, CALL, info_from_weight(Weight::max_value()), 10).is_ok());
 			// fee will be proportional to what is the actual maximum weight in the runtime.
 			assert_eq!(
 				Balances::free_balance(&1),

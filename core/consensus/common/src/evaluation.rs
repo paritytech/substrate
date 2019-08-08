@@ -18,7 +18,7 @@
 
 use super::MAX_BLOCK_SIZE;
 
-use parity_codec::Encode;
+use codec::Encode;
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, One, CheckedConversion};
 
 // This is just a best effort to encode the number. None indicated that it's too big to encode
@@ -32,8 +32,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, derive_more::Display)]
 pub enum Error {
 	/// Proposal provided not a block.
-	#[display(fmt="Proposal provided not a block.")]
-	BadProposalFormat,
+	#[display(fmt="Proposal provided not a block: decoding error: {}", _0)]
+	BadProposalFormat(codec::Error),
 	/// Proposal had wrong parent hash.
 	#[display(fmt="Proposal had wrong parent hash. Expected {:?}, got {:?}", expected, got)]
 	WrongParentHash { expected: String, got: String },
@@ -60,7 +60,7 @@ pub fn evaluate_initial<Block: BlockT>(
 
 	let encoded = Encode::encode(proposal);
 	let proposal = Block::decode(&mut &encoded[..])
-		.ok_or_else(|| Error::BadProposalFormat)?;
+		.map_err(|e| Error::BadProposalFormat(e))?;
 
 	if encoded.len() > MAX_BLOCK_SIZE {
 		return Err(Error::ProposalTooLarge(encoded.len()))

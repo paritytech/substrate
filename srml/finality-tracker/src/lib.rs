@@ -25,13 +25,13 @@ use inherents::{
 use srml_support::StorageValue;
 use sr_primitives::traits::{One, Zero, SaturatedConversion};
 use rstd::{prelude::*, result, cmp, vec};
-use parity_codec::Decode;
+use codec::Decode;
 use srml_support::{decl_module, decl_storage, for_each_tuple};
 use srml_support::traits::Get;
 use srml_system::{ensure_none, Trait as SystemTrait};
 
 #[cfg(feature = "std")]
-use parity_codec::Encode;
+use codec::Encode;
 
 /// The identifier for the `finalnum` inherent.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"finalnum";
@@ -244,15 +244,16 @@ impl<T: Trait> ProvideInherent for Module<T> {
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 	fn create_inherent(data: &InherentData) -> Option<Self::Call> {
-		let final_num =
-			data.finalized_number().expect("Gets and decodes final number inherent data");
-
-		// make hint only when not same as last to avoid bloat.
-		Self::recent_hints().last().and_then(|last| if last == &final_num {
-			None
+		if let Ok(final_num) = data.finalized_number() {
+			// make hint only when not same as last to avoid bloat.
+			Self::recent_hints().last().and_then(|last| if last == &final_num {
+				None
+			} else {
+				Some(Call::final_hint(final_num))
+			})
 		} else {
-			Some(Call::final_hint(final_num))
-		})
+			None
+		}
 	}
 
 	fn check_inherent(_call: &Self::Call, _data: &InherentData) -> result::Result<(), Self::Error> {
@@ -308,6 +309,7 @@ mod tests {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
+		type Call = ();
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;

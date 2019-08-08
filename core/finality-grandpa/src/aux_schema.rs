@@ -18,7 +18,7 @@
 
 use std::fmt::Debug;
 use std::sync::Arc;
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
 use fork_tree::ForkTree;
@@ -108,8 +108,8 @@ pub(crate) fn load_decode<B: AuxStore, T: Decode>(backend: &B, key: &[u8]) -> Cl
 	match backend.get_aux(key)? {
 		None => Ok(None),
 		Some(t) => T::decode(&mut &t[..])
-			.ok_or_else(
-				|| ClientError::Backend(format!("GRANDPA DB is corrupted.")),
+			.map_err(
+				|e| ClientError::Backend(format!("GRANDPA DB is corrupted: {}", e.what())),
 			)
 			.map(Some)
 	}

@@ -39,7 +39,8 @@ pub fn construct_genesis_block<
 
 #[cfg(test)]
 mod tests {
-	use parity_codec::{Encode, Decode, Joiner};
+	use super::*;
+	use codec::{Encode, Decode, Joiner};
 	use executor::native_executor_instance;
 	use state_machine::{self, OverlayedChanges, ExecutionStrategy, InMemoryChangesTrieStorage};
 	use state_machine::backend::InMemory;
@@ -95,6 +96,7 @@ mod tests {
 			&executor(),
 			"Core_initialize_block",
 			&header.encode(),
+			None,
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
@@ -108,6 +110,7 @@ mod tests {
 				&executor(),
 				"BlockBuilder_apply_extrinsic",
 				&tx.encode(),
+				None,
 			).execute(
 				ExecutionStrategy::NativeElseWasm,
 			).unwrap();
@@ -121,6 +124,7 @@ mod tests {
 			&executor(),
 			"BlockBuilder_finalize_block",
 			&[],
+			None,
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
@@ -147,7 +151,7 @@ mod tests {
 	#[test]
 	fn construct_genesis_should_work_with_native() {
 		let mut storage = GenesisConfig::new(false,
-			vec![Sr25519Keyring::One.into(), Sr25519Keyring::Two.into()],
+			vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			1000,
 			None,
@@ -166,6 +170,7 @@ mod tests {
 			&executor(),
 			"Core_execute_block",
 			&b1data,
+			None,
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
@@ -174,7 +179,7 @@ mod tests {
 	#[test]
 	fn construct_genesis_should_work_with_wasm() {
 		let mut storage = GenesisConfig::new(false,
-			vec![Sr25519Keyring::One.into(), Sr25519Keyring::Two.into()],
+			vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			1000,
 			None,
@@ -193,6 +198,7 @@ mod tests {
 			&executor(),
 			"Core_execute_block",
 			&b1data,
+			None,
 		).execute(
 			ExecutionStrategy::AlwaysWasm,
 		).unwrap();
@@ -201,7 +207,7 @@ mod tests {
 	#[test]
 	fn construct_genesis_with_bad_transaction_should_panic() {
 		let mut storage = GenesisConfig::new(false,
-			vec![Sr25519Keyring::One.into(), Sr25519Keyring::Two.into()],
+			vec![Sr25519Keyring::One.public().into(), Sr25519Keyring::Two.public().into()],
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			68,
 			None,
@@ -220,6 +226,7 @@ mod tests {
 			&executor(),
 			"Core_execute_block",
 			&b1data,
+			None,
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		);

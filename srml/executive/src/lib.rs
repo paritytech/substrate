@@ -82,7 +82,7 @@ use sr_primitives::{generic::Digest, traits::{
 	OnInitialize, NumberFor, Block as BlockT, OffchainWorker, ValidateUnsigned
 }};
 use srml_support::Dispatchable;
-use parity_codec::{Codec, Encode};
+use codec::{Codec, Encode};
 use system::{extrinsics_root, DigestOf};
 use sr_primitives::{ApplyOutcome, ApplyError};
 use sr_primitives::transaction_validity::TransactionValidity;
@@ -108,7 +108,7 @@ mod internal {
 		fn from(d: DispatchError) -> Self {
 			match d {
 				DispatchError::Payment => ApplyError::CantPay,
-				DispatchError::Resource => ApplyError::FullBlock,
+				DispatchError::Exhausted => ApplyError::FullBlock,
 				DispatchError::NoPermission => ApplyError::CantPay,
 				DispatchError::BadState => ApplyError::CantPay,
 				DispatchError::Stale => ApplyError::Stale,
@@ -368,8 +368,7 @@ mod tests {
 	use hex_literal::hex;
 
 	impl_outer_origin! {
-		pub enum Origin for Runtime {
-		}
+		pub enum Origin for Runtime { }
 	}
 
 	impl_outer_event!{
@@ -390,6 +389,7 @@ mod tests {
 	impl system::Trait for Runtime {
 		type Origin = Origin;
 		type Index = u64;
+		type Call = Call<Runtime>;
 		type BlockNumber = u64;
 		type Hash = primitives::H256;
 		type Hashing = BlakeTwo256;

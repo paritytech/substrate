@@ -19,7 +19,7 @@
 use crate::error::Error;
 use crate::wasm_executor::WasmExecutor;
 use log::{trace, warn};
-use parity_codec::Decode;
+use codec::Decode;
 use parity_wasm::elements::{deserialize_buffer, DataSegment, Instruction, Module as RawModule};
 use primitives::storage::well_known_keys;
 use primitives::Blake2Hasher;
@@ -288,7 +288,7 @@ impl RuntimesCache {
 
 		let heap_pages = ext
 			.storage(well_known_keys::HEAP_PAGES)
-			.and_then(|pages| u64::decode(&mut &pages[..]))
+			.and_then(|pages| u64::decode(&mut &pages[..]).ok())
 			.or(default_heap_pages)
 			.unwrap_or(DEFAULT_HEAP_PAGES);
 
@@ -308,7 +308,7 @@ impl RuntimesCache {
 		let version = wasm_executor
 			.call_in_wasm_module(ext, &instance, "Core_version", &[])
 			.ok()
-			.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()));
+			.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()).ok());
 		Ok(Rc::new(CachedRuntime {
 			instance,
 			version,
