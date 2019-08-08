@@ -19,7 +19,8 @@
 #![cfg(test)]
 
 use super::*;
-use crate::mock::{Offences, Offence, KIND, new_test_ext, with_on_offence_perbill};
+use crate::mock::{Offences, System, Offence, TestEvent, KIND, new_test_ext, with_on_offence_perbill};
+use system::{EventRecord, Phase};
 use runtime_io::with_externalities;
 
 #[test]
@@ -143,6 +144,76 @@ fn should_report_in_different_time_slot() {
 		with_on_offence_perbill(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
 		});
+	});
+}
+
+#[test]
+fn should_deposit_event() {
+	with_externalities(&mut new_test_ext(), || {
+		// given
+		let session_index = 5;
+		let time_slot = 42;
+		assert_eq!(
+			Offences::offence_reports(&KIND, &(session_index, time_slot)),
+			vec![]
+		);
+
+		let offence = Offence {
+			validators_count: 5,
+			session_index,
+			time_slot,
+			offenders: vec![5],
+		};
+
+		// when
+		Offences::report_offence(None, offence);
+
+		// then
+		assert_eq!(
+			System::events(),
+			vec![EventRecord {
+				phase: Phase::ApplyExtrinsic(0),
+				event: TestEvent::offences(crate::Event::Offence(KIND, session_index, time_slot)),
+				topics: vec![],
+			}]
+		);
+	});
+}
+
+#[test]
+fn doesnt_deposit_event_for_dups() {
+	with_externalities(&mut new_test_ext(), || {
+		// given
+		let session_index = 5;
+		let time_slot = 42;
+		assert_eq!(Offences::offence_reports(&KIND, &(session_index, time_slot)), vec![]);
+
+		let offence = Offence {
+			validators_count: 5,
+			session_index,
+			time_slot,
+			offenders: vec![5],
+		};
+		Offences::report_offence(None, offence.clone());
+		with_on_offence_perbill(|f| {
+			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
+			f.clear();
+		});
+
+		// when
+		// report for the second time
+		Offences::report_offence(None, offence);
+
+		// then
+		// there is only one event.
+		assert_eq!(
+			System::events(),
+			vec![EventRecord {
+				phase: Phase::ApplyExtrinsic(0),
+				event: TestEvent::offences(crate::Event::Offence(KIND, session_index, time_slot)),
+				topics: vec![],
+			}]
+		);
 	});
 }
 

@@ -25,7 +25,7 @@ use sr_staking_primitives::offence::{self, OffenceDetails, TimeSlot};
 use sr_primitives::testing::Header;
 use sr_primitives::traits::{IdentityLookup, BlakeTwo256};
 use substrate_primitives::{H256, Blake2Hasher};
-use support::{impl_outer_origin, parameter_types};
+use support::{impl_outer_origin, impl_outer_event, parameter_types};
 use {runtime_io, system};
 
 impl_outer_origin!{
@@ -76,7 +76,7 @@ impl system::Trait for Runtime {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type WeightMultiplierUpdate = ();
-	type Event = ();
+	type Event = TestEvent;
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type MaximumBlockLength = MaximumBlockLength;
@@ -84,8 +84,19 @@ impl system::Trait for Runtime {
 }
 
 impl Trait for Runtime {
+	type Event = TestEvent;
 	type IdentificationTuple = u64;
 	type OnOffenceHandler = OnOffenceHandler;
+}
+
+mod offences {
+	pub use crate::Event;
+}
+
+impl_outer_event! {
+	pub enum TestEvent for Runtime {
+		offences,
+	}
 }
 
 pub fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
@@ -95,6 +106,7 @@ pub fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 
 /// Offences module.
 pub type Offences = Module<Runtime>;
+pub type System = system::Module<Runtime>;
 
 pub const KIND: [u8; 16] = *b"test_report_1234";
 

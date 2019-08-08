@@ -26,7 +26,7 @@ mod tests;
 
 use rstd::vec::Vec;
 use support::{
-	StorageDoubleMap, decl_module, decl_storage, Parameter,
+	StorageDoubleMap, decl_module, decl_event, decl_storage, Parameter,
 };
 use sr_primitives::Perbill;
 use sr_staking_primitives::{
@@ -36,6 +36,8 @@ use sr_staking_primitives::{
 
 /// Offences trait
 pub trait Trait: system::Trait {
+	/// The overarching event type.
+	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
 	/// Full identification of the validator.
 	type IdentificationTuple: Parameter;
 	/// A handler called for every offence report.
@@ -55,9 +57,19 @@ decl_storage! {
 	}
 }
 
+decl_event!(
+	pub enum Event {
+		/// There is an offence reported of the given `kind` happened at the `session_index` and
+		/// (kind-specific) time slot. This event is not deposited for duplicate slashes.
+		Offence(Kind, SessionIndex, TimeSlot),
+	}
+);
+
 decl_module! {
 	/// Offences module, currently just responsible for taking offence reports.
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		fn deposit_event() = default;
+	}
 }
 
 impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportOffence<T::AccountId, T::IdentificationTuple, O>
@@ -103,6 +115,9 @@ impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportOffence<T::AccountId, T
 			// The report contained only duplicates, so there is no need to slash again.
 			return
 		}
+
+		// The report is not a duplicate. Deposit an event.
+		Self::deposit_event(Event::Offence(O::ID, session, time_slot));
 
 		let offenders_count = all_offenders.len() as u32;
 		let expected_fraction = O::slash_fraction(offenders_count, validators_count);

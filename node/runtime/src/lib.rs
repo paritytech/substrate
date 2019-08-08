@@ -400,6 +400,7 @@ impl im_online::Trait for Runtime {
 }
 
 impl offences::Trait for Runtime {
+	type Event = Event;
 	type IdentificationTuple = session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
 }
