@@ -1242,6 +1242,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			let last_best = self.backend.blockchain().info().best_hash;
 			let to_finalize_hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
 			self.apply_finality_with_block_hash(operation, to_finalize_hash, justification, last_best, notify)
+		}).map_err(|e| {
+			warn!("Block finalization error:\n{:?}", e);
+			e
 		})
 	}
 
@@ -1501,7 +1504,10 @@ impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Blo
 	) -> Result<ImportResult, Self::Error> {
 		self.lock_import_and_run(|operation| {
 			self.apply_block(operation, import_block, new_cache)
-		}).map_err(|e| ConsensusError::ClientImport(e.to_string()).into())
+		}).map_err(|e| {
+			warn!("Block import error:\n{:?}", e);
+			ConsensusError::ClientImport(e.to_string()).into()
+		})
 	}
 
 	/// Check block preconditions.
