@@ -156,7 +156,19 @@ pub struct TelemetryOnConnect {
 }
 
 macro_rules! new_impl {
-	($config:ident, $components:ty) => {{
+	(
+		$config:ident,
+		$build_client:expr,
+		$build_select_chain:expr,
+		$build_import_queue:expr,
+		$build_finality_proof_provider:expr,
+		$generate_intial_session_keys:expr,
+		$build_network_protocol:expr,
+		$build_transaction_pool:expr,
+		$maintain_transaction_pool:expr,
+		$offchain_workers:expr,
+		$start_rpc:expr,
+	) => {{
 		let (signal, exit) = exit_future::signal();
 
 		// List of asynchronous tasks to spawn. We collect them, then spawn them all at once.
@@ -168,11 +180,11 @@ macro_rules! new_impl {
 
 		let keystore = Keystore::open($config.keystore_path.clone(), $config.keystore_password.clone())?;
 
-		let (client, on_demand) = <$components>::build_client(&$config, executor, Some(keystore.clone()))?;
-		let select_chain = <$components>::build_select_chain(&mut $config, client.clone())?;
+		let (client, on_demand) = $build_client(&$config, executor, Some(keystore.clone()))?;
+		let select_chain = $build_select_chain(&mut $config, client.clone())?;
 
 		let transaction_pool = Arc::new(
-			<$components>::build_transaction_pool($config.transaction_pool.clone(), client.clone())?
+			$build_transaction_pool($config.transaction_pool.clone(), client.clone())?
 		);
 		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
 			imports_external_transactions: !$config.roles.is_light(),
@@ -180,17 +192,17 @@ macro_rules! new_impl {
 			client: client.clone(),
 		});
 
-		let (import_queue, finality_proof_request_builder) = <$components>::build_import_queue(
+		let (import_queue, finality_proof_request_builder) = $build_import_queue(
 			&mut $config,
 			client.clone(),
 			select_chain.clone(),
 			Some(transaction_pool.clone()),
 		)?;
 		let import_queue = Box::new(import_queue);
-		let finality_proof_provider = <$components>::build_finality_proof_provider(client.clone())?;
+		let finality_proof_provider = $build_finality_proof_provider(client.clone())?;
 		let chain_info = client.info().chain;
 
-		<$components>::RuntimeServices::generate_initial_session_keys(
+		$generate_intial_session_keys(
 			client.clone(),
 			$config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
 		)?;
@@ -204,7 +216,7 @@ macro_rules! new_impl {
 			"best" => ?chain_info.best_hash
 		);
 
-		let network_protocol = <<$components>::Factory>::build_network_protocol(&$config)?;
+		let network_protocol = $build_network_protocol(&$config)?;
 
 		let protocol_id = {
 			let protocol_id_full = match $config.chain_spec.protocol_id() {
@@ -265,7 +277,7 @@ macro_rules! new_impl {
 					let number = *notification.header.number();
 
 					if let (Some(txpool), Some(client)) = (txpool.upgrade(), wclient.upgrade()) {
-						<$components>::RuntimeServices::maintain_transaction_pool(
+						$maintain_transaction_pool(
 							&BlockId::hash(notification.hash),
 							&*client,
 							&*txpool,
@@ -273,7 +285,7 @@ macro_rules! new_impl {
 					}
 
 					if let (Some(txpool), Some(offchain)) = (txpool.upgrade(), offchain.as_ref().and_then(|o| o.upgrade())) {
-						let future = <$components>::RuntimeServices::offchain_workers(
+						let future = $offchain_workers(
 							&number,
 							&offchain,
 							&txpool,
@@ -317,7 +329,7 @@ macro_rules! new_impl {
 		let client_ = client.clone();
 		let mut sys = System::new();
 		let self_pid = get_current_pid().ok();
-		let (netstat_tx, netstat_rx) = mpsc::unbounded::<(NetworkStatus<ComponentBlock<$components>>, NetworkState)>();
+		let (netstat_tx, netstat_rx) = mpsc::unbounded::<(NetworkStatus<_>, NetworkState)>();
 		network_status_sinks.lock().push(netstat_tx);
 		let tel_task = netstat_rx.for_each(move |(net_status, network_state)| {
 			let info = client_.info();
@@ -375,7 +387,7 @@ macro_rules! new_impl {
 				impl_version: $config.impl_version.into(),
 				properties: $config.chain_spec.properties(),
 			};
-			<$components>::RuntimeServices::start_rpc(
+			$start_rpc(
 				client.clone(),
 				system_rpc_tx.clone(),
 				system_info.clone(),
@@ -471,7 +483,16 @@ impl<Components: components::Components> Service<Components> {
 	) -> Result<Self, error::Error> {
 		new_impl!(
 			config,
-			Components
+			Components::build_client,
+			Components::build_select_chain,
+			Components::build_import_queue,
+			Components::build_finality_proof_provider,
+			Components::RuntimeServices::generate_initial_session_keys,
+			<Components::Factory>::build_network_protocol,
+			Components::build_transaction_pool,
+			Components::RuntimeServices::maintain_transaction_pool,
+			Components::RuntimeServices::offchain_workers,
+			Components::RuntimeServices::start_rpc,
 		)
 	}
 
