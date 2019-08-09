@@ -26,6 +26,7 @@ pub mod chain_ops;
 pub mod error;
 
 use std::io;
+use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -77,14 +78,32 @@ const DEFAULT_PROTOCOL_ID: &str = "sup";
 
 /// Substrate service.
 pub struct Service<Components: components::Components> {
-	client: Arc<ComponentClient<Components>>,
-	select_chain: Option<Components::SelectChain>,
-	network: Arc<components::NetworkService<Components>>,
+	inner: NewService<
+		FactoryFullConfiguration<Components::Factory>,
+		ComponentBlock<Components>,
+		ComponentClient<Components>,
+		Components::SelectChain,
+		NetworkStatus<ComponentBlock<Components>>,
+		NetworkService<Components>,
+		TransactionPool<Components::TransactionPoolApi>,
+		offchain::OffchainWorkers<
+			ComponentClient<Components>,
+			ComponentOffchainStorage<Components>,
+			ComponentBlock<Components>
+		>,
+	>,
+}
+
+/// Substrate service.
+pub struct NewService<TCfg, TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
+	client: Arc<TCl>,
+	select_chain: Option<TSc>,
+	network: Arc<TNet>,
 	/// Sinks to propagate network status updates.
 	network_status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<(
-		NetworkStatus<ComponentBlock<Components>>, NetworkState
+		TNetStatus, NetworkState
 	)>>>>,
-	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
+	transaction_pool: Arc<TTxPool>,
 	/// A future that resolves when the service has exited, this is useful to
 	/// make sure any internally spawned futures stop when the service does.
 	exit: exit_future::Exit,
@@ -102,17 +121,14 @@ pub struct Service<Components: components::Components> {
 	/// The elements must then be polled manually.
 	to_poll: Vec<Box<dyn Future<Item = (), Error = ()> + Send>>,
 	/// Configuration of this Service
-	config: FactoryFullConfiguration<Components::Factory>,
-	rpc_handlers: components::RpcHandler,
+	config: TCfg,
+	rpc_handlers: rpc_servers::RpcHandler<rpc::Metadata>,
 	_rpc: Box<dyn std::any::Any + Send + Sync>,
 	_telemetry: Option<tel::Telemetry>,
 	_telemetry_on_connect_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>>,
-	_offchain_workers: Option<Arc<offchain::OffchainWorkers<
-		ComponentClient<Components>,
-		ComponentOffchainStorage<Components>,
-		ComponentBlock<Components>>
-	>>,
+	_offchain_workers: Option<Arc<TOc>>,
 	keystore: keystore::KeyStorePtr,
+	marker: PhantomData<TBl>,
 }
 
 /// Creates bare client without any networking.
@@ -457,7 +473,7 @@ macro_rules! new_impl {
 			telemetry
 		});
 
-		Ok(Service {
+		Ok(NewService {
 			client,
 			network,
 			network_status_sinks,
@@ -476,6 +492,7 @@ macro_rules! new_impl {
 			_offchain_workers: offchain_workers,
 			_telemetry_on_connect_sinks: telemetry_connection_sinks.clone(),
 			keystore,
+			marker: PhantomData,
 		})
 	}}
 }
@@ -485,7 +502,7 @@ impl<Components: components::Components> Service<Components> {
 	pub fn new(
 		mut config: FactoryFullConfiguration<Components::Factory>,
 	) -> Result<Self, error::Error> {
-		new_impl!(
+		let inner = new_impl!(
 			config,
 			Components::build_client,
 			Components::build_select_chain,
@@ -497,7 +514,9 @@ impl<Components: components::Components> Service<Components> {
 			Components::RuntimeServices::maintain_transaction_pool,
 			Components::RuntimeServices::offchain_workers,
 			Components::RuntimeServices::start_rpc,
-		)
+		);
+
+		inner.map(|inner| Service { inner })
 	}
 }
 
@@ -589,75 +608,75 @@ where FactoryFullConfiguration<Components::Factory>: Send {
 	type NetworkService = components::NetworkService<Components>;
 
 	fn config(&self) -> &Self::Config {
-		&self.config
+		&self.inner.config
 	}
 
 	fn config_mut(&mut self) -> &mut Self::Config {
-		&mut self.config
+		&mut self.inner.config
 	}
 
 	fn telemetry_on_connect_stream(&self) -> TelemetryOnConnectNotifications {
 		let (sink, stream) = mpsc::unbounded();
-		self._telemetry_on_connect_sinks.lock().push(sink);
+		self.inner._telemetry_on_connect_sinks.lock().push(sink);
 		stream
 	}
 
 	fn telemetry(&self) -> Option<tel::Telemetry> {
-		self._telemetry.as_ref().map(|t| t.clone())
+		self.inner._telemetry.as_ref().map(|t| t.clone())
 	}
 
 	fn keystore(&self) -> keystore::KeyStorePtr {
-		self.keystore.clone()
+		self.inner.keystore.clone()
 	}
 
 	fn spawn_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
-		let _ = self.to_spawn_tx.unbounded_send(Box::new(task));
+		let _ = self.inner.to_spawn_tx.unbounded_send(Box::new(task));
 	}
 
 	fn spawn_essential_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
-		let essential_failed = self.essential_failed.clone();
+		let essential_failed = self.inner.essential_failed.clone();
 		let essential_task = Box::new(task.map_err(move |_| {
 			error!("Essential task failed. Shutting down service.");
 			essential_failed.store(true, Ordering::Relaxed);
 		}));
 
-		let _ = self.to_spawn_tx.unbounded_send(essential_task);
+		let _ = self.inner.to_spawn_tx.unbounded_send(essential_task);
 	}
 
 	fn spawn_task_handle(&self) -> SpawnTaskHandle {
 		SpawnTaskHandle {
-			sender: self.to_spawn_tx.clone(),
+			sender: self.inner.to_spawn_tx.clone(),
 		}
 	}
 
 	fn rpc_query(&self, mem: &RpcSession, request: &str) -> Box<dyn Future<Item = Option<String>, Error = ()> + Send> {
-		Box::new(self.rpc_handlers.handle_request(request, mem.metadata.clone()))
+		Box::new(self.inner.rpc_handlers.handle_request(request, mem.metadata.clone()))
 	}
 
 	fn client(&self) -> Arc<client::Client<Self::Backend, Self::Executor, Self::Block, Self::RuntimeApi>> {
-		self.client.clone()
+		self.inner.client.clone()
 	}
 
 	fn select_chain(&self) -> Option<Self::SelectChain> {
-		self.select_chain.clone()
+		self.inner.select_chain.clone()
 	}
 
 	fn network(&self) -> Arc<Self::NetworkService> {
-		self.network.clone()
+		self.inner.network.clone()
 	}
 
 	fn network_status(&self) -> mpsc::UnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)> {
 		let (sink, stream) = mpsc::unbounded();
-		self.network_status_sinks.lock().push(sink);
+		self.inner.network_status_sinks.lock().push(sink);
 		stream
 	}
 
 	fn transaction_pool(&self) -> Arc<TransactionPool<Self::TransactionPoolApi>> {
-		self.transaction_pool.clone()
+		self.inner.transaction_pool.clone()
 	}
 
 	fn on_exit(&self) -> ::exit_future::Exit {
-		self.exit.clone()
+		self.inner.exit.clone()
 	}
 }
 
@@ -666,11 +685,11 @@ impl<Components> Future for Service<Components> where Components: components::Co
 	type Error = Error;
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-		if self.essential_failed.load(Ordering::Relaxed) {
+		if self.inner.essential_failed.load(Ordering::Relaxed) {
 			return Err(Error::Other("Essential task failed.".into()));
 		}
 
-		while let Ok(Async::Ready(Some(task_to_spawn))) = self.to_spawn_rx.poll() {
+		while let Ok(Async::Ready(Some(task_to_spawn))) = self.inner.to_spawn_rx.poll() {
 			let executor = tokio_executor::DefaultExecutor::current();
 			if let Err(err) = executor.execute(task_to_spawn) {
 				debug!(
@@ -678,13 +697,13 @@ impl<Components> Future for Service<Components> where Components: components::Co
 					"Failed to spawn background task: {:?}; falling back to manual polling",
 					err
 				);
-				self.to_poll.push(err.into_future());
+				self.inner.to_poll.push(err.into_future());
 			}
 		}
 
 		// Polling all the `to_poll` futures.
-		while let Some(pos) = self.to_poll.iter_mut().position(|t| t.poll().map(|t| t.is_ready()).unwrap_or(true)) {
-			self.to_poll.remove(pos);
+		while let Some(pos) = self.inner.to_poll.iter_mut().position(|t| t.poll().map(|t| t.is_ready()).unwrap_or(true)) {
+			self.inner.to_poll.remove(pos);
 		}
 
 		// The service future never ends.
@@ -699,7 +718,7 @@ impl<Components> Executor<Box<dyn Future<Item = (), Error = ()> + Send>>
 		&self,
 		future: Box<dyn Future<Item = (), Error = ()> + Send>
 	) -> Result<(), futures::future::ExecuteError<Box<dyn Future<Item = (), Error = ()> + Send>>> {
-		if let Err(err) = self.to_spawn_tx.unbounded_send(future) {
+		if let Err(err) = self.inner.to_spawn_tx.unbounded_send(future) {
 			let kind = futures::future::ExecuteErrorKind::Shutdown;
 			Err(futures::future::ExecuteError::new(kind, err.into_inner()))
 		} else {
@@ -912,7 +931,7 @@ pub struct NetworkStatus<B: BlockT> {
 impl<Components> Drop for Service<Components> where Components: components::Components {
 	fn drop(&mut self) {
 		debug!(target: "service", "Substrate service shutdown");
-		if let Some(signal) = self.signal.take() {
+		if let Some(signal) = self.inner.signal.take() {
 			signal.fire();
 		}
 	}
