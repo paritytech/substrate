@@ -36,7 +36,7 @@ mod pruning;
 use std::fmt;
 use parking_lot::RwLock;
 use codec::Codec;
-use std::collections::{VecDeque, HashMap, hash_map::Entry};
+use std::collections::{HashMap, hash_map::Entry};
 use noncanonical::NonCanonicalOverlay;
 use pruning::RefWindow;
 use log::trace;
@@ -77,8 +77,6 @@ pub enum Error<E: fmt::Debug> {
 	InvalidBlockNumber,
 	/// Trying to insert block with unknown parent.
 	InvalidParent,
-	/// Canonicalization would discard pinned state.
-	DiscardingPinned,
 }
 
 impl<E: fmt::Debug> From<codec::Error> for Error<E> {
@@ -95,7 +93,6 @@ impl<E: fmt::Debug> fmt::Debug for Error<E> {
 			Error::InvalidBlock => write!(f, "Trying to canonicalize invalid block"),
 			Error::InvalidBlockNumber => write!(f, "Trying to insert block with invalid number"),
 			Error::InvalidParent => write!(f, "Trying to insert block with unknown parent"),
-			Error::DiscardingPinned => write!(f, "Trying to discard pinned state"),
 		}
 	}
 }
@@ -173,7 +170,6 @@ fn to_meta_key<S: Codec>(suffix: &[u8], data: &S) -> Vec<u8> {
 struct StateDbSync<BlockHash: Hash, Key: Hash> {
 	mode: PruningMode,
 	non_canonical: NonCanonicalOverlay<BlockHash, Key>,
-	canonicalization_queue: VecDeque<BlockHash>,
 	pruning: Option<RefWindow<BlockHash, Key>>,
 	pinned: HashMap<BlockHash, u32>,
 }
@@ -195,7 +191,6 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 			non_canonical,
 			pruning,
 			pinned: Default::default(),
-			canonicalization_queue: Default::default(),
 		})
 	}
 
@@ -220,26 +215,16 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		if self.mode == PruningMode::ArchiveAll {
 			return Ok(commit)
 		}
-		self.canonicalization_queue.push_back(hash.clone());
-		while let Some(hash) = self.canonicalization_queue.front().cloned() {
-			if self.pinned.contains_key(&hash) {
-				break;
-			}
-			match self.non_canonical.canonicalize(&hash, &self.pinned, &mut commit) {
-				Ok(()) => {
-					self.canonicalization_queue.pop_front();
-					if self.mode == PruningMode::ArchiveCanonical {
-						commit.data.deleted.clear();
-					}
+		match self.non_canonical.canonicalize(&hash, &mut commit) {
+			Ok(()) => {
+				if self.mode == PruningMode::ArchiveCanonical {
+					commit.data.deleted.clear();
 				}
-				Err(Error::DiscardingPinned) => {
-					break;
-				}
-				Err(e) => return Err(e),
-			};
-			if let Some(ref mut pruning) = self.pruning {
-				pruning.note_canonical(&hash, &mut commit);
 			}
+			Err(e) => return Err(e),
+		};
+		if let Some(ref mut pruning) = self.pruning {
+			pruning.note_canonical(&hash, &mut commit);
 		}
 		self.prune(&mut commit);
 		Ok(commit)
@@ -300,6 +285,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		let refs = self.pinned.entry(hash.clone()).or_default();
 		if *refs == 0 {
 			trace!(target: "state-db", "Pinned block: {:?}", hash);
+			self.non_canonical.pin(hash);
 		}
 		*refs += 1
 	}
@@ -311,6 +297,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 				if *entry.get() == 0 {
 					trace!(target: "state-db", "Unpinned block: {:?}", hash);
 					entry.remove();
+					self.non_canonical.unpin(hash);
 				} else {
 					trace!(target: "state-db", "Releasing reference for {:?}", hash);
 				}
