@@ -113,41 +113,56 @@ construct_service_factory! {
 					}
 				}
 
-				let proposer = substrate_basic_authorship::ProposerFactory {
-					client: service.client(),
-					transaction_pool: service.transaction_pool(),
-				};
-
-				let client = service.client();
-				let select_chain = service.select_chain().ok_or(ServiceError::SelectChainRequired)?;
-
-				let babe_config = babe::BabeParams {
-					config: Config::get_or_compute(&*client)?,
-					keystore: service.keystore(),
-					client,
-					select_chain,
-					block_import,
-					env: proposer,
-					sync_oracle: service.network(),
-					inherent_data_providers: service.config().custom.inherent_data_providers.clone(),
-					force_authoring: service.config().force_authoring,
-					time_source: babe_link,
-				};
-
-				let babe = start_babe(babe_config)?;
-				let select = babe.select(service.on_exit()).then(|_| Ok(()));
-				service.spawn_task(Box::new(select));
-
-				if !service.config().disable_grandpa {
-					let config = grandpa::Config {
-						// FIXME #1578 make this available through chainspec
-						gossip_duration: Duration::from_millis(333),
-						justification_period: 4096,
-						name: Some(service.config().name.clone()),
-						keystore: Some(service.keystore()),
+				if service.config().roles.is_authority() {
+					let proposer = substrate_basic_authorship::ProposerFactory {
+						client: service.client(),
+						transaction_pool: service.transaction_pool(),
 					};
 
-					if service.config().roles.is_authority() {
+					let client = service.client();
+					let select_chain = service.select_chain().ok_or(ServiceError::SelectChainRequired)?;
+
+					let babe_config = babe::BabeParams {
+						config: Config::get_or_compute(&*client)?,
+						keystore: service.keystore(),
+						client,
+						select_chain,
+						block_import,
+						env: proposer,
+						sync_oracle: service.network(),
+						inherent_data_providers: service.config().custom.inherent_data_providers.clone(),
+						force_authoring: service.config().force_authoring,
+						time_source: babe_link,
+					};
+
+					let babe = start_babe(babe_config)?;
+					let select = babe.select(service.on_exit()).then(|_| Ok(()));
+					service.spawn_task(Box::new(select));
+				}
+
+				let config = grandpa::Config {
+					// FIXME #1578 make this available through chainspec
+					gossip_duration: Duration::from_millis(333),
+					justification_period: 4096,
+					name: Some(service.config().name.clone()),
+					keystore: Some(service.keystore()),
+				};
+
+				match (service.config().roles.is_authority(), service.config().disable_grandpa) {
+					(false, false) => {
+						// start the lightweight GRANDPA observer
+						service.spawn_task(Box::new(grandpa::run_grandpa_observer(
+							config,
+							link_half,
+							service.network(),
+							service.on_exit(),
+						)?));
+					},
+					(false, true) => {
+						// nothing to do here
+					},
+					(true, false) => {
+						// start the full GRANDPA voter
 						let telemetry_on_connect = TelemetryOnConnect {
 							telemetry_connection_sinks: service.telemetry_on_connect_stream(),
 						};
@@ -160,23 +175,19 @@ construct_service_factory! {
 							telemetry_on_connect: Some(telemetry_on_connect),
 						};
 						service.spawn_task(Box::new(grandpa::run_grandpa_voter(grandpa_config)?));
-					} else {
-						service.spawn_task(Box::new(grandpa::run_grandpa_observer(
-							config,
-							link_half,
-							service.network(),
-							service.on_exit(),
-						)?));
-					}
+					},
+					(true, true) => {
+						// since we are an authority, when authoring blocks we
+						// expect inherent data regarding what our last
+						// finalized block is, to be available. since we don't
+						// start the grandpa voter, we need to register the
+						// inherent data provider ourselves.
+						grandpa::register_finality_tracker_inherent_data_provider(
+							service.client(),
+							&service.config().custom.inherent_data_providers,
+						)?;
+					},
 				}
-
-				// regardless of whether grandpa is started or not, when
-				// authoring blocks we expect inherent data regarding what our
-				// last finalized block is, to be available.
-				grandpa::register_finality_tracker_inherent_data_provider(
-					service.client(),
-					&service.config().custom.inherent_data_providers,
-				)?;
 
 				Ok(service)
 			}
