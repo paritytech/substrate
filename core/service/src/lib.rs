@@ -22,6 +22,7 @@
 mod components;
 mod chain_spec;
 pub mod config;
+#[macro_use]
 pub mod chain_ops;
 pub mod error;
 
@@ -50,7 +51,8 @@ use substrate_executor::NativeExecutor;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
 
-pub use self::{error::Error, factory::ServiceBuilder};
+pub use self::error::Error;
+pub use self::factory::{ServiceBuilder, ServiceBuilderExport, ServiceBuilderImport, ServiceBuilderRevert};
 pub use config::{Configuration, Roles, PruningMode};
 pub use chain_spec::{ChainSpec, Properties};
 pub use transaction_pool::txpool::{

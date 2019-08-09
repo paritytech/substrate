@@ -19,6 +19,7 @@ use crate::{SpawnTaskHandle, start_rpc_servers, build_network_future, components
 use crate::{components, TransactionPoolAdapter};
 use crate::config::{Configuration, Roles};
 use client::{BlockchainEvents, Client, runtime_api};
+use codec::{Decode, Encode, IoReader};
 use consensus_common::import_queue::ImportQueue;
 use futures::{prelude::*, sync::mpsc};
 use futures03::{StreamExt as _, TryStreamExt as _};
@@ -29,10 +30,10 @@ use network::{config::BoxFinalityProofRequestBuilder, specialization::NetworkSpe
 use parking_lot::{Mutex, RwLock};
 use primitives::{Blake2Hasher, H256, Hasher};
 use sr_primitives::{BuildStorage, generic::BlockId};
-use sr_primitives::traits::{Block as BlockT, ProvideRuntimeApi, Header, SaturatedConversion};
+use sr_primitives::traits::{Block as BlockT, ProvideRuntimeApi, NumberFor, One, Zero, Header, SaturatedConversion};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use serde::{Serialize, de::DeserializeOwned};
-use std::{marker::PhantomData, sync::Arc, sync::atomic::AtomicBool};
+use std::{io::{Read, Write, Seek}, marker::PhantomData, sync::Arc, sync::atomic::AtomicBool};
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
 use transaction_pool::txpool::{ChainApi, Pool as TransactionPool};
@@ -396,6 +397,108 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			transaction_pool: Arc::new(transaction_pool),
 			marker: self.marker,
 		})
+	}
+}
+
+/// Implemented on `ServiceBuilder`. Allows importing blocks once you have given all the required
+/// components to the builder.
+pub trait ServiceBuilderImport {
+	/// Starts the process of importing blocks.
+	fn import_blocks(
+		self,
+		exit: impl Future<Item=(),Error=()> + Send + 'static,
+		input: impl Read + Seek,
+	) -> Result<Box<dyn Future<Item = (), Error = ()> + Send>, Error>;
+}
+
+/// Implemented on `ServiceBuilder`. Allows exporting blocks once you have given all the required
+/// components to the builder.
+pub trait ServiceBuilderExport {
+	/// Type of block of the builder.
+	type Block: BlockT;
+
+	/// Performs the blocks export.
+	fn export_blocks(
+		&self,
+		exit: impl Future<Item=(),Error=()> + Send + 'static,
+		output: impl Write,
+		from: NumberFor<Self::Block>,
+		to: Option<NumberFor<Self::Block>>,
+		json: bool
+	) -> Result<(), Error>;
+}
+
+/// Implemented on `ServiceBuilder`. Allows reverting the chain once you have given all the
+/// required components to the builder.
+pub trait ServiceBuilderRevert {
+	/// Type of block of the builder.
+	type Block: BlockT;
+
+	/// Performs a revert of `blocks` bocks.
+	fn revert_chain(
+		&self,
+		blocks: NumberFor<Self::Block>
+	) -> Result<(), Error>;
+}
+
+impl<TBl, TRtApi, TCfg, TGen, TBackend, TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool> ServiceBuilderImport for
+	ServiceBuilder<TBl, TRtApi, TCfg, TGen, Client<TBackend, TExec, TBl, TRtApi>, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool>
+where
+	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
+	TBackend: 'static + client::backend::Backend<TBl, Blake2Hasher> + Send,
+	TExec: 'static + client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone,
+	TImpQu: 'static + ImportQueue<TBl>,
+	TRtApi: 'static + Send + Sync,
+{
+	fn import_blocks(
+		self,
+		exit: impl Future<Item=(),Error=()> + Send + 'static,
+		input: impl Read + Seek,
+	) -> Result<Box<dyn Future<Item = (), Error = ()> + Send>, Error> {
+		let client = self.client;
+		let mut queue = self.import_queue;
+		import_blocks!(TBl, client, queue, exit, input)
+			.map(|f| Box::new(f) as Box<_>)
+	}
+}
+
+impl<TBl, TRtApi, TCfg, TGen, TBackend, TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool> ServiceBuilderExport for
+	ServiceBuilder<TBl, TRtApi, TCfg, TGen, Client<TBackend, TExec, TBl, TRtApi>, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool>
+where
+	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
+	TBackend: 'static + client::backend::Backend<TBl, Blake2Hasher> + Send,
+	TExec: 'static + client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone
+{
+	type Block = TBl;
+
+	fn export_blocks(
+		&self,
+		exit: impl Future<Item=(),Error=()> + Send + 'static,
+		mut output: impl Write,
+		from: NumberFor<TBl>,
+		to: Option<NumberFor<TBl>>,
+		json: bool
+	) -> Result<(), Error> {
+		let client = &self.client;
+		export_blocks!(client, exit, output, from, to, json)
+	}
+}
+
+impl<TBl, TRtApi, TCfg, TGen, TBackend, TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool> ServiceBuilderRevert for
+	ServiceBuilder<TBl, TRtApi, TCfg, TGen, Client<TBackend, TExec, TBl, TRtApi>, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool>
+where
+	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
+	TBackend: 'static + client::backend::Backend<TBl, Blake2Hasher> + Send,
+	TExec: 'static + client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone
+{
+	type Block = TBl;
+
+	fn revert_chain(
+		&self,
+		blocks: NumberFor<TBl>
+	) -> Result<(), Error> {
+		let client = &self.client;
+		revert_chain!(client, blocks)
 	}
 }
 
