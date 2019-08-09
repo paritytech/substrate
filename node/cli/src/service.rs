@@ -158,9 +158,6 @@ construct_service_factory! {
 							service.on_exit(),
 						)?));
 					},
-					(false, true) => {
-						// nothing to do here
-					},
 					(true, false) => {
 						// start the full GRANDPA voter
 						let telemetry_on_connect = TelemetryOnConnect {
@@ -176,15 +173,11 @@ construct_service_factory! {
 						};
 						service.spawn_task(Box::new(grandpa::run_grandpa_voter(grandpa_config)?));
 					},
-					(true, true) => {
-						// since we are an authority, when authoring blocks we
-						// expect inherent data regarding what our last
-						// finalized block is, to be available. since we don't
-						// start the grandpa voter, we need to register the
-						// inherent data provider ourselves.
-						grandpa::register_finality_tracker_inherent_data_provider(
+					(_, true) => {
+						grandpa::setup_disabled_grandpa(
 							service.client(),
 							&service.config().custom.inherent_data_providers,
+							service.network(),
 						)?;
 					},
 				}
