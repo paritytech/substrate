@@ -85,9 +85,9 @@ pub struct Service<Components: components::Components> {
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
 	/// A future that resolves when the service has exited, this is useful to
 	/// make sure any internally spawned futures stop when the service does.
-	on_exit: exit_future::Exit,
+	exit: exit_future::Exit,
 	/// A signal that makes the exit future above resolve, fired on service drop.
-	exit_signal: Option<Signal>,
+	signal: Option<Signal>,
 	/// Set to `true` when a spawned essential task has failed. The next time
 	/// the service future is polled it should complete with an error.
 	essential_failed: Arc<AtomicBool>,
@@ -160,7 +160,7 @@ impl<Components: components::Components> Service<Components> {
 	pub fn new(
 		mut config: FactoryFullConfiguration<Components::Factory>,
 	) -> Result<Self, error::Error> {
-		let (exit_signal, on_exit) = exit_future::signal();
+		let (signal, exit) = exit_future::signal();
 
 		// List of asynchronous tasks to spawn. We collect them, then spawn them all at once.
 		let (to_spawn_tx, to_spawn_rx) =
@@ -285,7 +285,7 @@ impl<Components: components::Components> Service<Components> {
 
 					Ok(())
 				})
-				.select(on_exit.clone())
+				.select(exit.clone())
 				.then(|_| Ok(()));
 			let _ = to_spawn_tx.unbounded_send(Box::new(events));
 		}
@@ -306,7 +306,7 @@ impl<Components: components::Components> Service<Components> {
 					);
 					Ok(())
 				})
-				.select(on_exit.clone())
+				.select(exit.clone())
 				.then(|_| Ok(()));
 
 			let _ = to_spawn_tx.unbounded_send(Box::new(events));
@@ -363,7 +363,7 @@ impl<Components: components::Components> Service<Components> {
 			);
 
 			Ok(())
-		}).select(on_exit.clone()).then(|_| Ok(()));
+		}).select(exit.clone()).then(|_| Ok(()));
 		let _ = to_spawn_tx.unbounded_send(Box::new(tel_task));
 
 		// RPC
@@ -395,7 +395,7 @@ impl<Components: components::Components> Service<Components> {
 			has_bootnodes
 		)
 			.map_err(|_| ())
-			.select(on_exit.clone())
+			.select(exit.clone())
 			.then(|_| Ok(()))));
 
 		let telemetry_connection_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>> = Default::default();
@@ -436,7 +436,7 @@ impl<Components: components::Components> Service<Components> {
 					Ok(())
 				});
 			let _ = to_spawn_tx.unbounded_send(Box::new(future
-				.select(on_exit.clone())
+				.select(exit.clone())
 				.then(|_| Ok(()))));
 			telemetry
 		});
@@ -447,8 +447,8 @@ impl<Components: components::Components> Service<Components> {
 			network_status_sinks,
 			select_chain,
 			transaction_pool,
-			on_exit,
-			exit_signal: Some(exit_signal),
+			exit,
+			signal: Some(signal),
 			essential_failed: Arc::new(AtomicBool::new(false)),
 			to_spawn_tx,
 			to_spawn_rx,
@@ -563,7 +563,7 @@ impl<Components: components::Components> Service<Components> {
 
 	/// Get a handle to a future that will resolve on exit.
 	pub fn on_exit(&self) -> ::exit_future::Exit {
-		self.on_exit.clone()
+		self.exit.clone()
 	}
 }
 
@@ -744,7 +744,7 @@ pub struct NetworkStatus<B: BlockT> {
 impl<Components> Drop for Service<Components> where Components: components::Components {
 	fn drop(&mut self) {
 		debug!(target: "service", "Substrate service shutdown");
-		if let Some(signal) = self.exit_signal.take() {
+		if let Some(signal) = self.signal.take() {
 			signal.fire();
 		}
 	}
