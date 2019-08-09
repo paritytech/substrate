@@ -50,7 +50,7 @@ use substrate_executor::NativeExecutor;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
 
-pub use self::error::Error;
+pub use self::{error::Error, factory::ServiceBuilder};
 pub use config::{Configuration, Roles, PruningMode};
 pub use chain_spec::{ChainSpec, Properties};
 pub use transaction_pool::txpool::{
@@ -478,6 +478,8 @@ macro_rules! new_impl {
 		})
 	}}
 }
+
+mod factory;
 
 impl<Components: components::Components> Service<Components> {
 	/// Creates a new service.
