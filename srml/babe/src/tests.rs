@@ -28,15 +28,15 @@ fn empty_randomness_is_correct() {
 
 #[test]
 fn check_module() {
-	with_externalities(&mut new_test_ext(vec![Default::default()]), || {
+	with_externalities(&mut new_test_ext(vec![0, 1, 2, 3]), || {
 		System::initialize(&1, &Default::default(), &Default::default(), &Default::default());
-		assert_eq!(<Module<mock::Test>>::current_slot(), 0);
+		assert_eq!(Babe::current_slot(), 0);
 		let mut header = System::finalize();
 		System::initialize(&2, &header.hash(), &Default::default(), &Default::default());
-		assert_eq!(<Module<mock::Test>>::current_slot(), 0);
+		assert_eq!(Babe::current_slot(), 0);
 		header = System::finalize();
 		System::initialize(&3, &header.hash(), &Default::default(), &Default::default());
-		assert_eq!(<Module<mock::Test>>::current_slot(), 1);
+		assert_eq!(Babe::current_slot(), 1);
 		header = System::finalize();
 		System::initialize(&4, &header.hash(), &Default::default(), &Default::default());
 		header = System::finalize();
@@ -48,6 +48,6 @@ fn check_module() {
 		System::finalize();
 		let _slot_duration = Babe::slot_duration();
 
-		<Module<mock::Test>>::randomness_change_epoch(1);
+		Babe::randomness_change_epoch(1);
 	})
 }
