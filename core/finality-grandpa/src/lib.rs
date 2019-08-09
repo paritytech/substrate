@@ -444,7 +444,7 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 
 /// Register the finality tracker inherent data provider (which is used by
 /// GRANDPA), if not registered already.
-pub fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H256>, RA>(
+fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H256>, RA>(
 	client: Arc<Client<B, E, Block, RA>>,
 	inherent_data_providers: &InherentDataProviders,
 ) -> Result<(), consensus_common::Error> where
@@ -738,6 +738,33 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 	X: Future<Item=(),Error=()> + Clone + Send + 'static,
 {
 	run_grandpa_voter(grandpa_params)
+}
+
+/// When GRANDPA is not initialized we still need to register the finality
+/// tracker inherent provider which might be expected by the runtime for block
+/// authoring. Additionally, we register a gossip message validator that
+/// discards all GRANDPA messages (otherwise, we end up banning nodes that send
+/// us a `Neighbor` message, since there is no registered gossip validator for
+/// the engine id defined in the message.)
+pub fn setup_disabled_grandpa<B, E, Block: BlockT<Hash=H256>, RA, N>(
+	client: Arc<Client<B, E, Block, RA>>,
+	inherent_data_providers: &InherentDataProviders,
+	network: N,
+) -> Result<(), consensus_common::Error> where
+	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+	RA: Send + Sync + 'static,
+	N: Network<Block> + Send + Sync + 'static,
+	N::In: Send + 'static,
+{
+	register_finality_tracker_inherent_data_provider(
+		client,
+		inherent_data_providers,
+	)?;
+
+	network.register_validator(Arc::new(network::consensus_gossip::DiscardAll));
+
+	Ok(())
 }
 
 /// Checks if this node is a voter in the given voter set.
