@@ -22,11 +22,13 @@
 #[macro_use]
 mod traits;
 mod params;
+mod execution_strategy;
 pub mod error;
 pub mod informant;
 
 use client::ExecutionStrategies;
 use service::{
+	config::Configuration,
 	ServiceFactory, FactoryFullConfiguration, RuntimeGenesis,
 	FactoryGenesis, PruningMode, ChainSpec,
 };
@@ -220,17 +222,17 @@ where
 	fdlimit::raise_fd_limit();
 
 	match cli_args {
-		params::CoreParams::Run(params) => run_node::<F, _, _, _, _>(
+		params::CoreParams::Run(params) => run_node(
 			params, spec_factory, exit, run_service, impl_name, version,
 		).map(|_| None),
 		params::CoreParams::BuildSpec(params) =>
-			build_spec::<F, _>(params, spec_factory, version).map(|_| None),
+			build_spec(params, spec_factory, version).map(|_| None),
 		params::CoreParams::ExportBlocks(params) =>
 			export_blocks::<F, _, _>(params, spec_factory, exit, version).map(|_| None),
 		params::CoreParams::ImportBlocks(params) =>
 			import_blocks::<F, _, _>(params, spec_factory, exit, version).map(|_| None),
 		params::CoreParams::PurgeChain(params) =>
-			purge_chain::<F, _>(params, spec_factory, version).map(|_| None),
+			purge_chain(params, spec_factory, version).map(|_| None),
 		params::CoreParams::Revert(params) =>
 			revert_chain::<F, _>(params, spec_factory, version).map(|_| None),
 		params::CoreParams::Custom(params) => Ok(Some(params)),
@@ -292,8 +294,8 @@ fn parse_ed25519_secret(hex: &String) -> error::Result<network::config::Ed25519S
 }
 
 /// Fill the given `PoolConfiguration` by looking at the cli parameters.
-fn fill_transaction_pool_configuration<F: ServiceFactory>(
-	options: &mut FactoryFullConfiguration<F>,
+fn fill_transaction_pool_configuration<C, G>(
+	options: &mut Configuration<C, G>,
 	params: TransactionPoolParams,
 ) -> error::Result<()> {
 	// ready queue
@@ -384,12 +386,13 @@ fn fill_config_keystore_password<C, G>(
 	Ok(())
 }
 
-fn create_run_node_config<F, S>(
+fn create_run_node_config<C, G, S>(
 	cli: RunCmd, spec_factory: S, impl_name: &'static str, version: &VersionInfo
-) -> error::Result<FactoryFullConfiguration<F>>
+) -> error::Result<Configuration<C, G>>
 where
-	F: ServiceFactory,
-	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
+	C: Default,
+	G: RuntimeGenesis,
+	S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
 {
 	let spec = load_spec(&cli.shared_params, spec_factory)?;
 	let mut config = service::Configuration::default_with_spec(spec.clone());
@@ -433,11 +436,16 @@ where
 		),
 	};
 
-	let role = if cli.light {
-		service::Roles::LIGHT
-	} else {
-		service::Roles::AUTHORITY
-	};
+	let is_dev = cli.shared_params.dev;
+
+	let role =
+		if cli.light {
+			service::Roles::LIGHT
+		} else if cli.validator || is_dev {
+			service::Roles::AUTHORITY
+		} else {
+			service::Roles::FULL
+		};
 
 	let exec = cli.execution_strategies;
 	let exec_all_or = |strat: params::ExecutionStrategy| exec.execution.unwrap_or(strat).into();
@@ -459,8 +467,6 @@ where
 	config.roles = role;
 	config.disable_grandpa = cli.no_grandpa;
 
-	let is_dev = cli.shared_params.dev;
-
 	let client_id = config.client_id();
 	fill_network_configuration(
 		cli.network_config,
@@ -471,9 +477,16 @@ where
 		is_dev,
 	)?;
 
-	fill_transaction_pool_configuration::<F>(&mut config, cli.pool_config)?;
+	fill_transaction_pool_configuration(&mut config, cli.pool_config)?;
 
-	config.dev_key_seed = cli.keyring.account.map(|a| format!("//{}", a));
+	config.dev_key_seed = cli.keyring.account
+		.map(|a| format!("//{}", a)).or_else(|| {
+			if is_dev {
+				Some("//Alice".into())
+			} else {
+				None
+			}
+		});
 
 	let rpc_interface: &str = if cli.rpc_external { "0.0.0.0" } else { "127.0.0.1" };
 	let ws_interface: &str = if cli.ws_external { "0.0.0.0" } else { "127.0.0.1" };
@@ -509,7 +522,7 @@ where
 	Ok(config)
 }
 
-fn run_node<F, S, RS, E, RP>(
+fn run_node<C, G, S, RS, E, RP>(
 	cli: MergeParameters<RunCmd, RP>,
 	spec_factory: S,
 	exit: E,
@@ -519,12 +532,13 @@ fn run_node<F, S, RS, E, RP>(
 ) -> error::Result<()>
 where
 	RP: StructOpt + Clone,
-	F: ServiceFactory,
+	C: Default,
+	G: RuntimeGenesis,
 	E: IntoExit,
-	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
-	RS: FnOnce(E, RunCmd, RP, FactoryFullConfiguration<F>) -> Result<(), String>,
+	S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
+	RS: FnOnce(E, RunCmd, RP, Configuration<C, G>) -> Result<(), String>,
  {
-	let config = create_run_node_config::<F, _>(cli.left.clone(), spec_factory, impl_name, version)?;
+	let config = create_run_node_config(cli.left.clone(), spec_factory, impl_name, version)?;
 
 	run_service(exit, cli.left, cli.right, config).map_err(Into::into)
 }
@@ -537,13 +551,13 @@ where
 // 9803-9874		Unassigned
 // 9926-9949		Unassigned
 
-fn with_default_boot_node<F>(
-	spec: &mut ChainSpec<FactoryGenesis<F>>,
+fn with_default_boot_node<G>(
+	spec: &mut ChainSpec<G>,
 	cli: BuildSpecCmd,
 	version: &VersionInfo,
 ) -> error::Result<()>
 where
-	F: ServiceFactory
+	G: RuntimeGenesis
 {
 	if spec.boot_nodes().is_empty() {
 		let base_path = base_path(&cli.shared_params, version);
@@ -561,20 +575,20 @@ where
 	Ok(())
 }
 
-fn build_spec<F, S>(
+fn build_spec<G, S>(
 	cli: BuildSpecCmd,
 	spec_factory: S,
 	version: &VersionInfo,
 ) -> error::Result<()>
 where
-	F: ServiceFactory,
-	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
+	G: RuntimeGenesis,
+	S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
 {
 	info!("Building chain spec");
 	let raw_output = cli.raw;
 	let mut spec = load_spec(&cli.shared_params, spec_factory)?;
-	with_default_boot_node::<F>(&mut spec, cli, version)?;
-	let json = service::chain_ops::build_spec::<FactoryGenesis<F>>(spec, raw_output)?;
+	with_default_boot_node(&mut spec, cli, version)?;
+	let json = service::chain_ops::build_spec(spec, raw_output)?;
 
 	print!("{}", json);
 
@@ -582,12 +596,13 @@ where
 }
 
 /// Creates a configuration including the database path.
-pub fn create_config_with_db_path<F, S>(
+pub fn create_config_with_db_path<C, G, S>(
 	spec_factory: S, cli: &SharedParams, version: &VersionInfo,
-) -> error::Result<FactoryFullConfiguration<F>>
+) -> error::Result<Configuration<C, G>>
 where
-	F: ServiceFactory,
-	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
+	C: Default,
+	G: RuntimeGenesis,
+	S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
 {
 	let spec = load_spec(cli, spec_factory)?;
 	let base_path = base_path(cli, version);
@@ -609,7 +624,7 @@ where
 	E: IntoExit,
 	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 {
-	let config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params, version)?;
+	let config = create_config_with_db_path(spec_factory, &cli.shared_params, version)?;
 
 	info!("DB path: {}", config.database_path.display());
 	let from = cli.from.unwrap_or(1);
@@ -642,7 +657,7 @@ where
 	E: IntoExit,
 	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 {
-	let mut config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params, version)?;
+	let mut config = create_config_with_db_path(spec_factory, &cli.shared_params, version)?;
 	config.execution_strategies = ExecutionStrategies {
 		importing: cli.execution.into(),
 		other: cli.execution.into(),
@@ -672,21 +687,21 @@ where
 	F: ServiceFactory,
 	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 {
-	let config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params, version)?;
+	let config = create_config_with_db_path(spec_factory, &cli.shared_params, version)?;
 	let blocks = cli.num;
 	Ok(service::chain_ops::revert_chain::<F>(config, blocks.into())?)
 }
 
-fn purge_chain<F, S>(
+fn purge_chain<G, S>(
 	cli: PurgeChainCmd,
 	spec_factory: S,
 	version: &VersionInfo,
 ) -> error::Result<()>
 where
-	F: ServiceFactory,
-	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
+	G: RuntimeGenesis,
+	S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
 {
-	let config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params, version)?;
+	let config = create_config_with_db_path::<(), _, _>(spec_factory, &cli.shared_params, version)?;
 	let db_path = config.database_path;
 
 	if cli.yes == false {

@@ -213,6 +213,13 @@ pub mod ext {
 		fn ext_exists_storage(key_data: *const u8, key_len: u32) -> u32;
 		/// Remove storage entries which key starts with given prefix.
 		fn ext_clear_prefix(prefix_data: *const u8, prefix_len: u32);
+		/// Remove child storage entries which key starts with given prefix.
+		fn ext_clear_child_prefix(
+			storage_key_data: *const u8,
+			storage_key_len: u32,
+			prefix_data: *const u8,
+			prefix_len: u32
+		);
 		/// Gets the value of the given key from storage.
 		///
 		/// The host allocates the memory for storing the value.
@@ -424,6 +431,12 @@ pub mod ext {
 		//================================
 		// Offchain-worker Context
 		//================================
+
+		/// Returns if the local node is a potential validator.
+		///
+		/// - `1` == `true`
+		/// - `0` == `false`
+		fn ext_is_validator() -> u32;
 
 		/// Submit transaction.
 		///
@@ -703,6 +716,15 @@ impl StorageApi for () {
 		}
 	}
 
+	fn clear_child_prefix(storage_key: &[u8], prefix: &[u8]) {
+		unsafe {
+			ext_clear_child_prefix.get()(
+				storage_key.as_ptr(), storage_key.len() as u32,
+				prefix.as_ptr(), prefix.len() as u32
+			);
+		}
+	}
+
 	fn kill_child_storage(storage_key: &[u8]) {
 		unsafe {
 			ext_kill_child_storage.get()(
@@ -948,6 +970,10 @@ impl CryptoApi for () {
 }
 
 impl OffchainApi for () {
+	fn is_validator() -> bool {
+		unsafe { ext_is_validator.get()() == 1 }
+	}
+
 	fn submit_transaction<T: codec::Encode>(data: &T) -> Result<(), ()> {
 		let encoded_data = codec::Encode::encode(data);
 		let ret = unsafe {
