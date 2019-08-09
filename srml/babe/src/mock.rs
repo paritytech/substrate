@@ -15,16 +15,17 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Test utilities
-#![allow(dead_code)]
+#![allow(dead_code, unused_imports)]
+
+use crate::{Trait, Module, GenesisConfig};
+use babe_primitives::sr25519::AuthorityId;
 use sr_primitives::{
 	traits::IdentityLookup, Perbill,
-	testing::Header,
+	testing::{Header, UintAuthorityId},
 };
 use srml_support::{impl_outer_origin, parameter_types};
 use runtime_io;
-use primitives::{H256, Blake2Hasher, sr25519::Public};
-use crate::{Module, GenesisConfig};
-use sr_primitives::BuildStorage;
+use primitives::{H256, Blake2Hasher};
 
 impl_outer_origin!{
 	pub enum Origin for Test {}
@@ -48,14 +49,14 @@ impl system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
+	type Call = ();
 	type Hash = H256;
-	type Hashing = ::sr_primitives::traits::BlakeTwo256;
+	type Hashing = sr_primitives::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type WeightMultiplierUpdate = ();
 	type Event = ();
-	type Call = ();
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type AvailableBlockRatio = AvailableBlockRatio;
@@ -64,19 +65,21 @@ impl system::Trait for Test {
 
 impl timestamp::Trait for Test {
 	type Moment = u64;
-	type OnTimestampSet = ();
+	type OnTimestampSet = Babe;
 	type MinimumPeriod = MinimumPeriod;
 }
 
-impl super::Trait for Test {
+impl Trait for Test {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
 }
 
-pub fn new_test_ext(authorities: Vec<Public>) -> runtime_io::TestExternalities<Blake2Hasher> {
+pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blake2Hasher> {
+	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	GenesisConfig {
-		authorities: authorities.into_iter().map(|a| (a.into(), 1)).collect(),
-	}.build_storage().unwrap().build_storage().unwrap().into()
+		authorities: authorities.into_iter().map(|a| (UintAuthorityId(a).to_public_key(), 1)).collect(),
+	}.assimilate_storage(&mut t).unwrap();
+	t.into()
 }
 
 pub type System = system::Module<Test>;
