@@ -113,32 +113,30 @@ construct_service_factory! {
 					}
 				}
 
-				if service.config().roles.is_authority() {
-					let proposer = substrate_basic_authorship::ProposerFactory {
-						client: service.client(),
-						transaction_pool: service.transaction_pool(),
-					};
+				let proposer = substrate_basic_authorship::ProposerFactory {
+					client: service.client(),
+					transaction_pool: service.transaction_pool(),
+				};
 
-					let client = service.client();
-					let select_chain = service.select_chain().ok_or(ServiceError::SelectChainRequired)?;
+				let client = service.client();
+				let select_chain = service.select_chain().ok_or(ServiceError::SelectChainRequired)?;
 
-					let babe_config = babe::BabeParams {
-						config: Config::get_or_compute(&*client)?,
-						keystore: service.keystore(),
-						client,
-						select_chain,
-						block_import,
-						env: proposer,
-						sync_oracle: service.network(),
-						inherent_data_providers: service.config().custom.inherent_data_providers.clone(),
-						force_authoring: service.config().force_authoring,
-						time_source: babe_link,
-					};
+				let babe_config = babe::BabeParams {
+					config: Config::get_or_compute(&*client)?,
+					keystore: service.keystore(),
+					client,
+					select_chain,
+					block_import,
+					env: proposer,
+					sync_oracle: service.network(),
+					inherent_data_providers: service.config().custom.inherent_data_providers.clone(),
+					force_authoring: service.config().force_authoring,
+					time_source: babe_link,
+				};
 
-					let babe = start_babe(babe_config)?;
-					let select = babe.select(service.on_exit()).then(|_| Ok(()));
-					service.spawn_task(Box::new(select));
-				}
+				let babe = start_babe(babe_config)?;
+				let select = babe.select(service.on_exit()).then(|_| Ok(()));
+				service.spawn_task(Box::new(select));
 
 				if !service.config().disable_grandpa {
 					let config = grandpa::Config {
