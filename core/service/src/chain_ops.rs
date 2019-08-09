@@ -18,20 +18,72 @@
 
 use std::{self, io::{Read, Write, Seek}};
 use futures::prelude::*;
-use futures03::TryFutureExt as _;
 use log::{info, warn};
 
-use sr_primitives::generic::{SignedBlock, BlockId};
-use sr_primitives::traits::{SaturatedConversion, Zero, One, Block, Header, NumberFor};
-use consensus_common::import_queue::{ImportQueue, IncomingBlock, Link, BlockImportError, BlockImportResult};
-use network::message;
+use sr_primitives::generic::BlockId;
+use sr_primitives::traits::{SaturatedConversion, Zero, One, Header, NumberFor};
+use consensus_common::import_queue::ImportQueue;
 
-use consensus_common::BlockOrigin;
 use crate::components::{self, Components, ServiceFactory, FactoryFullConfiguration, FactoryBlockNumber, RuntimeGenesis};
 use crate::new_client;
 use codec::{Decode, Encode, IoReader};
 use crate::error;
 use crate::chain_spec::ChainSpec;
+
+#[macro_export]
+macro_rules! export_blocks {
+($client:ident, $exit:ident, $output:ident, $from:ident, $to:ident, $json:ident) => {{
+	let mut block = $from;
+
+	let last = match $to {
+		Some(v) if v.is_zero() => One::one(),
+		Some(v) => v,
+		None => $client.info().chain.best_number,
+	};
+
+	if last < block {
+		return Err("Invalid block range specified".into());
+	}
+
+	let (exit_send, exit_recv) = std::sync::mpsc::channel();
+	::std::thread::spawn(move || {
+		let _ = $exit.wait();
+		let _ = exit_send.send(());
+	});
+	info!("Exporting blocks from #{} to #{}", block, last);
+	if !$json {
+		let last_: u64 = last.saturated_into::<u64>();
+		let block_: u64 = block.saturated_into::<u64>();
+		let len: u64 = last_ - block_ + 1;
+		$output.write(&len.encode())?;
+	}
+
+	loop {
+		if exit_recv.try_recv().is_ok() {
+			break;
+		}
+		match $client.block(&BlockId::number(block))? {
+			Some(block) => {
+				if $json {
+					serde_json::to_writer(&mut $output, &block)
+						.map_err(|e| format!("Error writing JSON: {}", e))?;
+				} else {
+					$output.write(&block.encode())?;
+				}
+			},
+			None => break,
+		}
+		if (block % 10000.into()).is_zero() {
+			info!("#{}", block);
+		}
+		if block == last {
+			break;
+		}
+		block += One::one();
+	}
+	Ok(())
+}}
+}
 
 /// Export a range of blocks to a binary stream.
 pub fn export_blocks<F, E, W>(
@@ -48,56 +100,18 @@ pub fn export_blocks<F, E, W>(
 	W: Write,
 {
 	let client = new_client::<F>(&config)?;
-	let mut block = from;
-
-	let last = match to {
-		Some(v) if v.is_zero() => One::one(),
-		Some(v) => v,
-		None => client.info().chain.best_number,
-	};
-
-	if last < block {
-		return Err("Invalid block range specified".into());
-	}
-
-	let (exit_send, exit_recv) = std::sync::mpsc::channel();
-	::std::thread::spawn(move || {
-		let _ = exit.wait();
-		let _ = exit_send.send(());
-	});
-	info!("Exporting blocks from #{} to #{}", block, last);
-	if !json {
-		let last_: u64 = last.saturated_into::<u64>();
-		let block_: u64 = block.saturated_into::<u64>();
-		let len: u64 = last_ - block_ + 1;
-		output.write(&len.encode())?;
-	}
-
-	loop {
-		if exit_recv.try_recv().is_ok() {
-			break;
-		}
-		match client.block(&BlockId::number(block))? {
-			Some(block) => {
-				if json {
-					serde_json::to_writer(&mut output, &block)
-						.map_err(|e| format!("Error writing JSON: {}", e))?;
-				} else {
-					output.write(&block.encode())?;
-				}
-			},
-			None => break,
-		}
-		if (block % 10000.into()).is_zero() {
-			info!("#{}", block);
-		}
-		if block == last {
-			break;
-		}
-		block += One::one();
-	}
-	Ok(())
+	export_blocks!(client, exit, output, from, to, json)
 }
+
+#[macro_export]
+macro_rules! import_blocks {
+($block:ty, $client:ident, $queue:ident, $exit:ident, $input:ident) => {{
+	use consensus_common::import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult};
+	use consensus_common::BlockOrigin;
+	use network::message;
+	use sr_primitives::generic::SignedBlock;
+	use sr_primitives::traits::Block;
+	use futures03::TryFutureExt as _;
 
 struct WaitLink {
 	imported_blocks: u64,
@@ -132,31 +146,13 @@ impl<B: Block> Link<B> for WaitLink {
 	}
 }
 
-/// Returns a future that import blocks from a binary stream.
-pub fn import_blocks<F, E, R>(
-	mut config: FactoryFullConfiguration<F>,
-	exit: E,
-	input: R
-) -> error::Result<impl Future<Item = (), Error = ()>>
-	where F: ServiceFactory, E: Future<Item=(),Error=()> + Send + 'static, R: Read + Seek,
-{
-	let client = new_client::<F>(&config)?;
-	// FIXME #1134 this shouldn't need a mutable config.
-	let select_chain = components::FullComponents::<F>::build_select_chain(&mut config, client.clone())?;
-	let (mut queue, _) = components::FullComponents::<F>::build_import_queue(
-		&mut config,
-		client.clone(),
-		select_chain,
-		None,
-	)?;
-
 	let (exit_send, exit_recv) = std::sync::mpsc::channel();
 	::std::thread::spawn(move || {
-		let _ = exit.wait();
+		let _ = $exit.wait();
 		let _ = exit_send.send(());
 	});
 
-	let mut io_reader_input = IoReader(input);
+	let mut io_reader_input = IoReader($input);
 	let count: u64 = Decode::decode(&mut io_reader_input)
 		.map_err(|e| format!("Error reading file: {}", e))?;
 	info!("Importing {} blocks", count);
@@ -165,11 +161,11 @@ pub fn import_blocks<F, E, R>(
 		if exit_recv.try_recv().is_ok() {
 			break;
 		}
-		match SignedBlock::<F::Block>::decode(&mut io_reader_input) {
+		match SignedBlock::<$block>::decode(&mut io_reader_input) {
 			Ok(signed) => {
 				let (header, extrinsics) = signed.block.deconstruct();
 				let hash = header.hash();
-				let block  = message::BlockData::<F::Block> {
+				let block  = message::BlockData::<$block> {
 					hash,
 					justification: signed.justification,
 					header: Some(header),
@@ -178,8 +174,8 @@ pub fn import_blocks<F, E, R>(
 					message_queue: None
 				};
 				// import queue handles verification and importing it into the client
-				queue.import_blocks(BlockOrigin::File, vec![
-					IncomingBlock::<F::Block> {
+				$queue.import_blocks(BlockOrigin::File, vec![
+					IncomingBlock::<$block> {
 						hash: block.hash,
 						header: block.header,
 						body: block.body,
@@ -208,7 +204,7 @@ pub fn import_blocks<F, E, R>(
 
 		let blocks_before = link.imported_blocks;
 		let _ = futures03::future::poll_fn(|cx| {
-			queue.poll_actions(cx, &mut link);
+			$queue.poll_actions(cx, &mut link);
 			std::task::Poll::Pending::<Result<(), ()>>
 		}).compat().poll();
 		if link.has_error {
@@ -226,12 +222,49 @@ pub fn import_blocks<F, E, R>(
 			);
 		}
 		if link.imported_blocks >= count {
-			info!("Imported {} blocks. Best: #{}", block_count, client.info().chain.best_number);
+			info!("Imported {} blocks. Best: #{}", block_count, $client.info().chain.best_number);
 			Ok(Async::Ready(()))
 		} else {
 			Ok(Async::NotReady)
 		}
 	}))
+}}
+}
+
+/// Returns a future that import blocks from a binary stream.
+pub fn import_blocks<F, E, R>(
+	mut config: FactoryFullConfiguration<F>,
+	exit: E,
+	input: R
+) -> error::Result<impl Future<Item = (), Error = ()>>
+	where F: ServiceFactory, E: Future<Item=(),Error=()> + Send + 'static, R: Read + Seek,
+{
+	let client = new_client::<F>(&config)?;
+	// FIXME #1134 this shouldn't need a mutable config.
+	let select_chain = components::FullComponents::<F>::build_select_chain(&mut config, client.clone())?;
+	let (mut queue, _) = components::FullComponents::<F>::build_import_queue(
+		&mut config,
+		client.clone(),
+		select_chain,
+		None
+	)?;
+
+	import_blocks!(F::Block, client, queue, exit, input)
+}
+
+#[macro_export]
+macro_rules! revert_chain {
+($client:ident, $blocks:ident) => {{
+	let reverted = $client.revert($blocks)?;
+	let info = $client.info().chain;
+
+	if reverted.is_zero() {
+		info!("There aren't any non-finalized blocks to revert.");
+	} else {
+		info!("Reverted {} blocks. Best: #{} ({})", reverted, info.best_number, info.best_hash);
+	}
+	Ok(())
+}}
 }
 
 /// Revert the chain.
@@ -242,15 +275,7 @@ pub fn revert_chain<F>(
 	where F: ServiceFactory,
 {
 	let client = new_client::<F>(&config)?;
-	let reverted = client.revert(blocks)?;
-	let info = client.info().chain;
-
-	if reverted.is_zero() {
-		info!("There aren't any non-finalized blocks to revert.");
-	} else {
-		info!("Reverted {} blocks. Best: #{} ({})", reverted, info.best_number, info.best_hash);
-	}
-	Ok(())
+	revert_chain!(client, blocks)
 }
 
 /// Build a chain spec json
