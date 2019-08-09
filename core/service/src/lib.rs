@@ -88,9 +88,9 @@ pub struct Service<Components: components::Components> {
 	on_exit: exit_future::Exit,
 	/// A signal that makes the exit future above resolve, fired on service drop.
 	exit_signal: Option<Signal>,
-	/// Set to `true` when a spawned infallible task has failed. The next time
+	/// Set to `true` when a spawned essential task has failed. The next time
 	/// the service future is polled it should complete with an error.
-	infallible_failed: Arc<AtomicBool>,
+	essential_failed: Arc<AtomicBool>,
 	/// Sender for futures that must be spawned as background tasks.
 	to_spawn_tx: mpsc::UnboundedSender<Box<dyn Future<Item = (), Error = ()> + Send>>,
 	/// Receiver for futures that must be spawned as background tasks.
@@ -447,7 +447,7 @@ impl<Components: components::Components> Service<Components> {
 			transaction_pool,
 			on_exit,
 			exit_signal: Some(exit_signal),
-			infallible_failed: Arc::new(AtomicBool::new(false)),
+			essential_failed: Arc::new(AtomicBool::new(false)),
 			to_spawn_tx,
 			to_spawn_rx,
 			to_poll: Vec::new(),
@@ -498,16 +498,16 @@ impl<Components: components::Components> Service<Components> {
 	}
 
 	/// Spawns a task in the background that runs the future passed as
-	/// parameter. The given task is considered infallible, i.e. if it errors we
+	/// parameter. The given task is considered essential, i.e. if it errors we
 	/// trigger a service exit.
-	pub fn spawn_infallible_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
-		let infallible_failed = self.infallible_failed.clone();
-		let infallible_task = Box::new(task.map_err(move |_| {
-			error!("Infallible task failed. Shutting down service.");
-			infallible_failed.store(true, Ordering::Relaxed);
+	pub fn spawn_essential_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
+		let essential_failed = self.essential_failed.clone();
+		let essential_task = Box::new(task.map_err(move |_| {
+			error!("Essential task failed. Shutting down service.");
+			essential_failed.store(true, Ordering::Relaxed);
 		}));
 
-		let _ = self.to_spawn_tx.unbounded_send(infallible_task);
+		let _ = self.to_spawn_tx.unbounded_send(essential_task);
 	}
 
 	/// Returns a handle for spawning tasks.
@@ -570,8 +570,8 @@ impl<Components> Future for Service<Components> where Components: components::Co
 	type Error = Error;
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-		if self.infallible_failed.load(Ordering::Relaxed) {
-			return Err(Error::Other("Infallible task failed.".into()));
+		if self.essential_failed.load(Ordering::Relaxed) {
+			return Err(Error::Other("Essential task failed.".into()));
 		}
 
 		while let Ok(Async::Ready(Some(task_to_spawn))) = self.to_spawn_rx.poll() {
