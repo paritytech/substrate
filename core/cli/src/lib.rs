@@ -467,6 +467,9 @@ impl<'a> ParseAndPrepareRevert<'a> {
 /// `RP` are custom parameters for the run command. This needs to be a `struct`! The custom
 /// parameters are visible to the user as if they were normal run command parameters. If no custom
 /// parameters are required, `NoCustom` can be used as type here.
+#[deprecated(
+	note = "Use parse_and_prepare instead; see the source code of parse_and_execute for how to transition"
+)]
 pub fn parse_and_execute<'a, F, CC, RP, S, RS, E, I, T>(
 	spec_factory: S,
 	version: &VersionInfo,
