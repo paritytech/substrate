@@ -32,7 +32,7 @@ use sr_primitives::{BuildStorage, generic::BlockId};
 use sr_primitives::traits::{Block as BlockT, ProvideRuntimeApi, Header, SaturatedConversion};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use serde::{Serialize, de::DeserializeOwned};
-use std::{marker::PhantomData, sync::Arc};
+use std::{marker::PhantomData, sync::Arc, sync::atomic::AtomicBool};
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
 use transaction_pool::txpool::{ChainApi, Pool as TransactionPool};
@@ -65,7 +65,7 @@ pub struct ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFpr
 	finality_proof_request_builder: Option<TFprb>,
 	finality_proof_provider: Option<TFpp>,
 	network_protocol: TNetP,
-	transaction_pool: TExPool,
+	transaction_pool: Arc<TExPool>,
 	marker: PhantomData<(TBl, TRtApi)>,
 }
 
@@ -124,7 +124,7 @@ where TGen: Serialize + DeserializeOwned + BuildStorage {
 			finality_proof_request_builder: None,
 			finality_proof_provider: None,
 			network_protocol: (),
-			transaction_pool: (),
+			transaction_pool: Arc::new(()),
 			marker: PhantomData,
 		})
 	}
@@ -203,7 +203,7 @@ where TGen: Serialize + DeserializeOwned + BuildStorage {
 			finality_proof_request_builder: None,
 			finality_proof_provider: None,
 			network_protocol: (),
-			transaction_pool: (),
+			transaction_pool: Arc::new(()),
 			marker: PhantomData,
 		})
 	}
@@ -393,7 +393,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			finality_proof_request_builder: self.finality_proof_request_builder,
 			finality_proof_provider: self.finality_proof_provider,
 			network_protocol: self.network_protocol,
-			transaction_pool,
+			transaction_pool: Arc::new(transaction_pool),
 			marker: self.marker,
 		})
 	}
