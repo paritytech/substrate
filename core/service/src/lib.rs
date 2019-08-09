@@ -175,6 +175,7 @@ pub struct TelemetryOnConnect {
 
 macro_rules! new_impl {
 	(
+		$block:ty,
 		$config:ident,
 		$build_components:expr,
 		$maintain_transaction_pool:expr,
@@ -471,7 +472,7 @@ macro_rules! new_impl {
 			_offchain_workers: offchain_workers,
 			_telemetry_on_connect_sinks: telemetry_connection_sinks.clone(),
 			keystore,
-			marker: PhantomData,
+			marker: PhantomData::<$block>,
 		})
 	}}
 }
@@ -482,6 +483,7 @@ impl<Components: components::Components> Service<Components> {
 		mut config: FactoryFullConfiguration<Components::Factory>,
 	) -> Result<Self, error::Error> {
 		let inner = new_impl!(
+			ComponentBlock<Components>,
 			config,
 			|mut config: &mut FactoryFullConfiguration<Components::Factory>| -> Result<_, error::Error> {
 				// Create client
