@@ -167,6 +167,212 @@ fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 	Ok(())
 }
 
+/// Parse command line interface arguments and prepares the command for execution.
+///
+/// Before returning, this function performs various initializations, such as initializing the
+/// panic handler and the logger, or increasing the limit for file descriptors.
+///
+/// # Remarks
+///
+/// `CC` is a custom subcommand. This needs to be an `enum`! If no custom subcommand is required,
+/// `NoCustom` can be used as type here.
+///
+/// `RP` are custom parameters for the run command. This needs to be a `struct`! The custom
+/// parameters are visible to the user as if they were normal run command parameters. If no custom
+/// parameters are required, `NoCustom` can be used as type here.
+pub fn parse_and_prepare<'a, CC, RP, I>(
+	version: &'a VersionInfo,
+	impl_name: &'static str,
+	args: I,
+) -> ParseAndPrepare<'a, CC, RP>
+where
+	CC: StructOpt + Clone + GetLogFilter,
+	RP: StructOpt + Clone + AugmentClap,
+	I: IntoIterator,
+	<I as IntoIterator>::Item: Into<std::ffi::OsString> + Clone,
+{
+	panic_handler::set(version.support_url);
+
+	let full_version = service::config::full_version_from_strs(
+		version.version,
+		version.commit
+	);
+
+	let matches = CoreParams::<CC, RP>::clap()
+		.name(version.executable_name)
+		.author(version.author)
+		.about(version.description)
+		.version(&(full_version + "\n")[..])
+		.setting(AppSettings::GlobalVersion)
+		.setting(AppSettings::ArgsNegateSubcommands)
+		.setting(AppSettings::SubcommandsNegateReqs)
+		.get_matches_from(args);
+	let cli_args = CoreParams::<CC, RP>::from_clap(&matches);
+
+	init_logger(cli_args.get_log_filter().as_ref().map(|v| v.as_ref()).unwrap_or(""));
+	fdlimit::raise_fd_limit();
+
+	match cli_args {
+		params::CoreParams::Run(params) => ParseAndPrepare::Run(
+			ParseAndPrepareRun { params, impl_name, version }
+		),
+		params::CoreParams::BuildSpec(params) => ParseAndPrepare::BuildSpec(
+			ParseAndPrepareBuildSpec { params, version }
+		),
+		params::CoreParams::ExportBlocks(params) => ParseAndPrepare::ExportBlocks(
+			ParseAndPrepareExport { params, version }
+		),
+		params::CoreParams::ImportBlocks(params) => ParseAndPrepare::ImportBlocks(
+			ParseAndPrepareImport { params, version }
+		),
+		params::CoreParams::PurgeChain(params) => ParseAndPrepare::PurgeChain(
+			ParseAndPreparePurge { params, version }
+		),
+		params::CoreParams::Revert(params) => ParseAndPrepare::RevertChain(
+			ParseAndPrepareRevert { params, version }
+		),
+		params::CoreParams::Custom(params) => ParseAndPrepare::CustomCommand(params),
+	}
+}
+
+/// Output of calling `parse_and_prepare`.
+#[must_use]
+pub enum ParseAndPrepare<'a, CC, RP> {
+	/// Command ready to run the main client.
+	Run(ParseAndPrepareRun<'a, RP>),
+	/// Command ready to build chain specs.
+	BuildSpec(ParseAndPrepareBuildSpec<'a>),
+	/// Command ready to export the chain.
+	ExportBlocks(ParseAndPrepareExport<'a>),
+	/// Command ready to import the chain.
+	ImportBlocks(ParseAndPrepareImport<'a>),
+	/// Command ready to purge the chain.
+	PurgeChain(ParseAndPreparePurge<'a>),
+	/// Command ready to revert the chain.
+	RevertChain(ParseAndPrepareRevert<'a>),
+	/// An additional custom command passed to `parse_and_prepare`.
+	CustomCommand(CC),
+}
+
+/// Command ready to run the main client.
+pub struct ParseAndPrepareRun<'a, RP> {
+	params: MergeParameters<RunCmd, RP>,
+	impl_name: &'static str,
+	version: &'a VersionInfo,
+}
+
+impl<'a, RP> ParseAndPrepareRun<'a, RP> {
+	/// Runs the command and runs the main client.
+	pub fn run<C, G, S, E, RS>(
+		self,
+		spec_factory: S,
+		exit: E,
+		run_service: RS,
+	) -> error::Result<()>
+	where S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
+		RP: StructOpt + Clone,
+		C: Default,
+		G: RuntimeGenesis,
+		E: IntoExit,
+		RS: FnOnce(E, RunCmd, RP, Configuration<C, G>) -> Result<(), String> {
+		run_node(self.params, spec_factory, exit, run_service, self.impl_name, self.version)
+	}
+}
+
+/// Command ready to build chain specs.
+pub struct ParseAndPrepareBuildSpec<'a> {
+	params: BuildSpecCmd,
+	version: &'a VersionInfo,
+}
+
+impl<'a> ParseAndPrepareBuildSpec<'a> {
+	/// Runs the command and build the chain specs.
+	pub fn run<G, S>(
+		self,
+		spec_factory: S
+	) -> error::Result<()>
+	where S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
+		G: RuntimeGenesis {
+		build_spec(self.params, spec_factory, self.version)
+	}
+}
+
+/// Command ready to export the chain.
+pub struct ParseAndPrepareExport<'a> {
+	params: ExportBlocksCmd,
+	version: &'a VersionInfo,
+}
+
+impl<'a> ParseAndPrepareExport<'a> {
+	/// Runs the command and exports from the chain.
+	pub fn run<F, S, E>(
+		self,
+		spec_factory: S,
+		exit: E,
+	) -> error::Result<()>
+	where S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
+		F: ServiceFactory,
+		E: IntoExit {
+		export_blocks::<F, E, S>(self.params, spec_factory, exit, self.version)
+	}
+}
+
+/// Command ready to import the chain.
+pub struct ParseAndPrepareImport<'a> {
+	params: ImportBlocksCmd,
+	version: &'a VersionInfo,
+}
+
+impl<'a> ParseAndPrepareImport<'a> {
+	/// Runs the command and imports to the chain.
+	pub fn run<F, S, E>(
+		self,
+		spec_factory: S,
+		exit: E,
+	) -> error::Result<()>
+	where S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
+		F: ServiceFactory,
+		E: IntoExit {
+		import_blocks::<F, E, S>(self.params, spec_factory, exit, self.version)
+	}
+}
+
+/// Command ready to purge the chain.
+pub struct ParseAndPreparePurge<'a> {
+	params: PurgeChainCmd,
+	version: &'a VersionInfo,
+}
+
+impl<'a> ParseAndPreparePurge<'a> {
+	/// Runs the command and purges the chain.
+	pub fn run<G, S>(
+		self,
+		spec_factory: S
+	) -> error::Result<()>
+	where S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
+		G: RuntimeGenesis {
+		purge_chain(self.params, spec_factory, self.version)
+	}
+}
+
+/// Command ready to revert the chain.
+pub struct ParseAndPrepareRevert<'a> {
+	params: RevertCmd,
+	version: &'a VersionInfo,
+}
+
+impl<'a> ParseAndPrepareRevert<'a> {
+	/// Runs the command and reverts the chain.
+	pub fn run<F, S>(
+		self,
+		spec_factory: S
+	) -> error::Result<()>
+	where S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
+		F: ServiceFactory {
+		revert_chain::<F, S>(self.params, spec_factory, self.version)
+	}
+}
+
 /// Parse command line interface arguments and executes the desired command.
 ///
 /// # Return value
@@ -200,43 +406,17 @@ where
 	I: IntoIterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,
 {
-	panic_handler::set(version.support_url);
+	match parse_and_prepare::<CC, RP, _>(version, impl_name, args) {
+		ParseAndPrepare::Run(cmd) => cmd.run(spec_factory, exit, run_service),
+		ParseAndPrepare::BuildSpec(cmd) => cmd.run(spec_factory),
+		ParseAndPrepare::ExportBlocks(cmd) => cmd.run::<F, _, _>(spec_factory, exit),
+		ParseAndPrepare::ImportBlocks(cmd) => cmd.run::<F, _, _>(spec_factory, exit),
+		ParseAndPrepare::PurgeChain(cmd) => cmd.run(spec_factory),
+		ParseAndPrepare::RevertChain(cmd) => cmd.run::<F, _>(spec_factory),
+		ParseAndPrepare::CustomCommand(cmd) => return Ok(Some(cmd))
+	}?;
 
-	let full_version = service::config::full_version_from_strs(
-		version.version,
-		version.commit
-	);
-
-	let matches = CoreParams::<CC, RP>::clap()
-		.name(version.executable_name)
-		.author(version.author)
-		.about(version.description)
-		.version(&(full_version + "\n")[..])
-		.setting(AppSettings::GlobalVersion)
-		.setting(AppSettings::ArgsNegateSubcommands)
-		.setting(AppSettings::SubcommandsNegateReqs)
-		.get_matches_from(args);
-	let cli_args = CoreParams::<CC, RP>::from_clap(&matches);
-
-	init_logger(cli_args.get_log_filter().as_ref().map(|v| v.as_ref()).unwrap_or(""));
-	fdlimit::raise_fd_limit();
-
-	match cli_args {
-		params::CoreParams::Run(params) => run_node(
-			params, spec_factory, exit, run_service, impl_name, version,
-		).map(|_| None),
-		params::CoreParams::BuildSpec(params) =>
-			build_spec(params, spec_factory, version).map(|_| None),
-		params::CoreParams::ExportBlocks(params) =>
-			export_blocks::<F, _, _>(params, spec_factory, exit, version).map(|_| None),
-		params::CoreParams::ImportBlocks(params) =>
-			import_blocks::<F, _, _>(params, spec_factory, exit, version).map(|_| None),
-		params::CoreParams::PurgeChain(params) =>
-			purge_chain(params, spec_factory, version).map(|_| None),
-		params::CoreParams::Revert(params) =>
-			revert_chain::<F, _>(params, spec_factory, version).map(|_| None),
-		params::CoreParams::Custom(params) => Ok(Some(params)),
-	}
+	Ok(None)
 }
 
 /// Create a `NodeKeyConfig` from the given `NodeKeyParams` in the context
