@@ -232,6 +232,11 @@ impl Timestamp {
 
 /// An extended externalities for offchain workers.
 pub trait Externalities {
+	/// Returns if the local node is a potential validator.
+	///
+	/// Even if this function returns `true`, it does not mean that any keys are configured
+	/// and that the validator is registered in the chain.
+	fn is_validator(&self) -> bool;
 	/// Submit transaction.
 	///
 	/// The transaction will end up in the pool and be propagated to others.
@@ -349,6 +354,10 @@ pub trait Externalities {
 
 }
 impl<T: Externalities + ?Sized> Externalities for Box<T> {
+	fn is_validator(&self) -> bool {
+		(& **self).is_validator()
+	}
+
 	fn submit_transaction(&mut self, ex: Vec<u8>) -> Result<(), ()> {
 		(&mut **self).submit_transaction(ex)
 	}

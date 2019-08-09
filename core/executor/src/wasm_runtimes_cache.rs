@@ -248,12 +248,12 @@ impl RuntimesCache {
 	) -> Result<Rc<CachedRuntime>, Error> {
 		let code_hash = ext
 			.original_storage_hash(well_known_keys::CODE)
-			.ok_or(Error::InvalidCode)?;
+			.ok_or(Error::InvalidCode("`CODE` not found in storage.".into()))?;
 
 		// This is direct result from fighting with borrowck.
 		let handle_result =
 			|cached_result: &Result<Rc<CachedRuntime>, CacheError>| match *cached_result {
-				Err(_) => Err(Error::InvalidCode),
+				Err(ref e) => Err(Error::InvalidCode(format!("{:?}", e))),
 				Ok(ref cached_runtime) => Ok(Rc::clone(cached_runtime)),
 			};
 
