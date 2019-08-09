@@ -8,22 +8,27 @@ use crate::{
 	}
 };
 
-// TODO TODO: look again with https://github.com/paritytech/substrate/pull/3323#event-2540726461
-
+/// Generator for `StorageLinkedMap` used by `decl_storage`
 pub trait StorageLinkedMap<K: Codec, V: Codec> {
 	/// The type that get/take returns.
 	type Query;
 
+	/// Hasher used to insert into storage.
 	type Hasher: StorageHasher;
 
+	/// Prefix used to prepend each key.
 	fn prefix() -> &'static [u8];
 
+	/// Key used to store linked map head.
 	fn final_head_key() -> &'static [u8];
 
+	/// Convert an optionnal value retrieved from storage to the type queried.
 	fn from_optional_value_to_query(v: Option<V>) -> Self::Query;
 
+	/// Convert a query to an optionnal value into storage.
 	fn from_query_to_optional_value(v: Self::Query) -> Option<V>;
 
+	/// Generate the full key used in top storage.
 	fn storage_linked_map_final_key<KeyArg>(key: KeyArg) -> <Self::Hasher as StorageHasher>::Output
 	where
 		KeyArg: Borrow<K>,

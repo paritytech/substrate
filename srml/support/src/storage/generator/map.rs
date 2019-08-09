@@ -3,18 +3,24 @@ use sr_std::prelude::*;
 use codec::{Codec, Encode, EncodeAppend};
 use crate::{storage::{self, unhashed, hashed::StorageHasher}, rstd::borrow::Borrow};
 
+/// Generator for `StorageMap` used by `decl_storage`
 pub trait StorageMap<K: Codec, V: Codec> {
 	/// The type that get/take returns.
 	type Query;
 
+	/// Hasher used to insert into storage.
 	type Hasher: StorageHasher;
 
+	/// Prefix used to prepend each key.
 	fn prefix() -> &'static [u8];
 
+	/// Convert an optional value retrieved from storage to the type queried.
 	fn from_optional_value_to_query(v: Option<V>) -> Self::Query;
 
+	/// Convert a query to an optional value into storage.
 	fn from_query_to_optional_value(v: Self::Query) -> Option<V>;
 
+	/// Generate the full key used in top storage.
 	fn storage_map_final_key<KeyArg>(key: KeyArg) -> <Self::Hasher as StorageHasher>::Output
 	where
 		KeyArg: Borrow<K>,

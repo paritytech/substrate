@@ -2,21 +2,27 @@ use sr_std::prelude::*;
 use codec::{Codec, Encode, EncodeAppend};
 use crate::{storage::{self, unhashed, hashed::StorageHasher}, rstd::borrow::Borrow};
 
+/// Generator for `StorageDoubleMap` used by `decl_storage`
 pub trait StorageDoubleMap<K1: Encode, K2: Encode, V: Codec> {
 	/// The type that get/take returns.
 	type Query;
 
+	/// Hasher for the first key.
 	type Hasher1: StorageHasher;
+
+	/// Hasher for the second key.
 	type Hasher2: StorageHasher;
 
 	/// Get the prefix key in storage.
 	fn key1_prefix() -> &'static [u8];
 
-	// Could we change this just asking for the default value ?
+	/// Convert an optional value retrieved from storage to the type queried.
 	fn from_optional_value_to_query(v: Option<V>) -> Self::Query;
 
+	/// Convert a query to an optional value into storage.
 	fn from_query_to_optional_value(v: Self::Query) -> Option<V>;
 
+	/// Generate the first part of the key used in top storage.
 	fn storage_double_map_final_key1<KArg1>(k1: &KArg1) -> <Self::Hasher1 as StorageHasher>::Output
 	where
 		KArg1: ?Sized + Encode,
@@ -27,6 +33,7 @@ pub trait StorageDoubleMap<K1: Encode, K2: Encode, V: Codec> {
 		Self::Hasher1::hash(&final_key1)
 	}
 
+	/// Generate the full key used in top storage.
 	fn storage_double_map_final_key<KArg1, KArg2>(k1: &KArg1, k2: &KArg2) -> Vec<u8>
 	where
 		KArg1: ?Sized + Encode,
@@ -47,7 +54,6 @@ where
 	V: Codec,
 	G: StorageDoubleMap<K1, K2, V>,
 {
-	/// The type that get/take returns.
 	type Query = G::Query;
 
 	fn exists<KArg1, KArg2>(k1: &KArg1, k2: &KArg2) -> bool
