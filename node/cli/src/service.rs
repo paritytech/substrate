@@ -113,33 +113,35 @@ construct_service_factory! {
 					}
 				}
 
-				let proposer = substrate_basic_authorship::ProposerFactory {
-					client: service.client(),
-					transaction_pool: service.transaction_pool(),
-				};
+				if service.config().roles.is_authority() {
+					let proposer = substrate_basic_authorship::ProposerFactory {
+						client: service.client(),
+						transaction_pool: service.transaction_pool(),
+					};
 
-				let client = service.client();
-				let select_chain = service.select_chain().ok_or(ServiceError::SelectChainRequired)?;
+					let client = service.client();
+					let select_chain = service.select_chain().ok_or(ServiceError::SelectChainRequired)?;
 
-				let babe_config = babe::BabeParams {
-					config: Config::get_or_compute(&*client)?,
-					keystore: service.keystore(),
-					client,
-					select_chain,
-					block_import,
-					env: proposer,
-					sync_oracle: service.network(),
-					inherent_data_providers: service.config().custom.inherent_data_providers.clone(),
-					force_authoring: service.config().force_authoring,
-					time_source: babe_link,
-				};
+					let babe_config = babe::BabeParams {
+						config: Config::get_or_compute(&*client)?,
+						keystore: service.keystore(),
+						client,
+						select_chain,
+						block_import,
+						env: proposer,
+						sync_oracle: service.network(),
+						inherent_data_providers: service.config().custom.inherent_data_providers.clone(),
+						force_authoring: service.config().force_authoring,
+						time_source: babe_link,
+					};
 
-				let babe = start_babe(babe_config)?;
-				let select = babe.select(service.on_exit()).then(|_| Ok(()));
+					let babe = start_babe(babe_config)?;
+					let select = babe.select(service.on_exit()).then(|_| Ok(()));
 
-				// the BABE authoring task is considered infallible, i.e. if it
-				// fails we take down the service with it.
-				service.spawn_infallible_task(select);
+					// the BABE authoring task is considered infallible, i.e. if it
+					// fails we take down the service with it.
+					service.spawn_essential_task(select);
+				}
 
 				let config = grandpa::Config {
 					// FIXME #1578 make this available through chainspec
@@ -149,8 +151,18 @@ construct_service_factory! {
 					keystore: Some(service.keystore()),
 				};
 
-				if !service.config().disable_grandpa {
-					if service.config().roles.is_authority() {
+				match (service.config().roles.is_authority(), service.config().disable_grandpa) {
+					(false, false) => {
+						// start the lightweight GRANDPA observer
+						service.spawn_task(Box::new(grandpa::run_grandpa_observer(
+							config,
+							link_half,
+							service.network(),
+							service.on_exit(),
+						)?));
+					},
+					(true, false) => {
+						// start the full GRANDPA voter
 						let telemetry_on_connect = TelemetryOnConnect {
 							telemetry_connection_sinks: service.telemetry_on_connect_stream(),
 						};
@@ -165,15 +177,15 @@ construct_service_factory! {
 
 						// the GRANDPA voter task is considered infallible, i.e.
 						// if it fails we take down the service with it.
-						service.spawn_infallible_task(grandpa::run_grandpa_voter(grandpa_config)?);
-					} else {
-						service.spawn_task(grandpa::run_grandpa_observer(
-							config,
-							link_half,
+						service.spawn_essential_task(grandpa::run_grandpa_voter(grandpa_config)?);
+					},
+					(_, true) => {
+						grandpa::setup_disabled_grandpa(
+							service.client(),
+							&service.config().custom.inherent_data_providers,
 							service.network(),
-							service.on_exit(),
-						)?);
-					}
+						)?;
+					},
 				}
 
 				Ok(service)

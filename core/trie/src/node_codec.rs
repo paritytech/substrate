@@ -172,7 +172,7 @@ impl<H: Hasher> NodeCodecT<H> for NodeCodec<H> {
 			None => false,
 		}), bitmap.as_mut());
 		output[bitmap_index..bitmap_index + BITMAP_LENGTH]
-			.copy_from_slice(&bitmap.as_ref()[..BITMAP_LENGTH]);
+			.copy_from_slice(&bitmap[..BITMAP_LENGTH]);
 		output
 	}
 

@@ -268,6 +268,7 @@ pub trait OffchainWorker<C: Components> {
 		>,
 		pool: &Arc<TransactionPool<C::TransactionPoolApi>>,
 		network_state: &Arc<dyn NetworkStateInfo + Send + Sync>,
+		is_validator: bool,
 	) -> error::Result<Box<dyn Future<Item = (), Error = ()> + Send>>;
 }
 
@@ -284,8 +285,9 @@ impl<C: Components> OffchainWorker<Self> for C where
 		>,
 		pool: &Arc<TransactionPool<C::TransactionPoolApi>>,
 		network_state: &Arc<dyn NetworkStateInfo + Send + Sync>,
+		is_validator: bool,
 	) -> error::Result<Box<dyn Future<Item = (), Error = ()> + Send>> {
-		let future = offchain.on_block_imported(number, pool, network_state.clone())
+		let future = offchain.on_block_imported(number, pool, network_state.clone(), is_validator)
 			.map(|()| Ok(()));
 		Ok(Box::new(Compat::new(future)))
 	}

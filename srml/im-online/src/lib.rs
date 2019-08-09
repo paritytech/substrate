@@ -219,7 +219,10 @@ decl_module! {
 
 		// Runs after every block.
 		fn offchain_worker(now: T::BlockNumber) {
-			Self::offchain(now);
+			// Only send messages if we are a potential validator.
+			if sr_io::is_validator() {
+				Self::offchain(now);
+			}
 		}
 	}
 }

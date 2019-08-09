@@ -297,7 +297,11 @@ pub struct ExecutionStrategies {
 /// The `run` command used to run a node.
 #[derive(Debug, StructOpt, Clone)]
 pub struct RunCmd {
-	/// Disable GRANDPA when running in validator mode
+	/// Enable validator mode
+	#[structopt(long = "validator")]
+	pub validator: bool,
+
+	/// Disable GRANDPA voter when running in validator mode, otherwise disables the GRANDPA observer
 	#[structopt(long = "no-grandpa")]
 	pub no_grandpa: bool,
 
