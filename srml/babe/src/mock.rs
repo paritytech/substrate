@@ -22,9 +22,9 @@ use sr_primitives::{
 };
 use srml_support::{impl_outer_origin, parameter_types};
 use runtime_io;
-use primitives::{H256, Blake2Hasher};
+use primitives::{H256, Blake2Hasher, sr25519::Public};
 use crate::{Module, GenesisConfig};
-use sr_primitives::testing::UintAuthorityId;
+use sr_primitives::BuildStorage;
 
 impl_outer_origin!{
 	pub enum Origin for Test {}
@@ -55,6 +55,7 @@ impl system::Trait for Test {
 	type Header = Header;
 	type WeightMultiplierUpdate = ();
 	type Event = ();
+	type Call = ();
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type AvailableBlockRatio = AvailableBlockRatio;
@@ -72,12 +73,10 @@ impl super::Trait for Test {
 	type ExpectedBlockTime = ExpectedBlockTime;
 }
 
-pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blake2Hasher> {
-	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
-	t.extend(GenesisConfig {
-		authorities: authorities.into_iter().map(|a| (UintAuthorityId(a).into(), 1)).collect(),
-	}.build_storage().unwrap().0);
-	t.into()
+pub fn new_test_ext(authorities: Vec<Public>) -> runtime_io::TestExternalities<Blake2Hasher> {
+	GenesisConfig {
+		authorities: authorities.into_iter().map(|a| (a.into(), 1)).collect(),
+	}.build_storage().unwrap().build_storage().unwrap().into()
 }
 
 pub type System = system::Module<Test>;

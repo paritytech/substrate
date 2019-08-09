@@ -18,7 +18,7 @@
 //! from VRF outputs and manages epoch transitions.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![forbid(unused_must_use, unsafe_code, unused_variables)]
+#![forbid(unused_must_use, unsafe_code, unused_variables, unused_imports, unused_must_use)]
 pub use timestamp;
 
 use rstd::{result, prelude::*};
