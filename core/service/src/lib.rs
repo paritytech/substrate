@@ -88,9 +88,9 @@ pub struct Service<Components: components::Components> {
 	on_exit: exit_future::Exit,
 	/// A signal that makes the exit future above resolve, fired on service drop.
 	exit_signal: Option<Signal>,
-	/// When set to `true` the next time the service future is polled it should
-	/// be completed (i.e. returns `Async::Ready(())`).
-	should_exit: Arc<AtomicBool>,
+	/// Set to `true` when a spawned infallible task has failed. The next time
+	/// the service future is polled it should complete with an error.
+	infallible_failed: Arc<AtomicBool>,
 	/// Sender for futures that must be spawned as background tasks.
 	to_spawn_tx: mpsc::UnboundedSender<Box<dyn Future<Item = (), Error = ()> + Send>>,
 	/// Receiver for futures that must be spawned as background tasks.
@@ -447,7 +447,7 @@ impl<Components: components::Components> Service<Components> {
 			transaction_pool,
 			on_exit,
 			exit_signal: Some(exit_signal),
-			should_exit: Arc::new(AtomicBool::new(false)),
+			infallible_failed: Arc::new(AtomicBool::new(false)),
 			to_spawn_tx,
 			to_spawn_rx,
 			to_poll: Vec::new(),
@@ -501,9 +501,10 @@ impl<Components: components::Components> Service<Components> {
 	/// parameter. The given task is considered infallible, i.e. if it errors we
 	/// trigger a service exit.
 	pub fn spawn_infallible_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
-		let should_exit = self.should_exit.clone();
+		let infallible_failed = self.infallible_failed.clone();
 		let infallible_task = Box::new(task.map_err(move |_| {
-			should_exit.store(true, Ordering::Relaxed)
+			error!("Infallible task failed. Shutting down service.");
+			infallible_failed.store(true, Ordering::Relaxed);
 		}));
 
 		let _ = self.to_spawn_tx.unbounded_send(infallible_task);
@@ -566,11 +567,11 @@ impl<Components: components::Components> Service<Components> {
 
 impl<Components> Future for Service<Components> where Components: components::Components {
 	type Item = ();
-	type Error = ();
+	type Error = Error;
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-		if self.should_exit.load(Ordering::Relaxed) {
-			return Ok(Async::Ready(()));
+		if self.infallible_failed.load(Ordering::Relaxed) {
+			return Err(Error::Other("Infallible task failed.".into()));
 		}
 
 		while let Ok(Async::Ready(Some(task_to_spawn))) = self.to_spawn_rx.poll() {

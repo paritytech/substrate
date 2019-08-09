@@ -53,7 +53,7 @@
 //! included in the newly-finalized chain.
 
 use futures::prelude::*;
-use log::{debug, info, warn};
+use log::{debug, error, info};
 use futures::sync::mpsc;
 use client::{
 	BlockchainEvents, CallExecutor, Client, backend::Backend, error::Error as ClientError,
@@ -709,7 +709,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 	let voter_work = voter_work
 		.map(|_| ())
 		.map_err(|e| {
-			warn!("GRANDPA Voter failed: {:?}", e);
+			error!("GRANDPA Voter failed: {:?}", e);
 			telemetry!(CONSENSUS_WARN; "afg.voter_failed"; "e" => ?e);
 		});
 

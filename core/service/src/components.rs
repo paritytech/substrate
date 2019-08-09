@@ -499,7 +499,7 @@ impl<Factory: ServiceFactory> DerefMut for FullComponents<Factory> {
 
 impl<Factory: ServiceFactory> Future for FullComponents<Factory> {
 	type Item = ();
-	type Error = ();
+	type Error = super::Error;
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
 		self.service.poll()
@@ -624,7 +624,7 @@ impl<Factory: ServiceFactory> DerefMut for LightComponents<Factory> {
 
 impl<Factory: ServiceFactory> Future for LightComponents<Factory> {
 	type Item = ();
-	type Error = ();
+	type Error = super::Error;
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
 		self.service.poll()
