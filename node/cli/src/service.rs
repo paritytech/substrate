@@ -94,9 +94,7 @@ construct_service_factory! {
 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
 		Genesis = GenesisConfig,
 		Configuration = NodeConfig<Self>,
-		FullService = FullComponents<Self>
-			{ |config: FactoryFullConfiguration<Self>|
-				FullComponents::<Factory>::new(config) },
+		FullService = FullComponents<Self> { |config: FactoryFullConfiguration<Self>| FullComponents::<Factory>::new(config) },
 		AuthoritySetup = {
 			|mut service: Self::FullService| {
 				let (block_import, link_half, babe_link) = service.config_mut().custom.import_setup.take()
@@ -184,7 +182,7 @@ construct_service_factory! {
 		LightService = LightComponents<Self>
 			{ |config| <LightComponents<Factory>>::new(config) },
 		FullImportQueue = BabeImportQueue<Self::Block>
-			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>, select_chain: Self::SelectChain| {
+			{ |config: &mut FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>, select_chain: Self::SelectChain| {
 				let (block_import, link_half) =
 					grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>, _>(
 						client.clone(), client.clone(), select_chain
