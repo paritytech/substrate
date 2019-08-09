@@ -239,7 +239,9 @@ where
 		work
 	}
 
-	/// Rebuilds the `self.observer` field using the other fields.
+	/// Rebuilds the `self.observer` field using the current authority set
+	/// state. This method should be called when we know that the authority set
+	/// has changed (e.g. as signalled by a voter command).
 	fn rebuild_observer(&mut self) {
 		let set_id = self.persistent_data.authority_set.set_id();
 		let voters = Arc::new(self.persistent_data.authority_set.current_authorities());
