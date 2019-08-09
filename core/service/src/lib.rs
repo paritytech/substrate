@@ -176,13 +176,7 @@ pub struct TelemetryOnConnect {
 macro_rules! new_impl {
 	(
 		$config:ident,
-		$build_client:expr,
-		$build_select_chain:expr,
-		$build_import_queue:expr,
-		$build_finality_proof_provider:expr,
-		$generate_intial_session_keys:expr,
-		$build_network_protocol:expr,
-		$build_transaction_pool:expr,
+		$build_components:expr,
 		$maintain_transaction_pool:expr,
 		$offchain_workers:expr,
 		$start_rpc:expr,
@@ -193,37 +187,20 @@ macro_rules! new_impl {
 		let (to_spawn_tx, to_spawn_rx) =
 			mpsc::unbounded::<Box<dyn Future<Item = (), Error = ()> + Send>>();
 
-		// Create client
-		let executor = NativeExecutor::new($config.default_heap_pages);
-
-		let keystore = Keystore::open($config.keystore_path.clone(), $config.keystore_password.clone())?;
-
-		let (client, on_demand) = $build_client(&$config, executor, Some(keystore.clone()))?;
-		let select_chain = $build_select_chain(&mut $config, client.clone())?;
-
-		let transaction_pool = Arc::new(
-			$build_transaction_pool($config.transaction_pool.clone(), client.clone())?
-		);
-		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
-			imports_external_transactions: !$config.roles.is_light(),
-			pool: transaction_pool.clone(),
-			client: client.clone(),
-		});
-
-		let (import_queue, finality_proof_request_builder) = $build_import_queue(
-			&mut $config,
-			client.clone(),
-			select_chain.clone(),
-			Some(transaction_pool.clone()),
-		)?;
+		// Create all the components.
+		let (
+			client,
+			on_demand,
+			keystore,
+			select_chain,
+			import_queue,
+			finality_proof_request_builder,
+			finality_proof_provider,
+			network_protocol,
+			transaction_pool
+		) = $build_components(&mut $config)?;
 		let import_queue = Box::new(import_queue);
-		let finality_proof_provider = $build_finality_proof_provider(client.clone())?;
 		let chain_info = client.info().chain;
-
-		$generate_intial_session_keys(
-			client.clone(),
-			$config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
-		)?;
 
 		let version = $config.full_version();
 		info!("Highest known block at #{}", chain_info.best_number);
@@ -234,7 +211,11 @@ macro_rules! new_impl {
 			"best" => ?chain_info.best_hash
 		);
 
-		let network_protocol = $build_network_protocol(&$config)?;
+		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
+			imports_external_transactions: !$config.roles.is_light(),
+			pool: transaction_pool.clone(),
+			client: client.clone(),
+		});
 
 		let protocol_id = {
 			let protocol_id_full = match $config.chain_spec.protocol_id() {
@@ -504,13 +485,46 @@ impl<Components: components::Components> Service<Components> {
 	) -> Result<Self, error::Error> {
 		let inner = new_impl!(
 			config,
-			Components::build_client,
-			Components::build_select_chain,
-			Components::build_import_queue,
-			Components::build_finality_proof_provider,
-			Components::RuntimeServices::generate_initial_session_keys,
-			<Components::Factory>::build_network_protocol,
-			Components::build_transaction_pool,
+			|mut config: &mut FactoryFullConfiguration<Components::Factory>| -> Result<_, error::Error> {
+				// Create client
+				let executor = NativeExecutor::new(config.default_heap_pages);
+
+				let keystore = Keystore::open(config.keystore_path.clone(), config.keystore_password.clone())?;
+
+				let (client, on_demand) = Components::build_client(&config, executor, Some(keystore.clone()))?;
+				let select_chain = Components::build_select_chain(&mut config, client.clone())?;
+
+				let transaction_pool = Arc::new(
+					Components::build_transaction_pool(config.transaction_pool.clone(), client.clone())?
+				);
+
+				let (import_queue, finality_proof_request_builder) = Components::build_import_queue(
+					&mut config,
+					client.clone(),
+					select_chain.clone(),
+					Some(transaction_pool.clone()),
+				)?;
+				let finality_proof_provider = Components::build_finality_proof_provider(client.clone())?;
+
+				Components::RuntimeServices::generate_initial_session_keys(
+					client.clone(),
+					config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
+				)?;
+
+				let network_protocol = <Components::Factory>::build_network_protocol(&config)?;
+
+				Ok((
+					client,
+					on_demand,
+					keystore,
+					select_chain,
+					import_queue,
+					finality_proof_request_builder,
+					finality_proof_provider,
+					network_protocol,
+					transaction_pool
+				))
+			},
 			Components::RuntimeServices::maintain_transaction_pool,
 			Components::RuntimeServices::offchain_workers,
 			Components::RuntimeServices::start_rpc,
