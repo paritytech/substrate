@@ -876,6 +876,13 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		Ok(0)
 	},
+	ext_is_validator() -> u32 => {
+		Ok(if runtime_io::is_validator() {
+			1
+		} else {
+			0
+		})
+	},
 	ext_submit_transaction(msg_data: *const u8, len: u32) -> u32 => {
 		let extrinsic = this.memory.get(msg_data, len as usize)
 			.map_err(|_| "OOB while ext_submit_transaction: wasm")?;

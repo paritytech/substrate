@@ -436,7 +436,7 @@ pub mod ext {
 		///
 		/// - `1` == `true`
 		/// - `0` == `false`
-		fn ext_is_validator() -> u8;
+		fn ext_is_validator() -> u32;
 
 		/// Submit transaction.
 		///
