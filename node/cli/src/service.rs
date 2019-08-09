@@ -138,15 +138,15 @@ construct_service_factory! {
 				let select = babe.select(service.on_exit()).then(|_| Ok(()));
 				service.spawn_task(Box::new(select));
 
-				let config = grandpa::Config {
-					// FIXME #1578 make this available through chainspec
-					gossip_duration: Duration::from_millis(333),
-					justification_period: 4096,
-					name: Some(service.config().name.clone()),
-					keystore: Some(service.keystore()),
-				};
-
 				if !service.config().disable_grandpa {
+					let config = grandpa::Config {
+						// FIXME #1578 make this available through chainspec
+						gossip_duration: Duration::from_millis(333),
+						justification_period: 4096,
+						name: Some(service.config().name.clone()),
+						keystore: Some(service.keystore()),
+					};
+
 					if service.config().roles.is_authority() {
 						let telemetry_on_connect = TelemetryOnConnect {
 							telemetry_connection_sinks: service.telemetry_on_connect_stream(),

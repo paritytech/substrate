@@ -263,6 +263,10 @@ impl NeverOffchainExt {
 }
 
 impl offchain::Externalities for NeverOffchainExt {
+	fn is_validator(&self) -> bool {
+		unreachable!()
+	}
+
 	fn submit_transaction(&mut self, _extrinsic: Vec<u8>) -> Result<(), ()> {
 		unreachable!()
 	}
