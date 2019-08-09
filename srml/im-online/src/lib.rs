@@ -79,7 +79,7 @@ use sr_primitives::{
 	transaction_validity::{TransactionValidity, TransactionLongevity, ValidTransaction},
 };
 use sr_staking_primitives::{
-	SessionIndex, ValidatorIdByIndex,
+	SessionIndex, CurrentElectedSet,
 	offence::{ReportOffence, Offence, TimeSlot, Kind},
 };
 use srml_support::{
@@ -177,7 +177,7 @@ pub trait Trait: system::Trait + session::historical::Trait {
 		>;
 
 	/// A type that returns a validator id from the current elected set of the era.
-	type ValidatorIdByIndex: ValidatorIdByIndex<<Self as session::Trait>::ValidatorId>;
+	type CurrentElectedSet: CurrentElectedSet<<Self as session::Trait>::ValidatorId>;
 }
 
 decl_event!(
@@ -388,28 +388,26 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	}
 
 	fn on_before_session_ending() {
+		let mut unresponsive = vec![];
+
 		let current_session = <session::Module<T>>::current_index();
 
 		let keys = Keys::get();
-		let mut unresponsive = vec![];
-		for auth_idx in 0..keys.len() {
+		let current_elected = T::CurrentElectedSet::current_elected_set();
+
+		// The invariant is that these two are of the same length.
+		// TODO: What to do: Uncomment, ignore, a third option?
+		// assert_eq!(keys.len(), current_elected.len());
+
+		for (auth_idx, validator_id) in current_elected.into_iter().enumerate() {
 			let auth_idx = auth_idx as u32;
 			if !<ReceivedHeartbeats>::exists(&current_session, &auth_idx) {
-				// Get the validator id by the index of its session key and then use this
-				// validator id to get the full identification. In practice it cannot return `None`
-				// since we are querying when the session hasn't yet ended.
-				let validator_id = T::ValidatorIdByIndex::validator_id_by_index(auth_idx).expect(
-					"auth_idx is an index `0..keys.len()`;
-						`keys` is populated from the current elected set;
-						`validator_id_by_index` queries validators from the current elected set;
-						thus it can't return `None`;
-						qed",
-				);
 				let full_identification = T::FullIdentificationOf::convert(validator_id.clone())
 					.expect(
-						"the validator id is from the current era;
+						"we got the validator_id from current_elected;
+						current_elected is set of currently elected validators;
 						the mapping between the validator id and its full identification should be valid;
-						thus it can't return `None`;
+						thus `FullIdentificationOf::convert` can't return `None`;
 						qed",
 					);
 

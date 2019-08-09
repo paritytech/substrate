@@ -396,7 +396,7 @@ impl im_online::Trait for Runtime {
 	type Event = Event;
 	type UncheckedExtrinsic = UncheckedExtrinsic;
 	type ReportUnresponsivness = Offences;
-	type ValidatorIdByIndex = Staking;
+	type CurrentElectedSet = staking::CurrentElectedStashAccounts<Runtime>;
 }
 
 impl offences::Trait for Runtime {

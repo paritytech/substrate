@@ -279,7 +279,7 @@ use sr_primitives::traits::{
 	SimpleArithmetic, SaturatedConversion,
 };
 use sr_staking_primitives::{
-	SessionIndex, ValidatorIdByIndex,
+	SessionIndex, CurrentElectedSet,
 	offence::{OnOffenceHandler, OffenceDetails},
 };
 #[cfg(feature = "std")]
@@ -1518,10 +1518,11 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 	}
 }
 
-impl<T: Trait> ValidatorIdByIndex<T::AccountId> for Module<T> {
-	fn validator_id_by_index(validator_index: u32) -> Option<T::AccountId> {
-		Self::current_elected()
-			.get(validator_index as usize)
-			.cloned()
+/// Returns the currently elected validator set represented by their stash accounts.
+pub struct CurrentElectedStashAccounts<T>(rstd::marker::PhantomData<T>);
+
+impl<T: Trait> CurrentElectedSet<T::AccountId> for CurrentElectedStashAccounts<T> {
+	fn current_elected_set() -> Vec<T::AccountId> {
+		<Module<T>>::current_elected()
 	}
 }
