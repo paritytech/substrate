@@ -438,11 +438,14 @@ where
 
 	let is_dev = cli.shared_params.dev;
 
-	let role = if cli.light {
-		service::Roles::LIGHT
-	} else {
-		service::Roles::AUTHORITY
-	};
+	let role =
+		if cli.light {
+			service::Roles::LIGHT
+		} else if cli.validator || is_dev {
+			service::Roles::AUTHORITY
+		} else {
+			service::Roles::FULL
+		};
 
 	let exec = cli.execution_strategies;
 	let exec_all_or = |strat: params::ExecutionStrategy| exec.execution.unwrap_or(strat).into();
