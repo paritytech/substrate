@@ -35,7 +35,7 @@ use std::time::{Duration, Instant};
 use futures::sync::mpsc;
 use parking_lot::Mutex;
 
-use client::{BlockchainEvents, backend::Backend, runtime_api::BlockT};
+use client::{BlockchainEvents, backend::Backend, runtime_api::BlockT, Client};
 use exit_future::Signal;
 use futures::prelude::*;
 use futures03::stream::{StreamExt as _, TryStreamExt as _};
@@ -596,87 +596,158 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	fn on_exit(&self) -> ::exit_future::Exit;
 }
 
-impl<Components: components::Components> AbstractService for Service<Components>
+impl<Components: components::Components> Deref for Service<Components>
 where FactoryFullConfiguration<Components::Factory>: Send {
-	type Block = ComponentBlock<Components>;
-	type Backend = <Components as components::Components>::Backend;
-	type Executor = <Components as components::Components>::Executor;
-	type RuntimeApi = <Components as components::Components>::RuntimeApi;
-	type Config = FactoryFullConfiguration<Components::Factory>;
-	type SelectChain = <Components as components::Components>::SelectChain;
-	type TransactionPoolApi = Components::TransactionPoolApi;
-	type NetworkService = components::NetworkService<Components>;
+	type Target = NewService<
+		FactoryFullConfiguration<Components::Factory>,
+		ComponentBlock<Components>,
+		ComponentClient<Components>,
+		Components::SelectChain,
+		NetworkStatus<ComponentBlock<Components>>,
+		NetworkService<Components>,
+		TransactionPool<Components::TransactionPoolApi>,
+		offchain::OffchainWorkers<
+			ComponentClient<Components>,
+			ComponentOffchainStorage<Components>,
+			ComponentBlock<Components>
+		>,
+	>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.inner
+	}
+}
+
+impl<Components: components::Components> DerefMut for Service<Components>
+where FactoryFullConfiguration<Components::Factory>: Send {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.inner
+	}
+}
+
+impl<TCfg, TBl, TBackend, TExec, TRtApi, TSc, TNet, TExPoolApi, TOc> AbstractService for
+	NewService<TCfg, TBl, Client<TBackend, TExec, TBl, TRtApi>, TSc, NetworkStatus<TBl>, TNet, TransactionPool<TExPoolApi>, TOc>
+where TCfg: 'static + Send,
+	TBl: BlockT<Hash = H256>,
+	TBackend: 'static + client::backend::Backend<TBl, Blake2Hasher>,
+	TExec: 'static + client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone,
+	TRtApi: 'static + Send + Sync,
+	TSc: 'static + Clone + Send,
+	TNet: 'static + Send + Sync,
+	TExPoolApi: 'static + ChainApi,
+	TOc: 'static + Send + Sync,
+{
+	type Block = TBl;
+	type Backend = TBackend;
+	type Executor = TExec;
+	type RuntimeApi = TRtApi;
+	type Config = TCfg;
+	type SelectChain = TSc;
+	type TransactionPoolApi = TExPoolApi;
+	type NetworkService = TNet;
 
 	fn config(&self) -> &Self::Config {
-		&self.inner.config
+		&self.config
 	}
 
 	fn config_mut(&mut self) -> &mut Self::Config {
-		&mut self.inner.config
+		&mut self.config
 	}
 
 	fn telemetry_on_connect_stream(&self) -> TelemetryOnConnectNotifications {
 		let (sink, stream) = mpsc::unbounded();
-		self.inner._telemetry_on_connect_sinks.lock().push(sink);
+		self._telemetry_on_connect_sinks.lock().push(sink);
 		stream
 	}
 
 	fn telemetry(&self) -> Option<tel::Telemetry> {
-		self.inner._telemetry.as_ref().map(|t| t.clone())
+		self._telemetry.as_ref().map(|t| t.clone())
 	}
 
 	fn keystore(&self) -> keystore::KeyStorePtr {
-		self.inner.keystore.clone()
+		self.keystore.clone()
 	}
 
 	fn spawn_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
-		let _ = self.inner.to_spawn_tx.unbounded_send(Box::new(task));
+		let _ = self.to_spawn_tx.unbounded_send(Box::new(task));
 	}
 
 	fn spawn_essential_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
-		let essential_failed = self.inner.essential_failed.clone();
+		let essential_failed = self.essential_failed.clone();
 		let essential_task = Box::new(task.map_err(move |_| {
 			error!("Essential task failed. Shutting down service.");
 			essential_failed.store(true, Ordering::Relaxed);
 		}));
 
-		let _ = self.inner.to_spawn_tx.unbounded_send(essential_task);
+		let _ = self.to_spawn_tx.unbounded_send(essential_task);
 	}
 
 	fn spawn_task_handle(&self) -> SpawnTaskHandle {
 		SpawnTaskHandle {
-			sender: self.inner.to_spawn_tx.clone(),
+			sender: self.to_spawn_tx.clone(),
 		}
 	}
 
 	fn rpc_query(&self, mem: &RpcSession, request: &str) -> Box<dyn Future<Item = Option<String>, Error = ()> + Send> {
-		Box::new(self.inner.rpc_handlers.handle_request(request, mem.metadata.clone()))
+		Box::new(self.rpc_handlers.handle_request(request, mem.metadata.clone()))
 	}
 
 	fn client(&self) -> Arc<client::Client<Self::Backend, Self::Executor, Self::Block, Self::RuntimeApi>> {
-		self.inner.client.clone()
+		self.client.clone()
 	}
 
 	fn select_chain(&self) -> Option<Self::SelectChain> {
-		self.inner.select_chain.clone()
+		self.select_chain.clone()
 	}
 
 	fn network(&self) -> Arc<Self::NetworkService> {
-		self.inner.network.clone()
+		self.network.clone()
 	}
 
 	fn network_status(&self) -> mpsc::UnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)> {
 		let (sink, stream) = mpsc::unbounded();
-		self.inner.network_status_sinks.lock().push(sink);
+		self.network_status_sinks.lock().push(sink);
 		stream
 	}
 
 	fn transaction_pool(&self) -> Arc<TransactionPool<Self::TransactionPoolApi>> {
-		self.inner.transaction_pool.clone()
+		self.transaction_pool.clone()
 	}
 
 	fn on_exit(&self) -> ::exit_future::Exit {
-		self.inner.exit.clone()
+		self.exit.clone()
+	}
+}
+
+impl<TCfg, TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Future for
+NewService<TCfg, TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
+	type Item = ();
+	type Error = Error;
+
+	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+		if self.essential_failed.load(Ordering::Relaxed) {
+			return Err(Error::Other("Essential task failed.".into()));
+		}
+
+		while let Ok(Async::Ready(Some(task_to_spawn))) = self.to_spawn_rx.poll() {
+			let executor = tokio_executor::DefaultExecutor::current();
+			if let Err(err) = executor.execute(task_to_spawn) {
+				debug!(
+					target: "service",
+					"Failed to spawn background task: {:?}; falling back to manual polling",
+					err
+				);
+				self.to_poll.push(err.into_future());
+			}
+		}
+
+		// Polling all the `to_poll` futures.
+		while let Some(pos) = self.to_poll.iter_mut().position(|t| t.poll().map(|t| t.is_ready()).unwrap_or(true)) {
+			self.to_poll.remove(pos);
+		}
+
+		// The service future never ends.
+		Ok(Async::NotReady)
 	}
 }
 
@@ -685,29 +756,22 @@ impl<Components> Future for Service<Components> where Components: components::Co
 	type Error = Error;
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-		if self.inner.essential_failed.load(Ordering::Relaxed) {
-			return Err(Error::Other("Essential task failed.".into()));
-		}
+		self.inner.poll()
+	}
+}
 
-		while let Ok(Async::Ready(Some(task_to_spawn))) = self.inner.to_spawn_rx.poll() {
-			let executor = tokio_executor::DefaultExecutor::current();
-			if let Err(err) = executor.execute(task_to_spawn) {
-				debug!(
-					target: "service",
-					"Failed to spawn background task: {:?}; falling back to manual polling",
-					err
-				);
-				self.inner.to_poll.push(err.into_future());
-			}
+impl<TCfg, TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Executor<Box<dyn Future<Item = (), Error = ()> + Send>> for
+NewService<TCfg, TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
+	fn execute(
+		&self,
+		future: Box<dyn Future<Item = (), Error = ()> + Send>
+	) -> Result<(), futures::future::ExecuteError<Box<dyn Future<Item = (), Error = ()> + Send>>> {
+		if let Err(err) = self.to_spawn_tx.unbounded_send(future) {
+			let kind = futures::future::ExecuteErrorKind::Shutdown;
+			Err(futures::future::ExecuteError::new(kind, err.into_inner()))
+		} else {
+			Ok(())
 		}
-
-		// Polling all the `to_poll` futures.
-		while let Some(pos) = self.inner.to_poll.iter_mut().position(|t| t.poll().map(|t| t.is_ready()).unwrap_or(true)) {
-			self.inner.to_poll.remove(pos);
-		}
-
-		// The service future never ends.
-		Ok(Async::NotReady)
 	}
 }
 
@@ -718,12 +782,7 @@ impl<Components> Executor<Box<dyn Future<Item = (), Error = ()> + Send>>
 		&self,
 		future: Box<dyn Future<Item = (), Error = ()> + Send>
 	) -> Result<(), futures::future::ExecuteError<Box<dyn Future<Item = (), Error = ()> + Send>>> {
-		if let Err(err) = self.inner.to_spawn_tx.unbounded_send(future) {
-			let kind = futures::future::ExecuteErrorKind::Shutdown;
-			Err(futures::future::ExecuteError::new(kind, err.into_inner()))
-		} else {
-			Ok(())
-		}
+		self.inner.execute(future)
 	}
 }
 
@@ -928,10 +987,11 @@ pub struct NetworkStatus<B: BlockT> {
 	pub average_upload_per_sec: u64,
 }
 
-impl<Components> Drop for Service<Components> where Components: components::Components {
+impl<TCfg, TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Drop for
+NewService<TCfg, TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	fn drop(&mut self) {
 		debug!(target: "service", "Substrate service shutdown");
-		if let Some(signal) = self.inner.signal.take() {
+		if let Some(signal) = self.signal.take() {
 			signal.fire();
 		}
 	}
