@@ -17,7 +17,7 @@
 //! Private implementation details of BABE digests.
 
 #[cfg(feature = "std")]
-use super::{BABE_ENGINE_ID, AuthoritySignature};
+use super::{BABE_ENGINE_ID, AuthoritySignature, Epoch};
 #[cfg(not(feature = "std"))]
 use super::{VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH};
 use super::{AuthorityId, AuthorityIndex, SlotNumber, BabeAuthorityWeight};
