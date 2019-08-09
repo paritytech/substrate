@@ -174,7 +174,7 @@ test-linux-stable-int:
         &> ${CI_COMMIT_SHORT_SHA}_int_failure.log
     - sccache -s
   after_script:
-    - awk '/FAILED|^error\[|^warning:/,0' ${CI_COMMIT_SHORT_SHA}_int_failure.log
+    - awk '/FAILED|^error\[/,0' ${CI_COMMIT_SHORT_SHA}_int_failure.log
   artifacts:
     name:                          $CI_COMMIT_SHORT_SHA
     when:                          on_failure
