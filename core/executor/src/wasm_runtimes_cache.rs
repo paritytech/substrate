@@ -31,7 +31,7 @@ use std::rc::Rc;
 use wasmi::{Module as WasmModule, ModuleRef as WasmModuleInstanceRef, RuntimeValue};
 
 #[derive(Debug)]
-pub enum CacheError {
+enum CacheError {
 	CodeNotFound,
 	ApplySnapshotFailed,
 	InvalidModule,
