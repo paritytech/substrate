@@ -18,7 +18,7 @@ inherents = { package = "substrate-inherents", path = "../../inherents" }
 srml-aura = { path = "../../../srml/aura" }
 client = { package = "substrate-client", path = "../../client" }
 substrate-telemetry = { path = "../../telemetry" }
-substrate-keystore = { path = "../../keystore" }
+keystore = { package = "substrate-keystore", path = "../../keystore" }
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
 sr-primitives = {  path = "../../sr-primitives" }
 futures-preview = { version = "0.3.0-alpha.17", features = ["compat"] }
@@ -35,3 +35,4 @@ service = { package = "substrate-service", path = "../../service" }
 test-client = { package = "substrate-test-runtime-client", path = "../../test-runtime/client" }
 tokio = "0.1.7"
 env_logger = "0.6"
+tempfile = "3.1"
