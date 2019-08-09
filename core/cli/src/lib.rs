@@ -275,7 +275,10 @@ impl<'a, RP> ParseAndPrepareRun<'a, RP> {
 		G: RuntimeGenesis,
 		E: IntoExit,
 		RS: FnOnce(E, RunCmd, RP, Configuration<C, G>) -> Result<(), String> {
-		run_node(self.params, spec_factory, exit, run_service, self.impl_name, self.version)
+
+		let config = create_run_node_config(self.params.left.clone(), spec_factory, self.impl_name, self.version)?;
+
+		run_service(exit, self.params.left, self.params.right, config).map_err(Into::into)
 	}
 }
 
@@ -293,7 +296,16 @@ impl<'a> ParseAndPrepareBuildSpec<'a> {
 	) -> error::Result<()>
 	where S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
 		G: RuntimeGenesis {
-		build_spec(self.params, spec_factory, self.version)
+		
+		info!("Building chain spec");
+		let raw_output = self.params.raw;
+		let mut spec = load_spec(&self.params.shared_params, spec_factory)?;
+		with_default_boot_node(&mut spec, self.params, self.version)?;
+		let json = service::chain_ops::build_spec(spec, raw_output)?;
+
+		print!("{}", json);
+
+		Ok(())
 	}
 }
 
@@ -313,7 +325,22 @@ impl<'a> ParseAndPrepareExport<'a> {
 	where S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 		F: ServiceFactory,
 		E: IntoExit {
-		export_blocks::<F, E, S>(self.params, spec_factory, exit, self.version)
+
+		let config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
+
+		info!("DB path: {}", config.database_path.display());
+		let from = self.params.from.unwrap_or(1);
+		let to = self.params.to;
+		let json = self.params.json;
+
+		let file: Box<dyn Write> = match self.params.output {
+			Some(filename) => Box::new(File::create(filename)?),
+			None => Box::new(stdout()),
+		};
+
+		service::chain_ops::export_blocks::<F, _, _>(
+			config, exit.into_exit(), file, from.into(), to.map(Into::into), json
+		).map_err(Into::into)
 	}
 }
 
@@ -333,7 +360,26 @@ impl<'a> ParseAndPrepareImport<'a> {
 	where S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 		F: ServiceFactory,
 		E: IntoExit {
-		import_blocks::<F, E, S>(self.params, spec_factory, exit, self.version)
+		
+		let mut config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
+		config.execution_strategies = ExecutionStrategies {
+			importing: self.params.execution.into(),
+			other: self.params.execution.into(),
+			..Default::default()
+		};
+
+		let file: Box<dyn ReadPlusSeek> = match self.params.input {
+			Some(filename) => Box::new(File::open(filename)?),
+			None => {
+				let mut buffer = Vec::new();
+				stdin().read_to_end(&mut buffer)?;
+				Box::new(Cursor::new(buffer))
+			},
+		};
+
+		let fut = service::chain_ops::import_blocks::<F, _, _>(config, exit.into_exit(), file)?;
+		tokio::run(fut);
+		Ok(())
 	}
 }
 
@@ -351,7 +397,38 @@ impl<'a> ParseAndPreparePurge<'a> {
 	) -> error::Result<()>
 	where S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
 		G: RuntimeGenesis {
-		purge_chain(self.params, spec_factory, self.version)
+		
+		let config = create_config_with_db_path::<(), _, _>(spec_factory, &self.params.shared_params, self.version)?;
+		let db_path = config.database_path;
+
+		if self.params.yes == false {
+			print!("Are you sure to remove {:?}? (y/n)", &db_path);
+			stdout().flush().expect("failed to flush stdout");
+
+			let mut input = String::new();
+			stdin().read_line(&mut input)?;
+			let input = input.trim();
+
+			match input.chars().nth(0) {
+				Some('y') | Some('Y') => {},
+				_ => {
+					println!("Aborted");
+					return Ok(());
+				},
+			}
+		}
+
+		match fs::remove_dir_all(&db_path) {
+			Result::Ok(_) => {
+				println!("{:?} removed.", &db_path);
+				Ok(())
+			},
+			Result::Err(ref err) if err.kind() == ErrorKind::NotFound => {
+				println!("{:?} did not exist.", &db_path);
+				Ok(())
+			},
+			Result::Err(err) => Result::Err(err.into())
+		}
 	}
 }
 
@@ -369,7 +446,9 @@ impl<'a> ParseAndPrepareRevert<'a> {
 	) -> error::Result<()>
 	where S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 		F: ServiceFactory {
-		revert_chain::<F, S>(self.params, spec_factory, self.version)
+		let config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
+		let blocks = self.params.num;
+		Ok(service::chain_ops::revert_chain::<F>(config, blocks.into())?)
 	}
 }
 
@@ -699,27 +778,6 @@ where
 	Ok(config)
 }
 
-fn run_node<C, G, S, RS, E, RP>(
-	cli: MergeParameters<RunCmd, RP>,
-	spec_factory: S,
-	exit: E,
-	run_service: RS,
-	impl_name: &'static str,
-	version: &VersionInfo,
-) -> error::Result<()>
-where
-	RP: StructOpt + Clone,
-	C: Default,
-	G: RuntimeGenesis,
-	E: IntoExit,
-	S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
-	RS: FnOnce(E, RunCmd, RP, Configuration<C, G>) -> Result<(), String>,
- {
-	let config = create_run_node_config(cli.left.clone(), spec_factory, impl_name, version)?;
-
-	run_service(exit, cli.left, cli.right, config).map_err(Into::into)
-}
-
 //
 // IANA unassigned port ranges that we could use:
 // 6717-6766		Unassigned
@@ -752,26 +810,6 @@ where
 	Ok(())
 }
 
-fn build_spec<G, S>(
-	cli: BuildSpecCmd,
-	spec_factory: S,
-	version: &VersionInfo,
-) -> error::Result<()>
-where
-	G: RuntimeGenesis,
-	S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
-{
-	info!("Building chain spec");
-	let raw_output = cli.raw;
-	let mut spec = load_spec(&cli.shared_params, spec_factory)?;
-	with_default_boot_node(&mut spec, cli, version)?;
-	let json = service::chain_ops::build_spec(spec, raw_output)?;
-
-	print!("{}", json);
-
-	Ok(())
-}
-
 /// Creates a configuration including the database path.
 pub fn create_config_with_db_path<C, G, S>(
 	spec_factory: S, cli: &SharedParams, version: &VersionInfo,
@@ -790,126 +828,10 @@ where
 	Ok(config)
 }
 
-fn export_blocks<F, E, S>(
-	cli: ExportBlocksCmd,
-	spec_factory: S,
-	exit: E,
-	version: &VersionInfo,
-) -> error::Result<()>
-where
-	F: ServiceFactory,
-	E: IntoExit,
-	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
-{
-	let config = create_config_with_db_path(spec_factory, &cli.shared_params, version)?;
-
-	info!("DB path: {}", config.database_path.display());
-	let from = cli.from.unwrap_or(1);
-	let to = cli.to;
-	let json = cli.json;
-
-	let file: Box<dyn Write> = match cli.output {
-		Some(filename) => Box::new(File::create(filename)?),
-		None => Box::new(stdout()),
-	};
-
-	service::chain_ops::export_blocks::<F, _, _>(
-		config, exit.into_exit(), file, from.into(), to.map(Into::into), json
-	).map_err(Into::into)
-}
-
 /// Internal trait used to cast to a dynamic type that implements Read and Seek.
 trait ReadPlusSeek: Read + Seek {}
 
 impl<T: Read + Seek> ReadPlusSeek for T {}
-
-fn import_blocks<F, E, S>(
-	cli: ImportBlocksCmd,
-	spec_factory: S,
-	exit: E,
-	version: &VersionInfo,
-) -> error::Result<()>
-where
-	F: ServiceFactory,
-	E: IntoExit,
-	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
-{
-	let mut config = create_config_with_db_path(spec_factory, &cli.shared_params, version)?;
-	config.execution_strategies = ExecutionStrategies {
-		importing: cli.execution.into(),
-		other: cli.execution.into(),
-		..Default::default()
-	};
-
-	let file: Box<dyn ReadPlusSeek> = match cli.input {
-		Some(filename) => Box::new(File::open(filename)?),
-		None => {
-			let mut buffer = Vec::new();
-			stdin().read_to_end(&mut buffer)?;
-			Box::new(Cursor::new(buffer))
-		},
-	};
-
-	let fut = service::chain_ops::import_blocks::<F, _, _>(config, exit.into_exit(), file)?;
-	tokio::run(fut);
-	Ok(())
-}
-
-fn revert_chain<F, S>(
-	cli: RevertCmd,
-	spec_factory: S,
-	version: &VersionInfo,
-) -> error::Result<()>
-where
-	F: ServiceFactory,
-	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
-{
-	let config = create_config_with_db_path(spec_factory, &cli.shared_params, version)?;
-	let blocks = cli.num;
-	Ok(service::chain_ops::revert_chain::<F>(config, blocks.into())?)
-}
-
-fn purge_chain<G, S>(
-	cli: PurgeChainCmd,
-	spec_factory: S,
-	version: &VersionInfo,
-) -> error::Result<()>
-where
-	G: RuntimeGenesis,
-	S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
-{
-	let config = create_config_with_db_path::<(), _, _>(spec_factory, &cli.shared_params, version)?;
-	let db_path = config.database_path;
-
-	if cli.yes == false {
-		print!("Are you sure to remove {:?}? (y/n)", &db_path);
-		stdout().flush().expect("failed to flush stdout");
-
-		let mut input = String::new();
-		stdin().read_line(&mut input)?;
-		let input = input.trim();
-
-		match input.chars().nth(0) {
-			Some('y') | Some('Y') => {},
-			_ => {
-				println!("Aborted");
-				return Ok(());
-			},
-		}
-	}
-
-	match fs::remove_dir_all(&db_path) {
-		Result::Ok(_) => {
-			println!("{:?} removed.", &db_path);
-			Ok(())
-		},
-		Result::Err(ref err) if err.kind() == ErrorKind::NotFound => {
-			println!("{:?} did not exist.", &db_path);
-			Ok(())
-		},
-		Result::Err(err) => Result::Err(err.into())
-	}
-}
 
 fn parse_address(
 	address: &str,
