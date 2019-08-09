@@ -274,8 +274,8 @@ impl<'a, RP> ParseAndPrepareRun<'a, RP> {
 		C: Default,
 		G: RuntimeGenesis,
 		E: IntoExit,
-		RS: FnOnce(E, RunCmd, RP, Configuration<C, G>) -> Result<(), String> {
-
+		RS: FnOnce(E, RunCmd, RP, Configuration<C, G>) -> Result<(), String>
+	{
 		let config = create_run_node_config(self.params.left.clone(), spec_factory, self.impl_name, self.version)?;
 
 		run_service(exit, self.params.left, self.params.right, config).map_err(Into::into)
@@ -295,8 +295,8 @@ impl<'a> ParseAndPrepareBuildSpec<'a> {
 		spec_factory: S
 	) -> error::Result<()>
 	where S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
-		G: RuntimeGenesis {
-		
+		G: RuntimeGenesis
+	{
 		info!("Building chain spec");
 		let raw_output = self.params.raw;
 		let mut spec = load_spec(&self.params.shared_params, spec_factory)?;
@@ -324,8 +324,8 @@ impl<'a> ParseAndPrepareExport<'a> {
 	) -> error::Result<()>
 	where S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 		F: ServiceFactory,
-		E: IntoExit {
-
+		E: IntoExit
+	{
 		let config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
 
 		info!("DB path: {}", config.database_path.display());
@@ -359,8 +359,8 @@ impl<'a> ParseAndPrepareImport<'a> {
 	) -> error::Result<()>
 	where S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 		F: ServiceFactory,
-		E: IntoExit {
-		
+		E: IntoExit
+	{
 		let mut config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
 		config.execution_strategies = ExecutionStrategies {
 			importing: self.params.execution.into(),
@@ -396,12 +396,12 @@ impl<'a> ParseAndPreparePurge<'a> {
 		spec_factory: S
 	) -> error::Result<()>
 	where S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
-		G: RuntimeGenesis {
-		
+		G: RuntimeGenesis
+	{
 		let config = create_config_with_db_path::<(), _, _>(spec_factory, &self.params.shared_params, self.version)?;
 		let db_path = config.database_path;
 
-		if self.params.yes == false {
+		if !self.params.yes {
 			print!("Are you sure to remove {:?}? (y/n)", &db_path);
 			stdout().flush().expect("failed to flush stdout");
 
