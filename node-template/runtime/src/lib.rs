@@ -48,7 +48,7 @@ pub type AccountSignature = sr25519::Signature;
 pub type Hash = primitives::H256;
 
 /// Index of a block number in the chain.
-pub type BlockNumber = u64;
+pub type BlockNumber = u32;
 
 /// Index of an account's extrinsic in the chain.
 pub type Nonce = u64;

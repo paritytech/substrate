@@ -179,7 +179,7 @@ impl timestamp::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const UncleGenerations: u64 = 5;
+	pub const UncleGenerations: u32 = 5;
 }
 
 impl authorship::Trait for Runtime {
