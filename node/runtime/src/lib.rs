@@ -179,7 +179,7 @@ impl timestamp::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const UncleGenerations: u32 = 5;
+	pub const UncleGenerations: BlockNumber = 5;
 }
 
 impl authorship::Trait for Runtime {
