@@ -303,7 +303,7 @@ pub trait CheckedConversion {
 }
 impl<T: Sized> CheckedConversion for T {}
 
-/// Multiply and devide by a number that isn't necessarily the same type. Basically just the same
+/// Multiply and divide by a number that isn't necessarily the same type. Basically just the same
 /// as `Mul` and `Div` except it can be used for all basic numeric types.
 pub trait Scale<Other> {
 	/// The output type of the product of `self` and `Other`.
