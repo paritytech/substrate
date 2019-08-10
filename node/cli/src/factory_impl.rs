@@ -215,7 +215,7 @@ impl RuntimeAdapter for FactoryState<Number> {
 		// TODO get correct phase via api. See #2587.
 		// This currently prevents the factory from being used
 		// without a preceding purge of the database.
-		self.block_no() as Self::Index
+		self.block_no() as Self::Phase
 	}
 }
 
