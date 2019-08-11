@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 client = { package = "substrate-client", path = "../../core/client" }
-futures-preview = "0.3.0-alpha.17"
+futures-preview = "=0.3.0-alpha.17"
 log = "0.4"
 offchain-primitives = { package = "substrate-offchain-primitives", path = "./primitives" }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }

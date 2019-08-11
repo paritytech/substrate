@@ -90,7 +90,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::{result, ops::{Mul, Div}, cmp};
+use rstd::{result, cmp};
 use codec::Encode;
 #[cfg(feature = "std")]
 use codec::Decode;
@@ -98,7 +98,9 @@ use codec::Decode;
 use inherents::ProvideInherentData;
 use srml_support::{StorageValue, Parameter, decl_storage, decl_module, for_each_tuple};
 use srml_support::traits::{Time, Get};
-use sr_primitives::traits::{SimpleArithmetic, Zero, SaturatedConversion};
+use sr_primitives::traits::{
+	SimpleArithmetic, Zero, SaturatedConversion, Scale
+};
 use sr_primitives::weights::SimpleDispatchInfo;
 use system::ensure_none;
 use inherents::{RuntimeString, InherentIdentifier, ProvideInherent, IsFatalError, InherentData};
@@ -207,8 +209,7 @@ for_each_tuple!(impl_timestamp_set);
 pub trait Trait: system::Trait {
 	/// Type used for expressing timestamp.
 	type Moment: Parameter + Default + SimpleArithmetic
-		+ Mul<Self::BlockNumber, Output = Self::Moment>
-		+ Div<Self::BlockNumber, Output = Self::Moment>;
+		+ Scale<Self::BlockNumber, Output = Self::Moment>;
 
 	/// Something which can be notified when the timestamp is set. Set this to `()` if not needed.
 	type OnTimestampSet: OnTimestampSet<Self::Moment>;
