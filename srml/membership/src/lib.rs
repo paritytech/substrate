@@ -80,6 +80,7 @@ decl_storage! {
 decl_event!(
 	pub enum Event<T, I=DefaultInstance> where
 		<T as system::Trait>::AccountId,
+		<T as Trait<I>>::Event,
 	{
 		/// The given member was added; see the transaction for who.
 		MemberAdded,
@@ -90,7 +91,7 @@ decl_event!(
 		/// The membership was reset; see the transaction for who the new set is.
 		MembersReset,
 		/// Phantom member, never used.
-		Dummy(sr_std::marker::PhantomData<(AccountId, I)>),
+		Dummy(sr_std::marker::PhantomData<(AccountId, Event)>),
 	}
 );
 
