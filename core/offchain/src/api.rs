@@ -47,11 +47,15 @@ pub(crate) struct Api<Storage, Block: traits::Block> {
 	db: Storage,
 	network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
 	_at: BlockId<Block>,
+	/// Is this node a potential validator?
+	is_validator: bool,
 }
 
 fn unavailable_yet<R: Default>(name: &str) -> R {
-	error!("The {:?} API is not available for offchain workers yet. Follow \
-		   https://github.com/paritytech/substrate/issues/1458 for details", name);
+	error!(
+		"The {:?} API is not available for offchain workers yet. Follow \
+		https://github.com/paritytech/substrate/issues/1458 for details", name
+	);
 	Default::default()
 }
 
@@ -63,6 +67,10 @@ where
 	Storage: OffchainStorage,
 	Block: traits::Block,
 {
+	fn is_validator(&self) -> bool {
+		self.is_validator
+	}
+
 	fn submit_transaction(&mut self, ext: Vec<u8>) -> Result<(), ()> {
 		self.sender
 			.unbounded_send(ExtMessage::SubmitExtrinsic(ext))
@@ -277,6 +285,7 @@ impl<A: ChainApi> AsyncApi<A> {
 		db: S,
 		at: BlockId<A::Block>,
 		network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
+		is_validator: bool,
 	) -> (Api<S, A::Block>, AsyncApi<A>) {
 		let (sender, rx) = mpsc::unbounded();
 
@@ -285,6 +294,7 @@ impl<A: ChainApi> AsyncApi<A> {
 			db,
 			network_state,
 			_at: at,
+			is_validator,
 		};
 
 		let async_api = AsyncApi {
@@ -362,6 +372,7 @@ mod tests {
 			db,
 			BlockId::Number(Zero::zero()),
 			mock,
+			false,
 		)
 	}
 
