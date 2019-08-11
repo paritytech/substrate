@@ -523,7 +523,7 @@ mod tests {
 		(block1, block2)
 	}
 
-	fn block_with_size(time: u64, nonce: u64, size: usize) -> (Vec<u8>, Hash) {
+	fn block_with_size(time: u64, nonce: u32, size: usize) -> (Vec<u8>, Hash) {
 		construct_block(
 			&mut new_test_ext(COMPACT_CODE, false),
 			1,
