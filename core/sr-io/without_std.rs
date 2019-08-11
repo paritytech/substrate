@@ -432,6 +432,12 @@ pub mod ext {
 		// Offchain-worker Context
 		//================================
 
+		/// Returns if the local node is a potential validator.
+		///
+		/// - `1` == `true`
+		/// - `0` == `false`
+		fn ext_is_validator() -> u32;
+
 		/// Submit transaction.
 		///
 		/// # Returns
@@ -964,6 +970,10 @@ impl CryptoApi for () {
 }
 
 impl OffchainApi for () {
+	fn is_validator() -> bool {
+		unsafe { ext_is_validator.get()() == 1 }
+	}
+
 	fn submit_transaction<T: codec::Encode>(data: &T) -> Result<(), ()> {
 		let encoded_data = codec::Encode::encode(data);
 		let ret = unsafe {

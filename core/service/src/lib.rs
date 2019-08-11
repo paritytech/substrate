@@ -153,7 +153,7 @@ impl<Components: components::Components> Service<Components> {
 	pub fn new(
 		mut config: FactoryFullConfiguration<Components::Factory>,
 	) -> Result<Self, error::Error> {
-		let (signal, exit) = ::exit_future::signal();
+		let (signal, exit) = exit_future::signal();
 
 		// List of asynchronous tasks to spawn. We collect them, then spawn them all at once.
 		let (to_spawn_tx, to_spawn_rx) =
@@ -250,6 +250,7 @@ impl<Components: components::Components> Service<Components> {
 			let offchain = offchain_workers.as_ref().map(Arc::downgrade);
 			let to_spawn_tx_ = to_spawn_tx.clone();
 			let network_state_info: Arc<dyn NetworkStateInfo + Send + Sync> = network.clone();
+			let is_validator = config.roles.is_authority();
 
 			let events = client.import_notification_stream()
 				.map(|v| Ok::<_, ()>(v)).compat()
@@ -270,6 +271,7 @@ impl<Components: components::Components> Service<Components> {
 							&offchain,
 							&txpool,
 							&network_state_info,
+							is_validator,
 						).map_err(|e| warn!("Offchain workers error processing new block: {:?}", e))?;
 						let _ = to_spawn_tx_.unbounded_send(future);
 					}

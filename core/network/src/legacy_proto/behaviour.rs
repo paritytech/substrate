@@ -24,6 +24,7 @@ use futures03::{compat::Compat, TryFutureExt as _, StreamExt as _, TryStreamExt 
 use libp2p::core::{ConnectedPoint, Multiaddr, PeerId};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use log::{debug, error, trace, warn};
+use rand::distributions::{Distribution as _, Uniform};
 use sr_primitives::traits::Block as BlockT;
 use smallvec::SmallVec;
 use std::{borrow::Cow, collections::hash_map::Entry, cmp, error, marker::PhantomData, mem, pin::Pin};
@@ -745,6 +746,11 @@ where
 					(through {:?})", peer_id, endpoint);
 				debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
 				self.peerset.dropped(peer_id.clone());
+
+				let ban_dur = Uniform::new(5, 10).sample(&mut rand::thread_rng());
+				self.peers.insert(peer_id.clone(), PeerState::Banned {
+					until: Instant::now() + Duration::from_secs(ban_dur)
+				});
 
 				if open {
 					debug!(target: "sub-libp2p", "External API <= Closed({:?})", peer_id);
