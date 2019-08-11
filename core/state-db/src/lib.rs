@@ -79,6 +79,12 @@ pub enum Error<E: fmt::Debug> {
 	InvalidParent,
 }
 
+/// Pinning error type.
+pub enum PinError {
+	/// Trying to pin invalid block.
+	InvalidBlock,
+}
+
 impl<E: fmt::Debug> From<codec::Error> for Error<E> {
 	fn from(x: codec::Error) -> Self {
 		Error::Decoding(x)
@@ -281,13 +287,25 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		}
 	}
 
-	pub fn pin(&mut self, hash: &BlockHash) {
-		let refs = self.pinned.entry(hash.clone()).or_default();
-		if *refs == 0 {
-			trace!(target: "state-db", "Pinned block: {:?}", hash);
-			self.non_canonical.pin(hash);
+	pub fn pin(&mut self, hash: &BlockHash) -> Result<(), PinError> {
+		match self.mode {
+			PruningMode::ArchiveAll => Ok(()),
+			PruningMode::ArchiveCanonical | PruningMode::Constrained(_) => {
+				if self.non_canonical.have_block(hash) ||
+					self.pruning.as_ref().map_or(false, |pruning| pruning.have_block(hash))
+				{
+					let refs = self.pinned.entry(hash.clone()).or_default();
+					if *refs == 0 {
+						trace!(target: "state-db", "Pinned block: {:?}", hash);
+						self.non_canonical.pin(hash);
+					}
+					*refs += 1;
+					Ok(())
+				} else {
+					Err(PinError::InvalidBlock)
+				}
+			}
 		}
-		*refs += 1
 	}
 
 	pub fn unpin(&mut self, hash: &BlockHash) {
@@ -362,7 +380,7 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	}
 
 	/// Prevents pruning of specified block and its descendants.
-	pub fn pin(&self, hash: &BlockHash) {
+	pub fn pin(&self, hash: &BlockHash) -> Result<(), PinError> {
 		self.db.write().pin(hash)
 	}
 
