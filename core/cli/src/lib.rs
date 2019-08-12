@@ -28,8 +28,9 @@ pub mod informant;
 
 use client::ExecutionStrategies;
 use service::{
-	config::Configuration,
-	ServiceFactory, FactoryFullConfiguration, RuntimeGenesis,
+	config::Configuration, ServiceFactory,
+	ServiceBuilderExport, ServiceBuilderImport, ServiceBuilderRevert,
+	FactoryFullConfiguration, RuntimeGenesis,
 	FactoryGenesis, PruningMode, ChainSpec,
 };
 use network::{
@@ -342,6 +343,37 @@ impl<'a> ParseAndPrepareExport<'a> {
 			config, exit.into_exit(), file, from.into(), to.map(Into::into), json
 		).map_err(Into::into)
 	}
+
+	/// Runs the command and exports from the chain.
+	pub fn run_with_builder<C, G, F, B, S, E>(
+		self,
+		builder: F,
+		spec_factory: S,
+		exit: E,
+	) -> error::Result<()>
+	where S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
+		F: FnOnce(Configuration<C, G>) -> B,
+		B: ServiceBuilderExport,
+		C: Default,
+		G: RuntimeGenesis,
+		E: IntoExit
+	{
+		let config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
+
+		info!("DB path: {}", config.database_path.display());
+		let from = self.params.from.unwrap_or(1);
+		let to = self.params.to;
+		let json = self.params.json;
+
+		let file: Box<dyn Write> = match self.params.output {
+			Some(filename) => Box::new(File::create(filename)?),
+			None => Box::new(stdout()),
+		};
+
+		let builder = builder(config);
+		builder.export_blocks(exit.into_exit(), file, from.into(), to.map(Into::into), json)?;
+		Ok(())
+	}
 }
 
 /// Command ready to import the chain.
@@ -378,6 +410,41 @@ impl<'a> ParseAndPrepareImport<'a> {
 		};
 
 		let fut = service::chain_ops::import_blocks::<F, _, _>(config, exit.into_exit(), file)?;
+		tokio::run(fut);
+		Ok(())
+	}
+
+	/// Runs the command and imports to the chain.
+	pub fn run_with_builder<C, G, F, B, S, E>(
+		self,
+		builder: F,
+		spec_factory: S,
+		exit: E,
+	) -> error::Result<()>
+	where S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
+		F: FnOnce(Configuration<C, G>) -> B,
+		B: ServiceBuilderImport,
+		C: Default,
+		G: RuntimeGenesis,
+		E: IntoExit
+	{
+		let mut config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
+		config.execution_strategies = ExecutionStrategies {
+			importing: self.params.execution.into(),
+			other: self.params.execution.into(),
+			..Default::default()
+		};
+
+		let file: Box<dyn ReadPlusSeek> = match self.params.input {
+			Some(filename) => Box::new(File::open(filename)?),
+			None => {
+				let mut buffer = Vec::new();
+				stdin().read_to_end(&mut buffer)?;
+				Box::new(Cursor::new(buffer))
+			},
+		};
+
+		let fut = builder(config).import_blocks(exit.into_exit(), file)?;
 		tokio::run(fut);
 		Ok(())
 	}
@@ -449,6 +516,23 @@ impl<'a> ParseAndPrepareRevert<'a> {
 		let config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
 		let blocks = self.params.num;
 		Ok(service::chain_ops::revert_chain::<F>(config, blocks.into())?)
+	}
+
+	/// Runs the command and reverts the chain.
+	pub fn run_with_builder<C, G, F, B, S>(
+		self,
+		builder: F,
+		spec_factory: S
+	) -> error::Result<()>
+	where S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
+		F: FnOnce(Configuration<C, G>) -> B,
+		B: ServiceBuilderRevert,
+		C: Default,
+		G: RuntimeGenesis {
+		let config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
+		let blocks = self.params.num;
+		builder(config).revert_chain(blocks.into())?;
+		Ok(())
 	}
 }
 
