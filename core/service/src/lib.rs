@@ -59,6 +59,7 @@ pub use transaction_pool::txpool::{
 	self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError
 };
 pub use client::FinalityNotifications;
+pub use rpc::Metadata as RpcMetadata;
 
 pub use components::{
 	ServiceFactory, FullBackend, FullExecutor, LightBackend,
@@ -200,7 +201,8 @@ macro_rules! new_impl {
 			finality_proof_request_builder,
 			finality_proof_provider,
 			network_protocol,
-			transaction_pool
+			transaction_pool,
+			rpc_extensions
 		) = $build_components(&mut $config)?;
 		let import_queue = Box::new(import_queue);
 		let chain_info = client.info().chain;
@@ -396,7 +398,7 @@ macro_rules! new_impl {
 				system_info.clone(),
 				Arc::new(SpawnTaskHandle { sender: to_spawn_tx.clone() }),
 				transaction_pool.clone(),
-				Components::build_rpc_extensions(client.clone(), transaction_pool.clone()),
+				rpc_extensions.clone(),
 				keystore.clone(),
 			)
 		};
@@ -518,6 +520,7 @@ impl<Components: components::Components> Service<Components> {
 				)?;
 
 				let network_protocol = <Components::Factory>::build_network_protocol(&config)?;
+				let rpc_extensions = Components::build_rpc_extensions(client.clone(), transaction_pool.clone());
 
 				Ok((
 					client,
@@ -528,7 +531,8 @@ impl<Components: components::Components> Service<Components> {
 					finality_proof_request_builder,
 					finality_proof_provider,
 					network_protocol,
-					transaction_pool
+					transaction_pool,
+					rpc_extensions
 				))
 			},
 			Components::RuntimeServices::maintain_transaction_pool,

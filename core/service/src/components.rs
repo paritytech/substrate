@@ -388,7 +388,7 @@ pub trait ServiceFactory: 'static + Sized {
 	/// Other configuration for service members.
 	type Configuration: Default;
 	/// RPC initialisation.
-	type RpcExtensions: rpc::RpcExtension<rpc::Metadata>;
+	type RpcExtensions: rpc::RpcExtension<rpc::Metadata> + Clone;
 	/// Extended full service type.
 	type FullService: ServiceTrait<FullComponents<Self>>;
 	/// Extended light service type.
@@ -488,7 +488,7 @@ pub trait Components: Sized + 'static {
 	/// The type that can start all runtime-dependent services.
 	type RuntimeServices: ServiceTrait<Self>;
 	/// The type that can extend the RPC methods.
-	type RpcExtensions: rpc::RpcExtension<rpc::Metadata>;
+	type RpcExtensions: rpc::RpcExtension<rpc::Metadata> + Clone;
 	// TODO: Traitify transaction pool and allow people to implement their own. (#1242)
 	/// Extrinsic pool type.
 	type TransactionPoolApi: 'static + txpool::ChainApi<

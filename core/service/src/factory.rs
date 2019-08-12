@@ -56,7 +56,7 @@ use transaction_pool::txpool::{ChainApi, Pool as TransactionPool};
 /// The order in which the `with_*` methods are called doesn't matter, as the correct binding of
 /// generics is done when you call `build`.
 ///
-pub struct ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool> {
+pub struct ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc> {
 	config: Configuration<TCfg, TGen>,
 	client: Arc<TCl>,
 	keystore: Arc<RwLock<Keystore>>,
@@ -67,10 +67,11 @@ pub struct ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFpr
 	finality_proof_provider: Option<TFpp>,
 	network_protocol: TNetP,
 	transaction_pool: Arc<TExPool>,
+	rpc_extensions: TRpc,
 	marker: PhantomData<(TBl, TRtApi)>,
 }
 
-impl<TCfg, TGen> ServiceBuilder<(), (), TCfg, TGen, (), (), (), (), (), (), (), ()>
+impl<TCfg, TGen> ServiceBuilder<(), (), TCfg, TGen, (), (), (), (), (), (), (), (), ()>
 where TGen: Serialize + DeserializeOwned + BuildStorage {
 	/// Start the service builder with a configuration.
 	pub fn new_full<TBl: BlockT<Hash=H256>, TRtApi, TExecDisp: NativeExecutionDispatch>(
@@ -90,6 +91,7 @@ where TGen: Serialize + DeserializeOwned + BuildStorage {
 		(),
 		(),
 		BoxFinalityProofRequestBuilder<TBl>,
+		(),
 		(),
 		(),
 		()
@@ -126,6 +128,7 @@ where TGen: Serialize + DeserializeOwned + BuildStorage {
 			finality_proof_provider: None,
 			network_protocol: (),
 			transaction_pool: Arc::new(()),
+			rpc_extensions: Default::default(),
 			marker: PhantomData,
 		})
 	}
@@ -172,6 +175,7 @@ where TGen: Serialize + DeserializeOwned + BuildStorage {
 		BoxFinalityProofRequestBuilder<TBl>,
 		(),
 		(),
+		(),
 		()
 	>, Error> {
 		let keystore = Keystore::open(config.keystore_path.clone(), config.keystore_password.clone())?;
@@ -205,19 +209,20 @@ where TGen: Serialize + DeserializeOwned + BuildStorage {
 			finality_proof_provider: None,
 			network_protocol: (),
 			transaction_pool: Arc::new(()),
+			rpc_extensions: Default::default(),
 			marker: PhantomData,
 		})
 	}
 }
 
-impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool>
-	ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool> {
+impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc>
+	ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc> {
 
 	/// Defines which head-of-chain strategy to use.
 	pub fn with_opt_select_chain<USc>(
 		mut self,
 		select_chain_builder: impl FnOnce(&mut Configuration<TCfg, TGen>, Arc<TCl>) -> Result<Option<USc>, Error>
-	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, USc, TImpQu, TFprb, TFpp, TNetP, TExPool>, Error> {
+	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, USc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc>, Error> {
 		let select_chain = select_chain_builder(&mut self.config, self.client.clone())?;
 
 		Ok(ServiceBuilder {
@@ -231,6 +236,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			finality_proof_provider: self.finality_proof_provider,
 			network_protocol: self.network_protocol,
 			transaction_pool: self.transaction_pool,
+			rpc_extensions: self.rpc_extensions,
 			marker: self.marker,
 		})
 	}
@@ -239,17 +245,17 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 	pub fn with_select_chain<USc>(
 		self,
 		builder: impl FnOnce(&mut Configuration<TCfg, TGen>, Arc<TCl>) -> Result<USc, Error>
-	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, USc, TImpQu, TFprb, TFpp, TNetP, TExPool>, Error> {
+	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, USc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc>, Error> {
 		self.with_opt_select_chain(|cfg, cl| builder(cfg, cl).map(Option::Some))
 	}
 
 	/// Defines which import queue to use.
 	pub fn with_import_queue<UImpQu>(
 		mut self,
-		builder: impl FnOnce(&mut Configuration<TCfg, TGen>, Arc<TCl>, Option<TSc>) -> Result<UImpQu, Error>
-	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, UImpQu, TFprb, TFpp, TNetP, TExPool>, Error>
+		builder: impl FnOnce(&mut Configuration<TCfg, TGen>, Arc<TCl>, Option<TSc>, Arc<TExPool>) -> Result<UImpQu, Error>
+	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, UImpQu, TFprb, TFpp, TNetP, TExPool, TRpc>, Error>
 	where TSc: Clone {
-		let import_queue = builder(&mut self.config, self.client.clone(), self.select_chain.clone())?;
+		let import_queue = builder(&mut self.config, self.client.clone(), self.select_chain.clone(), self.transaction_pool.clone())?;
 
 		Ok(ServiceBuilder {
 			config: self.config,
@@ -262,6 +268,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			finality_proof_provider: self.finality_proof_provider,
 			network_protocol: self.network_protocol,
 			transaction_pool: self.transaction_pool,
+			rpc_extensions: self.rpc_extensions,
 			marker: self.marker,
 		})
 	}
@@ -270,7 +277,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 	pub fn with_network_protocol<UNetP>(
 		self,
 		network_protocol_builder: impl FnOnce(&Configuration<TCfg, TGen>) -> Result<UNetP, Error>
-	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, UNetP, TExPool>, Error> {
+	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, UNetP, TExPool, TRpc>, Error> {
 		let network_protocol = network_protocol_builder(&self.config)?;
 
 		Ok(ServiceBuilder {
@@ -284,6 +291,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			finality_proof_provider: self.finality_proof_provider,
 			network_protocol,
 			transaction_pool: self.transaction_pool,
+			rpc_extensions: self.rpc_extensions,
 			marker: self.marker,
 		})
 	}
@@ -304,7 +312,8 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 		TFprb,
 		Arc<FinalityProofProvider<TBl>>,
 		TNetP,
-		TExPool
+		TExPool,
+		TRpc
 	>, Error> {
 		let finality_proof_provider = builder(self.client.clone())?;
 
@@ -319,6 +328,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			finality_proof_provider,
 			network_protocol: self.network_protocol,
 			transaction_pool: self.transaction_pool,
+			rpc_extensions: self.rpc_extensions,
 			marker: self.marker,
 		})
 	}
@@ -339,7 +349,8 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 		TFprb,
 		Arc<FinalityProofProvider<TBl>>,
 		TNetP,
-		TExPool
+		TExPool,
+		TRpc
 	>, Error> {
 		self.with_opt_finality_proof_provider(|client| build(client).map(Option::Some))
 	}
@@ -347,11 +358,11 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 	/// Defines which import queue to use.
 	pub fn with_import_queue_and_opt_fprb<UImpQu, UFprb>(
 		mut self,
-		builder: impl FnOnce(&mut Configuration<TCfg, TGen>, Arc<TCl>, Option<TSc>)
+		builder: impl FnOnce(&mut Configuration<TCfg, TGen>, Arc<TCl>, Option<TSc>, Arc<TExPool>)
 			-> Result<(UImpQu, Option<UFprb>), Error>
-	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, UImpQu, UFprb, TFpp, TNetP, TExPool>, Error>
+	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, UImpQu, UFprb, TFpp, TNetP, TExPool, TRpc>, Error>
 	where TSc: Clone {
-		let (import_queue, fprb) = builder(&mut self.config, self.client.clone(), self.select_chain.clone())?;
+		let (import_queue, fprb) = builder(&mut self.config, self.client.clone(), self.select_chain.clone(), self.transaction_pool.clone())?;
 
 		Ok(ServiceBuilder {
 			config: self.config,
@@ -364,6 +375,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			finality_proof_provider: self.finality_proof_provider,
 			network_protocol: self.network_protocol,
 			transaction_pool: self.transaction_pool,
+			rpc_extensions: self.rpc_extensions,
 			marker: self.marker,
 		})
 	}
@@ -371,17 +383,17 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 	/// Defines which import queue to use.
 	pub fn with_import_queue_and_fprb<UImpQu, UFprb>(
 		self,
-		builder: impl FnOnce(&mut Configuration<TCfg, TGen>, Arc<TCl>, Option<TSc>) -> Result<(UImpQu, UFprb), Error>
-	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, UImpQu, UFprb, TFpp, TNetP, TExPool>, Error>
+		builder: impl FnOnce(&mut Configuration<TCfg, TGen>, Arc<TCl>, Option<TSc>, Arc<TExPool>) -> Result<(UImpQu, UFprb), Error>
+	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, UImpQu, UFprb, TFpp, TNetP, TExPool, TRpc>, Error>
 	where TSc: Clone {
-		self.with_import_queue_and_opt_fprb(|cfg, cl, sc| builder(cfg, cl, sc).map(|(q, f)| (q, Some(f))))
+		self.with_import_queue_and_opt_fprb(|cfg, cl, sc, tx| builder(cfg, cl, sc, tx).map(|(q, f)| (q, Some(f))))
 	}
 
 	/// Defines which transaction pool to use.
 	pub fn with_transaction_pool<UExPool>(
 		self,
 		transaction_pool_builder: impl FnOnce(transaction_pool::txpool::Options, Arc<TCl>) -> Result<UExPool, Error>
-	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, UExPool>, Error> {
+	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, UExPool, TRpc>, Error> {
 		let transaction_pool = transaction_pool_builder(self.config.transaction_pool.clone(), self.client.clone())?;
 
 		Ok(ServiceBuilder {
@@ -395,6 +407,30 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			finality_proof_provider: self.finality_proof_provider,
 			network_protocol: self.network_protocol,
 			transaction_pool: Arc::new(transaction_pool),
+			rpc_extensions: self.rpc_extensions,
+			marker: self.marker,
+		})
+	}
+
+	/// Defines the RPC extensions to use.
+	pub fn with_rpc_extensions<URpc>(
+		self,
+		rpc_ext_builder: impl FnOnce(Arc<TCl>, Arc<TExPool>) -> URpc
+	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, URpc>, Error> {
+		let rpc_extensions = rpc_ext_builder(self.client.clone(), self.transaction_pool.clone());
+
+		Ok(ServiceBuilder {
+			config: self.config,
+			client: self.client,
+			keystore: self.keystore,
+			fetcher: self.fetcher,
+			select_chain: self.select_chain,
+			import_queue: self.import_queue,
+			finality_proof_request_builder: self.finality_proof_request_builder,
+			finality_proof_provider: self.finality_proof_provider,
+			network_protocol: self.network_protocol,
+			transaction_pool: self.transaction_pool,
+			rpc_extensions,
 			marker: self.marker,
 		})
 	}
@@ -441,8 +477,8 @@ pub trait ServiceBuilderRevert {
 	) -> Result<(), Error>;
 }
 
-impl<TBl, TRtApi, TCfg, TGen, TBackend, TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool> ServiceBuilderImport for
-	ServiceBuilder<TBl, TRtApi, TCfg, TGen, Client<TBackend, TExec, TBl, TRtApi>, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool>
+impl<TBl, TRtApi, TCfg, TGen, TBackend, TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc> ServiceBuilderImport for
+	ServiceBuilder<TBl, TRtApi, TCfg, TGen, Client<TBackend, TExec, TBl, TRtApi>, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc>
 where
 	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 	TBackend: 'static + client::backend::Backend<TBl, Blake2Hasher> + Send,
@@ -462,8 +498,8 @@ where
 	}
 }
 
-impl<TBl, TRtApi, TCfg, TGen, TBackend, TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool> ServiceBuilderExport for
-	ServiceBuilder<TBl, TRtApi, TCfg, TGen, Client<TBackend, TExec, TBl, TRtApi>, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool>
+impl<TBl, TRtApi, TCfg, TGen, TBackend, TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc> ServiceBuilderExport for
+	ServiceBuilder<TBl, TRtApi, TCfg, TGen, Client<TBackend, TExec, TBl, TRtApi>, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc>
 where
 	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 	TBackend: 'static + client::backend::Backend<TBl, Blake2Hasher> + Send,
@@ -484,8 +520,8 @@ where
 	}
 }
 
-impl<TBl, TRtApi, TCfg, TGen, TBackend, TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool> ServiceBuilderRevert for
-	ServiceBuilder<TBl, TRtApi, TCfg, TGen, Client<TBackend, TExec, TBl, TRtApi>, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool>
+impl<TBl, TRtApi, TCfg, TGen, TBackend, TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc> ServiceBuilderRevert for
+	ServiceBuilder<TBl, TRtApi, TCfg, TGen, Client<TBackend, TExec, TBl, TRtApi>, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc>
 where
 	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 	TBackend: 'static + client::backend::Backend<TBl, Blake2Hasher> + Send,
@@ -502,7 +538,7 @@ where
 	}
 }
 
-impl<TBl, TRtApi, TCfg, TGen, TBackend, TExec, TSc, TImpQu, TNetP, TExPoolApi>
+impl<TBl, TRtApi, TCfg, TGen, TBackend, TExec, TSc, TImpQu, TNetP, TExPoolApi, TRpc>
 ServiceBuilder<
 	TBl,
 	TRtApi,
@@ -515,7 +551,8 @@ ServiceBuilder<
 	BoxFinalityProofRequestBuilder<TBl>,
 	Arc<FinalityProofProvider<TBl>>,
 	TNetP,
-	TransactionPool<TExPoolApi>
+	TransactionPool<TExPoolApi>,
+	TRpc
 > where
 	Client<TBackend, TExec, TBl, TRtApi>: ProvideRuntimeApi,
 	<Client<TBackend, TExec, TBl, TRtApi> as ProvideRuntimeApi>::Api:
@@ -530,6 +567,7 @@ ServiceBuilder<
 	TImpQu: 'static + ImportQueue<TBl>,
 	TNetP: NetworkSpecialization<TBl>,
 	TExPoolApi: 'static + ChainApi<Block = TBl, Hash = <TBl as BlockT>::Hash>,
+	TRpc: rpc::RpcExtension<rpc::Metadata> + Clone,
 {
 	/// Builds the service.
 	pub fn build(self) -> Result<NewService<
@@ -560,7 +598,8 @@ ServiceBuilder<
 			finality_proof_request_builder,
 			finality_proof_provider,
 			network_protocol,
-			transaction_pool
+			transaction_pool,
+			rpc_extensions
 		) = (
 			self.client,
 			self.fetcher,
@@ -570,7 +609,8 @@ ServiceBuilder<
 			self.finality_proof_request_builder,
 			self.finality_proof_provider,
 			self.network_protocol,
-			self.transaction_pool
+			self.transaction_pool,
+			self.rpc_extensions
 		);
 
 		new_impl!(
@@ -586,12 +626,13 @@ ServiceBuilder<
 					finality_proof_request_builder,
 					finality_proof_provider,
 					network_protocol,
-					transaction_pool
+					transaction_pool,
+					rpc_extensions
 				))
 			},
 			|h, c, tx| maintain_transaction_pool(h, c, tx),
 			|n, o, p, ns, v| components::offchain_workers(n, o, p, ns, v),
-			|c, ssb, si, te, tp, ks| components::start_rpc(c, ssb, si, te, tp, ks),
+			|c, ssb, si, te, tp, ext, ks| components::start_rpc(c, ssb, si, te, tp, ext, ks),
 		)
 	}
 }
