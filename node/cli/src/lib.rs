@@ -28,7 +28,7 @@ mod factory_impl;
 use tokio::prelude::Future;
 use tokio::runtime::{Builder as RuntimeBuilder, Runtime};
 pub use cli::{VersionInfo, IntoExit, NoCustom, SharedParams, ExecutionStrategyParam};
-use substrate_service::{AbstractService, ServiceFactory, Roles as ServiceRoles};
+use substrate_service::{AbstractService, Roles as ServiceRoles};
 use log::info;
 use structopt::{StructOpt, clap::App};
 use cli::{AugmentClap, GetLogFilter, parse_and_prepare, ParseAndPrepare};
