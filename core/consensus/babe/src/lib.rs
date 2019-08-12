@@ -82,7 +82,7 @@ use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible, SignedDuration};
 mod aux_schema;
 #[cfg(test)]
 mod tests;
-pub use babe_primitives::AuthorityId;
+pub use babe_primitives::{AuthorityId, AuthorityPair, AuthoritySignature};
 
 /// A slot duration. Create with `get_or_compute`.
 // FIXME: Once Rust has higher-kinded types, the duplication between this

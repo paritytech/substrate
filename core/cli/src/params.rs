@@ -20,6 +20,8 @@ use std::path::PathBuf;
 use structopt::{StructOpt, clap::{arg_enum, _clap_count_exprs, App, AppSettings, SubCommand, Arg}};
 use client;
 
+pub use crate::execution_strategy::ExecutionStrategy;
+
 /// Auxiliary macro to implement `GetLogFilter` for all types that have the `shared_params` field.
 macro_rules! impl_get_log_filter {
 	( $type:ident ) => {
@@ -28,22 +30,6 @@ macro_rules! impl_get_log_filter {
 				self.shared_params.get_log_filter()
 			}
 		}
-	}
-}
-
-arg_enum! {
-	/// How to execute blocks
-	#[allow(missing_docs)]
-	#[derive(Debug, Clone, Copy)]
-	pub enum ExecutionStrategy {
-		// Execute with native build (if available, WebAssembly otherwise).
-		Native,
-		// Only execute with the WebAssembly build.
-		Wasm,
-		// Execute with both native (where available) and WebAssembly builds.
-		Both,
-		// Execute with the native build if possible; if it fails, then execute with WebAssembly.
-		NativeElseWasm,
 	}
 }
 
@@ -311,7 +297,11 @@ pub struct ExecutionStrategies {
 /// The `run` command used to run a node.
 #[derive(Debug, StructOpt, Clone)]
 pub struct RunCmd {
-	/// Disable GRANDPA when running in validator mode
+	/// Enable validator mode
+	#[structopt(long = "validator")]
+	pub validator: bool,
+
+	/// Disable GRANDPA voter when running in validator mode, otherwise disables the GRANDPA observer
 	#[structopt(long = "no-grandpa")]
 	pub no_grandpa: bool,
 

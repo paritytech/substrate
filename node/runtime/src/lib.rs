@@ -80,8 +80,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 136,
-	impl_version: 136,
+	spec_version: 139,
+	impl_version: 138,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -180,7 +180,7 @@ impl timestamp::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const UncleGenerations: u64 = 5;
+	pub const UncleGenerations: BlockNumber = 5;
 }
 
 impl authorship::Trait for Runtime {

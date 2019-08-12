@@ -141,6 +141,9 @@ export_api! {
 		/// Clear the storage entries with a key that starts with the given prefix.
 		fn clear_prefix(prefix: &[u8]);
 
+		/// Clear the child storage entries with a key that starts with the given prefix.
+		fn clear_child_prefix(storage_key: &[u8], prefix: &[u8]);
+
 		/// "Commit" all existing operations and compute the resultant storage root.
 		fn storage_root() -> [u8; 32];
 
@@ -270,6 +273,11 @@ export_api! {
 
 export_api! {
 	pub(crate) trait OffchainApi {
+		/// Returns if the local node is a potential validator.
+		///
+		/// Even if this function returns `true`, it does not mean that any keys are configured
+		/// and that the validator is registered in the chain.
+		fn is_validator() -> bool;
 		/// Submit transaction to the pool.
 		///
 		/// The transaction will end up in the pool.
@@ -401,7 +409,7 @@ mod imp {
 
 #[cfg(feature = "std")]
 pub use self::imp::{
-	StorageOverlay, ChildrenStorageOverlay, with_storage, with_storage_and_children,
+	StorageOverlay, ChildrenStorageOverlay, with_storage,
 	with_externalities
 };
 #[cfg(not(feature = "std"))]
