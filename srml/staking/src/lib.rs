@@ -559,16 +559,10 @@ pub trait Trait: system::Trait {
 #[derive(Copy, Clone, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub enum Forcing {
-	/// Not forcing anything - just let whatever happen.
-	NotForcing,
 	/// Force a new era, then reset to `NotForcing` as soon as it is done.
-	ForceNew,
+	New,
 	/// Avoid a new era indefinitely.
-	ForceNone,
-}
-
-impl Default for Forcing {
-	fn default() -> Self { Forcing::NotForcing }
+	Avoid,
 }
 
 decl_storage! {
@@ -641,7 +635,7 @@ decl_storage! {
 		pub RecentlyOffline get(recently_offline): Vec<(T::AccountId, T::BlockNumber, u32)>;
 
 		/// True if the next session change will be a new era regardless of index.
-		pub ForceEra get(force_era) config(): Forcing;
+		pub ForceEra get(force_era) config(): Option<Forcing>;
 
 		/// A mapping from still-bonded eras to the first session index of that era.
 		BondedEras: Vec<(EraIndex, SessionIndex)>;
@@ -1012,7 +1006,7 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn force_no_eras(origin) {
 			ensure_root(origin)?;
-			ForceEra::put(Forcing::ForceNone);
+			ForceEra::put(Forcing::Avoid);
 		}
 
 		/// Force there to be a new era at the end of the next session. After this, it will be
@@ -1024,7 +1018,7 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn force_new_era(origin) {
 			ensure_root(origin)?;
-			ForceEra::put(Forcing::ForceNew);
+			ForceEra::put(Forcing::New);
 		}
 
 		/// Set the offline slash grace period.
@@ -1155,8 +1149,8 @@ impl<T: Trait> Module<T> {
 		-> Option<(Vec<T::AccountId>, Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>)>
 	{
 		match ForceEra::get() {
-			Forcing::ForceNew => ForceEra::kill(),
-			Forcing::NotForcing if session_index % T::SessionsPerEra::get() == 0 => (),
+			Some(Forcing::New) => ForceEra::kill(),
+			None if session_index % T::SessionsPerEra::get() == 0 => (),
 			_ => return None,
 		}
 		let validators = T::SessionInterface::validators();
