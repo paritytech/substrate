@@ -26,13 +26,15 @@ use crate::traits::{
 	MaybeSerializeDebugButNotDeserialize
 };
 use crate::generic::Digest;
+use primitives::U256;
+use core::convert::TryFrom;
 
 /// Abstraction over a block header for a substrate chain.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
-pub struct Header<Number: Copy + Into<u128> + From<u128>, Hash: HashT> {
+pub struct Header<Number: Copy + Into<U256> + TryFrom<U256>, Hash: HashT> {
 	/// The parent hash.
 	pub parent_hash: Hash::Output,
 	/// The block number.
@@ -49,26 +51,19 @@ pub struct Header<Number: Copy + Into<u128> + From<u128>, Hash: HashT> {
 }
 
 #[cfg(feature = "std")]
-pub fn serialize_number<S, T: Copy + Into<u128>>(val: &T, s: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
-	use primitives::uint::U256;
-	let v: u128 = (*val).into();
-	let lower = U256::from(v as u64);
-	let upper = U256::from(v.rotate_left(64) as u64) << 64;
-	::serde::Serialize::serialize(&(upper + lower), s)
+pub fn serialize_number<S, T: Copy + Into<U256> + TryFrom<U256>>(val: &T, s: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+	let u256: U256 = (*val).into();
+	::serde::Serialize::serialize(&u256, s)
 }
 
 #[cfg(feature = "std")]
-pub fn deserialize_number<'a, D, T: Copy + From<u128>>(d: D) -> Result<T, D::Error> where D: ::serde::Deserializer<'a> {
-	use primitives::uint::U256;
+pub fn deserialize_number<'a, D, T: Copy + Into<U256> + TryFrom<U256>>(d: D) -> Result<T, D::Error> where D: ::serde::Deserializer<'a> {
 	let u256: U256 = ::serde::Deserialize::deserialize(d)?;
-	let lower = (u256 & U256::from(u64::max_value())).as_u64();
-	let upper = ((u256 - U256::from(lower)) >> 64).as_u128();
-	
-	Ok(From::from(upper.rotate_right(64) + lower as u128))
+	TryFrom::try_from(u256).map_err(|_| ::serde::de::Error::custom("Try from failed"))
 }
 
 impl<Number, Hash> Decode for Header<Number, Hash> where
-	Number: HasCompact + Copy + Into<u128> + From<u128>,
+	Number: HasCompact + Copy + Into<U256> + TryFrom<U256>,
 	Hash: HashT,
 	Hash::Output: Decode,
 {
@@ -84,7 +79,7 @@ impl<Number, Hash> Decode for Header<Number, Hash> where
 }
 
 impl<Number, Hash> Encode for Header<Number, Hash> where
-	Number: HasCompact + Copy + Into<u128> + From<u128>,
+	Number: HasCompact + Copy + Into<U256> + TryFrom<U256>,
 	Hash: HashT,
 	Hash::Output: Encode,
 {
@@ -98,13 +93,13 @@ impl<Number, Hash> Encode for Header<Number, Hash> where
 }
 
 impl<Number, Hash> codec::EncodeLike for Header<Number, Hash> where
-	Number: HasCompact + Copy + Into<u128> + From<u128>,
+	Number: HasCompact + Copy + Into<U256> + TryFrom<U256>,
 	Hash: HashT,
 	Hash::Output: Encode,
 {}
 
 impl<Number, Hash> traits::Header for Header<Number, Hash> where
-	Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + MaybeDisplay + SimpleArithmetic + Codec + Copy + Into<u128> + From<u128>,
+	Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + MaybeDisplay + SimpleArithmetic + Codec + Copy + Into<U256> + TryFrom<U256>,
 	Hash: HashT,
 	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeSerializeDebugButNotDeserialize + MaybeDisplay + SimpleBitOps + Codec,
 {
@@ -153,7 +148,7 @@ impl<Number, Hash> traits::Header for Header<Number, Hash> where
 }
 
 impl<Number, Hash> Header<Number, Hash> where
-	Number: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec + Into<u128> + From<u128>,
+	Number: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec + Into<U256> + TryFrom<U256>,
 	Hash: HashT,
 	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeDisplay + SimpleBitOps + Codec,
  {
