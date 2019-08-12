@@ -146,7 +146,9 @@ pub trait StorageValue<T: Codec> {
 	/// Upon any failure, it replaces `items` as the new value (assuming that the previous stored
 	/// data is simply corrupt and no longer usable).
 	///
-	/// WARNING: use with care; if your use-case is not _exactly_ as what this function is doing,
+	/// ### WARNING
+	///
+	/// use with care; if your use-case is not _exactly_ as what this function is doing,
 	/// you should use append and sensibly handle failure within the runtime code if it happens.
 	fn safe_append<'a, I: 'a + Encode + Clone>(items: &'a[I])
 		where T: EncodeAppend<Item=I> + From<&'a[I]>;
@@ -157,7 +159,7 @@ pub trait StorageValue<T: Codec> {
 	///
 	/// Note that this only returns the length if it is stored as an encoded value. Any read from
 	/// storage that falls back to the _default_ (regardless of being provided or literally
-	/// `Default::default()`) cannot have a `decode_len()`. A runtime cod can simply `unwrap_or()`
+	/// `Default::default()`) cannot have a `decode_len()`. A runtime code can simply `unwrap_or()`
 	/// in case of default values.
 	///
 	/// ```rust,
