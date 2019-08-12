@@ -25,7 +25,7 @@
 //! The methods of the [`NetworkService`] are implemented by sending a message over a channel,
 //! which is then processed by [`NetworkWorker::poll`].
 
-use std::{collections::HashMap, fs, marker::PhantomData, io, path::Path};
+use std::{collections::{HashMap, HashSet}, fs, marker::PhantomData, io, path::Path};
 use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
 
 use consensus::import_queue::{ImportQueue, Link};
@@ -40,7 +40,7 @@ use parking_lot::Mutex;
 use peerset::PeersetHandle;
 use sr_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
 
-use crate::{behaviour::{Behaviour, BehaviourOut}, config::parse_str_addr};
+use crate::{behaviour::{Behaviour, BehaviourOut}, config::{parse_str_addr, parse_addr}};
 use crate::{NetworkState, NetworkStateNotConnectedPeer, NetworkStatePeer};
 use crate::{transport, config::NodeKeyConfig, config::NonReservedPeerMode};
 use crate::config::{Params, TransportConfig};
@@ -494,6 +494,24 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		let _ = self
 			.to_worker
 			.unbounded_send(ServerToWorkerMsg::AddKnownAddress(peer_id, addr));
+		Ok(())
+	}
+
+	/// Modify a peerset priority group.
+	pub fn set_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
+		let peers = peers.into_iter().map(|p| {
+			parse_addr(p).map_err(|e| format!("{:?}", e))
+		}).collect::<Result<Vec<(PeerId, Multiaddr)>, String>>()?;
+
+		let peer_ids = peers.iter().map(|(peer_id, _addr)| peer_id.clone()).collect();
+		self.peerset.set_priority_group(group_id, peer_ids);
+
+		for (peer_id, addr) in peers.into_iter() {
+			let _ = self
+				.to_worker
+				.unbounded_send(ServerToWorkerMsg::AddKnownAddress(peer_id, addr));
+		}
+
 		Ok(())
 	}
 
