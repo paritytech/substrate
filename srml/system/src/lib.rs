@@ -239,7 +239,7 @@ decl_module! {
 		}
 
 		/// Make some on-chain remark.
-		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn remark(origin, _remark: Vec<u8>) {
 			ensure_signed(origin)?;
 		}
