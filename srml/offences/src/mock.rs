@@ -99,7 +99,7 @@ impl_outer_event! {
 }
 
 pub fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-	let t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
+	let t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 	t.into()
 }
 
