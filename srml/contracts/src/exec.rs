@@ -64,8 +64,8 @@ impl ExecReturnValue {
 #[cfg_attr(test, derive(Debug))]
 pub struct ExecError {
 	pub reason: &'static str,
-	/// This is an allocated buffer that may be reused. The buffer must be cleared be explicitly
-	/// cleared before reuse.
+	/// This is an allocated buffer that may be reused. The buffer must be cleared explicitly
+	/// before reuse.
 	pub buffer: Vec<u8>,
 }
 
@@ -383,7 +383,7 @@ where
 				Some(dest_code_hash) => {
 					let executable = try_or_exec_error!(
 						nested.loader.load_main(&dest_code_hash),
-						 input_data
+						input_data
 					);
 					nested.vm
 						.execute(

@@ -209,7 +209,7 @@ fn read_sandbox_memory<E: Ext>(
 	charge_gas(ctx.gas_meter, ctx.schedule, RuntimeToken::ReadMemory(len))?;
 
 	let mut buf = vec![0u8; len as usize];
-	ctx.memory().get(ptr, buf.as_mut_slice()).map_err(|_| sandbox::HostError)?;
+	ctx.memory.get(ptr, buf.as_mut_slice()).map_err(|_| sandbox::HostError)?;
 	Ok(buf)
 }
 
@@ -228,11 +228,8 @@ fn read_sandbox_memory_into_scratch<E: Ext>(
 ) -> Result<(), sandbox::HostError> {
 	charge_gas(ctx.gas_meter, ctx.schedule, RuntimeToken::ReadMemory(len))?;
 
-	let mut buf = mem::replace(&mut ctx.scratch_buf, Vec::new());
-	buf.resize(len as usize, 0);
-	ctx.memory().get(ptr, buf.as_mut_slice()).map_err(|_| sandbox::HostError)?;
-	let _  = mem::replace(&mut ctx.scratch_buf, buf);
-
+	ctx.scratch_buf.resize(len as usize, 0);
+	ctx.memory.get(ptr, ctx.scratch_buf.as_mut_slice()).map_err(|_| sandbox::HostError)?;
 	Ok(())
 }
 
@@ -251,7 +248,7 @@ fn read_sandbox_memory_into_buf<E: Ext>(
 ) -> Result<(), sandbox::HostError> {
 	charge_gas(ctx.gas_meter, ctx.schedule, RuntimeToken::ReadMemory(buf.len() as u32))?;
 
-	ctx.memory().get(ptr, buf).map_err(Into::into)
+	ctx.memory.get(ptr, buf).map_err(Into::into)
 }
 
 /// Read designated chunk from the sandbox memory, consuming an appropriate amount of
