@@ -141,7 +141,6 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 				(x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator)
 			}).collect(),
 			invulnerables: initial_authorities.iter().map(|x| x.0.clone()).collect(),
-			.. Default::default()
 		}),
 		democracy: Some(DemocracyConfig::default()),
 		collective_Instance1: Some(CouncilConfig {
@@ -269,7 +268,6 @@ pub fn testnet_genesis(
 				(x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator)
 			}).collect(),
 			invulnerables: initial_authorities.iter().map(|x| x.0.clone()).collect(),
-			.. Default::default()
 		}),
 		democracy: Some(DemocracyConfig::default()),
 		collective_Instance1: Some(CouncilConfig {
