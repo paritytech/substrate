@@ -1,0 +1,13 @@
+# Lists some code owners
+#
+# For details about syntax, see:
+# https://help.github.com/en/articles/about-code-owners
+# But here are some important notes:
+#
+# - Glob syntax is git-like, e.g. `/core` means the core directory in the root, unlike `core` which
+#   can be everywhere.
+# - Multiple owners are supported.
+# - The latest matching rule, if multiple, takes precedence.
+
+/srml/contracts/ sergei@parity.io
+/core/executor/ sergei@parity.io
