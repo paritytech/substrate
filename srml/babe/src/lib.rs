@@ -25,6 +25,7 @@
 pub use timestamp;
 
 use rstd::{result, prelude::*};
+use runtime_io::blake2_256;
 use srml_support::{
 	decl_storage, decl_module, StorageValue, StorageMap,
 	traits::{FindAuthor, Get, KeyOwnerProofSystem},
@@ -220,7 +221,9 @@ fn equivocation_is_valid<T: Trait>(
 	let signed = (equivocation, proof);
 	let reporter = equivocation.reporter();
 
-	let signature_valid = signed.using_encoded(|signed| {
+	let signature_valid = signed.using_encoded(|signed| if signed.len() > 256 {
+		reporter.verify(&blake2_256(signed), &signature)
+	} else {
 		reporter.verify(&signed, &signature)
 	});
 
@@ -297,19 +300,19 @@ decl_module! {
 		}
 
 		fn report_equivocation(
-			origin,
-			equivocation: BabeEquivocationProof<T::Header>,
-			proof: Proof,
+			_origin,
+			_equivocation: BabeEquivocationProof<T::Header>,
+			_proof: Proof,
 			_signature: AuthoritySignature
 		) {
-			let _who = ensure_signed(origin)?;
-			let to_punish = <T as Trait>::KeyOwnerSystem::check_proof(
-				(key_types::SR25519, equivocation.identity().encode()),
-				proof.clone(),
-			);
-			if to_punish.is_some() {
-				// TODO: Slash.
-			}
+			// let _who = ensure_signed(origin)?;
+			// let to_punish = <T as Trait>::KeyOwnerSystem::check_proof(
+			// 	(key_types::SR25519, equivocation.identity().encode()),
+			// 	proof.clone(),
+			// );
+			// if to_punish.is_some() {
+			// 	// TODO: Slash.
+			// }
 		}
 	}
 }

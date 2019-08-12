@@ -71,75 +71,75 @@ pub fn check_equivocation<C, H, E, V>(
 		>,
 {
 	// We don't check equivocations for old headers out of our capacity.
-	if slot_now - slot > MAX_SLOT_CAPACITY {
-		return Ok(None)
-	}
+	// if slot_now - slot > MAX_SLOT_CAPACITY {
+	// 	return Ok(None)
+	// }
 
 	// Key for this slot.
-	let mut current_slot_key = SLOT_HEADER_MAP_KEY.to_vec();
-	slot.using_encoded(|s| current_slot_key.extend(s));
+	// let mut current_slot_key = SLOT_HEADER_MAP_KEY.to_vec();
+	// slot.using_encoded(|s| current_slot_key.extend(s));
 
 	// Get headers of this slot.
-	let mut headers_with_signature = load_decode::<_, Vec<(H, V::Signature, V)>>(
-		backend.deref(),
-		&current_slot_key[..],
-	)?
-	.unwrap_or_else(Vec::new);
+	// let mut headers_with_signature = load_decode::<_, Vec<(H, V::Signature, V)>>(
+	// 	backend.deref(),
+	// 	&current_slot_key[..],
+	// )?
+	// .unwrap_or_else(Vec::new);
 
 	// Get first slot saved.
-	let slot_header_start = SLOT_HEADER_START.to_vec();
-	let first_saved_slot = load_decode::<_, u64>(backend, &slot_header_start[..])?
-		.unwrap_or(slot);
+	// let slot_header_start = SLOT_HEADER_START.to_vec();
+	// let first_saved_slot = load_decode::<_, u64>(backend, &slot_header_start[..])?
+	// 	.unwrap_or(slot);
 
-	for (prev_header, prev_signature, prev_signer) in headers_with_signature.iter() {
+	// for (prev_header, prev_signature, prev_signer) in headers_with_signature.iter() {
 		// A proof of equivocation consists of two headers:
 		// 1) signed by the same voter,
-		if prev_signer == signer {
+		// if prev_signer == signer {
 			// 2) with different hash
-			if header.hash() != prev_header.hash() {
-				return Ok(Some(AuthorshipEquivocationProof::new(
-					signer.clone(), // TODO: this should be the reporter.
-					signer.clone(),
-					Proof::default(), // TODO: add the proof.
-					slot,
-					SessionIndex::default(), // TODO: add session index.
-					prev_header.clone(),
-					header.clone(),
-					prev_signature.clone(),
-					signature.clone(),
-				)));
-			} else {
+			// if header.hash() != prev_header.hash() {
+				// return Ok(Some(AuthorshipEquivocationProof::new(
+				// 	signer.clone(), // TODO: this should be the reporter.
+				// 	signer.clone(),
+				// 	Proof::default(), // TODO: add the proof.
+				// 	slot,
+				// 	SessionIndex::default(), // TODO: add session index.
+				// 	header.clone(),
+				// 	header.clone(),
+				// 	signature.clone(),
+				// 	signature.clone(),
+				// )));
+			// } else {
 				//  We don't need to continue in case of duplicated header,
 				// since it's already saved and a possible equivocation
 				// would have been detected before.
-				return Ok(None)
-			}
-		}
-	}
+				// return Ok(None)
+			// }
+		// }
+	// }
 
-	let mut keys_to_delete = vec![];
-	let mut new_first_saved_slot = first_saved_slot;
+	// let mut keys_to_delete = vec![];
+	// let mut new_first_saved_slot = first_saved_slot;
 
-	if slot_now - first_saved_slot >= PRUNING_BOUND {
-		let prefix = SLOT_HEADER_MAP_KEY.to_vec();
-		new_first_saved_slot = slot_now.saturating_sub(MAX_SLOT_CAPACITY);
+	// if slot_now - first_saved_slot >= PRUNING_BOUND {
+	// 	let prefix = SLOT_HEADER_MAP_KEY.to_vec();
+	// 	new_first_saved_slot = slot_now.saturating_sub(MAX_SLOT_CAPACITY);
 
-		for s in first_saved_slot..new_first_saved_slot {
-			let mut p = prefix.clone();
-			s.using_encoded(|s| p.extend(s));
-			keys_to_delete.push(p);
-		}
-	}
+	// 	for s in first_saved_slot..new_first_saved_slot {
+	// 		let mut p = prefix.clone();
+	// 		s.using_encoded(|s| p.extend(s));
+	// 		keys_to_delete.push(p);
+	// 	}
+	// }
 
-	headers_with_signature.push((header.clone(), signature.clone(), signer.clone()));
+	// headers_with_signature.push((header.clone(), signature.clone(), signer.clone()));
 
-	backend.insert_aux(
-		&[
-			(&current_slot_key[..], headers_with_signature.encode().as_slice()),
-			(&slot_header_start[..], new_first_saved_slot.encode().as_slice()),
-		],
-		&keys_to_delete.iter().map(|k| &k[..]).collect::<Vec<&[u8]>>()[..],
-	)?;
+	// backend.insert_aux(
+	// 	&[
+	// 		(&current_slot_key[..], headers_with_signature.encode().as_slice()),
+	// 		(&slot_header_start[..], new_first_saved_slot.encode().as_slice()),
+	// 	],
+	// 	&keys_to_delete.iter().map(|k| &k[..]).collect::<Vec<&[u8]>>()[..],
+	// )?;
 
 	Ok(None)
 }

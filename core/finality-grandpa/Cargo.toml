@@ -27,11 +27,11 @@ service = { package = "substrate-service", path = "../service", optional = true 
 srml-finality-tracker = { path = "../../srml/finality-tracker" }
 srml-session = { path = "../../srml/session" }
 fg_primitives = { package = "substrate-finality-grandpa-primitives", path = "primitives" }
-grandpa = { package = "finality-grandpa", version = "0.9.0", features = ["derive-codec"] }
+grandpa = { package = "finality-grandpa", path = "/home/marcio/repos/finality-grandpa", features = ["derive-codec"] }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
 
 [dev-dependencies]
-grandpa = { package = "finality-grandpa", version = "0.9.0", features = ["derive-codec", "test-helpers"] }
+grandpa = { package = "finality-grandpa", path = "/home/marcio/repos/finality-grandpa", features = ["derive-codec", "test-helpers"] }
 network = { package = "substrate-network", path = "../network", features = ["test-helpers"] }
 keyring = { package = "substrate-keyring", path = "../keyring" }
 test-client = { package = "substrate-test-runtime-client", path = "../test-runtime/client"}

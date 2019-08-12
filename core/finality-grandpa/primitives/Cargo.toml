@@ -11,7 +11,7 @@ codec = { package = "parity-scale-codec", version = "1.0.0", default-features = 
 sr-primitives = { path = "../../sr-primitives", default-features = false }
 rstd = { package = "sr-std", path = "../../sr-std", default-features = false }
 serde = { version = "1.0", optional = true, features = ["derive"] }
-grandpa = { package = "finality-grandpa", version = "0.9.0", default-features = false, features = ["derive-codec"] }
+grandpa = { package = "finality-grandpa", path = "/home/marcio/repos/finality-grandpa", default-features = false, features = ["derive-codec"] }
 session = { package = "srml-session", path = "../../../srml/session", default-features = false }
 
 [features]

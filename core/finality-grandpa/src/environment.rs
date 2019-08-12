@@ -530,7 +530,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA, SC, T>
 	voter::Environment<Block::Hash, NumberFor<Block>>
 for Environment<B, E, Block, N, RA, SC, T>
 where
-	Block: 'static,
+	Block: 'static + Encode + Decode,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
 	N: Network<Block> + 'static + Send,
