@@ -33,7 +33,7 @@ use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
 	Moment, Signature,
 };
-use codec::{Encode, Decode, Codec};
+use codec::{Encode};
 use consensus_primitives::AuthorshipEquivocationProof;
 use babe::{AuthorityId as BabeId};
 use babe_primitives::BabeEquivocationProof;
@@ -56,7 +56,7 @@ use primitives::OpaqueMetadata;
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
 use im_online::{AuthorityId as ImOnlineId};
 use finality_tracker::{DEFAULT_REPORT_LATENCY, DEFAULT_WINDOW_SIZE};
-use session::historical::{self, Proof};
+use session::historical;
 
 #[cfg(any(feature = "std", test))]
 pub use sr_primitives::BuildStorage;
@@ -418,6 +418,7 @@ impl offences::Trait for Runtime {
 
 impl grandpa::Trait for Runtime {
 	type Event = Event;
+	type KeyOwnerSystem = Historical;
 }
 
 parameter_types! {
@@ -561,11 +562,14 @@ impl_runtime_apis! {
 		fn construct_equivocation_transaction(
 			equivocation: GrandpaEquivocationFrom<Block>
 		) -> Option<Vec<u8>> {
-			// TODO: Check proof and create transaction.
 			let proof = Historical::prove((key_types::SR25519, equivocation.identity.encode()))?;
-			let grandpa_call = GrandpaCall::report_equivocation(equivocation, proof);
+			let signing = (equivocation.clone(), proof.clone());
+			let reporter = &equivocation.reporter;
+			let signature = reporter.sign(&signing.encode()).expect("FIXME");
+			let grandpa_call = GrandpaCall::report_equivocation(equivocation, proof, signature);
 			let call = Call::Grandpa(grandpa_call);
-			Some(call.encode())
+			let ex = UncheckedExtrinsic::new_unsigned(call.into());
+			Some(ex.encode())
 		}
 	}
 
@@ -596,7 +600,6 @@ impl_runtime_apis! {
 		fn construct_equivocation_transaction(
 			equivocation: BabeEquivocationProof<<Block as BlockT>::Header>,
 		) -> Option<Vec<u8>> {
-			// TODO: Check proof and construct transaction.
 			let proof = Historical::prove((key_types::SR25519, equivocation.identity().encode()))?;
 			let reporter = equivocation.reporter();
 			let signature = reporter.sign(&(equivocation.clone(), proof.clone()).encode())

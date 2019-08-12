@@ -33,11 +33,14 @@ pub use substrate_finality_grandpa_primitives as fg_primitives;
 use rstd::prelude::*;
 use codec::{self as codec, Encode, Decode, Error, Codec};
 use srml_support::{
-	decl_event, decl_storage, decl_module, dispatch::Result, storage::StorageValue
+	decl_event, decl_storage, decl_module, dispatch::Result, storage::StorageValue,
+	traits::KeyOwnerProofSystem
 };
 use app_crypto::RuntimeAppPublic;
 use sr_primitives::{
-	generic::{DigestItem, OpaqueDigestItemId}, traits::{Zero, Verify}, Perbill
+	generic::{DigestItem, OpaqueDigestItemId}, Perbill, key_types, KeyTypeId,
+	transaction_validity::{TransactionValidity, ValidTransaction},
+	traits::{Zero, ValidateUnsigned}
 };
 use sr_staking_primitives::{SessionIndex, offence::{TimeSlot, Offence, Kind}};
 use fg_primitives::{
@@ -45,7 +48,7 @@ use fg_primitives::{
 	localized_payload
 };
 use session::historical::Proof;
-pub use fg_primitives::{AuthorityId, AuthorityWeight};
+pub use fg_primitives::{AuthorityId, AuthorityWeight, AuthoritySignature};
 use system::{ensure_signed, DigestOf};
 
 mod mock;
@@ -54,6 +57,7 @@ mod tests;
 pub trait Trait: system::Trait {
 	/// The event type of this module.
 	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
+	type KeyOwnerSystem: KeyOwnerProofSystem<(KeyTypeId, Vec<u8>), Proof=Proof>;
 }
 
 /// A stored pending change, old format.
@@ -155,16 +159,53 @@ decl_storage! {
 	}
 }
 
+impl<T> ValidateUnsigned for Module<T> where T: Trait 
+{
+	type Call = Call<T>;
+
+	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
+		match call {
+			Call::report_equivocation(equivocation, proof, signature)
+				if equivocation_is_valid::<T::Hash, T::BlockNumber>(equivocation, proof, signature) => {
+					return TransactionValidity::Valid(
+						ValidTransaction {
+							priority: 0,
+							requires: vec![],
+							provides: vec![],
+							longevity: 18446744073709551615,
+							propagate: true,
+						}
+					)
+			},
+			_ => TransactionValidity::Invalid(0),
+		}
+	}
+}
+
 fn equivocation_is_valid<H: Codec + PartialEq, N: Codec + PartialEq>(
-	equivocation: GrandpaEquivocation<H, N>
+	equivocation: &GrandpaEquivocation<H, N>,
+	proof: &Proof,
+	signature: &AuthoritySignature
 ) -> bool {
+
+	let signed = (equivocation, proof);
+	let reporter = &equivocation.reporter;
+
+	let signature_valid = signed.using_encoded(|signed| {
+		reporter.verify(&signed, &signature)
+	});
+
+	if !signature_valid {
+		return false
+	}
+
 	let first_vote = &equivocation.first.0;
 	let first_signature = &equivocation.first.1;
 
 	let second_vote = &equivocation.second.0;
 	let second_signature = &equivocation.second.1;
 
-	let identity = equivocation.identity;
+	let identity = &equivocation.identity;
 
 	if first_vote != second_vote {
 		let first_payload = localized_payload(
@@ -201,15 +242,17 @@ decl_module! {
 		fn report_equivocation(
 			origin,
 			equivocation: GrandpaEquivocation<T::Hash, T::BlockNumber>,
-			_proof: Proof
+			proof: Proof,
+			_signature: AuthoritySignature
 		) {
 			let _who = ensure_signed(origin)?;
-
-			if equivocation_is_valid(equivocation) {
-				// slash
+			let to_punish = <T as Trait>::KeyOwnerSystem::check_proof(
+				(key_types::SR25519, equivocation.identity.encode()),
+				proof.clone(),
+			);
+			if to_punish.is_some() {
+				// TODO: Slash.
 			}
-
-			// FIXME: https://github.com/paritytech/substrate/issues/1112
 		}
 
 		fn on_finalize(block_number: T::BlockNumber) {
