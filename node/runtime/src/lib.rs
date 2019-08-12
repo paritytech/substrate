@@ -28,6 +28,7 @@ use support::{
 	}
 };
 use primitives::u32_trait::{_1, _2, _3, _4};
+use app_crypto::RuntimeAppPublic;
 use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
 	Moment, Signature,
@@ -597,9 +598,13 @@ impl_runtime_apis! {
 		) -> Option<Vec<u8>> {
 			// TODO: Check proof and construct transaction.
 			let proof = Historical::prove((key_types::SR25519, equivocation.identity().encode()))?;
-			let babe_call = BabeCall::report_equivocation(equivocation, proof);
+			let reporter = equivocation.reporter();
+			let signature = reporter.sign(&(equivocation.clone(), proof.clone()).encode())
+				.expect("FIXME");
+			let babe_call = BabeCall::report_equivocation(equivocation, proof, signature);
 			let call = Call::Babe(babe_call);
-			Some(call.encode())
+			let ex = UncheckedExtrinsic::new_unsigned(call.into());
+			Some(ex.encode())
 		}
 	}
 

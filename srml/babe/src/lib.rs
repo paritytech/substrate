@@ -195,8 +195,8 @@ impl<T> ValidateUnsigned for Module<T> where T: Trait
 
 	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
 		match call {
-			Call::report_equivocation(equivocation, _proof)
-				if equivocation_is_valid::<T>(equivocation) => {
+			Call::report_equivocation(equivocation, proof, signature)
+				if equivocation_is_valid::<T>(equivocation, proof, signature) => {
 					return TransactionValidity::Valid(
 						ValidTransaction {
 							priority: 0,
@@ -214,7 +214,20 @@ impl<T> ValidateUnsigned for Module<T> where T: Trait
 
 fn equivocation_is_valid<T: Trait>(
 	equivocation: &BabeEquivocationProof<T::Header>,
+	proof: &Proof,
+	signature: &AuthoritySignature,
 ) -> bool {
+	let signed = (equivocation, proof);
+	let reporter = equivocation.reporter();
+
+	let signature_valid = signed.using_encoded(|signed| {
+		reporter.verify(&signed, &signature)
+	});
+
+	if !signature_valid {
+		return false
+	}
+
 	let first_header = equivocation.first_header();
 	let second_header = equivocation.second_header();
 
@@ -286,7 +299,8 @@ decl_module! {
 		fn report_equivocation(
 			origin,
 			equivocation: BabeEquivocationProof<T::Header>,
-			proof: Proof
+			proof: Proof,
+			_signature: AuthoritySignature
 		) {
 			let _who = ensure_signed(origin)?;
 			let to_punish = <T as Trait>::KeyOwnerSystem::check_proof(

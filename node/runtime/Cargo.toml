@@ -44,6 +44,7 @@ rustc-hex = { version = "2.0", optional = true }
 serde = { version = "1.0", optional = true }
 substrate-keyring = { path = "../../core/keyring", optional = true }
 substrate-session = { path = "../../core/session", default-features = false }
+app-crypto = { package = "substrate-application-crypto", path = "../../core/application-crypto", default-features = false }
 
 [build-dependencies]
 wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.2", path = "../../core/utils/wasm-builder-runner" }
