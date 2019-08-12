@@ -108,7 +108,7 @@ fn no_offline_should_work() {
 		assert_eq!(Staking::slash_count(&10), 0);
 		assert_eq!(Balances::free_balance(&10), 1);
 		// New era is not being forced
-		assert!(!Staking::forcing_new_era());
+		assert_eq!(Staking::force_era(), Forcing::NotForcing);
 	});
 }
 
@@ -163,7 +163,7 @@ fn invulnerability_should_work() {
 		assert!(<Validators<Test>>::exists(&11));
 		// New era not being forced
 		// NOTE: new era is always forced once slashing happens -> new validators need to be chosen.
-		assert!(!Staking::forcing_new_era());
+		assert_eq!(Staking::force_era(), Forcing::NotForcing);
 	});
 }
 
