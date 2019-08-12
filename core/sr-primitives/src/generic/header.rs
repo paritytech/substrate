@@ -53,17 +53,17 @@ pub struct Header<Number: Copy + Into<U256> + TryFrom<U256>, Hash: HashT> {
 #[cfg(feature = "std")]
 pub fn serialize_number<S, T: Copy + Into<U256> + TryFrom<U256>>(
 	val: &T, s: S,
-) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+) -> Result<S::Ok, S::Error> where S: serde::Serializer {
 	let u256: U256 = (*val).into();
-	::serde::Serialize::serialize(&u256, s)
+	serde::Serialize::serialize(&u256, s)
 }
 
 #[cfg(feature = "std")]
 pub fn deserialize_number<'a, D, T: Copy + Into<U256> + TryFrom<U256>>(
 	d: D,
-) -> Result<T, D::Error> where D: ::serde::Deserializer<'a> {
-	let u256: U256 = ::serde::Deserialize::deserialize(d)?;
-	TryFrom::try_from(u256).map_err(|_| ::serde::de::Error::custom("Try from failed"))
+) -> Result<T, D::Error> where D: serde::Deserializer<'a> {
+	let u256: U256 = serde::Deserialize::deserialize(d)?;
+	TryFrom::try_from(u256).map_err(|_| serde::de::Error::custom("Try from failed"))
 }
 
 impl<Number, Hash> Decode for Header<Number, Hash> where
@@ -103,10 +103,10 @@ impl<Number, Hash> codec::EncodeLike for Header<Number, Hash> where
 {}
 
 impl<Number, Hash> traits::Header for Header<Number, Hash> where
-	Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + MaybeDisplay +
+	Number: Member + MaybeSerializeDebug + rstd::hash::Hash + MaybeDisplay +
 		SimpleArithmetic + Codec + Copy + Into<U256> + TryFrom<U256>,
 	Hash: HashT,
-	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member +
+	Hash::Output: Default + rstd::hash::Hash + Copy + Member +
 		MaybeSerializeDebugButNotDeserialize + MaybeDisplay + SimpleBitOps + Codec,
 {
 	type Number = Number;
@@ -154,9 +154,9 @@ impl<Number, Hash> traits::Header for Header<Number, Hash> where
 }
 
 impl<Number, Hash> Header<Number, Hash> where
-	Number: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec + Into<U256> + TryFrom<U256>,
+	Number: Member + rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec + Into<U256> + TryFrom<U256>,
 	Hash: HashT,
-	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeDisplay + SimpleBitOps + Codec,
+	Hash::Output: Default + rstd::hash::Hash + Copy + Member + MaybeDisplay + SimpleBitOps + Codec,
  {
 	/// Convenience helper for computing the hash of the header without having
 	/// to import the trait.
@@ -174,7 +174,7 @@ mod tests {
 		fn serialize(num: u128) -> String {
 			let mut v = vec![];
 			{
-				let mut ser = ::serde_json::Serializer::new(::std::io::Cursor::new(&mut v));
+				let mut ser = serde_json::Serializer::new(std::io::Cursor::new(&mut v));
 				serialize_number(&num, &mut ser).unwrap();
 			}
 			String::from_utf8(v).unwrap()
@@ -189,7 +189,7 @@ mod tests {
 	#[test]
 	fn should_deserialize_number() {
 		fn deserialize(num: &str) -> u128 {
-			let mut der = ::serde_json::Deserializer::new(::serde_json::de::StrRead::new(num));
+			let mut der = serde_json::Deserializer::new(serde_json::de::StrRead::new(num));
 			deserialize_number(&mut der).unwrap()
 		}
 

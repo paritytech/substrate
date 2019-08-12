@@ -102,22 +102,22 @@ pub enum DigestItem<Hash> {
 }
 
 #[cfg(feature = "std")]
-impl<Hash: Encode> ::serde::Serialize for DigestItem<Hash> {
-	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+impl<Hash: Encode> serde::Serialize for DigestItem<Hash> {
+	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
 		self.using_encoded(|bytes| {
-			::primitives::bytes::serialize(bytes, seq)
+			primitives::bytes::serialize(bytes, seq)
 		})
 	}
 }
 
 #[cfg(feature = "std")]
-impl<'a, Hash: Decode> ::serde::Deserialize<'a> for DigestItem<Hash> {
+impl<'a, Hash: Decode> serde::Deserialize<'a> for DigestItem<Hash> {
 	fn deserialize<D>(de: D) -> Result<Self, D::Error> where
-		D: ::serde::Deserializer<'a>,
+		D: serde::Deserializer<'a>,
 	{
-		let r = ::primitives::bytes::deserialize(de)?;
+		let r = primitives::bytes::deserialize(de)?;
 		Decode::decode(&mut &r[..])
-			.map_err(|e| ::serde::de::Error::custom(format!("Decode error: {}", e)))
+			.map_err(|e| serde::de::Error::custom(format!("Decode error: {}", e)))
 	}
 }
 
