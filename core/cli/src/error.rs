@@ -36,7 +36,17 @@ pub enum Error {
 	Input(String),
 	/// Invalid listen multiaddress
 	#[display(fmt="Invalid listen multiaddress")]
-	InvalidListenMultiaddress
+	InvalidListenMultiaddress,
+	/// Other uncategorized error.
+	Other(String),
+}
+
+/// Must be implemented explicitly because `derive_more` won't generate this
+/// case due to conflicting derive for `Other(String)`.
+impl std::convert::From<String> for Error {
+	fn from(s: String) -> Error {
+		Error::Input(s)
+	}
 }
 
 impl std::error::Error for Error {
@@ -48,6 +58,7 @@ impl std::error::Error for Error {
 			Error::Client(ref err) => Some(err),
 			Error::Input(_) => None,
 			Error::InvalidListenMultiaddress => None,
+			Error::Other(_) => None,
 		}
 	}
 }

@@ -478,6 +478,10 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 	}
 
+	parameter_types! {
+		pub const UncleGenerations: u64 = 5;
+	}
+
 	impl Trait for Test {
 		type FindAuthor = AuthorGiven;
 		type UncleGenerations = UncleGenerations;
@@ -504,10 +508,6 @@ mod tests {
 
 			None
 		}
-	}
-
-	parameter_types! {
-		pub const UncleGenerations: u64 = 5;
 	}
 
 	pub struct VerifyBlock;
@@ -550,7 +550,6 @@ mod tests {
 		header
 	}
 
-
 	fn create_header(number: u64, parent_hash: H256, state_root: H256) -> Header {
 		Header::new(
 			number,
@@ -562,7 +561,7 @@ mod tests {
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
+		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		t.into()
 	}
 

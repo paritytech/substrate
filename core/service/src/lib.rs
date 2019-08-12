@@ -28,6 +28,7 @@ pub mod error;
 use std::io;
 use std::net::SocketAddr;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use futures::sync::mpsc;
 use parking_lot::Mutex;
@@ -82,8 +83,14 @@ pub struct Service<Components: components::Components> {
 		NetworkStatus<ComponentBlock<Components>>, NetworkState
 	)>>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
+	/// A future that resolves when the service has exited, this is useful to
+	/// make sure any internally spawned futures stop when the service does.
 	exit: exit_future::Exit,
+	/// A signal that makes the exit future above resolve, fired on service drop.
 	signal: Option<Signal>,
+	/// Set to `true` when a spawned essential task has failed. The next time
+	/// the service future is polled it should complete with an error.
+	essential_failed: Arc<AtomicBool>,
 	/// Sender for futures that must be spawned as background tasks.
 	to_spawn_tx: mpsc::UnboundedSender<Box<dyn Future<Item = (), Error = ()> + Send>>,
 	/// Receiver for futures that must be spawned as background tasks.
@@ -93,7 +100,7 @@ pub struct Service<Components: components::Components> {
 	/// The elements must then be polled manually.
 	to_poll: Vec<Box<dyn Future<Item = (), Error = ()> + Send>>,
 	/// Configuration of this Service
-	pub config: FactoryFullConfiguration<Components::Factory>,
+	config: FactoryFullConfiguration<Components::Factory>,
 	rpc_handlers: rpc::RpcHandler,
 	_rpc: Box<dyn std::any::Any + Send + Sync>,
 	_telemetry: Option<tel::Telemetry>,
@@ -149,18 +156,11 @@ pub struct TelemetryOnConnect {
 }
 
 impl<Components: components::Components> Service<Components> {
-	/// Get event stream for telemetry connection established events.
-	pub fn telemetry_on_connect_stream(&self) -> TelemetryOnConnectNotifications {
-		let (sink, stream) = mpsc::unbounded();
-		self._telemetry_on_connect_sinks.lock().push(sink);
-		stream
-	}
-
 	/// Creates a new service.
 	pub fn new(
 		mut config: FactoryFullConfiguration<Components::Factory>,
 	) -> Result<Self, error::Error> {
-		let (signal, exit) = ::exit_future::signal();
+		let (signal, exit) = exit_future::signal();
 
 		// List of asynchronous tasks to spawn. We collect them, then spawn them all at once.
 		let (to_spawn_tx, to_spawn_rx) =
@@ -182,7 +182,7 @@ impl<Components: components::Components> Service<Components> {
 		let finality_proof_provider = Components::build_finality_proof_provider(client.clone())?;
 		let chain_info = client.info().chain;
 
-		Components::RuntimeServices::generate_intial_session_keys(
+		Components::RuntimeServices::generate_initial_session_keys(
 			client.clone(),
 			config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
 		)?;
@@ -200,7 +200,7 @@ impl<Components: components::Components> Service<Components> {
 		let transaction_pool = Arc::new(
 			Components::build_transaction_pool(config.transaction_pool.clone(), client.clone())?
 		);
-		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter::<Components> {
+		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
 			imports_external_transactions: !config.roles.is_light(),
 			pool: transaction_pool.clone(),
 			client: client.clone(),
@@ -257,6 +257,7 @@ impl<Components: components::Components> Service<Components> {
 			let offchain = offchain_workers.as_ref().map(Arc::downgrade);
 			let to_spawn_tx_ = to_spawn_tx.clone();
 			let network_state_info: Arc<dyn NetworkStateInfo + Send + Sync> = network.clone();
+			let is_validator = config.roles.is_authority();
 
 			let events = client.import_notification_stream()
 				.map(|v| Ok::<_, ()>(v)).compat()
@@ -277,6 +278,7 @@ impl<Components: components::Components> Service<Components> {
 							&offchain,
 							&txpool,
 							&network_state_info,
+							is_validator,
 						).map_err(|e| warn!("Offchain workers error processing new block: {:?}", e))?;
 						let _ = to_spawn_tx_.unbounded_send(future);
 					}
@@ -383,9 +385,9 @@ impl<Components: components::Components> Service<Components> {
 			)
 		};
 		let rpc_handlers = gen_handler();
-		let rpc = start_rpc_servers::<Components::Factory, _>(&config, gen_handler)?;
+		let rpc = start_rpc_servers(&config, gen_handler)?;
 
-		let _ = to_spawn_tx.unbounded_send(Box::new(build_network_future::<Components, _, _>(
+		let _ = to_spawn_tx.unbounded_send(Box::new(build_network_future(
 			network_mut,
 			client.clone(),
 			network_status_sinks.clone(),
@@ -400,7 +402,7 @@ impl<Components: components::Components> Service<Components> {
 
 		// Telemetry
 		let telemetry = config.telemetry_endpoints.clone().map(|endpoints| {
-			let is_authority = config.roles == Roles::AUTHORITY;
+			let is_authority = config.roles.is_authority();
 			let network_id = network.local_peer_id().to_base58();
 			let name = config.name.clone();
 			let impl_name = config.impl_name.to_owned();
@@ -445,12 +447,13 @@ impl<Components: components::Components> Service<Components> {
 			network_status_sinks,
 			select_chain,
 			transaction_pool,
+			exit,
 			signal: Some(signal),
+			essential_failed: Arc::new(AtomicBool::new(false)),
 			to_spawn_tx,
 			to_spawn_rx,
 			to_poll: Vec::new(),
 			config,
-			exit,
 			rpc_handlers,
 			_rpc: rpc,
 			_telemetry: telemetry,
@@ -458,6 +461,27 @@ impl<Components: components::Components> Service<Components> {
 			_telemetry_on_connect_sinks: telemetry_connection_sinks.clone(),
 			keystore,
 		})
+	}
+
+	/// Returns a reference to the config passed at initialization.
+	pub fn config(&self) -> &FactoryFullConfiguration<Components::Factory> {
+		&self.config
+	}
+
+	/// Returns a reference to the config passed at initialization.
+	///
+	/// > **Note**: This method is currently necessary because we extract some elements from the
+	/// >			configuration at the end of the service initialization. It is intended to be
+	/// >			removed.
+	pub fn config_mut(&mut self) -> &mut FactoryFullConfiguration<Components::Factory> {
+		&mut self.config
+	}
+
+	/// Get event stream for telemetry connection established events.
+	pub fn telemetry_on_connect_stream(&self) -> TelemetryOnConnectNotifications {
+		let (sink, stream) = mpsc::unbounded();
+		self._telemetry_on_connect_sinks.lock().push(sink);
+		stream
 	}
 
 	/// Return a shared instance of Telemetry (if enabled)
@@ -473,6 +497,19 @@ impl<Components: components::Components> Service<Components> {
 	/// Spawns a task in the background that runs the future passed as parameter.
 	pub fn spawn_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
 		let _ = self.to_spawn_tx.unbounded_send(Box::new(task));
+	}
+
+	/// Spawns a task in the background that runs the future passed as
+	/// parameter. The given task is considered essential, i.e. if it errors we
+	/// trigger a service exit.
+	pub fn spawn_essential_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
+		let essential_failed = self.essential_failed.clone();
+		let essential_task = Box::new(task.map_err(move |_| {
+			error!("Essential task failed. Shutting down service.");
+			essential_failed.store(true, Ordering::Relaxed);
+		}));
+
+		let _ = self.to_spawn_tx.unbounded_send(essential_task);
 	}
 
 	/// Returns a handle for spawning tasks.
@@ -532,9 +569,13 @@ impl<Components: components::Components> Service<Components> {
 
 impl<Components> Future for Service<Components> where Components: components::Components {
 	type Item = ();
-	type Error = ();
+	type Error = Error;
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+		if self.essential_failed.load(Ordering::Relaxed) {
+			return Err(Error::Other("Essential task failed.".into()));
+		}
+
 		while let Ok(Async::Ready(Some(task_to_spawn))) = self.to_spawn_rx.poll() {
 			let executor = tokio_executor::DefaultExecutor::current();
 			if let Err(err) = executor.execute(task_to_spawn) {
@@ -577,14 +618,15 @@ impl<Components> Executor<Box<dyn Future<Item = (), Error = ()> + Send>>
 ///
 /// The `status_sink` contain a list of senders to send a periodic network status to.
 fn build_network_future<
-	Components: components::Components,
-	S: network::specialization::NetworkSpecialization<ComponentBlock<Components>>,
+	B: BlockT,
+	C: client::BlockchainEvents<B>,
+	S: network::specialization::NetworkSpecialization<B>,
 	H: network::ExHashT
 > (
-	mut network: network::NetworkWorker<ComponentBlock<Components>, S, H>,
-	client: Arc<ComponentClient<Components>>,
-	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<(NetworkStatus<ComponentBlock<Components>>, NetworkState)>>>>,
-	rpc_rx: futures03::channel::mpsc::UnboundedReceiver<rpc::apis::system::Request<ComponentBlock<Components>>>,
+	mut network: network::NetworkWorker<B, S, H>,
+	client: Arc<C>,
+	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<(NetworkStatus<B>, NetworkState)>>>>,
+	rpc_rx: futures03::channel::mpsc::UnboundedReceiver<rpc::apis::system::Request<B>>,
 	should_have_peers: bool,
 ) -> impl Future<Item = (), Error = ()> {
 	// Compatibility shim while we're transitionning to stable Futures.
@@ -710,8 +752,8 @@ impl<Components> Drop for Service<Components> where Components: components::Comp
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(not(target_os = "unknown"))]
-fn start_rpc_servers<F: ServiceFactory, H: FnMut() -> rpc::RpcHandler>(
-	config: &FactoryFullConfiguration<F>,
+fn start_rpc_servers<C, G, H: FnMut() -> rpc::RpcHandler>(
+	config: &Configuration<C, G>,
 	mut gen_handler: H
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	fn maybe_start_server<T, F>(address: Option<SocketAddr>, mut start: F) -> Result<Option<T>, io::Error>
@@ -751,8 +793,8 @@ fn start_rpc_servers<F: ServiceFactory, H: FnMut() -> rpc::RpcHandler>(
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(target_os = "unknown")]
-fn start_rpc_servers<F: ServiceFactory, H: FnMut() -> rpc::RpcHandler>(
-	_: &FactoryFullConfiguration<F>,
+fn start_rpc_servers<C, G, H: FnMut() -> rpc::RpcHandler>(
+	_: &Configuration<C, G>,
 	_: H
 ) -> Result<Box<std::any::Any + Send + Sync>, error::Error> {
 	Ok(Box::new(()))
@@ -779,16 +821,10 @@ impl RpcSession {
 }
 
 /// Transaction pool adapter.
-pub struct TransactionPoolAdapter<C: Components> {
+pub struct TransactionPoolAdapter<C, P> {
 	imports_external_transactions: bool,
-	pool: Arc<TransactionPool<C::TransactionPoolApi>>,
-	client: Arc<ComponentClient<C>>,
-}
-
-impl<C: Components> TransactionPoolAdapter<C> {
-	fn best_block_id(&self) -> Option<BlockId<ComponentBlock<C>>> {
-		Some(BlockId::hash(self.client.info().chain.best_hash))
-	}
+	pool: Arc<P>,
+	client: Arc<C>,
 }
 
 /// Get transactions for propagation.
@@ -812,14 +848,20 @@ where
 		.collect()
 }
 
-impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<C>> for
-	TransactionPoolAdapter<C> where <C as components::Components>::RuntimeApi: Send + Sync
+impl<B, H, C, PoolApi, E> network::TransactionPool<H, B> for
+	TransactionPoolAdapter<C, TransactionPool<PoolApi>>
+where
+	C: network::ClientHandle<B> + Send + Sync,
+	PoolApi: ChainApi<Block=B, Hash=H, Error=E>,
+	B: BlockT,
+	H: std::hash::Hash + Eq + sr_primitives::traits::Member + serde::Serialize,
+	E: txpool::error::IntoPoolError + From<txpool::error::Error>,
 {
-	fn transactions(&self) -> Vec<(ComponentExHash<C>, ComponentExtrinsic<C>)> {
+	fn transactions(&self) -> Vec<(H, <B as BlockT>::Extrinsic)> {
 		transactions_to_propagate(&self.pool)
 	}
 
-	fn import(&self, transaction: &ComponentExtrinsic<C>) -> Option<ComponentExHash<C>> {
+	fn import(&self, transaction: &<B as BlockT>::Extrinsic) -> Option<H> {
 		if !self.imports_external_transactions {
 			debug!("Transaction rejected");
 			return None;
@@ -828,12 +870,12 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 		let encoded = transaction.encode();
 		match Decode::decode(&mut &encoded[..]) {
 			Ok(uxt) => {
-				let best_block_id = self.best_block_id()?;
+				let best_block_id = BlockId::hash(self.client.info().chain.best_hash);
 				match self.pool.submit_one(&best_block_id, uxt) {
 					Ok(hash) => Some(hash),
 					Err(e) => match e.into_pool_error() {
 						Ok(txpool::error::Error::AlreadyImported(hash)) => {
-							hash.downcast::<ComponentExHash<C>>().ok()
+							hash.downcast::<H>().ok()
 								.map(|x| x.as_ref().clone())
 						},
 						Ok(e) => {
@@ -854,7 +896,7 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 		}
 	}
 
-	fn on_broadcasted(&self, propagations: HashMap<ComponentExHash<C>, Vec<String>>) {
+	fn on_broadcasted(&self, propagations: HashMap<H, Vec<String>>) {
 		self.pool.on_broadcasted(propagations)
 	}
 }

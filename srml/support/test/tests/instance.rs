@@ -75,7 +75,7 @@ mod module1 {
 
 		add_extra_genesis {
 			config(test) : T::BlockNumber;
-			build(|_, _, config: &Self| {
+			build(|_, config: &Self| {
 				println!("{}", config.test);
 			});
 		}
@@ -299,7 +299,7 @@ fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		}),
 		module2_Instance2: None,
 		module2_Instance3: None,
-	}.build_storage().unwrap().0.into()
+	}.build_storage().unwrap().into()
 }
 
 #[test]

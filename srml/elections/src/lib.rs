@@ -1304,7 +1304,7 @@ mod tests {
 					presentation_duration: 2,
 					term_duration: 5,
 				}),
-			}.build_storage().unwrap().0.into()
+			}.build_storage().unwrap().into()
 		}
 	}
 
