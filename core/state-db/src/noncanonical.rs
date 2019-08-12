@@ -347,7 +347,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 						0,
 						&mut self.parents,
 						&mut self.pinned,
-						&overlay.hash
+						&overlay.hash,
 					);
 				}
 				discard_values(&mut self.values, overlay.inserted, self.pinned.get_mut(&overlay.hash));
