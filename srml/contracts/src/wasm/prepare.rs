@@ -227,14 +227,20 @@ impl<'a> ContractModule<'a> {
 			};
 
 			// Then check the signature.
-			// Both "call" and "deploy" has a () -> () function type.
+			// Both "call" and "deploy" has a [] -> [] or [] -> [i32] function type.
+			//
+			// The [] -> [] signature predates the [] -> [i32] signature and is supported for
+			// backwards compatibility. This will likely be removed once ink! is updated to
+			// generate modules with the new function signatures.
 			let func_ty_idx = func_entries.get(fn_idx as usize)
 				.ok_or_else(|| "export refers to non-existent function")?
 				.type_ref();
 			let Type::Function(ref func_ty) = types
 				.get(func_ty_idx as usize)
 				.ok_or_else(|| "function has a non-existent type")?;
-			if !(func_ty.params().is_empty() && func_ty.return_type().is_none()) {
+			if !func_ty.params().is_empty() ||
+				!(func_ty.return_type().is_none() ||
+					func_ty.return_type() == Some(ValueType::I32)) {
 				return Err("entry point has wrong signature");
 			}
 		}
