@@ -88,19 +88,32 @@ construct_service_factory! {
 		RuntimeApi = RuntimeApi,
 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
 		RuntimeDispatch = node_executor::Executor,
-		FullTransactionPoolApi = transaction_pool::ChainApi<client::Client<FullBackend<Self>, FullExecutor<Self>, Block, RuntimeApi>, Block>
-			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
-		LightTransactionPoolApi = transaction_pool::ChainApi<client::Client<LightBackend<Self>, LightExecutor<Self>, Block, RuntimeApi>, Block>
-			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
+		FullTransactionPoolApi =
+			transaction_pool::ChainApi<
+				client::Client<FullBackend<Self>, FullExecutor<Self>, Block, RuntimeApi>,
+				Block
+			> {
+				|config, client|
+					Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client)))
+			},
+		LightTransactionPoolApi =
+			transaction_pool::ChainApi<
+				client::Client<LightBackend<Self>, LightExecutor<Self>, Block, RuntimeApi>,
+				Block
+			> {
+				|config, client|
+					Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client)))
+			},
 		Genesis = GenesisConfig,
 		Configuration = NodeConfig<Self>,
-		FullService = FullComponents<Self>
-			{ |config: FactoryFullConfiguration<Self>|
-				FullComponents::<Factory>::new(config) },
+		FullService = FullComponents<Self> {
+			|config: FactoryFullConfiguration<Self>| FullComponents::<Factory>::new(config)
+		},
 		AuthoritySetup = {
 			|mut service: Self::FullService| {
-				let (block_import, link_half, babe_link) = service.config_mut().custom.import_setup.take()
-					.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
+				let (block_import, link_half, babe_link) =
+					service.config_mut().custom.import_setup.take()
+						.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
 				// spawn any futures that were created in the previous setup steps
 				if let Some(tasks) = service.config_mut().custom.tasks_to_spawn.take() {
@@ -113,30 +126,34 @@ construct_service_factory! {
 					}
 				}
 
-				let proposer = substrate_basic_authorship::ProposerFactory {
-					client: service.client(),
-					transaction_pool: service.transaction_pool(),
-				};
+				if service.config().roles.is_authority() {
+					let proposer = substrate_basic_authorship::ProposerFactory {
+						client: service.client(),
+						transaction_pool: service.transaction_pool(),
+					};
 
-				let client = service.client();
-				let select_chain = service.select_chain().ok_or(ServiceError::SelectChainRequired)?;
+					let client = service.client();
+					let select_chain = service.select_chain()
+						.ok_or(ServiceError::SelectChainRequired)?;
 
-				let babe_config = babe::BabeParams {
-					config: Config::get_or_compute(&*client)?,
-					keystore: service.keystore(),
-					client,
-					select_chain,
-					block_import,
-					env: proposer,
-					sync_oracle: service.network(),
-					inherent_data_providers: service.config().custom.inherent_data_providers.clone(),
-					force_authoring: service.config().force_authoring,
-					time_source: babe_link,
-				};
+					let babe_config = babe::BabeParams {
+						config: Config::get_or_compute(&*client)?,
+						keystore: service.keystore(),
+						client,
+						select_chain,
+						block_import,
+						env: proposer,
+						sync_oracle: service.network(),
+						inherent_data_providers: service.config()
+							.custom.inherent_data_providers.clone(),
+						force_authoring: service.config().force_authoring,
+						time_source: babe_link,
+					};
 
-				let babe = start_babe(babe_config)?;
-				let select = babe.select(service.on_exit()).then(|_| Ok(()));
-				service.spawn_task(Box::new(select));
+					let babe = start_babe(babe_config)?;
+					let select = babe.select(service.on_exit()).then(|_| Ok(()));
+					service.spawn_task(Box::new(select));
+				}
 
 				let config = grandpa::Config {
 					// FIXME #1578 make this available through chainspec
@@ -146,8 +163,18 @@ construct_service_factory! {
 					keystore: Some(service.keystore()),
 				};
 
-				if !service.config().disable_grandpa {
-					if service.config().roles.is_authority() {
+				match (service.config().roles.is_authority(), service.config().disable_grandpa) {
+					(false, false) => {
+						// start the lightweight GRANDPA observer
+						service.spawn_task(Box::new(grandpa::run_grandpa_observer(
+							config,
+							link_half,
+							service.network(),
+							service.on_exit(),
+						)?));
+					},
+					(true, false) => {
+						// start the full GRANDPA voter
 						let telemetry_on_connect = TelemetryOnConnect {
 							telemetry_connection_sinks: service.telemetry_on_connect_stream(),
 						};
@@ -155,36 +182,33 @@ construct_service_factory! {
 							config: config,
 							link: link_half,
 							network: service.network(),
-							inherent_data_providers: service.config().custom.inherent_data_providers.clone(),
+							inherent_data_providers:
+								service.config().custom.inherent_data_providers.clone(),
 							on_exit: service.on_exit(),
 							telemetry_on_connect: Some(telemetry_on_connect),
 						};
 						service.spawn_task(Box::new(grandpa::run_grandpa_voter(grandpa_config)?));
-					} else {
-						service.spawn_task(Box::new(grandpa::run_grandpa_observer(
-							config,
-							link_half,
+					},
+					(_, true) => {
+						grandpa::setup_disabled_grandpa(
+							service.client(),
+							&service.config().custom.inherent_data_providers,
 							service.network(),
-							service.on_exit(),
-						)?));
-					}
+						)?;
+					},
 				}
-
-				// regardless of whether grandpa is started or not, when
-				// authoring blocks we expect inherent data regarding what our
-				// last finalized block is, to be available.
-				grandpa::register_finality_tracker_inherent_data_provider(
-					service.client(),
-					&service.config().custom.inherent_data_providers,
-				)?;
 
 				Ok(service)
 			}
 		},
 		LightService = LightComponents<Self>
 			{ |config| <LightComponents<Factory>>::new(config) },
-		FullImportQueue = BabeImportQueue<Self::Block>
-			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>, select_chain: Self::SelectChain| {
+		FullImportQueue = BabeImportQueue<Self::Block> {
+			|
+				config: &mut FactoryFullConfiguration<Self>,
+				client: Arc<FullClient<Self>>,
+				select_chain: Self::SelectChain
+			| {
 				let (block_import, link_half) =
 					grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>, _>(
 						client.clone(), client.clone(), select_chain
@@ -218,7 +242,8 @@ construct_service_factory! {
 				)?;
 
 				let finality_proof_import = block_import.clone();
-				let finality_proof_request_builder = finality_proof_import.create_finality_proof_request_builder();
+				let finality_proof_request_builder =
+					finality_proof_import.create_finality_proof_request_builder();
 
 				// FIXME: pruning task isn't started since light client doesn't do `AuthoritySetup`.
 				let (import_queue, ..) = import_queue(
@@ -250,7 +275,9 @@ construct_service_factory! {
 mod tests {
 	use std::sync::Arc;
 	use babe::CompatibleDigestItem;
-	use consensus_common::{Environment, Proposer, BlockImportParams, BlockOrigin, ForkChoiceStrategy};
+	use consensus_common::{
+		Environment, Proposer, BlockImportParams, BlockOrigin, ForkChoiceStrategy
+	};
 	use node_primitives::DigestItem;
 	use node_runtime::{BalancesCall, Call, UncheckedExtrinsic};
 	use node_runtime::constants::{currency::CENTS, time::SLOT_DURATION};
@@ -302,7 +329,9 @@ mod tests {
 				auxiliary: Vec::new(),
 			}
 		};
-		let extrinsic_factory = |service: &SyncService<<Factory as service::ServiceFactory>::FullService>| {
+		let extrinsic_factory =
+			|service: &SyncService<<Factory as service::ServiceFactory>::FullService>|
+		{
 			let payload = (
 				0,
 				Call::Balances(BalancesCall::transfer(RawAddress::Id(bob.public().0.into()), 69.into())),
@@ -329,7 +358,8 @@ mod tests {
 	#[ignore]
 	fn test_sync() {
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-		let keystore = keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
+		let keystore = keystore::Store::open(keystore_path.path(), None)
+			.expect("Creates keystore");
 		let alice = keystore.write().insert_ephemeral_from_seed::<babe::AuthorityPair>("//Alice")
 			.expect("Creates authority pair");
 

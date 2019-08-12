@@ -164,7 +164,7 @@ mod tests {
 		})
 	}
 
-	fn from_block_number(n: u64) -> Header {
+	fn from_block_number(n: u32) -> Header {
 		Header::new(n, Default::default(), Default::default(), [69; 32].into(), Default::default())
 	}
 
@@ -192,7 +192,7 @@ mod tests {
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_initialize_block",
-			&vec![].and(&from_block_number(1u64)),
+			&vec![].and(&from_block_number(1u32)),
 			true,
 			None,
 		).0;
@@ -228,7 +228,7 @@ mod tests {
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_initialize_block",
-			&vec![].and(&from_block_number(1u64)),
+			&vec![].and(&from_block_number(1u32)),
 			true,
 			None,
 		).0;
@@ -260,7 +260,7 @@ mod tests {
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_initialize_block",
-			&vec![].and(&from_block_number(1u64)),
+			&vec![].and(&from_block_number(1u32)),
 			true,
 			None,
 		).0;
@@ -296,7 +296,7 @@ mod tests {
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_initialize_block",
-			&vec![].and(&from_block_number(1u64)),
+			&vec![].and(&from_block_number(1u32)),
 			true,
 			None,
 		).0;
@@ -523,7 +523,7 @@ mod tests {
 		(block1, block2)
 	}
 
-	fn block_with_size(time: u64, nonce: u64, size: usize) -> (Vec<u8>, Hash) {
+	fn block_with_size(time: u64, nonce: u32, size: usize) -> (Vec<u8>, Hash) {
 		construct_block(
 			&mut new_test_ext(COMPACT_CODE, false),
 			1,
@@ -887,7 +887,7 @@ mod tests {
 		], map![]));
 
 		let r = WasmExecutor::new()
-			.call(&mut t, 8, COMPACT_CODE, "Core_initialize_block", &vec![].and(&from_block_number(1u64)));
+			.call(&mut t, 8, COMPACT_CODE, "Core_initialize_block", &vec![].and(&from_block_number(1u32)));
 		assert!(r.is_ok());
 		let r = WasmExecutor::new()
 			.call(&mut t, 8, COMPACT_CODE, "BlockBuilder_apply_extrinsic", &vec![].and(&xt())).unwrap();
@@ -909,7 +909,7 @@ mod tests {
 		], map![]));
 
 		let r = WasmExecutor::new()
-			.call(&mut t, 8, COMPACT_CODE, "Core_initialize_block", &vec![].and(&from_block_number(1u64)));
+			.call(&mut t, 8, COMPACT_CODE, "Core_initialize_block", &vec![].and(&from_block_number(1u32)));
 		assert!(r.is_ok());
 		let r = WasmExecutor::new()
 			.call(&mut t, 8, COMPACT_CODE, "BlockBuilder_apply_extrinsic", &vec![].and(&xt())).unwrap();
@@ -1080,7 +1080,7 @@ mod tests {
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_initialize_block",
-			&vec![].and(&from_block_number(1u64)),
+			&vec![].and(&from_block_number(1u32)),
 			true,
 			None,
 		).0;

@@ -336,6 +336,12 @@ fn with_offchain<R>(f: impl FnOnce(&mut dyn offchain::Externalities) -> R, msg: 
 }
 
 impl OffchainApi for () {
+	fn is_validator() -> bool {
+		with_offchain(|ext| {
+			ext.is_validator()
+		}, "is_validator can be called only in the offchain worker context")
+	}
+
 	fn submit_transaction<T: codec::Encode>(data: &T) -> Result<(), ()> {
 		with_offchain(|ext| {
 			ext.submit_transaction(codec::Encode::encode(data))
