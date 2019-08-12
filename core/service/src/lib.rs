@@ -175,7 +175,7 @@ impl<Components: components::Components> Service<Components> {
 		let finality_proof_provider = Components::build_finality_proof_provider(client.clone())?;
 		let chain_info = client.info().chain;
 
-		Components::RuntimeServices::generate_intial_session_keys(
+		Components::RuntimeServices::generate_initial_session_keys(
 			client.clone(),
 			config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
 		)?;
