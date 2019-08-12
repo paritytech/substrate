@@ -835,6 +835,10 @@ fn claim_slot(
 		.find_map(|(i, a)| {
 			keystore.key_pair::<AuthorityPair>(&a.0).ok().map(|kp| (kp, i))
 		})?;
+
+	debug!(target: "babe", "Slot #{}: We control the signing key for {:?}",
+		slot_number, authorities[authority_index]);
+
 	let transcript = make_transcript(randomness, slot_number, epoch_index);
 
 	// Compute the threshold we will use.
@@ -844,7 +848,11 @@ fn claim_slot(
 	let threshold = calculate_threshold(c, authorities, authority_index);
 
 	get_keypair(&key_pair)
-		.vrf_sign_after_check(transcript, |inout| check(inout, threshold))
+		.vrf_sign_after_check(transcript, |inout| {
+			let ok = check(inout, threshold);
+			trace!(target: "babe", "VRF < {}: {}", threshold, ok);
+			ok
+		})
 		.map(|s|(s, authority_index, key_pair))
 }
 
