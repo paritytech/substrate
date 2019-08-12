@@ -32,11 +32,13 @@ use crate::generic::Digest;
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
-pub struct Header<Number: Copy + Into<u128>, Hash: HashT> {
+pub struct Header<Number: Copy + Into<u128> + From<u128>, Hash: HashT> {
 	/// The parent hash.
 	pub parent_hash: Hash::Output,
 	/// The block number.
-	#[cfg_attr(feature = "std", serde(serialize_with = "serialize_number"))]
+	#[cfg_attr(feature = "std", serde(
+		serialize_with = "serialize_number",
+		deserialize_with = "deserialize_number"))]
 	pub number: Number,
 	/// The state trie merkle root
 	pub state_root: Hash::Output,
@@ -55,8 +57,18 @@ pub fn serialize_number<S, T: Copy + Into<u128>>(val: &T, s: S) -> Result<S::Ok,
 	::serde::Serialize::serialize(&(upper + lower), s)
 }
 
+#[cfg(feature = "std")]
+pub fn deserialize_number<'a, D, T: Copy + From<u128>>(d: D) -> Result<T, D::Error> where D: ::serde::Deserializer<'a> {
+	use primitives::uint::U256;
+	let u256: U256 = ::serde::Deserialize::deserialize(d)?;
+	let lower = (u256 & U256::from(u64::max_value())).as_u64();
+	let upper = ((u256 - U256::from(lower)) >> 64).as_u128();
+	
+	Ok(From::from(upper.rotate_right(64) + lower as u128))
+}
+
 impl<Number, Hash> Decode for Header<Number, Hash> where
-	Number: HasCompact + Copy + Into<u128>,
+	Number: HasCompact + Copy + Into<u128> + From<u128>,
 	Hash: HashT,
 	Hash::Output: Decode,
 {
@@ -72,7 +84,7 @@ impl<Number, Hash> Decode for Header<Number, Hash> where
 }
 
 impl<Number, Hash> Encode for Header<Number, Hash> where
-	Number: HasCompact + Copy + Into<u128>,
+	Number: HasCompact + Copy + Into<u128> + From<u128>,
 	Hash: HashT,
 	Hash::Output: Encode,
 {
@@ -86,13 +98,13 @@ impl<Number, Hash> Encode for Header<Number, Hash> where
 }
 
 impl<Number, Hash> codec::EncodeLike for Header<Number, Hash> where
-	Number: HasCompact + Copy + Into<u128>,
+	Number: HasCompact + Copy + Into<u128> + From<u128>,
 	Hash: HashT,
 	Hash::Output: Encode,
 {}
 
 impl<Number, Hash> traits::Header for Header<Number, Hash> where
-	Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + MaybeDisplay + SimpleArithmetic + Codec + Copy + Into<u128>,
+	Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + MaybeDisplay + SimpleArithmetic + Codec + Copy + Into<u128> + From<u128>,
 	Hash: HashT,
 	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeSerializeDebugButNotDeserialize + MaybeDisplay + SimpleBitOps + Codec,
 {
@@ -141,7 +153,7 @@ impl<Number, Hash> traits::Header for Header<Number, Hash> where
 }
 
 impl<Number, Hash> Header<Number, Hash> where
-	Number: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec + Into<u128>,
+	Number: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec + Into<u128> + From<u128>,
 	Hash: HashT,
 	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeDisplay + SimpleBitOps + Codec,
  {
@@ -173,4 +185,16 @@ mod tests {
 		assert_eq!(serialize(u64::max_value() as u128 + 1), "\"0x10000000000000000\"".to_owned());
 	}
 
+	#[test]
+	fn should_deserialize_number() {
+		fn deserialize(num: &str) -> u128 {
+			let mut der = ::serde_json::Deserializer::new(::serde_json::de::StrRead::new(num));
+			deserialize_number(&mut der).unwrap()
+		}
+
+		assert_eq!(deserialize("\"0x0\""), 0);
+		assert_eq!(deserialize("\"0x1\""), 1);
+		assert_eq!(deserialize("\"0xffffffffffffffff\""), u64::max_value() as u128);
+		assert_eq!(deserialize("\"0x10000000000000000\""), u64::max_value() as u128 + 1);
+	}
 }
