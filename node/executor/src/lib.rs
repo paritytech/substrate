@@ -378,6 +378,7 @@ mod tests {
 				offline_slash: Perbill::zero(),
 				offline_slash_grace: 0,
 				invulnerables: vec![alice(), bob(), charlie()],
+				.. Default::default()
 			}),
 			contracts: Some(ContractsConfig {
 				current_schedule: Default::default(),
