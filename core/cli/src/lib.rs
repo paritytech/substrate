@@ -352,7 +352,7 @@ impl<'a> ParseAndPrepareExport<'a> {
 		exit: E,
 	) -> error::Result<()>
 	where S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
-		F: FnOnce(Configuration<C, G>) -> B,
+		F: FnOnce(Configuration<C, G>) -> Result<B, error::Error>,
 		B: ServiceBuilderExport,
 		C: Default,
 		G: RuntimeGenesis,
@@ -370,8 +370,7 @@ impl<'a> ParseAndPrepareExport<'a> {
 			None => Box::new(stdout()),
 		};
 
-		let builder = builder(config);
-		builder.export_blocks(exit.into_exit(), file, from.into(), to.map(Into::into), json)?;
+		builder(config)?.export_blocks(exit.into_exit(), file, from.into(), to.map(Into::into), json)?;
 		Ok(())
 	}
 }
@@ -422,7 +421,7 @@ impl<'a> ParseAndPrepareImport<'a> {
 		exit: E,
 	) -> error::Result<()>
 	where S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
-		F: FnOnce(Configuration<C, G>) -> B,
+		F: FnOnce(Configuration<C, G>) -> Result<B, error::Error>,
 		B: ServiceBuilderImport,
 		C: Default,
 		G: RuntimeGenesis,
@@ -444,7 +443,7 @@ impl<'a> ParseAndPrepareImport<'a> {
 			},
 		};
 
-		let fut = builder(config).import_blocks(exit.into_exit(), file)?;
+		let fut = builder(config)?.import_blocks(exit.into_exit(), file)?;
 		tokio::run(fut);
 		Ok(())
 	}
@@ -525,13 +524,13 @@ impl<'a> ParseAndPrepareRevert<'a> {
 		spec_factory: S
 	) -> error::Result<()>
 	where S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
-		F: FnOnce(Configuration<C, G>) -> B,
+		F: FnOnce(Configuration<C, G>) -> Result<B, error::Error>,
 		B: ServiceBuilderRevert,
 		C: Default,
 		G: RuntimeGenesis {
 		let config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
 		let blocks = self.params.num;
-		builder(config).revert_chain(blocks.into())?;
+		builder(config)?.revert_chain(blocks.into())?;
 		Ok(())
 	}
 }
