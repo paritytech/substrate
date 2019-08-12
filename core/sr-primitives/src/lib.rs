@@ -824,6 +824,15 @@ impl ::serde::Serialize for OpaqueExtrinsic {
 	}
 }
 
+#[cfg(feature = "std")]
+impl<'a> ::serde::Deserialize<'a> for OpaqueExtrinsic {
+	fn deserialize<D>(de: D) -> Result<Self, D::Error> where D: ::serde::Deserializer<'a> {
+		let r = ::primitives::bytes::deserialize(de)?;
+		Decode::decode(&mut &r[..])
+			.map_err(|e| ::serde::de::Error::custom(format!("Decode error: {}", e)))
+	}
+}
+
 impl traits::Extrinsic for OpaqueExtrinsic {
 	type Call = ();
 
