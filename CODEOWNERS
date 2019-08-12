@@ -7,7 +7,8 @@
 # - Glob syntax is git-like, e.g. `/core` means the core directory in the root, unlike `core` which
 #   can be everywhere.
 # - Multiple owners are supported.
+# - Either handle (e.g, @pepyakin) or email can be used.
 # - The latest matching rule, if multiple, takes precedence.
 
-/srml/contracts/ sergei@parity.io
-/core/executor/ sergei@parity.io
+/srml/contracts/ @pepyakin
+/core/executor/ @pepyakin
