@@ -1221,13 +1221,13 @@ impl<T: Trait> Module<T> {
 	/// Returns the new `SlotStake` value and a set of newly selected _stash_ IDs.
 	fn select_validators() -> (BalanceOf<T>, Option<Vec<T::AccountId>>) {
 		let maybe_elected_set = elect::<T::AccountId, BalanceOf<T>, _, T::CurrencyToVote>(
-				Self::validator_count() as usize,
-				true,
-				Self::minimum_validator_count().max(1) as usize,
-				<Validators<T>>::enumerate().map(|(who, _)| who).collect::<Vec<T::AccountId>>(),
-				<Nominators<T>>::enumerate().collect(),
-				Self::slashable_balance_of
-			);
+			Self::validator_count() as usize,
+			true,
+			Self::minimum_validator_count().max(1) as usize,
+			<Validators<T>>::enumerate().map(|(who, _)| who).collect::<Vec<T::AccountId>>(),
+			<Nominators<T>>::enumerate().collect(),
+			Self::slashable_balance_of
+		);
 
 		if let Some(elected_set) = maybe_elected_set {
 			let elected_stashes = elected_set.0.into_iter().map(|(s, _)| s).collect::<Vec<T::AccountId>>();
