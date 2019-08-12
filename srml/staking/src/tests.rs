@@ -885,6 +885,43 @@ fn session_and_eras_work() {
 }
 
 #[test]
+fn forcing_new_era_works() {
+	with_externalities(&mut ExtBuilder::default().build(),|| {
+		// normal flow of session.
+		assert_eq!(Staking::current_era(), 0);
+		start_session(0);
+		assert_eq!(Staking::current_era(), 0);
+		start_session(1);
+		assert_eq!(Staking::current_era(), 0);
+		start_session(2);
+		assert_eq!(Staking::current_era(), 1);
+
+		// no era change.
+		ForceEra::put(Forcing::ForceNone);
+		start_session(3);
+		assert_eq!(Staking::current_era(), 1);
+		start_session(4);
+		assert_eq!(Staking::current_era(), 1);
+		start_session(5);
+		assert_eq!(Staking::current_era(), 1);
+		start_session(6);
+		assert_eq!(Staking::current_era(), 1);
+
+		// back to normal
+		ForceEra::put(Forcing::NotForcing);
+		start_session(7);
+		assert_eq!(Staking::current_era(), 1);
+		start_session(8);
+		assert_eq!(Staking::current_era(), 2);
+
+		// forceful change
+		ForceEra::put(Forcing::ForceNew);
+		start_session(9);
+		assert_eq!(Staking::current_era(), 3);
+	});
+}
+
+#[test]
 fn cannot_transfer_staked_balance() {
 	// Tests that a stash account cannot transfer funds
 	with_externalities(&mut ExtBuilder::default().nominate(false).build(), || {
