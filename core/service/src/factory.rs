@@ -213,6 +213,16 @@ where TGen: Serialize + DeserializeOwned + BuildStorage {
 impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool>
 	ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool> {
 
+	/// Returns a reference to the client that was stored in this builder.
+	pub fn client(&self) -> &Arc<TCl> {
+		&self.client
+	}
+
+	/// Returns a reference to the select-chain that was stored in this builder.
+	pub fn select_chain(&self) -> Option<&TSc> {
+		self.select_chain.as_ref()
+	}
+
 	/// Defines which head-of-chain strategy to use.
 	pub fn with_opt_select_chain<USc>(
 		mut self,
