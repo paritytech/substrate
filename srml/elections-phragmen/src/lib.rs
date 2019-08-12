@@ -124,7 +124,7 @@ decl_module! {
 		/// `who` cannot be an old voter who has not yet called [`remove_voter`].
 		///
 		/// Upon voting, the entire balance of `who` is locked and a bond amount is reserved.
-		#[weight = SimpleDispatchInfo::FixedNormal(2_500_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(750_000)]
 		fn vote(origin, votes: Vec<T::AccountId>) -> Result {
 			let who = ensure_signed(origin)?;
 
@@ -161,7 +161,7 @@ decl_module! {
 		/// Remove `origin` as a voter. One can use this to
 		///   1. _undo_ their votes before the election has started.
 		///   2. Remove their lock and unreserve the bond after an election round.
-		#[weight = SimpleDispatchInfo::FixedNormal(1_250_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn remove_voter(origin) {
 			let who = ensure_signed(origin)?;
 
@@ -184,7 +184,7 @@ decl_module! {
 		/// A candidate will either:
 		///   - Lose at the end of the term and gets their bond unreserved
 		///   - Win and become a member. Members will get their bond back at the end ot their term.
-		#[weight = SimpleDispatchInfo::FixedNormal(2_500_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
 		fn submit_candidacy(origin) {
 			let who = ensure_signed(origin)?;
 
