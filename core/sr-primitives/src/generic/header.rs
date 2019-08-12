@@ -51,13 +51,17 @@ pub struct Header<Number: Copy + Into<U256> + TryFrom<U256>, Hash: HashT> {
 }
 
 #[cfg(feature = "std")]
-pub fn serialize_number<S, T: Copy + Into<U256> + TryFrom<U256>>(val: &T, s: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+pub fn serialize_number<S, T: Copy + Into<U256> + TryFrom<U256>>(
+	val: &T, s: S,
+) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
 	let u256: U256 = (*val).into();
 	::serde::Serialize::serialize(&u256, s)
 }
 
 #[cfg(feature = "std")]
-pub fn deserialize_number<'a, D, T: Copy + Into<U256> + TryFrom<U256>>(d: D) -> Result<T, D::Error> where D: ::serde::Deserializer<'a> {
+pub fn deserialize_number<'a, D, T: Copy + Into<U256> + TryFrom<U256>>(
+	d: D,
+) -> Result<T, D::Error> where D: ::serde::Deserializer<'a> {
 	let u256: U256 = ::serde::Deserialize::deserialize(d)?;
 	TryFrom::try_from(u256).map_err(|_| ::serde::de::Error::custom("Try from failed"))
 }
@@ -99,9 +103,11 @@ impl<Number, Hash> codec::EncodeLike for Header<Number, Hash> where
 {}
 
 impl<Number, Hash> traits::Header for Header<Number, Hash> where
-	Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + MaybeDisplay + SimpleArithmetic + Codec + Copy + Into<U256> + TryFrom<U256>,
+	Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + MaybeDisplay +
+		SimpleArithmetic + Codec + Copy + Into<U256> + TryFrom<U256>,
 	Hash: HashT,
-	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeSerializeDebugButNotDeserialize + MaybeDisplay + SimpleBitOps + Codec,
+	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member +
+		MaybeSerializeDebugButNotDeserialize + MaybeDisplay + SimpleBitOps + Codec,
 {
 	type Number = Number;
 	type Hash = <Hash as HashT>::Output;
