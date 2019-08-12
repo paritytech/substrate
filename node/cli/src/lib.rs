@@ -187,7 +187,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 		ParseAndPrepare::PurgeChain(cmd) => cmd.run(load_spec),
 		ParseAndPrepare::RevertChain(cmd) => cmd.run_with_builder::<(), _, _, _, _>(|config| Ok(new_full_start!(config).0), load_spec),
 		ParseAndPrepare::CustomCommand(CustomSubcommands::Factory(cli_args)) => {
-			let mut config = cli::create_config_with_db_path(
+			let mut config = cli::create_config_with_db_path::<(), _, _>(
 				load_spec,
 				&cli_args.shared_params,
 				&version,
@@ -209,9 +209,13 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 				cli_args.num,
 				cli_args.rounds,
 			);
-			transaction_factory::factory::<service::Factory, FactoryState<_>>(
+
+			let service_builder = new_full_start!(config).0;
+			transaction_factory::factory::<FactoryState<_>, _, _, _, _, _>(
 				factory_state,
-				config,
+				service_builder.client(),
+				service_builder.select_chain()
+					.expect("The select_chain is always initialized by new_full_start!; QED")
 			).map_err(|e| format!("Error in transaction factory: {}", e))?;
 
 			Ok(())
