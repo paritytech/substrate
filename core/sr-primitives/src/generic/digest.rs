@@ -110,6 +110,17 @@ impl<Hash: Encode> ::serde::Serialize for DigestItem<Hash> {
 	}
 }
 
+#[cfg(feature = "std")]
+impl<'a, Hash: Decode> ::serde::Deserialize<'a> for DigestItem<Hash> {
+	fn deserialize<D>(de: D) -> Result<Self, D::Error> where
+		D: ::serde::Deserializer<'a>,
+	{
+		let r = ::primitives::bytes::deserialize(de)?;
+		Decode::decode(&mut &r[..])
+			.map_err(|e| ::serde::de::Error::custom(format!("Decode error: {}", e)))
+	}
+}
+
 /// A 'referencing view' for digest item. Does not own its contents. Used by
 /// final runtime implementations for encoding/decoding its log items.
 #[derive(PartialEq, Eq, Clone)]
