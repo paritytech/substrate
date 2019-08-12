@@ -25,7 +25,7 @@ use sr_primitives::weights::SimpleDispatchInfo;
 use codec::{Encode, Decode, Input, Output, Error};
 use srml_support::{
 	decl_module, decl_storage, decl_event, ensure,
-	StorageValue, StorageMap, Parameter, Dispatchable, IsSubType, EnumerableStorageMap,
+	StorageValue, StorageMap, Parameter, Dispatchable, EnumerableStorageMap,
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier,
 		OnFreeBalanceZero, Get
@@ -182,7 +182,7 @@ pub const DEFAULT_EMERGENCY_VOTING_PERIOD: u32 = 0;
 pub const DEFAULT_COOLOFF_PERIOD: u32 = 0;
 
 pub trait Trait: system::Trait + Sized {
-	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + IsSubType<Module<Self>, Self>;
+	type Proposal: Parameter + Dispatchable<Origin=Self::Origin>;
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
 	/// Currency type for this module.
@@ -1094,9 +1094,9 @@ mod tests {
 		balances::GenesisConfig::<Test>{
 			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
 			vesting: vec![],
-		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
-		GenesisConfig::default().assimilate_storage(&mut t.0, &mut t.1).unwrap();
-		runtime_io::TestExternalities::new_with_children(t)
+		}.assimilate_storage(&mut t).unwrap();
+		GenesisConfig::default().assimilate_storage(&mut t).unwrap();
+		runtime_io::TestExternalities::new(t)
 	}
 
 	type System = system::Module<Test>;

@@ -260,7 +260,7 @@ impl ExtBuilder {
 	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 		self.set_associated_consts();
-		let (mut t, mut c) = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut storage = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		let balance_factor = if self.existential_deposit > 0 {
 			256
 		} else {
@@ -292,7 +292,7 @@ impl ExtBuilder {
 					(999, 1_000_000_000_000),
 			],
 			vesting: vec![],
-		}.assimilate_storage(&mut t, &mut c);
+		}.assimilate_storage(&mut storage);
 
 		let stake_21 = if self.fair { 1000 } else { 2000 };
 		let stake_31 = if self.validator_pool { balance_factor * 1000 } else { 1 };
@@ -317,13 +317,14 @@ impl ExtBuilder {
 			minimum_validator_count: self.minimum_validator_count,
 			invulnerables: self.invulnerables,
 			slash_reward_fraction: Perbill::from_percent(10),
-		}.assimilate_storage(&mut t, &mut c);
+			..Default::default()
+		}.assimilate_storage(&mut storage);
 
 		let _ = session::GenesisConfig::<Test> {
 			keys: validators.iter().map(|x| (*x, UintAuthorityId(*x))).collect(),
-		}.assimilate_storage(&mut t, &mut c);
+		}.assimilate_storage(&mut storage);
 
-		let mut ext = t.into();
+		let mut ext = storage.into();
 		runtime_io::with_externalities(&mut ext, || {
 			let validators = Session::validators();
 			SESSION.with(|x|

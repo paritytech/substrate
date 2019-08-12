@@ -18,7 +18,9 @@
 //! Cryptographic utilities.
 // end::description[]
 
-use rstd::convert::{TryFrom, TryInto};
+#[cfg(feature = "std")]
+use rstd::convert::TryInto;
+use rstd::convert::TryFrom;
 #[cfg(feature = "std")]
 use parking_lot::Mutex;
 #[cfg(feature = "std")]

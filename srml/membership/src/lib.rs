@@ -64,8 +64,7 @@ decl_storage! {
 		config(members): Vec<T::AccountId>;
 		config(phantom): sr_std::marker::PhantomData<I>;
 		build(|
-			storage: &mut sr_primitives::StorageOverlay,
-			_: &mut sr_primitives::ChildrenStorageOverlay,
+			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
 			config: &GenesisConfig<T, I>
 		| {
 			sr_io::with_storage(storage, || {
@@ -81,6 +80,7 @@ decl_storage! {
 decl_event!(
 	pub enum Event<T, I=DefaultInstance> where
 		<T as system::Trait>::AccountId,
+		<T as Trait<I>>::Event,
 	{
 		/// The given member was added; see the transaction for who.
 		MemberAdded,
@@ -91,7 +91,7 @@ decl_event!(
 		/// The membership was reset; see the transaction for who the new set is.
 		MembersReset,
 		/// Phantom member, never used.
-		Dummy(sr_std::marker::PhantomData<(AccountId, I)>),
+		Dummy(sr_std::marker::PhantomData<(AccountId, Event)>),
 	}
 );
 
@@ -282,12 +282,12 @@ mod tests {
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
 	fn new_test_ext() -> sr_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
-		t.extend(GenesisConfig::<Test>{
+		GenesisConfig::<Test>{
 			members: vec![10, 20, 30],
 			.. Default::default()
-		}.build_storage().unwrap().0);
+		}.assimilate_storage(&mut t).unwrap();
 		t.into()
 	}
 

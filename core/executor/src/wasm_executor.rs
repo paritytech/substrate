@@ -281,6 +281,23 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.ext.clear_prefix(&prefix);
 		Ok(())
 	},
+	ext_clear_child_prefix(
+		storage_key_data: *const u8,
+		storage_key_len: u32,
+		prefix_data: *const u8,
+		prefix_len: u32
+	) => {
+		let storage_key = this.memory.get(
+			storage_key_data,
+			storage_key_len as usize
+		).map_err(|_| "Invalid attempt to determine storage_key in ext_clear_child_prefix")?;
+		let storage_key = ChildStorageKey::from_vec(storage_key)
+			.ok_or_else(|| "ext_clear_child_prefix: child storage key is not valid")?;
+		let prefix = this.memory.get(prefix_data, prefix_len as usize)
+			.map_err(|_| "Invalid attempt to determine prefix in ext_clear_child_prefix")?;
+		this.ext.clear_child_prefix(storage_key, &prefix);
+		Ok(())
+	},
 	ext_kill_child_storage(storage_key_data: *const u8, storage_key_len: u32) => {
 		let storage_key = this.memory.get(
 			storage_key_data,
@@ -858,6 +875,13 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			.map_err(|_| "Invalid attempt to set pubkey in ext_secp256k1_ecdsa_recover")?;
 
 		Ok(0)
+	},
+	ext_is_validator() -> u32 => {
+		Ok(if runtime_io::is_validator() {
+			1
+		} else {
+			0
+		})
 	},
 	ext_submit_transaction(msg_data: *const u8, len: u32) -> u32 => {
 		let extrinsic = this.memory.get(msg_data, len as usize)
@@ -1496,11 +1520,11 @@ mod tests {
 
 		assert_eq!(output, b"all ok!".to_vec());
 
-		let expected = TestExternalities::new(map![
+		let expected = TestExternalities::new((map![
 			b"input".to_vec() => b"Hello world".to_vec(),
 			b"foo".to_vec() => b"bar".to_vec(),
 			b"baz".to_vec() => b"bar".to_vec()
-		]);
+		], map![]));
 		assert_eq!(ext, expected);
 	}
 
@@ -1519,11 +1543,11 @@ mod tests {
 
 		assert_eq!(output, b"all ok!".to_vec());
 
-		let expected: TestExternalities<_> = map![
+		let expected = TestExternalities::new((map![
 			b"aaa".to_vec() => b"1".to_vec(),
 			b"aab".to_vec() => b"2".to_vec(),
 			b"bbb".to_vec() => b"5".to_vec()
-		];
+		], map![]));
 		assert_eq!(expected, ext);
 	}
 
@@ -1636,12 +1660,12 @@ mod tests {
 	}
 
 	#[test]
-	fn enumerated_trie_root_should_work() {
+	fn ordered_trie_root_should_work() {
 		let mut ext = TestExternalities::<Blake2Hasher>::default();
 		let trie_input = vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()];
 		let test_code = WASM_BINARY;
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_enumerated_trie_root", &[]).unwrap(),
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_ordered_trie_root", &[]).unwrap(),
 			Layout::<Blake2Hasher>::ordered_trie_root(trie_input.iter()).as_fixed_bytes().encode()
 		);
 	}

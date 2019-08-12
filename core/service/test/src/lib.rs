@@ -73,9 +73,9 @@ impl<T> From<T> for SyncService<T> {
 	}
 }
 
-impl<T: Future<Item=(), Error=()>> Future for SyncService<T> {
+impl<T: Future<Item=(), Error=service::Error>> Future for SyncService<T> {
 	type Item = ();
-	type Error = ();
+	type Error = service::Error;
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
 		self.0.lock().unwrap().poll()
@@ -195,8 +195,8 @@ fn node_config<F: ServiceFactory> (
 }
 
 impl<F: ServiceFactory> TestNet<F> where
-	F::FullService: Future<Item=(), Error=()>,
-	F::LightService: Future<Item=(), Error=()>
+	F::FullService: Future<Item=(), Error=service::Error>,
+	F::LightService: Future<Item=(), Error=service::Error>,
 {
 	fn new(
 		temp: &TempDir,
@@ -239,7 +239,7 @@ impl<F: ServiceFactory> TestNet<F> where
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
 			let service = SyncService::from(F::new_full(node_config).expect("Error creating test node service"));
 
-			executor.spawn(service.clone());
+			executor.spawn(service.clone().map_err(|_| ()));
 			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().into()));
 			((index + nodes), service, addr)
 		}));
@@ -250,7 +250,7 @@ impl<F: ServiceFactory> TestNet<F> where
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
 			let service = SyncService::from(F::new_full(node_config).expect("Error creating test node service"));
 
-			executor.spawn(service.clone());
+			executor.spawn(service.clone().map_err(|_| ()));
 			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().into()));
 			(index, service, addr)
 		}));
@@ -261,7 +261,7 @@ impl<F: ServiceFactory> TestNet<F> where
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
 			let service = SyncService::from(F::new_light(node_config).expect("Error creating test node service"));
 
-			executor.spawn(service.clone());
+			executor.spawn(service.clone().map_err(|_| ()));
 			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().into()));
 			(index, service, addr)
 		}));
@@ -272,8 +272,8 @@ impl<F: ServiceFactory> TestNet<F> where
 }
 
 pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) where
-	F::FullService: Future<Item=(), Error=()>,
-	F::LightService: Future<Item=(), Error=()>,
+	F::FullService: Future<Item=(), Error=service::Error>,
+	F::LightService: Future<Item=(), Error=service::Error>,
 {
 	const NUM_FULL_NODES: usize = 5;
 	const NUM_LIGHT_NODES: usize = 5;
@@ -347,8 +347,8 @@ pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) where
 
 pub fn sync<F, B, E>(spec: FactoryChainSpec<F>, mut block_factory: B, mut extrinsic_factory: E) where
 	F: ServiceFactory,
-	F::FullService: Future<Item=(), Error=()>,
-	F::LightService: Future<Item=(), Error=()>,
+	F::FullService: Future<Item=(), Error=service::Error>,
+	F::LightService: Future<Item=(), Error=service::Error>,
 	B: FnMut(&SyncService<F::FullService>) -> BlockImportParams<F::Block>,
 	E: FnMut(&SyncService<F::FullService>) -> FactoryExtrinsic<F>,
 {
@@ -406,8 +406,8 @@ pub fn sync<F, B, E>(spec: FactoryChainSpec<F>, mut block_factory: B, mut extrin
 
 pub fn consensus<F>(spec: FactoryChainSpec<F>, authorities: Vec<String>) where
 	F: ServiceFactory,
-	F::FullService: Future<Item=(), Error=()>,
-	F::LightService: Future<Item=(), Error=()>,
+	F::FullService: Future<Item=(), Error=service::Error>,
+	F::LightService: Future<Item=(), Error=service::Error>,
 {
 	const NUM_FULL_NODES: usize = 10;
 	const NUM_LIGHT_NODES: usize = 0;

@@ -141,6 +141,13 @@ impl StorageApi for () {
 		);
 	}
 
+	fn clear_child_prefix(storage_key: &[u8], prefix: &[u8]) {
+		ext::with(|ext| {
+			let storage_key = child_storage_key_or_panic(storage_key);
+			ext.clear_child_prefix(storage_key, prefix)
+		});
+	}
+
 	fn storage_root() -> [u8; 32] {
 		ext::with(|ext|
 			ext.storage_root()
@@ -158,14 +165,6 @@ impl StorageApi for () {
 		ext::with(|ext|
 			ext.storage_changes_root(parent_hash.into()).map(|h| h.map(|h| h.into()))
 		).unwrap_or(Ok(None)).expect("Invalid parent hash passed to storage_changes_root")
-	}
-
-	fn enumerated_trie_root<H>(input: &[&[u8]]) -> H::Out
-	where
-		H: Hasher,
-		H::Out: Ord,
-	{
-		Layout::<H>::ordered_trie_root(input)
 	}
 
 	fn trie_root<H, I, A, B>(input: I) -> H::Out
@@ -329,6 +328,12 @@ fn with_offchain<R>(f: impl FnOnce(&mut dyn offchain::Externalities) -> R, msg: 
 }
 
 impl OffchainApi for () {
+	fn is_validator() -> bool {
+		with_offchain(|ext| {
+			ext.is_validator()
+		}, "is_validator can be called only in the offchain worker context")
+	}
+
 	fn submit_transaction<T: codec::Encode>(data: &T) -> Result<(), ()> {
 		with_offchain(|ext| {
 			ext.submit_transaction(codec::Encode::encode(data))
@@ -456,35 +461,19 @@ pub type StorageOverlay = HashMap<Vec<u8>, Vec<u8>>;
 pub type ChildrenStorageOverlay = HashMap<Vec<u8>, StorageOverlay>;
 
 /// Execute the given closure with global functions available whose functionality routes into
-/// externalities that draw from and populate `storage`. Forwards the value that the closure returns.
-pub fn with_storage<R, F: FnOnce() -> R>(storage: &mut StorageOverlay, f: F) -> R {
-	let mut alt_storage = Default::default();
-	rstd::mem::swap(&mut alt_storage, storage);
-	let mut ext = BasicExternalities::new(alt_storage);
-	let r = ext::using(&mut ext, f);
-	*storage = ext.into_storages().0;
-	r
-}
-
-/// Execute the given closure with global functions available whose functionality routes into
 /// externalities that draw from and populate `storage` and `children_storage`.
 /// Forwards the value that the closure returns.
-pub fn with_storage_and_children<R, F: FnOnce() -> R>(
-	storage: &mut StorageOverlay,
-	children_storage: &mut ChildrenStorageOverlay,
+pub fn with_storage<R, F: FnOnce() -> R>(
+	storage: &mut (StorageOverlay, ChildrenStorageOverlay),
 	f: F
 ) -> R {
 	let mut alt_storage = Default::default();
-	let mut alt_children_storage = Default::default();
 	rstd::mem::swap(&mut alt_storage, storage);
-	rstd::mem::swap(&mut alt_children_storage, children_storage);
 
-	let mut ext = BasicExternalities::new_with_children(alt_storage, alt_children_storage);
+	let mut ext = BasicExternalities::new(alt_storage.0, alt_storage.1);
 	let r = ext::using(&mut ext, f);
 
-	let storage_tuple = ext.into_storages();
-	*storage = storage_tuple.0;
-	*children_storage = storage_tuple.1;
+	*storage = ext.into_storages();
 
 	r
 }
@@ -524,7 +513,7 @@ mod std_tests {
 			true
 		}));
 
-		t = BasicExternalities::new(map![b"foo".to_vec() => b"bar".to_vec()]);
+		t = BasicExternalities::new(map![b"foo".to_vec() => b"bar".to_vec()], map![]);
 
 		assert!(!with_externalities(&mut t, || {
 			assert_eq!(storage(b"hello"), None);
@@ -537,7 +526,7 @@ mod std_tests {
 	fn read_storage_works() {
 		let mut t = BasicExternalities::new(map![
 			b":test".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
-		]);
+		], map![]);
 
 		with_externalities(&mut t, || {
 			let mut v = [0u8; 4];
@@ -556,7 +545,7 @@ mod std_tests {
 			b":abcd".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 			b":abc".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 			b":abdd".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
-		]);
+		], map![]);
 
 		with_externalities(&mut t, || {
 			clear_prefix(b":abc");

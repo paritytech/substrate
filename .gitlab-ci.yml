@@ -121,8 +121,17 @@ test-linux-stable:                 &test-linux
     variables:
       - $DEPLOY_TAG
   script:
-    - time cargo test --all --release --verbose --locked
+    - time cargo test --all --release --verbose --locked |
+        tee output.log
     - sccache -s
+  after_script:
+    - echo "___Collecting warnings for check_warnings job___"
+    - awk '/^warning:/,/^$/ { print }' output.log > ${CI_COMMIT_SHORT_SHA}_warnings.log
+  artifacts:
+    name:                          $CI_COMMIT_SHORT_SHA
+    expire_in:                     24 hrs
+    paths:
+      - ${CI_COMMIT_SHORT_SHA}_warnings.log
 
 
 test-srml-staking:                 &test-srml-staking
@@ -165,7 +174,7 @@ test-linux-stable-int:
         &> ${CI_COMMIT_SHORT_SHA}_int_failure.log
     - sccache -s
   after_script:
-    - awk '/FAILED/,0' ${CI_COMMIT_SHORT_SHA}_int_failure.log
+    - awk '/FAILED|^error\[/,0' ${CI_COMMIT_SHORT_SHA}_int_failure.log
   artifacts:
     name:                          $CI_COMMIT_SHORT_SHA
     when:                          on_failure
@@ -280,6 +289,25 @@ build-rust-doc-release:
     - cp -R ./target/doc ./crate-docs
     - echo "<meta http-equiv=refresh content=0;url=substrate_service/index.html>" > ./crate-docs/index.html
     - sccache -s
+
+check_warnings:
+  stage:                           build
+  <<:                              *docker-env
+  except:
+    variables:
+      - $DEPLOY_TAG
+  variables:
+    GIT_STRATEGY:                  none
+  dependencies:
+    - test-linux-stable
+  script:
+    - if [ -s ${CI_COMMIT_SHORT_SHA}_warnings.log ]; then
+        cat ${CI_COMMIT_SHORT_SHA}_warnings.log;
+        exit 1;
+      else
+        echo "___No warnings___";
+      fi
+  allow_failure:                   true
 
 #### stage:                        publish
 

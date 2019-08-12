@@ -53,8 +53,7 @@ mod imp {
 /// Error that can occur while using this crate.
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum Error {
-	/// Module is not valid, couldn't be instantiated or it's `start` function trapped
-	/// when executed.
+	/// Module is not valid, couldn't be instantiated.
 	Module,
 
 	/// Access to a memory or table was made with an address or an index which is out of bounds.
@@ -62,7 +61,7 @@ pub enum Error {
 	/// Note that if wasm module makes an out-of-bounds access then trap will occur.
 	OutOfBounds,
 
-	/// Failed to invoke an exported function for some reason.
+	/// Failed to invoke the start function or an exported function for some reason.
 	Execution,
 }
 

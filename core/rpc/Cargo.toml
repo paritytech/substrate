@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 derive_more = "0.14.0"
 futures = "0.1"
-futures03 = { package = "futures-preview", version = "0.3.0-alpha.17", features = ["compat"] }
+futures03 = { package = "futures-preview", version = "=0.3.0-alpha.17", features = ["compat"] }
 jsonrpc-core = "12.0.0"
 jsonrpc-core-client = "12.0.0"
 jsonrpc-pubsub = "12.0.0"
@@ -21,6 +21,7 @@ client = { package = "substrate-client", path = "../client" }
 substrate-executor = { path = "../executor" }
 network = { package = "substrate-network", path = "../network" }
 primitives = { package = "substrate-primitives", path = "../primitives" }
+session = { package = "substrate-session", path = "../session" }
 state_machine = { package = "substrate-state-machine", path = "../state-machine" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../transaction-pool" }
 sr-primitives = { path = "../sr-primitives" }

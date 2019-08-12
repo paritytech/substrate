@@ -89,7 +89,7 @@ fn basic_setup_works() {
 		assert_eq!(Balances::free_balance(&10), 1);
 
 		// New era is not being forced
-		assert!(!Staking::forcing_new_era());
+		assert_eq!(Staking::force_era(), Forcing::NotForcing);
 
 		// All exposures must be correct.
 		check_exposure_all();
@@ -592,7 +592,7 @@ fn nominators_also_get_slashed() {
 			&[OffenceDetails {
 				offender: (
 					11,
-					dbg!(Staking::stakers(&11)),
+					Staking::stakers(&11),
 				),
 				count: 1,
 				reporters: vec![],
@@ -697,6 +697,44 @@ fn session_and_eras_work() {
 		// Block 7: Era increment.
 		start_session(8);
 		assert_eq!(Session::current_index(), 9);
+		assert_eq!(Staking::current_era(), 3);
+	});
+}
+
+#[test]
+fn forcing_new_era_works() {
+	with_externalities(&mut ExtBuilder::default().build(),|| {
+		// normal flow of session.
+		assert_eq!(Staking::current_era(), 0);
+		start_session(0);
+		assert_eq!(Staking::current_era(), 0);
+		start_session(1);
+		assert_eq!(Staking::current_era(), 0);
+		start_session(2);
+		assert_eq!(Staking::current_era(), 1);
+
+		// no era change.
+		ForceEra::put(Forcing::ForceNone);
+		start_session(3);
+		assert_eq!(Staking::current_era(), 1);
+		start_session(4);
+		assert_eq!(Staking::current_era(), 1);
+		start_session(5);
+		assert_eq!(Staking::current_era(), 1);
+		start_session(6);
+		assert_eq!(Staking::current_era(), 1);
+
+		// back to normal.
+		// this immediatelly starts a new session.
+		ForceEra::put(Forcing::NotForcing);
+		start_session(7);
+		assert_eq!(Staking::current_era(), 2);
+		start_session(8);
+		assert_eq!(Staking::current_era(), 2);
+
+		// forceful change
+		ForceEra::put(Forcing::ForceNew);
+		start_session(9);
 		assert_eq!(Staking::current_era(), 3);
 	});
 }
@@ -1949,6 +1987,8 @@ fn unbonded_balance_is_not_slashable() {
 
 #[test]
 fn era_is_always_same_length() {
+	// This ensures that the sessions is always of the same length if there is no forcing no
+	// session changes.
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		start_era(1);
 		assert_eq!(Staking::current_era_start_session_index(), SessionsPerEra::get());
@@ -1957,7 +1997,7 @@ fn era_is_always_same_length() {
 		assert_eq!(Staking::current_era_start_session_index(), SessionsPerEra::get() * 2);
 
 		let session = Session::current_index();
-		ForceNewEra::put(true);
+		ForceEra::put(Forcing::ForceNew);
 		advance_session();
 		assert_eq!(Staking::current_era(), 3);
 		assert_eq!(Staking::current_era_start_session_index(), session + 1);
@@ -1982,7 +2022,7 @@ fn offence_forces_new_era() {
 			&[Perbill::from_percent(5)],
 		);
 
-		assert!(Staking::forcing_new_era());
+		assert_eq!(Staking::force_era(), Forcing::ForceNew);
 	});
 }
 
@@ -2061,7 +2101,7 @@ fn invulnerables_are_not_slashed() {
 
 		// The validator hasn't been slashed. The new era is not forced.
 		assert_eq!(Balances::free_balance(&11), 1000);
-		assert!(!Staking::forcing_new_era());
+		assert_eq!(Staking::force_era(), Forcing::NotForcing);
 	});
 }
 
@@ -2085,6 +2125,6 @@ fn dont_slash_if_fraction_is_zero() {
 
 		// The validator hasn't been slashed. The new era is not forced.
 		assert_eq!(Balances::free_balance(&11), 1000);
-		assert!(!Staking::forcing_new_era());
+		assert_eq!(Staking::force_era(), Forcing::NotForcing);
 	});
 }

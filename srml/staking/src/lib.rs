@@ -531,6 +531,22 @@ pub trait Trait: system::Trait {
 	type SessionInterface: self::SessionInterface<Self::AccountId>;
 }
 
+/// Mode of era-forcing.
+#[derive(Copy, Clone, PartialEq, Eq, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+pub enum Forcing {
+	/// Not forcing anything - just let whatever happen.
+	NotForcing,
+	/// Force a new era, then reset to `NotForcing` as soon as it is done.
+	ForceNew,
+	/// Avoid a new era indefinitely.
+	ForceNone,
+}
+
+impl Default for Forcing {
+	fn default() -> Self { Forcing::NotForcing }
+}
+
 decl_storage! {
 	trait Store for Module<T: Trait> as Staking {
 
@@ -589,7 +605,7 @@ decl_storage! {
 		}): BalanceOf<T>;
 
 		/// True if the next session change will be a new era regardless of index.
-		pub ForceNewEra get(forcing_new_era): bool;
+		pub ForceEra get(force_era) config(): Forcing;
 
 		/// The percentage of the slash that is distributed to reporters.
 		///
@@ -603,8 +619,7 @@ decl_storage! {
 		config(stakers):
 			Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>;
 		build(|
-			storage: &mut sr_primitives::StorageOverlay,
-			_: &mut sr_primitives::ChildrenStorageOverlay,
+			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
 			config: &GenesisConfig<T>
 		| {
 			with_storage(storage, || {
@@ -915,7 +930,7 @@ decl_module! {
 			<Payee<T>>::insert(stash, payee);
 		}
 
-		/// (Re-)set the payment target for a controller.
+		/// (Re-)set the controller of a stash.
 		///
 		/// Effects will be felt at the beginning of the next era.
 		///
@@ -951,18 +966,27 @@ decl_module! {
 
 		// ----- Root calls.
 
-		/// Force there to be a new era. This also forces a new session immediately after.
-		/// `apply_rewards` should be true for validators to get the session reward.
+		/// Force there to be no new eras indefinitely.
 		///
 		/// # <weight>
-		/// - Independent of the arguments.
-		/// - Triggers the Phragmen election. Expensive but not user-controlled.
-		/// - Depends on state: `O(|edges| * |validators|)`.
+		/// - No arguments.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		fn force_no_eras(origin) {
+			ensure_root(origin)?;
+			ForceEra::put(Forcing::ForceNone);
+		}
+
+		/// Force there to be a new era at the end of the next session. After this, it will be
+		/// reset to normal (non-forced) behaviour.
+		///
+		/// # <weight>
+		/// - No arguments.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn force_new_era(origin) {
 			ensure_root(origin)?;
-			Self::apply_force_new_era()
+			ForceEra::put(Forcing::ForceNew);
 		}
 
 		/// Set the validators who cannot be slashed (if any).
@@ -1098,16 +1122,17 @@ impl<T: Trait> Module<T> {
 		-> Option<(Vec<T::AccountId>, Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>)>
 	{
 		let era_length = session_index.checked_sub(Self::current_era_start_session_index()).unwrap_or(0);
-		if ForceNewEra::take() || era_length == T::SessionsPerEra::get() {
-			let validators = T::SessionInterface::validators();
-			let prior = validators.into_iter()
-				.map(|v| { let e = Self::stakers(&v); (v, e) })
-				.collect();
-
-			Self::new_era(session_index).map(move |new| (new, prior))
-		} else {
-			None
+		match ForceEra::get() {
+			Forcing::ForceNew => ForceEra::kill(),
+			Forcing::NotForcing if era_length >= T::SessionsPerEra::get() => (),
+			_ => return None,
 		}
+		let validators = T::SessionInterface::validators();
+		let prior = validators.into_iter()
+			.map(|v| { let e = Self::stakers(&v); (v, e) })
+			.collect();
+
+		Self::new_era(session_index).map(move |new| (new, prior))
 	}
 
 	/// The era has changed - enact new staking set.
@@ -1300,10 +1325,6 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	fn apply_force_new_era() {
-		ForceNewEra::put(true);
-	}
-
 	/// Remove all associated data of a stash account from the staking system.
 	///
 	/// This is called :
@@ -1489,7 +1510,7 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 			// make sure to disable validator in next sessions
 			let _ = T::SessionInterface::disable_validator(stash);
 			// force a new era, to select a new validator set
-			Self::apply_force_new_era();
+			ForceEra::put(Forcing::ForceNew);
 			// actually slash the validator
 			let slashed_amount = Self::slash_validator(stash, amount, exposure);
 
