@@ -8,13 +8,11 @@ pub trait Trait: 'static + Eq + Clone {
 	type Hash;
 	type AccountId: Encode + Decode;
 	type Event: From<Event>;
-	type Error: From<Error> + From<&'static str>;
 }
 
 srml_support::decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		pub fn deposit_event(_event: T::Event) {
-		}
+		pub fn deposit_event(_event: T::Event) {}
 	}
 }
 

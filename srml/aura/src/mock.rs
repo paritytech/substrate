@@ -22,17 +22,13 @@ use primitives::{
 	traits::IdentityLookup,
 	testing::{Header, UintAuthorityId},
 };
-use srml_support::{impl_outer_origin, impl_outer_error, parameter_types};
+use srml_support::{impl_outer_origin, parameter_types};
 use runtime_io;
 use substrate_primitives::{H256, Blake2Hasher};
 use crate::{Trait, Module, GenesisConfig};
 
 impl_outer_origin!{
 	pub enum Origin for Test {}
-}
-
-impl_outer_error! {
-	pub enum Error for Runtime {}
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
@@ -54,7 +50,6 @@ impl system::Trait for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = ();
-	type Error = Error;
 	type BlockHashCount = BlockHashCount;
 }
 

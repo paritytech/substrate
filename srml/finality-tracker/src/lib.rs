@@ -268,7 +268,7 @@ mod tests {
 	use substrate_primitives::H256;
 	use primitives::traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT};
 	use primitives::testing::Header;
-	use srml_support::{assert_ok, impl_outer_origin, impl_outer_error, parameter_types};
+	use srml_support::{assert_ok, impl_outer_origin, parameter_types};
 	use srml_system as system;
 	use std::cell::RefCell;
 
@@ -283,10 +283,6 @@ mod tests {
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
-	}
-
-	impl_outer_error! {
-		pub enum Error for Test {}
 	}
 
 	thread_local! {
@@ -314,7 +310,6 @@ mod tests {
 		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
 		type Event = ();
-		type Error = Error;
 		type BlockHashCount = BlockHashCount;
 	}
 	parameter_types! {

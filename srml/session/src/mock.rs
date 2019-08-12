@@ -18,20 +18,15 @@
 
 use super::*;
 use std::cell::RefCell;
-use srml_support::{impl_outer_origin, impl_outer_error, parameter_types};
+use srml_support::{impl_outer_origin, parameter_types};
 use substrate_primitives::H256;
 use primitives::{
 	traits::{BlakeTwo256, IdentityLookup, ConvertInto},
 	testing::{Header, UintAuthorityId}
 };
 
-
 impl_outer_origin! {
 	pub enum Origin for Test {}
-}
-
-impl_outer_error! {
-	pub enum Error for Test {}
 }
 
 thread_local! {
@@ -125,7 +120,6 @@ impl system::Trait for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = ();
-	type Error = Error;
 	type BlockHashCount = BlockHashCount;
 }
 impl timestamp::Trait for Test {

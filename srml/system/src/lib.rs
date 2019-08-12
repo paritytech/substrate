@@ -833,14 +833,10 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
 	use primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
-	use srml_support::{impl_outer_origin, impl_outer_error, parameter_types};
+	use srml_support::{impl_outer_origin, parameter_types};
 
 	impl_outer_origin! {
 		pub enum Origin for Test where system = super {}
-	}
-
-	impl_outer_error! {
-		pub enum Error for Test where system = super {}
 	}
 
 	#[derive(Clone, Eq, PartialEq)]

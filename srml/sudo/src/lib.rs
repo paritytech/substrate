@@ -89,7 +89,7 @@
 use sr_std::prelude::*;
 use sr_primitives::traits::StaticLookup;
 use srml_support::{
-	StorageValue, Parameter, Dispatchable, decl_module, decl_event,
+	StorageValue, Parameter, RuntimeDispatchable, decl_module, decl_event,
 	decl_storage, ensure
 };
 use system::ensure_signed;
@@ -99,7 +99,7 @@ pub trait Trait: system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
 	/// A sudo-able call.
-	type Proposal: Parameter + Dispatchable<Origin=Self::Origin, Error=<Self as system::Trait>::Error>;
+	type Proposal: Parameter + RuntimeDispatchable<Origin=Self::Origin>;
 }
 
 decl_module! {

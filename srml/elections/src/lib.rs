@@ -1119,7 +1119,6 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = Event;
-		type Error = Error;
 		type BlockHashCount = BlockHashCount;
 	}
 	parameter_types! {
@@ -1134,7 +1133,6 @@ mod tests {
 		type OnNewAccount = ();
 		type OnFreeBalanceZero = ();
 		type Event = Event;
-		type Error = Error;
 		type TransactionPayment = ();
 		type TransferPayment = ();
 		type DustRemoval = ();

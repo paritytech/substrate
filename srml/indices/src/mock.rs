@@ -22,16 +22,12 @@ use std::collections::HashSet;
 use ref_thread_local::{ref_thread_local, RefThreadLocal};
 use primitives::testing::Header;
 use substrate_primitives::{H256, Blake2Hasher};
-use srml_support::{impl_outer_origin, impl_outer_error, parameter_types};
+use srml_support::{impl_outer_origin, parameter_types};
 use {runtime_io, system};
 use crate::{GenesisConfig, Module, Trait, IsDeadAccount, OnNewAccount, ResolveHint};
 
 impl_outer_origin!{
 	pub enum Origin for Runtime {}
-}
-
-impl_outer_error! {
-	pub enum Error for Runtime {}
 }
 
 ref_thread_local! {
@@ -81,7 +77,6 @@ impl system::Trait for Runtime {
 	type Lookup = Indices;
 	type Header = Header;
 	type Event = ();
-	type Error = Error;
 	type BlockHashCount = BlockHashCount;
 }
 impl Trait for Runtime {

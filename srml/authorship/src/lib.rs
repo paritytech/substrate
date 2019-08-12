@@ -326,14 +326,10 @@ mod tests {
 	use primitives::traits::{BlakeTwo256, IdentityLookup};
 	use primitives::testing::Header;
 	use primitives::generic::DigestItem;
-	use srml_support::{parameter_types, impl_outer_origin, impl_outer_error, ConsensusEngineId};
+	use srml_support::{parameter_types, impl_outer_origin, ConsensusEngineId};
 
 	impl_outer_origin!{
 		pub enum Origin for Test {}
-	}
-
-	impl_outer_error!{
-		pub enum Error for Test {}
 	}
 
 	#[derive(Clone, Eq, PartialEq)]
@@ -353,7 +349,6 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = ();
-		type Error = Error;
 		type BlockHashCount = BlockHashCount;
 	}
 

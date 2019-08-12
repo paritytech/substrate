@@ -21,22 +21,12 @@
 use primitives::{traits::{IdentityLookup}, testing::Header};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
-use srml_support::{impl_outer_origin, impl_outer_error, parameter_types, traits::Get};
+use srml_support::{impl_outer_origin, parameter_types, traits::Get};
 use std::cell::RefCell;
 use crate::{GenesisConfig, Module, Trait};
 
 impl_outer_origin!{
 	pub enum Origin for Runtime {}
-}
-
-mod balances {
-	pub use crate::Error;
-}
-
-impl_outer_error! {
-	pub enum Error for Runtime {
-		balances,
-	}
 }
 
 thread_local! {
@@ -88,7 +78,6 @@ impl system::Trait for Runtime {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = ();
-	type Error = Error;
 	type BlockHashCount = BlockHashCount;
 }
 impl Trait for Runtime {
@@ -99,7 +88,6 @@ impl Trait for Runtime {
 	type TransactionPayment = ();
 	type DustRemoval = ();
 	type TransferPayment = ();
-	type Error = Error;
 	type ExistentialDeposit = ExistentialDeposit;
 	type TransferFee = TransferFee;
 	type CreationFee = CreationFee;

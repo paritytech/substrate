@@ -216,14 +216,6 @@ macro_rules! construct_runtime {
 				}
 			),*
 		);
-		$crate::__decl_outer_error!(
-			$runtime;
-			$(
-				$name: $module:: $( < $module_instance >:: )? {
-					$( $modules $( <$modules_generic> )* ),*
-				}
-			),*
-		);
 		$crate::__decl_all_modules!(
 			$runtime;
 			;
@@ -411,7 +403,6 @@ macro_rules! __create_decl_macro {
 
 __create_decl_macro!(__decl_outer_event, impl_outer_event, Event, $);
 __create_decl_macro!(__decl_outer_origin, impl_outer_origin, Origin, $);
-__create_decl_macro!(__decl_outer_error, impl_outer_error, Error, $);
 
 /// A macro that defines all modules as an associated types of the Runtime type.
 #[macro_export]
@@ -561,7 +552,6 @@ macro_rules! __decl_outer_dispatch {
 	) => {
 		$crate::impl_outer_dispatch!(
 			pub enum Call for $runtime where origin: Origin {
-				type Error = Error;
 				$( $parsed_modules::$parsed_name, )*
 			}
 		);

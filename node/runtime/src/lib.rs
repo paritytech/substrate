@@ -123,7 +123,6 @@ impl system::Trait for Runtime {
 	type Lookup = Indices;
 	type Header = generic::Header<BlockNumber, BlakeTwo256>;
 	type Event = Event;
-	type Error = Error;
 	type BlockHashCount = BlockHashCount;
 }
 
@@ -160,7 +159,6 @@ impl balances::Trait for Runtime {
 	type CreationFee = CreationFee;
 	type TransactionBaseFee = TransactionBaseFee;
 	type TransactionByteFee = TransactionByteFee;
-	type Error = Error;
 }
 
 parameter_types! {

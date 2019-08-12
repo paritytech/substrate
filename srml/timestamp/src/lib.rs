@@ -325,17 +325,13 @@ impl<T: Trait> ProvideInherent for Module<T> {
 mod tests {
 	use super::*;
 
-	use srml_support::{impl_outer_origin, impl_outer_error, assert_ok, parameter_types};
+	use srml_support::{impl_outer_origin, assert_ok, parameter_types};
 	use runtime_io::{with_externalities, TestExternalities};
 	use substrate_primitives::H256;
 	use runtime_primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
-	}
-
-	impl_outer_error! {
-		pub enum Error for Runtime {}
 	}
 
 	#[derive(Clone, Eq, PartialEq)]
@@ -353,7 +349,6 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = ();
-		type Error = Error;
 		type BlockHashCount = BlockHashCount;
 	}
 	parameter_types! {

@@ -133,8 +133,6 @@ impl system::Trait for Runtime {
 	type Event = Event;
 	/// The ubiquitous origin type.
 	type Origin = Origin;
-	/// The ubiquitous error type.
-	type Error = Error;
 	/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 	type BlockHashCount = BlockHashCount;
 }
@@ -183,9 +181,6 @@ impl balances::Trait for Runtime {
 	type OnNewAccount = Indices;
 	/// The ubiquitous event type.
 	type Event = Event;
-	/// The ubiquitous event type.
-	type Error = Error;
-
 	type TransactionPayment = ();
 	type DustRemoval = ();
 	type TransferPayment = ();

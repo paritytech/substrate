@@ -102,7 +102,7 @@ use runtime_io::blake2_256;
 use runtime_primitives::traits::{
 	Hash, StaticLookup, Zero, MaybeSerializeDebug, Member
 };
-use srml_support::dispatch::{Result, Dispatchable};
+use srml_support::dispatch::{Result, RuntimeDispatchable};
 use srml_support::{
 	Parameter, StorageMap, StorageValue, decl_module, decl_event, decl_storage, storage::child,
 	parameter_types,
@@ -320,7 +320,7 @@ pub trait Trait: timestamp::Trait {
 	type Currency: Currency<Self::AccountId>;
 
 	/// The outer call dispatch type.
-	type Call: Parameter + Dispatchable<Origin=<Self as system::Trait>::Origin>;
+	type Call: Parameter + RuntimeDispatchable<Origin=<Self as system::Trait>::Origin>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;

@@ -76,7 +76,6 @@
 
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
-use rstd::convert::TryInto;
 use primitives::{
 	generic::Digest, ApplyResult, ApplyOutcome, ApplyError, DispatchError, PrimitiveError,
 	traits::{
@@ -85,7 +84,7 @@ use primitives::{
 		ValidateUnsigned,
 	}
 };
-use srml_support::{Dispatchable, traits::MakePayment};
+use srml_support::{RuntimeDispatchable, traits::MakePayment};
 use parity_codec::{Codec, Encode};
 use system::{extrinsics_root, DigestOf};
 use primitives::transaction_validity::{TransactionValidity, TransactionPriority, TransactionLongevity};
@@ -103,7 +102,7 @@ pub trait ExecuteBlock<Block: BlockT> {
 
 pub type CheckedOf<E, C> = <E as Checkable<C>>::Checked;
 pub type CallOf<E, C> = <CheckedOf<E, C> as Applyable>::Call;
-pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
+pub type OriginOf<E, C> = <CallOf<E, C> as RuntimeDispatchable>::Origin;
 
 pub struct Executive<System, Block, Context, Payment, UnsignedValidator, AllModules>(
 	PhantomData<(System, Block, Context, Payment, UnsignedValidator, AllModules)>
@@ -121,8 +120,7 @@ where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	<Block::Extrinsic as Checkable<Context>>::Error: Into<PrimitiveError>,
 	CheckedOf<Block::Extrinsic, Context>: Applyable<Index=System::Index, AccountId=System::AccountId> + Weighable,
-	CallOf<Block::Extrinsic, Context>: Dispatchable,
-	<CallOf<Block::Extrinsic, Context> as Dispatchable>::Error: Into<DispatchError> + TryInto<system::Error>,
+	CallOf<Block::Extrinsic, Context>: RuntimeDispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
 {
@@ -143,8 +141,7 @@ where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	<Block::Extrinsic as Checkable<Context>>::Error: Into<PrimitiveError>,
 	CheckedOf<Block::Extrinsic, Context>: Applyable<Index=System::Index, AccountId=System::AccountId> + Weighable,
-	CallOf<Block::Extrinsic, Context>: Dispatchable,
-	<CallOf<Block::Extrinsic, Context> as Dispatchable>::Error: Into<DispatchError> + TryInto<system::Error>,
+	CallOf<Block::Extrinsic, Context>: RuntimeDispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
 {
@@ -232,14 +229,7 @@ where
 		let l = uxt.encode().len();
 		match Self::apply_extrinsic_with_len(uxt, l, None) {
 			Ok(ApplyOutcome::Success) => (),
-			Ok(ApplyOutcome::Fail(e)) => {
-				runtime_io::print("Error:");
-				runtime_io::print(e.module as u64);
-				runtime_io::print(e.error as u64);
-				if let Some(msg) = e.message {
-					runtime_io::print(msg);
-				}
-			},
+			Ok(ApplyOutcome::Fail(e)) => runtime_io::print(e),
 			Err(ApplyError::CantPay) => panic!("All extrinsics should have sender able to pay their fees"),
 			Err(ApplyError::BadSignature) => panic!("All extrinsics should be properly signed"),
 			Err(ApplyError::Stale) | Err(ApplyError::Future) => panic!("All extrinsics should have the correct nonce"),
@@ -396,7 +386,7 @@ mod tests {
 	use substrate_primitives::{H256, Blake2Hasher};
 	use primitives::traits::{Header as HeaderT, BlakeTwo256, IdentityLookup};
 	use primitives::testing::{Digest, Header, Block};
-	use srml_support::{impl_outer_event, impl_outer_origin, impl_outer_error, parameter_types};
+	use srml_support::{impl_outer_event, impl_outer_origin, parameter_types};
 	use srml_support::traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons, WithdrawReason};
 	use system;
 	use hex_literal::hex;
@@ -409,12 +399,6 @@ mod tests {
 	impl_outer_event!{
 		pub enum MetaEvent for Runtime {
 			balances<T>,
-		}
-	}
-
-	impl_outer_error! {
-		pub enum Error for Runtime {
-			balances
 		}
 	}
 
@@ -434,7 +418,6 @@ mod tests {
 		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
 		type Event = MetaEvent;
-		type Error = Error;
 		type BlockHashCount = BlockHashCount;
 	}
 	parameter_types! {
@@ -452,7 +435,6 @@ mod tests {
 		type TransactionPayment = ();
 		type DustRemoval = ();
 		type TransferPayment = ();
-		type Error = Error;
 		type ExistentialDeposit = ExistentialDeposit;
 		type TransferFee = TransferFee;
 		type CreationFee = CreationFee;

@@ -166,7 +166,7 @@ macro_rules! assert_noop {
 #[macro_export]
 #[cfg(feature = "std")]
 macro_rules! assert_err {
-	( $x:expr , $y:expr ) => {
+	( $x:expr , $y:expr $(,)? ) => {
 		assert_eq!($x, Err($y));
 	}
 }

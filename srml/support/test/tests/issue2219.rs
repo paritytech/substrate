@@ -160,7 +160,6 @@ impl system::Trait for Runtime {
 	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
 	type Event = Event;
-	type Error = Error;
 }
 
 impl module::Trait for Runtime {}

@@ -1189,7 +1189,7 @@ impl<'a> Printable for &'a str {
 
 impl Printable for u64 {
 	fn print(&self) {
-		unsafe { ext_print_num.get()(self); }
+		unsafe { ext_print_num.get()(*self); }
 	}
 }
 

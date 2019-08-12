@@ -505,7 +505,7 @@ impl<T: Trait> Module<T> {
 mod tests {
 	use super::*;
 
-	use srml_support::{assert_ok, impl_outer_origin, impl_outer_error, parameter_types};
+	use srml_support::{assert_ok, impl_outer_origin, parameter_types};
 	use sr_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
 	// The testing primitives are very useful for avoiding having to work with signatures
@@ -516,12 +516,6 @@ mod tests {
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
-	}
-
-	impl_outer_error! {
-		pub enum Error for Test {
-			balances
-		}
 	}
 
 	// For testing the module, we construct most of a mock runtime. This means
@@ -542,7 +536,6 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = ();
-		type Error = Error;
 		type BlockHashCount = BlockHashCount;
 	}
 	parameter_types! {
@@ -560,7 +553,6 @@ mod tests {
 		type TransactionPayment = ();
 		type TransferPayment = ();
 		type DustRemoval = ();
-		type Error = Error;
 		type ExistentialDeposit = ExistentialDeposit;
 		type TransferFee = TransferFee;
 		type CreationFee = CreationFee;

@@ -24,7 +24,7 @@ use primitives::traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin, Ha
 use parity_codec::{Encode, Decode, Input, Output};
 use srml_support::{
 	decl_module, decl_storage, decl_event, ensure,
-	StorageValue, StorageMap, Parameter, Dispatchable, IsSubType, EnumerableStorageMap,
+	StorageValue, StorageMap, Parameter, RuntimeDispatchable, IsSubType, EnumerableStorageMap,
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier,
 		OnFreeBalanceZero, Get
@@ -174,7 +174,7 @@ pub const DEFAULT_EMERGENCY_VOTING_PERIOD: u32 = 0;
 pub const DEFAULT_COOLOFF_PERIOD: u32 = 0;
 
 pub trait Trait: system::Trait + Sized {
-	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + IsSubType<Module<Self>, Self>;
+	type Proposal: Parameter + RuntimeDispatchable<Origin=Self::Origin> + IsSubType<Module<Self>, Self>;
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
 	/// Currency type for this module.
@@ -970,7 +970,7 @@ mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
 	use srml_support::{
-		impl_outer_origin, impl_outer_error, impl_outer_dispatch, assert_noop, assert_ok, parameter_types,
+		impl_outer_origin, impl_outer_dispatch, assert_noop, assert_ok, parameter_types,
 		traits::Contains
 	};
 	use substrate_primitives::{H256, Blake2Hasher};
@@ -989,16 +989,8 @@ mod tests {
 
 	impl_outer_dispatch! {
 		pub enum Call for Test where origin: Origin {
-			type Error = Error;
-
 			balances::Balances,
 			democracy::Democracy,
-		}
-	}
-
-	impl_outer_error! {
-		pub enum Error for Test {
-			balances,
 		}
 	}
 
@@ -1018,7 +1010,6 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = ();
-		type Error = Error;
 		type BlockHashCount = BlockHashCount;
 	}
 	parameter_types! {
@@ -1036,7 +1027,6 @@ mod tests {
 		type TransactionPayment = ();
 		type TransferPayment = ();
 		type DustRemoval = ();
-		type Error = Error;
 		type ExistentialDeposit = ExistentialDeposit;
 		type TransferFee = TransferFee;
 		type CreationFee = CreationFee;

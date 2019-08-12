@@ -24,7 +24,7 @@ use rstd::{prelude::*, result};
 use substrate_primitives::u32_trait::Value as U32;
 use primitives::traits::{Hash, EnsureOrigin};
 use srml_support::{
-	dispatch::{Dispatchable, Parameter}, codec::{Encode, Decode}, traits::ChangeMembers,
+	dispatch::{RuntimeDispatchable, Parameter}, codec::{Encode, Decode}, traits::ChangeMembers,
 	StorageValue, StorageMap, decl_module, decl_event, decl_storage, ensure
 };
 use system::{self, ensure_signed, ensure_root};
@@ -43,7 +43,7 @@ pub trait Trait<I=DefaultInstance>: system::Trait {
 	type Origin: From<RawOrigin<Self::AccountId, I>>;
 
 	/// The outer call dispatch type.
-	type Proposal: Parameter + Dispatchable<Origin=<Self as Trait<I>>::Origin>;
+	type Proposal: Parameter + RuntimeDispatchable<Origin=<Self as Trait<I>>::Origin>;
 
 	/// The outer event type.
 	type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
@@ -414,7 +414,6 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = Event;
-		type Error = Error;
 		type BlockHashCount = BlockHashCount;
 	}
 	impl Trait<Instance1> for Test {

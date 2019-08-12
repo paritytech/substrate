@@ -25,16 +25,12 @@ use primitives::{
 	traits::{BlakeTwo256, IdentityLookup},
 };
 use substrate_primitives::{Blake2Hasher, H256};
-use support::{parameter_types, impl_outer_event, impl_outer_origin, impl_outer_error};
+use support::{parameter_types, impl_outer_event, impl_outer_origin};
 
 use super::*;
 
 impl_outer_origin! {
 	pub enum Origin for Test {}
-}
-
-impl_outer_error! {
-	pub enum Error for Test {}
 }
 
 // For testing the module, we construct most of a mock runtime. This means
@@ -55,7 +51,6 @@ impl system::Trait for Test {
 	type Lookup = IdentityLookup<u64>;
 	type Header = Header;
 	type Event = TestEvent;
-	type Error = Error;
 	type BlockHashCount = BlockHashCount;
 }
 

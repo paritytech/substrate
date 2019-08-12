@@ -34,7 +34,7 @@ use runtime_primitives::traits::{BlakeTwo256, Hash, IdentityLookup};
 use runtime_primitives::BuildStorage;
 use srml_support::{
 	assert_ok, assert_err, impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types,
-	impl_outer_error, storage::child,	StorageMap, StorageValue, traits::{Currency, Get},
+	storage::child,	StorageMap, StorageValue, traits::{Currency, Get},
 };
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -60,16 +60,8 @@ impl_outer_origin! {
 }
 impl_outer_dispatch! {
 	pub enum Call for Test where origin: Origin {
-		type Error = Error;
-
 		balances::Balances,
 		contract::Contract,
-	}
-}
-
-impl_outer_error! {
-	pub enum Error for Test {
-		balances
 	}
 }
 
@@ -115,7 +107,6 @@ impl system::Trait for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = MetaEvent;
-	type Error = Error;
 	type BlockHashCount = BlockHashCount;
 }
 parameter_types! {
@@ -130,7 +121,6 @@ impl balances::Trait for Test {
 	type TransactionPayment = ();
 	type DustRemoval = ();
 	type TransferPayment = ();
-	type Error = Error;
 	type ExistentialDeposit = ExistentialDeposit;
 	type TransferFee = TransferFee;
 	type CreationFee = CreationFee;
