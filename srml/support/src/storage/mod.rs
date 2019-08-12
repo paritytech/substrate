@@ -136,12 +136,16 @@ pub trait StorageValue<T: Codec> {
 	/// Append the given item to the value in the storage.
 	///
 	/// `T` is required to implement `codec::EncodeAppend`.
+	///
+	/// This can only be called for storage items that do not have a default values.
 	fn append<I: Encode>(items: &[I]) -> Result<(), &'static str>
-		where T: EncodeAppend<Item=I>;
+		where T: EncodeAppend<Item=I>, Self: crate::traits::NoDefault;
 
 	/// Append the given items to the value in the storage.
 	///
-	/// `T` is required to implement `codec::EncodeAppend`.
+	/// `T` is required to implement `Codec::EncodeAppend`.
+	///
+	/// This can only be called for storage items that do not have a default values.
 	///
 	/// Upon any failure, it replaces `items` as the new value (assuming that the previous stored
 	/// data is simply corrupt and no longer usable).
@@ -151,39 +155,15 @@ pub trait StorageValue<T: Codec> {
 	/// use with care; if your use-case is not _exactly_ as what this function is doing,
 	/// you should use append and sensibly handle failure within the runtime code if it happens.
 	fn safe_append<'a, I: 'a + Encode + Clone>(items: &'a[I])
-		where T: EncodeAppend<Item=I> + From<&'a[I]>;
+		where T: EncodeAppend<Item=I> + From<&'a[I]>, Self: crate::traits::NoDefault;
 
 	/// Read the length of the value in a fast way, without decoding the entire value.
 	///
 	/// `T` is required to implement `Codec::DecodeLength`.
 	///
-	/// Note that this only returns the length if it is stored as an encoded value. Any read from
-	/// storage that falls back to the _default_ (regardless of being provided or literally
-	/// `Default::default()`) cannot have a `decode_len()`. A runtime code can simply `unwrap_or()`
-	/// in case of default values.
-	///
-	/// ```rust,
-	/// # pub trait Trait {
-	/// # 	type Origin;
-	/// # 	type BlockNumber;
-	/// # }
-	/// # srml_support::decl_module! {
-	/// # 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
-	/// # }
-	/// srml_support_procedural::decl_storage! {
-	/// 	trait Store for Module<T: Trait> as Test {
-	/// 		Foo: Vec<u32>;
-	/// 		Bar: Vec<u32> = vec![1, 2];
-	/// 	}
-	/// }
-	/// # fn main() {
-	/// // you probably want to do something like:
-	/// // let foo_len = Foo::decode_len().unwrap_or(0);
-	/// // let bar_len = Bar::decode_len().unwrap_or(2);
-	/// # }
-	/// ```
+	/// This can only be called for storage items that do not have a default values.
 	fn decode_len() -> Result<usize, &'static str>
-		where T: codec::DecodeLength;
+		where T: codec::DecodeLength, Self: crate::traits::NoDefault;
 }
 
 impl<T: Codec, U> StorageValue<T> for U where U: hashed::generator::StorageValue<T> {
@@ -214,17 +194,17 @@ impl<T: Codec, U> StorageValue<T> for U where U: hashed::generator::StorageValue
 		U::take(&mut RuntimeStorage)
 	}
 	fn append<I: Encode>(items: &[I]) -> Result<(), &'static str>
-		where T: EncodeAppend<Item=I>
+		where T: EncodeAppend<Item=I>, U: crate::traits::NoDefault
 	{
 		U::append(items, &mut RuntimeStorage)
 	}
 	fn safe_append<'a, I: 'a + Encode + Clone>(items: &'a[I])
-		where T: From<&'a[I]> + EncodeAppend<Item=I>
+		where T: From<&'a[I]> + EncodeAppend<Item=I>, U: crate::traits::NoDefault
 	{
 		U::safe_append(items, &mut RuntimeStorage)
 	}
 	fn decode_len() -> Result<usize, &'static str>
-		where T: codec::DecodeLength
+		where T: codec::DecodeLength, U: crate::traits::NoDefault
 	{
 		U::decode_len(&mut RuntimeStorage)
 	}
@@ -316,12 +296,16 @@ pub trait AppendableStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
 	/// Append the given item to the value in the storage.
 	///
 	/// `T` is required to implement `codec::EncodeAppend`.
+	///
+	/// This can only be called for storage items that do not have a default values.
 	fn append<KeyArg: Borrow<K>, I: Encode>(key: KeyArg, items: &[I]) -> Result<(), &'static str>
-		where V: EncodeAppend<Item=I>;
+		where V: EncodeAppend<Item=I>, Self: crate::traits::NoDefault;
 
 	/// Append the given items to the value in the storage.
 	///
 	/// `T` is required to implement `codec::EncodeAppend`.
+	///
+	/// This can only be called for storage items that do not have a default values.
 	///
 	/// Upon any failure, it replaces `items` as the new value (assuming that the previous stored
 	/// data is simply corrupt and no longer usable).
@@ -329,7 +313,7 @@ pub trait AppendableStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
 	/// WARNING: use with care; if your use-case is not _exactly_ as what this function is doing,
 	/// you should use append and sensibly handle failure within the runtime code if it happens.
 	fn safe_append<'a, KeyArg: Borrow<K>, I: Encode + Clone>(key: KeyArg, items: &'a[I])
-		where V: EncodeAppend<Item=I> + From<&'a[I]>;
+		where V: EncodeAppend<Item=I> + From<&'a[I]>, Self: crate::traits::NoDefault;
 
 }
 
@@ -337,13 +321,13 @@ impl<K: Codec, V: Codec, U> AppendableStorageMap<K, V> for U
 	where U: hashed::generator::AppendableStorageMap<K, V>
 {
 	fn append<KeyArg: Borrow<K>, I: Encode>(key: KeyArg, items: &[I]) -> Result<(), &'static str>
-		where V: EncodeAppend<Item=I>
+		where V: EncodeAppend<Item=I>, Self: crate::traits::NoDefault
 	{
 		U::append(key.borrow(), items, &mut RuntimeStorage)
 	}
 
 	fn safe_append<'a, KeyArg: Borrow<K>, I: Encode + Clone>(key: KeyArg, items: &'a[I])
-		where V: EncodeAppend<Item=I> + From<&'a[I]>
+		where V: EncodeAppend<Item=I> + From<&'a[I]>, Self: crate::traits::NoDefault
 	{
 		U::safe_append(key.borrow(), items, &mut RuntimeStorage)
 	}
@@ -355,16 +339,18 @@ pub trait DecodeLengthStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
 	///
 	/// `T` is required to implement `Codec::DecodeLength`.
 	///
+	/// This can only be called for storage items that do not have a default values.
+	///
 	/// Has the same logic as [`StorageValue`](trait.StorageValue.html).
 	fn decode_len<KeyArg: Borrow<K>>(key: KeyArg) -> Result<usize, &'static str>
-		where V: codec::DecodeLength;
+		where V: codec::DecodeLength, Self: crate::traits::NoDefault;
 }
 
 impl <K: Codec, V: Codec, U> DecodeLengthStorageMap<K, V> for U
 	where U: hashed::generator::DecodeLengthStorageMap<K, V>
 {
 	fn decode_len<KeyArg: Borrow<K>>(key: KeyArg) -> Result<usize, &'static str>
-		where V: codec::DecodeLength
+		where V: codec::DecodeLength, U: crate::traits::NoDefault
 	{
 		U::decode_len(key.borrow(), &mut RuntimeStorage)
 	}

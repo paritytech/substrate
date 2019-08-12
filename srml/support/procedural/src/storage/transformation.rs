@@ -756,7 +756,6 @@ fn decl_storage_items(
 		let kind = type_infos.kind.clone();
 		// Propagate doc attributes.
 		let attrs = attrs.inner.iter().filter_map(|a| a.parse_meta().ok()).filter(|m| m.name() == "doc");
-
 		let i = impls::Impls {
 			scrate,
 			visibility,
@@ -765,6 +764,7 @@ fn decl_storage_items(
 			traittype,
 			instance_opts,
 			type_infos,
+			has_default: default_value.inner.as_ref().map(|d| &d.expr).is_some(),
 			fielddefault: default_value.inner.as_ref().map(|d| &d.expr).map(|d| quote!( #d ))
 				.unwrap_or_else(|| quote!{ Default::default() }),
 			prefix: build_prefix(cratename, name),

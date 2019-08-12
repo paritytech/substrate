@@ -44,6 +44,7 @@ pub(crate) struct Impls<'a, I: Iterator<Item=syn::Meta>> {
 	pub type_infos: DeclStorageTypeInfos<'a>,
 	pub fielddefault: TokenStream2,
 	pub prefix: String,
+	pub has_default: bool,
 	pub cratename: &'a syn::Ident,
 	pub name: &'a syn::Ident,
 	pub attrs: I,
@@ -59,6 +60,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			traittype,
 			instance_opts,
 			type_infos,
+			has_default,
 			fielddefault,
 			prefix,
 			name,
@@ -114,6 +116,12 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			)
 		};
 
+		let no_default_impl = if !has_default {
+			quote! { impl<#impl_trait> #scrate::traits::NoDefault for #name<#trait_and_instance> #where_clause {} }
+		} else {
+			quote! {}
+		};
+
 		// generator for value
 		quote! {
 			#( #[ #attrs ] )*
@@ -156,6 +164,8 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					ret
 				}
 			}
+
+			#no_default_impl
 		}
 	}
 
@@ -167,6 +177,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			traittype,
 			instance_opts,
 			type_infos,
+			has_default,
 			fielddefault,
 			prefix,
 			name,
@@ -228,6 +239,12 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			)
 		};
 
+		let no_default_impl = if !has_default {
+			quote! { impl<#impl_trait> #scrate::traits::NoDefault for #name<#trait_and_instance> #where_clause {} }
+		} else {
+			quote! {}
+		};
+
 		// generator for map
 		quote!{
 			#( #[ #attrs ] )*
@@ -287,6 +304,8 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			impl<#impl_trait> #scrate::storage::hashed::generator::DecodeLengthStorageMap<#kty, #typ>
 				for #name<#trait_and_instance> #where_clause
 			{}
+
+			#no_default_impl
 		}
 	}
 

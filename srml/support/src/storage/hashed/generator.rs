@@ -203,11 +203,13 @@ pub trait StorageValue<T: codec::Codec> {
 	/// Append the given items to the value in the storage.
 	///
 	/// `T` is required to implement `codec::EncodeAppend`.
+	///
+	/// This can only be called for storage items that do not have a default values.
 	fn append<S: HashedStorage<Twox128>, I: codec::Encode>(
 		items: &[I],
 		storage: &mut S,
 	) -> Result<(), &'static str>
-		where T: codec::EncodeAppend<Item=I>
+		where T: codec::EncodeAppend<Item=I>, Self: crate::traits::NoDefault,
 	{
 		let new_val = <T as codec::EncodeAppend>::append(
 			storage.get_raw(Self::key()).unwrap_or_default(),
@@ -220,10 +222,13 @@ pub trait StorageValue<T: codec::Codec> {
 	/// Safely append the given items to the value in the storage.
 	///
 	/// `T` is required to implement `codec::EncodeAppend`.
+	///
+	/// This can only be called for storage items that do not have a default values.
 	fn safe_append<'a, S: HashedStorage<Twox128>, I>(
 		items: &'a[I],
 		storage: &mut S,
 	) where
+		Self: crate::traits::NoDefault,
 		T: codec::EncodeAppend<Item=I> + From<&'a[I]>,
 		I: 'a + codec::Encode + Clone,
 	{
@@ -233,8 +238,10 @@ pub trait StorageValue<T: codec::Codec> {
 	/// Read the length of the value in a fast way, without decoding the entire value.
 	///
 	/// `T` is required to implement `Codec::DecodeLength`.
+	///
+	/// This can only be called for storage items that do not have a default values.
 	fn decode_len<S: HashedStorage<Twox128>>(storage: &mut S) -> Result<usize, &'static str>
-		where T: codec::DecodeLength
+		where T: codec::DecodeLength, Self: crate::traits::NoDefault,
 	{
 		// attempt to get the length directly.
 		if let Some(k) = storage.get_raw(Self::key()) {
@@ -333,7 +340,9 @@ pub trait AppendableStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, 
 		items: &[I],
 		storage: &mut S
 	) -> Result<(), &'static str>
-		where V: codec::EncodeAppend<Item=I>
+		where
+			V: codec::EncodeAppend<Item=I>,
+			Self: crate::traits::NoDefault,
 	{
 		let k = Self::key_for(key);
 		let new_val = <V as codec::EncodeAppend>::append(
@@ -347,11 +356,14 @@ pub trait AppendableStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, 
 	/// Safely append the given items to the value in the storage.
 	///
 	/// `T` is required to implement `codec::EncodeAppend`.
+	///
+	/// This can only be called for storage items that do not have a default values.
 	fn safe_append<'a, S, I>(
 		key : &K,
 		items: &'a[I],
 		storage: &mut S,
 	) where
+		Self: crate::traits::NoDefault,
 		S: HashedStorage<Self::Hasher>,
 		I: codec::Encode + Clone,
 		V: codec::EncodeAppend<Item=I> + From<&'a[I]>,
@@ -366,8 +378,10 @@ pub trait DecodeLengthStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K
 	/// Read the length of the value in a fast way, without decoding the entire value.
 	///
 	/// `T` is required to implement `Codec::DecodeLength`.
+	///
+	/// This can only be called for storage items that do not have a default values.
 	fn decode_len<S: HashedStorage<Self::Hasher>>(key: &K, storage: &mut S) -> Result<usize, &'static str>
-		where V: codec::DecodeLength
+		where V: codec::DecodeLength, Self: crate::traits::NoDefault
 	{
 		let k = Self::key_for(key);
 		if let Some(v) = storage.get_raw(&k[..]) {

@@ -875,15 +875,15 @@ mod test_append_and_len {
 			assert_eq!(OptionVec::get(), None);
 			assert_noop!(OptionVec::decode_len(), "could not find item to decode length");
 
-			// NOTE: this must be WARNED and documented to the upmost extent.
-			assert_eq!(JustVecWithDefault::get(), vec![6u32, 9]);
-			assert_noop!(JustVecWithDefault::decode_len(), "could not find item to decode length");
-
-			assert_eq!(OptionVecWithDefault::get(), Some(vec![6u32, 9]));
-			assert_noop!(OptionVecWithDefault::decode_len(), "could not find item to decode length");
-
 			assert_eq!(MapVec::get(0), vec![]);
 			assert_noop!(MapVec::decode_len(0), "could not find item to decode length");
+
+			// NOTE:
+			// such storage items with default cannot have decode length
+			// assert_eq!(JustVecWithDefault::get(), vec![6u32, 9]);
+			// assert_noop!(JustVecWithDefault::decode_len(), "could not find item to decode length");
+			// assert_eq!(OptionVecWithDefault::get(), Some(vec![6u32, 9]));
+			// assert_noop!(OptionVecWithDefault::decode_len(), "could not find item to decode length");
 		});
 	}
 }
