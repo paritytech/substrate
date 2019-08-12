@@ -16,9 +16,9 @@
 
 //! An election module based on sequential phragmen.
 //!
-//! The election happens in _rounds_: every `N` block, the entire previous members are retired and
-//! a new set is elected (which may or may not have some of the same members). Each round lasts for
-//! some number of blocks defined by `TermDuration` storage. Each cycle of is called a _term_.
+//! The election happens in _rounds_: every `N` blocks, the all previous members are retired and a
+//! new set is elected (which may or may not have some of the same members). Each round lasts for
+//! some number of blocks defined by `TermDuration` storage item. Each cycle of election is a term.
 //!
 //! `TermDuration` might change during a round. This can shorten or extend the length of the round.
 //! The next election round's block number is never stored but rather always checked on the fly.
@@ -30,17 +30,17 @@
 //! The entire free balance of a voter is locked upon voting and can only be used to pay for fees.
 //! Voters can update their votes by calling `vote()` again during the same round. This does not
 //! effect the reserved bond or lock. After a term, voters _must_ call `remove_voter` to get their
-//! bond back and remove the lock. Furthermore, voters of an old round cannot vote for the current
-//! round until they remove their previous data via `remove_voter`.
+//! bond back and remove the lock. Otherwise the bond amount will stay reserved and the lock will
+//! persist. Furthermore, voters of an old round cannot vote for the current round until they remove
+//! their previous data via `remove_voter`.
 //!
 //! Candidates also reserve a bond as they submit candidacy. A candidate cannot take their candidacy
 //! back. Winner candidates will be moved to the members list and will get their bond back at end of
 //! their term. Loser candidates will immediately get their bond back. Note that unlike phragmen in
-//! staking, candidates do NOT automatically vote for themselves (though they could via a separate
-//! transaction). Furthermore, the amount of tokens (stake) help by the candidate does not matter.
+//! staking, candidates do NOT automatically vote for themselves (though they _could_ via a separate
+//! transaction). Furthermore, the amount of tokens (stake) held by the candidate does not matter.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![recursion_limit="128"]
 
 use sr_primitives::traits::{Zero, StaticLookup, Bounded, Convert};
 use sr_primitives::weights::SimpleDispatchInfo;
@@ -92,6 +92,7 @@ decl_storage! {
 		/// round will happen.
 		pub TermDuration get(term_duration) config(): T::BlockNumber;
 
+		// ---- State
 		/// The current elected membership.
 		pub Members get(members) config(): Vec<T::AccountId>;
 
@@ -119,6 +120,8 @@ decl_module! {
 		/// The `votes` should:
 		///   - not be empty.
 		///   - not be less than the number of candidates.
+		///
+		/// `who` cannot be an old voter who has not yet called [`remove_voter`].
 		///
 		/// Upon voting, the entire balance of `who` is locked and a bond amount is reserved.
 		#[weight = SimpleDispatchInfo::FixedNormal(2_500_000)]
@@ -155,10 +158,9 @@ decl_module! {
 			Ok(())
 		}
 
-		/// Remove `origin` as a voter. One can use this to _undo_ their votes before the election
-		/// has started.
-		///
-		/// This can only be used for a vote which is submitted in the ongoing round.
+		/// Remove `origin` as a voter. One can use this to
+		///   1. _undo_ their votes before the election has started.
+		///   2. Remove their lock and unreserve the bond after an election round.
 		#[weight = SimpleDispatchInfo::FixedNormal(1_250_000)]
 		fn remove_voter(origin) {
 			let who = ensure_signed(origin)?;
@@ -180,7 +182,7 @@ decl_module! {
 		/// Submit oneself for candidacy.
 		///
 		/// A candidate will either:
-		///   - Lose at the end of the term and gets their bond unreserved (TODO: maybe burn?)
+		///   - Lose at the end of the term and gets their bond unreserved
 		///   - Win and become a member. Members will get their bond back at the end ot their term.
 		#[weight = SimpleDispatchInfo::FixedNormal(2_500_000)]
 		fn submit_candidacy(origin) {
@@ -253,22 +255,25 @@ decl_event!(
 );
 
 impl<T: Trait> Module<T> {
-	// exposed immutables.
-
+	/// Check if `who` is a candidate.
 	fn is_candidate(who: &T::AccountId) -> bool {
 		Self::candidates().iter().find(|c| *c == who).is_some()
 	}
 
+
+	/// Check if `who` is a voter in the ongoing round.
 	fn is_current_voter(who: &T::AccountId) -> bool {
 		let now = Self::election_rounds();
 		Self::votes_of(who).1 == now && <StakeOf<T>>::exists(who)
 	}
 
+	/// Check if `who` was a voter who has not yet called `remove_voter`.
 	fn is_old_voter(who: &T::AccountId) -> bool {
 		let now = Self::election_rounds();
 		Self::votes_of(who).1 < now && <StakeOf<T>>::exists(who)
 	}
 
+	/// The locked stake of a voter.
 	fn locked_stake_of(who: &T::AccountId) -> BalanceOf<T> {
 		if Self::is_current_voter(who) {
 			Self::stake_of(who)
@@ -277,10 +282,10 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	// Private
 	/// Check there's nothing to do this block.
 	///
-	/// Runs phragmen election and cleans all the previous state.
+	/// Runs phragmen election and cleans all the previous candidate state. The voter state is NOT
+	/// cleaned and voters must themselves submit a transaction to clean it.
 	fn end_block(block_number: T::BlockNumber) -> Result {
 		if (block_number % Self::term_duration()).is_zero() {
 			use sr_primitives::phragmen;

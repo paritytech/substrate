@@ -16,7 +16,7 @@
 
 //! Phragmen post-processing fot staking module.
 
-// TODO: deprecate this file, decouple from staking primitives and move to sr_primitives.
+// TODO #3365: deprecate this file, decouple from staking and move to sr_primitives.
 #![cfg(feature = "equalize")]
 
 use crate::{ExpoMap, Trait, BalanceOf, IndividualExposure};
