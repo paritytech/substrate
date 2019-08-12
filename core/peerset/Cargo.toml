@@ -8,7 +8,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-futures-preview = "0.3.0-alpha.17"
+futures-preview = "=0.3.0-alpha.17"
 libp2p = { version = "0.11.0", default-features = false }
 linked-hash-map = "0.5"
 log = "0.4"

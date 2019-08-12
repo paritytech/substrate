@@ -31,7 +31,7 @@ use substrate_service::{ServiceFactory, Roles as ServiceRoles};
 use std::ops::Deref;
 use log::info;
 use structopt::{StructOpt, clap::App};
-use cli::{AugmentClap, GetLogFilter};
+use cli::{AugmentClap, GetLogFilter, parse_and_prepare, ParseAndPrepare};
 use crate::factory_impl::FactoryState;
 use transaction_factory::RuntimeAdapter;
 use client::ExecutionStrategies;
@@ -158,9 +158,8 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 	T: Into<std::ffi::OsString> + Clone,
 	E: IntoExit,
 {
-	let ret = cli::parse_and_execute::<service::Factory, CustomSubcommands, NoCustom, _, _, _, _, _>(
-		load_spec, &version, "substrate-node", args, exit,
-		|exit, _cli_args, _custom_args, config| {
+	match parse_and_prepare::<CustomSubcommands, NoCustom, _>(&version, "substrate-node", args) {
+		ParseAndPrepare::Run(cmd) => cmd.run(load_spec, exit, |exit, _cli_args, _custom_args, config| {
 			info!("{}", version.name);
 			info!("  version {}", config.full_version());
 			info!("  by Parity Technologies, 2017-2019");
@@ -181,11 +180,13 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 					exit
 				),
 			}.map_err(|e| format!("{:?}", e))
-		}
-	);
-
-	match &ret {
-		Ok(Some(CustomSubcommands::Factory(cli_args))) => {
+		}),
+		ParseAndPrepare::BuildSpec(cmd) => cmd.run(load_spec),
+		ParseAndPrepare::ExportBlocks(cmd) => cmd.run::<service::Factory, _, _>(load_spec, exit),
+		ParseAndPrepare::ImportBlocks(cmd) => cmd.run::<service::Factory, _, _>(load_spec, exit),
+		ParseAndPrepare::PurgeChain(cmd) => cmd.run(load_spec),
+		ParseAndPrepare::RevertChain(cmd) => cmd.run::<service::Factory, _>(load_spec),
+		ParseAndPrepare::CustomCommand(CustomSubcommands::Factory(cli_args)) => {
 			let mut config = cli::create_config_with_db_path(
 				load_spec,
 				&cli_args.shared_params,
@@ -214,8 +215,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 			).map_err(|e| format!("Error in transaction factory: {}", e))?;
 
 			Ok(())
-		},
-		_ => ret.map_err(Into::into).map(|_| ())
+		}
 	}
 }
 
