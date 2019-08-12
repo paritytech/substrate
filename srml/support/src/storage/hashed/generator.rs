@@ -238,7 +238,8 @@ pub trait StorageValue<T: codec::Codec> {
 	{
 		// attempt to get the length directly.
 		if let Some(k) = storage.get_raw(Self::key()) {
-			<T as codec::DecodeLength>::len(&k).ok_or_else(|| "could not decode length")
+			let l = <T as codec::DecodeLength>::len(&k).map_err(|_| "could not decode length")?;
+			Ok(l)
 		} else {
 			Err("could not find item to decode length")
 		}
@@ -370,8 +371,8 @@ pub trait DecodeLengthStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K
 	{
 		let k = Self::key_for(key);
 		if let Some(v) = storage.get_raw(&k[..]) {
-			<V as codec::DecodeLength>::len(&v)
-				.ok_or_else(|| "could not decode length")
+			let l = <V as codec::DecodeLength>::len(&v).map_err(|_| "could not decode length")?;
+			Ok(l)
 		} else {
 			Err("could not find item to decode length")
 		}
