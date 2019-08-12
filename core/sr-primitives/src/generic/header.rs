@@ -17,7 +17,7 @@
 //! Generic implementation of a block header.
 
 #[cfg(feature = "std")]
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 #[cfg(feature = "std")]
 use log::debug;
 use crate::codec::{Decode, Encode, Codec, Input, Output, HasCompact, EncodeAsRef, Error};
@@ -29,21 +29,21 @@ use crate::generic::Digest;
 
 /// Abstraction over a block header for a substrate chain.
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 pub struct Header<Number: Copy + Into<u128>, Hash: HashT> {
 	/// The parent hash.
-	pub parent_hash: <Hash as HashT>::Output,
+	pub parent_hash: Hash::Output,
 	/// The block number.
 	#[cfg_attr(feature = "std", serde(serialize_with = "serialize_number"))]
 	pub number: Number,
 	/// The state trie merkle root
-	pub state_root: <Hash as HashT>::Output,
+	pub state_root: Hash::Output,
 	/// The merkle root of the extrinsics.
-	pub extrinsics_root: <Hash as HashT>::Output,
+	pub extrinsics_root: Hash::Output,
 	/// A chain-specific digest of data useful for light clients or referencing auxiliary data.
-	pub digest: Digest<<Hash as HashT>::Output>,
+	pub digest: Digest<Hash::Output>,
 }
 
 #[cfg(feature = "std")]
