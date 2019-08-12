@@ -46,8 +46,8 @@ use crate::{
 };
 
 use consensus_common::SelectChain;
-use srml_session::{historical::Proof, SessionIndex};
 use transaction_pool::txpool::{SubmitExtrinsic, ChainApi};
+use sr_staking_primitives::SessionIndex;
 
 use crate::authorities::{AuthoritySet, SharedAuthoritySet};
 use crate::consensus_changes::SharedConsensusChanges;

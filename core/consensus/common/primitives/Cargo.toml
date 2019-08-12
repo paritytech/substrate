@@ -13,6 +13,7 @@ rstd = { package = "sr-std", path = "../../../sr-std", default-features = false 
 serde = { version = "1.0", optional = true, features = ["derive"] }
 primitives = { package = "substrate-primitives", path = "../../../primitives", default-features = false }
 srml-session = { path = "../../../../srml/session", default-features = false }
+sr-staking-primitives = { path = "../../../sr-staking-primitives", default-features = false }
 app-crypto = { package = "substrate-application-crypto", path = "../../../application-crypto", default-features = false }
 
 [features]

@@ -52,7 +52,8 @@ use version::RuntimeVersion;
 use elections::VoteIndex;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
-use primitives::{OpaqueMetadata, blake2_256};
+use primitives::OpaqueMetadata;
+use runtime_io::blake2_256;
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
 use im_online::{AuthorityId as ImOnlineId};
 use finality_tracker::{DEFAULT_REPORT_LATENCY, DEFAULT_WINDOW_SIZE};

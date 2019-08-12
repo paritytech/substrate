@@ -36,13 +36,13 @@ use srml_support::{
 	decl_event, decl_storage, decl_module, dispatch::Result, storage::StorageValue,
 	traits::KeyOwnerProofSystem
 };
-use primitives::blake2_256;
 use app_crypto::RuntimeAppPublic;
 use sr_primitives::{
 	generic::{DigestItem, OpaqueDigestItemId}, Perbill, key_types, KeyTypeId,
 	transaction_validity::{TransactionValidity, ValidTransaction},
 	traits::{Zero, ValidateUnsigned}
 };
+use runtime_io::blake2_256;
 use sr_staking_primitives::{SessionIndex, offence::{TimeSlot, Offence, Kind}};
 use fg_primitives::{
 	ScheduledChange, ConsensusLog, GRANDPA_ENGINE_ID, GrandpaEquivocation,

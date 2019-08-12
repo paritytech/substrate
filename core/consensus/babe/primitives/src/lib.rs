@@ -26,7 +26,8 @@ use rstd::vec::Vec;
 use sr_primitives::{ConsensusEngineId, traits::Header};
 use substrate_client::decl_runtime_apis;
 use consensus_common_primitives::AuthorshipEquivocationProof;
-use srml_session::{historical::Proof, SessionIndex};
+use srml_session::historical::Proof;
+use sr_staking_primitives::SessionIndex;
 
 #[cfg(feature = "std")]
 pub use digest::BabePreDigest;

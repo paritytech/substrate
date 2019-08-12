@@ -29,6 +29,7 @@ srml-session = { path = "../../srml/session" }
 fg_primitives = { package = "substrate-finality-grandpa-primitives", path = "primitives" }
 grandpa = { package = "finality-grandpa", path = "/home/marcio/repos/finality-grandpa", features = ["derive-codec"] }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
+sr-staking-primitives = { path = "../sr-staking-primitives", default-features = false }
 
 [dev-dependencies]
 grandpa = { package = "finality-grandpa", path = "/home/marcio/repos/finality-grandpa", features = ["derive-codec", "test-helpers"] }

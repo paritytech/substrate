@@ -21,8 +21,9 @@
 use codec::Codec;
 use client::decl_runtime_apis;
 use rstd::vec::Vec;
-use sr_primitives::{traits::Header};
-use srml_session::{historical::Proof, SessionIndex};
+use sr_primitives::traits::Header;
+use sr_staking_primitives::SessionIndex;
+use srml_session::historical::Proof;
 use app_crypto::RuntimeAppPublic;
 
 decl_runtime_apis! {
