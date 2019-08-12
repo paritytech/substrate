@@ -45,8 +45,8 @@ use codec::{Encode, Decode, CompactAs};
 pub mod testing;
 
 pub mod weights;
+pub mod phragmen;
 pub mod traits;
-use traits::{SaturatedConversion, UniqueSaturatedInto, Saturating, Bounded, CheckedSub, CheckedAdd};
 
 pub mod generic;
 pub mod transaction_validity;
@@ -57,6 +57,8 @@ pub use generic::{DigestItem, Digest};
 /// Re-export this since it's part of the API of this crate.
 pub use primitives::crypto::{key_types, KeyTypeId, CryptoType};
 pub use app_crypto::AppKey;
+
+use traits::{SaturatedConversion, UniqueSaturatedInto, Saturating, Bounded, CheckedSub, CheckedAdd};
 
 /// A message indicating an invalid signature in extrinsic.
 pub const BAD_SIGNATURE: &str = "bad signature in extrinsic";

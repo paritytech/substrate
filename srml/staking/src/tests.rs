@@ -18,7 +18,7 @@
 
 use super::*;
 use runtime_io::with_externalities;
-use phragmen;
+use sr_primitives::phragmen;
 use sr_primitives::traits::OnInitialize;
 use srml_support::{assert_ok, assert_noop, assert_eq_uvec, EnumerableStorageMap};
 use mock::*;
@@ -1589,18 +1589,19 @@ fn phragmen_poc_2_works() {
 		assert_ok!(Staking::bond(Origin::signed(3), 4, 1000, RewardDestination::default()));
 		assert_ok!(Staking::nominate(Origin::signed(4), vec![11, 31]));
 
-		let winners = phragmen::elect::<Test, _, _, _>(
+		let winners = phragmen::elect::<u64, u64, _, <Test as Trait>::CurrencyToVote>(
 			2,
+			true,
 			Staking::minimum_validator_count() as usize,
-			<Validators<Test>>::enumerate(),
-			<Nominators<Test>>::enumerate(),
+			<Validators<Test>>::enumerate().map(|(v, _)| v).collect::<Vec<u64>>(),
+			<Nominators<Test>>::enumerate().collect(),
 			Staking::slashable_balance_of,
 		);
 
 		let (winners, assignment) = winners.unwrap();
 
 		// 10 and 30 must be the winners
-		assert_eq!(winners, vec![11, 31]);
+		assert_eq!(winners, vec![(11, 2050), (31, 2000)]);
 		assert_eq!(assignment, vec![
 			(3, vec![(11, 2816371998), (31, 1478595298)]),
 			(1, vec![(11, 4294967296)]),

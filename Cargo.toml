@@ -75,6 +75,7 @@ members = [
 	"srml/collective",
 	"srml/democracy",
 	"srml/elections",
+	"srml/elections-phragmen",
 	"srml/example",
 	"srml/executive",
 	"srml/finality-tracker",

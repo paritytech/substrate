@@ -276,7 +276,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-mod phragmen;
+mod equalize;
 mod inflation;
 
 #[cfg(all(feature = "bench", test))]
@@ -304,7 +304,7 @@ use sr_primitives::traits::{
 use sr_primitives::{Serialize, Deserialize};
 use system::{ensure_signed, ensure_root};
 
-use phragmen::{elect, ACCURACY, ExtendedBalance, equalize};
+use sr_primitives::phragmen::{elect, ACCURACY, ExtendedBalance};
 
 const RECENT_OFFLINE_COUNT: usize = 32;
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
@@ -473,7 +473,6 @@ type NegativeImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 type MomentOf<T>= <<T as Trait>::Time as Time>::Moment;
 
-type RawAssignment<T> = (<T as system::Trait>::AccountId, ExtendedBalance);
 type Assignment<T> = (<T as system::Trait>::AccountId, ExtendedBalance, BalanceOf<T>);
 type ExpoMap<T> = BTreeMap<
 	<T as system::Trait>::AccountId,
@@ -1221,16 +1220,17 @@ impl<T: Trait> Module<T> {
 	///
 	/// Returns the new `SlotStake` value and a set of newly selected _stash_ IDs.
 	fn select_validators() -> (BalanceOf<T>, Option<Vec<T::AccountId>>) {
-		let maybe_elected_set = elect::<T, _, _, _>(
-			Self::validator_count() as usize,
-			Self::minimum_validator_count().max(1) as usize,
-			<Validators<T>>::enumerate(),
-			<Nominators<T>>::enumerate(),
-			Self::slashable_balance_of,
-		);
+		let maybe_elected_set = elect::<T::AccountId, BalanceOf<T>, _, T::CurrencyToVote>(
+				Self::validator_count() as usize,
+				true,
+				Self::minimum_validator_count().max(1) as usize,
+				<Validators<T>>::enumerate().map(|(who, _)| who).collect::<Vec<T::AccountId>>(),
+				<Nominators<T>>::enumerate().collect(),
+				Self::slashable_balance_of
+			);
 
 		if let Some(elected_set) = maybe_elected_set {
-			let elected_stashes = elected_set.0;
+			let elected_stashes = elected_set.0.into_iter().map(|(s, _)| s).collect::<Vec<T::AccountId>>();
 			let assignments = elected_set.1;
 
 			// helper closure.
@@ -1281,7 +1281,8 @@ impl<T: Trait> Module<T> {
 				}
 			}
 
-			if cfg!(feature = "equalize") {
+			#[cfg(feature = "equalize")]
+			{
 				let tolerance = 0_u128;
 				let iterations = 2_usize;
 				let mut assignments_with_votes = assignments_with_stakes.iter()
@@ -1296,7 +1297,7 @@ impl<T: Trait> Module<T> {
 						BalanceOf<T>,
 						Vec<(T::AccountId, ExtendedBalance, ExtendedBalance)>
 					)>>();
-				equalize::<T>(&mut assignments_with_votes, &mut exposures, tolerance, iterations);
+				equalize::equalize::<T>(&mut assignments_with_votes, &mut exposures, tolerance, iterations);
 			}
 
 			// Clear Stakers and reduce their slash_count.
