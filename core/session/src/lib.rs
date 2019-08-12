@@ -29,6 +29,8 @@ client::decl_runtime_apis! {
 	/// Session keys runtime api.
 	pub trait SessionKeys {
 		/// Generate a set of session keys with optionally using the given seed.
+		/// The keys should be stored within the keystore exposed via runtime
+		/// externalities.
 		///
 		/// The seed needs to be a valid `utf8` string.
 		///
@@ -37,7 +39,8 @@ client::decl_runtime_apis! {
 	}
 }
 
-/// Generate the initial session keys with the given seeds.
+/// Generate the initial session keys with the given seeds and store them in
+/// the client's keystore.
 #[cfg(feature = "std")]
 pub fn generate_initial_session_keys<B, E, Block, RA>(
 	client: std::sync::Arc<client::Client<B, E, Block, RA>>,

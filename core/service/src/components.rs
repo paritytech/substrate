@@ -145,10 +145,11 @@ pub type PoolApi<C> = <C as Components>::TransactionPoolApi;
 pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
 impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
 
-/// Something that can create initial session keys from given seeds.
+/// Something that can create and store initial session keys from given seeds.
 pub trait InitialSessionKeys<C: Components> {
-	/// Generate the initial session keys for the given seeds.
-	fn generate_intial_session_keys(
+	/// Generate the initial session keys for the given seeds and store them in
+	/// an internal keystore.
+	fn generate_initial_session_keys(
 		client: Arc<ComponentClient<C>>,
 		seeds: Vec<String>,
 	) -> error::Result<()>;
@@ -158,7 +159,7 @@ impl<C: Components> InitialSessionKeys<Self> for C where
 	ComponentClient<C>: ProvideRuntimeApi,
 	<ComponentClient<C> as ProvideRuntimeApi>::Api: session::SessionKeys<ComponentBlock<C>>,
 {
-	fn generate_intial_session_keys(
+	fn generate_initial_session_keys(
 		client: Arc<ComponentClient<C>>,
 		seeds: Vec<String>,
 	) -> error::Result<()> {
