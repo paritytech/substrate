@@ -14,21 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{NewService, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID};
-use crate::{SpawnTaskHandle, start_rpc_servers, build_network_future, components::maintain_transaction_pool};
-use crate::{components, TransactionPoolAdapter};
-use crate::config::{Configuration, Roles};
+use crate::{NewService, NetworkStatus, NetworkState, error::{self, Error}, DEFAULT_PROTOCOL_ID};
+use crate::{SpawnTaskHandle, start_rpc_servers, build_network_future, TransactionPoolAdapter};
+use crate::TaskExecutor;
+use crate::config::Configuration;
 use client::{BlockchainEvents, Client, runtime_api};
 use codec::{Decode, Encode, IoReader};
 use consensus_common::import_queue::ImportQueue;
 use futures::{prelude::*, sync::mpsc};
-use futures03::{StreamExt as _, TryStreamExt as _};
-use keystore::Store as Keystore;
+use futures03::{FutureExt as _, compat::Compat, StreamExt as _, TryStreamExt as _};
+use keystore::{Store as Keystore, KeyStorePtr};
 use log::{info, warn};
 use network::{FinalityProofProvider, OnDemand, NetworkService, NetworkStateInfo};
 use network::{config::BoxFinalityProofRequestBuilder, specialization::NetworkSpecialization};
 use parking_lot::{Mutex, RwLock};
 use primitives::{Blake2Hasher, H256, Hasher};
+use rpc::{self, system::SystemInfo};
 use sr_primitives::{BuildStorage, generic::BlockId};
 use sr_primitives::traits::{Block as BlockT, ProvideRuntimeApi, NumberFor, One, Zero, Header, SaturatedConversion};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
@@ -36,7 +37,7 @@ use serde::{Serialize, de::DeserializeOwned};
 use std::{io::{Read, Write, Seek}, marker::PhantomData, sync::Arc, sync::atomic::AtomicBool};
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use tel::{telemetry, SUBSTRATE_INFO};
-use transaction_pool::txpool::{ChainApi, Pool as TransactionPool};
+use transaction_pool::txpool::{self, ChainApi, Pool as TransactionPool};
 
 /// Aggregator for the components required to build a service.
 ///
@@ -641,8 +642,141 @@ ServiceBuilder<
 				))
 			},
 			|h, c, tx| maintain_transaction_pool(h, c, tx),
-			|n, o, p, ns, v| components::offchain_workers(n, o, p, ns, v),
-			|c, ssb, si, te, tp, ext, ks| components::start_rpc(c, ssb, si, te, tp, ext, ks),
+			|n, o, p, ns, v| offchain_workers(n, o, p, ns, v),
+			|c, ssb, si, te, tp, ext, ks| start_rpc(c, ssb, si, te, tp, ext, ks),
 		)
+	}
+}
+
+pub(crate) fn start_rpc<Api, Backend, Block, Executor, PoolApi>(
+	client: Arc<Client<Backend, Executor, Block, Api>>,
+	system_send_back: futures03::channel::mpsc::UnboundedSender<rpc::system::Request<Block>>,
+	rpc_system_info: SystemInfo,
+	task_executor: TaskExecutor,
+	transaction_pool: Arc<TransactionPool<PoolApi>>,
+	rpc_extensions: impl rpc::RpcExtension<rpc::Metadata>,
+	keystore: KeyStorePtr,
+) -> rpc_servers::RpcHandler<rpc::Metadata>
+where
+	Block: BlockT<Hash = <Blake2Hasher as primitives::Hasher>::Out>,
+	Backend: client::backend::Backend<Block, Blake2Hasher> + 'static,
+	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi,
+	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api: runtime_api::Metadata<Block> + session::SessionKeys<Block>,
+	Api: Send + Sync + 'static,
+	Executor: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
+	PoolApi: txpool::ChainApi<Hash = Block::Hash, Block = Block> + 'static {
+	use rpc::{chain, state, author, system};
+	let subscriptions = rpc::Subscriptions::new(task_executor.clone());
+	let chain = chain::Chain::new(client.clone(), subscriptions.clone());
+	let state = state::State::new(client.clone(), subscriptions.clone());
+	let author = rpc::author::Author::new(
+		client,
+		transaction_pool,
+		subscriptions,
+		keystore,
+	);
+	let system = system::System::new(rpc_system_info, system_send_back);
+
+	rpc_servers::rpc_handler((
+		state::StateApi::to_delegate(state),
+		chain::ChainApi::to_delegate(chain),
+		author::AuthorApi::to_delegate(author),
+		system::SystemApi::to_delegate(system),
+		rpc_extensions,
+	))
+}
+
+pub(crate) fn maintain_transaction_pool<Api, Backend, Block, Executor, PoolApi>(
+	id: &BlockId<Block>,
+	client: &Client<Backend, Executor, Block, Api>,
+	transaction_pool: &TransactionPool<PoolApi>,
+) -> error::Result<()> where
+	Block: BlockT<Hash = <Blake2Hasher as primitives::Hasher>::Out>,
+	Backend: client::backend::Backend<Block, Blake2Hasher>,
+	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi,
+	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api: runtime_api::TaggedTransactionQueue<Block>,
+	Executor: client::CallExecutor<Block, Blake2Hasher>,
+	PoolApi: txpool::ChainApi<Hash = Block::Hash, Block = Block>,
+{
+	// Avoid calling into runtime if there is nothing to prune from the pool anyway.
+	if transaction_pool.status().is_empty() {
+		return Ok(())
+	}
+
+	if let Some(block) = client.block(id)? {
+		let parent_id = BlockId::hash(*block.block.header().parent_hash());
+		let extrinsics = block.block.extrinsics();
+		transaction_pool.prune(id, &parent_id, extrinsics).map_err(|e| format!("{:?}", e))?;
+	}
+
+	Ok(())
+}
+
+pub(crate) fn offchain_workers<Api, Backend, Block, Executor, PoolApi>(
+	number: &NumberFor<Block>,
+	offchain: &offchain::OffchainWorkers<
+		Client<Backend, Executor, Block, Api>,
+		<Backend as client::backend::Backend<Block, Blake2Hasher>>::OffchainStorage,
+		Block
+	>,
+	pool: &Arc<TransactionPool<PoolApi>>,
+	network_state: &Arc<dyn NetworkStateInfo + Send + Sync>,
+	is_validator: bool,
+) -> error::Result<Box<dyn Future<Item = (), Error = ()> + Send>>
+where
+	Block: BlockT<Hash = <Blake2Hasher as primitives::Hasher>::Out>,
+	Backend: client::backend::Backend<Block, Blake2Hasher> + 'static,
+	Api: 'static,
+	<Backend as client::backend::Backend<Block, Blake2Hasher>>::OffchainStorage: 'static,
+	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi + Send + Sync,
+	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api: offchain::OffchainWorkerApi<Block>,
+	Executor: client::CallExecutor<Block, Blake2Hasher> + 'static,
+	PoolApi: txpool::ChainApi<Hash = Block::Hash, Block = Block> + 'static,
+{
+	let future = offchain.on_block_imported(number, pool, network_state.clone(), is_validator)
+		.map(|()| Ok(()));
+	Ok(Box::new(Compat::new(future)))
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use consensus_common::{BlockOrigin, SelectChain};
+	use substrate_test_runtime_client::{prelude::*, runtime::Transfer};
+
+	#[test]
+	fn should_remove_transactions_from_the_pool() {
+		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
+		let client = Arc::new(client);
+		let pool = TransactionPool::new(Default::default(), ::transaction_pool::ChainApi::new(client.clone()));
+		let transaction = Transfer {
+			amount: 5,
+			nonce: 0,
+			from: AccountKeyring::Alice.into(),
+			to: Default::default(),
+		}.into_signed_tx();
+		let best = longest_chain.best_chain().unwrap();
+
+		// store the transaction in the pool
+		pool.submit_one(&BlockId::hash(best.hash()), transaction.clone()).unwrap();
+
+		// import the block
+		let mut builder = client.new_block(Default::default()).unwrap();
+		builder.push(transaction.clone()).unwrap();
+		let block = builder.bake().unwrap();
+		let id = BlockId::hash(block.header().hash());
+		client.import(BlockOrigin::Own, block).unwrap();
+
+		// fire notification - this should clean up the queue
+		assert_eq!(pool.status().ready, 1);
+		maintain_transaction_pool(
+			&id,
+			&client,
+			&pool,
+		).unwrap();
+
+		// then
+		assert_eq!(pool.status().ready, 0);
+		assert_eq!(pool.status().future, 0);
 	}
 }

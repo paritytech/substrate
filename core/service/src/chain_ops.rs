@@ -16,7 +16,7 @@
 
 //! Chain utilities.
 
-use crate::components::RuntimeGenesis;
+use crate::RuntimeGenesis;
 use crate::error;
 use crate::chain_spec::ChainSpec;
 

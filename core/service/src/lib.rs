@@ -19,7 +19,6 @@
 
 #![warn(missing_docs)]
 
-mod components;
 mod chain_spec;
 pub mod config;
 #[macro_use]
@@ -33,6 +32,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::ops::DerefMut;
 use std::time::{Duration, Instant};
+use serde::{Serialize, de::DeserializeOwned};
 use futures::sync::mpsc;
 use parking_lot::Mutex;
 
@@ -44,6 +44,7 @@ use network::{NetworkService, NetworkState, specialization::NetworkSpecializatio
 use log::{log, warn, debug, error, Level};
 use codec::{Encode, Decode};
 use primitives::{Blake2Hasher, H256};
+use sr_primitives::BuildStorage;
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::NumberFor;
 
@@ -55,22 +56,7 @@ pub use transaction_pool::txpool::{
 	self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError
 };
 pub use client::FinalityNotifications;
-<<<<<<< HEAD
 pub use rpc::Metadata as RpcMetadata;
-
-pub use components::{
-	ServiceFactory, FullBackend, FullExecutor, LightBackend,
-	LightExecutor, Components, PoolApi, ComponentClient, ComponentOffchainStorage,
-	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
-	CodeExecutor, NetworkService as ComponentNetworkService, FactoryChainSpec, FactoryBlock,
-	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
-	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic, InitialSessionKeys,
-};
-use components::{StartRpc, MaintainTransactionPool, OffchainWorker};
-=======
-pub use components::RuntimeGenesis;
-
->>>>>>> Remove the old API
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
@@ -116,6 +102,13 @@ pub struct NewService<TCfg, TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	keystore: keystore::KeyStorePtr,
 	marker: PhantomData<TBl>,
 }
+
+/// A set of traits for the runtime genesis config.
+pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
+impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
+
+/// Alias for a an implementation of `futures::future::Executor`.
+pub type TaskExecutor = Arc<dyn Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send + Sync>;
 
 /// An handle for spawning tasks in the service.
 #[derive(Clone)]
@@ -455,68 +448,6 @@ macro_rules! new_impl {
 
 mod factory;
 
-<<<<<<< HEAD
-impl<Components: components::Components> Service<Components> {
-	/// Creates a new service.
-	pub fn new(
-		mut config: FactoryFullConfiguration<Components::Factory>,
-	) -> Result<Self, error::Error> {
-		let inner = new_impl!(
-			ComponentBlock<Components>,
-			config,
-			|mut config: &mut FactoryFullConfiguration<Components::Factory>| -> Result<_, error::Error> {
-				// Create client
-				let executor = NativeExecutor::new(config.default_heap_pages);
-
-				let keystore = Keystore::open(config.keystore_path.clone(), config.keystore_password.clone())?;
-
-				let (client, on_demand) = Components::build_client(&config, executor, Some(keystore.clone()))?;
-				let select_chain = Components::build_select_chain(&mut config, client.clone())?;
-
-				let transaction_pool = Arc::new(
-					Components::build_transaction_pool(config.transaction_pool.clone(), client.clone())?
-				);
-
-				let (import_queue, finality_proof_request_builder) = Components::build_import_queue(
-					&mut config,
-					client.clone(),
-					select_chain.clone(),
-					Some(transaction_pool.clone()),
-				)?;
-				let finality_proof_provider = Components::build_finality_proof_provider(client.clone())?;
-
-				Components::RuntimeServices::generate_initial_session_keys(
-					client.clone(),
-					config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
-				)?;
-
-				let network_protocol = <Components::Factory>::build_network_protocol(&config)?;
-				let rpc_extensions = Components::build_rpc_extensions(client.clone(), transaction_pool.clone());
-
-				Ok((
-					client,
-					on_demand,
-					keystore,
-					select_chain,
-					import_queue,
-					finality_proof_request_builder,
-					finality_proof_provider,
-					network_protocol,
-					transaction_pool,
-					rpc_extensions
-				))
-			},
-			Components::RuntimeServices::maintain_transaction_pool,
-			Components::RuntimeServices::offchain_workers,
-			Components::RuntimeServices::start_rpc,
-		);
-
-		inner.map(|inner| Service { inner })
-	}
-}
-
-=======
->>>>>>> Remove the old API
 /// Abstraction over a Substrate service.
 pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send {
@@ -947,7 +878,7 @@ NewService<TCfg, TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(not(target_os = "unknown"))]
-fn start_rpc_servers<C, G, H: FnMut() -> components::RpcHandler>(
+fn start_rpc_servers<C, G, H: FnMut() -> rpc_servers::RpcHandler<rpc::Metadata>>(
 	config: &Configuration<C, G>,
 	mut gen_handler: H
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
@@ -1096,228 +1027,6 @@ where
 	}
 }
 
-<<<<<<< HEAD
-/// Constructs a service factory with the given name that implements the `ServiceFactory` trait.
-/// The required parameters are required to be given in the exact order. Some parameters are followed
-/// by `{}` blocks. These blocks are required and used to initialize the given parameter.
-/// In these block it is required to write a closure that takes the same number of arguments,
-/// the corresponding function in the `ServiceFactory` trait provides.
-///
-/// # Example
-///
-/// ```
-/// # use substrate_service::{
-/// # 	construct_service_factory, Service, FullBackend, FullExecutor, LightBackend, LightExecutor,
-/// # 	FullComponents, LightComponents, FactoryFullConfiguration, FullClient
-/// # };
-/// # use transaction_pool::{self, txpool::{Pool as TransactionPool}};
-/// # use network::{config::DummyFinalityProofRequestBuilder, construct_simple_protocol};
-/// # use client::{self, LongestChain};
-/// # use consensus_common::import_queue::{BasicQueue, Verifier};
-/// # use consensus_common::{BlockOrigin, BlockImportParams, well_known_cache_keys::Id as CacheKeyId};
-/// # use node_runtime::{GenesisConfig, RuntimeApi};
-/// # use std::sync::Arc;
-/// # use node_primitives::Block;
-/// # use babe_primitives::AuthorityPair as BabePair;
-/// # use grandpa_primitives::AuthorityPair as GrandpaPair;
-/// # use sr_primitives::Justification;
-/// # use sr_primitives::traits::Block as BlockT;
-/// # use grandpa;
-/// # construct_simple_protocol! {
-/// # 	pub struct NodeProtocol where Block = Block { }
-/// # }
-/// # struct MyVerifier;
-/// # impl<B: BlockT> Verifier<B> for MyVerifier {
-/// # 	fn verify(
-/// # 		&mut self,
-/// # 		origin: BlockOrigin,
-/// # 		header: B::Header,
-/// # 		justification: Option<Justification>,
-/// # 		body: Option<Vec<B::Extrinsic>>,
-/// # 	) -> Result<(BlockImportParams<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
-/// # 		unimplemented!();
-/// # 	}
-/// # }
-/// type FullChainApi<T> = transaction_pool::ChainApi<
-/// 	client::Client<FullBackend<T>, FullExecutor<T>, Block, RuntimeApi>, Block>;
-/// type LightChainApi<T> = transaction_pool::ChainApi<
-/// 	client::Client<LightBackend<T>, LightExecutor<T>, Block, RuntimeApi>, Block>;
-///
-/// construct_service_factory! {
-/// 	struct Factory {
-/// 		// Declare the block type
-/// 		Block = Block,
-/// 		RuntimeApi = RuntimeApi,
-/// 		// Declare the network protocol and give an initializer.
-/// 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
-/// 		RuntimeDispatch = node_executor::Executor,
-/// 		FullTransactionPoolApi = FullChainApi<Self>
-/// 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
-/// 		LightTransactionPoolApi = LightChainApi<Self>
-/// 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
-/// 		Genesis = GenesisConfig,
-/// 		Configuration = (),
-/// 		FullService = FullComponents<Self>
-/// 			{ |config| <FullComponents<Factory>>::new(config) },
-/// 		// Setup as Consensus Authority (if the role and key are given)
-/// 		AuthoritySetup = {
-/// 			|service: Self::FullService| {
-/// 				Ok(service)
-/// 			}},
-/// 		LightService = LightComponents<Self>
-/// 			{ |config| <LightComponents<Factory>>::new(config) },
-/// 		FullImportQueue = BasicQueue<Block>
-/// 			{ |_, client, _, _| Ok(BasicQueue::new(MyVerifier, Box::new(client), None, None)) },
-/// 		LightImportQueue = BasicQueue<Block>
-/// 			{ |_, client| {
-/// 				let fprb = Box::new(DummyFinalityProofRequestBuilder::default()) as Box<_>;
-/// 				Ok((BasicQueue::new(MyVerifier, Box::new(client), None, None), fprb))
-/// 			}},
-/// 		SelectChain = LongestChain<FullBackend<Self>, Self::Block>
-/// 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {
-/// 				#[allow(deprecated)]
-/// 				Ok(LongestChain::new(client.backend().clone()))
-/// 			}},
-/// 		FinalityProofProvider = { |client: Arc<FullClient<Self>>| {
-/// 				Ok(Some(Arc::new(grandpa::FinalityProofProvider::new(client.clone(), client)) as _))
-/// 			}},
-/// 		RpcExtensions = (),
-/// 	}
-/// }
-/// ```
-#[macro_export]
-macro_rules! construct_service_factory {
-	(
-		$(#[$attr:meta])*
-		struct $name:ident {
-			Block = $block:ty,
-			RuntimeApi = $runtime_api:ty,
-			NetworkProtocol = $protocol:ty { $( $protocol_init:tt )* },
-			RuntimeDispatch = $dispatch:ty,
-			FullTransactionPoolApi = $full_transaction:ty { $( $full_transaction_init:tt )* },
-			LightTransactionPoolApi = $light_transaction:ty { $( $light_transaction_init:tt )* },
-			Genesis = $genesis:ty,
-			Configuration = $config:ty,
-			FullService = $full_service:ty { $( $full_service_init:tt )* },
-			AuthoritySetup = { $( $authority_setup:tt )* },
-			LightService = $light_service:ty { $( $light_service_init:tt )* },
-			FullImportQueue = $full_import_queue:ty
-				{ $( $full_import_queue_init:tt )* },
-			LightImportQueue = $light_import_queue:ty
-				{ $( $light_import_queue_init:tt )* },
-			SelectChain = $select_chain:ty
-				{ $( $select_chain_init:tt )* },
-			FinalityProofProvider = { $( $finality_proof_provider_init:tt )* },
-			RpcExtensions = $rpc_extensions_ty:ty
-				$( { $( $rpc_extensions:tt )* } )?,
-		}
-	) => {
-		$( #[$attr] )*
-		pub struct $name {}
-
-		#[allow(unused_variables)]
-		impl $crate::ServiceFactory for $name {
-			type Block = $block;
-			type RuntimeApi = $runtime_api;
-			type NetworkProtocol = $protocol;
-			type RuntimeDispatch = $dispatch;
-			type FullTransactionPoolApi = $full_transaction;
-			type LightTransactionPoolApi = $light_transaction;
-			type Genesis = $genesis;
-			type Configuration = $config;
-			type FullService = $full_service;
-			type LightService = $light_service;
-			type FullImportQueue = $full_import_queue;
-			type LightImportQueue = $light_import_queue;
-			type SelectChain = $select_chain;
-			type RpcExtensions = $rpc_extensions_ty;
-
-			fn build_full_transaction_pool(
-				config: $crate::TransactionPoolOptions,
-				client: $crate::Arc<$crate::FullClient<Self>>
-			) -> $crate::Result<$crate::TransactionPool<Self::FullTransactionPoolApi>, $crate::Error>
-			{
-				( $( $full_transaction_init )* ) (config, client)
-			}
-
-			fn build_light_transaction_pool(
-				config: $crate::TransactionPoolOptions,
-				client: $crate::Arc<$crate::LightClient<Self>>
-			) -> $crate::Result<$crate::TransactionPool<Self::LightTransactionPoolApi>, $crate::Error>
-			{
-				( $( $light_transaction_init )* ) (config, client)
-			}
-
-			fn build_network_protocol(config: &$crate::FactoryFullConfiguration<Self>)
-				-> $crate::Result<Self::NetworkProtocol, $crate::Error>
-			{
-				( $( $protocol_init )* ) (config)
-			}
-
-			fn build_select_chain(
-				config: &mut $crate::FactoryFullConfiguration<Self>,
-				client: Arc<$crate::FullClient<Self>>
-			) -> $crate::Result<Self::SelectChain, $crate::Error> {
-				( $( $select_chain_init )* ) (config, client)
-			}
-
-			fn build_full_import_queue(
-				config: &mut $crate::FactoryFullConfiguration<Self>,
-				client: $crate::Arc<$crate::FullClient<Self>>,
-				select_chain: Self::SelectChain,
-				transaction_pool: Option<Arc<$crate::TransactionPool<Self::FullTransactionPoolApi>>>,
-			) -> $crate::Result<Self::FullImportQueue, $crate::Error> {
-				( $( $full_import_queue_init )* ) (config, client, select_chain, transaction_pool)
-			}
-
-			fn build_light_import_queue(
-				config: &mut FactoryFullConfiguration<Self>,
-				client: Arc<$crate::LightClient<Self>>,
-			) -> Result<(Self::LightImportQueue, $crate::BoxFinalityProofRequestBuilder<$block>), $crate::Error> {
-				( $( $light_import_queue_init )* ) (config, client)
-			}
-
-			fn build_finality_proof_provider(
-				client: Arc<$crate::FullClient<Self>>
-			) -> Result<Option<Arc<$crate::FinalityProofProvider<Self::Block>>>, $crate::Error> {
-				( $( $finality_proof_provider_init )* ) (client)
-			}
-
-			fn new_light(
-				config: $crate::FactoryFullConfiguration<Self>
-			) -> $crate::Result<Self::LightService, $crate::Error>
-			{
-				( $( $light_service_init )* ) (config)
-			}
-
-			fn new_full(
-				config: $crate::FactoryFullConfiguration<Self>
-			) -> Result<Self::FullService, $crate::Error>
-			{
-				( $( $full_service_init )* ) (config).and_then(|service| {
-					($( $authority_setup )*)(service)
-				})
-			}
-
-			fn build_full_rpc_extensions(
-				client: Arc<$crate::FullClient<Self>>,
-				transaction_pool: Arc<$crate::TransactionPool<Self::FullTransactionPoolApi>>,
-			) -> Self::RpcExtensions {
-				$( ( $( $rpc_extensions )* ) (client, transaction_pool) )?
-			}
-
-			fn build_light_rpc_extensions(
-				client: Arc<$crate::LightClient<Self>>,
-				transaction_pool: Arc<$crate::TransactionPool<Self::LightTransactionPoolApi>>,
-			) -> Self::RpcExtensions {
-				$( ( $( $rpc_extensions )* ) (client, transaction_pool) )?
-			}
-		}
-	}
-}
-
-=======
->>>>>>> Remove the old API
 #[cfg(test)]
 mod tests {
 	use super::*;
