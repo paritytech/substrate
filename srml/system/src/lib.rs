@@ -1381,7 +1381,7 @@ mod tests {
 			);
 			assert_eq!(
 				CheckWeight::<Test>(PhantomData).validate(&1, CALL, op, len).unwrap().priority,
-				Bounded::max_value(),
+				<u64 as Bounded>::max_value(),
 			);
 		})
 	}

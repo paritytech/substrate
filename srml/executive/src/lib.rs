@@ -610,7 +610,7 @@ mod tests {
 			assert_eq!(Executive::apply_extrinsic(x2.clone()).unwrap(), ApplyOutcome::Success);
 
 			// default weight for `TestXt` == encoded length.
-			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), (3 * len).into());
+			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), Weight::from(3 * len));
 			assert_eq!(<system::Module<Runtime>>::all_extrinsics_len(), 3 * len);
 
 			let _ = <system::Module<Runtime>>::finalize();
