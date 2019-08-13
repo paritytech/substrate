@@ -36,8 +36,7 @@ use sr_primitives::traits::{
 use keystore::KeyStorePtr;
 use codec::{Decode, Encode};
 use parking_lot::{Mutex, MutexGuard};
-use primitives::{Blake2Hasher, H256, Pair, Public};
-use primitive_types::U512;
+use primitives::{blake2_256, Blake2Hasher, H256, Pair, Public, U256};
 use merlin::Transcript;
 use inherents::{InherentDataProviders, InherentData};
 use substrate_telemetry::{
@@ -997,37 +996,23 @@ fn secondary_slot_author(
 	authorities: &[(AuthorityId, BabeAuthorityWeight)],
 	randomness: [u8; 32],
 ) -> Option<&AuthorityId> {
-	use parity_crypto::pbkdf2::{sha512, Salt, Secret};
-
 	if authorities.is_empty() {
 		return None;
 	}
 
 	let rand = {
-		let mut data = [0u8; 64];
+		let mut data = [0u8; 40];
 		data[..32].copy_from_slice(&randomness);
 
 		for (i, v) in slot_number.to_le_bytes().into_iter().enumerate() {
 			data[32 + i] = *v;
 		}
 
-		let mut rand = [0u8; 64];
-
-		sha512(
-			1,
-			Salt(&[]),
-			Secret(&data),
-			&mut rand,
-		);
-
-		U512::from(rand)
+		U256::from(blake2_256(&data))
 	};
 
-	let authorities_len = U512::from(authorities.len());
+	let authorities_len = U256::from(authorities.len());
 	let idx = rand % authorities_len;
-
-	assert!(idx < authorities_len && idx <= U512::from(u32::max_value()),
-		"Index is constrained by list size and u32 range; qed");
 
 	let expected_author = authorities.get(idx.as_u32() as usize)
 		.expect("authorities not empty; index constrained to list length; \
