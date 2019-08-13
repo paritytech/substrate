@@ -259,11 +259,20 @@ impl<H, B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<C, E, I
 		epoch_data.authorities.len()
 	}
 
-	fn claim_slot(&self, slot_number: u64, epoch_data: &Self::EpochData) -> Option<Self::Claim> {
-		// FIXME: parent weight
+	fn claim_slot(
+		&self,
+		header: &B::Header,
+		slot_number: u64,
+		epoch_data: &Self::EpochData,
+	) -> Option<Self::Claim> {
+		let parent_weight = {
+			let pre_digest = find_pre_digest::<B>(&header).ok()?;
+			pre_digest.weight()
+		};
+
 		claim_slot(
 			slot_number,
-			0,
+			parent_weight,
 			epoch_data,
 			self.c,
 			&self.keystore,
@@ -393,7 +402,8 @@ fn find_next_epoch_digest<B: BlockT>(header: &B::Header) -> Result<Option<Epoch>
 // used to submit such misbehavior reports.
 fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 	mut header: B::Header,
-	hash: B::Hash,
+	header_hash: B::Hash,
+	parent_header: B::Header,
 	slot_now: u64,
 	authorities: &[(AuthorityId, BabeAuthorityWeight)],
 	client: &C,
@@ -408,11 +418,11 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 	trace!(target: "babe", "Checking header");
 	let seal = match header.digest_mut().pop() {
 		Some(x) => x,
-		None => return Err(babe_err!("Header {:?} is unsealed", hash)),
+		None => return Err(babe_err!("Header {:?} is unsealed", header_hash)),
 	};
 
 	let sig = seal.as_babe_seal().ok_or_else(|| {
-		babe_err!("Header {:?} has a bad seal", hash)
+		babe_err!("Header {:?} has a bad seal", header_hash)
 	})?;
 
 	let pre_digest = find_pre_digest::<B>(&header)?;
@@ -426,18 +436,22 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 		return Err(babe_err!("Slot author not found"));
 	}
 
+	let parent_weight = {
+		let parent_pre_digest = find_pre_digest::<B>(&parent_header)?;
+		parent_pre_digest.weight()
+	};
+
 	match &pre_digest {
 		BabePreDigest::Primary { vrf_output, vrf_proof, authority_index, slot_number, weight } => {
 			debug!(target: "babe", "Verifying Primary block");
 
 			let digest = (vrf_output, vrf_proof, *authority_index, *slot_number, *weight);
 
-			// FIXME: parent weight
 			check_primary_header::<B>(
-				hash,
+				header_hash,
 				digest,
 				sig,
-				0,
+				parent_weight,
 				authorities,
 				randomness,
 				epoch_index,
@@ -449,12 +463,11 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 
 			let digest = (*authority_index, *slot_number, *weight);
 
-			// FIXME: parent weight
 			check_secondary_header::<B>(
-				hash,
+				header_hash,
 				digest,
 				sig,
-				0,
+				parent_weight,
 				&authorities,
 			)?;
 		},
@@ -690,11 +703,16 @@ impl<B, E, Block, RA, PRA, T> Verifier<Block> for BabeVerifier<B, E, Block, RA, 
 			epoch(self.api.as_ref(), &BlockId::Hash(parent_hash))
 				.map_err(|e| format!("Could not fetch epoch at {:?}: {:?}", parent_hash, e))?;
 
+		let parent_header = self.client.header(&BlockId::Hash(parent_hash))
+			.map_err(|e| format!("Could not fetch parent header {:?}: {:?}", parent_hash, e))?
+			.ok_or_else(|| format!("Parent header {:?} not found.", parent_hash))?;
+
 		// We add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of headers
 		let checked_header = check_header::<Block, PRA, T>(
 			header,
 			hash,
+			parent_header,
 			slot_now + 1,
 			&authorities,
 			&self.api,
