@@ -21,20 +21,19 @@
 #![forbid(unsafe_code, missing_docs)]
 pub use babe_primitives::*;
 pub use consensus_common::SyncOracle;
-use std::{collections::HashMap, sync::Arc, u64, fmt::{Debug, Display}, pin::Pin, time::{Instant, Duration}};
+use std::{collections::HashMap, sync::Arc, u64, pin::Pin, time::{Instant, Duration}};
 use babe_primitives;
 use consensus_common::ImportResult;
 use consensus_common::import_queue::{
 	BoxJustificationImport, BoxFinalityProofImport,
 };
 use consensus_common::well_known_cache_keys::Id as CacheKeyId;
-use sr_primitives::{generic, generic::{BlockId, OpaqueDigestItemId}, Justification};
+use sr_primitives::{generic::{BlockId, OpaqueDigestItemId}, Justification};
 use sr_primitives::traits::{
 	Block as BlockT, Header, DigestItemFor, NumberFor, ProvideRuntimeApi,
-	SimpleBitOps, Zero,
+	Zero,
 };
 use keystore::KeyStorePtr;
-use runtime_support::serde::{Serialize, Deserialize};
 use codec::{Decode, Encode};
 use parking_lot::{Mutex, MutexGuard};
 use primitives::{Blake2Hasher, H256, Pair, Public};
@@ -44,13 +43,11 @@ use substrate_telemetry::{
 	telemetry,
 	CONSENSUS_TRACE,
 	CONSENSUS_DEBUG,
-	CONSENSUS_WARN,
-	CONSENSUS_INFO,
 };
 use schnorrkel::{
 	keys::Keypair,
 	vrf::{
-		VRFProof, VRFProofBatchable, VRFInOut, VRFOutput,
+		VRFProof, VRFInOut, VRFOutput,
 	},
 };
 use consensus_common::{
@@ -72,12 +69,11 @@ use client::{
 };
 use fork_tree::ForkTree;
 use slots::{CheckedHeader, check_equivocation};
-use futures::{prelude::*, future};
+use futures::prelude::*;
 use futures01::Stream as _;
-use futures_timer::Delay;
 use log::{error, warn, debug, info, trace};
 
-use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible, SignedDuration};
+use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible};
 
 mod aux_schema;
 #[cfg(test)]
@@ -274,7 +270,7 @@ impl<H, B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<C, E, I
 		)
 	}
 
-	fn pre_digest_data(&self, slot_number: u64, claim: &Self::Claim) -> Vec<sr_primitives::DigestItem<B::Hash>> {
+	fn pre_digest_data(&self, _slot_number: u64, claim: &Self::Claim) -> Vec<sr_primitives::DigestItem<B::Hash>> {
 		vec![
 			<DigestItemFor<B> as CompatibleDigestItem>::babe_pre_digest(claim.0.clone()),
 		]
@@ -437,15 +433,12 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 			let digest = (vrf_output, vrf_proof, *authority_index, *slot_number, *weight);
 
 			// FIXME: parent weight
-			check_primary_header::<B, _>(
-				&header,
+			check_primary_header::<B>(
 				hash,
 				digest,
 				sig,
-				slot_now,
 				0,
 				authorities,
-				client,
 				randomness,
 				epoch_index,
 				c,
@@ -457,15 +450,12 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 			let digest = (*authority_index, *slot_number, *weight);
 
 			// FIXME: parent weight
-			check_secondary_header::<_, B>(
-				&header,
+			check_secondary_header::<B>(
 				hash,
 				digest,
 				sig,
-				slot_now,
 				0,
 				&authorities,
-				client,
 			)?;
 		},
 	}
@@ -492,15 +482,12 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 	Ok(CheckedHeader::Checked(header, (pre_digest, seal)))
 }
 
-fn check_primary_header<B: BlockT + Sized, C: AuxStore>(
-	header: &B::Header,
+fn check_primary_header<B: BlockT + Sized>(
 	pre_hash: B::Hash,
 	pre_digest: (&VRFOutput, &VRFProof, AuthorityIndex, SlotNumber, BabeBlockWeight),
 	signature: AuthoritySignature,
-	slot_now: SlotNumber,
 	parent_weight: BabeBlockWeight,
 	authorities: &[(AuthorityId, BabeAuthorityWeight)],
-	client: &C,
 	randomness: [u8; 32],
 	epoch_index: u64,
 	c: (u64, u64),
@@ -541,18 +528,13 @@ fn check_primary_header<B: BlockT + Sized, C: AuxStore>(
 	}
 }
 
-fn check_secondary_header<C, B: BlockT>(
-	header: &B::Header,
+fn check_secondary_header<B: BlockT>(
 	pre_hash: B::Hash,
 	pre_digest: (AuthorityIndex, SlotNumber, BabeBlockWeight),
 	signature: AuthoritySignature,
-	slot_now: SlotNumber,
 	parent_weight: BabeBlockWeight,
 	authorities: &[(AuthorityId, BabeAuthorityWeight)],
-	client: &C,
-) -> Result<(), String> where
-	C: client::backend::AuxStore,
-{
+) -> Result<(), String> {
 	let (authority_index, slot_number, weight) = pre_digest;
 
 	if weight != parent_weight {
@@ -960,6 +942,7 @@ fn claim_primary_slot(
 }
 
 /// Get the expected secondary author for given slot along with authorities.
+// FIXME: use instead SHA512(epoch_randomness ++ slot_number) mod number_of_validators
 fn secondary_slot_author(
 	slot_number: u64,
 	authorities: &[(AuthorityId, BabeAuthorityWeight)],
