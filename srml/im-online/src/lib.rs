@@ -418,10 +418,10 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 			}
 		}
 
-		let validators_count = keys.len() as u32;
+		let validator_set_count = keys.len() as u32;
 		let offence = UnresponsivnessOffence {
 			session_index: current_session,
-			validators_count,
+			validator_set_count,
 			offenders: unresponsive,
 		};
 
@@ -486,7 +486,7 @@ pub struct UnresponsivnessOffence<Offender> {
 	/// at the end of the session.
 	session_index: SessionIndex,
 	/// The size of the validator set in current session/era.
-	validators_count: u32,
+	validator_set_count: u32,
 	/// Authorities which were unresponsive during the current era.
 	offenders: Vec<Offender>,
 }
@@ -502,17 +502,17 @@ impl<Offender: Clone> Offence<Offender> for UnresponsivnessOffence<Offender> {
 		self.session_index
 	}
 
-	fn validators_count(&self) -> u32 {
-		self.validators_count
+	fn validator_set_count(&self) -> u32 {
+		self.validator_set_count
 	}
 
 	fn time_slot(&self) -> TimeSlot {
 		self.session_index as TimeSlot
 	}
 
-	fn slash_fraction(offenders: u32, validators_count: u32) -> Perbill {
+	fn slash_fraction(offenders: u32, validator_set_count: u32) -> Perbill {
 		// the formula is min((3 * (k - 1)) / n, 1) * 0.05
-		let x = Perbill::from_rational_approximation(3 * (offenders - 1), validators_count);
+		let x = Perbill::from_rational_approximation(3 * (offenders - 1), validator_set_count);
 
 		// _ * 0.05
 		// For now, Perbill doesn't support multiplication other than an integer so we perform

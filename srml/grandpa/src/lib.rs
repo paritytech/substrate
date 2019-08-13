@@ -391,7 +391,7 @@ struct GrandpaEquivocationOffence<FullIdentification> {
 	/// The session index in which the incident happened.
 	session_index: SessionIndex,
 	/// The size of the validator set at the time of the offence.
-	validators_count: u32,
+	validator_set_count: u32,
 	/// The authority which produced this equivocation.
 	offender: FullIdentification,
 }
@@ -407,8 +407,8 @@ impl<FullIdentification: Clone> Offence<FullIdentification> for GrandpaEquivocat
 		self.session_index
 	}
 
-	fn validators_count(&self) -> u32 {
-		self.validators_count
+	fn validator_set_count(&self) -> u32 {
+		self.validator_set_count
 	}
 
 	fn time_slot(&self) -> TimeSlot {
@@ -417,10 +417,10 @@ impl<FullIdentification: Clone> Offence<FullIdentification> for GrandpaEquivocat
 
 	fn slash_fraction(
 		offenders_count: u32,
-		validators_count: u32,
+		validator_set_count: u32,
 	) -> Perbill {
 		// the formula is min((3k / n)^2, 1)
-		let x = Perbill::from_rational_approximation(3 * offenders_count, validators_count);
+		let x = Perbill::from_rational_approximation(3 * offenders_count, validator_set_count);
 
 		// _ ^ 2
 		// For now, Perbill doesn't support taking the power of it. Until it does, do it manually.

@@ -62,8 +62,8 @@ pub trait Offence<Offender> {
 	/// function.
 	fn session_index(&self) -> SessionIndex;
 
-	/// Return a validators count at the time when the offence took place.
-	fn validators_count(&self) -> u32;
+	/// Return a validator set count at the time when the offence took place.
+	fn validator_set_count(&self) -> u32;
 
 	/// A point in time when this offence happened.
 	///
@@ -82,10 +82,10 @@ pub trait Offence<Offender> {
 	/// particular offence kind for the given parameters.
 	///
 	/// `offenders_count` - the count of unique offending authorities. It is >0.
-	/// `validators_count` - the cardinality of the validator set at the time of offence.
+	/// `validator_set_count` - the cardinality of the validator set at the time of offence.
 	fn slash_fraction(
 		offenders_count: u32,
-		validators_count: u32,
+		validator_set_count: u32,
 	) -> Perbill;
 }
 

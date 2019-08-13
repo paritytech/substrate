@@ -111,7 +111,7 @@ pub const KIND: [u8; 16] = *b"test_report_1234";
 
 #[derive(Clone)]
 pub struct Offence<T> {
-	pub validators_count: u32,
+	pub validator_set_count: u32,
 	pub session_index: u32,
 	pub offenders: Vec<T>,
 	pub time_slot: TimeSlot,
@@ -128,8 +128,8 @@ impl<T: Clone> offence::Offence<T> for Offence<T> {
 		self.session_index
 	}
 
-	fn validators_count(&self) -> u32 {
-		self.validators_count
+	fn validator_set_count(&self) -> u32 {
+		self.validator_set_count
 	}
 
 	fn time_slot(&self) -> TimeSlot {
@@ -138,8 +138,8 @@ impl<T: Clone> offence::Offence<T> for Offence<T> {
 
 	fn slash_fraction(
 		offenders_count: u32,
-		validators_count: u32,
+		validator_set_count: u32,
 	) -> Perbill {
-		Perbill::from_percent(5 + offenders_count * 100 / validators_count)
+		Perbill::from_percent(5 + offenders_count * 100 / validator_set_count)
 	}
 }

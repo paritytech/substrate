@@ -34,7 +34,7 @@ fn should_report_an_authority_and_trigger_on_offence() {
 		assert_eq!(Offences::offence_reports(&KIND, &(session_index, time_slot)), vec![]);
 
 		let offence = Offence {
-			validators_count: 5,
+			validator_set_count: 5,
 			session_index,
 			time_slot,
 			offenders: vec![5],
@@ -58,13 +58,13 @@ fn should_calculate_the_fraction_corectly() {
 		let time_slot = 42;
 		assert_eq!(Offences::offence_reports(&KIND, &(session_index, time_slot)), vec![]);
 		let offence1 = Offence {
-			validators_count: 5,
+			validator_set_count: 5,
 			session_index,
 			time_slot,
 			offenders: vec![5],
 		};
 		let offence2 = Offence {
-			validators_count: 5,
+			validator_set_count: 5,
 			session_index,
 			time_slot,
 			offenders: vec![4],
@@ -94,7 +94,7 @@ fn should_not_report_the_same_authority_twice_in_the_same_slot() {
 		assert_eq!(Offences::offence_reports(&KIND, &(session_index, time_slot)), vec![]);
 
 		let offence = Offence {
-			validators_count: 5,
+			validator_set_count: 5,
 			session_index,
 			time_slot,
 			offenders: vec![5],
@@ -126,7 +126,7 @@ fn should_report_in_different_time_slot() {
 		assert_eq!(Offences::offence_reports(&KIND, &(session_index, time_slot)), vec![]);
 
 		let mut offence = Offence {
-			validators_count: 5,
+			validator_set_count: 5,
 			session_index,
 			time_slot,
 			offenders: vec![5],
@@ -161,7 +161,7 @@ fn should_deposit_event() {
 		);
 
 		let offence = Offence {
-			validators_count: 5,
+			validator_set_count: 5,
 			session_index,
 			time_slot,
 			offenders: vec![5],
@@ -191,7 +191,7 @@ fn doesnt_deposit_event_for_dups() {
 		assert_eq!(Offences::offence_reports(&KIND, &(session_index, time_slot)), vec![]);
 
 		let offence = Offence {
-			validators_count: 5,
+			validator_set_count: 5,
 			session_index,
 			time_slot,
 			offenders: vec![5],
@@ -230,13 +230,13 @@ fn should_properly_count_offences() {
 		assert_eq!(Offences::offence_reports(&KIND, &(session_index, time_slot)), vec![]);
 
 		let offence1 = Offence {
-			validators_count: 5,
+			validator_set_count: 5,
 			session_index,
 			time_slot,
 			offenders: vec![5],
 		};
 		let offence2 = Offence {
-			validators_count: 5,
+			validator_set_count: 5,
 			session_index,
 			time_slot,
 			offenders: vec![4],

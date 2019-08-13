@@ -80,7 +80,7 @@ impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportOffence<T::AccountId, T
 		let offenders = offence.offenders();
 		let time_slot = offence.time_slot();
 		let session = offence.session_index();
-		let validators_count = offence.validators_count();
+		let validator_set_count = offence.validator_set_count();
 
 		// Check if an offence is already reported for the offender authorities
 		// and otherwise stores that report.
@@ -120,14 +120,14 @@ impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportOffence<T::AccountId, T
 		Self::deposit_event(Event::Offence(O::ID, session, time_slot));
 
 		let offenders_count = all_offenders.len() as u32;
-		let expected_fraction = O::slash_fraction(offenders_count, validators_count);
+		let expected_fraction = O::slash_fraction(offenders_count, validator_set_count);
 		let slash_perbil = all_offenders
 			.iter()
 			.map(|details| {
 				if details.count > 1 {
 					let previous_fraction = O::slash_fraction(
 						offenders_count.saturating_sub(details.count - 1),
-						validators_count,
+						validator_set_count,
 					);
 					let perbil = expected_fraction
 						.into_parts()
