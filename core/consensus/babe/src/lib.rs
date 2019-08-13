@@ -50,7 +50,7 @@ use substrate_telemetry::{
 use schnorrkel::{
 	keys::Keypair,
 	vrf::{
-		VRFProof, VRFProofBatchable, VRFInOut,
+		VRFProof, VRFProofBatchable, VRFInOut, VRFOutput,
 	},
 };
 use consensus_common::{
@@ -242,7 +242,7 @@ impl<H, B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<C, E, I
 	Error: std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 {
 	type EpochData = Epoch;
-	type Claim = (VRFInOut, VRFProof, u32, AuthorityPair);
+	type Claim = (BabePreDigest, AuthorityPair);
 	type SyncOracle = SO;
 	type Proposer = E::Proposer;
 	type BlockImport = I;
@@ -264,26 +264,19 @@ impl<H, B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<C, E, I
 	}
 
 	fn claim_slot(&self, slot_number: u64, epoch_data: &Self::EpochData) -> Option<Self::Claim> {
+		// FIXME: parent weight
 		claim_slot(
 			slot_number,
+			0,
 			epoch_data,
 			self.c,
 			&self.keystore,
-		).map(|((inout, vrf_proof, _), authority_index, key)| {
-			(inout, vrf_proof, authority_index as u32, key)
-		})
+		)
 	}
 
 	fn pre_digest_data(&self, slot_number: u64, claim: &Self::Claim) -> Vec<sr_primitives::DigestItem<B::Hash>> {
-		let inherent_digest = BabePreDigest {
-			vrf_proof: claim.1.clone(),
-			vrf_output: claim.0.to_output(),
-			authority_index: claim.2,
-			slot_number,
-		};
-
 		vec![
-			<DigestItemFor<B> as CompatibleDigestItem>::babe_pre_digest(inherent_digest),
+			<DigestItemFor<B> as CompatibleDigestItem>::babe_pre_digest(claim.0.clone()),
 		]
 	}
 
@@ -293,12 +286,13 @@ impl<H, B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<C, E, I
 		Vec<B::Extrinsic>,
 		Self::Claim,
 	) -> consensus_common::BlockImportParams<B> + Send> {
-		Box::new(|header, header_hash, body, (_, _, _, pair)| {
+		Box::new(|header, header_hash, body, (_, pair)| {
 			// sign the pre-sealed hash of the block and then
 			// add it to a digest item.
 			let signature = pair.sign(header_hash.as_ref());
 			let signature_digest_item = <DigestItemFor<B> as CompatibleDigestItem>::babe_seal(signature);
 
+			// FIXME: fork choice
 			BlockImportParams {
 				origin: BlockOrigin::Own,
 				header,
@@ -397,14 +391,14 @@ fn find_next_epoch_digest<B: BlockT>(header: &B::Header) -> Result<Option<Epoch>
 /// unsigned.  This is required for security and must not be changed.
 ///
 /// This digest item will always return `Some` when used with `as_babe_pre_digest`.
-// FIXME #1018 needs misbehavior types. The `transaction_pool` parameter will be 
+// FIXME #1018 needs misbehavior types. The `transaction_pool` parameter will be
 // used to submit such misbehavior reports.
 fn check_header<B: BlockT + Sized, C: AuxStore, T>(
-	client: &C,
-	slot_now: u64,
 	mut header: B::Header,
 	hash: B::Hash,
-	authorities: &[(AuthorityId, BabeWeight)],
+	slot_now: u64,
+	authorities: &[(AuthorityId, BabeAuthorityWeight)],
+	client: &C,
 	randomness: [u8; 32],
 	epoch_index: u64,
 	c: (u64, u64),
@@ -425,58 +419,154 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 
 	let pre_digest = find_pre_digest::<B>(&header)?;
 
-	let BabePreDigest { slot_number, authority_index, ref vrf_proof, ref vrf_output } = pre_digest;
-
-	if slot_number > slot_now {
+	if pre_digest.slot_number() > slot_now {
 		header.digest_mut().push(seal);
-		Ok(CheckedHeader::Deferred(header, slot_number))
-	} else if authority_index > authorities.len() as u32 {
-		Err(babe_err!("Slot author not found"))
-	} else {
-		let (pre_hash, author) = (header.hash(), &authorities[authority_index as usize].0);
+		return Ok(CheckedHeader::Deferred(header, pre_digest.slot_number()));
+	}
 
-		if AuthorityPair::verify(&sig, pre_hash, &author) {
-			let (inout, _batchable_proof) = {
-				let transcript = make_transcript(
-					&randomness,
-					slot_number,
-					epoch_index,
-				);
+	if pre_digest.authority_index() > authorities.len() as u32 {
+		return Err(babe_err!("Slot author not found"));
+	}
 
-				schnorrkel::PublicKey::from_bytes(author.as_slice()).and_then(|p| {
-					p.vrf_verify(transcript, vrf_output, vrf_proof)
-				}).map_err(|s| {
-					babe_err!("VRF verification failed: {:?}", s)
-				})?
-			};
+	match &pre_digest {
+		BabePreDigest::Primary { vrf_output, vrf_proof, authority_index, slot_number, weight } => {
+			debug!(target: "babe", "Verifying Primary block");
 
-			let threshold = calculate_threshold(c, authorities, authority_index as usize);
-			if !check(&inout, threshold) {
-				return Err(babe_err!("VRF verification of block by author {:?} failed: \
-									  threshold {} exceeded", author, threshold));
-			}
+			let digest = (vrf_output, vrf_proof, *authority_index, *slot_number, *weight);
 
-			if let Some(equivocation_proof) = check_equivocation(
-				client,
-				slot_now,
-				slot_number,
+			// FIXME: parent weight
+			check_primary_header::<B, _>(
 				&header,
-				author,
-			).map_err(|e| e.to_string())? {
-				info!(
-					"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
-					author,
-					slot_number,
-					equivocation_proof.fst_header().hash(),
-					equivocation_proof.snd_header().hash(),
-				);
-			}
+				hash,
+				digest,
+				sig,
+				slot_now,
+				0,
+				authorities,
+				client,
+				randomness,
+				epoch_index,
+				c,
+			)?;
+		},
+		BabePreDigest::Secondary { authority_index, slot_number, weight } => {
+			info!(target: "auraboros", "Verifying Secondary block");
 
-			let pre_digest = CompatibleDigestItem::babe_pre_digest(pre_digest);
-			Ok(CheckedHeader::Checked(header, (pre_digest, seal)))
-		} else {
-			Err(babe_err!("Bad signature on {:?}", hash))
+			let digest = (*authority_index, *slot_number, *weight);
+
+			// FIXME: parent weight
+			check_secondary_header::<_, B>(
+				&header,
+				hash,
+				digest,
+				sig,
+				slot_now,
+				0,
+				&authorities,
+				client,
+			)?;
+		},
+	}
+
+	let author = &authorities[pre_digest.authority_index() as usize].0;
+
+	if let Some(equivocation_proof) = check_equivocation(
+		client,
+		slot_now,
+		pre_digest.slot_number(),
+		&header,
+		author,
+	).map_err(|e| e.to_string())? {
+		info!(
+			"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
+			author,
+			pre_digest.slot_number(),
+			equivocation_proof.fst_header().hash(),
+			equivocation_proof.snd_header().hash(),
+		);
+	}
+
+	let pre_digest = CompatibleDigestItem::babe_pre_digest(pre_digest);
+	Ok(CheckedHeader::Checked(header, (pre_digest, seal)))
+}
+
+fn check_primary_header<B: BlockT + Sized, C: AuxStore>(
+	header: &B::Header,
+	pre_hash: B::Hash,
+	pre_digest: (&VRFOutput, &VRFProof, AuthorityIndex, SlotNumber, BabeBlockWeight),
+	signature: AuthoritySignature,
+	slot_now: SlotNumber,
+	parent_weight: BabeBlockWeight,
+	authorities: &[(AuthorityId, BabeAuthorityWeight)],
+	client: &C,
+	randomness: [u8; 32],
+	epoch_index: u64,
+	c: (u64, u64),
+) -> Result<(), String>
+	where DigestItemFor<B>: CompatibleDigestItem,
+{
+	let (vrf_output, vrf_proof, authority_index, slot_number, weight) = pre_digest;
+	if weight != parent_weight + 1 {
+		return Err("Invalid weight: should increase with Primary block.".to_string());
+	}
+
+	let author = &authorities[authority_index as usize].0;
+
+	if AuthorityPair::verify(&signature, pre_hash, &author) {
+		let (inout, _) = {
+			let transcript = make_transcript(
+				&randomness,
+				slot_number,
+				epoch_index,
+			);
+
+			schnorrkel::PublicKey::from_bytes(author.as_slice()).and_then(|p| {
+				p.vrf_verify(transcript, vrf_output, vrf_proof)
+			}).map_err(|s| {
+				babe_err!("VRF verification failed: {:?}", s)
+			})?
+		};
+
+		let threshold = calculate_primary_threshold(c, authorities, authority_index as usize);
+		if !check_primary_threshold(&inout, threshold) {
+			return Err(babe_err!("VRF verification of block by author {:?} failed: \
+								  threshold {} exceeded", author, threshold));
 		}
+
+		Ok(())
+	} else {
+		Err(babe_err!("Bad signature on {:?}", pre_hash))
+	}
+}
+
+fn check_secondary_header<C, B: BlockT>(
+	header: &B::Header,
+	pre_hash: B::Hash,
+	pre_digest: (AuthorityIndex, SlotNumber, BabeBlockWeight),
+	signature: AuthoritySignature,
+	slot_now: SlotNumber,
+	parent_weight: BabeBlockWeight,
+	authorities: &[(AuthorityId, BabeAuthorityWeight)],
+	client: &C,
+) -> Result<(), String> where
+	C: client::backend::AuxStore,
+{
+	let (authority_index, slot_number, weight) = pre_digest;
+
+	if weight != parent_weight {
+		return Err("Invalid weight: Should stay the same with Secondary block.".to_string());
+	}
+
+	// check the signature is valid under the expected authority and
+	// chain state.
+	// FIXME: check expected author
+	let expected_author = unimplemented!();
+	let author = &authorities[authority_index as usize].0;
+
+	if AuthorityPair::verify(&signature, pre_hash.as_ref(), author) {
+		Ok(())
+	} else {
+		Err(format!("Bad signature on {:?}", pre_hash))
 	}
 }
 
@@ -602,11 +692,11 @@ impl<B: BlockT, C, T> Verifier<B> for BabeVerifier<C, T> where
 		// We add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of headers
 		let checked_header = check_header::<B, C, T>(
-			&self.api,
-			slot_now + 1,
 			header,
 			hash,
+			slot_now + 1,
 			&authorities,
+			&self.api,
 			randomness,
 			epoch_index,
 			self.config.c(),
@@ -615,8 +705,10 @@ impl<B: BlockT, C, T> Verifier<B> for BabeVerifier<C, T> where
 
 		match checked_header {
 			CheckedHeader::Checked(pre_header, (pre_digest, seal)) => {
-				let BabePreDigest { slot_number, .. } = pre_digest.as_babe_pre_digest()
+				let babe_pre_digest = pre_digest.as_babe_pre_digest()
 					.expect("check_header always returns a pre-digest digest item; qed");
+
+				let slot_number = babe_pre_digest.slot_number();
 
 				// if the body is passed through, we need to use the runtime
 				// to check that the internally-set timestamp in the inherents
@@ -641,6 +733,7 @@ impl<B: BlockT, C, T> Verifier<B> for BabeVerifier<C, T> where
 					"babe.checked_and_importing";
 					"pre_header" => ?pre_header);
 
+				// FIXME: fork choice
 				let import_block = BlockImportParams {
 					origin,
 					header: pre_header,
@@ -729,13 +822,13 @@ fn make_transcript(
 	transcript
 }
 
-fn check(inout: &VRFInOut, threshold: u128) -> bool {
+fn check_primary_threshold(inout: &VRFInOut, threshold: u128) -> bool {
 	u128::from_le_bytes(inout.make_bytes::<[u8; 16]>(BABE_VRF_PREFIX)) < threshold
 }
 
-fn calculate_threshold(
+fn calculate_primary_threshold(
 	c: (u64, u64),
-	authorities: &[(AuthorityId, BabeWeight)],
+	authorities: &[(AuthorityId, BabeAuthorityWeight)],
 	authority_index: usize,
 ) -> u128 {
 	use num_bigint::BigUint;
@@ -758,34 +851,99 @@ fn calculate_threshold(
 	calc().unwrap_or(u128::max_value())
 }
 
+fn claim_slot(
+	slot_number: SlotNumber,
+	parent_weight: BabeBlockWeight,
+	epoch: &Epoch,
+	c: (u64, u64),
+	keystore: &KeyStorePtr,
+) -> Option<(BabePreDigest, AuthorityPair)> {
+	claim_primary_slot(slot_number, parent_weight, epoch, c, keystore)
+		.or_else(|| claim_secondary_slot(slot_number, parent_weight, &epoch.authorities, keystore))
+}
+
 /// Claim a slot if it is our turn.  Returns `None` if it is not our turn.
 ///
 /// This hashes the slot number, epoch, genesis hash, and chain randomness into
 /// the VRF.  If the VRF produces a value less than `threshold`, it is our turn,
 /// so it returns `Some(_)`.  Otherwise, it returns `None`.
-fn claim_slot(
-	slot_number: u64,
-	Epoch { authorities, randomness, epoch_index, .. }: &Epoch,
+fn claim_primary_slot(
+	slot_number: SlotNumber,
+	parent_weight: BabeBlockWeight,
+	epoch: &Epoch,
 	c: (u64, u64),
 	keystore: &KeyStorePtr,
-) -> Option<((VRFInOut, VRFProof, VRFProofBatchable), usize, AuthorityPair)> {
+) -> Option<(BabePreDigest, AuthorityPair)> {
+	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
 	let keystore = keystore.read();
-	let (key_pair, authority_index) = authorities.iter()
+
+	for (pair, authority_index) in authorities.iter()
 		.enumerate()
-		.find_map(|(i, a)| {
+		.flat_map(|(i, a)| {
 			keystore.key_pair::<AuthorityPair>(&a.0).ok().map(|kp| (kp, i))
-		})?;
-	let transcript = make_transcript(randomness, slot_number, *epoch_index);
+		})
+	{
+		let transcript = make_transcript(randomness, slot_number, *epoch_index);
 
-	// Compute the threshold we will use.
-	//
-	// We already checked that authorities contains `key.public()`, so it can't
-	// be empty.  Therefore, this division in `calculate_threshold` is safe.
-	let threshold = calculate_threshold(c, authorities, authority_index);
+		// Compute the threshold we will use.
+		//
+		// We already checked that authorities contains `key.public()`, so it can't
+		// be empty.  Therefore, this division in `calculate_threshold` is safe.
+		let threshold = calculate_primary_threshold(c, authorities, authority_index);
 
-	get_keypair(&key_pair)
-		.vrf_sign_after_check(transcript, |inout| check(inout, threshold))
-		.map(|s|(s, authority_index, key_pair))
+		let pre_digest = get_keypair(&pair)
+			.vrf_sign_after_check(transcript, |inout| check_primary_threshold(inout, threshold))
+			.map(|s| {
+				BabePreDigest::Primary {
+					slot_number,
+					vrf_output: s.0.to_output(),
+					vrf_proof: s.1,
+					authority_index: authority_index as u32,
+					weight: parent_weight + 1,
+				}
+			});
+
+		// early exit on first successful claim
+		if let Some(pre_digest) = pre_digest {
+			return Some((pre_digest, pair));
+		}
+	}
+
+	None
+}
+
+fn claim_secondary_slot(
+	slot_number: SlotNumber,
+	parent_weight: BabeBlockWeight,
+	authorities: &[(AuthorityId, BabeAuthorityWeight)],
+	keystore: &KeyStorePtr,
+) -> Option<(BabePreDigest, AuthorityPair)> {
+	if authorities.is_empty() {
+		return None;
+	}
+
+	// FIXME: check expected author
+	let expected_author = unimplemented!(); // slot_author::<P>(slot_number, epoch_data);
+	let keystore = keystore.read();
+
+	for (pair, authority_index) in authorities.iter()
+		.enumerate()
+		.flat_map(|(i, a)| {
+			keystore.key_pair::<AuthorityPair>(&a.0).ok().map(|kp| (kp, i))
+		})
+	{
+		if pair.public() == expected_author {
+			let pre_digest = BabePreDigest::Secondary {
+				slot_number,
+				authority_index: authority_index as u32,
+				weight: parent_weight,
+			};
+
+			return Some((pre_digest, pair));
+		}
+	}
+
+	None
 }
 
 fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> where
@@ -929,8 +1087,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 			let pre_digest = find_pre_digest::<Block>(&block.header)
 				.expect("valid babe headers must contain a predigest; \
 						 header has been already verified; qed");
-			let BabePreDigest { slot_number, .. } = pre_digest;
-			slot_number
+			pre_digest.slot_number()
 		};
 
 		// returns a function for checking whether a block is a descendent of another

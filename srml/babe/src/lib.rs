@@ -32,7 +32,7 @@ use codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-use babe_primitives::{BABE_ENGINE_ID, ConsensusLog, BabeWeight, Epoch, RawBabePreDigest};
+use babe_primitives::{BABE_ENGINE_ID, ConsensusLog, BabeAuthorityWeight, Epoch, RawBabePreDigest};
 pub use babe_primitives::{AuthorityId, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH};
 
 /// The BABE inherent identifier.
@@ -123,7 +123,7 @@ decl_storage! {
 		pub EpochIndex get(epoch_index): u64;
 
 		/// Current epoch authorities.
-		pub Authorities get(authorities) config(): Vec<(AuthorityId, BabeWeight)>;
+		pub Authorities get(authorities) config(): Vec<(AuthorityId, BabeAuthorityWeight)>;
 
 		/// Slot at which the current epoch started. It is possible that no
 		/// block was authored at the given slot and the epoch change was
@@ -192,11 +192,14 @@ decl_module! {
 				})
 			{
 				if EpochStartSlot::get() == 0 {
-					EpochStartSlot::put(digest.slot_number);
+					EpochStartSlot::put(digest.slot_number());
 				}
 
-				CurrentSlot::put(digest.slot_number);
-				Self::deposit_vrf_output(&digest.vrf_output);
+				CurrentSlot::put(digest.slot_number());
+
+				if let RawBabePreDigest::Primary { vrf_output, .. } = digest {
+					Self::deposit_vrf_output(&vrf_output);
+				}
 
 				return;
 			}
@@ -219,9 +222,16 @@ impl<T: Trait> FindAuthor<u32> for Module<T> {
 	{
 		for (id, mut data) in digests.into_iter() {
 			if id == BABE_ENGINE_ID {
-				return Some(RawBabePreDigest::decode(&mut data).ok()?.authority_index);
+				let pre_digest = RawBabePreDigest::decode(&mut data).ok()?;
+				return Some(match pre_digest {
+					RawBabePreDigest::Primary { authority_index, .. } =>
+						authority_index,
+					RawBabePreDigest::Secondary { authority_index, .. } =>
+						authority_index,
+				});
 			}
 		}
+
 		return None;
 	}
 }
