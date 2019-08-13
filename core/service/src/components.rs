@@ -34,7 +34,7 @@ use sr_primitives::{
 };
 use crate::config::Configuration;
 use primitives::{Blake2Hasher, H256, traits::BareCryptoStorePtr};
-use rpc::{self, apis::system::SystemInfo};
+use rpc::{self, system::SystemInfo};
 use futures::{prelude::*, future::Executor};
 use futures03::{FutureExt as _, channel::mpsc, compat::Compat};
 
@@ -200,7 +200,7 @@ impl<C: Components> StartRpc<C> for C where
 		let subscriptions = rpc::Subscriptions::new(task_executor.clone());
 		let chain = chain::Chain::new(client.clone(), subscriptions.clone());
 		let state = state::State::new(client.clone(), subscriptions.clone());
-		let author = rpc::apis::author::Author::new(
+		let author = rpc::author::Author::new(
 			client,
 			transaction_pool,
 			subscriptions,

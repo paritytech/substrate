@@ -41,16 +41,15 @@ mod tests {
 	use runtime_io;
 	use substrate_executor::WasmExecutor;
 	use codec::{Encode, Decode, Joiner};
-	use keyring::{AccountKeyring, Ed25519Keyring, Sr25519Keyring};
 	use runtime_support::{Hashable, StorageValue, StorageMap, assert_eq_error_rate, traits::Currency};
 	use state_machine::{CodeExecutor, Externalities, TestExternalities as CoreTestExternalities};
-	use primitives::{ twox_128, blake2_256, Blake2Hasher, NeverNativeValue, NativeOrEncoded};
-	use node_primitives::{Hash, BlockNumber, Balance};
+	use primitives::{twox_128, blake2_256, Blake2Hasher, NeverNativeValue, NativeOrEncoded, map};
 	use sr_primitives::traits::{Header as HeaderT, Hash as HashT, Convert};
 	use sr_primitives::{ApplyOutcome, ApplyError, ApplyResult};
 	use sr_primitives::weights::{WeightMultiplier, GetDispatchInfo};
 	use contracts::ContractAddressFor;
 	use system::{EventRecord, Phase};
+	use node_primitives::{Hash, BlockNumber, Balance};
 	use node_runtime::{
 		Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances, BuildStorage,
 		System, Event,
@@ -58,9 +57,8 @@ mod tests {
 	};
 	use node_runtime::constants::currency::*;
 	use node_runtime::impls::WeightToFee;
-	use wabt;
-	use primitives::map;
 	use node_testing::keyring::*;
+	use wabt;
 
 	/// The wasm runtime code.
 	///

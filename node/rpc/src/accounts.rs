@@ -24,7 +24,7 @@ use jsonrpc_derive::rpc;
 use node_primitives::{
 	AccountId, Index, AccountNonceApi, Block, BlockId,
 };
-use parity_codec::Encode;
+use codec::Encode;
 use sr_primitives::traits;
 use substrate_primitives::hexdisplay::HexDisplay;
 use transaction_pool::txpool::{self, Pool};
@@ -114,7 +114,7 @@ mod tests {
 	use super::*;
 
 	use node_runtime::{CheckedExtrinsic, Call, TimestampCall};
-	use parity_codec::Decode;
+	use codec::Decode;
 	use node_testing::{
 		client::{ClientExt, TestClientBuilder, TestClientBuilderExt},
 		keyring::{self, alice, signed_extra},
