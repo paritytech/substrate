@@ -19,9 +19,9 @@
 use primitives::{Pair, Public, crypto::UncheckedInto};
 pub use node_primitives::{AccountId, Balance};
 use node_runtime::{
-	BabeConfig,	BalancesConfig, ContractsConfig, CouncilConfig, DemocracyConfig,
+	BabeConfig, BalancesConfig, ContractsConfig, CouncilConfig, DemocracyConfig,
 	ElectionsConfig, GrandpaConfig, ImOnlineConfig, IndicesConfig, Perbill,
-	SessionConfig,	SessionKeys, StakerStatus, StakingConfig, SudoConfig, SystemConfig,
+	SessionConfig, SessionKeys, StakerStatus, StakingConfig, SudoConfig, SystemConfig,
 	TechnicalCommitteeConfig, WASM_BINARY,
 };
 use node_runtime::constants::{time::*, currency::*};
