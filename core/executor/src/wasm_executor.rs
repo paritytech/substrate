@@ -1660,12 +1660,12 @@ mod tests {
 	}
 
 	#[test]
-	fn enumerated_trie_root_should_work() {
+	fn ordered_trie_root_should_work() {
 		let mut ext = TestExternalities::<Blake2Hasher>::default();
 		let trie_input = vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()];
 		let test_code = WASM_BINARY;
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_enumerated_trie_root", &[]).unwrap(),
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_ordered_trie_root", &[]).unwrap(),
 			Layout::<Blake2Hasher>::ordered_trie_root(trie_input.iter()).as_fixed_bytes().encode()
 		);
 	}

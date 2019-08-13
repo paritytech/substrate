@@ -163,7 +163,8 @@ impl ProtocolId {
 	}
 }
 
-/// Parses a string address and returns the component, if valid.
+/// Parses a string address and splits it into Multiaddress and PeerId, if
+/// valid.
 ///
 /// # Example
 ///
@@ -177,8 +178,12 @@ impl ProtocolId {
 /// ```
 ///
 pub fn parse_str_addr(addr_str: &str) -> Result<(PeerId, Multiaddr), ParseErr> {
-	let mut addr: Multiaddr = addr_str.parse()?;
+	let addr: Multiaddr = addr_str.parse()?;
+	parse_addr(addr)
+}
 
+/// Splits a Multiaddress into a Multiaddress and PeerId.
+pub fn parse_addr(mut addr: Multiaddr)-> Result<(PeerId, Multiaddr), ParseErr> {
 	let who = match addr.pop() {
 		Some(multiaddr::Protocol::P2p(key)) => PeerId::from_multihash(key)
 			.map_err(|_| ParseErr::InvalidPeerId)?,

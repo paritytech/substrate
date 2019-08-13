@@ -1264,7 +1264,7 @@ macro_rules! decl_module {
 }
 
 pub trait IsSubType<T: Callable<R>, R> {
-	fn is_aux_sub_type(&self) -> Option<&CallableCallFor<T, R>>;
+	fn is_sub_type(&self) -> Option<&CallableCallFor<T, R>>;
 }
 
 /// Implement a meta-dispatch module to dispatch to other dispatchers.
@@ -1305,7 +1305,7 @@ macro_rules! impl_outer_dispatch {
 		$(
 			impl $crate::dispatch::IsSubType<$camelcase, $runtime> for $call_type {
 				#[allow(unreachable_patterns)]
-				fn is_aux_sub_type(&self) -> Option<&$crate::dispatch::CallableCallFor<$camelcase, $runtime>> {
+				fn is_sub_type(&self) -> Option<&$crate::dispatch::CallableCallFor<$camelcase, $runtime>> {
 					match *self {
 						$call_type::$camelcase(ref r) => Some(r),
 						// May be unreachable

@@ -108,7 +108,7 @@ fn no_offline_should_work() {
 		assert_eq!(Staking::slash_count(&10), 0);
 		assert_eq!(Balances::free_balance(&10), 1);
 		// New era is not being forced
-		assert!(!Staking::forcing_new_era());
+		assert_eq!(Staking::force_era(), Forcing::NotForcing);
 	});
 }
 
@@ -163,7 +163,7 @@ fn invulnerability_should_work() {
 		assert!(<Validators<Test>>::exists(&11));
 		// New era not being forced
 		// NOTE: new era is always forced once slashing happens -> new validators need to be chosen.
-		assert!(!Staking::forcing_new_era());
+		assert_eq!(Staking::force_era(), Forcing::NotForcing);
 	});
 }
 
@@ -880,6 +880,43 @@ fn session_and_eras_work() {
 		// Block 7: Era increment.
 		start_session(8);
 		assert_eq!(Session::current_index(), 9);
+		assert_eq!(Staking::current_era(), 3);
+	});
+}
+
+#[test]
+fn forcing_new_era_works() {
+	with_externalities(&mut ExtBuilder::default().build(),|| {
+		// normal flow of session.
+		assert_eq!(Staking::current_era(), 0);
+		start_session(0);
+		assert_eq!(Staking::current_era(), 0);
+		start_session(1);
+		assert_eq!(Staking::current_era(), 0);
+		start_session(2);
+		assert_eq!(Staking::current_era(), 1);
+
+		// no era change.
+		ForceEra::put(Forcing::ForceNone);
+		start_session(3);
+		assert_eq!(Staking::current_era(), 1);
+		start_session(4);
+		assert_eq!(Staking::current_era(), 1);
+		start_session(5);
+		assert_eq!(Staking::current_era(), 1);
+		start_session(6);
+		assert_eq!(Staking::current_era(), 1);
+
+		// back to normal
+		ForceEra::put(Forcing::NotForcing);
+		start_session(7);
+		assert_eq!(Staking::current_era(), 1);
+		start_session(8);
+		assert_eq!(Staking::current_era(), 2);
+
+		// forceful change
+		ForceEra::put(Forcing::ForceNew);
+		start_session(9);
 		assert_eq!(Staking::current_era(), 3);
 	});
 }

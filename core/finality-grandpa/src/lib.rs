@@ -53,7 +53,7 @@
 //! included in the newly-finalized chain.
 
 use futures::prelude::*;
-use log::{debug, info, warn};
+use log::{debug, error, info};
 use futures::sync::mpsc;
 use client::{
 	BlockchainEvents, CallExecutor, Client, backend::Backend, error::Error as ClientError,
@@ -680,8 +680,8 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 
 		poll_voter.select2(voter_commands_rx).then(move |res| match res {
 			Ok(future::Either::A(((), _))) => {
-				// voters don't conclude naturally; this could reasonably be an error.
-				Ok(FutureLoop::Break(()))
+				// voters don't conclude naturally
+				Err(Error::Safety("GRANDPA voter has concluded.".into()))
 			},
 			Err(future::Either::B(_)) => {
 				// the `voter_commands_rx` stream should not fail.
@@ -709,7 +709,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 	let voter_work = voter_work
 		.map(|_| ())
 		.map_err(|e| {
-			warn!("GRANDPA Voter failed: {:?}", e);
+			error!("GRANDPA Voter failed: {:?}", e);
 			telemetry!(CONSENSUS_WARN; "afg.voter_failed"; "e" => ?e);
 		});
 
