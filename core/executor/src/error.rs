@@ -38,8 +38,8 @@ pub enum Error {
 	#[display(fmt="Method not found: '{}'", _0)]
 	MethodNotFound(String),
 	/// Code is invalid (expected single byte)
-	#[display(fmt="Invalid Code")]
-	InvalidCode,
+	#[display(fmt="Invalid Code: {}", _0)]
+	InvalidCode(String),
 	/// Could not get runtime version.
 	#[display(fmt="On-chain runtime does not specify version")]
 	VersionInvalid,

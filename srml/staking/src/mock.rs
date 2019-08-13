@@ -110,6 +110,7 @@ impl system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = BlockNumber;
+	type Call = ();
 	type Hash = H256;
 	type Hashing = ::sr_primitives::traits::BlakeTwo256;
 	type AccountId = AccountId;
@@ -252,7 +253,7 @@ impl ExtBuilder {
 	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 		self.set_associated_consts();
-		let (mut t, mut c) = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut storage = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		let balance_factor = if self.existential_deposit > 0 {
 			256
 		} else {
@@ -284,7 +285,7 @@ impl ExtBuilder {
 					(999, 1_000_000_000_000),
 			],
 			vesting: vec![],
-		}.assimilate_storage(&mut t, &mut c);
+		}.assimilate_storage(&mut storage);
 
 		let stake_21 = if self.fair { 1000 } else { 2000 };
 		let stake_31 = if self.validator_pool { balance_factor * 1000 } else { 1 };
@@ -309,13 +310,14 @@ impl ExtBuilder {
 			offline_slash: Perbill::from_percent(5),
 			offline_slash_grace: 0,
 			invulnerables: vec![],
-		}.assimilate_storage(&mut t, &mut c);
+			.. Default::default()
+		}.assimilate_storage(&mut storage);
 
 		let _ = session::GenesisConfig::<Test> {
 			keys: validators.iter().map(|x| (*x, UintAuthorityId(*x))).collect(),
-		}.assimilate_storage(&mut t, &mut c);
+		}.assimilate_storage(&mut storage);
 
-		let mut ext = t.into();
+		let mut ext = storage.into();
 		runtime_io::with_externalities(&mut ext, || {
 			let validators = Session::validators();
 			SESSION.with(|x|
@@ -421,10 +423,12 @@ pub fn current_total_payout_for_duration(duration: u64) -> u64 {
 	res
 }
 
-pub fn add_reward_points_to_all_elected() {
-	for v in <Module<Test>>::current_elected() {
-		<Module<Test>>::add_reward_points_to_validator(v, 1);
-	}
+pub fn reward_all_elected() {
+	let rewards = <Module<Test>>::current_elected().iter()
+		.map(|v| (*v, 1))
+		.collect::<Vec<_>>();
+
+	<Module<Test>>::reward_by_ids(rewards)
 }
 
 pub fn validator_controllers() -> Vec<AccountId> {

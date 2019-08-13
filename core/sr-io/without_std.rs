@@ -19,8 +19,9 @@ pub use rstd;
 pub use rstd::{mem, slice};
 
 use core::{intrinsics, panic::PanicInfo};
-use rstd::{vec::Vec, cell::Cell, convert::TryInto, convert::TryFrom};
+use rstd::{vec::Vec, cell::Cell, convert::TryInto};
 use primitives::{offchain, Blake2Hasher};
+use codec::Decode;
 
 #[cfg(not(feature = "no_panic_handler"))]
 #[panic_handler]
@@ -127,8 +128,11 @@ pub mod ext {
 
 	/// Ensures we use the right crypto when calling into native
 	pub trait ExternTrieCrypto: Hasher {
-		/// Calculate enumerated trie root.
-		fn enumerated_trie_root(values: &[&[u8]]) -> Self::Out;
+		/// A trie root formed from the enumerated items.
+		fn ordered_trie_root<
+			A: AsRef<[u8]>,
+			I: IntoIterator<Item = A>
+		>(values: I) -> Self::Out;
 	}
 
 	/// Additional bounds for Hasher trait for without_std.
@@ -137,9 +141,16 @@ pub mod ext {
 
 	// Ensures we use a Blake2_256-flavored Hasher when calling into native
 	impl ExternTrieCrypto for Blake2Hasher {
-		fn enumerated_trie_root(values: &[&[u8]]) -> Self::Out {
-			let lengths = values.iter().map(|v| (v.len() as u32).to_le()).collect::<Vec<_>>();
-			let values = values.iter().fold(Vec::new(), |mut acc, sl| { acc.extend_from_slice(sl); acc });
+		fn ordered_trie_root<
+			A: AsRef<[u8]>,
+			I: IntoIterator<Item = A>
+		>(items: I) -> Self::Out {
+			let mut values = Vec::new();
+			let mut lengths = Vec::new();
+			for v in items.into_iter() {
+				values.extend_from_slice(v.as_ref());
+				lengths.push((v.as_ref().len() as u32).to_le());
+			}
 			let mut result: [u8; 32] = Default::default();
 			unsafe {
 				ext_blake2_256_enumerated_trie_root.get()(
@@ -158,7 +169,7 @@ pub mod ext {
 		(
 			$(
 				$( #[$attr:meta] )*
-				fn $name:ident ( $( $arg:ident : $arg_ty:ty ),* ) $( -> $ret:ty )?;
+				fn $name:ident ( $( $arg:ident : $arg_ty:ty ),* $(,)? ) $( -> $ret:ty )?;
 			)*
 		) => {
 			$(
@@ -212,6 +223,13 @@ pub mod ext {
 		fn ext_exists_storage(key_data: *const u8, key_len: u32) -> u32;
 		/// Remove storage entries which key starts with given prefix.
 		fn ext_clear_prefix(prefix_data: *const u8, prefix_len: u32);
+		/// Remove child storage entries which key starts with given prefix.
+		fn ext_clear_child_prefix(
+			storage_key_data: *const u8,
+			storage_key_len: u32,
+			prefix_data: *const u8,
+			prefix_len: u32
+		);
 		/// Gets the value of the given key from storage.
 		///
 		/// The host allocates the memory for storing the value.
@@ -352,30 +370,83 @@ pub mod ext {
 		fn ext_twox_256(data: *const u8, len: u32, out: *mut u8);
 		/// Keccak256 hash
 		fn ext_keccak_256(data: *const u8, len: u32, out: *mut u8);
-		/// Note: ext_ed25519_verify returns 0 if the signature is correct, nonzero otherwise.
+
+		/// Returns all `ed25519` public keys for the given key type from the keystore.
+		fn ext_ed25519_public_keys(id: *const u8, result_len: *mut u32) -> *mut u8;
+
+		/// Note: `ext_ed25519_verify` returns `0` if the signature is correct, nonzero otherwise.
 		fn ext_ed25519_verify(
 			msg_data: *const u8,
 			msg_len: u32,
 			sig_data: *const u8,
-			pubkey_data: *const u8
+			pubkey_data: *const u8,
 		) -> u32;
-		/// Note: ext_sr25519_verify returns 0 if the signature is correct, nonzero otherwise.
+
+		/// Generate an `ed25519` key pair for the given key type id and store the public key
+		/// in `out`.
+		fn ext_ed25519_generate(id: *const u8, seed: *const u8, seed_len: u32, out: *mut u8);
+
+		/// Sign the given `msg` with the `ed25519` key pair that corresponds to then given key
+		/// type id and public key. The raw signature is stored in `out`.
+		///
+		/// # Returns
+		///
+		/// - `0` on success
+		/// - nonezero if something failed, e.g. retrieving of the key.
+		fn ext_ed25519_sign(
+			id: *const u8,
+			pubkey: *const u8,
+			msg: *const u8,
+			msg_len: u32,
+			out: *mut u8,
+		) -> u32;
+
+		/// Returns all `sr25519` public keys for the given key type from the keystore.
+		fn ext_sr25519_public_keys(id: *const u8, result_len: *mut u32) -> *mut u8;
+
+		/// Note: `ext_sr25519_verify` returns 0 if the signature is correct, nonzero otherwise.
 		fn ext_sr25519_verify(
 			msg_data: *const u8,
 			msg_len: u32,
 			sig_data: *const u8,
-			pubkey_data: *const u8
+			pubkey_data: *const u8,
 		) -> u32;
+
+		/// Generate an `sr25519` key pair for the given key type id and store the public
+		/// key in `out`.
+		fn ext_sr25519_generate(id: *const u8, seed: *const u8, seed_len: u32, out: *mut u8);
+
+		/// Sign the given `msg` with the `sr25519` key pair that corresponds to then given key
+		/// type id and public key. The raw signature is stored in `out`.
+		///
+		/// # Returns
+		///
+		/// - `0` on success
+		/// - nonezero if something failed, e.g. retrieving of the key.
+		fn ext_sr25519_sign(
+			id: *const u8,
+			pubkey: *const u8,
+			msg: *const u8,
+			msg_len: u32,
+			out: *mut u8,
+		) -> u32;
+
 		/// Note: ext_secp256k1_ecdsa_recover returns 0 if the signature is correct, nonzero otherwise.
 		fn ext_secp256k1_ecdsa_recover(
 			msg_data: *const u8,
 			sig_data: *const u8,
-			pubkey_data: *mut u8
+			pubkey_data: *mut u8,
 		) -> u32;
 
 		//================================
 		// Offchain-worker Context
 		//================================
+
+		/// Returns if the local node is a potential validator.
+		///
+		/// - `1` == `true`
+		/// - `0` == `false`
+		fn ext_is_validator() -> u32;
 
 		/// Submit transaction.
 		///
@@ -397,94 +468,6 @@ pub mod ext {
 		/// a properly allocated pointer (which cannot be NULL), hence the
 		/// runtime code can always rely on it.
 		fn ext_network_state(written_out: *mut u32) -> *mut u8;
-
-		/// Returns the locally configured authority public key, if available.
-		/// The `crypto` argument is `offchain::CryptoKind` converted to `u32`.
-		///
-		/// # Returns
-		///
-		/// The encoded `Result<PublicKey encoded to Vec<u8>, ()>`.
-		/// `written_out` contains the length of the message.
-		///
-		/// The ownership of the returned buffer is transferred to the runtime
-		/// code and the runtime is responsible for freeing it. This is always
-		/// a properly allocated pointer (which cannot be NULL), hence the
-		/// runtime code can always rely on it.
-		fn ext_pubkey(key: u64, written_out: *mut u32) -> *mut u8;
-
-		/// Create new key(pair) for signing/encryption/decryption.
-		///
-		/// # Returns
-		///
-		/// - A crypto key id (if the value is less than u16::max_value)
-		/// - `u32::max_value` in case the crypto is not supported
-		fn ext_new_crypto_key(crypto: u32) -> u64;
-
-		/// Encrypt a piece of data using given crypto key.
-		///
-		/// If `key` is `0`, it will attempt to use current authority key of given `kind`.
-		///
-		/// # Returns
-		///
-		/// - `0` in case the key is invalid, `msg_len` is set to `u32::max_value`
-		/// - Otherwise, pointer to the encrypted message in memory,
-		///	`msg_len` contains the length of the message.
-		fn ext_encrypt(
-			key: u64,
-			data: *const u8,
-			data_len: u32,
-			msg_len: *mut u32
-		) -> *mut u8;
-
-		/// Decrypt a piece of data using given crypto key.
-		///
-		/// If `key` is `0`, it will attempt to use current authority key of given `kind`.
-		///
-		/// # Returns
-		///
-		/// - `0` in case the key is invalid or data couldn't be decrypted,
-		/// `msg_len` is set to `u32::max_value`
-		/// - Otherwise, pointer to the decrypted message in memory,
-		///	`msg_len` contains the length of the message.
-		fn ext_decrypt(
-			key: u64,
-			data: *const u8,
-			data_len: u32,
-			msg_len: *mut u32
-		) -> *mut u8;
-
-		/// Sign a piece of data using given crypto key.
-		///
-		/// If `key` is `0`, it will attempt to use current authority key of given `kind`.
-		///
-		/// # Returns
-		///
-		/// - `0` in case the key is invalid,
-		/// `sig_data_len` is set to `u32::max_value`
-		/// - Otherwise, pointer to the signature in memory,
-		///	`sig_data_len` contains the length of the signature.
-		fn ext_sign(
-			key: u64,
-			data: *const u8,
-			data_len: u32,
-			sig_data_len: *mut u32
-		) -> *mut u8;
-
-		/// Verifies that `signature` for `msg` matches given `key`.
-		///
-		/// If `key` is `0`, it will attempt to use current authority key of given `kind`.
-		///
-		/// # Returns
-		/// - `0` in case the signature is correct
-		/// - `1` in case it doesn't match the key
-		/// - `u32::max_value` if the key is invalid.
-		fn ext_verify(
-			key: u64,
-			msg: *const u8,
-			msg_len: u32,
-			signature: *const u8,
-			signature_len: u32
-		) -> u32;
 
 		/// Returns current UNIX timestamp (milliseconds)
 		fn ext_timestamp() -> u64;
@@ -529,7 +512,7 @@ pub mod ext {
 
 		/// Initiates a http request.
 		///
-		/// `meta` is parity-codec encoded additional parameters to the request (like redirection policy,
+		/// `meta` is parity-scale-codec encoded additional parameters to the request (like redirection policy,
 		/// timeouts, certificates policy, etc). The format is not yet specified and the field is currently
 		/// only reserved for future use.
 		///
@@ -596,7 +579,7 @@ pub mod ext {
 		///
 		/// # Returns
 		///
-		/// - A pointer to parity-codec encoded vector of pairs `(HeaderKey, HeaderValue)`.
+		/// - A pointer to parity-scale-codec encoded vector of pairs `(HeaderKey, HeaderValue)`.
 		/// - In case invalid `id` is passed it returns a pointer to parity-encoded empty vector.
 		fn ext_http_response_headers(
 			id: u32,
@@ -743,6 +726,15 @@ impl StorageApi for () {
 		}
 	}
 
+	fn clear_child_prefix(storage_key: &[u8], prefix: &[u8]) {
+		unsafe {
+			ext_clear_child_prefix.get()(
+				storage_key.as_ptr(), storage_key.len() as u32,
+				prefix.as_ptr(), prefix.len() as u32
+			);
+		}
+	}
+
 	fn kill_child_storage(storage_key: &[u8]) {
 		unsafe {
 			ext_kill_child_storage.get()(
@@ -785,10 +777,6 @@ impl StorageApi for () {
 		}
 	}
 
-	fn enumerated_trie_root<H: Hasher + ExternTrieCrypto>(values: &[&[u8]]) -> H::Out {
-		H::enumerated_trie_root(values)
-	}
-
 	fn trie_root<
 		H: Hasher + ExternTrieCrypto,
 		I: IntoIterator<Item = (A, B)>,
@@ -802,8 +790,8 @@ impl StorageApi for () {
 		H: Hasher + ExternTrieCrypto,
 		I: IntoIterator<Item = A>,
 		A: AsRef<[u8]>
-	>(_input: I) -> H::Out {
-		unimplemented!()
+	>(values: I) -> H::Out {
+		H::ordered_trie_root(values)
 	}
 }
 
@@ -871,15 +859,105 @@ impl HashingApi for () {
 }
 
 impl CryptoApi for () {
-	fn ed25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> bool {
+	fn ed25519_public_keys(id: KeyTypeId) -> Vec<ed25519::Public> {
+		let mut res_len = 0u32;
 		unsafe {
-			ext_ed25519_verify.get()(msg.as_ptr(), msg.len() as u32, sig.as_ptr(), pubkey.as_ref().as_ptr()) == 0
+			let res_ptr = ext_ed25519_public_keys.get()(id.0.as_ptr(), &mut res_len);
+			Vec::decode(&mut rstd::slice::from_raw_parts(res_ptr, res_len as usize)).unwrap_or_default()
 		}
 	}
 
-	fn sr25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> bool {
+	fn ed25519_generate(id: KeyTypeId, seed: Option<&str>) -> ed25519::Public {
+		let mut res = [0u8; 32];
+		let seed = seed.as_ref().map(|s| s.as_bytes()).unwrap_or(&[]);
 		unsafe {
-			ext_sr25519_verify.get()(msg.as_ptr(), msg.len() as u32, sig.as_ptr(), pubkey.as_ref().as_ptr()) == 0
+			ext_ed25519_generate.get()(id.0.as_ptr(), seed.as_ptr(), seed.len() as u32, res.as_mut_ptr())
+		};
+		ed25519::Public(res)
+	}
+
+	fn ed25519_sign<M: AsRef<[u8]>>(
+		id: KeyTypeId,
+		pubkey: &ed25519::Public,
+		msg: &M,
+	) -> Option<ed25519::Signature> {
+		let mut res = [0u8; 64];
+		let success = unsafe {
+			ext_ed25519_sign.get()(
+				id.0.as_ptr(),
+				pubkey.0.as_ptr(),
+				msg.as_ref().as_ptr(),
+				msg.as_ref().len() as u32,
+				res.as_mut_ptr(),
+			) == 0
+		};
+
+		if success {
+			Some(ed25519::Signature(res))
+		} else {
+			None
+		}
+	}
+
+	fn ed25519_verify(sig: &ed25519::Signature, msg: &[u8], pubkey: &ed25519::Public) -> bool {
+		unsafe {
+			ext_ed25519_verify.get()(
+				msg.as_ptr(),
+				msg.len() as u32,
+				sig.0.as_ptr(),
+				pubkey.0.as_ptr(),
+			) == 0
+		}
+	}
+
+	fn sr25519_public_keys(id: KeyTypeId) -> Vec<sr25519::Public> {
+		let mut res_len = 0u32;
+		unsafe {
+			let res_ptr = ext_sr25519_public_keys.get()(id.0.as_ptr(), &mut res_len);
+			Vec::decode(&mut rstd::slice::from_raw_parts(res_ptr, res_len as usize)).unwrap_or_default()
+		}
+	}
+
+	fn sr25519_generate(id: KeyTypeId, seed: Option<&str>) -> sr25519::Public {
+		let mut res = [0u8;32];
+		let seed = seed.as_ref().map(|s| s.as_bytes()).unwrap_or(&[]);
+		unsafe {
+			ext_sr25519_generate.get()(id.0.as_ptr(), seed.as_ptr(), seed.len() as u32, res.as_mut_ptr())
+		};
+		sr25519::Public(res)
+	}
+
+	fn sr25519_sign<M: AsRef<[u8]>>(
+		id: KeyTypeId,
+		pubkey: &sr25519::Public,
+		msg: &M,
+	) -> Option<sr25519::Signature> {
+		let mut res = [0u8; 64];
+		let success = unsafe {
+			ext_sr25519_sign.get()(
+				id.0.as_ptr(),
+				pubkey.0.as_ptr(),
+				msg.as_ref().as_ptr(),
+				msg.as_ref().len() as u32,
+				res.as_mut_ptr(),
+			) == 0
+		};
+
+		if success {
+			Some(sr25519::Signature(res))
+		} else {
+			None
+		}
+	}
+
+	fn sr25519_verify(sig: &sr25519::Signature, msg: &[u8], pubkey: &sr25519::Public) -> bool {
+		unsafe {
+			ext_sr25519_verify.get()(
+				msg.as_ptr(),
+				msg.len() as u32,
+				sig.0.as_ptr(),
+				pubkey.0.as_ptr(),
+			) == 0
 		}
 	}
 
@@ -898,6 +976,10 @@ impl CryptoApi for () {
 }
 
 impl OffchainApi for () {
+	fn is_validator() -> bool {
+		unsafe { ext_is_validator.get()() == 1 }
+	}
+
 	fn submit_transaction<T: codec::Encode>(data: &T) -> Result<(), ()> {
 		let encoded_data = codec::Encode::encode(data);
 		let ret = unsafe {
@@ -922,104 +1004,6 @@ impl OffchainApi for () {
 		match raw_result {
 			Some(raw_result) => codec::Decode::decode(&mut &*raw_result).unwrap_or(Err(())),
 			None => Err(())
-		}
-	}
-
-	fn pubkey(key: CryptoKey) -> Result<Vec<u8>, ()> {
-		let mut len = 0u32;
-		let raw_result = unsafe {
-			let ptr = ext_pubkey.get()(
-				key.into(),
-				&mut len,
-			);
-
-			from_raw_parts(ptr, len)
-		};
-
-		match raw_result {
-			Some(raw_result) => codec::Decode::decode(&mut &*raw_result).unwrap_or(Err(())),
-			None => Err(())
-		}
-	}
-
-	fn new_crypto_key(crypto: offchain::CryptoKind) -> Result<offchain::CryptoKey, ()> {
-		let crypto = crypto.into();
-		let ret = unsafe {
-			ext_new_crypto_key.get()(crypto)
-		};
-		offchain::CryptoKey::try_from(ret)
-	}
-
-	fn encrypt(
-		key: offchain::CryptoKey,
-		data: &[u8],
-	) -> Result<Vec<u8>, ()> {
-		let mut len = 0_u32;
-		unsafe {
-			let ptr = ext_encrypt.get()(
-				key.into(),
-				data.as_ptr(),
-				data.len() as u32,
-				&mut len
-			);
-
-			from_raw_parts(ptr, len).ok_or(())
-		}
-	}
-
-	fn decrypt(
-		key: offchain::CryptoKey,
-		data: &[u8],
-	) -> Result<Vec<u8>, ()> {
-		let mut len = 0_u32;
-		unsafe {
-			let ptr = ext_decrypt.get()(
-				key.into(),
-				data.as_ptr(),
-				data.len() as u32,
-				&mut len
-			);
-
-			from_raw_parts(ptr, len).ok_or(())
-		}
-	}
-
-	fn sign(
-		key: offchain::CryptoKey,
-		data: &[u8],
-	) -> Result<Vec<u8>, ()> {
-		let mut len = 0_u32;
-		unsafe {
-			let ptr = ext_sign.get()(
-				key.into(),
-				data.as_ptr(),
-				data.len() as u32,
-				&mut len
-			);
-
-			from_raw_parts(ptr, len).ok_or(())
-		}
-	}
-
-	fn verify(
-		key: offchain::CryptoKey,
-		msg: &[u8],
-		signature: &[u8],
-	) -> Result<bool, ()> {
-		let val = unsafe {
-			ext_verify.get()(
-				key.into(),
-				msg.as_ptr(),
-				msg.len() as u32,
-				signature.as_ptr(),
-				signature.len() as u32,
-			)
-		};
-
-		match val {
-			0 => Ok(true),
-			1 => Ok(false),
-			_ => Err(()),
 		}
 	}
 

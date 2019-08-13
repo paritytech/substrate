@@ -24,7 +24,7 @@ use kvdb::{KeyValueDB, DBTransaction};
 use client::blockchain::{well_known_cache_keys, Cache as BlockchainCache};
 use client::well_known_cache_keys::Id as CacheKeyId;
 use client::error::Result as ClientResult;
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 use crate::utils::{self, COLUMN_META, db_err};

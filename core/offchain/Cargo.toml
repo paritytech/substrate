@@ -8,21 +8,21 @@ edition = "2018"
 
 [dependencies]
 client = { package = "substrate-client", path = "../../core/client" }
-futures = "0.1.25"
+futures-preview = "=0.3.0-alpha.17"
 log = "0.4"
 offchain-primitives = { package = "substrate-offchain-primitives", path = "./primitives" }
-parity-codec = { version = "4.1.1", features = ["derive"] }
-parking_lot = "0.8.0"
+codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
+parking_lot = "0.9.0"
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
 sr-primitives = { path = "../../core/sr-primitives" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
 network = { package = "substrate-network", path = "../../core/network" }
+keystore = { package = "substrate-keystore", path = "../keystore" }
 
 [dev-dependencies]
 env_logger = "0.6"
 client-db = { package = "substrate-client-db", path = "../../core/client/db/", default-features = true }
 test-client = { package = "substrate-test-runtime-client", path = "../../core/test-runtime/client" }
-tokio = "0.1.7"
 
 [features]
 default = []

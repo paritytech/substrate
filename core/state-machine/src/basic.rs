@@ -20,7 +20,7 @@ use std::collections::HashMap;
 use std::iter::FromIterator;
 use crate::backend::{Backend, InMemory};
 use hash_db::Hasher;
-use trie::TrieConfiguration;
+use trie::{TrieConfiguration, default_child_trie_root};
 use trie::trie_types::Layout;
 use primitives::offchain;
 use primitives::storage::well_known_keys::is_child_storage_key;
@@ -35,13 +35,9 @@ pub struct BasicExternalities {
 }
 
 impl BasicExternalities {
-	/// Create a new instance of `BasicExternalities`
-	pub fn new(top: HashMap<Vec<u8>, Vec<u8>>) -> Self {
-		Self::new_with_children(top, Default::default())
-	}
 
-	/// Create a new instance of `BasicExternalities` with children
-	pub fn new_with_children(
+	/// Create a new instance of `BasicExternalities`
+	pub fn new(
 		top: HashMap<Vec<u8>, Vec<u8>>,
 		children: HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
 	) -> Self {
@@ -80,7 +76,7 @@ impl FromIterator<(Vec<u8>, Vec<u8>)> for BasicExternalities {
 }
 
 impl Default for BasicExternalities {
-	fn default() -> Self { Self::new(Default::default()) }
+	fn default() -> Self { Self::new(Default::default(), Default::default()) }
 }
 
 impl From<HashMap<Vec<u8>, Vec<u8>>> for BasicExternalities {
@@ -103,6 +99,10 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 
 	fn child_storage(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<Vec<u8>> {
 		self.children.get(storage_key.as_ref()).and_then(|child| child.get(key)).cloned()
+	}
+
+	fn original_child_storage(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<Vec<u8>> {
+		Externalities::<H>::child_storage(self, storage_key, key)
 	}
 
 	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
@@ -147,9 +147,32 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 		self.top.retain(|key, _| !key.starts_with(prefix));
 	}
 
+	fn clear_child_prefix(&mut self, storage_key: ChildStorageKey<H>, prefix: &[u8]) {
+		if let Some(child) = self.children.get_mut(storage_key.as_ref()) {
+			child.retain(|key, _| !key.starts_with(prefix));
+		}
+	}
+
 	fn chain_id(&self) -> u64 { 42 }
 
 	fn storage_root(&mut self) -> H::Out {
+		let mut top = self.top.clone();
+		let keys: Vec<_> = self.children.keys().map(|k| k.to_vec()).collect();
+		// Single child trie implementation currently allows using the same child
+		// empty root for all child trie. Using null storage key until multiple
+		// type of child trie support.
+		let empty_hash = default_child_trie_root::<Layout<H>>(&[]);
+		for storage_key in keys {
+			let child_root = self.child_storage_root(
+				ChildStorageKey::<H>::from_slice(storage_key.as_slice())
+					.expect("Map only feed by valid keys; qed")
+			);
+			if &empty_hash[..] == &child_root[..] {
+				top.remove(&storage_key);
+			} else {
+				top.insert(storage_key, child_root);
+			}
+		}
 		Layout::<H>::trie_root(self.top.clone())
 	}
 
@@ -159,7 +182,7 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 
 			InMemory::<H>::default().child_storage_root(storage_key.as_ref(), delta).0
 		} else {
-			vec![]
+			default_child_trie_root::<Layout<H>>(storage_key.as_ref())
 		}
 	}
 
@@ -168,7 +191,12 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 	}
 
 	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities> {
-		warn!("Call to non-existent out offchain externalities set.");
+		warn!("Call to non-existent offchain externalities set.");
+		None
+	}
+
+	fn keystore(&self) -> Option<primitives::traits::BareCryptoStorePtr> {
+		warn!("Call to non-existent keystore.");
 		None
 	}
 }
@@ -207,7 +235,7 @@ mod tests {
 	fn children_works() {
 		let child_storage = b":child_storage:default:test".to_vec();
 
-		let mut ext = BasicExternalities::new_with_children(
+		let mut ext = BasicExternalities::new(
 			Default::default(),
 			map![
 				child_storage.clone() => map![
@@ -235,7 +263,10 @@ mod tests {
 	#[test]
 	fn basic_externalities_is_empty() {
 		// Make sure no values are set by default in `BasicExternalities`.
-		let (storage, child_storage) = BasicExternalities::new(Default::default()).into_storages();
+		let (storage, child_storage) = BasicExternalities::new(
+			Default::default(),
+			Default::default(),
+		).into_storages();
 		assert!(storage.is_empty());
 		assert!(child_storage.is_empty());
 	}

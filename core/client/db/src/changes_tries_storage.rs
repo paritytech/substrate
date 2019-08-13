@@ -16,19 +16,16 @@
 
 //! DB-backed changes tries storage.
 
-// TODO: use last non-pruned digest block!!!
-
 use std::collections::HashMap;
 use std::sync::Arc;
 use hash_db::Prefix;
 use kvdb::{KeyValueDB, DBTransaction};
-use parity_codec::Encode;
+use codec::{Decode, Encode};
 use parking_lot::RwLock;
 use client::error::{Error as ClientError, Result as ClientResult};
 use trie::MemoryDB;
 use client::backend::ChangesTrieConfigurationRange;
 use client::blockchain::well_known_cache_keys;
-use parity_codec::Decode;
 use primitives::{H256, Blake2Hasher, ChangesTrieConfiguration, convert_hash};
 use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, CheckedSub,
@@ -324,7 +321,7 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 	fn configuration_at_block(&self, at: BlockIdOrHeader<Block>) -> ClientResult<ChangesTrieConfigurationRange<Block>> {
 		self.cache
 			.get_at_block(&well_known_cache_keys::CHANGES_TRIE_CONFIG, at)
-			.and_then(|(zero, end, encoded)| Decode::decode(&mut &encoded[..])
+			.and_then(|(zero, end, encoded)| Decode::decode(&mut &encoded[..]).ok()
 				.map(|config| ChangesTrieConfigurationRange { zero, end, config }))
 			.ok_or_else(|| ClientError::ErrorReadingChangesTriesConfig)
 	}
@@ -438,8 +435,8 @@ fn read_tries_meta<Block: BlockT>(
 ) -> ClientResult<ChangesTriesMeta<Block>> {
 	match db.get(meta_column, meta_keys::CHANGES_TRIES_META).map_err(db_err)? {
 		Some(h) => match Decode::decode(&mut &h[..]) {
-			Some(h) => Ok(h),
-			None => Err(client::error::Error::Backend("Error decoding changes tries metadata".into())),
+			Ok(h) => Ok(h),
+			Err(err) => Err(ClientError::Backend(format!("Error decoding changes tries metadata: {}", err))),
 		},
 		None => Ok(ChangesTriesMeta {
 			oldest_digest_range: None,

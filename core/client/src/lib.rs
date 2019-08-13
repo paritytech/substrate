@@ -62,7 +62,8 @@
 //! 	backend.clone(),
 //! 	LocalCallExecutor::new(
 //! 		backend.clone(),
-//! 		NativeExecutor::<LocalExecutor>::new(None)
+//! 		NativeExecutor::<LocalExecutor>::new(None),
+//! 		None,
 //!		),
 //! 	// This parameter provides the storage for the chain genesis.
 //! 	<(StorageOverlay, ChildrenStorageOverlay)>::default(),
@@ -114,7 +115,7 @@ pub use crate::client::{
 	new_in_mem,
 	BlockBody, BlockStatus, ImportNotifications, FinalityNotifications, BlockchainEvents,
 	BlockImportNotification, Client, ClientInfo, ExecutionStrategies, FinalityNotification,
-	LongestChain,
+	LongestChain, BlockOf, ProvideUncles,
 	utils,
 };
 #[cfg(feature = "std")]

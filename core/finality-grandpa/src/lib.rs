@@ -53,26 +53,29 @@
 //! included in the newly-finalized chain.
 
 use futures::prelude::*;
-use log::{debug, info, warn};
+use log::{debug, error, info};
 use futures::sync::mpsc;
-use client::{BlockchainEvents, CallExecutor, Client, backend::Backend, error::Error as ClientError};
-use client::blockchain::HeaderBackend;
-use parity_codec::Encode;
-use sr_primitives::traits::{
-	NumberFor, Block as BlockT, DigestFor, ProvideRuntimeApi,
+use client::{
+	BlockchainEvents, CallExecutor, Client, backend::Backend, error::Error as ClientError,
 };
-use fg_primitives::GrandpaApi;
-use inherents::InherentDataProviders;
+use client::blockchain::HeaderBackend;
+use codec::Encode;
 use sr_primitives::generic::BlockId;
+use sr_primitives::traits::{
+	NumberFor, Block as BlockT, DigestFor, ProvideRuntimeApi
+};
+use fg_primitives::{GrandpaApi, AuthorityPair};
+use keystore::KeyStorePtr;
+use inherents::InherentDataProviders;
 use consensus_common::SelectChain;
-use primitives::{ed25519, H256, Pair, Blake2Hasher};
+use primitives::{H256, Blake2Hasher};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_WARN};
 use serde_json;
 
 use srml_finality_tracker;
 
 use grandpa::Error as GrandpaError;
-use grandpa::{voter, round::State as RoundState, BlockNumberOps, voter_set::VoterSet};
+use grandpa::{voter, BlockNumberOps, voter_set::VoterSet};
 
 use std::fmt;
 use std::sync::Arc;
@@ -100,7 +103,7 @@ pub use light_import::light_block_import;
 pub use observer::run_grandpa_observer;
 
 use aux_schema::PersistentData;
-use environment::{CompletedRound, CompletedRounds, Environment, HasVoted, SharedVoterSetState, VoterSetState};
+use environment::{Environment, SharedVoterSetState, VoterSetState};
 use import::GrandpaBlockImport;
 use until_imported::UntilGlobalMessageBlocksImported;
 use communication::NetworkBridge;
@@ -198,10 +201,10 @@ pub struct Config {
 	/// at least every justification_period blocks. There are some other events which might cause
 	/// justification generation.
 	pub justification_period: u32,
-	/// The local signing key.
-	pub local_key: Option<Arc<ed25519::Pair>>,
 	/// Some local identifier of the voter.
 	pub name: Option<String>,
+	/// The keystore that manages the keys of this node.
+	pub keystore: Option<keystore::KeyStorePtr>,
 }
 
 impl Config {
@@ -396,11 +399,11 @@ where
 }
 
 fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
-	local_key: Option<&Arc<ed25519::Pair>>,
 	set_id: u64,
 	voters: &Arc<VoterSet<AuthorityId>>,
 	client: &Arc<Client<B, E, Block, RA>>,
 	network: &NetworkBridge<Block, N>,
+	keystore: &Option<KeyStorePtr>,
 ) -> (
 	impl Stream<
 		Item = CommunicationInH<Block, H256>,
@@ -417,10 +420,7 @@ fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	RA: Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
 {
-
-	let is_voter = local_key
-		.map(|pair| voters.contains_key(&pair.public().into()))
-		.unwrap_or(false);
+	let is_voter = is_voter(voters, keystore).is_some();
 
 	// verification stream
 	let (global_in, global_out) = network.global_communication(
@@ -491,7 +491,7 @@ pub struct GrandpaParams<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X> {
 /// block import worker that has already been instantiated with `block_import`.
 pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, X>,
-) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
+) -> client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
@@ -568,31 +568,6 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 		voter_set_state: set_state.clone(),
 	});
 
-	initial_environment.update_voter_set_state(|voter_set_state| {
-		match voter_set_state {
-			VoterSetState::Live { current_round: HasVoted::Yes(id, _), completed_rounds } => {
-				let local_id = config.local_key.clone().map(|pair| pair.public());
-				let has_voted = match local_id {
-					Some(local_id) => if *id == local_id {
-						// keep the previous votes
-						return Ok(None);
-					} else {
-						HasVoted::No
-					},
-					_ => HasVoted::No,
-				};
-
-				// NOTE: only updated on disk when the voter first
-				// proposes/prevotes/precommits or completes a round.
-				Ok(Some(VoterSetState::Live {
-					current_round: has_voted,
-					completed_rounds: completed_rounds.clone(),
-				}))
-			},
-			_ => Ok(None),
-		}
-	}).expect("operation inside closure cannot fail; qed");
-
 	let initial_state = (initial_environment, voter_commands_rx.into_future());
 	let voter_work = future::loop_fn(initial_state, move |params| {
 		let (env, voter_commands_rx) = params;
@@ -611,20 +586,18 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 				);
 
 				let global_comms = global_communication(
-					config.local_key.as_ref(),
 					env.set_id,
 					&env.voters,
 					&client,
 					&network,
+					&config.keystore,
 				);
-
-				let voters = (*env.voters).clone();
 
 				let last_completed_round = completed_rounds.last();
 
 				Some(voter::Voter::new(
 					env.clone(),
-					voters,
+					(*env.voters).clone(),
 					global_comms,
 					last_completed_round.number,
 					last_completed_round.state.clone(),
@@ -662,22 +635,11 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 
 					// start the new authority set using the block where the
 					// set changed (not where the signal happened!) as the base.
-					let genesis_state = RoundState::genesis((new.canon_hash, new.canon_number));
-
-					let set_state = VoterSetState::Live {
-						// always start at round 0 when changing sets.
-						completed_rounds: CompletedRounds::new(
-							CompletedRound {
-								number: 0,
-								state: genesis_state,
-								base: (new.canon_hash, new.canon_number),
-								votes: Vec::new(),
-							},
-							new.set_id,
-							&*authority_set.inner().read(),
-						),
-						current_round: HasVoted::No,
-					};
+					let set_state = VoterSetState::live(
+						new.set_id,
+						&*authority_set.inner().read(),
+						(new.canon_hash, new.canon_number),
+					);
 
 					#[allow(deprecated)]
 					aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
@@ -718,8 +680,8 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 
 		poll_voter.select2(voter_commands_rx).then(move |res| match res {
 			Ok(future::Either::A(((), _))) => {
-				// voters don't conclude naturally; this could reasonably be an error.
-				Ok(FutureLoop::Break(()))
+				// voters don't conclude naturally
+				Err(Error::Safety("GRANDPA voter has concluded.".into()))
 			},
 			Err(future::Either::B(_)) => {
 				// the `voter_commands_rx` stream should not fail.
@@ -747,7 +709,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 	let voter_work = voter_work
 		.map(|_| ())
 		.map_err(|e| {
-			warn!("GRANDPA Voter failed: {:?}", e);
+			error!("GRANDPA Voter failed: {:?}", e);
 			telemetry!(CONSENSUS_WARN; "afg.voter_failed"; "e" => ?e);
 		});
 
@@ -776,4 +738,45 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 	X: Future<Item=(),Error=()> + Clone + Send + 'static,
 {
 	run_grandpa_voter(grandpa_params)
+}
+
+/// When GRANDPA is not initialized we still need to register the finality
+/// tracker inherent provider which might be expected by the runtime for block
+/// authoring. Additionally, we register a gossip message validator that
+/// discards all GRANDPA messages (otherwise, we end up banning nodes that send
+/// us a `Neighbor` message, since there is no registered gossip validator for
+/// the engine id defined in the message.)
+pub fn setup_disabled_grandpa<B, E, Block: BlockT<Hash=H256>, RA, N>(
+	client: Arc<Client<B, E, Block, RA>>,
+	inherent_data_providers: &InherentDataProviders,
+	network: N,
+) -> Result<(), consensus_common::Error> where
+	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+	RA: Send + Sync + 'static,
+	N: Network<Block> + Send + Sync + 'static,
+	N::In: Send + 'static,
+{
+	register_finality_tracker_inherent_data_provider(
+		client,
+		inherent_data_providers,
+	)?;
+
+	network.register_validator(Arc::new(network::consensus_gossip::DiscardAll));
+
+	Ok(())
+}
+
+/// Checks if this node is a voter in the given voter set.
+///
+/// Returns the key pair of the node that is being used in the current voter set or `None`.
+fn is_voter(
+	voters: &Arc<VoterSet<AuthorityId>>,
+	keystore: &Option<KeyStorePtr>,
+) -> Option<AuthorityPair> {
+	match keystore {
+		Some(keystore) => voters.voters().iter()
+			.find_map(|(p, _)| keystore.read().key_pair::<AuthorityPair>(&p).ok()),
+		None => None,
+	}
 }

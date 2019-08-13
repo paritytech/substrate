@@ -175,7 +175,8 @@
 //!
 //! Total reward is split among validators and their nominators depending on the number of points
 //! they received during the era. Points are added to a validator using
-//! [`add_reward_points_to_validator`](./enum.Call.html#variant.add_reward_points_to_validator).
+//! [`reward_by_ids`](./enum.Call.html#variant.reward_by_ids) or
+//! [`reward_by_indices`](./enum.Call.html#variant.reward_by_indices).
 //!
 //! [`Module`](./struct.Module.html) implements
 //! [`authorship::EventHandler`](../srml_authorship/trait.EventHandler.html) to add reward points
@@ -284,7 +285,7 @@ mod benches;
 #[cfg(feature = "std")]
 use runtime_io::with_storage;
 use rstd::{prelude::*, result, collections::btree_map::BTreeMap};
-use parity_codec::{HasCompact, Encode, Decode};
+use codec::{HasCompact, Encode, Decode};
 use srml_support::{
 	StorageValue, StorageMap, EnumerableStorageMap, decl_module, decl_event,
 	decl_storage, ensure, traits::{
@@ -323,6 +324,18 @@ pub struct EraRewards {
 	/// Reward at one index correspond to reward for validator in current_elected of this index.
 	/// Thus this reward vec is only valid for one elected set.
 	rewards: Vec<u32>,
+}
+
+impl EraRewards {
+	/// Add the reward to the validator at the given index. Index must be valid
+	/// (i.e. `index < current_elected.len()`).
+	fn add_points_to_index(&mut self, index: u32, points: u32) {
+		if let Some(new_total) = self.total.checked_add(points) {
+			self.total = new_total;
+			self.rewards.resize((index as usize + 1).max(self.rewards.len()), 0);
+			self.rewards[index as usize] += points; // Addition is less than total
+		}
+	}
 }
 
 /// Indicates the initial status of the staker.
@@ -542,6 +555,22 @@ pub trait Trait: system::Trait {
 	type SessionInterface: self::SessionInterface<Self::AccountId>;
 }
 
+/// Mode of era-forcing.
+#[derive(Copy, Clone, PartialEq, Eq, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+pub enum Forcing {
+	/// Not forcing anything - just let whatever happen.
+	NotForcing,
+	/// Force a new era, then reset to `NotForcing` as soon as it is done.
+	ForceNew,
+	/// Avoid a new era indefinitely.
+	ForceNone,
+}
+
+impl Default for Forcing {
+	fn default() -> Self { Forcing::NotForcing }
+}
+
 decl_storage! {
 	trait Store for Module<T: Trait> as Staking {
 
@@ -612,7 +641,7 @@ decl_storage! {
 		pub RecentlyOffline get(recently_offline): Vec<(T::AccountId, T::BlockNumber, u32)>;
 
 		/// True if the next session change will be a new era regardless of index.
-		pub ForceNewEra get(forcing_new_era): bool;
+		pub ForceEra get(force_era) config(): Forcing;
 
 		/// A mapping from still-bonded eras to the first session index of that era.
 		BondedEras: Vec<(EraIndex, SessionIndex)>;
@@ -621,8 +650,7 @@ decl_storage! {
 		config(stakers):
 			Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>;
 		build(|
-			storage: &mut sr_primitives::StorageOverlay,
-			_: &mut sr_primitives::ChildrenStorageOverlay,
+			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
 			config: &GenesisConfig<T>
 		| {
 			with_storage(storage, || {
@@ -940,7 +968,7 @@ decl_module! {
 			<Payee<T>>::insert(stash, payee);
 		}
 
-		/// (Re-)set the payment target for a controller.
+		/// (Re-)set the controller of a stash.
 		///
 		/// Effects will be felt at the beginning of the next era.
 		///
@@ -976,18 +1004,27 @@ decl_module! {
 
 		// ----- Root calls.
 
-		/// Force there to be a new era. This also forces a new session immediately after.
-		/// `apply_rewards` should be true for validators to get the session reward.
+		/// Force there to be no new eras indefinitely.
 		///
 		/// # <weight>
-		/// - Independent of the arguments.
-		/// - Triggers the Phragmen election. Expensive but not user-controlled.
-		/// - Depends on state: `O(|edges| * |validators|)`.
+		/// - No arguments.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		fn force_no_eras(origin) {
+			ensure_root(origin)?;
+			ForceEra::put(Forcing::ForceNone);
+		}
+
+		/// Force there to be a new era at the end of the next session. After this, it will be
+		/// reset to normal (non-forced) behaviour.
+		///
+		/// # <weight>
+		/// - No arguments.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn force_new_era(origin) {
 			ensure_root(origin)?;
-			Self::apply_force_new_era()
+			ForceEra::put(Forcing::ForceNew);
 		}
 
 		/// Set the offline slash grace period.
@@ -1117,16 +1154,17 @@ impl<T: Trait> Module<T> {
 	fn new_session(session_index: SessionIndex)
 		-> Option<(Vec<T::AccountId>, Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>)>
 	{
-		if ForceNewEra::take() || session_index % T::SessionsPerEra::get() == 0 {
-			let validators = T::SessionInterface::validators();
-			let prior = validators.into_iter()
-				.map(|v| { let e = Self::stakers(&v); (v, e) })
-				.collect();
-
-			Self::new_era(session_index).map(move |new| (new, prior))
-		} else {
-			None
+		match ForceEra::get() {
+			Forcing::ForceNew => ForceEra::kill(),
+			Forcing::NotForcing if session_index % T::SessionsPerEra::get() == 0 => (),
+			_ => return None,
 		}
+		let validators = T::SessionInterface::validators();
+		let prior = validators.into_iter()
+			.map(|v| { let e = Self::stakers(&v); (v, e) })
+			.collect();
+
+		Self::new_era(session_index).map(move |new| (new, prior))
 	}
 
 	/// The era has changed - enact new staking set.
@@ -1323,10 +1361,6 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	fn apply_force_new_era() {
-		ForceNewEra::put(true);
-	}
-
 	/// Remove all associated data of a stash account from the staking system.
 	///
 	/// This is called :
@@ -1399,22 +1433,46 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Add reward points to validator.
+	/// Add reward points to validators using their stash account ID.
+	///
+	/// Validators are keyed by stash account ID and must be in the current elected set.
+	///
+	/// For each element in the iterator the given number of points in u32 is added to the
+	/// validator, thus duplicates are handled.
 	///
 	/// At the end of the era each the total payout will be distributed among validator
 	/// relatively to their points.
-	pub fn add_reward_points_to_validator(validator: T::AccountId, points: u32) {
-		<Module<T>>::current_elected().iter()
-			.position(|elected| *elected == validator)
-			.map(|index| {
-				CurrentEraRewards::mutate(|rewards| {
-					if let Some(new_total) = rewards.total.checked_add(points) {
-						rewards.total = new_total;
-						rewards.rewards.resize((index + 1).max(rewards.rewards.len()), 0);
-						rewards.rewards[index] += points; // Addition is less than total
-					}
-				});
-			});
+	///
+	/// COMPLEXITY: Complexity is `number_of_validator_to_reward x current_elected_len`.
+	/// If you need to reward lots of validator consider using `reward_by_indices`.
+	pub fn reward_by_ids(validators_points: impl IntoIterator<Item = (T::AccountId, u32)>) {
+		CurrentEraRewards::mutate(|rewards| {
+			let current_elected = <Module<T>>::current_elected();
+			for (validator, points) in validators_points.into_iter() {
+				if let Some(index) = current_elected.iter()
+					.position(|elected| *elected == validator)
+				{
+					rewards.add_points_to_index(index as u32, points);
+				}
+			}
+		});
+	}
+
+	/// Add reward points to validators using their validator index.
+	///
+	/// For each element in the iterator the given number of points in u32 is added to the
+	/// validator, thus duplicates are handled.
+	pub fn reward_by_indices(validators_points: impl IntoIterator<Item = (u32, u32)>) {
+		// TODO: This can be optimised once #3302 is implemented.
+		let current_elected_len = <Module<T>>::current_elected().len() as u32;
+
+		CurrentEraRewards::mutate(|rewards| {
+			for (validator_index, points) in validators_points.into_iter() {
+				if validator_index < current_elected_len {
+					rewards.add_points_to_index(validator_index, points);
+				}
+			}
+		});
 	}
 }
 
@@ -1444,11 +1502,13 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 /// * 1 point to the producer of each referenced uncle block.
 impl<T: Trait + authorship::Trait> authorship::EventHandler<T::AccountId, T::BlockNumber> for Module<T> {
 	fn note_author(author: T::AccountId) {
-		Self::add_reward_points_to_validator(author, 20);
+		Self::reward_by_ids(vec![(author, 20)]);
 	}
 	fn note_uncle(author: T::AccountId, _age: T::BlockNumber) {
-		Self::add_reward_points_to_validator(<authorship::Module<T>>::author(), 2);
-		Self::add_reward_points_to_validator(author, 1);
+		Self::reward_by_ids(vec![
+			(<authorship::Module<T>>::author(), 2),
+			(author, 1)
+		])
 	}
 }
 

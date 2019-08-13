@@ -23,20 +23,25 @@ extern crate alloc;
 
 #[cfg(feature = "std")]
 use serde::Serialize;
-use parity_codec::{Encode, Decode, Codec};
+use codec::{Encode, Decode, Codec};
 use sr_primitives::{ConsensusEngineId, traits::{DigestFor, NumberFor}};
 use client::decl_runtime_apis;
 use rstd::vec::Vec;
 
+mod app {
+	use app_crypto::{app_crypto, key_types::GRANDPA, ed25519};
+	app_crypto!(ed25519, GRANDPA);
+}
+
 /// The grandpa crypto scheme defined via the keypair type.
 #[cfg(feature = "std")]
-pub type AuthorityPair = primitives::ed25519::Pair;
+pub type AuthorityPair = app::Pair;
 
 /// Identity of a Grandpa authority.
-pub type AuthorityId = primitives::ed25519::Public;
+pub type AuthorityId = app::Public;
 
 /// Signature for a Grandpa authority.
-pub type AuthoritySignature = primitives::ed25519::Signature;
+pub type AuthoritySignature = app::Signature;
 
 /// The `ConsensusEngineId` of GRANDPA.
 pub const GRANDPA_ENGINE_ID: ConsensusEngineId = *b"FRNK";

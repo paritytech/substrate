@@ -16,7 +16,7 @@
 
 //! Chain utilities.
 
-use std::{self, io::{Read, Write}};
+use std::{self, io::{Read, Write, Seek}};
 use futures::prelude::*;
 use futures03::TryFutureExt as _;
 use log::{info, warn};
@@ -29,7 +29,7 @@ use network::message;
 use consensus_common::BlockOrigin;
 use crate::components::{self, Components, ServiceFactory, FactoryFullConfiguration, FactoryBlockNumber, RuntimeGenesis};
 use crate::new_client;
-use parity_codec::{Decode, Encode};
+use codec::{Decode, Encode, IoReader};
 use crate::error;
 use crate::chain_spec::ChainSpec;
 
@@ -136,9 +136,9 @@ impl<B: Block> Link<B> for WaitLink {
 pub fn import_blocks<F, E, R>(
 	mut config: FactoryFullConfiguration<F>,
 	exit: E,
-	mut input: R
+	input: R
 ) -> error::Result<impl Future<Item = (), Error = ()>>
-	where F: ServiceFactory, E: Future<Item=(),Error=()> + Send + 'static, R: Read,
+	where F: ServiceFactory, E: Future<Item=(),Error=()> + Send + 'static, R: Read + Seek,
 {
 	let client = new_client::<F>(&config)?;
 	// FIXME #1134 this shouldn't need a mutable config.
@@ -146,7 +146,8 @@ pub fn import_blocks<F, E, R>(
 	let (mut queue, _) = components::FullComponents::<F>::build_import_queue(
 		&mut config,
 		client.clone(),
-		select_chain
+		select_chain,
+		None,
 	)?;
 
 	let (exit_send, exit_recv) = std::sync::mpsc::channel();
@@ -155,37 +156,42 @@ pub fn import_blocks<F, E, R>(
 		let _ = exit_send.send(());
 	});
 
-	let count: u64 = Decode::decode(&mut input).ok_or("Error reading file")?;
+	let mut io_reader_input = IoReader(input);
+	let count: u64 = Decode::decode(&mut io_reader_input)
+		.map_err(|e| format!("Error reading file: {}", e))?;
 	info!("Importing {} blocks", count);
 	let mut block_count = 0;
 	for b in 0 .. count {
 		if exit_recv.try_recv().is_ok() {
 			break;
 		}
-		if let Some(signed) = SignedBlock::<F::Block>::decode(&mut input) {
-			let (header, extrinsics) = signed.block.deconstruct();
-			let hash = header.hash();
-			let block  = message::BlockData::<F::Block> {
-				hash,
-				justification: signed.justification,
-				header: Some(header),
-				body: Some(extrinsics),
-				receipt: None,
-				message_queue: None
-			};
-			// import queue handles verification and importing it into the client
-			queue.import_blocks(BlockOrigin::File, vec![
-				IncomingBlock::<F::Block>{
-					hash: block.hash,
-					header: block.header,
-					body: block.body,
-					justification: block.justification,
-					origin: None,
-				}
-			]);
-		} else {
-			warn!("Error reading block data at {}.", b);
-			break;
+		match SignedBlock::<F::Block>::decode(&mut io_reader_input) {
+			Ok(signed) => {
+				let (header, extrinsics) = signed.block.deconstruct();
+				let hash = header.hash();
+				let block  = message::BlockData::<F::Block> {
+					hash,
+					justification: signed.justification,
+					header: Some(header),
+					body: Some(extrinsics),
+					receipt: None,
+					message_queue: None
+				};
+				// import queue handles verification and importing it into the client
+				queue.import_blocks(BlockOrigin::File, vec![
+					IncomingBlock::<F::Block> {
+						hash: block.hash,
+						header: block.header,
+						body: block.body,
+						justification: block.justification,
+						origin: None,
+					}
+				]);
+			}
+			Err(e) => {
+				warn!("Error reading block data at {}: {}", b, e);
+				break;
+			}
 		}
 
 		block_count = b;
