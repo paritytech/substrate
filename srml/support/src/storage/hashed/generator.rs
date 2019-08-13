@@ -204,7 +204,7 @@ pub trait StorageValue<T: codec::Codec> {
 	///
 	/// `T` is required to implement `codec::EncodeAppend`.
 	///
-	/// This can only be called for storage items that do not have a default values.
+	/// This function only exists for storage values without default value..
 	fn append<S: HashedStorage<Twox128>, I: codec::Encode>(
 		items: &[I],
 		storage: &mut S,
@@ -223,7 +223,7 @@ pub trait StorageValue<T: codec::Codec> {
 	///
 	/// `T` is required to implement `codec::EncodeAppend`.
 	///
-	/// This can only be called for storage items that do not have a default values.
+	/// This function only exists for storage values without default value..
 	fn safe_append<'a, S: HashedStorage<Twox128>, I>(
 		items: &'a[I],
 		storage: &mut S,
@@ -239,7 +239,7 @@ pub trait StorageValue<T: codec::Codec> {
 	///
 	/// `T` is required to implement `Codec::DecodeLength`.
 	///
-	/// This can only be called for storage items that do not have a default values.
+	/// This function only exists for storage values without default value..
 	fn decode_len<S: HashedStorage<Twox128>>(storage: &mut S) -> Result<usize, &'static str>
 		where T: codec::DecodeLength, Self: crate::traits::NoDefault,
 	{
@@ -335,6 +335,8 @@ pub trait AppendableStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, 
 	/// Append the given items to the value in the storage.
 	///
 	/// `V` is required to implement `codec::EncodeAppend`.
+	///
+	/// This function only exists for storage values without default value..
 	fn append<S: HashedStorage<Self::Hasher>, I: codec::Encode>(
 		key : &K,
 		items: &[I],
@@ -357,7 +359,7 @@ pub trait AppendableStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, 
 	///
 	/// `T` is required to implement `codec::EncodeAppend`.
 	///
-	/// This can only be called for storage items that do not have a default values.
+	/// This function only exists for storage values without default value..
 	fn safe_append<'a, S, I>(
 		key : &K,
 		items: &'a[I],
@@ -379,7 +381,7 @@ pub trait DecodeLengthStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K
 	///
 	/// `T` is required to implement `Codec::DecodeLength`.
 	///
-	/// This can only be called for storage items that do not have a default values.
+	/// This function only exists for storage values without default value..
 	fn decode_len<S: HashedStorage<Self::Hasher>>(key: &K, storage: &mut S) -> Result<usize, &'static str>
 		where V: codec::DecodeLength, Self: crate::traits::NoDefault
 	{

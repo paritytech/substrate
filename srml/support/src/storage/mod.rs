@@ -137,7 +137,7 @@ pub trait StorageValue<T: Codec> {
 	///
 	/// `T` is required to implement `codec::EncodeAppend`.
 	///
-	/// This can only be called for storage items that do not have a default values.
+	/// This function only exists for storage values without default value..
 	fn append<I: Encode>(items: &[I]) -> Result<(), &'static str>
 		where T: EncodeAppend<Item=I>, Self: crate::traits::NoDefault;
 
@@ -145,7 +145,7 @@ pub trait StorageValue<T: Codec> {
 	///
 	/// `T` is required to implement `Codec::EncodeAppend`.
 	///
-	/// This can only be called for storage items that do not have a default values.
+	/// This function only exists for storage values without default value..
 	///
 	/// Upon any failure, it replaces `items` as the new value (assuming that the previous stored
 	/// data is simply corrupt and no longer usable).
@@ -161,7 +161,7 @@ pub trait StorageValue<T: Codec> {
 	///
 	/// `T` is required to implement `Codec::DecodeLength`.
 	///
-	/// This can only be called for storage items that do not have a default values.
+	/// This function only exists for storage values without default value..
 	fn decode_len() -> Result<usize, &'static str>
 		where T: codec::DecodeLength, Self: crate::traits::NoDefault;
 }
@@ -297,7 +297,7 @@ pub trait AppendableStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
 	///
 	/// `T` is required to implement `codec::EncodeAppend`.
 	///
-	/// This can only be called for storage items that do not have a default values.
+	/// This function only exists for storage values without default value..
 	fn append<KeyArg: Borrow<K>, I: Encode>(key: KeyArg, items: &[I]) -> Result<(), &'static str>
 		where V: EncodeAppend<Item=I>, Self: crate::traits::NoDefault;
 
@@ -305,7 +305,7 @@ pub trait AppendableStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
 	///
 	/// `T` is required to implement `codec::EncodeAppend`.
 	///
-	/// This can only be called for storage items that do not have a default values.
+	/// This function only exists for storage values without default value..
 	///
 	/// Upon any failure, it replaces `items` as the new value (assuming that the previous stored
 	/// data is simply corrupt and no longer usable).
@@ -339,7 +339,7 @@ pub trait DecodeLengthStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
 	///
 	/// `T` is required to implement `Codec::DecodeLength`.
 	///
-	/// This can only be called for storage items that do not have a default values.
+	/// This function only exists for storage values without default value..
 	///
 	/// Has the same logic as [`StorageValue`](trait.StorageValue.html).
 	fn decode_len<KeyArg: Borrow<K>>(key: KeyArg) -> Result<usize, &'static str>

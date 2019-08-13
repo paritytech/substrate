@@ -724,7 +724,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// The voter index must be provided as explained in [`voter_at`] function.
 	fn do_set_approvals(who: T::AccountId, votes: Vec<bool>, index: VoteIndex, hint: SetIndex) -> Result {
-		let candidates_len = <Self as Store>::Candidates::decode_len().unwrap_or(0usize);
+		let candidates_len = <Self as Store>::Candidates::decode_len().unwrap_or(0_usize);
 
 		ensure!(!Self::presentation_active(), "no approval changes during presentation period");
 		ensure!(index == Self::vote_index(), "incorrect vote index");
