@@ -26,7 +26,7 @@ use crate::sr_primitives::ConsensusEngineId;
 
 use super::for_each_tuple;
 
-/// A marker trait that should only be implemented for storage types to do not have a default value.
+/// A marker trait that should only be implemented for storage types that do not have a default value.
 pub trait NoDefault {}
 
 /// A trait for querying a single fixed value from a type.
