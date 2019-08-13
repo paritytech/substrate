@@ -16,17 +16,7 @@
 
 //! Chain utilities.
 
-use std::{self, io::{Read, Write, Seek}};
-use futures::prelude::*;
-use log::{info, warn};
-
-use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{SaturatedConversion, Zero, One, Header, NumberFor};
-use consensus_common::import_queue::ImportQueue;
-
-use crate::components::{self, Components, ServiceFactory, FactoryFullConfiguration, FactoryBlockNumber, RuntimeGenesis};
-use crate::new_client;
-use codec::{Decode, Encode, IoReader};
+use crate::components::RuntimeGenesis;
 use crate::error;
 use crate::chain_spec::ChainSpec;
 
@@ -83,24 +73,6 @@ macro_rules! export_blocks {
 	}
 	Ok(())
 }}
-}
-
-/// Export a range of blocks to a binary stream.
-pub fn export_blocks<F, E, W>(
-	config: FactoryFullConfiguration<F>,
-	exit: E,
-	mut output: W,
-	from: FactoryBlockNumber<F>,
-	to: Option<FactoryBlockNumber<F>>,
-	json: bool
-) -> error::Result<()>
-	where
-	F: ServiceFactory,
-	E: Future<Item=(),Error=()> + Send + 'static,
-	W: Write,
-{
-	let client = new_client::<F>(&config)?;
-	export_blocks!(client, exit, output, from, to, json)
 }
 
 #[macro_export]
@@ -231,27 +203,6 @@ impl<B: Block> Link<B> for WaitLink {
 }}
 }
 
-/// Returns a future that import blocks from a binary stream.
-pub fn import_blocks<F, E, R>(
-	mut config: FactoryFullConfiguration<F>,
-	exit: E,
-	input: R
-) -> error::Result<impl Future<Item = (), Error = ()>>
-	where F: ServiceFactory, E: Future<Item=(),Error=()> + Send + 'static, R: Read + Seek,
-{
-	let client = new_client::<F>(&config)?;
-	// FIXME #1134 this shouldn't need a mutable config.
-	let select_chain = components::FullComponents::<F>::build_select_chain(&mut config, client.clone())?;
-	let (mut queue, _) = components::FullComponents::<F>::build_import_queue(
-		&mut config,
-		client.clone(),
-		select_chain,
-		None
-	)?;
-
-	import_blocks!(F::Block, client, queue, exit, input)
-}
-
 #[macro_export]
 macro_rules! revert_chain {
 ($client:ident, $blocks:ident) => {{
@@ -265,17 +216,6 @@ macro_rules! revert_chain {
 	}
 	Ok(())
 }}
-}
-
-/// Revert the chain.
-pub fn revert_chain<F>(
-	config: FactoryFullConfiguration<F>,
-	blocks: FactoryBlockNumber<F>
-) -> error::Result<()>
-	where F: ServiceFactory,
-{
-	let client = new_client::<F>(&config)?;
-	revert_chain!(client, blocks)
 }
 
 /// Build a chain spec json

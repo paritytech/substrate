@@ -16,135 +16,32 @@
 
 //! Substrate service components.
 
-use std::{sync::Arc, ops::Deref, ops::DerefMut};
+use std::sync::Arc;
 use serde::{Serialize, de::DeserializeOwned};
-use crate::chain_spec::ChainSpec;
 use keystore::KeyStorePtr;
-use client_db;
-use client::{self, Client, runtime_api};
-use crate::{error, Service};
-use consensus_common::{import_queue::ImportQueue, SelectChain};
-use network::{
-	self, OnDemand, FinalityProofProvider, NetworkStateInfo, config::BoxFinalityProofRequestBuilder
-};
-use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
-use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
+use client::{Client, runtime_api};
+use crate::error;
+use network::NetworkStateInfo;
+use transaction_pool::txpool::{self, Pool as TransactionPool};
 use sr_primitives::{
 	BuildStorage, traits::{Block as BlockT, Header as HeaderT, NumberFor, ProvideRuntimeApi}, generic::BlockId
 };
+<<<<<<< HEAD
 use crate::config::Configuration;
 use primitives::{Blake2Hasher, H256, traits::BareCryptoStorePtr};
 use rpc::{self, system::SystemInfo};
+=======
+use primitives::Blake2Hasher;
+use rpc::{self, apis::system::SystemInfo};
+>>>>>>> Remove the old API
 use futures::{prelude::*, future::Executor};
 use futures03::{FutureExt as _, channel::mpsc, compat::Compat};
-
-// Type aliases.
-// These exist mainly to avoid typing `<F as Factory>::Foo` all over the code.
-
-/// Network service type for `Components`.
-pub type NetworkService<C> = network::NetworkService<
-	ComponentBlock<C>,
-	<<C as Components>::Factory as ServiceFactory>::NetworkProtocol,
-	ComponentExHash<C>
->;
-
-/// Code executor type for a factory.
-pub type CodeExecutor<F> = NativeExecutor<<F as ServiceFactory>::RuntimeDispatch>;
-
-/// Full client backend type for a factory.
-pub type FullBackend<F> = client_db::Backend<<F as ServiceFactory>::Block>;
-
-/// Full client executor type for a factory.
-pub type FullExecutor<F> = client::LocalCallExecutor<
-	client_db::Backend<<F as ServiceFactory>::Block>,
-	CodeExecutor<F>,
->;
-
-/// Light client backend type for a factory.
-pub type LightBackend<F> = client::light::backend::Backend<
-	client_db::light::LightStorage<<F as ServiceFactory>::Block>,
-	network::OnDemand<<F as ServiceFactory>::Block>,
-	Blake2Hasher,
->;
-
-/// Light client executor type for a factory.
-pub type LightExecutor<F> = client::light::call_executor::RemoteOrLocalCallExecutor<
-	<F as ServiceFactory>::Block,
-	client::light::backend::Backend<
-		client_db::light::LightStorage<<F as ServiceFactory>::Block>,
-		network::OnDemand<<F as ServiceFactory>::Block>,
-		Blake2Hasher
-	>,
-	client::light::call_executor::RemoteCallExecutor<
-		client::light::blockchain::Blockchain<
-			client_db::light::LightStorage<<F as ServiceFactory>::Block>,
-			network::OnDemand<<F as ServiceFactory>::Block>
-		>,
-		network::OnDemand<<F as ServiceFactory>::Block>,
-	>,
-	client::LocalCallExecutor<
-		client::light::backend::Backend<
-			client_db::light::LightStorage<<F as ServiceFactory>::Block>,
-			network::OnDemand<<F as ServiceFactory>::Block>,
-			Blake2Hasher
-		>,
-		CodeExecutor<F>
-	>
->;
-
-/// Full client type for a factory.
-pub type FullClient<F> = Client<FullBackend<F>, FullExecutor<F>, <F as ServiceFactory>::Block, <F as ServiceFactory>::RuntimeApi>;
-
-/// Light client type for a factory.
-pub type LightClient<F> = Client<LightBackend<F>, LightExecutor<F>, <F as ServiceFactory>::Block, <F as ServiceFactory>::RuntimeApi>;
-
-/// `ChainSpec` specialization for a factory.
-pub type FactoryChainSpec<F> = ChainSpec<<F as ServiceFactory>::Genesis>;
-
-/// `Genesis` specialization for a factory.
-pub type FactoryGenesis<F> = <F as ServiceFactory>::Genesis;
-
-/// `Block` type for a factory.
-pub type FactoryBlock<F> = <F as ServiceFactory>::Block;
-
-/// `Extrinsic` type for a factory.
-pub type FactoryExtrinsic<F> = <<F as ServiceFactory>::Block as BlockT>::Extrinsic;
-
-/// `Number` type for a factory.
-pub type FactoryBlockNumber<F> = <<FactoryBlock<F> as BlockT>::Header as HeaderT>::Number;
-
-/// Full `Configuration` type for a factory.
-pub type FactoryFullConfiguration<F> = Configuration<<F as ServiceFactory>::Configuration, FactoryGenesis<F>>;
-
-/// Client type for `Components`.
-pub type ComponentClient<C> = Client<
-	<C as Components>::Backend,
-	<C as Components>::Executor,
-	FactoryBlock<<C as Components>::Factory>,
-	<C as Components>::RuntimeApi,
->;
-
-/// A offchain workers storage backend type.
-pub type ComponentOffchainStorage<C> = <
-	<C as Components>::Backend as client::backend::Backend<ComponentBlock<C>, Blake2Hasher>
->::OffchainStorage;
-
-/// Block type for `Components`
-pub type ComponentBlock<C> = <<C as Components>::Factory as ServiceFactory>::Block;
-
-/// Extrinsic hash type for `Components`
-pub type ComponentExHash<C> = <<C as Components>::TransactionPoolApi as txpool::ChainApi>::Hash;
-
-/// Extrinsic type.
-pub type ComponentExtrinsic<C> = <ComponentBlock<C> as BlockT>::Extrinsic;
-
-/// Extrinsic pool API type for `Components`.
-pub type PoolApi<C> = <C as Components>::TransactionPoolApi;
 
 /// A set of traits for the runtime genesis config.
 pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
 impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
 
+<<<<<<< HEAD
 /// A transport-agnostic handler of the RPC queries.
 pub type RpcHandler = rpc_servers::RpcHandler<rpc::Metadata>;
 
@@ -201,6 +98,8 @@ impl<C: Components> StartRpc<C> for C where
 	}
 }
 
+=======
+>>>>>>> Remove the old API
 pub(crate) fn start_rpc<Api, Backend, Block, Executor, PoolApi>(
 	client: Arc<Client<Backend, Executor, Block, Api>>,
 	system_send_back: mpsc::UnboundedSender<rpc::system::Request<Block>>,
@@ -239,15 +138,6 @@ where
 	))
 }
 
-/// Something that can maintain transaction pool on every imported block.
-pub trait MaintainTransactionPool<C: Components> {
-	fn maintain_transaction_pool(
-		id: &BlockId<ComponentBlock<C>>,
-		client: &ComponentClient<C>,
-		transaction_pool: &TransactionPool<C::TransactionPoolApi>,
-	) -> error::Result<()>;
-}
-
 pub(crate) fn maintain_transaction_pool<Api, Backend, Block, Executor, PoolApi>(
 	id: &BlockId<Block>,
 	client: &Client<Backend, Executor, Block, Api>,
@@ -272,52 +162,6 @@ pub(crate) fn maintain_transaction_pool<Api, Backend, Block, Executor, PoolApi>(
 	}
 
 	Ok(())
-}
-
-impl<C: Components> MaintainTransactionPool<Self> for C where
-	ComponentClient<C>: ProvideRuntimeApi,
-	<ComponentClient<C> as ProvideRuntimeApi>::Api: runtime_api::TaggedTransactionQueue<ComponentBlock<C>>,
-{
-	fn maintain_transaction_pool(
-		id: &BlockId<ComponentBlock<C>>,
-		client: &ComponentClient<C>,
-		transaction_pool: &TransactionPool<C::TransactionPoolApi>,
-	) -> error::Result<()> {
-		maintain_transaction_pool(id, client, transaction_pool)
-	}
-}
-
-pub trait OffchainWorker<C: Components> {
-	fn offchain_workers(
-		number: &FactoryBlockNumber<C::Factory>,
-		offchain: &offchain::OffchainWorkers<
-			ComponentClient<C>,
-			ComponentOffchainStorage<C>,
-			ComponentBlock<C>
-		>,
-		pool: &Arc<TransactionPool<C::TransactionPoolApi>>,
-		network_state: &Arc<dyn NetworkStateInfo + Send + Sync>,
-		is_validator: bool,
-	) -> error::Result<Box<dyn Future<Item = (), Error = ()> + Send>>;
-}
-
-impl<C: Components> OffchainWorker<Self> for C where
-	ComponentClient<C>: ProvideRuntimeApi,
-	<ComponentClient<C> as ProvideRuntimeApi>::Api: offchain::OffchainWorkerApi<ComponentBlock<C>>,
-{
-	fn offchain_workers(
-		number: &FactoryBlockNumber<C::Factory>,
-		offchain: &offchain::OffchainWorkers<
-			ComponentClient<C>,
-			ComponentOffchainStorage<C>,
-			ComponentBlock<C>
-		>,
-		pool: &Arc<TransactionPool<C::TransactionPoolApi>>,
-		network_state: &Arc<dyn NetworkStateInfo + Send + Sync>,
-		is_validator: bool,
-	) -> error::Result<Box<dyn Future<Item = (), Error = ()> + Send>> {
-		offchain_workers(number, offchain, pool, network_state, is_validator)
-	}
 }
 
 pub(crate) fn offchain_workers<Api, Backend, Block, Executor, PoolApi>(
@@ -346,6 +190,7 @@ where
 	Ok(Box::new(Compat::new(future)))
 }
 
+<<<<<<< HEAD
 /// The super trait that combines all required traits a `Service` needs to implement.
 pub trait ServiceTrait<C: Components>:
 	Deref<Target = Service<C>>
@@ -808,10 +653,15 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 	}
 }
 
+=======
+/// Alias for a an implementation of `futures::future::Executor`.
+pub type TaskExecutor = Arc<dyn Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send + Sync>;
+
+>>>>>>> Remove the old API
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use consensus_common::BlockOrigin;
+	use consensus_common::{BlockOrigin, SelectChain};
 	use substrate_test_runtime_client::{prelude::*, runtime::Transfer};
 
 	#[test]

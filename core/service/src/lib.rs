@@ -36,20 +36,16 @@ use std::time::{Duration, Instant};
 use futures::sync::mpsc;
 use parking_lot::Mutex;
 
-use client::{BlockchainEvents, backend::Backend, runtime_api::BlockT, Client};
+use client::{runtime_api::BlockT, Client};
 use exit_future::Signal;
 use futures::prelude::*;
 use futures03::stream::{StreamExt as _, TryStreamExt as _};
-use keystore::Store as Keystore;
-use network::{NetworkService, NetworkState, NetworkStateInfo, specialization::NetworkSpecialization};
-use log::{log, info, warn, debug, error, Level};
+use network::{NetworkService, NetworkState, specialization::NetworkSpecialization};
+use log::{log, warn, debug, error, Level};
 use codec::{Encode, Decode};
 use primitives::{Blake2Hasher, H256};
 use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{Header, NumberFor, SaturatedConversion};
-use substrate_executor::NativeExecutor;
-use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
-use tel::{telemetry, SUBSTRATE_INFO};
+use sr_primitives::traits::NumberFor;
 
 pub use self::error::Error;
 pub use self::factory::{ServiceBuilder, ServiceBuilderExport, ServiceBuilderImport, ServiceBuilderRevert};
@@ -59,6 +55,7 @@ pub use transaction_pool::txpool::{
 	self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError
 };
 pub use client::FinalityNotifications;
+<<<<<<< HEAD
 pub use rpc::Metadata as RpcMetadata;
 
 pub use components::{
@@ -70,6 +67,10 @@ pub use components::{
 	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic, InitialSessionKeys,
 };
 use components::{StartRpc, MaintainTransactionPool, OffchainWorker};
+=======
+pub use components::RuntimeGenesis;
+
+>>>>>>> Remove the old API
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
@@ -78,24 +79,6 @@ pub use network::{FinalityProofProvider, OnDemand, config::BoxFinalityProofReque
 pub use futures::future::Executor;
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
-
-/// Substrate service.
-pub struct Service<Components: components::Components> {
-	inner: NewService<
-		FactoryFullConfiguration<Components::Factory>,
-		ComponentBlock<Components>,
-		ComponentClient<Components>,
-		Components::SelectChain,
-		NetworkStatus<ComponentBlock<Components>>,
-		ComponentNetworkService<Components>,
-		TransactionPool<Components::TransactionPoolApi>,
-		offchain::OffchainWorkers<
-			ComponentClient<Components>,
-			ComponentOffchainStorage<Components>,
-			ComponentBlock<Components>
-		>,
-	>,
-}
 
 /// Substrate service.
 pub struct NewService<TCfg, TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
@@ -132,19 +115,6 @@ pub struct NewService<TCfg, TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	_offchain_workers: Option<Arc<TOc>>,
 	keystore: keystore::KeyStorePtr,
 	marker: PhantomData<TBl>,
-}
-
-/// Creates bare client without any networking.
-pub fn new_client<Factory: components::ServiceFactory>(
-	config: &FactoryFullConfiguration<Factory>,
-) -> Result<Arc<ComponentClient<components::FullComponents<Factory>>>, error::Error> {
-	let executor = NativeExecutor::new(config.default_heap_pages);
-
-	components::FullComponents::<Factory>::build_client(
-		config,
-		executor,
-		None,
-	).map(|r| r.0)
 }
 
 /// An handle for spawning tasks in the service.
@@ -485,6 +455,7 @@ macro_rules! new_impl {
 
 mod factory;
 
+<<<<<<< HEAD
 impl<Components: components::Components> Service<Components> {
 	/// Creates a new service.
 	pub fn new(
@@ -544,6 +515,8 @@ impl<Components: components::Components> Service<Components> {
 	}
 }
 
+=======
+>>>>>>> Remove the old API
 /// Abstraction over a Substrate service.
 pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send {
@@ -618,35 +591,6 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 
 	/// Get a handle to a future that will resolve on exit.
 	fn on_exit(&self) -> ::exit_future::Exit;
-}
-
-impl<Components: components::Components> Deref for Service<Components>
-where FactoryFullConfiguration<Components::Factory>: Send {
-	type Target = NewService<
-		FactoryFullConfiguration<Components::Factory>,
-		ComponentBlock<Components>,
-		ComponentClient<Components>,
-		Components::SelectChain,
-		NetworkStatus<ComponentBlock<Components>>,
-		ComponentNetworkService<Components>,
-		TransactionPool<Components::TransactionPoolApi>,
-		offchain::OffchainWorkers<
-			ComponentClient<Components>,
-			ComponentOffchainStorage<Components>,
-			ComponentBlock<Components>
-		>,
-	>;
-
-	fn deref(&self) -> &Self::Target {
-		&self.inner
-	}
-}
-
-impl<Components: components::Components> DerefMut for Service<Components>
-where FactoryFullConfiguration<Components::Factory>: Send {
-	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut self.inner
-	}
 }
 
 impl<TCfg, TBl, TBackend, TExec, TRtApi, TSc, TNetSpec, TExPoolApi, TOc> AbstractService for
@@ -775,15 +719,6 @@ NewService<TCfg, TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	}
 }
 
-impl<Components> Future for Service<Components> where Components: components::Components {
-	type Item = ();
-	type Error = Error;
-
-	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-		self.inner.poll()
-	}
-}
-
 impl<TCfg, TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Executor<Box<dyn Future<Item = (), Error = ()> + Send>> for
 NewService<TCfg, TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	fn execute(
@@ -796,17 +731,6 @@ NewService<TCfg, TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 		} else {
 			Ok(())
 		}
-	}
-}
-
-impl<Components> Executor<Box<dyn Future<Item = (), Error = ()> + Send>>
-	for Service<Components> where Components: components::Components
-{
-	fn execute(
-		&self,
-		future: Box<dyn Future<Item = (), Error = ()> + Send>
-	) -> Result<(), futures::future::ExecuteError<Box<dyn Future<Item = (), Error = ()> + Send>>> {
-		self.inner.execute(future)
 	}
 }
 
@@ -1172,6 +1096,7 @@ where
 	}
 }
 
+<<<<<<< HEAD
 /// Constructs a service factory with the given name that implements the `ServiceFactory` trait.
 /// The required parameters are required to be given in the exact order. Some parameters are followed
 /// by `{}` blocks. These blocks are required and used to initialize the given parameter.
@@ -1391,6 +1316,8 @@ macro_rules! construct_service_factory {
 	}
 }
 
+=======
+>>>>>>> Remove the old API
 #[cfg(test)]
 mod tests {
 	use super::*;

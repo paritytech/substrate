@@ -1,3 +1,8 @@
+<<<<<<< HEAD
+=======
+//! Service implementation. Specialized wrapper over Substrate service.
+
+>>>>>>> Remove the old API
 #![warn(unused_extern_crates)]
 
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.

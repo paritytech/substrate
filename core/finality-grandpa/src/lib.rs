@@ -93,10 +93,6 @@ mod light_import;
 mod observer;
 mod until_imported;
 
-#[cfg(feature="service-integration")]
-mod service_integration;
-#[cfg(feature="service-integration")]
-pub use service_integration::{LinkHalfForService, BlockImportForService, BlockImportForLightService};
 pub use communication::Network;
 pub use finality_proof::FinalityProofProvider;
 pub use light_import::light_block_import;

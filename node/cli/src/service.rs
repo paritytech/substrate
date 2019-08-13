@@ -16,7 +16,7 @@
 
 #![warn(unused_extern_crates)]
 
-//! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
+//! Service implementation. Specialized wrapper over substrate service.
 
 use std::sync::Arc;
 use std::time::Duration;
