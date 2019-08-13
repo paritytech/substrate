@@ -29,6 +29,8 @@ fork-tree = { path = "../../utils/fork-tree" }
 futures-preview = { version = "=0.3.0-alpha.17", features = ["compat"] }
 futures01 = { package = "futures", version = "0.1" }
 futures-timer = "0.2.1"
+parity-crypto = { version = "0.4.0" }
+primitive-types = { version = "0.5.0" }
 parking_lot = "0.9.0"
 log = "0.4.6"
 schnorrkel = { version = "0.8.4", features = ["preaudit_deprecated"] }

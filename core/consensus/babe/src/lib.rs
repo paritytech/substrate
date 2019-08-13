@@ -37,6 +37,7 @@ use keystore::KeyStorePtr;
 use codec::{Decode, Encode};
 use parking_lot::{Mutex, MutexGuard};
 use primitives::{Blake2Hasher, H256, Pair, Public};
+use primitive_types::U512;
 use merlin::Transcript;
 use inherents::{InherentDataProviders, InherentData};
 use substrate_telemetry::{
@@ -360,6 +361,16 @@ macro_rules! babe_err {
 fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<BabePreDigest, String>
 	where DigestItemFor<B>: CompatibleDigestItem,
 {
+	// genesis block doesn't contain a pre digest so let's generate a
+	// dummy one to not break any invariants in the rest of the code
+	if header.number().is_zero() {
+		return Ok(BabePreDigest::Secondary {
+			slot_number: 0,
+			authority_index: 0,
+			weight: 0,
+		});
+	}
+
 	let mut pre_digest: Option<_> = None;
 	for log in header.digest().logs() {
 		trace!(target: "babe", "Checking log {:?}, looking for pre runtime digest", log);
@@ -402,7 +413,6 @@ fn find_next_epoch_digest<B: BlockT>(header: &B::Header) -> Result<Option<Epoch>
 // used to submit such misbehavior reports.
 fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 	mut header: B::Header,
-	header_hash: B::Hash,
 	parent_header: B::Header,
 	slot_now: u64,
 	authorities: &[(AuthorityId, BabeAuthorityWeight)],
@@ -418,12 +428,16 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 	trace!(target: "babe", "Checking header");
 	let seal = match header.digest_mut().pop() {
 		Some(x) => x,
-		None => return Err(babe_err!("Header {:?} is unsealed", header_hash)),
+		None => return Err(babe_err!("Header {:?} is unsealed", header.hash())),
 	};
 
 	let sig = seal.as_babe_seal().ok_or_else(|| {
-		babe_err!("Header {:?} has a bad seal", header_hash)
+		babe_err!("Header {:?} has a bad seal", header.hash())
 	})?;
+
+	// the pre-hash of the header doesn't include the seal
+	// and that's what we sign
+	let pre_hash = header.hash();
 
 	let pre_digest = find_pre_digest::<B>(&header)?;
 
@@ -448,7 +462,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 			let digest = (vrf_output, vrf_proof, *authority_index, *slot_number, *weight);
 
 			check_primary_header::<B>(
-				header_hash,
+				pre_hash,
 				digest,
 				sig,
 				parent_weight,
@@ -459,16 +473,17 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 			)?;
 		},
 		BabePreDigest::Secondary { authority_index, slot_number, weight } => {
-			info!(target: "auraboros", "Verifying Secondary block");
+			debug!(target: "babe", "Verifying Secondary block");
 
 			let digest = (*authority_index, *slot_number, *weight);
 
 			check_secondary_header::<B>(
-				header_hash,
+				pre_hash,
 				digest,
 				sig,
 				parent_weight,
 				&authorities,
+				randomness,
 			)?;
 		},
 	}
@@ -547,6 +562,7 @@ fn check_secondary_header<B: BlockT>(
 	signature: AuthoritySignature,
 	parent_weight: BabeBlockWeight,
 	authorities: &[(AuthorityId, BabeAuthorityWeight)],
+	randomness: [u8; 32],
 ) -> Result<(), String> {
 	let (authority_index, slot_number, weight) = pre_digest;
 
@@ -559,6 +575,7 @@ fn check_secondary_header<B: BlockT>(
 	let expected_author = secondary_slot_author(
 		slot_number,
 		authorities,
+		randomness,
 	).ok_or_else(|| "No secondary author expected.".to_string())?;
 
 	let author = &authorities[authority_index as usize].0;
@@ -711,7 +728,6 @@ impl<B, E, Block, RA, PRA, T> Verifier<Block> for BabeVerifier<B, E, Block, RA, 
 		// FIXME #1019 in the future, alter this queue to allow deferring of headers
 		let checked_header = check_header::<Block, PRA, T>(
 			header,
-			hash,
 			parent_header,
 			slot_now + 1,
 			&authorities,
@@ -767,8 +783,7 @@ impl<B, E, Block, RA, PRA, T> Verifier<Block> for BabeVerifier<B, E, Block, RA, 
 					.expect("parent_header must be imported; qed");
 
 					let best_weight = find_pre_digest::<Block>(&best_header)
-						.map(|d| d.weight())
-						.unwrap_or(0);
+						.map(|babe_pre_digest| babe_pre_digest.weight())?;
 
 					let new_weight = babe_pre_digest.weight();
 
@@ -906,7 +921,15 @@ fn claim_slot(
 	keystore: &KeyStorePtr,
 ) -> Option<(BabePreDigest, AuthorityPair)> {
 	claim_primary_slot(slot_number, parent_weight, epoch, c, keystore)
-		.or_else(|| claim_secondary_slot(slot_number, parent_weight, &epoch.authorities, keystore))
+		.or_else(|| {
+			claim_secondary_slot(
+				slot_number,
+				parent_weight,
+				&epoch.authorities,
+				keystore,
+				epoch.randomness,
+			)
+		})
 }
 
 /// Claim a slot if it is our turn.  Returns `None` if it is not our turn.
@@ -960,19 +983,45 @@ fn claim_primary_slot(
 }
 
 /// Get the expected secondary author for given slot along with authorities.
-// FIXME: use instead SHA512(epoch_randomness ++ slot_number) mod number_of_validators
 fn secondary_slot_author(
 	slot_number: u64,
 	authorities: &[(AuthorityId, BabeAuthorityWeight)],
+	randomness: [u8; 32],
 ) -> Option<&AuthorityId> {
-	if authorities.is_empty() { return None }
+	use parity_crypto::pbkdf2::{sha512, Salt, Secret};
 
-	let idx = slot_number % (authorities.len() as u64);
-	assert!(idx <= usize::max_value() as u64,
-		"It is impossible to have a vector with length beyond the address space; qed");
+	if authorities.is_empty() {
+		return None;
+	}
 
-	let expected_author = authorities.get(idx as usize)
-		.expect("authorities not empty; index constrained to list length;\
+	let rand = {
+		let mut data = [0u8; 64];
+		data[..32].copy_from_slice(&randomness);
+
+		for (i, v) in slot_number.to_le_bytes().into_iter().enumerate() {
+			data[32 + i] = *v;
+		}
+
+		let mut rand = [0u8; 64];
+
+		sha512(
+			1,
+			Salt(&[]),
+			Secret(&data),
+			&mut rand,
+		);
+
+		U512::from(rand)
+	};
+
+	let authorities_len = U512::from(authorities.len());
+	let (_, idx) = rand.div_mod(authorities_len);
+
+	assert!(idx < authorities_len && idx <= U512::from(u32::max_value()),
+		"Index is constrained by list size and u32 range; qed");
+
+	let expected_author = authorities.get(idx.as_u32() as usize)
+		.expect("authorities not empty; index constrained to list length; \
 				this is a valid index; qed");
 
 	Some(&expected_author.0)
@@ -983,6 +1032,7 @@ fn claim_secondary_slot(
 	parent_weight: BabeBlockWeight,
 	authorities: &[(AuthorityId, BabeAuthorityWeight)],
 	keystore: &KeyStorePtr,
+	randomness: [u8; 32],
 ) -> Option<(BabePreDigest, AuthorityPair)> {
 	if authorities.is_empty() {
 		return None;
@@ -991,6 +1041,7 @@ fn claim_secondary_slot(
 	let expected_author = secondary_slot_author(
 		slot_number,
 		authorities,
+		randomness,
 	)?;
 
 	let keystore = keystore.read();
