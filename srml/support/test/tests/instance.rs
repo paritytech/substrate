@@ -393,7 +393,7 @@ fn storage_with_instance_basic_operation() {
 		assert_eq!(LinkedMap::get(key), vec![1]);
 		assert_eq!(LinkedMap::take(key), vec![1]);
 		assert_eq!(LinkedMap::enumerate().count(), 1);
-		assert_eq!(LinkedMap::get(key), vec![]);
+		assert_eq!(LinkedMap::get(key), vec![0u8; 0]);
 		LinkedMap::mutate(key, |a| *a=vec![2]);
 		assert_eq!(LinkedMap::enumerate().count(), 2);
 		assert_eq!(LinkedMap::get(key), vec![2]);
