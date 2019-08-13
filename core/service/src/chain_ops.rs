@@ -85,38 +85,38 @@ macro_rules! import_blocks {
 	use sr_primitives::traits::Block;
 	use futures03::TryFutureExt as _;
 
-struct WaitLink {
-	imported_blocks: u64,
-	has_error: bool,
-}
-
-impl WaitLink {
-	fn new() -> WaitLink {
-		WaitLink {
-			imported_blocks: 0,
-			has_error: false,
-		}
+	struct WaitLink {
+		imported_blocks: u64,
+		has_error: bool,
 	}
-}
 
-impl<B: Block> Link<B> for WaitLink {
-	fn blocks_processed(
-		&mut self,
-		imported: usize,
-		_count: usize,
-		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
-	) {
-		self.imported_blocks += imported as u64;
-
-		for result in results {
-			if let (Err(err), hash) = result {
-				warn!("There was an error importing block with hash {:?}: {:?}", hash, err);
-				self.has_error = true;
-				break;
+	impl WaitLink {
+		fn new() -> WaitLink {
+			WaitLink {
+				imported_blocks: 0,
+				has_error: false,
 			}
 		}
 	}
-}
+
+	impl<B: Block> Link<B> for WaitLink {
+		fn blocks_processed(
+			&mut self,
+			imported: usize,
+			_count: usize,
+			results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
+		) {
+			self.imported_blocks += imported as u64;
+
+			for result in results {
+				if let (Err(err), hash) = result {
+					warn!("There was an error importing block with hash {:?}: {:?}", hash, err);
+					self.has_error = true;
+					break;
+				}
+			}
+		}
+	}
 
 	let (exit_send, exit_recv) = std::sync::mpsc::channel();
 	::std::thread::spawn(move || {
