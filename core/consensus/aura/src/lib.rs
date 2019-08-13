@@ -43,25 +43,24 @@ use client::{
 	runtime_api::ApiExt, error::Result as CResult, backend::AuxStore, BlockOf,
 };
 
-use sr_primitives::{generic::{self, BlockId, OpaqueDigestItemId}, Justification};
+use sr_primitives::{generic::{BlockId, OpaqueDigestItemId}, Justification};
 use sr_primitives::traits::{Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi, Zero, Member};
 
 use primitives::crypto::Pair;
 use inherents::{InherentDataProviders, InherentData};
 
-use futures::{prelude::*, future};
+use futures::prelude::*;
 use parking_lot::Mutex;
-use futures_timer::Delay;
-use log::{error, warn, debug, info, trace};
+use log::{debug, info, trace};
 
 use srml_aura::{
 	InherentType as AuraInherent, AuraInherentData,
 	timestamp::{TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError}
 };
-use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
+use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
 use slots::{CheckedHeader, SlotData, SlotWorker, SlotInfo, SlotCompatible};
-use slots::{SignedDuration, check_equivocation};
+use slots::check_equivocation;
 
 use keystore::KeyStorePtr;
 
