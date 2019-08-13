@@ -1426,9 +1426,9 @@ pub mod test_helpers {
 	/// Try to claim the given slot and return a `BabePreDigest` if
 	/// successful.
 	pub fn claim_slot<B, C>(
-		client: &C,
-		at: &BlockId<B>,
 		slot_number: u64,
+		parent: &B::Header,
+		client: &C,
 		c: (u64, u64),
 		keystore: &KeyStorePtr,
 	) -> Option<BabePreDigest> where
@@ -1436,20 +1436,17 @@ pub mod test_helpers {
 		C: ProvideRuntimeApi + ProvideCache<B>,
 		C::Api: BabeApi<B>,
 	{
-		let epoch = epoch(client, at).unwrap();
+		let epoch = epoch(client, &BlockId::Hash(parent.hash())).unwrap();
+
+		let weight = find_pre_digest::<B>(parent).ok()
+			.map(|d| d.weight())?;
 
 		super::claim_slot(
 			slot_number,
+			weight,
 			&epoch,
 			c,
 			keystore,
-		).map(|((inout, vrf_proof, _), authority_index, _)| {
-			BabePreDigest {
-				vrf_proof,
-				vrf_output: inout.to_output(),
-				authority_index: authority_index as u32,
-				slot_number,
-			}
-		})
+		).map(|(digest, _)| digest)
 	}
 }

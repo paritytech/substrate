@@ -20,14 +20,13 @@
 // https://github.com/paritytech/substrate/issues/2532
 #![allow(deprecated)]
 use super::*;
-use super::generic::DigestItem;
 
 use babe_primitives::AuthorityPair;
 use client::{LongestChain, block_builder::BlockBuilder};
 use consensus_common::NoNetwork as DummyOracle;
 use network::test::*;
 use network::test::{Block as TestBlock, PeersClient};
-use sr_primitives::traits::{Block as BlockT, DigestFor};
+use sr_primitives::{generic::DigestItem, traits::{Block as BlockT, DigestFor}};
 use network::config::ProtocolConfig;
 use tokio::runtime::current_thread;
 use keyring::sr25519::Keyring;
@@ -35,7 +34,8 @@ use client::BlockchainEvents;
 use test_client;
 use log::debug;
 use std::{time::Duration, borrow::Borrow, cell::RefCell};
-type Item = generic::DigestItem<Hash>;
+
+type Item = DigestItem<Hash>;
 
 type Error = client::error::Error;
 
@@ -88,7 +88,14 @@ type TestHeader = <TestBlock as BlockT>::Header;
 type TestExtrinsic = <TestBlock as BlockT>::Extrinsic;
 
 pub struct TestVerifier {
-	inner: BabeVerifier<PeersFullClient, ()>,
+	inner: BabeVerifier<
+		test_client::Backend,
+		test_client::Executor,
+		TestBlock,
+		test_client::runtime::RuntimeApi,
+		PeersFullClient,
+		()
+	>,
 	mutator: Mutator,
 }
 
@@ -126,9 +133,9 @@ impl TestNetFactory for BabeTestNet {
 	fn make_verifier(&self, client: PeersClient, _cfg: &ProtocolConfig)
 		-> Self::Verifier
 	{
-		let api = client.as_full().expect("only full clients are used in test");
+		let client = client.as_full().expect("only full clients are used in test");
 		trace!(target: "babe", "Creating a verifier");
-		let config = Config::get_or_compute(&*api)
+		let config = Config::get_or_compute(&*client)
 			.expect("slot duration available");
 		let inherent_data_providers = InherentDataProviders::new();
 		register_babe_inherent_data_provider(
@@ -139,7 +146,8 @@ impl TestNetFactory for BabeTestNet {
 
 		TestVerifier {
 			inner: BabeVerifier {
-				api,
+				client: client.clone(),
+				api: client,
 				inherent_data_providers,
 				config,
 				time_source: Default::default(),
@@ -324,8 +332,11 @@ fn can_author_block() {
 		epoch_index: 1,
 		duration: 100,
 	};
+
+	let parent_weight = 0;
+
 	loop {
-		match claim_slot(i, &epoch.clone(), (3, 10), &keystore) {
+		match claim_slot(i, parent_weight, &epoch.clone(), (3, 10), &keystore) {
 			None => i += 1,
 			Some(s) => {
 				debug!(target: "babe", "Authored block {:?}", s.0);
