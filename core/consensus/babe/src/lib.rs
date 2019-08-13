@@ -1015,7 +1015,7 @@ fn secondary_slot_author(
 	};
 
 	let authorities_len = U512::from(authorities.len());
-	let (_, idx) = rand.div_mod(authorities_len);
+	let idx = rand % authorities_len;
 
 	assert!(idx < authorities_len && idx <= U512::from(u32::max_value()),
 		"Index is constrained by list size and u32 range; qed");
