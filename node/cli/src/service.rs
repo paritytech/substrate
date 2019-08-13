@@ -19,13 +19,11 @@
 //! Service implementation. Specialized wrapper over substrate service.
 
 use std::sync::Arc;
-use std::time::Duration;
 
-use babe::{import_queue, start_babe, Config};
+use babe::{import_queue, Config};
 use client::{self, LongestChain};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use node_executor;
-use futures::prelude::*;
 use node_primitives::Block;
 use node_runtime::{GenesisConfig, RuntimeApi};
 use substrate_service::{
@@ -34,7 +32,6 @@ use substrate_service::{
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use inherents::InherentDataProviders;
 use network::construct_simple_protocol;
-use substrate_service::TelemetryOnConnect;
 
 construct_simple_protocol! {
 	/// Demo protocol attachment for substrate.
@@ -100,103 +97,114 @@ macro_rules! new_full_start {
 	}}
 }
 
+/// Creates a full service from the configuration.
+///
+/// We need to use a macro because the test suit doesn't work with an opaque service. It expects
+/// concrete types instead.
+macro_rules! new_full {
+	($config:expr) => {{
+		use futures::Future;
+
+		let (builder, mut import_setup, inherent_data_providers, mut tasks_to_spawn) = new_full_start!($config);
+
+		let service = builder.with_network_protocol(|_| Ok(crate::service::NodeProtocol::new()))?
+			.with_finality_proof_provider(|client|
+				Ok(Arc::new(grandpa::FinalityProofProvider::new(client.clone(), client)) as _)
+			)?
+			.build()?;
+
+		let (block_import, link_half, babe_link) = import_setup.take()
+				.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
+
+		// spawn any futures that were created in the previous setup steps
+		if let Some(tasks) = tasks_to_spawn.take() {
+			for task in tasks {
+				service.spawn_task(
+					task.select(service.on_exit())
+						.map(|_| ())
+						.map_err(|_| ())
+				);
+			}
+		}
+
+		if service.config().roles.is_authority() {
+			let proposer = substrate_basic_authorship::ProposerFactory {
+				client: service.client(),
+				transaction_pool: service.transaction_pool(),
+			};
+
+			let client = service.client();
+			let select_chain = service.select_chain()
+				.ok_or(substrate_service::Error::SelectChainRequired)?;
+
+			let babe_config = babe::BabeParams {
+				config: babe::Config::get_or_compute(&*client)?,
+				keystore: service.keystore(),
+				client,
+				select_chain,
+				block_import,
+				env: proposer,
+				sync_oracle: service.network(),
+				inherent_data_providers: inherent_data_providers.clone(),
+				force_authoring: service.config().force_authoring,
+				time_source: babe_link,
+			};
+
+			let babe = babe::start_babe(babe_config)?;
+			let select = babe.select(service.on_exit()).then(|_| Ok(()));
+			service.spawn_task(Box::new(select));
+		}
+
+		let config = grandpa::Config {
+			// FIXME #1578 make this available through chainspec
+			gossip_duration: std::time::Duration::from_millis(333),
+			justification_period: 4096,
+			name: Some(service.config().name.clone()),
+			keystore: Some(service.keystore()),
+		};
+
+		match (service.config().roles.is_authority(), service.config().disable_grandpa) {
+			(false, false) => {
+				// start the lightweight GRANDPA observer
+				service.spawn_task(Box::new(grandpa::run_grandpa_observer(
+					config,
+					link_half,
+					service.network(),
+					service.on_exit(),
+				)?));
+			},
+			(true, false) => {
+				// start the full GRANDPA voter
+				let telemetry_on_connect = substrate_service::TelemetryOnConnect {
+					telemetry_connection_sinks: service.telemetry_on_connect_stream(),
+				};
+				let grandpa_config = grandpa::GrandpaParams {
+					config: config,
+					link: link_half,
+					network: service.network(),
+					inherent_data_providers: inherent_data_providers.clone(),
+					on_exit: service.on_exit(),
+					telemetry_on_connect: Some(telemetry_on_connect),
+				};
+				service.spawn_task(Box::new(grandpa::run_grandpa_voter(grandpa_config)?));
+			},
+			(_, true) => {
+				grandpa::setup_disabled_grandpa(
+					service.client(),
+					&inherent_data_providers,
+					service.network(),
+				)?;
+			},
+		}
+
+		Ok((service, inherent_data_providers))
+	}}
+}
+
 /// Builds a new service for a full client.
 pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisConfig>)
 -> Result<impl AbstractService, ServiceError> {
-
-	let (builder, mut import_setup, inherent_data_providers, mut tasks_to_spawn) = new_full_start!(config);
-
-	let service = builder.with_network_protocol(|_| Ok(NodeProtocol::new()))?
-		.with_finality_proof_provider(|client|
-			Ok(Arc::new(GrandpaFinalityProofProvider::new(client.clone(), client)) as _)
-		)?
-		.build()?;
-
-	let (block_import, link_half, babe_link) = import_setup.take()
-			.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
-
-	// spawn any futures that were created in the previous setup steps
-	if let Some(tasks) = tasks_to_spawn.take() {
-		for task in tasks {
-			service.spawn_task(
-				task.select(service.on_exit())
-					.map(|_| ())
-					.map_err(|_| ())
-			);
-		}
-	}
-
-	if service.config().roles.is_authority() {
-		let proposer = substrate_basic_authorship::ProposerFactory {
-			client: service.client(),
-			transaction_pool: service.transaction_pool(),
-		};
-
-		let client = service.client();
-		let select_chain = service.select_chain()
-			.ok_or(ServiceError::SelectChainRequired)?;
-
-		let babe_config = babe::BabeParams {
-			config: Config::get_or_compute(&*client)?,
-			keystore: service.keystore(),
-			client,
-			select_chain,
-			block_import,
-			env: proposer,
-			sync_oracle: service.network(),
-			inherent_data_providers: inherent_data_providers.clone(),
-			force_authoring: service.config().force_authoring,
-			time_source: babe_link,
-		};
-
-		let babe = start_babe(babe_config)?;
-		let select = babe.select(service.on_exit()).then(|_| Ok(()));
-		service.spawn_task(Box::new(select));
-	}
-
-	let config = grandpa::Config {
-		// FIXME #1578 make this available through chainspec
-		gossip_duration: Duration::from_millis(333),
-		justification_period: 4096,
-		name: Some(service.config().name.clone()),
-		keystore: Some(service.keystore()),
-	};
-
-	match (service.config().roles.is_authority(), service.config().disable_grandpa) {
-		(false, false) => {
-			// start the lightweight GRANDPA observer
-			service.spawn_task(Box::new(grandpa::run_grandpa_observer(
-				config,
-				link_half,
-				service.network(),
-				service.on_exit(),
-			)?));
-		},
-		(true, false) => {
-			// start the full GRANDPA voter
-			let telemetry_on_connect = TelemetryOnConnect {
-				telemetry_connection_sinks: service.telemetry_on_connect_stream(),
-			};
-			let grandpa_config = grandpa::GrandpaParams {
-				config: config,
-				link: link_half,
-				network: service.network(),
-				inherent_data_providers: inherent_data_providers.clone(),
-				on_exit: service.on_exit(),
-				telemetry_on_connect: Some(telemetry_on_connect),
-			};
-			service.spawn_task(Box::new(grandpa::run_grandpa_voter(grandpa_config)?));
-		},
-		(_, true) => {
-			grandpa::setup_disabled_grandpa(
-				service.client(),
-				&inherent_data_providers,
-				service.network(),
-			)?;
-		},
-	}
-
-	Ok(service)
+	new_full!(config).map(|(service, _)| service)
 }
 
 /// Builds a new service for a light client.
@@ -276,7 +284,6 @@ mod tests {
 	use finality_tracker;
 	use keyring::AccountKeyring;
 	use substrate_service::AbstractService;
-	use service_test::SyncService;
 	use crate::service::{new_full, new_light};
 
 	#[cfg(feature = "rhd")]
@@ -341,7 +348,7 @@ mod tests {
 		);
 	}
 
-	/*#[test]
+	#[test]
 	#[ignore]
 	fn test_sync() {
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
@@ -362,14 +369,10 @@ mod tests {
 
 		service_test::sync(
 			chain_spec,
-			|config| new_full(config),
+			|config| new_full!(config),
 			|config| new_light(config),
-			|service| {
-				let service = service.get();
-				let mut inherent_data = service
-					.config()
-					.custom
-					.inherent_data_providers
+			|service, inherent_data_providers| {
+				let mut inherent_data = inherent_data_providers
 					.create_inherent_data()
 					.expect("Creates inherent data.");
 				inherent_data.replace_data(finality_tracker::INHERENT_IDENTIFIER, &1u64);
@@ -431,13 +434,13 @@ mod tests {
 					fork_choice: ForkChoiceStrategy::LongestChain,
 				}
 			},
-			|service| {
+			|service, _| {
 				let amount = 5 * CENTS;
 				let to = AddressPublic::from_raw(bob.public().0);
 				let from = AddressPublic::from_raw(charlie.public().0);
-				let genesis_hash = service.get().client().block_hash(0).unwrap().unwrap();
-				let best_block_id = BlockId::number(service.get().client().info().chain.best_number);
-				let version = service.get().client().runtime_version_at(&best_block_id).unwrap().spec_version;
+				let genesis_hash = service.client().block_hash(0).unwrap().unwrap();
+				let best_block_id = BlockId::number(service.client().info().chain.best_number);
+				let version = service.client().runtime_version_at(&best_block_id).unwrap().spec_version;
 				let signer = charlie.clone();
 
 				let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
@@ -468,7 +471,7 @@ mod tests {
 				OpaqueExtrinsic(v)
 			},
 		);
-	}*/
+	}
 
 	#[test]
 	#[ignore]
