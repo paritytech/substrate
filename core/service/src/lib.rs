@@ -41,7 +41,7 @@ use exit_future::Signal;
 use futures::prelude::*;
 use futures03::stream::{StreamExt as _, TryStreamExt as _};
 use keystore::Store as Keystore;
-use network::{NetworkState, NetworkStateInfo};
+use network::{NetworkService, NetworkState, NetworkStateInfo, specialization::NetworkSpecialization};
 use log::{log, info, warn, debug, error, Level};
 use codec::{Encode, Decode};
 use primitives::{Blake2Hasher, H256};
@@ -65,7 +65,7 @@ pub use components::{
 	ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	LightExecutor, Components, PoolApi, ComponentClient, ComponentOffchainStorage,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
-	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock,
+	CodeExecutor, NetworkService as ComponentNetworkService, FactoryChainSpec, FactoryBlock,
 	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
 	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic, InitialSessionKeys,
 };
@@ -87,7 +87,7 @@ pub struct Service<Components: components::Components> {
 		ComponentClient<Components>,
 		Components::SelectChain,
 		NetworkStatus<ComponentBlock<Components>>,
-		NetworkService<Components>,
+		ComponentNetworkService<Components>,
 		TransactionPool<Components::TransactionPoolApi>,
 		offchain::OffchainWorkers<
 			ComponentClient<Components>,
@@ -560,9 +560,9 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	/// Chain selection algorithm.
 	type SelectChain;
 	/// API of the transaction pool.
-	type TransactionPoolApi: ChainApi;
-	/// Network service.
-	type NetworkService;
+	type TransactionPoolApi: ChainApi<Block = Self::Block>;
+	/// Network specialization.
+	type NetworkSpecialization: NetworkSpecialization<Self::Block>;
 
 	/// Get event stream for telemetry connection established events.
 	fn telemetry_on_connect_stream(&self) -> TelemetryOnConnectNotifications;
@@ -608,7 +608,7 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	fn select_chain(&self) -> Option<Self::SelectChain>;
 
 	/// Get shared network instance.
-	fn network(&self) -> Arc<Self::NetworkService>;
+	fn network(&self) -> Arc<NetworkService<Self::Block, Self::NetworkSpecialization, H256>>;
 
 	/// Returns a receiver that periodically receives a status of the network.
 	fn network_status(&self) -> mpsc::UnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)>;
@@ -628,7 +628,7 @@ where FactoryFullConfiguration<Components::Factory>: Send {
 		ComponentClient<Components>,
 		Components::SelectChain,
 		NetworkStatus<ComponentBlock<Components>>,
-		NetworkService<Components>,
+		ComponentNetworkService<Components>,
 		TransactionPool<Components::TransactionPoolApi>,
 		offchain::OffchainWorkers<
 			ComponentClient<Components>,
@@ -649,17 +649,17 @@ where FactoryFullConfiguration<Components::Factory>: Send {
 	}
 }
 
-impl<TCfg, TBl, TBackend, TExec, TRtApi, TSc, TNet, TExPoolApi, TOc> AbstractService for
-	NewService<TCfg, TBl, Client<TBackend, TExec, TBl, TRtApi>, TSc, NetworkStatus<TBl>, TNet, TransactionPool<TExPoolApi>, TOc>
+impl<TCfg, TBl, TBackend, TExec, TRtApi, TSc, TNetSpec, TExPoolApi, TOc> AbstractService for
+	NewService<TCfg, TBl, Client<TBackend, TExec, TBl, TRtApi>, TSc, NetworkStatus<TBl>, NetworkService<TBl, TNetSpec, H256>, TransactionPool<TExPoolApi>, TOc>
 where TCfg: 'static + Send,
 	TBl: BlockT<Hash = H256>,
 	TBackend: 'static + client::backend::Backend<TBl, Blake2Hasher>,
 	TExec: 'static + client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone,
 	TRtApi: 'static + Send + Sync,
 	TSc: 'static + Clone + Send,
-	TNet: 'static + Send + Sync,
-	TExPoolApi: 'static + ChainApi,
+	TExPoolApi: 'static + ChainApi<Block = TBl>,
 	TOc: 'static + Send + Sync,
+	TNetSpec: NetworkSpecialization<TBl>,
 {
 	type Block = TBl;
 	type Backend = TBackend;
@@ -668,7 +668,7 @@ where TCfg: 'static + Send,
 	type Config = TCfg;
 	type SelectChain = TSc;
 	type TransactionPoolApi = TExPoolApi;
-	type NetworkService = TNet;
+	type NetworkSpecialization = TNetSpec;
 
 	fn config(&self) -> &Self::Config {
 		&self.config
@@ -724,7 +724,7 @@ where TCfg: 'static + Send,
 		self.select_chain.clone()
 	}
 
-	fn network(&self) -> Arc<Self::NetworkService> {
+	fn network(&self) -> Arc<NetworkService<Self::Block, Self::NetworkSpecialization, H256>> {
 		self.network.clone()
 	}
 
@@ -821,7 +821,7 @@ where T: 'static + Deref + DerefMut + Future<Item = (), Error = Error> + Send +
 	type Config = <<T as Deref>::Target as AbstractService>::Config;
 	type SelectChain = <<T as Deref>::Target as AbstractService>::SelectChain;
 	type TransactionPoolApi = <<T as Deref>::Target as AbstractService>::TransactionPoolApi;
-	type NetworkService = <<T as Deref>::Target as AbstractService>::NetworkService;
+	type NetworkSpecialization = <<T as Deref>::Target as AbstractService>::NetworkSpecialization;
 
 	fn telemetry_on_connect_stream(&self) -> TelemetryOnConnectNotifications {
 		(**self).telemetry_on_connect_stream()
@@ -867,7 +867,7 @@ where T: 'static + Deref + DerefMut + Future<Item = (), Error = Error> + Send +
 		(**self).select_chain()
 	}
 
-	fn network(&self) -> Arc<Self::NetworkService> {
+	fn network(&self) -> Arc<NetworkService<Self::Block, Self::NetworkSpecialization, H256>> {
 		(**self).network()
 	}
 
