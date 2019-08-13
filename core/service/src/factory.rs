@@ -406,8 +406,10 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 	/// Defines which import queue to use.
 	pub fn with_import_queue_and_fprb<UImpQu, UFprb>(
 		self,
-		builder: impl FnOnce(&mut Configuration<TCfg, TGen>, Arc<TCl>, Option<TSc>, Arc<TExPool>) -> Result<(UImpQu, UFprb), Error>
-	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, UImpQu, UFprb, TFpp, TNetP, TExPool, TRpc>, Error>
+		builder: impl FnOnce(&mut Configuration<TCfg, TGen>, Arc<TCl>, Option<TSc>, Arc<TExPool>)
+			-> Result<(UImpQu, UFprb), Error>
+	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, UImpQu, UFprb, TFpp,
+			TNetP, TExPool, TRpc>, Error>
 	where TSc: Clone {
 		self.with_import_queue_and_opt_fprb(|cfg, cl, sc, tx| builder(cfg, cl, sc, tx).map(|(q, f)| (q, Some(f))))
 	}
