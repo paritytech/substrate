@@ -14,12 +14,12 @@ client = { package = "substrate-client", path = "../../core/client", default-fea
 rstd = { package = "sr-std", path = "../../core/sr-std", default-features = false }
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 offchain-primitives = { package = "substrate-offchain-primitives", path = "../../core/offchain/primitives", default-features = false }
+authority-discovery-primitives = { package = "substrate-authority-discovery-primitives", path = "../../core/authority-discovery/primitives", default-features = false }
 version = { package = "sr-version", path = "../../core/sr-version", default-features = false }
 support = { package = "srml-support", path = "../../srml/support", default-features = false }
 authorship = { package = "srml-authorship", path = "../../srml/authorship", default-features = false }
 babe = { package = "srml-babe", path = "../../srml/babe", default-features = false }
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../core/consensus/babe/primitives", default-features = false }
-consensus-primitives = { package = "substrate-consensus-common-primitives", path = "../../core/consensus/common/primitives", default-features = false }
 balances = { package = "srml-balances", path = "../../srml/balances", default-features = false }
 contracts = { package = "srml-contracts", path = "../../srml/contracts", default-features = false }
 collective = { package = "srml-collective", path = "../../srml/collective", default-features = false }
@@ -37,6 +37,7 @@ timestamp = { package = "srml-timestamp", path = "../../srml/timestamp", default
 treasury = { package = "srml-treasury", path = "../../srml/treasury", default-features = false }
 sudo = { package = "srml-sudo", path = "../../srml/sudo", default-features = false }
 im-online = { package = "srml-im-online", path = "../../srml/im-online", default-features = false }
+authority-discovery = { package = "srml-authority-discovery", path = "../../srml/authority-discovery", default-features = false }
 node-primitives = { path = "../primitives", default-features = false }
 rustc-hex = { version = "2.0", optional = true }
 serde = { version = "1.0", optional = true }
@@ -60,7 +61,6 @@ std = [
 	"authorship/std",
 	"babe/std",
 	"babe-primitives/std",
-	"consensus-primitives/std",
 	"balances/std",
 	"contracts/std",
 	"collective/std",
@@ -86,5 +86,7 @@ std = [
 	"substrate-keyring",
 	"offchain-primitives/std",
 	"im-online/std",
+	"authority-discovery/std",
 	"substrate-session/std",
+	"authority-discovery-primitives/std",
 ]

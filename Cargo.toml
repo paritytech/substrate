@@ -81,6 +81,7 @@ members = [
 	"srml/generic-asset",
 	"srml/grandpa",
 	"srml/im-online",
+	"srml/authority-discovery",
 	"srml/indices",
 	"srml/membership",
 	"srml/metadata",

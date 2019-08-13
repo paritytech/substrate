@@ -14,18 +14,19 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Common consensus primitives.
+//! Runtime Api to help discover authorities.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::Codec;
 use client::decl_runtime_apis;
+use codec::Codec;
 use rstd::vec::Vec;
 
 decl_runtime_apis! {
-	/// Common consensus runtime api.
-	pub trait ConsensusApi<AuthorityId: Codec> {
-		/// Returns the set of authorities of the currently active consensus mechanism.
-		fn authorities() -> Vec<AuthorityId>;
-	}
+      pub trait AuthorityDiscoveryApi<AuthorityId: Codec> {
+            fn public_key() -> Option<AuthorityId>;
+            fn authorities() -> Vec<AuthorityId>;
+            fn sign(payload: Vec<u8>) -> Option<Vec<u8>>;
+            fn verify(payload: Vec<u8>, signature: Vec<u8>, public_key: AuthorityId) -> bool;
+      }
 }

@@ -397,6 +397,9 @@ impl im_online::Trait for Runtime {
 	type UncheckedExtrinsic = UncheckedExtrinsic;
 }
 
+impl authority_discovery::Trait for Runtime {
+}
+
 impl grandpa::Trait for Runtime {
 	type Event = Event;
 }
@@ -437,6 +440,7 @@ construct_runtime!(
 		Contracts: contracts,
 		Sudo: sudo,
 		ImOnline: im_online::{Module, Call, Storage, Event, ValidateUnsigned, Config<T>},
+		AuthorityDiscovery: authority_discovery::{Module, Call},
 	}
 );
 
@@ -563,9 +567,20 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl consensus_primitives::ConsensusApi<Block, babe_primitives::AuthorityId> for Runtime {
-		fn authorities() -> Vec<babe_primitives::AuthorityId> {
-			Babe::authorities().into_iter().map(|(a, _)| a).collect()
+	impl authority_discovery_primitives::AuthorityDiscoveryApi<Block, im_online::AuthorityId> for Runtime {
+		fn public_key() -> Option<im_online::AuthorityId> {
+			AuthorityDiscovery::public_key()
+		}
+		fn authorities() -> Vec<im_online::AuthorityId> {
+			AuthorityDiscovery::authorities()
+		}
+
+		fn sign(payload: Vec<u8>) -> Option<Vec<u8>> {
+			AuthorityDiscovery::sign(payload)
+		}
+
+		fn verify(payload: Vec<u8>, signature: Vec<u8>, public_key: im_online::AuthorityId) -> bool {
+			AuthorityDiscovery::verify(payload, signature, public_key)
 		}
 	}
 
