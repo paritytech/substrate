@@ -507,7 +507,7 @@ fn check_primary_header<B: BlockT + Sized, C: AuxStore>(
 {
 	let (vrf_output, vrf_proof, authority_index, slot_number, weight) = pre_digest;
 	if weight != parent_weight + 1 {
-		return Err("Invalid weight: should increase with Primary block.".to_string());
+		return Err("Invalid weight: should increase with Primary block.".into());
 	}
 
 	let author = &authorities[authority_index as usize].0;
@@ -554,14 +554,26 @@ fn check_secondary_header<C, B: BlockT>(
 	let (authority_index, slot_number, weight) = pre_digest;
 
 	if weight != parent_weight {
-		return Err("Invalid weight: Should stay the same with Secondary block.".to_string());
+		return Err("Invalid weight: Should stay the same with secondary block.".into());
 	}
 
 	// check the signature is valid under the expected authority and
 	// chain state.
-	// FIXME: check expected author
-	let expected_author = unimplemented!();
+	let expected_author = secondary_slot_author(
+		slot_number,
+		authorities,
+	).ok_or_else(|| "No secondary author expected.".to_string())?;
+
 	let author = &authorities[authority_index as usize].0;
+
+	if expected_author != author {
+		let msg = format!("Invalid author: Expected secondary author: {:?}, got: {:?}.",
+			expected_author,
+			author,
+		);
+
+		return Err(msg);
+	}
 
 	if AuthorityPair::verify(&signature, pre_hash.as_ref(), author) {
 		Ok(())
@@ -912,6 +924,24 @@ fn claim_primary_slot(
 	None
 }
 
+/// Get the expected secondary author for given slot along with authorities.
+fn secondary_slot_author(
+	slot_number: u64,
+	authorities: &[(AuthorityId, BabeAuthorityWeight)],
+) -> Option<&AuthorityId> {
+	if authorities.is_empty() { return None }
+
+	let idx = slot_number % (authorities.len() as u64);
+	assert!(idx <= usize::max_value() as u64,
+		"It is impossible to have a vector with length beyond the address space; qed");
+
+	let expected_author = authorities.get(idx as usize)
+		.expect("authorities not empty; index constrained to list length;\
+				this is a valid index; qed");
+
+	Some(&expected_author.0)
+}
+
 fn claim_secondary_slot(
 	slot_number: SlotNumber,
 	parent_weight: BabeBlockWeight,
@@ -922,8 +952,11 @@ fn claim_secondary_slot(
 		return None;
 	}
 
-	// FIXME: check expected author
-	let expected_author = unimplemented!(); // slot_author::<P>(slot_number, epoch_data);
+	let expected_author = secondary_slot_author(
+		slot_number,
+		authorities,
+	)?;
+
 	let keystore = keystore.read();
 
 	for (pair, authority_index) in authorities.iter()
@@ -932,7 +965,7 @@ fn claim_secondary_slot(
 			keystore.key_pair::<AuthorityPair>(&a.0).ok().map(|kp| (kp, i))
 		})
 	{
-		if pair.public() == expected_author {
+		if pair.public() == *expected_author {
 			let pre_digest = BabePreDigest::Secondary {
 				slot_number,
 				authority_index: authority_index as u32,
