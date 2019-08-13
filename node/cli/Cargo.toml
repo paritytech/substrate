@@ -43,6 +43,7 @@ system = { package = "srml-system", path = "../../srml/system" }
 balances = { package = "srml-balances", path = "../../srml/balances" }
 support = { package = "srml-support", path = "../../srml/support", default-features = false }
 im_online = { package = "srml-im-online", path = "../../srml/im-online", default-features = false }
+keystore = { package = "substrate-keystore", path = "../../core/keystore", default-features = false }
 
 [dev-dependencies]
 keystore = { package = "substrate-keystore", path = "../../core/keystore" }

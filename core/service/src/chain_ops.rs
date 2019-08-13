@@ -148,6 +148,7 @@ pub fn import_blocks<F, E, R>(
 		client.clone(),
 		select_chain,
 		None,
+		None,
 	)?;
 
 	let (exit_send, exit_recv) = std::sync::mpsc::channel();
