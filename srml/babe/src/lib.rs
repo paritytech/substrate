@@ -26,6 +26,7 @@ use srml_support::{decl_storage, decl_module, StorageValue, StorageMap, traits::
 use timestamp::{OnTimestampSet};
 use sr_primitives::{generic::DigestItem, ConsensusEngineId};
 use sr_primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert};
+use sr_primitives::weights::SimpleDispatchInfo;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
 use codec::{Encode, Decode};
@@ -34,6 +35,7 @@ use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent
 use inherents::{InherentDataProviders, ProvideInherentData};
 use babe_primitives::{BABE_ENGINE_ID, ConsensusLog, BabeAuthorityWeight, Epoch, RawBabePreDigest};
 pub use babe_primitives::{AuthorityId, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH};
+use system::ensure_root;
 
 /// The BABE inherent identifier.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"babeslot";
@@ -133,6 +135,14 @@ decl_storage! {
 		/// Current slot number.
 		pub CurrentSlot get(current_slot): u64;
 
+		/// Whether secondary slots are enabled in case the VRF-based slot is
+		/// empty for the current epoch and the next epoch, respectively.
+		pub SecondarySlots get(secondary_slots): (bool, bool) = (true, true);
+
+		/// Pending change to enable/disable secondary slots which will be
+		/// triggered at `current_epoch + 2`.
+		pub PendingSecondarySlotsChange get(pending_secondary_slots_change): Option<bool> = None;
+
 		/// The epoch randomness for the *current* epoch.
 		///
 		/// # Security
@@ -202,6 +212,17 @@ decl_module! {
 				}
 
 				return;
+			}
+		}
+
+		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		fn trigger_secondary_slots(origin, change: Option<bool>) {
+			ensure_root(origin)?;
+			match change {
+				Some(change) =>	PendingSecondarySlotsChange::put(change),
+				None => {
+					PendingSecondarySlotsChange::take();
+				},
 			}
 		}
 	}
@@ -366,13 +387,28 @@ impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Mod
 		let next_epoch_start_slot = EpochStartSlot::get().saturating_add(T::EpochDuration::get());
 		let next_randomness = NextRandomness::get();
 
+		// Update any pending secondary slots change
+		let mut secondary_slots = SecondarySlots::get();
+
+		secondary_slots.0 = secondary_slots.1;
+
+		if let Some(change) = PendingSecondarySlotsChange::take() {
+			secondary_slots.1 = change;
+		} else {
+			secondary_slots.1 = secondary_slots.0;
+		}
+
+		SecondarySlots::mutate(|secondary| {
+			*secondary = secondary_slots;
+		});
+
 		let next = Epoch {
 			epoch_index: next_epoch_index,
 			start_slot: next_epoch_start_slot,
 			duration: T::EpochDuration::get(),
 			authorities: next_authorities,
 			randomness: next_randomness,
-			secondary_slots: true,
+			secondary_slots: secondary_slots.1,
 		};
 
 		Self::deposit_consensus(ConsensusLog::NextEpochData(next))

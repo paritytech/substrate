@@ -611,6 +611,7 @@ cfg_if! {
 						randomness: <srml_babe::Module<Runtime>>::randomness(),
 						epoch_index: <srml_babe::Module<Runtime>>::epoch_index(),
 						duration: EpochDuration::get(),
+						secondary_slots: <srml_babe::Module<Runtime>>::secondary_slots().0,
 					}
 				}
 			}
@@ -821,6 +822,7 @@ cfg_if! {
 						randomness: <srml_babe::Module<Runtime>>::randomness(),
 						epoch_index: <srml_babe::Module<Runtime>>::epoch_index(),
 						duration: EpochDuration::get(),
+						secondary_slots: <srml_babe::Module<Runtime>>::secondary_slots().0,
 					}
 				}
 			}
