@@ -18,7 +18,7 @@
 //!
 //! NOTE: If you're looking for `parameter_types`, it has moved in to the top-level module.
 
-use crate::rstd::{result, marker::PhantomData, ops::Div};
+use crate::rstd::{prelude::*, result, marker::PhantomData, ops::Div};
 use crate::codec::{Codec, Encode, Decode};
 use primitives::u32_trait::Value as U32;
 use crate::sr_primitives::traits::{MaybeSerializeDebug, SimpleArithmetic, Saturating};
@@ -631,12 +631,61 @@ impl WithdrawReasons {
 }
 
 /// Trait for type that can handle incremental changes to a set of account IDs.
-pub trait ChangeMembers<AccountId> {
+pub trait ChangeMembers<AccountId: Clone + Ord> {
+	/// A number of members `incoming` just joined the set and replaced some `outgoing` ones. The
+	/// new set is given by `new`, and need not be sorted.
+	fn change_members(incoming: &[AccountId], outgoing: &[AccountId], mut new: Vec<AccountId>) {
+		new.sort_unstable();
+		Self::change_members_sorted(incoming, outgoing, &new[..]);
+	}
+
 	/// A number of members `_incoming` just joined the set and replaced some `_outgoing` ones. The
-	/// new set is thus given by `_new`.
-	fn change_members(_incoming: &[AccountId], _outgoing: &[AccountId], _new: &[AccountId]);
+	/// new set is thus given by `sorted_new` and **must be sorted**.
+	///
+	/// NOTE: This is the only function that needs to be implemented in `ChangeMembers`.
+	fn change_members_sorted(
+		incoming: &[AccountId],
+		outgoing: &[AccountId],
+		sorted_new: &[AccountId],
+	);
+
+	/// Set the new members; they **must already be sorted**. This will compute the diff and use it to
+	/// call `change_members_sorted`.
+	fn set_members_sorted(new_members: &[AccountId], old_members: &[AccountId]) {
+		let mut old_iter = old_members.iter();
+		let mut new_iter = new_members.iter();
+		let mut incoming = Vec::new();
+		let mut outgoing = Vec::new();
+		let mut old_i = old_iter.next();
+		let mut new_i = new_iter.next();
+		loop {
+			match (old_i, new_i) {
+				(None, None) => break,
+				(Some(old), Some(new)) if old == new => {
+					old_i = old_iter.next();
+					new_i = new_iter.next();
+				}
+				(Some(old), Some(new)) if old < new => {
+					outgoing.push(old.clone());
+					old_i = old_iter.next();
+				}
+				(Some(old), None) => {
+					outgoing.push(old.clone());
+					old_i = old_iter.next();
+				}
+				(_, Some(new)) => {
+					incoming.push(new.clone());
+					new_i = new_iter.next();
+				}
+			}
+		}
+
+		Self::change_members_sorted(&incoming[..], &outgoing[..], &new_members);
+	}
 }
 
-impl<T> ChangeMembers<T> for () {
-	fn change_members(_incoming: &[T], _outgoing: &[T], _new_set: &[T]) {}
+impl<T: Clone + Ord> ChangeMembers<T> for () {
+	fn change_members(_: &[T], _: &[T], _: Vec<T>) {}
+	fn change_members_sorted(_: &[T], _: &[T], _: &[T]) {}
+	fn set_members_sorted(_: &[T], _: &[T]) {}
 }

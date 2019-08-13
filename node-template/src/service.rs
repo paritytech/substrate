@@ -3,7 +3,6 @@
 #![warn(unused_extern_crates)]
 
 use std::sync::Arc;
-use log::info;
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use node_template_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi, WASM_BINARY};
 use substrate_service::{
@@ -15,11 +14,11 @@ use basic_authorship::ProposerFactory;
 use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration};
 use futures::prelude::*;
 use substrate_client::{self as client, LongestChain};
-use primitives::{ed25519::Pair, Pair as PairT};
 use inherents::InherentDataProviders;
 use network::{config::DummyFinalityProofRequestBuilder, construct_simple_protocol};
 use substrate_executor::native_executor_instance;
 use substrate_service::construct_service_factory;
+use aura_primitives::sr25519::AuthorityPair as AuraAuthorityPair;
 
 pub use substrate_executor::NativeExecutor;
 // Our native executor instance.
@@ -43,8 +42,6 @@ construct_simple_protocol! {
 construct_service_factory! {
 	struct Factory {
 		Block = Block,
-		ConsensusPair = Pair,
-		FinalityPair = Pair,
 		RuntimeApi = RuntimeApi,
 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
 		RuntimeDispatch = Executor,
@@ -68,8 +65,7 @@ construct_service_factory! {
 			},
 		AuthoritySetup = {
 			|service: Self::FullService| {
-				if let Some(key) = service.authority_key() {
-					info!("Using authority key {}", key.public());
+				if service.config().roles.is_authority() {
 					let proposer = ProposerFactory {
 						client: service.client(),
 						transaction_pool: service.transaction_pool(),
@@ -77,16 +73,16 @@ construct_service_factory! {
 					let client = service.client();
 					let select_chain = service.select_chain()
 						.ok_or_else(|| ServiceError::SelectChainRequired)?;
-					let aura = start_aura(
+					let aura = start_aura::<_, _, _, _, _, AuraAuthorityPair, _, _, _>(
 						SlotDuration::get_or_compute(&*client)?,
-						Arc::new(key),
 						client.clone(),
 						select_chain,
 						client,
 						proposer,
 						service.network(),
-						service.config.custom.inherent_data_providers.clone(),
-						service.config.force_authoring,
+						service.config().custom.inherent_data_providers.clone(),
+						service.config().force_authoring,
+						Some(service.keystore()),
 					)?;
 					service.spawn_task(Box::new(aura.select(service.on_exit()).then(|_| Ok(()))));
 				}
@@ -100,7 +96,7 @@ construct_service_factory! {
 			Self::Block,
 		>
 			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>, _select_chain: Self::SelectChain| {
-					import_queue::<_, _, Pair>(
+					import_queue::<_, _, aura_primitives::sr25519::AuthorityPair>(
 						SlotDuration::get_or_compute(&*client)?,
 						Box::new(client.clone()),
 						None,
@@ -115,7 +111,7 @@ construct_service_factory! {
 		>
 			{ |config: &mut FactoryFullConfiguration<Self>, client: Arc<LightClient<Self>>| {
 					let fprb = Box::new(DummyFinalityProofRequestBuilder::default()) as Box<_>;
-					import_queue::<_, _, Pair>(
+					import_queue::<_, _, AuraAuthorityPair>(
 						SlotDuration::get_or_compute(&*client)?,
 						Box::new(client.clone()),
 						None,

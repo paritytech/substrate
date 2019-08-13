@@ -9,8 +9,11 @@
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use rstd::prelude::*;
-use primitives::{ed25519, sr25519, OpaqueMetadata};
-use sr_primitives::{ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str};
+use primitives::{sr25519, OpaqueMetadata, crypto::key_types};
+use sr_primitives::{
+	ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
+	impl_opaque_keys,
+};
 use sr_primitives::traits::{NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify, ConvertInto};
 use sr_primitives::weights::Weight;
 use client::{
@@ -30,10 +33,10 @@ pub use sr_primitives::{Permill, Perbill};
 pub use support::{StorageValue, construct_runtime, parameter_types};
 
 /// Alias to the signature scheme used for Aura authority signatures.
-pub type AuraSignature = ed25519::Signature;
+pub type AuraSignature = consensus_aura::sr25519::AuthoritySignature;
 
 /// The Ed25519 pub key of an session that belongs to an Aura authority of the chain.
-pub type AuraId = ed25519::Public;
+pub type AuraId = consensus_aura::sr25519::AuthorityId;
 
 /// Alias to pubkey that identifies an account on the chain.
 pub type AccountId = <AccountSignature as Verify>::Signer;
@@ -71,8 +74,13 @@ pub mod opaque {
 	pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 	/// Opaque block identifier type.
 	pub type BlockId = generic::BlockId<Block>;
-	/// Opaque session key type.
-	pub type SessionKey = AuraId;
+
+	impl_opaque_keys! {
+		pub struct SessionKeys {
+			#[id(key_types::AURA)]
+			pub aura: AuraId,
+		}
+	}
 }
 
 /// This runtime version.
@@ -104,6 +112,8 @@ parameter_types! {
 impl system::Trait for Runtime {
 	/// The identifier used to distinguish between accounts.
 	type AccountId = AccountId;
+	/// The aggregated dispatch type that is available for extrinsics.
+	type Call = Call;
 	/// The lookup mechanism to get account ID from whatever is passed in dispatchers.
 	type Lookup = Indices;
 	/// The index type for storing how many extrinsics an account has signed.
@@ -152,6 +162,7 @@ impl indices::Trait for Runtime {
 parameter_types! {
 	pub const MinimumPeriod: u64 = 5000;
 }
+
 impl timestamp::Trait for Runtime {
 	/// A timestamp: milliseconds since the unix epoch.
 	type Moment = u64;
@@ -297,6 +308,13 @@ impl_runtime_apis! {
 	impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
 		fn offchain_worker(n: NumberFor<Block>) {
 			Executive::offchain_worker(n)
+		}
+	}
+
+	impl substrate_session::SessionKeys<Block> for Runtime {
+		fn generate_session_keys(seed: Option<Vec<u8>>) -> Vec<u8> {
+			let seed = seed.as_ref().map(|s| rstd::str::from_utf8(&s).expect("Seed is an utf8 string"));
+			opaque::SessionKeys::generate(seed)
 		}
 	}
 }

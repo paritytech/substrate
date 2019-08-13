@@ -186,7 +186,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 
 	match &ret {
 		Ok(Some(CustomSubcommands::Factory(cli_args))) => {
-			let mut config = cli::create_config_with_db_path::<service::Factory, _>(
+			let mut config = cli::create_config_with_db_path(
 				load_spec,
 				&cli_args.shared_params,
 				&version,

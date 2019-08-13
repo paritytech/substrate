@@ -60,6 +60,7 @@ pub fn to_session_keys(
 	SessionKeys {
 		ed25519: ed25519_keyring.to_owned().into(),
 		sr25519: sr25519_keyring.to_owned().into(),
+		im_online: sr25519_keyring.to_owned().public().into(),
 	}
 }
 

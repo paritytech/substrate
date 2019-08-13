@@ -42,7 +42,7 @@ use client::backend::NewBlockState;
 use client::blockchain::HeaderBackend;
 use client::ExecutionStrategies;
 use client::backend::{StorageCollection, ChildStorageCollection};
-use parity_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use hash_db::{Hasher, Prefix};
 use kvdb::{KeyValueDB, DBTransaction};
 use trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
@@ -144,6 +144,10 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 		self.state.for_keys_in_child_storage(storage_key, f)
 	}
 
+	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], f: F) {
+		self.state.for_child_keys_with_prefix(storage_key, prefix, f)
+	}
+
 	fn storage_root<I>(&self, delta: I) -> (H256, Self::Transaction)
 		where
 			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
@@ -195,6 +199,7 @@ pub fn new_client<E, S, Block, RA>(
 	executor: E,
 	genesis_storage: S,
 	execution_strategies: ExecutionStrategies,
+	keystore: Option<primitives::traits::BareCryptoStorePtr>,
 ) -> Result<
 	client::Client<Backend<Block>,
 	client::LocalCallExecutor<Backend<Block>, E>, Block, RA>, client::error::Error
@@ -205,7 +210,7 @@ pub fn new_client<E, S, Block, RA>(
 		S: BuildStorage,
 {
 	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
-	let executor = client::LocalCallExecutor::new(backend.clone(), executor);
+	let executor = client::LocalCallExecutor::new(backend.clone(), executor, keystore);
 	Ok(client::Client::new(backend, executor, genesis_storage, execution_strategies)?)
 }
 
@@ -338,8 +343,10 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 	fn body(&self, id: BlockId<Block>) -> Result<Option<Vec<Block::Extrinsic>>, client::error::Error> {
 		match read_db(&*self.db, columns::KEY_LOOKUP, columns::BODY, id)? {
 			Some(body) => match Decode::decode(&mut &body[..]) {
-				Some(body) => Ok(Some(body)),
-				None => return Err(client::error::Error::Backend("Error decoding body".into())),
+				Ok(body) => Ok(Some(body)),
+				Err(err) => return Err(client::error::Error::Backend(
+					format!("Error decoding body: {}", err)
+				)),
 			}
 			None => Ok(None),
 		}
@@ -348,8 +355,10 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 	fn justification(&self, id: BlockId<Block>) -> Result<Option<Justification>, client::error::Error> {
 		match read_db(&*self.db, columns::KEY_LOOKUP, columns::JUSTIFICATION, id)? {
 			Some(justification) => match Decode::decode(&mut &justification[..]) {
-				Some(justification) => Ok(Some(justification)),
-				None => return Err(client::error::Error::Backend("Error decoding justification".into())),
+				Ok(justification) => Ok(Some(justification)),
+				Err(err) => return Err(client::error::Error::Backend(
+					format!("Error decoding justification: {}", err)
+				)),
 			}
 			None => Ok(None),
 		}
@@ -838,7 +847,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				let changes_trie_config = self
 					.state_at(BlockId::Hash(block))?
 					.storage(well_known_keys::CHANGES_TRIE_CONFIG)?
-					.and_then(|v| Decode::decode(&mut &*v));
+					.and_then(|v| Decode::decode(&mut &*v).ok());
 				*cached_changes_trie_config = Some(changes_trie_config.clone());
 				Ok(changes_trie_config)
 			},

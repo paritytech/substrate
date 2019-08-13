@@ -26,6 +26,7 @@ pub use block_builder_ext::BlockBuilderExt;
 pub use generic_test_client::*;
 pub use runtime;
 
+use primitives::sr25519;
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT};
 
@@ -100,15 +101,22 @@ pub struct GenesisParameters {
 
 impl generic_test_client::GenesisInit for GenesisParameters {
 	fn genesis_storage(&self) -> (StorageOverlay, ChildrenStorageOverlay) {
+		use codec::Encode;
 		let mut storage = genesis_config(self.support_changes_trie, self.heap_pages_override).genesis_map();
 
+		let child_roots = storage.1.iter().map(|(sk, child_map)| {
+			let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
+				child_map.clone().into_iter()
+			);
+			(sk.clone(), state_root.encode())
+		});
 		let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
-			storage.clone().into_iter()
+			storage.0.clone().into_iter().chain(child_roots)
 		);
 		let block: runtime::Block = client::genesis::construct_genesis_block(state_root);
-		storage.extend(additional_storage_with_genesis(&block));
+		storage.0.extend(additional_storage_with_genesis(&block));
 
-		(storage, Default::default())
+		storage
 	}
 }
 
@@ -183,9 +191,9 @@ fn genesis_config(support_changes_trie: bool, heap_pages_override: Option<u64>) 
 	GenesisConfig::new(
 		support_changes_trie,
 		vec![
-			Sr25519Keyring::Alice.into(),
-			Sr25519Keyring::Bob.into(),
-			Sr25519Keyring::Charlie.into(),
+			sr25519::Public::from(Sr25519Keyring::Alice).into(),
+			sr25519::Public::from(Sr25519Keyring::Bob).into(),
+			sr25519::Public::from(Sr25519Keyring::Charlie).into(),
 		], vec![
 			AccountKeyring::Alice.into(),
 			AccountKeyring::Bob.into(),
@@ -210,9 +218,16 @@ pub fn new_light() -> client::Client<LightBackend, LightExecutor, runtime::Block
 	let backend = Arc::new(LightBackend::new(blockchain.clone()));
 	let executor = NativeExecutor::new(None);
 	let fetcher = Arc::new(LightFetcher);
-	let remote_call_executor = client::light::call_executor::RemoteCallExecutor::new(blockchain.clone(), fetcher);
-	let local_call_executor = client::LocalCallExecutor::new(backend.clone(), executor);
-	let call_executor = LightExecutor::new(backend.clone(), remote_call_executor, local_call_executor);
+	let remote_call_executor = client::light::call_executor::RemoteCallExecutor::new(
+		blockchain.clone(),
+		fetcher,
+	);
+	let local_call_executor = client::LocalCallExecutor::new(backend.clone(), executor, None);
+	let call_executor = LightExecutor::new(
+		backend.clone(),
+		remote_call_executor,
+		local_call_executor,
+	);
 
 	TestClientBuilder::with_backend(backend)
 		.build_with_executor(call_executor)

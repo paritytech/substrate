@@ -208,7 +208,7 @@ pub trait StorageValue<T: codec::Codec> {
 		let new_val = <T as codec::EncodeAppend>::append(
 			storage.get_raw(Self::key()).unwrap_or_default(),
 			items,
-		).ok_or_else(|| "Could not append given item")?;
+		).map_err(|_| "Could not append given item")?;
 		storage.put_raw(Self::key(), &new_val);
 		Ok(())
 	}
@@ -238,6 +238,23 @@ pub trait StorageMap<K: codec::Codec, V: codec::Codec> {
 	/// Take the value under a key.
 	fn take<S: HashedStorage<Self::Hasher>>(key: &K, storage: &mut S) -> Self::Query;
 
+	/// Swap the values of two keys.
+	fn swap<S: HashedStorage<Self::Hasher>>(key1: &K, key2: &K, storage: &mut S) {
+		let k1 = Self::key_for(key1);
+		let k2 = Self::key_for(key2);
+		let v1 = storage.get_raw(&k1[..]);
+		if let Some(val) = storage.get_raw(&k2[..]) {
+			storage.put_raw(&k1[..], &val[..]);
+		} else {
+			storage.kill(&k1[..])
+		}
+		if let Some(val) = v1 {
+			storage.put_raw(&k2[..], &val[..]);
+		} else {
+			storage.kill(&k2[..])
+		}
+	}
+
 	/// Store a value to be associated with the given key from the map.
 	fn insert<S: HashedStorage<Self::Hasher>>(key: &K, val: &V, storage: &mut S) {
 		storage.put(&Self::key_for(key)[..], val);
@@ -246,7 +263,7 @@ pub trait StorageMap<K: codec::Codec, V: codec::Codec> {
 	/// Store a value under this key into the provided storage instance; this can take any reference
 	/// type that derefs to `T` (and has `Encode` implemented).
 	/// Store a value under this key into the provided storage instance.
-	fn insert_ref<Arg: ?Sized + Encode, S: HashedStorage<Twox128>>(
+	fn insert_ref<Arg: ?Sized + Encode, S: HashedStorage<Self::Hasher>>(
 		key: &K,
 		val: &Arg,
 		storage: &mut S
@@ -286,7 +303,7 @@ pub trait AppendableStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, 
 		let new_val = <V as codec::EncodeAppend>::append(
 			storage.get_raw(&k[..]).unwrap_or_default(),
 			items,
-		).ok_or_else(|| "Could not append given item")?;
+		).map_err(|_| "Could not append given item")?;
 		storage.put_raw(&k[..], &new_val);
 		Ok(())
 	}

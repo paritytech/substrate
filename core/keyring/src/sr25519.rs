@@ -37,18 +37,7 @@ pub enum Keyring {
 
 impl Keyring {
 	pub fn from_public(who: &Public) -> Option<Keyring> {
-		[
-			Keyring::Alice,
-			Keyring::Bob,
-			Keyring::Charlie,
-			Keyring::Dave,
-			Keyring::Eve,
-			Keyring::Ferdie,
-			Keyring::One,
-			Keyring::Two,
-		].iter()
-			.map(|i| *i)
-			.find(|&k| &Public::from(k) == who)
+		Self::iter().find(|&k| &Public::from(k) == who)
 	}
 
 	pub fn from_raw_public(who: [u8; 32]) -> Option<Keyring> {
@@ -84,6 +73,14 @@ impl Keyring {
 	pub fn iter() -> impl Iterator<Item=Keyring> {
 		<Self as strum::IntoEnumIterator>::iter()
 	}
+
+	pub fn public(self) -> Public {
+		self.pair().public()
+	}
+
+	pub fn to_seed(self) -> String {
+		format!("//{}", self)
+	}
 }
 
 impl From<Keyring> for &'static str {
@@ -109,16 +106,7 @@ impl From<Keyring> for sr_primitives::MultiSigner {
 
 lazy_static! {
 	static ref PRIVATE_KEYS: HashMap<Keyring, Pair> = {
-		[
-			Keyring::Alice,
-			Keyring::Bob,
-			Keyring::Charlie,
-			Keyring::Dave,
-			Keyring::Eve,
-			Keyring::Ferdie,
-			Keyring::One,
-			Keyring::Two,
-		].iter().map(|&i| (i, i.pair())).collect()
+		Keyring::iter().map(|i| (i, i.pair())).collect()
 	};
 
 	static ref PUBLIC_KEYS: HashMap<Keyring, Public> = {
@@ -182,8 +170,26 @@ mod tests {
 
 	#[test]
 	fn should_work() {
-		assert!(Pair::verify(&Keyring::Alice.sign(b"I am Alice!"), b"I am Alice!", Keyring::Alice));
-		assert!(!Pair::verify(&Keyring::Alice.sign(b"I am Alice!"), b"I am Bob!", Keyring::Alice));
-		assert!(!Pair::verify(&Keyring::Alice.sign(b"I am Alice!"), b"I am Alice!", Keyring::Bob));
+		assert!(
+			Pair::verify(
+				&Keyring::Alice.sign(b"I am Alice!"),
+				b"I am Alice!",
+				&Keyring::Alice.public(),
+			)
+		);
+		assert!(
+			!Pair::verify(
+				&Keyring::Alice.sign(b"I am Alice!"),
+				b"I am Bob!",
+				&Keyring::Alice.public(),
+			)
+		);
+		assert!(
+			!Pair::verify(
+				&Keyring::Alice.sign(b"I am Alice!"),
+				b"I am Alice!",
+				&Keyring::Bob.public(),
+			)
+		);
 	}
 }

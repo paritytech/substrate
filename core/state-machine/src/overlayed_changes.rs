@@ -18,7 +18,7 @@
 
 #[cfg(test)] use std::iter::FromIterator;
 use std::collections::{HashMap, BTreeSet};
-use parity_codec::Decode;
+use codec::Decode;
 use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
 use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
 
@@ -220,6 +220,38 @@ impl OverlayedChanges {
 		}
 	}
 
+	pub(crate) fn clear_child_prefix(&mut self, storage_key: &[u8], prefix: &[u8]) {
+		let extrinsic_index = self.extrinsic_index();
+		let map_entry = self.prospective.children.entry(storage_key.to_vec()).or_default();
+
+		for (key, entry) in map_entry.1.iter_mut() {
+			if key.starts_with(prefix) {
+				*entry = None;
+
+				if let Some(extrinsic) = extrinsic_index {
+					map_entry.0.get_or_insert_with(Default::default)
+						.insert(extrinsic);
+				}
+			}
+		}
+
+		if let Some(child_committed) = self.committed.children.get(storage_key) {
+			// Then do the same with keys from commited changes.
+			// NOTE that we are making changes in the prospective change set.
+			for key in child_committed.1.keys() {
+				if key.starts_with(prefix) {
+					let entry = map_entry.1.entry(key.clone()).or_default();
+					*entry = None;
+
+					if let Some(extrinsic) = extrinsic_index {
+						map_entry.0.get_or_insert_with(Default::default)
+							.insert(extrinsic);
+					}
+				}
+			}
+		}
+	}
+
 	/// Discard prospective changes to state.
 	pub fn discard_prospective(&mut self) {
 		self.prospective.clear();
@@ -267,7 +299,7 @@ impl OverlayedChanges {
 	/// Inserts storage entry responsible for current extrinsic index.
 	#[cfg(test)]
 	pub(crate) fn set_extrinsic_index(&mut self, extrinsic_index: u32) {
-		use parity_codec::Encode;
+		use codec::Encode;
 		self.prospective.top.insert(EXTRINSIC_INDEX.to_vec(), OverlayedValue {
 			value: Some(extrinsic_index.encode()),
 			extrinsics: None,
@@ -284,7 +316,7 @@ impl OverlayedChanges {
 		match self.changes_trie_config.is_some() {
 			true => Some(
 				self.storage(EXTRINSIC_INDEX)
-					.and_then(|idx| idx.and_then(|idx| Decode::decode(&mut &*idx)))
+					.and_then(|idx| idx.and_then(|idx| Decode::decode(&mut &*idx).ok()))
 					.unwrap_or(NO_EXTRINSIC_INDEX)),
 			false => None,
 		}
@@ -371,6 +403,7 @@ mod tests {
 			&backend,
 			Some(&changes_trie_storage),
 			crate::NeverOffchainExt::new(),
+			None,
 		);
 		const ROOT: [u8; 32] = hex!("39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa");
 

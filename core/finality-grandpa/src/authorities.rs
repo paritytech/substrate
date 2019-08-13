@@ -19,7 +19,7 @@
 use fork_tree::ForkTree;
 use parking_lot::RwLock;
 use grandpa::voter_set::VoterSet;
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use log::{debug, info};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 use fg_primitives::AuthorityId;
@@ -403,7 +403,7 @@ pub(crate) struct PendingChange<H, N> {
 }
 
 impl<H: Decode, N: Decode> Decode for PendingChange<H, N> {
-	fn decode<I: parity_codec::Input>(value: &mut I) -> Option<Self> {
+	fn decode<I: codec::Input>(value: &mut I) -> Result<Self, codec::Error> {
 		let next_authorities = Decode::decode(value)?;
 		let delay = Decode::decode(value)?;
 		let canon_height = Decode::decode(value)?;
@@ -411,7 +411,7 @@ impl<H: Decode, N: Decode> Decode for PendingChange<H, N> {
 
 		let delay_kind = DelayKind::decode(value).unwrap_or(DelayKind::Finalized);
 
-		Some(PendingChange {
+		Ok(PendingChange {
 			next_authorities,
 			delay,
 			canon_height,
@@ -431,6 +431,7 @@ impl<H, N: Add<Output=N> + Clone> PendingChange<H, N> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use primitives::crypto::Public;
 
 	fn static_is_descendent_of<A>(value: bool)
 		-> impl Fn(&A, &A) -> Result<bool, std::io::Error>
@@ -520,8 +521,8 @@ mod tests {
 			pending_forced_changes: Vec::new(),
 		};
 
-		let set_a = vec![(AuthorityId::from_raw([1; 32]), 5)];
-		let set_b = vec![(AuthorityId::from_raw([2; 32]), 5)];
+		let set_a = vec![(AuthorityId::from_slice(&[1; 32]), 5)];
+		let set_b = vec![(AuthorityId::from_slice(&[2; 32]), 5)];
 
 		// two competing changes at the same height on different forks
 		let change_a = PendingChange {
@@ -585,8 +586,8 @@ mod tests {
 			pending_forced_changes: Vec::new(),
 		};
 
-		let set_a = vec![(AuthorityId::from_raw([1; 32]), 5)];
-		let set_c = vec![(AuthorityId::from_raw([2; 32]), 5)];
+		let set_a = vec![(AuthorityId::from_slice(&[1; 32]), 5)];
+		let set_c = vec![(AuthorityId::from_slice(&[2; 32]), 5)];
 
 		// two competing changes at the same height on different forks
 		let change_a = PendingChange {
@@ -651,7 +652,7 @@ mod tests {
 			pending_forced_changes: Vec::new(),
 		};
 
-		let set_a = vec![(AuthorityId::from_raw([1; 32]), 5)];
+		let set_a = vec![(AuthorityId::from_slice(&[1; 32]), 5)];
 
 		let change_a = PendingChange {
 			next_authorities: set_a.clone(),
@@ -717,8 +718,8 @@ mod tests {
 			pending_forced_changes: Vec::new(),
 		};
 
-		let set_a = vec![(AuthorityId::from_raw([1; 32]), 5)];
-		let set_b = vec![(AuthorityId::from_raw([2; 32]), 5)];
+		let set_a = vec![(AuthorityId::from_slice(&[1; 32]), 5)];
+		let set_b = vec![(AuthorityId::from_slice(&[2; 32]), 5)];
 
 		let change_a = PendingChange {
 			next_authorities: set_a.clone(),
