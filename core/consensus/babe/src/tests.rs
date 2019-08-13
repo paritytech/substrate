@@ -325,22 +325,32 @@ fn can_author_block() {
 		.expect("Generates authority pair");
 
 	let mut i = 0;
-	let epoch = Epoch {
+	let mut epoch = Epoch {
 		start_slot: 0,
 		authorities: vec![(pair.public(), 1)],
 		randomness: [0; 32],
 		epoch_index: 1,
 		duration: 100,
+		secondary_slots: true,
 	};
 
 	let parent_weight = 0;
 
+	// with secondary slots enabled it should never be empty
+	match claim_slot(i, parent_weight, &epoch, (3, 10), &keystore) {
+		None => i += 1,
+		Some(s) => debug!(target: "babe", "Authored block {:?}", s.0),
+	}
+
+	// otherwise with only vrf-based primary slots we might need to try a couple
+	// of times.
+	epoch.secondary_slots = false;
 	loop {
-		match claim_slot(i, parent_weight, &epoch.clone(), (3, 10), &keystore) {
+		match claim_slot(i, parent_weight, &epoch, (3, 10), &keystore) {
 			None => i += 1,
 			Some(s) => {
 				debug!(target: "babe", "Authored block {:?}", s.0);
-				break
+				break;
 			}
 		}
 	}
