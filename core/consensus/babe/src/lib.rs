@@ -292,7 +292,9 @@ impl<H, B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<C, E, I
 			let signature = pair.sign(header_hash.as_ref());
 			let signature_digest_item = <DigestItemFor<B> as CompatibleDigestItem>::babe_seal(signature);
 
-			// FIXME: fork choice
+			// When we building our own blocks we always author on top of the
+			// current best according to `SelectChain`, therefore our own block
+			// proposal should always become the new best.
 			BlockImportParams {
 				origin: BlockOrigin::Own,
 				header,
@@ -301,7 +303,7 @@ impl<H, B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<C, E, I
 				body: Some(body),
 				finalized: false,
 				auxiliary: Vec::new(),
-				fork_choice: ForkChoiceStrategy::LongestChain,
+				fork_choice: ForkChoiceStrategy::Custom(true),
 			}
 		})
 	}
@@ -587,22 +589,23 @@ fn check_secondary_header<C, B: BlockT>(
 pub struct BabeLink(Arc<Mutex<(Option<Duration>, Vec<(Instant, u64)>)>>);
 
 /// A verifier for Babe blocks.
-pub struct BabeVerifier<C, T> {
-	api: Arc<C>,
+pub struct BabeVerifier<B, E, Block: BlockT, RA, PRA, T> {
+	client: Arc<Client<B, E, Block, RA>>,
+	api: Arc<PRA>,
 	inherent_data_providers: inherents::InherentDataProviders,
 	config: Config,
 	time_source: BabeLink,
 	transaction_pool: Option<Arc<T>>,
 }
 
-impl<C, T> BabeVerifier<C, T> {
-	fn check_inherents<B: BlockT>(
+impl<B, E, Block: BlockT, RA, PRA, T> BabeVerifier<B, E, Block, RA, PRA, T> {
+	fn check_inherents(
 		&self,
-		block: B,
-		block_id: BlockId<B>,
+		block: Block,
+		block_id: BlockId<Block>,
 		inherent_data: InherentData,
 	) -> Result<(), String>
-		where C: ProvideRuntimeApi, C::Api: BlockBuilderApi<B>
+		where PRA: ProvideRuntimeApi, PRA::Api: BlockBuilderApi<Block>
 	{
 		let inherent_res = self.api.runtime_api().check_inherents(
 			&block_id,
@@ -665,18 +668,22 @@ fn median_algorithm(
 	}
 }
 
-impl<B: BlockT, C, T> Verifier<B> for BabeVerifier<C, T> where
-	C: ProvideRuntimeApi + Send + Sync + AuxStore + ProvideCache<B>,
-	C::Api: BlockBuilderApi<B> + BabeApi<B>,
+impl<B, E, Block, RA, PRA, T> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA, T> where
+	Block: BlockT<Hash=H256>,
+	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+	RA: Send + Sync,
+	PRA: ProvideRuntimeApi + Send + Sync + AuxStore + ProvideCache<Block>,
+	PRA::Api: BlockBuilderApi<Block> + BabeApi<Block>,
 	T: Send + Sync + 'static,
 {
 	fn verify(
 		&mut self,
 		origin: BlockOrigin,
-		header: B::Header,
+		header: Block::Header,
 		justification: Option<Justification>,
-		mut body: Option<Vec<B::Extrinsic>>,
-	) -> Result<(BlockImportParams<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+		mut body: Option<Vec<Block::Extrinsic>>,
+	) -> Result<(BlockImportParams<Block>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
 		trace!(
 			target: "babe",
 			"Verifying origin: {:?} header: {:?} justification: {:?} body: {:?}",
@@ -703,7 +710,7 @@ impl<B: BlockT, C, T> Verifier<B> for BabeVerifier<C, T> where
 
 		// We add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of headers
-		let checked_header = check_header::<B, C, T>(
+		let checked_header = check_header::<Block, PRA, T>(
 			header,
 			hash,
 			slot_now + 1,
@@ -727,7 +734,7 @@ impl<B: BlockT, C, T> Verifier<B> for BabeVerifier<C, T> where
 				// actually matches the slot set in the seal.
 				if let Some(inner_body) = body.take() {
 					inherent_data.babe_replace_inherent_data(slot_number);
-					let block = B::new(pre_header.clone(), inner_body);
+					let block = Block::new(pre_header.clone(), inner_body);
 
 					self.check_inherents(
 						block.clone(),
@@ -745,7 +752,35 @@ impl<B: BlockT, C, T> Verifier<B> for BabeVerifier<C, T> where
 					"babe.checked_and_importing";
 					"pre_header" => ?pre_header);
 
-				// FIXME: fork choice
+				// The fork choice rule is that we pick the heaviest chain (i.e.
+				// more primary blocks), if there's a tie we go with the longest
+				// chain.
+				let new_best = {
+					let (last_best, last_best_number) = {
+						#[allow(deprecated)]
+						let info = self.client.backend().blockchain().info();
+						(info.best_hash, info.best_number)
+					};
+
+					let best_header = self.client.header(&BlockId::Hash(last_best))
+												 .map_err(|_| "Failed fetching best header")?
+					.expect("parent_header must be imported; qed");
+
+					let best_weight = find_pre_digest::<Block>(&best_header)
+						.map(|d| d.weight())
+						.unwrap_or(0);
+
+					let new_weight = babe_pre_digest.weight();
+
+					if new_weight > best_weight {
+						true
+					} else if new_weight == best_weight {
+						*pre_header.number() > last_best_number
+					} else {
+						false
+					}
+				};
+
 				let import_block = BlockImportParams {
 					origin,
 					header: pre_header,
@@ -754,7 +789,7 @@ impl<B: BlockT, C, T> Verifier<B> for BabeVerifier<C, T> where
 					finalized: false,
 					justification,
 					auxiliary: Vec::new(),
-					fork_choice: ForkChoiceStrategy::LongestChain,
+					fork_choice: ForkChoiceStrategy::Custom(new_best),
 				};
 
 				Ok((import_block, Default::default()))
@@ -1287,6 +1322,7 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA, T>(
 	initialize_authorities_cache(&*api)?;
 
 	let verifier = BabeVerifier {
+		client: client.clone(),
 		api: api.clone(),
 		inherent_data_providers,
 		time_source: Default::default(),
