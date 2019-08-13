@@ -15,7 +15,8 @@ pub fn run<I, T, E>(args: I, exit: E, version: VersionInfo) -> error::Result<()>
 	E: IntoExit,
 {
 	match parse_and_prepare::<NoCustom, NoCustom, _>(&version, "substrate-node", args) {
-		ParseAndPrepare::Run(cmd) => cmd.run::<(), _, _, _, _>(load_spec, exit, |exit, _cli_args, _custom_args, config| {
+		ParseAndPrepare::Run(cmd) => cmd.run::<(), _, _, _, _>(load_spec, exit,
+		|exit, _cli_args, _custom_args, config| {
 			info!("{}", version.name);
 			info!("  version {}", config.full_version());
 			info!("  by {}, 2017, 2018", version.author);
@@ -37,10 +38,13 @@ pub fn run<I, T, E>(args: I, exit: E, version: VersionInfo) -> error::Result<()>
 			}.map_err(|e| format!("{:?}", e))
 		}),
 		ParseAndPrepare::BuildSpec(cmd) => cmd.run(load_spec),
-		ParseAndPrepare::ExportBlocks(cmd) => cmd.run_with_builder::<(), _, _, _, _, _>(|config| Ok(new_full_start!(config).0), load_spec, exit),
-		ParseAndPrepare::ImportBlocks(cmd) => cmd.run_with_builder::<(), _, _, _, _, _>(|config| Ok(new_full_start!(config).0), load_spec, exit),
+		ParseAndPrepare::ExportBlocks(cmd) => cmd.run_with_builder::<(), _, _, _, _, _>(|config|
+			Ok(new_full_start!(config).0), load_spec, exit),
+		ParseAndPrepare::ImportBlocks(cmd) => cmd.run_with_builder::<(), _, _, _, _, _>(|config|
+			Ok(new_full_start!(config).0), load_spec, exit),
 		ParseAndPrepare::PurgeChain(cmd) => cmd.run(load_spec),
-		ParseAndPrepare::RevertChain(cmd) => cmd.run_with_builder::<(), _, _, _, _>(|config| Ok(new_full_start!(config).0), load_spec),
+		ParseAndPrepare::RevertChain(cmd) => cmd.run_with_builder::<(), _, _, _, _>(|config|
+			Ok(new_full_start!(config).0), load_spec),
 		ParseAndPrepare::CustomCommand(_) => Ok(())
 	}?;
 
@@ -97,7 +101,8 @@ impl IntoExit for Exit {
 
 		let exit_send_cell = RefCell::new(Some(exit_send));
 		ctrlc::set_handler(move || {
-			if let Some(exit_send) = exit_send_cell.try_borrow_mut().expect("signal handler not reentrant; qed").take() {
+			let exit_send = exit_send_cell.try_borrow_mut().expect("signal handler not reentrant; qed").take();
+			if let Some(exit_send) = exit_send {
 				exit_send.send(()).expect("Error sending exit notification");
 			}
 		}).expect("Error setting Ctrl-C handler");

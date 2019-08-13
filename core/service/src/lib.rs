@@ -242,8 +242,9 @@ macro_rules! new_impl {
 				.map(|v| Ok::<_, ()>(v)).compat()
 				.for_each(move |notification| {
 					let number = *notification.header.number();
+					let txpool = txpool.upgrade();
 
-					if let (Some(txpool), Some(client)) = (txpool.upgrade(), wclient.upgrade()) {
+					if let (Some(ref txpool), Some(ref client)) = (&txpool, wclient.upgrade()) {
 						$maintain_transaction_pool(
 							&BlockId::hash(notification.hash),
 							&*client,
@@ -251,7 +252,8 @@ macro_rules! new_impl {
 						).map_err(|e| warn!("Pool error processing new block: {:?}", e))?;
 					}
 
-					if let (Some(txpool), Some(offchain)) = (txpool.upgrade(), offchain.as_ref().and_then(|o| o.upgrade())) {
+					let offchain = offchain.as_ref().and_then(|o| o.upgrade());
+					if let (Some(txpool), Some(offchain)) = (txpool, offchain) {
 						let future = $offchain_workers(
 							&number,
 							&offchain,
@@ -525,7 +527,8 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 }
 
 impl<TCfg, TBl, TBackend, TExec, TRtApi, TSc, TNetSpec, TExPoolApi, TOc> AbstractService for
-	NewService<TCfg, TBl, Client<TBackend, TExec, TBl, TRtApi>, TSc, NetworkStatus<TBl>, NetworkService<TBl, TNetSpec, H256>, TransactionPool<TExPoolApi>, TOc>
+	NewService<TCfg, TBl, Client<TBackend, TExec, TBl, TRtApi>, TSc, NetworkStatus<TBl>,
+		NetworkService<TBl, TNetSpec, H256>, TransactionPool<TExPoolApi>, TOc>
 where TCfg: 'static + Send,
 	TBl: BlockT<Hash = H256>,
 	TBackend: 'static + client::backend::Backend<TBl, Blake2Hasher>,

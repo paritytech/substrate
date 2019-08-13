@@ -298,10 +298,12 @@ pub fn connectivity<G, Fb, F, Lb, L>(spec: ChainSpec<G>, full_builder: Fb, light
 			info!("Checking star topology");
 			let first_address = network.full_nodes[0].2.clone();
 			for (_, service, _) in network.full_nodes.iter().skip(1) {
-				service.get().network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
+				service.get().network().add_reserved_peer(first_address.to_string())
+					.expect("Error adding reserved peer");
 			}
 			for (_, service, _) in network.light_nodes.iter() {
-				service.get().network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
+				service.get().network().add_reserved_peer(first_address.to_string())
+					.expect("Error adding reserved peer");
 			}
 			network.run_until_all_full(
 				|_index, service| service.get().network().num_connected() == NUM_FULL_NODES - 1
@@ -334,13 +336,15 @@ pub fn connectivity<G, Fb, F, Lb, L>(spec: ChainSpec<G>, full_builder: Fb, light
 			for i in 0..max_nodes {
 				if i != 0 {
 					if let Some((_, service, node_id)) = network.full_nodes.get(i) {
-						service.get().network().add_reserved_peer(address.to_string()).expect("Error adding reserved peer");
+						service.get().network().add_reserved_peer(address.to_string())
+							.expect("Error adding reserved peer");
 						address = node_id.clone();
 					}
 				}
 
 				if let Some((_, service, node_id)) = network.light_nodes.get(i) {
-					service.get().network().add_reserved_peer(address.to_string()).expect("Error adding reserved peer");
+					service.get().network().add_reserved_peer(address.to_string())
+						.expect("Error adding reserved peer");
 					address = node_id.clone();
 				}
 			}
@@ -354,7 +358,13 @@ pub fn connectivity<G, Fb, F, Lb, L>(spec: ChainSpec<G>, full_builder: Fb, light
 	}
 }
 
-pub fn sync<G, Fb, F, Lb, L, B, E>(spec: ChainSpec<G>, full_builder: Fb, light_builder: Lb, mut block_factory: B, mut extrinsic_factory: E) where
+pub fn sync<G, Fb, F, Lb, L, B, E>(
+	spec: ChainSpec<G>,
+	full_builder: Fb,
+	light_builder: Lb,
+	mut block_factory: B,
+	mut extrinsic_factory: E
+) where
 	Fb: Fn(Configuration<(), G>) -> Result<F, Error>,
 	F: AbstractService,
 	Lb: Fn(Configuration<(), G>) -> Result<L, Error>,
@@ -416,7 +426,12 @@ pub fn sync<G, Fb, F, Lb, L, B, E>(spec: ChainSpec<G>, full_builder: Fb, light_b
 	);
 }
 
-pub fn consensus<G, Fb, F, Lb, L>(spec: ChainSpec<G>, full_builder: Fb, light_builder: Lb, authorities: impl IntoIterator<Item = String>) where
+pub fn consensus<G, Fb, F, Lb, L>(
+	spec: ChainSpec<G>,
+	full_builder: Fb,
+	light_builder: Lb,
+	authorities: impl IntoIterator<Item = String>
+) where
 	Fb: Fn(Configuration<(), G>) -> Result<F, Error>,
 	F: AbstractService,
 	Lb: Fn(Configuration<(), G>) -> Result<L, Error>,

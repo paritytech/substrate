@@ -263,10 +263,17 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 	/// Defines which import queue to use.
 	pub fn with_import_queue<UImpQu>(
 		mut self,
-		builder: impl FnOnce(&mut Configuration<TCfg, TGen>, Arc<TCl>, Option<TSc>, Arc<TExPool>) -> Result<UImpQu, Error>
-	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, UImpQu, TFprb, TFpp, TNetP, TExPool, TRpc>, Error>
+		builder: impl FnOnce(&mut Configuration<TCfg, TGen>, Arc<TCl>, Option<TSc>, Arc<TExPool>)
+			-> Result<UImpQu, Error>
+	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, UImpQu, TFprb, TFpp,
+			TNetP, TExPool, TRpc>, Error>
 	where TSc: Clone {
-		let import_queue = builder(&mut self.config, self.client.clone(), self.select_chain.clone(), self.transaction_pool.clone())?;
+		let import_queue = builder(
+			&mut self.config,
+			self.client.clone(),
+			self.select_chain.clone(),
+			self.transaction_pool.clone()
+		)?;
 
 		Ok(ServiceBuilder {
 			config: self.config,
@@ -373,7 +380,12 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			-> Result<(UImpQu, Option<UFprb>), Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, UImpQu, UFprb, TFpp, TNetP, TExPool, TRpc>, Error>
 	where TSc: Clone {
-		let (import_queue, fprb) = builder(&mut self.config, self.client.clone(), self.select_chain.clone(), self.transaction_pool.clone())?;
+		let (import_queue, fprb) = builder(
+			&mut self.config,
+			self.client.clone(),
+			self.select_chain.clone(),
+			self.transaction_pool.clone()
+		)?;
 
 		Ok(ServiceBuilder {
 			config: self.config,
@@ -488,8 +500,9 @@ pub trait ServiceBuilderRevert {
 	) -> Result<(), Error>;
 }
 
-impl<TBl, TRtApi, TCfg, TGen, TBackend, TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc> ServiceBuilderImport for
-	ServiceBuilder<TBl, TRtApi, TCfg, TGen, Client<TBackend, TExec, TBl, TRtApi>, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc>
+impl<TBl, TRtApi, TCfg, TGen, TBackend, TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc>
+	ServiceBuilderImport for ServiceBuilder<TBl, TRtApi, TCfg, TGen, Client<TBackend, TExec, TBl, TRtApi>,
+		TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc>
 where
 	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 	TBackend: 'static + client::backend::Backend<TBl, Blake2Hasher> + Send,
@@ -509,8 +522,9 @@ where
 	}
 }
 
-impl<TBl, TRtApi, TCfg, TGen, TBackend, TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc> ServiceBuilderExport for
-	ServiceBuilder<TBl, TRtApi, TCfg, TGen, Client<TBackend, TExec, TBl, TRtApi>, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc>
+impl<TBl, TRtApi, TCfg, TGen, TBackend, TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc>
+	ServiceBuilderExport for ServiceBuilder<TBl, TRtApi, TCfg, TGen, Client<TBackend, TExec, TBl, TRtApi>,
+		TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc>
 where
 	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 	TBackend: 'static + client::backend::Backend<TBl, Blake2Hasher> + Send,
@@ -531,8 +545,9 @@ where
 	}
 }
 
-impl<TBl, TRtApi, TCfg, TGen, TBackend, TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc> ServiceBuilderRevert for
-	ServiceBuilder<TBl, TRtApi, TCfg, TGen, Client<TBackend, TExec, TBl, TRtApi>, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc>
+impl<TBl, TRtApi, TCfg, TGen, TBackend, TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc>
+	ServiceBuilderRevert for ServiceBuilder<TBl, TRtApi, TCfg, TGen, Client<TBackend, TExec, TBl, TRtApi>,
+		TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc>
 where
 	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 	TBackend: 'static + client::backend::Backend<TBl, Blake2Hasher> + Send,
@@ -567,7 +582,10 @@ ServiceBuilder<
 > where
 	Client<TBackend, TExec, TBl, TRtApi>: ProvideRuntimeApi,
 	<Client<TBackend, TExec, TBl, TRtApi> as ProvideRuntimeApi>::Api:
-		runtime_api::Metadata<TBl> + offchain::OffchainWorkerApi<TBl> + runtime_api::TaggedTransactionQueue<TBl> + session::SessionKeys<TBl>,
+		runtime_api::Metadata<TBl> +
+		offchain::OffchainWorkerApi<TBl> +
+		runtime_api::TaggedTransactionQueue<TBl> +
+		session::SessionKeys<TBl>,
 	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 	TRtApi: 'static + Send + Sync,
 	TCfg: Default,
@@ -661,7 +679,8 @@ where
 	Block: BlockT<Hash = <Blake2Hasher as primitives::Hasher>::Out>,
 	Backend: client::backend::Backend<Block, Blake2Hasher> + 'static,
 	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi,
-	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api: runtime_api::Metadata<Block> + session::SessionKeys<Block>,
+	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api:
+		runtime_api::Metadata<Block> + session::SessionKeys<Block>,
 	Api: Send + Sync + 'static,
 	Executor: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	PoolApi: txpool::ChainApi<Hash = Block::Hash, Block = Block> + 'static {

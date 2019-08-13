@@ -159,7 +159,8 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 	E: IntoExit,
 {
 	match parse_and_prepare::<CustomSubcommands, NoCustom, _>(&version, "substrate-node", args) {
-		ParseAndPrepare::Run(cmd) => cmd.run::<(), _, _, _, _>(load_spec, exit, |exit, _cli_args, _custom_args, config| {
+		ParseAndPrepare::Run(cmd) => cmd.run::<(), _, _, _, _>(load_spec, exit,
+		|exit, _cli_args, _custom_args, config| {
 			info!("{}", version.name);
 			info!("  version {}", config.full_version());
 			info!("  by Parity Technologies, 2017-2019");
@@ -182,10 +183,13 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 			}.map_err(|e| format!("{:?}", e))
 		}),
 		ParseAndPrepare::BuildSpec(cmd) => cmd.run(load_spec),
-		ParseAndPrepare::ExportBlocks(cmd) => cmd.run_with_builder::<(), _, _, _, _, _>(|config| Ok(new_full_start!(config).0), load_spec, exit),
-		ParseAndPrepare::ImportBlocks(cmd) => cmd.run_with_builder::<(), _, _, _, _, _>(|config| Ok(new_full_start!(config).0), load_spec, exit),
+		ParseAndPrepare::ExportBlocks(cmd) => cmd.run_with_builder::<(), _, _, _, _, _>(|config|
+			Ok(new_full_start!(config).0), load_spec, exit),
+		ParseAndPrepare::ImportBlocks(cmd) => cmd.run_with_builder::<(), _, _, _, _, _>(|config|
+			Ok(new_full_start!(config).0), load_spec, exit),
 		ParseAndPrepare::PurgeChain(cmd) => cmd.run(load_spec),
-		ParseAndPrepare::RevertChain(cmd) => cmd.run_with_builder::<(), _, _, _, _>(|config| Ok(new_full_start!(config).0), load_spec),
+		ParseAndPrepare::RevertChain(cmd) => cmd.run_with_builder::<(), _, _, _, _>(|config|
+			Ok(new_full_start!(config).0), load_spec),
 		ParseAndPrepare::CustomCommand(CustomSubcommands::Factory(cli_args)) => {
 			let mut config = cli::create_config_with_db_path::<(), _, _>(
 				load_spec,
