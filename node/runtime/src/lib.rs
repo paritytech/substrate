@@ -148,6 +148,7 @@ impl babe::Trait for Runtime {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
 	type KeyOwnerSystem = Historical;
+	type ReportEquivocation = Offences;
 }
 
 impl indices::Trait for Runtime {

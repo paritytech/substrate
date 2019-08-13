@@ -41,7 +41,7 @@ use sr_primitives::traits::{
 };
 use sr_staking_primitives::{
 	SessionIndex,
-	offence::{Offence, TimeSlot, Kind},
+	offence::{ReportOffence, Offence, TimeSlot, Kind},
 };
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
@@ -49,7 +49,7 @@ use codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-use session::historical::Proof;
+use session::historical::{Proof, IdentificationTuple};
 use system::ensure_signed;
 use consensus_common_primitives::AuthorshipEquivocationProof;
 use babe_primitives::{
@@ -131,10 +131,19 @@ impl ProvideInherentData for InherentDataProvider {
 	}
 }
 
-pub trait Trait: timestamp::Trait {
+pub trait Trait: timestamp::Trait + session::historical::Trait {
 	type EpochDuration: Get<u64>;
 	type ExpectedBlockTime: Get<Self::Moment>;
-	type KeyOwnerSystem: KeyOwnerProofSystem<(KeyTypeId, Vec<u8>), Proof=Proof>;
+	type KeyOwnerSystem: KeyOwnerProofSystem<
+		(KeyTypeId, Vec<u8>),
+		Proof=Proof,
+		IdentificationTuple=IdentificationTuple<Self>
+	>;
+	type ReportEquivocation: ReportOffence<
+		Self::AccountId,
+		IdentificationTuple<Self>,
+		BabeEquivocationOffence<IdentificationTuple<Self>>,
+	>;
 }
 
 /// The length of the BABE randomness
@@ -300,19 +309,25 @@ decl_module! {
 		}
 
 		fn report_equivocation(
-			_origin,
-			_equivocation: BabeEquivocationProof<T::Header>,
-			_proof: Proof,
+			origin,
+			equivocation: BabeEquivocationProof<T::Header>,
+			proof: Proof,
 			_signature: AuthoritySignature
 		) {
-			// let _who = ensure_signed(origin)?;
-			// let to_punish = <T as Trait>::KeyOwnerSystem::check_proof(
-			// 	(key_types::SR25519, equivocation.identity().encode()),
-			// 	proof.clone(),
-			// );
-			// if to_punish.is_some() {
-			// 	// TODO: Slash.
-			// }
+			let who = ensure_signed(origin)?;
+			let to_punish = <T as Trait>::KeyOwnerSystem::check_proof(
+				(key_types::BABE, equivocation.identity().encode()),
+				proof.clone(),
+			);
+			if let Some(to_punish) = to_punish {
+				let offence = BabeEquivocationOffence {
+					slot: equivocation.slot(),
+					session_index: equivocation.session_index().clone(),
+					validators_count: 0,
+					offender: to_punish,
+				};
+				T::ReportEquivocation::report_offence(Some(who), offence);
+			}
 		}
 	}
 }
@@ -359,7 +374,7 @@ impl<T: Trait> session::ShouldEndSession<T::BlockNumber> for Module<T> {
 ///
 /// When a validator released two or more blocks at the same slot.
 #[allow(dead_code)]
-struct BabeEquivocationOffence<FullIdentification> {
+pub struct BabeEquivocationOffence<FullIdentification> {
 	/// A babe slot number in which this incident happened.
 	slot: u64,
 	/// The session index in which the incident happened.
