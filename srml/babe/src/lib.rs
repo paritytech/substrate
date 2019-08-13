@@ -189,34 +189,8 @@ decl_module! {
 		/// the probability of a slot being empty).
 		const ExpectedBlockTime: T::Moment = T::ExpectedBlockTime::get();
 
-		/// Initialization
-		fn on_initialize() {
-			for digest in Self::get_inherent_digests()
-				.logs
-				.iter()
-				.filter_map(|s| s.as_pre_runtime())
-				.filter_map(|(id, mut data)| if id == BABE_ENGINE_ID {
-					RawBabePreDigest::decode(&mut data).ok()
-				} else {
-					None
-				})
-			{
-				if EpochStartSlot::get() == 0 {
-					EpochStartSlot::put(digest.slot_number());
-				}
-
-				CurrentSlot::put(digest.slot_number());
-
-				if let RawBabePreDigest::Primary { vrf_output, .. } = digest {
-					Self::deposit_vrf_output(&vrf_output);
-				}
-
-				return;
-			}
-		}
-
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
-		fn trigger_secondary_slots(origin, change: Option<bool>) {
+		fn set_pending_secondary_slots_change(origin, change: Option<bool>) {
 			ensure_root(origin)?;
 			match change {
 				Some(change) =>	PendingSecondarySlotsChange::put(change),
@@ -267,6 +241,32 @@ impl<T: Trait> IsMember<AuthorityId> for Module<T> {
 
 impl<T: Trait> session::ShouldEndSession<T::BlockNumber> for Module<T> {
 	fn should_end_session(_: T::BlockNumber) -> bool {
+		// NOTE: we run this code here instead of `on_initialize` in order to
+		// avoid any evaluation order issues with the session module.
+		// additionality the initialization only relates to "before extrinsics"
+		// are added, and the changes to the internal state we do here only
+		// relate to the session module (epoch data).
+		if let Some(digest) = Self::get_inherent_digests()
+			.logs
+			.iter()
+			.filter_map(|s| s.as_pre_runtime())
+			.find_map(|(id, mut data)| if id == BABE_ENGINE_ID {
+				RawBabePreDigest::decode(&mut data).ok()
+			} else {
+				None
+			})
+		{
+			if EpochStartSlot::get() == 0 {
+				EpochStartSlot::put(digest.slot_number());
+			}
+
+			CurrentSlot::put(digest.slot_number());
+
+			if let RawBabePreDigest::Primary { vrf_output, .. } = digest {
+				Self::deposit_vrf_output(&vrf_output);
+			}
+		}
+
 		let diff = CurrentSlot::get().saturating_sub(EpochStartSlot::get());
 		diff >= T::EpochDuration::get()
 	}
