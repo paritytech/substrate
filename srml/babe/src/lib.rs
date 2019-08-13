@@ -372,6 +372,7 @@ impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Mod
 			duration: T::EpochDuration::get(),
 			authorities: next_authorities,
 			randomness: next_randomness,
+			secondary_slots: true,
 		};
 
 		Self::deposit_consensus(ConsensusLog::NextEpochData(next))

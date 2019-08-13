@@ -419,6 +419,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 	client: &C,
 	randomness: [u8; 32],
 	epoch_index: u64,
+	secondary_slots: bool,
 	c: (u64, u64),
 	_transaction_pool: Option<&T>,
 ) -> Result<CheckedHeader<B::Header, (DigestItemFor<B>, DigestItemFor<B>)>, String> where
@@ -472,7 +473,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 				c,
 			)?;
 		},
-		BabePreDigest::Secondary { authority_index, slot_number, weight } => {
+		BabePreDigest::Secondary { authority_index, slot_number, weight } if secondary_slots => {
 			debug!(target: "babe", "Verifying Secondary block");
 
 			let digest = (*authority_index, *slot_number, *weight);
@@ -486,6 +487,9 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 				randomness,
 			)?;
 		},
+		_ => {
+			return Err(babe_err!("Secondary slot assignments are disabled for the current epoch."));
+		}
 	}
 
 	let author = &authorities[pre_digest.authority_index() as usize].0;
@@ -716,7 +720,7 @@ impl<B, E, Block, RA, PRA, T> Verifier<Block> for BabeVerifier<B, E, Block, RA, 
 
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
-		let Epoch { authorities, randomness, epoch_index, .. } =
+		let Epoch { authorities, randomness, epoch_index, secondary_slots, .. } =
 			epoch(self.api.as_ref(), &BlockId::Hash(parent_hash))
 				.map_err(|e| format!("Could not fetch epoch at {:?}: {:?}", parent_hash, e))?;
 
@@ -734,6 +738,7 @@ impl<B, E, Block, RA, PRA, T> Verifier<Block> for BabeVerifier<B, E, Block, RA, 
 			&self.api,
 			randomness,
 			epoch_index,
+			secondary_slots,
 			self.config.c(),
 			self.transaction_pool.as_ref().map(|x| &**x),
 		)?;
@@ -922,13 +927,17 @@ fn claim_slot(
 ) -> Option<(BabePreDigest, AuthorityPair)> {
 	claim_primary_slot(slot_number, parent_weight, epoch, c, keystore)
 		.or_else(|| {
-			claim_secondary_slot(
-				slot_number,
-				parent_weight,
-				&epoch.authorities,
-				keystore,
-				epoch.randomness,
-			)
+			if epoch.secondary_slots {
+				claim_secondary_slot(
+					slot_number,
+					parent_weight,
+					&epoch.authorities,
+					keystore,
+					epoch.randomness,
+				)
+			} else {
+				None
+			}
 		})
 }
 

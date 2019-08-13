@@ -94,7 +94,7 @@ pub struct TestVerifier {
 		TestBlock,
 		test_client::runtime::RuntimeApi,
 		PeersFullClient,
-		()
+		(),
 	>,
 	mutator: Mutator,
 }

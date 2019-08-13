@@ -87,6 +87,8 @@ pub struct Epoch {
 	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 	/// Randomness for this epoch
 	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+	/// Whether secondary slot assignments should be used during the epoch.
+	pub secondary_slots: bool,
 }
 
 /// An consensus log item for BABE.
