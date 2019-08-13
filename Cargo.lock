@@ -4544,6 +4544,7 @@ dependencies = [
  "substrate-consensus-common 2.0.0",
  "substrate-inherents 2.0.0",
  "substrate-primitives 2.0.0",
+ "substrate-telemetry 2.0.0",
  "substrate-test-runtime-client 2.0.0",
 ]
 
