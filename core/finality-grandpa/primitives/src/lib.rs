@@ -23,20 +23,25 @@ extern crate alloc;
 
 #[cfg(feature = "std")]
 use serde::Serialize;
-use parity_codec::{Encode, Decode, Codec};
+use codec::{Encode, Decode, Codec};
 use sr_primitives::{ConsensusEngineId, traits::{DigestFor, NumberFor}};
 use client::decl_runtime_apis;
 use rstd::vec::Vec;
 
+mod app {
+	use app_crypto::{app_crypto, key_types::GRANDPA, ed25519};
+	app_crypto!(ed25519, GRANDPA);
+}
+
 /// The grandpa crypto scheme defined via the keypair type.
 #[cfg(feature = "std")]
-pub type AuthorityPair = substrate_primitives::ed25519::Pair;
+pub type AuthorityPair = app::Pair;
 
 /// Identity of a Grandpa authority.
-pub type AuthorityId = substrate_primitives::ed25519::Public;
+pub type AuthorityId = app::Public;
 
 /// Signature for a Grandpa authority.
-pub type AuthoritySignature = substrate_primitives::ed25519::Signature;
+pub type AuthoritySignature = app::Signature;
 
 /// The `ConsensusEngineId` of GRANDPA.
 pub const GRANDPA_ENGINE_ID: ConsensusEngineId = *b"FRNK";
@@ -93,6 +98,14 @@ pub enum ConsensusLog<N: Codec> {
 	/// Note that the authority with given index is disabled until the next change.
 	#[codec(index = "3")]
 	OnDisabled(AuthorityIndex),
+	/// A signal to pause the current authority set after the given delay.
+	/// After finalizing the block at _delay_ the authorities should stop voting.
+	#[codec(index = "4")]
+	Pause(N),
+	/// A signal to resume the current authority set after the given delay.
+	/// After authoring the block at _delay_ the authorities should resume voting.
+	#[codec(index = "5")]
+	Resume(N),
 }
 
 impl<N: Codec> ConsensusLog<N> {
@@ -100,7 +113,7 @@ impl<N: Codec> ConsensusLog<N> {
 	pub fn try_into_change(self) -> Option<ScheduledChange<N>> {
 		match self {
 			ConsensusLog::ScheduledChange(change) => Some(change),
-			ConsensusLog::ForcedChange(_, _) | ConsensusLog::OnDisabled(_) => None,
+			_ => None,
 		}
 	}
 
@@ -108,7 +121,23 @@ impl<N: Codec> ConsensusLog<N> {
 	pub fn try_into_forced_change(self) -> Option<(N, ScheduledChange<N>)> {
 		match self {
 			ConsensusLog::ForcedChange(median, change) => Some((median, change)),
-			ConsensusLog::ScheduledChange(_) | ConsensusLog::OnDisabled(_) => None,
+			_ => None,
+		}
+	}
+
+	/// Try to cast the log entry as a contained pause signal.
+	pub fn try_into_pause(self) -> Option<N> {
+		match self {
+			ConsensusLog::Pause(delay) => Some(delay),
+			_ => None,
+		}
+	}
+
+	/// Try to cast the log entry as a contained resume signal.
+	pub fn try_into_resume(self) -> Option<N> {
+		match self {
+			ConsensusLog::Resume(delay) => Some(delay),
+			_ => None,
 		}
 	}
 }

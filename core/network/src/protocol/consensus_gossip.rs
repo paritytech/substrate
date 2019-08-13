@@ -25,8 +25,8 @@ use log::{trace, debug};
 use futures::sync::mpsc;
 use lru_cache::LruCache;
 use libp2p::PeerId;
-use runtime_primitives::traits::{Block as BlockT, Hash, HashFor};
-use runtime_primitives::ConsensusEngineId;
+use sr_primitives::traits::{Block as BlockT, Hash, HashFor};
+use sr_primitives::ConsensusEngineId;
 pub use crate::message::generic::{Message, ConsensusMessage};
 use crate::protocol::Context;
 use crate::config::Roles;
@@ -554,9 +554,31 @@ impl<B: BlockT> ConsensusGossip<B> {
 	}
 }
 
+/// A gossip message validator that discards all messages.
+pub struct DiscardAll;
+
+impl<B: BlockT> Validator<B> for DiscardAll {
+	fn validate(
+		&self,
+		_context: &mut dyn ValidatorContext<B>,
+		_sender: &PeerId,
+		_data: &[u8],
+	) -> ValidationResult<B::Hash> {
+		ValidationResult::Discard
+	}
+
+	fn message_expired<'a>(&'a self) -> Box<dyn FnMut(B::Hash, &[u8]) -> bool + 'a> {
+		Box::new(move |_topic, _data| true)
+	}
+
+	fn message_allowed<'a>(&'a self) -> Box<dyn FnMut(&PeerId, MessageIntent, &B::Hash, &[u8]) -> bool + 'a> {
+		Box::new(move |_who, _intent, _topic, _data| false)
+	}
+}
+
 #[cfg(test)]
 mod tests {
-	use runtime_primitives::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
+	use sr_primitives::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
 	use futures::Stream;
 
 	use super::*;

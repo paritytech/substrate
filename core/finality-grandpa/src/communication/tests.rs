@@ -23,8 +23,8 @@ use network::test::{Block, Hash};
 use network_gossip::Validator;
 use tokio::runtime::current_thread;
 use std::sync::Arc;
-use keyring::AuthorityKeyring;
-use parity_codec::Encode;
+use keyring::Ed25519Keyring;
+use codec::Encode;
 
 use crate::environment::SharedVoterSetState;
 use super::gossip::{self, GossipValidator};
@@ -133,7 +133,7 @@ fn config() -> crate::Config {
 	crate::Config {
 		gossip_duration: std::time::Duration::from_millis(10),
 		justification_period: 256,
-		local_key: None,
+		keystore: None,
 		name: None,
 	}
 }
@@ -141,26 +141,18 @@ fn config() -> crate::Config {
 // dummy voter set state
 fn voter_set_state() -> SharedVoterSetState<Block> {
 	use crate::authorities::AuthoritySet;
-	use crate::environment::{CompletedRound, CompletedRounds, HasVoted, VoterSetState};
+	use crate::environment::VoterSetState;
 	use grandpa::round::State as RoundState;
-	use substrate_primitives::H256;
+	use primitives::H256;
 
 	let state = RoundState::genesis((H256::zero(), 0));
 	let base = state.prevote_ghost.unwrap();
 	let voters = AuthoritySet::genesis(Vec::new());
-	let set_state = VoterSetState::Live {
-		completed_rounds: CompletedRounds::new(
-			CompletedRound {
-				state,
-				number: 0,
-				votes: Vec::new(),
-				base,
-			},
-			0,
-			&voters,
-		),
-		current_round: HasVoted::No,
-	};
+	let set_state = VoterSetState::live(
+		0,
+		&voters,
+		base,
+	);
 
 	set_state.into()
 }
@@ -202,9 +194,9 @@ fn make_test_network() -> (
 	)
 }
 
-fn make_ids(keys: &[AuthorityKeyring]) -> Vec<(AuthorityId, u64)> {
+fn make_ids(keys: &[Ed25519Keyring]) -> Vec<(AuthorityId, u64)> {
 	keys.iter()
-		.map(|key| AuthorityId(key.to_raw_public()))
+		.map(|key| key.clone().public().into())
 		.map(|id| (id, 1))
 		.collect()
 }
@@ -220,7 +212,7 @@ impl network_gossip::ValidatorContext<Block> for NoopContext {
 
 #[test]
 fn good_commit_leads_to_relay() {
-	let private = [AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
+	let private = [Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let public = make_ids(&private[..]);
 	let voter_set = Arc::new(public.iter().cloned().collect::<VoterSet<AuthorityId>>());
 
@@ -242,7 +234,7 @@ fn good_commit_leads_to_relay() {
 		for (i, key) in private.iter().enumerate() {
 			precommits.push(precommit.clone());
 
-			let signature = key.sign(&payload[..]);
+			let signature = fg_primitives::AuthoritySignature::from(key.sign(&payload[..]));
 			auth_data.push((signature, public[i].0.clone()))
 		}
 
@@ -335,7 +327,7 @@ fn good_commit_leads_to_relay() {
 
 #[test]
 fn bad_commit_leads_to_report() {
-	let private = [AuthorityKeyring::Alice, AuthorityKeyring::Bob, AuthorityKeyring::Charlie];
+	let private = [Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let public = make_ids(&private[..]);
 	let voter_set = Arc::new(public.iter().cloned().collect::<VoterSet<AuthorityId>>());
 
@@ -357,7 +349,7 @@ fn bad_commit_leads_to_report() {
 		for (i, key) in private.iter().enumerate() {
 			precommits.push(precommit.clone());
 
-			let signature = key.sign(&payload[..]);
+			let signature = fg_primitives::AuthoritySignature::from(key.sign(&payload[..]));
 			auth_data.push((signature, public[i].0.clone()))
 		}
 

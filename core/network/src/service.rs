@@ -25,26 +25,29 @@
 //! The methods of the [`NetworkService`] are implemented by sending a message over a channel,
 //! which is then processed by [`NetworkWorker::poll`].
 
-use std::{collections::HashMap, fs, marker::PhantomData, io, path::Path};
+use std::{collections::{HashMap, HashSet}, fs, marker::PhantomData, io, path::Path};
 use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
 
 use consensus::import_queue::{ImportQueue, Link};
 use consensus::import_queue::{BlockImportResult, BlockImportError};
 use futures::{prelude::*, sync::mpsc};
+use futures03::TryFutureExt as _;
 use log::{warn, error, info};
-use libp2p::core::{swarm::NetworkBehaviour, transport::boxed::Boxed, muxing::StreamMuxerBox};
 use libp2p::{PeerId, Multiaddr, multihash::Multihash};
+use libp2p::core::{transport::boxed::Boxed, muxing::StreamMuxerBox};
+use libp2p::swarm::NetworkBehaviour;
+use parking_lot::Mutex;
 use peerset::PeersetHandle;
-use runtime_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
+use sr_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
 
-use crate::{behaviour::{Behaviour, BehaviourOut}, config::parse_str_addr};
+use crate::{behaviour::{Behaviour, BehaviourOut}, config::{parse_str_addr, parse_addr}};
 use crate::{NetworkState, NetworkStateNotConnectedPeer, NetworkStatePeer};
 use crate::{transport, config::NodeKeyConfig, config::NonReservedPeerMode};
 use crate::config::{Params, TransportConfig};
 use crate::error::Error;
 use crate::protocol::{self, Protocol, Context, CustomMessageOutcome, PeerInfo};
 use crate::protocol::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
-use crate::protocol::{event::Event, on_demand::{AlwaysBadChecker, RequestData}};
+use crate::protocol::{event::Event, light_dispatch::{AlwaysBadChecker, RequestData}};
 use crate::protocol::specialization::NetworkSpecialization;
 use crate::protocol::sync::SyncState;
 
@@ -86,6 +89,8 @@ impl ReportHandle {
 pub struct NetworkService<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> {
 	/// Number of peers we're connected to.
 	num_connected: Arc<AtomicUsize>,
+	/// The local external addresses.
+	external_addresses: Arc<Mutex<Vec<Multiaddr>>>,
 	/// Are we actively catching up with the chain?
 	is_major_syncing: Arc<AtomicBool>,
 	/// Local copy of the `PeerId` of the local node.
@@ -215,8 +220,11 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			Swarm::<B, S, H>::add_external_address(&mut swarm, addr.clone());
 		}
 
+		let external_addresses = Arc::new(Mutex::new(Vec::new()));
+
 		let service = Arc::new(NetworkService {
 			bandwidth,
+			external_addresses: external_addresses.clone(),
 			num_connected: num_connected.clone(),
 			is_major_syncing: is_major_syncing.clone(),
 			peerset: peerset_handle,
@@ -226,13 +234,14 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 		});
 
 		Ok(NetworkWorker {
+			external_addresses,
 			num_connected,
 			is_major_syncing,
 			network_service: swarm,
 			service,
 			import_queue: params.import_queue,
 			from_worker,
-			on_demand_in: params.on_demand.and_then(|od| od.extract_receiver()),
+			light_client_rqs: params.on_demand.and_then(|od| od.extract_receiver()),
 		})
 	}
 
@@ -271,6 +280,11 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 		self.network_service.user_protocol().num_sync_peers()
 	}
 
+	/// Number of blocks in the import queue.
+	pub fn num_queued_blocks(&self) -> u32 {
+		self.network_service.user_protocol().num_queued_blocks()
+	}
+
 	/// Adds an address for a node.
 	pub fn add_known_address(&mut self, peer_id: PeerId, addr: Multiaddr) {
 		self.network_service.add_known_address(peer_id, addr);
@@ -295,7 +309,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 	/// Get network state.
 	///
 	/// **Note**: Use this only for debugging. This API is unstable. There are warnings literaly
-	/// everywhere about this. Please don't use this function to retreive actual information.
+	/// everywhere about this. Please don't use this function to retrieve actual information.
 	pub fn network_state(&mut self) -> NetworkState {
 		let swarm = &mut self.network_service;
 		let open = swarm.user_protocol().open_peers().cloned().collect::<Vec<_>>();
@@ -483,20 +497,80 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		Ok(())
 	}
 
+	/// Modify a peerset priority group.
+	pub fn set_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
+		let peers = peers.into_iter().map(|p| {
+			parse_addr(p).map_err(|e| format!("{:?}", e))
+		}).collect::<Result<Vec<(PeerId, Multiaddr)>, String>>()?;
+
+		let peer_ids = peers.iter().map(|(peer_id, _addr)| peer_id.clone()).collect();
+		self.peerset.set_priority_group(group_id, peer_ids);
+
+		for (peer_id, addr) in peers.into_iter() {
+			let _ = self
+				.to_worker
+				.unbounded_send(ServerToWorkerMsg::AddKnownAddress(peer_id, addr));
+		}
+
+		Ok(())
+	}
+
 	/// Returns the number of peers we're connected to.
 	pub fn num_connected(&self) -> usize {
 		self.num_connected.load(Ordering::Relaxed)
+	}
+
+	/// Returns the local external addresses.
+	pub fn external_addresses(&self) -> Vec<Multiaddr> {
+		self.external_addresses.lock().clone()
 	}
 }
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>
 	::consensus::SyncOracle for NetworkService<B, S, H> {
-	fn is_major_syncing(&self) -> bool {
-		self.is_major_syncing()
+	fn is_major_syncing(&mut self) -> bool {
+		NetworkService::is_major_syncing(self)
 	}
 
-	fn is_offline(&self) -> bool {
+	fn is_offline(&mut self) -> bool {
 		self.num_connected.load(Ordering::Relaxed) == 0
+	}
+}
+
+impl<'a, B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>
+	::consensus::SyncOracle for &'a NetworkService<B, S, H> {
+	fn is_major_syncing(&mut self) -> bool {
+		NetworkService::is_major_syncing(self)
+	}
+
+	fn is_offline(&mut self) -> bool {
+		self.num_connected.load(Ordering::Relaxed) == 0
+	}
+}
+
+/// Trait for providing information about the local network state
+pub trait NetworkStateInfo {
+	/// Returns the local external addresses.
+	fn external_addresses(&self) -> Vec<Multiaddr>;
+
+	/// Returns the local Peer ID.
+	fn peer_id(&self) -> PeerId;
+}
+
+impl<B, S, H> NetworkStateInfo for NetworkService<B, S, H>
+	where
+		B: sr_primitives::traits::Block,
+		S: NetworkSpecialization<B>,
+		H: ExHashT,
+{
+	/// Returns the local external addresses.
+	fn external_addresses(&self) -> Vec<Multiaddr> {
+		self.external_addresses.lock().clone()
+	}
+
+	/// Returns the local Peer ID.
+	fn peer_id(&self) -> PeerId {
+		self.local_peer_id.clone()
 	}
 }
 
@@ -521,6 +595,8 @@ enum ServerToWorkerMsg<B: BlockT, S: NetworkSpecialization<B>> {
 #[must_use = "The NetworkWorker must be polled in order for the network to work"]
 pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> {
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
+	external_addresses: Arc<Mutex<Vec<Multiaddr>>>,
+	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	num_connected: Arc<AtomicUsize>,
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	is_major_syncing: Arc<AtomicBool>,
@@ -532,8 +608,8 @@ pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: Ex
 	import_queue: Box<dyn ImportQueue<B>>,
 	/// Messages from the `NetworkService` and that must be processed.
 	from_worker: mpsc::UnboundedReceiver<ServerToWorkerMsg<B, S>>,
-	/// Receiver for queries from the on-demand that must be processed.
-	on_demand_in: Option<mpsc::UnboundedReceiver<RequestData<B>>>,
+	/// Receiver for queries from the light client that must be processed.
+	light_client_rqs: Option<mpsc::UnboundedReceiver<RequestData<B>>>,
 }
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for NetworkWorker<B, S, H> {
@@ -542,14 +618,17 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
 		// Poll the import queue for actions to perform.
-		self.import_queue.poll_actions(&mut NetworkLink {
-			protocol: &mut self.network_service,
-		});
+		let _ = futures03::future::poll_fn(|cx| {
+			self.import_queue.poll_actions(cx, &mut NetworkLink {
+				protocol: &mut self.network_service,
+			});
+			std::task::Poll::Pending::<Result<(), ()>>
+		}).compat().poll();
 
-		// Check for new incoming on-demand requests.
-		if let Some(on_demand_in) = self.on_demand_in.as_mut() {
-			while let Ok(Async::Ready(Some(rq))) = on_demand_in.poll() {
-				self.network_service.user_protocol_mut().add_on_demand_request(rq);
+		// Check for new incoming light client requests.
+		if let Some(light_client_rqs) = self.light_client_rqs.as_mut() {
+			while let Ok(Async::Ready(Some(rq))) = light_client_rqs.poll() {
+				self.network_service.user_protocol_mut().add_light_client_request(rq);
 			}
 		}
 
@@ -621,6 +700,10 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 
 		// Update the variables shared with the `NetworkService`.
 		self.num_connected.store(self.network_service.user_protocol_mut().num_connected_peers(), Ordering::Relaxed);
+		{
+			let external_addresses = Swarm::<B, S, H>::external_addresses(&self.network_service).cloned().collect();
+			*self.external_addresses.lock() = external_addresses;
+		}
 		self.is_major_syncing.store(match self.network_service.user_protocol_mut().sync_state() {
 			SyncState::Idle => false,
 			SyncState::Downloading => true,
@@ -631,7 +714,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 }
 
 /// The libp2p swarm, customized for our needs.
-type Swarm<B, S, H> = libp2p::core::Swarm<
+type Swarm<B, S, H> = libp2p::swarm::Swarm<
 	Boxed<(PeerId, StreamMuxerBox), io::Error>,
 	Behaviour<B, S, H>
 >;

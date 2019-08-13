@@ -19,7 +19,7 @@
 use codec::{Encode, Decode};
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
-use runtime_primitives::traits::Header;
+use sr_primitives::traits::Header;
 
 const SLOT_HEADER_MAP_KEY: &[u8] = b"slot_header_map";
 const SLOT_HEADER_START: &[u8] = b"slot_header_start";
@@ -37,8 +37,8 @@ fn load_decode<C, T>(backend: &C, key: &[u8]) -> ClientResult<Option<T>>
 	match backend.get_aux(key)? {
 		None => Ok(None),
 		Some(t) => T::decode(&mut &t[..])
-			.ok_or_else(
-				|| ClientError::Backend(format!("Slots DB is corrupted.")).into(),
+			.map_err(
+				|e| ClientError::Backend(format!("Slots DB is corrupted. Decode error: {}", e.what())).into(),
 			)
 			.map(Some)
 	}
@@ -153,7 +153,7 @@ pub fn check_equivocation<C, H, P>(
 mod test {
 	use primitives::{sr25519, Pair};
 	use primitives::hash::H256;
-	use runtime_primitives::testing::{Header as HeaderTest, Digest as DigestTest};
+	use sr_primitives::testing::{Header as HeaderTest, Digest as DigestTest};
 	use test_client;
 
 	use super::{MAX_SLOT_CAPACITY, PRUNING_BOUND, check_equivocation};

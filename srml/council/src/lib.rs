@@ -41,9 +41,10 @@ mod tests {
 	pub use runtime_io::with_externalities;
 	use srml_support::{impl_outer_origin, impl_outer_event, impl_outer_dispatch, parameter_types};
 	use srml_support::traits::Get;
-	pub use substrate_primitives::{H256, Blake2Hasher, u32_trait::{_1, _2, _3, _4}};
-	pub use primitives::traits::{BlakeTwo256, IdentityLookup};
-	pub use primitives::testing::{Digest, DigestItem, Header};
+	pub use primitives::{H256, Blake2Hasher, u32_trait::{_1, _2, _3, _4}};
+	pub use sr_primitives::traits::{BlakeTwo256, IdentityLookup};
+	pub use sr_primitives::testing::{Digest, DigestItem, Header};
+	pub use sr_primitives::Perbill;
 	pub use {seats, motions};
 	use std::cell::RefCell;
 
@@ -100,25 +101,33 @@ mod tests {
 	pub struct Test;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
+		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockLength: u32 = 2 * 1024;
+		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
+		type Call = ();
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
+		type WeightMultiplierUpdate = ();
 		type Event = Event;
 		type Error = Error;
 		type BlockHashCount = BlockHashCount;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type MaximumBlockLength = MaximumBlockLength;
+		type AvailableBlockRatio = AvailableBlockRatio;
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
 		pub const TransferFee: u64 = 0;
 		pub const CreationFee: u64 = 0;
-		pub const TransactionBaseFee: u64 = 0;
+		pub const TransactionBaseFee: u64 = 1;
 		pub const TransactionByteFee: u64 = 0;
 	}
 	impl balances::Trait for Test {
@@ -135,6 +144,7 @@ mod tests {
 		type CreationFee = CreationFee;
 		type TransactionBaseFee = TransactionBaseFee;
 		type TransactionByteFee = TransactionByteFee;
+		type WeightToFee = ();
 	}
 	parameter_types! {
 		pub const LaunchPeriod: u64 = 1;
@@ -253,7 +263,7 @@ mod tests {
 					(6, 60 * self.balance_factor)
 				],
 				vesting: vec![],
-			}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
+			}.assimilate_storage(&mut t).unwrap();
 			seats::GenesisConfig::<Test> {
 				active_council: if self.with_council { vec![
 					(1, 10),
@@ -263,8 +273,8 @@ mod tests {
 				desired_seats: 2,
 				presentation_duration: 2,
 				term_duration: 5,
-			}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
-			runtime_io::TestExternalities::new_with_children(t)
+			}.assimilate_storage(&mut t).unwrap();
+			runtime_io::TestExternalities::new(t)
 		}
 	}
 

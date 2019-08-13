@@ -22,9 +22,9 @@ use crate::backend::Backend;
 use crate::changes_trie::{Storage as ChangesTrieStorage, build_changes_trie};
 use crate::{Externalities, OverlayedChanges, ChildStorageKey};
 use hash_db::Hasher;
-use primitives::offchain;
-use primitives::storage::well_known_keys::is_child_storage_key;
+use primitives::{offchain, storage::well_known_keys::is_child_storage_key, traits::BareCryptoStorePtr};
 use trie::{MemoryDB, default_child_trie_root};
+use trie::trie_types::Layout;
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
 
@@ -81,8 +81,10 @@ where
 	changes_trie_transaction: Option<(MemoryDB<H>, H::Out)>,
 	/// Additional externalities for offchain workers.
 	///
-	/// If None, some methods from the trait might not supported.
+	/// If None, some methods from the trait might not be supported.
 	offchain_externalities: Option<&'a mut O>,
+	/// The keystore that manages the keys of the node.
+	keystore: Option<BareCryptoStorePtr>,
 	/// Dummy usage of N arg.
 	_phantom: ::std::marker::PhantomData<N>,
 }
@@ -102,6 +104,7 @@ where
 		backend: &'a B,
 		changes_trie_storage: Option<&'a T>,
 		offchain_externalities: Option<&'a mut O>,
+		keystore: Option<BareCryptoStorePtr>,
 	) -> Self {
 		Ext {
 			overlay,
@@ -110,6 +113,7 @@ where
 			changes_trie_storage,
 			changes_trie_transaction: None,
 			offchain_externalities,
+			keystore,
 			_phantom: Default::default(),
 		}
 	}
@@ -173,35 +177,51 @@ where
 	N: crate::changes_trie::BlockNumber,
 {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		let _guard = panic_handler::AbortGuard::new(true);
+		let _guard = panic_handler::AbortGuard::force_abort();
 		self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
 			self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL))
 	}
 
 	fn storage_hash(&self, key: &[u8]) -> Option<H::Out> {
-		let _guard = panic_handler::AbortGuard::new(true);
+		let _guard = panic_handler::AbortGuard::force_abort();
 		self.overlay.storage(key).map(|x| x.map(|x| H::hash(x))).unwrap_or_else(||
 			self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL))
 	}
 
 	fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		let _guard = panic_handler::AbortGuard::new(true);
+		let _guard = panic_handler::AbortGuard::force_abort();
 		self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
 	}
 
 	fn original_storage_hash(&self, key: &[u8]) -> Option<H::Out> {
-		let _guard = panic_handler::AbortGuard::new(true);
+		let _guard = panic_handler::AbortGuard::force_abort();
 		self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
 	}
 
 	fn child_storage(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<Vec<u8>> {
-		let _guard = panic_handler::AbortGuard::new(true);
+		let _guard = panic_handler::AbortGuard::force_abort();
 		self.overlay.child_storage(storage_key.as_ref(), key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
 			self.backend.child_storage(storage_key.as_ref(), key).expect(EXT_NOT_ALLOWED_TO_FAIL))
 	}
 
+	fn child_storage_hash(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<H::Out> {
+		let _guard = panic_handler::AbortGuard::force_abort();
+		self.overlay.child_storage(storage_key.as_ref(), key).map(|x| x.map(|x| H::hash(x))).unwrap_or_else(||
+			self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL))
+	}
+
+	fn original_child_storage(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<Vec<u8>> {
+		let _guard = panic_handler::AbortGuard::force_abort();
+		self.backend.child_storage(storage_key.as_ref(), key).expect(EXT_NOT_ALLOWED_TO_FAIL)
+	}
+
+	fn original_child_storage_hash(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<H::Out> {
+		let _guard = panic_handler::AbortGuard::force_abort();
+		self.backend.child_storage_hash(storage_key.as_ref(), key).expect(EXT_NOT_ALLOWED_TO_FAIL)
+	}
+
 	fn exists_storage(&self, key: &[u8]) -> bool {
-		let _guard = panic_handler::AbortGuard::new(true);
+		let _guard = panic_handler::AbortGuard::force_abort();
 		match self.overlay.storage(key) {
 			Some(x) => x.is_some(),
 			_ => self.backend.exists_storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL),
@@ -209,7 +229,7 @@ where
 	}
 
 	fn exists_child_storage(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> bool {
-		let _guard = panic_handler::AbortGuard::new(true);
+		let _guard = panic_handler::AbortGuard::force_abort();
 
 		match self.overlay.child_storage(storage_key.as_ref(), key) {
 			Some(x) => x.is_some(),
@@ -218,7 +238,7 @@ where
 	}
 
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) {
-		let _guard = panic_handler::AbortGuard::new(true);
+		let _guard = panic_handler::AbortGuard::force_abort();
 		if is_child_storage_key(&key) {
 			warn!(target: "trie", "Refuse to directly set child storage key");
 			return;
@@ -229,14 +249,14 @@ where
 	}
 
 	fn place_child_storage(&mut self, storage_key: ChildStorageKey<H>, key: Vec<u8>, value: Option<Vec<u8>>) {
-		let _guard = panic_handler::AbortGuard::new(true);
+		let _guard = panic_handler::AbortGuard::force_abort();
 
 		self.mark_dirty();
 		self.overlay.set_child_storage(storage_key.into_owned(), key, value);
 	}
 
 	fn kill_child_storage(&mut self, storage_key: ChildStorageKey<H>) {
-		let _guard = panic_handler::AbortGuard::new(true);
+		let _guard = panic_handler::AbortGuard::force_abort();
 
 		self.mark_dirty();
 		self.overlay.clear_child_storage(storage_key.as_ref());
@@ -246,7 +266,7 @@ where
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
-		let _guard = panic_handler::AbortGuard::new(true);
+		let _guard = panic_handler::AbortGuard::force_abort();
 		if is_child_storage_key(prefix) {
 			warn!(target: "trie", "Refuse to directly clear prefix that is part of child storage key");
 			return;
@@ -259,12 +279,22 @@ where
 		});
 	}
 
+	fn clear_child_prefix(&mut self, storage_key: ChildStorageKey<H>, prefix: &[u8]) {
+		let _guard = panic_handler::AbortGuard::force_abort();
+
+		self.mark_dirty();
+		self.overlay.clear_child_prefix(storage_key.as_ref(), prefix);
+		self.backend.for_child_keys_with_prefix(storage_key.as_ref(), prefix, |key| {
+			self.overlay.set_child_storage(storage_key.as_ref().to_vec(), key.to_vec(), None);
+		});
+	}
+
 	fn chain_id(&self) -> u64 {
 		42
 	}
 
 	fn storage_root(&mut self) -> H::Out {
-		let _guard = panic_handler::AbortGuard::new(true);
+		let _guard = panic_handler::AbortGuard::force_abort();
 		if let Some((_, ref root)) = self.storage_transaction {
 			return root.clone();
 		}
@@ -272,7 +302,6 @@ where
 		let child_storage_keys =
 			self.overlay.prospective.children.keys()
 				.chain(self.overlay.committed.children.keys());
-
 		let child_delta_iter = child_storage_keys.map(|storage_key|
 			(storage_key.clone(), self.overlay.committed.children.get(storage_key)
 				.into_iter()
@@ -292,12 +321,12 @@ where
 	}
 
 	fn child_storage_root(&mut self, storage_key: ChildStorageKey<H>) -> Vec<u8> {
-		let _guard = panic_handler::AbortGuard::new(true);
+		let _guard = panic_handler::AbortGuard::force_abort();
 		if self.storage_transaction.is_some() {
 			self
 				.storage(storage_key.as_ref())
 				.unwrap_or(
-					default_child_trie_root::<H>(storage_key.as_ref())
+					default_child_trie_root::<Layout<H>>(storage_key.as_ref())
 				)
 		} else {
 			let storage_key = storage_key.as_ref();
@@ -319,7 +348,7 @@ where
 	}
 
 	fn storage_changes_root(&mut self, parent_hash: H::Out) -> Result<Option<H::Out>, ()> {
-		let _guard = panic_handler::AbortGuard::new(true);
+		let _guard = panic_handler::AbortGuard::force_abort();
 		self.changes_trie_transaction = build_changes_trie::<_, T, H, N>(
 			self.backend,
 			self.changes_trie_storage.clone(),
@@ -332,12 +361,16 @@ where
 	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities> {
 		self.offchain_externalities.as_mut().map(|x| &mut **x as _)
 	}
+
+	fn keystore(&self) -> Option<BareCryptoStorePtr> {
+		self.keystore.clone()
+	}
 }
 
 #[cfg(test)]
 mod tests {
 	use hex_literal::hex;
-	use parity_codec::Encode;
+	use codec::Encode;
 	use primitives::{Blake2Hasher};
 	use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
 	use crate::backend::InMemory;
@@ -374,7 +407,7 @@ mod tests {
 	fn storage_changes_root_is_none_when_storage_is_not_provided() {
 		let mut overlay = prepare_overlay_with_changes();
 		let backend = TestBackend::default();
-		let mut ext = TestExt::new(&mut overlay, &backend, None, None);
+		let mut ext = TestExt::new(&mut overlay, &backend, None, None, None);
 		assert_eq!(ext.storage_changes_root(Default::default()).unwrap(), None);
 	}
 
@@ -384,7 +417,7 @@ mod tests {
 		overlay.changes_trie_config = None;
 		let storage = TestChangesTrieStorage::with_blocks(vec![(100, Default::default())]);
 		let backend = TestBackend::default();
-		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage), None);
+		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage), None, None);
 		assert_eq!(ext.storage_changes_root(Default::default()).unwrap(), None);
 	}
 
@@ -393,9 +426,11 @@ mod tests {
 		let mut overlay = prepare_overlay_with_changes();
 		let storage = TestChangesTrieStorage::with_blocks(vec![(99, Default::default())]);
 		let backend = TestBackend::default();
-		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage), None);
-		assert_eq!(ext.storage_changes_root(Default::default()).unwrap(),
-			Some(hex!("5b829920b9c8d554a19ee2a1ba593c4f2ee6fc32822d083e04236d693e8358d5").into()));
+		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage), None, None);
+		assert_eq!(
+			ext.storage_changes_root(Default::default()).unwrap(),
+			Some(hex!("bb0c2ef6e1d36d5490f9766cfcc7dfe2a6ca804504c3bb206053890d6dd02376").into()),
+		);
 	}
 
 	#[test]
@@ -404,8 +439,10 @@ mod tests {
 		overlay.prospective.top.get_mut(&vec![1]).unwrap().value = None;
 		let storage = TestChangesTrieStorage::with_blocks(vec![(99, Default::default())]);
 		let backend = TestBackend::default();
-		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage), None);
-		assert_eq!(ext.storage_changes_root(Default::default()).unwrap(),
-			Some(hex!("bcf494e41e29a15c9ae5caa053fe3cb8b446ee3e02a254efbdec7a19235b76e4").into()));
+		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage), None, None);
+		assert_eq!(
+			ext.storage_changes_root(Default::default()).unwrap(),
+			Some(hex!("96f5aae4690e7302737b6f9b7f8567d5bbb9eac1c315f80101235a92d9ec27f4").into()),
+		);
 	}
 }

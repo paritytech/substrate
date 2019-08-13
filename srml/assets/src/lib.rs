@@ -131,9 +131,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use srml_support::{StorageValue, StorageMap, Parameter, decl_module, decl_event, decl_storage, ensure};
-use primitives::traits::{Member, SimpleArithmetic, Zero, StaticLookup};
+use sr_primitives::traits::{Member, SimpleArithmetic, Zero, StaticLookup};
 use system::ensure_signed;
-use primitives::traits::One;
+use sr_primitives::traits::One;
 
 /// The module configuration trait.
 pub trait Trait: system::Trait {
@@ -241,10 +241,10 @@ mod tests {
 
 	use runtime_io::with_externalities;
 	use srml_support::{impl_outer_origin, assert_ok, assert_noop, parameter_types};
-	use substrate_primitives::{H256, Blake2Hasher};
+	use primitives::{H256, Blake2Hasher};
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
-	use primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+	use sr_primitives::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -257,18 +257,26 @@ mod tests {
 	pub struct Test;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
+		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockLength: u32 = 2 * 1024;
+		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
+		type Call = ();
 		type BlockNumber = u64;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
+		type WeightMultiplierUpdate = ();
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type AvailableBlockRatio = AvailableBlockRatio;
+		type MaximumBlockLength = MaximumBlockLength;
 	}
 	impl Trait for Test {
 		type Event = ();
@@ -280,7 +288,7 @@ mod tests {
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		system::GenesisConfig::default().build_storage::<Test>().unwrap().0.into()
+		system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 	}
 
 	#[test]

@@ -90,14 +90,18 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::{result, ops::{Mul, Div}, cmp};
-use parity_codec::Encode;
+use rstd::{result, cmp};
+use codec::Encode;
 #[cfg(feature = "std")]
-use parity_codec::Decode;
+use codec::Decode;
 #[cfg(feature = "std")]
 use inherents::ProvideInherentData;
-use srml_support::{StorageValue, Parameter, decl_storage, decl_module, for_each_tuple, traits::Get};
-use runtime_primitives::traits::{SimpleArithmetic, Zero, SaturatedConversion};
+use srml_support::{StorageValue, Parameter, decl_storage, decl_module, for_each_tuple};
+use srml_support::traits::{Time, Get};
+use sr_primitives::traits::{
+	SimpleArithmetic, Zero, SaturatedConversion, Scale
+};
+use sr_primitives::weights::SimpleDispatchInfo;
 use system::ensure_none;
 use inherents::{RuntimeString, InherentIdentifier, ProvideInherent, IsFatalError, InherentData};
 
@@ -131,7 +135,7 @@ impl InherentError {
 	#[cfg(feature = "std")]
 	pub fn try_from(id: &InherentIdentifier, data: &[u8]) -> Option<Self> {
 		if id == &INHERENT_IDENTIFIER {
-			<InherentError as parity_codec::Decode>::decode(&mut &data[..])
+			<InherentError as codec::Decode>::decode(&mut &data[..]).ok()
 		} else {
 			None
 		}
@@ -168,7 +172,7 @@ impl ProvideInherentData for InherentDataProvider {
 			.map_err(|_| {
 				"Current time is before unix epoch".into()
 			}).and_then(|d| {
-				let duration: InherentType = d.as_secs();
+				let duration: InherentType = d.as_millis() as u64;
 				inherent_data.put_data(INHERENT_IDENTIFIER, &duration)
 			})
 	}
@@ -205,8 +209,7 @@ for_each_tuple!(impl_timestamp_set);
 pub trait Trait: system::Trait {
 	/// Type used for expressing timestamp.
 	type Moment: Parameter + Default + SimpleArithmetic
-		+ Mul<Self::BlockNumber, Output = Self::Moment>
-		+ Div<Self::BlockNumber, Output = Self::Moment>;
+		+ Scale<Self::BlockNumber, Output = Self::Moment>;
 
 	/// Something which can be notified when the timestamp is set. Set this to `()` if not needed.
 	type OnTimestampSet: OnTimestampSet<Self::Moment>;
@@ -235,6 +238,7 @@ decl_module! {
 		/// `MinimumPeriod`.
 		///
 		/// The dispatch origin for this call must be `Inherent`.
+		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn set(origin, #[compact] now: T::Moment) {
 			ensure_none(origin)?;
 			assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
@@ -321,14 +325,23 @@ impl<T: Trait> ProvideInherent for Module<T> {
 	}
 }
 
+impl<T: Trait> Time for Module<T> {
+	type Moment = T::Moment;
+
+	/// Before the first set of now with inherent the value returned is zero.
+	fn now() -> Self::Moment {
+		Self::now()
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
 
 	use srml_support::{impl_outer_origin, assert_ok, parameter_types};
 	use runtime_io::{with_externalities, TestExternalities};
-	use substrate_primitives::H256;
-	use runtime_primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+	use primitives::H256;
+	use sr_primitives::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -338,18 +351,26 @@ mod tests {
 	pub struct Test;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
+		pub const MaximumBlockWeight: u32 = 1024;
+		pub const MaximumBlockLength: u32 = 2 * 1024;
+		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl system::Trait for Test {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
+		type Call = ();
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
+		type WeightMultiplierUpdate = ();
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
+		type MaximumBlockWeight = MaximumBlockWeight;
+		type AvailableBlockRatio = AvailableBlockRatio;
+		type MaximumBlockLength = MaximumBlockLength;
 	}
 	parameter_types! {
 		pub const MinimumPeriod: u64 = 5;
@@ -364,7 +385,7 @@ mod tests {
 	#[test]
 	fn timestamp_works() {
 		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		with_externalities(&mut TestExternalities::new_with_children(t), || {
+		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
 			assert_eq!(Timestamp::now(), 69);
@@ -375,7 +396,7 @@ mod tests {
 	#[should_panic(expected = "Timestamp must be updated only once in the block")]
 	fn double_timestamp_should_fail() {
 		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		with_externalities(&mut TestExternalities::new_with_children(t), || {
+		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
 			let _ = Timestamp::dispatch(Call::set(70), Origin::NONE);
@@ -386,7 +407,7 @@ mod tests {
 	#[should_panic(expected = "Timestamp must increment by at least <MinimumPeriod> between sequential blocks")]
 	fn block_period_minimum_enforced() {
 		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		with_externalities(&mut TestExternalities::new_with_children(t), || {
+		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
 			let _ = Timestamp::dispatch(Call::set(46), Origin::NONE);
 		});

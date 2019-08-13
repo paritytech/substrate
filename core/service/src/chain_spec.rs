@@ -16,12 +16,13 @@
 
 //! Substrate chain configurations.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::PathBuf;
 use serde::{Serialize, Deserialize};
 use primitives::storage::{StorageKey, StorageData};
-use runtime_primitives::{BuildStorage, StorageOverlay, ChildrenStorageOverlay};
+use sr_primitives::{BuildStorage, StorageOverlay, ChildrenStorageOverlay};
 use serde_json as json;
 use crate::components::RuntimeGenesis;
 use network::Multiaddr;
@@ -29,15 +30,15 @@ use tel::TelemetryEndpoints;
 
 enum GenesisSource<G> {
 	File(PathBuf),
-	Embedded(&'static [u8]),
+	Binary(Cow<'static, [u8]>),
 	Factory(fn() -> G),
 }
 
-impl<G: RuntimeGenesis> Clone for GenesisSource<G> {
+impl<G> Clone for GenesisSource<G> {
 	fn clone(&self) -> Self {
 		match *self {
 			GenesisSource::File(ref path) => GenesisSource::File(path.clone()),
-			GenesisSource::Embedded(d) => GenesisSource::Embedded(d),
+			GenesisSource::Binary(ref d) => GenesisSource::Binary(d.clone()),
 			GenesisSource::Factory(f) => GenesisSource::Factory(f),
 		}
 	}
@@ -50,14 +51,16 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 			genesis: Genesis<G>,
 		}
 
-		match *self {
-			GenesisSource::File(ref path) => {
+		match self {
+			GenesisSource::File(path) => {
 				let file = File::open(path).map_err(|e| format!("Error opening spec file: {}", e))?;
-				let genesis: GenesisContainer<G> = json::from_reader(file).map_err(|e| format!("Error parsing spec file: {}", e))?;
+				let genesis: GenesisContainer<G> =
+					json::from_reader(file).map_err(|e| format!("Error parsing spec file: {}", e))?;
 				Ok(genesis.genesis)
 			},
-			GenesisSource::Embedded(buf) => {
-				let genesis: GenesisContainer<G> = json::from_reader(buf).map_err(|e| format!("Error parsing embedded file: {}", e))?;
+			GenesisSource::Binary(buf) => {
+				let genesis: GenesisContainer<G> =
+					json::from_reader(buf.as_ref()).map_err(|e| format!("Error parsing embedded file: {}", e))?;
 				Ok(genesis.genesis)
 			},
 			GenesisSource::Factory(f) => Ok(Genesis::Runtime(f())),
@@ -69,10 +72,16 @@ impl<'a, G: RuntimeGenesis> BuildStorage for &'a ChainSpec<G> {
 	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
 		match self.genesis.resolve()? {
 			Genesis::Runtime(gc) => gc.build_storage(),
-			Genesis::Raw(map) => Ok((map.into_iter().map(|(k, v)| (k.0, v.0)).collect(), Default::default())),
+			Genesis::Raw(map, children_map) => Ok((
+				map.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
+				children_map.into_iter().map(|(sk, map)| (
+					sk.0,
+					map.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
+				)).collect(),
+			)),
 		}
 	}
-	fn assimilate_storage(self, _: &mut StorageOverlay, _: &mut ChildrenStorageOverlay) -> Result<(), String> {
+	fn assimilate_storage(self, _: &mut (StorageOverlay, ChildrenStorageOverlay)) -> Result<(), String> {
 		Err("`assimilate_storage` not implemented for `ChainSpec`.".into())
 	}
 }
@@ -82,7 +91,10 @@ impl<'a, G: RuntimeGenesis> BuildStorage for &'a ChainSpec<G> {
 #[serde(deny_unknown_fields)]
 enum Genesis<G> {
 	Runtime(G),
-	Raw(HashMap<StorageKey, StorageData>),
+	Raw(
+		HashMap<StorageKey, StorageData>,
+		HashMap<StorageKey, HashMap<StorageKey, StorageData>>,
+	),
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -101,12 +113,12 @@ struct ChainSpecFile {
 pub type Properties = json::map::Map<String, json::Value>;
 
 /// A configuration of a chain. Can be used to build a genesis block.
-pub struct ChainSpec<G: RuntimeGenesis> {
+pub struct ChainSpec<G> {
 	spec: ChainSpecFile,
 	genesis: GenesisSource<G>,
 }
 
-impl<G: RuntimeGenesis> Clone for ChainSpec<G> {
+impl<G> Clone for ChainSpec<G> {
 	fn clone(&self) -> Self {
 		ChainSpec {
 			spec: self.spec.clone(),
@@ -115,7 +127,7 @@ impl<G: RuntimeGenesis> Clone for ChainSpec<G> {
 	}
 }
 
-impl<G: RuntimeGenesis> ChainSpec<G> {
+impl<G> ChainSpec<G> {
 	/// A list of bootnode addresses.
 	pub fn boot_nodes(&self) -> &[String] {
 		&self.spec.boot_nodes
@@ -158,11 +170,12 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 	}
 
 	/// Parse json content into a `ChainSpec`
-	pub fn from_embedded(json: &'static [u8]) -> Result<Self, String> {
-		let spec = json::from_slice(json).map_err(|e| format!("Error parsing spec file: {}", e))?;
+	pub fn from_json_bytes(json: impl Into<Cow<'static, [u8]>>) -> Result<Self, String> {
+		let json = json.into();
+		let spec = json::from_slice(json.as_ref()).map_err(|e| format!("Error parsing spec file: {}", e))?;
 		Ok(ChainSpec {
 			spec,
-			genesis: GenesisSource::Embedded(json),
+			genesis: GenesisSource::Binary(json),
 		})
 	}
 
@@ -202,7 +215,9 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 			genesis: GenesisSource::Factory(constructor),
 		}
 	}
+}
 
+impl<G: RuntimeGenesis> ChainSpec<G> {
 	/// Dump to json string.
 	pub fn to_json(self, raw: bool) -> Result<String, String> {
 		#[derive(Serialize, Deserialize)]
@@ -214,11 +229,20 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 		};
 		let genesis = match (raw, self.genesis.resolve()?) {
 			(true, Genesis::Runtime(g)) => {
-				let storage = g.build_storage()?.0.into_iter()
+				let storage = g.build_storage()?;
+				let top = storage.0.into_iter()
 					.map(|(k, v)| (StorageKey(k), StorageData(v)))
 					.collect();
+				let children = storage.1.into_iter()
+					.map(|(sk, child)| (
+							StorageKey(sk),
+							child.into_iter()
+								.map(|(k, v)| (StorageKey(k), StorageData(v)))
+								.collect(),
+					))
+					.collect();
 
-				Genesis::Raw(storage)
+				Genesis::Raw(top, children)
 			},
 			(_, genesis) => genesis,
 		};

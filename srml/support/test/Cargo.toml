@@ -6,18 +6,19 @@ edition = "2018"
 
 [dependencies]
 serde = { version = "1.0", default-features = false, features = ["derive"] }
-parity-codec = { version = "4.1.1", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 runtime_io = { package = "sr-io", path = "../../../core/sr-io", default-features = false }
 srml-support = { version = "2", path = "../", default-features = false }
 inherents = { package = "substrate-inherents", path = "../../../core/inherents", default-features = false }
 primitives = { package = "substrate-primitives", path = "../../../core/primitives", default-features = false }
 trybuild = "1"
+pretty_assertions = "0.6.1"
 
 [features]
 default = ["std"]
 std = [
 	"serde/std",
-	"parity-codec/std",
+	"codec/std",
 	"runtime_io/std",
 	"srml-support/std",
 	"inherents/std",

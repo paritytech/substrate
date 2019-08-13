@@ -16,10 +16,11 @@
 
 //! Offchain workers types
 
-use crate::crypto;
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use rstd::prelude::{Vec, Box};
 use rstd::convert::TryFrom;
+
+pub use crate::crypto::KeyTypeId;
 
 /// A type of supported crypto.
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
@@ -55,46 +56,6 @@ impl TryFrom<u32> for StorageKind {
 impl From<StorageKind> for u32 {
 	fn from(c: StorageKind) -> Self {
 		c as u8 as u32
-	}
-}
-
-/// A type of supported crypto.
-#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
-#[repr(C)]
-pub enum CryptoKind {
-	/// SR25519 crypto (Schnorrkel)
-	Sr25519 = crypto::key_types::SR25519 as isize,
-	/// ED25519 crypto (Edwards)
-	Ed25519 = crypto::key_types::ED25519 as isize,
-}
-
-impl TryFrom<u32> for CryptoKind {
-	type Error = ();
-
-	fn try_from(kind: u32) -> Result<Self, Self::Error> {
-		match kind {
-			e if e == CryptoKind::Sr25519 as isize as u32 => Ok(CryptoKind::Sr25519),
-			e if e == CryptoKind::Ed25519 as isize as u32 => Ok(CryptoKind::Ed25519),
-			_ => Err(()),
-		}
-	}
-}
-
-impl From<CryptoKind> for u32 {
-	fn from(c: CryptoKind) -> Self {
-		c as isize as u32
-	}
-}
-
-/// Opaque type for created crypto keys.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub struct CryptoKeyId(pub u16);
-
-impl From<CryptoKeyId> for u32 {
-	fn from(c: CryptoKeyId) -> Self {
-		c.0 as u32
 	}
 }
 
@@ -185,6 +146,41 @@ impl TryFrom<u32> for HttpRequestStatus {
 	}
 }
 
+/// A blob to hold information about the local node's network state
+/// without committing to its format.
+#[derive(Clone, Eq, PartialEq, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct OpaqueNetworkState {
+	/// PeerId of the local node.
+	pub peer_id: OpaquePeerId,
+	/// List of addresses the node knows it can be reached as.
+	pub external_addresses: Vec<OpaqueMultiaddr>,
+}
+
+/// Simple blob to hold a `PeerId` without committing to its format.
+#[derive(Clone, Eq, PartialEq, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct OpaquePeerId(pub Vec<u8>);
+
+impl OpaquePeerId {
+	/// Create new `OpaquePeerId`
+	pub fn new(vec: Vec<u8>) -> Self {
+		OpaquePeerId(vec)
+	}
+}
+
+/// Simple blob to hold a `Multiaddr` without committing to its format.
+#[derive(Clone, Eq, PartialEq, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct OpaqueMultiaddr(pub Vec<u8>);
+
+impl OpaqueMultiaddr {
+	/// Create new `OpaqueMultiaddr`
+	pub fn new(vec: Vec<u8>) -> Self {
+		OpaqueMultiaddr(vec)
+	}
+}
+
 /// Opaque timestamp type
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Default)]
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -236,46 +232,18 @@ impl Timestamp {
 
 /// An extended externalities for offchain workers.
 pub trait Externalities {
+	/// Returns if the local node is a potential validator.
+	///
+	/// Even if this function returns `true`, it does not mean that any keys are configured
+	/// and that the validator is registered in the chain.
+	fn is_validator(&self) -> bool;
 	/// Submit transaction.
 	///
 	/// The transaction will end up in the pool and be propagated to others.
 	fn submit_transaction(&mut self, extrinsic: Vec<u8>) -> Result<(), ()>;
 
-	/// Create new key(pair) for signing/encryption/decryption.
-	///
-	/// Returns an error if given crypto kind is not supported.
-	fn new_crypto_key(&mut self, crypto: CryptoKind) -> Result<CryptoKeyId, ()>;
-
-	/// Encrypt a piece of data using given crypto key.
-	///
-	/// If `key` is `None`, it will attempt to use current authority key of `CryptoKind`.
-	///
-	/// Returns an error if `key` is not available or does not exist,
-	/// or the expected `CryptoKind` does not match.
-	fn encrypt(&mut self, key: Option<CryptoKeyId>, kind: CryptoKind, data: &[u8]) -> Result<Vec<u8>, ()>;
-
-	/// Decrypt a piece of data using given crypto key.
-	///
-	/// If `key` is `None`, it will attempt to use current authority key of `CryptoKind`.
-	///
-	/// Returns an error if data cannot be decrypted or the `key` is not available or does not exist,
-	/// or the expected `CryptoKind` does not match.
-	fn decrypt(&mut self, key: Option<CryptoKeyId>, kind: CryptoKind, data: &[u8]) -> Result<Vec<u8>, ()>;
-
-	/// Sign a piece of data using given crypto key.
-	///
-	/// If `key` is `None`, it will attempt to use current authority key of `CryptoKind`.
-	///
-	/// Returns an error if `key` is not available or does not exist,
-	/// or the expected `CryptoKind` does not match.
-	fn sign(&mut self, key: Option<CryptoKeyId>, kind: CryptoKind, data: &[u8]) -> Result<Vec<u8>, ()>;
-
-	/// Verifies that `signature` for `msg` matches given `key`.
-	///
-	/// Returns an `Ok` with `true` in case it does, `false` in case it doesn't.
-	/// Returns an error in case the key is not available or does not exist or the parameters
-	/// lengths are incorrect or `CryptoKind` does not match.
-	fn verify(&mut self, key: Option<CryptoKeyId>, kind: CryptoKind, msg: &[u8], signature: &[u8]) -> Result<bool, ()>;
+	/// Returns information about the local node's network state.
+	fn network_state(&self) -> Result<OpaqueNetworkState, ()>;
 
 	/// Returns current UNIX timestamp (in millis)
 	fn timestamp(&mut self) -> Timestamp;
@@ -308,7 +276,7 @@ pub trait Externalities {
 		&mut self,
 		kind: StorageKind,
 		key: &[u8],
-		old_value: &[u8],
+		old_value: Option<&[u8]>,
 		new_value: &[u8],
 	) -> bool;
 
@@ -319,9 +287,9 @@ pub trait Externalities {
 	/// offchain worker tasks running on the same machine. It IS persisted between runs.
 	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>>;
 
-	/// Initiaties a http request given HTTP verb and the URL.
+	/// Initiates a http request given HTTP verb and the URL.
 	///
-	/// Meta is a future-reserved field containing additional, parity-codec encoded parameters.
+	/// Meta is a future-reserved field containing additional, parity-scale-codec encoded parameters.
 	/// Returns the id of newly started request.
 	fn http_request_start(
 		&mut self,
@@ -386,28 +354,16 @@ pub trait Externalities {
 
 }
 impl<T: Externalities + ?Sized> Externalities for Box<T> {
+	fn is_validator(&self) -> bool {
+		(& **self).is_validator()
+	}
+
 	fn submit_transaction(&mut self, ex: Vec<u8>) -> Result<(), ()> {
 		(&mut **self).submit_transaction(ex)
 	}
 
-	fn new_crypto_key(&mut self, crypto: CryptoKind) -> Result<CryptoKeyId, ()> {
-		(&mut **self).new_crypto_key(crypto)
-	}
-
-	fn encrypt(&mut self, key: Option<CryptoKeyId>, kind: CryptoKind, data: &[u8]) -> Result<Vec<u8>, ()> {
-		(&mut **self).encrypt(key, kind, data)
-	}
-
-	fn decrypt(&mut self, key: Option<CryptoKeyId>, kind: CryptoKind, data: &[u8]) -> Result<Vec<u8>, ()> {
-		(&mut **self).decrypt(key, kind, data)
-	}
-
-	fn sign(&mut self, key: Option<CryptoKeyId>, kind: CryptoKind, data: &[u8]) -> Result<Vec<u8>, ()> {
-		(&mut **self).sign(key, kind, data)
-	}
-
-	fn verify(&mut self, key: Option<CryptoKeyId>, kind: CryptoKind, msg: &[u8], signature: &[u8]) -> Result<bool, ()> {
-		(&mut **self).verify(key, kind, msg, signature)
+	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
+		(& **self).network_state()
 	}
 
 	fn timestamp(&mut self) -> Timestamp {
@@ -430,7 +386,7 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		&mut self,
 		kind: StorageKind,
 		key: &[u8],
-		old_value: &[u8],
+		old_value: Option<&[u8]>,
 		new_value: &[u8],
 	) -> bool {
 		(&mut **self).local_storage_compare_and_set(kind, key, old_value, new_value)

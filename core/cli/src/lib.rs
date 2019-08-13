@@ -22,11 +22,13 @@
 #[macro_use]
 mod traits;
 mod params;
+mod execution_strategy;
 pub mod error;
 pub mod informant;
 
 use client::ExecutionStrategies;
 use service::{
+	config::Configuration,
 	ServiceFactory, FactoryFullConfiguration, RuntimeGenesis,
 	FactoryGenesis, PruningMode, ChainSpec,
 };
@@ -37,8 +39,8 @@ use network::{
 use primitives::H256;
 
 use std::{
-	io::{Write, Read, stdin, stdout, ErrorKind}, iter, fs::{self, File}, net::{Ipv4Addr, SocketAddr},
-	path::{Path, PathBuf}, str::FromStr,
+	io::{Write, Read, Seek, Cursor, stdin, stdout, ErrorKind}, iter, fs::{self, File},
+	net::{Ipv4Addr, SocketAddr}, path::{Path, PathBuf}, str::FromStr,
 };
 
 use names::{Generator, Name};
@@ -51,7 +53,7 @@ use params::{
 	NetworkConfigurationParams, MergeParameters, TransactionPoolParams,
 	NodeKeyParams, NodeKeyType, Cors,
 };
-pub use params::{NoCustom, CoreParams, SharedParams};
+pub use params::{NoCustom, CoreParams, SharedParams, ExecutionStrategy as ExecutionStrategyParam};
 pub use traits::{GetLogFilter, AugmentClap};
 use app_dirs::{AppInfo, AppDataType};
 use log::info;
@@ -165,38 +167,29 @@ fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 	Ok(())
 }
 
-/// Parse command line interface arguments and executes the desired command.
+/// Parse command line interface arguments and prepares the command for execution.
 ///
-/// # Return value
-///
-/// A result that indicates if any error occurred.
-/// If no error occurred and a custom subcommand was found, the subcommand is returned.
-/// The user needs to handle this subcommand on its own.
+/// Before returning, this function performs various initializations, such as initializing the
+/// panic handler and the logger, or increasing the limit for file descriptors.
 ///
 /// # Remarks
 ///
 /// `CC` is a custom subcommand. This needs to be an `enum`! If no custom subcommand is required,
 /// `NoCustom` can be used as type here.
+///
 /// `RP` are custom parameters for the run command. This needs to be a `struct`! The custom
 /// parameters are visible to the user as if they were normal run command parameters. If no custom
 /// parameters are required, `NoCustom` can be used as type here.
-pub fn parse_and_execute<'a, F, CC, RP, S, RS, E, I, T>(
-	spec_factory: S,
-	version: &VersionInfo,
+pub fn parse_and_prepare<'a, CC, RP, I>(
+	version: &'a VersionInfo,
 	impl_name: &'static str,
 	args: I,
-	exit: E,
-	run_service: RS,
-) -> error::Result<Option<CC>>
+) -> ParseAndPrepare<'a, CC, RP>
 where
-	F: ServiceFactory,
-	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 	CC: StructOpt + Clone + GetLogFilter,
 	RP: StructOpt + Clone + AugmentClap,
-	E: IntoExit,
-	RS: FnOnce(E, RunCmd, RP, FactoryFullConfiguration<F>) -> Result<(), String>,
-	I: IntoIterator<Item = T>,
-	T: Into<std::ffi::OsString> + Clone,
+	I: IntoIterator,
+	<I as IntoIterator>::Item: Into<std::ffi::OsString> + Clone,
 {
 	panic_handler::set(version.support_url);
 
@@ -220,21 +213,292 @@ where
 	fdlimit::raise_fd_limit();
 
 	match cli_args {
-		params::CoreParams::Run(params) => run_node::<F, _, _, _, _>(
-			params, spec_factory, exit, run_service, impl_name, version,
-		).map(|_| None),
-		params::CoreParams::BuildSpec(params) =>
-			build_spec::<F, _>(params, spec_factory, version).map(|_| None),
-		params::CoreParams::ExportBlocks(params) =>
-			export_blocks::<F, _, _>(params, spec_factory, exit, version).map(|_| None),
-		params::CoreParams::ImportBlocks(params) =>
-			import_blocks::<F, _, _>(params, spec_factory, exit, version).map(|_| None),
-		params::CoreParams::PurgeChain(params) =>
-			purge_chain::<F, _>(params, spec_factory, version).map(|_| None),
-		params::CoreParams::Revert(params) =>
-			revert_chain::<F, _>(params, spec_factory, version).map(|_| None),
-		params::CoreParams::Custom(params) => Ok(Some(params)),
+		params::CoreParams::Run(params) => ParseAndPrepare::Run(
+			ParseAndPrepareRun { params, impl_name, version }
+		),
+		params::CoreParams::BuildSpec(params) => ParseAndPrepare::BuildSpec(
+			ParseAndPrepareBuildSpec { params, version }
+		),
+		params::CoreParams::ExportBlocks(params) => ParseAndPrepare::ExportBlocks(
+			ParseAndPrepareExport { params, version }
+		),
+		params::CoreParams::ImportBlocks(params) => ParseAndPrepare::ImportBlocks(
+			ParseAndPrepareImport { params, version }
+		),
+		params::CoreParams::PurgeChain(params) => ParseAndPrepare::PurgeChain(
+			ParseAndPreparePurge { params, version }
+		),
+		params::CoreParams::Revert(params) => ParseAndPrepare::RevertChain(
+			ParseAndPrepareRevert { params, version }
+		),
+		params::CoreParams::Custom(params) => ParseAndPrepare::CustomCommand(params),
 	}
+}
+
+/// Output of calling `parse_and_prepare`.
+#[must_use]
+pub enum ParseAndPrepare<'a, CC, RP> {
+	/// Command ready to run the main client.
+	Run(ParseAndPrepareRun<'a, RP>),
+	/// Command ready to build chain specs.
+	BuildSpec(ParseAndPrepareBuildSpec<'a>),
+	/// Command ready to export the chain.
+	ExportBlocks(ParseAndPrepareExport<'a>),
+	/// Command ready to import the chain.
+	ImportBlocks(ParseAndPrepareImport<'a>),
+	/// Command ready to purge the chain.
+	PurgeChain(ParseAndPreparePurge<'a>),
+	/// Command ready to revert the chain.
+	RevertChain(ParseAndPrepareRevert<'a>),
+	/// An additional custom command passed to `parse_and_prepare`.
+	CustomCommand(CC),
+}
+
+/// Command ready to run the main client.
+pub struct ParseAndPrepareRun<'a, RP> {
+	params: MergeParameters<RunCmd, RP>,
+	impl_name: &'static str,
+	version: &'a VersionInfo,
+}
+
+impl<'a, RP> ParseAndPrepareRun<'a, RP> {
+	/// Runs the command and runs the main client.
+	pub fn run<C, G, S, E, RS>(
+		self,
+		spec_factory: S,
+		exit: E,
+		run_service: RS,
+	) -> error::Result<()>
+	where S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
+		RP: StructOpt + Clone,
+		C: Default,
+		G: RuntimeGenesis,
+		E: IntoExit,
+		RS: FnOnce(E, RunCmd, RP, Configuration<C, G>) -> Result<(), String>
+	{
+		let config = create_run_node_config(self.params.left.clone(), spec_factory, self.impl_name, self.version)?;
+
+		run_service(exit, self.params.left, self.params.right, config).map_err(Into::into)
+	}
+}
+
+/// Command ready to build chain specs.
+pub struct ParseAndPrepareBuildSpec<'a> {
+	params: BuildSpecCmd,
+	version: &'a VersionInfo,
+}
+
+impl<'a> ParseAndPrepareBuildSpec<'a> {
+	/// Runs the command and build the chain specs.
+	pub fn run<G, S>(
+		self,
+		spec_factory: S
+	) -> error::Result<()>
+	where S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
+		G: RuntimeGenesis
+	{
+		info!("Building chain spec");
+		let raw_output = self.params.raw;
+		let mut spec = load_spec(&self.params.shared_params, spec_factory)?;
+		with_default_boot_node(&mut spec, self.params, self.version)?;
+		let json = service::chain_ops::build_spec(spec, raw_output)?;
+
+		print!("{}", json);
+
+		Ok(())
+	}
+}
+
+/// Command ready to export the chain.
+pub struct ParseAndPrepareExport<'a> {
+	params: ExportBlocksCmd,
+	version: &'a VersionInfo,
+}
+
+impl<'a> ParseAndPrepareExport<'a> {
+	/// Runs the command and exports from the chain.
+	pub fn run<F, S, E>(
+		self,
+		spec_factory: S,
+		exit: E,
+	) -> error::Result<()>
+	where S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
+		F: ServiceFactory,
+		E: IntoExit
+	{
+		let config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
+
+		info!("DB path: {}", config.database_path.display());
+		let from = self.params.from.unwrap_or(1);
+		let to = self.params.to;
+		let json = self.params.json;
+
+		let file: Box<dyn Write> = match self.params.output {
+			Some(filename) => Box::new(File::create(filename)?),
+			None => Box::new(stdout()),
+		};
+
+		service::chain_ops::export_blocks::<F, _, _>(
+			config, exit.into_exit(), file, from.into(), to.map(Into::into), json
+		).map_err(Into::into)
+	}
+}
+
+/// Command ready to import the chain.
+pub struct ParseAndPrepareImport<'a> {
+	params: ImportBlocksCmd,
+	version: &'a VersionInfo,
+}
+
+impl<'a> ParseAndPrepareImport<'a> {
+	/// Runs the command and imports to the chain.
+	pub fn run<F, S, E>(
+		self,
+		spec_factory: S,
+		exit: E,
+	) -> error::Result<()>
+	where S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
+		F: ServiceFactory,
+		E: IntoExit
+	{
+		let mut config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
+		config.execution_strategies = ExecutionStrategies {
+			importing: self.params.execution.into(),
+			other: self.params.execution.into(),
+			..Default::default()
+		};
+
+		let file: Box<dyn ReadPlusSeek> = match self.params.input {
+			Some(filename) => Box::new(File::open(filename)?),
+			None => {
+				let mut buffer = Vec::new();
+				stdin().read_to_end(&mut buffer)?;
+				Box::new(Cursor::new(buffer))
+			},
+		};
+
+		let fut = service::chain_ops::import_blocks::<F, _, _>(config, exit.into_exit(), file)?;
+		tokio::run(fut);
+		Ok(())
+	}
+}
+
+/// Command ready to purge the chain.
+pub struct ParseAndPreparePurge<'a> {
+	params: PurgeChainCmd,
+	version: &'a VersionInfo,
+}
+
+impl<'a> ParseAndPreparePurge<'a> {
+	/// Runs the command and purges the chain.
+	pub fn run<G, S>(
+		self,
+		spec_factory: S
+	) -> error::Result<()>
+	where S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
+		G: RuntimeGenesis
+	{
+		let config = create_config_with_db_path::<(), _, _>(spec_factory, &self.params.shared_params, self.version)?;
+		let db_path = config.database_path;
+
+		if !self.params.yes {
+			print!("Are you sure to remove {:?}? (y/n)", &db_path);
+			stdout().flush().expect("failed to flush stdout");
+
+			let mut input = String::new();
+			stdin().read_line(&mut input)?;
+			let input = input.trim();
+
+			match input.chars().nth(0) {
+				Some('y') | Some('Y') => {},
+				_ => {
+					println!("Aborted");
+					return Ok(());
+				},
+			}
+		}
+
+		match fs::remove_dir_all(&db_path) {
+			Result::Ok(_) => {
+				println!("{:?} removed.", &db_path);
+				Ok(())
+			},
+			Result::Err(ref err) if err.kind() == ErrorKind::NotFound => {
+				println!("{:?} did not exist.", &db_path);
+				Ok(())
+			},
+			Result::Err(err) => Result::Err(err.into())
+		}
+	}
+}
+
+/// Command ready to revert the chain.
+pub struct ParseAndPrepareRevert<'a> {
+	params: RevertCmd,
+	version: &'a VersionInfo,
+}
+
+impl<'a> ParseAndPrepareRevert<'a> {
+	/// Runs the command and reverts the chain.
+	pub fn run<F, S>(
+		self,
+		spec_factory: S
+	) -> error::Result<()>
+	where S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
+		F: ServiceFactory {
+		let config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
+		let blocks = self.params.num;
+		Ok(service::chain_ops::revert_chain::<F>(config, blocks.into())?)
+	}
+}
+
+/// Parse command line interface arguments and executes the desired command.
+///
+/// # Return value
+///
+/// A result that indicates if any error occurred.
+/// If no error occurred and a custom subcommand was found, the subcommand is returned.
+/// The user needs to handle this subcommand on its own.
+///
+/// # Remarks
+///
+/// `CC` is a custom subcommand. This needs to be an `enum`! If no custom subcommand is required,
+/// `NoCustom` can be used as type here.
+/// `RP` are custom parameters for the run command. This needs to be a `struct`! The custom
+/// parameters are visible to the user as if they were normal run command parameters. If no custom
+/// parameters are required, `NoCustom` can be used as type here.
+#[deprecated(
+	note = "Use parse_and_prepare instead; see the source code of parse_and_execute for how to transition"
+)]
+pub fn parse_and_execute<'a, F, CC, RP, S, RS, E, I, T>(
+	spec_factory: S,
+	version: &VersionInfo,
+	impl_name: &'static str,
+	args: I,
+	exit: E,
+	run_service: RS,
+) -> error::Result<Option<CC>>
+where
+	F: ServiceFactory,
+	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
+	CC: StructOpt + Clone + GetLogFilter,
+	RP: StructOpt + Clone + AugmentClap,
+	E: IntoExit,
+	RS: FnOnce(E, RunCmd, RP, FactoryFullConfiguration<F>) -> Result<(), String>,
+	I: IntoIterator<Item = T>,
+	T: Into<std::ffi::OsString> + Clone,
+{
+	match parse_and_prepare::<CC, RP, _>(version, impl_name, args) {
+		ParseAndPrepare::Run(cmd) => cmd.run(spec_factory, exit, run_service),
+		ParseAndPrepare::BuildSpec(cmd) => cmd.run(spec_factory),
+		ParseAndPrepare::ExportBlocks(cmd) => cmd.run::<F, _, _>(spec_factory, exit),
+		ParseAndPrepare::ImportBlocks(cmd) => cmd.run::<F, _, _>(spec_factory, exit),
+		ParseAndPrepare::PurgeChain(cmd) => cmd.run(spec_factory),
+		ParseAndPrepare::RevertChain(cmd) => cmd.run::<F, _>(spec_factory),
+		ParseAndPrepare::CustomCommand(cmd) => return Ok(Some(cmd))
+	}?;
+
+	Ok(None)
 }
 
 /// Create a `NodeKeyConfig` from the given `NodeKeyParams` in the context
@@ -292,8 +556,8 @@ fn parse_ed25519_secret(hex: &String) -> error::Result<network::config::Ed25519S
 }
 
 /// Fill the given `PoolConfiguration` by looking at the cli parameters.
-fn fill_transaction_pool_configuration<F: ServiceFactory>(
-	options: &mut FactoryFullConfiguration<F>,
+fn fill_transaction_pool_configuration<C, G>(
+	options: &mut Configuration<C, G>,
 	params: TransactionPoolParams,
 ) -> error::Result<()> {
 	// ready queue
@@ -366,18 +630,36 @@ fn input_keystore_password() -> Result<String, String> {
 		.map_err(|e| format!("{:?}", e))
 }
 
-fn create_run_node_config<F, S>(
+/// Fill the password field of the given config instance.
+fn fill_config_keystore_password<C, G>(
+	config: &mut service::Configuration<C, G>,
+	cli: &RunCmd,
+) -> Result<(), String> {
+	config.keystore_password = if cli.password_interactive {
+		Some(input_keystore_password()?.into())
+	} else if let Some(ref file) = cli.password_filename {
+		Some(fs::read_to_string(file).map_err(|e| format!("{}", e))?.into())
+	} else if let Some(ref password) = cli.password {
+		Some(password.clone().into())
+	} else {
+		None
+	};
+
+	Ok(())
+}
+
+fn create_run_node_config<C, G, S>(
 	cli: RunCmd, spec_factory: S, impl_name: &'static str, version: &VersionInfo
-) -> error::Result<FactoryFullConfiguration<F>>
+) -> error::Result<Configuration<C, G>>
 where
-	F: ServiceFactory,
-	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
+	C: Default,
+	G: RuntimeGenesis,
+	S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
 {
 	let spec = load_spec(&cli.shared_params, spec_factory)?;
 	let mut config = service::Configuration::default_with_spec(spec.clone());
-	if cli.interactive_password {
-		config.password = input_keystore_password()?.into()
-	}
+
+	fill_config_keystore_password(&mut config, &cli)?;
 
 	config.impl_name = impl_name;
 	config.impl_commit = version.commit;
@@ -401,7 +683,9 @@ where
 
 	let base_path = base_path(&cli.shared_params, version);
 
-	config.keystore_path = cli.keystore_path.or_else(|| Some(keystore_path(&base_path, config.chain_spec.id())));
+	config.keystore_path = cli.keystore_path.unwrap_or_else(
+		|| keystore_path(&base_path, config.chain_spec.id())
+	);
 
 	config.database_path = db_path(&base_path, config.chain_spec.id());
 	config.database_cache_size = cli.database_cache_size;
@@ -414,10 +698,12 @@ where
 		),
 	};
 
+	let is_dev = cli.shared_params.dev;
+
 	let role =
 		if cli.light {
 			service::Roles::LIGHT
-		} else if cli.validator || cli.shared_params.dev {
+		} else if cli.validator || is_dev || cli.keyring.account.is_some() {
 			service::Roles::AUTHORITY
 		} else {
 			service::Roles::FULL
@@ -442,10 +728,6 @@ where
 
 	config.roles = role;
 	config.disable_grandpa = cli.no_grandpa;
-	config.grandpa_voter = cli.grandpa_voter;
-
-
-	let is_dev = cli.shared_params.dev;
 
 	let client_id = config.client_id();
 	fill_network_configuration(
@@ -457,32 +739,23 @@ where
 		is_dev,
 	)?;
 
-	fill_transaction_pool_configuration::<F>(
-		&mut config,
-		cli.pool_config,
-	)?;
+	fill_transaction_pool_configuration(&mut config, cli.pool_config)?;
 
-	if let Some(key) = cli.key {
-		config.keys.push(key);
-	}
-
-	if cli.shared_params.dev && cli.keyring.account.is_none() {
-		config.keys.push("//Alice".into());
-	}
-
-	if let Some(account) = cli.keyring.account {
-		config.keys.push(format!("//{}", account));
-	}
+	config.dev_key_seed = cli.keyring.account
+		.map(|a| format!("//{}", a)).or_else(|| {
+			if is_dev {
+				Some("//Alice".into())
+			} else {
+				None
+			}
+		});
 
 	let rpc_interface: &str = if cli.rpc_external { "0.0.0.0" } else { "127.0.0.1" };
 	let ws_interface: &str = if cli.ws_external { "0.0.0.0" } else { "127.0.0.1" };
 
-	config.rpc_http = Some(
-		parse_address(&format!("{}:{}", rpc_interface, 9933), cli.rpc_port)?
-	);
-	config.rpc_ws = Some(
-		parse_address(&format!("{}:{}", ws_interface, 9944), cli.ws_port)?
-	);
+	config.rpc_http = Some(parse_address(&format!("{}:{}", rpc_interface, 9933), cli.rpc_port)?);
+	config.rpc_ws = Some(parse_address(&format!("{}:{}", ws_interface, 9944), cli.ws_port)?);
+
 	config.rpc_ws_max_connections = cli.ws_max_connections;
 	config.rpc_cors = cli.rpc_cors.unwrap_or_else(|| if is_dev {
 		log::warn!("Running in --dev mode, RPC CORS has been disabled.");
@@ -511,26 +784,6 @@ where
 	Ok(config)
 }
 
-fn run_node<F, S, RS, E, RP>(
-	cli: MergeParameters<RunCmd, RP>,
-	spec_factory: S,
-	exit: E,
-	run_service: RS,
-	impl_name: &'static str,
-	version: &VersionInfo,
-) -> error::Result<()>
-where
-	RP: StructOpt + Clone,
-	F: ServiceFactory,
-	E: IntoExit,
-	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
-	RS: FnOnce(E, RunCmd, RP, FactoryFullConfiguration<F>) -> Result<(), String>,
- {
-	let config = create_run_node_config::<F, _>(cli.left.clone(), spec_factory, impl_name, version)?;
-
-	run_service(exit, cli.left, cli.right, config).map_err(Into::into)
-}
-
 //
 // IANA unassigned port ranges that we could use:
 // 6717-6766		Unassigned
@@ -539,13 +792,13 @@ where
 // 9803-9874		Unassigned
 // 9926-9949		Unassigned
 
-fn with_default_boot_node<F>(
-	spec: &mut ChainSpec<FactoryGenesis<F>>,
+fn with_default_boot_node<G>(
+	spec: &mut ChainSpec<G>,
 	cli: BuildSpecCmd,
 	version: &VersionInfo,
 ) -> error::Result<()>
 where
-	F: ServiceFactory
+	G: RuntimeGenesis
 {
 	if spec.boot_nodes().is_empty() {
 		let base_path = base_path(&cli.shared_params, version);
@@ -563,33 +816,14 @@ where
 	Ok(())
 }
 
-fn build_spec<F, S>(
-	cli: BuildSpecCmd,
-	spec_factory: S,
-	version: &VersionInfo,
-) -> error::Result<()>
-where
-	F: ServiceFactory,
-	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
-{
-	info!("Building chain spec");
-	let raw_output = cli.raw;
-	let mut spec = load_spec(&cli.shared_params, spec_factory)?;
-	with_default_boot_node::<F>(&mut spec, cli, version)?;
-	let json = service::chain_ops::build_spec::<FactoryGenesis<F>>(spec, raw_output)?;
-
-	print!("{}", json);
-
-	Ok(())
-}
-
 /// Creates a configuration including the database path.
-pub fn create_config_with_db_path<F, S>(
+pub fn create_config_with_db_path<C, G, S>(
 	spec_factory: S, cli: &SharedParams, version: &VersionInfo,
-) -> error::Result<FactoryFullConfiguration<F>>
+) -> error::Result<Configuration<C, G>>
 where
-	F: ServiceFactory,
-	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
+	C: Default,
+	G: RuntimeGenesis,
+	S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
 {
 	let spec = load_spec(cli, spec_factory)?;
 	let base_path = base_path(cli, version);
@@ -600,112 +834,10 @@ where
 	Ok(config)
 }
 
-fn export_blocks<F, E, S>(
-	cli: ExportBlocksCmd,
-	spec_factory: S,
-	exit: E,
-	version: &VersionInfo,
-) -> error::Result<()>
-where
-	F: ServiceFactory,
-	E: IntoExit,
-	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
-{
-	let config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params, version)?;
+/// Internal trait used to cast to a dynamic type that implements Read and Seek.
+trait ReadPlusSeek: Read + Seek {}
 
-	info!("DB path: {}", config.database_path.display());
-	let from = cli.from.unwrap_or(1);
-	let to = cli.to;
-	let json = cli.json;
-
-	let file: Box<dyn Write> = match cli.output {
-		Some(filename) => Box::new(File::create(filename)?),
-		None => Box::new(stdout()),
-	};
-
-	service::chain_ops::export_blocks::<F, _, _>(
-		config, exit.into_exit(), file, from.into(), to.map(Into::into), json
-	).map_err(Into::into)
-}
-
-fn import_blocks<F, E, S>(
-	cli: ImportBlocksCmd,
-	spec_factory: S,
-	exit: E,
-	version: &VersionInfo,
-) -> error::Result<()>
-where
-	F: ServiceFactory,
-	E: IntoExit,
-	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
-{
-	let config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params, version)?;
-
-	let file: Box<dyn Read> = match cli.input {
-		Some(filename) => Box::new(File::open(filename)?),
-		None => Box::new(stdin()),
-	};
-
-	let fut = service::chain_ops::import_blocks::<F, _, _>(config, exit.into_exit(), file)?;
-	tokio::run(fut);
-	Ok(())
-}
-
-fn revert_chain<F, S>(
-	cli: RevertCmd,
-	spec_factory: S,
-	version: &VersionInfo,
-) -> error::Result<()>
-where
-	F: ServiceFactory,
-	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
-{
-	let config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params, version)?;
-	let blocks = cli.num;
-	Ok(service::chain_ops::revert_chain::<F>(config, blocks.into())?)
-}
-
-fn purge_chain<F, S>(
-	cli: PurgeChainCmd,
-	spec_factory: S,
-	version: &VersionInfo,
-) -> error::Result<()>
-where
-	F: ServiceFactory,
-	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
-{
-	let config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params, version)?;
-	let db_path = config.database_path;
-
-	if cli.yes == false {
-		print!("Are you sure to remove {:?}? (y/n)", &db_path);
-		stdout().flush().expect("failed to flush stdout");
-
-		let mut input = String::new();
-		stdin().read_line(&mut input)?;
-		let input = input.trim();
-
-		match input.chars().nth(0) {
-			Some('y') | Some('Y') => {},
-			_ => {
-				println!("Aborted");
-				return Ok(());
-			},
-		}
-	}
-
-	match fs::remove_dir_all(&db_path) {
-		Result::Ok(_) => {
-			println!("{:?} removed.", &db_path);
-			Ok(())
-		},
-		Result::Err(ref err) if err.kind() == ErrorKind::NotFound => {
-			println!("{:?} did not exist.", &db_path);
-			Ok(())
-		},
-		Result::Err(err) => Result::Err(err.into())
-	}
-}
+impl<T: Read + Seek> ReadPlusSeek for T {}
 
 fn parse_address(
 	address: &str,

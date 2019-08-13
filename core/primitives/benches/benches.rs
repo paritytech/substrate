@@ -16,10 +16,11 @@
 #[macro_use]
 extern crate criterion;
 
+use substrate_primitives as primitives;
 use criterion::{Criterion, black_box, Bencher, Fun};
 use std::time::Duration;
-use substrate_primitives::crypto::Pair as _;
-use substrate_primitives::hashing::{twox_128, blake2_128};
+use primitives::crypto::Pair as _;
+use primitives::hashing::{twox_128, blake2_128};
 
 const MAX_KEY_SIZE: u32 = 32;
 
@@ -71,7 +72,7 @@ fn bench_ed25519(c: &mut Criterion) {
 		let msg = (0..msg_size)
 			.map(|_| rand::random::<u8>())
 			.collect::<Vec<_>>();
-		let key = substrate_primitives::ed25519::Pair::generate().0;
+		let key = primitives::ed25519::Pair::generate().0;
 		b.iter(|| key.sign(&msg))
 	}, vec![32, 1024, 1024 * 1024]);
 
@@ -79,10 +80,10 @@ fn bench_ed25519(c: &mut Criterion) {
 		let msg = (0..msg_size)
 			.map(|_| rand::random::<u8>())
 			.collect::<Vec<_>>();
-		let key = substrate_primitives::ed25519::Pair::generate().0;
+		let key = primitives::ed25519::Pair::generate().0;
 		let sig = key.sign(&msg);
 		let public = key.public();
-		b.iter(|| substrate_primitives::ed25519::Pair::verify(&sig, &msg, &public))
+		b.iter(|| primitives::ed25519::Pair::verify(&sig, &msg, &public))
 	}, vec![32, 1024, 1024 * 1024]);
 }
 

@@ -19,9 +19,13 @@
 // end::description[]
 
 #[cfg(feature = "std")]
-use rand::{RngCore, rngs::OsRng};
+use rstd::convert::TryInto;
+use rstd::convert::TryFrom;
 #[cfg(feature = "std")]
-use parity_codec::{Encode, Decode};
+use parking_lot::Mutex;
+#[cfg(feature = "std")]
+use rand::{RngCore, rngs::OsRng};
+use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use regex::Regex;
 #[cfg(feature = "std")]
@@ -29,6 +33,8 @@ use base58::{FromBase58, ToBase58};
 #[cfg(feature = "std")]
 use std::hash::Hash;
 use zeroize::Zeroize;
+#[doc(hidden)]
+pub use rstd::ops::Deref;
 
 /// The root phrase for our publicly known keys.
 pub const DEV_PHRASE: &str = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
@@ -75,6 +81,14 @@ pub struct Protected<T: Zeroize>(T);
 
 impl<T: Zeroize> AsRef<T> for Protected<T> {
 	fn as_ref(&self) -> &T {
+		&self.0
+	}
+}
+
+impl<T: Zeroize> rstd::ops::Deref for Protected<T> {
+	type Target = T;
+
+	fn deref(&self) -> &T {
 		&self.0
 	}
 }
@@ -243,20 +257,44 @@ pub enum PublicError {
 #[cfg(feature = "std")]
 pub trait Ss58Codec: Sized {
 	/// Some if the string is a properly encoded SS58Check address.
-	fn from_ss58check(s: &str) -> Result<Self, PublicError>;
+	fn from_ss58check(s: &str) -> Result<Self, PublicError> {
+		Self::from_ss58check_with_version(s)
+			.and_then(|(r, v)| match v {
+				Ss58AddressFormat::SubstrateAccountDirect => Ok(r),
+				v if v == *DEFAULT_VERSION.lock() => Ok(r),
+				_ => Err(PublicError::UnknownVersion),
+			})
+	}
+	/// Some if the string is a properly encoded SS58Check address.
+	fn from_ss58check_with_version(s: &str) -> Result<(Self, Ss58AddressFormat), PublicError>;
 	/// Some if the string is a properly encoded SS58Check address, optionally with
 	/// a derivation path following.
-	fn from_string(s: &str) -> Result<Self, PublicError> { Self::from_ss58check(s) }
+	fn from_string(s: &str) -> Result<Self, PublicError> {
+		Self::from_string_with_version(s)
+			.and_then(|(r, v)| match v {
+				Ss58AddressFormat::SubstrateAccountDirect => Ok(r),
+				v if v == *DEFAULT_VERSION.lock() => Ok(r),
+				_ => Err(PublicError::UnknownVersion),
+			})
+	}
+
 	/// Return the ss58-check string for this key.
-	fn to_ss58check(&self) -> String;
+	fn to_ss58check_with_version(&self, version: Ss58AddressFormat) -> String;
+	/// Return the ss58-check string for this key.
+	fn to_ss58check(&self) -> String { self.to_ss58check_with_version(*DEFAULT_VERSION.lock()) }
+	/// Some if the string is a properly encoded SS58Check address, optionally with
+	/// a derivation path following.
+	fn from_string_with_version(s: &str) -> Result<(Self, Ss58AddressFormat), PublicError> {
+		Self::from_ss58check_with_version(s)
+	}
 }
 
-#[cfg(feature = "std")]
 /// Derivable key trait.
 pub trait Derive: Sized {
 	/// Derive a child key from a series of given junctions.
 	///
 	/// Will be `None` for public keys if there are any hard junctions in there.
+	#[cfg(feature = "std")]
 	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, _path: Iter) -> Option<Self> {
 		None
 	}
@@ -274,8 +312,91 @@ fn ss58hash(data: &[u8]) -> blake2_rfc::blake2b::Blake2bResult {
 }
 
 #[cfg(feature = "std")]
+lazy_static::lazy_static! {
+	static ref DEFAULT_VERSION: Mutex<Ss58AddressFormat>
+		= Mutex::new(Ss58AddressFormat::SubstrateAccountDirect);
+}
+
+/// A known address (sub)format/network ID for SS58.
+#[cfg(feature = "std")]
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum Ss58AddressFormat {
+	/// Any Substrate network, direct checksum, standard account (*25519).
+	SubstrateAccountDirect,
+	/// Polkadot Relay-chain, direct checksum, standard account (*25519).
+	PolkadotAccountDirect,
+	/// Kusama Relay-chain, direct checksum, standard account (*25519).
+	KusamaAccountDirect,
+	/// Use a manually provided numeric value.
+	Custom(u8),
+}
+
+#[cfg(feature = "std")]
+impl From<Ss58AddressFormat> for u8 {
+	fn from(x: Ss58AddressFormat) -> u8 {
+		match x {
+			Ss58AddressFormat::SubstrateAccountDirect => 42,
+			Ss58AddressFormat::PolkadotAccountDirect => 0,
+			Ss58AddressFormat::KusamaAccountDirect => 2,
+			Ss58AddressFormat::Custom(n) => n,
+		}
+	}
+}
+
+#[cfg(feature = "std")]
+impl TryFrom<u8> for Ss58AddressFormat {
+	type Error = ();
+	fn try_from(x: u8) -> Result<Ss58AddressFormat, ()> {
+		match x {
+			42 => Ok(Ss58AddressFormat::SubstrateAccountDirect),
+			0 => Ok(Ss58AddressFormat::PolkadotAccountDirect),
+			2 => Ok(Ss58AddressFormat::KusamaAccountDirect),
+			_ => Err(()),
+		}
+	}
+}
+
+#[cfg(feature = "std")]
+impl<'a> TryFrom<&'a str> for Ss58AddressFormat {
+	type Error = ();
+	fn try_from(x: &'a str) -> Result<Ss58AddressFormat, ()> {
+		match x {
+			"substrate" => Ok(Ss58AddressFormat::SubstrateAccountDirect),
+			"polkadot" => Ok(Ss58AddressFormat::PolkadotAccountDirect),
+			"kusama" => Ok(Ss58AddressFormat::KusamaAccountDirect),
+			a => a.parse::<u8>().map(Ss58AddressFormat::Custom).map_err(|_| ()),
+		}
+	}
+}
+
+#[cfg(feature = "std")]
+impl From<Ss58AddressFormat> for String {
+	fn from(x: Ss58AddressFormat) -> String {
+		match x {
+			Ss58AddressFormat::SubstrateAccountDirect => "substrate".into(),
+			Ss58AddressFormat::PolkadotAccountDirect => "polkadot".into(),
+			Ss58AddressFormat::KusamaAccountDirect => "kusama".into(),
+			Ss58AddressFormat::Custom(x) => x.to_string(),
+		}
+	}
+}
+
+/// Set the default "version" (actually, this is a bit of a misnomer and the version byte is
+/// typically used not just to encode format/version but also network identity) that is used for
+/// encoding and decoding SS58 addresses. If an unknown version is provided then it fails.
+///
+/// Current known "versions" are:
+/// - 0 direct (payload) checksum for 32-byte *25519 Polkadot addresses.
+/// - 2 direct (payload) checksum for 32-byte *25519 Polkadot Milestone 'K' addresses.
+/// - 42 direct (payload) checksum for 32-byte *25519 addresses on any Substrate-based network.
+#[cfg(feature = "std")]
+pub fn set_default_ss58_version(version: Ss58AddressFormat) {
+	*DEFAULT_VERSION.lock() = version
+}
+
+#[cfg(feature = "std")]
 impl<T: AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
-	fn from_ss58check(s: &str) -> Result<Self, PublicError> {
+	fn from_ss58check_with_version(s: &str) -> Result<(Self, Ss58AddressFormat), PublicError> {
 		let mut res = T::default();
 		let len = res.as_mut().len();
 		let d = s.from_base58().map_err(|_| PublicError::BadBase58)?; // failure here would be invalid encoding.
@@ -283,21 +404,18 @@ impl<T: AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 			// Invalid length.
 			return Err(PublicError::BadLength);
 		}
-		if d[0] != 42 {
-			// Invalid version.
-			return Err(PublicError::UnknownVersion);
-		}
+		let ver = d[0].try_into().map_err(|_: ()| PublicError::UnknownVersion)?;
 
 		if d[len+1..len+3] != ss58hash(&d[0..len+1]).as_bytes()[0..2] {
 			// Invalid checksum.
 			return Err(PublicError::InvalidChecksum);
 		}
 		res.as_mut().copy_from_slice(&d[1..len+1]);
-		Ok(res)
+		Ok((res, ver))
 	}
 
-	fn to_ss58check(&self) -> String {
-		let mut v = vec![42u8];
+	fn to_ss58check_with_version(&self, version: Ss58AddressFormat) -> String {
+		let mut v = vec![version.into()];
 		v.extend(self.as_ref());
 		let r = ss58hash(&v);
 		v.extend(&r.as_bytes()[0..2]);
@@ -324,11 +442,33 @@ impl<T: AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 				.ok_or(PublicError::InvalidPath)
 		}
 	}
+
+	fn from_string_with_version(s: &str) -> Result<(Self, Ss58AddressFormat), PublicError> {
+		let re = Regex::new(r"^(?P<ss58>[\w\d]+)?(?P<path>(//?[^/]+)*)$")
+			.expect("constructed from known-good static value; qed");
+		let cap = re.captures(s).ok_or(PublicError::InvalidFormat)?;
+		let re_junction = Regex::new(r"/(/?[^/]+)")
+			.expect("constructed from known-good static value; qed");
+		let (addr, v) = Self::from_ss58check_with_version(
+			cap.name("ss58")
+				.map(|r| r.as_str())
+				.unwrap_or(DEV_ADDRESS)
+		)?;
+		if cap["path"].is_empty() {
+			Ok((addr, v))
+		} else {
+			let path = re_junction.captures_iter(&cap["path"])
+				.map(|f| DeriveJunction::from(&f[1]));
+			addr.derive(path)
+				.ok_or(PublicError::InvalidPath)
+				.map(|a| (a, v))
+		}
+	}
 }
 
 /// Trait suitable for typical cryptographic PKI key public type.
-pub trait Public: TypedKey + PartialEq + Eq {
-	/// A new instance from the given slice that should be 32 bytes long.
+pub trait Public: AsRef<[u8]> + AsMut<[u8]> + Default + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync {
+	/// A new instance from the given slice.
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
 	/// you are certain that the array actually is a pubkey. GIGO!
@@ -336,17 +476,85 @@ pub trait Public: TypedKey + PartialEq + Eq {
 
 	/// Return a `Vec<u8>` filled with raw data.
 	#[cfg(feature = "std")]
-	fn to_raw_vec(&self) -> Vec<u8>;
+	fn to_raw_vec(&self) -> Vec<u8> { self.as_slice().to_owned() }
 
 	/// Return a slice filled with raw data.
-	fn as_slice(&self) -> &[u8];
+	fn as_slice(&self) -> &[u8] { self.as_ref() }
+}
+
+#[cfg(feature = "std")]
+pub use self::dummy::*;
+
+#[cfg(feature = "std")]
+mod dummy {
+	use super::*;
+
+	/// Dummy cryptography. Doesn't do anything.
+	#[derive(Clone, Hash, Default, Eq, PartialEq)]
+	pub struct Dummy;
+
+	impl AsRef<[u8]> for Dummy {
+		fn as_ref(&self) -> &[u8] { &b""[..] }
+	}
+
+	impl AsMut<[u8]> for Dummy {
+		fn as_mut(&mut self) -> &mut[u8] {
+			unsafe {
+				#[allow(mutable_transmutes)]
+				rstd::mem::transmute::<_, &'static mut [u8]>(&b""[..])
+			}
+		}
+	}
+
+	impl CryptoType for Dummy {
+		type Pair = Dummy;
+	}
+
+	impl Derive for Dummy {}
+
+	impl Public for Dummy {
+		fn from_slice(_: &[u8]) -> Self { Self }
+		#[cfg(feature = "std")]
+		fn to_raw_vec(&self) -> Vec<u8> { vec![] }
+		fn as_slice(&self) -> &[u8] { b"" }
+	}
+
+	impl Pair for Dummy {
+		type Public = Dummy;
+		type Seed = Dummy;
+		type Signature = Dummy;
+		type DeriveError = ();
+		fn generate_with_phrase(_: Option<&str>) -> (Self, String, Self::Seed) { Default::default() }
+		fn from_phrase(_: &str, _: Option<&str>)
+			-> Result<(Self, Self::Seed), SecretStringError>
+		{
+			Ok(Default::default())
+		}
+		fn derive<
+			Iter: Iterator<Item=DeriveJunction>
+		>(&self, _: Iter) -> Result<Self, Self::DeriveError> { Ok(Self) }
+		fn from_seed(_: &Self::Seed) -> Self { Self }
+		fn from_seed_slice(_: &[u8]) -> Result<Self, SecretStringError> { Ok(Self) }
+		fn from_standard_components<
+			I: Iterator<Item=DeriveJunction>
+		>(
+			_: &str,
+			_: Option<&str>,
+			_: I
+		) -> Result<Self, SecretStringError> { Ok(Self) }
+		fn sign(&self, _: &[u8]) -> Self::Signature { Self }
+		fn verify<M: AsRef<[u8]>>(_: &Self::Signature, _: M, _: &Self::Public) -> bool { true }
+		fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(_: &[u8], _: M, _: P) -> bool { true }
+		fn public(&self) -> Self::Public { Self }
+		fn to_raw_vec(&self) -> Vec<u8> { vec![] }
+	}
 }
 
 /// Trait suitable for typical cryptographic PKI key pair type.
 ///
 /// For now it just specifies how to create a key from a phrase and derivation path.
 #[cfg(feature = "std")]
-pub trait Pair: TypedKey + Sized + 'static {
+pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	/// The type which is used to encode a public key.
 	type Public: Public + Hash;
 
@@ -408,7 +616,7 @@ pub trait Pair: TypedKey + Sized + 'static {
 	fn sign(&self, message: &[u8]) -> Self::Signature;
 
 	/// Verify a signature on a message. Returns true if the signature is good.
-	fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: P) -> bool;
+	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: &Self::Public) -> bool;
 
 	/// Verify a signature on a message. Returns true if the signature is good.
 	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool;
@@ -473,26 +681,109 @@ pub trait Pair: TypedKey + Sized + 'static {
 	fn to_raw_vec(&self) -> Vec<u8>;
 }
 
+/// One type is wrapped by another.
+pub trait IsWrappedBy<Outer>: From<Outer> + Into<Outer> {
+	/// Get a reference to the inner from the outer.
+	fn from_ref(outer: &Outer) -> &Self;
+	/// Get a mutable reference to the inner from the outer.
+	fn from_mut(outer: &mut Outer) -> &mut Self;
+}
+
+/// Opposite of `IsWrappedBy` - denotes a type which is a simple wrapper around another type.
+pub trait Wraps: Sized {
+	/// The inner type it is wrapping.
+	type Inner: IsWrappedBy<Self>;
+}
+
+impl<T, Outer> IsWrappedBy<Outer> for T where
+	Outer: AsRef<Self> + AsMut<Self> + From<Self>,
+	T: From<Outer>,
+{
+	/// Get a reference to the inner from the outer.
+	fn from_ref(outer: &Outer) -> &Self { outer.as_ref() }
+
+	/// Get a mutable reference to the inner from the outer.
+	fn from_mut(outer: &mut Outer) -> &mut Self { outer.as_mut() }
+}
+
+impl<Inner, Outer, T> UncheckedFrom<T> for Outer where
+	Outer: Wraps<Inner=Inner>,
+	Inner: IsWrappedBy<Outer> + UncheckedFrom<T>,
+{
+	fn unchecked_from(t: T) -> Self {
+		let inner: Inner = t.unchecked_into();
+		inner.into()
+	}
+}
+
+/// Type which has a particular kind of crypto associated with it.
+pub trait CryptoType {
+	/// The pair key type of this crypto.
+	#[cfg(feature="std")]
+	type Pair: Pair;
+}
+
 /// An identifier for a type of cryptographic key.
 ///
-/// 0-1024 are reserved.
-pub type KeyTypeId = u32;
+/// To avoid clashes with other modules when distributing your module publically, register your
+/// `KeyTypeId` on the list here by making a PR.
+///
+/// Values whose first character is `_` are reserved for private use and won't conflict with any
+/// public modules.
+#[derive(Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct KeyTypeId(pub [u8; 4]);
 
-/// Constant key types.
+impl From<u32> for KeyTypeId {
+	fn from(x: u32) -> Self {
+		Self(x.to_le_bytes())
+	}
+}
+
+impl From<KeyTypeId> for u32 {
+	fn from(x: KeyTypeId) -> Self {
+		u32::from_le_bytes(x.0)
+	}
+}
+
+impl<'a> TryFrom<&'a str> for KeyTypeId {
+	type Error = ();
+	fn try_from(x: &'a str) -> Result<Self, ()> {
+		let b = x.as_bytes();
+		if b.len() != 4 {
+			return Err(());
+		}
+		let mut res = KeyTypeId::default();
+		res.0.copy_from_slice(&b[0..4]);
+		Ok(res)
+	}
+}
+
+/// Known key types; this also functions as a global registry of key types for projects wishing to
+/// avoid collisions with each other.
+///
+/// It's not universal in the sense that *all* key types need to be mentioned here, it's just a
+/// handy place to put common key types.
 pub mod key_types {
 	use super::KeyTypeId;
 
-	/// ED25519 public key.
-	pub const ED25519: KeyTypeId = 10;
-
-	/// SR25519 public key.
-	pub const SR25519: KeyTypeId = 20;
-}
-
-/// A trait for something that has a key type ID.
-pub trait TypedKey {
-	/// The type ID of this key.
-	const KEY_TYPE: KeyTypeId;
+	/// Key type for generic S/R 25519 key.
+	pub const SR25519: KeyTypeId = KeyTypeId(*b"sr25");
+	/// Key type for generic Ed25519 key.
+	pub const ED25519: KeyTypeId = KeyTypeId(*b"ed25");
+	/// Key type for Babe module, build-in.
+	pub const BABE: KeyTypeId = KeyTypeId(*b"babe");
+	/// Key type for Grandpa module, build-in.
+	pub const GRANDPA: KeyTypeId = KeyTypeId(*b"gran");
+	/// Key type for controlling an account in a Substrate runtime, built-in.
+	pub const ACCOUNT: KeyTypeId = KeyTypeId(*b"acco");
+	/// Key type for Aura module, built-in.
+	pub const AURA: KeyTypeId = KeyTypeId(*b"aura");
+	/// Key type for ImOnline module, built-in.
+	pub const IM_ONLINE: KeyTypeId = KeyTypeId(*b"imon");
+	/// A key type ID useful for tests.
+	#[cfg(feature = "std")]
+	pub const DUMMY: KeyTypeId = KeyTypeId(*b"dumy");
 }
 
 #[cfg(test)]
@@ -501,7 +792,7 @@ mod tests {
 	use hex_literal::hex;
 	use super::*;
 
-	#[derive(Eq, PartialEq, Debug)]
+	#[derive(Clone, Eq, PartialEq, Debug)]
 	enum TestPair {
 		Generated,
 		GeneratedWithPhrase,
@@ -509,9 +800,31 @@ mod tests {
 		Standard{phrase: String, password: Option<String>, path: Vec<DeriveJunction>},
 		Seed(Vec<u8>),
 	}
+	impl Default for TestPair {
+		fn default() -> Self {
+			TestPair::Generated
+		}
+	}
+	impl CryptoType for TestPair {
+		type Pair = Self;
+	}
 
-	#[derive(PartialEq, Eq, Hash)]
+	#[derive(Clone, PartialEq, Eq, Hash, Default)]
 	struct TestPublic;
+	impl AsRef<[u8]> for TestPublic {
+		fn as_ref(&self) -> &[u8] {
+			&[]
+		}
+	}
+	impl AsMut<[u8]> for TestPublic {
+		fn as_mut(&mut self) -> &mut [u8] {
+			&mut []
+		}
+	}
+	impl CryptoType for TestPublic {
+		type Pair = TestPair;
+	}
+	impl Derive for TestPublic {}
 	impl Public for TestPublic {
 		fn from_slice(_bytes: &[u8]) -> Self {
 			Self
@@ -522,9 +835,6 @@ mod tests {
 		fn to_raw_vec(&self) -> Vec<u8> {
 			vec![]
 		}
-	}
-	impl TypedKey for TestPublic {
-		const KEY_TYPE: u32 = 4242;
 	}
 	impl Pair for TestPair {
 		type Public = TestPublic;
@@ -551,11 +861,7 @@ mod tests {
 		}
 		fn from_seed(_seed: &<TestPair as Pair>::Seed) -> Self { TestPair::Seed(vec![]) }
 		fn sign(&self, _message: &[u8]) -> Self::Signature { [] }
-		fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(
-			_sig: &Self::Signature,
-			_message: M,
-			_pubkey: P
-		) -> bool { true }
+		fn verify<M: AsRef<[u8]>>(_: &Self::Signature, _: M, _: &Self::Public) -> bool { true }
 		fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(
 			_sig: &[u8],
 			_message: M,
@@ -581,9 +887,6 @@ mod tests {
 		fn to_raw_vec(&self) -> Vec<u8> {
 			vec![]
 		}
-	}
-	impl TypedKey for TestPair {
-		const KEY_TYPE: u32 = 4242;
 	}
 
 	#[test]

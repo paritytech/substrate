@@ -23,10 +23,10 @@ pub mod helpers;
 mod tests;
 
 use crate::helpers::Receiver;
-use futures::sync::{mpsc, oneshot};
+use futures03::{channel::{mpsc, oneshot}, compat::Compat};
 use jsonrpc_derive::rpc;
 use network;
-use runtime_primitives::traits::{self, Header as HeaderT};
+use sr_primitives::traits::{self, Header as HeaderT};
 
 use self::error::Result;
 pub use self::helpers::{Properties, SystemInfo, Health, PeerInfo};
@@ -124,18 +124,18 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 	fn system_health(&self) -> Receiver<Health> {
 		let (tx, rx) = oneshot::channel();
 		let _ = self.send_back.unbounded_send(Request::Health(tx));
-		Receiver(rx)
+		Receiver(Compat::new(rx))
 	}
 
 	fn system_peers(&self) -> Receiver<Vec<PeerInfo<B::Hash, <B::Header as HeaderT>::Number>>> {
 		let (tx, rx) = oneshot::channel();
 		let _ = self.send_back.unbounded_send(Request::Peers(tx));
-		Receiver(rx)
+		Receiver(Compat::new(rx))
 	}
 
 	fn system_network_state(&self) -> Receiver<network::NetworkState> {
 		let (tx, rx) = oneshot::channel();
 		let _ = self.send_back.unbounded_send(Request::NetworkState(tx));
-		Receiver(rx)
+		Receiver(Compat::new(rx))
 	}
 }

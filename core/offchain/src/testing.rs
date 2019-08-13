@@ -28,9 +28,8 @@ use primitives::offchain::{
 	HttpRequestId as RequestId,
 	HttpRequestStatus as RequestStatus,
 	Timestamp,
-	CryptoKind,
-	CryptoKeyId,
 	StorageKind,
+	OpaqueNetworkState,
 };
 
 /// Pending request.
@@ -135,48 +134,15 @@ impl TestOffchainExt {
 }
 
 impl offchain::Externalities for TestOffchainExt {
+	fn is_validator(&self) -> bool {
+		unimplemented!("not needed in tests so far")
+	}
+
 	fn submit_transaction(&mut self, _ex: Vec<u8>) -> Result<(), ()> {
 		unimplemented!("not needed in tests so far")
 	}
 
-	fn new_crypto_key(&mut self, _crypto: CryptoKind) -> Result<CryptoKeyId, ()> {
-		unimplemented!("not needed in tests so far")
-	}
-
-	fn encrypt(
-		&mut self,
-		_key: Option<CryptoKeyId>,
-		_kind: CryptoKind,
-		_data: &[u8],
-	) -> Result<Vec<u8>, ()> {
-		unimplemented!("not needed in tests so far")
-	}
-
-	fn decrypt(
-		&mut self,
-		_key: Option<CryptoKeyId>,
-		_kind: CryptoKind,
-		_data: &[u8],
-	) -> Result<Vec<u8>, ()> {
-		unimplemented!("not needed in tests so far")
-	}
-
-	fn sign(
-		&mut self,
-		_key: Option<CryptoKeyId>,
-		_kind: CryptoKind,
-		_data: &[u8],
-	) -> Result<Vec<u8>, ()> {
-		unimplemented!("not needed in tests so far")
-	}
-
-	fn verify(
-		&mut self,
-		_key: Option<CryptoKeyId>,
-		_kind: CryptoKind,
-		_msg: &[u8],
-		_signature: &[u8],
-	) -> Result<bool, ()> {
+	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
 		unimplemented!("not needed in tests so far")
 	}
 
@@ -204,14 +170,14 @@ impl offchain::Externalities for TestOffchainExt {
 		&mut self,
 		kind: StorageKind,
 		key: &[u8],
-		old_value: &[u8],
+		old_value: Option<&[u8]>,
 		new_value: &[u8]
 	) -> bool {
 		let mut state = self.0.write();
 		match kind {
 			StorageKind::LOCAL => &mut state.local_storage,
 			StorageKind::PERSISTENT => &mut state.persistent_storage,
-		}.compare_and_set(b"", key, Some(old_value), new_value)
+		}.compare_and_set(b"", key, old_value, new_value)
 	}
 
 	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>> {
@@ -323,4 +289,3 @@ impl offchain::Externalities for TestOffchainExt {
 		}
 	}
 }
-

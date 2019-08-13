@@ -19,11 +19,24 @@
 use super::*;
 use std::cell::RefCell;
 use srml_support::{impl_outer_origin, parameter_types};
-use substrate_primitives::H256;
-use primitives::{
-	traits::{BlakeTwo256, IdentityLookup, ConvertInto},
+use primitives::{crypto::key_types::DUMMY, H256};
+use sr_primitives::{
+	Perbill, impl_opaque_keys, traits::{BlakeTwo256, IdentityLookup, ConvertInto},
 	testing::{Header, UintAuthorityId}
 };
+
+impl_opaque_keys! {
+	pub struct MockSessionKeys {
+		#[id(DUMMY)]
+		pub dummy: UintAuthorityId,
+	}
+}
+
+impl From<UintAuthorityId> for MockSessionKeys {
+	fn from(dummy: UintAuthorityId) -> Self {
+		Self { dummy }
+	}
+}
 
 impl_outer_origin! {
 	pub enum Origin for Test {}
@@ -49,10 +62,16 @@ impl ShouldEndSession<u64> for TestShouldEndSession {
 
 pub struct TestSessionHandler;
 impl SessionHandler<u64> for TestSessionHandler {
-	fn on_new_session<T: OpaqueKeys>(changed: bool, validators: &[(u64, T)]) {
+	fn on_new_session<T: OpaqueKeys>(
+		changed: bool,
+		validators: &[(u64, T)],
+		_queued_validators: &[(u64, T)],
+	) {
 		SESSION_CHANGED.with(|l| *l.borrow_mut() = changed);
 		AUTHORITIES.with(|l|
-			*l.borrow_mut() = validators.iter().map(|(_, id)| id.get::<UintAuthorityId>(0).unwrap_or_default()).collect()
+			*l.borrow_mut() = validators.iter()
+				.map(|(_, id)| id.get::<UintAuthorityId>(DUMMY).unwrap_or_default())
+				.collect()
 		);
 	}
 	fn on_disabled(_validator_index: usize) {}
@@ -108,26 +127,35 @@ pub fn set_next_validators(next: Vec<u64>) {
 pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
+	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const MinimumPeriod: u64 = 5;
+	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
+
 impl system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
+	type Call = ();
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
+	type WeightMultiplierUpdate = ();
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type AvailableBlockRatio = AvailableBlockRatio;
+	type MaximumBlockLength = MaximumBlockLength;
 }
+
 impl timestamp::Trait for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
 }
-
 
 impl Trait for Test {
 	type ShouldEndSession = TestShouldEndSession;
@@ -138,7 +166,7 @@ impl Trait for Test {
 	type SessionHandler = TestSessionHandler;
 	type ValidatorId = u64;
 	type ValidatorIdOf = ConvertInto;
-	type Keys = UintAuthorityId;
+	type Keys = MockSessionKeys;
 	type Event = ();
 	type SelectInitialValidators = ();
 }
@@ -146,7 +174,7 @@ impl Trait for Test {
 #[cfg(feature = "historical")]
 impl crate::historical::Trait for Test {
 	type FullIdentification = u64;
-	type FullIdentificationOf = primitives::traits::ConvertInto;
+	type FullIdentificationOf = sr_primitives::traits::ConvertInto;
 }
 
 pub type System = system::Module<Test>;

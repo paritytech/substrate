@@ -22,24 +22,25 @@
 use crate::account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
 use crate::{
 	BalanceOf, ComputeDispatchFee, ContractAddressFor, ContractInfo, ContractInfoOf, GenesisConfig,
-	Module, RawAliveContractInfo, RawEvent, Trait, TrieId, TrieIdFromParentCounter, TrieIdGenerator,
+	Module, RawAliveContractInfo, RawEvent, Trait, TrieId, TrieIdFromParentCounter,
+	TrieIdGenerator, Schedule,
 };
 use assert_matches::assert_matches;
 use hex_literal::*;
-use parity_codec::{Decode, Encode, KeyedVec};
+use codec::{Decode, Encode, KeyedVec};
 use runtime_io;
 use runtime_io::with_externalities;
-use runtime_primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, H256};
-use runtime_primitives::traits::{BlakeTwo256, Hash, IdentityLookup};
-use runtime_primitives::BuildStorage;
+use sr_primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, H256};
+use sr_primitives::traits::{BlakeTwo256, Hash, IdentityLookup};
+use sr_primitives::{Perbill, BuildStorage};
 use srml_support::{
 	assert_ok, assert_err, impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types,
 	storage::child,	StorageMap, StorageValue, traits::{Currency, Get},
 };
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use substrate_primitives::storage::well_known_keys;
-use substrate_primitives::Blake2Hasher;
+use primitives::storage::well_known_keys;
+use primitives::Blake2Hasher;
 use system::{self, EventRecord, Phase};
 use {balances, wabt};
 
@@ -96,22 +97,28 @@ impl Get<u64> for BlockGasLimit {
 pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
+	pub const MaximumBlockWeight: u32 = 1024;
+	pub const MaximumBlockLength: u32 = 2 * 1024;
+	pub const BalancesTransactionBaseFee: u64 = 0;
+	pub const BalancesTransactionByteFee: u64 = 0;
+	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
+	type Call = ();
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
+	type WeightMultiplierUpdate = ();
 	type Event = MetaEvent;
 	type BlockHashCount = BlockHashCount;
-}
-parameter_types! {
-	pub const BalancesTransactionBaseFee: u64 = 0;
-	pub const BalancesTransactionByteFee: u64 = 0;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type AvailableBlockRatio = AvailableBlockRatio;
+	type MaximumBlockLength = MaximumBlockLength;
 }
 impl balances::Trait for Test {
 	type Balance = u64;
@@ -126,6 +133,7 @@ impl balances::Trait for Test {
 	type CreationFee = CreationFee;
 	type TransactionBaseFee = BalancesTransactionBaseFee;
 	type TransactionByteFee = BalancesTransactionByteFee;
+	type WeightToFee = ();
 }
 parameter_types! {
 	pub const MinimumPeriod: u64 = 1;
@@ -190,7 +198,7 @@ impl ContractAddressFor<H256, u64> for DummyContractAddressFor {
 pub struct DummyTrieIdGenerator;
 impl TrieIdGenerator<u64> for DummyTrieIdGenerator {
 	fn trie_id(account_id: &u64) -> TrieId {
-		use substrate_primitives::storage::well_known_keys;
+		use primitives::storage::well_known_keys;
 
 		let new_seed = super::AccountCounter::mutate(|v| {
 			*v = v.wrapping_add(1);
@@ -270,12 +278,15 @@ impl ExtBuilder {
 		balances::GenesisConfig::<Test> {
 			balances: vec![],
 			vesting: vec![],
-		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
+		}.assimilate_storage(&mut t).unwrap();
 		GenesisConfig::<Test> {
-			current_schedule: Default::default(),
+			current_schedule: Schedule {
+				enable_println: true,
+				..Default::default()
+			},
 			gas_price: self.gas_price,
-		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
-		runtime_io::TestExternalities::new_with_children(t)
+		}.assimilate_storage(&mut t).unwrap();
+		runtime_io::TestExternalities::new(t)
 	}
 }
 
@@ -691,7 +702,7 @@ const CODE_SET_RENT: &str = r#"
 	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32 i32)))
 	(import "env" "ext_set_rent_allowance" (func $ext_set_rent_allowance (param i32 i32)))
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; insert a value of 4 bytes into storage
@@ -774,7 +785,7 @@ const CODE_SET_RENT: &str = r#"
 			(i32.const 0)
 			(i32.const 4)
 		)
-		(call $ext_scratch_copy
+		(call $ext_scratch_read
 			(i32.const 0)
 			(i32.const 0)
 			(get_local $input_size)
@@ -1166,7 +1177,7 @@ const CODE_CHECK_DEFAULT_RENT_ALLOWANCE: &str = r#"
 (module
 	(import "env" "ext_rent_allowance" (func $ext_rent_allowance))
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(func $assert (param i32)
@@ -1193,7 +1204,7 @@ const CODE_CHECK_DEFAULT_RENT_ALLOWANCE: &str = r#"
 		)
 
 		;; copy contents of the scratch buffer into the contract's memory.
-		(call $ext_scratch_copy
+		(call $ext_scratch_read
 			(i32.const 8)		;; Pointer in memory to the place where to copy.
 			(i32.const 0)		;; Offset from the start of the scratch buffer.
 			(i32.const 8)		;; Count of bytes to copy.
@@ -1250,17 +1261,24 @@ fn default_rent_allowance_on_create() {
 const CODE_RESTORATION: &str = r#"
 (module
 	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32 i32)))
-	(import "env" "ext_dispatch_call" (func $ext_dispatch_call (param i32 i32)))
+	(import "env" "ext_restore_to" (func $ext_restore_to (param i32 i32 i32 i32 i32 i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(func (export "call")
-		(call $ext_dispatch_call
-			;; Pointer to the start of the encoded call buffer
-			(i32.const 200)
-			;; The length of the encoded call buffer.
-			;;
-			;; NB: This is required to keep in sync with the values in `restoration`.
-			(i32.const 115)
+		(call $ext_restore_to
+			;; Pointer and length of the encoded dest buffer.
+			(i32.const 256)
+			(i32.const 8)
+			;; Pointer and length of the encoded code hash buffer
+			(i32.const 264)
+			(i32.const 32)
+			;; Pointer and length of the encoded rent_allowance buffer
+			(i32.const 296)
+			(i32.const 8)
+			;; Pointer and number of items in the delta buffer.
+			;; This buffer specifies multiple keys for removal before restoration.
+			(i32.const 100)
+			(i32.const 1)
 		)
 	)
 	(func (export "deploy")
@@ -1284,17 +1302,20 @@ const CODE_RESTORATION: &str = r#"
 	;; Data to restore
 	(data (i32.const 0) "\28")
 
-	;; ACL
+	;; Buffer that has ACL storage keys.
 	(data (i32.const 100) "\01")
 
-	;; Serialized version of `T::Call` that encodes a call to `restore_to` function. For more
-	;; details check out the `ENCODED_CALL_LITERAL`.
-	(data (i32.const 200)
-		"\01\05\02\00\00\00\00\00\00\00\69\ae\df\b4\f6\c1\c3\98\e9\7f\8a\52\04\de\0f\95\ad\5e\7d\c3"
-		"\54\09\60\be\ab\11\a8\6c\56\9f\bf\cf\32\00\00\00\00\00\00\00\08\01\00\00\00\00\00\00\00\00"
-		"\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\01\00\00\00\00\00\00"
-		"\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00"
+	;; Address of bob
+	(data (i32.const 256) "\02\00\00\00\00\00\00\00")
+
+	;; Code hash of SET_RENT
+	(data (i32.const 264)
+		"\14\eb\65\3c\86\98\d6\b2\3d\8d\3c\4a\54\c6\c4\71"
+		"\b9\fc\19\36\df\ca\a0\a1\f2\dc\ad\9d\e5\36\0b\25"
 	)
+
+	;; Rent allowance
+	(data (i32.const 296) "\32\00\00\00\00\00\00\00")
 )
 "#;
 
@@ -1319,45 +1340,9 @@ fn restoration_success() {
 }
 
 fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage: bool) {
+	let (set_rent_wasm, set_rent_code_hash) = compile_module::<Test>(CODE_SET_RENT).unwrap();
 	let (restoration_wasm, restoration_code_hash) =
 		compile_module::<Test>(CODE_RESTORATION).unwrap();
-	let (set_rent_wasm, set_rent_code_hash) = compile_module::<Test>(CODE_SET_RENT).unwrap();
-
-	let acl_key = {
-		let mut s = [0u8; 32];
-		s[0] = 1;
-		s
-	};
-
-	// This test can fail due to the encoding changes. In case it becomes too annoying
-	// let's rewrite so as we use this module controlled call or we serialize it in runtime.
-	let encoded = hex::encode(Encode::encode(&Call::Contract(super::Call::restore_to(
-		BOB,
-		set_rent_code_hash.into(),
-		<Test as balances::Trait>::Balance::from(50u32),
-		vec![acl_key, acl_key],
-	))));
-
-	// `ENCODED_CALL_LITERAL` is encoded `T::Call` represented as a byte array. There is an exact
-	// same copy of this (modulo hex notation differences) in `CODE_RESTORATION`.
-	//
-	// When this assert is triggered make sure that you update the literals here and in
-	// `CODE_RESTORATION`. Hopefully, we switch to automatic injection of the code.
-	const ENCODED_CALL_LITERAL: &str =
-		"0105020000000000000069aedfb4f6c1c398e97f8a5204de0f95ad5e7dc3540960beab11a86c569fbfcf320000\
-		0000000000080100000000000000000000000000000000000000000000000000000000000000010000000000000\
-		0000000000000000000000000000000000000000000000000";
-	assert_eq!(
-		encoded,
-		ENCODED_CALL_LITERAL,
-		"The literal was changed and requires updating here and in `CODE_RESTORATION`",
-	);
-	assert_eq!(
-		hex::decode(ENCODED_CALL_LITERAL).unwrap().len(),
-		115,
-		"The size of the literal was changed and requires updating in `CODE_RESTORATION`",
-	);
-
 
 	with_externalities(
 		&mut ExtBuilder::default().existential_deposit(50).build(),
@@ -1464,6 +1449,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 			} else {
 				// Here we expect that the restoration is succeeded. Check that the restoration
 				// contract `DJANGO` ceased to exist and that `BOB` returned back.
+				println!("{:?}", ContractInfoOf::<Test>::get(BOB));
 				let bob_contract = ContractInfoOf::<Test>::get(BOB).unwrap()
 					.get_alive().unwrap();
 				assert_eq!(bob_contract.rent_allowance, 50);
@@ -1481,7 +1467,7 @@ const CODE_STORAGE_SIZE: &str = r#"
 	(import "env" "ext_get_storage" (func $ext_get_storage (param i32) (result i32)))
 	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32 i32)))
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
 	(import "env" "memory" (memory 16 16))
 
 	(func $assert (param i32)
@@ -1503,7 +1489,7 @@ const CODE_STORAGE_SIZE: &str = r#"
 		)
 
 		;; copy contents of the scratch buffer into the contract's memory.
-		(call $ext_scratch_copy
+		(call $ext_scratch_read
 			(i32.const 32)		;; Pointer in memory to the place where to copy.
 			(i32.const 0)		;; Offset from the start of the scratch buffer.
 			(i32.const 4)		;; Count of bytes to copy.
@@ -1582,6 +1568,360 @@ fn storage_max_value_limit() {
 				),
 				"during execution"
 			);
+		}
+	);
+}
+
+const CODE_RETURN_WITH_DATA: &str = r#"
+(module
+	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
+	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
+	(import "env" "ext_scratch_write" (func $ext_scratch_write (param i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	;; Deploy routine is the same as call.
+	(func (export "deploy") (result i32)
+		(call $call)
+	)
+
+	;; Call reads the first 4 bytes (LE) as the exit status and returns the rest as output data.
+	(func $call (export "call") (result i32)
+		(local $buf_size i32)
+		(local $exit_status i32)
+
+		;; Find out the size of the scratch buffer
+		(set_local $buf_size (call $ext_scratch_size))
+
+		;; Copy scratch buffer into this contract memory.
+		(call $ext_scratch_read
+			(i32.const 0)		;; The pointer where to store the scratch buffer contents,
+			(i32.const 0)		;; Offset from the start of the scratch buffer.
+			(get_local $buf_size)		;; Count of bytes to copy.
+		)
+
+		;; Copy all but the first 4 bytes of the input data as the output data.
+		(call $ext_scratch_write
+			(i32.const 4)		;; Offset from the start of the scratch buffer.
+			(i32.sub		;; Count of bytes to copy.
+				(get_local $buf_size)
+				(i32.const 4)
+			)
+		)
+
+		;; Return the first 4 bytes of the input data as the exit status.
+		(i32.load (i32.const 0))
+	)
+)
+"#;
+
+const CODE_CALLER_CONTRACT: &str = r#"
+(module
+	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
+	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
+	(import "env" "ext_balance" (func $ext_balance))
+	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
+	(import "env" "ext_create" (func $ext_create (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
+	(import "env" "ext_println" (func $ext_println (param i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+
+	(func $current_balance (param $sp i32) (result i64)
+		(call $ext_balance)
+		(call $assert
+			(i32.eq (call $ext_scratch_size) (i32.const 8))
+		)
+		(call $ext_scratch_read
+			(i32.sub (get_local $sp) (i32.const 8))
+			(i32.const 0)
+			(i32.const 8)
+		)
+		(i64.load (i32.sub (get_local $sp) (i32.const 8)))
+	)
+
+	(func (export "deploy"))
+
+	(func (export "call")
+		(local $sp i32)
+		(local $exit_code i32)
+		(local $balance i64)
+
+		;; Input data is the code hash of the contract to be deployed.
+		(call $assert
+			(i32.eq
+				(call $ext_scratch_size)
+				(i32.const 32)
+			)
+		)
+
+		;; Copy code hash from scratch buffer into this contract's memory.
+		(call $ext_scratch_read
+			(i32.const 24)		;; The pointer where to store the scratch buffer contents,
+			(i32.const 0)		;; Offset from the start of the scratch buffer.
+			(i32.const 32)		;; Count of bytes to copy.
+		)
+
+		;; Read current balance into local variable.
+		(set_local $sp (i32.const 1024))
+		(set_local $balance
+			(call $current_balance (get_local $sp))
+		)
+
+		;; Fail to deploy the contract since it returns a non-zero exit status.
+		(set_local $exit_code
+			(call $ext_create
+				(i32.const 24)	;; Pointer to the code hash.
+				(i32.const 32)	;; Length of the code hash.
+				(i64.const 0)	;; How much gas to devote for the execution. 0 = all.
+				(i32.const 0)	;; Pointer to the buffer with value to transfer
+				(i32.const 8)	;; Length of the buffer with value to transfer.
+				(i32.const 9)	;; Pointer to input data buffer address
+				(i32.const 7)	;; Length of input data buffer
+			)
+		)
+
+		;; Check non-zero exit status.
+		(call $assert
+			(i32.eq (get_local $exit_code) (i32.const 0x11))
+		)
+
+		;; Check that scratch buffer is empty since contract instantiation failed.
+		(call $assert
+			(i32.eq (call $ext_scratch_size) (i32.const 0))
+		)
+
+		;; Check that balance has not changed.
+		(call $assert
+			(i64.eq (get_local $balance) (call $current_balance (get_local $sp)))
+		)
+
+		;; Fail to deploy the contract due to insufficient gas.
+		(set_local $exit_code
+			(call $ext_create
+				(i32.const 24)	;; Pointer to the code hash.
+				(i32.const 32)	;; Length of the code hash.
+				(i64.const 200)	;; How much gas to devote for the execution.
+				(i32.const 0)	;; Pointer to the buffer with value to transfer
+				(i32.const 8)	;; Length of the buffer with value to transfer.
+				(i32.const 8)	;; Pointer to input data buffer address
+				(i32.const 8)	;; Length of input data buffer
+			)
+		)
+
+		;; Check for special trap exit status.
+		(call $assert
+			(i32.eq (get_local $exit_code) (i32.const 0x0100))
+		)
+
+		;; Check that scratch buffer is empty since contract instantiation failed.
+		(call $assert
+			(i32.eq (call $ext_scratch_size) (i32.const 0))
+		)
+
+		;; Check that balance has not changed.
+		(call $assert
+			(i64.eq (get_local $balance) (call $current_balance (get_local $sp)))
+		)
+
+		;; Deploy the contract successfully.
+		(set_local $exit_code
+			(call $ext_create
+				(i32.const 24)	;; Pointer to the code hash.
+				(i32.const 32)	;; Length of the code hash.
+				(i64.const 0)	;; How much gas to devote for the execution. 0 = all.
+				(i32.const 0)	;; Pointer to the buffer with value to transfer
+				(i32.const 8)	;; Length of the buffer with value to transfer.
+				(i32.const 8)	;; Pointer to input data buffer address
+				(i32.const 8)	;; Length of input data buffer
+			)
+		)
+
+		;; Check for success exit status.
+		(call $assert
+			(i32.eq (get_local $exit_code) (i32.const 0x00))
+		)
+
+		;; Check that scratch buffer contains the address of the new contract.
+		(call $assert
+			(i32.eq (call $ext_scratch_size) (i32.const 8))
+		)
+
+		;; Copy contract address from scratch buffer into this contract's memory.
+		(call $ext_scratch_read
+			(i32.const 16)		;; The pointer where to store the scratch buffer contents,
+			(i32.const 0)		;; Offset from the start of the scratch buffer.
+			(i32.const 8)		;; Count of bytes to copy.
+		)
+
+		;; Check that balance has been deducted.
+		(set_local $balance
+			(i64.sub (get_local $balance) (i64.load (i32.const 0)))
+		)
+		(call $assert
+			(i64.eq (get_local $balance) (call $current_balance (get_local $sp)))
+		)
+
+		;; Call the new contract and expect it to return failing exit code.
+		(set_local $exit_code
+			(call $ext_call
+				(i32.const 16)	;; Pointer to "callee" address.
+				(i32.const 8)	;; Length of "callee" address.
+				(i64.const 0)	;; How much gas to devote for the execution. 0 = all.
+				(i32.const 0)	;; Pointer to the buffer with value to transfer
+				(i32.const 8)	;; Length of the buffer with value to transfer.
+				(i32.const 9)	;; Pointer to input data buffer address
+				(i32.const 7)	;; Length of input data buffer
+			)
+		)
+
+		;; Check non-zero exit status.
+		(call $assert
+			(i32.eq (get_local $exit_code) (i32.const 0x11))
+		)
+
+		;; Check that scratch buffer contains the expected return data.
+		(call $assert
+			(i32.eq (call $ext_scratch_size) (i32.const 3))
+		)
+		(i32.store
+			(i32.sub (get_local $sp) (i32.const 4))
+			(i32.const 0)
+		)
+		(call $ext_scratch_read
+			(i32.sub (get_local $sp) (i32.const 4))
+			(i32.const 0)
+			(i32.const 3)
+		)
+		(call $assert
+			(i32.eq
+				(i32.load (i32.sub (get_local $sp) (i32.const 4)))
+				(i32.const 0x00776655)
+			)
+		)
+
+		;; Check that balance has not changed.
+		(call $assert
+			(i64.eq (get_local $balance) (call $current_balance (get_local $sp)))
+		)
+
+		;; Fail to call the contract due to insufficient gas.
+		(set_local $exit_code
+			(call $ext_call
+				(i32.const 16)	;; Pointer to "callee" address.
+				(i32.const 8)	;; Length of "callee" address.
+				(i64.const 100)	;; How much gas to devote for the execution.
+				(i32.const 0)	;; Pointer to the buffer with value to transfer
+				(i32.const 8)	;; Length of the buffer with value to transfer.
+				(i32.const 8)	;; Pointer to input data buffer address
+				(i32.const 8)	;; Length of input data buffer
+			)
+		)
+
+		;; Check for special trap exit status.
+		(call $assert
+			(i32.eq (get_local $exit_code) (i32.const 0x0100))
+		)
+
+		;; Check that scratch buffer is empty since call trapped.
+		(call $assert
+			(i32.eq (call $ext_scratch_size) (i32.const 0))
+		)
+
+		;; Check that balance has not changed.
+		(call $assert
+			(i64.eq (get_local $balance) (call $current_balance (get_local $sp)))
+		)
+
+		;; Call the contract successfully.
+		(set_local $exit_code
+			(call $ext_call
+				(i32.const 16)	;; Pointer to "callee" address.
+				(i32.const 8)	;; Length of "callee" address.
+				(i64.const 0)	;; How much gas to devote for the execution. 0 = all.
+				(i32.const 0)	;; Pointer to the buffer with value to transfer
+				(i32.const 8)	;; Length of the buffer with value to transfer.
+				(i32.const 8)	;; Pointer to input data buffer address
+				(i32.const 8)	;; Length of input data buffer
+			)
+		)
+
+		;; Check for success exit status.
+		(call $assert
+			(i32.eq (get_local $exit_code) (i32.const 0x00))
+		)
+
+		;; Check that scratch buffer contains the expected return data.
+		(call $assert
+			(i32.eq (call $ext_scratch_size) (i32.const 4))
+		)
+		(i32.store
+			(i32.sub (get_local $sp) (i32.const 4))
+			(i32.const 0)
+		)
+		(call $ext_scratch_read
+			(i32.sub (get_local $sp) (i32.const 4))
+			(i32.const 0)
+			(i32.const 4)
+		)
+		(call $assert
+			(i32.eq
+				(i32.load (i32.sub (get_local $sp) (i32.const 4)))
+				(i32.const 0x77665544)
+			)
+		)
+
+		;; Check that balance has been deducted.
+		(set_local $balance
+			(i64.sub (get_local $balance) (i64.load (i32.const 0)))
+		)
+		(call $assert
+			(i64.eq (get_local $balance) (call $current_balance (get_local $sp)))
+		)
+	)
+
+	(data (i32.const 0) "\00\80")		;; The value to transfer on instantiation and calls.
+										;; Chosen to be greater than existential deposit.
+	(data (i32.const 8) "\00\11\22\33\44\55\66\77")		;; The input data to instantiations and calls.
+)
+"#;
+
+#[test]
+fn deploy_and_call_other_contract() {
+	let (callee_wasm, callee_code_hash) = compile_module::<Test>(CODE_RETURN_WITH_DATA).unwrap();
+	let (caller_wasm, caller_code_hash) = compile_module::<Test>(CODE_CALLER_CONTRACT).unwrap();
+
+	with_externalities(
+		&mut ExtBuilder::default().existential_deposit(50).build(),
+		|| {
+			// Create
+			Balances::deposit_creating(&ALICE, 1_000_000);
+			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, callee_wasm));
+			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, caller_wasm));
+
+			assert_ok!(Contract::create(
+				Origin::signed(ALICE),
+				100_000,
+				100_000,
+				caller_code_hash.into(),
+				vec![],
+			));
+
+			// Call BOB contract, which attempts to instantiate and call the callee contract and
+			// makes various assertions on the results from those calls.
+			assert_ok!(Contract::call(
+				Origin::signed(ALICE),
+				BOB,
+				0,
+				200_000,
+				callee_code_hash.as_ref().to_vec(),
+			));
 		}
 	);
 }
