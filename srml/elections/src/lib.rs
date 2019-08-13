@@ -1344,7 +1344,7 @@ mod tests {
 	#[test]
 	fn bool_to_flag_should_work() {
 		with_externalities(&mut ExtBuilder::default().build(), || {
-			assert_eq!(Elections::bool_to_flag(vec![]), vec![]);
+			assert_eq!(Elections::bool_to_flag(vec![]), Vec::<u32>::new());
 			assert_eq!(Elections::bool_to_flag(vec![false]), vec![0]);
 			assert_eq!(Elections::bool_to_flag(vec![true]), vec![1]);
 			assert_eq!(Elections::bool_to_flag(vec![true, true, true, true]), vec![15]);
@@ -1409,7 +1409,7 @@ mod tests {
 
 			assert_eq!(Elections::voters(0), Vec::<Option<u64>>::new());
 			assert_eq!(Elections::voter_info(1), None);
-			assert_eq!(Elections::all_approvals_of(&1), vec![]);
+			assert_eq!(Elections::all_approvals_of(&1), Vec::<bool>::new());
 		});
 	}
 
@@ -2264,11 +2264,11 @@ mod tests {
 
 			assert_eq!(Elections::all_approvals_of(&2), vec![true]);
 			// NOTE: these two are stored in mem differently though.
-			assert_eq!(Elections::all_approvals_of(&3), vec![]);
-			assert_eq!(Elections::all_approvals_of(&4), vec![]);
+			assert_eq!(Elections::all_approvals_of(&3), Vec::<bool>::new());
+			assert_eq!(Elections::all_approvals_of(&4), Vec::<bool>::new());
 
 			assert_eq!(Elections::approvals_of((3, 0)), vec![0]);
-			assert_eq!(Elections::approvals_of((4, 0)), vec![]);
+			assert_eq!(Elections::approvals_of((4, 0)), Vec::<u32>::new());
 		});
 	}
 
