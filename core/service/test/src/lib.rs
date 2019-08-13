@@ -246,7 +246,7 @@ impl<G, F, L> TestNet<G, F, L> where
 
 			executor.spawn(service.clone().map_err(|_| ()));
 			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().into()));
-			self.full_nodes.push((self.nodes, service, addr));
+			self.authority_nodes.push((self.nodes, service, addr));
 			self.nodes += 1;
 		}
 
@@ -359,8 +359,8 @@ pub fn sync<G, Fb, F, Lb, L, B, E>(spec: ChainSpec<G>, full_builder: Fb, light_b
 	F: AbstractService,
 	Lb: Fn(Configuration<(), G>) -> Result<L, Error>,
 	L: AbstractService,
-	B: FnMut(&SyncService<F>) -> BlockImportParams<F::Block>,
-	E: FnMut(&SyncService<F>) -> <F::Block as BlockT>::Extrinsic,
+	B: FnMut(&F) -> BlockImportParams<F::Block>,
+	E: FnMut(&F) -> <F::Block as BlockT>::Extrinsic,
 {
 	const NUM_FULL_NODES: usize = 10;
 	// FIXME: BABE light client support is currently not working.
@@ -385,7 +385,7 @@ pub fn sync<G, Fb, F, Lb, L, B, E>(spec: ChainSpec<G>, full_builder: Fb, light_b
 			if i % 128 == 0 {
 				info!("Generating #{}", i);
 			}
-			let import_data = block_factory(&first_service);
+			let import_data = block_factory(&first_service.get());
 			client.import_block(import_data, HashMap::new()).expect("Error importing test block");
 		}
 		network.full_nodes[0].2.clone()
@@ -408,7 +408,7 @@ pub fn sync<G, Fb, F, Lb, L, B, E>(spec: ChainSpec<G>, full_builder: Fb, light_b
 	info!("Checking extrinsic propagation");
 	let first_service = network.full_nodes[0].1.clone();
 	let best_block = BlockId::number(first_service.get().client().info().chain.best_number);
-	let extrinsic = extrinsic_factory(&first_service);
+	let extrinsic = extrinsic_factory(&first_service.get());
 	first_service.get().transaction_pool().submit_one(&best_block, extrinsic).unwrap();
 	network.run_until_all_full(
 		|_index, service| service.get().transaction_pool().ready().count() == 1,
