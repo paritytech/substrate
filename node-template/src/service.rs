@@ -82,7 +82,8 @@ macro_rules! new_full_start {
 
 /// Builds a new service for a full client.
 pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisConfig>)
--> Result<impl AbstractService, ServiceError> {
+	-> Result<impl AbstractService, ServiceError>
+{
 
 	let (builder, mut import_setup, inherent_data_providers, mut tasks_to_spawn) = new_full_start!(config);
 
@@ -188,7 +189,8 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 
 /// Builds a new service for a light client.
 pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisConfig>)
--> Result<impl AbstractService, ServiceError> {
+	-> Result<impl AbstractService, ServiceError>
+{
 	let inherent_data_providers = InherentDataProviders::new();
 
 	ServiceBuilder::new_light::<Block, RuntimeApi, Executor>(config)?
