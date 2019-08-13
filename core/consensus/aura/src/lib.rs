@@ -390,18 +390,21 @@ fn find_pre_digest<B: BlockT, P: Pair>(header: &B::Header) -> Result<u64, String
 ///
 /// This digest item will always return `Some` when used with `as_aura_seal`.
 //
-// FIXME #1018 needs misbehavior types
-fn check_header<C, B: BlockT, P: Pair>(
+// FIXME #1018 needs misbehavior types. The `transaction_pool` parameter will be 
+// used to submit such misbehavior reports.
+fn check_header<C, B: BlockT, P: Pair, T>(
 	client: &C,
 	slot_now: u64,
 	mut header: B::Header,
 	hash: B::Hash,
 	authorities: &[AuthorityId<P>],
+	_transaction_pool: Option<&T>,
 ) -> Result<CheckedHeader<B::Header, (u64, DigestItemFor<B>)>, String> where
 	DigestItemFor<B>: CompatibleDigestItem<P>,
 	P::Signature: Decode,
 	C: client::backend::AuxStore,
 	P::Public: Encode + Decode + PartialEq + Clone,
+	T: Send + Sync + 'static,
 {
 	let seal = match header.digest_mut().pop() {
 		Some(x) => x,
@@ -451,13 +454,14 @@ fn check_header<C, B: BlockT, P: Pair>(
 }
 
 /// A verifier for Aura blocks.
-pub struct AuraVerifier<C, P> {
+pub struct AuraVerifier<C, P, T> {
 	client: Arc<C>,
 	phantom: PhantomData<P>,
 	inherent_data_providers: inherents::InherentDataProviders,
+	transaction_pool: Option<Arc<T>>,
 }
 
-impl<C, P> AuraVerifier<C, P>
+impl<C, P, T> AuraVerifier<C, P, T>
 	where P: Send + Sync + 'static
 {
 	fn check_inherents<B: BlockT>(
@@ -510,13 +514,14 @@ impl<C, P> AuraVerifier<C, P>
 }
 
 #[forbid(deprecated)]
-impl<B: BlockT, C, P> Verifier<B> for AuraVerifier<C, P> where
+impl<B: BlockT, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
 	C: ProvideRuntimeApi + Send + Sync + client::backend::AuxStore + ProvideCache<B> + BlockOf,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>>,
 	DigestItemFor<B>: CompatibleDigestItem<P>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + 'static,
 	P::Signature: Encode + Decode,
+	T: Send + Sync + 'static,
 {
 	fn verify(
 		&mut self,
@@ -536,12 +541,13 @@ impl<B: BlockT, C, P> Verifier<B> for AuraVerifier<C, P> where
 		// we add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of
 		// headers
-		let checked_header = check_header::<C, B, P>(
+		let checked_header = check_header::<C, B, P, T>(
 			&self.client,
 			slot_now + 1,
 			header,
 			hash,
 			&authorities[..],
+			self.transaction_pool.as_ref().map(|x| &**x),
 		)?;
 		match checked_header {
 			CheckedHeader::Checked(pre_header, (slot_num, seal)) => {
@@ -680,13 +686,14 @@ fn register_aura_inherent_data_provider(
 }
 
 /// Start an import queue for the Aura consensus algorithm.
-pub fn import_queue<B, C, P>(
+pub fn import_queue<B, C, P, T>(
 	slot_duration: SlotDuration,
 	block_import: BoxBlockImport<B>,
 	justification_import: Option<BoxJustificationImport<B>>,
 	finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	client: Arc<C>,
 	inherent_data_providers: InherentDataProviders,
+	transaction_pool: Option<Arc<T>>,
 ) -> Result<AuraImportQueue<B>, consensus_common::Error> where
 	B: BlockT,
 	C: 'static + ProvideRuntimeApi + BlockOf + ProvideCache<B> + Send + Sync + AuxStore,
@@ -695,6 +702,7 @@ pub fn import_queue<B, C, P>(
 	P: Pair + Send + Sync + 'static,
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode,
 	P::Signature: Encode + Decode,
+	T: Send + Sync + 'static,
 {
 	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
 	initialize_authorities_cache(&*client)?;
@@ -703,6 +711,7 @@ pub fn import_queue<B, C, P>(
 		client: client.clone(),
 		inherent_data_providers,
 		phantom: PhantomData,
+		transaction_pool,
 	};
 	Ok(BasicQueue::new(
 		verifier,
@@ -773,7 +782,7 @@ mod tests {
 
 	impl TestNetFactory for AuraTestNet {
 		type Specialization = DummySpecialization;
-		type Verifier = AuraVerifier<PeersFullClient, AuthorityPair>;
+		type Verifier = AuraVerifier<PeersFullClient, AuthorityPair, ()>;
 		type PeerData = ();
 
 		/// Create new test network with peers and given config.
@@ -800,6 +809,7 @@ mod tests {
 					AuraVerifier {
 						client,
 						inherent_data_providers,
+						transaction_pool: Default::default(),
 						phantom: Default::default(),
 					}
 				},

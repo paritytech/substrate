@@ -146,7 +146,8 @@ pub fn import_blocks<F, E, R>(
 	let (mut queue, _) = components::FullComponents::<F>::build_import_queue(
 		&mut config,
 		client.clone(),
-		select_chain
+		select_chain,
+		None,
 	)?;
 
 	let (exit_send, exit_recv) = std::sync::mpsc::channel();
