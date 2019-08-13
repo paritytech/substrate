@@ -881,9 +881,7 @@ pub trait Dispatchable {
 
 /// Means by which a transaction may be extended. This type embodies both the data and the logic
 /// that should be additionally associated with the transaction. It should be plain old data.
-pub trait SignedExtension:
-	Codec + MaybeDebug + Sync + Send + Clone + Eq + PartialEq
-{
+pub trait SignedExtension: Codec + MaybeDebug + Sync + Send + Clone + Eq + PartialEq {
 	/// The type which encodes the sender identity.
 	type AccountId;
 

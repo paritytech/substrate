@@ -657,8 +657,6 @@ pub enum ApplyOutcome {
 	Fail(DispatchError),
 }
 
-impl codec::EncodeLike for ApplyOutcome {}
-
 #[derive(Eq, PartialEq, Clone, Copy, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[repr(u8)]
@@ -684,7 +682,7 @@ impl Encode for ApplyError {
 
 impl codec::EncodeLike for ApplyError {}
 
-#[derive(Eq, PartialEq, Clone, Copy)]
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 /// Reason why a dispatch call failed
 pub struct DispatchError {
@@ -693,6 +691,7 @@ pub struct DispatchError {
 	/// Module specific error value
 	pub error: u8,
 	/// Optional error message.
+	#[codec(skip)]
 	pub message: Option<&'static str>,
 }
 
@@ -704,22 +703,6 @@ impl DispatchError {
 			error,
 			message,
 		}
-	}
-}
-
-impl Encode for DispatchError {
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		f(&[self.module, self.error])
-	}
-}
-
-impl Decode for DispatchError {
-	fn decode<R: codec::Input>(input: &mut R) -> Option<Self> {
-		Some(DispatchError {
-			module: input.read_byte()?,
-			error: input.read_byte()?,
-			message: None,
-		})
 	}
 }
 

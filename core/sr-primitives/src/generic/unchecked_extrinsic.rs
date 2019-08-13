@@ -21,9 +21,11 @@ use std::fmt;
 
 use rstd::prelude::*;
 use runtime_io::blake2_256;
-use crate::codec::{Decode, Encode, Input, Error};
-use crate::traits::{self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic};
-use super::CheckedExtrinsic;
+use codec::{Decode, Encode, Input, Error};
+use crate::{
+	traits::{self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic},
+	PrimitiveError, generic::CheckedExtrinsic,
+};
 
 const TRANSACTION_VERSION: u8 = 3;
 
@@ -91,7 +93,8 @@ where
 	Signature: Member + traits::Verify<Signer=AccountId>,
 	Extra: SignedExtension<AccountId=AccountId>,
 	AccountId: Member + MaybeDisplay,
-	Lookup: traits::Lookup<Source=Address, Target=AccountId>
+	Lookup: traits::Lookup<Source=Address, Target=AccountId>,
+	PrimitiveError: From<Lookup::Error>,
 {
 	type Checked = CheckedExtrinsic<AccountId, Call, Extra>;
 	type Error = PrimitiveError;

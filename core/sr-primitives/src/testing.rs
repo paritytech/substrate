@@ -23,7 +23,7 @@ use crate::traits::{
 	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys, DispatchError, DispatchResult,
 	ValidateUnsigned, SignedExtension, Dispatchable,
 };
-use crate::{generic, KeyTypeId};
+use crate::{generic, KeyTypeId, PrimitiveError};
 use crate::weights::{GetDispatchInfo, DispatchInfo};
 pub use primitives::H256;
 use primitives::{crypto::{CryptoType, Dummy, key_types, Public}, U256};
