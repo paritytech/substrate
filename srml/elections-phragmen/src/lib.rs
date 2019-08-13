@@ -45,7 +45,7 @@
 use sr_primitives::traits::{Zero, StaticLookup, Bounded, Convert};
 use sr_primitives::weights::SimpleDispatchInfo;
 use srml_support::{StorageValue, StorageMap, EnumerableStorageMap, decl_storage, decl_event, ensure,
-	decl_module, dispatch::Result,
+	decl_module, dispatch,
 	traits::{Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReason,
 		WithdrawReasons, ChangeMembers
 	}
@@ -93,7 +93,7 @@ decl_storage! {
 		pub TermDuration get(term_duration) config(): T::BlockNumber;
 
 		// ---- State
-		/// The current elected membership.
+		/// The current elected membership. Sorted.
 		pub Members get(members) config(): Vec<T::AccountId>;
 
 		/// Votes of a particular voter, with the round index of the votes.
@@ -101,7 +101,7 @@ decl_storage! {
 		/// Locked stake of a voter.
 		pub StakeOf get(stake_of): map T::AccountId => BalanceOf<T>;
 
-		/// The present candidate list.
+		/// The present candidate list. Always sorted.
 		pub Candidates get(candidates): Vec<T::AccountId>;
 		/// Current number of active candidates.
 		pub CandidateCount get(candidate_count): u32;
@@ -125,7 +125,7 @@ decl_module! {
 		///
 		/// Upon voting, the entire balance of `who` is locked and a bond amount is reserved.
 		#[weight = SimpleDispatchInfo::FixedNormal(750_000)]
-		fn vote(origin, votes: Vec<T::AccountId>) -> Result {
+		fn vote(origin, votes: Vec<T::AccountId>) {
 			let who = ensure_signed(origin)?;
 
 			// TODO: use decode_len #3071.
@@ -155,7 +155,6 @@ decl_module! {
 
 			let now = Self::election_rounds();
 			<VotesOf<T>>::insert(&who, (votes, now));
-			Ok(())
 		}
 
 		/// Remove `origin` as a voter. One can use this to
@@ -188,13 +187,15 @@ decl_module! {
 		fn submit_candidacy(origin) {
 			let who = ensure_signed(origin)?;
 
-			ensure!(!Self::is_candidate(&who), "duplicate candidate submission");
+			let is_candidate = Self::is_candidate(&who);
+			ensure!(!is_candidate.is_ok(), "duplicate candidate submission");
+			// assured to be an error, error always contains the index.
+			let index = is_candidate.unwrap_err();
 
 			T::Currency::reserve(&who, T::CandidacyBond::get())
 				.map_err(|_| "candidate has not enough funds")?;
 
-			<Candidates<T>>::append(&[who.clone()])
-				.unwrap_or_else(|_| <Candidates<T>>::mutate(|c| c.push(who.clone())));
+			<Candidates<T>>::mutate(|c| c.insert(index, who));
 			CandidateCount::mutate(|c| *c += 1);
 		}
 
@@ -216,7 +217,7 @@ decl_module! {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
 
-			if Self::is_candidate(&who) {
+			if Self::is_candidate(&who).is_ok() {
 				let members = Self::members();
 				let new_members: Vec<T::AccountId> = members
 					.into_iter()
@@ -255,11 +256,11 @@ decl_event!(
 );
 
 impl<T: Trait> Module<T> {
-	/// Check if `who` is a candidate.
-	fn is_candidate(who: &T::AccountId) -> bool {
-		Self::candidates().iter().find(|c| *c == who).is_some()
+	/// Check if `who` is a candidate. It returns the insert index if the element does not exists as
+	/// an error.
+	fn is_candidate(who: &T::AccountId) -> Result<(), usize> {
+		Self::candidates().binary_search(who).map(|_| ())
 	}
-
 
 	/// Check if `who` is a voter in the ongoing round.
 	fn is_current_voter(who: &T::AccountId) -> bool {
@@ -286,7 +287,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// Runs phragmen election and cleans all the previous candidate state. The voter state is NOT
 	/// cleaned and voters must themselves submit a transaction to clean it.
-	fn end_block(block_number: T::BlockNumber) -> Result {
+	fn end_block(block_number: T::BlockNumber) -> dispatch::Result {
 		if (block_number % Self::term_duration()).is_zero() {
 			use sr_primitives::phragmen;
 			let seats = Self::desired_seats() as usize;
@@ -306,7 +307,9 @@ impl<T: Trait> Module<T> {
 			);
 
 			let old_members = <Members<T>>::take();
-			if let Some((new_members_with_approval, _)) = maybe_new_members {
+			if let Some((mut new_members_with_approval, _)) = maybe_new_members {
+				new_members_with_approval.sort_by_key(|x| x.0.clone());
+
 				let new_members = new_members_with_approval
 					.into_iter()
 					.filter_map(|(m, a)| if !a.is_zero() { Some(m) } else { None } )
@@ -314,10 +317,12 @@ impl<T: Trait> Module<T> {
 				<Members<T>>::put(new_members.clone());
 
 				// return bond to losers.
-				let losers = candidates.into_iter()
-					.filter(|c| new_members.iter().find(|v| *v == c).is_none())
-					.collect::<Vec<T::AccountId>>();
-				losers.iter().for_each(|c| { T::Currency::unreserve(&c, T::CandidacyBond::get()); });
+				candidates.into_iter().for_each(|c| {
+					// if this candidate is a loser return the bond
+					if new_members.binary_search(&c).is_err() {
+						T::Currency::unreserve(&c, T::CandidacyBond::get());
+					}
+				});
 
 				T::ChangeMembers::change_members(
 					&new_members,
@@ -519,7 +524,7 @@ mod tests {
 
 			assert_eq!(Elections::candidates(), vec![]);
 			assert_eq!(Elections::candidate_count(), 0);
-			assert_eq!(Elections::is_candidate(&1), false);
+			assert!(Elections::is_candidate(&1).is_err());
 
 			assert_eq!(current_voters(), vec![]);
 			assert_eq!(all_voters(), vec![]);
@@ -531,23 +536,23 @@ mod tests {
 	fn simple_candidate_submission_should_work() {
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			assert_eq!(Elections::candidates(), Vec::<u64>::new());
-			assert_eq!(Elections::is_candidate(&1), false);
-			assert_eq!(Elections::is_candidate(&2), false);
+			assert!(Elections::is_candidate(&1).is_err());
+			assert!(Elections::is_candidate(&2).is_err());
 
 			assert_eq!(Balances::free_balance(&1), 10);
 			assert_ok!(Elections::submit_candidacy(Origin::signed(1)));
 			assert_eq!(Balances::free_balance(&1), 10 - 3);
 			assert_eq!(Balances::reserved_balance(&1), 3);
 			assert_eq!(Elections::candidates(), vec![1]);
-			assert_eq!(Elections::is_candidate(&1), true);
-			assert_eq!(Elections::is_candidate(&2), false);
+			assert!(Elections::is_candidate(&1).is_ok());
+			assert!(Elections::is_candidate(&2).is_err());
 
 			assert_eq!(Balances::free_balance(&2), 20);
 			assert_ok!(Elections::submit_candidacy(Origin::signed(2)));
 			assert_eq!(Balances::free_balance(&2), 20 - 3);
 			assert_eq!(Elections::candidates(), vec![1, 2]);
-			assert_eq!(Elections::is_candidate(&1), true);
-			assert_eq!(Elections::is_candidate(&2), true);
+			assert!(Elections::is_candidate(&1).is_ok());
+			assert!(Elections::is_candidate(&2).is_ok());
 		});
 	}
 
@@ -707,7 +712,7 @@ mod tests {
 			System::set_block_number(5);
 			assert_ok!(Elections::end_block(System::block_number()));
 
-			assert_eq_uvec!(Elections::members(), vec![3, 5]);
+			assert_eq!(Elections::members(), vec![3, 5]);
 		});
 	}
 
@@ -726,7 +731,7 @@ mod tests {
 			System::set_block_number(5);
 			assert_ok!(Elections::end_block(System::block_number()));
 
-			assert_eq!(Elections::members(), vec![5, 4]);
+			assert_eq!(Elections::members(), vec![4, 5]);
 			assert_eq!(Elections::election_rounds(), 1);
 
 			// meanwhile, no one cares to become a candidate again.
@@ -736,7 +741,7 @@ mod tests {
 			assert_eq!(Elections::members(), vec![]);
 			assert_eq!(Elections::election_rounds(), 2);
 			assert_eq!(current_voters(), vec![]);
-			assert_eq_uvec!(all_voters(), vec![5, 4, 3]);
+			assert_eq_uvec!(all_voters(), vec![3, 4, 5]);
 		});
 	}
 
@@ -797,7 +802,7 @@ mod tests {
 
 			assert_eq!(Elections::election_rounds(), 1);
 
-			assert_eq!(Elections::members(), vec![5, 4]);
+			assert_eq!(Elections::members(), vec![4, 5]);
 		});
 	}
 
@@ -819,7 +824,7 @@ mod tests {
 
 			System::set_block_number(5);
 			assert_ok!(Elections::end_block(System::block_number()));
-			assert_eq!(Elections::members(), vec![5, 3]);
+			assert_eq!(Elections::members(), vec![3, 5]);
 			assert_eq!(Elections::election_rounds(), 1);
 
 			// meanwhile, no one cares to become a candidate again.
@@ -846,7 +851,7 @@ mod tests {
 			System::set_block_number(5);
 			assert_ok!(Elections::end_block(System::block_number()));
 
-			assert_eq!(Elections::members(), vec![5, 4]);
+			assert_eq!(Elections::members(), vec![4, 5]);
 			assert_eq!(Elections::election_rounds(), 1);
 			assert_eq!(Balances::reserved_balance(&5), 3 + 2);
 
