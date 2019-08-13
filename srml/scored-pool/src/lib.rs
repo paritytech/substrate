@@ -206,7 +206,7 @@ decl_module! {
 		/// Every `Period` blocks the `Members` set is refreshed from the
 		/// highest scoring members in the pool.
 		fn on_initialize(n: T::BlockNumber) {
-			if n % T::Period::get() == T::BlockNumber::zero() {
+			if n % T::Period::get() == Zero::zero() {
 				<Module<T, I>>::refresh_members(true);
 			}
 		}
@@ -356,8 +356,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 		// remove from set, if it was in there
 		let members = <Members<T, I>>::get();
-		let maybe_location = members.binary_search(&remove);
-		if let Ok(_location) = maybe_location {
+		if members.binary_search(&remove).is_ok() {
 			Self::refresh_members(true);
 		}
 
