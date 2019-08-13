@@ -244,7 +244,7 @@ macro_rules! new_impl {
 					let number = *notification.header.number();
 					let txpool = txpool.upgrade();
 
-					if let (Some(ref txpool), Some(ref client)) = (&txpool, wclient.upgrade()) {
+					if let (Some(txpool), Some(client)) = (txpool.as_ref(), wclient.upgrade()) {
 						$maintain_transaction_pool(
 							&BlockId::hash(notification.hash),
 							&*client,
