@@ -265,6 +265,11 @@ mod tests {
 			MEMBERS.with(|m| *m.borrow_mut() = new.to_vec());
 		}
 	}
+	impl InitializeMembers<u64> for TestChangeMembers {
+		fn initialize_members(members: &[u64]) {
+			MEMBERS.with(|m| *m.borrow_mut() = members.to_vec());
+		}
+	}
 
 	impl Trait for Test {
 		type Event = ();
