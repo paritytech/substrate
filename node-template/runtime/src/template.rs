@@ -12,7 +12,7 @@ use support::{decl_module, decl_storage, decl_event, StorageValue, dispatch::Res
 use system::ensure_signed;
 
 /// The module's configuration trait.
-pub trait Trait<I: Instance>: system::Trait {
+pub trait Trait<I: Instance=DefaultInstance>: system::Trait {
 	// TODO: Add other types and constants required configure this module.
 
 	/// The overarching event type.
@@ -21,7 +21,7 @@ pub trait Trait<I: Instance>: system::Trait {
 
 // This module's storage items.
 decl_storage! {
-	trait Store for Module<T: Trait<I>, I: Instance> as TemplateModule {
+	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as TemplateModule {
 		// Just a dummy storage item.
 		// Here we are declaring a StorageValue, `Something` as a Option<u32>
 		// `get(something)` is the default getter which returns either the stored `u32` or `None` if nothing stored
@@ -32,7 +32,7 @@ decl_storage! {
 // The module's dispatchable functions.
 decl_module! {
 	/// The module declaration.
-	pub struct Module<T: Trait<I>, I: Instance> for enum Call where origin: T::Origin {
+	pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where origin: T::Origin {
 		// Initializing events
 		// this is needed only if you are using events in your module
 		fn deposit_event<T, I>() = default;
@@ -56,7 +56,7 @@ decl_module! {
 }
 
 decl_event!(
-	pub enum Event<T, I> where AccountId = <T as system::Trait>::AccountId {
+	pub enum Event<T, I=DefaultInstance> where AccountId = <T as system::Trait>::AccountId {
 		// Just a dummy event.
 		// Event `Something` is declared with a parameter of the type `u32` and `AccountId`
 		// To emit this event, we call the deposit funtion, from our runtime funtions
