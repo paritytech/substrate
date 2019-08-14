@@ -385,13 +385,20 @@ where
 						nested.loader.load_main(&dest_code_hash),
 						input_data
 					);
-					nested.vm
+					let output = nested.vm
 						.execute(
 							&executable,
 							nested.new_call_context(caller, value),
 							input_data,
 							gas_meter,
-						)
+						)?;
+
+					// Destroy contract if insufficient remaining balance.
+					if nested.overlay.get_balance(&dest) < nested.config.existential_deposit {
+						nested.overlay.destroy_contract(&dest);
+					}
+
+					Ok(output)
 				}
 				None => Ok(ExecReturnValue { status: STATUS_SUCCESS, data: Vec::new() }),
 			}
