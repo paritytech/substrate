@@ -24,6 +24,8 @@ pub mod offence;
 /// Simple index type with which we can count sessions.
 pub type SessionIndex = u32;
 
+/// A trait for getting the currently elected validator set without coupling to the module that
+/// provides this information.
 pub trait CurrentElectedSet<ValidatorId> {
 	/// Returns the validator ids for the currently elected validator set.
 	fn current_elected_set() -> Vec<ValidatorId>;
