@@ -23,10 +23,22 @@ use codec::Codec;
 use rstd::vec::Vec;
 
 decl_runtime_apis! {
-      pub trait AuthorityDiscoveryApi<AuthorityId: Codec> {
-            fn public_key() -> Option<AuthorityId>;
-            fn authorities() -> Vec<AuthorityId>;
-            fn sign(payload: Vec<u8>) -> Option<Vec<u8>>;
-            fn verify(payload: Vec<u8>, signature: Vec<u8>, public_key: AuthorityId) -> bool;
-      }
+	/// The authority discovery api.
+	///
+	/// This api is used by the `core/authority-discovery` module to retrieve our own authority identifier, to retrieve
+	/// identifiers of the current authority set, as well as sign and verify Kademlia Dht external address payloads from
+	/// and to other authorities.
+	pub trait AuthorityDiscoveryApi<AuthorityId: Codec> {
+		/// Retrieve own authority identifier.
+		fn public_key() -> Option<AuthorityId>;
+
+		/// Retrieve authority identifiers of the current authority set.
+		fn authorities() -> Vec<AuthorityId>;
+
+		/// Sign the given payload with one of our authority keys.
+		fn sign(payload: Vec<u8>) -> Option<Vec<u8>>;
+
+		/// Verify the given signature for the given payload with the given authority identifier.
+		fn verify(payload: Vec<u8>, signature: Vec<u8>, public_key: AuthorityId) -> bool;
+	}
 }
