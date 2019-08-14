@@ -96,10 +96,6 @@ thread_local! {
 
 pub struct TestChangeMembers;
 impl ChangeMembers<u64> for TestChangeMembers {
-	fn set_members_sorted(new_members: &[u64], _old_members: &[u64]) {
-		MEMBERS.with(|m| *m.borrow_mut() = new_members.to_vec());
-	}
-
 	fn change_members_sorted(incoming: &[u64], outgoing: &[u64], new: &[u64]) {
 		let mut old_plus_incoming = MEMBERS.with(|m| m.borrow().to_vec());
 		old_plus_incoming.extend_from_slice(incoming);
@@ -112,6 +108,12 @@ impl ChangeMembers<u64> for TestChangeMembers {
 		assert_eq!(old_plus_incoming, new_plus_outgoing);
 
 		MEMBERS.with(|m| *m.borrow_mut() = new.to_vec());
+	}
+}
+
+impl InitializeMembers<u64> for TestChangeMembers {
+	fn initialize_members(new_members: &[u64]) {
+		MEMBERS.with(|m| *m.borrow_mut() = new_members.to_vec());
 	}
 }
 

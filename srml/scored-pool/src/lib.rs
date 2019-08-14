@@ -90,7 +90,7 @@ use codec::{Encode, Decode};
 use sr_std::prelude::*;
 use srml_support::{
 	StorageValue, decl_module, decl_storage, decl_event,
-	traits::{ChangeMembers, Currency, Get, ReservableCurrency},
+	traits::{ChangeMembers, InitializeMembers, Currency, Get, ReservableCurrency},
 };
 use system::{self, ensure_root, ensure_signed};
 use sr_primitives::{
@@ -122,7 +122,7 @@ pub trait Trait<I=DefaultInstance>: system::Trait {
 	/// This happens pre-genesis and will usually be the same as `MembershipChanged`.
 	/// If you need to do something different on initialization, then you can change
 	/// this accordingly.
-	type MembershipInitialized: ChangeMembers<Self::AccountId>;
+	type MembershipInitialized: InitializeMembers<Self::AccountId>;
 
 	/// The receiver of the signal for when the members have changed.
 	type MembershipChanged: ChangeMembers<Self::AccountId>;
@@ -154,7 +154,7 @@ decl_storage! {
 		config(phantom): sr_std::marker::PhantomData<I>;
 		build(|
 			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
-			config: &GenesisConfig<T, I>
+			config: &Self,
 		| {
 			sr_io::with_storage(storage, || {
 				let mut pool = config.pool.clone();
@@ -173,7 +173,7 @@ decl_storage! {
 				<Module<T, I>>::refresh_members(false);
 
 				let members = <Members<T, I>>::get();
-				T::MembershipInitialized::set_members_sorted(&members[..], &[]);
+				T::MembershipInitialized::initialize_members(&members);
 			});
 		})
 	}
