@@ -79,7 +79,7 @@ pub trait Offence<Offender> {
 	fn time_slot(&self) -> TimeSlot;
 
 	/// A slash fraction of the total exposure that should be slashed for this
-	/// particular offence kind for the given parameters.
+	/// particular offence kind for the given parameters that happened at a singular `TimeSlot`.
 	///
 	/// `offenders_count` - the count of unique offending authorities. It is >0.
 	/// `validator_set_count` - the cardinality of the validator set at the time of offence.
