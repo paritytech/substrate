@@ -105,7 +105,7 @@ impl<Block> LightStorage<Block>
 		Ok(LightStorage {
 			db,
 			meta: RwLock::new(meta),
-			cache: Arc::new(DbCacheSync::new(cache)),
+			cache: Arc::new(DbCacheSync(RwLock::new(cache))),
 		})
 	}
 
@@ -417,7 +417,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 
 		let is_genesis = number.is_zero();
 		if is_genesis {
-			self.cache.cache().write().set_genesis_hash(hash);
+			self.cache.0.write().set_genesis_hash(hash);
 			transaction.put(columns::META, meta_keys::GENESIS_HASH, hash.as_ref());
 		}
 
@@ -443,7 +443,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		}
 
 		{
-			let mut cache = self.cache.cache().write();
+			let mut cache = self.cache.0.write();
 			let cache_ops = cache.transaction(&mut transaction)
 				.on_block_insert(
 					ComplexBlockId::new(*header.parent_hash(), if number.is_zero() { Zero::zero() } else { number - One::one() }),
@@ -504,7 +504,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 			let number = *header.number();
 			self.note_finalized(&mut transaction, &header, hash.clone())?;
 			{
-				let mut cache = self.cache.cache().write();
+				let mut cache = self.cache.0.write();
 				let cache_ops = cache.transaction(&mut transaction)
 					.on_block_finalize(
 						ComplexBlockId::new(*header.parent_hash(), if number.is_zero() { Zero::zero() } else { number - One::one() }),

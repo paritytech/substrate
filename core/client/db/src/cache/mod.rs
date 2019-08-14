@@ -71,39 +71,6 @@ impl<Block: BlockT> ::std::cmp::PartialOrd for ComplexBlockId<Block> {
 	}
 }
 
-/// Block id or header.
-#[derive(Debug, Clone)]
-pub enum BlockIdOrHeader<'a, Block: BlockT> {
-	/// Block id.
-	Id(&'a ComplexBlockId<Block>),
-	/// Block header.
-	Header(&'a Block::Header),
-}
-
-impl<'a, Block: BlockT> From<&'a ComplexBlockId<Block>> for BlockIdOrHeader<'a, Block> {
-	fn from(id: &'a ComplexBlockId<Block>) -> Self {
-		BlockIdOrHeader::Id(id)
-	}
-}
-
-impl<'a, Block: BlockT> BlockIdOrHeader<'a, Block> {
-	/// Get id of refrenced block.
-	pub fn id(&self) -> ComplexBlockId<Block> {
-		match *self {
-			BlockIdOrHeader::Id(id) => id.clone(),
-			BlockIdOrHeader::Header(header) => ComplexBlockId::new(header.hash(), *header.number()),
-		}
-	}
-
-	/// Get number of refrenced block.
-	pub fn number(&self) -> NumberFor<Block> {
-		match *self {
-			BlockIdOrHeader::Id(id) => id.number,
-			BlockIdOrHeader::Header(header) => *header.number(),
-		}
-	}
-}
-
 /// All cache items must implement this trait.
 pub trait CacheItemT: Clone + Decode + Encode + PartialEq {}
 
@@ -361,70 +328,11 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 }
 
 /// Synchronous implementation of database-backed blockchain data cache.
-pub struct DbCacheSync<Block: BlockT> {
-	db: Arc<dyn KeyValueDB>,
-	key_lookup_column: Option<u32>,
-	header_column: Option<u32>,
-	cache: RwLock<DbCache<Block>>,
-}
-
-impl<Block: BlockT> DbCacheSync<Block> {
-	/// Create new sync cache.
-	pub fn new(cache: DbCache<Block>) -> Self {
-		Self {
-			db: cache.db.clone(),
-			key_lookup_column: cache.key_lookup_column.clone(),
-			header_column: cache.header_column.clone(),
-			cache: RwLock::new(cache),
-		}
-	}
-
-	/// Get reference to the cache.
-	pub(crate) fn cache(&self) -> &RwLock<DbCache<Block>> {
-		&self.cache
-	}
-
-	/// Convert block id into complex block id.
-	pub fn to_complex_id(&self, block: &BlockId<Block>) -> ClientResult<ComplexBlockId<Block>> {
-		Ok(match *block {
-			BlockId::Hash(hash) => {
-				let header = utils::require_header::<Block>(
-					&*self.db,
-					self.key_lookup_column,
-					self.header_column,
-					BlockId::Hash(hash.clone())
-				)?;
-				ComplexBlockId::new(hash, *header.number())
-			},
-			BlockId::Number(number) => {
-				let header = utils::require_header::<Block>(
-					&*self.db,
-					self.key_lookup_column,
-					self.header_column,
-					BlockId::Number(number.clone())
-				)?;
-				ComplexBlockId::new(header.hash(), number)
-			},
-		})
-	}
-
-	/// Get value at inserted or not yet inserted block.
-	pub fn get_at_block(
-		&self,
-		key: &CacheKeyId,
-		at: BlockIdOrHeader<Block>,
-	) -> Option<((NumberFor<Block>, Block::Hash), Option<(NumberFor<Block>, Block::Hash)>, Vec<u8>)> {
-		self.cache.read().cache_at.get(key)?
-			.value_at_block(at)
-			.map(|block_and_value| block_and_value.map(|(begin_block, end_block, value)|
-				((begin_block.number, begin_block.hash), end_block.map(|end_block| (end_block.number, end_block.hash)), value)))
-			.ok()?
-	}
-}
+pub struct DbCacheSync<Block: BlockT>(pub RwLock<DbCache<Block>>);
 
 impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 	fn initialize(&self, key: &CacheKeyId, data: Vec<u8>) -> ClientResult<()> {
-		let mut cache = self.cache.write();
+		let mut cache = self.0.write();
 		let genesis_hash = cache.genesis_hash;
 		let cache_contents = vec![(*key, data)].into_iter().collect();
 		let db = cache.db.clone();
@@ -448,7 +356,7 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 		at: &BlockId<Block>,
 	) -> Option<((NumberFor<Block>, Block::Hash), Option<(NumberFor<Block>, Block::Hash)>, Vec<u8>)> {
 		let id = {
-			let cache = self.cache.read();
+			let cache = self.0.read();
 			let storage = cache.cache_at.get(key)?.storage();
 			let db = storage.db();
 			let columns = storage.columns();
@@ -472,7 +380,11 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 			}
 		};
 
-		self.get_at_block(key, (&id).into())
+		self.0.read().cache_at.get(key)?
+			.value_at_block(id)
+			.map(|block_and_value| block_and_value.map(|(begin_block, end_block, value)|
+				((begin_block.number, begin_block.hash), end_block.map(|end_block| (end_block.number, end_block.hash)), value)))
+			.ok()?
 	}
 }
 

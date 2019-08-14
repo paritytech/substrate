@@ -24,8 +24,8 @@ use codec::{Decode, Encode};
 use parking_lot::RwLock;
 use client::error::{Error as ClientError, Result as ClientResult};
 use trie::MemoryDB;
-use client::backend::ChangesTrieConfigurationRange;
-use client::blockchain::well_known_cache_keys;
+use client::backend::{PrunableStateChangesTrieStorage, ChangesTrieConfigurationRange};
+use client::blockchain::{well_known_cache_keys, Cache as BlockchainCache};
 use primitives::{H256, Blake2Hasher, ChangesTrieConfiguration, convert_hash};
 use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, CheckedSub,
@@ -35,7 +35,7 @@ use state_machine::DBValue;
 use crate::utils::{self, Meta, meta_keys, db_err};
 use crate::cache::{
 	DbCacheSync, DbCache, DbCacheTransactionOps,
-	ComplexBlockId, BlockIdOrHeader, EntryType as CacheEntryType,
+	ComplexBlockId, EntryType as CacheEntryType,
 };
 
 /// Extract new changes trie configuration (if available) from the header.
@@ -47,7 +47,29 @@ pub fn extract_new_configuration<Header: HeaderT>(header: &Header) -> Option<&Op
 
 /// Opaque configuration cache transaction. During its lifetime, noone should modify cache. This is currently
 /// guaranteed because import lock is held during block import/finalization.
-pub type DbChangesTrieStorageTransaction<Block> = DbCacheTransactionOps<Block>;
+pub struct DbChangesTrieStorageTransaction<Block: BlockT> {
+	/// Cache operations that must be performed after db transaction is comitted.
+	cache_ops: DbCacheTransactionOps<Block>,
+	/// New configuration (if changed at current block).
+	new_config: Option<Option<ChangesTrieConfiguration>>,
+}
+
+impl<Block: BlockT> DbChangesTrieStorageTransaction<Block> {
+	/// Consume self and return transaction with given new configuration.
+	pub fn with_new_config(mut self, new_config: Option<Option<ChangesTrieConfiguration>>) -> Self {
+		self.new_config = new_config;
+		self
+	}
+}
+
+impl<Block: BlockT> From<DbCacheTransactionOps<Block>> for DbChangesTrieStorageTransaction<Block> {
+	fn from(cache_ops: DbCacheTransactionOps<Block>) -> Self {
+		DbChangesTrieStorageTransaction {
+			cache_ops,
+			new_config: None,
+		}
+	}
+}
 
 /// Changes tries storage.
 ///
@@ -106,14 +128,14 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 			header_column,
 			meta,
 			min_blocks_to_keep,
-			cache: DbCacheSync::new(DbCache::new(
+			cache: DbCacheSync(RwLock::new(DbCache::new(
 				db.clone(),
 				key_lookup_column,
 				header_column,
 				cache_column,
 				genesis_hash,
 				ComplexBlockId::new(finalized_hash, finalized_number),
-			)),
+			))),
 			tries_meta: RwLock::new(tries_meta),
 		})
 	}
@@ -138,35 +160,33 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 		// if configuration has not been changed AND block is not finalized => nothing to do here
 		let new_configuration = match new_configuration {
 			Some(new_configuration) => new_configuration,
-			None if !finalized => return Ok(DbChangesTrieStorageTransaction::empty()),
+			None if !finalized => return Ok(DbCacheTransactionOps::empty().into()),
 			None => return self.finalize(tx, parent_block.hash, block.hash, block.number, Some(new_header), cache_tx),
 		};
 
 		// update configuration cache
 		let mut cache_at = HashMap::new();
 		cache_at.insert(well_known_cache_keys::CHANGES_TRIE_CONFIG, new_configuration.encode());
-		Ok(match cache_tx {
-			Some(cache_tx) => {
-				self.cache.cache().write().transaction_with_ops(tx, cache_tx)
-					.on_block_insert(
-						parent_block,
-						block,
-						cache_at,
-						if finalized { CacheEntryType::Final } else { CacheEntryType::NonFinal },
-					)?
-					.into_ops()
-			},
-			None => {
-				self.cache.cache().write().transaction(tx)
-					.on_block_insert(
-						parent_block,
-						block,
-						cache_at,
-						if finalized { CacheEntryType::Final } else { CacheEntryType::NonFinal },
-					)?
-					.into_ops()
-			},
-		})
+		Ok(DbChangesTrieStorageTransaction::from(match cache_tx {
+			Some(cache_tx) => self.cache.0.write()
+				.transaction_with_ops(tx, cache_tx.cache_ops)
+				.on_block_insert(
+					parent_block,
+					block,
+					cache_at,
+					if finalized { CacheEntryType::Final } else { CacheEntryType::NonFinal },
+				)?
+				.into_ops(),
+			None => self.cache.0.write()
+				.transaction(tx)
+				.on_block_insert(
+					parent_block,
+					block,
+					cache_at,
+					if finalized { CacheEntryType::Final } else { CacheEntryType::NonFinal },
+				)?
+				.into_ops(),
+		}).with_new_config(Some(new_configuration)))
 	}
 
 	/// Called when block is finalized.
@@ -180,7 +200,7 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 		cache_tx: Option<DbChangesTrieStorageTransaction<Block>>,
 	) -> ClientResult<DbChangesTrieStorageTransaction<Block>> {
 		// prune obsolete changes tries
-		self.prune(tx, block_hash, block_num, new_header.clone())?;
+		self.prune(tx, block_hash, block_num, new_header.clone(), cache_tx.as_ref())?;
 
 		// if we have inserted the block that we're finalizing in the same transaction
 		// => then we have already finalized it from the commit() call
@@ -197,22 +217,24 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 		let parent_block_num = block_num.checked_sub(&One::one()).unwrap_or_else(|| Zero::zero());
 		let parent_block = ComplexBlockId::new(parent_block_hash, parent_block_num);
 		Ok(match cache_tx {
-			Some(cache_tx) => {
-				self.cache.cache().write().transaction_with_ops(tx, cache_tx)
+			Some(cache_tx) => DbChangesTrieStorageTransaction::from(
+				self.cache.0.write()
+					.transaction_with_ops(tx, cache_tx.cache_ops)
 					.on_block_finalize(
 						parent_block,
 						block,
 					)?
 					.into_ops()
-			},
-			None => {
-				self.cache.cache().write().transaction(tx)
+			).with_new_config(cache_tx.new_config),
+			None => DbChangesTrieStorageTransaction::from(
+				self.cache.0.write()
+					.transaction(tx)
 					.on_block_finalize(
 						parent_block,
 						block,
 					)?
 					.into_ops()
-			},
+			),
 		})
 	}
 
@@ -222,15 +244,16 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 		tx: &mut DBTransaction,
 		block: NumberFor<Block>,
 	) -> ClientResult<DbChangesTrieStorageTransaction<Block>> {
-		Ok(self.cache.cache().write().transaction(tx)
+		Ok(self.cache.0.write().transaction(tx)
 			.on_block_revert(block)?
-			.into_ops())
+			.into_ops()
+			.into())
 	}
 
 	/// When transaction has been committed.
 	pub fn post_commit(&self, tx: Option<DbChangesTrieStorageTransaction<Block>>) {
 		if let Some(tx) = tx {
-			self.cache.cache().write().commit(tx)
+			self.cache.0.write().commit(tx.cache_ops)
 				.expect("only fails if cache with given name isn't loaded yet;\
 						cache is already loaded because there is tx; qed");
 		}
@@ -243,6 +266,7 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 		block_hash: Block::Hash,
 		block_num: NumberFor<Block>,
 		new_header: Option<&Block::Header>,
+		cache_tx: Option<&DbChangesTrieStorageTransaction<Block>>,
 	) -> ClientResult<()> {
 		// never prune on archive nodes
 		let min_blocks_to_keep = match self.min_blocks_to_keep {
@@ -287,13 +311,24 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 					BlockId::Number(next_digest_range_start),
 				)?.hash(),
 			};
-			let block_id = ComplexBlockId::new(next_digest_range_start_hash, next_digest_range_start);
-			let block_id_or_header = match new_header {
-				Some(ref new_header) if *new_header.number() == next_digest_range_start
-					=> BlockIdOrHeader::Header(*new_header),
-				_ => BlockIdOrHeader::Id(&block_id),
+
+			let config_for_new_block = new_header
+				.map(|header| *header.number() == next_digest_range_start)
+				.unwrap_or(false);
+			let next_config = match cache_tx {
+				Some(cache_tx) if config_for_new_block && cache_tx.new_config.is_some() => {
+					let config = cache_tx
+						.new_config
+						.clone()
+						.expect("guarded by is_some(); qed");
+					ChangesTrieConfigurationRange {
+						zero: (block_num, block_hash),
+						end: None,
+						config,
+					}
+				},
+				_ => self.configuration_at(&BlockId::Hash(next_digest_range_start_hash))?,
 			};
-			let next_config = self.configuration_at_block(block_id_or_header)?;
 			if let Some(config) = next_config.config {
 				let mut oldest_digest_range = config
 					.next_max_level_digest_range(next_config.zero.0, next_digest_range_start)
@@ -316,15 +351,6 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 		write_tries_meta(tx, self.meta_column, &*tries_meta);
 		Ok(())
 	}
-
-	/// Return configuration at given block id or header.
-	fn configuration_at_block(&self, at: BlockIdOrHeader<Block>) -> ClientResult<ChangesTrieConfigurationRange<Block>> {
-		self.cache
-			.get_at_block(&well_known_cache_keys::CHANGES_TRIE_CONFIG, at)
-			.and_then(|(zero, end, encoded)| Decode::decode(&mut &encoded[..]).ok()
-				.map(|config| ChangesTrieConfigurationRange { zero, end, config }))
-			.ok_or_else(|| ClientError::ErrorReadingChangesTriesConfig)
-	}
 }
 
 impl<Block> client::backend::PrunableStateChangesTrieStorage<Block, Blake2Hasher>
@@ -337,8 +363,11 @@ where
 	}
 
 	fn configuration_at(&self, at: &BlockId<Block>) -> ClientResult<ChangesTrieConfigurationRange<Block>> {
-		self.cache.to_complex_id(at)
-			.and_then(|at| self.configuration_at_block((&at).into()))
+		self.cache
+			.get_at(&well_known_cache_keys::CHANGES_TRIE_CONFIG, at)
+			.and_then(|(zero, end, encoded)| Decode::decode(&mut &encoded[..]).ok()
+				.map(|config| ChangesTrieConfigurationRange { zero, end, config }))
+			.ok_or_else(|| ClientError::ErrorReadingChangesTriesConfig)
 	}
 
 	fn oldest_pruned_digest_range_end(&self) -> NumberFor<Block> {
@@ -897,7 +926,7 @@ mod tests {
 
 		// before truncate there are 2 unfinalized forks - block2_1+block2_3
 		assert_eq!(
-			backend.changes_tries_storage.cache.cache().write()
+			backend.changes_tries_storage.cache.0.write()
 				.get_cache(well_known_cache_keys::CHANGES_TRIE_CONFIG)
 				.unwrap()
 				.unfinalized()
@@ -910,7 +939,7 @@ mod tests {
 		// after truncating block2_3 - there are 2 unfinalized forks - block2_1+block2_2
 		backend.revert(1).unwrap();
 		assert_eq!(
-			backend.changes_tries_storage.cache.cache().write()
+			backend.changes_tries_storage.cache.0.write()
 				.get_cache(well_known_cache_keys::CHANGES_TRIE_CONFIG)
 				.unwrap()
 				.unfinalized()
@@ -924,7 +953,7 @@ mod tests {
 		// though they're pointing to the same block
 		backend.revert(1).unwrap();
 		assert_eq!(
-			backend.changes_tries_storage.cache.cache().write()
+			backend.changes_tries_storage.cache.0.write()
 				.get_cache(well_known_cache_keys::CHANGES_TRIE_CONFIG)
 				.unwrap()
 				.unfinalized()
@@ -934,7 +963,7 @@ mod tests {
 			vec![2, 2],
 		);
 		assert_eq!(
-			backend.changes_tries_storage.cache.cache().write()
+			backend.changes_tries_storage.cache.0.write()
 				.get_cache(well_known_cache_keys::CHANGES_TRIE_CONFIG)
 				.unwrap()
 				.unfinalized()
@@ -948,7 +977,7 @@ mod tests {
 		// after truncating block2 - there are no unfinalized forks
 		backend.revert(1).unwrap();
 		assert!(
-			backend.changes_tries_storage.cache.cache().write()
+			backend.changes_tries_storage.cache.0.write()
 				.get_cache(well_known_cache_keys::CHANGES_TRIE_CONFIG)
 				.unwrap()
 				.unfinalized()
