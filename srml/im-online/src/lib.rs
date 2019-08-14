@@ -168,7 +168,7 @@ pub trait Trait: system::Trait + session::historical::Trait {
 	/// can contain a signature.
 	type UncheckedExtrinsic: ExtrinsicT<Call=<Self as Trait>::Call> + Encode + Decode;
 
-	/// A type that gives us ability to submit unresponsivness offence reports.
+	/// A type that gives us the ability to submit unresponsiveness offence reports.
 	type ReportUnresponsivness:
 		ReportOffence<
 			Self::AccountId,
