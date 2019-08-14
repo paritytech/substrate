@@ -478,7 +478,7 @@ impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
 	}
 }
 
-/// An offense that is filed if a validator didn't send a heartbeat message.
+/// An offence that is filed if a validator didn't send a heartbeat message.
 pub struct UnresponsivenessOffence<Offender> {
 	/// The current session index in which we report the unresponsive validators.
 	///
