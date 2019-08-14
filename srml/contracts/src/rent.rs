@@ -154,8 +154,8 @@ fn try_evict_or_and_pay_rent<T: Trait>(
 		} else {
 			// Note that this will fail as soon as we support multiple type
 			// of hashing for child trie.
-			let child_storage_root =
-				<<T as system::Trait>::Hashing as HashT>::enumerated_trie_root(&[]);
+			let child_storage_root = <<T as system::Trait>::Hashing as HashT>::ordered_trie_root(&[&[]]);
+
 			let child_storage_root_ref: &[u8] = child_storage_root.as_ref();
 			(None, child_storage_root_ref.to_vec())
 		};
