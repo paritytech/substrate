@@ -128,7 +128,7 @@ impl<B: BlockT> ExtraRequests<B> {
 			return Ok(())
 		}
 
-		self.tree.finalize(best_finalized_hash, best_finalized_number, &is_descendent_of)?;
+		self.tree.finalize_with_ancestors(best_finalized_hash, best_finalized_number, &is_descendent_of)?;
 
 		let roots = self.tree.roots().collect::<HashSet<_>>();
 
