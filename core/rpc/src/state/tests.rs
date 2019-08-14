@@ -195,6 +195,7 @@ fn should_query_storage() {
 					(StorageKey(vec![4]), None),
 					(StorageKey(vec![5]), None),
 				],
+				child_changes: vec![],
 			},
 			StorageChangeSet {
 				block: block1_hash,
@@ -203,6 +204,7 @@ fn should_query_storage() {
 					(StorageKey(vec![3]), Some(StorageData(vec![3]))),
 					(StorageKey(vec![5]), Some(StorageData(vec![0]))),
 				],
+				child_changes: vec![],
 			},
 		];
 
@@ -230,6 +232,7 @@ fn should_query_storage() {
 				(StorageKey(vec![4]), Some(StorageData(vec![4]))),
 				(StorageKey(vec![5]), Some(StorageData(vec![1]))),
 			],
+			child_changes: vec![],
 		});
 		assert_eq!(result.unwrap(), expected);
 	}

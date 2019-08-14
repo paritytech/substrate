@@ -264,7 +264,11 @@ impl<B, E, Block: BlockT, RA> State<B, E, Block, RA> where
 	) -> Result<()> {
 		for block in range.unfiltered_range.start..range.unfiltered_range.end {
 			let block_hash = range.hashes[block].clone();
-			let mut block_changes = StorageChangeSet { block: block_hash.clone(), changes: Vec::new() };
+			let mut block_changes = StorageChangeSet {
+				block: block_hash.clone(),
+				changes: Vec::new(),
+				child_changes: Vec::new(),
+			};
 			let id = BlockId::hash(block_hash);
 			for key in keys {
 				let (has_changed, data) = {
@@ -318,8 +322,11 @@ impl<B, E, Block: BlockT, RA> State<B, E, Block, RA> where
 				}
 
 				changes_map.entry(block)
-					.or_insert_with(|| StorageChangeSet { block: block_hash, changes: Vec::new() })
-					.changes.push((key.clone(), value_at_block.clone()));
+					.or_insert_with(|| StorageChangeSet {
+						block: block_hash,
+						changes: Vec::new(),
+						child_changes: Vec::new(),
+					}).changes.push((key.clone(), value_at_block.clone()));
 				last_block = Some(block);
 				last_value = value_at_block;
 			}
@@ -492,7 +499,10 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 						.unwrap_or_else(|_| (key, None))
 					)
 					.collect();
-				vec![Ok(Ok(StorageChangeSet { block, changes }))]
+				vec![Ok(Ok(StorageChangeSet {
+					block, changes,
+					child_changes: Default::default(),
+				}))]
 			}).unwrap_or_default());
 
 		self.subscriptions.add(subscriber, |sink| {
@@ -503,6 +513,7 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 						.filter_map(|(o_sk, k, v)| if o_sk.is_none() {
 							Some((k.clone(),v.cloned()))
 						} else { None }).collect(),
+					child_changes: Default::default(),
 				})))
 				.compat();
 

@@ -23,22 +23,22 @@ use std::{
 
 use fnv::{FnvHashSet, FnvHashMap};
 use futures::channel::mpsc;
-use primitives::storage::{StorageKey, StorageData};
+use primitives::storage::{StorageKey, StorageData, StorageKeySpace};
 use sr_primitives::traits::Block as BlockT;
 
 /// Storage change set
 #[derive(Debug)]
 pub struct StorageChangeSet {
 	changes: Arc<Vec<(StorageKey, Option<StorageData>)>>,
-	child_changes: Arc<Vec<(StorageKey, Vec<(StorageKey, Option<StorageData>)>)>>,
+	child_changes: Arc<Vec<(StorageKeySpace, Vec<(StorageKey, Option<StorageData>)>)>>,
 	filter: Option<HashSet<StorageKey>>,
-	child_filters: Option<HashMap<StorageKey, Option<HashSet<StorageKey>>>>,
+	child_filters: Option<HashMap<StorageKeySpace, Option<HashSet<StorageKey>>>>,
 }
 
 impl StorageChangeSet {
 	/// Convert the change set into iterator over storage items.
 	pub fn iter<'a>(&'a self)
-		-> impl Iterator<Item=(Option<&'a StorageKey>, &'a StorageKey, Option<&'a StorageData>)> + 'a {
+		-> impl Iterator<Item=(Option<&'a StorageKeySpace>, &'a StorageKey, Option<&'a StorageData>)> + 'a {
 		let top = self.changes
 			.iter()
 			.filter(move |&(key, _)| match self.filter {
@@ -48,16 +48,16 @@ impl StorageChangeSet {
 			.map(move |(k,v)| (None, k, v.as_ref()));
 		let children = self.child_changes
 			.iter()
-			.filter_map(move |(sk, changes)| {
+			.filter_map(move |(keyspace, changes)| {
 				if let Some(cf) = self.child_filters.as_ref() {
-					if let Some(filter) = cf.get(sk) {
+					if let Some(filter) = cf.get(keyspace) {
 						Some(changes
 							.iter()
 							.filter(move |&(key, _)| match filter {
 								Some(ref filter) => filter.contains(key),
 								None => true,
 							})
-							.map(move |(k,v)| (Some(sk), k, v.as_ref())))
+							.map(move |(k,v)| (Some(keyspace), k, v.as_ref())))
 					} else { None }
 				} else { None	}
 			})
@@ -77,14 +77,14 @@ pub struct StorageNotifications<Block: BlockT> {
 	next_id: SubscriberId,
 	wildcard_listeners: FnvHashSet<SubscriberId>,
 	listeners: HashMap<StorageKey, FnvHashSet<SubscriberId>>,
-	child_listeners: HashMap<StorageKey, (
+	child_listeners: HashMap<StorageKeySpace, (
 		HashMap<StorageKey, FnvHashSet<SubscriberId>>,
 		FnvHashSet<SubscriberId>
 	)>,
 	sinks: FnvHashMap<SubscriberId, (
 		mpsc::UnboundedSender<(Block::Hash, StorageChangeSet)>,
 		Option<HashSet<StorageKey>>,
-		Option<HashMap<StorageKey, Option<HashSet<StorageKey>>>>,
+		Option<HashMap<StorageKeySpace, Option<HashSet<StorageKey>>>>,
 	)>,
 }
 
@@ -137,9 +137,9 @@ impl<Block: BlockT> StorageNotifications<Block> {
 				changes.push((k, v.map(StorageData)));
 			}
 		}
-		for (sk, changeset) in child_changeset {
-			let sk = StorageKey(sk);
-			if let Some((cl, cw)) = self.child_listeners.get(&sk) {
+		for (keyspace, changeset) in child_changeset {
+			let keyspace = StorageKeySpace(keyspace);
+			if let Some((cl, cw)) = self.child_listeners.get(&keyspace) {
 				let mut changes = Vec::new();
 				for (k, v) in changeset {
 					let k = StorageKey(k);
@@ -156,7 +156,7 @@ impl<Block: BlockT> StorageNotifications<Block> {
 					}
 				}
 				if !changes.is_empty() {
-					child_changes.push((sk, changes));
+					child_changes.push((keyspace, changes));
 				}
 			}
 		}
@@ -270,7 +270,7 @@ impl<Block: BlockT> StorageNotifications<Block> {
 	pub fn listen(
 		&mut self,
 		filter_keys: Option<&[StorageKey]>,
-		filter_child_keys: Option<&[(StorageKey, Option<Vec<StorageKey>>)]>,
+		filter_child_keys: Option<&[(StorageKeySpace, Option<Vec<StorageKey>>)]>,
 	) -> StorageEventStream<Block::Hash> {
 		self.next_id += 1;
 		let current_id = self.next_id;
@@ -313,7 +313,7 @@ mod tests {
 
 	type TestChangeSet = (
 		Vec<(StorageKey, Option<StorageData>)>,
-		Vec<(StorageKey, Vec<(StorageKey, Option<StorageData>)>)>,
+		Vec<(StorageKeySpace, Vec<(StorageKey, Option<StorageData>)>)>,
 	);
 
 	#[cfg(test)]
@@ -321,8 +321,8 @@ mod tests {
 		fn from(changes: TestChangeSet) -> Self {
 			// warning hardcoded child trie wildcard to test upon
 			let child_filters = Some([
-				(StorageKey(vec![4]), None),
-				(StorageKey(vec![5]), None),
+				(StorageKeySpace(vec![4]), None),
+				(StorageKeySpace(vec![5]), None),
 			].into_iter().cloned().collect());
 			StorageChangeSet {
 				changes: Arc::new(changes.0),
@@ -346,7 +346,7 @@ mod tests {
 	fn triggering_change_should_notify_wildcard_listeners() {
 		// given
 		let mut notifications = StorageNotifications::<Block>::default();
-		let child_filter = [(StorageKey(vec![4]), None)];
+		let child_filter = [(StorageKeySpace(vec![4]), None)];
 		let mut recv = futures::executor::block_on_stream(
 			notifications.listen(None, Some(&child_filter[..]))
 		);
@@ -371,7 +371,7 @@ mod tests {
 		assert_eq!(recv.next().unwrap(), (Hash::from_low_u64_be(1), (vec![
 			(StorageKey(vec![2]), Some(StorageData(vec![3]))),
 			(StorageKey(vec![3]), None),
-		], vec![(StorageKey(vec![4]), vec![
+		], vec![(StorageKeySpace(vec![4]), vec![
 			(StorageKey(vec![5]), Some(StorageData(vec![4]))),
 			(StorageKey(vec![6]), None),
 		])]).into()));
@@ -381,7 +381,7 @@ mod tests {
 	fn should_only_notify_interested_listeners() {
 		// given
 		let mut notifications = StorageNotifications::<Block>::default();
-		let child_filter = [(StorageKey(vec![4]), Some(vec![StorageKey(vec![5])]))];
+		let child_filter = [(StorageKeySpace(vec![4]), Some(vec![StorageKey(vec![5])]))];
 		let mut recv1 = futures::executor::block_on_stream(
 			notifications.listen(Some(&[StorageKey(vec![1])]), None)
 		);
@@ -418,7 +418,7 @@ mod tests {
 		], vec![]).into()));
 		assert_eq!(recv3.next().unwrap(), (Hash::from_low_u64_be(1), (vec![],
 		vec![
-			(StorageKey(vec![4]), vec![(StorageKey(vec![5]), Some(StorageData(vec![4])))]),
+			(StorageKeySpace(vec![4]), vec![(StorageKey(vec![5]), Some(StorageData(vec![4])))]),
 		]).into()));
 
 	}
@@ -428,7 +428,7 @@ mod tests {
 		// given
 		let mut notifications = StorageNotifications::<Block>::default();
 		{
-			let child_filter = [(StorageKey(vec![4]), Some(vec![StorageKey(vec![5])]))];
+			let child_filter = [(StorageKeySpace(vec![4]), Some(vec![StorageKey(vec![5])]))];
 			let _recv1 = futures::executor::block_on_stream(
 				notifications.listen(Some(&[StorageKey(vec![1])]), None)
 			);
@@ -439,7 +439,7 @@ mod tests {
 				notifications.listen(None, None)
 			);
 			let _recv4 = futures::executor::block_on_stream(
-				notifications.listen(None, Some(&child_filter))
+				notifications.listen(None, Some(&child_filter[..]))
 			);
 			assert_eq!(notifications.listeners.len(), 2);
 			assert_eq!(notifications.wildcard_listeners.len(), 2);
@@ -452,7 +452,11 @@ mod tests {
 			(vec![1], None),
 		];
 		let c_changeset = empty::<(_, Empty<_>)>();
-		notifications.trigger(&Hash::from_low_u64_be(1), changeset.into_iter(), c_changeset);
+		notifications.trigger(
+			&Hash::from_low_u64_be(1),
+			changeset.into_iter(),
+			c_changeset,
+		);
 
 		// then
 		assert_eq!(notifications.listeners.len(), 0);
@@ -470,7 +474,11 @@ mod tests {
 			// when
 			let changeset = vec![];
 			let c_changeset = empty::<(_, Empty<_>)>();
-			notifications.trigger(&Hash::from_low_u64_be(1), changeset.into_iter(), c_changeset);
+			notifications.trigger(
+				&Hash::from_low_u64_be(1),
+				changeset.into_iter(),
+				c_changeset,
+			);
 			recv
 		};
 

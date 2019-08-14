@@ -27,8 +27,8 @@ use codec::{Encode, Decode};
 use hash_db::{Hasher, Prefix};
 use primitives::{
 	Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash,
-	NeverNativeValue, ExecutionContext,
-	storage::{StorageKey, StorageData, well_known_keys}, NativeOrEncoded,
+	NeverNativeValue, ExecutionContext, NativeOrEncoded,
+	storage::{StorageKey, StorageData, StorageKeySpace, well_known_keys},
 	child_trie::{ChildTrie, ChildTrieReadRef},
 };
 use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
@@ -159,7 +159,7 @@ pub trait BlockchainEvents<Block: BlockT> {
 	fn storage_changes_notification_stream(
 		&self,
 		filter_keys: Option<&[StorageKey]>,
-		child_filter_keys: Option<&[(StorageKey, Option<Vec<StorageKey>>)]>,
+		child_filter_keys: Option<&[(StorageKeySpace, Option<Vec<StorageKey>>)]>,
 	) -> error::Result<StorageEventStream<Block::Hash>>;
 }
 
@@ -1596,7 +1596,7 @@ where
 	fn storage_changes_notification_stream(
 		&self,
 		filter_keys: Option<&[StorageKey]>,
-		child_filter_keys: Option<&[(StorageKey, Option<Vec<StorageKey>>)]>,
+		child_filter_keys: Option<&[(StorageKeySpace, Option<Vec<StorageKey>>)]>,
 	) -> error::Result<StorageEventStream<Block::Hash>> {
 		Ok(self.storage_notifications.lock().listen(filter_keys, child_filter_keys))
 	}

@@ -32,7 +32,12 @@ pub struct StorageKey(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Hash, PartialOrd, Ord, Clone))]
 pub struct StorageData(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
-/// Storage change set
+/// Contract storage keyspace data.
+#[derive(PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Hash, PartialOrd, Ord, Clone))]
+pub struct StorageKeySpace(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
+
+/// Storage change set.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, PartialEq, Eq))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 pub struct StorageChangeSet<Hash> {
@@ -43,6 +48,15 @@ pub struct StorageChangeSet<Hash> {
 		StorageKey,
 		Option<StorageData>,
 	)>,
+	/// A list of children changes.
+	pub child_changes: Vec<(
+		StorageKeySpace,
+		Vec<(
+			StorageKey,
+			Option<StorageData>
+		)>,
+	)>,
+
 }
 
 /// List of all well known keys and prefixes in storage.
