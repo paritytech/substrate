@@ -460,7 +460,6 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 	epoch_index: u64,
 	c: (u64, u64),
 	transaction_pool: Option<&T>,
-	keystore: Option<&KeyStorePtr>,
 ) -> Result<CheckedHeader<B::Header, (DigestItemFor<B>, DigestItemFor<B>)>, String> where
 	DigestItemFor<B>: CompatibleDigestItem,
 	C: ProvideRuntimeApi + HeaderBackend<B>,
@@ -570,7 +569,6 @@ pub struct BabeVerifier<C, T> {
 	config: Config,
 	time_source: BabeLink,
 	transaction_pool: Option<Arc<T>>,
-	keystore: Option<KeyStorePtr>,
 }
 
 impl<C, T> BabeVerifier<C, T> {
@@ -692,7 +690,6 @@ impl<B: BlockT, C, T> Verifier<B> for BabeVerifier<C, T> where
 			epoch_index,
 			self.config.c(),
 			self.transaction_pool.as_ref().map(|x| &**x),
-			self.keystore.as_ref(),
 		)?;
 
 		match checked_header {
@@ -1160,7 +1157,6 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA, T>(
 	api: Arc<PRA>,
 	inherent_data_providers: InherentDataProviders,
 	transaction_pool: Option<Arc<T>>,
-	keystore: Option<KeyStorePtr>,
 ) -> ClientResult<(
 	BabeImportQueue<Block>,
 	BabeLink,
@@ -1186,7 +1182,6 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA, T>(
 		time_source: Default::default(),
 		config,
 		transaction_pool,
-		keystore,
 	};
 
 	#[allow(deprecated)]

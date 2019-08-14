@@ -121,7 +121,6 @@ impl Decode for BabePreDigest {
 }
 
 /// A digest item which is usable with BABE consensus.
-// #[cfg(feature = "std")]
 pub trait CompatibleDigestItem: Sized {
 	/// Construct a digest item which contains a BABE pre-digest.
 	fn babe_pre_digest<D: Codec>(seal: D) -> Self;

@@ -28,7 +28,6 @@ use support::{
 	}
 };
 use primitives::u32_trait::{_1, _2, _3, _4};
-use app_crypto::RuntimeAppPublic;
 use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
 	Moment, Signature,
@@ -53,7 +52,6 @@ use elections::VoteIndex;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
 use primitives::OpaqueMetadata;
-use runtime_io::blake2_256;
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
 use im_online::{AuthorityId as ImOnlineId};
 use finality_tracker::{DEFAULT_REPORT_LATENCY, DEFAULT_WINDOW_SIZE};

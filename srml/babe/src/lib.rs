@@ -19,8 +19,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unused_must_use, unsafe_code, unused_variables)]
 
-// TODO: @marcio uncomment this when BabeEquivocation is integrated.
-// #![forbid(dead_code)]
+#![forbid(dead_code)]
 
 pub use timestamp;
 
@@ -373,11 +372,9 @@ impl<T: Trait> session::ShouldEndSession<T::BlockNumber> for Module<T> {
 	}
 }
 
-// TODO [slashing]: @marcio use this, remove the dead_code annotation.
 /// A BABE equivocation offence report.
 ///
 /// When a validator released two or more blocks at the same slot.
-#[allow(dead_code)]
 pub struct BabeEquivocationOffence<FullIdentification> {
 	/// A babe slot number in which this incident happened.
 	slot: u64,
@@ -431,7 +428,7 @@ impl<T: Trait> Module<T> {
 		equivocation: BabeEquivocationProof<T::Header>,
 		proof: Proof,
 	) -> Option<Vec<u8>> {
-		let mut local_keys = app::Public::all();
+		let local_keys = app::Public::all();
 		
 		if local_keys.len() > 0 {
 			let reporter = &local_keys[0];

@@ -235,7 +235,6 @@ construct_service_factory! {
 					client,
 					config.custom.inherent_data_providers.clone(),
 					transaction_pool,
-					keystore,
 				)?;
 
 				config.custom.import_setup = Some((babe_block_import.clone(), link_half, babe_link));
@@ -267,7 +266,6 @@ construct_service_factory! {
 					client.clone(),
 					client,
 					config.custom.inherent_data_providers.clone(),
-					None,
 					None,
 				)?;
 
