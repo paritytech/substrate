@@ -256,11 +256,11 @@ pub enum PermissionVersions<AccountId> {
 
 /// Asset permission types
 pub enum PermissionType {
-	/// Permission to burn asset permission
+	/// Permission to update asset permission
 	Burn,
 	/// Permission to mint new asset
 	Mint,
-	/// Permission to update asset
+	/// Permission to burn asset
 	Update,
 }
 
