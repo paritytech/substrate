@@ -260,7 +260,7 @@ struct BabeEquivocationOffence<FullIdentification> {
 	session_index: SessionIndex,
 	/// The size of the validator set at the time of the offence.
 	validator_set_count: u32,
-	/// The authority which produced the equivocation.
+	/// The authority that produced the equivocation.
 	offender: FullIdentification,
 }
 
