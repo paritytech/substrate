@@ -101,6 +101,7 @@ decl_storage! {
 		config(members): Vec<T::AccountId>;
 		build(|
 			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
+			_: &mut sr_primitives::StorageOverlay,
 			config: &Self,
 		| {
 			runtime_io::with_storage(

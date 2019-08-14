@@ -482,6 +482,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 	DigestItemFor<B>: CompatibleDigestItem,
 	T: Send + Sync + 'static,
 {
+println!("=== {}: idx={} authorities={:?}", header.number(), epoch_index, authorities);
 	trace!(target: "babe", "Checking header");
 	let seal = match header.digest_mut().pop() {
 		Some(x) => x,
@@ -682,14 +683,14 @@ impl<B: BlockT, C, T> Verifier<B> for BabeVerifier<C, T> where
 			epoch_index,
 			self.config.c(),
 			self.transaction_pool.as_ref().map(|x| &**x),
-		)?;
+		);
 
 		// if we have failed to check header using (presumably) current epoch AND we're probably in the next epoch
 		// => check using next epoch
 		// (this is only possible on the light client at epoch#0)
 		if epoch_index == 0 && checked_header.is_err() {
 			if let Some(Epoch { authorities, randomness, epoch_index, .. }) = maybe_next_epoch {
-				let checked_header_next = check_header::<B, C>(
+				let checked_header_next = check_header::<B, C, T>(
 					&self.api,
 					slot_now + 1,
 					header,
@@ -698,6 +699,7 @@ impl<B: BlockT, C, T> Verifier<B> for BabeVerifier<C, T> where
 					randomness,
 					epoch_index,
 					self.config.c(),
+					self.transaction_pool.as_ref().map(|x| &**x),
 				);
 
 				match checked_header_next {

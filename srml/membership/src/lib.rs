@@ -64,6 +64,7 @@ decl_storage! {
 		config(phantom): sr_std::marker::PhantomData<I>;
 		build(|
 			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
+			_: &mut sr_primitives::StorageOverlay,
 			config: &Self,
 		| {
 			sr_io::with_storage(storage, || {
