@@ -381,6 +381,7 @@ pub trait ServiceFactory: 'static + Sized {
 		config: &mut FactoryFullConfiguration<Self>,
 		_client: Arc<FullClient<Self>>,
 		_select_chain: Self::SelectChain,
+		_transaction_pool: Option<Arc<TransactionPool<Self::FullTransactionPoolApi>>>,
 	) -> Result<Self::FullImportQueue, error::Error> {
 		if let Some(name) = config.chain_spec.consensus_engine() {
 			match name {
@@ -454,6 +455,7 @@ pub trait Components: Sized + 'static {
 		config: &mut FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>,
 		select_chain: Option<Self::SelectChain>,
+		_transaction_pool: Option<Arc<TransactionPool<Self::TransactionPoolApi>>>,
 	) -> Result<(Self::ImportQueue, Option<BoxFinalityProofRequestBuilder<FactoryBlock<Self::Factory>>>), error::Error>;
 
 	/// Finality proof provider for serving network requests.
@@ -572,10 +574,11 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 		config: &mut FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>,
 		select_chain: Option<Self::SelectChain>,
+		transaction_pool: Option<Arc<TransactionPool<Self::TransactionPoolApi>>>,
 	) -> Result<(Self::ImportQueue, Option<BoxFinalityProofRequestBuilder<FactoryBlock<Self::Factory>>>), error::Error> {
 		let select_chain = select_chain
 			.ok_or(error::Error::SelectChainRequired)?;
-		Factory::build_full_import_queue(config, client, select_chain)
+		Factory::build_full_import_queue(config, client, select_chain, transaction_pool)
 			.map(|queue| (queue, None))
 	}
 
@@ -695,6 +698,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 		config: &mut FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>,
 		_select_chain: Option<Self::SelectChain>,
+		_transaction_pool: Option<Arc<TransactionPool<Self::TransactionPoolApi>>>,
 	) -> Result<(Self::ImportQueue, Option<BoxFinalityProofRequestBuilder<FactoryBlock<Self::Factory>>>), error::Error> {
 		Factory::build_light_import_queue(config, client)
 			.map(|(queue, builder)| (queue, Some(builder)))

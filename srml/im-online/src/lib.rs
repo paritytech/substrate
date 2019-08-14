@@ -190,7 +190,7 @@ decl_event!(
 decl_storage! {
 	trait Store for Module<T: Trait> as ImOnline {
 		/// The block number when we should gossip.
-		GossipAt get(gossip_at) config(): T::BlockNumber;
+		GossipAt get(gossip_at): T::BlockNumber;
 
 		/// The current set of keys that may issue a heartbeat.
 		Keys get(keys) config(): Vec<AuthorityId>;

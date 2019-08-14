@@ -173,10 +173,21 @@ impl<Components: components::Components> Service<Components> {
 
 		let (client, on_demand) = Components::build_client(&config, executor, Some(keystore.clone()))?;
 		let select_chain = Components::build_select_chain(&mut config, client.clone())?;
+
+		let transaction_pool = Arc::new(
+			Components::build_transaction_pool(config.transaction_pool.clone(), client.clone())?
+		);
+		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
+			imports_external_transactions: !config.roles.is_light(),
+			pool: transaction_pool.clone(),
+			client: client.clone(),
+		});
+
 		let (import_queue, finality_proof_request_builder) = Components::build_import_queue(
 			&mut config,
 			client.clone(),
 			select_chain.clone(),
+			Some(transaction_pool.clone()),
 		)?;
 		let import_queue = Box::new(import_queue);
 		let finality_proof_provider = Components::build_finality_proof_provider(client.clone())?;
@@ -197,14 +208,6 @@ impl<Components: components::Components> Service<Components> {
 		);
 
 		let network_protocol = <Components::Factory>::build_network_protocol(&config)?;
-		let transaction_pool = Arc::new(
-			Components::build_transaction_pool(config.transaction_pool.clone(), client.clone())?
-		);
-		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
-			imports_external_transactions: !config.roles.is_light(),
-			pool: transaction_pool.clone(),
-			client: client.clone(),
-		});
 
 		let protocol_id = {
 			let protocol_id_full = match config.chain_spec.protocol_id() {
@@ -971,7 +974,7 @@ where
 /// 		LightService = LightComponents<Self>
 /// 			{ |config| <LightComponents<Factory>>::new(config) },
 /// 		FullImportQueue = BasicQueue<Block>
-/// 			{ |_, client, _| Ok(BasicQueue::new(MyVerifier, Box::new(client), None, None)) },
+/// 			{ |_, client, _, _| Ok(BasicQueue::new(MyVerifier, Box::new(client), None, None)) },
 /// 		LightImportQueue = BasicQueue<Block>
 /// 			{ |_, client| {
 /// 				let fprb = Box::new(DummyFinalityProofRequestBuilder::default()) as Box<_>;
@@ -1064,9 +1067,10 @@ macro_rules! construct_service_factory {
 			fn build_full_import_queue(
 				config: &mut $crate::FactoryFullConfiguration<Self>,
 				client: $crate::Arc<$crate::FullClient<Self>>,
-				select_chain: Self::SelectChain
+				select_chain: Self::SelectChain,
+				transaction_pool: Option<Arc<$crate::TransactionPool<Self::FullTransactionPoolApi>>>,
 			) -> $crate::Result<Self::FullImportQueue, $crate::Error> {
-				( $( $full_import_queue_init )* ) (config, client, select_chain)
+				( $( $full_import_queue_init )* ) (config, client, select_chain, transaction_pool)
 			}
 
 			fn build_light_import_queue(

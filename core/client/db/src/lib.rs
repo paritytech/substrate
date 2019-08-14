@@ -92,9 +92,6 @@ pub struct RefTrackingState<Block: BlockT> {
 
 impl<B: BlockT> RefTrackingState<B> {
 	fn new(state: DbState, storage: Arc<StorageDb<B>>, parent_hash: Option<B::Hash>) -> RefTrackingState<B> {
-		if let Some(hash) = &parent_hash {
-			storage.state_db.pin(hash);
-		}
 		RefTrackingState {
 			state,
 			parent_hash,
@@ -1401,7 +1398,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		match self.blockchain.header(block) {
 			Ok(Some(ref hdr)) => {
 				let hash = hdr.hash();
-				if !self.storage.state_db.is_pruned(&hash, (*hdr.number()).saturated_into::<u64>()) {
+				if let Ok(()) = self.storage.state_db.pin(&hash) {
 					let root = H256::from_slice(hdr.state_root().as_ref());
 					let db_state = DbState::new(self.storage.clone(), root);
 					let state = RefTrackingState::new(db_state, self.storage.clone(), Some(hash.clone()));
