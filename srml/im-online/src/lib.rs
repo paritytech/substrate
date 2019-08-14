@@ -487,7 +487,7 @@ pub struct UnresponsivnessOffence<Offender> {
 	session_index: SessionIndex,
 	/// The size of the validator set in current session/era.
 	validator_set_count: u32,
-	/// Authorities which were unresponsive during the current era.
+	/// Authorities that were unresponsive during the current era.
 	offenders: Vec<Offender>,
 }
 
