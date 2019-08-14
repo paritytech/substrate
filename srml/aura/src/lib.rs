@@ -225,6 +225,8 @@ impl<T: Trait> Module<T> {
 		let cur_slot = now / slot_duration;
 
 		assert!(last_slot < cur_slot, "Only one block may be authored per slot.");
+
+		// TODO [#3398] Generate offence report for all authorities that skipped their slots.
 	}
 }
 
