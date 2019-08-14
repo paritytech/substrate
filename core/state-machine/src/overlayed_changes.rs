@@ -18,7 +18,7 @@
 
 #[cfg(test)] use std::iter::FromIterator;
 use std::collections::{HashMap, BTreeSet};
-use parity_codec::Decode;
+use codec::Decode;
 use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
 use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
 use primitives::child_trie::{KeySpace, ChildTrie, ChildTrieReadRef};
@@ -353,6 +353,43 @@ impl OverlayedChanges {
 		}
 	}
 
+	pub(crate) fn clear_child_prefix(&mut self, child_trie: &ChildTrie, prefix: &[u8]) {
+		let extrinsic_index = self.extrinsic_index();
+		let map_entry = self.prospective.children.entry(child_trie.keyspace().clone())
+			.or_insert_with(|| ChildOverlayChangeSet {
+				extrinsics: None,
+				values: Default::default(),
+				child_trie: child_trie.clone(),
+			});
+
+		for (key, entry) in map_entry.values.iter_mut() {
+			if key.starts_with(prefix) {
+				*entry = None;
+
+				if let Some(extrinsic) = extrinsic_index {
+					map_entry.extrinsics.get_or_insert_with(Default::default)
+						.insert(extrinsic);
+				}
+			}
+		}
+
+		if let Some(child_committed) = self.committed.children.get(child_trie.keyspace()) {
+			// Then do the same with keys from commited changes.
+			// NOTE that we are making changes in the prospective change set.
+			for key in child_committed.values.keys() {
+				if key.starts_with(prefix) {
+					let entry = map_entry.values.entry(key.clone()).or_default();
+					*entry = None;
+
+					if let Some(extrinsic) = extrinsic_index {
+						map_entry.extrinsics.get_or_insert_with(Default::default)
+							.insert(extrinsic);
+					}
+				}
+			}
+		}
+	}
+
 	/// Discard prospective changes to state.
 	pub fn discard_prospective(&mut self) {
 		self.prospective.clear();
@@ -407,7 +444,7 @@ impl OverlayedChanges {
 	/// Inserts storage entry responsible for current extrinsic index.
 	#[cfg(test)]
 	pub(crate) fn set_extrinsic_index(&mut self, extrinsic_index: u32) {
-		use parity_codec::Encode;
+		use codec::Encode;
 		self.prospective.top.insert(EXTRINSIC_INDEX.to_vec(), OverlayedValue {
 			value: Some(extrinsic_index.encode()),
 			extrinsics: None,
@@ -515,6 +552,7 @@ mod tests {
 			&backend,
 			Some(&changes_trie_storage),
 			crate::NeverOffchainExt::new(),
+			None,
 		);
 		const ROOT: [u8; 32] = hex!("39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa");
 

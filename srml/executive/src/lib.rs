@@ -82,7 +82,7 @@ use sr_primitives::{generic::Digest, traits::{
 	OnInitialize, NumberFor, Block as BlockT, OffchainWorker, ValidateUnsigned
 }};
 use srml_support::Dispatchable;
-use parity_codec::{Codec, Encode};
+use codec::{Codec, Encode};
 use system::{extrinsics_root, DigestOf};
 use sr_primitives::{ApplyOutcome, ApplyError};
 use sr_primitives::transaction_validity::TransactionValidity;
@@ -108,7 +108,7 @@ mod internal {
 		fn from(d: DispatchError) -> Self {
 			match d {
 				DispatchError::Payment => ApplyError::CantPay,
-				DispatchError::Resource => ApplyError::FullBlock,
+				DispatchError::Exhausted => ApplyError::FullBlock,
 				DispatchError::NoPermission => ApplyError::CantPay,
 				DispatchError::BadState => ApplyError::CantPay,
 				DispatchError::Stale => ApplyError::Stale,
@@ -368,8 +368,7 @@ mod tests {
 	use hex_literal::hex;
 
 	impl_outer_origin! {
-		pub enum Origin for Runtime {
-		}
+		pub enum Origin for Runtime { }
 	}
 
 	impl_outer_event!{
@@ -390,6 +389,7 @@ mod tests {
 	impl system::Trait for Runtime {
 		type Origin = Origin;
 		type Index = u64;
+		type Call = Call<Runtime>;
 		type BlockNumber = u64;
 		type Hash = primitives::H256;
 		type Hashing = BlakeTwo256;
@@ -465,10 +465,10 @@ mod tests {
 		balances::GenesisConfig::<Runtime> {
 			balances: vec![(1, 211)],
 			vesting: vec![],
-		}.assimilate_storage(&mut t.top, &mut t.children).unwrap();
+		}.assimilate_storage(&mut t).unwrap();
 		let xt = sr_primitives::testing::TestXt(sign_extra(1, 0, 0), Call::transfer(2, 69));
 		let weight = xt.get_dispatch_info().weight as u64;
-		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new_with_children(t);
+		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new(t);
 		with_externalities(&mut t, || {
 			Executive::initialize_block(&Header::new(
 				1,
@@ -486,10 +486,10 @@ mod tests {
 
 	fn new_test_ext(balance_factor: u64) -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
-		t.extend(balances::GenesisConfig::<Runtime> {
+		balances::GenesisConfig::<Runtime> {
 			balances: vec![(1, 111 * balance_factor)],
 			vesting: vec![],
-		}.build_storage().unwrap());
+		}.assimilate_storage(&mut t).unwrap();
 		t.into()
 	}
 

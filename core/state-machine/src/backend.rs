@@ -49,21 +49,6 @@ pub struct MapTransaction {
 }
 
 impl MapTransaction {
-	/// Equivalent to `Extend` rust trait, less flexible.
-	/// It merges both contents.
-	pub fn extend(&mut self, other: MapTransaction) {
-		self.top.extend(other.top);
-		for (k, (other_map, other_child_trie)) in other.children.into_iter() {
-			if let Some((map, child_trie)) = self.children.get_mut(&k) {
-				map.extend(other_map);
-				// warning this can result in loss of info if both map are not
-				// build other same backend.
-				*child_trie = other_child_trie;
-			} else {
-				self.children.insert(k, (other_map, other_child_trie));
-			}
-		}
-	}
 	/// Assimilate this map transaction into other storage.
 	/// This is pretty close to a reverse `extend`
 	pub fn assimilate_storage(
@@ -141,9 +126,18 @@ pub trait Backend<H: Hasher> {
 	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, child_trie: ChildTrieReadRef, f: F);
 
-	/// Retrieve all entries keys of which start with the given prefix and
+	/// Retrieve all entries keys which start with the given prefix and
 	/// call `f` for each of those keys.
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F);
+
+	/// Retrieve all child entries keys which start with the given prefix and
+	/// call `f` for each of those keys.
+	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
+		&self,
+		child_trie: ChildTrieReadRef,
+		prefix: &[u8],
+		f: F,
+	);
 
 	/// Calculate the storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit.
@@ -174,11 +168,7 @@ pub trait Backend<H: Hasher> {
 	/// Get all keys of child storage with given prefix
 	fn child_keys(&self, child_trie: ChildTrieReadRef, prefix: &[u8]) -> Vec<Vec<u8>> {
 		let mut all = Vec::new();
-		self.for_keys_in_child_storage(child_trie, |k| {
-			if k.starts_with(prefix) {
-				all.push(k.to_vec());
-			}
-		});
+		self.for_child_keys_with_prefix(child_trie, prefix, |k| all.push(k.to_vec()));
 		all
 	}
 
@@ -404,6 +394,16 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, child_trie: ChildTrieReadRef, mut f: F) {
 		self.inner.children.get(child_trie.keyspace()).map(|m| m.0.keys().for_each(|k| f(&k)));
+	}
+
+	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
+		&self,
+		child_trie: ChildTrieReadRef,
+		prefix: &[u8],
+		f: F,
+	) {
+		self.inner.children.get(child_trie.keyspace())
+			.map(|(map, _ct)| map.keys().filter(|key| key.starts_with(prefix)).map(|k| &**k).for_each(f));
 	}
 
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)

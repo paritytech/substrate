@@ -91,9 +91,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::{result, ops::{Mul, Div}, cmp};
-use parity_codec::Encode;
+use codec::Encode;
 #[cfg(feature = "std")]
-use parity_codec::Decode;
+use codec::Decode;
 #[cfg(feature = "std")]
 use inherents::ProvideInherentData;
 use srml_support::{StorageValue, Parameter, decl_storage, decl_module, for_each_tuple};
@@ -133,7 +133,7 @@ impl InherentError {
 	#[cfg(feature = "std")]
 	pub fn try_from(id: &InherentIdentifier, data: &[u8]) -> Option<Self> {
 		if id == &INHERENT_IDENTIFIER {
-			<InherentError as parity_codec::Decode>::decode(&mut &data[..])
+			<InherentError as codec::Decode>::decode(&mut &data[..]).ok()
 		} else {
 			None
 		}
@@ -358,6 +358,7 @@ mod tests {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
+		type Call = ();
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
@@ -383,7 +384,7 @@ mod tests {
 	#[test]
 	fn timestamp_works() {
 		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		with_externalities(&mut TestExternalities::new_with_children(t), || {
+		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
 			assert_eq!(Timestamp::now(), 69);
@@ -394,7 +395,7 @@ mod tests {
 	#[should_panic(expected = "Timestamp must be updated only once in the block")]
 	fn double_timestamp_should_fail() {
 		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		with_externalities(&mut TestExternalities::new_with_children(t), || {
+		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
 			let _ = Timestamp::dispatch(Call::set(70), Origin::NONE);
@@ -405,7 +406,7 @@ mod tests {
 	#[should_panic(expected = "Timestamp must increment by at least <MinimumPeriod> between sequential blocks")]
 	fn block_period_minimum_enforced() {
 		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		with_externalities(&mut TestExternalities::new_with_children(t), || {
+		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
 			let _ = Timestamp::dispatch(Call::set(46), Origin::NONE);
 		});

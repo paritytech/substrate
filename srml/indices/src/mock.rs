@@ -75,6 +75,7 @@ impl system::Trait for Runtime {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
+	type Call = ();
 	type Hash = H256;
 	type Hashing = ::sr_primitives::traits::BlakeTwo256;
 	type AccountId = u64;
@@ -102,9 +103,9 @@ pub fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 	}
 
 	let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
-	t.extend(GenesisConfig::<Runtime> {
+	GenesisConfig::<Runtime> {
 		ids: vec![1, 2, 3, 4]
-	}.build_storage().unwrap());
+	}.assimilate_storage(&mut t).unwrap();
 	t.into()
 }
 

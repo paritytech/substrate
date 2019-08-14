@@ -25,7 +25,7 @@ use sr_primitives::traits::{Hash as HashT, BlakeTwo256, Header as _};
 use sr_primitives::generic;
 use sr_primitives::{ApplyError, ApplyOutcome, ApplyResult};
 use sr_primitives::transaction_validity::{TransactionValidity, ValidTransaction};
-use parity_codec::{KeyedVec, Encode};
+use codec::{KeyedVec, Encode};
 use super::{
 	AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest, AuthorityId
 };
@@ -201,13 +201,12 @@ pub fn finalize_block() -> Header {
 	let txs: Vec<_> = (0..extrinsic_index).map(ExtrinsicData::take).collect();
 	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
 	let extrinsics_root = enumerated_trie_root::<Blake2Hasher>(&txs).into();
-	// let mut digest = Digest::default();
 	let number = <Number>::take().expect("Number is set by `initialize_block`");
 	let parent_hash = <ParentHash>::take();
 	let mut digest = <StorageDigest>::take().expect("StorageDigest is set by `initialize_block`");
 
 	let o_new_authorities = <NewAuthorities>::take();
-	// This MUST come after all changes to storage are done.  Otherwise we will fail the
+	// This MUST come after all changes to storage are done. Otherwise we will fail the
 	// “Storage root does not match that calculated” assertion.
 	let storage_root = BlakeTwo256::storage_root();
 	let storage_changes_root = BlakeTwo256::storage_changes_root(parent_hash);
@@ -274,8 +273,7 @@ fn execute_transfer_backend(tx: &Transfer) -> ApplyResult {
 }
 
 fn execute_new_authorities_backend(new_authorities: &[AuthorityId]) -> ApplyResult {
-	let new_authorities: Vec<AuthorityId> = new_authorities.iter().cloned().collect();
-	<NewAuthorities>::put(new_authorities);
+	NewAuthorities::put(new_authorities.to_vec());
 	Ok(ApplyOutcome::Success)
 }
 
@@ -324,13 +322,13 @@ mod tests {
 			Sr25519Keyring::Bob.to_raw_public(),
 			Sr25519Keyring::Charlie.to_raw_public()
 		];
-		TestExternalities::new(map![
+		TestExternalities::new(sr_primitives::MapTransaction { top: map![
 			twox_128(b"latest").to_vec() => vec![69u8; 32],
 			twox_128(b"sys:auth").to_vec() => authorities.encode(),
 			blake2_256(&AccountKeyring::Alice.to_raw_public().to_keyed_vec(b"balance:")).to_vec() => {
 				vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 			}
-		])
+		], children: map![]})
 	}
 
 	fn block_import_works<F>(block_executor: F) where F: Fn(Block, &mut TestExternalities<Blake2Hasher>) {

@@ -80,7 +80,7 @@ use sr_primitives::traits::{
 	Zero, EnsureOrigin, StaticLookup, CheckedSub, CheckedMul, AccountIdConversion
 };
 use sr_primitives::weights::SimpleDispatchInfo;
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use system::ensure_signed;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
@@ -382,6 +382,7 @@ mod tests {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
+		type Call = ();
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
@@ -439,10 +440,10 @@ mod tests {
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		t.extend(balances::GenesisConfig::<Test>{
+		balances::GenesisConfig::<Test>{
 			balances: vec![(0, 100), (1, 99), (2, 1)],
 			vesting: vec![],
-		}.build_storage().unwrap());
+		}.assimilate_storage(&mut t).unwrap();
 		t.into()
 	}
 

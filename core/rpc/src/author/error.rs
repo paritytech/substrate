@@ -19,7 +19,6 @@
 use client;
 use transaction_pool::txpool;
 use crate::rpc;
-
 use crate::errors;
 
 /// Author RPC Result type.
@@ -36,8 +35,20 @@ pub enum Error {
 	#[display(fmt="Extrinsic verification error: {}", _0)]
 	Verification(Box<dyn std::error::Error + Send>),
 	/// Incorrect extrinsic format.
-	#[display(fmt="Invalid extrinsic format")]
-	BadFormat,
+	#[display(fmt="Invalid extrinsic format: {}", _0)]
+	BadFormat(codec::Error),
+	/// Incorrect seed phrase.
+	#[display(fmt="Invalid seed phrase/SURI")]
+	BadSeedPhrase,
+	/// Key type ID has an unknown format.
+	#[display(fmt="Invalid key type ID format (should be of length four)")]
+	BadKeyType,
+	/// Key type ID has some unsupported crypto.
+	#[display(fmt="The crypto of key type ID is unknown")]
+	UnsupportedKeyType,
+	/// Some random issue with the key store. Shouldn't happen.
+	#[display(fmt="The key store is unavailable")]
+	KeyStoreUnavailable,
 }
 
 impl std::error::Error for Error {
@@ -78,9 +89,9 @@ impl From<Error> for rpc::Error {
 		use txpool::error::{Error as PoolError};
 
 		match e {
-			Error::BadFormat => rpc::Error {
+			Error::BadFormat(e) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(BAD_FORMAT),
-				message: "Extrinsic has invalid format.".into(),
+				message: format!("Extrinsic has invalid format: {}", e).into(),
 				data: None,
 			},
 			Error::Verification(e) => rpc::Error {

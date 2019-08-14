@@ -31,12 +31,15 @@ pub use rstd;
 #[doc(hidden)]
 pub use paste;
 
+#[doc(hidden)]
+pub use app_crypto;
+
 #[cfg(feature = "std")]
 pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay, MapTransaction};
 
-use rstd::{prelude::*, ops, convert::TryInto};
+use rstd::{prelude::*, ops, convert::{TryInto, TryFrom}};
 use primitives::{crypto, ed25519, sr25519, hash::{H256, H512}};
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, CompactAs};
 
 #[cfg(feature = "std")]
 pub mod testing;
@@ -52,7 +55,8 @@ pub mod transaction_validity;
 pub use generic::{DigestItem, Digest};
 
 /// Re-export this since it's part of the API of this crate.
-pub use primitives::crypto::{key_types, KeyTypeId};
+pub use primitives::crypto::{key_types, KeyTypeId, CryptoType};
+pub use app_crypto::AppKey;
 
 /// A message indicating an invalid signature in extrinsic.
 pub const BAD_SIGNATURE: &str = "bad signature in extrinsic";
@@ -109,16 +113,14 @@ pub use serde::{Serialize, Deserialize, de::DeserializeOwned};
 pub trait BuildStorage: Sized {
 	/// Build the storage out of this builder.
 	fn build_storage(self) -> Result<MapTransaction, String> {
-		let mut top = Default::default();
-		let mut children = Default::default();
-		self.assimilate_storage(&mut top, &mut children)?;
-		Ok(MapTransaction{ top, children })
+		let mut storage = Default::default();
+		self.assimilate_storage(&mut storage)?;
+		Ok(storage)
 	}
 	/// Assimilate the storage for this module into pre-existing overlays.
 	fn assimilate_storage(
 		self,
-		storage: &mut StorageOverlay,
-		child_storage: &mut ChildrenStorageOverlay
+		storage: &mut MapTransaction,
 	) -> Result<(), String>;
 }
 
@@ -128,24 +130,8 @@ pub trait BuildModuleGenesisStorage<T, I>: Sized {
 	/// Create the module genesis storage into the given `storage` and `child_storage`.
 	fn build_module_genesis_storage(
 		self,
-		storage: &mut StorageOverlay,
-		child_storage: &mut ChildrenStorageOverlay
+		storage: &mut MapTransaction,
 	) -> Result<(), String>;
-}
-
-#[cfg(feature = "std")]
-impl BuildStorage for StorageOverlay {
-	fn build_storage(self) -> Result<MapTransaction, String> {
-		Ok(MapTransaction{ top: self, children: Default::default() })
-	}
-	fn assimilate_storage(
-		self,
-		storage: &mut StorageOverlay,
-		_child_storage: &mut ChildrenStorageOverlay
-	) -> Result<(), String> {
-		storage.extend(self);
-		Ok(())
-	}
 }
 
 #[cfg(feature = "std")]
@@ -155,10 +141,18 @@ impl BuildStorage for MapTransaction {
 	}
 	fn assimilate_storage(
 		self,
-		storage: &mut StorageOverlay,
-		child_storage: &mut ChildrenStorageOverlay
+		storage: &mut MapTransaction,
 	)-> Result<(), String> {
-		self.assimilate_storage(storage, child_storage);
+		storage.top.extend(self.top);
+		for (k, other_map) in self.children.into_iter() {
+			if let Some(map) = storage.children.get_mut(&k) {
+				map.0.extend(other_map.0);
+				// Unchecked child trie replacement
+				map.1 = other_map.1;
+			} else {
+				storage.children.insert(k, other_map);
+			}
+		}
 		Ok(())
 	}
 }
@@ -168,7 +162,7 @@ pub type ConsensusEngineId = [u8; 4];
 
 /// Permill is parts-per-million (i.e. after multiplying by this, divide by 1000000).
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Ord, PartialOrd))]
-#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
+#[derive(Encode, Decode, CompactAs, Default, Copy, Clone, PartialEq, Eq)]
 pub struct Permill(u32);
 
 impl Permill {
@@ -258,26 +252,10 @@ impl From<f32> for Permill {
 	}
 }
 
-impl codec::CompactAs for Permill {
-	type As = u32;
-	fn encode_as(&self) -> &u32 {
-		&self.0
-	}
-	fn decode_from(x: u32) -> Permill {
-		Permill(x)
-	}
-}
-
-impl From<codec::Compact<Permill>> for Permill {
-	fn from(x: codec::Compact<Permill>) -> Permill {
-		x.0
-	}
-}
-
 /// Perbill is parts-per-billion. It stores a value between 0 and 1 in fixed point and
 /// provides a means to multiply some other value by that.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Encode, Decode, CompactAs, Default, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct Perbill(u32);
 
 impl Perbill {
@@ -369,23 +347,6 @@ impl From<f32> for Perbill {
 		Perbill::from_fraction(x as f64)
 	}
 }
-
-impl codec::CompactAs for Perbill {
-	type As = u32;
-	fn encode_as(&self) -> &u32 {
-		&self.0
-	}
-	fn decode_from(x: u32) -> Perbill {
-		Perbill(x)
-	}
-}
-
-impl From<codec::Compact<Perbill>> for Perbill {
-	fn from(x: codec::Compact<Perbill>) -> Perbill {
-		x.0
-	}
-}
-
 
 /// A fixed point number by the scale of 1 billion.
 ///
@@ -511,7 +472,7 @@ impl CheckedAdd for Fixed64 {
 
 /// PerU128 is parts-per-u128-max-value. It stores a value between 0 and 1 in fixed point.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
+#[derive(Encode, Decode, CompactAs, Default, Copy, Clone, PartialEq, Eq)]
 pub struct PerU128(u128);
 
 const U128: u128 = u128::max_value();
@@ -538,22 +499,6 @@ impl ::rstd::ops::Deref for PerU128 {
 
 	fn deref(&self) -> &u128 {
 		&self.0
-	}
-}
-
-impl codec::CompactAs for PerU128 {
-	type As = u128;
-	fn encode_as(&self) -> &u128 {
-		&self.0
-	}
-	fn decode_from(x: u128) -> PerU128 {
-		Self(x)
-	}
-}
-
-impl From<codec::Compact<PerU128>> for PerU128 {
-	fn from(x: codec::Compact<PerU128>) -> PerU128 {
-		x.0
 	}
 }
 
@@ -659,8 +604,13 @@ pub struct AnySignature(H512);
 impl Verify for AnySignature {
 	type Signer = sr25519::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sr25519::Public) -> bool {
-		runtime_io::sr25519_verify(self.0.as_fixed_bytes(), msg.get(), &signer.0) ||
-			runtime_io::ed25519_verify(self.0.as_fixed_bytes(), msg.get(), &signer.0)
+		sr25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
+			.map(|s| runtime_io::sr25519_verify(&s, msg.get(), &signer))
+			.unwrap_or(false)
+		|| ed25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
+			.and_then(|s| ed25519::Public::try_from(signer.0.as_ref()).map(|p| (s, p)))
+			.map(|(s, p)| runtime_io::ed25519_verify(&s, msg.get(), &p))
+			.unwrap_or(false)
 	}
 }
 
@@ -693,6 +643,8 @@ impl codec::Encode for ApplyOutcome {
 	}
 }
 
+impl codec::EncodeLike for ApplyOutcome {}
+
 #[derive(Eq, PartialEq, Clone, Copy, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[repr(u8)]
@@ -715,6 +667,8 @@ impl codec::Encode for ApplyError {
 		f(&[*self as u8])
 	}
 }
+
+impl codec::EncodeLike for ApplyError {}
 
 /// Result from attempt to apply an extrinsic.
 pub type ApplyResult = Result<ApplyOutcome, ApplyError>;
@@ -808,8 +762,7 @@ macro_rules! impl_outer_config {
 			impl $crate::BuildStorage for $main {
 				fn assimilate_storage(
 					self,
-					top: &mut $crate::StorageOverlay,
-					children: &mut $crate::ChildrenStorageOverlay
+					storage: &mut $crate::MapTransaction,
 				) -> std::result::Result<(), String> {
 					$(
 						if let Some(extra) = self.[< $snake $(_ $instance )? >] {
@@ -819,8 +772,7 @@ macro_rules! impl_outer_config {
 								$snake;
 								$( $instance )?;
 								extra;
-								top;
-								children;
+								storage;
 							}
 						}
 					)*
@@ -834,13 +786,11 @@ macro_rules! impl_outer_config {
 		$module:ident;
 		$instance:ident;
 		$extra:ident;
-		$top:ident;
-		$children:ident;
+		$storage:ident;
 	) => {
 		$crate::BuildModuleGenesisStorage::<$runtime, $module::$instance>::build_module_genesis_storage(
 			$extra,
-			$top,
-			$children,
+			$storage,
 		)?;
 	};
 	(@CALL_FN
@@ -848,13 +798,11 @@ macro_rules! impl_outer_config {
 		$module:ident;
 		;
 		$extra:ident;
-		$top:ident;
-		$children:ident;
+		$storage:ident;
 	) => {
 		$crate::BuildModuleGenesisStorage::<$runtime, $module::__InherentHiddenInstance>::build_module_genesis_storage(
 			$extra,
-			$top,
-			$children,
+			$storage,
 		)?;
 	}
 }

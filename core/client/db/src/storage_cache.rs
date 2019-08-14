@@ -548,6 +548,10 @@ impl<H: Hasher, S: StateBackend<H>, B: BlockT> StateBackend<H> for CachingState<
 		self.state.for_keys_in_child_storage(child_trie, f)
 	}
 
+	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, child_trie: ChildTrieReadRef, prefix: &[u8], f: F) {
+		self.state.for_child_keys_with_prefix(child_trie, prefix, f)
+	}
+
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
 		where
 			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,

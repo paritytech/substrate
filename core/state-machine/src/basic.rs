@@ -20,8 +20,7 @@ use std::collections::HashMap;
 use std::iter::FromIterator;
 use crate::backend::{Backend, InMemory, MapTransaction};
 use hash_db::Hasher;
-use trie::TrieConfiguration;
-use trie::default_child_trie_root;
+use trie::{TrieConfiguration, default_child_trie_root};
 use trie::trie_types::Layout;
 use primitives::offchain;
 use primitives::storage::well_known_keys::is_child_storage_key;
@@ -38,18 +37,15 @@ pub struct BasicExternalities {
 }
 
 impl BasicExternalities {
-	/// Create a new instance of `BasicExternalities`
-	pub fn new(top: HashMap<Vec<u8>, Vec<u8>>) -> Self {
-		Self::new_with_children(MapTransaction { top, children: Default::default() })
-	}
 
-	/// Create a new instance of `BasicExternalities` with children
-	pub fn new_with_children(map: MapTransaction) -> Self {
+	/// Create a new instance of `BasicExternalities`
+	pub fn new(map: MapTransaction) -> Self {
 		let pending_child = map.children.values()
 			.map(|(_, child_trie)| (
 					child_trie.parent_slice().to_vec(),
 					Some(child_trie.keyspace().clone())
 			)).collect();
+
 		BasicExternalities {
 			top: map.top,
 			children: map.children,
@@ -122,6 +118,10 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 		}
 	}
 
+	fn original_child_storage(&self, child_trie: ChildTrieReadRef, key: &[u8]) -> Option<Vec<u8>> {
+		Externalities::<H>::child_storage(self, child_trie, key)
+	}
+
 	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
 		if is_child_storage_key(&key) {
 			warn!(target: "trie", "Refuse to set child storage key via main storage");
@@ -190,9 +190,31 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 		self.top.retain(|key, _| !key.starts_with(prefix));
 	}
 
+	fn clear_child_prefix(&mut self, child_trie: &ChildTrie, prefix: &[u8]) {
+		let keyspace = child_trie.keyspace();
+		if let Some(child) = self.children.get_mut(keyspace) {
+			child.0.retain(|key, _| !key.starts_with(prefix));
+		}
+	}
+
 	fn chain_id(&self) -> u64 { 42 }
 
 	fn storage_root(&mut self) -> H::Out {
+
+		let mut top = self.top.clone();
+		let child_tries: Vec<_> = self.children.values().map(|v| v.1.clone()).collect();
+		// Single child trie implementation currently allows using the same child
+		// empty root for all child trie. Using null storage key until multiple
+		// type of child trie support.
+		let empty_hash = default_child_trie_root::<Layout<H>>();
+		for child_trie in child_tries {
+			let child_root = <Self as Externalities<H>>::child_storage_root(self, &child_trie);
+			if &empty_hash[..] == &child_root[..] && child_trie.extension().len() > 0 {
+				top.remove(child_trie.parent_trie());
+			} else {
+				top.insert(child_trie.parent_trie().to_vec(), child_trie.encoded_with_root(&child_root));
+			}
+		}
 		Layout::<H>::trie_root(self.top.clone())
 	}
 
@@ -212,7 +234,12 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 	}
 
 	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities> {
-		warn!("Call to non-existent out offchain externalities set.");
+		warn!("Call to non-existent offchain externalities set.");
+		None
+	}
+
+	fn keystore(&self) -> Option<primitives::traits::BareCryptoStorePtr> {
+		warn!("Call to non-existent keystore.");
 		None
 	}
 }
@@ -253,7 +280,7 @@ mod tests {
 
 		// use a dummy child trie (keyspace and undefined trie).
 		let child_trie = ChildTrie::fetch_or_new(|_| None, |_| (), child_storage, || 1u128);
-		let mut ext = BasicExternalities::new_with_children(MapTransaction {
+		let mut ext = BasicExternalities::new(MapTransaction {
 			top: Default::default(),
 			children: map![
 				child_trie.keyspace().to_vec() => (map![

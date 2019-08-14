@@ -36,9 +36,13 @@ arg_enum! {
 	#[allow(missing_docs)]
 	#[derive(Debug, Clone, Copy)]
 	pub enum ExecutionStrategy {
+		// Execute with native build (if available, WebAssembly otherwise).
 		Native,
+		// Only execute with the WebAssembly build.
 		Wasm,
+		// Execute with both native (where available) and WebAssembly builds.
 		Both,
+		// Execute with the native build if possible; if it fails, then execute with WebAssembly.
 		NativeElseWasm,
 	}
 }
@@ -55,7 +59,8 @@ impl Into<client::ExecutionStrategy> for ExecutionStrategy {
 }
 
 arg_enum! {
-	/// How to execute blocks
+	/// Whether off-chain workers are enabled.
+	#[allow(missing_docs)]
 	#[derive(Debug, Clone)]
 	pub enum OffchainWorkerEnabled {
 		Always,
@@ -306,26 +311,9 @@ pub struct ExecutionStrategies {
 /// The `run` command used to run a node.
 #[derive(Debug, StructOpt, Clone)]
 pub struct RunCmd {
-	/// Specify custom keystore path
-	#[structopt(long = "keystore-path", value_name = "PATH", parse(from_os_str))]
-	pub keystore_path: Option<PathBuf>,
-
-	/// Specify additional key seed
-	#[structopt(long = "key", value_name = "STRING")]
-	pub key: Option<String>,
-
-	/// Enable validator mode
-	#[structopt(long = "validator")]
-	pub validator: bool,
-
 	/// Disable GRANDPA when running in validator mode
 	#[structopt(long = "no-grandpa")]
 	pub no_grandpa: bool,
-
-	/// Run GRANDPA voter even when no additional key seed via `--key` is specified. This can for example be of interest
-	/// when running a sentry node in front of a validator, thus needing to forward GRANDPA gossip messages.
-	#[structopt(long = "grandpa-voter")]
-	pub grandpa_voter: bool,
 
 	/// Experimental: Run in light client mode
 	#[structopt(long = "light")]
@@ -422,9 +410,32 @@ pub struct RunCmd {
 	#[structopt(long = "force-authoring")]
 	pub force_authoring: bool,
 
-	/// Interactive password for validator key.
-	#[structopt(short = "i")]
-	pub interactive_password: bool,
+	/// Specify custom keystore path.
+	#[structopt(long = "keystore-path", value_name = "PATH", parse(from_os_str))]
+	pub keystore_path: Option<PathBuf>,
+
+	/// Use interactive shell for entering the password used by the keystore.
+	#[structopt(
+		long = "password-interactive",
+		raw(conflicts_with_all = "&[ \"password\", \"password_filename\" ]")
+	)]
+	pub password_interactive: bool,
+
+	/// Password used by the keystore.
+	#[structopt(
+		long = "password",
+		raw(conflicts_with_all = "&[ \"password_interactive\", \"password_filename\" ]")
+	)]
+	pub password: Option<String>,
+
+	/// File that contains the password used by the keystore.
+	#[structopt(
+		long = "password-filename",
+		value_name = "PATH",
+		parse(from_os_str),
+		raw(conflicts_with_all = "&[ \"password_interactive\", \"password\" ]")
+	)]
+	pub password_filename: Option<PathBuf>
 }
 
 /// Stores all required Cli values for a keyring test account.
@@ -443,7 +454,7 @@ lazy_static::lazy_static! {
 			let conflicts_with = keyring::Sr25519Keyring::iter()
 				.filter(|b| a != *b)
 				.map(|b| b.to_string().to_lowercase())
-				.chain(["name", "key"].iter().map(ToString::to_string))
+				.chain(std::iter::once("name".to_string()))
 				.collect::<Vec<_>>();
 			let name = a.to_string().to_lowercase();
 

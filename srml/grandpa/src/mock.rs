@@ -22,7 +22,7 @@ use sr_primitives::{Perbill, DigestItem, traits::IdentityLookup, testing::{Heade
 use runtime_io;
 use srml_support::{impl_outer_origin, impl_outer_event, parameter_types};
 use primitives::{H256, Blake2Hasher};
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use crate::{AuthorityId, GenesisConfig, Trait, Module, ConsensusLog};
 use substrate_finality_grandpa_primitives::GRANDPA_ENGINE_ID;
 
@@ -51,6 +51,7 @@ impl system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
+	type Call = ();
 	type Hash = H256;
 	type Hashing = ::sr_primitives::traits::BlakeTwo256;
 	type AccountId = u64;
@@ -75,14 +76,16 @@ impl_outer_event!{
 }
 
 pub fn to_authorities(vec: Vec<(u64, u64)>) -> Vec<(AuthorityId, u64)> {
-	vec.into_iter().map(|(id, weight)| (UintAuthorityId(id).into(), weight)).collect()
+	vec.into_iter()
+		.map(|(id, weight)| (UintAuthorityId(id).to_public_key::<AuthorityId>(), weight))
+		.collect()
 }
 
 pub fn new_test_ext(authorities: Vec<(u64, u64)>) -> runtime_io::TestExternalities<Blake2Hasher> {
 	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	t.extend(GenesisConfig {
+	GenesisConfig {
 		authorities: to_authorities(authorities),
-	}.build_storage().unwrap());
+	}.assimilate_storage(&mut t).unwrap();
 	t.into()
 }
 

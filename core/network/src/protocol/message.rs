@@ -19,7 +19,7 @@
 use bitflags::bitflags;
 use sr_primitives::{ConsensusEngineId, traits::{Block as BlockT, Header as HeaderT}};
 use primitives::child_trie::ChildTrieRead;
-use parity_codec::{Encode, Decode, Input, Output};
+use codec::{Encode, Decode, Input, Output, Error};
 pub use self::generic::{
 	BlockAnnounce, RemoteCallRequest, RemoteReadRequest,
 	RemoteHeaderRequest, RemoteHeaderResponse,
@@ -91,9 +91,11 @@ impl Encode for BlockAttributes {
 	}
 }
 
+impl codec::EncodeLike for BlockAttributes {}
+
 impl Decode for BlockAttributes {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Self::from_bits(input.read_byte()?)
+	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
+		Self::from_bits(input.read_byte()?).ok_or_else(|| Error::from("Invalid bytes"))
 	}
 }
 
@@ -126,7 +128,7 @@ pub struct RemoteReadResponse {
 
 /// Generic types.
 pub mod generic {
-	use parity_codec::{Encode, Decode};
+	use codec::{Encode, Decode};
 	use sr_primitives::Justification;
 	use crate::config::Roles;
 	use super::{

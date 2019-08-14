@@ -99,7 +99,7 @@ use serde::{Serialize, Deserialize};
 use primitives::crypto::UncheckedFrom;
 use primitives::child_trie::ChildTrie;
 use rstd::{prelude::*, marker::PhantomData};
-use parity_codec::{Codec, Encode, Decode};
+use codec::{Codec, Encode, Decode};
 use runtime_io::blake2_256;
 use sr_primitives::traits::{
 	Hash, StaticLookup, Zero, MaybeSerializeDebug, Member
@@ -333,7 +333,7 @@ pub trait Trait: timestamp::Trait {
 	///
 	/// It is recommended (though not required) for this function to return a fee that would be taken
 	/// by the Executive module for regular dispatch.
-	type ComputeDispatchFee: ComputeDispatchFee<Self::Call, BalanceOf<Self>>;
+	type ComputeDispatchFee: ComputeDispatchFee<<Self as Trait>::Call, BalanceOf<Self>>;
 
 	/// trie id generator
 	type TrieIdGenerator: TrieIdGenerator<Self::AccountId>;
@@ -427,8 +427,8 @@ where
 /// The default dispatch fee computor computes the fee in the same way that
 /// the implementation of `MakePayment` for the Balances module does.
 pub struct DefaultDispatchFeeComputor<T: Trait>(PhantomData<T>);
-impl<T: Trait> ComputeDispatchFee<T::Call, BalanceOf<T>> for DefaultDispatchFeeComputor<T> {
-	fn compute_dispatch_fee(call: &T::Call) -> BalanceOf<T> {
+impl<T: Trait> ComputeDispatchFee<<T as Trait>::Call, BalanceOf<T>> for DefaultDispatchFeeComputor<T> {
+	fn compute_dispatch_fee(call: &<T as Trait>::Call) -> BalanceOf<T> {
 		let encoded_len = call.using_encoded(|encoded| encoded.len() as u32);
 		let base_fee = T::TransactionBaseFee::get();
 		let byte_fee = T::TransactionByteFee::get();
@@ -528,10 +528,10 @@ decl_module! {
 			code: Vec<u8>
 		) -> Result {
 			let origin = ensure_signed(origin)?;
-			let schedule = <Module<T>>::current_schedule();
 
 			let (mut gas_meter, imbalance) = gas::buy_gas::<T>(&origin, gas_limit)?;
 
+			let schedule = <Module<T>>::current_schedule();
 			let result = wasm::save_code::<T>(code, &mut gas_meter, &schedule);
 			if let Ok(code_hash) = result {
 				Self::deposit_event(RawEvent::CodeStored(code_hash));
@@ -828,11 +828,10 @@ fn prefixed_trie_id(trie_id: &[u8]) -> Vec<u8> {
 
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
-		if let Some(ContractInfo::Alive(info)) = <ContractInfoOf<T>>::get(who) {
+		if let Some(ContractInfo::Alive(info)) = <ContractInfoOf<T>>::take(who) {
 			contract_child_trie(&info.trie_id)
 				.map(|child_trie| child::kill_storage(&child_trie));
 		}
-		<ContractInfoOf<T>>::remove(who);
 	}
 }
 

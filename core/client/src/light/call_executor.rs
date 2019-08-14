@@ -22,7 +22,7 @@ use std::{
 	marker::PhantomData, cell::RefCell, rc::Rc,
 };
 
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use primitives::{offchain, H256, Blake2Hasher, convert_hash, NativeOrEncoded};
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{One, Block as BlockT, Header as HeaderT};
@@ -94,8 +94,8 @@ where
 		call_data: &[u8],
 		_strategy: ExecutionStrategy,
 		_side_effects_handler: Option<&mut O>,
-	)
-		-> ClientResult<Vec<u8>> {
+	) -> ClientResult<Vec<u8>>
+	{
 		let block_hash = self.blockchain.expect_block_hash_from_id(id)?;
 		let block_header = self.blockchain.expect_header(id.clone())?;
 
@@ -130,6 +130,7 @@ where
 		_native_call: Option<NC>,
 		side_effects_handler: Option<&mut O>,
 		_recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
+		_enable_keystore: bool,
 	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 		let block_initialized = match initialize_block {
 			InitializeBlock::Do(ref init_block) => {
@@ -143,13 +144,25 @@ where
 			return Err(ClientError::NotAvailableOnLightClient.into());
 		}
 
-		self.call(at, method, call_data, (&execution_manager).into(), side_effects_handler).map(NativeOrEncoded::Encoded)
+		self.call(
+			at,
+			method,
+			call_data,
+			(&execution_manager).into(),
+			side_effects_handler,
+		).map(NativeOrEncoded::Encoded)
 	}
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> ClientResult<RuntimeVersion> {
-		let call_result = self.call(id, "Core_version", &[], ExecutionStrategy::NativeElseWasm, NeverOffchainExt::new())?;
+		let call_result = self.call(
+			id,
+			"Core_version",
+			&[],
+			ExecutionStrategy::NativeElseWasm,
+			NeverOffchainExt::new()
+		)?;
 		RuntimeVersion::decode(&mut call_result.as_slice())
-			.ok_or_else(|| ClientError::VersionInvalid.into())
+			.map_err(|_| ClientError::VersionInvalid.into())
 	}
 
 	fn call_at_state<
@@ -270,6 +283,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 		native_call: Option<NC>,
 		side_effects_handler: Option<&mut O>,
 		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
+		enable_keystore: bool,
 	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 		// there's no actual way/need to specify native/wasm execution strategy on light node
 		// => we can safely ignore passed values
@@ -296,6 +310,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 				native_call,
 				side_effects_handler,
 				recorder,
+				enable_keystore,
 			).map_err(|e| ClientError::Execution(Box::new(e.to_string()))),
 			false => CallExecutor::contextual_call::<
 				_,
@@ -318,6 +333,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 				native_call,
 				side_effects_handler,
 				recorder,
+				enable_keystore,
 			).map_err(|e| ClientError::Execution(Box::new(e.to_string()))),
 		}
 	}
@@ -463,6 +479,7 @@ pub fn check_execution_proof<Header, E, H>(
 		executor,
 		"Core_initialize_block",
 		&next_block.encode(),
+		None,
 	)?;
 
 	// execute method
@@ -472,6 +489,7 @@ pub fn check_execution_proof<Header, E, H>(
 		executor,
 		&request.method,
 		&request.call_data,
+		None,
 	)?;
 
 	Ok(local_result)

@@ -17,7 +17,7 @@
 //! Functionality for reading and storing children hashes from db.
 
 use kvdb::{KeyValueDB, DBTransaction};
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use crate::error;
 use std::hash::Hash;
 
@@ -41,8 +41,8 @@ pub fn read_children<
 	};
 
 	let children: Vec<V> = match Decode::decode(&mut &raw_val[..]) {
-		Some(children) => children,
-		None => return Err(error::Error::Backend("Error decoding children".into())),
+		Ok(children) => children,
+		Err(_) => return Err(error::Error::Backend("Error decoding children".into())),
 	};
 
 	Ok(children)

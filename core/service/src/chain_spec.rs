@@ -22,7 +22,8 @@ use std::fs::File;
 use std::path::PathBuf;
 use serde::{Serialize, Deserialize};
 use primitives::storage::{StorageKey, StorageData};
-use sr_primitives::{BuildStorage, StorageOverlay, ChildrenStorageOverlay, MapTransaction};
+use primitives::child_trie::{ChildTrie, produce_keyspace, reverse_keyspace};
+use sr_primitives::{BuildStorage, MapTransaction};
 use serde_json as json;
 use crate::components::RuntimeGenesis;
 use network::Multiaddr;
@@ -34,7 +35,7 @@ enum GenesisSource<G> {
 	Factory(fn() -> G),
 }
 
-impl<G: RuntimeGenesis> Clone for GenesisSource<G> {
+impl<G> Clone for GenesisSource<G> {
 	fn clone(&self) -> Self {
 		match *self {
 			GenesisSource::File(ref path) => GenesisSource::File(path.clone()),
@@ -72,13 +73,29 @@ impl<'a, G: RuntimeGenesis> BuildStorage for &'a ChainSpec<G> {
 	fn build_storage(self) -> Result<MapTransaction, String> {
 		match self.genesis.resolve()? {
 			Genesis::Runtime(gc) => gc.build_storage(),
-			Genesis::Raw(map) => Ok(MapTransaction {
+			Genesis::Raw(map, children_map) => Ok(MapTransaction {
 				top: map.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
-				children: Default::default(),
+				children: children_map.into_iter().map(|((sk, ks), map)| (
+					produce_keyspace(ks),
+					(
+						map.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
+						// no fetch or update on genesis building (use it as
+						// a dump build.
+						// child trie counter as a simple usize should be correctly
+						// define and the counter for it actually stored properly
+						// in top (with value of the max child trie).
+						ChildTrie::fetch_or_new(
+							|_| None,
+							|_| (),
+							sk.0.as_slice(),
+							|| ks,
+						)
+					)
+				)).collect(),
 			}),
 		}
 	}
-	fn assimilate_storage(self, _: &mut StorageOverlay, _: &mut ChildrenStorageOverlay) -> Result<(), String> {
+	fn assimilate_storage(self, _: &mut MapTransaction) -> Result<(), String> {
 		Err("`assimilate_storage` not implemented for `ChainSpec`.".into())
 	}
 }
@@ -88,7 +105,10 @@ impl<'a, G: RuntimeGenesis> BuildStorage for &'a ChainSpec<G> {
 #[serde(deny_unknown_fields)]
 enum Genesis<G> {
 	Runtime(G),
-	Raw(HashMap<StorageKey, StorageData>),
+	Raw(
+		HashMap<StorageKey, StorageData>,
+		HashMap<(StorageKey, u128), HashMap<StorageKey, StorageData>>,
+	),
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -107,12 +127,12 @@ struct ChainSpecFile {
 pub type Properties = json::map::Map<String, json::Value>;
 
 /// A configuration of a chain. Can be used to build a genesis block.
-pub struct ChainSpec<G: RuntimeGenesis> {
+pub struct ChainSpec<G> {
 	spec: ChainSpecFile,
 	genesis: GenesisSource<G>,
 }
 
-impl<G: RuntimeGenesis> Clone for ChainSpec<G> {
+impl<G> Clone for ChainSpec<G> {
 	fn clone(&self) -> Self {
 		ChainSpec {
 			spec: self.spec.clone(),
@@ -221,11 +241,24 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 		};
 		let genesis = match (raw, self.genesis.resolve()?) {
 			(true, Genesis::Runtime(g)) => {
-				let storage = g.build_storage()?.top.into_iter()
+				let storage = g.build_storage()?;
+				let top = storage.top.into_iter()
 					.map(|(k, v)| (StorageKey(k), StorageData(v)))
 					.collect();
+				let mut children = HashMap::new();
+				for (_ks, (child_map, child)) in storage.children.into_iter() {
+					children.insert(
+						(
+							StorageKey(child.parent_slice().to_vec()),
+							reverse_keyspace(child.keyspace()).map_err(|_| "u128 uncode error".to_string())?,
+						),
+						child_map.into_iter()
+							.map(|(k, v)| (StorageKey(k), StorageData(v)))
+							.collect(),
+					);
+				}
 
-				Genesis::Raw(storage)
+				Genesis::Raw(top, children)
 			},
 			(_, genesis) => genesis,
 		};

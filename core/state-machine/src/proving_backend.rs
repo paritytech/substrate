@@ -171,6 +171,15 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		self.backend.for_keys_with_prefix(prefix, f)
 	}
 
+	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
+		&self,
+		child_trie: ChildTrieReadRef,
+		prefix: &[u8],
+		f: F,
+	) {
+		self.backend.for_child_keys_with_prefix(child_trie, prefix, f)
+	}
+
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		self.backend.pairs()
 	}
