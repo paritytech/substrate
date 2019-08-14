@@ -41,7 +41,7 @@ fn should_report_an_authority_and_trigger_on_offence() {
 		};
 
 		// when
-		Offences::report_offence(None, offence);
+		Offences::report_offence(vec![], offence);
 
 		// then
 		with_on_offence_fractions(|f| {
@@ -51,7 +51,7 @@ fn should_report_an_authority_and_trigger_on_offence() {
 }
 
 #[test]
-fn should_calculate_the_fraction_corectly() {
+fn should_calculate_the_fraction_correctly() {
 	with_externalities(&mut new_test_ext(), || {
 		// given
 		let session_index = 5;
@@ -71,16 +71,16 @@ fn should_calculate_the_fraction_corectly() {
 		};
 
 		// when
-		Offences::report_offence(None, offence1);
+		Offences::report_offence(vec![], offence1);
 		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
 		});
 
-		Offences::report_offence(None, offence2);
+		Offences::report_offence(vec![], offence2);
 
 		// then
 		with_on_offence_fractions(|f| {
-			assert_eq!(f.clone(), vec![Perbill::from_percent(20), Perbill::from_percent(45)]);
+			assert_eq!(f.clone(), vec![Perbill::from_percent(15), Perbill::from_percent(45)]);
 		});
 	});
 }
@@ -99,15 +99,15 @@ fn should_not_report_the_same_authority_twice_in_the_same_slot() {
 			time_slot,
 			offenders: vec![5],
 		};
-		Offences::report_offence(None, offence.clone());
+		Offences::report_offence(vec![], offence.clone());
 		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
 			f.clear();
 		});
 
 		// when
-		// reportfor the second time
-		Offences::report_offence(None, offence);
+		// report for the second time
+		Offences::report_offence(vec![], offence);
 
 		// then
 		with_on_offence_fractions(|f| {
@@ -131,7 +131,7 @@ fn should_report_in_different_time_slot() {
 			time_slot,
 			offenders: vec![5],
 		};
-		Offences::report_offence(None, offence.clone());
+		Offences::report_offence(vec![], offence.clone());
 		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
 			f.clear();
@@ -140,7 +140,7 @@ fn should_report_in_different_time_slot() {
 		// when
 		// reportfor the second time
 		offence.time_slot += 1;
-		Offences::report_offence(None, offence);
+		Offences::report_offence(vec![], offence);
 
 		// then
 		with_on_offence_fractions(|f| {
@@ -168,7 +168,7 @@ fn should_deposit_event() {
 		};
 
 		// when
-		Offences::report_offence(None, offence);
+		Offences::report_offence(vec![], offence);
 
 		// then
 		assert_eq!(
@@ -196,7 +196,7 @@ fn doesnt_deposit_event_for_dups() {
 			time_slot,
 			offenders: vec![5],
 		};
-		Offences::report_offence(None, offence.clone());
+		Offences::report_offence(vec![], offence.clone());
 		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
 			f.clear();
@@ -204,7 +204,7 @@ fn doesnt_deposit_event_for_dups() {
 
 		// when
 		// report for the second time
-		Offences::report_offence(None, offence);
+		Offences::report_offence(vec![], offence);
 
 		// then
 		// there is only one event.
@@ -241,7 +241,7 @@ fn should_properly_count_offences() {
 			time_slot,
 			offenders: vec![4],
 		};
-		Offences::report_offence(None, offence1);
+		Offences::report_offence(vec![], offence1);
 		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
 			f.clear();
@@ -249,7 +249,7 @@ fn should_properly_count_offences() {
 
 		// when
 		// report for the second time
-		Offences::report_offence(None, offence2);
+		Offences::report_offence(vec![], offence2);
 
 		// then
 		// the 1st authority should have count 2 and the 2nd one should be reported only once.

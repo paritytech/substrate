@@ -99,6 +99,7 @@ impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportOffence<T::AccountId, T
 				// De-duplication of reports is tricky though, we need a canonical form of the report
 				// (for instance babe equivocation can have headers swapped).
 				if !offending_authorities.iter().any(|details| details.offender == offender) {
+					new_offenders.insert(offender.clone());
 					offending_authorities.push(OffenceDetails {
 						offender,
 						reporters: reporters.clone().into_iter().collect(),
@@ -109,13 +110,16 @@ impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportOffence<T::AccountId, T
 			offending_authorities
 		};
 
-		let offenders_count = all_offenders.len() as u32;
-		let previous_offenders_count = offenders_count - new_offenders.len() as u32;
-
-		if previous_offenders_count != offenders_count {
+		if new_offenders.is_empty() {
 			// The report contained only duplicates, so there is no need to slash again.
 			return
 		}
+
+		// We pushed new items in the offending_authorities, so update it.
+		<OffenceReports<T>>::insert(&O::ID, &(session, time_slot), &all_offenders);
+
+		let offenders_count = all_offenders.len() as u32;
+		let previous_offenders_count = offenders_count - new_offenders.len() as u32;
 
 		// The report is not a duplicate. Deposit an event.
 		Self::deposit_event(Event::Offence(O::ID, session, time_slot));
