@@ -152,7 +152,10 @@ construct_service_factory! {
 
 					let babe = start_babe(babe_config)?;
 					let select = babe.select(service.on_exit()).then(|_| Ok(()));
-					service.spawn_task(Box::new(select));
+
+					// the BABE authoring task is considered infallible, i.e. if it
+					// fails we take down the service with it.
+					service.spawn_essential_task(select);
 				}
 
 				let config = grandpa::Config {
@@ -187,7 +190,10 @@ construct_service_factory! {
 							on_exit: service.on_exit(),
 							telemetry_on_connect: Some(telemetry_on_connect),
 						};
-						service.spawn_task(Box::new(grandpa::run_grandpa_voter(grandpa_config)?));
+
+						// the GRANDPA voter task is considered infallible, i.e.
+						// if it fails we take down the service with it.
+						service.spawn_essential_task(grandpa::run_grandpa_voter(grandpa_config)?);
 					},
 					(_, true) => {
 						grandpa::setup_disabled_grandpa(
@@ -203,12 +209,15 @@ construct_service_factory! {
 		},
 		LightService = LightComponents<Self>
 			{ |config| <LightComponents<Factory>>::new(config) },
-		FullImportQueue = BabeImportQueue<Self::Block> {
-			|
-				config: &mut FactoryFullConfiguration<Self>,
-				client: Arc<FullClient<Self>>,
-				select_chain: Self::SelectChain
-			| {
+		FullImportQueue = BabeImportQueue<Self::Block>
+			{
+				|
+					config: &mut FactoryFullConfiguration<Self>,
+					client: Arc<FullClient<Self>>,
+					select_chain: Self::SelectChain,
+					transaction_pool: Option<Arc<TransactionPool<Self::FullTransactionPoolApi>>>,
+				|
+			{
 				let (block_import, link_half) =
 					grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>, _>(
 						client.clone(), client.clone(), select_chain
@@ -223,6 +232,7 @@ construct_service_factory! {
 					client.clone(),
 					client,
 					config.custom.inherent_data_providers.clone(),
+					transaction_pool,
 				)?;
 
 				config.custom.import_setup = Some((babe_block_import.clone(), link_half, babe_link));
@@ -246,7 +256,7 @@ construct_service_factory! {
 					finality_proof_import.create_finality_proof_request_builder();
 
 				// FIXME: pruning task isn't started since light client doesn't do `AuthoritySetup`.
-				let (import_queue, ..) = import_queue(
+				let (import_queue, ..) = import_queue::<_, _, _, _, _, _, TransactionPool<Self::FullTransactionPoolApi>>(
 					Config::get_or_compute(&*client)?,
 					block_import,
 					None,
@@ -254,6 +264,7 @@ construct_service_factory! {
 					client.clone(),
 					client,
 					config.custom.inherent_data_providers.clone(),
+					None,
 				)?;
 
 				Ok((import_queue, finality_proof_request_builder))

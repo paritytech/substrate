@@ -703,7 +703,7 @@ where
 	let role =
 		if cli.light {
 			service::Roles::LIGHT
-		} else if cli.validator || is_dev {
+		} else if cli.validator || is_dev || cli.keyring.account.is_some() {
 			service::Roles::AUTHORITY
 		} else {
 			service::Roles::FULL

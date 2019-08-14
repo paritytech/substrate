@@ -310,6 +310,7 @@ impl ExtBuilder {
 			offline_slash: Perbill::from_percent(5),
 			offline_slash_grace: 0,
 			invulnerables: vec![],
+			.. Default::default()
 		}.assimilate_storage(&mut storage, &mut Default::default());
 
 		let _ = session::GenesisConfig::<Test> {

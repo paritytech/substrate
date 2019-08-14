@@ -19,7 +19,7 @@ use crate::protocol::message::Message;
 use bytes::Bytes;
 use libp2p::core::{Negotiated, Endpoint, UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade::ProtocolName};
 use libp2p::tokio_codec::Framed;
-use log::warn;
+use log::debug;
 use std::{collections::VecDeque, io, marker::PhantomData, vec::IntoIter as VecIntoIter};
 use futures::{prelude::*, future, stream};
 use codec::{Decode, Encode};
@@ -201,7 +201,7 @@ where TSubstream: AsyncRead + AsyncWrite, B: BlockT {
 			Async::Ready(Some(data)) => {
 				let message = <Message<B> as Decode>::decode(&mut &data[..])
 					.map_err(|err| {
-						warn!(
+						debug!(
 							target: "sub-libp2p",
 							"Couldn't decode packet sent by the remote: {:?}: {}", data, err.what(),
 						);

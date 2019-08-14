@@ -88,7 +88,7 @@ type TestHeader = <TestBlock as BlockT>::Header;
 type TestExtrinsic = <TestBlock as BlockT>::Extrinsic;
 
 pub struct TestVerifier {
-	inner: BabeVerifier<PeersFullClient>,
+	inner: BabeVerifier<PeersFullClient, ()>,
 	mutator: Mutator,
 }
 
@@ -143,6 +143,7 @@ impl TestNetFactory for BabeTestNet {
 				inherent_data_providers,
 				config,
 				time_source: Default::default(),
+				transaction_pool : Default::default(),
 			},
 			mutator: MUTATOR.with(|s| s.borrow().clone()),
 		}
