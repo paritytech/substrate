@@ -167,14 +167,6 @@ impl StorageApi for () {
 		).unwrap_or(Ok(None)).expect("Invalid parent hash passed to storage_changes_root")
 	}
 
-	fn enumerated_trie_root<H>(input: &[&[u8]]) -> H::Out
-	where
-		H: Hasher,
-		H::Out: Ord,
-	{
-		Layout::<H>::ordered_trie_root(input)
-	}
-
 	fn trie_root<H, I, A, B>(input: I) -> H::Out
 	where
 		I: IntoIterator<Item = (A, B)>,

@@ -466,8 +466,9 @@ fn find_next_epoch_digest<B: BlockT>(header: &B::Header) -> Result<Option<Epoch>
 /// unsigned.  This is required for security and must not be changed.
 ///
 /// This digest item will always return `Some` when used with `as_babe_pre_digest`.
-// FIXME #1018 needs misbehavior types
-fn check_header<B: BlockT + Sized, C: AuxStore>(
+// FIXME #1018 needs misbehavior types. The `transaction_pool` parameter will be
+// used to submit such misbehavior reports.
+fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 	client: &C,
 	slot_now: u64,
 	mut header: B::Header,
@@ -476,8 +477,10 @@ fn check_header<B: BlockT + Sized, C: AuxStore>(
 	randomness: [u8; 32],
 	epoch_index: u64,
 	c: (u64, u64),
-) -> Result<CheckedHeader<B::Header, (DigestItemFor<B>, DigestItemFor<B>)>, String>
-	where DigestItemFor<B>: CompatibleDigestItem,
+	_transaction_pool: Option<&T>,
+) -> Result<CheckedHeader<B::Header, (DigestItemFor<B>, DigestItemFor<B>)>, String> where
+	DigestItemFor<B>: CompatibleDigestItem,
+	T: Send + Sync + 'static,
 {
 	trace!(target: "babe", "Checking header");
 	let seal = match header.digest_mut().pop() {
@@ -551,14 +554,15 @@ fn check_header<B: BlockT + Sized, C: AuxStore>(
 pub struct BabeLink(Arc<Mutex<(Option<Duration>, Vec<(Instant, u64)>)>>);
 
 /// A verifier for Babe blocks.
-pub struct BabeVerifier<C> {
+pub struct BabeVerifier<C, T> {
 	api: Arc<C>,
 	inherent_data_providers: inherents::InherentDataProviders,
 	config: Config,
 	time_source: BabeLink,
+	transaction_pool: Option<Arc<T>>,
 }
 
-impl<C> BabeVerifier<C> {
+impl<C, T> BabeVerifier<C, T> {
 	fn check_inherents<B: BlockT>(
 		&self,
 		block: B,
@@ -628,9 +632,10 @@ fn median_algorithm(
 	}
 }
 
-impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
+impl<B: BlockT, C, T> Verifier<B> for BabeVerifier<C, T> where
 	C: ProvideRuntimeApi + Send + Sync + AuxStore + ProvideCache<B>,
 	C::Api: BlockBuilderApi<B> + BabeApi<B>,
+	T: Send + Sync + 'static,
 {
 	fn verify(
 		&mut self,
@@ -667,7 +672,7 @@ impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
 
 		// We add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of headers
-		let mut checked_header = check_header::<B, C>(
+		let mut checked_header = check_header::<B, C, T>(
 			&self.api,
 			slot_now + 1,
 			header.clone(),
@@ -676,7 +681,8 @@ impl<B: BlockT, C> Verifier<B> for BabeVerifier<C> where
 			randomness,
 			epoch_index,
 			self.config.c(),
-		);
+			self.transaction_pool.as_ref().map(|x| &**x),
+		)?;
 
 		// if we have failed to check header using (presumably) current epoch AND we're probably in the next epoch
 		// => check using next epoch
@@ -1195,7 +1201,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 /// authoring when importing its own blocks, and a future that must be run to
 /// completion and is responsible for listening to finality notifications and
 /// pruning the epoch changes tree.
-pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
+pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA, T>(
 	config: Config,
 	block_import: I,
 	justification_import: Option<BoxJustificationImport<Block>>,
@@ -1203,6 +1209,7 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
 	client: Arc<Client<B, E, Block, RA>>,
 	api: Arc<PRA>,
 	inherent_data_providers: InherentDataProviders,
+	transaction_pool: Option<Arc<T>>,
 ) -> ClientResult<(
 	BabeImportQueue<Block>,
 	BabeLink,
@@ -1216,6 +1223,7 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
 	RA: Send + Sync + 'static,
 	PRA: ProvideRuntimeApi + ProvideCache<Block> + Send + Sync + AuxStore + 'static,
 	PRA::Api: BlockBuilderApi<Block> + BabeApi<Block>,
+	T: Send + Sync + 'static,
 {
 	register_babe_inherent_data_provider(&inherent_data_providers, config.get())?;
 	initialize_authorities_cache(&*api)?;
@@ -1225,6 +1233,7 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
 		inherent_data_providers,
 		time_source: Default::default(),
 		config,
+		transaction_pool,
 	};
 
 	#[allow(deprecated)]

@@ -59,11 +59,11 @@ fn run_until_exit<T, C, E>(
 	mut runtime: Runtime,
 	service: T,
 	e: E,
-) -> error::Result<()>
-	where
-		T: Deref<Target=substrate_service::Service<C>> + Future<Item = (), Error = ()> + Send + 'static,
-		C: substrate_service::Components,
-		E: IntoExit,
+) -> error::Result<()> where
+	T: Deref<Target=substrate_service::Service<C>>,
+	T: Future<Item = (), Error = substrate_service::error::Error> + Send + 'static,
+	C: substrate_service::Components,
+	E: IntoExit,
 {
 	let (exit_send, exit) = exit_future::signal();
 
@@ -74,10 +74,19 @@ fn run_until_exit<T, C, E>(
 	// but we need to keep holding a reference to the global telemetry guard
 	let _telemetry = service.telemetry();
 
-	let _ = runtime.block_on(service.select(e.into_exit()));
+	let service_res = {
+		let exit = e.into_exit().map_err(|_| error::Error::Other("Exit future failed.".into()));
+		let service = service.map_err(|err| error::Error::Service(err));
+		let select = service.select(exit).map(|_| ()).map_err(|(err, _)| err);
+		runtime.block_on(select)
+	};
+
 	exit_send.fire();
 
-	Ok(())
+	// TODO [andre]: timeout this future #1318
+	let _ = runtime.shutdown_on_idle().wait();
+
+	service_res
 }
 
 // handles ctrl-c
