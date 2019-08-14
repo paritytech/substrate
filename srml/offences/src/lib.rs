@@ -85,31 +85,39 @@ impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportOffence<T::AccountId, T
 		// Check if an offence is already reported for the offender authorities
 		// and otherwise stores that report.
 		let mut changed = false;
-		let all_offenders = <OffenceReports<T>>
-			::mutate(&O::ID, &(session, time_slot), |offending_authorities| {
-				for offender in offenders {
-					// TODO [slashing] This prevents slashing for multiple reports of the same kind at the same slot,
-					// note however that we might do that in the future if the reports are not exactly the same (dups).
-					// De-duplication of reports is tricky though, we need a canonical form of the report
-					// (for instance babe equivocation can have headers swapped).
-					if !offending_authorities.iter().any(|details| details.offender == offender) {
-						changed = true;
-						offending_authorities.push(OffenceDetails {
-							offender,
-							count: 0,
-							reporters: reporter.clone().into_iter().collect(),
-						});
-					}
+		let all_offenders = {
+			// We have to return the modified list of offending authorities. If we were to use
+			// `mutate` we would have to clone the whole list in order to return it.
+			let mut offending_authorities = <OffenceReports<T>>::get(&O::ID, &(session, time_slot));
+
+			for offender in offenders {
+				// TODO [slashing] This prevents slashing for multiple reports of the same kind at the same slot,
+				// note however that we might do that in the future if the reports are not exactly the same (dups).
+				// De-duplication of reports is tricky though, we need a canonical form of the report
+				// (for instance babe equivocation can have headers swapped).
+				if !offending_authorities.iter().any(|details| details.offender == offender) {
+					changed = true;
+					offending_authorities.push(OffenceDetails {
+						offender,
+						count: 0,
+						reporters: reporter.clone().into_iter().collect(),
+					});
+				}
+			}
+
+			if changed {
+				// Increase the count in each offence report. For just added offences the count is
+				// going to be increased from 0 to 1.
+				for details in offending_authorities.iter_mut() {
+					details.count += 1;
 				}
 
-				if changed {
-					for details in offending_authorities.iter_mut() {
-						details.count += 1;
-					}
-				}
+				// We pushed new items in the offending_authorities, so update it.
+				<OffenceReports<T>>::insert(&O::ID, &(session, time_slot), &offending_authorities);
+			}
 
-				offending_authorities.clone()
-			});
+			offending_authorities
+		};
 
 		if !changed {
 			// The report contained only duplicates, so there is no need to slash again.
