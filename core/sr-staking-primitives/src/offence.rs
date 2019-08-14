@@ -58,7 +58,7 @@ pub trait Offence<Offender> {
 	/// The list has no duplicates, so it is rather a set.
 	fn offenders(&self) -> Vec<Offender>;
 
-	/// The session index which is used for querying the validator set for the `slash_fraction`
+	/// The session index that is used for querying the validator set for the `slash_fraction`
 	/// function.
 	fn session_index(&self) -> SessionIndex;
 
