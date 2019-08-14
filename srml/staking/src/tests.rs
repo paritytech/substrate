@@ -2084,25 +2084,34 @@ fn reporters_receive_their_slice() {
 #[test]
 fn invulnerables_are_not_slashed() {
 	// For invulnerable validators no slashing is performed.
-	with_externalities(&mut ExtBuilder::default().invulnerables(vec![11]).build(), || {
-		assert_eq!(Balances::free_balance(&11), 1000);
+	with_externalities(
+		&mut ExtBuilder::default().invulnerables(vec![11]).build(),
+		|| {
+			assert_eq!(Balances::free_balance(&11), 1000);
+			assert_eq!(Balances::free_balance(&21), 2000);
+			assert_eq!(Staking::stakers(&21).total, 1250);
 
-		Staking::on_offence(
-			&[OffenceDetails {
-				offender: (
-					11,
-					Staking::stakers(&11),
-				),
-				count: 1,
-				reporters: vec![],
-			}],
-			&[Perbill::from_percent(50)],
-		);
+			Staking::on_offence(
+				&[
+					OffenceDetails {
+						offender: (11, Staking::stakers(&11)),
+						count: 1,
+						reporters: vec![],
+					},
+					OffenceDetails {
+						offender: (21, Staking::stakers(&21)),
+						count: 1,
+						reporters: vec![],
+					},
+				],
+				&[Perbill::from_percent(50), Perbill::from_percent(20)],
+			);
 
-		// The validator hasn't been slashed. The new era is not forced.
-		assert_eq!(Balances::free_balance(&11), 1000);
-		assert_eq!(Staking::force_era(), Forcing::NotForcing);
-	});
+			// The validator 11 hasn't been slashed, but 21 has been.
+			assert_eq!(Balances::free_balance(&11), 1000);
+			assert_eq!(Balances::free_balance(&21), 1750); // 2000 - (0.2 * 1250)
+		},
+	);
 }
 
 #[test]

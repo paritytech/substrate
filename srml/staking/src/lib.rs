@@ -1493,9 +1493,9 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 			let stash = &details.offender.0;
 			let exposure = &details.offender.1;
 
-			// Early exit if validator is invulnerable.
+			// Skip if the validator is invulnerable.
 			if Self::invulnerables().contains(stash) {
-				return
+				continue
 			}
 
 			// calculate the amount to slash
