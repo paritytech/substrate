@@ -428,21 +428,21 @@ fn check_header<C, B: BlockT, P: Pair, T>(
 		let pre_hash = header.hash();
 
 		if P::verify(&sig, pre_hash.as_ref(), expected_author) {
-			if let Some(equivocation_proof) = check_equivocation(
-				client,
-				slot_now,
-				slot_num,
-				&header,
-				sig,
-				expected_author,
-			).map_err(|e| e.to_string())? {
-				info!(
-					"Slot author is equivocating at slot {} with headers {:?} and {:?}",
-					slot_num,
-					equivocation_proof.fst_header().hash(),
-					equivocation_proof.snd_header().hash(),
-				);
-			}
+			// if let Some(equivocation_proof) = check_equivocation(
+			// 	client,
+			// 	slot_now,
+			// 	slot_num,
+			// 	&header,
+			// 	sig,
+			// 	expected_author,
+			// ).map_err(|e| e.to_string())? {
+			// 	info!(
+			// 		"Slot author is equivocating at slot {} with headers {:?} and {:?}",
+			// 		slot_num,
+			// 		equivocation_proof.fst_header().hash(),
+			// 		equivocation_proof.snd_header().hash(),
+			// 	);
+			// }
 
 			Ok(CheckedHeader::Checked(header, (slot_num, seal)))
 		} else {
