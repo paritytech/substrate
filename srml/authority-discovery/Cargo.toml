@@ -22,9 +22,11 @@ default = ["std"]
 std = [
 	"codec/std",
 	"sr-primitives/std",
+	"primitives/std",
 	"rstd/std",
 	"serde",
 	"session/std",
+	"im-online/std",
 	"srml-support/std",
 	"sr-io/std",
 	"system/std",
