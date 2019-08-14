@@ -32,7 +32,7 @@ pub type Kind = [u8; 16];
 
 /// Number of times the offence of this authority was already reported in the past.
 ///
-/// Note we don't buffer offence reporting so everytime we see a new offence
+/// Note that we don't buffer offence reporting, so every time we see a new offence
 /// of the same kind, we will report past authorities again.
 /// This counter keeps track of how many times the authority was already reported in the past,
 /// so that we can slash it accordingly.
