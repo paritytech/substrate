@@ -463,7 +463,7 @@ impl<T: Trait> Module<T> {
 		CurrentIndex::put(session_index);
 
 		// Queue next session keys.
-		let mut queued_amalgamated = next_validators.into_iter()
+		let queued_amalgamated = next_validators.into_iter()
 			.map(|a| { let k = Self::load_keys(&a).unwrap_or_default(); (a, k) })
 			.collect::<Vec<_>>();
 
