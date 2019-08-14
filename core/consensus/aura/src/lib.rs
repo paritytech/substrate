@@ -433,6 +433,7 @@ fn check_header<C, B: BlockT, P: Pair, T>(
 				slot_now,
 				slot_num,
 				&header,
+				sig,
 				expected_author,
 			).map_err(|e| e.to_string())? {
 				info!(
