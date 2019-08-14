@@ -251,7 +251,7 @@ decl_event!(
 		/// A new term with new members.
 		NewTerm(Vec<AccountId>),
 		/// No candidates were elected for this round.
-		EmptyCouncil(),
+		EmptyCouncil,
 	}
 );
 
