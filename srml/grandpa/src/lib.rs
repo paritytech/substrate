@@ -421,13 +421,7 @@ impl<FullIdentification: Clone> Offence<FullIdentification> for GrandpaEquivocat
 	) -> Perbill {
 		// the formula is min((3k / n)^2, 1)
 		let x = Perbill::from_rational_approximation(3 * offenders_count, validator_set_count);
-
 		// _ ^ 2
-		// For now, Perbill doesn't support taking the power of it. Until it does, do it manually.
-		// The conversion to u64 is performed to guarantee it fits.
-		// TODO: #3189 should fix this.
-		let x = x.into_parts();
-		let x = ((x as u64 * x as u64) / (1_000_000_000 * 1_000_000_000)) as u32;
-		Perbill::from_parts(x)
+		x.square()
 	}
 }
