@@ -482,7 +482,6 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 	DigestItemFor<B>: CompatibleDigestItem,
 	T: Send + Sync + 'static,
 {
-println!("=== {}: idx={} authorities={:?}", header.number(), epoch_index, authorities);
 	trace!(target: "babe", "Checking header");
 	let seal = match header.digest_mut().pop() {
 		Some(x) => x,
