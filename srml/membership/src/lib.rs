@@ -29,7 +29,7 @@ use srml_support::{
 use system::ensure_root;
 use sr_primitives::{traits::EnsureOrigin, weights::SimpleDispatchInfo};
 #[cfg(feature = "std")]
-use sr_primitives::MapTransaction;
+use sr_primitives::StorageContent;
 
 pub trait Trait<I=DefaultInstance>: system::Trait {
 	/// The overarching event type.
@@ -65,7 +65,7 @@ decl_storage! {
 		config(members): Vec<T::AccountId>;
 		config(phantom): sr_std::marker::PhantomData<I>;
 		build(|
-			storage: &mut MapTransaction,
+			storage: &mut StorageContent,
 			config: &Self,
 		| {
 			sr_io::with_storage(storage, || {

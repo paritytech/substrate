@@ -100,7 +100,7 @@ decl_storage! {
 		config(phantom): rstd::marker::PhantomData<I>;
 		config(members): Vec<T::AccountId>;
 		build(|
-			storage: &mut sr_primitives::MapTransaction,
+			storage: &mut sr_primitives::StorageContent,
 			config: &Self,
 		| {
 			runtime_io::with_storage(

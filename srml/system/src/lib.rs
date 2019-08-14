@@ -74,7 +74,7 @@
 #[cfg(feature = "std")]
 use serde::Serialize;
 #[cfg(feature = "std")]
-use sr_primitives::MapTransaction;
+use sr_primitives::StorageContent;
 use rstd::prelude::*;
 #[cfg(any(feature = "std", test))]
 use rstd::map;
@@ -413,7 +413,7 @@ decl_storage! {
 		config(code): Vec<u8>;
 
 		build(
-			|storage: &mut sr_primitives::MapTransaction,
+			|storage: &mut sr_primitives::StorageContent,
 			config: &GenesisConfig|
 		{
 			use codec::Encode;
@@ -684,7 +684,7 @@ impl<T: Trait> Module<T> {
 	/// Get the basic externalities for this module, useful for tests.
 	#[cfg(any(feature = "std", test))]
 	pub fn externalities() -> TestExternalities<Blake2Hasher> {
-		TestExternalities::new(MapTransaction{ top: map![
+		TestExternalities::new(StorageContent{ top: map![
 			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),
 			twox_128(<Number<T>>::key()).to_vec() => T::BlockNumber::one().encode(),
 			twox_128(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode()

@@ -22,7 +22,7 @@ use primitives::{
 // pub use primitives::BlakeHasher;
 pub use substrate_state_machine::{
 	Externalities, BasicExternalities, TestExternalities,
-	backend::{MapTransaction, StorageOverlay, ChildrenStorageOverlay},
+	backend::{StorageContent, StorageOverlay, ChildrenStorageOverlay},
 };
 
 use environmental::environmental;
@@ -450,7 +450,7 @@ pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut dyn Externalities<Blake
 /// externalities that draw from and populate `storage`.
 /// Forwards the value that the closure returns.
 pub fn with_storage<R, F: FnOnce() -> R>(
-	storage: &mut MapTransaction,
+	storage: &mut StorageContent,
 	f: F
 ) -> R {
 	let mut alt_storage = Default::default();
@@ -499,7 +499,7 @@ mod std_tests {
 			true
 		}));
 
-		t = BasicExternalities::new(MapTransaction {
+		t = BasicExternalities::new(StorageContent {
       top: map![b"foo".to_vec() => b"bar".to_vec()],
       children: map![],
     });
@@ -513,7 +513,7 @@ mod std_tests {
 
 	#[test]
 	fn read_storage_works() {
-		let mut t = BasicExternalities::new(MapTransaction { top: map![
+		let mut t = BasicExternalities::new(StorageContent { top: map![
 			b":test".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
 		], children: map![]});
 
@@ -529,7 +529,7 @@ mod std_tests {
 
 	#[test]
 	fn clear_prefix_works() {
-		let mut t = BasicExternalities::new(MapTransaction { top: map![
+		let mut t = BasicExternalities::new(StorageContent { top: map![
 			b":a".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 			b":abcd".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 			b":abc".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),

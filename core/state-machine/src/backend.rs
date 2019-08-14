@@ -37,18 +37,16 @@ pub type ChildrenStorageOverlay = HashMap<KeySpace, (StorageOverlay, ChildTrie)>
 
 #[derive(Default, Clone, PartialEq)]
 // see FIXME #2740 related to performance.
-/// Type alias over a in memory change cache, with support for child trie.
-/// This need to allow efficient access to value based on keys.
-/// First field is top map, second field is existing child trie map,
-/// third field is to be created child trie map.
-pub struct MapTransaction {
+/// StorageContent, it can contain transactional change
+/// for storage to.
+pub struct StorageContent {
 	/// Key value for top trie.
 	pub top: StorageOverlay,
 	/// Key value and child trie update (stored by `KeySpace`).
 	pub children: ChildrenStorageOverlay,
 }
 
-impl MapTransaction {
+impl StorageContent {
 	/// Assimilate this map transaction into other storage.
 	/// This is pretty close to a reverse `extend`
 	pub fn assimilate_storage(
@@ -257,7 +255,7 @@ impl error::Error for Void {
 /// In-memory backend. Fully recomputes tries on each commit but useful for
 /// tests.
 pub struct InMemory<H: Hasher> {
-	inner: MapTransaction,
+	inner: StorageContent,
 	trie: Option<TrieBackend<MemoryDB<H>, H>>,
 	_hasher: PhantomData<H>,
 }
@@ -322,8 +320,8 @@ impl<H: Hasher> InMemory<H> {
 
 }
 
-impl<H: Hasher> From<MapTransaction> for InMemory<H> {
-	fn from(inner: MapTransaction) -> Self {
+impl<H: Hasher> From<StorageContent> for InMemory<H> {
+	fn from(inner: StorageContent) -> Self {
 		InMemory {
 			inner: inner,
 			trie: None,
@@ -335,7 +333,7 @@ impl<H: Hasher> From<MapTransaction> for InMemory<H> {
 impl<H: Hasher> From<HashMap<Vec<u8>, Vec<u8>>> for InMemory<H> {
 	fn from(inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
 		InMemory {
-			inner: MapTransaction { top: inner, children: Default::default() },
+			inner: StorageContent { top: inner, children: Default::default() },
 			trie: None,
 			_hasher: PhantomData,
 		}
@@ -344,7 +342,7 @@ impl<H: Hasher> From<HashMap<Vec<u8>, Vec<u8>>> for InMemory<H> {
 
 impl<H: Hasher> From<VecTransaction> for InMemory<H> {
 	fn from(inner: VecTransaction) -> Self {
-		let mut expanded: MapTransaction = Default::default();
+		let mut expanded: StorageContent = Default::default();
 		for (child_key, key, value) in inner {
 			if let Some(value) = value {
 				if let Some(child_trie) = child_key {
@@ -468,7 +466,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		// the memorydb gets incorectly use to fead keyvalue database.
 		let mut mdb = MemoryDB::default();
 		let mut new_child_roots = Vec::new();
-		let MapTransaction { top: root_map, children: child_map } =
+		let StorageContent { top: root_map, children: child_map } =
 			std::mem::replace(&mut self.inner, Default::default());
 
 		for (_k, (map, child_trie)) in child_map.into_iter() {

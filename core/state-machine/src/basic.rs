@@ -18,7 +18,7 @@
 
 use std::collections::HashMap;
 use std::iter::FromIterator;
-use crate::backend::{Backend, InMemory, MapTransaction};
+use crate::backend::{Backend, InMemory, StorageContent};
 use hash_db::Hasher;
 use trie::{TrieConfiguration, default_child_trie_root};
 use trie::trie_types::Layout;
@@ -39,7 +39,7 @@ pub struct BasicExternalities {
 impl BasicExternalities {
 
 	/// Create a new instance of `BasicExternalities`
-	pub fn new(map: MapTransaction) -> Self {
+	pub fn new(map: StorageContent) -> Self {
 		let pending_child = map.children.values()
 			.map(|(_, child_trie)| (
 					child_trie.parent_slice().to_vec(),
@@ -59,8 +59,8 @@ impl BasicExternalities {
 	}
 
 	/// Consume self and returns inner storages
-	pub fn into_storages(self) -> MapTransaction {
-		MapTransaction {top: self.top, children: self.children}
+	pub fn into_storages(self) -> StorageContent {
+		StorageContent {top: self.top, children: self.children}
 	}
 }
 
@@ -280,7 +280,7 @@ mod tests {
 
 		// use a dummy child trie (keyspace and undefined trie).
 		let child_trie = ChildTrie::fetch_or_new(|_| None, |_| (), child_storage, || 1u128);
-		let mut ext = BasicExternalities::new(MapTransaction {
+		let mut ext = BasicExternalities::new(StorageContent {
 			top: Default::default(),
 			children: map![
 				child_trie.keyspace().to_vec() => (map![

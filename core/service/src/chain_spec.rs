@@ -23,7 +23,7 @@ use std::path::PathBuf;
 use serde::{Serialize, Deserialize};
 use primitives::storage::{StorageKey, StorageData};
 use primitives::child_trie::{ChildTrie, produce_keyspace, reverse_keyspace};
-use sr_primitives::{BuildStorage, MapTransaction};
+use sr_primitives::{BuildStorage, StorageContent};
 use serde_json as json;
 use crate::components::RuntimeGenesis;
 use network::Multiaddr;
@@ -70,10 +70,10 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 }
 
 impl<'a, G: RuntimeGenesis> BuildStorage for &'a ChainSpec<G> {
-	fn build_storage(self) -> Result<MapTransaction, String> {
+	fn build_storage(self) -> Result<StorageContent, String> {
 		match self.genesis.resolve()? {
 			Genesis::Runtime(gc) => gc.build_storage(),
-			Genesis::Raw(map, children_map) => Ok(MapTransaction {
+			Genesis::Raw(map, children_map) => Ok(StorageContent {
 				top: map.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
 				children: children_map.into_iter().map(|((sk, ks), map)| (
 					produce_keyspace(ks),
@@ -95,7 +95,7 @@ impl<'a, G: RuntimeGenesis> BuildStorage for &'a ChainSpec<G> {
 			}),
 		}
 	}
-	fn assimilate_storage(self, _: &mut MapTransaction) -> Result<(), String> {
+	fn assimilate_storage(self, _: &mut StorageContent) -> Result<(), String> {
 		Err("`assimilate_storage` not implemented for `ChainSpec`.".into())
 	}
 }

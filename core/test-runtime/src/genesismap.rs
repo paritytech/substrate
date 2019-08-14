@@ -50,7 +50,7 @@ impl GenesisConfig {
 		}
 	}
 
-	pub fn genesis_map(&self) -> sr_primitives::MapTransaction {
+	pub fn genesis_map(&self) -> sr_primitives::StorageContent {
 		let wasm_runtime = WASM_BINARY.to_vec();
 		let mut map: HashMap<Vec<u8>, Vec<u8>> = self.balances.iter()
 			.map(|&(ref account, balance)| (account.to_keyed_vec(b"balance:"), vec![].and(&balance)))
@@ -67,11 +67,11 @@ impl GenesisConfig {
 			map.insert(well_known_keys::CHANGES_TRIE_CONFIG.to_vec(), changes_trie_config.encode());
 		}
 		map.insert(twox_128(&b"sys:auth"[..])[..].to_vec(), self.authorities.encode());
-		sr_primitives::MapTransaction{ top: map, children: Default::default()}
+		sr_primitives::StorageContent{ top: map, children: Default::default()}
 	}
 }
 
-pub fn insert_genesis_block(storage: &mut sr_primitives::MapTransaction) -> primitives::hash::H256 {
+pub fn insert_genesis_block(storage: &mut sr_primitives::StorageContent) -> primitives::hash::H256 {
 
 	let child_roots = storage.children.iter().map(|(_ks, (child_map, child_trie))| {
 		let child_root = <<<crate::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(

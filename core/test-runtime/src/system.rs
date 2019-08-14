@@ -322,7 +322,7 @@ mod tests {
 			Sr25519Keyring::Bob.to_raw_public(),
 			Sr25519Keyring::Charlie.to_raw_public()
 		];
-		TestExternalities::new(sr_primitives::MapTransaction { top: map![
+		TestExternalities::new(sr_primitives::StorageContent { top: map![
 			twox_128(b"latest").to_vec() => vec![69u8; 32],
 			twox_128(b"sys:auth").to_vec() => authorities.encode(),
 			blake2_256(&AccountKeyring::Alice.to_raw_public().to_keyed_vec(b"balance:")).to_vec() => {

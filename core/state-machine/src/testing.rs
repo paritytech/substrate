@@ -17,7 +17,7 @@
 //! Test implementation for Externalities.
 
 use hash_db::Hasher;
-use crate::backend::{InMemory, Backend, MapTransaction};
+use crate::backend::{InMemory, Backend, StorageContent};
 use primitives::storage::well_known_keys::is_child_storage_key;
 use crate::changes_trie::{
 	build_changes_trie, InMemoryStorage as ChangesTrieInMemoryStorage,
@@ -33,8 +33,6 @@ use super::{Externalities, OverlayedChanges, OverlayedValueResult};
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
 
-type StorageTuple = MapTransaction;
-
 /// Simple Externalities impl.
 pub struct TestExternalities<H: Hasher, N: ChangesTrieBlockNumber> {
 	overlay: OverlayedChanges,
@@ -46,12 +44,12 @@ pub struct TestExternalities<H: Hasher, N: ChangesTrieBlockNumber> {
 
 impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	/// Create a new instance of `TestExternalities` with storage.
-	pub fn new(storage: StorageTuple) -> Self {
+	pub fn new(storage: StorageContent) -> Self {
 		Self::new_with_code(&[], storage)
 	}
 
 	/// Create a new instance of `TestExternalities` with code and storage.
-	pub fn new_with_code(code: &[u8], mut storage: StorageTuple) -> Self {
+	pub fn new_with_code(code: &[u8], mut storage: StorageContent) -> Self {
 		let mut overlay = OverlayedChanges::default();
 
 		assert!(storage.top.keys().all(|key| !is_child_storage_key(key)));
@@ -127,8 +125,8 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> Default for TestExternalities<H, N> {
 	fn default() -> Self { Self::new(Default::default()) }
 }
 
-impl<H: Hasher, N: ChangesTrieBlockNumber> From<StorageTuple> for TestExternalities<H, N> {
-	fn from(storage: StorageTuple) -> Self {
+impl<H: Hasher, N: ChangesTrieBlockNumber> From<StorageContent> for TestExternalities<H, N> {
+	fn from(storage: StorageContent) -> Self {
 		Self::new(storage)
 	}
 }

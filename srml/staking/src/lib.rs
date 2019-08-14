@@ -650,7 +650,7 @@ decl_storage! {
 		config(stakers):
 			Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>;
 		build(|
-			storage: &mut sr_primitives::MapTransaction,
+			storage: &mut sr_primitives::StorageContent,
 			config: &GenesisConfig<T>
 		| {
 			with_storage(storage, || {

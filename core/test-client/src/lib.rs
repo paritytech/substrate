@@ -31,7 +31,7 @@ pub use keyring::{
 	sr25519::Keyring as Sr25519Keyring,
 };
 pub use primitives::{Blake2Hasher, traits::BareCryptoStorePtr};
-pub use sr_primitives::MapTransaction;
+pub use sr_primitives::StorageContent;
 pub use state_machine::ExecutionStrategy;
 
 use std::sync::Arc;
@@ -57,11 +57,11 @@ pub struct LightFetcher;
 /// A genesis storage initialisation trait.
 pub trait GenesisInit: Default {
 	/// Construct genesis storage.
-	fn genesis_storage(&self) -> MapTransaction;
+	fn genesis_storage(&self) -> StorageContent;
 }
 
 impl GenesisInit for () {
-	fn genesis_storage(&self) -> MapTransaction {
+	fn genesis_storage(&self) -> StorageContent {
 		Default::default()
 	}
 }

@@ -25,7 +25,7 @@ use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenSto
 use primitives::child_trie::ChildTrie;
 use primitives::child_trie::ChildTrieReadRef;
 use state_machine::{Backend as StateBackend, TrieBackend};
-use state_machine::backend::{InMemory as InMemoryState, MapTransaction};
+use state_machine::backend::{InMemory as InMemoryState, StorageContent};
 use sr_primitives::traits::{Block as BlockT, NumberFor, Zero, Header};
 use crate::in_mem::{self, check_genesis_storage};
 use crate::backend::{
@@ -292,7 +292,7 @@ where
 		check_genesis_storage(&top, &children)?;
 
 		// this is only called when genesis block is imported => shouldn't be performance bottleneck
-		let mut storage = MapTransaction { top, children: Default::default() };
+		let mut storage = StorageContent { top, children: Default::default() };
 		// create a list of children keys to re-compute roots for
 		let child_delta : Vec<(ChildTrie, _)> = children.iter()
 			.map(|(_, (_, child_trie))| (child_trie.clone(), None))

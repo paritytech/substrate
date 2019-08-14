@@ -479,7 +479,7 @@ decl_storage! {
 		config(endowed_accounts): Vec<T::AccountId>;
 
 		build(|
-			storage: &mut sr_primitives::MapTransaction,
+			storage: &mut sr_primitives::StorageContent,
 			config: &GenesisConfig<T>| {
 			config.assets.iter().for_each(|asset_id| {
 				config.endowed_accounts.iter().for_each(|account_id| {

@@ -35,7 +35,7 @@ pub use paste;
 pub use app_crypto;
 
 #[cfg(feature = "std")]
-pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay, MapTransaction};
+pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay, StorageContent};
 
 use rstd::{prelude::*, ops, convert::{TryInto, TryFrom}};
 use primitives::{crypto, ed25519, sr25519, hash::{H256, H512}};
@@ -112,7 +112,7 @@ pub use serde::{Serialize, Deserialize, de::DeserializeOwned};
 #[cfg(feature = "std")]
 pub trait BuildStorage: Sized {
 	/// Build the storage out of this builder.
-	fn build_storage(self) -> Result<MapTransaction, String> {
+	fn build_storage(self) -> Result<StorageContent, String> {
 		let mut storage = Default::default();
 		self.assimilate_storage(&mut storage)?;
 		Ok(storage)
@@ -120,7 +120,7 @@ pub trait BuildStorage: Sized {
 	/// Assimilate the storage for this module into pre-existing overlays.
 	fn assimilate_storage(
 		self,
-		storage: &mut MapTransaction,
+		storage: &mut StorageContent,
 	) -> Result<(), String>;
 }
 
@@ -130,18 +130,18 @@ pub trait BuildModuleGenesisStorage<T, I>: Sized {
 	/// Create the module genesis storage into the given `storage` and `child_storage`.
 	fn build_module_genesis_storage(
 		self,
-		storage: &mut MapTransaction,
+		storage: &mut StorageContent,
 	) -> Result<(), String>;
 }
 
 #[cfg(feature = "std")]
-impl BuildStorage for MapTransaction {
-	fn build_storage(self) -> Result<MapTransaction, String> {
+impl BuildStorage for StorageContent {
+	fn build_storage(self) -> Result<StorageContent, String> {
 		Ok(self)
 	}
 	fn assimilate_storage(
 		self,
-		storage: &mut MapTransaction,
+		storage: &mut StorageContent,
 	)-> Result<(), String> {
 		storage.top.extend(self.top);
 		for (k, other_map) in self.children.into_iter() {
@@ -762,7 +762,7 @@ macro_rules! impl_outer_config {
 			impl $crate::BuildStorage for $main {
 				fn assimilate_storage(
 					self,
-					storage: &mut $crate::MapTransaction,
+					storage: &mut $crate::StorageContent,
 				) -> std::result::Result<(), String> {
 					$(
 						if let Some(extra) = self.[< $snake $(_ $instance )? >] {

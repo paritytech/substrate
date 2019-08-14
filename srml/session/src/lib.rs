@@ -320,7 +320,7 @@ decl_storage! {
 	add_extra_genesis {
 		config(keys): Vec<(T::ValidatorId, T::Keys)>;
 		build(|
-			storage: &mut sr_primitives::MapTransaction,
+			storage: &mut sr_primitives::StorageContent,
 			config: &GenesisConfig<T>
 		| {
 			runtime_io::with_storage(storage, || {

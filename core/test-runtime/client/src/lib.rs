@@ -100,7 +100,7 @@ pub struct GenesisParameters {
 }
 
 impl generic_test_client::GenesisInit for GenesisParameters {
-	fn genesis_storage(&self) -> MapTransaction {
+	fn genesis_storage(&self) -> StorageContent {
 		let mut storage = genesis_config(self.support_changes_trie, self.heap_pages_override).genesis_map();
 
 		let child_roots = storage.children.iter().map(|(_, child)| {
