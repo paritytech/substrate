@@ -111,7 +111,7 @@ pub trait OnOffenceHandler<Reporter, Offender> {
 	/// the same authorities were reported for the same offence
 	/// in the past (see `OffenceCount`).
 	///
-	/// The vector of `slash_fraction` contains perbils
+	/// The vector of `slash_fraction` contains `Perbill`s
 	/// the authorities should be slashed and is computed
 	/// according to the `OffenceCount` already. This is of the same length as `offenders.`
 	/// Zero is a valid value for a fraction.
