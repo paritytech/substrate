@@ -141,7 +141,7 @@ pub struct OffenceDetails<Reporter, Offender> {
 	/// in case the authority was already slashed in the past.
 	/// Note that we don't buffer slashes and instead use this approach.
 	pub count: OffenceCount,
-	/// A list of reporters of offences of this authority id. Possibily empty where there is no
+	/// A list of reporters of offences of this authority ID. Possibly empty where there are no
 	/// particular reporters.
 	pub reporters: Vec<Reporter>,
 }
