@@ -26,14 +26,14 @@ use rstd::vec::Vec;
 use sr_primitives::{ConsensusEngineId, traits::Header};
 use substrate_client::decl_runtime_apis;
 use consensus_common_primitives::AuthorshipEquivocationProof;
-use srml_session::historical::Proof;
 use sr_staking_primitives::SessionIndex;
 
 #[cfg(feature = "std")]
 pub use digest::BabePreDigest;
 pub use digest::{BABE_VRF_PREFIX, RawBabePreDigest, get_slot, CompatibleDigestItem, find_pre_digest};
 
-mod app {
+/// Crypto App module for Babe.
+pub mod app {
 	use app_crypto::{app_crypto, key_types::BABE, sr25519};
 	app_crypto!(sr25519, BABE);
 }
@@ -147,11 +147,10 @@ impl slots::SlotData for BabeConfiguration {
 #[derive(Clone, Encode, Decode, PartialEq)]
 #[cfg_attr(any(feature = "std", test), derive(Debug))]
 pub struct BabeEquivocationProof<H> {
-	reporter: AuthorityId,
+	reporter: Option<AuthorityId>,
 	identity: AuthorityId,
-	identity_proof: Proof,
 	slot: u64,
-	session_index: SessionIndex,
+	session_index: Option<SessionIndex>,
 	first_header: H,
 	second_header: H,
 	first_signature: AuthoritySignature,
@@ -168,22 +167,18 @@ where
 
 	/// Create a new Babe equivocation proof.
 	fn new(
-		reporter: Self::Identity,
 		identity: Self::Identity,
-		identity_proof: Proof,
 		slot: u64,
-		session_index: SessionIndex,
 		first_header: H,
 		second_header: H,
 		first_signature: Self::Signature,
 		second_signature: Self::Signature,
 	) -> Self {
 		BabeEquivocationProof {
-			reporter,
+			reporter: None,
 			identity,
-			identity_proof,
 			slot,
-			session_index,
+			session_index: None,
 			first_header,
 			second_header,
 			first_signature,
@@ -192,8 +187,8 @@ where
 	}
 
 	/// Get the reporter of the equivocation.
-	fn reporter(&self) -> &Self::Identity {
-		&self.reporter
+	fn reporter(&self) -> Option<&Self::Identity> {
+		self.reporter.as_ref()
 	}
 
 	/// Get the slot where the equivocation happened.
@@ -202,18 +197,13 @@ where
 	}
 
 		/// Get the session index where the equivocation happened.
-	fn session_index(&self) -> &SessionIndex {
-		&self.session_index
+	fn session_index(&self) -> Option<&SessionIndex> {
+		self.session_index.as_ref()
 	}
 
 	/// Get the identity of the suspect of equivocating.
 	fn identity(&self) -> &Self::Identity {
 		&self.identity
-	}
-
-	/// Get the identity of the suspect of equivocating.
-	fn identity_proof(&self) -> &Proof {
-		&self.identity_proof
 	}
 
 	/// Get the first header involved in the equivocation.

@@ -149,6 +149,8 @@ impl babe::Trait for Runtime {
 	type ExpectedBlockTime = ExpectedBlockTime;
 	type KeyOwnerSystem = Historical;
 	type ReportEquivocation = Offences;
+	type Call = Call;
+	type UncheckedExtrinsic = UncheckedExtrinsic;
 }
 
 impl indices::Trait for Runtime {
@@ -419,6 +421,8 @@ impl offences::Trait for Runtime {
 }
 
 impl grandpa::Trait for Runtime {
+	type Call = Call;
+	type UncheckedExtrinsic = UncheckedExtrinsic;	
 	type Event = Event;
 	type KeyOwnerSystem = Historical;
 }
@@ -565,20 +569,7 @@ impl_runtime_apis! {
 			equivocation: GrandpaEquivocationFrom<Block>
 		) -> Option<Vec<u8>> {
 			let proof = Historical::prove((key_types::GRANDPA, equivocation.identity.encode()))?;
-			let reporter = &equivocation.reporter;
-			let to_sign = (equivocation.clone(), proof.clone());
-
-			let signature = to_sign.using_encoded(|payload| if payload.len() > 256 {
-				reporter.sign(&blake2_256(payload))
-			} else {
-				reporter.sign(&payload)
-			}).expect("FIXME");
-
-			let grandpa_call = GrandpaCall::report_equivocation(equivocation, proof, signature);
-			let call = Call::Grandpa(grandpa_call);
-			let ex = UncheckedExtrinsic::new_unsigned(call.into());
-
-			Some(ex.encode())
+			Grandpa::construct_equivocation_transaction(equivocation, proof)
 		}
 	}
 
@@ -610,20 +601,7 @@ impl_runtime_apis! {
 			equivocation: BabeEquivocationProof<<Block as BlockT>::Header>,
 		) -> Option<Vec<u8>> {
 			let proof = Historical::prove((key_types::BABE, equivocation.identity().encode()))?;
-			let reporter = equivocation.reporter();
-			let to_sign = (equivocation.clone(), proof.clone());
-			
-			let signature = to_sign.using_encoded(|payload| if payload.len() > 256 {
-				reporter.sign(&blake2_256(payload))
-			} else {
-				reporter.sign(&payload)
-			}).expect("FIXME");
-			
-			let babe_call = BabeCall::report_equivocation(equivocation, proof, signature);
-			let call = Call::Babe(babe_call);
-			let ex = UncheckedExtrinsic::new_unsigned(call.into());
-			
-			Some(ex.encode())
+			Babe::construct_equivocation_transaction(equivocation, proof)
 		}
 	}
 

@@ -37,7 +37,7 @@ use keystore::KeyStorePtr;
 use runtime_support::serde::{Serialize, Deserialize};
 use codec::{Decode, Encode};
 use parking_lot::{Mutex, MutexGuard};
-use primitives::{Blake2Hasher, H256, Pair, Public, traits::BareCryptoStorePtr};
+use primitives::{Blake2Hasher, H256, Pair, Public, ExecutionContext};
 use merlin::Transcript;
 use inherents::{InherentDataProviders, InherentData};
 use substrate_telemetry::{
@@ -529,30 +529,25 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 					equivocation_proof.second_header().hash(),
 				);
 
-				let keystore = keystore.expect("FIXME");
-				let keystore = keystore.read();
-				if let Some((key_pair, authority_index)) = authorities.iter()
-					.enumerate()
-					.find_map(|(i, a)| {
-						keystore.key_pair::<AuthorityPair>(&a.0).ok().map(|kp| (kp, i))
-					}) {
-					
-					// Submit a transaction reporting the equivocation.
-					let block_id = BlockId::number(client.info().best_number);
-					
-					let maybe_report_tx = client
-						.runtime_api()
-						.construct_equivocation_transaction(&block_id, equivocation_proof);
-					if let Ok(Some(report_tx)) = maybe_report_tx {
-							transaction_pool.as_ref().map(|txpool| {
-								let uxt = Decode::decode(&mut report_tx.as_slice())
-									.expect("Encoded extrinsic is valid; qed");
-								txpool.submit_one(&block_id, uxt)
-							});
-							info!(target: "afg", "Babe equivocation report has been submitted")
-					} else {
-						error!(target: "afg", "Error constructing Babe equivocation report")
-					}
+				// Submit a transaction reporting the equivocation.
+				let block_id = BlockId::number(client.info().best_number);
+				let maybe_report_tx = client
+					.runtime_api()
+					.construct_equivocation_transaction_with_context(
+						&block_id,
+						ExecutionContext::Other,
+						equivocation_proof,
+					);
+
+				if let Ok(Some(report_tx)) = maybe_report_tx {
+					transaction_pool.as_ref().map(|txpool| {
+						let uxt = Decode::decode(&mut report_tx.as_slice())
+							.expect("Encoded extrinsic is valid; qed");
+						txpool.submit_one(&block_id, uxt)
+					});
+					info!(target: "afg", "Babe equivocation report has been submitted")
+				} else {
+					error!(target: "afg", "Error constructing Babe equivocation report")
 				}
 			}
 

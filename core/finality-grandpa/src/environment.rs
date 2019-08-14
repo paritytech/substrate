@@ -33,7 +33,7 @@ use grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
 	voter, voter_set::VoterSet, Message
 };
-use primitives::{Blake2Hasher, H256, Pair};
+use primitives::{Blake2Hasher, H256, Pair, ExecutionContext};
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, ProvideRuntimeApi
@@ -866,7 +866,11 @@ where
 
 			let block_id = BlockId::<Block>::number(self.inner.info().chain.best_number);
 			let maybe_report_call = self.inner.runtime_api()
-				.construct_equivocation_transaction(&block_id, grandpa_equivocation);
+				.construct_equivocation_transaction_with_context(
+					&block_id,
+					ExecutionContext::Other,
+					grandpa_equivocation,
+				);
 
 			if let Ok(Some(report_call)) = maybe_report_call {
 				let uxt = Decode::decode(&mut report_call.as_slice())
@@ -907,7 +911,11 @@ where
 
 			let block_id = BlockId::<Block>::number(self.inner.info().chain.best_number);
 			let maybe_report_call = self.inner.runtime_api()
-				.construct_equivocation_transaction(&block_id, grandpa_equivocation);
+				.construct_equivocation_transaction_with_context(
+					&block_id,
+					ExecutionContext::Other,
+					grandpa_equivocation,
+				);
 
 			if let Ok(Some(report_call)) = maybe_report_call {
 				let uxt = Decode::decode(&mut report_call.as_slice())

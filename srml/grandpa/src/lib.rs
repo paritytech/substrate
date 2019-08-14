@@ -40,13 +40,13 @@ use app_crypto::RuntimeAppPublic;
 use sr_primitives::{
 	generic::{DigestItem, OpaqueDigestItemId}, Perbill, key_types, KeyTypeId,
 	transaction_validity::{TransactionValidity, ValidTransaction},
-	traits::{Zero, ValidateUnsigned}
+	traits::{Zero, ValidateUnsigned, Extrinsic as ExtrinsicT}
 };
 use runtime_io::blake2_256;
 use sr_staking_primitives::{SessionIndex, offence::{TimeSlot, Offence, Kind}};
 use fg_primitives::{
 	ScheduledChange, ConsensusLog, GRANDPA_ENGINE_ID, GrandpaEquivocation,
-	localized_payload
+	localized_payload, app
 };
 use session::historical::Proof;
 pub use fg_primitives::{AuthorityId, AuthorityWeight, AuthoritySignature};
@@ -59,6 +59,8 @@ pub trait Trait: system::Trait {
 	/// The event type of this module.
 	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
 	type KeyOwnerSystem: KeyOwnerProofSystem<(KeyTypeId, Vec<u8>), Proof=Proof>;
+	type Call: From<Call<Self>>;
+	type UncheckedExtrinsic: ExtrinsicT<Call=<Self as Trait>::Call> + Encode + Decode;
 }
 
 /// A stored pending change, old format.
@@ -401,6 +403,32 @@ impl<T: Trait> Module<T> {
 		} else {
 			Err("Attempt to signal GRANDPA change with one already pending.")
 		}
+	}
+
+	pub fn construct_equivocation_transaction(
+		equivocation: GrandpaEquivocation<T::Hash, T::BlockNumber>,
+		proof: Proof,
+	) -> Option<Vec<u8>> {
+		let mut local_keys = app::Public::all();
+		
+		if local_keys.len() > 0 {
+			let reporter = &local_keys[0];
+			let to_sign = (equivocation.clone(), proof.clone());
+			
+			let maybe_signature = to_sign.using_encoded(|payload| if payload.len() > 256 {
+				reporter.sign(&blake2_256(payload))
+			} else {
+				reporter.sign(&payload)
+			});
+			
+			if let Some(signature) = maybe_signature {
+				let call = Call::report_equivocation(equivocation, proof, signature.into());
+				let ex = T::UncheckedExtrinsic::new_unsigned(call.into());
+				return Some(ex.encode())
+			}
+		}
+
+		None
 	}
 
 	/// Deposit one of this module's logs.

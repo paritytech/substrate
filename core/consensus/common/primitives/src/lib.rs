@@ -23,7 +23,6 @@ use client::decl_runtime_apis;
 use rstd::vec::Vec;
 use sr_primitives::traits::Header;
 use sr_staking_primitives::SessionIndex;
-use srml_session::historical::Proof;
 use app_crypto::RuntimeAppPublic;
 
 decl_runtime_apis! {
@@ -41,11 +40,8 @@ pub trait AuthorshipEquivocationProof {
 
 	/// Create an equivocation proof for AuRa or Babe.
 	fn new(
-		reporter: Self::Identity,
 		identity: Self::Identity,
-		identity_proof: Proof,
 		slot: u64,
-		session_index: SessionIndex,
 		first_header: Self::Header,
 		second_header: Self::Header,
 		first_signature: Self::Signature, 
@@ -53,19 +49,16 @@ pub trait AuthorshipEquivocationProof {
 	) -> Self;
 
 	/// Get the reporter of the equivocation.
-	fn reporter(&self) -> &Self::Identity;
+	fn reporter(&self) -> Option<&Self::Identity>;
 
 	/// Get the session index where the equivocation happened.
-	fn session_index(&self) -> &SessionIndex;
+	fn session_index(&self) -> Option<&SessionIndex>;
 
 	/// Get the slot where the equivocation happened.
 	fn slot(&self) -> u64;
 
 	/// Get the identity of the suspect of equivocating.
 	fn identity(&self) -> &Self::Identity;
-
-	/// Get the identity proof of the suspect of equivocating.
-	fn identity_proof(&self) -> &Proof;
 
 	/// Get the first header involved in the equivocation.
 	fn first_header(&self) -> &Self::Header;

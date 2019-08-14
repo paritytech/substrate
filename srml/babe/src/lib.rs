@@ -25,7 +25,7 @@
 pub use timestamp;
 
 use rstd::{result, prelude::*};
-use runtime_io::blake2_256;
+use sr_io::blake2_256;
 use srml_support::{
 	decl_storage, decl_module, StorageValue, StorageMap,
 	traits::{FindAuthor, Get, KeyOwnerProofSystem},
@@ -37,7 +37,7 @@ use sr_primitives::{
 };
 use sr_primitives::traits::{
 	IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert, Header,
-	ValidateUnsigned
+	ValidateUnsigned, Extrinsic as ExtrinsicT
 };
 use sr_staking_primitives::{
 	SessionIndex,
@@ -57,7 +57,7 @@ use babe_primitives::{
 	BabeEquivocationProof, get_slot
 };
 use app_crypto::RuntimeAppPublic;
-pub use babe_primitives::{AuthorityId, AuthoritySignature, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH};
+pub use babe_primitives::{AuthorityId, AuthoritySignature, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH, app};
 
 /// The BABE inherent identifier.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"babeslot";
@@ -134,6 +134,10 @@ impl ProvideInherentData for InherentDataProvider {
 pub trait Trait: timestamp::Trait + session::historical::Trait {
 	type EpochDuration: Get<u64>;
 	type ExpectedBlockTime: Get<Self::Moment>;
+
+	type Call: From<Call<Self>>;
+	type UncheckedExtrinsic: ExtrinsicT<Call=<Self as Trait>::Call> + Encode + Decode;
+
 	type KeyOwnerSystem: KeyOwnerProofSystem<
 		(KeyTypeId, Vec<u8>),
 		Proof=Proof,
@@ -228,7 +232,7 @@ fn equivocation_is_valid<T: Trait>(
 	signature: &AuthoritySignature,
 ) -> bool {
 	let signed = (equivocation, proof);
-	let reporter = equivocation.reporter();
+	let reporter = equivocation.reporter().expect("FIXME");
 
 	let signature_valid = signed.using_encoded(|signed| if signed.len() > 256 {
 		reporter.verify(&blake2_256(signed), &signature)
@@ -322,7 +326,7 @@ decl_module! {
 			if let Some(to_punish) = to_punish {
 				let offence = BabeEquivocationOffence {
 					slot: equivocation.slot(),
-					session_index: equivocation.session_index().clone(),
+					session_index: equivocation.session_index().expect("FIXME").clone(),
 					validators_count: 0,
 					offender: to_punish,
 				};
@@ -421,6 +425,32 @@ impl<T: Trait> Module<T> {
 		// we double the minimum block-period so each author can always propose within
 		// the majority of their slot.
 		<T as timestamp::Trait>::MinimumPeriod::get().saturating_mul(2.into())
+	}
+
+	pub fn construct_equivocation_transaction(
+		equivocation: BabeEquivocationProof<T::Header>,
+		proof: Proof,
+	) -> Option<Vec<u8>> {
+		let mut local_keys = app::Public::all();
+		
+		if local_keys.len() > 0 {
+			let reporter = &local_keys[0];
+			let to_sign = (equivocation.clone(), proof.clone());
+			
+			let maybe_signature = to_sign.using_encoded(|payload| if payload.len() > 256 {
+				reporter.sign(&blake2_256(payload))
+			} else {
+				reporter.sign(&payload)
+			});
+			
+			if let Some(signature) = maybe_signature {
+				let call = Call::report_equivocation(equivocation, proof, signature.into());
+				let ex = T::UncheckedExtrinsic::new_unsigned(call.into());
+				return Some(ex.encode())
+			}
+		}
+
+		None
 	}
 
 	fn deposit_consensus<U: Encode>(new: U) {
@@ -564,7 +594,7 @@ fn compute_randomness(
 		s.extend_from_slice(&vrf_output[..]);
 	}
 
-	runtime_io::blake2_256(&s)
+	sr_io::blake2_256(&s)
 }
 
 impl<T: Trait> ProvideInherent for Module<T> {

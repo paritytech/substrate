@@ -30,7 +30,7 @@ use rstd::vec::Vec;
 use grandpa::Message;
 use sr_staking_primitives::SessionIndex;
 
-mod app {
+pub mod app {
 	use app_crypto::{app_crypto, key_types::GRANDPA, ed25519};
 	app_crypto!(ed25519, GRANDPA);
 }

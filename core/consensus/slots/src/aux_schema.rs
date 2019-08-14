@@ -24,6 +24,8 @@ use sr_primitives::traits::Header;
 use app_crypto::RuntimeAppPublic;
 use consensus_common_primitives::AuthorshipEquivocationProof;
 use srml_session::historical::Proof;
+use keystore::KeyStorePtr;
+use sr_staking_primitives::SessionIndex;
 
 const SLOT_HEADER_MAP_KEY: &[u8] = b"slot_header_map";
 const SLOT_HEADER_START: &[u8] = b"slot_header_start";
@@ -62,7 +64,7 @@ pub fn check_equivocation<C, H, E, V>(
 	where
 		H: Header,
 		C: AuxStore,
-	V: RuntimeAppPublic + Codec + Clone + PartialEq,
+		V: RuntimeAppPublic + Codec + Clone + PartialEq,
 		<V as RuntimeAppPublic>::Signature: Clone + Codec,
 		E: AuthorshipEquivocationProof<
 			Header=H,
@@ -97,17 +99,15 @@ pub fn check_equivocation<C, H, E, V>(
 		// if prev_signer == signer {
 			// 2) with different hash
 			// if header.hash() != prev_header.hash() {
-				// return Ok(Some(AuthorshipEquivocationProof::new(
-				// 	signer.clone(), // TODO: this should be the reporter.
-				// 	signer.clone(),
-				// 	Proof::default(), // TODO: add the proof.
-				// 	slot,
-				// 	SessionIndex::default(), // TODO: add session index.
-				// 	header.clone(),
-				// 	header.clone(),
-				// 	signature.clone(),
-				// 	signature.clone(),
-				// )));
+				
+				return Ok(Some(AuthorshipEquivocationProof::new(
+					signer.clone(),
+					slot,
+					header.clone(),
+					header.clone(),
+					signature.clone(),
+					signature.clone(),
+				)));
 			// } else {
 				//  We don't need to continue in case of duplicated header,
 				// since it's already saved and a possible equivocation

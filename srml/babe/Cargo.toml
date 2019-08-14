@@ -19,7 +19,7 @@ timestamp = { package = "srml-timestamp", path = "../timestamp", default-feature
 session = { package = "srml-session", path = "../session", default-features = false }
 consensus-common-primitives = { package = "substrate-consensus-common-primitives", path = "../../core/consensus/common/primitives", default-features = false }
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../core/consensus/babe/primitives", default-features = false }
-runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = false, features = [ "wasm-nice-panic-message" ] }
+sr-io = { path = "../../core/sr-io", default-features = false, features = [ "wasm-nice-panic-message" ] }
 app-crypto = { package = "substrate-application-crypto", path = "../../core/application-crypto", default-features = false }
 
 [dev-dependencies]
@@ -41,6 +41,6 @@ std = [
 	"inherents/std",
 	"babe-primitives/std",
 	"session/std",
-	"runtime_io/std",
+	"sr-io/std",
 	"staking/std",
 ]
