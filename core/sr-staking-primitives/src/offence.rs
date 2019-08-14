@@ -134,13 +134,6 @@ impl<Reporter, Offender> OnOffenceHandler<Reporter, Offender> for () {
 pub struct OffenceDetails<Reporter, Offender> {
 	/// The offending authority id
 	pub offender: Offender,
-	/// A number of times the authority was already reported for this offence.
-	///
-	/// Since we punish all authorities for that made the same offence in the past as well
-	/// we keep track the "age" of the report, so that the slashes can be lowered
-	/// in case the authority was already slashed in the past.
-	/// Note that we don't buffer slashes and instead use this approach.
-	pub count: OffenceCount,
 	/// A list of reporters of offences of this authority ID. Possibly empty where there are no
 	/// particular reporters.
 	pub reporters: Vec<Reporter>,

@@ -24,7 +24,10 @@
 mod mock;
 mod tests;
 
-use rstd::vec::Vec;
+use rstd::{
+	collections::btree_set::BTreeSet,
+	vec::Vec,
+};
 use support::{
 	StorageDoubleMap, decl_module, decl_event, decl_storage, Parameter,
 };
@@ -39,7 +42,7 @@ pub trait Trait: system::Trait {
 	/// The overarching event type.
 	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
 	/// Full identification of the validator.
-	type IdentificationTuple: Parameter;
+	type IdentificationTuple: Parameter + Ord;
 	/// A handler called for every offence report.
 	type OnOffenceHandler: OnOffenceHandler<Self::AccountId, Self::IdentificationTuple>;
 }
@@ -84,7 +87,7 @@ impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportOffence<T::AccountId, T
 
 		// Check if an offence is already reported for the offender authorities
 		// and otherwise stores that report.
-		let mut changed = false;
+		let mut new_offenders = BTreeSet::new();
 		let all_offenders = {
 			// We have to return the modified list of offending authorities. If we were to use
 			// `mutate` we would have to clone the whole list in order to return it.
@@ -96,30 +99,20 @@ impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportOffence<T::AccountId, T
 				// De-duplication of reports is tricky though, we need a canonical form of the report
 				// (for instance babe equivocation can have headers swapped).
 				if !offending_authorities.iter().any(|details| details.offender == offender) {
-					changed = true;
 					offending_authorities.push(OffenceDetails {
 						offender,
-						count: 0,
 						reporters: reporters.clone().into_iter().collect(),
 					});
 				}
 			}
 
-			if changed {
-				// Increase the count in each offence report. For just added offences the count is
-				// going to be increased from 0 to 1.
-				for details in offending_authorities.iter_mut() {
-					details.count += 1;
-				}
-
-				// We pushed new items in the offending_authorities, so update it.
-				<OffenceReports<T>>::insert(&O::ID, &(session, time_slot), &offending_authorities);
-			}
-
 			offending_authorities
 		};
 
-		if !changed {
+		let offenders_count = all_offenders.len() as u32;
+		let previous_offenders_count = offenders_count - new_offenders.len() as u32;
+
+		if previous_offenders_count != offenders_count {
 			// The report contained only duplicates, so there is no need to slash again.
 			return
 		}
@@ -127,29 +120,43 @@ impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportOffence<T::AccountId, T
 		// The report is not a duplicate. Deposit an event.
 		Self::deposit_event(Event::Offence(O::ID, session, time_slot));
 
-		let offenders_count = all_offenders.len() as u32;
-		let expected_fraction = O::slash_fraction(offenders_count, validator_set_count);
-		let slash_perbil = all_offenders
+		// The amount new offenders are slashed
+		let new_fraction = O::slash_fraction(offenders_count, validator_set_count);
+		// The amount previous offenders are slashed additionally.
+		//
+		// Since they were slashed in the past, we slash by:
+		// x = (new - prev) / (1 - prev)
+		// because:
+		// Y = X * (1 - prev)
+		// Z = Y * (1 - x)
+		// Z = X * (1 - new)
+		let old_fraction = if previous_offenders_count > 0 {
+			let previous_fraction = O::slash_fraction(
+				offenders_count.saturating_sub(previous_offenders_count),
+				validator_set_count,
+			);
+			let numerator = new_fraction
+				.into_parts()
+				.saturating_sub(previous_fraction.into_parts());
+			let denominator = Perbill::from_parts(Perbill::one().into_parts() - previous_fraction.into_parts());
+			Perbill::from_parts(denominator * numerator)
+		} else {
+			new_fraction.clone()
+		};
+
+		// calculate how much to slash
+		let slash_perbill = all_offenders
 			.iter()
-			.map(|details| {
-				if details.count > 1 {
-					let previous_fraction = O::slash_fraction(
-						offenders_count.saturating_sub(details.count - 1),
-						validator_set_count,
-					);
-					let perbil = expected_fraction
-						.into_parts()
-						.saturating_sub(previous_fraction.into_parts());
-					Perbill::from_parts(perbil)
-				} else {
-					expected_fraction.clone()
-				}
+			.map(|details| if previous_offenders_count > 0 && new_offenders.contains(&details.offender) {
+				new_fraction.clone()
+			} else {
+				old_fraction.clone()
 			})
 			.collect::<Vec<_>>();
 
 		T::OnOffenceHandler::on_offence(
 			&all_offenders,
-			&slash_perbil,
+			&slash_perbill,
 		);
 	}
 }

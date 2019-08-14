@@ -425,7 +425,7 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 			offenders: unresponsive,
 		};
 
-		T::ReportUnresponsivness::report_offence(None, offence);
+		T::ReportUnresponsivness::report_offence(vec![], offence);
 	}
 
 	fn on_disabled(_i: usize) {
