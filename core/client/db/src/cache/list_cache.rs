@@ -39,9 +39,7 @@
 //! Finalized entry E1 is pruned when block B is finalized so that:
 //! EntryAt(B.number - prune_depth).points_to(E1)
 
-use std::collections::BTreeSet;
-#[cfg(test)]
-use std::collections::BTreeMap;
+use std::collections::{BTreeSet, BTreeMap};
 
 use log::warn;
 
@@ -84,7 +82,6 @@ pub enum CommitOperation<Block: BlockT, T: CacheItemT> {
 	BlockFinalized(ComplexBlockId<Block>, Option<Entry<Block, T>>, BTreeSet<usize>),
 	/// When best block is reverted - contains the forks that have to be updated
 	/// (they're either destroyed, or their best entry is updated to earlier block).
-	#[cfg(test)]
 	BlockReverted(BTreeMap<usize, Option<Fork<Block, T>>>),
 }
 
@@ -324,7 +321,6 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 	}
 
 	/// When block is reverted.
-	#[cfg(test)]
 	pub fn on_block_revert<Tx: StorageTransaction<Block, T>>(
 		&self,
 		tx: &mut Tx,
@@ -395,7 +391,6 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 					self.unfinalized.remove(*fork_index);
 				}
 			},
-			#[cfg(test)]
 			CommitOperation::BlockReverted(forks) => {
 				for (fork_index, updated_fork) in forks.into_iter().rev() {
 					match updated_fork {
@@ -568,7 +563,6 @@ impl<Block: BlockT, T: CacheItemT> Fork<Block, T> {
 	}
 
 	/// Truncate fork by deleting all entries that are descendants of given block.
-	#[cfg(test)]
 	pub fn truncate<S: Storage<Block, T>, Tx: StorageTransaction<Block, T>>(
 		&self,
 		storage: &S,

@@ -227,7 +227,6 @@ mod meta {
 					unfinalized.remove(*fork_index);
 				}
 			},
-			#[cfg(test)]
 			CommitOperation::BlockReverted(ref forks) => {
 				for (fork_index, updated_fork) in forks.iter().rev() {
 					match updated_fork {
