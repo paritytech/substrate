@@ -28,6 +28,14 @@ decl_runtime_apis! {
 	/// This api is used by the `core/authority-discovery` module to retrieve our own authority identifier, to retrieve
 	/// identifiers of the current authority set, as well as sign and verify Kademlia Dht external address payloads from
 	/// and to other authorities.
+	///
+	/// # Note
+	///
+	/// The underlying cryptography key can change at any moment in time. This can for example be problematic when a key
+	/// change happens in between calling `public_key` and `sign`, resulting in a signature that is not signed by the
+	/// key corresponding to the public key retrieved in the first call. To prevent races like the one above, one can
+	/// verify that the retrieved signature corresponds to the public key by calling `verify` as a third step.
+	///
 	pub trait AuthorityDiscoveryApi<AuthorityId: Codec> {
 		/// Retrieve own authority identifier.
 		fn public_key() -> Option<AuthorityId>;
