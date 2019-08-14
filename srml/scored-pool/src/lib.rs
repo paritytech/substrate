@@ -51,7 +51,7 @@
 //! ## Usage
 //!
 //! ```
-//! use srml_support::{decl_module, dispatch::Result, traits::ChangeMembers};
+//! use srml_support::{decl_module, dispatch::Result};
 //! use system::ensure_signed;
 //! use srml_scored_pool::{self as scored_pool};
 //!
