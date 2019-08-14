@@ -104,7 +104,7 @@ impl<Reporter, Offender, O: Offence<Offender>> ReportOffence<Reporter, Offender,
 /// Used to decouple the module that handles offences and
 /// the one that should punish for those offences.
 pub trait OnOffenceHandler<Reporter, Offender> {
-	/// A handler for offence of particular kind.
+	/// A handler for an offence of a particular kind.
 	///
 	/// Note that this contains a list of all previous offenders
 	/// as well. The implementer should cater for a case, where
