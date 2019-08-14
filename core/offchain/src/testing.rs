@@ -134,6 +134,10 @@ impl TestOffchainExt {
 }
 
 impl offchain::Externalities for TestOffchainExt {
+	fn is_validator(&self) -> bool {
+		unimplemented!("not needed in tests so far")
+	}
+
 	fn submit_transaction(&mut self, _ex: Vec<u8>) -> Result<(), ()> {
 		unimplemented!("not needed in tests so far")
 	}

@@ -159,14 +159,6 @@ impl StorageApi for () {
 		).unwrap_or(Ok(None)).expect("Invalid parent hash passed to storage_changes_root")
 	}
 
-	fn enumerated_trie_root<H>(input: &[&[u8]]) -> H::Out
-	where
-		H: Hasher,
-		H::Out: Ord,
-	{
-		Layout::<H>::ordered_trie_root(input)
-	}
-
 	fn trie_root<H, I, A, B>(input: I) -> H::Out
 	where
 		I: IntoIterator<Item = (A, B)>,
@@ -328,6 +320,12 @@ fn with_offchain<R>(f: impl FnOnce(&mut dyn offchain::Externalities) -> R, msg: 
 }
 
 impl OffchainApi for () {
+	fn is_validator() -> bool {
+		with_offchain(|ext| {
+			ext.is_validator()
+		}, "is_validator can be called only in the offchain worker context")
+	}
+
 	fn submit_transaction<T: codec::Encode>(data: &T) -> Result<(), ()> {
 		with_offchain(|ext| {
 			ext.submit_transaction(codec::Encode::encode(data))

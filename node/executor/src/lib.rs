@@ -164,7 +164,7 @@ mod tests {
 		})
 	}
 
-	fn from_block_number(n: u64) -> Header {
+	fn from_block_number(n: u32) -> Header {
 		Header::new(n, Default::default(), Default::default(), [69; 32].into(), Default::default())
 	}
 
@@ -193,7 +193,7 @@ mod tests {
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_initialize_block",
-			&vec![].and(&from_block_number(1u64)),
+			&vec![].and(&from_block_number(1u32)),
 			true,
 			None,
 		).0;
@@ -230,7 +230,7 @@ mod tests {
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_initialize_block",
-			&vec![].and(&from_block_number(1u64)),
+			&vec![].and(&from_block_number(1u32)),
 			true,
 			None,
 		).0;
@@ -263,7 +263,7 @@ mod tests {
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_initialize_block",
-			&vec![].and(&from_block_number(1u64)),
+			&vec![].and(&from_block_number(1u32)),
 			true,
 			None,
 		).0;
@@ -300,7 +300,7 @@ mod tests {
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_initialize_block",
-			&vec![].and(&from_block_number(1u64)),
+			&vec![].and(&from_block_number(1u32)),
 			true,
 			None,
 		).0;
@@ -382,6 +382,7 @@ mod tests {
 				offline_slash: Perbill::zero(),
 				offline_slash_grace: 0,
 				invulnerables: vec![alice(), bob(), charlie()],
+				.. Default::default()
 			}),
 			contracts: Some(ContractsConfig {
 				current_schedule: Default::default(),
@@ -527,7 +528,7 @@ mod tests {
 		(block1, block2)
 	}
 
-	fn block_with_size(time: u64, nonce: u64, size: usize) -> (Vec<u8>, Hash) {
+	fn block_with_size(time: u64, nonce: u32, size: usize) -> (Vec<u8>, Hash) {
 		construct_block(
 			&mut new_test_ext(COMPACT_CODE, false),
 			1,
@@ -694,7 +695,7 @@ mod tests {
 	;; ) -> u32
 	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "deploy")
 	)
@@ -709,7 +710,7 @@ mod tests {
 				)
 			)
 
-			(call $ext_scratch_copy
+			(call $ext_scratch_read
 				(i32.const 0)
 				(i32.const 0)
 				(i32.const 4)
@@ -892,7 +893,7 @@ mod tests {
 		], children: map![]});
 
 		let r = WasmExecutor::new()
-			.call(&mut t, 8, COMPACT_CODE, "Core_initialize_block", &vec![].and(&from_block_number(1u64)));
+			.call(&mut t, 8, COMPACT_CODE, "Core_initialize_block", &vec![].and(&from_block_number(1u32)));
 		assert!(r.is_ok());
 		let r = WasmExecutor::new()
 			.call(&mut t, 8, COMPACT_CODE, "BlockBuilder_apply_extrinsic", &vec![].and(&xt())).unwrap();
@@ -915,7 +916,7 @@ mod tests {
 		], children: map![]});
 
 		let r = WasmExecutor::new()
-			.call(&mut t, 8, COMPACT_CODE, "Core_initialize_block", &vec![].and(&from_block_number(1u64)));
+			.call(&mut t, 8, COMPACT_CODE, "Core_initialize_block", &vec![].and(&from_block_number(1u32)));
 		assert!(r.is_ok());
 		let r = WasmExecutor::new()
 			.call(&mut t, 8, COMPACT_CODE, "BlockBuilder_apply_extrinsic", &vec![].and(&xt())).unwrap();
@@ -1087,7 +1088,7 @@ mod tests {
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_initialize_block",
-			&vec![].and(&from_block_number(1u64)),
+			&vec![].and(&from_block_number(1u32)),
 			true,
 			None,
 		).0;

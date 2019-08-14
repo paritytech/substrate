@@ -48,7 +48,6 @@ mod tests {
 		runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest},
 		AccountKeyring, Sr25519Keyring,
 	};
-	use sr_primitives::traits::BlakeTwo256;
 	use primitives::Blake2Hasher;
 	use hex::*;
 

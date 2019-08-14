@@ -24,8 +24,7 @@
 
 use sr_std::prelude::*;
 use srml_support::{
-	StorageValue, decl_module, decl_storage, decl_event,
-	traits::{ChangeMembers}
+	StorageValue, decl_module, decl_storage, decl_event, traits::{ChangeMembers, InitializeMembers},
 };
 use system::ensure_root;
 use sr_primitives::{traits::EnsureOrigin, weights::SimpleDispatchInfo};
@@ -51,7 +50,7 @@ pub trait Trait<I=DefaultInstance>: system::Trait {
 	/// The receiver of the signal for when the membership has been initialized. This happens pre-
 	/// genesis and will usually be the same as `MembershipChanged`. If you need to do something
 	/// different on initialization, then you can change this accordingly.
-	type MembershipInitialized: ChangeMembers<Self::AccountId>;
+	type MembershipInitialized: InitializeMembers<Self::AccountId>;
 
 	/// The receiver of the signal for when the membership has changed.
 	type MembershipChanged: ChangeMembers<Self::AccountId>;
@@ -67,12 +66,12 @@ decl_storage! {
 		config(phantom): sr_std::marker::PhantomData<I>;
 		build(|
 			storage: &mut MapTransaction,
-			config: &GenesisConfig<T, I>
+			config: &Self,
 		| {
 			sr_io::with_storage(storage, || {
 				let mut members = config.members.clone();
 				members.sort();
-				T::MembershipInitialized::set_members_sorted(&members[..], &[]);
+				T::MembershipInitialized::initialize_members(&members);
 				<Members<T, I>>::put(members);
 			});
 		})
@@ -82,6 +81,7 @@ decl_storage! {
 decl_event!(
 	pub enum Event<T, I=DefaultInstance> where
 		<T as system::Trait>::AccountId,
+		<T as Trait<I>>::Event,
 	{
 		/// The given member was added; see the transaction for who.
 		MemberAdded,
@@ -92,7 +92,7 @@ decl_event!(
 		/// The membership was reset; see the transaction for who the new set is.
 		MembersReset,
 		/// Phantom member, never used.
-		Dummy(sr_std::marker::PhantomData<(AccountId, I)>),
+		Dummy(sr_std::marker::PhantomData<(AccountId, Event)>),
 	}
 );
 
@@ -265,6 +265,11 @@ mod tests {
 			assert_eq!(old_plus_incoming, new_plus_outgoing);
 
 			MEMBERS.with(|m| *m.borrow_mut() = new.to_vec());
+		}
+	}
+	impl InitializeMembers<u64> for TestChangeMembers {
+		fn initialize_members(members: &[u64]) {
+			MEMBERS.with(|m| *m.borrow_mut() = members.to_vec());
 		}
 	}
 

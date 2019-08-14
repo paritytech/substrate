@@ -131,8 +131,11 @@ pub mod ext {
 
 	/// Ensures we use the right crypto when calling into native
 	pub trait ExternTrieCrypto: Hasher {
-		/// Calculate enumerated trie root.
-		fn enumerated_trie_root(values: &[&[u8]]) -> Self::Out;
+		/// A trie root formed from the enumerated items.
+		fn ordered_trie_root<
+			A: AsRef<[u8]>,
+			I: IntoIterator<Item = A>
+		>(values: I) -> Self::Out;
 	}
 
 	/// Additional bounds for Hasher trait for without_std.
@@ -141,9 +144,16 @@ pub mod ext {
 
 	// Ensures we use a Blake2_256-flavored Hasher when calling into native
 	impl ExternTrieCrypto for Blake2Hasher {
-		fn enumerated_trie_root(values: &[&[u8]]) -> Self::Out {
-			let lengths = values.iter().map(|v| (v.len() as u32).to_le()).collect::<Vec<_>>();
-			let values = values.iter().fold(Vec::new(), |mut acc, sl| { acc.extend_from_slice(sl); acc });
+		fn ordered_trie_root<
+			A: AsRef<[u8]>,
+			I: IntoIterator<Item = A>
+		>(items: I) -> Self::Out {
+			let mut values = Vec::new();
+			let mut lengths = Vec::new();
+			for v in items.into_iter() {
+				values.extend_from_slice(v.as_ref());
+				lengths.push((v.as_ref().len() as u32).to_le());
+			}
 			let mut result: [u8; 32] = Default::default();
 			unsafe {
 				ext_blake2_256_enumerated_trie_root.get()(
@@ -473,6 +483,12 @@ pub mod ext {
 		//================================
 		// Offchain-worker Context
 		//================================
+
+		/// Returns if the local node is a potential validator.
+		///
+		/// - `1` == `true`
+		/// - `0` == `false`
+		fn ext_is_validator() -> u32;
 
 		/// Submit transaction.
 		///
@@ -884,10 +900,6 @@ impl StorageApi for () {
 		}
 	}
 
-	fn enumerated_trie_root<H: Hasher + ExternTrieCrypto>(values: &[&[u8]]) -> H::Out {
-		H::enumerated_trie_root(values)
-	}
-
 	fn trie_root<
 		H: Hasher + ExternTrieCrypto,
 		I: IntoIterator<Item = (A, B)>,
@@ -901,8 +913,8 @@ impl StorageApi for () {
 		H: Hasher + ExternTrieCrypto,
 		I: IntoIterator<Item = A>,
 		A: AsRef<[u8]>
-	>(_input: I) -> H::Out {
-		unimplemented!()
+	>(values: I) -> H::Out {
+		H::ordered_trie_root(values)
 	}
 }
 
@@ -1087,6 +1099,10 @@ impl CryptoApi for () {
 }
 
 impl OffchainApi for () {
+	fn is_validator() -> bool {
+		unsafe { ext_is_validator.get()() == 1 }
+	}
+
 	fn submit_transaction<T: codec::Encode>(data: &T) -> Result<(), ()> {
 		let encoded_data = codec::Encode::encode(data);
 		let ret = unsafe {

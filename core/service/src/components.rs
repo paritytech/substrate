@@ -145,10 +145,11 @@ pub type PoolApi<C> = <C as Components>::TransactionPoolApi;
 pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
 impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
 
-/// Something that can create initial session keys from given seeds.
+/// Something that can create and store initial session keys from given seeds.
 pub trait InitialSessionKeys<C: Components> {
-	/// Generate the initial session keys for the given seeds.
-	fn generate_intial_session_keys(
+	/// Generate the initial session keys for the given seeds and store them in
+	/// an internal keystore.
+	fn generate_initial_session_keys(
 		client: Arc<ComponentClient<C>>,
 		seeds: Vec<String>,
 	) -> error::Result<()>;
@@ -158,7 +159,7 @@ impl<C: Components> InitialSessionKeys<Self> for C where
 	ComponentClient<C>: ProvideRuntimeApi,
 	<ComponentClient<C> as ProvideRuntimeApi>::Api: session::SessionKeys<ComponentBlock<C>>,
 {
-	fn generate_intial_session_keys(
+	fn generate_initial_session_keys(
 		client: Arc<ComponentClient<C>>,
 		seeds: Vec<String>,
 	) -> error::Result<()> {
@@ -268,6 +269,7 @@ pub trait OffchainWorker<C: Components> {
 		>,
 		pool: &Arc<TransactionPool<C::TransactionPoolApi>>,
 		network_state: &Arc<dyn NetworkStateInfo + Send + Sync>,
+		is_validator: bool,
 	) -> error::Result<Box<dyn Future<Item = (), Error = ()> + Send>>;
 }
 
@@ -284,8 +286,9 @@ impl<C: Components> OffchainWorker<Self> for C where
 		>,
 		pool: &Arc<TransactionPool<C::TransactionPoolApi>>,
 		network_state: &Arc<dyn NetworkStateInfo + Send + Sync>,
+		is_validator: bool,
 	) -> error::Result<Box<dyn Future<Item = (), Error = ()> + Send>> {
-		let future = offchain.on_block_imported(number, pool, network_state.clone())
+		let future = offchain.on_block_imported(number, pool, network_state.clone(), is_validator)
 			.map(|()| Ok(()));
 		Ok(Box::new(Compat::new(future)))
 	}
@@ -378,6 +381,7 @@ pub trait ServiceFactory: 'static + Sized {
 		config: &mut FactoryFullConfiguration<Self>,
 		_client: Arc<FullClient<Self>>,
 		_select_chain: Self::SelectChain,
+		_transaction_pool: Option<Arc<TransactionPool<Self::FullTransactionPoolApi>>>,
 	) -> Result<Self::FullImportQueue, error::Error> {
 		if let Some(name) = config.chain_spec.consensus_engine() {
 			match name {
@@ -451,6 +455,7 @@ pub trait Components: Sized + 'static {
 		config: &mut FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>,
 		select_chain: Option<Self::SelectChain>,
+		_transaction_pool: Option<Arc<TransactionPool<Self::TransactionPoolApi>>>,
 	) -> Result<(Self::ImportQueue, Option<BoxFinalityProofRequestBuilder<FactoryBlock<Self::Factory>>>), error::Error>;
 
 	/// Finality proof provider for serving network requests.
@@ -499,10 +504,20 @@ impl<Factory: ServiceFactory> DerefMut for FullComponents<Factory> {
 
 impl<Factory: ServiceFactory> Future for FullComponents<Factory> {
 	type Item = ();
-	type Error = ();
+	type Error = super::Error;
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
 		self.service.poll()
+	}
+}
+
+impl<Factory: ServiceFactory> Executor<Box<dyn Future<Item = (), Error = ()> + Send>>
+for FullComponents<Factory> {
+	fn execute(
+		&self,
+		future: Box<dyn Future<Item = (), Error = ()> + Send>
+	) -> Result<(), futures::future::ExecuteError<Box<dyn Future<Item = (), Error = ()> + Send>>> {
+		self.service.execute(future)
 	}
 }
 
@@ -559,10 +574,11 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 		config: &mut FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>,
 		select_chain: Option<Self::SelectChain>,
+		transaction_pool: Option<Arc<TransactionPool<Self::TransactionPoolApi>>>,
 	) -> Result<(Self::ImportQueue, Option<BoxFinalityProofRequestBuilder<FactoryBlock<Self::Factory>>>), error::Error> {
 		let select_chain = select_chain
 			.ok_or(error::Error::SelectChainRequired)?;
-		Factory::build_full_import_queue(config, client, select_chain)
+		Factory::build_full_import_queue(config, client, select_chain, transaction_pool)
 			.map(|queue| (queue, None))
 	}
 
@@ -606,12 +622,28 @@ impl<Factory: ServiceFactory> Deref for LightComponents<Factory> {
 	}
 }
 
+impl<Factory: ServiceFactory> DerefMut for LightComponents<Factory> {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.service
+	}
+}
+
 impl<Factory: ServiceFactory> Future for LightComponents<Factory> {
 	type Item = ();
-	type Error = ();
+	type Error = super::Error;
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
 		self.service.poll()
+	}
+}
+
+impl<Factory: ServiceFactory> Executor<Box<dyn Future<Item = (), Error = ()> + Send>>
+for LightComponents<Factory> {
+	fn execute(
+		&self,
+		future: Box<dyn Future<Item = (), Error = ()> + Send>
+	) -> Result<(), futures::future::ExecuteError<Box<dyn Future<Item = (), Error = ()> + Send>>> {
+		self.service.execute(future)
 	}
 }
 
@@ -666,6 +698,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 		config: &mut FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>,
 		_select_chain: Option<Self::SelectChain>,
+		_transaction_pool: Option<Arc<TransactionPool<Self::TransactionPoolApi>>>,
 	) -> Result<(Self::ImportQueue, Option<BoxFinalityProofRequestBuilder<FactoryBlock<Self::Factory>>>), error::Error> {
 		Factory::build_light_import_queue(config, client)
 			.map(|(queue, builder)| (queue, Some(builder)))

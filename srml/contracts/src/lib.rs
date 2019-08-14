@@ -89,7 +89,7 @@ mod rent;
 #[cfg(test)]
 mod tests;
 
-use crate::exec::ExecutionContext;
+use crate::exec::{ExecutionContext, ExecResult};
 use crate::account_db::{AccountDb, DirectAccountDb};
 pub use crate::gas::{Gas, GasMeter};
 use crate::wasm::{WasmLoader, WasmVm};
@@ -560,7 +560,7 @@ decl_module! {
 			let dest = T::Lookup::lookup(dest)?;
 
 			Self::execute_wasm(origin, gas_limit, |ctx, gas_meter| {
-				ctx.call(dest, value, gas_meter, &data, exec::EmptyOutputBuf::new()).map(|_| ())
+				ctx.call(dest, value, gas_meter, data)
 			})
 		}
 
@@ -584,7 +584,8 @@ decl_module! {
 			let origin = ensure_signed(origin)?;
 
 			Self::execute_wasm(origin, gas_limit, |ctx, gas_meter| {
-				ctx.instantiate(endowment, gas_meter, &code_hash, &data).map(|_| ())
+				ctx.instantiate(endowment, gas_meter, &code_hash, data)
+					.map(|(_address, output)| output)
 			})
 		}
 
@@ -631,7 +632,7 @@ impl<T: Trait> Module<T> {
 	fn execute_wasm(
 		origin: T::AccountId,
 		gas_limit: Gas,
-		func: impl FnOnce(&mut ExecutionContext<T, WasmVm, WasmLoader>, &mut GasMeter<T>) -> Result
+		func: impl FnOnce(&mut ExecutionContext<T, WasmVm, WasmLoader>, &mut GasMeter<T>) -> ExecResult
 	) -> Result {
 		// Pay for the gas upfront.
 		//
@@ -646,7 +647,7 @@ impl<T: Trait> Module<T> {
 
 		let result = func(&mut ctx, &mut gas_meter);
 
-		if result.is_ok() {
+		if result.as_ref().map(|output| output.is_success()).unwrap_or(false) {
 			// Commit all changes that made it thus far into the persistent storage.
 			DirectAccountDb.commit(ctx.overlay.into_change_set());
 		}
@@ -688,6 +689,8 @@ impl<T: Trait> Module<T> {
 		});
 
 		result
+			.map(|_| ())
+			.map_err(|e| e.reason)
 	}
 
 	fn restore_to(
