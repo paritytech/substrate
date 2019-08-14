@@ -91,12 +91,12 @@ pub trait Offence<Offender> {
 
 /// A trait for decoupling offence reporters from the actual handling of offence reports.
 pub trait ReportOffence<Reporter, Offender, O: Offence<Offender>> {
-	/// Report an `offence` and reward the `reporter`.
-	fn report_offence(reporter: Option<Reporter>, offence: O);
+	/// Report an `offence` and reward given `reporters`.
+	fn report_offence(reporters: Vec<Reporter>, offence: O);
 }
 
 impl<Reporter, Offender, O: Offence<Offender>> ReportOffence<Reporter, Offender, O> for () {
-	fn report_offence(_reporter: Option<Reporter>, _offence: O) {}
+	fn report_offence(_reporters: Vec<Reporter>, _offence: O) {}
 }
 
 /// A trait to take action on an offence.

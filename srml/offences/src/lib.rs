@@ -76,7 +76,7 @@ impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportOffence<T::AccountId, T
 	for Module<T> where
 	T::IdentificationTuple: Clone,
 {
-	fn report_offence(reporter: Option<T::AccountId>, offence: O) {
+	fn report_offence(reporters: Vec<T::AccountId>, offence: O) {
 		let offenders = offence.offenders();
 		let time_slot = offence.time_slot();
 		let session = offence.session_index();
@@ -100,7 +100,7 @@ impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportOffence<T::AccountId, T
 					offending_authorities.push(OffenceDetails {
 						offender,
 						count: 0,
-						reporters: reporter.clone().into_iter().collect(),
+						reporters: reporters.clone().into_iter().collect(),
 					});
 				}
 			}
