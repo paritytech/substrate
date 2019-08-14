@@ -256,8 +256,8 @@ fn should_properly_count_offences() {
 		assert_eq!(
 			Offences::offence_reports(&KIND, &(session_index, time_slot)),
 			vec![
-				OffenceDetails { offender: 5, count: 2, reporters: vec![] },
-				OffenceDetails { offender: 4, count: 1, reporters: vec![] },
+				OffenceDetails { offender: 5, reporters: vec![] },
+				OffenceDetails { offender: 4, reporters: vec![] },
 			]
 		);
 	});

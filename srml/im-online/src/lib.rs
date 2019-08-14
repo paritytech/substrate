@@ -169,11 +169,11 @@ pub trait Trait: system::Trait + session::historical::Trait {
 	type UncheckedExtrinsic: ExtrinsicT<Call=<Self as Trait>::Call> + Encode + Decode;
 
 	/// A type that gives us the ability to submit unresponsiveness offence reports.
-	type ReportUnresponsivness:
+	type ReportUnresponsiveness:
 		ReportOffence<
 			Self::AccountId,
 			IdentificationTuple<Self>,
-			UnresponsivnessOffence<IdentificationTuple<Self>>,
+			UnresponsivenessOffence<IdentificationTuple<Self>>,
 		>;
 
 	/// A type that returns a validator id from the current elected set of the era.
@@ -419,13 +419,13 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 		}
 
 		let validator_set_count = keys.len() as u32;
-		let offence = UnresponsivnessOffence {
+		let offence = UnresponsivenessOffence {
 			session_index: current_session,
 			validator_set_count,
 			offenders: unresponsive,
 		};
 
-		T::ReportUnresponsivness::report_offence(vec![], offence);
+		T::ReportUnresponsivenes::report_offence(vec![], offence);
 	}
 
 	fn on_disabled(_i: usize) {
@@ -479,10 +479,10 @@ impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
 }
 
 /// An offense that is filed if a validator didn't send a heartbeat message.
-pub struct UnresponsivnessOffence<Offender> {
+pub struct UnresponsivenessOffence<Offender> {
 	/// The current session index in which we report the unresponsive validators.
 	///
-	/// It acts as a time measure for unresponsivness reports and effectively will always point
+	/// It acts as a time measure for unresponsiveness reports and effectively will always point
 	/// at the end of the session.
 	session_index: SessionIndex,
 	/// The size of the validator set in current session/era.
@@ -491,7 +491,7 @@ pub struct UnresponsivnessOffence<Offender> {
 	offenders: Vec<Offender>,
 }
 
-impl<Offender: Clone> Offence<Offender> for UnresponsivnessOffence<Offender> {
+impl<Offender: Clone> Offence<Offender> for UnresponsivenessOffence<Offender> {
 	const ID: Kind = *b"im-online:offlin";
 
 	fn offenders(&self) -> Vec<Offender> {
@@ -528,21 +528,21 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn test_unresponsivness_slash_fraction() {
-		// A single case of unresponsivness is not slashed.
+	fn test_unresponsiveness_slash_fraction() {
+		// A single case of unresponsiveness is not slashed.
 		assert_eq!(
-			UnresponsivnessOffence::<()>::slash_fraction(1, 50),
+			UnresponsivenessOffence::<()>::slash_fraction(1, 50),
 			Perbill::zero(),
 		);
 
 		assert_eq!(
-			UnresponsivnessOffence::<()>::slash_fraction(3, 50),
+			UnresponsivenessOffence::<()>::slash_fraction(3, 50),
 			Perbill::from_parts(6000000), // 0.6%
 		);
 
 		// One third offline should be punished around 5%.
 		assert_eq!(
-			UnresponsivnessOffence::<()>::slash_fraction(17, 50),
+			UnresponsivenessOffence::<()>::slash_fraction(17, 50),
 			Perbill::from_parts(48000000), // 4.8%
 		);
 	}
