@@ -25,6 +25,7 @@ use primitives::{H256, Blake2Hasher};
 use codec::{Encode, Decode};
 use crate::{AuthorityId, GenesisConfig, Trait, Module, ConsensusLog};
 use substrate_finality_grandpa_primitives::GRANDPA_ENGINE_ID;
+use test_runtime::Extrinsic;
 
 impl_outer_origin!{
 	pub enum Origin for Test {}
@@ -39,7 +40,9 @@ pub fn grandpa_log(log: ConsensusLog<u64>) -> DigestItem<H256> {
 pub struct Test;
 impl Trait for Test {
 	type Event = TestEvent;
-
+	type KeyOwnerSystem = ();
+	type Call = ();
+	type UncheckedExtrinsic = Extrinsic;
 }
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;

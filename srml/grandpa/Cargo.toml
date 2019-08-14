@@ -21,6 +21,7 @@ runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = 
 
 [dev-dependencies]
 runtime_io = { package = "sr-io", path = "../../core/sr-io" }
+test_runtime = { package = "substrate-test-runtime", path = "../../core/test-runtime" }
 
 [features]
 default = ["std"]
