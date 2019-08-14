@@ -132,6 +132,9 @@ decl_storage! {
 		/// Current epoch authorities.
 		pub Authorities get(authorities): Vec<(AuthorityId, BabeWeight)>;
 
+		/// Next epoch authorities.
+		NextAuthorities get(next_authorities): Option<Vec<(AuthorityId, BabeWeight)>>;
+
 		/// Slot at which the current epoch started. It is possible that no
 		/// block was authored at the given slot and the epoch change was
 		/// signalled later than this.
@@ -404,9 +407,10 @@ impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Mod
 		EpochIndex::put(epoch_index);
 
 		// Update authorities.
-		let authorities = validators.map(|(account, k)| {
-			(k, to_votes(staking::Module::<T>::stakers(account).total))
-		}).collect::<Vec<_>>();
+		let authorities = NextAuthorities::take()
+			.unwrap_or_else(|| validators.map(|(account, k)| {
+				(k, to_votes(staking::Module::<T>::stakers(account).total))
+			}).collect::<Vec<_>>());
 
 		Authorities::put(authorities);
 
@@ -440,6 +444,8 @@ impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Mod
 		let next_authorities = queued_validators.map(|(account, k)| {
 			(k, to_votes(staking::Module::<T>::stakers(account).total))
 		}).collect::<Vec<_>>();
+
+		NextAuthorities::put(next_authorities.clone());
 
 		let next_epoch_start_slot = EpochStartSlot::get().saturating_add(T::EpochDuration::get());
 		let next_randomness = NextRandomness::get();
