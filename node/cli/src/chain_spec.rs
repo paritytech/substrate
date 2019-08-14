@@ -19,10 +19,11 @@
 use primitives::{Pair, Public, crypto::UncheckedInto};
 pub use node_primitives::{AccountId, Balance};
 use node_runtime::{
-	BabeConfig,	BalancesConfig, ContractsConfig, CouncilConfig, DemocracyConfig,
-	ElectionsConfig, GrandpaConfig, ImOnlineConfig, IndicesConfig, Perbill,
-	SessionConfig,	SessionKeys, StakerStatus, StakingConfig, SudoConfig, SystemConfig,
-	TechnicalCommitteeConfig, WASM_BINARY,
+	BabeConfig, BalancesConfig, ContractsConfig, CouncilConfig, DemocracyConfig,
+	ElectionsConfig, GrandpaConfig, ImOnlineConfig, AuthorityDiscoveryConfig,
+	IndicesConfig, Perbill, SessionConfig, SessionKeys, StakerStatus,
+	StakingConfig, SudoConfig, SystemConfig, TechnicalCommitteeConfig,
+	WASM_BINARY,
 };
 use node_runtime::constants::{time::*, currency::*};
 pub use node_runtime::GenesisConfig;
@@ -172,6 +173,9 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			gossip_at: 0,
 			keys: initial_authorities.iter().map(|x| x.4.clone()).collect(),
 		}),
+		authority_discovery: Some(AuthorityDiscoveryConfig{
+			keys: initial_authorities.iter().map(|x| x.4.clone()).collect(),
+		}),
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.iter().map(|x| (x.2.clone(), 1)).collect(),
 		}),
@@ -303,6 +307,9 @@ pub fn testnet_genesis(
 		}),
 		im_online: Some(ImOnlineConfig{
 			gossip_at: 0,
+			keys: initial_authorities.iter().map(|x| x.4.clone()).collect(),
+		}),
+		authority_discovery: Some(AuthorityDiscoveryConfig{
 			keys: initial_authorities.iter().map(|x| x.4.clone()).collect(),
 		}),
 		grandpa: Some(GrandpaConfig {
