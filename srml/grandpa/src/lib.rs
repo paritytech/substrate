@@ -244,12 +244,12 @@ decl_module! {
 
 		/// Report some misbehavior.
 		fn report_equivocation(
-			_origin,
+			origin,
 			_equivocation: GrandpaEquivocation<T::Hash, T::BlockNumber>,
 			_proof: Proof,
 			_signature: AuthoritySignature
 		) {
-			// let _who = ensure_signed(origin)?;
+			ensure_signed(origin)?;
 			// let to_punish = <T as Trait>::KeyOwnerSystem::check_proof(
 			// 	(key_types::SR25519, equivocation.identity.encode()),
 			// 	proof.clone(),
@@ -409,7 +409,7 @@ impl<T: Trait> Module<T> {
 		equivocation: GrandpaEquivocation<T::Hash, T::BlockNumber>,
 		proof: Proof,
 	) -> Option<Vec<u8>> {
-		let mut local_keys = app::Public::all();
+		let local_keys = app::Public::all();
 		
 		if local_keys.len() > 0 {
 			let reporter = &local_keys[0];
@@ -423,7 +423,7 @@ impl<T: Trait> Module<T> {
 			
 			if let Some(signature) = maybe_signature {
 				let call = Call::report_equivocation(equivocation, proof, signature.into());
-				let ex = T::UncheckedExtrinsic::new_unsigned(call.into());
+				let ex = T::UncheckedExtrinsic::new_unsigned(call.into())?;
 				return Some(ex.encode())
 			}
 		}

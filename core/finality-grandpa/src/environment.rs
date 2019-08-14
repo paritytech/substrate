@@ -865,15 +865,15 @@ where
 			};
 
 			let block_id = BlockId::<Block>::number(self.inner.info().chain.best_number);
-			let maybe_report_call = self.inner.runtime_api()
+			let maybe_report_transaction = self.inner.runtime_api()
 				.construct_equivocation_transaction_with_context(
 					&block_id,
 					ExecutionContext::Other,
 					grandpa_equivocation,
 				);
 
-			if let Ok(Some(report_call)) = maybe_report_call {
-				let uxt = Decode::decode(&mut report_call.as_slice())
+			if let Ok(Some(report_transaction)) = maybe_report_transaction {
+				let uxt = Decode::decode(&mut report_transaction.as_slice())
 					.expect("Encoded extrinsic is valid; qed");
 				match self.transaction_pool.submit_one(&block_id, uxt) {
 					Err(e) => warn!("Error importing misbehavior report: {:?}", e),

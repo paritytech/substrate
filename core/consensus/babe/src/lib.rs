@@ -530,7 +530,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 
 				// Submit a transaction reporting the equivocation.
 				let block_id = BlockId::number(client.info().best_number);
-				let maybe_report_tx = client
+				let maybe_report_transaction = client
 					.runtime_api()
 					.construct_equivocation_transaction_with_context(
 						&block_id,
@@ -538,9 +538,9 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 						equivocation_proof,
 					);
 
-				if let Ok(Some(report_tx)) = maybe_report_tx {
+				if let Ok(Some(report_transaction)) = maybe_report_transaction {
 					transaction_pool.as_ref().map(|txpool| {
-						let uxt = Decode::decode(&mut report_tx.as_slice())
+						let uxt = Decode::decode(&mut report_transaction.as_slice())
 							.expect("Encoded extrinsic is valid; qed");
 						txpool.submit_one(&block_id, uxt)
 					});

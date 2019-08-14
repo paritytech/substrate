@@ -442,7 +442,7 @@ impl<T: Trait> Module<T> {
 			
 			if let Some(signature) = maybe_signature {
 				let call = Call::report_equivocation(equivocation, proof, signature.into());
-				let ex = T::UncheckedExtrinsic::new_unsigned(call.into());
+				let ex = T::UncheckedExtrinsic::new_unsigned(call.into())?;
 				return Some(ex.encode())
 			}
 		}
