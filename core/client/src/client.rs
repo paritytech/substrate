@@ -49,7 +49,6 @@ use executor::{RuntimeVersion, RuntimeInfo};
 use consensus::{
 	Error as ConsensusError, BlockImportParams,
 	ImportResult, BlockOrigin, ForkChoiceStrategy,
-	well_known_cache_keys::Id as CacheKeyId,
 	SelectChain, self,
 };
 
@@ -65,6 +64,7 @@ use crate::{
 	blockchain::{
 		self, Info as ChainInfo, Backend as ChainBackend,
 		HeaderBackend as ChainHeaderBackend, ProvideCache, Cache,
+		well_known_cache_keys::Id as CacheKeyId,
 	},
 	call_executor::{CallExecutor, LocalCallExecutor},
 	notifications::{StorageNotifications, StorageEventStream},

@@ -27,7 +27,11 @@ use std::sync::Arc;
 use crate::config::build_multiaddr;
 use log::trace;
 use crate::chain::FinalityProofProvider;
-use client::{self, ClientInfo, BlockchainEvents, BlockImportNotification, FinalityNotifications, FinalityNotification};
+use client::{
+	self, ClientInfo, BlockchainEvents, BlockImportNotification,
+	FinalityNotifications, FinalityNotification,
+	well_known_cache_keys::{self, Id as CacheKeyId},
+};
 use client::{in_mem::Backend as InMemoryBackend, error::Result as ClientResult};
 use client::block_builder::BlockBuilder;
 use client::backend::AuxStore;
@@ -37,7 +41,7 @@ use consensus::import_queue::{
 	BoxBlockImport, BoxJustificationImport, Verifier, BoxFinalityProofImport,
 };
 use consensus::block_import::{BlockImport, ImportResult};
-use consensus::{Error as ConsensusError, well_known_cache_keys::{self, Id as CacheKeyId}};
+use consensus::Error as ConsensusError;
 use consensus::{BlockOrigin, ForkChoiceStrategy, BlockImportParams, JustificationImport};
 use futures::prelude::*;
 use futures03::{StreamExt as _, TryStreamExt as _};

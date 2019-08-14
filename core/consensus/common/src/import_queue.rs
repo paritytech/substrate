@@ -27,7 +27,7 @@
 
 use std::collections::HashMap;
 use sr_primitives::{Justification, traits::{Block as BlockT, Header as _, NumberFor}};
-use crate::{error::Error as ConsensusError, well_known_cache_keys::Id as CacheKeyId};
+use crate::error::Error as ConsensusError;
 use crate::block_import::{
 	BlockImport, BlockOrigin, BlockImportParams, ImportedAux, JustificationImport, ImportResult,
 	FinalityProofImport,
@@ -64,6 +64,9 @@ pub struct IncomingBlock<B: BlockT> {
 	/// The peer, we received this from
 	pub origin: Option<Origin>,
 }
+
+/// Type of keys in the blockchain cache that consensus module could use for its needs.
+pub type CacheKeyId = [u8; 4];
 
 /// Verify a justification of a block
 pub trait Verifier<B: BlockT>: Send + Sync {

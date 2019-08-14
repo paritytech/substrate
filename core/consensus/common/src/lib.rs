@@ -117,15 +117,3 @@ where T: ?Sized, for<'r> &'r T: SyncOracle
 		<&T>::is_offline(&mut &**self)
 	}
 }
-
-/// A list of all well known keys in the cache.
-pub mod well_known_cache_keys {
-	/// The type representing cache keys.
-	pub type Id = [u8; 4];
-
-	/// A list of authorities.
-	pub const AUTHORITIES: Id = *b"auth";
-
-	/// Current Epoch data.
-	pub const EPOCH: Id = *b"epch";
-}

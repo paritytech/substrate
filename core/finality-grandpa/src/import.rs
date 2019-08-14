@@ -21,14 +21,14 @@ use codec::Encode;
 use futures::sync::mpsc;
 use parking_lot::RwLockWriteGuard;
 
-use client::{blockchain, CallExecutor, Client};
+use client::{blockchain, CallExecutor, Client, well_known_cache_keys};
 use client::blockchain::HeaderBackend;
 use client::backend::Backend;
 use client::runtime_api::ApiExt;
 use client::utils::is_descendent_of;
 use consensus_common::{
 	BlockImport, Error as ConsensusError,
-	BlockImportParams, ImportResult, JustificationImport, well_known_cache_keys,
+	BlockImportParams, ImportResult, JustificationImport,
 	SelectChain,
 };
 use fg_primitives::GrandpaApi;

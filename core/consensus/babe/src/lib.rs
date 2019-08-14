@@ -27,7 +27,6 @@ use consensus_common::ImportResult;
 use consensus_common::import_queue::{
 	BoxJustificationImport, BoxFinalityProofImport,
 };
-use consensus_common::well_known_cache_keys::Id as CacheKeyId;
 use sr_primitives::{generic, generic::{BlockId, OpaqueDigestItemId}, Justification};
 use sr_primitives::traits::{
 	Block as BlockT, Header, DigestItemFor, NumberFor, ProvideRuntimeApi,
@@ -61,7 +60,7 @@ use srml_babe::{
 	BabeInherentData,
 	timestamp::{TimestampInherentData, InherentType as TimestampInherent}
 };
-use consensus_common::{SelectChain, well_known_cache_keys};
+use consensus_common::SelectChain;
 use consensus_common::import_queue::{Verifier, BasicQueue};
 use client::{
 	block_builder::api::BlockBuilder as BlockBuilderApi,
@@ -69,6 +68,7 @@ use client::{
 	runtime_api::ApiExt, error::Result as ClientResult, backend::{AuxStore, Backend},
 	ProvideUncles,
 	utils::is_descendent_of,
+	well_known_cache_keys::{self, Id as CacheKeyId},
 };
 use fork_tree::ForkTree;
 use slots::{CheckedHeader, check_equivocation};

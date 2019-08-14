@@ -919,9 +919,9 @@ where
 /// # };
 /// # use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 /// # use network::{config::DummyFinalityProofRequestBuilder, construct_simple_protocol};
-/// # use client::{self, LongestChain};
+/// # use client::{self, LongestChain, well_known_cache_keys::Id as CacheKeyId};
 /// # use consensus_common::import_queue::{BasicQueue, Verifier};
-/// # use consensus_common::{BlockOrigin, BlockImportParams, well_known_cache_keys::Id as CacheKeyId};
+/// # use consensus_common::{BlockOrigin, BlockImportParams};
 /// # use node_runtime::{GenesisConfig, RuntimeApi};
 /// # use std::sync::Arc;
 /// # use node_primitives::Block;
