@@ -149,7 +149,7 @@ impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportOffence<T::AccountId, T
 
 		T::OnOffenceHandler::on_offence(
 			&all_offenders,
-			&slash_perbil
+			&slash_perbil,
 		);
 	}
 }
