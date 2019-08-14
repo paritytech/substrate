@@ -29,7 +29,7 @@ use crate::watcher::Watcher;
 use serde::Serialize;
 use log::debug;
 
-use futures::sync::mpsc;
+use futures::channel::mpsc;
 use parking_lot::{Mutex, RwLock};
 use sr_primitives::{
 	generic::BlockId,
