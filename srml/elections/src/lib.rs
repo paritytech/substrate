@@ -892,9 +892,12 @@ impl<T: Trait> Module<T> {
 			count += 1;
 		}
 		for (old, new) in candidates.iter().zip(new_candidates.iter()) {
+			// candidate and not a runner up.
 			if old != new {
 				// removed - kill it
 				<RegisterInfoOf<T>>::remove(old);
+
+				// candidate and not a runner up and not a winner.
 				if incoming.iter().find(|e| *e == old).is_some() {
 					// slash the bond.
 					let (imbalance, x) = T::Currency::slash_reserved(&old, T::CandidacyBond::get());
