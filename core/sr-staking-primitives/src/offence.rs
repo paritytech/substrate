@@ -71,7 +71,7 @@ pub trait Offence<Offender> {
 	///
 	/// The timescale is abstract and doesn't have to be the same across different implementations
 	/// of this trait. The value doesn't represent absolute timescale though since it is interpreted
-	/// along with the `session_index`. Two offences considered to happen at the same time iff
+	/// along with the `session_index`. Two offences are considered to happen at the same time iff
 	/// both `session_index` and `time_slot` are equal.
 	///
 	/// As an example, for GRANDPA timescale could be a round number and for BABE it could be a slot
