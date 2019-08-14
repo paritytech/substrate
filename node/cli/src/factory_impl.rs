@@ -162,7 +162,6 @@ impl RuntimeAdapter for FactoryState<Number> {
 	}
 
 	fn minimum_balance() -> Self::Balance {
-		// TODO get correct amount via api. See #2587.
 		ExistentialDeposit::get()
 	}
 
