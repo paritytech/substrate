@@ -31,11 +31,6 @@ impl_outer_origin!{
 	pub enum Origin for Test {}
 }
 
-impl_outer_dispatch! {
-	pub enum Call for Test where origin: Origin {
-	}
-}
-
 pub fn grandpa_log(log: ConsensusLog<u64>) -> DigestItem<H256> {
 	DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode())
 }
@@ -45,9 +40,7 @@ pub fn grandpa_log(log: ConsensusLog<u64>) -> DigestItem<H256> {
 pub struct Test;
 impl Trait for Test {
 	type Event = TestEvent;
-	type KeyOwnerSystem = ();
-	type Call = Extrinsic;
-	type UncheckedExtrinsic = Extrinsic;
+	// type KeyOwnerSystem = ();
 }
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;

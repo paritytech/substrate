@@ -419,10 +419,8 @@ impl offences::Trait for Runtime {
 }
 
 impl grandpa::Trait for Runtime {
-	type Call = Call;
-	type UncheckedExtrinsic = UncheckedExtrinsic;	
 	type Event = Event;
-	type KeyOwnerSystem = Historical;
+	// type KeyOwnerSystem = Historical;
 }
 
 parameter_types! {
@@ -567,7 +565,27 @@ impl_runtime_apis! {
 			equivocation: GrandpaEquivocationFrom<Block>
 		) -> Option<Vec<u8>> {
 			let proof = Historical::prove((key_types::GRANDPA, equivocation.identity.encode()))?;
-			Grandpa::construct_equivocation_transaction(equivocation, proof)
+			let local_keys = runtime_io::ed25519_public_keys(key_types::GRANDPA);
+		
+			if local_keys.len() > 0 {
+				let reporter = &local_keys[0];
+				let to_sign = (equivocation.clone(), proof.clone());
+				
+				let maybe_signature = to_sign.using_encoded(|payload| if payload.len() > 256 {
+					runtime_io::ed25519_sign(key_types::GRANDPA, reporter, &runtime_io::blake2_256(payload))
+				} else {
+					runtime_io::ed25519_sign(key_types::GRANDPA, reporter, &payload)
+				});
+				
+				if let Some(signature) = maybe_signature {
+					let call = GrandpaCall::report_equivocation(equivocation, proof, signature.into());
+					let grandpa_call = Call::Grandpa(call);
+					let ex = UncheckedExtrinsic::new_unsigned(grandpa_call);
+					return Some(ex.encode())
+				}
+			}
+
+			None
 		}
 	}
 
