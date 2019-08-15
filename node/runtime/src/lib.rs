@@ -35,7 +35,7 @@ use node_primitives::{
 use codec::{Encode};
 use consensus_primitives::AuthorshipEquivocationProof;
 use babe::{AuthorityId as BabeId};
-use babe_primitives::BabeEquivocationProof;
+use babe_primitives::EquivocationProof;
 use grandpa::fg_primitives::{self, ScheduledChange, GrandpaEquivocationFrom};
 use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
@@ -614,7 +614,7 @@ impl_runtime_apis! {
 		}
 
 		fn construct_equivocation_transaction(
-			equivocation: BabeEquivocationProof<<Block as BlockT>::Header>,
+			equivocation: EquivocationProof<<Block as BlockT>::Header, babe_primitives::AuthorityId, babe_primitives::AuthoritySignature>,
 		) -> Option<Vec<u8>> {
 			let proof = Historical::prove((key_types::BABE, equivocation.identity().encode()))?;
 			Babe::construct_equivocation_transaction(equivocation, proof)
