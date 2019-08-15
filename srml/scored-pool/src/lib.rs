@@ -140,7 +140,7 @@ pub trait Trait<I=DefaultInstance>: system::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as ScoredPool {
 		/// The current pool of candidates, stored as an ordered Vec
-		/// (ordered ascending by score, `None` first, highest last).
+		/// (ordered descending by score, `None` last, highest first).
 		Pool get(pool) config(): Vec<(T::AccountId, Option<T::Score>)>;
 
 		/// The current membership, stored as an ordered Vec.
@@ -168,9 +168,11 @@ decl_storage! {
 							.expect("balance too low");
 					});
 
-				/// Sorts the `Pool` by score in an ascending order. Entities which
+				/// Sorts the `Pool` by score in a descending order. Entities which
 				/// have a score of `None` are sorted to the beginning of the vec.
-				pool.sort_by_key(|(_, maybe_score)| maybe_score.unwrap_or_default());
+				pool.sort_by_key(|(_, maybe_score)|
+					Reverse(maybe_score.unwrap_or_default())
+				);
 
 				<Pool<T, I>>::put(&pool);
 				<Module<T, I>>::refresh_members(false);
@@ -227,9 +229,9 @@ decl_module! {
 				.map_err(|_| "balance too low")?;
 
 			let mut pool = <Pool<T, I>>::get();
-			// can be inserted as first element in pool, since entities with
-			// `None` are always sorted to the beginning.
-			pool.insert(0, (who.clone(), None));
+			// can be inserted as last element in pool, since entities with
+			// `None` are always sorted to the end.
+			pool.push((who.clone(), None));
 			<Pool<T, I>>::put(&pool);
 
 			Self::deposit_event(RawEvent::CandidateAdded);
@@ -282,15 +284,15 @@ decl_module! {
 			let location = Self::find_in_pool(&who)?;
 			pool.remove(location);
 
-			// we binary search the pool (which is sorted by score).
+			// we binary search the pool (which is sorted descending by score).
 			// if there is already an element with `score`, we insert
 			// right before that. if not, the search returns a location
 			// where we can insert while maintaining order.
 			let item = (who.clone(), Some(score.clone()));
 			let location = pool
 				.binary_search_by_key(
-					&Some(score),
-					|(_, score)| score.clone(),
+					&Reverse(score),
+					|(_, maybe_score)| Reverse(maybe_score.unwrap_or_default())
 				)
 				.unwrap_or_else(|l| l);
 			pool.insert(location, item);
@@ -321,7 +323,6 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		let mut new_members: Vec<T::AccountId> = pool
 			.into_iter()
 			.filter(|(_, score)| score.is_some())
-			.rev()
 			.take(count as usize)
 			.map(|(account_id, _)| account_id)
 			.collect();

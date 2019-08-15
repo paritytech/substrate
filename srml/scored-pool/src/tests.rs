@@ -36,10 +36,10 @@ fn fetch_from_pool(who: u64) -> Option<(u64, Option<u64>)> {
 #[test]
 fn query_membership_works() {
 	with_externalities(&mut new_test_ext(), || {
-		assert_eq!(ScoredPool::members(), vec![31, 40]);
+		assert_eq!(ScoredPool::members(), vec![20, 40]);
 		assert_eq!(Balances::reserved_balance(&31), CandidateDeposit::get());
 		assert_eq!(Balances::reserved_balance(&40), CandidateDeposit::get());
-		assert_eq!(MEMBERS.with(|m| m.borrow().clone()), vec![31, 40]);
+		assert_eq!(MEMBERS.with(|m| m.borrow().clone()), vec![20, 40]);
 	});
 }
 #[test]
@@ -79,7 +79,7 @@ fn scoring_works() {
 		// then
 		assert_eq!(fetch_from_pool(who), Some((who, Some(score))));
 		assert_eq!(ScoredPool::find_in_pool(&who),
-				   Ok(5)); // must be last element, since highest scored
+				   Ok(0)); // must be first element, since highest scored
 	});
 }
 
@@ -98,7 +98,7 @@ fn scoring_same_element_with_same_score_works() {
 
 		// must have been inserted right before the `20` element which is
 		// of the same score as `31`. so sort order is maintained.
-		assert_eq!(ScoredPool::find_in_pool(&who), Ok(2));
+		assert_eq!(ScoredPool::find_in_pool(&who), Ok(1));
 	});
 }
 
@@ -115,7 +115,7 @@ fn kicking_works() {
 		// given
 		let who = 40;
 		assert_eq!(Balances::reserved_balance(&who), CandidateDeposit::get());
-		assert_eq!(ScoredPool::find_in_pool(&who), Ok(4));
+		assert_eq!(ScoredPool::find_in_pool(&who), Ok(0));
 
 		// when
 		assert_ok!(ScoredPool::kick(Origin::signed(KickOrigin::get()), who));
@@ -175,7 +175,7 @@ fn refreshing_happens_every_period() {
 		System::set_block_number(1);
 		assert_ok!(ScoredPool::issue_candidacy(Origin::signed(15)));
 		assert_ok!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), 15, 99));
-		assert_eq!(ScoredPool::members(), vec![31, 40]);
+		assert_eq!(ScoredPool::members(), vec![20, 40]);
 
 		// when
 		System::set_block_number(4);
