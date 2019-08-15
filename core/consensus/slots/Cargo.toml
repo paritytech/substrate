@@ -10,6 +10,7 @@ codec = { package = "parity-scale-codec", version = "1.0.0" }
 client = { package = "substrate-client", path = "../../client" }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 sr-primitives = {  path = "../../sr-primitives" }
+substrate-telemetry = { path = "../../telemetry" }
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
 futures-preview = "=0.3.0-alpha.17"
