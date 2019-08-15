@@ -1213,6 +1213,10 @@ impl<T: Trait> Module<T> {
 
 		// Increment current era.
 		let current_era = CurrentEra::mutate(|s| { *s += 1; *s });
+
+		// prune journal for last era.
+		<EraSlashJournal<T>>::remove(current_era - 1);
+
 		CurrentEraStartSessionIndex::mutate(|v| {
 			*v = start_session_index;
 		});
