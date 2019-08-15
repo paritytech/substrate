@@ -220,8 +220,9 @@ decl_module! {
 				.map_err(|_| "balance too low")?;
 
 			let mut pool = <Pool<T, I>>::get();
-			pool.push((who.clone(), None));
-			Self::sort_pool(&mut pool);
+			// can be inserted as first element in pool, since entities with
+			// `None` are always sorted to the beginning.
+			pool.insert(0, (who.clone(), None));
 			<Pool<T, I>>::put(&pool);
 
 			Self::deposit_event(RawEvent::CandidateAdded);
