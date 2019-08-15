@@ -84,6 +84,25 @@ fn scoring_works() {
 }
 
 #[test]
+fn scoring_same_element_with_same_score_works() {
+	with_externalities(&mut new_test_ext(), || {
+		// given
+		let who = 31;
+		let score = 2;
+
+		// when
+		assert_ok!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, score));
+
+		// then
+		assert_eq!(fetch_from_pool(who), Some((who, Some(score))));
+
+		// must have been inserted right before the `20` element which is
+		// of the same score as `31`. so sort order is maintained.
+		assert_eq!(ScoredPool::find_in_pool(&who), Ok(2));
+	});
+}
+
+#[test]
 fn kicking_works_only_for_authorized() {
 	with_externalities(&mut new_test_ext(), || {
 		assert_noop!(ScoredPool::kick(Origin::signed(99), 40), "bad origin");

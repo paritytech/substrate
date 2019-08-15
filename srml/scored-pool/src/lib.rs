@@ -264,8 +264,19 @@ decl_module! {
 			let mut pool = <Pool<T, I>>::get();
 			let location = Self::find_in_pool(&who)?;
 			pool.remove(location);
-			pool.push((who.clone(), Some(score.clone())));
-			Self::sort_pool(&mut pool);
+
+			// we binary search the pool (which is sorted by score).
+			// if there is already an element with `score`, we insert
+			// right before that. if not, the search returns a location
+			// where we can insert while maintaining order.
+			let item = (who.clone(), Some(score.clone()));
+			let location = pool
+				.binary_search_by_key(
+					&Some(score),
+					|(_, score)| score.clone(),
+				)
+				.unwrap_or_else(|l| l);
+			pool.insert(location, item);
 
 			<Pool<T, I>>::put(&pool);
 		}
