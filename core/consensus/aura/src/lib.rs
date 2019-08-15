@@ -710,7 +710,6 @@ pub fn import_queue<B, C, P, T>(
 		inherent_data_providers,
 		transaction_pool,
 		phantom: PhantomData,
-		transaction_pool,
 	};
 	Ok(BasicQueue::new(
 		verifier,
