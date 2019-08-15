@@ -75,7 +75,7 @@ pub trait Offence<Offender> {
 	/// both `session_index` and `time_slot` are equal.
 	///
 	/// As an example, for GRANDPA timescale could be a round number and for BABE it could be a slot
-	/// number. Note that for BABE the round number is reset each epoch.
+	/// number. Note that for GRANDPA the round number is reset each epoch.
 	fn time_slot(&self) -> TimeSlot;
 
 	/// A slash fraction of the total exposure that should be slashed for this
