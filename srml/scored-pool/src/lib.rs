@@ -327,20 +327,10 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		let old_members = <Members<T, I>>::get();
 		<Members<T, I>>::put(&new_members);
 
-		let outgoing: Vec<T::AccountId> = old_members.clone()
-			.into_iter()
-			.filter(|old| new_members.binary_search(&old).is_err())
-			.collect();
-		let incoming: Vec<T::AccountId> = new_members.clone()
-			.into_iter()
-			.filter(|new| old_members.binary_search(&new).is_err())
-			.collect();
-
 		if notify {
-			T::MembershipChanged::change_members_sorted(
-				&incoming[..],
-				&outgoing[..],
-				&new_members[..]
+			T::MembershipChanged::set_members_sorted(
+				&new_members[..],
+				&old_members[..],
 			);
 		}
 	}
