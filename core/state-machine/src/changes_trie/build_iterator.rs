@@ -17,6 +17,7 @@
 //! Structures and functions to return blocks whose changes are to be included
 //! in given block's changes trie.
 
+use num_traits::Zero;
 use crate::changes_trie::{Configuration, BlockNumber};
 
 /// Returns iterator of OTHER blocks that are required for inclusion into
@@ -27,7 +28,7 @@ pub fn digest_build_iterator<Number: BlockNumber>(
 	block: Number,
 ) -> DigestBuildIterator<Number> {
 	// prepare digest build parameters
-	let (_, _, digest_step) = match config.digest_level_at_block(block.clone()) {
+	let (_, _, digest_step) = match config.digest_level_at_block(Zero::zero(), block.clone()) {
 		Some((current_level, digest_interval, digest_step)) =>
 			(current_level, digest_interval, digest_step),
 		None => return DigestBuildIterator::empty(),
