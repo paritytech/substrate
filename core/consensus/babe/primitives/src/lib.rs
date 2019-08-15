@@ -15,8 +15,8 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Primitives for BABE.
-#![deny(warnings)]
-#![forbid(unsafe_code, missing_docs, unused_variables, unused_imports)]
+// #![deny(warnings)]
+// #![forbid(unsafe_code, missing_docs, unused_variables, unused_imports)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod digest;
@@ -27,6 +27,7 @@ use sr_primitives::{ConsensusEngineId, traits::Header};
 use substrate_client::decl_runtime_apis;
 use consensus_common_primitives::AuthorshipEquivocationProof;
 use sr_staking_primitives::SessionIndex;
+pub use slots::EquivocationProof;
 
 #[cfg(feature = "std")]
 pub use digest::BabePreDigest;
@@ -143,87 +144,74 @@ impl slots::SlotData for BabeConfiguration {
 	const SLOT_KEY: &'static [u8] = b"babe_bootstrap_data";
 }
 
-/// Represents an Babe equivocation proof.
-#[derive(Clone, Encode, Decode, PartialEq)]
-#[cfg_attr(any(feature = "std", test), derive(Debug))]
-pub struct BabeEquivocationProof<H> {
-	reporter: Option<AuthorityId>,
-	identity: AuthorityId,
-	slot: u64,
-	session_index: Option<SessionIndex>,
-	first_header: H,
-	second_header: H,
-	first_signature: AuthoritySignature,
-	second_signature: AuthoritySignature,
-}
 
-impl<H> AuthorshipEquivocationProof for BabeEquivocationProof<H>
-where
-	H: Header,
-{
-	type Header = H;
-	type Identity = AuthorityId;
-	type Signature = AuthoritySignature;
+// impl<H> AuthorshipEquivocationProof for BabeEquivocationProof<H>
+// where
+// 	H: Header,
+// {
+// 	type Header = H;
+// 	type Identity = AuthorityId;
+// 	type Signature = AuthoritySignature;
 
-	/// Create a new Babe equivocation proof.
-	fn new(
-		identity: Self::Identity,
-		slot: u64,
-		first_header: H,
-		second_header: H,
-		first_signature: Self::Signature,
-		second_signature: Self::Signature,
-	) -> Self {
-		BabeEquivocationProof {
-			reporter: None,
-			identity,
-			slot,
-			session_index: None,
-			first_header,
-			second_header,
-			first_signature,
-			second_signature,
-		}
-	}
+// 	/// Create a new Babe equivocation proof.
+// 	fn new(
+// 		identity: Self::Identity,
+// 		slot: u64,
+// 		first_header: H,
+// 		second_header: H,
+// 		first_signature: Self::Signature,
+// 		second_signature: Self::Signature,
+// 	) -> Self {
+// 		BabeEquivocationProof {
+// 			reporter: None,
+// 			identity,
+// 			slot,
+// 			session_index: None,
+// 			first_header,
+// 			second_header,
+// 			first_signature,
+// 			second_signature,
+// 		}
+// 	}
 
-	/// Get the reporter of the equivocation.
-	fn reporter(&self) -> Option<&Self::Identity> {
-		self.reporter.as_ref()
-	}
+// 	/// Get the reporter of the equivocation.
+// 	fn reporter(&self) -> Option<&Self::Identity> {
+// 		self.reporter.as_ref()
+// 	}
 
-	/// Get the slot where the equivocation happened.
-	fn slot(&self) -> u64 {
-		self.slot
-	}
+// 	/// Get the slot where the equivocation happened.
+// 	fn slot(&self) -> u64 {
+// 		self.slot
+// 	}
 
-		/// Get the session index where the equivocation happened.
-	fn session_index(&self) -> Option<&SessionIndex> {
-		self.session_index.as_ref()
-	}
+// 		/// Get the session index where the equivocation happened.
+// 	fn session_index(&self) -> Option<&SessionIndex> {
+// 		self.session_index.as_ref()
+// 	}
 
-	/// Get the identity of the suspect of equivocating.
-	fn identity(&self) -> &Self::Identity {
-		&self.identity
-	}
+// 	/// Get the identity of the suspect of equivocating.
+// 	fn identity(&self) -> &Self::Identity {
+// 		&self.identity
+// 	}
 
-	/// Get the first header involved in the equivocation.
-	fn first_header(&self) -> &H {
-		&self.first_header
-	}
+// 	/// Get the first header involved in the equivocation.
+// 	fn first_header(&self) -> &H {
+// 		&self.first_header
+// 	}
 
-	/// Get the second header involved in the equivocation.
-	fn second_header(&self) -> &H {
-		&self.second_header
-	}
+// 	/// Get the second header involved in the equivocation.
+// 	fn second_header(&self) -> &H {
+// 		&self.second_header
+// 	}
 
-	fn first_signature(&self) -> &Self::Signature {
-		&self.first_signature
-	}
+// 	fn first_signature(&self) -> &Self::Signature {
+// 		&self.first_signature
+// 	}
 
-	fn second_signature(&self) -> &Self::Signature {
-		&self.second_signature
-	}
-}
+// 	fn second_signature(&self) -> &Self::Signature {
+// 		&self.second_signature
+// 	}
+// }
 
 
 decl_runtime_apis! {
@@ -240,7 +228,7 @@ decl_runtime_apis! {
 
 		/// Construct a transaction to report the equivocation.
 		fn construct_equivocation_transaction(
-			equivocation: BabeEquivocationProof<Block::Header>
+			equivocation: EquivocationProof<Block::Header, AuthorityId, AuthoritySignature>
 		) -> Option<Vec<u8>>;
 	}
 }

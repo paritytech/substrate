@@ -84,7 +84,7 @@ use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible, SignedDuration};
 mod aux_schema;
 #[cfg(test)]
 mod tests;
-pub use babe_primitives::{AuthorityId, AuthorityPair, AuthoritySignature, BabeEquivocationProof};
+pub use babe_primitives::{AuthorityId, AuthorityPair, AuthoritySignature, EquivocationProof};
 
 /// A slot duration. Create with `get_or_compute`.
 // FIXME: Once Rust has higher-kinded types, the duplication between this
@@ -511,7 +511,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 			}
 
 			if let Some(equivocation_proof) = check_equivocation::<
-				_, _, BabeEquivocationProof<B::Header>, _
+				_, _, EquivocationProof<B::Header, AuthorityId, AuthoritySignature>, _
 			>(
 				client,
 				slot_now,
