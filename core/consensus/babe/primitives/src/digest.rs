@@ -36,7 +36,9 @@ use schnorrkel::{
 	vrf::{VRFProof, VRFOutput, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH}
 };
 
-/// A BABE pre-digest
+/// A BABE pre-runtime digest. This contains all data required to validate a
+/// block and for the BABE runtime module. Slots can be assigned to a primary
+/// (VRF based) and to a secondary (slot number based).
 #[cfg(feature = "std")]
 #[derive(Clone, Debug)]
 pub enum BabePreDigest {

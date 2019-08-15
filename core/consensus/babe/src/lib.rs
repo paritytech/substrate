@@ -14,9 +14,47 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! # BABE consensus
+//! # BABE (Blind Assignment for Blockchain Extension)
 //!
-//! BABE (Blind Assignment for Blockchain Extension) consensus in Substrate.
+//! BABE is a slot-based block production mechanism which uses a VRF PRNG to
+//! randomly perform the slot allocation. On every slot, all the authorities
+//! generate a new random number with the VRF function and if it is lower than a
+//! given threshold (which is proportional to their weight/stake) they have a
+//! right to produce a block. The proof of the VRF function execution will be
+//! used by other peer to validate the legitimacy of the slot claim.
+//!
+//! The engine is also responsible for collecting entropy on-chain which will be
+//! used to seed the given VRF PRNG. An epoch is a contiguous number of slots
+//! under which we will be using the same authority set. During an epoch all VRF
+//! outputs produced as a result of block production will be collected on an
+//! on-chain randomness pool. Epoch changes are announced one epoch in advance,
+//! i.e. when ending epoch N, we announce the parameters (randomness,
+//! authorities, etc.) for epoch N+2.
+//!
+//! Since the slot assignment is randomized, it is possible that a slot is
+//! assigned to multiple validators in which case we will have a temporary fork,
+//! or that a slot is assigned to no validator in which case no block is
+//! produced. Which means that block times are not deterministic.
+//!
+//! The protocol has a parameter `c` [0, 1] for which `1 - c` is the probability
+//! of a slot being empty. The choice of this parameter affects the security of
+//! the protocol relating to maximum tolerable network delays.
+//!
+//! In addition to the VRF-based slot assignment described above, which we will
+//! call primary slots, the engine also supports a deterministic secondary slot
+//! assignment. Primary slots take precedence over secondary slots, when
+//! authoring the node starts by trying to claim a primary slot and falls back
+//! to a secondary slot claim attempt. The secondary slot assignment is done
+//! by picking the authority at index:
+//!
+//! `blake2_256(epoch_randomness ++ slot_number) % authorities_len`.
+//!
+//! The fork choice rule is weight-based, where weight equals the number of
+//! primary blocks in the chain. We will pick the heaviest chain (more primary
+//! blocks) and will go with the longest one in case of a tie.
+//!
+//! An in-depth description and analysis of the protocol can be found here:
+//! <https://research.web3.foundation/en/latest/polkadot/BABE/Babe>
 
 #![forbid(unsafe_code, missing_docs)]
 pub use babe_primitives::*;
@@ -408,6 +446,9 @@ fn find_next_epoch_digest<B: BlockT>(header: &B::Header) -> Result<Option<Epoch>
 /// unsigned.  This is required for security and must not be changed.
 ///
 /// This digest item will always return `Some` when used with `as_babe_pre_digest`.
+///
+/// The given header can either be from a primary or secondary slot assignment,
+/// with each having different validation logic.
 // FIXME #1018 needs misbehavior types. The `transaction_pool` parameter will be
 // used to submit such misbehavior reports.
 fn check_header<B: BlockT + Sized, C: AuxStore, T>(
@@ -493,6 +534,8 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 
 	let author = &authorities[pre_digest.authority_index() as usize].0;
 
+	// the header is valid but let's check if there was something else already
+	// proposed at the same slot by the given author
 	if let Some(equivocation_proof) = check_equivocation(
 		client,
 		slot_now,
@@ -513,6 +556,10 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 	Ok(CheckedHeader::Checked(header, (pre_digest, seal)))
 }
 
+/// Check a primary slot proposal header. We validate that the given header is
+/// properly signed by the expected authority, and that the contained VRF proof
+/// is valid. Additionally, the weight of this block must increase compared to
+/// it's parent since it is a primary block.
 fn check_primary_header<B: BlockT + Sized>(
 	pre_hash: B::Hash,
 	pre_digest: (&VRFOutput, &VRFProof, AuthorityIndex, SlotNumber, BabeBlockWeight),
@@ -559,6 +606,10 @@ fn check_primary_header<B: BlockT + Sized>(
 	}
 }
 
+/// Check a secondary slot proposal header. We validate that the given header is
+/// properly signed by the expected authority, which we have a deterministic way
+/// of computing. Additionally, the weight of this block must stay the same
+/// compared to it's parent since it is a secondary block.
 fn check_secondary_header<B: BlockT>(
 	pre_hash: B::Hash,
 	pre_digest: (AuthorityIndex, SlotNumber, BabeBlockWeight),
@@ -888,10 +939,14 @@ fn make_transcript(
 	transcript
 }
 
+/// Returns true if the given VRF output is lower than the given threshold,
+/// false otherwise.
 fn check_primary_threshold(inout: &VRFInOut, threshold: u128) -> bool {
 	u128::from_le_bytes(inout.make_bytes::<[u8; 16]>(BABE_VRF_PREFIX)) < threshold
 }
 
+/// Calculates the primary selection threshold for a given authority, taking
+/// into account `c` (`1 - c` represents the probability of a slot being empty).
 fn calculate_primary_threshold(
 	c: (u64, u64),
 	authorities: &[(AuthorityId, BabeAuthorityWeight)],
@@ -917,6 +972,10 @@ fn calculate_primary_threshold(
 	calc().unwrap_or(u128::max_value())
 }
 
+/// Tries to claim the given slot number. This method starts by trying to claim
+/// a primary VRF based slot. If we are not able to claim it, then if we have
+/// secondary slots enabled for the given epoch, we will fallback to trying to
+/// claim a secondary slot.
 fn claim_slot(
 	slot_number: SlotNumber,
 	parent_weight: BabeBlockWeight,
@@ -940,11 +999,10 @@ fn claim_slot(
 		})
 }
 
-/// Claim a slot if it is our turn.  Returns `None` if it is not our turn.
-///
+/// Claim a primary slot if it is our turn.  Returns `None` if it is not our turn.
 /// This hashes the slot number, epoch, genesis hash, and chain randomness into
 /// the VRF.  If the VRF produces a value less than `threshold`, it is our turn,
-/// so it returns `Some(_)`.  Otherwise, it returns `None`.
+/// so it returns `Some(_)`. Otherwise, it returns `None`.
 fn claim_primary_slot(
 	slot_number: SlotNumber,
 	parent_weight: BabeBlockWeight,
@@ -990,7 +1048,9 @@ fn claim_primary_slot(
 	None
 }
 
-/// Get the expected secondary author for given slot along with authorities.
+/// Get the expected secondary author for the given slot and with given
+/// authorities. This should always assign the slot to some authority unless the
+/// authorities list is empty.
 fn secondary_slot_author(
 	slot_number: u64,
 	authorities: &[(AuthorityId, BabeAuthorityWeight)],
@@ -1021,6 +1081,9 @@ fn secondary_slot_author(
 	Some(&expected_author.0)
 }
 
+/// Claim a secondary slot if it is our turn to propose, returning the
+/// pre-digest to use when authoring the block, or `None` if it is not our turn
+/// to propose.
 fn claim_secondary_slot(
 	slot_number: SlotNumber,
 	parent_weight: BabeBlockWeight,

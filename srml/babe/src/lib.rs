@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Consensus extension module for BABE consensus.
+//! Consensus extension module for BABE consensus. Collects on-chain randomness
+//! from VRF outputs and manages epoch transitions.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unused_must_use, unsafe_code, unused_variables, dead_code)]
@@ -189,6 +190,9 @@ decl_module! {
 		/// the probability of a slot being empty).
 		const ExpectedBlockTime: T::Moment = T::ExpectedBlockTime::get();
 
+		/// Sets a pending change to enable / disable secondary slot assignment.
+		/// The pending change will be set at the end of the current epoch and
+		/// will be enacted at `current_epoch + 2`.
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn set_pending_secondary_slots_change(origin, change: Option<bool>) {
 			ensure_root(origin)?;
@@ -390,11 +394,14 @@ impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Mod
 		// Update any pending secondary slots change
 		let mut secondary_slots = SecondarySlots::get();
 
+		// change for E + 1 now becomes change at E
 		secondary_slots.0 = secondary_slots.1;
 
 		if let Some(change) = PendingSecondarySlotsChange::take() {
+			// if there's a pending change schedule it for E + 1
 			secondary_slots.1 = change;
 		} else {
+			// otherwise E + 1 will have the same value as E
 			secondary_slots.1 = secondary_slots.0;
 		}
 
