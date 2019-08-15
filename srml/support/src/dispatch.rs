@@ -422,7 +422,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
-		fn on_initialise($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
+		fn on_initialize($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
 		compile_error!(
