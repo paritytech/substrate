@@ -37,13 +37,17 @@ decl_runtime_apis! {
 	/// verify that the retrieved signature corresponds to the public key by calling `verify` as a third step.
 	///
 	pub trait AuthorityDiscoveryApi<AuthorityId: Codec> {
-		/// Retrieve own authority identifier.
+		/// Returns own authority identifier iff it is part of the current authority set, otherwise this function
+		/// returns None. The restriction might be softened in the future in case a consumer needs to learn own
+		/// authority identifier in any case.
 		fn public_key() -> Option<AuthorityId>;
 
 		/// Retrieve authority identifiers of the current authority set.
 		fn authorities() -> Vec<AuthorityId>;
 
-		/// Sign the given payload with one of our authority keys.
+		/// Sign the given payload with one of our authority keys. This key will correspond to the public key returned
+		/// by `public_key` unless the underlying key is changed in between calls. If own authority key is not part of
+		/// the current set of authorities, this function returns None.
 		fn sign(payload: Vec<u8>) -> Option<Vec<u8>>;
 
 		/// Verify the given signature for the given payload with the given authority identifier.

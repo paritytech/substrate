@@ -48,6 +48,10 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
+    /// Returns own authority identifier iff it is part of the current authority
+    /// set, otherwise this function returns None. The restriction might be
+    /// softened in the future in case a consumer needs to learn own authority
+    /// identifier in any case.
     pub fn public_key() -> Option<im_online::AuthorityId> {
         let authorities = Keys::get();
 
@@ -67,16 +71,23 @@ impl<T: Trait> Module<T> {
         intersect.pop()
     }
 
+    /// Retrieve authority identifiers of the current authority set.
     pub fn authorities() -> Vec<im_online::AuthorityId> {
         Keys::get()
     }
 
+    /// Sign the given payload with one of our authority keys. This key will
+    /// correspond to the public key returned by `public_key` unless the
+    /// underlying key is changed in between calls. If own authority key is not
+    /// part of the current set of authorities, this function returns None.
     pub fn sign(payload: Vec<u8>) -> Option<Vec<u8>> {
         let pub_key = Module::<T>::public_key()?;
 
         pub_key.sign(&payload).map(|s| s.encode())
     }
 
+    /// Verify the given signature for the given payload with the given
+    /// authority identifier.
     pub fn verify(
         payload: Vec<u8>,
         signature: Vec<u8>,
