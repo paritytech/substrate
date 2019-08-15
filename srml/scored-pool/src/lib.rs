@@ -138,7 +138,7 @@ pub trait Trait<I=DefaultInstance>: system::Trait {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Membership {
+	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as ScoredPool {
 		/// The current pool of candidates, stored as an ordered Vec
 		/// (ordered ascending by score, `None` first, highest last).
 		Pool get(pool) config(): Vec<(T::AccountId, Option<T::Score>)>;
