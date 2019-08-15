@@ -559,7 +559,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 /// Check a primary slot proposal header. We validate that the given header is
 /// properly signed by the expected authority, and that the contained VRF proof
 /// is valid. Additionally, the weight of this block must increase compared to
-/// it's parent since it is a primary block.
+/// its parent since it is a primary block.
 fn check_primary_header<B: BlockT + Sized>(
 	pre_hash: B::Hash,
 	pre_digest: (&VRFOutput, &VRFProof, AuthorityIndex, SlotNumber, BabeBlockWeight),
@@ -609,7 +609,7 @@ fn check_primary_header<B: BlockT + Sized>(
 /// Check a secondary slot proposal header. We validate that the given header is
 /// properly signed by the expected authority, which we have a deterministic way
 /// of computing. Additionally, the weight of this block must stay the same
-/// compared to it's parent since it is a secondary block.
+/// compared to its parent since it is a secondary block.
 fn check_secondary_header<B: BlockT>(
 	pre_hash: B::Hash,
 	pre_digest: (AuthorityIndex, SlotNumber, BabeBlockWeight),

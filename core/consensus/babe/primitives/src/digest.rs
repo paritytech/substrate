@@ -55,7 +55,7 @@ pub enum BabePreDigest {
 		/// Chain weight (measured in number of Primary blocks)
 		weight: BabeBlockWeight,
 	},
-	/// A secondary deterministic slot assignmnet.
+	/// A secondary deterministic slot assignment.
 	Secondary {
 		/// Authority index
 		authority_index: super::AuthorityIndex,
@@ -112,7 +112,7 @@ pub enum RawBabePreDigest {
 		/// VRF proof
 		vrf_proof: [u8; VRF_PROOF_LENGTH],
 	},
-	/// A secondary deterministic slot assignmnet.
+	/// A secondary deterministic slot assignment.
 	Secondary {
 		/// Authority index
 		authority_index: AuthorityIndex,
