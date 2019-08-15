@@ -77,7 +77,6 @@ use futures::{prelude::*, future};
 use futures01::Stream as _;
 use futures_timer::Delay;
 use log::{error, warn, debug, info, trace};
-use consensus_common_primitives::AuthorshipEquivocationProof;
 
 use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible, SignedDuration};
 
@@ -510,9 +509,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 									  threshold {} exceeded", author, threshold));
 			}
 
-			if let Some(equivocation_proof) = check_equivocation::<
-				_, _, EquivocationProof<B::Header, AuthorityId, AuthoritySignature>, _
-			>(
+			if let Some(equivocation_proof) = check_equivocation(
 				client,
 				slot_now,
 				slot_number,
@@ -524,8 +521,8 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 					"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
 					author,
 					slot_number,
-					equivocation_proof.first_header().hash(),
-					equivocation_proof.second_header().hash(),
+					equivocation_proof.first_header.hash(),
+					equivocation_proof.second_header.hash(),
 				);
 
 				// Submit a transaction reporting the equivocation.
