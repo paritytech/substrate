@@ -746,8 +746,8 @@ decl_module! {
 				return Err("controller already paired")
 			}
 
-			let value = value.min(stash_balance);
 			let stash_balance = T::Currency::free_balance(&stash);
+			let value = value.min(stash_balance);
 
 			// reject a bond which is considered to be _dust_.
 			if value < T::Currency::minimum_balance() {
