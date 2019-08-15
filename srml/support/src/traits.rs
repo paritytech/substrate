@@ -689,3 +689,13 @@ impl<T: Clone + Ord> ChangeMembers<T> for () {
 	fn change_members_sorted(_: &[T], _: &[T], _: &[T]) {}
 	fn set_members_sorted(_: &[T], _: &[T]) {}
 }
+
+/// Trait for type that can handle the initialization of account IDs at genesis.
+pub trait InitializeMembers<AccountId> {
+	/// Initialize the members to the given `members`.
+	fn initialize_members(members: &[AccountId]);
+}
+
+impl<T> InitializeMembers<T> for () {
+	fn initialize_members(_: &[T]) {}
+}

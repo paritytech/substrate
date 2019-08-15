@@ -35,7 +35,7 @@ use sr_primitives::traits::{BlakeTwo256, Hash, IdentityLookup};
 use sr_primitives::{Perbill, BuildStorage};
 use srml_support::{
 	assert_ok, assert_err, impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types,
-	storage::child,	StorageMap, StorageValue, traits::{Currency, Get},
+	storage::child, StorageMap, StorageValue, traits::{Currency, Get},
 };
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicUsize, Ordering};
