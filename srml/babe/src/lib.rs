@@ -25,7 +25,7 @@ use rstd::{result, prelude::*};
 use srml_support::{decl_storage, decl_module, StorageValue, StorageMap, traits::FindAuthor, traits::Get};
 use timestamp::{OnTimestampSet};
 use sr_primitives::{generic::DigestItem, ConsensusEngineId};
-use sr_primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert};
+use sr_primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon};
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
 use codec::{Encode, Decode};
@@ -311,7 +311,7 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 		EpochIndex::put(epoch_index);
 
 		// Update authorities.
-		let authorities = validators.map(|(account, k)| {
+		let authorities = validators.map(|(_account, k)| {
 			(k, 1)
 		}).collect::<Vec<_>>();
 
@@ -344,7 +344,7 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 
 		// After we update the current epoch, we signal the *next* epoch change
 		// so that nodes can track changes.
-		let next_authorities = queued_validators.map(|(account, k)| {
+		let next_authorities = queued_validators.map(|(_account, k)| {
 			(k, 1)
 		}).collect::<Vec<_>>();
 
