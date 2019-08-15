@@ -15,8 +15,8 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{DiscoveryNetBehaviour, config::ProtocolId};
-use crate::custom_proto::handler::{CustomProtoHandlerProto, CustomProtoHandlerOut, CustomProtoHandlerIn};
-use crate::custom_proto::upgrade::RegisteredProtocol;
+use crate::legacy_proto::handler::{CustomProtoHandlerProto, CustomProtoHandlerOut, CustomProtoHandlerIn};
+use crate::legacy_proto::upgrade::RegisteredProtocol;
 use crate::protocol::message::Message;
 use fnv::FnvHashMap;
 use futures::prelude::*;
@@ -24,6 +24,7 @@ use futures03::{compat::Compat, TryFutureExt as _, StreamExt as _, TryStreamExt 
 use libp2p::core::{ConnectedPoint, Multiaddr, PeerId};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use log::{debug, error, trace, warn};
+use rand::distributions::{Distribution as _, Uniform};
 use sr_primitives::traits::Block as BlockT;
 use smallvec::SmallVec;
 use std::{borrow::Cow, collections::hash_map::Entry, cmp, error, marker::PhantomData, mem, pin::Pin};
@@ -34,7 +35,7 @@ use tokio_io::{AsyncRead, AsyncWrite};
 ///
 /// ## How it works
 ///
-/// The role of the `CustomProto` is to synchronize the following components:
+/// The role of the `LegacyProto` is to synchronize the following components:
 ///
 /// - The libp2p swarm that opens new connections and reports disconnects.
 /// - The connection handler (see `handler.rs`) that handles individual connections.
@@ -60,7 +61,7 @@ use tokio_io::{AsyncRead, AsyncWrite};
 /// Note that this "banning" system is not an actual ban. If a "banned" node tries to connect to
 /// us, we accept the connection. The "banning" system is only about delaying dialing attempts.
 ///
-pub struct CustomProto<B: BlockT, TSubstream> {
+pub struct LegacyProto<B: BlockT, TSubstream> {
 	/// List of protocols to open with peers. Never modified.
 	protocol: RegisteredProtocol<B>,
 
@@ -79,7 +80,7 @@ pub struct CustomProto<B: BlockT, TSubstream> {
 	next_incoming_index: peerset::IncomingIndex,
 
 	/// Events to produce from `poll()`.
-	events: SmallVec<[NetworkBehaviourAction<CustomProtoHandlerIn<B>, CustomProtoOut<B>>; 4]>,
+	events: SmallVec<[NetworkBehaviourAction<CustomProtoHandlerIn<B>, LegacyProtoOut<B>>; 4]>,
 
 	/// Marker to pin the generics.
 	marker: PhantomData<TSubstream>,
@@ -186,9 +187,9 @@ struct IncomingPeer {
 	incoming_id: peerset::IncomingIndex,
 }
 
-/// Event that can be emitted by the `CustomProto`.
+/// Event that can be emitted by the `LegacyProto`.
 #[derive(Debug)]
-pub enum CustomProtoOut<B: BlockT> {
+pub enum LegacyProtoOut<B: BlockT> {
 	/// Opened a custom protocol with the remote.
 	CustomProtocolOpen {
 		/// Version of the protocol that has been opened.
@@ -225,7 +226,7 @@ pub enum CustomProtoOut<B: BlockT> {
 	},
 }
 
-impl<B: BlockT, TSubstream> CustomProto<B, TSubstream> {
+impl<B: BlockT, TSubstream> LegacyProto<B, TSubstream> {
 	/// Creates a `CustomProtos`.
 	pub fn new(
 		protocol: impl Into<ProtocolId>,
@@ -234,7 +235,7 @@ impl<B: BlockT, TSubstream> CustomProto<B, TSubstream> {
 	) -> Self {
 		let protocol = RegisteredProtocol::new(protocol, versions);
 
-		CustomProto {
+		LegacyProto {
 			protocol,
 			peerset,
 			peers: FnvHashMap::default(),
@@ -606,7 +607,7 @@ impl<B: BlockT, TSubstream> CustomProto<B, TSubstream> {
 	}
 }
 
-impl<B: BlockT, TSubstream> DiscoveryNetBehaviour for CustomProto<B, TSubstream> {
+impl<B: BlockT, TSubstream> DiscoveryNetBehaviour for LegacyProto<B, TSubstream> {
 	fn add_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
 		self.peerset.discovered(peer_ids.into_iter().map(|peer_id| {
 			debug!(target: "sub-libp2p", "PSM <= Discovered({:?})", peer_id);
@@ -615,13 +616,13 @@ impl<B: BlockT, TSubstream> DiscoveryNetBehaviour for CustomProto<B, TSubstream>
 	}
 }
 
-impl<B, TSubstream> NetworkBehaviour for CustomProto<B, TSubstream>
+impl<B, TSubstream> NetworkBehaviour for LegacyProto<B, TSubstream>
 where
 	TSubstream: AsyncRead + AsyncWrite,
 	B: BlockT,
 {
 	type ProtocolsHandler = CustomProtoHandlerProto<B, TSubstream>;
-	type OutEvent = CustomProtoOut<B>;
+	type OutEvent = LegacyProtoOut<B>;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
 		CustomProtoHandlerProto::new(self.protocol.clone())
@@ -714,7 +715,7 @@ where
 				}
 				if open {
 					debug!(target: "sub-libp2p", "External API <= Closed({:?})", peer_id);
-					let event = CustomProtoOut::CustomProtocolClosed {
+					let event = LegacyProtoOut::CustomProtocolClosed {
 						peer_id: peer_id.clone(),
 						reason: "Disconnected by libp2p".into(),
 					};
@@ -731,7 +732,7 @@ where
 				self.peers.insert(peer_id.clone(), PeerState::Banned { until: timer_deadline });
 				if open {
 					debug!(target: "sub-libp2p", "External API <= Closed({:?})", peer_id);
-					let event = CustomProtoOut::CustomProtocolClosed {
+					let event = LegacyProtoOut::CustomProtocolClosed {
 						peer_id: peer_id.clone(),
 						reason: "Disconnected by libp2p".into(),
 					};
@@ -746,9 +747,14 @@ where
 				debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
 				self.peerset.dropped(peer_id.clone());
 
+				let ban_dur = Uniform::new(5, 10).sample(&mut rand::thread_rng());
+				self.peers.insert(peer_id.clone(), PeerState::Banned {
+					until: Instant::now() + Duration::from_secs(ban_dur)
+				});
+
 				if open {
 					debug!(target: "sub-libp2p", "External API <= Closed({:?})", peer_id);
-					let event = CustomProtoOut::CustomProtocolClosed {
+					let event = LegacyProtoOut::CustomProtocolClosed {
 						peer_id: peer_id.clone(),
 						reason: "Disconnected by libp2p".into(),
 					};
@@ -833,7 +839,7 @@ where
 				};
 
 				debug!(target: "sub-libp2p", "External API <= Closed({:?})", source);
-				let event = CustomProtoOut::CustomProtocolClosed {
+				let event = LegacyProtoOut::CustomProtocolClosed {
 					reason,
 					peer_id: source.clone(),
 				};
@@ -891,7 +897,7 @@ where
 				};
 
 				debug!(target: "sub-libp2p", "External API <= Open({:?})", source);
-				let event = CustomProtoOut::CustomProtocolOpen {
+				let event = LegacyProtoOut::CustomProtocolOpen {
 					version,
 					peer_id: source,
 					endpoint,
@@ -904,7 +910,7 @@ where
 				debug_assert!(self.is_open(&source));
 				trace!(target: "sub-libp2p", "Handler({:?}) => Message", source);
 				trace!(target: "sub-libp2p", "External API <= Message({:?})", source);
-				let event = CustomProtoOut::CustomMessage {
+				let event = LegacyProtoOut::CustomMessage {
 					peer_id: source,
 					message,
 				};
@@ -918,7 +924,7 @@ where
 				trace!(target: "sub-libp2p", "External API <= Clogged({:?})", source);
 				warn!(target: "sub-libp2p", "Queue of packets to send to {:?} is \
 					pretty large", source);
-				self.events.push(NetworkBehaviourAction::GenerateEvent(CustomProtoOut::Clogged {
+				self.events.push(NetworkBehaviourAction::GenerateEvent(LegacyProtoOut::Clogged {
 					peer_id: source,
 					messages,
 				}));

@@ -70,9 +70,13 @@ pub trait Backend<H: Hasher> {
 	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F);
 
-	/// Retrieve all entries keys of which start with the given prefix and
+	/// Retrieve all entries keys which start with the given prefix and
 	/// call `f` for each of those keys.
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F);
+
+	/// Retrieve all child entries keys which start with the given prefix and
+	/// call `f` for each of those keys.
+	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], f: F);
 
 	/// Calculate the storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit.
@@ -103,11 +107,7 @@ pub trait Backend<H: Hasher> {
 	/// Get all keys of child storage with given prefix
 	fn child_keys(&self, child_storage_key: &[u8], prefix: &[u8]) -> Vec<Vec<u8>> {
 		let mut all = Vec::new();
-		self.for_keys_in_child_storage(child_storage_key, |k| {
-			if k.starts_with(prefix) {
-				all.push(k.to_vec());
-			}
-		});
+		self.for_child_keys_with_prefix(child_storage_key, prefix, |k| all.push(k.to_vec()));
 		all
 	}
 
@@ -248,6 +248,25 @@ impl<H: Hasher> From<HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>> for In
 	}
 }
 
+impl<H: Hasher> From<(
+		HashMap<Vec<u8>, Vec<u8>>,
+		HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
+)> for InMemory<H> {
+	fn from(inners: (
+		HashMap<Vec<u8>, Vec<u8>>,
+		HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
+	)) -> Self {
+		let mut inner: HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>
+			= inners.1.into_iter().map(|(k, v)| (Some(k), v)).collect();
+		inner.insert(None, inners.0);
+		InMemory {
+			inner: inner,
+			trie: None,
+			_hasher: PhantomData,
+		}
+	}
+}
+
 impl<H: Hasher> From<HashMap<Vec<u8>, Vec<u8>>> for InMemory<H> {
 	fn from(inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
 		let mut expanded = HashMap::new();
@@ -304,6 +323,11 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], mut f: F) {
 		self.inner.get(&Some(storage_key.to_vec())).map(|map| map.keys().for_each(|k| f(&k)));
+	}
+
+	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], f: F) {
+		self.inner.get(&Some(storage_key.to_vec()))
+			.map(|map| map.keys().filter(|key| key.starts_with(prefix)).map(|k| &**k).for_each(f));
 	}
 
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)

@@ -26,7 +26,7 @@ use primitives::{
 	ed25519, sr25519, hexdisplay::HexDisplay, Pair, Public, blake2_256,
 	crypto::{Ss58Codec, set_default_ss58_version, Ss58AddressFormat}
 };
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sr_primitives::generic::Era;
 use node_primitives::{Balance, Index, Hash};
 use node_runtime::{Call, UncheckedExtrinsic, BalancesCall, Runtime};
@@ -41,7 +41,11 @@ trait Crypto {
 	}
 	fn ss58_from_pair(pair: &Self::Pair) -> String { pair.public().to_ss58check() }
 	fn public_from_pair(pair: &Self::Pair) -> Vec<u8> { pair.public().as_ref().to_owned() }
-	fn print_from_uri(uri: &str, password: Option<&str>) where <Self::Pair as Pair>::Public: Sized + Ss58Codec + AsRef<[u8]> {
+	fn print_from_uri(
+		uri: &str,
+		password: Option<&str>,
+		network_override: Option<Ss58AddressFormat>,
+	) where <Self::Pair as Pair>::Public: Sized + Ss58Codec + AsRef<[u8]> {
 		if let Ok((pair, seed)) = Self::Pair::from_phrase(uri, password) {
 			println!("Secret phrase `{}` is account:\n  Secret seed: 0x{}\n  Public key (hex): 0x{}\n  Address (SS58): {}",
 				uri,
@@ -56,9 +60,10 @@ trait Crypto {
 				Self::ss58_from_pair(&pair)
 			);
 		} else if let Ok((public, v)) = <Self::Pair as Pair>::Public::from_string_with_version(uri) {
+			let v = network_override.unwrap_or(v);
 			println!("Public Key URI `{}` is account:\n  Network ID/version: {}\n  Public key (hex): 0x{}\n  Address (SS58): {}",
 				uri,
-				String::from(Ss58AddressFormat::from(v)),
+				String::from(v),
 				HexDisplay::from(&public.as_ref()),
 				public.to_ss58check_with_version(v)
 			);
@@ -88,7 +93,7 @@ impl Crypto for Sr25519 {
 
 fn execute<C: Crypto>(matches: clap::ArgMatches) where
 	<<C as Crypto>::Pair as Pair>::Signature: AsRef<[u8]> + AsMut<[u8]> + Default,
-	<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec + AsRef<<<C as Crypto>::Pair as Pair>::Public>,
+	<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec,
 {
 	let extra = |i: Index, f: Balance| {
 		(
@@ -100,11 +105,12 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 		)
 	};
 	let password = matches.value_of("password");
-	let maybe_network = matches.value_of("network");
+	let maybe_network: Option<Ss58AddressFormat> = matches.value_of("network")
+		.map(|network| network.try_into()
+			.expect("Invalid network name: must be polkadot/substrate/kusama")
+		);
 	if let Some(network) = maybe_network {
-		let v = network.try_into()
-			.expect("Invalid network name: must be polkadot/substrate/kusama");
-		set_default_ss58_version(v);
+		set_default_ss58_version(network);
 	}
 	match matches.subcommand() {
 		("generate", Some(matches)) => {
@@ -115,17 +121,21 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 					.expect("Invalid number of words given for phrase: must be 12/15/18/21/24")
 				).unwrap_or(MnemonicType::Words12);
 			let mnemonic = Mnemonic::new(words, Language::English);
-			C::print_from_uri(mnemonic.phrase(), password);
+			C::print_from_uri(mnemonic.phrase(), password, maybe_network);
 		}
 		("inspect", Some(matches)) => {
 			let uri = matches.value_of("uri")
 				.expect("URI parameter is required; thus it can't be None; qed");
-			C::print_from_uri(uri, password);
+			C::print_from_uri(uri, password, maybe_network);
 		}
 		("vanity", Some(matches)) => {
 			let desired: String = matches.value_of("pattern").map(str::to_string).unwrap_or_default();
 			let result = vanity::generate_key::<C>(&desired).expect("Key generation failed");
-			C::print_from_uri(&format!("0x{}", HexDisplay::from(&result.seed.as_ref())), None);
+			C::print_from_uri(
+				&format!("0x{}", HexDisplay::from(&result.seed.as_ref())),
+				None,
+				maybe_network
+			);
 		}
 		("sign", Some(matches)) => {
 			let suri = matches.value_of("suri")
@@ -165,7 +175,7 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 			let genesis_hash: Hash = match matches.value_of("genesis").unwrap_or("alex") {
 				"elm" => hex!["10c08714a10c7da78f40a60f6f732cf0dba97acfb5e2035445b032386157d5c3"].into(),
 				"alex" => hex!["dcd1346701ca8396496e52aa2785b1748deb6db09551b72159dcb3e08991025b"].into(),
-				h => hex::decode(h).ok().and_then(|x| Decode::decode(&mut &x[..]))
+				h => hex::decode(h).ok().and_then(|x| Decode::decode(&mut &x[..]).ok())
 					.expect("Invalid genesis hash or unrecognised chain identifier"),
 			};
 
@@ -203,12 +213,12 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 			let call = matches.value_of("call")
 				.expect("call is required; thus it can't be None; qed");
 			let function: Call = hex::decode(&call).ok()
-				.and_then(|x| Decode::decode(&mut &x[..])).unwrap();
+				.and_then(|x| Decode::decode(&mut &x[..]).ok()).unwrap();
 
 			let genesis_hash: Hash = match matches.value_of("genesis").unwrap_or("alex") {
 				"elm" => hex!["10c08714a10c7da78f40a60f6f732cf0dba97acfb5e2035445b032386157d5c3"].into(),
 				"alex" => hex!["dcd1346701ca8396496e52aa2785b1748deb6db09551b72159dcb3e08991025b"].into(),
-				h => hex::decode(h).ok().and_then(|x| Decode::decode(&mut &x[..]))
+				h => hex::decode(h).ok().and_then(|x| Decode::decode(&mut &x[..]).ok())
 					.expect("Invalid genesis hash or unrecognised chain identifier"),
 			};
 
@@ -289,7 +299,7 @@ mod tests {
 	fn should_work() {
 		let s = "0123456789012345678901234567890123456789012345678901234567890123";
 
-		let d1: Hash = hex::decode(s).ok().and_then(|x| Decode::decode(&mut &x[..])).unwrap();
+		let d1: Hash = hex::decode(s).ok().and_then(|x| Decode::decode(&mut &x[..]).ok()).unwrap();
 
 		let d2: Hash = {
 			let mut gh: [u8; 32] = Default::default();

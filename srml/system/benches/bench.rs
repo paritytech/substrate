@@ -63,6 +63,7 @@ impl system::Trait for Runtime {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
+	type Call = ();
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
@@ -81,7 +82,7 @@ impl module::Trait for Runtime {
 }
 
 fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-	system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0.into()
+	system::GenesisConfig::default().build_storage::<Runtime>().unwrap().into()
 }
 
 fn deposit_events(n: usize) {

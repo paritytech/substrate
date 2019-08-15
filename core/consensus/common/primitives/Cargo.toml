@@ -6,7 +6,7 @@ description = "Common consensus primitives"
 edition = "2018"
 
 [dependencies]
-parity-codec = { version = "4.1.1", default-features = false }
+codec = { package = "parity-scale-codec", default-features = false, version = "1.0.3" }
 client = { package = "substrate-client", path = "../../../client", default-features = false }
 sr-primitives = { path = "../../../sr-primitives", default-features = false }
 rstd = { package = "sr-std", path = "../../../sr-std", default-features = false }
@@ -16,6 +16,6 @@ default = ["std"]
 std = [
     "rstd/std",
     "client/std",
-    "parity-codec/std",
+    "codec/std",
     "sr-primitives/std"
 ]

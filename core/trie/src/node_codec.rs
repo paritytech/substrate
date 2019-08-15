@@ -49,7 +49,7 @@ impl<H: Hasher> NodeCodecT<H> for NodeCodec<H> {
 
 	fn decode(data: &[u8]) -> rstd::result::Result<Node, Self::Error> {
 		let input = &mut &*data;
-		let head = NodeHeader::decode(input).ok_or(Error::BadFormat)?;
+		let head = NodeHeader::decode(input)?;
 		match head {
 			NodeHeader::Null => Ok(Node::Empty),
 			NodeHeader::Branch(has_value, nibble_count) => {
@@ -69,7 +69,7 @@ impl<H: Hasher> NodeCodecT<H> for NodeCodec<H> {
 				let bitmap_slice = take(input, BITMAP_LENGTH).ok_or(Error::BadFormat)?;
 				let bitmap = Bitmap::decode(&bitmap_slice[..])?;
 				let value = if has_value {
-					let count = <Compact<u32>>::decode(input).ok_or(Error::BadFormat)?.0 as usize;
+					let count = <Compact<u32>>::decode(input)?.0 as usize;
 					Some(take(input, count).ok_or(Error::BadFormat)?)
 				} else {
 					None
@@ -78,7 +78,7 @@ impl<H: Hasher> NodeCodecT<H> for NodeCodec<H> {
 
 				for i in 0..nibble_ops::NIBBLE_LENGTH {
 					if bitmap.value_at(i) {
-						let count = <Compact<u32>>::decode(input).ok_or(Error::BadFormat)?.0 as usize;
+						let count = <Compact<u32>>::decode(input)?.0 as usize;
 						children[i] = Some(take(input, count).ok_or(Error::BadFormat)?);
 					}
 				}
@@ -98,7 +98,7 @@ impl<H: Hasher> NodeCodecT<H> for NodeCodec<H> {
 					nibble_data,
 					nibble_ops::number_padding(nibble_count),
 				);
-				let count = <Compact<u32>>::decode(input).ok_or(Error::BadFormat)?.0 as usize;
+				let count = <Compact<u32>>::decode(input)?.0 as usize;
 				Ok(Node::Leaf(nibble_slice, take(input, count).ok_or(Error::BadFormat)?))
 			}
 		}
@@ -172,7 +172,7 @@ impl<H: Hasher> NodeCodecT<H> for NodeCodec<H> {
 			None => false,
 		}), bitmap.as_mut());
 		output[bitmap_index..bitmap_index + BITMAP_LENGTH]
-			.copy_from_slice(&bitmap.as_ref()[..BITMAP_LENGTH]);
+			.copy_from_slice(&bitmap[..BITMAP_LENGTH]);
 		output
 	}
 
@@ -229,11 +229,8 @@ const BITMAP_LENGTH: usize = 2;
 pub(crate) struct Bitmap(u16);
 
 impl Bitmap {
-
 	pub fn decode(data: &[u8]) -> Result<Self, Error> {
-		u16::decode(&mut &data[..])
-			.ok_or(Error::BadFormat)
-			.map(|v|Bitmap(v))
+		Ok(Bitmap(u16::decode(&mut &data[..])?))
 	}
 
 	pub fn value_at(&self, i: usize) -> bool {

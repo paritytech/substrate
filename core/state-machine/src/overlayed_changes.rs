@@ -18,7 +18,7 @@
 
 #[cfg(test)] use std::iter::FromIterator;
 use std::collections::{HashMap, BTreeSet};
-use parity_codec::Decode;
+use codec::Decode;
 use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
 use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
 use smallvec::SmallVec;
@@ -769,6 +769,18 @@ impl OverlayedChanges {
 		self.operation_from_last_gc += nb_remove;
 	}
 
+	pub(crate) fn clear_child_prefix(&mut self, storage_key: &[u8], prefix: &[u8]) {
+		let extrinsic_index = self.extrinsic_index();
+		let history = self.changes.history.as_slice();
+		let map_entry = self.changes.children.entry(storage_key.to_vec()).or_default();
+
+		for (key, entry) in map_entry.iter_mut() {
+			if key.starts_with(prefix) {
+				entry.set_with_extrinsic(history, None, extrinsic_index)
+			}
+		}
+	}
+
 	/// Discard prospective changes to state.
 	pub fn discard_prospective(&mut self) {
 		self.changes.discard_prospective();
@@ -837,14 +849,14 @@ impl OverlayedChanges {
 	/// Inserts storage entry responsible for current extrinsic index.
 	#[cfg(test)]
 	pub(crate) fn set_extrinsic_index(&mut self, extrinsic_index: u32) {
-		use parity_codec::Encode;
-	
-		let value = extrinsic_index.encode();
-		let entry = self.changes.top.entry(EXTRINSIC_INDEX.to_vec()).or_default();
-		entry.set(self.changes.history.as_slice(), OverlayedValue{
-			value: Some(value),
-			extrinsics: None,
-		});
+		use codec::Encode;
+		self.changes.top.entry(EXTRINSIC_INDEX.to_vec()).or_default().set(
+			self.changes.history.as_slice(),
+			OverlayedValue{
+				value: Some(extrinsic_index.encode()),
+				extrinsics: None,
+			}
+		);
 	}
 
 	/// Test only method to build from committed info and prospective.
@@ -879,7 +891,7 @@ impl OverlayedChanges {
 		match self.changes_trie_config.is_some() {
 			true => Some(
 				self.storage(EXTRINSIC_INDEX)
-					.and_then(|idx| idx.and_then(|idx| Decode::decode(&mut &*idx)))
+					.and_then(|idx| idx.and_then(|idx| Decode::decode(&mut &*idx).ok()))
 					.unwrap_or(NO_EXTRINSIC_INDEX)),
 			false => None,
 		}
@@ -985,6 +997,7 @@ mod tests {
 			&backend,
 			Some(&changes_trie_storage),
 			crate::NeverOffchainExt::new(),
+			None,
 		);
 		const ROOT: [u8; 32] = hex!("39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa");
 

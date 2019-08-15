@@ -19,10 +19,10 @@ use crate::protocol::message::Message;
 use bytes::Bytes;
 use libp2p::core::{Negotiated, Endpoint, UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade::ProtocolName};
 use libp2p::tokio_codec::Framed;
-use log::warn;
+use log::debug;
 use std::{collections::VecDeque, io, marker::PhantomData, vec::IntoIter as VecIntoIter};
 use futures::{prelude::*, future, stream};
-use parity_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use sr_primitives::traits::Block as BlockT;
 use tokio_io::{AsyncRead, AsyncWrite};
 use unsigned_varint::codec::UviBytes;
@@ -179,7 +179,7 @@ where TSubstream: AsyncRead + AsyncWrite, B: BlockT {
 				self.clogged_fuse = true;
 				return Ok(Async::Ready(Some(RegisteredProtocolEvent::Clogged {
 					messages: self.send_queue.iter()
-						.map(|m| Decode::decode(&mut &m[..]).ok_or(()))
+						.map(|m| Decode::decode(&mut &m[..]))
 						.filter_map(Result::ok)
 						.collect(),
 				})))
@@ -199,9 +199,12 @@ where TSubstream: AsyncRead + AsyncWrite, B: BlockT {
 		// Note that `inner` is wrapped in a `Fuse`, therefore we can poll it forever.
 		match self.inner.poll()? {
 			Async::Ready(Some(data)) => {
-				let message = <Message<B> as Decode>::decode(&mut &data[..]).ok_or(())
-					.map_err(|()| {
-						warn!(target: "sub-libp2p", "Couldn't decode packet sent by the remote: {:?}", data);
+				let message = <Message<B> as Decode>::decode(&mut &data[..])
+					.map_err(|err| {
+						debug!(
+							target: "sub-libp2p",
+							"Couldn't decode packet sent by the remote: {:?}: {}", data, err.what(),
+						);
 						io::ErrorKind::InvalidData
 					})?;
 				Ok(Async::Ready(Some(RegisteredProtocolEvent::Message(message))))

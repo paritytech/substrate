@@ -3,7 +3,7 @@ use futures::{future, Future, sync::oneshot};
 use std::cell::RefCell;
 use tokio::runtime::Runtime;
 pub use substrate_cli::{VersionInfo, IntoExit, error};
-use substrate_cli::{informant, parse_and_execute, NoCustom};
+use substrate_cli::{informant, parse_and_prepare, ParseAndPrepare, NoCustom};
 use substrate_service::{ServiceFactory, Roles as ServiceRoles};
 use crate::chain_spec;
 use std::ops::Deref;
@@ -15,9 +15,8 @@ pub fn run<I, T, E>(args: I, exit: E, version: VersionInfo) -> error::Result<()>
 	T: Into<std::ffi::OsString> + Clone,
 	E: IntoExit,
 {
-	parse_and_execute::<service::Factory, NoCustom, NoCustom, _, _, _, _, _>(
-		load_spec, &version, "substrate-node", args, exit,
-	 	|exit, _cli_args, _custom_args, config| {
+	match parse_and_prepare::<NoCustom, NoCustom, _>(&version, "substrate-node", args) {
+		ParseAndPrepare::Run(cmd) => cmd.run(load_spec, exit, |exit, _cli_args, _custom_args, config| {
 			info!("{}", version.name);
 			info!("  version {}", config.full_version());
 			info!("  by {}, 2017, 2018", version.author);
@@ -37,8 +36,16 @@ pub fn run<I, T, E>(args: I, exit: E, version: VersionInfo) -> error::Result<()>
 					exit
 				),
 			}.map_err(|e| format!("{:?}", e))
-		}
-	).map_err(Into::into).map(|_| ())
+		}),
+		ParseAndPrepare::BuildSpec(cmd) => cmd.run(load_spec),
+		ParseAndPrepare::ExportBlocks(cmd) => cmd.run::<service::Factory, _, _>(load_spec, exit),
+		ParseAndPrepare::ImportBlocks(cmd) => cmd.run::<service::Factory, _, _>(load_spec, exit),
+		ParseAndPrepare::PurgeChain(cmd) => cmd.run(load_spec),
+		ParseAndPrepare::RevertChain(cmd) => cmd.run::<service::Factory, _>(load_spec),
+		ParseAndPrepare::CustomCommand(_) => Ok(())
+	}?;
+
+	Ok(())
 }
 
 fn load_spec(id: &str) -> Result<Option<chain_spec::ChainSpec>, String> {
@@ -52,11 +59,11 @@ fn run_until_exit<T, C, E>(
 	mut runtime: Runtime,
 	service: T,
 	e: E,
-) -> error::Result<()>
-	where
-		T: Deref<Target=substrate_service::Service<C>> + Future<Item = (), Error = ()> + Send + 'static,
-		C: substrate_service::Components,
-		E: IntoExit,
+) -> error::Result<()> where
+	T: Deref<Target=substrate_service::Service<C>>,
+	T: Future<Item = (), Error = substrate_service::error::Error> + Send + 'static,
+	C: substrate_service::Components,
+	E: IntoExit,
 {
 	let (exit_send, exit) = exit_future::signal();
 
@@ -67,10 +74,19 @@ fn run_until_exit<T, C, E>(
 	// but we need to keep holding a reference to the global telemetry guard
 	let _telemetry = service.telemetry();
 
-	let _ = runtime.block_on(service.select(e.into_exit()));
+	let service_res = {
+		let exit = e.into_exit().map_err(|_| error::Error::Other("Exit future failed.".into()));
+		let service = service.map_err(|err| error::Error::Service(err));
+		let select = service.select(exit).map(|_| ()).map_err(|(err, _)| err);
+		runtime.block_on(select)
+	};
+
 	exit_send.fire();
 
-	Ok(())
+	// TODO [andre]: timeout this future #1318
+	let _ = runtime.shutdown_on_idle().wait();
+
+	service_res
 }
 
 // handles ctrl-c

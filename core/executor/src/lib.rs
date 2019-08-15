@@ -44,7 +44,7 @@ pub use native_executor::{with_native_environment, NativeExecutor, NativeExecuti
 pub use wasm_runtimes_cache::RuntimesCache;
 pub use state_machine::Externalities;
 pub use runtime_version::{RuntimeVersion, NativeVersion};
-pub use parity_codec::Codec;
+pub use codec::Codec;
 #[doc(hidden)]
 pub use primitives::Blake2Hasher;
 
