@@ -52,7 +52,7 @@ thread_local! {
 
 pub struct TestSessionHandler;
 impl session::SessionHandler<AccountId> for TestSessionHandler {
-	fn on_genesis_session<Ks: OpaqueKeys>(validators: &[(AccountId, Ks)]) {}
+	fn on_genesis_session<Ks: OpaqueKeys>(_validators: &[(AccountId, Ks)]) {}
 
 	fn on_new_session<Ks: OpaqueKeys>(
 		_changed: bool,
