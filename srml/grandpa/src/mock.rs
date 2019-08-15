@@ -20,7 +20,7 @@
 
 use sr_primitives::{Perbill, DigestItem, traits::IdentityLookup, testing::{Header, UintAuthorityId}};
 use runtime_io;
-use srml_support::{impl_outer_origin, impl_outer_event, parameter_types};
+use srml_support::{impl_outer_origin, impl_outer_dispatch, impl_outer_event, parameter_types};
 use primitives::{H256, Blake2Hasher};
 use codec::{Encode, Decode};
 use crate::{AuthorityId, GenesisConfig, Trait, Module, ConsensusLog};
@@ -29,6 +29,11 @@ use test_runtime::Extrinsic;
 
 impl_outer_origin!{
 	pub enum Origin for Test {}
+}
+
+impl_outer_dispatch! {
+	pub enum Call for Test where origin: Origin {
+	}
 }
 
 pub fn grandpa_log(log: ConsensusLog<u64>) -> DigestItem<H256> {
@@ -41,7 +46,7 @@ pub struct Test;
 impl Trait for Test {
 	type Event = TestEvent;
 	type KeyOwnerSystem = ();
-	type Call = ();
+	type Call = Extrinsic;
 	type UncheckedExtrinsic = Extrinsic;
 }
 parameter_types! {
