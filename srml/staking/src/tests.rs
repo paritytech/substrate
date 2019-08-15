@@ -1910,7 +1910,7 @@ fn reward_validator_slashing_validator_doesnt_overflow() {
 		]});
 
 		// Check slashing
-		let _ = Staking::slash_validator(&11, reward_slash, &Staking::stakers(&11));
+		let _ = Staking::slash_validator(&11, reward_slash, &Staking::stakers(&11), &mut Vec::new());
 		assert_eq!(Balances::total_balance(&11), stake - 1);
 		assert_eq!(Balances::total_balance(&2), 1);
 	})
