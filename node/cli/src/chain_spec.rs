@@ -298,13 +298,13 @@ pub fn testnet_genesis(
 			key: root_key,
 		}),
 		babe: Some(BabeConfig {
-			authorities: initial_authorities.iter().map(|x| (x.3.clone(), 1)).collect(),
+			authorities: vec![],
 		}),
 		im_online: Some(ImOnlineConfig{
-			keys: initial_authorities.iter().map(|x| x.4.clone()).collect(),
+			keys: vec![],
 		}),
 		grandpa: Some(GrandpaConfig {
-			authorities: initial_authorities.iter().map(|x| (x.2.clone(), 1)).collect(),
+			authorities: vec![],
 		}),
 		membership_Instance1: Some(Default::default()),
 	}
