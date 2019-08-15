@@ -333,7 +333,7 @@ impl<T: Trait> Module<T> {
 			T::ChangeMembers::change_members_sorted(
 				&new_members,
 				&old_members,
-				new_members.clone(),
+				&new_members,
 			);
 			Self::deposit_event(RawEvent::NewTerm(new_members));
 		} else {
