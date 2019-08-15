@@ -185,12 +185,12 @@ mod tests {
     impl session::SessionHandler<im_online::AuthorityId> for TestSessionHandler {
         fn on_new_session<Ks: OpaqueKeys>(
             _changed: bool,
-            validators: &[(im_online::AuthorityId, Ks)],
+            _validators: &[(im_online::AuthorityId, Ks)],
             _queued_validators: &[(im_online::AuthorityId, Ks)],
         ) {
         }
 
-        fn on_disabled(validator_index: usize) {}
+        fn on_disabled(_validator_index: usize) {}
     }
 
     #[test]
