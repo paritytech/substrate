@@ -37,5 +37,4 @@ std = [
 	"babe-primitives/std",
 	"session/std",
 	"runtime_io/std",
-	"staking/std",
 ]
