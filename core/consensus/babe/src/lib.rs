@@ -741,7 +741,7 @@ fn epoch<B, C>(client: &C, at: &BlockId<B>) -> Result<Epoch, ConsensusError> whe
 	client
 		.cache()
 		.and_then(|cache| cache.get_at(&well_known_cache_keys::EPOCH, at)
-			.and_then(|v| Decode::decode(&mut &v[..]).ok()))
+			.and_then(|(_, _, v)| Decode::decode(&mut &v[..]).ok()))
 		.or_else(|| {
 			if client.runtime_api().has_api::<dyn BabeApi<B>>(at).unwrap_or(false) {
 				let s = BabeApi::epoch(&*client.runtime_api(), at).ok()?;
@@ -869,7 +869,7 @@ fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> 
 	let genesis_id = BlockId::Number(Zero::zero());
 	let genesis_epoch: Option<Epoch> = cache
 		.get_at(&well_known_cache_keys::EPOCH, &genesis_id)
-		.and_then(|v| Decode::decode(&mut &v[..]).ok());
+		.and_then(|(_, _, v)| Decode::decode(&mut &v[..]).ok());
 	if genesis_epoch.is_some() {
 		return Ok(());
 	}
