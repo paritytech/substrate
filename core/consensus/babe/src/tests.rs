@@ -20,7 +20,7 @@
 // https://github.com/paritytech/substrate/issues/2532
 #![allow(deprecated)]
 use super::*;
-use super::generic::DigestItem;
+use sr_primitives::generic::{self, DigestItem};
 
 use babe_primitives::AuthorityPair;
 use client::{LongestChain, block_builder::BlockBuilder};
@@ -325,7 +325,7 @@ fn can_author_block() {
 		duration: 100,
 	};
 	loop {
-		match claim_slot(i, epoch.clone(), (3, 10), &keystore) {
+		match claim_slot(i, &epoch.clone(), (3, 10), &keystore) {
 			None => i += 1,
 			Some(s) => {
 				debug!(target: "babe", "Authored block {:?}", s.0);
