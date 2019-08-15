@@ -67,9 +67,7 @@ pub use self::storage::{
 	StorageValue, StorageMap, EnumerableStorageMap, StorageDoubleMap, AppendableStorageMap
 };
 pub use self::hashable::Hashable;
-pub use self::dispatch::{
-	Parameter, ModuleDispatchable, RuntimeDispatchable, Callable, IsSubType, ModuleDispatchError,
-};
+pub use self::dispatch::{Parameter, Callable, IsSubType};
 pub use self::double_map::StorageDoubleMapWithHasher;
 pub use runtime_io::{print, storage_root, Printable};
 pub use sr_primitives::{self, ConsensusEngineId};

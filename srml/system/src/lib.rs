@@ -78,22 +78,24 @@ use rstd::prelude::*;
 #[cfg(any(feature = "std", test))]
 use rstd::map;
 use rstd::marker::PhantomData;
-use sr_primitives::generic::{self, Era};
-use sr_primitives::Perbill;
-use sr_primitives::weights::{
-	Weight, DispatchInfo, DispatchClass, WeightMultiplier, SimpleDispatchInfo
+use sr_primitives::{
+	generic::{self, Era}, Perbill, ApplyError,
+	weights::{Weight, DispatchInfo, DispatchClass, WeightMultiplier, SimpleDispatchInfo},
+	transaction_validity::{
+		ValidTransaction, TransactionPriority, TransactionLongevity, TransactionValidityError,
+		InvalidTransactionValidity, TransactionValidity,
+	},
+	traits::{
+		self, CheckEqual, SimpleArithmetic, Zero, SignedExtension, Convert, Lookup,
+		SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, SaturatedConversion,
+		MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded,
+	},
 };
-use sr_primitives::transaction_validity::{
-	ValidTransaction, TransactionPriority, TransactionLongevity
-};
-use sr_primitives::traits::{self, CheckEqual, SimpleArithmetic, Zero, SignedExtension, Convert,
-	SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, DispatchError, SaturatedConversion,
-	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded, Lookup,
-};
-use primitives::{storage::well_known_keys, DispatchError};
+
+use primitives::storage::well_known_keys;
 use srml_support::{
 	storage, decl_module, decl_event, decl_storage, StorageDoubleMap, StorageValue, StorageMap,
-	Parameter, for_each_tuple, traits::{Contains, Get}
+	Parameter, for_each_tuple, traits::{Contains, Get}, decl_error,
 };
 use safe_mix::TripletMix;
 use codec::{Encode, Decode};
@@ -310,7 +312,7 @@ decl_event!(
 		/// An extrinsic completed successfully.
 		ExtrinsicSuccess,
 		/// An extrinsic failed.
-		ExtrinsicFailed(DispatchError),
+		ExtrinsicFailed(ApplyError),
 	}
 );
 
@@ -322,30 +324,6 @@ decl_error! {
 		RequireSignedOrigin,
 		RequireRootOrigin,
 		RequireNoOrigin,
-	}
-}
-
-impl From<PrimitiveError> for Error {
-	fn from(err: PrimitiveError) -> Error {
-		match err {
-			PrimitiveError::Other(err) => Error::Other(err),
-			PrimitiveError::BadSignature => Error::BadSignature,
-			PrimitiveError::BlockFull => Error::BlockFull,
-		}
-	}
-}
-
-// Exists for for backward compatibility purpose.
-impl From<Error> for &'static str {
-	fn from(err: Error) -> &'static str {
-		match err {
-			Error::Other(val) => val,
-			Error::BadSignature => "bad signature in extrinsic",
-			Error::BlockFull => "block size limit is reached",
-			Error::RequireSignedOrigin => "bad origin: expected to be a signed origin",
-			Error::RequireRootOrigin => "bad origin: expected to be a root origin",
-			Error::RequireNoOrigin => "bad origin: expected to be no origin",
-		}
 	}
 }
 
@@ -832,7 +810,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
-	pub fn note_applied_extrinsic(r: &Result<(), &'static str>, _encoded_len: u32) {
+	pub fn note_applied_extrinsic(r: &Result<(), ApplyError>, _encoded_len: u32) {
 		Self::deposit_event(match r {
 			Ok(_) => Event::ExtrinsicSuccess,
 			Err(err) => Event::ExtrinsicFailed(err.clone()),
@@ -865,7 +843,6 @@ impl<T: Trait> Module<T> {
 pub struct CheckWeight<T: Trait + Send + Sync>(PhantomData<T>);
 
 impl<T: Trait + Send + Sync> CheckWeight<T> {
-
 	/// Get the quota ratio of each dispatch class type. This indicates that all operational
 	/// dispatches can use the full capacity of any resource, while user-triggered ones can consume
 	/// a portion.
@@ -880,14 +857,14 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	/// Checks if the current extrinsic can fit into the block with respect to block weight limits.
 	///
 	/// Upon successes, it returns the new block weight as a `Result`.
-	fn check_weight(info: DispatchInfo) -> Result<Weight, DispatchError> {
+	fn check_weight(info: DispatchInfo) -> Result<Weight, ApplyError> {
 		let current_weight = Module::<T>::all_extrinsics_weight();
 		let maximum_weight = T::MaximumBlockWeight::get();
 		let limit = Self::get_dispatch_limit_ratio(info.class) * maximum_weight;
 		let added_weight = info.weight.min(limit);
 		let next_weight = current_weight.saturating_add(added_weight);
 		if next_weight > limit {
-			return Err(DispatchError::Exhausted)
+			return Err(ApplyError::Exhausted)
 		}
 		Ok(next_weight)
 	}
@@ -895,14 +872,14 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	/// Checks if the current extrinsic can fit into the block with respect to block length limits.
 	///
 	/// Upon successes, it returns the new block length as a `Result`.
-	fn check_block_length(info: DispatchInfo, len: usize) -> Result<u32, DispatchError> {
+	fn check_block_length(info: DispatchInfo, len: usize) -> Result<u32, ApplyError> {
 		let current_len = Module::<T>::all_extrinsics_len();
 		let maximum_len = T::MaximumBlockLength::get();
 		let limit = Self::get_dispatch_limit_ratio(info.class) * maximum_len;
 		let added_len = len as u32;
 		let next_len = current_len.saturating_add(added_len);
 		if next_len > limit {
-			return Err(DispatchError::Exhausted)
+			return Err(ApplyError::Exhausted)
 		}
 		Ok(next_len)
 	}
@@ -928,7 +905,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 	type AdditionalSigned = ();
 	type Pre = ();
 
-	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
+	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
 
 	fn pre_dispatch(
 		self,
@@ -936,7 +913,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		_call: &Self::Call,
 		info: DispatchInfo,
 		len: usize,
-	) -> Result<(), DispatchError> {
+	) -> Result<(), ApplyError> {
 		let next_len = Self::check_block_length(info, len)?;
 		AllExtrinsicsLen::put(next_len);
 		let next_weight = Self::check_weight(info)?;
@@ -950,13 +927,15 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		_call: &Self::Call,
 		info: DispatchInfo,
 		len: usize,
-	) -> Result<ValidTransaction, DispatchError> {
+	) -> TransactionValidity {
 		// There is no point in writing to storage here since changes are discarded. This basically
-		// discards any transaction which is bigger than the length or weight limit **alone**,which
+		// discards any transaction which is bigger than the length or weight limit **alone**, which
 		// is a guarantee that it will fail in the pre-dispatch phase.
-		let _ = Self::check_block_length(info, len)?;
-		let _ = Self::check_weight(info)?;
-		Ok(ValidTransaction { priority: Self::get_priority(info), ..Default::default() })
+		if Self::check_block_length(info, len).is_err() || Self::check_weight(info).is_err() {
+			return InvalidTransactionValidity::ExhaustResources.into();
+		}
+
+		ValidTransaction { priority: Self::get_priority(info), ..Default::default() }.into()
 	}
 }
 
@@ -992,7 +971,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 	type AdditionalSigned = ();
 	type Pre = ();
 
-	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
+	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
 
 	fn pre_dispatch(
 		self,
@@ -1000,13 +979,18 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 		_call: &Self::Call,
 		_info: DispatchInfo,
 		_len: usize,
-	) -> Result<(), DispatchError> {
+	) -> Result<(), ApplyError> {
 		let expected = <AccountNonce<T>>::get(who);
 		if self.0 != expected {
 			return Err(
-				if self.0 < expected { DispatchError::Stale } else { DispatchError::Future }
+				if self.0 < expected {
+					InvalidTransactionValidity::Stale
+				} else {
+					InvalidTransactionValidity::Future
+				}.into()
 			)
 		}
+
 		<AccountNonce<T>>::insert(who, expected + T::Index::one());
 		Ok(())
 	}
@@ -1017,11 +1001,11 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 		_call: &Self::Call,
 		info: DispatchInfo,
 		_len: usize,
-	) -> Result<ValidTransaction, DispatchError> {
+	) -> TransactionValidity {
 		// check index
 		let expected = <AccountNonce<T>>::get(who);
 		if self.0 < expected {
-			return Err(DispatchError::Stale)
+			return InvalidTransactionValidity::Stale.into()
 		}
 
 		let provides = vec![Encode::encode(&(who, self.0))];
@@ -1031,13 +1015,13 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 			vec![]
 		};
 
-		Ok(ValidTransaction {
+		ValidTransaction {
 			priority: info.weight as TransactionPriority,
 			requires,
 			provides,
 			longevity: TransactionLongevity::max_value(),
 			propagate: true,
-		})
+		}.into()
 	}
 }
 
@@ -1066,11 +1050,14 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 	type AdditionalSigned = T::Hash;
 	type Pre = ();
 
-	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str> {
+	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
 		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
 		let n = (self.0).0.birth(current_u64).saturated_into::<T::BlockNumber>();
-		if !<BlockHash<T>>::exists(n) { Err("transaction birth block ancient")? }
-		Ok(<Module<T>>::block_hash(n))
+		if !<BlockHash<T>>::exists(n) {
+			Err(InvalidTransactionValidity::AncientBirthBlock.into())
+		} else {
+			Ok(<Module<T>>::block_hash(n))
+		}
 	}
 }
 
@@ -1098,7 +1085,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckGenesis<T> {
 	type AdditionalSigned = T::Hash;
 	type Pre = ();
 
-	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str> {
+	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
 		Ok(<Module<T>>::block_hash(T::BlockNumber::zero()))
 	}
 }
@@ -1124,7 +1111,7 @@ mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
 	use primitives::H256;
-	use sr_primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+	use sr_primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header, DispatchError};
 	use srml_support::{impl_outer_origin, parameter_types};
 
 	impl_outer_origin! {

@@ -31,6 +31,7 @@ use crate::{
 
 /// The AccountId alias in this test module.
 pub type AccountId = u64;
+pub type BlockNumber = u64;
 pub type Balance = u64;
 
 /// Simple structure that exposes how u64 currency can be represented as... u64.

@@ -29,67 +29,19 @@ pub use sr_primitives::{
 	weights::{
 		SimpleDispatchInfo, GetDispatchInfo, DispatchInfo, WeighData, ClassifyDispatch,
 		TransactionPriority
-	}, traits::{Dispatchable, DispatchResult}, DispatchError
+	}, traits::{Dispatchable, DispatchResult, ModuleDispatchError}, DispatchError
 };
 
 /// A type that cannot be instantiated.
 pub enum Never {}
 
-/// Result of a module function call; either nothing (functions are only called for "side effects")
-/// or an error.
-pub type DispatchResult<Error> = result::Result<(), Error>;
-
 /// Result with string error message. This exists for backward compatibility purpose.
 pub type Result = DispatchResult<&'static str>;
-
-/// A lazy module call (module function and argument values) that can be executed via its `dispatch`
-/// method.
-pub trait ModuleDispatchable {
-	/// Every function call from your runtime has an origin, which specifies where the extrinsic was
-	/// generated from. In the case of a signed extrinsic (transaction), the origin contains an
-	/// identifier for the caller. The origin can be empty in the case of an inherent extrinsic.
-	type Origin;
-	type Trait;
-	type Error: ModuleDispatchError;
-
-	fn dispatch(self, origin: Self::Origin) -> DispatchResult<Self::Error>;
-}
-
-/// A lazy runtime call that can be executed via its `dispatch` method.
-pub trait RuntimeDispatchable {
-	/// Every function call from your runtime has an origin, which specifies where the extrinsic was
-	/// generated from. In the case of a signed extrinsic (transaction), the origin contains an
-	/// identifier for the caller. The origin can be empty in the case of an inherent extrinsic.
-	type Origin;
-	type Trait;
-
-	fn dispatch(self, origin: Self::Origin) -> DispatchResult<DispatchError>;
-}
-
-pub trait ModuleDispatchError {
-	/// Convert this error to an `u8`.
-	///
-	/// The `u8` corresponds to the index of the variant in the error enum.
-	fn as_u8(&self) -> u8;
-
-	/// Convert the error to a `&'static str`.
-	fn as_str(&self) -> &'static str;
-}
-
-impl ModuleDispatchError for &'static str {
-	fn as_u8(&self) -> u8 {
-		0
-	}
-
-	fn as_str(&self) -> &'static str {
-		self
-	}
-}
 
 /// Serializable version of Dispatchable.
 /// This value can be used as a "function" in an extrinsic.
 pub trait Callable<T> {
-	type Call: ModuleDispatchable + Codec + Clone + PartialEq + Eq;
+	type Call: Dispatchable + Codec + Clone + PartialEq + Eq;
 }
 
 // dirty hack to work around serde_derive issue
@@ -1357,7 +1309,7 @@ macro_rules! decl_module {
 			}
 		}
 
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::ModuleDispatchable
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Dispatchable
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
 			type Trait = $trait_instance;
@@ -1388,7 +1340,7 @@ macro_rules! decl_module {
 			where $( $other_where_bounds )*
 		{
 			#[doc(hidden)]
-			pub fn dispatch<D: $crate::dispatch::ModuleDispatchable<Trait = $trait_instance>>(
+			pub fn dispatch<D: $crate::dispatch::Dispatchable<Trait = $trait_instance>>(
 				d: D,
 				origin: D::Origin
 			) -> $crate::dispatch::DispatchResult<D::Error> {
@@ -1444,14 +1396,14 @@ macro_rules! impl_outer_dispatch {
 				}
 			}
 		}
-		impl $crate::dispatch::RuntimeDispatchable for $call_type {
+		impl $crate::dispatch::Dispatchable for $call_type {
 			type Origin = $origin;
 			type Trait = $call_type;
+			type Error = $crate::dispatch::DispatchError;
 			fn dispatch(
 				self,
 				origin: $origin,
 			) -> $crate::dispatch::DispatchResult<$crate::dispatch::DispatchError> {
-				use $crate::{ModuleDispatchable, ModuleDispatchError};
 				$crate::impl_outer_dispatch! {
 					@DISPATCH_MATCH
 					self
@@ -1499,7 +1451,9 @@ macro_rules! impl_outer_dispatch {
 			{
 				$( $generated )*
 				$call_type::$name(call) => call.dispatch($origin).map_err(|e| {
-					$crate::dispatch::DispatchError::new($index, e.as_u8(), Some(e.as_str()))
+					let mut error: $crate::dispatch::DispatchError = e.into();
+					error.module = Some($index);
+					error
 				}),
 			}
 			$index + 1;

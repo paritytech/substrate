@@ -23,7 +23,7 @@ use runtime_io;
 #[cfg(feature = "std")] use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use primitives::{self, Hasher, Blake2Hasher};
 use crate::codec::{Codec, Encode, Decode, HasCompact};
-use crate::transaction_validity::{ValidTransaction, TransactionValidity};
+use crate::transaction_validity::{ValidTransaction, TransactionValidity, TransactionValidityError};
 use crate::generic::{Digest, DigestItem};
 use crate::weights::DispatchInfo;
 pub use integer_sqrt::IntegerSquareRoot;
@@ -790,11 +790,9 @@ pub type DigestItemFor<B> = DigestItem<<<B as Block>::Header as Header>::Hash>;
 pub trait Checkable<Context>: Sized {
 	/// Returned if `check` succeeds.
 	type Checked;
-	/// Indicates why `check` failed
-	type Error;
 
 	/// Check self, given an instance of Context.
-	fn check(self, c: &Context) -> Result<Self::Checked, Self::Error>;
+	fn check(self, c: &Context) -> Result<Self::Checked, TransactionValidityError>;
 }
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
@@ -804,67 +802,23 @@ pub trait Checkable<Context>: Sized {
 pub trait BlindCheckable: Sized {
 	/// Returned if `check` succeeds.
 	type Checked;
-	/// Returned if `check` failed.
-	type Error;
 
 	/// Check self.
-	fn check(self) -> Result<Self::Checked, Self::Error>;
+	fn check(self) -> Result<Self::Checked, TransactionValidityError>;
 }
 
 // Every `BlindCheckable` is also a `StaticCheckable` for arbitrary `Context`.
 impl<T: BlindCheckable, Context> Checkable<Context> for T {
 	type Checked = <Self as BlindCheckable>::Checked;
-	type Error = <Self as BlindCheckable>::Error;
 
-	fn check(self, _c: &Context) -> Result<Self::Checked, Self::Error> {
+	fn check(self, _c: &Context) -> Result<Self::Checked, TransactionValidityError> {
 		BlindCheckable::check(self)
-	}
-}
-
-/// An abstract error concerning an attempt to verify, check or dispatch the transaction. This
-/// cannot be more concrete because it's designed to work reasonably well over a broad range of
-/// possible transaction types.
-#[cfg_attr(feature = "std", derive(Debug))]
-pub enum DispatchError {
-	/// General error to do with the inability to pay some fees (e.g. account balance too low).
-	Payment,
-
-	/// General error to do with the exhaustion of block resources.
-	Exhausted,
-
-	/// General error to do with the permissions of the sender.
-	NoPermission,
-
-	/// General error to do with the state of the system in general.
-	BadState,
-
-	/// General error to do with the transaction being outdated (e.g. nonce too low).
-	Stale,
-
-	/// General error to do with the transaction not yet being valid (e.g. nonce too high).
-	Future,
-
-	/// General error to do with the transaction's proofs (e.g. signature).
-	BadProof,
-}
-
-impl From<DispatchError> for i8 {
-	fn from(e: DispatchError) -> i8 {
-		match e {
-			DispatchError::Payment => -64,
-			DispatchError::Exhausted => -65,
-			DispatchError::NoPermission => -66,
-			DispatchError::BadState => -67,
-			DispatchError::Stale => -68,
-			DispatchError::Future => -69,
-			DispatchError::BadProof => -70,
-		}
 	}
 }
 
 /// Result of a module function call; either nothing (functions are only called for "side effects")
 /// or an error message.
-pub type DispatchResult = result::Result<(), &'static str>;
+pub type DispatchResult<Error> = result::Result<(), Error>;
 
 /// A lazy call (module function and argument values) that can be executed via its `dispatch`
 /// method.
@@ -875,8 +829,10 @@ pub trait Dispatchable {
 	type Origin;
 	/// ...
 	type Trait;
+	/// The error type returned by this dispatchable.
+	type Error: Into<crate::DispatchError>;
 	/// Actually dispatch this call and result the result of it.
-	fn dispatch(self, origin: Self::Origin) -> DispatchResult;
+	fn dispatch(self, origin: Self::Origin) -> DispatchResult<Self::Error>;
 }
 
 /// Means by which a transaction may be extended. This type embodies both the data and the logic
@@ -897,7 +853,7 @@ pub trait SignedExtension: Codec + MaybeDebug + Sync + Send + Clone + Eq + Parti
 
 	/// Construct any additional data that should be in the signed payload of the transaction. Can
 	/// also perform any pre-signature-verification checks and return an error if needed.
-	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str>;
+	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError>;
 
 	/// Validate a signed transaction for the transaction queue.
 	fn validate(
@@ -906,8 +862,8 @@ pub trait SignedExtension: Codec + MaybeDebug + Sync + Send + Clone + Eq + Parti
 		_call: &Self::Call,
 		_info: DispatchInfo,
 		_len: usize,
-	) -> Result<ValidTransaction, DispatchError> {
-		Ok(Default::default())
+	) -> TransactionValidity {
+		ValidTransaction::default().into()
 	}
 
 	/// Do any pre-flight stuff for a signed transaction.
@@ -917,8 +873,11 @@ pub trait SignedExtension: Codec + MaybeDebug + Sync + Send + Clone + Eq + Parti
 		call: &Self::Call,
 		info: DispatchInfo,
 		len: usize,
-	) -> Result<Self::Pre, DispatchError> {
-		self.validate(who, call, info, len).map(|_| Self::Pre::default())
+	) -> Result<Self::Pre, crate::ApplyError> {
+		self.validate(who, call, info, len)
+			.into_result()
+			.map(|_| Self::Pre::default())
+			.map_err(Into::into)
 	}
 
 	/// Validate an unsigned transaction for the transaction queue. Normally the default
@@ -928,23 +887,35 @@ pub trait SignedExtension: Codec + MaybeDebug + Sync + Send + Clone + Eq + Parti
 		_call: &Self::Call,
 		_info: DispatchInfo,
 		_len: usize,
-	) -> Result<ValidTransaction, DispatchError> { Ok(Default::default()) }
+	) -> TransactionValidity {
+		ValidTransaction::default().into()
+	}
 
 	/// Do any pre-flight stuff for a unsigned transaction.
 	fn pre_dispatch_unsigned(
 		call: &Self::Call,
 		info: DispatchInfo,
 		len: usize,
-	) -> Result<Self::Pre, DispatchError> {
-		Self::validate_unsigned(call, info, len).map(|_| Self::Pre::default())
+	) -> Result<Self::Pre, crate::ApplyError> {
+		Self::validate_unsigned(call, info, len)
+			.into_result()
+			.map(|_| Self::Pre::default())
+			.map_err(Into::into)
 	}
 
 	/// Do any post-flight stuff for a transaction.
-	fn post_dispatch(
-		_pre: Self::Pre,
-		_info: DispatchInfo,
-		_len: usize,
-	) { }
+	fn post_dispatch(_pre: Self::Pre, _info: DispatchInfo, _len: usize) { }
+}
+
+/// An error that is returned by a dispatchable function of a module.
+pub trait ModuleDispatchError {
+	/// Convert this error to an `u8`.
+	///
+	/// The `u8` corresponds to the index of the variant in the error enum.
+	fn as_u8(&self) -> u8;
+
+	/// Convert the error to a `&'static str`.
+	fn as_str(&self) -> &'static str;
 }
 
 macro_rules! tuple_impl_indexed {
@@ -959,10 +930,10 @@ macro_rules! tuple_impl_indexed {
 		> SignedExtension for ($($direct),+,) {
 			type AccountId = AccountId;
 			type Call = Call;
-			type AdditionalSigned = ($($direct::AdditionalSigned,)+);
+			type AdditionalSigned = ( $( $direct::AdditionalSigned, )+ );
 			type Pre =  ($($direct::Pre,)+);
-			fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str> {
-				Ok(( $(self.$index.additional_signed()?,)+ ))
+			fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
+				Ok(( $( self.$index.additional_signed()?, )+ ))
 			}
 			fn validate(
 				&self,
@@ -970,9 +941,14 @@ macro_rules! tuple_impl_indexed {
 				call: &Self::Call,
 				info: DispatchInfo,
 				len: usize,
-			) -> Result<ValidTransaction, DispatchError> {
-				let aggregator = vec![$(<$direct as SignedExtension>::validate(&self.$index, who, call, info, len)?),+];
-				Ok(aggregator.into_iter().fold(ValidTransaction::default(), |acc, a| acc.combine_with(a)))
+			) -> TransactionValidity {
+				let aggregator = vec![
+					$( <$direct as SignedExtension>::validate(&self.$index, who, call, info, len) ),+
+				];
+				aggregator.into_iter().fold(
+					TransactionValidity::Valid(ValidTransaction::default()),
+					|acc, a| acc.combine_with(|| a)
+				)
 			}
 			fn pre_dispatch(
 				self,
@@ -980,22 +956,26 @@ macro_rules! tuple_impl_indexed {
 				call: &Self::Call,
 				info: DispatchInfo,
 				len: usize,
-			) -> Result<Self::Pre, DispatchError> {
+			) -> Result<Self::Pre, $crate::ApplyError> {
 				Ok(($(self.$index.pre_dispatch(who, call, info, len)?,)+))
 			}
 			fn validate_unsigned(
 				call: &Self::Call,
 				info: DispatchInfo,
 				len: usize,
-			) -> Result<ValidTransaction, DispatchError> {
-				let aggregator = vec![$($direct::validate_unsigned(call, info, len)?),+];
-				Ok(aggregator.into_iter().fold(ValidTransaction::default(), |acc, a| acc.combine_with(a)))
+			) -> TransactionValidity {
+				let aggregator = vec![ $( $direct::validate_unsigned(call, info, len) ),+ ];
+
+				aggregator.into_iter().fold(
+					TransactionValidity::Valid(ValidTransaction::default()),
+					|acc, a| acc.combine_with(|| a)
+				)
 			}
 			fn pre_dispatch_unsigned(
 				call: &Self::Call,
 				info: DispatchInfo,
 				len: usize,
-			) -> Result<Self::Pre, DispatchError> {
+			) -> Result<Self::Pre, $crate::ApplyError> {
 				Ok(($($direct::pre_dispatch_unsigned(call, info, len)?,)+))
 			}
 			fn post_dispatch(
@@ -1032,7 +1012,7 @@ impl SignedExtension for () {
 	type AdditionalSigned = ();
 	type Call = ();
 	type Pre = ();
-	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
+	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
 }
 
 /// An "executable" piece of information, used by the standard Substrate Executive in order to
@@ -1052,17 +1032,19 @@ pub trait Applyable: Sized + Send + Sync {
 	fn sender(&self) -> Option<&Self::AccountId>;
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
-	fn validate<V: ValidateUnsigned<Call=Self::Call>>(&self,
+	fn validate<V: ValidateUnsigned<Call=Self::Call>>(
+		&self,
 		info: DispatchInfo,
 		len: usize,
 	) -> TransactionValidity;
 
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
-	fn dispatch(self,
+	fn apply(
+		self,
 		info: DispatchInfo,
 		len: usize,
-	) -> Result<DispatchResult, DispatchError>;
+	) -> crate::ApplyResult;
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.

@@ -39,7 +39,7 @@ macro_rules! decl_error {
 			),*
 		}
 
-		impl $crate::ModuleDispatchError for $error {
+		impl $crate::dispatch::ModuleDispatchError for $error {
 			fn as_u8(&self) -> u8 {
 				$crate::decl_error! {
 					@GENERATE_AS_U8
@@ -64,6 +64,13 @@ macro_rules! decl_error {
 		impl From<&'static str> for $error {
 			fn from(val: &'static str) -> $error {
 				$error::Other(val)
+			}
+		}
+
+		impl Into<$crate::dispatch::DispatchError> for $error {
+			fn into(self) -> $crate::dispatch::DispatchError {
+				use $crate::dispatch::ModuleDispatchError;
+				$crate::dispatch::DispatchError::new(None, self.as_u8(), Some(self.as_str()))
 			}
 		}
 	};

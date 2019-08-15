@@ -24,7 +24,8 @@ use runtime_io::blake2_256;
 use codec::{Decode, Encode, Input, Error};
 use crate::{
 	traits::{self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic},
-	PrimitiveError, generic::CheckedExtrinsic,
+	generic::CheckedExtrinsic,
+	transaction_validity::{TransactionValidityError, InvalidTransactionValidity},
 };
 
 const TRANSACTION_VERSION: u8 = 3;
@@ -94,15 +95,14 @@ where
 	Extra: SignedExtension<AccountId=AccountId>,
 	AccountId: Member + MaybeDisplay,
 	Lookup: traits::Lookup<Source=Address, Target=AccountId>,
-	PrimitiveError: From<Lookup::Error>,
+	TransactionValidityError: From<Lookup::Error>,
 {
 	type Checked = CheckedExtrinsic<AccountId, Call, Extra>;
-	type Error = PrimitiveError;
 
-	fn check(self, lookup: &Lookup) -> Result<Self::Checked, Self::Error> {
+	fn check(self, lookup: &Lookup) -> Result<Self::Checked, TransactionValidityError> {
 		Ok(match self.signature {
 			Some((signed, signature, extra)) => {
-				let additional_signed = extra.additional_signed()?;
+				let additional_signed = extra.additional_signed();
 				let raw_payload = (self.function, extra, additional_signed);
 				let signed = lookup.lookup(signed)?;
 				if !raw_payload.using_encoded(|payload| {
@@ -112,7 +112,7 @@ where
 						signature.verify(payload, &signed)
 					}
 				}) {
-					return Err(PrimitiveError::BadSignature)
+					return Err(InvalidTransactionValidity::BadProof.into())
 				}
 				CheckedExtrinsic {
 					signed: Some((signed, raw_payload.1)),

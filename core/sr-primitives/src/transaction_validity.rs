@@ -17,8 +17,7 @@
 //! Transaction validity interface.
 
 use rstd::prelude::*;
-use crate::codec::{Encode, Decode, Error};
-use crate::traits::DispatchError;
+use crate::codec::{Encode, Decode};
 
 /// Priority for a transaction. Additive. Higher is better.
 pub type TransactionPriority = u64;
@@ -30,29 +29,142 @@ pub type TransactionLongevity = u64;
 /// Tag for a transaction. No two transactions with the same tag should be placed on-chain.
 pub type TransactionTag = Vec<u8>;
 
+/// An invalid transaction validity.
+#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy)]
+#[cfg_attr(feature = "std", derive(Debug, serde::Serialize))]
+pub enum InvalidTransactionValidity {
+	/// General error to do with the transaction not yet being valid (e.g. nonce too high).
+	Future,
+	/// General error to do with the transaction being outdated (e.g. nonce too low).
+	Stale,
+	/// General error to do with the transaction's proofs (e.g. signature).
+	BadProof,
+	/// The transaction birth block is ancient.
+	AncientBirthBlock,
+	/// The transaction **alone** would exhaust the resources of a block.
+	ExhaustResources,
+	/// Any other custom invalid validity that is not covered by this enum.
+	Custom(u8),
+}
+
+/// An unknown transaction validity.
+#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy)]
+#[cfg_attr(feature = "std", derive(Debug, serde::Serialize))]
+pub enum UnknownTransactionValidity {
+	/// An invalid/unknown account index
+	InvalidIndex,
+	/// No validator found for the given unsigned transaction.
+	NoUnsignedValidator,
+	/// Any other custom unknown validity that is not covered by this enum.
+	Custom(u8),
+}
+
+/// The error that can occur while checking the validity of a transaction.
+#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy)]
+#[cfg_attr(feature = "std", derive(Debug, serde::Serialize))]
+pub enum TransactionValidityError {
+	/// The transaction is invalid.
+	Invalid(InvalidTransactionValidity),
+	/// Transaction validity can't be determined.
+	Unknown(UnknownTransactionValidity),
+}
+
+impl Into<TransactionValidityError> for InvalidTransactionValidity {
+	fn into(self) -> TransactionValidityError {
+		TransactionValidityError::Invalid(self)
+	}
+}
+
+impl Into<TransactionValidityError> for UnknownTransactionValidity {
+	fn into(self) -> TransactionValidityError {
+		TransactionValidityError::Unknown(self)
+	}
+}
+
+impl Into<crate::ApplyError> for InvalidTransactionValidity {
+	fn into(self) -> crate::ApplyError {
+		TransactionValidityError::from(self.into()).into()
+	}
+}
+
+impl Into<crate::ApplyError> for UnknownTransactionValidity {
+	fn into(self) -> crate::ApplyError {
+		TransactionValidityError::from(self.into()).into()
+	}
+}
+
 /// Information on a transaction's validity and, if valid, on how it relates to other transactions.
-#[derive(Clone, PartialEq, Eq, Encode)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum TransactionValidity {
-	/// Transaction is invalid. Details are described by the error code.
-	Invalid(i8),
+	/// Transaction is invalid.
+	Invalid(InvalidTransactionValidity),
 	/// Transaction is valid.
 	Valid(ValidTransaction),
 	/// Transaction validity can't be determined.
-	Unknown(i8),
+	Unknown(UnknownTransactionValidity),
 }
 
-impl From<Result<ValidTransaction, DispatchError>> for TransactionValidity {
-	fn from(r: Result<ValidTransaction, DispatchError>) -> Self {
-		match r {
-			Ok(v) => TransactionValidity::Valid(v),
-			Err(e) => TransactionValidity::Invalid(e.into()),
+impl Into<TransactionValidity> for TransactionValidityError {
+	fn into(self) -> TransactionValidity {
+		match self {
+			TransactionValidityError::Invalid(invalid) => TransactionValidity::Invalid(invalid),
+			TransactionValidityError::Unknown(unknown) => TransactionValidity::Unknown(unknown),
+		}
+	}
+}
+
+impl Into<TransactionValidity> for InvalidTransactionValidity {
+	fn into(self) -> TransactionValidity {
+		TransactionValidity::Invalid(self)
+	}
+}
+
+impl Into<TransactionValidity> for UnknownTransactionValidity {
+	fn into(self) -> TransactionValidity {
+		TransactionValidity::Unknown(self)
+	}
+}
+
+impl Into<TransactionValidity> for ValidTransaction {
+	fn into(self) -> TransactionValidity {
+		TransactionValidity::Valid(self)
+	}
+}
+
+impl TransactionValidity {
+	/// Combine two `TransactionValidity`s.
+	///
+	/// If both are valid, they are combined.
+	///
+	/// If one of them is not valid, the non-valid one is returned. If both are not valid, `self` is
+	/// returned.
+	pub fn combine_with<F: FnOnce() -> Self>(self, other: F) -> Self {
+		match self {
+			TransactionValidity::Valid(valid) => {
+				match other() {
+					TransactionValidity::Valid(other_valid) => {
+						TransactionValidity::Valid(valid.combine_with(other_valid))
+					},
+					o => o,
+				}
+			},
+			_ => self,
+		}
+	}
+
+	/// Convert this `TransactionValidity` into a `Result`.
+	pub fn into_result(self) -> Result<ValidTransaction, TransactionValidityError> {
+		match self {
+			TransactionValidity::Valid(valid) => Ok(valid),
+			TransactionValidity::Invalid(invalid) => Err(invalid.into()),
+			TransactionValidity::Unknown(unknown) => Err(unknown.into()),
 		}
 	}
 }
 
 /// Information concerning a valid transaction.
-#[derive(Clone, PartialEq, Eq, Encode)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct ValidTransaction {
 	/// Priority of the transaction.
@@ -108,27 +220,6 @@ impl ValidTransaction {
 			provides: { self.provides.append(&mut other.provides); self.provides },
 			longevity: self.longevity.min(other.longevity),
 			propagate: self.propagate && other.propagate,
-		}
-	}
-}
-
-impl Decode for TransactionValidity {
-	fn decode<I: crate::codec::Input>(value: &mut I) -> Result<Self, Error> {
-		match value.read_byte()? {
-			0 => Ok(TransactionValidity::Invalid(i8::decode(value)?)),
-			1 => {
-				let priority = TransactionPriority::decode(value)?;
-				let requires = Vec::decode(value)?;
-				let provides = Vec::decode(value)?;
-				let longevity = TransactionLongevity::decode(value)?;
-				let propagate = bool::decode(value).unwrap_or(true);
-
-				Ok(TransactionValidity::Valid(ValidTransaction {
-					priority, requires, provides, longevity, propagate,
-				}))
-			},
-			2 => Ok(TransactionValidity::Unknown(i8::decode(value)?)),
-			_ => Err("Invalid transaction validity variant".into()),
 		}
 	}
 }

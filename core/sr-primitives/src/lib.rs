@@ -58,42 +58,6 @@ pub use generic::{DigestItem, Digest};
 pub use primitives::crypto::{key_types, KeyTypeId, CryptoType};
 pub use app_crypto::AppKey;
 
-#[cfg_attr(test, derive(PartialEq, Debug))]
-/// Primitive Error type
-pub enum PrimitiveError {
-	/// Unknown error
-	/// This exists only to make implementation easier. Should be avoid as much as possible.
-	Other(&'static str),
-	/// Indicating an invalid signature in extrinsic.
-	BadSignature,
-	/// Full block error message.
-	///
-	/// This allows modules to indicate that given transaction is potentially valid
-	/// in the future, but can't be executed in the current state.
-	/// Note this error should be returned early in the execution to prevent DoS,
-	/// cause the fees are not being paid if this error is returned.
-	///
-	/// Example: block gas limit is reached (the transaction can be retried in the next block though).
-	BlockFull,
-}
-
-// Exists for for backward compatibility purpose.
-impl Into<&'static str> for PrimitiveError {
-	fn into(self) -> &'static str {
-		match self {
-			PrimitiveError::Other(val) => val,
-			PrimitiveError::BadSignature => "bad signature in extrinsic",
-			PrimitiveError::BlockFull => "block size limit is reached",
-		}
-	}
-}
-
-impl From<&'static str> for PrimitiveError {
-	fn from(val: &'static str) -> PrimitiveError {
-		PrimitiveError::Other(val)
-	}
-}
-
 /// Justification type.
 pub type Justification = Vec<u8>;
 
@@ -647,47 +611,50 @@ impl From<ed25519::Signature> for AnySignature {
 	}
 }
 
-#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode)]
+#[derive(Eq, PartialEq, Clone, Copy, Decode, Encode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
-/// Outcome of a valid extrinsic application. Capable of being sliced.
-pub enum ApplyOutcome {
-	/// Successful application (extrinsic reported no issue).
-	Success,
-	/// Failed application (extrinsic was probably a no-op other than fees).
-	Fail(DispatchError),
-}
-
-#[derive(Eq, PartialEq, Clone, Copy, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
-#[repr(u8)]
 /// Reason why an extrinsic couldn't be applied (i.e. invalid extrinsic).
 pub enum ApplyError {
-	/// Bad signature.
-	BadSignature = 0,
-	/// Nonce too low.
-	Stale = 1,
-	/// Nonce too high.
-	Future = 2,
-	/// Sending account had too low a balance.
-	CantPay = 3,
-	/// Block is full, no more extrinsics can be applied.
-	FullBlock = 255,
+	/// General error to do with the inability to pay some fees (e.g. account balance too low).
+	Payment,
+
+	/// General error to do with the permissions of the sender.
+	NoPermission,
+
+	/// General error to do with the state of the system in general.
+	BadState,
+
+	/// General error to do with the exhaustion of block resources.
+	Exhausted,
+
+	/// Any error that occurred in a module while dispatching the transaction.
+	Module(DispatchError),
+
+	/// Any error to do with the transaction validity.
+	Validity(transaction_validity::TransactionValidityError),
 }
 
-impl Encode for ApplyError {
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		f(&[*self as u8])
+impl From<DispatchError> for ApplyError {
+	fn from(err: DispatchError) -> Self {
+		ApplyError::Module(err)
 	}
 }
 
-impl codec::EncodeLike for ApplyError {}
+impl From<transaction_validity::TransactionValidityError> for ApplyError {
+	fn from(err: transaction_validity::TransactionValidityError) -> Self {
+		ApplyError::Validity(err)
+	}
+}
+
+/// Result from attempt to apply an extrinsic.
+pub type ApplyResult = Result<(), ApplyError>;
 
 #[derive(Eq, PartialEq, Clone, Copy, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 /// Reason why a dispatch call failed
 pub struct DispatchError {
 	/// Module index, matching the metadata module index
-	pub module: u8,
+	pub module: Option<u8>,
 	/// Module specific error value
 	pub error: u8,
 	/// Optional error message.
@@ -697,7 +664,7 @@ pub struct DispatchError {
 
 impl DispatchError {
 	/// Create a new instance of `DispatchError`.
-	pub fn new(module: u8, error: u8, message: Option<&'static str>) -> Self {
+	pub fn new(module: Option<u8>, error: u8, message: Option<&'static str>) -> Self {
 		Self {
 			module,
 			error,
@@ -709,7 +676,9 @@ impl DispatchError {
 impl runtime_io::Printable for DispatchError {
 	fn print(&self) {
 		"DispatchError".print();
-		self.module.print();
+		if let Some(module) = self.module {
+			module.print();
+		}
 		self.error.print();
 		if let Some(msg) = self.message {
 			msg.print();
@@ -717,8 +686,21 @@ impl runtime_io::Printable for DispatchError {
 	}
 }
 
-/// Result from attempt to apply an extrinsic.
-pub type ApplyResult = Result<ApplyOutcome, ApplyError>;
+impl traits::ModuleDispatchError for &'static str {
+	fn as_u8(&self) -> u8 {
+		0
+	}
+
+	fn as_str(&self) -> &'static str {
+		self
+	}
+}
+
+impl From<&'static str> for DispatchError {
+	fn from(err: &'static str) -> DispatchError {
+		DispatchError::new(None, 0, Some(err))
+	}
+}
 
 /// Verify a signature on an encoded value in a lazy manner. This can be
 /// an optimization if the signature scheme has an "unsigned" escape hash.

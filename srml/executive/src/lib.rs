@@ -254,7 +254,6 @@ where
 		<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32);
 
 		r.map(|_| ApplyOutcome::Success).map_err(ApplyOutcome::Fail)
-		})
 	}
 
 	fn final_checks(header: &System::Header) {
