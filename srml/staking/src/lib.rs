@@ -447,7 +447,7 @@ pub struct Exposure<AccountId, Balance: HasCompact> {
 pub struct SlashJournalEntry<AccountId, Balance: HasCompact> {
 	who: AccountId,
 	amount: Balance,
-	own_slash: Balance,
+	own_slash: Balance, // the amount of `who`'s own exposure that was slashed
 }
 
 pub type BalanceOf<T> =
