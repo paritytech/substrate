@@ -389,6 +389,7 @@ mod tests {
 				authorities: vec![],
 			}),
 			im_online: Some(Default::default()),
+			authority_discovery: Some(Default::default()),
 			democracy: Some(Default::default()),
 			collective_Instance1: Some(Default::default()),
 			collective_Instance2: Some(Default::default()),
