@@ -795,13 +795,16 @@ impl OverlayedChanges {
 
 	pub(crate) fn clear_child_prefix(&mut self, storage_key: &[u8], prefix: &[u8]) {
 		let extrinsic_index = self.extrinsic_index();
-		let history = self.changes.history.as_slice();
-		let map_entry = self.changes.children.entry(storage_key.to_vec()).or_default();
-
-		for (key, entry) in map_entry.iter_mut() {
-			if key.starts_with(prefix) {
-				entry.set_with_extrinsic(history, None, extrinsic_index)
+		if let Some(child_change) = self.changes.children.get_mut(storage_key) {
+			let mut nb_remove = 0;
+			for (key, entry) in child_change.iter_mut() {
+				if key.starts_with(prefix) {
+					nb_remove += 1;
+					entry.set_with_extrinsic(self.changes.history.as_slice(), None, extrinsic_index);
+				}
 			}
+
+			self.operation_from_last_gc += nb_remove;
 		}
 	}
 
@@ -874,13 +877,8 @@ impl OverlayedChanges {
 	#[cfg(test)]
 	pub(crate) fn set_extrinsic_index(&mut self, extrinsic_index: u32) {
 		use codec::Encode;
-		self.changes.top.entry(EXTRINSIC_INDEX.to_vec()).or_default().set(
-			self.changes.history.as_slice(),
-			OverlayedValue{
-				value: Some(extrinsic_index.encode()),
-				extrinsics: None,
-			}
-		);
+		let value = extrinsic_index.encode();
+		self.set_storage(EXTRINSIC_INDEX.to_vec(), Some(extrinsic_index.encode()));
 	}
 
 	/// Test only method to build from committed info and prospective.

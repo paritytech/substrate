@@ -235,6 +235,7 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 		let (root, is_empty, _) = {
 			let delta = self.overlay.changes.child_iter(storage_key)
 				.map(|(k, v)| (k.to_vec(), v.map(|s| s.to_vec())));
+
 			self.backend.child_storage_root(storage_key, delta)
 		};
 		if is_empty {
