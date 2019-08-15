@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Utility for gossip of network messages between authorities.
+//! Utility for gossip of network messages between nodes.
 //! Handles chain-specific and standard BFT messages.
 //!
 //! Gossip messages are separated by two categories: "topics" and consensus engine ID.
