@@ -29,7 +29,7 @@ use crate::watcher::Watcher;
 use serde::Serialize;
 use log::debug;
 
-use futures::sync::mpsc;
+use futures::channel::mpsc;
 use parking_lot::{Mutex, RwLock};
 use sr_primitives::{
 	generic::BlockId,
@@ -453,7 +453,6 @@ fn fire_events<H, H2, Ex>(
 mod tests {
 	use super::*;
 	use sr_primitives::transaction_validity::ValidTransaction;
-	use futures::Stream;
 	use codec::Encode;
 	use test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
 	use assert_matches::assert_matches;
@@ -605,9 +604,9 @@ mod tests {
 		};
 
 		// then
-		let mut it = stream.wait();
-		assert_eq!(it.next(), Some(Ok(())));
-		assert_eq!(it.next(), Some(Ok(())));
+		let mut it = futures::executor::block_on_stream(stream);
+		assert_eq!(it.next(), Some(()));
+		assert_eq!(it.next(), Some(()));
 		assert_eq!(it.next(), None);
 	}
 
@@ -747,9 +746,9 @@ mod tests {
 			assert_eq!(pool.status().future, 0);
 
 			// then
-			let mut stream = watcher.into_stream().wait();
-			assert_eq!(stream.next(), Some(Ok(watcher::Status::Ready)));
-			assert_eq!(stream.next(), Some(Ok(watcher::Status::Finalized(H256::from_low_u64_be(2).into()))));
+			let mut stream = futures::executor::block_on_stream(watcher.into_stream());
+			assert_eq!(stream.next(), Some(watcher::Status::Ready));
+			assert_eq!(stream.next(), Some(watcher::Status::Finalized(H256::from_low_u64_be(2).into())));
 			assert_eq!(stream.next(), None);
 		}
 
@@ -772,9 +771,9 @@ mod tests {
 			assert_eq!(pool.status().future, 0);
 
 			// then
-			let mut stream = watcher.into_stream().wait();
-			assert_eq!(stream.next(), Some(Ok(watcher::Status::Ready)));
-			assert_eq!(stream.next(), Some(Ok(watcher::Status::Finalized(H256::from_low_u64_be(2).into()))));
+			let mut stream = futures::executor::block_on_stream(watcher.into_stream());
+			assert_eq!(stream.next(), Some(watcher::Status::Ready));
+			assert_eq!(stream.next(), Some(watcher::Status::Finalized(H256::from_low_u64_be(2).into())));
 			assert_eq!(stream.next(), None);
 		}
 
@@ -801,9 +800,9 @@ mod tests {
 			assert_eq!(pool.status().ready, 2);
 
 			// then
-			let mut stream = watcher.into_stream().wait();
-			assert_eq!(stream.next(), Some(Ok(watcher::Status::Future)));
-			assert_eq!(stream.next(), Some(Ok(watcher::Status::Ready)));
+			let mut stream = futures::executor::block_on_stream(watcher.into_stream());
+			assert_eq!(stream.next(), Some(watcher::Status::Future));
+			assert_eq!(stream.next(), Some(watcher::Status::Ready));
 		}
 
 		#[test]
@@ -824,9 +823,9 @@ mod tests {
 
 
 			// then
-			let mut stream = watcher.into_stream().wait();
-			assert_eq!(stream.next(), Some(Ok(watcher::Status::Ready)));
-			assert_eq!(stream.next(), Some(Ok(watcher::Status::Invalid)));
+			let mut stream = futures::executor::block_on_stream(watcher.into_stream());
+			assert_eq!(stream.next(), Some(watcher::Status::Ready));
+			assert_eq!(stream.next(), Some(watcher::Status::Invalid));
 			assert_eq!(stream.next(), None);
 		}
 
@@ -851,9 +850,9 @@ mod tests {
 
 
 			// then
-			let mut stream = watcher.into_stream().wait();
-			assert_eq!(stream.next(), Some(Ok(watcher::Status::Ready)));
-			assert_eq!(stream.next(), Some(Ok(watcher::Status::Broadcast(peers))));
+			let mut stream = futures::executor::block_on_stream(watcher.into_stream());
+			assert_eq!(stream.next(), Some(watcher::Status::Ready));
+			assert_eq!(stream.next(), Some(watcher::Status::Broadcast(peers)));
 		}
 
 		#[test]
@@ -888,9 +887,9 @@ mod tests {
 			assert_eq!(pool.status().ready, 1);
 
 			// then
-			let mut stream = watcher.into_stream().wait();
-			assert_eq!(stream.next(), Some(Ok(watcher::Status::Ready)));
-			assert_eq!(stream.next(), Some(Ok(watcher::Status::Dropped)));
+			let mut stream = futures::executor::block_on_stream(watcher.into_stream());
+			assert_eq!(stream.next(), Some(watcher::Status::Ready));
+			assert_eq!(stream.next(), Some(watcher::Status::Dropped));
 		}
 
 		#[test]

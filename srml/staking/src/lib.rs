@@ -277,7 +277,7 @@ mod mock;
 mod tests;
 
 mod equalize;
-mod inflation;
+pub mod inflation;
 
 #[cfg(all(feature = "bench", test))]
 mod benches;
