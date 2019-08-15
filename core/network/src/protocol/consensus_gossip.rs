@@ -27,7 +27,7 @@
 //! under a single topic to all peers who don't have them yet, and `send_topic` to
 //! send all messages under a single topic to a specific peer.
 //!
-//! Each consensus engine ID can have an associated,
+//! Each consensus engine ID must have an associated,
 //! registered `Validator` for all gossip messages. The primary role of this `Validator` is
 //! to process incoming messages from peers, and decide whether to discard them or process
 //! them. It also decides whether to re-broadcast the message.
