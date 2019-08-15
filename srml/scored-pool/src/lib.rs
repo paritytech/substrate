@@ -89,7 +89,7 @@ mod tests;
 use codec::{Encode, Decode};
 use sr_std::prelude::*;
 use srml_support::{
-	StorageValue, decl_module, decl_storage, decl_event,
+	StorageValue, decl_module, decl_storage, decl_event, ensure,
 	traits::{ChangeMembers, InitializeMembers, Currency, Get, ReservableCurrency},
 };
 use system::{self, ensure_root, ensure_signed};
@@ -214,13 +214,7 @@ decl_module! {
 		/// Add `origin` to the pool of candidates.
 		pub fn issue_candidacy(origin) {
 			let who = ensure_signed(origin)?;
-
-			let _ = Self::find_in_pool(&who)
-				.ok()
-				.map_or_else(
-					|| Ok(()),
-					|_| Err("already a member"),
-				)?;
+			ensure!(Self::find_in_pool(&who).is_err(), "already a member");
 
 			T::Currency::reserve(&who, T::CandidateDeposit::get())
 				.map_err(|_| "balance too low")?;
@@ -337,9 +331,8 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	///
 	/// Returns its position in the `Pool` vec, if found.
 	fn find_in_pool(seek: &T::AccountId) -> Result<usize, &'static str> {
-		let pool = <Pool<T, I>>::get();
 		// we can't use binary search here since the pool is sorted by score
-		pool
+		Self::pool()
 			.iter()
 			.position(|(who, _score)| who == seek)
 			.ok_or("not a member")
