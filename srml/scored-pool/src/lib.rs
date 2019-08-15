@@ -104,7 +104,7 @@ pub trait Trait<I=DefaultInstance>: system::Trait {
 	type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
 
 	/// The score attributed to a member or candidate.
-	type Score: SimpleArithmetic + Clone + Default + Encode + Decode + MaybeSerializeDebug;
+	type Score: SimpleArithmetic + Clone + Copy + Default + Encode + Decode + MaybeSerializeDebug;
 
 	/// The overarching event type.
 	type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
@@ -333,9 +333,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// Sorts the `Pool` by score in an ascending order. Entities which
 	/// have a score of `None` are sorted to the beginning of the vec.
 	fn sort_pool(pool: &mut Vec<(T::AccountId, Option<T::Score>)>) {
-		pool.sort_by_key(|(_who, maybe_score)|
-			Option::unwrap_or_default(maybe_score.clone())
-		);
+		pool.sort_by_key(|(_, maybe_score)| maybe_score.unwrap_or_default());
 	}
 
 	/// Find an entity in the pool.
