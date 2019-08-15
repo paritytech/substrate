@@ -616,9 +616,33 @@ impl OverlayedChangeSet {
 		&self,
 	) -> impl Iterator<Item=(&[u8], impl Iterator<Item = (&[u8], &OverlayedValue)>)> {
 		self.children.iter()
-			.map(move |(storage_key, child)| (storage_key.as_slice(), child.iter()
+			.map(move |(keyspace, child)| (keyspace.as_slice(), child.iter()
 				.filter_map(move |(k, v)|
 					v.get(self.history.as_slice()).map(|v| (k.as_slice(), v)))
+			))
+	}
+
+	/// Iterator over current state of the overlay.
+	pub fn children_iter(
+		&self,
+	) -> impl Iterator<Item=(&[u8], impl Iterator<Item = (&[u8], Option<&[u8]>)>)> {
+		self.children.iter()
+			.map(move |(keyspace, child)| (keyspace.as_slice(), child.iter()
+				.filter_map(move |(k, v)|
+					v.get(self.history.as_slice())
+						.map(|v| (k.as_slice(), v.value.as_ref().map(|v| v.as_slice()))))
+			))
+	}
+
+	/// Iterator over current state of the overlay.
+	pub fn owned_children_iter<'a>(
+		&'a self,
+	) -> impl Iterator<Item=(Vec<u8>, impl Iterator<Item = (Vec<u8>, Option<Vec<u8>>)> + 'a)> + 'a {
+		self.children.iter()
+			.map(move |(keyspace, child)| (keyspace.to_vec(), child.iter()
+				.filter_map(move |(k, v)|
+					v.get(self.history.as_slice())
+						.map(|v| (k.to_vec(), v.value.as_ref().map(|v| v.to_vec()))))
 			))
 	}
 

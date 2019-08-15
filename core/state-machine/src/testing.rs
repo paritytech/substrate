@@ -221,11 +221,7 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 
 	fn storage_root(&mut self) -> H::Out {
 
-		let child_storage_keys = self.overlay.changes.children.keys();
-
-		let child_delta_iter = child_storage_keys.map(|storage_key|
-			(storage_key.clone(), self.overlay.changes.child_iter(storage_key)
-				.map(|(k, v)| (k.to_vec(), v.map(|s| s.to_vec())))));
+		let child_delta_iter = self.overlay.changes.owned_children_iter();
 
 		// compute and memoize
 		let delta = self.overlay.changes.top_iter().map(|(k, v)| (k.to_vec(), v.map(|s| s.to_vec())));
