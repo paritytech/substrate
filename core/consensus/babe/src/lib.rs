@@ -1060,16 +1060,7 @@ fn secondary_slot_author(
 		return None;
 	}
 
-	let rand = {
-		let mut data = [0u8; 40];
-		data[..32].copy_from_slice(&randomness);
-
-		for (i, v) in slot_number.to_le_bytes().into_iter().enumerate() {
-			data[32 + i] = *v;
-		}
-
-		U256::from(blake2_256(&data))
-	};
+	let rand = U256::from((randomness, slot_number).using_encoded(blake2_256));
 
 	let authorities_len = U256::from(authorities.len());
 	let idx = rand % authorities_len;
