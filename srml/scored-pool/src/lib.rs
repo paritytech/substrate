@@ -168,7 +168,10 @@ decl_storage! {
 							.expect("balance too low");
 					});
 
-				<Module<T, I>>::sort_pool(&mut pool);
+				/// Sorts the `Pool` by score in an ascending order. Entities which
+				/// have a score of `None` are sorted to the beginning of the vec.
+				pool.sort_by_key(|(_, maybe_score)| maybe_score.unwrap_or_default());
+
 				<Pool<T, I>>::put(&pool);
 				<Module<T, I>>::refresh_members(false);
 
@@ -333,12 +336,6 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 				&old_members[..],
 			);
 		}
-	}
-
-	/// Sorts the `Pool` by score in an ascending order. Entities which
-	/// have a score of `None` are sorted to the beginning of the vec.
-	fn sort_pool(pool: &mut Vec<(T::AccountId, Option<T::Score>)>) {
-		pool.sort_by_key(|(_, maybe_score)| maybe_score.unwrap_or_default());
 	}
 
 	/// Find an entity in the pool.
