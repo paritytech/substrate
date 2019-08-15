@@ -445,6 +445,11 @@ impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Mod
 			(k, to_votes(staking::Module::<T>::stakers(account).total))
 		}).collect::<Vec<_>>();
 
+		// at the start of next session, the same authorities will be in `validators` argument,
+		// but at that time, stakes could change. This could lead to the case when we have
+		// announced the same authorities, but obsolete weights to light clients using NextEpochData.
+		// But we'll actually use updated weights on full nodes.
+		// To avoid this, let's save authorities for the next session here.
 		NextAuthorities::put(next_authorities.clone());
 
 		let next_epoch_start_slot = EpochStartSlot::get().saturating_add(T::EpochDuration::get());
