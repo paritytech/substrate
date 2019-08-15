@@ -183,14 +183,18 @@ decl_event!(
 	pub enum Event<T, I=DefaultInstance> where
 		<T as system::Trait>::AccountId,
 	{
-		/// The given member was removed; see the transaction for who.
+		/// The given member was removed. See the transaction for who.
 		MemberRemoved,
-		/// An entity has issued a candidacy.
+		/// An entity has issued a candidacy. See the transaction for who.
 		CandidateAdded,
-		/// An entity withdrew candidacy.
+		/// An entity withdrew candidacy. See the transaction for who.
 		CandidateWithdrew,
 		/// The candidacy was forcefully removed for an entity.
+		/// See the transaction for who.
 		CandidateKicked,
+		/// A score was attributed to the candidate.
+		/// See the transaction for who.
+		CandidateScored,
 		/// Phantom member, never used.
 		Dummy(sr_std::marker::PhantomData<(AccountId, I)>),
 	}
@@ -280,6 +284,7 @@ decl_module! {
 			pool.insert(location, item);
 
 			<Pool<T, I>>::put(&pool);
+			Self::deposit_event(RawEvent::CandidateScored);
 		}
 
 		/// Root-dispatchable call to change `MemberCount`.
