@@ -53,7 +53,7 @@ use system::ensure_signed;
 use consensus_common_primitives::AuthorshipEquivocationProof;
 use babe_primitives::{
 	BABE_ENGINE_ID, ConsensusLog, BabeWeight, Epoch, RawBabePreDigest, 
-	BabeEquivocationProof, get_slot
+	EquivocationProof, get_slot
 };
 use app_crypto::RuntimeAppPublic;
 pub use babe_primitives::{AuthorityId, AuthoritySignature, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH, app};
@@ -226,12 +226,12 @@ impl<T> ValidateUnsigned for Module<T> where T: Trait
 }
 
 fn equivocation_is_valid<T: Trait>(
-	equivocation: &BabeEquivocationProof<T::Header>,
+	equivocation: &EquivocationProof<T::Header, AuthorityId, AuthoritySignature>,
 	proof: &Proof,
 	signature: &AuthoritySignature,
 ) -> bool {
 	let signed = (equivocation, proof);
-	let reporter = equivocation.reporter().expect("FIXME");
+	let reporter = &equivocation.reporter;
 
 	let signature_valid = signed.using_encoded(|signed| if signed.len() > 256 {
 		reporter.verify(&blake2_256(signed), &signature)
@@ -243,15 +243,15 @@ fn equivocation_is_valid<T: Trait>(
 		return false
 	}
 
-	let first_header = equivocation.first_header();
-	let second_header = equivocation.second_header();
+	let first_header = &equivocation.first_header;
+	let second_header = &equivocation.second_header;
 
 	if first_header == second_header {
 		return false
 	}
 
-	let maybe_first_slot = get_slot::<T::Header>(first_header);
-	let maybe_second_slot = get_slot::<T::Header>(second_header);
+	let maybe_first_slot = get_slot::<T::Header>(&first_header);
+	let maybe_second_slot = get_slot::<T::Header>(&second_header);
 	
 	if maybe_first_slot.is_err() || maybe_second_slot.is_err() {
 		return false
@@ -259,13 +259,13 @@ fn equivocation_is_valid<T: Trait>(
 	let first_slot = maybe_first_slot.expect("checked before; qed");
 	let second_slot = maybe_second_slot.expect("checked before; qed");
 
-	if equivocation.slot() == first_slot && first_slot == second_slot {
-		let author = equivocation.identity();
+	if equivocation.slot == first_slot && first_slot == second_slot {
+		let author = &equivocation.identity;
 
-		if !author.verify(&first_header.hash(), equivocation.first_signature()) {
+		if !author.verify(&first_header.hash(), &equivocation.first_signature) {
 			return false
 		}
-		if !author.verify(&second_header.hash(), equivocation.second_signature()) {
+		if !author.verify(&second_header.hash(), &equivocation.second_signature) {
 			return false
 		}
 		return true;
@@ -313,19 +313,19 @@ decl_module! {
 
 		fn report_equivocation(
 			origin,
-			equivocation: BabeEquivocationProof<T::Header>,
+			equivocation: EquivocationProof<T::Header, AuthorityId, AuthoritySignature>,
 			proof: Proof,
 			_signature: AuthoritySignature
 		) {
 			let who = ensure_signed(origin)?;
 			let to_punish = <T as Trait>::KeyOwnerSystem::check_proof(
-				(key_types::BABE, equivocation.identity().encode()),
+				(key_types::BABE, equivocation.identity.encode()),
 				proof.clone(),
 			);
 			if let Some(to_punish) = to_punish {
 				let offence = BabeEquivocationOffence {
-					slot: equivocation.slot(),
-					session_index: equivocation.session_index().expect("FIXME").clone(),
+					slot: equivocation.slot,
+					session_index: SessionIndex::default(),
 					validator_set_count: 0,
 					offender: to_punish,
 				};
@@ -425,7 +425,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	pub fn construct_equivocation_transaction(
-		equivocation: BabeEquivocationProof<T::Header>,
+		equivocation: EquivocationProof<T::Header, AuthorityId, AuthoritySignature>,
 		proof: Proof,
 	) -> Option<Vec<u8>> {
 		let local_keys = app::Public::all();
