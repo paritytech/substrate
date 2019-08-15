@@ -31,7 +31,7 @@ use sr_primitives::{generic::DigestItem, ConsensusEngineId, Perbill};
 use sr_primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert};
 use sr_staking_primitives::{
 	SessionIndex,
-	offence::{Offence, TimeSlot, Kind},
+	offence::{Offence, Kind},
 };
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
@@ -266,6 +266,7 @@ struct BabeEquivocationOffence<FullIdentification> {
 
 impl<FullIdentification: Clone> Offence<FullIdentification> for BabeEquivocationOffence<FullIdentification> {
 	const ID: Kind = *b"babe:equivocatio";
+	type TimeSlot = u64;
 
 	fn offenders(&self) -> Vec<FullIdentification> {
 		vec![self.offender.clone()]
@@ -279,8 +280,8 @@ impl<FullIdentification: Clone> Offence<FullIdentification> for BabeEquivocation
 		self.validator_set_count
 	}
 
-	fn time_slot(&self) -> TimeSlot {
-		self.slot as TimeSlot
+	fn time_slot(&self) -> u64 {
+		self.slot
 	}
 
 	fn slash_fraction(

@@ -25,17 +25,26 @@ mod mock;
 mod tests;
 
 use rstd::{
-	collections::btree_set::BTreeSet,
 	vec::Vec,
+	collections::btree_set::BTreeSet,
 };
 use support::{
-	StorageDoubleMap, decl_module, decl_event, decl_storage, Parameter,
+	StorageMap, StorageDoubleMap, decl_module, decl_event, decl_storage, Parameter,
 };
-use sr_primitives::Perbill;
+use sr_primitives::{
+	Perbill,
+	traits::Hash,
+};
 use sr_staking_primitives::{
-	SessionIndex,
-	offence::{Offence, ReportOffence, TimeSlot, Kind, OnOffenceHandler, OffenceDetails},
+	offence::{Offence, ReportOffence, Kind, OnOffenceHandler, OffenceDetails},
 };
+use codec::{Encode, Decode};
+
+/// A binary blob which represents a SCALE codec-encoded `O::TimeSlot`.
+type OpaqueTimeSlot = Vec<u8>;
+
+/// A type alias for a report identifier.
+type ReportIdOf<T> = <T as system::Trait>::Hash;
 
 /// Offences trait
 pub trait Trait: system::Trait {
@@ -49,14 +58,19 @@ pub trait Trait: system::Trait {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Offences {
-		/// A mapping between unique `TimeSlots` within a particular session and the offence `Kind` into
-		/// a vector of offending authorities.
+		/// The primary structure that holds all offence records keyed by report identifiers.
+		Reports get(reports): map ReportIdOf<T> => Option<OffenceDetails<T::AccountId, T::IdentificationTuple>>;
+
+		/// A vector of reports of the same kind that happened at the same time slot.
+		ConcurrentReportsIndex: double_map Kind, blake2_256(OpaqueTimeSlot) => Vec<ReportIdOf<T>>;
+
+		/// Enumerates all reports of a kind along with the time they happened.
 		///
-		/// It's important that we store all authorities reported for an offence for any kind and
-		/// timeslot since the slashing will increase based on the length of this vec.
-		OffenceReports get(offence_reports):
-			double_map Kind, blake2_256((SessionIndex, TimeSlot))
-			=> Vec<OffenceDetails<T::AccountId, T::IdentificationTuple>>;
+		/// All reports are sorted by the time of offence.
+		///
+		/// Note that the actual type of this mapping is `Vec<u8>`, this is because values of
+		/// different types are not supported at the moment so we are doing the manual serialization.
+		ReportsByKindIndex: map Kind => Vec<u8>; // (O::TimeSlot, ReportIdOf<T>)
 	}
 }
 
@@ -64,7 +78,7 @@ decl_event!(
 	pub enum Event {
 		/// There is an offence reported of the given `kind` happened at the `session_index` and
 		/// (kind-specific) time slot. This event is not deposited for duplicate slashes.
-		Offence(Kind, SessionIndex, TimeSlot),
+		Offence(Kind, OpaqueTimeSlot),
 	}
 );
 
@@ -75,57 +89,45 @@ decl_module! {
 	}
 }
 
-impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportOffence<T::AccountId, T::IdentificationTuple, O>
-	for Module<T> where
+impl<T: Trait, O: Offence<T::IdentificationTuple>>
+	ReportOffence<T::AccountId, T::IdentificationTuple, O> for Module<T>
+where
 	T::IdentificationTuple: Clone,
 {
 	fn report_offence(reporters: Vec<T::AccountId>, offence: O) {
 		let offenders = offence.offenders();
 		let time_slot = offence.time_slot();
-		let session = offence.session_index();
 		let validator_set_count = offence.validator_set_count();
 
-		// Check if an offence is already reported for the offender authorities
-		// and otherwise stores that report.
-		let mut new_offenders = BTreeSet::new();
-		let all_offenders = {
-			// We have to return the modified list of offending authorities. If we were to use
-			// `mutate` we would have to clone the whole list in order to return it.
-			let mut offending_authorities = <OffenceReports<T>>::get(&O::ID, &(session, time_slot));
+		let mut cache = ReportIndexCache::load(&time_slot);
 
-			for offender in offenders {
-				// TODO [slashing] This prevents slashing for multiple reports of the same kind at the same slot,
-				// note however that we might do that in the future if the reports are not exactly the same (dups).
-				// De-duplication of reports is tricky though, we need a canonical form of the report
-				// (for instance babe equivocation can have headers swapped).
-				if !offending_authorities.iter().any(|details| details.offender == offender) {
-					new_offenders.insert(offender.clone());
-					offending_authorities.push(OffenceDetails {
-						offender,
-						reporters: reporters.clone().into_iter().collect(),
-					});
-				}
-			}
-
-			offending_authorities
-		};
+		// Go through all offenders in the report and record unique reports.
+		let new_offenders =
+			Self::collect_unique_reports::<O>(reporters, &time_slot, offenders, &mut cache);
 
 		if new_offenders.is_empty() {
 			// The report contained only duplicates, so there is no need to slash again.
-			return
+			return;
 		}
 
-		// We pushed new items in the offending_authorities, so update it.
-		<OffenceReports<T>>::insert(&O::ID, &(session, time_slot), &all_offenders);
+		// Deposit the event.
+		Self::deposit_event(Event::Offence(O::ID, time_slot.encode()));
 
-		let offenders_count = all_offenders.len() as u32;
+		// Load report details for the all reports happened at the same time.
+		let concurrent_offenders = cache
+			.concurrent_reports
+			.iter()
+			.filter_map(|report_id| {
+				<Reports<T>>::get(report_id)
+			})
+			.collect::<Vec<_>>();
+
+		let offenders_count = concurrent_offenders.len() as u32;
 		let previous_offenders_count = offenders_count - new_offenders.len() as u32;
-
-		// The report is not a duplicate. Deposit an event.
-		Self::deposit_event(Event::Offence(O::ID, session, time_slot));
 
 		// The amount new offenders are slashed
 		let new_fraction = O::slash_fraction(offenders_count, validator_set_count);
+
 		// The amount previous offenders are slashed additionally.
 		//
 		// Since they were slashed in the past, we slash by:
@@ -149,7 +151,7 @@ impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportOffence<T::AccountId, T
 		};
 
 		// calculate how much to slash
-		let slash_perbill = all_offenders
+		let slash_perbill = concurrent_offenders
 			.iter()
 			.map(|details| if previous_offenders_count > 0 && new_offenders.contains(&details.offender) {
 				new_fraction.clone()
@@ -159,8 +161,111 @@ impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportOffence<T::AccountId, T
 			.collect::<Vec<_>>();
 
 		T::OnOffenceHandler::on_offence(
-			&all_offenders,
+			&concurrent_offenders,
 			&slash_perbill,
+		);
+
+		cache.save()
+	}
+}
+
+impl<T: Trait> Module<T> {
+	/// Compute the ID for the given report properties.
+	///
+	/// The report id depends on the offence kind, time slot and the id of offender.
+	fn report_id<O: Offence<T::IdentificationTuple>>(
+		time_slot: &O::TimeSlot,
+		offender: &T::IdentificationTuple,
+	) -> ReportIdOf<T> {
+		(O::ID, time_slot.encode(), offender).using_encoded(T::Hashing::hash)
+	}
+
+	/// Goes through all offenders in a report and record each unique offence updating indexes.
+	///
+	/// Returns `true` if there were unique reports.
+	fn collect_unique_reports<O: Offence<T::IdentificationTuple>>(
+		reporters: Vec<T::AccountId>,
+		time_slot: &O::TimeSlot,
+		offenders: Vec<T::IdentificationTuple>,
+		index_cache: &mut ReportIndexCache<T, O>,
+	) -> BTreeSet<T::IdentificationTuple> {
+		let mut new_offenders = BTreeSet::new();
+
+		for offender in offenders {
+			let report_id = Self::report_id::<O>(time_slot, &offender);
+
+			if !<Reports<T>>::exists(&report_id) {
+				new_offenders.insert(offender.clone());
+				<Reports<T>>::insert(
+					&report_id,
+					OffenceDetails {
+						offender,
+						reporters: reporters.clone(),
+					},
+				);
+
+				index_cache.insert(time_slot, report_id);
+			}
+		}
+
+		new_offenders
+	}
+}
+
+/// An auxilary struct for dealing with caches of report indexes localized for a specific offence
+/// kind.
+///
+/// It is expected that access to the indexes will be only performed through this struct while it
+/// exists.
+struct ReportIndexCache<T: Trait, O: Offence<T::IdentificationTuple>> {
+	opaque_time_slot: OpaqueTimeSlot,
+	concurrent_reports: Vec<ReportIdOf<T>>,
+	same_kind_reports: Vec<(O::TimeSlot, ReportIdOf<T>)>,
+}
+
+impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportIndexCache<T, O> {
+	/// Preload indexes from the cache for the specific `time_slot` and the kind of the offence.
+	fn load(time_slot: &O::TimeSlot) -> Self {
+		let opaque_time_slot = time_slot.encode();
+
+		let same_kind_reports = <ReportsByKindIndex>::get(&O::ID);
+		let same_kind_reports =
+			Vec::<(O::TimeSlot, ReportIdOf<T>)>::decode(&mut &same_kind_reports[..])
+				.unwrap_or_default();
+
+		let concurrent_reports = <ConcurrentReportsIndex<T>>::get(&O::ID, &opaque_time_slot);
+
+		Self {
+			opaque_time_slot,
+			concurrent_reports,
+			same_kind_reports,
+		}
+	}
+
+	/// Insert a new report to the index cache.
+	fn insert(&mut self, time_slot: &O::TimeSlot, report_id: ReportIdOf<T>) {
+		// Update the list of concurrent reports.
+		self.concurrent_reports.push(report_id);
+
+		// Insert the report id into the list while maintaining the ordering by the time
+		// slot.
+		let idx = match self
+			.same_kind_reports
+			.binary_search_by_key(&time_slot, |&(ref when, _)| when)
+		{
+			Ok(idx) => idx,
+			Err(idx) => idx,
+		};
+		self.same_kind_reports.insert(idx, (time_slot.clone(), report_id));
+	}
+
+	/// Dump the indexes to the storage.
+	fn save(self) {
+		<ReportsByKindIndex>::insert(&O::ID, self.same_kind_reports.encode());
+		<ConcurrentReportsIndex<T>>::insert(
+			&O::ID,
+			&self.opaque_time_slot,
+			&self.concurrent_reports,
 		);
 	}
 }

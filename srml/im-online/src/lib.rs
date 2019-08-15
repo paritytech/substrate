@@ -80,7 +80,7 @@ use sr_primitives::{
 };
 use sr_staking_primitives::{
 	SessionIndex, CurrentElectedSet,
-	offence::{ReportOffence, Offence, TimeSlot, Kind},
+	offence::{ReportOffence, Offence, Kind},
 };
 use srml_support::{
 	StorageValue, decl_module, decl_event, decl_storage, StorageDoubleMap, print,
@@ -493,6 +493,7 @@ pub struct UnresponsivenessOffence<Offender> {
 
 impl<Offender: Clone> Offence<Offender> for UnresponsivenessOffence<Offender> {
 	const ID: Kind = *b"im-online:offlin";
+	type TimeSlot = SessionIndex;
 
 	fn offenders(&self) -> Vec<Offender> {
 		self.offenders.clone()
@@ -506,8 +507,8 @@ impl<Offender: Clone> Offence<Offender> for UnresponsivenessOffence<Offender> {
 		self.validator_set_count
 	}
 
-	fn time_slot(&self) -> TimeSlot {
-		self.session_index as TimeSlot
+	fn time_slot(&self) -> SessionIndex {
+		self.session_index as SessionIndex
 	}
 
 	fn slash_fraction(offenders: u32, validator_set_count: u32) -> Perbill {

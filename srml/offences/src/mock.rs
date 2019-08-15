@@ -20,12 +20,16 @@
 
 use std::cell::RefCell;
 use crate::{Module, Trait};
+use codec::Encode;
 use sr_primitives::Perbill;
-use sr_staking_primitives::offence::{self, OffenceDetails, TimeSlot};
+use sr_staking_primitives::{
+	SessionIndex,
+	offence::{self, Kind, OffenceDetails},
+};
 use sr_primitives::testing::Header;
 use sr_primitives::traits::{IdentityLookup, BlakeTwo256};
 use substrate_primitives::{H256, Blake2Hasher};
-use support::{impl_outer_origin, impl_outer_event, parameter_types};
+use support::{impl_outer_origin, impl_outer_event, parameter_types, StorageMap, StorageDoubleMap};
 use {runtime_io, system};
 
 impl_outer_origin!{
@@ -109,31 +113,41 @@ pub type System = system::Module<Runtime>;
 
 pub const KIND: [u8; 16] = *b"test_report_1234";
 
+/// Returns all offence details for the specific `kind` happened at the specific time slot.
+pub fn offence_reports(kind: Kind, time_slot: u128) -> Vec<OffenceDetails<u64, u64>> {
+	<crate::ConcurrentReportsIndex<Runtime>>::get(&kind, &time_slot.encode())
+		.into_iter()
+		.map(|report_id| <crate::Reports<Runtime>>::get(&report_id).unwrap())
+		.collect()
+}
+
 #[derive(Clone)]
 pub struct Offence<T> {
 	pub validator_set_count: u32,
-	pub session_index: u32,
 	pub offenders: Vec<T>,
-	pub time_slot: TimeSlot,
+	pub time_slot: u128,
 }
 
 impl<T: Clone> offence::Offence<T> for Offence<T> {
 	const ID: offence::Kind = KIND;
+	type TimeSlot = u128;
 
 	fn offenders(&self) -> Vec<T> {
 		self.offenders.clone()
-	}
-
-	fn session_index(&self) -> u32 {
-		self.session_index
 	}
 
 	fn validator_set_count(&self) -> u32 {
 		self.validator_set_count
 	}
 
-	fn time_slot(&self) -> TimeSlot {
+	fn time_slot(&self) -> u128 {
 		self.time_slot
+	}
+
+	fn session_index(&self) -> SessionIndex {
+		// session index is not used by the srml-offences directly, but rather it exists only for
+		// filtering historical reports.
+		unimplemented!()
 	}
 
 	fn slash_fraction(
