@@ -3731,7 +3731,6 @@ dependencies = [
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
  "srml-session 2.0.0",
- "srml-staking 2.0.0",
  "srml-support 2.0.0",
  "srml-system 2.0.0",
  "srml-timestamp 2.0.0",
