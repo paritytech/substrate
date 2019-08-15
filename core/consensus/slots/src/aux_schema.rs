@@ -22,7 +22,6 @@ use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
 use sr_primitives::traits::Header;
 use app_crypto::RuntimeAppPublic;
-use consensus_common_primitives::AuthorshipEquivocationProof;
 use srml_session::historical::Proof;
 use keystore::KeyStorePtr;
 use sr_staking_primitives::SessionIndex;
@@ -50,27 +49,35 @@ fn load_decode<C, T>(backend: &C, key: &[u8]) -> ClientResult<Option<T>>
 	}
 }
 
+/// Represents an Babe equivocation proof.
+#[derive(Clone, Encode, Decode, PartialEq, Debug)]
+// #[cfg_attr(any(feature = "std", test), derive(Debug))]
+pub struct EquivocationProof<H, P, S> {
+	pub reporter: P,
+	pub identity: P,
+	pub slot: u64,
+	pub first_header: H,
+	pub second_header: H,
+	pub first_signature: S,
+	pub second_signature: S,
+}
+
 /// Checks if the header is an equivocation and returns the proof in that case.
 ///
 /// Note: it detects equivocations only when slot_now - slot <= MAX_SLOT_CAPACITY.
-pub fn check_equivocation<C, H, E, V>(
+pub fn check_equivocation<C, H, V>(
 	backend: &C,
 	slot_now: u64,
 	slot: u64,
 	header: &H,
 	signature: V::Signature,
 	signer: &V,
-) -> ClientResult<Option<E>>
+) -> ClientResult<Option<EquivocationProof<H, V, <V as RuntimeAppPublic>::Signature>>>
 	where
 		H: Header,
 		C: AuxStore,
 		V: RuntimeAppPublic + Codec + Clone + PartialEq,
 		<V as RuntimeAppPublic>::Signature: Clone + Codec,
-		E: AuthorshipEquivocationProof<
-			Header=H,
-			Signature=<V as RuntimeAppPublic>::Signature,
-			Identity=V,
-		>,
 {
 	// We don't check equivocations for old headers out of our capacity.
 	// if slot_now - slot > MAX_SLOT_CAPACITY {
@@ -100,14 +107,15 @@ pub fn check_equivocation<C, H, E, V>(
 			// 2) with different hash
 			// if header.hash() != prev_header.hash() {
 				
-				return Ok(Some(AuthorshipEquivocationProof::new(
-					signer.clone(),
+				return Ok(Some(EquivocationProof {
+					reporter: signer.clone(),
+					identity: signer.clone(),
 					slot,
-					header.clone(),
-					header.clone(),
-					signature.clone(),
-					signature.clone(),
-				)));
+					first_header: header.clone(),
+					second_header: header.clone(),
+					first_signature: signature.clone(),
+					second_signature: signature.clone(),
+				}));
 			// } else {
 				//  We don't need to continue in case of duplicated header,
 				// since it's already saved and a possible equivocation
@@ -146,11 +154,13 @@ pub fn check_equivocation<C, H, E, V>(
 
 #[cfg(test)]
 mod test {
+	use super::*;
 	use primitives::{sr25519, Pair};
 	use primitives::hash::H256;
 	use sr_primitives::testing::{Header as HeaderTest, Digest as DigestTest};
-	use test_client;
-
+	use test_client::{
+		runtime::app_crypto::ed25519::{AppPair, AppPublic, AppSignature },
+	};
 	use super::{MAX_SLOT_CAPACITY, PRUNING_BOUND, check_equivocation};
 
 	fn create_header(number: u64) -> HeaderTest {
@@ -171,7 +181,7 @@ mod test {
 	#[test]
 	fn check_equivocation_works() {
 		let client = test_client::new();
-		let (pair, _seed) = sr25519::Pair::generate();
+		let (pair, _seed) = AppPair::generate();
 		let public = pair.public();
 
 		let header1 = create_header(1); // @ slot 2
@@ -181,6 +191,8 @@ mod test {
 		let header5 = create_header(4); // @ slot MAX_SLOT_CAPACITY + 4
 		let header6 = create_header(3); // @ slot 4
 
+		let signature1: AppSignature = pair.sign(header1.encode().as_slice());
+
 		// It's ok to sign same headers.
 		assert!(
 			check_equivocation(
@@ -188,6 +200,7 @@ mod test {
 				2,
 				2,
 				&header1,
+				signature1,
 				&public,
 			).unwrap().is_none(),
 		);
@@ -198,7 +211,8 @@ mod test {
 				3,
 				2,
 				&header1,
-				&public,
+				signature1,
+				&public.into(),
 			).unwrap().is_none(),
 		);
 
@@ -209,7 +223,8 @@ mod test {
 				4,
 				2,
 				&header2,
-				&public,
+				signature1,
+				&public.into(),
 			).unwrap().is_some(),
 		);
 
@@ -220,7 +235,8 @@ mod test {
 				5,
 				4,
 				&header3,
-				&public,
+				signature1,
+				&public.into(),
 			).unwrap().is_none(),
 		);
 
@@ -231,7 +247,8 @@ mod test {
 				PRUNING_BOUND + 2,
 				MAX_SLOT_CAPACITY + 4,
 				&header4,
-				&public,
+				signature1,
+				&public.into(),
 			).unwrap().is_none(),
 		);
 
@@ -242,7 +259,8 @@ mod test {
 				PRUNING_BOUND + 3,
 				MAX_SLOT_CAPACITY + 4,
 				&header5,
-				&public,
+				signature1,
+				&public.into(),
 			).unwrap().is_some(),
 		);
 
@@ -253,7 +271,8 @@ mod test {
 				PRUNING_BOUND + 4,
 				4,
 				&header6,
-				&public,
+				signature1,
+				&public.into(),
 			).unwrap().is_none(),
 		);
 	}

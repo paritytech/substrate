@@ -28,7 +28,9 @@ mod aux_schema;
 
 pub use slots::{SignedDuration, SlotInfo};
 use slots::Slots;
-pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
+pub use aux_schema::{
+	check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND, EquivocationProof
+};
 
 use codec::{Decode, Encode};
 use consensus_common::{SyncOracle, SelectChain};
