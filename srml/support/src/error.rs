@@ -67,6 +67,13 @@ macro_rules! decl_error {
 			}
 		}
 
+		impl From<$error> for &'static str {
+			fn from(err: $error) -> &'static str {
+				use $crate::dispatch::ModuleDispatchError;
+				err.as_str()
+			}
+		}
+
 		impl Into<$crate::dispatch::DispatchError> for $error {
 			fn into(self) -> $crate::dispatch::DispatchError {
 				use $crate::dispatch::ModuleDispatchError;
