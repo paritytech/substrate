@@ -326,10 +326,10 @@ decl_module! {
 				let offence = BabeEquivocationOffence {
 					slot: equivocation.slot(),
 					session_index: equivocation.session_index().expect("FIXME").clone(),
-					validators_count: 0,
+					validator_set_count: 0,
 					offender: to_punish,
 				};
-				T::ReportEquivocation::report_offence(Some(who), offence);
+				T::ReportEquivocation::report_offence(vec![who], offence);
 			}
 		}
 	}

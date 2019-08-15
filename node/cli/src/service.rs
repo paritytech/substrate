@@ -38,7 +38,6 @@ use inherents::InherentDataProviders;
 use network::construct_simple_protocol;
 use substrate_service::construct_service_factory;
 use substrate_service::TelemetryOnConnect;
-use keystore::KeyStorePtr;
 
 construct_simple_protocol! {
 	/// Demo protocol attachment for substrate.

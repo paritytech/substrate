@@ -382,8 +382,7 @@ pub trait ServiceFactory: 'static + Sized {
 		_client: Arc<FullClient<Self>>,
 		_select_chain: Self::SelectChain,
 		_transaction_pool: Option<Arc<TransactionPool<Self::FullTransactionPoolApi>>>,
-		_keystore: Option<KeyStorePtr>,
-	) -> Result<Self::FullImportQueue, error::Error> {
+		) -> Result<Self::FullImportQueue, error::Error> {
 		if let Some(name) = config.chain_spec.consensus_engine() {
 			match name {
 				_ => Err(format!("Chain Specification defines unknown consensus engine '{}'", name).into())
@@ -457,7 +456,6 @@ pub trait Components: Sized + 'static {
 		client: Arc<ComponentClient<Self>>,
 		select_chain: Option<Self::SelectChain>,
 		_transaction_pool: Option<Arc<TransactionPool<Self::TransactionPoolApi>>>,
-		_keystore: Option<KeyStorePtr>,
 	) -> Result<(Self::ImportQueue, Option<BoxFinalityProofRequestBuilder<FactoryBlock<Self::Factory>>>), error::Error>;
 
 	/// Finality proof provider for serving network requests.
@@ -577,11 +575,10 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 		client: Arc<ComponentClient<Self>>,
 		select_chain: Option<Self::SelectChain>,
 		transaction_pool: Option<Arc<TransactionPool<Self::TransactionPoolApi>>>,
-		keystore: Option<KeyStorePtr>,
 	) -> Result<(Self::ImportQueue, Option<BoxFinalityProofRequestBuilder<FactoryBlock<Self::Factory>>>), error::Error> {
 		let select_chain = select_chain
 			.ok_or(error::Error::SelectChainRequired)?;
-		Factory::build_full_import_queue(config, client, select_chain, transaction_pool, keystore)
+		Factory::build_full_import_queue(config, client, select_chain, transaction_pool)
 			.map(|queue| (queue, None))
 	}
 
@@ -702,7 +699,6 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 		client: Arc<ComponentClient<Self>>,
 		_select_chain: Option<Self::SelectChain>,
 		_transaction_pool: Option<Arc<TransactionPool<Self::TransactionPoolApi>>>,
-		_keystore: Option<KeyStorePtr>,
 	) -> Result<(Self::ImportQueue, Option<BoxFinalityProofRequestBuilder<FactoryBlock<Self::Factory>>>), error::Error> {
 		Factory::build_light_import_queue(config, client)
 			.map(|(queue, builder)| (queue, Some(builder)))

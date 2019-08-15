@@ -390,6 +390,8 @@ impl srml_babe::Trait for Runtime {
 	type ExpectedBlockTime = ExpectedBlockTime;
 }
 
+
+
 /// Adds one to the given input and returns the final result.
 #[inline(never)]
 fn benchmark_add_one(i: u64) -> u64 {

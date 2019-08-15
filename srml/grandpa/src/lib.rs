@@ -38,7 +38,7 @@ use srml_support::{
 };
 use app_crypto::RuntimeAppPublic;
 use sr_primitives::{
-	generic::{DigestItem, OpaqueDigestItemId}, Perbill, key_types, KeyTypeId,
+	generic::{DigestItem, OpaqueDigestItemId}, Perbill, KeyTypeId,
 	transaction_validity::{TransactionValidity, ValidTransaction},
 	traits::{Zero, ValidateUnsigned, Extrinsic as ExtrinsicT}
 };

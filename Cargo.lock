@@ -3936,6 +3936,7 @@ dependencies = [
  "substrate-application-crypto 2.0.0",
  "substrate-finality-grandpa-primitives 2.0.0",
  "substrate-primitives 2.0.0",
+ "substrate-test-runtime 2.0.0",
 ]
 
 [[package]]

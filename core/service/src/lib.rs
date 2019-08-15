@@ -189,7 +189,6 @@ impl<Components: components::Components> Service<Components> {
 			client.clone(),
 			select_chain.clone(),
 			Some(transaction_pool.clone()),
-			Some(keystore.clone()),
 		)?;
 		let import_queue = Box::new(import_queue);
 		let finality_proof_provider = Components::build_finality_proof_provider(client.clone())?;
@@ -1071,9 +1070,8 @@ macro_rules! construct_service_factory {
 				client: $crate::Arc<$crate::FullClient<Self>>,
 				select_chain: Self::SelectChain,
 				transaction_pool: Option<Arc<$crate::TransactionPool<Self::FullTransactionPoolApi>>>,
-				keystore: Option<KeyStorePtr>,
 			) -> $crate::Result<Self::FullImportQueue, $crate::Error> {
-				( $( $full_import_queue_init )* ) (config, client, select_chain, transaction_pool, keystore)
+				( $( $full_import_queue_init )* ) (config, client, select_chain, transaction_pool)
 			}
 
 			fn build_light_import_queue(
