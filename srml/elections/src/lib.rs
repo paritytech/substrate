@@ -900,7 +900,7 @@ impl<T: Trait> Module<T> {
 				// candidate and not a runner up and not a winner.
 				if incoming.iter().find(|e| *e == old).is_some() {
 					// slash the bond.
-					let (imbalance, x) = T::Currency::slash_reserved(&old, T::CandidacyBond::get());
+					let (imbalance, _) = T::Currency::slash_reserved(&old, T::CandidacyBond::get());
 					T::LoserCandidate::on_unbalanced(imbalance);
 				}
 			}
