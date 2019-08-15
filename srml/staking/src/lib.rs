@@ -746,6 +746,9 @@ decl_module! {
 				return Err("controller already paired")
 			}
 
+			let value = value.min(stash_balance);
+			let stash_balance = T::Currency::free_balance(&stash);
+
 			// reject a bond which is considered to be _dust_.
 			if value < T::Currency::minimum_balance() {
 				return Err("can not bond with value less than minimum balance")
@@ -756,8 +759,6 @@ decl_module! {
 			<Bonded<T>>::insert(&stash, controller.clone());
 			<Payee<T>>::insert(&stash, payee);
 
-			let stash_balance = T::Currency::free_balance(&stash);
-			let value = value.min(stash_balance);
 			let item = StakingLedger { stash, total: value, active: value, unlocking: vec![] };
 			Self::update_ledger(&controller, &item);
 		}
