@@ -39,6 +39,10 @@
 //! their term. Loser candidates will immediately get their bond back. Note that unlike phragmen in
 //! staking, candidates do NOT automatically vote for themselves (though they _could_ via a separate
 //! transaction). Furthermore, the amount of tokens (stake) held by the candidate does not matter.
+//!
+//! - [`election_phragmen::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//! - [`Module`](./struct.Module.html)
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -60,6 +64,7 @@ pub const DEFAULT_CANDIDACY_BOND: u32 = 9;
 pub const DEFAULT_VOTING_BOND: u32 = 2;
 
 pub trait Trait: system::Trait {
+	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
 	/// The currency that people are electing with.
@@ -86,8 +91,6 @@ decl_storage! {
 		// ---- parameters
 		/// Number of seats to elect.
 		pub DesiredSeats get(desired_seats) config(): u32;
-		/// The total number of vote rounds that have happened, exclusive of the upcoming one.
-		pub ElectionRounds get(election_rounds): u32 = Zero::zero();
 		/// How long each seat is kept. This defined the next block number at which an election
 		/// round will happen.
 		pub TermDuration get(term_duration) config(): T::BlockNumber;
@@ -95,6 +98,8 @@ decl_storage! {
 		// ---- State
 		/// The current elected membership. Sorted.
 		pub Members get(members) config(): Vec<T::AccountId>;
+		/// The total number of vote rounds that have happened, exclusive of the upcoming one.
+		pub ElectionRounds get(election_rounds): u32 = Zero::zero();
 
 		/// Votes of a particular voter, with the round index of the votes.
 		pub VotesOf get(votes_of): linked_map T::AccountId => (Vec<T::AccountId>, u32);
@@ -331,7 +336,7 @@ impl<T: Trait> Module<T> {
 				);
 				Self::deposit_event(RawEvent::NewTerm(new_members));
 			} else {
-				Self::deposit_event(RawEvent::EmptyCouncil());
+				Self::deposit_event(RawEvent::EmptyCouncil);
 			}
 
 			// clean candidates
