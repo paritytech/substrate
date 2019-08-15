@@ -298,6 +298,7 @@ impl<Components: components::Components> Service<Components> {
 			let network = Arc::downgrade(&network);
 			let transaction_pool_ = transaction_pool.clone();
 			let events = transaction_pool.import_notification_stream()
+				.map(|v| Ok::<_, ()>(v)).compat()
 				.for_each(move |_| {
 					if let Some(network) = network.upgrade() {
 						network.trigger_repropagate();
