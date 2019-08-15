@@ -292,6 +292,15 @@ impl<T: Trait> Module<T> {
 		this_randomness
 	}
 
+	fn set_authorities<'a, I: 'a>(authorities: I)
+		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
+	{
+		let authorities = authorities.map(|(_account, k)| {
+			(k, 1)
+		}).collect::<Vec<_>>();
+
+		Authorities::put(authorities);
+	}
 }
 
 impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
@@ -300,6 +309,13 @@ impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = AuthorityId;
+
+	fn on_genesis_session<'a, I: 'a>(validators: I)
+		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
+	{
+		Self::set_authorities(validators);
+	}
+
 	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, queued_validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
@@ -311,11 +327,7 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 		EpochIndex::put(epoch_index);
 
 		// Update authorities.
-		let authorities = validators.map(|(_account, k)| {
-			(k, 1)
-		}).collect::<Vec<_>>();
-
-		Authorities::put(authorities);
+		Self::set_authorities(validators);
 
 		// Update epoch start slot.
 		let now = CurrentSlot::get();

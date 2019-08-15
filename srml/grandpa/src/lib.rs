@@ -346,12 +346,19 @@ impl<T: Trait> Module<T> {
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = AuthorityId;
 
+	fn on_genesis_session<'a, I: 'a>(validators: I)
+		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
+	{
+		let authorities = validators.map(|(_, k)| (k, 1)).collect::<Vec<_>>();
+		Authorities::put(authorities);
+	}
+
 	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, _queued_validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
 		// instant changes
 		if changed {
-			let next_authorities = validators.map(|(_, k)| (k, 1u64)).collect::<Vec<_>>();
+			let next_authorities = validators.map(|(_, k)| (k, 1)).collect::<Vec<_>>();
 			let last_authorities = <Module<T>>::grandpa_authorities();
 			if next_authorities != last_authorities {
 				if let Some((further_wait, median)) = <Stalled<T>>::take() {
