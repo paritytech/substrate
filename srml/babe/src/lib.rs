@@ -123,7 +123,7 @@ decl_storage! {
 		pub EpochIndex get(epoch_index): u64;
 
 		/// Current epoch authorities.
-		pub Authorities get(authorities) config(): Vec<(AuthorityId, BabeWeight)>;
+		pub Authorities get(authorities): Vec<(AuthorityId, BabeWeight)>;
 
 		/// Slot at which the current epoch started. It is possible that no
 		/// block was authored at the given slot and the epoch change was
@@ -162,6 +162,18 @@ decl_storage! {
 		/// epoch.
 		SegmentIndex build(|_| 0): u32;
 		UnderConstruction: map u32 => Vec<[u8; 32 /* VRF_OUTPUT_LENGTH */]>;
+	}
+	add_extra_genesis {
+		config(authorities): Vec<(AuthorityId, BabeWeight)>;
+		build(|
+			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
+			config: &GenesisConfig
+		| {
+			runtime_io::with_storage(
+				storage,
+				|| Module::<T>::initialize_authorities(&config.authorities),
+			);
+		})
 	}
 }
 
@@ -292,14 +304,11 @@ impl<T: Trait> Module<T> {
 		this_randomness
 	}
 
-	fn set_authorities<'a, I: 'a>(authorities: I)
-		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
-	{
-		let authorities = authorities.map(|(_account, k)| {
-			(k, 1)
-		}).collect::<Vec<_>>();
-
-		Authorities::put(authorities);
+	fn initialize_authorities(authorities: &[(AuthorityId, BabeWeight)]) {
+		if !authorities.is_empty() {
+			assert!(Authorities::get().is_empty(), "Authorities are already initialized!");
+			Authorities::put_ref(authorities);
+		}
 	}
 }
 
@@ -313,8 +322,8 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	fn on_genesis_session<'a, I: 'a>(validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
-		assert!(Authorities::get().is_empty(), "Authorities are already initialized!");
-		Self::set_authorities(validators);
+		let authorities = validators.map(|(_, k)| (k, 1)).collect::<Vec<_>>();
+		Self::initialize_authorities(&authorities);
 	}
 
 	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, queued_validators: I)
@@ -328,7 +337,11 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 		EpochIndex::put(epoch_index);
 
 		// Update authorities.
-		Self::set_authorities(validators);
+		let authorities = validators.map(|(_account, k)| {
+			(k, 1)
+		}).collect::<Vec<_>>();
+
+		Authorities::put(authorities);
 
 		// Update epoch start slot.
 		let now = CurrentSlot::get();
