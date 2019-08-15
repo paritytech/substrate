@@ -313,6 +313,7 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	fn on_genesis_session<'a, I: 'a>(validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
+		assert!(Authorities::get().is_empty(), "Authorities are already initialized!");
 		Self::set_authorities(validators);
 	}
 
