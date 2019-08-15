@@ -18,12 +18,23 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::Codec;
+use codec::{Encode, Decode, Codec};
 use client::decl_runtime_apis;
 use rstd::vec::Vec;
 use sr_primitives::traits::Header;
-use sr_staking_primitives::SessionIndex;
-use app_crypto::RuntimeAppPublic;
+
+/// Represents an Babe equivocation proof.
+#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, PartialEq, Eq, Decode, Encode)]
+pub struct EquivocationProof<H, P, S> {
+	pub reporter: P,
+	pub identity: P,
+	pub slot: u64,
+	pub first_header: H,
+	pub second_header: H,
+	pub first_signature: S,
+	pub second_signature: S,
+}
 
 decl_runtime_apis! {
 	/// Common consensus runtime api.
@@ -31,44 +42,4 @@ decl_runtime_apis! {
 		/// Returns the set of authorities of the currently active consensus mechanism.
 		fn authorities() -> Vec<AuthorityId>;
 	}
-}
-
-pub trait AuthorshipEquivocationProof {
-	type Header: Header;
-	type Signature: Codec;
-	type Identity: Codec + RuntimeAppPublic;
-
-	/// Create an equivocation proof for AuRa or Babe.
-	fn new(
-		identity: Self::Identity,
-		slot: u64,
-		first_header: Self::Header,
-		second_header: Self::Header,
-		first_signature: Self::Signature, 
-		second_signature: Self::Signature,
-	) -> Self;
-
-	/// Get the reporter of the equivocation.
-	fn reporter(&self) -> Option<&Self::Identity>;
-
-	/// Get the session index where the equivocation happened.
-	fn session_index(&self) -> Option<&SessionIndex>;
-
-	/// Get the slot where the equivocation happened.
-	fn slot(&self) -> u64;
-
-	/// Get the identity of the suspect of equivocating.
-	fn identity(&self) -> &Self::Identity;
-
-	/// Get the first header involved in the equivocation.
-	fn first_header(&self) -> &Self::Header;
-
-	/// Get the second header involved in the equivocation.
-	fn second_header(&self) -> &Self::Header;
-
-	/// Get signature for the first header involved in the equivocation.
-	fn first_signature(&self) -> &Self::Signature;
-
-	/// Get signature for the second header involved in the equivocation.
-	fn second_signature(&self) -> &Self::Signature;
 }

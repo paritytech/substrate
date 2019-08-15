@@ -53,7 +53,7 @@ use inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
-pub use babe_primitives::AuthorityId;
+pub use babe_primitives::{AuthorityId, AuthoritySignature};
 pub type AuraId = aura_primitives::sr25519::AuthorityId;
 
 // Inlucde the WASM binary
@@ -620,7 +620,11 @@ cfg_if! {
 				}
 
 				fn construct_equivocation_transaction(
-					equivocation: babe_primitives::BabeEquivocationProof<<Block as BlockT>::Header>,
+					equivocation: babe_primitives::EquivocationProof<
+						<Block as BlockT>::Header,
+						AuthorityId,
+						AuthoritySignature
+					>,
 				) -> Option<Vec<u8>> {
 					Some(vec![])
 				}
@@ -839,7 +843,11 @@ cfg_if! {
 				}
 
 				fn construct_equivocation_transaction(
-					equivocation: babe_primitives::BabeEquivocationProof<<Block as BlockT>::Header>,
+					equivocation: babe_primitives::EquivocationProof<
+						<Block as BlockT>::Header,
+						AuthorityId,
+						AuthoritySignature
+					>,
 				) -> Option<Vec<u8>> {
 					Some(vec![])
 				}

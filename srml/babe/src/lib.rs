@@ -35,8 +35,7 @@ use sr_primitives::{
 	transaction_validity::{TransactionValidity, ValidTransaction},
 };
 use sr_primitives::traits::{
-	IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert, Header,
-	ValidateUnsigned, Extrinsic as ExtrinsicT
+	IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert, Header, ValidateUnsigned,
 };
 use sr_staking_primitives::{
 	SessionIndex,
@@ -50,7 +49,6 @@ use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent
 use inherents::{InherentDataProviders, ProvideInherentData};
 use session::historical::{Proof, IdentificationTuple};
 use system::ensure_signed;
-use consensus_common_primitives::AuthorshipEquivocationProof;
 use babe_primitives::{
 	BABE_ENGINE_ID, ConsensusLog, BabeWeight, Epoch, RawBabePreDigest, 
 	EquivocationProof, get_slot
@@ -133,9 +131,6 @@ impl ProvideInherentData for InherentDataProvider {
 pub trait Trait: timestamp::Trait + session::historical::Trait {
 	type EpochDuration: Get<u64>;
 	type ExpectedBlockTime: Get<Self::Moment>;
-
-	type Call: From<Call<Self>>;
-	type UncheckedExtrinsic: ExtrinsicT<Call=<Self as Trait>::Call> + Encode + Decode;
 
 	type KeyOwnerSystem: KeyOwnerProofSystem<
 		(KeyTypeId, Vec<u8>),
@@ -422,32 +417,6 @@ impl<T: Trait> Module<T> {
 		// we double the minimum block-period so each author can always propose within
 		// the majority of their slot.
 		<T as timestamp::Trait>::MinimumPeriod::get().saturating_mul(2.into())
-	}
-
-	pub fn construct_equivocation_transaction(
-		equivocation: EquivocationProof<T::Header, AuthorityId, AuthoritySignature>,
-		proof: Proof,
-	) -> Option<Vec<u8>> {
-		let local_keys = app::Public::all();
-		
-		if local_keys.len() > 0 {
-			let reporter = &local_keys[0];
-			let to_sign = (equivocation.clone(), proof.clone());
-			
-			let maybe_signature = to_sign.using_encoded(|payload| if payload.len() > 256 {
-				reporter.sign(&blake2_256(payload))
-			} else {
-				reporter.sign(&payload)
-			});
-			
-			if let Some(signature) = maybe_signature {
-				let call = Call::report_equivocation(equivocation, proof, signature.into());
-				let ex = T::UncheckedExtrinsic::new_unsigned(call.into())?;
-				return Some(ex.encode())
-			}
-		}
-
-		None
 	}
 
 	fn deposit_consensus<U: Encode>(new: U) {

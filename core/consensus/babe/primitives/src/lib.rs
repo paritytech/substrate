@@ -25,9 +25,8 @@ use codec::{Encode, Decode};
 use rstd::vec::Vec;
 use sr_primitives::{ConsensusEngineId, traits::Header};
 use substrate_client::decl_runtime_apis;
-use consensus_common_primitives::AuthorshipEquivocationProof;
 use sr_staking_primitives::SessionIndex;
-pub use slots::EquivocationProof;
+pub use consensus_common_primitives::EquivocationProof;
 
 #[cfg(feature = "std")]
 pub use digest::BabePreDigest;

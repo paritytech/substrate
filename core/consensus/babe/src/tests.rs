@@ -35,6 +35,8 @@ use client::BlockchainEvents;
 use test_client;
 use log::debug;
 use std::{time::Duration, borrow::Borrow, cell::RefCell};
+use transaction_pool::txpool::SubmitExtrinsic;
+
 type Item = generic::DigestItem<Hash>;
 
 type Error = client::error::Error;
@@ -87,8 +89,17 @@ pub struct BabeTestNet {
 type TestHeader = <TestBlock as BlockT>::Header;
 type TestExtrinsic = <TestBlock as BlockT>::Extrinsic;
 
+#[derive(Debug, Encode, Decode, Clone)]
+pub struct TestPool;
+
+impl<C, Block> SubmitExtrinsic<C, Block> for TestPool
+{
+	fn submit_one(&self, _client: &C, _extrinsic: &[u8]) {
+	}
+}
+
 pub struct TestVerifier {
-	inner: BabeVerifier<PeersFullClient, ()>,
+	inner: BabeVerifier<PeersFullClient, TestPool>,
 	mutator: Mutator,
 }
 

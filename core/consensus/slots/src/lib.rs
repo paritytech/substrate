@@ -28,12 +28,11 @@ mod aux_schema;
 
 pub use slots::{SignedDuration, SlotInfo};
 use slots::Slots;
-pub use aux_schema::{
-	check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND, EquivocationProof
-};
+pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
 
 use codec::{Decode, Encode};
 use consensus_common::{SyncOracle, SelectChain};
+use consensus_common_primitives::EquivocationProof;
 use futures::{prelude::*, future::{self, Either}};
 use inherents::{InherentData, InherentDataProviders};
 use log::{debug, error, info, warn};

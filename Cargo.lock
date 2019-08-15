@@ -4984,6 +4984,7 @@ dependencies = [
  "substrate-network 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-service 2.0.0",
+ "substrate-transaction-pool 2.0.0",
  "tempdir 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
 ]

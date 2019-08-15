@@ -809,7 +809,6 @@ mod tests {
 						inherent_data_providers,
 						transaction_pool: Default::default(),
 						phantom: Default::default(),
-						transaction_pool: Default::default(),
 					}
 				},
 				PeersClient::Light(_) => unreachable!("No (yet) tests for light client + Aura"),

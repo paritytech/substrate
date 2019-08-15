@@ -25,6 +25,7 @@ use app_crypto::RuntimeAppPublic;
 use srml_session::historical::Proof;
 use keystore::KeyStorePtr;
 use sr_staking_primitives::SessionIndex;
+use consensus_common_primitives::EquivocationProof;
 
 const SLOT_HEADER_MAP_KEY: &[u8] = b"slot_header_map";
 const SLOT_HEADER_START: &[u8] = b"slot_header_start";
@@ -47,19 +48,6 @@ fn load_decode<C, T>(backend: &C, key: &[u8]) -> ClientResult<Option<T>>
 			)
 			.map(Some)
 	}
-}
-
-/// Represents an Babe equivocation proof.
-#[derive(Clone, Encode, Decode, PartialEq, Debug)]
-// #[cfg_attr(any(feature = "std", test), derive(Debug))]
-pub struct EquivocationProof<H, P, S> {
-	pub reporter: P,
-	pub identity: P,
-	pub slot: u64,
-	pub first_header: H,
-	pub second_header: H,
-	pub first_signature: S,
-	pub second_signature: S,
 }
 
 /// Checks if the header is an equivocation and returns the proof in that case.
@@ -191,7 +179,7 @@ mod test {
 		let header5 = create_header(4); // @ slot MAX_SLOT_CAPACITY + 4
 		let header6 = create_header(3); // @ slot 4
 
-		let signature1: AppSignature = pair.sign(header1.encode().as_slice());
+		let signature: AppSignature = pair.sign(header1.encode().as_slice());
 
 		// It's ok to sign same headers.
 		assert!(
@@ -200,7 +188,7 @@ mod test {
 				2,
 				2,
 				&header1,
-				signature1,
+				signature.clone(),
 				&public,
 			).unwrap().is_none(),
 		);
@@ -211,8 +199,8 @@ mod test {
 				3,
 				2,
 				&header1,
-				signature1,
-				&public.into(),
+				signature.clone(),
+				&public,
 			).unwrap().is_none(),
 		);
 
@@ -223,8 +211,8 @@ mod test {
 				4,
 				2,
 				&header2,
-				signature1,
-				&public.into(),
+				signature.clone(),
+				&public,
 			).unwrap().is_some(),
 		);
 
@@ -235,8 +223,8 @@ mod test {
 				5,
 				4,
 				&header3,
-				signature1,
-				&public.into(),
+				signature.clone(),
+				&public,
 			).unwrap().is_none(),
 		);
 
@@ -247,8 +235,8 @@ mod test {
 				PRUNING_BOUND + 2,
 				MAX_SLOT_CAPACITY + 4,
 				&header4,
-				signature1,
-				&public.into(),
+				signature.clone(),
+				&public,
 			).unwrap().is_none(),
 		);
 
@@ -259,8 +247,8 @@ mod test {
 				PRUNING_BOUND + 3,
 				MAX_SLOT_CAPACITY + 4,
 				&header5,
-				signature1,
-				&public.into(),
+				signature.clone(),
+				&public,
 			).unwrap().is_some(),
 		);
 
@@ -271,8 +259,8 @@ mod test {
 				PRUNING_BOUND + 4,
 				4,
 				&header6,
-				signature1,
-				&public.into(),
+				signature.clone(),
+				&public,
 			).unwrap().is_none(),
 		);
 	}

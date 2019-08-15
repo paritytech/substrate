@@ -32,8 +32,7 @@ use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
 	Moment, Signature,
 };
-use codec::{Encode};
-use consensus_primitives::AuthorshipEquivocationProof;
+use codec::{Encode, Decode};
 use babe::{AuthorityId as BabeId};
 use babe_primitives::EquivocationProof;
 use grandpa::fg_primitives::{self, ScheduledChange, GrandpaEquivocationFrom};
@@ -147,8 +146,6 @@ impl babe::Trait for Runtime {
 	type ExpectedBlockTime = ExpectedBlockTime;
 	type KeyOwnerSystem = Historical;
 	type ReportEquivocation = Offences;
-	type Call = Call;
-	type UncheckedExtrinsic = UncheckedExtrinsic;
 }
 
 impl indices::Trait for Runtime {
@@ -616,8 +613,28 @@ impl_runtime_apis! {
 		fn construct_equivocation_transaction(
 			equivocation: EquivocationProof<<Block as BlockT>::Header, babe_primitives::AuthorityId, babe_primitives::AuthoritySignature>,
 		) -> Option<Vec<u8>> {
-			let proof = Historical::prove((key_types::BABE, equivocation.identity().encode()))?;
-			Babe::construct_equivocation_transaction(equivocation, proof)
+			let proof = Historical::prove((key_types::BABE, equivocation.identity.encode()))?;
+			let local_keys = runtime_io::sr25519_public_keys(key_types::GRANDPA);
+		
+			if local_keys.len() > 0 {
+				let reporter = &local_keys[0];
+				let to_sign = (equivocation.clone(), proof.clone());
+				
+				let maybe_signature = to_sign.using_encoded(|payload| if payload.len() > 256 {
+					runtime_io::sr25519_sign(key_types::BABE, reporter, &runtime_io::blake2_256(payload))
+				} else {
+					runtime_io::sr25519_sign(key_types::BABE, reporter, &payload)
+				});
+				
+				if let Some(signature) = maybe_signature {
+					let call = BabeCall::report_equivocation(equivocation, proof, signature.into());
+					let babe_call = Call::Babe(call);
+					let ex = UncheckedExtrinsic::new_unsigned(babe_call);
+					return Some(ex.encode())
+				}
+			}
+
+			None
 		}
 	}
 
