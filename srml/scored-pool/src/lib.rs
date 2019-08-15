@@ -94,7 +94,7 @@ use srml_support::{
 };
 use system::{self, ensure_root, ensure_signed};
 use sr_primitives::{
-	traits::{EnsureOrigin, SimpleArithmetic, MaybeSerializeDebug, Zero},
+	traits::{EnsureOrigin, SimpleArithmetic, MaybeSerializeDebug, Zero, StaticLookup},
 };
 
 type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
@@ -247,12 +247,16 @@ decl_module! {
 		/// Kick a member `who` from the set.
 		///
 		/// May only be called from `KickOrigin` or root.
-		pub fn kick(origin, who: T::AccountId) {
+		pub fn kick(
+			origin,
+			dest: <T::Lookup as StaticLookup>::Source
+		) {
 			T::KickOrigin::try_origin(origin)
 				.map(|_| ())
 				.or_else(ensure_root)
 				.map_err(|_| "bad origin")?;
 
+			let who = T::Lookup::lookup(dest)?;
 			Self::remove_member(who)?;
 			Self::deposit_event(RawEvent::CandidateKicked);
 		}
@@ -260,12 +264,17 @@ decl_module! {
 		/// Score a member `who` with `score`.
 		///
 		/// May only be called from `ScoreOrigin` or root.
-		pub fn score(origin, who: T::AccountId, score: T::Score) {
+		pub fn score(
+			origin,
+			dest: <T::Lookup as StaticLookup>::Source,
+			score: T::Score
+		) {
 			T::ScoreOrigin::try_origin(origin)
 				.map(|_| ())
 				.or_else(ensure_root)
 				.map_err(|_| "bad origin")?;
 
+			let who = T::Lookup::lookup(dest)?;
 			let mut pool = <Pool<T, I>>::get();
 			let location = Self::find_in_pool(&who)?;
 			pool.remove(location);
