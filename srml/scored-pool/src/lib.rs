@@ -228,11 +228,12 @@ decl_module! {
 			T::Currency::reserve(&who, T::CandidateDeposit::get())
 				.map_err(|_| "balance too low")?;
 
-			let mut pool = <Pool<T, I>>::get();
 			// can be inserted as last element in pool, since entities with
 			// `None` are always sorted to the end.
-			pool.push((who.clone(), None));
-			<Pool<T, I>>::put(&pool);
+			if let Err(e) = <Pool<T, I>>::append(&[(who.clone(), None)]) {
+				T::Currency::unreserve(&who, T::CandidateDeposit::get());
+				return Err(e);
+			}
 
 			Self::deposit_event(RawEvent::CandidateAdded);
 		}
