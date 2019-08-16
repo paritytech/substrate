@@ -28,8 +28,9 @@
 //!
 //! NOTE: Aura itself is designed to be generic over the crypto used.
 #![forbid(missing_docs, unsafe_code)]
-use std::{sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fmt::Debug, pin::Pin};
+use std::{sync::Arc, time::Duration, thread, marker::PhantomData, pin::Pin};
 
+use app_crypto::{AppPair, RuntimeAppPublic};
 use codec::{Encode, Decode, Codec};
 use consensus_common::{self, BlockImport, Environment, Proposer,
 	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
@@ -44,9 +45,9 @@ use client::{
 };
 
 use sr_primitives::{generic::{BlockId, OpaqueDigestItemId}, Justification};
-use sr_primitives::traits::{Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi, Zero, Member};
-
+use sr_primitives::traits::{Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi, Zero};
 use primitives::crypto::Pair;
+
 use inherents::{InherentDataProviders, InherentData};
 
 use futures::prelude::*;
@@ -96,7 +97,7 @@ impl SlotDuration {
 }
 
 /// Get slot author for given block along with authorities.
-fn slot_author<P: Pair>(slot_num: u64, authorities: &[AuthorityId<P>]) -> Option<&AuthorityId<P>> {
+fn slot_author<P: AppPair>(slot_num: u64, authorities: &[AuthorityId<P>]) -> Option<&AuthorityId<P>> {
 	if authorities.is_empty() { return None }
 
 	let idx = slot_num % (authorities.len() as u64);
@@ -147,9 +148,8 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 	E: Environment<B, Error=Error> + Send + Sync + 'static,
 	E::Proposer: Proposer<B, Error=Error>,
 	<E::Proposer as Proposer<B>>::Create: Unpin + Send,
-	P: Pair + Send + Sync,
-	P::Public: Hash + Member + Encode + Decode,
-	P::Signature: Hash + Member + Encode + Decode,
+	P: AppPair,
+	<P as Pair>::Signature: Codec,
 	H: Header<Hash=B::Hash>,
 	I: BlockImport<B> + Send + Sync + 'static,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
@@ -197,9 +197,8 @@ impl<H, B, C, E, I, P, Error, SO> slots::SimpleSlotWorker<B> for AuraWorker<C, E
 	<E::Proposer as Proposer<B>>::Create: Unpin + Send,
 	H: Header<Hash=B::Hash>,
 	I: BlockImport<B> + Send + Sync + 'static,
-	P: Pair + Send + Sync,
-	P::Public: Member + Encode + Decode + Hash,
-	P::Signature: Member + Encode + Decode + Hash + Debug,
+	P: AppPair,
+	<P as Pair>::Signature: Codec,
 	SO: SyncOracle + Send + Clone,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 {
@@ -295,9 +294,8 @@ impl<H, B: BlockT, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, 
 	<E::Proposer as Proposer<B>>::Create: Unpin + Send + 'static,
 	H: Header<Hash=B::Hash>,
 	I: BlockImport<B> + Send + Sync + 'static,
-	P: Pair + Send + Sync,
-	P::Public: Member + Encode + Decode + Hash,
-	P::Signature: Member + Encode + Decode + Hash + Debug,
+	P: AppPair,
+	<P as Pair>::Signature: Codec,
 	SO: SyncOracle + Send + Sync + Clone,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 {
@@ -317,10 +315,8 @@ macro_rules! aura_err {
 	};
 }
 
-fn find_pre_digest<B: BlockT, P: Pair>(header: &B::Header) -> Result<u64, String>
+fn find_pre_digest<B: BlockT, P: AppPair>(header: &B::Header) -> Result<u64, String>
 	where DigestItemFor<B>: CompatibleDigestItem<P>,
-		P::Signature: Decode,
-		P::Public: Encode + Decode + PartialEq + Clone,
 {
 	let mut pre_digest: Option<u64> = None;
 	for log in header.digest().logs() {
@@ -338,7 +334,7 @@ fn find_pre_digest<B: BlockT, P: Pair>(header: &B::Header) -> Result<u64, String
 /// if it's successful, returns the pre-header and the digest item containing the seal.
 ///
 /// This digest item will always return `Some` when used with `as_aura_seal`.
-fn check_header<C, B: BlockT, P: Pair, T>(
+fn check_header<C, B: BlockT, P: AppPair, T>(
 	client: &C,
 	slot_now: u64,
 	mut header: B::Header,
@@ -347,9 +343,9 @@ fn check_header<C, B: BlockT, P: Pair, T>(
 	_transaction_pool: Option<&T>,
 ) -> Result<CheckedHeader<B::Header, (u64, DigestItemFor<B>)>, String> where
 	DigestItemFor<B>: CompatibleDigestItem<P>,
-	P::Signature: Decode,
 	C: client::backend::AuxStore,
-	P::Public: Encode + Decode + PartialEq + Clone,
+	AuthorityId<P>: RuntimeAppPublic<Signature = <P as Pair>::Signature>,
+	<P as Pair>::Signature: Codec + Clone,
 	T: Send + Sync + 'static,
 {
 	let seal = match header.digest_mut().pop() {
@@ -466,9 +462,9 @@ impl<B: BlockT, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
 	C: ProvideRuntimeApi + Send + Sync + client::backend::AuxStore + ProvideCache<B> + BlockOf,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>>,
 	DigestItemFor<B>: CompatibleDigestItem<P>,
-	P: Pair + Send + Sync + 'static,
-	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + 'static,
-	P::Signature: Encode + Decode,
+	P: AppPair,
+	AuthorityId<P>: RuntimeAppPublic<Signature=<P as Pair>::Signature>,
+	<P as Pair>::Signature: Codec + Clone,
 	T: Send + Sync + 'static,
 {
 	fn verify(
@@ -647,9 +643,9 @@ pub fn import_queue<B, C, P, T>(
 	C: 'static + ProvideRuntimeApi + BlockOf + ProvideCache<B> + Send + Sync + AuxStore,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>>,
 	DigestItemFor<B>: CompatibleDigestItem<P>,
-	P: Pair + Send + Sync + 'static,
-	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode,
-	P::Signature: Encode + Decode,
+	P: AppPair,
+	AuthorityId<P>: RuntimeAppPublic<Signature=<P as Pair>::Signature>,
+	<P as Pair>::Signature: Codec + Clone,
 	T: Send + Sync + 'static,
 {
 	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
