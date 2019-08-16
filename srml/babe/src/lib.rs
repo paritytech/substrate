@@ -27,7 +27,7 @@ pub use timestamp;
 use rstd::{result, prelude::*};
 use sr_io::blake2_256;
 use srml_support::{
-	decl_storage, decl_module, StorageValue, StorageMap,
+	decl_storage, decl_module, StorageValue, StorageMap, Parameter,
 	traits::{FindAuthor, Get, KeyOwnerProofSystem},
 };
 use timestamp::{OnTimestampSet};
@@ -49,7 +49,6 @@ use codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-use session::historical::{Proof, IdentificationTuple};
 use system::{ensure_signed, ensure_root};
 use babe_primitives::{
 	BABE_ENGINE_ID, ConsensusLog, BabeAuthorityWeight, Epoch, RawBabePreDigest,
@@ -130,19 +129,21 @@ impl ProvideInherentData for InherentDataProvider {
 	}
 }
 
-pub trait Trait: timestamp::Trait + session::historical::Trait {
+pub trait Trait: timestamp::Trait {
 	type EpochDuration: Get<u64>;
 	type ExpectedBlockTime: Get<Self::Moment>;
+	type IdentificationTuple: Parameter;
+	type Proof: Parameter;
 
 	type KeyOwnerSystem: KeyOwnerProofSystem<
 		(KeyTypeId, Vec<u8>),
-		Proof=Proof,
-		IdentificationTuple=IdentificationTuple<Self>
+		Proof=Self::Proof,
+		IdentificationTuple=Self::IdentificationTuple,
 	>;
 	type ReportEquivocation: ReportOffence<
 		Self::AccountId,
-		IdentificationTuple<Self>,
-		BabeEquivocationOffence<IdentificationTuple<Self>>,
+		Self::IdentificationTuple,
+		BabeEquivocationOffence<Self::IdentificationTuple>,
 	>;
 }
 
@@ -248,7 +249,7 @@ impl<T> ValidateUnsigned for Module<T> where T: Trait
 
 fn equivocation_is_valid<T: Trait>(
 	equivocation: &EquivocationProof<T::Header, AuthorityId, AuthoritySignature>,
-	proof: &Proof,
+	proof: &T::Proof,
 	signature: &AuthoritySignature,
 ) -> bool {
 	let signed = (equivocation, proof);
@@ -323,7 +324,7 @@ decl_module! {
 		fn report_equivocation(
 			origin,
 			equivocation: EquivocationProof<T::Header, AuthorityId, AuthoritySignature>,
-			proof: Proof,
+			proof: T::Proof,
 			_signature: AuthoritySignature
 		) {
 			// TODO [slashing] I thought we are porducing an UnsignedTransaction?

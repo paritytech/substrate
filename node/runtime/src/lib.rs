@@ -144,6 +144,8 @@ parameter_types! {
 impl babe::Trait for Runtime {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
+	type IdentificationTuple = historical::IdentificationTuple<Self>;
+	type Proof = historical::Proof;
 	type KeyOwnerSystem = Historical;
 	type ReportEquivocation = Offences;
 }
