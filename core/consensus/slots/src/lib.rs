@@ -84,7 +84,12 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	fn authorities_len(&self, epoch_data: &Self::EpochData) -> usize;
 
 	/// Tries to claim the given slot, returning an object with claim data if successful.
-	fn claim_slot(&self, slot_number: u64, epoch_data: &Self::EpochData) -> Option<Self::Claim>;
+	fn claim_slot(
+		&self,
+		header: &B::Header,
+		slot_number: u64,
+		epoch_data: &Self::EpochData,
+	) -> Option<Self::Claim>;
 
 	/// Return the pre digest data to include in a block authored with the given claim.
 	fn pre_digest_data(&self, slot_number: u64, claim: &Self::Claim) -> Vec<sr_primitives::DigestItem<B::Hash>>;
@@ -143,7 +148,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			return Box::pin(future::ready(Ok(())));
 		}
 
-		let claim = match self.claim_slot(slot_number, &epoch_data) {
+		let claim = match self.claim_slot(&chain_head, slot_number, &epoch_data) {
 			None => return Box::pin(future::ready(Ok(()))),
 			Some(claim) => claim,
 		};

@@ -225,7 +225,12 @@ impl<H, B, C, E, I, P, Error, SO> slots::SimpleSlotWorker<B> for AuraWorker<C, E
 		epoch_data.len()
 	}
 
-	fn claim_slot(&self, slot_number: u64, epoch_data: &Self::EpochData) -> Option<Self::Claim> {
+	fn claim_slot(
+		&self,
+		_header: &B::Header,
+		slot_number: u64,
+		epoch_data: &Self::EpochData,
+	) -> Option<Self::Claim> {
 		let expected_author = slot_author::<P>(slot_number, epoch_data);
 
 		expected_author.and_then(|p| {

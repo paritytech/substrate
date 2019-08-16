@@ -13,7 +13,7 @@ hex-literal = "0.2"
 inherents = { package = "substrate-inherents", path = "../../core/inherents", default-features = false }
 rstd = { package = "sr-std", path = "../../core/sr-std", default-features = false }
 serde = { version = "1.0.93", optional = true }
-session = { package = "srml-session", path = "../session", default-features = false }
+session = { package = "srml-session", path = "../session", default-features = false, features = ["historical"] }
 sr-io = { path = "../../core/sr-io", default-features = false, features = [ "wasm-nice-panic-message" ] }
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 sr-staking-primitives = { path = "../../core/sr-staking-primitives", default-features = false }

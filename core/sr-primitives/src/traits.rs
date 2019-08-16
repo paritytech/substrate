@@ -1251,6 +1251,17 @@ pub trait SubmitExtrinsic<TBlock: Block>: Send + Sync {
 	) -> Result<(), Self::Error>;
 }
 
+// A dummy implementation to simplify code that doesn't care about submitting extrinsics.
+impl<B: Block> SubmitExtrinsic<B> for () {
+	type Error = &'static str;
+		/// Imports one unverified extrinsic to the pool
+	fn submit_extrinsic(
+		&self,
+		_at: &BlockId<B>,
+		_xt: B::Extrinsic,
+	) -> Result<(), Self::Error> { Err("unimplemented") }
+}
+
 #[cfg(test)]
 mod tests {
 	use super::AccountIdConversion;
