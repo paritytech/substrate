@@ -102,7 +102,7 @@ where
 	fn check(self, lookup: &Lookup) -> Result<Self::Checked, TransactionValidityError> {
 		Ok(match self.signature {
 			Some((signed, signature, extra)) => {
-				let additional_signed = extra.additional_signed();
+				let additional_signed = extra.additional_signed()?;
 				let raw_payload = (self.function, extra, additional_signed);
 				let signed = lookup.lookup(signed)?;
 				if !raw_payload.using_encoded(|payload| {
@@ -200,7 +200,12 @@ where
 	Extra: SignedExtension,
 {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "UncheckedExtrinsic({:?}, {:?})", self.signature.as_ref().map(|x| (&x.0, &x.2)), self.function)
+		write!(
+			f,
+			"UncheckedExtrinsic({:?}, {:?})",
+			self.signature.as_ref().map(|x| (&x.0, &x.2)),
+			self.function,
+		)
 	}
 }
 
@@ -216,7 +221,8 @@ mod tests {
 	impl Lookup for TestContext {
 		type Source = u64;
 		type Target = u64;
-		fn lookup(&self, s: u64) -> Result<u64, &'static str> { Ok(s) }
+		type Error = TransactionValidityError;
+		fn lookup(&self, s: u64) -> Result<u64, TransactionValidityError> { Ok(s) }
 	}
 
 	#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Encode, Decode)]
@@ -242,7 +248,7 @@ mod tests {
 		type AdditionalSigned = ();
 		type Pre = ();
 
-		fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
+		fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
 	}
 
 	type Ex = UncheckedExtrinsic<TestAccountId, TestCall, TestSig, TestExtra>;
@@ -293,10 +299,13 @@ mod tests {
 			vec![0u8; 0],
 			TEST_ACCOUNT,
 			TestSig(TEST_ACCOUNT, vec![0u8; 0]),
-			TestExtra
+			TestExtra,
 		);
 		assert!(ux.is_signed().unwrap_or(false));
-		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err(crate::BAD_SIGNATURE));
+		assert_eq!(
+			<Ex as Checkable<TestContext>>::check(ux, &TestContext),
+			Err(InvalidTransactionValidity::BadProof.into()),
+		);
 	}
 
 	#[test]
@@ -305,12 +314,12 @@ mod tests {
 			vec![0u8; 0],
 			TEST_ACCOUNT,
 			TestSig(TEST_ACCOUNT, (vec![0u8; 0], TestExtra).encode()),
-			TestExtra
+			TestExtra,
 		);
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(
 			<Ex as Checkable<TestContext>>::check(ux, &TestContext),
-			Ok(CEx { signed: Some((TEST_ACCOUNT, TestExtra)), function: vec![0u8; 0] })
+			Ok(CEx { signed: Some((TEST_ACCOUNT, TestExtra)), function: vec![0u8; 0] }),
 		);
 	}
 

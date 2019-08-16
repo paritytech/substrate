@@ -173,7 +173,6 @@ impl Decode for Vote {
 }
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
-type Error = &'static str;
 
 pub const DEFAULT_ENACTMENT_PERIOD: u32 = 0;
 pub const DEFAULT_LAUNCH_PERIOD: u32 = 0;

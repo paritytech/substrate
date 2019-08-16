@@ -1019,17 +1019,20 @@ mod tests {
 	#[test]
 	fn dispatch_error_encoding() {
 		let error = DispatchError {
-			module: 1,
+			module: Some(1),
 			error: 2,
 			message: Some("error message"),
 		};
 		let encoded = error.encode();
-		let decoded = DispatchError::decode(&mut &*encoded).unwrap();
-		assert_eq!(encoded, vec![1, 2]);
-		assert_eq!(decoded, DispatchError {
-			module: 1,
-			error: 2,
-			message: None,
-		});
+		let decoded = DispatchError::decode(&mut &encoded[..]).unwrap();
+		assert_eq!(encoded, vec![1, 1, 2]);
+		assert_eq!(
+			decoded,
+			DispatchError {
+				module: Some(1),
+				error: 2,
+				message: None,
+			},
+		);
 	}
 }

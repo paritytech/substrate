@@ -133,7 +133,7 @@ impl Into<crate::ApplyError> for UnknownTransactionValidity {
 }
 
 /// Information on a transaction's validity and, if valid, on how it relates to other transactions.
-#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Clone, PartialEq, Eq, Encode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum TransactionValidity {
 	/// Transaction is invalid.
@@ -202,8 +202,29 @@ impl TransactionValidity {
 	}
 }
 
+impl Decode for TransactionValidity {
+	fn decode<I: crate::codec::Input>(value: &mut I) -> Result<Self, codec::Error> {
+		match value.read_byte()? {
+			0 => Ok(TransactionValidity::Invalid(InvalidTransactionValidity::decode(value)?)),
+			1 => {
+				let priority = TransactionPriority::decode(value)?;
+				let requires = Vec::decode(value)?;
+				let provides = Vec::decode(value)?;
+				let longevity = TransactionLongevity::decode(value)?;
+				let propagate = bool::decode(value).unwrap_or(true);
+
+				Ok(TransactionValidity::Valid(ValidTransaction {
+					priority, requires, provides, longevity, propagate,
+				}))
+			},
+			2 => Ok(TransactionValidity::Unknown(UnknownTransactionValidity::decode(value)?)),
+			_ => Err("Invalid transaction validity variant".into()),
+		}
+	}
+}
+
 /// Information concerning a valid transaction.
-#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Clone, PartialEq, Eq, Encode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct ValidTransaction {
 	/// Priority of the transaction.
@@ -270,16 +291,23 @@ mod tests {
 	#[test]
 	fn should_decode_with_backward_compat() {
 		let old_encoding = vec![
-			1, 5, 0, 0, 0, 0, 0, 0, 0, 4, 16, 1, 2, 3, 4, 4, 12, 4, 5, 6, 42, 0, 0, 0, 0, 0, 0, 0
+			1, 5, 0, 0, 0, 0, 0, 0, 0, 4, 16, 1, 2, 3, 4, 4, 12, 4, 5, 6, 42, 0, 0, 0, 0, 0, 0, 0,
 		];
 
-		assert_eq!(TransactionValidity::decode(&mut &*old_encoding), Ok(TransactionValidity::Valid(ValidTransaction {
-			priority: 5,
-			requires: vec![vec![1, 2, 3, 4]],
-			provides: vec![vec![4, 5, 6]],
-			longevity: 42,
-			propagate: true,
-		})));
+		assert_eq!(
+			TransactionValidity::decode(&mut &*old_encoding),
+			Ok(
+				TransactionValidity::Valid(
+					ValidTransaction {
+						priority: 5,
+						requires: vec![vec![1, 2, 3, 4]],
+						provides: vec![vec![4, 5, 6]],
+						longevity: 42,
+						propagate: true,
+					}
+				),
+			)
+		);
 	}
 
 	#[test]

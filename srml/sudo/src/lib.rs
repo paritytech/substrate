@@ -87,12 +87,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sr_std::prelude::*;
-use sr_primitives::traits::StaticLookup;
-use sr_primitives::weights::SimpleDispatchInfo;
-use srml_support::{
-	StorageValue, Parameter, RuntimeDispatchable, decl_module, decl_event,
-	decl_storage, ensure
-};
+use sr_primitives::{traits::{StaticLookup, Dispatchable}, weights::SimpleDispatchInfo};
+use srml_support::{StorageValue, Parameter, decl_module, decl_event, decl_storage, ensure};
 use system::ensure_signed;
 
 pub trait Trait: system::Trait {
@@ -100,7 +96,7 @@ pub trait Trait: system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
 	/// A sudo-able call.
-	type Proposal: Parameter + RuntimeDispatchable<Origin=Self::Origin>;
+	type Proposal: Parameter + Dispatchable<Origin=Self::Origin>;
 }
 
 decl_module! {
