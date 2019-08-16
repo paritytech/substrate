@@ -41,7 +41,7 @@ use sr_primitives::{
 	transaction_validity::{TransactionValidity, ValidTransaction},
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup,
+		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup, DigestFor, NumberFor,
 	},
 };
 use runtime_version::RuntimeVersion;
@@ -51,6 +51,8 @@ use runtime_version::NativeVersion;
 use runtime_support::{impl_outer_origin, parameter_types, traits::KeyOwnerProofSystem};
 use inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
+use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
+use grandpa::fg_primitives::{self, ScheduledChange, GrandpaEquivocationFrom};
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
 pub use babe_primitives::{AuthorityId, AuthoritySignature};
@@ -349,6 +351,12 @@ impl From<srml_system::Event> for Event {
 	}
 }
 
+impl From<grandpa::Event> for Event {
+	fn from(_evt: grandpa::Event) -> Self {
+		unimplemented!("Not required in tests!")
+	}
+}
+
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 250;
 	pub const MinimumPeriod: u64 = 5;
@@ -410,6 +418,12 @@ impl srml_babe::Trait for Runtime {
 	type KeyOwnerSystem = FakeKeyOwnerProofSystem;
 	type ReportEquivocation = ();
 }
+
+impl grandpa::Trait for Runtime {
+	type Event = Event;
+}
+
+pub type Grandpa = grandpa::Module<Runtime>;
 
 /// Adds one to the given input and returns the final result.
 #[inline(never)]
@@ -651,6 +665,30 @@ cfg_if! {
 				}
 			}
 
+			impl fg_primitives::GrandpaApi<Block> for Runtime {
+				fn grandpa_pending_change(digest: &DigestFor<Block>)
+					-> Option<ScheduledChange<NumberFor<Block>>>
+				{
+					Grandpa::pending_change(digest)
+				}
+
+				fn grandpa_forced_change(digest: &DigestFor<Block>)
+					-> Option<(NumberFor<Block>, ScheduledChange<NumberFor<Block>>)>
+				{
+					Grandpa::forced_change(digest)
+				}
+
+				fn grandpa_authorities() -> Vec<(GrandpaId, GrandpaWeight)> {
+					Grandpa::grandpa_authorities()
+				}
+
+				fn construct_equivocation_transaction(
+					_equivocation: GrandpaEquivocationFrom<Block>
+				) -> Option<Vec<u8>> {
+					unimplemented!()
+				}
+			}
+
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
 				fn offchain_worker(block: u64) {
 					let ex = Extrinsic::IncludeData(block.encode());
@@ -875,6 +913,31 @@ cfg_if! {
 					Some(vec![])
 				}
 			}
+
+			impl fg_primitives::GrandpaApi<Block> for Runtime {
+				fn grandpa_pending_change(digest: &DigestFor<Block>)
+					-> Option<ScheduledChange<NumberFor<Block>>>
+				{
+					Grandpa::pending_change(digest)
+				}
+
+				fn grandpa_forced_change(digest: &DigestFor<Block>)
+					-> Option<(NumberFor<Block>, ScheduledChange<NumberFor<Block>>)>
+				{
+					Grandpa::forced_change(digest)
+				}
+
+				fn grandpa_authorities() -> Vec<(GrandpaId, GrandpaWeight)> {
+					Grandpa::grandpa_authorities()
+				}
+
+				fn construct_equivocation_transaction(
+					_equivocation: GrandpaEquivocationFrom<Block>
+				) -> Option<Vec<u8>> {
+					unimplemented!()
+				}
+			}
+
 
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
 				fn offchain_worker(block: u64) {

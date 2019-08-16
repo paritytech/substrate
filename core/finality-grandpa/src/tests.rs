@@ -1175,13 +1175,13 @@ fn voter_persists_its_votes() {
 								justification_period: 32,
 								keystore: Some(self.keystore.clone()),
 								name: Some(format!("peer#{}", 0)),
-								transaction_pool: self.transaction_pool.clone(),
 							},
 							link,
 							network: self.net.lock().peers[0].network_service().clone(),
 							inherent_data_providers: InherentDataProviders::new(),
 							on_exit: Exit,
 							telemetry_on_connect: None,
+							transaction_pool: self.transaction_pool.clone(),
 						};
 
 						let voter = run_grandpa_voter(grandpa_params)
@@ -1213,6 +1213,7 @@ fn voter_persists_its_votes() {
 			net: net.clone(),
 			client: client.clone(),
 			keystore,
+			transaction_pool: Arc::new(TransactionPool),
 		});
 	}
 
@@ -1511,7 +1512,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 			inherent_data_providers: InherentDataProviders::new(),
 			on_exit: Exit,
 			telemetry_on_connect: None,
-			transaction_pool: Arc::new(TransactionPool::default()),
+			transaction_pool: Arc::new(TransactionPool),
 		};
 
 		Box::new(run_grandpa_voter(grandpa_params).expect("all in order with client and network"))

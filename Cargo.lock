@@ -5058,6 +5058,7 @@ dependencies = [
  "sr-version 2.0.0",
  "srml-babe 2.0.0",
  "srml-executive 2.0.0",
+ "srml-grandpa 2.0.0",
  "srml-support 2.0.0",
  "srml-system 2.0.0",
  "srml-timestamp 2.0.0",

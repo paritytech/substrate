@@ -94,8 +94,8 @@ impl SubmitExtrinsic<TestBlock> for TransactionPool {
 
 	fn submit_extrinsic(
 		&self,
-		at: &BlockId<TestBlock>,
-		xt: TestExtrinsic,
+		_at: &BlockId<TestBlock>,
+		_xt: TestExtrinsic,
 	) -> Result<(), Self::Error> {
 		Ok(())
 	}
@@ -108,7 +108,7 @@ pub struct TestVerifier {
 		TestBlock,
 		test_client::runtime::RuntimeApi,
 		PeersFullClient,
-		(),
+		TransactionPool,
 	>,
 	mutator: Mutator,
 }
