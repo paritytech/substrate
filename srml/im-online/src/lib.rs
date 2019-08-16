@@ -360,7 +360,7 @@ impl<T: Trait> Module<T> {
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = AuthorityId;
 
-	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, _next_validators: I)
+	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, _queued_validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
 		// Reset heartbeats
