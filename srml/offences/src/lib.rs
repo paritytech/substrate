@@ -104,7 +104,7 @@ where
 			new_offenders,
 			concurrent_offenders,
 		} = match Self::triage_offence_report::<O>(reporters, &time_slot, offenders) {
-			Some(cache) => cache,
+			Some(triage) => triage,
 			// The report contained only duplicates, so there is no need to slash again.
 			None => return,
 		};
@@ -175,7 +175,7 @@ impl<T: Trait> Module<T> {
 		time_slot: &O::TimeSlot,
 		offenders: Vec<T::IdentificationTuple>,
 	) -> Option<TriageOutcome<T>> {
-		let mut cache = ReportIndexStorage::<T, O>::load(time_slot);
+		let mut storage = ReportIndexStorage::<T, O>::load(time_slot);
 		let mut new_offenders = BTreeSet::new();
 
 		for offender in offenders {
@@ -191,18 +191,18 @@ impl<T: Trait> Module<T> {
 					},
 				);
 
-				cache.insert(time_slot, report_id);
+				storage.insert(time_slot, report_id);
 			}
 		}
 
 		if !new_offenders.is_empty() {
 			// Load report details for the all reports happened at the same time.
-			let concurrent_offenders = cache.concurrent_reports
+			let concurrent_offenders = storage.concurrent_reports
 				.iter()
 				.filter_map(|report_id| <Reports<T>>::get(report_id))
 				.collect::<Vec<_>>();
 
-			cache.save();
+			storage.save();
 
 			Some(TriageOutcome {
 				new_offenders,
@@ -234,7 +234,7 @@ struct ReportIndexStorage<T: Trait, O: Offence<T::IdentificationTuple>> {
 }
 
 impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
-	/// Preload indexes from the cache for the specific `time_slot` and the kind of the offence.
+	/// Preload indexes from the storage for the specific `time_slot` and the kind of the offence.
 	fn load(time_slot: &O::TimeSlot) -> Self {
 		let opaque_time_slot = time_slot.encode();
 
@@ -252,19 +252,19 @@ impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
 		}
 	}
 
-	/// Insert a new report to the index cache.
+	/// Insert a new report to the index.
 	fn insert(&mut self, time_slot: &O::TimeSlot, report_id: ReportIdOf<T>) {
 		// Insert the report id into the list while maintaining the ordering by the time
 		// slot.
-		let idx = match self
+		let pos = match self
 			.same_kind_reports
 			.binary_search_by_key(&time_slot, |&(ref when, _)| when)
 		{
-			Ok(idx) => idx,
-			Err(idx) => idx,
+			Ok(pos) => pos,
+			Err(pos) => pos,
 		};
 		self.same_kind_reports
-			.insert(idx, (time_slot.clone(), report_id));
+			.insert(pos, (time_slot.clone(), report_id));
 
 		// Update the list of concurrent reports.
 		self.concurrent_reports.push(report_id);
