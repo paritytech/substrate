@@ -872,7 +872,6 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	}
 
 	/// Utility constructor for tests and client code.
-	#[cfg(feature = "std")]
 	pub fn new() -> Self {
 		Self(PhantomData)
 	}
@@ -927,7 +926,6 @@ impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckWeight<T> {
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckNonce<T: Trait>(#[codec(compact)] T::Index);
 
-#[cfg(feature = "std")]
 impl<T: Trait> CheckNonce<T> {
 	/// utility constructor. Used only in client/factory code.
 	pub fn from(nonce: T::Index) -> Self {
@@ -1001,7 +999,6 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckEra<T: Trait + Send + Sync>((Era, rstd::marker::PhantomData<T>));
 
-#[cfg(feature = "std")]
 impl<T: Trait + Send + Sync> CheckEra<T> {
 	/// utility constructor. Used only in client/factory code.
 	pub fn from(era: Era) -> Self {
@@ -1041,10 +1038,9 @@ impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckGenesis<T> {
 	}
 }
 
-#[cfg(feature = "std")]
 impl<T: Trait + Send + Sync> CheckGenesis<T> {
 	pub fn new() -> Self {
-		Self(std::marker::PhantomData)
+		Self(core::marker::PhantomData)
 	}
 }
 

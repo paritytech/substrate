@@ -1168,7 +1168,6 @@ pub struct TakeFees<T: Trait<I>, I: Instance = DefaultInstance>(#[codec(compact)
 
 impl<T: Trait<I>, I: Instance> TakeFees<T, I> {
 	/// utility constructor. Used only in client/factory code.
-	#[cfg(feature = "std")]
 	pub fn from(fee: T::Balance) -> Self {
 		Self(fee)
 	}
