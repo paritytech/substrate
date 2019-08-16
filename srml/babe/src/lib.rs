@@ -22,9 +22,7 @@
 pub use timestamp;
 
 use rstd::{result, prelude::*};
-use srml_support::{
-	decl_storage, decl_module, StorageValue, StorageMap, traits::FindAuthor, traits::Get,
-};
+use srml_support::{decl_storage, decl_module, StorageValue, StorageMap, traits::FindAuthor, traits::Get};
 use timestamp::{OnTimestampSet};
 use sr_primitives::{generic::DigestItem, ConsensusEngineId};
 use sr_primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon};
