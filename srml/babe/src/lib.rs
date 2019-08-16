@@ -271,11 +271,6 @@ impl<T: Trait> IsMember<AuthorityId> for Module<T> {
 
 impl<T: Trait> session::ShouldEndSession<T::BlockNumber> for Module<T> {
 	fn should_end_session(_: T::BlockNumber) -> bool {
-		// NOTE: we run this code here instead of `on_initialize` in order to
-		// avoid any evaluation order issues with the session module.
-		// additionality the initialization only relates to "before extrinsics"
-		// are added, and the changes to the internal state we do here only
-		// relate to the session module (epoch data).
 		// it might be (and it is in current implementation) that session module is calling
 		// should_end_session() from it's own on_initialize() handler
 		// => because session on_initialize() is called earlier than ours, let's ensure
