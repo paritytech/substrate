@@ -25,7 +25,7 @@ use rstd::{result, prelude::*};
 use srml_support::{decl_storage, decl_module, StorageValue, StorageMap, traits::FindAuthor, traits::Get};
 use timestamp::{OnTimestampSet};
 use sr_primitives::{generic::DigestItem, ConsensusEngineId};
-use sr_primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert};
+use sr_primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon};
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
 use codec::{Encode, Decode};
@@ -123,7 +123,7 @@ decl_storage! {
 		pub EpochIndex get(epoch_index): u64;
 
 		/// Current epoch authorities.
-		pub Authorities get(authorities) config(): Vec<(AuthorityId, BabeWeight)>;
+		pub Authorities get(authorities): Vec<(AuthorityId, BabeWeight)>;
 
 		/// Slot at which the current epoch started. It is possible that no
 		/// block was authored at the given slot and the epoch change was
@@ -162,6 +162,18 @@ decl_storage! {
 		/// epoch.
 		SegmentIndex build(|_| 0): u32;
 		UnderConstruction: map u32 => Vec<[u8; 32 /* VRF_OUTPUT_LENGTH */]>;
+	}
+	add_extra_genesis {
+		config(authorities): Vec<(AuthorityId, BabeWeight)>;
+		build(|
+			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
+			config: &GenesisConfig
+		| {
+			runtime_io::with_storage(
+				storage,
+				|| Module::<T>::initialize_authorities(&config.authorities),
+			);
+		})
 	}
 }
 
@@ -292,22 +304,31 @@ impl<T: Trait> Module<T> {
 		this_randomness
 	}
 
+	fn initialize_authorities(authorities: &[(AuthorityId, BabeWeight)]) {
+		if !authorities.is_empty() {
+			assert!(Authorities::get().is_empty(), "Authorities are already initialized!");
+			Authorities::put_ref(authorities);
+		}
+	}
 }
 
 impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 	fn on_timestamp_set(_moment: T::Moment) { }
 }
 
-impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
+impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = AuthorityId;
+
+	fn on_genesis_session<'a, I: 'a>(validators: I)
+		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
+	{
+		let authorities = validators.map(|(_, k)| (k, 1)).collect::<Vec<_>>();
+		Self::initialize_authorities(&authorities);
+	}
+
 	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, queued_validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
-		use staking::BalanceOf;
-		let to_votes = |b: BalanceOf<T>| {
-			<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b)
-		};
-
 		// Update epoch index
 		let epoch_index = EpochIndex::get()
 			.checked_add(1)
@@ -316,8 +337,8 @@ impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Mod
 		EpochIndex::put(epoch_index);
 
 		// Update authorities.
-		let authorities = validators.map(|(account, k)| {
-			(k, to_votes(staking::Module::<T>::stakers(account).total))
+		let authorities = validators.map(|(_account, k)| {
+			(k, 1)
 		}).collect::<Vec<_>>();
 
 		Authorities::put(authorities);
@@ -349,8 +370,8 @@ impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Mod
 
 		// After we update the current epoch, we signal the *next* epoch change
 		// so that nodes can track changes.
-		let next_authorities = queued_validators.map(|(account, k)| {
-			(k, to_votes(staking::Module::<T>::stakers(account).total))
+		let next_authorities = queued_validators.map(|(_account, k)| {
+			(k, 1)
 		}).collect::<Vec<_>>();
 
 		let next_epoch_start_slot = EpochStartSlot::get().saturating_add(T::EpochDuration::get());
