@@ -602,7 +602,9 @@ where
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync + 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	SC: SelectChain<Block> + 'static,
-	T: SubmitExtrinsic<Block>,
+	T: SubmitExtrinsic<Block> + 'static,
+	Client<B, E, Block, RA>: HeaderBackend<Block> + ProvideRuntimeApi,
+	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: GrandpaApi<Block>,
 {
 	fn new(
 		client: Arc<Client<B, E, Block, RA>>,
@@ -760,6 +762,8 @@ where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	SC: SelectChain<Block> + 'static,
 	T: SubmitExtrinsic<Block> + 'static,
+	Client<B, E, Block, RA>: HeaderBackend<Block> + ProvideRuntimeApi,
+	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: GrandpaApi<Block>,
 {
 	type Item = ();
 	type Error = Error;
