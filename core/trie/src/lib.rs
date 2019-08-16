@@ -22,10 +22,13 @@ mod error;
 mod node_header;
 mod node_codec;
 mod trie_stream;
+mod child_tries;
 
 use rstd::boxed::Box;
 use rstd::vec::Vec;
 use hash_db::Hasher;
+use child_tries::{ChildTrie, DefaultChildTrie};
+
 /// Our `NodeCodec`-specific error.
 pub use error::Error;
 /// The Substrate format implementation of `TrieStream`.
@@ -41,6 +44,26 @@ pub use memory_db::prefixed_key;
 /// Various re-exports from the `hash-db` crate.
 pub use hash_db::{HashDB as HashDBT, EMPTY_PREFIX};
 
+macro_rules! with_child_trie {
+	( $ident:ident, $storage_key:expr, $expr:expr, $default:expr ) => {
+		if $storage_key.starts_with(b":child_storage:default:") {
+			#[allow(unused_variables)]
+			let $ident = DefaultChildTrie;
+			$expr
+		} else {
+			$default
+		}
+	};
+
+	( $ident:ident, $storage_key:expr, $expr:expr ) => {
+		with_child_trie!(
+			$ident, $storage_key, $expr,
+			panic!("all child trie operations starts by calling is_child_trie_key_valid;
+					is_child_trie_key checked that the key is always valid;
+					qed")
+		)
+	};
+}
 
 #[derive(Default)]
 /// substrate trie layout
@@ -173,7 +196,8 @@ pub fn read_trie_value_with<
 /// `child_trie_root` and `child_delta_trie_root` can panic if invalid value is provided to them.
 pub fn is_child_trie_key_valid<L: TrieConfiguration>(storage_key: &[u8]) -> bool {
 	use primitives::storage::well_known_keys;
-	let has_right_prefix = storage_key.starts_with(b":child_storage:default:");
+	let has_right_prefix = with_child_trie!(trie, storage_key, true, false);
+
 	if has_right_prefix {
 		// This is an attempt to catch a change of `is_child_storage_key`, which
 		// just checks if the key has prefix `:child_storage:` at the moment of writing.
@@ -186,25 +210,25 @@ pub fn is_child_trie_key_valid<L: TrieConfiguration>(storage_key: &[u8]) -> bool
 }
 
 /// Determine the default child trie root.
-pub fn default_child_trie_root<L: TrieConfiguration>(_storage_key: &[u8]) -> Vec<u8> {
-	L::trie_root::<_, Vec<u8>, Vec<u8>>(core::iter::empty()).as_ref().iter().cloned().collect()
+pub fn default_child_trie_root<L: TrieConfiguration>(storage_key: &[u8]) -> Vec<u8> {
+	with_child_trie!(trie, storage_key, trie.default_root::<L>())
 }
 
 /// Determine a child trie root given its ordered contents, closed form. H is the default hasher,
 /// but a generic implementation may ignore this type parameter and use other hashers.
-pub fn child_trie_root<L: TrieConfiguration, I, A, B>(_storage_key: &[u8], input: I) -> Vec<u8>
+pub fn child_trie_root<L: TrieConfiguration, I, A, B>(storage_key: &[u8], input: I) -> Vec<u8>
 	where
 		I: IntoIterator<Item = (A, B)>,
 		A: AsRef<[u8]> + Ord,
 		B: AsRef<[u8]>,
 {
-	L::trie_root(input).as_ref().iter().cloned().collect()
+	with_child_trie!(trie, storage_key, trie.root::<L, _, _, _>(input))
 }
 
 /// Determine a child trie root given a hash DB and delta values. H is the default hasher,
 /// but a generic implementation may ignore this type parameter and use other hashers.
 pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB>(
-	_storage_key: &[u8],
+	storage_key: &[u8],
 	db: &mut DB,
 	root_vec: Vec<u8>,
 	delta: I
@@ -216,48 +240,21 @@ pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB>(
 		DB: hash_db::HashDB<L::Hash, trie_db::DBValue>
 			+ hash_db::PlainDB<TrieHash<L>, trie_db::DBValue>,
 {
-	let mut root = TrieHash::<L>::default();
-	// root is fetched from DB, not writable by runtime, so it's always valid.
-	root.as_mut().copy_from_slice(&root_vec);
-
-	{
-		let mut trie = TrieDBMut::<L>::from_existing(&mut *db, &mut root)?;
-
-		for (key, change) in delta {
-			match change {
-				Some(val) => trie.insert(key.as_ref(), val.as_ref())?,
-				None => trie.remove(key.as_ref())?,
-			};
-		}
-	}
-
-	Ok(root.as_ref().to_vec())
+	with_child_trie!(trie, storage_key, trie.delta_root::<L, _, _, _, _>(db, root_vec, delta))
 }
 
 /// Call `f` for all keys in a child trie.
 pub fn for_keys_in_child_trie<L: TrieConfiguration, F: FnMut(&[u8]), DB>(
-	_storage_key: &[u8],
+	storage_key: &[u8],
 	db: &DB,
 	root_slice: &[u8],
-	mut f: F
+	f: F
 ) -> Result<(), Box<TrieError<L>>>
 	where
 		DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>
-			+ hash_db::PlainDBRef<TrieHash<L>, trie_db::DBValue>,
+				+ hash_db::PlainDBRef<TrieHash<L>, trie_db::DBValue>,
 {
-	let mut root = TrieHash::<L>::default();
-	// root is fetched from DB, not writable by runtime, so it's always valid.
-	root.as_mut().copy_from_slice(root_slice);
-
-	let trie = TrieDB::<L>::new(&*db, &root)?;
-	let iter = trie.iter()?;
-
-	for x in iter {
-		let (key, _) = x?;
-		f(&key);
-	}
-
-	Ok(())
+	with_child_trie!(trie, storage_key, trie.for_keys::<L, _, _>(db, root_slice, f))
 }
 
 /// Record all keys for a given root.
@@ -285,7 +282,7 @@ pub fn record_all_keys<L: TrieConfiguration, DB>(
 
 /// Read a value from the child trie.
 pub fn read_child_trie_value<L: TrieConfiguration, DB>(
-	_storage_key: &[u8],
+	storage_key: &[u8],
 	db: &DB,
 	root_slice: &[u8],
 	key: &[u8]
@@ -294,16 +291,12 @@ pub fn read_child_trie_value<L: TrieConfiguration, DB>(
 		DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>
 			+ hash_db::PlainDBRef<TrieHash<L>, trie_db::DBValue>,
 {
-	let mut root = TrieHash::<L>::default();
-	// root is fetched from DB, not writable by runtime, so it's always valid.
-	root.as_mut().copy_from_slice(root_slice);
-
-	Ok(TrieDB::<L>::new(&*db, &root)?.get(key).map(|x| x.map(|val| val.to_vec()))?)
+	with_child_trie!(trie, storage_key, trie.read_value::<L, _>(db, root_slice, key))
 }
 
 /// Read a value from the child trie with given query.
 pub fn read_child_trie_value_with<L: TrieConfiguration, Q: Query<L::Hash, Item=DBValue>, DB>(
-	_storage_key: &[u8],
+	storage_key: &[u8],
 	db: &DB,
 	root_slice: &[u8],
 	key: &[u8],
@@ -313,11 +306,7 @@ pub fn read_child_trie_value_with<L: TrieConfiguration, Q: Query<L::Hash, Item=D
 		DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>
 			+ hash_db::PlainDBRef<TrieHash<L>, trie_db::DBValue>,
 {
-	let mut root = TrieHash::<L>::default();
-	// root is fetched from DB, not writable by runtime, so it's always valid.
-	root.as_mut().copy_from_slice(root_slice);
-
-	Ok(TrieDB::<L>::new(&*db, &root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
+	with_child_trie!(trie, storage_key, trie.read_value_with::<L, _, _>(db, root_slice, key, query))
 }
 
 /// Constants used into trie simplification codec.
