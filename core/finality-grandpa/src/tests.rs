@@ -366,15 +366,13 @@ fn create_keystore(authority: Ed25519Keyring) -> (KeyStorePtr, tempfile::TempDir
 
 struct TransactionPool;
 
-impl SubmitExtrinsic for TransactionPool {
-	type BlockId = BlockId<Block>;
-	type Extrinsic = ();
+impl SubmitExtrinsic<Block> for TransactionPool {
 	type Error = String;
 
 	fn submit_extrinsic(
 		&self,
-		at: &Self::BlockId,
-		xt: Self::Extrinsic,
+		at: &BlockId<Block>,
+		xt: Block::Extrinsic,
 	) -> std::result::Result<(), Self::Error> {
 		Ok(())
 	}

@@ -140,11 +140,11 @@ pub fn check_equivocation<C, H, V>(
 #[cfg(test)]
 mod test {
 	use super::*;
-	use primitives::{sr25519, Pair};
+	use primitives::{Pair};
 	use primitives::hash::H256;
 	use sr_primitives::testing::{Header as HeaderTest, Digest as DigestTest};
 	use test_client::{
-		runtime::app_crypto::ed25519::{AppPair, AppPublic, AppSignature },
+		runtime::app_crypto::ed25519::{AppPair, AppSignature },
 	};
 	use super::{MAX_SLOT_CAPACITY, PRUNING_BOUND, check_equivocation};
 

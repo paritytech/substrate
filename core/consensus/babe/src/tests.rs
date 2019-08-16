@@ -89,15 +89,13 @@ type TestExtrinsic = <TestBlock as BlockT>::Extrinsic;
 
 struct TransactionPool;
 
-impl SubmitExtrinsic for TransactionPool {
-	type BlockId = BlockId<TestBlock>;
-	type Extrinsic = TestExtrinsic;
+impl SubmitExtrinsic<TestBlock> for TransactionPool {
 	type Error = String;
 
 	fn submit_extrinsic(
 		&self,
-		at: &Self::BlockId,
-		xt: Self::Extrinsic,
+		at: &BlockId<TestBlock>,
+		xt: TestExtrinsic,
 	) -> Result<(), Self::Error> {
 		Ok(())
 	}
