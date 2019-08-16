@@ -200,6 +200,27 @@ impl TransactionValidity {
 			TransactionValidity::Unknown(unknown) => Err(unknown.into()),
 		}
 	}
+
+	/// Returns if the validity `invalid` or `unknown`.
+	pub fn is_invalid_or_unknown(&self) -> bool {
+		match self {
+			TransactionValidity::Invalid(_) | TransactionValidity::Unknown(_) => true,
+			TransactionValidity::Valid(_) => false,
+		}
+	}
+
+	/// Returns if the validity `valid`.
+	pub fn is_valid(&self) -> bool {
+		!self.is_invalid_or_unknown()
+	}
+
+	/// Try to convert into `ValidTransaction`.
+	pub fn into_valid(self) -> Option<ValidTransaction> {
+		match self {
+			TransactionValidity::Valid(valid) => Some(valid),
+			_ => None,
+		}
+	}
 }
 
 impl Decode for TransactionValidity {

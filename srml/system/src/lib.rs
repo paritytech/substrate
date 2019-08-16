@@ -1200,17 +1200,23 @@ mod tests {
 
 			System::initialize(&2, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
 			System::deposit_event(42u16);
-			System::note_applied_extrinsic(&Ok(()), 0);
-			System::note_applied_extrinsic(&Err(DispatchError { module: 1, error: 2, message: None }), 0);
+			System::note_applied_extrinsic(&ApplyOutcome::Success, 0);
+			System::note_applied_extrinsic(
+				&ApplyOutcome::Fail(DispatchError::new(Some(1), 2, None)),
+				0,
+			);
 			System::note_finished_extrinsics();
 			System::deposit_event(3u16);
 			System::finalize();
-			assert_eq!(System::events(), vec![
-				EventRecord { phase: Phase::ApplyExtrinsic(0), event: 42u16, topics: vec![] },
-				EventRecord { phase: Phase::ApplyExtrinsic(0), event: 100u16, topics: vec![] },
-				EventRecord { phase: Phase::ApplyExtrinsic(1), event: 0x0201u16, topics: vec![] },
-				EventRecord { phase: Phase::Finalization, event: 3u16, topics: vec![] }
-			]);
+			assert_eq!(
+				System::events(),
+				vec![
+					EventRecord { phase: Phase::ApplyExtrinsic(0), event: 42u16, topics: vec![] },
+					EventRecord { phase: Phase::ApplyExtrinsic(0), event: 100u16, topics: vec![] },
+					EventRecord { phase: Phase::ApplyExtrinsic(1), event: 257u16, topics: vec![] },
+					EventRecord { phase: Phase::Finalization, event: 3u16, topics: vec![] }
+				]
+			);
 		});
 	}
 
@@ -1314,13 +1320,13 @@ mod tests {
 			let info = DispatchInfo::default();
 			let len = 0_usize;
 			// stale
-			assert!(CheckNonce::<Test>(0).validate(&1, CALL, info, len).is_err());
+			assert!(CheckNonce::<Test>(0).validate(&1, CALL, info, len).is_invalid_or_unknown());
 			assert!(CheckNonce::<Test>(0).pre_dispatch(&1, CALL, info, len).is_err());
 			// correct
-			assert!(CheckNonce::<Test>(1).validate(&1, CALL, info, len).is_ok());
+			assert!(CheckNonce::<Test>(1).validate(&1, CALL, info, len).is_valid());
 			assert!(CheckNonce::<Test>(1).pre_dispatch(&1, CALL, info, len).is_ok());
 			// future
-			assert!(CheckNonce::<Test>(5).validate(&1, CALL, info, len).is_ok());
+			assert!(CheckNonce::<Test>(5).validate(&1, CALL, info, len).is_valid());
 			assert!(CheckNonce::<Test>(5).pre_dispatch(&1, CALL, info, len).is_err());
 		})
 	}
@@ -1409,14 +1415,19 @@ mod tests {
 			let op = DispatchInfo { weight: 100, class: DispatchClass::Operational };
 			let len = 0_usize;
 
-			assert_eq!(
-				CheckWeight::<Test>(PhantomData).validate(&1, CALL, normal, len).unwrap().priority,
-				100,
-			);
-			assert_eq!(
-				CheckWeight::<Test>(PhantomData).validate(&1, CALL, op, len).unwrap().priority,
-				Bounded::max_value(),
-			);
+			let priority = CheckWeight::<Test>(PhantomData)
+				.validate(&1, CALL, normal, len)
+				.into_valid()
+				.unwrap()
+				.priority;
+			assert_eq!(priority, 100);
+
+			let priority = CheckWeight::<Test>(PhantomData)
+				.validate(&1, CALL, op, len)
+				.into_valid()
+				.unwrap()
+				.priority;
+			assert_eq!(priority, Bounded::max_value());
 		})
 	}
 
@@ -1450,7 +1461,7 @@ mod tests {
 			// future
 			assert_eq!(
 				CheckEra::<Test>::from(Era::mortal(4, 2)).additional_signed().err().unwrap(),
-				"transaction birth block ancient"
+				InvalidTransactionValidity::AncientBirthBlock.into(),
 			);
 
 			// correct

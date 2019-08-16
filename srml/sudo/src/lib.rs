@@ -87,7 +87,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sr_std::prelude::*;
-use sr_primitives::{traits::{StaticLookup, Dispatchable}, weights::SimpleDispatchInfo};
+use sr_primitives::{
+	traits::{StaticLookup, Dispatchable}, weights::SimpleDispatchInfo, DispatchError,
+};
 use srml_support::{StorageValue, Parameter, decl_module, decl_event, decl_storage, ensure};
 use system::ensure_signed;
 
@@ -122,6 +124,7 @@ decl_module! {
 			let res = match proposal.dispatch(system::RawOrigin::Root.into()) {
 				Ok(_) => true,
 				Err(e) => {
+					let e: DispatchError = e.into();
 					sr_io::print(e);
 					false
 				}

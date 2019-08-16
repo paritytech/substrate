@@ -37,8 +37,10 @@ use substrate_client::{
 	impl_runtime_apis,
 };
 use sr_primitives::{
-	ApplyResult, create_runtime_str, Perbill, impl_opaque_keys, PrimitiveError,
-	transaction_validity::{TransactionValidity, ValidTransaction},
+	ApplyResult, create_runtime_str, Perbill, impl_opaque_keys,
+	transaction_validity::{
+		TransactionValidity, ValidTransaction, TransactionValidityError, InvalidTransactionValidity,
+	},
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
 		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup,
@@ -122,19 +124,18 @@ impl serde::Serialize for Extrinsic {
 
 impl BlindCheckable for Extrinsic {
 	type Checked = Self;
-	type Error = PrimitiveError;
 
-	fn check(self) -> Result<Self, Self::Error> {
+	fn check(self) -> Result<Self, TransactionValidityError> {
 		match self {
 			Extrinsic::AuthoritiesChange(new_auth) => Ok(Extrinsic::AuthoritiesChange(new_auth)),
 			Extrinsic::Transfer(transfer, signature) => {
 				if sr_primitives::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
 					Ok(Extrinsic::Transfer(transfer, signature))
 				} else {
-					Err(PrimitiveError::BadSignature)
+					Err(InvalidTransactionValidity::BadProof.into())
 				}
 			},
-			Extrinsic::IncludeData(_) => Err(PrimitiveError::BadSignature),
+			Extrinsic::IncludeData(_) => Err(InvalidTransactionValidity::BadProof.into()),
 			Extrinsic::StorageChange(key, value) => Ok(Extrinsic::StorageChange(key, value)),
 		}
 	}

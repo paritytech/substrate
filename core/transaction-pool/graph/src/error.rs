@@ -16,7 +16,9 @@
 
 //! Transaction pool errors.
 
-use sr_primitives::transaction_validity::TransactionPriority as Priority;
+use sr_primitives::transaction_validity::{
+	TransactionPriority as Priority, InvalidTransactionValidity, UnknownTransactionValidity,
+};
 
 /// Transaction pool result.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -25,11 +27,11 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
 	/// Transaction is not verifiable yet, but might be in the future.
-	#[display(fmt="Unkown Transaction Validity. Error code: {}", _0)]
-	UnknownTransactionValidity(i8),
+	#[display(fmt="Unkown Transaction Validity. Error code: {:?}", _0)]
+	UnknownTransactionValidity(UnknownTransactionValidity),
 	/// Transaction is invalid.
-	#[display(fmt="Invalid Transaction. Error Code: {}", _0)]
-	InvalidTransaction(i8),
+	#[display(fmt="Invalid Transaction. Error Code: {:?}", _0)]
+	InvalidTransaction(InvalidTransactionValidity),
 	/// The transaction is temporarily banned.
 	#[display(fmt="Temporarily Banned")]
 	TemporarilyBanned,
