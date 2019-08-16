@@ -2356,6 +2356,7 @@ dependencies = [
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.97 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 2.0.0",
+ "sr-staking-primitives 2.0.0",
  "sr-std 2.0.0",
  "sr-version 2.0.0",
  "srml-authorship 0.1.0",
@@ -2371,6 +2372,7 @@ dependencies = [
  "srml-im-online 0.1.0",
  "srml-indices 2.0.0",
  "srml-membership 2.0.0",
+ "srml-offences 1.0.0",
  "srml-session 2.0.0",
  "srml-staking 2.0.0",
  "srml-sudo 2.0.0",
@@ -3651,6 +3653,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "sr-staking-primitives"
+version = "2.0.0"
+dependencies = [
+ "parity-scale-codec 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 2.0.0",
+ "sr-std 2.0.0",
+]
+
+[[package]]
 name = "sr-std"
 version = "2.0.0"
 dependencies = [
@@ -3694,7 +3705,6 @@ dependencies = [
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
  "srml-session 2.0.0",
- "srml-staking 2.0.0",
  "srml-support 2.0.0",
  "srml-system 2.0.0",
  "srml-timestamp 2.0.0",
@@ -3729,6 +3739,7 @@ dependencies = [
  "serde 1.0.97 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
+ "sr-staking-primitives 2.0.0",
  "sr-std 2.0.0",
  "srml-session 2.0.0",
  "srml-support 2.0.0",
@@ -3897,6 +3908,7 @@ dependencies = [
  "serde 1.0.97 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
+ "sr-staking-primitives 2.0.0",
  "sr-std 2.0.0",
  "srml-finality-tracker 2.0.0",
  "srml-session 2.0.0",
@@ -3914,6 +3926,7 @@ dependencies = [
  "serde 1.0.97 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
+ "sr-staking-primitives 2.0.0",
  "sr-std 2.0.0",
  "srml-session 2.0.0",
  "srml-support 2.0.0",
@@ -3964,6 +3977,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "srml-offences"
+version = "1.0.0"
+dependencies = [
+ "parity-scale-codec 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.97 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 2.0.0",
+ "sr-primitives 2.0.0",
+ "sr-staking-primitives 2.0.0",
+ "sr-std 2.0.0",
+ "srml-balances 2.0.0",
+ "srml-support 2.0.0",
+ "srml-system 2.0.0",
+ "substrate-primitives 2.0.0",
+]
+
+[[package]]
 name = "srml-session"
 version = "2.0.0"
 dependencies = [
@@ -3973,6 +4002,7 @@ dependencies = [
  "serde 1.0.97 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
+ "sr-staking-primitives 2.0.0",
  "sr-std 2.0.0",
  "srml-support 2.0.0",
  "srml-system 2.0.0",
@@ -3992,6 +4022,7 @@ dependencies = [
  "serde 1.0.97 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
+ "sr-staking-primitives 2.0.0",
  "sr-std 2.0.0",
  "srml-authorship 0.1.0",
  "srml-balances 2.0.0",

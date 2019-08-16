@@ -18,15 +18,22 @@
 //! from VRF outputs and manages epoch transitions.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![forbid(unused_must_use, unsafe_code, unused_variables, dead_code)]
+#![forbid(unused_must_use, unsafe_code, unused_variables)]
+
+// TODO: @marcio uncomment this when BabeEquivocation is integrated.
+// #![forbid(dead_code)]
 
 pub use timestamp;
 
 use rstd::{result, prelude::*};
 use srml_support::{decl_storage, decl_module, StorageValue, StorageMap, traits::FindAuthor, traits::Get};
 use timestamp::{OnTimestampSet};
-use sr_primitives::{generic::DigestItem, ConsensusEngineId};
+use sr_primitives::{generic::DigestItem, ConsensusEngineId, Perbill};
 use sr_primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon};
+use sr_staking_primitives::{
+	SessionIndex,
+	offence::{Offence, Kind},
+};
 use sr_primitives::weights::SimpleDispatchInfo;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
@@ -279,6 +286,53 @@ impl<T: Trait> session::ShouldEndSession<T::BlockNumber> for Module<T> {
 
 		let diff = CurrentSlot::get().saturating_sub(EpochStartSlot::get());
 		diff >= T::EpochDuration::get()
+	}
+}
+
+// TODO [slashing]: @marcio use this, remove the dead_code annotation.
+/// A BABE equivocation offence report.
+///
+/// When a validator released two or more blocks at the same slot.
+#[allow(dead_code)]
+struct BabeEquivocationOffence<FullIdentification> {
+	/// A babe slot number in which this incident happened.
+	slot: u64,
+	/// The session index in which the incident happened.
+	session_index: SessionIndex,
+	/// The size of the validator set at the time of the offence.
+	validator_set_count: u32,
+	/// The authority that produced the equivocation.
+	offender: FullIdentification,
+}
+
+impl<FullIdentification: Clone> Offence<FullIdentification> for BabeEquivocationOffence<FullIdentification> {
+	const ID: Kind = *b"babe:equivocatio";
+	type TimeSlot = u64;
+
+	fn offenders(&self) -> Vec<FullIdentification> {
+		vec![self.offender.clone()]
+	}
+
+	fn session_index(&self) -> SessionIndex {
+		self.session_index
+	}
+
+	fn validator_set_count(&self) -> u32 {
+		self.validator_set_count
+	}
+
+	fn time_slot(&self) -> Self::TimeSlot {
+		self.slot
+	}
+
+	fn slash_fraction(
+		offenders_count: u32,
+		validator_set_count: u32,
+	) -> Perbill {
+		// the formula is min((3k / n)^2, 1)
+		let x = Perbill::from_rational_approximation(3 * offenders_count, validator_set_count);
+		// _ ^ 2
+		x.square()
 	}
 }
 
