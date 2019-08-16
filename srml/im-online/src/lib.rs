@@ -177,12 +177,24 @@ decl_storage! {
 		GossipAt get(gossip_at): T::BlockNumber;
 
 		/// The current set of keys that may issue a heartbeat.
-		Keys get(keys) config(): Vec<AuthorityId>;
+		Keys get(keys): Vec<AuthorityId>;
 
 		/// For each session index we keep a mapping of `AuthorityId`
 		/// to `offchain::OpaqueNetworkState`.
 		ReceivedHeartbeats get(received_heartbeats): double_map SessionIndex,
 			blake2_256(AuthIndex) => Vec<u8>;
+	}
+	add_extra_genesis {
+		config(keys): Vec<AuthorityId>;
+		build(|
+			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
+			config: &GenesisConfig
+		| {
+			sr_io::with_storage(
+				storage,
+				|| Module::<T>::initialize_keys(&config.keys),
+			);
+		})
 	}
 }
 
@@ -355,10 +367,23 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
+	fn initialize_keys(keys: &[AuthorityId]) {
+		if !keys.is_empty() {
+			assert!(Keys::get().is_empty(), "Keys are already initialized!");
+			Keys::put_ref(keys);
+		}
+	}
 }
 
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = AuthorityId;
+
+	fn on_genesis_session<'a, I: 'a>(validators: I)
+		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
+	{
+		let keys = validators.map(|x| x.1).collect::<Vec<_>>();
+		Self::initialize_keys(&keys);
+	}
 
 	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, _queued_validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
