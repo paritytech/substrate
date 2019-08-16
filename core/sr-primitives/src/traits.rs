@@ -1095,7 +1095,12 @@ pub trait RuntimeApiInfo {
 	const VERSION: u32;
 }
 
-/// Something that can validate unsigned extrinsics.
+/// Something that can validate unsigned extrinsics for the transaction pool.
+///
+/// Note that any checks done here are only used for determining the validity of
+/// the transaction for the transaction pool.
+/// During block execution phase one need to perform the same checks anyway,
+/// since this function is not being called.
 pub trait ValidateUnsigned {
 	/// The call to validate
 	type Call;

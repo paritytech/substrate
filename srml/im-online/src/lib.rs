@@ -77,7 +77,7 @@ use rstd::prelude::*;
 use session::SessionIndex;
 use sr_io::Printable;
 use srml_support::{
-	StorageValue, decl_module, decl_event, decl_storage, StorageDoubleMap, print,
+	StorageValue, decl_module, decl_event, decl_storage, StorageDoubleMap, print, ensure
 };
 use system::ensure_none;
 use app_crypto::RuntimeAppPublic;
@@ -206,11 +206,12 @@ decl_module! {
 		fn heartbeat(
 			origin,
 			heartbeat: Heartbeat<T::BlockNumber>,
-			_signature: AuthoritySignature
+			signature: AuthoritySignature
 		) {
 			ensure_none(origin)?;
 
 			let current_session = <session::Module<T>>::current_index();
+			ensure!(current_session == heartbeat.session_index, "Outdated hearbeat received.");
 			let exists = <ReceivedHeartbeats>::exists(
 				&current_session,
 				&heartbeat.authority_index
@@ -218,6 +219,11 @@ decl_module! {
 			let keys = Keys::get();
 			let public = keys.get(heartbeat.authority_index as usize);
 			if let (true, Some(public)) = (!exists, public) {
+				let signature_valid = heartbeat.using_encoded(|encoded_heartbeat| {
+					public.verify(&encoded_heartbeat, &signature)
+				});
+				ensure!(signature_valid, "Invalid hearbeat signature.");
+
 				Self::deposit_event(Event::HeartbeatReceived(public.clone()));
 
 				let network_state = heartbeat.network_state.encode();
