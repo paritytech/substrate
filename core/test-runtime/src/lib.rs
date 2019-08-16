@@ -48,7 +48,7 @@ use runtime_version::RuntimeVersion;
 pub use primitives::{hash::H256, crypto::key_types};
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
-use runtime_support::{impl_outer_origin, parameter_types};
+use runtime_support::{impl_outer_origin, parameter_types, traits::KeyOwnerProofSystem};
 use inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
 
@@ -387,9 +387,28 @@ parameter_types! {
 	pub const ExpectedBlockTime: u64 = 10_000;
 }
 
+pub struct FakeKeyOwnerProofSystem;
+
+impl<Key> KeyOwnerProofSystem<Key> for FakeKeyOwnerProofSystem {
+	type Proof = ();
+	type IdentificationTuple = ();
+
+	fn prove(_key: Key) -> Option<Self::Proof> {
+		None
+	}
+
+	fn check_proof(_key: Key, _proof: Self::Proof) -> Option<Self::IdentificationTuple> {
+		Some(())
+	}
+}
+
 impl srml_babe::Trait for Runtime {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
+	type IdentificationTuple = ();
+	type Proof = ();
+	type KeyOwnerSystem = FakeKeyOwnerProofSystem;
+	type ReportEquivocation = ();
 }
 
 /// Adds one to the given input and returns the final result.
@@ -622,7 +641,7 @@ cfg_if! {
 				}
 
 				fn construct_equivocation_transaction(
-					equivocation: babe_primitives::EquivocationProof<
+					_equivocation: babe_primitives::EquivocationProof<
 						<Block as BlockT>::Header,
 						AuthorityId,
 						AuthoritySignature
