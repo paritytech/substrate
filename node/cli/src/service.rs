@@ -429,7 +429,7 @@ mod tests {
 			// add it to a digest item.
 			let to_sign = pre_hash.encode();
 			let signature = alice.sign(&to_sign[..]);
-			let item = <DigestItem as CompatibleDigestItem>::babe_seal(
+			let item = <DigestItem as CompatibleDigestItem>::babe_seal::<babe::AuthoritySignature>(
 				signature.into(),
 			);
 			slot_num += 1;

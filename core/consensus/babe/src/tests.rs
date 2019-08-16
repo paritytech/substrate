@@ -27,7 +27,7 @@ use client::{LongestChain, block_builder::BlockBuilder};
 use consensus_common::NoNetwork as DummyOracle;
 use network::test::*;
 use network::test::{Block as TestBlock, PeersClient};
-use sr_primitives::traits::{Block as BlockT, DigestFor};
+use sr_primitives::traits::{Block as BlockT, DigestFor, SubmitExtrinsic};
 use network::config::ProtocolConfig;
 use tokio::runtime::current_thread;
 use keyring::sr25519::Keyring;
@@ -35,7 +35,6 @@ use client::BlockchainEvents;
 use test_client;
 use log::debug;
 use std::{time::Duration, borrow::Borrow, cell::RefCell};
-use transaction_pool::txpool::SubmitExtrinsic;
 
 type Item = generic::DigestItem<Hash>;
 
@@ -92,9 +91,9 @@ type TestExtrinsic = <TestBlock as BlockT>::Extrinsic;
 struct TransactionPool;
 
 impl SubmitExtrinsic for TransactionPool {
-	type BlockId = ();
-	type Extrinsic = ();
-	type Error = ();
+	type BlockId = BlockId<TestBlock>;
+	type Extrinsic = TestExtrinsic;
+	type Error = String;
 
 	fn submit_extrinsic(
 		&self,
@@ -268,7 +267,7 @@ fn rejects_missing_inherent_digest() {
 	MUTATOR.with(|s| *s.borrow_mut() = Arc::new(move |header: &mut TestHeader| {
 		let v = std::mem::replace(&mut header.digest_mut().logs, vec![]);
 		header.digest_mut().logs = v.into_iter()
-			.filter(|v| v.as_babe_pre_digest().is_none())
+			.filter(|v| v.as_babe_pre_digest::<()>().is_none())
 			.collect()
 	}));
 	run_one_test()
@@ -280,7 +279,7 @@ fn rejects_missing_seals() {
 	MUTATOR.with(|s| *s.borrow_mut() = Arc::new(move |header: &mut TestHeader| {
 		let v = std::mem::replace(&mut header.digest_mut().logs, vec![]);
 		header.digest_mut().logs = v.into_iter()
-			.filter(|v| v.as_babe_seal().is_none())
+			.filter(|v| v.as_babe_seal::<()>().is_none())
 			.collect()
 	}));
 	run_one_test()
@@ -306,15 +305,15 @@ fn wrong_consensus_engine_id_rejected() {
 	let _ = env_logger::try_init();
 	let sig = AuthorityPair::generate().0.sign(b"");
 	let bad_seal: Item = DigestItem::Seal([0; 4], sig.to_vec());
-	assert!(bad_seal.as_babe_pre_digest().is_none());
-	assert!(bad_seal.as_babe_seal().is_none())
+	assert!(bad_seal.as_babe_pre_digest::<()>().is_none());
+	assert!(bad_seal.as_babe_seal::<()>().is_none())
 }
 
 #[test]
 fn malformed_pre_digest_rejected() {
 	let _ = env_logger::try_init();
 	let bad_seal: Item = DigestItem::Seal(BABE_ENGINE_ID, [0; 64].to_vec());
-	assert!(bad_seal.as_babe_pre_digest().is_none());
+	assert!(bad_seal.as_babe_pre_digest::<()>().is_none());
 }
 
 #[test]
@@ -322,8 +321,8 @@ fn sig_is_not_pre_digest() {
 	let _ = env_logger::try_init();
 	let sig = AuthorityPair::generate().0.sign(b"");
 	let bad_seal: Item = DigestItem::Seal(BABE_ENGINE_ID, sig.to_vec());
-	assert!(bad_seal.as_babe_pre_digest().is_none());
-	assert!(bad_seal.as_babe_seal().is_some())
+	assert!(bad_seal.as_babe_pre_digest::<()>().is_none());
+	assert!(bad_seal.as_babe_seal::<()>().is_some())
 }
 
 #[test]

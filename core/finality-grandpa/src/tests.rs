@@ -36,10 +36,10 @@ use consensus_common::import_queue::{BoxBlockImport, BoxJustificationImport, Box
 use std::collections::{HashMap, HashSet};
 use std::result;
 use codec::Decode;
-use sr_primitives::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT};
+use sr_primitives::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT, SubmitExtrinsic};
 use sr_primitives::generic::BlockId;
 use primitives::{NativeOrEncoded, ExecutionContext, crypto::Public};
-use fg_primitives::AuthorityId;
+use fg_primitives::{AuthorityId, GrandpaEquivocationFrom};
 
 use authorities::AuthoritySet;
 use finality_proof::{FinalityProofProvider, AuthoritySetForFinalityProver, AuthoritySetForFinalityChecker};
@@ -310,6 +310,16 @@ impl GrandpaApi<Block> for RuntimeApi {
 		// extrinsics.
 		Ok(self.inner.forced_changes.lock().get(&parent_hash).map(|c| c.clone())).map(NativeOrEncoded::Native)
 	}
+
+	fn GrandpaApi_construct_equivocation_transaction_runtime_api_impl(
+		&self,
+		at: &BlockId<Block>,
+		_: ExecutionContext,
+		_: Option<(GrandpaEquivocationFrom<Block>)>,
+		_: Vec<u8>,
+	) -> Result<NativeOrEncoded<Option<Vec<u8>>>> {
+		Ok(NativeOrEncoded::Native(Some(vec![])))
+	}
 }
 
 impl AuthoritySetForFinalityProver<Block> for TestApi {
@@ -352,6 +362,22 @@ fn create_keystore(authority: Ed25519Keyring) -> (KeyStorePtr, tempfile::TempDir
 		.expect("Creates authority key");
 
 	(keystore, keystore_path)
+}
+
+struct TransactionPool;
+
+impl SubmitExtrinsic for TransactionPool {
+	type BlockId = BlockId<Block>;
+	type Extrinsic = ();
+	type Error = String;
+
+	fn submit_extrinsic(
+		&self,
+		at: &Self::BlockId,
+		xt: Self::Extrinsic,
+	) -> std::result::Result<(), Self::Error> {
+		Ok(())
+	}
 }
 
 // run the voters to completion. provide a closure to be invoked after
@@ -422,7 +448,7 @@ fn run_to_completion_with<F>(
 			inherent_data_providers: InherentDataProviders::new(),
 			on_exit: Exit,
 			telemetry_on_connect: None,
-			transaction_pool: Arc::new(()),
+			transaction_pool: Arc::new(TransactionPool),
 		};
 		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
@@ -536,6 +562,7 @@ fn finalize_3_voters_1_full_observer() {
 			inherent_data_providers: InherentDataProviders::new(),
 			on_exit: Exit,
 			telemetry_on_connect: None,
+			transaction_pool: Arc::new(TransactionPool),
 		};
 		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
@@ -707,6 +734,7 @@ fn transition_3_voters_twice_1_full_observer() {
 			inherent_data_providers: InherentDataProviders::new(),
 			on_exit: Exit,
 			telemetry_on_connect: None,
+			transaction_pool: Arc::new(TransactionPool),
 		};
 		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
@@ -1133,6 +1161,7 @@ fn voter_persists_its_votes() {
 				inherent_data_providers: InherentDataProviders::new(),
 				on_exit: Exit,
 				telemetry_on_connect: None,
+				transaction_pool: Arc::new(TransactionPool),
 			};
 
 			let voter = run_grandpa_voter(grandpa_params)
@@ -1463,6 +1492,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 			inherent_data_providers: InherentDataProviders::new(),
 			on_exit: Exit,
 			telemetry_on_connect: None,
+			transaction_pool: Arc::new(TransactionPool),
 		};
 
 		Box::new(run_grandpa_voter(grandpa_params).expect("all in order with client and network"))
