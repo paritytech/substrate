@@ -29,7 +29,7 @@ use network::{
 };
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use transaction_pool::txpool::{
-	self, Options as TransactionPoolOptions, Pool as TransactionPool, SubmitExtrinsic
+	self, Options as TransactionPoolOptions, Pool as TransactionPool
 };
 use sr_primitives::{
 	BuildStorage, traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi}, generic::BlockId

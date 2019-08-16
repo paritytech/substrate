@@ -33,7 +33,7 @@ use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
 use sr_primitives::{
 	generic::BlockId,
-	traits::{self, SaturatedConversion},
+	traits::{self, SaturatedConversion, SubmitExtrinsic},
 	transaction_validity::{TransactionValidity, TransactionTag as Tag},
 };
 
@@ -99,6 +99,24 @@ impl Default for Options {
 	}
 }
 
+/// Something that can submit an extrinsic.
+impl<B: ChainApi> SubmitExtrinsic for Pool<B> {
+	type BlockId = BlockId<B::Block>;
+	type Extrinsic = ExtrinsicFor<B>;
+	type Error = String;
+
+	/// Imports one unverified extrinsic to the pool
+	fn submit_extrinsic(
+		&self,
+		at: &Self::BlockId,
+		xt: Self::Extrinsic,
+	) -> Result<(), Self::Error> {
+		self.submit_one(at, xt)
+			.map_err(|e| format!("{}", e))
+			.map(|_| ())
+	}
+}
+
 /// Extrinsics pool.
 pub struct Pool<B: ChainApi> {
 	api: B,
@@ -110,29 +128,6 @@ pub struct Pool<B: ChainApi> {
 	>>,
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<()>>>,
 	rotator: PoolRotator<ExHash<B>>,
-}
-
-/// Something that can submit an extrinsic.
-pub trait SubmitExtrinsic {
-	/// Concrete extrinsic validation and query logic.
-	type Api: ChainApi;
-
-	/// Imports one unverified extrinsic to the pool
-	fn submit_one(
-		&self,
-		at: &BlockId<<Self::Api as ChainApi>::Block>,
-		xt: ExtrinsicFor<Self::Api>,
-	) -> Result<ExHash<Self::Api>, <Self::Api as ChainApi>::Error>;
-}
-
-impl<B: ChainApi> SubmitExtrinsic for Pool<B> {
-	type Api = B;
-
-	fn submit_one(&self, at: &BlockId<B::Block>, xt: ExtrinsicFor<B>) -> Result<ExHash<B>, B::Error> {
-		Ok(self.submit_at(at, ::std::iter::once(xt))?
-			.pop()
-			.expect("One extrinsic passed; one result returned; qed")?)
-	}
 }
 
 impl<B: ChainApi> Pool<B> {
@@ -195,6 +190,13 @@ impl<B: ChainApi> Pool<B> {
 			Ok(ref hash) if removed.contains(hash) => Err(error::Error::ImmediatelyDropped.into()),
 			other => other,
 		}).collect())
+	}
+
+	/// Imports one unverified extrinsic to the pool
+	pub fn submit_one(&self, at: &BlockId<B::Block>, xt: ExtrinsicFor<B>) -> Result<ExHash<B>, B::Error> {
+		Ok(self.submit_at(at, ::std::iter::once(xt))?
+			.pop()
+			.expect("One extrinsic passed; one result returned; qed")?)
 	}
 
 	fn enforce_limits(&self) -> HashSet<ExHash<B>> {

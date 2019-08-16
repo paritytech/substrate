@@ -32,7 +32,7 @@ use primitives::offchain::{
 	OpaqueNetworkState, OpaquePeerId, OpaqueMultiaddr, StorageKind,
 };
 use sr_primitives::{generic::BlockId, traits::{self, Extrinsic}};
-use transaction_pool::txpool::{Pool, ChainApi, SubmitExtrinsic};
+use transaction_pool::txpool::{Pool, ChainApi};
 
 /// A message between the offchain extension and the processing thread.
 enum ExtMessage {

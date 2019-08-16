@@ -36,7 +36,8 @@ use grandpa::{
 use primitives::{Blake2Hasher, H256, Pair, ExecutionContext};
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{
-	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, ProvideRuntimeApi
+	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, ProvideRuntimeApi,
+	SubmitExtrinsic
 };
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
@@ -46,7 +47,6 @@ use crate::{
 };
 
 use consensus_common::SelectChain;
-use transaction_pool::txpool::{SubmitExtrinsic, ChainApi};
 use sr_staking_primitives::SessionIndex;
 
 use crate::authorities::{AuthoritySet, SharedAuthoritySet};
@@ -538,8 +538,7 @@ where
 	RA: 'static + Send + Sync,
 	SC: SelectChain<Block> + 'static,
 	NumberFor<Block>: BlockNumberOps,
-	T: SubmitExtrinsic,
-	<T as SubmitExtrinsic>::Api: ChainApi<Block=Block>,
+	T: SubmitExtrinsic<BlockId=BlockId<Block>>,
 	Client<B, E, Block, RA>: HeaderBackend<Block> + ProvideRuntimeApi,
 	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: GrandpaApi<Block>,
 {
@@ -875,8 +874,8 @@ where
 			if let Ok(Some(report_transaction)) = maybe_report_transaction {
 				let uxt = Decode::decode(&mut report_transaction.as_slice())
 					.expect("Encoded extrinsic is valid; qed");
-				match self.transaction_pool.submit_one(&block_id, uxt) {
-					Err(e) => warn!("Error importing misbehavior report: {:?}", e),
+				match self.transaction_pool.submit_extrinsic(&block_id, uxt) {
+					Err(e) => warn!("Error importing misbehavior report: {}", e),
 					Ok(hash) => info!("Misbehavior report imported to transaction pool: {:?}", hash),
 				}
 			} else {
@@ -920,8 +919,8 @@ where
 			if let Ok(Some(report_call)) = maybe_report_call {
 				let uxt = Decode::decode(&mut report_call.as_slice())
 					.expect("Encoded extrinsic is valid; qed");
-				match self.transaction_pool.submit_one(&block_id, uxt) {
-					Err(e) => warn!("Error importing misbehavior report: {:?}", e),
+				match self.transaction_pool.submit_extrinsic(&block_id, uxt) {
+					Err(e) => warn!("Error importing misbehavior report: {}", e),
 					Ok(hash) => info!("Misbehavior report imported to transaction pool: {:?}", hash),
 				}
 			} else {

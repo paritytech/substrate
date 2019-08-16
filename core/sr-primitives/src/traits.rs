@@ -1203,6 +1203,23 @@ impl<T: Encode + Decode + Default, Id: Encode + Decode + TypeId> AccountIdConver
 	}
 }
 
+/// Something that can submit an extrinsic.
+pub trait SubmitExtrinsic {
+	/// Id of the block where the extrinsic is submitted.
+	type BlockId;
+	/// The extrinsic submitted.
+	type Extrinsic: Codec;
+	/// Error type in case of failed submission.
+	type Error: core::fmt::Display;
+
+	/// Imports one unverified extrinsic to the pool
+	fn submit_extrinsic(
+		&self,
+		at: &Self::BlockId,
+		xt: Self::Extrinsic,
+	) -> Result<(), Self::Error>;
+}
+
 #[cfg(test)]
 mod tests {
 	use super::AccountIdConversion;

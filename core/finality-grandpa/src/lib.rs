@@ -63,7 +63,7 @@ use client::blockchain::HeaderBackend;
 use codec::Encode;
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{
-	NumberFor, Block as BlockT, DigestFor, ProvideRuntimeApi
+	NumberFor, Block as BlockT, DigestFor, ProvideRuntimeApi, SubmitExtrinsic
 };
 use fg_primitives::{GrandpaApi, AuthorityPair};
 use keystore::KeyStorePtr;
@@ -72,7 +72,6 @@ use consensus_common::SelectChain;
 use primitives::{H256, Blake2Hasher};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_WARN};
 use serde_json;
-use transaction_pool::txpool::{SubmitExtrinsic, ChainApi};
 
 use srml_finality_tracker;
 
@@ -509,8 +508,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T>(
 	Client<B, E, Block, RA>: HeaderBackend<Block> + ProvideRuntimeApi,
 	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: GrandpaApi<Block>,
 	RA: Send + Sync + 'static + ConstructRuntimeApi<Block, Client<B, E, Block, RA>>,
-	T: SubmitExtrinsic,
-	<T as SubmitExtrinsic>::Api: ChainApi<Block=Block>,
+	T: SubmitExtrinsic<BlockId=BlockId<Block>>,
 {
 	let GrandpaParams {
 		config,
@@ -752,8 +750,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T>(
 	Client<B, E, Block, RA>: HeaderBackend<Block> + ProvideRuntimeApi,
 	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: GrandpaApi<Block>,
 	RA: Send + Sync + 'static + ConstructRuntimeApi<Block, Client<B, E, Block, RA>>,
-	T: SubmitExtrinsic,
-	<T as SubmitExtrinsic>::Api: ChainApi<Block=Block>,
+	T: SubmitExtrinsic<BlockId=BlockId<Block>>,
 {
 	run_grandpa_voter(grandpa_params)
 }

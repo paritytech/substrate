@@ -52,7 +52,7 @@ pub use config::{Configuration, Roles, PruningMode};
 pub use chain_spec::{ChainSpec, Properties};
 pub use transaction_pool::txpool::{
 	self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi,
-	IntoPoolError, SubmitExtrinsic
+	IntoPoolError
 };
 pub use client::FinalityNotifications;
 

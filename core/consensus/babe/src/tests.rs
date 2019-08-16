@@ -89,17 +89,24 @@ pub struct BabeTestNet {
 type TestHeader = <TestBlock as BlockT>::Header;
 type TestExtrinsic = <TestBlock as BlockT>::Extrinsic;
 
-#[derive(Debug, Encode, Decode, Clone)]
-pub struct TestPool;
+struct TransactionPool;
 
-impl<C, Block> SubmitExtrinsic<C, Block> for TestPool
-{
-	fn submit_one(&self, _client: &C, _extrinsic: &[u8]) {
+impl SubmitExtrinsic for TransactionPool {
+	type BlockId = ();
+	type Extrinsic = ();
+	type Error = ();
+
+	fn submit_extrinsic(
+		&self,
+		at: &Self::BlockId,
+		xt: Self::Extrinsic,
+	) -> Result<(), Self::Error> {
+		Ok(())
 	}
 }
 
 pub struct TestVerifier {
-	inner: BabeVerifier<PeersFullClient, TestPool>,
+	inner: BabeVerifier<PeersFullClient, TransactionPool>,
 	mutator: Mutator,
 }
 

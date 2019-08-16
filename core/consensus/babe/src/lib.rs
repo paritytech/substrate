@@ -31,7 +31,7 @@ use consensus_common::well_known_cache_keys::Id as CacheKeyId;
 use sr_primitives::{generic, generic::{BlockId, OpaqueDigestItemId}, Justification};
 use sr_primitives::traits::{
 	Block as BlockT, Header, DigestItemFor, NumberFor, ProvideRuntimeApi,
-	SimpleBitOps, Zero,
+	SimpleBitOps, Zero, SubmitExtrinsic
 };
 use keystore::KeyStorePtr;
 use runtime_support::serde::{Serialize, Deserialize};
@@ -70,7 +70,6 @@ use client::{
 	ProvideUncles,
 	utils::is_descendent_of,
 };
-use transaction_pool::txpool::{SubmitExtrinsic, ChainApi};
 use fork_tree::ForkTree;
 use slots::{CheckedHeader, check_equivocation};
 use futures::{prelude::*, future};
@@ -463,8 +462,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 	DigestItemFor<B>: CompatibleDigestItem,
 	C: ProvideRuntimeApi + HeaderBackend<B>,
 	C::Api: BabeApi<B>,
-	T: SubmitExtrinsic + Send + Sync + 'static,
-	<T as SubmitExtrinsic>::Api: ChainApi<Block=B>,
+	T: SubmitExtrinsic<BlockId=BlockId<B>> + Send + Sync + 'static,
 {
 	trace!(target: "babe", "Checking header");
 	let seal = match header.digest_mut().pop() {
@@ -539,7 +537,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 					transaction_pool.as_ref().map(|txpool| {
 						let uxt = Decode::decode(&mut report_transaction.as_slice())
 							.expect("Encoded extrinsic is valid; qed");
-						txpool.submit_one(&block_id, uxt)
+						txpool.submit_extrinsic(&block_id, uxt)
 					});
 					info!(target: "afg", "Babe equivocation report has been submitted")
 				} else {
@@ -641,8 +639,7 @@ fn median_algorithm(
 impl<B: BlockT, C, T> Verifier<B> for BabeVerifier<C, T> where
 	C: ProvideRuntimeApi + HeaderBackend<B> + Send + Sync + AuxStore + ProvideCache<B>,
 	C::Api: BlockBuilderApi<B> + BabeApi<B>,
-	T: SubmitExtrinsic + Send + Sync + 'static,
-	<T as SubmitExtrinsic>::Api: ChainApi<Block=B>,
+	T: SubmitExtrinsic<BlockId=BlockId<B>> + Send + Sync + 'static,
 {
 	fn verify(
 		&mut self,
@@ -1167,8 +1164,7 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA, T>(
 	RA: Send + Sync + 'static,
 	PRA: ProvideRuntimeApi + HeaderBackend<Block> + ProvideCache<Block> + Send + Sync + AuxStore + 'static,
 	PRA::Api: BlockBuilderApi<Block> + BabeApi<Block>,
-	T: SubmitExtrinsic + Send + Sync + 'static,
-	<T as SubmitExtrinsic>::Api: ChainApi<Block=Block>,
+	T: SubmitExtrinsic<BlockId=BlockId<Block>> + Send + Sync + 'static,
 {
 	register_babe_inherent_data_provider(&inherent_data_providers, config.get())?;
 	initialize_authorities_cache(&*api)?;

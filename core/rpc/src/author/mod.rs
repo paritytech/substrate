@@ -45,7 +45,6 @@ use transaction_pool::{
 		IntoPoolError,
 		Pool,
 		watcher::Status,
-		SubmitExtrinsic,
 	},
 };
 use session::SessionKeys;
