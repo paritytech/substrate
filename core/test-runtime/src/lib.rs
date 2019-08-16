@@ -25,7 +25,7 @@ pub mod system;
 use rstd::{prelude::*, marker::PhantomData};
 use codec::{Encode, Decode, Input, Error};
 
-use primitives::{Blake2Hasher, OpaqueMetadata, crypto::KeyTypeId};
+use primitives::{Blake2Hasher, OpaqueMetadata};
 use app_crypto::{ed25519, sr25519, RuntimeAppPublic};
 pub use app_crypto;
 use trie_db::{TrieMut, Trie};
@@ -41,7 +41,7 @@ use sr_primitives::{
 	transaction_validity::{TransactionValidity, ValidTransaction},
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup, OpaqueKeys,
+		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup,
 	},
 };
 use runtime_version::RuntimeVersion;
