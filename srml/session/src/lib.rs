@@ -219,8 +219,11 @@ pub trait OneSessionHandler<ValidatorId> {
 		where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
 
 	/// Session set has changed; act appropriately.
-	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, queued_validators: I)
-		where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
+	fn on_new_session<'a, I: 'a>(
+		_changed: bool,
+		_validators: I,
+		_queued_validators: I
+	) where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
 
 	/// A notification for end of the session.
 	///
@@ -229,7 +232,7 @@ pub trait OneSessionHandler<ValidatorId> {
 	fn on_before_session_ending() {}
 
 	/// A validator got disabled. Act accordingly until a new session begins.
-	fn on_disabled(i: usize);
+	fn on_disabled(_validator_index: usize);
 }
 
 macro_rules! impl_session_handlers {

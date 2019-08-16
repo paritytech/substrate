@@ -158,7 +158,7 @@ decl_storage! {
 			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
 			config: &GenesisConfig<T>
 		| {
-			runtime_io::with_storage(
+			sr_io::with_storage(
 				storage,
 				|| Module::<T>::initialize_authorities(&config.authorities),
 			);

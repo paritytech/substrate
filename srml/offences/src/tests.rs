@@ -21,6 +21,7 @@
 use super::*;
 use crate::mock::{
 	Offences, System, Offence, TestEvent, KIND, new_test_ext, with_on_offence_fractions,
+	offence_reports,
 };
 use system::{EventRecord, Phase};
 use runtime_io::with_externalities;
@@ -29,13 +30,11 @@ use runtime_io::with_externalities;
 fn should_report_an_authority_and_trigger_on_offence() {
 	with_externalities(&mut new_test_ext(), || {
 		// given
-		let session_index = 5;
 		let time_slot = 42;
-		assert_eq!(Offences::offence_reports(&KIND, &(session_index, time_slot)), vec![]);
+		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
 		let offence = Offence {
 			validator_set_count: 5,
-			session_index,
 			time_slot,
 			offenders: vec![5],
 		};
@@ -54,18 +53,15 @@ fn should_report_an_authority_and_trigger_on_offence() {
 fn should_calculate_the_fraction_correctly() {
 	with_externalities(&mut new_test_ext(), || {
 		// given
-		let session_index = 5;
 		let time_slot = 42;
-		assert_eq!(Offences::offence_reports(&KIND, &(session_index, time_slot)), vec![]);
+		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 		let offence1 = Offence {
 			validator_set_count: 5,
-			session_index,
 			time_slot,
 			offenders: vec![5],
 		};
 		let offence2 = Offence {
 			validator_set_count: 5,
-			session_index,
 			time_slot,
 			offenders: vec![4],
 		};
@@ -89,13 +85,11 @@ fn should_calculate_the_fraction_correctly() {
 fn should_not_report_the_same_authority_twice_in_the_same_slot() {
 	with_externalities(&mut new_test_ext(), || {
 		// given
-		let session_index = 5;
 		let time_slot = 42;
-		assert_eq!(Offences::offence_reports(&KIND, &(session_index, time_slot)), vec![]);
+		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
 		let offence = Offence {
 			validator_set_count: 5,
-			session_index,
 			time_slot,
 			offenders: vec![5],
 		};
@@ -121,13 +115,11 @@ fn should_not_report_the_same_authority_twice_in_the_same_slot() {
 fn should_report_in_different_time_slot() {
 	with_externalities(&mut new_test_ext(), || {
 		// given
-		let session_index = 5;
 		let time_slot = 42;
-		assert_eq!(Offences::offence_reports(&KIND, &(session_index, time_slot)), vec![]);
+		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
 		let mut offence = Offence {
 			validator_set_count: 5,
-			session_index,
 			time_slot,
 			offenders: vec![5],
 		};
@@ -153,16 +145,11 @@ fn should_report_in_different_time_slot() {
 fn should_deposit_event() {
 	with_externalities(&mut new_test_ext(), || {
 		// given
-		let session_index = 5;
 		let time_slot = 42;
-		assert_eq!(
-			Offences::offence_reports(&KIND, &(session_index, time_slot)),
-			vec![]
-		);
+		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
 		let offence = Offence {
 			validator_set_count: 5,
-			session_index,
 			time_slot,
 			offenders: vec![5],
 		};
@@ -175,7 +162,7 @@ fn should_deposit_event() {
 			System::events(),
 			vec![EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: TestEvent::offences(crate::Event::Offence(KIND, session_index, time_slot)),
+				event: TestEvent::offences(crate::Event::Offence(KIND, time_slot.encode())),
 				topics: vec![],
 			}]
 		);
@@ -186,13 +173,11 @@ fn should_deposit_event() {
 fn doesnt_deposit_event_for_dups() {
 	with_externalities(&mut new_test_ext(), || {
 		// given
-		let session_index = 5;
 		let time_slot = 42;
-		assert_eq!(Offences::offence_reports(&KIND, &(session_index, time_slot)), vec![]);
+		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
 		let offence = Offence {
 			validator_set_count: 5,
-			session_index,
 			time_slot,
 			offenders: vec![5],
 		};
@@ -212,7 +197,7 @@ fn doesnt_deposit_event_for_dups() {
 			System::events(),
 			vec![EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: TestEvent::offences(crate::Event::Offence(KIND, session_index, time_slot)),
+				event: TestEvent::offences(crate::Event::Offence(KIND, time_slot.encode())),
 				topics: vec![],
 			}]
 		);
@@ -225,19 +210,16 @@ fn should_properly_count_offences() {
 	// should have `count` equal 2 and the count of the 2nd one should be equal to 1.
 	with_externalities(&mut new_test_ext(), || {
 		// given
-		let session_index = 5;
 		let time_slot = 42;
-		assert_eq!(Offences::offence_reports(&KIND, &(session_index, time_slot)), vec![]);
+		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
 		let offence1 = Offence {
 			validator_set_count: 5,
-			session_index,
 			time_slot,
 			offenders: vec![5],
 		};
 		let offence2 = Offence {
 			validator_set_count: 5,
-			session_index,
 			time_slot,
 			offenders: vec![4],
 		};
@@ -254,7 +236,7 @@ fn should_properly_count_offences() {
 		// then
 		// the 1st authority should have count 2 and the 2nd one should be reported only once.
 		assert_eq!(
-			Offences::offence_reports(&KIND, &(session_index, time_slot)),
+			offence_reports(KIND, time_slot),
 			vec![
 				OffenceDetails { offender: 5, reporters: vec![] },
 				OffenceDetails { offender: 4, reporters: vec![] },

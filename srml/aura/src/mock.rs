@@ -25,7 +25,7 @@ use sr_primitives::{
 	testing::{Header, UintAuthorityId},
 };
 use srml_support::{impl_outer_origin, parameter_types};
-use runtime_io;
+use sr_io;
 use primitives::{H256, Blake2Hasher};
 
 impl_outer_origin!{
@@ -72,7 +72,7 @@ impl Trait for Test {
 	type AuthorityId = AuthorityId;
 }
 
-pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blake2Hasher> {
+pub fn new_test_ext(authorities: Vec<u64>) -> sr_io::TestExternalities<Blake2Hasher> {
 	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	GenesisConfig::<Test>{
 		authorities: authorities.into_iter().map(|a| UintAuthorityId(a).to_public_key()).collect(),

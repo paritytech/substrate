@@ -18,7 +18,7 @@
 
 #![cfg(test)]
 
-use runtime_io::with_externalities;
+use sr_io::with_externalities;
 use crate::mock::{Aura, new_test_ext};
 
 #[test]

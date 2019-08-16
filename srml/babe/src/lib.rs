@@ -34,14 +34,14 @@ use timestamp::{OnTimestampSet};
 use sr_primitives::{
 	generic::DigestItem, ConsensusEngineId, Perbill, key_types, KeyTypeId,
 	transaction_validity::{TransactionValidity, ValidTransaction},
+	traits::{
+		IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Header, ValidateUnsigned,
+	},
+	weights::SimpleDispatchInfo,
 };
-use sr_primitives::traits::{
-	IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Header, ValidateUnsigned,
-};
-use sr_primitives::weights::SimpleDispatchInfo;
 use sr_staking_primitives::{
 	SessionIndex,
-	offence::{ReportOffence, Offence, TimeSlot, Kind},
+	offence::{ReportOffence, Offence, Kind},
 };
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
@@ -425,6 +425,7 @@ pub struct BabeEquivocationOffence<FullIdentification> {
 
 impl<FullIdentification: Clone> Offence<FullIdentification> for BabeEquivocationOffence<FullIdentification> {
 	const ID: Kind = *b"babe:equivocatio";
+	type TimeSlot = u64;
 
 	fn offenders(&self) -> Vec<FullIdentification> {
 		vec![self.offender.clone()]
@@ -438,8 +439,8 @@ impl<FullIdentification: Clone> Offence<FullIdentification> for BabeEquivocation
 		self.validator_set_count
 	}
 
-	fn time_slot(&self) -> TimeSlot {
-		self.slot as TimeSlot
+	fn time_slot(&self) -> Self::TimeSlot {
+		self.slot
 	}
 
 	fn slash_fraction(

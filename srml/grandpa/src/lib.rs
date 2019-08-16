@@ -43,7 +43,10 @@ use sr_primitives::{
 	traits::{Zero, ValidateUnsigned}
 };
 use runtime_io::blake2_256;
-use sr_staking_primitives::{SessionIndex, offence::{TimeSlot, Offence, Kind}};
+use sr_staking_primitives::{
+	SessionIndex,
+	offence::{Offence, Kind},
+};
 use fg_primitives::{
 	ScheduledChange, ConsensusLog, GRANDPA_ENGINE_ID, GrandpaEquivocation,
 	localized_payload,
@@ -502,12 +505,20 @@ impl<T: Trait> finality_tracker::OnFinalizationStalled<T::BlockNumber> for Modul
 	}
 }
 
+/// A round number and set id which point on the time of an offence.
+#[derive(Copy, Clone, PartialOrd, Ord, Eq, PartialEq, Encode, Decode)]
+struct GrandpaTimeSlot {
+	// The order of these matters for `derive(Ord)`.
+	set_id: u64,
+	round: u64,
+}
+
 // TODO [slashing]: Integrate this.
 /// A grandpa equivocation offence report.
 #[allow(dead_code)]
 struct GrandpaEquivocationOffence<FullIdentification> {
-	/// A round in which the incident happened.
-	round: u64,
+	/// Time slot at which this incident happened.
+	time_slot: GrandpaTimeSlot,
 	/// The session index in which the incident happened.
 	session_index: SessionIndex,
 	/// The size of the validator set at the time of the offence.
@@ -518,6 +529,7 @@ struct GrandpaEquivocationOffence<FullIdentification> {
 
 impl<FullIdentification: Clone> Offence<FullIdentification> for GrandpaEquivocationOffence<FullIdentification> {
 	const ID: Kind = *b"grandpa:equivoca";
+	type TimeSlot = GrandpaTimeSlot;
 
 	fn offenders(&self) -> Vec<FullIdentification> {
 		vec![self.offender.clone()]
@@ -531,8 +543,8 @@ impl<FullIdentification: Clone> Offence<FullIdentification> for GrandpaEquivocat
 		self.validator_set_count
 	}
 
-	fn time_slot(&self) -> TimeSlot {
-		self.round as TimeSlot
+	fn time_slot(&self) -> Self::TimeSlot {
+		self.time_slot
 	}
 
 	fn slash_fraction(

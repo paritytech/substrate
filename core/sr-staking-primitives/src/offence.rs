@@ -38,12 +38,6 @@ pub type Kind = [u8; 16];
 /// so that we can slash it accordingly.
 pub type OffenceCount = u32;
 
-/// A type that represents a point in time on an abstract timescale.
-///
-/// See `Offence::time_slot` for details. The only requirement is that such timescale could be
-/// represented by a single `u128` value.
-pub type TimeSlot = u128;
-
 /// A trait implemented by an offence report.
 ///
 /// This trait assumes that the offence is legitimate and was validated already.
@@ -53,6 +47,12 @@ pub trait Offence<Offender> {
 	/// Identifier which is unique for this kind of an offence.
 	const ID: Kind;
 
+	/// A type that represents a point in time on an abstract timescale.
+	///
+	/// See `Offence::time_slot` for details. The only requirement is that such timescale could be
+	/// represented by a single `u128` value.
+	type TimeSlot: Clone + codec::Codec + Ord;
+
 	/// The list of all offenders involved in this incident.
 	///
 	/// The list has no duplicates, so it is rather a set.
@@ -60,6 +60,8 @@ pub trait Offence<Offender> {
 
 	/// The session index that is used for querying the validator set for the `slash_fraction`
 	/// function.
+	///
+	/// This is used for filtering historical sessions.
 	fn session_index(&self) -> SessionIndex;
 
 	/// Return a validator set count at the time when the offence took place.
@@ -75,8 +77,8 @@ pub trait Offence<Offender> {
 	/// both `session_index` and `time_slot` are equal.
 	///
 	/// As an example, for GRANDPA timescale could be a round number and for BABE it could be a slot
-	/// number. Note that for BABE the round number is reset each epoch.
-	fn time_slot(&self) -> TimeSlot;
+	/// number. Note that for GRANDPA the round number is reset each epoch.
+	fn time_slot(&self) -> Self::TimeSlot;
 
 	/// A slash fraction of the total exposure that should be slashed for this
 	/// particular offence kind for the given parameters that happened at a singular `TimeSlot`.
