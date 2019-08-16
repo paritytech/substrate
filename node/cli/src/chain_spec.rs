@@ -173,7 +173,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			keys: vec![],
 		}),
 		authority_discovery: Some(AuthorityDiscoveryConfig{
-			keys: initial_authorities.iter().map(|x| x.4.clone()).collect(),
+			keys: vec![],
 		}),
 		grandpa: Some(GrandpaConfig {
 			authorities: vec![],
@@ -308,7 +308,7 @@ pub fn testnet_genesis(
 			keys: vec![],
 		}),
 		authority_discovery: Some(AuthorityDiscoveryConfig{
-			keys: initial_authorities.iter().map(|x| x.4.clone()).collect(),
+			keys: vec![],
 		}),
 		grandpa: Some(GrandpaConfig {
 			authorities: vec![],

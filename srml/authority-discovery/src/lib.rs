@@ -38,7 +38,19 @@ pub trait Trait: system::Trait + session::Trait {}
 decl_storage! {
     trait Store for Module<T: Trait> as AuthorityDiscovery {
         /// The current set of keys that may issue a heartbeat.
-        Keys get(keys) config(): Vec<im_online::AuthorityId>;
+        Keys get(keys): Vec<im_online::AuthorityId>;
+    }
+    add_extra_genesis {
+        config(keys): Vec<im_online::AuthorityId>;
+        build(|
+              storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
+              config: &GenesisConfig
+              | {
+                  sr_io::with_storage(
+                      storage,
+                      || Module::<T>::initialize_keys(&config.keys),
+                  );
+              })
     }
 }
 
@@ -100,10 +112,25 @@ impl<T: Trait> Module<T> {
             Err(_e) => false,
         }
     }
+
+    fn initialize_keys(keys: &[im_online::AuthorityId]) {
+        if !keys.is_empty() {
+            assert!(Keys::get().is_empty(), "Keys are already initialized!");
+            Keys::put_ref(keys);
+        }
+    }
 }
 
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
     type Key = im_online::AuthorityId;
+
+    fn on_genesis_session<'a, I: 'a>(validators: I)
+    where
+        I: Iterator<Item = (&'a T::AccountId, im_online::AuthorityId)>,
+    {
+        let keys = validators.map(|x| x.1).collect::<Vec<_>>();
+        Self::initialize_keys(&keys);
+    }
 
     fn on_new_session<'a, I: 'a>(_changed: bool, _validators: I, next_validators: I)
     where
@@ -202,6 +229,8 @@ mod tests {
         }
 
         fn on_disabled(_validator_index: usize) {}
+
+        fn on_genesis_session<Ks: OpaqueKeys>(_validators: &[(im_online::AuthorityId, Ks)]) {}
     }
 
     #[test]
@@ -229,7 +258,7 @@ mod tests {
         GenesisConfig {
             keys: vec![authority_id.clone()],
         }
-        .assimilate_storage(&mut t)
+        .assimilate_storage::<Test>(&mut t)
         .unwrap();
 
         // Create externalities.
@@ -266,7 +295,7 @@ mod tests {
             .collect();
 
         GenesisConfig { keys: keys }
-            .assimilate_storage(&mut t)
+            .assimilate_storage::<Test>(&mut t)
             .unwrap();
 
         // Create externalities.
