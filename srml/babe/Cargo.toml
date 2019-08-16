@@ -33,7 +33,6 @@ std = [
 	"codec/std",
 	"inherents/std",
 	"rstd/std",
-	"runtime_io/std",
 	"serde",
 	"session/std",
 	"sr-io/std",

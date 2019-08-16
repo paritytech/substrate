@@ -5,20 +5,19 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-serde = { version = "1.0", optional = true, features = ["derive"] }
+app-crypto = { package = "substrate-application-crypto", path = "../../core/application-crypto", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+finality-tracker = { package = "srml-finality-tracker", path = "../finality-tracker", default-features = false }
 primitives = { package = "substrate-primitives",  path = "../../core/primitives", default-features = false }
-substrate-finality-grandpa-primitives = { path = "../../core/finality-grandpa/primitives", default-features = false }
 rstd = { package = "sr-std", path = "../../core/sr-std", default-features = false }
 runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = false, features = [ "wasm-nice-panic-message" ] }
+serde = { version = "1.0", optional = true, features = ["derive"] }
+session = { package = "srml-session", path = "../session", default-features = false }
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 sr-staking-primitives = { path = "../../core/sr-staking-primitives", default-features = false }
 srml-support = { path = "../support", default-features = false }
+substrate-finality-grandpa-primitives = { path = "../../core/finality-grandpa/primitives", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
-session = { package = "srml-session", path = "../session", default-features = false }
-finality-tracker = { package = "srml-finality-tracker", path = "../finality-tracker", default-features = false }
-app-crypto = { package = "substrate-application-crypto", path = "../../core/application-crypto", default-features = false }
-runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = false, features = [ "wasm-nice-panic-message" ] }
 
 [dev-dependencies]
 runtime_io = { package = "sr-io", path = "../../core/sr-io" }
@@ -27,15 +26,16 @@ test_runtime = { package = "substrate-test-runtime", path = "../../core/test-run
 [features]
 default = ["std"]
 std = [
-	"serde",
 	"codec/std",
+	"finality-tracker/std",
 	"primitives/std",
-	"substrate-finality-grandpa-primitives/std",
 	"rstd/std",
-	"srml-support/std",
+	"runtime_io/std",
+	"serde",
+	"session/std",
 	"sr-primitives/std",
 	"sr-staking-primitives/std",
+	"srml-support/std",
+	"substrate-finality-grandpa-primitives/std",
 	"system/std",
-	"session/std",
-	"finality-tracker/std",
 ]

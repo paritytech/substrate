@@ -32,6 +32,7 @@ std = [
 	"primitives/std",
 	"rstd/std",
 	"serde",
+	"session/std",
 	"sr-primitives/std",
 	"srml-support/std",
 	"substrate-consensus-aura-primitives/std",

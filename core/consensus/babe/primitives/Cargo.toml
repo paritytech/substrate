@@ -22,6 +22,7 @@ default = ["std"]
 std = [
 	"rstd/std",
 	"sr-primitives/std",
+	"sr-staking-primitives/std",
 	"substrate-client/std",
 	"codec/std",
 	"schnorrkel",
