@@ -387,12 +387,10 @@ parameter_types! {
 	pub const ExpectedBlockTime: u64 = 10_000;
 }
 
-// impl srml_babe::Trait for Runtime {
-// 	type EpochDuration = EpochDuration;
-// 	type ExpectedBlockTime = ExpectedBlockTime;
-// }
-
-
+impl srml_babe::Trait for Runtime {
+	type EpochDuration = EpochDuration;
+	type ExpectedBlockTime = ExpectedBlockTime;
+}
 
 /// Adds one to the given input and returns the final result.
 #[inline(never)]
@@ -614,13 +612,10 @@ cfg_if! {
 					let authorities: Vec<_> = authorities.into_iter().map(|x|(x, 1)).collect();
 
 					babe_primitives::Epoch {
-						// start_slot: <srml_babe::Module<Runtime>>::epoch_start_slot(),
-						start_slot: 0,
+						start_slot: <srml_babe::Module<Runtime>>::epoch_start_slot(),
 						authorities,
-						// randomness: <srml_babe::Module<Runtime>>::randomness(),
-						randomness: [0; 32],
-						// epoch_index: <srml_babe::Module<Runtime>>::epoch_index(),
-						epoch_index: 0,
+						randomness: <srml_babe::Module<Runtime>>::randomness(),
+						epoch_index: <srml_babe::Module<Runtime>>::epoch_index(),
 						duration: EpochDuration::get(),
 						secondary_slots: <srml_babe::Module<Runtime>>::secondary_slots().0,
 					}
@@ -633,7 +628,7 @@ cfg_if! {
 						AuthoritySignature
 					>,
 				) -> Option<Vec<u8>> {
-					Some(vec![])
+					None
 				}
 			}
 
@@ -842,13 +837,10 @@ cfg_if! {
 					let authorities: Vec<_> = authorities.into_iter().map(|x|(x, 1)).collect();
 
 					babe_primitives::Epoch {
-						// start_slot: <srml_babe::Module<Runtime>>::epoch_start_slot(),
-						start_slot: 0,
+						start_slot: <srml_babe::Module<Runtime>>::epoch_start_slot(),
 						authorities,
-						// randomness: <srml_babe::Module<Runtime>>::randomness(),
-						randomness: [0; 32],
-						// epoch_index: <srml_babe::Module<Runtime>>::epoch_index(),
-						epoch_index: 0,
+						randomness: <srml_babe::Module<Runtime>>::randomness(),
+						epoch_index: <srml_babe::Module<Runtime>>::epoch_index(),
 						duration: EpochDuration::get(),
 						secondary_slots: <srml_babe::Module<Runtime>>::secondary_slots().0,
 					}

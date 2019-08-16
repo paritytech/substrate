@@ -856,7 +856,8 @@ where
 			let grandpa_equivocation = GrandpaEquivocationFrom::<Block> {
 				reporter,
 				round_number: equivocation.round_number,
-				session_index: SessionIndex::default(), // TODO: add session index.
+				// TODO [slashing] get proper session index.
+				session_index: SessionIndex::default(),
 				identity: equivocation.identity,
 				first: (first_vote, first_signature),
 				second: (second_vote, second_signature),
@@ -901,7 +902,8 @@ where
 			let grandpa_equivocation = GrandpaEquivocationFrom::<Block> {
 				reporter,
 				round_number: equivocation.round_number,
-				session_index: SessionIndex::default(), // TODO: add session index.
+				// TODO [slashing] get proper session index.
+				session_index: SessionIndex::default(),
 				identity: equivocation.identity,
 				first: (first_vote, first_signature),
 				second: (second_vote, second_signature),

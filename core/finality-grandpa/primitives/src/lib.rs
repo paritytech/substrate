@@ -58,6 +58,7 @@ pub fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec
 	(message, round, set_id).encode()
 }
 
+// TODO [slashing] consider removing and use generic `EquivocationProof`.
 #[cfg_attr(feature = "std", derive(Debug))]
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
 pub struct GrandpaEquivocation<H, N> {
@@ -72,7 +73,7 @@ pub struct GrandpaEquivocation<H, N> {
 	/// The identity of the equivocator.
 	pub identity: AuthorityId,
 	/// The first vote in the equivocation.
-	pub	first: (Message<H, N>, AuthoritySignature),
+	pub first: (Message<H, N>, AuthoritySignature),
 	/// The second vote in the equivocation.
 	pub second: (Message<H, N>, AuthoritySignature),
 }
