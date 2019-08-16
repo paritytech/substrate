@@ -112,9 +112,6 @@ impl ProvideInherentData for InherentDataProvider {
 pub trait Trait: timestamp::Trait {
 	type EpochDuration: Get<u64>;
 	type ExpectedBlockTime: Get<Self::Moment>;
-
-	/// The keys. Used when BABE is used with session module to decode inital validators set of session module.
-	type Keys: OpaqueKeys + Member + Parameter;
 }
 
 /// The length of the BABE randomness

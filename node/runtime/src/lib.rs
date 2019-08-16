@@ -136,7 +136,6 @@ parameter_types! {
 impl babe::Trait for Runtime {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
-	type Keys = SessionKeys;
 }
 
 impl indices::Trait for Runtime {
