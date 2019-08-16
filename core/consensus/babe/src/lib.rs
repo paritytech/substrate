@@ -1550,7 +1550,7 @@ pub mod test_helpers {
 		C: ProvideRuntimeApi + ProvideCache<B>,
 		C::Api: BabeApi<B>,
 	{
-		let epoch = match epoch(client, at).unwrap() {
+		let epoch = match epoch(client, &BlockId::Hash(parent.hash())).unwrap() {
 			MaybeSpanEpoch::Regular(epoch) => epoch,
 			_ => unreachable!("it is always Regular epoch on full nodes"),
 		};
