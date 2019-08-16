@@ -186,6 +186,12 @@ impl<A> OnSessionEnding<A> for () {
 
 /// Handler for session lifecycle events.
 pub trait SessionHandler<ValidatorId> {
+	/// The given validator set will be used for the genesis session.
+	/// It is guaranteed that the given validator set will also be used
+	/// for the second session, therefore the first call to `on_new_session`
+	/// should provide the same validator set.
+	fn on_genesis_session<Ks: OpaqueKeys>(validators: &[(ValidatorId, Ks)]);
+
 	/// Session set has changed; act appropriately.
 	fn on_new_session<Ks: OpaqueKeys>(
 		changed: bool,
@@ -207,6 +213,9 @@ pub trait SessionHandler<ValidatorId> {
 pub trait OneSessionHandler<ValidatorId> {
 	/// The key type expected.
 	type Key: Decode + Default + AppKey;
+
+	fn on_genesis_session<'a, I: 'a>(validators: I)
+		where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
 
 	/// Session set has changed; act appropriately.
 	fn on_new_session<'a, I: 'a>(
@@ -230,6 +239,7 @@ pub trait OneSessionHandler<ValidatorId> {
 macro_rules! impl_session_handlers {
 	() => (
 		impl<AId> SessionHandler<AId> for () {
+			fn on_genesis_session<Ks: OpaqueKeys>(_: &[(AId, Ks)]) {}
 			fn on_new_session<Ks: OpaqueKeys>(_: bool, _: &[(AId, Ks)], _: &[(AId, Ks)]) {}
 			fn on_before_session_ending() {}
 			fn on_disabled(_: usize) {}
@@ -238,6 +248,15 @@ macro_rules! impl_session_handlers {
 
 	( $($t:ident)* ) => {
 		impl<AId, $( $t: OneSessionHandler<AId> ),*> SessionHandler<AId> for ( $( $t , )* ) {
+			fn on_genesis_session<Ks: OpaqueKeys>(validators: &[(AId, Ks)]) {
+				$(
+					let our_keys: Box<dyn Iterator<Item=_>> = Box::new(validators.iter()
+						.map(|k| (&k.0, k.1.get::<$t::Key>(<$t::Key as AppKey>::ID)
+							.unwrap_or_default())));
+
+					$t::on_genesis_session(our_keys);
+				)*
+			}
 			fn on_new_session<Ks: OpaqueKeys>(
 				changed: bool,
 				validators: &[(AId, Ks)],
@@ -374,6 +393,9 @@ decl_storage! {
 						<Module<T>>::load_keys(&v).unwrap_or_default(),
 					))
 					.collect();
+
+				// Tell everyone about the genesis session keys
+				T::SessionHandler::on_genesis_session::<T::Keys>(&queued_keys);
 
 				<Validators<T>>::put(initial_validators);
 				<QueuedKeys<T>>::put(queued_keys);

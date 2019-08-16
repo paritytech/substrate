@@ -13,6 +13,7 @@ rstd = { package = "sr-std", path = "../../core/sr-std", default-features = fals
 serde = { version = "1.0", optional = true }
 session = { package = "srml-session", path = "../session", default-features = false }
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
+runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = false, features = [ "wasm-nice-panic-message" ] }
 srml-support = { path = "../support", default-features = false }
 substrate-consensus-aura-primitives = { path = "../../core/consensus/aura/primitives", default-features = false}
 system = { package = "srml-system", path = "../system", default-features = false }
@@ -21,7 +22,6 @@ timestamp = { package = "srml-timestamp", path = "../timestamp", default-feature
 [dev-dependencies]
 lazy_static = "1.0"
 parking_lot = "0.9.0"
-runtime_io = { package = "sr-io", path = "../../core/sr-io" }
 
 [features]
 default = ["std"]
@@ -29,6 +29,7 @@ std = [
 	"app-crypto/std",
 	"codec/std",
 	"inherents/std",
+	"runtime_io/std",
 	"primitives/std",
 	"rstd/std",
 	"serde",
