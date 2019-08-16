@@ -88,7 +88,6 @@ decl_module! {
 		fn deposit_event() = default;
 	}
 }
-
 impl<T: Trait, O: Offence<T::IdentificationTuple>>
 	ReportOffence<T::AccountId, T::IdentificationTuple, O> for Module<T>
 where
@@ -99,28 +98,22 @@ where
 		let time_slot = offence.time_slot();
 		let validator_set_count = offence.validator_set_count();
 
-		// Go through all offenders in the report and record unique reports.
-		let cache = Self::collect_unique_reports::<O>(reporters, &time_slot, offenders);
-
-		if cache.new_offenders.is_empty() {
+		// Go through all offenders in the offence report and find all offenders that was spotted
+		// in unique reports.
+		let TriageOutcome {
+			new_offenders,
+			concurrent_offenders,
+		} = match Self::triage_offence_report::<O>(reporters, &time_slot, offenders) {
+			Some(cache) => cache,
 			// The report contained only duplicates, so there is no need to slash again.
-			return;
-		}
+			None => return,
+		};
 
 		// Deposit the event.
 		Self::deposit_event(Event::Offence(O::ID, time_slot.encode()));
 
-		// Load report details for the all reports happened at the same time.
-		let concurrent_offenders = cache
-			.concurrent_reports
-			.iter()
-			.filter_map(|report_id| {
-				<Reports<T>>::get(report_id)
-			})
-			.collect::<Vec<_>>();
-
 		let offenders_count = concurrent_offenders.len() as u32;
-		let previous_offenders_count = offenders_count - cache.new_offenders.len() as u32;
+		let previous_offenders_count = offenders_count - new_offenders.len() as u32;
 
 		// The amount new offenders are slashed
 		let new_fraction = O::slash_fraction(offenders_count, validator_set_count);
@@ -141,7 +134,8 @@ where
 			let numerator = new_fraction
 				.into_parts()
 				.saturating_sub(previous_fraction.into_parts());
-			let denominator = Perbill::from_parts(Perbill::one().into_parts() - previous_fraction.into_parts());
+			let denominator =
+				Perbill::from_parts(Perbill::one().into_parts() - previous_fraction.into_parts());
 			Perbill::from_parts(denominator * numerator)
 		} else {
 			new_fraction.clone()
@@ -150,19 +144,16 @@ where
 		// calculate how much to slash
 		let slash_perbill = concurrent_offenders
 			.iter()
-			.map(|details| if previous_offenders_count > 0 && cache.new_offenders.contains(&details.offender) {
-				new_fraction.clone()
-			} else {
-				old_fraction.clone()
+			.map(|details| {
+				if previous_offenders_count > 0 && new_offenders.contains(&details.offender) {
+					new_fraction.clone()
+				} else {
+					old_fraction.clone()
+				}
 			})
 			.collect::<Vec<_>>();
 
-		T::OnOffenceHandler::on_offence(
-			&concurrent_offenders,
-			&slash_perbill,
-		);
-
-		cache.save()
+		T::OnOffenceHandler::on_offence(&concurrent_offenders, &slash_perbill);
 	}
 }
 
@@ -177,21 +168,21 @@ impl<T: Trait> Module<T> {
 		(O::ID, time_slot.encode(), offender).using_encoded(T::Hashing::hash)
 	}
 
-	/// Goes through all offenders in a report and record each unique offence updating indexes.
-	///
-	/// Returns `true` if there were unique reports.
-	fn collect_unique_reports<O: Offence<T::IdentificationTuple>>(
+	/// Triages the offence report and returns the set of offenders that was involved in unique
+	/// reports along with the list of the concurrent offences.
+	fn triage_offence_report<O: Offence<T::IdentificationTuple>>(
 		reporters: Vec<T::AccountId>,
 		time_slot: &O::TimeSlot,
 		offenders: Vec<T::IdentificationTuple>,
-	) -> ReportIndexCache<T, O> {
-		let mut index_cache = ReportIndexCache::load(time_slot);
+	) -> Option<TriageOutcome<T>> {
+		let mut cache = ReportIndexCache::<T, O>::load(time_slot);
+		let mut new_offenders = BTreeSet::new();
 
 		for offender in offenders {
 			let report_id = Self::report_id::<O>(time_slot, &offender);
 
 			if !<Reports<T>>::exists(&report_id) {
-				index_cache.new_offenders.insert(offender.clone());
+				new_offenders.insert(offender.clone());
 				<Reports<T>>::insert(
 					&report_id,
 					OffenceDetails {
@@ -200,12 +191,34 @@ impl<T: Trait> Module<T> {
 					},
 				);
 
-				index_cache.insert(time_slot, report_id);
+				cache.insert(time_slot, report_id);
 			}
 		}
 
-		index_cache
+		if !new_offenders.is_empty() {
+			// Load report details for the all reports happened at the same time.
+			let concurrent_offenders = cache.concurrent_reports
+				.iter()
+				.filter_map(|report_id| <Reports<T>>::get(report_id))
+				.collect::<Vec<_>>();
+
+			cache.save();
+
+			Some(TriageOutcome {
+				new_offenders,
+				concurrent_offenders,
+			})
+		} else {
+			None
+		}
 	}
+}
+
+struct TriageOutcome<T: Trait> {
+	/// Offenders that was spotted in the unique reports.
+	new_offenders: BTreeSet<T::IdentificationTuple>,
+	/// Other reports for the same report kinds.
+	concurrent_offenders: Vec<OffenceDetails<T::AccountId, T::IdentificationTuple>>,
 }
 
 /// An auxilary struct for dealing with caches of report indexes localized for a specific offence
@@ -218,7 +231,6 @@ struct ReportIndexCache<T: Trait, O: Offence<T::IdentificationTuple>> {
 	opaque_time_slot: OpaqueTimeSlot,
 	concurrent_reports: Vec<ReportIdOf<T>>,
 	same_kind_reports: Vec<(O::TimeSlot, ReportIdOf<T>)>,
-	new_offenders: BTreeSet<T::IdentificationTuple>,
 }
 
 impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportIndexCache<T, O> {
@@ -237,15 +249,11 @@ impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportIndexCache<T, O> {
 			opaque_time_slot,
 			concurrent_reports,
 			same_kind_reports,
-			new_offenders: BTreeSet::new(),
 		}
 	}
 
 	/// Insert a new report to the index cache.
 	fn insert(&mut self, time_slot: &O::TimeSlot, report_id: ReportIdOf<T>) {
-		// Update the list of concurrent reports.
-		self.concurrent_reports.push(report_id);
-
 		// Insert the report id into the list while maintaining the ordering by the time
 		// slot.
 		let idx = match self
@@ -255,7 +263,11 @@ impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportIndexCache<T, O> {
 			Ok(idx) => idx,
 			Err(idx) => idx,
 		};
-		self.same_kind_reports.insert(idx, (time_slot.clone(), report_id));
+		self.same_kind_reports
+			.insert(idx, (time_slot.clone(), report_id));
+
+		// Update the list of concurrent reports.
+		self.concurrent_reports.push(report_id);
 	}
 
 	/// Dump the indexes to the storage.
