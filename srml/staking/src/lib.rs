@@ -672,6 +672,9 @@ decl_event!(
 		Reward(Balance),
 		/// One validator (and its nominators) has been slashed by the given amount.
 		Slash(AccountId, Balance),
+		/// An old slashing report from a prior era was discarded because it could
+		/// not be processed.
+		OldSlashingReportDiscarded(SessionIndex),
 	}
 );
 
@@ -1595,8 +1598,13 @@ impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
 {
 	fn report_offence(reporters: Vec<Reporter>, offence: O) {
 		// disallow any slashing from before the current era.
-		if offence.session_index() >= <Module<T>>::current_era_start_session_index() {
+		let offence_session = offence.session_index();
+		if offence_session >= <Module<T>>::current_era_start_session_index() {
 			R::report_offence(reporters, offence)
+		} else {
+			<Module<T>>::deposit_event(
+				RawEvent::OldSlashingReportDiscarded(offence_session).into()
+			)
 		}
 	}
 }
