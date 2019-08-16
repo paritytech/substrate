@@ -385,7 +385,7 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 		Self::initialize_keys(&keys);
 	}
 
-	fn on_new_session<'a, I: 'a>(_changed: bool, _validators: I, next_validators: I)
+	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, _queued_validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
 		// Reset heartbeats
@@ -395,7 +395,7 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 		<GossipAt<T>>::put(<system::Module<T>>::block_number());
 
 		// Remember who the authorities are for the new session.
-		Keys::put(next_validators.map(|x| x.1).collect::<Vec<_>>());
+		Keys::put(validators.map(|x| x.1).collect::<Vec<_>>());
 	}
 
 	fn on_disabled(_i: usize) {
