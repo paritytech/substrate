@@ -85,7 +85,7 @@ pub fn new_test_ext(authorities: Vec<(u64, u64)>) -> runtime_io::TestExternaliti
 	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	GenesisConfig {
 		authorities: to_authorities(authorities),
-	}.assimilate_storage(&mut t, &mut Default::default()).unwrap();
+	}.assimilate_storage(&mut t).unwrap();
 	t.into()
 }
 

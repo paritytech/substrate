@@ -278,14 +278,14 @@ impl ExtBuilder {
 		balances::GenesisConfig::<Test> {
 			balances: vec![],
 			vesting: vec![],
-		}.assimilate_storage(&mut t, &mut Default::default()).unwrap();
+		}.assimilate_storage(&mut t).unwrap();
 		GenesisConfig::<Test> {
 			current_schedule: Schedule {
 				enable_println: true,
 				..Default::default()
 			},
 			gas_price: self.gas_price,
-		}.assimilate_storage(&mut t, &mut Default::default()).unwrap();
+		}.assimilate_storage(&mut t).unwrap();
 		runtime_io::TestExternalities::new(t)
 	}
 }

@@ -285,7 +285,7 @@ impl ExtBuilder {
 					(999, 1_000_000_000_000),
 			],
 			vesting: vec![],
-		}.assimilate_storage(&mut storage, &mut Default::default());
+		}.assimilate_storage(&mut storage);
 
 		let stake_21 = if self.fair { 1000 } else { 2000 };
 		let stake_31 = if self.validator_pool { balance_factor * 1000 } else { 1 };
@@ -311,11 +311,11 @@ impl ExtBuilder {
 			offline_slash_grace: 0,
 			invulnerables: vec![],
 			.. Default::default()
-		}.assimilate_storage(&mut storage, &mut Default::default());
+		}.assimilate_storage(&mut storage);
 
 		let _ = session::GenesisConfig::<Test> {
 			keys: validators.iter().map(|x| (*x, UintAuthorityId(*x))).collect(),
-		}.assimilate_storage(&mut storage, &mut Default::default());
+		}.assimilate_storage(&mut storage);
 
 		let mut ext = storage.into();
 		runtime_io::with_externalities(&mut ext, || {

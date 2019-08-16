@@ -132,9 +132,6 @@ decl_storage! {
 		/// Current epoch authorities.
 		pub Authorities get(authorities): Vec<(AuthorityId, BabeWeight)>;
 
-		/// Next epoch authorities.
-		NextAuthorities get(next_authorities): Option<Vec<(AuthorityId, BabeWeight)>>;
-
 		/// Slot at which the current epoch started. It is possible that no
 		/// block was authored at the given slot and the epoch change was
 		/// signalled later than this.
@@ -181,53 +178,10 @@ decl_storage! {
 		config(authorities): Vec<(AuthorityId, BabeWeight)>;
 		build(|
 			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
-			temp_storage: &mut sr_primitives::StorageOverlay,
-			config: &GenesisConfig,
+			_config: &GenesisConfig,
 		| {
-			use primitives::storage::well_known_keys;
-			use sr_primitives::AppKey;
-
 			runtime_io::with_storage(storage, || {
-				let mut authorities = config.authorities.clone();
-
-				// if session module is here AND it has mutated initial validators list, then we want to sync
-				// it with our authorities list
-				let session_validators_keys = temp_storage.get(
-					well_known_keys::temp::MUTATED_SESSION_VALIDATORS_KEYS,
-				);
-
-				if let Some(session_validators_keys) = session_validators_keys {
-					let session_validators_keys: Vec<(T::AccountId, T::Keys)> = Decode::decode(
-						&mut &session_validators_keys[..],
-					).expect("unable to decode initial session validators keys");
-
-					// we expect that the validators set passed received from session will have the same set or subset
-					// of authorities passed to the BABE module
-
-					assert!(
-						session_validators_keys.len() <= authorities.len(),
-						"Trying to select unknown BABE authorities for genesis block",
-					);
-
-					let session_validators_keys_len = session_validators_keys.len();
-					for (idx, session_validator_keys) in session_validators_keys.into_iter().enumerate() {
-						let session_validator_key = session_validator_keys.1.get(AuthorityId::ID)
-							.expect("Unable to get required key for BABE authority at genesis block");
-						let authority_position = authorities.iter().position(|(a, _)| *a == session_validator_key);
-						match authority_position {
-							Some(position) if position == idx => (),
-							Some(position) if position < idx => panic!(
-								"Trying to select duplicate BABE authority for genesis block",
-							),
-							Some(position) => authorities.swap(position, idx),
-							None => panic!("Trying to select unknown BABE authority for genesis block"),
-						}
-					}
-
-					authorities.truncate(session_validators_keys_len);
-				}
-
-				Authorities::put(authorities);
+				unimplemented!("TODO: resolve conflict using theirs")
 			});
 		});
 	}
@@ -407,10 +361,9 @@ impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Mod
 		EpochIndex::put(epoch_index);
 
 		// Update authorities.
-		let authorities = NextAuthorities::take()
-			.unwrap_or_else(|| validators.map(|(account, k)| {
-				(k, to_votes(staking::Module::<T>::stakers(account).total))
-			}).collect::<Vec<_>>());
+		let authorities = validators.map(|(_account, k)| {
+			(k, 1)
+		}).collect::<Vec<_>>();
 
 		Authorities::put(authorities);
 
@@ -444,13 +397,6 @@ impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Mod
 		let next_authorities = queued_validators.map(|(account, k)| {
 			(k, to_votes(staking::Module::<T>::stakers(account).total))
 		}).collect::<Vec<_>>();
-
-		// at the start of next session, the same authorities will be in `validators` argument,
-		// but at that time, stakes could change. This could lead to the case when we have
-		// announced the same authorities, but obsolete weights to light clients using NextEpochData.
-		// But we'll actually use updated weights on full nodes.
-		// To avoid this, let's save authorities for the next session here.
-		NextAuthorities::put(next_authorities.clone());
 
 		let next_epoch_start_slot = EpochStartSlot::get().saturating_add(T::EpochDuration::get());
 		let next_randomness = NextRandomness::get();

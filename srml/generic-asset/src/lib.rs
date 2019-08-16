@@ -480,7 +480,6 @@ decl_storage! {
 
 		build(|
 			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
-			_: &mut sr_primitives::StorageOverlay,
 			config: &GenesisConfig<T>| {
 			config.assets.iter().for_each(|asset_id| {
 				config.endowed_accounts.iter().for_each(|account_id| {

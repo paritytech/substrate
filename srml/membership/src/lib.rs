@@ -64,7 +64,6 @@ decl_storage! {
 		config(phantom): sr_std::marker::PhantomData<I>;
 		build(|
 			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
-			_: &mut sr_primitives::StorageOverlay,
 			config: &Self,
 		| {
 			sr_io::with_storage(storage, || {
@@ -292,7 +291,7 @@ mod tests {
 		GenesisConfig::<Test>{
 			members: vec![10, 20, 30],
 			.. Default::default()
-		}.assimilate_storage(&mut t, &mut Default::default()).unwrap();
+		}.assimilate_storage(&mut t).unwrap();
 		t.into()
 	}
 

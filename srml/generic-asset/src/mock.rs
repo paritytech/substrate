@@ -128,7 +128,7 @@ impl ExtBuilder {
 				staking_asset_id: 16000,
 				spending_asset_id: 16001,
 			}
-			.assimilate_storage(&mut t, &mut Default::default()).unwrap();
+			.assimilate_storage(&mut t).unwrap();
 
 		t.into()
 	}

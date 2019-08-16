@@ -259,7 +259,7 @@ mod tests {
 					(6, 60 * self.balance_factor)
 				],
 				vesting: vec![],
-			}.assimilate_storage(&mut t, &mut Default::default()).unwrap();
+			}.assimilate_storage(&mut t).unwrap();
 			seats::GenesisConfig::<Test> {
 				active_council: if self.with_council { vec![
 					(1, 10),
@@ -269,7 +269,7 @@ mod tests {
 				desired_seats: 2,
 				presentation_duration: 2,
 				term_duration: 5,
-			}.assimilate_storage(&mut t, &mut Default::default()).unwrap();
+			}.assimilate_storage(&mut t).unwrap();
 			runtime_io::TestExternalities::new(t)
 		}
 	}

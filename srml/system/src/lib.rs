@@ -412,7 +412,6 @@ decl_storage! {
 
 		build(
 			|storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
-			_: &mut sr_primitives::StorageOverlay,
 			config: &GenesisConfig|
 		{
 			use codec::Encode;

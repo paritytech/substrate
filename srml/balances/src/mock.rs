@@ -202,7 +202,7 @@ impl ExtBuilder {
 			} else {
 				vec![]
 			},
-		}.assimilate_storage(&mut t, &mut Default::default()).unwrap();
+		}.assimilate_storage(&mut t).unwrap();
 		t.into()
 	}
 }

@@ -443,7 +443,7 @@ mod tests {
 		balances::GenesisConfig::<Test>{
 			balances: vec![(0, 100), (1, 99), (2, 1)],
 			vesting: vec![],
-		}.assimilate_storage(&mut t, &mut Default::default()).unwrap();
+		}.assimilate_storage(&mut t).unwrap();
 		t.into()
 	}
 

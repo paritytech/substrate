@@ -105,7 +105,7 @@ pub fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 	let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 	GenesisConfig::<Runtime> {
 		ids: vec![1, 2, 3, 4]
-	}.assimilate_storage(&mut t, &mut Default::default()).unwrap();
+	}.assimilate_storage(&mut t).unwrap();
 	t.into()
 }
 

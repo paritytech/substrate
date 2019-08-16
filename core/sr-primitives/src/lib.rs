@@ -114,15 +114,13 @@ pub trait BuildStorage: Sized {
 	/// Build the storage out of this builder.
 	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
 		let mut storage = (Default::default(), Default::default());
-		let mut temp_storage = Default::default();
-		self.assimilate_storage(&mut storage, &mut temp_storage)?;
+		self.assimilate_storage(&mut storage)?;
 		Ok(storage)
 	}
 	/// Assimilate the storage for this module into pre-existing overlays.
 	fn assimilate_storage(
 		self,
 		storage: &mut (StorageOverlay, ChildrenStorageOverlay),
-		temp_storage: &mut StorageOverlay,
 	) -> Result<(), String>;
 }
 
@@ -133,7 +131,6 @@ pub trait BuildModuleGenesisStorage<T, I>: Sized {
 	fn build_module_genesis_storage(
 		self,
 		storage: &mut (StorageOverlay, ChildrenStorageOverlay),
-		temp_storage: &mut StorageOverlay,
 	) -> Result<(), String>;
 }
 
@@ -145,7 +142,6 @@ impl BuildStorage for (StorageOverlay, ChildrenStorageOverlay) {
 	fn assimilate_storage(
 		self,
 		storage: &mut (StorageOverlay, ChildrenStorageOverlay),
-		_temp_storage: &mut StorageOverlay,
 	)-> Result<(), String> {
 		storage.0.extend(self.0);
 		for (k, other_map) in self.1.into_iter() {
@@ -765,7 +761,6 @@ macro_rules! impl_outer_config {
 				fn assimilate_storage(
 					self,
 					storage: &mut ($crate::StorageOverlay, $crate::ChildrenStorageOverlay),
-					temp_storage: &mut $crate::StorageOverlay,
 				) -> std::result::Result<(), String> {
 					$(
 						if let Some(extra) = self.[< $snake $(_ $instance )? >] {
@@ -776,7 +771,6 @@ macro_rules! impl_outer_config {
 								$( $instance )?;
 								extra;
 								storage;
-								temp_storage;
 							}
 						}
 					)*
@@ -791,12 +785,10 @@ macro_rules! impl_outer_config {
 		$instance:ident;
 		$extra:ident;
 		$storage:ident;
-		$temp:ident;
 	) => {
 		$crate::BuildModuleGenesisStorage::<$runtime, $module::$instance>::build_module_genesis_storage(
 			$extra,
 			$storage,
-			$temp,
 		)?;
 	};
 	(@CALL_FN
@@ -805,12 +797,10 @@ macro_rules! impl_outer_config {
 		;
 		$extra:ident;
 		$storage:ident;
-		$temp:ident;
 	) => {
 		$crate::BuildModuleGenesisStorage::<$runtime, $module::__InherentHiddenInstance>::build_module_genesis_storage(
 			$extra,
 			$storage,
-			$temp,
 		)?;
 	}
 }

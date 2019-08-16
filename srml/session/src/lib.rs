@@ -321,12 +321,8 @@ decl_storage! {
 		config(keys): Vec<(T::ValidatorId, T::Keys)>;
 		build(|
 			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
-			temp_storage: &mut sr_primitives::StorageOverlay,
 			config: &GenesisConfig<T>
 		| {
-			use codec::Encode;
-			use primitives::storage::well_known_keys;
-
 			runtime_io::with_storage(storage, || {
 				for (who, keys) in config.keys.iter().cloned() {
 					assert!(
@@ -338,11 +334,8 @@ decl_storage! {
 						.expect("genesis config must not contain duplicates; qed");
 				}
 
-				let initial_validators = T::SelectInitialValidators::select_initial_validators();
-				let (validators_selected, initial_validators) = match initial_validators {
-					Some(initial_validators) => (true, initial_validators),
-					None => (false, config.keys.iter().map(|(ref v, _)| v.clone()).collect()),
-				};
+				let initial_validators = T::SelectInitialValidators::select_initial_validators()
+					.unwrap_or_else(|| config.keys.iter().map(|(ref v, _)| v.clone()).collect());
 
 				assert!(!initial_validators.is_empty(), "Empty validator set in genesis block!");
 
@@ -354,20 +347,6 @@ decl_storage! {
 						<Module<T>>::load_keys(&v).unwrap_or_default(),
 					))
 					.collect();
-
-				// There are some other modules (BABE, for example) that are maintaining similar validators/authorities
-				// lists and may work standalone OR in conjunction with session module.
-				// When working in conjunction with session module, they tend to maintain the same list as the session
-				// module.
-				// But session module can mutate this list in genesis, using SelectInitialValidators.
-				// To notify other modules about this mutation (so they could use mutated list), let's write this
-				// mutated list into well-known-key.
-				if validators_selected {
-					temp_storage.insert(
-						well_known_keys::temp::MUTATED_SESSION_VALIDATORS_KEYS.to_vec(),
-						queued_keys.encode(),
-					);
-				}
 
 				<Validators<T>>::put(initial_validators);
 				<QueuedKeys<T>>::put(queued_keys);
@@ -600,7 +579,7 @@ mod tests {
 			keys: NEXT_VALIDATORS.with(|l|
 				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i).into())).collect()
 			),
-		}.assimilate_storage(&mut t, &mut Default::default()).unwrap();
+		}.assimilate_storage(&mut t).unwrap();
 		runtime_io::TestExternalities::new(t)
 	}
 

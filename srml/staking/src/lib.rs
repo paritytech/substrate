@@ -651,7 +651,6 @@ decl_storage! {
 			Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>;
 		build(|
 			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
-			_: &mut sr_primitives::StorageOverlay,
 			config: &GenesisConfig<T>
 		| {
 			with_storage(storage, || {

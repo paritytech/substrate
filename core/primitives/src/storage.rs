@@ -75,10 +75,4 @@ pub mod well_known_keys {
 		// Other code might depend on this, so be careful changing this.
 		key.starts_with(CHILD_STORAGE_KEY_PREFIX)
 	}
-
-	/// List of all well known temporary storage keys (that are used only during genesis build).
-	pub mod temp {
-		/// Mutated initial (genesis) validators list from the session module.
-		pub const MUTATED_SESSION_VALIDATORS_KEYS: &'static [u8] = b":mutated_session_validators_keys";
-	}
 }
