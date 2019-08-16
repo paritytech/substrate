@@ -483,6 +483,14 @@ where
 					gas_meter,
 				)?;
 
+			// Error out if insufficient remaining balance.
+			if nested.overlay.get_balance(&dest) < nested.config.existential_deposit {
+				return Err(ExecError {
+					reason: "insufficient remaining balance",
+					buffer: output.data,
+				});
+			}
+
 			// Deposit an instantiation event.
 			nested.deferred.push(DeferredAction::DepositEvent {
 				event: RawEvent::Instantiated(caller.clone(), dest.clone()),
