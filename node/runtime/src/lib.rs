@@ -43,6 +43,7 @@ use client::{
 use sr_primitives::{ApplyResult, impl_opaque_keys, generic, create_runtime_str, key_types};
 use sr_primitives::transaction_validity::TransactionValidity;
 use sr_primitives::weights::Weight;
+use sr_primitives::generic::Era;
 use sr_primitives::traits::{
 	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup,
 };
@@ -625,19 +626,31 @@ impl_runtime_apis! {
 
 			if local_keys.len() > 0 {
 				let reporter = &local_keys[0];
-				let to_sign = (equivocation.clone(), proof.clone());
 
-				let maybe_signature = to_sign.using_encoded(|payload| if payload.len() > 256 {
+				let call = BabeCall::report_equivocation(equivocation, proof);
+				let function = Call::Babe(call);
+
+				// TODO: fix these parameters.
+				let check_genesis = system::CheckGenesis::new();
+				let check_era = system::CheckEra::from(Era::Immortal);
+				let check_nonce = system::CheckNonce::from(0);
+				let check_weight = system::CheckWeight::new();
+				let take_fees = balances::TakeFees::from(0);
+				let extra = (check_genesis, check_era, check_nonce, check_weight, take_fees);
+
+				let genesis_hash = System::block_hash(0);
+				let raw_payload = (function, extra.clone(), genesis_hash, genesis_hash);
+
+				let maybe_signature = raw_payload.using_encoded(|payload| if payload.len() > 256 {
 					runtime_io::sr25519_sign(key_types::BABE, reporter, &runtime_io::blake2_256(payload))
 				} else {
 					runtime_io::sr25519_sign(key_types::BABE, reporter, &payload)
 				});
 
 				if let Some(signature) = maybe_signature {
-					let call = BabeCall::report_equivocation(equivocation, proof, signature.into());
-					let babe_call = Call::Babe(call);
-					let ex = UncheckedExtrinsic::new_unsigned(babe_call);
-					return Some(ex.encode())
+					let signed = indices::address::Address::from(reporter.clone());
+					let extrinsic = UncheckedExtrinsic::new_signed(raw_payload.0, signed, signature.into(), extra);
+					return Some(extrinsic.encode())
 				}
 			}
 
