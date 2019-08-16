@@ -280,7 +280,7 @@ use sr_primitives::traits::{
 };
 use sr_staking_primitives::{
 	SessionIndex, CurrentElectedSet,
-	offence::{OnOffenceHandler, OffenceDetails},
+	offence::{OnOffenceHandler, OffenceDetails, Offence, ReportOffence},
 };
 #[cfg(feature = "std")]
 use sr_primitives::{Serialize, Deserialize};
@@ -439,6 +439,15 @@ pub struct Exposure<AccountId, Balance: HasCompact> {
 	pub own: Balance,
 	/// The portions of nominators stashes that are exposed.
 	pub others: Vec<IndividualExposure<AccountId, Balance>>,
+}
+
+/// A slashing event occurred, slashing a validator for a given amount of balance.
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct SlashJournalEntry<AccountId, Balance: HasCompact> {
+	who: AccountId,
+	amount: Balance,
+	own_slash: Balance, // the amount of `who`'s own exposure that was slashed
 }
 
 pub type BalanceOf<T> =
@@ -614,6 +623,10 @@ decl_storage! {
 
 		/// A mapping from still-bonded eras to the first session index of that era.
 		BondedEras: Vec<(EraIndex, SessionIndex)>;
+
+		/// All slashes that have occurred in a given era.
+		EraSlashJournal get(era_slash_journal):
+			map EraIndex => Vec<SlashJournalEntry<T::AccountId, BalanceOf<T>>>;
 	}
 	add_extra_genesis {
 		config(stakers):
@@ -659,6 +672,9 @@ decl_event!(
 		Reward(Balance),
 		/// One validator (and its nominators) has been slashed by the given amount.
 		Slash(AccountId, Balance),
+		/// An old slashing report from a prior era was discarded because it could
+		/// not be processed.
+		OldSlashingReportDiscarded(SessionIndex),
 	}
 );
 
@@ -1030,17 +1046,33 @@ impl<T: Trait> Module<T> {
 	/// Removes the slash from the validator's balance by preference,
 	/// and reduces the nominators' balance if needed.
 	///
-	/// Returns the resulting `NegativeImbalance` to allow distributing the slashed amount.
+	/// Returns the resulting `NegativeImbalance` to allow distributing the slashed amount and
+	/// pushes an entry onto the slash journal.
 	fn slash_validator(
 		stash: &T::AccountId,
 		slash: BalanceOf<T>,
 		exposure: &Exposure<T::AccountId, BalanceOf<T>>,
+		journal: &mut Vec<SlashJournalEntry<T::AccountId, BalanceOf<T>>>,
 	) -> NegativeImbalanceOf<T> {
 		// The amount we are actually going to slash (can't be bigger than the validator's total
 		// exposure)
 		let slash = slash.min(exposure.total);
+
+		// limit what we'll slash of the stash's own to only what's in
+		// the exposure.
+		//
+		// note: this is fine only because we limit reports of the current era.
+		// otherwise, these funds may have already been slashed due to something
+		// reported from a prior era.
+		let already_slashed_own = journal.iter()
+			.filter(|entry| &entry.who == stash)
+			.map(|entry| entry.own_slash)
+			.fold(<BalanceOf<T>>::zero(), |a, c| a.saturating_add(c));
+
+		let own_remaining = exposure.own.saturating_sub(already_slashed_own);
+
 		// The amount we'll slash from the validator's stash directly.
-		let own_slash = exposure.own.min(slash);
+		let own_slash = own_remaining.min(slash);
 		let (mut imbalance, missing) = T::Currency::slash(stash, own_slash);
 		let own_slash = own_slash - missing;
 		// The amount remaining that we can't slash from the validator,
@@ -1057,6 +1089,12 @@ impl<T: Trait> Module<T> {
 				}
 			}
 		}
+
+		journal.push(SlashJournalEntry {
+			who: stash.clone(),
+			own_slash: own_slash.clone(),
+			amount: slash,
+		});
 
 		// trigger the event
 		Self::deposit_event(
@@ -1178,6 +1216,10 @@ impl<T: Trait> Module<T> {
 
 		// Increment current era.
 		let current_era = CurrentEra::mutate(|s| { *s += 1; *s });
+
+		// prune journal for last era.
+		<EraSlashJournal<T>>::remove(current_era - 1);
+
 		CurrentEraStartSessionIndex::mutate(|v| {
 			*v = start_session_index;
 		});
@@ -1471,6 +1513,7 @@ impl<T: Trait> SelectInitialValidators<T::AccountId> for Module<T> {
 	}
 }
 
+/// This is intended to be used with `FilterHistoricalOffences`.
 impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::IdentificationTuple<T>> for Module<T> where
 	T: session::Trait<ValidatorId = <T as system::Trait>::AccountId>,
 	T: session::historical::Trait<
@@ -1489,6 +1532,8 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 		let mut remaining_imbalance = <NegativeImbalanceOf<T>>::zero();
 		let slash_reward_fraction = SlashRewardFraction::get();
 
+		let era_now = Self::current_era();
+		let mut journal = Self::era_slash_journal(era_now);
 		for (details, slash_fraction) in offenders.iter().zip(slash_fraction) {
 			let stash = &details.offender.0;
 			let exposure = &details.offender.1;
@@ -1512,7 +1557,7 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 			// force a new era, to select a new validator set
 			ForceEra::put(Forcing::ForceNew);
 			// actually slash the validator
-			let slashed_amount = Self::slash_validator(stash, amount, exposure);
+			let slashed_amount = Self::slash_validator(stash, amount, exposure, &mut journal);
 
 			// distribute the rewards according to the slash
 			let slash_reward = slash_reward_fraction * slashed_amount.peek();
@@ -1533,9 +1578,34 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 				remaining_imbalance.subsume(slashed_amount);
 			}
 		}
+		<EraSlashJournal<T>>::insert(era_now, journal);
 
 		// Handle the rest of imbalances
 		T::Slash::on_unbalanced(remaining_imbalance);
+	}
+}
+
+/// Filter historical offences out and only allow those from the current era.
+pub struct FilterHistoricalOffences<T, R> {
+	_inner: rstd::marker::PhantomData<(T, R)>,
+}
+
+impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
+	for FilterHistoricalOffences<Module<T>, R> where
+	T: Trait,
+	R: ReportOffence<Reporter, Offender, O>,
+	O: Offence<Offender>,
+{
+	fn report_offence(reporters: Vec<Reporter>, offence: O) {
+		// disallow any slashing from before the current era.
+		let offence_session = offence.session_index();
+		if offence_session >= <Module<T>>::current_era_start_session_index() {
+			R::report_offence(reporters, offence)
+		} else {
+			<Module<T>>::deposit_event(
+				RawEvent::OldSlashingReportDiscarded(offence_session).into()
+			)
+		}
 	}
 }
 
