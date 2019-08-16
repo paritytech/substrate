@@ -67,20 +67,25 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use primitives::offchain::{OpaqueNetworkState, StorageKind};
+use app_crypto::RuntimeAppPublic;
 use codec::{Encode, Decode};
+use primitives::offchain::{OpaqueNetworkState, StorageKind};
+use rstd::prelude::*;
+use session::historical::IdentificationTuple;
+use sr_io::Printable;
 use sr_primitives::{
-	ApplyError, traits::Extrinsic as ExtrinsicT,
+	Perbill, ApplyError,
+	traits::{Extrinsic as ExtrinsicT, Convert},
 	transaction_validity::{TransactionValidity, TransactionLongevity, ValidTransaction},
 };
-use rstd::prelude::*;
-use session::SessionIndex;
-use sr_io::Printable;
+use sr_staking_primitives::{
+	SessionIndex, CurrentElectedSet,
+	offence::{ReportOffence, Offence, Kind},
+};
 use srml_support::{
 	StorageValue, decl_module, decl_event, decl_storage, StorageDoubleMap, print, ensure
 };
 use system::ensure_none;
-use app_crypto::RuntimeAppPublic;
 
 mod app {
 	pub use app_crypto::sr25519 as crypto;
@@ -152,7 +157,7 @@ pub struct Heartbeat<BlockNumber>
 	authority_index: AuthIndex,
 }
 
-pub trait Trait: system::Trait + session::Trait {
+pub trait Trait: system::Trait + session::historical::Trait {
 	/// The overarching event type.
 	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
 
@@ -162,6 +167,17 @@ pub trait Trait: system::Trait + session::Trait {
 	/// A extrinsic right from the external world. This is unchecked and so
 	/// can contain a signature.
 	type UncheckedExtrinsic: ExtrinsicT<Call=<Self as Trait>::Call> + Encode + Decode;
+
+	/// A type that gives us the ability to submit unresponsiveness offence reports.
+	type ReportUnresponsiveness:
+		ReportOffence<
+			Self::AccountId,
+			IdentificationTuple<Self>,
+			UnresponsivenessOffence<IdentificationTuple<Self>>,
+		>;
+
+	/// A type that returns a validator id from the current elected set of the era.
+	type CurrentElectedSet: CurrentElectedSet<<Self as session::Trait>::ValidatorId>;
 }
 
 decl_event!(
@@ -382,6 +398,7 @@ impl<T: Trait> Module<T> {
 }
 
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
+
 	type Key = AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
@@ -402,6 +419,44 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 
 		// Remember who the authorities are for the new session.
 		Keys::put(validators.map(|x| x.1).collect::<Vec<_>>());
+	}
+
+	fn on_before_session_ending() {
+		let mut unresponsive = vec![];
+
+		let current_session = <session::Module<T>>::current_index();
+
+		let keys = Keys::get();
+		let current_elected = T::CurrentElectedSet::current_elected_set();
+
+		// The invariant is that these two are of the same length.
+		// TODO: What to do: Uncomment, ignore, a third option?
+		// assert_eq!(keys.len(), current_elected.len());
+
+		for (auth_idx, validator_id) in current_elected.into_iter().enumerate() {
+			let auth_idx = auth_idx as u32;
+			if !<ReceivedHeartbeats>::exists(&current_session, &auth_idx) {
+				let full_identification = T::FullIdentificationOf::convert(validator_id.clone())
+					.expect(
+						"we got the validator_id from current_elected;
+						current_elected is set of currently elected validators;
+						the mapping between the validator id and its full identification should be valid;
+						thus `FullIdentificationOf::convert` can't return `None`;
+						qed",
+					);
+
+				unresponsive.push((validator_id, full_identification));
+			}
+		}
+
+		let validator_set_count = keys.len() as u32;
+		let offence = UnresponsivenessOffence {
+			session_index: current_session,
+			validator_set_count,
+			offenders: unresponsive,
+		};
+
+		T::ReportUnresponsiveness::report_offence(vec![], offence);
 	}
 
 	fn on_disabled(_i: usize) {
@@ -451,5 +506,76 @@ impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
 		}
 
 		TransactionValidity::Invalid(0)
+	}
+}
+
+/// An offence that is filed if a validator didn't send a heartbeat message.
+pub struct UnresponsivenessOffence<Offender> {
+	/// The current session index in which we report the unresponsive validators.
+	///
+	/// It acts as a time measure for unresponsiveness reports and effectively will always point
+	/// at the end of the session.
+	session_index: SessionIndex,
+	/// The size of the validator set in current session/era.
+	validator_set_count: u32,
+	/// Authorities that were unresponsive during the current era.
+	offenders: Vec<Offender>,
+}
+
+impl<Offender: Clone> Offence<Offender> for UnresponsivenessOffence<Offender> {
+	const ID: Kind = *b"im-online:offlin";
+	type TimeSlot = SessionIndex;
+
+	fn offenders(&self) -> Vec<Offender> {
+		self.offenders.clone()
+	}
+
+	fn session_index(&self) -> SessionIndex {
+		self.session_index
+	}
+
+	fn validator_set_count(&self) -> u32 {
+		self.validator_set_count
+	}
+
+	fn time_slot(&self) -> Self::TimeSlot {
+		self.session_index
+	}
+
+	fn slash_fraction(offenders: u32, validator_set_count: u32) -> Perbill {
+		// the formula is min((3 * (k - 1)) / n, 1) * 0.05
+		let x = Perbill::from_rational_approximation(3 * (offenders - 1), validator_set_count);
+
+		// _ * 0.05
+		// For now, Perbill doesn't support multiplication other than an integer so we perform
+		// a manual scaling.
+		// TODO: #3189 should fix this.
+		let p = (x.into_parts() as u64 * 50_000_000u64) / 1_000_000_000u64;
+		Perbill::from_parts(p as u32)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_unresponsiveness_slash_fraction() {
+		// A single case of unresponsiveness is not slashed.
+		assert_eq!(
+			UnresponsivenessOffence::<()>::slash_fraction(1, 50),
+			Perbill::zero(),
+		);
+
+		assert_eq!(
+			UnresponsivenessOffence::<()>::slash_fraction(3, 50),
+			Perbill::from_parts(6000000), // 0.6%
+		);
+
+		// One third offline should be punished around 5%.
+		assert_eq!(
+			UnresponsivenessOffence::<()>::slash_fraction(17, 50),
+			Perbill::from_parts(48000000), // 4.8%
+		);
 	}
 }
