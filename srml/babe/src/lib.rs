@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Consensus extension module for BABE consensus.
+//! Consensus extension module for BABE consensus. Collects on-chain randomness
+//! from VRF outputs and manages epoch transitions.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unused_must_use, unsafe_code, unused_variables, dead_code)]
@@ -26,14 +27,16 @@ use srml_support::{decl_storage, decl_module, StorageValue, StorageMap, traits::
 use timestamp::{OnTimestampSet};
 use sr_primitives::{generic::DigestItem, ConsensusEngineId};
 use sr_primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon};
+use sr_primitives::weights::SimpleDispatchInfo;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
 use codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-use babe_primitives::{BABE_ENGINE_ID, ConsensusLog, BabeWeight, Epoch, RawBabePreDigest};
+use babe_primitives::{BABE_ENGINE_ID, ConsensusLog, BabeAuthorityWeight, Epoch, RawBabePreDigest};
 pub use babe_primitives::{AuthorityId, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH};
+use system::ensure_root;
 
 /// The BABE inherent identifier.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"babeslot";
@@ -123,7 +126,7 @@ decl_storage! {
 		pub EpochIndex get(epoch_index): u64;
 
 		/// Current epoch authorities.
-		pub Authorities get(authorities): Vec<(AuthorityId, BabeWeight)>;
+		pub Authorities get(authorities): Vec<(AuthorityId, BabeAuthorityWeight)>;
 
 		/// Slot at which the current epoch started. It is possible that no
 		/// block was authored at the given slot and the epoch change was
@@ -132,6 +135,14 @@ decl_storage! {
 
 		/// Current slot number.
 		pub CurrentSlot get(current_slot): u64;
+
+		/// Whether secondary slots are enabled in case the VRF-based slot is
+		/// empty for the current epoch and the next epoch, respectively.
+		pub SecondarySlots get(secondary_slots): (bool, bool) = (true, true);
+
+		/// Pending change to enable/disable secondary slots which will be
+		/// triggered at `current_epoch + 2`.
+		pub PendingSecondarySlotsChange get(pending_secondary_slots_change): Option<bool> = None;
 
 		/// The epoch randomness for the *current* epoch.
 		///
@@ -168,7 +179,7 @@ decl_storage! {
 		Initialized get(initialized): Option<bool>;
 	}
 	add_extra_genesis {
-		config(authorities): Vec<(AuthorityId, BabeWeight)>;
+		config(authorities): Vec<(AuthorityId, BabeAuthorityWeight)>;
 		build(|
 			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
 			config: &GenesisConfig
@@ -204,6 +215,20 @@ decl_module! {
 		fn on_finalize() {
 			Initialized::kill();
 		}
+
+		/// Sets a pending change to enable / disable secondary slot assignment.
+		/// The pending change will be set at the end of the current epoch and
+		/// will be enacted at `current_epoch + 2`.
+		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		fn set_pending_secondary_slots_change(origin, change: Option<bool>) {
+			ensure_root(origin)?;
+			match change {
+				Some(change) =>	PendingSecondarySlotsChange::put(change),
+				None => {
+					PendingSecondarySlotsChange::take();
+				},
+			}
+		}
 	}
 }
 
@@ -222,9 +247,16 @@ impl<T: Trait> FindAuthor<u32> for Module<T> {
 	{
 		for (id, mut data) in digests.into_iter() {
 			if id == BABE_ENGINE_ID {
-				return Some(RawBabePreDigest::decode(&mut data).ok()?.authority_index);
+				let pre_digest = RawBabePreDigest::decode(&mut data).ok()?;
+				return Some(match pre_digest {
+					RawBabePreDigest::Primary { authority_index, .. } =>
+						authority_index,
+					RawBabePreDigest::Secondary { authority_index, .. } =>
+						authority_index,
+				});
 			}
 		}
+
 		return None;
 	}
 }
@@ -302,11 +334,14 @@ impl<T: Trait> Module<T> {
 			})
 		{
 			if EpochStartSlot::get() == 0 {
-				EpochStartSlot::put(digest.slot_number);
+				EpochStartSlot::put(digest.slot_number());
 			}
 
-			CurrentSlot::put(digest.slot_number);
-			Self::deposit_vrf_output(&digest.vrf_output);
+			CurrentSlot::put(digest.slot_number());
+
+			if let RawBabePreDigest::Primary { vrf_output, .. } = digest {
+				Self::deposit_vrf_output(&vrf_output);
+			}
 
 			return;
 		}
@@ -331,7 +366,7 @@ impl<T: Trait> Module<T> {
 		this_randomness
 	}
 
-	fn initialize_authorities(authorities: &[(AuthorityId, BabeWeight)]) {
+	fn initialize_authorities(authorities: &[(AuthorityId, BabeAuthorityWeight)]) {
 		if !authorities.is_empty() {
 			assert!(Authorities::get().is_empty(), "Authorities are already initialized!");
 			Authorities::put_ref(authorities);
@@ -404,12 +439,31 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 		let next_epoch_start_slot = EpochStartSlot::get().saturating_add(T::EpochDuration::get());
 		let next_randomness = NextRandomness::get();
 
+		// Update any pending secondary slots change
+		let mut secondary_slots = SecondarySlots::get();
+
+		// change for E + 1 now becomes change at E
+		secondary_slots.0 = secondary_slots.1;
+
+		if let Some(change) = PendingSecondarySlotsChange::take() {
+			// if there's a pending change schedule it for E + 1
+			secondary_slots.1 = change;
+		} else {
+			// otherwise E + 1 will have the same value as E
+			secondary_slots.1 = secondary_slots.0;
+		}
+
+		SecondarySlots::mutate(|secondary| {
+			*secondary = secondary_slots;
+		});
+
 		let next = Epoch {
 			epoch_index: next_epoch_index,
 			start_slot: next_epoch_start_slot,
 			duration: T::EpochDuration::get(),
 			authorities: next_authorities,
 			randomness: next_randomness,
+			secondary_slots: secondary_slots.1,
 		};
 
 		Self::deposit_consensus(ConsensusLog::NextEpochData(next))

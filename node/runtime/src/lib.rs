@@ -559,6 +559,7 @@ impl_runtime_apis! {
 				epoch_index: Babe::epoch_index(),
 				randomness: Babe::randomness(),
 				duration: EpochDuration::get(),
+				secondary_slots: Babe::secondary_slots().0,
 			}
 		}
 	}
