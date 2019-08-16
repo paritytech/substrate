@@ -32,7 +32,6 @@ std = [
 	"safe-mix/std",
 	"serde",
 	"sr-primitives/std",
-	"sr-staking-primitives/std",
 	"srml-support/std",
 	"substrate-trie/std",
 	"timestamp/std",

@@ -26,6 +26,7 @@ test_runtime = { package = "substrate-test-runtime", path = "../../core/test-run
 [features]
 default = ["std"]
 std = [
+	"app-crypto/std",
 	"codec/std",
 	"finality-tracker/std",
 	"primitives/std",

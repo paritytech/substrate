@@ -38,15 +38,16 @@ use srml_support::{
 };
 use app_crypto::RuntimeAppPublic;
 use sr_primitives::{
-	generic::{DigestItem, OpaqueDigestItemId}, Perbill, KeyTypeId,
+	generic::{DigestItem, OpaqueDigestItemId},
 	transaction_validity::{TransactionValidity, ValidTransaction},
-	traits::{Zero, ValidateUnsigned}
+	traits::{Zero, ValidateUnsigned},
+	Perbill, KeyTypeId,
 };
-use runtime_io::blake2_256;
 use sr_staking_primitives::{
 	SessionIndex,
 	offence::{Offence, Kind},
 };
+use runtime_io::blake2_256;
 use fg_primitives::{
 	ScheduledChange, ConsensusLog, GRANDPA_ENGINE_ID, GrandpaEquivocation,
 	localized_payload,

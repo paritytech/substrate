@@ -126,10 +126,11 @@ use sr_primitives::weights::SimpleDispatchInfo;
 use sr_primitives::traits::{Convert, Zero, Member, OpaqueKeys};
 use sr_staking_primitives::SessionIndex;
 use srml_support::{
-	dispatch::Result, ConsensusEngineId, StorageValue, StorageDoubleMap, for_each_tuple,
-	decl_module, decl_event, decl_storage,
+	dispatch::Result,
+	traits::{OnFreeBalanceZero, Get, FindAuthor},
+	ConsensusEngineId, StorageValue, StorageDoubleMap,Parameter,
+	for_each_tuple, decl_module, decl_event, decl_storage, ensure,
 };
-use srml_support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor}, Parameter};
 use system::{self, ensure_signed};
 
 #[cfg(test)]
