@@ -11,6 +11,7 @@ client = { package = "substrate-client", path = "../../client" }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 sr-primitives = {  path = "../../sr-primitives" }
 sr-staking-primitives = { path = "../../sr-staking-primitives", default-features = false }
+substrate-telemetry = { path = "../../telemetry" }
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
 consensus_common_primitives = { package = "substrate-consensus-common-primitives", path = "../common/primitives" }
 app-crypto = { package = "substrate-application-crypto", path = "../../application-crypto", default-features = false }

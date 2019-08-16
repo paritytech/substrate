@@ -81,6 +81,7 @@ impl<'a, G: RuntimeGenesis> BuildStorage for &'a ChainSpec<G> {
 			)),
 		}
 	}
+
 	fn assimilate_storage(self, _: &mut (StorageOverlay, ChildrenStorageOverlay)) -> Result<(), String> {
 		Err("`assimilate_storage` not implemented for `ChainSpec`.".into())
 	}

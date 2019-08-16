@@ -88,8 +88,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 141,
-	impl_version: 141,
+	spec_version: 145,
+	impl_version: 145,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -563,17 +563,17 @@ impl_runtime_apis! {
 		) -> Option<Vec<u8>> {
 			let proof = Historical::prove((key_types::GRANDPA, equivocation.identity.encode()))?;
 			let local_keys = runtime_io::ed25519_public_keys(key_types::GRANDPA);
-		
+
 			if local_keys.len() > 0 {
 				let reporter = &local_keys[0];
 				let to_sign = (equivocation.clone(), proof.clone());
-				
+
 				let maybe_signature = to_sign.using_encoded(|payload| if payload.len() > 256 {
 					runtime_io::ed25519_sign(key_types::GRANDPA, reporter, &runtime_io::blake2_256(payload))
 				} else {
 					runtime_io::ed25519_sign(key_types::GRANDPA, reporter, &payload)
 				});
-				
+
 				if let Some(signature) = maybe_signature {
 					let call = GrandpaCall::report_equivocation(equivocation, proof, signature.into());
 					let grandpa_call = Call::Grandpa(call);
@@ -615,17 +615,17 @@ impl_runtime_apis! {
 		) -> Option<Vec<u8>> {
 			let proof = Historical::prove((key_types::BABE, equivocation.identity.encode()))?;
 			let local_keys = runtime_io::sr25519_public_keys(key_types::GRANDPA);
-		
+
 			if local_keys.len() > 0 {
 				let reporter = &local_keys[0];
 				let to_sign = (equivocation.clone(), proof.clone());
-				
+
 				let maybe_signature = to_sign.using_encoded(|payload| if payload.len() > 256 {
 					runtime_io::sr25519_sign(key_types::BABE, reporter, &runtime_io::blake2_256(payload))
 				} else {
 					runtime_io::sr25519_sign(key_types::BABE, reporter, &payload)
 				});
-				
+
 				if let Some(signature) = maybe_signature {
 					let call = BabeCall::report_equivocation(equivocation, proof, signature.into());
 					let babe_call = Call::Babe(call);
