@@ -23,8 +23,8 @@ use runtime_io;
 #[cfg(feature = "std")] use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use primitives::{self, Hasher, Blake2Hasher};
 use crate::codec::{Codec, Encode, Decode, HasCompact};
+use crate::generic::{Digest, DigestItem, BlockId};
 use crate::transaction_validity::{ValidTransaction, TransactionValidity};
-use crate::generic::{Digest, DigestItem};
 use crate::weights::DispatchInfo;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
@@ -1239,19 +1239,15 @@ impl<T: Encode + Decode + Default, Id: Encode + Decode + TypeId> AccountIdConver
 }
 
 /// Something that can submit an extrinsic.
-pub trait SubmitExtrinsic {
-	/// Id of the block where the extrinsic is submitted.
-	type BlockId;
-	/// The extrinsic submitted.
-	type Extrinsic: Codec;
+pub trait SubmitExtrinsic<TBlock: Block>: Send + Sync {
 	/// Error type in case of failed submission.
 	type Error: core::fmt::Display;
 
 	/// Imports one unverified extrinsic to the pool
 	fn submit_extrinsic(
 		&self,
-		at: &Self::BlockId,
-		xt: Self::Extrinsic,
+		at: &BlockId<TBlock>,
+		xt: TBlock::Extrinsic,
 	) -> Result<(), Self::Error>;
 }
 

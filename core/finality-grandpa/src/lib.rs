@@ -504,11 +504,10 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T>(
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
 	X: Future<Item=(),Error=()> + Clone + Send + 'static,
-	T: Send + Sync + 'static,
 	Client<B, E, Block, RA>: HeaderBackend<Block> + ProvideRuntimeApi,
 	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: GrandpaApi<Block>,
-	RA: Send + Sync + 'static + ConstructRuntimeApi<Block, Client<B, E, Block, RA>>,
-	T: SubmitExtrinsic<BlockId=BlockId<Block>>,
+	RA: ConstructRuntimeApi<Block, Client<B, E, Block, RA>> + Send + Sync + 'static,
+	T: SubmitExtrinsic<Block> + 'static,
 {
 	let GrandpaParams {
 		config,
@@ -565,7 +564,8 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T>(
 		network,
 		select_chain,
 		persistent_data,
-		voter_commands_rx
+		voter_commands_rx,
+		transaction_pool,
 	);
 
 	let voter_work = voter_work
@@ -586,22 +586,23 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T>(
 
 /// Future that powers the voter.
 #[must_use]
-struct VoterWork<B, E, Block: BlockT, N: Network<Block>, RA, SC> {
+struct VoterWork<B, E, Block: BlockT, N: Network<Block>, RA, SC, T> {
 	voter: Box<dyn Future<Item = (), Error = CommandOrError<Block::Hash, NumberFor<Block>>> + Send>,
-	env: Arc<Environment<B, E, Block, N, RA, SC>>,
+	env: Arc<Environment<B, E, Block, N, RA, SC, T>>,
 	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 }
 
-impl<B, E, Block, N, RA, SC> VoterWork<B, E, Block, N, RA, SC>
+impl<B, E, Block, N, RA, SC, T> VoterWork<B, E, Block, N, RA, SC, T>
 where
 	Block: BlockT<Hash=H256>,
 	N: Network<Block> + Sync,
 	N::In: Send + 'static,
 	NumberFor<Block>: BlockNumberOps,
-	RA: 'static + Send + Sync,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+	RA: ConstructRuntimeApi<Block, Client<B, E, Block, RA>> + Send + Sync + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync + 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	SC: SelectChain<Block> + 'static,
+	T: SubmitExtrinsic<Block>,
 {
 	fn new(
 		client: Arc<Client<B, E, Block, RA>>,
@@ -610,6 +611,7 @@ where
 		select_chain: SC,
 		persistent_data: PersistentData<Block>,
 		voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
+		transaction_pool: Arc<T>,
 	) -> Self {
 
 		let voters = persistent_data.authority_set.current_authorities();
@@ -747,16 +749,17 @@ where
 	}
 }
 
-impl<B, E, Block, N, RA, SC> Future for VoterWork<B, E, Block, N, RA, SC>
+impl<B, E, Block, N, RA, SC, T> Future for VoterWork<B, E, Block, N, RA, SC, T>
 where
 	Block: BlockT<Hash=H256>,
 	N: Network<Block> + Sync,
 	N::In: Send + 'static,
 	NumberFor<Block>: BlockNumberOps,
-	RA: 'static + Send + Sync,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+	RA: ConstructRuntimeApi<Block, Client<B, E, Block, RA>> + Send + Sync + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync + 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	SC: SelectChain<Block> + 'static,
+	T: SubmitExtrinsic<Block> + 'static,
 {
 	type Item = ();
 	type Error = Error;
@@ -813,11 +816,10 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X, T>(
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
 	X: Future<Item=(),Error=()> + Clone + Send + 'static,
-	T: Sync + Send + 'static,
 	Client<B, E, Block, RA>: HeaderBackend<Block> + ProvideRuntimeApi,
 	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: GrandpaApi<Block>,
-	RA: Send + Sync + 'static + ConstructRuntimeApi<Block, Client<B, E, Block, RA>>,
-	T: SubmitExtrinsic<BlockId=BlockId<Block>>,
+	RA: ConstructRuntimeApi<Block, Client<B, E, Block, RA>> + Send + Sync + 'static,
+	T: SubmitExtrinsic<Block> + 'static,
 {
 	run_grandpa_voter(grandpa_params)
 }

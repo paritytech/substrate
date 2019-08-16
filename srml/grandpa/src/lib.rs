@@ -46,7 +46,7 @@ use runtime_io::blake2_256;
 use sr_staking_primitives::{SessionIndex, offence::{TimeSlot, Offence, Kind}};
 use fg_primitives::{
 	ScheduledChange, ConsensusLog, GRANDPA_ENGINE_ID, GrandpaEquivocation,
-	localized_payload, app
+	localized_payload,
 };
 use session::historical::Proof;
 pub use fg_primitives::{AuthorityId, AuthorityWeight, AuthoritySignature};
@@ -172,7 +172,7 @@ decl_storage! {
 	}
 }
 
-impl<T> ValidateUnsigned for Module<T> where T: Trait 
+impl<T> ValidateUnsigned for Module<T> where T: Trait
 {
 	type Call = Call<T>;
 
@@ -260,6 +260,7 @@ decl_module! {
 			_signature: AuthoritySignature
 		) {
 			ensure_signed(origin)?;
+			// TODO [slashing] implement me
 			// let to_punish = <T as Trait>::KeyOwnerSystem::check_proof(
 			// 	(key_types::SR25519, equivocation.identity.encode()),
 			// 	proof.clone(),

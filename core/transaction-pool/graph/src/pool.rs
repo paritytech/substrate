@@ -100,16 +100,14 @@ impl Default for Options {
 }
 
 /// Something that can submit an extrinsic.
-impl<B: ChainApi> SubmitExtrinsic for Pool<B> {
-	type BlockId = BlockId<B::Block>;
-	type Extrinsic = ExtrinsicFor<B>;
+impl<B: ChainApi> SubmitExtrinsic<B::Block> for Pool<B> {
 	type Error = String;
 
 	/// Imports one unverified extrinsic to the pool
 	fn submit_extrinsic(
 		&self,
-		at: &Self::BlockId,
-		xt: Self::Extrinsic,
+		at: &BlockId<B::Block>,
+		xt: ExtrinsicFor<B>,
 	) -> Result<(), Self::Error> {
 		self.submit_one(at, xt)
 			.map_err(|e| format!("{}", e))

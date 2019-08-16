@@ -31,7 +31,7 @@ use consensus_common::well_known_cache_keys::Id as CacheKeyId;
 use sr_primitives::{generic::{BlockId, OpaqueDigestItemId}, Justification};
 use sr_primitives::traits::{
 	Block as BlockT, Header, DigestItemFor, NumberFor, ProvideRuntimeApi,
-	SimpleBitOps, Zero, SubmitExtrinsic
+	Zero, SubmitExtrinsic
 };
 use keystore::KeyStorePtr;
 use codec::{Decode, Encode};
@@ -393,7 +393,7 @@ fn check_header<B: BlockT + Sized, C: AuxStore, T>(
 	DigestItemFor<B>: CompatibleDigestItem,
 	C: ProvideRuntimeApi + HeaderBackend<B>,
 	C::Api: BabeApi<B>,
-	T: SubmitExtrinsic<BlockId=BlockId<B>> + Send + Sync + 'static,
+	T: SubmitExtrinsic<B>,
 {
 	trace!(target: "babe", "Checking header");
 	let seal = match header.digest_mut().pop() {
@@ -570,7 +570,7 @@ fn median_algorithm(
 impl<B: BlockT, C, T> Verifier<B> for BabeVerifier<C, T> where
 	C: ProvideRuntimeApi + HeaderBackend<B> + Send + Sync + AuxStore + ProvideCache<B>,
 	C::Api: BlockBuilderApi<B> + BabeApi<B>,
-	T: SubmitExtrinsic<BlockId=BlockId<B>> + Send + Sync + 'static,
+	T: SubmitExtrinsic<B> + 'static,
 {
 	fn verify(
 		&mut self,
@@ -1159,7 +1159,7 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA, T>(
 	RA: Send + Sync + 'static,
 	PRA: ProvideRuntimeApi + HeaderBackend<Block> + ProvideCache<Block> + Send + Sync + AuxStore + 'static,
 	PRA::Api: BlockBuilderApi<Block> + BabeApi<Block>,
-	T: SubmitExtrinsic<BlockId=BlockId<Block>> + Send + Sync + 'static,
+	T: SubmitExtrinsic<Block> + 'static,
 {
 	register_babe_inherent_data_provider(&inherent_data_providers, config.get())?;
 	initialize_authorities_cache(&*api)?;
