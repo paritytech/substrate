@@ -25,7 +25,6 @@
 pub use timestamp;
 
 use rstd::{result, prelude::*};
-use sr_io::blake2_256;
 use srml_support::{
 	decl_storage, decl_module, StorageValue, StorageMap, Parameter,
 	traits::{FindAuthor, Get, KeyOwnerProofSystem},
@@ -223,22 +222,7 @@ decl_storage! {
 
 fn equivocation_is_valid<T: Trait>(
 	equivocation: &EquivocationProof<T::Header, AuthorityId, AuthoritySignature>,
-	proof: &T::Proof,
-	signature: &AuthoritySignature,
 ) -> bool {
-	let signed = (equivocation, proof);
-	let reporter = &equivocation.reporter;
-
-	let signature_valid = signed.using_encoded(|signed| if signed.len() > 256 {
-		reporter.verify(&blake2_256(signed), &signature)
-	} else {
-		reporter.verify(&signed, &signature)
-	});
-
-	if !signature_valid {
-		return false
-	}
-
 	let first_header = &equivocation.first_header;
 	let second_header = &equivocation.second_header;
 
@@ -294,16 +278,15 @@ decl_module! {
 			Initialized::kill();
 		}
 
-		/// Report equivocation.
+		/// Report a Babe equivocation.
 		fn report_equivocation(
 			origin,
 			equivocation: EquivocationProof<T::Header, AuthorityId, AuthoritySignature>,
-			proof: T::Proof,
-			signature: AuthoritySignature
+			proof: T::Proof
 		) {
 			let who = ensure_signed(origin)?;
 
-			if !equivocation_is_valid::<T>(&equivocation, &proof, &signature) {
+			if !equivocation_is_valid::<T>(&equivocation) {
 				return Err("invalid equivocation")
 			}
 
