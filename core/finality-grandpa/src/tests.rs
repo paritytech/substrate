@@ -371,8 +371,8 @@ impl SubmitExtrinsic<Block> for TransactionPool {
 
 	fn submit_extrinsic(
 		&self,
-		at: &BlockId<Block>,
-		xt: <Block as BlockT>::Extrinsic,
+		_at: &BlockId<Block>,
+		_xt: <Block as BlockT>::Extrinsic,
 	) -> std::result::Result<(), Self::Error> {
 		Ok(())
 	}
