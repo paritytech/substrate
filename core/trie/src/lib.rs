@@ -252,7 +252,7 @@ pub fn for_keys_in_child_trie<L: TrieConfiguration, F: FnMut(&[u8]), DB>(
 ) -> Result<(), Box<TrieError<L>>>
 	where
 		DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>
-				+ hash_db::PlainDBRef<TrieHash<L>, trie_db::DBValue>,
+			+ hash_db::PlainDBRef<TrieHash<L>, trie_db::DBValue>,
 {
 	with_child_trie!(trie, storage_key, trie.for_keys::<L, _, _>(db, root_slice, f))
 }
