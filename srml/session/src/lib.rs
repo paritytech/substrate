@@ -439,6 +439,7 @@ impl<T: Trait> Module<T> {
 	/// equivocation punishment after a fork.
 	pub fn rotate_session() {
 		let session_index = CurrentIndex::get();
+
 		let changed = QueuedChanged::get();
 		let mut next_changed = Changed::take();
 
