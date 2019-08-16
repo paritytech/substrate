@@ -62,6 +62,7 @@ impl ShouldEndSession<u64> for TestShouldEndSession {
 
 pub struct TestSessionHandler;
 impl SessionHandler<u64> for TestSessionHandler {
+	fn on_genesis_session<T: OpaqueKeys>(_validators: &[(u64, T)]) {}
 	fn on_new_session<T: OpaqueKeys>(
 		changed: bool,
 		validators: &[(u64, T)],
