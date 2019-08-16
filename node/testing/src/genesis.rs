@@ -28,14 +28,14 @@ use sr_primitives::Perbill;
 
 
 /// Create genesis runtime configuration for tests.
-pub fn config(support_changes_trie: bool) -> GenesisConfig {
+pub fn config(support_changes_trie: bool, code: Option<&[u8]>) -> GenesisConfig {
 	GenesisConfig {
 		system: Some(SystemConfig {
 			changes_trie_config: if support_changes_trie { Some(ChangesTrieConfiguration {
 				digest_interval: 2,
 				digest_levels: 2,
 			}) } else { None },
-			code: WASM_BINARY.to_vec(),
+			code: code.map(|x| x.to_vec()).unwrap_or_else(|| WASM_BINARY.to_vec()),
 		}),
 		indices: Some(IndicesConfig {
 			ids: vec![alice(), bob(), charlie(), dave(), eve(), ferdie()],

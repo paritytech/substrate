@@ -43,7 +43,7 @@ pub struct GenesisParameters {
 
 impl test_client::GenesisInit for GenesisParameters {
 	fn genesis_storage(&self) -> (StorageOverlay, ChildrenStorageOverlay) {
-		crate::genesis::config(self.support_changes_trie).build_storage().unwrap()
+		crate::genesis::config(self.support_changes_trie, None).build_storage().unwrap()
 	}
 }
 

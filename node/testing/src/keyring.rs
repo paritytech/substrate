@@ -79,7 +79,7 @@ pub fn signed_extra(nonce: Index, extra_fee: Balance) -> SignedExtra {
 pub fn sign(xt: CheckedExtrinsic, genesis_hash: [u8; 32]) -> UncheckedExtrinsic {
 	match xt.signed {
 		Some((signed, extra)) => {
-			let payload = (xt.function, extra.clone(), genesis_hash);
+			let payload = (xt.function, extra.clone(), genesis_hash, genesis_hash);
 			let key = AccountKeyring::from_public(&signed).unwrap();
 			let signature = payload.using_encoded(|b| {
 				if b.len() > 256 {

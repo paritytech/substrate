@@ -263,7 +263,7 @@ mod tests {
 	fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<Blake2Hasher> {
 		let mut ext = TestExternalities::new_with_code(
 			code,
-			node_testing::genesis::config(support_changes_trie).build_storage().unwrap(),
+			node_testing::genesis::config(support_changes_trie, Some(code)).build_storage().unwrap(),
 		);
 		ext.changes_trie_storage().insert(0, GENESIS_HASH.into(), Default::default());
 		ext
