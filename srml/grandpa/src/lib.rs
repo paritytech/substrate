@@ -38,10 +38,7 @@ use srml_support::{
 };
 use app_crypto::RuntimeAppPublic;
 use sr_primitives::{
-	generic::{DigestItem, OpaqueDigestItemId},
-	transaction_validity::{TransactionValidity, ValidTransaction},
-	traits::{Zero, ValidateUnsigned},
-	Perbill, KeyTypeId,
+	generic::{DigestItem, OpaqueDigestItemId}, traits::Zero, Perbill, KeyTypeId,
 };
 use sr_staking_primitives::{
 	SessionIndex,
@@ -176,29 +173,6 @@ decl_storage! {
 	}
 }
 
-impl<T> ValidateUnsigned for Module<T> where T: Trait
-{
-	type Call = Call<T>;
-
-	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
-		match call {
-			Call::report_equivocation(equivocation, proof, signature)
-				if equivocation_is_valid::<T::Hash, T::BlockNumber>(equivocation, proof, signature) => {
-					return TransactionValidity::Valid(
-						ValidTransaction {
-							priority: 0,
-							requires: vec![],
-							provides: vec![],
-							longevity: 18446744073709551615,
-							propagate: true,
-						}
-					)
-			},
-			_ => TransactionValidity::Invalid(0),
-		}
-	}
-}
-
 fn equivocation_is_valid<H: Codec + PartialEq, N: Codec + PartialEq>(
 	equivocation: &GrandpaEquivocation<H, N>,
 	proof: &Proof,
@@ -259,11 +233,15 @@ decl_module! {
 		/// Report some misbehavior.
 		fn report_equivocation(
 			origin,
-			_equivocation: GrandpaEquivocation<T::Hash, T::BlockNumber>,
-			_proof: Proof,
-			_signature: AuthoritySignature
+			equivocation: GrandpaEquivocation<T::Hash, T::BlockNumber>,
+			proof: Proof,
+			signature: AuthoritySignature
 		) {
-			ensure_signed(origin)?;
+			let _who = ensure_signed(origin)?;
+
+			if !equivocation_is_valid(&equivocation, &proof, &signature) {
+				return Err("invalid equivocation")
+			}
 			// TODO [slashing] implement me
 			// let to_punish = <T as Trait>::KeyOwnerSystem::check_proof(
 			// 	(key_types::SR25519, equivocation.identity.encode()),
