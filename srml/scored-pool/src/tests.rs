@@ -43,21 +43,21 @@ fn query_membership_works() {
 	});
 }
 #[test]
-fn issue_candidacy_must_not_work() {
+fn submit_candidacy_must_not_work() {
 	with_externalities(&mut new_test_ext(), || {
-		assert_noop!(ScoredPool::issue_candidacy(Origin::signed(99)), "balance too low");
-		assert_noop!(ScoredPool::issue_candidacy(Origin::signed(10)), "already a member");
+		assert_noop!(ScoredPool::submit_candidacy(Origin::signed(99)), "balance too low");
+		assert_noop!(ScoredPool::submit_candidacy(Origin::signed(10)), "already a member");
 	});
 }
 
 #[test]
-fn issue_candidacy_works() {
+fn submit_candidacy_works() {
 	with_externalities(&mut new_test_ext(), || {
 		// given
 		let who = 15;
 
 		// when
-		assert_ok!(ScoredPool::issue_candidacy(Origin::signed(who)));
+		assert_ok!(ScoredPool::submit_candidacy(Origin::signed(who)));
 		assert_eq!(fetch_from_pool(15), Some((who, None)));
 
 		// then
@@ -71,7 +71,7 @@ fn scoring_works() {
 		// given
 		let who = 15;
 		let score = 99;
-		assert_ok!(ScoredPool::issue_candidacy(Origin::signed(who)));
+		assert_ok!(ScoredPool::submit_candidacy(Origin::signed(who)));
 
 		// when
 		assert_ok!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, score));
@@ -132,8 +132,8 @@ fn kicking_works() {
 fn unscored_entities_must_not_be_used_for_filling_members() {
 	with_externalities(&mut new_test_ext(), || {
 		// given
-		// we issue a candidacy, score will be None
-		assert_ok!(ScoredPool::issue_candidacy(Origin::signed(15)));
+		// we submit a candidacy, score will be None
+		assert_ok!(ScoredPool::submit_candidacy(Origin::signed(15)));
 
 		// when
 		// we remove every scored member
@@ -156,7 +156,7 @@ fn unscored_entities_must_not_be_used_for_filling_members() {
 fn refreshing_works() {
 	with_externalities(&mut new_test_ext(), || {
 		// given
-		assert_ok!(ScoredPool::issue_candidacy(Origin::signed(15)));
+		assert_ok!(ScoredPool::submit_candidacy(Origin::signed(15)));
 		assert_ok!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), 15, 99));
 
 		// when
@@ -173,7 +173,7 @@ fn refreshing_happens_every_period() {
 	with_externalities(&mut new_test_ext(), || {
 		// given
 		System::set_block_number(1);
-		assert_ok!(ScoredPool::issue_candidacy(Origin::signed(15)));
+		assert_ok!(ScoredPool::submit_candidacy(Origin::signed(15)));
 		assert_ok!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), 15, 99));
 		assert_eq!(ScoredPool::members(), vec![20, 40]);
 

@@ -42,7 +42,7 @@
 //!
 //! ### Public Functions
 //!
-//! - `issue_candidacy` - Issue candidacy to become a member. Requires a deposit.
+//! - `submit_candidacy` - Submit candidacy to become a member. Requires a deposit.
 //! - `withdraw_candidacy` - Withdraw candidacy. Deposit is returned.
 //! - `score` - Attribute a quantitative score to an entity.
 //! - `kick` - Remove an entity from the pool and members. Deposit is returned.
@@ -62,7 +62,7 @@
 //! 		pub fn candidate(origin) -> Result {
 //! 			let who = ensure_signed(origin)?;
 //!
-//! 			let _ = <scored_pool::Module<T>>::issue_candidacy(
+//! 			let _ = <scored_pool::Module<T>>::submit_candidacy(
 //! 				T::Origin::from(Some(who.clone()).into())
 //! 			);
 //! 			Ok(())
@@ -221,7 +221,7 @@ decl_module! {
 		}
 
 		/// Add `origin` to the pool of candidates.
-		pub fn issue_candidacy(origin) {
+		pub fn submit_candidacy(origin) {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::find_in_pool(&who).is_err(), "already a member");
 
