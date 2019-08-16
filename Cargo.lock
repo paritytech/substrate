@@ -4497,7 +4497,6 @@ dependencies = [
  "sr-primitives 2.0.0",
  "sr-staking-primitives 2.0.0",
  "sr-std 2.0.0",
- "srml-session 2.0.0",
  "substrate-application-crypto 2.0.0",
  "substrate-client 2.0.0",
  "substrate-consensus-common-primitives 2.0.0",
@@ -4673,7 +4672,6 @@ dependencies = [
  "sr-primitives 2.0.0",
  "sr-staking-primitives 2.0.0",
  "sr-std 2.0.0",
- "srml-session 2.0.0",
  "substrate-application-crypto 2.0.0",
  "substrate-client 2.0.0",
 ]

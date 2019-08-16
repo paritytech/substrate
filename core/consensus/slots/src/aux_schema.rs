@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+/ Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -23,7 +23,6 @@ use client::error::{Result as ClientResult, Error as ClientError};
 use sr_primitives::traits::Header;
 use app_crypto::RuntimeAppPublic;
 use srml_session::historical::Proof;
-use keystore::KeyStorePtr;
 use sr_staking_primitives::SessionIndex;
 use consensus_common_primitives::EquivocationProof;
 
@@ -94,7 +93,7 @@ pub fn check_equivocation<C, H, V>(
 		// if prev_signer == signer {
 			// 2) with different hash
 			// if header.hash() != prev_header.hash() {
-				
+
 				return Ok(Some(EquivocationProof {
 					reporter: signer.clone(),
 					identity: signer.clone(),

@@ -6,27 +6,26 @@ description = "Primitives for BABE consensus"
 edition = "2018"
 
 [dependencies]
-substrate-client = { path = "../../../client", default-features = false }
-rstd = { package = "sr-std", path = "../../../sr-std", default-features = false }
-sr-primitives = {  path = "../../../sr-primitives", default-features = false }
-sr-staking-primitives = { path = "../../../sr-staking-primitives", default-features = false }
 app-crypto = { package = "substrate-application-crypto", path = "../../../application-crypto", default-features = false }
-slots = { package = "substrate-consensus-slots", path = "../../slots", optional = true }
-schnorrkel = { version = "0.8.4", features = ["preaudit_deprecated"], optional = true }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
 consensus_common_primitives = { package = "substrate-consensus-common-primitives", path = "../../common/primitives", default-features = false }
-srml-session = { path = "../../../../srml/session", default-features = false }
+rstd = { package = "sr-std", path = "../../../sr-std", default-features = false }
+schnorrkel = { version = "0.8.4", features = ["preaudit_deprecated"], optional = true }
+slots = { package = "substrate-consensus-slots", path = "../../slots", optional = true }
+sr-primitives = {  path = "../../../sr-primitives", default-features = false }
+sr-staking-primitives = { path = "../../../sr-staking-primitives", default-features = false }
+substrate-client = { path = "../../../client", default-features = false }
 
 [features]
 default = ["std"]
 std = [
+	"app-crypto/std",
+	"codec/std",
+	"consensus_common_primitives/std",
 	"rstd/std",
+	"schnorrkel",
+	"slots",
 	"sr-primitives/std",
 	"sr-staking-primitives/std",
 	"substrate-client/std",
-	"codec/std",
-	"schnorrkel",
-	"app-crypto/std",
-	"slots",
-	"consensus_common_primitives/std",
 ]
