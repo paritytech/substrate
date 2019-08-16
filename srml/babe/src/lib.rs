@@ -33,10 +33,7 @@ use srml_support::{
 use timestamp::{OnTimestampSet};
 use sr_primitives::{
 	generic::DigestItem, ConsensusEngineId, Perbill, key_types, KeyTypeId,
-	transaction_validity::{TransactionValidity, ValidTransaction},
-	traits::{
-		IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Header, ValidateUnsigned,
-	},
+	traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Header},
 	weights::SimpleDispatchInfo,
 };
 use sr_staking_primitives::{
@@ -224,29 +221,6 @@ decl_storage! {
 	}
 }
 
-impl<T> ValidateUnsigned for Module<T> where T: Trait
-{
-	type Call = Call<T>;
-
-	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
-		match call {
-			Call::report_equivocation(equivocation, proof, signature)
-				if equivocation_is_valid::<T>(equivocation, proof, signature) => {
-					return TransactionValidity::Valid(
-						ValidTransaction {
-							priority: 0,
-							requires: vec![],
-							provides: vec![],
-							longevity: 18446744073709551615,
-							propagate: true,
-						}
-					)
-			},
-			_ => TransactionValidity::Invalid(0),
-		}
-	}
-}
-
 fn equivocation_is_valid<T: Trait>(
 	equivocation: &EquivocationProof<T::Header, AuthorityId, AuthoritySignature>,
 	proof: &T::Proof,
@@ -325,10 +299,14 @@ decl_module! {
 			origin,
 			equivocation: EquivocationProof<T::Header, AuthorityId, AuthoritySignature>,
 			proof: T::Proof,
-			_signature: AuthoritySignature
+			signature: AuthoritySignature
 		) {
-			// TODO [slashing] I thought we are porducing an UnsignedTransaction?
 			let who = ensure_signed(origin)?;
+
+			if !equivocation_is_valid::<T>(&equivocation, &proof, &signature) {
+				return Err("invalid equivocation")
+			}
+
 			let to_punish = <T as Trait>::KeyOwnerSystem::check_proof(
 				(key_types::BABE, equivocation.identity.encode()),
 				proof.clone(),
