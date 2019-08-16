@@ -30,6 +30,12 @@ pub enum Error {
 	/// Transaction is invalid.
 	#[display(fmt="Invalid Transaction. Error Code: {}", _0)]
 	InvalidTransaction(i8),
+	/// The transaction validity returned no "provides" tag.
+	///
+	/// Such transactions are not accepted to the pool, since we use those tags
+	/// to define identity of transactions (occupance of the same "slot").
+	#[display(fmt="The transaction does not provide any tags, so the pool can't identify it.")]
+	NoTagsProvided,
 	/// The transaction is temporarily banned.
 	#[display(fmt="Temporarily Banned")]
 	TemporarilyBanned,

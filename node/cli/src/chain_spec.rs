@@ -19,9 +19,9 @@
 use primitives::{Pair, Public, crypto::UncheckedInto};
 pub use node_primitives::{AccountId, Balance};
 use node_runtime::{
-	BabeConfig,	BalancesConfig, ContractsConfig, CouncilConfig, DemocracyConfig,
+	BabeConfig, BalancesConfig, ContractsConfig, CouncilConfig, DemocracyConfig,
 	ElectionsConfig, GrandpaConfig, ImOnlineConfig, IndicesConfig, Perbill,
-	SessionConfig,	SessionKeys, StakerStatus, StakingConfig, SudoConfig, SystemConfig,
+	SessionConfig, SessionKeys, StakerStatus, StakingConfig, SudoConfig, SystemConfig,
 	TechnicalCommitteeConfig, WASM_BINARY,
 };
 use node_runtime::constants::{time::*, currency::*};
@@ -141,6 +141,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 				(x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator)
 			}).collect(),
 			invulnerables: initial_authorities.iter().map(|x| x.0.clone()).collect(),
+			.. Default::default()
 		}),
 		democracy: Some(DemocracyConfig::default()),
 		collective_Instance1: Some(CouncilConfig {
@@ -165,14 +166,13 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			key: endowed_accounts[0].clone(),
 		}),
 		babe: Some(BabeConfig {
-			authorities: initial_authorities.iter().map(|x| (x.3.clone(), 1)).collect(),
+			authorities: vec![],
 		}),
 		im_online: Some(ImOnlineConfig {
-			gossip_at: 0,
-			keys: initial_authorities.iter().map(|x| x.4.clone()).collect(),
+			keys: vec![],
 		}),
 		grandpa: Some(GrandpaConfig {
-			authorities: initial_authorities.iter().map(|x| (x.2.clone(), 1)).collect(),
+			authorities: vec![],
 		}),
 		membership_Instance1: Some(Default::default()),
 	}
@@ -268,6 +268,7 @@ pub fn testnet_genesis(
 				(x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator)
 			}).collect(),
 			invulnerables: initial_authorities.iter().map(|x| x.0.clone()).collect(),
+			.. Default::default()
 		}),
 		democracy: Some(DemocracyConfig::default()),
 		collective_Instance1: Some(CouncilConfig {
@@ -297,14 +298,13 @@ pub fn testnet_genesis(
 			key: root_key,
 		}),
 		babe: Some(BabeConfig {
-			authorities: initial_authorities.iter().map(|x| (x.3.clone(), 1)).collect(),
+			authorities: vec![],
 		}),
 		im_online: Some(ImOnlineConfig{
-			gossip_at: 0,
-			keys: initial_authorities.iter().map(|x| x.4.clone()).collect(),
+			keys: vec![],
 		}),
 		grandpa: Some(GrandpaConfig {
-			authorities: initial_authorities.iter().map(|x| (x.2.clone(), 1)).collect(),
+			authorities: vec![],
 		}),
 		membership_Instance1: Some(Default::default()),
 	}

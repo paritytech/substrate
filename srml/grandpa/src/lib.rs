@@ -133,7 +133,7 @@ decl_event!(
 decl_storage! {
 	trait Store for Module<T: Trait> as GrandpaFinality {
 		/// The current authority set.
-		Authorities get(authorities) config(): Vec<(AuthorityId, AuthorityWeight)>;
+		Authorities get(authorities): Vec<(AuthorityId, AuthorityWeight)>;
 
 		/// State of the current authority set.
 		State get(state): StoredState<T::BlockNumber> = StoredState::Live;
@@ -146,6 +146,18 @@ decl_storage! {
 
 		/// `true` if we are currently stalled.
 		Stalled get(stalled): Option<(T::BlockNumber, T::BlockNumber)>;
+	}
+	add_extra_genesis {
+		config(authorities): Vec<(AuthorityId, AuthorityWeight)>;
+		build(|
+			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
+			config: &GenesisConfig
+		| {
+			runtime_io::with_storage(
+				storage,
+				|| Module::<T>::initialize_authorities(&config.authorities),
+			);
+		})
 	}
 }
 
@@ -310,6 +322,13 @@ impl<T: Trait> Module<T> {
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode());
 		<system::Module<T>>::deposit_log(log.into());
 	}
+
+	fn initialize_authorities(authorities: &[(AuthorityId, AuthorityWeight)]) {
+		if !authorities.is_empty() {
+			assert!(Authorities::get().is_empty(), "Authorities are already initialized!");
+			Authorities::put_ref(authorities);
+		}
+	}
 }
 
 impl<T: Trait> Module<T> {
@@ -346,12 +365,19 @@ impl<T: Trait> Module<T> {
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = AuthorityId;
 
+	fn on_genesis_session<'a, I: 'a>(validators: I)
+		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
+	{
+		let authorities = validators.map(|(_, k)| (k, 1)).collect::<Vec<_>>();
+		Self::initialize_authorities(&authorities);
+	}
+
 	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, _queued_validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
 		// instant changes
 		if changed {
-			let next_authorities = validators.map(|(_, k)| (k, 1u64)).collect::<Vec<_>>();
+			let next_authorities = validators.map(|(_, k)| (k, 1)).collect::<Vec<_>>();
 			let last_authorities = <Module<T>>::grandpa_authorities();
 			if next_authorities != last_authorities {
 				if let Some((further_wait, median)) = <Stalled<T>>::take() {

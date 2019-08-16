@@ -79,6 +79,7 @@ pub fn config(support_changes_trie: bool, code: Option<&[u8]>) -> GenesisConfig 
 			offline_slash: Perbill::zero(),
 			offline_slash_grace: 0,
 			invulnerables: vec![alice(), bob(), charlie()],
+			.. Default::default()
 		}),
 		contracts: Some(ContractsConfig {
 			current_schedule: Default::default(),

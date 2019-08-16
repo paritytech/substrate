@@ -25,7 +25,7 @@ use rstd::{result, prelude::*};
 use srml_support::{decl_storage, decl_module, StorageValue, StorageMap, traits::FindAuthor, traits::Get};
 use timestamp::{OnTimestampSet};
 use sr_primitives::{generic::DigestItem, ConsensusEngineId};
-use sr_primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert};
+use sr_primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon};
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
 use codec::{Encode, Decode};
@@ -123,7 +123,7 @@ decl_storage! {
 		pub EpochIndex get(epoch_index): u64;
 
 		/// Current epoch authorities.
-		pub Authorities get(authorities) config(): Vec<(AuthorityId, BabeWeight)>;
+		pub Authorities get(authorities): Vec<(AuthorityId, BabeWeight)>;
 
 		/// Slot at which the current epoch started. It is possible that no
 		/// block was authored at the given slot and the epoch change was
@@ -162,6 +162,22 @@ decl_storage! {
 		/// epoch.
 		SegmentIndex build(|_| 0): u32;
 		UnderConstruction: map u32 => Vec<[u8; 32 /* VRF_OUTPUT_LENGTH */]>;
+
+		/// Temporary value (cleared at block finalization) which is true
+		/// if per-block initialization has already been called for current block.
+		Initialized get(initialized): Option<bool>;
+	}
+	add_extra_genesis {
+		config(authorities): Vec<(AuthorityId, BabeWeight)>;
+		build(|
+			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
+			config: &GenesisConfig
+		| {
+			runtime_io::with_storage(
+				storage,
+				|| Module::<T>::initialize_authorities(&config.authorities),
+			);
+		})
 	}
 }
 
@@ -181,25 +197,12 @@ decl_module! {
 
 		/// Initialization
 		fn on_initialize() {
-			for digest in Self::get_inherent_digests()
-				.logs
-				.iter()
-				.filter_map(|s| s.as_pre_runtime())
-				.filter_map(|(id, mut data)| if id == BABE_ENGINE_ID {
-					RawBabePreDigest::decode(&mut data).ok()
-				} else {
-					None
-				})
-			{
-				if EpochStartSlot::get() == 0 {
-					EpochStartSlot::put(digest.slot_number);
-				}
+			Self::do_initialize();
+		}
 
-				CurrentSlot::put(digest.slot_number);
-				Self::deposit_vrf_output(&digest.vrf_output);
-
-				return;
-			}
+		/// Block finalization
+		fn on_finalize() {
+			Initialized::kill();
 		}
 	}
 }
@@ -236,6 +239,12 @@ impl<T: Trait> IsMember<AuthorityId> for Module<T> {
 
 impl<T: Trait> session::ShouldEndSession<T::BlockNumber> for Module<T> {
 	fn should_end_session(_: T::BlockNumber) -> bool {
+		// it might be (and it is in current implementation) that session module is calling
+		// should_end_session() from it's own on_initialize() handler
+		// => because session on_initialize() is called earlier than ours, let's ensure
+		// that we have synced with digest before checking if session should be ended
+		Self::do_initialize();
+
 		let diff = CurrentSlot::get().saturating_sub(EpochStartSlot::get());
 		diff >= T::EpochDuration::get()
 	}
@@ -273,6 +282,36 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
+	fn do_initialize() {
+		// since do_initialize can be called twice (if session module is present)
+		// => let's ensure that we only modify the storage once per block
+		let initialized = Self::initialized().unwrap_or(false);
+		if initialized {
+			return;
+		}
+
+		Initialized::put(true);
+		for digest in Self::get_inherent_digests()
+			.logs
+			.iter()
+			.filter_map(|s| s.as_pre_runtime())
+			.filter_map(|(id, mut data)| if id == BABE_ENGINE_ID {
+				RawBabePreDigest::decode(&mut data).ok()
+			} else {
+				None
+			})
+		{
+			if EpochStartSlot::get() == 0 {
+				EpochStartSlot::put(digest.slot_number);
+			}
+
+			CurrentSlot::put(digest.slot_number);
+			Self::deposit_vrf_output(&digest.vrf_output);
+
+			return;
+		}
+	}
+
 	/// Call this function exactly once when an epoch changes, to update the
 	/// randomness. Returns the new randomness.
 	fn randomness_change_epoch(next_epoch_index: u64) -> [u8; RANDOMNESS_LENGTH] {
@@ -292,22 +331,31 @@ impl<T: Trait> Module<T> {
 		this_randomness
 	}
 
+	fn initialize_authorities(authorities: &[(AuthorityId, BabeWeight)]) {
+		if !authorities.is_empty() {
+			assert!(Authorities::get().is_empty(), "Authorities are already initialized!");
+			Authorities::put_ref(authorities);
+		}
+	}
 }
 
 impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 	fn on_timestamp_set(_moment: T::Moment) { }
 }
 
-impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
+impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = AuthorityId;
+
+	fn on_genesis_session<'a, I: 'a>(validators: I)
+		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
+	{
+		let authorities = validators.map(|(_, k)| (k, 1)).collect::<Vec<_>>();
+		Self::initialize_authorities(&authorities);
+	}
+
 	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, queued_validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
-		use staking::BalanceOf;
-		let to_votes = |b: BalanceOf<T>| {
-			<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b)
-		};
-
 		// Update epoch index
 		let epoch_index = EpochIndex::get()
 			.checked_add(1)
@@ -316,8 +364,8 @@ impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Mod
 		EpochIndex::put(epoch_index);
 
 		// Update authorities.
-		let authorities = validators.map(|(account, k)| {
-			(k, to_votes(staking::Module::<T>::stakers(account).total))
+		let authorities = validators.map(|(_account, k)| {
+			(k, 1)
 		}).collect::<Vec<_>>();
 
 		Authorities::put(authorities);
@@ -349,8 +397,8 @@ impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Mod
 
 		// After we update the current epoch, we signal the *next* epoch change
 		// so that nodes can track changes.
-		let next_authorities = queued_validators.map(|(account, k)| {
-			(k, to_votes(staking::Module::<T>::stakers(account).total))
+		let next_authorities = queued_validators.map(|(_account, k)| {
+			(k, 1)
 		}).collect::<Vec<_>>();
 
 		let next_epoch_start_slot = EpochStartSlot::get().saturating_add(T::EpochDuration::get());

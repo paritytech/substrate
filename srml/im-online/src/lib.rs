@@ -70,14 +70,14 @@
 use primitives::offchain::{OpaqueNetworkState, StorageKind};
 use codec::{Encode, Decode};
 use sr_primitives::{
-	ApplyError, traits::{Extrinsic as ExtrinsicT},
+	ApplyError, traits::Extrinsic as ExtrinsicT,
 	transaction_validity::{TransactionValidity, TransactionLongevity, ValidTransaction},
 };
 use rstd::prelude::*;
 use session::SessionIndex;
 use sr_io::Printable;
 use srml_support::{
-	StorageValue, decl_module, decl_event, decl_storage, StorageDoubleMap, print,
+	StorageValue, decl_module, decl_event, decl_storage, StorageDoubleMap, print, ensure
 };
 use system::ensure_none;
 use app_crypto::RuntimeAppPublic;
@@ -174,15 +174,27 @@ decl_event!(
 decl_storage! {
 	trait Store for Module<T: Trait> as ImOnline {
 		/// The block number when we should gossip.
-		GossipAt get(gossip_at) config(): T::BlockNumber;
+		GossipAt get(gossip_at): T::BlockNumber;
 
 		/// The current set of keys that may issue a heartbeat.
-		Keys get(keys) config(): Vec<AuthorityId>;
+		Keys get(keys): Vec<AuthorityId>;
 
 		/// For each session index we keep a mapping of `AuthorityId`
 		/// to `offchain::OpaqueNetworkState`.
 		ReceivedHeartbeats get(received_heartbeats): double_map SessionIndex,
 			blake2_256(AuthIndex) => Vec<u8>;
+	}
+	add_extra_genesis {
+		config(keys): Vec<AuthorityId>;
+		build(|
+			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
+			config: &GenesisConfig
+		| {
+			sr_io::with_storage(
+				storage,
+				|| Module::<T>::initialize_keys(&config.keys),
+			);
+		})
 	}
 }
 
@@ -194,11 +206,12 @@ decl_module! {
 		fn heartbeat(
 			origin,
 			heartbeat: Heartbeat<T::BlockNumber>,
-			_signature: AuthoritySignature
+			signature: AuthoritySignature
 		) {
 			ensure_none(origin)?;
 
 			let current_session = <session::Module<T>>::current_index();
+			ensure!(current_session == heartbeat.session_index, "Outdated hearbeat received.");
 			let exists = <ReceivedHeartbeats>::exists(
 				&current_session,
 				&heartbeat.authority_index
@@ -206,6 +219,11 @@ decl_module! {
 			let keys = Keys::get();
 			let public = keys.get(heartbeat.authority_index as usize);
 			if let (true, Some(public)) = (!exists, public) {
+				let signature_valid = heartbeat.using_encoded(|encoded_heartbeat| {
+					public.verify(&encoded_heartbeat, &signature)
+				});
+				ensure!(signature_valid, "Invalid hearbeat signature.");
+
 				Self::deposit_event(Event::HeartbeatReceived(public.clone()));
 
 				let network_state = heartbeat.network_state.encode();
@@ -355,12 +373,25 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
+	fn initialize_keys(keys: &[AuthorityId]) {
+		if !keys.is_empty() {
+			assert!(Keys::get().is_empty(), "Keys are already initialized!");
+			Keys::put_ref(keys);
+		}
+	}
 }
 
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = AuthorityId;
 
-	fn on_new_session<'a, I: 'a>(_changed: bool, _validators: I, next_validators: I)
+	fn on_genesis_session<'a, I: 'a>(validators: I)
+		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
+	{
+		let keys = validators.map(|x| x.1).collect::<Vec<_>>();
+		Self::initialize_keys(&keys);
+	}
+
+	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, _queued_validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
 		// Reset heartbeats
@@ -370,7 +401,7 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 		<GossipAt<T>>::put(<system::Module<T>>::block_number());
 
 		// Remember who the authorities are for the new session.
-		Keys::put(next_validators.map(|x| x.1).collect::<Vec<_>>());
+		Keys::put(validators.map(|x| x.1).collect::<Vec<_>>());
 	}
 
 	fn on_disabled(_i: usize) {

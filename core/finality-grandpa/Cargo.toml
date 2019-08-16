@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 fork-tree = { path = "../../core/utils/fork-tree" }
 futures = "0.1"
-futures03 = { package = "futures-preview", version = "0.3.0-alpha.17", features = ["compat"] }
+futures03 = { package = "futures-preview", version = "=0.3.0-alpha.17", features = ["compat"] }
 log = "0.4"
 parking_lot = "0.9.0"
 tokio-executor = "0.1.7"

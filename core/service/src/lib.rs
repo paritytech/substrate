@@ -28,6 +28,7 @@ pub mod error;
 use std::io;
 use std::net::SocketAddr;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use futures::sync::mpsc;
 use parking_lot::Mutex;
@@ -82,8 +83,14 @@ pub struct Service<Components: components::Components> {
 		NetworkStatus<ComponentBlock<Components>>, NetworkState
 	)>>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
+	/// A future that resolves when the service has exited, this is useful to
+	/// make sure any internally spawned futures stop when the service does.
 	exit: exit_future::Exit,
+	/// A signal that makes the exit future above resolve, fired on service drop.
 	signal: Option<Signal>,
+	/// Set to `true` when a spawned essential task has failed. The next time
+	/// the service future is polled it should complete with an error.
+	essential_failed: Arc<AtomicBool>,
 	/// Sender for futures that must be spawned as background tasks.
 	to_spawn_tx: mpsc::UnboundedSender<Box<dyn Future<Item = (), Error = ()> + Send>>,
 	/// Receiver for futures that must be spawned as background tasks.
@@ -166,16 +173,27 @@ impl<Components: components::Components> Service<Components> {
 
 		let (client, on_demand) = Components::build_client(&config, executor, Some(keystore.clone()))?;
 		let select_chain = Components::build_select_chain(&mut config, client.clone())?;
+
+		let transaction_pool = Arc::new(
+			Components::build_transaction_pool(config.transaction_pool.clone(), client.clone())?
+		);
+		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
+			imports_external_transactions: !config.roles.is_light(),
+			pool: transaction_pool.clone(),
+			client: client.clone(),
+		});
+
 		let (import_queue, finality_proof_request_builder) = Components::build_import_queue(
 			&mut config,
 			client.clone(),
 			select_chain.clone(),
+			Some(transaction_pool.clone()),
 		)?;
 		let import_queue = Box::new(import_queue);
 		let finality_proof_provider = Components::build_finality_proof_provider(client.clone())?;
 		let chain_info = client.info().chain;
 
-		Components::RuntimeServices::generate_intial_session_keys(
+		Components::RuntimeServices::generate_initial_session_keys(
 			client.clone(),
 			config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
 		)?;
@@ -190,14 +208,6 @@ impl<Components: components::Components> Service<Components> {
 		);
 
 		let network_protocol = <Components::Factory>::build_network_protocol(&config)?;
-		let transaction_pool = Arc::new(
-			Components::build_transaction_pool(config.transaction_pool.clone(), client.clone())?
-		);
-		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
-			imports_external_transactions: !config.roles.is_light(),
-			pool: transaction_pool.clone(),
-			client: client.clone(),
-		});
 
 		let protocol_id = {
 			let protocol_id_full = match config.chain_spec.protocol_id() {
@@ -288,6 +298,7 @@ impl<Components: components::Components> Service<Components> {
 			let network = Arc::downgrade(&network);
 			let transaction_pool_ = transaction_pool.clone();
 			let events = transaction_pool.import_notification_stream()
+				.map(|v| Ok::<_, ()>(v)).compat()
 				.for_each(move |_| {
 					if let Some(network) = network.upgrade() {
 						network.trigger_repropagate();
@@ -396,7 +407,7 @@ impl<Components: components::Components> Service<Components> {
 
 		// Telemetry
 		let telemetry = config.telemetry_endpoints.clone().map(|endpoints| {
-			let is_authority = config.roles == Roles::AUTHORITY;
+			let is_authority = config.roles.is_authority();
 			let network_id = network.local_peer_id().to_base58();
 			let name = config.name.clone();
 			let impl_name = config.impl_name.to_owned();
@@ -441,12 +452,13 @@ impl<Components: components::Components> Service<Components> {
 			network_status_sinks,
 			select_chain,
 			transaction_pool,
+			exit,
 			signal: Some(signal),
+			essential_failed: Arc::new(AtomicBool::new(false)),
 			to_spawn_tx,
 			to_spawn_rx,
 			to_poll: Vec::new(),
 			config,
-			exit,
 			rpc_handlers,
 			_rpc: rpc,
 			_telemetry: telemetry,
@@ -490,6 +502,19 @@ impl<Components: components::Components> Service<Components> {
 	/// Spawns a task in the background that runs the future passed as parameter.
 	pub fn spawn_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
 		let _ = self.to_spawn_tx.unbounded_send(Box::new(task));
+	}
+
+	/// Spawns a task in the background that runs the future passed as
+	/// parameter. The given task is considered essential, i.e. if it errors we
+	/// trigger a service exit.
+	pub fn spawn_essential_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
+		let essential_failed = self.essential_failed.clone();
+		let essential_task = Box::new(task.map_err(move |_| {
+			error!("Essential task failed. Shutting down service.");
+			essential_failed.store(true, Ordering::Relaxed);
+		}));
+
+		let _ = self.to_spawn_tx.unbounded_send(essential_task);
 	}
 
 	/// Returns a handle for spawning tasks.
@@ -549,9 +574,13 @@ impl<Components: components::Components> Service<Components> {
 
 impl<Components> Future for Service<Components> where Components: components::Components {
 	type Item = ();
-	type Error = ();
+	type Error = Error;
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+		if self.essential_failed.load(Ordering::Relaxed) {
+			return Err(Error::Other("Essential task failed.".into()));
+		}
+
 		while let Ok(Async::Ready(Some(task_to_spawn))) = self.to_spawn_rx.poll() {
 			let executor = tokio_executor::DefaultExecutor::current();
 			if let Err(err) = executor.execute(task_to_spawn) {
@@ -947,7 +976,7 @@ where
 /// 		LightService = LightComponents<Self>
 /// 			{ |config| <LightComponents<Factory>>::new(config) },
 /// 		FullImportQueue = BasicQueue<Block>
-/// 			{ |_, client, _| Ok(BasicQueue::new(MyVerifier, Box::new(client), None, None)) },
+/// 			{ |_, client, _, _| Ok(BasicQueue::new(MyVerifier, Box::new(client), None, None)) },
 /// 		LightImportQueue = BasicQueue<Block>
 /// 			{ |_, client| {
 /// 				let fprb = Box::new(DummyFinalityProofRequestBuilder::default()) as Box<_>;
@@ -1044,9 +1073,10 @@ macro_rules! construct_service_factory {
 			fn build_full_import_queue(
 				config: &mut $crate::FactoryFullConfiguration<Self>,
 				client: $crate::Arc<$crate::FullClient<Self>>,
-				select_chain: Self::SelectChain
+				select_chain: Self::SelectChain,
+				transaction_pool: Option<Arc<$crate::TransactionPool<Self::FullTransactionPoolApi>>>,
 			) -> $crate::Result<Self::FullImportQueue, $crate::Error> {
-				( $( $full_import_queue_init )* ) (config, client, select_chain)
+				( $( $full_import_queue_init )* ) (config, client, select_chain, transaction_pool)
 			}
 
 			fn build_light_import_queue(

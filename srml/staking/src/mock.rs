@@ -52,6 +52,8 @@ thread_local! {
 
 pub struct TestSessionHandler;
 impl session::SessionHandler<AccountId> for TestSessionHandler {
+	fn on_genesis_session<Ks: OpaqueKeys>(_validators: &[(AccountId, Ks)]) {}
+
 	fn on_new_session<Ks: OpaqueKeys>(
 		_changed: bool,
 		validators: &[(AccountId, Ks)],
@@ -310,6 +312,7 @@ impl ExtBuilder {
 			offline_slash: Perbill::from_percent(5),
 			offline_slash_grace: 0,
 			invulnerables: vec![],
+			.. Default::default()
 		}.assimilate_storage(&mut storage);
 
 		let _ = session::GenesisConfig::<Test> {
