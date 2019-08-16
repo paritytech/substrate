@@ -19,6 +19,8 @@
 
 use super::ChildTrie;
 use crate::{TrieHash, TrieError, TrieDBMut, TrieDB};
+use rstd::boxed::Box;
+use rstd::vec::Vec;
 use trie_db::{TrieConfiguration, DBValue, Query, Trie, TrieMut};
 use hash_db::{HashDB, HashDBRef, PlainDB, PlainDBRef};
 

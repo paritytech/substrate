@@ -21,6 +21,8 @@ mod default;
 pub use self::default::DefaultChildTrie;
 
 use crate::{TrieHash, TrieError};
+use rstd::boxed::Box;
+use rstd::vec::Vec;
 use trie_db::{TrieConfiguration, DBValue, Query};
 use hash_db::{HashDB, HashDBRef, PlainDB, PlainDBRef};
 
