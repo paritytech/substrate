@@ -173,17 +173,6 @@ decl_storage! {
 		config(authorities): Vec<(AuthorityId, BabeWeight)>;
 		build(|
 			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
-			_config: &GenesisConfig,
-		| {
-			runtime_io::with_storage(storage, || {
-				unimplemented!("TODO: resolve conflict using theirs")
-			});
-		});
-	}
-	add_extra_genesis {
-		config(authorities): Vec<(AuthorityId, BabeWeight)>;
-		build(|
-			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
 			config: &GenesisConfig
 		| {
 			runtime_io::with_storage(

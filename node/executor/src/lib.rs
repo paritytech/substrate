@@ -55,7 +55,7 @@ mod tests {
 		Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances, BuildStorage,
 		GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System, SystemConfig,
 		GrandpaConfig, IndicesConfig, ContractsConfig, Event, SessionKeys, SignedExtra,
-		TransferFee, TransactionBaseFee, TransactionByteFee, BabeConfig,
+		TransferFee, TransactionBaseFee, TransactionByteFee,
 	};
 	use node_runtime::constants::currency::*;
 	use node_runtime::impls::WeightToFee;
@@ -339,13 +339,6 @@ mod tests {
 			indices: Some(IndicesConfig {
 				ids: vec![alice(), bob(), charlie(), dave(), eve(), ferdie()],
 			}),
-			babe: Some(BabeConfig {
-				authorities: vec![
-					(Sr25519Keyring::Dave.public().into(), 0),
-					(Sr25519Keyring::Eve.public().into(), 0),
-					(Sr25519Keyring::Ferdie.public().into(), 0),
-				]
-			}),
 			balances: Some(BalancesConfig {
 				balances: vec![
 					(alice(), 111 * DOLLARS),
@@ -359,17 +352,17 @@ mod tests {
 			}),
 			session: Some(SessionConfig {
 				keys: vec![
-					(dave(), to_session_keys(
-						&Ed25519Keyring::Dave,
-						&Sr25519Keyring::Dave,
+					(alice(), to_session_keys(
+						&Ed25519Keyring::Alice,
+						&Sr25519Keyring::Alice,
 					)),
-					(eve(), to_session_keys(
-						&Ed25519Keyring::Eve,
-						&Sr25519Keyring::Eve,
+					(bob(), to_session_keys(
+						&Ed25519Keyring::Bob,
+						&Sr25519Keyring::Bob,
 					)),
-					(ferdie(), to_session_keys(
-						&Ed25519Keyring::Ferdie,
-						&Sr25519Keyring::Ferdie,
+					(charlie(), to_session_keys(
+						&Ed25519Keyring::Charlie,
+						&Sr25519Keyring::Charlie,
 					)),
 				]
 			}),
@@ -391,6 +384,7 @@ mod tests {
 				current_schedule: Default::default(),
 				gas_price: 1 * MILLICENTS,
 			}),
+			babe: Some(Default::default()),
 			grandpa: Some(GrandpaConfig {
 				authorities: vec![],
 			}),
