@@ -35,7 +35,7 @@ use sr_primitives::{
 	transaction_validity::{TransactionValidity, ValidTransaction},
 };
 use sr_primitives::traits::{
-	IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert, Header, ValidateUnsigned,
+	IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Header, ValidateUnsigned,
 };
 use sr_staking_primitives::{
 	SessionIndex,
@@ -205,7 +205,7 @@ decl_storage! {
 			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
 			config: &GenesisConfig
 		| {
-			runtime_io::with_storage(
+			sr_io::with_storage(
 				storage,
 				|| Module::<T>::initialize_authorities(&config.authorities),
 			);

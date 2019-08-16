@@ -32,7 +32,6 @@ pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
 
 use codec::{Decode, Encode};
 use consensus_common::{BlockImport, Proposer, SyncOracle, SelectChain};
-use consensus_common_primitives::EquivocationProof;
 use futures::{prelude::*, future::{self, Either}};
 use futures_timer::Delay;
 use inherents::{InherentData, InherentDataProviders};

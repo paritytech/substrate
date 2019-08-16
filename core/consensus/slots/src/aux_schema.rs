@@ -1,4 +1,4 @@
-/ Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,14 +16,11 @@
 
 //! Schema for slots in the aux-db.
 
-use std::ops::Deref;
-use codec::{Encode, Decode, Codec};
+use codec::{Decode, Codec};
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
 use sr_primitives::traits::Header;
 use app_crypto::RuntimeAppPublic;
-use srml_session::historical::Proof;
-use sr_staking_primitives::SessionIndex;
 use consensus_common_primitives::EquivocationProof;
 
 const SLOT_HEADER_MAP_KEY: &[u8] = b"slot_header_map";

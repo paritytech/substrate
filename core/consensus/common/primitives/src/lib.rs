@@ -21,7 +21,6 @@
 use codec::{Encode, Decode, Codec};
 use client::decl_runtime_apis;
 use rstd::vec::Vec;
-use sr_primitives::traits::Header;
 
 /// Represents an Babe equivocation proof.
 #[cfg_attr(feature = "std", derive(Debug))]
