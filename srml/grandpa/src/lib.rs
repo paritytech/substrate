@@ -446,7 +446,7 @@ impl<FullIdentification: Clone> Offence<FullIdentification> for GrandpaEquivocat
 		self.validator_set_count
 	}
 
-	fn time_slot(&self) -> GrandpaTimeSlot {
+	fn time_slot(&self) -> Self::TimeSlot {
 		self.time_slot
 	}
 

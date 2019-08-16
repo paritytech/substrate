@@ -99,13 +99,10 @@ where
 		let time_slot = offence.time_slot();
 		let validator_set_count = offence.validator_set_count();
 
-		let mut cache = ReportIndexCache::load(&time_slot);
-
 		// Go through all offenders in the report and record unique reports.
-		let new_offenders =
-			Self::collect_unique_reports::<O>(reporters, &time_slot, offenders, &mut cache);
+		let cache = Self::collect_unique_reports::<O>(reporters, &time_slot, offenders);
 
-		if new_offenders.is_empty() {
+		if cache.new_offenders.is_empty() {
 			// The report contained only duplicates, so there is no need to slash again.
 			return;
 		}
@@ -123,7 +120,7 @@ where
 			.collect::<Vec<_>>();
 
 		let offenders_count = concurrent_offenders.len() as u32;
-		let previous_offenders_count = offenders_count - new_offenders.len() as u32;
+		let previous_offenders_count = offenders_count - cache.new_offenders.len() as u32;
 
 		// The amount new offenders are slashed
 		let new_fraction = O::slash_fraction(offenders_count, validator_set_count);
@@ -153,7 +150,7 @@ where
 		// calculate how much to slash
 		let slash_perbill = concurrent_offenders
 			.iter()
-			.map(|details| if previous_offenders_count > 0 && new_offenders.contains(&details.offender) {
+			.map(|details| if previous_offenders_count > 0 && cache.new_offenders.contains(&details.offender) {
 				new_fraction.clone()
 			} else {
 				old_fraction.clone()
@@ -187,15 +184,14 @@ impl<T: Trait> Module<T> {
 		reporters: Vec<T::AccountId>,
 		time_slot: &O::TimeSlot,
 		offenders: Vec<T::IdentificationTuple>,
-		index_cache: &mut ReportIndexCache<T, O>,
-	) -> BTreeSet<T::IdentificationTuple> {
-		let mut new_offenders = BTreeSet::new();
+	) -> ReportIndexCache<T, O> {
+		let mut index_cache = ReportIndexCache::load(time_slot);
 
 		for offender in offenders {
 			let report_id = Self::report_id::<O>(time_slot, &offender);
 
 			if !<Reports<T>>::exists(&report_id) {
-				new_offenders.insert(offender.clone());
+				index_cache.new_offenders.insert(offender.clone());
 				<Reports<T>>::insert(
 					&report_id,
 					OffenceDetails {
@@ -208,7 +204,7 @@ impl<T: Trait> Module<T> {
 			}
 		}
 
-		new_offenders
+		index_cache
 	}
 }
 
@@ -217,10 +213,12 @@ impl<T: Trait> Module<T> {
 ///
 /// It is expected that access to the indexes will be only performed through this struct while it
 /// exists.
+#[must_use = "The changes are not saved without called `save`"]
 struct ReportIndexCache<T: Trait, O: Offence<T::IdentificationTuple>> {
 	opaque_time_slot: OpaqueTimeSlot,
 	concurrent_reports: Vec<ReportIdOf<T>>,
 	same_kind_reports: Vec<(O::TimeSlot, ReportIdOf<T>)>,
+	new_offenders: BTreeSet<T::IdentificationTuple>,
 }
 
 impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportIndexCache<T, O> {
@@ -239,6 +237,7 @@ impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportIndexCache<T, O> {
 			opaque_time_slot,
 			concurrent_reports,
 			same_kind_reports,
+			new_offenders: BTreeSet::new(),
 		}
 	}
 

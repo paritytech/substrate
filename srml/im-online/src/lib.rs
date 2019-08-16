@@ -538,8 +538,8 @@ impl<Offender: Clone> Offence<Offender> for UnresponsivenessOffence<Offender> {
 		self.validator_set_count
 	}
 
-	fn time_slot(&self) -> SessionIndex {
-		self.session_index as SessionIndex
+	fn time_slot(&self) -> Self::TimeSlot {
+		self.session_index
 	}
 
 	fn slash_fraction(offenders: u32, validator_set_count: u32) -> Perbill {

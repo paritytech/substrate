@@ -289,7 +289,7 @@ impl<FullIdentification: Clone> Offence<FullIdentification> for BabeEquivocation
 		self.validator_set_count
 	}
 
-	fn time_slot(&self) -> u64 {
+	fn time_slot(&self) -> Self::TimeSlot {
 		self.slot
 	}
 
