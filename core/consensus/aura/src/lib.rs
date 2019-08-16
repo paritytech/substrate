@@ -43,25 +43,24 @@ use client::{
 	runtime_api::ApiExt, error::Result as CResult, backend::AuxStore, BlockOf,
 };
 
-use sr_primitives::{generic::{self, BlockId, OpaqueDigestItemId}, Justification};
+use sr_primitives::{generic::{BlockId, OpaqueDigestItemId}, Justification};
 use sr_primitives::traits::{Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi, Zero, Member};
 
 use primitives::crypto::Pair;
 use inherents::{InherentDataProviders, InherentData};
 
-use futures::{prelude::*, future};
+use futures::prelude::*;
 use parking_lot::Mutex;
-use futures_timer::Delay;
-use log::{error, warn, debug, info, trace};
+use log::{debug, info, trace};
 
 use srml_aura::{
 	InherentType as AuraInherent, AuraInherentData,
 	timestamp::{TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError}
 };
-use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
+use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
 use slots::{CheckedHeader, SlotData, SlotWorker, SlotInfo, SlotCompatible};
-use slots::{SignedDuration, check_equivocation};
+use slots::check_equivocation;
 
 use keystore::KeyStorePtr;
 
@@ -335,7 +334,7 @@ fn find_pre_digest<B: BlockT, P: Pair>(header: &B::Header) -> Result<u64, String
 ///
 /// This digest item will always return `Some` when used with `as_aura_seal`.
 //
-// FIXME #1018 needs misbehavior types. The `transaction_pool` parameter will be 
+// FIXME #1018 needs misbehavior types. The `transaction_pool` parameter will be
 // used to submit such misbehavior reports.
 fn check_header<C, B: BlockT, P: Pair, T>(
 	client: &C,

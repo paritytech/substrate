@@ -162,6 +162,10 @@ decl_storage! {
 		/// epoch.
 		SegmentIndex build(|_| 0): u32;
 		UnderConstruction: map u32 => Vec<[u8; 32 /* VRF_OUTPUT_LENGTH */]>;
+
+		/// Temporary value (cleared at block finalization) which is true
+		/// if per-block initialization has already been called for current block.
+		Initialized get(initialized): Option<bool>;
 	}
 	add_extra_genesis {
 		config(authorities): Vec<(AuthorityId, BabeWeight)>;
@@ -193,25 +197,12 @@ decl_module! {
 
 		/// Initialization
 		fn on_initialize() {
-			for digest in Self::get_inherent_digests()
-				.logs
-				.iter()
-				.filter_map(|s| s.as_pre_runtime())
-				.filter_map(|(id, mut data)| if id == BABE_ENGINE_ID {
-					RawBabePreDigest::decode(&mut data).ok()
-				} else {
-					None
-				})
-			{
-				if EpochStartSlot::get() == 0 {
-					EpochStartSlot::put(digest.slot_number);
-				}
+			Self::do_initialize();
+		}
 
-				CurrentSlot::put(digest.slot_number);
-				Self::deposit_vrf_output(&digest.vrf_output);
-
-				return;
-			}
+		/// Block finalization
+		fn on_finalize() {
+			Initialized::kill();
 		}
 	}
 }
@@ -248,6 +239,12 @@ impl<T: Trait> IsMember<AuthorityId> for Module<T> {
 
 impl<T: Trait> session::ShouldEndSession<T::BlockNumber> for Module<T> {
 	fn should_end_session(_: T::BlockNumber) -> bool {
+		// it might be (and it is in current implementation) that session module is calling
+		// should_end_session() from it's own on_initialize() handler
+		// => because session on_initialize() is called earlier than ours, let's ensure
+		// that we have synced with digest before checking if session should be ended
+		Self::do_initialize();
+
 		let diff = CurrentSlot::get().saturating_sub(EpochStartSlot::get());
 		diff >= T::EpochDuration::get()
 	}
@@ -282,6 +279,36 @@ impl<T: Trait> Module<T> {
 			let segment_idx = segment_idx + 1;
 			<UnderConstruction>::insert(&segment_idx, vec![*vrf_output].as_ref());
 			<SegmentIndex>::put(&segment_idx);
+		}
+	}
+
+	fn do_initialize() {
+		// since do_initialize can be called twice (if session module is present)
+		// => let's ensure that we only modify the storage once per block
+		let initialized = Self::initialized().unwrap_or(false);
+		if initialized {
+			return;
+		}
+
+		Initialized::put(true);
+		for digest in Self::get_inherent_digests()
+			.logs
+			.iter()
+			.filter_map(|s| s.as_pre_runtime())
+			.filter_map(|(id, mut data)| if id == BABE_ENGINE_ID {
+				RawBabePreDigest::decode(&mut data).ok()
+			} else {
+				None
+			})
+		{
+			if EpochStartSlot::get() == 0 {
+				EpochStartSlot::put(digest.slot_number);
+			}
+
+			CurrentSlot::put(digest.slot_number);
+			Self::deposit_vrf_output(&digest.vrf_output);
+
+			return;
 		}
 	}
 
