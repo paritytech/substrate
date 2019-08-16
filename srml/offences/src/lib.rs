@@ -175,7 +175,7 @@ impl<T: Trait> Module<T> {
 		time_slot: &O::TimeSlot,
 		offenders: Vec<T::IdentificationTuple>,
 	) -> Option<TriageOutcome<T>> {
-		let mut cache = ReportIndexCache::<T, O>::load(time_slot);
+		let mut cache = ReportIndexStorage::<T, O>::load(time_slot);
 		let mut new_offenders = BTreeSet::new();
 
 		for offender in offenders {
@@ -221,19 +221,19 @@ struct TriageOutcome<T: Trait> {
 	concurrent_offenders: Vec<OffenceDetails<T::AccountId, T::IdentificationTuple>>,
 }
 
-/// An auxilary struct for dealing with caches of report indexes localized for a specific offence
-/// kind.
+/// An auxilary struct for working with storage of indexes localized for a specific offence
+/// kind (specified by the `O` type parameter).
 ///
-/// It is expected that access to the indexes will be only performed through this struct while it
-/// exists.
+/// This struct is responsible for aggregating storage writes and the underlying storage should not
+/// accessed directly meanwhile.
 #[must_use = "The changes are not saved without called `save`"]
-struct ReportIndexCache<T: Trait, O: Offence<T::IdentificationTuple>> {
+struct ReportIndexStorage<T: Trait, O: Offence<T::IdentificationTuple>> {
 	opaque_time_slot: OpaqueTimeSlot,
 	concurrent_reports: Vec<ReportIdOf<T>>,
 	same_kind_reports: Vec<(O::TimeSlot, ReportIdOf<T>)>,
 }
 
-impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportIndexCache<T, O> {
+impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
 	/// Preload indexes from the cache for the specific `time_slot` and the kind of the offence.
 	fn load(time_slot: &O::TimeSlot) -> Self {
 		let opaque_time_slot = time_slot.encode();

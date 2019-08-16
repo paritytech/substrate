@@ -117,7 +117,10 @@ pub const KIND: [u8; 16] = *b"test_report_1234";
 pub fn offence_reports(kind: Kind, time_slot: u128) -> Vec<OffenceDetails<u64, u64>> {
 	<crate::ConcurrentReportsIndex<Runtime>>::get(&kind, &time_slot.encode())
 		.into_iter()
-		.map(|report_id| <crate::Reports<Runtime>>::get(&report_id).unwrap())
+		.map(|report_id| {
+			<crate::Reports<Runtime>>::get(&report_id)
+				.expect("dangling report id is found in ConcurrentReportsIndex")
+		})
 		.collect()
 }
 
