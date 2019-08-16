@@ -29,7 +29,7 @@ use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
 	Moment, Signature,
 };
-use babe::{AuthorityId as BabeId};
+use babe_primitives::{sr25519::AuthorityId as BabeId};
 use grandpa::fg_primitives::{self, ScheduledChange};
 use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
