@@ -33,6 +33,8 @@ pub type TransactionTag = Vec<u8>;
 #[derive(Clone, PartialEq, Eq, Encode, Decode, Copy)]
 #[cfg_attr(feature = "std", derive(Debug, serde::Serialize))]
 pub enum InvalidTransactionValidity {
+	/// General error to do with the inability to pay some fees (e.g. account balance too low).
+	Payment,
 	/// General error to do with the transaction not yet being valid (e.g. nonce too high).
 	Future,
 	/// General error to do with the transaction being outdated (e.g. nonce too low).
@@ -47,6 +49,22 @@ pub enum InvalidTransactionValidity {
 	Custom(u8),
 }
 
+impl Into<&'static str> for InvalidTransactionValidity {
+	fn into(self) -> &'static str {
+		match self {
+			InvalidTransactionValidity::Future => "Transaction will be valid in the future",
+			InvalidTransactionValidity::Stale => "Transaction is outdated",
+			InvalidTransactionValidity::BadProof => "Transaction has a bad signature",
+			InvalidTransactionValidity::AncientBirthBlock => "Transaction has an ancient birth block",
+			InvalidTransactionValidity::ExhaustResources =>
+				"Transaction would exhausts the block limits",
+			InvalidTransactionValidity::Payment =>
+				"Inability to pay some fees (e.g. account balance too low)",
+			InvalidTransactionValidity::Custom(_) => "InvalidTransactionValidity custom error",
+		}
+	}
+}
+
 /// An unknown transaction validity.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, Copy)]
 #[cfg_attr(feature = "std", derive(Debug, serde::Serialize))]
@@ -59,6 +77,18 @@ pub enum UnknownTransactionValidity {
 	Custom(u8),
 }
 
+impl Into<&'static str> for UnknownTransactionValidity {
+	fn into(self) -> &'static str {
+		match self {
+			UnknownTransactionValidity::InvalidIndex =>
+				"Transaction used an invalid/unknown account index",
+			UnknownTransactionValidity::NoUnsignedValidator =>
+				"Could not find an unsigned validator for the unsigned transaction",
+			UnknownTransactionValidity::Custom(_) => "UnknownTransactionValidity custom error",
+		}
+	}
+}
+
 /// The error that can occur while checking the validity of a transaction.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, Copy)]
 #[cfg_attr(feature = "std", derive(Debug, serde::Serialize))]
@@ -67,6 +97,15 @@ pub enum TransactionValidityError {
 	Invalid(InvalidTransactionValidity),
 	/// Transaction validity can't be determined.
 	Unknown(UnknownTransactionValidity),
+}
+
+impl Into<&'static str> for TransactionValidityError {
+	fn into(self) -> &'static str {
+		match self {
+			TransactionValidityError::Invalid(invalid) => invalid.into(),
+			TransactionValidityError::Unknown(unknown) => unknown.into(),
+		}
+	}
 }
 
 impl Into<TransactionValidityError> for InvalidTransactionValidity {

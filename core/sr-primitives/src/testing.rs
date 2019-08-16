@@ -317,7 +317,9 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 			Extra::pre_dispatch_unsigned(&self.1, info, len)?;
 			None
 		};
-		self.1.dispatch(maybe_who.into()).map_err(|e| DispatchError::from(e.into()).into())
+
+		let res = self.1.dispatch(maybe_who.into());
+		Ok(res.map_err(|e| DispatchError::from(e.into()).into()).into())
 	}
 }
 

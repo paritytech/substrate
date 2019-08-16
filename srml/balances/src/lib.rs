@@ -159,12 +159,17 @@ use srml_support::traits::{
 	Imbalance, SignedImbalance, ReservableCurrency, Get,
 };
 use srml_support::dispatch::Result;
-use sr_primitives::traits::{
-	Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug,
-	Saturating, Bounded, SignedExtension, SaturatedConversion, DispatchError, Convert,
+use sr_primitives::{
+	transaction_validity::{
+		TransactionPriority, ValidTransaction, InvalidTransactionValidity, TransactionValidity,
+		TransactionValidityError,
+	},
+	traits::{
+		Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug,
+		Saturating, Bounded, SignedExtension, SaturatedConversion, Convert,
+	},
+	weights::{DispatchInfo, SimpleDispatchInfo, Weight},
 };
-use sr_primitives::transaction_validity::{TransactionPriority, ValidTransaction};
-use sr_primitives::weights::{DispatchInfo, SimpleDispatchInfo, Weight};
 use system::{IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
 
 mod mock;
@@ -1217,7 +1222,7 @@ impl<T: Trait<I>, I: Instance + Clone + Eq> SignedExtension for TakeFees<T, I> {
 	type Call = T::Call;
 	type AdditionalSigned = ();
 	type Pre = ();
-	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
+	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
 
 	fn validate(
 		&self,
@@ -1225,22 +1230,25 @@ impl<T: Trait<I>, I: Instance + Clone + Eq> SignedExtension for TakeFees<T, I> {
 		_call: &Self::Call,
 		info: DispatchInfo,
 		len: usize,
-	) -> rstd::result::Result<ValidTransaction, DispatchError> {
+	) -> TransactionValidity {
 		// pay any fees.
 		let fee = Self::compute_fee(len, info, self.0);
-		let imbalance = <Module<T, I>>::withdraw(
+		let imbalance = match <Module<T, I>>::withdraw(
 			who,
 			fee,
 			WithdrawReason::TransactionPayment,
 			ExistenceRequirement::KeepAlive,
-		).map_err(|_| DispatchError::Payment)?;
+		) {
+			Ok(imbalance) => imbalance,
+			Err(_) => return InvalidTransactionValidity::Payment.into(),
+		};
 		T::TransactionPayment::on_unbalanced(imbalance);
 
 		let mut r = ValidTransaction::default();
 		// NOTE: we probably want to maximize the _fee (of any type) per weight unit_ here, which
 		// will be a bit more than setting the priority to tip. For now, this is enough.
 		r.priority = fee.saturated_into::<TransactionPriority>();
-		Ok(r)
+		r.into()
 	}
 }
 

@@ -79,7 +79,7 @@ use rstd::prelude::*;
 use rstd::map;
 use rstd::marker::PhantomData;
 use sr_primitives::{
-	generic::{self, Era}, Perbill, ApplyError,
+	generic::{self, Era}, Perbill, ApplyError, ApplyOutcome, DispatchError,
 	weights::{Weight, DispatchInfo, DispatchClass, WeightMultiplier, SimpleDispatchInfo},
 	transaction_validity::{
 		ValidTransaction, TransactionPriority, TransactionLongevity, TransactionValidityError,
@@ -312,7 +312,7 @@ decl_event!(
 		/// An extrinsic completed successfully.
 		ExtrinsicSuccess,
 		/// An extrinsic failed.
-		ExtrinsicFailed(ApplyError),
+		ExtrinsicFailed(DispatchError),
 	}
 );
 
@@ -810,11 +810,13 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
-	pub fn note_applied_extrinsic(r: &Result<(), ApplyError>, _encoded_len: u32) {
-		Self::deposit_event(match r {
-			Ok(_) => Event::ExtrinsicSuccess,
-			Err(err) => Event::ExtrinsicFailed(err.clone()),
-		}.into());
+	pub fn note_applied_extrinsic(r: &ApplyOutcome, _encoded_len: u32) {
+		Self::deposit_event(
+			match r {
+				ApplyOutcome::Success => Event::ExtrinsicSuccess,
+				ApplyOutcome::Fail(err) => Event::ExtrinsicFailed(err.clone()),
+			}.into()
+		);
 
 		let next_extrinsic_index = Self::extrinsic_index().unwrap_or_default() + 1u32;
 

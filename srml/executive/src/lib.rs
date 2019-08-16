@@ -59,13 +59,13 @@
 //! # pub type Balances = u64;
 //! # pub type AllModules = u64;
 //! # pub enum Runtime {};
-//! # use sr_primitives::transaction_validity::TransactionValidity;
+//! # use sr_primitives::transaction_validity::{TransactionValidity, UnknownTransactionValidity};
 //! # use sr_primitives::traits::ValidateUnsigned;
 //! # impl ValidateUnsigned for Runtime {
 //! # 	type Call = ();
 //! #
 //! # 	fn validate_unsigned(_call: &Self::Call) -> TransactionValidity {
-//! # 		TransactionValidity::Invalid(0)
+//! # 		UnknownTransactionValidity::NoUnsignedValidator.into()
 //! # 	}
 //! # }
 //! /// Executive: handles dispatch to the various modules.
@@ -74,19 +74,17 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::prelude::*;
-use rstd::marker::PhantomData;
-use rstd::result;
-use sr_primitives::{generic::Digest, traits::{
-	self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize, PrimitiveError,
-	OnInitialize, NumberFor, Block as BlockT, OffchainWorker, ValidateUnsigned
-}};
-use srml_support::Dispatchable;
+use rstd::{prelude::*, marker::PhantomData};
+use sr_primitives::{
+	generic::Digest, ApplyResult, ApplyOutcome, weights::GetDispatchInfo,
+	traits::{
+		self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize, OnInitialize,
+		NumberFor, Block as BlockT, OffchainWorker, ValidateUnsigned, Dispatchable
+	},
+	transaction_validity::TransactionValidity,
+};
 use codec::{Codec, Encode};
 use system::{extrinsics_root, DigestOf};
-use sr_primitives::{ApplyOutcome, ApplyError};
-use sr_primitives::transaction_validity::TransactionValidity;
-use sr_primitives::weights::GetDispatchInfo;
 
 /// Trait that can be used to execute a block.
 pub trait ExecuteBlock<Block: BlockT> {
@@ -96,7 +94,7 @@ pub trait ExecuteBlock<Block: BlockT> {
 
 pub type CheckedOf<E, C> = <E as Checkable<C>>::Checked;
 pub type CallOf<E, C> = <CheckedOf<E, C> as Applyable>::Call;
-pub type OriginOf<E, C> = <CallOf<E, C> as RuntimeDispatchable>::Origin;
+pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
 
 pub struct Executive<System, Block, Context, UnsignedValidator, AllModules>(
 	PhantomData<(System, Block, Context, UnsignedValidator, AllModules)>
@@ -111,7 +109,6 @@ impl<
 > ExecuteBlock<Block> for Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
-	<Block::Extrinsic as Checkable<Context>>::Error: Into<PrimitiveError>,
 	CheckedOf<Block::Extrinsic, Context>: Applyable<AccountId=System::AccountId> + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
@@ -131,7 +128,6 @@ impl<
 > Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
-	<Block::Extrinsic as Checkable<Context>>::Error: Into<PrimitiveError>,
 	CheckedOf<Block::Extrinsic, Context>: Applyable<AccountId=System::AccountId> + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
@@ -222,10 +218,7 @@ where
 		match Self::apply_extrinsic_with_len(uxt, l, None) {
 			Ok(ApplyOutcome::Success) => (),
 			Ok(ApplyOutcome::Fail(e)) => runtime_io::print(e),
-			Err(ApplyError::CantPay) => panic!("All extrinsics should have sender able to pay their fees"),
-			Err(ApplyError::BadSignature) => panic!("All extrinsics should be properly signed"),
-			Err(ApplyError::Stale) | Err(ApplyError::Future) => panic!("All extrinsics should have the correct nonce"),
-			Err(ApplyError::FullBlock) => panic!("Extrinsics should not exceed block limit"),
+			Err(e) => { let err: &'static str = e.into(); panic!(err) },
 		}
 	}
 
@@ -236,7 +229,7 @@ where
 		to_note: Option<Vec<u8>>,
 	) -> ApplyResult {
 		// Verify that the signature is good.
-		let xt = uxt.check(&Default::default()).map_err(ApplyError::CantPay)?;
+		let xt = uxt.check(&Default::default())?;
 
 		// We don't need to make sure to `note_extrinsic` only after we know it's going to be
 		// executed to prevent it from leaking in storage since at this point, it will either
@@ -249,11 +242,11 @@ where
 
 		// Decode parameters and dispatch
 		let dispatch_info = xt.get_dispatch_info();
-		let r = Applyable::dispatch(xt, dispatch_info, encoded_len).map_err(DispatchError::from)?;
+		let r = Applyable::apply(xt, dispatch_info, encoded_len)?;
 
 		<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32);
 
-		r.map(|_| ApplyOutcome::Success).map_err(ApplyOutcome::Fail)
+		Ok(r)
 	}
 
 	fn final_checks(header: &System::Header) {
@@ -283,25 +276,11 @@ where
 	///
 	/// Changes made to storage should be discarded.
 	pub fn validate_transaction(uxt: Block::Extrinsic) -> TransactionValidity {
-		// Note errors > 0 are from ApplyError
-		const UNKNOWN_ERROR: i8 = -127;
-		const INVALID_INDEX: i8 = -10;
-
 		let encoded_len = uxt.using_encoded(|d| d.len());
 		let xt = match uxt.check(&Default::default()) {
 			// Checks out. Carry on.
 			Ok(xt) => xt,
-			Err(err) => return match err.into() {
-				// An unknown account index implies that the transaction may yet become valid.
-				// TODO: avoid hardcoded error string here #2953
-				PrimitiveError::Other("invalid account index") =>
-					TransactionValidity::Unknown(INVALID_INDEX),
-				// Technically a bad signature could also imply an out-of-date account index, but
-				// that's more of an edge case.
-				PrimitiveError::BadSignature =>
-					TransactionValidity::Invalid(ApplyError::BadSignature as i8),
-				_ => TransactionValidity::Invalid(UNKNOWN_ERROR),
-			}
+			Err(err) => return err.into(),
 		};
 
 		let dispatch_info = xt.get_dispatch_info();
@@ -321,13 +300,15 @@ mod tests {
 	use balances::Call;
 	use runtime_io::with_externalities;
 	use primitives::{H256, Blake2Hasher};
-	use sr_primitives::generic::Era;
-	use sr_primitives::Perbill;
-	use sr_primitives::weights::Weight;
-	use sr_primitives::traits::{Header as HeaderT, BlakeTwo256, IdentityLookup, ConvertInto};
-	use sr_primitives::testing::{Digest, Header, Block};
-	use srml_support::{impl_outer_event, impl_outer_origin, parameter_types};
-	use srml_support::traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons, WithdrawReason};
+	use sr_primitives::{
+		generic::Era, Perbill, DispatchError, weights::Weight, testing::{Digest, Header, Block},
+		traits::{Header as HeaderT, BlakeTwo256, IdentityLookup, ConvertInto},
+		transaction_validity::{UnknownTransactionValidity, InvalidTransactionValidity}, ApplyError,
+	};
+	use srml_support::{
+		impl_outer_event, impl_outer_origin, parameter_types,
+		traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons, WithdrawReason},
+	};
 	use system;
 	use hex_literal::hex;
 
@@ -396,7 +377,7 @@ mod tests {
 		fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
 			match call {
 				Call::set_balance(_, _, _) => TransactionValidity::Valid(Default::default()),
-				_ => TransactionValidity::Invalid(0),
+				_ => UnknownTransactionValidity::NoUnsignedValidator.into(),
 			}
 		}
 	}
@@ -442,7 +423,7 @@ mod tests {
 				Digest::default(),
 			));
 			let r = Executive::apply_extrinsic(xt);
-			assert_eq!(r, Ok(ApplyOutcome::Success));
+			assert!(r.is_ok());
 			assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 142 - 10 - weight);
 			assert_eq!(<balances::Module<Runtime>>::total_balance(&2), 69);
 		});
@@ -545,14 +526,19 @@ mod tests {
 			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
 
 			for nonce in 0..=num_to_exhaust_block {
-				let xt = sr_primitives::testing::TestXt(sign_extra(1, nonce.into(), 0), Call::transfer::<Runtime>(33, 0));
+				let xt = sr_primitives::testing::TestXt(
+					sign_extra(1, nonce.into(), 0), Call::transfer::<Runtime>(33, 0),
+				);
 				let res = Executive::apply_extrinsic(xt);
 				if nonce != num_to_exhaust_block {
-					assert_eq!(res.unwrap(), ApplyOutcome::Success);
-					assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), encoded_len * (nonce + 1));
+					assert!(res.is_ok());
+					assert_eq!(
+						<system::Module<Runtime>>::all_extrinsics_weight(),
+						encoded_len * (nonce + 1),
+					);
 					assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(nonce as u32 + 1));
 				} else {
-					assert_eq!(res, Err(ApplyError::FullBlock));
+					assert_eq!(res, Err(ApplyError::Exhausted));
 				}
 			}
 		});
@@ -594,7 +580,11 @@ mod tests {
 			assert_eq!(Executive::validate_transaction(xt.clone()), valid);
 			assert_eq!(
 				Executive::apply_extrinsic(xt),
-				Ok(ApplyOutcome::Fail(DispatchError { module: 0, error: 4 /*RequireNoOrigin*/ , message: None }))
+				Ok(
+					ApplyOutcome::Fail(
+						DispatchError { module: None, error: 0, message: Some("RequireRootOrigin") }
+					)
+				)
 			);
 		});
 	}
@@ -623,15 +613,21 @@ mod tests {
 				));
 
 				if lock == WithdrawReasons::except(WithdrawReason::TransactionPayment) {
-					assert_eq!(Executive::apply_extrinsic(xt).unwrap(), ApplyOutcome::Fail(DispatchError {
-						module: 0,
-						error: 0,
-						message: Some("account liquidity restrictions prevent withdrawal")
-					}));
+					assert_eq!(
+						Executive::apply_extrinsic(xt).unwrap(),
+						ApplyOutcome::Fail(DispatchError {
+							module: None,
+							error: 0,
+							message: Some("account liquidity restrictions prevent withdrawal"),
+						}),
+					);
 					// but tx fee has been deducted. the transaction failed on transfer, not on fee.
 					assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 111 - 10 - weight);
 				} else {
-					assert_eq!(Executive::apply_extrinsic(xt), Err(ApplyError::CantPay));
+					assert_eq!(
+						Executive::apply_extrinsic(xt),
+						Err(ApplyError::Validity(InvalidTransactionValidity::Payment.into())),
+					);
 					assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 111);
 				}
 			});

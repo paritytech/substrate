@@ -615,9 +615,6 @@ impl From<ed25519::Signature> for AnySignature {
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 /// Reason why an extrinsic couldn't be applied (i.e. invalid extrinsic).
 pub enum ApplyError {
-	/// General error to do with the inability to pay some fees (e.g. account balance too low).
-	Payment,
-
 	/// General error to do with the permissions of the sender.
 	NoPermission,
 
@@ -627,16 +624,18 @@ pub enum ApplyError {
 	/// General error to do with the exhaustion of block resources.
 	Exhausted,
 
-	/// Any error that occurred in a module while dispatching the transaction.
-	Module(DispatchError),
-
 	/// Any error to do with the transaction validity.
 	Validity(transaction_validity::TransactionValidityError),
 }
 
-impl From<DispatchError> for ApplyError {
-	fn from(err: DispatchError) -> Self {
-		ApplyError::Module(err)
+impl Into<&'static str> for ApplyError {
+	fn into(self) -> &'static str {
+		match self {
+			ApplyError::NoPermission => "Transaction does not have required permissions",
+			ApplyError::BadState => "System in bad state",
+			ApplyError::Exhausted => "Transaction exhausted block limits",
+			ApplyError::Validity(v) => v.into(),
+		}
 	}
 }
 
@@ -646,8 +645,33 @@ impl From<transaction_validity::TransactionValidityError> for ApplyError {
 	}
 }
 
+/// The outcome of applying a transaction.
+#[derive(Eq, PartialEq, Clone, Copy, Decode, Encode)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+pub enum ApplyOutcome {
+	/// The transaction was applied successfully.
+	Success,
+	/// Any error that occurred in a module while dispatching the transaction.
+	Fail(DispatchError),
+}
+
+impl From<DispatchError> for ApplyOutcome {
+	fn from(err: DispatchError) -> Self {
+		ApplyOutcome::Fail(err)
+	}
+}
+
+impl From<Result<(), DispatchError>> for ApplyOutcome {
+	fn from(res: Result<(), DispatchError>) -> Self {
+		match res {
+			Ok(()) => ApplyOutcome::Success,
+			Err(e) => e.into(),
+		}
+	}
+}
+
 /// Result from attempt to apply an extrinsic.
-pub type ApplyResult = Result<(), ApplyError>;
+pub type ApplyResult = Result<ApplyOutcome, ApplyError>;
 
 #[derive(Eq, PartialEq, Clone, Copy, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
