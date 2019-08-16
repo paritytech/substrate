@@ -300,7 +300,7 @@ pub fn testnet_genesis(
 			authorities: vec![],
 		}),
 		im_online: Some(ImOnlineConfig {
-			keys: initial_authorities.iter().map(|x| x.4.clone()).collect(),
+			keys: vec![],
 		}),
 		grandpa: Some(GrandpaConfig {
 			authorities: vec![],

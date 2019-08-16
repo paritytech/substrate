@@ -614,7 +614,11 @@ impl_runtime_apis! {
 		}
 
 		fn construct_equivocation_transaction(
-			equivocation: EquivocationProof<<Block as BlockT>::Header, babe_primitives::AuthorityId, babe_primitives::AuthoritySignature>,
+			equivocation: EquivocationProof<
+				<Block as BlockT>::Header,
+				babe_primitives::AuthorityId,
+				babe_primitives::AuthoritySignature
+			>,
 		) -> Option<Vec<u8>> {
 			let proof = Historical::prove((key_types::BABE, equivocation.identity.encode()))?;
 			let local_keys = runtime_io::sr25519_public_keys(key_types::GRANDPA);
