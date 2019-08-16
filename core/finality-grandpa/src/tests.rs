@@ -372,7 +372,7 @@ impl SubmitExtrinsic<Block> for TransactionPool {
 	fn submit_extrinsic(
 		&self,
 		at: &BlockId<Block>,
-		xt: Block::Extrinsic,
+		xt: <Block as BlockT>::Extrinsic,
 	) -> std::result::Result<(), Self::Error> {
 		Ok(())
 	}
@@ -1148,7 +1148,7 @@ fn voter_persists_its_votes() {
 			net: Arc<Mutex<GrandpaTestNet>>,
 			client: PeersClient,
 			keystore: KeyStorePtr,
-			transaction_pool: Arc::new(TransactionPool),
+			transaction_pool: Arc<TransactionPool>,
 		}
 
 		impl Future for ResettableVoter {
@@ -1511,7 +1511,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 			inherent_data_providers: InherentDataProviders::new(),
 			on_exit: Exit,
 			telemetry_on_connect: None,
-			transaction_pool: Arc::new(TransactionPool),
+			transaction_pool: Arc::new(TransactionPool::default()),
 		};
 
 		Box::new(run_grandpa_voter(grandpa_params).expect("all in order with client and network"))
