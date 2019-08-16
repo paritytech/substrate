@@ -38,7 +38,7 @@ use srml_support::{
 };
 use app_crypto::RuntimeAppPublic;
 use sr_primitives::{
-	generic::{DigestItem, OpaqueDigestItemId}, traits::Zero, Perbill, KeyTypeId,
+	generic::{DigestItem, OpaqueDigestItemId}, traits::Zero, Perbill, key_types, KeyTypeId
 };
 use sr_staking_primitives::{
 	SessionIndex,
@@ -230,7 +230,7 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
 
-		/// Report some misbehavior.
+		/// Report a Grandpa vote equivocation.
 		fn report_equivocation(
 			origin,
 			equivocation: GrandpaEquivocation<T::Hash, T::BlockNumber>,
@@ -242,13 +242,19 @@ decl_module! {
 			if !equivocation_is_valid(&equivocation, &proof, &signature) {
 				return Err("invalid equivocation")
 			}
-			// TODO [slashing] implement me
+
 			// let to_punish = <T as Trait>::KeyOwnerSystem::check_proof(
-			// 	(key_types::SR25519, equivocation.identity.encode()),
+			// 	(key_types::GRANDPA, equivocation.identity.encode()),
 			// 	proof.clone(),
 			// );
-			// if to_punish.is_some() {
-			// 	// TODO: Slash.
+			// if let Some(to_punish) = to_punish {
+			// 	let offence = GrandpaEquivocationOffence {
+			// 		time_slot: equivocation.slot,
+			// 		session_index: SessionIndex::default(),
+			// 		validator_set_count: 0,
+			// 		offender: to_punish,
+			// 	};
+			// 	T::ReportEquivocation::report_offence(vec![who], offence);
 			// }
 		}
 
