@@ -2058,7 +2058,12 @@ fn reporters_receive_their_slice() {
 	// amount.
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		// The reporters' reward is calculated from the total exposure.
-		assert_eq!(Staking::stakers(&11).total, 1250);
+		#[cfg(feature = "equalize")]
+		let initial_balance = 1250;
+		#[cfg(not(feature = "equalize"))]
+		let initial_balance = 1125;
+
+		assert_eq!(Staking::stakers(&11).total, initial_balance);
 
 		Staking::on_offence(
 			&[OffenceDetails {
@@ -2071,9 +2076,10 @@ fn reporters_receive_their_slice() {
 			&[Perbill::from_percent(50)],
 		);
 
-		// 1250 x 50% (slash fraction) x 10% (rewards slice)
-		assert_eq!(Balances::free_balance(&1), 10 + 31);
-		assert_eq!(Balances::free_balance(&2), 20 + 31);
+		// initial_balance x 50% (slash fraction) x 10% (rewards slice)
+		let reward = initial_balance / 20 / 2;
+		assert_eq!(Balances::free_balance(&1), 10 + reward);
+		assert_eq!(Balances::free_balance(&2), 20 + reward);
 	});
 }
 
@@ -2083,9 +2089,14 @@ fn invulnerables_are_not_slashed() {
 	with_externalities(
 		&mut ExtBuilder::default().invulnerables(vec![11]).build(),
 		|| {
+			#[cfg(feature = "equalize")]
+			let initial_balance = 1250;
+			#[cfg(not(feature = "equalize"))]
+			let initial_balance = 1375;
+
 			assert_eq!(Balances::free_balance(&11), 1000);
 			assert_eq!(Balances::free_balance(&21), 2000);
-			assert_eq!(Staking::stakers(&21).total, 1250);
+			assert_eq!(Staking::stakers(&21).total, initial_balance);
 
 			Staking::on_offence(
 				&[
@@ -2103,7 +2114,8 @@ fn invulnerables_are_not_slashed() {
 
 			// The validator 11 hasn't been slashed, but 21 has been.
 			assert_eq!(Balances::free_balance(&11), 1000);
-			assert_eq!(Balances::free_balance(&21), 1750); // 2000 - (0.2 * 1250)
+			// 2000 - (0.2 * initial_balance)
+			assert_eq!(Balances::free_balance(&21), 2000 - (2 * initial_balance / 10));
 		},
 	);
 }
