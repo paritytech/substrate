@@ -198,21 +198,18 @@ construct_service_factory! {
 		},
 		LightService = LightComponents<Self>
 			{ |config| <LightComponents<Factory>>::new(config) },
-		FullImportQueue = BabeImportQueue<Self::Block>
-			{
-				|
-					config: &mut FactoryFullConfiguration<Self>,
-					client: Arc<FullClient<Self>>,
-					select_chain: Self::SelectChain,
-					transaction_pool: Option<Arc<TransactionPool<Self::FullTransactionPoolApi>>>,
-				|
-			{
+		FullImportQueue = BabeImportQueue<Self::Block> {
+			|
+				config: &mut FactoryFullConfiguration<Self>,
+				client: Arc<FullClient<Self>>,
+				select_chain: Self::SelectChain,
+				transaction_pool: Option<Arc<TransactionPool<Self::FullTransactionPoolApi>>>,
+			| {
 				let (block_import, link_half) =
 					grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>, _>(
 						client.clone(), client.clone(), select_chain
 					)?;
 				let justification_import = block_import.clone();
-
 				let (import_queue, babe_link, babe_block_import, pruning_task) = import_queue(
 					Config::get_or_compute(&*client)?,
 					block_import,
@@ -223,12 +220,11 @@ construct_service_factory! {
 					config.custom.inherent_data_providers.clone(),
 					transaction_pool,
 				)?;
-
 				config.custom.import_setup = Some((babe_block_import.clone(), link_half, babe_link));
 				config.custom.tasks_to_spawn = Some(vec![Box::new(pruning_task)]);
-
 				Ok(import_queue)
-			}},
+			}
+		},
 		LightImportQueue = BabeImportQueue<Self::Block>
 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<LightClient<Self>>| {
 				#[allow(deprecated)]
