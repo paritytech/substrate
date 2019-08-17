@@ -565,23 +565,35 @@ impl_runtime_apis! {
 			equivocation: GrandpaEquivocationFrom<Block>
 		) -> Option<Vec<u8>> {
 			let proof = Historical::prove((key_types::GRANDPA, equivocation.identity.encode()))?;
-			let local_keys = runtime_io::ed25519_public_keys(key_types::GRANDPA);
+			let local_keys = runtime_io::sr25519_public_keys(key_types::GRANDPA);
 
 			if local_keys.len() > 0 {
 				let reporter = &local_keys[0];
-				let to_sign = (equivocation.clone(), proof.clone());
 
-				let maybe_signature = to_sign.using_encoded(|payload| if payload.len() > 256 {
-					runtime_io::ed25519_sign(key_types::GRANDPA, reporter, &runtime_io::blake2_256(payload))
+				let call = GrandpaCall::report_equivocation(equivocation, proof);
+				let function = Call::Grandpa(call);
+
+				// TODO: fix these parameters.
+				let check_genesis = system::CheckGenesis::new();
+				let check_era = system::CheckEra::from(Era::Immortal);
+				let check_nonce = system::CheckNonce::from(0);
+				let check_weight = system::CheckWeight::new();
+				let take_fees = balances::TakeFees::from(0);
+				let extra = (check_genesis, check_era, check_nonce, check_weight, take_fees);
+
+				let genesis_hash = System::block_hash(0);
+				let raw_payload = (function, extra.clone(), genesis_hash, genesis_hash);
+
+				let maybe_signature = raw_payload.using_encoded(|payload| if payload.len() > 256 {
+					runtime_io::sr25519_sign(key_types::GRANDPA, reporter, &runtime_io::blake2_256(payload))
 				} else {
-					runtime_io::ed25519_sign(key_types::GRANDPA, reporter, &payload)
+					runtime_io::sr25519_sign(key_types::GRANDPA, reporter, &payload)
 				});
 
 				if let Some(signature) = maybe_signature {
-					let call = GrandpaCall::report_equivocation(equivocation, proof, signature.into());
-					let grandpa_call = Call::Grandpa(call);
-					let ex = UncheckedExtrinsic::new_unsigned(grandpa_call);
-					return Some(ex.encode())
+					let signed = indices::address::Address::from(reporter.clone());
+					let extrinsic = UncheckedExtrinsic::new_signed(raw_payload.0, signed, signature.into(), extra);
+					return Some(extrinsic.encode())
 				}
 			}
 
@@ -622,7 +634,7 @@ impl_runtime_apis! {
 			>,
 		) -> Option<Vec<u8>> {
 			let proof = Historical::prove((key_types::BABE, equivocation.identity.encode()))?;
-			let local_keys = runtime_io::sr25519_public_keys(key_types::GRANDPA);
+			let local_keys = runtime_io::sr25519_public_keys(key_types::BABE);
 
 			if local_keys.len() > 0 {
 				let reporter = &local_keys[0];

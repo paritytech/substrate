@@ -44,7 +44,6 @@ use sr_staking_primitives::{
 	SessionIndex,
 	offence::{Offence, Kind},
 };
-use runtime_io::blake2_256;
 use fg_primitives::{
 	ScheduledChange, ConsensusLog, GRANDPA_ENGINE_ID, GrandpaEquivocation,
 	localized_payload,
@@ -175,22 +174,7 @@ decl_storage! {
 
 fn equivocation_is_valid<H: Codec + PartialEq, N: Codec + PartialEq>(
 	equivocation: &GrandpaEquivocation<H, N>,
-	proof: &Proof,
-	signature: &AuthoritySignature
 ) -> bool {
-	let signed = (equivocation, proof);
-	let reporter = &equivocation.reporter;
-
-	let signature_valid = signed.using_encoded(|signed| if signed.len() > 256 {
-		reporter.verify(&blake2_256(signed), &signature)
-	} else {
-		reporter.verify(&signed, &signature)
-	});
-
-	if !signature_valid {
-		return false
-	}
-
 	let first_vote = &equivocation.first.0;
 	let first_signature = &equivocation.first.1;
 
@@ -234,12 +218,11 @@ decl_module! {
 		fn report_equivocation(
 			origin,
 			equivocation: GrandpaEquivocation<T::Hash, T::BlockNumber>,
-			proof: Proof,
-			signature: AuthoritySignature
+			_proof: Proof
 		) {
 			let _who = ensure_signed(origin)?;
 
-			if !equivocation_is_valid(&equivocation, &proof, &signature) {
+			if !equivocation_is_valid(&equivocation) {
 				return Err("invalid equivocation")
 			}
 
