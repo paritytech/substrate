@@ -892,13 +892,13 @@ impl<T: Trait> Module<T> {
 			count += 1;
 		}
 		for (old, new) in candidates.iter().zip(new_candidates.iter()) {
-			// candidate and not a runner up.
+			// candidate is not a runner up.
 			if old != new {
 				// removed - kill it
 				<RegisterInfoOf<T>>::remove(old);
 
-				// candidate and not a runner up and not a winner.
-				if incoming.iter().find(|e| *e == old).is_some() {
+				// and candidate is not a winner.
+				if incoming.iter().find(|e| *e == old).is_none() {
 					// slash the bond.
 					let (imbalance, _) = T::Currency::slash_reserved(&old, T::CandidacyBond::get());
 					T::LoserCandidate::on_unbalanced(imbalance);
@@ -2481,9 +2481,6 @@ mod tests {
 			System::set_block_number(11);
 			assert_ok!(Elections::submit_candidacy(Origin::signed(1), 0));
 
-			assert_eq!(balances(&2), (18, 2));
-			assert_eq!(balances(&5), (48, 2));
-
 			assert_ok!(Elections::reap_inactive_voter(Origin::signed(5),
 				(voter_ids().iter().position(|&i| i == 5).unwrap() as u32).into(),
 				2, (voter_ids().iter().position(|&i| i == 2).unwrap() as u32).into(),
@@ -2492,11 +2489,6 @@ mod tests {
 
 			assert_eq!(voter_ids(), vec![0, 5]);
 			assert_eq!(Elections::all_approvals_of(&2).len(), 0);
-
-			// reaped. the reserved amount is lost.
-			assert_eq!(balances(&2), (18, 0));
-			// reaper. Will get the bond is gained.
-			assert_eq!(balances(&5), (50, 2));
 		});
 	}
 
@@ -2930,7 +2922,7 @@ mod tests {
 			assert!(!Elections::presentation_active());
 			assert_eq!(Elections::members(), vec![(1, 11)]);
 
-			// account 1, 2 is a total loser
+			// account 2 is not a runner up or in leaderboard.
 			assert_eq!(balances(&2), (17, 0));
 		});
 	}
