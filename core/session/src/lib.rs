@@ -18,12 +18,15 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use codec::{Encode, Decode};
 use rstd::vec::Vec;
+use sr_primitives::KeyTypeId;
+use sr_staking_primitives::SessionIndex;
 
 #[cfg(feature = "std")]
-use sr_primitives::traits::{ProvideRuntimeApi, Block as BlockT};
-#[cfg(feature = "std")]
 use primitives::{H256, Blake2Hasher};
+#[cfg(feature = "std")]
+use sr_primitives::traits::{ProvideRuntimeApi, Block as BlockT};
 
 client::decl_runtime_apis! {
 	/// Session keys runtime api.
@@ -37,6 +40,26 @@ client::decl_runtime_apis! {
 		/// Returns the concatenated SCALE encoded public keys.
 		fn generate_session_keys(seed: Option<Vec<u8>>) -> Vec<u8>;
 	}
+
+	/// Historical session membership runtime api.
+	pub trait SessionMembership {
+		/// Generates a proof that the given session key is a part of the
+		/// current session. The generated proof can later on be validated with
+		/// the historical session module. Proofs of membership are useful e.g.
+		/// for validating misbehavior reports.
+		fn generate_session_membership_proof(
+			session_key: (KeyTypeId, Vec<u8>),
+		) -> Option<MembershipProof>;
+	}
+}
+
+/// Proof of membership of a specific key in a given session.
+#[derive(Encode, Decode, Clone, PartialEq, Eq, Default, Debug)]
+pub struct MembershipProof {
+	/// The session index on which the specific key is a member.
+	pub session: SessionIndex,
+	/// Trie nodes of a merkle proof of session membership.
+	pub trie_nodes: Vec<Vec<u8>>,
 }
 
 /// Generate the initial session keys with the given seeds and store them in

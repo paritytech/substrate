@@ -36,7 +36,7 @@ use client::{
 	runtime_api as client_api, impl_runtime_apis
 };
 use sr_primitives::{
-	Permill, Perbill, ApplyResult, impl_opaque_keys, generic, create_runtime_str, key_types
+	ApplyResult, KeyTypeId, Perbill, Permill, impl_opaque_keys, generic, create_runtime_str, key_types,
 };
 use sr_primitives::curve::PiecewiseLinear;
 use sr_primitives::transaction_validity::TransactionValidity;
@@ -49,6 +49,7 @@ use elections::VoteIndex;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
 use primitives::OpaqueMetadata;
+use session::historical;
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
 use im_online::sr25519::{AuthorityId as ImOnlineId};
 use authority_discovery_primitives::{AuthorityId as EncodedAuthorityId, Signature as EncodedSignature};
@@ -527,6 +528,7 @@ construct_runtime!(
 		ImOnline: im_online::{Module, Call, Storage, Event<T>, ValidateUnsigned, Config<T>},
 		AuthorityDiscovery: authority_discovery::{Module, Call, Config<T>},
 		Offences: offences::{Module, Call, Storage, Event},
+		Historical: historical::{Module},
 		RandomnessCollectiveFlip: randomness_collective_flip::{Module, Call, Storage},
 	}
 );
@@ -705,6 +707,16 @@ impl_runtime_apis! {
 		fn generate_session_keys(seed: Option<Vec<u8>>) -> Vec<u8> {
 			let seed = seed.as_ref().map(|s| rstd::str::from_utf8(&s).expect("Seed is an utf8 string"));
 			SessionKeys::generate(seed)
+		}
+	}
+
+	impl substrate_session::SessionMembership<Block> for Runtime {
+		fn generate_session_membership_proof(
+			session_key: (KeyTypeId, Vec<u8>),
+		) -> Option<substrate_session::MembershipProof> {
+			use support::traits::KeyOwnerProofSystem;
+
+			Historical::prove(session_key)
 		}
 	}
 }

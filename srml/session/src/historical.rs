@@ -27,6 +27,7 @@
 
 use rstd::prelude::*;
 use codec::{Encode, Decode};
+use session_primitives::MembershipProof;
 use sr_primitives::KeyTypeId;
 use sr_primitives::traits::{Convert, OpaqueKeys, Hash as HashT};
 use support::{decl_module, decl_storage};
@@ -268,17 +269,10 @@ impl<T: Trait> ProvingTrie<T> {
 
 }
 
-/// Proof of ownership of a specific key.
-#[derive(Encode, Decode, Clone)]
-pub struct Proof {
-	session: SessionIndex,
-	trie_nodes: Vec<Vec<u8>>,
-}
-
 impl<T: Trait, D: AsRef<[u8]>> support::traits::KeyOwnerProofSystem<(KeyTypeId, D)>
 	for Module<T>
 {
-	type Proof = Proof;
+	type Proof = MembershipProof;
 	type IdentificationTuple = IdentificationTuple<T>;
 
 	fn prove(key: (KeyTypeId, D)) -> Option<Self::Proof> {
@@ -287,13 +281,13 @@ impl<T: Trait, D: AsRef<[u8]>> support::traits::KeyOwnerProofSystem<(KeyTypeId, 
 
 		let (id, data) = key;
 
-		trie.prove(id, data.as_ref()).map(|trie_nodes| Proof {
+		trie.prove(id, data.as_ref()).map(|trie_nodes| MembershipProof {
 			session,
 			trie_nodes,
 		})
 	}
 
-	fn check_proof(key: (KeyTypeId, D), proof: Proof) -> Option<IdentificationTuple<T>> {
+	fn check_proof(key: (KeyTypeId, D), proof: Self::Proof) -> Option<IdentificationTuple<T>> {
 		let (id, data) = key;
 
 		if proof.session == <SessionModule<T>>::current_index() {
