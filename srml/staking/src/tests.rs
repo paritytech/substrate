@@ -2114,7 +2114,7 @@ fn invulnerables_are_not_slashed() {
 
 			// The validator 11 hasn't been slashed, but 21 has been.
 			assert_eq!(Balances::free_balance(&11), 1000);
-			// 2000 - (0.2 * 1250)
+			// 2000 - (0.2 * initial_balance)
 			assert_eq!(Balances::free_balance(&21), 2000 - (2 * initial_balance / 10));
 		},
 	);
