@@ -23,16 +23,13 @@
 use rstd::prelude::*;
 use support::{
 	construct_runtime, parameter_types,
-	traits::{
-		SplitTwoWays, Currency, KeyOwnerProofSystem
-	}
+	traits::{SplitTwoWays, Currency}
 };
 use primitives::u32_trait::{_1, _2, _3, _4};
 use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
 	Moment, Signature,
 };
-use codec::Encode;
 use babe::{AuthorityId as BabeId};
 use babe_primitives::EquivocationProof;
 use grandpa::fg_primitives::{self, ScheduledChange, GrandpaEquivocationFrom};
@@ -43,7 +40,6 @@ use client::{
 use sr_primitives::{ApplyResult, impl_opaque_keys, generic, create_runtime_str, key_types};
 use sr_primitives::transaction_validity::TransactionValidity;
 use sr_primitives::weights::Weight;
-use sr_primitives::generic::Era;
 use sr_primitives::traits::{
 	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup,
 };
@@ -420,7 +416,9 @@ impl offences::Trait for Runtime {
 
 impl grandpa::Trait for Runtime {
 	type Event = Event;
-	// type KeyOwnerSystem = Historical;
+	type IdentificationTuple = historical::IdentificationTuple<Self>;
+	type Proof = historical::Proof;
+	type KeyOwnerSystem = Historical;
 }
 
 parameter_types! {
@@ -564,40 +562,7 @@ impl_runtime_apis! {
 		fn construct_equivocation_transaction(
 			equivocation: GrandpaEquivocationFrom<Block>
 		) -> Option<Vec<u8>> {
-			let proof = Historical::prove((key_types::GRANDPA, equivocation.identity.encode()))?;
-			let local_keys = runtime_io::sr25519_public_keys(key_types::GRANDPA);
-
-			if local_keys.len() > 0 {
-				let reporter = &local_keys[0];
-
-				let call = GrandpaCall::report_equivocation(equivocation, proof);
-				let function = Call::Grandpa(call);
-
-				// TODO: fix these parameters.
-				let check_genesis = system::CheckGenesis::new();
-				let check_era = system::CheckEra::from(Era::Immortal);
-				let check_nonce = system::CheckNonce::from(0);
-				let check_weight = system::CheckWeight::new();
-				let take_fees = balances::TakeFees::from(0);
-				let extra = (check_genesis, check_era, check_nonce, check_weight, take_fees);
-
-				let genesis_hash = System::block_hash(0);
-				let raw_payload = (function, extra.clone(), genesis_hash, genesis_hash);
-
-				let maybe_signature = raw_payload.using_encoded(|payload| if payload.len() > 256 {
-					runtime_io::sr25519_sign(key_types::GRANDPA, reporter, &runtime_io::blake2_256(payload))
-				} else {
-					runtime_io::sr25519_sign(key_types::GRANDPA, reporter, &payload)
-				});
-
-				if let Some(signature) = maybe_signature {
-					let signed = indices::address::Address::from(reporter.clone());
-					let extrinsic = UncheckedExtrinsic::new_signed(raw_payload.0, signed, signature.into(), extra);
-					return Some(extrinsic.encode())
-				}
-			}
-
-			None
+			Grandpa::construct_equivocation_transaction(equivocation)
 		}
 	}
 
@@ -633,40 +598,7 @@ impl_runtime_apis! {
 				babe_primitives::AuthoritySignature
 			>,
 		) -> Option<Vec<u8>> {
-			let proof = Historical::prove((key_types::BABE, equivocation.identity.encode()))?;
-			let local_keys = runtime_io::sr25519_public_keys(key_types::BABE);
-
-			if local_keys.len() > 0 {
-				let reporter = &local_keys[0];
-
-				let call = BabeCall::report_equivocation(equivocation, proof);
-				let function = Call::Babe(call);
-
-				// TODO: fix these parameters.
-				let check_genesis = system::CheckGenesis::new();
-				let check_era = system::CheckEra::from(Era::Immortal);
-				let check_nonce = system::CheckNonce::from(0);
-				let check_weight = system::CheckWeight::new();
-				let take_fees = balances::TakeFees::from(0);
-				let extra = (check_genesis, check_era, check_nonce, check_weight, take_fees);
-
-				let genesis_hash = System::block_hash(0);
-				let raw_payload = (function, extra.clone(), genesis_hash, genesis_hash);
-
-				let maybe_signature = raw_payload.using_encoded(|payload| if payload.len() > 256 {
-					runtime_io::sr25519_sign(key_types::BABE, reporter, &runtime_io::blake2_256(payload))
-				} else {
-					runtime_io::sr25519_sign(key_types::BABE, reporter, &payload)
-				});
-
-				if let Some(signature) = maybe_signature {
-					let signed = indices::address::Address::from(reporter.clone());
-					let extrinsic = UncheckedExtrinsic::new_signed(raw_payload.0, signed, signature.into(), extra);
-					return Some(extrinsic.encode())
-				}
-			}
-
-			None
+			Babe::construct_equivocation_transaction(equivocation)
 		}
 	}
 

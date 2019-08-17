@@ -31,8 +31,8 @@ use srml_support::{
 };
 use timestamp::{OnTimestampSet};
 use sr_primitives::{
-	generic::DigestItem, ConsensusEngineId, Perbill, key_types, KeyTypeId,
-	traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Header},
+	generic::{DigestItem, Era, UncheckedExtrinsic}, ConsensusEngineId, Perbill, key_types, KeyTypeId,
+	traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Header, Zero},
 	weights::SimpleDispatchInfo,
 };
 use sr_staking_primitives::{
@@ -125,7 +125,7 @@ impl ProvideInherentData for InherentDataProvider {
 	}
 }
 
-pub trait Trait: timestamp::Trait {
+pub trait Trait: timestamp::Trait + balances::Trait + indices::Trait + Send + Sync {
 	type EpochDuration: Get<u64>;
 	type ExpectedBlockTime: Get<Self::Moment>;
 	type IdentificationTuple: Parameter;
@@ -422,6 +422,53 @@ impl<T: Trait> Module<T> {
 		// we double the minimum block-period so each author can always propose within
 		// the majority of their slot.
 		<T as timestamp::Trait>::MinimumPeriod::get().saturating_mul(2.into())
+	}
+
+	pub fn construct_equivocation_transaction(
+		equivocation: EquivocationProof<T::Header, AuthorityId, AuthoritySignature>
+	) -> Option<Vec<u8>> {
+		let proof = T::KeyOwnerSystem::prove((
+			key_types::BABE,
+			equivocation.identity.encode(),
+		))?;
+
+		let local_keys = app::Public::all();
+
+		if local_keys.len() > 0 {
+			let reporter = &local_keys[0];
+			let function = Call::report_equivocation::<T>(equivocation, proof);
+
+			// TODO: fix these parameters.
+			let check_genesis = system::CheckGenesis::<T>::new();
+			let check_era = system::CheckEra::<T>::from(Era::Immortal);
+			let check_nonce = system::CheckNonce::<T>::from(Default::default());
+			let check_weight = system::CheckWeight::<T>::new();
+			let take_fees = balances::TakeFees::<T>::from(Default::default());
+			let extra = (check_genesis, check_era, check_nonce, check_weight, take_fees);
+
+			let genesis_hash = <system::Module<T>>::block_hash(T::BlockNumber::zero());
+			let raw_payload = (function, extra.clone(), genesis_hash, genesis_hash);
+
+			let maybe_signature: Option<app::Signature> = raw_payload.using_encoded(|payload| if payload.len() > 256 {
+				reporter.sign(&sr_io::blake2_256(payload))
+			} else {
+				reporter.sign(&payload)
+			});
+
+			if let Some(signature) = maybe_signature {
+				let signed = indices::address::Address::<app::Public, T::Index>::Id(reporter.clone());
+				let extrinsic = UncheckedExtrinsic::new_signed(
+					raw_payload.0,
+					signed,
+					signature,
+					extra,
+				).encode();
+
+				return Some(extrinsic.encode())
+			}
+		}
+
+		None
 	}
 
 	fn deposit_consensus<U: Encode>(new: U) {

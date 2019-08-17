@@ -18,6 +18,8 @@ sr-staking-primitives = { path = "../../core/sr-staking-primitives", default-fea
 srml-support = { path = "../support", default-features = false }
 substrate-finality-grandpa-primitives = { path = "../../core/finality-grandpa/primitives", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
+balances = { package = "srml-balances", path = "../balances", default-features = false }
+indices = { package = "srml-indices", path = "../indices", default-features = false }
 
 [dev-dependencies]
 runtime_io = { package = "sr-io", path = "../../core/sr-io" }
@@ -39,4 +41,6 @@ std = [
 	"srml-support/std",
 	"substrate-finality-grandpa-primitives/std",
 	"system/std",
+	"balances/std",
+	"indices/std",
 ]

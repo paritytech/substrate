@@ -34,11 +34,12 @@ use rstd::prelude::*;
 use codec::{self as codec, Encode, Decode, Error, Codec};
 use srml_support::{
 	decl_event, decl_storage, decl_module, dispatch::Result, storage::StorageValue,
-	traits::KeyOwnerProofSystem
+	traits::KeyOwnerProofSystem, Parameter
 };
 use app_crypto::RuntimeAppPublic;
 use sr_primitives::{
-	generic::{DigestItem, OpaqueDigestItemId}, traits::Zero, Perbill, key_types, KeyTypeId
+	generic::{DigestItem, OpaqueDigestItemId, Era, UncheckedExtrinsic},
+	traits::Zero, Perbill, key_types, KeyTypeId
 };
 use sr_staking_primitives::{
 	SessionIndex,
@@ -48,17 +49,22 @@ use fg_primitives::{
 	ScheduledChange, ConsensusLog, GRANDPA_ENGINE_ID, GrandpaEquivocation,
 	localized_payload,
 };
-use session::historical::Proof;
-pub use fg_primitives::{AuthorityId, AuthorityWeight, AuthoritySignature};
+pub use fg_primitives::{AuthorityId, AuthorityWeight, AuthoritySignature, app};
 use system::{ensure_signed, DigestOf};
 
 mod mock;
 mod tests;
 
-pub trait Trait: system::Trait {
+pub trait Trait: system::Trait + balances::Trait + indices::Trait + Send + Sync {
 	/// The event type of this module.
 	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
-	// type KeyOwnerSystem: KeyOwnerProofSystem<(KeyTypeId, Vec<u8>), Proof=Proof>;
+	type IdentificationTuple: Parameter;
+	type Proof: Parameter;
+	type KeyOwnerSystem: KeyOwnerProofSystem<
+		(KeyTypeId, Vec<u8>),
+		Proof=Self::Proof,
+		IdentificationTuple=Self::IdentificationTuple,
+	>;
 }
 
 /// A stored pending change, old format.
@@ -218,7 +224,7 @@ decl_module! {
 		fn report_equivocation(
 			origin,
 			equivocation: GrandpaEquivocation<T::Hash, T::BlockNumber>,
-			_proof: Proof
+			_proof: T::Proof
 		) {
 			let _who = ensure_signed(origin)?;
 
@@ -385,6 +391,53 @@ impl<T: Trait> Module<T> {
 		} else {
 			Err("Attempt to signal GRANDPA change with one already pending.")
 		}
+	}
+
+	pub fn construct_equivocation_transaction(
+		equivocation: GrandpaEquivocation<T::Hash, T::BlockNumber>
+	) -> Option<Vec<u8>> {
+		let proof = T::KeyOwnerSystem::prove((
+			key_types::GRANDPA,
+			equivocation.identity.encode(),
+		))?;
+
+		let local_keys = app::Public::all();
+
+		if local_keys.len() > 0 {
+			let reporter = &local_keys[0];
+			let function = Call::report_equivocation::<T>(equivocation, proof);
+
+			// TODO: fix these parameters.
+			let check_genesis = system::CheckGenesis::<T>::new();
+			let check_era = system::CheckEra::<T>::from(Era::Immortal);
+			let check_nonce = system::CheckNonce::<T>::from(Default::default());
+			let check_weight = system::CheckWeight::<T>::new();
+			let take_fees = balances::TakeFees::<T>::from(Default::default());
+			let extra = (check_genesis, check_era, check_nonce, check_weight, take_fees);
+
+			let genesis_hash = <system::Module<T>>::block_hash(T::BlockNumber::zero());
+			let raw_payload = (function, extra.clone(), genesis_hash, genesis_hash);
+
+			let maybe_signature: Option<app::Signature> = raw_payload.using_encoded(|payload| if payload.len() > 256 {
+				reporter.sign(&runtime_io::blake2_256(payload))
+			} else {
+				reporter.sign(&payload)
+			});
+
+			if let Some(signature) = maybe_signature {
+				let signed = indices::address::Address::<app::Public, T::Index>::Id(reporter.clone());
+				let extrinsic = UncheckedExtrinsic::new_signed(
+					raw_payload.0,
+					signed,
+					signature,
+					extra,
+				).encode();
+
+				return Some(extrinsic.encode())
+			}
+		}
+
+		None
 	}
 
 	/// Deposit one of this module's logs.
