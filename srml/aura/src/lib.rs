@@ -64,8 +64,6 @@ use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
 use substrate_consensus_aura_primitives::{AURA_ENGINE_ID, ConsensusLog, AuthorityIndex};
-#[cfg(feature = "std")]
-use codec::Decode;
 
 mod mock;
 mod tests;
