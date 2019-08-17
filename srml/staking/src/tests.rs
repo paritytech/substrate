@@ -2076,7 +2076,7 @@ fn reporters_receive_their_slice() {
 			&[Perbill::from_percent(50)],
 		);
 
-		// 1250 x 50% (slash fraction) x 10% (rewards slice)
+		// initial_balance x 50% (slash fraction) x 10% (rewards slice)
 		let reward = initial_balance / 20 / 2;
 		assert_eq!(Balances::free_balance(&1), 10 + reward);
 		assert_eq!(Balances::free_balance(&2), 20 + reward);
