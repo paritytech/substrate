@@ -68,7 +68,10 @@ pub type SlotNumber = u64;
 /// The weight of an authority.
 // NOTE: we use a unique name for the weight to avoid conflicts with other
 //       `Weight` types, since the metadata isn't able to disambiguate.
-pub type BabeWeight = u64;
+pub type BabeAuthorityWeight = u64;
+
+/// The weight of a BABE block.
+pub type BabeBlockWeight = u32;
 
 /// BABE epoch information
 #[derive(Decode, Encode, Default, PartialEq, Eq, Clone)]
@@ -81,9 +84,11 @@ pub struct Epoch {
 	/// The duration of this epoch
 	pub duration: SlotNumber,
 	/// The authorities and their weights
-	pub authorities: Vec<(AuthorityId, BabeWeight)>,
+	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 	/// Randomness for this epoch
 	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+	/// Whether secondary slot assignments should be used during the epoch.
+	pub secondary_slots: bool,
 }
 
 /// An consensus log item for BABE.

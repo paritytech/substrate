@@ -19,7 +19,7 @@ use crate::protocol::sync::{PeerSync, PeerSyncState};
 use fork_tree::ForkTree;
 use libp2p::PeerId;
 use log::warn;
-use sr_primitives::traits::{Block as BlockT, NumberFor};
+use sr_primitives::traits::{Block as BlockT, NumberFor, Zero};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::{Duration, Instant};
 
@@ -38,6 +38,8 @@ pub(crate) type ExtraRequest<B> = (<B as BlockT>::Hash, NumberFor<B>);
 #[derive(Debug)]
 pub(crate) struct ExtraRequests<B: BlockT> {
 	tree: ForkTree<B::Hash, NumberFor<B>, ()>,
+	/// best finalized block number that we have seen since restart
+	best_seen_finalized_number: NumberFor<B>,
 	/// requests which have been queued for later processing
 	pending_requests: VecDeque<ExtraRequest<B>>,
 	/// requests which are currently underway to some peer
@@ -52,6 +54,7 @@ impl<B: BlockT> ExtraRequests<B> {
 	pub(crate) fn new() -> Self {
 		ExtraRequests {
 			tree: ForkTree::new(),
+			best_seen_finalized_number: Zero::zero(),
 			pending_requests: VecDeque::new(),
 			active_requests: HashMap::new(),
 			failed_requests: HashMap::new(),
@@ -80,7 +83,7 @@ impl<B: BlockT> ExtraRequests<B> {
 		match self.tree.import(request.0, request.1, (), &is_descendent_of) {
 			Ok(true) => {
 				// this is a new root so we add it to the current `pending_requests`
-				self.pending_requests.push_back((request.0, request.1))
+				self.pending_requests.push_back((request.0, request.1));
 			}
 			Err(err) => {
 				warn!(target: "sync", "Failed to insert request {:?} into tree: {:?}", request, err);
@@ -93,7 +96,7 @@ impl<B: BlockT> ExtraRequests<B> {
 	/// Retry any pending request if a peer disconnected.
 	pub(crate) fn peer_disconnected(&mut self, who: &PeerId) {
 		if let Some(request) = self.active_requests.remove(who) {
-			self.pending_requests.push_front(request)
+			self.pending_requests.push_front(request);
 		}
 	}
 
@@ -128,7 +131,10 @@ impl<B: BlockT> ExtraRequests<B> {
 			return Ok(())
 		}
 
-		self.tree.finalize(best_finalized_hash, best_finalized_number, &is_descendent_of)?;
+		if best_finalized_number > self.best_seen_finalized_number {
+			self.tree.finalize_with_ancestors(best_finalized_hash, best_finalized_number, &is_descendent_of)?;
+			self.best_seen_finalized_number = best_finalized_number;
+		}
 
 		let roots = self.tree.roots().collect::<HashSet<_>>();
 
@@ -176,6 +182,7 @@ impl<B: BlockT> ExtraRequests<B> {
 		self.active_requests.clear();
 		self.pending_requests.clear();
 		self.pending_requests.extend(self.tree.roots().map(|(&h, &n, _)| (h, n)));
+		self.best_seen_finalized_number = finalized_number;
 
 		true
 	}

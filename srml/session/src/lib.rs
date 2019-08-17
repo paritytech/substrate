@@ -124,6 +124,7 @@ use codec::Decode;
 use sr_primitives::{KeyTypeId, AppKey};
 use sr_primitives::weights::SimpleDispatchInfo;
 use sr_primitives::traits::{Convert, Zero, Member, OpaqueKeys};
+use sr_staking_primitives::SessionIndex;
 use srml_support::{
 	dispatch::Result, ConsensusEngineId, StorageValue, StorageDoubleMap, for_each_tuple,
 	decl_module, decl_event, decl_storage,
@@ -136,9 +137,6 @@ mod mock;
 
 #[cfg(feature = "historical")]
 pub mod historical;
-
-/// Simple index type with which we can count sessions.
-pub type SessionIndex = u32;
 
 /// Decides whether the session should be ended.
 pub trait ShouldEndSession<BlockNumber> {
@@ -168,6 +166,7 @@ impl<
 }
 
 /// An event handler for when the session is ending.
+/// TODO [slashing] consider renaming to OnSessionStarting
 pub trait OnSessionEnding<ValidatorId> {
 	/// Handle the fact that the session is ending, and optionally provide the new validator set.
 	///
@@ -185,8 +184,14 @@ impl<A> OnSessionEnding<A> for () {
 	fn on_session_ending(_: SessionIndex, _: SessionIndex) -> Option<Vec<A>> { None }
 }
 
-/// Handler for when a session keys set changes.
+/// Handler for session lifecycle events.
 pub trait SessionHandler<ValidatorId> {
+	/// The given validator set will be used for the genesis session.
+	/// It is guaranteed that the given validator set will also be used
+	/// for the second session, therefore the first call to `on_new_session`
+	/// should provide the same validator set.
+	fn on_genesis_session<Ks: OpaqueKeys>(validators: &[(ValidatorId, Ks)]);
+
 	/// Session set has changed; act appropriately.
 	fn on_new_session<Ks: OpaqueKeys>(
 		changed: bool,
@@ -194,30 +199,64 @@ pub trait SessionHandler<ValidatorId> {
 		queued_validators: &[(ValidatorId, Ks)],
 	);
 
+	/// A notification for end of the session.
+	///
+	/// Note it is triggered before any `OnSessionEnding` handlers,
+	/// so we can still affect the validator set.
+	fn on_before_session_ending() {}
+
 	/// A validator got disabled. Act accordingly until a new session begins.
 	fn on_disabled(validator_index: usize);
 }
 
-/// One session-key type handler.
+/// A session handler for specific key type.
 pub trait OneSessionHandler<ValidatorId> {
 	/// The key type expected.
 	type Key: Decode + Default + AppKey;
 
-	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, queued_validators: I)
+	fn on_genesis_session<'a, I: 'a>(validators: I)
 		where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
-	fn on_disabled(i: usize);
+
+	/// Session set has changed; act appropriately.
+	fn on_new_session<'a, I: 'a>(
+		_changed: bool,
+		_validators: I,
+		_queued_validators: I
+	) where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
+
+
+	/// A notification for end of the session.
+	///
+	/// Note it is triggered before any `OnSessionEnding` handlers,
+	/// so we can still affect the validator set.
+	fn on_before_session_ending() {}
+
+	/// A validator got disabled. Act accordingly until a new session begins.
+	fn on_disabled(_validator_index: usize);
+
 }
 
 macro_rules! impl_session_handlers {
 	() => (
 		impl<AId> SessionHandler<AId> for () {
+			fn on_genesis_session<Ks: OpaqueKeys>(_: &[(AId, Ks)]) {}
 			fn on_new_session<Ks: OpaqueKeys>(_: bool, _: &[(AId, Ks)], _: &[(AId, Ks)]) {}
+			fn on_before_session_ending() {}
 			fn on_disabled(_: usize) {}
 		}
 	);
 
 	( $($t:ident)* ) => {
 		impl<AId, $( $t: OneSessionHandler<AId> ),*> SessionHandler<AId> for ( $( $t , )* ) {
+			fn on_genesis_session<Ks: OpaqueKeys>(validators: &[(AId, Ks)]) {
+				$(
+					let our_keys: Box<dyn Iterator<Item=_>> = Box::new(validators.iter()
+						.map(|k| (&k.0, k.1.get::<$t::Key>(<$t::Key as AppKey>::ID)
+							.unwrap_or_default())));
+
+					$t::on_genesis_session(our_keys);
+				)*
+			}
 			fn on_new_session<Ks: OpaqueKeys>(
 				changed: bool,
 				validators: &[(AId, Ks)],
@@ -233,6 +272,13 @@ macro_rules! impl_session_handlers {
 					$t::on_new_session(changed, our_keys, queued_keys);
 				)*
 			}
+
+			fn on_before_session_ending() {
+				$(
+					$t::on_before_session_ending();
+				)*
+			}
+
 			fn on_disabled(i: usize) {
 				$(
 					$t::on_disabled(i);
@@ -347,6 +393,9 @@ decl_storage! {
 						<Module<T>>::load_keys(&v).unwrap_or_default(),
 					))
 					.collect();
+
+				// Tell everyone about the genesis session keys
+				T::SessionHandler::on_genesis_session::<T::Keys>(&queued_keys);
 
 				<Validators<T>>::put(initial_validators);
 				<QueuedKeys<T>>::put(queued_keys);

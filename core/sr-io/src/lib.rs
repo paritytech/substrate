@@ -269,6 +269,7 @@ export_api! {
 		/// Even if this function returns `true`, it does not mean that any keys are configured
 		/// and that the validator is registered in the chain.
 		fn is_validator() -> bool;
+
 		/// Submit transaction to the pool.
 		///
 		/// The transaction will end up in the pool.

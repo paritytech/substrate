@@ -8,7 +8,7 @@
 #   can be everywhere.
 # - Multiple owners are supported.
 # - Either handle (e.g, @pepyakin) or email can be used. Keep in mind, that handles might work better because they
-#   are more recognizable on GitHub, you can use them for mentioning unlike an email. 
+#   are more recognizable on GitHub, you can use them for mentioning unlike an email.
 # - The latest matching rule, if multiple, takes precedence.
 
 /srml/contracts/ @pepyakin
