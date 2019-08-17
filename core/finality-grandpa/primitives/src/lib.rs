@@ -28,7 +28,7 @@ use sr_primitives::ConsensusEngineId;
 use client::decl_runtime_apis;
 use rstd::vec::Vec;
 
-mod app {
+pub mod app {
 	use app_crypto::{app_crypto, key_types::GRANDPA, ed25519};
 	app_crypto!(ed25519, GRANDPA);
 }
@@ -173,5 +173,10 @@ decl_runtime_apis! {
 		/// used to finalize descendants of this block (B+1, B+2, ...). The block B itself
 		/// is finalized by the authorities from block B-1.
 		fn grandpa_authorities() -> Vec<(AuthorityId, AuthorityWeight)>;
+
+		fn construct_equivocation_report_extrinsic(
+			equivocation: (),
+			key_owner_proof: Vec<u8>,
+		) -> Option<Vec<u8>>;
 	}
 }

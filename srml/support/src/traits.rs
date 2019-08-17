@@ -23,7 +23,7 @@ use codec::{FullCodec, Codec, Encode, Decode};
 use primitives::u32_trait::Value as U32;
 use sr_primitives::{
 	ConsensusEngineId,
-	traits::{MaybeSerializeDebug, SimpleArithmetic, Saturating},
+	traits::{MaybeDebug, MaybeSerializeDebug, SimpleArithmetic, Saturating},
 };
 
 /// Anything that can have a `::len()` method.
@@ -115,7 +115,7 @@ pub trait VerifySeal<Header, Author> {
 /// key owner.
 pub trait KeyOwnerProofSystem<Key> {
 	/// The proof of membership itself.
-	type Proof: Codec;
+	type Proof: Clone + Codec + MaybeDebug + PartialEq;
 	/// The full identification of a key owner and the stash account.
 	type IdentificationTuple: Codec;
 

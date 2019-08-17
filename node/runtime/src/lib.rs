@@ -458,6 +458,9 @@ impl authority_discovery::Trait for Runtime {
 
 impl grandpa::Trait for Runtime {
 	type Event = Event;
+	type Call = Call;
+	type UncheckedExtrinsic = UncheckedExtrinsic;
+	type KeyOwnerProofSystem = Historical;
 }
 
 parameter_types! {
@@ -620,6 +623,21 @@ impl_runtime_apis! {
 	impl fg_primitives::GrandpaApi<Block> for Runtime {
 		fn grandpa_authorities() -> Vec<(GrandpaId, GrandpaWeight)> {
 			Grandpa::grandpa_authorities()
+		}
+
+		fn construct_equivocation_report_extrinsic(
+			equivocation: (),
+			key_owner_proof: Vec<u8>,
+		) -> Option<Vec<u8>> {
+			use codec::{Decode, Encode};
+
+			let key_owner_proof = Decode::decode(&mut &key_owner_proof[..]).ok()?;
+
+			Grandpa::construct_equivocation_report_extrinsic(
+				equivocation,
+				key_owner_proof,
+				|_call, _key| None, // FIXME: actually create xt here
+			).map(|xt| xt.encode())
 		}
 	}
 

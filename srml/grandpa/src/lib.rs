@@ -34,10 +34,12 @@ use rstd::prelude::*;
 use codec::{self as codec, Encode, Decode, Error};
 use support::{
 	decl_event, decl_storage, decl_module, dispatch::Result,
+	storage::StorageValue, storage::StorageMap, traits::KeyOwnerProofSystem,
 };
 use sr_primitives::{
-	generic::{DigestItem, OpaqueDigestItemId}, traits::Zero,
-	Perbill,
+	generic::{DigestItem, OpaqueDigestItemId},
+	traits::{Extrinsic as ExtrinsicT, Zero},
+	KeyTypeId, Perbill,
 };
 use sr_staking_primitives::{
 	SessionIndex,
@@ -53,7 +55,23 @@ mod tests;
 pub trait Trait: system::Trait {
 	/// The event type of this module.
 	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
+
+	/// The function call.
+	type Call: From<Call<Self>>;
+
+	/// A system for proving ownership of keys, i.e. that a given key was part
+	/// of a validator set. Needed for validating equivocation reports.
+	type KeyOwnerProofSystem: KeyOwnerProofSystem<
+		(KeyTypeId, Vec<u8>),
+	>;
+
+	/// A extrinsic right from the external world. This is unchecked and so
+	/// can contain a signature.
+	type UncheckedExtrinsic: ExtrinsicT<Call=<Self as Trait>::Call> + Encode + Decode;
 }
+
+type KeyOwnerProof<T> =
+	<<T as Trait>::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, Vec<u8>)>>::Proof;
 
 /// A stored pending change, old format.
 // TODO: remove shim
@@ -169,10 +187,19 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
 
-		/// Report some misbehavior.
-		fn report_misbehavior(origin, _report: Vec<u8>) {
+		// Report some misbehavior.
+		fn report_equivocation(origin, equivocation: (), proof: KeyOwnerProof<T>) {
 			ensure_signed(origin)?;
-			// FIXME: https://github.com/paritytech/substrate/issues/1112
+
+			let id = T::KeyOwnerProofSystem::check_proof(
+				unimplemented!(),
+				proof,
+			).ok_or("Invalid key ownership proof.")?;
+
+			// TODO:
+			// - use proper equivocation type
+			// - validate equivocation
+			// - report to offences module
 		}
 
 		fn on_finalize(block_number: T::BlockNumber) {
@@ -335,6 +362,33 @@ impl<T: Trait> Module<T> {
 			assert!(Authorities::get().is_empty(), "Authorities are already initialized!");
 			Authorities::put(authorities);
 		}
+	}
+
+	pub fn construct_equivocation_report_extrinsic<F>(
+		equivocation: (),
+		key_owner_proof: KeyOwnerProof<T>,
+		create_extrinsic: F,
+	) -> Option<T::UncheckedExtrinsic> where
+		F: Fn(Call<T>, fg_primitives::app::Public) -> Option<T::UncheckedExtrinsic>,
+	{
+		use app_crypto::RuntimeAppPublic;
+		let local_keys = fg_primitives::app::Public::all();
+
+		for key in local_keys {
+			let call = Call::report_equivocation::<T>(
+				equivocation,
+				key_owner_proof.clone(),
+			);
+
+			let xt = create_extrinsic(call, key);
+
+			// early exit after successful extrinsic creation
+			if xt.is_some() {
+				return xt;
+			}
+		}
+
+		None
 	}
 }
 
