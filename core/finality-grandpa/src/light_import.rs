@@ -246,7 +246,7 @@ fn do_import_block<B, E, Block: BlockT<Hash=H256>, RA, J>(
 
 	// we don't want to finalize on `inner.import_block`
 	let justification = block.justification.take();
-	let enacts_consensus_change = new_cache.contains_key(&well_known_cache_keys::AUTHORITIES);
+	let enacts_consensus_change = !new_cache.is_empty();
 	let import_result = BlockImport::import_block(&mut client, block, new_cache);
 
 	let mut imported_aux = match import_result {

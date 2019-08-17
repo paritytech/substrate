@@ -31,9 +31,6 @@
 //!
 //! ## Related Modules
 //!
-//! - [Staking](../srml_staking/index.html): The Staking module is called in Aura to enforce slashing
-//!  if validators miss a certain number of slots (see the [`StakingSlasher`](./struct.StakingSlasher.html)
-//!  struct and associated method).
 //! - [Timestamp](../srml_timestamp/index.html): The Timestamp module is used in Aura to track
 //! consensus rounds (via `slots`).
 //! - [Consensus](../srml_consensus/index.html): The Consensus module does not relate directly to Aura,
@@ -55,7 +52,7 @@ use codec::Encode;
 use srml_support::{decl_storage, decl_module, Parameter, storage::StorageValue, traits::Get};
 use app_crypto::AppPublic;
 use sr_primitives::{
-	traits::{SaturatedConversion, Saturating, Zero, One, Member, IsMember}, generic::DigestItem,
+	traits::{SaturatedConversion, Saturating, Zero, Member, IsMember}, generic::DigestItem,
 };
 use timestamp::OnTimestampSet;
 #[cfg(feature = "std")]
@@ -142,19 +139,7 @@ impl ProvideInherentData for InherentDataProvider {
 	}
 }
 
-/// Something that can handle Aura consensus reports.
-pub trait HandleReport {
-	fn handle_report(report: AuraReport);
-}
-
-impl HandleReport for () {
-	fn handle_report(_report: AuraReport) { }
-}
-
 pub trait Trait: timestamp::Trait {
-	/// The logic for handling reports.
-	type HandleReport: HandleReport;
-
 	/// The identifier type for an authority.
 	type AuthorityId: Member + Parameter + AppPublic + Default;
 }
@@ -165,7 +150,19 @@ decl_storage! {
 		LastTimestamp get(last) build(|_| 0.into()): T::Moment;
 
 		/// The current authorities
-		pub Authorities get(authorities) config(): Vec<T::AuthorityId>;
+		pub Authorities get(authorities): Vec<T::AuthorityId>;
+	}
+	add_extra_genesis {
+		config(authorities): Vec<T::AuthorityId>;
+		build(|
+			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
+			config: &GenesisConfig<T>
+		| {
+			runtime_io::with_storage(
+				storage,
+				|| Module::<T>::initialize_authorities(&config.authorities),
+			);
+		})
 	}
 }
 
@@ -183,10 +180,24 @@ impl<T: Trait> Module<T> {
 		);
 		<system::Module<T>>::deposit_log(log.into());
 	}
+
+	fn initialize_authorities(authorities: &[T::AuthorityId]) {
+		if !authorities.is_empty() {
+			assert!(<Authorities<T>>::get().is_empty(), "Authorities are already initialized!");
+			<Authorities<T>>::put_ref(authorities);
+		}
+	}
 }
 
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = T::AuthorityId;
+
+	fn on_genesis_session<'a, I: 'a>(validators: I)
+		where I: Iterator<Item=(&'a T::AccountId, T::AuthorityId)>
+	{
+		let authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
+		Self::initialize_authorities(&authorities);
+	}
 
 	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, _queued_validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, T::AuthorityId)>
@@ -200,6 +211,7 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 			}
 		}
 	}
+
 	fn on_disabled(i: usize) {
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(
 			AURA_ENGINE_ID,
@@ -218,34 +230,6 @@ impl<T: Trait> IsMember<T::AuthorityId> for Module<T> {
 	}
 }
 
-/// A report of skipped authorities in Aura.
-#[derive(Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub struct AuraReport {
-	// The first skipped slot.
-	start_slot: usize,
-	// The number of times authorities were skipped.
-	skipped: usize,
-}
-
-impl AuraReport {
-	/// Call the closure with (`validator_indices`, `punishment_count`) for each
-	/// validator to punish.
-	pub fn punish<F>(&self, validator_count: usize, mut punish_with: F)
-		where F: FnMut(usize, usize)
-	{
-		// If all validators have been skipped, then it implies some sort of
-		// systematic problem common to all rather than a minority of validators
-		// not fulfilling their specific duties. In this case, it doesn't make
-		// sense to punish anyone, so we guard against it.
-		if self.skipped < validator_count {
-			for index in 0..self.skipped {
-				punish_with((self.start_slot + index) % validator_count, 1);
-			}
-		}
-	}
-}
-
 impl<T: Trait> Module<T> {
 	/// Determine the Aura slot-duration based on the Timestamp module configuration.
 	pub fn slot_duration() -> T::Moment {
@@ -254,7 +238,7 @@ impl<T: Trait> Module<T> {
 		<T as timestamp::Trait>::MinimumPeriod::get().saturating_mul(2.into())
 	}
 
-	fn on_timestamp_set<H: HandleReport>(now: T::Moment, slot_duration: T::Moment) {
+	fn on_timestamp_set(now: T::Moment, slot_duration: T::Moment) {
 		let last = Self::last();
 		<Self as Store>::LastTimestamp::put(now.clone());
 
@@ -265,42 +249,17 @@ impl<T: Trait> Module<T> {
 		assert!(!slot_duration.is_zero(), "Aura slot duration cannot be zero.");
 
 		let last_slot = last / slot_duration.clone();
-		let first_skipped = last_slot.clone() + One::one();
 		let cur_slot = now / slot_duration;
 
 		assert!(last_slot < cur_slot, "Only one block may be authored per slot.");
-		if cur_slot == first_skipped { return }
 
-		let skipped_slots = cur_slot - last_slot - One::one();
-
-		H::handle_report(AuraReport {
-			start_slot: first_skipped.saturated_into::<usize>(),
-			skipped: skipped_slots.saturated_into::<usize>(),
-		})
+		// TODO [#3398] Generate offence report for all authorities that skipped their slots.
 	}
 }
 
 impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 	fn on_timestamp_set(moment: T::Moment) {
-		Self::on_timestamp_set::<T::HandleReport>(moment, Self::slot_duration())
-	}
-}
-
-/// A type for performing slashing based on Aura reports.
-pub struct StakingSlasher<T>(::rstd::marker::PhantomData<T>);
-
-impl<T: staking::Trait + Trait> HandleReport for StakingSlasher<T> {
-	fn handle_report(report: AuraReport) {
-		use staking::SessionInterface;
-		let validators = T::SessionInterface::validators();
-
-		report.punish(
-			validators.len(),
-			|idx, slash_count| {
-				let v = validators[idx].clone();
-				staking::Module::<T>::on_offline_validator(v, slash_count);
-			}
-		);
+		Self::on_timestamp_set(moment, Self::slot_duration())
 	}
 }
 
