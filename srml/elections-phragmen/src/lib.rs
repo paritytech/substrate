@@ -166,7 +166,7 @@ decl_module! {
 		/// Upon voting, `value` units of `who`'s balance is locked and a bond amount is reserved.
 		/// It is the responsibility of the caller to not place all of their balance into the lock
 		/// and keep some for further transactions.
-		#[weight = SimpleDispatchInfo::FixedNormal(750_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn vote(origin, votes: Vec<T::AccountId>, value: BalanceOf<T>) {
 			let who = ensure_signed(origin)?;
 
@@ -225,7 +225,7 @@ decl_module! {
 		///   - Win and become a member. Members will eventually get their stash back.
 		///   - Become a runner-up. Runner-ups are reserved members in case one gets forcefully
 		///     removed.
-		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn submit_candidacy(origin) {
 			let who = ensure_signed(origin)?;
 
@@ -258,7 +258,7 @@ decl_module! {
 		/// outgoing member. Otherwise, a new phragmen round is started.
 		///
 		/// Note that this does not affect the designated block number of the next election.
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(2_000_000)]
 		fn remove_member(origin, who: <T::Lookup as StaticLookup>::Source) {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
