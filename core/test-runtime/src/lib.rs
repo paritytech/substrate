@@ -53,6 +53,9 @@ use inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
 use grandpa::fg_primitives::{self, ScheduledChange, GrandpaEquivocationFrom};
+use indices::ResolveHint;
+use srml_system::IsDeadAccount;
+use runtime_support::traits::Get;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
 pub use babe_primitives::{AuthorityId, AuthoritySignature};
@@ -357,6 +360,12 @@ impl From<grandpa::Event> for Event {
 	}
 }
 
+impl From<()> for Event {
+	fn from(_evt: ()) -> Self {
+		unimplemented!("Not required in tests!")
+	}
+}
+
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 250;
 	pub const MinimumPeriod: u64 = 5;
@@ -421,6 +430,57 @@ impl srml_babe::Trait for Runtime {
 
 impl grandpa::Trait for Runtime {
 	type Event = Event;
+	type IdentificationTuple = ();
+	type Proof = ();
+	type KeyOwnerSystem = FakeKeyOwnerProofSystem;
+}
+
+pub struct TestIsDeadAccount {}
+impl IsDeadAccount<u64> for TestIsDeadAccount {
+	fn is_dead_account(_who: &u64) -> bool {
+		false
+	}
+}
+
+pub struct TestResolveHint;
+impl ResolveHint<u64, u64> for TestResolveHint {
+	fn resolve_hint(who: &u64) -> Option<u64> {
+		if *who < 256 {
+			None
+		} else {
+			Some(*who - 256)
+		}
+	}
+}
+
+impl indices::Trait for Runtime {
+	type AccountIndex = u64;
+	type IsDeadAccount = TestIsDeadAccount;
+	type ResolveHint = TestResolveHint;
+	type Event = ();
+}
+
+pub struct Getter;
+impl Get<u64> for Getter {
+	fn get() -> u64 {
+		0
+	}
+}
+
+impl balances::Trait for Runtime {
+	type Balance = u64;
+	type OnFreeBalanceZero = ();
+	type OnNewAccount = ();
+	type Event = ();
+	type TransactionPayment = ();
+	type DustRemoval = ();
+	type TransferPayment = ();
+	type ExistentialDeposit = Getter;
+	type TransferFee = Getter;
+	type CreationFee = Getter;
+	type TransactionBaseFee = Getter;
+	type TransactionByteFee = Getter;
+	type WeightToFee = ();
 }
 
 pub type Grandpa = grandpa::Module<Runtime>;

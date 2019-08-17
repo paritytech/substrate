@@ -313,7 +313,7 @@ impl GrandpaApi<Block> for RuntimeApi {
 
 	fn GrandpaApi_construct_equivocation_transaction_runtime_api_impl(
 		&self,
-		at: &BlockId<Block>,
+		_at: &BlockId<Block>,
 		_: ExecutionContext,
 		_: Option<(GrandpaEquivocationFrom<Block>)>,
 		_: Vec<u8>,

@@ -20,11 +20,16 @@
 
 use sr_primitives::{Perbill, DigestItem, traits::IdentityLookup, testing::{Header, UintAuthorityId}};
 use runtime_io;
-use srml_support::{impl_outer_origin, impl_outer_event, parameter_types};
+use srml_support::{
+	impl_outer_origin, impl_outer_event, parameter_types,
+	traits::{Get, KeyOwnerProofSystem}
+};
 use primitives::{H256, Blake2Hasher};
 use codec::{Encode, Decode};
 use crate::{AuthorityId, GenesisConfig, Trait, Module, ConsensusLog};
 use substrate_finality_grandpa_primitives::GRANDPA_ENGINE_ID;
+use indices::ResolveHint;
+use system::IsDeadAccount;
 
 impl_outer_origin!{
 	pub enum Origin for Test {}
@@ -34,13 +39,31 @@ pub fn grandpa_log(log: ConsensusLog<u64>) -> DigestItem<H256> {
 	DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode())
 }
 
+pub struct FakeKeyOwnerProofSystem;
+
+impl<Key> KeyOwnerProofSystem<Key> for FakeKeyOwnerProofSystem {
+	type Proof = ();
+	type IdentificationTuple = ();
+
+	fn prove(_key: Key) -> Option<Self::Proof> {
+		None
+	}
+
+	fn check_proof(_key: Key, _proof: Self::Proof) -> Option<Self::IdentificationTuple> {
+		Some(())
+	}
+}
+
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug, Decode, Encode)]
 pub struct Test;
 impl Trait for Test {
 	type Event = TestEvent;
-	// type KeyOwnerSystem = ();
+	type IdentificationTuple = ();
+	type Proof = ();
+	type KeyOwnerSystem = FakeKeyOwnerProofSystem;
 }
+
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const MaximumBlockWeight: u32 = 1024;
@@ -64,6 +87,61 @@ impl system::Trait for Test {
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 }
+
+pub struct TestIsDeadAccount {}
+impl IsDeadAccount<u64> for TestIsDeadAccount {
+	fn is_dead_account(_who: &u64) -> bool {
+		false
+	}
+}
+
+pub struct TestResolveHint;
+impl ResolveHint<u64, u64> for TestResolveHint {
+	fn resolve_hint(who: &u64) -> Option<u64> {
+		if *who < 256 {
+			None
+		} else {
+			Some(*who - 256)
+		}
+	}
+}
+
+impl indices::Trait for Test {
+	type AccountIndex = u64;
+	type IsDeadAccount = TestIsDeadAccount;
+	type ResolveHint = TestResolveHint;
+	type Event = ();
+}
+
+pub struct Getter;
+impl Get<u64> for Getter {
+	fn get() -> u64 {
+		0
+	}
+}
+
+impl balances::Trait for Test {
+	type Balance = u64;
+	type OnFreeBalanceZero = ();
+	type OnNewAccount = ();
+	type Event = ();
+	type TransactionPayment = ();
+	type DustRemoval = ();
+	type TransferPayment = ();
+	type ExistentialDeposit = Getter;
+	type TransferFee = Getter;
+	type CreationFee = Getter;
+	type TransactionBaseFee = Getter;
+	type TransactionByteFee = Getter;
+	type WeightToFee = ();
+}
+
+impl From<()> for TestEvent {
+	fn from(_evt: ()) -> Self {
+		unimplemented!("Not required in tests!")
+	}
+}
+
 
 mod grandpa {
 	pub use crate::Event;

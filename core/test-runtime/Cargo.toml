@@ -17,6 +17,8 @@ inherents = { package = "substrate-inherents", path = "../inherents", default-fe
 aura-primitives = { package = "substrate-consensus-aura-primitives", path = "../consensus/aura/primitives", default-features = false }
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../consensus/babe/primitives", default-features = false }
 grandpa = { package = "srml-grandpa", path = "../../srml/grandpa", default-features = false }
+indices = { package = "srml-indices", path = "../../srml/indices", default-features = false }
+balances = { package = "srml-balances", path = "../../srml/balances", default-features = false }
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
 runtime_io = { package = "sr-io", path = "../sr-io", default-features = false }
 sr-primitives = {  path = "../sr-primitives", default-features = false }
