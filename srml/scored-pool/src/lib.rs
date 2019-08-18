@@ -250,13 +250,14 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			ensure!(!<CandidateExists<T, I>>::exists(&who), "already a member");
 
-			T::Currency::reserve(&who, T::CandidateDeposit::get())
+			let deposit = T::CandidateDeposit::get();
+			T::Currency::reserve(&who, deposit)
 				.map_err(|_| "balance too low to submit candidacy")?;
 
 			// can be inserted as last element in pool, since entities with
 			// `None` are always sorted to the end.
 			if let Err(e) = <Pool<T, I>>::append(&[(who.clone(), None)]) {
-				T::Currency::unreserve(&who, T::CandidateDeposit::get());
+				T::Currency::unreserve(&who, deposit);
 				return Err(e);
 			}
 
