@@ -215,7 +215,7 @@ fn refreshing_happens_every_period() {
 }
 
 #[test]
-fn test_withdraw_candidacy_only_works_for_members() {
+fn withdraw_candidacy_must_only_work_for_members() {
 	with_externalities(&mut new_test_ext(), || {
 		let who = 77;
 		let index = 0;
@@ -246,7 +246,7 @@ fn index_mismatches_should_abort() {
 }
 
 #[test]
-fn test_withdraw_unscored_candidacy() {
+fn withdraw_unscored_candidacy_must_work() {
 	with_externalities(&mut new_test_ext(), || {
 		// given
 		let who = 5;
@@ -261,7 +261,7 @@ fn test_withdraw_unscored_candidacy() {
 }
 
 #[test]
-fn test_withdraw_scored_candidacy() {
+fn withdraw_scored_candidacy_must_work() {
 	with_externalities(&mut new_test_ext(), || {
 		// given
 		let who = 40;
