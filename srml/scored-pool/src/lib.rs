@@ -98,6 +98,7 @@ use sr_primitives::{
 };
 
 type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+type PoolT<T, I> = Vec<(<T as system::Trait>::AccountId, Option<<T as Trait<I>>::Score>)>;
 
 /// The enum is supplied when refreshing the members set.
 /// Depending on the enum variant the corresponding associated
@@ -151,7 +152,7 @@ decl_storage! {
 	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as ScoredPool {
 		/// The current pool of candidates, stored as an ordered Vec
 		/// (ordered descending by score, `None` last, highest first).
-		Pool get(pool) config(): Vec<(T::AccountId, Option<T::Score>)>;
+		Pool get(pool) config(): PoolT<T, I>;
 
 		/// A Map of the candidates. The information in this Map is redundant
 		/// to the information in the `Pool`. But the Map enables us to easily
@@ -193,7 +194,7 @@ decl_storage! {
 				);
 
 				<Pool<T, I>>::put(&pool);
-				<Module<T, I>>::refresh_members(ChangeReceiver::MembershipInitialized);
+				<Module<T, I>>::refresh_members(pool, ChangeReceiver::MembershipInitialized);
 			});
 		})
 	}
@@ -231,7 +232,8 @@ decl_module! {
 		/// highest scoring members in the pool.
 		fn on_initialize(n: T::BlockNumber) {
 			if n % T::Period::get() == Zero::zero() {
-				<Module<T, I>>::refresh_members(ChangeReceiver::MembershipChanged);
+				let pool = <Pool<T, I>>::get();
+				<Module<T, I>>::refresh_members(pool, ChangeReceiver::MembershipChanged);
 			}
 		}
 
@@ -281,9 +283,11 @@ decl_module! {
 			index: u32
 		) {
 			let who = ensure_signed(origin)?;
-			Self::ensure_index(&who, index)?;
 
-			Self::remove_member(who, index)?;
+			let pool = <Pool<T, I>>::get();
+			Self::ensure_index(&pool, &who, index)?;
+
+			Self::remove_member(pool, who, index)?;
 			Self::deposit_event(RawEvent::CandidateWithdrew);
 		}
 
@@ -304,8 +308,11 @@ decl_module! {
 				.map_err(|_| "bad origin")?;
 
 			let who = T::Lookup::lookup(dest)?;
-			Self::ensure_index(&who, index)?;
-			Self::remove_member(who, index)?;
+
+			let pool = <Pool<T, I>>::get();
+			Self::ensure_index(&pool, &who, index)?;
+
+			Self::remove_member(pool, who, index)?;
 			Self::deposit_event(RawEvent::CandidateKicked);
 		}
 
@@ -327,9 +334,10 @@ decl_module! {
 				.map_err(|_| "bad origin")?;
 
 			let who = T::Lookup::lookup(dest)?;
-			Self::ensure_index(&who, index)?;
 
 			let mut pool = <Pool<T, I>>::get();
+			Self::ensure_index(&pool, &who, index)?;
+
 			pool.remove(index as usize);
 
 			// we binary search the pool (which is sorted descending by score).
@@ -369,10 +377,12 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	///
 	/// The `notify` parameter is used to deduct which associated
 	/// type function to invoke at the end of the method.
-	fn refresh_members(notify: ChangeReceiver) {
+	fn refresh_members(
+		pool: PoolT<T, I>,
+		notify: ChangeReceiver
+	) {
 		let count = <MemberCount<I>>::get();
 
-		let pool = <Pool<T, I>>::get();
 		let mut new_members: Vec<T::AccountId> = pool
 			.into_iter()
 			.filter(|(_, score)| score.is_some())
@@ -399,19 +409,24 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	///
 	/// If the entity is a member it is also removed from `Members` and
 	/// the deposit is returned.
-	fn remove_member(remove: T::AccountId, index: u32) -> Result<(), &'static str> {
+	fn remove_member(
+		mut pool: PoolT<T, I>,
+		remove: T::AccountId,
+		index: u32
+	) -> Result<(), &'static str> {
 		// all callers of this function in this module also check
 		// the index for validity before calling this function.
 		// nevertheless we check again here, to assert that there was
 		// no mistake when invoking this sensible function.
-		Self::ensure_index(&remove, index)?;
+		Self::ensure_index(&pool, &remove, index)?;
 
-		<Pool<T, I>>::mutate(|pool| pool.remove(index as usize));
+		pool.remove(index as usize);
+		<Pool<T, I>>::put(&pool);
 
 		// remove from set, if it was in there
 		let members = <Members<T, I>>::get();
 		if members.binary_search(&remove).is_ok() {
-			Self::refresh_members(ChangeReceiver::MembershipChanged);
+			Self::refresh_members(pool, ChangeReceiver::MembershipChanged);
 		}
 
 		<CandidateExists<T, I>>::remove(&remove);
@@ -422,11 +437,16 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		Ok(())
 	}
 
-	fn ensure_index(who: &T::AccountId, index: u32) -> Result<(), &'static str> {
-		let pool = <Pool<T, I>>::get();
+	fn ensure_index(
+		pool: &PoolT<T, I>,
+		who: &T::AccountId,
+		index: u32
+	) -> Result<(), &'static str> {
 		ensure!(index < pool.len() as u32, "index out of bounds");
+
 		let (index_who, _index_score) = &pool[index as usize];
 		ensure!(index_who == who, "index does not match requested account");
+
 		Ok(())
 	}
 }
