@@ -74,7 +74,7 @@ use rstd::prelude::*;
 use session::historical::IdentificationTuple;
 use sr_io::Printable;
 use sr_primitives::{
-	traits::Extrinsic as ExtrinsicT, Perbill,
+	traits::{Extrinsic as ExtrinsicT, Convert}, Perbill,
 	transaction_validity::{
 		TransactionValidity, TransactionLongevity, ValidTransaction, InvalidTransactionValidity,
 	},
