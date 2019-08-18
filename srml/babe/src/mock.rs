@@ -23,6 +23,7 @@ use sr_primitives::{
 	traits::IdentityLookup, Perbill,
 	testing::{Header, UintAuthorityId},
 };
+use sr_version::RuntimeVersion;
 use srml_support::{impl_outer_origin, parameter_types};
 use runtime_io;
 use primitives::{H256, Blake2Hasher};
@@ -43,6 +44,7 @@ parameter_types! {
 	pub const MinimumPeriod: u64 = 1;
 	pub const EpochDuration: u64 = 3;
 	pub const ExpectedBlockTime: u64 = 1;
+	pub const Version: RuntimeVersion = test_runtime::VERSION;
 }
 
 impl system::Trait for Test {
@@ -51,6 +53,7 @@ impl system::Trait for Test {
 	type BlockNumber = u64;
 	type Call = ();
 	type Hash = H256;
+	type Version = Version;
 	type Hashing = sr_primitives::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
@@ -78,7 +81,7 @@ pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blak
 	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	GenesisConfig {
 		authorities: authorities.into_iter().map(|a| (UintAuthorityId(a).to_public_key(), 1)).collect(),
-	}.assimilate_storage(&mut t).unwrap();
+	}.assimilate_storage::<Test>(&mut t).unwrap();
 	t.into()
 }
 
