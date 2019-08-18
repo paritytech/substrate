@@ -458,12 +458,13 @@ mod tests {
 
 			let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
 
+			let check_version = system::CheckVersion::new();
 			let check_genesis = system::CheckGenesis::new();
 			let check_era = system::CheckEra::from(Era::Immortal);
 			let check_nonce = system::CheckNonce::from(index);
 			let check_weight = system::CheckWeight::new();
 			let take_fees = balances::TakeFees::from(0);
-			let extra = (check_genesis, check_era, check_nonce, check_weight, take_fees);
+			let extra = (check_version, check_genesis, check_era, check_nonce, check_weight, take_fees);
 
 			let raw_payload = (function, extra.clone(), genesis_hash, genesis_hash);
 			let signature = raw_payload.using_encoded(|payload| if payload.len() > 256 {
