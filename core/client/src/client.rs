@@ -1894,6 +1894,7 @@ pub(crate) mod tests {
 	use test_client::{
 		prelude::*,
 		client::backend::Backend as TestBackend,
+		client_db::{Backend, DatabaseSettings, PruningMode},
 		runtime::{self, Block, Transfer, RuntimeApi, TestAPI},
 	};
 
@@ -2812,5 +2813,96 @@ pub(crate) mod tests {
 		// Set B1 as new best
 		client.set_head(BlockId::hash(b1.hash())).unwrap();
 		assert_eq!(950, current_balance());
+	}
+
+	#[test]
+	fn doesnt_import_blocks_that_revert_finality() {
+		let _ = env_logger::try_init();
+		let tmp = tempdir::TempDir::new("client-test").unwrap();
+
+		// we need to run with archive pruning to avoid pruning non-canonical
+		// states
+		let backend = Arc::new(Backend::new(
+			DatabaseSettings {
+				cache_size: None,
+				state_cache_size: 1 << 20,
+				state_cache_child_ratio: None,
+				path: tmp.into_path(),
+				pruning: PruningMode::ArchiveAll,
+			},
+			u64::max_value(),
+		).unwrap());
+
+		let client = TestClientBuilder::with_backend(backend).build();
+
+		//    -> C1
+		//   /
+		// G -> A1 -> A2
+		//   \
+		//    -> B1 -> B2 -> B3
+
+		let a1 = client.new_block_at(&BlockId::Number(0), Default::default())
+			.unwrap().bake().unwrap();
+		client.import(BlockOrigin::Own, a1.clone()).unwrap();
+
+		let a2 = client.new_block_at(&BlockId::Hash(a1.hash()), Default::default())
+			.unwrap().bake().unwrap();
+		client.import(BlockOrigin::Own, a2.clone()).unwrap();
+
+		let mut b1 = client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
+
+		// needed to make sure B1 gets a different hash from A1
+		b1.push_transfer(Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
+			amount: 1,
+			nonce: 0,
+		}).unwrap();
+		let b1 = b1.bake().unwrap();
+		client.import(BlockOrigin::Own, b1.clone()).unwrap();
+
+		let b2 = client.new_block_at(&BlockId::Hash(b1.hash()), Default::default())
+			.unwrap().bake().unwrap();
+		client.import(BlockOrigin::Own, b2.clone()).unwrap();
+
+		// we will finalize A2 which should make it impossible to import a new
+		// B3 at the same height but that doesnt't include it
+		client.finalize_block(BlockId::Hash(a2.hash()), None, false).unwrap();
+
+		let b3 = client.new_block_at(&BlockId::Hash(b2.hash()), Default::default())
+			.unwrap().bake().unwrap();
+
+		let import_err = client.import(BlockOrigin::Own, b3).err().unwrap();
+		let expected_err = ConsensusError::ClientImport(
+			error::Error::NotInFinalizedChain.to_string()
+		);
+
+		assert_eq!(
+			import_err.to_string(),
+			expected_err.to_string(),
+		);
+
+		// adding a C1 block which is lower than the last finalized should also
+		// fail (with a cheaper check that doesn't require checking ancestry).
+		let mut c1 = client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
+
+		// needed to make sure C1 gets a different hash from A1 and B1
+		c1.push_transfer(Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
+			amount: 2,
+			nonce: 0,
+		}).unwrap();
+		let c1 = c1.bake().unwrap();
+
+		let import_err = client.import(BlockOrigin::Own, c1).err().unwrap();
+		let expected_err = ConsensusError::ClientImport(
+			error::Error::NotInFinalizedChain.to_string()
+		);
+
+		assert_eq!(
+			import_err.to_string(),
+			expected_err.to_string(),
+		);
 	}
 }
