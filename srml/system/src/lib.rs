@@ -1122,7 +1122,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckVersion<T> {
 	type AdditionalSigned = u32;
 	type Pre = ();
 
-	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str> {
+	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
 		Ok(<Module<T>>::runtime_version().spec_version)
 	}
 }
