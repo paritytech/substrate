@@ -740,7 +740,8 @@ decl_module! {
 				return Err("stash already bonded")
 			}
 
-			let controller = T::Lookup::lookup(controller)?;
+			let controller = T::Lookup::lookup(controller)
+				.ok_or("could not find `controller` account")?;
 
 			if <Ledger<T>>::exists(&controller) {
 				return Err("controller already paired")
@@ -922,9 +923,8 @@ decl_module! {
 			ensure!(!targets.is_empty(), "targets cannot be empty");
 			let targets = targets.into_iter()
 				.take(MAX_NOMINATIONS)
-				.map(T::Lookup::lookup)
-				.collect::<result::Result<Vec<T::AccountId>, _>>()
-				?;
+				.map(|t| T::Lookup::lookup(t).ok_or("could not find a target account"))
+				.collect::<result::Result<Vec<T::AccountId>, _>>()?;
 
 			<Validators<T>>::remove(stash);
 			<Nominators<T>>::insert(stash, targets);
@@ -984,7 +984,7 @@ decl_module! {
 		fn set_controller(origin, controller: <T::Lookup as StaticLookup>::Source) {
 			let stash = ensure_signed(origin)?;
 			let old_controller = Self::bonded(&stash).ok_or("not a stash")?;
-			let controller = T::Lookup::lookup(controller)?;
+			let controller = T::Lookup::lookup(controller).ok_or("could not find `controller` account")?;
 			if <Ledger<T>>::exists(&controller) {
 				return Err("controller already paired")
 			}

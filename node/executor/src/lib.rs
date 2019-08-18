@@ -44,11 +44,17 @@ mod tests {
 	use keyring::{AccountKeyring, Ed25519Keyring, Sr25519Keyring};
 	use runtime_support::{Hashable, StorageValue, StorageMap, assert_eq_error_rate, traits::Currency};
 	use state_machine::{CodeExecutor, Externalities, TestExternalities as CoreTestExternalities};
-	use primitives::{ twox_128, blake2_256, Blake2Hasher, ChangesTrieConfiguration, NeverNativeValue, NativeOrEncoded};
+	use primitives::{
+		twox_128, blake2_256, Blake2Hasher, ChangesTrieConfiguration, NeverNativeValue,
+		NativeOrEncoded,
+	};
 	use node_primitives::{Hash, BlockNumber, AccountId, Balance, Index};
-	use sr_primitives::traits::{Header as HeaderT, Hash as HashT, Convert};
-	use sr_primitives::{generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
-	use sr_primitives::weights::{WeightMultiplier, GetDispatchInfo};
+	use sr_primitives::{
+		traits::{Header as HeaderT, Hash as HashT, Convert},
+		generic::Era, ApplyOutcome, ApplyResult, Perbill,
+		transaction_validity::InvalidTransactionValidity,
+		weights::{WeightMultiplier, GetDispatchInfo},
+	};
 	use contracts::ContractAddressFor;
 	use system::{EventRecord, Phase};
 	use node_runtime::{
@@ -205,7 +211,7 @@ mod tests {
 			None,
 		).0.unwrap();
 		let r = ApplyResult::decode(&mut &v.as_encoded()[..]).unwrap();
-		assert_eq!(r, Err(ApplyError::CantPay));
+		assert_eq!(r, Err(InvalidTransactionValidity::Payment.into()));
 	}
 
 	#[test]
@@ -241,7 +247,7 @@ mod tests {
 			None,
 		).0.unwrap();
 		let r = ApplyResult::decode(&mut &v.as_encoded()[..]).unwrap();
-		assert_eq!(r, Err(ApplyError::CantPay));
+		assert_eq!(r, Err(InvalidTransactionValidity::Payment.into()));
 	}
 
 	#[test]
@@ -893,7 +899,7 @@ mod tests {
 		let r = WasmExecutor::new()
 			.call(&mut t, 8, COMPACT_CODE, "BlockBuilder_apply_extrinsic", &vec![].and(&xt())).unwrap();
 		let r = ApplyResult::decode(&mut &r[..]).unwrap();
-		assert_eq!(r, Err(ApplyError::CantPay));
+		assert_eq!(r, Err(InvalidTransactionValidity::Payment.into()));
 	}
 
 	#[test]

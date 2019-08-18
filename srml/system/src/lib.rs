@@ -186,8 +186,7 @@ pub trait Trait: 'static + Eq + Clone {
 	/// Used to define the type and conversion mechanism for referencing accounts in transactions. It's perfectly
 	/// reasonable for this to be an identity conversion (with the source type being `AccountId`), but other modules
 	/// (e.g. Indices module) may provide more functional/efficient alternatives.
-	// TODO: avoid &'static str error type #2953
-	type Lookup: StaticLookup<Target = Self::AccountId, Error = &'static str>;
+	type Lookup: StaticLookup<Target = Self::AccountId>;
 
 	/// Handler for updating the weight multiplier at the end of each block.
 	///
@@ -451,7 +450,6 @@ impl<
 	AccountId,
 > EnsureOrigin<O> for EnsureRoot<AccountId> {
 	type Success = ();
-	type Error = &'static str;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
 			RawOrigin::Root => Ok(()),
@@ -466,7 +464,6 @@ impl<
 	AccountId,
 > EnsureOrigin<O> for EnsureSigned<AccountId> {
 	type Success = AccountId;
-	type Error = &'static str;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
 			RawOrigin::Signed(who) => Ok(who),
@@ -482,7 +479,6 @@ impl<
 	AccountId: PartialEq + Clone,
 > EnsureOrigin<O> for EnsureSignedBy<Who, AccountId> {
 	type Success = AccountId;
-	type Error = &'static str;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
 			RawOrigin::Signed(ref who) if Who::contains(who) => Ok(who.clone()),
@@ -497,7 +493,6 @@ impl<
 	AccountId,
 > EnsureOrigin<O> for EnsureNone<AccountId> {
 	type Success = ();
-	type Error = &'static str;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
 			RawOrigin::None => Ok(()),
@@ -509,7 +504,6 @@ impl<
 pub struct EnsureNever<T>(::rstd::marker::PhantomData<T>);
 impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
 	type Success = T;
-	type Error = &'static str;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		Err(o)
 	}
@@ -859,31 +853,33 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	/// Checks if the current extrinsic can fit into the block with respect to block weight limits.
 	///
 	/// Upon successes, it returns the new block weight as a `Result`.
-	fn check_weight(info: DispatchInfo) -> Result<Weight, ApplyError> {
+	fn check_weight(info: DispatchInfo) -> Result<Weight, TransactionValidityError> {
 		let current_weight = Module::<T>::all_extrinsics_weight();
 		let maximum_weight = T::MaximumBlockWeight::get();
 		let limit = Self::get_dispatch_limit_ratio(info.class) * maximum_weight;
 		let added_weight = info.weight.min(limit);
 		let next_weight = current_weight.saturating_add(added_weight);
 		if next_weight > limit {
-			return Err(ApplyError::Exhausted)
+			Err(InvalidTransactionValidity::ExhaustResources.into())
+		} else {
+			Ok(next_weight)
 		}
-		Ok(next_weight)
 	}
 
 	/// Checks if the current extrinsic can fit into the block with respect to block length limits.
 	///
 	/// Upon successes, it returns the new block length as a `Result`.
-	fn check_block_length(info: DispatchInfo, len: usize) -> Result<u32, ApplyError> {
+	fn check_block_length(info: DispatchInfo, len: usize) -> Result<u32, TransactionValidityError> {
 		let current_len = Module::<T>::all_extrinsics_len();
 		let maximum_len = T::MaximumBlockLength::get();
 		let limit = Self::get_dispatch_limit_ratio(info.class) * maximum_len;
 		let added_len = len as u32;
 		let next_len = current_len.saturating_add(added_len);
 		if next_len > limit {
-			return Err(ApplyError::Exhausted)
+			Err(InvalidTransactionValidity::ExhaustResources.into())
+		} else {
+			Ok(next_len)
 		}
-		Ok(next_len)
 	}
 
 	/// get the priority of an extrinsic denoted by `info`.
@@ -933,8 +929,12 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		// There is no point in writing to storage here since changes are discarded. This basically
 		// discards any transaction which is bigger than the length or weight limit **alone**, which
 		// is a guarantee that it will fail in the pre-dispatch phase.
-		if Self::check_block_length(info, len).is_err() || Self::check_weight(info).is_err() {
-			return InvalidTransactionValidity::ExhaustResources.into();
+		if let Err(e) = Self::check_block_length(info, len) {
+			return e.into();
+		}
+
+		if let Err(e) = Self::check_weight(info) {
+			return e.into();
 		}
 
 		ValidTransaction { priority: Self::get_priority(info), ..Default::default() }.into()
@@ -1102,8 +1102,8 @@ impl<T> Default for ChainContext<T> {
 impl<T: Trait> Lookup for ChainContext<T> {
 	type Source = <T::Lookup as StaticLookup>::Source;
 	type Target = <T::Lookup as StaticLookup>::Target;
-	type Error = <T::Lookup as StaticLookup>::Error;
-	fn lookup(&self, s: Self::Source) -> rstd::result::Result<Self::Target, Self::Error> {
+
+	fn lookup(&self, s: Self::Source) -> Option<Self::Target> {
 		<T::Lookup as StaticLookup>::lookup(s)
 	}
 }

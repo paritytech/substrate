@@ -99,15 +99,15 @@ impl From<Error> for rpc::Error {
 				message: format!("Verification Error: {}", e).into(),
 				data: Some(format!("{:?}", e).into()),
 			},
-			Error::Pool(PoolError::InvalidTransaction(code)) => rpc::Error {
+			Error::Pool(PoolError::InvalidTransaction(e)) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_INVALID_TX),
 				message: "Invalid Transaction".into(),
-				data: Some(code.into()),
+				data: serde_json::to_value(e).ok(),
 			},
-			Error::Pool(PoolError::UnknownTransactionValidity(code)) => rpc::Error {
+			Error::Pool(PoolError::UnknownTransactionValidity(e)) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_UNKNOWN_VALIDITY),
 				message: "Unknown Transaction Validity".into(),
-				data: Some(code.into()),
+				data: serde_json::to_value(e).ok(),
 			},
 			Error::Pool(PoolError::TemporarilyBanned) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_TEMPORARILY_BANNED),
@@ -131,7 +131,7 @@ impl From<Error> for rpc::Error {
 			},
 			Error::Pool(PoolError::ImmediatelyDropped) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_IMMEDIATELY_DROPPED),
-				message: "Immediately Dropped" .into(),
+				message: "Immediately Dropped".into(),
 				data: Some("The transaction couldn't enter the pool because of the limit".into()),
 			},
 			e => errors::internal(e),

@@ -16,7 +16,6 @@
 
 use crate::{GasSpent, Module, Trait, BalanceOf, NegativeImbalanceOf};
 use rstd::convert::TryFrom;
-use sr_primitives::PrimitiveError;
 use sr_primitives::traits::{CheckedMul, Zero, SaturatedConversion, SimpleArithmetic, UniqueSaturatedInto};
 use srml_support::StorageValue;
 use srml_support::traits::{Currency, ExistenceRequirement, Get, Imbalance, OnUnbalanced, WithdrawReason};
@@ -205,7 +204,7 @@ pub fn buy_gas<T: Trait>(
 	let gas_available = T::BlockGasLimit::get() - <Module<T>>::gas_spent();
 	if gas_limit > gas_available {
 		// gas limit reached, revert the transaction and retry again in the future
-		return Err(PrimitiveError::BlockFull.into());
+		return Err("gas block limit reached");
 	}
 
 	// Buy the specified amount of gas.

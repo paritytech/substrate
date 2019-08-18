@@ -209,11 +209,11 @@ pub trait Trait: system::Trait + Sized {
 
 	/// Origin from which the next tabled referendum may be forced. This is a normal
 	/// "super-majority-required" referendum.
-	type ExternalOrigin: EnsureOrigin<Self::Origin, Error = Error>;
+	type ExternalOrigin: EnsureOrigin<Self::Origin>;
 
 	/// Origin from which the next tabled referendum may be forced; this allows for the tabling of
 	/// a majority-carries referendum.
-	type ExternalMajorityOrigin: EnsureOrigin<Self::Origin, Error = Error>;
+	type ExternalMajorityOrigin: EnsureOrigin<Self::Origin>;
 
 	/// Origin from which the next tabled referendum may be forced; this allows for the tabling of
 	/// a negative-turnout-bias (default-carries) referendum.
@@ -231,7 +231,7 @@ pub trait Trait: system::Trait + Sized {
 	type CancellationOrigin: EnsureOrigin<Self::Origin>;
 
 	/// Origin for anyone able to veto proposals.
-	type VetoOrigin: EnsureOrigin<Self::Origin, Success=Self::AccountId, Error = Error>;
+	type VetoOrigin: EnsureOrigin<Self::Origin, Success=Self::AccountId>;
 
 	/// Period in blocks where an external proposal may not be re-submitted after being vetoed.
 	type CooloffPeriod: Get<Self::BlockNumber>;

@@ -103,7 +103,6 @@ mod tests {
 		type Header = Header;
 		type WeightMultiplierUpdate = ();
 		type Event = ();
-		type Error = Error;
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type MaximumBlockLength = MaximumBlockLength;

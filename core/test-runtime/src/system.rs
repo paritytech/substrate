@@ -21,12 +21,13 @@ use rstd::prelude::*;
 use runtime_io::{storage_root, ordered_trie_root, storage_changes_root, twox_128, blake2_256};
 use runtime_support::storage::{self, StorageValue, StorageMap};
 use runtime_support::storage_items;
-use sr_primitives::traits::{Hash as HashT, BlakeTwo256, Header as _};
-use sr_primitives::generic;
-use sr_primitives::{ApplyError, ApplyOutcome, ApplyResult};
-use sr_primitives::transaction_validity::{TransactionValidity, ValidTransaction};
+use sr_primitives::{
+	traits::{Hash as HashT, BlakeTwo256, Header as _}, generic, ApplyError, ApplyOutcome,
+	ApplyResult,
+	transaction_validity::{TransactionValidity, ValidTransaction, InvalidTransactionValidity},
+};
 use codec::{KeyedVec, Encode};
-use super::{
+use crate::{
 	AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest, AuthorityId
 };
 use primitives::{Blake2Hasher, storage::well_known_keys};
@@ -146,17 +147,17 @@ impl executive::ExecuteBlock<Block> for BlockExecutor {
 /// This doesn't attempt to validate anything regarding the block.
 pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 	if check_signature(&utx).is_err() {
-		return TransactionValidity::Invalid(ApplyError::BadSignature as i8);
+		return InvalidTransactionValidity::BadProof.into();
 	}
 
 	let tx = utx.transfer();
 	let nonce_key = tx.from.to_keyed_vec(NONCE_OF);
 	let expected_nonce: u64 = storage::hashed::get_or(&blake2_256, &nonce_key, 0);
 	if tx.nonce < expected_nonce {
-		return TransactionValidity::Invalid(ApplyError::Stale as i8);
+		return InvalidTransactionValidity::Stale.into();
 	}
 	if tx.nonce > expected_nonce + 64 {
-		return TransactionValidity::Unknown(ApplyError::Future as i8);
+		return InvalidTransactionValidity::Future.into();
 	}
 
 	let hash = |from: &AccountId, nonce: u64| {
@@ -232,8 +233,7 @@ pub fn finalize_block() -> Header {
 #[inline(always)]
 fn check_signature(utx: &Extrinsic) -> Result<(), ApplyError> {
 	use sr_primitives::traits::BlindCheckable;
-	utx.clone().check().map_err(|_| ApplyError::BadSignature)?;
-	Ok(())
+	utx.clone().check().map_err(|_| InvalidTransactionValidity::BadProof.into()).map(|_| ())
 }
 
 fn execute_transaction_backend(utx: &Extrinsic) -> ApplyResult {
@@ -251,7 +251,7 @@ fn execute_transfer_backend(tx: &Transfer) -> ApplyResult {
 	let nonce_key = tx.from.to_keyed_vec(NONCE_OF);
 	let expected_nonce: u64 = storage::hashed::get_or(&blake2_256, &nonce_key, 0);
 	if !(tx.nonce == expected_nonce) {
-		return Err(ApplyError::Stale)
+		return Err(InvalidTransactionValidity::Stale.into())
 	}
 
 	// increment nonce in storage
@@ -263,7 +263,7 @@ fn execute_transfer_backend(tx: &Transfer) -> ApplyResult {
 
 	// enact transfer
 	if !(tx.amount <= from_balance) {
-		return Err(ApplyError::CantPay)
+		return Err(InvalidTransactionValidity::Payment.into())
 	}
 	let to_balance_key = tx.to.to_keyed_vec(BALANCE_OF);
 	let to_balance: u64 = storage::hashed::get_or(&blake2_256, &to_balance_key, 0);
@@ -292,7 +292,7 @@ fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 		println!(
 			"Hash: given={}, expected={}",
 			HexDisplay::from(given.as_fixed_bytes()),
-			HexDisplay::from(expected.as_fixed_bytes())
+			HexDisplay::from(expected.as_fixed_bytes()),
 		);
 	}
 }
@@ -300,9 +300,9 @@ fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 #[cfg(not(feature = "std"))]
 fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 	if given != expected {
-		::runtime_io::print("Hash not equal");
-		::runtime_io::print(given.as_bytes());
-		::runtime_io::print(expected.as_bytes());
+		runtime_io::print("Hash not equal");
+		runtime_io::print(given.as_bytes());
+		runtime_io::print(expected.as_bytes());
 	}
 }
 

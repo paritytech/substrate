@@ -621,11 +621,18 @@ pub enum ApplyError {
 	/// General error to do with the state of the system in general.
 	BadState,
 
-	/// General error to do with the exhaustion of block resources.
-	Exhausted,
-
 	/// Any error to do with the transaction validity.
 	Validity(transaction_validity::TransactionValidityError),
+}
+
+impl ApplyError {
+	/// Returns if the reason for the error was block resource exhaustion.
+	pub fn exhaust_resources(&self) -> bool {
+		match self {
+			Self::Validity(e) => e.exhaust_resources(),
+			_ => false,
+		}
+	}
 }
 
 impl Into<&'static str> for ApplyError {
@@ -633,7 +640,6 @@ impl Into<&'static str> for ApplyError {
 		match self {
 			ApplyError::NoPermission => "Transaction does not have required permissions",
 			ApplyError::BadState => "System in bad state",
-			ApplyError::Exhausted => "Transaction exhausted block limits",
 			ApplyError::Validity(v) => v.into(),
 		}
 	}

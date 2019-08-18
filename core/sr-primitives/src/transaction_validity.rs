@@ -33,6 +33,8 @@ pub type TransactionTag = Vec<u8>;
 #[derive(Clone, PartialEq, Eq, Encode, Decode, Copy)]
 #[cfg_attr(feature = "std", derive(Debug, serde::Serialize))]
 pub enum InvalidTransactionValidity {
+	/// The call of the transaction is not expected.
+	Call,
 	/// General error to do with the inability to pay some fees (e.g. account balance too low).
 	Payment,
 	/// General error to do with the transaction not yet being valid (e.g. nonce too high).
@@ -49,9 +51,20 @@ pub enum InvalidTransactionValidity {
 	Custom(u8),
 }
 
+impl InvalidTransactionValidity {
+	/// Returns if the reason for the invalidity was block resource exhaustion.
+	pub fn exhaust_resources(&self) -> bool {
+		match self {
+			Self::ExhaustResources => true,
+			_ => false,
+		}
+	}
+}
+
 impl Into<&'static str> for InvalidTransactionValidity {
 	fn into(self) -> &'static str {
 		match self {
+			InvalidTransactionValidity::Call => "Transaction call is not expected",
 			InvalidTransactionValidity::Future => "Transaction will be valid in the future",
 			InvalidTransactionValidity::Stale => "Transaction is outdated",
 			InvalidTransactionValidity::BadProof => "Transaction has a bad signature",
@@ -99,6 +112,16 @@ pub enum TransactionValidityError {
 	Unknown(UnknownTransactionValidity),
 }
 
+impl TransactionValidityError {
+	/// Returns if the reason for the error was block resource exhaustion.
+	pub fn exhaust_resources(&self) -> bool {
+		match self {
+			Self::Invalid(e) => e.exhaust_resources(),
+			Self::Unknown(_) => false,
+		}
+	}
+}
+
 impl Into<&'static str> for TransactionValidityError {
 	fn into(self) -> &'static str {
 		match self {
@@ -108,27 +131,27 @@ impl Into<&'static str> for TransactionValidityError {
 	}
 }
 
-impl Into<TransactionValidityError> for InvalidTransactionValidity {
-	fn into(self) -> TransactionValidityError {
-		TransactionValidityError::Invalid(self)
+impl From<InvalidTransactionValidity> for TransactionValidityError {
+	fn from(err: InvalidTransactionValidity) -> Self {
+		TransactionValidityError::Invalid(err)
 	}
 }
 
-impl Into<TransactionValidityError> for UnknownTransactionValidity {
-	fn into(self) -> TransactionValidityError {
-		TransactionValidityError::Unknown(self)
+impl From<UnknownTransactionValidity> for TransactionValidityError {
+	fn from(err: UnknownTransactionValidity) -> Self {
+		TransactionValidityError::Unknown(err)
 	}
 }
 
 impl Into<crate::ApplyError> for InvalidTransactionValidity {
 	fn into(self) -> crate::ApplyError {
-		TransactionValidityError::from(self.into()).into()
+		TransactionValidityError::from(self).into()
 	}
 }
 
 impl Into<crate::ApplyError> for UnknownTransactionValidity {
 	fn into(self) -> crate::ApplyError {
-		TransactionValidityError::from(self.into()).into()
+		TransactionValidityError::from(self).into()
 	}
 }
 

@@ -538,7 +538,7 @@ mod tests {
 					);
 					assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(nonce as u32 + 1));
 				} else {
-					assert_eq!(res, Err(ApplyError::Exhausted));
+					assert_eq!(res, Err(InvalidTransactionValidity::ExhaustResources.into()));
 				}
 			}
 		});

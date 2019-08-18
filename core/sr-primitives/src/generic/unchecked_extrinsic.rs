@@ -25,7 +25,9 @@ use codec::{Decode, Encode, Input, Error};
 use crate::{
 	traits::{self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic},
 	generic::CheckedExtrinsic,
-	transaction_validity::{TransactionValidityError, InvalidTransactionValidity},
+	transaction_validity::{
+		TransactionValidityError, InvalidTransactionValidity, UnknownTransactionValidity,
+	},
 };
 
 const TRANSACTION_VERSION: u8 = 3;
@@ -95,7 +97,6 @@ where
 	Extra: SignedExtension<AccountId=AccountId>,
 	AccountId: Member + MaybeDisplay,
 	Lookup: traits::Lookup<Source=Address, Target=AccountId>,
-	TransactionValidityError: From<Lookup::Error>,
 {
 	type Checked = CheckedExtrinsic<AccountId, Call, Extra>;
 
@@ -104,7 +105,7 @@ where
 			Some((signed, signature, extra)) => {
 				let additional_signed = extra.additional_signed()?;
 				let raw_payload = (self.function, extra, additional_signed);
-				let signed = lookup.lookup(signed)?;
+				let signed = lookup.lookup(signed).ok_or(UnknownTransactionValidity::InvalidIndex)?;
 				if !raw_payload.using_encoded(|payload| {
 					if payload.len() > 256 {
 						signature.verify(&blake2_256(payload)[..], &signed)
@@ -214,16 +215,10 @@ mod tests {
 	use super::*;
 	use runtime_io::blake2_256;
 	use crate::codec::{Encode, Decode};
-	use crate::traits::{SignedExtension, Lookup};
+	use crate::traits::{SignedExtension, IdentityLookup};
 	use serde::{Serialize, Deserialize};
 
-	struct TestContext;
-	impl Lookup for TestContext {
-		type Source = u64;
-		type Target = u64;
-		type Error = TransactionValidityError;
-		fn lookup(&self, s: u64) -> Result<u64, TransactionValidityError> { Ok(s) }
-	}
+	type TestContext = IdentityLookup<u64>;
 
 	#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Encode, Decode)]
 	struct TestSig(u64, Vec<u8>);
@@ -290,7 +285,7 @@ mod tests {
 	fn unsigned_check_should_work() {
 		let ux = Ex::new_unsigned(vec![0u8; 0]);
 		assert!(!ux.is_signed().unwrap_or(false));
-		assert!(<Ex as Checkable<TestContext>>::check(ux, &TestContext).is_ok());
+		assert!(<Ex as Checkable<TestContext>>::check(ux, &Default::default()).is_ok());
 	}
 
 	#[test]
@@ -303,7 +298,7 @@ mod tests {
 		);
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(
-			<Ex as Checkable<TestContext>>::check(ux, &TestContext),
+			<Ex as Checkable<TestContext>>::check(ux, &Default::default()),
 			Err(InvalidTransactionValidity::BadProof.into()),
 		);
 	}
@@ -318,7 +313,7 @@ mod tests {
 		);
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(
-			<Ex as Checkable<TestContext>>::check(ux, &TestContext),
+			<Ex as Checkable<TestContext>>::check(ux, &Default::default()),
 			Ok(CEx { signed: Some((TEST_ACCOUNT, TestExtra)), function: vec![0u8; 0] }),
 		);
 	}

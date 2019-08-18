@@ -174,7 +174,7 @@ decl_module! {
 			let origin = ensure_signed(origin)?;
 			let origin_account = (id, origin.clone());
 			let origin_balance = <Balances<T>>::get(&origin_account);
-			let target = T::Lookup::lookup(target)?;
+			let target = T::Lookup::lookup(target).ok_or("could not find `target` account")?;
 			ensure!(!amount.is_zero(), "transfer amount should be non-zero");
 			ensure!(origin_balance >= amount, "origin account balance must be greater than or equal to the transfer amount");
 

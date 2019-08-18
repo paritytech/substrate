@@ -93,32 +93,26 @@ impl<
 	}
 }
 
-/// EnsureOrigin Error type
-pub trait EnsureOriginError {
-	/// Indicates invalid origin
-	fn invalid_origin() -> Self;
+/// An error type that indicates that the origin is invalid.
+#[derive(Encode, Decode)]
+pub struct InvalidOrigin;
+
+impl From<InvalidOrigin> for &'static str {
+	fn from(_: InvalidOrigin) -> &'static str {
+		"Invalid origin"
+	}
 }
 
 /// Some sort of check on the origin is performed by this object.
 pub trait EnsureOrigin<OuterOrigin> {
 	/// A return type.
 	type Success;
-	/// Error type
-	type Error: EnsureOriginError;
 	/// Perform the origin check.
-	fn ensure_origin(o: OuterOrigin) -> result::Result<Self::Success, Self::Error> {
-		Self::try_origin(o).map_err(|_| Self::Error::invalid_origin())
+	fn ensure_origin(o: OuterOrigin) -> result::Result<Self::Success, InvalidOrigin> {
+		Self::try_origin(o).map_err(|_| InvalidOrigin)
 	}
 	/// Perform the origin check.
 	fn try_origin(o: OuterOrigin) -> result::Result<Self::Success, OuterOrigin>;
-}
-
-impl EnsureOriginError for () {
-	fn invalid_origin() -> () {}
-}
-
-impl EnsureOriginError for &'static str {
-	fn invalid_origin() -> &'static str { "Invalid origin" }
 }
 
 /// Means of changing one type into another in a manner dependent on the source type.
@@ -127,10 +121,8 @@ pub trait Lookup {
 	type Source;
 	/// Type to lookup into.
 	type Target;
-	/// Error type
-	type Error;
 	/// Attempt a lookup.
-	fn lookup(&self, s: Self::Source) -> result::Result<Self::Target, Self::Error>;
+	fn lookup(&self, s: Self::Source) -> Option<Self::Target>;
 }
 
 /// Means of changing one type into another in a manner dependent on the source type.
@@ -141,10 +133,8 @@ pub trait StaticLookup {
 	type Source: Codec + Clone + PartialEq + MaybeDebug;
 	/// Type to lookup into.
 	type Target;
-	/// Error type.
-	type Error;
 	/// Attempt a lookup.
-	fn lookup(s: Self::Source) -> result::Result<Self::Target, Self::Error>;
+	fn lookup(s: Self::Source) -> Option<Self::Target>;
 	/// Convert from Target back to Source.
 	fn unlookup(t: Self::Target) -> Self::Source;
 }
@@ -155,15 +145,14 @@ pub struct IdentityLookup<T>(PhantomData<T>);
 impl<T: Codec + Clone + PartialEq + MaybeDebug> StaticLookup for IdentityLookup<T> {
 	type Source = T;
 	type Target = T;
-	type Error = &'static str;
-	fn lookup(x: T) -> result::Result<T, Self::Error> { Ok(x) }
+	fn lookup(x: T) -> Option<T> { Some(x) }
 	fn unlookup(x: T) -> T { x }
 }
+
 impl<T> Lookup for IdentityLookup<T> {
 	type Source = T;
 	type Target = T;
-	type Error = &'static str;
-	fn lookup(&self, x: T) -> result::Result<T, Self::Error> { Ok(x) }
+	fn lookup(&self, x: T) -> Option<T> { Some(x) }
 }
 
 /// Extensible conversion trait. Generic over both source and destination types.

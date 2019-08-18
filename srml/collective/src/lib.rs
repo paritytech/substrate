@@ -302,7 +302,6 @@ impl<
 	I,
 > EnsureOrigin<O> for EnsureMember<AccountId, I> {
 	type Success = AccountId;
-	type Error = &'static str;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
 			RawOrigin::Member(id) => Ok(id),
@@ -319,7 +318,6 @@ impl<
 	I,
 > EnsureOrigin<O> for EnsureMembers<N, AccountId, I> {
 	type Success = (MemberCount, MemberCount);
-	type Error = &'static str;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
 			RawOrigin::Members(n, m) if n >= N::VALUE => Ok((n, m)),
@@ -339,7 +337,6 @@ impl<
 	I,
 > EnsureOrigin<O> for EnsureProportionMoreThan<N, D, AccountId, I> {
 	type Success = ();
-	type Error = &'static str;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
 			RawOrigin::Members(n, m) if n * D::VALUE > N::VALUE * m => Ok(()),
@@ -359,7 +356,6 @@ impl<
 	I,
 > EnsureOrigin<O> for EnsureProportionAtLeast<N, D, AccountId, I> {
 	type Success = ();
-	type Error = &'static str;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
 			RawOrigin::Members(n, m) if n * D::VALUE >= N::VALUE * m => Ok(()),

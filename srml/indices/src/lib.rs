@@ -19,7 +19,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::{prelude::*, result, marker::PhantomData, convert::TryInto};
+use rstd::{prelude::*, marker::PhantomData, convert::TryInto};
 use codec::{Encode, Codec};
 use srml_support::{StorageValue, StorageMap, Parameter, decl_module, decl_event, decl_storage};
 use sr_primitives::traits::{One, SimpleArithmetic, StaticLookup, Member};
@@ -224,11 +224,11 @@ impl<T: Trait> OnNewAccount<T::AccountId> for Module<T> {
 impl<T: Trait> StaticLookup for Module<T> {
 	type Source = address::Address<T::AccountId, T::AccountIndex>;
 	type Target = T::AccountId;
-	type Error = &'static str;
 
-	fn lookup(a: Self::Source) -> result::Result<Self::Target, &'static str> {
-		Self::lookup_address(a).ok_or("invalid account index")
+	fn lookup(a: Self::Source) -> Option<T::AccountId> {
+		Self::lookup_address(a)
 	}
+
 	fn unlookup(a: Self::Target) -> Self::Source {
 		address::Address::Id(a)
 	}

@@ -70,8 +70,10 @@
 use primitives::offchain::{OpaqueNetworkState, StorageKind};
 use codec::{Encode, Decode};
 use sr_primitives::{
-	ApplyError, traits::{Extrinsic as ExtrinsicT},
-	transaction_validity::{TransactionValidity, TransactionLongevity, ValidTransaction},
+	traits::Extrinsic as ExtrinsicT,
+	transaction_validity::{
+		TransactionValidity, TransactionLongevity, ValidTransaction, InvalidTransactionValidity,
+	},
 };
 use rstd::prelude::*;
 use session::SessionIndex;
@@ -127,7 +129,7 @@ enum OffchainErr {
 }
 
 impl Printable for OffchainErr {
-	fn print(self) {
+	fn print(&self) {
 		match self {
 			OffchainErr::DecodeWorkerStatus => print("Offchain error: decoding WorkerStatus failed!"),
 			OffchainErr::ExtrinsicCreation => print("Offchain error: extrinsic creation failed!"),
@@ -381,24 +383,24 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
 
-	fn validate_unsigned(call: &Self::Call) -> srml_support::unsigned::TransactionValidity {
+	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
 		if let Call::heartbeat(heartbeat, signature) = call {
 			if <Module<T>>::is_online_in_current_session(heartbeat.authority_index) {
 				// we already received a heartbeat for this authority
-				return TransactionValidity::Invalid(ApplyError::Stale as i8);
+				return InvalidTransactionValidity::Stale.into();
 			}
 
 			// check if session index from heartbeat is recent
 			let current_session = <session::Module<T>>::current_index();
 			if heartbeat.session_index != current_session {
-				return TransactionValidity::Invalid(ApplyError::Stale as i8);
+				return InvalidTransactionValidity::Stale.into();
 			}
 
 			// verify that the incoming (unverified) pubkey is actually an authority id
 			let keys = Keys::get();
 			let authority_id = match keys.get(heartbeat.authority_index as usize) {
 				Some(id) => id,
-				None => return TransactionValidity::Invalid(ApplyError::BadSignature as i8),
+				None => return InvalidTransactionValidity::BadProof.into(),
 			};
 
 			// check signature (this is expensive so we do it last).
@@ -407,7 +409,7 @@ impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
 			});
 
 			if !signature_valid {
-				return TransactionValidity::Invalid(ApplyError::BadSignature as i8);
+				return InvalidTransactionValidity::BadProof.into();
 			}
 
 			return TransactionValidity::Valid(ValidTransaction {
@@ -419,6 +421,6 @@ impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
 			})
 		}
 
-		TransactionValidity::Invalid(0)
+		InvalidTransactionValidity::Call.into()
 	}
 }

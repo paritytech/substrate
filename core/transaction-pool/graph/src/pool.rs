@@ -452,7 +452,7 @@ fn fire_events<H, H2, Ex>(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sr_primitives::transaction_validity::ValidTransaction;
+	use sr_primitives::transaction_validity::{ValidTransaction, InvalidTransactionValidity};
 	use futures::Stream;
 	use codec::Encode;
 	use test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
@@ -470,8 +470,11 @@ mod tests {
 		type Error = error::Error;
 
 		/// Verify extrinsic at given block.
-		fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: ExtrinsicFor<Self>) -> Result<TransactionValidity, Self::Error> {
-
+		fn validate_transaction(
+			&self,
+			at: &BlockId<Self::Block>,
+			uxt: ExtrinsicFor<Self>,
+		) -> Result<TransactionValidity, Self::Error> {
 			let block_number = self.block_id_to_number(at)?.unwrap();
 			let nonce = uxt.transfer().nonce;
 
@@ -486,7 +489,7 @@ mod tests {
 			}
 
 			if nonce < block_number {
-				Ok(TransactionValidity::Invalid(0))
+				Ok(InvalidTransactionValidity::Stale.into())
 			} else {
 				Ok(TransactionValidity::Valid(ValidTransaction {
 					priority: 4,
