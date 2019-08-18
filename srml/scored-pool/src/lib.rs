@@ -99,6 +99,16 @@ use sr_primitives::{
 
 type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
+/// The enum is supplied when refreshing the members set.
+/// Depending on the enum variant the corresponding associated
+/// type function will be invoked.
+enum ChangeReceiver {
+	/// Should call `T::MembershipInitialized`.
+	MembershipInitialized,
+	/// Should call `T::MembershipChanged`.
+	MembershipChanged,
+}
+
 pub trait Trait<I=DefaultInstance>: system::Trait {
 	/// The currency used for deposits.
 	type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
@@ -183,10 +193,7 @@ decl_storage! {
 				);
 
 				<Pool<T, I>>::put(&pool);
-				<Module<T, I>>::refresh_members(false);
-
-				let members = <Members<T, I>>::get();
-				T::MembershipInitialized::initialize_members(&members);
+				<Module<T, I>>::refresh_members(ChangeReceiver::MembershipInitialized);
 			});
 		})
 	}
@@ -224,7 +231,7 @@ decl_module! {
 		/// highest scoring members in the pool.
 		fn on_initialize(n: T::BlockNumber) {
 			if n % T::Period::get() == Zero::zero() {
-				<Module<T, I>>::refresh_members(true);
+				<Module<T, I>>::refresh_members(ChangeReceiver::MembershipChanged);
 			}
 		}
 
@@ -359,9 +366,9 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// Fetches the `MemberCount` highest scoring members from
 	/// `Pool` and puts them into `Members`.
 	///
-	/// If `notify` is set to true `T::MembershipChanged::change_members_sorted`
-	/// will be invoked at the end of the method.
-	fn refresh_members(notify: bool) {
+	/// The `notify` parameter is used to deduct which associated
+	/// type function to invoke at the end of the method.
+	fn refresh_members(notify: ChangeReceiver) {
 		let count = <MemberCount<I>>::get();
 
 		let pool = <Pool<T, I>>::get();
@@ -376,11 +383,14 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		let old_members = <Members<T, I>>::get();
 		<Members<T, I>>::put(&new_members);
 
-		if notify {
-			T::MembershipChanged::set_members_sorted(
-				&new_members[..],
-				&old_members[..],
-			);
+		match notify {
+			ChangeReceiver::MembershipInitialized =>
+				T::MembershipInitialized::initialize_members(&new_members),
+			ChangeReceiver::MembershipChanged =>
+				T::MembershipChanged::set_members_sorted(
+					&new_members[..],
+					&old_members[..],
+				),
 		}
 	}
 
@@ -400,7 +410,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		// remove from set, if it was in there
 		let members = <Members<T, I>>::get();
 		if members.binary_search(&remove).is_ok() {
-			Self::refresh_members(true);
+			Self::refresh_members(ChangeReceiver::MembershipChanged);
 		}
 
 		<CandidateExists<T, I>>::remove(&remove);
