@@ -229,6 +229,16 @@ decl_module! {
 		}
 
 		/// Add `origin` to the pool of candidates.
+		///
+		/// This results in `CandidateDeposit` being reserved from
+		/// the `origin` account. The deposit is returned once
+		/// candidacy is withdrawn by the candidate or the entity
+		/// is kicked by `KickOrigin`.
+		///
+		/// The dispatch origin of this function must be signed.
+		///
+		/// The `index` parameter of this function must be set to
+		/// the index of the transactor in the `Pool`.
 		pub fn submit_candidacy(origin) {
 			let who = ensure_signed(origin)?;
 			ensure!(!<CandidateExists<T, I>>::exists(&who), "already a member");
@@ -253,6 +263,11 @@ decl_module! {
 		/// If the entity is part of the `Members`, then the highest member
 		/// of the `Pool` that is not currently in `Members` is immediately
 		/// placed in the set instead.
+		///
+		/// The dispatch origin of this function must be signed.
+		///
+		/// The `index` parameter of this function must be set to
+		/// the index of the transactor in the `Pool`.
 		pub fn withdraw_candidacy(
 			origin,
 			index: u32
@@ -267,6 +282,9 @@ decl_module! {
 		/// Kick a member `who` from the set.
 		///
 		/// May only be called from `KickOrigin` or root.
+		///
+		/// The `index` parameter of this function must be set to
+		/// the index of `dest` in the `Pool`.
 		pub fn kick(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -286,6 +304,9 @@ decl_module! {
 		/// Score a member `who` with `score`.
 		///
 		/// May only be called from `ScoreOrigin` or root.
+		///
+		/// The `index` parameter of this function must be set to
+		/// the index of the `dest` in the `Pool`.
 		pub fn score(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -320,7 +341,12 @@ decl_module! {
 			Self::deposit_event(RawEvent::CandidateScored);
 		}
 
-		/// Root-dispatchable call to change `MemberCount`.
+		/// Dispatchable call to change `MemberCount`.
+		///
+		/// This will only have an effect the next time a refresh happens
+		/// (this happens each `Period`).
+		///
+		/// May only be called from root.
 		pub fn change_member_count(origin, count: u32) {
 			ensure_root(origin)?;
 			<MemberCount<I>>::put(&count);
@@ -358,10 +384,15 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		}
 	}
 
-	/// Removes an entity from the `Pool` and also from `Members`,
-	/// if it's a member. In the latter case the deposit is returned.
+	/// Removes an entity `remove` at `index` from the `Pool`.
+	///
+	/// If the entity is a member it is also removed from `Members` and
+	/// the deposit is returned.
 	fn remove_member(remove: T::AccountId, index: u32) -> Result<(), &'static str> {
-		// this check is
+		// all callers of this function in this module also check
+		// the index for validity before calling this function.
+		// nevertheless we check again here, to assert that there was
+		// no mistake when invoking this sensible function.
 		Self::ensure_index(&remove, index)?;
 
 		<Pool<T, I>>::mutate(|pool| pool.remove(index as usize));
