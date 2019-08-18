@@ -916,10 +916,26 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			blockchain::BlockStatus::Unknown => {},
 		}
 
-		let (last_best, last_best_number) = {
-			let info = self.backend.blockchain().info();
-			(info.best_hash, info.best_number)
-		};
+		let info = self.backend.blockchain().info();
+
+		// the block is lower than our last finalized block so it must revert
+		// finality, refusing import.
+		if *import_headers.post().number() <= info.finalized_number {
+			return Err(error::Error::NotInFinalizedChain);
+		}
+
+		// find tree route from last finalized to given block.
+		let route_from_finalized = crate::blockchain::tree_route(
+			self.backend.blockchain(),
+			BlockId::Hash(info.finalized_hash),
+			BlockId::Hash(parent_hash),
+		)?;
+
+		// the block being imported retracts the last finalized block, refusing to
+		// import.
+		if !route_from_finalized.retracted().is_empty() {
+			return Err(error::Error::NotInFinalizedChain);
+		}
 
 		// this is a fairly arbitrary choice of where to draw the line on making notifications,
 		// but the general goal is to only make notifications when we are already fully synced
@@ -934,16 +950,23 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		// ensure parent block is finalized to maintain invariant that
 		// finality is called sequentially.
 		if finalized {
-			self.apply_finality_with_block_hash(operation, parent_hash, None, last_best, make_notifications)?;
+			self.apply_finality_with_block_hash(operation, parent_hash, None, info.best_hash, make_notifications)?;
 		}
 
 		// FIXME #1232: correct path logic for when to execute this function
-		let (storage_update,changes_update,storage_changes) = self.block_execution(&operation.op, &import_headers, origin, hash, body.clone())?;
+		let (storage_update, changes_update, storage_changes) = self.block_execution(
+			&operation.op,
+			&import_headers,
+			origin,
+			hash,
+			body.clone(),
+		)?;
 
 		let is_new_best = finalized || match fork_choice {
-			ForkChoiceStrategy::LongestChain => import_headers.post().number() > &last_best_number,
+			ForkChoiceStrategy::LongestChain => import_headers.post().number() > &info.best_number,
 			ForkChoiceStrategy::Custom(v) => v,
 		};
+
 		let leaf_state = if finalized {
 			crate::backend::NewBlockState::Final
 		} else if is_new_best {
