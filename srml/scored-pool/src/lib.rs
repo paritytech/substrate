@@ -172,7 +172,7 @@ decl_storage! {
 					.iter()
 					.for_each(|(who, _)| {
 						T::Currency::reserve(&who, T::CandidateDeposit::get())
-							.expect("balance too low");
+							.expect("balance too low to create candidacy");
 						<CandidateExists<T, I>>::insert(who, true);
 					});
 
@@ -234,7 +234,7 @@ decl_module! {
 			ensure!(!<CandidateExists<T, I>>::exists(&who), "already a member");
 
 			T::Currency::reserve(&who, T::CandidateDeposit::get())
-				.map_err(|_| "balance too low")?;
+				.map_err(|_| "balance too low to submit candidacy")?;
 
 			// can be inserted as last element in pool, since entities with
 			// `None` are always sorted to the end.
@@ -384,7 +384,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		let pool = <Pool<T, I>>::get();
 		ensure!(index < pool.len() as u32, "index out of bounds");
 		let (index_who, _index_score) = &pool[index as usize];
-		ensure!(index_who == who, "index wrong");
+		ensure!(index_who == who, "index does not match requested account");
 		Ok(())
 	}
 }

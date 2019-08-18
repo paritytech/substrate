@@ -27,6 +27,9 @@ type ScoredPool = Module<Test>;
 type System = system::Module<Test>;
 type Balances = balances::Module<Test>;
 
+const OOB_ERR: &str = "index out of bounds";
+const INDEX_ERR: &str = "index does not match requested account";
+
 /// Fetch an entity from the pool, if existent.
 fn fetch_from_pool(who: u64) -> Option<(u64, Option<u64>)> {
 	ScoredPool::pool()
@@ -55,8 +58,14 @@ fn query_membership_works() {
 #[test]
 fn submit_candidacy_must_not_work() {
 	with_externalities(&mut new_test_ext(), || {
-		assert_noop!(ScoredPool::submit_candidacy(Origin::signed(99)), "balance too low");
-		assert_noop!(ScoredPool::submit_candidacy(Origin::signed(40)), "already a member");
+		assert_noop!(
+			ScoredPool::submit_candidacy(Origin::signed(99)),
+			"balance too low to submit candidacy"
+		);
+		assert_noop!(
+			ScoredPool::submit_candidacy(Origin::signed(40)),
+			"already a member"
+		);
 	});
 }
 
@@ -210,7 +219,7 @@ fn test_withdraw_candidacy_only_works_for_members() {
 	with_externalities(&mut new_test_ext(), || {
 		let who = 77;
 		let index = 0;
-		assert_noop!(ScoredPool::withdraw_candidacy(Origin::signed(who), index), "index wrong");
+		assert_noop!( ScoredPool::withdraw_candidacy(Origin::signed(who), index), INDEX_ERR);
 	});
 }
 
@@ -219,9 +228,9 @@ fn oob_index_should_abort() {
 	with_externalities(&mut new_test_ext(), || {
 		let who = 40;
 		let oob_index = ScoredPool::pool().len() as u32;
-		assert_noop!(ScoredPool::withdraw_candidacy(Origin::signed(who), oob_index), "index out of bounds");
-		assert_noop!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, oob_index, 99), "index out of bounds");
-		assert_noop!(ScoredPool::kick(Origin::signed(KickOrigin::get()), who, oob_index), "index out of bounds");
+		assert_noop!(ScoredPool::withdraw_candidacy(Origin::signed(who), oob_index), OOB_ERR);
+		assert_noop!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, oob_index, 99), OOB_ERR);
+		assert_noop!(ScoredPool::kick(Origin::signed(KickOrigin::get()), who, oob_index), OOB_ERR);
 	});
 }
 
@@ -230,9 +239,9 @@ fn index_mismatches_should_abort() {
 	with_externalities(&mut new_test_ext(), || {
 		let who = 40;
 		let index = 3;
-		assert_noop!(ScoredPool::withdraw_candidacy(Origin::signed(who), index), "index wrong");
-		assert_noop!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, index, 99), "index wrong");
-		assert_noop!(ScoredPool::kick(Origin::signed(KickOrigin::get()), who, index), "index wrong");
+		assert_noop!(ScoredPool::withdraw_candidacy(Origin::signed(who), index), INDEX_ERR);
+		assert_noop!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, index, 99), INDEX_ERR);
+		assert_noop!(ScoredPool::kick(Origin::signed(KickOrigin::get()), who, index), INDEX_ERR);
 	});
 }
 
