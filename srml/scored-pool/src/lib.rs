@@ -89,7 +89,7 @@ mod tests;
 use codec::{Encode, Decode};
 use sr_std::prelude::*;
 use srml_support::{
-	StorageValue, decl_module, decl_storage, decl_event, ensure,
+	StorageValue, StorageMap, decl_module, decl_storage, decl_event, ensure,
 	traits::{ChangeMembers, InitializeMembers, Currency, Get, ReservableCurrency},
 };
 use system::{self, ensure_root, ensure_signed};
@@ -143,6 +143,13 @@ decl_storage! {
 		/// (ordered descending by score, `None` last, highest first).
 		Pool get(pool) config(): Vec<(T::AccountId, Option<T::Score>)>;
 
+		/// A Map of the candidates. The information in this Map is redundant
+		/// to the information in the `Pool`. But the Map enables us to easily
+		/// check if a candidate is already in the pool, without having to
+		/// iterate over the entire pool (the `Pool` is not sorted by `T::AccountId`,
+		/// but by `T::Score` instead).
+		CandidateExists get(candidate_exists): map T::AccountId => bool;
+
 		/// The current membership, stored as an ordered Vec.
 		Members get(members): Vec<T::AccountId>;
 
@@ -166,6 +173,7 @@ decl_storage! {
 					.for_each(|(who, _)| {
 						T::Currency::reserve(&who, T::CandidateDeposit::get())
 							.expect("balance too low");
+						<CandidateExists<T, I>>::insert(who, true);
 					});
 
 				/// Sorts the `Pool` by score in a descending order. Entities which
@@ -223,7 +231,7 @@ decl_module! {
 		/// Add `origin` to the pool of candidates.
 		pub fn submit_candidacy(origin) {
 			let who = ensure_signed(origin)?;
-			ensure!(Self::find_in_pool(&who).is_err(), "already a member");
+			ensure!(!<CandidateExists<T, I>>::exists(&who), "already a member");
 
 			T::Currency::reserve(&who, T::CandidateDeposit::get())
 				.map_err(|_| "balance too low")?;
@@ -235,6 +243,8 @@ decl_module! {
 				return Err(e);
 			}
 
+			<CandidateExists<T, I>>::insert(&who, true);
+
 			Self::deposit_event(RawEvent::CandidateAdded);
 		}
 
@@ -243,10 +253,14 @@ decl_module! {
 		/// If the entity is part of the `Members`, then the highest member
 		/// of the `Pool` that is not currently in `Members` is immediately
 		/// placed in the set instead.
-		pub fn withdraw_candidacy(origin) {
+		pub fn withdraw_candidacy(
+			origin,
+			index: u32
+		) {
 			let who = ensure_signed(origin)?;
+			Self::ensure_index(&who, index)?;
 
-			Self::remove_member(who)?;
+			Self::remove_member(who, index)?;
 			Self::deposit_event(RawEvent::CandidateWithdrew);
 		}
 
@@ -255,7 +269,8 @@ decl_module! {
 		/// May only be called from `KickOrigin` or root.
 		pub fn kick(
 			origin,
-			dest: <T::Lookup as StaticLookup>::Source
+			dest: <T::Lookup as StaticLookup>::Source,
+			index: u32
 		) {
 			T::KickOrigin::try_origin(origin)
 				.map(|_| ())
@@ -263,7 +278,8 @@ decl_module! {
 				.map_err(|_| "bad origin")?;
 
 			let who = T::Lookup::lookup(dest)?;
-			Self::remove_member(who)?;
+			Self::ensure_index(&who, index)?;
+			Self::remove_member(who, index)?;
 			Self::deposit_event(RawEvent::CandidateKicked);
 		}
 
@@ -273,6 +289,7 @@ decl_module! {
 		pub fn score(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
+			index: u32,
 			score: T::Score
 		) {
 			T::ScoreOrigin::try_origin(origin)
@@ -281,9 +298,10 @@ decl_module! {
 				.map_err(|_| "bad origin")?;
 
 			let who = T::Lookup::lookup(dest)?;
+			Self::ensure_index(&who, index)?;
+
 			let mut pool = <Pool<T, I>>::get();
-			let location = Self::find_in_pool(&who)?;
-			pool.remove(location);
+			pool.remove(index as usize);
 
 			// we binary search the pool (which is sorted descending by score).
 			// if there is already an element with `score`, we insert
@@ -340,25 +358,13 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		}
 	}
 
-	/// Find an entity in the pool.
-	///
-	/// Returns its position in the `Pool` vec, if found.
-	fn find_in_pool(seek: &T::AccountId) -> Result<usize, &'static str> {
-		// we can't use binary search here since the pool is sorted by score
-		Self::pool()
-			.iter()
-			.position(|(who, _score)| who == seek)
-			.ok_or("not a member")
-	}
-
 	/// Removes an entity from the `Pool` and also from `Members`,
 	/// if it's a member. In the latter case the deposit is returned.
-	fn remove_member(remove: T::AccountId) -> Result<(), &'static str> {
-		// remove from pool
-		let mut pool = <Pool<T, I>>::get();
-		let location = Self::find_in_pool(&remove)?;
-		pool.remove(location);
-		<Pool<T, I>>::put(&pool);
+	fn remove_member(remove: T::AccountId, index: u32) -> Result<(), &'static str> {
+		// this check is
+		Self::ensure_index(&remove, index)?;
+
+		<Pool<T, I>>::mutate(|pool| pool.remove(index as usize));
 
 		// remove from set, if it was in there
 		let members = <Members<T, I>>::get();
@@ -366,9 +372,20 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 			Self::refresh_members(true);
 		}
 
+		<CandidateExists<T, I>>::remove(&remove);
+
 		T::Currency::unreserve(&remove, T::CandidateDeposit::get());
 
 		Self::deposit_event(RawEvent::MemberRemoved);
 		Ok(())
 	}
+
+	fn ensure_index(who: &T::AccountId, index: u32) -> Result<(), &'static str> {
+		let pool = <Pool<T, I>>::get();
+		ensure!(index < pool.len() as u32, "index out of bounds");
+		let (index_who, _index_score) = &pool[index as usize];
+		ensure!(index_who == who, "index wrong");
+		Ok(())
+	}
 }
+

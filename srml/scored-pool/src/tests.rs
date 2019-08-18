@@ -27,10 +27,19 @@ type ScoredPool = Module<Test>;
 type System = system::Module<Test>;
 type Balances = balances::Module<Test>;
 
+/// Fetch an entity from the pool, if existent.
 fn fetch_from_pool(who: u64) -> Option<(u64, Option<u64>)> {
 	ScoredPool::pool()
 		.into_iter()
 		.find(|item| item.0 == who)
+}
+
+/// Find an entity in the pool.
+/// Returns its position in the `Pool` vec, if existent.
+fn find_in_pool(who: u64) -> Option<usize> {
+	ScoredPool::pool()
+		.into_iter()
+		.position(|item| item.0 == who)
 }
 
 #[test]
@@ -42,11 +51,12 @@ fn query_membership_works() {
 		assert_eq!(MEMBERS.with(|m| m.borrow().clone()), vec![20, 40]);
 	});
 }
+
 #[test]
 fn submit_candidacy_must_not_work() {
 	with_externalities(&mut new_test_ext(), || {
 		assert_noop!(ScoredPool::submit_candidacy(Origin::signed(99)), "balance too low");
-		assert_noop!(ScoredPool::submit_candidacy(Origin::signed(10)), "already a member");
+		assert_noop!(ScoredPool::submit_candidacy(Origin::signed(40)), "already a member");
 	});
 }
 
@@ -74,12 +84,12 @@ fn scoring_works() {
 		assert_ok!(ScoredPool::submit_candidacy(Origin::signed(who)));
 
 		// when
-		assert_ok!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, score));
+		let index = find_in_pool(who).expect("entity must be in pool") as u32;
+		assert_ok!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, index, score));
 
 		// then
 		assert_eq!(fetch_from_pool(who), Some((who, Some(score))));
-		assert_eq!(ScoredPool::find_in_pool(&who),
-				   Ok(0)); // must be first element, since highest scored
+		assert_eq!(find_in_pool(who), Some(0)); // must be first element, since highest scored
 	});
 }
 
@@ -88,24 +98,27 @@ fn scoring_same_element_with_same_score_works() {
 	with_externalities(&mut new_test_ext(), || {
 		// given
 		let who = 31;
+		let index = find_in_pool(who).expect("entity must be in pool") as u32;
 		let score = 2;
 
 		// when
-		assert_ok!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, score));
+		assert_ok!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, index, score));
 
 		// then
 		assert_eq!(fetch_from_pool(who), Some((who, Some(score))));
 
 		// must have been inserted right before the `20` element which is
 		// of the same score as `31`. so sort order is maintained.
-		assert_eq!(ScoredPool::find_in_pool(&who), Ok(1));
+		assert_eq!(find_in_pool(who), Some(1));
 	});
 }
 
 #[test]
 fn kicking_works_only_for_authorized() {
 	with_externalities(&mut new_test_ext(), || {
-		assert_noop!(ScoredPool::kick(Origin::signed(99), 40), "bad origin");
+		let who = 40;
+		let index = find_in_pool(who).expect("entity must be in pool") as u32;
+		assert_noop!(ScoredPool::kick(Origin::signed(99), who, index), "bad origin");
 	});
 }
 
@@ -115,13 +128,14 @@ fn kicking_works() {
 		// given
 		let who = 40;
 		assert_eq!(Balances::reserved_balance(&who), CandidateDeposit::get());
-		assert_eq!(ScoredPool::find_in_pool(&who), Ok(0));
+		assert_eq!(find_in_pool(who), Some(0));
 
 		// when
-		assert_ok!(ScoredPool::kick(Origin::signed(KickOrigin::get()), who));
+		let index = find_in_pool(who).expect("entity must be in pool") as u32;
+		assert_ok!(ScoredPool::kick(Origin::signed(KickOrigin::get()), who, index));
 
 		// then
-		assert_eq!(ScoredPool::find_in_pool(&who), Err("not a member"));
+		assert_eq!(find_in_pool(who), None);
 		assert_eq!(ScoredPool::members(), vec![20, 31]);
 		assert_eq!(MEMBERS.with(|m| m.borrow().clone()), ScoredPool::members());
 		assert_eq!(Balances::reserved_balance(&who), 0); // deposit must have been returned
@@ -141,7 +155,8 @@ fn unscored_entities_must_not_be_used_for_filling_members() {
 			.into_iter()
 			.for_each(|(who, score)| {
 				if let Some(_) = score {
-					assert_ok!(ScoredPool::kick(Origin::signed(KickOrigin::get()), who));
+					let index = find_in_pool(who).expect("entity must be in pool") as u32;
+					assert_ok!(ScoredPool::kick(Origin::signed(KickOrigin::get()), who, index));
 				}
 			});
 
@@ -156,8 +171,10 @@ fn unscored_entities_must_not_be_used_for_filling_members() {
 fn refreshing_works() {
 	with_externalities(&mut new_test_ext(), || {
 		// given
-		assert_ok!(ScoredPool::submit_candidacy(Origin::signed(15)));
-		assert_ok!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), 15, 99));
+		let who = 15;
+		assert_ok!(ScoredPool::submit_candidacy(Origin::signed(who)));
+		let index = find_in_pool(who).expect("entity must be in pool") as u32;
+		assert_ok!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, index, 99));
 
 		// when
 		ScoredPool::refresh_members(true);
@@ -174,7 +191,8 @@ fn refreshing_happens_every_period() {
 		// given
 		System::set_block_number(1);
 		assert_ok!(ScoredPool::submit_candidacy(Origin::signed(15)));
-		assert_ok!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), 15, 99));
+		let index = find_in_pool(15).expect("entity must be in pool") as u32;
+		assert_ok!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), 15, index, 99));
 		assert_eq!(ScoredPool::members(), vec![20, 40]);
 
 		// when
@@ -190,7 +208,31 @@ fn refreshing_happens_every_period() {
 #[test]
 fn test_withdraw_candidacy_only_works_for_members() {
 	with_externalities(&mut new_test_ext(), || {
-		assert_noop!(ScoredPool::withdraw_candidacy(Origin::signed(77)), "not a member");
+		let who = 77;
+		let index = 0;
+		assert_noop!(ScoredPool::withdraw_candidacy(Origin::signed(who), index), "index wrong");
+	});
+}
+
+#[test]
+fn oob_index_should_abort() {
+	with_externalities(&mut new_test_ext(), || {
+		let who = 40;
+		let oob_index = ScoredPool::pool().len() as u32;
+		assert_noop!(ScoredPool::withdraw_candidacy(Origin::signed(who), oob_index), "index out of bounds");
+		assert_noop!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, oob_index, 99), "index out of bounds");
+		assert_noop!(ScoredPool::kick(Origin::signed(KickOrigin::get()), who, oob_index), "index out of bounds");
+	});
+}
+
+#[test]
+fn index_mismatches_should_abort() {
+	with_externalities(&mut new_test_ext(), || {
+		let who = 40;
+		let index = 3;
+		assert_noop!(ScoredPool::withdraw_candidacy(Origin::signed(who), index), "index wrong");
+		assert_noop!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, index, 99), "index wrong");
+		assert_noop!(ScoredPool::kick(Origin::signed(KickOrigin::get()), who, index), "index wrong");
 	});
 }
 
@@ -201,7 +243,8 @@ fn test_withdraw_unscored_candidacy() {
 		let who = 5;
 
 		// when
-		assert_ok!(ScoredPool::withdraw_candidacy(Origin::signed(who)));
+		let index = find_in_pool(who).expect("entity must be in pool") as u32;
+		assert_ok!(ScoredPool::withdraw_candidacy(Origin::signed(who), index));
 
 		// then
 		assert_eq!(fetch_from_pool(5), None);
@@ -216,11 +259,31 @@ fn test_withdraw_scored_candidacy() {
 		assert_eq!(Balances::reserved_balance(&who), CandidateDeposit::get());
 
 		// when
-		assert_ok!(ScoredPool::withdraw_candidacy(Origin::signed(who)));
+		let index = find_in_pool(who).expect("entity must be in pool") as u32;
+		assert_ok!(ScoredPool::withdraw_candidacy(Origin::signed(who), index));
 
 		// then
 		assert_eq!(fetch_from_pool(who), None);
 		assert_eq!(ScoredPool::members(), vec![20, 31]);
 		assert_eq!(Balances::reserved_balance(&who), 0);
+	});
+}
+
+#[test]
+fn candidacy_resubmitting_works() {
+	with_externalities(&mut new_test_ext(), || {
+		// given
+		let who = 15;
+
+		// when
+		assert_ok!(ScoredPool::submit_candidacy(Origin::signed(who)));
+		assert_eq!(ScoredPool::candidate_exists(who), true);
+		let index = find_in_pool(who).expect("entity must be in pool") as u32;
+		assert_ok!(ScoredPool::withdraw_candidacy(Origin::signed(who), index));
+		assert_eq!(ScoredPool::candidate_exists(who), false);
+		assert_ok!(ScoredPool::submit_candidacy(Origin::signed(who)));
+
+		// then
+		assert_eq!(ScoredPool::candidate_exists(who), true);
 	});
 }
