@@ -2818,7 +2818,7 @@ pub(crate) mod tests {
 	#[test]
 	fn doesnt_import_blocks_that_revert_finality() {
 		let _ = env_logger::try_init();
-		let tmp = tempdir::TempDir::new("client-test").unwrap();
+		let tmp = tempfile::tempdir().unwrap();
 
 		// we need to run with archive pruning to avoid pruning non-canonical
 		// states
@@ -2827,7 +2827,7 @@ pub(crate) mod tests {
 				cache_size: None,
 				state_cache_size: 1 << 20,
 				state_cache_child_ratio: None,
-				path: tmp.into_path(),
+				path: tmp.path().into(),
 				pruning: PruningMode::ArchiveAll,
 			},
 			u64::max_value(),
