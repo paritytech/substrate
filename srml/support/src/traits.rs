@@ -32,6 +32,10 @@ pub trait Get<T> {
 	fn get() -> T;
 }
 
+impl<T: Default> Get<T> for () {
+	fn get() -> T { T::default() }
+}
+
 /// A trait for querying whether a type can be said to statically "contain" a value. Similar
 /// in nature to `Get`, except it is designed to be lazy rather than active (you can't ask it to
 /// enumerate all values that it contains) and work for multiple values rather than just one.
