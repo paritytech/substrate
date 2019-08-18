@@ -20,6 +20,7 @@ use super::*;
 use runtime_io::with_externalities;
 use phragmen;
 use sr_primitives::traits::OnInitialize;
+use sr_staking_primitives::offence::{OffenceDetails, OnOffenceHandler};
 use srml_support::{assert_ok, assert_noop, assert_eq_uvec, EnumerableStorageMap};
 use mock::*;
 use srml_support::traits::{Currency, ReservableCurrency};
@@ -41,11 +42,11 @@ fn basic_setup_works() {
 		// Account 1 does not control any stash
 		assert_eq!(Staking::ledger(&1), None);
 
-		// ValidatorPrefs are default, thus unstake_threshold is 3, other values are default for their type
+		// ValidatorPrefs are default
 		assert_eq!(<Validators<Test>>::enumerate().collect::<Vec<_>>(), vec![
-			(31, ValidatorPrefs { unstake_threshold: 3, validator_payment: 0 }),
-			(21, ValidatorPrefs { unstake_threshold: 3, validator_payment: 0 }),
-			(11, ValidatorPrefs { unstake_threshold: 3, validator_payment: 0 })
+			(31, ValidatorPrefs::default()),
+			(21, ValidatorPrefs::default()),
+			(11, ValidatorPrefs::default())
 		]);
 
 		// Account 100 is the default nominator
@@ -83,32 +84,16 @@ fn basic_setup_works() {
 		// Initial Era and session
 		assert_eq!(Staking::current_era(), 0);
 
-		// initial slash_count of validators
-		assert_eq!(Staking::slash_count(&11), 0);
-		assert_eq!(Staking::slash_count(&21), 0);
+		// Account 10 has `balance_factor` free balance
+		assert_eq!(Balances::free_balance(&10), 1);
+		assert_eq!(Balances::free_balance(&10), 1);
+
+		// New era is not being forced
+		assert_eq!(Staking::force_era(), Forcing::NotForcing);
 
 		// All exposures must be correct.
 		check_exposure_all();
 		check_nominator_all();
-	});
-}
-
-#[test]
-fn no_offline_should_work() {
-	// Test the staking module works when no validators are offline
-	with_externalities(&mut ExtBuilder::default().build(),
-	|| {
-		// Slashing begins for validators immediately if found offline
-		assert_eq!(Staking::offline_slash_grace(), 0);
-		// Account 10 has not been reported offline
-		assert_eq!(Staking::slash_count(&10), 0);
-		// Account 10 has `balance_factor` free balance
-		assert_eq!(Balances::free_balance(&10), 1);
-		// Nothing happens to Account 10, as expected
-		assert_eq!(Staking::slash_count(&10), 0);
-		assert_eq!(Balances::free_balance(&10), 1);
-		// New era is not being forced
-		assert_eq!(Staking::force_era(), Forcing::NotForcing);
 	});
 }
 
@@ -133,183 +118,6 @@ fn change_controller_works() {
 		);
 		assert_ok!(Staking::validate(Origin::signed(5), ValidatorPrefs::default()));
 	})
-}
-
-#[test]
-fn invulnerability_should_work() {
-	// Test that users can be invulnerable from slashing and being kicked
-	with_externalities(&mut ExtBuilder::default().build(),
-	|| {
-		// Make account 11 invulnerable
-		assert_ok!(Staking::set_invulnerables(Origin::ROOT, vec![11]));
-		// Give account 11 some funds
-		let _ = Balances::make_free_balance_be(&11, 70);
-		// There is no slash grace -- slash immediately.
-		assert_eq!(Staking::offline_slash_grace(), 0);
-		// Account 11 has not been slashed
-		assert_eq!(Staking::slash_count(&11), 0);
-		// Account 11 has the 70 funds we gave it above
-		assert_eq!(Balances::free_balance(&11), 70);
-		// Account 11 should be a validator
-		assert!(<Validators<Test>>::exists(&11));
-
-		// Set account 11 as an offline validator with a large number of reports
-		// Should exit early if invulnerable
-		Staking::on_offline_validator(10, 100);
-
-		// Show that account 11 has not been touched
-		assert_eq!(Staking::slash_count(&11), 0);
-		assert_eq!(Balances::free_balance(&11), 70);
-		assert!(<Validators<Test>>::exists(&11));
-		// New era not being forced
-		// NOTE: new era is always forced once slashing happens -> new validators need to be chosen.
-		assert_eq!(Staking::force_era(), Forcing::NotForcing);
-	});
-}
-
-#[test]
-fn offline_should_slash_and_disable() {
-	// Test that an offline validator gets slashed and kicked
-	with_externalities(&mut ExtBuilder::default().build(), || {
-		// Give account 10 some balance
-		let _ = Balances::make_free_balance_be(&11, 1000);
-		// Confirm account 10 is a validator
-		assert!(<Validators<Test>>::exists(&11));
-		// Validators get slashed immediately
-		assert_eq!(Staking::offline_slash_grace(), 0);
-		// Unstake threshold is 3
-		assert_eq!(Staking::validators(&11).unstake_threshold, 3);
-		// Account 10 has not been slashed before
-		assert_eq!(Staking::slash_count(&11), 0);
-		// Account 10 has the funds we just gave it
-		assert_eq!(Balances::free_balance(&11), 1000);
-		// Account 10 is not yet disabled.
-		assert!(!is_disabled(10));
-		// Report account 10 as offline, one greater than unstake threshold
-		Staking::on_offline_validator(10, 4);
-		// Confirm user has been reported
-		assert_eq!(Staking::slash_count(&11), 4);
-		// Confirm balance has been reduced by 2^unstake_threshold * offline_slash() * amount_at_stake.
-		let slash_base = Staking::offline_slash() * Staking::stakers(11).total;
-		assert_eq!(Balances::free_balance(&11), 1000 - 2_u64.pow(3) * slash_base);
-		// Confirm account 10 has been disabled.
-		assert!(is_disabled(10));
-	});
-}
-
-#[test]
-fn offline_grace_should_delay_slashing() {
-	// Tests that with grace, slashing is delayed
-	with_externalities(&mut ExtBuilder::default().build(), || {
-		// Initialize account 10 with balance
-		let _ = Balances::make_free_balance_be(&11, 70);
-		// Verify account 11 has balance
-		assert_eq!(Balances::free_balance(&11), 70);
-
-		// Set offline slash grace
-		let offline_slash_grace = 1;
-		assert_ok!(Staking::set_offline_slash_grace(Origin::ROOT, offline_slash_grace));
-		assert_eq!(Staking::offline_slash_grace(), 1);
-
-		// Check unstake_threshold is 3 (default)
-		let default_unstake_threshold = 3;
-		assert_eq!(
-			Staking::validators(&11),
-			ValidatorPrefs { unstake_threshold: default_unstake_threshold, validator_payment: 0 }
-		);
-
-		// Check slash count is zero
-		assert_eq!(Staking::slash_count(&11), 0);
-
-		// Report account 10 up to the threshold
-		Staking::on_offline_validator(10, default_unstake_threshold as usize + offline_slash_grace as usize);
-		// Confirm slash count
-		assert_eq!(Staking::slash_count(&11), 4);
-
-		// Nothing should happen
-		assert_eq!(Balances::free_balance(&11), 70);
-
-		// Report account 10 one more time
-		Staking::on_offline_validator(10, 1);
-		assert_eq!(Staking::slash_count(&11), 5);
-		// User gets slashed
-		assert!(Balances::free_balance(&11) < 70);
-		// New era is forced
-		assert!(is_disabled(10));
-	});
-}
-
-
-#[test]
-fn max_unstake_threshold_works() {
-	// Tests that max_unstake_threshold gets used when prefs.unstake_threshold is large
-	with_externalities(&mut ExtBuilder::default().build(), || {
-		const MAX_UNSTAKE_THRESHOLD: u32 = 10;
-		// Two users with maximum possible balance
-		let _ = Balances::make_free_balance_be(&11, u64::max_value());
-		let _ = Balances::make_free_balance_be(&21, u64::max_value());
-
-		// Give them full exposure as a staker
-		<Stakers<Test>>::insert(&11, Exposure { total: 1000000, own: 1000000, others: vec![]});
-		<Stakers<Test>>::insert(&21, Exposure { total: 2000000, own: 2000000, others: vec![]});
-
-		// Check things are initialized correctly
-		assert_eq!(Balances::free_balance(&11), u64::max_value());
-		assert_eq!(Balances::free_balance(&21), u64::max_value());
-		assert_eq!(Staking::offline_slash_grace(), 0);
-		// Account 10 will have max unstake_threshold
-		assert_ok!(Staking::validate(Origin::signed(10), ValidatorPrefs {
-			unstake_threshold: MAX_UNSTAKE_THRESHOLD,
-			validator_payment: 0,
-		}));
-		// Account 20 could not set their unstake_threshold past 10
-		assert_noop!(Staking::validate(Origin::signed(20), ValidatorPrefs {
-			unstake_threshold: MAX_UNSTAKE_THRESHOLD + 1,
-			validator_payment: 0}),
-			"unstake threshold too large"
-		);
-		// Give Account 20 unstake_threshold 11 anyway, should still be limited to 10
-		<Validators<Test>>::insert(21, ValidatorPrefs {
-			unstake_threshold: MAX_UNSTAKE_THRESHOLD + 1,
-			validator_payment: 0,
-		});
-
-		OfflineSlash::put(Perbill::from_fraction(0.0001));
-
-		// Report each user 1 more than the max_unstake_threshold
-		Staking::on_offline_validator(10, MAX_UNSTAKE_THRESHOLD as usize + 1);
-		Staking::on_offline_validator(20, MAX_UNSTAKE_THRESHOLD as usize + 1);
-
-		// Show that each balance only gets reduced by 2^max_unstake_threshold times 10%
-		// of their total stake.
-		assert_eq!(Balances::free_balance(&11), u64::max_value() - 2_u64.pow(MAX_UNSTAKE_THRESHOLD) * 100);
-		assert_eq!(Balances::free_balance(&21), u64::max_value() - 2_u64.pow(MAX_UNSTAKE_THRESHOLD) * 200);
-	});
-}
-
-#[test]
-fn slashing_does_not_cause_underflow() {
-	// Tests that slashing more than a user has does not underflow
-	with_externalities(&mut ExtBuilder::default().build(), || {
-		// Verify initial conditions
-		assert_eq!(Balances::free_balance(&11), 1000);
-		assert_eq!(Staking::offline_slash_grace(), 0);
-
-		// Set validator preference so that 2^unstake_threshold would cause overflow (greater than 64)
-		// FIXME: that doesn't overflow.
-		<Validators<Test>>::insert(11, ValidatorPrefs {
-			unstake_threshold: 10,
-			validator_payment: 0,
-		});
-
-		System::set_block_number(1);
-		Session::on_initialize(System::block_number());
-
-		// Should not panic
-		Staking::on_offline_validator(10, 100);
-		// Confirm that underflow has not occurred, and account balance is set to zero
-		assert_eq!(Balances::free_balance(&11), 0);
-	});
 }
 
 #[test]
@@ -748,13 +556,12 @@ fn nominating_and_rewards_should_work() {
 #[test]
 fn nominators_also_get_slashed() {
 	// A nominator should be slashed if the validator they nominated is slashed
+	// Here is the breakdown of roles:
+	// 10 - is the controller of 11
+	// 11 - is the stash.
+	// 2 - is the nominator of 20, 10
 	with_externalities(&mut ExtBuilder::default().nominate(false).build(), || {
 		assert_eq!(Staking::validator_count(), 2);
-		// slash happens immediately.
-		assert_eq!(Staking::offline_slash_grace(), 0);
-		// Account 10 has not been reported offline
-		assert_eq!(Staking::slash_count(&10), 0);
-		OfflineSlash::put(Perbill::from_percent(12));
 
 		// Set payee to controller
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
@@ -765,7 +572,7 @@ fn nominators_also_get_slashed() {
 			let _ = Balances::make_free_balance_be(i, initial_balance);
 		}
 
-		// 2 will nominate for 10
+		// 2 will nominate for 10, 20
 		let nominator_stake = 500;
 		assert_ok!(Staking::bond(Origin::signed(1), 2, nominator_stake, RewardDestination::default()));
 		assert_ok!(Staking::nominate(Origin::signed(2), vec![20, 10]));
@@ -781,15 +588,24 @@ fn nominators_also_get_slashed() {
 		assert_eq!(Balances::total_balance(&2), initial_balance);
 
 		// 10 goes offline
-		Staking::on_offline_validator(10, 4);
-		let expo = Staking::stakers(10);
-		let slash_value = Staking::offline_slash() * expo.total * 2_u64.pow(3);
+		Staking::on_offence(
+			&[OffenceDetails {
+				offender: (
+					11,
+					Staking::stakers(&11),
+				),
+				reporters: vec![],
+			}],
+			&[Perbill::from_percent(5)],
+		);
+		let expo = Staking::stakers(11);
+		let slash_value = 50;
 		let total_slash = expo.total.min(slash_value);
 		let validator_slash = expo.own.min(total_slash);
 		let nominator_slash = nominator_stake.min(total_slash - validator_slash);
 
 		// initial + first era reward + slash
-		assert_eq!(Balances::total_balance(&10), initial_balance + total_payout - validator_slash);
+		assert_eq!(Balances::total_balance(&11), initial_balance - validator_slash);
 		assert_eq!(Balances::total_balance(&2), initial_balance - nominator_slash);
 		check_exposure_all();
 		check_nominator_all();
@@ -907,10 +723,11 @@ fn forcing_new_era_works() {
 		start_session(6);
 		assert_eq!(Staking::current_era(), 1);
 
-		// back to normal
+		// back to normal.
+		// this immediatelly starts a new session.
 		ForceEra::put(Forcing::NotForcing);
 		start_session(7);
-		assert_eq!(Staking::current_era(), 1);
+		assert_eq!(Staking::current_era(), 2);
 		start_session(8);
 		assert_eq!(Staking::current_era(), 2);
 
@@ -1100,7 +917,6 @@ fn validator_payment_prefs_work() {
 		});
 		<Payee<Test>>::insert(&2, RewardDestination::Stash);
 		<Validators<Test>>::insert(&11, ValidatorPrefs {
-			unstake_threshold: 3,
 			validator_payment: validator_cut
 		});
 
@@ -1337,13 +1153,6 @@ fn slot_stake_is_least_staked_validator_and_exposure_defines_maximum_punishment(
 		// -- slot stake should also be updated.
 		assert_eq!(Staking::slot_stake(), 69 + total_payout_0/2);
 
-		// If 10 gets slashed now, it will be slashed by 5% of exposure.total * 2.pow(unstake_thresh)
-		Staking::on_offline_validator(10, 4);
-		// Confirm user has been reported
-		assert_eq!(Staking::slash_count(&11), 4);
-		// check the balance of 10 (slash will be deducted from free balance.)
-		assert_eq!(Balances::free_balance(&11), _11_balance - _11_balance*5/100 * 2u64.pow(3));
-
 		check_exposure_all();
 		check_nominator_all();
 	});
@@ -1365,8 +1174,6 @@ fn on_free_balance_zero_stash_removes_validator() {
 		assert_eq!(Staking::bonded(&11), Some(10));
 
 		// Set some storage items which we expect to be cleaned up
-		// Initiate slash count storage item
-		Staking::on_offline_validator(10, 1);
 		// Set payee information
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Stash));
 
@@ -1374,7 +1181,6 @@ fn on_free_balance_zero_stash_removes_validator() {
 		assert!(<Ledger<Test>>::exists(&10));
 		assert!(<Bonded<Test>>::exists(&11));
 		assert!(<Validators<Test>>::exists(&11));
-		assert!(<SlashCount<Test>>::exists(&11));
 		assert!(<Payee<Test>>::exists(&11));
 
 		// Reduce free_balance of controller to 0
@@ -1389,7 +1195,6 @@ fn on_free_balance_zero_stash_removes_validator() {
 		assert!(<Ledger<Test>>::exists(&10));
 		assert!(<Bonded<Test>>::exists(&11));
 		assert!(<Validators<Test>>::exists(&11));
-		assert!(<SlashCount<Test>>::exists(&11));
 		assert!(<Payee<Test>>::exists(&11));
 
 		// Reduce free_balance of stash to 0
@@ -1402,7 +1207,6 @@ fn on_free_balance_zero_stash_removes_validator() {
 		assert!(!<Bonded<Test>>::exists(&11));
 		assert!(!<Validators<Test>>::exists(&11));
 		assert!(!<Nominators<Test>>::exists(&11));
-		assert!(!<SlashCount<Test>>::exists(&11));
 		assert!(!<Payee<Test>>::exists(&11));
 	});
 }
@@ -1459,7 +1263,6 @@ fn on_free_balance_zero_stash_removes_nominator() {
 		assert!(!<Bonded<Test>>::exists(&11));
 		assert!(!<Validators<Test>>::exists(&11));
 		assert!(!<Nominators<Test>>::exists(&11));
-		assert!(!<SlashCount<Test>>::exists(&11));
 		assert!(!<Payee<Test>>::exists(&11));
 	});
 }
@@ -2107,7 +1910,7 @@ fn reward_validator_slashing_validator_doesnt_overflow() {
 		]});
 
 		// Check slashing
-		Staking::slash_validator(&11, reward_slash);
+		let _ = Staking::slash_validator(&11, reward_slash, &Staking::stakers(&11), &mut Vec::new());
 		assert_eq!(Balances::total_balance(&11), stake - 1);
 		assert_eq!(Balances::total_balance(&2), 1);
 	})
@@ -2179,4 +1982,163 @@ fn unbonded_balance_is_not_slashable() {
 		// only the active portion.
 		assert_eq!(Staking::slashable_balance_of(&11), 200);
 	})
+}
+
+#[test]
+fn era_is_always_same_length() {
+	// This ensures that the sessions is always of the same length if there is no forcing no
+	// session changes.
+	with_externalities(&mut ExtBuilder::default().build(), || {
+		start_era(1);
+		assert_eq!(Staking::current_era_start_session_index(), SessionsPerEra::get());
+
+		start_era(2);
+		assert_eq!(Staking::current_era_start_session_index(), SessionsPerEra::get() * 2);
+
+		let session = Session::current_index();
+		ForceEra::put(Forcing::ForceNew);
+		advance_session();
+		assert_eq!(Staking::current_era(), 3);
+		assert_eq!(Staking::current_era_start_session_index(), session + 1);
+
+		start_era(4);
+		assert_eq!(Staking::current_era_start_session_index(), session + SessionsPerEra::get() + 1);
+	});
+}
+
+#[test]
+fn offence_forces_new_era() {
+	with_externalities(&mut ExtBuilder::default().build(), || {
+		Staking::on_offence(
+			&[OffenceDetails {
+				offender: (
+					11,
+					Staking::stakers(&11),
+				),
+				reporters: vec![],
+			}],
+			&[Perbill::from_percent(5)],
+		);
+
+		assert_eq!(Staking::force_era(), Forcing::ForceNew);
+	});
+}
+
+#[test]
+fn slashing_performed_according_exposure() {
+	// This test checks that slashing is performed according the exposure (or more precisely,
+	// historical exposure), not the current balance.
+	with_externalities(&mut ExtBuilder::default().build(), || {
+		assert_eq!(Staking::stakers(&11).own, 1000);
+
+		// Handle an offence with a historical exposure.
+		Staking::on_offence(
+			&[OffenceDetails {
+				offender: (
+					11,
+					Exposure {
+						total: 500,
+						own: 500,
+						others: vec![],
+					},
+				),
+				reporters: vec![],
+			}],
+			&[Perbill::from_percent(50)],
+		);
+
+		// The stash account should be slashed for 250 (50% of 500).
+		assert_eq!(Balances::free_balance(&11), 1000 - 250);
+	});
+}
+
+#[test]
+fn reporters_receive_their_slice() {
+	// This test verifies that the reporters of the offence receive their slice from the slashed
+	// amount.
+	with_externalities(&mut ExtBuilder::default().build(), || {
+		// The reporters' reward is calculated from the total exposure.
+		#[cfg(feature = "equalize")]
+		let initial_balance = 1250;
+		#[cfg(not(feature = "equalize"))]
+		let initial_balance = 1125;
+
+		assert_eq!(Staking::stakers(&11).total, initial_balance);
+
+		Staking::on_offence(
+			&[OffenceDetails {
+				offender: (
+					11,
+					Staking::stakers(&11),
+				),
+				reporters: vec![1, 2],
+			}],
+			&[Perbill::from_percent(50)],
+		);
+
+		// initial_balance x 50% (slash fraction) x 10% (rewards slice)
+		let reward = initial_balance / 20 / 2;
+		assert_eq!(Balances::free_balance(&1), 10 + reward);
+		assert_eq!(Balances::free_balance(&2), 20 + reward);
+	});
+}
+
+#[test]
+fn invulnerables_are_not_slashed() {
+	// For invulnerable validators no slashing is performed.
+	with_externalities(
+		&mut ExtBuilder::default().invulnerables(vec![11]).build(),
+		|| {
+			#[cfg(feature = "equalize")]
+			let initial_balance = 1250;
+			#[cfg(not(feature = "equalize"))]
+			let initial_balance = 1375;
+
+			assert_eq!(Balances::free_balance(&11), 1000);
+			assert_eq!(Balances::free_balance(&21), 2000);
+			assert_eq!(Staking::stakers(&21).total, initial_balance);
+
+			Staking::on_offence(
+				&[
+					OffenceDetails {
+						offender: (11, Staking::stakers(&11)),
+						reporters: vec![],
+					},
+					OffenceDetails {
+						offender: (21, Staking::stakers(&21)),
+						reporters: vec![],
+					},
+				],
+				&[Perbill::from_percent(50), Perbill::from_percent(20)],
+			);
+
+			// The validator 11 hasn't been slashed, but 21 has been.
+			assert_eq!(Balances::free_balance(&11), 1000);
+			// 2000 - (0.2 * initial_balance)
+			assert_eq!(Balances::free_balance(&21), 2000 - (2 * initial_balance / 10));
+		},
+	);
+}
+
+#[test]
+fn dont_slash_if_fraction_is_zero() {
+	// Don't slash if the fraction is zero.
+	with_externalities(&mut ExtBuilder::default().build(), || {
+		assert_eq!(Balances::free_balance(&11), 1000);
+
+		Staking::on_offence(
+			&[OffenceDetails {
+				offender: (
+					11,
+					Staking::stakers(&11),
+				),
+				reporters: vec![],
+			}],
+			&[Perbill::from_percent(0)],
+		);
+
+		// The validator hasn't been slashed. The new era is not forced.
+		assert_eq!(Balances::free_balance(&11), 1000);
+		assert_eq!(Staking::force_era(), Forcing::NotForcing);
+	});
 }

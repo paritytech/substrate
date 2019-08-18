@@ -69,7 +69,7 @@ impl Subscriptions {
 	/// Creates new subscription for given subscriber.
 	///
 	/// Second parameter is a function that converts Subscriber sink into a future.
-	/// This future will be driven to completion bu underlying event loop
+	/// This future will be driven to completion by the underlying event loop
 	/// or will be cancelled in case #cancel is invoked.
 	pub fn add<T, E, G, R, F>(&self, subscriber: Subscriber<T, E>, into_future: G) where
 		G: FnOnce(Sink<T, E>) -> R,
