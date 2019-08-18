@@ -454,6 +454,8 @@ mod tests {
 			let to = AddressPublic::from_raw(bob.public().0);
 			let from = AddressPublic::from_raw(charlie.public().0);
 			let genesis_hash = service.get().client().block_hash(0).unwrap().unwrap();
+			let best_block_id = BlockId::number(service.client().info().chain.best_number);
+			let version = service.get().client().runtime_version_at(best_block_id).unwrap().spec_version;
 			let signer = charlie.clone();
 
 			let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
@@ -466,7 +468,7 @@ mod tests {
 			let take_fees = balances::TakeFees::from(0);
 			let extra = (check_version, check_genesis, check_era, check_nonce, check_weight, take_fees);
 
-			let raw_payload = (function, extra.clone(), genesis_hash, genesis_hash);
+			let raw_payload = (function, extra.clone(), version, genesis_hash, genesis_hash);
 			let signature = raw_payload.using_encoded(|payload| if payload.len() > 256 {
 				signer.sign(&blake2_256(payload)[..])
 			} else {
