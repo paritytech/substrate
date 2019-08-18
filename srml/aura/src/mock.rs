@@ -60,6 +60,7 @@ impl system::Trait for Test {
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type MaximumBlockLength = MaximumBlockLength;
+	type Version = ();
 }
 
 impl timestamp::Trait for Test {
@@ -69,7 +70,6 @@ impl timestamp::Trait for Test {
 }
 
 impl Trait for Test {
-	type HandleReport = ();
 	type AuthorityId = AuthorityId;
 }
 
@@ -81,5 +81,4 @@ pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blak
 	t.into()
 }
 
-pub type System = system::Module<Test>;
 pub type Aura = Module<Test>;
