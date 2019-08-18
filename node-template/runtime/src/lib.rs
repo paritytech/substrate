@@ -143,7 +143,6 @@ impl system::Trait for Runtime {
 }
 
 impl aura::Trait for Runtime {
-	type HandleReport = ();
 	type AuthorityId = AuraId;
 }
 

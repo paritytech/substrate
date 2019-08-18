@@ -668,7 +668,7 @@ pub mod tests {
 	use sr_primitives::traits::{Block as BlockT, NumberFor, Header as HeaderT};
 	use client::{error::{Error as ClientError, Result as ClientResult}};
 	use client::light::fetcher::{FetchChecker, RemoteHeaderRequest,
-		ChangesProof,	RemoteCallRequest, RemoteReadRequest,
+		ChangesProof, RemoteCallRequest, RemoteReadRequest,
 		RemoteReadChildRequest, RemoteChangesRequest, RemoteBodyRequest};
 	use crate::config::Roles;
 	use crate::message::{self, BlockAttributes, Direction, FromBlock, RequestId};

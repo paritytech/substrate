@@ -27,11 +27,17 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
 	/// Transaction is not verifiable yet, but might be in the future.
-	#[display(fmt="Unkown Transaction Validity. Error code: {:?}", _0)]
+	#[display(fmt="Unkown transaction validity: {:?}", _0)]
 	UnknownTransactionValidity(UnknownTransactionValidity),
 	/// Transaction is invalid.
-	#[display(fmt="Invalid Transaction. Error Code: {:?}", _0)]
+	#[display(fmt="Invalid transaction validity: {:?}", _0)]
 	InvalidTransaction(InvalidTransactionValidity),
+	/// The transaction validity returned no "provides" tag.
+	///
+	/// Such transactions are not accepted to the pool, since we use those tags
+	/// to define identity of transactions (occupance of the same "slot").
+	#[display(fmt="The transaction does not provide any tags, so the pool can't identify it.")]
+	NoTagsProvided,
 	/// The transaction is temporarily banned.
 	#[display(fmt="Temporarily Banned")]
 	TemporarilyBanned,
