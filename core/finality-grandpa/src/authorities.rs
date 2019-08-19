@@ -49,7 +49,7 @@ impl<H, N> SharedAuthoritySet<H, N> {
 
 impl<H: Eq, N> SharedAuthoritySet<H, N>
 where N: Add<Output=N> + Ord + Clone + Debug,
-	  H: Clone + Debug
+		H: Clone + Debug
 {
 	/// Get the earliest limit-block number, if any.
 	pub(crate) fn current_limit(&self) -> Option<N> {
@@ -100,7 +100,7 @@ pub(crate) struct AuthoritySet<H, N> {
 
 impl<H, N> AuthoritySet<H, N>
 where H: PartialEq,
-	  N: Ord,
+		N: Ord,
 {
 	/// Get a genesis set with given authorities.
 	pub(crate) fn genesis(initial: Vec<(AuthorityId, u64)>) -> Self {
@@ -129,14 +129,14 @@ where
 		is_descendent_of: &F,
 	) -> Result<(), fork_tree::Error<E>> where
 		F: Fn(&H, &H) -> Result<bool, E>,
-		E:  std::error::Error,
+		E: std::error::Error,
 	{
 		let hash = pending.canon_hash.clone();
 		let number = pending.canon_height.clone();
 
 		debug!(target: "afg", "Inserting potential standard set change signaled at block {:?} \
 							   (delayed by {:?} blocks).",
-			   (&number, &hash), pending.delay);
+			(&number, &hash), pending.delay);
 
 		self.pending_standard_changes.import(
 			hash.clone(),
