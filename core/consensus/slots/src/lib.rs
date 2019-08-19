@@ -31,13 +31,16 @@ use slots::Slots;
 pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
 
 use codec::{Decode, Encode};
-use consensus_common::{SyncOracle, SelectChain};
+use consensus_common::{BlockImport, Proposer, SyncOracle, SelectChain};
 use futures::{prelude::*, future::{self, Either}};
+use futures_timer::Delay;
 use inherents::{InherentData, InherentDataProviders};
 use log::{debug, error, info, warn};
 use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{ApiRef, Block as BlockT, ProvideRuntimeApi};
-use std::{fmt::Debug, ops::Deref};
+use sr_primitives::traits::{ApiRef, Block as BlockT, Header, ProvideRuntimeApi};
+use std::{fmt::Debug, ops::Deref, pin::Pin, sync::Arc};
+use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
+use parking_lot::Mutex;
 
 /// A worker that should be invoked at every new slot.
 pub trait SlotWorker<B: BlockT> {
@@ -47,6 +50,208 @@ pub trait SlotWorker<B: BlockT> {
 
 	/// Called when a new slot is triggered.
 	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo) -> Self::OnSlot;
+}
+
+/// A skeleton implementation for `SlotWorker` which tries to claim a slot at at
+/// its beginning and tries to produce a block if successfully claimed, timing
+/// out if block production takes too long.
+pub trait SimpleSlotWorker<B: BlockT> {
+	/// A handle to a `BlockImport`.
+	type BlockImport: BlockImport<B> + Send + 'static;
+
+	/// A handle to a `SyncOracle`.
+	type SyncOracle: SyncOracle;
+
+	/// The type of proposer to use to build blocks.
+	type Proposer: Proposer<B>;
+
+	/// Data associated with a slot claim.
+	type Claim: Send + 'static;
+
+	/// Epoch data necessary for authoring.
+	type EpochData;
+
+	/// The logging target to use when logging messages.
+	fn logging_target(&self) -> &'static str;
+
+	/// A handle to a `BlockImport`.
+	fn block_import(&self) -> Arc<Mutex<Self::BlockImport>>;
+
+	/// Returns the epoch data necessary for authoring.
+	fn epoch_data(&self, block: &B::Hash) -> Result<Self::EpochData, consensus_common::Error>;
+
+	/// Returns the number of authorities given the epoch data.
+	fn authorities_len(&self, epoch_data: &Self::EpochData) -> usize;
+
+	/// Tries to claim the given slot, returning an object with claim data if successful.
+	fn claim_slot(
+		&self,
+		header: &B::Header,
+		slot_number: u64,
+		epoch_data: &Self::EpochData,
+	) -> Option<Self::Claim>;
+
+	/// Return the pre digest data to include in a block authored with the given claim.
+	fn pre_digest_data(&self, slot_number: u64, claim: &Self::Claim) -> Vec<sr_primitives::DigestItem<B::Hash>>;
+
+	/// Returns a function which produces a `BlockImportParams`.
+	fn import_block(&self) -> Box<dyn Fn(
+		B::Header,
+		&B::Hash,
+		Vec<B::Extrinsic>,
+		Self::Claim,
+	) -> consensus_common::BlockImportParams<B> + Send>;
+
+	/// Whether to force authoring if offline.
+	fn force_authoring(&self) -> bool;
+
+	/// Returns a handle to a `SyncOracle`.
+	fn sync_oracle(&mut self) -> &mut Self::SyncOracle;
+
+	/// Returns a `Proposer` to author on top of the given block.
+	fn proposer(&mut self, block: &B::Header) -> Result<Self::Proposer, consensus_common::Error>;
+
+	/// Implements the `on_slot` functionality from `SlotWorker`.
+	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo)
+		-> Pin<Box<dyn Future<Output = Result<(), consensus_common::Error>> + Send>> where
+		Self: Send + Sync,
+		<Self::Proposer as Proposer<B>>::Create: Unpin + Send + 'static,
+	{
+		let (timestamp, slot_number, slot_duration) =
+			(slot_info.timestamp, slot_info.number, slot_info.duration);
+
+		let epoch_data = match self.epoch_data(&chain_head.hash()) {
+			Ok(epoch_data) => epoch_data,
+			Err(err) => {
+				warn!("Unable to fetch epoch data at block {:?}: {:?}", chain_head.hash(), err);
+
+				telemetry!(
+					CONSENSUS_WARN; "slots.unable_fetching_authorities";
+					"slot" => ?chain_head.hash(),
+					"err" => ?err,
+				);
+
+				return Box::pin(future::ready(Ok(())));
+			}
+		};
+
+		let authorities_len = self.authorities_len(&epoch_data);
+
+		if !self.force_authoring() && self.sync_oracle().is_offline() && authorities_len > 1 {
+			debug!(target: self.logging_target(), "Skipping proposal slot. Waiting for the network.");
+			telemetry!(
+				CONSENSUS_DEBUG;
+				"slots.skipping_proposal_slot";
+				"authorities_len" => authorities_len,
+			);
+
+			return Box::pin(future::ready(Ok(())));
+		}
+
+		let claim = match self.claim_slot(&chain_head, slot_number, &epoch_data) {
+			None => return Box::pin(future::ready(Ok(()))),
+			Some(claim) => claim,
+		};
+
+		debug!(
+			target: self.logging_target(), "Starting authorship at slot {}; timestamp = {}",
+			slot_number,
+			timestamp,
+		);
+
+		telemetry!(CONSENSUS_DEBUG; "slots.starting_authorship";
+			"slot_num" => slot_number,
+			"timestamp" => timestamp,
+		);
+
+		let mut proposer = match self.proposer(&chain_head) {
+			Ok(proposer) => proposer,
+			Err(err) => {
+				warn!("Unable to author block in slot {:?}: {:?}", slot_number, err);
+
+				telemetry!(CONSENSUS_WARN; "slots.unable_authoring_block";
+					"slot" => slot_number, "err" => ?err
+				);
+
+				return Box::pin(future::ready(Ok(())));
+			},
+		};
+
+		let remaining_duration = slot_info.remaining_duration();
+		let logs = self.pre_digest_data(slot_number, &claim);
+
+		// deadline our production to approx. the end of the slot
+		let proposal_work = futures::future::select(
+			proposer.propose(
+				slot_info.inherent_data,
+				sr_primitives::generic::Digest {
+					logs,
+				},
+				remaining_duration,
+			).map_err(|e| consensus_common::Error::ClientImport(format!("{:?}", e)).into()),
+			Delay::new(remaining_duration)
+				.map_err(|err| consensus_common::Error::FaultyTimer(err).into())
+		).map(|v| match v {
+			futures::future::Either::Left((b, _)) => b.map(|b| (b, claim)),
+			futures::future::Either::Right((Ok(_), _)) =>
+				Err(consensus_common::Error::ClientImport("Timeout in the Slots proposer".into())),
+			futures::future::Either::Right((Err(err), _)) => Err(err),
+		});
+
+		let import_block = self.import_block();
+		let block_import = self.block_import();
+		let logging_target = self.logging_target();
+
+		Box::pin(proposal_work.map_ok(move |(block, claim)| {
+			// minor hack since we don't have access to the timestamp
+			// that is actually set by the proposer.
+			let slot_after_building = SignedDuration::default().slot_now(slot_duration);
+			if slot_after_building != slot_number {
+				info!("Discarding proposal for slot {}; block production took too long", slot_number);
+				telemetry!(CONSENSUS_INFO; "slots.discarding_proposal_took_too_long";
+					"slot" => slot_number,
+				);
+
+				return;
+			}
+
+			let (header, body) = block.deconstruct();
+			let header_num = header.number().clone();
+			let header_hash = header.hash();
+			let parent_hash = header.parent_hash().clone();
+
+			let import_block = import_block(
+				header,
+				&header_hash,
+				body,
+				claim,
+			);
+
+			info!("Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
+					header_num,
+					import_block.post_header().hash(),
+					header_hash,
+			);
+
+			telemetry!(CONSENSUS_INFO; "slots.pre_sealed_block";
+				"header_num" => ?header_num,
+				"hash_now" => ?import_block.post_header().hash(),
+				"hash_previously" => ?header_hash,
+			);
+
+			if let Err(err) = block_import.lock().import_block(import_block, Default::default()) {
+				warn!(target: logging_target,
+					"Error with block built on {:?}: {:?}",
+					parent_hash,
+					err,
+				);
+
+				telemetry!(CONSENSUS_WARN; "slots.err_with_block_built_on";
+					"hash" => ?parent_hash, "err" => ?err,
+				);
+			}
+		}))
+	}
 }
 
 /// Slot compatible inherent data.

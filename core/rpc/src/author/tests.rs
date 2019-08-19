@@ -23,6 +23,7 @@ use transaction_pool::{
 	txpool::Pool,
 	ChainApi,
 };
+use futures::Stream;
 use primitives::{
 	H256, blake2_256, hexdisplay::HexDisplay, traits::BareCryptoStore, testing::KeyStore,
 	ed25519, crypto::key_types,

@@ -401,9 +401,9 @@ mod tests {
 			let babe_pre_digest = loop {
 				inherent_data.replace_data(timestamp::INHERENT_IDENTIFIER, &(slot_num * SLOT_DURATION));
 				if let Some(babe_pre_digest) = babe::test_helpers::claim_slot(
-					&*service.client(),
-					&parent_id,
 					slot_num,
+					&parent_header,
+					&*service.client(),
 					(278, 1000),
 					&keystore,
 				) {

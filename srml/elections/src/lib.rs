@@ -892,9 +892,17 @@ impl<T: Trait> Module<T> {
 			count += 1;
 		}
 		for (old, new) in candidates.iter().zip(new_candidates.iter()) {
+			// candidate is not a runner up.
 			if old != new {
 				// removed - kill it
 				<RegisterInfoOf<T>>::remove(old);
+
+				// and candidate is not a winner.
+				if incoming.iter().find(|e| *e == old).is_none() {
+					// slash the bond.
+					let (imbalance, _) = T::Currency::slash_reserved(&old, T::CandidacyBond::get());
+					T::LoserCandidate::on_unbalanced(imbalance);
+				}
 			}
 		}
 		// discard any superfluous slots.
@@ -1144,6 +1152,7 @@ mod tests {
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
+		type Version = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
@@ -1253,6 +1262,7 @@ mod tests {
 	pub struct ExtBuilder {
 		balance_factor: u64,
 		decay_ratio: u32,
+		desired_seats: u32,
 		voting_fee: u64,
 		voter_bond: u64,
 		bad_presentation_punishment: u64,
@@ -1263,6 +1273,7 @@ mod tests {
 			Self {
 				balance_factor: 1,
 				decay_ratio: 24,
+				desired_seats: 2,
 				voting_fee: 0,
 				voter_bond: 0,
 				bad_presentation_punishment: 1,
@@ -1291,6 +1302,10 @@ mod tests {
 			self.voter_bond = fee;
 			self
 		}
+		pub fn desired_seats(mut self, seats: u32) -> Self {
+			self.desired_seats = seats;
+			self
+		}
 		pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 			VOTER_BOND.with(|v| *v.borrow_mut() = self.voter_bond);
 			VOTING_FEE.with(|v| *v.borrow_mut() = self.voting_fee);
@@ -1310,7 +1325,7 @@ mod tests {
 				}),
 				elections: Some(elections::GenesisConfig::<Test>{
 					members: vec![],
-					desired_seats: 2,
+					desired_seats: self.desired_seats,
 					presentation_duration: 2,
 					term_duration: 5,
 				}),
@@ -1339,6 +1354,10 @@ mod tests {
 
 	fn bond() -> u64 {
 		<Test as Trait>::VotingBond::get()
+	}
+
+	fn balances(who: &u64) -> (u64, u64) {
+		(Balances::free_balance(who), Balances::reserved_balance(who))
 	}
 
 	#[test]
@@ -2471,8 +2490,6 @@ mod tests {
 
 			assert_eq!(voter_ids(), vec![0, 5]);
 			assert_eq!(Elections::all_approvals_of(&2).len(), 0);
-			assert_eq!(Balances::total_balance(&2), 18);
-			assert_eq!(Balances::total_balance(&5), 52);
 		});
 	}
 
@@ -2871,6 +2888,43 @@ mod tests {
 			);
 
 			assert_eq!(Elections::candidate_reg_info(4), Some((0, 3)));
+		});
+	}
+
+	#[test]
+	fn loser_candidates_bond_gets_slashed() {
+		with_externalities(&mut ExtBuilder::default().desired_seats(1).build(), || {
+			System::set_block_number(4);
+			assert!(!Elections::presentation_active());
+
+			assert_ok!(Elections::submit_candidacy(Origin::signed(1), 0));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 1));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(3), 2));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(4), 3));
+
+			assert_eq!(balances(&2), (17, 3));
+
+			assert_ok!(Elections::set_approvals(Origin::signed(5), vec![true], 0, 0));
+			assert_ok!(Elections::set_approvals(Origin::signed(1), vec![false, true, true, true], 0, 0));
+
+			assert_ok!(Elections::end_block(System::block_number()));
+
+			System::set_block_number(6);
+			assert!(Elections::presentation_active());
+			assert_eq!(Elections::present_winner(Origin::signed(4), 4, 10, 0), Ok(()));
+			assert_eq!(Elections::present_winner(Origin::signed(3), 3, 10, 0), Ok(()));
+			assert_eq!(Elections::present_winner(Origin::signed(2), 2, 10, 0), Ok(()));
+			assert_eq!(Elections::present_winner(Origin::signed(1), 1, 50, 0), Ok(()));
+
+
+			// winner + carry
+			assert_eq!(Elections::leaderboard(), Some(vec![(10, 3), (10, 4), (50, 1)]));
+			assert_ok!(Elections::end_block(System::block_number()));
+			assert!(!Elections::presentation_active());
+			assert_eq!(Elections::members(), vec![(1, 11)]);
+
+			// account 2 is not a runner up or in leaderboard.
+			assert_eq!(balances(&2), (17, 0));
 		});
 	}
 }
