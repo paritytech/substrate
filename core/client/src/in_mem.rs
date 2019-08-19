@@ -718,6 +718,10 @@ where
 			.map(|num| num.is_zero())
 			.unwrap_or(false)
 	}
+
+	fn remote_blockchain(&self) -> Arc<dyn crate::light::blockchain::RemoteBlockchain<Block>> {
+		unimplemented!()
+	}
 }
 
 /// Prunable in-memory changes trie storage.

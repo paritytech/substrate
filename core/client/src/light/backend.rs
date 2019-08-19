@@ -231,8 +231,8 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 impl<S, F, Block, H> RemoteBackend<Block, H> for Backend<S, F, H>
 where
 	Block: BlockT,
-	S: BlockchainStorage<Block>,
-	F: Fetcher<Block>,
+	S: BlockchainStorage<Block> + 'static,
+	F: Fetcher<Block> + 'static,
 	H: Hasher<Out=Block::Hash>,
 	H::Out: Ord,
 {
@@ -241,6 +241,10 @@ where
 			&& self.blockchain.expect_block_number_from_id(block)
 				.map(|num| num.is_zero())
 				.unwrap_or(false)
+	}
+
+	fn remote_blockchain(&self) -> Arc<dyn crate::light::blockchain::RemoteBlockchain<Block>> {
+		self.blockchain.clone()
 	}
 }
 
@@ -358,7 +362,7 @@ where
 			*self.cached_header.write() = Some(cached_header);
 		}
 
-		futures::executor::block_on(
+		futures03::executor::block_on(
 			self.fetcher.upgrade().ok_or(ClientError::NotAvailableOnLightClient)?
 				.remote_read(RemoteReadRequest {
 					block: self.block,

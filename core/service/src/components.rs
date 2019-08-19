@@ -21,7 +21,7 @@ use serde::{Serialize, de::DeserializeOwned};
 use crate::chain_spec::ChainSpec;
 use keystore::KeyStorePtr;
 use client_db;
-use client::{self, Client, runtime_api};
+use client::{self, Client, runtime_api, light::blockchain::RemoteBlockchain, backend::RemoteBackend};
 use crate::{error, Service};
 use consensus_common::{import_queue::ImportQueue, SelectChain};
 use network::{
@@ -174,6 +174,7 @@ impl<C: Components> InitialSessionKeys<Self> for C where
 pub trait StartRpc<C: Components> {
 	fn start_rpc(
 		client: Arc<ComponentClient<C>>,
+		light_components: Option<(Arc<dyn RemoteBlockchain<ComponentBlock<C>>>, Arc<OnDemand<ComponentBlock<C>>>)>,
 		system_send_back: mpsc::UnboundedSender<rpc::system::Request<ComponentBlock<C>>>,
 		system_info: SystemInfo,
 		task_executor: TaskExecutor,
@@ -190,6 +191,7 @@ impl<C: Components> StartRpc<C> for C where
 {
 	fn start_rpc(
 		client: Arc<ComponentClient<C>>,
+		light_components: Option<(Arc<dyn RemoteBlockchain<ComponentBlock<C>>>, Arc<OnDemand<ComponentBlock<C>>>)>,
 		system_send_back: mpsc::UnboundedSender<rpc::system::Request<ComponentBlock<C>>>,
 		rpc_system_info: SystemInfo,
 		task_executor: TaskExecutor,
@@ -199,8 +201,14 @@ impl<C: Components> StartRpc<C> for C where
 	) -> RpcHandler {
 		use rpc::{chain, state, author, system};
 		let subscriptions = rpc::Subscriptions::new(task_executor.clone());
-		let chain = chain::Chain::new(client.clone(), subscriptions.clone());
-		let state = state::State::new(client.clone(), subscriptions.clone());
+		let chain = match light_components.clone() {
+			Some((remote_blockchain, fetcher)) => chain::new_light(client.clone(), subscriptions.clone(), remote_blockchain, fetcher),
+			None => chain::new_full(client.clone(), subscriptions.clone()),
+		};
+		let state = match light_components.clone() {
+			Some((remote_blockchain, fetcher)) => state::new_light(client.clone(), subscriptions.clone(), remote_blockchain, fetcher),
+			None => state::new_full(client.clone(), subscriptions.clone()),
+		};
 		let author = rpc::author::Author::new(
 			client,
 			transaction_pool,
@@ -464,7 +472,7 @@ pub trait Components: Sized + 'static {
 	) -> Result<
 		(
 			Arc<ComponentClient<Self>>,
-			Option<Arc<OnDemand<FactoryBlock<Self::Factory>>>>
+			Option<(Arc<dyn RemoteBlockchain<FactoryBlock<Self::Factory>>>, Arc<OnDemand<FactoryBlock<Self::Factory>>>)>,
 		),
 		error::Error
 	>;
@@ -567,7 +575,10 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 		executor: CodeExecutor<Self::Factory>,
 		keystore: Option<BareCryptoStorePtr>,
 	) -> Result<
-			(Arc<ComponentClient<Self>>, Option<Arc<OnDemand<FactoryBlock<Self::Factory>>>>),
+			(
+				Arc<ComponentClient<Self>>,
+				Option<(Arc<dyn RemoteBlockchain<FactoryBlock<Self::Factory>>>, Arc<OnDemand<FactoryBlock<Self::Factory>>>)>,
+			),
 			error::Error,
 		>
 	{
@@ -704,7 +715,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 		-> Result<
 			(
 				Arc<ComponentClient<Self>>,
-				Option<Arc<OnDemand<FactoryBlock<Self::Factory>>>>
+				Option<(Arc<dyn RemoteBlockchain<FactoryBlock<Self::Factory>>>, Arc<OnDemand<FactoryBlock<Self::Factory>>>)>,
 			), error::Error>
 	{
 		let db_settings = client_db::DatabaseSettings {
@@ -723,8 +734,9 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 		);
 		let fetcher = Arc::new(network::OnDemand::new(fetch_checker));
 		let client_backend = client::light::new_light_backend(light_blockchain, fetcher.clone());
+		let local_blockchain = client_backend.remote_blockchain();
 		let client = client::light::new_light(client_backend, fetcher.clone(), &config.chain_spec, executor)?;
-		Ok((Arc::new(client), Some(fetcher)))
+		Ok((Arc::new(client), Some((local_blockchain, fetcher))))
 	}
 
 	fn build_transaction_pool(config: TransactionPoolOptions, client: Arc<ComponentClient<Self>>)

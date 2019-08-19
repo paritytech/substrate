@@ -171,7 +171,7 @@ impl<Components: components::Components> Service<Components> {
 
 		let keystore = Keystore::open(config.keystore_path.clone(), config.keystore_password.clone())?;
 
-		let (client, on_demand) = Components::build_client(&config, executor, Some(keystore.clone()))?;
+		let (client, light_components) = Components::build_client(&config, executor, Some(keystore.clone()))?;
 		let select_chain = Components::build_select_chain(&mut config, client.clone())?;
 
 		let transaction_pool = Arc::new(
@@ -228,7 +228,7 @@ impl<Components: components::Components> Service<Components> {
 			chain: client.clone(),
 			finality_proof_provider,
 			finality_proof_request_builder,
-			on_demand,
+			on_demand: light_components.clone().map(|(_, on_demand)| on_demand),
 			transaction_pool: transaction_pool_adapter.clone() as _,
 			import_queue,
 			protocol_id,
@@ -381,6 +381,7 @@ impl<Components: components::Components> Service<Components> {
 			};
 			Components::RuntimeServices::start_rpc(
 				client.clone(),
+				light_components.clone(),
 				system_rpc_tx.clone(),
 				system_info.clone(),
 				Arc::new(SpawnTaskHandle { sender: to_spawn_tx.clone() }),

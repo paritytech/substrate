@@ -20,9 +20,13 @@
 use client;
 use crate::rpc;
 use crate::errors;
+use crate::rpc::futures::Future;
 
 /// Chain RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
+
+/// State RPC future Result type.
+pub type FutureResult<T> = Box<dyn Future<Item = T, Error = Error> + Send>;
 
 /// Chain RPC errors.
 #[derive(Debug, derive_more::Display, derive_more::From)]

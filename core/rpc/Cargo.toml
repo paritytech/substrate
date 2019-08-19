@@ -27,6 +27,7 @@ transaction_pool = { package = "substrate-transaction-pool", path = "../transact
 sr-primitives = { path = "../sr-primitives" }
 runtime_version = { package = "sr-version", path = "../sr-version" }
 substrate-keystore = { path = "../keystore" }
+hash-db = { version = "0.15.0", default-features = false }
 
 [dev-dependencies]
 assert_matches = "1.1"
