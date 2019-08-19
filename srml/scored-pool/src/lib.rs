@@ -22,16 +22,18 @@
 //! scoring entities. Unscored entities are never part of `Members`.
 //!
 //! If an entity wants to be part of the pool a deposit is required.
-//! The deposit is returned when the entity withdraws (or when it
-//! is removed by an entity with the appropriate authority).
+//! The deposit is returned when the entity withdraws or when it
+//! is removed by an entity with the appropriate authority.
 //!
 //! Every `Period` blocks the set of `Members` is refreshed from the
 //! highest scoring members in the pool and, no matter if changes
-//! occurred, `T::MembersChanged::change_members` is invoked.
+//! occurred, `T::MembershipChanged::set_members_sorted` is invoked.
+//! On first load `T::MembershipInitialized::initialize_members` is
+//! invoked with the initial `Members` set.
 //!
 //! It is possible to withdraw candidacy/resign your membership at any
 //! time. If an entity is currently a member, this results in removal
-//! from the `Pool` and `Members` and the entity is immediately replaced
+//! from the `Pool` and `Members`; the entity is immediately replaced
 //! by the next highest scoring candidate in the pool, if available.
 //!
 //! - [`scored_pool::Trait`](./trait.Trait.html)
@@ -157,8 +159,8 @@ decl_storage! {
 		/// A Map of the candidates. The information in this Map is redundant
 		/// to the information in the `Pool`. But the Map enables us to easily
 		/// check if a candidate is already in the pool, without having to
-		/// iterate over the entire pool (the `Pool` is not sorted by `T::AccountId`,
-		/// but by `T::Score` instead).
+		/// iterate over the entire pool (the `Pool` is not sorted by
+		/// `T::AccountId`, but by `T::Score` instead).
 		CandidateExists get(candidate_exists): map T::AccountId => bool;
 
 		/// The current membership, stored as an ordered Vec.
@@ -437,6 +439,8 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		Ok(())
 	}
 
+	/// Checks if `index` is a valid number and if the element found
+	/// at `index` in `Pool` is equal to `who`.
 	fn ensure_index(
 		pool: &PoolT<T, I>,
 		who: &T::AccountId,

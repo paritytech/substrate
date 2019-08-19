@@ -123,7 +123,6 @@ impl Trait for Test {
 	type KickOrigin = EnsureSignedBy<KickOrigin, u64>;
 	type MembershipInitialized = TestChangeMembers;
 	type MembershipChanged = TestChangeMembers;
-
 	type Currency = balances::Module<Self>;
 	type CandidateDeposit = CandidateDeposit;
 	type Period = Period;
@@ -160,4 +159,19 @@ pub fn new_test_ext() -> sr_io::TestExternalities<Blake2Hasher> {
 		.. Default::default()
 	}.assimilate_storage(&mut t).unwrap();
 	t.into()
+}
+
+/// Fetch an entity from the pool, if existent.
+pub fn fetch_from_pool(who: u64) -> Option<(u64, Option<u64>)> {
+	<Module<Test>>::pool()
+		.into_iter()
+		.find(|item| item.0 == who)
+}
+
+/// Find an entity in the pool.
+/// Returns its position in the `Pool` vec, if existent.
+pub fn find_in_pool(who: u64) -> Option<usize> {
+	<Module<Test>>::pool()
+		.into_iter()
+		.position(|item| item.0 == who)
 }

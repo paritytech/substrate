@@ -30,21 +30,6 @@ type Balances = balances::Module<Test>;
 const OOB_ERR: &str = "index out of bounds";
 const INDEX_ERR: &str = "index does not match requested account";
 
-/// Fetch an entity from the pool, if existent.
-fn fetch_from_pool(who: u64) -> Option<(u64, Option<u64>)> {
-	ScoredPool::pool()
-		.into_iter()
-		.find(|item| item.0 == who)
-}
-
-/// Find an entity in the pool.
-/// Returns its position in the `Pool` vec, if existent.
-fn find_in_pool(who: u64) -> Option<usize> {
-	ScoredPool::pool()
-		.into_iter()
-		.position(|item| item.0 == who)
-}
-
 #[test]
 fn query_membership_works() {
 	with_externalities(&mut new_test_ext(), || {
@@ -155,7 +140,7 @@ fn kicking_works() {
 fn unscored_entities_must_not_be_used_for_filling_members() {
 	with_externalities(&mut new_test_ext(), || {
 		// given
-		// we submit a candidacy, score will be None
+		// we submit a candidacy, score will be `None`
 		assert_ok!(ScoredPool::submit_candidacy(Origin::signed(15)));
 
 		// when
@@ -170,7 +155,7 @@ fn unscored_entities_must_not_be_used_for_filling_members() {
 			});
 
 		// then
-		// the None candidates should not have been filled in
+		// the `None` candidates should not have been filled in
 		assert_eq!(ScoredPool::members(), vec![]);
 		assert_eq!(MEMBERS.with(|m| m.borrow().clone()), ScoredPool::members());
 	});
