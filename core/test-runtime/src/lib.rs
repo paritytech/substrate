@@ -373,6 +373,7 @@ impl srml_system::Trait for Runtime {
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
+	type Version = ();
 }
 
 impl srml_timestamp::Trait for Runtime {

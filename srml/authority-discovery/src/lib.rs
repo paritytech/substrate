@@ -151,7 +151,6 @@ mod tests {
     use app_crypto::Pair;
     use primitives::testing::KeyStore;
     use primitives::{crypto::key_types, sr25519, traits::BareCryptoStore, H256};
-    use session::SessionIndex;
     use sr_io::{with_externalities, TestExternalities};
     use sr_primitives::testing::{Header, UintAuthorityId};
     use sr_primitives::traits::{ConvertInto, IdentityLookup, OpaqueKeys};
@@ -159,6 +158,7 @@ mod tests {
     use srml_support::{impl_outer_origin, parameter_types};
 
     type AuthorityDiscovery = Module<Test>;
+    type SessionIndex = u32;
 
     #[derive(Clone, Eq, PartialEq)]
     pub struct Test;
@@ -213,6 +213,7 @@ mod tests {
         type MaximumBlockWeight = MaximumBlockWeight;
         type AvailableBlockRatio = AvailableBlockRatio;
         type MaximumBlockLength = MaximumBlockLength;
+	      type Version = ();
     }
 
     impl_outer_origin! {

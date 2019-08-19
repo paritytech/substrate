@@ -5,7 +5,6 @@ authors = ["Anonymous"]
 edition = "2018"
 
 [dependencies]
-
 serde = { version = "1.0", optional = true, features = ["derive"] }
 safe-mix = { version = "1.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
@@ -16,15 +15,16 @@ support = { package = "srml-support", path = "../../srml/support", default_featu
 primitives = { package = "substrate-primitives", path = "../../core/primitives", default_features = false }
 substrate-session = { path = "../../core/session", default-features = false }
 balances = { package = "srml-balances", path = "../../srml/balances", default_features = false }
-aura = { package = "srml-aura", path = "../../srml/aura", default_features = false }
+babe = { package = "srml-babe", path = "../../srml/babe", default-features = false }
+babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../core/consensus/babe/primitives", default-features = false }
 executive = { package = "srml-executive", path = "../../srml/executive", default_features = false }
 indices = { package = "srml-indices", path = "../../srml/indices", default_features = false }
+grandpa = { package = "srml-grandpa", path = "../../srml/grandpa", default-features = false }
 system = { package = "srml-system", path = "../../srml/system", default_features = false }
 timestamp = { package = "srml-timestamp", path = "../../srml/timestamp", default_features = false }
 sudo = { package = "srml-sudo", path = "../../srml/sudo", default_features = false }
 sr-primitives = { path = "../../core/sr-primitives", default_features = false }
 client = { package = "substrate-client", path = "../../core/client", default_features = false }
-consensus-aura = { package = "substrate-consensus-aura-primitives", path = "../../core/consensus/aura/primitives", default_features = false }
 offchain-primitives = { package = "substrate-offchain-primitives", path = "../../core/offchain/primitives", default-features = false }
 
 [build-dependencies]
@@ -39,9 +39,11 @@ std = [
 	"runtime-io/std",
 	"support/std",
 	"balances/std",
+	"babe/std",
+	"babe-primitives/std",
 	"executive/std",
-	"aura/std",
 	"indices/std",
+	"grandpa/std",
 	"primitives/std",
 	"sr-primitives/std",
 	"system/std",
@@ -50,7 +52,6 @@ std = [
 	"version/std",
 	"serde",
 	"safe-mix/std",
-	"consensus-aura/std",
 	"offchain-primitives/std",
 	"substrate-session/std",
 ]

@@ -19,11 +19,9 @@
 use primitives::{Pair, Public, crypto::UncheckedInto};
 pub use node_primitives::{AccountId, Balance};
 use node_runtime::{
-	BabeConfig, BalancesConfig, ContractsConfig, CouncilConfig, DemocracyConfig,
-	ElectionsConfig, GrandpaConfig, ImOnlineConfig, AuthorityDiscoveryConfig,
-	IndicesConfig, Perbill, SessionConfig, SessionKeys, StakerStatus,
-	StakingConfig, SudoConfig, SystemConfig, TechnicalCommitteeConfig,
-	WASM_BINARY,
+	AuthorityDiscoveryConfig, BabeConfig, BalancesConfig, ContractsConfig, CouncilConfig, DemocracyConfig,
+	ElectionsConfig, GrandpaConfig, ImOnlineConfig, IndicesConfig, SessionConfig, SessionKeys, StakerStatus,
+	StakingConfig, SudoConfig, SystemConfig, TechnicalCommitteeConfig, WASM_BINARY,
 };
 use node_runtime::constants::{time::*, currency::*};
 pub use node_runtime::GenesisConfig;
@@ -33,6 +31,7 @@ use substrate_telemetry::TelemetryEndpoints;
 use grandpa_primitives::{AuthorityId as GrandpaId};
 use babe_primitives::{AuthorityId as BabeId};
 use im_online::AuthorityId as ImOnlineId;
+use sr_primitives::Perbill;
 
 const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 
@@ -134,14 +133,13 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
-			offline_slash: Perbill::from_parts(1_000_000),
 			validator_count: 7,
-			offline_slash_grace: 4,
 			minimum_validator_count: 4,
 			stakers: initial_authorities.iter().map(|x| {
 				(x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator)
 			}).collect(),
 			invulnerables: initial_authorities.iter().map(|x| x.0.clone()).collect(),
+			slash_reward_fraction: Perbill::from_percent(10),
 			.. Default::default()
 		}),
 		democracy: Some(DemocracyConfig::default()),
@@ -266,12 +264,11 @@ pub fn testnet_genesis(
 			current_era: 0,
 			minimum_validator_count: 1,
 			validator_count: 2,
-			offline_slash: Perbill::zero(),
-			offline_slash_grace: 0,
 			stakers: initial_authorities.iter().map(|x| {
 				(x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator)
 			}).collect(),
 			invulnerables: initial_authorities.iter().map(|x| x.0.clone()).collect(),
+			slash_reward_fraction: Perbill::from_percent(10),
 			.. Default::default()
 		}),
 		democracy: Some(DemocracyConfig::default()),
@@ -304,7 +301,7 @@ pub fn testnet_genesis(
 		babe: Some(BabeConfig {
 			authorities: vec![],
 		}),
-		im_online: Some(ImOnlineConfig{
+		im_online: Some(ImOnlineConfig {
 			keys: vec![],
 		}),
 		authority_discovery: Some(AuthorityDiscoveryConfig{

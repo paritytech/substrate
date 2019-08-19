@@ -24,6 +24,7 @@ use sr_primitives::{
 	Perbill, impl_opaque_keys, traits::{BlakeTwo256, IdentityLookup, ConvertInto},
 	testing::{Header, UintAuthorityId}
 };
+use sr_staking_primitives::SessionIndex;
 
 impl_opaque_keys! {
 	pub struct MockSessionKeys {
@@ -150,6 +151,7 @@ impl system::Trait for Test {
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type MaximumBlockLength = MaximumBlockLength;
+	type Version = ();
 }
 
 impl timestamp::Trait for Test {
