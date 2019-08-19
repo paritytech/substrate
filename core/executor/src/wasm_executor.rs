@@ -1020,7 +1020,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			.map_err(|_| "OOB while ext_local_storage_compare_and_set: wasm")?;
 
 		let res = {
-			if old_value == u32::max_value() {
+			if old_value_len == u32::max_value() {
 				this.ext.offchain()
 					.map(|api| api.local_storage_compare_and_set(kind, &key, None, &new_value))
 					.ok_or_else(|| "Calling unavailable API ext_local_storage_compare_and_set: wasm")?
