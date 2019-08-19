@@ -64,23 +64,18 @@ impl<T: Trait> Module<T> {
 	/// set, otherwise this function returns None. The restriction might be
 	/// softened in the future in case a consumer needs to learn own authority
 	/// identifier in any case.
-	pub fn public_key() -> Option<im_online::AuthorityId> {
+	pub fn authority_id() -> Option<im_online::AuthorityId> {
 		let authorities = Keys::get();
 
 		let local_keys = im_online::AuthorityId::all();
 
-		let mut intersect: Vec<im_online::AuthorityId> = authorities
-			.into_iter()
-			.filter_map(|authority| {
-				if local_keys.contains(&authority) {
-					Some(authority)
-				} else {
-					None
-				}
-			})
-			.collect();
-
-		intersect.pop()
+		authorities.into_iter().find_map(|authority| {
+			if local_keys.contains(&authority) {
+				Some(authority)
+			} else {
+				None
+			}
+		})
 	}
 
 	/// Retrieve authority identifiers of the current authority set.
@@ -88,14 +83,9 @@ impl<T: Trait> Module<T> {
 		Keys::get()
 	}
 
-	/// Sign the given payload with one of our authority keys. This key will
-	/// correspond to the public key returned by `public_key` unless the
-	/// underlying key is changed in between calls. If own authority key is not
-	/// part of the current set of authorities, this function returns None.
-	pub fn sign(payload: Vec<u8>) -> Option<Vec<u8>> {
-		let pub_key = Module::<T>::public_key()?;
-
-		pub_key.sign(&payload).map(|s| s.encode())
+	/// Sign the given payload with the private key corresponding to the given authority id.
+	pub fn sign(payload: Vec<u8>, authority_id: im_online::AuthorityId) -> Option<Vec<u8>> {
+		authority_id.sign(&payload).map(|s| s.encode())
 	}
 
 	/// Verify the given signature for the given payload with the given
@@ -103,14 +93,11 @@ impl<T: Trait> Module<T> {
 	pub fn verify(
 		payload: Vec<u8>,
 		signature: Vec<u8>,
-		public_key: im_online::AuthorityId,
+		authority_id: im_online::AuthorityId,
 	) -> bool {
-		let sig: Result<im_online::AuthoritySignature, _> = Decode::decode(&mut &signature[..]);
-
-		match sig {
-			Ok(sig) => public_key.verify(&payload, &sig),
-			Err(_e) => false,
-		}
+		im_online::AuthoritySignature::decode(&mut &signature[..])
+			.map(|s| authority_id.verify(&payload, &s))
+			.unwrap_or(false)
 	}
 
 	fn initialize_keys(keys: &[im_online::AuthorityId]) {
@@ -235,7 +222,7 @@ mod tests {
 	}
 
 	#[test]
-	fn public_key_fn_returns_intersection_of_current_authorities_and_keys_in_key_store() {
+	fn authority_id_fn_returns_intersection_of_current_authorities_and_keys_in_key_store() {
 		// Create keystore and generate key.
 		let key_store = KeyStore::new();
 		key_store
@@ -269,13 +256,13 @@ mod tests {
 		with_externalities(&mut externalities, || {
 			assert_eq!(
 				authority_id,
-				AuthorityDiscovery::public_key().expect("Retrieving public key.")
+				AuthorityDiscovery::authority_id().expect("Retrieving public key.")
 			);
 		});
 	}
 
 	#[test]
-	fn public_key_fn_does_not_return_key_outside_current_authority_set() {
+	fn authority_id_fn_does_not_return_key_outside_current_authority_set() {
 		// Create keystore and generate key.
 		let key_store = KeyStore::new();
 		key_store
@@ -304,7 +291,59 @@ mod tests {
 		externalities.set_keystore(key_store);
 
 		with_externalities(&mut externalities, || {
-			assert_eq!(None, AuthorityDiscovery::public_key());
+			assert_eq!(None, AuthorityDiscovery::authority_id());
+		});
+	}
+
+	#[test]
+	fn sign_and_verify_workflow() {
+		// Create keystore and generate key.
+		let key_store = KeyStore::new();
+		key_store
+			.write()
+			.sr25519_generate_new(key_types::IM_ONLINE, None)
+			.expect("Generates key.");
+
+		// Retrieve key to later check if we got the right one.
+		let public_key = key_store
+			.read()
+			.sr25519_public_keys(key_types::IM_ONLINE)
+			.pop()
+			.unwrap();
+		let authority_id = im_online::AuthorityId::from(public_key);
+
+		// Build genesis.
+		let mut t = system::GenesisConfig::default()
+			.build_storage::<Test>()
+			.unwrap();
+
+		GenesisConfig {
+			keys: vec![authority_id.clone()],
+		}
+		.assimilate_storage::<Test>(&mut t)
+		.unwrap();
+
+		// Create externalities.
+		let mut externalities = TestExternalities::new(t);
+		externalities.set_keystore(key_store);
+
+		with_externalities(&mut externalities, || {
+			let authority_id = AuthorityDiscovery::authority_id().expect("authority id");
+			let payload = String::from("test payload").into_bytes();
+			let sig =
+				AuthorityDiscovery::sign(payload.clone(), authority_id.clone()).expect("signature");
+
+			assert!(AuthorityDiscovery::verify(
+				payload,
+				sig.clone(),
+				authority_id.clone()
+			));
+
+			assert!(!AuthorityDiscovery::verify(
+				String::from("other payload").into_bytes(),
+				sig,
+				authority_id
+			))
 		});
 	}
 }

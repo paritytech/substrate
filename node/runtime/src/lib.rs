@@ -407,8 +407,7 @@ impl offences::Trait for Runtime {
 	type OnOffenceHandler = Staking;
 }
 
-impl authority_discovery::Trait for Runtime {
-}
+impl authority_discovery::Trait for Runtime {}
 
 impl grandpa::Trait for Runtime {
 	type Event = Event;
@@ -581,15 +580,15 @@ impl_runtime_apis! {
 	}
 
 	impl authority_discovery_primitives::AuthorityDiscoveryApi<Block, im_online::AuthorityId> for Runtime {
-		fn public_key() -> Option<im_online::AuthorityId> {
-			AuthorityDiscovery::public_key()
+		fn authority_id() -> Option<im_online::AuthorityId> {
+			AuthorityDiscovery::authority_id()
 		}
 		fn authorities() -> Vec<im_online::AuthorityId> {
 			AuthorityDiscovery::authorities()
 		}
 
-		fn sign(payload: Vec<u8>) -> Option<Vec<u8>> {
-			AuthorityDiscovery::sign(payload)
+		fn sign(payload: Vec<u8>, authority_id: im_online::AuthorityId) -> Option<Vec<u8>> {
+			AuthorityDiscovery::sign(payload, authority_id)
 		}
 
 		fn verify(payload: Vec<u8>, signature: Vec<u8>, public_key: im_online::AuthorityId) -> bool {

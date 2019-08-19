@@ -18,7 +18,7 @@ sr-io = { package = "sr-io", path = "../../core/sr-io", default-features = false
 system = { package = "srml-system", path = "../system", default-features = false }
 
 [features]
-default = ["std", "session/historical"]
+default = ["std"]
 std = [
 	"codec/std",
 	"sr-primitives/std",
