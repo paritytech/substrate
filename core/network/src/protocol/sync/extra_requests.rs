@@ -18,7 +18,7 @@ use client::error::Error as ClientError;
 use crate::protocol::sync::{PeerSync, PeerSyncState};
 use fork_tree::ForkTree;
 use libp2p::PeerId;
-use log::warn;
+use log::{debug, warn};
 use sr_primitives::traits::{Block as BlockT, NumberFor, Zero};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::{Duration, Instant};
@@ -85,9 +85,15 @@ impl<B: BlockT> ExtraRequests<B> {
 				// this is a new root so we add it to the current `pending_requests`
 				self.pending_requests.push_back((request.0, request.1));
 			}
+			Err(fork_tree::Error::Revert) => {
+				// we have finalized further than the given request, presumably
+				// by some other part of the system (not sync). we can safely
+				// ignore the `Revert` error.
+				return;
+			},
 			Err(err) => {
-				warn!(target: "sync", "Failed to insert request {:?} into tree: {:?}", request, err);
-				return
+				debug!(target: "sync", "Failed to insert request {:?} into tree: {:?}", request, err);
+				return;
 			}
 			_ => ()
 		}
@@ -132,7 +138,20 @@ impl<B: BlockT> ExtraRequests<B> {
 		}
 
 		if best_finalized_number > self.best_seen_finalized_number {
-			self.tree.finalize_with_ancestors(best_finalized_hash, best_finalized_number, &is_descendent_of)?;
+			match self.tree.finalize_with_ancestors(
+				best_finalized_hash,
+				best_finalized_number,
+				&is_descendent_of,
+			) {
+				Err(fork_tree::Error::Revert) => {
+					// we might have finalized further already in which case we
+					// will get a `Revert` error which we can safely ignore.
+					return Ok(());
+				},
+				Err(err) => return Err(err),
+				Ok(_) => {},
+			}
+
 			self.best_seen_finalized_number = best_finalized_number;
 		}
 
