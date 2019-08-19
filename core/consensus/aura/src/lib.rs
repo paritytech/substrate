@@ -582,7 +582,7 @@ fn initialize_authorities_cache<A, B, C>(client: &C) -> Result<(), ConsensusErro
 	let genesis_id = BlockId::Number(Zero::zero());
 	let genesis_authorities: Option<Vec<A>> = cache
 		.get_at(&well_known_cache_keys::AUTHORITIES, &genesis_id)
-		.and_then(|v| Decode::decode(&mut &v[..]).ok());
+		.and_then(|(_, _, v)| Decode::decode(&mut &v[..]).ok());
 	if genesis_authorities.is_some() {
 		return Ok(());
 	}
@@ -610,7 +610,7 @@ fn authorities<A, B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<A>, Consensus
 		.cache()
 		.and_then(|cache| cache
 			.get_at(&well_known_cache_keys::AUTHORITIES, at)
-			.and_then(|v| Decode::decode(&mut &v[..]).ok())
+			.and_then(|(_, _, v)| Decode::decode(&mut &v[..]).ok())
 		)
 		.or_else(|| AuraApi::authorities(&*client.runtime_api(), at).ok())
 		.ok_or_else(|| consensus_common::Error::InvalidAuthoritiesSet.into())

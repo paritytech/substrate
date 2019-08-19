@@ -37,6 +37,11 @@ use srml_support::{
 };
 use sr_primitives::{
 	generic::{DigestItem, OpaqueDigestItemId}, traits::Zero,
+	Perbill,
+};
+use sr_staking_primitives::{
+	SessionIndex,
+	offence::{Offence, Kind},
 };
 use fg_primitives::{ScheduledChange, ConsensusLog, GRANDPA_ENGINE_ID};
 pub use fg_primitives::{AuthorityId, AuthorityWeight};
@@ -400,5 +405,58 @@ impl<T: Trait> finality_tracker::OnFinalizationStalled<T::BlockNumber> for Modul
 		// to figure out _who_ failed. until then, we can't meaningfully guard
 		// against `next == last` the way that normal session changes do.
 		<Stalled<T>>::put((further_wait, median));
+	}
+}
+
+/// A round number and set id which point on the time of an offence.
+#[derive(Copy, Clone, PartialOrd, Ord, Eq, PartialEq, Encode, Decode)]
+struct GrandpaTimeSlot {
+	// The order of these matters for `derive(Ord)`.
+	set_id: u64,
+	round: u64,
+}
+
+// TODO [slashing]: Integrate this.
+/// A grandpa equivocation offence report.
+#[allow(dead_code)]
+struct GrandpaEquivocationOffence<FullIdentification> {
+	/// Time slot at which this incident happened.
+	time_slot: GrandpaTimeSlot,
+	/// The session index in which the incident happened.
+	session_index: SessionIndex,
+	/// The size of the validator set at the time of the offence.
+	validator_set_count: u32,
+	/// The authority which produced this equivocation.
+	offender: FullIdentification,
+}
+
+impl<FullIdentification: Clone> Offence<FullIdentification> for GrandpaEquivocationOffence<FullIdentification> {
+	const ID: Kind = *b"grandpa:equivoca";
+	type TimeSlot = GrandpaTimeSlot;
+
+	fn offenders(&self) -> Vec<FullIdentification> {
+		vec![self.offender.clone()]
+	}
+
+	fn session_index(&self) -> SessionIndex {
+		self.session_index
+	}
+
+	fn validator_set_count(&self) -> u32 {
+		self.validator_set_count
+	}
+
+	fn time_slot(&self) -> Self::TimeSlot {
+		self.time_slot
+	}
+
+	fn slash_fraction(
+		offenders_count: u32,
+		validator_set_count: u32,
+	) -> Perbill {
+		// the formula is min((3k / n)^2, 1)
+		let x = Perbill::from_rational_approximation(3 * offenders_count, validator_set_count);
+		// _ ^ 2
+		x.square()
 	}
 }

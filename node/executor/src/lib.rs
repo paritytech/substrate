@@ -43,13 +43,15 @@ mod tests {
 	use codec::{Encode, Decode, Joiner};
 	use runtime_support::{Hashable, StorageValue, StorageMap, assert_eq_error_rate, traits::Currency};
 	use state_machine::{CodeExecutor, Externalities, TestExternalities as CoreTestExternalities};
-	use primitives::{twox_128, blake2_256, Blake2Hasher, NeverNativeValue, NativeOrEncoded, map};
+	use primitives::{
+		twox_128, blake2_256, Blake2Hasher, ChangesTrieConfiguration, NeverNativeValue, NativeOrEncoded. map
+	};
 	use sr_primitives::traits::{Header as HeaderT, Hash as HashT, Convert};
 	use sr_primitives::{ApplyOutcome, ApplyError, ApplyResult};
 	use sr_primitives::weights::{WeightMultiplier, GetDispatchInfo};
 	use contracts::ContractAddressFor;
 	use system::{EventRecord, Phase};
-	use node_primitives::{Hash, BlockNumber, Balance};
+	use node_primitives::{Hash, BlockNumber, AccountId, Balance, Index};
 	use node_runtime::{
 		Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances, BuildStorage,
 		System, Event,
@@ -77,10 +79,12 @@ mod tests {
 
 	const GENESIS_HASH: [u8; 32] = [69u8; 32];
 
+	const VERSION: u32 = node_runtime::VERSION.spec_version;
+
 	type TestExternalities<H> = CoreTestExternalities<H, u64>;
 
 	fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
-		node_testing::keyring::sign(xt, GENESIS_HASH)
+		node_testing::keyring::sign(xt, VERSION, GENESIS_HASH)
 	}
 
 	/// Default transfer fee

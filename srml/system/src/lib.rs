@@ -77,6 +77,7 @@ use rstd::prelude::*;
 #[cfg(any(feature = "std", test))]
 use rstd::map;
 use rstd::marker::PhantomData;
+use sr_version::RuntimeVersion;
 use sr_primitives::generic::{self, Era};
 use sr_primitives::Perbill;
 use sr_primitives::weights::{
@@ -216,6 +217,8 @@ pub trait Trait: 'static + Eq + Clone {
 	/// module, including weight and length.
 	type AvailableBlockRatio: Get<Perbill>;
 
+	/// Get the chain's current version.
+	type Version: Get<RuntimeVersion>;
 }
 
 pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;
@@ -709,6 +712,9 @@ impl<T: Trait> Module<T> {
 		<ParentHash<T>>::put(n);
 	}
 
+	/// Return the chain's current runtime version.
+	pub fn runtime_version() -> RuntimeVersion { T::Version::get() }
+
 	/// Get the basic random seed.
 	///
 	/// In general you won't want to use this, but rather `Self::random` which
@@ -1059,6 +1065,35 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckGenesis<T> {
 	}
 }
 
+/// Ensure the runtime version registered in the transaction is the same as at present.
+#[derive(Encode, Decode, Clone, Eq, PartialEq)]
+pub struct CheckVersion<T: Trait + Send + Sync>(rstd::marker::PhantomData<T>);
+
+#[cfg(feature = "std")]
+impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckVersion<T> {
+	fn fmt(&self, _f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		Ok(())
+	}
+}
+
+#[cfg(feature = "std")]
+impl<T: Trait + Send + Sync> CheckVersion<T> {
+	pub fn new() -> Self {
+		Self(std::marker::PhantomData)
+	}
+}
+
+impl<T: Trait + Send + Sync> SignedExtension for CheckVersion<T> {
+	type AccountId = T::AccountId;
+	type Call = <T as Trait>::Call;
+	type AdditionalSigned = u32;
+	type Pre = ();
+
+	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str> {
+		Ok(<Module<T>>::runtime_version().spec_version)
+	}
+}
+
 pub struct ChainContext<T>(::rstd::marker::PhantomData<T>);
 impl<T> Default for ChainContext<T> {
 	fn default() -> Self {
@@ -1112,6 +1147,7 @@ mod tests {
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
+		type Version = ();
 	}
 
 	impl From<Event> for u16 {

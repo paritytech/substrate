@@ -952,7 +952,7 @@ fn epoch_from_cache<B, C>(client: &C, at: &BlockId<B>) -> Option<MaybeSpanEpoch>
 	client.cache()
 		.and_then(|cache| cache
 			.get_at(&well_known_cache_keys::EPOCH, at)
-			.and_then(|v| Decode::decode(&mut &v[..]).ok()))
+			.and_then(|(_, _, v)| Decode::decode(&mut &v[..]).ok()))
 }
 
 /// Extract current epoch from runtime.
@@ -1202,7 +1202,7 @@ fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> 
 	let genesis_id = BlockId::Number(Zero::zero());
 	let genesis_epoch: Option<MaybeSpanEpoch> = cache
 		.get_at(&well_known_cache_keys::EPOCH, &genesis_id)
-		.and_then(|v| Decode::decode(&mut &v[..]).ok());
+		.and_then(|(_, _, v)| Decode::decode(&mut &v[..]).ok());
 	if genesis_epoch.is_some() {
 		return Ok(());
 	}
