@@ -86,6 +86,7 @@ impl system::Trait for Test {
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
+	type Version = ();
 }
 
 pub struct TestIsDeadAccount {}

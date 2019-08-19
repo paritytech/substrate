@@ -12,7 +12,7 @@ kvdb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c
 kvdb-rocksdb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d", optional = true }
 kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
 linked-hash-map = "0.5"
-hash-db = { version = "0.15.0" }
+hash-db = { version = "0.15.2" }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 sr-primitives = {  path = "../../sr-primitives" }
 client = { package = "substrate-client", path = "../../client" }

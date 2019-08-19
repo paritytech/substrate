@@ -48,8 +48,11 @@
 pub use timestamp;
 
 use rstd::{result, prelude::*};
-use codec::Encode;
-use srml_support::{decl_storage, decl_module, Parameter, storage::StorageValue, traits::Get};
+use codec::{Encode, Decode};
+use srml_support::{
+	decl_storage, decl_module, Parameter, storage::StorageValue, traits::{Get, FindAuthor},
+	ConsensusEngineId,
+};
 use app_crypto::AppPublic;
 use sr_primitives::{
 	traits::{SaturatedConversion, Saturating, Zero, Member, IsMember}, generic::DigestItem,
@@ -60,9 +63,7 @@ use timestamp::TimestampInherentData;
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-use substrate_consensus_aura_primitives::{AURA_ENGINE_ID, ConsensusLog};
-#[cfg(feature = "std")]
-use codec::Decode;
+use substrate_consensus_aura_primitives::{AURA_ENGINE_ID, ConsensusLog, AuthorityIndex};
 
 mod mock;
 mod tests;
@@ -215,10 +216,27 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	fn on_disabled(i: usize) {
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(
 			AURA_ENGINE_ID,
-			ConsensusLog::<T::AuthorityId>::OnDisabled(i as u64).encode(),
+			ConsensusLog::<T::AuthorityId>::OnDisabled(i as AuthorityIndex).encode(),
 		);
 
 		<system::Module<T>>::deposit_log(log.into());
+	}
+}
+
+impl<T: Trait> FindAuthor<u32> for Module<T> {
+	fn find_author<'a, I>(digests: I) -> Option<u32> where
+		I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
+	{
+		for (id, mut data) in digests.into_iter() {
+			if id == AURA_ENGINE_ID {
+				if let Ok(slot_num) = u64::decode(&mut data) {
+					let author_index = slot_num % Self::authorities().len() as u64;
+					return Some(author_index as u32)
+				}
+			}
+		}
+
+		None
 	}
 }
 
