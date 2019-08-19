@@ -1,0 +1,30 @@
+[package]
+name = "srml-scored-pool"
+version = "1.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+serde = { version = "1.0", optional = true }
+sr-io = { path = "../../core/sr-io", default-features = false }
+sr-primitives = { path = "../../core/sr-primitives", default-features = false }
+sr-std = { path = "../../core/sr-std", default-features = false }
+srml-support = { path = "../support", default-features = false }
+system = { package = "srml-system", path = "../system", default-features = false }
+
+[dev-dependencies]
+balances = { package = "srml-balances", path = "../balances" }
+primitives = { package = "substrate-primitives",  path = "../../core/primitives" }
+
+[features]
+default = ["std"]
+std = [
+	"codec/std",
+	"serde",
+	"sr-io/std",
+	"sr-primitives/std",
+	"sr-std/std",
+	"srml-support/std",
+	"system/std",
+]
