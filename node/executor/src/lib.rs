@@ -44,7 +44,7 @@ mod tests {
 	use keyring::{AccountKeyring, Ed25519Keyring, Sr25519Keyring};
 	use runtime_support::{Hashable, StorageValue, StorageMap, assert_eq_error_rate, traits::Currency};
 	use state_machine::{CodeExecutor, Externalities, TestExternalities as CoreTestExternalities};
-	use primitives::{ twox_128, blake2_256, Blake2Hasher, ChangesTrieConfiguration, NeverNativeValue, NativeOrEncoded};
+	use primitives::{twox_128, blake2_256, Blake2Hasher, ChangesTrieConfiguration, NeverNativeValue, NativeOrEncoded};
 	use node_primitives::{Hash, BlockNumber, AccountId, Balance, Index};
 	use sr_primitives::traits::{Header as HeaderT, Hash as HashT, Convert};
 	use sr_primitives::{generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
@@ -55,7 +55,7 @@ mod tests {
 		Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances, BuildStorage,
 		GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System, SystemConfig,
 		GrandpaConfig, IndicesConfig, ContractsConfig, Event, SessionKeys, SignedExtra,
-		TransferFee, TransactionBaseFee, TransactionByteFee,
+		TransferFee, TransactionBaseFee, TransactionByteFee
 	};
 	use node_runtime::constants::currency::*;
 	use node_runtime::impls::WeightToFee;
@@ -78,6 +78,8 @@ mod tests {
 	const BLOATY_CODE: &[u8] = node_runtime::WASM_BINARY_BLOATY;
 
 	const GENESIS_HASH: [u8; 32] = [69u8; 32];
+
+	const VERSION: u32 = node_runtime::VERSION.spec_version;
 
 	type TestExternalities<H> = CoreTestExternalities<H, u64>;
 
@@ -122,7 +124,7 @@ mod tests {
 	fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
 		match xt.signed {
 			Some((signed, extra)) => {
-				let payload = (xt.function, extra.clone(), GENESIS_HASH, GENESIS_HASH);
+				let payload = (xt.function, extra.clone(), VERSION, GENESIS_HASH, GENESIS_HASH);
 				let key = AccountKeyring::from_public(&signed).unwrap();
 				let signature = payload.using_encoded(|b| {
 					if b.len() > 256 {
@@ -145,6 +147,7 @@ mod tests {
 
 	fn signed_extra(nonce: Index, extra_fee: Balance) -> SignedExtra {
 		(
+			system::CheckVersion::new(),
 			system::CheckGenesis::new(),
 			system::CheckEra::from(Era::mortal(256, 0)),
 			system::CheckNonce::from(nonce),
