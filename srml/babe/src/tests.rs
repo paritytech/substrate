@@ -50,3 +50,13 @@ fn check_epoch_change() {
 		Babe::randomness_change_epoch(1);
 	})
 }
+
+#[test]
+fn authority_index() {
+	with_externalities(&mut new_test_ext(vec![0, 1, 2, 3]), || {
+		assert_eq!(Babe::find_author((&[(BABE_ENGINE_ID, &[][..])]).into_iter().cloned()), None,
+			"Trivially invalid authorities are ignored");
+		assert_eq!(Babe::find_author((&[(BABE_ENGINE_ID, &[][..])]).into_iter().cloned()), None,
+			"Trivially invalid authorities are ignored")
+	})
+}
