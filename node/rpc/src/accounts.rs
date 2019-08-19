@@ -120,6 +120,8 @@ mod tests {
 		keyring::{self, alice, signed_extra},
 	};
 
+	const VERSION: u32 = node_runtime::VERSION.spec_version;
+
 	#[test]
 	fn should_return_next_nonce_for_some_account() {
 		// given
@@ -132,7 +134,7 @@ mod tests {
 				signed: Some((alice().into(), extra)),
 				function: Call::Timestamp(TimestampCall::set(5)),
 			};
-			let xt = keyring::sign(ex, client.genesis_hash().into());
+			let xt = keyring::sign(ex, VERSION, client.genesis_hash().into());
 			// Convert to OpaqueExtrinsic
 			let encoded = xt.encode();
 			node_primitives::UncheckedExtrinsic::decode(&mut &*encoded).unwrap()
