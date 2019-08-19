@@ -114,7 +114,3 @@ is-it-maintained-open-issues = { repository = "paritytech/substrate" }
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
-
-# TODO [ToDr] Temporary workaround for nightly issues.
-[patch.crates-io]
-hashmap_core = { git = "https://github.com/paritytech/hashmap_core" }

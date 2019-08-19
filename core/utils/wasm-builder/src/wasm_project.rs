@@ -185,10 +185,6 @@ fn create_wasm_workspace_project(wasm_workspace: &Path) {
 
 				[workspace]
 				members = [ {members} ]
-
-				# TODO [ToDr] temporary measure to fix nightly builds.
-				[patch.crates-io]
-				hashmap_core = {{ git = "https://github.com/paritytech/hashmap_core" }}
 			"#,
 			members = members,
 		)
