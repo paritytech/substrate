@@ -80,8 +80,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 147,
-	impl_version: 150,
+	spec_version: 148,
+	impl_version: 148,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -407,6 +407,8 @@ impl offences::Trait for Runtime {
 	type OnOffenceHandler = Staking;
 }
 
+impl authority_discovery::Trait for Runtime {}
+
 impl grandpa::Trait for Runtime {
 	type Event = Event;
 }
@@ -447,6 +449,7 @@ construct_runtime!(
 		Contracts: contracts,
 		Sudo: sudo,
 		ImOnline: im_online::{Module, Call, Storage, Event, ValidateUnsigned, Config},
+		AuthorityDiscovery: authority_discovery::{Module, Call, Config},
 		Offences: offences::{Module, Call, Storage, Event},
 	}
 );
@@ -576,15 +579,26 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl node_primitives::AccountNonceApi<Block> for Runtime {
-		fn account_nonce(account: AccountId) -> Index {
-			System::account_nonce(account)
+	impl authority_discovery_primitives::AuthorityDiscoveryApi<Block, im_online::AuthorityId> for Runtime {
+		fn authority_id() -> Option<im_online::AuthorityId> {
+			AuthorityDiscovery::authority_id()
+		}
+		fn authorities() -> Vec<im_online::AuthorityId> {
+			AuthorityDiscovery::authorities()
+		}
+
+		fn sign(payload: Vec<u8>, authority_id: im_online::AuthorityId) -> Option<Vec<u8>> {
+			AuthorityDiscovery::sign(payload, authority_id)
+		}
+
+		fn verify(payload: Vec<u8>, signature: Vec<u8>, public_key: im_online::AuthorityId) -> bool {
+			AuthorityDiscovery::verify(payload, signature, public_key)
 		}
 	}
 
-	impl consensus_primitives::ConsensusApi<Block, babe_primitives::AuthorityId> for Runtime {
-		fn authorities() -> Vec<babe_primitives::AuthorityId> {
-			Babe::authorities().into_iter().map(|(a, _)| a).collect()
+	impl node_primitives::AccountNonceApi<Block> for Runtime {
+		fn account_nonce(account: AccountId) -> Index {
+			System::account_nonce(account)
 		}
 	}
 

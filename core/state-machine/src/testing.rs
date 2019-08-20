@@ -89,6 +89,11 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 		self.offchain = Some(Box::new(offchain));
 	}
 
+	/// Set keystore.
+	pub fn set_keystore(&mut self, keystore: BareCryptoStorePtr) {
+		self.keystore = Some(keystore);
+	}
+
 	/// Get mutable reference to changes trie storage.
 	pub fn changes_trie_storage(&mut self) -> &mut ChangesTrieInMemoryStorage<H, N> {
 		&mut self.changes_trie_storage
