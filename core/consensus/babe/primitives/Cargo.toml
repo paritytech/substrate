@@ -8,7 +8,6 @@ edition = "2018"
 [dependencies]
 app-crypto = { package = "substrate-application-crypto", path = "../../../application-crypto", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
-consensus_common_primitives = { package = "substrate-consensus-common-primitives", path = "../../common/primitives", default-features = false }
 rstd = { package = "sr-std", path = "../../../sr-std", default-features = false }
 schnorrkel = { version = "0.8.4", features = ["preaudit_deprecated"], optional = true }
 slots = { package = "substrate-consensus-slots", path = "../../slots", optional = true }
@@ -21,7 +20,6 @@ default = ["std"]
 std = [
 	"app-crypto/std",
 	"codec/std",
-	"consensus_common_primitives/std",
 	"rstd/std",
 	"schnorrkel",
 	"slots",

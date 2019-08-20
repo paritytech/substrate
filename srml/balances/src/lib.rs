@@ -824,12 +824,12 @@ where
 	}
 
 	fn burn(mut amount: Self::Balance) -> Self::PositiveImbalance {
-		<TotalIssuance<T, I>>::mutate(|issued|
-			issued.checked_sub(&amount).unwrap_or_else(|| {
+		<TotalIssuance<T, I>>::mutate(|issued| {
+			*issued = issued.checked_sub(&amount).unwrap_or_else(|| {
 				amount = *issued;
 				Zero::zero()
-			})
-		);
+			});
+		});
 		PositiveImbalance::new(amount)
 	}
 

@@ -37,7 +37,7 @@ use substrate_client::{
 	impl_runtime_apis,
 };
 use sr_primitives::{
-	ApplyResult, create_runtime_str, Perbill, impl_opaque_keys,
+	ApplyResult, create_runtime_str, Perbill, impl_opaque_keys, EquivocationProof,
 	transaction_validity::{TransactionValidity, ValidTransaction},
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
@@ -716,7 +716,7 @@ cfg_if! {
 				}
 
 				fn construct_equivocation_transaction(
-					_equivocation: babe_primitives::EquivocationProof<
+					_equivocation: EquivocationProof<
 						<Block as BlockT>::Header,
 						AuthorityId,
 						AuthoritySignature
@@ -965,7 +965,7 @@ cfg_if! {
 				}
 
 				fn construct_equivocation_transaction(
-					equivocation: babe_primitives::EquivocationProof<
+					equivocation: EquivocationProof<
 						<Block as BlockT>::Header,
 						AuthorityId,
 						AuthoritySignature

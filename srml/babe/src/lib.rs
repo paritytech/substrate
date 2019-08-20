@@ -31,9 +31,9 @@ use srml_support::{
 };
 use timestamp::{OnTimestampSet};
 use sr_primitives::{
-	generic::{DigestItem, Era, UncheckedExtrinsic}, ConsensusEngineId, Perbill, key_types, KeyTypeId,
+	generic::{DigestItem, Era, UncheckedExtrinsic}, ConsensusEngineId, Perbill,
 	traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Header, Zero},
-	weights::SimpleDispatchInfo,
+	weights::SimpleDispatchInfo, EquivocationProof, key_types, KeyTypeId
 };
 use sr_staking_primitives::{
 	SessionIndex,
@@ -47,8 +47,7 @@ use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent
 use inherents::{InherentDataProviders, ProvideInherentData};
 use system::{ensure_signed, ensure_root};
 use babe_primitives::{
-	BABE_ENGINE_ID, ConsensusLog, BabeAuthorityWeight, Epoch, RawBabePreDigest,
-	EquivocationProof, get_slot
+	BABE_ENGINE_ID, ConsensusLog, BabeAuthorityWeight, Epoch, RawBabePreDigest, get_slot
 };
 use app_crypto::RuntimeAppPublic;
 pub use babe_primitives::{AuthorityId, AuthoritySignature, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH, app};

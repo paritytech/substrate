@@ -13,7 +13,6 @@ sr-primitives = {  path = "../../sr-primitives" }
 sr-staking-primitives = { path = "../../sr-staking-primitives" }
 substrate-telemetry = { path = "../../telemetry" }
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
-consensus_common_primitives = { package = "substrate-consensus-common-primitives", path = "../common/primitives" }
 app-crypto = { package = "substrate-application-crypto", path = "../../application-crypto" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
 futures-preview = "0.3.0-alpha.17"

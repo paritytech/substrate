@@ -24,7 +24,6 @@ srml-babe = { path = "../../../srml/babe" }
 client = { package = "substrate-client", path = "../../client" }
 uncles = { package = "substrate-consensus-uncles", path = "../uncles" }
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
-consensus_common_primitives = { package = "substrate-consensus-common-primitives", path = "../common/primitives" }
 slots = { package = "substrate-consensus-slots", path = "../slots"  }
 sr-primitives = {  path = "../../sr-primitives" }
 fork-tree = { path = "../../utils/fork-tree" }

@@ -19,9 +19,8 @@
 use codec::{Encode, Decode, Codec};
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
-use sr_primitives::traits::Header;
+use sr_primitives::{traits::Header, EquivocationProof};
 use app_crypto::RuntimeAppPublic;
-use consensus_common_primitives::EquivocationProof;
 
 const SLOT_HEADER_MAP_KEY: &[u8] = b"slot_header_map";
 const SLOT_HEADER_START: &[u8] = b"slot_header_start";

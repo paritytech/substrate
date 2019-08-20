@@ -12,12 +12,11 @@ use rstd::prelude::*;
 use primitives::{OpaqueMetadata, crypto::key_types};
 use sr_primitives::{
 	ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
-	impl_opaque_keys, AnySignature
+	impl_opaque_keys, AnySignature, EquivocationProof
 };
 use sr_primitives::traits::{NumberFor, BlakeTwo256, Block as BlockT, DigestFor, StaticLookup, Verify, ConvertInto};
 use sr_primitives::weights::Weight;
 use babe::{AuthorityId as BabeId, AuthoritySignature};
-use consensus_primitives::EquivocationProof;
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
 use grandpa::fg_primitives::{self, ScheduledChange, GrandpaEquivocationFrom};
 use client::{
@@ -429,19 +428,13 @@ impl_runtime_apis! {
 		}
 
 		fn construct_equivocation_transaction(
-			_equivocation: babe_primitives::EquivocationProof<
+			_equivocation: EquivocationProof<
 				<Block as BlockT>::Header,
 				BabeId,
 				AuthoritySignature
 			>,
 		) -> Option<Vec<u8>> {
 			None
-		}
-	}
-
-	impl consensus_primitives::ConsensusApi<Block, babe_primitives::AuthorityId> for Runtime {
-		fn authorities() -> Vec<babe_primitives::AuthorityId> {
-			Babe::authorities().into_iter().map(|(a, _)| a).collect()
 		}
 	}
 

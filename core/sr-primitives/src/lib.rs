@@ -855,6 +855,19 @@ impl traits::Extrinsic for OpaqueExtrinsic {
 	fn new_unsigned(_call: Self::Call) -> Option<Self> { None }
 }
 
+/// Represents an equivocation proof.
+#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, PartialEq, Eq, Decode, Encode)]
+pub struct EquivocationProof<H, P, S> {
+	pub reporter: P,
+	pub identity: P,
+	pub slot: u64,
+	pub first_header: H,
+	pub second_header: H,
+	pub first_signature: S,
+	pub second_signature: S,
+}
+
 #[cfg(test)]
 mod tests {
 	use crate::codec::{Encode, Decode};

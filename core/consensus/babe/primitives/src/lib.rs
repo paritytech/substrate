@@ -23,9 +23,8 @@ mod digest;
 
 use codec::{Encode, Decode};
 use rstd::vec::Vec;
-use sr_primitives::ConsensusEngineId;
+use sr_primitives::{ConsensusEngineId, EquivocationProof};
 use substrate_client::decl_runtime_apis;
-pub use consensus_common_primitives::EquivocationProof;
 
 #[cfg(feature = "std")]
 pub use digest::BabePreDigest;

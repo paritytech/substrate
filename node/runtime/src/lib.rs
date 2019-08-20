@@ -31,13 +31,14 @@ use node_primitives::{
 	Moment, Signature,
 };
 use babe::{AuthorityId as BabeId};
-use babe_primitives::EquivocationProof;
 use grandpa::fg_primitives::{self, ScheduledChange, GrandpaEquivocationFrom};
 use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
 	runtime_api as client_api, impl_runtime_apis
 };
-use sr_primitives::{ApplyResult, impl_opaque_keys, generic, create_runtime_str, key_types};
+use sr_primitives::{
+	ApplyResult, impl_opaque_keys, generic, create_runtime_str, key_types, EquivocationProof
+};
 use sr_primitives::transaction_validity::TransactionValidity;
 use sr_primitives::weights::Weight;
 use sr_primitives::traits::{
@@ -85,8 +86,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 147,
-	impl_version: 150,
+	spec_version: 148,
+	impl_version: 148,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -246,8 +247,8 @@ impl staking::Trait for Runtime {
 	type CurrencyToVote = CurrencyToVoteHandler;
 	type OnRewardMinted = Treasury;
 	type Event = Event;
-	type Slash = ();
-	type Reward = ();
+	type Slash = Treasury; // send the slashed funds to the treasury.
+	type Reward = (); // rewards are minted from the void
 	type SessionsPerEra = SessionsPerEra;
 	type BondingDuration = BondingDuration;
 	type SessionInterface = Self;
@@ -416,6 +417,8 @@ impl offences::Trait for Runtime {
 	type OnOffenceHandler = Staking;
 }
 
+impl authority_discovery::Trait for Runtime {}
+
 impl grandpa::Trait for Runtime {
 	type Event = Event;
 	type IdentificationTuple = historical::IdentificationTuple<Self>;
@@ -460,6 +463,7 @@ construct_runtime!(
 		Contracts: contracts,
 		Sudo: sudo,
 		ImOnline: im_online::{Module, Call, Storage, Event, ValidateUnsigned, Config},
+		AuthorityDiscovery: authority_discovery::{Module, Call, Config},
 		Offences: offences::{Module, Call, Storage, Event},
 	}
 );
@@ -605,9 +609,26 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl consensus_primitives::ConsensusApi<Block, babe_primitives::AuthorityId> for Runtime {
-		fn authorities() -> Vec<babe_primitives::AuthorityId> {
-			Babe::authorities().into_iter().map(|(a, _)| a).collect()
+	impl authority_discovery_primitives::AuthorityDiscoveryApi<Block, im_online::AuthorityId> for Runtime {
+		fn authority_id() -> Option<im_online::AuthorityId> {
+			AuthorityDiscovery::authority_id()
+		}
+		fn authorities() -> Vec<im_online::AuthorityId> {
+			AuthorityDiscovery::authorities()
+		}
+
+		fn sign(payload: Vec<u8>, authority_id: im_online::AuthorityId) -> Option<Vec<u8>> {
+			AuthorityDiscovery::sign(payload, authority_id)
+		}
+
+		fn verify(payload: Vec<u8>, signature: Vec<u8>, public_key: im_online::AuthorityId) -> bool {
+			AuthorityDiscovery::verify(payload, signature, public_key)
+		}
+	}
+
+	impl node_primitives::AccountNonceApi<Block> for Runtime {
+		fn account_nonce(account: AccountId) -> Index {
+			System::account_nonce(account)
 		}
 	}
 
