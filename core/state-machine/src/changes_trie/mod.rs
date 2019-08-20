@@ -32,6 +32,19 @@
 //! the last N*digest_level-1 blocks (except for genesis block), mapping these keys
 //! to the set of lower-level digest blocks.
 //!
+//! Changes trie configuration could change within a time. The range of blocks, where
+//! configuration has been active, is given by two blocks: zero and end. Zero block is
+//! the block where configuration has been set. But the first changes trie that uses
+//! this configuration will be built at the block zero+1. If configuration deactivates
+//! at some block, this will be the end block of the configuration. It is also the
+//! zero block of the next configuration.
+//!
+//! If configuration has the end block, it also means that 'skewed digest' has/should
+//! been built at that block. If this is the block where max-level digest should have
+//! been created, than it is simply max-level digest of this configuration. Otherwise,
+//! it is the digest that covers all blocks since last max-level digest block was
+//! created.
+//!
 //! Changes trie only contains the top level storage changes. Sub-level changes
 //! are propagated through its storage root on the top level storage.
 
