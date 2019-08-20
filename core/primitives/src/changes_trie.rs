@@ -113,7 +113,11 @@ impl ChangesTrieConfiguration {
 			Some(last_max_digest_block)
 		}
 	}
-	/// Returns max level digest block number that must be created at block >= passed block number.
+
+	/// Returns max level digest blocks range (inclusive) which includes passed block.
+	///
+	/// Returns None if digests are not creatd at all.
+	/// It will return the first max-level digest if block is <= zero.
 	pub fn next_max_level_digest_range<Number>(
 		&self,
 		zero: Number,
