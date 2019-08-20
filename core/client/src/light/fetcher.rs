@@ -286,7 +286,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 			)?;
 		}
 
-		// TODO: remove this in #3201
+		// FIXME: remove this in https://github.com/paritytech/substrate/pull/3201
 		let changes_trie_config_range = ChangesTrieConfigurationRange {
 			config: &request.changes_trie_config,
 			zero: Zero::zero(),

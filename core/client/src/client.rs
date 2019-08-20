@@ -553,7 +553,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let last_number = self.backend.blockchain().expect_block_number_from_id(&last)?;
 		let last_hash = self.backend.blockchain().expect_block_hash_from_id(&last)?;
 
-		// TODO: remove this in #3201
+		// FIXME: remove this in https://github.com/paritytech/substrate/pull/3201
 		let config_range = ChangesTrieConfigurationRange {
 			config: &config,
 			zero: Zero::zero(),
@@ -661,7 +661,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(max))?,
 		);
 
-		// TODO: remove this in #3201
+		// FIXME: remove this in https://github.com/paritytech/substrate/pull/3201
 		let config_range = ChangesTrieConfigurationRange {
 			config: &config,
 			zero: Zero::zero(),

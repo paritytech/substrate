@@ -162,7 +162,7 @@ pub fn build_changes_trie<'a, B: Backend<H>, S: Storage<H, Number>, H: Hasher, N
 		_ => return Ok(None),
 	};
 
-	// TODO: remove this in #3201
+	// FIXME: remove this in https://github.com/paritytech/substrate/pull/3201
 	let config = ConfigurationRange {
 		config,
 		zero: Zero::zero(),
