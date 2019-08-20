@@ -1,0 +1,25 @@
+[package]
+name = "node-rpc"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+client = { package = "substrate-client", path = "../../core/client" }
+jsonrpc-core = "13.0.0"
+jsonrpc-core-client = "13.0.0"
+jsonrpc-derive = "13.0.0"
+jsonrpc-pubsub = "13.0.0"
+keyring = { package = "substrate-keyring", path = "../../core/keyring" }
+log = "0.4"
+node-primitives = { path = "../primitives" }
+codec = { package = "parity-scale-codec", version = "1.0.0" }
+serde = { version = "1.0", features = ["derive"] }
+sr-primitives = { path = "../../core/sr-primitives" }
+substrate-primitives = { path = "../../core/primitives" }
+transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
+
+[dev-dependencies]
+node-testing = { path = "../testing" }
+node-runtime = { path = "../runtime" }
+env_logger = "0.6"
