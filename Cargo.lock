@@ -2296,6 +2296,7 @@ dependencies = [
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
+ "srml-authority-discovery 0.1.0",
  "srml-balances 2.0.0",
  "srml-contracts 2.0.0",
  "srml-finality-tracker 2.0.0",
@@ -2419,6 +2420,7 @@ dependencies = [
  "sr-staking-primitives 2.0.0",
  "sr-std 2.0.0",
  "sr-version 2.0.0",
+ "srml-authority-discovery 0.1.0",
  "srml-authorship 0.1.0",
  "srml-babe 2.0.0",
  "srml-balances 2.0.0",
@@ -2440,9 +2442,9 @@ dependencies = [
  "srml-system 2.0.0",
  "srml-timestamp 2.0.0",
  "srml-treasury 2.0.0",
+ "substrate-authority-discovery-primitives 2.0.0",
  "substrate-client 2.0.0",
  "substrate-consensus-babe-primitives 2.0.0",
- "substrate-consensus-common-primitives 2.0.0",
  "substrate-keyring 2.0.0",
  "substrate-offchain-primitives 2.0.0",
  "substrate-primitives 2.0.0",
@@ -2503,7 +2505,6 @@ dependencies = [
  "srml-timestamp 2.0.0",
  "substrate-client 2.0.0",
  "substrate-consensus-babe-primitives 2.0.0",
- "substrate-consensus-common-primitives 2.0.0",
  "substrate-offchain-primitives 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-session 2.0.0",
@@ -3806,6 +3807,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "srml-authority-discovery"
+version = "0.1.0"
+dependencies = [
+ "parity-scale-codec 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.97 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 2.0.0",
+ "sr-primitives 2.0.0",
+ "sr-std 2.0.0",
+ "srml-im-online 0.1.0",
+ "srml-session 2.0.0",
+ "srml-support 2.0.0",
+ "srml-system 2.0.0",
+ "substrate-application-crypto 2.0.0",
+ "substrate-primitives 2.0.0",
+]
+
+[[package]]
 name = "srml-authorship"
 version = "0.1.0"
 dependencies = [
@@ -4382,6 +4400,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-authority-discovery-primitives"
+version = "2.0.0"
+dependencies = [
+ "parity-scale-codec 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 2.0.0",
+ "sr-std 2.0.0",
+ "substrate-client 2.0.0",
+]
+
+[[package]]
 name = "substrate-basic-authorship"
 version = "2.0.0"
 dependencies = [
@@ -4617,16 +4645,6 @@ dependencies = [
  "substrate-inherents 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-test-runtime-client 2.0.0",
-]
-
-[[package]]
-name = "substrate-consensus-common-primitives"
-version = "2.0.0"
-dependencies = [
- "parity-scale-codec 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-primitives 2.0.0",
- "sr-std 2.0.0",
- "substrate-client 2.0.0",
 ]
 
 [[package]]

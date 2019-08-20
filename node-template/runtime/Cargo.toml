@@ -25,7 +25,6 @@ timestamp = { package = "srml-timestamp", path = "../../srml/timestamp", default
 sudo = { package = "srml-sudo", path = "../../srml/sudo", default_features = false }
 sr-primitives = { path = "../../core/sr-primitives", default_features = false }
 client = { package = "substrate-client", path = "../../core/client", default_features = false }
-consensus-primitives = { package = "substrate-consensus-common-primitives", path = "../../core/consensus/common/primitives", default-features = false }
 offchain-primitives = { package = "substrate-offchain-primitives", path = "../../core/offchain/primitives", default-features = false }
 
 [build-dependencies]
@@ -53,7 +52,6 @@ std = [
 	"version/std",
 	"serde",
 	"safe-mix/std",
-	"consensus-primitives/std",
 	"offchain-primitives/std",
 	"substrate-session/std",
 ]
