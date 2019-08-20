@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,24 +14,19 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Substrate RPC interfaces.
+//! A collection of node-specific RPC methods.
 //!
-//! A collection of RPC methods and subscriptions supported by all substrate clients.
+//! Since `substrate` core functionality makes no assumptions
+//! about the modules used inside the runtime, so do
+//! RPC methods defined in `substrate-rpc` crate.
+//! It means that `core/rpc` can't have any methods that
+//! need some strong assumptions about the particular runtime.
+//!
+//! The RPCs available in this crate however can make some assumptions
+//! about how the runtime is constructed and what `SRML` modules
+//! are part of it. Therefore all node-runtime-specific RPCs can
+//! be placed here.
 
 #![warn(missing_docs)]
 
-mod errors;
-mod helpers;
-mod metadata;
-mod subscriptions;
-
-use jsonrpc_core as rpc;
-
-pub use metadata::Metadata;
-pub use rpc::IoHandlerExtension as RpcExtension;
-pub use subscriptions::Subscriptions;
-
-pub mod author;
-pub mod chain;
-pub mod state;
-pub mod system;
+pub mod accounts;

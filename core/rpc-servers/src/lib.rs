@@ -18,11 +18,10 @@
 
 #[warn(missing_docs)]
 
-pub use substrate_rpc as apis;
-
 use std::io;
+use jsonrpc_core::IoHandlerExtension;
 use log::error;
-use sr_primitives::{traits::{Block as BlockT, NumberFor}, generic::SignedBlock};
+use pubsub::PubSubMetadata;
 
 /// Maximal payload accepted by RPC servers.
 const MAX_PAYLOAD: usize = 15 * 1024 * 1024;
@@ -30,30 +29,17 @@ const MAX_PAYLOAD: usize = 15 * 1024 * 1024;
 /// Default maximum number of connections for WS RPC servers.
 const WS_MAX_CONNECTIONS: usize = 100;
 
-pub type Metadata = apis::metadata::Metadata;
-pub type RpcHandler = pubsub::PubSubHandler<Metadata>;
+/// The RPC IoHandler containing all requested APIs.
+pub type RpcHandler<T> = pubsub::PubSubHandler<T>;
 
 pub use self::inner::*;
 
 /// Construct rpc `IoHandler`
-pub fn rpc_handler<Block: BlockT, ExHash, S, C, A, Y>(
-	state: S,
-	chain: C,
-	author: A,
-	system: Y,
-) -> RpcHandler where
-	Block: BlockT + 'static,
-	ExHash: Send + Sync + 'static + sr_primitives::Serialize + sr_primitives::DeserializeOwned,
-	S: apis::state::StateApi<Block::Hash, Metadata=Metadata>,
-	C: apis::chain::ChainApi<NumberFor<Block>, Block::Hash, Block::Header, SignedBlock<Block>, Metadata=Metadata>,
-	A: apis::author::AuthorApi<ExHash, Block::Hash, Metadata=Metadata>,
-	Y: apis::system::SystemApi<Block::Hash, NumberFor<Block>>,
-{
+pub fn rpc_handler<M: PubSubMetadata>(
+	extension: impl IoHandlerExtension<M>
+) -> RpcHandler<M> {
 	let mut io = pubsub::PubSubHandler::default();
-	io.extend_with(state.to_delegate());
-	io.extend_with(chain.to_delegate());
-	io.extend_with(author.to_delegate());
-	io.extend_with(system.to_delegate());
+	extension.augment(&mut io);
 	io
 }
 
@@ -67,10 +53,10 @@ mod inner {
 	/// Start HTTP server listening on given address.
 	///
 	/// **Note**: Only available if `not(target_os = "unknown")`.
-	pub fn start_http(
+	pub fn start_http<M: pubsub::PubSubMetadata + Default>(
 		addr: &std::net::SocketAddr,
 		cors: Option<&Vec<String>>,
-		io: RpcHandler,
+		io: RpcHandler<M>,
 	) -> io::Result<http::Server> {
 		http::ServerBuilder::new(io)
 			.threads(4)
@@ -89,13 +75,13 @@ mod inner {
 	/// Start WS server listening on given address.
 	///
 	/// **Note**: Only available if `not(target_os = "unknown")`.
-	pub fn start_ws(
+	pub fn start_ws<M: pubsub::PubSubMetadata + From<jsonrpc_core::futures::sync::mpsc::Sender<String>>> (
 		addr: &std::net::SocketAddr,
 		max_connections: Option<usize>,
 		cors: Option<&Vec<String>>,
-		io: RpcHandler,
+		io: RpcHandler<M>,
 	) -> io::Result<ws::Server> {
-		ws::ServerBuilder::with_meta_extractor(io, |context: &ws::RequestContext| Metadata::new(context.sender()))
+		ws::ServerBuilder::with_meta_extractor(io, |context: &ws::RequestContext| context.sender().into())
 			.max_payload(MAX_PAYLOAD)
 			.max_connections(max_connections.unwrap_or(WS_MAX_CONNECTIONS))
 			.allowed_origins(map_cors(cors))
