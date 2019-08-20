@@ -33,7 +33,7 @@ decl_runtime_apis! {
 		/// Returns own authority identifier iff it is part of the current authority
 		/// set, otherwise this function returns None. The restriction might be
 		/// softened in the future in case a consumer needs to learn own authority
-		/// identifier in any case.
+		/// identifier.
 		fn authority_id() -> Option<AuthorityId>;
 
 		/// Retrieve authority identifiers of the current authority set.

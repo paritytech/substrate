@@ -22,7 +22,7 @@
 //!
 //! ## Dependencies
 //!
-//! This module depends on the [Im online module](../srml_im_online/index.html)
+//! This module depends on the [I’m online module](../srml_im_online/index.html)
 //! using its session key.
 
 // Ensure we're `no_std` when compiling for Wasm.
@@ -63,7 +63,7 @@ impl<T: Trait> Module<T> {
 	/// Returns own authority identifier iff it is part of the current authority
 	/// set, otherwise this function returns None. The restriction might be
 	/// softened in the future in case a consumer needs to learn own authority
-	/// identifier in any case.
+	/// identifier.
 	pub fn authority_id() -> Option<im_online::AuthorityId> {
 		let authorities = Keys::get();
 
