@@ -103,7 +103,7 @@ pub use light_import::light_block_import;
 pub use observer::run_grandpa_observer;
 
 use aux_schema::PersistentData;
-use environment::{Environment, SharedVoterSetState, VoterSetState};
+use environment::{Environment, VoterSetState};
 use import::GrandpaBlockImport;
 use until_imported::UntilGlobalMessageBlocksImported;
 use communication::NetworkBridge;
@@ -688,23 +688,24 @@ where
 					"set_id" => ?new.set_id,
 				);
 
-				// start the new authority set using the block where the
-				// set changed (not where the signal happened!) as the base.
-				let set_state = VoterSetState::live(
-					new.set_id,
-					&*self.env.authority_set.inner().read(),
-					(new.canon_hash, new.canon_number),
-				);
+				self.env.update_voter_set_state(|_| {
+					// start the new authority set using the block where the
+					// set changed (not where the signal happened!) as the base.
+					let set_state = VoterSetState::live(
+						new.set_id,
+						&*self.env.authority_set.inner().read(),
+						(new.canon_hash, new.canon_number),
+					);
 
-				#[allow(deprecated)]
-				aux_schema::write_voter_set_state(&**self.env.inner.backend(), &set_state)?;
-
-				let set_state: SharedVoterSetState<_> = set_state.into();
+					#[allow(deprecated)]
+					aux_schema::write_voter_set_state(&**self.env.inner.backend(), &set_state)?;
+					Ok(Some(set_state))
+				})?;
 
 				self.env = Arc::new(Environment {
 					voters: Arc::new(new.authorities.into_iter().collect()),
 					set_id: new.set_id,
-					voter_set_state: set_state,
+					voter_set_state: self.env.voter_set_state.clone(),
 					// Fields below are simply transferred and not updated.
 					inner: self.env.inner.clone(),
 					select_chain: self.env.select_chain.clone(),
