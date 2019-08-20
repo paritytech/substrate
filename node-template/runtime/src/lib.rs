@@ -16,9 +16,10 @@ use sr_primitives::{
 };
 use sr_primitives::traits::{NumberFor, BlakeTwo256, Block as BlockT, DigestFor, StaticLookup, Verify, ConvertInto};
 use sr_primitives::weights::Weight;
-use babe::{AuthorityId as BabeId};
+use babe::{AuthorityId as BabeId, AuthoritySignature};
+use consensus_primitives::EquivocationProof;
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
-use grandpa::fg_primitives::{self, ScheduledChange};
+use grandpa::fg_primitives::{self, ScheduledChange, GrandpaEquivocationFrom};
 use client::{
 	block_builder::api::{CheckInherentsResult, InherentData, self as block_builder_api},
 	runtime_api as client_api, impl_runtime_apis
@@ -33,7 +34,7 @@ pub use sr_primitives::BuildStorage;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use sr_primitives::{Permill, Perbill};
-pub use support::{StorageValue, construct_runtime, parameter_types};
+pub use support::{StorageValue, construct_runtime, parameter_types, traits::KeyOwnerProofSystem};
 
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -186,13 +187,35 @@ parameter_types! {
 	pub const ExpectedBlockTime: u64 = MILLISECS_PER_BLOCK;
 }
 
+pub struct FakeKeyOwnerProofSystem;
+
+impl<Key> KeyOwnerProofSystem<Key> for FakeKeyOwnerProofSystem {
+	type Proof = ();
+	type IdentificationTuple = ();
+
+	fn prove(_key: Key) -> Option<Self::Proof> {
+		None
+	}
+
+	fn check_proof(_key: Key, _proof: Self::Proof) -> Option<Self::IdentificationTuple> {
+		Some(())
+	}
+}
+
 impl babe::Trait for Runtime {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
+	type IdentificationTuple = ();
+	type Proof = ();
+	type KeyOwnerSystem = FakeKeyOwnerProofSystem;
+	type ReportEquivocation = ();
 }
 
 impl grandpa::Trait for Runtime {
 	type Event = Event;
+	type IdentificationTuple = ();
+	type Proof = ();
+	type KeyOwnerSystem = FakeKeyOwnerProofSystem;
 }
 
 impl indices::Trait for Runtime {
@@ -372,6 +395,12 @@ impl_runtime_apis! {
 		fn grandpa_authorities() -> Vec<(GrandpaId, GrandpaWeight)> {
 			Grandpa::grandpa_authorities()
 		}
+
+		fn construct_equivocation_transaction(
+			_equivocation: GrandpaEquivocationFrom<Block>
+		) -> Option<Vec<u8>> {
+			unimplemented!()
+		}
 	}
 
 	impl babe_primitives::BabeApi<Block> for Runtime {
@@ -397,6 +426,16 @@ impl_runtime_apis! {
 				duration: EpochDuration::get(),
 				secondary_slots: Babe::secondary_slots().0,
 			}
+		}
+
+		fn construct_equivocation_transaction(
+			_equivocation: babe_primitives::EquivocationProof<
+				<Block as BlockT>::Header,
+				BabeId,
+				AuthoritySignature
+			>,
+		) -> Option<Vec<u8>> {
+			None
 		}
 	}
 
