@@ -138,7 +138,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 	sync_oracle: SO,
 	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
-	keystore: Option<KeyStorePtr>,
+	keystore: KeyStorePtr,
 ) -> Result<impl futures01::Future<Item = (), Error = ()>, consensus_common::Error> where
 	B: BlockT<Header=H>,
 	C: ProvideRuntimeApi + BlockOf + ProvideCache<B> + AuxStore + Send + Sync,
@@ -182,7 +182,7 @@ struct AuraWorker<C, E, I, P, SO> {
 	client: Arc<C>,
 	block_import: Arc<Mutex<I>>,
 	env: E,
-	keystore: Option<KeyStorePtr>,
+	keystore: KeyStorePtr,
 	sync_oracle: SO,
 	force_authoring: bool,
 	_key_type: PhantomData<P>,
@@ -234,9 +234,8 @@ impl<H, B, C, E, I, P, Error, SO> slots::SimpleSlotWorker<B> for AuraWorker<C, E
 		let expected_author = slot_author::<P>(slot_number, epoch_data);
 
 		expected_author.and_then(|p| {
-			self.keystore.as_ref().and_then(|k| {
-				k.read().key_pair_by_type::<P>(&p, app_crypto::key_types::AURA).ok()
-			})
+			self.keystore.read()
+				.key_pair_by_type::<P>(&p, app_crypto::key_types::AURA).ok()
 		})
 	}
 
@@ -833,7 +832,7 @@ mod tests {
 				DummyOracle,
 				inherent_data_providers,
 				false,
-				Some(keystore),
+				keystore,
 			).expect("Starts aura");
 
 			runtime.spawn(aura);
