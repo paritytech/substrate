@@ -85,7 +85,6 @@ impl ChangesTrieConfiguration {
 	/// Returns max level digest block number that has been created at block <= passed block number.
 	///
 	/// Returns None if digests are not created at all.
-	/// This could return Some(zero), even though changes trie isn't ever created at this block.
 	pub fn prev_max_level_digest_block<Number>(
 		&self,
 		zero: Number,
@@ -96,27 +95,29 @@ impl ChangesTrieConfiguration {
 			::rstd::ops::Add<Output=Number> + ::rstd::ops::Sub<Output=Number> +
 			::rstd::ops::Div<Output=Number> + ::rstd::ops::Mul<Output=Number> + Zero,
 	{
-		if !self.is_digest_build_enabled() {
-			return None;
-		}
-
 		if block <= zero {
 			return None;
 		}
 
-		let max_digest_interval: Number = self.max_digest_interval().into();
-		let max_digests_since_zero = (block.clone() - zero.clone()) / max_digest_interval.clone();
-		let last_max_digest_block = zero.clone() + max_digests_since_zero * max_digest_interval.clone();
-		if last_max_digest_block == zero {
+		let (next_begin, next_end) = self.next_max_level_digest_range(zero.clone(), block.clone())?;
+
+		// if 'next' digest includes our block, then it is a also a previous digest
+		if next_end == block {
+			return Some(block);
+		}
+
+		// if previous digest ends at zero block, then there are no previous digest
+		let prev_end = next_begin - 1.into();
+		if prev_end == zero {
 			None
 		} else {
-			Some(last_max_digest_block)
+			Some(prev_end)
 		}
 	}
 
 	/// Returns max level digest blocks range (inclusive) which includes passed block.
 	///
-	/// Returns None if digests are not creatd at all.
+	/// Returns None if digests are not created at all.
 	/// It will return the first max-level digest if block is <= zero.
 	pub fn next_max_level_digest_range<Number>(
 		&self,
