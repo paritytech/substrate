@@ -104,7 +104,9 @@ pub trait StorageMap<K: Codec, V: Codec> {
 		where V: EncodeAppend<Item=I>;
 }
 
-/// A strongly-typed map in storage.
+/// A strongly-typed linked map in storage.
+///
+/// Similar to `StorageMap` but allows to enumerate other elements and doesn't implement append.
 pub trait StorageLinkedMap<K: Codec, V: Codec> {
 	/// The type that get/take return.
 	type Query;
