@@ -38,7 +38,7 @@ use exit_future::Signal;
 use futures::prelude::*;
 use futures03::stream::{StreamExt as _, TryStreamExt as _};
 use keystore::Store as Keystore;
-use network::{NetworkState, NetworkStateInfo};
+use network::{NetworkState, NetworkStateInfo, Event, DhtEvent};
 use log::{log, info, warn, debug, error, Level};
 use codec::{Encode, Decode};
 use sr_primitives::generic::BlockId;
@@ -708,11 +708,11 @@ fn build_network_future<
 		}
 
 		// Main network polling.
-		match network.poll() {
-			Ok(Async::NotReady) => {}
-			Err(err) => warn!(target: "service", "Error in network: {:?}", err),
-			Ok(Async::Ready(())) => warn!(target: "service", "Network service finished"),
-		}
+		while let Ok(Async::Ready(Some(Event::Dht(event)))) = network.poll().map_err(|err| {
+			warn!(target: "service", "Error in network: {:?}", err);
+		}) {
+			// Ignore for now.
+		};
 
 		// Now some diagnostic for performances.
 		let polling_dur = before_polling.elapsed();
