@@ -21,4 +21,17 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
+	RetrievingAuthorityId,
+	VerifyingDhtPayload,
+	HashingAuthorityId(libp2p::core::multiaddr::multihash::EncodeError),
+	CallingRuntime(client::error::Error),
+	SigningDhtPayload,
+	/// From the Dht we only get the hashed authority id. In order to retrieve the actual authority id and to ensure it
+	/// is actually an authority, we match the hash against the hash of the authority id of all other authorities. This
+	/// error is the result of the above failing.
+	MatchingHashedAuthorityIdWithAuthorityId,
+	SettingPeersetPriorityGroup(String),
+	Encoding(prost::EncodeError),
+	Decoding(prost::DecodeError),
+	ParsingMultiaddress(libp2p::core::multiaddr::Error),
 }
