@@ -1215,6 +1215,7 @@ fn voter_persists_its_votes() {
 			config.clone(),
 			set_state,
 			Exit,
+			true,
 		);
 		runtime.block_on(routing_work).unwrap();
 

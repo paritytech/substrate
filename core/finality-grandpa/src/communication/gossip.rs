@@ -1418,6 +1418,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
+			true,
 		);
 
 		let set_id = 1;
@@ -1453,6 +1454,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
+			true,
 		);
 		let set_id = 1;
 		let auth = AuthorityId::from_slice(&[1u8; 32]);
@@ -1497,6 +1499,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
+			true,
 		);
 
 		let set_id = 1;
@@ -1565,6 +1568,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			set_state.clone(),
+			true,
 		);
 
 		let set_id = 1;
@@ -1619,6 +1623,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			set_state.clone(),
+			true,
 		);
 
 		// the validator starts at set id 2
