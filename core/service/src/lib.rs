@@ -28,6 +28,7 @@ pub mod error;
 use std::io;
 use std::net::SocketAddr;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use futures::sync::mpsc;
 use parking_lot::Mutex;
@@ -62,7 +63,7 @@ pub use components::{
 	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
 	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic, InitialSessionKeys,
 };
-use components::{StartRPC, MaintainTransactionPool, OffchainWorker};
+use components::{StartRpc, MaintainTransactionPool, OffchainWorker};
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
@@ -82,8 +83,14 @@ pub struct Service<Components: components::Components> {
 		NetworkStatus<ComponentBlock<Components>>, NetworkState
 	)>>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
+	/// A future that resolves when the service has exited, this is useful to
+	/// make sure any internally spawned futures stop when the service does.
 	exit: exit_future::Exit,
+	/// A signal that makes the exit future above resolve, fired on service drop.
 	signal: Option<Signal>,
+	/// Set to `true` when a spawned essential task has failed. The next time
+	/// the service future is polled it should complete with an error.
+	essential_failed: Arc<AtomicBool>,
 	/// Sender for futures that must be spawned as background tasks.
 	to_spawn_tx: mpsc::UnboundedSender<Box<dyn Future<Item = (), Error = ()> + Send>>,
 	/// Receiver for futures that must be spawned as background tasks.
@@ -94,7 +101,7 @@ pub struct Service<Components: components::Components> {
 	to_poll: Vec<Box<dyn Future<Item = (), Error = ()> + Send>>,
 	/// Configuration of this Service
 	config: FactoryFullConfiguration<Components::Factory>,
-	rpc_handlers: rpc::RpcHandler,
+	rpc_handlers: components::RpcHandler,
 	_rpc: Box<dyn std::any::Any + Send + Sync>,
 	_telemetry: Option<tel::Telemetry>,
 	_telemetry_on_connect_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>>,
@@ -153,7 +160,7 @@ impl<Components: components::Components> Service<Components> {
 	pub fn new(
 		mut config: FactoryFullConfiguration<Components::Factory>,
 	) -> Result<Self, error::Error> {
-		let (signal, exit) = ::exit_future::signal();
+		let (signal, exit) = exit_future::signal();
 
 		// List of asynchronous tasks to spawn. We collect them, then spawn them all at once.
 		let (to_spawn_tx, to_spawn_rx) =
@@ -166,16 +173,27 @@ impl<Components: components::Components> Service<Components> {
 
 		let (client, on_demand) = Components::build_client(&config, executor, Some(keystore.clone()))?;
 		let select_chain = Components::build_select_chain(&mut config, client.clone())?;
+
+		let transaction_pool = Arc::new(
+			Components::build_transaction_pool(config.transaction_pool.clone(), client.clone())?
+		);
+		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
+			imports_external_transactions: !config.roles.is_light(),
+			pool: transaction_pool.clone(),
+			client: client.clone(),
+		});
+
 		let (import_queue, finality_proof_request_builder) = Components::build_import_queue(
 			&mut config,
 			client.clone(),
 			select_chain.clone(),
+			Some(transaction_pool.clone()),
 		)?;
 		let import_queue = Box::new(import_queue);
 		let finality_proof_provider = Components::build_finality_proof_provider(client.clone())?;
 		let chain_info = client.info().chain;
 
-		Components::RuntimeServices::generate_intial_session_keys(
+		Components::RuntimeServices::generate_initial_session_keys(
 			client.clone(),
 			config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
 		)?;
@@ -190,14 +208,6 @@ impl<Components: components::Components> Service<Components> {
 		);
 
 		let network_protocol = <Components::Factory>::build_network_protocol(&config)?;
-		let transaction_pool = Arc::new(
-			Components::build_transaction_pool(config.transaction_pool.clone(), client.clone())?
-		);
-		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
-			imports_external_transactions: !config.roles.is_light(),
-			pool: transaction_pool.clone(),
-			client: client.clone(),
-		});
 
 		let protocol_id = {
 			let protocol_id_full = match config.chain_spec.protocol_id() {
@@ -250,6 +260,7 @@ impl<Components: components::Components> Service<Components> {
 			let offchain = offchain_workers.as_ref().map(Arc::downgrade);
 			let to_spawn_tx_ = to_spawn_tx.clone();
 			let network_state_info: Arc<dyn NetworkStateInfo + Send + Sync> = network.clone();
+			let is_validator = config.roles.is_authority();
 
 			let events = client.import_notification_stream()
 				.map(|v| Ok::<_, ()>(v)).compat()
@@ -270,6 +281,7 @@ impl<Components: components::Components> Service<Components> {
 							&offchain,
 							&txpool,
 							&network_state_info,
+							is_validator,
 						).map_err(|e| warn!("Offchain workers error processing new block: {:?}", e))?;
 						let _ = to_spawn_tx_.unbounded_send(future);
 					}
@@ -286,6 +298,7 @@ impl<Components: components::Components> Service<Components> {
 			let network = Arc::downgrade(&network);
 			let transaction_pool_ = transaction_pool.clone();
 			let events = transaction_pool.import_notification_stream()
+				.map(|v| Ok::<_, ()>(v)).compat()
 				.for_each(move |_| {
 					if let Some(network) = network.upgrade() {
 						network.trigger_repropagate();
@@ -360,7 +373,7 @@ impl<Components: components::Components> Service<Components> {
 		// RPC
 		let (system_rpc_tx, system_rpc_rx) = futures03::channel::mpsc::unbounded();
 		let gen_handler = || {
-			let system_info = rpc::apis::system::SystemInfo {
+			let system_info = rpc::system::SystemInfo {
 				chain_name: config.chain_spec.name().into(),
 				impl_name: config.impl_name.into(),
 				impl_version: config.impl_version.into(),
@@ -372,6 +385,7 @@ impl<Components: components::Components> Service<Components> {
 				system_info.clone(),
 				Arc::new(SpawnTaskHandle { sender: to_spawn_tx.clone() }),
 				transaction_pool.clone(),
+				Components::build_rpc_extensions(client.clone(), transaction_pool.clone()),
 				keystore.clone(),
 			)
 		};
@@ -393,7 +407,7 @@ impl<Components: components::Components> Service<Components> {
 
 		// Telemetry
 		let telemetry = config.telemetry_endpoints.clone().map(|endpoints| {
-			let is_authority = config.roles == Roles::AUTHORITY;
+			let is_authority = config.roles.is_authority();
 			let network_id = network.local_peer_id().to_base58();
 			let name = config.name.clone();
 			let impl_name = config.impl_name.to_owned();
@@ -438,12 +452,13 @@ impl<Components: components::Components> Service<Components> {
 			network_status_sinks,
 			select_chain,
 			transaction_pool,
+			exit,
 			signal: Some(signal),
+			essential_failed: Arc::new(AtomicBool::new(false)),
 			to_spawn_tx,
 			to_spawn_rx,
 			to_poll: Vec::new(),
 			config,
-			exit,
 			rpc_handlers,
 			_rpc: rpc,
 			_telemetry: telemetry,
@@ -487,6 +502,19 @@ impl<Components: components::Components> Service<Components> {
 	/// Spawns a task in the background that runs the future passed as parameter.
 	pub fn spawn_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
 		let _ = self.to_spawn_tx.unbounded_send(Box::new(task));
+	}
+
+	/// Spawns a task in the background that runs the future passed as
+	/// parameter. The given task is considered essential, i.e. if it errors we
+	/// trigger a service exit.
+	pub fn spawn_essential_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
+		let essential_failed = self.essential_failed.clone();
+		let essential_task = Box::new(task.map_err(move |_| {
+			error!("Essential task failed. Shutting down service.");
+			essential_failed.store(true, Ordering::Relaxed);
+		}));
+
+		let _ = self.to_spawn_tx.unbounded_send(essential_task);
 	}
 
 	/// Returns a handle for spawning tasks.
@@ -546,9 +574,13 @@ impl<Components: components::Components> Service<Components> {
 
 impl<Components> Future for Service<Components> where Components: components::Components {
 	type Item = ();
-	type Error = ();
+	type Error = Error;
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+		if self.essential_failed.load(Ordering::Relaxed) {
+			return Err(Error::Other("Essential task failed.".into()));
+		}
+
 		while let Ok(Async::Ready(Some(task_to_spawn))) = self.to_spawn_rx.poll() {
 			let executor = tokio_executor::DefaultExecutor::current();
 			if let Err(err) = executor.execute(task_to_spawn) {
@@ -599,7 +631,7 @@ fn build_network_future<
 	mut network: network::NetworkWorker<B, S, H>,
 	client: Arc<C>,
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<(NetworkStatus<B>, NetworkState)>>>>,
-	rpc_rx: futures03::channel::mpsc::UnboundedReceiver<rpc::apis::system::Request<B>>,
+	rpc_rx: futures03::channel::mpsc::UnboundedReceiver<rpc::system::Request<B>>,
 	should_have_peers: bool,
 ) -> impl Future<Item = (), Error = ()> {
 	// Compatibility shim while we're transitionning to stable Futures.
@@ -635,16 +667,16 @@ fn build_network_future<
 		// Poll the RPC requests and answer them.
 		while let Ok(Async::Ready(Some(request))) = rpc_rx.poll() {
 			match request {
-				rpc::apis::system::Request::Health(sender) => {
-					let _ = sender.send(rpc::apis::system::Health {
+				rpc::system::Request::Health(sender) => {
+					let _ = sender.send(rpc::system::Health {
 						peers: network.peers_debug_info().len(),
 						is_syncing: network.service().is_major_syncing(),
 						should_have_peers,
 					});
 				},
-				rpc::apis::system::Request::Peers(sender) => {
+				rpc::system::Request::Peers(sender) => {
 					let _ = sender.send(network.peers_debug_info().into_iter().map(|(peer_id, p)|
-						rpc::apis::system::PeerInfo {
+						rpc::system::PeerInfo {
 							peer_id: peer_id.to_base58(),
 							roles: format!("{:?}", p.roles),
 							protocol_version: p.protocol_version,
@@ -653,7 +685,7 @@ fn build_network_future<
 						}
 					).collect());
 				}
-				rpc::apis::system::Request::NetworkState(sender) => {
+				rpc::system::Request::NetworkState(sender) => {
 					let _ = sender.send(network.network_state());
 				}
 			};
@@ -725,7 +757,7 @@ impl<Components> Drop for Service<Components> where Components: components::Comp
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(not(target_os = "unknown"))]
-fn start_rpc_servers<C, G, H: FnMut() -> rpc::RpcHandler>(
+fn start_rpc_servers<C, G, H: FnMut() -> components::RpcHandler>(
 	config: &Configuration<C, G>,
 	mut gen_handler: H
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
@@ -750,11 +782,11 @@ fn start_rpc_servers<C, G, H: FnMut() -> rpc::RpcHandler>(
 	Ok(Box::new((
 		maybe_start_server(
 			config.rpc_http,
-			|address| rpc::start_http(address, config.rpc_cors.as_ref(), gen_handler()),
+			|address| rpc_servers::start_http(address, config.rpc_cors.as_ref(), gen_handler()),
 		)?,
 		maybe_start_server(
 			config.rpc_ws,
-			|address| rpc::start_ws(
+			|address| rpc_servers::start_ws(
 				address,
 				config.rpc_ws_max_connections,
 				config.rpc_cors.as_ref(),
@@ -766,7 +798,7 @@ fn start_rpc_servers<C, G, H: FnMut() -> rpc::RpcHandler>(
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(target_os = "unknown")]
-fn start_rpc_servers<C, G, H: FnMut() -> rpc::RpcHandler>(
+fn start_rpc_servers<C, G, H: FnMut() -> components::RpcHandler>(
 	_: &Configuration<C, G>,
 	_: H
 ) -> Result<Box<std::any::Any + Send + Sync>, error::Error> {
@@ -788,7 +820,7 @@ impl RpcSession {
 	/// The `RpcSession` must be kept alive in order to receive messages on the sender.
 	pub fn new(sender: mpsc::Sender<String>) -> RpcSession {
 		RpcSession {
-			metadata: rpc::Metadata::new(sender),
+			metadata: sender.into(),
 		}
 	}
 }
@@ -944,7 +976,7 @@ where
 /// 		LightService = LightComponents<Self>
 /// 			{ |config| <LightComponents<Factory>>::new(config) },
 /// 		FullImportQueue = BasicQueue<Block>
-/// 			{ |_, client, _| Ok(BasicQueue::new(MyVerifier, Box::new(client), None, None)) },
+/// 			{ |_, client, _, _| Ok(BasicQueue::new(MyVerifier, Box::new(client), None, None)) },
 /// 		LightImportQueue = BasicQueue<Block>
 /// 			{ |_, client| {
 /// 				let fprb = Box::new(DummyFinalityProofRequestBuilder::default()) as Box<_>;
@@ -958,6 +990,7 @@ where
 /// 		FinalityProofProvider = { |client: Arc<FullClient<Self>>| {
 /// 				Ok(Some(Arc::new(grandpa::FinalityProofProvider::new(client.clone(), client)) as _))
 /// 			}},
+/// 		RpcExtensions = (),
 /// 	}
 /// }
 /// ```
@@ -984,6 +1017,8 @@ macro_rules! construct_service_factory {
 			SelectChain = $select_chain:ty
 				{ $( $select_chain_init:tt )* },
 			FinalityProofProvider = { $( $finality_proof_provider_init:tt )* },
+			RpcExtensions = $rpc_extensions_ty:ty
+				$( { $( $rpc_extensions:tt )* } )?,
 		}
 	) => {
 		$( #[$attr] )*
@@ -1004,6 +1039,7 @@ macro_rules! construct_service_factory {
 			type FullImportQueue = $full_import_queue;
 			type LightImportQueue = $light_import_queue;
 			type SelectChain = $select_chain;
+			type RpcExtensions = $rpc_extensions_ty;
 
 			fn build_full_transaction_pool(
 				config: $crate::TransactionPoolOptions,
@@ -1037,9 +1073,10 @@ macro_rules! construct_service_factory {
 			fn build_full_import_queue(
 				config: &mut $crate::FactoryFullConfiguration<Self>,
 				client: $crate::Arc<$crate::FullClient<Self>>,
-				select_chain: Self::SelectChain
+				select_chain: Self::SelectChain,
+				transaction_pool: Option<Arc<$crate::TransactionPool<Self::FullTransactionPoolApi>>>,
 			) -> $crate::Result<Self::FullImportQueue, $crate::Error> {
-				( $( $full_import_queue_init )* ) (config, client, select_chain)
+				( $( $full_import_queue_init )* ) (config, client, select_chain, transaction_pool)
 			}
 
 			fn build_light_import_queue(
@@ -1069,6 +1106,20 @@ macro_rules! construct_service_factory {
 				( $( $full_service_init )* ) (config).and_then(|service| {
 					($( $authority_setup )*)(service)
 				})
+			}
+
+			fn build_full_rpc_extensions(
+				client: Arc<$crate::FullClient<Self>>,
+				transaction_pool: Arc<$crate::TransactionPool<Self::FullTransactionPoolApi>>,
+			) -> Self::RpcExtensions {
+				$( ( $( $rpc_extensions )* ) (client, transaction_pool) )?
+			}
+
+			fn build_light_rpc_extensions(
+				client: Arc<$crate::LightClient<Self>>,
+				transaction_pool: Arc<$crate::TransactionPool<Self::LightTransactionPoolApi>>,
+			) -> Self::RpcExtensions {
+				$( ( $( $rpc_extensions )* ) (client, transaction_pool) )?
 			}
 		}
 	}

@@ -125,7 +125,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			{
 				type Query = #value_type;
 
-				fn key() -> &'static [u8] {
+				fn unhashed_key() -> &'static [u8] {
 					#final_prefix
 				}
 

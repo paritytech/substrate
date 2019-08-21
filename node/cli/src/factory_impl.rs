@@ -39,11 +39,11 @@ pub struct FactoryState<N> {
 	block_no: N,
 
 	mode: Mode,
-	start_number: u64,
-	rounds: u64,
-	round: u64,
-	block_in_round: u64,
-	num: u64,
+	start_number: u32,
+	rounds: u32,
+	round: u32,
+	block_in_round: u32,
+	num: u32,
 }
 
 type Number = <<node_primitives::Block as BlockT>::Header as HeaderT>::Number;
@@ -51,6 +51,7 @@ type Number = <<node_primitives::Block as BlockT>::Header as HeaderT>::Number;
 impl<Number> FactoryState<Number> {
 	fn build_extra(index: node_primitives::Index, phase: u64) -> node_runtime::SignedExtra {
 		(
+			system::CheckVersion::new(),
 			system::CheckGenesis::new(),
 			system::CheckEra::from(Era::mortal(256, phase)),
 			system::CheckNonce::from(index),
@@ -77,9 +78,9 @@ impl RuntimeAdapter for FactoryState<Number> {
 	) -> FactoryState<Self::Number> {
 		FactoryState {
 			mode,
-			num: num,
+			num: num as u32,
 			round: 0,
-			rounds,
+			rounds: rounds as u32,
 			block_in_round: 0,
 			block_no: 0,
 			start_number: 0,
@@ -132,12 +133,12 @@ impl RuntimeAdapter for FactoryState<Number> {
 		key: &Self::Secret,
 		destination: &Self::AccountId,
 		amount: &Self::Balance,
+		version: u32,
 		genesis_hash: &<Self::Block as BlockT>::Hash,
 		prior_block_hash: &<Self::Block as BlockT>::Hash,
 	) -> <Self::Block as BlockT>::Extrinsic {
 		let index = self.extract_index(&sender, prior_block_hash);
 		let phase = self.extract_phase(*prior_block_hash);
-
 		sign::<Self>(CheckedExtrinsic {
 			signed: Some((sender.clone(), Self::build_extra(index, phase))),
 			function: Call::Balances(
@@ -146,11 +147,11 @@ impl RuntimeAdapter for FactoryState<Number> {
 					(*amount).into()
 				)
 			)
-		}, key, (genesis_hash.clone(), prior_block_hash.clone(), (), (), ()))
+		}, key, (version, genesis_hash.clone(), prior_block_hash.clone(), (), (), ()))
 	}
 
 	fn inherent_extrinsics(&self) -> InherentData {
-		let timestamp = self.block_no * MINIMUM_PERIOD;
+		let timestamp = self.block_no as u64 * MINIMUM_PERIOD;
 
 		let mut inherent = InherentData::new();
 		inherent.put_data(timestamp::INHERENT_IDENTIFIER, &timestamp)
@@ -194,12 +195,12 @@ impl RuntimeAdapter for FactoryState<Number> {
 		// This currently prevents the factory from being used
 		// without a preceding purge of the database.
 		if self.mode == Mode::MasterToN || self.mode == Mode::MasterTo1 {
-			self.block_no()
+			self.block_no() as Self::Index
 		} else {
 			match self.round() {
 				0 =>
 					// if round is 0 all transactions will be done with master as a sender
-					self.block_no(),
+					self.block_no() as Self::Index,
 				_ =>
 					// if round is e.g. 1 every sender account will be new and not yet have
 					// any transactions done
@@ -215,12 +216,12 @@ impl RuntimeAdapter for FactoryState<Number> {
 		// TODO get correct phase via api. See #2587.
 		// This currently prevents the factory from being used
 		// without a preceding purge of the database.
-		self.block_no
+		self.block_no() as Self::Phase
 	}
 }
 
-fn gen_seed_bytes(seed: u64) -> [u8; 32] {
-	let mut rng: StdRng = SeedableRng::seed_from_u64(seed);
+fn gen_seed_bytes(seed: u32) -> [u8; 32] {
+	let mut rng: StdRng = SeedableRng::seed_from_u64(seed as u64);
 
 	let mut seed_bytes = [0u8; 32];
 	for i in 0..32 {

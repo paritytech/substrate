@@ -17,7 +17,9 @@
 //! Generators are a set of trait on which storage traits are implemented.
 //!
 //! (i.e. implementing the generator for StorageValue on a type will automatically derive the
-//! implementation of StorageValue for this type)
+//! implementation of StorageValue for this type).
+//!
+//! They are used by `decl_storage`.
 
 mod linked_map;
 mod map;

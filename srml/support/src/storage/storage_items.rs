@@ -193,7 +193,7 @@ macro_rules! __storage_items_internal {
 		impl $crate::storage::generator::StorageValue<$ty> for $name {
 			type Query = $gettype;
 
-			fn key() -> &'static [u8] {
+			fn unhashed_key() -> &'static [u8] {
 				$key
 			}
 

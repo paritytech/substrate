@@ -476,6 +476,11 @@ mod tests {
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
+		type Version = ();
+	}
+
+	parameter_types! {
+		pub const UncleGenerations: u64 = 5;
 	}
 
 	impl Trait for Test {
@@ -504,10 +509,6 @@ mod tests {
 
 			None
 		}
-	}
-
-	parameter_types! {
-		pub const UncleGenerations: u64 = 5;
 	}
 
 	pub struct VerifyBlock;
@@ -549,7 +550,6 @@ mod tests {
 
 		header
 	}
-
 
 	fn create_header(number: u64, parent_hash: H256, state_root: H256) -> Header {
 		Header::new(

@@ -25,7 +25,7 @@ use sr_primitives::weights::SimpleDispatchInfo;
 use codec::{Encode, Decode, Input, Output, Error};
 use srml_support::{
 	decl_module, decl_storage, decl_event, ensure,
-	StorageValue, StorageMap, StorageLinkedMap, Parameter, Dispatchable, IsSubType,
+	StorageValue, StorageMap, StorageLinkedMap, Parameter, Dispatchable,
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier,
 		OnFreeBalanceZero, Get
@@ -182,7 +182,7 @@ pub const DEFAULT_EMERGENCY_VOTING_PERIOD: u32 = 0;
 pub const DEFAULT_COOLOFF_PERIOD: u32 = 0;
 
 pub trait Trait: system::Trait + Sized {
-	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + IsSubType<Module<Self>, Self>;
+	type Proposal: Parameter + Dispatchable<Origin=Self::Origin>;
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
 	/// Currency type for this module.
@@ -1029,6 +1029,7 @@ mod tests {
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
+		type Version = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;

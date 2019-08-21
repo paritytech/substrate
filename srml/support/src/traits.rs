@@ -32,6 +32,10 @@ pub trait Get<T> {
 	fn get() -> T;
 }
 
+impl<T: Default> Get<T> for () {
+	fn get() -> T { T::default() }
+}
+
 /// A trait for querying whether a type can be said to statically "contain" a value. Similar
 /// in nature to `Get`, except it is designed to be lazy rather than active (you can't ask it to
 /// enumerate all values that it contains) and work for multiple values rather than just one.
@@ -117,8 +121,8 @@ pub trait VerifySeal<Header, Author> {
 pub trait KeyOwnerProofSystem<Key> {
 	/// The proof of membership itself.
 	type Proof: Codec;
-	/// The full identification of a key owner.
-	type FullIdentification: Codec;
+	/// The full identification of a key owner and the stash account.
+	type IdentificationTuple: Codec;
 
 	/// Prove membership of a key owner in the current block-state.
 	///
@@ -131,7 +135,7 @@ pub trait KeyOwnerProofSystem<Key> {
 
 	/// Check a proof of membership on-chain. Return `Some` iff the proof is
 	/// valid and recent enough to check.
-	fn check_proof(key: Key, proof: Self::Proof) -> Option<Self::FullIdentification>;
+	fn check_proof(key: Key, proof: Self::Proof) -> Option<Self::IdentificationTuple>;
 }
 
 /// Handler for when some currency "account" decreased in balance for
@@ -688,4 +692,14 @@ impl<T: Clone + Ord> ChangeMembers<T> for () {
 	fn change_members(_: &[T], _: &[T], _: Vec<T>) {}
 	fn change_members_sorted(_: &[T], _: &[T], _: &[T]) {}
 	fn set_members_sorted(_: &[T], _: &[T]) {}
+}
+
+/// Trait for type that can handle the initialization of account IDs at genesis.
+pub trait InitializeMembers<AccountId> {
+	/// Initialize the members to the given `members`.
+	fn initialize_members(members: &[AccountId]);
+}
+
+impl<T> InitializeMembers<T> for () {
+	fn initialize_members(_: &[T]) {}
 }

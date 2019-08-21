@@ -18,7 +18,7 @@
 //! and depositing logs.
 
 use rstd::prelude::*;
-use runtime_io::{storage_root, enumerated_trie_root, storage_changes_root, twox_128, blake2_256};
+use runtime_io::{storage_root, ordered_trie_root, storage_changes_root, twox_128, blake2_256};
 use runtime_support::storage::{self, StorageValue, StorageMap};
 use runtime_support::storage_items;
 use sr_primitives::traits::{Hash as HashT, BlakeTwo256, Header as _};
@@ -96,7 +96,7 @@ fn execute_block_with_state_root_handler(
 	// check transaction trie root represents the transactions.
 	let txs = block.extrinsics.iter().map(Encode::encode).collect::<Vec<_>>();
 	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
-	let txs_root = enumerated_trie_root::<Blake2Hasher>(&txs).into();
+	let txs_root = ordered_trie_root::<Blake2Hasher, _, _>(&txs).into();
 	info_expect_equal_hash(&txs_root, &header.extrinsics_root);
 	if let Mode::Overwrite = mode {
 		header.extrinsics_root = txs_root;
@@ -200,7 +200,7 @@ pub fn finalize_block() -> Header {
 	let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX).unwrap();
 	let txs: Vec<_> = (0..extrinsic_index).map(ExtrinsicData::take).collect();
 	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
-	let extrinsics_root = enumerated_trie_root::<Blake2Hasher>(&txs).into();
+	let extrinsics_root = ordered_trie_root::<Blake2Hasher, _, _>(&txs).into();
 	let number = <Number>::take().expect("Number is set by `initialize_block`");
 	let parent_hash = <ParentHash>::take();
 	let mut digest = <StorageDigest>::take().expect("StorageDigest is set by `initialize_block`");

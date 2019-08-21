@@ -35,6 +35,7 @@ use rstd::ops::{
 	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
 	RemAssign, Shl, Shr
 };
+use crate::AppKey;
 
 /// A lazy value.
 pub trait Lazy<T: ?Sized> {
@@ -67,6 +68,28 @@ impl Verify for primitives::sr25519::Signature {
 	type Signer = primitives::sr25519::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
 		runtime_io::sr25519_verify(self, msg.get(), signer)
+	}
+}
+
+/// Means of signature verification of an application key.
+pub trait AppVerify {
+	/// Type of the signer.
+	type Signer;
+	/// Verify a signature. Return `true` if signature is valid for the value.
+	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool;
+}
+
+impl<
+	S: Verify<Signer=<<T as AppKey>::Public as app_crypto::AppPublic>::Generic> + From<T>,
+	T: app_crypto::Wraps<Inner=S> + app_crypto::AppKey + app_crypto::AppSignature +
+		AsRef<S> + AsMut<S> + From<S>,
+> AppVerify for T {
+	type Signer = <T as AppKey>::Public;
+	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool {
+		use app_crypto::IsWrappedBy;
+		let inner: &S = self.as_ref();
+		let inner_pubkey = <Self::Signer as app_crypto::AppPublic>::Generic::from_ref(&signer);
+		Verify::verify(inner, msg, inner_pubkey)
 	}
 }
 
@@ -280,6 +303,47 @@ pub trait CheckedConversion {
 }
 impl<T: Sized> CheckedConversion for T {}
 
+/// Multiply and divide by a number that isn't necessarily the same type. Basically just the same
+/// as `Mul` and `Div` except it can be used for all basic numeric types.
+pub trait Scale<Other> {
+	/// The output type of the product of `self` and `Other`.
+	type Output;
+
+	/// @return the product of `self` and `other`.
+	fn mul(self, other: Other) -> Self::Output;
+
+	/// @return the integer division of `self` and `other`.
+	fn div(self, other: Other) -> Self::Output;
+
+	/// @return the modulo remainder of `self` and `other`.
+	fn rem(self, other: Other) -> Self::Output;
+}
+macro_rules! impl_scale {
+	($self:ty, $other:ty) => {
+		impl Scale<$other> for $self {
+			type Output = Self;
+			fn mul(self, other: $other) -> Self::Output { self * (other as Self) }
+			fn div(self, other: $other) -> Self::Output { self / (other as Self) }
+			fn rem(self, other: $other) -> Self::Output { self % (other as Self) }
+		}
+	}
+}
+impl_scale!(u128, u128);
+impl_scale!(u128, u64);
+impl_scale!(u128, u32);
+impl_scale!(u128, u16);
+impl_scale!(u128, u8);
+impl_scale!(u64, u64);
+impl_scale!(u64, u32);
+impl_scale!(u64, u16);
+impl_scale!(u64, u8);
+impl_scale!(u32, u32);
+impl_scale!(u32, u16);
+impl_scale!(u32, u8);
+impl_scale!(u16, u16);
+impl_scale!(u16, u8);
+impl_scale!(u8, u8);
+
 /// Trait for things that can be clear (have no bits set). For numeric types, essentially the same
 /// as `Zero`.
 pub trait Clear {
@@ -402,12 +466,9 @@ pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stup
 		Encode::using_encoded(s, Self::hash)
 	}
 
-	/// Produce the trie-db root of a mapping from indices to byte slices.
-	fn enumerated_trie_root(items: &[&[u8]]) -> Self::Output;
-
-	/// Iterator-based version of `enumerated_trie_root`.
+	/// Iterator-based version of `ordered_trie_root`.
 	fn ordered_trie_root<
-		I: IntoIterator<Item = A> + Iterator<Item = A>,
+		I: IntoIterator<Item = A>,
 		A: AsRef<[u8]>
 	>(input: I) -> Self::Output;
 
@@ -436,9 +497,6 @@ impl Hash for BlakeTwo256 {
 	fn hash(s: &[u8]) -> Self::Output {
 		runtime_io::blake2_256(s).into()
 	}
-	fn enumerated_trie_root(items: &[&[u8]]) -> Self::Output {
-		runtime_io::enumerated_trie_root::<Blake2Hasher>(items).into()
-	}
 	fn trie_root<
 		I: IntoIterator<Item = (A, B)>,
 		A: AsRef<[u8]> + Ord,
@@ -447,7 +505,7 @@ impl Hash for BlakeTwo256 {
 		runtime_io::trie_root::<Blake2Hasher, _, _, _>(input).into()
 	}
 	fn ordered_trie_root<
-		I: IntoIterator<Item = A> + Iterator<Item = A>,
+		I: IntoIterator<Item = A>,
 		A: AsRef<[u8]>
 	>(input: I) -> Self::Output {
 		runtime_io::ordered_trie_root::<Blake2Hasher, _, _>(input).into()
@@ -816,6 +874,14 @@ pub trait SignedExtension:
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str>;
 
 	/// Validate a signed transaction for the transaction queue.
+	///
+	/// This function can be called frequently by the transaction queue,
+	/// to obtain transaction validity against current state.
+	/// It should perform all checks that determine a valid transaction,
+	/// that can pay for it's execution and quickly eliminate ones
+	/// that are stale or incorrect.
+	///
+	/// Make sure to perform the same checks in `pre_dispatch` function.
 	fn validate(
 		&self,
 		_who: &Self::AccountId,
@@ -827,6 +893,13 @@ pub trait SignedExtension:
 	}
 
 	/// Do any pre-flight stuff for a signed transaction.
+	///
+	/// Note this function by default delegates to `validate`, so that
+	/// all checks performed for the transaction queue are also performed during
+	/// the dispatch phase (applying the extrinsic).
+	///
+	/// If you ever override this function, you need to make sure to always
+	/// perform the same validation as in `validate`.
 	fn pre_dispatch(
 		self,
 		who: &Self::AccountId,
@@ -837,9 +910,17 @@ pub trait SignedExtension:
 		self.validate(who, call, info, len).map(|_| Self::Pre::default())
 	}
 
-	/// Validate an unsigned transaction for the transaction queue. Normally the default
-	/// implementation is fine since `ValidateUnsigned` is a better way of recognising and
-	/// validating unsigned transactions.
+	/// Validate an unsigned transaction for the transaction queue.
+	///
+	/// Normally the default implementation is fine since `ValidateUnsigned`
+	/// is a better way of recognising and validating unsigned transactions.
+	///
+	/// This function can be called frequently by the transaction queue,
+	/// to obtain transaction validity against current state.
+	/// It should perform all checks that determine a valid unsigned transaction,
+	/// and quickly eliminate ones that are stale or incorrect.
+	///
+	/// Make sure to perform the same checks in `pre_dispatch_unsigned` function.
 	fn validate_unsigned(
 		_call: &Self::Call,
 		_info: DispatchInfo,
@@ -847,6 +928,13 @@ pub trait SignedExtension:
 	) -> Result<ValidTransaction, DispatchError> { Ok(Default::default()) }
 
 	/// Do any pre-flight stuff for a unsigned transaction.
+	///
+	/// Note this function by default delegates to `validate_unsigned`, so that
+	/// all checks performed for the transaction queue are also performed during
+	/// the dispatch phase (applying the extrinsic).
+	///
+	/// If you ever override this function, you need to make sure to always
+	/// perform the same validation as in `validate_unsigned`.
 	fn pre_dispatch_unsigned(
 		call: &Self::Call,
 		info: DispatchInfo,
@@ -1037,7 +1125,12 @@ pub trait RuntimeApiInfo {
 	const VERSION: u32;
 }
 
-/// Something that can validate unsigned extrinsics.
+/// Something that can validate unsigned extrinsics for the transaction pool.
+///
+/// Note that any checks done here are only used for determining the validity of
+/// the transaction for the transaction pool.
+/// During block execution phase one need to perform the same checks anyway,
+/// since this function is not being called.
 pub trait ValidateUnsigned {
 	/// The call to validate
 	type Call;
