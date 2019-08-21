@@ -43,8 +43,9 @@ pub(crate) struct Impls<'a, I: Iterator<Item=syn::Meta>> {
 	pub instance_opts: &'a InstanceOpts,
 	pub type_infos: DeclStorageTypeInfos<'a>,
 	pub fielddefault: TokenStream2,
+	pub default_delegator_ident: syn::Ident,
+	pub default_delegator_return: TokenStream2,
 	pub prefix: String,
-	pub has_default: bool,
 	pub cratename: &'a syn::Ident,
 	pub name: &'a syn::Ident,
 	pub attrs: I,
@@ -60,8 +61,9 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			traittype,
 			instance_opts,
 			type_infos,
-			has_default,
 			fielddefault,
+			default_delegator_ident,
+			default_delegator_return,
 			prefix,
 			name,
 			attrs,
@@ -116,14 +118,17 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			)
 		};
 
-		let no_default_impl = if !has_default {
-			quote! { impl<#impl_trait> #scrate::traits::NoDefault for #name<#trait_and_instance> #where_clause {} }
-		} else {
-			quote! {}
-		};
-
 		// generator for value
 		quote! {
+			#visibility struct #default_delegator_ident<#struct_trait>(
+				#scrate::rstd::marker::PhantomData<(#trait_and_instance)>
+			);
+			impl<#impl_trait> #scrate::traits::StorageDefault<#typ> for #default_delegator_ident<#trait_and_instance> {
+				fn default() -> #typ {
+					#default_delegator_return
+				}
+			}
+
 			#( #[ #attrs ] )*
 			#visibility struct #name<#struct_trait>(
 				#scrate::rstd::marker::PhantomData<(#trait_and_instance)>
@@ -133,6 +138,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				for #name<#trait_and_instance> #where_clause
 			{
 				type Query = #value_type;
+				type Default = #default_delegator_ident<#trait_and_instance>;
 
 				/// Get the storage key.
 				fn key() -> &'static [u8] {
@@ -164,8 +170,6 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					ret
 				}
 			}
-
-			#no_default_impl
 		}
 	}
 
@@ -177,8 +181,9 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			traittype,
 			instance_opts,
 			type_infos,
-			has_default,
 			fielddefault,
+			default_delegator_ident,
+			default_delegator_return,
 			prefix,
 			name,
 			attrs,
@@ -239,12 +244,6 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			)
 		};
 
-		let no_default_impl = if !has_default {
-			quote! { impl<#impl_trait> #scrate::traits::NoDefault for #name<#trait_and_instance> #where_clause {} }
-		} else {
-			quote! {}
-		};
-
 		// generator for map
 		quote!{
 			#( #[ #attrs ] )*
@@ -301,11 +300,20 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				for #name<#trait_and_instance> #where_clause
 			{}
 
+			#visibility struct #default_delegator_ident<#struct_trait>(
+				#scrate::rstd::marker::PhantomData<(#trait_and_instance)>
+			);
+			impl<#impl_trait> #scrate::traits::StorageDefault<#typ> for #default_delegator_ident<#trait_and_instance> {
+				fn default() -> #typ {
+					#default_delegator_return
+				}
+			}
+
 			impl<#impl_trait> #scrate::storage::hashed::generator::DecodeLengthStorageMap<#kty, #typ>
 				for #name<#trait_and_instance> #where_clause
-			{}
-
-			#no_default_impl
+			{
+				type Default = #default_delegator_ident<#trait_and_instance>;
+			}
 		}
 	}
 

@@ -172,6 +172,7 @@ macro_rules! __storage_items_internal {
 
 		impl $crate::storage::hashed::generator::StorageValue<$ty> for $name {
 			type Query = $gettype;
+			type Default = ();
 
 			/// Get the storage key.
 			fn key() -> &'static [u8] {
@@ -809,14 +810,18 @@ mod test_append_and_len {
 	}
 	crate::decl_storage! {
 		trait Store for Module<T: Trait> as Test {
+			NonVec: u32;
+
 			JustVec: Vec<u32>;
-			JustVecWithDefault: Vec<u32> = vec![6, 9];
+			JustVecWithDefault: Vec<u32> = vec![6u32, 9, 11, 33];
 			OptionVec: Option<Vec<u32>>;
-			 // this (option with default) is stupid in practice. Just to show a point in tests.
-			OptionVecWithDefault: Option<Vec<u32>> = Some(vec![6, 9]);
-			JustVecNoLength: Vec<u32>;
+			OptionVecWithDefault: Option<Vec<u32>> = Some(vec![6u32, 9, 11]);
+			OptionVecWithNoneDefault: Option<Vec<u32>> = None;
 
 			MapVec: map u32 => Vec<u32>;
+			MapVecWithDefault: map u32 => Vec<u32> = vec![33u32, 69];
+			OptionMapVec: map u32 => Option<Vec<u32>>;
+			OptionMapVecWithDefault: map u32 => Option<Vec<u32>> = Some(vec![33u32, 66, 99]);
 		}
 	}
 
@@ -825,6 +830,15 @@ mod test_append_and_len {
 	impl Trait for Test {
 		type Origin = u32;
 		type BlockNumber = u32;
+	}
+
+	#[test]
+	fn default_for_option() {
+		with_externalities(&mut TestExternalities::default(), || {
+			assert_eq!(OptionVecWithDefault::get(), Some(vec![6, 9, 11]));
+			assert_eq!(OptionVec::get(), None);
+			assert_eq!(JustVec::get(), vec![]);
+		});
 	}
 
 	#[test]
@@ -867,23 +881,31 @@ mod test_append_and_len {
 	}
 
 	#[test]
-	fn len_works_for_uninitialized() {
+	fn len_for_default() {
 		with_externalities(&mut TestExternalities::default(), || {
 			assert_eq!(JustVec::get(), vec![]);
-			assert_noop!(JustVec::decode_len(), "could not find item to decode length");
+			assert_eq!(JustVec::decode_len(), Ok(0));
+
+			assert_eq!(JustVecWithDefault::get(), vec![6u32, 9, 11, 33]);
+			assert_eq!(JustVecWithDefault::decode_len(), Ok(4));
 
 			assert_eq!(OptionVec::get(), None);
-			assert_noop!(OptionVec::decode_len(), "could not find item to decode length");
+			assert_eq!(OptionVec::decode_len(), Ok(0));
 
 			assert_eq!(MapVec::get(0), vec![]);
-			assert_noop!(MapVec::decode_len(0), "could not find item to decode length");
+			assert_eq!(MapVec::decode_len(0), Ok(0));
 
-			// NOTE:
-			// such storage items with default cannot have decode length
-			// assert_eq!(JustVecWithDefault::get(), vec![6u32, 9]);
-			// assert_noop!(JustVecWithDefault::decode_len(), "could not find item to decode length");
-			// assert_eq!(OptionVecWithDefault::get(), Some(vec![6u32, 9]));
-			// assert_noop!(OptionVecWithDefault::decode_len(), "could not find item to decode length");
+			assert_eq!(MapVecWithDefault::get(0), vec![33, 69]);
+			assert_eq!(MapVecWithDefault::decode_len(0), Ok(2));
+
+			assert_eq!(OptionMapVec::get(0), None);
+			assert_eq!(OptionMapVec::decode_len(0), Ok(0));
+
+			assert_eq!(OptionMapVecWithDefault::get(0), Some(vec![33u32, 66, 99]));
+			assert_eq!(OptionMapVecWithDefault::decode_len(0), Ok(3));
+
+			assert_eq!(OptionVecWithDefault::get(), Some(vec![6u32, 9, 11]));
+			assert_eq!(OptionVecWithDefault::decode_len(), Ok(3));
 		});
 	}
 }
