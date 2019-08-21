@@ -70,10 +70,6 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 			special_trap: None,
 		}
 	}
-
-	fn memory(&self) -> &sandbox::Memory {
-		&self.memory
-	}
 }
 
 pub(crate) fn to_execution_result<E: Ext>(
