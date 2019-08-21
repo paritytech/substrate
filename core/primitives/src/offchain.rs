@@ -230,6 +230,51 @@ impl Timestamp {
 	}
 }
 
+/// Execution context extra capabilities.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[repr(C)]
+pub enum Capability {
+	/// Access to transaction pool.
+	TransactionPool = 1,
+	/// Access to offchain worker DB.
+	OffchainWorkerDb = 2,
+	/// External http calls.
+	Http = 4,
+	/// Keystore access.
+	Keystore = 8,
+	/// Randomness source.
+	Randomness = 16,
+	/// Access to opaque network state.
+	NetworkState = 32,
+}
+
+/// A set of capabilities
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub struct Capabilities(u8);
+
+impl Capabilities {
+	/// Return an object representing an empty set of capabilities.
+	pub fn none() -> Self {
+		Self(0)
+	}
+
+	/// Return an object representing all capabilities enabled.
+	pub fn all() -> Self {
+		Self(u8::max_value())
+	}
+
+	/// Check if particular capability is enabled.
+	pub fn has(&self, capability: Capability) -> bool {
+		self.0 & capability as u8 != 0
+	}
+}
+
+impl<'a> From<&'a [Capability]> for Capabilities {
+	fn from(list: &'a [Capability]) -> Self {
+		Capabilities(list.iter().fold(0_u8, |a, b| a | *b as u8))
+	}
+}
+
 /// An extended externalities for offchain workers.
 pub trait Externalities {
 	/// Returns if the local node is a potential validator.
@@ -430,6 +475,147 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		(&mut **self).http_response_read_body(request_id, buffer, deadline)
 	}
 }
+/// An `OffchainExternalities` implementation with limited capabilities.
+pub struct LimitedExternalities<T> {
+	capabilities: Capabilities,
+	externalities: T,
+}
+
+impl<T> LimitedExternalities<T> {
+	/// Create new externalities limited to given `capabilities`.
+	pub fn new(capabilities: Capabilities, externalities: T) -> Self {
+		Self {
+			capabilities,
+			externalities,
+		}
+	}
+
+	/// Check if given capability is allowed.
+	///
+	/// Returns `Ok` in case it is, `Err` otherwise.
+	fn check(&self, capability: Capability) -> Result<(), ()> {
+		if self.capabilities.has(capability) {
+			Ok(())
+		} else {
+			#[cfg(feature = "log")]
+			log::warn!("Accessing a forbidden API. No: {:?} capability.", capability);
+			Err(())
+		}
+	}
+}
+
+impl<T: Externalities> Externalities for LimitedExternalities<T> {
+	fn is_validator(&self) -> bool {
+		if self.check(Capability::Keystore).is_ok() {
+			self.externalities.is_validator()
+		} else {
+			false
+		}
+	}
+
+	fn submit_transaction(&mut self, ex: Vec<u8>) -> Result<(), ()> {
+		self.check(Capability::TransactionPool)?;
+		self.externalities.submit_transaction(ex)
+	}
+
+	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
+		self.check(Capability::NetworkState)?;
+		self.externalities.network_state()
+	}
+
+	fn timestamp(&mut self) -> Timestamp {
+		if self.check(Capability::Http).is_ok() {
+			self.externalities.timestamp()
+		} else {
+			Timestamp::from_unix_millis(0)
+		}
+	}
+
+	fn sleep_until(&mut self, deadline: Timestamp) {
+		if self.check(Capability::Http).is_ok() {
+			self.externalities.sleep_until(deadline)
+		}
+	}
+
+	fn random_seed(&mut self) -> [u8; 32] {
+		if self.check(Capability::Randomness).is_ok() {
+			self.externalities.random_seed()
+		} else {
+			[0_u8; 32]
+		}
+	}
+
+	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
+		if self.check(Capability::OffchainWorkerDb).is_ok() {
+			self.externalities.local_storage_set(kind, key, value)
+		}
+	}
+
+	fn local_storage_compare_and_set(
+		&mut self,
+		kind: StorageKind,
+		key: &[u8],
+		old_value: Option<&[u8]>,
+		new_value: &[u8],
+	) -> bool {
+		if self.check(Capability::OffchainWorkerDb).is_ok() {
+			self.externalities.local_storage_compare_and_set(kind, key, old_value, new_value)
+		} else {
+			true
+		}
+	}
+
+	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>> {
+		self.check(Capability::OffchainWorkerDb).ok()?;
+		self.externalities.local_storage_get(kind, key)
+	}
+
+	fn http_request_start(&mut self, method: &str, uri: &str, meta: &[u8]) -> Result<HttpRequestId, ()> {
+		self.check(Capability::Http)?;
+		self.externalities.http_request_start(method, uri, meta)
+	}
+
+	fn http_request_add_header(&mut self, request_id: HttpRequestId, name: &str, value: &str) -> Result<(), ()> {
+		self.check(Capability::Http)?;
+		self.externalities.http_request_add_header(request_id, name, value)
+	}
+
+	fn http_request_write_body(
+		&mut self,
+		request_id: HttpRequestId,
+		chunk: &[u8],
+		deadline: Option<Timestamp>
+	) -> Result<(), HttpError> {
+		self.check(Capability::Http).map_err(|_| HttpError::IoError)?;
+		self.externalities.http_request_write_body(request_id, chunk, deadline)
+	}
+
+	fn http_response_wait(&mut self, ids: &[HttpRequestId], deadline: Option<Timestamp>) -> Vec<HttpRequestStatus> {
+		if self.check(Capability::Http).is_ok() {
+			self.externalities.http_response_wait(ids, deadline)
+		} else {
+			ids.iter().map(|_| HttpRequestStatus::Unknown).collect()
+		}
+	}
+
+	fn http_response_headers(&mut self, request_id: HttpRequestId) -> Vec<(Vec<u8>, Vec<u8>)> {
+		if self.check(Capability::Http).is_ok() {
+			self.externalities.http_response_headers(request_id)
+		} else {
+			Default::default()
+		}
+	}
+
+	fn http_response_read_body(
+		&mut self,
+		request_id: HttpRequestId,
+		buffer: &mut [u8],
+		deadline: Option<Timestamp>
+	) -> Result<usize, HttpError> {
+		self.check(Capability::Http).map_err(|_| HttpError::IoError)?;
+		self.externalities.http_response_read_body(request_id, buffer, deadline)
+	}
+}
 
 
 #[cfg(test)]
@@ -442,5 +628,19 @@ mod tests {
 		assert_eq!(t.add(Duration::from_millis(10)), Timestamp(15));
 		assert_eq!(t.sub(Duration::from_millis(10)), Timestamp(0));
 		assert_eq!(t.diff(&Timestamp(3)), Duration(2));
+	}
+
+	#[test]
+	fn capabilities() {
+		let none = Capabilities::none();
+		let all = Capabilities::all();
+		let some = Capabilities::from(&[Capability::Keystore, Capability::Randomness][..]);
+
+		assert!(!none.has(Capability::Keystore));
+		assert!(all.has(Capability::Keystore));
+		assert!(some.has(Capability::Keystore));
+		assert!(!none.has(Capability::TransactionPool));
+		assert!(all.has(Capability::TransactionPool));
+		assert!(!some.has(Capability::TransactionPool));
 	}
 }

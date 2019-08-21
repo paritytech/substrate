@@ -88,19 +88,36 @@ pub enum ExecutionContext {
 	Syncing,
 	/// Context used for block construction.
 	BlockConstruction,
-	/// Offchain worker context.
+	/// Context used for offchain calls.
+	///
+	/// Includes keystore capabilities.
+	OffchainCall,
+	/// Context used for rich offchain calls.
+	///
+	/// This includes access to offchain worker db (read / write)
+	/// and transaction pool.
+	RichOffchainCall(Box<dyn offchain::Externalities>),
+	/// A context used for offchain workers.
+	///
+	/// This should include all capabilities of `offchain::Externalities`.
 	OffchainWorker(Box<dyn offchain::Externalities>),
-	/// Context used for other calls.
-	Other,
 }
 
 impl ExecutionContext {
-	/// Returns if the keystore should be enabled for the current context.
-	pub fn enable_keystore(&self) -> bool {
+	/// Returns the capabilities of particular context.
+	pub fn capabilities(&self) -> offchain::Capabilities {
 		use ExecutionContext::*;
+		use crate::offchain::Capability::*;
+		use crate::offchain::Capabilities;
 		match self {
-			Importing | Syncing | BlockConstruction => false,
-			OffchainWorker(_) | Other => true,
+			Importing | Syncing | BlockConstruction => Capabilities::none(),
+			OffchainCall => [Keystore][..].into(),
+			RichOffchainCall(_) => [
+				TransactionPool,
+				Keystore,
+				OffchainWorkerDb,
+			][..].into(),
+			OffchainWorker(_) => Capabilities::all(),
 		}
 	}
 }
