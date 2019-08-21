@@ -19,7 +19,9 @@ use sr_std::prelude::*;
 use codec::{Codec, Encode, EncodeAppend};
 use crate::{storage::{self, unhashed, hashed::StorageHasher}, rstd::borrow::Borrow};
 
-/// Generator for `StorageMap` used by `decl_storage`
+/// Generator for `StorageMap` used by `decl_storage`.
+///
+/// For each key value is stored at `Hasher(prefix ++ key)`.
 pub trait StorageMap<K: Codec, V: Codec> {
 	/// The type that get/take returns.
 	type Query;

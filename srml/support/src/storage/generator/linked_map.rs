@@ -24,7 +24,10 @@ use crate::{
 	}
 };
 
-/// Generator for `StorageLinkedMap` used by `decl_storage`
+/// Generator for `StorageLinkedMap` used by `decl_storage`.
+///
+/// For each key value is stored at `Hasher(prefix ++ key)` along with a linkage used for
+/// enumeration.
 pub trait StorageLinkedMap<K: Codec, V: Codec> {
 	/// The type that get/take returns.
 	type Query;

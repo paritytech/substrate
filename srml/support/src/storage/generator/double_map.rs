@@ -18,7 +18,18 @@ use sr_std::prelude::*;
 use codec::{Codec, Encode, EncodeAppend};
 use crate::{storage::{self, unhashed, hashed::StorageHasher}, rstd::borrow::Borrow};
 
-/// Generator for `StorageDoubleMap` used by `decl_storage`
+/// Generator for `StorageDoubleMap` used by `decl_storage`.
+///
+/// # Mapping of keys to a storage path
+///
+/// The storage key (i.e. the key under which the `Value` will be stored) is created from two parts.
+/// The first part is a hash of a concatenation of the `key1_prefix` and `Key1`. And the second part
+/// is a hash of a `Key2`.
+///
+/// Thus value for (key1, key2) is stored at `Hasher1(key1_prefix ++ key1) ++ Hasher2(key2)`.
+///
+/// /!\ be careful while choosing the Hash, indeed malicious could craft second keys to lower the
+/// trie.
 pub trait StorageDoubleMap<K1: Encode, K2: Encode, V: Codec> {
 	/// The type that get/take returns.
 	type Query;
@@ -29,7 +40,7 @@ pub trait StorageDoubleMap<K1: Encode, K2: Encode, V: Codec> {
 	/// Hasher for the second key.
 	type Hasher2: StorageHasher;
 
-	/// Get the prefix key in storage.
+	/// Get the prefix for first key.
 	fn key1_prefix() -> &'static [u8];
 
 	/// Convert an optional value retrieved from storage to the type queried.
