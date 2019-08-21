@@ -7,7 +7,7 @@ build = "build.rs"
 
 [dependencies]
 integer-sqrt = { version = "0.1.2" }
-safe-mix = { version = "1.0", default-features = false }
+safe-mix = { version = "1.0.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 primitives = { package = "substrate-primitives",  path = "../../core/primitives", default-features = false }
 client = { package = "substrate-client", path = "../../core/client", default-features = false }
@@ -41,8 +41,8 @@ im-online = { package = "srml-im-online", path = "../../srml/im-online", default
 authority-discovery = { package = "srml-authority-discovery", path = "../../srml/authority-discovery", default-features = false }
 offences = { package = "srml-offences", path = "../../srml/offences", default-features = false }
 node-primitives = { path = "../primitives", default-features = false }
-rustc-hex = { version = "2.0", optional = true }
-serde = { version = "1.0", optional = true }
+rustc-hex = { version = "2.0.1", optional = true }
+serde = { version = "1.0.99", optional = true }
 substrate-keyring = { path = "../../core/keyring", optional = true }
 substrate-session = { path = "../../core/session", default-features = false }
 

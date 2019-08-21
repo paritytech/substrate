@@ -8,8 +8,8 @@ edition = "2018"
 
 [dependencies]
 client = { package = "substrate-client", path = "../../core/client" }
-futures-preview = "=0.3.0-alpha.17"
-log = "0.4"
+futures-preview = "0.3.0-alpha.18"
+log = "0.4.8"
 offchain-primitives = { package = "substrate-offchain-primitives", path = "./primitives" }
 codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
 parking_lot = "0.9.0"
@@ -20,7 +20,7 @@ network = { package = "substrate-network", path = "../../core/network" }
 keystore = { package = "substrate-keystore", path = "../keystore" }
 
 [dev-dependencies]
-env_logger = "0.6"
+env_logger = "0.6.2"
 client-db = { package = "substrate-client-db", path = "../../core/client/db/", default-features = true }
 test-client = { package = "substrate-test-runtime-client", path = "../../core/test-runtime/client" }
 
