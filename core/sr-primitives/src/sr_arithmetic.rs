@@ -18,11 +18,17 @@
 
 #[cfg(feature = "std")]
 use crate::serde::{Serialize, Deserialize};
-use rstd::{prelude::*, ops, convert::{TryInto, TryFrom}};
+
+use rstd::{
+	ops, prelude::*,
+	convert::{TryInto, TryFrom},
+	cmp::{min, max, Ordering}
+};
 use codec::{Encode, Decode};
-use crate::traits::{SimpleArithmetic, SaturatedConversion, CheckedSub, CheckedAdd, Bounded, UniqueSaturatedInto, Saturating};
-
-
+use crate::traits::{
+	SimpleArithmetic, SaturatedConversion, CheckedSub, CheckedAdd, Bounded, UniqueSaturatedInto,
+	Saturating, Zero,
+};
 
 macro_rules! implement_per_thing {
 	($name:ident, $test_mod:ident, $max:tt, $type:ty, $upper_type:ty, $title:expr) => {
@@ -43,6 +49,12 @@ macro_rules! implement_per_thing {
 			/// Everything.
 			pub fn one() -> Self { Self($max) }
 
+			/// consume self and deconstruct into a raw numeric type.
+			pub fn deconstruct(self) -> $type { self.0 }
+
+			/// return the scale at which this per-thing is working.
+			pub const fn accuracy() -> $type { $max }
+
 			/// From an explicitly defined number of parts per maximum of the type.
 			///
 			/// This can be called at compile time.
@@ -59,7 +71,7 @@ macro_rules! implement_per_thing {
 			#[cfg(feature = "std")]
 			pub fn from_fraction(x: f64) -> Self { Self((x * ($max as f64)) as $type) }
 
-			/// Approximate the fraction `p/q` into a per million fraction.
+			/// Approximate the fraction `p/q` into a per-thing fraction.
 			///
 			/// The computation of this approximation is performed in the generic type `N`.
 			///
@@ -247,24 +259,6 @@ macro_rules! implement_per_thing {
 						$name::from_percent(10),
 					);
 
-					// almost at the edge
-					assert_eq!(
-						$name::from_rational_approximation($max - 1, $max + 1),
-						$name::from_parts($max - 2),
-					);
-					assert_eq!(
-						$name::from_rational_approximation(1, $max-1),
-						$name::from_parts(1),
-					);
-					assert_eq!(
-						$name::from_rational_approximation(1, $max),
-						$name::from_parts(1),
-					);
-					assert_eq!(
-						$name::from_rational_approximation(1, $max+1),
-						$name::zero(),
-					);
-
 					// no accurate anymore but won't overflow.
 					assert_eq!(
 						$name::from_rational_approximation($num_type::max_value() - 1, $num_type::max_value()),
@@ -283,6 +277,24 @@ macro_rules! implement_per_thing {
 
 			#[test]
 			fn per_thing_from_rationale_approx_works() {
+				// almost at the edge
+				assert_eq!(
+					$name::from_rational_approximation($max - 1, $max + 1),
+					$name::from_parts($max - 2),
+				);
+				assert_eq!(
+					$name::from_rational_approximation(1, $max-1),
+					$name::from_parts(1),
+				);
+				assert_eq!(
+					$name::from_rational_approximation(1, $max),
+					$name::from_parts(1),
+				);
+				assert_eq!(
+					$name::from_rational_approximation(1, $max+1),
+					$name::zero(),
+				);
+
 				per_thing_from_rationale_approx_test!(u32);
 				per_thing_from_rationale_approx_test!(u64);
 				per_thing_from_rationale_approx_test!(u128);
@@ -451,53 +463,347 @@ impl CheckedAdd for Fixed64 {
 	}
 }
 
-/// PerU128 is parts-per-u128-max-value. It stores a value between 0 and 1 in fixed point.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
-pub struct PerU128(u128);
+/// Helper gcd function used in Rational128 implementation.
+fn gcd(a: u128, b: u128) -> u128 {
+	match ((a, b), (a & 1, b & 1)) {
+		((x, y), _) if x == y => y,
+		((0, x), _) | ((x, 0), _) => x,
+		((x, y), (0, 1)) | ((y, x), (1, 0)) => gcd(x >> 1, y),
+		((x, y), (0, 0)) => gcd(x >> 1, y >> 1) << 1,
+		((x, y), (1, 1)) => {
+			let (x, y) = (min(x, y), max(x, y));
+			gcd((y - x) >> 1, x)
+		},
+		_ => unreachable!(),
+    }
+}
 
-const U128: u128 = u128::max_value();
+/// A wrapper for any rational number with a 128 bit numerator and denominator.
+#[derive(Clone, Copy, Default)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct Rational128(u128, u128);
 
-impl PerU128 {
+/// Tries to compute `a * b / c`. The approach is:
+///   - Simply try a * b / c.
+///   - Swap the operations in case the former multiplication overflows. Divide first. This might
+///     collapse to zero.
+///
+/// If none worked then return Error.
+pub fn multiply_by_rational(a: u128, b: u128, c: u128) -> Result<u128, &'static str> {
+	// This is the safest way to go. Try it.
+	if let Some(x) = a.checked_mul(b) {
+		Ok(x / c)
+	} else {
+		let bigger = a.max(b);
+		let smaller = a.min(b);
+		if bigger < c { return Err("division will collapse to zero"); }
+		(bigger / c).checked_mul(smaller).ok_or("multiplication overflow")
+	}
+}
+
+/// Performs [`multiply_by_rational`]. In case of failure, it greedily tries to shift the numerator
+/// (`b`) and denominator (`c`) until the multiplication fits. This is guranteed to work if `b/c`
+/// is a rational number smaller than 1.
+///
+/// In case `b/c > 1` and overflow happens, `a` is returned.
+///
+// TODO: we can probably guess what is the sweet spot by examining the bit length of the number
+// rather than just multiplying them and incrementing the shift value.
+pub fn safe_multiply_by_rational(a: u128, b: u128, c: u128) -> u128 {
+	// safe to start with 1. 0 already failed.
+	let mut shift = 1;
+	multiply_by_rational(a, b, c).unwrap_or_else(|_| {
+		loop {
+			let shifted_b = b >> shift;
+			if let Some(val) = a.checked_mul(shifted_b) {
+				let shifted_c = c >> shift;
+				break val / shifted_c.max(1);
+			}
+			shift += 1;
+
+			// defensive only. Before reaching here, shifted_b must have been 1, in which case
+			// multiplying it with a should have NOT overflowed.
+			if shifted_b == 0 { break 0; }
+		}
+	})
+
+}
+
+impl Rational128 {
 	/// Nothing.
-	pub fn zero() -> Self { Self(0) }
+	pub fn zero() -> Self {
+		Self(0, 1)
+	}
 
-	/// `true` if this is nothing.
-	pub fn is_zero(&self) -> bool { self.0 == 0 }
+	/// If it is zero or not
+	pub fn is_zero(&self) -> bool {
+		self.0.is_zero()
+	}
 
-	/// Everything.
-	pub fn one() -> Self { Self(U128) }
+	/// Build from a raw `n/d`.
+	pub fn from(n: u128, d: u128) -> Self {
+		Self(n, d.max(1))
+	}
 
-	/// From an explicitly defined number of parts per maximum of the type.
-	pub fn from_parts(x: u128) -> Self { Self(x) }
+	/// Return the numerator.
+	pub fn n(&self) -> u128 {
+		self.0
+	}
 
-	/// Construct new instance where `x` is denominator and the nominator is 1.
-	pub fn from_xth(x: u128) -> Self { Self(U128/x.max(1)) }
-}
+	/// Return the denominator.
+	pub fn d(&self) -> u128 {
+		self.1
+	}
 
-impl ::rstd::ops::Deref for PerU128 {
-	type Target = u128;
+	/// Convert self to a similar rational number where to denominator is the given `den`.
+	pub fn to_den(self, den: u128) -> Result<Self, &'static str> {
+		if den >= self.1 {
+			let n = multiply_by_rational(den, self.0, self.1)?;
+			Ok(Self(n, den))
+		} else {
+			let div = self.1 / den;
+			Ok(Self(self.0 / div.max(1), den))
+		}
 
-	fn deref(&self) -> &u128 {
-		&self.0
+	}
+
+	/// Get the least common divisor of self and `other`.
+	///
+	/// Arithmetic operations like normal `Add` and `Sub` are not provided. This can be used to
+	/// easily implement them.
+	pub fn lcm(&self, other: &Self) -> Result<u128, &'static str> {
+		// THIS should be tested better: two large numbers that are almost the same.
+		if self.1 == other.1 { return Ok(self.1) }
+		let g = gcd(self.1, other.1);
+		multiply_by_rational(self.1 , other.1, g)
+	}
+
+	/// A saturating add that assumes `self` and `other` have the same denominator.
+	pub fn lazy_saturating_add(self, other: Self) -> Self {
+		if other.is_zero() {
+			self
+		} else {
+			debug_assert!(
+				self.1 == other.1,
+				"cannot lazily add two rationals with different denominator"
+			);
+			Self(self.0.saturating_add(other.0) ,self.1)
+		}
+	}
+
+	/// A saturating subtraction that assumes `self` and `other` have the same denominator.
+	pub fn lazy_saturating_sub(self, other: Self) -> Self {
+		if other.is_zero() {
+			self
+		} else {
+			debug_assert!(
+				self.1 == other.1,
+				"cannot lazily add two rationals with different denominator"
+			);
+			Self(self.0.saturating_sub(other.0) ,self.1)
+		}
+	}
+
+	/// Addition. Simply tries to unify the denominators and add the numerators.
+	///
+	/// Overflow might happen during any of the steps. None is returned in such cases.
+	///
+	/// TODO: actually return None.
+	pub fn checked_add(self, other: Self) -> Result<Self, &'static str> {
+		let lcm = self.lcm(&other)?;
+		let self_scaled = self.to_den(lcm)?;
+		let other_scaled = other.to_den(lcm)?;
+
+		let n = self_scaled.0.checked_add(other_scaled.0)
+			.ok_or("overflow while adding numerators")?;
+		Ok(Self(n, self_scaled.1))
+	}
+
+	/// Subtraction. Simply tries to unify the denominators and subtract the numerators.
+	///
+	/// Overflow might happen during any of the steps. None is returned in such cases.
+	pub fn checked_sub(self, other: Self) -> Result<Self, &'static str> {
+		let lcm = self.lcm(&other)?;
+		let self_scaled = self.to_den(lcm)?;
+		let other_scaled = other.to_den(lcm)?;
+
+		let n = self_scaled.0.checked_sub(other_scaled.0)
+			.ok_or("overflow while subtracting numerators")?;
+		Ok(Self(n, self_scaled.1))
 	}
 }
 
-impl codec::CompactAs for PerU128 {
-	type As = u128;
-	fn encode_as(&self) -> &u128 {
-		&self.0
-	}
-	fn decode_from(x: u128) -> PerU128 {
-		Self(x)
+impl PartialOrd for Rational128 {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		Some(self.cmp(other))
 	}
 }
 
-impl From<codec::Compact<PerU128>> for PerU128 {
-	fn from(x: codec::Compact<PerU128>) -> PerU128 {
-		x.0
+impl Ord for Rational128 {
+	fn cmp(&self, other: &Self) -> Ordering {
+		let lcm = self.1.saturating_mul(other.1).saturating_mul(gcd(self.1, other.1));
+		let self_scaled = self.0 * (lcm / self.1);
+		let other_scaled = other.0 * (lcm / other.1);
+		self_scaled.cmp(&other_scaled)
 	}
 }
+
+impl PartialEq for Rational128 {
+    fn eq(&self, other: &Self) -> bool {
+		let lcm = self.1.saturating_mul(other.1).saturating_mul(gcd(self.1, other.1));
+		let self_scaled = self.0 * (lcm / self.1);
+		let other_scaled = other.0 * (lcm / other.1);
+		self_scaled.eq(&other_scaled)
+    }
+}
+
+impl Eq for Rational128 {}
+
+
+#[cfg(test)]
+mod test_rational {
+	use super::*;
+
+	const MAX128: u128 = u128::max_value();
+	const MAX64: u128 = u64::max_value() as u128;
+
+	fn r(p: u128, q: u128) -> Rational128 {
+		Rational128(p, q)
+	}
+
+
+	#[test]
+	fn to_denom_works() {
+		// simple up and down
+		assert_eq!(r(1, 5).to_den(10).unwrap(), r(2, 10));
+		assert_eq!(r(4, 10).to_den(5).unwrap(), r(2, 5));
+
+		// up and down with large numbers
+		assert_eq!(r(MAX128 - 10, MAX128).to_den(10).unwrap(), r(9, 10));
+		assert_eq!(r(MAX128 / 2, MAX128).to_den(10).unwrap(), r(5, 10));
+
+		// large to perbill
+		assert_eq!(r(MAX128 / 2, MAX128).to_den(1000_000_000).unwrap(), r(500_000_000, 1000_000_000));
+
+		// large to large
+		assert_eq!(r(MAX128 / 2, MAX128).to_den(MAX128/2).unwrap(), r(MAX128/4, MAX128/2));
+	}
+
+	#[test]
+	fn gdc_works() {
+		assert_eq!(gcd(10, 5), 5);
+		assert_eq!(gcd(7, 22), 1);
+	}
+
+	#[test]
+	fn lcm_works() {
+		// simple stuff
+		assert_eq!(r(3, 10).lcm(&r(4, 15)).unwrap(), 30);
+		assert_eq!(r(5, 30).lcm(&r(1, 7)).unwrap(), 210);
+		assert_eq!(r(5, 30).lcm(&r(1, 10)).unwrap(), 30);
+
+		// large numbers
+		assert_eq!(r(1_000_000_000, MAX128).lcm(&r(7_000_000_000, MAX128-1)), Err("multiplication overflow"));
+		assert_eq!(r(1_000_000_000, MAX64).lcm(&r(7_000_000_000, MAX64-1)), Ok(340282366920938463408034375210639556610));
+		assert!(340282366920938463408034375210639556610 < MAX128);
+	}
+
+	#[test]
+	fn add_works() {
+		// works
+		assert_eq!(r(3, 10).checked_add(r(1, 10)).unwrap(), r(2, 5));
+		assert_eq!(r(3, 10).checked_add(r(3, 7)).unwrap(), r(51, 70));
+
+		// errors
+		assert!(r(1, MAX128).checked_add(r(1, MAX128-1)).is_err());
+		assert_eq!(r(MAX128, MAX128).checked_add(r(MAX128, MAX128)), Err("overflow while adding numerators"));
+
+	}
+
+	#[test]
+	fn sub_works() {
+		// works
+		assert_eq!(r(3, 10).checked_sub(r(1, 10)).unwrap(), r(1, 5));
+		assert_eq!(r(6, 10).checked_sub(r(3, 7)).unwrap(), r(12, 70));
+
+		// errors
+		assert_eq!(r(7, MAX128).checked_add(r(MAX128, MAX128)), Err("overflow while adding numerators"));
+		assert_eq!(r(1, 10).checked_sub(r(2,10)), Err("overflow while subtracting numerators"));
+	}
+
+	#[test]
+	fn ordering_and_eq_works() {
+		assert!(r(1, 2) > r(1, 3));
+		assert!(r(1, 2) > r(2, 6));
+
+		assert!(r(1, 2) < r(6, 6));
+		assert!(r(2, 1) > r(2, 6));
+
+		assert!(r(5, 10) == r(1, 2));
+		assert!(r(1, 2) == r(1, 2));
+
+		assert!(r(1, 1490000000000200000) > r(1, 1490000000000200001));
+	}
+
+
+	#[test]
+	fn safe_multiply_by_rational_works() {
+		// basics
+		assert_eq!(safe_multiply_by_rational(7, 2, 3), 7 * 2 / 3);
+		assert_eq!(safe_multiply_by_rational(7, 20, 30), 7 * 2 / 3);
+		assert_eq!(safe_multiply_by_rational(20, 7, 30), 7 * 2 / 3);
+
+		// Where simple swap helps.
+		assert_eq!(safe_multiply_by_rational(MAX128, 2, 3), MAX128 / 3 * 2);
+		assert_eq!(
+			safe_multiply_by_rational(MAX128, 555, 1000),
+			MAX128 / 1000 * 555
+		);
+
+		// This can't work with just swap.
+		assert_eq!(
+			safe_multiply_by_rational(MAX64, MAX128 / 2, MAX128-1),
+			MAX64 / 2
+		);
+		assert_eq!(
+			safe_multiply_by_rational(MAX64, MAX128, MAX128 - 1),
+			MAX64
+		);
+
+		assert_eq!(
+			safe_multiply_by_rational(MAX128 / 2, 3, 1),
+			MAX128 / 2
+		);
+	}
+
+	#[test]
+	fn multiply_by_rational_works() {
+		assert_eq!(multiply_by_rational(7, 2, 3).unwrap(), 7 * 2 / 3);
+		assert_eq!(multiply_by_rational(7, 20, 30).unwrap(), 7 * 2 / 3);
+		assert_eq!(multiply_by_rational(20, 7, 30).unwrap(), 7 * 2 / 3);
+
+		assert_eq!(multiply_by_rational(MAX128, 2, 3).unwrap(), MAX128 / 3 * 2);
+		assert_eq!(
+			multiply_by_rational(MAX128, 555, 1000).unwrap(),
+			MAX128 / 1000 * 555
+		);
+
+		assert_eq!(
+			multiply_by_rational(MAX64, MAX128 / 2, MAX128 - 1),
+			Err("division will collapse to zero")
+		);
+		assert_eq!(
+			multiply_by_rational(MAX64, MAX128, MAX128 - 1).unwrap(),
+			MAX64
+		);
+
+		assert_eq!(
+			multiply_by_rational(MAX128 - 1000, 3, 1),
+			Err("multiplication overflow")
+		);
+	}
+}
+
 
 #[cfg(test)]
 mod tests {

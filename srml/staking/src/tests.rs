@@ -48,7 +48,6 @@ fn basic_setup_works() {
 			(11, ValidatorPrefs { unstake_threshold: 3, validator_payment: 0 })
 		]);
 
-		// Account 100 is the default nominator
 		assert_eq!(Staking::ledger(100), Some(StakingLedger { stash: 101, total: 500, active: 500, unlocking: vec![] }));
 		assert_eq!(Staking::nominators(101), vec![11, 21]);
 
@@ -650,11 +649,11 @@ fn nominating_and_rewards_should_work() {
 		if cfg!(feature = "equalize") {
 			// total expo of 10, with 1200 coming from nominators (externals), according to phragmen.
 			assert_eq!(Staking::stakers(11).own, 1000);
-			assert_eq!(Staking::stakers(11).total, 1000 + 999);
+			assert_eq_error_rate!(Staking::stakers(11).total, 1000 + 1000, 2);
 			// 2 and 4 supported 10, each with stake 600, according to phragmen.
 			assert_eq!(
 				Staking::stakers(11).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(),
-				vec![599, 400]
+				vec![600, 400]
 			);
 			assert_eq!(
 				Staking::stakers(11).others.iter().map(|e| e.who).collect::<Vec<u64>>(),
@@ -662,11 +661,11 @@ fn nominating_and_rewards_should_work() {
 			);
 			// total expo of 20, with 500 coming from nominators (externals), according to phragmen.
 			assert_eq!(Staking::stakers(21).own, 1000);
-			assert_eq!(Staking::stakers(21).total, 1000 + 999);
+			assert_eq_error_rate!(Staking::stakers(21).total, 1000 + 1000, 2);
 			// 2 and 4 supported 20, each with stake 250, according to phragmen.
 			assert_eq!(
 				Staking::stakers(21).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(),
-				vec![400, 599]
+				vec![400, 600]
 			);
 			assert_eq!(
 				Staking::stakers(21).others.iter().map(|e| e.who).collect::<Vec<u64>>(),
@@ -687,11 +686,11 @@ fn nominating_and_rewards_should_work() {
 			);
 			// total expo of 20, with 500 coming from nominators (externals), according to phragmen.
 			assert_eq!(Staking::stakers(21).own, 1000);
-			assert_eq!(Staking::stakers(21).total, 1000 + 1198);
+			assert_eq_error_rate!(Staking::stakers(21).total, 1000 + 1200, 2);
 			// 2 and 4 supported 20, each with stake 250, according to phragmen.
 			assert_eq!(
 				Staking::stakers(21).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(),
-				vec![599, 599]
+				vec![600, 600]
 			);
 			assert_eq!(
 				Staking::stakers(21).others.iter().map(|e| e.who).collect::<Vec<u64>>(),
@@ -1508,11 +1507,11 @@ fn phragmen_poc_works() {
 		assert_eq!(Staking::stakers(21).own, 1000);
 
 		if cfg!(feature = "equalize") {
-			assert_eq!(Staking::stakers(11).total, 1000 + 499);
-			assert_eq!(Staking::stakers(21).total, 1000 + 499);
+			assert_eq_error_rate!(Staking::stakers(11).total, 1000 + 500, 2);
+			assert_eq_error_rate!(Staking::stakers(21).total, 1000 + 500, 2);
 		} else {
-			assert_eq!(Staking::stakers(11).total, 1000 + 332);
-			assert_eq!(Staking::stakers(21).total, 1000 + 666);
+			assert_eq_error_rate!(Staking::stakers(11).total, 1000 + 333, 2);
+			assert_eq_error_rate!(Staking::stakers(21).total, 1000 + 666, 2);
 		}
 
 		// Nominator's stake distribution.
@@ -1602,8 +1601,8 @@ fn phragmen_poc_2_works() {
 		// 10 and 30 must be the winners
 		assert_eq!(winners, vec![11, 31]);
 		assert_eq!(assignment, vec![
-			(3, vec![(11, 2816371998), (31, 1478595298)]),
-			(1, vec![(11, 4294967296)]),
+			(3, vec![(11, sr_primitives::Perbill::from_parts(655737705)), (31, sr_primitives::Perbill::from_parts(344262295))]),
+			(1, vec![(11, sr_primitives::Perbill::from_percent(100))]),
 		]);
 		check_exposure_all();
 		check_nominator_all();
@@ -1838,13 +1837,13 @@ fn phragmen_linear_worse_case_equalize() {
 
 		assert_eq_uvec!(validator_controllers(), vec![10, 60, 40, 20, 50, 30, 70]);
 
-		assert_eq!(Staking::stakers(11).total, 3000);
-		assert_eq!(Staking::stakers(21).total, 2254);
-		assert_eq!(Staking::stakers(31).total, 2254);
-		assert_eq!(Staking::stakers(41).total, 1926);
-		assert_eq!(Staking::stakers(51).total, 1871);
-		assert_eq!(Staking::stakers(61).total, 1892);
-		assert_eq!(Staking::stakers(71).total, 1799);
+		assert_eq_error_rate!(Staking::stakers(11).total, 3000, 2);
+		assert_eq_error_rate!(Staking::stakers(21).total, 2255, 2);
+		assert_eq_error_rate!(Staking::stakers(31).total, 2255, 2);
+		assert_eq_error_rate!(Staking::stakers(41).total, 1925, 2);
+		assert_eq_error_rate!(Staking::stakers(51).total, 1870, 2);
+		assert_eq_error_rate!(Staking::stakers(61).total, 1890, 2);
+		assert_eq_error_rate!(Staking::stakers(71).total, 1800, 2);
 
 		check_exposure_all();
 		check_nominator_all();
@@ -1879,14 +1878,14 @@ fn phragmen_score_should_be_accurate_on_large_stakes() {
 		.nominate(false)
 		.build(),
 	|| {
-		bond_validator(2, u64::max_value());
-		bond_validator(4, u64::max_value());
-		bond_validator(6, u64::max_value()-1);
-		bond_validator(8, u64::max_value()-2);
+		bond_validator(2, u64::max_value()-1);
+		bond_validator(4, u64::max_value()-3);
+		bond_validator(6, u64::max_value()-2);
+		bond_validator(8, u64::max_value()-4);
 
 		start_era(1);
 
-		assert_eq!(validator_controllers(), vec![4, 2]);
+		assert_eq_uvec!(validator_controllers(), vec![6, 2]);
 		check_exposure_all();
 		check_nominator_all();
 	})

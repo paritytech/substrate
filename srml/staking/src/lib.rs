@@ -303,7 +303,7 @@ use sr_primitives::traits::{
 use sr_primitives::{Serialize, Deserialize};
 use system::{ensure_signed, ensure_root};
 
-use phragmen::{elect, ACCURACY, ExtendedBalance, equalize};
+use phragmen::{elect, ExtendedBalance, equalize};
 
 const RECENT_OFFLINE_COUNT: usize = 32;
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
@@ -460,8 +460,7 @@ type NegativeImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 type MomentOf<T>= <<T as Trait>::Time as Time>::Moment;
 
-type RawAssignment<T> = (<T as system::Trait>::AccountId, ExtendedBalance);
-type Assignment<T> = (<T as system::Trait>::AccountId, ExtendedBalance, BalanceOf<T>);
+type Assignment<T> = (<T as system::Trait>::AccountId, Perbill, BalanceOf<T>);
 type ExpoMap<T> = BTreeMap<
 	<T as system::Trait>::AccountId,
 	Exposure<<T as system::Trait>::AccountId, BalanceOf<T>>
@@ -1222,27 +1221,19 @@ impl<T: Trait> Module<T> {
 			let elected_stashes = elected_set.0;
 			let assignments = elected_set.1;
 
-			// helper closure.
-			let to_balance = |b: ExtendedBalance|
-				<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(b);
 			let to_votes = |b: BalanceOf<T>|
 				<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b) as ExtendedBalance;
-
-			// The return value of this is safe to be converted to u64.
-			// The original balance, `b` is within the scope of u64. It is just extended to u128
-			// to be properly multiplied by a ratio, which will lead to another value
-			// less than u64 for sure. The result can then be safely passed to `to_balance`.
-			// For now the backward convert is used. A simple `TryFrom<u64>` is also safe.
-			let ratio_of = |b, p| (p as ExtendedBalance).saturating_mul(to_votes(b)) / ACCURACY;
 
 			// Compute the actual stake from nominator's ratio.
 			let assignments_with_stakes = assignments.iter().map(|(n, a)|(
 				n.clone(),
 				Self::slashable_balance_of(n),
-				a.iter().map(|(acc, r)| (
+				a.into_iter().map(|(acc, per)| (
 					acc.clone(),
-					*r,
-					to_balance(ratio_of(Self::slashable_balance_of(n), *r)),
+					*per,
+					// AUDIT: it is crucially important for the `Mul` implementation of perbill to
+					// properly handle this.
+					*per * Self::slashable_balance_of(n),
 				))
 				.collect::<Vec<Assignment<T>>>()
 			)).collect::<Vec<(T::AccountId, BalanceOf<T>, Vec<Assignment<T>>)>>();
@@ -1277,13 +1268,14 @@ impl<T: Trait> Module<T> {
 					.map(|a| (
 						a.0.clone(), a.1,
 						a.2.iter()
-							.map(|e| (e.0.clone(), e.1, to_votes(e.2)))
-							.collect::<Vec<(T::AccountId, ExtendedBalance, ExtendedBalance)>>()
+							.map(|e| (e.0.clone(), to_votes(e.2)))
+							.collect::<Vec<(T::AccountId, ExtendedBalance)>>()
 					))
 					.collect::<Vec<(
-						T::AccountId,
-						BalanceOf<T>,
-						Vec<(T::AccountId, ExtendedBalance, ExtendedBalance)>
+						T::AccountId, // nominator
+						BalanceOf<T>, // balance
+						// voted for: (who, weight_as_accuracy, weight_as_balance)
+						Vec<(T::AccountId, ExtendedBalance)>
 					)>>();
 				equalize::<T>(&mut assignments_with_votes, &mut exposures, tolerance, iterations);
 			}

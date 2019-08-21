@@ -53,7 +53,7 @@ pub use generic::{DigestItem, Digest};
 pub use primitives::crypto::{key_types, KeyTypeId};
 
 /// Export arithmetic stuff.
-pub use sr_arithmetic::{Perbill, Permill, Percent, PerU128, Fixed64};
+pub use sr_arithmetic::{Perbill, Permill, Percent, Rational128, Fixed64, safe_multiply_by_rational};
 
 /// A message indicating an invalid signature in extrinsic.
 pub const BAD_SIGNATURE: &str = "bad signature in extrinsic";
