@@ -371,6 +371,7 @@ mod tests {
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
+		type Version = ();
 	}
 	parameter_types! {
 		pub const MinimumPeriod: u64 = 5;

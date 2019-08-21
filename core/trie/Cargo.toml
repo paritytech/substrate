@@ -14,16 +14,16 @@ harness = false
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
-hash-db = { version = "0.15.0", default-features = false }
-trie-db = { version = "0.15.0", default-features = false }
-trie-root = { version = "0.15.0", default-features = false }
-memory-db = { version = "0.15.0", default-features = false }
+hash-db = { version = "0.15.2", default-features = false }
+trie-db = { version = "0.15.2", default-features = false }
+trie-root = { version = "0.15.2", default-features = false }
+memory-db = { version = "0.15.2", default-features = false }
 primitives = { package = "substrate-primitives",  path = "../primitives", default-features = false }
 
 [dev-dependencies]
-trie-bench = { version = "0.16.0" }
-trie-standardmap = { version = "0.15.0" }
-keccak-hasher = { version = "0.15.0" }
+trie-bench = { version = "0.16.2" }
+trie-standardmap = { version = "0.15.2" }
+keccak-hasher = { version = "0.15.2" }
 criterion = "0.2"
 hex-literal = "0.2.0"
 

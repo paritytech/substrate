@@ -6,7 +6,7 @@ description = "Substrate node implementation in Rust."
 edition = "2018"
 
 [dependencies]
-trie-root = "0.15.0"
+trie-root = "0.15.2"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 runtime_io = { package = "sr-io", path = "../../core/sr-io" }
 state_machine = { package = "substrate-state-machine", path = "../../core/state-machine" }
@@ -17,13 +17,12 @@ node-primitives = { path = "../primitives" }
 node-runtime = { path = "../runtime" }
 
 [dev-dependencies]
+node-testing = { path = "../testing" }
 test-client = { package = "substrate-test-client", path = "../../core/test-client" }
-keyring = { package = "substrate-keyring", path = "../../core/keyring" }
 sr-primitives = { path = "../../core/sr-primitives" }
 runtime_support = { package = "srml-support", path = "../../srml/support" }
 balances = { package = "srml-balances", path = "../../srml/balances" }
 session = { package = "srml-session", path = "../../srml/session" }
-staking = { package = "srml-staking", path = "../../srml/staking" }
 system = { package = "srml-system", path = "../../srml/system" }
 timestamp = { package = "srml-timestamp", path = "../../srml/timestamp" }
 treasury = { package = "srml-treasury", path = "../../srml/treasury" }

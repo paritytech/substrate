@@ -874,6 +874,14 @@ pub trait SignedExtension:
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str>;
 
 	/// Validate a signed transaction for the transaction queue.
+	///
+	/// This function can be called frequently by the transaction queue,
+	/// to obtain transaction validity against current state.
+	/// It should perform all checks that determine a valid transaction,
+	/// that can pay for it's execution and quickly eliminate ones
+	/// that are stale or incorrect.
+	///
+	/// Make sure to perform the same checks in `pre_dispatch` function.
 	fn validate(
 		&self,
 		_who: &Self::AccountId,
@@ -885,6 +893,13 @@ pub trait SignedExtension:
 	}
 
 	/// Do any pre-flight stuff for a signed transaction.
+	///
+	/// Note this function by default delegates to `validate`, so that
+	/// all checks performed for the transaction queue are also performed during
+	/// the dispatch phase (applying the extrinsic).
+	///
+	/// If you ever override this function, you need to make sure to always
+	/// perform the same validation as in `validate`.
 	fn pre_dispatch(
 		self,
 		who: &Self::AccountId,
@@ -895,9 +910,17 @@ pub trait SignedExtension:
 		self.validate(who, call, info, len).map(|_| Self::Pre::default())
 	}
 
-	/// Validate an unsigned transaction for the transaction queue. Normally the default
-	/// implementation is fine since `ValidateUnsigned` is a better way of recognising and
-	/// validating unsigned transactions.
+	/// Validate an unsigned transaction for the transaction queue.
+	///
+	/// Normally the default implementation is fine since `ValidateUnsigned`
+	/// is a better way of recognising and validating unsigned transactions.
+	///
+	/// This function can be called frequently by the transaction queue,
+	/// to obtain transaction validity against current state.
+	/// It should perform all checks that determine a valid unsigned transaction,
+	/// and quickly eliminate ones that are stale or incorrect.
+	///
+	/// Make sure to perform the same checks in `pre_dispatch_unsigned` function.
 	fn validate_unsigned(
 		_call: &Self::Call,
 		_info: DispatchInfo,
@@ -905,6 +928,13 @@ pub trait SignedExtension:
 	) -> Result<ValidTransaction, DispatchError> { Ok(Default::default()) }
 
 	/// Do any pre-flight stuff for a unsigned transaction.
+	///
+	/// Note this function by default delegates to `validate_unsigned`, so that
+	/// all checks performed for the transaction queue are also performed during
+	/// the dispatch phase (applying the extrinsic).
+	///
+	/// If you ever override this function, you need to make sure to always
+	/// perform the same validation as in `validate_unsigned`.
 	fn pre_dispatch_unsigned(
 		call: &Self::Call,
 		info: DispatchInfo,
@@ -1095,7 +1125,12 @@ pub trait RuntimeApiInfo {
 	const VERSION: u32;
 }
 
-/// Something that can validate unsigned extrinsics.
+/// Something that can validate unsigned extrinsics for the transaction pool.
+///
+/// Note that any checks done here are only used for determining the validity of
+/// the transaction for the transaction pool.
+/// During block execution phase one need to perform the same checks anyway,
+/// since this function is not being called.
 pub trait ValidateUnsigned {
 	/// The call to validate
 	type Call;

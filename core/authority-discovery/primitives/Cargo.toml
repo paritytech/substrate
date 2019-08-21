@@ -1,5 +1,5 @@
 [package]
-name = "substrate-consensus-common-primitives"
+name = "substrate-authority-discovery-primitives"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Common consensus primitives"
@@ -7,9 +7,9 @@ edition = "2018"
 
 [dependencies]
 codec = { package = "parity-scale-codec", default-features = false, version = "1.0.3" }
-client = { package = "substrate-client", path = "../../../client", default-features = false }
-sr-primitives = { path = "../../../sr-primitives", default-features = false }
-rstd = { package = "sr-std", path = "../../../sr-std", default-features = false }
+client = { package = "substrate-client", path = "../../client", default-features = false }
+sr-primitives = { path = "../../sr-primitives", default-features = false }
+rstd = { package = "sr-std", path = "../../sr-std", default-features = false }
 
 [features]
 default = ["std"]

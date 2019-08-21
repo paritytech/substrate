@@ -1,3 +1,4 @@
+
 // Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
@@ -11,21 +12,21 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
-//! Common consensus primitives.
-
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::Codec;
-use client::decl_runtime_apis;
+//! A crate which contains primitives that are useful for implementation that uses staking
+//! approaches in general. Definitions related to sessions, slashing, etc go here.
+
 use rstd::vec::Vec;
 
-decl_runtime_apis! {
-	/// Common consensus runtime api.
-	pub trait ConsensusApi<AuthorityId: Codec> {
-		/// Returns the set of authorities of the currently active consensus mechanism.
-		fn authorities() -> Vec<AuthorityId>;
-	}
+pub mod offence;
+
+/// Simple index type with which we can count sessions.
+pub type SessionIndex = u32;
+
+/// A trait for getting the currently elected validator set without coupling to the module that
+/// provides this information.
+pub trait CurrentElectedSet<ValidatorId> {
+	/// Returns the validator ids for the currently elected validator set.
+	fn current_elected_set() -> Vec<ValidatorId>;
 }

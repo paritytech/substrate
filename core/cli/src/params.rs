@@ -119,6 +119,7 @@ pub struct NetworkConfigurationParams {
 }
 
 arg_enum! {
+	#[allow(missing_docs)]
 	#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 	pub enum NodeKeyType {
 		Secp256k1,

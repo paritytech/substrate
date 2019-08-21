@@ -278,6 +278,17 @@ construct_service_factory! {
 		FinalityProofProvider = { |client: Arc<FullClient<Self>>| {
 			Ok(Some(Arc::new(GrandpaFinalityProofProvider::new(client.clone(), client)) as _))
 		}},
+
+		RpcExtensions = jsonrpc_core::IoHandler<substrate_rpc::Metadata>
+		{ |client, pool| {
+			use node_rpc::accounts::{Accounts, AccountsApi};
+
+			let mut io = jsonrpc_core::IoHandler::default();
+			io.extend_with(
+				AccountsApi::to_delegate(Accounts::new(client, pool))
+			);
+			io
+		}},
 	}
 }
 
@@ -401,9 +412,9 @@ mod tests {
 			let babe_pre_digest = loop {
 				inherent_data.replace_data(timestamp::INHERENT_IDENTIFIER, &(slot_num * SLOT_DURATION));
 				if let Some(babe_pre_digest) = babe::test_helpers::claim_slot(
-					&*service.client(),
-					&parent_id,
 					slot_num,
+					&parent_header,
+					&*service.client(),
 					(278, 1000),
 					&keystore,
 				) {
@@ -454,18 +465,21 @@ mod tests {
 			let to = AddressPublic::from_raw(bob.public().0);
 			let from = AddressPublic::from_raw(charlie.public().0);
 			let genesis_hash = service.get().client().block_hash(0).unwrap().unwrap();
+			let best_block_id = BlockId::number(service.get().client().info().chain.best_number);
+			let version = service.get().client().runtime_version_at(&best_block_id).unwrap().spec_version;
 			let signer = charlie.clone();
 
 			let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
 
+			let check_version = system::CheckVersion::new();
 			let check_genesis = system::CheckGenesis::new();
 			let check_era = system::CheckEra::from(Era::Immortal);
 			let check_nonce = system::CheckNonce::from(index);
 			let check_weight = system::CheckWeight::new();
 			let take_fees = balances::TakeFees::from(0);
-			let extra = (check_genesis, check_era, check_nonce, check_weight, take_fees);
+			let extra = (check_version, check_genesis, check_era, check_nonce, check_weight, take_fees);
 
-			let raw_payload = (function, extra.clone(), genesis_hash, genesis_hash);
+			let raw_payload = (function, extra.clone(), version, genesis_hash, genesis_hash);
 			let signature = raw_payload.using_encoded(|payload| if payload.len() > 256 {
 				signer.sign(&blake2_256(payload)[..])
 			} else {
