@@ -503,12 +503,13 @@ struct Inner<Block: BlockT> {
 	config: crate::Config,
 	next_rebroadcast: Instant,
 	pending_catch_up: PendingCatchUp,
+	catch_up_enabled: bool,
 }
 
 type MaybeMessage<Block> = Option<(Vec<PeerId>, NeighborPacket<NumberFor<Block>>)>;
 
 impl<Block: BlockT> Inner<Block> {
-	fn new(config: crate::Config) -> Self {
+	fn new(config: crate::Config, catch_up_enabled: bool) -> Self {
 		Inner {
 			local_view: None,
 			peers: Peers::default(),
@@ -516,6 +517,7 @@ impl<Block: BlockT> Inner<Block> {
 			next_rebroadcast: Instant::now() + REBROADCAST_AFTER,
 			authorities: Vec::new(),
 			pending_catch_up: PendingCatchUp::None,
+			catch_up_enabled,
 			config,
 		}
 	}
@@ -804,6 +806,10 @@ impl<Block: BlockT> Inner<Block> {
 	}
 
 	fn try_catch_up(&mut self, who: &PeerId) -> (Option<GossipMessage<Block>>, Option<Report>) {
+		if !self.catch_up_enabled {
+			return (None, None);
+		}
+
 		let mut catch_up = None;
 		let mut report = None;
 
@@ -917,13 +923,17 @@ pub(super) struct GossipValidator<Block: BlockT> {
 }
 
 impl<Block: BlockT> GossipValidator<Block> {
-	/// Create a new gossip-validator. This initialized the current set to 0.
-	pub(super) fn new(config: crate::Config, set_state: environment::SharedVoterSetState<Block>)
-		-> (GossipValidator<Block>, ReportStream)
-	{
+	/// Create a new gossip-validator. The current set is initialized to 0. If
+	/// `catch_up_enabled` is set to false then the validator will not issue any
+	/// catch up requests (useful e.g. when running just the GRANDPA observer).
+	pub(super) fn new(
+		config: crate::Config,
+		set_state: environment::SharedVoterSetState<Block>,
+		catch_up_enabled: bool,
+	) -> (GossipValidator<Block>, ReportStream)	{
 		let (tx, rx) = mpsc::unbounded();
 		let val = GossipValidator {
-			inner: parking_lot::RwLock::new(Inner::new(config)),
+			inner: parking_lot::RwLock::new(Inner::new(config, catch_up_enabled)),
 			set_state,
 			report_sender: tx,
 		};
