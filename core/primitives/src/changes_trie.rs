@@ -281,6 +281,9 @@ mod tests {
 		assert_eq!(config(1, 1).prev_max_level_digest_block(0u64, 16), None);
 		assert_eq!(config(2, 1).prev_max_level_digest_block(0u64, 16), Some(16));
 		assert_eq!(config(4, 1).prev_max_level_digest_block(0u64, 16), Some(16));
+		assert_eq!(config(4, 2).prev_max_level_digest_block(0u64, 16), Some(16));
+		assert_eq!(config(4, 2).prev_max_level_digest_block(0u64, 17), Some(16));
+		assert_eq!(config(4, 2).prev_max_level_digest_block(0u64, 33), Some(32));
 		assert_eq!(config(32, 1).prev_max_level_digest_block(0u64, 16), None);
 		assert_eq!(config(2, 3).prev_max_level_digest_block(0u64, 10), Some(8));
 		assert_eq!(config(2, 3).prev_max_level_digest_block(0u64, 8), Some(8));
