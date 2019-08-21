@@ -25,13 +25,14 @@ use client::{self, Client, runtime_api};
 use crate::{error, Service};
 use consensus_common::{import_queue::ImportQueue, SelectChain};
 use network::{
-	self, OnDemand, FinalityProofProvider, NetworkStateInfo, config::BoxFinalityProofRequestBuilder
+	self, OnDemand, FinalityProofProvider, NetworkStateInfo, config::BoxFinalityProofRequestBuilder, DhtEvent,
 };
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
 use sr_primitives::{
 	BuildStorage, traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi}, generic::BlockId
 };
+use authority_discovery_primitives::AuthorityDiscoveryApi;
 use crate::config::Configuration;
 use primitives::{Blake2Hasher, H256, traits::BareCryptoStorePtr};
 use rpc::{self, system::SystemInfo};
@@ -302,6 +303,40 @@ impl<C: Components> OffchainWorker<Self> for C where
 	}
 }
 
+pub trait AuthorityDiscovery<C: Components> {
+	fn authority_discovery<H, S>(
+		client: Arc<ComponentClient<C>>,
+		network: Arc<network::NetworkService<ComponentBlock<C>, S, H>>,
+		dht_event_rx: futures::sync::mpsc::Receiver<DhtEvent>,
+	) -> Box<dyn Future<Item = (), Error = ()> + Send>
+	where
+		H: network::ExHashT,
+		S: network::specialization::NetworkSpecialization<ComponentBlock<C>>;
+}
+
+impl<C: Components> AuthorityDiscovery<Self> for C
+where
+	ComponentClient<C>: ProvideRuntimeApi,
+	<ComponentClient<C> as ProvideRuntimeApi>::Api:
+		AuthorityDiscoveryApi<ComponentBlock<C>, <C::Factory as ServiceFactory>::AuthorityId>,
+{
+	fn authority_discovery<H, S>(
+		client: Arc<ComponentClient<C>>,
+		network: Arc<network::NetworkService<ComponentBlock<C>, S, H>>,
+		dht_event_rx: futures::sync::mpsc::Receiver<DhtEvent>,
+	) -> Box<dyn Future<Item = (), Error = ()> + Send>
+	where
+		H: network::ExHashT,
+		S: network::specialization::NetworkSpecialization<ComponentBlock<C>>,
+	{
+		Box::new(substrate_authority_discovery::AuthorityDiscovery::new(
+			client,
+			network,
+			dht_event_rx,
+		))
+	}
+}
+
 /// The super trait that combines all required traits a `Service` needs to implement.
 pub trait ServiceTrait<C: Components>:
 	Deref<Target = Service<C>>
@@ -310,6 +345,7 @@ pub trait ServiceTrait<C: Components>:
 	+ StartRpc<C>
 	+ MaintainTransactionPool<C>
 	+ OffchainWorker<C>
+	+ AuthorityDiscovery<C>
 	+ InitialSessionKeys<C>
 {}
 impl<C: Components, T> ServiceTrait<C> for T where
@@ -319,6 +355,7 @@ impl<C: Components, T> ServiceTrait<C> for T where
 	+ StartRpc<C>
 	+ MaintainTransactionPool<C>
 	+ OffchainWorker<C>
+	+ AuthorityDiscovery<C>
 	+ InitialSessionKeys<C>
 {}
 
@@ -349,12 +386,22 @@ pub trait ServiceFactory: 'static + Sized {
 	type FullService: ServiceTrait<FullComponents<Self>>;
 	/// Extended light service type.
 	type LightService: ServiceTrait<LightComponents<Self>>;
-	/// ImportQueue for full client
+	/// ImportQueue for full client.
 	type FullImportQueue: ImportQueue<Self::Block> + 'static;
-	/// ImportQueue for light clients
+	/// ImportQueue for light clients.
 	type LightImportQueue: ImportQueue<Self::Block> + 'static;
-	/// The Fork Choice Strategy for the chain
+	/// The Fork Choice Strategy for the chain.
 	type SelectChain: SelectChain<Self::Block> + 'static;
+	/// Authority identifier used for authority-discovery module.
+	// TODO: Are all of these trait bounds necessary?
+	type AuthorityId: codec::Codec
+		+ std::clone::Clone
+		+ std::cmp::Eq
+		+ std::convert::AsRef<[u8]>
+		+ std::fmt::Debug
+		+ std::hash::Hash
+		+ std::marker::Send
+		+ std::string::ToString;
 
 	//TODO: replace these with a constructor trait. that TransactionPool implements. (#1242)
 	/// Extrinsic pool constructor for the full client.

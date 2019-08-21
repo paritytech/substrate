@@ -1,0 +1,26 @@
+[package]
+name = "substrate-authority-discovery"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+build = "build.rs"
+
+[build-dependencies]
+prost-build = "0.5"
+
+[dependencies]
+network = { package = "substrate-network", path = "../../core/network" }
+sr-primitives = { path = "../../core/sr-primitives" }
+primitives = { package = "substrate-primitives", path = "../primitives" }
+client = { package = "substrate-client", path = "../../core/client" }
+authority-discovery-primitives = { package = "substrate-authority-discovery-primitives", path = "./primitives", default-features = false }
+codec = { package = "parity-scale-codec", default-features = false, version = "1.0.3" }
+futures = "0.1.17"
+tokio-timer = "0.2"
+keystore = { package = "substrate-keystore", path = "../../core/keystore" }
+libp2p = { version = "0.12.0", default-features = false, features = ["secp256k1", "libp2p-websocket"] }
+serde_json = "1.0"
+log = "0.4"
+derive_more = "0.14.0"
+prost = "0.5"
+bytes = "0.4"

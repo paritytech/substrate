@@ -278,7 +278,6 @@ construct_service_factory! {
 		FinalityProofProvider = { |client: Arc<FullClient<Self>>| {
 			Ok(Some(Arc::new(GrandpaFinalityProofProvider::new(client.clone(), client)) as _))
 		}},
-
 		RpcExtensions = jsonrpc_core::IoHandler<substrate_rpc::Metadata>
 		{ |client, pool| {
 			use node_rpc::accounts::{Accounts, AccountsApi};
@@ -289,6 +288,7 @@ construct_service_factory! {
 			);
 			io
 		}},
+		AuthorityId = im_online::AuthorityId,
 	}
 }
 
