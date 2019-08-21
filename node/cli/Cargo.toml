@@ -11,6 +11,7 @@ log = "0.4"
 tokio = "0.1.7"
 futures = "0.1"
 exit-future = "0.1"
+jsonrpc-core = "13.0.0"
 cli = { package = "substrate-cli", path = "../../core/cli" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 sr-io = { path = "../../core/sr-io" }
@@ -18,8 +19,10 @@ client = { package = "substrate-client", path = "../../core/client" }
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
 inherents = { package = "substrate-inherents", path = "../../core/inherents" }
 node-runtime = { path = "../runtime" }
+node-rpc = { path = "../rpc" }
 node-primitives = { path = "../primitives" }
 hex-literal = "0.2"
+substrate-rpc = { package = "substrate-rpc", path = "../../core/rpc" }
 substrate-basic-authorship = { path = "../../core/basic-authorship" }
 substrate-service = { path = "../../core/service" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
@@ -43,6 +46,7 @@ system = { package = "srml-system", path = "../../srml/system" }
 balances = { package = "srml-balances", path = "../../srml/balances" }
 support = { package = "srml-support", path = "../../srml/support", default-features = false }
 im_online = { package = "srml-im-online", path = "../../srml/im-online", default-features = false }
+authority-discovery = { package = "srml-authority-discovery", path = "../../srml/authority-discovery", default-features = false }
 
 [dev-dependencies]
 keystore = { package = "substrate-keystore", path = "../../core/keystore" }

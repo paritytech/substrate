@@ -14,18 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Common consensus primitives.
+//! A set of testing utilities for Substrate Node.
 
-#![cfg_attr(not(feature = "std"), no_std)]
+#![warn(missing_docs)]
 
-use codec::Codec;
-use client::decl_runtime_apis;
-use rstd::vec::Vec;
+pub mod client;
+pub mod genesis;
+pub mod keyring;
 
-decl_runtime_apis! {
-	/// Common consensus runtime api.
-	pub trait ConsensusApi<AuthorityId: Codec> {
-		/// Returns the set of authorities of the currently active consensus mechanism.
-		fn authorities() -> Vec<AuthorityId>;
-	}
-}

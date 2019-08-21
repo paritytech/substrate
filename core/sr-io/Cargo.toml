@@ -12,7 +12,7 @@ rustc_version = "0.2"
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
 primitives = { package = "substrate-primitives", path = "../primitives", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false }
-hash-db = { version = "0.15.0", default-features = false }
+hash-db = { version = "0.15.2", default-features = false }
 libsecp256k1 = { version = "0.2.1", optional = true }
 tiny-keccak = { version = "1.4.2", optional = true }
 environmental = { version = "1.0.1", optional = true }

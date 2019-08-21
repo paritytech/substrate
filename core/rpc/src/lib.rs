@@ -15,19 +15,23 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Substrate RPC interfaces.
+//!
+//! A collection of RPC methods and subscriptions supported by all substrate clients.
 
 #![warn(missing_docs)]
 
 mod errors;
 mod helpers;
+mod metadata;
 mod subscriptions;
 
+use jsonrpc_core as rpc;
+
+pub use metadata::Metadata;
+pub use rpc::IoHandlerExtension as RpcExtension;
 pub use subscriptions::Subscriptions;
 
 pub mod author;
 pub mod chain;
-pub mod metadata;
 pub mod state;
 pub mod system;
-
-use jsonrpc_core as rpc;
