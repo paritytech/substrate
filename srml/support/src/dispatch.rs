@@ -171,6 +171,9 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// # fn main() {}
 /// ```
 ///
+/// Note: `decl_storage` must be called to generate `Instance` trait and optionally
+/// `DefaultInstance` type.
+///
 /// ## Where clause
 ///
 /// Besides the default `origin: T::Origin`, you can also pass other bounds to the module declaration.
