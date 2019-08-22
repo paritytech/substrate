@@ -265,9 +265,26 @@ impl Capabilities {
 		Self(u8::max_value())
 	}
 
+	/// Return capabilities for rich offchain calls.
+	///
+	/// Those calls should be allowed to sign and submit transactions
+	/// and access offchain workers database (but read only!).
+	pub fn rich_offchain_call() -> Self {
+		[
+			Capability::TransactionPool,
+			Capability::Keystore,
+			Capability::OffchainWorkerDbRead,
+		][..].into()
+	}
+
 	/// Check if particular capability is enabled.
 	pub fn has(&self, capability: Capability) -> bool {
 		self.0 & capability as u8 != 0
+	}
+
+	/// Check if this capability object represents all capabilities.
+	pub fn has_all(&self) -> bool {
+		self == &Capabilities::all()
 	}
 }
 
