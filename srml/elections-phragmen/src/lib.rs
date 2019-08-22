@@ -38,7 +38,7 @@
 //! is locked from the account of the voter and indicated the weight of the vote. Voters can update
 //! their votes at any time by calling `vote()` again. This keeps the bond untouched but can
 //! optionally change the locked `value`. After a round, votes are kept and might still be valid
-//! for further rounds. A voter is responsible to call `remove_voter` upon once they are done to
+//! for further rounds. A voter is responsible for calling `remove_voter` once they are done to
 //! have their bond back and remove the lock.
 //!
 //! ### Candidacy and Members
