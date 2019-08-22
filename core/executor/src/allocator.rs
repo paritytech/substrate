@@ -64,6 +64,7 @@ const ALIGNMENT: u32 = 8;
 // index) and then a subsequent item of 2^x bytes, where x = [3..24].
 const N: usize = 22;
 const MAX_POSSIBLE_ALLOCATION: u32 = 16777216; // 2^24 bytes
+const MIN_POSSIBLE_ALLOCATION: u32 = 8;
 
 // Each pointer is prefixed with 8 bytes, which identify the list index
 // to which it belongs.
@@ -114,13 +115,14 @@ impl FreeingBumpHeapAllocator {
 	}
 
 	/// Gets requested number of bytes to allocate and returns a pointer.
+	/// The minimum size which can be allocated is 8 bytes.
 	/// The maximum size which can be allocated at once is 16 MiB.
 	pub fn allocate(&mut self, size: u32) -> Result<u32> {
 		if size > MAX_POSSIBLE_ALLOCATION {
 			return Err(Error::RequestedAllocationTooLarge);
 		}
 
-		let size = size.max(8);
+		let size = size.max(MIN_POSSIBLE_ALLOCATION);
 		let item_size = size.next_power_of_two();
 		if item_size + PREFIX_SIZE + self.total_size > self.max_heap_size {
 			return Err(Error::AllocatorOutOfSpace);
@@ -245,6 +247,19 @@ mod tests {
 		// then
 		// returned pointer must start right after `PREFIX_SIZE`
 		assert_eq!(ptr, PREFIX_SIZE);
+	}
+
+	#[test]
+	fn should_use_minimum_allocation_size_for_zero_allocations() {
+		// given
+		let mem = MemoryInstance::alloc(Pages(1), None).unwrap();
+		let mut heap = FreeingBumpHeapAllocator::new(mem, 0);
+
+		// when
+		let ptr = heap.allocate(0).unwrap();
+
+		// then
+		assert_eq!(heap.total_size, MIN_POSSIBLE_ALLOCATION + PREFIX_SIZE);
 	}
 
 	#[test]
