@@ -548,7 +548,7 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 	}
 
 	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
-		if self.check(Capability::OffchainWorkerDb).is_ok() {
+		if self.check(Capability::OffchainWorkerDbWrite).is_ok() {
 			self.externalities.local_storage_set(kind, key, value)
 		}
 	}
@@ -560,7 +560,7 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 		old_value: Option<&[u8]>,
 		new_value: &[u8],
 	) -> bool {
-		if self.check(Capability::OffchainWorkerDb).is_ok() {
+		if self.check(Capability::OffchainWorkerDbWrite).is_ok() {
 			self.externalities.local_storage_compare_and_set(kind, key, old_value, new_value)
 		} else {
 			true
@@ -568,7 +568,7 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 	}
 
 	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>> {
-		self.check(Capability::OffchainWorkerDb).ok()?;
+		self.check(Capability::OffchainWorkerDbRead).ok()?;
 		self.externalities.local_storage_get(kind, key)
 	}
 
