@@ -636,7 +636,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for Ne
 			// Process the next message coming from the `NetworkService`.
 			let msg = match self.from_worker.poll() {
 				Ok(Async::Ready(Some(msg))) => msg,
-				Ok(Async::Ready(None)) | Err(_) => return Ok(Async::NotReady),
+				Ok(Async::Ready(None)) | Err(_) => return Ok(Async::Ready(None)),
 				Ok(Async::NotReady) => break,
 			};
 
