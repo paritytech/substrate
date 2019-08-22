@@ -33,7 +33,7 @@ use consensus::import_queue::{BlockImportResult, BlockImportError};
 use futures::{prelude::*, sync::mpsc};
 use futures03::TryFutureExt as _;
 use log::{warn, error, info};
-use libp2p::{PeerId, Multiaddr, multihash::Multihash};
+use libp2p::{PeerId, Multiaddr, kad::record};
 use libp2p::core::{transport::boxed::Boxed, muxing::StreamMuxerBox};
 use libp2p::swarm::NetworkBehaviour;
 use parking_lot::Mutex;
@@ -456,7 +456,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	///
 	/// This will generate either a `ValueFound` or a `ValueNotFound` event and pass it to
 	/// `on_event` on the network specialization.
-	pub fn get_value(&self, key: &Multihash) {
+	pub fn get_value(&self, key: &record::Key) {
 		let _ = self
 			.to_worker
 			.unbounded_send(ServerToWorkerMsg::GetValue(key.clone()));
@@ -466,7 +466,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	///
 	/// This will generate either a `ValuePut` or a `ValuePutFailed` event and pass it to
 	/// `on_event` on the network specialization.
-	pub fn put_value(&self, key: Multihash, value: Vec<u8>) {
+	pub fn put_value(&self, key: record::Key, value: Vec<u8>) {
 		let _ = self
 			.to_worker
 			.unbounded_send(ServerToWorkerMsg::PutValue(key, value));
@@ -584,8 +584,8 @@ enum ServerToWorkerMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	ExecuteWithSpec(Box<dyn FnOnce(&mut S, &mut dyn Context<B>) + Send>),
 	ExecuteWithGossip(Box<dyn FnOnce(&mut ConsensusGossip<B>, &mut dyn Context<B>) + Send>),
 	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>, GossipMessageRecipient),
-	GetValue(Multihash),
-	PutValue(Multihash, Vec<u8>),
+	GetValue(record::Key),
+	PutValue(record::Key, Vec<u8>),
 	AddKnownAddress(PeerId, Multiaddr),
 }
 

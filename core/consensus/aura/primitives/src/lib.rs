@@ -61,7 +61,7 @@ pub mod ed25519 {
 pub const AURA_ENGINE_ID: ConsensusEngineId = [b'a', b'u', b'r', b'a'];
 
 /// The index of an authority.
-pub type AuthorityIndex = u64;
+pub type AuthorityIndex = u32;
 
 /// An consensus log item for Aura.
 #[derive(Decode, Encode)]

@@ -63,7 +63,7 @@ pub use components::{
 	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
 	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic, InitialSessionKeys,
 };
-use components::{StartRPC, MaintainTransactionPool, OffchainWorker};
+use components::{StartRpc, MaintainTransactionPool, OffchainWorker};
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
@@ -101,7 +101,7 @@ pub struct Service<Components: components::Components> {
 	to_poll: Vec<Box<dyn Future<Item = (), Error = ()> + Send>>,
 	/// Configuration of this Service
 	config: FactoryFullConfiguration<Components::Factory>,
-	rpc_handlers: rpc::RpcHandler,
+	rpc_handlers: components::RpcHandler,
 	_rpc: Box<dyn std::any::Any + Send + Sync>,
 	_telemetry: Option<tel::Telemetry>,
 	_telemetry_on_connect_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<()>>>>,
@@ -298,6 +298,7 @@ impl<Components: components::Components> Service<Components> {
 			let network = Arc::downgrade(&network);
 			let transaction_pool_ = transaction_pool.clone();
 			let events = transaction_pool.import_notification_stream()
+				.map(|v| Ok::<_, ()>(v)).compat()
 				.for_each(move |_| {
 					if let Some(network) = network.upgrade() {
 						network.trigger_repropagate();
@@ -372,7 +373,7 @@ impl<Components: components::Components> Service<Components> {
 		// RPC
 		let (system_rpc_tx, system_rpc_rx) = futures03::channel::mpsc::unbounded();
 		let gen_handler = || {
-			let system_info = rpc::apis::system::SystemInfo {
+			let system_info = rpc::system::SystemInfo {
 				chain_name: config.chain_spec.name().into(),
 				impl_name: config.impl_name.into(),
 				impl_version: config.impl_version.into(),
@@ -384,6 +385,7 @@ impl<Components: components::Components> Service<Components> {
 				system_info.clone(),
 				Arc::new(SpawnTaskHandle { sender: to_spawn_tx.clone() }),
 				transaction_pool.clone(),
+				Components::build_rpc_extensions(client.clone(), transaction_pool.clone()),
 				keystore.clone(),
 			)
 		};
@@ -629,7 +631,7 @@ fn build_network_future<
 	mut network: network::NetworkWorker<B, S, H>,
 	client: Arc<C>,
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<(NetworkStatus<B>, NetworkState)>>>>,
-	rpc_rx: futures03::channel::mpsc::UnboundedReceiver<rpc::apis::system::Request<B>>,
+	rpc_rx: futures03::channel::mpsc::UnboundedReceiver<rpc::system::Request<B>>,
 	should_have_peers: bool,
 ) -> impl Future<Item = (), Error = ()> {
 	// Compatibility shim while we're transitionning to stable Futures.
@@ -665,16 +667,16 @@ fn build_network_future<
 		// Poll the RPC requests and answer them.
 		while let Ok(Async::Ready(Some(request))) = rpc_rx.poll() {
 			match request {
-				rpc::apis::system::Request::Health(sender) => {
-					let _ = sender.send(rpc::apis::system::Health {
+				rpc::system::Request::Health(sender) => {
+					let _ = sender.send(rpc::system::Health {
 						peers: network.peers_debug_info().len(),
 						is_syncing: network.service().is_major_syncing(),
 						should_have_peers,
 					});
 				},
-				rpc::apis::system::Request::Peers(sender) => {
+				rpc::system::Request::Peers(sender) => {
 					let _ = sender.send(network.peers_debug_info().into_iter().map(|(peer_id, p)|
-						rpc::apis::system::PeerInfo {
+						rpc::system::PeerInfo {
 							peer_id: peer_id.to_base58(),
 							roles: format!("{:?}", p.roles),
 							protocol_version: p.protocol_version,
@@ -683,7 +685,7 @@ fn build_network_future<
 						}
 					).collect());
 				}
-				rpc::apis::system::Request::NetworkState(sender) => {
+				rpc::system::Request::NetworkState(sender) => {
 					let _ = sender.send(network.network_state());
 				}
 			};
@@ -755,7 +757,7 @@ impl<Components> Drop for Service<Components> where Components: components::Comp
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(not(target_os = "unknown"))]
-fn start_rpc_servers<C, G, H: FnMut() -> rpc::RpcHandler>(
+fn start_rpc_servers<C, G, H: FnMut() -> components::RpcHandler>(
 	config: &Configuration<C, G>,
 	mut gen_handler: H
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
@@ -780,11 +782,11 @@ fn start_rpc_servers<C, G, H: FnMut() -> rpc::RpcHandler>(
 	Ok(Box::new((
 		maybe_start_server(
 			config.rpc_http,
-			|address| rpc::start_http(address, config.rpc_cors.as_ref(), gen_handler()),
+			|address| rpc_servers::start_http(address, config.rpc_cors.as_ref(), gen_handler()),
 		)?,
 		maybe_start_server(
 			config.rpc_ws,
-			|address| rpc::start_ws(
+			|address| rpc_servers::start_ws(
 				address,
 				config.rpc_ws_max_connections,
 				config.rpc_cors.as_ref(),
@@ -796,7 +798,7 @@ fn start_rpc_servers<C, G, H: FnMut() -> rpc::RpcHandler>(
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(target_os = "unknown")]
-fn start_rpc_servers<C, G, H: FnMut() -> rpc::RpcHandler>(
+fn start_rpc_servers<C, G, H: FnMut() -> components::RpcHandler>(
 	_: &Configuration<C, G>,
 	_: H
 ) -> Result<Box<std::any::Any + Send + Sync>, error::Error> {
@@ -818,7 +820,7 @@ impl RpcSession {
 	/// The `RpcSession` must be kept alive in order to receive messages on the sender.
 	pub fn new(sender: mpsc::Sender<String>) -> RpcSession {
 		RpcSession {
-			metadata: rpc::Metadata::new(sender),
+			metadata: sender.into(),
 		}
 	}
 }
@@ -988,6 +990,7 @@ where
 /// 		FinalityProofProvider = { |client: Arc<FullClient<Self>>| {
 /// 				Ok(Some(Arc::new(grandpa::FinalityProofProvider::new(client.clone(), client)) as _))
 /// 			}},
+/// 		RpcExtensions = (),
 /// 	}
 /// }
 /// ```
@@ -1014,6 +1017,8 @@ macro_rules! construct_service_factory {
 			SelectChain = $select_chain:ty
 				{ $( $select_chain_init:tt )* },
 			FinalityProofProvider = { $( $finality_proof_provider_init:tt )* },
+			RpcExtensions = $rpc_extensions_ty:ty
+				$( { $( $rpc_extensions:tt )* } )?,
 		}
 	) => {
 		$( #[$attr] )*
@@ -1034,6 +1039,7 @@ macro_rules! construct_service_factory {
 			type FullImportQueue = $full_import_queue;
 			type LightImportQueue = $light_import_queue;
 			type SelectChain = $select_chain;
+			type RpcExtensions = $rpc_extensions_ty;
 
 			fn build_full_transaction_pool(
 				config: $crate::TransactionPoolOptions,
@@ -1100,6 +1106,20 @@ macro_rules! construct_service_factory {
 				( $( $full_service_init )* ) (config).and_then(|service| {
 					($( $authority_setup )*)(service)
 				})
+			}
+
+			fn build_full_rpc_extensions(
+				client: Arc<$crate::FullClient<Self>>,
+				transaction_pool: Arc<$crate::TransactionPool<Self::FullTransactionPoolApi>>,
+			) -> Self::RpcExtensions {
+				$( ( $( $rpc_extensions )* ) (client, transaction_pool) )?
+			}
+
+			fn build_light_rpc_extensions(
+				client: Arc<$crate::LightClient<Self>>,
+				transaction_pool: Arc<$crate::TransactionPool<Self::LightTransactionPoolApi>>,
+			) -> Self::RpcExtensions {
+				$( ( $( $rpc_extensions )* ) (client, transaction_pool) )?
 			}
 		}
 	}
