@@ -138,7 +138,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 	sync_oracle: SO,
 	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
-	keystore: Option<KeyStorePtr>,
+	keystore: KeyStorePtr,
 ) -> Result<impl futures01::Future<Item = (), Error = ()>, consensus_common::Error> where
 	B: BlockT<Header=H>,
 	C: ProvideRuntimeApi + BlockOf + ProvideCache<B> + AuxStore + Send + Sync,
@@ -182,7 +182,7 @@ struct AuraWorker<C, E, I, P, SO> {
 	client: Arc<C>,
 	block_import: Arc<Mutex<I>>,
 	env: E,
-	keystore: Option<KeyStorePtr>,
+	keystore: KeyStorePtr,
 	sync_oracle: SO,
 	force_authoring: bool,
 	_key_type: PhantomData<P>,
@@ -225,13 +225,17 @@ impl<H, B, C, E, I, P, Error, SO> slots::SimpleSlotWorker<B> for AuraWorker<C, E
 		epoch_data.len()
 	}
 
-	fn claim_slot(&self, slot_number: u64, epoch_data: &Self::EpochData) -> Option<Self::Claim> {
+	fn claim_slot(
+		&self,
+		_header: &B::Header,
+		slot_number: u64,
+		epoch_data: &Self::EpochData,
+	) -> Option<Self::Claim> {
 		let expected_author = slot_author::<P>(slot_number, epoch_data);
 
 		expected_author.and_then(|p| {
-			self.keystore.as_ref().and_then(|k| {
-				k.read().key_pair_by_type::<P>(&p, app_crypto::key_types::AURA).ok()
-			})
+			self.keystore.read()
+				.key_pair_by_type::<P>(&p, app_crypto::key_types::AURA).ok()
 		})
 	}
 
@@ -577,7 +581,7 @@ fn initialize_authorities_cache<A, B, C>(client: &C) -> Result<(), ConsensusErro
 	let genesis_id = BlockId::Number(Zero::zero());
 	let genesis_authorities: Option<Vec<A>> = cache
 		.get_at(&well_known_cache_keys::AUTHORITIES, &genesis_id)
-		.and_then(|v| Decode::decode(&mut &v[..]).ok());
+		.and_then(|(_, _, v)| Decode::decode(&mut &v[..]).ok());
 	if genesis_authorities.is_some() {
 		return Ok(());
 	}
@@ -605,7 +609,7 @@ fn authorities<A, B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<A>, Consensus
 		.cache()
 		.and_then(|cache| cache
 			.get_at(&well_known_cache_keys::AUTHORITIES, at)
-			.and_then(|v| Decode::decode(&mut &v[..]).ok())
+			.and_then(|(_, _, v)| Decode::decode(&mut &v[..]).ok())
 		)
 		.or_else(|| AuraApi::authorities(&*client.runtime_api(), at).ok())
 		.ok_or_else(|| consensus_common::Error::InvalidAuthoritiesSet.into())
@@ -828,7 +832,7 @@ mod tests {
 				DummyOracle,
 				inherent_data_providers,
 				false,
-				Some(keystore),
+				keystore,
 			).expect("Starts aura");
 
 			runtime.spawn(aura);

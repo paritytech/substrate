@@ -261,6 +261,7 @@ cfg_if! {
 				fn benchmark_direct_call() -> u64;
 				fn returns_mutable_static() -> u64;
 				fn allocates_huge_stack_array(trap: bool) -> Vec<u8>;
+				fn vec_with_capacity(size: u32) -> Vec<u8>;
 				/// Returns the initialized block number.
 				fn get_block_number() -> u64;
 				/// Takes and returns the initialized block number.
@@ -302,6 +303,7 @@ cfg_if! {
 				fn benchmark_direct_call() -> u64;
 				fn returns_mutable_static() -> u64;
 				fn allocates_huge_stack_array(trap: bool) -> Vec<u8>;
+				fn vec_with_capacity(size: u32) -> Vec<u8>;
 				/// Returns the initialized block number.
 				fn get_block_number() -> u64;
 				/// Takes and returns the initialized block number.
@@ -371,6 +373,7 @@ impl srml_system::Trait for Runtime {
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
+	type Version = ();
 }
 
 impl srml_timestamp::Trait for Runtime {
@@ -561,6 +564,10 @@ cfg_if! {
 					unimplemented!("is not expected to be invoked from non-wasm builds");
 				}
 
+				fn vec_with_capacity(_size: u32) -> Vec<u8> {
+					unimplemented!("is not expected to be invoked from non-wasm builds");
+				}
+
 				fn get_block_number() -> u64 {
 					system::get_block_number().expect("Block number is initialized")
 				}
@@ -611,6 +618,7 @@ cfg_if! {
 						randomness: <srml_babe::Module<Runtime>>::randomness(),
 						epoch_index: <srml_babe::Module<Runtime>>::epoch_index(),
 						duration: EpochDuration::get(),
+						secondary_slots: <srml_babe::Module<Runtime>>::secondary_slots().0,
 					}
 				}
 			}
@@ -771,6 +779,10 @@ cfg_if! {
 					data.to_vec()
 				}
 
+				fn vec_with_capacity(size: u32) -> Vec<u8> {
+					Vec::with_capacity(size as usize)
+				}
+
 				fn get_block_number() -> u64 {
 					system::get_block_number().expect("Block number is initialized")
 				}
@@ -821,6 +833,7 @@ cfg_if! {
 						randomness: <srml_babe::Module<Runtime>>::randomness(),
 						epoch_index: <srml_babe::Module<Runtime>>::epoch_index(),
 						duration: EpochDuration::get(),
+						secondary_slots: <srml_babe::Module<Runtime>>::secondary_slots().0,
 					}
 				}
 			}
@@ -875,6 +888,7 @@ fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic) {
 mod tests {
 	use substrate_test_runtime_client::{
 		prelude::*,
+		consensus::BlockOrigin,
 		DefaultTestClientBuilderExt, TestClientBuilder,
 		runtime::TestAPI,
 	};
@@ -882,7 +896,9 @@ mod tests {
 		generic::BlockId,
 		traits::ProvideRuntimeApi,
 	};
+	use primitives::storage::well_known_keys::HEAP_PAGES;
 	use state_machine::ExecutionStrategy;
+	use codec::Encode;
 
 	#[test]
 	fn returns_mutable_static() {
@@ -930,4 +946,36 @@ mod tests {
 		assert!(ret.is_ok());
 	}
 
+	#[test]
+	fn heap_pages_is_respected() {
+		// This tests that the on-chain HEAP_PAGES parameter is respected.
+
+		// Create a client devoting only 8 pages of wasm memory. This gives us ~512k of heap memory.
+		let client = TestClientBuilder::new()
+			.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
+			.set_heap_pages(8)
+			.build();
+		let runtime_api = client.runtime_api();
+		let block_id = BlockId::Number(client.info().chain.best_number);
+
+		// Try to allocate 1024k of memory on heap. This is going to fail since it is twice larger
+		// than the heap.
+		let ret = runtime_api.vec_with_capacity(&block_id, 1048576);
+		assert!(ret.is_err());
+
+		// Create a block that sets the `:heap_pages` to 32 pages of memory which corresponds to
+		// ~2048k of heap memory.
+		let new_block_id = {
+			let mut builder = client.new_block(Default::default()).unwrap();
+			builder.push_storage_change(HEAP_PAGES.to_vec(), Some(32u64.encode())).unwrap();
+			let block = builder.bake().unwrap();
+			let hash = block.header.hash();
+			client.import(BlockOrigin::Own, block).unwrap();
+			BlockId::Hash(hash)
+		};
+
+		// Allocation of 1024k while having ~2048k should succeed.
+		let ret = runtime_api.vec_with_capacity(&new_block_id, 1048576);
+		assert!(ret.is_ok());
+	}
 }

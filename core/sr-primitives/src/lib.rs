@@ -298,6 +298,18 @@ impl Perbill {
 
 		Perbill(part as u32)
 	}
+
+	/// Return the product of multiplication of this value by itself.
+	pub fn square(self) -> Self {
+		let p: u64 = self.0 as u64 * self.0 as u64;
+		let q: u64 = 1_000_000_000 * 1_000_000_000;
+		Self::from_rational_approximation(p, q)
+	}
+
+	/// Take out the raw parts-per-billions.
+	pub fn into_parts(self) -> u32 {
+		self.0
+	}
 }
 
 impl<N> ops::Mul<N> for Perbill
@@ -958,5 +970,24 @@ mod tests {
 			Permill::from_parts(999_999) * std::u128::MAX,
 			((Into::<U256>::into(std::u128::MAX) * 999_999u32) / 1_000_000u32).as_u128()
 		);
+	}
+
+	#[test]
+	fn per_bill_square() {
+		const FIXTURES: &[(u32, u32)] = &[
+			(0, 0),
+			(1250000, 1562), // (0.00125, 0.000001562)
+			(255300000, 65178090), // (0.2553, 0.06517809)
+			(500000000, 250000000), // (0.5, 0.25)
+			(999995000, 999990000), // (0.999995, 0.999990000, but ideally 0.99999000002)
+			(1000000000, 1000000000),
+		];
+
+		for &(x, r) in FIXTURES {
+			assert_eq!(
+				Perbill::from_parts(x).square(),
+				Perbill::from_parts(r),
+			);
+		}
 	}
 }
