@@ -236,16 +236,18 @@ impl Timestamp {
 pub enum Capability {
 	/// Access to transaction pool.
 	TransactionPool = 1,
-	/// Access to offchain worker DB.
-	OffchainWorkerDb = 2,
 	/// External http calls.
-	Http = 4,
+	Http = 2,
 	/// Keystore access.
-	Keystore = 8,
+	Keystore = 4,
 	/// Randomness source.
-	Randomness = 16,
+	Randomness = 8,
 	/// Access to opaque network state.
-	NetworkState = 32,
+	NetworkState = 16,
+	/// Access to offchain worker DB (read only).
+	OffchainWorkerDbRead = 32,
+	/// Access to offchain worker DB (writes).
+	OffchainWorkerDbWrite = 64,
 }
 
 /// A set of capabilities

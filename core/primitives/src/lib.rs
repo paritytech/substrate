@@ -115,7 +115,7 @@ impl ExecutionContext {
 			RichOffchainCall(_) => [
 				TransactionPool,
 				Keystore,
-				OffchainWorkerDb,
+				OffchainWorkerDbRead,
 			][..].into(),
 			OffchainWorker(_) => Capabilities::all(),
 		}
