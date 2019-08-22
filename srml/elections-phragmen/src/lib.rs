@@ -22,7 +22,7 @@
 //!
 //! The election happens in _rounds_: every `N` blocks, all previous members are retired and a new
 //! set is elected (which may or may not have an intersection with the previous set). Each round
-//! lasts for some number of blocks defined by `TermDuration` storage item. The works _term_ and
+//! lasts for some number of blocks defined by `TermDuration` storage item. The words _term_ and
 //! _round_ can be used interchangeably in this context.
 //!
 //! `TermDuration` might change during a round. This can shorten or extend the length of the round.
