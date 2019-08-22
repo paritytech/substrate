@@ -77,6 +77,7 @@ pub trait RuntimeAdapter {
 		key: &Self::Secret,
 		destination: &Self::AccountId,
 		amount: &Self::Balance,
+		version: u32,
 		genesis_hash: &<Self::Block as BlockT>::Hash,
 		prior_block_hash: &<Self::Block as BlockT>::Hash,
 	) -> <Self::Block as BlockT>::Extrinsic;
@@ -119,6 +120,7 @@ where
 		select_chain.best_chain().map_err(|e| format!("{:?}", e).into());
 	let mut best_hash = best_header?.hash();
 	let best_block_id = BlockId::<F::Block>::hash(best_hash);
+	let version = client.runtime_version_at(&best_block_id)?.spec_version;
 	let genesis_hash = client.block_hash(Zero::zero())?
 		.expect("Genesis block always exists; qed").into();
 
@@ -126,6 +128,7 @@ where
 		Mode::MasterToNToM => complex_mode::next::<F, RA>(
 			&mut factory_state,
 			&client,
+			version,
 			genesis_hash,
 			best_hash.into(),
 			best_block_id,
@@ -133,6 +136,7 @@ where
 		_ => simple_modes::next::<F, RA>(
 			&mut factory_state,
 			&client,
+			version,
 			genesis_hash,
 			best_hash.into(),
 			best_block_id,

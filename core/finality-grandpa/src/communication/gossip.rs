@@ -729,7 +729,9 @@ impl<Block: BlockT> Inner<Block> {
 			// race where the peer sent us the request before it observed that
 			// we had transitioned to a new set. In this case we charge a lower
 			// cost.
-			if local_view.round.0.saturating_sub(CATCH_UP_THRESHOLD) == 0 {
+			if request.set_id.0.saturating_add(1) == local_view.set_id.0 &&
+				local_view.round.0.saturating_sub(CATCH_UP_THRESHOLD) == 0
+			{
 				return (None, Action::Discard(cost::HONEST_OUT_OF_SCOPE_CATCH_UP));
 			}
 
@@ -1599,5 +1601,85 @@ mod tests {
 			},
 			_ => panic!("expected catch up message"),
 		};
+	}
+
+	#[test]
+	fn detects_honest_out_of_scope_catch_requests() {
+		let set_state = voter_set_state();
+		let (val, _) = GossipValidator::<Block>::new(
+			config(),
+			set_state.clone(),
+		);
+
+		// the validator starts at set id 2
+		val.note_set(SetId(2), Vec::new(), |_, _| {});
+
+		// add the peer making the request to the validator,
+		// otherwise it is discarded
+		let peer = PeerId::random();
+		val.inner.write().peers.new_peer(peer.clone());
+
+		let send_request = |set_id, round| {
+			let mut inner = val.inner.write();
+			inner.handle_catch_up_request(
+				&peer,
+				CatchUpRequestMessage {
+					set_id: SetId(set_id),
+					round: Round(round),
+				},
+				&set_state,
+			)
+		};
+
+		let assert_res = |res: (Option<_>, Action<_>), honest| {
+			assert!(res.0.is_none());
+			assert_eq!(
+				res.1,
+				if honest {
+					Action::Discard(cost::HONEST_OUT_OF_SCOPE_CATCH_UP)
+				} else {
+					Action::Discard(Misbehavior::OutOfScopeMessage.cost())
+				},
+			);
+		};
+
+		// the validator is at set id 2 and round 0. requests for set id 1
+		// should not be answered but they should be considered an honest
+		// mistake
+		assert_res(
+			send_request(1, 1),
+			true,
+		);
+
+		assert_res(
+			send_request(1, 10),
+			true,
+		);
+
+		// requests for set id 0 should be considered out of scope
+		assert_res(
+			send_request(0, 1),
+			false,
+		);
+
+		assert_res(
+			send_request(0, 10),
+			false,
+		);
+
+		// after the validator progresses further than CATCH_UP_THRESHOLD in set
+		// id 2, any request for set id 1 should no longer be considered an
+		// honest mistake.
+		val.note_round(Round(3), |_, _| {});
+
+		assert_res(
+			send_request(1, 1),
+			false,
+		);
+
+		assert_res(
+			send_request(1, 2),
+			false,
+		);
 	}
 }

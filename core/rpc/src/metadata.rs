@@ -52,3 +52,9 @@ impl Metadata {
 		(rx, Self::new(tx))
 	}
 }
+
+impl From<mpsc::Sender<String>> for Metadata {
+	fn from(sender: mpsc::Sender<String>) -> Self {
+		Self::new(sender)
+	}
+}

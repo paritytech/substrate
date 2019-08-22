@@ -97,6 +97,7 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 {
 	let extra = |i: Index, f: Balance| {
 		(
+			system::CheckVersion::<Runtime>::new(),
 			system::CheckGenesis::<Runtime>::new(),
 			system::CheckEra::<Runtime>::from(Era::Immortal),
 			system::CheckNonce::<Runtime>::from(i),
@@ -168,7 +169,7 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 			let index = matches.value_of("index")
 				.expect("parameter is required; thus it can't be None; qed");
 			let index = str::parse::<Index>(index)
-				.expect("Invalid 'amount' parameter; expecting an integer.");
+				.expect("Invalid 'index' parameter; expecting an integer.");
 
 			let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
 
@@ -208,7 +209,7 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 			let index = matches.value_of("nonce")
 				.expect("nonce is required; thus it can't be None; qed");
 			let index = str::parse::<Index>(index)
-				.expect("Invalid 'index' parameter; expecting an integer.");
+				.expect("Invalid 'nonce' parameter; expecting an integer.");
 
 			let call = matches.value_of("call")
 				.expect("call is required; thus it can't be None; qed");
