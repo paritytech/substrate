@@ -507,10 +507,13 @@ mod tests {
 	#[test]
 	fn unused_pot_should_diminish() {
 		with_externalities(&mut new_test_ext(), || {
+			let init_total_issuance = Balances::total_issuance();
 			Treasury::on_dilution(100, 100);
+			assert_eq!(Balances::total_issuance(), init_total_issuance + 100);
 
 			<Treasury as OnFinalize<u64>>::on_finalize(2);
 			assert_eq!(Treasury::pot(), 50);
+			assert_eq!(Balances::total_issuance(), init_total_issuance + 50);
 		});
 	}
 

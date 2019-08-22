@@ -146,7 +146,6 @@ impl<B: BlockT> ExtraRequests<B> {
 				Err(fork_tree::Error::Revert) => {
 					// we might have finalized further already in which case we
 					// will get a `Revert` error which we can safely ignore.
-					return Ok(());
 				},
 				Err(err) => return Err(err),
 				Ok(_) => {},
