@@ -1697,4 +1697,101 @@ mod tests {
 			false,
 		);
 	}
+
+	#[test]
+	fn issues_catch_up_request_on_neighbor_packet_import() {
+		let (val, _) = GossipValidator::<Block>::new(
+			config(),
+			voter_set_state(),
+			true,
+		);
+
+		// the validator starts at set id 1.
+		val.note_set(SetId(1), Vec::new(), |_, _| {});
+
+		// add the peer making the request to the validator,
+		// otherwise it is discarded.
+		let peer = PeerId::random();
+		val.inner.write().peers.new_peer(peer.clone());
+
+		let import_neighbor_message = |set_id, round| {
+			let (_, _, catch_up_request, _) = val.inner.write().import_neighbor_message(
+				&peer,
+				NeighborPacket {
+					round: Round(round),
+					set_id: SetId(set_id),
+					commit_finalized_height: 42,
+				},
+			);
+
+			catch_up_request
+		};
+
+		// importing a neighbor message from a peer in the same set in a later
+		// round should lead to a catch up request for the previous round.
+		match import_neighbor_message(1, 42) {
+			Some(GossipMessage::CatchUpRequest(request)) => {
+				assert_eq!(request.set_id, SetId(1));
+				assert_eq!(request.round, Round(41));
+			},
+			_ => panic!("expected catch up message"),
+		}
+
+		// we note that we're at round 41.
+		val.note_round(Round(41), |_, _| {});
+
+		// if we import a neighbor message within CATCH_UP_THRESHOLD then we
+		// won't request a catch up.
+		match import_neighbor_message(1, 42) {
+			None => {},
+			_ => panic!("expected no catch up message"),
+		}
+
+		// or if the peer is on a lower round.
+		match import_neighbor_message(1, 40) {
+			None => {},
+			_ => panic!("expected no catch up message"),
+		}
+
+		// we also don't request a catch up if the peer is in a different set.
+		match import_neighbor_message(2, 42) {
+			None => {},
+			_ => panic!("expected no catch up message"),
+		}
+	}
+
+	#[test]
+	fn doesnt_send_catch_up_requests_when_disabled() {
+		// we create a gossip validator with catch up requests disabled.
+		let (val, _) = GossipValidator::<Block>::new(
+			config(),
+			voter_set_state(),
+			false,
+		);
+
+		// the validator starts at set id 1.
+		val.note_set(SetId(1), Vec::new(), |_, _| {});
+
+		// add the peer making the request to the validator,
+		// otherwise it is discarded.
+		let peer = PeerId::random();
+		val.inner.write().peers.new_peer(peer.clone());
+
+		// importing a neighbor message from a peer in the same set in a later
+		// round should lead to a catch up request but since they're disabled
+		// we should get `None`.
+		let (_, _, catch_up_request, _) = val.inner.write().import_neighbor_message(
+			&peer,
+			NeighborPacket {
+				round: Round(42),
+				set_id: SetId(1),
+				commit_finalized_height: 50,
+			},
+		);
+
+		match catch_up_request {
+			None => {},
+			_ => panic!("expected no catch up message"),
+		}
+	}
 }
