@@ -339,9 +339,14 @@ where
 			// Process incoming events before triggering new ones.
 			self.handle_dht_events()?;
 
-			while let Ok(Async::Ready(_)) = self.interval.poll() {
-				self.publish_own_ext_addresses()?;
+			if let Ok(Async::Ready(_)) = self.interval.poll() {
+				// Make sure to call interval.poll until it returns Async::NotReady once. Otherwise, in case one of the
+				// function calls within this block do a `return`, we don't call `interval.poll` again and thereby the
+				// underlying Tokio task is never registered with Tokios Reactor to be woken up on the next interval
+				// tick.
+				while let Ok(Async::Ready(_)) = self.interval.poll() {}
 
+				self.publish_own_ext_addresses()?;
 				self.request_addresses_of_others()?;
 			}
 
@@ -351,7 +356,7 @@ where
 		match inner() {
 			Ok(()) => {}
 			Err(e) => error!(target: "sub-authority-discovery", "Poll failure: {:?}", e),
-		}
+		};
 
 		// Make sure to always return NotReady as this is a long running task
 		// with the same lifetime of the node itself.
