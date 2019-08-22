@@ -797,19 +797,25 @@ mod test3 {
 #[cfg(test)]
 #[allow(dead_code)]
 mod test_append_and_len {
-	use crate::assert_noop;
 	use crate::storage::{AppendableStorageMap, DecodeLengthStorageMap, StorageMap, StorageValue};
 	use runtime_io::{with_externalities, TestExternalities};
+	use codec::{Encode, Decode};
 
 	pub trait Trait {
 		type Origin;
 		type BlockNumber;
 	}
+
 	decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
+
+	#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+	struct NoDef(u32);
+
 	crate::decl_storage! {
 		trait Store for Module<T: Trait> as Test {
+			NoDefault: Option<NoDef>;
 			NonVec: u32;
 
 			JustVec: Vec<u32>;
@@ -890,7 +896,7 @@ mod test_append_and_len {
 			assert_eq!(JustVecWithDefault::decode_len(), Ok(4));
 
 			assert_eq!(OptionVec::get(), None);
-			assert_eq!(OptionVec::decode_len(), Ok(0));
+			assert_eq!(OptionVec::decode_len(), Err("could not use default as fallback"));
 
 			assert_eq!(MapVec::get(0), vec![]);
 			assert_eq!(MapVec::decode_len(0), Ok(0));
@@ -899,7 +905,7 @@ mod test_append_and_len {
 			assert_eq!(MapVecWithDefault::decode_len(0), Ok(2));
 
 			assert_eq!(OptionMapVec::get(0), None);
-			assert_eq!(OptionMapVec::decode_len(0), Ok(0));
+			assert_eq!(OptionMapVec::decode_len(0), Err("could not use default as fallback"));
 
 			assert_eq!(OptionMapVecWithDefault::get(0), Some(vec![33u32, 66, 99]));
 			assert_eq!(OptionMapVecWithDefault::decode_len(0), Ok(3));

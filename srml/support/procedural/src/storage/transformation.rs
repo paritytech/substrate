@@ -753,7 +753,6 @@ fn decl_storage_items(
 		} = sline;
 
 		let type_infos = get_type_infos(storage_type);
-		let has_default = default_value.inner.is_some();
 		let fielddefault = default_value.inner
 			.as_ref()
 			.map(|d| &d.expr)
@@ -768,8 +767,8 @@ fn decl_storage_items(
 			&format!("{}{}", name.to_string(), "DefaultDelegator"),
 			proc_macro2::Span::call_site()
 		);
-		let default_delegator_return = if has_default && type_infos.is_option {
-			quote! { #fielddefault.unwrap_or_default() }
+		let default_delegator_return = if !type_infos.is_option {
+			quote! { Some(#fielddefault) }
 		} else {
 			quote! { #fielddefault }
 		};

@@ -124,7 +124,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				#scrate::rstd::marker::PhantomData<(#trait_and_instance)>
 			);
 			impl<#impl_trait> #scrate::traits::StorageDefault<#typ> for #default_delegator_ident<#trait_and_instance> {
-				fn default() -> #typ {
+				fn default() -> Option<#typ> {
 					#default_delegator_return
 				}
 			}
@@ -304,7 +304,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				#scrate::rstd::marker::PhantomData<(#trait_and_instance)>
 			);
 			impl<#impl_trait> #scrate::traits::StorageDefault<#typ> for #default_delegator_ident<#trait_and_instance> {
-				fn default() -> #typ {
+				fn default() -> Option<#typ> {
 					#default_delegator_return
 				}
 			}
