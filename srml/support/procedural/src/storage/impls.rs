@@ -122,8 +122,10 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 		quote! {
 			#visibility struct #default_delegator_ident<#struct_trait>(
 				#scrate::rstd::marker::PhantomData<(#trait_and_instance)>
-			);
-			impl<#impl_trait> #scrate::traits::StorageDefault<#typ> for #default_delegator_ident<#trait_and_instance> {
+			) #where_clause;
+			impl<#impl_trait> #scrate::traits::StorageDefault<#typ>
+				for #default_delegator_ident<#trait_and_instance> #where_clause
+			{
 				fn default() -> Option<#typ> {
 					#default_delegator_return
 				}
@@ -302,8 +304,10 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 
 			#visibility struct #default_delegator_ident<#struct_trait>(
 				#scrate::rstd::marker::PhantomData<(#trait_and_instance)>
-			);
-			impl<#impl_trait> #scrate::traits::StorageDefault<#typ> for #default_delegator_ident<#trait_and_instance> {
+			) #where_clause;
+			impl<#impl_trait> #scrate::traits::StorageDefault<#typ>
+				for #default_delegator_ident<#trait_and_instance> #where_clause
+			{
 				fn default() -> Option<#typ> {
 					#default_delegator_return
 				}
