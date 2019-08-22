@@ -18,7 +18,7 @@ tokio = "0.1"
 exit-future = "0.1"
 parking_lot = "0.9.0"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-trie-root = "0.15.0"
+trie-root = "0.15.2"
 sr-io = { path = "../core/sr-io" }
 substrate-cli = { path = "../core/cli" }
 primitives = { package = "substrate-primitives", path = "../core/primitives" }
@@ -27,8 +27,9 @@ substrate-service = { path = "../core/service" }
 inherents = { package = "substrate-inherents", path = "../core/inherents" }
 transaction-pool = { package = "substrate-transaction-pool", path = "../core/transaction-pool" }
 network = { package = "substrate-network", path = "../core/network" }
-consensus = { package = "substrate-consensus-aura", path = "../core/consensus/aura" }
-aura-primitives = { package = "substrate-consensus-aura-primitives", path = "../core/consensus/aura/primitives" }
+babe = { package = "substrate-consensus-babe", path = "../core/consensus/babe" }
+babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../core/consensus/babe/primitives" }
+grandpa = { package = "substrate-finality-grandpa", path = "../core/finality-grandpa" }
 grandpa-primitives = { package = "substrate-finality-grandpa-primitives", path = "../core/finality-grandpa/primitives" }
 substrate-client = {  path = "../core/client" }
 basic-authorship = { package = "substrate-basic-authorship", path = "../core/basic-authorship" }
