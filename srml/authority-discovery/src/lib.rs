@@ -43,14 +43,14 @@ decl_storage! {
 	add_extra_genesis {
 		config(keys): Vec<im_online::AuthorityId>;
 		build(|
-			  storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
-			  config: &GenesisConfig
-			  | {
-				  sr_io::with_storage(
-					  storage,
-					  || Module::<T>::initialize_keys(&config.keys),
-				  );
-			  })
+			storage: &mut sr_primitives::StorageContent,
+			config: &GenesisConfig
+		| {
+			sr_io::with_storage(
+				storage,
+				|| Module::<T>::initialize_keys(&config.keys),
+			);
+		})
 	}
 }
 

@@ -16,7 +16,7 @@
 
 //! Utilites to build a `TestClient` for `node-runtime`.
 
-use sr_primitives::BuildStorage;
+use sr_primitives::{BuildStorage, StorageContent};
 
 /// Re-export test-client utilities.
 pub use test_client::*;
@@ -42,7 +42,7 @@ pub struct GenesisParameters {
 }
 
 impl test_client::GenesisInit for GenesisParameters {
-	fn genesis_storage(&self) -> (StorageOverlay, ChildrenStorageOverlay) {
+	fn genesis_storage(&self) -> StorageContent {
 		crate::genesis::config(self.support_changes_trie, None).build_storage().unwrap()
 	}
 }

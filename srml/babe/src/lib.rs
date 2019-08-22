@@ -188,7 +188,7 @@ decl_storage! {
 	add_extra_genesis {
 		config(authorities): Vec<(AuthorityId, BabeAuthorityWeight)>;
 		build(|
-			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
+			storage: &mut sr_primitives::StorageContent,
 			config: &GenesisConfig
 		| {
 			runtime_io::with_storage(

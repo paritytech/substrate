@@ -97,6 +97,7 @@ use srml_support::{
 use system::{self, ensure_root, ensure_signed};
 use sr_primitives::{
 	traits::{EnsureOrigin, SimpleArithmetic, MaybeSerializeDebug, Zero, StaticLookup},
+	StorageContent,
 };
 
 type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
@@ -173,7 +174,7 @@ decl_storage! {
 		config(members): Vec<T::AccountId>;
 		config(phantom): sr_std::marker::PhantomData<I>;
 		build(|
-			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
+			storage: &mut StorageContent,
 			config: &Self,
 		| {
 			sr_io::with_storage(storage, || {
