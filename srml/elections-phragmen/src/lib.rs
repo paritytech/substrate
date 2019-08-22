@@ -32,7 +32,7 @@
 //!
 //! ### Voting
 //!
-//! Voters can vote for as many of the candidates by providing a list of account ids. Invalid votes
+//! Voters can vote for any set of the candidates by providing a list of account ids. Invalid votes
 //! (voting for non-candidates) are ignored during election. Yet, a voter _might_ vote for a
 //! future candidate. Voters reserve a bond as they vote. Each vote defines a `value`. This amount
 //! is locked from the account of the voter and indicated the weight of the vote. Voters can update
