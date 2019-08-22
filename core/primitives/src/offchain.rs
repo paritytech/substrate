@@ -494,63 +494,48 @@ impl<T> LimitedExternalities<T> {
 
 	/// Check if given capability is allowed.
 	///
-	/// Returns `Ok` in case it is, `Err` otherwise.
-	fn check(&self, capability: Capability) -> Result<(), ()> {
-		if self.capabilities.has(capability) {
-			Ok(())
-		} else {
-			#[cfg(feature = "log")]
-			log::warn!("Accessing a forbidden API. No: {:?} capability.", capability);
-			Err(())
+	/// Panics in case it is not.
+	fn check(&self, capability: Capability, name: &'static str) {
+		if !self.capabilities.has(capability) {
+			panic!("Accessing a forbidden API: {}. No: {:?} capability.", name, capability);
 		}
 	}
 }
 
 impl<T: Externalities> Externalities for LimitedExternalities<T> {
 	fn is_validator(&self) -> bool {
-		if self.check(Capability::Keystore).is_ok() {
-			self.externalities.is_validator()
-		} else {
-			false
-		}
+		self.check(Capability::Keystore, "is_validator");
+		self.externalities.is_validator()
 	}
 
 	fn submit_transaction(&mut self, ex: Vec<u8>) -> Result<(), ()> {
-		self.check(Capability::TransactionPool)?;
+		self.check(Capability::TransactionPool, "submit_transaction");
 		self.externalities.submit_transaction(ex)
 	}
 
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
-		self.check(Capability::NetworkState)?;
+		self.check(Capability::NetworkState, "network_state");
 		self.externalities.network_state()
 	}
 
 	fn timestamp(&mut self) -> Timestamp {
-		if self.check(Capability::Http).is_ok() {
-			self.externalities.timestamp()
-		} else {
-			Timestamp::from_unix_millis(0)
-		}
+		self.check(Capability::Http, "timestamp");
+		self.externalities.timestamp()
 	}
 
 	fn sleep_until(&mut self, deadline: Timestamp) {
-		if self.check(Capability::Http).is_ok() {
-			self.externalities.sleep_until(deadline)
-		}
+		self.check(Capability::Http, "sleep_until");
+		self.externalities.sleep_until(deadline)
 	}
 
 	fn random_seed(&mut self) -> [u8; 32] {
-		if self.check(Capability::Randomness).is_ok() {
-			self.externalities.random_seed()
-		} else {
-			[0_u8; 32]
-		}
+		self.check(Capability::Randomness, "random_seed");
+		self.externalities.random_seed()
 	}
 
 	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
-		if self.check(Capability::OffchainWorkerDbWrite).is_ok() {
-			self.externalities.local_storage_set(kind, key, value)
-		}
+		self.check(Capability::OffchainWorkerDbWrite, "local_storage_set");
+		self.externalities.local_storage_set(kind, key, value)
 	}
 
 	fn local_storage_compare_and_set(
@@ -560,25 +545,22 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 		old_value: Option<&[u8]>,
 		new_value: &[u8],
 	) -> bool {
-		if self.check(Capability::OffchainWorkerDbWrite).is_ok() {
-			self.externalities.local_storage_compare_and_set(kind, key, old_value, new_value)
-		} else {
-			true
-		}
+		self.check(Capability::OffchainWorkerDbWrite, "local_storage_compare_and_set");
+		self.externalities.local_storage_compare_and_set(kind, key, old_value, new_value)
 	}
 
 	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>> {
-		self.check(Capability::OffchainWorkerDbRead).ok()?;
+		self.check(Capability::OffchainWorkerDbRead, "local_storage_get");
 		self.externalities.local_storage_get(kind, key)
 	}
 
 	fn http_request_start(&mut self, method: &str, uri: &str, meta: &[u8]) -> Result<HttpRequestId, ()> {
-		self.check(Capability::Http)?;
+		self.check(Capability::Http, "http_request_start");
 		self.externalities.http_request_start(method, uri, meta)
 	}
 
 	fn http_request_add_header(&mut self, request_id: HttpRequestId, name: &str, value: &str) -> Result<(), ()> {
-		self.check(Capability::Http)?;
+		self.check(Capability::Http, "http_request_add_header");
 		self.externalities.http_request_add_header(request_id, name, value)
 	}
 
@@ -588,24 +570,18 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 		chunk: &[u8],
 		deadline: Option<Timestamp>
 	) -> Result<(), HttpError> {
-		self.check(Capability::Http).map_err(|_| HttpError::IoError)?;
+		self.check(Capability::Http, "http_request_write_body");
 		self.externalities.http_request_write_body(request_id, chunk, deadline)
 	}
 
 	fn http_response_wait(&mut self, ids: &[HttpRequestId], deadline: Option<Timestamp>) -> Vec<HttpRequestStatus> {
-		if self.check(Capability::Http).is_ok() {
-			self.externalities.http_response_wait(ids, deadline)
-		} else {
-			ids.iter().map(|_| HttpRequestStatus::Unknown).collect()
-		}
+		self.check(Capability::Http, "http_response_wait");
+		self.externalities.http_response_wait(ids, deadline)
 	}
 
 	fn http_response_headers(&mut self, request_id: HttpRequestId) -> Vec<(Vec<u8>, Vec<u8>)> {
-		if self.check(Capability::Http).is_ok() {
-			self.externalities.http_response_headers(request_id)
-		} else {
-			Default::default()
-		}
+		self.check(Capability::Http, "http_response_headers");
+		self.externalities.http_response_headers(request_id)
 	}
 
 	fn http_response_read_body(
@@ -614,7 +590,7 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 		buffer: &mut [u8],
 		deadline: Option<Timestamp>
 	) -> Result<usize, HttpError> {
-		self.check(Capability::Http).map_err(|_| HttpError::IoError)?;
+		self.check(Capability::Http, "http_response_read_body");
 		self.externalities.http_response_read_body(request_id, buffer, deadline)
 	}
 }
