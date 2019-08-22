@@ -396,7 +396,7 @@ impl sudo::Trait for Runtime {
 impl im_online::Trait for Runtime {
 	type Call = Call;
 	type Event = Event;
-	type UncheckedExtrinsic = UncheckedExtrinsic;
+	type SubmitTransaction = SubmitTransaction;
 	type ReportUnresponsiveness = Offences;
 	type CurrentElectedSet = staking::CurrentElectedStashAccounts<Runtime>;
 }
@@ -423,6 +423,8 @@ impl finality_tracker::Trait for Runtime {
 	type WindowSize = WindowSize;
 	type ReportLatency = ReportLatency;
 }
+
+type SubmitTransaction = system::offchain::TransactionSubmitter<(), UncheckedExtrinsic>;
 
 construct_runtime!(
 	pub enum Runtime where

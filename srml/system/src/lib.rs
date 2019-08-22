@@ -104,6 +104,8 @@ use runtime_io::{twox_128, TestExternalities, Blake2Hasher};
 #[cfg(any(feature = "std", test))]
 use primitives::ChangesTrieConfiguration;
 
+pub mod offchain;
+
 /// Handler for when a new account has been created.
 pub trait OnNewAccount<AccountId> {
 	/// A new account `who` has been registered.
