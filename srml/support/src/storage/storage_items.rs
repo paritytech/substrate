@@ -816,7 +816,6 @@ mod test_append_and_len {
 	crate::decl_storage! {
 		trait Store for Module<T: Trait> as Test {
 			NoDefault: Option<NoDef>;
-			NonVec: u32;
 
 			JustVec: Vec<u32>;
 			JustVecWithDefault: Vec<u32> = vec![6, 9, 11, 33];
@@ -872,7 +871,7 @@ mod test_append_and_len {
 	}
 
 	#[test]
-	fn safe_append_works() {
+	fn append_or_put() {
 		with_externalities(&mut TestExternalities::default(), || {
 			let _ = MapVec::append_or_put(1, &[1, 2, 3]);
 			let _ = MapVec::append_or_put(1, &[4, 5]);
@@ -908,6 +907,12 @@ mod test_append_and_len {
 
 			assert_eq!(OptionVec::get(), None);
 			assert_eq!(OptionVec::decode_len(), Err("could not use default as fallback"));
+
+			assert_eq!(OptionVecWithNoneDefault::get(), None);
+			assert_eq!(OptionVecWithNoneDefault::decode_len(), Err("could not use default as fallback"));
+
+			assert_eq!(OptionVecWithDefault::get(), Some(vec![6, 9, 11]));
+			assert_eq!(OptionVecWithDefault::decode_len(), Ok(3));
 
 			assert_eq!(MapVec::get(0), vec![]);
 			assert_eq!(MapVec::decode_len(0), Ok(0));
