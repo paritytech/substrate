@@ -54,7 +54,7 @@ fn should_return_storage() {
 fn should_return_child_storage() {
 	let core = tokio::runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::TestClientBuilder::new()
-		.add_child_storage("test", "key", vec![42_u8])
+		.add_child_storage("default:test", "key", vec![42_u8])
 		.build());
 	let genesis_hash = client.genesis_hash();
 	let client = State::new(client, Subscriptions::new(Arc::new(core.executor())));
