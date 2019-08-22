@@ -153,7 +153,7 @@ pub trait StorageValue<T: Codec> {
 	///
 	/// use with care; if your use-case is not _exactly_ as what this function is doing,
 	/// you should use append and sensibly handle failure within the runtime code if it happens.
-	fn safe_append<'a, I: 'a + Encode + Clone>(items: &'a[I])
+	fn append_or_put<'a, I: 'a + Encode + Clone>(items: &'a[I])
 		where T: EncodeAppend<Item=I> + From<&'a[I]>;
 
 	/// Read the length of the value in a fast way, without decoding the entire value.
@@ -196,10 +196,10 @@ impl<T: Codec, U> StorageValue<T> for U where U: hashed::generator::StorageValue
 	{
 		U::append(items, &mut RuntimeStorage)
 	}
-	fn safe_append<'a, I: 'a + Encode + Clone>(items: &'a[I])
+	fn append_or_put<'a, I: 'a + Encode + Clone>(items: &'a[I])
 		where T: From<&'a[I]> + EncodeAppend<Item=I>
 	{
-		U::safe_append(items, &mut RuntimeStorage)
+		U::append_or_put(items, &mut RuntimeStorage)
 	}
 	fn decode_len() -> Result<usize, &'static str>
 		where T: codec::DecodeLength, T: Len
@@ -212,6 +212,8 @@ impl<T: Codec, U> StorageValue<T> for U where U: hashed::generator::StorageValue
 pub trait StorageMap<K: Codec, V: Codec> {
 	/// The type that get/take return.
 	type Query;
+	/// Something that can provide the default value of this storage type.
+	type Default: StorageDefault<V>;
 
 	/// Get the prefix key in storage.
 	fn prefix() -> &'static [u8];
@@ -247,6 +249,7 @@ pub trait StorageMap<K: Codec, V: Codec> {
 
 impl<K: Codec, V: Codec, U> StorageMap<K, V> for U where U: hashed::generator::StorageMap<K, V> {
 	type Query = U::Query;
+	type Default = U::Default;
 
 	fn prefix() -> &'static [u8] {
 		<U as hashed::generator::StorageMap<K, V>>::prefix()
@@ -306,7 +309,7 @@ pub trait AppendableStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
 	///
 	/// WARNING: use with care; if your use-case is not _exactly_ as what this function is doing,
 	/// you should use append and sensibly handle failure within the runtime code if it happens.
-	fn safe_append<'a, KeyArg: Borrow<K>, I: Encode + Clone>(key: KeyArg, items: &'a[I])
+	fn append_or_put<'a, KeyArg: Borrow<K>, I: Encode + Clone>(key: KeyArg, items: &'a[I])
 		where V: EncodeAppend<Item=I> + From<&'a[I]>;
 
 }
@@ -320,18 +323,15 @@ impl<K: Codec, V: Codec, U> AppendableStorageMap<K, V> for U
 		U::append(key.borrow(), items, &mut RuntimeStorage)
 	}
 
-	fn safe_append<'a, KeyArg: Borrow<K>, I: Encode + Clone>(key: KeyArg, items: &'a[I])
+	fn append_or_put<'a, KeyArg: Borrow<K>, I: Encode + Clone>(key: KeyArg, items: &'a[I])
 		where V: EncodeAppend<Item=I> + From<&'a[I]>
 	{
-		U::safe_append(key.borrow(), items, &mut RuntimeStorage)
+		U::append_or_put(key.borrow(), items, &mut RuntimeStorage)
 	}
 }
 
 /// A storage map with a decodable length.
 pub trait DecodeLengthStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
-	/// Something that can provide the default value of this storage type.
-	type Default: StorageDefault<V>;
-
 	/// Read the length of the value in a fast way, without decoding the entire value.
 	///
 	/// `T` is required to implement `Codec::DecodeLength`.
@@ -344,7 +344,6 @@ pub trait DecodeLengthStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
 impl <K: Codec, V: Codec, U> DecodeLengthStorageMap<K, V> for U
 	where U: hashed::generator::DecodeLengthStorageMap<K, V>
 {
-	type Default = U::Default;
 	fn decode_len<KeyArg: Borrow<K>>(key: KeyArg) -> Result<usize, &'static str>
 		where V: codec::DecodeLength, V: Len
 	{

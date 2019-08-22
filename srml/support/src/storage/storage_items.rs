@@ -222,8 +222,8 @@ macro_rules! __storage_items_internal {
 
 		impl $crate::storage::hashed::generator::StorageMap<$kty, $ty> for $name {
 			type Query = $gettype;
-
 			type Hasher = $crate::Blake2_256;
+			type Default = ();
 
 			/// Get the prefix key in storage.
 			fn prefix() -> &'static [u8] {
@@ -819,15 +819,15 @@ mod test_append_and_len {
 			NonVec: u32;
 
 			JustVec: Vec<u32>;
-			JustVecWithDefault: Vec<u32> = vec![6u32, 9, 11, 33];
+			JustVecWithDefault: Vec<u32> = vec![6, 9, 11, 33];
 			OptionVec: Option<Vec<u32>>;
-			OptionVecWithDefault: Option<Vec<u32>> = Some(vec![6u32, 9, 11]);
+			OptionVecWithDefault: Option<Vec<u32>> = Some(vec![6, 9, 11]);
 			OptionVecWithNoneDefault: Option<Vec<u32>> = None;
 
 			MapVec: map u32 => Vec<u32>;
-			MapVecWithDefault: map u32 => Vec<u32> = vec![33u32, 69];
+			MapVecWithDefault: map u32 => Vec<u32> = vec![33, 69];
 			OptionMapVec: map u32 => Option<Vec<u32>>;
-			OptionMapVecWithDefault: map u32 => Option<Vec<u32>> = Some(vec![33u32, 66, 99]);
+			OptionMapVecWithDefault: map u32 => Option<Vec<u32>> = Some(vec![33, 66, 99]);
 		}
 	}
 
@@ -861,14 +861,25 @@ mod test_append_and_len {
 	}
 
 	#[test]
+	fn append_works_for_default() {
+		with_externalities(&mut TestExternalities::default(), || {
+			let _ = JustVecWithDefault::append(&[1]);
+			assert_eq!(JustVecWithDefault::get(), vec![6, 9, 11, 33, 1]);
+
+			let _ = MapVecWithDefault::append(0, &[1]);
+			assert_eq!(MapVecWithDefault::get(0), vec![33, 69, 1]);
+		});
+	}
+
+	#[test]
 	fn safe_append_works() {
 		with_externalities(&mut TestExternalities::default(), || {
-			let _ = MapVec::safe_append(1, &[1, 2, 3]);
-			let _ = MapVec::safe_append(1, &[4, 5]);
+			let _ = MapVec::append_or_put(1, &[1, 2, 3]);
+			let _ = MapVec::append_or_put(1, &[4, 5]);
 			assert_eq!(MapVec::get(1), vec![1, 2, 3, 4, 5]);
 
-			let _ = JustVec::safe_append(&[1, 2, 3]);
-			let _ = JustVec::safe_append(&[4, 5]);
+			let _ = JustVec::append_or_put(&[1, 2, 3]);
+			let _ = JustVec::append_or_put(&[4, 5]);
 			assert_eq!(JustVec::get(), vec![1, 2, 3, 4, 5]);
 		});
 	}
@@ -877,7 +888,7 @@ mod test_append_and_len {
 	fn len_works() {
 		with_externalities(&mut TestExternalities::default(), || {
 			JustVec::put(&vec![1, 2, 3, 4]);
-			OptionVec::put(&vec![1u32, 2, 3, 4, 5]);
+			OptionVec::put(&vec![1, 2, 3, 4, 5]);
 			MapVec::insert(1, &vec![1, 2, 3, 4, 5, 6]);
 
 			assert_eq!(JustVec::decode_len().unwrap(), 4);
@@ -892,7 +903,7 @@ mod test_append_and_len {
 			assert_eq!(JustVec::get(), vec![]);
 			assert_eq!(JustVec::decode_len(), Ok(0));
 
-			assert_eq!(JustVecWithDefault::get(), vec![6u32, 9, 11, 33]);
+			assert_eq!(JustVecWithDefault::get(), vec![6, 9, 11, 33]);
 			assert_eq!(JustVecWithDefault::decode_len(), Ok(4));
 
 			assert_eq!(OptionVec::get(), None);
@@ -907,10 +918,10 @@ mod test_append_and_len {
 			assert_eq!(OptionMapVec::get(0), None);
 			assert_eq!(OptionMapVec::decode_len(0), Err("could not use default as fallback"));
 
-			assert_eq!(OptionMapVecWithDefault::get(0), Some(vec![33u32, 66, 99]));
+			assert_eq!(OptionMapVecWithDefault::get(0), Some(vec![33, 66, 99]));
 			assert_eq!(OptionMapVecWithDefault::decode_len(0), Ok(3));
 
-			assert_eq!(OptionVecWithDefault::get(), Some(vec![6u32, 9, 11]));
+			assert_eq!(OptionVecWithDefault::get(), Some(vec![6, 9, 11]));
 			assert_eq!(OptionVecWithDefault::decode_len(), Ok(3));
 		});
 	}

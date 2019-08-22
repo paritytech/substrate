@@ -214,17 +214,24 @@ pub trait StorageValue<T: codec::Codec> {
 		where T: codec::EncodeAppend<Item=I>
 	{
 		let new_val = <T as codec::EncodeAppend>::append(
-			storage.get_raw(Self::key()).unwrap_or_default(),
+			// if the key exists, directly append to it.
+			storage.get_raw(Self::key()).unwrap_or_else(|| {
+				// otherwise, try and read a proper __provided__ default.
+				Self::Default::default().map(|v| v.encode())
+					// or just use the default value.
+					.unwrap_or_default()
+			}),
 			items,
 		).map_err(|_| "Could not append given item")?;
 		storage.put_raw(Self::key(), &new_val);
 		Ok(())
 	}
 
-	/// Safely append the given items to the value in the storage.
+	/// Safely append the given items to the value in the storage. If a codec error occurs, then the
+	/// old (presumably corrupt) value is replaced with the given `items`.
 	///
 	/// `T` is required to implement `codec::EncodeAppend`.
-	fn safe_append<'a, S: HashedStorage<Twox128>, I>(
+	fn append_or_put<'a, S: HashedStorage<Twox128>, I>(
 		items: &'a[I],
 		storage: &mut S,
 	) where
@@ -254,8 +261,10 @@ pub trait StorageValue<T: codec::Codec> {
 pub trait StorageMap<K: codec::Codec, V: codec::Codec> {
 	/// The type that get/take returns.
 	type Query;
-
+	/// Hasher type
 	type Hasher: StorageHasher;
+	/// Something that can provide the default value of this storage type.
+	type Default: StorageDefault<V>;
 
 	/// Get the prefix key in storage.
 	fn prefix() -> &'static [u8];
@@ -341,17 +350,23 @@ pub trait AppendableStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, 
 	{
 		let k = Self::key_for(key);
 		let new_val = <V as codec::EncodeAppend>::append(
-			storage.get_raw(&k[..]).unwrap_or_default(),
+			storage.get_raw(&k[..]).unwrap_or_else(|| {
+				// otherwise, try and read a proper __provided__ default.
+				Self::Default::default().map(|v| v.encode())
+					// or just use the default value.
+					.unwrap_or_default()
+			}),
 			items,
 		).map_err(|_| "Could not append given item")?;
 		storage.put_raw(&k[..], &new_val);
 		Ok(())
 	}
 
-	/// Safely append the given items to the value in the storage.
+	/// Safely append the given items to the value in the storage. If a codec error occurs, then the
+	/// old (presumably corrupt) value is replaced with the given `items`.
 	///
 	/// `T` is required to implement `codec::EncodeAppend`.
-	fn safe_append<'a, S, I>(
+	fn append_or_put<'a, S, I>(
 		key : &K,
 		items: &'a[I],
 		storage: &mut S,
@@ -367,9 +382,6 @@ pub trait AppendableStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, 
 
 /// A storage map with a decodable length.
 pub trait DecodeLengthStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, V> {
-	/// Something that can provide the default value of this storage type.
-	type Default: StorageDefault<V>;
-
 	/// Read the length of the value in a fast way, without decoding the entire value.
 	///
 	/// `T` is required to implement `Codec::DecodeLength`.
