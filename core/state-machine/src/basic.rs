@@ -158,15 +158,12 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 	fn storage_root(&mut self) -> H::Out {
 		let mut top = self.top.clone();
 		let keys: Vec<_> = self.children.keys().map(|k| k.to_vec()).collect();
-		// Single child trie implementation currently allows using the same child
-		// empty root for all child trie. Using null storage key until multiple
-		// type of child trie support.
-		let empty_hash = default_child_trie_root::<Layout<H>>(&[]);
 		for storage_key in keys {
 			let child_root = self.child_storage_root(
 				ChildStorageKey::<H>::from_slice(storage_key.as_slice())
 					.expect("Map only feed by valid keys; qed")
 			);
+			let empty_hash = default_child_trie_root::<Layout<H>>(storage_key.as_slice());
 			if &empty_hash[..] == &child_root[..] {
 				top.remove(&storage_key);
 			} else {
