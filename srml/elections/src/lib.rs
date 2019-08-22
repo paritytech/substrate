@@ -138,7 +138,6 @@ pub type VoteIndex = u32;
 
 // all three must be in sync.
 type ApprovalFlag = u32;
-const APPROVAL_FLAG_MASK: ApprovalFlag = 0x8000_0000;
 const APPROVAL_FLAG_LEN: usize = 32;
 
 pub trait Trait: system::Trait {
@@ -1011,7 +1010,6 @@ impl<T: Trait> Module<T> {
 	/// Return true of the bit `n` of scalar `x` is set to `1` and false otherwise.
 	fn bit_at(x: ApprovalFlag, n: usize) -> bool {
 		if n < APPROVAL_FLAG_LEN {
-			// x & ( APPROVAL_FLAG_MASK >> n ) != 0
 			x & ( 1 << n ) != 0
 		} else {
 			false
