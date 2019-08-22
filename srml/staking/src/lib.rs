@@ -465,9 +465,6 @@ type ExpoMap<T> = BTreeMap<
 	Exposure<<T as system::Trait>::AccountId, BalanceOf<T>>
 >;
 
-pub const DEFAULT_SESSIONS_PER_ERA: u32 = 3;
-pub const DEFAULT_BONDING_DURATION: u32 = 1;
-
 /// Means for interacting with a specialized version of the `session` trait.
 ///
 /// This is needed because `Staking` sets the `ValidatorIdOf` of the `session::Trait`
