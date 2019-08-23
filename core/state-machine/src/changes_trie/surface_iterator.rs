@@ -17,7 +17,7 @@
 //! The best way to understand how this iterator works is to imagine some 2D terrain that have some mountains
 //! (digest changes tries) and valleys (changes tries for regular blocks). There are gems (blocks) beneath the
 //! terrain. Given the request to find all gems in the range [X1; X2] this iterator will return **minimal set**
-//! of points at the terrain (mountains and valleys() inside this range that have to be drilled down to
+//! of points at the terrain (mountains and valleys) inside this range that have to be drilled down to
 //! search for gems.
 
 use num_traits::One;
