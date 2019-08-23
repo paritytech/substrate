@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,22 +14,23 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Substrate RPC implementation.
+//! Substrate RPC interfaces.
 //!
-//! A core implementation of Substrate RPC interfaces.
+//! A collection of RPC methods and subscriptions supported by all substrate clients.
 
 #![warn(missing_docs)]
 
 mod errors;
-mod helpers;
+mod metadata;
+mod subscriptions;
 
 use jsonrpc_core as rpc;
 
-pub use api::metadata::Metadata;
-pub use api::subscriptions::Subscriptions;
+pub use metadata::Metadata;
 pub use rpc::IoHandlerExtension as RpcExtension;
+pub use subscriptions::Subscriptions;
 
 pub mod author;
-pub mod chain;
-pub mod state;
-pub mod system;
+// pub mod chain;
+// pub mod state;
+// pub mod system;

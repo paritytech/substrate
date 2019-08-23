@@ -50,63 +50,8 @@ use transaction_pool::{
 };
 use session::SessionKeys;
 
-pub use self::gen_client::Client as AuthorClient;
-
-/// Substrate authoring RPC API
-#[rpc]
-pub trait AuthorApi<Hash, BlockHash> {
-	/// RPC metadata
-	type Metadata;
-
-	/// Submit hex-encoded extrinsic for inclusion in block.
-	#[rpc(name = "author_submitExtrinsic")]
-	fn submit_extrinsic(&self, extrinsic: Bytes) -> Result<Hash>;
-
-	/// Insert a key into the keystore.
-	#[rpc(name = "author_insertKey")]
-	fn insert_key(&self,
-		key_type: String,
-		suri: String,
-		maybe_public: Option<Bytes>
-	) -> Result<Bytes>;
-
-	/// Generate new session keys and returns the corresponding public keys.
-	#[rpc(name = "author_rotateKeys")]
-	fn rotate_keys(&self) -> Result<Bytes>;
-
-	/// Returns all pending extrinsics, potentially grouped by sender.
-	#[rpc(name = "author_pendingExtrinsics")]
-	fn pending_extrinsics(&self) -> Result<Vec<Bytes>>;
-
-	/// Remove given extrinsic from the pool and temporarily ban it to prevent reimporting.
-	#[rpc(name = "author_removeExtrinsic")]
-	fn remove_extrinsic(&self,
-		bytes_or_hash: Vec<hash::ExtrinsicOrHash<Hash>>
-	) -> Result<Vec<Hash>>;
-
-	/// Submit an extrinsic to watch.
-	#[pubsub(
-		subscription = "author_extrinsicUpdate",
-		subscribe,
-		name = "author_submitAndWatchExtrinsic"
-	)]
-	fn watch_extrinsic(&self,
-		metadata: Self::Metadata,
-		subscriber: Subscriber<Status<Hash, BlockHash>>,
-		bytes: Bytes
-	);
-
-	/// Unsubscribe from extrinsic watching.
-	#[pubsub(
-		subscription = "author_extrinsicUpdate",
-		unsubscribe,
-		name = "author_unwatchExtrinsic"
-	)]
-	fn unwatch_extrinsic(&self,
-		metadata: Option<Self::Metadata>,
-		id: SubscriptionId
-	) -> Result<bool>;
-}
+/// Re-export the API for backward compatibility.
+pub use api::author::*;
 
 /// Authoring API
 pub struct Author<B, E, P, RA> where P: PoolChainApi + Sync + Send + 'static {

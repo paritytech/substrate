@@ -5,6 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
+api = { package = "substrate-rpc-api", path = "./api" }
 derive_more = "0.14.0"
 futures = "0.1"
 futures03 = { package = "futures-preview", version = "0.3.0-alpha.17", features = ["compat"] }
