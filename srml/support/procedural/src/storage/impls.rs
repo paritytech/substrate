@@ -328,6 +328,8 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			instance_opts,
 			type_infos,
 			fielddefault,
+			default_delegator_ident,
+			default_delegator_return,
 			prefix,
 			name,
 			attrs,
@@ -600,15 +602,23 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 
 			#structure
 
+			#visibility struct #default_delegator_ident<#struct_trait>(
+				#scrate::rstd::marker::PhantomData<(#trait_and_instance)>
+			) #where_clause;
+			impl<#impl_trait> #scrate::traits::StorageDefault<#typ>
+				for #default_delegator_ident<#trait_and_instance> #where_clause
+			{
+				fn default() -> Option<#typ> {
+					#default_delegator_return
+				}
+			}
+
 			impl<#impl_trait> #scrate::storage::hashed::generator::StorageMap<#kty, #typ>
 				for #name<#trait_and_instance> #where_clause
 			{
 				type Query = #value_type;
 				type Hasher = #scrate::#hasher;
-				// NOTE: this must not be used as (). If a method wants to use this, A proper value
-				// (similar to normal map) should be passed in to get consistent behavior with other
-				// Defaults.
-				type Default = ();
+				type Default = #default_delegator_ident<#trait_and_instance>;
 
 				/// Get the prefix key in storage.
 				fn prefix() -> &'static [u8] {
@@ -730,6 +740,10 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					})
 				}
 			}
+
+			impl<#impl_trait> #scrate::storage::hashed::generator::DecodeLengthStorageMap<#kty, #typ>
+				for #name<#trait_and_instance> #where_clause
+			{}
 		}
 	}
 

@@ -251,7 +251,8 @@ pub trait StorageValue<T: codec::Codec> {
 		if let Some(k) = storage.get_raw(Self::key()) {
 			<T as codec::DecodeLength>::len(&k).map_err(|e| e.what())
 		} else {
-			let default = Self::Default::default().ok_or("could not use default as fallback")?;
+			let default = Self::Default::default()
+				.ok_or("value does not exist and could not use default as fallback")?;
 			Ok(default.len())
 		}
 	}
@@ -392,7 +393,8 @@ pub trait DecodeLengthStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K
 		if let Some(v) = storage.get_raw(&k[..]) {
 			<V as codec::DecodeLength>::len(&v).map_err(|e| e.what())
 		} else {
-			let default = Self::Default::default().ok_or("could not use default as fallback")?;
+			let default = Self::Default::default()
+				.ok_or("value does not exist and could not use default as fallback")?;
 			Ok(default.len())
 		}
 	}

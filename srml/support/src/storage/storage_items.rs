@@ -827,6 +827,8 @@ mod test_append_and_len {
 			MapVecWithDefault: map u32 => Vec<u32> = vec![33, 69];
 			OptionMapVec: map u32 => Option<Vec<u32>>;
 			OptionMapVecWithDefault: map u32 => Option<Vec<u32>> = Some(vec![33, 66, 99]);
+
+			LinkedMap: linked_map u32 => Vec<u32>;
 		}
 	}
 
@@ -871,7 +873,7 @@ mod test_append_and_len {
 	}
 
 	#[test]
-	fn append_or_put() {
+	fn append_or_put_works() {
 		with_externalities(&mut TestExternalities::default(), || {
 			let _ = MapVec::append_or_put(1, &[1, 2, 3]);
 			let _ = MapVec::append_or_put(1, &[4, 5]);
@@ -889,10 +891,12 @@ mod test_append_and_len {
 			JustVec::put(&vec![1, 2, 3, 4]);
 			OptionVec::put(&vec![1, 2, 3, 4, 5]);
 			MapVec::insert(1, &vec![1, 2, 3, 4, 5, 6]);
+			LinkedMap::insert(2, &vec![1, 2, 3]);
 
 			assert_eq!(JustVec::decode_len().unwrap(), 4);
 			assert_eq!(OptionVec::decode_len().unwrap(), 5);
 			assert_eq!(MapVec::decode_len(1).unwrap(), 6);
+			assert_eq!(LinkedMap::decode_len(2).unwrap(), 3);
 		});
 	}
 
@@ -906,10 +910,16 @@ mod test_append_and_len {
 			assert_eq!(JustVecWithDefault::decode_len(), Ok(4));
 
 			assert_eq!(OptionVec::get(), None);
-			assert_eq!(OptionVec::decode_len(), Err("could not use default as fallback"));
+			assert_eq!(
+				OptionVec::decode_len(),
+				Err("value does not exist and could not use default as fallback")
+			);
 
 			assert_eq!(OptionVecWithNoneDefault::get(), None);
-			assert_eq!(OptionVecWithNoneDefault::decode_len(), Err("could not use default as fallback"));
+			assert_eq!(
+				OptionVecWithNoneDefault::decode_len(),
+				Err("value does not exist and could not use default as fallback")
+			);
 
 			assert_eq!(OptionVecWithDefault::get(), Some(vec![6, 9, 11]));
 			assert_eq!(OptionVecWithDefault::decode_len(), Ok(3));
@@ -921,7 +931,10 @@ mod test_append_and_len {
 			assert_eq!(MapVecWithDefault::decode_len(0), Ok(2));
 
 			assert_eq!(OptionMapVec::get(0), None);
-			assert_eq!(OptionMapVec::decode_len(0), Err("could not use default as fallback"));
+			assert_eq!(
+				OptionMapVec::decode_len(0),
+				Err("value does not exist and could not use default as fallback")
+			);
 
 			assert_eq!(OptionMapVecWithDefault::get(0), Some(vec![33, 66, 99]));
 			assert_eq!(OptionMapVecWithDefault::decode_len(0), Ok(3));
