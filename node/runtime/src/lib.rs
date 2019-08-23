@@ -39,7 +39,7 @@ use sr_primitives::{ApplyResult, impl_opaque_keys, generic, create_runtime_str, 
 use sr_primitives::transaction_validity::TransactionValidity;
 use sr_primitives::weights::Weight;
 use sr_primitives::traits::{
-	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup,
+	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, SaturatedConversion,
 };
 use version::RuntimeVersion;
 use elections::VoteIndex;
@@ -426,8 +426,19 @@ impl finality_tracker::Trait for Runtime {
 
 impl system::offchain::GetPayload<Call, Index, SignedPayload> for Runtime {
 	fn get_payload(call: Call, index: Index) -> SignedPayload {
-		// TODO Get signer extra and convert into `SignedPayload`.
-		unimplemented!()
+		// TODO [ToDr] Where to take the fee from?
+		let fee = unimplemented!();
+		let period = 1 << 8;
+		let current_block = System::block_number().saturated_into::<u64>();
+		let extra: SignedExtra = (
+			system::CheckVersion::<Runtime>::new(),
+			system::CheckGenesis::<Runtime>::new(),
+			system::CheckEra::<Runtime>::from(generic::Era::mortal(period, current_block)),
+			system::CheckNonce::<Runtime>::from(index),
+			system::CheckWeight::<Runtime>::new(),
+			balances::TakeFees::<Runtime>::from(fee),
+		);
+		SignedPayload::new(call, extra);
 	}
 }
 
