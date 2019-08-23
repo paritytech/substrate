@@ -236,19 +236,25 @@ pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
 impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	/// Create a new NetworkBridge to the given NetworkService. Returns the service
 	/// handle and a future that must be polled to completion to finish startup.
-	/// If a voter set state is given it registers previous round votes with the
-	/// gossip service.
+	/// On creation it will register previous rounds' votes with the gossip
+	/// service taken from the VoterSetState.
 	pub(crate) fn new(
 		service: N,
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,
 		on_exit: impl Future<Item=(),Error=()> + Clone + Send + 'static,
+		catch_up_enabled: bool,
 	) -> (
 		Self,
 		impl futures::Future<Item = (), Error = ()> + Send + 'static,
 	) {
 
-		let (validator, report_stream) = GossipValidator::new(config, set_state.clone());
+		let (validator, report_stream) = GossipValidator::new(
+			config,
+			set_state.clone(),
+			catch_up_enabled,
+		);
+
 		let validator = Arc::new(validator);
 		service.register_validator(validator.clone());
 
