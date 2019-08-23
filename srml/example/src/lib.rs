@@ -528,22 +528,13 @@ impl<T: Trait> Module<T> {
 // Some extra information, such as encoded length, some static dispatch info like weight and the
 // sender of the transaction (if signed) are also provided.
 //
-// The main hooks that you can add are:
-//   - `pre_dispatch`.
-//   - `validate`.
-//   - `pre_dispatch_unsigned`.
-//   - `validate_unsigned`.
-//   - `post_dispatch`.
+// The full list of hooks that can be added to a signed extension can be found
+// [here](https://crates.parity.io/sr_primitives/traits/trait.SignedExtension.html).
 //
 // The signed extensions are aggregated in the runtime file of a substrate chain. All extensions
 // should be aggregated in a tuple and passed to the `CheckedExtrinsic` and `UncheckedExtrinsic`
 // types defined in the runtime. Lookup `pub type SignedExtra = (...)` in `node/runtime` and
 // `node-template` for an example of this.
-//
-// > `SignedExtension` is a very recent addition to substrate at the time of this writing and might
-// > be subject to rapid change and refactor. While the core concept will stay the same, always
-// > check the `SignedExtension` trait and an example implementation (system and balances module)
-// > for exact and up to date API.
 
 /// A simple signed extension that checks for the `set_dummy` call. In that case, it increases the
 /// priority and prints some log.
