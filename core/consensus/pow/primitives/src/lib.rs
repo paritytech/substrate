@@ -16,7 +16,12 @@ decl_runtime_apis! {
 	/// API necessary for block authorship with Proof of Work.
 	pub trait PowApi {
 		/// Verify a given proof of work against the current difficulty.
+		/// Note that `pre_hash` is always a hash of a direct child.
+		///
 		/// Returns the current difficulty.
 		fn verify(pre_hash: &H256, seal: &Seal) -> Difficulty;
+
+		/// Mine a seal that satisfy the current difficulty.
+		fn mine(pre_hash: &H256) -> Seal;
 	}
 }
