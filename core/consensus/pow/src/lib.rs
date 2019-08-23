@@ -1,19 +1,18 @@
 use std::sync::Arc;
-use core::marker::PhantomData;
 use client::{
-	BlockOf, blockchain::{HeaderBackend, ProvideCache}, block_builder::api::BlockBuilder as BlockBuilderApi,
+	BlockOf, blockchain::{HeaderBackend, ProvideCache}, block_builder::api::BlockBuilder as BlockBuilderApi, backend::AuxStore,
 };
 use sr_primitives::Justification;
 use sr_primitives::generic::{BlockId, DigestItem};
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi};
 use srml_timestamp::{TimestampInherentData, InherentError as TIError};
-use pow_primitives::{Seal, PowApi, Difficulty, POW_ENGINE_ID};
+use pow_primitives::{PowApi, Difficulty, POW_ENGINE_ID};
 use primitives::H256;
 use inherents::{InherentDataProviders, InherentData};
 use consensus_common::{
-	BlockImportParams, BlockOrigin, ForkChoiceStrategy, well_known_cache_keys::{self, Id as CacheKeyId}
+	BlockImportParams, BlockOrigin, ForkChoiceStrategy, well_known_cache_keys::Id as CacheKeyId
 };
-use consensus_common::import_queue::Verifier;
+use consensus_common::import_queue::{BoxBlockImport, BasicQueue, Verifier};
 use codec::{Encode, Decode};
 
 /// Auxiliary prefix for PoW engine.
@@ -101,7 +100,7 @@ impl<C> PowVerifier<C> {
 }
 
 impl<B: BlockT<Hash=H256>, C> Verifier<B> for PowVerifier<C> where
-	C: ProvideRuntimeApi + Send + Sync + HeaderBackend<B> + client::backend::AuxStore + ProvideCache<B> + BlockOf,
+	C: ProvideRuntimeApi + Send + Sync + HeaderBackend<B> + AuxStore + ProvideCache<B> + BlockOf,
 	C::Api: BlockBuilderApi<B> + PowApi<B>,
 {
 	fn verify(
@@ -111,7 +110,7 @@ impl<B: BlockT<Hash=H256>, C> Verifier<B> for PowVerifier<C> where
 		justification: Option<Justification>,
 		mut body: Option<Vec<B::Extrinsic>>,
 	) -> Result<(BlockImportParams<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
-		let mut inherent_data = self.inherent_data_providers
+		let inherent_data = self.inherent_data_providers
 			.create_inherent_data().map_err(String::from)?;
 		let timestamp_now = inherent_data.timestamp_inherent_data().map_err(String::from)?;
 
@@ -169,4 +168,29 @@ impl<B: BlockT<Hash=H256>, C> Verifier<B> for PowVerifier<C> where
 
 		Ok((import_block, None))
 	}
+}
+
+/// The PoW import queue type.
+pub type PowImportQueue<B> = BasicQueue<B>;
+
+pub fn import_queue<B, C>(
+	block_import: BoxBlockImport<B>,
+	client: Arc<C>,
+	inherent_data_providers: InherentDataProviders,
+) -> Result<PowImportQueue<B>, consensus_common::Error> where
+	B: BlockT<Hash=H256>,
+	C: 'static + ProvideRuntimeApi + HeaderBackend<B> + BlockOf + ProvideCache<B> + Send + Sync + AuxStore,
+	C::Api: BlockBuilderApi<B> + PowApi<B>,
+{
+	let verifier = PowVerifier {
+		client: client.clone(),
+		inherent_data_providers,
+	};
+
+	Ok(BasicQueue::new(
+		verifier,
+		block_import,
+		None,
+		None
+	))
 }
