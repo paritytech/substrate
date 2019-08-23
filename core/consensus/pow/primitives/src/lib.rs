@@ -1,3 +1,5 @@
+#![cfg_attr(not(feature = "std"), no_std)]
+
 use substrate_client::decl_runtime_apis;
 use rstd::vec::Vec;
 use sr_primitives::ConsensusEngineId;
@@ -19,9 +21,9 @@ decl_runtime_apis! {
 		/// Note that `pre_hash` is always a hash of a direct child.
 		///
 		/// Returns the current difficulty.
-		fn verify(pre_hash: &H256, seal: &Seal) -> Difficulty;
+		fn verify(pre_hash: &H256, seal: &Seal) -> Option<Difficulty>;
 
 		/// Mine a seal that satisfy the current difficulty.
-		fn mine(pre_hash: &H256) -> Seal;
+		fn mine(pre_hash: &H256) -> (Difficulty, Seal);
 	}
 }

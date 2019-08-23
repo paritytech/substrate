@@ -1,4 +1,5 @@
-use std::sync::Arc;
+use std::sync::{Mutex, Arc};
+use std::thread;
 use client::{
 	BlockOf, blockchain::{HeaderBackend, ProvideCache}, block_builder::api::BlockBuilder as BlockBuilderApi, backend::AuxStore,
 };
@@ -10,10 +11,13 @@ use pow_primitives::{PowApi, Difficulty, POW_ENGINE_ID};
 use primitives::H256;
 use inherents::{InherentDataProviders, InherentData};
 use consensus_common::{
-	BlockImportParams, BlockOrigin, ForkChoiceStrategy, well_known_cache_keys::Id as CacheKeyId
+	BlockImportParams, BlockOrigin, ForkChoiceStrategy, well_known_cache_keys::Id as CacheKeyId,
+	Environment, Proposer, BlockImport,
 };
 use consensus_common::import_queue::{BoxBlockImport, BasicQueue, Verifier};
 use codec::{Encode, Decode};
+use log::{debug, error, info, warn};
+use futures::prelude::*;
 
 /// Auxiliary prefix for PoW engine.
 pub const POW_AUX_PREFIX: [u8; 4] = *b"PoW:";
@@ -57,7 +61,7 @@ impl<C> PowVerifier<C> {
 			&block_id,
 			&pre_hash,
 			&inner_seal,
-		).map_err(|e| format!("{:?}", e))?;
+		).map_err(|e| format!("{:?}", e))?.ok_or("Invalid seal")?;
 
 		Ok((header, difficulty, seal))
 	}
@@ -182,6 +186,13 @@ pub fn import_queue<B, C>(
 	C: 'static + ProvideRuntimeApi + HeaderBackend<B> + BlockOf + ProvideCache<B> + Send + Sync + AuxStore,
 	C::Api: BlockBuilderApi<B> + PowApi<B>,
 {
+	if !inherent_data_providers.has_provider(&srml_timestamp::INHERENT_IDENTIFIER) {
+		match inherent_data_providers.register_provider(srml_timestamp::InherentDataProvider) {
+			Ok(()) => (),
+			Err(e) => warn!("Registering inherent data provider for timestamp failed"),
+		}
+	}
+
 	let verifier = PowVerifier {
 		client: client.clone(),
 		inherent_data_providers,
@@ -193,4 +204,99 @@ pub fn import_queue<B, C>(
 		None,
 		None
 	))
+}
+
+pub fn start_mine<B: BlockT<Hash=H256>, I, C, E>(
+	block_import: Arc<Mutex<I>>,
+	client: Arc<C>,
+	mut env: E,
+	inherent_data_providers: inherents::InherentDataProviders,
+) where
+	I: BlockImport<B> + Send + Sync + 'static,
+	C: HeaderBackend<B> + AuxStore + ProvideRuntimeApi + 'static,
+	C::Api: PowApi<B>,
+	E: Environment<B> + Send + Sync + 'static,
+	E::Error: core::fmt::Debug,
+{
+	if !inherent_data_providers.has_provider(&srml_timestamp::INHERENT_IDENTIFIER) {
+		match inherent_data_providers.register_provider(srml_timestamp::InherentDataProvider) {
+			Ok(()) => (),
+			Err(e) => warn!("Registering inherent data provider for timestamp failed"),
+		}
+	}
+
+	thread::spawn(move || {
+		loop {
+			match mine_one(&block_import, &client, &mut env, &inherent_data_providers) {
+				Ok(()) => (),
+				Err(e) => warn!("Mining block failed: {:?}", e),
+			}
+
+			std::thread::sleep(std::time::Duration::new(1, 0));
+		}
+	});
+}
+
+pub fn mine_one<B: BlockT<Hash=H256>, I, C, E>(
+	block_import: &Arc<Mutex<I>>,
+	client: &Arc<C>,
+	env: &mut E,
+	inherent_data_providers: &inherents::InherentDataProviders,
+) -> Result<(), String> where
+	I: BlockImport<B>,
+	C: HeaderBackend<B> + AuxStore + ProvideRuntimeApi,
+	C::Api: PowApi<B>,
+	E: Environment<B>,
+	E::Error: core::fmt::Debug,
+{
+	let best_hash = client.info().best_hash;
+	let best_header = client.header(BlockId::Hash(best_hash))
+		.map_err(|e| format!("Best header does not exist: {:?}", e))?
+		.ok_or("Fetching best header failed")?;
+	let best_aux_key = POW_AUX_PREFIX.iter().chain(&best_hash[..])
+		.cloned().collect::<Vec<_>>();
+	let mut aux = match client.get_aux(&best_aux_key)
+		.map_err(|e| format!("{:?}", e))?
+	{
+		Some(bytes) => PowAux::decode(&mut &bytes[..]).map_err(|e| format!("{:?}", e))?,
+		None => Default::default(),
+	};
+	let mut proposer = env.init(&best_header).map_err(|e| format!("{:?}", e))?;
+
+	let inherent_data = inherent_data_providers
+		.create_inherent_data().map_err(String::from)?;
+	let block = futures::executor::block_on(proposer.propose(
+		inherent_data,
+		Default::default(),
+		std::time::Duration::new(1, 0)
+	)).map_err(|e| format!("Block proposing error: {:?}", e))?;
+
+	let (mut header, body) = block.deconstruct();
+	let (difficulty, seal) = client.runtime_api().mine(
+		&BlockId::Hash(best_hash),
+		&header.hash(),
+	).map_err(|e| format!("Mine sealing runtime error: {:?}", e))?;
+
+	aux.total_difficulty += difficulty;
+	let hash = header.hash();
+
+	let import_block = BlockImportParams {
+		origin: BlockOrigin::Own,
+		header,
+		justification: None,
+		post_digests: vec![DigestItem::Seal(POW_ENGINE_ID, seal)],
+		body: Some(body),
+		finalized: false,
+		auxiliary: vec![(POW_AUX_PREFIX.iter().chain(&hash[..]).cloned().collect::<Vec<_>>(),
+						 Some(aux.encode()))],
+		fork_choice: ForkChoiceStrategy::Custom(true),
+	};
+
+	if let Err(err) = block_import.lock().expect("Lock failed").import_block(import_block, Default::default()) {
+		warn!("Error with block built on {:?}: {:?}",
+			  best_hash,
+			  err,
+		);
+	}
+	Ok(())
 }
