@@ -198,7 +198,8 @@ pub trait SessionHandler<ValidatorId> {
 	/// should provide the same validator set.
 	fn on_genesis_session<Ks: OpaqueKeys>(validators: &[(ValidatorId, Ks)]);
 
-	/// Session set has changed; act appropriately.
+	/// Session set has changed; act appropriately. Note that this can be called
+	/// before initialization of your module.
 	///
 	/// `changed` is true whenever any of the session keys or underlying economic
 	/// identities or weightings behind those keys has changed.
@@ -226,7 +227,8 @@ pub trait OneSessionHandler<ValidatorId> {
 	fn on_genesis_session<'a, I: 'a>(validators: I)
 		where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
 
-	/// Session set has changed; act appropriately.
+	/// Session set has changed; act appropriately. Note that this can be called
+	/// before initialization of your module.
 	///
 	/// `changed` is true when at least one of the session keys
 	/// or the underlying economic identities/distribution behind one the
@@ -460,7 +462,7 @@ decl_module! {
 			Ok(())
 		}
 
-		/// Called when a block is finalized. Will rotate session if it is the last
+		/// Called when a block is initialized. Will rotate session if it is the last
 		/// block of the current session.
 		fn on_initialize(n: T::BlockNumber) {
 			if T::ShouldEndSession::should_end_session(n) {
