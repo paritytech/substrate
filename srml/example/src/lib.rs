@@ -258,7 +258,7 @@ use srml_support::{StorageValue, dispatch::Result, decl_module, decl_storage, de
 use system::{ensure_signed, ensure_root};
 use codec::{Encode, Decode};
 use sr_primitives::{
-	traits::{SignedExtension, DispatchError, Bounded },
+	traits::{SignedExtension, DispatchError, Bounded},
 	transaction_validity::ValidTransaction,
 	weights::{SimpleDispatchInfo, DispatchInfo},
 };
@@ -553,7 +553,6 @@ impl<T: Trait> Module<T> {
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct WatchDummy<T: Trait + Send + Sync>(PhantomData<T>);
 
-// TODO how is this different then driving?
 #[cfg(feature = "std")]
 impl<T: Trait + Send + Sync> rstd::fmt::Debug for WatchDummy<T> {
 	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
