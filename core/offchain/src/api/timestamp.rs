@@ -44,3 +44,17 @@ pub fn now() -> Timestamp {
 pub fn timestamp_from_now(timestamp: Timestamp) -> Duration {
 	Duration::from_millis(timestamp.diff(&now()).millis())
 }
+
+/// Converts the deadline into a `Future` that resolves when the deadline is reached.
+pub fn deadline_to_future(
+	deadline: Option<Timestamp>,
+) -> futures::future::MaybeDone<impl futures::Future> {
+	use futures::future;
+
+	future::maybe_done(match deadline {
+		Some(deadline) => future::Either::Left(
+			futures_timer::Delay::new(timestamp_from_now(deadline))
+		),
+		None => future::Either::Right(future::pending())
+	})
+}

@@ -169,14 +169,7 @@ impl HttpApi {
 			Some(r) => r,
 		};
 
-		// Convert the deadline into a `Future` that resolves when the deadline is reached.
-		let mut deadline = future::maybe_done(match deadline {
-			Some(deadline) => future::Either::Left(
-				futures_timer::Delay::new(timestamp::timestamp_from_now(deadline))
-			),
-			None => future::Either::Right(future::pending())
-		});
-
+		let mut deadline = timestamp::deadline_to_future(deadline);
 		// Closure that writes data to a sender, taking the deadline into account.
 		// If `IoError` is returned, don't forget to destroy the request.
 		let mut poll_sender = move |sender: &mut hyper::body::Sender| -> Result<(), HttpError> {
@@ -300,13 +293,7 @@ impl HttpApi {
 			self.requests.insert(*id, HttpApiRequest::Dispatched(None));
 		}
 
-		// Convert the deadline into a `Future` that resolves when the deadline is reached.
-		let mut deadline = future::maybe_done(match deadline {
-			Some(deadline) => future::Either::Left(
-				futures_timer::Delay::new(timestamp::timestamp_from_now(deadline))
-			),
-			None => future::Either::Right(future::pending())
-		});
+		let mut deadline = timestamp::deadline_to_future(deadline);
 
 		loop {
 			// Within that loop, first try to see if we have all the elements for a response.
@@ -473,7 +460,7 @@ impl HttpApi {
 			}
 
 			// If we reach here, that means the `current_read_chunk` is empty and needs to be
-			// filled with a new chunk from `body`. We block on either the next body of the
+			// filled with a new chunk from `body`. We block on either the next body or the
 			// deadline.
 			let mut next_body = future::maybe_done(response.body.next());
 			futures::executor::block_on(future::select(&mut next_body, &mut deadline));
@@ -551,7 +538,7 @@ enum WorkerToApi {
 		id: HttpRequestId,
 		/// Error that happened.
 		error: hyper::Error,
-	}
+	},
 }
 
 enum HyperClient {
@@ -669,12 +656,11 @@ impl Future for HttpWorker {
 						}
 						Poll::Ready(Some(Err(err))) => {
 							let _ = tx.start_send(Err(err));
-							continue 	// don't insert the request back
+							// don't insert the request back
 						},
 						Poll::Ready(None) => {}		// EOF; don't insert the request back
 						Poll::Pending => {
 							me.requests.push((id, HttpWorkerRequest::ReadBody { body, tx }));
-							continue
 						},
 					}
 				}
