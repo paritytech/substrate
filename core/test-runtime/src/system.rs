@@ -62,6 +62,12 @@ pub fn initialize_block(header: &Header) {
 	<ParentHash>::put(&header.parent_hash);
 	<StorageDigest>::put(header.digest());
 	storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
+
+	// try to read something that depends on current header digest
+	// so that it'll be included in execution proof
+	if let Some(generic::DigestItem::Other(v)) = header.digest().logs().iter().next() {
+		let _: Option<u32> = storage::unhashed::get(&v);
+	}
 }
 
 pub fn get_block_number() -> Option<BlockNumber> {
@@ -102,6 +108,12 @@ fn execute_block_with_state_root_handler(
 		header.extrinsics_root = txs_root;
 	} else {
 		assert!(txs_root == header.extrinsics_root, "Transaction trie root must be valid.");
+	}
+
+	// try to read something that depends on current header digest
+	// so that it'll be included in execution proof
+	if let Some(generic::DigestItem::Other(v)) = header.digest().logs().iter().next() {
+		let _: Option<u32> = storage::unhashed::get(&v);
 	}
 
 	// execute transactions
