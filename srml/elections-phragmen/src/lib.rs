@@ -131,11 +131,12 @@ decl_storage! {
 		pub ElectionRounds get(election_rounds): u32 = Zero::zero();
 
 		/// Votes of a particular voter, with the round index of the votes.
-		pub VotesOf get(votes_of): linked_map T::AccountId => (Vec<T::AccountId>, u32);
+		pub VotesOf get(votes_of): linked_map T::AccountId => Vec<T::AccountId>;
 		/// Locked stake of a voter.
 		pub StakeOf get(stake_of): map T::AccountId => BalanceOf<T>;
 
-		/// The present candidate list. Sorted based on account id.
+		/// The present candidate list. Sorted based on account id. A current member can never enter
+		/// this vector and is always implicitly assumed to be a candidate.
 		pub Candidates get(candidates): Vec<T::AccountId>;
 		/// Current number of active candidates.
 		pub CandidateCount get(candidate_count): u32;
@@ -164,13 +165,18 @@ decl_module! {
 
 			// TODO: use decode_len #3071 and remove candidate_count.
 			let candidates_count = Self::candidate_count();
+			// addition is valid: candidates adn members never overlap.
 			let allowed_votes = candidates_count as usize + Self::members().len();
-			ensure!(!allowed_votes.is_zero(), "number of candidates cannot be zero");
+
+			ensure!(!allowed_votes.is_zero(), "cannot vote when no candidates or members exist");
 			ensure!(votes.len() <= allowed_votes, "cannot vote more than candidates");
 			ensure!(votes.len() <= MAXIMUM_VOTE, "cannot vote more than maximum allowed");
 
 			ensure!(!votes.is_empty(), "must vote for at least one candidate.");
-			ensure!(value > T::Currency::minimum_balance(), "cannot vote with stake less than min balance");
+			ensure!(
+				value > T::Currency::minimum_balance(),
+				"cannot vote with stake less than minimum balance"
+			);
 
 			if !Self::is_voter(&who) {
 				// first time voter. Reserve bond.
@@ -190,8 +196,7 @@ decl_module! {
 			);
 			<StakeOf<T>>::insert(&who, locked_balance);
 
-			let now = Self::election_rounds();
-			<VotesOf<T>>::insert(&who, (votes, now));
+			<VotesOf<T>>::insert(&who, votes);
 		}
 
 		/// Remove `origin` as a voter. This removes the lock and returns the bond.
@@ -229,7 +234,7 @@ decl_module! {
 			let index = is_candidate.unwrap_err();
 
 			T::Currency::reserve(&who, T::CandidacyBond::get())
-				.map_err(|_| "candidate has not enough funds")?;
+				.map_err(|_| "candidate does not have enough funds")?;
 
 			<Candidates<T>>::mutate(|c| c.insert(index, who));
 			CandidateCount::mutate(|c| *c += 1);
@@ -340,7 +345,7 @@ impl<T: Trait> Module<T> {
 		let exposed_candidates = candidates.clone();
 		candidates.append(&mut Self::members());
 		let voters_and_votes = <VotesOf<T>>::enumerate()
-			.map(|(v, i)| (v, i.0))
+			.map(|(v, i)| (v, i))
 			.collect::<Vec<(T::AccountId, Vec<T::AccountId>)>>();
 		let maybe_new_members = phragmen::elect::<_, _, _, T::CurrencyToVote>(
 			num_to_elect,
@@ -376,7 +381,7 @@ impl<T: Trait> Module<T> {
 
 			// Burn loser bond. members list is sorted. O(NLogM) (N candidates, M members)
 			exposed_candidates.into_iter().for_each(|c| {
-				if new_members.binary_search(&c).is_err() { // TODO make sure candidate cannot fuck themselves up here and get slashed by re-submitting.
+				if new_members.binary_search(&c).is_err() {
 					let (imbalance, _) = T::Currency::slash_reserved(&c, T::CandidacyBond::get());
 					T::LoserCandidate::on_unbalanced(imbalance);
 				}
@@ -567,13 +572,19 @@ mod tests {
 		(Balances::free_balance(who), Balances::reserved_balance(who))
 	}
 
+	fn has_lock(who: &u64) -> u64 {
+		let lock = Balances::locks(who)[0].clone();
+		assert_eq!(lock.id, MODULE_ID);
+		lock.amount
+	}
+
 	#[test]
 	fn params_should_work() {
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			System::set_block_number(1);
-			assert_eq!(Elections::election_rounds(), 0);
-			assert_eq!(Elections::term_duration(), 5);
 			assert_eq!(Elections::desired_members(), 2);
+			assert_eq!(Elections::term_duration(), 5);
+			assert_eq!(Elections::election_rounds(), 0);
 
 			assert_eq!(Elections::members(), vec![]);
 
@@ -582,7 +593,7 @@ mod tests {
 			assert!(Elections::is_candidate(&1).is_err());
 
 			assert_eq!(all_voters(), vec![]);
-			assert_eq!(Elections::votes_of(&1).0, vec![]);
+			assert_eq!(Elections::votes_of(&1), vec![]);
 		});
 	}
 
@@ -593,18 +604,21 @@ mod tests {
 			assert!(Elections::is_candidate(&1).is_err());
 			assert!(Elections::is_candidate(&2).is_err());
 
-			assert_eq!(Balances::free_balance(&1), 10);
+			assert_eq!(balances(&1), (10, 0));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(1)));
-			assert_eq!(Balances::free_balance(&1), 10 - 3);
-			assert_eq!(Balances::reserved_balance(&1), 3);
+			assert_eq!(balances(&1), (7, 3));
+
 			assert_eq!(Elections::candidates(), vec![1]);
+
 			assert!(Elections::is_candidate(&1).is_ok());
 			assert!(Elections::is_candidate(&2).is_err());
 
-			assert_eq!(Balances::free_balance(&2), 20);
+			assert_eq!(balances(&2), (20, 0));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(2)));
-			assert_eq!(Balances::free_balance(&2), 20 - 3);
+			assert_eq!(balances(&2), (17, 3));
+
 			assert_eq!(Elections::candidates(), vec![1, 2]);
+
 			assert!(Elections::is_candidate(&1).is_ok());
 			assert!(Elections::is_candidate(&2).is_ok());
 		});
@@ -625,6 +639,7 @@ mod tests {
 
 	#[test]
 	fn member_candidacy_submission_should_not_work() {
+		// critically important to make sure that outgoing candidates and losers are not mixed up.
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::vote(Origin::signed(2), vec![5], 20));
@@ -648,45 +663,56 @@ mod tests {
 			assert_eq!(Elections::candidates(), Vec::<u64>::new());
 			assert_noop!(
 				Elections::submit_candidacy(Origin::signed(7)),
-				"candidate has not enough funds"
+				"candidate does not have enough funds"
 			);
 		});
 	}
 
 	#[test]
-	fn vote_locks_balance() {
+	fn simple_voting_should_work() {
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			assert_eq!(Elections::candidates(), Vec::<u64>::new());
-			assert_eq!(Balances::free_balance(&2), 20);
+			assert_eq!(balances(&2), (20, 0));
 
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::vote(Origin::signed(2), vec![5], 20));
 
-			assert_eq!(Balances::free_balance(&2), 20 - 2);
-			assert_noop!(
-				Balances::reserve(&2, 1),
-				"account liquidity restrictions prevent withdrawal"
-			); // locked.
+			assert_eq!(balances(&2), (18, 2));
+			assert_eq!(has_lock(&2), 20);
 		});
 	}
 
 	#[test]
-	fn can_update_votes() {
+	fn can_vote_with_custom_stake() {
 		with_externalities(&mut ExtBuilder::default().build(), || {
-			assert_eq!(Balances::free_balance(&2), 20);
-			assert_eq!(Balances::reserved_balance(&2), 0);
+			assert_eq!(Elections::candidates(), Vec::<u64>::new());
+			assert_eq!(balances(&2), (20, 0));
+
+			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
+			assert_ok!(Elections::vote(Origin::signed(2), vec![5], 12));
+
+			assert_eq!(balances(&2), (18, 2));
+			assert_eq!(has_lock(&2), 12);
+		});
+	}
+
+	#[test]
+	fn can_update_votes_and_stake() {
+		with_externalities(&mut ExtBuilder::default().build(), || {
+			assert_eq!(balances(&2), (20, 0));
 
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
 			assert_ok!(Elections::vote(Origin::signed(2), vec![5], 20));
 
-			assert_eq!(Balances::free_balance(&2), 20 - 2);
-			assert_eq!(Balances::reserved_balance(&2), 2);
+			assert_eq!(balances(&2), (18, 2));
+			assert_eq!(has_lock(&2), 20);
 			assert_eq!(Elections::stake_of(2), 20);
 
 			// can update; different stake; different lock and reserve.
 			assert_ok!(Elections::vote(Origin::signed(2), vec![5, 4], 15));
-			assert_eq!(Balances::reserved_balance(&2), 2);
+			assert_eq!(balances(&2), (18, 2));
+			assert_eq!(has_lock(&2), 15);
 			assert_eq!(Elections::stake_of(2), 15);
 		});
 	}
@@ -696,8 +722,27 @@ mod tests {
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			assert_noop!(
 				Elections::vote(Origin::signed(2), vec![], 20),
-				"number of candidates cannot be zero"
+				"cannot vote when no candidates or members exist"
 			);
+		});
+	}
+
+	#[test]
+	fn can_vote_for_old_members_even_when_no_new_candidates() {
+		// let allowed_votes = candidates_count as usize + Self::members().len()
+		with_externalities(&mut ExtBuilder::default().build(), || {
+			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
+
+			assert_ok!(Elections::vote(Origin::signed(2), vec![4, 5], 20));
+
+			System::set_block_number(5);
+			assert_ok!(Elections::end_block(System::block_number()));
+
+			assert_eq!(Elections::members(), vec![4, 5]);
+			assert_eq!(Elections::candidates(), vec![]);
+
+			assert_ok!(Elections::vote(Origin::signed(3), vec![4, 5], 10));
 		});
 	}
 
@@ -722,7 +767,7 @@ mod tests {
 
 			assert_noop!(
 				Elections::vote(Origin::signed(2), vec![4], 1),
-				"cannot vote with stake less than min balance"
+				"cannot vote with stake less than minimum balance"
 			);
 		})
 	}
@@ -736,6 +781,7 @@ mod tests {
 			assert_ok!(Elections::vote(Origin::signed(2), vec![4, 5], 30));
 			// you can lie but won't get away with it.
 			assert_eq!(Elections::stake_of(2), 20);
+			assert_eq!(has_lock(&2), 20);
 		});
 	}
 
@@ -750,18 +796,17 @@ mod tests {
 			assert_eq_uvec!(all_voters(), vec![2, 3]);
 			assert_eq!(Elections::stake_of(2), 20);
 			assert_eq!(Elections::stake_of(3), 30);
-			assert_eq!(Elections::votes_of(2), (vec![5], 0));
-			assert_eq!(Elections::votes_of(3), (vec![5], 0));
+			assert_eq!(Elections::votes_of(2), vec![5]);
+			assert_eq!(Elections::votes_of(3), vec![5]);
 
 			assert_ok!(Elections::remove_voter(Origin::signed(2)));
 
-			assert_eq!(all_voters(), vec![3]);
-			assert_eq!(Elections::votes_of(2), (vec![], 0));
+			assert_eq_uvec!(all_voters(), vec![3]);
+			assert_eq!(Elections::votes_of(2), vec![]);
 			assert_eq!(Elections::stake_of(2), 0);
 
-			assert_eq!(Balances::free_balance(&2), 20);
-			assert_eq!(Balances::reserved_balance(&2), 0);
-			assert_ok!(Balances::reserve(&2, 10)); // no locks
+			assert_eq!(balances(&2), (20, 0));
+			assert_eq!(Balances::locks(&2).len(), 0);
 		});
 	}
 
@@ -809,27 +854,32 @@ mod tests {
 	fn simple_voting_rounds_should_work() {
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(3)));
 
 			assert_ok!(Elections::vote(Origin::signed(2), vec![5], 20));
-			assert_ok!(Elections::vote(Origin::signed(3), vec![5], 30));
+			assert_ok!(Elections::vote(Origin::signed(4), vec![4], 15));
+			assert_ok!(Elections::vote(Origin::signed(3), vec![3], 30));
 
-			assert_eq_uvec!(all_voters(), vec![2, 3]);
+			assert_eq_uvec!(all_voters(), vec![2, 3, 4]);
 
-			assert_eq!(Elections::votes_of(2).0, vec![5]);
-			assert_eq!(Elections::votes_of(3).0, vec![5]);
+			assert_eq!(Elections::votes_of(2), vec![5]);
+			assert_eq!(Elections::votes_of(3), vec![3]);
+			assert_eq!(Elections::votes_of(4), vec![4]);
 
-			assert_eq!(Elections::candidates(), vec![5]);
-			assert_eq!(Elections::candidate_count(), 1);
+			assert_eq!(Elections::candidates(), vec![3, 4, 5]);
+			assert_eq!(Elections::candidate_count(), 3);
 
 			assert_eq!(Elections::election_rounds(), 0);
 
 			System::set_block_number(5);
 			assert_ok!(Elections::end_block(System::block_number()));
 
-			assert_eq!(Elections::members(), vec![5]);
-			assert_eq_uvec!(all_voters(), vec![2, 3]);
+			assert_eq!(Elections::members(), vec![3, 5]);
+			assert_eq_uvec!(all_voters(), vec![2, 3, 4]);
 			assert_eq!(Elections::candidates(), vec![]);
 			assert_eq!(Elections::candidate_count(), 0);
+
 			assert_eq!(Elections::election_rounds(), 1);
 		});
 	}
@@ -837,10 +887,9 @@ mod tests {
 	#[test]
 	fn old_voter_will_be_counted() {
 		with_externalities(&mut ExtBuilder::default().build(), || {
-			// TODO: add to mopdule doc the tip that: one can always submit a candidacy and vote but not the other way around.
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 
-			// This guys vote is pointless for this round.
+			// This guy's vote is pointless for this round.
 			assert_ok!(Elections::vote(Origin::signed(3), vec![4], 30));
 			assert_ok!(Elections::vote(Origin::signed(5), vec![5], 50));
 
@@ -853,10 +902,10 @@ mod tests {
 			// but now it has a valid target.
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
 
-			// meanwhile, no one cares to become a candidate again.
 			System::set_block_number(10);
 			assert_ok!(Elections::end_block(System::block_number()));
-			// none of the votes matter anymore
+
+			// candidate 4 is affected by an old vote.
 			assert_eq!(Elections::members(), vec![4, 5]);
 			assert_eq!(Elections::election_rounds(), 2);
 			assert_eq_uvec!(all_voters(), vec![3, 5]);
@@ -904,11 +953,7 @@ mod tests {
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(3)));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2)));
 
-			assert_ok!(Elections::vote(Origin::signed(2), vec![2], 20));
-			assert_ok!(Elections::vote(Origin::signed(3), vec![3], 30));
 			assert_ok!(Elections::vote(Origin::signed(4), vec![4], 40));
 			assert_ok!(Elections::vote(Origin::signed(5), vec![5], 50));
 
@@ -918,22 +963,29 @@ mod tests {
 			assert_eq!(Elections::members(), vec![4, 5]);
 			assert_eq!(Elections::election_rounds(), 1);
 
-			// 2 will become a candidate again, with the same vote.
-			assert_ok!(Elections::remove_voter(Origin::signed(2)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(2)));
-			assert_ok!(Elections::vote(Origin::signed(2), vec![2], 18));
+			assert_ok!(Elections::vote(Origin::signed(2), vec![2], 20));
 
-			// 4, 5 will persist as candidates despite not being in the list.
-			assert_eq!(Elections::candidates(), vec![2]);
+			assert_ok!(Elections::submit_candidacy(Origin::signed(3)));
+			assert_ok!(Elections::vote(Origin::signed(3), vec![3], 30));
+
+			assert_ok!(Elections::remove_voter(Origin::signed(4)));
+
+			// 5 will persist as candidates despite not being in the list.
+			assert_eq!(Elections::candidates(), vec![2, 3]);
+
 			System::set_block_number(10);
 			assert_ok!(Elections::end_block(System::block_number()));
 
-			assert_eq!(Elections::members(), vec![4, 5]);
+			// 4 removed; 5 and 3 are the new best.
+			assert_eq!(Elections::members(), vec![3, 5]);
 		});
 	}
 
 	#[test]
 	fn election_state_is_uninterrupted() {
+		// what I mean by uninterrupted:
+		// given no input or stimulants the same members are re-elected.
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
@@ -972,7 +1024,7 @@ mod tests {
 			assert_eq!(Elections::members(), vec![4, 5]);
 			assert_eq!(Elections::election_rounds(), 1);
 
-			// a new candidate is also there waiting.
+			// a new candidate
 			assert_ok!(Elections::submit_candidacy(Origin::signed(3)));
 			assert_ok!(Elections::vote(Origin::signed(3), vec![3], 30));
 
@@ -1021,27 +1073,26 @@ mod tests {
 	#[test]
 	fn outgoing_will_get_the_bond_back() {
 		with_externalities(&mut ExtBuilder::default().build(), || {
-			assert_eq!(Balances::total_balance(&5), 50);
+			assert_eq!(balances(&5), (50, 0));
 
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
-			assert_eq!(Balances::reserved_balance(&5), 3);
+			assert_eq!(balances(&5), (47, 3));
 
 			assert_ok!(Elections::vote(Origin::signed(5), vec![5], 50));
-			assert_eq!(Balances::reserved_balance(&5), 3 + 2);
+			assert_eq!(balances(&5), (45, 5));
 
 			System::set_block_number(5);
 			assert_ok!(Elections::end_block(System::block_number()));
 			assert_eq!(Elections::members(), vec![5]);
 
 			assert_ok!(Elections::remove_voter(Origin::signed(5)));
-			assert_eq!(Balances::reserved_balance(&5), 3);
-			// meanwhile, no one cares to become a candidate again.
+			assert_eq!(balances(&5), (47, 3));
+
 			System::set_block_number(10);
 			assert_ok!(Elections::end_block(System::block_number()));
 			assert_eq!(Elections::members(), vec![]);
 
-			assert_eq!(Balances::reserved_balance(&5), 0);
-			assert_eq!(Balances::total_balance(&5), 50);
+			assert_eq!(balances(&5), (50, 0));
 		});
 	}
 
@@ -1049,23 +1100,22 @@ mod tests {
 	fn losers_will_lose_the_bond() {
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(3)));
 
 			assert_ok!(Elections::vote(Origin::signed(4), vec![5], 40));
 
-			assert_eq!(Balances::reserved_balance(&5), 3);
-			assert_eq!(Balances::reserved_balance(&3), 3);
+			assert_eq!(balances(&5), (47, 3));
+			assert_eq!(balances(&3), (27, 3));
 
 			System::set_block_number(5);
 			assert_ok!(Elections::end_block(System::block_number()));
 
 			assert_eq!(Elections::members(), vec![5]);
 
-			assert_eq!(Balances::reserved_balance(&5), 3); // winner
-
-			assert_eq!(Balances::reserved_balance(&3), 0); // loser
-			assert_eq!(Balances::free_balance(&3), 27); // loser
+			// winner
+			assert_eq!(balances(&5), (47, 3));
+			// loser
+			assert_eq!(balances(&3), (27, 0));
 		});
 	}
 
@@ -1080,27 +1130,31 @@ mod tests {
 
 			System::set_block_number(5);
 			assert_ok!(Elections::end_block(System::block_number()));
+			assert_eq!(Elections::members(), vec![4, 5]);
 
 			assert_ok!(Elections::submit_candidacy(Origin::signed(1)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(2)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(3)));
 
+			// 5 will change their vote and becomes an `outgoing`
 			assert_ok!(Elections::vote(Origin::signed(5), vec![4], 8));
+			// 4 will stay in the set
 			assert_ok!(Elections::vote(Origin::signed(4), vec![4], 40));
+			// 3 will become a winner
 			assert_ok!(Elections::vote(Origin::signed(3), vec![3], 30));
+			// these two are losers.
 			assert_ok!(Elections::vote(Origin::signed(2), vec![2], 20));
 			assert_ok!(Elections::vote(Origin::signed(1), vec![1], 10));
 
 			System::set_block_number(10);
 			assert_ok!(Elections::end_block(System::block_number()));
 
-			// 3, 4 are new members, must still be bonded
+			// 3, 4 are new members, must still be bonded, nothing slashed.
 			assert_eq!(Elections::members(), vec![3, 4]);
 			assert_eq!(balances(&3), (25, 5));
 			assert_eq!(balances(&4), (35, 5));
 
-			// 1 is a loser, will get slashed.
-			assert_eq!(Balances::reserved_balance(&1), 2);
+			// 1 is a loser, slashed by 3.
 			assert_eq!(balances(&1), (5, 2));
 
 			// 5 is an outgoing loser, it will get their bond back.
