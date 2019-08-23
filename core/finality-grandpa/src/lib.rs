@@ -108,7 +108,7 @@ use import::GrandpaBlockImport;
 use until_imported::UntilGlobalMessageBlocksImported;
 use communication::NetworkBridge;
 use service::TelemetryOnConnect;
-use fg_primitives::AuthoritySignature;
+use fg_primitives::{AuthoritySignature, SetId, AuthorityWeight};
 
 // Re-export these two because it's just so damn convenient.
 pub use fg_primitives::{AuthorityId, ScheduledChange};
@@ -267,8 +267,8 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> BlockStatus<Block> for Arc<Client<B, E,
 pub(crate) struct NewAuthoritySet<H, N> {
 	pub(crate) canon_number: N,
 	pub(crate) canon_hash: H,
-	pub(crate) set_id: u64,
-	pub(crate) authorities: Vec<(AuthorityId, u64)>,
+	pub(crate) set_id: SetId,
+	pub(crate) authorities: Vec<(AuthorityId, AuthorityWeight)>,
 }
 
 /// Commands issued to the voter.
@@ -399,7 +399,7 @@ where
 }
 
 fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
-	set_id: u64,
+	set_id: SetId,
 	voters: &Arc<VoterSet<AuthorityId>>,
 	client: &Arc<Client<B, E, Block, RA>>,
 	network: &NetworkBridge<Block, N>,
