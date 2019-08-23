@@ -227,7 +227,7 @@ decl_module! {
 			ensure_none(origin)?;
 
 			let current_session = <session::Module<T>>::current_index();
-			ensure!(current_session == heartbeat.session_index, "Outdated hearbeat received.");
+			ensure!(current_session == heartbeat.session_index, "Outdated heartbeat received.");
 			let exists = <ReceivedHeartbeats>::exists(
 				&current_session,
 				&heartbeat.authority_index
@@ -238,7 +238,7 @@ decl_module! {
 				let signature_valid = heartbeat.using_encoded(|encoded_heartbeat| {
 					public.verify(&encoded_heartbeat, &signature)
 				});
-				ensure!(signature_valid, "Invalid hearbeat signature.");
+				ensure!(signature_valid, "Invalid heartbeat signature.");
 
 				Self::deposit_event(Event::HeartbeatReceived(public.clone()));
 

@@ -524,6 +524,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 		config.clone(),
 		persistent_data.set_state.clone(),
 		on_exit.clone(),
+		true,
 	);
 
 	register_finality_tracker_inherent_data_provider(client.clone(), &inherent_data_providers)?;
