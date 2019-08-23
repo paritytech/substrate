@@ -16,15 +16,54 @@
 
 //! Module helpers for offchain calls.
 
-use sr_primitives::traits::Extrinsic as ExtrinsicT;
+use codec::{Encode, Codec};
+use sr_primitives::app_crypto::RuntimeAppPublic;
+use sr_primitives::generic::{UncheckedExtrinsic, SignedPayload};
+use sr_primitives::traits::{Extrinsic as ExtrinsicT, SignedExtension, StaticLookup, MaybeDebug};
 
 /// A trait responsible for producing signature payload for an extrinsic.
 pub trait Signer<T: crate::Trait, Extrinsic: ExtrinsicT> {
 	fn sign(
 		account: T::AccountId,
 		nonce: T::Index,
-		call: &Extrinsic::Call,
-	) -> Option<Extrinsic::SignaturePayload>;
+		call: Extrinsic::Call,
+	) -> (Extrinsic::Call, Option<Extrinsic::SignaturePayload>);
+}
+
+pub trait GetPayload<Call, Index, Payload> {
+	fn get_payload(call: Call, index: Index) -> Payload;
+}
+
+impl<T, L, P, TSigner, Address, Call, Extra, Signature> Signer<T, UncheckedExtrinsic<Address, Call, Signature, Extra>>
+	for (TSigner, UncheckedExtrinsic<Address, Call, Signature, Extra>, L, P)
+where
+	TSigner: RuntimeAppPublic + From<T::AccountId>,
+	TSigner::Signature: Into<Signature>,
+	Address: Codec + Clone + PartialEq + MaybeDebug,
+	Call: Encode,
+	T: crate::Trait,
+	Extra: SignedExtension,
+	L: StaticLookup<Source=Address, Target=T::AccountId>,
+	P: GetPayload<Call, T::Index, SignedPayload<Call, Extra>>,
+{
+	fn sign(
+		account: T::AccountId,
+		nonce: T::Index,
+		call: Call,
+	) -> (Call, Option<
+		<UncheckedExtrinsic<Address, Call, Signature, Extra> as ExtrinsicT>::SignaturePayload
+	>) {
+		let raw_payload = P::get_payload(call, nonce);
+		let signature = raw_payload.using_encoded(|payload| {
+			TSigner::from(account.clone()).sign(&payload)
+		});
+		let address = L::unlookup(account);
+		let (call, extra, _) = raw_payload.deconstruct();
+		match signature {
+			Some(sig) => (call, Some((address, sig.into(), extra))),
+			None => (call, None),
+		}
+	}
 }
 
 /// A trait to sign and submit transactions in offchain calls.
@@ -43,8 +82,10 @@ pub trait SubmitSignedTransaction<T: crate::Trait, Call> {
 	fn sign_and_submit(call: impl Into<Call>, id: T::AccountId) -> Result<(), ()> {
 		let call = call.into();
 		let expected = <crate::Module<T>>::account_nonce(&id);
-		let signature_data = Self::Sign::sign(id, expected, &call).ok_or(())?;
-		let xt = Self::Extrinsic::new(call, Some(signature_data)).ok_or(())?;
+		let (call, signature_data) = Self::Sign::sign(id, expected, call);
+		// return an error if there is no signature_data, instead of producing unsigned extrinsic.
+		let signature_data = Some(signature_data.ok_or(())?);
+		let xt = Self::Extrinsic::new(call, signature_data).ok_or(())?;
 		runtime_io::submit_transaction(&xt)
 	}
 }
@@ -68,6 +109,14 @@ pub trait SubmitUnsignedTransaction<T: crate::Trait, Call> {
 /// A default type used to submit transactions to the pool.
 pub struct TransactionSubmitter<S, E> {
 	_signer: rstd::marker::PhantomData<(S, E)>,
+}
+
+impl<S, E> Default for TransactionSubmitter<S, E> {
+	fn default() -> Self {
+		Self {
+			_signer: Default::default(),
+		}
+	}
 }
 
 /// A blanket implementation to simplify creation of transaction signer & submitter in the runtime.

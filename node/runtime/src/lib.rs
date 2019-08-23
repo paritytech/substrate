@@ -424,7 +424,15 @@ impl finality_tracker::Trait for Runtime {
 	type ReportLatency = ReportLatency;
 }
 
-type SubmitTransaction = system::offchain::TransactionSubmitter<(), UncheckedExtrinsic>;
+impl system::offchain::GetPayload<Call, Index, SignedPayload> for Runtime {
+	fn get_payload(call: Call, index: Index) -> SignedPayload {
+		unimplemented!()
+	}
+}
+
+// TODO [ToDr] What type to use here?
+type Signer = (ImOnlineId, UncheckedExtrinsic, Indices, Runtime);
+type SubmitTransaction = system::offchain::TransactionSubmitter<Signer, UncheckedExtrinsic>;
 
 construct_runtime!(
 	pub enum Runtime where
@@ -477,6 +485,8 @@ pub type SignedExtra = (
 );
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, Signature, SignedExtra>;
+/// The payload being signed in transactions.
+pub type SignedPayload = generic::SignedPayload<Call, SignedExtra>;
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Call, SignedExtra>;
 /// Executive: handles dispatch to the various modules.
@@ -609,5 +619,19 @@ impl_runtime_apis! {
 			let seed = seed.as_ref().map(|s| rstd::str::from_utf8(&s).expect("Seed is an utf8 string"));
 			SessionKeys::generate(seed)
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use system::offchain::SubmitSignedTransaction;
+
+	fn is_submit_signed_transaction(_arg: impl SubmitSignedTransaction<Runtime, Call>) {}
+
+	#[test]
+	fn validate_bounds() {
+		let x = SubmitTransaction::default();
+		is_submit_signed_transaction(x);
 	}
 }

@@ -27,7 +27,7 @@ mod digest;
 #[cfg(test)]
 mod tests;
 
-pub use self::unchecked_extrinsic::UncheckedExtrinsic;
+pub use self::unchecked_extrinsic::{UncheckedExtrinsic, SignedPayload};
 pub use self::era::{Era, Phase};
 pub use self::checked_extrinsic::CheckedExtrinsic;
 pub use self::header::Header;

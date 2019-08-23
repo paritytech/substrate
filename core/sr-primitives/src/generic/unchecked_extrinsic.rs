@@ -108,21 +108,18 @@ where
 	fn check(self, lookup: &Lookup) -> Result<Self::Checked, &'static str> {
 		Ok(match self.signature {
 			Some((signed, signature, extra)) => {
-				let additional_signed = extra.additional_signed()?;
-				let raw_payload = (self.function, extra, additional_signed);
 				let signed = lookup.lookup(signed)?;
+				let raw_payload = SignedPayload::new(self.function, extra)?;
 				if !raw_payload.using_encoded(|payload| {
-					if payload.len() > 256 {
-						signature.verify(&blake2_256(payload)[..], &signed)
-					} else {
-						signature.verify(payload, &signed)
-					}
+					signature.verify(payload, &signed)
 				}) {
 					return Err(crate::BAD_SIGNATURE)
 				}
+
+				let (function, extra, _) = raw_payload.deconstruct();
 				CheckedExtrinsic {
-					signed: Some((signed, raw_payload.1)),
-					function: raw_payload.0,
+					signed: Some((signed, extra)),
+					function,
 				}
 			}
 			None => CheckedExtrinsic {
@@ -130,6 +127,54 @@ where
 				function: self.function,
 			},
 		})
+	}
+}
+
+/// A payload to sign for unchecked extrinsics.
+pub struct SignedPayload<Call, Extra: SignedExtension> {
+	raw_payload: (
+		Call,
+		Extra,
+		Extra::AdditionalSigned,
+	),
+}
+
+impl<Call, Extra> SignedPayload<Call, Extra> where
+	Call: Encode,
+	Extra: SignedExtension,
+{
+	/// Create new `SignedPayload`.
+	///
+	/// This function may fail if `additional_signed` of `Extra` is not available.
+	pub fn new(call: Call, extra: Extra) -> Result<Self, &'static str> {
+		let additional_signed = extra.additional_signed()?;
+		let raw_payload = (call, extra, additional_signed);
+		Ok(Self { raw_payload })
+	}
+
+	/// Create new `SignedPayload` from raw components.
+	pub fn from_raw(call: Call, extra: Extra, additional_signed: Extra::AdditionalSigned) -> Self {
+		Self {
+			raw_payload: (call, extra, additional_signed),
+		}
+	}
+
+	/// Get an encoded version of this payload.
+	///
+	/// Payloads longer than 256 bytes are going to be `blake2_256`-hashed.
+	pub fn using_encoded<O>(&self, f: impl FnOnce(&[u8]) -> O) -> O {
+		self.raw_payload.using_encoded(|payload| {
+			if payload.len() > 256 {
+				f(&blake2_256(payload)[..])
+			} else {
+				f(payload)
+			}
+		})
+	}
+
+	/// Deconstruct the payload into it's components.
+	pub fn deconstruct(self) -> (Call, Extra, Extra::AdditionalSigned) {
+		self.raw_payload
 	}
 }
 
