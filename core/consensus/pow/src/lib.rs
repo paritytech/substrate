@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use core::marker::PhantomData;
 use client::{
-	BlockOf, blockchain::ProvideCache, block_builder::api::BlockBuilder as BlockBuilderApi,
+	BlockOf, blockchain::{HeaderBackend, ProvideCache}, block_builder::api::BlockBuilder as BlockBuilderApi,
 };
 use sr_primitives::Justification;
 use sr_primitives::generic::{BlockId, DigestItem};
@@ -101,7 +101,7 @@ impl<C> PowVerifier<C> {
 }
 
 impl<B: BlockT<Hash=H256>, C> Verifier<B> for PowVerifier<C> where
-	C: ProvideRuntimeApi + Send + Sync + client::backend::AuxStore + ProvideCache<B> + BlockOf,
+	C: ProvideRuntimeApi + Send + Sync + HeaderBackend<B> + client::backend::AuxStore + ProvideCache<B> + BlockOf,
 	C::Api: BlockBuilderApi<B> + PowApi<B>,
 {
 	fn verify(
@@ -115,10 +115,19 @@ impl<B: BlockT<Hash=H256>, C> Verifier<B> for PowVerifier<C> where
 			.create_inherent_data().map_err(String::from)?;
 		let timestamp_now = inherent_data.timestamp_inherent_data().map_err(String::from)?;
 
+		let best_hash = self.client.info().best_hash;
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
 		let parent_aux_key = POW_AUX_PREFIX.iter().chain(&parent_hash[..])
 			.cloned().collect::<Vec<_>>();
+		let best_aux_key = POW_AUX_PREFIX.iter().chain(&best_hash[..])
+			.cloned().collect::<Vec<_>>();
+		let best_aux = match self.client.get_aux(&best_aux_key)
+			.map_err(|e| format!("{:?}", e))?
+		{
+			Some(bytes) => PowAux::decode(&mut &bytes[..]).map_err(|e| format!("{:?}", e))?,
+			None => Default::default(),
+		};
 		let mut aux = match self.client.get_aux(&parent_aux_key)
 			.map_err(|e| format!("{:?}", e))?
 		{
@@ -155,7 +164,7 @@ impl<B: BlockT<Hash=H256>, C> Verifier<B> for PowVerifier<C> where
 			justification,
 			auxiliary: vec![(POW_AUX_PREFIX.iter().chain(&hash[..]).cloned().collect::<Vec<_>>(),
 							 Some(aux.encode()))],
-			fork_choice: ForkChoiceStrategy::LongestChain,
+			fork_choice: ForkChoiceStrategy::Custom(aux.total_difficulty > best_aux.total_difficulty),
 		};
 
 		Ok((import_block, None))
