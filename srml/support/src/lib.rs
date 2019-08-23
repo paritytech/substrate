@@ -30,9 +30,8 @@ pub use serde;
 pub use sr_std as rstd;
 #[doc(hidden)]
 pub use codec;
-#[cfg(feature = "std")]
 #[doc(hidden)]
-pub use once_cell;
+pub use spin;
 #[doc(hidden)]
 pub use paste;
 

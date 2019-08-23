@@ -1055,17 +1055,16 @@ fn store_functions_to_metadata (
 				#traitinstance, #instance #bound_instantiable #equal_default_instance
 			>(pub #scrate::rstd::marker::PhantomData<(#traitinstance #comma_instance)>);
 
-			#[cfg(feature = "std")]
 			#[allow(non_upper_case_globals)]
-			static #cache_name: #scrate::once_cell::sync::OnceCell<#scrate::rstd::vec::Vec<u8>> = #scrate::once_cell::sync::OnceCell::INIT;
+			static #cache_name: #scrate::spin::Once<#scrate::rstd::vec::Vec<u8>> =
+				#scrate::spin::Once::new();
 
-			#[cfg(feature = "std")]
 			impl<#traitinstance: #traittype, #instance #bound_instantiable> #scrate::metadata::DefaultByte
 				for #struct_name<#traitinstance, #instance> #where_clause
 			{
 				fn default_byte(&self) -> #scrate::rstd::vec::Vec<u8> {
 					use #scrate::codec::Encode;
-					#cache_name.get_or_init(|| {
+					#cache_name.call_once(|| {
 						let def_val: #value_type = #default;
 						<#value_type as Encode>::encode(&def_val)
 					}).clone()
@@ -1077,17 +1076,6 @@ fn store_functions_to_metadata (
 
 			unsafe impl<#traitinstance: #traittype, #instance #bound_instantiable> Sync
 				for #struct_name<#traitinstance, #instance> #where_clause {}
-
-			#[cfg(not(feature = "std"))]
-			impl<#traitinstance: #traittype, #instance #bound_instantiable> #scrate::metadata::DefaultByte
-				for #struct_name<#traitinstance, #instance> #where_clause
-			{
-				fn default_byte(&self) -> #scrate::rstd::vec::Vec<u8> {
-					use #scrate::codec::Encode;
-					let def_val: #value_type = #default;
-					<#value_type as Encode>::encode(&def_val)
-				}
-			}
 		};
 
 		default_getter_struct_def.extend(def_get);
