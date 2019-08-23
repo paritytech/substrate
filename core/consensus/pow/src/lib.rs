@@ -16,8 +16,11 @@ use consensus_common::{
 use consensus_common::import_queue::Verifier;
 use codec::{Encode, Decode};
 
+/// Auxiliary prefix for PoW engine.
+pub const POW_AUX_PREFIX: [u8; 4] = *b"PoW:";
+
 /// Auxiliary data for PoW.
-#[derive(Encode, Decode, Clone, Debug)]
+#[derive(Encode, Decode, Clone, Debug, Default)]
 pub struct PowAux {
 	pub total_difficulty: Difficulty,
 }
@@ -114,11 +117,20 @@ impl<B: BlockT<Hash=H256>, C> Verifier<B> for PowVerifier<C> where
 
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
+		let parent_aux_key = POW_AUX_PREFIX.iter().chain(&parent_hash[..])
+			.cloned().collect::<Vec<_>>();
+		let mut aux = match self.client.get_aux(&parent_aux_key)
+			.map_err(|e| format!("{:?}", e))?
+		{
+			Some(bytes) => PowAux::decode(&mut &bytes[..]).map_err(|e| format!("{:?}", e))?,
+			None => Default::default(),
+		};
 
 		let (checked_header, difficulty, seal) = self.check_header::<B>(
 			header,
 			BlockId::Hash(parent_hash),
 		)?;
+		aux.total_difficulty += difficulty;
 
 		if let Some(inner_body) = body.take() {
 			let block = B::new(checked_header.clone(), inner_body);
@@ -141,7 +153,8 @@ impl<B: BlockT<Hash=H256>, C> Verifier<B> for PowVerifier<C> where
 			body,
 			finalized: false,
 			justification,
-			auxiliary: Vec::new(),
+			auxiliary: vec![(POW_AUX_PREFIX.iter().chain(&hash[..]).cloned().collect::<Vec<_>>(),
+							 Some(aux.encode()))],
 			fork_choice: ForkChoiceStrategy::LongestChain,
 		};
 
