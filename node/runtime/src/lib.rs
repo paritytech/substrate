@@ -426,6 +426,7 @@ impl finality_tracker::Trait for Runtime {
 
 impl system::offchain::GetPayload<Call, Index, SignedPayload> for Runtime {
 	fn get_payload(call: Call, index: Index) -> SignedPayload {
+		// TODO Get signer extra and convert into `SignedPayload`.
 		unimplemented!()
 	}
 }
