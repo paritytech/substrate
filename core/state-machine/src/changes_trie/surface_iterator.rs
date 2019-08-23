@@ -17,13 +17,16 @@
 //! The best way to understand how this iterator works is to imagine some 2D terrain that have some mountains
 //! (digest changes tries) and valleys (changes tries for regular blocks). There are gems (blocks) beneath the
 //! terrain. Given the request to find all gems in the range [X1; X2] this iterator will return **minimal set**
-//! of points at the terrain (mountains and valleys() inside this range that have to be drilled down to
+//! of points at the terrain (mountains and valleys) inside this range that have to be drilled down to
 //! search for gems.
 
 use num_traits::One;
 use crate::changes_trie::{ConfigurationRange, BlockNumber};
 
 /// Returns surface iterator for given range of blocks.
+///
+/// `max` is the number of best block, known to caller. We can't access any changes tries
+/// that are built after this block, even though we may have them built already.
 pub fn surface_iterator<'a, Number: BlockNumber>(
 	config: ConfigurationRange<'a, Number>,
 	max: Number,
