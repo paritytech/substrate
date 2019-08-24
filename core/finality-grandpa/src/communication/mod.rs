@@ -51,7 +51,7 @@ use gossip::{
 	GossipMessage, FullCatchUpMessage, FullCommitMessage, VoteOrPrecommitMessage, GossipValidator
 };
 use fg_primitives::{
-	AuthorityPair, AuthorityId, AuthoritySignature, SetId as SetIdAlias, RoundNumber,
+	AuthorityPair, AuthorityId, AuthoritySignature, SetId as SetIdNumber, RoundNumber,
 };
 
 pub mod gossip;
@@ -131,12 +131,12 @@ pub trait Network<Block: BlockT>: Clone + Send + 'static {
 }
 
 /// Create a unique topic for a round and set-id combo.
-pub(crate) fn round_topic<B: BlockT>(round: RoundNumber, set_id: SetIdAlias) -> B::Hash {
+pub(crate) fn round_topic<B: BlockT>(round: RoundNumber, set_id: SetIdNumber) -> B::Hash {
 	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-{}", set_id, round).as_bytes())
 }
 
 /// Create a unique topic for global messages on a set ID.
-pub(crate) fn global_topic<B: BlockT>(set_id: SetIdAlias) -> B::Hash {
+pub(crate) fn global_topic<B: BlockT>(set_id: SetIdNumber) -> B::Hash {
 	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-GLOBAL", set_id).as_bytes())
 }
 
@@ -620,7 +620,7 @@ impl<B: BlockT, N: Network<B>> Clone for NetworkBridge<B, N> {
 	}
 }
 
-fn localized_payload<E: Encode>(round: RoundNumber, set_id: SetIdAlias, message: &E) -> Vec<u8> {
+fn localized_payload<E: Encode>(round: RoundNumber, set_id: SetIdNumber, message: &E) -> Vec<u8> {
 	(message, round, set_id).encode()
 }
 
@@ -630,7 +630,7 @@ pub struct Round(pub RoundNumber);
 
 /// Type-safe wrapper around a set ID.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Encode, Decode)]
-pub struct SetId(pub SetIdAlias);
+pub struct SetId(pub SetIdNumber);
 
 // check a message.
 pub(crate) fn check_message_sig<Block: BlockT>(
@@ -638,7 +638,7 @@ pub(crate) fn check_message_sig<Block: BlockT>(
 	id: &AuthorityId,
 	signature: &AuthoritySignature,
 	round: RoundNumber,
-	set_id: SetIdAlias,
+	set_id: SetIdNumber,
 ) -> Result<(), ()> {
 	let as_public = id.clone();
 	let encoded_raw = localized_payload(round, set_id, message);
@@ -659,7 +659,7 @@ pub(crate) fn check_message_sig<Block: BlockT>(
 /// be taken when switching to different key types.
 struct OutgoingMessages<Block: BlockT, N: Network<Block>> {
 	round: RoundNumber,
-	set_id: SetIdAlias,
+	set_id: SetIdNumber,
 	locals: Option<(AuthorityPair, AuthorityId)>,
 	sender: mpsc::UnboundedSender<SignedMessage<Block>>,
 	network: N,
@@ -854,7 +854,7 @@ fn check_catch_up<Block: BlockT>(
 	fn check_signatures<'a, B, I>(
 		messages: I,
 		round: RoundNumber,
-		set_id: SetIdAlias,
+		set_id: SetIdNumber,
 		mut signatures_checked: usize,
 	) -> Result<usize, i32> where
 		B: BlockT,
@@ -921,7 +921,7 @@ impl<Block: BlockT, N: Network<Block>> CommitsOut<Block, N> {
 	/// Create a new commit output stream.
 	pub(crate) fn new(
 		network: N,
-		set_id: SetIdAlias,
+		set_id: SetIdNumber,
 		is_voter: bool,
 		gossip_validator: Arc<GossipValidator<Block>>,
 	) -> Self {

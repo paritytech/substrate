@@ -153,8 +153,9 @@ decl_storage! {
 		/// `true` if we are currently stalled.
 		Stalled get(stalled): Option<(T::BlockNumber, T::BlockNumber)>;
 
-		/// The number of changes (both in terms of keys and underlying economic responsibilities) in the "set" of Grandpa validators from genesis.
-		CurrentSetId get(current_set_id) build(|_| fg_primitives::genesis_set_id()): SetId;
+		/// The number of changes (both in terms of keys and underlying economic responsibilities)
+		/// in the "set" of Grandpa validators from genesis.
+		CurrentSetId get(current_set_id) build(|_| fg_primitives::SetId::default()): SetId;
 
 		/// A mapping from grandpa set ID to the index of the *most recent* session for which its members were responsible.
 		SetIdSession get(session_for_set): map SetId => Option<SessionIndex>;
@@ -394,25 +395,25 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T>
 	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, _queued_validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
-		let session_index = <session::Module<T>>::current_index();
 		// Always issue a change if `session` says that the validators have changed.
 		// Even if their session keys are the same as before, the underyling economic
 		// identities have changed.
-		if changed {
+		let current_set_id = if changed {
 			let next_authorities = validators.map(|(_, k)| (k, 1)).collect::<Vec<_>>();
 			if let Some((further_wait, median)) = <Stalled<T>>::take() {
 				let _ = Self::schedule_change(next_authorities, further_wait, Some(median));
 			} else {
 				let _ = Self::schedule_change(next_authorities, Zero::zero(), None);
 			}
-			let new_set_id = CurrentSetId::mutate(|s| { *s += 1; *s });
-			SetIdSession::insert(new_set_id, &session_index);
+			CurrentSetId::mutate(|s| { *s += 1; *s })
 		} else {
 			// nothing's changed, neither economic conditions nor session keys. update the pointer
 			// of the current set.
-			let set_id = Self::current_set_id();
-			SetIdSession::insert(set_id, &session_index);
-		}
+			Self::current_set_id()
+		};
+
+		let session_index = <session::Module<T>>::current_index();
+		SetIdSession::insert(set_id, &session_index);
 	}
 
 	fn on_disabled(i: usize) {

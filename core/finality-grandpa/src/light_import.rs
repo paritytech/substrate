@@ -192,7 +192,7 @@ impl LightAuthoritySet {
 	/// Get a genesis set with given authorities.
 	pub fn genesis(initial: Vec<(AuthorityId, u64)>) -> Self {
 		LightAuthoritySet {
-			set_id: fg_primitives::genesis_set_id(),
+			set_id: fg_primitives::SetId::default(),
 			authorities: initial,
 		}
 	}

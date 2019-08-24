@@ -55,9 +55,6 @@ pub type AuthorityIndex = u64;
 /// The identifier of a GRANDPA set.
 pub type SetId = u64;
 
-/// The genesis set ID.
-pub fn genesis_set_id() -> SetId { 0 }
-
 /// The round indicator.
 pub type RoundNumber = u64;
 
