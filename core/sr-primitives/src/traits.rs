@@ -796,7 +796,7 @@ impl<T: BlindCheckable, Context> Checkable<Context> for T {
 /// An abstract error concerning an attempt to verify, check or dispatch the transaction. This
 /// cannot be more concrete because it's designed to work reasonably well over a broad range of
 /// possible transaction types.
-#[cfg_attr(feature = "std", derive(Debug))]
+#[cfg_attr(feature = "std", derive(PartialEq, Debug))]
 pub enum DispatchError {
 	/// General error to do with the inability to pay some fees (e.g. account balance too low).
 	Payment,

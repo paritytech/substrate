@@ -72,8 +72,6 @@
 //! - [`Imbalance`](../srml_support/traits/trait.Imbalance.html): Functions for handling
 //! imbalances between total issuance in the system and account balances. Must be used when a function
 //! creates new funds (e.g. a reward) or destroys some funds (e.g. a system fee).
-//! - [`MakePayment`](../srml_support/traits/trait.MakePayment.html): Simple trait designed
-//! for hooking into a transaction payment.
 //! - [`IsDeadAccount`](../srml_system/trait.IsDeadAccount.html): Determiner to say whether a
 //! given account is unused.
 //!
@@ -87,6 +85,17 @@
 //! ### Public Functions
 //!
 //! - `vesting_balance` - Get the amount that is currently being vested and cannot be transferred out of this account.
+//!
+//! ### Signed Extensions
+//!
+//! The balances module defines the following extensions:
+//!
+//!   - [`TakeFees`]: Consumes fees proportional to the length and weight of the transaction.
+//!     Additionally, it can contain a single encoded payload as a `tip`. The inclusion priority
+//!     is increased proportional to the tip.
+//!
+//! Lookup the runtime aggregator file (e.g. `node/runtime`) to see the full list of signed
+//! extensions included in a chain.
 //!
 //! ## Usage
 //!
