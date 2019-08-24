@@ -449,6 +449,21 @@ decl_module! {
 			<Self as Currency<_>>::transfer(&transactor, &dest, value)?;
 		}
 
+		/// Exactly as `transfer`, except the origin must be root and the source account may be
+		/// specified.
+		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
+		pub fn force_transfer(
+			origin,
+			source: <T::Lookup as StaticLookup>::Source,
+			dest: <T::Lookup as StaticLookup>::Source,
+			#[compact] value: T::Balance
+		) {
+			ensure_root(origin)?;
+			let source = T::Lookup::lookup(source)?;
+			let dest = T::Lookup::lookup(dest)?;
+			<Self as Currency<_>>::transfer(&source, &dest, value)?;
+		}
+
 		/// Set the balances of a given account.
 		///
 		/// This will alter `FreeBalance` and `ReservedBalance` in storage. it will
@@ -462,7 +477,7 @@ decl_module! {
 		/// - Independent of the arguments.
 		/// - Contains a limited number of reads and writes.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(500_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(50_000)]
 		fn set_balance(
 			origin,
 			who: <T::Lookup as StaticLookup>::Source,
