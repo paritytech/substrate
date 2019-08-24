@@ -387,8 +387,8 @@ by the keystore, you need to provide the key using one of the cli arguments `--p
 
 === Recommended RPC call
 
-For most users that want to run a validator node, the `author_rotateKeys` RPC call is sufficient.
-The RPC call will generate `N` session keys for you and returns their public keys. `N` is the number
+For most users who want to run a validator node, the `author_rotateKeys` RPC call is sufficient.
+The RPC call will generate `N` Session keys for you and return their public keys. `N` is the number
 of session keys configured in the runtime. The output of the RPC call can be used as input for the
 `session::set_keys` transaction.
 
@@ -398,7 +398,7 @@ curl -H 'Content-Type: application/json' --data '{ "jsonrpc":"2.0", "method":"au
 
 === Advanced RPC call
 
-If the session keys need to match a fixed seed, they can be set individually key by key. The RPC call
+If the Session keys need to match a fixed seed, they can be set individually key by key. The RPC call
 expects the key seed and the key type. The key types supported by default in Substrate are listed
 https://github.com/paritytech/substrate/blob/master/core/primitives/src/crypto.rs#L767[here], but the
 user can declare any key type.
@@ -407,7 +407,7 @@ user can declare any key type.
 curl -H 'Content-Type: application/json' --data '{ "jsonrpc":"2.0", "method":"author_insertKey", "params":["KEY_TYPE", "SEED"],"id":1 }' localhost:9933
 ```
 
-`KEY_TYPE` - needs to be replaced with the 4 character key type identifier.
+`KEY_TYPE` - needs to be replaced with the 4-character key type identifier.
 `SEEED` - is the seed of the key.
 
 == Documentation
