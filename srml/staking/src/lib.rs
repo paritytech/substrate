@@ -1355,6 +1355,10 @@ impl<T: Trait> Module<T> {
 			// Set the new validator set in sessions.
 			<CurrentElected<T>>::put(&elected_stashes);
 
+			// In order to keep the property required by `n_session_ending`
+			// that we must return the new validator set even if it's the same as the old,
+			// as long as any underlying economic conditions have changed, we don't attempt
+			// to do any optimization where we compare against the prior set.
 			(slot_stake, Some(elected_stashes))
 		} else {
 			// There were not enough candidates for even our minimal level of functionality.

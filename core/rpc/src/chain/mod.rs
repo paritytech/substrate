@@ -67,19 +67,19 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 	#[pubsub(
 		subscription = "chain_newHead",
 		subscribe,
-		name = "chain_subscribeNewHead",
-		alias("subscribe_newHead")
+		name = "chain_subscribeNewHeads",
+		alias("subscribe_newHead", "chain_subscribeNewHead")
 	)]
-	fn subscribe_new_head(&self, metadata: Self::Metadata, subscriber: Subscriber<Header>);
+	fn subscribe_new_heads(&self, metadata: Self::Metadata, subscriber: Subscriber<Header>);
 
 	/// Unsubscribe from new head subscription.
 	#[pubsub(
 		subscription = "chain_newHead",
 		unsubscribe,
-		name = "chain_unsubscribeNewHead",
-		alias("unsubscribe_newHead")
+		name = "chain_unsubscribeNewHeads",
+		alias("unsubscribe_newHead", "chain_unsubscribeNewHead")
 	)]
-	fn unsubscribe_new_head(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool>;
+	fn unsubscribe_new_heads(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool>;
 
 	/// New head subscription
 	#[pubsub(
@@ -199,7 +199,7 @@ impl<B, E, Block, RA> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, Sig
 		Ok(self.client.info().chain.finalized_hash)
 	}
 
-	fn subscribe_new_head(&self, _metadata: Self::Metadata, subscriber: Subscriber<Block::Header>) {
+	fn subscribe_new_heads(&self, _metadata: Self::Metadata, subscriber: Subscriber<Block::Header>) {
 		self.subscribe_headers(
 			subscriber,
 			|| self.block_hash(None.into()),
@@ -210,7 +210,7 @@ impl<B, E, Block, RA> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, Sig
 		)
 	}
 
-	fn unsubscribe_new_head(&self, _metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool> {
+	fn unsubscribe_new_heads(&self, _metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool> {
 		Ok(self.subscriptions.cancel(id))
 	}
 
