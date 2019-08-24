@@ -666,6 +666,42 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					#mutate_impl;
 					ret
 				}
+
+				// Swap must be overriden not to break links.
+				fn swap<S: #scrate::HashedStorage<Self::Hasher>>(
+					key1: &#kty,
+					key2: &#kty,
+					storage: &mut S,
+				) {
+					use self::#inner_module::Utils;
+
+					let final_key1 = &*#as_map::key_for(key1);
+					let final_key2 = &*#as_map::key_for(key2);
+					let full_value_1 = Self::read_with_linkage(storage, final_key1);
+					let full_value_2 = Self::read_with_linkage(storage, final_key2);
+
+					match (full_value_1, full_value_2) {
+						// Just keep linkage in order and only swap values.
+						(Some((value1, linkage1)), Some((value2, linkage2))) => {
+							storage.put(final_key1, &(value2, linkage1));
+							storage.put(final_key2, &(value1, linkage2));
+						}
+						// Remove key and insert the new one.
+						(Some((value, linkage)), None) => {
+							#as_map::remove(key1, storage);
+							let linkage = Self::new_head_linkage(storage, key2);
+							storage.put(final_key2, &(value, linkage));
+						}
+						// Remove key and insert the new one.
+						(None, Some((value, linkage))) => {
+							#as_map::remove(key2, storage);
+							let linkage = Self::new_head_linkage(storage, key1);
+							storage.put(final_key1, &(value, linkage));
+						}
+						// No-op.
+						(None, None) => (),
+					}
+				}
 			}
 
 			impl<#impl_trait> #scrate::storage::hashed::generator::EnumerableStorageMap<#kty, #typ>

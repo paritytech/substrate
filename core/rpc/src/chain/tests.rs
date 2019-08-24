@@ -202,7 +202,7 @@ fn should_notify_about_latest_block() {
 			subscriptions: Subscriptions::new(Arc::new(remote)),
 		};
 
-		api.subscribe_new_head(Default::default(), subscriber);
+		api.subscribe_new_heads(Default::default(), subscriber);
 
 		// assert id assigned
 		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));

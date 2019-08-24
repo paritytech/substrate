@@ -160,7 +160,7 @@ It won't do much until you start producing blocks though, so to do that you'll n
 
 [source, shell]
 ----
-substrate --chain ~/mychain.json --validator --key ...
+substrate --chain ~/mychain.json --validator
 ----
 
 You can distribute `mychain.json` so that everyone can synchronize and (depending on your authorities list) validate on your chain.
@@ -377,6 +377,38 @@ git checkout -b v1.0 origin/v1.0
 ----
 
 You can then follow the same steps for building and running as described above in <<flaming-fir>>.
+
+== Key management
+
+Keys in Substrate are stored in the keystore in the file system. To store keys into this keystore,
+you need to use one of the two provided RPC calls. If your keys are encrypted or should be encrypted
+by the keystore, you need to provide the key using one of the cli arguments `--password`,
+`--password-interactive` or `--password-filename`.
+
+=== Recommended RPC call
+
+For most users who want to run a validator node, the `author_rotateKeys` RPC call is sufficient.
+The RPC call will generate `N` Session keys for you and return their public keys. `N` is the number
+of session keys configured in the runtime. The output of the RPC call can be used as input for the
+`session::set_keys` transaction.
+
+```
+curl -H 'Content-Type: application/json' --data '{ "jsonrpc":"2.0", "method":"author_rotateKeys", "id":1 }' localhost:9933
+```
+
+=== Advanced RPC call
+
+If the Session keys need to match a fixed seed, they can be set individually key by key. The RPC call
+expects the key seed and the key type. The key types supported by default in Substrate are listed
+https://github.com/paritytech/substrate/blob/master/core/primitives/src/crypto.rs#L767[here], but the
+user can declare any key type.
+
+```
+curl -H 'Content-Type: application/json' --data '{ "jsonrpc":"2.0", "method":"author_insertKey", "params":["KEY_TYPE", "SEED"],"id":1 }' localhost:9933
+```
+
+`KEY_TYPE` - needs to be replaced with the 4-character key type identifier.
+`SEEED` - is the seed of the key.
 
 == Documentation
 
