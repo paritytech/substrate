@@ -157,7 +157,7 @@ impl<B: BlockT<Hash=H256>, C> Verifier<B> for PowVerifier<C> where
 			let (_, inner_body) = block.deconstruct();
 			body = Some(inner_body);
 		}
-
+		let key = POW_AUX_PREFIX.iter().chain(&hash[..]).cloned().collect::<Vec<_>>();
 		let import_block = BlockImportParams {
 			origin,
 			header: checked_header,
@@ -165,8 +165,7 @@ impl<B: BlockT<Hash=H256>, C> Verifier<B> for PowVerifier<C> where
 			body,
 			finalized: false,
 			justification,
-			auxiliary: vec![(POW_AUX_PREFIX.iter().chain(&hash[..]).cloned().collect::<Vec<_>>(),
-							 Some(aux.encode()))],
+			auxiliary: vec![(key, Some(aux.encode()))],
 			fork_choice: ForkChoiceStrategy::Custom(aux.total_difficulty > best_aux.total_difficulty),
 		};
 
@@ -280,6 +279,7 @@ pub fn mine_one<B: BlockT<Hash=H256>, I, C, E>(
 	aux.total_difficulty += difficulty;
 	let hash = header.hash();
 
+	let key = POW_AUX_PREFIX.iter().chain(&hash[..]).cloned().collect::<Vec<_>>();
 	let import_block = BlockImportParams {
 		origin: BlockOrigin::Own,
 		header,
@@ -287,8 +287,7 @@ pub fn mine_one<B: BlockT<Hash=H256>, I, C, E>(
 		post_digests: vec![DigestItem::Seal(POW_ENGINE_ID, seal)],
 		body: Some(body),
 		finalized: false,
-		auxiliary: vec![(POW_AUX_PREFIX.iter().chain(&hash[..]).cloned().collect::<Vec<_>>(),
-						 Some(aux.encode()))],
+		auxiliary: vec![(key, Some(aux.encode()))],
 		fork_choice: ForkChoiceStrategy::Custom(true),
 	};
 
