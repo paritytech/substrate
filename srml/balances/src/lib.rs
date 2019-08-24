@@ -181,12 +181,6 @@ mod tests;
 
 pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
 
-pub const DEFAULT_EXISTENTIAL_DEPOSIT: u32 = 0;
-pub const DEFAULT_TRANSFER_FEE: u32 = 0;
-pub const DEFAULT_CREATION_FEE: u32 = 0;
-pub const DEFAULT_TRANSACTION_BASE_FEE: u32 = 0;
-pub const DEFAULT_TRANSACTION_BYTE_FEE: u32 = 0;
-
 pub trait Subtrait<I: Instance = DefaultInstance>: system::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy +

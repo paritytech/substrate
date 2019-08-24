@@ -174,13 +174,6 @@ impl Decode for Vote {
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
-pub const DEFAULT_ENACTMENT_PERIOD: u32 = 0;
-pub const DEFAULT_LAUNCH_PERIOD: u32 = 0;
-pub const DEFAULT_VOTING_PERIOD: u32 = 0;
-pub const DEFAULT_MINIMUM_DEPOSIT: u32 = 0;
-pub const DEFAULT_EMERGENCY_VOTING_PERIOD: u32 = 0;
-pub const DEFAULT_COOLOFF_PERIOD: u32 = 0;
-
 pub trait Trait: system::Trait + Sized {
 	type Proposal: Parameter + Dispatchable<Origin=Self::Origin>;
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
