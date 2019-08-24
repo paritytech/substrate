@@ -153,10 +153,10 @@ decl_storage! {
 		/// `true` if we are currently stalled.
 		Stalled get(stalled): Option<(T::BlockNumber, T::BlockNumber)>;
 
-		/// The current set-id.
+		/// The number of changes (both in terms of keys and underlying economic responsibilities) in the "set" of Grandpa validators from genesis.
 		CurrentSetId get(current_set_id) build(|_| fg_primitives::genesis_set_id()): SetId;
 
-		/// A mapping from grandpa set ID to session index.
+		/// A mapping from grandpa set ID to the index of the *most recent* session for which its members were responsible.
 		SetIdSession get(session_for_set): map SetId => Option<SessionIndex>;
 	}
 	add_extra_genesis {
