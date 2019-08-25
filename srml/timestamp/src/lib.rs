@@ -209,7 +209,7 @@ for_each_tuple!(impl_timestamp_set);
 pub trait Trait: system::Trait {
 	/// Type used for expressing timestamp.
 	type Moment: Parameter + Default + SimpleArithmetic
-		+ Scale<Self::BlockNumber, Output = Self::Moment>;
+		+ Scale<Self::BlockNumber, Output = Self::Moment> + Copy;
 
 	/// Something which can be notified when the timestamp is set. Set this to `()` if not needed.
 	type OnTimestampSet: OnTimestampSet<Self::Moment>;
