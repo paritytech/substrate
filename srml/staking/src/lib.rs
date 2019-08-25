@@ -1179,7 +1179,7 @@ impl<T: Trait> Module<T> {
 		let rewards = CurrentEraRewards::take();
 		let now = T::Time::now();
 		let previous_era_start = <CurrentEraStart<T>>::mutate(|v| {
-			rstd::mem::replace(v, now.clone())
+			rstd::mem::replace(v, now)
 		});
 		let era_duration = now - previous_era_start;
 		if !era_duration.is_zero() {
