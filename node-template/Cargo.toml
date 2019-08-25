@@ -37,3 +37,8 @@ node-template-runtime = { path = "runtime" }
 
 [build-dependencies]
 vergen = "3"
+
+[workspace]
+members = [
+    "runtime"
+]
