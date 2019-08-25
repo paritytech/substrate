@@ -195,9 +195,9 @@ macro_rules! impl_timestamp_set {
 	);
 
 	( $($t:ident)* ) => {
-		impl<Moment: Clone, $($t: OnTimestampSet<Moment>),*> OnTimestampSet<Moment> for ($($t,)*) {
+		impl<Moment: Copy, $($t: OnTimestampSet<Moment>),*> OnTimestampSet<Moment> for ($($t,)*) {
 			fn on_timestamp_set(moment: Moment) {
-				$($t::on_timestamp_set(moment.clone());)*
+				$($t::on_timestamp_set(moment);)*
 			}
 		}
 	}
@@ -246,7 +246,7 @@ decl_module! {
 				Self::now().is_zero() || now >= Self::now() + T::MinimumPeriod::get(),
 				"Timestamp must increment by at least <MinimumPeriod> between sequential blocks"
 			);
-			<Self as Store>::Now::put(now.clone());
+			<Self as Store>::Now::put(now);
 			<Self as Store>::DidUpdate::put(true);
 
 			<T::OnTimestampSet as OnTimestampSet<_>>::on_timestamp_set(now);
