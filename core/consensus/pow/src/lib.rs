@@ -173,6 +173,20 @@ impl<B: BlockT<Hash=H256>, C> Verifier<B> for PowVerifier<C> where
 	}
 }
 
+/// Register the PoW inherent data provider, if not registered already.
+fn register_pow_inherent_data_provider(
+	inherent_data_providers: &InherentDataProviders,
+) -> Result<(), consensus_common::Error> {
+	if !inherent_data_providers.has_provider(&srml_timestamp::INHERENT_IDENTIFIER) {
+		inherent_data_providers
+			.register_provider(srml_timestamp::InherentDataProvider)
+			.map_err(Into::into)
+			.map_err(consensus_common::Error::InherentData)
+	} else {
+		Ok(())
+	}
+}
+
 /// The PoW import queue type.
 pub type PowImportQueue<B> = BasicQueue<B>;
 
@@ -185,12 +199,7 @@ pub fn import_queue<B, C>(
 	C: 'static + ProvideRuntimeApi + HeaderBackend<B> + BlockOf + ProvideCache<B> + Send + Sync + AuxStore,
 	C::Api: BlockBuilderApi<B> + PowApi<B>,
 {
-	if !inherent_data_providers.has_provider(&srml_timestamp::INHERENT_IDENTIFIER) {
-		match inherent_data_providers.register_provider(srml_timestamp::InherentDataProvider) {
-			Ok(()) => (),
-			Err(e) => warn!("Registering inherent data provider for timestamp failed"),
-		}
-	}
+	register_pow_inherent_data_provider(&inherent_data_providers)?;
 
 	let verifier = PowVerifier {
 		client: client.clone(),
@@ -217,11 +226,8 @@ pub fn start_mine<B: BlockT<Hash=H256>, I, C, E>(
 	E: Environment<B> + Send + Sync + 'static,
 	E::Error: core::fmt::Debug,
 {
-	if !inherent_data_providers.has_provider(&srml_timestamp::INHERENT_IDENTIFIER) {
-		match inherent_data_providers.register_provider(srml_timestamp::InherentDataProvider) {
-			Ok(()) => (),
-			Err(e) => warn!("Registering inherent data provider for timestamp failed"),
-		}
+	if let Err(_) = register_pow_inherent_data_provider(&inherent_data_providers) {
+		warn!("Registering inherent data provider for timestamp failed");
 	}
 
 	thread::spawn(move || {
@@ -270,7 +276,7 @@ pub fn mine_one<B: BlockT<Hash=H256>, I, C, E>(
 		std::time::Duration::new(1, 0)
 	)).map_err(|e| format!("Block proposing error: {:?}", e))?;
 
-	let (mut header, body) = block.deconstruct();
+	let (header, body) = block.deconstruct();
 	let (difficulty, seal) = client.runtime_api().mine(
 		&BlockId::Hash(best_hash),
 		&header.hash(),
