@@ -22,7 +22,7 @@ use client::{
 	BlockOf, blockchain::{HeaderBackend, ProvideCache}, block_builder::api::BlockBuilder as BlockBuilderApi, backend::AuxStore,
 };
 use sr_primitives::Justification;
-use sr_primitives::generic::{BlockId, DigestItem};
+use sr_primitives::generic::{BlockId, Digest, DigestItem};
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi};
 use srml_timestamp::{TimestampInherentData, InherentError as TIError};
 use pow_primitives::{PowApi, Difficulty, POW_ENGINE_ID};
@@ -235,6 +235,7 @@ pub fn start_mine<B: BlockT<Hash=H256>, C, E>(
 	mut block_import: BoxBlockImport<B>,
 	client: Arc<C>,
 	mut env: E,
+	preruntime: Vec<u8>,
 	round: u32,
 	inherent_data_providers: inherents::InherentDataProviders,
 ) where
@@ -253,6 +254,7 @@ pub fn start_mine<B: BlockT<Hash=H256>, C, E>(
 				&mut block_import,
 				client.as_ref(),
 				&mut env,
+				&preruntime,
 				round,
 				&inherent_data_providers
 			) {
@@ -272,6 +274,7 @@ fn mine_loop<B: BlockT<Hash=H256>, C, E>(
 	block_import: &mut BoxBlockImport<B>,
 	client: &C,
 	env: &mut E,
+	preruntime: &[u8],
 	round: u32,
 	inherent_data_providers: &inherents::InherentDataProviders,
 ) -> Result<(), String> where
@@ -297,9 +300,11 @@ fn mine_loop<B: BlockT<Hash=H256>, C, E>(
 
 		let inherent_data = inherent_data_providers
 			.create_inherent_data().map_err(String::from)?;
+		let mut inherent_digest = Digest::default();
+		inherent_digest.push(DigestItem::PreRuntime(POW_ENGINE_ID, preruntime.to_vec()));
 		let block = futures::executor::block_on(proposer.propose(
 			inherent_data,
-			Default::default(),
+			inherent_digest,
 			std::time::Duration::new(0, 0)
 		)).map_err(|e| format!("Block proposing error: {:?}", e))?;
 
