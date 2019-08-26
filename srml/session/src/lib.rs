@@ -481,6 +481,9 @@ impl<T: Trait> Module<T> {
 
 		let changed = QueuedChanged::get();
 
+		// Inform the session handlers that a session is going to end.
+		T::SessionHandler::on_before_session_ending();
+
 		// Get queued session keys and validators.
 		let session_keys = <QueuedKeys<T>>::get();
 		let validators = session_keys.iter()
@@ -489,9 +492,6 @@ impl<T: Trait> Module<T> {
 		<Validators<T>>::put(&validators);
 
 		let applied_at = session_index + 2;
-
-		// Inform the session handlers that a session is going to end.
-		T::SessionHandler::on_before_session_ending();
 
 		// Get next validator set.
 		let maybe_next_validators = T::OnSessionEnding::on_session_ending(session_index, applied_at);
