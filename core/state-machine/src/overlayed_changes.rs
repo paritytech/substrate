@@ -877,7 +877,6 @@ impl OverlayedChanges {
 	#[cfg(test)]
 	pub(crate) fn set_extrinsic_index(&mut self, extrinsic_index: u32) {
 		use codec::Encode;
-		let value = extrinsic_index.encode();
 		self.set_storage(EXTRINSIC_INDEX.to_vec(), Some(extrinsic_index.encode()));
 	}
 
