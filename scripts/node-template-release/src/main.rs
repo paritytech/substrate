@@ -117,8 +117,15 @@ fn replace_path_dependencies_with_git(cargo_toml_path: &Path, commit_id: &str, c
 	cargo_toml.insert("dependencies".into(), dependencies.into());
 }
 
-/// Add `profile.release` = `panic = unwind` to the given `Cargo.toml`
-fn cargo_toml_add_profile_release(cargo_toml: &mut CargoToml) {
+/// Update the top level (workspace) `Cargo.toml` file.
+///
+/// - Adds `profile.release` = `panic = unwind`
+/// - Adds `workspace` definition
+fn update_top_level_cargo_toml(
+	cargo_toml: &mut CargoToml,
+	workspace_members: Vec<&PathBuf>,
+	node_template_path: &Path,
+) {
 	let mut panic_unwind = toml::value::Table::new();
 	panic_unwind.insert("panic".into(), "unwind".into());
 
@@ -126,6 +133,24 @@ fn cargo_toml_add_profile_release(cargo_toml: &mut CargoToml) {
 	profile.insert("release".into(), panic_unwind.into());
 
 	cargo_toml.insert("profile".into(), profile.into());
+
+	let members = workspace_members.iter()
+		.map(|p|
+			p.strip_prefix(node_template_path)
+				.expect("Workspace member is a child of the node template path!")
+				.parent()
+				// We get the `Cargo.toml` paths as workspace members, but for the `members` field
+				// we just need the path.
+				.expect("The given path ends with `Cargo.toml` as file name!")
+				.display()
+				.to_string()
+		)
+		.collect::<Vec<_>>();
+
+	let mut members_section = toml::value::Table::new();
+	members_section.insert("members".into(), members.into());
+
+	cargo_toml.insert("workspace".into(), members_section.into());
 }
 
 fn write_cargo_toml(path: &Path, cargo_toml: CargoToml) {
@@ -137,10 +162,24 @@ fn write_cargo_toml(path: &Path, cargo_toml: CargoToml) {
 /// Build and test the generated node-template
 fn build_and_test(path: &Path, cargo_tomls: &[PathBuf]) {
 	// Build node
-	assert!(Command::new("cargo").args(&["build", "--all"]).current_dir(path).status().expect("Compiles node").success());
+	assert!(
+		Command::new("cargo")
+			.args(&["build", "--all"])
+			.current_dir(path)
+			.status()
+			.expect("Compiles node")
+			.success()
+	);
 
 	// Test node
-	assert!(Command::new("cargo").args(&["test", "--all"]).current_dir(path).status().expect("Tests node").success());
+	assert!(
+		Command::new("cargo")
+			.args(&["test", "--all"])
+			.current_dir(path)
+			.status()
+			.expect("Tests node")
+			.success()
+	);
 
 	// Remove all `target` directories
 	for toml in cargo_tomls {
@@ -174,14 +213,20 @@ fn main() {
 	let cargo_tomls = find_cargo_tomls(build_dir.path().to_owned());
 
 	let commit_id = get_git_commit_id(&options.node_template);
+	let top_level_cargo_toml_path = node_template_path.join("Cargo.toml");
 
 	cargo_tomls.iter().for_each(|t| {
 		let mut cargo_toml = parse_cargo_toml(&t);
 		replace_path_dependencies_with_git(&t, &commit_id, &mut cargo_toml);
 
-		// If this is the top-level `Cargo.toml`, add `profile.release`
-		if &node_template_path.join("Cargo.toml") == t {
-			cargo_toml_add_profile_release(&mut cargo_toml);
+		// Check if this is the top level `Cargo.toml`, as this requires some special treatments.
+		if top_level_cargo_toml_path == *t {
+			// All workspace member `Cargo.toml` file paths.
+			let workspace_members = cargo_tomls.iter()
+				.filter(|p| **p != top_level_cargo_toml_path)
+				.collect();
+
+			update_top_level_cargo_toml(&mut cargo_toml, workspace_members, &node_template_path);
 		}
 
 		write_cargo_toml(&t, cargo_toml);
