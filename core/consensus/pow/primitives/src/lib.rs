@@ -38,7 +38,8 @@ decl_runtime_apis! {
 		/// Verify a given proof of work against the current difficulty.
 		/// Note that `pre_hash` is always a hash of a direct child.
 		///
-		/// Returns the current difficulty.
+		/// Returns the current difficulty if the seal is valid. Otherwise
+		/// returns `None`.
 		fn verify(pre_hash: &H256, seal: &Seal) -> Option<Difficulty>;
 
 		/// Mine a seal that satisfy the current difficulty.
