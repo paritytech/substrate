@@ -30,7 +30,6 @@ use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::ops::DerefMut;
 use std::time::{Duration, Instant};
 use serde::{Serialize, de::DeserializeOwned};
 use futures::sync::mpsc;
@@ -458,7 +457,7 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	/// Backend storage for the client.
 	type Backend: 'static + client::backend::Backend<Self::Block, Blake2Hasher>;
 	/// How to execute calls towards the runtime.
-	type Executor: 'static + client::CallExecutor<Self::Block, Blake2Hasher> + Send + Sync + Clone;
+	type CallExecutor: 'static + client::CallExecutor<Self::Block, Blake2Hasher> + Send + Sync + Clone;
 	/// API that the runtime provides.
 	type RuntimeApi: Send + Sync;
 	/// Configuration struct of the service.
@@ -508,7 +507,7 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	fn rpc_query(&self, mem: &RpcSession, request: &str) -> Box<dyn Future<Item = Option<String>, Error = ()> + Send>;
 
 	/// Get shared client instance.
-	fn client(&self) -> Arc<client::Client<Self::Backend, Self::Executor, Self::Block, Self::RuntimeApi>>;
+	fn client(&self) -> Arc<client::Client<Self::Backend, Self::CallExecutor, Self::Block, Self::RuntimeApi>>;
 
 	/// Get clone of select chain.
 	fn select_chain(&self) -> Option<Self::SelectChain>;
@@ -541,7 +540,7 @@ where TCfg: 'static + Send,
 {
 	type Block = TBl;
 	type Backend = TBackend;
-	type Executor = TExec;
+	type CallExecutor = TExec;
 	type RuntimeApi = TRtApi;
 	type Config = TCfg;
 	type SelectChain = TSc;
@@ -594,7 +593,7 @@ where TCfg: 'static + Send,
 		Box::new(self.rpc_handlers.handle_request(request, mem.metadata.clone()))
 	}
 
-	fn client(&self) -> Arc<client::Client<Self::Backend, Self::Executor, Self::Block, Self::RuntimeApi>> {
+	fn client(&self) -> Arc<client::Client<Self::Backend, Self::CallExecutor, Self::Block, Self::RuntimeApi>> {
 		self.client.clone()
 	}
 
@@ -665,80 +664,6 @@ NewService<TCfg, TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 		} else {
 			Ok(())
 		}
-	}
-}
-
-impl<T> AbstractService for T
-where T: 'static + Deref + DerefMut + Future<Item = (), Error = Error> + Send +
-	Executor<Box<dyn Future<Item = (), Error = ()> + Send>>,
-	T::Target: AbstractService {
-	type Block = <<T as Deref>::Target as AbstractService>::Block;
-	type Backend = <<T as Deref>::Target as AbstractService>::Backend;
-	type Executor = <<T as Deref>::Target as AbstractService>::Executor;
-	type RuntimeApi = <<T as Deref>::Target as AbstractService>::RuntimeApi;
-	type Config = <<T as Deref>::Target as AbstractService>::Config;
-	type SelectChain = <<T as Deref>::Target as AbstractService>::SelectChain;
-	type TransactionPoolApi = <<T as Deref>::Target as AbstractService>::TransactionPoolApi;
-	type NetworkSpecialization = <<T as Deref>::Target as AbstractService>::NetworkSpecialization;
-
-	fn telemetry_on_connect_stream(&self) -> TelemetryOnConnectNotifications {
-		(**self).telemetry_on_connect_stream()
-	}
-
-	fn config(&self) -> &Self::Config {
-		(**self).config()
-	}
-
-	fn config_mut(&mut self) -> &mut Self::Config {
-		(&mut **self).config_mut()
-	}
-
-	fn telemetry(&self) -> Option<tel::Telemetry> {
-		(**self).telemetry()
-	}
-
-	fn spawn_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
-		(**self).spawn_task(task)
-	}
-
-	fn spawn_essential_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
-		(**self).spawn_essential_task(task)
-	}
-
-	fn spawn_task_handle(&self) -> SpawnTaskHandle {
-		(**self).spawn_task_handle()
-	}
-
-	fn keystore(&self) -> keystore::KeyStorePtr {
-		(**self).keystore()
-	}
-
-	fn rpc_query(&self, mem: &RpcSession, request: &str) -> Box<dyn Future<Item = Option<String>, Error = ()> + Send> {
-		(**self).rpc_query(mem, request)
-	}
-
-	fn client(&self) -> Arc<client::Client<Self::Backend, Self::Executor, Self::Block, Self::RuntimeApi>> {
-		(**self).client()
-	}
-
-	fn select_chain(&self) -> Option<Self::SelectChain> {
-		(**self).select_chain()
-	}
-
-	fn network(&self) -> Arc<NetworkService<Self::Block, Self::NetworkSpecialization, H256>> {
-		(**self).network()
-	}
-
-	fn network_status(&self) -> mpsc::UnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)> {
-		(**self).network_status()
-	}
-
-	fn transaction_pool(&self) -> Arc<TransactionPool<Self::TransactionPoolApi>> {
-		(**self).transaction_pool()
-	}
-
-	fn on_exit(&self) -> ::exit_future::Exit {
-		(**self).on_exit()
 	}
 }
 
