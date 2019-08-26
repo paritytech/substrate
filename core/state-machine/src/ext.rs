@@ -377,7 +377,6 @@ mod tests {
 		InMemoryStorage as InMemoryChangesTrieStorage};
 	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet};
 	use history_driven_data::linear::History;
-	use history_driven_data::State as TransactionState;
 	use super::*;
 
 	type TestBackend = InMemory<Blake2Hasher>;

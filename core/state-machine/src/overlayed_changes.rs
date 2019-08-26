@@ -21,8 +21,10 @@ use std::collections::{HashMap, BTreeSet};
 use codec::Decode;
 use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
 use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
-use history_driven_data::linear::{States, History};
+use history_driven_data::linear::{States, History as HistoryBasis, MemoryOnly};
 use history_driven_data::State as TransactionState;
+
+type History<V> = HistoryBasis<MemoryOnly<V>, V>;
 
 /// Treshold in number of operation before running a garbage colletion.
 ///
@@ -97,7 +99,7 @@ impl FromIterator<(Vec<u8>, OverlayedValue)> for OverlayedChangeSet {
 		let mut result = OverlayedChangeSet::default();
 		result.top = iter.into_iter().map(|(k, v)| (k, {
 			let mut history = History::default();
-			history.push(v, 0);
+			history.force_push(v, 0);
 			history
 		})).collect();
 		result

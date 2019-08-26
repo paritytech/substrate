@@ -448,7 +448,9 @@ fn code_using_trie() -> u64 {
 fn history_driven_data() -> u64 {
 
 	let mut states = history_driven_data::linear::States::default();
-	let mut value = history_driven_data::linear::History::default();
+	let mut value = history_driven_data::linear::History::<
+		history_driven_data::linear::MemoryOnly<_>,
+	_>::default();
 	if value.get(states.as_ref()) != None {
 		return 101;
 	}

@@ -25,12 +25,19 @@
 use crate::State as TransactionState;
 use rstd::vec::Vec;
 use rstd::vec;
+use rstd::marker::PhantomData;
 
+/// Array like buffer for in memory storage.
+/// By in memory we expect that this will
+/// not required persistence and is not serialized.
 #[cfg(not(feature = "std"))]
-type InnerVec<V> = Vec<(V, usize)>;
+pub type MemoryOnly<V> = Vec<(V, usize)>;
 
+/// Array like buffer for in memory storage.
+/// By in memory we expect that this will
+/// not required persistence and is not serialized.
 #[cfg(feature = "std")]
-type InnerVec<V> = smallvec::SmallVec<[(V, usize); ALLOCATED_HISTORY]>;
+pub type MemoryOnly<V> = smallvec::SmallVec<[(V, usize); ALLOCATED_HISTORY]>;
 
 /// Size of preallocated history per element.
 /// Currently at two for committed and prospective only.
@@ -43,35 +50,72 @@ const ALLOCATED_HISTORY: usize = 2;
 /// Values are always paired with a state history index.
 #[derive(Debug, Clone)]
 #[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
-pub struct History<V>(InnerVec<V>);
+pub struct History<B, V>(B, PhantomData<V>);
 
-impl<V> Default for History<V> {
+trait HistoryBuffer<V>: Default
+  + rstd::ops::Index<usize, Output = (V, usize)>
+  + rstd::ops::IndexMut<usize, Output = (V, usize)>
+{
+
+	fn len(&self) -> usize;
+	fn truncate(&mut self, _index: usize);
+	fn pop(&mut self) -> Option<(V, usize)>;
+	fn push(&mut self, _val: (V, usize));
+	fn remove(&mut self, _index: usize) -> (V, usize);
+}
+
+impl<V> HistoryBuffer<V> for MemoryOnly<V> {
+	fn len(&self) -> usize {
+		self.len()
+	}
+
+	fn truncate(&mut self, index: usize) {
+		self.truncate(index)
+	}
+
+	fn pop(&mut self) -> Option<(V, usize)> {
+		self.pop()
+	}
+
+	fn push(&mut self, val: (V, usize)) {
+		self.push(val)
+	}
+
+	fn remove(&mut self, index: usize) -> (V, usize) {
+    self.remove(index)
+  }
+
+
+
+}
+
+impl<B: HistoryBuffer<V>, V> Default for History<B, V> {
 	fn default() -> Self {
-		History(Default::default())
+		History(Default::default(), PhantomData) 
 	}
 }
 
-impl<V> rstd::ops::Index<usize> for History<V> {
+impl<B: HistoryBuffer<V>, V> rstd::ops::Index<usize> for History<B, V> {
 	type Output = (V, usize);
 	fn index(&self, index: usize) -> &Self::Output {
 		self.0.index(index)
 	}
 }
 
-impl<V> rstd::ops::IndexMut<usize> for History<V> {
+impl<B: HistoryBuffer<V>, V> rstd::ops::IndexMut<usize> for History<B, V> {
 	fn index_mut(&mut self, index: usize) -> &mut Self::Output {
 		self.0.index_mut(index)
 	}
 }
 
-impl<V> History<V> {
+impl<B: HistoryBuffer<V>, V> History<B, V> {
 
 	#[cfg(any(test, feature = "test"))]
 	/// Create an history from an existing history.
 	pub fn from_iter(input: impl IntoIterator<Item = (V, usize)>) -> Self {
 		let mut history = History::default();
 		for v in input {
-			history.push(v.0, v.1);
+			history.force_push(v.0, v.1);
 		}
 		history
 	}
