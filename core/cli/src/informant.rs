@@ -22,15 +22,8 @@ use futures03::{StreamExt as _, TryStreamExt as _};
 use log::{info, warn};
 use sr_primitives::{generic::BlockId, traits::Header};
 use service::AbstractService;
-use tokio::runtime::TaskExecutor;
 
 mod display;
-
-/// Spawn informant on the event loop
-#[deprecated(note = "Please use informant::build instead, and then create the task manually")]
-pub fn start(service: &impl AbstractService, exit: ::exit_future::Exit, handle: TaskExecutor) {
-	handle.spawn(exit.until(build(service)).map(|_| ()));
-}
 
 /// Creates an informant in the form of a `Future` that must be polled regularly.
 pub fn build(service: &impl AbstractService) -> impl Future<Item = (), Error = ()> {
