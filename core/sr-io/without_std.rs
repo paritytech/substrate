@@ -692,13 +692,13 @@ impl StorageApi for () {
 			if ext_child_trie.get()(
 				storage_key.as_ptr(),
 				storage_key.len() as u32,
-				&mut key as *mut _,
+				&mut key as *mut *mut u8,
 				&mut key_length,
-				&mut root as *mut _,
+				&mut root as *mut *mut u8,
 				&mut root_length,
-				&mut parent as *mut _,
+				&mut parent as *mut *mut u8,
 				&mut parent_length,
-				&mut extension as *mut _,
+				&mut extension as *mut *mut u8,
 				&mut extension_length,
 			) == 1 {
 				Some(ChildTrie::unsafe_from_ptr_child_trie(
