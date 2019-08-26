@@ -52,7 +52,9 @@ fn check_epoch_change() {
 		assert!(!Babe::should_end_session(200000),
 			"BABE does not include the block number in epoch calculations");
 		EpochStartSlot::put(1);
-		CurrentSlot::put(100000);
+		CurrentSlot::put(3);
+		assert!(!Babe::should_end_session(0));
+		CurrentSlot::put(4);
 		assert!(Babe::should_end_session(0));
 		Babe::randomness_change_epoch(1);
 	})
