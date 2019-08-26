@@ -202,7 +202,6 @@ check-web-wasm:
     - time cargo web build -p substrate-keystore
     - time cargo web build -p substrate-executor
     - time cargo web build -p substrate-network
-    - time cargo web build -p substrate-offchain
     - time cargo web build -p substrate-panic-handler
     - time cargo web build -p substrate-peerset
     - time cargo web build -p substrate-primitives
@@ -336,7 +335,7 @@ check_warnings:
     - docker push $CONTAINER_IMAGE:$VERSION
     - docker push $CONTAINER_IMAGE:latest
 
-publish-docker-substrate:          
+publish-docker-substrate:
   stage:                           publish
   <<:                              *publish-docker-release
   # collect VERSION artifact here to pass it on to kubernetes

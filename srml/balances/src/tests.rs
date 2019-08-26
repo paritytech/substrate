@@ -26,6 +26,7 @@ use srml_support::{
 	traits::{LockableCurrency, LockIdentifier, WithdrawReason, WithdrawReasons,
 	Currency, ReservableCurrency}
 };
+use system::RawOrigin;
 
 const ID_1: LockIdentifier = *b"1       ";
 const ID_2: LockIdentifier = *b"2       ";
@@ -347,6 +348,20 @@ fn balance_transfer_works() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		let _ = Balances::deposit_creating(&1, 111);
 		assert_ok!(Balances::transfer(Some(1).into(), 2, 69));
+		assert_eq!(Balances::total_balance(&1), 42);
+		assert_eq!(Balances::total_balance(&2), 69);
+	});
+}
+
+#[test]
+fn force_transfer_works() {
+	with_externalities(&mut ExtBuilder::default().build(), || {
+		let _ = Balances::deposit_creating(&1, 111);
+		assert_noop!(
+			Balances::force_transfer(Some(2).into(), 1, 2, 69),
+			"bad origin: expected to be a root origin"
+		);
+		assert_ok!(Balances::force_transfer(RawOrigin::Root.into(), 1, 2, 69));
 		assert_eq!(Balances::total_balance(&1), 42);
 		assert_eq!(Balances::total_balance(&2), 69);
 	});
