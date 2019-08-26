@@ -39,11 +39,11 @@ impl<T: Default> StorageDefault<T> for () { fn default() -> Option<T> { Some(Def
 /// Anything that can have a `::len()` method.
 pub trait Len {
 	/// Return the length of data type.
-    fn len(&self) -> usize;
+	fn len(&self) -> usize;
 }
 
 impl<T: IntoIterator + Clone,> Len for T where <T as IntoIterator>::IntoIter: ExactSizeIterator {
-    fn len(&self) -> usize {
+	fn len(&self) -> usize {
 		self.clone().into_iter().len()
 	}
 }

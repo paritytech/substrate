@@ -818,17 +818,19 @@ mod test_append_and_len {
 			NoDefault: Option<NoDef>;
 
 			JustVec: Vec<u32>;
-			JustVecWithDefault: Vec<u32> = vec![6, 9, 11, 33];
+			JustVecWithDefault: Vec<u32> = vec![6, 9];
 			OptionVec: Option<Vec<u32>>;
-			OptionVecWithDefault: Option<Vec<u32>> = Some(vec![6, 9, 11]);
-			OptionVecWithNoneDefault: Option<Vec<u32>> = None;
+			OptionVecWithDefault: Option<Vec<u32>> = Some(vec![6, 9]);
 
 			MapVec: map u32 => Vec<u32>;
-			MapVecWithDefault: map u32 => Vec<u32> = vec![33, 69];
+			MapVecWithDefault: map u32 => Vec<u32> = vec![6, 9];
 			OptionMapVec: map u32 => Option<Vec<u32>>;
-			OptionMapVecWithDefault: map u32 => Option<Vec<u32>> = Some(vec![33, 66, 99]);
+			OptionMapVecWithDefault: map u32 => Option<Vec<u32>> = Some(vec![6, 9]);
 
-			LinkedMap: linked_map u32 => Vec<u32>;
+			LinkedMapVec: linked_map u32 => Vec<u32>;
+			LinkedMapVecWithDefault: linked_map u32 => Vec<u32> = vec![6, 9];
+			OptionLinkedMapVec: linked_map u32 => Option<Vec<u32>>;
+			OptionLinkedMapVecWithDefault: linked_map u32 => Option<Vec<u32>> = Some(vec![6, 9]);
 		}
 	}
 
@@ -842,7 +844,7 @@ mod test_append_and_len {
 	#[test]
 	fn default_for_option() {
 		with_externalities(&mut TestExternalities::default(), || {
-			assert_eq!(OptionVecWithDefault::get(), Some(vec![6, 9, 11]));
+			assert_eq!(OptionVecWithDefault::get(), Some(vec![6, 9]));
 			assert_eq!(OptionVec::get(), None);
 			assert_eq!(JustVec::get(), vec![]);
 		});
@@ -851,12 +853,12 @@ mod test_append_and_len {
 	#[test]
 	fn append_works() {
 		with_externalities(&mut TestExternalities::default(), || {
-			let _ = MapVec::append(1, &[1, 2, 3]);
-			let _ = MapVec::append(1, &[4, 5]);
+			let _ = MapVec::append(1, [1, 2, 3].iter());
+			let _ = MapVec::append(1, [4, 5].iter());
 			assert_eq!(MapVec::get(1), vec![1, 2, 3, 4, 5]);
 
-			let _ = JustVec::append(&[1, 2, 3]);
-			let _ = JustVec::append(&[4, 5]);
+			let _ = JustVec::append([1, 2, 3].iter());
+			let _ = JustVec::append([4, 5].iter());
 			assert_eq!(JustVec::get(), vec![1, 2, 3, 4, 5]);
 		});
 	}
@@ -864,23 +866,29 @@ mod test_append_and_len {
 	#[test]
 	fn append_works_for_default() {
 		with_externalities(&mut TestExternalities::default(), || {
-			let _ = JustVecWithDefault::append(&[1]);
-			assert_eq!(JustVecWithDefault::get(), vec![6, 9, 11, 33, 1]);
+			assert_eq!(JustVecWithDefault::get(), vec![6, 9]);
+			let _ = JustVecWithDefault::append([1].iter());
+			assert_eq!(JustVecWithDefault::get(), vec![6, 9, 1]);
 
-			let _ = MapVecWithDefault::append(0, &[1]);
-			assert_eq!(MapVecWithDefault::get(0), vec![33, 69, 1]);
+			assert_eq!(MapVecWithDefault::get(0), vec![6, 9]);
+			let _ = MapVecWithDefault::append(0, [1].iter());
+			assert_eq!(MapVecWithDefault::get(0), vec![6, 9, 1]);
+
+			assert_eq!(OptionVec::get(), None);
+			let _ = OptionVec::append([1].iter());
+			assert_eq!(OptionVec::get(), Some(vec![1]));
 		});
 	}
 
 	#[test]
 	fn append_or_put_works() {
 		with_externalities(&mut TestExternalities::default(), || {
-			let _ = MapVec::append_or_put(1, &[1, 2, 3]);
-			let _ = MapVec::append_or_put(1, &[4, 5]);
+			let _ = MapVec::append_or_insert(1, [1, 2, 3].iter());
+			let _ = MapVec::append_or_insert(1, [4, 5].iter());
 			assert_eq!(MapVec::get(1), vec![1, 2, 3, 4, 5]);
 
-			let _ = JustVec::append_or_put(&[1, 2, 3]);
-			let _ = JustVec::append_or_put(&[4, 5]);
+			let _ = JustVec::append_or_put([1, 2, 3].iter());
+			let _ = JustVec::append_or_put([4, 5].iter());
 			assert_eq!(JustVec::get(), vec![1, 2, 3, 4, 5]);
 		});
 	}
@@ -891,23 +899,24 @@ mod test_append_and_len {
 			JustVec::put(&vec![1, 2, 3, 4]);
 			OptionVec::put(&vec![1, 2, 3, 4, 5]);
 			MapVec::insert(1, &vec![1, 2, 3, 4, 5, 6]);
-			LinkedMap::insert(2, &vec![1, 2, 3]);
+			LinkedMapVec::insert(2, &vec![1, 2, 3]);
 
 			assert_eq!(JustVec::decode_len().unwrap(), 4);
 			assert_eq!(OptionVec::decode_len().unwrap(), 5);
 			assert_eq!(MapVec::decode_len(1).unwrap(), 6);
-			assert_eq!(LinkedMap::decode_len(2).unwrap(), 3);
+			assert_eq!(LinkedMapVec::decode_len(2).unwrap(), 3);
 		});
 	}
 
 	#[test]
-	fn len_for_default() {
+	fn len_works_for_default() {
 		with_externalities(&mut TestExternalities::default(), || {
+			// vec
 			assert_eq!(JustVec::get(), vec![]);
 			assert_eq!(JustVec::decode_len(), Ok(0));
 
-			assert_eq!(JustVecWithDefault::get(), vec![6, 9, 11, 33]);
-			assert_eq!(JustVecWithDefault::decode_len(), Ok(4));
+			assert_eq!(JustVecWithDefault::get(), vec![6, 9]);
+			assert_eq!(JustVecWithDefault::decode_len(), Ok(2));
 
 			assert_eq!(OptionVec::get(), None);
 			assert_eq!(
@@ -915,19 +924,14 @@ mod test_append_and_len {
 				Err("value does not exist and could not use default as fallback")
 			);
 
-			assert_eq!(OptionVecWithNoneDefault::get(), None);
-			assert_eq!(
-				OptionVecWithNoneDefault::decode_len(),
-				Err("value does not exist and could not use default as fallback")
-			);
+			assert_eq!(OptionVecWithDefault::get(), Some(vec![6, 9]));
+			assert_eq!(OptionVecWithDefault::decode_len(), Ok(2));
 
-			assert_eq!(OptionVecWithDefault::get(), Some(vec![6, 9, 11]));
-			assert_eq!(OptionVecWithDefault::decode_len(), Ok(3));
-
+			// map
 			assert_eq!(MapVec::get(0), vec![]);
 			assert_eq!(MapVec::decode_len(0), Ok(0));
 
-			assert_eq!(MapVecWithDefault::get(0), vec![33, 69]);
+			assert_eq!(MapVecWithDefault::get(0), vec![6, 9]);
 			assert_eq!(MapVecWithDefault::decode_len(0), Ok(2));
 
 			assert_eq!(OptionMapVec::get(0), None);
@@ -936,11 +940,24 @@ mod test_append_and_len {
 				Err("value does not exist and could not use default as fallback")
 			);
 
-			assert_eq!(OptionMapVecWithDefault::get(0), Some(vec![33, 66, 99]));
-			assert_eq!(OptionMapVecWithDefault::decode_len(0), Ok(3));
+			assert_eq!(OptionMapVecWithDefault::get(0), Some(vec![6, 9]));
+			assert_eq!(OptionMapVecWithDefault::decode_len(0), Ok(2));
 
-			assert_eq!(OptionVecWithDefault::get(), Some(vec![6, 9, 11]));
-			assert_eq!(OptionVecWithDefault::decode_len(), Ok(3));
+			// linked map
+			assert_eq!(LinkedMapVec::get(0), vec![]);
+			assert_eq!(LinkedMapVec::decode_len(0), Ok(0));
+
+			assert_eq!(LinkedMapVecWithDefault::get(0), vec![6, 9]);
+			assert_eq!(LinkedMapVecWithDefault::decode_len(0), Ok(2));
+
+			assert_eq!(OptionLinkedMapVec::get(0), None);
+			assert_eq!(
+				OptionLinkedMapVec::decode_len(0),
+				Err("value does not exist and could not use default as fallback")
+			);
+
+			assert_eq!(OptionLinkedMapVecWithDefault::get(0), Some(vec![6, 9]));
+			assert_eq!(OptionLinkedMapVecWithDefault::decode_len(0), Ok(2));
 		});
 	}
 }

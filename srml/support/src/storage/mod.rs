@@ -17,7 +17,7 @@
 //! Stuff to do with the runtime's storage.
 
 use crate::rstd::prelude::*;
-use crate::rstd::borrow::Borrow;
+use crate::rstd::{borrow::Borrow, iter::FromIterator};
 use codec::{Codec, Encode, Decode, KeyedVec, EncodeAppend};
 use hashed::generator::{HashedStorage, StorageHasher};
 use unhashed::generator::UnhashedStorage;
@@ -139,8 +139,11 @@ pub trait StorageValue<T: Codec> {
 	/// Append the given item to the value in the storage.
 	///
 	/// `T` is required to implement `codec::EncodeAppend`.
-	fn append<I: Encode>(items: &[I]) -> Result<(), &'static str>
-		where T: EncodeAppend<Item=I>;
+	fn append<'a, I, R>(items: R) -> Result<(), &'static str> where
+		I: 'a + Encode,
+		T: EncodeAppend<Item=I>,
+		R: IntoIterator<Item=&'a I>,
+		R::IntoIter: ExactSizeIterator;
 
 	/// Append the given items to the value in the storage.
 	///
@@ -153,8 +156,11 @@ pub trait StorageValue<T: Codec> {
 	///
 	/// use with care; if your use-case is not _exactly_ as what this function is doing,
 	/// you should use append and sensibly handle failure within the runtime code if it happens.
-	fn append_or_put<'a, I: 'a + Encode + Clone>(items: &'a[I])
-		where T: EncodeAppend<Item=I> + From<&'a[I]>;
+	fn append_or_put<'a, I, R>(items: R) where
+		I: 'a + Encode + Clone,
+		T: EncodeAppend<Item=I> + FromIterator<I>,
+		R: IntoIterator<Item=&'a I> + Clone,
+		R::IntoIter: ExactSizeIterator;
 
 	/// Read the length of the value in a fast way, without decoding the entire value.
 	///
@@ -191,13 +197,19 @@ impl<T: Codec, U> StorageValue<T> for U where U: hashed::generator::StorageValue
 	fn take() -> Self::Query {
 		U::take(&mut RuntimeStorage)
 	}
-	fn append<I: Encode>(items: &[I]) -> Result<(), &'static str>
-		where T: EncodeAppend<Item=I>
+	fn append<'a, I, R>(items: R) -> Result<(), &'static str> where
+		I: 'a + Encode,
+		T: EncodeAppend<Item=I>,
+		R: IntoIterator<Item=&'a I>,
+		R::IntoIter: ExactSizeIterator,
 	{
 		U::append(items, &mut RuntimeStorage)
 	}
-	fn append_or_put<'a, I: 'a + Encode + Clone>(items: &'a[I])
-		where T: From<&'a[I]> + EncodeAppend<Item=I>
+	fn append_or_put<'a, I, R>(items: R) where
+		I: 'a + Encode + Clone,
+		T: EncodeAppend<Item=I> + FromIterator<I>,
+		R: IntoIterator<Item=&'a I> + Clone,
+		R::IntoIter: ExactSizeIterator,
 	{
 		U::append_or_put(items, &mut RuntimeStorage)
 	}
@@ -297,8 +309,15 @@ pub trait AppendableStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
 	/// Append the given item to the value in the storage.
 	///
 	/// `T` is required to implement `codec::EncodeAppend`.
-	fn append<KeyArg: Borrow<K>, I: Encode>(key: KeyArg, items: &[I]) -> Result<(), &'static str>
-		where V: EncodeAppend<Item=I>;
+	fn append<'a, KeyArg, I, R>(
+		key: KeyArg,
+		items: R,
+	) -> Result<(), &'static str> where
+		KeyArg: Borrow<K>,
+		I: 'a + codec::Encode,
+		V: EncodeAppend<Item=I>,
+		R: IntoIterator<Item=&'a I> + Clone,
+		R::IntoIter: ExactSizeIterator;
 
 	/// Append the given items to the value in the storage.
 	///
@@ -309,24 +328,44 @@ pub trait AppendableStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
 	///
 	/// WARNING: use with care; if your use-case is not _exactly_ as what this function is doing,
 	/// you should use append and sensibly handle failure within the runtime code if it happens.
-	fn append_or_put<'a, KeyArg: Borrow<K>, I: Encode + Clone>(key: KeyArg, items: &'a[I])
-		where V: EncodeAppend<Item=I> + From<&'a[I]>;
-
+	fn append_or_insert<'a, KeyArg, I, R>(
+		key: KeyArg,
+		items: R,
+	) where
+		KeyArg: Borrow<K>,
+		I: 'a + codec::Encode + Clone,
+		V: codec::EncodeAppend<Item=I> + FromIterator<I>,
+		R: IntoIterator<Item=&'a I> + Clone,
+		R::IntoIter: ExactSizeIterator;
 }
 
 impl<K: Codec, V: Codec, U> AppendableStorageMap<K, V> for U
 	where U: hashed::generator::AppendableStorageMap<K, V>
 {
-	fn append<KeyArg: Borrow<K>, I: Encode>(key: KeyArg, items: &[I]) -> Result<(), &'static str>
-		where V: EncodeAppend<Item=I>
+	fn append<'a, KeyArg, I, R>(
+		key: KeyArg,
+		items: R,
+	) -> Result<(), &'static str> where
+		KeyArg: Borrow<K>,
+		I: 'a + codec::Encode,
+		V: EncodeAppend<Item=I>,
+		R: IntoIterator<Item=&'a I> + Clone,
+		R::IntoIter: ExactSizeIterator,
 	{
 		U::append(key.borrow(), items, &mut RuntimeStorage)
 	}
 
-	fn append_or_put<'a, KeyArg: Borrow<K>, I: Encode + Clone>(key: KeyArg, items: &'a[I])
-		where V: EncodeAppend<Item=I> + From<&'a[I]>
+	fn append_or_insert<'a, KeyArg, I, R>(
+		key: KeyArg,
+		items: R,
+	) where
+		KeyArg: Borrow<K>,
+		I: 'a + codec::Encode + Clone,
+		V: codec::EncodeAppend<Item=I> + FromIterator<I>,
+		R: IntoIterator<Item=&'a I> + Clone,
+		R::IntoIter: ExactSizeIterator,
 	{
-		U::append_or_put(key.borrow(), items, &mut RuntimeStorage)
+		U::append_or_insert(key.borrow(), items, &mut RuntimeStorage)
 	}
 }
 

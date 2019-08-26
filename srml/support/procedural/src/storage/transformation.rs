@@ -765,7 +765,7 @@ fn decl_storage_items(
 		// create default value delegator
 		let default_delegator_ident = Ident::new(
 			&format!("{}{}", name.to_string(), "DefaultDelegator"),
-			proc_macro2::Span::call_site()
+			proc_macro2::Span::call_site(),
 		);
 		let default_delegator_return = if !type_infos.is_option {
 			quote! { Some(#fielddefault) }
