@@ -26,8 +26,9 @@ use codec::{Encode, Decode, Input, Output, Error};
 use srml_support::{
 	decl_module, decl_storage, decl_event, ensure, AppendableStorageMap, StorageValue, StorageMap,
 	Parameter, Dispatchable, EnumerableStorageMap,
-	traits::{Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier,
-		OnFreeBalanceZero, Get
+	traits::{
+		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
+		OnFreeBalanceZero
 	}
 };
 use srml_support::dispatch::Result;
