@@ -48,7 +48,7 @@ use sr_primitives::generic::BlockId;
 use sr_primitives::traits::NumberFor;
 
 pub use self::error::Error;
-pub use self::factory::{ServiceBuilder, ServiceBuilderExport, ServiceBuilderImport, ServiceBuilderRevert};
+pub use self::builder::{ServiceBuilder, ServiceBuilderExport, ServiceBuilderImport, ServiceBuilderRevert};
 pub use config::{Configuration, Roles, PruningMode};
 pub use chain_spec::{ChainSpec, Properties};
 pub use transaction_pool::txpool::{
@@ -438,7 +438,7 @@ macro_rules! new_impl {
 	}}
 }
 
-mod factory;
+mod builder;
 
 /// Abstraction over a Substrate service.
 pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
