@@ -257,7 +257,7 @@ pub fn start_mine<B: BlockT<Hash=H256>, C, E>(
 				&inherent_data_providers
 			) {
 				Ok(()) => (),
-				Err(e) => warn!(
+				Err(e) => error!(
 					"Mining block failed with {:?}. Sleep for 1 second before restarting...",
 					e
 				),
