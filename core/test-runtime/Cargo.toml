@@ -31,6 +31,7 @@ cfg-if = "0.1.6"
 srml-babe = { path = "../../srml/babe", default-features = false }
 srml-timestamp = { path = "../../srml/timestamp", default-features = false }
 srml-system = { path = "../../srml/system", default-features = false }
+history-driven-data = { path = "../utils/history-driven-data", default-features = false }
 
 [dev-dependencies]
 substrate-executor = { path = "../executor" }
@@ -71,4 +72,5 @@ std = [
 	"srml-system/std",
 	"app-crypto/std",
 	"session/std",
+  "history-driven-data/std",
 ]

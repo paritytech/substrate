@@ -1,0 +1,20 @@
+[package]
+name = "history-driven-data"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Data stored with per item history"
+edition = "2018"
+
+[dependencies]
+smallvec = { version = "0.6", optional = true }
+rstd = { package = "sr-std", path = "../../sr-std", default-features = false }
+
+[dev-dependencies]
+
+[features]
+default = ["std"]
+std = [
+  "smallvec",
+  "rstd/std",
+]
+test = []

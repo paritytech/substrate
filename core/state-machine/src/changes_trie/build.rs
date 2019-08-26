@@ -177,7 +177,9 @@ mod test {
 	use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
 	use crate::backend::InMemory;
 	use crate::changes_trie::storage::InMemoryStorage;
-	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet, History, TransactionState};
+	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet};
+	use history_driven_data::linear::{History, States};
+	use history_driven_data::State as TransactionState;
 	use super::*;
 
 	fn prepare_for_build() -> (InMemory<Blake2Hasher>, InMemoryStorage<Blake2Hasher, u64>, OverlayedChanges) {
@@ -226,7 +228,7 @@ mod test {
 		let changes = OverlayedChanges {
 			changes_trie_config: Some(Configuration { digest_interval: 4, digest_levels: 2 }),
 			changes: OverlayedChangeSet {
-				history: vec![TransactionState::Committed, TransactionState::Pending],
+				history: States::test_vector(vec![TransactionState::Committed, TransactionState::Pending]),
 				children: Default::default(),
 				top: vec![
 					(EXTRINSIC_INDEX.to_vec(), History::from_iter(vec![
