@@ -19,7 +19,8 @@
 use std::sync::Arc;
 use std::thread;
 use client::{
-	BlockOf, blockchain::{HeaderBackend, ProvideCache}, block_builder::api::BlockBuilder as BlockBuilderApi, backend::AuxStore,
+	BlockOf, blockchain::{HeaderBackend, ProvideCache},
+	block_builder::api::BlockBuilder as BlockBuilderApi, backend::AuxStore,
 };
 use sr_primitives::Justification;
 use sr_primitives::generic::{BlockId, Digest, DigestItem};
