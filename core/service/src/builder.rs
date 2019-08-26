@@ -233,7 +233,8 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 	pub fn with_opt_select_chain<USc>(
 		mut self,
 		select_chain_builder: impl FnOnce(&mut Configuration<TCfg, TGen>, Arc<TCl>) -> Result<Option<USc>, Error>
-	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, USc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc>, Error> {
+	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, USc, TImpQu, TFprb, TFpp,
+		TNetP, TExPool, TRpc>, Error> {
 		let select_chain = select_chain_builder(&mut self.config, self.client.clone())?;
 
 		Ok(ServiceBuilder {
@@ -256,7 +257,8 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 	pub fn with_select_chain<USc>(
 		self,
 		builder: impl FnOnce(&mut Configuration<TCfg, TGen>, Arc<TCl>) -> Result<USc, Error>
-	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, USc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc>, Error> {
+	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, USc, TImpQu, TFprb, TFpp,
+		TNetP, TExPool, TRpc>, Error> {
 		self.with_opt_select_chain(|cfg, cl| builder(cfg, cl).map(Option::Some))
 	}
 
@@ -295,7 +297,8 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 	pub fn with_network_protocol<UNetP>(
 		self,
 		network_protocol_builder: impl FnOnce(&Configuration<TCfg, TGen>) -> Result<UNetP, Error>
-	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, UNetP, TExPool, TRpc>, Error> {
+	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
+		UNetP, TExPool, TRpc>, Error> {
 		let network_protocol = network_protocol_builder(&self.config)?;
 
 		Ok(ServiceBuilder {
@@ -378,7 +381,8 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 		mut self,
 		builder: impl FnOnce(&mut Configuration<TCfg, TGen>, Arc<TCl>, Option<TSc>, Arc<TExPool>)
 			-> Result<(UImpQu, Option<UFprb>), Error>
-	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, UImpQu, UFprb, TFpp, TNetP, TExPool, TRpc>, Error>
+	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, UImpQu, UFprb, TFpp,
+		TNetP, TExPool, TRpc>, Error>
 	where TSc: Clone {
 		let (import_queue, fprb) = builder(
 			&mut self.config,
@@ -418,7 +422,8 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 	pub fn with_transaction_pool<UExPool>(
 		self,
 		transaction_pool_builder: impl FnOnce(transaction_pool::txpool::Options, Arc<TCl>) -> Result<UExPool, Error>
-	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, UExPool, TRpc>, Error> {
+	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
+		TNetP, UExPool, TRpc>, Error> {
 		let transaction_pool = transaction_pool_builder(self.config.transaction_pool.clone(), self.client.clone())?;
 
 		Ok(ServiceBuilder {
@@ -441,7 +446,8 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 	pub fn with_rpc_extensions<URpc>(
 		self,
 		rpc_ext_builder: impl FnOnce(Arc<TCl>, Arc<TExPool>) -> URpc
-	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, URpc>, Error> {
+	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
+		TNetP, TExPool, URpc>, Error> {
 		let rpc_extensions = rpc_ext_builder(self.client.clone(), self.transaction_pool.clone());
 
 		Ok(ServiceBuilder {
