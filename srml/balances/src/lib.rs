@@ -504,8 +504,8 @@ decl_module! {
 			#[compact] value: T::Balance
 		) {
 			ensure_root(origin)?;
-			let source = T::Lookup::lookup(source)?;
-			let dest = T::Lookup::lookup(dest)?;
+			let source = T::Lookup::lookup(source).ok_or("could not find `source` account")?;
+			let dest = T::Lookup::lookup(dest).ok_or("could not find `dest` account")?;
 			<Self as Currency<_>>::transfer(&source, &dest, value)?;
 		}
 	}

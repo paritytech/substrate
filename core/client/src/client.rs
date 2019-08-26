@@ -1491,6 +1491,8 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 			_ => None,
 		};
 
+		self.
+
 		self.executor.contextual_call::<_, _, fn(_,_) -> _,_,_>(
 			|| core_api.initialize_block(at, &self.prepare_environment_block(at)?),
 			at,

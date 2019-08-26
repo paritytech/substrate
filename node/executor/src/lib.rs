@@ -44,23 +44,18 @@ mod tests {
 	use runtime_support::{Hashable, StorageValue, StorageMap, assert_eq_error_rate, traits::Currency};
 	use state_machine::{CodeExecutor, Externalities, TestExternalities as CoreTestExternalities};
 	use primitives::{
-		twox_128, blake2_256, Blake2Hasher, ChangesTrieConfiguration, NeverNativeValue,
-		NativeOrEncoded,
+		twox_128, blake2_256, Blake2Hasher, NeverNativeValue, NativeOrEncoded, map
 	};
-	use node_primitives::{Hash, BlockNumber, AccountId, Balance, Index};
+	use node_primitives::{Hash, BlockNumber, Balance};
 	use sr_primitives::{
-		traits::{Header as HeaderT, Hash as HashT, Convert},
-		generic::Era, ApplyOutcome, ApplyResult, Perbill,
-		transaction_validity::InvalidTransaction,
-		weights::{WeightMultiplier, GetDispatchInfo},
+		traits::{Header as HeaderT, Hash as HashT, Convert}, ApplyOutcome, ApplyResult,
+		transaction_validity::InvalidTransaction, weights::{WeightMultiplier, GetDispatchInfo},
 	};
 	use contracts::ContractAddressFor;
 	use system::{EventRecord, Phase};
-	use node_primitives::{Hash, BlockNumber, Balance};
 	use node_runtime::{
 		Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances, BuildStorage,
-		System, Event,
-		TransferFee, TransactionBaseFee, TransactionByteFee,
+		System, Event, TransferFee, TransactionBaseFee, TransactionByteFee,
 	};
 	use node_runtime::constants::currency::*;
 	use node_runtime::impls::WeightToFee;

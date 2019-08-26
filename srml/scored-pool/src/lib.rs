@@ -309,7 +309,7 @@ decl_module! {
 				.or_else(ensure_root)
 				.map_err(|_| "bad origin")?;
 
-			let who = T::Lookup::lookup(dest)?;
+			let who = T::Lookup::lookup(dest).ok_or("Could not find `dest` account")?;
 
 			let pool = <Pool<T, I>>::get();
 			Self::ensure_index(&pool, &who, index)?;
@@ -335,7 +335,7 @@ decl_module! {
 				.or_else(ensure_root)
 				.map_err(|_| "bad origin")?;
 
-			let who = T::Lookup::lookup(dest)?;
+			let who = T::Lookup::lookup(dest).ok_or("Could not find `dest` account")?;
 
 			let mut pool = <Pool<T, I>>::get();
 			Self::ensure_index(&pool, &who, index)?;
