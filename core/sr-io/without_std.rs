@@ -1197,7 +1197,7 @@ impl OffchainApi for () {
 
 		statuses
 			.into_iter()
-			.map(|status| status.try_into().unwrap_or(offchain::HttpRequestStatus::Unknown))
+			.map(|status| status.try_into().unwrap_or(offchain::HttpRequestStatus::Invalid))
 			.collect()
 	}
 
