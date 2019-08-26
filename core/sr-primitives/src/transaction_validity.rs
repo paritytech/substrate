@@ -46,7 +46,7 @@ pub enum InvalidTransactionValidity {
 	/// The transaction birth block is ancient.
 	AncientBirthBlock,
 	/// The transaction **alone** would exhaust the resources of a block.
-	ExhaustResources,
+	ExhaustsResources,
 	/// Any other custom invalid validity that is not covered by this enum.
 	Custom(u8),
 }
