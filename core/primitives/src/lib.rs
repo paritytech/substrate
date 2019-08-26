@@ -100,8 +100,10 @@ impl ExecutionContext {
 		use ExecutionContext::*;
 
 		match self {
-			Importing | Syncing | BlockConstruction | OffchainCall(None) =>
+			Importing | Syncing | BlockConstruction =>
 				offchain::Capabilities::none(),
+			// Enable keystore by default for offchain calls. CC @bkchr
+			OffchainCall(None) => [offchain::Capability::Keystore][..].into(),
 			OffchainCall(Some((_, capabilities))) => *capabilities,
 		}
 	}
