@@ -52,7 +52,7 @@ mod tests {
 	use sr_primitives::{
 		traits::{Header as HeaderT, Hash as HashT, Convert},
 		generic::Era, ApplyOutcome, ApplyResult, Perbill,
-		transaction_validity::InvalidTransactionValidity,
+		transaction_validity::InvalidTransaction,
 		weights::{WeightMultiplier, GetDispatchInfo},
 	};
 	use contracts::ContractAddressFor;
@@ -211,7 +211,7 @@ mod tests {
 			None,
 		).0.unwrap();
 		let r = ApplyResult::decode(&mut &v.as_encoded()[..]).unwrap();
-		assert_eq!(r, Err(InvalidTransactionValidity::Payment.into()));
+		assert_eq!(r, Err(InvalidTransaction::Payment.into()));
 	}
 
 	#[test]
@@ -247,7 +247,7 @@ mod tests {
 			None,
 		).0.unwrap();
 		let r = ApplyResult::decode(&mut &v.as_encoded()[..]).unwrap();
-		assert_eq!(r, Err(InvalidTransactionValidity::Payment.into()));
+		assert_eq!(r, Err(InvalidTransaction::Payment.into()));
 	}
 
 	#[test]
@@ -898,7 +898,7 @@ mod tests {
 		let r = WasmExecutor::new()
 			.call(&mut t, 8, COMPACT_CODE, "BlockBuilder_apply_extrinsic", &vec![].and(&xt())).unwrap();
 		let r = ApplyResult::decode(&mut &r[..]).unwrap();
-		assert_eq!(r, Err(InvalidTransactionValidity::Payment.into()));
+		assert_eq!(r, Err(InvalidTransaction::Payment.into()));
 	}
 
 	#[test]

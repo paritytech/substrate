@@ -17,7 +17,7 @@
 //! Transaction pool errors.
 
 use sr_primitives::transaction_validity::{
-	TransactionPriority as Priority, InvalidTransactionValidity, UnknownTransactionValidity,
+	TransactionPriority as Priority, InvalidTransaction, UnknownTransaction,
 };
 
 /// Transaction pool result.
@@ -28,10 +28,10 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
 	/// Transaction is not verifiable yet, but might be in the future.
 	#[display(fmt="Unkown transaction validity: {:?}", _0)]
-	UnknownTransactionValidity(UnknownTransactionValidity),
+	UnknownTransaction(UnknownTransaction),
 	/// Transaction is invalid.
 	#[display(fmt="Invalid transaction validity: {:?}", _0)]
-	InvalidTransaction(InvalidTransactionValidity),
+	InvalidTransaction(InvalidTransaction),
 	/// The transaction validity returned no "provides" tag.
 	///
 	/// Such transactions are not accepted to the pool, since we use those tags

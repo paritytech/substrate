@@ -59,13 +59,13 @@
 //! # pub type Balances = u64;
 //! # pub type AllModules = u64;
 //! # pub enum Runtime {};
-//! # use sr_primitives::transaction_validity::{TransactionValidity, UnknownTransactionValidity};
+//! # use sr_primitives::transaction_validity::{TransactionValidity, UnknownTransaction};
 //! # use sr_primitives::traits::ValidateUnsigned;
 //! # impl ValidateUnsigned for Runtime {
 //! # 	type Call = ();
 //! #
 //! # 	fn validate_unsigned(_call: &Self::Call) -> TransactionValidity {
-//! # 		UnknownTransactionValidity::NoUnsignedValidator.into()
+//! # 		UnknownTransaction::NoUnsignedValidator.into()
 //! # 	}
 //! # }
 //! /// Executive: handles dispatch to the various modules.
@@ -303,7 +303,7 @@ mod tests {
 	use sr_primitives::{
 		generic::Era, Perbill, DispatchError, weights::Weight, testing::{Digest, Header, Block},
 		traits::{Header as HeaderT, BlakeTwo256, IdentityLookup, ConvertInto},
-		transaction_validity::{UnknownTransactionValidity, InvalidTransactionValidity}, ApplyError,
+		transaction_validity::{InvalidTransaction, UnknownTransaction}, ApplyError,
 	};
 	use srml_support::{
 		impl_outer_event, impl_outer_origin, parameter_types,
@@ -378,7 +378,7 @@ mod tests {
 		fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
 			match call {
 				Call::set_balance(_, _, _) => TransactionValidity::Valid(Default::default()),
-				_ => UnknownTransactionValidity::NoUnsignedValidator.into(),
+				_ => UnknownTransaction::NoUnsignedValidator.into(),
 			}
 		}
 	}
@@ -539,7 +539,7 @@ mod tests {
 					);
 					assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(nonce as u32 + 1));
 				} else {
-					assert_eq!(res, Err(InvalidTransactionValidity::ExhaustResources.into()));
+					assert_eq!(res, Err(InvalidTransaction::ExhaustsResources.into()));
 				}
 			}
 		});
@@ -627,7 +627,7 @@ mod tests {
 				} else {
 					assert_eq!(
 						Executive::apply_extrinsic(xt),
-						Err(ApplyError::Validity(InvalidTransactionValidity::Payment.into())),
+						Err(ApplyError::Validity(InvalidTransaction::Payment.into())),
 					);
 					assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 111);
 				}

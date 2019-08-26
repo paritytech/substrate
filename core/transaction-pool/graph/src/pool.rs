@@ -151,7 +151,7 @@ impl<B: ChainApi> Pool<B> {
 					},
 					TransactionValidity::Unknown(e) => {
 						self.listener.write().invalid(&hash);
-						Err(error::Error::UnknownTransactionValidity(e).into())
+						Err(error::Error::UnknownTransaction(e).into())
 					},
 				}
 			})
@@ -454,7 +454,7 @@ fn fire_events<H, H2, Ex>(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sr_primitives::transaction_validity::{ValidTransaction, InvalidTransactionValidity};
+	use sr_primitives::transaction_validity::{ValidTransaction, InvalidTransaction};
 	use codec::Encode;
 	use test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
 	use assert_matches::assert_matches;
@@ -492,7 +492,7 @@ mod tests {
 			}
 
 			if nonce < block_number {
-				Ok(InvalidTransactionValidity::Stale.into())
+				Ok(InvalidTransaction::Stale.into())
 			} else {
 				Ok(TransactionValidity::Valid(ValidTransaction {
 					priority: 4,

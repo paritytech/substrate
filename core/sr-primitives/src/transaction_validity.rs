@@ -32,7 +32,7 @@ pub type TransactionTag = Vec<u8>;
 /// An invalid transaction validity.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, Copy)]
 #[cfg_attr(feature = "std", derive(Debug, serde::Serialize))]
-pub enum InvalidTransactionValidity {
+pub enum InvalidTransaction {
 	/// The call of the transaction is not expected.
 	Call,
 	/// General error to do with the inability to pay some fees (e.g. account balance too low).
@@ -51,29 +51,29 @@ pub enum InvalidTransactionValidity {
 	Custom(u8),
 }
 
-impl InvalidTransactionValidity {
+impl InvalidTransaction {
 	/// Returns if the reason for the invalidity was block resource exhaustion.
-	pub fn exhaust_resources(&self) -> bool {
+	pub fn exhausts_resources(&self) -> bool {
 		match self {
-			Self::ExhaustResources => true,
+			Self::ExhaustsResources => true,
 			_ => false,
 		}
 	}
 }
 
-impl Into<&'static str> for InvalidTransactionValidity {
+impl Into<&'static str> for InvalidTransaction {
 	fn into(self) -> &'static str {
 		match self {
-			InvalidTransactionValidity::Call => "Transaction call is not expected",
-			InvalidTransactionValidity::Future => "Transaction will be valid in the future",
-			InvalidTransactionValidity::Stale => "Transaction is outdated",
-			InvalidTransactionValidity::BadProof => "Transaction has a bad signature",
-			InvalidTransactionValidity::AncientBirthBlock => "Transaction has an ancient birth block",
-			InvalidTransactionValidity::ExhaustResources =>
+			InvalidTransaction::Call => "Transaction call is not expected",
+			InvalidTransaction::Future => "Transaction will be valid in the future",
+			InvalidTransaction::Stale => "Transaction is outdated",
+			InvalidTransaction::BadProof => "Transaction has a bad signature",
+			InvalidTransaction::AncientBirthBlock => "Transaction has an ancient birth block",
+			InvalidTransaction::ExhaustsResources =>
 				"Transaction would exhausts the block limits",
-			InvalidTransactionValidity::Payment =>
+			InvalidTransaction::Payment =>
 				"Inability to pay some fees (e.g. account balance too low)",
-			InvalidTransactionValidity::Custom(_) => "InvalidTransactionValidity custom error",
+			InvalidTransaction::Custom(_) => "InvalidTransaction custom error",
 		}
 	}
 }
@@ -81,7 +81,7 @@ impl Into<&'static str> for InvalidTransactionValidity {
 /// An unknown transaction validity.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, Copy)]
 #[cfg_attr(feature = "std", derive(Debug, serde::Serialize))]
-pub enum UnknownTransactionValidity {
+pub enum UnknownTransaction {
 	/// An invalid/unknown account index
 	InvalidIndex,
 	/// No validator found for the given unsigned transaction.
@@ -90,14 +90,14 @@ pub enum UnknownTransactionValidity {
 	Custom(u8),
 }
 
-impl Into<&'static str> for UnknownTransactionValidity {
+impl Into<&'static str> for UnknownTransaction {
 	fn into(self) -> &'static str {
 		match self {
-			UnknownTransactionValidity::InvalidIndex =>
+			UnknownTransaction::InvalidIndex =>
 				"Transaction used an invalid/unknown account index",
-			UnknownTransactionValidity::NoUnsignedValidator =>
+			UnknownTransaction::NoUnsignedValidator =>
 				"Could not find an unsigned validator for the unsigned transaction",
-			UnknownTransactionValidity::Custom(_) => "UnknownTransactionValidity custom error",
+			UnknownTransaction::Custom(_) => "UnknownTransaction custom error",
 		}
 	}
 }
@@ -107,16 +107,16 @@ impl Into<&'static str> for UnknownTransactionValidity {
 #[cfg_attr(feature = "std", derive(Debug, serde::Serialize))]
 pub enum TransactionValidityError {
 	/// The transaction is invalid.
-	Invalid(InvalidTransactionValidity),
+	Invalid(InvalidTransaction),
 	/// Transaction validity can't be determined.
-	Unknown(UnknownTransactionValidity),
+	Unknown(UnknownTransaction),
 }
 
 impl TransactionValidityError {
 	/// Returns if the reason for the error was block resource exhaustion.
-	pub fn exhaust_resources(&self) -> bool {
+	pub fn exhausts_resources(&self) -> bool {
 		match self {
-			Self::Invalid(e) => e.exhaust_resources(),
+			Self::Invalid(e) => e.exhausts_resources(),
 			Self::Unknown(_) => false,
 		}
 	}
@@ -131,25 +131,25 @@ impl Into<&'static str> for TransactionValidityError {
 	}
 }
 
-impl From<InvalidTransactionValidity> for TransactionValidityError {
-	fn from(err: InvalidTransactionValidity) -> Self {
+impl From<InvalidTransaction> for TransactionValidityError {
+	fn from(err: InvalidTransaction) -> Self {
 		TransactionValidityError::Invalid(err)
 	}
 }
 
-impl From<UnknownTransactionValidity> for TransactionValidityError {
-	fn from(err: UnknownTransactionValidity) -> Self {
+impl From<UnknownTransaction> for TransactionValidityError {
+	fn from(err: UnknownTransaction) -> Self {
 		TransactionValidityError::Unknown(err)
 	}
 }
 
-impl Into<crate::ApplyError> for InvalidTransactionValidity {
+impl Into<crate::ApplyError> for InvalidTransaction {
 	fn into(self) -> crate::ApplyError {
 		TransactionValidityError::from(self).into()
 	}
 }
 
-impl Into<crate::ApplyError> for UnknownTransactionValidity {
+impl Into<crate::ApplyError> for UnknownTransaction {
 	fn into(self) -> crate::ApplyError {
 		TransactionValidityError::from(self).into()
 	}
@@ -160,11 +160,11 @@ impl Into<crate::ApplyError> for UnknownTransactionValidity {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum TransactionValidity {
 	/// Transaction is invalid.
-	Invalid(InvalidTransactionValidity),
+	Invalid(InvalidTransaction),
 	/// Transaction is valid.
 	Valid(ValidTransaction),
 	/// Transaction validity can't be determined.
-	Unknown(UnknownTransactionValidity),
+	Unknown(UnknownTransaction),
 }
 
 impl Into<TransactionValidity> for TransactionValidityError {
@@ -176,13 +176,13 @@ impl Into<TransactionValidity> for TransactionValidityError {
 	}
 }
 
-impl Into<TransactionValidity> for InvalidTransactionValidity {
+impl Into<TransactionValidity> for InvalidTransaction {
 	fn into(self) -> TransactionValidity {
 		TransactionValidity::Invalid(self)
 	}
 }
 
-impl Into<TransactionValidity> for UnknownTransactionValidity {
+impl Into<TransactionValidity> for UnknownTransaction {
 	fn into(self) -> TransactionValidity {
 		TransactionValidity::Unknown(self)
 	}
@@ -249,7 +249,7 @@ impl TransactionValidity {
 impl Decode for TransactionValidity {
 	fn decode<I: crate::codec::Input>(value: &mut I) -> Result<Self, codec::Error> {
 		match value.read_byte()? {
-			0 => Ok(TransactionValidity::Invalid(InvalidTransactionValidity::decode(value)?)),
+			0 => Ok(TransactionValidity::Invalid(InvalidTransaction::decode(value)?)),
 			1 => {
 				let priority = TransactionPriority::decode(value)?;
 				let requires = Vec::decode(value)?;
@@ -261,7 +261,7 @@ impl Decode for TransactionValidity {
 					priority, requires, provides, longevity, propagate,
 				}))
 			},
-			2 => Ok(TransactionValidity::Unknown(UnknownTransactionValidity::decode(value)?)),
+			2 => Ok(TransactionValidity::Unknown(UnknownTransaction::decode(value)?)),
 			_ => Err("Invalid transaction validity variant".into()),
 		}
 	}

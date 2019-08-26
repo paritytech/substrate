@@ -104,7 +104,7 @@ impl From<Error> for rpc::Error {
 				message: "Invalid Transaction".into(),
 				data: serde_json::to_value(e).ok(),
 			},
-			Error::Pool(PoolError::UnknownTransactionValidity(e)) => rpc::Error {
+			Error::Pool(PoolError::UnknownTransaction(e)) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_UNKNOWN_VALIDITY),
 				message: "Unknown Transaction Validity".into(),
 				data: serde_json::to_value(e).ok(),

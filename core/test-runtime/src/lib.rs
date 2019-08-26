@@ -39,7 +39,7 @@ use substrate_client::{
 use sr_primitives::{
 	ApplyResult, create_runtime_str, Perbill, impl_opaque_keys,
 	transaction_validity::{
-		TransactionValidity, ValidTransaction, TransactionValidityError, InvalidTransactionValidity,
+		TransactionValidity, ValidTransaction, TransactionValidityError, InvalidTransaction,
 	},
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
@@ -132,10 +132,10 @@ impl BlindCheckable for Extrinsic {
 				if sr_primitives::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
 					Ok(Extrinsic::Transfer(transfer, signature))
 				} else {
-					Err(InvalidTransactionValidity::BadProof.into())
+					Err(InvalidTransaction::BadProof.into())
 				}
 			},
-			Extrinsic::IncludeData(_) => Err(InvalidTransactionValidity::BadProof.into()),
+			Extrinsic::IncludeData(_) => Err(InvalidTransaction::BadProof.into()),
 			Extrinsic::StorageChange(key, value) => Ok(Extrinsic::StorageChange(key, value)),
 		}
 	}

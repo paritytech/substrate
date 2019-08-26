@@ -76,7 +76,7 @@ use sr_io::Printable;
 use sr_primitives::{
 	traits::{Extrinsic as ExtrinsicT, Convert}, Perbill,
 	transaction_validity::{
-		TransactionValidity, TransactionLongevity, ValidTransaction, InvalidTransactionValidity,
+		TransactionValidity, TransactionLongevity, ValidTransaction, InvalidTransaction,
 	},
 };
 use sr_staking_primitives::{
@@ -472,20 +472,20 @@ impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
 		if let Call::heartbeat(heartbeat, signature) = call {
 			if <Module<T>>::is_online_in_current_session(heartbeat.authority_index) {
 				// we already received a heartbeat for this authority
-				return InvalidTransactionValidity::Stale.into();
+				return InvalidTransaction::Stale.into();
 			}
 
 			// check if session index from heartbeat is recent
 			let current_session = <session::Module<T>>::current_index();
 			if heartbeat.session_index != current_session {
-				return InvalidTransactionValidity::Stale.into();
+				return InvalidTransaction::Stale.into();
 			}
 
 			// verify that the incoming (unverified) pubkey is actually an authority id
 			let keys = Keys::get();
 			let authority_id = match keys.get(heartbeat.authority_index as usize) {
 				Some(id) => id,
-				None => return InvalidTransactionValidity::BadProof.into(),
+				None => return InvalidTransaction::BadProof.into(),
 			};
 
 			// check signature (this is expensive so we do it last).
@@ -494,7 +494,7 @@ impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
 			});
 
 			if !signature_valid {
-				return InvalidTransactionValidity::BadProof.into();
+				return InvalidTransaction::BadProof.into();
 			}
 
 			return TransactionValidity::Valid(ValidTransaction {
@@ -506,7 +506,7 @@ impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
 			})
 		}
 
-		InvalidTransactionValidity::Call.into()
+		InvalidTransaction::Call.into()
 	}
 }
 

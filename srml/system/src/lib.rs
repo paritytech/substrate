@@ -84,7 +84,7 @@ use sr_primitives::{
 	weights::{Weight, DispatchInfo, DispatchClass, WeightMultiplier, SimpleDispatchInfo},
 	transaction_validity::{
 		ValidTransaction, TransactionPriority, TransactionLongevity, TransactionValidityError,
-		InvalidTransactionValidity, TransactionValidity,
+		InvalidTransaction, TransactionValidity,
 	},
 	traits::{
 		self, CheckEqual, SimpleArithmetic, Zero, SignedExtension, Convert, Lookup,
@@ -866,7 +866,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 		let added_weight = info.weight.min(limit);
 		let next_weight = current_weight.saturating_add(added_weight);
 		if next_weight > limit {
-			Err(InvalidTransactionValidity::ExhaustResources.into())
+			Err(InvalidTransaction::ExhaustsResources.into())
 		} else {
 			Ok(next_weight)
 		}
@@ -882,7 +882,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 		let added_len = len as u32;
 		let next_len = current_len.saturating_add(added_len);
 		if next_len > limit {
-			Err(InvalidTransactionValidity::ExhaustResources.into())
+			Err(InvalidTransaction::ExhaustsResources.into())
 		} else {
 			Ok(next_len)
 		}
@@ -992,9 +992,9 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 		if self.0 != expected {
 			return Err(
 				if self.0 < expected {
-					InvalidTransactionValidity::Stale
+					InvalidTransaction::Stale
 				} else {
-					InvalidTransactionValidity::Future
+					InvalidTransaction::Future
 				}.into()
 			)
 		}
@@ -1013,7 +1013,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 		// check index
 		let expected = <AccountNonce<T>>::get(who);
 		if self.0 < expected {
-			return InvalidTransactionValidity::Stale.into()
+			return InvalidTransaction::Stale.into()
 		}
 
 		let provides = vec![Encode::encode(&(who, self.0))];
@@ -1062,7 +1062,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
 		let n = (self.0).0.birth(current_u64).saturated_into::<T::BlockNumber>();
 		if !<BlockHash<T>>::exists(n) {
-			Err(InvalidTransactionValidity::AncientBirthBlock.into())
+			Err(InvalidTransaction::AncientBirthBlock.into())
 		} else {
 			Ok(<Module<T>>::block_hash(n))
 		}
@@ -1497,7 +1497,7 @@ mod tests {
 			// future
 			assert_eq!(
 				CheckEra::<Test>::from(Era::mortal(4, 2)).additional_signed().err().unwrap(),
-				InvalidTransactionValidity::AncientBirthBlock.into(),
+				InvalidTransaction::AncientBirthBlock.into(),
 			);
 
 			// correct

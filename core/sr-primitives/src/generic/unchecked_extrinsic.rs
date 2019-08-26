@@ -26,7 +26,7 @@ use crate::{
 	traits::{self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic},
 	generic::CheckedExtrinsic,
 	transaction_validity::{
-		TransactionValidityError, InvalidTransactionValidity, UnknownTransactionValidity,
+		TransactionValidityError, InvalidTransaction, UnknownTransaction,
 	},
 };
 
@@ -105,7 +105,7 @@ where
 			Some((signed, signature, extra)) => {
 				let additional_signed = extra.additional_signed()?;
 				let raw_payload = (self.function, extra, additional_signed);
-				let signed = lookup.lookup(signed).ok_or(UnknownTransactionValidity::InvalidIndex)?;
+				let signed = lookup.lookup(signed).ok_or(UnknownTransaction::InvalidIndex)?;
 				if !raw_payload.using_encoded(|payload| {
 					if payload.len() > 256 {
 						signature.verify(&blake2_256(payload)[..], &signed)
@@ -113,7 +113,7 @@ where
 						signature.verify(payload, &signed)
 					}
 				}) {
-					return Err(InvalidTransactionValidity::BadProof.into())
+					return Err(InvalidTransaction::BadProof.into())
 				}
 				CheckedExtrinsic {
 					signed: Some((signed, raw_payload.1)),
@@ -299,7 +299,7 @@ mod tests {
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(
 			<Ex as Checkable<TestContext>>::check(ux, &Default::default()),
-			Err(InvalidTransactionValidity::BadProof.into()),
+			Err(InvalidTransaction::BadProof.into()),
 		);
 	}
 

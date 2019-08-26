@@ -161,8 +161,8 @@ use srml_support::traits::{
 use srml_support::dispatch::Result;
 use sr_primitives::{
 	transaction_validity::{
-		TransactionPriority, ValidTransaction, InvalidTransactionValidity, TransactionValidity,
-		TransactionValidityError,
+		TransactionPriority, ValidTransaction, InvalidTransaction, TransactionValidityError,
+		TransactionValidity,
 	},
 	traits::{
 		Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug,
@@ -1241,7 +1241,7 @@ impl<T: Trait<I>, I: Instance + Clone + Eq> SignedExtension for TakeFees<T, I> {
 			ExistenceRequirement::KeepAlive,
 		) {
 			Ok(imbalance) => imbalance,
-			Err(_) => return InvalidTransactionValidity::Payment.into(),
+			Err(_) => return InvalidTransaction::Payment.into(),
 		};
 		T::TransactionPayment::on_unbalanced(imbalance);
 

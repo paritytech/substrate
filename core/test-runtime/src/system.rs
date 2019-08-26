@@ -24,7 +24,7 @@ use runtime_support::storage_items;
 use sr_primitives::{
 	traits::{Hash as HashT, BlakeTwo256, Header as _}, generic, ApplyError, ApplyOutcome,
 	ApplyResult,
-	transaction_validity::{TransactionValidity, ValidTransaction, InvalidTransactionValidity},
+	transaction_validity::{TransactionValidity, ValidTransaction, InvalidTransaction},
 };
 use codec::{KeyedVec, Encode};
 use crate::{
@@ -147,17 +147,17 @@ impl executive::ExecuteBlock<Block> for BlockExecutor {
 /// This doesn't attempt to validate anything regarding the block.
 pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 	if check_signature(&utx).is_err() {
-		return InvalidTransactionValidity::BadProof.into();
+		return InvalidTransaction::BadProof.into();
 	}
 
 	let tx = utx.transfer();
 	let nonce_key = tx.from.to_keyed_vec(NONCE_OF);
 	let expected_nonce: u64 = storage::hashed::get_or(&blake2_256, &nonce_key, 0);
 	if tx.nonce < expected_nonce {
-		return InvalidTransactionValidity::Stale.into();
+		return InvalidTransaction::Stale.into();
 	}
 	if tx.nonce > expected_nonce + 64 {
-		return InvalidTransactionValidity::Future.into();
+		return InvalidTransaction::Future.into();
 	}
 
 	let hash = |from: &AccountId, nonce: u64| {
@@ -233,7 +233,7 @@ pub fn finalize_block() -> Header {
 #[inline(always)]
 fn check_signature(utx: &Extrinsic) -> Result<(), ApplyError> {
 	use sr_primitives::traits::BlindCheckable;
-	utx.clone().check().map_err(|_| InvalidTransactionValidity::BadProof.into()).map(|_| ())
+	utx.clone().check().map_err(|_| InvalidTransaction::BadProof.into()).map(|_| ())
 }
 
 fn execute_transaction_backend(utx: &Extrinsic) -> ApplyResult {
@@ -251,7 +251,7 @@ fn execute_transfer_backend(tx: &Transfer) -> ApplyResult {
 	let nonce_key = tx.from.to_keyed_vec(NONCE_OF);
 	let expected_nonce: u64 = storage::hashed::get_or(&blake2_256, &nonce_key, 0);
 	if !(tx.nonce == expected_nonce) {
-		return Err(InvalidTransactionValidity::Stale.into())
+		return Err(InvalidTransaction::Stale.into());
 	}
 
 	// increment nonce in storage
@@ -263,7 +263,7 @@ fn execute_transfer_backend(tx: &Transfer) -> ApplyResult {
 
 	// enact transfer
 	if !(tx.amount <= from_balance) {
-		return Err(InvalidTransactionValidity::Payment.into())
+		return Err(InvalidTransaction::Payment.into());
 	}
 	let to_balance_key = tx.to.to_keyed_vec(BALANCE_OF);
 	let to_balance: u64 = storage::hashed::get_or(&blake2_256, &to_balance_key, 0);

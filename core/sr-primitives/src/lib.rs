@@ -639,9 +639,9 @@ pub enum ApplyError {
 
 impl ApplyError {
 	/// Returns if the reason for the error was block resource exhaustion.
-	pub fn exhaust_resources(&self) -> bool {
+	pub fn exhausts_resources(&self) -> bool {
 		match self {
-			Self::Validity(e) => e.exhaust_resources(),
+			Self::Validity(e) => e.exhausts_resources(),
 			_ => false,
 		}
 	}
