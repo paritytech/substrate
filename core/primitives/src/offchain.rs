@@ -232,7 +232,7 @@ impl Timestamp {
 
 /// Execution context extra capabilities.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-#[repr(C)]
+#[repr(u8)]
 pub enum Capability {
 	/// Access to transaction pool.
 	TransactionPool = 1,
