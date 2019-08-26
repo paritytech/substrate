@@ -61,7 +61,7 @@ impl From<StorageKind> for u32 {
 
 /// Opaque type for offchain http requests.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[cfg_attr(feature = "std", derive(Debug, Hash))]
 pub struct HttpRequestId(pub u16);
 
 impl From<HttpRequestId> for u32 {
@@ -79,6 +79,8 @@ pub enum HttpError {
 	DeadlineReached = 1,
 	/// There was an IO Error while processing the request.
 	IoError = 2,
+	/// The ID of the request is invalid in this context.
+	Invalid = 3,
 }
 
 impl TryFrom<u32> for HttpError {
@@ -88,6 +90,7 @@ impl TryFrom<u32> for HttpError {
 		match error {
 			e if e == HttpError::DeadlineReached as u8 as u32 => Ok(HttpError::DeadlineReached),
 			e if e == HttpError::IoError as u8 as u32 => Ok(HttpError::IoError),
+			e if e == HttpError::Invalid as u8 as u32 => Ok(HttpError::Invalid),
 			_ => Err(())
 		}
 	}
@@ -105,18 +108,17 @@ impl From<HttpError> for u32 {
 pub enum HttpRequestStatus {
 	/// Deadline was reached while we waited for this request to finish.
 	///
-	/// Note the deadline is controlled by the calling part, it not necessarily means
-	/// that the request has timed out.
+	/// Note the deadline is controlled by the calling part, it not necessarily
+	/// means that the request has timed out.
 	DeadlineReached,
-	/// Request timed out.
+	/// An error has occured during the request, for example a timeout or the
+	/// remote has closed our socket.
 	///
-	/// This means that the request couldn't be completed by the host environment
-	/// within a reasonable time (according to the host), has now been terminated
-	/// and is considered finished.
-	/// To retry the request you need to construct it again.
-	Timeout,
-	/// Request status of this ID is not known.
-	Unknown,
+	/// The request is now considered destroyed. To retry the request you need
+	/// to construct it again.
+	IoError,
+	/// The passed ID is invalid in this context.
+	Invalid,
 	/// The request has finished with given status code.
 	Finished(u16),
 }
@@ -124,9 +126,9 @@ pub enum HttpRequestStatus {
 impl From<HttpRequestStatus> for u32 {
 	fn from(status: HttpRequestStatus) -> Self {
 		match status {
-			HttpRequestStatus::Unknown => 0,
+			HttpRequestStatus::Invalid => 0,
 			HttpRequestStatus::DeadlineReached => 10,
-			HttpRequestStatus::Timeout => 20,
+			HttpRequestStatus::IoError => 20,
 			HttpRequestStatus::Finished(code) => u32::from(code),
 		}
 	}
@@ -137,9 +139,9 @@ impl TryFrom<u32> for HttpRequestStatus {
 
 	fn try_from(status: u32) -> Result<Self, Self::Error> {
 		match status {
-			0 => Ok(HttpRequestStatus::Unknown),
+			0 => Ok(HttpRequestStatus::Invalid),
 			10 => Ok(HttpRequestStatus::DeadlineReached),
-			20 => Ok(HttpRequestStatus::Timeout),
+			20 => Ok(HttpRequestStatus::IoError),
 			100..=999 => u16::try_from(status).map(HttpRequestStatus::Finished).map_err(|_| ()),
 			_ => Err(()),
 		}
@@ -291,6 +293,11 @@ pub trait Externalities {
 	///
 	/// Meta is a future-reserved field containing additional, parity-scale-codec encoded parameters.
 	/// Returns the id of newly started request.
+	///
+	/// Returns an error if:
+	/// - No new request identifier could be allocated.
+	/// - The method or URI contain invalid characters.
+	///
 	fn http_request_start(
 		&mut self,
 		method: &str,
@@ -299,6 +306,18 @@ pub trait Externalities {
 	) -> Result<HttpRequestId, ()>;
 
 	/// Append header to the request.
+	///
+	/// Calling this function multiple times with the same header name continues appending new
+	/// headers. In other words, headers are never replaced.
+	///
+	/// Returns an error if:
+	/// - The request identifier is invalid.
+	/// - You have called `http_request_write_body` on that request.
+	/// - The name or value contain invalid characters.
+	///
+	/// An error doesn't poison the request, and you can continue as if the call had never been
+	/// made.
+	///
 	fn http_request_add_header(
 		&mut self,
 		request_id: HttpRequestId,
@@ -308,10 +327,19 @@ pub trait Externalities {
 
 	/// Write a chunk of request body.
 	///
-	/// Writing an empty chunks finalises the request.
+	/// Calling this function with a non-empty slice may or may not start the
+	/// HTTP request. Calling this function with an empty chunks finalizes the
+	/// request and always starts it. It is no longer valid to write more data
+	/// afterwards.
 	/// Passing `None` as deadline blocks forever.
 	///
-	/// Returns an error in case deadline is reached or the chunk couldn't be written.
+	/// Returns an error if:
+	/// - The request identifier is invalid.
+	/// - `http_response_wait` has already been called on this request.
+	/// - The deadline is reached.
+	/// - An I/O error has happened, for example the remote has closed our
+	///   request. The request is then considered invalid.
+	///
 	fn http_request_write_body(
 		&mut self,
 		request_id: HttpRequestId,
@@ -325,6 +353,9 @@ pub trait Externalities {
 	/// Note that if deadline is not provided the method will block indefinitely,
 	/// otherwise unready responses will produce `DeadlineReached` status.
 	///
+	/// If a response returns an `IoError`, it is then considered destroyed.
+	/// Its id is then invalid.
+	///
 	/// Passing `None` as deadline blocks forever.
 	fn http_response_wait(
 		&mut self,
@@ -335,6 +366,12 @@ pub trait Externalities {
 	/// Read all response headers.
 	///
 	/// Returns a vector of pairs `(HeaderKey, HeaderValue)`.
+	///
+	/// Dispatches the request if it hasn't been done yet. It is no longer
+	/// valid to modify the headers or write data to the request.
+	///
+	/// Returns an empty list if the identifier is unknown/invalid, hasn't
+	/// received a response, or has finished.
 	fn http_response_headers(
 		&mut self,
 		request_id: HttpRequestId
@@ -342,9 +379,23 @@ pub trait Externalities {
 
 	/// Read a chunk of body response to given buffer.
 	///
+	/// Dispatches the request if it hasn't been done yet. It is no longer
+	/// valid to modify the headers or write data to the request.
+	///
 	/// Returns the number of bytes written or an error in case a deadline
 	/// is reached or server closed the connection.
 	/// Passing `None` as a deadline blocks forever.
+	///
+	/// If `Ok(0)` or `Err(IoError)` is returned, the request is considered
+	/// destroyed. Doing another read or getting the response's headers, for
+	/// example, is then invalid.
+	///
+	/// Returns an error if:
+	/// - The request identifier is invalid.
+	/// - The deadline is reached.
+	/// - An I/O error has happened, for example the remote has closed our
+	///   request. The request is then considered invalid.
+	///
 	fn http_response_read_body(
 		&mut self,
 		request_id: HttpRequestId,
