@@ -30,8 +30,8 @@ use pow_primitives::{PowApi, Difficulty, POW_ENGINE_ID};
 use primitives::H256;
 use inherents::{InherentDataProviders, InherentData};
 use consensus_common::{
-	BlockImportParams, BlockOrigin, ForkChoiceStrategy, well_known_cache_keys::Id as CacheKeyId,
-	Environment, Proposer,
+	BlockImportParams, BlockOrigin, ForkChoiceStrategy,
+	well_known_cache_keys::Id as CacheKeyId, Environment, Proposer,
 };
 use consensus_common::import_queue::{BoxBlockImport, BasicQueue, Verifier};
 use codec::{Encode, Decode};
@@ -214,7 +214,8 @@ pub fn import_queue<B, C>(
 	inherent_data_providers: InherentDataProviders,
 ) -> Result<PowImportQueue<B>, consensus_common::Error> where
 	B: BlockT<Hash=H256>,
-	C: 'static + ProvideRuntimeApi + HeaderBackend<B> + BlockOf + ProvideCache<B> + Send + Sync + AuxStore,
+	C: ProvideRuntimeApi + HeaderBackend<B> + BlockOf + ProvideCache<B> + AuxStore,
+	C: Send + Sync + AuxStore + 'static,
 	C::Api: BlockBuilderApi<B> + PowApi<B>,
 {
 	register_pow_inherent_data_provider(&inherent_data_providers)?;
