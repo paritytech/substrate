@@ -18,7 +18,7 @@
 #![allow(unused_imports)]
 use super::*;
 use runtime_io::with_externalities;
-use mock::{new_test_ext, Babe};
+use mock::{new_test_ext, Babe, Test};
 use sr_primitives::traits::Header;
 use session::ShouldEndSession;
 
@@ -47,6 +47,13 @@ fn check_module() {
 #[test]
 fn check_epoch_change() {
 	with_externalities(&mut new_test_ext(vec![0, 1, 2, 3]), || {
+		system::Module::<Test>::initialize(&1, &Default::default(), &Default::default(), &Default::default());
+		assert!(!Babe::should_end_session(0), "Genesis does not change sessions");
+		assert!(!Babe::should_end_session(200000),
+			"BABE does not include the block number in epoch calculations");
+		EpochStartSlot::put(1);
+		CurrentSlot::put(100000);
+		assert!(Babe::should_end_session(0));
 		Babe::randomness_change_epoch(1);
 	})
 }
