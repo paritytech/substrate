@@ -24,6 +24,6 @@ decl_runtime_apis! {
 		fn verify(pre_hash: &H256, seal: &Seal) -> Option<Difficulty>;
 
 		/// Mine a seal that satisfy the current difficulty.
-		fn mine(pre_hash: &H256) -> (Difficulty, Seal);
+		fn mine(pre_hash: &H256, seed: &H256, round: u32) -> Option<(Difficulty, Seal)>;
 	}
 }

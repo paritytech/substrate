@@ -218,6 +218,7 @@ pub fn start_mine<B: BlockT<Hash=H256>, I, C, E>(
 	block_import: Arc<Mutex<I>>,
 	client: Arc<C>,
 	mut env: E,
+	round: u32,
 	inherent_data_providers: inherents::InherentDataProviders,
 ) where
 	I: BlockImport<B> + Send + Sync + 'static,
@@ -232,7 +233,7 @@ pub fn start_mine<B: BlockT<Hash=H256>, I, C, E>(
 
 	thread::spawn(move || {
 		loop {
-			match mine_one(&block_import, &client, &mut env, &inherent_data_providers) {
+			match mine_one(&block_import, &client, &mut env, round, &inherent_data_providers) {
 				Ok(()) => (),
 				Err(e) => warn!("Mining block failed: {:?}", e),
 			}
@@ -246,6 +247,7 @@ pub fn mine_one<B: BlockT<Hash=H256>, I, C, E>(
 	block_import: &Arc<Mutex<I>>,
 	client: &Arc<C>,
 	env: &mut E,
+	round: u32,
 	inherent_data_providers: &inherents::InherentDataProviders,
 ) -> Result<(), String> where
 	I: BlockImport<B>,
@@ -277,10 +279,21 @@ pub fn mine_one<B: BlockT<Hash=H256>, I, C, E>(
 	)).map_err(|e| format!("Block proposing error: {:?}", e))?;
 
 	let (header, body) = block.deconstruct();
-	let (difficulty, seal) = client.runtime_api().mine(
-		&BlockId::Hash(best_hash),
-		&header.hash(),
-	).map_err(|e| format!("Mine sealing runtime error: {:?}", e))?;
+	let seed = H256::random();
+	let (difficulty, seal) = {
+		loop {
+			let value = client.runtime_api().mine(
+				&BlockId::Hash(best_hash),
+				&header.hash(),
+				&seed,
+				round,
+			).map_err(|e| format!("Mine sealing runtime error: {:?}", e))?;
+
+			if let Some(value) = value {
+				break value
+			}
+		}
+	};
 
 	aux.total_difficulty += difficulty;
 	let hash = header.hash();
