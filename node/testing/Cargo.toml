@@ -1,0 +1,30 @@
+[package]
+name = "node-testing"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Test utilities for Substrate node."
+edition = "2018"
+
+[dependencies]
+balances = { package = "srml-balances", path = "../../srml/balances" }
+client = { package = "substrate-client", path = "../../core/client" }
+contracts = { package = "srml-contracts", path = "../../srml/contracts" }
+grandpa = { package = "srml-grandpa", path = "../../srml/grandpa" }
+indices = { package = "srml-indices", path = "../../srml/indices" }
+keyring = { package = "substrate-keyring", path = "../../core/keyring" }
+node-executor = { path = "../executor" }
+node-primitives = { path = "../primitives" }
+node-runtime = { path = "../runtime" }
+codec = { package = "parity-scale-codec", version = "1.0.0" }
+primitives = { package = "substrate-primitives", path = "../../core/primitives" }
+sr-io = { path = "../../core/sr-io" }
+sr-primitives = { path = "../../core/sr-primitives" }
+runtime_support = { package = "srml-support", path = "../../srml/support" }
+session = { package = "srml-session", path = "../../srml/session" }
+staking = { package = "srml-staking", path = "../../srml/staking" }
+substrate-executor = { path = "../../core/executor" }
+system = { package = "srml-system", path = "../../srml/system" }
+test-client = { package = "substrate-test-client", path = "../../core/test-client" }
+timestamp = { package = "srml-timestamp", path = "../../srml/timestamp" }
+treasury = { package = "srml-treasury", path = "../../srml/treasury" }
+wabt = "~0.7.4"

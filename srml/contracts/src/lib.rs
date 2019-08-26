@@ -425,7 +425,8 @@ where
 }
 
 /// The default dispatch fee computor computes the fee in the same way that
-/// the implementation of `MakePayment` for the Balances module does.
+/// the implementation of `TakeFees` for the Balances module does. Note that this only takes a fixed
+/// fee based on size. Unlike the balances module, weight-fee is applied.
 pub struct DefaultDispatchFeeComputor<T: Trait>(PhantomData<T>);
 impl<T: Trait> ComputeDispatchFee<<T as Trait>::Call, BalanceOf<T>> for DefaultDispatchFeeComputor<T> {
 	fn compute_dispatch_fee(call: &<T as Trait>::Call) -> BalanceOf<T> {

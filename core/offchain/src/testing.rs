@@ -248,7 +248,7 @@ impl offchain::Externalities for TestOffchainExt {
 
 		ids.iter().map(|id| match state.requests.get(id) {
 			Some(req) if req.response.is_empty() => RequestStatus::DeadlineReached,
-			None => RequestStatus::Unknown,
+			None => RequestStatus::Invalid,
 			_ => RequestStatus::Finished(200),
 		}).collect()
 	}

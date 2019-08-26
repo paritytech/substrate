@@ -5,10 +5,11 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-serde = { version = "1.0", optional = true, features = ["derive"] }
+client = { package = "substrate-client", path = "../../core/client", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 primitives = { package = "substrate-primitives", path = "../../core/primitives", default-features = false }
 rstd = { package = "sr-std", path = "../../core/sr-std", default-features = false }
+serde = { version = "1.0", optional = true, features = ["derive"] }
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 
 [dev-dependencies]
@@ -18,9 +19,10 @@ pretty_assertions = "0.6.1"
 [features]
 default = ["std"]
 std = [
+	"client/std",
 	"codec/std",
 	"primitives/std",
 	"rstd/std",
-	"sr-primitives/std",
 	"serde",
+	"sr-primitives/std",
 ]
