@@ -64,7 +64,7 @@ mod double_map;
 pub mod traits;
 
 pub use self::storage::{
-	StorageValue, StorageMap, EnumerableStorageMap, StorageDoubleMap, AppendableStorageMap
+	StorageValue, StorageMap, EnumerableStorageMap, StorageDoubleMap, AppendableStorageMap,
 };
 pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Callable, IsSubType};
