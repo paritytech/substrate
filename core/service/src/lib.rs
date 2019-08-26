@@ -129,15 +129,6 @@ impl Executor<Box<dyn Future<Item = (), Error = ()> + Send>> for SpawnTaskHandle
 	}
 }
 
-/// Stream of events for connection established to a telemetry server.
-pub type TelemetryOnConnectNotifications = mpsc::UnboundedReceiver<()>;
-
-/// Used to hook on telemetry connection established events.
-pub struct TelemetryOnConnect {
-	/// Event stream.
-	pub telemetry_connection_sinks: TelemetryOnConnectNotifications,
-}
-
 macro_rules! new_impl {
 	(
 		$block:ty,
@@ -470,7 +461,7 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	type NetworkSpecialization: NetworkSpecialization<Self::Block>;
 
 	/// Get event stream for telemetry connection established events.
-	fn telemetry_on_connect_stream(&self) -> TelemetryOnConnectNotifications;
+	fn telemetry_on_connect_stream(&self) -> mpsc::UnboundedReceiver<()>;
 
 	/// Returns the configuration passed on construction.
 	fn config(&self) -> &Self::Config;
@@ -555,7 +546,7 @@ where TCfg: 'static + Send,
 		&mut self.config
 	}
 
-	fn telemetry_on_connect_stream(&self) -> TelemetryOnConnectNotifications {
+	fn telemetry_on_connect_stream(&self) -> mpsc::UnboundedReceiver<()> {
 		let (sink, stream) = mpsc::unbounded();
 		self._telemetry_on_connect_sinks.lock().push(sink);
 		stream

@@ -23,7 +23,6 @@ serde_json = "1.0"
 client = { package = "substrate-client", path = "../client" }
 inherents = { package = "substrate-inherents", path = "../../core/inherents" }
 network = { package = "substrate-network", path = "../network" }
-service = { package = "substrate-service", path = "../service" }
 srml-finality-tracker = { path = "../../srml/finality-tracker" }
 fg_primitives = { package = "substrate-finality-grandpa-primitives", path = "primitives" }
 grandpa = { package = "finality-grandpa", version = "0.9.0", features = ["derive-codec"] }

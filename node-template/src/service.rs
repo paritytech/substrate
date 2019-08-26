@@ -7,10 +7,7 @@ use babe::{import_queue, start_babe, Config};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use futures::prelude::*;
 use node_template_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi, WASM_BINARY};
-use substrate_service::{
-	error::{Error as ServiceError}, AbstractService, Configuration, ServiceBuilder,
-	TelemetryOnConnect,
-};
+use substrate_service::{error::{Error as ServiceError}, AbstractService, Configuration, ServiceBuilder};
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use inherents::InherentDataProviders;
 use network::construct_simple_protocol;
@@ -159,16 +156,13 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 		},
 		(true, false) => {
 			// start the full GRANDPA voter
-			let telemetry_on_connect = TelemetryOnConnect {
-				telemetry_connection_sinks: service.telemetry_on_connect_stream(),
-			};
 			let grandpa_config = grandpa::GrandpaParams {
 				config: config,
 				link: link_half,
 				network: service.network(),
 				inherent_data_providers: inherent_data_providers.clone(),
 				on_exit: service.on_exit(),
-				telemetry_on_connect: Some(telemetry_on_connect),
+				telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
 			};
 
 			// the GRANDPA voter task is considered infallible, i.e.

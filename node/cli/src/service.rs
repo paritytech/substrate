@@ -175,16 +175,13 @@ macro_rules! new_full {
 			},
 			(true, false) => {
 				// start the full GRANDPA voter
-				let telemetry_on_connect = substrate_service::TelemetryOnConnect {
-					telemetry_connection_sinks: service.telemetry_on_connect_stream(),
-				};
 				let grandpa_config = grandpa::GrandpaParams {
 					config: config,
 					link: link_half,
 					network: service.network(),
 					inherent_data_providers: inherent_data_providers.clone(),
 					on_exit: service.on_exit(),
-					telemetry_on_connect: Some(telemetry_on_connect),
+					telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
 				};
 				service.spawn_task(Box::new(grandpa::run_grandpa_voter(grandpa_config)?));
 			},
