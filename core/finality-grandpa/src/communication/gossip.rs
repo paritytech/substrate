@@ -1799,4 +1799,55 @@ mod tests {
 			_ => panic!("expected no catch up message"),
 		}
 	}
+
+	#[test]
+	fn doesnt_send_catch_up_requests_to_non_authorities() {
+		let (val, _) = GossipValidator::<Block>::new(
+			config(),
+			voter_set_state(),
+			true,
+		);
+
+		// the validator starts at set id 1.
+		val.note_set(SetId(1), Vec::new(), |_, _| {});
+
+		// add the peers making the requests to the validator,
+		// otherwise it is discarded.
+		let peer_authority = PeerId::random();
+		let peer_full = PeerId::random();
+
+		val.inner.write().peers.new_peer(peer_authority.clone(), Roles::AUTHORITY);
+		val.inner.write().peers.new_peer(peer_full.clone(), Roles::FULL);
+
+		let import_neighbor_message = |peer| {
+			let (_, _, catch_up_request, _) = val.inner.write().import_neighbor_message(
+				&peer,
+				NeighborPacket {
+					round: Round(42),
+					set_id: SetId(1),
+					commit_finalized_height: 50,
+				},
+			);
+
+			catch_up_request
+		};
+
+		// importing a neighbor message from a peer in the same set in a later
+		// round should lead to a catch up request but since the node is not an
+		// authority we should get `None`.
+		match import_neighbor_message(peer_full) {
+			None => {},
+			_ => panic!("expected no catch up message"),
+		}
+
+		// importing the same neighbor message from a peer who is an authority
+		// should lead to a catch up request.
+		match import_neighbor_message(peer_authority) {
+			Some(GossipMessage::CatchUpRequest(request)) => {
+				assert_eq!(request.set_id, SetId(1));
+				assert_eq!(request.round, Round(41));
+			},
+			_ => panic!("expected catch up message"),
+		}
+	}
 }
