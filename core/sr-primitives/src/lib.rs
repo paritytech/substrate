@@ -647,9 +647,9 @@ impl ApplyError {
 	}
 }
 
-impl Into<&'static str> for ApplyError {
-	fn into(self) -> &'static str {
-		match self {
+impl From<ApplyError> for &'static str {
+	fn from(err: ApplyError) -> &'static str {
+		match err {
 			ApplyError::NoPermission => "Transaction does not have required permissions",
 			ApplyError::BadState => "System in bad state",
 			ApplyError::Validity(v) => v.into(),
