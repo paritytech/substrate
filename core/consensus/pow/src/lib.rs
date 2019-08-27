@@ -42,7 +42,7 @@ use consensus_common::import_queue::{BoxBlockImport, BasicQueue, Verifier};
 use codec::{Encode, Decode};
 use log::*;
 
-/// Auxiliary prefix for PoW engine.
+/// Auxiliary storage prefix for PoW engine.
 pub const POW_AUX_PREFIX: [u8; 4] = *b"PoW:";
 
 fn aux_key(hash: &H256) -> Vec<u8> {
