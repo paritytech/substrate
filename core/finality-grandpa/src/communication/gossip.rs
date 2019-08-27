@@ -1329,7 +1329,7 @@ mod tests {
 		assert!(res.unwrap().is_none());
 
 		// connect & disconnect.
-		peers.new_peer(id.clone());
+		peers.new_peer(id.clone(), Roles::AUTHORITY);
 		peers.peer_disconnected(&id);
 
 		let res = peers.update_peer_state(&id, update.clone());
@@ -1365,7 +1365,7 @@ mod tests {
 		let mut peers = Peers::default();
 		let id = PeerId::random();
 
-		peers.new_peer(id.clone());
+		peers.new_peer(id.clone(), Roles::AUTHORITY);
 
 		let mut check_update = move |update: NeighborPacket<_>| {
 			let view = peers.update_peer_state(&id, update.clone()).unwrap().unwrap();
@@ -1385,7 +1385,7 @@ mod tests {
 		let mut peers = Peers::default();
 
 		let id = PeerId::random();
-		peers.new_peer(id.clone());
+		peers.new_peer(id.clone(), Roles::AUTHORITY);
 
 		peers.update_peer_state(&id, NeighborPacket {
 			round: Round(10),
@@ -1586,7 +1586,7 @@ mod tests {
 		// add the peer making the request to the validator,
 		// otherwise it is discarded
 		let mut inner = val.inner.write();
-		inner.peers.new_peer(peer.clone());
+		inner.peers.new_peer(peer.clone(), Roles::AUTHORITY);
 
 		let res = inner.handle_catch_up_request(
 			&peer,
@@ -1637,7 +1637,7 @@ mod tests {
 		// add the peer making the request to the validator,
 		// otherwise it is discarded
 		let peer = PeerId::random();
-		val.inner.write().peers.new_peer(peer.clone());
+		val.inner.write().peers.new_peer(peer.clone(), Roles::AUTHORITY);
 
 		let send_request = |set_id, round| {
 			let mut inner = val.inner.write();
@@ -1717,7 +1717,7 @@ mod tests {
 		// add the peer making the request to the validator,
 		// otherwise it is discarded.
 		let peer = PeerId::random();
-		val.inner.write().peers.new_peer(peer.clone());
+		val.inner.write().peers.new_peer(peer.clone(), Roles::AUTHORITY);
 
 		let import_neighbor_message = |set_id, round| {
 			let (_, _, catch_up_request, _) = val.inner.write().import_neighbor_message(
@@ -1780,7 +1780,7 @@ mod tests {
 		// add the peer making the request to the validator,
 		// otherwise it is discarded.
 		let peer = PeerId::random();
-		val.inner.write().peers.new_peer(peer.clone());
+		val.inner.write().peers.new_peer(peer.clone(), Roles::AUTHORITY);
 
 		// importing a neighbor message from a peer in the same set in a later
 		// round should lead to a catch up request but since they're disabled
