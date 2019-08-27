@@ -15,13 +15,11 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use codec::{Codec, Encode, Decode};
-use crate::{
-	storage::{self, unhashed, hashed::StorageHasher},
-	rstd::{
-		borrow::Borrow,
-		boxed::Box,
-		marker::PhantomData,
-	}
+use crate::storage::{self, unhashed, hashed::StorageHasher};
+use sr_std::{
+	borrow::Borrow,
+	boxed::Box,
+	marker::PhantomData,
 };
 
 /// Generator for `StorageLinkedMap` used by `decl_storage`.

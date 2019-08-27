@@ -14,11 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! child storage NOTE could replace unhashed by having only one kind of storage (root being null storage
-//! key (storage_key can become Option<&[u8]>).
+//! Operation on runtime child storages.
+//!
 //! This module is a currently only a variant of unhashed with additional `storage_key`.
 //! Note that `storage_key` must be unique and strong (strong in the sense of being long enough to
 //! avoid collision from a resistant hash function (which unique implies)).
+// NOTE: could replace unhashed by having only one kind of storage (root being null storage key (storage_key can become Option<&[u8]>).
 
 use super::{Codec, Encode, Decode, Vec};
 

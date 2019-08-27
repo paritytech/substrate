@@ -108,10 +108,7 @@ impl<K: Codec, V: Codec, G: StorageMap<K, V>> storage::StorageMap<K, V> for G {
 
 	fn take<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query {
 		let key = Self::storage_map_final_key(key);
-		let value = unhashed::get(key.as_ref());
-		if value.is_some() {
-			unhashed::kill(key.as_ref())
-		}
+		let value = unhashed::take(key.as_ref());
 		G::from_optional_value_to_query(value)
 	}
 

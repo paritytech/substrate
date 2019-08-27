@@ -112,10 +112,7 @@ where
 	{
 		let final_key = Self::storage_double_map_final_key(k1, k2);
 
-		let value = unhashed::get(&final_key);
-		if value.is_some() {
-			unhashed::kill(&final_key)
-		}
+		let value = unhashed::take(&final_key);
 		G::from_optional_value_to_query(value)
 	}
 
