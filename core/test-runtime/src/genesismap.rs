@@ -25,14 +25,12 @@ use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
 
 /// Configuration of a general Substrate test genesis block.
 pub struct GenesisConfig {
-	pub changes_trie_config: Option<ChangesTrieConfiguration>,
-	pub authorities: Vec<AuthorityId>,
-	pub balances: Vec<(AccountId, u64)>,
-	pub heap_pages_override: Option<u64>,
+	changes_trie_config: Option<ChangesTrieConfiguration>,
+	authorities: Vec<AuthorityId>,
+	balances: Vec<(AccountId, u64)>,
+	heap_pages_override: Option<u64>,
 	/// Additional storage key pairs that will be added to the genesis map.
-	pub extra_storage: Vec<(Vec<u8>, Vec<u8>)>,
-	/// Prevent direct construction of this object.
-	_use_ctor: std::marker::PhantomData<()>,
+	extra_storage: Vec<(Vec<u8>, Vec<u8>)>,
 }
 
 impl GenesisConfig {
@@ -53,7 +51,6 @@ impl GenesisConfig {
 			balances: endowed_accounts.into_iter().map(|a| (a, balance)).collect(),
 			heap_pages_override,
 			extra_storage,
-			_use_ctor: std::marker::PhantomData,
 		}
 	}
 
