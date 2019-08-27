@@ -29,8 +29,8 @@ pub mod informant;
 use client::ExecutionStrategies;
 use service::{
 	config::Configuration,
-	ServiceFactory, FactoryFullConfiguration, RuntimeGenesis,
-	FactoryGenesis, PruningMode, ChainSpec,
+	ServiceBuilderExport, ServiceBuilderImport, ServiceBuilderRevert,
+	RuntimeGenesis, PruningMode, ChainSpec,
 };
 use network::{
 	self, multiaddr::Protocol,
@@ -317,13 +317,17 @@ pub struct ParseAndPrepareExport<'a> {
 
 impl<'a> ParseAndPrepareExport<'a> {
 	/// Runs the command and exports from the chain.
-	pub fn run<F, S, E>(
+	pub fn run_with_builder<C, G, F, B, S, E>(
 		self,
+		builder: F,
 		spec_factory: S,
 		exit: E,
 	) -> error::Result<()>
-	where S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
-		F: ServiceFactory,
+	where S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
+		F: FnOnce(Configuration<C, G>) -> Result<B, error::Error>,
+		B: ServiceBuilderExport,
+		C: Default,
+		G: RuntimeGenesis,
 		E: IntoExit
 	{
 		let config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
@@ -338,9 +342,8 @@ impl<'a> ParseAndPrepareExport<'a> {
 			None => Box::new(stdout()),
 		};
 
-		service::chain_ops::export_blocks::<F, _, _>(
-			config, exit.into_exit(), file, from.into(), to.map(Into::into), json
-		).map_err(Into::into)
+		builder(config)?.export_blocks(exit.into_exit(), file, from.into(), to.map(Into::into), json)?;
+		Ok(())
 	}
 }
 
@@ -352,13 +355,17 @@ pub struct ParseAndPrepareImport<'a> {
 
 impl<'a> ParseAndPrepareImport<'a> {
 	/// Runs the command and imports to the chain.
-	pub fn run<F, S, E>(
+	pub fn run_with_builder<C, G, F, B, S, E>(
 		self,
+		builder: F,
 		spec_factory: S,
 		exit: E,
 	) -> error::Result<()>
-	where S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
-		F: ServiceFactory,
+	where S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
+		F: FnOnce(Configuration<C, G>) -> Result<B, error::Error>,
+		B: ServiceBuilderImport,
+		C: Default,
+		G: RuntimeGenesis,
 		E: IntoExit
 	{
 		let mut config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
@@ -377,7 +384,7 @@ impl<'a> ParseAndPrepareImport<'a> {
 			},
 		};
 
-		let fut = service::chain_ops::import_blocks::<F, _, _>(config, exit.into_exit(), file)?;
+		let fut = builder(config)?.import_blocks(exit.into_exit(), file)?;
 		tokio::run(fut);
 		Ok(())
 	}
@@ -440,65 +447,21 @@ pub struct ParseAndPrepareRevert<'a> {
 
 impl<'a> ParseAndPrepareRevert<'a> {
 	/// Runs the command and reverts the chain.
-	pub fn run<F, S>(
+	pub fn run_with_builder<C, G, F, B, S>(
 		self,
+		builder: F,
 		spec_factory: S
 	) -> error::Result<()>
-	where S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
-		F: ServiceFactory {
+	where S: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
+		F: FnOnce(Configuration<C, G>) -> Result<B, error::Error>,
+		B: ServiceBuilderRevert,
+		C: Default,
+		G: RuntimeGenesis {
 		let config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
 		let blocks = self.params.num;
-		Ok(service::chain_ops::revert_chain::<F>(config, blocks.into())?)
+		builder(config)?.revert_chain(blocks.into())?;
+		Ok(())
 	}
-}
-
-/// Parse command line interface arguments and executes the desired command.
-///
-/// # Return value
-///
-/// A result that indicates if any error occurred.
-/// If no error occurred and a custom subcommand was found, the subcommand is returned.
-/// The user needs to handle this subcommand on its own.
-///
-/// # Remarks
-///
-/// `CC` is a custom subcommand. This needs to be an `enum`! If no custom subcommand is required,
-/// `NoCustom` can be used as type here.
-/// `RP` are custom parameters for the run command. This needs to be a `struct`! The custom
-/// parameters are visible to the user as if they were normal run command parameters. If no custom
-/// parameters are required, `NoCustom` can be used as type here.
-#[deprecated(
-	note = "Use parse_and_prepare instead; see the source code of parse_and_execute for how to transition"
-)]
-pub fn parse_and_execute<'a, F, CC, RP, S, RS, E, I, T>(
-	spec_factory: S,
-	version: &VersionInfo,
-	impl_name: &'static str,
-	args: I,
-	exit: E,
-	run_service: RS,
-) -> error::Result<Option<CC>>
-where
-	F: ServiceFactory,
-	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
-	CC: StructOpt + Clone + GetLogFilter,
-	RP: StructOpt + Clone + AugmentClap,
-	E: IntoExit,
-	RS: FnOnce(E, RunCmd, RP, FactoryFullConfiguration<F>) -> Result<(), String>,
-	I: IntoIterator<Item = T>,
-	T: Into<std::ffi::OsString> + Clone,
-{
-	match parse_and_prepare::<CC, RP, _>(version, impl_name, args) {
-		ParseAndPrepare::Run(cmd) => cmd.run(spec_factory, exit, run_service),
-		ParseAndPrepare::BuildSpec(cmd) => cmd.run(spec_factory),
-		ParseAndPrepare::ExportBlocks(cmd) => cmd.run::<F, _, _>(spec_factory, exit),
-		ParseAndPrepare::ImportBlocks(cmd) => cmd.run::<F, _, _>(spec_factory, exit),
-		ParseAndPrepare::PurgeChain(cmd) => cmd.run(spec_factory),
-		ParseAndPrepare::RevertChain(cmd) => cmd.run::<F, _>(spec_factory),
-		ParseAndPrepare::CustomCommand(cmd) => return Ok(Some(cmd))
-	}?;
-
-	Ok(None)
 }
 
 /// Create a `NodeKeyConfig` from the given `NodeKeyParams` in the context

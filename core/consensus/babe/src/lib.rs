@@ -857,8 +857,7 @@ impl<B, E, Block, RA, PRA, T> Verifier<Block> for BabeVerifier<B, E, Block, RA, 
 				// chain.
 				let new_best = {
 					let (last_best, last_best_number) = {
-						#[allow(deprecated)]
-						let info = self.client.backend().blockchain().info();
+						let info = self.client.info().chain;
 						(info.best_hash, info.best_number)
 					};
 
