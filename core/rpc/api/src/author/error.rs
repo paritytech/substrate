@@ -16,7 +16,7 @@
 
 //! Authoring RPC module errors.
 
-use crate::rpc;
+use rpc;
 use crate::errors;
 
 /// Author RPC Result type.

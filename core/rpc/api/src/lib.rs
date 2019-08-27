@@ -21,16 +21,14 @@
 #![warn(missing_docs)]
 
 mod errors;
-mod metadata;
+mod helpers;
 mod subscriptions;
 
-use jsonrpc_core as rpc;
-
-pub use metadata::Metadata;
 pub use rpc::IoHandlerExtension as RpcExtension;
 pub use subscriptions::Subscriptions;
+pub use helpers::Receiver;
 
 pub mod author;
-// pub mod chain;
-// pub mod state;
-// pub mod system;
+pub mod chain;
+pub mod state;
+pub mod system;

@@ -16,19 +16,15 @@
 
 //! Substrate block-author/full-node API.
 
-pub mod error;
-pub mod hash;
-
 #[cfg(test)]
 mod tests;
 
 use std::{sync::Arc, convert::TryInto};
 
 use client::{self, Client};
-use crate::rpc::futures::{Sink, Future};
-use crate::subscriptions::Subscriptions;
+use rpc::futures::{Sink, Future};
 use futures03::{StreamExt as _, compat::Compat};
-use jsonrpc_derive::rpc;
+use api::Subscriptions;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use log::warn;
 use codec::{Encode, Decode};
@@ -37,7 +33,6 @@ use primitives::{
 	traits::BareCryptoStorePtr,
 };
 use sr_primitives::{generic, traits::{self, ProvideRuntimeApi}};
-use self::error::{Error, Result};
 use transaction_pool::{
 	txpool::{
 		ChainApi as PoolChainApi,
@@ -52,6 +47,7 @@ use session::SessionKeys;
 
 /// Re-export the API for backward compatibility.
 pub use api::author::*;
+use self::error::{Error, Result};
 
 /// Authoring API
 pub struct Author<B, E, P, RA> where P: PoolChainApi + Sync + Send + 'static {
@@ -128,7 +124,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 		self.client.runtime_api().generate_session_keys(
 			&generic::BlockId::Hash(best_block_hash),
 			None,
-		).map(Into::into).map_err(Into::into)
+		).map(Into::into).map_err(|e| Error::Client(Box::new(e)))
 	}
 
 	fn submit_extrinsic(&self, ext: Bytes) -> Result<ExHash<P>> {
