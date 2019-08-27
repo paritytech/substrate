@@ -3826,6 +3826,7 @@ dependencies = [
  "serde 1.0.97 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
+ "sr-staking-primitives 2.0.0",
  "sr-std 2.0.0",
  "srml-im-online 0.1.0",
  "srml-session 2.0.0",
