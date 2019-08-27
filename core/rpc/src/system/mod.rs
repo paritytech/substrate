@@ -41,7 +41,7 @@ pub enum Request<B: traits::Block> {
 	/// Must return information about the peers we are connected to.
 	Peers(oneshot::Sender<Vec<PeerInfo<B::Hash, <B::Header as HeaderT>::Number>>>),
 	/// Must return the state of the network.
-	NetworkState(oneshot::Sender<jsonrpc_core::Value>),
+	NetworkState(oneshot::Sender<rpc::Value>),
 }
 
 impl<B: traits::Block> System<B> {
@@ -89,7 +89,7 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 		Receiver(Compat::new(rx))
 	}
 
-	fn system_network_state(&self) -> Receiver<jsonrpc_core::Value> {
+	fn system_network_state(&self) -> Receiver<rpc::Value> {
 		let (tx, rx) = oneshot::channel();
 		let _ = self.send_back.unbounded_send(Request::NetworkState(tx));
 		Receiver(Compat::new(rx))

@@ -23,8 +23,6 @@
 mod helpers;
 mod metadata;
 
-use jsonrpc_core as rpc;
-
 pub use api::Subscriptions;
 pub use self::metadata::Metadata;
 pub use rpc::IoHandlerExtension as RpcExtension;

@@ -19,8 +19,8 @@
 pub mod error;
 pub mod number;
 
-use rpc::Result as RpcResult;
-use rpc::futures::Future;
+use jsonrpc_core::Result as RpcResult;
+use jsonrpc_core::futures::Future;
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use self::error::Result;

@@ -18,8 +18,8 @@
 
 pub mod error;
 
-use rpc::Result as RpcResult;
-use rpc::futures::Future;
+use jsonrpc_core::Result as RpcResult;
+use jsonrpc_core::futures::Future;
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use primitives::Bytes;

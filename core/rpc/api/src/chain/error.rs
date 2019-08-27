@@ -17,7 +17,6 @@
 
 //! Error helpers for Chain RPC module.
 
-use rpc;
 use crate::errors;
 
 /// Chain RPC Result type.
@@ -45,11 +44,11 @@ impl std::error::Error for Error {
 /// Base error code for all chain errors.
 const BASE_ERROR: i64 = 3000;
 
-impl From<Error> for rpc::Error {
+impl From<Error> for jsonrpc_core::Error {
 	fn from(e: Error) -> Self {
 		match e {
-			Error::Other(message) => rpc::Error {
-				code: rpc::ErrorCode::ServerError(BASE_ERROR + 1),
+			Error::Other(message) => jsonrpc_core::Error {
+				code: jsonrpc_core::ErrorCode::ServerError(BASE_ERROR + 1),
 				message,
 				data: None,
 			},

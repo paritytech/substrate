@@ -16,7 +16,6 @@
 
 //! System RPC module errors.
 
-use rpc;
 use crate::system::helpers::Health;
 
 /// System RPC Result type.
@@ -35,11 +34,11 @@ impl std::error::Error for Error {}
 /// Base code for all system errors.
 const BASE_ERROR: i64 = 2000;
 
-impl From<Error> for rpc::Error {
+impl From<Error> for jsonrpc_core::Error {
 	fn from(e: Error) -> Self {
 		match e {
-			Error::NotHealthy(ref h) => rpc::Error {
-				code: rpc::ErrorCode::ServerError(BASE_ERROR + 1),
+			Error::NotHealthy(ref h) => jsonrpc_core::Error {
+				code: jsonrpc_core::ErrorCode::ServerError(BASE_ERROR + 1),
 				message: format!("{}", e),
 				data: serde_json::to_value(h).ok(),
 			},

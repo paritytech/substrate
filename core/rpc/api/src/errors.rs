@@ -14,13 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use rpc;
 use log::warn;
 
-pub fn internal<E: ::std::fmt::Debug>(e: E) -> rpc::Error {
+pub fn internal<E: ::std::fmt::Debug>(e: E) -> jsonrpc_core::Error {
 	warn!("Unknown error: {:?}", e);
-	rpc::Error {
-		code: rpc::ErrorCode::InternalError,
+	jsonrpc_core::Error {
+		code: jsonrpc_core::ErrorCode::InternalError,
 		message: "Unknown error occured".into(),
 		data: Some(format!("{:?}", e).into()),
 	}
