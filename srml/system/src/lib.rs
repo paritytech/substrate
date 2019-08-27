@@ -87,7 +87,6 @@
 //! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(trace_macros)]
 
 #[cfg(feature = "std")]
 use serde::Serialize;
