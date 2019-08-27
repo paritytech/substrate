@@ -386,12 +386,14 @@ impl Misbehavior {
 
 struct PeerInfo<N> {
 	view: View<N>,
+	roles: Roles,
 }
 
 impl<N> PeerInfo<N> {
-	fn new() -> Self {
+	fn new(roles: Roles) -> Self {
 		PeerInfo {
 			view: View::default(),
+			roles,
 		}
 	}
 }
@@ -408,8 +410,8 @@ impl<N> Default for Peers<N> {
 }
 
 impl<N: Ord> Peers<N> {
-	fn new_peer(&mut self, who: PeerId) {
-		self.inner.insert(who, PeerInfo::new());
+	fn new_peer(&mut self, who: PeerId, roles: Roles) {
+		self.inner.insert(who, PeerInfo::new(roles));
 	}
 
 	fn peer_disconnected(&mut self, who: &PeerId) {
@@ -815,9 +817,12 @@ impl<Block: BlockT> Inner<Block> {
 
 		// if the peer is on the same set and ahead of us by a margin bigger
 		// than `CATCH_UP_THRESHOLD` then we should ask it for a catch up
-		// message.
+		// message. we only send catch-up requests to authorities, observers
+		// won't be able to reply since they don't follow the full GRANDPA
+		// protocol and therefore might not have the vote data available.
 		if let (Some(peer), Some(local_view)) = (self.peers.peer(who), &self.local_view) {
-			if peer.view.set_id == local_view.set_id &&
+			if peer.roles.is_authority() &&
+				peer.view.set_id == local_view.set_id &&
 				peer.view.round.0.saturating_sub(CATCH_UP_THRESHOLD) > local_view.round.0
 			{
 				// send catch up request if allowed
@@ -1033,10 +1038,10 @@ impl<Block: BlockT> GossipValidator<Block> {
 }
 
 impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> {
-	fn new_peer(&self, context: &mut dyn ValidatorContext<Block>, who: &PeerId, _roles: Roles) {
+	fn new_peer(&self, context: &mut dyn ValidatorContext<Block>, who: &PeerId, roles: Roles) {
 		let packet = {
 			let mut inner = self.inner.write();
-			inner.peers.new_peer(who.clone());
+			inner.peers.new_peer(who.clone(), roles);
 
 			inner.local_view.as_ref().map(|v| {
 				NeighborPacket {
