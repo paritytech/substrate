@@ -191,9 +191,9 @@ mod tests {
 	}
 
 	impl im_online::Trait for Test {
+		type AuthorityId = AuthorityId;
 		type Call = im_online::Call<Test>;
 		type Event = ();
-		type AuthorityId = AuthorityId;
 		type UncheckedExtrinsic = UncheckedExtrinsic<(), im_online::Call<Test>, (), ()>;
 		type ReportUnresponsiveness = ();
 		type CurrentElectedSet = DummyCurrentElectedSet<AuthorityId>;
