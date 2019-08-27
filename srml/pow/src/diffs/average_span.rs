@@ -12,8 +12,7 @@ pub trait Trait: timestamp::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as AverageSpanDifficultyAdjustment {
 		LastTimestamp get(last_timestamp): Option<T::Moment>;
-		TargetDifficulty get(target_difficulty)
-			build(|_| <T::InitialDifficulty>::get()): Difficulty;
+		TargetDifficulty: Option<Difficulty>;
 	}
 }
 
@@ -27,17 +26,30 @@ decl_module! {
 						return
 					}
 
-					let accumulated_difficulty = Self::target_difficulty() *
+					let accumulated_difficulty =
+						Self::target_difficulty() *
 						<T::Span>::get().unique_saturated_into();
+					if accumulated_difficulty == 0 {
+						return
+					}
 
 					let target_difficulty = accumulated_difficulty *
 						<T::TargetPeriod>::get().unique_saturated_into() /
 						(current_timestamp - last_timestamp).unique_saturated_into();
+					if target_difficulty == 0 {
+						return
+					}
 					<TargetDifficulty>::put(target_difficulty);
 				}
 
 				<LastTimestamp<T>>::put(<timestamp::Module<T>>::now());
 			}
 		}
+	}
+}
+
+impl<T: Trait> Module<T> {
+	pub fn target_difficulty() -> Difficulty {
+		<TargetDifficulty>::get().unwrap_or(<T::InitialDifficulty>::get())
 	}
 }
