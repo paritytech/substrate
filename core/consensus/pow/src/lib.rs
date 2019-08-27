@@ -26,7 +26,7 @@ use sr_primitives::Justification;
 use sr_primitives::generic::{BlockId, Digest, DigestItem};
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi};
 use srml_timestamp::{TimestampInherentData, InherentError as TIError};
-use pow_primitives::{PowApi, Difficulty, POW_ENGINE_ID};
+use pow_primitives::{PowApi, Difficulty, Seal, POW_ENGINE_ID};
 use primitives::H256;
 use inherents::{InherentDataProviders, InherentData};
 use consensus_common::{
@@ -46,19 +46,88 @@ pub struct PowAux {
 	pub total_difficulty: Difficulty,
 }
 
-/// A verifier for PoW blocks.
-pub struct PowVerifier<C> {
+/// Algorithm used for proof of work.
+pub trait PowAlgorithm<B: BlockT> {
+	/// Get the next block's difficulty.
+	fn difficulty(&self, parent: &BlockId<B>) -> Result<Difficulty, String>;
+	/// Verify proof of work against the given difficulty.
+	fn verify(
+		&self,
+		parent: &BlockId<B>,
+		pre_hash: &H256,
+		seal: &Seal,
+		difficulty: Difficulty
+	) -> Result<bool, String>;
+	/// Mine a seal that satisfy the given difficulty.
+	fn mine(
+		&self,
+		parent: &BlockId<B>,
+		pre_hash: &H256,
+		seed: &H256,
+		difficulty: Difficulty,
+		round: u32
+	) -> Result<Option<Seal>, String>;
+}
+
+/// Delegates algorithm selection to Substrate runtime.
+pub struct PowRuntimeAlgorithm<C> {
 	client: Arc<C>,
+}
+
+impl<C> PowRuntimeAlgorithm<C> {
+	/// Create a new runtime algorithm given a client.
+	pub fn new(client: Arc<C>) -> Self {
+		Self { client }
+	}
+}
+
+impl<B: BlockT<Hash=H256>, C> PowAlgorithm<B> for PowRuntimeAlgorithm<C> where
+	C: ProvideRuntimeApi,
+	C::Api: PowApi<B>,
+{
+	fn difficulty(&self, parent: &BlockId<B>) -> Result<Difficulty, String> {
+		self.client.runtime_api().difficulty(parent)
+			.map_err(|e| format!("Fetch difficulty failed: {:?}", e))
+	}
+
+	fn verify(
+		&self,
+		parent: &BlockId<B>,
+		pre_hash: &H256,
+		seal: &Seal,
+		difficulty: Difficulty
+	) -> Result<bool, String> {
+		self.client.runtime_api().verify(parent, pre_hash, seal, difficulty)
+			.map_err(|e| format!("Verify PoW seal failed: {:?}", e))
+	}
+
+	fn mine(
+		&self,
+		parent: &BlockId<B>,
+		pre_hash: &H256,
+		seed: &H256,
+		difficulty: Difficulty,
+		round: u32
+	) -> Result<Option<Seal>, String> {
+		self.client.runtime_api().mine(parent, pre_hash, seed, difficulty, round)
+			.map_err(|e| format!("Mine PoW seal failed: {:?}", e))
+	}
+}
+
+/// A verifier for PoW blocks.
+pub struct PowVerifier<C, Algorithm> {
+	client: Arc<C>,
+	algorithm: Algorithm,
 	inherent_data_providers: inherents::InherentDataProviders,
 }
 
-impl<C> PowVerifier<C> {
+impl<C, Algorithm> PowVerifier<C, Algorithm> {
 	fn check_header<B: BlockT<Hash=H256>>(
 		&self,
 		mut header: B::Header,
 		block_id: BlockId<B>,
 	) -> Result<(B::Header, Difficulty, DigestItem<H256>), String> where
-		C: ProvideRuntimeApi, C::Api: PowApi<B>,
+		Algorithm: PowAlgorithm<B>,
 	{
 		let hash = header.hash();
 
@@ -74,15 +143,14 @@ impl<C> PowVerifier<C> {
 		};
 
 		let pre_hash = header.hash();
-		let difficulty = self.client.runtime_api().difficulty(&block_id)
-			.map_err(|e| format!("Fetch difficulty failed: {:?}", e))?;
+		let difficulty = self.algorithm.difficulty(&block_id)?;
 
-		if !self.client.runtime_api().verify(
+		if !self.algorithm.verify(
 			&block_id,
 			&pre_hash,
 			&inner_seal,
 			difficulty,
-		).map_err(|e| format!("Verify seal failed: {:?}", e))? {
+		)? {
 			return Err("PoW validation error: invalid seal".into());
 		}
 
@@ -126,9 +194,10 @@ impl<C> PowVerifier<C> {
 	}
 }
 
-impl<B: BlockT<Hash=H256>, C> Verifier<B> for PowVerifier<C> where
+impl<B: BlockT<Hash=H256>, C, Algorithm> Verifier<B> for PowVerifier<C, Algorithm> where
 	C: ProvideRuntimeApi + Send + Sync + HeaderBackend<B> + AuxStore + ProvideCache<B> + BlockOf,
-	C::Api: BlockBuilderApi<B> + PowApi<B>,
+	C::Api: BlockBuilderApi<B>,
+	Algorithm: PowAlgorithm<B> + Send + Sync,
 {
 	fn verify(
 		&mut self,
@@ -213,20 +282,23 @@ fn register_pow_inherent_data_provider(
 /// The PoW import queue type.
 pub type PowImportQueue<B> = BasicQueue<B>;
 
-pub fn import_queue<B, C>(
+pub fn import_queue<B, C, Algorithm>(
 	block_import: BoxBlockImport<B>,
 	client: Arc<C>,
+	algorithm: Algorithm,
 	inherent_data_providers: InherentDataProviders,
 ) -> Result<PowImportQueue<B>, consensus_common::Error> where
 	B: BlockT<Hash=H256>,
 	C: ProvideRuntimeApi + HeaderBackend<B> + BlockOf + ProvideCache<B> + AuxStore,
 	C: Send + Sync + AuxStore + 'static,
 	C::Api: BlockBuilderApi<B> + PowApi<B>,
+	Algorithm: PowAlgorithm<B> + Send + Sync + 'static,
 {
 	register_pow_inherent_data_provider(&inherent_data_providers)?;
 
 	let verifier = PowVerifier {
 		client: client.clone(),
+		algorithm,
 		inherent_data_providers,
 	};
 
@@ -238,9 +310,10 @@ pub fn import_queue<B, C>(
 	))
 }
 
-pub fn start_mine<B: BlockT<Hash=H256>, C, E>(
+pub fn start_mine<B: BlockT<Hash=H256>, C, Algorithm, E>(
 	mut block_import: BoxBlockImport<B>,
 	client: Arc<C>,
+	algorithm: Algorithm,
 	mut env: E,
 	preruntime: Vec<u8>,
 	round: u32,
@@ -248,6 +321,7 @@ pub fn start_mine<B: BlockT<Hash=H256>, C, E>(
 ) where
 	C: HeaderBackend<B> + AuxStore + ProvideRuntimeApi + 'static,
 	C::Api: PowApi<B>,
+	Algorithm: PowAlgorithm<B> + Send + Sync + 'static,
 	E: Environment<B> + Send + Sync + 'static,
 	E::Error: core::fmt::Debug,
 {
@@ -260,6 +334,7 @@ pub fn start_mine<B: BlockT<Hash=H256>, C, E>(
 			match mine_loop(
 				&mut block_import,
 				client.as_ref(),
+				&algorithm,
 				&mut env,
 				&preruntime,
 				round,
@@ -277,16 +352,17 @@ pub fn start_mine<B: BlockT<Hash=H256>, C, E>(
 	});
 }
 
-fn mine_loop<B: BlockT<Hash=H256>, C, E>(
+fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E>(
 	block_import: &mut BoxBlockImport<B>,
 	client: &C,
+	algorithm: &Algorithm,
 	env: &mut E,
 	preruntime: &[u8],
 	round: u32,
 	inherent_data_providers: &inherents::InherentDataProviders,
 ) -> Result<(), String> where
-	C: HeaderBackend<B> + AuxStore + ProvideRuntimeApi,
-	C::Api: PowApi<B>,
+	C: HeaderBackend<B> + AuxStore,
+	Algorithm: PowAlgorithm<B>,
 	E: Environment<B>,
 	E::Error: core::fmt::Debug,
 {
@@ -319,17 +395,17 @@ fn mine_loop<B: BlockT<Hash=H256>, C, E>(
 		let seed = H256::random();
 		let (difficulty, seal) = {
 			loop {
-				let difficulty = client.runtime_api().difficulty(
+				let difficulty = algorithm.difficulty(
 					&BlockId::Hash(best_hash),
-				).map_err(|e| format!("Fetch difficulty failed: {:?}", e))?;
+				)?;
 
-				let seal = client.runtime_api().mine(
+				let seal = algorithm.mine(
 					&BlockId::Hash(best_hash),
 					&header.hash(),
 					&seed,
 					difficulty,
 					round,
-				).map_err(|e| format!("Mine sealing runtime error: {:?}", e))?;
+				)?;
 
 				if let Some(seal) = seal {
 					break (difficulty, seal)
