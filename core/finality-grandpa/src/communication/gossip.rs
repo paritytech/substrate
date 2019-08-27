@@ -1835,9 +1835,8 @@ mod tests {
 		// importing a neighbor message from a peer in the same set in a later
 		// round should lead to a catch up request but since the node is not an
 		// authority we should get `None`.
-		match import_neighbor_message(peer_full) {
-			None => {},
-			_ => panic!("expected no catch up message"),
+		if import_neighbor_message(peer_full).is_some() {
+			panic!("expected no catch up message");
 		}
 
 		// importing the same neighbor message from a peer who is an authority
