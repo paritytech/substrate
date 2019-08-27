@@ -171,7 +171,7 @@ impl<Block, B, E, RA, A> Proposer<Block, SubstrateClient<B, E, Block, RA>, A>	wh
 				Ok(()) => {
 					debug!("[{:?}] Pushed to the block.", pending.hash);
 				}
-				Err(error::Error::ApplyExtrinsicFailed(e)) if e.exhausts_resources() => {
+				Err(error::Error::ApplyExtrinsicFailed(e)) if e.exhausted_resources() => {
 					if is_first {
 						debug!("[{:?}] Invalid transaction: FullBlock on empty block", pending.hash);
 						unqueue_invalid.push(pending.hash.clone());
