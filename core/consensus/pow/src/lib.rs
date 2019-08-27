@@ -45,10 +45,28 @@ use log::*;
 /// Auxiliary prefix for PoW engine.
 pub const POW_AUX_PREFIX: [u8; 4] = *b"PoW:";
 
+fn aux_key(hash: &H256) -> Vec<u8> {
+	POW_AUX_PREFIX.iter().chain(&hash[..])
+		.cloned().collect::<Vec<_>>()
+}
+
 /// Auxiliary data for PoW.
 #[derive(Encode, Decode, Clone, Debug, Default)]
 pub struct PowAux {
+	/// Total difficulty.
 	pub total_difficulty: Difficulty,
+}
+
+impl PowAux {
+	/// Read the auxiliary from client.
+	pub fn read<C: AuxStore>(client: &C, hash: &H256) -> Result<Self, String> {
+		let key = aux_key(hash);
+
+		match client.get_aux(&key).map_err(|e| format!("{:?}", e))? {
+			Some(bytes) => PowAux::decode(&mut &bytes[..]).map_err(|e| format!("{:?}", e)),
+			None => Ok(Default::default()),
+		}
+	}
 }
 
 /// Algorithm used for proof of work.
@@ -218,22 +236,8 @@ impl<B: BlockT<Hash=H256>, C, Algorithm> Verifier<B> for PowVerifier<C, Algorith
 		let best_hash = self.client.info().best_hash;
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
-		let parent_aux_key = POW_AUX_PREFIX.iter().chain(&parent_hash[..])
-			.cloned().collect::<Vec<_>>();
-		let best_aux_key = POW_AUX_PREFIX.iter().chain(&best_hash[..])
-			.cloned().collect::<Vec<_>>();
-		let best_aux = match self.client.get_aux(&best_aux_key)
-			.map_err(|e| format!("{:?}", e))?
-		{
-			Some(bytes) => PowAux::decode(&mut &bytes[..]).map_err(|e| format!("{:?}", e))?,
-			None => Default::default(),
-		};
-		let mut aux = match self.client.get_aux(&parent_aux_key)
-			.map_err(|e| format!("{:?}", e))?
-		{
-			Some(bytes) => PowAux::decode(&mut &bytes[..]).map_err(|e| format!("{:?}", e))?,
-			None => Default::default(),
-		};
+		let best_aux = PowAux::read(self.client.as_ref(), &best_hash)?;
+		let mut aux = PowAux::read(self.client.as_ref(), &parent_hash)?;
 
 		let (checked_header, difficulty, seal) = self.check_header::<B>(
 			header,
@@ -254,7 +258,7 @@ impl<B: BlockT<Hash=H256>, C, Algorithm> Verifier<B> for PowVerifier<C, Algorith
 			let (_, inner_body) = block.deconstruct();
 			body = Some(inner_body);
 		}
-		let key = POW_AUX_PREFIX.iter().chain(&hash[..]).cloned().collect::<Vec<_>>();
+		let key = aux_key(&hash);
 		let import_block = BlockImportParams {
 			origin,
 			header: checked_header,
@@ -381,14 +385,7 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E>(
 		let best_header = client.header(BlockId::Hash(best_hash))
 			.map_err(|e| format!("Best header does not exist: {:?}", e))?
 			.ok_or("Fetching best header failed")?;
-		let best_aux_key = POW_AUX_PREFIX.iter().chain(&best_hash[..])
-			.cloned().collect::<Vec<_>>();
-		let mut aux = match client.get_aux(&best_aux_key)
-			.map_err(|e| format!("{:?}", e))?
-		{
-			Some(bytes) => PowAux::decode(&mut &bytes[..]).map_err(|e| format!("{:?}", e))?,
-			None => Default::default(),
-		};
+		let mut aux = PowAux::read(client, &best_hash)?;
 		let mut proposer = env.init(&best_header).map_err(|e| format!("{:?}", e))?;
 
 		let inherent_data = inherent_data_providers
@@ -430,7 +427,7 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E>(
 		aux.total_difficulty = aux.total_difficulty.saturating_add(difficulty);
 		let hash = header.hash();
 
-		let key = POW_AUX_PREFIX.iter().chain(&hash[..]).cloned().collect::<Vec<_>>();
+		let key = aux_key(&hash);
 		let import_block = BlockImportParams {
 			origin: BlockOrigin::Own,
 			header,
