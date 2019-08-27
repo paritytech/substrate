@@ -88,7 +88,7 @@ pub trait PowAlgorithm<B: BlockT> {
 		pre_hash: &H256,
 		seed: &H256,
 		difficulty: Difficulty,
-		round: u32
+		round: u32,
 	) -> Result<Option<Seal>, String>;
 }
 
