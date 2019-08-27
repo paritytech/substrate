@@ -29,7 +29,7 @@ use rstd::{result, prelude::*};
 use srml_support::{decl_storage, decl_module, StorageValue, StorageMap, traits::FindAuthor, traits::Get};
 use timestamp::{OnTimestampSet};
 use sr_primitives::{generic::DigestItem, ConsensusEngineId, Perbill};
-use sr_primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon};
+use sr_primitives::traits::{Header as HeaderT, IsMember, SaturatedConversion, Saturating, RandomnessBeacon};
 use sr_staking_primitives::{
 	SessionIndex,
 	offence::{Offence, Kind},
@@ -273,6 +273,46 @@ impl<T: Trait> IsMember<AuthorityId> for Module<T> {
 		<Module<T>>::authorities()
 			.iter()
 			.any(|id| &id.0 == authority_id)
+	}
+}
+
+/// A filter on uncles which ensures that only primary slot blocks can be
+/// included. Secondary slots have deterministic allocation therefore they
+/// should not clash with other secondary slots. They might clash with primary
+/// slots, but in this case we don't want the secondary slot block to be uncled
+/// since it was only a fallback for the primary slot block.
+///
+/// This does O(n) work in the number of uncles included.
+pub struct OnlyPrimaryUncles;
+
+impl<Header, Author> authorship::FilterUncle<Header, Author> for OnlyPrimaryUncles
+where
+	Header: HeaderT,
+{
+	type Accumulator = ();
+
+	fn filter_uncle(header: &Header, _: &mut Self::Accumulator)
+		-> Result<Option<Author>, &'static str>
+	{
+		for (id, mut data) in header.digest()
+			.logs
+			.iter()
+			.filter_map(|s| s.as_pre_runtime())
+		{
+			if id == BABE_ENGINE_ID {
+				let pre_digest = RawBabePreDigest::decode(&mut data)
+					.map_err(|_| "Failed to decode raw babe pre-digest.")?;
+
+				match pre_digest {
+					RawBabePreDigest::Primary { .. } =>
+						return Ok(None),
+					RawBabePreDigest::Secondary { .. } =>
+						return Err("Secondary slots cannot be uncled"),
+				}
+			}
+		}
+
+		Err("Raw babe pre-digest not found.")
 	}
 }
 

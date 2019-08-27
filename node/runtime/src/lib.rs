@@ -186,7 +186,7 @@ parameter_types! {
 impl authorship::Trait for Runtime {
 	type FindAuthor = session::FindAccountFromAuthorIndex<Self, Babe>;
 	type UncleGenerations = UncleGenerations;
-	type FilterUncle = ();
+	type FilterUncle = babe::OnlyPrimaryUncles;
 	type EventHandler = Staking;
 }
 
