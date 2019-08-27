@@ -33,7 +33,7 @@ pub trait StorageValue<T: Codec> {
 	type Query;
 
 	/// Get the storage key.
-	fn key() -> Vec<u8>;
+	fn key() -> [u8; 16];
 
 	/// Does the value (explicitly) exist in storage?
 	fn exists() -> bool;
