@@ -18,9 +18,8 @@
 
 //! Substrate authority discovery.
 //!
-//! This crate enables Substrate authorities to directly connect to other
-//! authorities. [`AuthorityDiscovery`] implements the Future trait. By polling
-//! [`AuthorityDiscovery`] an authority:
+//! This crate enables Substrate authorities to directly connect to other authorities. [`AuthorityDiscovery`] implements
+//! the Future trait. By polling [`AuthorityDiscovery`] an authority:
 //!
 //!
 //! 1. **Makes itself discoverable**
@@ -42,8 +41,7 @@
 //!
 //!    3. Validates the signatures of the retrieved key value pairs.
 //!
-//!    4. Adds the retrieved external addresses as priority nodes to the
-//!    peerset.
+//!    4. Adds the retrieved external addresses as priority nodes to the peerset.
 
 use authority_discovery_primitives::AuthorityDiscoveryApi;
 use client::blockchain::HeaderBackend;
@@ -51,10 +49,10 @@ use error::{Error, Result};
 use futures::{prelude::*, sync::mpsc::Receiver};
 use log::{debug, error, log_enabled, warn};
 use network::specialization::NetworkSpecialization;
-use network::{DhtEvent, ExHashT, NetworkStateInfo};
+use network::{DhtEvent, ExHashT};
 use prost::Message;
 use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{Block, ProvideRuntimeApi};
+use sr_primitives::traits::{Block as BlockT, ProvideRuntimeApi};
 use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
 use std::marker::PhantomData;
@@ -67,13 +65,11 @@ mod schema {
 	include!(concat!(env!("OUT_DIR"), "/authority_discovery.rs"));
 }
 
-/// A AuthorityDiscovery makes a given authority discoverable as well as
-/// discovers other authoritys.
-pub struct AuthorityDiscovery<AuthorityId, Client, B, S, H>
+/// A AuthorityDiscovery makes a given authority discoverable as well as discovers other authorities.
+pub struct AuthorityDiscovery<AuthorityId, Client, Network, Block>
 where
-	B: Block + 'static,
-	S: NetworkSpecialization<B>,
-	H: ExHashT,
+	Block: BlockT + 'static,
+	Network: NetworkProvider,
 	AuthorityId: std::string::ToString
 		+ codec::Codec
 		+ std::convert::AsRef<[u8]>
@@ -81,36 +77,32 @@ where
 		+ std::fmt::Debug
 		+ std::hash::Hash
 		+ std::cmp::Eq,
-	Client: ProvideRuntimeApi + Send + Sync + 'static + HeaderBackend<B>,
-	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<B, AuthorityId>,
+	Client: ProvideRuntimeApi + Send + Sync + 'static + HeaderBackend<Block>,
+	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block, AuthorityId>,
 {
 	client: Arc<Client>,
 
-	network: Arc<network::NetworkService<B, S, H>>,
+	network: Arc<Network>,
 	/// Channel we receive Dht events on.
 	dht_event_rx: Receiver<DhtEvent>,
 
-	/// Interval to be proactive on, e.g. publishing own addresses or starting
-	/// to query for addresses.
+	/// Interval to be proactive on, e.g. publishing own addresses or starting to query for addresses.
 	interval: tokio_timer::Interval,
 
-	/// The network peerset interface for priority groups lets us only set an
-	/// entire group, but we retrieve the addresses of other authorities one by
-	/// one from the network. To use the peerset interface we need to cache the
-	/// addresses and always overwrite the entire peerset priority group. To
-	/// ensure this map doesn't grow indefinitely
-	/// `purge_old_authorities_from_cache` function is called each time we add a
-	/// new entry.
+	/// The network peerset interface for priority groups lets us only set an entire group, but we retrieve the
+	/// addresses of other authorities one by one from the network. To use the peerset interface we need to cache the
+	/// addresses and always overwrite the entire peerset priority group. To ensure this map doesn't grow indefinitely
+	/// `purge_old_authorities_from_cache` function is called each time we add a new entry.
 	address_cache: HashMap<AuthorityId, Vec<libp2p::Multiaddr>>,
 
 	phantom_authority_id: PhantomData<AuthorityId>,
+	phantom_block: PhantomData<Block>,
 }
 
-impl<AuthorityId, Client, B, S, H> AuthorityDiscovery<AuthorityId, Client, B, S, H>
+impl<AuthorityId, Client, Network, Block> AuthorityDiscovery<AuthorityId, Client, Network, Block>
 where
-	B: Block + 'static,
-	S: NetworkSpecialization<B>,
-	H: ExHashT,
+	Block: BlockT + 'static,
+	Network: NetworkProvider,
 	AuthorityId: std::string::ToString
 		+ codec::Codec
 		+ std::convert::AsRef<[u8]>
@@ -118,15 +110,15 @@ where
 		+ std::fmt::Debug
 		+ std::hash::Hash
 		+ std::cmp::Eq,
-	Client: ProvideRuntimeApi + Send + Sync + 'static + HeaderBackend<B>,
-	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<B, AuthorityId>,
+	Client: ProvideRuntimeApi + Send + Sync + 'static + HeaderBackend<Block>,
+	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block, AuthorityId>,
 {
 	/// Return a new authority discovery.
 	pub fn new(
 		client: Arc<Client>,
-		network: Arc<network::NetworkService<B, S, H>>,
+		network: Arc<Network>,
 		dht_event_rx: futures::sync::mpsc::Receiver<DhtEvent>,
-	) -> AuthorityDiscovery<AuthorityId, Client, B, S, H> {
+	) -> AuthorityDiscovery<AuthorityId, Client, Network, Block> {
 		// Kademlia's default time-to-live for Dht records is 36h, republishing records every 24h. Given that a node
 		// could restart at any point in time, one can not depend on the republishing process, thus starting to publish
 		// own external addresses should happen on an interval < 36h.
@@ -142,6 +134,7 @@ where
 			interval,
 			address_cache,
 			phantom_authority_id: PhantomData,
+			phantom_block: PhantomData,
 		}
 	}
 
@@ -161,7 +154,7 @@ where
 			.into_iter()
 			.map(|mut a| {
 				a.push(libp2p::core::multiaddr::Protocol::P2p(
-					self.network.peer_id().into(),
+					self.network.local_peer_id().into(),
 				));
 				a
 			})
@@ -169,12 +162,11 @@ where
 			.collect();
 
 		let mut serialized_addresses = vec![];
-		{
-			let mut a = schema::AuthorityAddresses::default();
-			a.addresses = addresses;
-			a.encode(&mut serialized_addresses)
-				.map_err(Error::Encoding)?;
-		};
+		schema::AuthorityAddresses {
+			addresses: addresses,
+		}
+		.encode(&mut serialized_addresses)
+		.map_err(Error::Encoding)?;
 
 		let sig = self
 			.client
@@ -184,12 +176,12 @@ where
 			.ok_or(Error::SigningDhtPayload)?;
 
 		let mut signed_addresses = vec![];
-		{
-			let mut a = schema::SignedAuthorityAddresses::default();
-			a.addresses = serialized_addresses;
-			a.signature = sig;
-			a.encode(&mut signed_addresses).map_err(Error::Encoding)?;
-		};
+		schema::SignedAuthorityAddresses {
+			addresses: serialized_addresses,
+			signature: sig,
+		}
+		.encode(&mut signed_addresses)
+		.map_err(Error::Encoding)?;
 
 		self.network
 			.put_value(hash_authority_id(authority_id.as_ref())?, signed_addresses);
@@ -244,7 +236,7 @@ where
 		&mut self,
 		values: Vec<(libp2p::kad::record::Key, Vec<u8>)>,
 	) -> Result<()> {
-		println!("==== dht found handling, cache: {:?}", self.address_cache);
+		println!("==== Dht found handling, cache: {:?}", self.address_cache);
 		let id = BlockId::hash(self.client.info().best_hash);
 
 		// From the Dht we only get the hashed authority id. In order to retrieve the actual authority id and to ensure
@@ -258,8 +250,7 @@ where
 			.collect::<Result<HashMap<_, _>>>()?;
 
 		for (key, value) in values.iter() {
-			// Check if the event origins from an authority in the current
-			// authority set.
+			// Check if the event origins from an authority in the current authority set.
 			let authority_pub_key: &AuthorityId = authorities
 				.get(key)
 				.ok_or(Error::MatchingHashedAuthorityIdWithAuthorityId)?;
@@ -295,8 +286,7 @@ where
 				.insert(authority_pub_key.clone(), addresses);
 		}
 
-		// Let's update the peerset priority group with the all the addresses we
-		// have in our cache.
+		// Let's update the peerset priority group with the all the addresses we have in our cache.
 
 		let addresses = HashSet::from_iter(
 			self.address_cache
@@ -312,18 +302,17 @@ where
 		Ok(())
 	}
 
-	fn purge_old_authorities_from_cache(&mut self, authorities: &Vec<AuthorityId>) {
+	fn purge_old_authorities_from_cache(&mut self, current_authorities: &Vec<AuthorityId>) {
 		self.address_cache
-			.retain(|peer_id, _addresses| authorities.contains(peer_id))
+			.retain(|peer_id, _addresses| current_authorities.contains(peer_id))
 	}
 }
 
-impl<AuthorityId, Client, B, S, H> futures::Future
-	for AuthorityDiscovery<AuthorityId, Client, B, S, H>
+impl<AuthorityId, Client, Network, Block> futures::Future
+	for AuthorityDiscovery<AuthorityId, Client, Network, Block>
 where
-	B: Block + 'static,
-	S: NetworkSpecialization<B>,
-	H: ExHashT,
+	Block: BlockT + 'static,
+	Network: NetworkProvider,
 	AuthorityId: std::string::ToString
 		+ codec::Codec
 		+ std::convert::AsRef<[u8]>
@@ -331,8 +320,8 @@ where
 		+ std::fmt::Debug
 		+ std::hash::Hash
 		+ std::cmp::Eq,
-	Client: ProvideRuntimeApi + Send + Sync + 'static + HeaderBackend<B>,
-	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<B, AuthorityId>,
+	Client: ProvideRuntimeApi + Send + Sync + 'static + HeaderBackend<Block>,
+	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block, AuthorityId>,
 {
 	type Item = ();
 	type Error = ();
@@ -362,14 +351,354 @@ where
 			Err(e) => error!(target: "sub-authority-discovery", "Poll failure: {:?}", e),
 		};
 
-		// Make sure to always return NotReady as this is a long running task
-		// with the same lifetime as the node itself.
+		// Make sure to always return NotReady as this is a long running task with the same lifetime as the node itself.
 		Ok(futures::Async::NotReady)
 	}
 }
 
-fn hash_authority_id(id: &[u8]) -> Result<(libp2p::kad::record::Key)> {
+/// NetworkProvider provides AuthorityDiscovery with all necessary hooks into the underlying Substrate networking. Using
+/// this trait abstraction instead of NetworkService directly is necessary to unit test AuthorityDiscovery.
+pub trait NetworkProvider {
+	/// Returns the local external addresses.
+	fn external_addresses(&self) -> Vec<libp2p::Multiaddr>;
+
+	/// Returns the network identity of the node.
+	fn local_peer_id(&self) -> libp2p::PeerId;
+
+	/// Modify a peerset priority group.
+	fn set_priority_group(
+		&self,
+		group_id: String,
+		peers: HashSet<libp2p::Multiaddr>,
+	) -> std::result::Result<(), String>;
+
+	/// Start putting a value in the Dht.
+	fn put_value(&self, key: libp2p::kad::record::Key, value: Vec<u8>);
+
+	/// Start getting a value from the Dht.
+	fn get_value(&self, key: &libp2p::kad::record::Key);
+}
+
+impl<B, S, H> NetworkProvider for network::NetworkService<B, S, H>
+where
+	B: BlockT + 'static,
+	S: NetworkSpecialization<B>,
+	H: ExHashT,
+{
+	fn external_addresses(&self) -> Vec<libp2p::Multiaddr> {
+		self.external_addresses()
+	}
+	fn local_peer_id(&self) -> libp2p::PeerId {
+		self.local_peer_id()
+	}
+	fn set_priority_group(
+		&self,
+		group_id: String,
+		peers: HashSet<libp2p::Multiaddr>,
+	) -> std::result::Result<(), String> {
+		self.set_priority_group(group_id, peers)
+	}
+	fn put_value(&self, key: libp2p::kad::record::Key, value: Vec<u8>) {
+		self.put_value(key, value)
+	}
+	fn get_value(&self, key: &libp2p::kad::record::Key) {
+		self.get_value(key)
+	}
+}
+
+fn hash_authority_id(id: &[u8]) -> Result<libp2p::kad::record::Key> {
 	libp2p::multihash::encode(libp2p::multihash::Hash::SHA2256, id)
 		.map(|k| libp2p::kad::record::Key::new(&k))
 		.map_err(Error::HashingAuthorityId)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use client::runtime_api::{ApiExt, Core, RuntimeVersion};
+	use futures::future::poll_fn;
+	use primitives::{ExecutionContext, NativeOrEncoded};
+	use sr_primitives::traits::Zero;
+	use sr_primitives::traits::{ApiRef, Block as BlockT, NumberFor, ProvideRuntimeApi};
+	use std::sync::{Arc, Mutex};
+	use test_client::runtime::Block;
+	use tokio::runtime::current_thread;
+
+	#[derive(Clone)]
+	struct TestApi {}
+
+	impl ProvideRuntimeApi for TestApi {
+		type Api = RuntimeApi;
+
+		fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api> {
+			RuntimeApi {}.into()
+		}
+	}
+
+	/// Blockchain database header backend. Does not perform any validation.
+	impl<Block: BlockT> HeaderBackend<Block> for TestApi {
+		fn header(
+			&self,
+			_id: BlockId<Block>,
+		) -> std::result::Result<Option<Block::Header>, client::error::Error> {
+			Ok(None)
+		}
+
+		fn info(&self) -> client::blockchain::Info<Block> {
+			client::blockchain::Info {
+				best_hash: Default::default(),
+				best_number: Zero::zero(),
+				finalized_hash: Default::default(),
+				finalized_number: Zero::zero(),
+				genesis_hash: Default::default(),
+			}
+		}
+
+		fn status(
+			&self,
+			_id: BlockId<Block>,
+		) -> std::result::Result<client::blockchain::BlockStatus, client::error::Error> {
+			Ok(client::blockchain::BlockStatus::Unknown)
+		}
+
+		fn number(
+			&self,
+			_hash: Block::Hash,
+		) -> std::result::Result<Option<NumberFor<Block>>, client::error::Error> {
+			Ok(None)
+		}
+
+		fn hash(
+			&self,
+			_number: NumberFor<Block>,
+		) -> std::result::Result<Option<Block::Hash>, client::error::Error> {
+			Ok(None)
+		}
+	}
+
+	struct RuntimeApi {}
+
+	impl Core<Block> for RuntimeApi {
+		fn Core_version_runtime_api_impl(
+			&self,
+			_: &BlockId<Block>,
+			_: ExecutionContext,
+			_: Option<()>,
+			_: Vec<u8>,
+		) -> std::result::Result<NativeOrEncoded<RuntimeVersion>, client::error::Error> {
+			unimplemented!("Not required for testing!")
+		}
+
+		fn Core_execute_block_runtime_api_impl(
+			&self,
+			_: &BlockId<Block>,
+			_: ExecutionContext,
+			_: Option<(Block)>,
+			_: Vec<u8>,
+		) -> std::result::Result<NativeOrEncoded<()>, client::error::Error> {
+			unimplemented!("Not required for testing!")
+		}
+
+		fn Core_initialize_block_runtime_api_impl(
+			&self,
+			_: &BlockId<Block>,
+			_: ExecutionContext,
+			_: Option<&<Block as BlockT>::Header>,
+			_: Vec<u8>,
+		) -> std::result::Result<NativeOrEncoded<()>, client::error::Error> {
+			unimplemented!("Not required for testing!")
+		}
+	}
+
+	impl ApiExt<Block> for RuntimeApi {
+		fn map_api_result<F: FnOnce(&Self) -> std::result::Result<R, E>, R, E>(
+			&self,
+			_: F,
+		) -> std::result::Result<R, E> {
+			unimplemented!("Not required for testing!")
+		}
+
+		fn runtime_version_at(
+			&self,
+			_: &BlockId<Block>,
+		) -> std::result::Result<RuntimeVersion, client::error::Error> {
+			unimplemented!("Not required for testing!")
+		}
+
+		fn record_proof(&mut self) {
+			unimplemented!("Not required for testing!")
+		}
+
+		fn extract_proof(&mut self) -> Option<Vec<Vec<u8>>> {
+			unimplemented!("Not required for testing!")
+		}
+	}
+
+	impl AuthorityDiscoveryApi<Block, String> for RuntimeApi {
+		fn AuthorityDiscoveryApi_authority_id_runtime_api_impl(
+			&self,
+			_: &BlockId<Block>,
+			_: ExecutionContext,
+			_: Option<()>,
+			_: Vec<u8>,
+		) -> std::result::Result<NativeOrEncoded<Option<String>>, client::error::Error> {
+			return Ok(NativeOrEncoded::Native(Some("test".to_string())));
+		}
+		fn AuthorityDiscoveryApi_authorities_runtime_api_impl(
+			&self,
+			_: &BlockId<Block>,
+			_: ExecutionContext,
+			_: Option<()>,
+			_: Vec<u8>,
+		) -> std::result::Result<NativeOrEncoded<Vec<String>>, client::error::Error> {
+			return Ok(NativeOrEncoded::Native(vec![
+				"test-authority-id-1".to_string(),
+				"test-authority-id-2".to_string(),
+			]));
+		}
+		fn AuthorityDiscoveryApi_sign_runtime_api_impl(
+			&self,
+			_: &BlockId<Block>,
+			_: ExecutionContext,
+			_: Option<(std::vec::Vec<u8>, String)>,
+			_: Vec<u8>,
+		) -> std::result::Result<NativeOrEncoded<Option<Vec<u8>>>, client::error::Error> {
+			return Ok(NativeOrEncoded::Native(Some(
+				"test-signature-1".as_bytes().to_vec(),
+			)));
+		}
+		fn AuthorityDiscoveryApi_verify_runtime_api_impl(
+			&self,
+			_: &BlockId<Block>,
+			_: ExecutionContext,
+			args: Option<(Vec<u8>, Vec<u8>, String)>,
+			_: Vec<u8>,
+		) -> std::result::Result<NativeOrEncoded<bool>, client::error::Error> {
+			if args.unwrap().1 == "test-signature-1".as_bytes() {
+				return Ok(NativeOrEncoded::Native(true));
+			}
+			return Ok(NativeOrEncoded::Native(false));
+		}
+	}
+
+	#[derive(Default)]
+	struct TestNetwork {
+		// Whenever functions on `TestNetwork` are called, the function arguments are added to the vectors below.
+		pub put_value_call: Arc<Mutex<Vec<(libp2p::kad::record::Key, Vec<u8>)>>>,
+		pub get_value_call: Arc<Mutex<Vec<libp2p::kad::record::Key>>>,
+		pub set_priority_group_call: Arc<Mutex<Vec<(String, HashSet<libp2p::Multiaddr>)>>>,
+	}
+
+	impl NetworkProvider for TestNetwork {
+		fn external_addresses(&self) -> Vec<libp2p::Multiaddr> {
+			vec![]
+		}
+		fn local_peer_id(&self) -> libp2p::PeerId {
+			libp2p::PeerId::random()
+		}
+		fn set_priority_group(
+			&self,
+			group_id: String,
+			peers: HashSet<libp2p::Multiaddr>,
+		) -> std::result::Result<(), String> {
+			self.set_priority_group_call
+				.lock()
+				.unwrap()
+				.push((group_id, peers));
+			Ok(())
+		}
+		fn put_value(&self, key: libp2p::kad::record::Key, value: Vec<u8>) {
+			self.put_value_call.lock().unwrap().push((key, value));
+		}
+		fn get_value(&self, key: &libp2p::kad::record::Key) {
+			self.get_value_call.lock().unwrap().push(key.clone());
+		}
+	}
+
+	#[test]
+	fn publish_own_ext_addresses_puts_record_on_dht() {
+		let (_dht_event_tx, dht_event_rx) = futures::sync::mpsc::channel(1000);
+		let test_api = Arc::new(TestApi {});
+		let network: Arc<TestNetwork> = Arc::new(Default::default());
+
+		let mut authority_discovery =
+			AuthorityDiscovery::new(test_api, network.clone(), dht_event_rx);
+
+		authority_discovery.publish_own_ext_addresses().unwrap();
+
+		// Expect authority discovery to put a new record onto the dht.
+		assert_eq!(network.put_value_call.lock().unwrap().len(), 1);
+	}
+
+	#[test]
+	fn request_addresses_of_others_triggers_dht_get_query() {
+		let (_dht_event_tx, dht_event_rx) = futures::sync::mpsc::channel(1000);
+		let test_api = Arc::new(TestApi {});
+		let network: Arc<TestNetwork> = Arc::new(Default::default());
+
+		let mut authority_discovery =
+			AuthorityDiscovery::new(test_api, network.clone(), dht_event_rx);
+
+		authority_discovery.request_addresses_of_others().unwrap();
+
+		// Expect authority discovery to request new records from the dht.
+		assert_eq!(network.get_value_call.lock().unwrap().len(), 2);
+	}
+
+	#[test]
+	fn handle_dht_events_with_value_found_should_call_set_priority_group() {
+		// Create authority discovery.
+
+		let (mut dht_event_tx, dht_event_rx) = futures::sync::mpsc::channel(1000);
+		let test_api = Arc::new(TestApi {});
+		let network: Arc<TestNetwork> = Arc::new(Default::default());
+
+		let mut authority_discovery =
+			AuthorityDiscovery::new(test_api, network.clone(), dht_event_rx);
+
+		// Create sample dht event.
+
+		let authority_id_1 = hash_authority_id("test-authority-id-1".as_bytes()).unwrap();
+		let address_1 = "/ip6/2001:db8::".to_string();
+
+		let mut serialized_addresses = vec![];
+		schema::AuthorityAddresses {
+			addresses: vec![address_1.clone()],
+		}
+		.encode(&mut serialized_addresses)
+		.unwrap();
+
+		let mut signed_addresses = vec![];
+		schema::SignedAuthorityAddresses {
+			addresses: serialized_addresses,
+			signature: "test-signature-1".as_bytes().to_vec(),
+		}
+		.encode(&mut signed_addresses)
+		.unwrap();
+
+		let dht_event = network::DhtEvent::ValueFound(vec![(authority_id_1, signed_addresses)]);
+		dht_event_tx.try_send(dht_event).unwrap();
+
+		// Make authority discovery handle the event.
+
+		let f = || {
+			authority_discovery.handle_dht_events().unwrap();
+
+			// Expect authority discovery to set the priority set.
+			assert_eq!(network.set_priority_group_call.lock().unwrap().len(), 1);
+
+			assert_eq!(
+				network.set_priority_group_call.lock().unwrap()[0],
+				(
+					"authorities".to_string(),
+					HashSet::from_iter(vec![address_1.parse().unwrap()].into_iter())
+				)
+			);
+
+			Ok(Async::Ready(()))
+		};
+
+		let mut runtime = current_thread::Runtime::new().unwrap();
+		runtime.block_on(poll_fn::<(), (), _>(f)).unwrap();
+	}
 }
