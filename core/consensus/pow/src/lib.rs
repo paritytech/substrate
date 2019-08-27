@@ -74,12 +74,17 @@ impl<C> PowVerifier<C> {
 		};
 
 		let pre_hash = header.hash();
+		let difficulty = self.client.runtime_api().difficulty(&block_id)
+			.map_err(|e| format!("Fetch difficulty failed: {:?}", e))?;
 
-		let difficulty = self.client.runtime_api().verify(
+		if !self.client.runtime_api().verify(
 			&block_id,
 			&pre_hash,
 			&inner_seal,
-		).map_err(|e| format!("{:?}", e))?.ok_or("Invalid seal")?;
+			difficulty,
+		).map_err(|e| format!("Verify seal failed: {:?}", e))? {
+			return Err("PoW validation error: invalid seal".into());
+		}
 
 		Ok((header, difficulty, seal))
 	}
@@ -314,15 +319,20 @@ fn mine_loop<B: BlockT<Hash=H256>, C, E>(
 		let seed = H256::random();
 		let (difficulty, seal) = {
 			loop {
-				let value = client.runtime_api().mine(
+				let difficulty = client.runtime_api().difficulty(
+					&BlockId::Hash(best_hash),
+				).map_err(|e| format!("Fetch difficulty failed: {:?}", e))?;
+
+				let seal = client.runtime_api().mine(
 					&BlockId::Hash(best_hash),
 					&header.hash(),
 					&seed,
+					difficulty,
 					round,
 				).map_err(|e| format!("Mine sealing runtime error: {:?}", e))?;
 
-				if let Some(value) = value {
-					break value
+				if let Some(seal) = seal {
+					break (difficulty, seal)
 				}
 
 				if best_hash != client.info().best_hash {
