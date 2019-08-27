@@ -153,6 +153,7 @@ mod tests {
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			1000,
 			None,
+			vec![],
 		).genesis_map();
 		let genesis_hash = insert_genesis_block(&mut storage);
 
@@ -181,6 +182,7 @@ mod tests {
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			1000,
 			None,
+			vec![],
 		).genesis_map();
 		let genesis_hash = insert_genesis_block(&mut storage);
 
@@ -209,6 +211,7 @@ mod tests {
 			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			68,
 			None,
+			vec![],
 		).genesis_map();
 		let genesis_hash = insert_genesis_block(&mut storage);
 
