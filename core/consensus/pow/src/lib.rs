@@ -79,7 +79,7 @@ pub trait PowAlgorithm<B: BlockT> {
 		parent: &BlockId<B>,
 		pre_hash: &H256,
 		seal: &Seal,
-		difficulty: Difficulty
+		difficulty: Difficulty,
 	) -> Result<bool, String>;
 	/// Mine a seal that satisfy the given difficulty.
 	fn mine(
