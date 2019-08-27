@@ -82,8 +82,8 @@ impl Into<&'static str> for InvalidTransaction {
 #[derive(Clone, PartialEq, Eq, Encode, Decode, Copy)]
 #[cfg_attr(feature = "std", derive(Debug, serde::Serialize))]
 pub enum UnknownTransaction {
-	/// An invalid/unknown account index
-	InvalidIndex,
+	/// Could not lookup some information that are required to validate the transaction.
+	CannotLookup,
 	/// No validator found for the given unsigned transaction.
 	NoUnsignedValidator,
 	/// Any other custom unknown validity that is not covered by this enum.
@@ -93,8 +93,8 @@ pub enum UnknownTransaction {
 impl Into<&'static str> for UnknownTransaction {
 	fn into(self) -> &'static str {
 		match self {
-			UnknownTransaction::InvalidIndex =>
-				"Transaction used an invalid/unknown account index",
+			UnknownTransaction::CannotLookup =>
+				"Could not lookup some information to validate the transaction",
 			UnknownTransaction::NoUnsignedValidator =>
 				"Could not find an unsigned validator for the unsigned transaction",
 			UnknownTransaction::Custom(_) => "UnknownTransaction custom error",

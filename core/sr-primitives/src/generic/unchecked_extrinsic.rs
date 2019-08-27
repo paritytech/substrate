@@ -105,7 +105,7 @@ where
 			Some((signed, signature, extra)) => {
 				let additional_signed = extra.additional_signed()?;
 				let raw_payload = (self.function, extra, additional_signed);
-				let signed = lookup.lookup(signed).ok_or(UnknownTransaction::InvalidIndex)?;
+				let signed = lookup.lookup(signed).ok_or(UnknownTransaction::CannotLookup)?;
 				if !raw_payload.using_encoded(|payload| {
 					if payload.len() > 256 {
 						signature.verify(&blake2_256(payload)[..], &signed)
