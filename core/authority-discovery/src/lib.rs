@@ -20,7 +20,7 @@
 //!
 //! This crate enables Substrate authorities to directly connect to other
 //! authorities. [`AuthorityDiscovery`] implements the Future trait. By polling
-//! a [`AuthorityDiscovery`] an authority:
+//! [`AuthorityDiscovery`] an authority:
 //!
 //!
 //! 1. **Makes itself discoverable**
@@ -59,7 +59,7 @@ use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
 use std::marker::PhantomData;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 mod error;
 /// Dht payload schemas generated from Protobuf definitions via Prost crate in build.rs.
@@ -127,9 +127,12 @@ where
 		network: Arc<network::NetworkService<B, S, H>>,
 		dht_event_rx: futures::sync::mpsc::Receiver<DhtEvent>,
 	) -> AuthorityDiscovery<AuthorityId, Client, B, S, H> {
-		// TODO: 5 seconds is probably a bit spammy, figure out what Kademlias
-		// time to live for dht entries is and adjust accordingly.
-		let interval = tokio_timer::Interval::new_interval(Duration::from_secs(5));
+		// Kademlia's default time-to-live for Dht records is 36h, republishing records every 24h. Given that a node
+		// could restart at any point in time, one can not depend on the republishing process, thus starting to publish
+		// own external addresses should happen on an interval < 36h.
+		// TODO: It might make sense to split this up into a publication_interval and a retrieval_interval.
+		let interval =
+			tokio_timer::Interval::new(Instant::now(), Duration::from_secs(12 * 60 * 60));
 		let address_cache = HashMap::new();
 
 		AuthorityDiscovery {
@@ -342,11 +345,12 @@ where
 			if let Ok(Async::Ready(_)) = self.interval.poll() {
 				// Make sure to call interval.poll until it returns Async::NotReady once. Otherwise, in case one of the
 				// function calls within this block do a `return`, we don't call `interval.poll` again and thereby the
-				// underlying Tokio task is never registered with Tokios Reactor to be woken up on the next interval
+				// underlying Tokio task is never registered with Tokio's Reactor to be woken up on the next interval
 				// tick.
 				while let Ok(Async::Ready(_)) = self.interval.poll() {}
 
 				self.publish_own_ext_addresses()?;
+				// TODO: Should we request external addresses more often than we publish our owns?
 				self.request_addresses_of_others()?;
 			}
 
@@ -359,7 +363,7 @@ where
 		};
 
 		// Make sure to always return NotReady as this is a long running task
-		// with the same lifetime of the node itself.
+		// with the same lifetime as the node itself.
 		Ok(futures::Async::NotReady)
 	}
 }
