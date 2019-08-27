@@ -18,8 +18,7 @@ pub use substrate_executor::NativeExecutor;
 native_executor_instance!(
 	pub Executor,
 	node_template_runtime::api::dispatch,
-	node_template_runtime::native_version,
-	WASM_BINARY
+	node_template_runtime::native_version
 );
 
 construct_simple_protocol! {
@@ -72,7 +71,7 @@ macro_rules! new_full_start {
 
 				Ok(import_queue)
 			})?;
-		
+
 		(builder, import_setup, inherent_data_providers, tasks_to_spawn)
 	}}
 }
