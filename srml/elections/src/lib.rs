@@ -28,7 +28,7 @@ use sr_primitives::traits::{Zero, One, StaticLookup, Bounded, Saturating};
 use sr_primitives::weights::SimpleDispatchInfo;
 use runtime_io::print;
 use srml_support::{
-	StorageValue, StorageMap,
+	StorageValue, StorageMap, AppendableStorageMap, DecodeLengthStorageMap,
 	dispatch::Result, decl_storage, decl_event, ensure, decl_module,
 	traits::{
 		Currency, ExistenceRequirement, Get, LockableCurrency, LockIdentifier,
@@ -714,15 +714,15 @@ impl<T: Trait> Module<T> {
 	///
 	/// The voter index must be provided as explained in [`voter_at`] function.
 	fn do_set_approvals(who: T::AccountId, votes: Vec<bool>, index: VoteIndex, hint: SetIndex) -> Result {
-		let candidates = Self::candidates();
+		let candidates_len = <Self as Store>::Candidates::decode_len().unwrap_or(0_usize);
 
 		ensure!(!Self::presentation_active(), "no approval changes during presentation period");
 		ensure!(index == Self::vote_index(), "incorrect vote index");
-		ensure!(!candidates.is_empty(), "amount of candidates to receive approval votes should be non-zero");
+		ensure!(!candidates_len.is_zero(), "amount of candidates to receive approval votes should be non-zero");
 		// Prevent a vote from voters that provide a list of votes that exceeds the candidates length
 		// since otherwise an attacker may be able to submit a very long list of `votes` that far exceeds
 		// the amount of candidates and waste more computation than a reasonable voting bond would cover.
-		ensure!(candidates.len() >= votes.len(), "amount of candidate votes cannot exceed amount of candidates");
+		ensure!(candidates_len >= votes.len(), "amount of candidate votes cannot exceed amount of candidates");
 
 		// Amount to be locked up.
 		let mut locked_balance = T::Currency::total_balance(&who);
@@ -755,10 +755,10 @@ impl<T: Trait> Module<T> {
 				CellStatus::Head | CellStatus::Occupied => {
 					// Either occupied or out-of-range.
 					let next = Self::next_nonfull_voter_set();
-					let mut set = Self::voters(next);
+					let set_len = <Voters<T>>::decode_len(next).unwrap_or(0_usize);
 					// Caused a new set to be created. Pay for it.
 					// This is the last potential error. Writes will begin afterwards.
-					if set.is_empty() {
+					if set_len == 0 {
 						let imbalance = T::Currency::withdraw(
 							&who,
 							T::VotingFee::get(),
@@ -769,8 +769,10 @@ impl<T: Trait> Module<T> {
 						// NOTE: this is safe since the `withdraw()` will check this.
 						locked_balance -= T::VotingFee::get();
 					}
-					Self::checked_push_voter(&mut set, who.clone(), next);
-					<Voters<T>>::insert(next, set);
+					if set_len + 1 == VOTER_SET_SIZE {
+						NextVoterSet::put(next + 1);
+					}
+					<Voters<T>>::append_or_insert(next, [Some(who.clone())].into_iter())
 				}
 			}
 
@@ -906,18 +908,6 @@ impl<T: Trait> Module<T> {
 		CandidateCount::put(count);
 		VoteCount::put(Self::vote_index() + 1);
 		Ok(())
-	}
-
-	fn checked_push_voter(set: &mut Vec<Option<T::AccountId>>, who: T::AccountId, index: u32) {
-		let len = set.len();
-
-		// Defensive only: this should never happen. Don't push since it will break more things.
-		if len == VOTER_SET_SIZE { return; }
-
-		set.push(Some(who));
-		if len + 1 == VOTER_SET_SIZE {
-			NextVoterSet::put(index + 1);
-		}
 	}
 
 	/// Get the set and vector index of a global voter index.

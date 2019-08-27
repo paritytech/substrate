@@ -26,6 +26,28 @@ use crate::sr_primitives::ConsensusEngineId;
 
 use super::for_each_tuple;
 
+/// A trait that can return the default value of a storage item. This must only ever be implemented
+/// for a special delegator struct for each storage item
+pub trait StorageDefault<V>: Sized {
+	/// Return the default value of type `V`. `None`, if `V` does not have a proper default value.
+	fn default() -> Option<V>;
+}
+
+// FIXME #1466 This is needed for `storage_items!`. Should be removed once it is deprecated.
+impl<T: Default> StorageDefault<T> for () { fn default() -> Option<T> { Some(Default::default()) } }
+
+/// Anything that can have a `::len()` method.
+pub trait Len {
+	/// Return the length of data type.
+	fn len(&self) -> usize;
+}
+
+impl<T: IntoIterator + Clone,> Len for T where <T as IntoIterator>::IntoIter: ExactSizeIterator {
+	fn len(&self) -> usize {
+		self.clone().into_iter().len()
+	}
+}
+
 /// A trait for querying a single fixed value from a type.
 pub trait Get<T> {
 	/// Return a constant value.
