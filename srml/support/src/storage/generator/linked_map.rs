@@ -212,6 +212,35 @@ impl<K: Codec, V: Codec, G: StorageLinkedMap<K, V>> storage::StorageLinkedMap<K,
 		G::from_optional_value_to_query(val)
 	}
 
+	fn swap<KeyArg1: Borrow<K>, KeyArg2: Borrow<K>>(key1: KeyArg1, key2: KeyArg2) {
+		let final_key1 = Self::storage_linked_map_final_key(key1.borrow());
+		let final_key2 = Self::storage_linked_map_final_key(key2.borrow());
+		let full_value_1 = read_with_linkage::<_, _, G>(final_key1.as_ref());
+		let full_value_2 = read_with_linkage::<_, _, G>(final_key2.as_ref());
+
+		match (full_value_1, full_value_2) {
+			// Just keep linkage in order and only swap values.
+			(Some((value1, linkage1)), Some((value2, linkage2))) => {
+				unhashed::put(final_key1.as_ref(), &(value2, linkage1));
+				unhashed::put(final_key2.as_ref(), &(value1, linkage2));
+			}
+			// Remove key and insert the new one.
+			(Some((value, _linkage)), None) => {
+				Self::remove(key1);
+				let linkage = new_head_linkage::<_, _, G>(key2.borrow());
+				unhashed::put(final_key2.as_ref(), &(value, linkage));
+			}
+			// Remove key and insert the new one.
+			(None, Some((value, _linkage))) => {
+				Self::remove(key2);
+				let linkage = new_head_linkage::<_, _, G>(key1.borrow());
+				unhashed::put(final_key1.as_ref(), &(value, linkage));
+			}
+			// No-op.
+			(None, None) => (),
+		}
+	}
+
 	fn insert<KeyArg: Borrow<K>, ValArg: Borrow<V>>(key: KeyArg, val: ValArg) {
 		let final_key = Self::storage_linked_map_final_key(key.borrow());
 		let linkage = match read_with_linkage::<_, _, G>(final_key.as_ref()) {

@@ -42,6 +42,23 @@
 //!
 //! See the [`Module`](./struct.Module.html) struct for details of publicly available functions.
 //!
+//! ### Signed Extensions
+//!
+//! The system module defines the following extensions:
+//!
+//!   - [`CheckWeight`]: Checks the weight and length of the block and ensure that it does not
+//!     exceed the limits.
+//!   - ['CheckNonce']: Checks the nonce of the transaction. Contains a single payload of type
+//!     `T::Index`.
+//!   - [`CheckEra`]: Checks the era of the transaction. Contains a single payload of type `Era`.
+//!   - [`CheckGenesis`]: Checks the provided genesis hash of the transaction. Must be a part of the
+//!     signed payload of the transaction.
+//!   - [`CheckVersion`]: Checks that the runtime version is the same as the one encoded in the
+//!     transaction.
+//!
+//! Lookup the runtime aggregator file (e.g. `node/runtime`) to see the full list of signed
+//! extensions included in a chain.
+//!
 //! ## Usage
 //!
 //! ### Prerequisites

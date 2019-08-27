@@ -35,7 +35,7 @@ use syn::{
 	},
 	parse_macro_input,
 };
-use quote::quote;
+use quote::{quote, quote_spanned};
 
 use super::*;
 
@@ -423,7 +423,9 @@ fn decl_store_extra_genesis(
 					}
 					assimilate_require_generic |= ext::expr_contains_ident(&expr.content, traitinstance);
 					let content = &expr.content;
-					scall = quote!( let scall: fn(&Self) = #content; scall );
+					scall = quote_spanned! { expr.span() =>
+						let scall: fn(&Self) = #content; scall
+					};
 					has_scall = true;
 				},
 			}

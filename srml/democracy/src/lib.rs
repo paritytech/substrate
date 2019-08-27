@@ -174,13 +174,6 @@ impl Decode for Vote {
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
-pub const DEFAULT_ENACTMENT_PERIOD: u32 = 0;
-pub const DEFAULT_LAUNCH_PERIOD: u32 = 0;
-pub const DEFAULT_VOTING_PERIOD: u32 = 0;
-pub const DEFAULT_MINIMUM_DEPOSIT: u32 = 0;
-pub const DEFAULT_EMERGENCY_VOTING_PERIOD: u32 = 0;
-pub const DEFAULT_COOLOFF_PERIOD: u32 = 0;
-
 pub trait Trait: system::Trait + Sized {
 	type Proposal: Parameter + Dispatchable<Origin=Self::Origin>;
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -953,12 +946,12 @@ impl<T: Trait> Module<T> {
 		if (now % T::LaunchPeriod::get()).is_zero() {
 			// Errors come from the queue being empty. we don't really care about that, and even if
 			// we did, there is nothing we can do here.
-			let _ = Self::launch_next(now.clone());
+			let _ = Self::launch_next(now);
 		}
 
 		// tally up votes for any expiring referenda.
 		for (index, info) in Self::maturing_referenda_at(now).into_iter() {
-			Self::bake_referendum(now.clone(), index, info)?;
+			Self::bake_referendum(now, index, info)?;
 		}
 
 		for (proposal, index) in <DispatchQueue<T>>::take(now).into_iter().filter_map(|x| x) {

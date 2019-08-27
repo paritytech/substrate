@@ -343,6 +343,35 @@ mod tests {
 	}
 
 	#[test]
+	fn linked_map_swap_works() {
+		with_externalities(&mut new_test_ext(), || {
+			OptionLinkedMap::insert(0, 0);
+			OptionLinkedMap::insert(1, 1);
+			OptionLinkedMap::insert(2, 2);
+			OptionLinkedMap::insert(3, 3);
+
+			let collect = || OptionLinkedMap::enumerate().collect::<Vec<_>>();
+			assert_eq!(collect(), vec![(3, 3), (2, 2), (1, 1), (0, 0)]);
+
+			// Two existing
+			OptionLinkedMap::swap(1, 2);
+			assert_eq!(collect(), vec![(3, 3), (2, 1), (1, 2), (0, 0)]);
+
+			// Back to normal
+			OptionLinkedMap::swap(2, 1);
+			assert_eq!(collect(), vec![(3, 3), (2, 2), (1, 1), (0, 0)]);
+
+			// Left existing
+			OptionLinkedMap::swap(2, 5);
+			assert_eq!(collect(), vec![(5, 2), (3, 3), (1, 1), (0, 0)]);
+
+			// Right existing
+			OptionLinkedMap::swap(5, 2);
+			assert_eq!(collect(), vec![(2, 2), (3, 3), (1, 1), (0, 0)]);
+		});
+	}
+
+	#[test]
 	fn linked_map_basic_insert_remove_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			// initialized during genesis

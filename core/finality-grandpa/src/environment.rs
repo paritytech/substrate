@@ -51,7 +51,7 @@ use crate::authorities::{AuthoritySet, SharedAuthoritySet};
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
-use fg_primitives::{AuthorityId, AuthoritySignature};
+use fg_primitives::{AuthorityId, AuthoritySignature, SetId, RoundNumber};
 
 type HistoricalVotes<Block> = grandpa::HistoricalVotes<
 	<Block as BlockT>::Hash,
@@ -65,7 +65,7 @@ type HistoricalVotes<Block> = grandpa::HistoricalVotes<
 #[derive(Debug, Clone, Decode, Encode, PartialEq)]
 pub struct CompletedRound<Block: BlockT> {
 	/// The round number.
-	pub number: u64,
+	pub number: RoundNumber,
 	/// The round state (prevote ghost, estimate, finalized, etc.)
 	pub state: RoundState<Block::Hash, NumberFor<Block>>,
 	/// The target block base used for voting in the round.
@@ -80,7 +80,7 @@ pub struct CompletedRound<Block: BlockT> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct CompletedRounds<Block: BlockT> {
 	rounds: Vec<CompletedRound<Block>>,
-	set_id: u64,
+	set_id: SetId,
 	voters: Vec<AuthorityId>,
 }
 
@@ -100,7 +100,7 @@ impl<Block: BlockT> codec::EncodeLike for CompletedRounds<Block> {}
 
 impl<Block: BlockT> Decode for CompletedRounds<Block> {
 	fn decode<I: codec::Input>(value: &mut I) -> Result<Self, codec::Error> {
-		<(Vec<CompletedRound<Block>>, u64, Vec<AuthorityId>)>::decode(value)
+		<(Vec<CompletedRound<Block>>, SetId, Vec<AuthorityId>)>::decode(value)
 			.map(|(rounds, set_id, voters)| CompletedRounds {
 				rounds: rounds.into(),
 				set_id,
@@ -113,7 +113,7 @@ impl<Block: BlockT> CompletedRounds<Block> {
 	/// Create a new completed rounds tracker with NUM_LAST_COMPLETED_ROUNDS capacity.
 	pub(crate) fn new(
 		genesis: CompletedRound<Block>,
-		set_id: u64,
+		set_id: SetId,
 		voters: &AuthoritySet<Block::Hash, NumberFor<Block>>,
 	)
 		-> CompletedRounds<Block>
@@ -126,7 +126,7 @@ impl<Block: BlockT> CompletedRounds<Block> {
 	}
 
 	/// Get the set-id and voter set of the completed rounds.
-	pub fn set_info(&self) -> (u64, &[AuthorityId]) {
+	pub fn set_info(&self) -> (SetId, &[AuthorityId]) {
 		(self.set_id, &self.voters[..])
 	}
 
@@ -162,7 +162,7 @@ impl<Block: BlockT> CompletedRounds<Block> {
 
 /// A map with voter status information for currently live rounds,
 /// which votes have we cast and what are they.
-pub type CurrentRounds<Block> = BTreeMap<u64, HasVoted<Block>>;
+pub type CurrentRounds<Block> = BTreeMap<RoundNumber, HasVoted<Block>>;
 
 /// The state of the current voter set, whether it is currently active or not
 /// and information related to the previously completed rounds. Current round
@@ -190,7 +190,7 @@ impl<Block: BlockT> VoterSetState<Block> {
 	/// the given genesis state and the given authorities. Round 1 is added as a
 	/// current round (with state `HasVoted::No`).
 	pub(crate) fn live(
-		set_id: u64,
+		set_id: SetId,
 		authority_set: &AuthoritySet<Block::Hash, NumberFor<Block>>,
 		genesis_state: (Block::Hash, NumberFor<Block>),
 	) -> VoterSetState<Block> {
@@ -237,7 +237,7 @@ impl<Block: BlockT> VoterSetState<Block> {
 
 	/// Returns the voter set state validating that it includes the given round
 	/// in current rounds and that the voter isn't paused.
-	pub fn with_current_round(&self, round: u64)
+	pub fn with_current_round(&self, round: RoundNumber)
 		-> Result<(&CompletedRounds<Block>, &CurrentRounds<Block>), Error>
 	{
 		if let VoterSetState::Live { completed_rounds, current_rounds } = self {
@@ -344,7 +344,7 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 	}
 
 	/// Return vote status information for the current round.
-	pub(crate) fn has_voted(&self, round: u64) -> HasVoted<Block> {
+	pub(crate) fn has_voted(&self, round: RoundNumber) -> HasVoted<Block> {
 		match &*self.inner.read() {
 			VoterSetState::Live { current_rounds, .. } => {
 				current_rounds.get(&round).and_then(|has_voted| match has_voted {
@@ -375,7 +375,7 @@ pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, SC> {
 	pub(crate) authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	pub(crate) consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	pub(crate) network: crate::communication::NetworkBridge<Block, N>,
-	pub(crate) set_id: u64,
+	pub(crate) set_id: SetId,
 	pub(crate) voter_set_state: SharedVoterSetState<Block>,
 }
 
@@ -554,7 +554,7 @@ where
 
 	fn round_data(
 		&self,
-		round: u64
+		round: RoundNumber,
 	) -> voter::RoundData<Self::Id, Self::Timer, Self::In, Self::Out> {
 		let now = Instant::now();
 		let prevote_timer = Delay::new(now + self.config.gossip_duration * 2);
@@ -601,7 +601,7 @@ where
 		}
 	}
 
-	fn proposed(&self, round: u64, propose: PrimaryPropose<Block>) -> Result<(), Self::Error> {
+	fn proposed(&self, round: RoundNumber, propose: PrimaryPropose<Block>) -> Result<(), Self::Error> {
 		let local_id = crate::is_voter(&self.voters, &self.config.keystore);
 
 		let local_id = match local_id {
@@ -641,7 +641,7 @@ where
 		Ok(())
 	}
 
-	fn prevoted(&self, round: u64, prevote: Prevote<Block>) -> Result<(), Self::Error> {
+	fn prevoted(&self, round: RoundNumber, prevote: Prevote<Block>) -> Result<(), Self::Error> {
 		let local_id = crate::is_voter(&self.voters, &self.config.keystore);
 
 		let local_id = match local_id {
@@ -683,7 +683,7 @@ where
 		Ok(())
 	}
 
-	fn precommitted(&self, round: u64, precommit: Precommit<Block>) -> Result<(), Self::Error> {
+	fn precommitted(&self, round: RoundNumber, precommit: Precommit<Block>) -> Result<(), Self::Error> {
 		let local_id = crate::is_voter(&self.voters, &self.config.keystore);
 
 		let local_id = match local_id {
@@ -737,7 +737,7 @@ where
 
 	fn completed(
 		&self,
-		round: u64,
+		round: RoundNumber,
 		state: RoundState<Block::Hash, NumberFor<Block>>,
 		base: (Block::Hash, NumberFor<Block>),
 		historical_votes: &HistoricalVotes<Block>,
@@ -794,7 +794,13 @@ where
 		Ok(())
 	}
 
-	fn finalize_block(&self, hash: Block::Hash, number: NumberFor<Block>, round: u64, commit: Commit<Block>) -> Result<(), Self::Error> {
+	fn finalize_block(
+		&self,
+		hash: Block::Hash,
+		number: NumberFor<Block>,
+		round: RoundNumber,
+		commit: Commit<Block>,
+	) -> Result<(), Self::Error> {
 		finalize_block(
 			&*self.inner,
 			&self.authority_set,
@@ -818,7 +824,7 @@ where
 
 	fn prevote_equivocation(
 		&self,
-		_round: u64,
+		_round: RoundNumber,
 		equivocation: ::grandpa::Equivocation<Self::Id, Prevote<Block>, Self::Signature>
 	) {
 		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
@@ -827,7 +833,7 @@ where
 
 	fn precommit_equivocation(
 		&self,
-		_round: u64,
+		_round: RoundNumber,
 		equivocation: Equivocation<Self::Id, Precommit<Block>, Self::Signature>
 	) {
 		warn!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
@@ -837,11 +843,11 @@ where
 
 pub(crate) enum JustificationOrCommit<Block: BlockT> {
 	Justification(GrandpaJustification<Block>),
-	Commit((u64, Commit<Block>)),
+	Commit((RoundNumber, Commit<Block>)),
 }
 
-impl<Block: BlockT> From<(u64, Commit<Block>)> for JustificationOrCommit<Block> {
-	fn from(commit: (u64, Commit<Block>)) -> JustificationOrCommit<Block> {
+impl<Block: BlockT> From<(RoundNumber, Commit<Block>)> for JustificationOrCommit<Block> {
+	fn from(commit: (RoundNumber, Commit<Block>)) -> JustificationOrCommit<Block> {
 		JustificationOrCommit::Commit(commit)
 	}
 }
