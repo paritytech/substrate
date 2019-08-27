@@ -359,7 +359,7 @@ fn force_transfer_works() {
 		let _ = Balances::deposit_creating(&1, 111);
 		assert_noop!(
 			Balances::force_transfer(Some(2).into(), 1, 2, 69),
-			"bad origin: expected to be a root origin"
+			"RequireRootOrigin",
 		);
 		assert_ok!(Balances::force_transfer(RawOrigin::Root.into(), 1, 2, 69));
 		assert_eq!(Balances::total_balance(&1), 42);
