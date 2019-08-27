@@ -118,7 +118,7 @@ impl<B: BlockT<Hash=H256>, C> PowAlgorithm<B> for PowRuntimeAlgorithm<C> where
 		parent: &BlockId<B>,
 		pre_hash: &H256,
 		seal: &Seal,
-		difficulty: Difficulty
+		difficulty: Difficulty,
 	) -> Result<bool, String> {
 		self.client.runtime_api().verify(parent, pre_hash, seal, difficulty)
 			.map_err(|e| format!("Verify PoW seal failed: {:?}", e))
