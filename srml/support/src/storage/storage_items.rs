@@ -919,10 +919,7 @@ mod test_append_and_len {
 			assert_eq!(JustVecWithDefault::decode_len(), Ok(2));
 
 			assert_eq!(OptionVec::get(), None);
-			assert_eq!(
-				OptionVec::decode_len(),
-				Err("value does not exist and could not use default as fallback")
-			);
+			assert_eq!(OptionVec::decode_len(), Ok(0));
 
 			assert_eq!(OptionVecWithDefault::get(), Some(vec![6, 9]));
 			assert_eq!(OptionVecWithDefault::decode_len(), Ok(2));
@@ -935,10 +932,7 @@ mod test_append_and_len {
 			assert_eq!(MapVecWithDefault::decode_len(0), Ok(2));
 
 			assert_eq!(OptionMapVec::get(0), None);
-			assert_eq!(
-				OptionMapVec::decode_len(0),
-				Err("value does not exist and could not use default as fallback")
-			);
+			assert_eq!(OptionMapVec::decode_len(0), Ok(0));
 
 			assert_eq!(OptionMapVecWithDefault::get(0), Some(vec![6, 9]));
 			assert_eq!(OptionMapVecWithDefault::decode_len(0), Ok(2));
@@ -951,10 +945,7 @@ mod test_append_and_len {
 			assert_eq!(LinkedMapVecWithDefault::decode_len(0), Ok(2));
 
 			assert_eq!(OptionLinkedMapVec::get(0), None);
-			assert_eq!(
-				OptionLinkedMapVec::decode_len(0),
-				Err("value does not exist and could not use default as fallback")
-			);
+			assert_eq!(OptionLinkedMapVec::decode_len(0), Ok(0));
 
 			assert_eq!(OptionLinkedMapVecWithDefault::get(0), Some(vec![6, 9]));
 			assert_eq!(OptionLinkedMapVecWithDefault::decode_len(0), Ok(2));

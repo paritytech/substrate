@@ -252,6 +252,10 @@ pub trait StorageValue<T: codec::Codec> {
 	/// Read the length of the value in a fast way, without decoding the entire value.
 	///
 	/// `T` is required to implement `Codec::DecodeLength`.
+	///
+	/// Note that `0` is returned as the default value if no encoded value exists at the given key.
+	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
+	/// function for this purpose.
 	fn decode_len<S: HashedStorage<Twox128>>(storage: &mut S) -> Result<usize, &'static str>
 		where T: codec::DecodeLength, T: Len
 	{
@@ -259,9 +263,7 @@ pub trait StorageValue<T: codec::Codec> {
 		if let Some(k) = storage.get_raw(Self::key()) {
 			<T as codec::DecodeLength>::len(&k).map_err(|e| e.what())
 		} else {
-			let default = Self::Default::default()
-				.ok_or("value does not exist and could not use default as fallback")?;
-			Ok(default.len())
+			Ok(Self::Default::default().map(|v| v.len()).unwrap_or(0))
 		}
 	}
 }
@@ -400,6 +402,10 @@ pub trait DecodeLengthStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K
 	/// Read the length of the value in a fast way, without decoding the entire value.
 	///
 	/// `T` is required to implement `Codec::DecodeLength`.
+	///
+	/// Note that `0` is returned as the default value if no encoded value exists at the given key.
+	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
+	/// function for this purpose.
 	fn decode_len<S: HashedStorage<Self::Hasher>>(key: &K, storage: &mut S) -> Result<usize, &'static str>
 		where V: codec::DecodeLength, V: Len
 	{
@@ -407,9 +413,7 @@ pub trait DecodeLengthStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K
 		if let Some(v) = storage.get_raw(&k[..]) {
 			<V as codec::DecodeLength>::len(&v).map_err(|e| e.what())
 		} else {
-			let default = Self::Default::default()
-				.ok_or("value does not exist and could not use default as fallback")?;
-			Ok(default.len())
+			Ok(Self::Default::default().map(|v| v.len()).unwrap_or(0))
 		}
 	}
 }
