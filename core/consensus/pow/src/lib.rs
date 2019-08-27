@@ -378,7 +378,7 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E>(
 	C: HeaderBackend<B> + AuxStore,
 	Algorithm: PowAlgorithm<B>,
 	E: Environment<B>,
-	E::Error: core::fmt::Debug,
+	E::Error: std::fmt::Debug,
 {
 	'outer: loop {
 		let best_hash = client.info().best_hash;
