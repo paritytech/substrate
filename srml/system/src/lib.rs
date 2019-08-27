@@ -422,7 +422,7 @@ decl_storage! {
 			if let Some(ref changes_trie_config) = config.changes_trie_config {
 				runtime_io::set_storage(
 					well_known_keys::CHANGES_TRIE_CONFIG,
-					&changes_trie_config.encode()
+					&changes_trie_config.encode(),
 				);
 			}
 		});

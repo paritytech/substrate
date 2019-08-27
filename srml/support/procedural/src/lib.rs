@@ -144,7 +144,7 @@ use proc_macro::TokenStream;
 ///			config(genesis_field): GenesisFieldType;
 ///			config(genesis_field2): GenesisFieldType;
 ///			...
-///			build(|_: &GenesisConfig<T>| {
+///			build(|_: &Self| {
 ///				// Modification of storage
 ///			})
 ///		}

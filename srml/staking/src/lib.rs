@@ -650,7 +650,7 @@ decl_storage! {
 					}, StakerStatus::Nominator(votes) => {
 						<Module<T>>::nominate(
 							T::Origin::from(Some(controller.clone()).into()),
-							votes.iter().map(|l| {T::Lookup::unlookup(l.clone())}).collect()
+							votes.iter().map(|l| T::Lookup::unlookup(l.clone())).collect()
 						)
 					}, _ => Ok(())
 				};

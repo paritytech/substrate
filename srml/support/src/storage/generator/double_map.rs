@@ -88,7 +88,7 @@ where
 		K1: Borrow<KArg1>,
 		K2: Borrow<KArg2>,
 		KArg1: ?Sized + Encode,
-		KArg2: ?Sized + Encode
+		KArg2: ?Sized + Encode,
 	{
 		unhashed::exists(&Self::storage_double_map_final_key(k1, k2))
 	}
@@ -98,7 +98,7 @@ where
 		K1: Borrow<KArg1>,
 		K2: Borrow<KArg2>,
 		KArg1: ?Sized + Encode,
-		KArg2: ?Sized + Encode
+		KArg2: ?Sized + Encode,
 	{
 		G::from_optional_value_to_query(unhashed::get(&Self::storage_double_map_final_key(k1, k2)))
 	}
@@ -108,7 +108,7 @@ where
 		K1: Borrow<KArg1>,
 		K2: Borrow<KArg2>,
 		KArg1: ?Sized + Encode,
-		KArg2: ?Sized + Encode
+		KArg2: ?Sized + Encode,
 	{
 		let final_key = Self::storage_double_map_final_key(k1, k2);
 
@@ -126,7 +126,7 @@ where
 		V: Borrow<VArg>,
 		KArg1: ?Sized + Encode,
 		KArg2: ?Sized + Encode,
-		VArg: ?Sized + Encode
+		VArg: ?Sized + Encode,
 	{
 		unhashed::put(&Self::storage_double_map_final_key(k1, k2), &val.borrow())
 	}
@@ -136,7 +136,7 @@ where
 		K1: Borrow<KArg1>,
 		K2: Borrow<KArg2>,
 		KArg1: ?Sized + Encode,
-		KArg2: ?Sized + Encode
+		KArg2: ?Sized + Encode,
 	{
 		unhashed::kill(&Self::storage_double_map_final_key(k1, k2))
 	}
@@ -151,7 +151,7 @@ where
 		K2: Borrow<KArg2>,
 		KArg1: ?Sized + Encode,
 		KArg2: ?Sized + Encode,
-		F: FnOnce(&mut Self::Query) -> R
+		F: FnOnce(&mut Self::Query) -> R,
 	{
 		let mut val = G::get(k1, k2);
 
@@ -174,7 +174,7 @@ where
 		KArg1: ?Sized + Encode,
 		KArg2: ?Sized + Encode,
 		I: codec::Encode,
-		V: EncodeAppend<Item=I>
+		V: EncodeAppend<Item=I>,
 	{
 		let final_key = Self::storage_double_map_final_key(k1, k2);
 
