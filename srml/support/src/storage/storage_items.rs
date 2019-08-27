@@ -61,11 +61,6 @@ pub fn unwrap_or_default<T: Default>(t: Option<T>) -> T {
 }
 
 #[doc(hidden)]
-pub fn wrap<T>(t: T) -> Option<T> {
-	Some(t)
-}
-
-#[doc(hidden)]
 pub fn require<T: Default>(t: Option<T>) -> T {
 	t.expect("Required values must be in storage")
 }
@@ -84,19 +79,19 @@ macro_rules! storage_items {
 		storage_items!($($t)*);
 	};
 	($name:ident : $key:expr => default $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() () (RAW_TYPE $ty) (unwrap_or_default) (wrap) $name: $key => $ty);
+		$crate::__storage_items_internal!(() () (RAW_TYPE $ty) (unwrap_or_default) (Some) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident : $key:expr => default $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) () (RAW_TYPE $ty) (unwrap_or_default) (wrap) $name: $key => $ty);
+		$crate::__storage_items_internal!((pub) () (RAW_TYPE $ty) (unwrap_or_default) (Some) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 	($name:ident : $key:expr => required $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() () (RAW_TYPE $ty) (require) (wrap) $name: $key => $ty);
+		$crate::__storage_items_internal!(() () (RAW_TYPE $ty) (require) (Some) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident : $key:expr => required $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) () (RAW_TYPE $ty) (require) (wrap) $name: $key => $ty);
+		$crate::__storage_items_internal!((pub) () (RAW_TYPE $ty) (require) (Some) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 
@@ -109,19 +104,19 @@ macro_rules! storage_items {
 		storage_items!($($t)*);
 	};
 	($name:ident get($getfn:ident) : $key:expr => default $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() ($getfn) (RAW_TYPE $ty) (unwrap_or_default) (wrap) $name: $key => $ty);
+		$crate::__storage_items_internal!(() ($getfn) (RAW_TYPE $ty) (unwrap_or_default) (Some) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident get($getfn:ident) : $key:expr => default $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) ($getfn) (RAW_TYPE $ty) (unwrap_or_default) (wrap) $name: $key => $ty);
+		$crate::__storage_items_internal!((pub) ($getfn) (RAW_TYPE $ty) (unwrap_or_default) (Some) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 	($name:ident get($getfn:ident) : $key:expr => required $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() ($getfn) (RAW_TYPE $ty) (require) (wrap) $name: $key => $ty);
+		$crate::__storage_items_internal!(() ($getfn) (RAW_TYPE $ty) (require) (Some) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident get($getfn:ident) : $key:expr => required $ty:ty; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) ($getfn) (RAW_TYPE $ty) (require) (wrap) $name: $key => $ty);
+		$crate::__storage_items_internal!((pub) ($getfn) (RAW_TYPE $ty) (require) (Some) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 
@@ -135,19 +130,19 @@ macro_rules! storage_items {
 		storage_items!($($t)*);
 	};
 	($name:ident : $prefix:expr => default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() () (RAW_TYPE $ty) (unwrap_or_default) (wrap) $name: $prefix => map [$kty => $ty]);
+		$crate::__storage_items_internal!(() () (RAW_TYPE $ty) (unwrap_or_default) (Some) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident : $prefix:expr => default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) () (RAW_TYPE $ty) (unwrap_or_default) (wrap) $name: $prefix => map [$kty => $ty]);
+		$crate::__storage_items_internal!((pub) () (RAW_TYPE $ty) (unwrap_or_default) (Some) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 	($name:ident : $prefix:expr => required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() () (RAW_TYPE $ty) (require) (wrap) $name: $prefix => map [$kty => $ty]);
+		$crate::__storage_items_internal!(() () (RAW_TYPE $ty) (require) (Some) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident : $prefix:expr => required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) () (RAW_TYPE $ty) (require) (wrap) $name: $prefix => map [$kty => $ty]);
+		$crate::__storage_items_internal!((pub) () (RAW_TYPE $ty) (require) (Some) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 
@@ -160,19 +155,19 @@ macro_rules! storage_items {
 		storage_items!($($t)*);
 	};
 	($name:ident get($getfn:ident) : $prefix:expr => default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() ($getfn) (RAW_TYPE $ty) (unwrap_or_default) (wrap) $name: $prefix => map [$kty => $ty]);
+		$crate::__storage_items_internal!(() ($getfn) (RAW_TYPE $ty) (unwrap_or_default) (Some) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident get($getfn:ident) : $prefix:expr => default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) ($getfn) (RAW_TYPE $ty) (unwrap_or_default) (wrap) $name: $prefix => map [$kty => $ty]);
+		$crate::__storage_items_internal!((pub) ($getfn) (RAW_TYPE $ty) (unwrap_or_default) (Some) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 	($name:ident get($getfn:ident) : $prefix:expr => required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!(() ($getfn) (RAW_TYPE $ty) (require) (wrap) $name: $prefix => map [$kty => $ty]);
+		$crate::__storage_items_internal!(() ($getfn) (RAW_TYPE $ty) (require) (Some) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident get($getfn:ident) : $prefix:expr => required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		$crate::__storage_items_internal!((pub) ($getfn) (RAW_TYPE $ty) (require) (wrap) $name: $prefix => map [$kty => $ty]);
+		$crate::__storage_items_internal!((pub) ($getfn) (RAW_TYPE $ty) (require) (Some) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 
