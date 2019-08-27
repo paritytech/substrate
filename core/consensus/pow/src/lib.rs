@@ -130,7 +130,7 @@ impl<B: BlockT<Hash=H256>, C> PowAlgorithm<B> for PowRuntimeAlgorithm<C> where
 		pre_hash: &H256,
 		seed: &H256,
 		difficulty: Difficulty,
-		round: u32
+		round: u32,
 	) -> Result<Option<Seal>, String> {
 		self.client.runtime_api().mine(parent, pre_hash, seed, difficulty, round)
 			.map_err(|e| format!("Mine PoW seal failed: {:?}", e))
