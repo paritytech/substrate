@@ -51,8 +51,7 @@ mod local_executor {
 	native_executor_instance!(
 		pub LocalExecutor,
 		runtime::api::dispatch,
-		runtime::native_version,
-		runtime::WASM_BINARY
+		runtime::native_version
 	);
 }
 

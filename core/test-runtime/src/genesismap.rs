@@ -77,6 +77,10 @@ impl GenesisConfig {
 			map.insert(well_known_keys::CHANGES_TRIE_CONFIG.to_vec(), changes_trie_config.encode());
 		}
 		map.insert(twox_128(&b"sys:auth"[..])[..].to_vec(), self.authorities.encode());
+		// Finally, add the extra storage entries.
+		for (key, value) in self.extra_storage.iter().cloned() {
+			map.insert(key, value);
+		}
 		(map, Default::default())
 	}
 }

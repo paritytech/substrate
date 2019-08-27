@@ -54,8 +54,7 @@ mod tests {
 	native_executor_instance!(
 		Executor,
 		test_client::runtime::api::dispatch,
-		test_client::runtime::native_version,
-		test_client::runtime::WASM_BINARY
+		test_client::runtime::native_version
 	);
 
 	fn executor() -> executor::NativeExecutor<Executor> {
