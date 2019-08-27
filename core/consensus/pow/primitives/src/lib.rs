@@ -57,7 +57,7 @@ decl_runtime_apis! {
 		fn verify(
 			pre_hash: &H256,
 			seal: &Seal,
-			difficulty: Difficulty
+			difficulty: Difficulty,
 		) -> bool;
 
 		/// Mine a seal that satisfy the given difficulty.
