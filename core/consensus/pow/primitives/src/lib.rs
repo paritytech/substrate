@@ -27,6 +27,11 @@ use primitives::H256;
 pub const POW_ENGINE_ID: ConsensusEngineId = [b'p', b'o', b'w', b'_'];
 
 /// Type of difficulty.
+///
+/// For runtime designed for Substrate, it's always possible to fit its total
+/// difficulty range under `u128::max_value()` because it can be freely scaled
+/// up or scaled down. Practially, nearly no PoW chains uses difficulty values
+/// larger than `u128::max_value()`.
 pub type Difficulty = u128;
 
 /// Type of seal.
