@@ -107,7 +107,8 @@ impl GenesisParameters {
 				sr25519::Public::from(Sr25519Keyring::Alice).into(),
 				sr25519::Public::from(Sr25519Keyring::Bob).into(),
 				sr25519::Public::from(Sr25519Keyring::Charlie).into(),
-			], vec![
+			],
+			vec![
 				AccountKeyring::Alice.into(),
 				AccountKeyring::Bob.into(),
 				AccountKeyring::Charlie.into(),
@@ -182,7 +183,7 @@ pub trait TestClientBuilderExt<B>: Sized {
 	/// # Panics
 	///
 	/// Panics if the key is empty.
-	fn add_extra_storage(self, key: Vec<u8>, value: Vec<u8>) -> Self;
+	fn add_extra_storage<K: Into<Vec<u8>>, V: Into<Vec<u8>>>(self, key: K, value: V) -> Self;
 
 	/// Build the test client.
 	fn build(self) -> Client<B> {
@@ -209,9 +210,10 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 		self
 	}
 
-	fn add_extra_storage(mut self, key: Vec<u8>, value: Vec<u8>) -> Self {
+	fn add_extra_storage<K: Into<Vec<u8>>, V: Into<Vec<u8>>>(mut self, key: K, value: V) -> Self {
+		let key = key.into();
 		assert!(!key.is_empty());
-		self.genesis_init_mut().extra_storage.push((key, value));
+		self.genesis_init_mut().extra_storage.push((key, value.into()));
 		self
 	}
 
