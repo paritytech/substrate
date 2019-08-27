@@ -57,7 +57,9 @@ use transaction_pool::txpool::{self, ChainApi, Pool as TransactionPool};
 /// The order in which the `with_*` methods are called doesn't matter, as the correct binding of
 /// generics is done when you call `build`.
 ///
-pub struct ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, Backend> {
+pub struct ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
+	TNetP, TExPool, TRpc, Backend>
+{
 	config: Configuration<TCfg, TGen>,
 	client: Arc<TCl>,
 	backend: Arc<Backend>,
