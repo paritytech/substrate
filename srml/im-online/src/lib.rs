@@ -253,7 +253,7 @@ decl_module! {
 				&current_session,
 				&heartbeat.authority_index
 			);
-			let keys = Keys::get();
+			let keys = Keys::<T>::get();
 			let public = keys.get(heartbeat.authority_index as usize);
 			if let (true, Some(public)) = (!exists, public) {
 				let signature_valid = heartbeat.using_encoded(|encoded_heartbeat| {
@@ -261,7 +261,7 @@ decl_module! {
 				});
 				ensure!(signature_valid, "Invalid heartbeat signature.");
 
-				Self::deposit_event(Event::HeartbeatReceived(public.clone()));
+				Self::deposit_event(Event::<T>::HeartbeatReceived(public.clone()));
 
 				let network_state = heartbeat.network_state.encode();
 				<ReceivedHeartbeats>::insert(
@@ -318,7 +318,7 @@ impl<T: Trait> Module<T> {
 
 	fn do_gossip_at(block_number: T::BlockNumber) -> Result<(), OffchainErr> {
 		// we run only when a local authority key is configured
-		let authorities = Keys::get();
+		let authorities = Keys::<T>::get();
 		let mut local_keys = T::AuthorityId::all();
 		local_keys.sort();
 
@@ -412,8 +412,8 @@ impl<T: Trait> Module<T> {
 
 	fn initialize_keys(keys: &[T::AuthorityId]) {
 		if !keys.is_empty() {
-			assert!(Keys::get().is_empty(), "Keys are already initialized!");
-			Keys::put_ref(keys);
+			assert!(Keys::<T>::get().is_empty(), "Keys are already initialized!");
+			Keys::<T>::put_ref(keys);
 		}
 	}
 }
@@ -439,7 +439,7 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 		<GossipAt<T>>::put(<system::Module<T>>::block_number());
 
 		// Remember who the authorities are for the new session.
-		Keys::put(validators.map(|x| x.1).collect::<Vec<_>>());
+		Keys::<T>::put(validators.map(|x| x.1).collect::<Vec<_>>());
 	}
 
 	fn on_before_session_ending() {
@@ -447,7 +447,7 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 
 		let current_session = <session::Module<T>>::current_index();
 
-		let keys = Keys::get();
+		let keys = Keys::<T>::get();
 		let current_elected = T::CurrentElectedSet::current_elected_set();
 
 		// The invariant is that these two are of the same length.
@@ -502,7 +502,7 @@ impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
 			}
 
 			// verify that the incoming (unverified) pubkey is actually an authority id
-			let keys = Keys::get();
+			let keys = Keys::<T>::get();
 			let authority_id = match keys.get(heartbeat.authority_index as usize) {
 				Some(id) => id,
 				None => return TransactionValidity::Invalid(ApplyError::BadSignature as i8),
