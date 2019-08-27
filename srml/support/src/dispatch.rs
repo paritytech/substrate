@@ -171,6 +171,9 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// # fn main() {}
 /// ```
 ///
+/// Note: `decl_storage` must be called to generate `Instance` trait and optionally
+/// `DefaultInstance` type.
+///
 /// ## Where clause
 ///
 /// Besides the default `origin: T::Origin`, you can also pass other bounds to the module declaration.
@@ -368,25 +371,6 @@ macro_rules! decl_module {
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
 		{ $( $other_where_bounds:tt )* }
 		{ $( $deposit_event:tt )* }
-		{ $( $on_initialize:tt )* }
-		{}
-		{ $( $offchain:tt )* }
-		{ $( $constants:tt )* }
-		[ $( $dispatchables:tt )* ]
-		$(#[doc = $doc_attr:tt])*
-		fn on_finalise($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
-		$($rest:tt)*
-	) => {
-		compile_error!(
-			"`on_finalise` was renamed to `on_finalize`. Please rename your function accordingly."
-		);
-	};
-	(@normalize
-		$(#[$attr:meta])*
-		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
-		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
-		{ $( $other_where_bounds:tt )* }
-		{ $( $deposit_event:tt )* }
 		{}
 		{ $( $on_finalize:tt )* }
 		{ $( $offchain:tt )* }
@@ -408,25 +392,6 @@ macro_rules! decl_module {
 			{ $( $constants )* }
 			[ $( $dispatchables )* ]
 			$($rest)*
-		);
-	};
-	(@normalize
-		$(#[$attr:meta])*
-		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
-		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
-		{ $( $other_where_bounds:tt )* }
-		{ $( $deposit_event:tt )* }
-		{}
-		{ $( $on_finalize:tt )* }
-		{ $( $offchain:tt )* }
-		{ $( $constants:tt )* }
-		[ $( $dispatchables:tt )* ]
-		$(#[doc = $doc_attr:tt])*
-		fn on_initialise($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
-		$($rest:tt)*
-	) => {
-		compile_error!(
-			"`on_initialise` was renamed to `on_initialize`. Please rename your function accordingly."
 		);
 	};
 	(@normalize
@@ -1264,7 +1229,7 @@ macro_rules! decl_module {
 }
 
 pub trait IsSubType<T: Callable<R>, R> {
-	fn is_aux_sub_type(&self) -> Option<&CallableCallFor<T, R>>;
+	fn is_sub_type(&self) -> Option<&CallableCallFor<T, R>>;
 }
 
 /// Implement a meta-dispatch module to dispatch to other dispatchers.
@@ -1305,7 +1270,7 @@ macro_rules! impl_outer_dispatch {
 		$(
 			impl $crate::dispatch::IsSubType<$camelcase, $runtime> for $call_type {
 				#[allow(unreachable_patterns)]
-				fn is_aux_sub_type(&self) -> Option<&$crate::dispatch::CallableCallFor<$camelcase, $runtime>> {
+				fn is_sub_type(&self) -> Option<&$crate::dispatch::CallableCallFor<$camelcase, $runtime>> {
 					match *self {
 						$call_type::$camelcase(ref r) => Some(r),
 						// May be unreachable
@@ -1431,6 +1396,14 @@ macro_rules! __impl_module_constants_metadata {
 							$crate::dispatch::Encode::encode(&value)
 						}
 					}
+
+					unsafe impl<$const_trait_instance: 'static + $const_trait_name $(
+						<I>, $const_instance: $const_instantiable)?
+					> Send for $default_byte_name <$const_trait_instance $(, $const_instance)?> {}
+
+					unsafe impl<$const_trait_instance: 'static + $const_trait_name $(
+						<I>, $const_instance: $const_instantiable)?
+					> Sync for $default_byte_name <$const_trait_instance $(, $const_instance)?> {}
 				)*
 				&[
 					$(
@@ -1568,13 +1541,13 @@ macro_rules! __check_reserved_fn_name {
 		$crate::__check_reserved_fn_name!(@compile_error on_initialize);
 	};
 	(on_initialise $( $rest:ident )*) => {
-		$crate::__check_reserved_fn_name!(@compile_error on_initialise);
+		$crate::__check_reserved_fn_name!(@compile_error_renamed on_initialise on_initialize);
 	};
 	(on_finalize $( $rest:ident )*) => {
 		$crate::__check_reserved_fn_name!(@compile_error on_finalize);
 	};
 	(on_finalise $( $rest:ident )*) => {
-		$crate::__check_reserved_fn_name!(@compile_error on_finalise);
+		$crate::__check_reserved_fn_name!(@compile_error_renamed on_finalise on_finalize);
 	};
 	(offchain_worker $( $rest:ident )*) => {
 		$crate::__check_reserved_fn_name!(@compile_error offchain_worker);
@@ -1584,9 +1557,26 @@ macro_rules! __check_reserved_fn_name {
 	};
 	() => {};
 	(@compile_error $ident:ident) => {
-		compile_error!(concat!("Invalid call fn name: `", stringify!($ident),
-		"`, name is reserved and doesn't match expected signature, please refer to `decl_module!`",
-		" documentation to see the appropriate usage, or rename it to an unreserved keyword."));
+		compile_error!(
+			concat!(
+				"Invalid call fn name: `",
+				stringify!($ident),
+				"`, name is reserved and doesn't match expected signature, please refer to ",
+				"`decl_module!` documentation to see the appropriate usage, or rename it to an ",
+				"unreserved keyword."
+			),
+		);
+	};
+	(@compile_error_renamed $ident:ident $new_ident:ident) => {
+		compile_error!(
+			concat!(
+				"`",
+				stringify!($ident),
+				"` was renamed to `",
+				stringify!($new_ident),
+				"`. Please rename your function accordingly.",
+			),
+		);
 	};
 }
 

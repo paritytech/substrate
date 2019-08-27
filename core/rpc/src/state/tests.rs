@@ -260,11 +260,14 @@ fn should_return_runtime_version() {
 		\"specVersion\":1,\"implVersion\":1,\"apis\":[[\"0xdf6acb689907609b\",2],\
 		[\"0x37e397fc7c91f5e4\",1],[\"0xd2bc9897eed08f15\",1],[\"0x40fe3ad401f8959a\",3],\
 		[\"0xc6e9a76309f39b09\",1],[\"0xdd718d5cc53262d4\",1],[\"0xcbca25e39f142387\",1],\
-		[\"0xf78b278be53f454c\",1]]}";
-	assert_eq!(
-		serde_json::to_string(&api.runtime_version(None.into()).unwrap()).unwrap(),
-		result,
-	);
+		[\"0xf78b278be53f454c\",1],[\"0xab3c0572291feb8b\",1]]}";
+
+	let runtime_version = api.runtime_version(None.into()).unwrap();
+	let serialized = serde_json::to_string(&runtime_version).unwrap();
+	assert_eq!(serialized, result);
+
+	let deserialized: RuntimeVersion = serde_json::from_str(result).unwrap();
+	assert_eq!(deserialized, runtime_version);
 }
 
 #[test]

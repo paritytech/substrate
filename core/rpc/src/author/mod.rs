@@ -22,18 +22,22 @@ pub mod hash;
 #[cfg(test)]
 mod tests;
 
-use std::sync::Arc;
+use std::{sync::Arc, convert::TryInto};
 
 use client::{self, Client};
-use crate::rpc::futures::{Sink, Stream, Future};
+use crate::rpc::futures::{Sink, Future};
 use crate::subscriptions::Subscriptions;
+use futures03::{StreamExt as _, compat::Compat};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use log::warn;
-use parity_codec::{Encode, Decode};
-use primitives::{Bytes, Blake2Hasher, H256};
-use sr_primitives::{generic, traits};
-use self::error::Result;
+use codec::{Encode, Decode};
+use primitives::{
+	Bytes, Blake2Hasher, H256, ed25519, sr25519, crypto::{Pair, Public, key_types},
+	traits::BareCryptoStorePtr,
+};
+use sr_primitives::{generic, traits::{self, ProvideRuntimeApi}};
+use self::error::{Error, Result};
 use transaction_pool::{
 	txpool::{
 		ChainApi as PoolChainApi,
@@ -44,6 +48,7 @@ use transaction_pool::{
 		watcher::Status,
 	},
 };
+use session::SessionKeys;
 
 pub use self::gen_client::Client as AuthorClient;
 
@@ -57,21 +62,50 @@ pub trait AuthorApi<Hash, BlockHash> {
 	#[rpc(name = "author_submitExtrinsic")]
 	fn submit_extrinsic(&self, extrinsic: Bytes) -> Result<Hash>;
 
+	/// Insert a key into the keystore.
+	#[rpc(name = "author_insertKey")]
+	fn insert_key(&self,
+		key_type: String,
+		suri: String,
+		maybe_public: Option<Bytes>
+	) -> Result<Bytes>;
+
+	/// Generate new session keys and returns the corresponding public keys.
+	#[rpc(name = "author_rotateKeys")]
+	fn rotate_keys(&self) -> Result<Bytes>;
+
 	/// Returns all pending extrinsics, potentially grouped by sender.
 	#[rpc(name = "author_pendingExtrinsics")]
 	fn pending_extrinsics(&self) -> Result<Vec<Bytes>>;
 
 	/// Remove given extrinsic from the pool and temporarily ban it to prevent reimporting.
 	#[rpc(name = "author_removeExtrinsic")]
-	fn remove_extrinsic(&self, bytes_or_hash: Vec<hash::ExtrinsicOrHash<Hash>>) -> Result<Vec<Hash>>;
+	fn remove_extrinsic(&self,
+		bytes_or_hash: Vec<hash::ExtrinsicOrHash<Hash>>
+	) -> Result<Vec<Hash>>;
 
 	/// Submit an extrinsic to watch.
-	#[pubsub(subscription = "author_extrinsicUpdate", subscribe, name = "author_submitAndWatchExtrinsic")]
-	fn watch_extrinsic(&self, metadata: Self::Metadata, subscriber: Subscriber<Status<Hash, BlockHash>>, bytes: Bytes);
+	#[pubsub(
+		subscription = "author_extrinsicUpdate",
+		subscribe,
+		name = "author_submitAndWatchExtrinsic"
+	)]
+	fn watch_extrinsic(&self,
+		metadata: Self::Metadata,
+		subscriber: Subscriber<Status<Hash, BlockHash>>,
+		bytes: Bytes
+	);
 
 	/// Unsubscribe from extrinsic watching.
-	#[pubsub(subscription = "author_extrinsicUpdate", unsubscribe, name = "author_unwatchExtrinsic")]
-	fn unwatch_extrinsic(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool>;
+	#[pubsub(
+		subscription = "author_extrinsicUpdate",
+		unsubscribe,
+		name = "author_unwatchExtrinsic"
+	)]
+	fn unwatch_extrinsic(&self,
+		metadata: Option<Self::Metadata>,
+		id: SubscriptionId
+	) -> Result<bool>;
 }
 
 /// Authoring API
@@ -82,6 +116,8 @@ pub struct Author<B, E, P, RA> where P: PoolChainApi + Sync + Send + 'static {
 	pool: Arc<Pool<P>>,
 	/// Subscriptions manager
 	subscriptions: Subscriptions,
+	/// The key store.
+	keystore: BareCryptoStorePtr,
 }
 
 impl<B, E, P, RA> Author<B, E, P, RA> where P: PoolChainApi + Sync + Send + 'static {
@@ -90,11 +126,13 @@ impl<B, E, P, RA> Author<B, E, P, RA> where P: PoolChainApi + Sync + Send + 'sta
 		client: Arc<Client<B, E, <P as PoolChainApi>::Block, RA>>,
 		pool: Arc<Pool<P>>,
 		subscriptions: Subscriptions,
+		keystore: BareCryptoStorePtr,
 	) -> Self {
 		Author {
 			client,
 			pool,
 			subscriptions,
+			keystore,
 		}
 	}
 }
@@ -105,12 +143,51 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 	P: PoolChainApi + Sync + Send + 'static,
 	P::Block: traits::Block<Hash=H256>,
 	P::Error: 'static,
-	RA: Send + Sync + 'static
+	RA: Send + Sync + 'static,
+	Client<B, E, P::Block, RA>: ProvideRuntimeApi,
+	<Client<B, E, P::Block, RA> as ProvideRuntimeApi>::Api: SessionKeys<P::Block>,
 {
 	type Metadata = crate::metadata::Metadata;
 
+	fn insert_key(
+		&self,
+		key_type: String,
+		suri: String,
+		maybe_public: Option<Bytes>,
+	) -> Result<Bytes> {
+		let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
+		let mut keystore = self.keystore.write();
+		let maybe_password = keystore.password();
+		let public = match maybe_public {
+			Some(public) => public.0,
+			None => {
+				let maybe_public = match key_type {
+					key_types::BABE | key_types::IM_ONLINE | key_types::SR25519 =>
+						sr25519::Pair::from_string(&suri, maybe_password)
+							.map(|pair| pair.public().to_raw_vec()),
+					key_types::GRANDPA | key_types::ED25519 =>
+						ed25519::Pair::from_string(&suri, maybe_password)
+							.map(|pair| pair.public().to_raw_vec()),
+					_ => Err(Error::UnsupportedKeyType)?,
+				};
+				maybe_public.map_err(|_| Error::BadSeedPhrase)?
+			}
+		};
+		keystore.insert_unknown(key_type, &suri, &public[..])
+			.map_err(|_| Error::KeyStoreUnavailable)?;
+		Ok(public.into())
+	}
+
+	fn rotate_keys(&self) -> Result<Bytes> {
+		let best_block_hash = self.client.info().chain.best_hash;
+		self.client.runtime_api().generate_session_keys(
+			&generic::BlockId::Hash(best_block_hash),
+			None,
+		).map(Into::into).map_err(Into::into)
+	}
+
 	fn submit_extrinsic(&self, ext: Bytes) -> Result<ExHash<P>> {
-		let xt = Decode::decode(&mut &ext[..]).ok_or(error::Error::BadFormat)?;
+		let xt = Decode::decode(&mut &ext[..])?;
 		let best_block_hash = self.client.info().chain.best_hash;
 		self.pool
 			.submit_one(&generic::BlockId::hash(best_block_hash), xt)
@@ -124,12 +201,14 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 		Ok(self.pool.ready().map(|tx| tx.data.encode().into()).collect())
 	}
 
-	fn remove_extrinsic(&self, bytes_or_hash: Vec<hash::ExtrinsicOrHash<ExHash<P>>>) -> Result<Vec<ExHash<P>>> {
+	fn remove_extrinsic(&self,
+		bytes_or_hash: Vec<hash::ExtrinsicOrHash<ExHash<P>>>
+	) -> Result<Vec<ExHash<P>>> {
 		let hashes = bytes_or_hash.into_iter()
 			.map(|x| match x {
 				hash::ExtrinsicOrHash::Hash(h) => Ok(h),
 				hash::ExtrinsicOrHash::Extrinsic(bytes) => {
-					let xt = Decode::decode(&mut &bytes[..]).ok_or(error::Error::BadFormat)?;
+					let xt = Decode::decode(&mut &bytes[..])?;
 					Ok(self.pool.hash_of(&xt))
 				},
 			})
@@ -143,11 +222,14 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 		)
 	}
 
-	fn watch_extrinsic(&self, _metadata: Self::Metadata, subscriber: Subscriber<Status<ExHash<P>, BlockHash<P>>>, xt: Bytes) {
+	fn watch_extrinsic(&self,
+		_metadata: Self::Metadata,
+		subscriber: Subscriber<Status<ExHash<P>, BlockHash<P>>>,
+		xt: Bytes
+	) {
 		let submit = || -> Result<_> {
 			let best_block_hash = self.client.info().chain.best_hash;
-			let dxt = <<P as PoolChainApi>::Block as traits::Block>::Extrinsic::decode(&mut &xt[..])
-				.ok_or(error::Error::BadFormat)?;
+			let dxt = <<P as PoolChainApi>::Block as traits::Block>::Extrinsic::decode(&mut &xt[..])?;
 			self.pool
 				.submit_and_watch(&generic::BlockId::hash(best_block_hash), dxt)
 				.map_err(|e| e.into_pool_error()
@@ -168,7 +250,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 		self.subscriptions.add(subscriber, move |sink| {
 			sink
 				.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
-				.send_all(watcher.into_stream().map(Ok))
+				.send_all(Compat::new(watcher.into_stream().map(|v| Ok::<_, ()>(Ok(v)))))
 				.map(|_| ())
 		})
 	}

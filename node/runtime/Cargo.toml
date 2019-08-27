@@ -8,18 +8,19 @@ build = "build.rs"
 [dependencies]
 integer-sqrt = { version = "0.1.2" }
 safe-mix = { version = "1.0", default-features = false }
-parity-codec = { version = "4.1.1", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 primitives = { package = "substrate-primitives",  path = "../../core/primitives", default-features = false }
 client = { package = "substrate-client", path = "../../core/client", default-features = false }
 rstd = { package = "sr-std", path = "../../core/sr-std", default-features = false }
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
+sr-staking-primitives = { path = "../../core/sr-staking-primitives", default-features = false }
 offchain-primitives = { package = "substrate-offchain-primitives", path = "../../core/offchain/primitives", default-features = false }
+authority-discovery-primitives = { package = "substrate-authority-discovery-primitives", path = "../../core/authority-discovery/primitives", default-features = false }
 version = { package = "sr-version", path = "../../core/sr-version", default-features = false }
 support = { package = "srml-support", path = "../../srml/support", default-features = false }
 authorship = { package = "srml-authorship", path = "../../srml/authorship", default-features = false }
 babe = { package = "srml-babe", path = "../../srml/babe", default-features = false }
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../core/consensus/babe/primitives", default-features = false }
-consensus-primitives = { package = "substrate-consensus-common-primitives", path = "../../core/consensus/common/primitives", default-features = false }
 balances = { package = "srml-balances", path = "../../srml/balances", default-features = false }
 contracts = { package = "srml-contracts", path = "../../srml/contracts", default-features = false }
 collective = { package = "srml-collective", path = "../../srml/collective", default-features = false }
@@ -29,6 +30,7 @@ executive = { package = "srml-executive", path = "../../srml/executive", default
 finality-tracker = { package = "srml-finality-tracker", path = "../../srml/finality-tracker", default-features = false }
 grandpa = { package = "srml-grandpa", path = "../../srml/grandpa", default-features = false }
 indices = { package = "srml-indices", path = "../../srml/indices", default-features = false }
+membership = { package = "srml-membership", path = "../../srml/membership", default-features = false }
 session = { package = "srml-session", path = "../../srml/session", default-features = false, features = ["historical"] }
 staking = { package = "srml-staking", path = "../../srml/staking", default-features = false }
 system = { package = "srml-system", path = "../../srml/system", default-features = false }
@@ -36,10 +38,13 @@ timestamp = { package = "srml-timestamp", path = "../../srml/timestamp", default
 treasury = { package = "srml-treasury", path = "../../srml/treasury", default-features = false }
 sudo = { package = "srml-sudo", path = "../../srml/sudo", default-features = false }
 im-online = { package = "srml-im-online", path = "../../srml/im-online", default-features = false }
+authority-discovery = { package = "srml-authority-discovery", path = "../../srml/authority-discovery", default-features = false }
+offences = { package = "srml-offences", path = "../../srml/offences", default-features = false }
 node-primitives = { path = "../primitives", default-features = false }
 rustc-hex = { version = "2.0", optional = true }
 serde = { version = "1.0", optional = true }
 substrate-keyring = { path = "../../core/keyring", optional = true }
+substrate-session = { path = "../../core/session", default-features = false }
 
 [build-dependencies]
 wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.0.2", path = "../../core/utils/wasm-builder-runner" }
@@ -50,37 +55,42 @@ no_std = [
 	"contracts/core",
 ]
 std = [
-	"parity-codec/std",
-	"primitives/std",
-	"rstd/std",
-	"sr-primitives/std",
-	"support/std",
+	"authority-discovery-primitives/std",
+	"authority-discovery/std",
 	"authorship/std",
-	"babe/std",
 	"babe-primitives/std",
-	"consensus-primitives/std",
+	"babe/std",
 	"balances/std",
-	"contracts/std",
+	"client/std",
+	"codec/std",
 	"collective/std",
+	"contracts/std",
 	"democracy/std",
 	"elections/std",
 	"executive/std",
 	"finality-tracker/std",
 	"grandpa/std",
+	"im-online/std",
 	"indices/std",
+	"membership/std",
+	"node-primitives/std",
+	"offchain-primitives/std",
+	"offences/std",
+	"primitives/std",
+	"rstd/std",
+	"rustc-hex",
+	"safe-mix/std",
+	"serde",
 	"session/std",
+	"sr-primitives/std",
+	"sr-staking-primitives/std",
 	"staking/std",
+	"substrate-keyring",
+	"substrate-session/std",
+	"sudo/std",
+	"support/std",
 	"system/std",
 	"timestamp/std",
 	"treasury/std",
-	"sudo/std",
 	"version/std",
-	"node-primitives/std",
-	"serde",
-	"safe-mix/std",
-	"client/std",
-	"rustc-hex",
-	"substrate-keyring",
-	"offchain-primitives/std",
-	"im-online/std",
 ]

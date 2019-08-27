@@ -35,7 +35,7 @@ use srml_support::{
 		OnUnbalanced, ReservableCurrency, WithdrawReason, WithdrawReasons, ChangeMembers
 	}
 };
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use system::{self, ensure_signed, ensure_root};
 
 // no polynomial attacks:
@@ -138,17 +138,7 @@ pub type VoteIndex = u32;
 
 // all three must be in sync.
 type ApprovalFlag = u32;
-pub const APPROVAL_FLAG_MASK: ApprovalFlag = 0x8000_0000;
 pub const APPROVAL_FLAG_LEN: usize = 32;
-
-pub const DEFAULT_CANDIDACY_BOND: u32 = 9;
-pub const DEFAULT_VOTING_BOND: u32 = 0;
-pub const DEFAULT_VOTING_FEE: u32 = 0;
-pub const DEFAULT_PRESENT_SLASH_PER_VOTER: u32 = 1;
-pub const DEFAULT_CARRY_COUNT: u32 = 2;
-pub const DEFAULT_INACTIVE_GRACE_PERIOD: u32 = 1;
-pub const DEFAULT_VOTING_PERIOD: u32 = 1000;
-pub const DEFAULT_DECAY_RATIO: u32 = 24;
 
 pub trait Trait: system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -593,7 +583,7 @@ decl_module! {
 				.collect();
 			<Members<T>>::put(&new_set);
 			let new_set = new_set.into_iter().map(|x| x.0).collect::<Vec<_>>();
-			T::ChangeMembers::change_members(&[], &[who], &new_set[..]);
+			T::ChangeMembers::change_members(&[], &[who], new_set);
 		}
 
 		/// Set the presentation duration. If there is currently a vote being presented for, will
@@ -876,7 +866,7 @@ impl<T: Trait> Module<T> {
 		<Members<T>>::put(&new_set);
 
 		let new_set = new_set.into_iter().map(|x| x.0).collect::<Vec<_>>();
-		T::ChangeMembers::change_members(&incoming, &outgoing, &new_set[..]);
+		T::ChangeMembers::change_members(&incoming, &outgoing, new_set);
 
 		// clear all except runners-up from candidate list.
 		let candidates = Self::candidates();
@@ -892,9 +882,17 @@ impl<T: Trait> Module<T> {
 			count += 1;
 		}
 		for (old, new) in candidates.iter().zip(new_candidates.iter()) {
+			// candidate is not a runner up.
 			if old != new {
 				// removed - kill it
 				<RegisterInfoOf<T>>::remove(old);
+
+				// and candidate is not a winner.
+				if incoming.iter().find(|e| *e == old).is_none() {
+					// slash the bond.
+					let (imbalance, _) = T::Currency::slash_reserved(&old, T::CandidacyBond::get());
+					T::LoserCandidate::on_unbalanced(imbalance);
+				}
 			}
 		}
 		// discard any superfluous slots.
@@ -1132,6 +1130,7 @@ mod tests {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
+		type Call = ();
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
@@ -1143,6 +1142,7 @@ mod tests {
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
+		type Version = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
@@ -1203,7 +1203,7 @@ mod tests {
 
 	pub struct TestChangeMembers;
 	impl ChangeMembers<u64> for TestChangeMembers {
-		fn change_members(incoming: &[u64], outgoing: &[u64], new: &[u64]) {
+		fn change_members_sorted(incoming: &[u64], outgoing: &[u64], new: &[u64]) {
 			let mut old_plus_incoming = MEMBERS.with(|m| m.borrow().to_vec());
 			old_plus_incoming.extend_from_slice(incoming);
 			old_plus_incoming.sort();
@@ -1252,6 +1252,7 @@ mod tests {
 	pub struct ExtBuilder {
 		balance_factor: u64,
 		decay_ratio: u32,
+		desired_seats: u32,
 		voting_fee: u64,
 		voter_bond: u64,
 		bad_presentation_punishment: u64,
@@ -1262,6 +1263,7 @@ mod tests {
 			Self {
 				balance_factor: 1,
 				decay_ratio: 24,
+				desired_seats: 2,
 				voting_fee: 0,
 				voter_bond: 0,
 				bad_presentation_punishment: 1,
@@ -1290,6 +1292,10 @@ mod tests {
 			self.voter_bond = fee;
 			self
 		}
+		pub fn desired_seats(mut self, seats: u32) -> Self {
+			self.desired_seats = seats;
+			self
+		}
 		pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 			VOTER_BOND.with(|v| *v.borrow_mut() = self.voter_bond);
 			VOTING_FEE.with(|v| *v.borrow_mut() = self.voting_fee);
@@ -1309,11 +1315,11 @@ mod tests {
 				}),
 				elections: Some(elections::GenesisConfig::<Test>{
 					members: vec![],
-					desired_seats: 2,
+					desired_seats: self.desired_seats,
 					presentation_duration: 2,
 					term_duration: 5,
 				}),
-			}.build_storage().unwrap().0.into()
+			}.build_storage().unwrap().into()
 		}
 	}
 
@@ -1338,6 +1344,10 @@ mod tests {
 
 	fn bond() -> u64 {
 		<Test as Trait>::VotingBond::get()
+	}
+
+	fn balances(who: &u64) -> (u64, u64) {
+		(Balances::free_balance(who), Balances::reserved_balance(who))
 	}
 
 	#[test]
@@ -2470,8 +2480,6 @@ mod tests {
 
 			assert_eq!(voter_ids(), vec![0, 5]);
 			assert_eq!(Elections::all_approvals_of(&2).len(), 0);
-			assert_eq!(Balances::total_balance(&2), 18);
-			assert_eq!(Balances::total_balance(&5), 52);
 		});
 	}
 
@@ -2870,6 +2878,43 @@ mod tests {
 			);
 
 			assert_eq!(Elections::candidate_reg_info(4), Some((0, 3)));
+		});
+	}
+
+	#[test]
+	fn loser_candidates_bond_gets_slashed() {
+		with_externalities(&mut ExtBuilder::default().desired_seats(1).build(), || {
+			System::set_block_number(4);
+			assert!(!Elections::presentation_active());
+
+			assert_ok!(Elections::submit_candidacy(Origin::signed(1), 0));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 1));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(3), 2));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(4), 3));
+
+			assert_eq!(balances(&2), (17, 3));
+
+			assert_ok!(Elections::set_approvals(Origin::signed(5), vec![true], 0, 0));
+			assert_ok!(Elections::set_approvals(Origin::signed(1), vec![false, true, true, true], 0, 0));
+
+			assert_ok!(Elections::end_block(System::block_number()));
+
+			System::set_block_number(6);
+			assert!(Elections::presentation_active());
+			assert_eq!(Elections::present_winner(Origin::signed(4), 4, 10, 0), Ok(()));
+			assert_eq!(Elections::present_winner(Origin::signed(3), 3, 10, 0), Ok(()));
+			assert_eq!(Elections::present_winner(Origin::signed(2), 2, 10, 0), Ok(()));
+			assert_eq!(Elections::present_winner(Origin::signed(1), 1, 50, 0), Ok(()));
+
+
+			// winner + carry
+			assert_eq!(Elections::leaderboard(), Some(vec![(10, 3), (10, 4), (50, 1)]));
+			assert_ok!(Elections::end_block(System::block_number()));
+			assert!(!Elections::presentation_active());
+			assert_eq!(Elections::members(), vec![(1, 11)]);
+
+			// account 2 is not a runner up or in leaderboard.
+			assert_eq!(balances(&2), (17, 0));
 		});
 	}
 }

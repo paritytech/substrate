@@ -106,7 +106,13 @@ pub trait Cache<Block: BlockT>: Send + Sync {
 	/// Otherwise cache may end up in inconsistent state.
 	fn initialize(&self, key: &well_known_cache_keys::Id, value_at_genesis: Vec<u8>) -> Result<()>;
 	/// Returns cached value by the given key.
-	fn get_at(&self, key: &well_known_cache_keys::Id, block: &BlockId<Block>) -> Option<Vec<u8>>;
+	///
+	/// Returned tuple is the range where value has been active and the value itself.
+	fn get_at(
+		&self,
+		key: &well_known_cache_keys::Id,
+		block: &BlockId<Block>,
+	) -> Option<((NumberFor<Block>, Block::Hash), Option<(NumberFor<Block>, Block::Hash)>, Vec<u8>)>;
 }
 
 /// Blockchain info

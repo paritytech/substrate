@@ -19,9 +19,9 @@
 use std::collections::HashMap;
 use runtime_io::{blake2_256, twox_128};
 use super::{AuthorityId, AccountId, WASM_BINARY};
-use parity_codec::{Encode, KeyedVec, Joiner};
+use codec::{Encode, KeyedVec, Joiner};
 use primitives::{ChangesTrieConfiguration, map, storage::well_known_keys};
-use sr_primitives::traits::Block;
+use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
 
 /// Configuration of a general Substrate test genesis block.
 pub struct GenesisConfig {
@@ -50,7 +50,10 @@ impl GenesisConfig {
 		}
 	}
 
-	pub fn genesis_map(&self) -> HashMap<Vec<u8>, Vec<u8>> {
+	pub fn genesis_map(&self) -> (
+		HashMap<Vec<u8>, Vec<u8>>,
+		HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
+	) {
 		let wasm_runtime = WASM_BINARY.to_vec();
 		let mut map: HashMap<Vec<u8>, Vec<u8>> = self.balances.iter()
 			.map(|&(ref account, balance)| (account.to_keyed_vec(b"balance:"), vec![].and(&balance)))
@@ -67,8 +70,30 @@ impl GenesisConfig {
 			map.insert(well_known_keys::CHANGES_TRIE_CONFIG.to_vec(), changes_trie_config.encode());
 		}
 		map.insert(twox_128(&b"sys:auth"[..])[..].to_vec(), self.authorities.encode());
-		map
+		(map, Default::default())
 	}
+}
+
+pub fn insert_genesis_block(
+	storage: &mut (
+		HashMap<Vec<u8>, Vec<u8>>,
+		HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
+	)
+) -> primitives::hash::H256 {
+
+	let child_roots = storage.1.iter().map(|(sk, child_map)| {
+		let state_root = <<<crate::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
+			child_map.clone().into_iter()
+		);
+		(sk.clone(), state_root.encode())
+	});
+	let state_root = <<<crate::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
+		storage.0.clone().into_iter().chain(child_roots)
+	);
+	let block: crate::Block = substrate_client::genesis::construct_genesis_block(state_root);
+	let genesis_hash = block.header.hash();
+	storage.0.extend(additional_storage_with_genesis(&block));
+	genesis_hash
 }
 
 pub fn additional_storage_with_genesis(genesis_block: &crate::Block) -> HashMap<Vec<u8>, Vec<u8>> {

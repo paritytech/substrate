@@ -22,12 +22,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use babe::{import_queue, start_babe, BabeImportQueue, Config};
-use babe_primitives::AuthorityPair as BabePair;
 use client::{self, LongestChain};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use node_executor;
-use primitives::Pair;
-use grandpa_primitives::AuthorityPair as GrandpaPair;
 use futures::prelude::*;
 use node_primitives::Block;
 use node_runtime::{GenesisConfig, RuntimeApi};
@@ -40,7 +37,6 @@ use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use inherents::InherentDataProviders;
 use network::construct_simple_protocol;
 use substrate_service::construct_service_factory;
-use log::info;
 use substrate_service::TelemetryOnConnect;
 
 construct_simple_protocol! {
@@ -88,25 +84,35 @@ impl<F> Default for NodeSetupState<F> where F: substrate_service::ServiceFactory
 construct_service_factory! {
 	struct Factory {
 		Block = Block,
-		ConsensusPair = BabePair,
-		FinalityPair = GrandpaPair,
 		RuntimeApi = RuntimeApi,
 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
 		RuntimeDispatch = node_executor::Executor,
-		FullTransactionPoolApi = transaction_pool::ChainApi<client::Client<FullBackend<Self>, FullExecutor<Self>, Block, RuntimeApi>, Block>
-			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
-		LightTransactionPoolApi = transaction_pool::ChainApi<client::Client<LightBackend<Self>, LightExecutor<Self>, Block, RuntimeApi>, Block>
-			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
+		FullTransactionPoolApi =
+			transaction_pool::ChainApi<
+				client::Client<FullBackend<Self>, FullExecutor<Self>, Block, RuntimeApi>,
+				Block
+			> {
+				|config, client|
+					Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client)))
+			},
+		LightTransactionPoolApi =
+			transaction_pool::ChainApi<
+				client::Client<LightBackend<Self>, LightExecutor<Self>, Block, RuntimeApi>,
+				Block
+			> {
+				|config, client|
+					Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client)))
+			},
 		Genesis = GenesisConfig,
 		SetupState = NodeSetupState<Self>,
 		Configuration = (),
-		FullService = FullComponents<Self>
-			{ |config: FactoryFullConfiguration<Self>|
-				FullComponents::<Factory>::new(config) },
+		FullService = FullComponents<Self> {
+			|config: FactoryFullConfiguration<Self>| FullComponents::<Factory>::new(config)
+		},
 		AuthoritySetup = {
 			|service: Self::FullService, mut state: FullComponentsSetupState<Self>| {
-				let (block_import, link_half, babe_link) = state.custom.import_setup.take()
-					.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
+				let (block_import, link_half, babe_link) =state.custom.import_setup.take()
+						.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
 				// spawn any futures that were created in the previous setup steps
 				if let Some(tasks) = state.custom.tasks_to_spawn.take() {
@@ -119,9 +125,7 @@ construct_service_factory! {
 					}
 				}
 
-				if let Some(babe_key) = service.authority_key() {
-					info!("Using BABE key {}", babe_key.public());
-
+				if state.config.roles.is_authority() {
 					let proposer = substrate_basic_authorship::ProposerFactory {
 						client: service.client(),
 						transaction_pool: service.transaction_pool(),
@@ -133,7 +137,7 @@ construct_service_factory! {
 
 					let babe_config = babe::BabeParams {
 						config: Config::get_or_compute(&*client)?,
-						local_key: Arc::new(babe_key),
+						keystore: service.keystore(),
 						client,
 						select_chain,
 						block_import,
@@ -146,25 +150,23 @@ construct_service_factory! {
 
 					let babe = start_babe(babe_config)?;
 					let select = babe.select(service.on_exit()).then(|_| Ok(()));
-					service.spawn_task(Box::new(select));
+
+					// the BABE authoring task is considered infallible, i.e. if it
+					// fails we take down the service with it.
+					service.spawn_essential_task(select);
 				}
 
-				let grandpa_key = if state.config.disable_grandpa {
-					None
-				} else {
-					service.fg_authority_key()
-				};
-
 				let config = grandpa::Config {
-					local_key: grandpa_key.map(Arc::new),
 					// FIXME #1578 make this available through chainspec
 					gossip_duration: Duration::from_millis(333),
 					justification_period: 4096,
-					name: Some(state.config.name.clone())
+					name: Some(state.config.name.clone()),
+					keystore: Some(service.keystore()),
 				};
 
-				match config.local_key {
-					None if !state.config.grandpa_voter => {
+				match (state.config.roles.is_authority(), state.config.disable_grandpa) {
+					(false, false) => {
+						// start the lightweight GRANDPA observer
 						service.spawn_task(Box::new(grandpa::run_grandpa_observer(
 							config,
 							link_half,
@@ -172,8 +174,8 @@ construct_service_factory! {
 							service.on_exit(),
 						)?));
 					},
-					// Either config.local_key is set, or user forced voter service via `--grandpa-voter` flag.
-					_ => {
+					(true, false) => {
+						// start the full GRANDPA voter
 						let telemetry_on_connect = TelemetryOnConnect {
 							telemetry_connection_sinks: service.telemetry_on_connect_stream(),
 						};
@@ -181,11 +183,22 @@ construct_service_factory! {
 							config: config,
 							link: link_half,
 							network: service.network(),
-							inherent_data_providers: state.custom.inherent_data_providers.clone(),
+							inherent_data_providers:
+								state.custom.inherent_data_providers.clone(),
 							on_exit: service.on_exit(),
 							telemetry_on_connect: Some(telemetry_on_connect),
 						};
-						service.spawn_task(Box::new(grandpa::run_grandpa_voter(grandpa_config)?));
+
+						// the GRANDPA voter task is considered infallible, i.e.
+						// if it fails we take down the service with it.
+						service.spawn_essential_task(grandpa::run_grandpa_voter(grandpa_config)?);
+					},
+					(_, true) => {
+						grandpa::setup_disabled_grandpa(
+							service.client(),
+							&state.custom.inherent_data_providers,
+							service.network(),
+						)?;
 					},
 				}
 
@@ -195,7 +208,14 @@ construct_service_factory! {
 		LightService = LightComponents<Self>
 			{ |config| <LightComponents<Factory>>::new(config) },
 		FullImportQueue = BabeImportQueue<Self::Block>
-			{ |state: &mut FullComponentsSetupState<Self> , client: Arc<FullClient<Self>>, select_chain: Self::SelectChain| {
+			{
+				|
+					state: &mut FullComponentsSetupState<Self>,
+					client: Arc<FullClient<Self>>,
+					select_chain: Self::SelectChain,
+					transaction_pool: Option<Arc<TransactionPool<Self::FullTransactionPoolApi>>>,
+				|
+			{
 				let (block_import, link_half) =
 					grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>, _>(
 						client.clone(), client.clone(), select_chain
@@ -210,6 +230,7 @@ construct_service_factory! {
 					client.clone(),
 					client,
 					state.custom.inherent_data_providers.clone(),
+					transaction_pool,
 				)?;
 
 				state.custom.import_setup = Some((babe_block_import.clone(), link_half, babe_link));
@@ -228,10 +249,11 @@ construct_service_factory! {
 				)?;
 
 				let finality_proof_import = block_import.clone();
-				let finality_proof_request_builder = finality_proof_import.create_finality_proof_request_builder();
+				let finality_proof_request_builder =
+					finality_proof_import.create_finality_proof_request_builder();
 
 				// FIXME: pruning task isn't started since light client doesn't do `AuthoritySetup`.
-				let (import_queue, ..) = import_queue(
+				let (import_queue, ..) = import_queue::<_, _, _, _, _, _, TransactionPool<Self::FullTransactionPoolApi>>(
 					Config::get_or_compute(&*client)?,
 					block_import,
 					None,
@@ -239,6 +261,7 @@ construct_service_factory! {
 					client.clone(),
 					client,
 					state.custom.inherent_data_providers.clone(),
+					None,
 				)?;
 
 				Ok((import_queue, finality_proof_request_builder))
@@ -251,6 +274,17 @@ construct_service_factory! {
 		FinalityProofProvider = { |state: &mut FullComponentsSetupState<Self>, client: Arc<FullClient<Self>>| {
 			Ok(Some(Arc::new(GrandpaFinalityProofProvider::new(state.backend.clone(), client)) as _))
 		}},
+
+		RpcExtensions = jsonrpc_core::IoHandler<substrate_rpc::Metadata>
+		{ |client, pool| {
+			use node_rpc::accounts::{Accounts, AccountsApi};
+
+			let mut io = jsonrpc_core::IoHandler::default();
+			io.extend_with(
+				AccountsApi::to_delegate(Accounts::new(client, pool))
+			);
+			io
+		}},
 	}
 }
 
@@ -259,11 +293,13 @@ construct_service_factory! {
 mod tests {
 	use std::sync::Arc;
 	use babe::CompatibleDigestItem;
-	use consensus_common::{Environment, Proposer, BlockImportParams, BlockOrigin, ForkChoiceStrategy};
+	use consensus_common::{
+		Environment, Proposer, BlockImportParams, BlockOrigin, ForkChoiceStrategy
+	};
 	use node_primitives::DigestItem;
 	use node_runtime::{BalancesCall, Call, UncheckedExtrinsic};
 	use node_runtime::constants::{currency::CENTS, time::SLOT_DURATION};
-	use parity_codec::{Encode, Decode};
+	use codec::{Encode, Decode};
 	use primitives::{
 		crypto::Pair as CryptoPair, blake2_256,
 		sr25519::Public as AddressPublic, H256,
@@ -271,7 +307,7 @@ mod tests {
 	use sr_primitives::{generic::{BlockId, Era, Digest}, traits::Block, OpaqueExtrinsic};
 	use timestamp;
 	use finality_tracker;
-	use keyring::{AccountKeyring, Sr25519Keyring};
+	use keyring::AccountKeyring;
 	use substrate_service::ServiceFactory;
 	use service_test::SyncService;
 	use crate::service::Factory;
@@ -311,7 +347,9 @@ mod tests {
 				auxiliary: Vec::new(),
 			}
 		};
-		let extrinsic_factory = |service: &SyncService<<Factory as service::ServiceFactory>::FullService>| {
+		let extrinsic_factory =
+			|service: &SyncService<<Factory as service::ServiceFactory>::FullService>|
+		{
 			let payload = (
 				0,
 				Call::Balances(BalancesCall::transfer(RawAddress::Id(bob.public().0.into()), 69.into())),
@@ -337,14 +375,18 @@ mod tests {
 	// #[test]
 	// #[ignore]
 	// fn test_sync() {
+	// 	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
+	// 	let keystore = keystore::Store::open(keystore_path.path(), None)
+	// 		.expect("Creates keystore");
+	// 	let alice = keystore.write().insert_ephemeral_from_seed::<babe::AuthorityPair>("//Alice")
+	// 		.expect("Creates authority pair");
+
 	// 	let chain_spec = crate::chain_spec::tests::integration_test_config_with_single_authority();
 
-	// 	let alice = Arc::new(Sr25519Keyring::Alice.pair());
 	// 	let mut slot_num = 1u64;
 	// 	let block_factory = |service: &SyncService<<Factory as ServiceFactory>::FullService>| {
 	// 		let service = service.get();
-	// 		let mut inherent_data = service
-	// 			.config
+	// 		let mut inherent_data = state
 	// 			.custom
 	// 			.inherent_data_providers
 	// 			.create_inherent_data()
@@ -365,11 +407,11 @@ mod tests {
 	// 		let babe_pre_digest = loop {
 	// 			inherent_data.replace_data(timestamp::INHERENT_IDENTIFIER, &(slot_num * SLOT_DURATION));
 	// 			if let Some(babe_pre_digest) = babe::test_helpers::claim_slot(
-	// 				&*service.client(),
-	// 				&parent_id,
 	// 				slot_num,
-	// 				&alice,
+	// 				&parent_header,
+	// 				&*service.client(),
 	// 				(278, 1000),
+	// 				&keystore,
 	// 			) {
 	// 				break babe_pre_digest;
 	// 			}
@@ -393,7 +435,7 @@ mod tests {
 	// 		let to_sign = pre_hash.encode();
 	// 		let signature = alice.sign(&to_sign[..]);
 	// 		let item = <DigestItem as CompatibleDigestItem>::babe_seal(
-	// 			signature,
+	// 			signature.into(),
 	// 		);
 	// 		slot_num += 1;
 
@@ -418,17 +460,21 @@ mod tests {
 	// 		let to = AddressPublic::from_raw(bob.public().0);
 	// 		let from = AddressPublic::from_raw(charlie.public().0);
 	// 		let genesis_hash = service.get().client().block_hash(0).unwrap().unwrap();
+	// 		let best_block_id = BlockId::number(service.get().client().info().chain.best_number);
+	// 		let version = service.get().client().runtime_version_at(&best_block_id).unwrap().spec_version;
 	// 		let signer = charlie.clone();
 
 	// 		let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
 
+	// 		let check_version = system::CheckVersion::new();
+	// 		let check_genesis = system::CheckGenesis::new();
 	// 		let check_era = system::CheckEra::from(Era::Immortal);
 	// 		let check_nonce = system::CheckNonce::from(index);
-	// 		let check_weight = system::CheckWeight::from();
+	// 		let check_weight = system::CheckWeight::new();
 	// 		let take_fees = balances::TakeFees::from(0);
-	// 		let extra = (check_era, check_nonce, check_weight, take_fees);
+	// 		let extra = (check_version, check_genesis, check_era, check_nonce, check_weight, take_fees);
 
-	// 		let raw_payload = (function, extra.clone(), genesis_hash);
+	// 		let raw_payload = (function, extra.clone(), version, genesis_hash, genesis_hash);
 	// 		let signature = raw_payload.using_encoded(|payload| if payload.len() > 256 {
 	// 			signer.sign(&blake2_256(payload)[..])
 	// 		} else {
@@ -453,17 +499,17 @@ mod tests {
 	// 	);
 	// }
 
-	#[test]
-	#[ignore]
-	fn test_consensus() {
-		use super::Factory;
+	// #[test]
+	// #[ignore]
+	// fn test_consensus() {
+	// 	use super::Factory;
 
-		service_test::consensus::<Factory>(
-			crate::chain_spec::tests::integration_test_config_with_two_authorities(),
-			vec![
-				"//Alice".into(),
-				"//Bob".into(),
-			],
-		)
-	}
+	// 	service_test::consensus::<Factory>(
+	// 		crate::chain_spec::tests::integration_test_config_with_two_authorities(),
+	// 		vec![
+	// 			"//Alice".into(),
+	// 			"//Bob".into(),
+	// 		],
+	// 	)
+	// }
 }

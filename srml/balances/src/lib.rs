@@ -72,8 +72,6 @@
 //! - [`Imbalance`](../srml_support/traits/trait.Imbalance.html): Functions for handling
 //! imbalances between total issuance in the system and account balances. Must be used when a function
 //! creates new funds (e.g. a reward) or destroys some funds (e.g. a system fee).
-//! - [`MakePayment`](../srml_support/traits/trait.MakePayment.html): Simple trait designed
-//! for hooking into a transaction payment.
 //! - [`IsDeadAccount`](../srml_system/trait.IsDeadAccount.html): Determiner to say whether a
 //! given account is unused.
 //!
@@ -87,6 +85,17 @@
 //! ### Public Functions
 //!
 //! - `vesting_balance` - Get the amount that is currently being vested and cannot be transferred out of this account.
+//!
+//! ### Signed Extensions
+//!
+//! The balances module defines the following extensions:
+//!
+//!   - [`TakeFees`]: Consumes fees proportional to the length and weight of the transaction.
+//!     Additionally, it can contain a single encoded payload as a `tip`. The inclusion priority
+//!     is increased proportional to the tip.
+//!
+//! Lookup the runtime aggregator file (e.g. `node/runtime`) to see the full list of signed
+//! extensions included in a chain.
 //!
 //! ## Usage
 //!
@@ -151,7 +160,7 @@
 
 use rstd::prelude::*;
 use rstd::{cmp, result, mem};
-use parity_codec::{Codec, Encode, Decode};
+use codec::{Codec, Encode, Decode};
 use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module};
 use srml_support::traits::{
 	UpdateBalanceOutcome, Currency, OnFreeBalanceZero, OnUnbalanced,
@@ -171,12 +180,6 @@ mod mock;
 mod tests;
 
 pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
-
-pub const DEFAULT_EXISTENTIAL_DEPOSIT: u32 = 0;
-pub const DEFAULT_TRANSFER_FEE: u32 = 0;
-pub const DEFAULT_CREATION_FEE: u32 = 0;
-pub const DEFAULT_TRANSACTION_BASE_FEE: u32 = 0;
-pub const DEFAULT_TRANSACTION_BYTE_FEE: u32 = 0;
 
 pub trait Subtrait<I: Instance = DefaultInstance>: system::Trait {
 	/// The balance of an account.
@@ -459,7 +462,7 @@ decl_module! {
 		/// - Independent of the arguments.
 		/// - Contains a limited number of reads and writes.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(500_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(50_000)]
 		fn set_balance(
 			origin,
 			who: <T::Lookup as StaticLookup>::Source,
@@ -484,6 +487,21 @@ decl_module! {
 				mem::drop(NegativeImbalance::<T, I>::new(current_reserved - new_reserved));
 			}
 			Self::set_reserved_balance(&who, new_reserved);
+		}
+
+		/// Exactly as `transfer`, except the origin must be root and the source account may be
+		/// specified.
+		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
+		pub fn force_transfer(
+			origin,
+			source: <T::Lookup as StaticLookup>::Source,
+			dest: <T::Lookup as StaticLookup>::Source,
+			#[compact] value: T::Balance
+		) {
+			ensure_root(origin)?;
+			let source = T::Lookup::lookup(source)?;
+			let dest = T::Lookup::lookup(dest)?;
+			<Self as Currency<_>>::transfer(&source, &dest, value)?;
 		}
 	}
 }
@@ -763,6 +781,7 @@ impl<T: Subtrait<I>, I: Instance> PartialEq for ElevatedTrait<T, I> {
 impl<T: Subtrait<I>, I: Instance> Eq for ElevatedTrait<T, I> {}
 impl<T: Subtrait<I>, I: Instance> system::Trait for ElevatedTrait<T, I> {
 	type Origin = T::Origin;
+	type Call = T::Call;
 	type Index = T::Index;
 	type BlockNumber = T::BlockNumber;
 	type Hash = T::Hash;
@@ -776,6 +795,7 @@ impl<T: Subtrait<I>, I: Instance> system::Trait for ElevatedTrait<T, I> {
 	type MaximumBlockWeight = T::MaximumBlockWeight;
 	type MaximumBlockLength = T::MaximumBlockLength;
 	type AvailableBlockRatio = T::AvailableBlockRatio;
+	type Version = T::Version;
 }
 impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type Balance = T::Balance;
@@ -822,12 +842,12 @@ where
 	}
 
 	fn burn(mut amount: Self::Balance) -> Self::PositiveImbalance {
-		<TotalIssuance<T, I>>::mutate(|issued|
-			issued.checked_sub(&amount).unwrap_or_else(|| {
+		<TotalIssuance<T, I>>::mutate(|issued| {
+			*issued = issued.checked_sub(&amount).unwrap_or_else(|| {
 				amount = *issued;
 				Zero::zero()
-			})
-		);
+			});
+		});
 		PositiveImbalance::new(amount)
 	}
 
@@ -1213,12 +1233,15 @@ impl<T: Trait<I>, I: Instance> rstd::fmt::Debug for TakeFees<T, I> {
 
 impl<T: Trait<I>, I: Instance + Clone + Eq> SignedExtension for TakeFees<T, I> {
 	type AccountId = T::AccountId;
+	type Call = T::Call;
 	type AdditionalSigned = ();
+	type Pre = ();
 	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
 
 	fn validate(
 		&self,
 		who: &Self::AccountId,
+		_call: &Self::Call,
 		info: DispatchInfo,
 		len: usize,
 	) -> rstd::result::Result<ValidTransaction, DispatchError> {

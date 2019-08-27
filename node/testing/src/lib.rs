@@ -14,9 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-pub use self::behaviour::{CustomProto, CustomProtoOut};
+//! A set of testing utilities for Substrate Node.
 
-mod behaviour;
-mod handler;
-mod upgrade;
-mod tests;
+#![warn(missing_docs)]
+
+pub mod client;
+pub mod genesis;
+pub mod keyring;
+

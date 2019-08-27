@@ -73,9 +73,9 @@ impl<T> From<T> for SyncService<T> {
 	}
 }
 
-impl<T: Future<Item=(), Error=()>> Future for SyncService<T> {
+impl<T: Future<Item=(), Error=service::Error>> Future for SyncService<T> {
 	type Item = ();
-	type Error = ();
+	type Error = service::Error;
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
 		self.0.lock().unwrap().poll()
@@ -135,10 +135,6 @@ fn node_config<F: ServiceFactory> (
 ) -> FactoryFullConfiguration<F>
 {
 	let root = root.path().join(format!("node-{}", index));
-	let mut keys = Vec::new();
-	if let Some(seed) = key_seed {
-		keys.push(seed);
-	}
 
 	let config_path = Some(String::from(root.join("network").to_str().unwrap()));
 	let net_config_path = config_path.clone();
@@ -173,13 +169,13 @@ fn node_config<F: ServiceFactory> (
 		roles: role,
 		transaction_pool: Default::default(),
 		network: network_config,
-		keystore_path: Some(root.join("key")),
+		keystore_path: root.join("key"),
+		keystore_password: None,
 		database_path: root.join("db"),
 		database_cache_size: None,
 		state_cache_size: 16777216,
 		state_cache_child_ratio: None,
 		pruning: Default::default(),
-		keys: keys,
 		chain_spec: (*spec).clone(),
 		custom: Default::default(),
 		name: format!("Node {}", index),
@@ -194,14 +190,13 @@ fn node_config<F: ServiceFactory> (
 		offchain_worker: false,
 		force_authoring: false,
 		disable_grandpa: false,
-		grandpa_voter: false,
-		password: "".to_string().into(),
+		dev_key_seed: key_seed,
 	}
 }
 
 impl<F: ServiceFactory> TestNet<F> where
-	F::FullService: Future<Item=(), Error=()>,
-	F::LightService: Future<Item=(), Error=()>
+	F::FullService: Future<Item=(), Error=service::Error>,
+	F::LightService: Future<Item=(), Error=service::Error>,
 {
 	fn new(
 		temp: &TempDir,
@@ -244,7 +239,7 @@ impl<F: ServiceFactory> TestNet<F> where
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
 			let service = SyncService::from(F::new_full(node_config).expect("Error creating test node service"));
 
-			executor.spawn(service.clone());
+			executor.spawn(service.clone().map_err(|_| ()));
 			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().into()));
 			((index + nodes), service, addr)
 		}));
@@ -255,7 +250,7 @@ impl<F: ServiceFactory> TestNet<F> where
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
 			let service = SyncService::from(F::new_full(node_config).expect("Error creating test node service"));
 
-			executor.spawn(service.clone());
+			executor.spawn(service.clone().map_err(|_| ()));
 			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().into()));
 			(index, service, addr)
 		}));
@@ -266,7 +261,7 @@ impl<F: ServiceFactory> TestNet<F> where
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
 			let service = SyncService::from(F::new_light(node_config).expect("Error creating test node service"));
 
-			executor.spawn(service.clone());
+			executor.spawn(service.clone().map_err(|_| ()));
 			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().into()));
 			(index, service, addr)
 		}));
@@ -277,8 +272,8 @@ impl<F: ServiceFactory> TestNet<F> where
 }
 
 pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) where
-	F::FullService: Future<Item=(), Error=()>,
-	F::LightService: Future<Item=(), Error=()>,
+	F::FullService: Future<Item=(), Error=service::Error>,
+	F::LightService: Future<Item=(), Error=service::Error>,
 {
 	const NUM_FULL_NODES: usize = 5;
 	const NUM_LIGHT_NODES: usize = 5;
@@ -352,14 +347,14 @@ pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) where
 
 pub fn sync<F, B, E>(spec: FactoryChainSpec<F>, mut block_factory: B, mut extrinsic_factory: E) where
 	F: ServiceFactory,
-	F::FullService: Future<Item=(), Error=()>,
-	F::LightService: Future<Item=(), Error=()>,
+	F::FullService: Future<Item=(), Error=service::Error>,
+	F::LightService: Future<Item=(), Error=service::Error>,
 	B: FnMut(&SyncService<F::FullService>) -> BlockImportParams<F::Block>,
 	E: FnMut(&SyncService<F::FullService>) -> FactoryExtrinsic<F>,
 {
 	const NUM_FULL_NODES: usize = 10;
 	// FIXME: BABE light client support is currently not working.
-	const NUM_LIGHT_NODES: usize = 0;
+	const NUM_LIGHT_NODES: usize = 10;
 	const NUM_BLOCKS: usize = 512;
 	let temp = TempDir::new("substrate-sync-test").expect("Error creating test dir");
 	let mut network = TestNet::<F>::new(
@@ -411,11 +406,11 @@ pub fn sync<F, B, E>(spec: FactoryChainSpec<F>, mut block_factory: B, mut extrin
 
 pub fn consensus<F>(spec: FactoryChainSpec<F>, authorities: Vec<String>) where
 	F: ServiceFactory,
-	F::FullService: Future<Item=(), Error=()>,
-	F::LightService: Future<Item=(), Error=()>,
+	F::FullService: Future<Item=(), Error=service::Error>,
+	F::LightService: Future<Item=(), Error=service::Error>,
 {
 	const NUM_FULL_NODES: usize = 10;
-	const NUM_LIGHT_NODES: usize = 0;
+	const NUM_LIGHT_NODES: usize = 10;
 	const NUM_BLOCKS: usize = 10; // 10 * 2 sec block production time = ~20 seconds
 	let temp = TempDir::new("substrate-conensus-test").expect("Error creating test dir");
 	let mut network = TestNet::<F>::new(

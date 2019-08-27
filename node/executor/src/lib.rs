@@ -37,30 +37,30 @@ native_executor_instance!(
 #[cfg(test)]
 mod tests {
 	use super::Executor;
-	use {balances, contracts, indices, staking, system, timestamp};
+	use {balances, contracts, indices, system, timestamp};
 	use runtime_io;
 	use substrate_executor::WasmExecutor;
-	use parity_codec::{Encode, Decode, Joiner};
-	use keyring::{AccountKeyring, Ed25519Keyring, Sr25519Keyring};
+	use codec::{Encode, Decode, Joiner};
 	use runtime_support::{Hashable, StorageValue, StorageMap, assert_eq_error_rate, traits::Currency};
 	use state_machine::{CodeExecutor, Externalities, TestExternalities as CoreTestExternalities};
-	use primitives::{ twox_128, blake2_256, Blake2Hasher, ChangesTrieConfiguration, NeverNativeValue, NativeOrEncoded};
-	use node_primitives::{Hash, BlockNumber, AccountId, Balance, Index};
+	use primitives::{
+		twox_128, blake2_256, Blake2Hasher, NeverNativeValue, NativeOrEncoded, map
+	};
 	use sr_primitives::traits::{Header as HeaderT, Hash as HashT, Convert};
-	use sr_primitives::{generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
+	use sr_primitives::{ApplyOutcome, ApplyError, ApplyResult};
 	use sr_primitives::weights::{WeightMultiplier, GetDispatchInfo};
 	use contracts::ContractAddressFor;
 	use system::{EventRecord, Phase};
+	use node_primitives::{Hash, BlockNumber, Balance};
 	use node_runtime::{
 		Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances, BuildStorage,
-		GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System, SystemConfig,
-		GrandpaConfig, IndicesConfig, ContractsConfig, Event, SessionKeys, SignedExtra,
+		System, Event,
 		TransferFee, TransactionBaseFee, TransactionByteFee,
 	};
 	use node_runtime::constants::currency::*;
 	use node_runtime::impls::WeightToFee;
+	use node_testing::keyring::*;
 	use wabt;
-	use primitives::map;
 
 	/// The wasm runtime code.
 	///
@@ -79,7 +79,13 @@ mod tests {
 
 	const GENESIS_HASH: [u8; 32] = [69u8; 32];
 
+	const VERSION: u32 = node_runtime::VERSION.spec_version;
+
 	type TestExternalities<H> = CoreTestExternalities<H, u64>;
+
+	fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
+		node_testing::keyring::sign(xt, VERSION, GENESIS_HASH)
+	}
 
 	/// Default transfer fee
 	fn transfer_fee<E: Encode>(extrinsic: &E) -> Balance {
@@ -95,63 +101,6 @@ mod tests {
 		length_fee + weight_fee + TransferFee::get()
 	}
 
-	fn alice() -> AccountId {
-		AccountKeyring::Alice.into()
-	}
-
-	fn bob() -> AccountId {
-		AccountKeyring::Bob.into()
-	}
-
-	fn charlie() -> AccountId {
-		AccountKeyring::Charlie.into()
-	}
-
-	fn dave() -> AccountId {
-		AccountKeyring::Dave.into()
-	}
-
-	fn eve() -> AccountId {
-		AccountKeyring::Eve.into()
-	}
-
-	fn ferdie() -> AccountId {
-		AccountKeyring::Ferdie.into()
-	}
-
-	fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
-		match xt.signed {
-			Some((signed, extra)) => {
-				let payload = (xt.function, extra.clone(), GENESIS_HASH);
-				let key = AccountKeyring::from_public(&signed).unwrap();
-				let signature = payload.using_encoded(|b| {
-					if b.len() > 256 {
-						key.sign(&runtime_io::blake2_256(b))
-					} else {
-						key.sign(b)
-					}
-				}).into();
-				UncheckedExtrinsic {
-					signature: Some((indices::address::Address::Id(signed), signature, extra)),
-					function: payload.0,
-				}
-			}
-			None => UncheckedExtrinsic {
-				signature: None,
-				function: xt.function,
-			},
-		}
-	}
-
-	fn signed_extra(nonce: Index, extra_fee: Balance) -> SignedExtra {
-		(
-			system::CheckEra::from(Era::mortal(256, 0)),
-			system::CheckNonce::from(nonce),
-			system::CheckWeight::from(),
-			balances::TakeFees::from(extra_fee)
-		)
-	}
-
 	fn default_transfer_call() -> balances::Call<Runtime> {
 		balances::Call::transfer::<Runtime>(bob().into(), 69 * DOLLARS)
 	}
@@ -163,7 +112,7 @@ mod tests {
 		})
 	}
 
-	fn from_block_number(n: u64) -> Header {
+	fn from_block_number(n: u32) -> Header {
 		Header::new(n, Default::default(), Default::default(), [69; 32].into(), Default::default())
 	}
 
@@ -173,7 +122,7 @@ mod tests {
 
 	#[test]
 	fn panic_execution_with_foreign_code_gives_error() {
-		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, map![
+		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, (map![
 			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
 				69_u128.encode()
 			},
@@ -186,12 +135,12 @@ mod tests {
 			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => {
 				vec![0u8; 32]
 			}
-		]);
+		], map![]));
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_initialize_block",
-			&vec![].and(&from_block_number(1u64)),
+			&vec![].and(&from_block_number(1u32)),
 			true,
 			None,
 		).0;
@@ -209,7 +158,7 @@ mod tests {
 
 	#[test]
 	fn bad_extrinsic_with_native_equivalent_code_gives_error() {
-		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, map![
+		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, (map![
 			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
 				69_u128.encode()
 			},
@@ -222,12 +171,12 @@ mod tests {
 			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => {
 				vec![0u8; 32]
 			}
-		]);
+		], map![]));
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_initialize_block",
-			&vec![].and(&from_block_number(1u64)),
+			&vec![].and(&from_block_number(1u32)),
 			true,
 			None,
 		).0;
@@ -245,7 +194,7 @@ mod tests {
 
 	#[test]
 	fn successful_execution_with_native_equivalent_code_gives_ok() {
-		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, map![
+		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, (map![
 			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
 				(111 * DOLLARS).encode()
 			},
@@ -254,12 +203,12 @@ mod tests {
 			},
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
-		]);
+		], map![]));
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_initialize_block",
-			&vec![].and(&from_block_number(1u64)),
+			&vec![].and(&from_block_number(1u32)),
 			true,
 			None,
 		).0;
@@ -281,7 +230,7 @@ mod tests {
 
 	#[test]
 	fn successful_execution_with_foreign_code_gives_ok() {
-		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, map![
+		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, (map![
 			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
 				(111 * DOLLARS).encode()
 			},
@@ -290,12 +239,12 @@ mod tests {
 			},
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
-		]);
+		], map![]));
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_initialize_block",
-			&vec![].and(&from_block_number(1u64)),
+			&vec![].and(&from_block_number(1u32)),
 			true,
 			None,
 		).0;
@@ -315,83 +264,11 @@ mod tests {
 		});
 	}
 
-	fn to_session_keys(
-		ed25519_keyring: &Ed25519Keyring,
-		sr25519_keyring: &Sr25519Keyring,
-	) -> SessionKeys {
-		SessionKeys {
-			ed25519: ed25519_keyring.to_owned().into(),
-			sr25519: sr25519_keyring.to_owned().into(),
-		}
-	}
-
 	fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<Blake2Hasher> {
-		let mut ext = TestExternalities::new_with_code_with_children(code, GenesisConfig {
-			babe: Some(Default::default()),
-			system: Some(SystemConfig {
-				changes_trie_config: if support_changes_trie { Some(ChangesTrieConfiguration {
-					digest_interval: 2,
-					digest_levels: 2,
-				}) } else { None },
-				..Default::default()
-			}),
-			indices: Some(IndicesConfig {
-				ids: vec![alice(), bob(), charlie(), dave(), eve(), ferdie()],
-			}),
-			balances: Some(BalancesConfig {
-				balances: vec![
-					(alice(), 111 * DOLLARS),
-					(bob(), 100 * DOLLARS),
-					(charlie(), 100_000_000 * DOLLARS),
-					(dave(), 111 * DOLLARS),
-					(eve(), 101 * DOLLARS),
-					(ferdie(), 100 * DOLLARS),
-				],
-				vesting: vec![],
-			}),
-			session: Some(SessionConfig {
-				keys: vec![
-					(alice(), to_session_keys(
-						&Ed25519Keyring::Alice,
-						&Sr25519Keyring::Alice,
-					)),
-					(bob(), to_session_keys(
-						&Ed25519Keyring::Bob,
-						&Sr25519Keyring::Bob,
-					)),
-					(charlie(), to_session_keys(
-						&Ed25519Keyring::Charlie,
-						&Sr25519Keyring::Charlie,
-					)),
-				]
-			}),
-			staking: Some(StakingConfig {
-				current_era: 0,
-				stakers: vec![
-					(dave(), alice(), 111 * DOLLARS, staking::StakerStatus::Validator),
-					(eve(), bob(), 100 * DOLLARS, staking::StakerStatus::Validator),
-					(ferdie(), charlie(), 100 * DOLLARS, staking::StakerStatus::Validator)
-				],
-				validator_count: 3,
-				minimum_validator_count: 0,
-				offline_slash: Perbill::zero(),
-				offline_slash_grace: 0,
-				invulnerables: vec![alice(), bob(), charlie()],
-			}),
-			democracy: Some(Default::default()),
-			collective_Instance1: Some(Default::default()),
-			collective_Instance2: Some(Default::default()),
-			elections: Some(Default::default()),
-			contracts: Some(ContractsConfig {
-				current_schedule: Default::default(),
-				gas_price: 1 * MILLICENTS,
-			}),
-			sudo: Some(Default::default()),
-			im_online: Some(Default::default()),
-			grandpa: Some(GrandpaConfig {
-				authorities: vec![],
-			}),
-		}.build_storage().unwrap());
+		let mut ext = TestExternalities::new_with_code(
+			code,
+			node_testing::genesis::config(support_changes_trie, Some(code)).build_storage().unwrap(),
+		);
 		ext.changes_trie_storage().insert(0, GENESIS_HASH.into(), Default::default());
 		ext
 	}
@@ -402,13 +279,13 @@ mod tests {
 		parent_hash: Hash,
 		extrinsics: Vec<CheckedExtrinsic>,
 	) -> (Vec<u8>, Hash) {
-		use trie::ordered_trie_root;
+		use trie::{TrieConfiguration, trie_types::Layout};
 
 		// sign extrinsics.
 		let extrinsics = extrinsics.into_iter().map(sign).collect::<Vec<_>>();
 
 		// calculate the header fields that we can.
-		let extrinsics_root = ordered_trie_root::<Blake2Hasher, _, _>(
+		let extrinsics_root = Layout::<Blake2Hasher>::ordered_trie_root(
 				extrinsics.iter().map(Encode::encode)
 			).to_fixed_bytes()
 			.into();
@@ -520,7 +397,7 @@ mod tests {
 		(block1, block2)
 	}
 
-	fn block_with_size(time: u64, nonce: u64, size: usize) -> (Vec<u8>, Hash) {
+	fn block_with_size(time: u64, nonce: u32, size: usize) -> (Vec<u8>, Hash) {
 		construct_block(
 			&mut new_test_ext(COMPACT_CODE, false),
 			1,
@@ -687,7 +564,7 @@ mod tests {
 	;; ) -> u32
 	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "deploy")
 	)
@@ -702,7 +579,7 @@ mod tests {
 				)
 			)
 
-			(call $ext_scratch_copy
+			(call $ext_scratch_read
 				(i32.const 0)
 				(i32.const 0)
 				(i32.const 4)
@@ -872,7 +749,7 @@ mod tests {
 
 	#[test]
 	fn panic_execution_gives_error() {
-		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, map![
+		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, (map![
 			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
 				0_u128.encode()
 			},
@@ -881,10 +758,10 @@ mod tests {
 			},
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
-		]);
+		], map![]));
 
 		let r = WasmExecutor::new()
-			.call(&mut t, 8, COMPACT_CODE, "Core_initialize_block", &vec![].and(&from_block_number(1u64)));
+			.call(&mut t, 8, COMPACT_CODE, "Core_initialize_block", &vec![].and(&from_block_number(1u32)));
 		assert!(r.is_ok());
 		let r = WasmExecutor::new()
 			.call(&mut t, 8, COMPACT_CODE, "BlockBuilder_apply_extrinsic", &vec![].and(&xt())).unwrap();
@@ -894,7 +771,7 @@ mod tests {
 
 	#[test]
 	fn successful_execution_gives_ok() {
-		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, map![
+		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, (map![
 			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
 				(111 * DOLLARS).encode()
 			},
@@ -903,10 +780,10 @@ mod tests {
 			},
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
-		]);
+		], map![]));
 
 		let r = WasmExecutor::new()
-			.call(&mut t, 8, COMPACT_CODE, "Core_initialize_block", &vec![].and(&from_block_number(1u64)));
+			.call(&mut t, 8, COMPACT_CODE, "Core_initialize_block", &vec![].and(&from_block_number(1u32)));
 		assert!(r.is_ok());
 		let r = WasmExecutor::new()
 			.call(&mut t, 8, COMPACT_CODE, "BlockBuilder_apply_extrinsic", &vec![].and(&xt())).unwrap();
@@ -949,15 +826,12 @@ mod tests {
 
 	#[test]
 	fn should_import_block_with_test_client() {
-		use test_client::{ClientExt, TestClientBuilder, consensus::BlockOrigin};
+		use node_testing::client::{ClientExt, TestClientBuilderExt, TestClientBuilder, consensus::BlockOrigin};
 
-		let client = TestClientBuilder::default()
-			.build_with_native_executor::<Block, node_runtime::RuntimeApi, _>(executor())
-			.0;
-
+		let client = TestClientBuilder::new().build();
 		let block1 = changes_trie_block();
 		let block_data = block1.0;
-		let block = Block::decode(&mut &block_data[..]).unwrap();
+		let block = node_primitives::Block::decode(&mut &block_data[..]).unwrap();
 
 		client.import(BlockOrigin::Own, block).unwrap();
 	}
@@ -1054,7 +928,7 @@ mod tests {
 		//   - 1 MILLICENTS in substrate node.
 		//   - 1 milldot based on current polkadot runtime.
 		// (this baed on assigning 0.1 CENT to the cheapest tx with `weight = 100`)
-		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, map![
+		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, (map![
 			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
 				(100 * DOLLARS).encode()
 			},
@@ -1066,7 +940,7 @@ mod tests {
 			},
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
-		]);
+		], map![]));
 
 		let tip = 1_000_000;
 		let xt = sign(CheckedExtrinsic {
@@ -1077,7 +951,7 @@ mod tests {
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_initialize_block",
-			&vec![].and(&from_block_number(1u64)),
+			&vec![].and(&from_block_number(1u32)),
 			true,
 			None,
 		).0;

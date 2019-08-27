@@ -16,7 +16,7 @@
 
 //! On-demand requests service.
 
-use crate::protocol::on_demand::RequestData;
+use crate::protocol::light_dispatch::RequestData;
 use std::sync::Arc;
 use futures::{prelude::*, sync::mpsc, sync::oneshot};
 use futures03::compat::{Compat01As03, Future01CompatExt as _};

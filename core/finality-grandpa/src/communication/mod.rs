@@ -29,18 +29,18 @@
 
 use std::sync::Arc;
 
-use grandpa::{voter, voter_set::VoterSet};
-use grandpa::Message::{Prevote, Precommit, PrimaryPropose};
 use futures::prelude::*;
 use futures::sync::{oneshot, mpsc};
+use grandpa::Message::{Prevote, Precommit, PrimaryPropose};
+use grandpa::{voter, voter_set::VoterSet};
 use log::{debug, trace};
-use tokio_executor::Executor;
-use parity_codec::{Encode, Decode};
-use primitives::{ed25519, Pair};
-use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
-use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
 use network::{consensus_gossip as network_gossip, NetworkService};
 use network_gossip::ConsensusMessage;
+use codec::{Encode, Decode};
+use primitives::Pair;
+use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
+use substrate_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
+use tokio_executor::Executor;
 
 use crate::{
 	CatchUp, Commit, CommunicationIn, CommunicationOut, CompactCommit, Error,
@@ -50,7 +50,9 @@ use crate::environment::HasVoted;
 use gossip::{
 	GossipMessage, FullCatchUpMessage, FullCommitMessage, VoteOrPrecommitMessage, GossipValidator
 };
-use primitives::ed25519::{Public as AuthorityId, Signature as AuthoritySignature};
+use fg_primitives::{
+	AuthorityPair, AuthorityId, AuthoritySignature, SetId as SetIdNumber, RoundNumber,
+};
 
 pub mod gossip;
 mod periodic;
@@ -129,12 +131,12 @@ pub trait Network<Block: BlockT>: Clone + Send + 'static {
 }
 
 /// Create a unique topic for a round and set-id combo.
-pub(crate) fn round_topic<B: BlockT>(round: u64, set_id: u64) -> B::Hash {
+pub(crate) fn round_topic<B: BlockT>(round: RoundNumber, set_id: SetIdNumber) -> B::Hash {
 	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-{}", set_id, round).as_bytes())
 }
 
 /// Create a unique topic for global messages on a set ID.
-pub(crate) fn global_topic<B: BlockT>(set_id: u64) -> B::Hash {
+pub(crate) fn global_topic<B: BlockT>(set_id: SetIdNumber) -> B::Hash {
 	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-GLOBAL", set_id).as_bytes())
 }
 
@@ -236,19 +238,25 @@ pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
 impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	/// Create a new NetworkBridge to the given NetworkService. Returns the service
 	/// handle and a future that must be polled to completion to finish startup.
-	/// If a voter set state is given it registers previous round votes with the
-	/// gossip service.
+	/// On creation it will register previous rounds' votes with the gossip
+	/// service taken from the VoterSetState.
 	pub(crate) fn new(
 		service: N,
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,
 		on_exit: impl Future<Item=(),Error=()> + Clone + Send + 'static,
+		catch_up_enabled: bool,
 	) -> (
 		Self,
 		impl futures::Future<Item = (), Error = ()> + Send + 'static,
 	) {
 
-		let (validator, report_stream) = GossipValidator::new(config, set_state.clone());
+		let (validator, report_stream) = GossipValidator::new(
+			config,
+			set_state.clone(),
+			catch_up_enabled,
+		);
+
 		let validator = Arc::new(validator);
 		service.register_validator(validator.clone());
 
@@ -341,7 +349,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		round: Round,
 		set_id: SetId,
 		voters: Arc<VoterSet<AuthorityId>>,
-		local_key: Option<Arc<ed25519::Pair>>,
+		local_key: Option<AuthorityPair>,
 		has_voted: HasVoted<B>,
 	) -> (
 		impl Stream<Item=SignedMessage<B>,Error=Error>,
@@ -354,8 +362,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		);
 
 		let locals = local_key.and_then(|pair| {
-			let public = pair.public();
-			let id = AuthorityId(public.0);
+			let id = pair.public();
 			if voters.contains_key(&id) {
 				Some((pair, id))
 			} else {
@@ -367,10 +374,10 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		let incoming = self.service.messages_for(topic)
 			.filter_map(|notification| {
 				let decoded = GossipMessage::<B>::decode(&mut &notification.message[..]);
-				if decoded.is_none() {
-					debug!(target: "afg", "Skipping malformed message {:?}", notification);
+				if let Err(ref e) = decoded {
+					debug!(target: "afg", "Skipping malformed message {:?}: {}", notification, e);
 				}
-				decoded
+				decoded.ok()
 			})
 			.and_then(move |msg| {
 				match msg {
@@ -583,10 +590,10 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 		.filter_map(|notification| {
 			// this could be optimized by decoding piecewise.
 			let decoded = GossipMessage::<B>::decode(&mut &notification.message[..]);
-			if decoded.is_none() {
-				trace!(target: "afg", "Skipping malformed commit message {:?}", notification);
+			if let Err(ref e) = decoded {
+				trace!(target: "afg", "Skipping malformed commit message {:?}: {}", notification, e);
 			}
-			decoded.map(move |d| (notification, d))
+			decoded.map(move |d| (notification, d)).ok()
 		})
 		.filter_map(move |(notification, msg)| {
 			match msg {
@@ -613,29 +620,29 @@ impl<B: BlockT, N: Network<B>> Clone for NetworkBridge<B, N> {
 	}
 }
 
-fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec<u8> {
+fn localized_payload<E: Encode>(round: RoundNumber, set_id: SetIdNumber, message: &E) -> Vec<u8> {
 	(message, round, set_id).encode()
 }
 
-/// Type-safe wrapper around u64 when indicating that it's a round number.
+/// Type-safe wrapper around a round number.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Encode, Decode)]
-pub struct Round(pub u64);
+pub struct Round(pub RoundNumber);
 
-/// Type-safe wrapper around u64 when indicating that it's a set ID.
+/// Type-safe wrapper around a set ID.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Encode, Decode)]
-pub struct SetId(pub u64);
+pub struct SetId(pub SetIdNumber);
 
 // check a message.
 pub(crate) fn check_message_sig<Block: BlockT>(
 	message: &Message<Block>,
 	id: &AuthorityId,
 	signature: &AuthoritySignature,
-	round: u64,
-	set_id: u64,
+	round: RoundNumber,
+	set_id: SetIdNumber,
 ) -> Result<(), ()> {
-	let as_public = AuthorityId::from_raw(id.0);
+	let as_public = id.clone();
 	let encoded_raw = localized_payload(round, set_id, message);
-	if ed25519::Pair::verify(signature, &encoded_raw, as_public) {
+	if AuthorityPair::verify(signature, &encoded_raw, &as_public) {
 		Ok(())
 	} else {
 		debug!(target: "afg", "Bad signature on message from {:?}", id);
@@ -651,9 +658,9 @@ pub(crate) fn check_message_sig<Block: BlockT>(
 /// `ed25519` and `BLS` signatures (which we might use in the future), care must
 /// be taken when switching to different key types.
 struct OutgoingMessages<Block: BlockT, N: Network<Block>> {
-	round: u64,
-	set_id: u64,
-	locals: Option<(Arc<ed25519::Pair>, AuthorityId)>,
+	round: RoundNumber,
+	set_id: SetIdNumber,
+	locals: Option<(AuthorityPair, AuthorityId)>,
 	sender: mpsc::UnboundedSender<SignedMessage<Block>>,
 	network: N,
 	has_voted: HasVoted<Block>,
@@ -846,8 +853,8 @@ fn check_catch_up<Block: BlockT>(
 
 	fn check_signatures<'a, B, I>(
 		messages: I,
-		round: u64,
-		set_id: u64,
+		round: RoundNumber,
+		set_id: SetIdNumber,
 		mut signatures_checked: usize,
 	) -> Result<usize, i32> where
 		B: BlockT,
@@ -914,7 +921,7 @@ impl<Block: BlockT, N: Network<Block>> CommitsOut<Block, N> {
 	/// Create a new commit output stream.
 	pub(crate) fn new(
 		network: N,
-		set_id: u64,
+		set_id: SetIdNumber,
 		is_voter: bool,
 		gossip_validator: Arc<GossipValidator<Block>>,
 	) -> Self {
@@ -928,10 +935,10 @@ impl<Block: BlockT, N: Network<Block>> CommitsOut<Block, N> {
 }
 
 impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
-	type SinkItem = (u64, Commit<Block>);
+	type SinkItem = (RoundNumber, Commit<Block>);
 	type SinkError = Error;
 
-	fn start_send(&mut self, input: (u64, Commit<Block>)) -> StartSend<Self::SinkItem, Error> {
+	fn start_send(&mut self, input: (RoundNumber, Commit<Block>)) -> StartSend<Self::SinkItem, Error> {
 		if !self.is_voter {
 			return Ok(AsyncSink::Ready);
 		}

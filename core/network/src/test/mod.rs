@@ -60,18 +60,19 @@ use test_client::{self, AccountKeyring};
 pub use test_client::runtime::{Block, Extrinsic, Hash, Transfer};
 pub use test_client::{TestClient, TestClientBuilder, TestClientBuilderExt};
 
-type AuthorityId = primitives::sr25519::Public;
+type AuthorityId = babe_primitives::AuthorityId;
 
 #[cfg(any(test, feature = "test-helpers"))]
 /// A Verifier that accepts all blocks and passes them on with the configured
 /// finality to be imported.
+#[derive(Clone)]
 pub struct PassThroughVerifier(pub bool);
 
 #[cfg(any(test, feature = "test-helpers"))]
 /// This `Verifier` accepts all data as valid.
 impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 	fn verify(
-		&self,
+		&mut self,
 		origin: BlockOrigin,
 		header: B::Header,
 		justification: Option<Justification>,
@@ -206,7 +207,7 @@ pub struct Peer<D, S: NetworkSpecialization<Block>> {
 	client: PeersClient,
 	/// We keep a copy of the verifier so that we can invoke it for locally-generated blocks,
 	/// instead of going through the import queue.
-	verifier: Arc<dyn Verifier<Block>>,
+	verifier: VerifierAdapter<dyn Verifier<Block>>,
 	/// We keep a copy of the block_import so that we can invoke it for locally-generated blocks,
 	/// instead of going through the import queue.
 	block_import: Box<dyn BlockImport<Block, Error = ConsensusError>>,
@@ -424,6 +425,27 @@ impl<T: ?Sized + BlockImport<Block>> BlockImport<Block> for BlockImportAdapter<T
 	}
 }
 
+/// Implements `Verifier` on an `Arc<Mutex<impl Verifier>>`. Used internally.
+struct VerifierAdapter<T: ?Sized>(Arc<Mutex<Box<T>>>);
+
+impl<T: ?Sized> Clone for VerifierAdapter<T> {
+	fn clone(&self) -> Self {
+		VerifierAdapter(self.0.clone())
+	}
+}
+
+impl<B: BlockT, T: ?Sized + Verifier<B>> Verifier<B> for VerifierAdapter<T> {
+	fn verify(
+		&mut self,
+		origin: BlockOrigin,
+		header: B::Header,
+		justification: Option<Justification>,
+		body: Option<Vec<B::Extrinsic>>
+	) -> Result<(BlockImportParams<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+		self.0.lock().verify(origin, header, justification, body)
+	}
+}
+
 pub trait TestNetFactory: Sized {
 	type Specialization: NetworkSpecialization<Block> + SpecializationFactory;
 	type Verifier: 'static + Verifier<Block>;
@@ -431,7 +453,7 @@ pub trait TestNetFactory: Sized {
 
 	/// These two need to be implemented!
 	fn from_config(config: &ProtocolConfig) -> Self;
-	fn make_verifier(&self, client: PeersClient, config: &ProtocolConfig) -> Arc<Self::Verifier>;
+	fn make_verifier(&self, client: PeersClient, config: &ProtocolConfig) -> Self::Verifier;
 
 	/// Get reference to peer.
 	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData, Self::Specialization>;
@@ -480,6 +502,7 @@ pub trait TestNetFactory: Sized {
 		let (c, longest_chain) = test_client_builder.build_with_longest_chain();
 		let client = Arc::new(c);
 		let verifier = self.make_verifier(PeersClient::Full(client.clone(), backend.clone()), config);
+		let verifier = VerifierAdapter(Arc::new(Mutex::new(Box::new(verifier) as Box<_>)));
 		let (block_import, justification_import, finality_proof_import, finality_proof_request_builder, data)
 			= self.make_block_import(PeersClient::Full(client.clone(), backend.clone()));
 		let block_import = BlockImportAdapter(Arc::new(Mutex::new(block_import)));
@@ -542,6 +565,7 @@ pub trait TestNetFactory: Sized {
 		let (c, backend) = test_client::new_light();
 		let client = Arc::new(c);
 		let verifier = self.make_verifier(PeersClient::Light(client.clone(), backend.clone()), &config);
+		let verifier = VerifierAdapter(Arc::new(Mutex::new(Box::new(verifier) as Box<_>)));
 		let (block_import, justification_import, finality_proof_import, finality_proof_request_builder, data)
 			= self.make_block_import(PeersClient::Light(client.clone(), backend.clone()));
 		let block_import = BlockImportAdapter(Arc::new(Mutex::new(block_import)));
@@ -605,6 +629,9 @@ pub trait TestNetFactory: Sized {
 		// Return `NotReady` if there's a mismatch in the highest block number.
 		let mut highest = None;
 		for peer in self.peers().iter() {
+			if peer.is_major_syncing() || peer.network.num_queued_blocks() != 0 {
+				return Async::NotReady
+			}
 			match (highest, peer.client.info().chain.best_number) {
 				(None, b) => highest = Some(b),
 				(Some(ref a), ref b) if a == b => {},
@@ -662,9 +689,9 @@ impl TestNetFactory for TestNet {
 	}
 
 	fn make_verifier(&self, _client: PeersClient, _config: &ProtocolConfig)
-		-> Arc<Self::Verifier>
+		-> Self::Verifier
 	{
-		Arc::new(PassThroughVerifier(false))
+		PassThroughVerifier(false)
 	}
 
 	fn peer(&mut self, i: usize) -> &mut Peer<(), Self::Specialization> {
@@ -707,9 +734,7 @@ impl TestNetFactory for JustificationTestNet {
 		JustificationTestNet(TestNet::from_config(config))
 	}
 
-	fn make_verifier(&self, client: PeersClient, config: &ProtocolConfig)
-		-> Arc<Self::Verifier>
-	{
+	fn make_verifier(&self, client: PeersClient, config: &ProtocolConfig) -> Self::Verifier {
 		self.0.make_verifier(client, config)
 	}
 

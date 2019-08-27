@@ -17,16 +17,16 @@
 //! Generic implementation of a digest.
 
 #[cfg(feature = "std")]
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use rstd::prelude::*;
 
 use crate::ConsensusEngineId;
-use crate::codec::{Decode, Encode, Input};
+use crate::codec::{Decode, Encode, Input, Error};
 
 /// Generic header digest.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct Digest<Hash: Encode + Decode> {
 	/// A list of logs in the digest.
 	pub logs: Vec<DigestItem<Hash>>,
@@ -102,11 +102,22 @@ pub enum DigestItem<Hash> {
 }
 
 #[cfg(feature = "std")]
-impl<Hash: Encode> ::serde::Serialize for DigestItem<Hash> {
-	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+impl<Hash: Encode> serde::Serialize for DigestItem<Hash> {
+	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
 		self.using_encoded(|bytes| {
-			::primitives::bytes::serialize(bytes, seq)
+			primitives::bytes::serialize(bytes, seq)
 		})
+	}
+}
+
+#[cfg(feature = "std")]
+impl<'a, Hash: Decode> serde::Deserialize<'a> for DigestItem<Hash> {
+	fn deserialize<D>(de: D) -> Result<Self, D::Error> where
+		D: serde::Deserializer<'a>,
+	{
+		let r = primitives::bytes::deserialize(de)?;
+		Decode::decode(&mut &r[..])
+			.map_err(|e| serde::de::Error::custom(format!("Decode error: {}", e)))
 	}
 }
 
@@ -221,27 +232,29 @@ impl<Hash: Encode> Encode for DigestItem<Hash> {
 	}
 }
 
+impl<Hash: Encode> codec::EncodeLike for DigestItem<Hash> {}
+
 impl<Hash: Decode> Decode for DigestItem<Hash> {
 	#[allow(deprecated)]
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
 		let item_type: DigestItemType = Decode::decode(input)?;
 		match item_type {
-			DigestItemType::ChangesTrieRoot => Some(DigestItem::ChangesTrieRoot(
+			DigestItemType::ChangesTrieRoot => Ok(DigestItem::ChangesTrieRoot(
 				Decode::decode(input)?,
 			)),
 			DigestItemType::PreRuntime => {
 				let vals: (ConsensusEngineId, Vec<u8>) = Decode::decode(input)?;
-				Some(DigestItem::PreRuntime(vals.0, vals.1))
+				Ok(DigestItem::PreRuntime(vals.0, vals.1))
 			},
 			DigestItemType::Consensus => {
 				let vals: (ConsensusEngineId, Vec<u8>) = Decode::decode(input)?;
-				Some(DigestItem::Consensus(vals.0, vals.1))
+				Ok(DigestItem::Consensus(vals.0, vals.1))
 			}
 			DigestItemType::Seal => {
 				let vals: (ConsensusEngineId, Vec<u8>) = Decode::decode(input)?;
-				Some(DigestItem::Seal(vals.0, vals.1))
+				Ok(DigestItem::Seal(vals.0, vals.1))
 			},
-			DigestItemType::Other => Some(DigestItem::Other(
+			DigestItemType::Other => Ok(DigestItem::Other(
 				Decode::decode(input)?,
 			)),
 		}
@@ -305,7 +318,7 @@ impl<'a, Hash> DigestItemRef<'a, Hash> {
 	/// Try to match this digest item to the given opaque item identifier; if it matches, then
 	/// try to cast to the given datatype; if that works, return it.
 	pub fn try_to<T: Decode>(&self, id: OpaqueDigestItemId) -> Option<T> {
-		self.try_as_raw(id).and_then(|mut x| Decode::decode(&mut x))
+		self.try_as_raw(id).and_then(|mut x| Decode::decode(&mut x).ok())
 	}
 }
 
@@ -339,6 +352,8 @@ impl<'a, Hash: Encode> Encode for DigestItemRef<'a, Hash> {
 		v
 	}
 }
+
+impl<'a, Hash: Encode> codec::EncodeLike for DigestItemRef<'a, Hash> {}
 
 #[cfg(test)]
 mod tests {

@@ -19,10 +19,10 @@ use crate::error::{Error, Result};
 use state_machine::{CodeExecutor, Externalities};
 use crate::wasm_executor::WasmExecutor;
 use runtime_version::{NativeVersion, RuntimeVersion};
-use parity_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use crate::RuntimeInfo;
 use primitives::{Blake2Hasher, NativeOrEncoded};
-use log::trace;
+use log::{trace, warn};
 
 use crate::RuntimesCache;
 
@@ -34,7 +34,7 @@ fn safe_call<F, U>(f: F) -> Result<U>
 	where F: UnwindSafe + FnOnce() -> U
 {
 	// Substrate uses custom panic hook that terminates process on panic. Disable termination for the native call.
-	let _guard = panic_handler::AbortGuard::new(false);
+	let _guard = panic_handler::AbortGuard::force_unwind();
 	::std::panic::catch_unwind(f).map_err(|_| Error::Runtime)
 }
 
@@ -107,8 +107,14 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 	) -> Option<RuntimeVersion> {
 		RUNTIMES_CACHE.with(|cache| {
 			let cache = &mut cache.borrow_mut();
-			cache.fetch_runtime(&self.fallback, ext, self.default_heap_pages)
-				.ok()?.version().clone()
+
+			match cache.fetch_runtime(&self.fallback, ext, self.default_heap_pages) {
+				Ok(runtime) => runtime.version(),
+				Err(e) => {
+					warn!(target: "executor", "Failed to fetch runtime: {:?}", e);
+					None
+				}
+			}
 		})
 	}
 }

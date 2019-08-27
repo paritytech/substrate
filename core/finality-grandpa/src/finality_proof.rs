@@ -43,7 +43,7 @@ use client::{
 	light::fetcher::{FetchChecker, RemoteCallRequest},
 	ExecutionStrategy, NeverOffchainExt,
 };
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use grandpa::BlockNumberOps;
 use sr_primitives::{Justification, generic::BlockId};
 use sr_primitives::traits::{
@@ -81,8 +81,8 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> AuthoritySetForFinalityProver<Block> fo
 			ExecutionStrategy::NativeElseWasm,
 			NeverOffchainExt::new(),
 		).and_then(|call_result| Decode::decode(&mut &call_result[..])
-			.ok_or_else(|| ClientError::CallResultDecode(
-				"failed to decode GRANDPA authorities set proof".into(),
+			.map_err(|err| ClientError::CallResultDecode(
+				"failed to decode GRANDPA authorities set proof".into(), err
 			)))
 	}
 
@@ -121,8 +121,8 @@ impl<Block: BlockT> AuthoritySetForFinalityChecker<Block> for Arc<dyn FetchCheck
 		self.check_execution_proof(&request, proof)
 			.and_then(|authorities| {
 				let authorities: Vec<(AuthorityId, u64)> = Decode::decode(&mut &authorities[..])
-					.ok_or_else(|| ClientError::CallResultDecode(
-						"failed to decode GRANDPA authorities set proof".into(),
+					.map_err(|err| ClientError::CallResultDecode(
+						"failed to decode GRANDPA authorities set proof".into(), err
 					))?;
 				Ok(authorities.into_iter().collect())
 			})
@@ -162,8 +162,8 @@ impl<B, Block> network::FinalityProofProvider<Block> for FinalityProofProvider<B
 		request: &[u8],
 	) -> Result<Option<Vec<u8>>, ClientError> {
 		let request: FinalityProofRequest<Block::Hash> = Decode::decode(&mut &request[..])
-			.ok_or_else(|| {
-				warn!(target: "finality", "Unable to decode finality proof request.");
+			.map_err(|e| {
+				warn!(target: "finality", "Unable to decode finality proof request: {}", e.what());
 				ClientError::Backend(format!("Invalid finality proof request"))
 			})?;
 		match request {
@@ -439,7 +439,7 @@ fn do_check_finality_proof<Block: BlockT<Hash=H256>, B, J>(
 {
 	// decode finality proof
 	let proof = FinalityProof::<Block::Header>::decode(&mut &remote_proof[..])
-		.ok_or_else(|| ClientError::BadJustification("failed to decode finality proof".into()))?;
+		.map_err(|_| ClientError::BadJustification("failed to decode finality proof".into()))?;
 
 	// empty proof can't prove anything
 	if proof.is_empty() {
@@ -494,7 +494,7 @@ fn check_finality_proof_fragment<Block: BlockT<Hash=H256>, B, J>(
 	// verify justification using previous authorities set
 	let (mut current_set_id, mut current_authorities) = authority_set.extract_authorities();
 	let justification: J = Decode::decode(&mut &proof_fragment.justification[..])
-		.ok_or_else(|| ClientError::JustificationDecode)?;
+		.map_err(|_| ClientError::JustificationDecode)?;
 	justification.verify(current_set_id, &current_authorities)?;
 
 	// and now verify new authorities proof (if provided)
@@ -554,7 +554,8 @@ pub(crate) trait ProvableJustification<Header: HeaderT>: Encode + Decode {
 		set_id: u64,
 		authorities: &[(AuthorityId, u64)],
 	) -> ClientResult<Self> {
-		let justification = Self::decode(&mut &**justification).ok_or(ClientError::JustificationDecode)?;
+		let justification = Self::decode(&mut &**justification)
+			.map_err(|_| ClientError::JustificationDecode)?;
 		justification.verify(set_id, authorities)?;
 		Ok(justification)
 	}
@@ -575,6 +576,7 @@ pub(crate) mod tests {
 	use test_client::client::{backend::NewBlockState};
 	use test_client::client::in_mem::Blockchain as InMemoryBlockchain;
 	use super::*;
+	use primitives::crypto::Public;
 
 	type FinalityProof = super::FinalityProof<Header>;
 
@@ -733,7 +735,7 @@ pub(crate) mod tests {
 		let proof_of_4 = prove_finality::<_, _, TestJustification>(
 			&blockchain,
 			&(
-				|_| Ok(vec![(AuthorityId::from_raw([1u8; 32]), 1u64)]),
+				|_| Ok(vec![(AuthorityId::from_slice(&[1u8; 32]), 1u64)]),
 				|_| unreachable!("authorities didn't change => ProveAuthorities won't be called"),
 			),
 			0,
@@ -756,7 +758,7 @@ pub(crate) mod tests {
 		let proof_of_5: FinalityProof = Decode::decode(&mut &prove_finality::<_, _, TestJustification>(
 			&blockchain,
 			&(
-				|_| Ok(vec![(AuthorityId::from_raw([1u8; 32]), 1u64)]),
+				|_| Ok(vec![(AuthorityId::from_slice(&[1u8; 32]), 1u64)]),
 				|_| unreachable!("should return before calling ProveAuthorities"),
 			),
 			0,
@@ -782,7 +784,7 @@ pub(crate) mod tests {
 		let proof_of_5: FinalityProof = Decode::decode(&mut &prove_finality::<_, _, TestJustification>(
 			&blockchain,
 			&(
-				|_| Ok(vec![(AuthorityId::from_raw([1u8; 32]), 1u64)]),
+				|_| Ok(vec![(AuthorityId::from_slice(&[1u8; 32]), 1u64)]),
 				|_| unreachable!("should return before calling ProveAuthorities"),
 			),
 			0,
@@ -814,10 +816,12 @@ pub(crate) mod tests {
 			&blockchain,
 			&(
 				|block_id| match block_id {
-					BlockId::Hash(h) if h == header(3).hash() => Ok(vec![(AuthorityId::from_raw([3u8; 32]), 1u64)]),
-					BlockId::Number(3) => Ok(vec![(AuthorityId::from_raw([3u8; 32]), 1u64)]),
-					BlockId::Number(4) => Ok(vec![(AuthorityId::from_raw([4u8; 32]), 1u64)]),
-					BlockId::Number(6) => Ok(vec![(AuthorityId::from_raw([6u8; 32]), 1u64)]),
+					BlockId::Hash(h) if h == header(3).hash() => Ok(
+						vec![(AuthorityId::from_slice(&[3u8; 32]), 1u64)]
+					),
+					BlockId::Number(3) => Ok(vec![(AuthorityId::from_slice(&[3u8; 32]), 1u64)]),
+					BlockId::Number(4) => Ok(vec![(AuthorityId::from_slice(&[4u8; 32]), 1u64)]),
+					BlockId::Number(6) => Ok(vec![(AuthorityId::from_slice(&[6u8; 32]), 1u64)]),
 					_ => unreachable!("no other authorities should be fetched: {:?}", block_id),
 				},
 				|block_id| match block_id {
@@ -858,7 +862,7 @@ pub(crate) mod tests {
 		do_check_finality_proof::<_, _, TestJustification>(
 			&blockchain,
 			1,
-			vec![(AuthorityId::from_raw([3u8; 32]), 1u64)],
+			vec![(AuthorityId::from_slice(&[3u8; 32]), 1u64)],
 			&ClosureAuthoritySetForFinalityChecker(|_, _, _| unreachable!("returns before CheckAuthoritiesProof")),
 			vec![42],
 		).unwrap_err();
@@ -872,7 +876,7 @@ pub(crate) mod tests {
 		do_check_finality_proof::<_, _, TestJustification>(
 			&blockchain,
 			1,
-			vec![(AuthorityId::from_raw([3u8; 32]), 1u64)],
+			vec![(AuthorityId::from_slice(&[3u8; 32]), 1u64)],
 			&ClosureAuthoritySetForFinalityChecker(|_, _, _| unreachable!("returns before CheckAuthoritiesProof")),
 			Vec::<TestJustification>::new().encode(),
 		).unwrap_err();
@@ -886,7 +890,7 @@ pub(crate) mod tests {
 		do_check_finality_proof::<_, _, TestJustification>(
 			&blockchain,
 			1,
-			vec![(AuthorityId::from_raw([3u8; 32]), 1u64)],
+			vec![(AuthorityId::from_slice(&[3u8; 32]), 1u64)],
 			&ClosureAuthoritySetForFinalityChecker(|_, _, _| unreachable!("returns before CheckAuthoritiesProof")),
 			vec![FinalityProofFragment {
 				block: header(4).hash(),
@@ -910,7 +914,7 @@ pub(crate) mod tests {
 		do_check_finality_proof::<_, _, TestJustification>(
 			&blockchain,
 			1,
-			vec![(AuthorityId::from_raw([3u8; 32]), 1u64)],
+			vec![(AuthorityId::from_slice(&[3u8; 32]), 1u64)],
 			&ClosureAuthoritySetForFinalityChecker(|_, _, _| unreachable!("returns before CheckAuthoritiesProof")),
 			vec![FinalityProofFragment {
 				block: header(4).hash(),
@@ -933,8 +937,8 @@ pub(crate) mod tests {
 		let effects = do_check_finality_proof::<_, _, TestJustification>(
 			&blockchain,
 			1,
-			vec![(AuthorityId::from_raw([3u8; 32]), 1u64)],
-			&ClosureAuthoritySetForFinalityChecker(|_, _, _| Ok(vec![(AuthorityId::from_raw([4u8; 32]), 1u64)])),
+			vec![(AuthorityId::from_slice(&[3u8; 32]), 1u64)],
+			&ClosureAuthoritySetForFinalityChecker(|_, _, _| Ok(vec![(AuthorityId::from_slice(&[4u8; 32]), 1u64)])),
 			vec![FinalityProofFragment {
 				block: header(2).hash(),
 				justification: TestJustification(true, vec![7]).encode(),
@@ -952,7 +956,7 @@ pub(crate) mod tests {
 			block: header(4).hash(),
 			justification: TestJustification(true, vec![8]).encode(),
 			new_set_id: 2,
-			new_authorities: vec![(AuthorityId::from_raw([4u8; 32]), 1u64)],
+			new_authorities: vec![(AuthorityId::from_slice(&[4u8; 32]), 1u64)],
 		});
 	}
 
@@ -969,7 +973,7 @@ pub(crate) mod tests {
 		let proof_of_4 = prove_finality::<_, _, TestJustification>(
 			&blockchain,
 			&(
-				|_| Ok(vec![(AuthorityId::from_raw([1u8; 32]), 1u64)]),
+				|_| Ok(vec![(AuthorityId::from_slice(&[1u8; 32]), 1u64)]),
 				|_| unreachable!("should return before calling ProveAuthorities"),
 			),
 			0,

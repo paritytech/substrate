@@ -26,16 +26,18 @@
 //! Afterwards, the proofs can be fed to a consensus module when reporting misbehavior.
 
 use rstd::prelude::*;
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use sr_primitives::KeyTypeId;
 use sr_primitives::traits::{Convert, OpaqueKeys, Hash as HashT};
 use srml_support::{
 	StorageValue, StorageMap, decl_module, decl_storage,
 };
 use srml_support::{Parameter, print};
-use substrate_trie::{MemoryDB, Trie, TrieMut, TrieDBMut, TrieDB, Recorder};
-
+use substrate_trie::{MemoryDB, Trie, TrieMut, Recorder, EMPTY_PREFIX};
+use substrate_trie::trie_types::{TrieDBMut, TrieDB};
 use super::{SessionIndex, Module as SessionModule};
+
+type ValidatorCount = u32;
 
 /// Trait necessary for the historical module.
 pub trait Trait: super::Trait {
@@ -55,8 +57,8 @@ pub trait Trait: super::Trait {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Session {
-		/// Mapping from historical session indices to session-data root hash.
-		HistoricalSessions get(historical_root): map SessionIndex => Option<T::Hash>;
+		/// Mapping from historical session indices to session-data root hash and validator count.
+		HistoricalSessions get(historical_root): map SessionIndex => Option<(T::Hash, ValidatorCount)>;
 		/// Queued full identifications for queued sessions whose validators have become obsolete.
 		CachedObsolete get(cached_obsolete): map SessionIndex
 			=> Option<Vec<(T::ValidatorId, T::FullIdentification)>>;
@@ -100,9 +102,9 @@ impl<T: Trait> Module<T> {
 /// Specialization of the crate-level `OnSessionEnding` which returns the old
 /// set of full identification when changing the validator set.
 pub trait OnSessionEnding<ValidatorId, FullIdentification>: crate::OnSessionEnding<ValidatorId> {
-	/// Returns the set of new validators, if any, along with the old validators
-	/// and their full identifications.
-	fn on_session_ending(ending: SessionIndex, applied_at: SessionIndex)
+	/// If there was a validator set change, its returns the set of new validators along with the
+	/// old validators and their full identifications.
+	fn on_session_ending(ending: SessionIndex, will_apply_at: SessionIndex)
 		-> Option<(Vec<ValidatorId>, Vec<(ValidatorId, FullIdentification)>)>;
 }
 
@@ -121,8 +123,9 @@ impl<T: Trait, I> crate::OnSessionEnding<T::ValidatorId> for NoteHistoricalRoot<
 		// do all of this _before_ calling the other `on_session_ending` impl
 		// so that we have e.g. correct exposures from the _current_.
 
+		let count = <SessionModule<T>>::validators().len() as u32;
 		match ProvingTrie::<T>::generate_for(ending) {
-			Ok(trie) => <HistoricalSessions<T>>::insert(ending, &trie.root),
+			Ok(trie) => <HistoricalSessions<T>>::insert(ending, &(trie.root, count)),
 			Err(reason) => {
 				print("Failed to generate historical ancestry-inclusion proof.");
 				print(reason);
@@ -219,7 +222,7 @@ impl<T: Trait> ProvingTrie<T> {
 
 		let mut memory_db = MemoryDB::default();
 		for node in nodes {
-			HashDBT::insert(&mut memory_db, &[], &node[..]);
+			HashDBT::insert(&mut memory_db, EMPTY_PREFIX, &node[..]);
 		}
 
 		ProvingTrie {
@@ -235,13 +238,13 @@ impl<T: Trait> ProvingTrie<T> {
 		let val_idx = (key_id, key_data).using_encoded(|s| {
 			trie.get_with(s, &mut recorder)
 				.ok()?
-				.and_then(|raw| u32::decode(&mut &*raw))
+				.and_then(|raw| u32::decode(&mut &*raw).ok())
 		})?;
 
 		val_idx.using_encoded(|s| {
 			trie.get_with(s, &mut recorder)
 				.ok()?
-				.and_then(|raw| <IdentificationTuple<T>>::decode(&mut &*raw))
+				.and_then(|raw| <IdentificationTuple<T>>::decode(&mut &*raw).ok())
 		})?;
 
 		Some(recorder.drain().into_iter().map(|r| r.data).collect())
@@ -258,11 +261,11 @@ impl<T: Trait> ProvingTrie<T> {
 		let trie = TrieDB::new(&self.db, &self.root).ok()?;
 		let val_idx = (key_id, key_data).using_encoded(|s| trie.get(s))
 			.ok()?
-			.and_then(|raw| u32::decode(&mut &*raw))?;
+			.and_then(|raw| u32::decode(&mut &*raw).ok())?;
 
 		val_idx.using_encoded(|s| trie.get(s))
 			.ok()?
-			.and_then(|raw| <IdentificationTuple<T>>::decode(&mut &*raw))
+			.and_then(|raw| <IdentificationTuple<T>>::decode(&mut &*raw).ok())
 	}
 
 }
@@ -278,7 +281,7 @@ impl<T: Trait, D: AsRef<[u8]>> srml_support::traits::KeyOwnerProofSystem<(KeyTyp
 	for Module<T>
 {
 	type Proof = Proof;
-	type FullIdentification = IdentificationTuple<T>;
+	type IdentificationTuple = IdentificationTuple<T>;
 
 	fn prove(key: (KeyTypeId, D)) -> Option<Self::Proof> {
 		let session = <SessionModule<T>>::current_index();
@@ -300,7 +303,7 @@ impl<T: Trait, D: AsRef<[u8]>> srml_support::traits::KeyOwnerProofSystem<(KeyTyp
 				T::FullIdentificationOf::convert(owner.clone()).map(move |id| (owner, id))
 			)
 		} else {
-			let root = <HistoricalSessions<T>>::get(&proof.session)?;
+			let (root, _) = <HistoricalSessions<T>>::get(&proof.session)?;
 			let trie = ProvingTrie::<T>::from_nodes(root, &proof.trie_nodes);
 
 			trie.query(id, data.as_ref())
@@ -312,11 +315,8 @@ impl<T: Trait, D: AsRef<[u8]>> srml_support::traits::KeyOwnerProofSystem<(KeyTyp
 mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
-	use primitives::Blake2Hasher;
-	use sr_primitives::{
-		traits::OnInitialize,
-		testing::{UintAuthorityId, UINT_DUMMY_KEY},
-	};
+	use primitives::{Blake2Hasher, crypto::key_types::DUMMY};
+	use sr_primitives::{traits::OnInitialize, testing::UintAuthorityId};
 	use crate::mock::{
 		NEXT_VALIDATORS, force_new_session,
 		set_next_validators, Test, System, Session,
@@ -326,13 +326,12 @@ mod tests {
 	type Historical = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
-		let (storage, _child_storage) = crate::GenesisConfig::<Test> {
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		crate::GenesisConfig::<Test> {
 			keys: NEXT_VALIDATORS.with(|l|
-				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i))).collect()
+				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i).into())).collect()
 			),
-		}.build_storage().unwrap();
-		t.extend(storage);
+		}.assimilate_storage(&mut t).unwrap();
 		runtime_io::TestExternalities::new(t)
 	}
 
@@ -346,15 +345,10 @@ mod tests {
 			Session::on_initialize(1);
 
 			let encoded_key_1 = UintAuthorityId(1).encode();
-			let proof = Historical::prove((UINT_DUMMY_KEY, &encoded_key_1[..])).unwrap();
+			let proof = Historical::prove((DUMMY, &encoded_key_1[..])).unwrap();
 
 			// proof-checking in the same session is OK.
-			assert!(
-				Historical::check_proof(
-					(UINT_DUMMY_KEY, &encoded_key_1[..]),
-					proof.clone(),
-				).is_some()
-			);
+			assert!(Historical::check_proof((DUMMY, &encoded_key_1[..]), proof.clone()).is_some());
 
 			set_next_validators(vec![1, 2, 4]);
 			force_new_session();
@@ -370,12 +364,7 @@ mod tests {
 			assert!(Session::current_index() > proof.session);
 
 			// proof-checking in the next session is also OK.
-			assert!(
-				Historical::check_proof(
-					(UINT_DUMMY_KEY, &encoded_key_1[..]),
-					proof.clone(),
-				).is_some()
-			);
+			assert!(Historical::check_proof((DUMMY, &encoded_key_1[..]), proof.clone()).is_some());
 
 			set_next_validators(vec![1, 2, 5]);
 
