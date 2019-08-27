@@ -15,6 +15,11 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Proof of work consensus for Substrate.
+//!
+//! To use this engine, you can either implement a standalone `PowAlgorithm`
+//! or use the runtime PoW algorithm engine. The runtime engine requires you
+//! to implement the `PowApi` defined in `substrate-consensus-pow-primitives`.
+//! There is also a helper module in SRML (`srml-pow`) to make the process easier.
 
 use std::sync::Arc;
 use std::thread;
@@ -282,6 +287,7 @@ fn register_pow_inherent_data_provider(
 /// The PoW import queue type.
 pub type PowImportQueue<B> = BasicQueue<B>;
 
+/// Import queue for PoW engine.
 pub fn import_queue<B, C, Algorithm>(
 	block_import: BoxBlockImport<B>,
 	client: Arc<C>,
@@ -310,6 +316,10 @@ pub fn import_queue<B, C, Algorithm>(
 	))
 }
 
+/// Start the background mining thread for PoW. Note that because PoW mining
+/// is CPU-intensive, it is not possible to use async future to define this.
+/// However, it's not recommended to use background thread in the rest of the
+/// codebase.
 pub fn start_mine<B: BlockT<Hash=H256>, C, Algorithm, E>(
 	mut block_import: BoxBlockImport<B>,
 	client: Arc<C>,
