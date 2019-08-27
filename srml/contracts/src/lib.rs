@@ -63,6 +63,15 @@
 //! This creates a new smart contract account and calls its contract deploy handler to initialize the contract.
 //! * `call` - Makes a call to an account, optionally transferring some balance.
 //!
+//! ### Signed Extensions
+//!
+//! The contracts module defines the following extension:
+//!
+//!   - [`CheckBlockGasLimit`]: Ensures that the transaction does not exceeds the block gas limit.
+//!
+//! The signed extension needs to be added as signed extra to the transaction type to be used in the
+//! runtime.
+//!
 //! ## Usage
 //!
 //! The Contract module is a work in progress. The following examples show how this Contract module can be
