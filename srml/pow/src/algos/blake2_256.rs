@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Simple blake2_256 hash mining algorithm.
+
 use pow_primitives::{Difficulty, Seal as RawSeal};
 use primitives::{H256, U256};
 use runtime_io::blake2_256;
@@ -27,11 +29,15 @@ fn verify_difficulty(hash: &H256, difficulty: Difficulty, proportion: Difficulty
 }
 
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
+/// Seal for blake2_256.
 pub struct Seal {
+	/// Nonce, which is an arbitrary data hashed with the header's pre_hash.
 	pub nonce: H256,
+	/// The actual proof of work seal.
 	pub work: H256,
 }
 
+/// Verify a seal, given a pre_hash and difficulty.
 pub fn verify(
 	pre_hash: &H256,
 	seal: &RawSeal,
@@ -54,6 +60,7 @@ pub fn verify(
 	true
 }
 
+/// Mine a seal that satisfy the difficulty requirement.
 pub fn mine(
 	pre_hash: &H256,
 	seed: &H256,
