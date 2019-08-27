@@ -65,7 +65,7 @@ decl_runtime_apis! {
 			pre_hash: &H256,
 			seed: &H256,
 			difficulty: Difficulty,
-			round: u32
+			round: u32,
 		) -> Option<Seal>;
 	}
 }
