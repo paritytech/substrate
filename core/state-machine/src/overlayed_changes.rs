@@ -21,29 +21,9 @@ use std::collections::{HashMap, BTreeSet};
 use codec::Decode;
 use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
 use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
-use history_driven_data::linear::{States, History as HistoryBasis, MemoryOnly};
-use history_driven_data::State as TransactionState;
-
-type History<V> = HistoryBasis<MemoryOnly<V>, V>;
-
-/// Treshold in number of operation before running a garbage colletion.
-///
-/// Should be same as `TRIGGER_COMMIT_GC` or higher
-/// (we most likely do not want lower as transaction are
-/// possibly more frequent than commit).
-const TRIGGER_TRANSACTION_GC: usize = 100_000;
-
-/// Treshold in number of operation before running a garbage colletion
-/// on a commit operation.
-///
-/// We may want a lower value than for a transaction, even
-/// a 1 if we want to do it between every operation.
-const TRIGGER_COMMIT_GC: usize = 10_000;
-
-/// Used to count big content as multiple operations.
-/// This is a number of octet.
-/// Set to 0 to ignore.
-const ADD_CONTENT_SIZE_UNIT: usize = 64;
+use historied_data::linear::{States, History};
+use historied_data::State as TransactionState;
+use historied_data::DEFAULT_GC_CONF;
 
 /// The overlayed changes to state to be queried on top of the backend.
 ///
@@ -366,18 +346,11 @@ impl OverlayedChanges {
 		None
 	}
 
-	fn add_cost_op(&mut self, val: &Option<Vec<u8>>) {
-		let content_cost = if ADD_CONTENT_SIZE_UNIT > 0 {
-			val.as_ref().map(|s| s.len() / ADD_CONTENT_SIZE_UNIT).unwrap_or(0)
-		} else { 0 };
-		self.operation_from_last_gc += 1 + content_cost;
-	}
-
 	/// Inserts the given key-value pair into the prospective change set.
 	///
 	/// `None` can be used to delete a value specified by the given key.
 	pub fn set_storage(&mut self, key: Vec<u8>, val: Option<Vec<u8>>) {
-		self.add_cost_op(&val);
+		self.operation_from_last_gc += DEFAULT_GC_CONF.operation_cost(&val);
 		let extrinsic_index = self.extrinsic_index();
 		let entry = self.changes.top.entry(key).or_default();
 		set_with_extrinsic_overlayed_value(entry, self.changes.history.as_ref(), val, extrinsic_index);
@@ -387,7 +360,7 @@ impl OverlayedChanges {
 	///
 	/// `None` can be used to delete a value specified by the given key.
 	pub(crate) fn set_child_storage(&mut self, storage_key: Vec<u8>, key: Vec<u8>, val: Option<Vec<u8>>) {
-		self.add_cost_op(&val);
+		self.operation_from_last_gc += DEFAULT_GC_CONF.operation_cost(&val);
 		let extrinsic_index = self.extrinsic_index();
 		let map_entry = self.changes.children.entry(storage_key).or_default();
 		let entry = map_entry.entry(key).or_default();
@@ -447,7 +420,7 @@ impl OverlayedChanges {
 	/// Discard prospective changes to state.
 	pub fn discard_prospective(&mut self) {
 		self.changes.discard_prospective();
-		if self.operation_from_last_gc > TRIGGER_COMMIT_GC {
+		if self.operation_from_last_gc > DEFAULT_GC_CONF.trigger_commit_gc {
 			self.operation_from_last_gc = 0;
 			self.gc(true);
 		}
@@ -456,7 +429,7 @@ impl OverlayedChanges {
 	/// Commit prospective changes to state.
 	pub fn commit_prospective(&mut self) {
 		self.changes.commit_prospective();
-		if self.operation_from_last_gc > TRIGGER_COMMIT_GC {
+		if self.operation_from_last_gc > DEFAULT_GC_CONF.trigger_commit_gc {
 			self.operation_from_last_gc = 0;
 			self.gc(true);
 		}
@@ -465,7 +438,7 @@ impl OverlayedChanges {
 	/// Create a new transactional layer.
 	pub fn start_transaction(&mut self) {
 		self.changes.start_transaction();
-		if self.operation_from_last_gc > TRIGGER_TRANSACTION_GC {
+		if self.operation_from_last_gc > DEFAULT_GC_CONF.trigger_transaction_gc {
 			self.operation_from_last_gc = 0;
 			self.gc(true);
 		}
@@ -475,7 +448,7 @@ impl OverlayedChanges {
 	/// A transaction is always running (history always end with pending).
 	pub fn discard_transaction(&mut self) {
 		self.changes.discard_transaction();
-		if self.operation_from_last_gc > TRIGGER_TRANSACTION_GC {
+		if self.operation_from_last_gc > DEFAULT_GC_CONF.trigger_transaction_gc {
 			self.operation_from_last_gc = 0;
 			self.gc(true);
 		}
@@ -535,8 +508,6 @@ impl OverlayedChanges {
 		prospective.into_iter().for_each(|(k, v)| result.set_storage(k, v));
 		result
 	}
-
-
 
 	/// Returns current extrinsic index to use in changes trie construction.
 	/// None is returned if it is not set or changes trie config is not set.

@@ -1,4 +1,4 @@
-## History driven data
+## Historied data
 
 Crate with methods to manage data that stores its own history.
 
@@ -11,10 +11,8 @@ history context.
 
 History is serialize as a per item basis.
 
+This crates is be `no_std` compatible, unless feature `std` is used.
 
-This crates should be `no_std` compatible, feature `std` should be use
-for std usage.
-
-For more information see <https://crates.io/substrate-wasm-builder>
+For more information see <https://crates.io/historied-data>
 
 License: GPL-3.0

@@ -445,12 +445,10 @@ fn code_using_trie() -> u64 {
 	} else { 103 }
 }
 
-fn history_driven_data() -> u64 {
+fn historied_data() -> u64 {
 
-	let mut states = history_driven_data::linear::States::default();
-	let mut value = history_driven_data::linear::History::<
-		history_driven_data::linear::MemoryOnly<_>,
-	_>::default();
+	let mut states = historied_data::linear::States::default();
+	let mut value = historied_data::linear::History::default();
 	if value.get(states.as_ref()) != None {
 		return 101;
 	}
@@ -585,7 +583,7 @@ cfg_if! {
 				}
 
 				fn use_history_data() -> u64 {
-					history_driven_data()
+					historied_data()
 				}
 
 				fn use_transactions() -> u64 {
@@ -781,7 +779,7 @@ cfg_if! {
 				}
 
 				fn use_history_data() -> u64 {
-					history_driven_data()
+					historied_data()
 				}
 
 				fn use_transactions() -> u64 {

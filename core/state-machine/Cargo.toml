@@ -16,13 +16,13 @@ primitives = { package = "substrate-primitives", path = "../primitives" }
 panic-handler = { package = "substrate-panic-handler", path = "../panic-handler" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 num-traits = "0.2"
-history-driven-data = { path = "../utils/history-driven-data", features = ["std"] }
+historied-data = { path = "../utils/historied-data", features = ["std"] }
 
 [dev-dependencies]
 hex-literal = "0.2.0"
 criterion = "0.2"
 rand = "0.6"
-history-driven-data = { path = "../utils/history-driven-data", features = ["std", "test"] }
+historied-data = { path = "../utils/historied-data", features = ["std", "test"] }
 
 [[bench]]
 name = "bench"
@@ -30,4 +30,6 @@ harness = false
 
 [features]
 default = []
-test = []
+test = [
+  "historied-data/test",
+]

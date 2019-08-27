@@ -178,8 +178,8 @@ mod test {
 	use crate::backend::InMemory;
 	use crate::changes_trie::storage::InMemoryStorage;
 	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet};
-	use history_driven_data::linear::{History, States};
-	use history_driven_data::State as TransactionState;
+	use historied_data::linear::{History, States};
+	use historied_data::State as TransactionState;
 	use super::*;
 
 	fn prepare_for_build() -> (InMemory<Blake2Hasher>, InMemoryStorage<Blake2Hasher, u64>, OverlayedChanges) {

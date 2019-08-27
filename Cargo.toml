@@ -61,7 +61,7 @@ members = [
 	"core/transaction-pool/graph",
 	"core/trie",
 	"core/utils/fork-tree",
-	"core/utils/history-driven-data",
+	"core/utils/historied-data",
 	"core/utils/wasm-builder",
 	"core/utils/wasm-builder-runner",
 	"srml/support",

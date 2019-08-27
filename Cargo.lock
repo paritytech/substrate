@@ -1213,7 +1213,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "history-driven-data"
+name = "historied-data"
 version = "2.0.0"
 dependencies = [
  "smallvec 0.6.10 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5130,7 +5130,7 @@ dependencies = [
  "criterion 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "hash-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "history-driven-data 2.0.0",
+ "historied-data 2.0.0",
  "log 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5186,7 +5186,7 @@ name = "substrate-test-runtime"
 version = "2.0.0"
 dependencies = [
  "cfg-if 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "history-driven-data 2.0.0",
+ "historied-data 2.0.0",
  "log 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "memory-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
