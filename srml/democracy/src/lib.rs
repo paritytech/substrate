@@ -27,7 +27,7 @@ use sr_primitives::{
 use codec::{Encode, Decode, Input, Output, Error};
 use srml_support::{
 	decl_module, decl_storage, decl_event, ensure, AppendableStorageMap, StorageValue, StorageMap,
-	Parameter, Dispatchable, EnumerableStorageMap,
+	Parameter, EnumerableStorageMap,
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
 		OnFreeBalanceZero
