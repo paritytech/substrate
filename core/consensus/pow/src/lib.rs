@@ -337,7 +337,7 @@ pub fn start_mine<B: BlockT<Hash=H256>, C, Algorithm, E>(
 	C::Api: PowApi<B>,
 	Algorithm: PowAlgorithm<B> + Send + Sync + 'static,
 	E: Environment<B> + Send + Sync + 'static,
-	E::Error: core::fmt::Debug,
+	E::Error: std::fmt::Debug,
 {
 	if let Err(_) = register_pow_inherent_data_provider(&inherent_data_providers) {
 		warn!("Registering inherent data provider for timestamp failed");
