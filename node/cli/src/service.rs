@@ -205,9 +205,12 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 /// Builds a new service for a light client.
 pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisConfig>)
 -> Result<impl AbstractService, ServiceError> {
-	let inherent_data_providers = InherentDataProviders::new();
+	use futures::Future;
 
-	ServiceBuilder::new_light::<Block, RuntimeApi, node_executor::Executor>(config)?
+	let inherent_data_providers = InherentDataProviders::new();
+	let mut tasks_to_spawn = Vec::new();
+
+	let service = ServiceBuilder::new_light::<Block, RuntimeApi, node_executor::Executor>(config)?
 		.with_select_chain(|_config, client| {
 			#[allow(deprecated)]
 			Ok(LongestChain::new(client.backend().clone()))
@@ -229,8 +232,7 @@ pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisCo
 			let finality_proof_request_builder =
 				finality_proof_import.create_finality_proof_request_builder();
 
-			// FIXME: pruning task isn't started since light client doesn't do `AuthoritySetup`.
-			let (import_queue, ..) = import_queue(
+			let (import_queue, _, _, pruning_task) = import_queue(
 				Config::get_or_compute(&*client)?,
 				block_import,
 				None,
@@ -240,6 +242,8 @@ pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisCo
 				inherent_data_providers.clone(),
 				Some(transaction_pool)
 			)?;
+
+			tasks_to_spawn.push(Box::new(pruning_task));
 
 			Ok((import_queue, finality_proof_request_builder))
 		})?
@@ -256,7 +260,18 @@ pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisCo
 			);
 			io
 		})?
-		.build()
+		.build()?;
+
+	// spawn any futures that were created in the previous setup steps
+	for task in tasks_to_spawn.drain(..) {
+		service.spawn_task(
+			task.select(service.on_exit())
+				.map(|_| ())
+				.map_err(|_| ())
+		);
+	}
+
+	Ok(service)
 }
 
 #[cfg(test)]
