@@ -40,7 +40,7 @@
 /node/rpc-client/ @tomusdrw
 /core/rpc-servers/ @tomusdrw
 
-# Grandpa, BABE, consensus stuff
+# GRANDPA, BABE, consensus stuff
 /srml/babe/ @andresilva
 /srml/grandpa/ @andresilva
 /core/finality-grandpa/ @andresilva
