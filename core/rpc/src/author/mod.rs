@@ -162,7 +162,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 			Some(public) => public.0,
 			None => {
 				let maybe_public = match key_type {
-					key_types::BABE | key_types::IM_ONLINE | key_types::SR25519 =>
+					key_types::BABE | key_types::SR25519 =>
 						sr25519::Pair::from_string(&suri, maybe_password)
 							.map(|pair| pair.public().to_raw_vec()),
 					key_types::GRANDPA | key_types::ED25519 =>
