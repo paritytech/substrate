@@ -1604,7 +1604,7 @@ impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
 			R::report_offence(reporters, offence)
 		} else {
 			<Module<T>>::deposit_event(
-				RawEvent::OldSlashingReportDiscarded(offence_session).into()
+				RawEvent::OldSlashingReportDiscarded(offence_session)
 			)
 		}
 	}
