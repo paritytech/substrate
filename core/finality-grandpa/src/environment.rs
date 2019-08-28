@@ -797,19 +797,6 @@ where
 		round: RoundNumber,
 		commit: Commit<Block>,
 	) -> Result<(), Self::Error> {
-		let status = self.inner.info().chain;
-		if number <= status.finalized_number && self.inner.hash(number)? == Some(hash) {
-			// This can happen after a forced change (triggered by the finality tracker when finality is stalled), since
-			// the voter will be restarted at the median last finalized block, which can be lower than the local best
-			// finalized block.
-			warn!(target: "afg", "Re-finalized block #{:?} ({:?}) in the canonical chain, current best finalized is #{:?}",
-				  hash,
-				  number,
-				  status.finalized_number,
-			);
-
-			return Ok(());
-		}
 		finalize_block(
 			&*self.inner,
 			&self.authority_set,
@@ -884,6 +871,19 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
 	RA: Send + Sync,
 {
+	let status = client.info().chain;
+	if number <= status.finalized_number && client.hash(number)? == Some(hash) {
+		// This can happen after a forced change (triggered by the finality tracker when finality is stalled), since
+		// the voter will be restarted at the median last finalized block, which can be lower than the local best
+		// finalized block.
+		warn!(target: "afg", "Re-finalized block #{:?} ({:?}) in the canonical chain, current best finalized is #{:?}",
+				hash,
+				number,
+				status.finalized_number,
+		);
+
+		return Ok(());
+	}
 	// lock must be held through writing to DB to avoid race
 	let mut authority_set = authority_set.inner().write();
 
