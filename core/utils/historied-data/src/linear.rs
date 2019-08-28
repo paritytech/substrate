@@ -54,7 +54,7 @@ pub struct History<V>(MemoryOnly<V>);
 
 impl<V> Default for History<V> {
 	fn default() -> Self {
-		History(Default::default()) 
+		History(Default::default())
 	}
 }
 
@@ -177,7 +177,7 @@ impl States {
 		while i > 0 {
 			i -= 1;
 			match self.0[i] {
-				TransactionState::Dropped => (), 
+				TransactionState::Dropped => (),
 				TransactionState::Prospective
 				| TransactionState::TxPending
 				| TransactionState::Pending => self.0[i] = TransactionState::Committed,
@@ -199,7 +199,7 @@ impl States {
 		while i > 0 {
 			i -= 1;
 			match self.0[i] {
-				TransactionState::Dropped => (), 
+				TransactionState::Dropped => (),
 				TransactionState::Prospective
 				| TransactionState::Pending => self.0[i] = TransactionState::Dropped,
 				TransactionState::TxPending => {
@@ -219,7 +219,7 @@ impl States {
 			i -= 1;
 			match self.0[i] {
 				TransactionState::Prospective
-				| TransactionState::Dropped => (), 
+				| TransactionState::Dropped => (),
 				TransactionState::Pending => self.0[i] = TransactionState::Prospective,
 				TransactionState::TxPending => {
 					self.0[i] = TransactionState::Prospective;
@@ -231,6 +231,19 @@ impl States {
 		self.0.push(TransactionState::Pending);
 	}
 
+	/// Return array of `TxPending` indexes in state.
+	/// This is use as an input for garbage collection.
+	pub fn transaction_indexes(&self) -> Vec<usize> {
+		let mut transaction_index = Vec::new();
+		for (i, state) in self.0.iter().enumerate() {
+			if &TransactionState::TxPending == state {
+				transaction_index.push(i);
+			}
+		}
+		transaction_index
+	}
+
+
 }
 
 impl<V> History<V> {
@@ -239,17 +252,17 @@ impl<V> History<V> {
 	/// When possible please prefer `get_mut` as it can free
 	/// some memory.
 	pub fn get(&self, history: &[TransactionState]) -> Option<&V> {
-		// index is never 0, 
+		// index is never 0,
 		let mut index = self.len();
 		if index == 0 {
 			return None;
 		}
-		debug_assert!(history.len() >= index); 
+		debug_assert!(history.len() >= index);
 		while index > 0 {
 			index -= 1;
 			let (v, history_index) = self.get_state(index);
 			match history[history_index] {
-				TransactionState::Dropped => (), 
+				TransactionState::Dropped => (),
 				TransactionState::Pending
 				| TransactionState::TxPending
 				| TransactionState::Prospective
@@ -260,14 +273,39 @@ impl<V> History<V> {
 		None
 	}
 
-	#[cfg(any(test, feature = "test"))]
-	pub fn get_prospective(&self, history: &[TransactionState]) -> Option<&V> {
-		// index is never 0, 
+	/// Get latest value, consuming the historied data.
+	pub fn into_pending(mut self, history: &[TransactionState]) -> Option<V> {
 		let mut index = self.len();
 		if index == 0 {
 			return None;
 		}
-		debug_assert!(history.len() >= index); 
+		debug_assert!(history.len() >= index);
+		while index > 0 {
+			index -= 1;
+			let history_index = self.get_state(index).1;
+			match history[history_index] {
+				TransactionState::Dropped => (),
+				TransactionState::Pending
+				| TransactionState::TxPending
+				| TransactionState::Prospective
+				| TransactionState::Committed => {
+					self.truncate(index + 1);
+					return self.pop().map(|v| v.0);
+				},
+			}
+		}
+		None
+	}
+
+
+	#[cfg(any(test, feature = "test"))]
+	pub fn get_prospective(&self, history: &[TransactionState]) -> Option<&V> {
+		// index is never 0,
+		let mut index = self.len();
+		if index == 0 {
+			return None;
+		}
+		debug_assert!(history.len() >= index);
 		while index > 0 {
 			index -= 1;
 			let (v, history_index) = self.get_state(index);
@@ -277,7 +315,7 @@ impl<V> History<V> {
 				| TransactionState::Prospective =>
 					return Some(v),
 				TransactionState::Committed
-				| TransactionState::Dropped => (), 
+				| TransactionState::Dropped => (),
 			}
 		}
 		None
@@ -285,29 +323,28 @@ impl<V> History<V> {
 
 	#[cfg(any(test, feature = "test"))]
 	pub fn get_committed(&self, history: &[TransactionState]) -> Option<&V> {
-		// index is never 0, 
+		// index is never 0,
 		let mut index = self.len();
 		if index == 0 {
 			return None;
 		}
-		debug_assert!(history.len() >= index); 
+		debug_assert!(history.len() >= index);
 		while index > 0 {
 			index -= 1;
 			let (v, history_index) = self.get_state(index);
 			match history[history_index] {
-				TransactionState::Committed =>
-					return Some(v),
+				TransactionState::Committed => return Some(v),
 				TransactionState::Pending
 				| TransactionState::TxPending
 				| TransactionState::Prospective
-				| TransactionState::Dropped => (), 
+				| TransactionState::Dropped => (),
 			}
 		}
 		None
 	}
 
 	pub fn into_committed(mut self, history: &[TransactionState]) -> Option<V> {
-		// index is never 0, 
+		// index is never 0,
 		let mut index = self.len();
 		if index == 0 {
 			return None;
@@ -315,7 +352,7 @@ impl<V> History<V> {
 		// internal method: should be use properly
 		// (history of the right overlay change set
 		// is size aligned).
-		debug_assert!(history.len() >= index); 
+		debug_assert!(history.len() >= index);
 		while index > 0 {
 			index -= 1;
 			let history_index = self.get_state(index).1;
@@ -327,7 +364,7 @@ impl<V> History<V> {
 				TransactionState::Pending
 				| TransactionState::TxPending
 				| TransactionState::Prospective
-				| TransactionState::Dropped => (), 
+				| TransactionState::Dropped => (),
 			}
 		}
 		None
@@ -345,7 +382,7 @@ impl<V> History<V> {
 		// internal method: should be use properly
 		// (history of the right overlay change set
 		// is size aligned).
-		debug_assert!(history.len() >= index); 
+		debug_assert!(history.len() >= index);
 		while index > 0 {
 			index -= 1;
 			let history_index = self.get_state(index).1;
@@ -390,7 +427,7 @@ impl<V> History<V> {
 			// internal method: should be use properly
 			// (history of the right overlay change set
 			// is size aligned).
-			debug_assert!(history.len() >= index); 
+			debug_assert!(history.len() >= index);
 			while index > 0 {
 				index -= 1;
 				let history_index = self.get_state(index).1;
@@ -447,4 +484,5 @@ impl<V> History<V> {
 			return self.get_mut(history);
 		}
 	}
+
 }

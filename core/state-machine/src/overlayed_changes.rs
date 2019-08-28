@@ -144,12 +144,7 @@ impl OverlayedChangeSet {
 	/// Garbage collect.
 	fn gc(&mut self, eager: bool) {
 		let eager = if eager {
-			let mut transaction_index = Vec::new();
-			for (i, state) in self.history.iter() {
-				if TransactionState::TxPending == state {
-					transaction_index.push(i);
-				}
-			}
+			let transaction_index = self.history.transaction_indexes();
 			Some(transaction_index)
 		} else {
 			None
@@ -163,7 +158,6 @@ impl OverlayedChangeSet {
 			m.len() > 0
 		});
 	}
-
 
 	/// Whether the change set is empty.
 	pub fn is_empty(&self) -> bool {
@@ -349,7 +343,7 @@ impl OverlayedChanges {
 	///
 	/// `None` can be used to delete a value specified by the given key.
 	pub fn set_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) {
-		self.operation_from_last_gc += DEFAULT_GC_CONF.operation_cost(&value);
+		self.operation_from_last_gc += DEFAULT_GC_CONF.operation_cost(value.as_ref());
 		let extrinsic_index = self.extrinsic_index();
 		let entry = self.changes.top.entry(key).or_default();
 		set_with_extrinsic_overlayed_value(entry, self.changes.history.as_ref(), value, extrinsic_index);
@@ -364,7 +358,7 @@ impl OverlayedChanges {
 		key: Vec<u8>,
 		value: Option<Vec<u8>>,
 	) {
-		self.operation_from_last_gc += DEFAULT_GC_CONF.operation_cost(&value);
+		self.operation_from_last_gc += DEFAULT_GC_CONF.operation_cost(value.as_ref());
 		let extrinsic_index = self.extrinsic_index();
 		let map_entry = self.changes.children.entry(storage_key).or_default();
 		let entry = map_entry.entry(key).or_default();
@@ -466,6 +460,10 @@ impl OverlayedChanges {
 	/// Commit a transactional layer.
 	pub fn commit_transaction(&mut self) {
 		self.changes.commit_transaction();
+		if self.operation_from_last_gc > DEFAULT_GC_CONF.trigger_transaction_gc {
+			self.operation_from_last_gc = 0;
+			self.gc(true);
+		}
 	}
 	
 	/// Consume `OverlayedChanges` and take committed set.

@@ -70,7 +70,7 @@ pub struct GCConfiguration {
 
 impl GCConfiguration {
 	/// Cost depending on value if any.
-	pub fn operation_cost(&self, val: &Option<rstd::vec::Vec<u8>>) -> usize {
+	pub fn operation_cost(&self, val: Option<&rstd::vec::Vec<u8>>) -> usize {
 		let additional_cost = if self.add_content_size_unit > 0 {
 			if let Some(s) = val.as_ref() {
 				s.len() / self.add_content_size_unit
