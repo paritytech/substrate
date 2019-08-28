@@ -46,6 +46,8 @@ pub fn timestamp_from_now(timestamp: Timestamp) -> Duration {
 }
 
 /// Converts the deadline into a `Future` that resolves when the deadline is reached.
+///
+/// If `None`, returns a never-ending `Future`.
 pub fn deadline_to_future(
 	deadline: Option<Timestamp>,
 ) -> futures::future::MaybeDone<impl futures::Future> {
