@@ -1536,9 +1536,7 @@ impl<B, E, Block, RA> Finalizer<Block, Blake2Hasher, B> for Client<B, E, Block, 
 
 	fn finalize_block(&self, id: BlockId<Block>, justification: Option<Justification>, notify: bool) -> error::Result<()> {
 		self.lock_import_and_run(|operation| {
-			let last_best = self.backend.blockchain().info().best_hash;
-			let to_finalize_hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
-			self.apply_finality_with_block_hash(operation, to_finalize_hash, justification, last_best, notify)
+			self.apply_finality(operation, id, justification, notify)
 		})
 	}
 }
