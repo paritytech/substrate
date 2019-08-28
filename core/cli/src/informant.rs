@@ -48,7 +48,8 @@ pub fn build(service: &impl AbstractService) -> impl Future<Item = (), Error = (
 		if let Some((ref last_num, ref last_hash)) = last_best {
 			if n.header.parent_hash() != last_hash && n.is_new_best  {
 				let tree_route = ::client::blockchain::tree_route(
-					|id| client.header(&id)?.ok_or(::client::error::Error::UnknownBlock(format!("Unknown block {:?}", id))),
+					|id| client.header(&id)?.ok_or_else(
+						|| ::client::error::Error::UnknownBlock(format!("Unknown block {:?}", id))),
 					BlockId::Hash(last_hash.clone()),
 					BlockId::Hash(n.hash),
 				);

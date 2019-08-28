@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-client = { package = "substrate-client", path = "../client", features = ["test-helpers"] }
+client = { package = "substrate-client", path = "../client" }
 client-db = { package = "substrate-client-db", path = "../client/db", features = ["test-helpers"] }
 consensus = { package = "substrate-consensus-common", path = "../consensus/common" }
 executor = { package = "substrate-executor", path = "../executor" }
