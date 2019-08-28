@@ -180,7 +180,7 @@ pub trait Trait: system::Trait + session::historical::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
-	/// The function call.
+	/// A dispatchable call type.
 	type Call: From<Call<Self>>;
 
 	/// A extrinsic right from the external world. This is unchecked and so
