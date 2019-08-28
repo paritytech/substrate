@@ -333,13 +333,13 @@ Flaming Fir is the new testnet for Substrate master (2.0) to test the latest dev
 
 Since Flaming Fir is targeting the master branch we make absolutely no guarantees of stability and/or persistence of the network. We might reset the chain at any time if it is necessary to deploy new changes. Currently, the validators are running with a client built from `d013bd900`, if you build from this commit you should be able to successfully sync, later commits may not work as new breaking changes may be introduced in master.
 
-Latest known working version: `d013bd900`
+Latest known working version: `a2a0eb5398d6223e531455b4c155ef053a4a3a2b`
 
 [source, shell]
 ----
 git clone https://github.com/paritytech/substrate.git
 cd substrate
-git checkout -b flaming-fir d013bd900
+git checkout -b flaming-fir a2a0eb5398d6223e531455b4c155ef053a4a3a2b
 ----
 
 You can run the tests if you like:
