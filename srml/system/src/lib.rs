@@ -246,11 +246,6 @@ pub type KeyValue = (Vec<u8>, Vec<u8>);
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		/// Deposits an event into this block's event record.
-		pub fn deposit_event(event: T::Event) {
-			Self::deposit_event_indexed(&[], event);
-		}
-
 		/// A big dispatch that will disallow any other transaction to be included.
 		// TODO: this must be preferable available for testing really (not possible at the moment).
 		#[weight = SimpleDispatchInfo::MaxOperational]
@@ -545,6 +540,11 @@ pub fn ensure_none<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'stati
 }
 
 impl<T: Trait> Module<T> {
+	/// Deposits an event into this block's event record.
+	pub fn deposit_event(event: impl Into<T::Event>) {
+		Self::deposit_event_indexed(&[], event.into());
+	}
+
 	/// Deposits an event into this block's event record adding this event
 	/// to the corresponding topic indexes.
 	///
@@ -815,7 +815,7 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event(match r {
 			Ok(_) => Event::ExtrinsicSuccess,
 			Err(_) => Event::ExtrinsicFailed,
-		}.into());
+		});
 
 		let next_extrinsic_index = Self::extrinsic_index().unwrap_or_default() + 1u32;
 

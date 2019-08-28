@@ -683,7 +683,7 @@ decl_module! {
 		/// Number of eras that staked funds must remain bonded for.
 		const BondingDuration: EraIndex = T::BondingDuration::get();
 
-		fn deposit_event<T>() = default;
+		fn deposit_event() = default;
 
 		fn on_finalize() {
 			// Set the start of the first era.

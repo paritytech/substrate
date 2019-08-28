@@ -324,7 +324,7 @@ impl<AccountId> Into<PermissionVersions<AccountId>> for PermissionLatest<Account
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn deposit_event<T>() = default;
+		fn deposit_event() = default;
 
 		/// Create a new kind of asset.
 		fn create(origin, options: AssetOptions<T::Balance, T::AccountId>) -> Result {
