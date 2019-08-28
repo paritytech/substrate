@@ -1,4 +1,11 @@
-# Lists some code owners
+# Lists some code owners.
+#
+# A codeowner just oversees some part of the codebase. If an owned file is changed then the
+# corresponding codeowner receives a review request. An approval of the codeowner is
+# not required for merging a PR though.
+#
+# **This is pretty much an experiment at the moment**. Feel free to remove yourself at any time if
+# you do not want to receive review requests any longer.
 #
 # For details about syntax, see:
 # https://help.github.com/en/articles/about-code-owners
@@ -11,5 +18,36 @@
 #   are more recognizable on GitHub, you can use them for mentioning unlike an email.
 # - The latest matching rule, if multiple, takes precedence.
 
-/srml/contracts/ @pepyakin
+# Wasm execution and the wasm side of Substrate Runtime Interface
 /core/executor/ @pepyakin
+/core/sr-io/without_std.rs @pepyakin
+/core/sr-std/without_std.rs @pepyakin
+
+# Sandboxing capability of Substrate Runtime
+/core/sr-sandbox @pepyakin
+/core/primitives/src/sandbox.rs @pepyakin
+
+# Transaction pool
+/core/transaction-pool/ @tomusdrw
+
+# Offchain
+/core/offchain/ @tomusdrw
+
+# Everything that has RPC in it
+/core/rpc/ @tomusdrw
+/node/rpc/ @tomusdrw
+/node/rpc-client @tomusdrw
+/core/rpc-servers/ @tomusdrw
+
+# Grandpa, BABE, consensus stuff
+/srml/babe/ @andresilva
+/srml/grandpa/ @andresilva
+/core/finality-grandpa/ @andresilva
+/core/consensus/babe/ @andresilva
+/core/consensus/slots/ @andresilva
+
+# Contracts
+/srml/contracts/ @pepyakin @thiolliere @jimpo
+
+# Inflation points
+/srml/staking/src/inflation.rs @thiolliere
