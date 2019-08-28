@@ -42,7 +42,7 @@ use consensus_common::import_queue::{BoxBlockImport, BasicQueue, Verifier};
 use codec::{Encode, Decode};
 use log::*;
 
-/// Auxiliary prefix for PoW engine.
+/// Auxiliary storage prefix for PoW engine.
 pub const POW_AUX_PREFIX: [u8; 4] = *b"PoW:";
 
 fn aux_key(hash: &H256) -> Vec<u8> {
@@ -79,7 +79,7 @@ pub trait PowAlgorithm<B: BlockT> {
 		parent: &BlockId<B>,
 		pre_hash: &H256,
 		seal: &Seal,
-		difficulty: Difficulty
+		difficulty: Difficulty,
 	) -> Result<bool, String>;
 	/// Mine a seal that satisfy the given difficulty.
 	fn mine(
@@ -88,7 +88,7 @@ pub trait PowAlgorithm<B: BlockT> {
 		pre_hash: &H256,
 		seed: &H256,
 		difficulty: Difficulty,
-		round: u32
+		round: u32,
 	) -> Result<Option<Seal>, String>;
 }
 
@@ -291,7 +291,7 @@ pub fn start_mine<B: BlockT<Hash=H256>, C, Algorithm, E>(
 	C: HeaderBackend<B> + AuxStore + 'static,
 	Algorithm: PowAlgorithm<B> + Send + Sync + 'static,
 	E: Environment<B> + Send + Sync + 'static,
-	E::Error: core::fmt::Debug,
+	E::Error: std::fmt::Debug,
 {
 	if let Err(_) = register_pow_inherent_data_provider(&inherent_data_providers) {
 		warn!("Registering inherent data provider for timestamp failed");
@@ -332,7 +332,7 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E>(
 	C: HeaderBackend<B> + AuxStore,
 	Algorithm: PowAlgorithm<B>,
 	E: Environment<B>,
-	E::Error: core::fmt::Debug,
+	E::Error: std::fmt::Debug,
 {
 	'outer: loop {
 		let best_hash = client.info().best_hash;
