@@ -1324,7 +1324,7 @@ impl<T: Trait> Module<T> {
 					// This might reasonably saturate and we cannot do much about it. The sum of
 					// someone's stake might exceed the balance type if they have the maximum amount
 					// of balance and receive some support. This is super unlikely to happen, yet
-					// we simulate it it in some tests.
+					// we simulate it in some tests.
 					total: to_balance(s.total),
 					others: s.others
 						.into_iter()
