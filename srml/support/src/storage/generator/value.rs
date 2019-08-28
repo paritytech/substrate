@@ -16,8 +16,9 @@
 
 #[cfg(not(feature = "std"))]
 use sr_std::prelude::*;
-use codec::{Codec, Encode, EncodeAppend};
-use crate::{storage::{self, unhashed, hashed::{Twox128, StorageHasher}}, rstd::borrow::Borrow};
+use sr_std::{borrow::Borrow, iter::FromIterator};
+use codec::{Codec, Encode};
+use crate::{storage::{self, unhashed, hashed::{Twox128, StorageHasher}}, traits::Len};
 
 /// Generator for `StorageValue` used by `decl_storage`.
 ///
@@ -89,8 +90,15 @@ impl<T: Codec, G: StorageValue<T>> storage::StorageValue<T> for G {
 		G::from_optional_value_to_query(value)
 	}
 
-	fn append<I: Encode>(items: &[I]) -> Result<(), &'static str>
-		where T: EncodeAppend<Item=I>
+	/// Append the given items to the value in the storage.
+	///
+	/// `T` is required to implement `codec::EncodeAppend`.
+	fn append<'a, I, R>(items: R) -> Result<(), &'static str>
+	where
+		I: 'a + codec::Encode,
+		T: codec::EncodeAppend<Item=I>,
+		R: IntoIterator<Item=&'a I>,
+		R::IntoIter: ExactSizeIterator,
 	{
 		let key = Self::storage_value_final_key();
 		let encoded_value = unhashed::get_raw(&key)
@@ -101,11 +109,48 @@ impl<T: Codec, G: StorageValue<T>> storage::StorageValue<T> for G {
 				}
 			});
 
-		let new_val = <T as EncodeAppend>::append(
+		let new_val = T::append(
 			encoded_value,
 			items,
 		).map_err(|_| "Could not append given item")?;
 		unhashed::put_raw(&key, &new_val);
 		Ok(())
+	}
+
+	/// Safely append the given items to the value in the storage. If a codec error occurs, then the
+	/// old (presumably corrupt) value is replaced with the given `items`.
+	///
+	/// `T` is required to implement `codec::EncodeAppend`.
+	fn append_or_put<'a, I, R>(items: R)
+	where
+		I: 'a + codec::Encode + Clone,
+		T: codec::EncodeAppend<Item=I> + FromIterator<I>,
+		R: IntoIterator<Item=&'a I> + Clone,
+		R::IntoIter: ExactSizeIterator,
+	{
+		Self::append(items.clone())
+			.unwrap_or_else(|_| Self::put(&items.into_iter().cloned().collect()));
+	}
+
+	/// Read the length of the value in a fast way, without decoding the entire value.
+	///
+	/// `T` is required to implement `Codec::DecodeLength`.
+	///
+	/// Note that `0` is returned as the default value if no encoded value exists at the given key.
+	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
+	/// function for this purpose.
+	fn decode_len() -> Result<usize, &'static str> where T: codec::DecodeLength, T: Len {
+		let key = Self::storage_value_final_key();
+
+		// attempt to get the length directly.
+		if let Some(k) = unhashed::get_raw(&key) {
+			<T as codec::DecodeLength>::len(&k).map_err(|e| e.what())
+		} else {
+			let len = G::from_query_to_optional_value(G::from_optional_value_to_query(None))
+				.map(|v| v.len())
+				.unwrap_or(0);
+
+			Ok(len)
+		}
 	}
 }

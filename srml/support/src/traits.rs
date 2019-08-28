@@ -26,6 +26,18 @@ use crate::sr_primitives::ConsensusEngineId;
 
 use super::for_each_tuple;
 
+/// Anything that can have a `::len()` method.
+pub trait Len {
+	/// Return the length of data type.
+	fn len(&self) -> usize;
+}
+
+impl<T: IntoIterator + Clone,> Len for T where <T as IntoIterator>::IntoIter: ExactSizeIterator {
+	fn len(&self) -> usize {
+		self.clone().into_iter().len()
+	}
+}
+
 /// A trait for querying a single fixed value from a type.
 pub trait Get<T> {
 	/// Return a constant value.

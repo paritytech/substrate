@@ -207,7 +207,6 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				for #name<#trait_and_instance> #where_clause
 			{
 				type Query = #value_type;
-
 				type Hasher = #scrate::#hasher;
 
 				fn prefix() -> &'static [u8] {
@@ -303,7 +302,6 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				for #name<#trait_and_instance> #where_clause
 			{
 				type Query = #value_type;
-
 				type Hasher = #scrate::#hasher;
 
 				fn prefix() -> &'static [u8] {

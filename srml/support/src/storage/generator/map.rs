@@ -16,8 +16,9 @@
 
 #[cfg(not(feature = "std"))]
 use sr_std::prelude::*;
-use codec::{Codec, Encode, EncodeAppend};
-use crate::{storage::{self, unhashed, hashed::StorageHasher}, rstd::borrow::Borrow};
+use sr_std::borrow::Borrow;
+use codec::{Codec, Encode};
+use crate::{storage::{self, unhashed, hashed::StorageHasher}, traits::Len};
 
 /// Generator for `StorageMap` used by `decl_storage`.
 ///
@@ -112,8 +113,13 @@ impl<K: Codec, V: Codec, G: StorageMap<K, V>> storage::StorageMap<K, V> for G {
 		G::from_optional_value_to_query(value)
 	}
 
-	fn append<KeyArg: Borrow<K>, I: Encode>(key: KeyArg, items: &[I]) -> Result<(), &'static str>
-		where V: EncodeAppend<Item=I>
+	fn append<'a, I, R, KeyArg>(key: KeyArg, items: R) -> Result<(), &'static str>
+	where
+		KeyArg: Borrow<K>,
+		I: 'a + codec::Encode,
+		V: codec::EncodeAppend<Item=I>,
+		R: IntoIterator<Item=&'a I>,
+		R::IntoIter: ExactSizeIterator,
 	{
 		let key = Self::storage_map_final_key(key);
 		let encoded_value = unhashed::get_raw(key.as_ref())
@@ -130,5 +136,32 @@ impl<K: Codec, V: Codec, G: StorageMap<K, V>> storage::StorageMap<K, V> for G {
 		).map_err(|_| "Could not append given item")?;
 		unhashed::put_raw(key.as_ref(), &new_val);
 		Ok(())
+	}
+
+	fn append_or_insert<'a, I, R, KeyArg>(key: KeyArg, items: R)
+	where
+		KeyArg: Borrow<K>,
+		I: 'a + codec::Encode + Clone,
+		V: codec::EncodeAppend<Item=I> + crate::rstd::iter::FromIterator<I>,
+		R: IntoIterator<Item=&'a I> + Clone,
+		R::IntoIter: ExactSizeIterator,
+	{
+		Self::append(key.borrow(), items.clone())
+			.unwrap_or_else(|_| Self::insert(key, &items.into_iter().cloned().collect()));
+	}
+
+	fn decode_len<KeyArg: Borrow<K>>(key: KeyArg) -> Result<usize, &'static str>
+		where V: codec::DecodeLength + Len
+	{
+		let key = Self::storage_map_final_key(key);
+		if let Some(v) = unhashed::get_raw(key.as_ref()) {
+			<V as codec::DecodeLength>::len(&v).map_err(|e| e.what())
+		} else {
+			let len = G::from_query_to_optional_value(G::from_optional_value_to_query(None))
+				.map(|v| v.len())
+				.unwrap_or(0);
+
+			Ok(len)
+		}
 	}
 }

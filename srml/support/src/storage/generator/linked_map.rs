@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use codec::{Codec, Encode, Decode};
-use crate::storage::{self, unhashed, hashed::StorageHasher};
+use crate::{storage::{self, unhashed, hashed::StorageHasher}, traits::Len};
 use sr_std::{
 	borrow::Borrow,
 	boxed::Box,
@@ -312,5 +312,20 @@ impl<K: Codec, V: Codec, G: StorageLinkedMap<K, V>> storage::StorageLinkedMap<K,
 
 	fn head() -> Option<K> {
 		read_head::<_, _, G>()
+	}
+
+	fn decode_len<KeyArg: Borrow<K>>(key: KeyArg) -> Result<usize, &'static str>
+		where V: codec::DecodeLength + Len
+	{
+		let key = Self::storage_linked_map_final_key(key);
+		if let Some(v) = unhashed::get_raw(key.as_ref()) {
+			<V as codec::DecodeLength>::len(&v).map_err(|e| e.what())
+		} else {
+			let len = G::from_query_to_optional_value(G::from_optional_value_to_query(None))
+				.map(|v| v.len())
+				.unwrap_or(0);
+
+			Ok(len)
+		}
 	}
 }

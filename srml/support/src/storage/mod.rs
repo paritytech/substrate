@@ -17,8 +17,9 @@
 //! Stuff to do with the runtime's storage.
 
 use crate::rstd::prelude::*;
-use crate::rstd::borrow::Borrow;
+use crate::rstd::{borrow::Borrow, iter::FromIterator};
 use codec::{Codec, Encode, Decode, KeyedVec, EncodeAppend};
+use crate::traits::Len;
 
 #[macro_use]
 pub mod storage_items;
@@ -60,8 +61,34 @@ pub trait StorageValue<T: Codec> {
 	/// Append the given item to the value in the storage.
 	///
 	/// `T` is required to implement `codec::EncodeAppend`.
-	fn append<I: Encode>(items: &[I]) -> Result<(), &'static str>
-		where T: EncodeAppend<Item=I>;
+	fn append<'a, I, R>(items: R) -> Result<(), &'static str> where
+		I: 'a + Encode,
+		T: EncodeAppend<Item=I>,
+		R: IntoIterator<Item=&'a I>,
+		R::IntoIter: ExactSizeIterator;
+
+	/// Append the given items to the value in the storage.
+	///
+	/// `T` is required to implement `Codec::EncodeAppend`.
+	///
+	/// Upon any failure, it replaces `items` as the new value (assuming that the previous stored
+	/// data is simply corrupt and no longer usable).
+	///
+	/// ### WARNING
+	///
+	/// use with care; if your use-case is not _exactly_ as what this function is doing,
+	/// you should use append and sensibly handle failure within the runtime code if it happens.
+	fn append_or_put<'a, I, R>(items: R) where
+		I: 'a + Encode + Clone,
+		T: EncodeAppend<Item=I> + FromIterator<I>,
+		R: IntoIterator<Item=&'a I> + Clone,
+		R::IntoIter: ExactSizeIterator;
+
+	/// Read the length of the value in a fast way, without decoding the entire value.
+	///
+	/// `T` is required to implement `Codec::DecodeLength`.
+	fn decode_len() -> Result<usize, &'static str>
+		where T: codec::DecodeLength + Len;
 }
 
 /// A strongly-typed map in storage.
@@ -97,11 +124,38 @@ pub trait StorageMap<K: Codec, V: Codec> {
 	/// Take the value under a key.
 	fn take<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query;
 
-	/// Append the given item to the value in the storage.
+	/// Append the given items to the value in the storage.
+	///
+	/// `V` is required to implement `codec::EncodeAppend`.
+	fn append<'a, I, R, KeyArg>(key: KeyArg, items: R) -> Result<(), &'static str>
+	where
+		KeyArg: Borrow<K>,
+		I: 'a + codec::Encode,
+		V: codec::EncodeAppend<Item=I>,
+		R: IntoIterator<Item=&'a I> + Clone,
+		R::IntoIter: ExactSizeIterator;
+
+	/// Safely append the given items to the value in the storage. If a codec error occurs, then the
+	/// old (presumably corrupt) value is replaced with the given `items`.
 	///
 	/// `T` is required to implement `codec::EncodeAppend`.
-	fn append<KeyArg: Borrow<K>, I: Encode>(key: KeyArg, items: &[I]) -> Result<(), &'static str>
-		where V: EncodeAppend<Item=I>;
+	fn append_or_insert<'a, I, R, KeyArg>(key: KeyArg, items: R)
+	where
+		KeyArg: Borrow<K>,
+		I: 'a + codec::Encode + Clone,
+		V: codec::EncodeAppend<Item=I> + crate::rstd::iter::FromIterator<I>,
+		R: IntoIterator<Item=&'a I> + Clone,
+		R::IntoIter: ExactSizeIterator;
+
+	/// Read the length of the value in a fast way, without decoding the entire value.
+	///
+	/// `T` is required to implement `Codec::DecodeLength`.
+	///
+	/// Note that `0` is returned as the default value if no encoded value exists at the given key.
+	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
+	/// function for this purpose.
+	fn decode_len<KeyArg: Borrow<K>>(key: KeyArg) -> Result<usize, &'static str>
+		where V: codec::DecodeLength + Len;
 }
 
 /// A strongly-typed linked map in storage.
@@ -141,6 +195,16 @@ pub trait StorageLinkedMap<K: Codec, V: Codec> {
 
 	/// Enumerate all elements in the map.
 	fn enumerate() -> Box<dyn Iterator<Item = (K, V)>> where K: 'static, V: 'static, Self: 'static;
+
+	/// Read the length of the value in a fast way, without decoding the entire value.
+	///
+	/// `T` is required to implement `Codec::DecodeLength`.
+	///
+	/// Note that `0` is returned as the default value if no encoded value exists at the given key.
+	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
+	/// function for this purpose.
+	fn decode_len<KeyArg: Borrow<K>>(key: KeyArg) -> Result<usize, &'static str>
+		where V: codec::DecodeLength + Len;
 }
 
 /// An implementation of a map with a two keys.
