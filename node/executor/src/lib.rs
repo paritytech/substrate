@@ -123,10 +123,10 @@ mod tests {
 			<balances::FreeBalance<Runtime>>::key_for(alice()) => {
 				69_u128.encode()
 			},
-			<balances::TotalIssuance<Runtime>>::key() => {
+			<balances::TotalIssuance<Runtime>>::key().to_vec() => {
 				69_u128.encode()
 			},
-			<indices::NextEnumSet<Runtime>>::key() => {
+			<indices::NextEnumSet<Runtime>>::key().to_vec() => {
 				0_u128.encode()
 			},
 			<system::BlockHash<Runtime>>::key_for(0) => {
@@ -159,10 +159,10 @@ mod tests {
 			<balances::FreeBalance<Runtime>>::key_for(alice()) => {
 				69_u128.encode()
 			},
-			<balances::TotalIssuance<Runtime>>::key() => {
+			<balances::TotalIssuance<Runtime>>::key().to_vec() => {
 				69_u128.encode()
 			},
-			<indices::NextEnumSet<Runtime>>::key() => {
+			<indices::NextEnumSet<Runtime>>::key().to_vec() => {
 				0_u128.encode()
 			},
 			<system::BlockHash<Runtime>>::key_for(0) => {
@@ -195,10 +195,10 @@ mod tests {
 			<balances::FreeBalance<Runtime>>::key_for(alice()) => {
 				(111 * DOLLARS).encode()
 			},
-			<balances::TotalIssuance<Runtime>>::key() => {
+			<balances::TotalIssuance<Runtime>>::key().to_vec() => {
 				(111 * DOLLARS).encode()
 			},
-			<indices::NextEnumSet<Runtime>>::key() => vec![0u8; 16],
+			<indices::NextEnumSet<Runtime>>::key().to_vec() => vec![0u8; 16],
 			<system::BlockHash<Runtime>>::key_for(0) => vec![0u8; 32]
 		], map![]));
 
@@ -231,10 +231,10 @@ mod tests {
 			<balances::FreeBalance<Runtime>>::key_for(alice()) => {
 				(111 * DOLLARS).encode()
 			},
-			<balances::TotalIssuance<Runtime>>::key() => {
+			<balances::TotalIssuance<Runtime>>::key().to_vec() => {
 				(111 * DOLLARS).encode()
 			},
-			<indices::NextEnumSet<Runtime>>::key() => vec![0u8; 16],
+			<indices::NextEnumSet<Runtime>>::key().to_vec() => vec![0u8; 16],
 			<system::BlockHash<Runtime>>::key_for(0) => vec![0u8; 32]
 		], map![]));
 
@@ -750,10 +750,10 @@ mod tests {
 			<balances::FreeBalance<Runtime>>::key_for(alice()) => {
 				0_u128.encode()
 			},
-			<balances::TotalIssuance<Runtime>>::key() => {
+			<balances::TotalIssuance<Runtime>>::key().to_vec() => {
 				0_u128.encode()
 			},
-			<indices::NextEnumSet<Runtime>>::key() => vec![0u8; 16],
+			<indices::NextEnumSet<Runtime>>::key().to_vec() => vec![0u8; 16],
 			<system::BlockHash<Runtime>>::key_for(0) => vec![0u8; 32]
 		], map![]));
 
@@ -772,10 +772,10 @@ mod tests {
 			<balances::FreeBalance<Runtime>>::key_for(alice()) => {
 				(111 * DOLLARS).encode()
 			},
-			<balances::TotalIssuance<Runtime>>::key() => {
+			<balances::TotalIssuance<Runtime>>::key().to_vec() => {
 				(111 * DOLLARS).encode()
 			},
-			<indices::NextEnumSet<Runtime>>::key() => vec![0u8; 16],
+			<indices::NextEnumSet<Runtime>>::key().to_vec() => vec![0u8; 16],
 			<system::BlockHash<Runtime>>::key_for(0) => vec![0u8; 32]
 		], map![]));
 
@@ -932,10 +932,10 @@ mod tests {
 			<balances::FreeBalance<Runtime>>::key_for(bob()) => {
 				(10 * DOLLARS).encode()
 			},
-			<balances::TotalIssuance<Runtime>>::key() => {
+			<balances::TotalIssuance<Runtime>>::key().to_vec() => {
 				(110 * DOLLARS).encode()
 			},
-			<indices::NextEnumSet<Runtime>>::key() => vec![0u8; 16],
+			<indices::NextEnumSet<Runtime>>::key().to_vec() => vec![0u8; 16],
 			<system::BlockHash<Runtime>>::key_for(0) => vec![0u8; 32]
 		], map![]));
 
