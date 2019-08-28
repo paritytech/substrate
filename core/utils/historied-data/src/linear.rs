@@ -67,218 +67,6 @@ impl<V> Default for History<V> {
 
 impl<V> History<V> {
 
-	/// Access to latest pending value (non dropped state in history).
-	/// When possible please prefer `get_mut` as it can free
-	/// some memory.
-	pub fn get(&self, history: &[TransactionState]) -> Option<&V> {
-		// index is never 0, 
-		let mut index = self.len();
-		if index == 0 {
-			return None;
-		}
-		debug_assert!(history.len() >= index); 
-		while index > 0 {
-			index -= 1;
-			let (v, history_index) = self.get_state(index);
-			match history[history_index] {
-				TransactionState::Dropped => (), 
-				TransactionState::Pending
-				| TransactionState::TxPending
-				| TransactionState::Prospective
-				| TransactionState::Committed =>
-					return Some(v),
-			}
-		}
-		None
-	}
-
-	#[cfg(any(test, feature = "test"))]
-	pub fn get_prospective(&self, history: &[TransactionState]) -> Option<&V> {
-		// index is never 0, 
-		let mut index = self.len();
-		if index == 0 {
-			return None;
-		}
-		debug_assert!(history.len() >= index); 
-		while index > 0 {
-			index -= 1;
-			let (v, history_index) = self.get_state(index);
-			match history[history_index] {
-				TransactionState::Pending
-				| TransactionState::TxPending
-				| TransactionState::Prospective =>
-					return Some(v),
-				TransactionState::Committed
-				| TransactionState::Dropped => (), 
-			}
-		}
-		None
-	}
-
-	#[cfg(any(test, feature = "test"))]
-	pub fn get_committed(&self, history: &[TransactionState]) -> Option<&V> {
-		// index is never 0, 
-		let mut index = self.len();
-		if index == 0 {
-			return None;
-		}
-		debug_assert!(history.len() >= index); 
-		while index > 0 {
-			index -= 1;
-			let (v, history_index) = self.get_state(index);
-			match history[history_index] {
-				TransactionState::Committed =>
-					return Some(v),
-				TransactionState::Pending
-				| TransactionState::TxPending
-				| TransactionState::Prospective
-				| TransactionState::Dropped => (), 
-			}
-		}
-		None
-	}
-
-	pub fn into_committed(mut self, history: &[TransactionState]) -> Option<V> {
-		// index is never 0, 
-		let mut index = self.len();
-		if index == 0 {
-			return None;
-		}
-		// internal method: should be use properly
-		// (history of the right overlay change set
-		// is size aligned).
-		debug_assert!(history.len() >= index); 
-		while index > 0 {
-			index -= 1;
-			let history_index = self.get_state(index).1;
-			match history[history_index] {
-				TransactionState::Committed => {
-					self.truncate(index + 1);
-					return self.pop().map(|v| v.0);
-				},
-				TransactionState::Pending
-				| TransactionState::TxPending
-				| TransactionState::Prospective
-				| TransactionState::Dropped => (), 
-			}
-		}
-		None
-	}
-
-	/// Access to latest pending value (non dropped state in history).
-	/// This method uses `get_mut` and do remove pending
-	/// This method remove latest dropped value up to the latest valid value.
-	pub fn get_mut(&mut self, history: &[TransactionState]) -> Option<(&mut V, usize)> {
-
-		let mut index = self.len();
-		if index == 0 {
-			return None;
-		}
-		// internal method: should be use properly
-		// (history of the right overlay change set
-		// is size aligned).
-		debug_assert!(history.len() >= index); 
-		while index > 0 {
-			index -= 1;
-			let history_index = self.get_state(index).1;
-			match history[history_index] {
-				TransactionState::Committed => {
-					// here we could gc all preceding values but that is additional cost
-					// and get_mut should stop at pending following committed.
-					return Some((self.mut_ref(index), history_index))
-				},
-				TransactionState::Pending
-				| TransactionState::TxPending
-				| TransactionState::Prospective => {
-					return Some((self.mut_ref(index), history_index))
-				},
-				TransactionState::Dropped => { let _ = self.pop(); },
-			}
-		}
-		None
-	}
-
-
-	/// Garbage collect a history, act as a `get_mut` with additional cost.
-	/// If `eager` is true, all dropped value are removed even if it means shifting
-	/// array byte. Otherwhise we mainly ensure collection up to last Commit state
-	/// (truncate left size).
-	pub fn gc(
-		&mut self,
-		history: &[TransactionState],
-		tx_index: Option<&[usize]>,
-	) -> Option<(&mut V, usize)> {
-		if let Some(tx_index) = tx_index {
-			let mut tx_index = &tx_index[..];
-			let mut index = self.len();
-			if index == 0 {
-				return None;
-			}
-			let mut bellow_value = usize::max_value();
-			let mut result: Option<(usize, usize)> = None;
-			// internal method: should be use properly
-			// (history of the right overlay change set
-			// is size aligned).
-			debug_assert!(history.len() >= index); 
-			while index > 0 {
-				index -= 1;
-				let history_index = self.get_state(index).1;
-				match history[history_index] {
-					TransactionState::Committed => {
-						for _ in 0..index {
-							self.remove(0);
-						}
-						result = Some(result.map(|(i, hi)| (i - index, hi)).unwrap_or((0, history_index)));
-						index = 0;
-					},
-					TransactionState::Pending
-					| TransactionState::Prospective => {
-						if history_index >= bellow_value {
-							self.remove(index);
-							result.as_mut().map(|(i, _hi)| *i = *i - 1);
-						} else {
-							if result.is_none() {
-								result = Some((index, history_index));
-							}
-							while bellow_value > history_index {
-								// bellow_value = pop
-								let split = tx_index.split_last()
-									.map(|(v, sl)| (*v, sl))
-									.unwrap_or((0, &[]));
-								bellow_value = split.0;
-								tx_index = split.1;
-							}
-						}
-					},
-					TransactionState::TxPending => {
-						if history_index >= bellow_value {
-							self.remove(index);
-							result.as_mut().map(|(i, _hi)| *i = *i - 1);
-						} else {
-							if result.is_none() {
-								result = Some((index, history_index));
-							}
-						}
-						bellow_value = usize::max_value();
-					},
-					TransactionState::Dropped => {
-						self.remove(index);
-					},
-				}
-			}
-			if let Some((index, history_index)) = result {
-				Some((self.mut_ref(index), history_index))
-			} else { None }
-
-		} else {
-			return self.get_mut(history);
-		}
-	}
-}
-
-
-impl<V> History<V> {
-
 	#[cfg(any(test, feature = "test"))]
 	/// Create an history from an existing history.
 	pub fn from_iter(input: impl IntoIterator<Item = (V, usize)>) -> Self {
@@ -622,14 +410,14 @@ impl<'a> Serialized<'a> {
 }
 
 
-// TODO macroed this big copy (and maybe later spend time on using a trait: not
-// worth it at this point).
-impl<'a> Serialized<'a> {
+
+// share implementation, trait would be better.
+macro_rules! history_impl(( $read: ty, $owned: ty, $mut: ty ) => {
 
 	/// Access to latest pending value (non dropped state in history).
 	/// When possible please prefer `get_mut` as it can free
 	/// some memory.
-	pub fn get(&self, history: &[TransactionState]) -> Option<&[u8]> {
+	pub fn get(&self, history: &[TransactionState]) -> Option<$read> {
 		// index is never 0, 
 		let mut index = self.len();
 		if index == 0 {
@@ -652,7 +440,7 @@ impl<'a> Serialized<'a> {
 	}
 
 	#[cfg(any(test, feature = "test"))]
-	pub fn get_prospective(&self, history: &[TransactionState]) -> Option<&[u8]> {
+	pub fn get_prospective(&self, history: &[TransactionState]) -> Option<$read> {
 		// index is never 0, 
 		let mut index = self.len();
 		if index == 0 {
@@ -675,7 +463,7 @@ impl<'a> Serialized<'a> {
 	}
 
 	#[cfg(any(test, feature = "test"))]
-	pub fn get_committed(&self, history: &[TransactionState]) -> Option<&[u8]> {
+	pub fn get_committed(&self, history: &[TransactionState]) -> Option<$read> {
 		// index is never 0, 
 		let mut index = self.len();
 		if index == 0 {
@@ -697,7 +485,7 @@ impl<'a> Serialized<'a> {
 		None
 	}
 
-	pub fn into_committed(mut self, history: &[TransactionState]) -> Option<Vec<u8>> {
+	pub fn into_committed(mut self, history: &[TransactionState]) -> Option<$owned> {
 		// index is never 0, 
 		let mut index = self.len();
 		if index == 0 {
@@ -725,9 +513,9 @@ impl<'a> Serialized<'a> {
 	}
 
 	/// Access to latest pending value (non dropped state in history).
-	/// This method uses `get_mut` and do remove pending
+	///
 	/// This method remove latest dropped value up to the latest valid value.
-	pub fn get_mut(&mut self, history: &[TransactionState]) -> Option<((), usize)> {
+	pub fn get_mut(&mut self, history: &[TransactionState]) -> Option<($mut, usize)> {
 
 		let mut index = self.len();
 		if index == 0 {
@@ -766,7 +554,7 @@ impl<'a> Serialized<'a> {
 		&mut self,
 		history: &[TransactionState],
 		tx_index: Option<&[usize]>,
-	) -> Option<((), usize)> {
+	) -> Option<($mut, usize)> {
 		if let Some(tx_index) = tx_index {
 			let mut tx_index = &tx_index[..];
 			let mut index = self.len();
@@ -833,6 +621,13 @@ impl<'a> Serialized<'a> {
 			return self.get_mut(history);
 		}
 	}
+
+});
+
+impl<'a> Serialized<'a> {
+  history_impl!(&[u8], Vec<u8>, ());
 }
 
-
+impl<V> History<V> {
+  history_impl!(&V, V, &mut V);
+}
