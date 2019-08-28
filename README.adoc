@@ -133,7 +133,7 @@ First let's get a template chainspec that you can edit. We'll use the "staging" 
 substrate build-spec --chain=staging > ~/chainspec.json
 ----
 
-Now, edit `~/chainspec.json` in your editor. There are a lot of individual fields for each module, and one very large one which contains the Webassembly code blob for this chain. The easiest field to edit is the block `period`. Change it to 10 (seconds):
+Now, edit `~/chainspec.json` in your editor. There are a lot of individual fields for each module, and one very large one which contains the WebAssembly code blob for this chain. The easiest field to edit is the block `period`. Change it to 10 (seconds):
 
 [source, json]
 ----
@@ -281,9 +281,9 @@ cargo run \-- --dev
 
 Detailed logs may be shown by running the node with the following environment variables set: `RUST_LOG=debug RUST_BACKTRACE=1 cargo run \-- --dev`.
 
-If you want to see the multi-node consensus algorithm in action locally, then you can create a local testnet with two validator nodes for Alice and Bob, who are the initial authorities of the genesis chain specification that have been endowed with a testnet DOTs. We'll give each node a name and expose them so they are listed on link:https://telemetry.polkadot.io/#/Local%20Testnet[Telemetry] . You'll need two terminals windows open.
+If you want to see the multi-node consensus algorithm in action locally, then you can create a local testnet with two validator nodes for Alice and Bob, who are the initial authorities of the genesis chain specification that have been endowed with a testnet DOTs. We'll give each node a name and expose them so they are listed on link:https://telemetry.polkadot.io/#/Local%20Testnet[Telemetry]. You'll need two terminal windows open.
 
-We'll start Alice's substrate node first on default TCP port 30333 with her chain database stored locally at `/tmp/alice`. The Bootnode ID of her node is `QmRpheLN4JWdAnY7HGJfWFNbfkQCb6tFf4vvA6hgjMZKrR`, which is generated from the `--node-key` value that we specify below:
+We'll start Alice's Substrate node first on default TCP port 30333 with her chain database stored locally at `/tmp/alice`. The Bootnode ID of her node is `QmRpheLN4JWdAnY7HGJfWFNbfkQCb6tFf4vvA6hgjMZKrR`, which is generated from the `--node-key` value that we specify below:
 
 [source, shell]
 cargo run --release \-- \
@@ -294,7 +294,7 @@ cargo run --release \-- \
   --telemetry-url ws://telemetry.polkadot.io:1024 \
   --validator
 
-In the second terminal, we'll run the following to start Bob's substrate node on a different TCP port of 30334, and with his chain database stored locally at `/tmp/bob`. We'll specify a value for the `--bootnodes` option that will connect his node to Alice's Bootnode ID on TCP port 30333:
+In the second terminal, we'll run the following to start Bob's Substrate node on a different TCP port of 30334, and with his chain database stored locally at `/tmp/bob`. We'll specify a value for the `--bootnodes` option that will connect his node to Alice's Bootnode ID on TCP port 30333:
 
 [source, shell]
 cargo run --release \-- \
@@ -408,7 +408,7 @@ curl -H 'Content-Type: application/json' --data '{ "jsonrpc":"2.0", "method":"au
 ```
 
 `KEY_TYPE` - needs to be replaced with the 4-character key type identifier.
-`SEEED` - is the seed of the key.
+`SEED` - is the seed of the key.
 
 == Documentation
 

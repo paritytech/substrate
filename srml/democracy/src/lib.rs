@@ -24,11 +24,11 @@ use sr_primitives::traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin,
 use sr_primitives::weights::SimpleDispatchInfo;
 use codec::{Encode, Decode, Input, Output, Error};
 use srml_support::{
-	decl_module, decl_storage, decl_event, ensure,
-	StorageValue, StorageMap, Parameter, Dispatchable, EnumerableStorageMap,
+	decl_module, decl_storage, decl_event, ensure, AppendableStorageMap, StorageValue, StorageMap,
+	Parameter, Dispatchable, EnumerableStorageMap,
 	traits::{
-		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier,
-		OnFreeBalanceZero, Get
+		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
+		OnFreeBalanceZero
 	}
 };
 use srml_support::dispatch::Result;
@@ -377,9 +377,8 @@ decl_module! {
 			PublicPropCount::put(index + 1);
 			<DepositOf<T>>::insert(index, (value, vec![who.clone()]));
 
-			let mut props = Self::public_props();
-			props.push((index, (*proposal).clone(), who));
-			<PublicProps<T>>::put(props);
+			let new_prop = (index, (*proposal).clone(), who);
+			<PublicProps<T>>::append_or_put([new_prop].into_iter());
 
 			Self::deposit_event(RawEvent::Proposed(index, value));
 		}
@@ -788,7 +787,7 @@ impl<T: Trait> Module<T> {
 	fn do_vote(who: T::AccountId, ref_index: ReferendumIndex, vote: Vote) -> Result {
 		ensure!(Self::is_active_referendum(ref_index), "vote given for invalid referendum.");
 		if !<VoteOf<T>>::exists(&(ref_index, who.clone())) {
-			<VotersFor<T>>::mutate(ref_index, |voters| voters.push(who.clone()));
+			<VotersFor<T>>::append_or_insert(ref_index, [who.clone()].into_iter());
 		}
 		<VoteOf<T>>::insert(&(ref_index, who), vote);
 		Ok(())
@@ -926,9 +925,9 @@ impl<T: Trait> Module<T> {
 			if info.delay.is_zero() {
 				Self::enact_proposal(info.proposal, index);
 			} else {
-				<DispatchQueue<T>>::mutate(
+				<DispatchQueue<T>>::append_or_insert(
 					now + info.delay,
-					|q| q.push(Some((info.proposal, index)))
+					[Some((info.proposal, index))].into_iter()
 				);
 			}
 		} else {
