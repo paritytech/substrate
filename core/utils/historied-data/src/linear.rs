@@ -243,6 +243,10 @@ impl States {
 /// Could be use for direct access memory to.
 pub struct Serialized<'a>(Cow<'a, [u8]>);
 
+// Basis implementation to be on par with implementation using
+// vec like container. Those method could be move to a trait
+// implementation.
+// Those function requires checked index.
 impl<'a> Serialized<'a> {
 
 	fn len(&self) -> usize {
@@ -250,17 +254,26 @@ impl<'a> Serialized<'a> {
 		self.read_le_usize(len - 4)
 	}
 
+	fn clear(&mut self) {
+		self.write_le_usize(0, 0);
+		self.0.to_mut().truncate(4);
+	}
+
 	fn truncate(&mut self, index: usize) {
+		if index == 0 {
+			self.clear();
+			return;
+		}
 		let len = self.len();
 		if index >= len {
 			return;
 		}
-		let start = self.index_start();
-		let end_ix = self.index_element(index + 1);
-		let len_ix = len * 4;
-		self.slice_copy(start, end_ix, len_ix);
-		self.write_le_usize(end_ix + len_ix - 4, index);
-		self.0.to_mut().truncate(end_ix + len_ix);
+		let start_ix = self.index_start();
+		let new_start = self.index_element(index);
+		let len_ix = index * 4;
+		self.slice_copy(start_ix, new_start, len_ix);
+		self.write_le_usize(new_start + len_ix - 4, index);
+		self.0.to_mut().truncate(new_start + len_ix);
 	}
 
 	fn pop(&mut self) -> Option<(Vec<u8>, usize)> {
@@ -268,12 +281,17 @@ impl<'a> Serialized<'a> {
 		if len == 0 {
 			return None;
 		}
-		let start_ix = self.index_element(len);
+		let start_ix = self.index_element(len - 1);
 		let end_ix = self.index_start();
 		let state = self.read_le_usize(start_ix);
 		let value = self.0[start_ix + 4..end_ix].to_vec();
-		self.write_le_usize(len - 1, self.0.len() - 8);
-		let ix_size = len * 4;
+		if len - 1 == 0 {
+			self.clear();
+			return Some((value, state))	
+		} else {
+			self.write_le_usize(self.0.len() - 8, len - 1);
+		};
+		let ix_size = (len * 4) - 4;
 		self.slice_copy(end_ix, start_ix, ix_size);
 		self.0.to_mut().truncate(start_ix + ix_size);
 		Some((value, state))
@@ -291,33 +309,42 @@ impl<'a> Serialized<'a> {
 		self.write_le_usize(start_ix, val.1);
 		self.0.to_mut().extend_from_slice(val.0);
 		self.0.to_mut().append(&mut new_ix);
-		self.write_le_usize(self.0.len() - 4, start_ix);
-		self.append_le_usize(len + 1);
+		if len > 0 {
+			self.write_le_usize(self.0.len() - 4, start_ix);
+			self.append_le_usize(len + 1);
+		} else {
+			self.write_le_usize(self.0.len() - 4, 1);
+		}
 	}
 
 	fn remove(&mut self, index: usize) {
 		let len = self.len();
+		if len == 1 && index == 0 {
+			self.clear();
+			return;
+		}
 		// eager removal is costy, running some gc impl
 		// can be interesting (would be malleable serializing).
 		let elt_start = self.index_element(index);
 		let start_ix = self.index_start();
-		let elt_end = if index == len {
+		let elt_end = if index == len - 1 {
 			start_ix
 		} else {
-			self.index_element(index) 
+			self.index_element(index + 1) 
 		};
 		let delete_size = elt_end - elt_start;
-		for i in elt_start..elt_end {
-			let _ = self.0.to_mut().remove(i);
+		for _ in elt_start..elt_end {
+			let _ = self.0.to_mut().remove(elt_start);
 		}
 		let start_ix = start_ix - delete_size;
-		for i in 0..len - index - 1 {
-			let old_value = self.read_le_usize(4 + start_ix + i * 4);
-			self.write_le_usize(start_ix + i * 4, old_value - delete_size);
+		for i in 1..len - index - 1 {
+			let old_value = self.read_le_usize(start_ix + i * 4);
+			self.write_le_usize(start_ix + (i - 1) * 4, old_value - delete_size);
 		}
-		let size_index = start_ix + (len - 1) * 4;
-		self.write_le_usize(size_index, len - 1);
-		self.0.to_mut().truncate(size_index + 4);
+		let len = len - 1;
+		let end_index = start_ix + len * 4;
+		self.write_le_usize(end_index - 4, len);
+		self.0.to_mut().truncate(end_index);
 
 	}
 
@@ -330,7 +357,7 @@ impl<'a> Serialized<'a> {
 			self.index_element(index + 1)
 		};
 		let state = self.read_le_usize(start_ix);
-		(&self.0[start_ix..end_ix], state)
+		(&self.0[start_ix + 4..end_ix], state)
 	}
 
 }
@@ -341,21 +368,22 @@ impl<'a> Default for Serialized<'a> {
 	}
 }
 
+// Utility function for basis implementation.
 impl<'a> Serialized<'a> {
 	
 	// Index at end, also contains the encoded size
 	fn index_start(&self) -> usize {
 		let nb_ix = self.len();
+		if nb_ix ==0 { return 0; }
 		let end = self.0.len();
 		end - (nb_ix * 4)
 	}
 
 	fn index_element(&self, position: usize) -> usize {
-		let index_start = self.index_start();
 		if position == 0 {
-			return index_start;
+			return 0;
 		}
-		let i = index_start + (position - 1) * 4;
+		let i = self.index_start() + (position - 1) * 4;
 		self.read_le_usize(i)
 	}
 
@@ -630,4 +658,55 @@ impl<'a> Serialized<'a> {
 
 impl<V> History<V> {
   history_impl!(&V, V, &mut V);
+}
+
+mod test {
+  use super::*;
+
+  #[test]
+  fn serialized_basis() {
+    // test basis unsafe function similar to a simple vec
+    // without index checking.
+	//fn get_state(&self, index: usize) -> (&V, usize) {
+	//fn len(&self) -> usize {
+	//fn truncate(&mut self, index: usize) {
+	//fn push(&mut self, val: (&[u8], usize)) {
+	//fn pop(&mut self) -> Option<(Vec<u8>, usize)> {
+	//fn remove(&mut self, index: usize) {
+	//fn get_state(&self, index: usize) -> (&[u8], usize) {
+    let v1 = &b"val1"[..];
+    let v2 = &b"value_2"[..];
+    let v3 = &b"a third value 3"[..];
+    let mut ser = Serialized::default();
+    assert_eq!(ser.len(), 0);
+    assert_eq!(ser.pop(), None);
+    ser.push((v1, 1));
+    assert_eq!(ser.get_state(0), (v1, 1));
+    assert_eq!(ser.pop(), Some((v1.to_vec(), 1)));
+	assert_eq!(ser.len(), 0);
+    ser.push((v1, 1));
+    ser.push((v2, 2));
+    ser.push((v3, 3));
+ 	assert_eq!(ser.get_state(0), (v1, 1));
+    assert_eq!(ser.get_state(1), (v2, 2));
+    assert_eq!(ser.get_state(2), (v3, 3));
+    assert_eq!(ser.pop(), Some((v3.to_vec(), 3)));
+    assert_eq!(ser.len(), 2);
+    ser.push((v3, 3));
+    assert_eq!(ser.get_state(2), (v3, 3));
+	ser.remove(0);
+    assert_eq!(ser.len(), 2);
+	assert_eq!(ser.get_state(0), (v2, 2));
+    assert_eq!(ser.get_state(1), (v3, 3));
+    ser.push((v1, 1));
+	ser.remove(1);
+    assert_eq!(ser.len(), 2);
+	assert_eq!(ser.get_state(0), (v2, 2));
+    assert_eq!(ser.get_state(1), (v1, 1));
+	ser.push((v1, 1));
+	ser.truncate(1);
+    assert_eq!(ser.len(), 1);
+	assert_eq!(ser.get_state(0), (v2, 2));
+	
+  }
 }
