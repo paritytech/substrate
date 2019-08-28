@@ -17,10 +17,11 @@
 //! Stuff to do with the runtime's storage.
 
 use crate::rstd::prelude::*;
-use crate::rstd::borrow::Borrow;
+use crate::rstd::{borrow::Borrow, iter::FromIterator};
 use codec::{Codec, Encode, Decode, KeyedVec, EncodeAppend};
 use hashed::generator::{HashedStorage, StorageHasher};
 use unhashed::generator::UnhashedStorage;
+use crate::traits::{StorageDefault, Len};
 
 #[macro_use]
 pub mod storage_items;
@@ -107,6 +108,8 @@ impl UnhashedStorage for RuntimeStorage {
 pub trait StorageValue<T: Codec> {
 	/// The type that get/take return.
 	type Query;
+	/// Something that can provide the default value of this storage type.
+	type Default: StorageDefault<T>;
 
 	/// Get the storage key.
 	fn key() -> &'static [u8];
@@ -136,12 +139,39 @@ pub trait StorageValue<T: Codec> {
 	/// Append the given item to the value in the storage.
 	///
 	/// `T` is required to implement `codec::EncodeAppend`.
-	fn append<I: Encode>(items: &[I]) -> Result<(), &'static str>
-		where T: EncodeAppend<Item=I>;
+	fn append<'a, I, R>(items: R) -> Result<(), &'static str> where
+		I: 'a + Encode,
+		T: EncodeAppend<Item=I>,
+		R: IntoIterator<Item=&'a I>,
+		R::IntoIter: ExactSizeIterator;
+
+	/// Append the given items to the value in the storage.
+	///
+	/// `T` is required to implement `Codec::EncodeAppend`.
+	///
+	/// Upon any failure, it replaces `items` as the new value (assuming that the previous stored
+	/// data is simply corrupt and no longer usable).
+	///
+	/// ### WARNING
+	///
+	/// use with care; if your use-case is not _exactly_ as what this function is doing,
+	/// you should use append and sensibly handle failure within the runtime code if it happens.
+	fn append_or_put<'a, I, R>(items: R) where
+		I: 'a + Encode + Clone,
+		T: EncodeAppend<Item=I> + FromIterator<I>,
+		R: IntoIterator<Item=&'a I> + Clone,
+		R::IntoIter: ExactSizeIterator;
+
+	/// Read the length of the value in a fast way, without decoding the entire value.
+	///
+	/// `T` is required to implement `Codec::DecodeLength`.
+	fn decode_len() -> Result<usize, &'static str>
+		where T: codec::DecodeLength, T: Len;
 }
 
 impl<T: Codec, U> StorageValue<T> for U where U: hashed::generator::StorageValue<T> {
 	type Query = U::Query;
+	type Default = U::Default;
 
 	fn key() -> &'static [u8] {
 		<U as hashed::generator::StorageValue<T>>::key()
@@ -167,10 +197,26 @@ impl<T: Codec, U> StorageValue<T> for U where U: hashed::generator::StorageValue
 	fn take() -> Self::Query {
 		U::take(&mut RuntimeStorage)
 	}
-	fn append<I: Encode>(items: &[I]) -> Result<(), &'static str>
-		where T: EncodeAppend<Item=I>
+	fn append<'a, I, R>(items: R) -> Result<(), &'static str> where
+		I: 'a + Encode,
+		T: EncodeAppend<Item=I>,
+		R: IntoIterator<Item=&'a I>,
+		R::IntoIter: ExactSizeIterator,
 	{
 		U::append(items, &mut RuntimeStorage)
+	}
+	fn append_or_put<'a, I, R>(items: R) where
+		I: 'a + Encode + Clone,
+		T: EncodeAppend<Item=I> + FromIterator<I>,
+		R: IntoIterator<Item=&'a I> + Clone,
+		R::IntoIter: ExactSizeIterator,
+	{
+		U::append_or_put(items, &mut RuntimeStorage)
+	}
+	fn decode_len() -> Result<usize, &'static str>
+		where T: codec::DecodeLength, T: Len
+	{
+		U::decode_len(&mut RuntimeStorage)
 	}
 }
 
@@ -178,6 +224,8 @@ impl<T: Codec, U> StorageValue<T> for U where U: hashed::generator::StorageValue
 pub trait StorageMap<K: Codec, V: Codec> {
 	/// The type that get/take return.
 	type Query;
+	/// Something that can provide the default value of this storage type.
+	type Default: StorageDefault<V>;
 
 	/// Get the prefix key in storage.
 	fn prefix() -> &'static [u8];
@@ -213,6 +261,7 @@ pub trait StorageMap<K: Codec, V: Codec> {
 
 impl<K: Codec, V: Codec, U> StorageMap<K, V> for U where U: hashed::generator::StorageMap<K, V> {
 	type Query = U::Query;
+	type Default = U::Default;
 
 	fn prefix() -> &'static [u8] {
 		<U as hashed::generator::StorageMap<K, V>>::prefix()
@@ -260,17 +309,84 @@ pub trait AppendableStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
 	/// Append the given item to the value in the storage.
 	///
 	/// `T` is required to implement `codec::EncodeAppend`.
-	fn append<KeyArg: Borrow<K>, I: Encode>(key: KeyArg, items: &[I]) -> Result<(), &'static str>
-		where V: EncodeAppend<Item=I>;
+	fn append<'a, KeyArg, I, R>(
+		key: KeyArg,
+		items: R,
+	) -> Result<(), &'static str> where
+		KeyArg: Borrow<K>,
+		I: 'a + codec::Encode,
+		V: EncodeAppend<Item=I>,
+		R: IntoIterator<Item=&'a I> + Clone,
+		R::IntoIter: ExactSizeIterator;
+
+	/// Append the given items to the value in the storage.
+	///
+	/// `T` is required to implement `codec::EncodeAppend`.
+	///
+	/// Upon any failure, it replaces `items` as the new value (assuming that the previous stored
+	/// data is simply corrupt and no longer usable).
+	///
+	/// WARNING: use with care; if your use-case is not _exactly_ as what this function is doing,
+	/// you should use append and sensibly handle failure within the runtime code if it happens.
+	fn append_or_insert<'a, KeyArg, I, R>(
+		key: KeyArg,
+		items: R,
+	) where
+		KeyArg: Borrow<K>,
+		I: 'a + codec::Encode + Clone,
+		V: codec::EncodeAppend<Item=I> + FromIterator<I>,
+		R: IntoIterator<Item=&'a I> + Clone,
+		R::IntoIter: ExactSizeIterator;
 }
 
 impl<K: Codec, V: Codec, U> AppendableStorageMap<K, V> for U
 	where U: hashed::generator::AppendableStorageMap<K, V>
 {
-	fn append<KeyArg: Borrow<K>, I: Encode>(key: KeyArg, items: &[I]) -> Result<(), &'static str>
-		where V: EncodeAppend<Item=I>
+	fn append<'a, KeyArg, I, R>(
+		key: KeyArg,
+		items: R,
+	) -> Result<(), &'static str> where
+		KeyArg: Borrow<K>,
+		I: 'a + codec::Encode,
+		V: EncodeAppend<Item=I>,
+		R: IntoIterator<Item=&'a I> + Clone,
+		R::IntoIter: ExactSizeIterator,
 	{
 		U::append(key.borrow(), items, &mut RuntimeStorage)
+	}
+
+	fn append_or_insert<'a, KeyArg, I, R>(
+		key: KeyArg,
+		items: R,
+	) where
+		KeyArg: Borrow<K>,
+		I: 'a + codec::Encode + Clone,
+		V: codec::EncodeAppend<Item=I> + FromIterator<I>,
+		R: IntoIterator<Item=&'a I> + Clone,
+		R::IntoIter: ExactSizeIterator,
+	{
+		U::append_or_insert(key.borrow(), items, &mut RuntimeStorage)
+	}
+}
+
+/// A storage map with a decodable length.
+pub trait DecodeLengthStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
+	/// Read the length of the value in a fast way, without decoding the entire value.
+	///
+	/// `T` is required to implement `Codec::DecodeLength`.
+	///
+	/// Has the same logic as [`StorageValue`](trait.StorageValue.html).
+	fn decode_len<KeyArg: Borrow<K>>(key: KeyArg) -> Result<usize, &'static str>
+		where V: codec::DecodeLength, V: Len;
+}
+
+impl <K: Codec, V: Codec, U> DecodeLengthStorageMap<K, V> for U
+	where U: hashed::generator::DecodeLengthStorageMap<K, V>
+{
+	fn decode_len<KeyArg: Borrow<K>>(key: KeyArg) -> Result<usize, &'static str>
+		where V: codec::DecodeLength, V: Len
+	{
+		U::decode_len(key.borrow(), &mut RuntimeStorage)
 	}
 }
 

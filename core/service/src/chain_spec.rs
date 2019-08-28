@@ -24,7 +24,7 @@ use serde::{Serialize, Deserialize};
 use primitives::storage::{StorageKey, StorageData};
 use sr_primitives::{BuildStorage, StorageOverlay, ChildrenStorageOverlay};
 use serde_json as json;
-use crate::components::RuntimeGenesis;
+use crate::RuntimeGenesis;
 use network::Multiaddr;
 use tel::TelemetryEndpoints;
 
