@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-sr-primitives = { path = "../../core/sr-primitives" }
+sr-primitives = { path = "../sr-primitives", default-features = false }
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
 
 [features]
