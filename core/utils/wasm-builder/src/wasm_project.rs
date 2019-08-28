@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::write_file_if_changed;
+
 use std::{fs, path::{Path, PathBuf}, borrow::ToOwned, process::{Command, self}, env};
 
 use toml::value::Table;
@@ -75,7 +77,10 @@ impl Drop for WorkspaceLock {
 ///
 /// # Returns
 /// The path to the compact WASM binary and the bloaty WASM binary.
-pub fn create_and_compile(cargo_manifest: &Path) -> (WasmBinary, WasmBinaryBloaty)  {
+pub fn create_and_compile(
+	cargo_manifest: &Path,
+	default_rustflags: &str,
+) -> (WasmBinary, WasmBinaryBloaty) {
 	let wasm_workspace_root = get_wasm_workspace_root();
 	let wasm_workspace = wasm_workspace_root.join("wbuild");
 
@@ -85,7 +90,7 @@ pub fn create_and_compile(cargo_manifest: &Path) -> (WasmBinary, WasmBinaryBloat
 	let project = create_project(cargo_manifest, &wasm_workspace);
 	create_wasm_workspace_project(&wasm_workspace);
 
-	build_project(&project);
+	build_project(&project, default_rustflags);
 	let (wasm_binary, bloaty) = compact_wasm_file(
 		&project,
 		cargo_manifest,
@@ -198,12 +203,7 @@ fn create_wasm_workspace_project(wasm_workspace: &Path) {
 	).expect("WASM workspace `Cargo.toml` writing can not fail; qed");
 }
 
-/// Write to the given `file` if the `content` is different.
-fn write_file_if_changed(file: PathBuf, content: String) {
-	if fs::read_to_string(&file).ok().as_ref() != Some(&content) {
-		fs::write(&file, content).expect(&format!("Writing `{}` can not fail!", file.display()));
-	}
-}
+
 
 /// Create the project used to build the wasm binary.
 ///
@@ -271,12 +271,13 @@ fn is_release_build() -> bool {
 }
 
 /// Build the project to create the WASM binary.
-fn build_project(project: &Path) {
+fn build_project(project: &Path, default_rustflags: &str) {
 	let manifest_path = project.join("Cargo.toml");
 	let mut build_cmd = crate::get_nightly_cargo().command();
 
 	let rustflags = format!(
-		"-C link-arg=--export-table {}",
+		"-C link-arg=--export-table {} {}",
+		default_rustflags,
 		env::var(crate::WASM_BUILD_RUSTFLAGS_ENV).unwrap_or_default(),
 	);
 

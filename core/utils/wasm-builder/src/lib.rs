@@ -111,6 +111,22 @@ const WASM_TARGET_DIRECTORY: &str = "WASM_TARGET_DIRECTORY";
 ///               constant `WASM_BINARY`, which contains the built WASM binary.
 /// `cargo_manifest` - The path to the `Cargo.toml` of the project that should be built.
 pub fn build_project(file_name: &str, cargo_manifest: &str) {
+	build_project_with_default_rustflags(file_name, cargo_manifest, "");
+}
+
+/// Build the currently built project as WASM binary.
+///
+/// The current project is determined by using the `CARGO_MANIFEST_DIR` environment variable.
+///
+/// `file_name` - The name + path of the file being generated. The file contains the
+///               constant `WASM_BINARY`, which contains the built WASM binary.
+/// `cargo_manifest` - The path to the `Cargo.toml` of the project that should be built.
+/// `default_rustflags` - Default `RUSTFLAGS` that will always be set for the build.
+pub fn build_project_with_default_rustflags(
+	file_name: &str,
+	cargo_manifest: &str,
+	default_rustflags: &str,
+) {
 	if check_skip_build() {
 		return;
 	}
@@ -132,10 +148,11 @@ pub fn build_project(file_name: &str, cargo_manifest: &str) {
 
 	let (wasm_binary, bloaty) = wasm_project::create_and_compile(
 		&cargo_manifest,
+		default_rustflags,
 	);
 
-	create_out_file(
-		file_name,
+	write_file_if_changed(
+		file_name.into(),
 		format!(
 			r#"
 				pub const WASM_BINARY: &[u8] = include_bytes!("{wasm_binary}");
@@ -152,11 +169,11 @@ fn check_skip_build() -> bool {
 	env::var(SKIP_BUILD_ENV).is_ok()
 }
 
-fn create_out_file(file_name: &str, content: String) {
-	fs::write(
-		file_name,
-		content,
-	).expect("Creating and writing can not fail; qed");
+/// Write to the given `file` if the `content` is different.
+fn write_file_if_changed(file: PathBuf, content: String) {
+	if fs::read_to_string(&file).ok().as_ref() != Some(&content) {
+		fs::write(&file, content).expect(&format!("Writing `{}` can not fail!", file.display()));
+	}
 }
 
 /// Get a cargo command that compiles with nightly

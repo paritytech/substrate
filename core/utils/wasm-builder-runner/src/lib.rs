@@ -30,9 +30,6 @@ use std::{env, process::{Command, self}, fs, path::{PathBuf, Path}};
 /// Environment variable that tells us to skip building the WASM binary.
 const SKIP_BUILD_ENV: &str = "SKIP_WASM_BUILD";
 
-/// Environment variable to extend the `RUSTFLAGS` variable given to the WASM build.
-const WASM_BUILD_RUSTFLAGS_ENV: &str = "WASM_BUILD_RUSTFLAGS";
-
 /// Environment variable that tells us to create a dummy WASM binary.
 ///
 /// This is useful for `cargo check` to speed-up the compilation.
@@ -102,22 +99,8 @@ impl WasmBuilderSource {
 pub fn build_current_project_with_rustflags(
 	file_name: &str,
 	wasm_builder_source: WasmBuilderSource,
-	rustflags: &str,
+	default_rustflags: &str,
 ) {
-	let given_rustflags = env::var(WASM_BUILD_RUSTFLAGS_ENV).unwrap_or_default();
-	env::set_var(WASM_BUILD_RUSTFLAGS_ENV, format!("{} {}", given_rustflags, rustflags));
-
-	build_current_project(file_name, wasm_builder_source)
-}
-
-/// Build the currently built project as WASM binary.
-///
-/// The current project is determined using the `CARGO_MANIFEST_DIR` environment variable.
-///
-/// `file_name` - The name of the file being generated in the `OUT_DIR`. The file contains the
-///               constant `WASM_BINARY` which contains the build wasm binary.
-/// `wasm_builder_path` - Path to the wasm-builder project, relative to `CARGO_MANIFEST_DIR`.
-pub fn build_current_project(file_name: &str, wasm_builder_source: WasmBuilderSource) {
 	if check_skip_build() {
 		// If we skip the build, we still want to make sure to be called when an env variable changes
 		generate_rerun_if_changed_instructions();
@@ -145,6 +128,7 @@ pub fn build_current_project(file_name: &str, wasm_builder_source: WasmBuilderSo
 			&manifest_dir,
 			wasm_builder_source,
 			&cargo_toml_path,
+			default_rustflags,
 		);
 		run_project(&project_folder);
 	}
@@ -152,6 +136,17 @@ pub fn build_current_project(file_name: &str, wasm_builder_source: WasmBuilderSo
 	// As last step we need to generate our `rerun-if-changed` stuff. If a build fails, we don't
 	// want to spam the output!
 	generate_rerun_if_changed_instructions();
+}
+
+/// Build the currently built project as WASM binary.
+///
+/// The current project is determined using the `CARGO_MANIFEST_DIR` environment variable.
+///
+/// `file_name` - The name of the file being generated in the `OUT_DIR`. The file contains the
+///               constant `WASM_BINARY` which contains the build wasm binary.
+/// `wasm_builder_path` - Path to the wasm-builder project, relative to `CARGO_MANIFEST_DIR`.
+pub fn build_current_project(file_name: &str, wasm_builder_source: WasmBuilderSource) {
+	build_current_project_with_rustflags(file_name, wasm_builder_source, "");
 }
 
 /// Returns the root path of the wasm-builder-runner workspace.
@@ -179,6 +174,7 @@ fn create_project(
 	manifest_dir: &Path,
 	wasm_builder_source: WasmBuilderSource,
 	cargo_toml_path: &Path,
+	default_rustflags: &str,
 ) {
 	fs::create_dir_all(project_folder.join("src"))
 		.expect("WASM build runner dir create can not fail; qed");
@@ -205,12 +201,19 @@ fn create_project(
 		project_folder.join("src/main.rs"),
 		format!(
 			r#"
+				use substrate_wasm_builder::build_project_with_default_rustflags;
+
 				fn main() {{
-					substrate_wasm_builder::build_project("{file_path}", "{cargo_toml_path}")
+					build_project_with_default_rustflags(
+						"{file_path}",
+						"{cargo_toml_path}",
+						"{default_rustflags}",
+					)
 				}}
 			"#,
 			file_path = replace_back_slashes(file_path.display()),
 			cargo_toml_path = replace_back_slashes(cargo_toml_path.display()),
+			default_rustflags = default_rustflags,
 		)
 	).expect("WASM build runner `main.rs` writing can not fail; qed");
 }
