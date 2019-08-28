@@ -213,7 +213,7 @@ pub fn new() -> Client<Backend> {
 /// Creates new light client instance used for tests.
 pub fn new_light() -> (
 	client::Client<LightBackend, LightExecutor, runtime::Block, runtime::RuntimeApi>,
-	Arc<LightBackend>
+	Arc<LightBackend>,
 ) {
 
 	let storage = client_db::light::LightStorage::new_test();
@@ -234,6 +234,8 @@ pub fn new_light() -> (
 
 	(TestClientBuilder::with_backend(backend.clone())
 		.build_with_executor(call_executor)
-		.0, backend)
+		.0,
+	backend,
+	)
 
 }

@@ -590,7 +590,8 @@ where
 }
 
 impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Future for
-NewService<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
+	NewService<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc>
+{
 	type Item = ();
 	type Error = Error;
 
@@ -622,7 +623,8 @@ NewService<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 }
 
 impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Executor<Box<dyn Future<Item = (), Error = ()> + Send>> for
-NewService<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
+	NewService<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc>
+{
 	fn execute(
 		&self,
 		future: Box<dyn Future<Item = (), Error = ()> + Send>
@@ -764,7 +766,8 @@ pub struct NetworkStatus<B: BlockT> {
 }
 
 impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Drop for
-NewService<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
+	NewService<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc>
+{
 	fn drop(&mut self) {
 		debug!(target: "service", "Substrate service shutdown");
 		if let Some(signal) = self.signal.take() {

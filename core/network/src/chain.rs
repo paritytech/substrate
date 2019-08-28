@@ -135,7 +135,8 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 
 		let tree_route = ::client::blockchain::tree_route(
 			|id| self.header(&id)?.ok_or_else(||
-				client::error::Error::UnknownBlock(format!("Unknown block {:?}", id))),
+				client::error::Error::UnknownBlock(format!("Unknown block {:?}", id))
+			),
 			BlockId::Hash(*block),
 			BlockId::Hash(*base),
 		)?;

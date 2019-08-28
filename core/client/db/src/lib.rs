@@ -197,15 +197,16 @@ pub fn new_client<E, S, Block, RA>(
 	genesis_storage: S,
 	execution_strategies: ExecutionStrategies,
 	keystore: Option<primitives::traits::BareCryptoStorePtr>,
-) -> Result<(client::Client<
+) -> Result<(
+		client::Client<
 			Backend<Block>,
 			client::LocalCallExecutor<Backend<Block>, E>,
 			Block,
-			RA
+			RA,
 		>,
-		Arc<Backend<Block>>
+		Arc<Backend<Block>>,
 	),
-	client::error::Error
+	client::error::Error,
 >
 	where
 		Block: BlockT<Hash=H256>,

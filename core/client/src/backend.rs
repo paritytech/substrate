@@ -158,7 +158,7 @@ pub trait Finalizer<Block: BlockT, H: Hasher<Out=Block::Hash>, B: Backend<Block,
 		&self,
 		id: BlockId<Block>,
 		justification: Option<Justification>,
-		notify: bool
+		notify: bool,
 	) -> error::Result<()>;
 
 }
