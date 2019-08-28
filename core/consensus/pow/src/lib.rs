@@ -31,7 +31,7 @@ use sr_primitives::Justification;
 use sr_primitives::generic::{BlockId, Digest, DigestItem};
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi};
 use srml_timestamp::{TimestampInherentData, InherentError as TIError};
-use pow_primitives::{PowApi, Difficulty, Seal, POW_ENGINE_ID};
+use pow_primitives::{Difficulty, Seal, POW_ENGINE_ID};
 use primitives::H256;
 use inherents::{InherentDataProviders, InherentData};
 use consensus_common::{
@@ -90,51 +90,6 @@ pub trait PowAlgorithm<B: BlockT> {
 		difficulty: Difficulty,
 		round: u32
 	) -> Result<Option<Seal>, String>;
-}
-
-/// Delegates algorithm selection to Substrate runtime.
-pub struct PowRuntimeAlgorithm<C> {
-	client: Arc<C>,
-}
-
-impl<C> PowRuntimeAlgorithm<C> {
-	/// Create a new runtime algorithm given a client.
-	pub fn new(client: Arc<C>) -> Self {
-		Self { client }
-	}
-}
-
-impl<B: BlockT<Hash=H256>, C> PowAlgorithm<B> for PowRuntimeAlgorithm<C> where
-	C: ProvideRuntimeApi,
-	C::Api: PowApi<B>,
-{
-	fn difficulty(&self, parent: &BlockId<B>) -> Result<Difficulty, String> {
-		self.client.runtime_api().difficulty(parent)
-			.map_err(|e| format!("Fetch difficulty failed: {:?}", e))
-	}
-
-	fn verify(
-		&self,
-		parent: &BlockId<B>,
-		pre_hash: &H256,
-		seal: &Seal,
-		difficulty: Difficulty
-	) -> Result<bool, String> {
-		self.client.runtime_api().verify(parent, pre_hash, seal, difficulty)
-			.map_err(|e| format!("Verify PoW seal failed: {:?}", e))
-	}
-
-	fn mine(
-		&self,
-		parent: &BlockId<B>,
-		pre_hash: &H256,
-		seed: &H256,
-		difficulty: Difficulty,
-		round: u32
-	) -> Result<Option<Seal>, String> {
-		self.client.runtime_api().mine(parent, pre_hash, seed, difficulty, round)
-			.map_err(|e| format!("Mine PoW seal failed: {:?}", e))
-	}
 }
 
 /// A verifier for PoW blocks.
@@ -301,7 +256,7 @@ pub fn import_queue<B, C, Algorithm>(
 	B: BlockT<Hash=H256>,
 	C: ProvideRuntimeApi + HeaderBackend<B> + BlockOf + ProvideCache<B> + AuxStore,
 	C: Send + Sync + AuxStore + 'static,
-	C::Api: BlockBuilderApi<B> + PowApi<B>,
+	C::Api: BlockBuilderApi<B>,
 	Algorithm: PowAlgorithm<B> + Send + Sync + 'static,
 {
 	register_pow_inherent_data_provider(&inherent_data_providers)?;
@@ -333,8 +288,7 @@ pub fn start_mine<B: BlockT<Hash=H256>, C, Algorithm, E>(
 	round: u32,
 	inherent_data_providers: inherents::InherentDataProviders,
 ) where
-	C: HeaderBackend<B> + AuxStore + ProvideRuntimeApi + 'static,
-	C::Api: PowApi<B>,
+	C: HeaderBackend<B> + AuxStore + 'static,
 	Algorithm: PowAlgorithm<B> + Send + Sync + 'static,
 	E: Environment<B> + Send + Sync + 'static,
 	E::Error: core::fmt::Debug,
