@@ -14,7 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Rust implementation of the Phragmén election algorithm.
+//! Rust implementation of the Phragmén election algorithm. This is used in several SRML modules to
+//! optimally distribute the weight of a set of voters among an elected set of candidates. In the
+//! context of staking this is mapped to validators and nominators.
+//!
+//! The algorithm has two phases:
+//!   - Sequential phragmen: performed in [`elect`] function which is first pass of the distribution
+//!     The results are not optimal but the execution time is less.
+//!   - Equalize post-processing: tries to further distribute the weight fairly among candidates.
+//!     Incurs more execution time.
+//!
+//! The main objective of the assignments done by phragmen is to maximize the minimum backed
+//! candidate in the elected set.
+//!
+//! Reference implementation: https://github.com/w3f/consensus
+//! Further details:
+//! https://research.web3.foundation/en/latest/polkadot/NPoS/4.%20Sequential%20Phragm%C3%A9n%E2%80%99s%20method/
 
 use rstd::{prelude::*, collections::btree_map::BTreeMap};
 use crate::PerU128;
@@ -22,67 +37,74 @@ use crate::traits::{Zero, Convert, Member, SimpleArithmetic};
 
 /// Type used as the fraction.
 type Fraction = PerU128;
-/// Wrapper around the type used as the _safe_ wrapper around a `balance`.
+
+/// A type in which performing operations on balances and stakes of candidates and voters are safe.
+///
+/// This module's functions expect a `Convert` type to convert all balances to u64. Hence, u128 is
+/// a safe type for arithmetic operations over them.
+///
+/// Balance types converted to `ExtendedBalance` are referred to as `Votes`.
 pub type ExtendedBalance = u128;
 
 // this is only used while creating the candidate score. Due to reasons explained below
 // The more accurate this is, the less likely we choose a wrong candidate.
+// TODO: can be removed with proper use of per-things #2908
 const SCALE_FACTOR: ExtendedBalance = u32::max_value() as ExtendedBalance + 1;
+
 /// These are used to expose a fixed accuracy to the caller function. The bigger they are,
 /// the more accurate we get, but the more likely it is for us to overflow. The case of overflow
 /// is handled but accuracy will be lost. 32 or 16 are reasonable values.
+// TODO: can be removed with proper use of per-things #2908
 pub const ACCURACY: ExtendedBalance = u32::max_value() as ExtendedBalance + 1;
 
-/// Wrapper around validation candidates some metadata.
+/// A candidate entity for phragmen election.
 #[derive(Clone, Default)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Candidate<AccountId> {
-	/// The validator's account
+	/// Identifier.
 	pub who: AccountId,
 	/// Intermediary value used to sort candidates.
 	pub score: Fraction,
-	/// Accumulator of the stake of this candidate based on received votes.
+	/// Sum of the stake of this candidate based on received votes.
 	approval_stake: ExtendedBalance,
 	/// Flag for being elected.
 	elected: bool,
 }
 
-/// Wrapper around the nomination info of a single voter for a group of validators.
+/// A voter entity.
 #[derive(Clone, Default)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Voter<AccountId> {
-	/// The voter's account.
+	/// Identifier.
 	who: AccountId,
-	/// List of validators proposed by this voter.
+	/// List of candidates proposed by this voter.
 	edges: Vec<Edge<AccountId>>,
-	/// the stake amount proposed by the voter as a part of the vote.
+	/// The stake of this voter.
 	budget: ExtendedBalance,
-	/// Incremented each time a nominee that this voter voted for has been elected.
+	/// Incremented each time a candidate that this voter voted for has been elected.
 	load: Fraction,
 }
 
-/// Wrapper around a voter's vote and the load of that vote.
+/// A candidate being backed by a voter.
 #[derive(Clone, Default)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Edge<AccountId> {
-	/// Account being voted for
+	/// Identifier.
 	who: AccountId,
 	/// Load of this vote.
 	load: Fraction,
-	/// Equal to `edge.load / nom.load`. Stored only to be used with post-processing.
-	ratio: ExtendedBalance,
 	/// Index of the candidate stored in the 'candidates' vector.
 	candidate_index: usize,
 }
 
-/// A ratio of a voter's vote, indicated by `ExtendedBalance` / `ACCURACY`.
+/// Means a particular `AccountId` was backed by a ratio of `ExtendedBalance / ACCURACY`.
 pub type PhragmenAssignment<AccountId> = (AccountId, ExtendedBalance);
 
 /// Final result of the phragmen election.
 pub struct PhragmenResult<AccountId> {
 	/// Just winners.
 	pub winners: Vec<AccountId>,
-	/// individual assignments. for each tuple, the first elements is a voter and the second
+	/// Individual assignments. for each tuple, the first elements is a voter and the second
 	/// is the list of candidates that it supports.
 	pub assignments: Vec<(AccountId, Vec<PhragmenAssignment<AccountId>>)>
 }
@@ -110,18 +132,24 @@ pub type SupportMap<A> = BTreeMap<A, Support<A>>;
 
 /// Perform election based on Phragmén algorithm.
 ///
-/// Reference implementation: https://github.com/w3f/consensus
-///
 /// Returns an `Option` the set of winners and their detailed support ratio from each voter if
 /// enough candidates are provided. Returns `None` otherwise.
 ///
-///
+/// * `candidate_count`: number of candidates to elect.
+/// * `minimum_candidate_count`: minimum number of candidates to elect. If less candidates exist,
+///   `None` is returned.
+/// * `initial_candidates`: candidates list to be elected from.
+/// * `initial_voters`: voters list.
+/// * `stake_of`: something that can return the stake stake of a particular candidate or voter.
+/// * `self_vote`. If true, then each candidate will automatically vote for themselves with the a
+///   weight indicated by their stake. Note that when this is `true` candidates are filtered by
+/// having at least some backed stake from themselves.
 pub fn elect<AccountId, Balance, FS, C>(
-	validator_count: usize,
-	minimum_validator_count: usize,
+	candidate_count: usize,
+	minimum_candidate_count: usize,
 	initial_candidates: Vec<AccountId>,
 	initial_voters: Vec<(AccountId, Vec<AccountId>)>,
-	slashable_balance_of: FS,
+	stake_of: FS,
 	self_vote: bool,
 ) -> Option<PhragmenResult<AccountId>> where
 	AccountId: Default + Ord + Member,
@@ -136,14 +164,18 @@ pub fn elect<AccountId, Balance, FS, C>(
 	let mut elected_candidates: Vec<AccountId>;
 	let mut assigned: Vec<(AccountId, Vec<PhragmenAssignment<AccountId>>)>;
 
+	// used to cache and access candidates index.
 	let mut c_idx_cache = BTreeMap::<AccountId, usize>::new();
 
-	// 1- Pre-process candidates and place them in a container, optimisation and add phantom votes.
-	// Candidates who have 0 stake => have no votes or all null-votes. Kick them out not.
-	let mut voters: Vec<Voter<AccountId>> = Vec::with_capacity(initial_candidates.len() + initial_voters.len());
+	// voters list.
+	let num_voters = initial_candidates.len() + initial_voters.len();
+	let mut voters: Vec<Voter<AccountId>> = Vec::with_capacity(num_voters);
+
+	// collect candidates. self vote or filter might apply
 	let mut candidates = if self_vote {
+		// self vote. filter.
 		initial_candidates.into_iter().map(|who| {
-			let stake = slashable_balance_of(&who);
+			let stake = stake_of(&who);
 			Candidate { who, approval_stake: to_votes(stake), ..Default::default() }
 		})
 		.filter_map(|c| {
@@ -166,6 +198,7 @@ pub fn elect<AccountId, Balance, FS, C>(
 		})
 		.collect::<Vec<Candidate<AccountId>>>()
 	} else {
+		// no self vote. just collect.
 		initial_candidates.into_iter()
 			.enumerate()
 			.map(|(idx, who)| {
@@ -175,17 +208,20 @@ pub fn elect<AccountId, Balance, FS, C>(
 			.collect::<Vec<Candidate<AccountId>>>()
 	};
 
-	// 2- collect the voters with the associated votes.
-	// Also collect approval stake along the way.
-	voters.extend(initial_voters.into_iter().map(|(who, nominees)| {
-		let voter_stake = slashable_balance_of(&who);
-		let mut edges: Vec<Edge<AccountId>> = Vec::with_capacity(nominees.len());
-		for n in nominees {
-			if let Some(idx) = c_idx_cache.get(&n) {
+	// early return if we don't have enough candidates
+	if candidates.len() < minimum_candidate_count { return None; }
+
+	// collect voters. use `c_idx_cache` for fast access and aggregate `approval_stake` of
+	// candidates.
+	voters.extend(initial_voters.into_iter().map(|(who, votes)| {
+		let voter_stake = stake_of(&who);
+		let mut edges: Vec<Edge<AccountId>> = Vec::with_capacity(votes.len());
+		for v in votes {
+			if let Some(idx) = c_idx_cache.get(&v) {
 				// This candidate is valid + already cached.
 				candidates[*idx].approval_stake = candidates[*idx].approval_stake
 					.saturating_add(to_votes(voter_stake));
-				edges.push(Edge { who: n.clone(), candidate_index: *idx, ..Default::default() });
+				edges.push(Edge { who: v.clone(), candidate_index: *idx, ..Default::default() });
 			} // else {} would be wrong votes. We don't really care about it.
 		}
 		Voter {
@@ -196,118 +232,114 @@ pub fn elect<AccountId, Balance, FS, C>(
 		}
 	}));
 
-	// 4- If we have more candidates then needed, run Phragmén.
-	if candidates.len() >= minimum_validator_count {
-		let validator_count = validator_count.min(candidates.len());
-		elected_candidates = Vec::with_capacity(validator_count);
-		assigned = Vec::with_capacity(validator_count);
 
-		// Main election loop
-		for _round in 0..validator_count {
-			// Loop 1: initialize score
-			for c in &mut candidates {
-				if !c.elected {
-					c.score = Fraction::from_xth(c.approval_stake);
-				}
+	// we have already checked that we have more candidates than minimum_candidate_count.
+	// run phragmen.
+	let to_elect = candidate_count.min(candidates.len());
+	elected_candidates = Vec::with_capacity(candidate_count);
+	assigned = Vec::with_capacity(candidate_count);
+
+	// main election loop
+	for _round in 0..to_elect {
+		// loop 1: initialize score
+		for c in &mut candidates {
+			if !c.elected {
+				c.score = Fraction::from_xth(c.approval_stake);
 			}
-			// Loop 2: increment score.
-			for n in &voters {
-				for e in &n.edges {
-					let c = &mut candidates[e.candidate_index];
-					if !c.elected && !c.approval_stake.is_zero() {
-						// Basic fixed-point shifting by 32.
-						// `n.budget.saturating_mul(SCALE_FACTOR)` will never saturate
-						// since n.budget cannot exceed u64,despite being stored in u128. yet,
-						// `*n.load / SCALE_FACTOR` might collapse to zero. Hence, 32 or 16 bits are better scale factors.
-						// Note that left-associativity in operators precedence is crucially important here.
-						let temp =
-							n.budget.saturating_mul(SCALE_FACTOR) / c.approval_stake
-							* (*n.load / SCALE_FACTOR);
-						c.score = Fraction::from_parts((*c.score).saturating_add(temp));
-					}
+		}
+		// loop 2: increment score
+		for n in &voters {
+			for e in &n.edges {
+				let c = &mut candidates[e.candidate_index];
+				if !c.elected && !c.approval_stake.is_zero() {
+					// Basic fixed-point shifting by 32.
+					// `n.budget.saturating_mul(SCALE_FACTOR)` will never saturate
+					// since n.budget cannot exceed u64,despite being stored in u128. yet,
+					// `*n.load / SCALE_FACTOR` might collapse to zero. Hence, 32 or 16 bits are
+					// better scale factors. Note that left-associativity in operators precedence is
+					//  crucially important here.
+					let temp =
+						n.budget.saturating_mul(SCALE_FACTOR) / c.approval_stake
+						* (*n.load / SCALE_FACTOR);
+					c.score = Fraction::from_parts((*c.score).saturating_add(temp));
 				}
-			}
-
-			// Find the best
-			if let Some(winner) = candidates
-				.iter_mut()
-				.filter(|c| !c.elected)
-				.min_by_key(|c| *c.score)
-			{
-				// loop 3: update voter and edge load
-				winner.elected = true;
-				for n in &mut voters {
-					for e in &mut n.edges {
-						if e.who == winner.who {
-							e.load = Fraction::from_parts(*winner.score - *n.load);
-							n.load = winner.score;
-						}
-					}
-				}
-
-				elected_candidates.push(winner.who.clone());
-			} else {
-				break
-			}
-		} // end of all rounds
-
-		// 4.1- Update backing stake of candidates and voters
-		for n in &mut voters {
-			let mut assignment = (n.who.clone(), vec![]);
-			for e in &mut n.edges {
-				if let Some(c) = elected_candidates.iter().cloned().find(|c| *c == e.who) {
-					if c != n.who {
-						let ratio = {
-							// Full support. No need to calculate.
-							if *n.load == *e.load { ACCURACY }
-							else {
-								// This should not saturate. Safest is to just check
-								if let Some(r) = ACCURACY.checked_mul(*e.load) {
-									r / n.load.max(1)
-								} else {
-									// Just a simple trick.
-									*e.load / (n.load.max(1) / ACCURACY)
-								}
-							}
-						};
-						e.ratio = ratio;
-						assignment.1.push((e.who.clone(), ratio));
-					}
-				}
-			}
-
-			if assignment.1.len() > 0 {
-				// To ensure an assertion indicating: no stake from the voter going to waste, we add
-				//  a minimal post-processing to equally assign all of the leftover stake ratios.
-				let vote_count = assignment.1.len() as ExtendedBalance;
-				let l = assignment.1.len();
-				let sum = assignment.1.iter().map(|a| a.1).sum::<ExtendedBalance>();
-				let diff = ACCURACY.checked_sub(sum).unwrap_or(0);
-				let diff_per_vote= diff / vote_count;
-
-				if diff_per_vote > 0 {
-					for i in 0..l {
-						assignment.1[i%l].1 =
-							assignment.1[i%l].1
-							.saturating_add(diff_per_vote);
-					}
-				}
-
-				// `remainder` is set to be less than maximum votes of a voter (currently 16).
-				// safe to cast it to usize.
-				let remainder = diff - diff_per_vote * vote_count;
-				for i in 0..remainder as usize {
-					assignment.1[i%l].1 =
-						assignment.1[i%l].1
-						.saturating_add(1);
-				}
-				assigned.push(assignment);
 			}
 		}
 
-	} else {
-		// if we have less than minimum, use the previous validator set.
-		return None
+		// loop 3: find the best
+		if let Some(winner) = candidates
+			.iter_mut()
+			.filter(|c| !c.elected)
+			.min_by_key(|c| *c.score)
+		{
+			// loop 3: update voter and edge load
+			winner.elected = true;
+			for n in &mut voters {
+				for e in &mut n.edges {
+					if e.who == winner.who {
+						e.load = Fraction::from_parts(*winner.score - *n.load);
+						n.load = winner.score;
+					}
+				}
+			}
+
+			elected_candidates.push(winner.who.clone());
+		} else {
+			break
+		}
+	} // end of all rounds
+
+	// update backing stake of candidates and voters
+	for n in &mut voters {
+		let mut assignment = (n.who.clone(), vec![]);
+		for e in &mut n.edges {
+			if let Some(c) = elected_candidates.iter().cloned().find(|c| *c == e.who) {
+				if c != n.who {
+					let ratio = {
+						// Full support. No need to calculate.
+						if *n.load == *e.load { ACCURACY }
+						else {
+							// This should not saturate. Safest is to just check
+							if let Some(r) = ACCURACY.checked_mul(*e.load) {
+								r / n.load.max(1)
+							} else {
+								// Just a simple trick.
+								*e.load / (n.load.max(1) / ACCURACY)
+							}
+						}
+					};
+					assignment.1.push((e.who.clone(), ratio));
+				}
+			}
+		}
+
+		if assignment.1.len() > 0 {
+			// To ensure an assertion indicating: no stake from the voter going to waste, we add
+			//  a minimal post-processing to equally assign all of the leftover stake ratios.
+			let vote_count = assignment.1.len() as ExtendedBalance;
+			let l = assignment.1.len();
+			let sum = assignment.1.iter().map(|a| a.1).sum::<ExtendedBalance>();
+			let diff = ACCURACY.checked_sub(sum).unwrap_or(0);
+			let diff_per_vote= diff / vote_count;
+
+			if diff_per_vote > 0 {
+				for i in 0..l {
+					assignment.1[i%l].1 =
+						assignment.1[i%l].1
+						.saturating_add(diff_per_vote);
+				}
+			}
+
+			// `remainder` is set to be less than maximum votes of a voter (currently 16).
+			// safe to cast it to usize.
+			let remainder = diff - diff_per_vote * vote_count;
+			for i in 0..remainder as usize {
+				assignment.1[i%l].1 =
+					assignment.1[i%l].1
+					.saturating_add(1);
+			}
+			assigned.push(assignment);
+		}
 	}
 
 	Some(PhragmenResult {
@@ -316,17 +348,23 @@ pub fn elect<AccountId, Balance, FS, C>(
 	})
 }
 
-/// Performs equalize post-processing to the output of the election algorithm
-/// This function mutates the input parameters, most noticeably it updates the exposure of
-/// the elected candidates.
+/// Performs equalize post-processing to the output of the election algorithm. This happens in
+/// rounds. The number of rounds and the maximum diff-per-round tolerance can be tuned through input
+/// parameters.
 ///
-/// No value is returned from the function and the `expo_map` parameter is updated.
+/// No value is returned from the function and the `supports` parameter is updated.
+///
+/// * `assignments`: exactly the same is the output of phragmen.
+/// * `supports`: mutable reference to s `SupportMap`. This parameter is updated.
+/// * `tolerance`: maximum difference that can occur before an early quite happens.
+/// * `iterations`: maximum number of iterations that will be processed.
+/// * `stake_of`: something that can return the stake stake of a particular candidate or voter.
 pub fn equalize<Balance, AccountId, C, FS>(
 	mut assignments: Vec<(AccountId, Vec<PhragmenAssignment<AccountId>>)>,
 	supports: &mut SupportMap<AccountId>,
 	tolerance: ExtendedBalance,
 	iterations: usize,
-	slashable_balance_of: FS,
+	stake_of: FS,
 ) where
 	C: Convert<Balance, u64> + Convert<u128, Balance>,
 	for <'r> FS: Fn(&'r AccountId) -> Balance,
@@ -337,7 +375,7 @@ pub fn equalize<Balance, AccountId, C, FS>(
 		let mut max_diff = 0;
 
 		for (voter, assignment) in assignments.iter_mut() {
-			let voter_budget = slashable_balance_of(&voter);
+			let voter_budget = stake_of(&voter);
 
 			let diff = do_equalize::<_, _, C>(
 				voter,
@@ -355,6 +393,8 @@ pub fn equalize<Balance, AccountId, C, FS>(
 	}
 }
 
+/// actually perform equalize. same interface is `equalize`. Just called in loops with a check for
+/// maximum difference.
 fn do_equalize<Balance, AccountId, C>(
 	voter: &AccountId,
 	budget_balance: Balance,

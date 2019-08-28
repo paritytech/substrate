@@ -503,7 +503,7 @@ pub trait Trait: system::Trait {
 	/// This must fit into a `u64` but is allowed to be sensibly lossy.
 	/// TODO: #1377
 	/// The backward convert should be removed as the new Phragmen API returns ratio.
-	/// The post-processing needs it but will be moved to off-chain.
+	/// The post-processing needs it but will be moved to off-chain. TODO: #2908
 	type CurrencyToVote: Convert<BalanceOf<Self>, u64> + Convert<u128, BalanceOf<Self>>;
 
 	/// Some tokens minted.
