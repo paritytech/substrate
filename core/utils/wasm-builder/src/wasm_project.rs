@@ -86,7 +86,11 @@ pub fn create_and_compile(cargo_manifest: &Path) -> (WasmBinary, WasmBinaryBloat
 	create_wasm_workspace_project(&wasm_workspace);
 
 	build_project(&project);
-	let (wasm_binary, bloaty) = compact_wasm_file(&project, cargo_manifest, &wasm_workspace);
+	let (wasm_binary, bloaty) = compact_wasm_file(
+		&project,
+		cargo_manifest,
+		&wasm_workspace,
+	);
 
 	copy_wasm_to_target_directory(cargo_manifest, &wasm_binary);
 
@@ -124,6 +128,7 @@ fn find_cargo_lock(cargo_manifest: &Path) -> Option<PathBuf> {
 		cargo_manifest.display(),
 		build_helper::out_dir().display()
 	);
+
 	None
 }
 
@@ -193,6 +198,13 @@ fn create_wasm_workspace_project(wasm_workspace: &Path) {
 	).expect("WASM workspace `Cargo.toml` writing can not fail; qed");
 }
 
+/// Write to the given `file` if the `content` is different.
+fn write_file_if_changed(file: PathBuf, content: String) {
+	if fs::read_to_string(&file).ok().as_ref() != Some(&content) {
+		fs::write(&file, content).expect(&format!("Writing `{}` can not fail!", file.display()));
+	}
+}
+
 /// Create the project used to build the wasm binary.
 ///
 /// # Returns
@@ -205,7 +217,7 @@ fn create_project(cargo_manifest: &Path, wasm_workspace: &Path) -> PathBuf {
 
 	fs::create_dir_all(project_folder.join("src")).expect("Wasm project dir create can not fail; qed");
 
-	fs::write(
+	write_file_if_changed(
 		project_folder.join("Cargo.toml"),
 		format!(
 			r#"
@@ -225,12 +237,12 @@ fn create_project(cargo_manifest: &Path, wasm_workspace: &Path) -> PathBuf {
 			crate_path = crate_path.display(),
 			wasm_binary = wasm_binary,
 		)
-	).expect("Project `Cargo.toml` writing can not fail; qed");
+	);
 
-	fs::write(
+	write_file_if_changed(
 		project_folder.join("src/lib.rs"),
-		"#![no_std] pub use wasm_project::*;",
-	).expect("Project `lib.rs` writing can not fail; qed");
+		"#![no_std] pub use wasm_project::*;".into(),
+	);
 
 	if let Some(crate_lock_file) = find_cargo_lock(cargo_manifest) {
 		// Use the `Cargo.lock` of the main project.

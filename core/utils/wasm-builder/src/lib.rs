@@ -130,7 +130,9 @@ pub fn build_project(file_name: &str, cargo_manifest: &str) {
 		process::exit(1);
 	}
 
-	let (wasm_binary, bloaty) = wasm_project::create_and_compile(&cargo_manifest);
+	let (wasm_binary, bloaty) = wasm_project::create_and_compile(
+		&cargo_manifest,
+	);
 
 	create_out_file(
 		file_name,

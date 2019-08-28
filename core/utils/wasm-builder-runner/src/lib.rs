@@ -133,18 +133,44 @@ pub fn build_current_project(file_name: &str, wasm_builder_source: WasmBuilderSo
 	let cargo_toml_path = manifest_dir.join("Cargo.toml");
 	let out_dir = PathBuf::from(env::var("OUT_DIR").expect("`OUT_DIR` is set by cargo!"));
 	let file_path = out_dir.join(file_name);
-	let project_folder = out_dir.join("wasm_build_runner");
+	let project_name = env::var("CARGO_PKG_NAME").expect("`CARGO_PKG_NAME` is set by cargo!");
+	let project_folder = get_workspace_root().join(project_name);
 
 	if check_provide_dummy_wasm_binary() {
 		provide_dummy_wasm_binary(&file_path);
 	} else {
-		create_project(&project_folder, &file_path, &manifest_dir, wasm_builder_source, &cargo_toml_path);
+		create_project(
+			&project_folder,
+			&file_path,
+			&manifest_dir,
+			wasm_builder_source,
+			&cargo_toml_path,
+		);
 		run_project(&project_folder);
 	}
 
 	// As last step we need to generate our `rerun-if-changed` stuff. If a build fails, we don't
 	// want to spam the output!
 	generate_rerun_if_changed_instructions();
+}
+
+/// Returns the root path of the wasm-builder-runner workspace.
+///
+/// The wasm-builder-runner workspace contains all wasm-builder-runner's projects.
+fn get_workspace_root() -> PathBuf {
+	let out_dir_env = env::var("OUT_DIR").expect("`OUT_DIR` is set by cargo!");
+	let mut out_dir = PathBuf::from(&out_dir_env);
+
+	loop {
+		match out_dir.parent() {
+			Some(parent) if out_dir.ends_with("build") => return parent.join("wbuild-runner"),
+			_ => if !out_dir.pop() {
+				break;
+			}
+		}
+	}
+
+	panic!("Could not find target dir in: {}", out_dir_env)
 }
 
 fn create_project(
