@@ -47,7 +47,7 @@ use elections::VoteIndex;
 use version::NativeVersion;
 use primitives::OpaqueMetadata;
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
-use im_online::{AuthorityId as ImOnlineId};
+use im_online::sr25519::{AuthorityId as ImOnlineId};
 
 #[cfg(any(feature = "std", test))]
 pub use sr_primitives::BuildStorage;
@@ -79,7 +79,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 153,
+	spec_version: 154,
 	impl_version: 154,
 	apis: RUNTIME_API_VERSIONS,
 };
@@ -393,6 +393,7 @@ impl sudo::Trait for Runtime {
 }
 
 impl im_online::Trait for Runtime {
+	type AuthorityId = ImOnlineId;
 	type Call = Call;
 	type Event = Event;
 	type UncheckedExtrinsic = UncheckedExtrinsic;
@@ -447,8 +448,8 @@ construct_runtime!(
 		Treasury: treasury::{Module, Call, Storage, Event<T>},
 		Contracts: contracts,
 		Sudo: sudo,
-		ImOnline: im_online::{Module, Call, Storage, Event, ValidateUnsigned, Config},
-		AuthorityDiscovery: authority_discovery::{Module, Call, Config},
+		ImOnline: im_online::{Module, Call, Storage, Event<T>, ValidateUnsigned, Config<T>},
+		AuthorityDiscovery: authority_discovery::{Module, Call, Config<T>},
 		Offences: offences::{Module, Call, Storage, Event},
 	}
 );
@@ -578,19 +579,19 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl authority_discovery_primitives::AuthorityDiscoveryApi<Block, im_online::AuthorityId> for Runtime {
-		fn authority_id() -> Option<im_online::AuthorityId> {
+	impl authority_discovery_primitives::AuthorityDiscoveryApi<Block, ImOnlineId> for Runtime {
+		fn authority_id() -> Option<ImOnlineId> {
 			AuthorityDiscovery::authority_id()
 		}
-		fn authorities() -> Vec<im_online::AuthorityId> {
+		fn authorities() -> Vec<ImOnlineId> {
 			AuthorityDiscovery::authorities()
 		}
 
-		fn sign(payload: Vec<u8>, authority_id: im_online::AuthorityId) -> Option<Vec<u8>> {
+		fn sign(payload: Vec<u8>, authority_id: ImOnlineId) -> Option<Vec<u8>> {
 			AuthorityDiscovery::sign(payload, authority_id)
 		}
 
-		fn verify(payload: Vec<u8>, signature: Vec<u8>, public_key: im_online::AuthorityId) -> bool {
+		fn verify(payload: Vec<u8>, signature: Vec<u8>, public_key: ImOnlineId) -> bool {
 			AuthorityDiscovery::verify(payload, signature, public_key)
 		}
 	}
