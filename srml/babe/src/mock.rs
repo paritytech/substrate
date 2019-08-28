@@ -17,11 +17,12 @@
 //! Test utilities
 #![allow(dead_code, unused_imports)]
 
-use crate::{Trait, Module, GenesisConfig};
+use super::{Trait, Module, GenesisConfig};
 use babe_primitives::sr25519::AuthorityId;
 use sr_primitives::{
 	traits::IdentityLookup, Perbill,
 	testing::{Header, UintAuthorityId},
+	impl_opaque_keys, key_types::DUMMY,
 };
 use sr_version::RuntimeVersion;
 use srml_support::{impl_outer_origin, parameter_types};
@@ -64,6 +65,24 @@ impl system::Trait for Test {
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type MaximumBlockLength = MaximumBlockLength;
+}
+
+impl_opaque_keys! {
+	pub struct MockSessionKeys {
+		#[id(DUMMY)]
+		pub dummy: UintAuthorityId,
+	}
+}
+
+impl session::Trait for Test {
+	type Event = ();
+	type ValidatorId = u64;
+	type ShouldEndSession = Babe;
+	type SessionHandler = (Babe,);
+	type OnSessionEnding = ();
+	type ValidatorIdOf = ();
+	type SelectInitialValidators = ();
+	type Keys = MockSessionKeys;
 }
 
 impl timestamp::Trait for Test {

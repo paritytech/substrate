@@ -16,10 +16,12 @@
 
 //! Consensus extension module tests for BABE consensus.
 #![allow(unused_imports)]
+#![cfg(test)]
 use super::*;
 use runtime_io::with_externalities;
 use mock::{new_test_ext, Babe, Test};
 use sr_primitives::{traits::Header, Digest};
+use babe_primitives::CompatibleDigestItem;
 use session::ShouldEndSession;
 
 #[test]
@@ -45,6 +47,8 @@ fn check_module() {
 }
 
 type System = system::Module<Test>;
+type Session = session::Module<Test>;
+type EpochDuration = <Test as super::Trait>::EpochDuration;
 
 #[test]
 fn check_epoch_change() {
@@ -66,7 +70,17 @@ fn check_epoch_change() {
 		assert!(Babe::should_end_session(0));
 		Babe::randomness_change_epoch(1);
 		let header = System::finalize();
-		assert_ne!(header.digest, Digest { logs: vec![] });
+		let Digest { ref logs } = header.digest;
+		assert_eq!(logs.len(), 1);
+		let (engine_id, mut epoch) = logs[0].as_consensus().unwrap();
+		assert_eq!(BABE_ENGINE_ID, engine_id);
+		let Epoch { start_slot, duration, .. } = match ConsensusLog::decode(&mut epoch).unwrap() {
+			ConsensusLog::NextEpochData(e) => e,
+			ConsensusLog::OnDisabled(_) => panic!("we have not disabled any authorities yet!"),
+		};
+		assert_eq!(EpochDuration::get(), 3);
+		assert_eq!(duration, EpochDuration::get());
+		assert_eq!(start_slot, 2 * EpochDuration::get() + 1);
 	})
 }
 
