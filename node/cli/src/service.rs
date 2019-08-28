@@ -283,7 +283,7 @@ mod tests {
 	};
 	use node_primitives::DigestItem;
 	use node_runtime::{BalancesCall, Call, UncheckedExtrinsic};
-	use node_runtime::constants::{currency::CENTS, time::SLOT_DURATION};
+	use node_runtime::constants::{currency::CENTS, time::{PRIMARY_PROBABILITY, SLOT_DURATION}};
 	use codec::{Encode, Decode};
 	use primitives::{
 		crypto::Pair as CryptoPair, blake2_256,
@@ -404,7 +404,7 @@ mod tests {
 						slot_num,
 						&parent_header,
 						&*service.client(),
-						(278, 1000),
+						PRIMARY_PROBABILITY,
 						&keystore,
 					) {
 						break babe_pre_digest;
