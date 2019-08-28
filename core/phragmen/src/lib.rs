@@ -31,6 +31,8 @@
 //! Further details:
 //! https://research.web3.foundation/en/latest/polkadot/NPoS/4.%20Sequential%20Phragm%C3%A9n%E2%80%99s%20method/
 
+#![cfg_attr(not(feature = "std"), no_std)]
+
 use rstd::{prelude::*, collections::btree_map::BTreeMap};
 use sr_primitives::PerU128;
 use sr_primitives::traits::{Zero, Convert, Member, SimpleArithmetic};
