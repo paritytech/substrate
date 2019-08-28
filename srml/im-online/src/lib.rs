@@ -88,38 +88,38 @@ use srml_support::{
 };
 use system::ensure_none;
 
-mod app_sr25519 {
-	use app_crypto::{app_crypto, key_types::IM_ONLINE, sr25519};
-	app_crypto!(sr25519, IM_ONLINE);
-}
-
 pub mod sr25519 {
+	mod app_sr25519 {
+		use app_crypto::{app_crypto, key_types::IM_ONLINE, sr25519};
+		app_crypto!(sr25519, IM_ONLINE);
+	}
+
 	/// An i'm online keypair using sr25519 as its crypto.
 	#[cfg(feature = "std")]
-	pub type AuthorityPair = super::app_sr25519::Pair;
+	pub type AuthorityPair = app_sr25519::Pair;
 
 	/// An i'm online signature using sr25519 as its crypto.
-	pub type AuthoritySignature = super::app_sr25519::Signature;
+	pub type AuthoritySignature = app_sr25519::Signature;
 
 	/// An i'm online identifier using sr25519 as its crypto.
-	pub type AuthorityId = super::app_sr25519::Public;
-}
-
-mod app_ed25519 {
-	use app_crypto::{app_crypto, key_types::IM_ONLINE, ed25519};
-	app_crypto!(ed25519, IM_ONLINE);
+	pub type AuthorityId = app_sr25519::Public;
 }
 
 pub mod ed25519 {
+	mod app_ed25519 {
+		use app_crypto::{app_crypto, key_types::IM_ONLINE, ed25519};
+		app_crypto!(ed25519, IM_ONLINE);
+	}
+
 	/// An i'm online keypair using ed25519 as its crypto.
 	#[cfg(feature = "std")]
-	pub type AuthorityPair = super::app_ed25519::Pair;
+	pub type AuthorityPair = app_ed25519::Pair;
 
 	/// An i'm online signature using ed25519 as its crypto.
-	pub type AuthoritySignature = super::app_ed25519::Signature;
+	pub type AuthoritySignature = app_ed25519::Signature;
 
 	/// An i'm online identifier using ed25519 as its crypto.
-	pub type AuthorityId = super::app_ed25519::Public;
+	pub type AuthorityId = app_ed25519::Public;
 }
 
 // The local storage database key under which the worker progress status
