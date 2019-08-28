@@ -17,6 +17,7 @@
 //! Authoring RPC module errors.
 
 use crate::errors;
+use jsonrpc_core as rpc;
 
 /// Author RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -85,53 +86,53 @@ const POOL_IMMEDIATELY_DROPPED: i64 = POOL_INVALID_TX + 6;
 /// The key type crypto is not known.
 const UNSUPPORTED_KEY_TYPE: i64 = POOL_INVALID_TX + 7;
 
-impl From<Error> for jsonrpc_core::Error {
+impl From<Error> for rpc::Error {
 	fn from(e: Error) -> Self {
 		use txpool::error::{Error as PoolError};
 
 		match e {
-			Error::BadFormat(e) => jsonrpc_core::Error {
-				code: jsonrpc_core::ErrorCode::ServerError(BAD_FORMAT),
+			Error::BadFormat(e) => rpc::Error {
+				code: rpc::ErrorCode::ServerError(BAD_FORMAT),
 				message: format!("Extrinsic has invalid format: {}", e).into(),
 				data: None,
 			},
-			Error::Verification(e) => jsonrpc_core::Error {
-				code: jsonrpc_core::ErrorCode::ServerError(VERIFICATION_ERROR),
+			Error::Verification(e) => rpc::Error {
+				code: rpc::ErrorCode::ServerError(VERIFICATION_ERROR),
 				message: format!("Verification Error: {}", e).into(),
 				data: Some(format!("{:?}", e).into()),
 			},
-			Error::Pool(PoolError::InvalidTransaction(code)) => jsonrpc_core::Error {
-				code: jsonrpc_core::ErrorCode::ServerError(POOL_INVALID_TX),
+			Error::Pool(PoolError::InvalidTransaction(code)) => rpc::Error {
+				code: rpc::ErrorCode::ServerError(POOL_INVALID_TX),
 				message: "Invalid Transaction".into(),
 				data: Some(code.into()),
 			},
-			Error::Pool(PoolError::UnknownTransactionValidity(code)) => jsonrpc_core::Error {
-				code: jsonrpc_core::ErrorCode::ServerError(POOL_UNKNOWN_VALIDITY),
+			Error::Pool(PoolError::UnknownTransactionValidity(code)) => rpc::Error {
+				code: rpc::ErrorCode::ServerError(POOL_UNKNOWN_VALIDITY),
 				message: "Unknown Transaction Validity".into(),
 				data: Some(code.into()),
 			},
-			Error::Pool(PoolError::TemporarilyBanned) => jsonrpc_core::Error {
-				code: jsonrpc_core::ErrorCode::ServerError(POOL_TEMPORARILY_BANNED),
+			Error::Pool(PoolError::TemporarilyBanned) => rpc::Error {
+				code: rpc::ErrorCode::ServerError(POOL_TEMPORARILY_BANNED),
 				message: "Transaction is temporarily banned".into(),
 				data: None,
 			},
-			Error::Pool(PoolError::AlreadyImported(hash)) => jsonrpc_core::Error {
-				code: jsonrpc_core::ErrorCode::ServerError(POOL_ALREADY_IMPORTED),
+			Error::Pool(PoolError::AlreadyImported(hash)) => rpc::Error {
+				code: rpc::ErrorCode::ServerError(POOL_ALREADY_IMPORTED),
 				message: "Transaction Already Imported".into(),
 				data: Some(format!("{:?}", hash).into()),
 			},
-			Error::Pool(PoolError::TooLowPriority { old, new }) => jsonrpc_core::Error {
-				code: jsonrpc_core::ErrorCode::ServerError(POOL_TOO_LOW_PRIORITY),
+			Error::Pool(PoolError::TooLowPriority { old, new }) => rpc::Error {
+				code: rpc::ErrorCode::ServerError(POOL_TOO_LOW_PRIORITY),
 				message: format!("Priority is too low: ({} vs {})", old, new),
 				data: Some("The transaction has too low priority to replace another transaction already in the pool.".into()),
 			},
-			Error::Pool(PoolError::CycleDetected) => jsonrpc_core::Error {
-				code: jsonrpc_core::ErrorCode::ServerError(POOL_CYCLE_DETECTED),
+			Error::Pool(PoolError::CycleDetected) => rpc::Error {
+				code: rpc::ErrorCode::ServerError(POOL_CYCLE_DETECTED),
 				message: "Cycle Detected".into(),
 				data: None,
 			},
-			Error::Pool(PoolError::ImmediatelyDropped) => jsonrpc_core::Error {
-				code: jsonrpc_core::ErrorCode::ServerError(POOL_IMMEDIATELY_DROPPED),
+			Error::Pool(PoolError::ImmediatelyDropped) => rpc::Error {
+				code: rpc::ErrorCode::ServerError(POOL_IMMEDIATELY_DROPPED),
 				message: "Immediately Dropped" .into(),
 				data: Some("The transaction couldn't enter the pool because of the limit".into()),
 			},

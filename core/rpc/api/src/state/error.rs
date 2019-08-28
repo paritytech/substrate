@@ -17,6 +17,7 @@
 //! State RPC errors.
 
 use crate::errors;
+use jsonrpc_core as rpc;
 
 /// State RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -51,11 +52,11 @@ impl std::error::Error for Error {
 /// Base code for all state errors.
 const BASE_ERROR: i64 = 4000;
 
-impl From<Error> for jsonrpc_core::Error {
+impl From<Error> for rpc::Error {
 	fn from(e: Error) -> Self {
 		match e {
-			Error::InvalidBlockRange { .. } => jsonrpc_core::Error {
-				code: jsonrpc_core::ErrorCode::ServerError(BASE_ERROR + 1),
+			Error::InvalidBlockRange { .. } => rpc::Error {
+				code: rpc::ErrorCode::ServerError(BASE_ERROR + 1),
 				message: format!("{}", e),
 				data: None,
 			},
