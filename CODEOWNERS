@@ -53,3 +53,6 @@
 
 # Inflation points
 /srml/staking/src/inflation.rs @thiolliere
+
+# Support crates
+/srml/support/ @thiolliere
