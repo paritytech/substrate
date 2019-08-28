@@ -8,6 +8,9 @@ edition = "2018"
 sr-primitives = { path = "../sr-primitives", default-features = false }
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
 
+[dev-dependencies]
+support = { package = "srml-support", path = "../../srml/support" }
+
 [features]
 default = ["std"]
 std = [

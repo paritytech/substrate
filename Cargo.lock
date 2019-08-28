@@ -2940,6 +2940,7 @@ version = "2.0.0"
 dependencies = [
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
+ "srml-support 2.0.0",
 ]
 
 [[package]]
