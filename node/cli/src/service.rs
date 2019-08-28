@@ -46,7 +46,7 @@ macro_rules! new_full_start {
 	($config:expr) => {{
 		let mut import_setup = None;
 		let inherent_data_providers = inherents::InherentDataProviders::new();
-		let mut tasks_to_spawn = None;
+		let mut tasks_to_spawn = Vec::new();
 
 		let builder = substrate_service::ServiceBuilder::new_full::<
 			node_primitives::Block, node_runtime::RuntimeApi, node_executor::Executor
@@ -79,7 +79,7 @@ macro_rules! new_full_start {
 				)?;
 
 				import_setup = Some((babe_block_import.clone(), link_half, babe_link));
-				tasks_to_spawn = Some(vec![Box::new(pruning_task)]);
+				tasks_to_spawn.push(Box::new(pruning_task));
 
 				Ok(import_queue)
 			})?
@@ -92,7 +92,7 @@ macro_rules! new_full_start {
 				);
 				io
 			})?;
-		
+
 		(builder, import_setup, inherent_data_providers, tasks_to_spawn)
 	}}
 }
@@ -117,14 +117,12 @@ macro_rules! new_full {
 				.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
 		// spawn any futures that were created in the previous setup steps
-		if let Some(tasks) = tasks_to_spawn.take() {
-			for task in tasks {
-				service.spawn_task(
-					task.select(service.on_exit())
-						.map(|_| ())
-						.map_err(|_| ())
-				);
-			}
+		for task in tasks_to_spawn.drain(..) {
+			service.spawn_task(
+				task.select(service.on_exit())
+					.map(|_| ())
+					.map_err(|_| ())
+			);
 		}
 
 		if service.config().roles.is_authority() {
