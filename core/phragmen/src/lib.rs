@@ -32,8 +32,8 @@
 //! https://research.web3.foundation/en/latest/polkadot/NPoS/4.%20Sequential%20Phragm%C3%A9n%E2%80%99s%20method/
 
 use rstd::{prelude::*, collections::btree_map::BTreeMap};
-use crate::PerU128;
-use crate::traits::{Zero, Convert, Member, SimpleArithmetic};
+use sr_primitives::PerU128;
+use sr_primitives::traits::{Zero, Convert, Member, SimpleArithmetic};
 
 /// Type used as the fraction.
 type Fraction = PerU128;
@@ -186,14 +186,14 @@ pub fn elect<AccountId, Balance, FS, C>(
 			}
 		})
 		.enumerate()
-		.map(|(idx, c)| {
+		.map(|(i, c)| {
 			voters.push(Voter {
 				who: c.who.clone(),
-				edges: vec![ Edge { who: c.who.clone(), candidate_index: idx, ..Default::default() }],
+				edges: vec![Edge { who: c.who.clone(), candidate_index: i, ..Default::default() }],
 				budget: c.approval_stake,
 				load: Fraction::zero(),
 			});
-			c_idx_cache.insert(c.who.clone(), idx);
+			c_idx_cache.insert(c.who.clone(), i);
 			c
 		})
 		.collect::<Vec<Candidate<AccountId>>>()

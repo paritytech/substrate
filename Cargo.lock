@@ -2935,6 +2935,14 @@ version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "phragmen"
+version = "2.0.0"
+dependencies = [
+ "sr-primitives 2.0.0",
+ "sr-std 2.0.0",
+]
+
+[[package]]
 name = "pin-utils"
 version = "0.1.0-alpha.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4154,6 +4162,7 @@ name = "srml-staking"
 version = "2.0.0"
 dependencies = [
  "parity-scale-codec 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "phragmen 2.0.0",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.97 (registry+https://github.com/rust-lang/crates.io-index)",

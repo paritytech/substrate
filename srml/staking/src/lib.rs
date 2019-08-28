@@ -277,7 +277,7 @@ use sr_primitives::traits::{
 	Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded, SimpleArithmetic,
 	SaturatedConversion,
 };
-use sr_primitives::phragmen::{elect, equalize, Support, SupportMap, ExtendedBalance, ACCURACY};
+use phragmen::{elect, equalize, Support, SupportMap, ExtendedBalance, ACCURACY};
 use sr_staking_primitives::{
 	SessionIndex, CurrentElectedSet,
 	offence::{OnOffenceHandler, OffenceDetails, Offence, ReportOffence},

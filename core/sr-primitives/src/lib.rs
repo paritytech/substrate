@@ -46,7 +46,6 @@ use traits::{SaturatedConversion, UniqueSaturatedInto, Saturating, Bounded, Chec
 pub mod testing;
 
 pub mod weights;
-pub mod phragmen;
 pub mod traits;
 
 pub mod generic;

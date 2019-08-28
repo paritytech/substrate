@@ -27,7 +27,7 @@ use test::Bencher;
 use runtime_io::with_externalities;
 use mock::*;
 use super::*;
-use sr_primitives::phragmen;
+use phragmen;
 use rand::{self, Rng};
 
 const VALIDATORS: u64 = 1000;
