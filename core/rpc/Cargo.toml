@@ -9,7 +9,7 @@ api = { package = "substrate-rpc-api", path = "./api" }
 client = { package = "substrate-client", path = "../client" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 futures03 = { package = "futures-preview", version = "0.3.0-alpha.17", features = ["compat"] }
-jsonrpc_pubsub = "13.0.0"
+jsonrpc-pubsub = "13.0.0"
 log = "0.4"
 primitives = { package = "substrate-primitives", path = "../primitives" }
 rpc = { package = "jsonrpc-core", version = "13.0.0" }
@@ -25,7 +25,8 @@ transaction_pool = { package = "substrate-transaction-pool", path = "../transact
 [dev-dependencies]
 assert_matches = "1.1"
 futures = "0.1.17"
+network = { package = "substrate-network", path = "../network" }
+rustc-hex = "2.0"
 sr-io = { path = "../sr-io" }
 test-client = { package = "substrate-test-runtime-client", path = "../test-runtime/client" }
-rustc-hex = "2.0"
 tokio = "0.1.17"
