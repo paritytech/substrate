@@ -41,11 +41,11 @@
 /core/rpc-servers/ @tomusdrw
 
 # GRANDPA, BABE, consensus stuff
-/srml/babe/ @andresilva
-/srml/grandpa/ @andresilva
-/core/finality-grandpa/ @andresilva
-/core/consensus/babe/ @andresilva
-/core/consensus/slots/ @andresilva
+/srml/babe/ @andresilva @DemiMarie-parity
+/srml/grandpa/ @andresilva @DemiMarie-parity
+/core/finality-grandpa/ @andresilva @DemiMarie-parity
+/core/consensus/babe/ @andresilva @DemiMarie-parity
+/core/consensus/slots/ @andresilva @DemiMarie-parity
 
 # Contracts
 /srml/contracts/ @pepyakin @thiolliere @jimpo
@@ -54,5 +54,15 @@
 # Inflation points
 /srml/staking/src/inflation.rs @thiolliere
 
+# NPoS and Governance
+/srml/staking/ @kianenigma
+/srml/election/ @kianenigma
+
+# End to end testing of substrate node
+/node/executor/ @kianenigma
+
+# Transaction weight stuff
+/core/sr-primitives/weights.rs @kianenigma
+
 # Support crates
-/srml/support/ @thiolliere
+/srml/support/ @thiolliere @kianenigma
