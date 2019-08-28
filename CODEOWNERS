@@ -24,7 +24,7 @@
 /core/sr-std/without_std.rs @pepyakin
 
 # Sandboxing capability of Substrate Runtime
-/core/sr-sandbox @pepyakin
+/core/sr-sandbox/ @pepyakin
 /core/primitives/src/sandbox.rs @pepyakin
 
 # Transaction pool
@@ -32,12 +32,12 @@
 
 # Offchain
 /core/offchain/ @tomusdrw
-/sr-io/src/offchain @tomusdrw
+/sr-io/src/offchain/ @tomusdrw
 
 # Everything that has RPC in it
 /core/rpc/ @tomusdrw
 /node/rpc/ @tomusdrw
-/node/rpc-client @tomusdrw
+/node/rpc-client/ @tomusdrw
 /core/rpc-servers/ @tomusdrw
 
 # Grandpa, BABE, consensus stuff
