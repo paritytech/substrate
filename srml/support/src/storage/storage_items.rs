@@ -172,6 +172,7 @@ macro_rules! __storage_items_internal {
 
 		impl $crate::storage::hashed::generator::StorageValue<$ty> for $name {
 			type Query = $gettype;
+			type Default = ();
 
 			/// Get the storage key.
 			fn key() -> &'static [u8] {
@@ -221,8 +222,8 @@ macro_rules! __storage_items_internal {
 
 		impl $crate::storage::hashed::generator::StorageMap<$kty, $ty> for $name {
 			type Query = $gettype;
-
 			type Hasher = $crate::Blake2_256;
+			type Default = ();
 
 			/// Get the prefix key in storage.
 			fn prefix() -> &'static [u8] {
@@ -795,18 +796,41 @@ mod test3 {
 
 #[cfg(test)]
 #[allow(dead_code)]
-mod test_map_vec_append {
+mod test_append_and_len {
+	use crate::storage::{AppendableStorageMap, DecodeLengthStorageMap, StorageMap, StorageValue};
+	use runtime_io::{with_externalities, TestExternalities};
+	use codec::{Encode, Decode};
+
 	pub trait Trait {
 		type Origin;
 		type BlockNumber;
 	}
+
 	decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
+
+	#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+	struct NoDef(u32);
+
 	crate::decl_storage! {
 		trait Store for Module<T: Trait> as Test {
+			NoDefault: Option<NoDef>;
+
 			JustVec: Vec<u32>;
+			JustVecWithDefault: Vec<u32> = vec![6, 9];
+			OptionVec: Option<Vec<u32>>;
+			OptionVecWithDefault: Option<Vec<u32>> = Some(vec![6, 9]);
+
 			MapVec: map u32 => Vec<u32>;
+			MapVecWithDefault: map u32 => Vec<u32> = vec![6, 9];
+			OptionMapVec: map u32 => Option<Vec<u32>>;
+			OptionMapVecWithDefault: map u32 => Option<Vec<u32>> = Some(vec![6, 9]);
+
+			LinkedMapVec: linked_map u32 => Vec<u32>;
+			LinkedMapVecWithDefault: linked_map u32 => Vec<u32> = vec![6, 9];
+			OptionLinkedMapVec: linked_map u32 => Option<Vec<u32>>;
+			OptionLinkedMapVecWithDefault: linked_map u32 => Option<Vec<u32>> = Some(vec![6, 9]);
 		}
 	}
 
@@ -818,18 +842,113 @@ mod test_map_vec_append {
 	}
 
 	#[test]
-	fn append_works() {
-		use crate::storage::{AppendableStorageMap, StorageMap, StorageValue};
-		use runtime_io::{with_externalities, TestExternalities};
-
+	fn default_for_option() {
 		with_externalities(&mut TestExternalities::default(), || {
-			let _ = MapVec::append(1, &[1, 2, 3]);
-			let _ = MapVec::append(1, &[4, 5]);
+			assert_eq!(OptionVecWithDefault::get(), Some(vec![6, 9]));
+			assert_eq!(OptionVec::get(), None);
+			assert_eq!(JustVec::get(), vec![]);
+		});
+	}
+
+	#[test]
+	fn append_works() {
+		with_externalities(&mut TestExternalities::default(), || {
+			let _ = MapVec::append(1, [1, 2, 3].iter());
+			let _ = MapVec::append(1, [4, 5].iter());
 			assert_eq!(MapVec::get(1), vec![1, 2, 3, 4, 5]);
 
-			let _ = JustVec::append(&[1, 2, 3]);
-			let _ = JustVec::append(&[4, 5]);
+			let _ = JustVec::append([1, 2, 3].iter());
+			let _ = JustVec::append([4, 5].iter());
 			assert_eq!(JustVec::get(), vec![1, 2, 3, 4, 5]);
+		});
+	}
+
+	#[test]
+	fn append_works_for_default() {
+		with_externalities(&mut TestExternalities::default(), || {
+			assert_eq!(JustVecWithDefault::get(), vec![6, 9]);
+			let _ = JustVecWithDefault::append([1].iter());
+			assert_eq!(JustVecWithDefault::get(), vec![6, 9, 1]);
+
+			assert_eq!(MapVecWithDefault::get(0), vec![6, 9]);
+			let _ = MapVecWithDefault::append(0, [1].iter());
+			assert_eq!(MapVecWithDefault::get(0), vec![6, 9, 1]);
+
+			assert_eq!(OptionVec::get(), None);
+			let _ = OptionVec::append([1].iter());
+			assert_eq!(OptionVec::get(), Some(vec![1]));
+		});
+	}
+
+	#[test]
+	fn append_or_put_works() {
+		with_externalities(&mut TestExternalities::default(), || {
+			let _ = MapVec::append_or_insert(1, [1, 2, 3].iter());
+			let _ = MapVec::append_or_insert(1, [4, 5].iter());
+			assert_eq!(MapVec::get(1), vec![1, 2, 3, 4, 5]);
+
+			let _ = JustVec::append_or_put([1, 2, 3].iter());
+			let _ = JustVec::append_or_put([4, 5].iter());
+			assert_eq!(JustVec::get(), vec![1, 2, 3, 4, 5]);
+		});
+	}
+
+	#[test]
+	fn len_works() {
+		with_externalities(&mut TestExternalities::default(), || {
+			JustVec::put(&vec![1, 2, 3, 4]);
+			OptionVec::put(&vec![1, 2, 3, 4, 5]);
+			MapVec::insert(1, &vec![1, 2, 3, 4, 5, 6]);
+			LinkedMapVec::insert(2, &vec![1, 2, 3]);
+
+			assert_eq!(JustVec::decode_len().unwrap(), 4);
+			assert_eq!(OptionVec::decode_len().unwrap(), 5);
+			assert_eq!(MapVec::decode_len(1).unwrap(), 6);
+			assert_eq!(LinkedMapVec::decode_len(2).unwrap(), 3);
+		});
+	}
+
+	#[test]
+	fn len_works_for_default() {
+		with_externalities(&mut TestExternalities::default(), || {
+			// vec
+			assert_eq!(JustVec::get(), vec![]);
+			assert_eq!(JustVec::decode_len(), Ok(0));
+
+			assert_eq!(JustVecWithDefault::get(), vec![6, 9]);
+			assert_eq!(JustVecWithDefault::decode_len(), Ok(2));
+
+			assert_eq!(OptionVec::get(), None);
+			assert_eq!(OptionVec::decode_len(), Ok(0));
+
+			assert_eq!(OptionVecWithDefault::get(), Some(vec![6, 9]));
+			assert_eq!(OptionVecWithDefault::decode_len(), Ok(2));
+
+			// map
+			assert_eq!(MapVec::get(0), vec![]);
+			assert_eq!(MapVec::decode_len(0), Ok(0));
+
+			assert_eq!(MapVecWithDefault::get(0), vec![6, 9]);
+			assert_eq!(MapVecWithDefault::decode_len(0), Ok(2));
+
+			assert_eq!(OptionMapVec::get(0), None);
+			assert_eq!(OptionMapVec::decode_len(0), Ok(0));
+
+			assert_eq!(OptionMapVecWithDefault::get(0), Some(vec![6, 9]));
+			assert_eq!(OptionMapVecWithDefault::decode_len(0), Ok(2));
+
+			// linked map
+			assert_eq!(LinkedMapVec::get(0), vec![]);
+			assert_eq!(LinkedMapVec::decode_len(0), Ok(0));
+
+			assert_eq!(LinkedMapVecWithDefault::get(0), vec![6, 9]);
+			assert_eq!(LinkedMapVecWithDefault::decode_len(0), Ok(2));
+
+			assert_eq!(OptionLinkedMapVec::get(0), None);
+			assert_eq!(OptionLinkedMapVec::decode_len(0), Ok(0));
+
+			assert_eq!(OptionLinkedMapVecWithDefault::get(0), Some(vec![6, 9]));
+			assert_eq!(OptionLinkedMapVecWithDefault::decode_len(0), Ok(2));
 		});
 	}
 }

@@ -182,6 +182,7 @@ fn make_test_network() -> (
 		config(),
 		voter_set_state(),
 		Exit,
+		true,
 	);
 
 	(
