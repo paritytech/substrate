@@ -499,7 +499,7 @@ pub(crate) fn ancestry<B, Block: BlockT<Hash=H256>, E, RA>(
 	if base == block { return Err(GrandpaError::NotDescendent) }
 
 	let tree_route_res = ::client::blockchain::tree_route(
-		|id| client.header(&id)?.ok_or(client::error::Error::UnknownBlock(format!("Unknown block {:?}", id))),
+		|id| client.header(&id)?.ok_or(client::error::Error::UnknownBlock(format!("{:?}", id))),
 		BlockId::Hash(block),
 		BlockId::Hash(base),
 	);
