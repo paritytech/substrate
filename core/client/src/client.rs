@@ -1032,7 +1032,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				let get_execution_manager = |execution_strategy: ExecutionStrategy| {
 					match execution_strategy {
 						ExecutionStrategy::NativeElseWasm => ExecutionManager::NativeElseWasm,
-						ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
+						ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm(true),
 						ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
 						ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
 							let header = import_headers.post();

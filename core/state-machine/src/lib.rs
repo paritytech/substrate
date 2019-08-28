@@ -145,8 +145,14 @@ impl fmt::Display for ExecutionError {
 
 type CallResult<R, E> = Result<NativeOrEncoded<R>, E>;
 
-/// Externalities: pinned to specific active address.
-pub trait Externalities<H: Hasher> {
+/// Storage externalities API: pinned to specific active address.
+///
+/// Implementations of methods of this trait guarantee that there are no side effects,
+/// other than modifications to some **internal state** which could easily be
+/// discarded by throwing this instance of this Externalities away.
+///
+/// Every method may panic if storage access fails.
+pub trait StorageExternalities<H: Hasher> {
 	/// Read runtime storage.
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>>;
 
@@ -233,7 +239,9 @@ pub trait Externalities<H: Hasher> {
 	/// Get the identity of the chain.
 	fn chain_id(&self) -> u64;
 
-	/// Get the trie root of the current storage map. This will also update all child storage keys in the top-level storage map.
+	/// Get the trie root of the current storage map.
+	///
+	/// This will also update all child storage keys in the top-level storage map.
 	fn storage_root(&mut self) -> H::Out where H::Out: Ord;
 
 	/// Get the trie root of a child storage map. This will also update the value of the child
@@ -244,7 +252,13 @@ pub trait Externalities<H: Hasher> {
 
 	/// Get the change trie root of the current storage overlay at a block with given parent.
 	fn storage_changes_root(&mut self, parent: H::Out) -> Result<Option<H::Out>, ()> where H::Out: Ord;
+}
 
+/// Extra externalities API: pinned to specific active address.
+///
+/// Methods of implementations of this trait may have some side-effects, thus it isn't safe
+/// to catch unwindings of any panics that occur during these methods call.
+pub trait Externalities<H: Hasher>: StorageExternalities<H> {
 	/// Returns offchain externalities extension if present.
 	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities>;
 
@@ -367,7 +381,9 @@ pub trait CodeExecutor<H: Hasher>: Sized + Send + Sync {
 	/// Call a given method in the runtime. Returns a tuple of the result (either the output data
 	/// or an execution error) together with a `bool`, which is true if native execution was used.
 	fn call<
-		E: Externalities<H>, R: Encode + Decode + PartialEq, NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe
+		E: Externalities<H>,
+		R: Encode + Decode + PartialEq,
+		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe
 	>(
 		&self,
 		ext: &mut E,
@@ -401,8 +417,11 @@ type DefaultHandler<R, E> = fn(
 pub enum ExecutionManager<F> {
 	/// Execute with the native equivalent if it is compatible with the given wasm module; otherwise fall back to the wasm.
 	NativeWhenPossible,
-	/// Use the given wasm module.
-	AlwaysWasm,
+	/// Use the given wasm module. The backend on which code is executed code could be
+	/// trusted (true) or untrusted (false).
+	/// If untrusted, all panics that occurs within externalities are treated as runtime execution error.
+	/// If trusted, they are considered fatal && aren't catched.
+	AlwaysWasm(bool),
 	/// Run with both the wasm and the native variant (if compatible). Call `F` in the case of any discrepency.
 	Both(F),
 	/// First native, then if that fails or is not possible, wasm.
@@ -413,7 +432,7 @@ impl<'a, F> From<&'a ExecutionManager<F>> for ExecutionStrategy {
 	fn from(s: &'a ExecutionManager<F>) -> Self {
 		match *s {
 			ExecutionManager::NativeWhenPossible => ExecutionStrategy::NativeWhenPossible,
-			ExecutionManager::AlwaysWasm => ExecutionStrategy::AlwaysWasm,
+			ExecutionManager::AlwaysWasm(_) => ExecutionStrategy::AlwaysWasm,
 			ExecutionManager::NativeElseWasm => ExecutionStrategy::NativeElseWasm,
 			ExecutionManager::Both(_) => ExecutionStrategy::Both,
 		}
@@ -424,7 +443,7 @@ impl ExecutionStrategy {
 	/// Gets the corresponding manager for the execution strategy.
 	pub fn get_manager<E: std::fmt::Debug, R: Decode + Encode>(self) -> ExecutionManager<DefaultHandler<R, E>> {
 		match self {
-			ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
+			ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm(true),
 			ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
 			ExecutionStrategy::NativeElseWasm => ExecutionManager::NativeElseWasm,
 			ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
@@ -450,9 +469,14 @@ pub fn native_else_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>
 	ExecutionManager::NativeElseWasm
 }
 
-/// Evaluate to ExecutionManager::NativeWhenPossible, without having to figure out the type.
+/// Evaluate to ExecutionManager::AlwaysWasm with trusted backend, without having to figure out the type.
 pub fn always_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
-	ExecutionManager::AlwaysWasm
+	ExecutionManager::AlwaysWasm(true)
+}
+
+/// Evaluate ExecutionManager::AlwaysWasm with untrusted backend, without having to figure out the type.
+fn always_untrusted_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
+	ExecutionManager::AlwaysWasm(false)
 }
 
 /// Creates new substrate state machine.
@@ -667,7 +691,12 @@ impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 				ExecutionManager::NativeElseWasm => {
 					self.execute_call_with_native_else_wasm_strategy(compute_tx, native_call.take(), orig_prospective)
 				},
-				ExecutionManager::AlwaysWasm => {
+				ExecutionManager::AlwaysWasm(trusted) => {
+					let _abort_guard = if !trusted {
+						Some(panic_handler::AbortGuard::never_abort())
+					} else {
+						None
+					};
 					let (result, _, storage_delta, changes_delta) = self.execute_aux(compute_tx, false, native_call);
 					(result, storage_delta, changes_delta)
 				},
@@ -743,7 +772,7 @@ where
 		_hasher: PhantomData,
 	};
 	let (result, _, _) = sm.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
-		native_else_wasm(),
+		always_wasm(),
 		false,
 		None,
 	)?;
@@ -796,7 +825,7 @@ where
 		_hasher: PhantomData,
 	};
 	sm.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
-		native_else_wasm(),
+		always_untrusted_wasm(),
 		false,
 		None,
 	).map(|(result, _, _)| result.into_encoded())

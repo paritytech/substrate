@@ -28,7 +28,7 @@ use primitives::{
 	storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES}, traits::BareCryptoStorePtr, offchain
 };
 use codec::Encode;
-use super::{ChildStorageKey, Externalities, OverlayedChanges};
+use super::{ChildStorageKey, Externalities, StorageExternalities, OverlayedChanges};
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
 
@@ -141,7 +141,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> From<StorageTuple> for TestExternalit
 	}
 }
 
-impl<H, N> Externalities<H> for TestExternalities<H, N>
+impl<H, N> StorageExternalities<H> for TestExternalities<H, N>
 	where
 		H: Hasher,
 		N: ChangesTrieBlockNumber,
@@ -278,7 +278,14 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 			parent,
 		)?.map(|(_, root)| root))
 	}
+}
 
+impl<H, N> Externalities<H> for TestExternalities<H, N>
+	where
+		H: Hasher,
+		N: ChangesTrieBlockNumber,
+		H::Out: Ord + 'static
+{
 	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities> {
 		self.offchain
 			.as_mut()

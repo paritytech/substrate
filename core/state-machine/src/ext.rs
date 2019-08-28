@@ -20,7 +20,7 @@ use std::{error, fmt, cmp::Ord};
 use log::warn;
 use crate::backend::Backend;
 use crate::changes_trie::{Storage as ChangesTrieStorage, build_changes_trie};
-use crate::{Externalities, OverlayedChanges, ChildStorageKey};
+use crate::{Externalities, StorageExternalities, OverlayedChanges, ChildStorageKey};
 use hash_db::Hasher;
 use primitives::{offchain, storage::well_known_keys::is_child_storage_key, traits::BareCryptoStorePtr};
 use trie::{MemoryDB, default_child_trie_root};
@@ -167,7 +167,7 @@ where
 	}
 }
 
-impl<'a, B, T, H, N, O> Externalities<H> for Ext<'a, H, N, B, T, O>
+impl<'a, B, T, H, N, O> StorageExternalities<H> for Ext<'a, H, N, B, T, O>
 where
 	H: Hasher,
 	B: 'a + Backend<H>,
@@ -357,7 +357,16 @@ where
 		)?;
 		Ok(self.changes_trie_transaction.as_ref().map(|(_, root)| root.clone()))
 	}
+}
 
+impl<'a, B, T, H, N, O> Externalities<H> for Ext<'a, H, N, B, T, O>
+where	H: Hasher,
+	B: 'a + Backend<H>,
+	T: 'a + ChangesTrieStorage<H, N>,
+	H::Out: Ord + 'static,
+	N: crate::changes_trie::BlockNumber,
+	O: 'a + offchain::Externalities,
+{
 	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities> {
 		self.offchain_externalities.as_mut().map(|x| &mut **x as _)
 	}
@@ -365,6 +374,7 @@ where
 	fn keystore(&self) -> Option<BareCryptoStorePtr> {
 		self.keystore.clone()
 	}
+
 }
 
 #[cfg(test)]

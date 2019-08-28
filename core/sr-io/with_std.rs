@@ -20,7 +20,7 @@ use primitives::{
 // Switch to this after PoC-3
 // pub use primitives::BlakeHasher;
 pub use substrate_state_machine::{
-	Externalities, BasicExternalities, TestExternalities, ChildStorageKey,
+	Externalities, StorageExternalities, BasicExternalities, TestExternalities, ChildStorageKey,
 };
 
 use environmental::environmental;

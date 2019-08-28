@@ -338,7 +338,7 @@ mod tests {
 	use crate::backend::InMemory;
 	use crate::changes_trie::InMemoryStorage as InMemoryChangesTrieStorage;
 	use crate::ext::Ext;
-	use crate::Externalities;
+	use crate::StorageExternalities;
 	use super::*;
 
 	fn strip_extrinsic_index(map: &HashMap<Vec<u8>, OverlayedValue>) -> HashMap<Vec<u8>, OverlayedValue> {

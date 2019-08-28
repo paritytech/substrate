@@ -24,7 +24,7 @@ use trie::{TrieConfiguration, default_child_trie_root};
 use trie::trie_types::Layout;
 use primitives::offchain;
 use primitives::storage::well_known_keys::is_child_storage_key;
-use super::{ChildStorageKey, Externalities};
+use super::{ChildStorageKey, Externalities, StorageExternalities};
 use log::warn;
 
 /// Simple HashMap-based Externalities impl.
@@ -35,7 +35,6 @@ pub struct BasicExternalities {
 }
 
 impl BasicExternalities {
-
 	/// Create a new instance of `BasicExternalities`
 	pub fn new(
 		top: HashMap<Vec<u8>, Vec<u8>>,
@@ -88,7 +87,7 @@ impl From<HashMap<Vec<u8>, Vec<u8>>> for BasicExternalities {
 	}
 }
 
-impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
+impl<H: Hasher> StorageExternalities<H> for BasicExternalities where H::Out: Ord {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		self.top.get(key).cloned()
 	}
@@ -189,7 +188,9 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 	fn storage_changes_root(&mut self, _parent: H::Out) -> Result<Option<H::Out>, ()> {
 		Ok(None)
 	}
+}
 
+impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord {
 	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities> {
 		warn!("Call to non-existent offchain externalities set.");
 		None
