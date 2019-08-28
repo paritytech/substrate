@@ -86,37 +86,35 @@ impl FromIterator<(Vec<u8>, OverlayedValue)> for OverlayedChangeSet {
 	}
 }
 
-
-
 /// Variant of `set` value that update extrinsics.
 /// It does remove latest dropped values.
 fn set_with_extrinsic_overlayed_value(
-	h: &mut History<OverlayedValue>,
+	h_value: &mut History<OverlayedValue>,
 	history: &[TransactionState],
-	val: Option<Vec<u8>>,
+	value: Option<Vec<u8>>,
 	extrinsic_index: Option<u32>,
 ) {
 	if let Some(extrinsic) = extrinsic_index {
-		set_with_extrinsic_inner_overlayed_value(h, history, val, extrinsic)
+		set_with_extrinsic_inner_overlayed_value(h_value, history, value, extrinsic)
 	} else {
-		h.set(history, OverlayedValue {
-			value: val,
+		h_value.set(history, OverlayedValue {
+			value,
 			extrinsics: None,
 		})
 	}
 }
 
 fn set_with_extrinsic_inner_overlayed_value(
-	h: &mut History<OverlayedValue>,
+	h_value: &mut History<OverlayedValue>,
 	history: &[TransactionState],
-	val: Option<Vec<u8>>,
+	value: Option<Vec<u8>>,
 	extrinsic_index: u32,
 ) {
 	let state = history.len() - 1;
-	if let Some((mut current, current_index)) = h.get_mut(history) {
+	if let Some((mut current, current_index)) = h_value.get_mut(history) {
 
 		if current_index == state {
-			current.value = val;
+			current.value = value;
 			current.extrinsics.get_or_insert_with(Default::default)
 				.insert(extrinsic_index);
 
@@ -124,8 +122,8 @@ fn set_with_extrinsic_inner_overlayed_value(
 			let mut extrinsics = current.extrinsics.clone();
 			extrinsics.get_or_insert_with(Default::default)
 				.insert(extrinsic_index);
-			h.force_push(OverlayedValue {
-				value: val,
+			h_value.force_push(OverlayedValue {
+				value,
 				extrinsics,
 			}, state);
 		}
@@ -134,8 +132,8 @@ fn set_with_extrinsic_inner_overlayed_value(
 		extrinsics.get_or_insert_with(Default::default)
 			.insert(extrinsic_index);
 
-		h.force_push(OverlayedValue {
-			 value: val,
+		h_value.force_push(OverlayedValue {
+			 value,
 			 extrinsics,
 		}, state);
 
@@ -146,21 +144,22 @@ impl OverlayedChangeSet {
 	/// Garbage collect.
 	fn gc(&mut self, eager: bool) {
 		let eager = if eager {
-			let mut tx_ixs = Vec::new();
-			for (i, h) in self.history.iter() {
-				if TransactionState::TxPending == h {
-					tx_ixs.push(i);
+			let mut transaction_index = Vec::new();
+			for (i, state) in self.history.iter() {
+				if TransactionState::TxPending == state {
+					transaction_index.push(i);
 				}
 			}
-			Some(tx_ixs)
+			Some(transaction_index)
 		} else {
 			None
 		};
 		let history = self.history.as_ref();
+		let eager = || eager.as_ref().map(|t| t.as_slice());
 		// retain does change values
-		self.top.retain(|_, h| h.gc(history, eager.as_ref().map(|t| t.as_slice())).is_some());
+		self.top.retain(|_, h_value| h_value.gc(history, eager()).is_some());
 		self.children.retain(|_, m| {
-			m.retain(|_, h| h.gc(history, eager.as_ref().map(|t| t.as_slice())).is_some());
+			m.retain(|_, h_value| h_value.gc(history, eager()).is_some());
 			m.len() > 0
 		});
 	}
@@ -324,9 +323,9 @@ impl OverlayedChanges {
 	/// to the backend); Some(None) if the key has been deleted. Some(Some(...)) for a key whose
 	/// value has been set.
 	pub fn storage(&self, key: &[u8]) -> Option<Option<&[u8]>> {
-		if let Some(overlay_val) = self.changes.top.get(key) {
-			if let Some(o_val) = overlay_val.get(self.changes.history.as_ref()) {
-				return Some(o_val.value.as_ref().map(|v| v.as_slice()))
+		if let Some(overlay_value) = self.changes.top.get(key) {
+			if let Some(o_value) = overlay_value.get(self.changes.history.as_ref()) {
+				return Some(o_value.value.as_ref().map(|v| v.as_slice()))
 			}
 		}
 		None
@@ -337,9 +336,9 @@ impl OverlayedChanges {
 	/// value has been set.
 	pub fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Option<Option<&[u8]>> {
 		if let Some(map) = self.changes.children.get(storage_key) {
-			if let Some(overlay_val) = map.get(key) {
-				if let Some(o_val) = overlay_val.get(self.changes.history.as_ref()) {
-					return Some(o_val.value.as_ref().map(|v| v.as_slice()))
+			if let Some(overlay_value) = map.get(key) {
+				if let Some(o_value) = overlay_value.get(self.changes.history.as_ref()) {
+					return Some(o_value.value.as_ref().map(|v| v.as_slice()))
 				}
 			}
 		}
@@ -349,22 +348,32 @@ impl OverlayedChanges {
 	/// Inserts the given key-value pair into the prospective change set.
 	///
 	/// `None` can be used to delete a value specified by the given key.
-	pub fn set_storage(&mut self, key: Vec<u8>, val: Option<Vec<u8>>) {
-		self.operation_from_last_gc += DEFAULT_GC_CONF.operation_cost(&val);
+	pub fn set_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) {
+		self.operation_from_last_gc += DEFAULT_GC_CONF.operation_cost(&value);
 		let extrinsic_index = self.extrinsic_index();
 		let entry = self.changes.top.entry(key).or_default();
-		set_with_extrinsic_overlayed_value(entry, self.changes.history.as_ref(), val, extrinsic_index);
+		set_with_extrinsic_overlayed_value(entry, self.changes.history.as_ref(), value, extrinsic_index);
 	}
 
 	/// Inserts the given key-value pair into the prospective child change set.
 	///
 	/// `None` can be used to delete a value specified by the given key.
-	pub(crate) fn set_child_storage(&mut self, storage_key: Vec<u8>, key: Vec<u8>, val: Option<Vec<u8>>) {
-		self.operation_from_last_gc += DEFAULT_GC_CONF.operation_cost(&val);
+	pub(crate) fn set_child_storage(
+		&mut self,
+		storage_key: Vec<u8>,
+		key: Vec<u8>,
+		value: Option<Vec<u8>>,
+	) {
+		self.operation_from_last_gc += DEFAULT_GC_CONF.operation_cost(&value);
 		let extrinsic_index = self.extrinsic_index();
 		let map_entry = self.changes.children.entry(storage_key).or_default();
 		let entry = map_entry.entry(key).or_default();
-		set_with_extrinsic_overlayed_value(entry, self.changes.history.as_ref(), val, extrinsic_index);
+		set_with_extrinsic_overlayed_value(
+			entry,
+			self.changes.history.as_ref(),
+			value,
+			extrinsic_index,
+		);
 	}
 
 	/// Clear child storage of given storage key.
@@ -391,29 +400,29 @@ impl OverlayedChanges {
 	pub(crate) fn clear_prefix(&mut self, prefix: &[u8]) {
 		let extrinsic_index = self.extrinsic_index();
 
-		let mut nb_remove = 0;
+		let mut number_removed = 0;
 		for (key, entry) in self.changes.top.iter_mut() {
 			if key.starts_with(prefix) {
-				nb_remove += 1;
+				number_removed += 1;
 				set_with_extrinsic_overlayed_value(entry, self.changes.history.as_ref(), None, extrinsic_index);
 			}
 		}
 
-		self.operation_from_last_gc += nb_remove;
+		self.operation_from_last_gc += number_removed;
 	}
 
 	pub(crate) fn clear_child_prefix(&mut self, storage_key: &[u8], prefix: &[u8]) {
 		let extrinsic_index = self.extrinsic_index();
 		if let Some(child_change) = self.changes.children.get_mut(storage_key) {
-			let mut nb_remove = 0;
+			let mut number_removed = 0;
 			for (key, entry) in child_change.iter_mut() {
 				if key.starts_with(prefix) {
-					nb_remove += 1;
+					number_removed += 1;
 					set_with_extrinsic_overlayed_value(entry, self.changes.history.as_ref(), None, extrinsic_index);
 				}
 			}
 
-			self.operation_from_last_gc += nb_remove;
+			self.operation_from_last_gc += number_removed;
 		}
 	}
 

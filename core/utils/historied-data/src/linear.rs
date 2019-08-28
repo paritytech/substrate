@@ -41,6 +41,7 @@ type MemoryOnly<V> = smallvec::SmallVec<[(V, usize); ALLOCATED_HISTORY]>;
 /// Size of preallocated history per element.
 /// Currently at two for committed and prospective only.
 /// It means that using transaction in a module got a direct allocation cost.
+#[cfg(feature = "std")]
 const ALLOCATED_HISTORY: usize = 2;
 
 /// History of value that are related to a state history (eg field `history` of
@@ -51,20 +52,19 @@ const ALLOCATED_HISTORY: usize = 2;
 #[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
 pub struct History<V>(MemoryOnly<V>);
 
-
-impl<V> History<V> {
-	fn get_state(&self, index: usize) -> (&V, usize) {
-		(&self.0[index].0, self.0[index].1)
-	}
-}
-
 impl<V> Default for History<V> {
 	fn default() -> Self {
 		History(Default::default()) 
 	}
 }
 
+// Following implementation are here to isolate
+// buffer specific functions.
 impl<V> History<V> {
+
+	fn get_state(&self, index: usize) -> (&V, usize) {
+		(&self.0[index].0, self.0[index].1)
+	}
 
 	#[cfg(any(test, feature = "test"))]
 	/// Create an history from an existing history.
@@ -103,21 +103,21 @@ impl<V> History<V> {
 	/// This method shall only be call after a `get_mut` where
 	/// the returned index indicate that a `set` will result
 	/// in appending a value.
-	pub fn force_push(&mut self, val: V, tx_index: usize) {
-		self.0.push((val, tx_index))
+	pub fn force_push(&mut self, value: V, history_index: usize) {
+		self.0.push((value, history_index))
 	}
 
 	/// Set a value, it uses a state history as parameter.
 	/// This method uses `get_mut` and do remove pending
 	/// dropped value.
-	pub fn set(&mut self, history: &[TransactionState], val: V) {
+	pub fn set(&mut self, history: &[TransactionState], value: V) {
 		if let Some((v, index)) = self.get_mut(history) {
 			if index == history.len() - 1 {
-				*v = val;
+				*v = value;
 				return;
 			}
 		}
-		self.force_push(val, history.len() - 1);
+		self.force_push(value, history.len() - 1);
 	}
 
 	fn mut_ref(&mut self, index: usize) -> &mut V {
@@ -150,8 +150,8 @@ impl States {
 
 	/// Build any state for testing only.
 	#[cfg(any(test, feature = "test"))]
-	pub fn test_vector(test_state: Vec<TransactionState>) -> Self {
-		States(test_state)
+	pub fn test_vector(test_states: Vec<TransactionState>) -> Self {
+		States(test_states)
 	}
 
 	/// Discard prospective changes to state.
@@ -368,20 +368,23 @@ impl<V> History<V> {
 
 
 	/// Garbage collect a history, act as a `get_mut` with additional cost.
-	/// If `eager` is true, all dropped value are removed even if it means shifting
-	/// array byte. Otherwhise we mainly ensure collection up to last Commit state
+	/// To run `eager`, a `transaction_index` parameter of all `TxPending` states
+	/// must be provided, then all dropped value are removed even if it means shifting
+	/// array byte. Otherwhise we mainly garbage collect up to last Commit state
 	/// (truncate left size).
 	pub fn gc(
 		&mut self,
 		history: &[TransactionState],
-		tx_index: Option<&[usize]>,
+		transaction_index: Option<&[usize]>,
 	) -> Option<(&mut V, usize)> {
-		if let Some(tx_index) = tx_index {
-			let mut tx_index = &tx_index[..];
+		if let Some(transaction_index) = transaction_index {
+			let mut transaction_index = &transaction_index[..];
 			let mut index = self.len();
 			if index == 0 {
 				return None;
 			}
+			// indicates that we got a value to return up to previous
+			// `TxPending` so values in between can be dropped.
 			let mut bellow_value = usize::max_value();
 			let mut result: Option<(usize, usize)> = None;
 			// internal method: should be use properly
@@ -396,32 +399,34 @@ impl<V> History<V> {
 						for _ in 0..index {
 							self.remove(0);
 						}
-						result = Some(result.map(|(i, hi)| (i - index, hi)).unwrap_or((0, history_index)));
-						index = 0;
+						result = Some(result.map(|(i, history_index)| (i - index, history_index))
+							.unwrap_or((0, history_index)));
+						break;
 					},
 					TransactionState::Pending
 					| TransactionState::Prospective => {
 						if history_index >= bellow_value {
 							self.remove(index);
-							result.as_mut().map(|(i, _hi)| *i = *i - 1);
+							result.as_mut().map(|(i, _)| *i = *i - 1);
 						} else {
 							if result.is_none() {
 								result = Some((index, history_index));
 							}
+							// move to next previous `TxPending`
 							while bellow_value > history_index {
-								// bellow_value = pop
-								let split = tx_index.split_last()
+								// mut slice pop
+								let split = transaction_index.split_last()
 									.map(|(v, sl)| (*v, sl))
 									.unwrap_or((0, &[]));
 								bellow_value = split.0;
-								tx_index = split.1;
+								transaction_index = split.1;
 							}
 						}
 					},
 					TransactionState::TxPending => {
 						if history_index >= bellow_value {
 							self.remove(index);
-							result.as_mut().map(|(i, _hi)| *i = *i - 1);
+							result.as_mut().map(|(i, _)| *i = *i - 1);
 						} else {
 							if result.is_none() {
 								result = Some((index, history_index));
@@ -443,5 +448,3 @@ impl<V> History<V> {
 		}
 	}
 }
-
-
