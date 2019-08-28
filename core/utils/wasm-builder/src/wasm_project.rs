@@ -88,6 +88,8 @@ pub fn create_and_compile(cargo_manifest: &Path) -> (WasmBinary, WasmBinaryBloat
 	build_project(&project);
 	let (wasm_binary, bloaty) = compact_wasm_file(&project, cargo_manifest, &wasm_workspace);
 
+	copy_wasm_to_target_directory(cargo_manifest, &wasm_binary);
+
 	generate_rerun_if_changed_instructions(cargo_manifest, &project, &wasm_workspace);
 
 	(wasm_binary, bloaty)
@@ -349,4 +351,29 @@ fn generate_rerun_if_changed_instructions(
 	println!("cargo:rerun-if-env-changed={}", crate::SKIP_BUILD_ENV);
 	println!("cargo:rerun-if-env-changed={}", crate::WASM_BUILD_TYPE_ENV);
 	println!("cargo:rerun-if-env-changed={}", crate::WASM_BUILD_RUSTFLAGS_ENV);
+	println!("cargo:rerun-if-env-changed={}", crate::WASM_TARGET_DIRECTORY);
+}
+
+/// Copy the WASM binary to the target directory set in `WASM_TARGET_DIRECTORY` environment variable.
+/// If the variable is not set, this is a no-op.
+fn copy_wasm_to_target_directory(cargo_manifest: &Path, wasm_binary: &WasmBinary) {
+	let target_dir = match env::var(crate::WASM_TARGET_DIRECTORY) {
+		Ok(path) => PathBuf::from(path),
+		Err(_) => return,
+	};
+
+	if !target_dir.is_absolute() {
+		panic!(
+			"Environment variable `{}` with `{}` is not an absolute path!",
+			crate::WASM_TARGET_DIRECTORY,
+			target_dir.display(),
+		);
+	}
+
+	fs::create_dir_all(&target_dir).expect("Creates `WASM_TARGET_DIRECTORY`.");
+
+	fs::copy(
+		wasm_binary.wasm_binary_path(),
+		target_dir.join(format!("{}.wasm", get_wasm_binary_name(cargo_manifest))),
+	).expect("Copies WASM binary to `WASM_TARGET_DIRECTORY`.");
 }
