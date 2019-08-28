@@ -32,6 +32,7 @@
 
 # Offchain
 /core/offchain/ @tomusdrw
+/sr-io/src/offchain @tomusdrw
 
 # Everything that has RPC in it
 /core/rpc/ @tomusdrw
@@ -48,6 +49,7 @@
 
 # Contracts
 /srml/contracts/ @pepyakin @thiolliere @jimpo
+/srml/contracts/src/wasm/runtime.rs @Robbepop
 
 # Inflation points
 /srml/staking/src/inflation.rs @thiolliere
