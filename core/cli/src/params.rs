@@ -441,7 +441,11 @@ lazy_static::lazy_static! {
 	/// The Cli values for all test accounts.
 	static ref TEST_ACCOUNTS_CLI_VALUES: Vec<KeyringTestAccountCliValues> = {
 		keyring::Sr25519Keyring::iter().map(|a| {
-			let help = format!("Shortcut for `--key //{} --name {}`.", a, a);
+			let help = format!(
+				"Shortcut for `--name {} --validator` with session keys for `{}` added to keystore.",
+				a,
+				a,
+			);
 			let conflicts_with = keyring::Sr25519Keyring::iter()
 				.filter(|b| a != *b)
 				.map(|b| b.to_string().to_lowercase())

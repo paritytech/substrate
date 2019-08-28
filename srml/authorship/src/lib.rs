@@ -27,7 +27,7 @@ use srml_support::traits::{FindAuthor, VerifySeal, Get};
 use srml_support::dispatch::Result as DispatchResult;
 use codec::{Encode, Decode};
 use system::ensure_none;
-use sr_primitives::traits::{SimpleArithmetic, Header as HeaderT, One, Zero};
+use sr_primitives::traits::{Header as HeaderT, One, Zero};
 use sr_primitives::weights::SimpleDispatchInfo;
 use inherents::{
 	RuntimeString, InherentIdentifier, ProvideInherent,
@@ -236,29 +236,14 @@ decl_storage! {
 	}
 }
 
-fn prune_old_uncles<BlockNumber, Hash, Author>(
-	minimum_height: BlockNumber,
-	uncles: &mut Vec<UncleEntryItem<BlockNumber, Hash, Author>>
-) where BlockNumber: SimpleArithmetic {
-	let prune_entries = uncles.iter().take_while(|item| match item {
-		UncleEntryItem::Uncle(_, _) => true,
-		UncleEntryItem::InclusionHeight(height) => height < &minimum_height,
-	});
-	let prune_index = prune_entries.count();
-
-	let _ = uncles.drain(..prune_index);
-}
-
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn on_initialize(now: T::BlockNumber) {
 			let uncle_generations = T::UncleGenerations::get();
-			let mut uncles = <Self as Store>::Uncles::get();
-
 			// prune uncles that are older than the allowed number of generations.
 			if uncle_generations <= now {
 				let minimum_height = now - uncle_generations;
-				prune_old_uncles(minimum_height, &mut uncles)
+				Self::prune_old_uncles(minimum_height)
 			}
 
 			<Self as Store>::DidSetUncles::put(false);
@@ -386,6 +371,18 @@ impl<T: Trait> Module<T> {
 
 		// check uncle validity.
 		T::FilterUncle::filter_uncle(&uncle, accumulator)
+	}
+
+	fn prune_old_uncles(minimum_height: T::BlockNumber) {
+		let mut uncles = <Self as Store>::Uncles::get();
+		let prune_entries = uncles.iter().take_while(|item| match item {
+			UncleEntryItem::Uncle(_, _) => true,
+			UncleEntryItem::InclusionHeight(height) => height < &minimum_height,
+		});
+		let prune_index = prune_entries.count();
+
+		let _ = uncles.drain(..prune_index);
+		<Self as Store>::Uncles::put(uncles);
 	}
 }
 
@@ -569,15 +566,21 @@ mod tests {
 	#[test]
 	fn prune_old_uncles_works() {
 		use UncleEntryItem::*;
-		let mut uncles = vec![
-			InclusionHeight(1u32), Uncle((), Some(())), Uncle((), None), Uncle((), None),
-			InclusionHeight(2u32), Uncle((), None),
-			InclusionHeight(3u32), Uncle((), None),
-		];
+		with_externalities(&mut new_test_ext(), || {
+			let hash = Default::default();
+			let author = Default::default();
+			let uncles = vec![
+				InclusionHeight(1u64), Uncle(hash, Some(author)), Uncle(hash, None), Uncle(hash, None),
+				InclusionHeight(2u64), Uncle(hash, None),
+				InclusionHeight(3u64), Uncle(hash, None),
+			];
 
-		prune_old_uncles(3, &mut uncles);
+			<Authorship as Store>::Uncles::put(uncles);
+			Authorship::prune_old_uncles(3);
 
-		assert_eq!(uncles, vec![InclusionHeight(3), Uncle((), None)]);
+			let uncles = <Authorship as Store>::Uncles::get();
+			assert_eq!(uncles, vec![InclusionHeight(3u64), Uncle(hash, None)]);
+		})
 	}
 
 	#[test]

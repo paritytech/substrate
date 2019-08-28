@@ -93,10 +93,6 @@ mod light_import;
 mod observer;
 mod until_imported;
 
-#[cfg(feature="service-integration")]
-mod service_integration;
-#[cfg(feature="service-integration")]
-pub use service_integration::{LinkHalfForService, BlockImportForService, BlockImportForLightService};
 pub use communication::Network;
 pub use finality_proof::FinalityProofProvider;
 pub use light_import::light_block_import;
@@ -107,8 +103,7 @@ use environment::{Environment, VoterSetState};
 use import::GrandpaBlockImport;
 use until_imported::UntilGlobalMessageBlocksImported;
 use communication::NetworkBridge;
-use service::TelemetryOnConnect;
-use fg_primitives::AuthoritySignature;
+use fg_primitives::{AuthoritySignature, SetId, AuthorityWeight};
 
 // Re-export these two because it's just so damn convenient.
 pub use fg_primitives::{AuthorityId, ScheduledChange};
@@ -267,8 +262,8 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> BlockStatus<Block> for Arc<Client<B, E,
 pub(crate) struct NewAuthoritySet<H, N> {
 	pub(crate) canon_number: N,
 	pub(crate) canon_hash: H,
-	pub(crate) set_id: u64,
-	pub(crate) authorities: Vec<(AuthorityId, u64)>,
+	pub(crate) set_id: SetId,
+	pub(crate) authorities: Vec<(AuthorityId, AuthorityWeight)>,
 }
 
 /// Commands issued to the voter.
@@ -399,7 +394,7 @@ where
 }
 
 fn global_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
-	set_id: u64,
+	set_id: SetId,
 	voters: &Arc<VoterSet<AuthorityId>>,
 	client: &Arc<Client<B, E, Block, RA>>,
 	network: &NetworkBridge<Block, N>,
@@ -484,7 +479,7 @@ pub struct GrandpaParams<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X> {
 	/// Handle to a future that will resolve on exit.
 	pub on_exit: X,
 	/// If supplied, can be used to hook on telemetry connection established events.
-	pub telemetry_on_connect: Option<TelemetryOnConnect>,
+	pub telemetry_on_connect: Option<mpsc::UnboundedReceiver<()>>,
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
@@ -524,13 +519,14 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 		config.clone(),
 		persistent_data.set_state.clone(),
 		on_exit.clone(),
+		true,
 	);
 
 	register_finality_tracker_inherent_data_provider(client.clone(), &inherent_data_providers)?;
 
 	let telemetry_task = if let Some(telemetry_on_connect) = telemetry_on_connect {
 		let authorities = persistent_data.authority_set.clone();
-		let events = telemetry_on_connect.telemetry_connection_sinks
+		let events = telemetry_on_connect
 			.for_each(move |_| {
 				telemetry!(CONSENSUS_INFO; "afg.authority_set";
 					 "authority_set_id" => ?authorities.set_id(),
