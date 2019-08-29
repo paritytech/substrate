@@ -27,8 +27,9 @@ use codec::{Encode, Decode};
 use hash_db::{Hasher, Prefix};
 use primitives::{
 	Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash,
-	NeverNativeValue, ExecutionContext,
-	storage::{StorageKey, StorageData, well_known_keys}, NativeOrEncoded
+	NeverNativeValue, ExecutionContext, NativeOrEncoded,
+	storage::{StorageKey, StorageData, well_known_keys},
+	offchain,
 };
 use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
 use sr_primitives::{
@@ -1471,8 +1472,6 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 		context: ExecutionContext,
 		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
 	) -> error::Result<NativeOrEncoded<R>> {
-		let enable_keystore = context.enable_keystore();
-
 		let manager = match context {
 			ExecutionContext::BlockConstruction =>
 				self.execution_strategies.block_construction.get_manager(),
@@ -1480,16 +1479,17 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 				self.execution_strategies.syncing.get_manager(),
 			ExecutionContext::Importing =>
 				self.execution_strategies.importing.get_manager(),
-			ExecutionContext::OffchainWorker(_) =>
+			ExecutionContext::OffchainCall(Some((_, capabilities))) if capabilities.has_all() =>
 				self.execution_strategies.offchain_worker.get_manager(),
-			ExecutionContext::Other =>
+			ExecutionContext::OffchainCall(_) =>
 				self.execution_strategies.other.get_manager(),
 		};
 
+		let capabilities = context.capabilities();
 		let mut offchain_extensions = match context {
-			ExecutionContext::OffchainWorker(ext) => Some(ext),
+			ExecutionContext::OffchainCall(ext) => ext.map(|x| x.0),
 			_ => None,
-		};
+		}.map(|ext| offchain::LimitedExternalities::new(capabilities, ext));
 
 		self.executor.contextual_call::<_, _, fn(_,_) -> _,_,_>(
 			|| core_api.initialize_block(at, &self.prepare_environment_block(at)?),
@@ -1502,7 +1502,7 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 			native_call,
 			offchain_extensions.as_mut(),
 			recorder,
-			enable_keystore,
+			capabilities.has(offchain::Capability::Keystore),
 		)
 	}
 
