@@ -17,9 +17,8 @@
 
 //! Error helpers for Chain RPC module.
 
-use client;
-use crate::rpc;
 use crate::errors;
+use jsonrpc_core as rpc;
 
 /// Chain RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -28,7 +27,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
 	/// Client error.
-	Client(client::error::Error),
+	#[display(fmt="Client error: {}", _0)]
+	Client(Box<dyn std::error::Error + Send>),
 	/// Other error type.
 	Other(String),
 }
@@ -36,7 +36,7 @@ pub enum Error {
 impl std::error::Error for Error {
 	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
 		match self {
-			Error::Client(ref err) => Some(err),
+			Error::Client(ref err) => Some(&**err),
 			_ => None,
 		}
 	}

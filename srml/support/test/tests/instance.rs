@@ -55,7 +55,7 @@ mod module1 {
 		{
 			fn offchain_worker() {}
 
-			fn deposit_event<T, I>() = default;
+			fn deposit_event() = default;
 
 			fn one(origin) {
 				system::ensure_root(origin)?;
@@ -132,7 +132,7 @@ mod module2 {
 		pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where
 			origin: <T as system::Trait>::Origin
 		{
-			fn deposit_event<T, I>() = default;
+			fn deposit_event() = default;
 		}
 	}
 

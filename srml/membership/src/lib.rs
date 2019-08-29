@@ -101,7 +101,7 @@ decl_module! {
 		for enum Call
 		where origin: T::Origin
 	{
-		fn deposit_event<T, I>() = default;
+		fn deposit_event() = default;
 
 		/// Add a member `who` to the set.
 		///

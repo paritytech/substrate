@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,20 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Substrate RPC implementation.
-//!
-//! A core implementation of Substrate RPC interfaces.
+use log::warn;
 
-#![warn(missing_docs)]
-
-mod helpers;
-mod metadata;
-
-pub use api::Subscriptions;
-pub use self::metadata::Metadata;
-pub use rpc::IoHandlerExtension as RpcExtension;
-
-pub mod author;
-pub mod chain;
-pub mod state;
-pub mod system;
+pub fn internal<E: ::std::fmt::Debug>(e: E) -> jsonrpc_core::Error {
+	warn!("Unknown error: {:?}", e);
+	jsonrpc_core::Error {
+		code: jsonrpc_core::ErrorCode::InternalError,
+		message: "Unknown error occured".into(),
+		data: Some(format!("{:?}", e).into()),
+	}
+}
