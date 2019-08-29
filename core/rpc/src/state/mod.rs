@@ -424,7 +424,12 @@ pub fn new_light<B, E, Block: BlockT, RA, F: Fetcher<Block>>(
 		F: Send + Sync + 'static,
 {
 	State {
-		backend: Box::new(self::state_light::LightState::new(client, subscriptions, remote_blockchain, fetcher)),
+		backend: Box::new(self::state_light::LightState::new(
+			client,
+			subscriptions,
+			remote_blockchain,
+			fetcher,
+		)),
 	}
 }
 
@@ -446,7 +451,11 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA>
 		self.backend.call(block, method, data)
 	}
 
-	fn storage_keys(&self, key_prefix: StorageKey, block: Option<Block::Hash>) -> FutureResult<Vec<StorageKey>> {
+	fn storage_keys(
+		&self,
+		key_prefix: StorageKey,
+		block: Option<Block::Hash>,
+	) -> FutureResult<Vec<StorageKey>> {
 		self.backend.storage_keys(block, key_prefix)
 	}
 
@@ -532,7 +541,11 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA>
 		self.backend.subscribe_runtime_version(meta, subscriber);
 	}
 
-	fn unsubscribe_runtime_version(&self, meta: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool> {
+	fn unsubscribe_runtime_version(
+		&self,
+		meta: Option<Self::Metadata>,
+		id: SubscriptionId,
+	) -> RpcResult<bool> {
 		self.backend.unsubscribe_runtime_version(meta, id)
 	}
 }

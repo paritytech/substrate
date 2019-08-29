@@ -64,12 +64,12 @@ impl<B, E, Block: BlockT, RA, F: Fetcher<Block>> LightChain<B, E, Block, RA, F> 
 	}
 }
 
-impl<B, E, Block, RA, F: Fetcher<Block>> ChainBackend<B, E, Block, RA> for LightChain<B, E, Block, RA, F> where
+impl<B, E, Block, RA, F> ChainBackend<B, E, Block, RA> for LightChain<B, E, Block, RA, F> where
 	Block: BlockT<Hash=H256> + 'static,
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	RA: Send + Sync + 'static,
-	F: Send + Sync + 'static
+	F: Fetcher<Block> + Send + Sync + 'static,
 {
 	fn client(&self) -> &Arc<Client<B, E, Block, RA>> {
 		&self.client

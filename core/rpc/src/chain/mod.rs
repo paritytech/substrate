@@ -86,7 +86,11 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 		name = "chain_unsubscribeNewHeads",
 		alias("unsubscribe_newHead", "chain_unsubscribeNewHead")
 	)]
-	fn unsubscribe_new_heads(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool>;
+	fn unsubscribe_new_heads(
+		&self,
+		metadata: Option<Self::Metadata>,
+		id: SubscriptionId,
+	) -> RpcResult<bool>;
 
 	/// New head subscription
 	#[pubsub(
@@ -104,7 +108,11 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 		name = "chain_unsubscribeFinalizedHeads",
 		alias("chain_unsubscribeFinalisedHeads")
 	)]
-	fn unsubscribe_finalized_heads(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool>;
+	fn unsubscribe_finalized_heads(
+		&self,
+		metadata: Option<Self::Metadata>,
+		id: SubscriptionId,
+	) -> RpcResult<bool>;
 }
 
 /// Blockchain backend API
@@ -137,10 +145,15 @@ trait ChainBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 	/// Get hash of the n-th block in the canon chain.
 	///
 	/// By default returns latest block hash.
-	fn block_hash(&self, number: Option<number::NumberOrHex<NumberFor<Block>>>) -> Result<Option<Block::Hash>> {
+	fn block_hash(
+		&self,
+		number: Option<number::NumberOrHex<NumberFor<Block>>>,
+	) -> Result<Option<Block::Hash>> {
 		Ok(match number {
 			None => Some(self.client().info().chain.best_hash),
-			Some(num_or_hex) => self.client().header(&BlockId::number(num_or_hex.to_number()?))?.map(|h| h.hash()),
+			Some(num_or_hex) => self.client()
+				.header(&BlockId::number(num_or_hex.to_number()?))?
+				.map(|h| h.hash()),
 		})
 	}
 
@@ -150,7 +163,11 @@ trait ChainBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 	}
 
 	/// New head subscription
-	fn subscribe_new_heads(&self, _metadata: crate::metadata::Metadata, subscriber: Subscriber<Block::Header>) {
+	fn subscribe_new_heads(
+		&self,
+		_metadata: crate::metadata::Metadata,
+		subscriber: Subscriber<Block::Header>,
+	) {
 		subscribe_headers(
 			self.client(),
 			self.subscriptions(),
@@ -164,12 +181,20 @@ trait ChainBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 	}
 
 	/// Unsubscribe from new head subscription.
-	fn unsubscribe_new_heads(&self, _metadata: Option<crate::metadata::Metadata>, id: SubscriptionId) -> RpcResult<bool> {
+	fn unsubscribe_new_heads(
+		&self,
+		_metadata: Option<crate::metadata::Metadata>,
+		id: SubscriptionId,
+	) -> RpcResult<bool> {
 		Ok(self.subscriptions().cancel(id))
 	}
 
 	/// New head subscription
-	fn subscribe_finalized_heads(&self, _metadata: crate::metadata::Metadata, subscriber: Subscriber<Block::Header>) {
+	fn subscribe_finalized_heads(
+		&self,
+		_metadata: crate::metadata::Metadata,
+		subscriber: Subscriber<Block::Header>,
+	) {
 		subscribe_headers(
 			self.client(),
 			self.subscriptions(),
@@ -182,7 +207,11 @@ trait ChainBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 	}
 
 	/// Unsubscribe from new head subscription.
-	fn unsubscribe_finalized_heads(&self, _metadata: Option<crate::metadata::Metadata>, id: SubscriptionId) -> RpcResult<bool> {
+	fn unsubscribe_finalized_heads(
+		&self,
+		_metadata: Option<crate::metadata::Metadata>,
+		id: SubscriptionId,
+	) -> RpcResult<bool> {
 		Ok(self.subscriptions().cancel(id))
 	}
 }
@@ -218,7 +247,12 @@ pub fn new_light<B, E, Block: BlockT, RA, F: Fetcher<Block>>(
 		F: Send + Sync + 'static,
 {
 	Chain {
-		backend: Box::new(self::chain_light::LightChain::new(client, subscriptions, remote_blockchain, fetcher)),
+		backend: Box::new(self::chain_light::LightChain::new(
+			client,
+			subscriptions,
+			remote_blockchain,
+			fetcher,
+		)),
 	}
 }
 

@@ -194,7 +194,11 @@ impl<S: Storage<Block>, F, Block: BlockT> ProvideCache<Block> for Blockchain<S, 
 	}
 }
 
-impl<S: Storage<Block>, F: Fetcher<Block> + Send + Sync, Block: BlockT> RemoteBlockchain<Block> for Blockchain<S, F> {
+impl<S, F, Block: BlockT> RemoteBlockchain<Block> for Blockchain<S, F>
+	where
+		S: Storage<Block>,
+		F: Fetcher<Block> + Send + Sync,
+{
 	fn header(&self, id: BlockId<Block>) -> ClientResult<LocalOrRemote<
 		Block::Header,
 		RemoteHeaderRequest<Block::Header>,
