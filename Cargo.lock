@@ -3596,6 +3596,7 @@ dependencies = [
  "serde_json 1.0.40 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
  "sr-std 2.0.0",
+ "srml-support 2.0.0",
  "substrate-primitives 2.0.0",
 ]
 
