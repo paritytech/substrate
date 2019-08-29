@@ -75,7 +75,7 @@ use session::historical::IdentificationTuple;
 use sr_io::Printable;
 use sr_primitives::{
 	Perbill, ApplyError,
-	traits::{Convert, Extrinsic as ExtrinsicT, Member},
+	traits::{Convert, Extrinsic as ExtrinsicT, Member, Saturating},
 	transaction_validity::{TransactionValidity, TransactionLongevity, ValidTransaction},
 };
 use sr_staking_primitives::{
@@ -566,13 +566,7 @@ impl<Offender: Clone> Offence<Offender> for UnresponsivenessOffence<Offender> {
 	fn slash_fraction(offenders: u32, validator_set_count: u32) -> Perbill {
 		// the formula is min((3 * (k - 1)) / n, 1) * 0.05
 		let x = Perbill::from_rational_approximation(3 * (offenders - 1), validator_set_count);
-
-		// _ * 0.05
-		// For now, Perbill doesn't support multiplication other than an integer so we perform
-		// a manual scaling.
-		// TODO: #3189 should fix this.
-		let p = (x.into_parts() as u64 * 50_000_000u64) / 1_000_000_000u64;
-		Perbill::from_parts(p as u32)
+		x.saturating_mul(Perbill::from_percent(5))
 	}
 }
 

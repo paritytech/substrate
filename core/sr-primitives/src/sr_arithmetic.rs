@@ -68,6 +68,14 @@ macro_rules! implement_per_thing {
 				Self([x, 100][(x > 100) as usize] * ($max / 100))
 			}
 
+			/// Return the product of multiplication of this value by itself.
+			pub fn square(self) -> Self {
+				// both can be safely casted and multiplied.
+				let p: $upper_type = self.0 as $upper_type * self.0 as $upper_type;
+				let q: $upper_type = $max as $upper_type * $max as $upper_type;
+				Self::from_rational_approximation(p, q)
+			}
+
 			/// Converts a fraction into `Permill`.
 			#[cfg(feature = "std")]
 			pub fn from_fraction(x: f64) -> Self { Self((x * ($max as f64)) as $type) }
@@ -119,6 +127,16 @@ macro_rules! implement_per_thing {
 				let parts = a * b / m;
 				// This will always fit into $type.
 				Self::from_parts(parts as $type)
+			}
+		}
+
+		impl ops::Div for $name {
+			type Output = Self;
+
+			fn div(self, rhs: Self) -> Self::Output {
+				let p = self.0;
+				let q = rhs.0;
+				Self::from_rational_approximation(p, q)
 			}
 		}
 
@@ -345,6 +363,26 @@ macro_rules! implement_per_thing {
 				assert_eq!($name::from_percent(50).saturating_mul($name::from_percent(50)), $name::from_percent(25));
 				assert_eq!($name::from_percent(20).saturating_mul($name::from_percent(20)), $name::from_percent(4));
 				assert_eq!($name::from_percent(10).saturating_mul($name::from_percent(10)), $name::from_percent(1));
+			}
+
+			#[test]
+			fn per_thing_square_works() {
+				assert_eq!($name::from_percent(100).square(), $name::from_percent(100));
+				assert_eq!($name::from_percent(50).square(), $name::from_percent(25));
+				assert_eq!($name::from_percent(10).square(), $name::from_percent(1));
+				assert_eq!($name::from_percent(2).square(), $name::from_parts(4 * $max / 10_000));
+			}
+
+			#[test]
+			fn per_things_div_works() {
+				// normal
+				assert_eq!($name::from_percent(10) / $name::from_percent(20), $name::from_percent(50));
+				assert_eq!($name::from_percent(10) / $name::from_percent(10), $name::from_percent(100));
+				assert_eq!($name::from_percent(10) / $name::from_percent(0), $name::from_percent(100));
+
+				// will not overflow
+				assert_eq!($name::from_percent(10) / $name::from_percent(5), $name::from_percent(100));
+				assert_eq!($name::from_percent(100) / $name::from_percent(50), $name::from_percent(100));
 			}
 		}
 	};

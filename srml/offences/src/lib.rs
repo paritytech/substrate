@@ -33,7 +33,7 @@ use support::{
 };
 use sr_primitives::{
 	Perbill,
-	traits::Hash,
+	traits::{Hash, Saturating},
 };
 use sr_staking_primitives::{
 	offence::{Offence, ReportOffence, Kind, OnOffenceHandler, OffenceDetails},
@@ -131,12 +131,10 @@ where
 				offenders_count.saturating_sub(previous_offenders_count),
 				validator_set_count,
 			);
-			let numerator = new_fraction
-				.into_parts()
-				.saturating_sub(previous_fraction.into_parts());
-			let denominator =
-				Perbill::from_parts(Perbill::one().into_parts() - previous_fraction.into_parts());
-			Perbill::from_parts(denominator * numerator)
+			let numerator = new_fraction.saturating_sub(previous_fraction);
+			let denominator = Perbill::one().saturating_sub(previous_fraction);
+			// TODO: I will not change this but this looks WRONG WRONG.
+			numerator / denominator
 		} else {
 			new_fraction.clone()
 		};
