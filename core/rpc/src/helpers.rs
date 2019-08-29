@@ -14,22 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use futures::prelude::*;
-use futures03::{channel::oneshot, compat::Compat};
-
-/// Wraps around `oneshot::Receiver` and adjusts the error type to produce an internal error if the
-/// sender gets dropped.
-pub struct Receiver<T>(pub Compat<oneshot::Receiver<T>>);
-
-impl<T> Future for Receiver<T> {
-	type Item = T;
-	type Error = jsonrpc_core::Error;
-
-	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-		self.0.poll().map_err(|_| jsonrpc_core::Error::internal_error())
-	}
-}
-
 /// Unwraps the trailing parameter or falls back with the closure result.
 pub fn unwrap_or_else<F, H, E>(or_else: F, optional: Option<H>) -> Result<H, E> where
 	F: FnOnce() -> Result<H, E>,

@@ -1,4 +1,4 @@
-// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,20 +14,18 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Substrate RPC implementation.
-//!
-//! A core implementation of Substrate RPC interfaces.
+use jsonrpc_core::futures::prelude::*;
+use futures03::{channel::oneshot, compat::Compat};
 
-#![warn(missing_docs)]
+/// Wraps around `oneshot::Receiver` and adjusts the error type to produce an internal error if the
+/// sender gets dropped.
+pub struct Receiver<T>(pub Compat<oneshot::Receiver<T>>);
 
-mod helpers;
-mod metadata;
+impl<T> Future for Receiver<T> {
+	type Item = T;
+	type Error = jsonrpc_core::Error;
 
-pub use api::Subscriptions;
-pub use self::metadata::Metadata;
-pub use rpc::IoHandlerExtension as RpcExtension;
-
-pub mod author;
-pub mod chain;
-pub mod state;
-pub mod system;
+	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+		self.0.poll().map_err(|_| jsonrpc_core::Error::internal_error())
+	}
+}
