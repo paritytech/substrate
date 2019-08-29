@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sr_std::prelude::*;
+use rstd::prelude::*;
 use codec::{Codec, Encode, EncodeAppend};
 use crate::{storage::{self, unhashed, hashed::StorageHasher}, rstd::borrow::Borrow};
 
