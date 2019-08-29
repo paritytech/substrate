@@ -37,7 +37,7 @@ use sr_primitives::Justification;
 use sr_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, ProvideRuntimeApi, DigestFor,
 };
-use fg_primitives::{GrandpaApi, AuthorityId};
+use fg_primitives::{self, GrandpaApi, AuthorityId};
 use sr_primitives::generic::BlockId;
 use primitives::{H256, Blake2Hasher};
 
@@ -193,7 +193,7 @@ impl LightAuthoritySet {
 	/// Get a genesis set with given authorities.
 	pub fn genesis(initial: Vec<(AuthorityId, u64)>) -> Self {
 		LightAuthoritySet {
-			set_id: 0,
+			set_id: fg_primitives::SetId::default(),
 			authorities: initial,
 		}
 	}
@@ -247,7 +247,7 @@ fn do_import_block<B, E, Block: BlockT<Hash=H256>, RA, J>(
 
 	// we don't want to finalize on `inner.import_block`
 	let justification = block.justification.take();
-	let enacts_consensus_change = new_cache.contains_key(&well_known_cache_keys::AUTHORITIES);
+	let enacts_consensus_change = !new_cache.is_empty();
 	let import_result = BlockImport::import_block(&mut client, block, new_cache);
 
 	let mut imported_aux = match import_result {

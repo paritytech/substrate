@@ -25,8 +25,9 @@ mod tests;
 use std::{sync::Arc, convert::TryInto};
 
 use client::{self, Client};
-use crate::rpc::futures::{Sink, Stream, Future};
+use crate::rpc::futures::{Sink, Future};
 use crate::subscriptions::Subscriptions;
+use futures03::{StreamExt as _, compat::Compat};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use log::warn;
@@ -161,7 +162,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 			Some(public) => public.0,
 			None => {
 				let maybe_public = match key_type {
-					key_types::BABE | key_types::IM_ONLINE | key_types::SR25519 =>
+					key_types::BABE | key_types::SR25519 =>
 						sr25519::Pair::from_string(&suri, maybe_password)
 							.map(|pair| pair.public().to_raw_vec()),
 					key_types::GRANDPA | key_types::ED25519 =>
@@ -249,7 +250,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 		self.subscriptions.add(subscriber, move |sink| {
 			sink
 				.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
-				.send_all(watcher.into_stream().map(Ok))
+				.send_all(Compat::new(watcher.into_stream().map(|v| Ok::<_, ()>(Ok(v)))))
 				.map(|_| ())
 		})
 	}

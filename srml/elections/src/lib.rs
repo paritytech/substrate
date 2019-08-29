@@ -28,7 +28,7 @@ use sr_primitives::traits::{Zero, One, StaticLookup, Bounded, Saturating};
 use sr_primitives::weights::SimpleDispatchInfo;
 use runtime_io::print;
 use srml_support::{
-	StorageValue, StorageMap,
+	StorageValue, StorageMap, AppendableStorageMap, DecodeLengthStorageMap,
 	dispatch::Result, decl_storage, decl_event, ensure, decl_module,
 	traits::{
 		Currency, ExistenceRequirement, Get, LockableCurrency, LockIdentifier,
@@ -138,17 +138,7 @@ pub type VoteIndex = u32;
 
 // all three must be in sync.
 type ApprovalFlag = u32;
-pub const APPROVAL_FLAG_MASK: ApprovalFlag = 0x8000_0000;
 pub const APPROVAL_FLAG_LEN: usize = 32;
-
-pub const DEFAULT_CANDIDACY_BOND: u32 = 9;
-pub const DEFAULT_VOTING_BOND: u32 = 0;
-pub const DEFAULT_VOTING_FEE: u32 = 0;
-pub const DEFAULT_PRESENT_SLASH_PER_VOTER: u32 = 1;
-pub const DEFAULT_CARRY_COUNT: u32 = 2;
-pub const DEFAULT_INACTIVE_GRACE_PERIOD: u32 = 1;
-pub const DEFAULT_VOTING_PERIOD: u32 = 1000;
-pub const DEFAULT_DECAY_RATIO: u32 = 24;
 
 pub trait Trait: system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -724,15 +714,15 @@ impl<T: Trait> Module<T> {
 	///
 	/// The voter index must be provided as explained in [`voter_at`] function.
 	fn do_set_approvals(who: T::AccountId, votes: Vec<bool>, index: VoteIndex, hint: SetIndex) -> Result {
-		let candidates = Self::candidates();
+		let candidates_len = <Self as Store>::Candidates::decode_len().unwrap_or(0_usize);
 
 		ensure!(!Self::presentation_active(), "no approval changes during presentation period");
 		ensure!(index == Self::vote_index(), "incorrect vote index");
-		ensure!(!candidates.is_empty(), "amount of candidates to receive approval votes should be non-zero");
+		ensure!(!candidates_len.is_zero(), "amount of candidates to receive approval votes should be non-zero");
 		// Prevent a vote from voters that provide a list of votes that exceeds the candidates length
 		// since otherwise an attacker may be able to submit a very long list of `votes` that far exceeds
 		// the amount of candidates and waste more computation than a reasonable voting bond would cover.
-		ensure!(candidates.len() >= votes.len(), "amount of candidate votes cannot exceed amount of candidates");
+		ensure!(candidates_len >= votes.len(), "amount of candidate votes cannot exceed amount of candidates");
 
 		// Amount to be locked up.
 		let mut locked_balance = T::Currency::total_balance(&who);
@@ -765,10 +755,10 @@ impl<T: Trait> Module<T> {
 				CellStatus::Head | CellStatus::Occupied => {
 					// Either occupied or out-of-range.
 					let next = Self::next_nonfull_voter_set();
-					let mut set = Self::voters(next);
+					let set_len = <Voters<T>>::decode_len(next).unwrap_or(0_usize);
 					// Caused a new set to be created. Pay for it.
 					// This is the last potential error. Writes will begin afterwards.
-					if set.is_empty() {
+					if set_len == 0 {
 						let imbalance = T::Currency::withdraw(
 							&who,
 							T::VotingFee::get(),
@@ -779,8 +769,10 @@ impl<T: Trait> Module<T> {
 						// NOTE: this is safe since the `withdraw()` will check this.
 						locked_balance -= T::VotingFee::get();
 					}
-					Self::checked_push_voter(&mut set, who.clone(), next);
-					<Voters<T>>::insert(next, set);
+					if set_len + 1 == VOTER_SET_SIZE {
+						NextVoterSet::put(next + 1);
+					}
+					<Voters<T>>::append_or_insert(next, [Some(who.clone())].into_iter())
 				}
 			}
 
@@ -892,9 +884,17 @@ impl<T: Trait> Module<T> {
 			count += 1;
 		}
 		for (old, new) in candidates.iter().zip(new_candidates.iter()) {
+			// candidate is not a runner up.
 			if old != new {
 				// removed - kill it
 				<RegisterInfoOf<T>>::remove(old);
+
+				// and candidate is not a winner.
+				if incoming.iter().find(|e| *e == old).is_none() {
+					// slash the bond.
+					let (imbalance, _) = T::Currency::slash_reserved(&old, T::CandidacyBond::get());
+					T::LoserCandidate::on_unbalanced(imbalance);
+				}
 			}
 		}
 		// discard any superfluous slots.
@@ -908,18 +908,6 @@ impl<T: Trait> Module<T> {
 		CandidateCount::put(count);
 		VoteCount::put(Self::vote_index() + 1);
 		Ok(())
-	}
-
-	fn checked_push_voter(set: &mut Vec<Option<T::AccountId>>, who: T::AccountId, index: u32) {
-		let len = set.len();
-
-		// Defensive only: this should never happen. Don't push since it will break more things.
-		if len == VOTER_SET_SIZE { return; }
-
-		set.push(Some(who));
-		if len + 1 == VOTER_SET_SIZE {
-			NextVoterSet::put(index + 1);
-		}
 	}
 
 	/// Get the set and vector index of a global voter index.
@@ -1144,6 +1132,7 @@ mod tests {
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
+		type Version = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
@@ -1253,6 +1242,7 @@ mod tests {
 	pub struct ExtBuilder {
 		balance_factor: u64,
 		decay_ratio: u32,
+		desired_seats: u32,
 		voting_fee: u64,
 		voter_bond: u64,
 		bad_presentation_punishment: u64,
@@ -1263,6 +1253,7 @@ mod tests {
 			Self {
 				balance_factor: 1,
 				decay_ratio: 24,
+				desired_seats: 2,
 				voting_fee: 0,
 				voter_bond: 0,
 				bad_presentation_punishment: 1,
@@ -1291,6 +1282,10 @@ mod tests {
 			self.voter_bond = fee;
 			self
 		}
+		pub fn desired_seats(mut self, seats: u32) -> Self {
+			self.desired_seats = seats;
+			self
+		}
 		pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 			VOTER_BOND.with(|v| *v.borrow_mut() = self.voter_bond);
 			VOTING_FEE.with(|v| *v.borrow_mut() = self.voting_fee);
@@ -1310,7 +1305,7 @@ mod tests {
 				}),
 				elections: Some(elections::GenesisConfig::<Test>{
 					members: vec![],
-					desired_seats: 2,
+					desired_seats: self.desired_seats,
 					presentation_duration: 2,
 					term_duration: 5,
 				}),
@@ -1339,6 +1334,10 @@ mod tests {
 
 	fn bond() -> u64 {
 		<Test as Trait>::VotingBond::get()
+	}
+
+	fn balances(who: &u64) -> (u64, u64) {
+		(Balances::free_balance(who), Balances::reserved_balance(who))
 	}
 
 	#[test]
@@ -2471,8 +2470,6 @@ mod tests {
 
 			assert_eq!(voter_ids(), vec![0, 5]);
 			assert_eq!(Elections::all_approvals_of(&2).len(), 0);
-			assert_eq!(Balances::total_balance(&2), 18);
-			assert_eq!(Balances::total_balance(&5), 52);
 		});
 	}
 
@@ -2871,6 +2868,43 @@ mod tests {
 			);
 
 			assert_eq!(Elections::candidate_reg_info(4), Some((0, 3)));
+		});
+	}
+
+	#[test]
+	fn loser_candidates_bond_gets_slashed() {
+		with_externalities(&mut ExtBuilder::default().desired_seats(1).build(), || {
+			System::set_block_number(4);
+			assert!(!Elections::presentation_active());
+
+			assert_ok!(Elections::submit_candidacy(Origin::signed(1), 0));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 1));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(3), 2));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(4), 3));
+
+			assert_eq!(balances(&2), (17, 3));
+
+			assert_ok!(Elections::set_approvals(Origin::signed(5), vec![true], 0, 0));
+			assert_ok!(Elections::set_approvals(Origin::signed(1), vec![false, true, true, true], 0, 0));
+
+			assert_ok!(Elections::end_block(System::block_number()));
+
+			System::set_block_number(6);
+			assert!(Elections::presentation_active());
+			assert_eq!(Elections::present_winner(Origin::signed(4), 4, 10, 0), Ok(()));
+			assert_eq!(Elections::present_winner(Origin::signed(3), 3, 10, 0), Ok(()));
+			assert_eq!(Elections::present_winner(Origin::signed(2), 2, 10, 0), Ok(()));
+			assert_eq!(Elections::present_winner(Origin::signed(1), 1, 50, 0), Ok(()));
+
+
+			// winner + carry
+			assert_eq!(Elections::leaderboard(), Some(vec![(10, 3), (10, 4), (50, 1)]));
+			assert_ok!(Elections::end_block(System::block_number()));
+			assert!(!Elections::presentation_active());
+			assert_eq!(Elections::members(), vec![(1, 11)]);
+
+			// account 2 is not a runner up or in leaderboard.
+			assert_eq!(balances(&2), (17, 0));
 		});
 	}
 }

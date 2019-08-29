@@ -256,11 +256,11 @@ pub enum PermissionVersions<AccountId> {
 
 /// Asset permission types
 pub enum PermissionType {
-	/// Permission to update asset permission
+	/// Permission to burn asset permission
 	Burn,
 	/// Permission to mint new asset
 	Mint,
-	/// Permission to burn asset
+	/// Permission to update asset
 	Update,
 }
 
@@ -1063,6 +1063,7 @@ impl<T: Subtrait> system::Trait for ElevatedTrait<T> {
 	type AvailableBlockRatio = T::AvailableBlockRatio;
 	type WeightMultiplierUpdate = ();
 	type BlockHashCount = T::BlockHashCount;
+	type Version = T::Version;
 }
 impl<T: Subtrait> Trait for ElevatedTrait<T> {
 	type Balance = T::Balance;

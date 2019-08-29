@@ -35,7 +35,7 @@ use syn::{
 	},
 	parse_macro_input,
 };
-use quote::quote;
+use quote::{quote, quote_spanned};
 
 use super::*;
 
@@ -417,7 +417,16 @@ fn decl_store_extra_genesis(
 					}
 					assimilate_require_generic |= ext::expr_contains_ident(&expr.content, traitinstance);
 					let content = &expr.content;
-					scall = quote!( ( #content ) );
+					scall = quote_spanned! { expr.span() =>
+						let scall: fn(
+							&mut (
+								#scrate::sr_primitives::StorageOverlay,
+								#scrate::sr_primitives::ChildrenStorageOverlay
+							),
+							&Self
+						) = #content;
+						scall
+					};
 					has_scall = true;
 				},
 			}
@@ -753,9 +762,25 @@ fn decl_storage_items(
 		} = sline;
 
 		let type_infos = get_type_infos(storage_type);
+		let fielddefault = default_value.inner
+			.as_ref()
+			.map(|d| &d.expr)
+			.map(|d| quote!( #d ))
+			.unwrap_or_else(|| quote!{ Default::default() });
 		let kind = type_infos.kind.clone();
 		// Propagate doc attributes.
 		let attrs = attrs.inner.iter().filter_map(|a| a.parse_meta().ok()).filter(|m| m.name() == "doc");
+
+		// create default value delegator
+		let default_delegator_ident = Ident::new(
+			&format!("{}{}", name.to_string(), "DefaultDelegator"),
+			proc_macro2::Span::call_site(),
+		);
+		let default_delegator_return = if !type_infos.is_option {
+			quote! { Some(#fielddefault) }
+		} else {
+			quote! { #fielddefault }
+		};
 
 		let i = impls::Impls {
 			scrate,
@@ -765,8 +790,9 @@ fn decl_storage_items(
 			traittype,
 			instance_opts,
 			type_infos,
-			fielddefault: default_value.inner.as_ref().map(|d| &d.expr).map(|d| quote!( #d ))
-				.unwrap_or_else(|| quote!{ Default::default() }),
+			fielddefault,
+			default_delegator_ident,
+			default_delegator_return,
 			prefix: build_prefix(cratename, name),
 			name,
 			attrs,

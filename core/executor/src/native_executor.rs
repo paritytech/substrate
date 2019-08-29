@@ -49,9 +49,6 @@ pub fn with_native_environment<F, U>(ext: &mut dyn Externalities<Blake2Hasher>, 
 
 /// Delegate for dispatching a CodeExecutor call to native code.
 pub trait NativeExecutionDispatch: Send + Sync {
-	/// Get the wasm code that the native dispatch will be equivalent to.
-	fn native_equivalent() -> &'static [u8];
-
 	/// Dispatch a method and input data to be executed natively.
 	fn dispatch(ext: &mut dyn Externalities<Blake2Hasher>, method: &str, data: &[u8]) -> Result<Vec<u8>>;
 
@@ -211,19 +208,13 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 /// Implements a `NativeExecutionDispatch` for provided parameters.
 #[macro_export]
 macro_rules! native_executor_instance {
-	( $pub:vis $name:ident, $dispatcher:path, $version:path, $code:expr) => {
+	( $pub:vis $name:ident, $dispatcher:path, $version:path $(,)?) => {
 		/// A unit struct which implements `NativeExecutionDispatch` feeding in the hard-coded runtime.
 		$pub struct $name;
-		$crate::native_executor_instance!(IMPL $name, $dispatcher, $version, $code);
+		$crate::native_executor_instance!(IMPL $name, $dispatcher, $version);
 	};
-	(IMPL $name:ident, $dispatcher:path, $version:path, $code:expr) => {
+	(IMPL $name:ident, $dispatcher:path, $version:path) => {
 		impl $crate::NativeExecutionDispatch for $name {
-			fn native_equivalent() -> &'static [u8] {
-				// WARNING!!! This assumes that the runtime was built *before* the main project. Until we
-				// get a proper build script, this must be strictly adhered to or things will go wrong.
-				$code
-			}
-
 			fn dispatch(
 				ext: &mut $crate::Externalities<$crate::Blake2Hasher>,
 				method: &str,

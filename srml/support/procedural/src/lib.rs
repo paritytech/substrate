@@ -133,7 +133,17 @@ use proc_macro::TokenStream;
 /// }
 /// ```
 ///
-/// This struct can be exposed as `Config` by the `decl_runtime!` macro.
+/// This struct can be exposed as `ExampleConfig` by the `construct_runtime!` macro like follows:
+///
+/// ```nocompile
+/// construct_runtime!(
+/// 	pub enum Runtume with ... {
+///         ...,
+///         Example: example::{Module, Storage, ..., Config<T>},
+///         ...,
+///	}
+/// );
+/// ```
 ///
 /// ### Module with Instances
 ///

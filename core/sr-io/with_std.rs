@@ -206,7 +206,7 @@ impl CryptoApi for () {
 		ext::with(|ext| {
 			ext.keystore()
 				.expect("No `keystore` associated for the current context!")
-				.write()
+				.read()
 				.ed25519_public_keys(id)
 		}).expect("`ed25519_public_keys` cannot be called outside of an Externalities-provided environment.")
 	}
@@ -233,7 +233,7 @@ impl CryptoApi for () {
 				.expect("No `keystore` associated for the current context!")
 				.read()
 				.ed25519_key_pair(id, &pub_key)
-				.map(|k| k.sign(msg.as_ref()).into())
+				.map(|k| k.sign(msg.as_ref()))
 		}).expect("`ed25519_sign` cannot be called outside of an Externalities-provided environment.")
 	}
 
@@ -245,7 +245,7 @@ impl CryptoApi for () {
 		ext::with(|ext| {
 			ext.keystore()
 				.expect("No `keystore` associated for the current context!")
-				.write()
+				.read()
 				.sr25519_public_keys(id)
 		}).expect("`sr25519_public_keys` cannot be called outside of an Externalities-provided environment.")
 	}
@@ -272,7 +272,7 @@ impl CryptoApi for () {
 				.expect("No `keystore` associated for the current context!")
 				.read()
 				.sr25519_key_pair(id, &pub_key)
-				.map(|k| k.sign(msg.as_ref()).into())
+				.map(|k| k.sign(msg.as_ref()))
 		}).expect("`sr25519_sign` cannot be called outside of an Externalities-provided environment.")
 	}
 

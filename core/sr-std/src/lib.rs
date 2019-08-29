@@ -68,7 +68,7 @@ include!("../without_std.rs");
 pub mod prelude {
 	pub use crate::vec::Vec;
 	pub use crate::boxed::Box;
-	pub use crate::cmp::{Eq, PartialEq};
+	pub use crate::cmp::{Eq, PartialEq, Reverse};
 	pub use crate::clone::Clone;
 
 	// Re-export `vec!` macro here, but not in `std` mode, since
