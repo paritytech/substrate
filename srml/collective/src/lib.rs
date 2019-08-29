@@ -138,7 +138,7 @@ decl_event!(
 // operational class.
 decl_module! {
 	pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where origin: <T as system::Trait>::Origin {
-		fn deposit_event<T, I>() = default;
+		fn deposit_event() = default;
 
 		/// Set the collective's membership manually to `new_members`. Be nice to the chain and
 		/// provide it pre-sorted.
