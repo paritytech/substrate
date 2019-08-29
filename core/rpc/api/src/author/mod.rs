@@ -44,8 +44,8 @@ pub trait AuthorApi<Hash, BlockHash> {
 	fn insert_key(&self,
 		key_type: String,
 		suri: String,
-		maybe_public: Option<Bytes>
-	) -> Result<Bytes>;
+		public: Bytes,
+	) -> Result<()>;
 
 	/// Generate new session keys and returns the corresponding public keys.
 	#[rpc(name = "author_rotateKeys")]
