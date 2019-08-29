@@ -20,8 +20,8 @@
 use super::*;
 use runtime_io::with_externalities;
 use mock::{new_test_ext, Babe, Test};
-use sr_primitives::{traits::Header, Digest};
-use babe_primitives::CompatibleDigestItem;
+use sr_primitives::{traits::Header, Digest, testing::UintAuthorityId};
+use babe_primitives::{CompatibleDigestItem, sr25519::AuthorityId};
 use session::ShouldEndSession;
 
 #[test]
@@ -74,13 +74,29 @@ fn check_epoch_change() {
 		assert_eq!(logs.len(), 1);
 		let (engine_id, mut epoch) = logs[0].as_consensus().unwrap();
 		assert_eq!(BABE_ENGINE_ID, engine_id);
-		let Epoch { start_slot, duration, .. } = match ConsensusLog::decode(&mut epoch).unwrap() {
+		let Epoch {
+			start_slot,
+			duration,
+			epoch_index,
+			authorities,
+			randomness,
+			secondary_slots,
+		} = match ConsensusLog::decode(&mut epoch).unwrap() {
 			ConsensusLog::NextEpochData(e) => e,
 			ConsensusLog::OnDisabled(_) => panic!("we have not disabled any authorities yet!"),
 		};
 		assert_eq!(EpochDuration::get(), 3);
 		assert_eq!(duration, EpochDuration::get());
 		assert_eq!(start_slot, 2 * EpochDuration::get() + 1);
+		assert_eq!(epoch_index, 2, "wrong epoch index");
+		let expected_authorities: Vec<(AuthorityId, u64)> = [1u64, 2, 3, 4].iter().map(|&s| (UintAuthorityId(s).to_public_key(), s)).collect();
+		if false {
+			assert_eq!(authorities, expected_authorities)
+		} else {
+			assert_eq!(authorities, [])
+		}
+		assert_eq!(randomness, [2, 232, 2, 244, 166, 226, 138, 102, 132, 237, 9, 130, 42, 88, 216, 122, 74, 210, 211, 143, 83, 217, 31, 210, 129, 101, 20, 125, 168, 0, 36, 78]);
+		assert!(secondary_slots);
 	})
 }
 
