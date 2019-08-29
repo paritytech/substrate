@@ -337,8 +337,8 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E>(
 	'outer: loop {
 		let best_hash = client.info().best_hash;
 		let best_header = client.header(BlockId::Hash(best_hash))
-			.map_err(|e| format!("Best header does not exist: {:?}", e))?
-			.ok_or("Fetching best header failed")?;
+			.map_err(|e| format!("Fetching best header failed: {:?}", e))?
+			.ok_or("Best header does not exist")?;
 		let mut aux = PowAux::read(client, &best_hash)?;
 		let mut proposer = env.init(&best_header).map_err(|e| format!("{:?}", e))?;
 
