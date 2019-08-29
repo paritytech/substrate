@@ -24,8 +24,8 @@ use sr_primitives::traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin,
 use sr_primitives::weights::SimpleDispatchInfo;
 use codec::{Encode, Decode, Input, Output, Error};
 use srml_support::{
-	decl_module, decl_storage, decl_event, ensure, AppendableStorageMap, StorageValue, StorageMap,
-	Parameter, Dispatchable, EnumerableStorageMap,
+	decl_module, decl_storage, decl_event, ensure, StorageValue, StorageMap, StorageLinkedMap,
+	Parameter, Dispatchable,
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
 		OnFreeBalanceZero

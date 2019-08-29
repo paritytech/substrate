@@ -62,16 +62,11 @@ decl_storage! {
 	add_extra_genesis {
 		config(members): Vec<T::AccountId>;
 		config(phantom): sr_std::marker::PhantomData<I>;
-		build(|
-			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
-			config: &Self,
-		| {
-			sr_io::with_storage(storage, || {
-				let mut members = config.members.clone();
-				members.sort();
-				T::MembershipInitialized::initialize_members(&members);
-				<Members<T, I>>::put(members);
-			});
+		build(|config: &Self| {
+			let mut members = config.members.clone();
+			members.sort();
+			T::MembershipInitialized::initialize_members(&members);
+			<Members<T, I>>::put(members);
 		})
 	}
 }
