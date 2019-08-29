@@ -884,6 +884,7 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 
 		return Ok(());
 	}
+
 	// lock must be held through writing to DB to avoid race
 	let mut authority_set = authority_set.inner().write();
 

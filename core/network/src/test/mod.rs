@@ -363,9 +363,9 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	///  1. this might be expensive as it creates an in-memory-copy of the chain
 	///     to count the blocks, thus if you have a different way of testing this
 	///     (e.g. `info.best_hash`) - use that.
-	///  2. this is not reliably always increasing nor effectily acurate as the
-	///     orphaned and proofen-to-never-finalized blocks may be pruned at any time
-	///     thus this number can also drop again.
+	///  2. This is not always increasing nor accurate, as the
+	///     orphaned and proven-to-never-finalized blocks may be pruned at any time.
+	///     Therefore, this number can drop again.
 	pub fn blocks_count(&self) -> usize {
 		match self.backend {
 			Some(ref backend) => backend.as_in_memory().blockchain().blocks_count(),

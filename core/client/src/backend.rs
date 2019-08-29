@@ -147,8 +147,8 @@ pub trait Finalizer<Block: BlockT, H: Hasher<Out=Block::Hash>, B: Backend<Block,
 	/// fire finality notifications.
 	///
 	/// If the block being finalized is on a different fork from the current
-	/// best block the finalized block is set as best, this might be slightly
-	/// innacurate (i.e. outdated), usages that require determining an accurate
+	/// best block, the finalized block is set as best. This might be slightly
+	/// inaccurate (i.e. outdated). Usages that require determining an accurate
 	/// best block should use `SelectChain` instead of the client.
 	///
 	/// Pass a flag to indicate whether finality notifications should be propagated.

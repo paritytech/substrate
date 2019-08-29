@@ -205,8 +205,8 @@ fn run_one_test() {
 	for (peer_id, seed) in peers {
 		let mut net = net.lock();
 		let peer = net.peer(*peer_id);
-		let client = peer.client().as_full().expect("full clients are created").clone();
-		let select_chain = peer.select_chain().expect("full client has select chain");
+		let client = peer.client().as_full().expect("Only full clients are used in tests").clone();
+		let select_chain = peer.select_chain().expect("Full client has select_chain");
 		
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 		let keystore = keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
