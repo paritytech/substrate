@@ -417,7 +417,7 @@ type DefaultHandler<R, E> = fn(
 pub enum ExecutionManager<F> {
 	/// Execute with the native equivalent if it is compatible with the given wasm module; otherwise fall back to the wasm.
 	NativeWhenPossible,
-	/// Use the given wasm module. The backend on which code is executed code could be
+	/// Use the given wasm module. The backend on which code is executed could be
 	/// trusted (true) or untrusted (false).
 	/// If untrusted, all panics that occurs within externalities are treated as runtime execution error.
 	/// If trusted, they are considered fatal && aren't catched.
