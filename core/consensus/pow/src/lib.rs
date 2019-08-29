@@ -50,7 +50,7 @@ fn aux_key(hash: &H256) -> Vec<u8> {
 		.cloned().collect::<Vec<_>>()
 }
 
-/// Auxiliary data for PoW.
+/// Auxiliary storage data for PoW.
 #[derive(Encode, Decode, Clone, Debug, Default)]
 pub struct PowAux {
 	/// Total difficulty.
