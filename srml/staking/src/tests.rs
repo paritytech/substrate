@@ -539,9 +539,17 @@ fn nominating_and_rewards_should_work() {
 			assert_eq_error_rate!(Balances::total_balance(&20), initial_balance + payout_for_20/2, 1);
 		} else {
 			// Nominator 2: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
-			assert_eq_error_rate!(Balances::total_balance(&2), initial_balance + (2*payout_for_10/9 + 3*payout_for_20/11) - 2, 1);
+			assert_eq_error_rate!(
+				Balances::total_balance(&2),
+				initial_balance + (2*payout_for_10/9 + 3*payout_for_20/11) - 2,
+				1,
+			);
 			// Nominator 4: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
-			assert_eq_error_rate!(Balances::total_balance(&4), initial_balance + (2*payout_for_10/9 + 3*payout_for_20/11) - 2, 1);
+			assert_eq_error_rate!(
+				Balances::total_balance(&4),
+				initial_balance + (2*payout_for_10/9 + 3*payout_for_20/11) - 2,
+				1,
+			);
 
 			// Validator 10: got 800 / 1800 external stake => 8/18 =? 4/9 => Validator's share = 5/9
 			assert_eq_error_rate!(Balances::total_balance(&10), initial_balance + 5*payout_for_10/9 - 1, 1);

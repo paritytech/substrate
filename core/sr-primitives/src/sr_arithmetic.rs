@@ -883,7 +883,10 @@ mod tests_fixed64 {
 			assert_eq!(Fixed64::from_rational(100, 1).saturated_multiply_accumulate(10 as $num_type), 1010);
 			assert_eq!(Fixed64::from_rational(100, 2).saturated_multiply_accumulate(10 as $num_type), 510);
 			assert_eq!(Fixed64::from_rational(100, 3).saturated_multiply_accumulate(0 as $num_type), 0);
-			assert_eq!(Fixed64::from_rational(5, 1).saturated_multiply_accumulate($num_type::max_value()), $num_type::max_value());
+			assert_eq!(
+				Fixed64::from_rational(5, 1).saturated_multiply_accumulate($num_type::max_value()),
+				$num_type::max_value()
+			);
 			assert_eq!(max().saturated_multiply_accumulate($num_type::max_value()), $num_type::max_value());
 		}
 	}
