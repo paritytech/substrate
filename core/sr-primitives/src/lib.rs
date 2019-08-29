@@ -40,13 +40,13 @@ pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 use rstd::{prelude::*, ops, convert::{TryInto, TryFrom}};
 use primitives::{crypto, ed25519, sr25519, hash::{H256, H512}};
 use codec::{Encode, Decode, CompactAs};
+use traits::{SaturatedConversion, UniqueSaturatedInto, Saturating, Bounded, CheckedSub, CheckedAdd};
 
 #[cfg(feature = "std")]
 pub mod testing;
 
 pub mod weights;
 pub mod traits;
-use traits::{SaturatedConversion, UniqueSaturatedInto, Saturating, Bounded, CheckedSub, CheckedAdd};
 
 pub mod generic;
 pub mod transaction_validity;

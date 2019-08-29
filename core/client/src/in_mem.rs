@@ -758,6 +758,10 @@ impl<Block, H> state_machine::ChangesTrieStorage<H, NumberFor<Block>> for Change
 		Block: BlockT,
 		H: Hasher,
 {
+	fn as_roots_storage(&self) -> &dyn state_machine::ChangesTrieRootsStorage<H, NumberFor<Block>> {
+		self
+	}
+
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<state_machine::DBValue>, String> {
 		self.0.get(key, prefix)
 	}
