@@ -124,7 +124,7 @@ impl<C, Algorithm> PowVerifier<C, Algorithm> {
 		let difficulty = self.algorithm.difficulty(&parent_block_id)?;
 
 		if !self.algorithm.verify(
-			&block_id,
+			&parent_block_id,
 			&pre_hash,
 			&inner_seal,
 			difficulty,
