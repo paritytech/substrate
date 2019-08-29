@@ -257,7 +257,7 @@ pub trait StorageExternalities<H: Hasher> {
 /// Extra externalities API: pinned to specific active address.
 ///
 /// Methods of this trait may have side-effects.  Therefore, it isn't safe
-/// to catch unwindings of any panics that occur during these methods call.
+/// to catch unwinding of any panics that occur during calls to them.
 pub trait Externalities<H: Hasher>: StorageExternalities<H> {
 	/// Returns offchain externalities extension if present.
 	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities>;
