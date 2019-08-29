@@ -68,7 +68,6 @@
 
 use sr_primitives::traits::{Zero, StaticLookup, Bounded, Convert};
 use sr_primitives::weights::SimpleDispatchInfo;
-use sr_primitives::phragmen;
 use srml_support::{StorageValue, StorageMap, EnumerableStorageMap, decl_storage, decl_event, ensure,
 	decl_module, dispatch,
 	traits::{Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
@@ -145,7 +144,7 @@ decl_storage! {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn deposit_event<T>() = default;
+		fn deposit_event() = default;
 
 		const CandidacyBond: BalanceOf<T> = T::CandidacyBond::get();
 		const VotingBond: BalanceOf<T> = T::VotingBond::get();
@@ -349,17 +348,18 @@ impl<T: Trait> Module<T> {
 			.collect::<Vec<(T::AccountId, Vec<T::AccountId>)>>();
 		let maybe_new_members = phragmen::elect::<_, _, _, T::CurrencyToVote>(
 			num_to_elect,
-			false,
 			0,
 			candidates.clone(),
 			voters_and_votes,
-			Self::locked_stake_of
+			Self::locked_stake_of,
+			false,
 		);
 
 		let mut to_release_bond: Vec<T::AccountId> = Vec::with_capacity(desired_seats);
 		let old_members = <Members<T>>::take();
-		if let Some((new_members_with_approval, _)) = maybe_new_members {
+		if let Some(phragmen_results) = maybe_new_members {
 			// filter out those who had literally no votes at all.
+			let new_members_with_approval = phragmen_results.winners;
 			let mut new_members = new_members_with_approval
 				.into_iter()
 				.filter_map(|(m, a)| if a.is_zero() { None } else { Some(m) } )

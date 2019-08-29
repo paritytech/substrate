@@ -40,12 +40,12 @@ pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 use rstd::{prelude::*, ops, convert::{TryInto, TryFrom}};
 use primitives::{crypto, ed25519, sr25519, hash::{H256, H512}};
 use codec::{Encode, Decode, CompactAs};
+use traits::{SaturatedConversion, UniqueSaturatedInto, Saturating, Bounded, CheckedSub, CheckedAdd};
 
 #[cfg(feature = "std")]
 pub mod testing;
 
 pub mod weights;
-pub mod phragmen;
 pub mod traits;
 
 pub mod generic;
@@ -57,8 +57,6 @@ pub use generic::{DigestItem, Digest};
 /// Re-export this since it's part of the API of this crate.
 pub use primitives::crypto::{key_types, KeyTypeId, CryptoType};
 pub use app_crypto::AppKey;
-
-use traits::{SaturatedConversion, UniqueSaturatedInto, Saturating, Bounded, CheckedSub, CheckedAdd};
 
 /// A message indicating an invalid signature in extrinsic.
 pub const BAD_SIGNATURE: &str = "bad signature in extrinsic";

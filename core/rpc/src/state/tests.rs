@@ -25,20 +25,24 @@ use test_client::{
 	consensus::BlockOrigin,
 	runtime,
 };
-use substrate_executor::NativeExecutionDispatch;
 
 #[test]
 fn should_return_storage() {
+	const KEY: &[u8] = b":mock";
+	const VALUE: &[u8] = b"hello world";
+
 	let core = tokio::runtime::Runtime::new().unwrap();
-	let client = Arc::new(test_client::new());
+	let client = TestClientBuilder::new()
+		.add_extra_storage(KEY.to_vec(), VALUE.to_vec())
+		.build();
 	let genesis_hash = client.genesis_hash();
-	let client = State::new(client, Subscriptions::new(Arc::new(core.executor())));
-	let key = StorageKey(b":code".to_vec());
+	let client = State::new(Arc::new(client), Subscriptions::new(Arc::new(core.executor())));
+	let key = StorageKey(KEY.to_vec());
 
 	assert_eq!(
 		client.storage(key.clone(), Some(genesis_hash).into())
 			.map(|x| x.map(|x| x.0.len())).unwrap().unwrap() as usize,
-		LocalExecutor::native_equivalent().len(),
+		VALUE.len(),
 	);
 	assert_matches!(
 		client.storage_hash(key.clone(), Some(genesis_hash).into()).map(|x| x.is_some()),
@@ -46,7 +50,7 @@ fn should_return_storage() {
 	);
 	assert_eq!(
 		client.storage_size(key.clone(), None).unwrap().unwrap() as usize,
-		LocalExecutor::native_equivalent().len(),
+		VALUE.len(),
 	);
 }
 
@@ -86,7 +90,7 @@ fn should_call_contract() {
 
 	assert_matches!(
 		client.call("balanceOf".into(), Bytes(vec![1,2,3]), Some(genesis_hash).into()),
-		Err(Error::Client(client::error::Error::Execution(_)))
+		Err(Error::Client(_))
 	)
 }
 
@@ -262,10 +266,12 @@ fn should_return_runtime_version() {
 		[\"0xc6e9a76309f39b09\",1],[\"0xdd718d5cc53262d4\",1],[\"0xcbca25e39f142387\",1],\
 		[\"0xf78b278be53f454c\",1],[\"0xab3c0572291feb8b\",1]]}";
 
-	assert_eq!(
-		serde_json::to_string(&api.runtime_version(None.into()).unwrap()).unwrap(),
-		result,
-	);
+	let runtime_version = api.runtime_version(None.into()).unwrap();
+	let serialized = serde_json::to_string(&runtime_version).unwrap();
+	assert_eq!(serialized, result);
+
+	let deserialized: RuntimeVersion = serde_json::from_str(result).unwrap();
+	assert_eq!(deserialized, runtime_version);
 }
 
 #[test]

@@ -228,7 +228,7 @@ decl_module! {
 		for enum Call
 		where origin: T::Origin
 	{
-		fn deposit_event<T, I>() = default;
+		fn deposit_event() = default;
 
 		/// Every `Period` blocks the `Members` set is refreshed from the
 		/// highest scoring members in the pool.
