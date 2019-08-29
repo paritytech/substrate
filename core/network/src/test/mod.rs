@@ -367,10 +367,9 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	///     orphaned and proven-to-never-finalized blocks may be pruned at any time.
 	///     Therefore, this number can drop again.
 	pub fn blocks_count(&self) -> usize {
-		match self.backend {
-			Some(ref backend) => backend.as_in_memory().blockchain().blocks_count(),
-			_ => 0
-		}
+		self.backend.as_ref().map(
+			|backend| backend.as_in_memory().blockchain().blocks_count()
+		).unwrap_or(0)
 	}
 }
 
