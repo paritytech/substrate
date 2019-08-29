@@ -37,7 +37,7 @@ pub trait StorageValue<T: Codec> {
 	fn from_query_to_optional_value(v: Self::Query) -> Option<T>;
 
 	/// Generate the full key used in top storage.
-	fn storage_value_final_key() -> [u8;16] {
+	fn storage_value_final_key() -> [u8; 16] {
 		Twox128::hash(Self::unhashed_key())
 	}
 }
