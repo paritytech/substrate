@@ -447,7 +447,7 @@ pub trait AbstractService: 'static + Future<Item = (), Error = Error> +
 	/// API that the runtime provides.
 	type RuntimeApi: Send + Sync;
 	/// Chain selection algorithm.
-	type SelectChain;
+	type SelectChain: consensus_common::SelectChain<Self::Block>;
 	/// API of the transaction pool.
 	type TransactionPoolApi: ChainApi<Block = Self::Block>;
 	/// Network specialization.
@@ -511,7 +511,7 @@ where
 	TBackend: 'static + client::backend::Backend<TBl, Blake2Hasher>,
 	TExec: 'static + client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone,
 	TRtApi: 'static + Send + Sync,
-	TSc: 'static + Clone + Send,
+	TSc: consensus_common::SelectChain<TBl> + 'static + Clone + Send,
 	TExPoolApi: 'static + ChainApi<Block = TBl>,
 	TOc: 'static + Send + Sync,
 	TNetSpec: NetworkSpecialization<TBl>,

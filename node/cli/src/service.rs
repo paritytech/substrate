@@ -46,7 +46,7 @@ macro_rules! new_full_start {
 	($config:expr) => {{
 		let mut import_setup = None;
 		let inherent_data_providers = inherents::InherentDataProviders::new();
-		let mut tasks_to_spawn = None;
+		let mut tasks_to_spawn = Vec::new();
 
 		let builder = substrate_service::ServiceBuilder::new_full::<
 			node_primitives::Block, node_runtime::RuntimeApi, node_executor::Executor
@@ -78,7 +78,7 @@ macro_rules! new_full_start {
 				)?;
 
 				import_setup = Some((babe_block_import.clone(), link_half, babe_link));
-				tasks_to_spawn = Some(vec![Box::new(pruning_task)]);
+				tasks_to_spawn.push(Box::new(pruning_task));
 
 				Ok(import_queue)
 			})?
@@ -91,7 +91,7 @@ macro_rules! new_full_start {
 				);
 				io
 			})?;
-		
+
 		(builder, import_setup, inherent_data_providers, tasks_to_spawn)
 	}}
 }
@@ -128,14 +128,12 @@ macro_rules! new_full {
 				.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
 		// spawn any futures that were created in the previous setup steps
-		if let Some(tasks) = tasks_to_spawn.take() {
-			for task in tasks {
-				service.spawn_task(
-					task.select(service.on_exit())
-						.map(|_| ())
-						.map_err(|_| ())
-				);
-			}
+		for task in tasks_to_spawn.drain(..) {
+			service.spawn_task(
+				task.select(service.on_exit())
+					.map(|_| ())
+					.map_err(|_| ())
+			);
 		}
 
 		if is_authority {
@@ -218,9 +216,12 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 /// Builds a new service for a light client.
 pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisConfig>)
 -> Result<impl AbstractService, ServiceError> {
-	let inherent_data_providers = InherentDataProviders::new();
+	use futures::Future;
 
-	ServiceBuilder::new_light::<Block, RuntimeApi, node_executor::Executor>(config)?
+	let inherent_data_providers = InherentDataProviders::new();
+	let mut tasks_to_spawn = Vec::new();
+
+	let service = ServiceBuilder::new_light::<Block, RuntimeApi, node_executor::Executor>(config)?
 		.with_select_chain(|_config, backend| {
 			Ok(LongestChain::new(backend.clone()))
 		})?
@@ -240,8 +241,7 @@ pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisCo
 			let finality_proof_request_builder =
 				finality_proof_import.create_finality_proof_request_builder();
 
-			// FIXME: pruning task isn't started since light client doesn't do `AuthoritySetup`.
-			let (import_queue, ..) = import_queue(
+			let (import_queue, _, _, pruning_task) = import_queue(
 				Config::get_or_compute(&*client)?,
 				block_import,
 				None,
@@ -251,6 +251,8 @@ pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisCo
 				inherent_data_providers.clone(),
 				Some(transaction_pool)
 			)?;
+
+			tasks_to_spawn.push(Box::new(pruning_task));
 
 			Ok((import_queue, finality_proof_request_builder))
 		})?
@@ -267,7 +269,18 @@ pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisCo
 			);
 			io
 		})?
-		.build()
+		.build()?;
+
+	// spawn any futures that were created in the previous setup steps
+	for task in tasks_to_spawn.drain(..) {
+		service.spawn_task(
+			task.select(service.on_exit())
+				.map(|_| ())
+				.map_err(|_| ())
+		);
+	}
+
+	Ok(service)
 }
 
 #[cfg(test)]
@@ -279,7 +292,7 @@ mod tests {
 	};
 	use node_primitives::DigestItem;
 	use node_runtime::{BalancesCall, Call, UncheckedExtrinsic};
-	use node_runtime::constants::{currency::CENTS, time::SLOT_DURATION};
+	use node_runtime::constants::{currency::CENTS, time::{PRIMARY_PROBABILITY, SLOT_DURATION}};
 	use codec::{Encode, Decode};
 	use primitives::{
 		crypto::Pair as CryptoPair, blake2_256,
@@ -400,7 +413,7 @@ mod tests {
 						slot_num,
 						&parent_header,
 						&*service.client(),
-						(278, 1000),
+						PRIMARY_PROBABILITY,
 						&keystore,
 					) {
 						break babe_pre_digest;
