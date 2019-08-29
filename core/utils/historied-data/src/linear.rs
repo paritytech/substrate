@@ -71,7 +71,7 @@ impl<V> History<V> {
 	pub fn from_iter(input: impl IntoIterator<Item = (V, usize)>) -> Self {
 		let mut history = History::default();
 		for v in input {
-			history.force_push(v.0, v.1);
+			history.unsafe_push(v.0, v.1);
 		}
 		history
 	}
@@ -103,7 +103,7 @@ impl<V> History<V> {
 	/// This method shall only be call after a `get_mut` where
 	/// the returned index indicate that a `set` will result
 	/// in appending a value.
-	pub fn force_push(&mut self, value: V, history_index: usize) {
+	pub fn unsafe_push(&mut self, value: V, history_index: usize) {
 		self.0.push((value, history_index))
 	}
 
@@ -117,7 +117,7 @@ impl<V> History<V> {
 				return;
 			}
 		}
-		self.force_push(value, history.len() - 1);
+		self.unsafe_push(value, history.len() - 1);
 	}
 
 	fn mut_ref(&mut self, index: usize) -> &mut V {

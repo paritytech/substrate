@@ -79,7 +79,7 @@ impl FromIterator<(Vec<u8>, OverlayedValue)> for OverlayedChangeSet {
 		let mut result = OverlayedChangeSet::default();
 		result.top = iter.into_iter().map(|(k, v)| (k, {
 			let mut history = History::default();
-			history.force_push(v, 0);
+			history.unsafe_push(v, 0);
 			history
 		})).collect();
 		result
@@ -122,7 +122,7 @@ fn set_with_extrinsic_inner_overlayed_value(
 			let mut extrinsics = current.extrinsics.clone();
 			extrinsics.get_or_insert_with(Default::default)
 				.insert(extrinsic_index);
-			h_value.force_push(OverlayedValue {
+			h_value.unsafe_push(OverlayedValue {
 				value,
 				extrinsics,
 			}, state);
@@ -132,7 +132,7 @@ fn set_with_extrinsic_inner_overlayed_value(
 		extrinsics.get_or_insert_with(Default::default)
 			.insert(extrinsic_index);
 
-		h_value.force_push(OverlayedValue {
+		h_value.unsafe_push(OverlayedValue {
 			 value,
 			 extrinsics,
 		}, state);

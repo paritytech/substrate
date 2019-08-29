@@ -450,6 +450,7 @@ fn historied_data() -> u64 {
 	let mut states = historied_data::linear::States::default();
 	let mut value = historied_data::linear::History::default();
 	if value.get(states.as_ref()) != None {
+		// value superior to 100 are error codes.
 		return 101;
 	}
  
@@ -467,6 +468,7 @@ fn historied_data() -> u64 {
 		return 104;
 	}
  
+	// 0 for success
 	return 0;
 }
 
