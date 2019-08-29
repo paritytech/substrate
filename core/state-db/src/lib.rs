@@ -35,9 +35,8 @@ mod pruning;
 
 use std::fmt;
 use parking_lot::RwLock;
-use parity_codec as codec;
 use codec::Codec;
-use std::collections::{VecDeque, HashMap, hash_map::Entry};
+use std::collections::{HashMap, hash_map::Entry};
 use noncanonical::NonCanonicalOverlay;
 use pruning::RefWindow;
 use log::trace;
@@ -71,26 +70,35 @@ pub enum Error<E: fmt::Debug> {
 	/// Database backend error.
 	Db(E),
 	/// `Codec` decoding error.
-	Decoding,
+	Decoding(codec::Error),
 	/// Trying to canonicalize invalid block.
 	InvalidBlock,
 	/// Trying to insert block with invalid number.
 	InvalidBlockNumber,
 	/// Trying to insert block with unknown parent.
 	InvalidParent,
-	/// Canonicalization would discard pinned state.
-	DiscardingPinned,
+}
+
+/// Pinning error type.
+pub enum PinError {
+	/// Trying to pin invalid block.
+	InvalidBlock,
+}
+
+impl<E: fmt::Debug> From<codec::Error> for Error<E> {
+	fn from(x: codec::Error) -> Self {
+		Error::Decoding(x)
+	}
 }
 
 impl<E: fmt::Debug> fmt::Debug for Error<E> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
 			Error::Db(e) => e.fmt(f),
-			Error::Decoding => write!(f, "Error decoding slicable value"),
+			Error::Decoding(e) => write!(f, "Error decoding slicable value: {}", e.what()),
 			Error::InvalidBlock => write!(f, "Trying to canonicalize invalid block"),
 			Error::InvalidBlockNumber => write!(f, "Trying to insert block with invalid number"),
 			Error::InvalidParent => write!(f, "Trying to insert block with unknown parent"),
-			Error::DiscardingPinned => write!(f, "Trying to discard pinned state"),
 		}
 	}
 }
@@ -168,7 +176,6 @@ fn to_meta_key<S: Codec>(suffix: &[u8], data: &S) -> Vec<u8> {
 struct StateDbSync<BlockHash: Hash, Key: Hash> {
 	mode: PruningMode,
 	non_canonical: NonCanonicalOverlay<BlockHash, Key>,
-	canonicalization_queue: VecDeque<BlockHash>,
 	pruning: Option<RefWindow<BlockHash, Key>>,
 	pinned: HashMap<BlockHash, u32>,
 }
@@ -190,7 +197,6 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 			non_canonical,
 			pruning,
 			pinned: Default::default(),
-			canonicalization_queue: Default::default(),
 		})
 	}
 
@@ -215,26 +221,16 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		if self.mode == PruningMode::ArchiveAll {
 			return Ok(commit)
 		}
-		self.canonicalization_queue.push_back(hash.clone());
-		while let Some(hash) = self.canonicalization_queue.front().cloned() {
-			if self.pinned.contains_key(&hash) {
-				break;
-			}
-			match self.non_canonical.canonicalize(&hash, &self.pinned, &mut commit) {
-				Ok(()) => {
-					self.canonicalization_queue.pop_front();
-					if self.mode == PruningMode::ArchiveCanonical {
-						commit.data.deleted.clear();
-					}
+		match self.non_canonical.canonicalize(&hash, &mut commit) {
+			Ok(()) => {
+				if self.mode == PruningMode::ArchiveCanonical {
+					commit.data.deleted.clear();
 				}
-				Err(Error::DiscardingPinned) => {
-					break;
-				}
-				Err(e) => return Err(e),
-			};
-			if let Some(ref mut pruning) = self.pruning {
-				pruning.note_canonical(&hash, &mut commit);
 			}
+			Err(e) => return Err(e),
+		};
+		if let Some(ref mut pruning) = self.pruning {
+			pruning.note_canonical(&hash, &mut commit);
 		}
 		self.prune(&mut commit);
 		Ok(commit)
@@ -291,12 +287,25 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		}
 	}
 
-	pub fn pin(&mut self, hash: &BlockHash) {
-		let refs = self.pinned.entry(hash.clone()).or_default();
-		if *refs == 0 {
-			trace!(target: "state-db", "Pinned block: {:?}", hash);
+	pub fn pin(&mut self, hash: &BlockHash) -> Result<(), PinError> {
+		match self.mode {
+			PruningMode::ArchiveAll => Ok(()),
+			PruningMode::ArchiveCanonical | PruningMode::Constrained(_) => {
+				if self.non_canonical.have_block(hash) ||
+					self.pruning.as_ref().map_or(false, |pruning| pruning.have_block(hash))
+				{
+					let refs = self.pinned.entry(hash.clone()).or_default();
+					if *refs == 0 {
+						trace!(target: "state-db", "Pinned block: {:?}", hash);
+						self.non_canonical.pin(hash);
+					}
+					*refs += 1;
+					Ok(())
+				} else {
+					Err(PinError::InvalidBlock)
+				}
+			}
 		}
-		*refs += 1
 	}
 
 	pub fn unpin(&mut self, hash: &BlockHash) {
@@ -306,6 +315,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 				if *entry.get() == 0 {
 					trace!(target: "state-db", "Unpinned block: {:?}", hash);
 					entry.remove();
+					self.non_canonical.unpin(hash);
 				} else {
 					trace!(target: "state-db", "Releasing reference for {:?}", hash);
 				}
@@ -370,7 +380,7 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	}
 
 	/// Prevents pruning of specified block and its descendants.
-	pub fn pin(&self, hash: &BlockHash) {
+	pub fn pin(&self, hash: &BlockHash) -> Result<(), PinError> {
 		self.db.write().pin(hash)
 	}
 

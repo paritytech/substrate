@@ -19,13 +19,14 @@
 #![cfg(test)]
 
 use super::*;
-use mock::{Balances, ExtBuilder, Runtime, System, info_from_weight};
+use mock::{Balances, ExtBuilder, Runtime, System, info_from_weight, CALL};
 use runtime_io::with_externalities;
 use srml_support::{
 	assert_noop, assert_ok, assert_err,
 	traits::{LockableCurrency, LockIdentifier, WithdrawReason, WithdrawReasons,
 	Currency, ReservableCurrency}
 };
+use system::RawOrigin;
 
 const ID_1: LockIdentifier = *b"1       ";
 const ID_2: LockIdentifier = *b"2       ";
@@ -127,6 +128,7 @@ fn lock_reasons_should_work() {
 			assert!(<TakeFees<Runtime> as SignedExtension>::pre_dispatch(
 				TakeFees::from(1),
 				&1,
+				CALL,
 				info_from_weight(1),
 				0,
 			).is_ok());
@@ -140,6 +142,7 @@ fn lock_reasons_should_work() {
 			assert!(<TakeFees<Runtime> as SignedExtension>::pre_dispatch(
 				TakeFees::from(1),
 				&1,
+				CALL,
 				info_from_weight(1),
 				0,
 			).is_ok());
@@ -150,6 +153,7 @@ fn lock_reasons_should_work() {
 			assert!(<TakeFees<Runtime> as SignedExtension>::pre_dispatch(
 				TakeFees::from(1),
 				&1,
+				CALL,
 				info_from_weight(1),
 				0,
 			).is_err());
@@ -344,6 +348,20 @@ fn balance_transfer_works() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		let _ = Balances::deposit_creating(&1, 111);
 		assert_ok!(Balances::transfer(Some(1).into(), 2, 69));
+		assert_eq!(Balances::total_balance(&1), 42);
+		assert_eq!(Balances::total_balance(&2), 69);
+	});
+}
+
+#[test]
+fn force_transfer_works() {
+	with_externalities(&mut ExtBuilder::default().build(), || {
+		let _ = Balances::deposit_creating(&1, 111);
+		assert_noop!(
+			Balances::force_transfer(Some(2).into(), 1, 2, 69),
+			"bad origin: expected to be a root origin"
+		);
+		assert_ok!(Balances::force_transfer(RawOrigin::Root.into(), 1, 2, 69));
 		assert_eq!(Balances::total_balance(&1), 42);
 		assert_eq!(Balances::total_balance(&2), 69);
 	});
@@ -757,9 +775,9 @@ fn signed_extension_take_fees_work() {
 			.build(),
 		|| {
 			let len = 10;
-			assert!(TakeFees::<Runtime>::from(0).pre_dispatch(&1, info_from_weight(5), len).is_ok());
+			assert!(TakeFees::<Runtime>::from(0).pre_dispatch(&1, CALL, info_from_weight(5), len).is_ok());
 			assert_eq!(Balances::free_balance(&1), 100 - 20 - 25);
-			assert!(TakeFees::<Runtime>::from(5 /* tipped */).pre_dispatch(&1, info_from_weight(3), len).is_ok());
+			assert!(TakeFees::<Runtime>::from(5 /* tipped */).pre_dispatch(&1, CALL, info_from_weight(3), len).is_ok());
 			assert_eq!(Balances::free_balance(&1), 100 - 20 - 25 - 20 - 5 - 15);
 		}
 	);
@@ -777,12 +795,28 @@ fn signed_extension_take_fees_is_bounded() {
 			use sr_primitives::weights::Weight;
 
 			// maximum weight possible
-			assert!(TakeFees::<Runtime>::from(0).pre_dispatch(&1, info_from_weight(Weight::max_value()), 10).is_ok());
+			assert!(TakeFees::<Runtime>::from(0).pre_dispatch(&1, CALL, info_from_weight(Weight::max_value()), 10).is_ok());
 			// fee will be proportional to what is the actual maximum weight in the runtime.
 			assert_eq!(
 				Balances::free_balance(&1),
 				(10000 - <Runtime as system::Trait>::MaximumBlockWeight::get()) as u64
 			);
+		}
+	);
+}
+
+#[test]
+fn burn_must_work() {
+	with_externalities(
+		&mut ExtBuilder::default()
+			.monied(true)
+			.build(),
+		|| {
+			let init_total_issuance = Balances::total_issuance();
+			let imbalance = Balances::burn(10);
+			assert_eq!(Balances::total_issuance(), init_total_issuance - 10);
+			drop(imbalance);
+			assert_eq!(Balances::total_issuance(), init_total_issuance);
 		}
 	);
 }

@@ -19,7 +19,7 @@
 use crate::error::Error;
 use crate::wasm_executor::WasmExecutor;
 use log::{trace, warn};
-use parity_codec::Decode;
+use codec::Decode;
 use parity_wasm::elements::{deserialize_buffer, DataSegment, Instruction, Module as RawModule};
 use primitives::storage::well_known_keys;
 use primitives::Blake2Hasher;
@@ -86,7 +86,7 @@ struct StateSnapshot {
 	data_segments: Vec<(u32, Vec<u8>)>,
 	/// The list of all global mutable variables of the module in their sequential order.
 	global_mut_values: Vec<RuntimeValue>,
-	heap_pages: u32,
+	heap_pages: u64,
 }
 
 impl StateSnapshot {
@@ -94,7 +94,7 @@ impl StateSnapshot {
 	fn take(
 		module_instance: &WasmModuleInstanceRef,
 		data_segments: Vec<DataSegment>,
-		heap_pages: u32,
+		heap_pages: u64,
 	) -> Option<Self> {
 		let prepared_segments = data_segments
 			.into_iter()
@@ -248,20 +248,41 @@ impl RuntimesCache {
 	) -> Result<Rc<CachedRuntime>, Error> {
 		let code_hash = ext
 			.original_storage_hash(well_known_keys::CODE)
-			.ok_or(Error::InvalidCode)?;
+			.ok_or(Error::InvalidCode("`CODE` not found in storage.".into()))?;
+
+		let heap_pages = ext
+			.storage(well_known_keys::HEAP_PAGES)
+			.and_then(|pages| u64::decode(&mut &pages[..]).ok())
+			.or(default_heap_pages)
+			.unwrap_or(DEFAULT_HEAP_PAGES);
 
 		// This is direct result from fighting with borrowck.
 		let handle_result =
 			|cached_result: &Result<Rc<CachedRuntime>, CacheError>| match *cached_result {
-				Err(_) => Err(Error::InvalidCode),
+				Err(ref e) => Err(Error::InvalidCode(format!("{:?}", e))),
 				Ok(ref cached_runtime) => Ok(Rc::clone(cached_runtime)),
 			};
 
 		match self.instances.entry(code_hash.into()) {
-			Entry::Occupied(o) => handle_result(o.get()),
+			Entry::Occupied(mut o) => {
+				let result = o.get_mut();
+				if let Ok(ref cached_runtime) = result {
+					if cached_runtime.state_snapshot.heap_pages != heap_pages {
+						trace!(
+							target: "runtimes_cache",
+							"heap_pages were changed. Reinstantiating the instance"
+						);
+						*result = Self::create_wasm_instance(wasm_executor, ext, heap_pages);
+						if let Err(ref err) = result {
+							warn!(target: "runtimes_cache", "cannot create a runtime: {:?}", err);
+						}
+					}
+				}
+				handle_result(result)
+			},
 			Entry::Vacant(v) => {
 				trace!(target: "runtimes_cache", "no instance found in cache, creating now.");
-				let result = Self::create_wasm_instance(wasm_executor, ext, default_heap_pages);
+				let result = Self::create_wasm_instance(wasm_executor, ext, heap_pages);
 				if let Err(ref err) = result {
 					warn!(target: "runtimes_cache", "cannot create a runtime: {:?}", err);
 				}
@@ -273,7 +294,7 @@ impl RuntimesCache {
 	fn create_wasm_instance<E: Externalities<Blake2Hasher>>(
 		wasm_executor: &WasmExecutor,
 		ext: &mut E,
-		default_heap_pages: Option<u64>,
+		heap_pages: u64,
 	) -> Result<Rc<CachedRuntime>, CacheError> {
 		let code = ext
 			.original_storage(well_known_keys::CODE)
@@ -286,18 +307,12 @@ impl RuntimesCache {
 		// we just loaded and validated the `module` above.
 		let data_segments = extract_data_segments(&code).ok_or(CacheError::CantDeserializeWasm)?;
 
-		let heap_pages = ext
-			.storage(well_known_keys::HEAP_PAGES)
-			.and_then(|pages| u64::decode(&mut &pages[..]))
-			.or(default_heap_pages)
-			.unwrap_or(DEFAULT_HEAP_PAGES);
-
 		// Instantiate this module.
 		let instance = WasmExecutor::instantiate_module::<E>(heap_pages as usize, &module)
 			.map_err(CacheError::Instantiation)?;
 
 		// Take state snapshot before executing anything.
-		let state_snapshot = StateSnapshot::take(&instance, data_segments, heap_pages as u32)
+		let state_snapshot = StateSnapshot::take(&instance, data_segments, heap_pages)
 			.expect(
 				"`take` returns `Err` if the module is not valid;
 				we already loaded module above, thus the `Module` is proven to be valid at this point;
@@ -308,7 +323,7 @@ impl RuntimesCache {
 		let version = wasm_executor
 			.call_in_wasm_module(ext, &instance, "Core_version", &[])
 			.ok()
-			.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()));
+			.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()).ok());
 		Ok(Rc::new(CachedRuntime {
 			instance,
 			version,

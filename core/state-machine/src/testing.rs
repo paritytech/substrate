@@ -17,7 +17,6 @@
 //! Test implementation for Externalities.
 
 use std::collections::{HashMap};
-use std::iter::FromIterator;
 use hash_db::Hasher;
 use crate::backend::{InMemory, Backend};
 use primitives::storage::well_known_keys::is_child_storage_key;
@@ -25,9 +24,10 @@ use crate::changes_trie::{
 	build_changes_trie, InMemoryStorage as ChangesTrieInMemoryStorage,
 	BlockNumber as ChangesTrieBlockNumber,
 };
-use primitives::offchain;
-use primitives::storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES};
-use parity_codec::Encode;
+use primitives::{
+	storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES}, traits::BareCryptoStorePtr, offchain
+};
+use codec::Encode;
 use super::{ChildStorageKey, Externalities, OverlayedChanges};
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
@@ -40,26 +40,17 @@ pub struct TestExternalities<H: Hasher, N: ChangesTrieBlockNumber> {
 	backend: InMemory<H>,
 	changes_trie_storage: ChangesTrieInMemoryStorage<H, N>,
 	offchain: Option<Box<dyn offchain::Externalities>>,
+	keystore: Option<BareCryptoStorePtr>,
 }
 
 impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	/// Create a new instance of `TestExternalities` with storage.
-	pub fn new(storage: HashMap<Vec<u8>, Vec<u8>>) -> Self {
-		Self::new_with_children((storage, Default::default()))
-	}
-
-	/// Create a new instance of `TestExternalities` with storage and children.
-	pub fn new_with_children(storage: StorageTuple) -> Self {
-		Self::new_with_code_with_children(&[], storage)
+	pub fn new(storage: StorageTuple) -> Self {
+		Self::new_with_code(&[], storage)
 	}
 
 	/// Create a new instance of `TestExternalities` with code and storage.
-	pub fn new_with_code(code: &[u8], storage: HashMap<Vec<u8>, Vec<u8>>) -> Self {
-		Self::new_with_code_with_children(code, (storage, Default::default()))
-	}
-
-	/// Create a new instance of `TestExternalities` with code, storage and children.
-	pub fn new_with_code_with_children(code: &[u8], mut storage: StorageTuple) -> Self {
+	pub fn new_with_code(code: &[u8], mut storage: StorageTuple) -> Self {
 		let mut overlay = OverlayedChanges::default();
 
 		assert!(storage.0.keys().all(|key| !is_child_storage_key(key)));
@@ -84,6 +75,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
 			backend: backend.into(),
 			offchain: None,
+			keystore: None,
 		}
 	}
 
@@ -95,6 +87,11 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 	/// Set offchain externaltiies.
 	pub fn set_offchain_externalities(&mut self, offchain: impl offchain::Externalities + 'static) {
 		self.offchain = Some(Box::new(offchain));
+	}
+
+	/// Set keystore.
+	pub fn set_keystore(&mut self, keystore: BareCryptoStorePtr) {
+		self.keystore = Some(keystore);
 	}
 
 	/// Get mutable reference to changes trie storage.
@@ -134,25 +131,13 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> PartialEq for TestExternalities<H, N>
 	}
 }
 
-impl<H: Hasher, N: ChangesTrieBlockNumber> FromIterator<(Vec<u8>, Vec<u8>)> for TestExternalities<H, N> {
-	fn from_iter<I: IntoIterator<Item=(Vec<u8>, Vec<u8>)>>(iter: I) -> Self {
-		Self::new(iter.into_iter().collect())
-	}
-}
-
 impl<H: Hasher, N: ChangesTrieBlockNumber> Default for TestExternalities<H, N> {
 	fn default() -> Self { Self::new(Default::default()) }
 }
 
-impl<H: Hasher, N: ChangesTrieBlockNumber> From<HashMap<Vec<u8>, Vec<u8>>> for TestExternalities<H, N> {
-	fn from(hashmap: HashMap<Vec<u8>, Vec<u8>>) -> Self {
-		Self::from_iter(hashmap)
-	}
-}
-
 impl<H: Hasher, N: ChangesTrieBlockNumber> From<StorageTuple> for TestExternalities<H, N> {
 	fn from(storage: StorageTuple) -> Self {
-		Self::new_with_children(storage)
+		Self::new(storage)
 	}
 }
 
@@ -179,6 +164,13 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 				.child_storage(storage_key.as_ref(), key)
 				.expect(EXT_NOT_ALLOWED_TO_FAIL)
 			)
+	}
+
+	fn original_child_storage(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<Vec<u8>> {
+		self.backend
+			.child_storage(storage_key.as_ref(), key)
+			.map(|x| x.map(|x| x.to_vec()))
+			.expect(EXT_NOT_ALLOWED_TO_FAIL)
 	}
 
 	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
@@ -222,20 +214,45 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 		});
 	}
 
+	fn clear_child_prefix(&mut self, storage_key: ChildStorageKey<H>, prefix: &[u8]) {
+
+		self.overlay.clear_child_prefix(storage_key.as_ref(), prefix);
+
+		let backend = &self.backend;
+		let overlay = &mut self.overlay;
+		backend.for_child_keys_with_prefix(storage_key.as_ref(), prefix, |key| {
+			overlay.set_child_storage(storage_key.as_ref().to_vec(), key.to_vec(), None);
+		});
+	}
+
 	fn chain_id(&self) -> u64 { 42 }
 
 	fn storage_root(&mut self) -> H::Out {
+
+		let child_storage_keys =
+			self.overlay.prospective.children.keys()
+				.chain(self.overlay.committed.children.keys());
+
+		let child_delta_iter = child_storage_keys.map(|storage_key|
+			(storage_key.clone(), self.overlay.committed.children.get(storage_key)
+				.into_iter()
+				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
+				.chain(self.overlay.prospective.children.get(storage_key)
+					.into_iter()
+					.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone()))))));
+
+
 		// compute and memoize
 		let delta = self.overlay.committed.top.iter().map(|(k, v)| (k.clone(), v.value.clone()))
 			.chain(self.overlay.prospective.top.iter().map(|(k, v)| (k.clone(), v.value.clone())));
+		self.backend.full_storage_root(delta, child_delta_iter).0
 
-		self.backend.storage_root(delta).0
 	}
 
 	fn child_storage_root(&mut self, storage_key: ChildStorageKey<H>) -> Vec<u8> {
 		let storage_key = storage_key.as_ref();
 
-		let (root, _, _) = {
+		let (root, is_empty, _) = {
 			let delta = self.overlay.committed.children.get(storage_key)
 				.into_iter()
 				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
@@ -245,7 +262,11 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 
 			self.backend.child_storage_root(storage_key, delta)
 		};
-		self.overlay.set_storage(storage_key.into(), Some(root.clone()));
+		if is_empty {
+			self.overlay.set_storage(storage_key.into(), None);
+		} else {
+			self.overlay.set_storage(storage_key.into(), Some(root.clone()));
+		}
 		root
 	}
 
@@ -263,6 +284,10 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 			.as_mut()
 			.map(|x| &mut **x as _)
 	}
+
+	fn keystore(&self) -> Option<BareCryptoStorePtr> {
+		self.keystore.clone()
+	}
 }
 
 #[cfg(test)]
@@ -277,7 +302,7 @@ mod tests {
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
-		const ROOT: [u8; 32] = hex!("cc65c26c37ebd4abcdeb3f1ecd727527051620779a2f6c809bac0f8a87dbb816");
+		const ROOT: [u8; 32] = hex!("2a340d3dfd52f5992c6b117e9e45f479e6da5afffafeb26ab619cf137a95aeb8");
 		assert_eq!(ext.storage_root(), H256::from(ROOT));
 	}
 

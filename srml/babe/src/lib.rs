@@ -14,26 +14,36 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Consensus extension module for BABE consensus.
+//! Consensus extension module for BABE consensus. Collects on-chain randomness
+//! from VRF outputs and manages epoch transitions.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![forbid(unused_must_use, unsafe_code, unused_variables, dead_code)]
+#![forbid(unused_must_use, unsafe_code, unused_variables)]
+
+// TODO: @marcio uncomment this when BabeEquivocation is integrated.
+// #![forbid(dead_code)]
 
 pub use timestamp;
 
 use rstd::{result, prelude::*};
-use srml_support::{decl_storage, decl_module, StorageValue, traits::FindAuthor, traits::Get};
+use srml_support::{decl_storage, decl_module, StorageValue, StorageMap, traits::FindAuthor, traits::Get};
 use timestamp::{OnTimestampSet};
-use sr_primitives::{generic::DigestItem, ConsensusEngineId};
-use sr_primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon, Convert};
+use sr_primitives::{generic::DigestItem, ConsensusEngineId, Perbill};
+use sr_primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon};
+use sr_staking_primitives::{
+	SessionIndex,
+	offence::{Offence, Kind},
+};
+use sr_primitives::weights::SimpleDispatchInfo;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-use babe_primitives::{BABE_ENGINE_ID, ConsensusLog, BabeWeight, Epoch, RawBabePreDigest};
+use babe_primitives::{BABE_ENGINE_ID, ConsensusLog, BabeAuthorityWeight, Epoch, RawBabePreDigest};
 pub use babe_primitives::{AuthorityId, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH};
+use system::ensure_root;
 
 /// The BABE inherent identifier.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"babeslot";
@@ -103,7 +113,7 @@ impl ProvideInherentData for InherentDataProvider {
 	}
 
 	fn error_to_string(&self, error: &[u8]) -> Option<String> {
-		RuntimeString::decode(&mut &error[..]).map(Into::into)
+		RuntimeString::decode(&mut &error[..]).map(Into::into).ok()
 	}
 }
 
@@ -115,13 +125,15 @@ pub trait Trait: timestamp::Trait {
 /// The length of the BABE randomness
 pub const RANDOMNESS_LENGTH: usize = 32;
 
+const UNDER_CONSTRUCTION_SEGMENT_LENGTH: usize = 256;
+
 decl_storage! {
 	trait Store for Module<T: Trait> as Babe {
 		/// Current epoch index.
 		pub EpochIndex get(epoch_index): u64;
 
 		/// Current epoch authorities.
-		pub Authorities get(authorities) config(): Vec<(AuthorityId, BabeWeight)>;
+		pub Authorities get(authorities): Vec<(AuthorityId, BabeAuthorityWeight)>;
 
 		/// Slot at which the current epoch started. It is possible that no
 		/// block was authored at the given slot and the epoch change was
@@ -130,6 +142,14 @@ decl_storage! {
 
 		/// Current slot number.
 		pub CurrentSlot get(current_slot): u64;
+
+		/// Whether secondary slots are enabled in case the VRF-based slot is
+		/// empty for the current epoch and the next epoch, respectively.
+		pub SecondarySlots get(secondary_slots): (bool, bool) = (true, true);
+
+		/// Pending change to enable/disable secondary slots which will be
+		/// triggered at `current_epoch + 2`.
+		pub PendingSecondarySlotsChange get(pending_secondary_slots_change): Option<bool> = None;
 
 		/// The epoch randomness for the *current* epoch.
 		///
@@ -150,7 +170,32 @@ decl_storage! {
 		NextRandomness: [u8; 32 /* RANDOMNESS_LENGTH */];
 
 		/// Randomness under construction.
-		UnderConstruction: [u8; 32 /* VRF_OUTPUT_LENGTH */];
+		///
+		/// We make a tradeoff between storage accesses and list length.
+		/// We store the under-construction randomness in segments of up to
+		/// `UNDER_CONSTRUCTION_SEGMENT_LENGTH`.
+		///
+		/// Once a segment reaches this length, we begin the next one.
+		/// We reset all segments and return to `0` at the beginning of every
+		/// epoch.
+		SegmentIndex build(|_| 0): u32;
+		UnderConstruction: map u32 => Vec<[u8; 32 /* VRF_OUTPUT_LENGTH */]>;
+
+		/// Temporary value (cleared at block finalization) which is true
+		/// if per-block initialization has already been called for current block.
+		Initialized get(initialized): Option<bool>;
+	}
+	add_extra_genesis {
+		config(authorities): Vec<(AuthorityId, BabeAuthorityWeight)>;
+		build(|
+			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
+			config: &GenesisConfig
+		| {
+			runtime_io::with_storage(
+				storage,
+				|| Module::<T>::initialize_authorities(&config.authorities),
+			);
+		})
 	}
 }
 
@@ -170,24 +215,25 @@ decl_module! {
 
 		/// Initialization
 		fn on_initialize() {
-			for digest in Self::get_inherent_digests()
-				.logs
-				.iter()
-				.filter_map(|s| s.as_pre_runtime())
-				.filter_map(|(id, mut data)| if id == BABE_ENGINE_ID {
-					RawBabePreDigest::decode(&mut data)
-				} else {
-					None
-				})
-			{
-				if EpochStartSlot::get() == 0 {
-					EpochStartSlot::put(digest.slot_number);
-				}
+			Self::do_initialize();
+		}
 
-				CurrentSlot::put(digest.slot_number);
-				Self::deposit_vrf_output(&digest.vrf_output);
+		/// Block finalization
+		fn on_finalize() {
+			Initialized::kill();
+		}
 
-				return;
+		/// Sets a pending change to enable / disable secondary slot assignment.
+		/// The pending change will be set at the end of the current epoch and
+		/// will be enacted at `current_epoch + 2`.
+		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		fn set_pending_secondary_slots_change(origin, change: Option<bool>) {
+			ensure_root(origin)?;
+			match change {
+				Some(change) =>	PendingSecondarySlotsChange::put(change),
+				None => {
+					PendingSecondarySlotsChange::take();
+				},
 			}
 		}
 	}
@@ -202,15 +248,22 @@ impl<T: Trait> RandomnessBeacon for Module<T> {
 /// A BABE public key
 pub type BabeKey = [u8; PUBLIC_KEY_LENGTH];
 
-impl<T: Trait> FindAuthor<u64> for Module<T> {
-	fn find_author<'a, I>(digests: I) -> Option<u64> where
+impl<T: Trait> FindAuthor<u32> for Module<T> {
+	fn find_author<'a, I>(digests: I) -> Option<u32> where
 		I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
 	{
 		for (id, mut data) in digests.into_iter() {
 			if id == BABE_ENGINE_ID {
-				return Some(RawBabePreDigest::decode(&mut data)?.authority_index);
+				let pre_digest = RawBabePreDigest::decode(&mut data).ok()?;
+				return Some(match pre_digest {
+					RawBabePreDigest::Primary { authority_index, .. } =>
+						authority_index,
+					RawBabePreDigest::Secondary { authority_index, .. } =>
+						authority_index,
+				});
 			}
 		}
+
 		return None;
 	}
 }
@@ -225,8 +278,61 @@ impl<T: Trait> IsMember<AuthorityId> for Module<T> {
 
 impl<T: Trait> session::ShouldEndSession<T::BlockNumber> for Module<T> {
 	fn should_end_session(_: T::BlockNumber) -> bool {
+		// it might be (and it is in current implementation) that session module is calling
+		// should_end_session() from it's own on_initialize() handler
+		// => because session on_initialize() is called earlier than ours, let's ensure
+		// that we have synced with digest before checking if session should be ended
+		Self::do_initialize();
+
 		let diff = CurrentSlot::get().saturating_sub(EpochStartSlot::get());
 		diff >= T::EpochDuration::get()
+	}
+}
+
+// TODO [slashing]: @marcio use this, remove the dead_code annotation.
+/// A BABE equivocation offence report.
+///
+/// When a validator released two or more blocks at the same slot.
+#[allow(dead_code)]
+struct BabeEquivocationOffence<FullIdentification> {
+	/// A babe slot number in which this incident happened.
+	slot: u64,
+	/// The session index in which the incident happened.
+	session_index: SessionIndex,
+	/// The size of the validator set at the time of the offence.
+	validator_set_count: u32,
+	/// The authority that produced the equivocation.
+	offender: FullIdentification,
+}
+
+impl<FullIdentification: Clone> Offence<FullIdentification> for BabeEquivocationOffence<FullIdentification> {
+	const ID: Kind = *b"babe:equivocatio";
+	type TimeSlot = u64;
+
+	fn offenders(&self) -> Vec<FullIdentification> {
+		vec![self.offender.clone()]
+	}
+
+	fn session_index(&self) -> SessionIndex {
+		self.session_index
+	}
+
+	fn validator_set_count(&self) -> u32 {
+		self.validator_set_count
+	}
+
+	fn time_slot(&self) -> Self::TimeSlot {
+		self.slot
+	}
+
+	fn slash_fraction(
+		offenders_count: u32,
+		validator_set_count: u32,
+	) -> Perbill {
+		// the formula is min((3k / n)^2, 1)
+		let x = Perbill::from_rational_approximation(3 * offenders_count, validator_set_count);
+		// _ ^ 2
+		x.square()
 	}
 }
 
@@ -248,38 +354,98 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn deposit_vrf_output(vrf_output: &[u8; VRF_OUTPUT_LENGTH]) {
-		UnderConstruction::mutate(|z| z.iter_mut().zip(vrf_output).for_each(|(x, y)| *x^=y))
+		let segment_idx = <SegmentIndex>::get();
+		let mut segment = <UnderConstruction>::get(&segment_idx);
+		if segment.len() < UNDER_CONSTRUCTION_SEGMENT_LENGTH {
+			// push onto current segment: not full.
+			segment.push(*vrf_output);
+			<UnderConstruction>::insert(&segment_idx, &segment);
+		} else {
+			// move onto the next segment and update the index.
+			let segment_idx = segment_idx + 1;
+			<UnderConstruction>::insert(&segment_idx, vec![*vrf_output].as_ref());
+			<SegmentIndex>::put(&segment_idx);
+		}
+	}
+
+	fn do_initialize() {
+		// since do_initialize can be called twice (if session module is present)
+		// => let's ensure that we only modify the storage once per block
+		let initialized = Self::initialized().unwrap_or(false);
+		if initialized {
+			return;
+		}
+
+		Initialized::put(true);
+		for digest in Self::get_inherent_digests()
+			.logs
+			.iter()
+			.filter_map(|s| s.as_pre_runtime())
+			.filter_map(|(id, mut data)| if id == BABE_ENGINE_ID {
+				RawBabePreDigest::decode(&mut data).ok()
+			} else {
+				None
+			})
+		{
+			if EpochStartSlot::get() == 0 {
+				EpochStartSlot::put(digest.slot_number());
+			}
+
+			CurrentSlot::put(digest.slot_number());
+
+			if let RawBabePreDigest::Primary { vrf_output, .. } = digest {
+				Self::deposit_vrf_output(&vrf_output);
+			}
+
+			return;
+		}
 	}
 
 	/// Call this function exactly once when an epoch changes, to update the
 	/// randomness. Returns the new randomness.
 	fn randomness_change_epoch(next_epoch_index: u64) -> [u8; RANDOMNESS_LENGTH] {
 		let this_randomness = NextRandomness::get();
+		let segment_idx: u32 = <SegmentIndex>::mutate(|s| rstd::mem::replace(s, 0));
+
+		// overestimate to the segment being full.
+		let rho_size = segment_idx.saturating_add(1) as usize * UNDER_CONSTRUCTION_SEGMENT_LENGTH;
+
 		let next_randomness = compute_randomness(
 			this_randomness,
 			next_epoch_index,
-			UnderConstruction::get(),
+			(0..segment_idx).flat_map(|i| <UnderConstruction>::take(&i)),
+			Some(rho_size),
 		);
-		UnderConstruction::put(&[0; RANDOMNESS_LENGTH]);
 		NextRandomness::put(&next_randomness);
 		this_randomness
 	}
 
+	fn initialize_authorities(authorities: &[(AuthorityId, BabeAuthorityWeight)]) {
+		if !authorities.is_empty() {
+			assert!(Authorities::get().is_empty(), "Authorities are already initialized!");
+			Authorities::put_ref(authorities);
+		}
+	}
 }
 
 impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 	fn on_timestamp_set(_moment: T::Moment) { }
 }
 
-impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
+impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = AuthorityId;
+
+	fn on_genesis_session<'a, I: 'a>(validators: I)
+		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
+	{
+		let authorities = validators.map(|(_, k)| (k, 1)).collect::<Vec<_>>();
+		Self::initialize_authorities(&authorities);
+	}
+
 	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, queued_validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
-		use staking::BalanceOf;
-		let to_votes = |b: BalanceOf<T>| {
-			<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b)
-		};
+		Self::do_initialize();
 
 		// Update epoch index
 		let epoch_index = EpochIndex::get()
@@ -289,8 +455,8 @@ impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Mod
 		EpochIndex::put(epoch_index);
 
 		// Update authorities.
-		let authorities = validators.map(|(account, k)| {
-			(k, to_votes(staking::Module::<T>::stakers(account).total))
+		let authorities = validators.map(|(_account, k)| {
+			(k, 1)
 		}).collect::<Vec<_>>();
 
 		Authorities::put(authorities);
@@ -322,12 +488,30 @@ impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Mod
 
 		// After we update the current epoch, we signal the *next* epoch change
 		// so that nodes can track changes.
-		let next_authorities = queued_validators.map(|(account, k)| {
-			(k, to_votes(staking::Module::<T>::stakers(account).total))
+		let next_authorities = queued_validators.map(|(_account, k)| {
+			(k, 1)
 		}).collect::<Vec<_>>();
 
 		let next_epoch_start_slot = EpochStartSlot::get().saturating_add(T::EpochDuration::get());
 		let next_randomness = NextRandomness::get();
+
+		// Update any pending secondary slots change
+		let mut secondary_slots = SecondarySlots::get();
+
+		// change for E + 1 now becomes change at E
+		secondary_slots.0 = secondary_slots.1;
+
+		if let Some(change) = PendingSecondarySlotsChange::take() {
+			// if there's a pending change schedule it for E + 1
+			secondary_slots.1 = change;
+		} else {
+			// otherwise E + 1 will have the same value as E
+			secondary_slots.1 = secondary_slots.0;
+		}
+
+		SecondarySlots::mutate(|secondary| {
+			*secondary = secondary_slots;
+		});
 
 		let next = Epoch {
 			epoch_index: next_epoch_index,
@@ -335,25 +519,35 @@ impl<T: Trait + staking::Trait> session::OneSessionHandler<T::AccountId> for Mod
 			duration: T::EpochDuration::get(),
 			authorities: next_authorities,
 			randomness: next_randomness,
+			secondary_slots: secondary_slots.1,
 		};
 
 		Self::deposit_consensus(ConsensusLog::NextEpochData(next))
 	}
 
 	fn on_disabled(i: usize) {
-		Self::deposit_consensus(ConsensusLog::OnDisabled(i as u64))
+		Self::deposit_consensus(ConsensusLog::OnDisabled(i as u32))
 	}
 }
 
+// compute randomness for a new epoch. rho is the concatenation of all
+// VRF outputs in the prior epoch.
+//
+// an optional size hint as to how many VRF outputs there were may be provided.
 fn compute_randomness(
 	last_epoch_randomness: [u8; RANDOMNESS_LENGTH],
 	epoch_index: u64,
-	rho: [u8; VRF_OUTPUT_LENGTH],
+	rho: impl Iterator<Item=[u8; VRF_OUTPUT_LENGTH]>,
+	rho_size_hint: Option<usize>,
 ) -> [u8; RANDOMNESS_LENGTH] {
-	let mut s = [0; 40 + VRF_OUTPUT_LENGTH];
-	s[..32].copy_from_slice(&last_epoch_randomness);
-	s[32..40].copy_from_slice(&epoch_index.to_le_bytes());
-	s[40..].copy_from_slice(&rho);
+	let mut s = Vec::with_capacity(40 + rho_size_hint.unwrap_or(0) * VRF_OUTPUT_LENGTH);
+	s.extend_from_slice(&last_epoch_randomness);
+	s.extend_from_slice(&epoch_index.to_le_bytes());
+
+	for vrf_output in rho {
+		s.extend_from_slice(&vrf_output[..]);
+	}
+
 	runtime_io::blake2_256(&s)
 }
 

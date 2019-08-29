@@ -43,6 +43,8 @@ pub(crate) struct Impls<'a, I: Iterator<Item=syn::Meta>> {
 	pub instance_opts: &'a InstanceOpts,
 	pub type_infos: DeclStorageTypeInfos<'a>,
 	pub fielddefault: TokenStream2,
+	pub default_delegator_ident: syn::Ident,
+	pub default_delegator_return: TokenStream2,
 	pub prefix: String,
 	pub cratename: &'a syn::Ident,
 	pub name: &'a syn::Ident,
@@ -60,6 +62,8 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			instance_opts,
 			type_infos,
 			fielddefault,
+			default_delegator_ident,
+			default_delegator_return,
 			prefix,
 			name,
 			attrs,
@@ -116,6 +120,17 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 
 		// generator for value
 		quote! {
+			#visibility struct #default_delegator_ident<#struct_trait>(
+				#scrate::rstd::marker::PhantomData<(#trait_and_instance)>
+			) #where_clause;
+			impl<#impl_trait> #scrate::traits::StorageDefault<#typ>
+				for #default_delegator_ident<#trait_and_instance> #where_clause
+			{
+				fn default() -> Option<#typ> {
+					#default_delegator_return
+				}
+			}
+
 			#( #[ #attrs ] )*
 			#visibility struct #name<#struct_trait>(
 				#scrate::rstd::marker::PhantomData<(#trait_and_instance)>
@@ -125,6 +140,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				for #name<#trait_and_instance> #where_clause
 			{
 				type Query = #value_type;
+				type Default = #default_delegator_ident<#trait_and_instance>;
 
 				/// Get the storage key.
 				fn key() -> &'static [u8] {
@@ -168,6 +184,8 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			instance_opts,
 			type_infos,
 			fielddefault,
+			default_delegator_ident,
+			default_delegator_return,
 			prefix,
 			name,
 			attrs,
@@ -200,10 +218,13 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 		} = instance_opts;
 
 		let final_prefix = if let Some(instance) = instance {
-			let const_name = syn::Ident::new(&format!("{}{}", PREFIX_FOR, name.to_string()), proc_macro2::Span::call_site());
-			quote!{ #instance::#const_name.as_bytes() }
+			let const_name = syn::Ident::new(
+				&format!("{}{}", PREFIX_FOR, name.to_string()),
+				proc_macro2::Span::call_site(),
+			);
+			quote! { #instance::#const_name.as_bytes() }
 		} else {
-			quote!{ #prefix.as_bytes() }
+			quote! { #prefix.as_bytes() }
 		};
 
 		let trait_required = ext::type_contains_ident(value_type, traitinstance)
@@ -227,6 +248,17 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 
 		// generator for map
 		quote!{
+			#visibility struct #default_delegator_ident<#struct_trait>(
+				#scrate::rstd::marker::PhantomData<(#trait_and_instance)>
+			) #where_clause;
+			impl<#impl_trait> #scrate::traits::StorageDefault<#typ>
+				for #default_delegator_ident<#trait_and_instance> #where_clause
+			{
+				fn default() -> Option<#typ> {
+					#default_delegator_return
+				}
+			}
+
 			#( #[ #attrs ] )*
 			#visibility struct #name<#struct_trait>(
 				#scrate::rstd::marker::PhantomData<(#trait_and_instance)>
@@ -236,8 +268,8 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				for #name<#trait_and_instance> #where_clause
 			{
 				type Query = #value_type;
-
 				type Hasher = #scrate::#hasher;
+				type Default = #default_delegator_ident<#trait_and_instance>;
 
 				/// Get the prefix key in storage.
 				fn prefix() -> &'static [u8] {
@@ -280,6 +312,10 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			impl<#impl_trait> #scrate::storage::hashed::generator::AppendableStorageMap<#kty, #typ>
 				for #name<#trait_and_instance> #where_clause
 			{}
+
+			impl<#impl_trait> #scrate::storage::hashed::generator::DecodeLengthStorageMap<#kty, #typ>
+				for #name<#trait_and_instance> #where_clause
+			{}
 		}
 	}
 
@@ -292,6 +328,8 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			instance_opts,
 			type_infos,
 			fielddefault,
+			default_delegator_ident,
+			default_delegator_return,
 			prefix,
 			name,
 			attrs,
@@ -350,6 +388,12 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					None => #as_map::remove(key, storage),
 				}
 			}
+		};
+
+		let mutate_map = if type_infos.is_option {
+			quote! { .map(|(data, linkage)| (Some(data), Some(linkage))) }
+		} else {
+			quote! { .map(|(data, linkage)| (data, Some(linkage))) }
 		};
 
 		let trait_required = ext::type_contains_ident(value_type, traitinstance)
@@ -442,7 +486,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					fn remove_linkage<S: #scrate::HashedStorage<#scrate::#hasher>>(linkage: Linkage<#kty>, storage: &mut S);
 
 					/// Read the contained data and it's linkage.
-					fn read_with_linkage<S>(storage: &S, key: &[u8]) -> Option<(#value_type, Linkage<#kty>)>
+					fn read_with_linkage<S>(storage: &S, key: &[u8]) -> Option<(#typ, Linkage<#kty>)>
 					where
 						S: #scrate::HashedStorage<#scrate::#hasher>;
 
@@ -504,7 +548,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				fn read_with_linkage<S: #scrate::HashedStorage<#scrate::#hasher>>(
 					storage: &S,
 					key: &[u8],
-				) -> Option<(#value_type, self::#inner_module::Linkage<#kty>)> {
+				) -> Option<(#typ, self::#inner_module::Linkage<#kty>)> {
 					storage.get(key)
 				}
 
@@ -558,12 +602,23 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 
 			#structure
 
+			#visibility struct #default_delegator_ident<#struct_trait>(
+				#scrate::rstd::marker::PhantomData<(#trait_and_instance)>
+			) #where_clause;
+			impl<#impl_trait> #scrate::traits::StorageDefault<#typ>
+				for #default_delegator_ident<#trait_and_instance> #where_clause
+			{
+				fn default() -> Option<#typ> {
+					#default_delegator_return
+				}
+			}
+
 			impl<#impl_trait> #scrate::storage::hashed::generator::StorageMap<#kty, #typ>
 				for #name<#trait_and_instance> #where_clause
 			{
 				type Query = #value_type;
-
 				type Hasher = #scrate::#hasher;
+				type Default = #default_delegator_ident<#trait_and_instance>;
 
 				/// Get the prefix key in storage.
 				fn prefix() -> &'static [u8] {
@@ -586,14 +641,12 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				fn take<S: #scrate::HashedStorage<#scrate::#hasher>>(key: &#kty, storage: &mut S) -> Self::Query {
 					use self::#inner_module::Utils;
 
-					let res: Option<(#value_type, self::#inner_module::Linkage<#kty>)> = storage.take(&*#as_map::key_for(key));
-					match res {
-						Some((data, linkage)) => {
-							Self::remove_linkage(linkage, storage);
-							data
-						},
-						None => #fielddefault,
-					}
+					let res: Option<(#typ, self::#inner_module::Linkage<#kty>)> = storage.take(&*#as_map::key_for(key));
+
+					res.map(|(d, l)| {
+						Self::remove_linkage(l, storage);
+						d
+					}).#option_simple_1(|| #fielddefault)
 				}
 
 				/// Remove the value under a key.
@@ -602,7 +655,11 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				}
 
 				/// Store a value to be associated with the given key from the map.
-				fn insert<S: #scrate::HashedStorage<#scrate::#hasher>>(key: &#kty, val: &#typ, storage: &mut S) {
+				fn insert<S: #scrate::HashedStorage<#scrate::#hasher>>(
+					key: &#kty,
+					val: &#typ,
+					storage: &mut S,
+				) {
 					use self::#inner_module::Utils;
 
 					let key_for = &*#as_map::key_for(key);
@@ -612,6 +669,29 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 						// create new linkage
 						None => Self::new_head_linkage(storage, key),
 					};
+
+					storage.put(key_for, &(val, linkage))
+				}
+
+				/// Store a value under this key into the provided storage instance; this can take any reference
+				/// type that derefs to `T` (and has `Encode` implemented).
+				/// Store a value under this key into the provided storage instance.
+				fn insert_ref<Arg, S>(key: &#kty, val: &Arg, storage: &mut S)
+				where
+					#typ: AsRef<Arg>,
+					Arg: ?Sized + #scrate::codec::Encode,
+					S: #scrate::HashedStorage<#scrate::#hasher>
+				{
+					use self::#inner_module::Utils;
+
+					let key_for = &*#as_map::key_for(key);
+					let linkage = match Self::read_with_linkage(storage, key_for) {
+						// overwrite but reuse existing linkage
+						Some((_data, linkage)) => linkage,
+						// create new linkage
+						None => Self::new_head_linkage(storage, key),
+					};
+
 					storage.put(key_for, &(val, linkage))
 				}
 
@@ -625,12 +705,48 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 
 					let key_for = &*#as_map::key_for(key);
 					let (mut val, linkage) = Self::read_with_linkage(storage, key_for)
-						.map(|(data, linkage)| (data, Some(linkage)))
+						#mutate_map
 						.unwrap_or_else(|| (#fielddefault, None));
 
 					let ret = f(&mut val);
-					#mutate_impl ;
+					#mutate_impl;
 					ret
+				}
+
+				// Swap must be overriden not to break links.
+				fn swap<S: #scrate::HashedStorage<Self::Hasher>>(
+					key1: &#kty,
+					key2: &#kty,
+					storage: &mut S,
+				) {
+					use self::#inner_module::Utils;
+
+					let final_key1 = &*#as_map::key_for(key1);
+					let final_key2 = &*#as_map::key_for(key2);
+					let full_value_1 = Self::read_with_linkage(storage, final_key1);
+					let full_value_2 = Self::read_with_linkage(storage, final_key2);
+
+					match (full_value_1, full_value_2) {
+						// Just keep linkage in order and only swap values.
+						(Some((value1, linkage1)), Some((value2, linkage2))) => {
+							storage.put(final_key1, &(value2, linkage1));
+							storage.put(final_key2, &(value1, linkage2));
+						}
+						// Remove key and insert the new one.
+						(Some((value, linkage)), None) => {
+							#as_map::remove(key1, storage);
+							let linkage = Self::new_head_linkage(storage, key2);
+							storage.put(final_key2, &(value, linkage));
+						}
+						// Remove key and insert the new one.
+						(None, Some((value, linkage))) => {
+							#as_map::remove(key2, storage);
+							let linkage = Self::new_head_linkage(storage, key1);
+							storage.put(final_key1, &(value, linkage));
+						}
+						// No-op.
+						(None, None) => (),
+					}
 				}
 			}
 
@@ -660,6 +776,10 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					})
 				}
 			}
+
+			impl<#impl_trait> #scrate::storage::hashed::generator::DecodeLengthStorageMap<#kty, #typ>
+				for #name<#trait_and_instance> #where_clause
+			{}
 		}
 	}
 

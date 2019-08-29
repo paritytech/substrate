@@ -27,7 +27,6 @@ use crate::on_demand_layer::OnDemand;
 use crate::service::{ExHashT, TransactionPool};
 use bitflags::bitflags;
 use consensus::import_queue::ImportQueue;
-use parity_codec;
 use sr_primitives::traits::{Block as BlockT};
 use std::sync::Arc;
 use libp2p::identity::{Keypair, secp256k1, ed25519};
@@ -103,21 +102,28 @@ impl Roles {
 		self.intersects(Roles::FULL | Roles::AUTHORITY)
 	}
 
+	/// Does this role represents a client that does not participates in the consensus?
+	pub fn is_authority(&self) -> bool {
+		*self == Roles::AUTHORITY
+	}
+
 	/// Does this role represents a client that does not hold full chain data locally?
 	pub fn is_light(&self) -> bool {
 		!self.is_full()
 	}
 }
 
-impl parity_codec::Encode for Roles {
-	fn encode_to<T: parity_codec::Output>(&self, dest: &mut T) {
+impl codec::Encode for Roles {
+	fn encode_to<T: codec::Output>(&self, dest: &mut T) {
 		dest.push_byte(self.bits())
 	}
 }
 
-impl parity_codec::Decode for Roles {
-	fn decode<I: parity_codec::Input>(input: &mut I) -> Option<Self> {
-		Self::from_bits(input.read_byte()?)
+impl codec::EncodeLike for Roles {}
+
+impl codec::Decode for Roles {
+	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
+		Self::from_bits(input.read_byte()?).ok_or_else(|| codec::Error::from("Invalid bytes"))
 	}
 }
 
@@ -157,7 +163,8 @@ impl ProtocolId {
 	}
 }
 
-/// Parses a string address and returns the component, if valid.
+/// Parses a string address and splits it into Multiaddress and PeerId, if
+/// valid.
 ///
 /// # Example
 ///
@@ -171,8 +178,12 @@ impl ProtocolId {
 /// ```
 ///
 pub fn parse_str_addr(addr_str: &str) -> Result<(PeerId, Multiaddr), ParseErr> {
-	let mut addr: Multiaddr = addr_str.parse()?;
+	let addr: Multiaddr = addr_str.parse()?;
+	parse_addr(addr)
+}
 
+/// Splits a Multiaddress into a Multiaddress and PeerId.
+pub fn parse_addr(mut addr: Multiaddr)-> Result<(PeerId, Multiaddr), ParseErr> {
 	let who = match addr.pop() {
 		Some(multiaddr::Protocol::P2p(key)) => PeerId::from_multihash(key)
 			.map_err(|_| ParseErr::InvalidPeerId)?,

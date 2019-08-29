@@ -6,37 +6,37 @@ edition = "2018"
 
 [dependencies]
 hex-literal = "0.2"
-parity-codec = { version = "4.1.1", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 serde = { version = "1.0.93", optional = true }
 inherents = { package = "substrate-inherents", path = "../../core/inherents", default-features = false }
 rstd = { package = "sr-std", path = "../../core/sr-std", default-features = false }
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
-staking = { package = "srml-staking", path = "../staking", default-features = false }
+sr-staking-primitives = { path = "../../core/sr-staking-primitives", default-features = false }
 srml-support = { path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 timestamp = { package = "srml-timestamp", path = "../timestamp", default-features = false }
 session = { package = "srml-session", path = "../session", default-features = false }
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../../core/consensus/babe/primitives", default-features = false }
-runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
+runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = false, features = [ "wasm-nice-panic-message" ] }
 
 [dev-dependencies]
 lazy_static = "1.3.0"
-parking_lot = "0.8.0"
+parking_lot = "0.9.0"
 primitives = { package = "substrate-primitives",  path = "../../core/primitives" }
 
 [features]
 default = ["std"]
 std = [
 	"serde",
-	"parity-codec/std",
+	"codec/std",
 	"rstd/std",
 	"srml-support/std",
 	"sr-primitives/std",
+	"sr-staking-primitives/std",
 	"system/std",
 	"timestamp/std",
 	"inherents/std",
 	"babe-primitives/std",
 	"session/std",
 	"runtime_io/std",
-	"staking/std",
 ]

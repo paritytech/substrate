@@ -119,7 +119,9 @@ pub struct ChainSync<B: BlockT> {
 	queue_blocks: HashSet<B::Hash>,
 	/// The best block number that we are currently importing.
 	best_importing_number: NumberFor<B>,
-	request_builder: Option<BoxFinalityProofRequestBuilder<B>>
+	request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
+	/// A flag that caches idle state with no pending requests.
+	is_idle: bool,
 }
 
 /// All the data we have about a Peer that we are trying to sync with
@@ -198,7 +200,9 @@ pub struct Status<B: BlockT> {
 	/// Target sync block number.
 	pub best_seen_block: Option<NumberFor<B>>,
 	/// Number of peers participating in syncing.
-	pub num_peers: u32
+	pub num_peers: u32,
+	/// Number of blocks queued for import
+	pub queued_blocks: u32,
 }
 
 /// A peer did not behave as expected and should be reported.
@@ -287,7 +291,8 @@ impl<B: BlockT> ChainSync<B> {
 			required_block_attributes,
 			queue_blocks: Default::default(),
 			best_importing_number: Zero::zero(),
-			request_builder
+			request_builder,
+			is_idle: false,
 		}
 	}
 
@@ -317,7 +322,8 @@ impl<B: BlockT> ChainSync<B> {
 		Status {
 			state: sync_state,
 			best_seen_block: best_seen,
-			num_peers: self.peers.len() as u32
+			num_peers: self.peers.len() as u32,
+			queued_blocks: self.queue_blocks.len() as u32,
 		}
 	}
 
@@ -343,7 +349,6 @@ impl<B: BlockT> ChainSync<B> {
 					info!("New peer with unknown genesis hash {} ({}).", info.best_hash, info.best_number);
 					return Err(BadPeer(who, i32::min_value()))
 				}
-
 				// If there are more than `MAJOR_SYNC_BLOCKS` in the import queue then we have
 				// enough to do in the import queue that it's not worth kicking off
 				// an ancestor search, which is what we do in the next match case below.
@@ -395,6 +400,7 @@ impl<B: BlockT> ChainSync<B> {
 					),
 					recently_announced: Default::default()
 				});
+				self.is_idle = false;
 
 				Ok(Some(ancestry_request::<B>(common_best)))
 			}
@@ -407,6 +413,7 @@ impl<B: BlockT> ChainSync<B> {
 					state: PeerSyncState::Available,
 					recently_announced: Default::default(),
 				});
+				self.is_idle = false;
 				Ok(None)
 			}
 		}
@@ -484,12 +491,16 @@ impl<B: BlockT> ChainSync<B> {
 
 	/// Get an iterator over all block requests of all peers.
 	pub fn block_requests(&mut self) -> impl Iterator<Item = (PeerId, BlockRequest<B>)> + '_ {
+		if self.is_idle {
+			return Either::Left(std::iter::empty())
+		}
 		if self.queue_blocks.len() > MAX_IMPORTING_BLOCKS {
 			trace!(target: "sync", "Too many blocks in the queue.");
 			return Either::Left(std::iter::empty())
 		}
 		let blocks = &mut self.blocks;
 		let attrs = &self.required_block_attributes;
+		let mut have_requests = false;
 		let iter = self.peers.iter_mut().filter_map(move |(id, peer)| {
 			if !peer.state.is_available() {
 				trace!(target: "sync", "Peer {} is busy", id);
@@ -497,13 +508,17 @@ impl<B: BlockT> ChainSync<B> {
 			}
 			if let Some((range, req)) = peer_block_request(id, peer, blocks, attrs) {
 				peer.state = PeerSyncState::DownloadingNew(range.start);
-				trace!(target: "sync", "new block request for {}", id);
+				trace!(target: "sync", "New block request for {}", id);
+				have_requests = true;
 				Some((id.clone(), req))
 			} else {
-				trace!(target: "sync", "no new block request for {}", id);
+				trace!(target: "sync", "No new block request for {}", id);
 				None
 			}
 		});
+		if !have_requests {
+			self.is_idle = true;
+		}
 		Either::Right(iter)
 	}
 
@@ -523,6 +538,7 @@ impl<B: BlockT> ChainSync<B> {
 					trace!(target: "sync", "Reversing incoming block list");
 					blocks.reverse()
 				}
+				self.is_idle = false;
 				match &mut peer.state {
 					PeerSyncState::DownloadingNew(start_block) => {
 						self.blocks.clear_peer_download(&who);
@@ -638,6 +654,7 @@ impl<B: BlockT> ChainSync<B> {
 				return Ok(OnBlockJustification::Nothing)
 			};
 
+		self.is_idle = false;
 		if let PeerSyncState::DownloadingJustification(hash) = peer.state {
 			peer.state = PeerSyncState::Available;
 
@@ -676,6 +693,7 @@ impl<B: BlockT> ChainSync<B> {
 				return Ok(OnBlockFinalityProof::Nothing)
 			};
 
+		self.is_idle = false;
 		if let PeerSyncState::DownloadingFinalityProof(hash) = peer.state {
 			peer.state = PeerSyncState::Available;
 
@@ -789,6 +807,7 @@ impl<B: BlockT> ChainSync<B> {
 			self.best_importing_number = Zero::zero()
 		}
 
+		self.is_idle = false;
 		output.into_iter()
 	}
 
@@ -802,10 +821,12 @@ impl<B: BlockT> ChainSync<B> {
 				number,
 			)
 		}
+		self.is_idle = false;
 	}
 
 	pub fn on_finality_proof_import(&mut self, req: (B::Hash, NumberFor<B>), res: Result<(B::Hash, NumberFor<B>), ()>) {
 		self.extra_finality_proofs.try_finalize_root(req, res, true);
+		self.is_idle = false;
 	}
 
 	/// Notify about finalization of the given block.
@@ -860,6 +881,7 @@ impl<B: BlockT> ChainSync<B> {
 			);
 			peer.common_number = new_common_number;
 		}
+		self.is_idle = false;
 	}
 
 	/// Call when a node announces a new block.
@@ -900,11 +922,12 @@ impl<B: BlockT> ChainSync<B> {
 		}
 		// We assume that the announced block is the latest they have seen, and so our common number
 		// is either one further ahead or it's the one they just announced, if we know about it.
-		if header.parent_hash() == &self.best_queued_hash || known_parent {
-			peer.common_number = number - One::one();
-		} else if known {
+		if known {
 			peer.common_number = number
+		} else if header.parent_hash() == &self.best_queued_hash || known_parent {
+			peer.common_number = number - One::one();
 		}
+		self.is_idle = false;
 
 		// known block case
 		if known || self.is_already_downloading(&hash) {
@@ -984,6 +1007,7 @@ impl<B: BlockT> ChainSync<B> {
 		self.peers.remove(&who);
 		self.extra_justifications.peer_disconnected(&who);
 		self.extra_finality_proofs.peer_disconnected(&who);
+		self.is_idle = false;
 	}
 
 	/// Restart the sync process.
@@ -997,6 +1021,7 @@ impl<B: BlockT> ChainSync<B> {
 		let info = self.client.info();
 		self.best_queued_hash = info.chain.best_hash;
 		self.best_queued_number = info.chain.best_number;
+		self.is_idle = false;
 		debug!(target:"sync", "Restarted with {} ({})", self.best_queued_number, self.best_queued_hash);
 		let old_peers = std::mem::replace(&mut self.peers, HashMap::new());
 		old_peers.into_iter().filter_map(move |(id, _)| {

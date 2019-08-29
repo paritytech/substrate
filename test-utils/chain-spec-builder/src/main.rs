@@ -1,6 +1,6 @@
 use clap::{App, load_yaml};
 
-use node_cli::chain_spec;
+use node_cli::chain_spec::{self, AccountId};
 use substrate_service::chain_ops::build_spec;
 
 fn genesis_constructor() -> chain_spec::GenesisConfig {
@@ -13,11 +13,11 @@ fn genesis_constructor() -> chain_spec::GenesisConfig {
 
 	let endowed_accounts = matches.values_of("endowed_account_seed")
 		.unwrap()
-		.map(chain_spec::get_account_id_from_seed)
+		.map(chain_spec::get_from_seed::<AccountId>)
 		.collect();
 
 	let sudo_key_seed = matches.value_of("sudo_key_seed").unwrap();
-	let sudo_key = chain_spec::get_account_id_from_seed(sudo_key_seed);
+	let sudo_key = chain_spec::get_from_seed::<AccountId>(sudo_key_seed);
 
 	let enable_println = true;
 

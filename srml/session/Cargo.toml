@@ -7,9 +7,10 @@ edition =  "2018"
 [dependencies]
 serde = { version = "1.0", optional = true }
 safe-mix = { version = "1.0", default-features = false}
-parity-codec = { version = "4.1.1", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 rstd = { package = "sr-std", path = "../../core/sr-std", default-features = false }
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
+sr-staking-primitives = { path = "../../core/sr-staking-primitives", default-features = false }
 srml-support = { path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 timestamp = { package = "srml-timestamp", path = "../timestamp", default-features = false }
@@ -18,6 +19,7 @@ runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = 
 
 [dev-dependencies]
 primitives = { package = "substrate-primitives",  path = "../../core/primitives" }
+app-crypto = { package = "substrate-application-crypto",  path = "../../core/application-crypto" }
 lazy_static = "1.0"
 
 [features]
@@ -26,10 +28,11 @@ historical = ["substrate-trie"]
 std = [
 	"serde",
 	"safe-mix/std",
-	"parity-codec/std",
+	"codec/std",
 	"rstd/std",
 	"srml-support/std",
 	"sr-primitives/std",
+	"sr-staking-primitives/std",
 	"timestamp/std",
 	"substrate-trie/std"
 ]

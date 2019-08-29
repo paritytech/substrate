@@ -73,7 +73,7 @@ pub fn new_light<B, S, F, GS, RA, E>(
 		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
 {
 	let remote_executor = RemoteCallExecutor::new(backend.blockchain().clone(), fetcher);
-	let local_executor = LocalCallExecutor::new(backend.clone(), code_executor);
+	let local_executor = LocalCallExecutor::new(backend.clone(), code_executor, None);
 	let executor = RemoteOrLocalCallExecutor::new(backend.clone(), remote_executor, local_executor);
 	Client::new(backend, executor, genesis_storage, Default::default())
 }

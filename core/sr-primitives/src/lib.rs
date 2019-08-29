@@ -30,10 +30,14 @@ pub use rstd;
 #[doc(hidden)]
 pub use paste;
 
+#[doc(hidden)]
+pub use app_crypto;
+
 #[cfg(feature = "std")]
 pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 
 use rstd::prelude::*;
+use rstd::convert::TryFrom;
 use primitives::{crypto, ed25519, sr25519, hash::{H256, H512}};
 use codec::{Encode, Decode};
 
@@ -50,7 +54,8 @@ pub mod sr_arithmetic;
 pub use generic::{DigestItem, Digest};
 
 /// Re-export this since it's part of the API of this crate.
-pub use primitives::crypto::{key_types, KeyTypeId};
+pub use primitives::crypto::{key_types, KeyTypeId, CryptoType};
+pub use app_crypto::AppKey;
 
 /// Export arithmetic stuff.
 pub use sr_arithmetic::{Perbill, Permill, Percent, Rational128, Fixed64, safe_multiply_by_rational};
@@ -110,16 +115,14 @@ pub use serde::{Serialize, Deserialize, de::DeserializeOwned};
 pub trait BuildStorage: Sized {
 	/// Build the storage out of this builder.
 	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
-		let mut storage = Default::default();
-		let mut child_storage = Default::default();
-		self.assimilate_storage(&mut storage, &mut child_storage)?;
-		Ok((storage, child_storage))
+		let mut storage = (Default::default(), Default::default());
+		self.assimilate_storage(&mut storage)?;
+		Ok(storage)
 	}
 	/// Assimilate the storage for this module into pre-existing overlays.
 	fn assimilate_storage(
 		self,
-		storage: &mut StorageOverlay,
-		child_storage: &mut ChildrenStorageOverlay
+		storage: &mut (StorageOverlay, ChildrenStorageOverlay),
 	) -> Result<(), String>;
 }
 
@@ -129,24 +132,8 @@ pub trait BuildModuleGenesisStorage<T, I>: Sized {
 	/// Create the module genesis storage into the given `storage` and `child_storage`.
 	fn build_module_genesis_storage(
 		self,
-		storage: &mut StorageOverlay,
-		child_storage: &mut ChildrenStorageOverlay
+		storage: &mut (StorageOverlay, ChildrenStorageOverlay),
 	) -> Result<(), String>;
-}
-
-#[cfg(feature = "std")]
-impl BuildStorage for StorageOverlay {
-	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
-		Ok((self, Default::default()))
-	}
-	fn assimilate_storage(
-		self,
-		storage: &mut StorageOverlay,
-		_child_storage: &mut ChildrenStorageOverlay
-	) -> Result<(), String> {
-		storage.extend(self);
-		Ok(())
-	}
 }
 
 #[cfg(feature = "std")]
@@ -156,11 +143,16 @@ impl BuildStorage for (StorageOverlay, ChildrenStorageOverlay) {
 	}
 	fn assimilate_storage(
 		self,
-		storage: &mut StorageOverlay,
-		child_storage: &mut ChildrenStorageOverlay
+		storage: &mut (StorageOverlay, ChildrenStorageOverlay),
 	)-> Result<(), String> {
-		storage.extend(self.0);
-		child_storage.extend(self.1);
+		storage.0.extend(self.0);
+		for (k, other_map) in self.1.into_iter() {
+			if let Some(map) = storage.1.get_mut(&k) {
+				map.extend(other_map);
+			} else {
+				storage.1.insert(k, other_map);
+			}
+		}
 		Ok(())
 	}
 }
@@ -270,8 +262,13 @@ pub struct AnySignature(H512);
 impl Verify for AnySignature {
 	type Signer = sr25519::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sr25519::Public) -> bool {
-		runtime_io::sr25519_verify(self.0.as_fixed_bytes(), msg.get(), &signer.0) ||
-			runtime_io::ed25519_verify(self.0.as_fixed_bytes(), msg.get(), &signer.0)
+		sr25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
+			.map(|s| runtime_io::sr25519_verify(&s, msg.get(), &signer))
+			.unwrap_or(false)
+		|| ed25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
+			.and_then(|s| ed25519::Public::try_from(signer.0.as_ref()).map(|p| (s, p)))
+			.map(|(s, p)| runtime_io::ed25519_verify(&s, msg.get(), &p))
+			.unwrap_or(false)
 	}
 }
 
@@ -304,6 +301,8 @@ impl codec::Encode for ApplyOutcome {
 	}
 }
 
+impl codec::EncodeLike for ApplyOutcome {}
+
 #[derive(Eq, PartialEq, Clone, Copy, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[repr(u8)]
@@ -326,6 +325,8 @@ impl codec::Encode for ApplyError {
 		f(&[*self as u8])
 	}
 }
+
+impl codec::EncodeLike for ApplyError {}
 
 /// Result from attempt to apply an extrinsic.
 pub type ApplyResult = Result<ApplyOutcome, ApplyError>;
@@ -419,8 +420,7 @@ macro_rules! impl_outer_config {
 			impl $crate::BuildStorage for $main {
 				fn assimilate_storage(
 					self,
-					top: &mut $crate::StorageOverlay,
-					children: &mut $crate::ChildrenStorageOverlay
+					storage: &mut ($crate::StorageOverlay, $crate::ChildrenStorageOverlay),
 				) -> std::result::Result<(), String> {
 					$(
 						if let Some(extra) = self.[< $snake $(_ $instance )? >] {
@@ -430,8 +430,7 @@ macro_rules! impl_outer_config {
 								$snake;
 								$( $instance )?;
 								extra;
-								top;
-								children;
+								storage;
 							}
 						}
 					)*
@@ -445,13 +444,11 @@ macro_rules! impl_outer_config {
 		$module:ident;
 		$instance:ident;
 		$extra:ident;
-		$top:ident;
-		$children:ident;
+		$storage:ident;
 	) => {
 		$crate::BuildModuleGenesisStorage::<$runtime, $module::$instance>::build_module_genesis_storage(
 			$extra,
-			$top,
-			$children,
+			$storage,
 		)?;
 	};
 	(@CALL_FN
@@ -459,13 +456,11 @@ macro_rules! impl_outer_config {
 		$module:ident;
 		;
 		$extra:ident;
-		$top:ident;
-		$children:ident;
+		$storage:ident;
 	) => {
 		$crate::BuildModuleGenesisStorage::<$runtime, $module::__InherentHiddenInstance>::build_module_genesis_storage(
 			$extra,
-			$top,
-			$children,
+			$storage,
 		)?;
 	}
 }
@@ -486,6 +481,15 @@ impl std::fmt::Debug for OpaqueExtrinsic {
 impl ::serde::Serialize for OpaqueExtrinsic {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
 		codec::Encode::using_encoded(&self.0, |bytes| ::primitives::bytes::serialize(bytes, seq))
+	}
+}
+
+#[cfg(feature = "std")]
+impl<'a> ::serde::Deserialize<'a> for OpaqueExtrinsic {
+	fn deserialize<D>(de: D) -> Result<Self, D::Error> where D: ::serde::Deserializer<'a> {
+		let r = ::primitives::bytes::deserialize(de)?;
+		Decode::decode(&mut &r[..])
+			.map_err(|e| ::serde::de::Error::custom(format!("Decode error: {}", e)))
 	}
 }
 

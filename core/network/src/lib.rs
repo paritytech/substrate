@@ -172,7 +172,7 @@
 
 mod behaviour;
 mod chain;
-mod custom_proto;
+mod legacy_proto;
 mod debug_info;
 mod discovery;
 mod on_demand_layer;
@@ -286,8 +286,8 @@ pub enum NetworkStatePeerEndpoint {
 	Dialing(Multiaddr),
 	/// We are listening.
 	Listening {
-		/// Address we're listening on that received the connection.
-		listen_addr: Multiaddr,
+		/// Local address of the connection.
+		local_addr: Multiaddr,
 		/// Address data is sent back to.
 		send_back_addr: Multiaddr,
 	},
@@ -298,9 +298,9 @@ impl From<ConnectedPoint> for NetworkStatePeerEndpoint {
 		match endpoint {
 			ConnectedPoint::Dialer { address } =>
 				NetworkStatePeerEndpoint::Dialing(address),
-			ConnectedPoint::Listener { listen_addr, send_back_addr } =>
+			ConnectedPoint::Listener { local_addr, send_back_addr } =>
 				NetworkStatePeerEndpoint::Listening {
-					listen_addr,
+					local_addr,
 					send_back_addr
 				}
 		}

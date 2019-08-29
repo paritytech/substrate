@@ -27,9 +27,9 @@ use std::collections::HashSet;
 #[cfg(feature = "std")]
 use sr_primitives::traits::RuntimeApiInfo;
 
-use parity_codec::Encode;
+use codec::Encode;
 #[cfg(feature = "std")]
-use parity_codec::Decode;
+use codec::Decode;
 use sr_primitives::RuntimeString;
 pub use sr_primitives::create_runtime_str;
 
@@ -62,7 +62,7 @@ macro_rules! create_apis_vec {
 /// This triplet have different semantics and mis-interpretation could cause problems.
 /// In particular: bug fixes should result in an increment of `spec_version` and possibly `authoring_version`,
 /// absolutely not `impl_version` since they change the semantics of the runtime.
-#[derive(Clone, PartialEq, Eq, Encode)]
+#[derive(Clone, PartialEq, Eq, Encode, Default)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize, Decode))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 pub struct RuntimeVersion {
@@ -96,7 +96,13 @@ pub struct RuntimeVersion {
 	pub impl_version: u32,
 
 	/// List of supported API "features" along with their versions.
-	#[cfg_attr(feature = "std", serde(serialize_with = "apis_serialize::serialize"))]
+	#[cfg_attr(
+		feature = "std",
+		serde(
+			serialize_with = "apis_serialize::serialize",
+			deserialize_with = "apis_serialize::deserialize",
+		)
+	)]
 	pub apis: ApisVec,
 }
 
@@ -163,7 +169,7 @@ impl NativeVersion {
 mod apis_serialize {
 	use super::*;
 	use impl_serde::serialize as bytes;
-	use serde::{Serializer, ser::SerializeTuple};
+	use serde::{Serializer, de, ser::SerializeTuple};
 
 	#[derive(Serialize)]
 	struct ApiId<'a>(
@@ -186,5 +192,45 @@ mod apis_serialize {
 		S: Serializer,
 	{
 		bytes::serialize(*apis, ser)
+	}
+
+	#[derive(Deserialize)]
+	struct ApiIdOwned(
+		#[serde(deserialize_with="deserialize_bytes")]
+		super::ApiId,
+		u32,
+	);
+
+	pub fn deserialize<'de, D>(deserializer: D) -> Result<ApisVec, D::Error> where
+		D: de::Deserializer<'de>,
+	{
+		struct Visitor;
+		impl<'de> de::Visitor<'de> for Visitor {
+			type Value = ApisVec;
+
+			fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+				formatter.write_str("a sequence of api id and version tuples")
+			}
+
+			fn visit_seq<V>(self, mut visitor: V) -> Result<Self::Value, V::Error> where
+				V: de::SeqAccess<'de>,
+			{
+				let mut apis = Vec::new();
+				while let Some(value) = visitor.next_element::<ApiIdOwned>()? {
+					apis.push((value.0, value.1));
+				}
+				Ok(apis.into())
+			}
+		}
+		deserializer.deserialize_seq(Visitor)
+	}
+
+	pub fn deserialize_bytes<'de, D>(d: D) -> Result<super::ApiId, D::Error> where
+		D: de::Deserializer<'de>
+	{
+		let bytes = bytes::deserialize_check_len(d, bytes::ExpectedLen::Exact(8))?;
+		let mut arr = [0; 8];
+		arr.copy_from_slice(&bytes);
+		Ok(arr)
 	}
 }

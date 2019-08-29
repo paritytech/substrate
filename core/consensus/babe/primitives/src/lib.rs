@@ -21,24 +21,31 @@
 
 mod digest;
 
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use rstd::vec::Vec;
 use sr_primitives::ConsensusEngineId;
-use primitives::sr25519;
 use substrate_client::decl_runtime_apis;
 
 #[cfg(feature = "std")]
 pub use digest::{BabePreDigest, CompatibleDigestItem};
 pub use digest::{BABE_VRF_PREFIX, RawBabePreDigest};
 
+mod app {
+	use app_crypto::{app_crypto, key_types::BABE, sr25519};
+	app_crypto!(sr25519, BABE);
+}
+
 /// A Babe authority keypair. Necessarily equivalent to the schnorrkel public key used in
 /// the main Babe module. If that ever changes, then this must, too.
 #[cfg(feature = "std")]
-pub type AuthorityPair = sr25519::Pair;
+pub type AuthorityPair = app::Pair;
+
+/// A Babe authority signature.
+pub type AuthoritySignature = app::Signature;
 
 /// A Babe authority identifier. Necessarily equivalent to the schnorrkel public key used in
 /// the main Babe module. If that ever changes, then this must, too.
-pub type AuthorityId = sr25519::Public;
+pub type AuthorityId = app::Public;
 
 /// The `ConsensusEngineId` of BABE.
 pub const BABE_ENGINE_ID: ConsensusEngineId = *b"BABE";
@@ -53,7 +60,7 @@ pub const VRF_PROOF_LENGTH: usize = 64;
 pub const PUBLIC_KEY_LENGTH: usize = 32;
 
 /// The index of an authority.
-pub type AuthorityIndex = u64;
+pub type AuthorityIndex = u32;
 
 /// A slot number.
 pub type SlotNumber = u64;
@@ -61,7 +68,10 @@ pub type SlotNumber = u64;
 /// The weight of an authority.
 // NOTE: we use a unique name for the weight to avoid conflicts with other
 //       `Weight` types, since the metadata isn't able to disambiguate.
-pub type BabeWeight = u64;
+pub type BabeAuthorityWeight = u64;
+
+/// The weight of a BABE block.
+pub type BabeBlockWeight = u32;
 
 /// BABE epoch information
 #[derive(Decode, Encode, Default, PartialEq, Eq, Clone)]
@@ -74,9 +84,11 @@ pub struct Epoch {
 	/// The duration of this epoch
 	pub duration: SlotNumber,
 	/// The authorities and their weights
-	pub authorities: Vec<(AuthorityId, BabeWeight)>,
+	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 	/// Randomness for this epoch
 	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+	/// Whether secondary slot assignments should be used during the epoch.
+	pub secondary_slots: bool,
 }
 
 /// An consensus log item for BABE.

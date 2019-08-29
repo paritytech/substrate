@@ -21,20 +21,21 @@
 #![allow(deprecated)]
 use super::*;
 
+use babe_primitives::AuthorityPair;
 use client::{LongestChain, block_builder::BlockBuilder};
 use consensus_common::NoNetwork as DummyOracle;
 use network::test::*;
 use network::test::{Block as TestBlock, PeersClient};
-use sr_primitives::traits::{Block as BlockT, DigestFor};
+use sr_primitives::{generic::DigestItem, traits::{Block as BlockT, DigestFor}};
 use network::config::ProtocolConfig;
 use tokio::runtime::current_thread;
 use keyring::sr25519::Keyring;
-use super::generic::DigestItem;
 use client::BlockchainEvents;
 use test_client;
 use log::debug;
 use std::{time::Duration, borrow::Borrow, cell::RefCell};
-type Item = generic::DigestItem<Hash>;
+
+type Item = DigestItem<Hash>;
 
 type Error = client::error::Error;
 
@@ -87,7 +88,14 @@ type TestHeader = <TestBlock as BlockT>::Header;
 type TestExtrinsic = <TestBlock as BlockT>::Extrinsic;
 
 pub struct TestVerifier {
-	inner: BabeVerifier<PeersFullClient>,
+	inner: BabeVerifier<
+		test_client::Backend,
+		test_client::Executor,
+		TestBlock,
+		test_client::runtime::RuntimeApi,
+		PeersFullClient,
+		(),
+	>,
 	mutator: Mutator,
 }
 
@@ -96,7 +104,7 @@ impl Verifier<TestBlock> for TestVerifier {
 	/// new set of validators to import. If not, err with an Error-Message
 	/// presented to the User in the logs.
 	fn verify(
-		&self,
+		&mut self,
 		origin: BlockOrigin,
 		mut header: TestHeader,
 		justification: Option<Justification>,
@@ -123,11 +131,11 @@ impl TestNetFactory for BabeTestNet {
 
 	/// KLUDGE: this function gets the mutator from thread-local storage.
 	fn make_verifier(&self, client: PeersClient, _cfg: &ProtocolConfig)
-		-> Arc<Self::Verifier>
+		-> Self::Verifier
 	{
-		let api = client.as_full().expect("only full clients are used in test");
+		let client = client.as_full().expect("only full clients are used in test");
 		trace!(target: "babe", "Creating a verifier");
-		let config = Config::get_or_compute(&*api)
+		let config = Config::get_or_compute(&*client)
 			.expect("slot duration available");
 		let inherent_data_providers = InherentDataProviders::new();
 		register_babe_inherent_data_provider(
@@ -136,15 +144,17 @@ impl TestNetFactory for BabeTestNet {
 		).expect("Registers babe inherent data provider");
 		trace!(target: "babe", "Provider registered");
 
-		Arc::new(TestVerifier {
+		TestVerifier {
 			inner: BabeVerifier {
-				api,
+				client: client.clone(),
+				api: client,
 				inherent_data_providers,
 				config,
 				time_source: Default::default(),
+				transaction_pool : Default::default(),
 			},
 			mutator: MUTATOR.with(|s| s.borrow().clone()),
-		})
+		}
 	}
 
 	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData, DummySpecialization> {
@@ -166,12 +176,6 @@ impl TestNetFactory for BabeTestNet {
 }
 
 #[test]
-fn can_serialize_block() {
-	let _ = env_logger::try_init();
-	assert!(BabePreDigest::decode(&mut &b""[..]).is_none());
-}
-
-#[test]
 #[should_panic]
 fn rejects_empty_block() {
 	env_logger::try_init().unwrap();
@@ -189,15 +193,21 @@ fn run_one_test() {
 	let net = BabeTestNet::new(3);
 
 	let peers = &[
-		(0, Keyring::Alice),
-		(1, Keyring::Bob),
-		(2, Keyring::Charlie),
+		(0, "//Alice"),
+		(1, "//Bob"),
+		(2, "//Charlie"),
 	];
 
 	let net = Arc::new(Mutex::new(net));
 	let mut import_notifications = Vec::new();
 	let mut runtime = current_thread::Runtime::new().unwrap();
-	for (peer_id, key) in peers {
+	let mut keystore_paths = Vec::new();
+	for (peer_id, seed) in peers {
+		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
+		let keystore = keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
+		keystore.write().insert_ephemeral_from_seed::<AuthorityPair>(seed).expect("Generates authority key");
+		keystore_paths.push(keystore_path);
+
 		let client = net.lock().peer(*peer_id).client().as_full().unwrap();
 		let environ = DummyFactory(client.clone());
 		import_notifications.push(
@@ -206,21 +216,18 @@ fn run_one_test() {
 				.for_each(move |_| future::ready(()))
 		);
 
-		let config = Config::get_or_compute(&*client)
-			.expect("slot duration available");
+		let config = Config::get_or_compute(&*client).expect("slot duration available");
 
 		let inherent_data_providers = InherentDataProviders::new();
 		register_babe_inherent_data_provider(
 			&inherent_data_providers, config.get()
 		).expect("Registers babe inherent data provider");
 
-
 		#[allow(deprecated)]
 		let select_chain = LongestChain::new(client.backend().clone());
 
 		runtime.spawn(start_babe(BabeParams {
 			config,
-			local_key: Arc::new(key.clone().into()),
 			block_import: client.clone(),
 			select_chain,
 			client,
@@ -229,6 +236,7 @@ fn run_one_test() {
 			inherent_data_providers,
 			force_authoring: false,
 			time_source: Default::default(),
+			keystore,
 		}).expect("Starts babe"));
 	}
 
@@ -236,7 +244,7 @@ fn run_one_test() {
 		net.lock().poll();
 		Ok::<_, ()>(futures01::Async::NotReady::<()>)
 	}));
-	
+
 	runtime.block_on(future::join_all(import_notifications)
 		.map(|_| Ok::<(), ()>(())).compat()).unwrap();
 }
@@ -286,8 +294,8 @@ fn rejects_missing_consensus_digests() {
 #[test]
 fn wrong_consensus_engine_id_rejected() {
 	let _ = env_logger::try_init();
-	let sig = sr25519::Pair::generate().0.sign(b"");
-	let bad_seal: Item = DigestItem::Seal([0; 4], sig.0.to_vec());
+	let sig = AuthorityPair::generate().0.sign(b"");
+	let bad_seal: Item = DigestItem::Seal([0; 4], sig.to_vec());
 	assert!(bad_seal.as_babe_pre_digest().is_none());
 	assert!(bad_seal.as_babe_seal().is_none())
 }
@@ -302,8 +310,8 @@ fn malformed_pre_digest_rejected() {
 #[test]
 fn sig_is_not_pre_digest() {
 	let _ = env_logger::try_init();
-	let sig = sr25519::Pair::generate().0.sign(b"");
-	let bad_seal: Item = DigestItem::Seal(BABE_ENGINE_ID, sig.0.to_vec());
+	let sig = AuthorityPair::generate().0.sign(b"");
+	let bad_seal: Item = DigestItem::Seal(BABE_ENGINE_ID, sig.to_vec());
 	assert!(bad_seal.as_babe_pre_digest().is_none());
 	assert!(bad_seal.as_babe_seal().is_some())
 }
@@ -311,21 +319,38 @@ fn sig_is_not_pre_digest() {
 #[test]
 fn can_author_block() {
 	let _ = env_logger::try_init();
-	let (pair, _) = sr25519::Pair::generate();
+	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
+	let keystore = keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
+	let pair = keystore.write().insert_ephemeral_from_seed::<AuthorityPair>("//Alice")
+		.expect("Generates authority pair");
+
 	let mut i = 0;
-	let epoch = Epoch {
+	let mut epoch = Epoch {
 		start_slot: 0,
 		authorities: vec![(pair.public(), 1)],
 		randomness: [0; 32],
 		epoch_index: 1,
 		duration: 100,
+		secondary_slots: true,
 	};
+
+	let parent_weight = 0;
+
+	// with secondary slots enabled it should never be empty
+	match claim_slot(i, parent_weight, &epoch, (3, 10), &keystore) {
+		None => i += 1,
+		Some(s) => debug!(target: "babe", "Authored block {:?}", s.0),
+	}
+
+	// otherwise with only vrf-based primary slots we might need to try a couple
+	// of times.
+	epoch.secondary_slots = false;
 	loop {
-		match claim_slot(i, epoch.clone(), &pair, (3, 10)) {
+		match claim_slot(i, parent_weight, &epoch, (3, 10), &keystore) {
 			None => i += 1,
 			Some(s) => {
-				debug!(target: "babe", "Authored block {:?}", s);
-				break
+				debug!(target: "babe", "Authored block {:?}", s.0);
+				break;
 			}
 		}
 	}
@@ -337,9 +362,9 @@ fn authorities_call_works() {
 	let client = test_client::new();
 
 	assert_eq!(client.info().chain.best_number, 0);
-	assert_eq!(epoch(&client, &BlockId::Number(0)).unwrap().authorities, vec![
-		(Keyring::Alice.into(), 1),
-		(Keyring::Bob.into(), 1),
-		(Keyring::Charlie.into(), 1),
+	assert_eq!(epoch(&client, &BlockId::Number(0)).unwrap().into_regular().unwrap().authorities, vec![
+		(Keyring::Alice.public().into(), 1),
+		(Keyring::Bob.public().into(), 1),
+		(Keyring::Charlie.public().into(), 1),
 	]);
 }

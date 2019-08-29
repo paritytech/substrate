@@ -25,7 +25,7 @@
 //! The methods of the [`NetworkService`] are implemented by sending a message over a channel,
 //! which is then processed by [`NetworkWorker::poll`].
 
-use std::{collections::HashMap, fs, marker::PhantomData, io, path::Path};
+use std::{collections::{HashMap, HashSet}, fs, marker::PhantomData, io, path::Path};
 use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
 
 use consensus::import_queue::{ImportQueue, Link};
@@ -33,21 +33,21 @@ use consensus::import_queue::{BlockImportResult, BlockImportError};
 use futures::{prelude::*, sync::mpsc};
 use futures03::TryFutureExt as _;
 use log::{warn, error, info};
-use libp2p::{PeerId, Multiaddr, multihash::Multihash};
+use libp2p::{PeerId, Multiaddr, kad::record};
 use libp2p::core::{transport::boxed::Boxed, muxing::StreamMuxerBox};
 use libp2p::swarm::NetworkBehaviour;
 use parking_lot::Mutex;
 use peerset::PeersetHandle;
 use sr_primitives::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
 
-use crate::{behaviour::{Behaviour, BehaviourOut}, config::parse_str_addr};
+use crate::{behaviour::{Behaviour, BehaviourOut}, config::{parse_str_addr, parse_addr}};
 use crate::{NetworkState, NetworkStateNotConnectedPeer, NetworkStatePeer};
 use crate::{transport, config::NodeKeyConfig, config::NonReservedPeerMode};
 use crate::config::{Params, TransportConfig};
 use crate::error::Error;
 use crate::protocol::{self, Protocol, Context, CustomMessageOutcome, PeerInfo};
 use crate::protocol::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
-use crate::protocol::{event::Event, on_demand::{AlwaysBadChecker, RequestData}};
+use crate::protocol::{event::Event, light_dispatch::{AlwaysBadChecker, RequestData}};
 use crate::protocol::specialization::NetworkSpecialization;
 use crate::protocol::sync::SyncState;
 
@@ -241,7 +241,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 			service,
 			import_queue: params.import_queue,
 			from_worker,
-			on_demand_in: params.on_demand.and_then(|od| od.extract_receiver()),
+			light_client_rqs: params.on_demand.and_then(|od| od.extract_receiver()),
 		})
 	}
 
@@ -278,6 +278,11 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 	/// Number of peers participating in syncing.
 	pub fn num_sync_peers(&self) -> u32 {
 		self.network_service.user_protocol().num_sync_peers()
+	}
+
+	/// Number of blocks in the import queue.
+	pub fn num_queued_blocks(&self) -> u32 {
+		self.network_service.user_protocol().num_queued_blocks()
 	}
 
 	/// Adds an address for a node.
@@ -451,7 +456,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	///
 	/// This will generate either a `ValueFound` or a `ValueNotFound` event and pass it to
 	/// `on_event` on the network specialization.
-	pub fn get_value(&self, key: &Multihash) {
+	pub fn get_value(&self, key: &record::Key) {
 		let _ = self
 			.to_worker
 			.unbounded_send(ServerToWorkerMsg::GetValue(key.clone()));
@@ -461,7 +466,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	///
 	/// This will generate either a `ValuePut` or a `ValuePutFailed` event and pass it to
 	/// `on_event` on the network specialization.
-	pub fn put_value(&self, key: Multihash, value: Vec<u8>) {
+	pub fn put_value(&self, key: record::Key, value: Vec<u8>) {
 		let _ = self
 			.to_worker
 			.unbounded_send(ServerToWorkerMsg::PutValue(key, value));
@@ -489,6 +494,24 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 		let _ = self
 			.to_worker
 			.unbounded_send(ServerToWorkerMsg::AddKnownAddress(peer_id, addr));
+		Ok(())
+	}
+
+	/// Modify a peerset priority group.
+	pub fn set_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
+		let peers = peers.into_iter().map(|p| {
+			parse_addr(p).map_err(|e| format!("{:?}", e))
+		}).collect::<Result<Vec<(PeerId, Multiaddr)>, String>>()?;
+
+		let peer_ids = peers.iter().map(|(peer_id, _addr)| peer_id.clone()).collect();
+		self.peerset.set_priority_group(group_id, peer_ids);
+
+		for (peer_id, addr) in peers.into_iter() {
+			let _ = self
+				.to_worker
+				.unbounded_send(ServerToWorkerMsg::AddKnownAddress(peer_id, addr));
+		}
+
 		Ok(())
 	}
 
@@ -561,8 +584,8 @@ enum ServerToWorkerMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	ExecuteWithSpec(Box<dyn FnOnce(&mut S, &mut dyn Context<B>) + Send>),
 	ExecuteWithGossip(Box<dyn FnOnce(&mut ConsensusGossip<B>, &mut dyn Context<B>) + Send>),
 	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>, GossipMessageRecipient),
-	GetValue(Multihash),
-	PutValue(Multihash, Vec<u8>),
+	GetValue(record::Key),
+	PutValue(record::Key, Vec<u8>),
 	AddKnownAddress(PeerId, Multiaddr),
 }
 
@@ -585,8 +608,8 @@ pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: Ex
 	import_queue: Box<dyn ImportQueue<B>>,
 	/// Messages from the `NetworkService` and that must be processed.
 	from_worker: mpsc::UnboundedReceiver<ServerToWorkerMsg<B, S>>,
-	/// Receiver for queries from the on-demand that must be processed.
-	on_demand_in: Option<mpsc::UnboundedReceiver<RequestData<B>>>,
+	/// Receiver for queries from the light client that must be processed.
+	light_client_rqs: Option<mpsc::UnboundedReceiver<RequestData<B>>>,
 }
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for NetworkWorker<B, S, H> {
@@ -602,10 +625,10 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 			std::task::Poll::Pending::<Result<(), ()>>
 		}).compat().poll();
 
-		// Check for new incoming on-demand requests.
-		if let Some(on_demand_in) = self.on_demand_in.as_mut() {
-			while let Ok(Async::Ready(Some(rq))) = on_demand_in.poll() {
-				self.network_service.user_protocol_mut().add_on_demand_request(rq);
+		// Check for new incoming light client requests.
+		if let Some(light_client_rqs) = self.light_client_rqs.as_mut() {
+			while let Ok(Async::Ready(Some(rq))) = light_client_rqs.poll() {
+				self.network_service.user_protocol_mut().add_light_client_request(rq);
 			}
 		}
 

@@ -151,7 +151,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use parity_codec::{Decode, Encode, HasCompact, Input, Output};
+use codec::{Decode, Encode, HasCompact, Input, Output, Error};
 
 use sr_primitives::traits::{
 	CheckedAdd, CheckedSub, MaybeSerializeDebug, Member, One, Saturating, SimpleArithmetic, Zero, Bounded
@@ -256,11 +256,11 @@ pub enum PermissionVersions<AccountId> {
 
 /// Asset permission types
 pub enum PermissionType {
-	/// Permission to update asset permission
+	/// Permission to burn asset permission
 	Burn,
 	/// Permission to mint new asset
 	Mint,
-	/// Permission to burn asset
+	/// Permission to update asset
 	Update,
 }
 
@@ -284,10 +284,12 @@ impl<AccountId: Encode> Encode for PermissionVersions<AccountId> {
 	}
 }
 
+impl<AccountId: Encode> codec::EncodeLike for PermissionVersions<AccountId> {}
+
 impl<AccountId: Decode> Decode for PermissionVersions<AccountId> {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+	fn decode<I: Input>(input: &mut I) -> core::result::Result<Self, Error> {
 		let version = PermissionVersionNumber::decode(input)?;
-		Some(
+		Ok(
 			match version {
 				PermissionVersionNumber::V1 => PermissionVersions::V1(Decode::decode(input)?)
 			}
@@ -477,14 +479,13 @@ decl_storage! {
 		config(endowed_accounts): Vec<T::AccountId>;
 
 		build(|
-			storage: &mut sr_primitives::StorageOverlay,
-			_: &mut sr_primitives::ChildrenStorageOverlay,
+			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
 			config: &GenesisConfig<T>| {
 			config.assets.iter().for_each(|asset_id| {
 				config.endowed_accounts.iter().for_each(|account_id| {
-					storage.insert(
+					storage.0.insert(
 						<FreeBalance<T>>::key_for(asset_id, account_id),
-						<T::Balance as parity_codec::Encode>::encode(&config.initial_balance)
+						<T::Balance as codec::Encode>::encode(&config.initial_balance)
 					);
 				});
 			});
@@ -1048,6 +1049,7 @@ impl<T: Subtrait> PartialEq for ElevatedTrait<T> {
 impl<T: Subtrait> Eq for ElevatedTrait<T> {}
 impl<T: Subtrait> system::Trait for ElevatedTrait<T> {
 	type Origin = T::Origin;
+	type Call = T::Call;
 	type Index = T::Index;
 	type BlockNumber = T::BlockNumber;
 	type Hash = T::Hash;
@@ -1061,6 +1063,7 @@ impl<T: Subtrait> system::Trait for ElevatedTrait<T> {
 	type AvailableBlockRatio = T::AvailableBlockRatio;
 	type WeightMultiplierUpdate = ();
 	type BlockHashCount = T::BlockHashCount;
+	type Version = T::Version;
 }
 impl<T: Subtrait> Trait for ElevatedTrait<T> {
 	type Balance = T::Balance;

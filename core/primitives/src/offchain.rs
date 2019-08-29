@@ -16,10 +16,11 @@
 
 //! Offchain workers types
 
-use crate::crypto;
-use parity_codec::{Encode, Decode};
+use codec::{Encode, Decode};
 use rstd::prelude::{Vec, Box};
 use rstd::convert::TryFrom;
+
+pub use crate::crypto::KeyTypeId;
 
 /// A type of supported crypto.
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
@@ -58,84 +59,9 @@ impl From<StorageKind> for u32 {
 	}
 }
 
-/// A type of supported crypto.
-#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
-#[repr(C)]
-pub enum CryptoKind {
-	/// SR25519 crypto (Schnorrkel)
-	Sr25519 = crypto::key_types::SR25519 as isize,
-	/// ED25519 crypto (Edwards)
-	Ed25519 = crypto::key_types::ED25519 as isize,
-}
-
-impl TryFrom<u32> for CryptoKind {
-	type Error = ();
-
-	fn try_from(kind: u32) -> Result<Self, Self::Error> {
-		match kind {
-			e if e == CryptoKind::Sr25519 as isize as u32 => Ok(CryptoKind::Sr25519),
-			e if e == CryptoKind::Ed25519 as isize as u32 => Ok(CryptoKind::Ed25519),
-			_ => Err(()),
-		}
-	}
-}
-
-impl From<CryptoKind> for u32 {
-	fn from(c: CryptoKind) -> Self {
-		c as isize as u32
-	}
-}
-
-/// Key to use in the offchain worker crypto api.
-#[derive(Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub enum CryptoKey {
-	/// Use a key from the offchain workers local storage.
-	LocalKey {
-		/// The id of the key.
-		id: u16,
-		/// The kind of the key.
-		kind: CryptoKind,
-	},
-	/// Use the key the block authoring algorithm uses.
-	AuthorityKey,
-	/// Use the key the finality gadget uses.
-	FgAuthorityKey,
-}
-
-impl TryFrom<u64> for CryptoKey {
-	type Error = ();
-
-	fn try_from(key: u64) -> Result<Self, Self::Error> {
-		match key & 0xFF {
-			0 => {
-				let id = (key >> 8 & 0xFFFF) as u16;
-				let kind = CryptoKind::try_from((key >> 32) as u32)?;
-				Ok(CryptoKey::LocalKey { id, kind })
-			}
-			1 => Ok(CryptoKey::AuthorityKey),
-			2 => Ok(CryptoKey::FgAuthorityKey),
-			_ => Err(()),
-		}
-	}
-}
-
-impl From<CryptoKey> for u64 {
-	fn from(key: CryptoKey) -> u64 {
-		match key {
-			CryptoKey::LocalKey { id, kind } => {
-				((kind as u64) << 32) | ((id as u64) << 8)
-			}
-			CryptoKey::AuthorityKey => 1,
-			CryptoKey::FgAuthorityKey => 2,
-		}
-	}
-}
-
 /// Opaque type for offchain http requests.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[cfg_attr(feature = "std", derive(Debug, Hash))]
 pub struct HttpRequestId(pub u16);
 
 impl From<HttpRequestId> for u32 {
@@ -153,6 +79,8 @@ pub enum HttpError {
 	DeadlineReached = 1,
 	/// There was an IO Error while processing the request.
 	IoError = 2,
+	/// The ID of the request is invalid in this context.
+	Invalid = 3,
 }
 
 impl TryFrom<u32> for HttpError {
@@ -162,6 +90,7 @@ impl TryFrom<u32> for HttpError {
 		match error {
 			e if e == HttpError::DeadlineReached as u8 as u32 => Ok(HttpError::DeadlineReached),
 			e if e == HttpError::IoError as u8 as u32 => Ok(HttpError::IoError),
+			e if e == HttpError::Invalid as u8 as u32 => Ok(HttpError::Invalid),
 			_ => Err(())
 		}
 	}
@@ -179,18 +108,17 @@ impl From<HttpError> for u32 {
 pub enum HttpRequestStatus {
 	/// Deadline was reached while we waited for this request to finish.
 	///
-	/// Note the deadline is controlled by the calling part, it not necessarily means
-	/// that the request has timed out.
+	/// Note the deadline is controlled by the calling part, it not necessarily
+	/// means that the request has timed out.
 	DeadlineReached,
-	/// Request timed out.
+	/// An error has occured during the request, for example a timeout or the
+	/// remote has closed our socket.
 	///
-	/// This means that the request couldn't be completed by the host environment
-	/// within a reasonable time (according to the host), has now been terminated
-	/// and is considered finished.
-	/// To retry the request you need to construct it again.
-	Timeout,
-	/// Request status of this ID is not known.
-	Unknown,
+	/// The request is now considered destroyed. To retry the request you need
+	/// to construct it again.
+	IoError,
+	/// The passed ID is invalid in this context.
+	Invalid,
 	/// The request has finished with given status code.
 	Finished(u16),
 }
@@ -198,9 +126,9 @@ pub enum HttpRequestStatus {
 impl From<HttpRequestStatus> for u32 {
 	fn from(status: HttpRequestStatus) -> Self {
 		match status {
-			HttpRequestStatus::Unknown => 0,
+			HttpRequestStatus::Invalid => 0,
 			HttpRequestStatus::DeadlineReached => 10,
-			HttpRequestStatus::Timeout => 20,
+			HttpRequestStatus::IoError => 20,
 			HttpRequestStatus::Finished(code) => u32::from(code),
 		}
 	}
@@ -211,9 +139,9 @@ impl TryFrom<u32> for HttpRequestStatus {
 
 	fn try_from(status: u32) -> Result<Self, Self::Error> {
 		match status {
-			0 => Ok(HttpRequestStatus::Unknown),
+			0 => Ok(HttpRequestStatus::Invalid),
 			10 => Ok(HttpRequestStatus::DeadlineReached),
-			20 => Ok(HttpRequestStatus::Timeout),
+			20 => Ok(HttpRequestStatus::IoError),
 			100..=999 => u16::try_from(status).map(HttpRequestStatus::Finished).map_err(|_| ()),
 			_ => Err(()),
 		}
@@ -304,8 +232,77 @@ impl Timestamp {
 	}
 }
 
+/// Execution context extra capabilities.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[repr(u8)]
+pub enum Capability {
+	/// Access to transaction pool.
+	TransactionPool = 1,
+	/// External http calls.
+	Http = 2,
+	/// Keystore access.
+	Keystore = 4,
+	/// Randomness source.
+	Randomness = 8,
+	/// Access to opaque network state.
+	NetworkState = 16,
+	/// Access to offchain worker DB (read only).
+	OffchainWorkerDbRead = 32,
+	/// Access to offchain worker DB (writes).
+	OffchainWorkerDbWrite = 64,
+}
+
+/// A set of capabilities
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub struct Capabilities(u8);
+
+impl Capabilities {
+	/// Return an object representing an empty set of capabilities.
+	pub fn none() -> Self {
+		Self(0)
+	}
+
+	/// Return an object representing all capabilities enabled.
+	pub fn all() -> Self {
+		Self(u8::max_value())
+	}
+
+	/// Return capabilities for rich offchain calls.
+	///
+	/// Those calls should be allowed to sign and submit transactions
+	/// and access offchain workers database (but read only!).
+	pub fn rich_offchain_call() -> Self {
+		[
+			Capability::TransactionPool,
+			Capability::Keystore,
+			Capability::OffchainWorkerDbRead,
+		][..].into()
+	}
+
+	/// Check if particular capability is enabled.
+	pub fn has(&self, capability: Capability) -> bool {
+		self.0 & capability as u8 != 0
+	}
+
+	/// Check if this capability object represents all capabilities.
+	pub fn has_all(&self) -> bool {
+		self == &Capabilities::all()
+	}
+}
+
+impl<'a> From<&'a [Capability]> for Capabilities {
+	fn from(list: &'a [Capability]) -> Self {
+		Capabilities(list.iter().fold(0_u8, |a, b| a | *b as u8))
+	}
+}
+
 /// An extended externalities for offchain workers.
 pub trait Externalities {
+	/// Returns if the local node is a potential validator.
+	///
+	/// Even if this function returns `true`, it does not mean that any keys are configured
+	/// and that the validator is registered in the chain.
+	fn is_validator(&self) -> bool;
 	/// Submit transaction.
 	///
 	/// The transaction will end up in the pool and be propagated to others.
@@ -313,45 +310,6 @@ pub trait Externalities {
 
 	/// Returns information about the local node's network state.
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()>;
-
-	/// Create new key(pair) for signing/encryption/decryption.
-	///
-	/// Returns an error if given crypto kind is not supported.
-	fn new_crypto_key(&mut self, crypto: CryptoKind) -> Result<CryptoKey, ()>;
-
-	/// Returns the locally configured authority public key, if available.
-	fn pubkey(&self, key: CryptoKey) -> Result<Vec<u8>, ()>;
-
-	/// Encrypt a piece of data using given crypto key.
-	///
-	/// If `key` is `None`, it will attempt to use current authority key of `CryptoKind`.
-	///
-	/// Returns an error if `key` is not available or does not exist,
-	/// or the expected `CryptoKind` does not match.
-	fn encrypt(&mut self, key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()>;
-
-	/// Decrypt a piece of data using given crypto key.
-	///
-	/// If `key` is `None`, it will attempt to use current authority key of `CryptoKind`.
-	///
-	/// Returns an error if data cannot be decrypted or the `key` is not available or does not exist,
-	/// or the expected `CryptoKind` does not match.
-	fn decrypt(&mut self, key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()>;
-
-	/// Sign a piece of data using given crypto key.
-	///
-	/// If `key` is `None`, it will attempt to use current authority key of `CryptoKind`.
-	///
-	/// Returns an error if `key` is not available or does not exist,
-	/// or the expected `CryptoKind` does not match.
-	fn sign(&mut self, key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()>;
-
-	/// Verifies that `signature` for `msg` matches given `key`.
-	///
-	/// Returns an `Ok` with `true` in case it does, `false` in case it doesn't.
-	/// Returns an error in case the key is not available or does not exist or the parameters
-	/// lengths are incorrect or `CryptoKind` does not match.
-	fn verify(&mut self, key: CryptoKey, msg: &[u8], signature: &[u8]) -> Result<bool, ()>;
 
 	/// Returns current UNIX timestamp (in millis)
 	fn timestamp(&mut self) -> Timestamp;
@@ -397,8 +355,13 @@ pub trait Externalities {
 
 	/// Initiates a http request given HTTP verb and the URL.
 	///
-	/// Meta is a future-reserved field containing additional, parity-codec encoded parameters.
+	/// Meta is a future-reserved field containing additional, parity-scale-codec encoded parameters.
 	/// Returns the id of newly started request.
+	///
+	/// Returns an error if:
+	/// - No new request identifier could be allocated.
+	/// - The method or URI contain invalid characters.
+	///
 	fn http_request_start(
 		&mut self,
 		method: &str,
@@ -407,6 +370,18 @@ pub trait Externalities {
 	) -> Result<HttpRequestId, ()>;
 
 	/// Append header to the request.
+	///
+	/// Calling this function multiple times with the same header name continues appending new
+	/// headers. In other words, headers are never replaced.
+	///
+	/// Returns an error if:
+	/// - The request identifier is invalid.
+	/// - You have called `http_request_write_body` on that request.
+	/// - The name or value contain invalid characters.
+	///
+	/// An error doesn't poison the request, and you can continue as if the call had never been
+	/// made.
+	///
 	fn http_request_add_header(
 		&mut self,
 		request_id: HttpRequestId,
@@ -416,10 +391,19 @@ pub trait Externalities {
 
 	/// Write a chunk of request body.
 	///
-	/// Writing an empty chunks finalises the request.
+	/// Calling this function with a non-empty slice may or may not start the
+	/// HTTP request. Calling this function with an empty chunks finalizes the
+	/// request and always starts it. It is no longer valid to write more data
+	/// afterwards.
 	/// Passing `None` as deadline blocks forever.
 	///
-	/// Returns an error in case deadline is reached or the chunk couldn't be written.
+	/// Returns an error if:
+	/// - The request identifier is invalid.
+	/// - `http_response_wait` has already been called on this request.
+	/// - The deadline is reached.
+	/// - An I/O error has happened, for example the remote has closed our
+	///   request. The request is then considered invalid.
+	///
 	fn http_request_write_body(
 		&mut self,
 		request_id: HttpRequestId,
@@ -433,6 +417,9 @@ pub trait Externalities {
 	/// Note that if deadline is not provided the method will block indefinitely,
 	/// otherwise unready responses will produce `DeadlineReached` status.
 	///
+	/// If a response returns an `IoError`, it is then considered destroyed.
+	/// Its id is then invalid.
+	///
 	/// Passing `None` as deadline blocks forever.
 	fn http_response_wait(
 		&mut self,
@@ -443,6 +430,12 @@ pub trait Externalities {
 	/// Read all response headers.
 	///
 	/// Returns a vector of pairs `(HeaderKey, HeaderValue)`.
+	///
+	/// Dispatches the request if it hasn't been done yet. It is no longer
+	/// valid to modify the headers or write data to the request.
+	///
+	/// Returns an empty list if the identifier is unknown/invalid, hasn't
+	/// received a response, or has finished.
 	fn http_response_headers(
 		&mut self,
 		request_id: HttpRequestId
@@ -450,9 +443,23 @@ pub trait Externalities {
 
 	/// Read a chunk of body response to given buffer.
 	///
+	/// Dispatches the request if it hasn't been done yet. It is no longer
+	/// valid to modify the headers or write data to the request.
+	///
 	/// Returns the number of bytes written or an error in case a deadline
 	/// is reached or server closed the connection.
 	/// Passing `None` as a deadline blocks forever.
+	///
+	/// If `Ok(0)` or `Err(IoError)` is returned, the request is considered
+	/// destroyed. Doing another read or getting the response's headers, for
+	/// example, is then invalid.
+	///
+	/// Returns an error if:
+	/// - The request identifier is invalid.
+	/// - The deadline is reached.
+	/// - An I/O error has happened, for example the remote has closed our
+	///   request. The request is then considered invalid.
+	///
 	fn http_response_read_body(
 		&mut self,
 		request_id: HttpRequestId,
@@ -462,36 +469,16 @@ pub trait Externalities {
 
 }
 impl<T: Externalities + ?Sized> Externalities for Box<T> {
+	fn is_validator(&self) -> bool {
+		(& **self).is_validator()
+	}
+
 	fn submit_transaction(&mut self, ex: Vec<u8>) -> Result<(), ()> {
 		(&mut **self).submit_transaction(ex)
 	}
 
-	fn new_crypto_key(&mut self, crypto: CryptoKind) -> Result<CryptoKey, ()> {
-		(&mut **self).new_crypto_key(crypto)
-	}
-
-	fn encrypt(&mut self, key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()> {
-		(&mut **self).encrypt(key, data)
-	}
-
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
 		(& **self).network_state()
-	}
-
-	fn pubkey(&self, key: CryptoKey) -> Result<Vec<u8>, ()> {
-		(&**self).pubkey(key)
-	}
-
-	fn decrypt(&mut self, key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()> {
-		(&mut **self).decrypt(key, data)
-	}
-
-	fn sign(&mut self, key: CryptoKey, data: &[u8]) -> Result<Vec<u8>, ()> {
-		(&mut **self).sign(key, data)
-	}
-
-	fn verify(&mut self, key: CryptoKey, msg: &[u8], signature: &[u8]) -> Result<bool, ()> {
-		(&mut **self).verify(key, msg, signature)
 	}
 
 	fn timestamp(&mut self) -> Timestamp {
@@ -558,6 +545,123 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		(&mut **self).http_response_read_body(request_id, buffer, deadline)
 	}
 }
+/// An `OffchainExternalities` implementation with limited capabilities.
+pub struct LimitedExternalities<T> {
+	capabilities: Capabilities,
+	externalities: T,
+}
+
+impl<T> LimitedExternalities<T> {
+	/// Create new externalities limited to given `capabilities`.
+	pub fn new(capabilities: Capabilities, externalities: T) -> Self {
+		Self {
+			capabilities,
+			externalities,
+		}
+	}
+
+	/// Check if given capability is allowed.
+	///
+	/// Panics in case it is not.
+	fn check(&self, capability: Capability, name: &'static str) {
+		if !self.capabilities.has(capability) {
+			panic!("Accessing a forbidden API: {}. No: {:?} capability.", name, capability);
+		}
+	}
+}
+
+impl<T: Externalities> Externalities for LimitedExternalities<T> {
+	fn is_validator(&self) -> bool {
+		self.check(Capability::Keystore, "is_validator");
+		self.externalities.is_validator()
+	}
+
+	fn submit_transaction(&mut self, ex: Vec<u8>) -> Result<(), ()> {
+		self.check(Capability::TransactionPool, "submit_transaction");
+		self.externalities.submit_transaction(ex)
+	}
+
+	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
+		self.check(Capability::NetworkState, "network_state");
+		self.externalities.network_state()
+	}
+
+	fn timestamp(&mut self) -> Timestamp {
+		self.check(Capability::Http, "timestamp");
+		self.externalities.timestamp()
+	}
+
+	fn sleep_until(&mut self, deadline: Timestamp) {
+		self.check(Capability::Http, "sleep_until");
+		self.externalities.sleep_until(deadline)
+	}
+
+	fn random_seed(&mut self) -> [u8; 32] {
+		self.check(Capability::Randomness, "random_seed");
+		self.externalities.random_seed()
+	}
+
+	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
+		self.check(Capability::OffchainWorkerDbWrite, "local_storage_set");
+		self.externalities.local_storage_set(kind, key, value)
+	}
+
+	fn local_storage_compare_and_set(
+		&mut self,
+		kind: StorageKind,
+		key: &[u8],
+		old_value: Option<&[u8]>,
+		new_value: &[u8],
+	) -> bool {
+		self.check(Capability::OffchainWorkerDbWrite, "local_storage_compare_and_set");
+		self.externalities.local_storage_compare_and_set(kind, key, old_value, new_value)
+	}
+
+	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>> {
+		self.check(Capability::OffchainWorkerDbRead, "local_storage_get");
+		self.externalities.local_storage_get(kind, key)
+	}
+
+	fn http_request_start(&mut self, method: &str, uri: &str, meta: &[u8]) -> Result<HttpRequestId, ()> {
+		self.check(Capability::Http, "http_request_start");
+		self.externalities.http_request_start(method, uri, meta)
+	}
+
+	fn http_request_add_header(&mut self, request_id: HttpRequestId, name: &str, value: &str) -> Result<(), ()> {
+		self.check(Capability::Http, "http_request_add_header");
+		self.externalities.http_request_add_header(request_id, name, value)
+	}
+
+	fn http_request_write_body(
+		&mut self,
+		request_id: HttpRequestId,
+		chunk: &[u8],
+		deadline: Option<Timestamp>
+	) -> Result<(), HttpError> {
+		self.check(Capability::Http, "http_request_write_body");
+		self.externalities.http_request_write_body(request_id, chunk, deadline)
+	}
+
+	fn http_response_wait(&mut self, ids: &[HttpRequestId], deadline: Option<Timestamp>) -> Vec<HttpRequestStatus> {
+		self.check(Capability::Http, "http_response_wait");
+		self.externalities.http_response_wait(ids, deadline)
+	}
+
+	fn http_response_headers(&mut self, request_id: HttpRequestId) -> Vec<(Vec<u8>, Vec<u8>)> {
+		self.check(Capability::Http, "http_response_headers");
+		self.externalities.http_response_headers(request_id)
+	}
+
+	fn http_response_read_body(
+		&mut self,
+		request_id: HttpRequestId,
+		buffer: &mut [u8],
+		deadline: Option<Timestamp>
+	) -> Result<usize, HttpError> {
+		self.check(Capability::Http, "http_response_read_body");
+		self.externalities.http_response_read_body(request_id, buffer, deadline)
+	}
+}
 
 
 #[cfg(test)]
@@ -573,25 +677,16 @@ mod tests {
 	}
 
 	#[test]
-	fn crypto_key_to_from_u64() {
-		let key = CryptoKey::AuthorityKey;
-		let uint: u64 = key.clone().into();
-		let key2 = CryptoKey::try_from(uint).unwrap();
-		assert_eq!(key, key2);
+	fn capabilities() {
+		let none = Capabilities::none();
+		let all = Capabilities::all();
+		let some = Capabilities::from(&[Capability::Keystore, Capability::Randomness][..]);
 
-		let key = CryptoKey::FgAuthorityKey;
-		let uint: u64 = key.clone().into();
-		let key2 = CryptoKey::try_from(uint).unwrap();
-		assert_eq!(key, key2);
-
-		let key = CryptoKey::LocalKey { id: 0, kind: CryptoKind::Ed25519 };
-		let uint: u64 = key.clone().into();
-		let key2 = CryptoKey::try_from(uint).unwrap();
-		assert_eq!(key, key2);
-
-		let key = CryptoKey::LocalKey { id: 10, kind: CryptoKind::Sr25519 };
-		let uint: u64 = key.clone().into();
-		let key2 = CryptoKey::try_from(uint).unwrap();
-		assert_eq!(key, key2);
+		assert!(!none.has(Capability::Keystore));
+		assert!(all.has(Capability::Keystore));
+		assert!(some.has(Capability::Keystore));
+		assert!(!none.has(Capability::TransactionPool));
+		assert!(all.has(Capability::TransactionPool));
+		assert!(!some.has(Capability::TransactionPool));
 	}
 }

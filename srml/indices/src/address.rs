@@ -19,7 +19,8 @@
 #[cfg(feature = "std")]
 use std::fmt;
 use rstd::convert::TryInto;
-use crate::{Member, Decode, Encode, Input, Output};
+use crate::Member;
+use codec::{Encode, Decode, Input, Output, Error};
 
 /// An indices-aware address, which can be either a direct `AccountId` or
 /// an index.
@@ -54,16 +55,16 @@ impl<AccountId, AccountIndex> From<AccountId> for Address<AccountId, AccountInde
 	}
 }
 
-fn need_more_than<T: PartialOrd>(a: T, b: T) -> Option<T> {
-	if a < b { Some(b) } else { None }
+fn need_more_than<T: PartialOrd>(a: T, b: T) -> Result<T, Error> {
+	if a < b { Ok(b) } else { Err("Invalid range".into()) }
 }
 
 impl<AccountId, AccountIndex> Decode for Address<AccountId, AccountIndex> where
 	AccountId: Member + Decode,
 	AccountIndex: Member + Decode + PartialOrd<AccountIndex> + Ord + From<u32> + Copy,
 {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Some(match input.read_byte()? {
+	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
+		Ok(match input.read_byte()? {
 			x @ 0x00..=0xef => Address::Index(AccountIndex::from(x as u32)),
 			0xfc => Address::Index(AccountIndex::from(
 				need_more_than(0xef, u16::decode(input)?)? as u32
@@ -75,7 +76,7 @@ impl<AccountId, AccountIndex> Decode for Address<AccountId, AccountIndex> where
 				need_more_than(0xffffffffu32.into(), Decode::decode(input)?)?
 			),
 			0xff => Address::Id(Decode::decode(input)?),
-			_ => return None,
+			_ => return Err("Invalid address variant".into()),
 		})
 	}
 }
@@ -114,6 +115,11 @@ impl<AccountId, AccountIndex> Encode for Address<AccountId, AccountIndex> where
 	}
 }
 
+impl<AccountId, AccountIndex> codec::EncodeLike for Address<AccountId, AccountIndex> where
+	AccountId: Member + Encode,
+	AccountIndex: Member + Encode + PartialOrd<AccountIndex> + Ord + Copy + From<u32> + TryInto<u32>,
+{}
+
 impl<AccountId, AccountIndex> Default for Address<AccountId, AccountIndex> where
 	AccountId: Member + Default,
 	AccountIndex: Member,
@@ -125,7 +131,7 @@ impl<AccountId, AccountIndex> Default for Address<AccountId, AccountIndex> where
 
 #[cfg(test)]
 mod tests {
-	use crate::{Encode, Decode};
+	use codec::{Encode, Decode};
 
 	type Address = super::Address<[u8; 8], u32>;
 	fn index(i: u32) -> Address { super::Address::Index(i) }
@@ -135,7 +141,7 @@ mod tests {
 		if let Some(ref a) = a {
 			assert_eq!(d, &a.encode()[..]);
 		}
-		assert_eq!(Address::decode(&mut &d[..]), a);
+		assert_eq!(Address::decode(&mut &d[..]).ok(), a);
 	}
 
 	#[test]

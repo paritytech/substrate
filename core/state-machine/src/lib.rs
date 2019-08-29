@@ -22,9 +22,10 @@ use std::{fmt, panic::UnwindSafe, result, marker::PhantomData};
 use std::borrow::Cow;
 use log::warn;
 use hash_db::Hasher;
-use parity_codec::{Decode, Encode};
+use codec::{Decode, Encode};
 use primitives::{
 	storage::well_known_keys, NativeOrEncoded, NeverNativeValue, offchain,
+	traits::BareCryptoStorePtr,
 };
 
 pub mod backend;
@@ -38,7 +39,8 @@ mod trie_backend;
 mod trie_backend_essence;
 
 use overlayed_changes::OverlayedChangeSet;
-pub use trie::{TrieMut, TrieDBMut, DBValue, MemoryDB};
+pub use trie::{TrieMut, DBValue, MemoryDB};
+pub use trie::trie_types::{Layout, TrieDBMut};
 pub use testing::TestExternalities;
 pub use basic::BasicExternalities;
 pub use ext::Ext;
@@ -48,6 +50,7 @@ pub use changes_trie::{
 	Storage as ChangesTrieStorage,
 	RootsStorage as ChangesTrieRootsStorage,
 	InMemoryStorage as InMemoryChangesTrieStorage,
+	ConfigurationRange as ChangesTrieConfigurationRange,
 	key_changes, key_changes_proof, key_changes_proof_check,
 	prune as prune_changes_tries,
 	oldest_non_pruned_trie as oldest_non_pruned_changes_trie
@@ -60,6 +63,7 @@ pub use proving_backend::{
 pub use trie_backend_essence::{TrieBackendStorage, Storage};
 pub use trie_backend::TrieBackend;
 
+
 /// A wrapper around a child storage key.
 ///
 /// This wrapper ensures that the child storage key is correct and properly used. It is
@@ -71,7 +75,7 @@ pub struct ChildStorageKey<'a, H: Hasher> {
 
 impl<'a, H: Hasher> ChildStorageKey<'a, H> {
 	fn new(storage_key: Cow<'a, [u8]>) -> Option<Self> {
-		if !trie::is_child_trie_key_valid::<H>(&storage_key) {
+		if !trie::is_child_trie_key_valid::<Layout<H>>(&storage_key) {
 			return None;
 		}
 
@@ -152,13 +156,31 @@ pub trait Externalities<H: Hasher> {
 		self.storage(key).map(|v| H::hash(&v))
 	}
 
+	/// Get child storage value hash. This may be optimized for large values.
+	fn child_storage_hash(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<H::Out> {
+		self.child_storage(storage_key, key).map(|v| H::hash(&v))
+	}
+
 	/// Read original runtime storage, ignoring any overlayed changes.
 	fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>>;
+
+	/// Read original runtime child storage, ignoring any overlayed changes.
+	fn original_child_storage(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Get original storage value hash, ignoring any overlayed changes.
 	/// This may be optimized for large values.
 	fn original_storage_hash(&self, key: &[u8]) -> Option<H::Out> {
 		self.original_storage(key).map(|v| H::hash(&v))
+	}
+
+	/// Get original child storage value hash, ignoring any overlayed changes.
+	/// This may be optimized for large values.
+	fn original_child_storage_hash(
+		&self,
+		storage_key: ChildStorageKey<H>,
+		key: &[u8],
+	) -> Option<H::Out> {
+		self.original_child_storage(storage_key, key).map(|v| H::hash(&v))
 	}
 
 	/// Read child runtime storage.
@@ -200,6 +222,9 @@ pub trait Externalities<H: Hasher> {
 	/// Clear storage entries which keys are start with the given prefix.
 	fn clear_prefix(&mut self, prefix: &[u8]);
 
+	/// Clear child storage entries which keys are start with the given prefix.
+	fn clear_child_prefix(&mut self, storage_key: ChildStorageKey<H>, prefix: &[u8]);
+
 	/// Set or clear a storage entry (`key`) of current contract being called (effective immediately).
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>);
 
@@ -223,6 +248,9 @@ pub trait Externalities<H: Hasher> {
 
 	/// Returns offchain externalities extension if present.
 	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities>;
+
+	/// Returns the keystore.
+	fn keystore(&self) -> Option<BareCryptoStorePtr>;
 }
 
 /// An implementation of offchain extensions that should never be triggered.
@@ -236,6 +264,10 @@ impl NeverOffchainExt {
 }
 
 impl offchain::Externalities for NeverOffchainExt {
+	fn is_validator(&self) -> bool {
+		unreachable!()
+	}
+
 	fn submit_transaction(&mut self, _extrinsic: Vec<u8>) -> Result<(), ()> {
 		unreachable!()
 	}
@@ -243,53 +275,6 @@ impl offchain::Externalities for NeverOffchainExt {
 	fn network_state(
 		&self,
 	) -> Result<offchain::OpaqueNetworkState, ()> {
-		unreachable!()
-	}
-
-	fn pubkey(
-		&self,
-		_key: offchain::CryptoKey,
-	) -> Result<Vec<u8>, ()> {
-		unreachable!()
-	}
-
-	fn new_crypto_key(
-		&mut self,
-		_crypto: offchain::CryptoKind,
-	) -> Result<offchain::CryptoKey, ()> {
-		unreachable!()
-	}
-
-	fn encrypt(
-		&mut self,
-		_key: offchain::CryptoKey,
-		_data: &[u8],
-	) -> Result<Vec<u8>, ()> {
-		unreachable!()
-	}
-
-	fn decrypt(
-		&mut self,
-		_key: offchain::CryptoKey,
-		_data: &[u8],
-	) -> Result<Vec<u8>, ()> {
-		unreachable!()
-	}
-
-	fn sign(
-		&mut self,
-		_key: offchain::CryptoKey,
-		_data: &[u8],
-	) -> Result<Vec<u8>, ()> {
-		unreachable!()
-	}
-
-	fn verify(
-		&mut self,
-		_key: offchain::CryptoKey,
-		_msg: &[u8],
-		_signature: &[u8],
-	) -> Result<bool, ()> {
 		unreachable!()
 	}
 
@@ -480,6 +465,7 @@ pub fn new<'a, H, N, B, T, O, Exec>(
 	exec: &'a Exec,
 	method: &'a str,
 	call_data: &'a [u8],
+	keystore: Option<BareCryptoStorePtr>,
 ) -> StateMachine<'a, H, N, B, T, O, Exec> {
 	StateMachine {
 		backend,
@@ -489,6 +475,7 @@ pub fn new<'a, H, N, B, T, O, Exec>(
 		exec,
 		method,
 		call_data,
+		keystore,
 		_hasher: PhantomData,
 	}
 }
@@ -502,6 +489,7 @@ pub struct StateMachine<'a, H, N, B, T, O, Exec> {
 	exec: &'a Exec,
 	method: &'a str,
 	call_data: &'a [u8],
+	keystore: Option<BareCryptoStorePtr>,
 	_hasher: PhantomData<(H, N)>,
 }
 
@@ -559,6 +547,7 @@ impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 			self.backend,
 			self.changes_trie_storage,
 			self.offchain_ext.as_mut().map(|x| &mut **x),
+			self.keystore.clone(),
 		);
 		let (result, was_native) = self.exec.call(
 			&mut externalities,
@@ -706,6 +695,7 @@ pub fn prove_execution<B, H, Exec>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
+	keystore: Option<BareCryptoStorePtr>,
 ) -> Result<(Vec<u8>, Vec<Vec<u8>>), Box<dyn Error>>
 where
 	B: Backend<H>,
@@ -715,7 +705,7 @@ where
 {
 	let trie_backend = backend.as_trie_backend()
 		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<dyn Error>)?;
-	prove_execution_on_trie_backend(trie_backend, overlay, exec, method, call_data)
+	prove_execution_on_trie_backend(trie_backend, overlay, exec, method, call_data, keystore)
 }
 
 /// Prove execution using the given trie backend, overlayed changes, and call executor.
@@ -733,6 +723,7 @@ pub fn prove_execution_on_trie_backend<S, H, Exec>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
+	keystore: Option<BareCryptoStorePtr>,
 ) -> Result<(Vec<u8>, Vec<Vec<u8>>), Box<dyn Error>>
 where
 	S: trie_backend_essence::TrieBackendStorage<H>,
@@ -749,6 +740,7 @@ where
 		exec,
 		method,
 		call_data,
+		keystore,
 		_hasher: PhantomData,
 	};
 	let (result, _, _) = sm.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
@@ -768,6 +760,7 @@ pub fn execution_proof_check<H, Exec>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
+	keystore: Option<BareCryptoStorePtr>,
 ) -> Result<Vec<u8>, Box<dyn Error>>
 where
 	H: Hasher,
@@ -775,7 +768,7 @@ where
 	H::Out: Ord + 'static,
 {
 	let trie_backend = create_proof_check_backend::<H>(root.into(), proof)?;
-	execution_proof_check_on_trie_backend(&trie_backend, overlay, exec, method, call_data)
+	execution_proof_check_on_trie_backend(&trie_backend, overlay, exec, method, call_data, keystore)
 }
 
 /// Check execution proof on proving backend, generated by `prove_execution` call.
@@ -785,6 +778,7 @@ pub fn execution_proof_check_on_trie_backend<H, Exec>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
+	keystore: Option<BareCryptoStorePtr>,
 ) -> Result<Vec<u8>, Box<dyn Error>>
 where
 	H: Hasher,
@@ -799,6 +793,7 @@ where
 		exec,
 		method,
 		call_data,
+		keystore,
 		_hasher: PhantomData,
 	};
 	sm.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
@@ -937,7 +932,7 @@ pub(crate) fn set_changes_trie_config(
 ) -> Result<(), Box<dyn Error>> {
 	let config = match config {
 		Some(v) => Some(Decode::decode(&mut &v[..])
-			.ok_or_else(|| Box::new("Failed to decode changes trie configuration".to_owned()) as Box<dyn Error>)?),
+			.map_err(|_| Box::new("Failed to decode changes trie configuration".to_owned()) as Box<dyn Error>)?),
 		None => None,
 	};
 
@@ -971,7 +966,7 @@ where
 #[cfg(test)]
 mod tests {
 	use std::collections::HashMap;
-	use parity_codec::Encode;
+	use codec::Encode;
 	use overlayed_changes::OverlayedValue;
 	use super::*;
 	use super::backend::InMemory;
@@ -1049,6 +1044,7 @@ mod tests {
 			},
 			"test",
 			&[],
+			None,
 		).execute(
 			ExecutionStrategy::NativeWhenPossible
 		).unwrap().0, vec![66]);
@@ -1070,6 +1066,7 @@ mod tests {
 			},
 			"test",
 			&[],
+			None,
 		).execute(
 			ExecutionStrategy::NativeElseWasm
 		).unwrap().0, vec![66]);
@@ -1091,6 +1088,7 @@ mod tests {
 			},
 			"test",
 			&[],
+			None,
 		).execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
 			ExecutionManager::Both(|we, _ne| {
 				consensus_failed = true;
@@ -1113,13 +1111,26 @@ mod tests {
 
 		// fetch execution proof from 'remote' full node
 		let remote_backend = trie_backend::tests::test_trie();
-		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
-		let (remote_result, remote_proof) = prove_execution(remote_backend,
-			&mut Default::default(), &executor, "test", &[]).unwrap();
+		let remote_root = remote_backend.storage_root(std::iter::empty()).0;
+		let (remote_result, remote_proof) = prove_execution(
+			remote_backend,
+			&mut Default::default(),
+			&executor,
+			"test",
+			&[],
+			None,
+		).unwrap();
 
 		// check proof locally
-		let local_result = execution_proof_check::<Blake2Hasher, _>(remote_root, remote_proof,
-			&mut Default::default(), &executor, "test", &[]).unwrap();
+		let local_result = execution_proof_check::<Blake2Hasher, _>(
+			remote_root,
+			remote_proof,
+			&mut Default::default(),
+			&executor,
+			"test",
+			&[],
+			None,
+		).unwrap();
 
 		// check that both results are correct
 		assert_eq!(remote_result, vec![66]);
@@ -1150,7 +1161,13 @@ mod tests {
 
 		{
 			let changes_trie_storage = InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new();
-			let mut ext = Ext::new(&mut overlay, backend, Some(&changes_trie_storage), NeverOffchainExt::new());
+			let mut ext = Ext::new(
+				&mut overlay,
+				backend,
+				Some(&changes_trie_storage),
+				NeverOffchainExt::new(),
+				None,
+			);
 			ext.clear_prefix(b"ab");
 		}
 		overlay.commit_prospective();
@@ -1179,7 +1196,8 @@ mod tests {
 			&mut overlay,
 			backend,
 			Some(&changes_trie_storage),
-			NeverOffchainExt::new()
+			NeverOffchainExt::new(),
+			None,
 		);
 
 		ext.set_child_storage(
@@ -1251,41 +1269,47 @@ mod tests {
 
 	#[test]
 	fn cannot_change_changes_trie_config() {
-		assert!(new(
-			&trie_backend::tests::test_trie(),
-			Some(&InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new()),
-			NeverOffchainExt::new(),
-			&mut Default::default(),
-			&DummyCodeExecutor {
-				change_changes_trie_config: true,
-				native_available: false,
-				native_succeeds: true,
-				fallback_succeeds: true,
-			},
-			"test",
-			&[],
-		).execute(
-			ExecutionStrategy::NativeWhenPossible
-		).is_err());
+		assert!(
+			new(
+				&trie_backend::tests::test_trie(),
+				Some(&InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new()),
+				NeverOffchainExt::new(),
+				&mut Default::default(),
+				&DummyCodeExecutor {
+					change_changes_trie_config: true,
+					native_available: false,
+					native_succeeds: true,
+					fallback_succeeds: true,
+				},
+				"test",
+				&[],
+				None,
+			)
+			.execute(ExecutionStrategy::NativeWhenPossible)
+			.is_err()
+		);
 	}
 
 	#[test]
 	fn cannot_change_changes_trie_config_with_native_else_wasm() {
-		assert!(new(
-			&trie_backend::tests::test_trie(),
-			Some(&InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new()),
-			NeverOffchainExt::new(),
-			&mut Default::default(),
-			&DummyCodeExecutor {
-				change_changes_trie_config: true,
-				native_available: false,
-				native_succeeds: true,
-				fallback_succeeds: true,
-			},
-			"test",
-			&[],
-		).execute(
-			ExecutionStrategy::NativeElseWasm
-		).is_err());
+		assert!(
+			new(
+				&trie_backend::tests::test_trie(),
+				Some(&InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new()),
+				NeverOffchainExt::new(),
+				&mut Default::default(),
+				&DummyCodeExecutor {
+					change_changes_trie_config: true,
+					native_available: false,
+					native_succeeds: true,
+					fallback_succeeds: true,
+				},
+				"test",
+				&[],
+				None,
+			)
+			.execute(ExecutionStrategy::NativeElseWasm)
+			.is_err()
+		);
 	}
 }
