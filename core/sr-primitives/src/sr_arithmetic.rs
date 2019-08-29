@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Minimal, mostly not efficient, fixed point arithmetic primitives for runtime.
+//! Minimal fixed point arithmetic primitives and types for runtime.
 
 #[cfg(feature = "std")]
 use crate::serde::{Serialize, Deserialize};
@@ -30,7 +30,7 @@ use crate::traits::{
 };
 
 macro_rules! implement_per_thing {
-	($name:ident, $test_mod:ident, $max:tt, $type:ty, $upper_type:ty, $title:expr) => {
+	($name:ident, $test_mod:ident, $max:tt, $type:ty, $upper_type:ty, $title:expr $(,)?) => {
 		/// A fixed point representation of a number between in the range [0, 1].
 		///
 		#[doc = $title]
@@ -166,9 +166,11 @@ macro_rules! implement_per_thing {
 
 					// `rem_multiplied_upper` is less than $max^2 therefore divided by $max it fits
 					// in $type. remember that $type always fits $max.
-					let rem_multiplied_divided_sized = (rem_multiplied_upper / ($max as $upper_type)) as $type;
+					let rem_multiplied_divided_sized =
+						(rem_multiplied_upper / ($max as $upper_type)) as $type;
 
-					// `rem_multiplied_divided_sized` is inferior to b, thus it can be converted back to N type
+					// `rem_multiplied_divided_sized` is inferior to b, thus it can be converted
+					// back to N type
 					rem_multiplied_divided_sized.into()
 				};
 
@@ -235,7 +237,8 @@ macro_rules! implement_per_thing {
 					let compact: crate::codec::Compact<$name> = $name(n).into();
 					let encoded = compact.encode();
 					assert_eq!(encoded.len(), l);
-					let decoded = <crate::codec::Compact<$name>>::decode(&mut & encoded[..]).unwrap();
+					let decoded = <crate::codec::Compact<$name>>::decode(&mut & encoded[..])
+						.unwrap();
 					let per_thingy: $name = decoded.into();
 					assert_eq!(per_thingy, $name(n));
 				}
@@ -352,17 +355,44 @@ macro_rules! implement_per_thing {
 
 			#[test]
 			fn per_thing_saturating_op_works() {
-				assert_eq!($name::from_percent(50).saturating_add($name::from_percent(40)), $name::from_percent(90));
-				assert_eq!($name::from_percent(50).saturating_add($name::from_percent(50)), $name::from_percent(100));
-				assert_eq!($name::from_percent(60).saturating_add($name::from_percent(50)), $name::from_percent(100));
+				assert_eq!(
+					$name::from_percent(50).saturating_add($name::from_percent(40)),
+					$name::from_percent(90)
+				);
+				assert_eq!(
+					$name::from_percent(50).saturating_add($name::from_percent(50)),
+					$name::from_percent(100)
+				);
+				assert_eq!(
+					$name::from_percent(60).saturating_add($name::from_percent(50)),
+					$name::from_percent(100)
+				);
 
-				assert_eq!($name::from_percent(60).saturating_sub($name::from_percent(50)), $name::from_percent(10));
-				assert_eq!($name::from_percent(60).saturating_sub($name::from_percent(60)), $name::from_percent(0));
-				assert_eq!($name::from_percent(60).saturating_sub($name::from_percent(70)), $name::from_percent(0));
+				assert_eq!(
+					$name::from_percent(60).saturating_sub($name::from_percent(50)),
+					$name::from_percent(10)
+				);
+				assert_eq!(
+					$name::from_percent(60).saturating_sub($name::from_percent(60)),
+					$name::from_percent(0)
+				);
+				assert_eq!(
+					$name::from_percent(60).saturating_sub($name::from_percent(70)),
+					$name::from_percent(0)
+				);
 
-				assert_eq!($name::from_percent(50).saturating_mul($name::from_percent(50)), $name::from_percent(25));
-				assert_eq!($name::from_percent(20).saturating_mul($name::from_percent(20)), $name::from_percent(4));
-				assert_eq!($name::from_percent(10).saturating_mul($name::from_percent(10)), $name::from_percent(1));
+				assert_eq!(
+					$name::from_percent(50).saturating_mul($name::from_percent(50)),
+					$name::from_percent(25)
+				);
+				assert_eq!(
+					$name::from_percent(20).saturating_mul($name::from_percent(20)),
+					$name::from_percent(4)
+				);
+				assert_eq!(
+					$name::from_percent(10).saturating_mul($name::from_percent(10)),
+					$name::from_percent(1)
+				);
 			}
 
 			#[test]
@@ -376,22 +406,60 @@ macro_rules! implement_per_thing {
 			#[test]
 			fn per_things_div_works() {
 				// normal
-				assert_eq!($name::from_percent(10) / $name::from_percent(20), $name::from_percent(50));
-				assert_eq!($name::from_percent(10) / $name::from_percent(10), $name::from_percent(100));
-				assert_eq!($name::from_percent(10) / $name::from_percent(0), $name::from_percent(100));
+				assert_eq!($name::from_percent(10) / $name::from_percent(20),
+					$name::from_percent(50)
+				);
+				assert_eq!($name::from_percent(10) / $name::from_percent(10),
+					$name::from_percent(100)
+				);
+				assert_eq!($name::from_percent(10) / $name::from_percent(0),
+					$name::from_percent(100)
+				);
 
 				// will not overflow
-				assert_eq!($name::from_percent(10) / $name::from_percent(5), $name::from_percent(100));
-				assert_eq!($name::from_percent(100) / $name::from_percent(50), $name::from_percent(100));
+				assert_eq!($name::from_percent(10) / $name::from_percent(5),
+					$name::from_percent(100)
+				);
+				assert_eq!($name::from_percent(100) / $name::from_percent(50),
+					$name::from_percent(100)
+				);
 			}
 		}
 	};
 }
 
-implement_per_thing!(Permill, test_permill, 1_000_000u32, u32, u64, "_Parts per Million_");
-implement_per_thing!(Perbill, test_perbill, 1_000_000_000u32, u32, u64, "_Parts per Billion_");
-implement_per_thing!(Perquintill, test_perquintill, 1_000_000_000_000_000_000u64, u64, u128, "_Parts per Quintillion_");
-implement_per_thing!(Percent, test_per_cent, 100u32, u32, u32, "_Percent_");
+implement_per_thing!(
+	Permill,
+	test_permill,
+	1_000_000u32,
+	u32,
+	u64,
+	"_Parts per Million_",
+);
+implement_per_thing!(
+	Perbill,
+	test_perbill,
+	1_000_000_000u32,
+	u32,
+	u64,
+	"_Parts per Billion_",
+);
+implement_per_thing!(
+	Perquintill,
+	test_perquintill,
+	1_000_000_000_000_000_000u64,
+	u64,
+	u128,
+	"_Parts per Quintillion_",
+);
+implement_per_thing!(
+	Percent,
+	test_per_cent,
+	100u32,
+	u32,
+	u32,
+	"_Percent_",
+);
 
 /// An unsigned fixed point number. Can hold any value in the range [-9_223_372_036, 9_223_372_036]
 /// with fixed point accuracy of one billion.
@@ -537,50 +605,55 @@ fn gcd(a: u128, b: u128) -> u128 {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Rational128(u128, u128);
 
-/// Tries to compute `a * b / c`. The approach is:
-///   - Simply try a * b / c.
-///   - Swap the operations in case the former multiplication overflows. Divide first. This might
-///     collapse to zero.
-///
-/// If none worked then return Error.
-pub fn multiply_by_rational(a: u128, b: u128, c: u128) -> Result<u128, &'static str> {
-	// This is the safest way to go. Try it.
-	if let Some(x) = a.checked_mul(b) {
-		Ok(x / c)
-	} else {
-		let bigger = a.max(b);
-		let smaller = a.min(b);
-		if bigger < c { return Err("division will collapse to zero"); }
-		(bigger / c).checked_mul(smaller).ok_or("multiplication overflow")
-	}
-}
-
-/// Performs [`multiply_by_rational`]. In case of failure, it greedily tries to shift the numerator
-/// (`b`) and denominator (`c`) until the multiplication fits. This is guranteed to work if `b/c`
-/// is a rational number smaller than 1.
-///
-/// In case `b/c > 1` and overflow happens, `a` is returned.
-///
-// TODO: we can probably guess what is the sweet spot by examining the bit length of the number
-// rather than just multiplying them and incrementing the shift value.
-pub fn safe_multiply_by_rational(a: u128, b: u128, c: u128) -> u128 {
-	// safe to start with 1. 0 already failed.
-	let mut shift = 1;
-	multiply_by_rational(a, b, c).unwrap_or_else(|_| {
-		loop {
-			let shifted_b = b >> shift;
-			if let Some(val) = a.checked_mul(shifted_b) {
-				let shifted_c = c >> shift;
-				break val / shifted_c.max(1);
-			}
-			shift += 1;
-
-			// defensive only. Before reaching here, shifted_b must have been 1, in which case
-			// multiplying it with a should have NOT overflowed.
-			if shifted_b == 0 { break 0; }
+/// Some helper functions to work with 128bit numbers. Note that the functionality provided here is
+/// only sensible to use with 128bit numbers because for smaller sizes, you can always rely on
+/// assumptions of a bigger type (u128) being available, or simply create a per-thing and use the
+/// multiplication implementation provided there.
+pub mod helpers_128bit {
+	/// Tries to compute `a * b / c`. The approach is:
+	///   - Simply try a * b / c.
+	///   - Swap the operations in case the former multiplication overflows. Divide first. This might
+	///     collapse to zero.
+	///
+	/// If none worked then return Error.
+	pub fn multiply_by_rational(a: u128, b: u128, c: u128) -> Result<u128, &'static str> {
+		// This is the safest way to go. Try it.
+		if let Some(x) = a.checked_mul(b) {
+			Ok(x / c)
+		} else {
+			let bigger = a.max(b);
+			let smaller = a.min(b);
+			if bigger < c { return Err("division will collapse to zero"); }
+			(bigger / c).checked_mul(smaller).ok_or("multiplication overflow")
 		}
-	})
+	}
 
+	/// Performs [`multiply_by_rational`]. In case of failure, it greedily tries to shift the numerator
+	/// (`b`) and denominator (`c`) (looking at the whole thing is `a * b / c`) until the multiplication
+	/// fits. This is guaranteed to work if `b < c`.
+	///
+	/// In case `b > c` and overflow happens, `a` is returned.
+	///
+	// TODO: we can probably guess what is the sweet spot by examining the bit length of the number
+	// rather than just multiplying them and incrementing the shift value.
+	pub fn safe_multiply_by_rational(a: u128, b: u128, c: u128) -> u128 {
+		// safe to start with 1. 0 already failed.
+		let mut shift = 1;
+		multiply_by_rational(a, b, c).unwrap_or_else(|_| {
+			loop {
+				let shifted_b = b >> shift;
+				if let Some(val) = a.checked_mul(shifted_b) {
+					let shifted_c = c >> shift;
+					break val / shifted_c.max(1);
+				}
+				shift += 1;
+
+				// defensive only. Before reaching here, shifted_b must have been 1, in which case
+				// multiplying it with a should have NOT overflowed.
+				if shifted_b == 0 { break 0; }
+			}
+		})
+	}
 }
 
 impl Rational128 {
@@ -612,7 +685,7 @@ impl Rational128 {
 	/// Convert self to a similar rational number where to denominator is the given `den`.
 	pub fn to_den(self, den: u128) -> Result<Self, &'static str> {
 		if den >= self.1 {
-			let n = multiply_by_rational(den, self.0, self.1)?;
+			let n = helpers_128bit::multiply_by_rational(den, self.0, self.1)?;
 			Ok(Self(n, den))
 		} else {
 			let div = self.1 / den;
@@ -629,7 +702,7 @@ impl Rational128 {
 		// THIS should be tested better: two large numbers that are almost the same.
 		if self.1 == other.1 { return Ok(self.1) }
 		let g = gcd(self.1, other.1);
-		multiply_by_rational(self.1 , other.1, g)
+		helpers_128bit::multiply_by_rational(self.1 , other.1, g)
 	}
 
 	/// A saturating add that assumes `self` and `other` have the same denominator.
@@ -717,6 +790,7 @@ impl Eq for Rational128 {}
 #[cfg(test)]
 mod test_rational128 {
 	use super::*;
+	use super::helpers_128bit::*;
 
 	const MAX128: u128 = u128::max_value();
 	const MAX64: u128 = u64::max_value() as u128;

@@ -34,7 +34,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::{prelude::*, collections::btree_map::BTreeMap};
-use sr_primitives::{Perbill, Rational128};
+use sr_primitives::{helpers_128bit::safe_multiply_by_rational, Perbill, Rational128};
 use sr_primitives::traits::{Zero, Convert, Member, SimpleArithmetic};
 
 /// A type in which performing operations on balances and stakes of candidates and voters are safe.
@@ -246,7 +246,7 @@ pub fn elect<AccountId, Balance, FS, C>(
 			for e in &n.edges {
 				let c = &mut candidates[e.candidate_index];
 				if !c.elected && !c.approval_stake.is_zero() {
-					let temp_n = sr_primitives::safe_multiply_by_rational(n.load.n(), n.budget, c.approval_stake);
+					let temp_n = safe_multiply_by_rational(n.load.n(), n.budget, c.approval_stake);
 					let temp_d = n.load.d();
 					let temp = Rational128::from(temp_n, temp_d);
 					c.score = c.score.lazy_saturating_add(temp);

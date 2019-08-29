@@ -243,7 +243,7 @@ macro_rules! __assert_eq_uvec {
 #[macro_export]
 #[cfg(feature = "std")]
 macro_rules! assert_eq_error_rate {
-	($x:expr, $y:expr, $error:expr) => {
+	($x:expr, $y:expr, $error:expr $(,)?) => {
 		assert!(
 			($x) >= (($y) - ($error)) && ($x) <= (($y) + ($error)),
 			"{:?} != {:?} (with error rate {:?})",

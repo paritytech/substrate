@@ -376,6 +376,7 @@ fn nominating_and_rewards_should_work() {
 	// PHRAGMEN OUTPUT: running this test with the reference impl gives:
 	//
 	// Votes  [('10', 1000, ['10']), ('20', 1000, ['20']), ('30', 1000, ['30']), ('40', 1000, ['40']), ('2', 1000, ['10', '20', '30']), ('4', 1000, ['10', '20', '40'])]
+	// Votes  [('10', 1000, ['10']), ('20', 1000, ['20']), ('30', 1000, ['30']), ('40', 1000, ['40']), ('2', 1000, ['10', '20', '30']), ('4', 1000, ['10', '20', '40'])]
 	// Sequential Phragmén gives
 	// 10  is elected with stake  2200.0 and score  0.0003333333333333333
 	// 20  is elected with stake  1800.0 and score  0.0005555555555555556
