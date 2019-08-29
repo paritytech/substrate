@@ -1020,7 +1020,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 	}
 }
 
-/// Nonce check and increment to give replay protection for transactions.
+/// Check for transaction mortality.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckEra<T: Trait + Send + Sync>((Era, rstd::marker::PhantomData<T>));
 
@@ -1044,6 +1044,21 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 	type Call = T::Call;
 	type AdditionalSigned = T::Hash;
 	type Pre = ();
+
+	fn validate(
+		&self,
+		_who: &Self::AccountId,
+		_call: &Self::Call,
+		_info: DispatchInfo,
+		_len: usize,
+	) -> Result<ValidTransaction, DispatchError> {
+		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
+		let valid_till = (self.0).0.death(current_u64);
+		Ok(ValidTransaction {
+			longevity: valid_till.saturating_sub(current_u64),
+			..Default::default()
+		})
+	}
 
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str> {
 		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
@@ -1476,6 +1491,25 @@ mod tests {
 			System::set_block_number(13);
 			<BlockHash<Test>>::insert(12, H256::repeat_byte(1));
 			assert!(CheckEra::<Test>::from(Era::mortal(4, 12)).additional_signed().is_ok());
+		})
+	}
+
+	#[test]
+	fn signed_ext_check_era_should_change_longevity() {
+		with_externalities(&mut new_test_ext(), || {
+			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal };
+			let len = 0_usize;
+			let ext = (
+				CheckWeight::<Test>(PhantomData),
+				CheckEra::<Test>::from(Era::mortal(16, 256)),
+			);
+			System::set_block_number(17);
+			<BlockHash<Test>>::insert(16, H256::repeat_byte(1));
+
+			assert_eq!(
+				ext.validate(&1, CALL, normal, len).unwrap().longevity,
+				15,
+			);
 		})
 	}
 }

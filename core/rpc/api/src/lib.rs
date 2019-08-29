@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,14 +14,21 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::rpc;
-use log::warn;
+//! Substrate RPC interfaces.
+//!
+//! A collection of RPC methods and subscriptions supported by all substrate clients.
 
-pub fn internal<E: ::std::fmt::Debug>(e: E) -> rpc::Error {
-	warn!("Unknown error: {:?}", e);
-	rpc::Error {
-		code: rpc::ErrorCode::InternalError,
-		message: "Unknown error occured".into(),
-		data: Some(format!("{:?}", e).into()),
-	}
-}
+#![warn(missing_docs)]
+
+mod errors;
+mod helpers;
+mod subscriptions;
+
+pub use jsonrpc_core::IoHandlerExtension as RpcExtension;
+pub use subscriptions::Subscriptions;
+pub use helpers::Receiver;
+
+pub mod author;
+pub mod chain;
+pub mod state;
+pub mod system;

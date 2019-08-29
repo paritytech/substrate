@@ -40,11 +40,19 @@ pub mod time {
 	/// that are expressed in blocks. The rest of the code should use
 	/// `SLOT_DURATION` instead (like the timestamp module for calculating the
 	/// minimum period).
+	///
+	/// If using BABE with secondary slots (default) then all of the slots will
+	/// always be assigned, in which case `MILLISECS_PER_BLOCK` and
+	/// `SLOT_DURATION` should have the same value.
+	///
 	/// <https://research.web3.foundation/en/latest/polkadot/BABE/Babe/#6-practical-results>
-	pub const MILLISECS_PER_BLOCK: Moment = 6000;
+	pub const MILLISECS_PER_BLOCK: Moment = 3000;
 	pub const SECS_PER_BLOCK: Moment = MILLISECS_PER_BLOCK / 1000;
 
-	pub const SLOT_DURATION: Moment = 6000;
+	pub const SLOT_DURATION: Moment = MILLISECS_PER_BLOCK;
+
+	// 1 in 4 blocks (on average, not counting collisions) will be primary BABE blocks.
+	pub const PRIMARY_PROBABILITY: (u64, u64) = (1, 4);
 
 	pub const EPOCH_DURATION_IN_BLOCKS: BlockNumber = 10 * MINUTES;
 	pub const EPOCH_DURATION_IN_SLOTS: u64 = {

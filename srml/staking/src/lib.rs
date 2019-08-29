@@ -254,7 +254,6 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-mod phragmen;
 pub mod inflation;
 
 #[cfg(all(feature = "bench", test))]
@@ -262,7 +261,7 @@ mod benches;
 
 #[cfg(feature = "std")]
 use runtime_io::with_storage;
-use rstd::{prelude::*, result, collections::btree_map::BTreeMap};
+use rstd::{prelude::*, result};
 use codec::{HasCompact, Encode, Decode};
 use srml_support::{
 	StorageValue, StorageMap, EnumerableStorageMap, decl_module, decl_event,
@@ -275,9 +274,10 @@ use session::{historical::OnSessionEnding, SelectInitialValidators};
 use sr_primitives::Perbill;
 use sr_primitives::weights::SimpleDispatchInfo;
 use sr_primitives::traits::{
-	Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded,
-	SimpleArithmetic, SaturatedConversion,
+	Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded, SimpleArithmetic,
+	SaturatedConversion,
 };
+use phragmen::{elect, equalize, Support, SupportMap, ExtendedBalance, ACCURACY};
 use sr_staking_primitives::{
 	SessionIndex, CurrentElectedSet,
 	offence::{OnOffenceHandler, OffenceDetails, Offence, ReportOffence},
@@ -285,8 +285,6 @@ use sr_staking_primitives::{
 #[cfg(feature = "std")]
 use sr_primitives::{Serialize, Deserialize};
 use system::{ensure_signed, ensure_root};
-
-use phragmen::{elect, ACCURACY, ExtendedBalance, equalize};
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 const MAX_NOMINATIONS: usize = 16;
@@ -458,13 +456,6 @@ type NegativeImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 type MomentOf<T>= <<T as Trait>::Time as Time>::Moment;
 
-type RawAssignment<T> = (<T as system::Trait>::AccountId, ExtendedBalance);
-type Assignment<T> = (<T as system::Trait>::AccountId, ExtendedBalance, BalanceOf<T>);
-type ExpoMap<T> = BTreeMap<
-	<T as system::Trait>::AccountId,
-	Exposure<<T as system::Trait>::AccountId, BalanceOf<T>>
->;
-
 /// Means for interacting with a specialized version of the `session` trait.
 ///
 /// This is needed because `Staking` sets the `ValidatorIdOf` of the `session::Trait`
@@ -512,7 +503,7 @@ pub trait Trait: system::Trait {
 	/// This must fit into a `u64` but is allowed to be sensibly lossy.
 	/// TODO: #1377
 	/// The backward convert should be removed as the new Phragmen API returns ratio.
-	/// The post-processing needs it but will be moved to off-chain.
+	/// The post-processing needs it but will be moved to off-chain. TODO: #2908
 	type CurrencyToVote: Convert<BalanceOf<Self>, u64> + Convert<u128, BalanceOf<Self>>;
 
 	/// Some tokens minted.
@@ -1254,17 +1245,18 @@ impl<T: Trait> Module<T> {
 	///
 	/// Returns the new `SlotStake` value and a set of newly selected _stash_ IDs.
 	fn select_validators() -> (BalanceOf<T>, Option<Vec<T::AccountId>>) {
-		let maybe_elected_set = elect::<T, _, _, _>(
+		let maybe_phragmen_result = elect::<_, _, _, T::CurrencyToVote>(
 			Self::validator_count() as usize,
 			Self::minimum_validator_count().max(1) as usize,
-			<Validators<T>>::enumerate(),
-			<Nominators<T>>::enumerate(),
+			<Validators<T>>::enumerate().map(|(who, _)| who).collect::<Vec<T::AccountId>>(),
+			<Nominators<T>>::enumerate().collect(),
 			Self::slashable_balance_of,
+			true,
 		);
 
-		if let Some(elected_set) = maybe_elected_set {
-			let elected_stashes = elected_set.0;
-			let assignments = elected_set.1;
+		if let Some(phragmen_result) = maybe_phragmen_result {
+			let elected_stashes = phragmen_result.winners;
+			let mut assignments = phragmen_result.assignments;
 
 			// helper closure.
 			let to_balance = |b: ExtendedBalance|
@@ -1277,59 +1269,45 @@ impl<T: Trait> Module<T> {
 			// to be properly multiplied by a ratio, which will lead to another value
 			// less than u64 for sure. The result can then be safely passed to `to_balance`.
 			// For now the backward convert is used. A simple `TryFrom<u64>` is also safe.
-			let ratio_of = |b, p| (p as ExtendedBalance).saturating_mul(to_votes(b)) / ACCURACY;
+			let ratio_of = |b, r: ExtendedBalance| r.saturating_mul(to_votes(b)) / ACCURACY;
 
-			// Compute the actual stake from nominator's ratio.
-			let assignments_with_stakes = assignments.iter().map(|(n, a)|(
-				n.clone(),
-				Self::slashable_balance_of(n),
-				a.iter().map(|(acc, r)| (
-					acc.clone(),
-					*r,
-					to_balance(ratio_of(Self::slashable_balance_of(n), *r)),
-				))
-				.collect::<Vec<Assignment<T>>>()
-			)).collect::<Vec<(T::AccountId, BalanceOf<T>, Vec<Assignment<T>>)>>();
-
-			// update elected candidate exposures.
-			let mut exposures = <ExpoMap<T>>::new();
+			// Initialize the support of each candidate.
+			let mut supports = <SupportMap<T::AccountId>>::new();
 			elected_stashes
 				.iter()
-				.map(|e| (e, Self::slashable_balance_of(e)))
+				.map(|e| (e, to_votes(Self::slashable_balance_of(e))))
 				.for_each(|(e, s)| {
-					let item = Exposure { own: s, total: s, ..Default::default() };
-					exposures.insert(e.clone(), item);
+					let item = Support { own: s, total: s, ..Default::default() };
+					supports.insert(e.clone(), item);
 				});
 
-			for (n, _, assignment) in &assignments_with_stakes {
-				for (c, _, s) in assignment {
-					if let Some(expo) = exposures.get_mut(c) {
-						// NOTE: simple example where this saturates:
-						// candidate with max_value stake. 1 nominator with max_value stake.
-						// Nuked. Sadly there is not much that we can do about this.
-						// See this test: phragmen_should_not_overflow_xxx()
-						expo.total = expo.total.saturating_add(*s);
-						expo.others.push( IndividualExposure { who: n.clone(), value: *s } );
+			// convert the ratio in-place (and replace) to the balance but still in the extended
+			// balance type.
+			for (n, assignment) in assignments.iter_mut() {
+				for (c, r) in assignment.iter_mut() {
+					let nominator_stake = Self::slashable_balance_of(n);
+					let other_stake = ratio_of(nominator_stake, *r);
+					if let Some(support) = supports.get_mut(c) {
+						// This for an astronomically rich validator with more astronomically rich
+						// set of nominators, this might saturate.
+						support.total = support.total.saturating_add(other_stake);
+						support.others.push((n.clone(), other_stake));
 					}
+					// convert the ratio to extended balance
+					*r = other_stake;
 				}
 			}
 
 			if cfg!(feature = "equalize") {
 				let tolerance = 0_u128;
 				let iterations = 2_usize;
-				let mut assignments_with_votes = assignments_with_stakes.iter()
-					.map(|a| (
-						a.0.clone(), a.1,
-						a.2.iter()
-							.map(|e| (e.0.clone(), e.1, to_votes(e.2)))
-							.collect::<Vec<(T::AccountId, ExtendedBalance, ExtendedBalance)>>()
-					))
-					.collect::<Vec<(
-						T::AccountId,
-						BalanceOf<T>,
-						Vec<(T::AccountId, ExtendedBalance, ExtendedBalance)>
-					)>>();
-				equalize::<T>(&mut assignments_with_votes, &mut exposures, tolerance, iterations);
+				equalize::<_, _, T::CurrencyToVote, _>(
+					assignments,
+					&mut supports,
+					tolerance,
+					iterations,
+					Self::slashable_balance_of,
+				);
 			}
 
 			// Clear Stakers.
@@ -1339,11 +1317,24 @@ impl<T: Trait> Module<T> {
 
 			// Populate Stakers and figure out the minimum stake behind a slot.
 			let mut slot_stake = BalanceOf::<T>::max_value();
-			for (c, e) in exposures.iter() {
-				if e.total < slot_stake {
-					slot_stake = e.total;
+			for (c, s) in supports.into_iter() {
+				// build `struct exposure` from `support`
+				let exposure = Exposure {
+					own: to_balance(s.own),
+					// This might reasonably saturate and we cannot do much about it. The sum of
+					// someone's stake might exceed the balance type if they have the maximum amount
+					// of balance and receive some support. This is super unlikely to happen, yet
+					// we simulate it in some tests.
+					total: to_balance(s.total),
+					others: s.others
+						.into_iter()
+						.map(|(who, value)| IndividualExposure { who, value: to_balance(value) })
+						.collect::<Vec<IndividualExposure<_, _>>>(),
+				};
+				if exposure.total < slot_stake {
+					slot_stake = exposure.total;
 				}
-				<Stakers<T>>::insert(c.clone(), e.clone());
+				<Stakers<T>>::insert(c.clone(), exposure.clone());
 			}
 
 			// Update slot stake.
