@@ -15,14 +15,46 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! This module implements a freeing-bump allocator.
-//! See more details at https://github.com/paritytech/substrate/issues/1615.
+//!
+//! The algorithm is as follows:
+//! We store `N` linked list heads, where `N` is the total number of sizes
+//! of allocations to support. A simple set is powers of two from 8 bytes
+//! to 16,777,216 bytes (2^3 - 2^24 inclusive), resulting in `N = 22`:
+//!
+//! ```ignore
+//!	let mut heads [u64; N] = [0; N];
+//! fn size(n: u64) -> u64 { 8 << n }
+//! let mut bumper = 0;
+//! fn bump(n: u64) -> u64 { let res = bumper; bumper += n; res }
+//! ```
+//!
+//! We assume there is a slab of heap to be allocated:
+//!
+//! ```ignore
+//! let mut heap = [0u8; HEAP_SIZE];
+//! ```
+//!
+//! Whenever we allocate, we select the lowest linked list item size that
+//! will fit the allocation (i.e. the next highest power of two).
+//! We then check to see if the linked list is empty. If empty, we use
+//! the bump allocator to get the allocation with an extra 8 bytes
+//! preceding it. We initialise those preceding 8 bytes to identify the
+//! list to which it belongs (e.g. `0x__ffffffffffffff` where `__` is the
+//! linked list index). If it is not empty, we unlink the first item from
+//! the linked list and then reset the 8 preceding bytes so they now record
+//! the identity of the linked list.
+//!
+//! To deallocate we use the preceding 8 bytes of the allocation to knit
+//! back the allocation into the linked list from the head.
 
 use crate::error::{Error, Result};
 use log::trace;
 use wasmi::MemoryRef;
 use wasmi::memory_units::Bytes;
 
-// The pointers need to be aligned to 8 bytes.
+// The pointers need to be aligned to 8 bytes. This is because the
+// maximum value type handled by wasm32 is u64; hence we need to make
+// sure that pointers are always aligned by 8 bytes.
 const ALIGNMENT: u32 = 8;
 
 // The pointer returned by `allocate()` needs to fulfill the alignment
@@ -102,6 +134,7 @@ impl FreeingBumpHeapAllocator {
 			self.bump(item_size + 8) + 8
 		};
 
+		// Reset prefix
 		(1..8).try_for_each(|i| self.set_heap(ptr - i, 255))?;
 
 		self.set_heap(ptr - 8, list_index as u8)?;
