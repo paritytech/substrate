@@ -4169,6 +4169,7 @@ dependencies = [
  "srml-system 2.0.0",
  "srml-timestamp 2.0.0",
  "substrate-keyring 2.0.0",
+ "substrate-phragmen 2.0.0",
  "substrate-primitives 2.0.0",
 ]
 
@@ -4929,6 +4930,15 @@ dependencies = [
  "lru-cache 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.40 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "substrate-phragmen"
+version = "2.0.0"
+dependencies = [
+ "sr-primitives 2.0.0",
+ "sr-std 2.0.0",
+ "srml-support 2.0.0",
 ]
 
 [[package]]
