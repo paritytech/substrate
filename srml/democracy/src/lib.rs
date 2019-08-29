@@ -354,7 +354,7 @@ decl_module! {
 		/// Period in blocks where an external proposal may not be re-submitted after being vetoed.
 		const CooloffPeriod: T::BlockNumber = T::CooloffPeriod::get();
 
-		fn deposit_event<T>() = default;
+		fn deposit_event() = default;
 
 		/// Propose a sensitive action to be taken.
 		///

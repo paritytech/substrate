@@ -203,7 +203,7 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// * `deposit_event`: Helper function for depositing an [event](https://docs.substrate.dev/docs/event-enum).
 /// The default behavior is to call `deposit_event` from the [System module](../srml_system/index.html).
 /// However, you can write your own implementation for events in your runtime. To use the default behavior,
-/// add `fn deposit_event<T>() = default;` to your `Module`.
+/// add `fn deposit_event() = default;` to your `Module`.
 ///
 /// The following reserved functions also take the block number (with type `T::BlockNumber`) as an optional input:
 ///
@@ -288,7 +288,7 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
-		$vis:vis fn deposit_event $(<$dpeg:ident $(, $dpeg_instance:ident)?>)* () = default;
+		$vis:vis fn deposit_event() = default;
 		$($rest:tt)*
 	) => {
 		$crate::decl_module!(@normalize
@@ -296,7 +296,7 @@ macro_rules! decl_module {
 			pub struct $mod_type<$trait_instance: $trait_name$(<I>, I: $instantiable $(= $module_default_instance)?)?>
 			for enum $call_type where origin: $origin_type, system = $system
 			{ $( $other_where_bounds )* }
-			{ $vis fn deposit_event $(<$dpeg $(, $dpeg_instance)?>)* () = default; }
+			{ $vis fn deposit_event() = default; }
 			{ $( $on_initialize )* }
 			{ $( $on_finalize )* }
 			{ $( $offchain )* }
@@ -317,23 +317,11 @@ macro_rules! decl_module {
 		{ $( $constants:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
-		$vis:vis fn deposit_event $(<$dpeg:ident $(, $dpeg_instance:ident)?>)* (
-			$($param_name:ident : $param:ty),*
-		) { $( $impl:tt )* }
+		$vis:vis fn deposit_event
 		$($rest:tt)*
 	) => {
-		$crate::decl_module!(@normalize
-			$(#[$attr])*
-			pub struct $mod_type<$trait_instance: $trait_name$(<I>, I: $instantiable $(= $module_default_instance)?)?>
-			for enum $call_type where origin: $origin_type, system = $system
-			{ $( $other_where_bounds )* }
-			{ $vis fn deposit_event $(<$dpeg $(, $dpeg_instance)?>)* ($( $param_name: $param ),* ) { $( $impl )* } }
-			{ $( $on_initialize )* }
-			{ $( $on_finalize )* }
-			{ $( $offchain )* }
-			{ $( $constants )* }
-			[ $( $dispatchables )* ]
-			$($rest)*
+		compile_error!(
+			"`deposit_event` function is reserved and must follow the syntax: `$vis:vis fn deposit_event() = default;`"
 		);
 	};
 	(@normalize
@@ -685,25 +673,10 @@ macro_rules! decl_module {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?> $module<$trait_instance $(, $instance)?>
 			where $( $other_where_bounds )*
 		{
-			$vis fn deposit_event(event: Event$(<$event_trait_instance $(, $event_instance)?>)?) {
-				<$system::Module<$trait_instance>>::deposit_event(
-					<$trait_instance as $trait_name$(<$instance>)?>::Event::from(event).into()
-				);
-			}
-		}
-	};
-
-	(@impl_deposit_event
-		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
-		$system:ident;
-		{ $( $other_where_bounds:tt )* }
-		$vis:vis fn deposit_event($param:ident : $param_ty:ty) { $( $impl:tt )* }
-	) => {
-		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?> $module<$trait_instance $(, $instance)?>
-			where $( $other_where_bounds )*
-		{
-			$vis fn deposit_event($param: $param_ty) {
-				$( $impl )*
+			$vis fn deposit_event(
+				event: impl Into<< $trait_instance as $trait_name $(<$instance>)? >::Event>
+			) {
+				<$system::Module<$trait_instance>>::deposit_event(event.into())
 			}
 		}
 	};

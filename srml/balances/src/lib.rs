@@ -413,7 +413,7 @@ decl_module! {
 		/// The fee to be paid for making a transaction; the per-byte portion.
 		const TransactionByteFee: T::Balance = T::TransactionByteFee::get();
 
-		fn deposit_event<T, I>() = default;
+		fn deposit_event() = default;
 
 		/// Transfer some liquid free balance to another account.
 		///
