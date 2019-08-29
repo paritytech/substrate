@@ -39,7 +39,7 @@ use sr_primitives::{ApplyResult, impl_opaque_keys, generic, create_runtime_str, 
 use sr_primitives::transaction_validity::TransactionValidity;
 use sr_primitives::weights::Weight;
 use sr_primitives::traits::{
-	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, SaturatedConversion,
+	self, BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, SaturatedConversion,
 };
 use version::RuntimeVersion;
 use elections::VoteIndex;
@@ -48,6 +48,7 @@ use version::NativeVersion;
 use primitives::OpaqueMetadata;
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
 use im_online::sr25519::{AuthorityId as ImOnlineId};
+use system::offchain::TransactionSubmitter;
 
 #[cfg(any(feature = "std", test))]
 pub use sr_primitives::BuildStorage;
@@ -396,7 +397,7 @@ impl im_online::Trait for Runtime {
 	type AuthorityId = ImOnlineId;
 	type Call = Call;
 	type Event = Event;
-	type SubmitTransaction = SubmitTransaction;
+	type SubmitTransaction = TransactionSubmitter<ImOnlineId, Runtime, UncheckedExtrinsic>;
 	type ReportUnresponsiveness = Offences;
 	type CurrentElectedSet = staking::CurrentElectedStashAccounts<Runtime>;
 }
@@ -424,27 +425,32 @@ impl finality_tracker::Trait for Runtime {
 	type ReportLatency = ReportLatency;
 }
 
-impl system::offchain::GetPayload<Call, Index, SignedPayload> for Runtime {
-	fn get_payload(call: Call, index: Index) -> SignedPayload {
-		// TODO [ToDr] Where to take the fee from?
-		let fee = unimplemented!();
+impl system::offchain::CreateTransaction<Runtime, UncheckedExtrinsic> for Runtime {
+	type Signature = Signature;
+
+	fn create_transaction<F: system::offchain::Signer<AccountId, Self::Signature>>(
+		call: Call,
+		account: AccountId,
+		index: Index,
+	) -> Option<(Call, <UncheckedExtrinsic as traits::Extrinsic>::SignaturePayload)> {
 		let period = 1 << 8;
 		let current_block = System::block_number().saturated_into::<u64>();
+		let tip = 0;
 		let extra: SignedExtra = (
 			system::CheckVersion::<Runtime>::new(),
 			system::CheckGenesis::<Runtime>::new(),
 			system::CheckEra::<Runtime>::from(generic::Era::mortal(period, current_block)),
 			system::CheckNonce::<Runtime>::from(index),
 			system::CheckWeight::<Runtime>::new(),
-			balances::TakeFees::<Runtime>::from(fee),
+			balances::TakeFees::<Runtime>::from(tip),
 		);
-		SignedPayload::new(call, extra);
+		let raw_payload = SignedPayload::new(call, extra).ok()?;
+		let signature = F::sign(account.clone(), &raw_payload)?;
+		let address = Indices::unlookup(account);
+		let (call, extra, _) = raw_payload.deconstruct();
+		Some((call, (address, signature, extra)))
 	}
 }
-
-// TODO [ToDr] What type to use here?
-type Signer = (ImOnlineId, UncheckedExtrinsic, Indices, Runtime);
-type SubmitTransaction = system::offchain::TransactionSubmitter<Signer, UncheckedExtrinsic>;
 
 construct_runtime!(
 	pub enum Runtime where

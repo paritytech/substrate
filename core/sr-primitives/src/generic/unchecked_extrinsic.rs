@@ -130,7 +130,11 @@ where
 	}
 }
 
-/// A payload to sign for unchecked extrinsics.
+/// A payload that has been signed for a unchecked extrinsics.
+///
+/// Note that the payload that we sign to produce unchecked extrinsic signature
+/// is going to be different than the `SignaturePayload` - so the thing the extrinsic
+/// actually contains.
 pub struct SignedPayload<Call, Extra: SignedExtension> {
 	raw_payload: (
 		Call,
@@ -175,6 +179,15 @@ impl<Call, Extra> SignedPayload<Call, Extra> where
 	/// Deconstruct the payload into it's components.
 	pub fn deconstruct(self) -> (Call, Extra, Extra::AdditionalSigned) {
 		self.raw_payload
+	}
+}
+
+impl<Call, Extra> Encode for SignedPayload<Call, Extra> where
+	Call: Encode,
+	Extra: SignedExtension,
+{
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		self.using_encoded(f)
 	}
 }
 
