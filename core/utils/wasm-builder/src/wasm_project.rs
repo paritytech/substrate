@@ -203,8 +203,6 @@ fn create_wasm_workspace_project(wasm_workspace: &Path) {
 	).expect("WASM workspace `Cargo.toml` writing can not fail; qed");
 }
 
-
-
 /// Create the project used to build the wasm binary.
 ///
 /// # Returns
