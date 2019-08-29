@@ -156,7 +156,7 @@ pub fn elect<AccountId, Balance, FS, C>(
 ) -> Option<PhragmenResult<AccountId>> where
 	AccountId: Default + Ord + Member,
 	Balance: Default + Copy + SimpleArithmetic,
-	for <'r> FS: Fn(&'r AccountId) -> Balance,
+	for<'r> FS: Fn(&'r AccountId) -> Balance,
 	C: Convert<Balance, u64> + Convert<u128, Balance>,
 {
 	let to_votes = |b: Balance|
@@ -180,13 +180,7 @@ pub fn elect<AccountId, Balance, FS, C>(
 			let stake = stake_of(&who);
 			Candidate { who, approval_stake: to_votes(stake), ..Default::default() }
 		})
-		.filter_map(|c| {
-			if c.approval_stake.is_zero() {
-				None
-			} else {
-				Some(c)
-			}
-		})
+		.filter(|c| !c.approval_stake.is_zero())
 		.enumerate()
 		.map(|(i, c)| {
 			voters.push(Voter {
@@ -369,7 +363,7 @@ pub fn equalize<Balance, AccountId, C, FS>(
 	stake_of: FS,
 ) where
 	C: Convert<Balance, u64> + Convert<u128, Balance>,
-	for <'r> FS: Fn(&'r AccountId) -> Balance,
+	for<'r> FS: Fn(&'r AccountId) -> Balance,
 	AccountId: Ord + Clone,
 {
 	// prepare the data for equalise
@@ -384,7 +378,7 @@ pub fn equalize<Balance, AccountId, C, FS>(
 				voter_budget,
 				assignment,
 				supports,
-				tolerance
+				tolerance,
 			);
 			if diff > max_diff { max_diff = diff; }
 		}
@@ -551,7 +545,7 @@ mod tests {
 		self_vote: bool,
 	) -> Option<_PhragmenResult<AccountId>> where
 		AccountId: Default + Ord + Member + Copy,
-		for <'r> FS: Fn(&'r AccountId) -> u64,
+		for<'r> FS: Fn(&'r AccountId) -> u64,
 	{
 		let mut elected_candidates: Vec<AccountId>;
 		let mut assigned: Vec<(AccountId, Vec<_PhragmenAssignment<AccountId>>)>;
@@ -564,13 +558,7 @@ mod tests {
 				let stake = stake_of(&who) as f64;
 				_Candidate { who, approval_stake: stake, ..Default::default() }
 			})
-			.filter_map(|c| {
-				if c.approval_stake == 0f64 {
-					None
-				} else {
-					Some(c)
-				}
-			})
+			.filter(|c| c.approval_stake != 0f64)
 			.enumerate()
 			.map(|(i, c)| {
 				let who = c.who;
