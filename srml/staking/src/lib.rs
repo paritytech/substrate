@@ -627,18 +627,19 @@ decl_storage! {
 					T::Origin::from(Some(stash.clone()).into()),
 					T::Lookup::unlookup(controller.clone()),
 					balance,
-					RewardDestination::Staked
+					RewardDestination::Staked,
 				);
 				let _ = match status {
 					StakerStatus::Validator => {
 						<Module<T>>::validate(
 							T::Origin::from(Some(controller.clone()).into()),
-							Default::default()
+							Default::default(),
 						)
-					}, StakerStatus::Nominator(votes) => {
+					},
+					StakerStatus::Nominator(votes) => {
 						<Module<T>>::nominate(
 							T::Origin::from(Some(controller.clone()).into()),
-							votes.iter().map(|l| T::Lookup::unlookup(l.clone())).collect()
+							votes.iter().map(|l| T::Lookup::unlookup(l.clone())).collect(),
 						)
 					}, _ => Ok(())
 				};
