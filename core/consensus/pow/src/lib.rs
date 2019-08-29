@@ -103,7 +103,7 @@ impl<C, Algorithm> PowVerifier<C, Algorithm> {
 	fn check_header<B: BlockT<Hash=H256>>(
 		&self,
 		mut header: B::Header,
-		block_id: BlockId<B>,
+		parent_block_id: BlockId<B>,
 	) -> Result<(B::Header, Difficulty, DigestItem<H256>), String> where
 		Algorithm: PowAlgorithm<B>,
 	{
@@ -121,7 +121,7 @@ impl<C, Algorithm> PowVerifier<C, Algorithm> {
 		};
 
 		let pre_hash = header.hash();
-		let difficulty = self.algorithm.difficulty(&block_id)?;
+		let difficulty = self.algorithm.difficulty(&parent_block_id)?;
 
 		if !self.algorithm.verify(
 			&block_id,
