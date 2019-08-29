@@ -19,7 +19,7 @@
 use hash_db::Hasher;
 use trie::Recorder;
 use log::warn;
-use num_traits::One;
+use num_traits::{One, Zero};
 use crate::proving_backend::ProvingBackendEssence;
 use crate::trie_backend_essence::TrieBackendEssence;
 use crate::changes_trie::{AnchorBlockId, Configuration, Storage, BlockNumber};
@@ -110,7 +110,7 @@ fn pruning_range<Number: BlockNumber>(
 	// compute number of changes tries we actually want to keep
 	let (prune_interval, blocks_to_keep) = if config.is_digest_build_enabled() {
 		// we only CAN prune at block where max-level-digest is created
-		let max_digest_interval = match config.digest_level_at_block(block.clone()) {
+		let max_digest_interval = match config.digest_level_at_block(Zero::zero(), block.clone()) {
 			Some((digest_level, digest_interval, _)) if digest_level == config.digest_levels =>
 				digest_interval,
 			_ => return None,
