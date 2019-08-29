@@ -86,8 +86,10 @@ where
 	/// Channel we receive Dht events on.
 	dht_event_rx: Receiver<DhtEvent>,
 
-	/// Interval to be proactive on, e.g. publishing own addresses or starting to query for addresses.
-	interval: tokio_timer::Interval,
+	/// Interval to be proactive, publishing own addresses.
+	publish_interval: tokio_timer::Interval,
+	/// Interval on which to query for addresses of other authorities.
+	query_interval: tokio_timer::Interval,
 
 	/// The network peerset interface for priority groups lets us only set an entire group, but we retrieve the
 	/// addresses of other authorities one by one from the network. To use the peerset interface we need to cache the
@@ -120,18 +122,24 @@ where
 		dht_event_rx: futures::sync::mpsc::Receiver<DhtEvent>,
 	) -> AuthorityDiscovery<AuthorityId, Client, Network, Block> {
 		// Kademlia's default time-to-live for Dht records is 36h, republishing records every 24h. Given that a node
-		// could restart at any point in time, one can not depend on the republishing process, thus starting to publish
-		// own external addresses should happen on an interval < 36h.
-		// TODO: It might make sense to split this up into a publication_interval and a retrieval_interval.
-		let interval =
+		// could restart at any point in time, one can not depend on the republishing process, thus publishing own
+		// external addresses should happen on an interval < 36h.
+		let publish_interval =
 			tokio_timer::Interval::new(Instant::now(), Duration::from_secs(12 * 60 * 60));
+
+		// External addresses of other authorities can change at any given point in time. The interval on which to query
+		// for external addresses of other authorities is a trade off between efficiency and performance.
+		let query_interval =
+			tokio_timer::Interval::new(Instant::now(), Duration::from_secs(10 * 60));
+
 		let address_cache = HashMap::new();
 
 		AuthorityDiscovery {
 			client,
 			network,
 			dht_event_rx,
-			interval,
+			publish_interval,
+			query_interval,
 			address_cache,
 			phantom_authority_id: PhantomData,
 			phantom_block: PhantomData,
@@ -236,7 +244,8 @@ where
 		&mut self,
 		values: Vec<(libp2p::kad::record::Key, Vec<u8>)>,
 	) -> Result<()> {
-		println!("==== Dht found handling, cache: {:?}", self.address_cache);
+		debug!(target: "sub-authority-discovery", "Got Dht value from network.");
+
 		let id = BlockId::hash(self.client.info().best_hash);
 
 		// From the Dht we only get the hashed authority id. In order to retrieve the actual authority id and to ensure
@@ -295,6 +304,7 @@ where
 				.flatten(),
 		);
 
+		debug!(target: "sub-authority-discovery", "Applying priority group {:#?} to peerset.", addresses);
 		self.network
 			.set_priority_group("authorities".to_string(), addresses)
 			.map_err(Error::SettingPeersetPriorityGroup)?;
@@ -331,15 +341,23 @@ where
 			// Process incoming events before triggering new ones.
 			self.handle_dht_events()?;
 
-			if let Ok(Async::Ready(_)) = self.interval.poll() {
+			if let Ok(Async::Ready(_)) = self.publish_interval.poll() {
 				// Make sure to call interval.poll until it returns Async::NotReady once. Otherwise, in case one of the
 				// function calls within this block do a `return`, we don't call `interval.poll` again and thereby the
 				// underlying Tokio task is never registered with Tokio's Reactor to be woken up on the next interval
 				// tick.
-				while let Ok(Async::Ready(_)) = self.interval.poll() {}
+				while let Ok(Async::Ready(_)) = self.publish_interval.poll() {}
 
 				self.publish_own_ext_addresses()?;
-				// TODO: Should we request external addresses more often than we publish our owns?
+			}
+
+			if let Ok(Async::Ready(_)) = self.query_interval.poll() {
+				// Make sure to call interval.poll until it returns Async::NotReady once. Otherwise, in case one of the
+				// function calls within this block do a `return`, we don't call `interval.poll` again and thereby the
+				// underlying Tokio task is never registered with Tokio's Reactor to be woken up on the next interval
+				// tick.
+				while let Ok(Async::Ready(_)) = self.query_interval.poll() {}
+
 				self.request_addresses_of_others()?;
 			}
 
