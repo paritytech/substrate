@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use runtime_io::{with_externalities, Blake2Hasher};
-use srml_support::{StorageValue, StorageMap, StorageDoubleMap};
+use srml_support::{StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap};
 use srml_support::storage::unhashed;
 use codec::{Encode, Decode};
 

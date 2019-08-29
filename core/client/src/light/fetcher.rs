@@ -26,11 +26,14 @@ use codec::{Decode, Encode};
 use primitives::{ChangesTrieConfiguration, convert_hash};
 use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
-	SimpleArithmetic, CheckedConversion,
+	SimpleArithmetic, CheckedConversion, Zero,
 };
-use state_machine::{CodeExecutor, ChangesTrieRootsStorage, ChangesTrieAnchorBlockId,
+use state_machine::{
+	CodeExecutor, ChangesTrieRootsStorage,
+	ChangesTrieAnchorBlockId, ChangesTrieConfigurationRange,
 	TrieBackend, read_proof_check, key_changes_proof_check,
-	create_proof_check_backend_storage, read_child_proof_check};
+	create_proof_check_backend_storage, read_child_proof_check,
+};
 
 use crate::cht;
 use crate::error::{Error as ClientError, Result as ClientResult};
@@ -283,9 +286,16 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 			)?;
 		}
 
+		// FIXME: remove this in https://github.com/paritytech/substrate/pull/3201
+		let changes_trie_config_range = ChangesTrieConfigurationRange {
+			config: &request.changes_trie_config,
+			zero: Zero::zero(),
+			end: None,
+		};
+
 		// and now check the key changes proof + get the changes
-		key_changes_proof_check::<_, H, _>(
-			&request.changes_trie_config,
+		key_changes_proof_check::<H, _>(
+			changes_trie_config_range,
 			&RootsStorage {
 				roots: (request.tries_roots.0, &request.tries_roots.2),
 				prev_roots: remote_roots,

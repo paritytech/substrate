@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::write_file_if_changed;
+
 use std::{fs, path::{Path, PathBuf}, borrow::ToOwned, process::{Command, self}, env};
 
 use toml::value::Table;
@@ -75,7 +77,10 @@ impl Drop for WorkspaceLock {
 ///
 /// # Returns
 /// The path to the compact WASM binary and the bloaty WASM binary.
-pub fn create_and_compile(cargo_manifest: &Path) -> (WasmBinary, WasmBinaryBloaty)  {
+pub fn create_and_compile(
+	cargo_manifest: &Path,
+	default_rustflags: &str,
+) -> (WasmBinary, WasmBinaryBloaty) {
 	let wasm_workspace_root = get_wasm_workspace_root();
 	let wasm_workspace = wasm_workspace_root.join("wbuild");
 
@@ -85,8 +90,14 @@ pub fn create_and_compile(cargo_manifest: &Path) -> (WasmBinary, WasmBinaryBloat
 	let project = create_project(cargo_manifest, &wasm_workspace);
 	create_wasm_workspace_project(&wasm_workspace);
 
-	build_project(&project);
-	let (wasm_binary, bloaty) = compact_wasm_file(&project, cargo_manifest, &wasm_workspace);
+	build_project(&project, default_rustflags);
+	let (wasm_binary, bloaty) = compact_wasm_file(
+		&project,
+		cargo_manifest,
+		&wasm_workspace,
+	);
+
+	copy_wasm_to_target_directory(cargo_manifest, &wasm_binary);
 
 	generate_rerun_if_changed_instructions(cargo_manifest, &project, &wasm_workspace);
 
@@ -122,6 +133,7 @@ fn find_cargo_lock(cargo_manifest: &Path) -> Option<PathBuf> {
 		cargo_manifest.display(),
 		build_helper::out_dir().display()
 	);
+
 	None
 }
 
@@ -203,7 +215,7 @@ fn create_project(cargo_manifest: &Path, wasm_workspace: &Path) -> PathBuf {
 
 	fs::create_dir_all(project_folder.join("src")).expect("Wasm project dir create can not fail; qed");
 
-	fs::write(
+	write_file_if_changed(
 		project_folder.join("Cargo.toml"),
 		format!(
 			r#"
@@ -223,12 +235,12 @@ fn create_project(cargo_manifest: &Path, wasm_workspace: &Path) -> PathBuf {
 			crate_path = crate_path.display(),
 			wasm_binary = wasm_binary,
 		)
-	).expect("Project `Cargo.toml` writing can not fail; qed");
+	);
 
-	fs::write(
+	write_file_if_changed(
 		project_folder.join("src/lib.rs"),
-		"#![no_std] pub use wasm_project::*;",
-	).expect("Project `lib.rs` writing can not fail; qed");
+		"#![no_std] pub use wasm_project::*;".into(),
+	);
 
 	if let Some(crate_lock_file) = find_cargo_lock(cargo_manifest) {
 		// Use the `Cargo.lock` of the main project.
@@ -257,12 +269,13 @@ fn is_release_build() -> bool {
 }
 
 /// Build the project to create the WASM binary.
-fn build_project(project: &Path) {
+fn build_project(project: &Path, default_rustflags: &str) {
 	let manifest_path = project.join("Cargo.toml");
 	let mut build_cmd = crate::get_nightly_cargo().command();
 
 	let rustflags = format!(
-		"-C link-arg=--export-table {}",
+		"-C link-arg=--export-table {} {}",
+		default_rustflags,
 		env::var(crate::WASM_BUILD_RUSTFLAGS_ENV).unwrap_or_default(),
 	);
 
@@ -349,4 +362,29 @@ fn generate_rerun_if_changed_instructions(
 	println!("cargo:rerun-if-env-changed={}", crate::SKIP_BUILD_ENV);
 	println!("cargo:rerun-if-env-changed={}", crate::WASM_BUILD_TYPE_ENV);
 	println!("cargo:rerun-if-env-changed={}", crate::WASM_BUILD_RUSTFLAGS_ENV);
+	println!("cargo:rerun-if-env-changed={}", crate::WASM_TARGET_DIRECTORY);
+}
+
+/// Copy the WASM binary to the target directory set in `WASM_TARGET_DIRECTORY` environment variable.
+/// If the variable is not set, this is a no-op.
+fn copy_wasm_to_target_directory(cargo_manifest: &Path, wasm_binary: &WasmBinary) {
+	let target_dir = match env::var(crate::WASM_TARGET_DIRECTORY) {
+		Ok(path) => PathBuf::from(path),
+		Err(_) => return,
+	};
+
+	if !target_dir.is_absolute() {
+		panic!(
+			"Environment variable `{}` with `{}` is not an absolute path!",
+			crate::WASM_TARGET_DIRECTORY,
+			target_dir.display(),
+		);
+	}
+
+	fs::create_dir_all(&target_dir).expect("Creates `WASM_TARGET_DIRECTORY`.");
+
+	fs::copy(
+		wasm_binary.wasm_binary_path(),
+		target_dir.join(format!("{}.wasm", get_wasm_binary_name(cargo_manifest))),
+	).expect("Copies WASM binary to `WASM_TARGET_DIRECTORY`.");
 }

@@ -200,7 +200,7 @@ fn should_insert_key() {
 	p.insert_key(
 		String::from_utf8(key_types::ED25519.0.to_vec()).expect("Keytype is a valid string"),
 		suri.to_string(),
-		Some(key_pair.public().0.to_vec().into()),
+		key_pair.public().0.to_vec().into(),
 	).expect("Insert key");
 
 	let store_key_pair = keystore.read()

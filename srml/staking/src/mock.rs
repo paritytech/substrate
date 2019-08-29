@@ -18,12 +18,12 @@
 
 use std::{collections::HashSet, cell::RefCell};
 use sr_primitives::Perbill;
-use sr_primitives::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize};
+use sr_primitives::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize, SaturatedConversion};
 use sr_primitives::testing::{Header, UintAuthorityId};
 use sr_staking_primitives::SessionIndex;
 use primitives::{H256, Blake2Hasher};
 use runtime_io;
-use srml_support::{assert_ok, impl_outer_origin, parameter_types, EnumerableStorageMap};
+use srml_support::{assert_ok, impl_outer_origin, parameter_types, StorageLinkedMap};
 use srml_support::traits::{Currency, Get, FindAuthor};
 use crate::{
 	EraIndex, GenesisConfig, Module, Trait, StakerStatus, ValidatorPrefs, RewardDestination,
@@ -41,9 +41,7 @@ impl Convert<u64, u64> for CurrencyToVoteHandler {
 	fn convert(x: u64) -> u64 { x }
 }
 impl Convert<u128, u64> for CurrencyToVoteHandler {
-	fn convert(x: u128) -> u64 {
-		x as u64
-	}
+	fn convert(x: u128) -> u64 { x.saturated_into() }
 }
 
 thread_local! {
