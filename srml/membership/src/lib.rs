@@ -24,8 +24,7 @@
 
 use sr_std::prelude::*;
 use srml_support::{
-	StorageValue, decl_module, decl_storage, decl_event,
-	traits::{ChangeMembers}
+	StorageValue, decl_module, decl_storage, decl_event, traits::{ChangeMembers, InitializeMembers},
 };
 use system::ensure_root;
 use sr_primitives::{traits::EnsureOrigin, weights::SimpleDispatchInfo};
@@ -49,7 +48,7 @@ pub trait Trait<I=DefaultInstance>: system::Trait {
 	/// The receiver of the signal for when the membership has been initialized. This happens pre-
 	/// genesis and will usually be the same as `MembershipChanged`. If you need to do something
 	/// different on initialization, then you can change this accordingly.
-	type MembershipInitialized: ChangeMembers<Self::AccountId>;
+	type MembershipInitialized: InitializeMembers<Self::AccountId>;
 
 	/// The receiver of the signal for when the membership has changed.
 	type MembershipChanged: ChangeMembers<Self::AccountId>;
@@ -64,14 +63,13 @@ decl_storage! {
 		config(members): Vec<T::AccountId>;
 		config(phantom): sr_std::marker::PhantomData<I>;
 		build(|
-			storage: &mut sr_primitives::StorageOverlay,
-			_: &mut sr_primitives::ChildrenStorageOverlay,
-			config: &GenesisConfig<T, I>
+			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
+			config: &Self,
 		| {
 			sr_io::with_storage(storage, || {
 				let mut members = config.members.clone();
 				members.sort();
-				T::MembershipInitialized::set_members_sorted(&members[..], &[]);
+				T::MembershipInitialized::initialize_members(&members);
 				<Members<T, I>>::put(members);
 			});
 		})
@@ -81,6 +79,7 @@ decl_storage! {
 decl_event!(
 	pub enum Event<T, I=DefaultInstance> where
 		<T as system::Trait>::AccountId,
+		<T as Trait<I>>::Event,
 	{
 		/// The given member was added; see the transaction for who.
 		MemberAdded,
@@ -91,7 +90,7 @@ decl_event!(
 		/// The membership was reset; see the transaction for who the new set is.
 		MembersReset,
 		/// Phantom member, never used.
-		Dummy(sr_std::marker::PhantomData<(AccountId, I)>),
+		Dummy(sr_std::marker::PhantomData<(AccountId, Event)>),
 	}
 );
 
@@ -239,6 +238,7 @@ mod tests {
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
+		type Version = ();
 	}
 	parameter_types! {
 		pub const One: u64 = 1;
@@ -266,6 +266,11 @@ mod tests {
 			MEMBERS.with(|m| *m.borrow_mut() = new.to_vec());
 		}
 	}
+	impl InitializeMembers<u64> for TestChangeMembers {
+		fn initialize_members(members: &[u64]) {
+			MEMBERS.with(|m| *m.borrow_mut() = members.to_vec());
+		}
+	}
 
 	impl Trait for Test {
 		type Event = ();
@@ -282,12 +287,12 @@ mod tests {
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
 	fn new_test_ext() -> sr_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
-		t.extend(GenesisConfig::<Test>{
+		GenesisConfig::<Test>{
 			members: vec![10, 20, 30],
 			.. Default::default()
-		}.build_storage().unwrap().0);
+		}.assimilate_storage(&mut t).unwrap();
 		t.into()
 	}
 

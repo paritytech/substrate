@@ -256,11 +256,11 @@ pub enum PermissionVersions<AccountId> {
 
 /// Asset permission types
 pub enum PermissionType {
-	/// Permission to update asset permission
+	/// Permission to burn asset permission
 	Burn,
 	/// Permission to mint new asset
 	Mint,
-	/// Permission to burn asset
+	/// Permission to update asset
 	Update,
 }
 
@@ -479,12 +479,11 @@ decl_storage! {
 		config(endowed_accounts): Vec<T::AccountId>;
 
 		build(|
-			storage: &mut sr_primitives::StorageOverlay,
-			_: &mut sr_primitives::ChildrenStorageOverlay,
+			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
 			config: &GenesisConfig<T>| {
 			config.assets.iter().for_each(|asset_id| {
 				config.endowed_accounts.iter().for_each(|account_id| {
-					storage.insert(
+					storage.0.insert(
 						<FreeBalance<T>>::key_for(asset_id, account_id),
 						<T::Balance as codec::Encode>::encode(&config.initial_balance)
 					);
@@ -1064,6 +1063,7 @@ impl<T: Subtrait> system::Trait for ElevatedTrait<T> {
 	type AvailableBlockRatio = T::AvailableBlockRatio;
 	type WeightMultiplierUpdate = ();
 	type BlockHashCount = T::BlockHashCount;
+	type Version = T::Version;
 }
 impl<T: Subtrait> Trait for ElevatedTrait<T> {
 	type Balance = T::Balance;

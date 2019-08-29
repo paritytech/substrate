@@ -43,6 +43,8 @@ pub(crate) struct Impls<'a, I: Iterator<Item=syn::Meta>> {
 	pub instance_opts: &'a InstanceOpts,
 	pub type_infos: DeclStorageTypeInfos<'a>,
 	pub fielddefault: TokenStream2,
+	pub default_delegator_ident: syn::Ident,
+	pub default_delegator_return: TokenStream2,
 	pub prefix: String,
 	pub cratename: &'a syn::Ident,
 	pub name: &'a syn::Ident,
@@ -60,6 +62,8 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			instance_opts,
 			type_infos,
 			fielddefault,
+			default_delegator_ident,
+			default_delegator_return,
 			prefix,
 			name,
 			attrs,
@@ -116,6 +120,17 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 
 		// generator for value
 		quote! {
+			#visibility struct #default_delegator_ident<#struct_trait>(
+				#scrate::rstd::marker::PhantomData<(#trait_and_instance)>
+			) #where_clause;
+			impl<#impl_trait> #scrate::traits::StorageDefault<#typ>
+				for #default_delegator_ident<#trait_and_instance> #where_clause
+			{
+				fn default() -> Option<#typ> {
+					#default_delegator_return
+				}
+			}
+
 			#( #[ #attrs ] )*
 			#visibility struct #name<#struct_trait>(
 				#scrate::rstd::marker::PhantomData<(#trait_and_instance)>
@@ -125,6 +140,7 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				for #name<#trait_and_instance> #where_clause
 			{
 				type Query = #value_type;
+				type Default = #default_delegator_ident<#trait_and_instance>;
 
 				/// Get the storage key.
 				fn key() -> &'static [u8] {
@@ -168,6 +184,8 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			instance_opts,
 			type_infos,
 			fielddefault,
+			default_delegator_ident,
+			default_delegator_return,
 			prefix,
 			name,
 			attrs,
@@ -230,6 +248,17 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 
 		// generator for map
 		quote!{
+			#visibility struct #default_delegator_ident<#struct_trait>(
+				#scrate::rstd::marker::PhantomData<(#trait_and_instance)>
+			) #where_clause;
+			impl<#impl_trait> #scrate::traits::StorageDefault<#typ>
+				for #default_delegator_ident<#trait_and_instance> #where_clause
+			{
+				fn default() -> Option<#typ> {
+					#default_delegator_return
+				}
+			}
+
 			#( #[ #attrs ] )*
 			#visibility struct #name<#struct_trait>(
 				#scrate::rstd::marker::PhantomData<(#trait_and_instance)>
@@ -239,8 +268,8 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 				for #name<#trait_and_instance> #where_clause
 			{
 				type Query = #value_type;
-
 				type Hasher = #scrate::#hasher;
+				type Default = #default_delegator_ident<#trait_and_instance>;
 
 				/// Get the prefix key in storage.
 				fn prefix() -> &'static [u8] {
@@ -283,6 +312,10 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			impl<#impl_trait> #scrate::storage::hashed::generator::AppendableStorageMap<#kty, #typ>
 				for #name<#trait_and_instance> #where_clause
 			{}
+
+			impl<#impl_trait> #scrate::storage::hashed::generator::DecodeLengthStorageMap<#kty, #typ>
+				for #name<#trait_and_instance> #where_clause
+			{}
 		}
 	}
 
@@ -295,6 +328,8 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 			instance_opts,
 			type_infos,
 			fielddefault,
+			default_delegator_ident,
+			default_delegator_return,
 			prefix,
 			name,
 			attrs,
@@ -567,12 +602,23 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 
 			#structure
 
+			#visibility struct #default_delegator_ident<#struct_trait>(
+				#scrate::rstd::marker::PhantomData<(#trait_and_instance)>
+			) #where_clause;
+			impl<#impl_trait> #scrate::traits::StorageDefault<#typ>
+				for #default_delegator_ident<#trait_and_instance> #where_clause
+			{
+				fn default() -> Option<#typ> {
+					#default_delegator_return
+				}
+			}
+
 			impl<#impl_trait> #scrate::storage::hashed::generator::StorageMap<#kty, #typ>
 				for #name<#trait_and_instance> #where_clause
 			{
 				type Query = #value_type;
-
 				type Hasher = #scrate::#hasher;
+				type Default = #default_delegator_ident<#trait_and_instance>;
 
 				/// Get the prefix key in storage.
 				fn prefix() -> &'static [u8] {
@@ -666,6 +712,42 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					#mutate_impl;
 					ret
 				}
+
+				// Swap must be overriden not to break links.
+				fn swap<S: #scrate::HashedStorage<Self::Hasher>>(
+					key1: &#kty,
+					key2: &#kty,
+					storage: &mut S,
+				) {
+					use self::#inner_module::Utils;
+
+					let final_key1 = &*#as_map::key_for(key1);
+					let final_key2 = &*#as_map::key_for(key2);
+					let full_value_1 = Self::read_with_linkage(storage, final_key1);
+					let full_value_2 = Self::read_with_linkage(storage, final_key2);
+
+					match (full_value_1, full_value_2) {
+						// Just keep linkage in order and only swap values.
+						(Some((value1, linkage1)), Some((value2, linkage2))) => {
+							storage.put(final_key1, &(value2, linkage1));
+							storage.put(final_key2, &(value1, linkage2));
+						}
+						// Remove key and insert the new one.
+						(Some((value, linkage)), None) => {
+							#as_map::remove(key1, storage);
+							let linkage = Self::new_head_linkage(storage, key2);
+							storage.put(final_key2, &(value, linkage));
+						}
+						// Remove key and insert the new one.
+						(None, Some((value, linkage))) => {
+							#as_map::remove(key2, storage);
+							let linkage = Self::new_head_linkage(storage, key1);
+							storage.put(final_key1, &(value, linkage));
+						}
+						// No-op.
+						(None, None) => (),
+					}
+				}
 			}
 
 			impl<#impl_trait> #scrate::storage::hashed::generator::EnumerableStorageMap<#kty, #typ>
@@ -694,6 +776,10 @@ impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 					})
 				}
 			}
+
+			impl<#impl_trait> #scrate::storage::hashed::generator::DecodeLengthStorageMap<#kty, #typ>
+				for #name<#trait_and_instance> #where_clause
+			{}
 		}
 	}
 

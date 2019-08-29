@@ -134,6 +134,10 @@ impl TestOffchainExt {
 }
 
 impl offchain::Externalities for TestOffchainExt {
+	fn is_validator(&self) -> bool {
+		unimplemented!("not needed in tests so far")
+	}
+
 	fn submit_transaction(&mut self, _ex: Vec<u8>) -> Result<(), ()> {
 		unimplemented!("not needed in tests so far")
 	}
@@ -244,7 +248,7 @@ impl offchain::Externalities for TestOffchainExt {
 
 		ids.iter().map(|id| match state.requests.get(id) {
 			Some(req) if req.response.is_empty() => RequestStatus::DeadlineReached,
-			None => RequestStatus::Unknown,
+			None => RequestStatus::Invalid,
 			_ => RequestStatus::Finished(200),
 		}).collect()
 	}

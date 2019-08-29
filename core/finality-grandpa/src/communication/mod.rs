@@ -50,7 +50,9 @@ use crate::environment::HasVoted;
 use gossip::{
 	GossipMessage, FullCatchUpMessage, FullCommitMessage, VoteOrPrecommitMessage, GossipValidator
 };
-use fg_primitives::{AuthorityPair, AuthorityId, AuthoritySignature};
+use fg_primitives::{
+	AuthorityPair, AuthorityId, AuthoritySignature, SetId as SetIdNumber, RoundNumber,
+};
 
 pub mod gossip;
 mod periodic;
@@ -129,12 +131,12 @@ pub trait Network<Block: BlockT>: Clone + Send + 'static {
 }
 
 /// Create a unique topic for a round and set-id combo.
-pub(crate) fn round_topic<B: BlockT>(round: u64, set_id: u64) -> B::Hash {
+pub(crate) fn round_topic<B: BlockT>(round: RoundNumber, set_id: SetIdNumber) -> B::Hash {
 	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-{}", set_id, round).as_bytes())
 }
 
 /// Create a unique topic for global messages on a set ID.
-pub(crate) fn global_topic<B: BlockT>(set_id: u64) -> B::Hash {
+pub(crate) fn global_topic<B: BlockT>(set_id: SetIdNumber) -> B::Hash {
 	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-GLOBAL", set_id).as_bytes())
 }
 
@@ -236,19 +238,25 @@ pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
 impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	/// Create a new NetworkBridge to the given NetworkService. Returns the service
 	/// handle and a future that must be polled to completion to finish startup.
-	/// If a voter set state is given it registers previous round votes with the
-	/// gossip service.
+	/// On creation it will register previous rounds' votes with the gossip
+	/// service taken from the VoterSetState.
 	pub(crate) fn new(
 		service: N,
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,
 		on_exit: impl Future<Item=(),Error=()> + Clone + Send + 'static,
+		catch_up_enabled: bool,
 	) -> (
 		Self,
 		impl futures::Future<Item = (), Error = ()> + Send + 'static,
 	) {
 
-		let (validator, report_stream) = GossipValidator::new(config, set_state.clone());
+		let (validator, report_stream) = GossipValidator::new(
+			config,
+			set_state.clone(),
+			catch_up_enabled,
+		);
+
 		let validator = Arc::new(validator);
 		service.register_validator(validator.clone());
 
@@ -612,25 +620,25 @@ impl<B: BlockT, N: Network<B>> Clone for NetworkBridge<B, N> {
 	}
 }
 
-fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec<u8> {
+fn localized_payload<E: Encode>(round: RoundNumber, set_id: SetIdNumber, message: &E) -> Vec<u8> {
 	(message, round, set_id).encode()
 }
 
-/// Type-safe wrapper around u64 when indicating that it's a round number.
+/// Type-safe wrapper around a round number.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Encode, Decode)]
-pub struct Round(pub u64);
+pub struct Round(pub RoundNumber);
 
-/// Type-safe wrapper around u64 when indicating that it's a set ID.
+/// Type-safe wrapper around a set ID.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Encode, Decode)]
-pub struct SetId(pub u64);
+pub struct SetId(pub SetIdNumber);
 
 // check a message.
 pub(crate) fn check_message_sig<Block: BlockT>(
 	message: &Message<Block>,
 	id: &AuthorityId,
 	signature: &AuthoritySignature,
-	round: u64,
-	set_id: u64,
+	round: RoundNumber,
+	set_id: SetIdNumber,
 ) -> Result<(), ()> {
 	let as_public = id.clone();
 	let encoded_raw = localized_payload(round, set_id, message);
@@ -650,8 +658,8 @@ pub(crate) fn check_message_sig<Block: BlockT>(
 /// `ed25519` and `BLS` signatures (which we might use in the future), care must
 /// be taken when switching to different key types.
 struct OutgoingMessages<Block: BlockT, N: Network<Block>> {
-	round: u64,
-	set_id: u64,
+	round: RoundNumber,
+	set_id: SetIdNumber,
 	locals: Option<(AuthorityPair, AuthorityId)>,
 	sender: mpsc::UnboundedSender<SignedMessage<Block>>,
 	network: N,
@@ -845,8 +853,8 @@ fn check_catch_up<Block: BlockT>(
 
 	fn check_signatures<'a, B, I>(
 		messages: I,
-		round: u64,
-		set_id: u64,
+		round: RoundNumber,
+		set_id: SetIdNumber,
 		mut signatures_checked: usize,
 	) -> Result<usize, i32> where
 		B: BlockT,
@@ -913,7 +921,7 @@ impl<Block: BlockT, N: Network<Block>> CommitsOut<Block, N> {
 	/// Create a new commit output stream.
 	pub(crate) fn new(
 		network: N,
-		set_id: u64,
+		set_id: SetIdNumber,
 		is_voter: bool,
 		gossip_validator: Arc<GossipValidator<Block>>,
 	) -> Self {
@@ -927,10 +935,10 @@ impl<Block: BlockT, N: Network<Block>> CommitsOut<Block, N> {
 }
 
 impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
-	type SinkItem = (u64, Commit<Block>);
+	type SinkItem = (RoundNumber, Commit<Block>);
 	type SinkError = Error;
 
-	fn start_send(&mut self, input: (u64, Commit<Block>)) -> StartSend<Self::SinkItem, Error> {
+	fn start_send(&mut self, input: (RoundNumber, Commit<Block>)) -> StartSend<Self::SinkItem, Error> {
 		if !self.is_voter {
 			return Ok(AsyncSink::Ready);
 		}

@@ -20,6 +20,7 @@ use std::{collections::HashSet, cell::RefCell};
 use sr_primitives::Perbill;
 use sr_primitives::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize};
 use sr_primitives::testing::{Header, UintAuthorityId};
+use sr_staking_primitives::SessionIndex;
 use primitives::{H256, Blake2Hasher};
 use runtime_io;
 use srml_support::{assert_ok, impl_outer_origin, parameter_types, EnumerableStorageMap};
@@ -52,6 +53,8 @@ thread_local! {
 
 pub struct TestSessionHandler;
 impl session::SessionHandler<AccountId> for TestSessionHandler {
+	fn on_genesis_session<Ks: OpaqueKeys>(_validators: &[(AccountId, Ks)]) {}
+
 	fn on_new_session<Ks: OpaqueKeys>(
 		_changed: bool,
 		validators: &[(AccountId, Ks)],
@@ -71,8 +74,8 @@ impl session::SessionHandler<AccountId> for TestSessionHandler {
 	}
 }
 
-pub fn is_disabled(validator: AccountId) -> bool {
-	let stash = Staking::ledger(&validator).unwrap().stash;
+pub fn is_disabled(controller: AccountId) -> bool {
+	let stash = Staking::ledger(&controller).unwrap().stash;
 	SESSION.with(|d| d.borrow().1.contains(&stash))
 }
 
@@ -122,6 +125,7 @@ impl system::Trait for Test {
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type MaximumBlockLength = MaximumBlockLength;
+	type Version = ();
 }
 parameter_types! {
 	pub const TransferFee: Balance = 0;
@@ -179,7 +183,7 @@ impl timestamp::Trait for Test {
 	type MinimumPeriod = MinimumPeriod;
 }
 parameter_types! {
-	pub const SessionsPerEra: session::SessionIndex = 3;
+	pub const SessionsPerEra: SessionIndex = 3;
 	pub const BondingDuration: EraIndex = 3;
 }
 impl Trait for Test {
@@ -203,6 +207,7 @@ pub struct ExtBuilder {
 	minimum_validator_count: u32,
 	fair: bool,
 	num_validators: Option<u32>,
+	invulnerables: Vec<u64>,
 }
 
 impl Default for ExtBuilder {
@@ -215,6 +220,7 @@ impl Default for ExtBuilder {
 			minimum_validator_count: 0,
 			fair: true,
 			num_validators: None,
+			invulnerables: vec![],
 		}
 	}
 }
@@ -248,12 +254,16 @@ impl ExtBuilder {
 		self.num_validators = Some(num_validators);
 		self
 	}
+	pub fn invulnerables(mut self, invulnerables: Vec<u64>) -> Self {
+		self.invulnerables = invulnerables;
+		self
+	}
 	pub fn set_associated_consts(&self) {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
 	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 		self.set_associated_consts();
-		let (mut t, mut c) = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut storage = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		let balance_factor = if self.existential_deposit > 0 {
 			256
 		} else {
@@ -285,7 +295,7 @@ impl ExtBuilder {
 					(999, 1_000_000_000_000),
 			],
 			vesting: vec![],
-		}.assimilate_storage(&mut t, &mut c);
+		}.assimilate_storage(&mut storage);
 
 		let stake_21 = if self.fair { 1000 } else { 2000 };
 		let stake_31 = if self.validator_pool { balance_factor * 1000 } else { 1 };
@@ -298,6 +308,7 @@ impl ExtBuilder {
 		let _ = GenesisConfig::<Test>{
 			current_era: 0,
 			stakers: vec![
+				// (stash, controller, staked_amount, status)
 				(11, 10, balance_factor * 1000, StakerStatus::<AccountId>::Validator),
 				(21, 20, stake_21, StakerStatus::<AccountId>::Validator),
 				(31, 30, stake_31, StakerStatus::<AccountId>::Validator),
@@ -307,16 +318,16 @@ impl ExtBuilder {
 			],
 			validator_count: self.validator_count,
 			minimum_validator_count: self.minimum_validator_count,
-			offline_slash: Perbill::from_percent(5),
-			offline_slash_grace: 0,
-			invulnerables: vec![],
-		}.assimilate_storage(&mut t, &mut c);
+			invulnerables: self.invulnerables,
+			slash_reward_fraction: Perbill::from_percent(10),
+			..Default::default()
+		}.assimilate_storage(&mut storage);
 
 		let _ = session::GenesisConfig::<Test> {
 			keys: validators.iter().map(|x| (*x, UintAuthorityId(*x))).collect(),
-		}.assimilate_storage(&mut t, &mut c);
+		}.assimilate_storage(&mut storage);
 
-		let mut ext = t.into();
+		let mut ext = storage.into();
 		runtime_io::with_externalities(&mut ext, || {
 			let validators = Session::validators();
 			SESSION.with(|x|
@@ -395,7 +406,12 @@ pub fn bond_nominator(acc: u64, val: u64, target: Vec<u64>) {
 	assert_ok!(Staking::nominate(Origin::signed(acc), target));
 }
 
-pub fn start_session(session_index: session::SessionIndex) {
+pub fn advance_session() {
+	let current_index = Session::current_index();
+	start_session(current_index + 1);
+}
+
+pub fn start_session(session_index: SessionIndex) {
 	// Compensate for session delay
 	let session_index = session_index + 1;
 	for i in Session::current_index()..session_index {

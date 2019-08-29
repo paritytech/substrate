@@ -89,11 +89,6 @@ type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::
 
 const MODULE_ID: ModuleId = ModuleId(*b"py/trsry");
 
-pub const DEFAULT_PROPOSAL_BOND: u32 = 0;
-pub const DEFAULT_PROPOSAL_BOND_MINIMUM: u32 = 0;
-pub const DEFAULT_SPEND_PERIOD: u32 = 0;
-pub const DEFAULT_BURN: u32 = 0;
-
 pub trait Trait: system::Trait {
 	/// The staking balance.
 	type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
@@ -394,6 +389,7 @@ mod tests {
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
+		type Version = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
@@ -439,11 +435,11 @@ mod tests {
 	type Treasury = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap().0;
-		t.extend(balances::GenesisConfig::<Test>{
+		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		balances::GenesisConfig::<Test>{
 			balances: vec![(0, 100), (1, 99), (2, 1)],
 			vesting: vec![],
-		}.build_storage().unwrap().0);
+		}.assimilate_storage(&mut t).unwrap();
 		t.into()
 	}
 
@@ -506,10 +502,13 @@ mod tests {
 	#[test]
 	fn unused_pot_should_diminish() {
 		with_externalities(&mut new_test_ext(), || {
+			let init_total_issuance = Balances::total_issuance();
 			Treasury::on_dilution(100, 100);
+			assert_eq!(Balances::total_issuance(), init_total_issuance + 100);
 
 			<Treasury as OnFinalize<u64>>::on_finalize(2);
 			assert_eq!(Treasury::pot(), 50);
+			assert_eq!(Balances::total_issuance(), init_total_issuance + 50);
 		});
 	}
 

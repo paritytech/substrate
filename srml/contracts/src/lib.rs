@@ -89,7 +89,7 @@ mod rent;
 #[cfg(test)]
 mod tests;
 
-use crate::exec::ExecutionContext;
+use crate::exec::{ExecutionContext, ExecResult};
 use crate::account_db::{AccountDb, DirectAccountDb};
 pub use crate::gas::{Gas, GasMeter};
 use crate::wasm::{WasmLoader, WasmVm};
@@ -425,7 +425,8 @@ where
 }
 
 /// The default dispatch fee computor computes the fee in the same way that
-/// the implementation of `MakePayment` for the Balances module does.
+/// the implementation of `TakeFees` for the Balances module does. Note that this only takes a fixed
+/// fee based on size. Unlike the balances module, weight-fee is applied.
 pub struct DefaultDispatchFeeComputor<T: Trait>(PhantomData<T>);
 impl<T: Trait> ComputeDispatchFee<<T as Trait>::Call, BalanceOf<T>> for DefaultDispatchFeeComputor<T> {
 	fn compute_dispatch_fee(call: &<T as Trait>::Call) -> BalanceOf<T> {
@@ -528,10 +529,10 @@ decl_module! {
 			code: Vec<u8>
 		) -> Result {
 			let origin = ensure_signed(origin)?;
-			let schedule = <Module<T>>::current_schedule();
 
 			let (mut gas_meter, imbalance) = gas::buy_gas::<T>(&origin, gas_limit)?;
 
+			let schedule = <Module<T>>::current_schedule();
 			let result = wasm::save_code::<T>(code, &mut gas_meter, &schedule);
 			if let Ok(code_hash) = result {
 				Self::deposit_event(RawEvent::CodeStored(code_hash));
@@ -560,7 +561,7 @@ decl_module! {
 			let dest = T::Lookup::lookup(dest)?;
 
 			Self::execute_wasm(origin, gas_limit, |ctx, gas_meter| {
-				ctx.call(dest, value, gas_meter, &data, exec::EmptyOutputBuf::new()).map(|_| ())
+				ctx.call(dest, value, gas_meter, data)
 			})
 		}
 
@@ -584,7 +585,8 @@ decl_module! {
 			let origin = ensure_signed(origin)?;
 
 			Self::execute_wasm(origin, gas_limit, |ctx, gas_meter| {
-				ctx.instantiate(endowment, gas_meter, &code_hash, &data).map(|_| ())
+				ctx.instantiate(endowment, gas_meter, &code_hash, data)
+					.map(|(_address, output)| output)
 			})
 		}
 
@@ -631,7 +633,7 @@ impl<T: Trait> Module<T> {
 	fn execute_wasm(
 		origin: T::AccountId,
 		gas_limit: Gas,
-		func: impl FnOnce(&mut ExecutionContext<T, WasmVm, WasmLoader>, &mut GasMeter<T>) -> Result
+		func: impl FnOnce(&mut ExecutionContext<T, WasmVm, WasmLoader>, &mut GasMeter<T>) -> ExecResult
 	) -> Result {
 		// Pay for the gas upfront.
 		//
@@ -646,7 +648,7 @@ impl<T: Trait> Module<T> {
 
 		let result = func(&mut ctx, &mut gas_meter);
 
-		if result.is_ok() {
+		if result.as_ref().map(|output| output.is_success()).unwrap_or(false) {
 			// Commit all changes that made it thus far into the persistent storage.
 			DirectAccountDb.commit(ctx.overlay.into_change_set());
 		}
@@ -688,6 +690,8 @@ impl<T: Trait> Module<T> {
 		});
 
 		result
+			.map(|_| ())
+			.map_err(|e| e.reason)
 	}
 
 	fn restore_to(
@@ -812,10 +816,9 @@ decl_storage! {
 
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
-		if let Some(ContractInfo::Alive(info)) = <ContractInfoOf<T>>::get(who) {
+		if let Some(ContractInfo::Alive(info)) = <ContractInfoOf<T>>::take(who) {
 			child::kill_storage(&info.trie_id);
 		}
-		<ContractInfoOf<T>>::remove(who);
 	}
 }
 

@@ -233,6 +233,38 @@ impl OverlayedChanges {
 		}
 	}
 
+	pub(crate) fn clear_child_prefix(&mut self, storage_key: &[u8], prefix: &[u8]) {
+		let extrinsic_index = self.extrinsic_index();
+		let map_entry = self.prospective.children.entry(storage_key.to_vec()).or_default();
+
+		for (key, entry) in map_entry.iter_mut() {
+			if key.starts_with(prefix) {
+				entry.value = None;
+
+				if let Some(extrinsic) = extrinsic_index {
+					entry.extrinsics.get_or_insert_with(Default::default)
+						.insert(extrinsic);
+				}
+			}
+		}
+
+		if let Some(child_committed) = self.committed.children.get(storage_key) {
+			// Then do the same with keys from commited changes.
+			// NOTE that we are making changes in the prospective change set.
+			for key in child_committed.keys() {
+				if key.starts_with(prefix) {
+					let entry = map_entry.entry(key.clone()).or_default();
+					entry.value = None;
+
+					if let Some(extrinsic) = extrinsic_index {
+						entry.extrinsics.get_or_insert_with(Default::default)
+							.insert(extrinsic);
+					}
+				}
+			}
+		}
+	}
+
 	/// Discard prospective changes to state.
 	pub fn discard_prospective(&mut self) {
 		self.prospective.clear();

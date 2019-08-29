@@ -42,6 +42,23 @@
 //!
 //! See the [`Module`](./struct.Module.html) struct for details of publicly available functions.
 //!
+//! ### Signed Extensions
+//!
+//! The system module defines the following extensions:
+//!
+//!   - [`CheckWeight`]: Checks the weight and length of the block and ensure that it does not
+//!     exceed the limits.
+//!   - ['CheckNonce']: Checks the nonce of the transaction. Contains a single payload of type
+//!     `T::Index`.
+//!   - [`CheckEra`]: Checks the era of the transaction. Contains a single payload of type `Era`.
+//!   - [`CheckGenesis`]: Checks the provided genesis hash of the transaction. Must be a part of the
+//!     signed payload of the transaction.
+//!   - [`CheckVersion`]: Checks that the runtime version is the same as the one encoded in the
+//!     transaction.
+//!
+//! Lookup the runtime aggregator file (e.g. `node/runtime`) to see the full list of signed
+//! extensions included in a chain.
+//!
 //! ## Usage
 //!
 //! ### Prerequisites
@@ -77,6 +94,7 @@ use rstd::prelude::*;
 #[cfg(any(feature = "std", test))]
 use rstd::map;
 use rstd::marker::PhantomData;
+use sr_version::RuntimeVersion;
 use sr_primitives::generic::{self, Era};
 use sr_primitives::Perbill;
 use sr_primitives::weights::{
@@ -147,7 +165,7 @@ pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output
 /// Compute the trie root of a list of extrinsics.
 pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 	let xts = xts.iter().map(Vec::as_slice).collect::<Vec<_>>();
-	H::enumerated_trie_root(&xts)
+	H::ordered_trie_root(&xts)
 }
 
 pub trait Trait: 'static + Eq + Clone {
@@ -216,6 +234,8 @@ pub trait Trait: 'static + Eq + Clone {
 	/// module, including weight and length.
 	type AvailableBlockRatio: Get<Perbill>;
 
+	/// Get the chain's current version.
+	type Version: Get<RuntimeVersion>;
 }
 
 pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;
@@ -239,7 +259,7 @@ decl_module! {
 		}
 
 		/// Make some on-chain remark.
-		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn remark(origin, _remark: Vec<u8>) {
 			ensure_signed(origin)?;
 		}
@@ -411,17 +431,16 @@ decl_storage! {
 		config(code): Vec<u8>;
 
 		build(
-			|storage: &mut sr_primitives::StorageOverlay,
-			_: &mut sr_primitives::ChildrenStorageOverlay,
+			|storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
 			config: &GenesisConfig|
 		{
 			use codec::Encode;
 
-			storage.insert(well_known_keys::CODE.to_vec(), config.code.clone());
-			storage.insert(well_known_keys::EXTRINSIC_INDEX.to_vec(), 0u32.encode());
+			storage.0.insert(well_known_keys::CODE.to_vec(), config.code.clone());
+			storage.0.insert(well_known_keys::EXTRINSIC_INDEX.to_vec(), 0u32.encode());
 
 			if let Some(ref changes_trie_config) = config.changes_trie_config {
-				storage.insert(
+				storage.0.insert(
 					well_known_keys::CHANGES_TRIE_CONFIG.to_vec(),
 					changes_trie_config.encode());
 			}
@@ -559,7 +578,7 @@ impl<T: Trait> Module<T> {
 		// We perform early return if we've reached the maximum capacity of the event list,
 		// so `Events<T>` seems to be corrupted. Also, this has happened after the start of execution
 		// (since the event list is cleared at the block initialization).
-		if <Events<T>>::append(&[event]).is_err() {
+		if <Events<T>>::append([event].into_iter()).is_err() {
 			// The most sensible thing to do here is to just ignore this event and wait until the
 			// new block.
 			return;
@@ -683,11 +702,11 @@ impl<T: Trait> Module<T> {
 	/// Get the basic externalities for this module, useful for tests.
 	#[cfg(any(feature = "std", test))]
 	pub fn externalities() -> TestExternalities<Blake2Hasher> {
-		TestExternalities::new(map![
+		TestExternalities::new((map![
 			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),
 			twox_128(<Number<T>>::key()).to_vec() => T::BlockNumber::one().encode(),
 			twox_128(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode()
-		])
+		], map![]))
 	}
 
 	/// Set the block number to something in particular. Can be used as an alternative to
@@ -709,6 +728,9 @@ impl<T: Trait> Module<T> {
 	pub fn set_parent_hash(n: T::Hash) {
 		<ParentHash<T>>::put(n);
 	}
+
+	/// Return the chain's current runtime version.
+	pub fn runtime_version() -> RuntimeVersion { T::Version::get() }
 
 	/// Get the basic random seed.
 	///
@@ -803,13 +825,15 @@ impl<T: Trait> Module<T> {
 	/// To be called immediately after `note_applied_extrinsic` of the last extrinsic of the block
 	/// has been called.
 	pub fn note_finished_extrinsics() {
-		let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX).unwrap_or_default();
+		let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX)
+			.unwrap_or_default();
 		ExtrinsicCount::put(extrinsic_index);
 	}
 
 	/// Remove all extrinsic data and save the extrinsics trie root.
 	pub fn derive_extrinsics() {
-		let extrinsics = (0..ExtrinsicCount::get().unwrap_or_default()).map(ExtrinsicData::take).collect();
+		let extrinsics = (0..ExtrinsicCount::get().unwrap_or_default())
+			.map(ExtrinsicData::take).collect();
 		let xts_root = extrinsics_data_root::<T::Hashing>(extrinsics);
 		<ExtrinsicsRoot<T>>::put(xts_root);
 	}
@@ -881,6 +905,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = ();
+	type Pre = ();
 
 	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
 
@@ -944,6 +969,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = ();
+	type Pre = ();
 
 	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
 
@@ -994,7 +1020,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 	}
 }
 
-/// Nonce check and increment to give replay protection for transactions.
+/// Check for transaction mortality.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckEra<T: Trait + Send + Sync>((Era, rstd::marker::PhantomData<T>));
 
@@ -1017,6 +1043,23 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = T::Hash;
+	type Pre = ();
+
+	fn validate(
+		&self,
+		_who: &Self::AccountId,
+		_call: &Self::Call,
+		_info: DispatchInfo,
+		_len: usize,
+	) -> Result<ValidTransaction, DispatchError> {
+		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
+		let valid_till = (self.0).0.death(current_u64);
+		Ok(ValidTransaction {
+			longevity: valid_till.saturating_sub(current_u64),
+			..Default::default()
+		})
+	}
+
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str> {
 		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
 		let n = (self.0).0.birth(current_u64).saturated_into::<T::BlockNumber>();
@@ -1047,8 +1090,39 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckGenesis<T> {
 	type AccountId = T::AccountId;
 	type Call = <T as Trait>::Call;
 	type AdditionalSigned = T::Hash;
+	type Pre = ();
+
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str> {
 		Ok(<Module<T>>::block_hash(T::BlockNumber::zero()))
+	}
+}
+
+/// Ensure the runtime version registered in the transaction is the same as at present.
+#[derive(Encode, Decode, Clone, Eq, PartialEq)]
+pub struct CheckVersion<T: Trait + Send + Sync>(rstd::marker::PhantomData<T>);
+
+#[cfg(feature = "std")]
+impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckVersion<T> {
+	fn fmt(&self, _f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		Ok(())
+	}
+}
+
+#[cfg(feature = "std")]
+impl<T: Trait + Send + Sync> CheckVersion<T> {
+	pub fn new() -> Self {
+		Self(std::marker::PhantomData)
+	}
+}
+
+impl<T: Trait + Send + Sync> SignedExtension for CheckVersion<T> {
+	type AccountId = T::AccountId;
+	type Call = <T as Trait>::Call;
+	type AdditionalSigned = u32;
+	type Pre = ();
+
+	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str> {
+		Ok(<Module<T>>::runtime_version().spec_version)
 	}
 }
 
@@ -1105,6 +1179,7 @@ mod tests {
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
+		type Version = ();
 	}
 
 	impl From<Event> for u16 {
@@ -1121,7 +1196,7 @@ mod tests {
 	const CALL: &<Test as Trait>::Call = &();
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		GenesisConfig::default().build_storage::<Test>().unwrap().0.into()
+		GenesisConfig::default().build_storage::<Test>().unwrap().into()
 	}
 
 	fn normal_weight_limit() -> Weight {
@@ -1416,6 +1491,25 @@ mod tests {
 			System::set_block_number(13);
 			<BlockHash<Test>>::insert(12, H256::repeat_byte(1));
 			assert!(CheckEra::<Test>::from(Era::mortal(4, 12)).additional_signed().is_ok());
+		})
+	}
+
+	#[test]
+	fn signed_ext_check_era_should_change_longevity() {
+		with_externalities(&mut new_test_ext(), || {
+			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal };
+			let len = 0_usize;
+			let ext = (
+				CheckWeight::<Test>(PhantomData),
+				CheckEra::<Test>::from(Era::mortal(16, 256)),
+			);
+			System::set_block_number(17);
+			<BlockHash<Test>>::insert(16, H256::repeat_byte(1));
+
+			assert_eq!(
+				ext.validate(&1, CALL, normal, len).unwrap().longevity,
+				15,
+			);
 		})
 	}
 }

@@ -371,13 +371,21 @@ This function returns the size of the scratch buffer.
 
 **complexity**: This function is of constant complexity.
 
-## ext_scratch_copy
+## ext_scratch_read
 
 This function copies slice of data from the scratch buffer to the sandbox memory. The calling code specifies the slice length. Execution of the function consists of the following steps:
 
 1. Storing a specified slice of the scratch buffer into the sandbox memory (see sandboxing memory set)
 
 **complexity**: The computing complexity of this function is proportional to the length of the slice. No additional memory is required.
+
+## ext_scratch_write
+
+This function copies slice of data from the sandbox memory to the scratch buffer. The calling code specifies the slice length. Execution of the function consists of the following steps:
+
+1. Loading a slice from the sandbox memory into the (see sandboxing memory get)
+
+**complexity**: Complexity is proportional to the length of the slice.
 
 ## ext_set_rent_allowance
 
