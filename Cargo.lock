@@ -2467,7 +2467,7 @@ dependencies = [
  "substrate-offchain-primitives 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-session 2.0.0",
- "substrate-wasm-builder-runner 1.0.2",
+ "substrate-wasm-builder-runner 1.0.3",
 ]
 
 [[package]]
@@ -2976,7 +2976,7 @@ name = "proc-macro-crate"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "toml 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "toml 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -5020,7 +5020,7 @@ dependencies = [
  "sr-sandbox 2.0.0",
  "sr-std 2.0.0",
  "substrate-primitives 2.0.0",
- "substrate-wasm-builder-runner 1.0.2",
+ "substrate-wasm-builder-runner 1.0.3",
 ]
 
 [[package]]
@@ -5201,7 +5201,7 @@ dependencies = [
  "substrate-state-machine 2.0.0",
  "substrate-test-runtime-client 2.0.0",
  "substrate-trie 2.0.0",
- "substrate-wasm-builder-runner 1.0.2",
+ "substrate-wasm-builder-runner 1.0.3",
  "trie-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -5269,24 +5269,24 @@ dependencies = [
 
 [[package]]
 name = "substrate-wasm-builder"
-version = "1.0.4"
+version = "1.0.5"
 dependencies = [
  "build-helper 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "cargo_metadata 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "fs2 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempfile 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "toml 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "toml 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "walkdir 2.2.9 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "substrate-wasm-builder-runner"
 version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "substrate-wasm-builder-runner"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
+version = "1.0.3"
 
 [[package]]
 name = "subtle"
@@ -5643,7 +5643,7 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "0.5.1"
+version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "serde 1.0.97 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5727,7 +5727,7 @@ dependencies = [
  "serde 1.0.97 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.40 (registry+https://github.com/rust-lang/crates.io-index)",
  "termcolor 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "toml 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "toml 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -6641,7 +6641,7 @@ dependencies = [
 "checksum tokio-tls 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "354b8cd83825b3c20217a9dc174d6a0c67441a2fae5c41bcb1ea6679f6ae0f7c"
 "checksum tokio-udp 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)" = "66268575b80f4a4a710ef83d087fdfeeabdce9b74c797535fbac18a2cb906e92"
 "checksum tokio-uds 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)" = "037ffc3ba0e12a0ab4aca92e5234e0dedeb48fddf6ccd260f1f150a36a9f2445"
-"checksum toml 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)" = "b8c96d7873fa7ef8bdeb3a9cda3ac48389b4154f32b9803b4bc26220b677b039"
+"checksum toml 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)" = "c7aabe75941d914b72bf3e5d3932ed92ce0664d49d8432305a8b547c37227724"
 "checksum traitobject 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "efd1f82c56340fdf16f2a953d7bda4f8fdffba13d93b00844c25572110b26079"
 "checksum trie-bench 0.16.2 (registry+https://github.com/rust-lang/crates.io-index)" = "3073600c543ed001319d7e092c46dfd8c245af1a218ec5c75eb01582660a2b3e"
 "checksum trie-db 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)" = "d0b62d27e8aa1c07414549ac872480ac82380bab39e730242ab08d82d7cc098a"
