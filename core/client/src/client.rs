@@ -27,8 +27,9 @@ use codec::{Encode, Decode};
 use hash_db::{Hasher, Prefix};
 use primitives::{
 	Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash,
-	NeverNativeValue, ExecutionContext,
-	storage::{StorageKey, StorageData, well_known_keys}, NativeOrEncoded
+	NeverNativeValue, ExecutionContext, NativeOrEncoded,
+	storage::{StorageKey, StorageData, well_known_keys},
+	offchain,
 };
 use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
 use sr_primitives::{
@@ -42,7 +43,7 @@ use sr_primitives::{
 use state_machine::{
 	DBValue, Backend as StateBackend, CodeExecutor, ChangesTrieAnchorBlockId,
 	ExecutionStrategy, ExecutionManager, prove_read, prove_child_read,
-	ChangesTrieRootsStorage, ChangesTrieStorage,
+	ChangesTrieRootsStorage, ChangesTrieStorage, ChangesTrieConfigurationRange,
 	key_changes, key_changes_proof, OverlayedChanges, NeverOffchainExt,
 };
 use executor::{RuntimeVersion, RuntimeInfo};
@@ -553,8 +554,15 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let last_number = self.backend.blockchain().expect_block_number_from_id(&last)?;
 		let last_hash = self.backend.blockchain().expect_block_hash_from_id(&last)?;
 
-		key_changes::<_, Blake2Hasher, _>(
-			&config,
+		// FIXME: remove this in https://github.com/paritytech/substrate/pull/3201
+		let config_range = ChangesTrieConfigurationRange {
+			config: &config,
+			zero: Zero::zero(),
+			end: None,
+		};
+
+		key_changes::<Blake2Hasher, _>(
+			config_range,
 			&*storage,
 			first,
 			&ChangesTrieAnchorBlockId {
@@ -631,6 +639,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		}
 
 		impl<'a, Block: BlockT> ChangesTrieStorage<Blake2Hasher, NumberFor<Block>> for AccessedRootsRecorder<'a, Block> {
+			fn as_roots_storage(&self) -> &dyn state_machine::ChangesTrieRootsStorage<Blake2Hasher, NumberFor<Block>> {
+				self
+			}
+
 			fn get(&self, key: &H256, prefix: Prefix) -> Result<Option<DBValue>, String> {
 				self.storage.get(key, prefix)
 			}
@@ -650,13 +662,20 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(max))?,
 		);
 
+		// FIXME: remove this in https://github.com/paritytech/substrate/pull/3201
+		let config_range = ChangesTrieConfigurationRange {
+			config: &config,
+			zero: Zero::zero(),
+			end: None,
+		};
+
 		// fetch key changes proof
 		let first_number = self.backend.blockchain()
 			.expect_block_number_from_id(&BlockId::Hash(first))?;
 		let last_number = self.backend.blockchain()
 			.expect_block_number_from_id(&BlockId::Hash(last))?;
-		let key_changes_proof = key_changes_proof::<_, Blake2Hasher, _>(
-			&config,
+		let key_changes_proof = key_changes_proof::<Blake2Hasher, _>(
+			config_range,
 			&recording_storage,
 			first_number,
 			&ChangesTrieAnchorBlockId {
@@ -1471,8 +1490,6 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 		context: ExecutionContext,
 		recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
 	) -> error::Result<NativeOrEncoded<R>> {
-		let enable_keystore = context.enable_keystore();
-
 		let manager = match context {
 			ExecutionContext::BlockConstruction =>
 				self.execution_strategies.block_construction.get_manager(),
@@ -1480,16 +1497,17 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 				self.execution_strategies.syncing.get_manager(),
 			ExecutionContext::Importing =>
 				self.execution_strategies.importing.get_manager(),
-			ExecutionContext::OffchainWorker(_) =>
+			ExecutionContext::OffchainCall(Some((_, capabilities))) if capabilities.has_all() =>
 				self.execution_strategies.offchain_worker.get_manager(),
-			ExecutionContext::Other =>
+			ExecutionContext::OffchainCall(_) =>
 				self.execution_strategies.other.get_manager(),
 		};
 
+		let capabilities = context.capabilities();
 		let mut offchain_extensions = match context {
-			ExecutionContext::OffchainWorker(ext) => Some(ext),
+			ExecutionContext::OffchainCall(ext) => ext.map(|x| x.0),
 			_ => None,
-		};
+		}.map(|ext| offchain::LimitedExternalities::new(capabilities, ext));
 
 		self.executor.contextual_call::<_, _, fn(_,_) -> _,_,_>(
 			|| core_api.initialize_block(at, &self.prepare_environment_block(at)?),
@@ -1502,7 +1520,7 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 			native_call,
 			offchain_extensions.as_mut(),
 			recorder,
-			enable_keystore,
+			capabilities.has(offchain::Capability::Keystore),
 		)
 	}
 

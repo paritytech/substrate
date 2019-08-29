@@ -29,28 +29,33 @@ use test_client::{
 	consensus::BlockOrigin,
 	runtime,
 };
-use substrate_executor::NativeExecutionDispatch;
 
 #[test]
 fn should_return_storage() {
+	const KEY: &[u8] = b":mock";
+	const VALUE: &[u8] = b"hello world";
+
 	let core = tokio::runtime::Runtime::new().unwrap();
-	let client = Arc::new(test_client::new());
+	let client = TestClientBuilder::new()
+		.add_extra_storage(KEY.to_vec(), VALUE.to_vec())
+		.build();
 	let genesis_hash = client.genesis_hash();
-	let client = new_full(client, Subscriptions::new(Arc::new(core.executor())));
-	let key = StorageKey(b":code".to_vec());
+	let client = new_full(Arc::new(client), Subscriptions::new(Arc::new(core.executor())));
+	let key = StorageKey(KEY.to_vec());
 
 	assert_eq!(
-		client.storage(key.clone(), Some(genesis_hash).into())
-			.wait().map(|x| x.map(|x| x.0.len())).unwrap().unwrap() as usize,
-		LocalExecutor::native_equivalent().len(),
+		client.storage(key.clone(), Some(genesis_hash).into()).wait()
+			.map(|x| x.map(|x| x.0.len())).unwrap().unwrap() as usize,
+		VALUE.len(),
 	);
 	assert_matches!(
-		client.storage_hash(key.clone(), Some(genesis_hash).into()).wait().map(|x| x.is_some()),
+		client.storage_hash(key.clone(), Some(genesis_hash).into()).wait()
+			.map(|x| x.is_some()),
 		Ok(true)
 	);
 	assert_eq!(
 		client.storage_size(key.clone(), None).wait().unwrap().unwrap() as usize,
-		LocalExecutor::native_equivalent().len(),
+		VALUE.len(),
 	);
 }
 

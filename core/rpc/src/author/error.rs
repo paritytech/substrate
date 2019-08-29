@@ -83,6 +83,8 @@ const POOL_TOO_LOW_PRIORITY: i64 = POOL_INVALID_TX + 4;
 const POOL_CYCLE_DETECTED: i64 = POOL_INVALID_TX + 5;
 /// The transaction was not included to the pool because of the limits.
 const POOL_IMMEDIATELY_DROPPED: i64 = POOL_INVALID_TX + 6;
+/// The key type crypto is not known.
+const UNSUPPORTED_KEY_TYPE: i64 = POOL_INVALID_TX + 7;
 
 impl From<Error> for rpc::Error {
 	fn from(e: Error) -> Self {
@@ -133,6 +135,14 @@ impl From<Error> for rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_IMMEDIATELY_DROPPED),
 				message: "Immediately Dropped" .into(),
 				data: Some("The transaction couldn't enter the pool because of the limit".into()),
+			},
+			Error::UnsupportedKeyType => rpc::Error {
+				code: rpc::ErrorCode::ServerError(UNSUPPORTED_KEY_TYPE),
+				message: "Unknown key type crypto" .into(),
+				data: Some(
+					"The crypto for the given key type is unknown, please add the public key to the \
+					request to insert the key successfully.".into()
+				),
 			},
 			e => errors::internal(e),
 		}
