@@ -27,7 +27,7 @@ extern crate bitmask;
 #[cfg(feature = "std")]
 pub use serde;
 #[doc(hidden)]
-pub use sr_std as rstd;
+pub use rstd;
 #[doc(hidden)]
 pub use codec;
 #[cfg(feature = "std")]

@@ -16,7 +16,7 @@
 
 use codec::{Codec, Encode, Decode};
 use crate::{storage::{self, unhashed, hashed::StorageHasher}, traits::Len};
-use sr_std::{
+use rstd::{
 	borrow::Borrow,
 	marker::PhantomData,
 };

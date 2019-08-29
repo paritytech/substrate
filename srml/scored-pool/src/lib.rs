@@ -89,7 +89,7 @@ mod mock;
 mod tests;
 
 use codec::{Encode, Decode};
-use sr_std::prelude::*;
+use rstd::prelude::*;
 use srml_support::{
 	StorageValue, StorageMap, decl_module, decl_storage, decl_event, ensure,
 	traits::{ChangeMembers, InitializeMembers, Currency, Get, ReservableCurrency},
@@ -171,7 +171,7 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(members): Vec<T::AccountId>;
-		config(phantom): sr_std::marker::PhantomData<I>;
+		config(phantom): rstd::marker::PhantomData<I>;
 		build(|config| {
 			let mut pool = config.pool.clone();
 
@@ -214,7 +214,7 @@ decl_event!(
 		/// See the transaction for who.
 		CandidateScored,
 		/// Phantom member, never used.
-		Dummy(sr_std::marker::PhantomData<(AccountId, I)>),
+		Dummy(rstd::marker::PhantomData<(AccountId, I)>),
 	}
 );
 
