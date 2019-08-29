@@ -96,6 +96,8 @@ cargo-check-benches:
   <<:                              *docker-env
   script:
     - BUILD_DUMMY_WASM_BINARY=1 time cargo check --benches --all
+    - cd srml/staking/
+    - time cargo test --release --verbose --no-default-features --features bench
     - sccache -s
 
 
