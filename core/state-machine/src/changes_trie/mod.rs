@@ -14,6 +14,24 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Changes trie related structures and functions.
+//!
+//! Changes trie is a trie built of { storage key => extrinsiscs } pairs
+//! at the end of each block. For every changed storage key it contains
+//! a pair, mapping key to the set of extrinsics where it has been changed.
+//!
+//! Optionally, every N blocks, additional level1-digest nodes are appended
+//! to the changes trie, containing pairs { storage key => blocks }. For every
+//! storage key that has been changed in PREVIOUS N-1 blocks (except for genesis
+//! block) it contains a pair, mapping this key to the set of blocks where it
+//! has been changed.
+//!
+//! Optionally, every N^digest_level (where digest_level > 1) blocks, additional
+//! digest_level digest is created. It is built out of pairs { storage key => digest
+//! block }, containing entries for every storage key that has been changed in
+//! the last N*digest_level-1 blocks (except for genesis block), mapping these keys
+//! to the set of lower-level digest blocks.
+//!
 //! Changes trie configuration could change within a time. The range of blocks, where
 //! configuration has been active, is given by two blocks: zero and end. Zero block is
 //! the block where configuration has been set. But the first changes trie that uses
