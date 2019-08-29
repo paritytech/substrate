@@ -743,7 +743,11 @@ pub trait Extrinsic: Sized {
 	/// The function call.
 	type Call;
 
-	/// The signed data for signed extrinsics.
+	/// The payload we carry for signed extrinsics.
+	///
+	/// Usually it will contain a `Signature` and
+	/// may include some additional data that are specific to signed
+	/// extrinsics.
 	type SignaturePayload;
 
 	/// Is this `Extrinsic` signed?
