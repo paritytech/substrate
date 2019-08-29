@@ -725,7 +725,9 @@ fn build_network_future<
 					).collect());
 				}
 				rpc::system::Request::NetworkState(sender) => {
-					let _ = sender.send(network.network_state());
+					if let Some(network_state) = serde_json::to_value(&network.network_state()).ok() {
+						let _ = sender.send(network_state);
+					}
 				}
 			};
 		}

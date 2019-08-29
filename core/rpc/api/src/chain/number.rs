@@ -61,14 +61,12 @@ impl<Number: TryFrom<u64> + From<u32> + Debug + PartialOrd> NumberOrHex<Number> 
 	}
 }
 
-#[cfg(test)]
 impl From<u64> for NumberOrHex<u64> {
 	fn from(n: u64) -> Self {
 		NumberOrHex::Number(n)
 	}
 }
 
-#[cfg(test)]
 impl<Number> From<U256> for NumberOrHex<Number> {
 	fn from(n: U256) -> Self {
 		NumberOrHex::Hex(n)

@@ -5,32 +5,28 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-derive_more = "0.14.0"
-futures = "0.1"
-futures03 = { package = "futures-preview", version = "0.3.0-alpha.17", features = ["compat"] }
-jsonrpc-core = "13.1.0"
-jsonrpc-core-client = "13.1.0"
-jsonrpc-pubsub = "13.1.0"
-jsonrpc-derive = "13.1.0"
-log = "0.4"
-parking_lot = "0.9.0"
-codec = { package = "parity-scale-codec", version = "1.0.0" }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+api = { package = "substrate-rpc-api", path = "./api" }
 client = { package = "substrate-client", path = "../client" }
-network = { package = "substrate-network", path = "../network" }
+codec = { package = "parity-scale-codec", version = "1.0.0" }
+futures03 = { package = "futures-preview", version = "0.3.0-alpha.17", features = ["compat"] }
+jsonrpc-pubsub = "13.1.0"
+log = "0.4"
 primitives = { package = "substrate-primitives", path = "../primitives" }
-session = { package = "substrate-session", path = "../session" }
-state_machine = { package = "substrate-state-machine", path = "../state-machine" }
-transaction_pool = { package = "substrate-transaction-pool", path = "../transaction-pool" }
-sr-primitives = { path = "../sr-primitives" }
+rpc = { package = "jsonrpc-core", version = "13.0.0" }
 runtime_version = { package = "sr-version", path = "../sr-version" }
+serde_json = "1.0"
+session = { package = "substrate-session", path = "../session" }
+sr-primitives = { path = "../sr-primitives" }
+state_machine = { package = "substrate-state-machine", path = "../state-machine" }
+substrate-executor = { path = "../executor" }
 substrate-keystore = { path = "../keystore" }
+transaction_pool = { package = "substrate-transaction-pool", path = "../transaction-pool" }
 
 [dev-dependencies]
 assert_matches = "1.1"
 futures = "0.1.17"
+network = { package = "substrate-network", path = "../network" }
+rustc-hex = "2.0"
 sr-io = { path = "../sr-io" }
 test-client = { package = "substrate-test-runtime-client", path = "../test-runtime/client" }
-rustc-hex = "2.0"
 tokio = "0.1.17"
