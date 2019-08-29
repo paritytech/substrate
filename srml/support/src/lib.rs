@@ -35,11 +35,11 @@ pub use codec;
 pub use once_cell;
 #[doc(hidden)]
 pub use paste;
+#[cfg(feature = "std")]
+#[doc(hidden)]
+pub use runtime_io::with_storage;
 
-pub use self::storage::hashed::generator::{
-	HashedStorage, Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat
-};
-pub use self::storage::unhashed::generator::UnhashedStorage;
+pub use self::storage::hashed::{Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat};
 
 #[macro_use]
 pub mod dispatch;
@@ -61,10 +61,7 @@ pub mod unsigned;
 mod double_map;
 pub mod traits;
 
-pub use self::storage::{
-	StorageValue, StorageMap, EnumerableStorageMap, StorageDoubleMap, AppendableStorageMap,
-	DecodeLengthStorageMap,
-};
+pub use self::storage::{StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap};
 pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
 pub use self::double_map::StorageDoubleMapWithHasher;

@@ -381,41 +381,36 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(keys): Vec<(T::ValidatorId, T::Keys)>;
-		build(|
-			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
-			config: &GenesisConfig<T>
-		| {
-			runtime_io::with_storage(storage, || {
-				for (who, keys) in config.keys.iter().cloned() {
-					assert!(
-						<Module<T>>::load_keys(&who).is_none(),
-						"genesis config contained duplicate validator {:?}", who,
-					);
+		build(|config: &GenesisConfig<T>| {
+			for (who, keys) in config.keys.iter().cloned() {
+				assert!(
+					<Module<T>>::load_keys(&who).is_none(),
+					"genesis config contained duplicate validator {:?}", who,
+				);
 
-					<Module<T>>::do_set_keys(&who, keys)
-						.expect("genesis config must not contain duplicates; qed");
-				}
+				<Module<T>>::do_set_keys(&who, keys)
+					.expect("genesis config must not contain duplicates; qed");
+			}
 
-				let initial_validators = T::SelectInitialValidators::select_initial_validators()
-					.unwrap_or_else(|| config.keys.iter().map(|(ref v, _)| v.clone()).collect());
+			let initial_validators = T::SelectInitialValidators::select_initial_validators()
+				.unwrap_or_else(|| config.keys.iter().map(|(ref v, _)| v.clone()).collect());
 
-				assert!(!initial_validators.is_empty(), "Empty validator set in genesis block!");
+			assert!(!initial_validators.is_empty(), "Empty validator set in genesis block!");
 
-				let queued_keys: Vec<_> = initial_validators
-					.iter()
-					.cloned()
-					.map(|v| (
-						v.clone(),
-						<Module<T>>::load_keys(&v).unwrap_or_default(),
-					))
-					.collect();
+			let queued_keys: Vec<_> = initial_validators
+				.iter()
+				.cloned()
+				.map(|v| (
+					v.clone(),
+					<Module<T>>::load_keys(&v).unwrap_or_default(),
+				))
+				.collect();
 
-				// Tell everyone about the genesis session keys
-				T::SessionHandler::on_genesis_session::<T::Keys>(&queued_keys);
+			// Tell everyone about the genesis session keys
+			T::SessionHandler::on_genesis_session::<T::Keys>(&queued_keys);
 
-				<Validators<T>>::put(initial_validators);
-				<QueuedKeys<T>>::put(queued_keys);
-			});
+			<Validators<T>>::put(initial_validators);
+			<QueuedKeys<T>>::put(queued_keys);
 		});
 	}
 }

@@ -99,15 +99,7 @@ decl_storage! {
 	add_extra_genesis {
 		config(phantom): rstd::marker::PhantomData<I>;
 		config(members): Vec<T::AccountId>;
-		build(|
-			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
-			config: &Self,
-		| {
-			runtime_io::with_storage(
-				storage,
-				|| Module::<T, I>::initialize_members(&config.members),
-			);
-		})
+		build(|config| Module::<T, I>::initialize_members(&config.members))
 	}
 }
 
