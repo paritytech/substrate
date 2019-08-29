@@ -43,7 +43,7 @@ use sr_primitives::{
 use state_machine::{
 	DBValue, Backend as StateBackend, CodeExecutor, ChangesTrieAnchorBlockId,
 	ExecutionStrategy, ExecutionManager, prove_read, prove_child_read,
-	ChangesTrieRootsStorage, ChangesTrieStorage,
+	ChangesTrieRootsStorage, ChangesTrieStorage, ChangesTrieConfigurationRange,
 	key_changes, key_changes_proof, OverlayedChanges, NeverOffchainExt,
 };
 use executor::{RuntimeVersion, RuntimeInfo};
@@ -554,8 +554,15 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let last_number = self.backend.blockchain().expect_block_number_from_id(&last)?;
 		let last_hash = self.backend.blockchain().expect_block_hash_from_id(&last)?;
 
-		key_changes::<_, Blake2Hasher, _>(
-			&config,
+		// FIXME: remove this in https://github.com/paritytech/substrate/pull/3201
+		let config_range = ChangesTrieConfigurationRange {
+			config: &config,
+			zero: Zero::zero(),
+			end: None,
+		};
+
+		key_changes::<Blake2Hasher, _>(
+			config_range,
 			&*storage,
 			first,
 			&ChangesTrieAnchorBlockId {
@@ -632,6 +639,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		}
 
 		impl<'a, Block: BlockT> ChangesTrieStorage<Blake2Hasher, NumberFor<Block>> for AccessedRootsRecorder<'a, Block> {
+			fn as_roots_storage(&self) -> &dyn state_machine::ChangesTrieRootsStorage<Blake2Hasher, NumberFor<Block>> {
+				self
+			}
+
 			fn get(&self, key: &H256, prefix: Prefix) -> Result<Option<DBValue>, String> {
 				self.storage.get(key, prefix)
 			}
@@ -651,13 +662,20 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(max))?,
 		);
 
+		// FIXME: remove this in https://github.com/paritytech/substrate/pull/3201
+		let config_range = ChangesTrieConfigurationRange {
+			config: &config,
+			zero: Zero::zero(),
+			end: None,
+		};
+
 		// fetch key changes proof
 		let first_number = self.backend.blockchain()
 			.expect_block_number_from_id(&BlockId::Hash(first))?;
 		let last_number = self.backend.blockchain()
 			.expect_block_number_from_id(&BlockId::Hash(last))?;
-		let key_changes_proof = key_changes_proof::<_, Blake2Hasher, _>(
-			&config,
+		let key_changes_proof = key_changes_proof::<Blake2Hasher, _>(
+			config_range,
 			&recording_storage,
 			first_number,
 			&ChangesTrieAnchorBlockId {
