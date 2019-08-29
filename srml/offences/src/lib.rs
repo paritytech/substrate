@@ -133,8 +133,7 @@ where
 			);
 			let numerator = new_fraction.saturating_sub(previous_fraction);
 			let denominator = Perbill::one().saturating_sub(previous_fraction);
-			// TODO: I will not change this but this looks WRONG WRONG.
-			numerator / denominator
+			denominator.saturating_mul(numerator)
 		} else {
 			new_fraction.clone()
 		};
