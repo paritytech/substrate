@@ -16,61 +16,17 @@
 
 //! Substrate system API.
 
-pub mod error;
-pub mod helpers;
-
 #[cfg(test)]
 mod tests;
 
-use crate::helpers::Receiver;
 use futures03::{channel::{mpsc, oneshot}, compat::Compat};
-use jsonrpc_derive::rpc;
-use network;
+use api::Receiver;
 use sr_primitives::traits::{self, Header as HeaderT};
-
 use self::error::Result;
 
+pub use api::system::*;
 pub use self::helpers::{Properties, SystemInfo, Health, PeerInfo};
 pub use self::gen_client::Client as SystemClient;
-
-/// Substrate system RPC API
-#[rpc]
-pub trait SystemApi<Hash, Number> {
-	/// Get the node's implementation name. Plain old string.
-	#[rpc(name = "system_name")]
-	fn system_name(&self) -> Result<String>;
-
-	/// Get the node implementation's version. Should be a semver string.
-	#[rpc(name = "system_version")]
-	fn system_version(&self) -> Result<String>;
-
-	/// Get the chain's type. Given as a string identifier.
-	#[rpc(name = "system_chain")]
-	fn system_chain(&self) -> Result<String>;
-
-	/// Get a custom set of properties as a JSON object, defined in the chain spec.
-	#[rpc(name = "system_properties")]
-	fn system_properties(&self) -> Result<Properties>;
-
-	/// Return health status of the node.
-	///
-	/// Node is considered healthy if it is:
-	/// - connected to some peers (unless running in dev mode)
-	/// - not performing a major sync
-	#[rpc(name = "system_health", returns = "Health")]
-	fn system_health(&self) -> Receiver<Health>;
-
-	/// Returns currently connected peers
-	#[rpc(name = "system_peers", returns = "Vec<PeerInfo<Hash, Number>>")]
-	fn system_peers(&self) -> Receiver<Vec<PeerInfo<Hash, Number>>>;
-
-	/// Returns current state of the network.
-	///
-	/// **Warning**: This API is not stable.
-	// TODO: make this stable and move structs https://github.com/paritytech/substrate/issues/1890
-	#[rpc(name = "system_networkState", returns = "network::NetworkState")]
-	fn system_network_state(&self) -> Receiver<network::NetworkState>;
-}
 
 /// System API implementation
 pub struct System<B: traits::Block> {
@@ -85,7 +41,7 @@ pub enum Request<B: traits::Block> {
 	/// Must return information about the peers we are connected to.
 	Peers(oneshot::Sender<Vec<PeerInfo<B::Hash, <B::Header as HeaderT>::Number>>>),
 	/// Must return the state of the network.
-	NetworkState(oneshot::Sender<network::NetworkState>),
+	NetworkState(oneshot::Sender<rpc::Value>),
 }
 
 impl<B: traits::Block> System<B> {
@@ -133,7 +89,7 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 		Receiver(Compat::new(rx))
 	}
 
-	fn system_network_state(&self) -> Receiver<network::NetworkState> {
+	fn system_network_state(&self) -> Receiver<rpc::Value> {
 		let (tx, rx) = oneshot::channel();
 		let _ = self.send_back.unbounded_send(Request::NetworkState(tx));
 		Receiver(Compat::new(rx))

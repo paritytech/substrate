@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::subscriptions::Subscriptions;
 use super::*;
 use super::state_full::split_range;
 use self::error::Error;
@@ -95,7 +94,7 @@ fn should_call_contract() {
 
 	assert_matches!(
 		client.call("balanceOf".into(), Bytes(vec![1,2,3]), Some(genesis_hash).into()).wait(),
-		Err(Error::Client(client::error::Error::Execution(_)))
+		Err(Error::Client(_))
 	)
 }
 

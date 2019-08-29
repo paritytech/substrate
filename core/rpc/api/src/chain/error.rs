@@ -14,54 +14,46 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! State RPC errors.
 
-use client;
-use crate::rpc;
+//! Error helpers for Chain RPC module.
+
 use crate::errors;
-use crate::rpc::futures::Future;
+use jsonrpc_core as rpc;
 
-/// State RPC Result type.
+/// Chain RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// State RPC future Result type.
-pub type FutureResult<T> = Box<dyn Future<Item = T, Error = Error> + Send>;
+pub type FutureResult<T> = Box<dyn rpc::futures::Future<Item = T, Error = Error> + Send>;
 
-/// State RPC errors.
+/// Chain RPC errors.
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
 	/// Client error.
-	Client(client::error::Error),
-	/// Provided block range couldn't be resolved to a list of blocks.
-	#[display(fmt = "Cannot resolve a block range ['{:?}' ... '{:?}]. {}", from, to, details)]
-	InvalidBlockRange {
-		/// Beginning of the block range.
-		from: String,
-		/// End of the block range.
-		to: String,
-		/// Details of the error message.
-		details: String,
-	},
+	#[display(fmt="Client error: {}", _0)]
+	Client(Box<dyn std::error::Error + Send>),
+	/// Other error type.
+	Other(String),
 }
 
 impl std::error::Error for Error {
 	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
 		match self {
-			Error::Client(ref err) => Some(err),
+			Error::Client(ref err) => Some(&**err),
 			_ => None,
 		}
 	}
 }
 
-/// Base code for all state errors.
-const BASE_ERROR: i64 = 4000;
+/// Base error code for all chain errors.
+const BASE_ERROR: i64 = 3000;
 
 impl From<Error> for rpc::Error {
 	fn from(e: Error) -> Self {
 		match e {
-			Error::InvalidBlockRange { .. } => rpc::Error {
+			Error::Other(message) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(BASE_ERROR + 1),
-				message: format!("{}", e),
+				message,
 				data: None,
 			},
 			e => errors::internal(e),

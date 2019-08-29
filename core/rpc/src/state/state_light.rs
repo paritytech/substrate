@@ -17,10 +17,12 @@
 //! State API backend for light nodes.
 
 use std::sync::Arc;
-use futures::future::{result, Future};
 use futures03::{future::{ready, Either}, FutureExt, TryFutureExt};
 use hash_db::Hasher;
+use rpc::futures::future::{result, Future};
+use rpc::Result as RpcResult;
 
+use api::Subscriptions;
 use client::{
 	self, Client, CallExecutor,
 	error::Error as ClientError,
@@ -36,9 +38,7 @@ use runtime_version::RuntimeVersion;
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT};
 
-use crate::rpc::Result as RpcResult;
-use crate::subscriptions::Subscriptions;
-use super::{StateBackend, error::{FutureResult, Error}};
+use super::{StateBackend, error::{FutureResult, Error}, client_err};
 
 pub struct LightState<Block: BlockT, F: Fetcher<Block>, B, E, RA> {
 	client: Arc<Client<B, E, Block, RA>>,
@@ -84,7 +84,7 @@ impl<Block: BlockT, F: Fetcher<Block> + 'static, B, E, RA> LightState<Block, F, 
 		maybe_header.then(move |result|
 			ready(result.and_then(|maybe_header|
 				maybe_header.ok_or(client::error::Error::UnknownBlock(format!("{}", block)))
-			).map_err(Error::Client)),
+			).map_err(client_err)),
 		)
 	}
 }
@@ -120,7 +120,7 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 					method,
 					call_data: call_data.0,
 					retry_count: Default::default(),
-				}).then(|result| ready(result.map(Bytes).map_err(Error::Client)))),
+				}).then(|result| ready(result.map(Bytes).map_err(client_err)))),
 				Err(error) => Either::Right(ready(Err(error))),
 			});
 
@@ -132,7 +132,7 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 		_block: Option<Block::Hash>,
 		_prefix: StorageKey,
 	) -> FutureResult<Vec<StorageKey>> {
-		Box::new(result(Err(Error::Client(ClientError::NotAvailableOnLightClient))))
+		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
 	}
 
 	fn storage(
@@ -148,7 +148,7 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 					header,
 					key: key.0,
 					retry_count: Default::default(),
-				}).then(|result| ready(result.map(|data| data.map(StorageData)).map_err(Error::Client)))),
+				}).then(|result| ready(result.map(|data| data.map(StorageData)).map_err(client_err)))),
 				Err(error) => Either::Right(ready(Err(error))),
 			});
 
@@ -174,7 +174,7 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 		_child_storage_key: StorageKey,
 		_prefix: StorageKey,
 	) -> FutureResult<Vec<StorageKey>> {
-		Box::new(result(Err(Error::Client(ClientError::NotAvailableOnLightClient))))
+		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
 	}
 
 	fn child_storage(
@@ -192,7 +192,7 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 					storage_key: child_storage_key.0,
 					key: key.0,
 					retry_count: Default::default(),
-				}).then(|result| ready(result.map(|data| data.map(StorageData)).map_err(Error::Client)))),
+				}).then(|result| ready(result.map(|data| data.map(StorageData)).map_err(client_err)))),
 				Err(error) => Either::Right(ready(Err(error))),
 			});
 
@@ -217,7 +217,7 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 		let metadata = self.call(block, "Metadata_metadata".into(), Bytes(Vec::new()))
 			.and_then(|metadata| OpaqueMetadata::decode(&mut &metadata.0[..])
 				.map(Into::into)
-				.map_err(|decode_err| Error::Client(ClientError::CallResultDecode(
+				.map_err(|decode_err| client_err(ClientError::CallResultDecode(
 					"Unable to decode metadata",
 					decode_err,
 				))));
@@ -228,7 +228,7 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 	fn runtime_version(&self, block: Option<Block::Hash>) -> FutureResult<RuntimeVersion> {
 		let version = self.call(block, "Core_version".into(), Bytes(Vec::new()))
 			.and_then(|version| Decode::decode(&mut &version.0[..])
-				.map_err(|_| Error::Client(ClientError::VersionInvalid))
+				.map_err(|_| client_err(ClientError::VersionInvalid))
 			);
 
 		Box::new(version)
@@ -240,7 +240,7 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 		_to: Option<Block::Hash>,
 		_keys: Vec<StorageKey>,
 	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>> {
-		Box::new(result(Err(Error::Client(ClientError::NotAvailableOnLightClient))))
+		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
 	}
 
 	fn subscribe_storage(

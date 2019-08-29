@@ -16,8 +16,6 @@
 
 //! Substrate state API.
 
-pub mod error;
-
 mod state_full;
 mod state_light;
 
@@ -26,141 +24,27 @@ mod tests;
 
 use std::sync::Arc;
 use log::warn;
-use futures::future::Future;
+use rpc::Result as RpcResult;
+use rpc::futures::{stream, Future, Sink, Stream};
 use futures03::{future, StreamExt as _, TryStreamExt as _};
 
+use sr_primitives::traits::{Block as BlockT, ProvideRuntimeApi};
+
+use api::Subscriptions;
 use client::{
 	BlockchainEvents, Client, CallExecutor,
 	runtime_api::Metadata,
 	light::{blockchain::RemoteBlockchain, fetcher::Fetcher},
 };
-use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use primitives::{Blake2Hasher, Bytes, H256};
 use primitives::storage::{self, StorageKey, StorageData, StorageChangeSet};
 use runtime_version::RuntimeVersion;
 use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{Block as BlockT, ProvideRuntimeApi};
 
-use crate::rpc::Result as RpcResult;
-use crate::rpc::futures::{stream, Sink, Stream};
-use crate::subscriptions::Subscriptions;
 use self::error::{Error, FutureResult};
 
-pub use self::gen_client::Client as StateClient;
-
-/// Substrate state API
-#[rpc]
-pub trait StateApi<Hash> {
-	/// RPC Metadata
-	type Metadata;
-
-	/// Call a contract at a block's state.
-	#[rpc(name = "state_call", alias("state_callAt"))]
-	fn call(&self, name: String, bytes: Bytes, hash: Option<Hash>) -> FutureResult<Bytes>;
-
-	/// Returns the keys with prefix, leave empty to get all the keys
-	#[rpc(name = "state_getKeys")]
-	fn storage_keys(&self, prefix: StorageKey, hash: Option<Hash>) -> FutureResult<Vec<StorageKey>>;
-
-	/// Returns a storage entry at a specific block's state.
-	#[rpc(name = "state_getStorage", alias("state_getStorageAt"))]
-	fn storage(&self, key: StorageKey, hash: Option<Hash>) -> FutureResult<Option<StorageData>>;
-
-	/// Returns the hash of a storage entry at a block's state.
-	#[rpc(name = "state_getStorageHash", alias("state_getStorageHashAt"))]
-	fn storage_hash(&self, key: StorageKey, hash: Option<Hash>) -> FutureResult<Option<Hash>>;
-
-	/// Returns the size of a storage entry at a block's state.
-	#[rpc(name = "state_getStorageSize", alias("state_getStorageSizeAt"))]
-	fn storage_size(&self, key: StorageKey, hash: Option<Hash>) -> FutureResult<Option<u64>>;
-
-	/// Returns the keys with prefix from a child storage, leave empty to get all the keys
-	#[rpc(name = "state_getChildKeys")]
-	fn child_storage_keys(
-		&self,
-		child_storage_key: StorageKey,
-		prefix: StorageKey,
-		hash: Option<Hash>
-	) -> FutureResult<Vec<StorageKey>>;
-
-	/// Returns a child storage entry at a specific block's state.
-	#[rpc(name = "state_getChildStorage")]
-	fn child_storage(
-		&self,
-		child_storage_key: StorageKey,
-		key: StorageKey,
-		hash: Option<Hash>
-	) -> FutureResult<Option<StorageData>>;
-
-	/// Returns the hash of a child storage entry at a block's state.
-	#[rpc(name = "state_getChildStorageHash")]
-	fn child_storage_hash(
-		&self,
-		child_storage_key: StorageKey,
-		key: StorageKey,
-		hash: Option<Hash>
-	) -> FutureResult<Option<Hash>>;
-
-	/// Returns the size of a child storage entry at a block's state.
-	#[rpc(name = "state_getChildStorageSize")]
-	fn child_storage_size(
-		&self,
-		child_storage_key: StorageKey,
-		key: StorageKey,
-		hash: Option<Hash>
-	) -> FutureResult<Option<u64>>;
-
-	/// Returns the runtime metadata as an opaque blob.
-	#[rpc(name = "state_getMetadata")]
-	fn metadata(&self, hash: Option<Hash>) -> FutureResult<Bytes>;
-
-	/// Get the runtime version.
-	#[rpc(name = "state_getRuntimeVersion", alias("chain_getRuntimeVersion"))]
-	fn runtime_version(&self, hash: Option<Hash>) -> FutureResult<RuntimeVersion>;
-
-	/// Query historical storage entries (by key) starting from a block given as the second parameter.
-	///
-	/// NOTE This first returned result contains the initial state of storage for all keys.
-	/// Subsequent values in the vector represent changes to the previous state (diffs).
-	#[rpc(name = "state_queryStorage")]
-	fn query_storage(
-		&self,
-		keys: Vec<StorageKey>,
-		block: Hash,
-		hash: Option<Hash>
-	) -> FutureResult<Vec<StorageChangeSet<Hash>>>;
-
-	/// New runtime version subscription
-	#[pubsub(
-		subscription = "state_runtimeVersion",
-		subscribe,
-		name = "state_subscribeRuntimeVersion",
-		alias("chain_subscribeRuntimeVersion")
-	)]
-	fn subscribe_runtime_version(&self, metadata: Self::Metadata, subscriber: Subscriber<RuntimeVersion>);
-
-	/// Unsubscribe from runtime version subscription
-	#[pubsub(
-		subscription = "state_runtimeVersion",
-		unsubscribe,
-		name = "state_unsubscribeRuntimeVersion",
-		alias("chain_unsubscribeRuntimeVersion")
-	)]
-	fn unsubscribe_runtime_version(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool>;
-
-	/// New storage subscription
-	#[pubsub(subscription = "state_storage", subscribe, name = "state_subscribeStorage")]
-	fn subscribe_storage(
-		&self, metadata: Self::Metadata, subscriber: Subscriber<StorageChangeSet<Hash>>, keys: Option<Vec<StorageKey>>
-	);
-
-	/// Unsubscribe from storage subscription
-	#[pubsub(subscription = "state_storage", unsubscribe, name = "state_unsubscribeStorage")]
-	fn unsubscribe_storage(
-		&self, metadata: Option<Self::Metadata>, id: SubscriptionId
-	) -> RpcResult<bool>;
-}
+pub use api::state::*;
 
 /// State backend API.
 pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
@@ -279,7 +163,7 @@ pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 		) {
 			Ok(stream) => stream,
 			Err(err) => {
-				let _ = subscriber.reject(Error::from(err).into());
+				let _ = subscriber.reject(Error::from(client_err(err)).into());
 				return;
 			}
 		};
@@ -297,7 +181,7 @@ pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 					let info = client.info();
 					let version = client
 						.runtime_version_at(&BlockId::hash(info.chain.best_hash))
-						.map_err(Error::from)
+						.map_err(client_err)
 						.map_err(Into::into);
 					if previous_version != version {
 						previous_version = version.clone();
@@ -342,7 +226,7 @@ pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 		) {
 			Ok(stream) => stream,
 			Err(err) => {
-				let _ = subscriber.reject(Error::from(err).into());
+				let _ = subscriber.reject(client_err(err).into());
 				return;
 			},
 		};
@@ -548,4 +432,8 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA>
 	) -> RpcResult<bool> {
 		self.backend.unsubscribe_runtime_version(meta, id)
 	}
+}
+
+pub(crate) fn client_err(err: client::error::Error) -> Error {
+	Error::Client(Box::new(err))
 }

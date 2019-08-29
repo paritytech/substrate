@@ -17,15 +17,15 @@
 //! Blockchain API backend for full nodes.
 
 use std::sync::Arc;
-use futures::future::result;
+use rpc::futures::future::result;
 
+use api::Subscriptions;
 use client::{self, Client};
 use primitives::{H256, Blake2Hasher};
 use sr_primitives::generic::{BlockId, SignedBlock};
 use sr_primitives::traits::{Block as BlockT};
 
-use crate::subscriptions::Subscriptions;
-use super::{ChainBackend, error::{Error, FutureResult}};
+use super::{ChainBackend, error::FutureResult, client_err};
 
 /// Blockchain API backend for full nodes. Reads all the data from local database.
 pub struct FullChain<B, E, Block: BlockT, RA> {
@@ -62,7 +62,7 @@ impl<B, E, Block, RA> ChainBackend<B, E, Block, RA> for FullChain<B, E, Block, R
 	fn header(&self, hash: Option<Block::Hash>) -> FutureResult<Option<Block::Header>> {
 		Box::new(result(self.client
 			.header(&BlockId::Hash(self.unwrap_or_best(hash)))
-			.map_err(Error::Client)
+			.map_err(client_err)
 		))
 	}
 
@@ -71,7 +71,7 @@ impl<B, E, Block, RA> ChainBackend<B, E, Block, RA> for FullChain<B, E, Block, R
 	{
 		Box::new(result(self.client
 			.block(&BlockId::Hash(self.unwrap_or_best(hash)))
-			.map_err(Error::Client)
+			.map_err(client_err)
 		))
 	}
 }

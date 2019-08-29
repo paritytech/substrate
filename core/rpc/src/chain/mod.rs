@@ -16,9 +16,6 @@
 
 //! Substrate blockchain API.
 
-pub mod error;
-pub mod number;
-
 mod chain_full;
 mod chain_light;
 
@@ -26,94 +23,23 @@ mod chain_light;
 mod tests;
 
 use std::sync::Arc;
+use rpc::futures::{stream, Future, Sink, Stream};
 use futures03::{future, StreamExt as _, TryStreamExt as _};
 use log::warn;
 
+use api::Subscriptions;
 use client::{
 	self, Client, BlockchainEvents,
 	light::{fetcher::Fetcher, blockchain::RemoteBlockchain},
 };
-use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use primitives::{H256, Blake2Hasher};
 use sr_primitives::generic::{BlockId, SignedBlock};
 use sr_primitives::traits::{Block as BlockT, Header, NumberFor};
+use self::error::{Result, Error, FutureResult};
+use rpc::Result as RpcResult;
 
-use crate::rpc::Result as RpcResult;
-use crate::rpc::futures::{stream, Future, Sink, Stream};
-use crate::subscriptions::Subscriptions;
-use self::error::{Result, FutureResult};
-
-pub use self::gen_client::Client as ChainClient;
-
-/// Substrate blockchain API
-#[rpc]
-pub trait ChainApi<Number, Hash, Header, SignedBlock> {
-	/// RPC metadata
-	type Metadata;
-
-	/// Get header of a relay chain block.
-	#[rpc(name = "chain_getHeader")]
-	fn header(&self, hash: Option<Hash>) -> FutureResult<Option<Header>>;
-
-	/// Get header and body of a relay chain block.
-	#[rpc(name = "chain_getBlock")]
-	fn block(&self, hash: Option<Hash>) -> FutureResult<Option<SignedBlock>>;
-
-	/// Get hash of the n-th block in the canon chain.
-	///
-	/// By default returns latest block hash.
-	#[rpc(name = "chain_getBlockHash", alias("chain_getHead"))]
-	fn block_hash(&self, number: Option<number::NumberOrHex<Number>>) -> Result<Option<Hash>>;
-
-	/// Get hash of the last finalized block in the canon chain.
-	#[rpc(name = "chain_getFinalizedHead", alias("chain_getFinalisedHead"))]
-	fn finalized_head(&self) -> Result<Hash>;
-
-	/// New head subscription
-	#[pubsub(
-		subscription = "chain_newHead",
-		subscribe,
-		name = "chain_subscribeNewHeads",
-		alias("subscribe_newHead", "chain_subscribeNewHead")
-	)]
-	fn subscribe_new_heads(&self, metadata: Self::Metadata, subscriber: Subscriber<Header>);
-
-	/// Unsubscribe from new head subscription.
-	#[pubsub(
-		subscription = "chain_newHead",
-		unsubscribe,
-		name = "chain_unsubscribeNewHeads",
-		alias("unsubscribe_newHead", "chain_unsubscribeNewHead")
-	)]
-	fn unsubscribe_new_heads(
-		&self,
-		metadata: Option<Self::Metadata>,
-		id: SubscriptionId,
-	) -> RpcResult<bool>;
-
-	/// New head subscription
-	#[pubsub(
-		subscription = "chain_finalizedHead",
-		subscribe,
-		name = "chain_subscribeFinalizedHeads",
-		alias("chain_subscribeFinalisedHeads")
-	)]
-	fn subscribe_finalized_heads(&self, metadata: Self::Metadata, subscriber: Subscriber<Header>);
-
-	/// Unsubscribe from new head subscription.
-	#[pubsub(
-		subscription = "chain_finalizedHead",
-		unsubscribe,
-		name = "chain_unsubscribeFinalizedHeads",
-		alias("chain_unsubscribeFinalisedHeads")
-	)]
-	fn unsubscribe_finalized_heads(
-		&self,
-		metadata: Option<Self::Metadata>,
-		id: SubscriptionId,
-	) -> RpcResult<bool>;
-}
+pub use api::chain::*;
 
 /// Blockchain backend API
 trait ChainBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
@@ -152,7 +78,8 @@ trait ChainBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 		Ok(match number {
 			None => Some(self.client().info().chain.best_hash),
 			Some(num_or_hex) => self.client()
-				.header(&BlockId::number(num_or_hex.to_number()?))?
+				.header(&BlockId::number(num_or_hex.to_number()?))
+				.map_err(client_err)?
 				.map(|h| h.hash()),
 		})
 	}
@@ -322,7 +249,7 @@ fn subscribe_headers<B, E, Block, RA, F, G, S, ERR>(
 	subscriptions.add(subscriber, |sink| {
 		// send current head right at the start.
 		let header = client.header(&BlockId::Hash(best_block_hash()))
-			.map_err(self::error::Error::Client)
+			.map_err(client_err)
 			.and_then(|header| {
 				header.ok_or_else(|| "Best header missing.".to_owned().into())
 			})
@@ -342,4 +269,8 @@ fn subscribe_headers<B, E, Block, RA, F, G, S, ERR>(
 			// we ignore the resulting Stream (if the first stream is over we are unsubscribed)
 			.map(|_| ())
 	});
+}
+
+fn client_err(err: client::error::Error) -> Error {
+	Error::Client(Box::new(err))
 }

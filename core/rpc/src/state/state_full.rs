@@ -19,8 +19,9 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::ops::Range;
-use futures::future::result;
+use rpc::futures::future::result;
 
+use api::Subscriptions;
 use client::{self, Client, CallExecutor, runtime_api::Metadata};
 use primitives::{H256, Blake2Hasher, Bytes};
 use primitives::storage::{StorageKey, StorageData, StorageChangeSet};
@@ -29,8 +30,7 @@ use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{Block as BlockT, Header, NumberFor, ProvideRuntimeApi, SaturatedConversion};
 use state_machine::{self, ExecutionStrategy};
 
-use crate::subscriptions::Subscriptions;
-use super::{StateBackend, error::{FutureResult, Error, Result}};
+use super::{StateBackend, error::{FutureResult, Error, Result}, client_err};
 
 /// Ranges to query in state_queryStorage.
 struct QueryStorageRange<Block: BlockT> {
@@ -75,9 +75,9 @@ impl<B, E, Block: BlockT, RA> FullState<B, E, Block, RA>
 		from: Block::Hash,
 		to: Option<Block::Hash>
 	) -> Result<QueryStorageRange<Block>> {
-		let to = self.block_or_best(to)?;
-		let from_hdr = self.client.header(&BlockId::hash(from))?;
-		let to_hdr = self.client.header(&BlockId::hash(to))?;
+		let to = self.block_or_best(to).map_err(client_err)?;
+		let from_hdr = self.client.header(&BlockId::hash(from)).map_err(client_err)?;
+		let to_hdr = self.client.header(&BlockId::hash(to)).map_err(client_err)?;
 		match (from_hdr, to_hdr) {
 			(Some(ref from), Some(ref to)) if from.number() <= to.number() => {
 				// check if we can get from `to` to `from` by going through parent_hashes.
@@ -86,7 +86,10 @@ impl<B, E, Block: BlockT, RA> FullState<B, E, Block, RA>
 					let mut blocks = vec![to.hash()];
 					let mut last = to.clone();
 					while *last.number() > from_number {
-						if let Some(hdr) = self.client.header(&BlockId::hash(*last.parent_hash()))? {
+						let hdr = self.client
+							.header(&BlockId::hash(*last.parent_hash()))
+							.map_err(client_err)?;
+						if let Some(hdr) = hdr {
 							blocks.push(hdr.hash());
 							last = hdr;
 						} else {
@@ -108,7 +111,9 @@ impl<B, E, Block: BlockT, RA> FullState<B, E, Block, RA>
 					blocks
 				};
 				// check if we can filter blocks-with-changes from some (sub)range using changes tries
-				let changes_trie_range = self.client.max_key_changes_range(from_number, BlockId::Hash(to.hash()))?;
+				let changes_trie_range = self.client
+					.max_key_changes_range(from_number, BlockId::Hash(to.hash()))
+					.map_err(client_err)?;
 				let filtered_range_begin = changes_trie_range
 					.map(|(begin, _)| (begin - from_number).saturated_into::<usize>());
 				let (unfiltered_range, filtered_range) = split_range(blocks.len(), filtered_range_begin);
@@ -139,7 +144,7 @@ impl<B, E, Block: BlockT, RA> FullState<B, E, Block, RA>
 			let id = BlockId::hash(block_hash);
 			for key in keys {
 				let (has_changed, data) = {
-					let curr_data = self.client.storage(&id, key)?;
+					let curr_data = self.client.storage(&id, key).map_err(client_err)?;
 					match last_values.get(key) {
 						Some(prev_data) => (curr_data != *prev_data, curr_data),
 						None => (true, curr_data),
@@ -176,14 +181,15 @@ impl<B, E, Block: BlockT, RA> FullState<B, E, Block, RA>
 		for key in keys {
 			let mut last_block = None;
 			let mut last_value = last_values.get(key).cloned().unwrap_or_default();
-			for (block, _) in self.client.key_changes(begin, end, key)?.into_iter().rev() {
+			let key_changes = self.client.key_changes(begin, end, key).map_err(client_err)?;
+			for (block, _) in key_changes.into_iter().rev() {
 				if last_block == Some(block) {
 					continue;
 				}
 
 				let block_hash = range.hashes[(block - range.first_number).saturated_into::<usize>()].clone();
 				let id = BlockId::Hash(block_hash);
-				let value_at_block = self.client.storage(&id, key)?;
+				let value_at_block = self.client.storage(&id, key).map_err(client_err)?;
 				if last_value == value_at_block {
 					continue;
 				}
@@ -237,7 +243,7 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 						state_machine::NeverOffchainExt::new(),
 					)
 					.map(Into::into))
-				.map_err(Error::Client)))
+				.map_err(client_err)))
 	}
 
 	fn storage_keys(
@@ -248,7 +254,7 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 		Box::new(result(
 			self.block_or_best(block)
 				.and_then(|block| self.client.storage_keys(&BlockId::Hash(block), &prefix))
-				.map_err(Error::Client)))
+				.map_err(client_err)))
 	}
 
 	fn storage(
@@ -259,7 +265,7 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 		Box::new(result(
 			self.block_or_best(block)
 				.and_then(|block| self.client.storage(&BlockId::Hash(block), &key))
-				.map_err(Error::Client)))
+				.map_err(client_err)))
 	}
 
 	fn storage_hash(
@@ -270,7 +276,7 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 		Box::new(result(
 			self.block_or_best(block)
 				.and_then(|block| self.client.storage_hash(&BlockId::Hash(block), &key))
-				.map_err(Error::Client)))
+				.map_err(client_err)))
 	}
 
 	fn child_storage_keys(
@@ -282,7 +288,7 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 		Box::new(result(
 			self.block_or_best(block)
 				.and_then(|block| self.client.child_storage_keys(&BlockId::Hash(block), &child_storage_key, &prefix))
-				.map_err(Error::Client)))
+				.map_err(client_err)))
 	}
 
 	fn child_storage(
@@ -294,7 +300,7 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 		Box::new(result(
 			self.block_or_best(block)
 				.and_then(|block| self.client.child_storage(&BlockId::Hash(block), &child_storage_key, &key))
-				.map_err(Error::Client)))
+				.map_err(client_err)))
 	}
 
 	fn child_storage_hash(
@@ -306,21 +312,21 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 		Box::new(result(
 			self.block_or_best(block)
 				.and_then(|block| self.client.child_storage_hash(&BlockId::Hash(block), &child_storage_key, &key))
-				.map_err(Error::Client)))
+				.map_err(client_err)))
 	}
 
 	fn metadata(&self, block: Option<Block::Hash>) -> FutureResult<Bytes> {
 		Box::new(result(
 			self.block_or_best(block)
 				.and_then(|block| self.client.runtime_api().metadata(&BlockId::Hash(block)).map(Into::into))
-				.map_err(Error::Client)))
+				.map_err(client_err)))
 	}
 
 	fn runtime_version(&self, block: Option<Block::Hash>) -> FutureResult<RuntimeVersion> {
 		Box::new(result(
 			self.block_or_best(block)
 				.and_then(|block| self.client.runtime_version_at(&BlockId::Hash(block)))
-				.map_err(Error::Client)))
+				.map_err(client_err)))
 	}
 
 	fn query_storage(

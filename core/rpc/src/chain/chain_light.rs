@@ -17,9 +17,10 @@
 //! Blockchain API backend for light nodes.
 
 use std::sync::Arc;
-use futures::future::{result, Future, Either};
+use rpc::futures::future::{result, Future, Either};
 use futures03::{future::ready, FutureExt, TryFutureExt};
 
+use api::Subscriptions;
 use client::{
 	self, Client,
 	light::{
@@ -31,8 +32,7 @@ use primitives::{H256, Blake2Hasher};
 use sr_primitives::generic::{BlockId, SignedBlock};
 use sr_primitives::traits::{Block as BlockT};
 
-use crate::subscriptions::Subscriptions;
-use super::{ChainBackend, error::{Error, FutureResult}};
+use super::{ChainBackend, error::FutureResult, client_err};
 
 /// Blockchain API backend for light nodes. Reads all the data from local
 /// database, if available, or fetches it from remote node otherwise.
@@ -90,7 +90,7 @@ impl<B, E, Block, RA, F> ChainBackend<B, E, Block, RA> for LightChain<B, E, Bloc
 		);
 
 		Box::new(maybe_header.then(move |result|
-			ready(result.map_err(Error::Client)),
+			ready(result.map_err(client_err)),
 		).boxed().compat())
 	}
 
@@ -111,7 +111,7 @@ impl<B, E, Block, RA, F> ChainBackend<B, E, Block, RA> for LightChain<B, E, Bloc
 						block: Block::new(header, body),
 						justification: None,
 					}))
-					.map_err(Error::Client)
+					.map_err(client_err)
 				),
 				None => Either::B(result(Ok(None))),
 			});
