@@ -36,7 +36,7 @@ const EDGES: u64 = 2;
 const TO_ELECT: usize = 100;
 const STAKE: u64 = 1000;
 
-type C<T> = <<T as Trait>::CurrencyToVote as Convert<Balance, AccountId>>;
+type C<T> = <T as Trait>::CurrencyToVote;
 
 fn do_phragmen(
 	b: &mut Bencher,
@@ -45,7 +45,7 @@ fn do_phragmen(
 	count: usize,
 	votes_per: u64,
 	eq_iters: usize,
-	eq_tolerance: u128,
+	_eq_tolerance: u128,
 ) {
 	with_externalities(&mut ExtBuilder::default().nominate(false).build(), || {
 		assert!(num_vals > votes_per);
@@ -88,7 +88,8 @@ fn do_phragmen(
 				let elected_stashes = r.winners;
 				let mut assignments = r.assignments;
 
-				let to_votes = |b: Balance| C<Test>::convert(b) as ExtendedBalance;
+				let to_votes = |b: Balance|
+				<C<Test> as Convert<Balance, AccountId>>::convert(b) as ExtendedBalance;
 				let ratio_of = |b, r: ExtendedBalance| r.saturating_mul(to_votes(b)) / ACCURACY;
 
 				// Initialize the support of each candidate.
