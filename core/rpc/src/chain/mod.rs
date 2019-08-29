@@ -16,9 +16,6 @@
 
 //! Substrate blockchain API.
 
-pub mod error;
-pub mod number;
-
 #[cfg(test)]
 mod tests;
 
@@ -26,79 +23,17 @@ use std::sync::Arc;
 use futures03::{future, StreamExt as _, TryStreamExt as _};
 
 use client::{self, Client, BlockchainEvents};
-use crate::rpc::Result as RpcResult;
-use crate::rpc::futures::{stream, Future, Sink, Stream};
-use crate::subscriptions::Subscriptions;
-use jsonrpc_derive::rpc;
+use rpc::Result as RpcResult;
+use rpc::futures::{stream, Future, Sink, Stream};
+use api::Subscriptions;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use log::warn;
 use primitives::{H256, Blake2Hasher};
 use sr_primitives::generic::{BlockId, SignedBlock};
 use sr_primitives::traits::{Block as BlockT, Header, NumberFor};
-use self::error::Result;
+use self::error::{Error, Result};
 
-pub use self::gen_client::Client as ChainClient;
-
-/// Substrate blockchain API
-#[rpc]
-pub trait ChainApi<Number, Hash, Header, SignedBlock> {
-	/// RPC metadata
-	type Metadata;
-
-	/// Get header of a relay chain block.
-	#[rpc(name = "chain_getHeader")]
-	fn header(&self, hash: Option<Hash>) -> Result<Option<Header>>;
-
-	/// Get header and body of a relay chain block.
-	#[rpc(name = "chain_getBlock")]
-	fn block(&self, hash: Option<Hash>) -> Result<Option<SignedBlock>>;
-
-	/// Get hash of the n-th block in the canon chain.
-	///
-	/// By default returns latest block hash.
-	#[rpc(name = "chain_getBlockHash", alias("chain_getHead"))]
-	fn block_hash(&self, hash: Option<number::NumberOrHex<Number>>) -> Result<Option<Hash>>;
-
-	/// Get hash of the last finalized block in the canon chain.
-	#[rpc(name = "chain_getFinalizedHead", alias("chain_getFinalisedHead"))]
-	fn finalized_head(&self) -> Result<Hash>;
-
-	/// New head subscription
-	#[pubsub(
-		subscription = "chain_newHead",
-		subscribe,
-		name = "chain_subscribeNewHeads",
-		alias("subscribe_newHead", "chain_subscribeNewHead")
-	)]
-	fn subscribe_new_heads(&self, metadata: Self::Metadata, subscriber: Subscriber<Header>);
-
-	/// Unsubscribe from new head subscription.
-	#[pubsub(
-		subscription = "chain_newHead",
-		unsubscribe,
-		name = "chain_unsubscribeNewHeads",
-		alias("unsubscribe_newHead", "chain_unsubscribeNewHead")
-	)]
-	fn unsubscribe_new_heads(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool>;
-
-	/// New head subscription
-	#[pubsub(
-		subscription = "chain_finalizedHead",
-		subscribe,
-		name = "chain_subscribeFinalizedHeads",
-		alias("chain_subscribeFinalisedHeads")
-	)]
-	fn subscribe_finalized_heads(&self, metadata: Self::Metadata, subscriber: Subscriber<Header>);
-
-	/// Unsubscribe from new head subscription.
-	#[pubsub(
-		subscription = "chain_finalizedHead",
-		unsubscribe,
-		name = "chain_unsubscribeFinalizedHeads",
-		alias("chain_unsubscribeFinalisedHeads")
-	)]
-	fn unsubscribe_finalized_heads(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool>;
-}
+pub use api::chain::*;
 
 /// Chain API with subscriptions support.
 pub struct Chain<B, E, Block: BlockT, RA> {
@@ -168,6 +103,10 @@ impl<B, E, Block, RA> Chain<B, E, Block, RA> where
 	}
 }
 
+fn client_error(err: client::error::Error) -> Error {
+	Error::Client(Box::new(err))
+}
+
 impl<B, E, Block, RA> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, SignedBlock<Block>> for Chain<B, E, Block, RA> where
 	Block: BlockT<Hash=H256> + 'static,
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
@@ -178,20 +117,23 @@ impl<B, E, Block, RA> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, Sig
 
 	fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>> {
 		let hash = self.unwrap_or_best(hash)?;
-		Ok(self.client.header(&BlockId::Hash(hash))?)
+		Ok(self.client.header(&BlockId::Hash(hash)).map_err(client_error)?)
 	}
 
 	fn block(&self, hash: Option<Block::Hash>)
 		-> Result<Option<SignedBlock<Block>>>
 	{
 		let hash = self.unwrap_or_best(hash)?;
-		Ok(self.client.block(&BlockId::Hash(hash))?)
+		Ok(self.client.block(&BlockId::Hash(hash)).map_err(client_error)?)
 	}
 
 	fn block_hash(&self, number: Option<number::NumberOrHex<NumberFor<Block>>>) -> Result<Option<Block::Hash>> {
 		Ok(match number {
 			None => Some(self.client.info().chain.best_hash),
-			Some(num_or_hex) => self.client.header(&BlockId::number(num_or_hex.to_number()?))?.map(|h| h.hash()),
+			Some(num_or_hex) => self.client
+				.header(&BlockId::number(num_or_hex.to_number()?))
+				.map_err(client_error)?
+				.map(|h| h.hash()),
 		})
 	}
 
