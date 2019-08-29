@@ -42,6 +42,23 @@
 //!
 //! See the [`Module`](./struct.Module.html) struct for details of publicly available functions.
 //!
+//! ### Signed Extensions
+//!
+//! The system module defines the following extensions:
+//!
+//!   - [`CheckWeight`]: Checks the weight and length of the block and ensure that it does not
+//!     exceed the limits.
+//!   - ['CheckNonce']: Checks the nonce of the transaction. Contains a single payload of type
+//!     `T::Index`.
+//!   - [`CheckEra`]: Checks the era of the transaction. Contains a single payload of type `Era`.
+//!   - [`CheckGenesis`]: Checks the provided genesis hash of the transaction. Must be a part of the
+//!     signed payload of the transaction.
+//!   - [`CheckVersion`]: Checks that the runtime version is the same as the one encoded in the
+//!     transaction.
+//!
+//! Lookup the runtime aggregator file (e.g. `node/runtime`) to see the full list of signed
+//! extensions included in a chain.
+//!
 //! ## Usage
 //!
 //! ### Prerequisites
@@ -563,7 +580,7 @@ impl<T: Trait> Module<T> {
 		// We perform early return if we've reached the maximum capacity of the event list,
 		// so `Events<T>` seems to be corrupted. Also, this has happened after the start of execution
 		// (since the event list is cleared at the block initialization).
-		if <Events<T>>::append(&[event]).is_err() {
+		if <Events<T>>::append([event].into_iter()).is_err() {
 			// The most sensible thing to do here is to just ignore this event and wait until the
 			// new block.
 			return;
@@ -1005,7 +1022,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 	}
 }
 
-/// Nonce check and increment to give replay protection for transactions.
+/// Check for transaction mortality.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckEra<T: Trait + Send + Sync>((Era, rstd::marker::PhantomData<T>));
 
@@ -1029,6 +1046,21 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 	type Call = T::Call;
 	type AdditionalSigned = T::Hash;
 	type Pre = ();
+
+	fn validate(
+		&self,
+		_who: &Self::AccountId,
+		_call: &Self::Call,
+		_info: DispatchInfo,
+		_len: usize,
+	) -> Result<ValidTransaction, DispatchError> {
+		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
+		let valid_till = (self.0).0.death(current_u64);
+		Ok(ValidTransaction {
+			longevity: valid_till.saturating_sub(current_u64),
+			..Default::default()
+		})
+	}
 
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, &'static str> {
 		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
@@ -1461,6 +1493,25 @@ mod tests {
 			System::set_block_number(13);
 			<BlockHash<Test>>::insert(12, H256::repeat_byte(1));
 			assert!(CheckEra::<Test>::from(Era::mortal(4, 12)).additional_signed().is_ok());
+		})
+	}
+
+	#[test]
+	fn signed_ext_check_era_should_change_longevity() {
+		with_externalities(&mut new_test_ext(), || {
+			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal };
+			let len = 0_usize;
+			let ext = (
+				CheckWeight::<Test>(PhantomData),
+				CheckEra::<Test>::from(Era::mortal(16, 256)),
+			);
+			System::set_block_number(17);
+			<BlockHash<Test>>::insert(16, H256::repeat_byte(1));
+
+			assert_eq!(
+				ext.validate(&1, CALL, normal, len).unwrap().longevity,
+				15,
+			);
 		})
 	}
 }

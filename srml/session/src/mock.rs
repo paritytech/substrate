@@ -44,6 +44,7 @@ impl_outer_origin! {
 }
 
 thread_local! {
+	pub static VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![1, 2, 3]);
 	pub static NEXT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![1, 2, 3]);
 	pub static AUTHORITIES: RefCell<Vec<UintAuthorityId>> =
 		RefCell::new(vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
@@ -51,6 +52,9 @@ thread_local! {
 	pub static SESSION_LENGTH: RefCell<u64> = RefCell::new(2);
 	pub static SESSION_CHANGED: RefCell<bool> = RefCell::new(false);
 	pub static TEST_SESSION_CHANGED: RefCell<bool> = RefCell::new(false);
+	pub static DISABLED: RefCell<bool> = RefCell::new(false);
+	// Stores if `on_before_session_end` was called
+	pub static BEFORE_SESSION_END_CALLED: RefCell<bool> = RefCell::new(false);
 }
 
 pub struct TestShouldEndSession;
@@ -76,14 +80,27 @@ impl SessionHandler<u64> for TestSessionHandler {
 				.collect()
 		);
 	}
-	fn on_disabled(_validator_index: usize) {}
+	fn on_disabled(_validator_index: usize) {
+		DISABLED.with(|l| *l.borrow_mut() = true)
+	}
+	fn on_before_session_ending() {
+		BEFORE_SESSION_END_CALLED.with(|b| *b.borrow_mut() = true);
+	}
 }
 
 pub struct TestOnSessionEnding;
 impl OnSessionEnding<u64> for TestOnSessionEnding {
 	fn on_session_ending(_: SessionIndex, _: SessionIndex) -> Option<Vec<u64>> {
 		if !TEST_SESSION_CHANGED.with(|l| *l.borrow()) {
-			Some(NEXT_VALIDATORS.with(|l| l.borrow().clone()))
+			VALIDATORS.with(|v| {
+				let mut v = v.borrow_mut();
+				*v = NEXT_VALIDATORS.with(|l| l.borrow().clone());
+				Some(v.clone())
+			})
+		} else if DISABLED.with(|l| std::mem::replace(&mut *l.borrow_mut(), false)) {
+			// If there was a disabled validator, underlying conditions have changed
+			// so we return `Some`.
+			Some(VALIDATORS.with(|v| v.borrow().clone()))
 		} else {
 			None
 		}
@@ -92,16 +109,13 @@ impl OnSessionEnding<u64> for TestOnSessionEnding {
 
 #[cfg(feature = "historical")]
 impl crate::historical::OnSessionEnding<u64, u64> for TestOnSessionEnding {
-	fn on_session_ending(_: SessionIndex, _: SessionIndex)
+	fn on_session_ending(ending_index: SessionIndex, will_apply_at: SessionIndex)
 		-> Option<(Vec<u64>, Vec<(u64, u64)>)>
 	{
-		if !TEST_SESSION_CHANGED.with(|l| *l.borrow()) {
-			let last_validators = Session::validators();
-			let last_identifications = last_validators.into_iter().map(|v| (v, v)).collect();
-			Some((NEXT_VALIDATORS.with(|l| l.borrow().clone()), last_identifications))
-		} else {
-			None
-		}
+		let pair_with_ids = |vals: &[u64]| vals.iter().map(|&v| (v, v)).collect::<Vec<_>>();
+		<Self as OnSessionEnding<_>>::on_session_ending(ending_index, will_apply_at)
+			.map(|vals| (pair_with_ids(&vals), vals))
+			.map(|(ids, vals)| (vals, ids))
 	}
 }
 
@@ -125,8 +139,17 @@ pub fn set_next_validators(next: Vec<u64>) {
 	NEXT_VALIDATORS.with(|v| *v.borrow_mut() = next);
 }
 
+pub fn before_session_end_called() -> bool {
+	BEFORE_SESSION_END_CALLED.with(|b| *b.borrow())
+}
+
+pub fn reset_before_session_end_called() {
+	BEFORE_SESSION_END_CALLED.with(|b| *b.borrow_mut() = false);
+}
+
 #[derive(Clone, Eq, PartialEq)]
 pub struct Test;
+
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const MaximumBlockWeight: u32 = 1024;

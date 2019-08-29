@@ -27,32 +27,31 @@ use tempdir::TempDir;
 use tokio::{runtime::Runtime, prelude::FutureExt};
 use tokio::timer::Interval;
 use service::{
-	ServiceFactory,
+	AbstractService,
+	ChainSpec,
 	Configuration,
-	FactoryFullConfiguration,
-	FactoryChainSpec,
 	Roles,
-	FactoryExtrinsic,
+	Error,
 };
 use network::{multiaddr, Multiaddr};
 use network::config::{NetworkConfiguration, TransportConfig, NodeKeyConfig, Secret, NonReservedPeerMode};
-use sr_primitives::generic::BlockId;
+use sr_primitives::{generic::BlockId, traits::Block as BlockT};
 use consensus::{BlockImportParams, BlockImport};
 
 /// Maximum duration of single wait call.
 const MAX_WAIT_TIME: Duration = Duration::from_secs(60 * 3);
 
-struct TestNet<F: ServiceFactory> {
+struct TestNet<G, F, L, U> {
 	runtime: Runtime,
-	authority_nodes: Vec<(usize, SyncService<F::FullService>, Multiaddr)>,
-	full_nodes: Vec<(usize, SyncService<F::FullService>, Multiaddr)>,
-	light_nodes: Vec<(usize, SyncService<F::LightService>, Multiaddr)>,
-	chain_spec: FactoryChainSpec<F>,
+	authority_nodes: Vec<(usize, SyncService<F>, U, Multiaddr)>,
+	full_nodes: Vec<(usize, SyncService<F>, U, Multiaddr)>,
+	light_nodes: Vec<(usize, SyncService<L>, Multiaddr)>,
+	chain_spec: ChainSpec<G>,
 	base_port: u16,
 	nodes: usize,
 }
 
-/// Wraps around an `Arc<Service>>` and implements `Future`.
+/// Wraps around an `Arc<Service>` and implements `Future`.
 pub struct SyncService<T>(Arc<Mutex<T>>);
 
 impl<T> SyncService<T> {
@@ -82,22 +81,24 @@ impl<T: Future<Item=(), Error=service::Error>> Future for SyncService<T> {
 	}
 }
 
-impl<F: ServiceFactory> TestNet<F> {
+impl<G, F, L, U> TestNet<G, F, L, U>
+where F: Send + 'static, L: Send +'static, U: Clone + Send + 'static
+{
 	pub fn run_until_all_full<FP, LP>(
 		&mut self,
 		full_predicate: FP,
 		light_predicate: LP,
 	)
 		where
-			FP: Send + Fn(usize, &SyncService<F::FullService>) -> bool + 'static,
-			LP: Send + Fn(usize, &SyncService<F::LightService>) -> bool + 'static,
+			FP: Send + Fn(usize, &SyncService<F>) -> bool + 'static,
+			LP: Send + Fn(usize, &SyncService<L>) -> bool + 'static,
 	{
 		let full_nodes = self.full_nodes.clone();
 		let light_nodes = self.light_nodes.clone();
 		let interval = Interval::new_interval(Duration::from_millis(100))
 			.map_err(|_| ())
 			.for_each(move |_| {
-				let full_ready = full_nodes.iter().all(|&(ref id, ref service, _)|
+				let full_ready = full_nodes.iter().all(|&(ref id, ref service, _, _)|
 					full_predicate(*id, service)
 				);
 
@@ -125,14 +126,14 @@ impl<F: ServiceFactory> TestNet<F> {
 	}
 }
 
-fn node_config<F: ServiceFactory> (
+fn node_config<G> (
 	index: usize,
-	spec: &FactoryChainSpec<F>,
+	spec: &ChainSpec<G>,
 	role: Roles,
 	key_seed: Option<String>,
 	base_port: u16,
 	root: &TempDir,
-) -> FactoryFullConfiguration<F>
+) -> Configuration<(), G>
 {
 	let root = root.path().join(format!("node-{}", index));
 
@@ -194,18 +195,18 @@ fn node_config<F: ServiceFactory> (
 	}
 }
 
-impl<F: ServiceFactory> TestNet<F> where
-	F::FullService: Future<Item=(), Error=service::Error>,
-	F::LightService: Future<Item=(), Error=service::Error>,
+impl<G, F, L, U> TestNet<G, F, L, U> where
+	F: AbstractService,
+	L: AbstractService,
 {
 	fn new(
 		temp: &TempDir,
-		spec: FactoryChainSpec<F>,
-		full: usize,
-		light: usize,
-		authorities: Vec<String>,
+		spec: ChainSpec<G>,
+		full: impl Iterator<Item = impl FnOnce(Configuration<(), G>) -> Result<(F, U), Error>>,
+		light: impl Iterator<Item = impl FnOnce(Configuration<(), G>) -> Result<L, Error>>,
+		authorities: impl Iterator<Item = (String, impl FnOnce(Configuration<(), G>) -> Result<(F, U), Error>)>,
 		base_port: u16
-	) -> TestNet<F> {
+	) -> TestNet<G, F, L, U> {
 		let _ = env_logger::try_init();
 		fdlimit::raise_fd_limit();
 		let runtime = Runtime::new().expect("Error creating tokio runtime");
@@ -222,79 +223,89 @@ impl<F: ServiceFactory> TestNet<F> where
 		net
 	}
 
-	fn insert_nodes(&mut self, temp: &TempDir, full: usize, light: usize, authorities: Vec<String>) {
-		let mut nodes = self.nodes;
-		let base_port = self.base_port;
-		let spec = &self.chain_spec;
+	fn insert_nodes(
+		&mut self,
+		temp: &TempDir,
+		full: impl Iterator<Item = impl FnOnce(Configuration<(), G>) -> Result<(F, U), Error>>,
+		light: impl Iterator<Item = impl FnOnce(Configuration<(), G>) -> Result<L, Error>>,
+		authorities: impl Iterator<Item = (String, impl FnOnce(Configuration<(), G>) -> Result<(F, U), Error>)>
+	) {
 		let executor = self.runtime.executor();
-		self.authority_nodes.extend(authorities.iter().enumerate().map(|(index, key)| {
-			let node_config = node_config::<F>(
-				index,
-				&spec,
+
+		for (key, authority) in authorities {
+			let node_config = node_config(
+				self.nodes,
+				&self.chain_spec,
 				Roles::AUTHORITY,
-				Some(key.clone()),
-				base_port,
+				Some(key),
+				self.base_port,
 				&temp,
 			);
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
-			let service = SyncService::from(F::new_full(node_config).expect("Error creating test node service"));
+			let (service, user_data) = authority(node_config).expect("Error creating test node service");
+			let service = SyncService::from(service);
 
 			executor.spawn(service.clone().map_err(|_| ()));
 			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().into()));
-			((index + nodes), service, addr)
-		}));
-		nodes += authorities.len();
+			self.authority_nodes.push((self.nodes, service, user_data, addr));
+			self.nodes += 1;
+		}
 
-		self.full_nodes.extend((nodes..nodes + full).map(|index| {
-			let node_config = node_config::<F>(index, &spec, Roles::FULL, None, base_port, &temp);
+		for full in full {
+			let node_config = node_config(self.nodes, &self.chain_spec, Roles::FULL, None, self.base_port, &temp);
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
-			let service = SyncService::from(F::new_full(node_config).expect("Error creating test node service"));
+			let (service, user_data) = full(node_config).expect("Error creating test node service");
+			let service = SyncService::from(service);
 
 			executor.spawn(service.clone().map_err(|_| ()));
 			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().into()));
-			(index, service, addr)
-		}));
-		nodes += full;
+			self.full_nodes.push((self.nodes, service, user_data, addr));
+			self.nodes += 1;
+		}
 
-		self.light_nodes.extend((nodes..nodes + light).map(|index| {
-			let node_config = node_config::<F>(index, &spec, Roles::LIGHT, None, base_port, &temp);
+		for light in light {
+			let node_config = node_config(self.nodes, &self.chain_spec, Roles::LIGHT, None, self.base_port, &temp);
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
-			let service = SyncService::from(F::new_light(node_config).expect("Error creating test node service"));
+			let service = SyncService::from(light(node_config).expect("Error creating test node service"));
 
 			executor.spawn(service.clone().map_err(|_| ()));
 			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().into()));
-			(index, service, addr)
-		}));
-		nodes += light;
-
-		self.nodes = nodes;
+			self.light_nodes.push((self.nodes, service, addr));
+			self.nodes += 1;
+		}
 	}
 }
 
-pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) where
-	F::FullService: Future<Item=(), Error=service::Error>,
-	F::LightService: Future<Item=(), Error=service::Error>,
+pub fn connectivity<G, Fb, F, Lb, L>(spec: ChainSpec<G>, full_builder: Fb, light_builder: Lb) where
+	Fb: Fn(Configuration<(), G>) -> Result<F, Error>,
+	F: AbstractService,
+	Lb: Fn(Configuration<(), G>) -> Result<L, Error>,
+	L: AbstractService,
 {
 	const NUM_FULL_NODES: usize = 5;
 	const NUM_LIGHT_NODES: usize = 5;
 	{
 		let temp = TempDir::new("substrate-connectivity-test").expect("Error creating test dir");
 		let runtime = {
-			let mut network = TestNet::<F>::new(
+			let mut network = TestNet::new(
 				&temp,
 				spec.clone(),
-				NUM_FULL_NODES,
-				NUM_LIGHT_NODES,
-				vec![],
+				(0..NUM_FULL_NODES).map(|_| { |cfg| full_builder(cfg).map(|s| (s, ())) }),
+				(0..NUM_LIGHT_NODES).map(|_| { |cfg| light_builder(cfg) }),
+				// Note: this iterator is empty but we can't just use `iter::empty()`, otherwise
+				// the type of the closure cannot be inferred.
+				(0..0).map(|_| (String::new(), { |cfg| full_builder(cfg).map(|s| (s, ())) })),
 				30400,
 			);
 			info!("Checking star topology");
-			let first_address = network.full_nodes[0].2.clone();
-			for (_, service, _) in network.full_nodes.iter().skip(1) {
-				service.get().network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
+			let first_address = network.full_nodes[0].3.clone();
+			for (_, service, _, _) in network.full_nodes.iter().skip(1) {
+				service.get().network().add_reserved_peer(first_address.to_string())
+					.expect("Error adding reserved peer");
 			}
 			for (_, service, _) in network.light_nodes.iter() {
-				service.get().network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
+				service.get().network().add_reserved_peer(first_address.to_string())
+					.expect("Error adding reserved peer");
 			}
 			network.run_until_all_full(
 				|_index, service| service.get().network().num_connected() == NUM_FULL_NODES - 1
@@ -311,27 +322,31 @@ pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) where
 	{
 		let temp = TempDir::new("substrate-connectivity-test").expect("Error creating test dir");
 		{
-			let mut network = TestNet::<F>::new(
+			let mut network = TestNet::new(
 				&temp,
 				spec,
-				NUM_FULL_NODES,
-				NUM_LIGHT_NODES,
-				vec![],
+				(0..NUM_FULL_NODES).map(|_| { |cfg| full_builder(cfg).map(|s| (s, ())) }),
+				(0..NUM_LIGHT_NODES).map(|_| { |cfg| light_builder(cfg) }),
+				// Note: this iterator is empty but we can't just use `iter::empty()`, otherwise
+				// the type of the closure cannot be inferred.
+				(0..0).map(|_| (String::new(), { |cfg| full_builder(cfg).map(|s| (s, ())) })),
 				30400,
 			);
 			info!("Checking linked topology");
-			let mut address = network.full_nodes[0].2.clone();
+			let mut address = network.full_nodes[0].3.clone();
 			let max_nodes = std::cmp::max(NUM_FULL_NODES, NUM_LIGHT_NODES);
 			for i in 0..max_nodes {
 				if i != 0 {
-					if let Some((_, service, node_id)) = network.full_nodes.get(i) {
-						service.get().network().add_reserved_peer(address.to_string()).expect("Error adding reserved peer");
+					if let Some((_, service, _, node_id)) = network.full_nodes.get(i) {
+						service.get().network().add_reserved_peer(address.to_string())
+							.expect("Error adding reserved peer");
 						address = node_id.clone();
 					}
 				}
 
 				if let Some((_, service, node_id)) = network.light_nodes.get(i) {
-					service.get().network().add_reserved_peer(address.to_string()).expect("Error adding reserved peer");
+					service.get().network().add_reserved_peer(address.to_string())
+						.expect("Error adding reserved peer");
 					address = node_id.clone();
 				}
 			}
@@ -345,42 +360,53 @@ pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) where
 	}
 }
 
-pub fn sync<F, B, E>(spec: FactoryChainSpec<F>, mut block_factory: B, mut extrinsic_factory: E) where
-	F: ServiceFactory,
-	F::FullService: Future<Item=(), Error=service::Error>,
-	F::LightService: Future<Item=(), Error=service::Error>,
-	B: FnMut(&SyncService<F::FullService>) -> BlockImportParams<F::Block>,
-	E: FnMut(&SyncService<F::FullService>) -> FactoryExtrinsic<F>,
+pub fn sync<G, Fb, F, Lb, L, B, E, U>(
+	spec: ChainSpec<G>,
+	full_builder: Fb,
+	light_builder: Lb,
+	mut block_factory: B,
+	mut extrinsic_factory: E
+) where
+	Fb: Fn(Configuration<(), G>) -> Result<(F, U), Error>,
+	F: AbstractService,
+	Lb: Fn(Configuration<(), G>) -> Result<L, Error>,
+	L: AbstractService,
+	B: FnMut(&F, &U) -> BlockImportParams<F::Block>,
+	E: FnMut(&F, &U) -> <F::Block as BlockT>::Extrinsic,
+	U: Clone + Send + 'static,
 {
 	const NUM_FULL_NODES: usize = 10;
 	// FIXME: BABE light client support is currently not working.
 	const NUM_LIGHT_NODES: usize = 10;
 	const NUM_BLOCKS: usize = 512;
 	let temp = TempDir::new("substrate-sync-test").expect("Error creating test dir");
-	let mut network = TestNet::<F>::new(
+	let mut network = TestNet::new(
 		&temp,
 		spec.clone(),
-		NUM_FULL_NODES,
-		NUM_LIGHT_NODES,
-		vec![],
+		(0..NUM_FULL_NODES).map(|_| { |cfg| full_builder(cfg) }),
+		(0..NUM_LIGHT_NODES).map(|_| { |cfg| light_builder(cfg) }),
+		// Note: this iterator is empty but we can't just use `iter::empty()`, otherwise
+		// the type of the closure cannot be inferred.
+		(0..0).map(|_| (String::new(), { |cfg| full_builder(cfg) })),
 		30500,
 	);
 	info!("Checking block sync");
 	let first_address = {
 		let first_service = &network.full_nodes[0].1;
+		let first_user_data = &network.full_nodes[0].2;
 		let mut client = first_service.get().client();
 		for i in 0 .. NUM_BLOCKS {
 			if i % 128 == 0 {
 				info!("Generating #{}", i);
 			}
-			let import_data = block_factory(&first_service);
+			let import_data = block_factory(&first_service.get(), first_user_data);
 			client.import_block(import_data, HashMap::new()).expect("Error importing test block");
 		}
-		network.full_nodes[0].2.clone()
+		network.full_nodes[0].3.clone()
 	};
 
 	info!("Running sync");
-	for (_, service, _) in network.full_nodes.iter().skip(1) {
+	for (_, service, _, _) in network.full_nodes.iter().skip(1) {
 		service.get().network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
 	}
 	for (_, service, _) in network.light_nodes.iter() {
@@ -395,8 +421,9 @@ pub fn sync<F, B, E>(spec: FactoryChainSpec<F>, mut block_factory: B, mut extrin
 
 	info!("Checking extrinsic propagation");
 	let first_service = network.full_nodes[0].1.clone();
+	let first_user_data = &network.full_nodes[0].2;
 	let best_block = BlockId::number(first_service.get().client().info().chain.best_number);
-	let extrinsic = extrinsic_factory(&first_service);
+	let extrinsic = extrinsic_factory(&first_service.get(), first_user_data);
 	first_service.get().transaction_pool().submit_one(&best_block, extrinsic).unwrap();
 	network.run_until_all_full(
 		|_index, service| service.get().transaction_pool().ready().count() == 1,
@@ -404,33 +431,39 @@ pub fn sync<F, B, E>(spec: FactoryChainSpec<F>, mut block_factory: B, mut extrin
 	);
 }
 
-pub fn consensus<F>(spec: FactoryChainSpec<F>, authorities: Vec<String>) where
-	F: ServiceFactory,
-	F::FullService: Future<Item=(), Error=service::Error>,
-	F::LightService: Future<Item=(), Error=service::Error>,
+pub fn consensus<G, Fb, F, Lb, L>(
+	spec: ChainSpec<G>,
+	full_builder: Fb,
+	light_builder: Lb,
+	authorities: impl IntoIterator<Item = String>
+) where
+	Fb: Fn(Configuration<(), G>) -> Result<F, Error>,
+	F: AbstractService,
+	Lb: Fn(Configuration<(), G>) -> Result<L, Error>,
+	L: AbstractService,
 {
 	const NUM_FULL_NODES: usize = 10;
 	const NUM_LIGHT_NODES: usize = 10;
 	const NUM_BLOCKS: usize = 10; // 10 * 2 sec block production time = ~20 seconds
 	let temp = TempDir::new("substrate-conensus-test").expect("Error creating test dir");
-	let mut network = TestNet::<F>::new(
+	let mut network = TestNet::new(
 		&temp,
 		spec.clone(),
-		NUM_FULL_NODES / 2,
-		NUM_LIGHT_NODES / 2,
-		authorities,
+		(0..NUM_FULL_NODES / 2).map(|_| { |cfg| full_builder(cfg).map(|s| (s, ())) }),
+		(0..NUM_LIGHT_NODES / 2).map(|_| { |cfg| light_builder(cfg) }),
+		authorities.into_iter().map(|key| (key, { |cfg| full_builder(cfg).map(|s| (s, ())) })),
 		30600,
 	);
 
 	info!("Checking consensus");
-	let first_address = network.authority_nodes[0].2.clone();
-	for (_, service, _) in network.full_nodes.iter() {
+	let first_address = network.authority_nodes[0].3.clone();
+	for (_, service, _, _) in network.full_nodes.iter() {
 		service.get().network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
 	}
 	for (_, service, _) in network.light_nodes.iter() {
 		service.get().network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
 	}
-	for (_, service, _) in network.authority_nodes.iter().skip(1) {
+	for (_, service, _, _) in network.authority_nodes.iter().skip(1) {
 		service.get().network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
 	}
 	network.run_until_all_full(
@@ -441,8 +474,15 @@ pub fn consensus<F>(spec: FactoryChainSpec<F>, authorities: Vec<String>) where
 	);
 
 	info!("Adding more peers");
-	network.insert_nodes(&temp, NUM_FULL_NODES / 2, NUM_LIGHT_NODES / 2, vec![]);
-	for (_, service, _) in network.full_nodes.iter() {
+	network.insert_nodes(
+		&temp,
+		(0..NUM_FULL_NODES / 2).map(|_| { |cfg| full_builder(cfg).map(|s| (s, ())) }),
+		(0..NUM_LIGHT_NODES / 2).map(|_| { |cfg| light_builder(cfg) }),
+		// Note: this iterator is empty but we can't just use `iter::empty()`, otherwise
+		// the type of the closure cannot be inferred.
+		(0..0).map(|_| (String::new(), { |cfg| full_builder(cfg).map(|s| (s, ())) })),
+	);
+	for (_, service, _, _) in network.full_nodes.iter() {
 		service.get().network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
 	}
 	for (_, service, _) in network.light_nodes.iter() {

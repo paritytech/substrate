@@ -253,9 +253,15 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use rstd::marker::PhantomData;
 use srml_support::{StorageValue, dispatch::Result, decl_module, decl_storage, decl_event};
 use system::{ensure_signed, ensure_root};
-use sr_primitives::weights::SimpleDispatchInfo;
+use codec::{Encode, Decode};
+use sr_primitives::{
+	traits::{SignedExtension, DispatchError, Bounded},
+	transaction_validity::ValidTransaction,
+	weights::{SimpleDispatchInfo, DispatchInfo},
+};
 
 /// Our module's configuration trait. All our types and consts go in here. If the
 /// module is dependent on specific other modules, then their configuration traits
@@ -500,15 +506,96 @@ impl<T: Trait> Module<T> {
 	}
 }
 
+// Similar to other SRML modules, your module can also define a signed extension and perform some
+// checks and [pre/post]processing [before/after] the transaction. A signed extension can be any
+// decodable type that implements `SignedExtension`. See the trait definition for the full list of
+// bounds. As a convention, you can follow this approach to create an extension for your module:
+//   - If the extension does not carry any data, then use a tuple struct with just a `marker`
+//     (needed for the compiler to accept `T: Trait`) will suffice.
+//   - Otherwise, create a tuple struct which contains the external data. Of course, for the entire
+//     struct to be decodable, each individual item also needs to be decodable.
+//
+// Note that a signed extension can also indicate that a particular data must be present in the
+// _signing payload_ of a transaction by providing an implementation for the `additional_signed`
+// method. This example will not cover this type of extension. See `CheckRuntime` in system module
+// for an example.
+//
+// Using the extension, you can add some hooks to the lifecycle of each transaction. Note that by
+// default, an extension is applied to all `Call` functions (i.e. all transactions). the `Call` enum
+// variant is given to each function of `SignedExtension`. Hence, you can filter based on module or
+// a particular call if needed.
+//
+// Some extra information, such as encoded length, some static dispatch info like weight and the
+// sender of the transaction (if signed) are also provided.
+//
+// The full list of hooks that can be added to a signed extension can be found
+// [here](https://crates.parity.io/sr_primitives/traits/trait.SignedExtension.html).
+//
+// The signed extensions are aggregated in the runtime file of a substrate chain. All extensions
+// should be aggregated in a tuple and passed to the `CheckedExtrinsic` and `UncheckedExtrinsic`
+// types defined in the runtime. Lookup `pub type SignedExtra = (...)` in `node/runtime` and
+// `node-template` for an example of this.
+
+/// A simple signed extension that checks for the `set_dummy` call. In that case, it increases the
+/// priority and prints some log.
+///
+/// Additionally, it drops any transaction with an encoded length higher than 200 bytes. No
+/// particular reason why, just to demonstrate the power of signed extensions.
+#[derive(Encode, Decode, Clone, Eq, PartialEq)]
+pub struct WatchDummy<T: Trait + Send + Sync>(PhantomData<T>);
+
+#[cfg(feature = "std")]
+impl<T: Trait + Send + Sync> rstd::fmt::Debug for WatchDummy<T> {
+	fn fmt(&self, f: &mut rstd::fmt::Formatter) -> rstd::fmt::Result {
+		write!(f, "WatchDummy<T>")
+	}
+}
+
+impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
+	type AccountId = T::AccountId;
+	// Note that this could also be assigned to the top-level call enum. It is passed into the
+	// balances module directly and since `Trait: balances::Trait`, you could also use `T::Call`.
+	// In that case, you would have had access to all call variants and could match on variants from
+	// other modules.
+	type Call = Call<T>;
+	type AdditionalSigned = ();
+	type Pre = ();
+
+	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
+
+	fn validate(
+		&self,
+		_who: &Self::AccountId,
+		call: &Self::Call,
+		_info: DispatchInfo,
+		len: usize,
+	) -> rstd::result::Result<ValidTransaction, DispatchError> {
+		// if the transaction is too big, just drop it.
+		if len > 200 { return Err(DispatchError::Exhausted) }
+
+		// check for `set_dummy`
+		match call {
+			Call::set_dummy(..) => {
+				rio::print("set_dummy was received.");
+
+				let mut valid_tx = ValidTransaction::default();
+				valid_tx.priority = Bounded::max_value();
+				Ok(valid_tx)
+			}
+			_ => Ok(Default::default())
+		}
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
 
 	use srml_support::{assert_ok, impl_outer_origin, parameter_types};
-	use sr_io::with_externalities;
+	use rio::with_externalities;
 	use primitives::{H256, Blake2Hasher};
 	// The testing primitives are very useful for avoiding having to work with signatures
-	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
+	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sr_primitives::{
 		Perbill, traits::{BlakeTwo256, OnInitialize, OnFinalize, IdentityLookup}, testing::Header
 	};
@@ -575,7 +662,7 @@ mod tests {
 
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
-	fn new_test_ext() -> sr_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext() -> rio::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
 		balances::GenesisConfig::<Test>::default().assimilate_storage(&mut t).unwrap();
@@ -616,5 +703,22 @@ mod tests {
 			assert_ok!(Example::accumulate_foo(Origin::signed(1), 1));
 			assert_eq!(Example::foo(), 25);
 		});
+	}
+
+	#[test]
+	fn signed_ext_watch_dummy_works() {
+		with_externalities(&mut new_test_ext(), || {
+			let call = <Call<Test>>::set_dummy(10);
+			let info = DispatchInfo::default();
+
+			assert_eq!(
+				WatchDummy::<Test>(PhantomData).validate(&1, &call, info, 150).unwrap().priority,
+				Bounded::max_value()
+			);
+			assert_eq!(
+				WatchDummy::<Test>(PhantomData).validate(&1, &call, info, 250),
+				Err(DispatchError::Exhausted)
+			);
+		})
 	}
 }

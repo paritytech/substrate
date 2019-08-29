@@ -14,12 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Abstract storage to use on HashedStorage trait
+//! Abstract storage to use on HashedStorage trait. Please refer to the
+//! [top level docs](../../index.html) for more detailed documentation about storage traits and functions.
 
 use crate::codec::{self, Encode};
-use crate::rstd::prelude::{Vec, Box};
+use crate::rstd::{prelude::{Vec, Box}, iter::FromIterator};
 #[cfg(feature = "std")]
 use crate::storage::unhashed::generator::UnhashedStorage;
+use crate::traits::{StorageDefault, Len};
 use runtime_io::{twox_64, twox_128, blake2_128, twox_256, blake2_256};
 
 pub trait StorageHasher: 'static {
@@ -164,6 +166,9 @@ impl<H: StorageHasher> HashedStorage<H> for sr_primitives::StorageOverlay {
 pub trait StorageValue<T: codec::Codec> {
 	/// The type that get/take returns.
 	type Query;
+	/// Something that can provide the default value of this storage type.
+	type Default: StorageDefault<T>;
+
 
 	/// Get the storage key.
 	fn key() -> &'static [u8];
@@ -202,15 +207,64 @@ pub trait StorageValue<T: codec::Codec> {
 	/// Append the given items to the value in the storage.
 	///
 	/// `T` is required to implement `codec::EncodeAppend`.
-	fn append<S: HashedStorage<Twox128>, I: codec::Encode>(
-		items: &[I], storage: &mut S
-	) -> Result<(), &'static str> where T: codec::EncodeAppend<Item=I> {
+	fn append<'a, S, I, R>(
+		items: R,
+		storage: &mut S,
+	) -> Result<(), &'static str> where
+		S: HashedStorage<Twox128>,
+		I: 'a + codec::Encode,
+		T: codec::EncodeAppend<Item=I>,
+		R: IntoIterator<Item=&'a I>,
+		R::IntoIter: ExactSizeIterator,
+	{
 		let new_val = <T as codec::EncodeAppend>::append(
-			storage.get_raw(Self::key()).unwrap_or_default(),
+			// if the key exists, directly append to it.
+			storage.get_raw(Self::key()).unwrap_or_else(|| {
+				// otherwise, try and read a proper __provided__ default.
+				Self::Default::default().map(|v| v.encode())
+					// or just use the Rust's `default()` value.
+					.unwrap_or_default()
+			}),
 			items,
 		).map_err(|_| "Could not append given item")?;
 		storage.put_raw(Self::key(), &new_val);
 		Ok(())
+	}
+
+	/// Safely append the given items to the value in the storage. If a codec error occurs, then the
+	/// old (presumably corrupt) value is replaced with the given `items`.
+	///
+	/// `T` is required to implement `codec::EncodeAppend`.
+	fn append_or_put<'a, S, I, R>(
+		items: R,
+		storage: &mut S,
+	) where
+		S: HashedStorage<Twox128>,
+		I: 'a + codec::Encode + Clone,
+		T: codec::EncodeAppend<Item=I> + FromIterator<I>,
+		R: IntoIterator<Item=&'a I> + Clone,
+		R::IntoIter: ExactSizeIterator,
+	{
+		Self::append(items.clone(), storage)
+			.unwrap_or_else(|_| Self::put(&items.into_iter().cloned().collect(), storage));
+	}
+
+	/// Read the length of the value in a fast way, without decoding the entire value.
+	///
+	/// `T` is required to implement `Codec::DecodeLength`.
+	///
+	/// Note that `0` is returned as the default value if no encoded value exists at the given key.
+	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
+	/// function for this purpose.
+	fn decode_len<S: HashedStorage<Twox128>>(storage: &mut S) -> Result<usize, &'static str>
+		where T: codec::DecodeLength, T: Len
+	{
+		// attempt to get the length directly.
+		if let Some(k) = storage.get_raw(Self::key()) {
+			<T as codec::DecodeLength>::len(&k).map_err(|e| e.what())
+		} else {
+			Ok(Self::Default::default().map(|v| v.len()).unwrap_or(0))
+		}
 	}
 }
 
@@ -218,8 +272,10 @@ pub trait StorageValue<T: codec::Codec> {
 pub trait StorageMap<K: codec::Codec, V: codec::Codec> {
 	/// The type that get/take returns.
 	type Query;
-
+	/// Hasher type
 	type Hasher: StorageHasher;
+	/// Something that can provide the default value of this storage type.
+	type Default: StorageDefault<V>;
 
 	/// Get the prefix key in storage.
 	fn prefix() -> &'static [u8];
@@ -295,16 +351,69 @@ pub trait EnumerableStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, 
 pub trait AppendableStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, V> {
 	/// Append the given items to the value in the storage.
 	///
-	/// `T` is required to implement `codec::EncodeAppend`.
-	fn append<S: HashedStorage<Self::Hasher>, I: codec::Encode>(
-		key : &K, items: &[I], storage: &mut S
-	) -> Result<(), &'static str> where V: codec::EncodeAppend<Item=I> {
+	/// `V` is required to implement `codec::EncodeAppend`.
+	fn append<'a, S, I, R>(
+		key : &K,
+		items: R,
+		storage: &mut S,
+	) -> Result<(), &'static str> where
+		S: HashedStorage<Self::Hasher>,
+		I: 'a + codec::Encode,
+		V: codec::EncodeAppend<Item=I>,
+		R: IntoIterator<Item=&'a I> + Clone,
+		R::IntoIter: ExactSizeIterator,
+	{
 		let k = Self::key_for(key);
 		let new_val = <V as codec::EncodeAppend>::append(
-			storage.get_raw(&k[..]).unwrap_or_default(),
+			storage.get_raw(&k[..]).unwrap_or_else(|| {
+				// otherwise, try and read a proper __provided__ default.
+				Self::Default::default().map(|v| v.encode())
+					// or just use the default value.
+					.unwrap_or_default()
+			}),
 			items,
 		).map_err(|_| "Could not append given item")?;
 		storage.put_raw(&k[..], &new_val);
 		Ok(())
+	}
+
+	/// Safely append the given items to the value in the storage. If a codec error occurs, then the
+	/// old (presumably corrupt) value is replaced with the given `items`.
+	///
+	/// `T` is required to implement `codec::EncodeAppend`.
+	fn append_or_insert<'a, S, I, R>(
+		key : &K,
+		items: R,
+		storage: &mut S,
+	) where
+		S: HashedStorage<Self::Hasher>,
+		I: 'a + codec::Encode + Clone,
+		V: codec::EncodeAppend<Item=I> + crate::rstd::iter::FromIterator<I>,
+		R: IntoIterator<Item=&'a I> + Clone,
+		R::IntoIter: ExactSizeIterator,
+	{
+		Self::append(key, items.clone(), storage)
+			.unwrap_or_else(|_| Self::insert(key, &items.into_iter().cloned().collect(), storage));
+	}
+}
+
+/// A storage map with a decodable length.
+pub trait DecodeLengthStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, V> {
+	/// Read the length of the value in a fast way, without decoding the entire value.
+	///
+	/// `T` is required to implement `Codec::DecodeLength`.
+	///
+	/// Note that `0` is returned as the default value if no encoded value exists at the given key.
+	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
+	/// function for this purpose.
+	fn decode_len<S: HashedStorage<Self::Hasher>>(key: &K, storage: &mut S) -> Result<usize, &'static str>
+		where V: codec::DecodeLength, V: Len
+	{
+		let k = Self::key_for(key);
+		if let Some(v) = storage.get_raw(&k[..]) {
+			<V as codec::DecodeLength>::len(&v).map_err(|e| e.what())
+		} else {
+			Ok(Self::Default::default().map(|v| v.len()).unwrap_or(0))
+		}
 	}
 }

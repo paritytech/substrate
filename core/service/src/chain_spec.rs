@@ -25,7 +25,7 @@ use primitives::storage::{StorageKey, StorageData};
 use primitives::child_trie::{ChildTrie, produce_keyspace, reverse_keyspace};
 use sr_primitives::{BuildStorage, StorageContent};
 use serde_json as json;
-use crate::components::RuntimeGenesis;
+use crate::RuntimeGenesis;
 use network::Multiaddr;
 use tel::TelemetryEndpoints;
 
