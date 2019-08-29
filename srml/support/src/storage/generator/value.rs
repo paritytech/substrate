@@ -45,7 +45,7 @@ pub trait StorageValue<T: Codec> {
 impl<T: Codec, G: StorageValue<T>> storage::StorageValue<T> for G {
 	type Query = G::Query;
 
-	fn key() -> [u8; 16] {
+	fn hashed_key() -> [u8; 16] {
 		Self::storage_value_final_key()
 	}
 

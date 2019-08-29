@@ -53,7 +53,7 @@ pub trait StorageMap<K: Codec, V: Codec> {
 impl<K: Codec, V: Codec, G: StorageMap<K, V>> storage::StorageMap<K, V> for G {
 	type Query = G::Query;
 
-	fn key_for<KeyArg: Borrow<K>>(key: KeyArg) -> Vec<u8> {
+	fn hashed_key_for<KeyArg: Borrow<K>>(key: KeyArg) -> Vec<u8> {
 		Self::storage_map_final_key(key).as_ref().to_vec()
 	}
 

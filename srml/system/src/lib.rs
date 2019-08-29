@@ -701,9 +701,9 @@ impl<T: Trait> Module<T> {
 	#[cfg(any(feature = "std", test))]
 	pub fn externalities() -> TestExternalities<Blake2Hasher> {
 		TestExternalities::new((map![
-			<BlockHash<T>>::key_for(T::BlockNumber::zero()) => [69u8; 32].encode(),
-			<Number<T>>::key().to_vec() => T::BlockNumber::one().encode(),
-			<ParentHash<T>>::key().to_vec() => [69u8; 32].encode()
+			<BlockHash<T>>::hashed_key_for(T::BlockNumber::zero()) => [69u8; 32].encode(),
+			<Number<T>>::hashed_key().to_vec() => T::BlockNumber::one().encode(),
+			<ParentHash<T>>::hashed_key().to_vec() => [69u8; 32].encode()
 		], map![]))
 	}
 

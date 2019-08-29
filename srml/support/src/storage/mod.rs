@@ -34,7 +34,7 @@ pub trait StorageValue<T: Codec> {
 	type Query;
 
 	/// Get the storage key.
-	fn key() -> [u8; 16];
+	fn hashed_key() -> [u8; 16];
 
 	/// Does the value (explicitly) exist in storage?
 	fn exists() -> bool;
@@ -97,7 +97,7 @@ pub trait StorageMap<K: Codec, V: Codec> {
 	type Query;
 
 	/// Get the storage key used to fetch a value corresponding to a specific key.
-	fn key_for<KeyArg: Borrow<K>>(key: KeyArg) -> Vec<u8>;
+	fn hashed_key_for<KeyArg: Borrow<K>>(key: KeyArg) -> Vec<u8>;
 
 	/// Does the value (explicitly) exist in storage?
 	fn exists<KeyArg: Borrow<K>>(key: KeyArg) -> bool;
