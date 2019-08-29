@@ -42,7 +42,7 @@ use sr_primitives::{
 use state_machine::{
 	DBValue, Backend as StateBackend, CodeExecutor, ChangesTrieAnchorBlockId,
 	ExecutionStrategy, ExecutionManager, prove_read, prove_child_read,
-	ChangesTrieRootsStorage, ChangesTrieStorage,
+	ChangesTrieRootsStorage, ChangesTrieStorage, BackendTrustLevel,
 	key_changes, key_changes_proof, OverlayedChanges, NeverOffchainExt,
 };
 use executor::{RuntimeVersion, RuntimeInfo};
@@ -1032,7 +1032,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				let get_execution_manager = |execution_strategy: ExecutionStrategy| {
 					match execution_strategy {
 						ExecutionStrategy::NativeElseWasm => ExecutionManager::NativeElseWasm,
-						ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm(true),
+						ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm(BackendTrustLevel::Trusted),
 						ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
 						ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
 							let header = import_headers.post();

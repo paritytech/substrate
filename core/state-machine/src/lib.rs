@@ -412,16 +412,25 @@ type DefaultHandler<R, E> = fn(
 	CallResult<R, E>,
 ) -> CallResult<R, E>;
 
+/// Storage backend trust level.
+#[derive(Debug, Clone)]
+pub enum BackendTrustLevel {
+	/// Panics from trusted backend are justified and never caught.
+	Trusted,
+	/// Panics from untrusted backend are caught and interpreted as runtime error.
+	/// Untrusted backend may miss some parts of trie => panics are not considered
+	/// fatal.
+	Untrusted,
+}
+
 /// Like `ExecutionStrategy` only it also stores a handler in case of consensus failure.
 #[derive(Clone)]
 pub enum ExecutionManager<F> {
 	/// Execute with the native equivalent if it is compatible with the given wasm module; otherwise fall back to the wasm.
 	NativeWhenPossible,
 	/// Use the given wasm module. The backend on which code is executed code could be
-	/// trusted (true) or untrusted (false).
-	/// If untrusted, all panics that occurs within externalities are treated as runtime execution error.
-	/// If trusted, they are considered fatal && aren't catched.
-	AlwaysWasm(bool),
+	/// trusted or untrusted.
+	AlwaysWasm(BackendTrustLevel),
 	/// Run with both the wasm and the native variant (if compatible). Call `F` in the case of any discrepency.
 	Both(F),
 	/// First native, then if that fails or is not possible, wasm.
@@ -443,7 +452,7 @@ impl ExecutionStrategy {
 	/// Gets the corresponding manager for the execution strategy.
 	pub fn get_manager<E: std::fmt::Debug, R: Decode + Encode>(self) -> ExecutionManager<DefaultHandler<R, E>> {
 		match self {
-			ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm(true),
+			ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm(BackendTrustLevel::Trusted),
 			ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
 			ExecutionStrategy::NativeElseWasm => ExecutionManager::NativeElseWasm,
 			ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
@@ -471,12 +480,12 @@ pub fn native_else_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>
 
 /// Evaluate to ExecutionManager::AlwaysWasm with trusted backend, without having to figure out the type.
 pub fn always_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
-	ExecutionManager::AlwaysWasm(true)
+	ExecutionManager::AlwaysWasm(BackendTrustLevel::Trusted)
 }
 
 /// Evaluate ExecutionManager::AlwaysWasm with untrusted backend, without having to figure out the type.
 fn always_untrusted_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
-	ExecutionManager::AlwaysWasm(false)
+	ExecutionManager::AlwaysWasm(BackendTrustLevel::Untrusted)
 }
 
 /// Creates new substrate state machine.
@@ -691,11 +700,10 @@ impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 				ExecutionManager::NativeElseWasm => {
 					self.execute_call_with_native_else_wasm_strategy(compute_tx, native_call.take(), orig_prospective)
 				},
-				ExecutionManager::AlwaysWasm(trusted) => {
-					let _abort_guard = if !trusted {
-						Some(panic_handler::AbortGuard::never_abort())
-					} else {
-						None
+				ExecutionManager::AlwaysWasm(trust_level) => {
+					let _abort_guard = match trust_level {
+						BackendTrustLevel::Trusted => None,
+						BackendTrustLevel::Untrusted => Some(panic_handler::AbortGuard::never_abort()),
 					};
 					let (result, _, storage_delta, changes_delta) = self.execute_aux(compute_tx, false, native_call);
 					(result, storage_delta, changes_delta)
