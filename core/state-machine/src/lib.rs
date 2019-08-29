@@ -256,7 +256,7 @@ pub trait StorageExternalities<H: Hasher> {
 
 /// Extra externalities API: pinned to specific active address.
 ///
-/// Methods of implementations of this trait may have some side-effects, thus it isn't safe
+/// Methods of this trait may have side-effects.  Therefore, it isn't safe
 /// to catch unwindings of any panics that occur during these methods call.
 pub trait Externalities<H: Hasher>: StorageExternalities<H> {
 	/// Returns offchain externalities extension if present.
