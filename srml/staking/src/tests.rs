@@ -33,14 +33,23 @@ fn basic_setup_works() {
 	with_externalities(&mut ExtBuilder::default()
 		.build(),
 	|| {
-		assert_eq!(Staking::bonded(&11), Some(10)); // Account 11 is stashed and locked, and account 10 is the controller
-		assert_eq!(Staking::bonded(&21), Some(20)); // Account 21 is stashed and locked, and account 20 is the controller
-		assert_eq!(Staking::bonded(&1), None);		// Account 1 is not a stashed
+		// Account 11 is stashed and locked, and account 10 is the controller
+		assert_eq!(Staking::bonded(&11), Some(10));
+		// Account 21 is stashed and locked, and account 20 is the controller
+		assert_eq!(Staking::bonded(&21), Some(20));
+		// Account 1 is not a stashed
+		assert_eq!(Staking::bonded(&1), None);
 
 		// Account 10 controls the stash from account 11, which is 100 * balance_factor units
-		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000, active: 1000, unlocking: vec![] }));
+		assert_eq!(
+			Staking::ledger(&10),
+			Some(StakingLedger { stash: 11, total: 1000, active: 1000, unlocking: vec![] })
+		);
 		// Account 20 controls the stash from account 21, which is 200 * balance_factor units
-		assert_eq!(Staking::ledger(&20), Some(StakingLedger { stash: 21, total: 1000, active: 1000, unlocking: vec![] }));
+		assert_eq!(
+			Staking::ledger(&20),
+			Some(StakingLedger { stash: 21, total: 1000, active: 1000, unlocking: vec![] })
+		);
 		// Account 1 does not control any stash
 		assert_eq!(Staking::ledger(&1), None);
 
@@ -51,7 +60,10 @@ fn basic_setup_works() {
 			(11, ValidatorPrefs::default())
 		]);
 
-		assert_eq!(Staking::ledger(100), Some(StakingLedger { stash: 101, total: 500, active: 500, unlocking: vec![] }));
+		assert_eq!(
+			Staking::ledger(100),
+			Some(StakingLedger { stash: 101, total: 500, active: 500, unlocking: vec![] })
+		);
 		assert_eq!(Staking::nominators(101), vec![11, 21]);
 
 		if cfg!(feature = "equalize") {
@@ -340,8 +352,6 @@ fn less_than_needed_candidates_works() {
 
 #[test]
 fn no_candidate_emergency_condition() {
-	// Test the situation where the number of validators are less than `ValidatorCount` and less than <MinValidators>
-	// The expected behavior is to choose all candidates from the previous era.
 	with_externalities(&mut ExtBuilder::default()
 		.minimum_validator_count(10)
 		.validator_count(15)
@@ -375,8 +385,6 @@ fn no_candidate_emergency_condition() {
 fn nominating_and_rewards_should_work() {
 	// PHRAGMEN OUTPUT: running this test with the reference impl gives:
 	//
-	// Votes  [('10', 1000, ['10']), ('20', 1000, ['20']), ('30', 1000, ['30']), ('40', 1000, ['40']), ('2', 1000, ['10', '20', '30']), ('4', 1000, ['10', '20', '40'])]
-	// Votes  [('10', 1000, ['10']), ('20', 1000, ['20']), ('30', 1000, ['30']), ('40', 1000, ['40']), ('2', 1000, ['10', '20', '30']), ('4', 1000, ['10', '20', '40'])]
 	// Sequential Phragmén gives
 	// 10  is elected with stake  2200.0 and score  0.0003333333333333333
 	// 20  is elected with stake  1800.0 and score  0.0005555555555555556
@@ -660,9 +668,15 @@ fn double_controlling_should_fail() {
 		|| {
 			let arbitrary_value = 5;
 			// 2 = controller, 1 stashed => ok
-			assert_ok!(Staking::bond(Origin::signed(1), 2, arbitrary_value, RewardDestination::default()));
+			assert_ok!(
+				Staking::bond(Origin::signed(1), 2, arbitrary_value,
+				RewardDestination::default())
+			);
 			// 2 = controller, 3 stashed (Note that 2 is reused.) => no-op
-			assert_noop!(Staking::bond(Origin::signed(3), 2, arbitrary_value, RewardDestination::default()), "controller already paired");
+			assert_noop!(
+				Staking::bond(Origin::signed(3), 2, arbitrary_value, RewardDestination::default()),
+				"controller already paired"
+			);
 		});
 }
 
@@ -759,7 +773,10 @@ fn cannot_transfer_staked_balance() {
 		// Confirm account 11 (via controller 10) is totally staked
 		assert_eq!(Staking::stakers(&11).total, 1000);
 		// Confirm account 11 cannot transfer as a result
-		assert_noop!(Balances::transfer(Origin::signed(11), 20, 1), "account liquidity restrictions prevent withdrawal");
+		assert_noop!(
+			Balances::transfer(Origin::signed(11), 20, 1),
+			"account liquidity restrictions prevent withdrawal"
+		);
 
 		// Give account 11 extra free balance
 		let _ = Balances::make_free_balance_be(&11, 10000);
@@ -785,7 +802,10 @@ fn cannot_transfer_staked_balance_2() {
 		// Confirm account 21 (via controller 20) is totally staked
 		assert_eq!(Staking::stakers(&21).total, 1000);
 		// Confirm account 21 can transfer at most 1000
-		assert_noop!(Balances::transfer(Origin::signed(21), 20, 1001), "account liquidity restrictions prevent withdrawal");
+		assert_noop!(
+			Balances::transfer(Origin::signed(21), 20, 1001),
+			"account liquidity restrictions prevent withdrawal"
+		);
 		assert_ok!(Balances::transfer(Origin::signed(21), 20, 1000));
 	});
 }
@@ -1453,7 +1473,10 @@ fn phragmen_poc_2_works() {
 		// 10 and 30 must be the winners
 		assert_eq!(winners, vec![11, 31]);
 		assert_eq!(assignments, vec![
-			(3, vec![(11, sr_primitives::Perbill::from_parts(655737705)), (31, sr_primitives::Perbill::from_parts(344262295))]),
+			(3, vec![
+				(11, sr_primitives::Perbill::from_parts(655737705)),
+				(31, sr_primitives::Perbill::from_parts(344262295))
+			]),
 			(1, vec![(11, sr_primitives::Perbill::from_percent(100))]),
 		]);
 		check_exposure_all();
@@ -1650,7 +1673,11 @@ fn bond_with_little_staked_value_bounded_by_slot_stake() {
 		assert_eq!(Staking::slot_stake(), 1);
 
 		assert_eq_error_rate!(Balances::free_balance(&2), init_balance_2 + total_payout_1 / 3, 2);
-		assert_eq_error_rate!(Balances::free_balance(&10), init_balance_10 + total_payout_0/3 + total_payout_1 / 3, 2);
+		assert_eq_error_rate!(
+			Balances::free_balance(&10),
+			init_balance_10 + total_payout_0/3 + total_payout_1 / 3,
+			2,
+		);
 		check_exposure_all();
 		check_nominator_all();
 	});
