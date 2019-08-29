@@ -21,7 +21,8 @@ use wasmi::nan_preserving_float::{F32, F64};
 
 pub trait ConvertibleToWasm {
 	const VALUE_TYPE: ValueType;
-	type NativeType; fn to_runtime_value(self) -> RuntimeValue;
+	type NativeType;
+	fn to_runtime_value(self) -> RuntimeValue;
 }
 
 impl ConvertibleToWasm for i32 {
@@ -46,18 +47,6 @@ impl ConvertibleToWasm for u64 {
 	type NativeType = u64;
 	const VALUE_TYPE: ValueType = ValueType::I64;
 	fn to_runtime_value(self) -> RuntimeValue { RuntimeValue::I64(self as i64) }
-}
-
-impl ConvertibleToWasm for F32 {
-	type NativeType = F32;
-	const VALUE_TYPE: ValueType = ValueType::F32;
-	fn to_runtime_value(self) -> RuntimeValue { RuntimeValue::F32(self) }
-}
-
-impl ConvertibleToWasm for F64 {
-	type NativeType = F64;
-	const VALUE_TYPE: ValueType = ValueType::F64;
-	fn to_runtime_value(self) -> RuntimeValue { RuntimeValue::F64(self) }
 }
 
 impl ConvertibleToWasm for isize {

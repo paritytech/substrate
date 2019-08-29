@@ -40,6 +40,7 @@ use log::trace;
 macro_rules! debug_trace {
 	( $( $x:tt )* ) => ( trace!( $( $x )* ) )
 }
+
 #[cfg(not(feature="wasm-extern-trace"))]
 macro_rules! debug_trace {
 	( $( $x:tt )* ) => ()
@@ -1343,7 +1344,7 @@ impl WasmExecutor {
 		method: &str,
 		data: &[u8],
 	) -> Result<Vec<u8>> {
-		let module = ::wasmi::Module::from_buffer(code)?;
+		let module = wasmi::Module::from_buffer(code)?;
 		let module = Self::instantiate_module::<E>(heap_pages, &module)?;
 		self.call_in_wasm_module(ext, &module, method, data)
 	}
@@ -1451,7 +1452,13 @@ impl WasmExecutor {
 			.and_then(|e| e.as_table().cloned());
 		let heap_base = Self::get_heap_base(module_instance)?;
 
-		let mut fec = FunctionExecutor::new(memory.clone(), heap_base, table, ext)?;
+		let mut fec = FunctionExecutor::new(
+			memory.clone(),
+			heap_base,
+			table,
+			ext,
+		)?;
+
 		let parameters = create_parameters(&mut |data: &[u8]| {
 			let offset = fec.heap.allocate(data.len() as u32)?;
 			memory.set(offset, &data)?;
@@ -1469,7 +1476,11 @@ impl WasmExecutor {
 				None => Err(Error::InvalidReturn),
 			},
 			Err(e) => {
-				trace!(target: "wasm-executor", "Failed to execute code with {} pages", memory.current_size().0);
+				trace!(
+					target: "wasm-executor",
+					"Failed to execute code with {} pages",
+					memory.current_size().0
+				);
 				Err(e.into())
 			},
 		};

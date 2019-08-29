@@ -65,6 +65,8 @@ pub mod uint;
 mod changes_trie;
 pub mod traits;
 pub mod testing;
+#[cfg(feature = "std")]
+pub mod wasm;
 
 #[cfg(test)]
 mod tests;
