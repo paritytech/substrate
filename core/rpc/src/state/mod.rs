@@ -296,9 +296,9 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 	) -> Result<Option<StorageData>> {
 		let block = BlockId::Hash(self.unwrap_or_best(block)?);
 		trace!(target: "rpc", "Querying child storage at {:?} for key {}", block, HexDisplay::from(&key.0));
-		if let Some(subtrie) = self.client.child_trie(&block, &child_storage_key)? {
+		if let Some(subtrie) = self.client.child_trie(&block, &child_storage_key)
+			.map_err(client_err)? {
 			Ok(self.client.child_storage(&block, subtrie.node_ref(), &key)
-				.child_storage(&BlockId::Hash(block), &child_storage_key, &key)
 				.map_err(client_err)?
 			)
 		} else {
@@ -314,7 +314,8 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 	) -> Result<Vec<StorageKey>> {
 		let block = BlockId::Hash(self.unwrap_or_best(block)?);
 		trace!(target: "rpc", "Querying child storage keys at {:?}", block);
-		if let Some(subtrie) = self.client.child_trie(&block, &child_storage_key)? {
+		if let Some(subtrie) = self.client.child_trie(&block, &child_storage_key)
+			.map_err(client_err)? {
 			Ok(self.client
 				.child_storage_keys(&block, subtrie.node_ref(), &key_prefix)
 				.map_err(client_err)?
@@ -336,7 +337,8 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 			block,
 			HexDisplay::from(&key.0),
 		);
-		if let Some(subtrie) = self.client.child_trie(&block, &child_storage_key)? {
+		if let Some(subtrie) = self.client.child_trie(&block, &child_storage_key)
+			.map_err(client_err)? {
 			Ok(self.client
 				.child_storage_hash(&block, subtrie.node_ref(), &key)
 				.map_err(client_err)?
