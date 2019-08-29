@@ -165,6 +165,9 @@ pub trait StorageLinkedMap<K: Codec, V: Codec> {
 	/// The type that get/take return.
 	type Query;
 
+	/// The type that iterates over all `(key, value)`.
+	type Enumerator: Iterator<Item = (K, V)>;
+
 	/// Does the value (explicitly) exist in storage?
 	fn exists<KeyArg: Borrow<K>>(key: KeyArg) -> bool;
 
@@ -194,7 +197,7 @@ pub trait StorageLinkedMap<K: Codec, V: Codec> {
 	fn head() -> Option<K>;
 
 	/// Enumerate all elements in the map.
-	fn enumerate() -> Box<dyn Iterator<Item = (K, V)>> where K: 'static, V: 'static, Self: 'static;
+	fn enumerate() -> Self::Enumerator;
 
 	/// Read the length of the value in a fast way, without decoding the entire value.
 	///

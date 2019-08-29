@@ -18,7 +18,6 @@ use codec::{Codec, Encode, Decode};
 use crate::{storage::{self, unhashed, hashed::StorageHasher}, traits::Len};
 use sr_std::{
 	borrow::Borrow,
-	boxed::Box,
 	marker::PhantomData,
 };
 
@@ -75,7 +74,7 @@ impl<Key> Default for Linkage<Key> {
 }
 
 /// A key-value pair iterator for enumerable map.
-struct Enumerator<K: Codec, V: Codec, G: StorageLinkedMap<K, V>> {
+pub struct Enumerator<K: Codec, V: Codec, G: StorageLinkedMap<K, V>> {
 	next: Option<K>,
 	_phantom: PhantomData<(G, V)>,
 }
@@ -203,6 +202,8 @@ where
 impl<K: Codec, V: Codec, G: StorageLinkedMap<K, V>> storage::StorageLinkedMap<K, V> for G {
 	type Query = G::Query;
 
+	type Enumerator = Enumerator<K, V, Self>;
+
 	fn exists<KeyArg: Borrow<K>>(key: KeyArg) -> bool {
 		unhashed::exists(Self::storage_linked_map_final_key(key).as_ref())
 	}
@@ -298,16 +299,11 @@ impl<K: Codec, V: Codec, G: StorageLinkedMap<K, V>> storage::StorageLinkedMap<K,
 		G::from_optional_value_to_query(value)
 	}
 
-	fn enumerate() -> Box<dyn Iterator<Item = (K, V)>>
-	where
-		K: 'static,
-		V: 'static,
-		Self: 'static
-	{
-		Box::new(Enumerator::<_, _, G> {
+	fn enumerate() -> Self::Enumerator {
+		Enumerator::<_, _, G> {
 			next: read_head::<_, _, G>(),
 			_phantom: Default::default(),
-		})
+		}
 	}
 
 	fn head() -> Option<K> {
