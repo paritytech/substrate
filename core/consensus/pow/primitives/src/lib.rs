@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Primitives for Substrate PoW consensus.
+//! Primitives for Substrate Proof-of-Work (PoW) consensus.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
