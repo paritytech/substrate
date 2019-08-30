@@ -27,19 +27,26 @@
 //!
 //! `TermDuration` might change during a round. This can shorten or extend the length of the round.
 //! The next election round's block number is never stored but rather always checked on the fly.
-//! Based on the current block height and `TermDuration`, `BlockNumber % TermDuration == 0` will
-//! always trigger a new election round.
+//! Based on the current block number and `TermDuration`, the condition `BlockNumber % TermDuration
+//! == 0` being satisfied will always trigger a new election round.
 //!
 //! ### Voting
 //!
 //! Voters can vote for any set of the candidates by providing a list of account ids. Invalid votes
-//! (voting for non-candidates) are ignored during election. Yet, a voter _might_ vote for a
-//! future candidate. Voters reserve a bond as they vote. Each vote defines a `value`. This amount
-//! is locked from the account of the voter and indicates the weight of the vote. Voters can update
+//! (voting for non-candidates) are ignored during election. Yet, a voter _might_ vote for a future
+//! candidate. Voters reserve a bond as they vote. Each vote defines a `value`. This amount is
+//! locked from the account of the voter and indicates the weight of the vote. Voters can update
 //! their votes at any time by calling `vote()` again. This keeps the bond untouched but can
-//! optionally change the locked `value`. After a round, votes are kept and might still be valid
-//! for further rounds. A voter is responsible for calling `remove_voter` once they are done to
-//! have their bond back and remove the lock.
+//! optionally change the locked `value`. After a round, votes are kept and might still be valid for
+//! further rounds. A voter is responsible for calling `remove_voter` once they are done to have
+//! their bond back and remove the lock.
+//!
+//! Voters also report other voters as being defunct to earn their bond. A voter is defunct once all
+//! of the candidates that they have voted for are neither a valid candidate anymore nor a member.
+//! Upon reporting, if the target voter is actually defunct, the reporter will be rewarded by the
+//! voting bond of the target. The target will lose their bond and get removed. If the target is not
+//! defunct, the reporter is slashed and removed. To prevent being reported, voters should manually
+//! submit a `remove_voter()` as soon as they are in the defunct state.
 //!
 //! ### Candidacy and Members
 //!
@@ -48,15 +55,15 @@
 //!   - **Winner**: A winner is kept as a _member_. They must still have a bond in reserve and they
 //!     are automatically counted as a candidate for the next election.
 //!   - **Loser**: Any of the candidate who are not a winner are left as losers. A loser might be an
-//! 	_outgoing member_, meaning that they are an active member who failed to keep their spot. In
-//! 	this case, the outgoing member will get their bond back. Otherwise, the bond is slashed from
-//! 	the loser candidate.
+//!     _outgoing member_, meaning that they are an active member who failed to keep their spot. In
+//!     this case, the outgoing member will get their bond back. Otherwise, the bond is slashed from
+//!     the loser candidate.
 //!
-//! Note that with the members being the default candidates for the next round and votes
-//! persisting in storage, the election system is entirely stable given no further input. This means
-//! that if the system has a particular set of candidates `C` and voters `V` that lead to a
-//! set of members `M` being elected, as long as `V` and `C` don't remove their candidacy and votes,
-//! `M` will keep being re-elected at the end of each round.
+//! Note that with the members being the default candidates for the next round and votes persisting
+//! in storage, the election system is entirely stable given no further input. This means that if
+//! the system has a particular set of candidates `C` and voters `V` that lead to a set of members
+//! `M` being elected, as long as `V` and `C` don't remove their candidacy and votes, `M` will keep
+//! being re-elected at the end of each round.
 //!
 //! ### Module Information
 //!
@@ -64,13 +71,21 @@
 //! - [`Call`](./enum.Call.html)
 //! - [`Module`](./struct.Module.html)
 
+// TODO: we don't hold the voters accountable in any sense; a voter can remove themselves (unbond)
+// right after an election (even if their voted for some winners) and they can be reported right
+// after an election. We should probably add some accountability here. Simplest would be that voters
+// cannot remove/report as long as they have a voted target who is in the member list.
+
+// TODO: update the weights with O values.
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sr_primitives::traits::{Zero, StaticLookup, Bounded, Convert};
 use sr_primitives::weights::SimpleDispatchInfo;
 use srml_support::{StorageValue, StorageMap, EnumerableStorageMap, decl_storage, decl_event, ensure,
 	decl_module, dispatch,
-	traits::{Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
+	traits::{
+		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
 		ChangeMembers, OnUnbalanced,
 	}
 };
@@ -107,8 +122,11 @@ pub trait Trait: system::Trait {
 	/// How much should be locked up in order to be able to submit votes.
 	type VotingBond: Get<BalanceOf<Self>>;
 
-	/// Handler for the unbalanced reduction when a candidate has lost
+	/// Handler for the unbalanced reduction when a candidate has lost.
 	type LoserCandidate: OnUnbalanced<NegativeImbalanceOf<Self>>;
+
+	/// Handler for the unbalanced reduction when a reporter has submitted a bad defunct report.
+	type BadReport: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 	/// Handler for the unbalanced reduction when a member has been kicked.
 	type KickedMember: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -124,7 +142,7 @@ decl_storage! {
 		pub TermDuration get(term_duration) config(): T::BlockNumber;
 
 		// ---- State
-		/// The current elected membership. Sorted based on account id (low to high).
+		/// The current elected membership. Sorted based on account id.
 		pub Members get(members) config(): Vec<T::AccountId>;
 		/// The total number of vote rounds that have happened, exclusive of the upcoming one.
 		pub ElectionRounds get(election_rounds): u32 = Zero::zero();
@@ -158,6 +176,10 @@ decl_module! {
 		/// Upon voting, `value` units of `who`'s balance is locked and a bond amount is reserved.
 		/// It is the responsibility of the caller to not place all of their balance into the lock
 		/// and keep some for further transactions.
+		///
+		/// # <weight>
+		/// O(1)
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn vote(origin, votes: Vec<T::AccountId>, value: BalanceOf<T>) {
 			let who = ensure_signed(origin)?;
@@ -194,7 +216,6 @@ decl_module! {
 				WithdrawReasons::all(),
 			);
 			<StakeOf<T>>::insert(&who, locked_balance);
-
 			<VotesOf<T>>::insert(&who, votes);
 		}
 
@@ -205,30 +226,67 @@ decl_module! {
 
 			ensure!(Self::is_voter(&who), "must be a voter");
 
-			// remove storage.
-			<VotesOf<T>>::remove(&who);
-			<StakeOf<T>>::remove(&who);
-
-			// unreserve the bond and remove.
-			T::Currency::unreserve(&who, T::VotingBond::get());
-			T::Currency::remove_lock(MODULE_ID, &who);
+			Self::do_remove_voter(&who, true);
 		}
+
+		/// Report `target` for being an defunct voter. In case of a valid report, the reporter is
+		/// rewarded by the bond amount of `target`. Otherwise, the reporter itself is removed and
+		/// their bond is slashed.
+		///
+		/// A defunct voter is defined to be:
+		///   - a voter who's current submitted votes are all invalid. i.e. all of them are no
+		///     longer a candidate nor an active member.
+		///
+		/// # <weight>
+		/// O(NLogM) given M current candidates and N votes for `target`.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
+		fn report_defunct_voter(origin, target: <T::Lookup as StaticLookup>::Source) {
+			let reporter = ensure_signed(origin)?;
+			let target = T::Lookup::lookup(target)?;
+
+			ensure!(reporter != target, "cannot report self");
+			ensure!(Self::is_voter(&reporter), "reporter must be a voter");
+
+			// Checking if someone is a candidate and a member here is O(LogN), making the whole
+			// function O(MLonN) with N candidates in total and M of them being voted by `target`.
+			// We could easily add another mapping to be able to check if someone is a candidate in
+			// `O(1)` but that would make the process of removing candidates at the end of each
+			// round slightly harder.
+			//
+			// Note that for now we have a bound of number of votes (`N`).
+			let valid = Self::is_defunct_voter(&target);
+			if valid {
+				// reporter will get the voting bond of the target
+				T::Currency::repatriate_reserved(&target, &reporter, T::VotingBond::get())?;
+				// remove the target. They are defunct.
+				Self::do_remove_voter(&target, false);
+			} else {
+				// slash the bond of the reporter.
+				let imbalance = T::Currency::slash_reserved(&reporter, T::VotingBond::get()).0;
+				T::BadReport::on_unbalanced(imbalance);
+				// remove the reporter.
+				Self::do_remove_voter(&reporter, false);
+			}
+			Self::deposit_event(RawEvent::VoterReported(target, reporter, valid));
+		}
+
 
 		/// Submit oneself for candidacy.
 		///
 		/// A candidate will either:
 		///   - Lose at the end of the term and get slashed.
 		///   - Win and become a member. Members will eventually get their stash back.
+		/// # <weight>
+		/// O(LogN) Given N candidates.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn submit_candidacy(origin) {
 			let who = ensure_signed(origin)?;
 
 			let is_candidate = Self::is_candidate(&who);
 			ensure!(!is_candidate.is_ok(), "duplicate candidate submission");
-			ensure!(
-				Self::members().binary_search(&who).is_err(),
-				"member cannot re-submit candidacy"
-			);
+			ensure!(Self::is_member(&who), "member cannot re-submit candidacy");
 			// assured to be an error, error always contains the index.
 			let index = is_candidate.unwrap_err();
 
@@ -240,6 +298,9 @@ decl_module! {
 		}
 
 		/// Set the desired member count. Changes will be effective at the beginning of next round.
+		/// # <weight>
+		/// O(1)
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn set_desired_member_count(origin, #[compact] count: u32) {
 			ensure_root(origin)?;
@@ -252,6 +313,9 @@ decl_module! {
 		///  Current members (except for the removed one) are treated like active candidate.
 		///
 		/// Note that this does not affect the designated block number of the next election.
+		/// # <weight>
+		/// O(LogN) given N candidates + O(phragmen)
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(2_000_000)]
 		fn remove_member(origin, who: <T::Lookup as StaticLookup>::Source) {
 			ensure_root(origin)?;
@@ -298,19 +362,63 @@ decl_event!(
 		/// A member has been removed. This should always be followed by either `NewTerm` ot
 		/// `EmptyTerm`.
 		MemberKicked(AccountId),
+		/// A voter (first element) was reported (byt the second element) with the the report being
+		/// successful or not (third element).
+		VoterReported(AccountId, AccountId, bool),
 	}
 );
 
 impl<T: Trait> Module<T> {
 	/// Check if `who` is a candidate. It returns the insert index if the element does not exists as
 	/// an error.
+	///
+	/// O(LogN) given N candidates.
 	fn is_candidate(who: &T::AccountId) -> Result<(), usize> {
 		Self::candidates().binary_search(who).map(|_| ())
 	}
 
 	/// Check if `who` is a voter. It may or may not be a _current_ one.
+	///
+	/// O(1).
 	fn is_voter(who: &T::AccountId) -> bool {
 		<StakeOf<T>>::exists(who)
+	}
+
+	/// Check if `who` is currently an active member.
+	///
+	/// Limited number of members. Binary search. Constant time factor. O(1)
+	fn is_member(who: &T::AccountId) -> bool {
+		Self::members().binary_search(who).is_ok()
+	}
+
+	/// Check if `who` is a defunct voter.
+	///
+	/// Note that false is returned if `who` is not a voter at all.
+	///
+	/// O(NLogM) with M candidates and `who` having voted for `N` of them.
+	fn is_defunct_voter(who: &T::AccountId) -> bool {
+		if Self::is_voter(who) {
+			Self::votes_of(who)
+				.iter()
+				.all(|v| !Self::is_member(v) && !Self::is_candidate(v).is_ok())
+		} else {
+			false
+		}
+	}
+
+	/// Remove a certain someone as a voter.
+	///
+	/// This will clean always clean the storage associated with the voter, and remove the balance
+	/// lock. Optionally, it would also return the reserved voting bond if indicated by `unreserve`.
+	fn do_remove_voter(who: &T::AccountId, unreserve: bool) {
+		// remove storage and lock.
+		<VotesOf<T>>::remove(who);
+		<StakeOf<T>>::remove(who);
+		T::Currency::remove_lock(MODULE_ID, who);
+
+		if unreserve {
+			T::Currency::unreserve(who, T::VotingBond::get());
+		}
 	}
 
 	/// The locked stake of a voter.
@@ -368,7 +476,10 @@ impl<T: Trait> Module<T> {
 			<Members<T>>::put(new_members.clone());
 
 			// report member changes. We compute diff because we need the outgoing list.
-			let (incoming, outgoing) = T::ChangeMembers::compute_members_diff(&new_members, &old_members);
+			let (incoming, outgoing) = T::ChangeMembers::compute_members_diff(
+				&new_members,
+				&old_members
+			);
 			T::ChangeMembers::change_members_sorted(
 				&incoming,
 				&outgoing.clone(),
@@ -505,6 +616,7 @@ mod tests {
 		type VotingBond = VotingBond;
 		type LoserCandidate = ();
 		type KickedMember = ();
+		type BadReport = ();
 	}
 
 	pub type Block = sr_primitives::generic::Block<Header, UncheckedExtrinsic>;
@@ -851,6 +963,115 @@ mod tests {
 	}
 
 	#[test]
+	fn reporter_must_be_voter() {
+		with_externalities(&mut ExtBuilder::default().build(), || {
+			assert_noop!(
+				Elections::report_defunct_voter(Origin::signed(1), 2),
+				"reporter must be a voter",
+			);
+		});
+	}
+
+	#[test]
+	fn can_detect_defunct_voter() {
+		with_externalities(&mut ExtBuilder::default().build(), || {
+			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
+
+			assert_ok!(Elections::vote(Origin::signed(5), vec![5], 50));
+			assert_ok!(Elections::vote(Origin::signed(4), vec![4], 40));
+			assert_ok!(Elections::vote(Origin::signed(2), vec![4, 5], 20));
+			// will be soon a defunct voter.
+			assert_ok!(Elections::vote(Origin::signed(3), vec![3], 30));
+
+			System::set_block_number(5);
+			assert_ok!(Elections::end_block(System::block_number()));
+
+			assert_eq!(Elections::members(), vec![4, 5]);
+			assert_eq!(Elections::candidates(), vec![]);
+
+			// all of them have a member that they voted for.
+			assert_eq!(Elections::is_defunct_voter(&5), false);
+			assert_eq!(Elections::is_defunct_voter(&4), false);
+			assert_eq!(Elections::is_defunct_voter(&2), false);
+
+			// defunct
+			assert_eq!(Elections::is_defunct_voter(&3), true);
+
+			assert_ok!(Elections::submit_candidacy(Origin::signed(1)));
+			assert_ok!(Elections::vote(Origin::signed(1), vec![1], 10));
+
+			// has a candidate voted for.
+			assert_eq!(Elections::is_defunct_voter(&1), false);
+
+		});
+	}
+
+	#[test]
+	fn report_voter_should_work_and_earn_reward() {
+		with_externalities(&mut ExtBuilder::default().build(), || {
+			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
+
+			assert_ok!(Elections::vote(Origin::signed(5), vec![5], 50));
+			assert_ok!(Elections::vote(Origin::signed(4), vec![4], 40));
+			assert_ok!(Elections::vote(Origin::signed(2), vec![4, 5], 20));
+			// will be soon a defunct voter.
+			assert_ok!(Elections::vote(Origin::signed(3), vec![3], 30));
+
+			System::set_block_number(5);
+			assert_ok!(Elections::end_block(System::block_number()));
+
+			assert_eq!(Elections::members(), vec![4, 5]);
+			assert_eq!(Elections::candidates(), vec![]);
+
+			assert_eq!(balances(&3), (28, 2));
+			assert_eq!(balances(&5), (45, 5));
+
+			assert_ok!(Elections::report_defunct_voter(Origin::signed(5), 3));
+			assert_eq!(
+				System::events()[1].event,
+				Event::elections(RawEvent::VoterReported(3, 5, true))
+			);
+
+			assert_eq!(balances(&3), (28, 0));
+			assert_eq!(balances(&5), (47, 5));
+		});
+	}
+
+	#[test]
+	fn report_voter_should_slash_when_bad_report() {
+		with_externalities(&mut ExtBuilder::default().build(), || {
+			with_externalities(&mut ExtBuilder::default().build(), || {
+			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
+
+			assert_ok!(Elections::vote(Origin::signed(5), vec![5], 50));
+			assert_ok!(Elections::vote(Origin::signed(4), vec![4], 40));
+
+			System::set_block_number(5);
+			assert_ok!(Elections::end_block(System::block_number()));
+
+			assert_eq!(Elections::members(), vec![4, 5]);
+			assert_eq!(Elections::candidates(), vec![]);
+
+			assert_eq!(balances(&4), (35, 5));
+			assert_eq!(balances(&5), (45, 5));
+
+			assert_ok!(Elections::report_defunct_voter(Origin::signed(5), 4));
+			assert_eq!(
+				System::events()[1].event,
+				Event::elections(RawEvent::VoterReported(4, 5, false))
+			);
+
+			assert_eq!(balances(&4), (35, 5));
+			assert_eq!(balances(&5), (45, 3));
+		});
+		});
+	}
+
+
+	#[test]
 	fn simple_voting_rounds_should_work() {
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
@@ -885,7 +1106,7 @@ mod tests {
 	}
 
 	#[test]
-	fn old_voter_will_be_counted() {
+	fn defunct_voter_will_be_counted() {
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 
