@@ -29,28 +29,23 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use app_crypto::RuntimeAppPublic;
-use codec::{Decode, Encode};
 use rstd::prelude::*;
+use codec::{Encode, Decode};
 use srml_support::{decl_module, decl_storage, StorageValue};
 
-pub trait Trait: system::Trait + session::Trait {}
+pub trait Trait: system::Trait + session::Trait + im_online::Trait {}
+
+type AuthorityIdFor<T> = <T as im_online::Trait>::AuthorityId;
+type AuthoritySignatureFor<T> = <<T as im_online::Trait>::AuthorityId as RuntimeAppPublic>::Signature;
 
 decl_storage! {
 	trait Store for Module<T: Trait> as AuthorityDiscovery {
 		/// The current set of keys that may issue a heartbeat.
-		Keys get(keys): Vec<im_online::AuthorityId>;
+		Keys get(keys): Vec<AuthorityIdFor<T>>;
 	}
 	add_extra_genesis {
-		config(keys): Vec<im_online::AuthorityId>;
-		build(|
-			  storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
-			  config: &GenesisConfig
-			  | {
-				  sr_io::with_storage(
-					  storage,
-					  || Module::<T>::initialize_keys(&config.keys),
-				  );
-			  })
+		config(keys): Vec<AuthorityIdFor<T>>;
+		build(|config| Module::<T>::initialize_keys(&config.keys))
 	}
 }
 
@@ -64,10 +59,10 @@ impl<T: Trait> Module<T> {
 	/// set, otherwise this function returns None. The restriction might be
 	/// softened in the future in case a consumer needs to learn own authority
 	/// identifier.
-	fn authority_id() -> Option<im_online::AuthorityId> {
-		let authorities = Keys::get();
+	fn authority_id() -> Option<AuthorityIdFor<T>> {
+		let authorities = Keys::<T>::get();
 
-		let local_keys = im_online::AuthorityId::all();
+		let local_keys = <AuthorityIdFor<T>>::all();
 
 		authorities.into_iter().find_map(|authority| {
 			if local_keys.contains(&authority) {
@@ -79,12 +74,12 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Retrieve authority identifiers of the current authority set.
-	pub fn authorities() -> Vec<im_online::AuthorityId> {
-		Keys::get()
+	pub fn authorities() -> Vec<AuthorityIdFor<T>> {
+		Keys::<T>::get()
 	}
 
 	/// Sign the given payload with the private key corresponding to the given authority id.
-	pub fn sign(payload: Vec<u8>) -> Option<(im_online::AuthoritySignature, im_online::AuthorityId)> {
+	pub fn sign(payload: Vec<u8>) -> Option<(AuthoritySignatureFor<T>, AuthorityIdFor<T>)> {
 		let authority_id = Module::<T>::authority_id()?;
 		authority_id.sign(&payload).map(|s| (s, authority_id))
 	}
@@ -93,26 +88,26 @@ impl<T: Trait> Module<T> {
 	/// authority identifier.
 	pub fn verify(
 		payload: Vec<u8>,
-		signature: im_online::AuthoritySignature,
-		authority_id: im_online::AuthorityId,
+		signature: AuthoritySignatureFor<T>,
+		authority_id: AuthorityIdFor<T>,
 	) -> bool {
 		authority_id.verify(&payload, &signature)
 	}
 
-	fn initialize_keys(keys: &[im_online::AuthorityId]) {
+	fn initialize_keys(keys: &[AuthorityIdFor<T>]) {
 		if !keys.is_empty() {
-			assert!(Keys::get().is_empty(), "Keys are already initialized!");
-			Keys::put_ref(keys);
+			assert!(Keys::<T>::get().is_empty(), "Keys are already initialized!");
+			Keys::<T>::put_ref(keys);
 		}
 	}
 }
 
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
-	type Key = im_online::AuthorityId;
+	type Key = AuthorityIdFor<T>;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
 	where
-		I: Iterator<Item = (&'a T::AccountId, im_online::AuthorityId)>,
+		I: Iterator<Item = (&'a T::AccountId, Self::Key)>,
 	{
 		let keys = validators.map(|x| x.1).collect::<Vec<_>>();
 		Self::initialize_keys(&keys);
@@ -120,10 +115,10 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 
 	fn on_new_session<'a, I: 'a>(_changed: bool, _validators: I, next_validators: I)
 	where
-		I: Iterator<Item = (&'a T::AccountId, im_online::AuthorityId)>,
+		I: Iterator<Item = (&'a T::AccountId, Self::Key)>,
 	{
 		// Remember who the authorities are for the new session.
-		Keys::put(next_validators.map(|x| x.1).collect::<Vec<_>>());
+		Keys::<T>::put(next_validators.map(|x| x.1).collect::<Vec<_>>());
 	}
 
 	fn on_disabled(_i: usize) {
@@ -138,9 +133,11 @@ mod tests {
 	use primitives::testing::KeyStore;
 	use primitives::{crypto::key_types, sr25519, traits::BareCryptoStore, H256};
 	use sr_io::{with_externalities, TestExternalities};
+	use sr_primitives::generic::UncheckedExtrinsic;
 	use sr_primitives::testing::{Header, UintAuthorityId};
 	use sr_primitives::traits::{ConvertInto, IdentityLookup, OpaqueKeys};
 	use sr_primitives::Perbill;
+	use sr_staking_primitives::CurrentElectedSet;
 	use srml_support::{impl_outer_origin, parameter_types};
 
 	type AuthorityDiscovery = Module<Test>;
@@ -150,12 +147,21 @@ mod tests {
 	pub struct Test;
 	impl Trait for Test {}
 
+	type AuthorityId = im_online::sr25519::AuthorityId;
+
+	pub struct DummyCurrentElectedSet<T>(std::marker::PhantomData<T>);
+	impl<T> CurrentElectedSet<T> for DummyCurrentElectedSet<T> {
+		fn current_elected_set() -> Vec<T> {
+			vec![]
+		}
+	}
+
 	pub struct TestOnSessionEnding;
-	impl session::OnSessionEnding<im_online::AuthorityId> for TestOnSessionEnding {
+	impl session::OnSessionEnding<AuthorityId> for TestOnSessionEnding {
 		fn on_session_ending(
 			_: SessionIndex,
 			_: SessionIndex,
-		) -> Option<Vec<im_online::AuthorityId>> {
+		) -> Option<Vec<AuthorityId>> {
 			None
 		}
 	}
@@ -166,9 +172,23 @@ mod tests {
 		type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
 		type SessionHandler = TestSessionHandler;
 		type Event = ();
-		type ValidatorId = im_online::AuthorityId;
+		type ValidatorId = AuthorityId;
 		type ValidatorIdOf = ConvertInto;
 		type SelectInitialValidators = ();
+	}
+
+	impl session::historical::Trait for Test {
+		type FullIdentification = ();
+		type FullIdentificationOf = ();
+	}
+
+	impl im_online::Trait for Test {
+		type AuthorityId = AuthorityId;
+		type Call = im_online::Call<Test>;
+		type Event = ();
+		type UncheckedExtrinsic = UncheckedExtrinsic<(), im_online::Call<Test>, (), ()>;
+		type ReportUnresponsiveness = ();
+		type CurrentElectedSet = DummyCurrentElectedSet<AuthorityId>;
 	}
 
 	pub type BlockNumber = u64;
@@ -190,7 +210,7 @@ mod tests {
 		type Call = ();
 		type Hash = H256;
 		type Hashing = ::sr_primitives::traits::BlakeTwo256;
-		type AccountId = im_online::AuthorityId;
+		type AccountId = AuthorityId;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type WeightMultiplierUpdate = ();
@@ -207,17 +227,17 @@ mod tests {
 	}
 
 	pub struct TestSessionHandler;
-	impl session::SessionHandler<im_online::AuthorityId> for TestSessionHandler {
+	impl session::SessionHandler<AuthorityId> for TestSessionHandler {
 		fn on_new_session<Ks: OpaqueKeys>(
 			_changed: bool,
-			_validators: &[(im_online::AuthorityId, Ks)],
-			_queued_validators: &[(im_online::AuthorityId, Ks)],
+			_validators: &[(AuthorityId, Ks)],
+			_queued_validators: &[(AuthorityId, Ks)],
 		) {
 		}
 
 		fn on_disabled(_validator_index: usize) {}
 
-		fn on_genesis_session<Ks: OpaqueKeys>(_validators: &[(im_online::AuthorityId, Ks)]) {}
+		fn on_genesis_session<Ks: OpaqueKeys>(_validators: &[(AuthorityId, Ks)]) {}
 	}
 
 	#[test]
@@ -235,17 +255,17 @@ mod tests {
 			.sr25519_public_keys(key_types::IM_ONLINE)
 			.pop()
 			.unwrap();
-		let authority_id = im_online::AuthorityId::from(public_key);
+		let authority_id = AuthorityId::from(public_key);
 
 		// Build genesis.
 		let mut t = system::GenesisConfig::default()
 			.build_storage::<Test>()
 			.unwrap();
 
-		GenesisConfig {
+		GenesisConfig::<Test> {
 			keys: vec![authority_id.clone()],
 		}
-		.assimilate_storage::<Test>(&mut t)
+		.assimilate_storage(&mut t)
 		.unwrap();
 
 		// Create externalities.
@@ -278,11 +298,11 @@ mod tests {
 		let keys = vec![(); 5]
 			.iter()
 			.map(|_x| sr25519::Pair::generate_with_phrase(None).0.public())
-			.map(im_online::AuthorityId::from)
+			.map(AuthorityId::from)
 			.collect();
 
-		GenesisConfig { keys: keys }
-			.assimilate_storage::<Test>(&mut t)
+		GenesisConfig::<Test> { keys: keys }
+			.assimilate_storage(&mut t)
 			.unwrap();
 
 		// Create externalities.
@@ -309,17 +329,17 @@ mod tests {
 			.sr25519_public_keys(key_types::IM_ONLINE)
 			.pop()
 			.unwrap();
-		let authority_id = im_online::AuthorityId::from(public_key);
+		let authority_id = AuthorityId::from(public_key);
 
 		// Build genesis.
 		let mut t = system::GenesisConfig::default()
 			.build_storage::<Test>()
 			.unwrap();
 
-		GenesisConfig {
+		GenesisConfig::<Test> {
 			keys: vec![authority_id.clone()],
 		}
-		.assimilate_storage::<Test>(&mut t)
+		.assimilate_storage(&mut t)
 		.unwrap();
 
 		// Create externalities.

@@ -299,8 +299,8 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 		key: &CacheKeyId,
 		at: &BlockId<Block>,
 	) -> Option<((NumberFor<Block>, Block::Hash), Option<(NumberFor<Block>, Block::Hash)>, Vec<u8>)> {
-		let cache = self.0.read();
-		let storage = cache.cache_at.get(key)?.storage();
+		let mut cache = self.0.write();
+		let storage = cache.get_cache(*key).storage();
 		let db = storage.db();
 		let columns = storage.columns();
 		let at = match *at {

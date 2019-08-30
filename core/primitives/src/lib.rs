@@ -88,19 +88,23 @@ pub enum ExecutionContext {
 	Syncing,
 	/// Context used for block construction.
 	BlockConstruction,
-	/// Offchain worker context.
-	OffchainWorker(Box<dyn offchain::Externalities>),
-	/// Context used for other calls.
-	Other,
+	/// Context used for offchain calls.
+	///
+	/// This allows passing offchain extension and customizing available capabilities.
+	OffchainCall(Option<(Box<dyn offchain::Externalities>, offchain::Capabilities)>),
 }
 
 impl ExecutionContext {
-	/// Returns if the keystore should be enabled for the current context.
-	pub fn enable_keystore(&self) -> bool {
+	/// Returns the capabilities of particular context.
+	pub fn capabilities(&self) -> offchain::Capabilities {
 		use ExecutionContext::*;
+
 		match self {
-			Importing | Syncing | BlockConstruction => false,
-			OffchainWorker(_) | Other => true,
+			Importing | Syncing | BlockConstruction =>
+				offchain::Capabilities::none(),
+			// Enable keystore by default for offchain calls. CC @bkchr
+			OffchainCall(None) => [offchain::Capability::Keystore][..].into(),
+			OffchainCall(Some((_, capabilities))) => *capabilities,
 		}
 	}
 }

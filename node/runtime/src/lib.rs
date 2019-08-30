@@ -47,8 +47,7 @@ use elections::VoteIndex;
 use version::NativeVersion;
 use primitives::OpaqueMetadata;
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
-use im_online::{AuthorityId as ImOnlineId};
-use finality_tracker::{DEFAULT_REPORT_LATENCY, DEFAULT_WINDOW_SIZE};
+use im_online::sr25519::{AuthorityId as ImOnlineId, AuthoritySignature as ImOnlineSignature};
 use authority_discovery_primitives::{AuthorityId as EncodedAuthorityId, Signature as EncodedSignature};
 use codec::{Encode, Decode};
 
@@ -82,8 +81,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 148,
-	impl_version: 148,
+	spec_version: 154,
+	impl_version: 157,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -239,8 +238,8 @@ impl staking::Trait for Runtime {
 	type CurrencyToVote = CurrencyToVoteHandler;
 	type OnRewardMinted = Treasury;
 	type Event = Event;
-	type Slash = ();
-	type Reward = ();
+	type Slash = Treasury; // send the slashed funds to the treasury.
+	type Reward = (); // rewards are minted from the void
 	type SessionsPerEra = SessionsPerEra;
 	type BondingDuration = BondingDuration;
 	type SessionInterface = Self;
@@ -396,6 +395,7 @@ impl sudo::Trait for Runtime {
 }
 
 impl im_online::Trait for Runtime {
+	type AuthorityId = ImOnlineId;
 	type Call = Call;
 	type Event = Event;
 	type UncheckedExtrinsic = UncheckedExtrinsic;
@@ -416,8 +416,8 @@ impl grandpa::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const WindowSize: BlockNumber = DEFAULT_WINDOW_SIZE.into();
-	pub const ReportLatency: BlockNumber = DEFAULT_REPORT_LATENCY.into();
+	pub const WindowSize: BlockNumber = 101;
+	pub const ReportLatency: BlockNumber = 1000;
 }
 
 impl finality_tracker::Trait for Runtime {
@@ -450,8 +450,8 @@ construct_runtime!(
 		Treasury: treasury::{Module, Call, Storage, Event<T>},
 		Contracts: contracts,
 		Sudo: sudo,
-		ImOnline: im_online::{Module, Call, Storage, Event, ValidateUnsigned, Config},
-		AuthorityDiscovery: authority_discovery::{Module, Call, Config},
+		ImOnline: im_online::{Module, Call, Storage, Event<T>, ValidateUnsigned, Config<T>},
+		AuthorityDiscovery: authority_discovery::{Module, Call, Config<T>},
 		Offences: offences::{Module, Call, Storage, Event},
 	}
 );
@@ -565,7 +565,7 @@ impl_runtime_apis! {
 			babe_primitives::BabeConfiguration {
 				median_required_blocks: 1000,
 				slot_duration: Babe::slot_duration(),
-				c: (278, 1000),
+				c: PRIMARY_PROBABILITY,
 			}
 		}
 
@@ -596,12 +596,12 @@ impl_runtime_apis! {
 		}
 
 		fn verify(payload: Vec<u8>, signature: EncodedSignature, authority_id: EncodedAuthorityId) -> bool {
-			let signature = match im_online::AuthoritySignature::decode(&mut &signature.0[..]) {
+			let signature = match ImOnlineSignature::decode(&mut &signature.0[..]) {
 				Ok(s) => s,
 				_ => return false,
 			};
 
-			let authority_id = match im_online::AuthorityId::decode(&mut &authority_id.0[..]) {
+			let authority_id = match ImOnlineId::decode(&mut &authority_id.0[..]) {
 				Ok(id) => id,
 				_ => return false,
 			};

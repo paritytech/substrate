@@ -183,7 +183,7 @@ fn should_return_finalized_hash() {
 	);
 
 	// finalize
-	client.client.finalize_block(BlockId::number(1), None, true).unwrap();
+	client.client.finalize_block(BlockId::number(1), None).unwrap();
 	assert_matches!(
 		client.finalized_head(),
 		Ok(ref x) if x == &client.client.block_hash(1).unwrap().unwrap()
@@ -202,7 +202,7 @@ fn should_notify_about_latest_block() {
 			subscriptions: Subscriptions::new(Arc::new(remote)),
 		};
 
-		api.subscribe_new_head(Default::default(), subscriber);
+		api.subscribe_new_heads(Default::default(), subscriber);
 
 		// assert id assigned
 		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
@@ -240,7 +240,7 @@ fn should_notify_about_finalized_block() {
 
 		let builder = api.client.new_block(Default::default()).unwrap();
 		api.client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
-		api.client.finalize_block(BlockId::number(1), None, true).unwrap();
+		api.client.finalize_block(BlockId::number(1), None).unwrap();
 	}
 
 	// assert initial head sent.

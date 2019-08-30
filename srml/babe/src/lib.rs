@@ -187,15 +187,7 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(authorities): Vec<(AuthorityId, BabeAuthorityWeight)>;
-		build(|
-			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
-			config: &GenesisConfig
-		| {
-			runtime_io::with_storage(
-				storage,
-				|| Module::<T>::initialize_authorities(&config.authorities),
-			);
-		})
+		build(|config| Module::<T>::initialize_authorities(&config.authorities))
 	}
 }
 
@@ -445,6 +437,8 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, queued_validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
+		Self::do_initialize();
+
 		// Update epoch index
 		let epoch_index = EpochIndex::get()
 			.checked_add(1)

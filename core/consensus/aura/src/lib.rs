@@ -138,7 +138,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, Error, H>(
 	sync_oracle: SO,
 	inherent_data_providers: InherentDataProviders,
 	force_authoring: bool,
-	keystore: Option<KeyStorePtr>,
+	keystore: KeyStorePtr,
 ) -> Result<impl futures01::Future<Item = (), Error = ()>, consensus_common::Error> where
 	B: BlockT<Header=H>,
 	C: ProvideRuntimeApi + BlockOf + ProvideCache<B> + AuxStore + Send + Sync,
@@ -182,7 +182,7 @@ struct AuraWorker<C, E, I, P, SO> {
 	client: Arc<C>,
 	block_import: Arc<Mutex<I>>,
 	env: E,
-	keystore: Option<KeyStorePtr>,
+	keystore: KeyStorePtr,
 	sync_oracle: SO,
 	force_authoring: bool,
 	_key_type: PhantomData<P>,
@@ -234,9 +234,8 @@ impl<H, B, C, E, I, P, Error, SO> slots::SimpleSlotWorker<B> for AuraWorker<C, E
 		let expected_author = slot_author::<P>(slot_number, epoch_data);
 
 		expected_author.and_then(|p| {
-			self.keystore.as_ref().and_then(|k| {
-				k.read().key_pair_by_type::<P>(&p, app_crypto::key_types::AURA).ok()
-			})
+			self.keystore.read()
+				.key_pair_by_type::<P>(&p, app_crypto::key_types::AURA).ok()
 		})
 	}
 
@@ -681,7 +680,7 @@ mod tests {
 	use parking_lot::Mutex;
 	use tokio::runtime::current_thread;
 	use keyring::sr25519::Keyring;
-	use client::{LongestChain, BlockchainEvents};
+	use client::BlockchainEvents;
 	use test_client;
 	use aura_primitives::sr25519::AuthorityPair;
 
@@ -745,7 +744,7 @@ mod tests {
 			-> Self::Verifier
 		{
 			match client {
-				PeersClient::Full(client) => {
+				PeersClient::Full(client, _) => {
 					let slot_duration = SlotDuration::get_or_compute(&*client)
 						.expect("slot duration available");
 					let inherent_data_providers = InherentDataProviders::new();
@@ -762,7 +761,7 @@ mod tests {
 						phantom: Default::default(),
 					}
 				},
-				PeersClient::Light(_) => unreachable!("No (yet) tests for light client + Aura"),
+				PeersClient::Light(_, _) => unreachable!("No (yet) tests for light client + Aura"),
 			}
 		}
 
@@ -797,18 +796,17 @@ mod tests {
 		let mut runtime = current_thread::Runtime::new().unwrap();
 		let mut keystore_paths = Vec::new();
 		for (peer_id, key) in peers {
+			let mut net = net.lock();
+			let peer = net.peer(*peer_id);
+			let client = peer.client().as_full().expect("full clients are created").clone();
+			let select_chain = peer.select_chain().expect("full client has a select chain");
 			let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 			let keystore = keystore::Store::open(keystore_path.path(), None).expect("Creates keystore.");
 
 			keystore.write().insert_ephemeral_from_seed::<AuthorityPair>(&key.to_seed())
 				.expect("Creates authority key");
 			keystore_paths.push(keystore_path);
-
-			let client = net.lock().peer(*peer_id).client().as_full().expect("full clients are created").clone();
-			#[allow(deprecated)]
-			let select_chain = LongestChain::new(
-				client.backend().clone(),
-			);
+			
 			let environ = DummyFactory(client.clone());
 			import_notifications.push(
 				client.import_notification_stream()
@@ -833,7 +831,7 @@ mod tests {
 				DummyOracle,
 				inherent_data_providers,
 				false,
-				Some(keystore),
+				keystore,
 			).expect("Starts aura");
 
 			runtime.spawn(aura);

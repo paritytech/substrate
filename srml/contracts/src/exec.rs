@@ -267,6 +267,7 @@ pub enum DeferredAction<T: Trait> {
 }
 
 pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
+	pub parent: Option<&'a ExecutionContext<'a, T, V, L>>,
 	pub self_account: T::AccountId,
 	pub self_trie_id: Option<TrieId>,
 	pub overlay: OverlayAccountDb<'a, T>,
@@ -291,6 +292,7 @@ where
 	/// account (not a contract).
 	pub fn top_level(origin: T::AccountId, cfg: &'a Config<T>, vm: &'a V, loader: &'a L) -> Self {
 		ExecutionContext {
+			parent: None,
 			self_trie_id: None,
 			self_account: origin,
 			overlay: OverlayAccountDb::<T>::new(&DirectAccountDb),
@@ -308,6 +310,7 @@ where
 		-> ExecutionContext<'b, T, V, L>
 	{
 		ExecutionContext {
+			parent: Some(self),
 			self_trie_id: trie_id,
 			self_account: dest,
 			overlay: OverlayAccountDb::new(&self.overlay),
@@ -385,13 +388,29 @@ where
 						nested.loader.load_main(&dest_code_hash),
 						input_data
 					);
-					nested.vm
+					let output = nested.vm
 						.execute(
 							&executable,
 							nested.new_call_context(caller, value),
 							input_data,
 							gas_meter,
-						)
+						)?;
+
+					// Destroy contract if insufficient remaining balance.
+					if nested.overlay.get_balance(&dest) < nested.config.existential_deposit {
+						let parent = nested.parent
+							.expect("a nested execution context must have a parent; qed");
+						if parent.is_live(&dest) {
+							return Err(ExecError {
+								reason: "contract cannot be destroyed during recursive execution",
+								buffer: output.data,
+							});
+						}
+
+						nested.overlay.destroy_contract(&dest);
+					}
+
+					Ok(output)
 				}
 				None => Ok(ExecReturnValue { status: STATUS_SUCCESS, data: Vec::new() }),
 			}
@@ -464,6 +483,14 @@ where
 					gas_meter,
 				)?;
 
+			// Error out if insufficient remaining balance.
+			if nested.overlay.get_balance(&dest) < nested.config.existential_deposit {
+				return Err(ExecError {
+					reason: "insufficient remaining balance",
+					buffer: output.data,
+				});
+			}
+
 			// Deposit an instantiation event.
 			nested.deferred.push(DeferredAction::DepositEvent {
 				event: RawEvent::Instantiated(caller.clone(), dest.clone()),
@@ -506,6 +533,13 @@ where
 		}
 
 		Ok(output)
+	}
+
+	/// Returns whether a contract, identified by address, is currently live in the execution
+	/// stack, meaning it is in the middle of an execution.
+	fn is_live(&self, account: &T::AccountId) -> bool {
+		&self.self_account == account ||
+			self.parent.map_or(false, |parent| parent.is_live(account))
 	}
 }
 

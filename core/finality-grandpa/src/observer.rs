@@ -175,8 +175,10 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 		network,
 		config.clone(),
 		persistent_data.set_state.clone(),
-		on_exit.clone()
+		on_exit.clone(),
+		false,
 	);
+
 	let observer_work = ObserverWork::new(
 		client,
 		network,
@@ -299,8 +301,7 @@ where
 				let completed_rounds = self.persistent_data.set_state.read().completed_rounds();
 				let set_state = VoterSetState::Paused { completed_rounds };
 
-				#[allow(deprecated)]
-				crate::aux_schema::write_voter_set_state(&**self.client.backend(), &set_state)?;
+				crate::aux_schema::write_voter_set_state(&*self.client, &set_state)?;
 
 				set_state
 			},
@@ -313,8 +314,7 @@ where
 					(new.canon_hash, new.canon_number),
 				);
 
-				#[allow(deprecated)]
-				crate::aux_schema::write_voter_set_state(&**self.client.backend(), &set_state)?;
+				crate::aux_schema::write_voter_set_state(&*self.client, &set_state)?;
 
 				set_state
 			},

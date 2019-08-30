@@ -197,9 +197,16 @@ pub fn new_client<E, S, Block, RA>(
 	genesis_storage: S,
 	execution_strategies: ExecutionStrategies,
 	keystore: Option<primitives::traits::BareCryptoStorePtr>,
-) -> Result<
-	client::Client<Backend<Block>,
-	client::LocalCallExecutor<Backend<Block>, E>, Block, RA>, client::error::Error
+) -> Result<(
+		client::Client<
+			Backend<Block>,
+			client::LocalCallExecutor<Backend<Block>, E>,
+			Block,
+			RA,
+		>,
+		Arc<Backend<Block>>,
+	),
+	client::error::Error,
 >
 	where
 		Block: BlockT<Hash=H256>,
@@ -208,7 +215,10 @@ pub fn new_client<E, S, Block, RA>(
 {
 	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
 	let executor = client::LocalCallExecutor::new(backend.clone(), executor, keystore);
-	Ok(client::Client::new(backend, executor, genesis_storage, execution_strategies)?)
+	Ok((
+		client::Client::new(backend.clone(), executor, genesis_storage, execution_strategies)?,
+		backend,
+	))
 }
 
 pub(crate) mod columns {
@@ -681,6 +691,10 @@ impl<Block> state_machine::ChangesTrieStorage<Blake2Hasher, NumberFor<Block>>
 where
 	Block: BlockT<Hash=H256>,
 {
+	fn as_roots_storage(&self) -> &dyn state_machine::ChangesTrieRootsStorage<Blake2Hasher, NumberFor<Block>> {
+		self
+	}
+
 	fn get(&self, key: &H256, _prefix: Prefix) -> Result<Option<DBValue>, String> {
 		self.db.get(columns::CHANGES_TRIE, &key[..])
 			.map_err(|err| format!("{}", err))
@@ -867,7 +881,9 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		// cannot find tree route with empty DB.
 		if meta.best_hash != Default::default() {
 			let tree_route = ::client::blockchain::tree_route(
-				&self.blockchain,
+				|id| self.blockchain.header(id)?.ok_or_else(
+					|| client::error::Error::UnknownBlock(format!("{:?}", id))
+				),
 				BlockId::Hash(meta.best_hash),
 				BlockId::Hash(route_to),
 			)?;
@@ -2014,6 +2030,7 @@ mod tests {
 	#[test]
 	fn tree_route_works() {
 		let backend = Backend::<Block>::new_test(1000, 100);
+		let blockchain = backend.blockchain();
 		let block0 = insert_header(&backend, 0, Default::default(), Vec::new(), Default::default());
 
 		// fork from genesis: 3 prong.
@@ -2027,7 +2044,7 @@ mod tests {
 
 		{
 			let tree_route = ::client::blockchain::tree_route(
-				backend.blockchain(),
+				|id| blockchain.header(id)?.ok_or_else(|| client::error::Error::UnknownBlock(format!("{:?}", id))),
 				BlockId::Hash(a3),
 				BlockId::Hash(b2)
 			).unwrap();
@@ -2039,7 +2056,7 @@ mod tests {
 
 		{
 			let tree_route = ::client::blockchain::tree_route(
-				backend.blockchain(),
+				|id| blockchain.header(id)?.ok_or_else(|| client::error::Error::UnknownBlock(format!("{:?}", id))),
 				BlockId::Hash(a1),
 				BlockId::Hash(a3),
 			).unwrap();
@@ -2051,7 +2068,7 @@ mod tests {
 
 		{
 			let tree_route = ::client::blockchain::tree_route(
-				backend.blockchain(),
+				|id| blockchain.header(id)?.ok_or_else(|| client::error::Error::UnknownBlock(format!("{:?}", id))),
 				BlockId::Hash(a3),
 				BlockId::Hash(a1),
 			).unwrap();
@@ -2063,7 +2080,7 @@ mod tests {
 
 		{
 			let tree_route = ::client::blockchain::tree_route(
-				backend.blockchain(),
+				|id| blockchain.header(id)?.ok_or_else(|| client::error::Error::UnknownBlock(format!("{:?}", id))),
 				BlockId::Hash(a2),
 				BlockId::Hash(a2),
 			).unwrap();
@@ -2077,13 +2094,14 @@ mod tests {
 	#[test]
 	fn tree_route_child() {
 		let backend = Backend::<Block>::new_test(1000, 100);
+		let blockchain = backend.blockchain();
 
 		let block0 = insert_header(&backend, 0, Default::default(), Vec::new(), Default::default());
 		let block1 = insert_header(&backend, 1, block0, Vec::new(), Default::default());
 
 		{
 			let tree_route = ::client::blockchain::tree_route(
-				backend.blockchain(),
+				|id| blockchain.header(id)?.ok_or_else(|| client::error::Error::UnknownBlock(format!("{:?}", id))),
 				BlockId::Hash(block0),
 				BlockId::Hash(block1),
 			).unwrap();
