@@ -957,7 +957,6 @@ impl Default for Schedule {
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckBlockGasLimit<T: Trait + Send + Sync>(PhantomData<T>);
 
-#[cfg(feature = "std")]
 impl<T: Trait + Send + Sync> Default for CheckBlockGasLimit<T> {
 	fn default() -> Self {
 		Self(std::marker::PhantomData)
