@@ -321,6 +321,8 @@ we support multiple environment variables:
 * `TRIGGER_WASM_BUILD` - Can be set to trigger a WASM build. On subsequent calls the value of the variable
                          needs to change. As WASM builder instructs `cargo` to watch for file changes
                          this environment variable should only be required in certain circumstances.
+* `WASM_TARGET_DIRECTORY` - Will copy any build WASM binary to the given directory. The path needs
+                            to be absolute.
 
 Each project can be skipped individually by using the environment variable `SKIP_PROJECT_NAME_WASM_BUILD`.
 Where `PROJECT_NAME` needs to be replaced by the name of the cargo project, e.g. `node-runtime` will
@@ -404,11 +406,12 @@ https://github.com/paritytech/substrate/blob/master/core/primitives/src/crypto.r
 user can declare any key type.
 
 ```
-curl -H 'Content-Type: application/json' --data '{ "jsonrpc":"2.0", "method":"author_insertKey", "params":["KEY_TYPE", "SEED"],"id":1 }' localhost:9933
+curl -H 'Content-Type: application/json' --data '{ "jsonrpc":"2.0", "method":"author_insertKey", "params":["KEY_TYPE", "SEED", "PUBLIC"],"id":1 }' localhost:9933
 ```
 
 `KEY_TYPE` - needs to be replaced with the 4-character key type identifier.
 `SEED` - is the seed of the key.
+`PUBLIC` - public key for the given key.
 
 == Documentation
 

@@ -22,6 +22,7 @@ pub mod trait_tests;
 
 mod block_builder_ext;
 
+use std::sync::Arc;
 pub use block_builder_ext::BlockBuilderExt;
 pub use generic_test_client::*;
 pub use runtime;
@@ -228,8 +229,10 @@ pub fn new() -> Client<Backend> {
 }
 
 /// Creates new light client instance used for tests.
-pub fn new_light() -> client::Client<LightBackend, LightExecutor, runtime::Block, runtime::RuntimeApi> {
-	use std::sync::Arc;
+pub fn new_light() -> (
+	client::Client<LightBackend, LightExecutor, runtime::Block, runtime::RuntimeApi>,
+	Arc<LightBackend>,
+) {
 
 	let storage = client_db::light::LightStorage::new_test();
 	let blockchain = Arc::new(client::light::blockchain::Blockchain::new(storage));
@@ -247,7 +250,10 @@ pub fn new_light() -> client::Client<LightBackend, LightExecutor, runtime::Block
 		local_call_executor,
 	);
 
-	TestClientBuilder::with_backend(backend)
+	(TestClientBuilder::with_backend(backend.clone())
 		.build_with_executor(call_executor)
-		.0
+		.0,
+	backend,
+	)
+
 }

@@ -22,7 +22,7 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sr_std::prelude::*;
+use rstd::prelude::*;
 use srml_support::{
 	StorageValue, decl_module, decl_storage, decl_event, traits::{ChangeMembers, InitializeMembers},
 };
@@ -61,17 +61,12 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(members): Vec<T::AccountId>;
-		config(phantom): sr_std::marker::PhantomData<I>;
-		build(|
-			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
-			config: &Self,
-		| {
-			sr_io::with_storage(storage, || {
-				let mut members = config.members.clone();
-				members.sort();
-				T::MembershipInitialized::initialize_members(&members);
-				<Members<T, I>>::put(members);
-			});
+		config(phantom): rstd::marker::PhantomData<I>;
+		build(|config: &Self| {
+			let mut members = config.members.clone();
+			members.sort();
+			T::MembershipInitialized::initialize_members(&members);
+			<Members<T, I>>::put(members);
 		})
 	}
 }
@@ -90,7 +85,7 @@ decl_event!(
 		/// The membership was reset; see the transaction for who the new set is.
 		MembersReset,
 		/// Phantom member, never used.
-		Dummy(sr_std::marker::PhantomData<(AccountId, Event)>),
+		Dummy(rstd::marker::PhantomData<(AccountId, Event)>),
 	}
 );
 
@@ -99,7 +94,7 @@ decl_module! {
 		for enum Call
 		where origin: T::Origin
 	{
-		fn deposit_event<T, I>() = default;
+		fn deposit_event() = default;
 
 		/// Add a member `who` to the set.
 		///

@@ -16,7 +16,7 @@
 
 //! Console informant. Prints sync progress and block events. Runs on the calling thread.
 
-use client::{backend::Backend, BlockchainEvents};
+use client::BlockchainEvents;
 use futures::{Future, Stream};
 use futures03::{StreamExt as _, TryStreamExt as _};
 use log::{info, warn};
@@ -48,8 +48,8 @@ pub fn build(service: &impl AbstractService) -> impl Future<Item = (), Error = (
 		if let Some((ref last_num, ref last_hash)) = last_best {
 			if n.header.parent_hash() != last_hash && n.is_new_best  {
 				let tree_route = ::client::blockchain::tree_route(
-					#[allow(deprecated)]
-					client.backend().blockchain(),
+					|id| client.header(&id)?.ok_or_else(
+						|| client::error::Error::UnknownBlock(format!("{:?}", id))),
 					BlockId::Hash(last_hash.clone()),
 					BlockId::Hash(n.hash),
 				);
