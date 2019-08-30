@@ -645,9 +645,20 @@ impl_runtime_apis! {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use sr_primitives::app_crypto::RuntimeAppPublic;
 	use system::offchain::SubmitSignedTransaction;
 
-	fn is_submit_signed_transaction(_arg: impl SubmitSignedTransaction<Runtime, Call>) {}
+	fn is_submit_signed_transaction<T, Signer>(_arg: T) where
+		T: SubmitSignedTransaction<
+			Runtime,
+			Call,
+			Extrinsic=UncheckedExtrinsic,
+			CreateTransaction=Runtime,
+			Signer=Signer,
+		>,
+		Signer: RuntimeAppPublic + From<AccountId>,
+		Signer::Signature: Into<Signature>,
+	{}
 
 	#[test]
 	fn validate_bounds() {
