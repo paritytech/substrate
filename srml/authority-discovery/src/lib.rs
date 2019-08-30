@@ -194,7 +194,7 @@ mod tests {
 		type AuthorityId = AuthorityId;
 		type Call = im_online::Call<Test>;
 		type Event = ();
-		type UncheckedExtrinsic = UncheckedExtrinsic<(), im_online::Call<Test>, (), ()>;
+		type SubmitTransaction = ();
 		type ReportUnresponsiveness = ();
 		type CurrentElectedSet = DummyCurrentElectedSet<AuthorityId>;
 	}
