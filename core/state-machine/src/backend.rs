@@ -16,16 +16,15 @@
 
 //! State machine backends. These manage the code and storage of contracts.
 
-use std::{error, fmt};
-use std::cmp::Ord;
-use std::collections::HashMap;
-use std::marker::PhantomData;
+use std::{error, fmt, cmp::Ord, collections::HashMap, marker::PhantomData};
 use log::warn;
 use hash_db::Hasher;
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::TrieBackendStorage;
-use trie::{TrieMut, MemoryDB, child_trie_root, default_child_trie_root, TrieConfiguration};
-use trie::trie_types::{TrieDBMut, Layout};
+use trie::{
+	TrieMut, MemoryDB, child_trie_root, default_child_trie_root, TrieConfiguration,
+	trie_types::{TrieDBMut, Layout},
+};
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
@@ -147,7 +146,6 @@ pub trait Backend<H: Hasher> {
 		txs.consolidate(parent_txs);
 		(root, txs)
 	}
-
 }
 
 /// Trait that allows consolidate two transactions together.
@@ -290,8 +288,6 @@ impl<H: Hasher> From<Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)>> for InMem
 		expanded.into()
 	}
 }
-
-impl super::Error for Void {}
 
 impl<H: Hasher> InMemory<H> {
 	/// child storage key iterator

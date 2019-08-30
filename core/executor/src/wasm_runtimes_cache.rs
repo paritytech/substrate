@@ -21,13 +21,9 @@ use crate::wasm_executor::WasmExecutor;
 use log::{trace, warn};
 use codec::Decode;
 use parity_wasm::elements::{deserialize_buffer, DataSegment, Instruction, Module as RawModule};
-use primitives::storage::well_known_keys;
-use primitives::Blake2Hasher;
+use primitives::{storage::well_known_keys, Blake2Hasher, traits::Externalities};
 use runtime_version::RuntimeVersion;
-use state_machine::Externalities;
-use std::collections::hash_map::{Entry, HashMap};
-use std::mem;
-use std::rc::Rc;
+use std::{collections::hash_map::{Entry, HashMap}, mem, rc::Rc};
 use wasmi::{Module as WasmModule, ModuleRef as WasmModuleInstanceRef, RuntimeValue};
 
 #[derive(Debug)]

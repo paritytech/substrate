@@ -20,13 +20,16 @@ use sr_primitives::{
 	generic::BlockId, traits::Block as BlockT,
 };
 use state_machine::{
-	self, OverlayedChanges, Ext, CodeExecutor, ExecutionManager,
-	ExecutionStrategy, NeverOffchainExt, backend::Backend as _,
+	self, OverlayedChanges, Ext, ExecutionManager, StateMachine, ExecutionStrategy,
+	backend::Backend as _,
 };
 use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use hash_db::Hasher;
 use trie::MemoryDB;
-use primitives::{offchain, H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue};
+use primitives::{
+	offchain::{self, NeverOffchainExt}, H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue,
+	traits::CodeExecutor,
+};
 
 use crate::runtime_api::{ProofRecorder, InitializeBlock};
 use crate::backend;
@@ -197,7 +200,7 @@ where
 	) -> error::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
-		let return_data = state_machine::new(
+		let return_data = StateMachine::new(
 			&state,
 			self.backend.changes_trie_storage(),
 			side_effects_handler,
@@ -270,7 +273,7 @@ where
 					recorder.clone()
 				);
 
-				state_machine::new(
+				StateMachine::new(
 					&backend,
 					self.backend.changes_trie_storage(),
 					side_effects_handler,
@@ -288,7 +291,7 @@ where
 				.map(|(result, _, _)| result)
 				.map_err(Into::into)
 			}
-			None => state_machine::new(
+			None => StateMachine::new(
 				&state,
 				self.backend.changes_trie_storage(),
 				side_effects_handler,
@@ -347,7 +350,7 @@ where
 		(S::Transaction, <Blake2Hasher as Hasher>::Out),
 		Option<MemoryDB<Blake2Hasher>>,
 	)> {
-		state_machine::new(
+		StateMachine::new(
 			state,
 			self.backend.changes_trie_storage(),
 			side_effects_handler,

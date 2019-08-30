@@ -40,16 +40,15 @@ use log::{trace, warn};
 use client::{
 	backend::Backend, blockchain::Backend as BlockchainBackend, CallExecutor, Client,
 	error::{Error as ClientError, Result as ClientResult},
-	light::fetcher::{FetchChecker, RemoteCallRequest},
-	ExecutionStrategy, NeverOffchainExt,
+	light::fetcher::{FetchChecker, RemoteCallRequest}, ExecutionStrategy,
 };
 use codec::{Encode, Decode};
 use grandpa::BlockNumberOps;
-use sr_primitives::{Justification, generic::BlockId};
-use sr_primitives::traits::{
-	NumberFor, Block as BlockT, Header as HeaderT, One,
+use sr_primitives::{
+	Justification, generic::BlockId,
+	traits::{NumberFor, Block as BlockT, Header as HeaderT, One},
 };
-use primitives::{H256, Blake2Hasher};
+use primitives::{H256, Blake2Hasher, offchain::NeverOffchainExt};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 use fg_primitives::AuthorityId;
 

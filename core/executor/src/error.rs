@@ -16,7 +16,6 @@
 
 //! Rust executor possible errors.
 
-use state_machine;
 use serializer;
 use wasmi;
 
@@ -88,8 +87,6 @@ impl std::error::Error for Error {
 		}
 	}
 }
-
-impl state_machine::Error for Error {}
 
 impl wasmi::HostError for Error {}
 

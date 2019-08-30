@@ -359,7 +359,10 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 			.executor()
 			.call(
 				&BlockId::Hash(block),
-				&method, &data.0, ExecutionStrategy::NativeElseWasm, state_machine::NeverOffchainExt::new(),
+				&method,
+				&data.0,
+				ExecutionStrategy::NativeElseWasm,
+				primitives::offchain::NeverOffchainExt::new(),
 			)?;
 		Ok(Bytes(return_data))
 	}

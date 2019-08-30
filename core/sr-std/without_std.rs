@@ -49,7 +49,6 @@ mod __impl {
 pub use alloc::boxed;
 pub use alloc::rc;
 pub use alloc::vec;
-pub use core::borrow;
 pub use core::cell;
 pub use core::clone;
 pub use core::cmp;
@@ -75,4 +74,9 @@ pub mod collections {
 	pub use alloc::collections::btree_map;
 	pub use alloc::collections::btree_set;
 	pub use alloc::collections::vec_deque;
+}
+
+pub mod borrow {
+	pub use core::borrow::*;
+	pub use alloc::borrow::*;
 }
