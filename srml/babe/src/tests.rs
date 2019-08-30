@@ -53,27 +53,47 @@ type EpochDuration = <Test as super::Trait>::EpochDuration;
 #[test]
 fn check_epoch_change() {
 	with_externalities(&mut new_test_ext(vec![0, 1, 2, 3]), || {
+		const EXPECTED_RANDOMNESS: [u8; 32] = [
+			2, 232, 2, 244, 166, 226, 138, 102,
+			132, 237, 9, 130, 42, 88, 216, 122,
+			74, 210, 211, 143, 83, 217, 31, 210,
+			129, 101, 20, 125, 168, 0, 36, 78,
+		];
+
+		// We start out at genesis.
 		System::initialize(&1, &Default::default(), &Default::default(), &Default::default());
+
+		// Check that we do not change sessions on the genesis block.
 		assert!(!Babe::should_end_session(0), "Genesis does not change sessions");
-		assert!(!Babe::should_end_session(200000),
-			"BABE does not include the block number in epoch calculations");
+		assert!(
+			!Babe::should_end_session(200000),
+			"BABE does not include the block number in epoch calculations",
+		);
 		let header = System::finalize();
+
+		// We should have no logs yet.
 		assert_eq!(header.digest, Digest { logs: vec![] });
+
+		// Re-initialize.
 		System::initialize(&3, &header.hash(), &Default::default(), &Default::default());
 		EpochStartSlot::put(1);
 		CurrentSlot::put(3);
 		let header = System::finalize();
 		assert_eq!(header.digest, Digest { logs: vec![] });
 		assert!(!Babe::should_end_session(0));
+
+		// Rotate the session
 		System::initialize(&4, &header.hash(), &Default::default(), &Default::default());
 		CurrentSlot::put(4);
-		assert!(Babe::should_end_session(0));
+		assert!(Babe::should_end_session(0), "we change sessions at slot 4");
 		Babe::randomness_change_epoch(1);
 		let header = System::finalize();
+
+		// Check that we got the expected digest.
 		let Digest { ref logs } = header.digest;
-		assert_eq!(logs.len(), 1);
+		assert_eq!(logs.len(), 1, "should only have 1 digest here");
 		let (engine_id, mut epoch) = logs[0].as_consensus().unwrap();
-		assert_eq!(BABE_ENGINE_ID, engine_id);
+		assert_eq!(BABE_ENGINE_ID, engine_id, "we should only have a BABE consensus digest here");
 		let Epoch {
 			start_slot,
 			duration,
@@ -85,27 +105,23 @@ fn check_epoch_change() {
 			ConsensusLog::NextEpochData(e) => e,
 			ConsensusLog::OnDisabled(_) => panic!("we have not disabled any authorities yet!"),
 		};
-		assert_eq!(EpochDuration::get(), 3);
-		assert_eq!(duration, EpochDuration::get());
-		assert_eq!(start_slot, 2 * EpochDuration::get() + 1);
-		assert_eq!(epoch_index, 2, "wrong epoch index");
-		let expected_authorities: Vec<(AuthorityId, u64)> = [1u64, 2, 3, 4].iter().map(|&s| (UintAuthorityId(s).to_public_key(), s)).collect();
-		if false {
-			assert_eq!(authorities, expected_authorities)
-		} else {
-			assert_eq!(authorities, [])
-		}
-		assert_eq!(randomness, [2, 232, 2, 244, 166, 226, 138, 102, 132, 237, 9, 130, 42, 88, 216, 122, 74, 210, 211, 143, 83, 217, 31, 210, 129, 101, 20, 125, 168, 0, 36, 78]);
-		assert!(secondary_slots);
+
+		// Check that the fields of the digest are correct
+		assert_eq!(EpochDuration::get(), 3, "wrong epoch duration");
+		assert_eq!(duration, EpochDuration::get(), "wrong epoch duration");
+		assert_eq!(start_slot, 2 * EpochDuration::get() + 1, "we should start at the next epoch");
+		assert_eq!(epoch_index, 2, "we are at epoch 2");
+		assert_eq!(authorities, []);
+		assert_eq!(randomness, EXPECTED_RANDOMNESS, "incorrect randomness");
+		assert!(secondary_slots, "secondary slots missed");
 	})
 }
 
 #[test]
 fn authority_index() {
 	with_externalities(&mut new_test_ext(vec![0, 1, 2, 3]), || {
-		assert_eq!(Babe::find_author((&[(BABE_ENGINE_ID, &[][..])]).into_iter().cloned()), None,
-			"Trivially invalid authorities are ignored");
-		assert_eq!(Babe::find_author((&[(BABE_ENGINE_ID, &[][..])]).into_iter().cloned()), None,
+		assert_eq!(
+			Babe::find_author((&[(BABE_ENGINE_ID, &[][..])]).into_iter().cloned()), None,
 			"Trivially invalid authorities are ignored")
 	})
 }
