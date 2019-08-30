@@ -116,7 +116,16 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 		let mut socket = mem::replace(&mut self.socket, NodeSocket::Poisoned);
 		self.socket = loop {
 			match socket {
-				NodeSocket::Connected(mut conn) =>
+				NodeSocket::Connected(mut conn) => {
+					let mut connection_timeout = Delay::new(Duration::from_millis(500));
+					match Future::poll(Pin::new(&mut connection_timeout), cx) {
+						Poll::Pending => {},
+						Poll::Ready(Err(_)) | Poll::Ready(Ok(_)) => {
+							warn!(target: "telemetry", "Server unresponsive from {}", self.addr);
+							let timeout = gen_rand_reconnect_delay();
+							break NodeSocket::WaitingReconnect(timeout)
+						}
+					}
 					match NodeSocketConnected::poll(Pin::new(&mut conn), cx, &self.addr) {
 						Poll::Ready(Ok(v)) => match v {}
 						Poll::Pending => break NodeSocket::Connected(conn),
@@ -127,6 +136,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 							return Poll::Ready(NodeEvent::Disconnected(err))
 						}
 					}
+				}
 				NodeSocket::Dialing(mut s) => match Future::poll(Pin::new(&mut s), cx) {
 					Poll::Ready(Ok(sink)) => {
 						debug!(target: "telemetry", "Connected to {}", self.addr);
