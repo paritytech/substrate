@@ -23,7 +23,7 @@ pub mod trait_tests;
 mod block_builder_ext;
 
 use std::sync::Arc;
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 pub use block_builder_ext::BlockBuilderExt;
 pub use generic_test_client::*;
 pub use runtime;
@@ -98,8 +98,8 @@ pub type LightExecutor = client::light::call_executor::RemoteOrLocalCallExecutor
 pub struct GenesisParameters {
 	support_changes_trie: bool,
 	heap_pages_override: Option<u64>,
-	extra_storage: Vec<(Vec<u8>, Vec<u8>)>,
-	child_extra_storage: BTreeMap<Vec<u8>, Vec<(Vec<u8>, Vec<u8>)>>,
+	extra_storage: HashMap<Vec<u8>, Vec<u8>>,
+	child_extra_storage: HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
 }
 
 impl GenesisParameters {
@@ -229,7 +229,7 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 	fn add_extra_storage<K: Into<Vec<u8>>, V: Into<Vec<u8>>>(mut self, key: K, value: V) -> Self {
 		let key = key.into();
 		assert!(!key.is_empty());
-		self.genesis_init_mut().extra_storage.push((key, value.into()));
+		self.genesis_init_mut().extra_storage.insert(key, value.into());
 		self
 	}
 
@@ -246,7 +246,7 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 		self.genesis_init_mut().child_extra_storage
 			.entry(storage_key)
 			.or_insert_with(Default::default)
-			.push((key, value.into()));
+			.insert(key, value.into());
 		self
 	}
 
