@@ -97,7 +97,7 @@ cargo-check-benches:
   script:
     - BUILD_DUMMY_WASM_BINARY=1 time cargo check --benches --all
     - cd srml/staking/
-    - time  cargo bench --features bench --verbose
+    - time cargo +nightly bench --features bench --verbose
     - sccache -s
 
 
