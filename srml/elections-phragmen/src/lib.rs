@@ -286,7 +286,7 @@ decl_module! {
 
 			let is_candidate = Self::is_candidate(&who);
 			ensure!(!is_candidate.is_ok(), "duplicate candidate submission");
-			ensure!(Self::is_member(&who), "member cannot re-submit candidacy");
+			ensure!(!Self::is_member(&who), "member cannot re-submit candidacy");
 			// assured to be an error, error always contains the index.
 			let index = is_candidate.unwrap_err();
 
