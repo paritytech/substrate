@@ -570,7 +570,8 @@ pub mod tests {
 		let remote_block_id = BlockId::Number(0);
 		let remote_block_hash = remote_client.block_hash(0).unwrap().unwrap();
 		let mut remote_block_header = remote_client.header(&remote_block_id).unwrap().unwrap();
-		remote_block_header.state_root = remote_client.state_at(&remote_block_id).unwrap().storage_root(::std::iter::empty()).0.into();
+		remote_block_header.state_root = remote_client.state_at(&remote_block_id).unwrap()
+			.storage_root(::std::iter::empty()).0.into();
 
 		// 'fetch' read proof from remote node
 		let heap_pages = remote_client.storage(&remote_block_id, &StorageKey(well_known_keys::HEAP_PAGES.to_vec()))
@@ -602,7 +603,8 @@ pub mod tests {
 		let remote_block_id = BlockId::Number(0);
 		let remote_block_hash = remote_client.block_hash(0).unwrap().unwrap();
 		let mut remote_block_header = remote_client.header(&remote_block_id).unwrap().unwrap();
-		remote_block_header.state_root = remote_client.state_at(&remote_block_id).unwrap().storage_root(::std::iter::empty()).0.into();
+		remote_block_header.state_root = remote_client.state_at(&remote_block_id).unwrap()
+			.storage_root(::std::iter::empty()).0.into();
 
 		// 'fetch' child read proof from remote node
 		let child_value = remote_client.child_storage(
