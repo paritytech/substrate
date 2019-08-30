@@ -23,11 +23,17 @@ use mock::{new_test_ext, Babe, Test};
 use sr_primitives::{traits::Header, Digest, testing::UintAuthorityId};
 use babe_primitives::{CompatibleDigestItem, sr25519::AuthorityId};
 use session::ShouldEndSession;
+const EMPTY_RANDOMNESS: [u8; 32] = [
+	74, 25, 49, 128, 53, 97, 244, 49,
+	222, 202, 176, 2, 231, 66, 95, 10,
+	133, 49, 213, 228, 86, 161, 164, 127,
+	217, 153, 138, 37, 48, 192, 248, 0,
+];
 
 #[test]
 fn empty_randomness_is_correct() {
 	let s = compute_randomness([0; RANDOMNESS_LENGTH], 0, std::iter::empty(), None);
-	assert_eq!(s, [74, 25, 49, 128, 53, 97, 244, 49, 222, 202, 176, 2, 231, 66, 95, 10, 133, 49, 213, 228, 86, 161, 164, 127, 217, 153, 138, 37, 48, 192, 248, 0]);
+	assert_eq!(s, EMPTY_RANDOMNESS);
 }
 
 #[test]
