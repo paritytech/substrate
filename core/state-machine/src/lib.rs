@@ -146,7 +146,7 @@ impl fmt::Display for ExecutionError {
 
 type CallResult<R, E> = Result<NativeOrEncoded<R>, E>;
 
-/// Storage externalities API: pinned to specific active address.
+/// Storage externalities API.
 ///
 /// Implementations of methods of this trait guarantee that there are no side effects,
 /// other than modifications to some **internal state** which could easily be
@@ -255,7 +255,7 @@ pub trait StorageExternalities<H: Hasher> {
 	fn storage_changes_root(&mut self, parent: H::Out) -> Result<Option<H::Out>, ()> where H::Out: Ord;
 }
 
-/// Extra externalities API: pinned to specific active address.
+/// Externalities API.
 ///
 /// Methods of this trait may have side-effects.  Therefore, it isn't safe
 /// to catch unwinding of any panics that occur during calls to them.

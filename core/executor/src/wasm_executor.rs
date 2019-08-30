@@ -16,7 +16,7 @@
 
 //! Rust implementation of Substrate contracts.
 
-use std::{collections::HashMap, convert::TryFrom, str};
+use std::{collections::HashMap, convert::TryFrom, str, panic};
 use tiny_keccak;
 use secp256k1;
 
@@ -77,12 +77,12 @@ impl<'e, E: Externalities<Blake2Hasher> + 'e> ExtHideout<'e, E> {
 	/// leading to process abort.
 	pub fn with_storage_ext<T, F>(&mut self, f: F) -> Result<T>
 		where
-			F: ::std::panic::UnwindSafe + FnOnce(&mut dyn StorageExternalities<Blake2Hasher>) -> Result<T>
+			F: panic::UnwindSafe + FnOnce(&mut dyn StorageExternalities<Blake2Hasher>) -> Result<T>
 	{
 		// it is safe beause basic methods of StorageExternalities are guaranteed to touch only
 		// its internal state + we should discard it on error
-		let mut ext = std::panic::AssertUnwindSafe(&mut *self.0);
-		std::panic::catch_unwind(move || f(&mut **ext))
+		let mut ext = panic::AssertUnwindSafe(&mut *self.0);
+		panic::catch_unwind(move || f(&mut **ext))
 			.map_err(|_| Error::Runtime)
 			.and_then(|result| result)
 	}
