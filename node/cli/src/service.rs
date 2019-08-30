@@ -289,7 +289,7 @@ mod tests {
 		crypto::Pair as CryptoPair, blake2_256,
 		sr25519::Public as AddressPublic, H256,
 	};
-	use sr_primitives::{generic::{BlockId, Era, Digest}, traits::Block, OpaqueExtrinsic};
+	use sr_primitives::{generic::{BlockId, Era, Digest}, traits::Block, OpaqueExtrinsic, SignedPayload};
 	use timestamp;
 	use finality_tracker;
 	use keyring::AccountKeyring;
