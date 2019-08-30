@@ -61,7 +61,7 @@ use crate::{
 	},
 	backend::{
 		self, BlockImportOperation, PrunableStateChangesTrieStorage,
-		StorageCollection, ChildStorageCollection
+		ClientImportOperation, Finalizer,
 	},
 	blockchain::{
 		self, Info as ChainInfo, Backend as ChainBackend,
@@ -128,21 +128,6 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	_phantom: PhantomData<RA>,
 }
 
-/// Client import operation, a wrapper for the backend.
-pub struct ClientImportOperation<Block: BlockT, H: Hasher<Out=Block::Hash>, B: backend::Backend<Block, H>> {
-	op: B::BlockImportOperation,
-	notify_imported: Option<(
-		Block::Hash,
-		BlockOrigin,
-		Block::Header,
-		bool,
-		Option<(
-			StorageCollection,
-			ChildStorageCollection,
-		)>)>,
-	notify_finalized: Vec<Block::Hash>,
-}
-
 /// A source of blockchain events.
 pub trait BlockchainEvents<Block: BlockT> {
 	/// Get block import event stream. Not guaranteed to be fired for every
@@ -183,6 +168,8 @@ pub trait ProvideUncles<Block: BlockT> {
 pub struct ClientInfo<Block: BlockT> {
 	/// Best block hash.
 	pub chain: ChainInfo<Block>,
+	/// State Cache Size currently used by the backend
+	pub used_state_cache_size: Option<usize>,
 }
 
 /// Block status.
@@ -828,28 +815,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		result
 	}
 
-	/// Set a block as best block.
-	pub fn set_head(
-		&self,
-		id: BlockId<Block>
-	) -> error::Result<()> {
-		self.lock_import_and_run(|operation| {
-			self.apply_head(operation, id)
-		})
-	}
-
-	/// Set a block as best block, and apply it to an operation.
-	pub fn apply_head(
-		&self,
-		operation: &mut ClientImportOperation<Block, Blake2Hasher, B>,
-		id: BlockId<Block>,
-	) -> error::Result<()> {
-		operation.op.mark_head(id)
-	}
-
 	/// Apply a checked and validated block to an operation. If a justification is provided
 	/// then `finalized` *must* be true.
-	pub fn apply_block(
+	fn apply_block(
 		&self,
 		operation: &mut ClientImportOperation<Block, Blake2Hasher, B>,
 		import_block: BlockImportParams<Block>,
@@ -945,7 +913,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 		// find tree route from last finalized to given block.
 		let route_from_finalized = crate::blockchain::tree_route(
-			self.backend.blockchain(),
+			|id| self.header(&id)?.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id))),
 			BlockId::Hash(info.finalized_hash),
 			BlockId::Hash(parent_hash),
 		)?;
@@ -1112,7 +1080,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		}
 
 		let route_from_finalized = crate::blockchain::tree_route(
-			self.backend.blockchain(),
+			|id| self.header(&id)?.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id))),
 			BlockId::Hash(last_finalized),
 			BlockId::Hash(block),
 		)?;
@@ -1125,7 +1093,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		}
 
 		let route_from_best = crate::blockchain::tree_route(
-			self.backend.blockchain(),
+			|id| self.header(&id)?.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id))),
 			BlockId::Hash(best_block),
 			BlockId::Hash(block),
 		)?;
@@ -1228,68 +1196,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(())
 	}
 
-	/// Apply auxiliary data insertion into an operation.
-	pub fn apply_aux<
-		'a,
-		'b: 'a,
-		'c: 'a,
-		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
-		D: IntoIterator<Item=&'a &'b [u8]>,
-	>(
-		&self,
-		operation: &mut ClientImportOperation<Block, Blake2Hasher, B>,
-		insert: I,
-		delete: D
-	) -> error::Result<()> {
-		operation.op.insert_aux(
-			insert.into_iter()
-				.map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
-				.chain(delete.into_iter().map(|k| (k.to_vec(), None)))
-		)
-	}
-
-	/// Mark all blocks up to given as finalized in operation. If a
-	/// justification is provided it is stored with the given finalized
-	/// block (any other finalized blocks are left unjustified).
-	///
-	/// If the block being finalized is on a different fork from the current
-	/// best block the finalized block is set as best, this might be slightly
-	/// innacurate (i.e. outdated), usages that require determining an accurate
-	/// best block should use `SelectChain` instead of the client.
-	pub fn apply_finality(
-		&self,
-		operation: &mut ClientImportOperation<Block, Blake2Hasher, B>,
-		id: BlockId<Block>,
-		justification: Option<Justification>,
-		notify: bool,
-	) -> error::Result<()> {
-		let last_best = self.backend.blockchain().info().best_hash;
-		let to_finalize_hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
-		self.apply_finality_with_block_hash(operation, to_finalize_hash, justification, last_best, notify)
-	}
-
-	/// Finalize a block. This will implicitly finalize all blocks up to it and
-	/// fire finality notifications.
-	///
-	/// If the block being finalized is on a different fork from the current
-	/// best block the finalized block is set as best, this might be slightly
-	/// innacurate (i.e. outdated), usages that require determining an accurate
-	/// best block should use `SelectChain` instead of the client.
-	///
-	/// Pass a flag to indicate whether finality notifications should be propagated.
-	/// This is usually tied to some synchronization state, where we don't send notifications
-	/// while performing major synchronization work.
-	pub fn finalize_block(&self, id: BlockId<Block>, justification: Option<Justification>, notify: bool) -> error::Result<()> {
-		self.lock_import_and_run(|operation| {
-			let last_best = self.backend.blockchain().info().best_hash;
-			let to_finalize_hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
-			self.apply_finality_with_block_hash(operation, to_finalize_hash, justification, last_best, notify)
-		}).map_err(|e| {
-			warn!("Block finalization error:\n{:?}", e);
-			e
-		})
-	}
-
 	/// Attempts to revert the chain by `n` blocks. Returns the number of blocks that were
 	/// successfully reverted.
 	pub fn revert(&self, n: NumberFor<Block>) -> error::Result<NumberFor<Block>> {
@@ -1301,6 +1207,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let info = self.backend.blockchain().info();
 		ClientInfo {
 			chain: info,
+			used_state_cache_size: self.backend.used_state_cache_size(),
 		}
 	}
 
@@ -1359,7 +1266,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let load_header = |id: Block::Hash| -> error::Result<Block::Header> {
 			match self.backend.blockchain().header(BlockId::Hash(id))? {
 				Some(hdr) => Ok(hdr),
-				None => Err(Error::UnknownBlock(format!("Unknown block {:?}", id))),
+				None => Err(Error::UnknownBlock(format!("{:?}", id))),
 			}
 		};
 
@@ -1443,6 +1350,33 @@ impl<B, E, Block, RA> ChainHeaderBackend<Block> for Client<B, E, Block, RA> wher
 
 	fn hash(&self, number: NumberFor<Block>) -> error::Result<Option<Block::Hash>> {
 		self.backend.blockchain().hash(number)
+	}
+}
+
+impl<B, E, Block, RA> ChainHeaderBackend<Block> for &Client<B, E, Block, RA> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+	Block: BlockT<Hash=H256>,
+	RA: Send + Sync,
+{
+	fn header(&self, id: BlockId<Block>) -> error::Result<Option<Block::Header>> {
+		(**self).backend.blockchain().header(id)
+	}
+
+	fn info(&self) -> blockchain::Info<Block> {
+		(**self).backend.blockchain().info()
+	}
+
+	fn status(&self, id: BlockId<Block>) -> error::Result<blockchain::BlockStatus> {
+		(**self).status(id)
+	}
+
+	fn number(&self, hash: Block::Hash) -> error::Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>> {
+		(**self).number(hash)
+	}
+
+	fn hash(&self, number: NumberFor<Block>) -> error::Result<Option<Block::Hash>> {
+		(**self).hash(number)
 	}
 }
 
@@ -1598,6 +1532,50 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 		parent_hash: Block::Hash,
 	) -> Result<ImportResult, Self::Error> {
 		(&*self).check_block(hash, parent_hash)
+	}
+}
+
+impl<B, E, Block, RA> Finalizer<Block, Blake2Hasher, B> for Client<B, E, Block, RA> where 
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
+	Block: BlockT<Hash=H256>,
+{
+	fn apply_finality(
+		&self,
+		operation: &mut ClientImportOperation<Block, Blake2Hasher, B>,
+		id: BlockId<Block>,
+		justification: Option<Justification>,
+		notify: bool,
+	) -> error::Result<()> {
+		let last_best = self.backend.blockchain().info().best_hash;
+		let to_finalize_hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
+		self.apply_finality_with_block_hash(operation, to_finalize_hash, justification, last_best, notify)
+	}
+
+	fn finalize_block(&self, id: BlockId<Block>, justification: Option<Justification>, notify: bool) -> error::Result<()> {
+		self.lock_import_and_run(|operation| {
+			self.apply_finality(operation, id, justification, notify)
+		})
+	}
+}
+
+impl<B, E, Block, RA> Finalizer<Block, Blake2Hasher, B> for &Client<B, E, Block, RA> where 
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
+	Block: BlockT<Hash=H256>,
+{
+	fn apply_finality(
+		&self,
+		operation: &mut ClientImportOperation<Block, Blake2Hasher, B>,
+		id: BlockId<Block>,
+		justification: Option<Justification>,
+		notify: bool,
+	) -> error::Result<()> {
+		(**self).apply_finality(operation, id, justification, notify)
+	}
+
+	fn finalize_block(&self, id: BlockId<Block>, justification: Option<Justification>, notify: bool) -> error::Result<()> {
+		(**self).finalize_block(id, justification, notify)
 	}
 }
 
@@ -1847,13 +1825,56 @@ impl<B, E, Block, RA> backend::AuxStore for Client<B, E, Block, RA>
 		// layer, one can always use atomic operations to make sure
 		// import is only locked once.
 		self.lock_import_and_run(|operation| {
-			self.apply_aux(operation, insert, delete)
+			apply_aux(operation, insert, delete)
 		})
 	}
 	/// Query auxiliary data from key-value store.
 	fn get_aux(&self, key: &[u8]) -> error::Result<Option<Vec<u8>>> {
 		crate::backend::AuxStore::get_aux(&*self.backend, key)
 	}
+}
+
+
+impl<B, E, Block, RA> backend::AuxStore for &Client<B, E, Block, RA>
+	where
+		B: backend::Backend<Block, Blake2Hasher>,
+		E: CallExecutor<Block, Blake2Hasher>,
+		Block: BlockT<Hash=H256>,
+{ 
+
+	fn insert_aux<
+		'a,
+		'b: 'a,
+		'c: 'a,
+		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
+		D: IntoIterator<Item=&'a &'b [u8]>,
+	>(&self, insert: I, delete: D) -> error::Result<()> {
+		(**self).insert_aux(insert, delete)
+	}
+
+	fn get_aux(&self, key: &[u8]) -> error::Result<Option<Vec<u8>>> {
+		(**self).get_aux(key)
+	}
+}
+
+/// Helper function to apply auxiliary data insertion into an operation.
+pub fn apply_aux<'a, 'b: 'a, 'c: 'a, B, Block, H, D, I>(
+	operation: &mut ClientImportOperation<Block, H, B>,
+	insert: I,
+	delete: D
+) -> error::Result<()>
+where
+	Block: BlockT,
+	H: Hasher<Out=Block::Hash>,
+	B: backend::Backend<Block, H>,
+	I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
+	D: IntoIterator<Item=&'a &'b [u8]>,
+{
+	operation.op.insert_aux(
+		insert.into_iter()
+			.map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
+			.chain(delete.into_iter().map(|k| (k.to_vec(), None)))
+	)
 }
 
 /// Utility methods for the client.
@@ -1891,8 +1912,7 @@ pub mod utils {
 			}
 
 			let tree_route = blockchain::tree_route(
-				#[allow(deprecated)]
-				client.backend().blockchain(),
+				|id| client.header(&id)?.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id))),
 				BlockId::Hash(*hash),
 				BlockId::Hash(*base),
 			)?;
@@ -1911,7 +1931,6 @@ pub(crate) mod tests {
 	use consensus::{BlockOrigin, SelectChain};
 	use test_client::{
 		prelude::*,
-		client::backend::Backend as TestBackend,
 		client_db::{Backend, DatabaseSettings, PruningMode},
 		runtime::{self, Block, Transfer, RuntimeApi, TestAPI},
 	};
@@ -2572,8 +2591,6 @@ pub(crate) mod tests {
 
 	#[test]
 	fn import_with_justification() {
-		use test_client::blockchain::Backend;
-
 		let client = test_client::new();
 
 		// G -> A1
@@ -2589,33 +2606,29 @@ pub(crate) mod tests {
 		let a3 = client.new_block_at(&BlockId::Hash(a2.hash()), Default::default()).unwrap().bake().unwrap();
 		client.import_justified(BlockOrigin::Own, a3.clone(), justification.clone()).unwrap();
 
-		#[allow(deprecated)]
-		let blockchain = client.backend().blockchain();
-
 		assert_eq!(
-			blockchain.last_finalized().unwrap(),
+			client.info().chain.finalized_hash,
 			a3.hash(),
 		);
 
 		assert_eq!(
-			blockchain.justification(BlockId::Hash(a3.hash())).unwrap(),
+			client.justification(&BlockId::Hash(a3.hash())).unwrap(),
 			Some(justification),
 		);
 
 		assert_eq!(
-			blockchain.justification(BlockId::Hash(a1.hash())).unwrap(),
+			client.justification(&BlockId::Hash(a1.hash())).unwrap(),
 			None,
 		);
 
 		assert_eq!(
-			blockchain.justification(BlockId::Hash(a2.hash())).unwrap(),
+			client.justification(&BlockId::Hash(a2.hash())).unwrap(),
 			None,
 		);
 	}
 
 	#[test]
 	fn importing_diverged_finalized_block_should_trigger_reorg() {
-		use test_client::blockchain::HeaderBackend;
 
 		let client = test_client::new();
 
@@ -2639,12 +2652,9 @@ pub(crate) mod tests {
 		// create but don't import B1 just yet
 		let b1 = b1.bake().unwrap();
 
-		#[allow(deprecated)]
-		let blockchain = client.backend().blockchain();
-
 		// A2 is the current best since it's the longest chain
 		assert_eq!(
-			blockchain.info().best_hash,
+			client.info().chain.best_hash,
 			a2.hash(),
 		);
 
@@ -2653,19 +2663,18 @@ pub(crate) mod tests {
 		client.import_justified(BlockOrigin::Own, b1.clone(), justification).unwrap();
 
 		assert_eq!(
-			blockchain.info().best_hash,
+			client.info().chain.best_hash,
 			b1.hash(),
 		);
 
 		assert_eq!(
-			blockchain.info().finalized_hash,
+			client.info().chain.finalized_hash,
 			b1.hash(),
 		);
 	}
 
 	#[test]
 	fn finalizing_diverged_block_should_trigger_reorg() {
-		use test_client::blockchain::HeaderBackend;
 
 		let (client, select_chain) = TestClientBuilder::new().build_with_longest_chain();
 
@@ -2692,29 +2701,26 @@ pub(crate) mod tests {
 		let b2 = client.new_block_at(&BlockId::Hash(b1.hash()), Default::default()).unwrap().bake().unwrap();
 		client.import(BlockOrigin::Own, b2.clone()).unwrap();
 
-		#[allow(deprecated)]
-		let blockchain = client.backend().blockchain();
-
 		// A2 is the current best since it's the longest chain
 		assert_eq!(
-			blockchain.info().best_hash,
+			client.info().chain.best_hash,
 			a2.hash(),
 		);
 
 		// we finalize block B1 which is on a different branch from current best
 		// which should trigger a re-org.
-		client.finalize_block(BlockId::Hash(b1.hash()), None, false).unwrap();
+		client.finalize_block(BlockId::Hash(b1.hash()), None).unwrap();
 
 		// B1 should now be the latest finalized
 		assert_eq!(
-			blockchain.info().finalized_hash,
+			client.info().chain.finalized_hash,
 			b1.hash(),
 		);
 
 		// and B1 should be the new best block (`finalize_block` as no way of
 		// knowing about B2)
 		assert_eq!(
-			blockchain.info().best_hash,
+			client.info().chain.best_hash,
 			b1.hash(),
 		);
 
@@ -2733,7 +2739,7 @@ pub(crate) mod tests {
 		client.import(BlockOrigin::Own, b3.clone()).unwrap();
 
 		assert_eq!(
-			blockchain.info().best_hash,
+			client.info().chain.best_hash,
 			b3.hash(),
 		);
 	}
@@ -2796,44 +2802,6 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-	fn state_reverted_on_set_head() {
-		let _ = env_logger::try_init();
-		let client = test_client::new();
-
-		let current_balance = ||
-			client.runtime_api().balance_of(
-				&BlockId::number(client.info().chain.best_number), AccountKeyring::Alice.into()
-			).unwrap();
-
-		// G -> A1
-		//   \
-		//    -> B1
-		let mut a1 = client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
-		a1.push_transfer(Transfer {
-			from: AccountKeyring::Alice.into(),
-			to: AccountKeyring::Bob.into(),
-			amount: 10,
-			nonce: 0,
-		}).unwrap();
-		let a1 = a1.bake().unwrap();
-		client.import(BlockOrigin::Own, a1.clone()).unwrap();
-
-		let mut b1 = client.new_block_at(&BlockId::Number(0), Default::default()).unwrap();
-		b1.push_transfer(Transfer {
-			from: AccountKeyring::Alice.into(),
-			to: AccountKeyring::Ferdie.into(),
-			amount: 50,
-			nonce: 0,
-		}).unwrap();
-		let b1 = b1.bake().unwrap();
-		client.import(BlockOrigin::Own, b1.clone()).unwrap();
-		assert_eq!(990, current_balance());
-		// Set B1 as new best
-		client.set_head(BlockId::hash(b1.hash())).unwrap();
-		assert_eq!(950, current_balance());
-	}
-
-	#[test]
 	fn doesnt_import_blocks_that_revert_finality() {
 		let _ = env_logger::try_init();
 		let tmp = tempfile::tempdir().unwrap();
@@ -2885,7 +2853,7 @@ pub(crate) mod tests {
 
 		// we will finalize A2 which should make it impossible to import a new
 		// B3 at the same height but that doesnt't include it
-		client.finalize_block(BlockId::Hash(a2.hash()), None, false).unwrap();
+		client.finalize_block(BlockId::Hash(a2.hash()), None).unwrap();
 
 		let b3 = client.new_block_at(&BlockId::Hash(b2.hash()), Default::default())
 			.unwrap().bake().unwrap();

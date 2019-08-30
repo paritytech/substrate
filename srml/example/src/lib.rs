@@ -363,7 +363,7 @@ decl_module! {
 		/// It is also possible to provide a custom implementation.
 		/// For non-generic events, the generic parameter just needs to be dropped, so that it
 		/// looks like: `fn deposit_event() = default;`.
-		fn deposit_event<T>() = default;
+		fn deposit_event() = default;
 		/// This is your public interface. Be extremely careful.
 		/// This is just a simple example of how to interact with the module from the external
 		/// world.

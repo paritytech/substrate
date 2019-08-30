@@ -27,6 +27,7 @@ use test::Bencher;
 use runtime_io::with_externalities;
 use mock::*;
 use super::*;
+use phragmen;
 use rand::{self, Rng};
 
 const VALIDATORS: u64 = 1000;
@@ -35,6 +36,8 @@ const EDGES: u64 = 2;
 const TO_ELECT: usize = 100;
 const STAKE: u64 = 1000;
 
+type C<T> = <T as Trait>::CurrencyToVote;
+
 fn do_phragmen(
 	b: &mut Bencher,
 	num_vals: u64,
@@ -42,7 +45,7 @@ fn do_phragmen(
 	count: usize,
 	votes_per: u64,
 	eq_iters: usize,
-	eq_tolerance: u128,
+	_eq_tolerance: u128,
 ) {
 	with_externalities(&mut ExtBuilder::default().nominate(false).build(), || {
 		assert!(num_vals > votes_per);
@@ -71,67 +74,55 @@ fn do_phragmen(
 			});
 
 		b.iter(|| {
-			let r = phragmen::elect::<Test, _, _, _>(
+			let r = phragmen::elect::<_, _, _, <Test as Trait>::CurrencyToVote>(
 				count,
 				1_usize,
-				<Validators<Test>>::enumerate(),
-				<Nominators<Test>>::enumerate(),
-				Staking::slashable_balance_of
+				<Validators<Test>>::enumerate().map(|(who, _)| who).collect::<Vec<u64>>(),
+				<Nominators<Test>>::enumerate().collect(),
+				Staking::slashable_balance_of,
+				true,
 			).unwrap();
 
 			// Do the benchmarking with equalize.
 			if eq_iters > 0 {
-				let elected_stashes = r.0;
-				let assignments = r.1;
+				let elected_stashes = r.winners;
+				let mut assignments = r.assignments;
 
-				let to_balance = |b: ExtendedBalance|
-				<<mock::Test as Trait>::CurrencyToVote as Convert<ExtendedBalance, Balance>>::convert(b);
 				let to_votes = |b: Balance|
-					<<mock::Test as Trait>::CurrencyToVote as Convert<Balance, u64>>::convert(b) as ExtendedBalance;
-				let ratio_of = |b, p| (p as ExtendedBalance).saturating_mul(to_votes(b)) / ACCURACY;
+				<C<Test> as Convert<Balance, AccountId>>::convert(b) as ExtendedBalance;
+				let ratio_of = |b, r: ExtendedBalance| r.saturating_mul(to_votes(b)) / ACCURACY;
 
-				let assignments_with_stakes = assignments.into_iter().map(|(n, a)|(
-					n,
-					Staking::slashable_balance_of(&n),
-					a.into_iter().map(|(acc, r)| (
-						acc.clone(),
-						r,
-						to_balance(ratio_of(Staking::slashable_balance_of(&n), r)),
-					))
-					.collect::<Vec<Assignment<Test>>>()
-				)).collect::<Vec<(AccountId, Balance, Vec<Assignment<Test>>)>>();
-
-				let mut exposures = <ExpoMap<Test>>::new();
+				// Initialize the support of each candidate.
+				let mut supports = <SupportMap<u64>>::new();
 				elected_stashes
-					.into_iter()
-					.map(|e| (e, Staking::slashable_balance_of(&e)))
+					.iter()
+					.map(|e| (e, to_votes(Staking::slashable_balance_of(e))))
 					.for_each(|(e, s)| {
-						let item = Exposure { own: s, total: s, ..Default::default() };
-						exposures.insert(e, item);
+						let item = Support { own: s, total: s, ..Default::default() };
+						supports.insert(e.clone(), item);
 					});
 
-				for (n, _, assignment) in &assignments_with_stakes {
-					for (c, _, s) in assignment {
-						if let Some(expo) = exposures.get_mut(c) {
-							expo.total = expo.total.saturating_add(*s);
-							expo.others.push( IndividualExposure { who: n.clone(), value: *s } );
+				for (n, assignment) in assignments.iter_mut() {
+					for (c, r) in assignment.iter_mut() {
+						let nominator_stake = Staking::slashable_balance_of(n);
+						let other_stake = ratio_of(nominator_stake, *r);
+						if let Some(support) = supports.get_mut(c) {
+							support.total = support.total.saturating_add(other_stake);
+							support.others.push((n.clone(), other_stake));
 						}
+						*r = other_stake;
 					}
 				}
 
-				let mut assignments_with_votes = assignments_with_stakes.into_iter()
-					.map(|a| (
-						a.0, a.1,
-						a.2.into_iter()
-							.map(|e| (e.0, e.1, to_votes(e.2)))
-							.collect::<Vec<(AccountId, ExtendedBalance, ExtendedBalance)>>()
-					))
-					.collect::<Vec<(
-						AccountId,
-						Balance,
-						Vec<(AccountId, ExtendedBalance, ExtendedBalance)>
-					)>>();
-				equalize::<Test>(&mut assignments_with_votes, &mut exposures, eq_tolerance, eq_iters);
+				let tolerance = 0_u128;
+				let iterations = 2_usize;
+				phragmen::equalize::<_, _, <Test as Trait>::CurrencyToVote, _>(
+					assignments,
+					&mut supports,
+					tolerance,
+					iterations,
+					Staking::slashable_balance_of,
+				);
 			}
 		})
 	})

@@ -116,7 +116,7 @@ use safe_mix::TripletMix;
 use codec::{Encode, Decode};
 
 #[cfg(any(feature = "std", test))]
-use runtime_io::{twox_128, TestExternalities, Blake2Hasher};
+use runtime_io::{TestExternalities, Blake2Hasher};
 
 #[cfg(any(feature = "std", test))]
 use primitives::ChangesTrieConfiguration;
@@ -246,11 +246,6 @@ pub type KeyValue = (Vec<u8>, Vec<u8>);
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		/// Deposits an event into this block's event record.
-		pub fn deposit_event(event: T::Event) {
-			Self::deposit_event_indexed(&[], event);
-		}
-
 		/// A big dispatch that will disallow any other transaction to be included.
 		// TODO: this must be preferable available for testing really (not possible at the moment).
 		#[weight = SimpleDispatchInfo::MaxOperational]
@@ -430,19 +425,17 @@ decl_storage! {
 		#[serde(with = "primitives::bytes")]
 		config(code): Vec<u8>;
 
-		build(
-			|storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
-			config: &GenesisConfig|
-		{
+		build(|config: &GenesisConfig| {
 			use codec::Encode;
 
-			storage.0.insert(well_known_keys::CODE.to_vec(), config.code.clone());
-			storage.0.insert(well_known_keys::EXTRINSIC_INDEX.to_vec(), 0u32.encode());
+			runtime_io::set_storage(well_known_keys::CODE, &config.code);
+			runtime_io::set_storage(well_known_keys::EXTRINSIC_INDEX, &0u32.encode());
 
 			if let Some(ref changes_trie_config) = config.changes_trie_config {
-				storage.0.insert(
-					well_known_keys::CHANGES_TRIE_CONFIG.to_vec(),
-					changes_trie_config.encode());
+				runtime_io::set_storage(
+					well_known_keys::CHANGES_TRIE_CONFIG,
+					&changes_trie_config.encode(),
+				);
 			}
 		});
 	}
@@ -545,6 +538,11 @@ pub fn ensure_none<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'stati
 }
 
 impl<T: Trait> Module<T> {
+	/// Deposits an event into this block's event record.
+	pub fn deposit_event(event: impl Into<T::Event>) {
+		Self::deposit_event_indexed(&[], event.into());
+	}
+
 	/// Deposits an event into this block's event record adding this event
 	/// to the corresponding topic indexes.
 	///
@@ -703,9 +701,9 @@ impl<T: Trait> Module<T> {
 	#[cfg(any(feature = "std", test))]
 	pub fn externalities() -> TestExternalities<Blake2Hasher> {
 		TestExternalities::new((map![
-			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),
-			twox_128(<Number<T>>::key()).to_vec() => T::BlockNumber::one().encode(),
-			twox_128(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode()
+			<BlockHash<T>>::hashed_key_for(T::BlockNumber::zero()) => [69u8; 32].encode(),
+			<Number<T>>::hashed_key().to_vec() => T::BlockNumber::one().encode(),
+			<ParentHash<T>>::hashed_key().to_vec() => [69u8; 32].encode()
 		], map![]))
 	}
 
@@ -815,7 +813,7 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event(match r {
 			Ok(_) => Event::ExtrinsicSuccess,
 			Err(_) => Event::ExtrinsicFailed,
-		}.into());
+		});
 
 		let next_extrinsic_index = Self::extrinsic_index().unwrap_or_default() + 1u32;
 

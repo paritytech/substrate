@@ -94,29 +94,14 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 		&self,
 		key_type: String,
 		suri: String,
-		maybe_public: Option<Bytes>,
-	) -> Result<Bytes> {
+		public: Bytes,
+	) -> Result<()> {
 		let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
 		let mut keystore = self.keystore.write();
 		let maybe_password = keystore.password();
-		let public = match maybe_public {
-			Some(public) => public.0,
-			None => {
-				let maybe_public = match key_type {
-					key_types::BABE | key_types::SR25519 =>
-						sr25519::Pair::from_string(&suri, maybe_password)
-							.map(|pair| pair.public().to_raw_vec()),
-					key_types::GRANDPA | key_types::ED25519 =>
-						ed25519::Pair::from_string(&suri, maybe_password)
-							.map(|pair| pair.public().to_raw_vec()),
-					_ => Err(Error::UnsupportedKeyType)?,
-				};
-				maybe_public.map_err(|_| Error::BadSeedPhrase)?
-			}
-		};
 		keystore.insert_unknown(key_type, &suri, &public[..])
 			.map_err(|_| Error::KeyStoreUnavailable)?;
-		Ok(public.into())
+		Ok(())
 	}
 
 	fn rotate_keys(&self) -> Result<Bytes> {
