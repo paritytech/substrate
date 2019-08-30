@@ -959,7 +959,7 @@ pub struct CheckBlockGasLimit<T: Trait + Send + Sync>(PhantomData<T>);
 
 impl<T: Trait + Send + Sync> Default for CheckBlockGasLimit<T> {
 	fn default() -> Self {
-		Self(std::marker::PhantomData)
+		Self(PhantomData)
 	}
 }
 
