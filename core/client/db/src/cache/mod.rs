@@ -336,7 +336,14 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 
 /// Get pruning strategy for given cache.
 fn cache_pruning_strategy<N: From<u32>>(cache: CacheKeyId) -> PruningStrategy<N> {
+	// the cache is mostly used to store data from consensus engines
+	// this kind of data is only required for non-finalized blocks
+	// => by default we prune finalized cached entries
+
 	match cache {
+		// we need to keep changes tries configurations forever (or at least until changes tries,
+		// that were built using this configuration, are not pruned) to make it possible to refer
+		// to old changes tries
 		well_known_cache_keys::CHANGES_TRIE_CONFIG => PruningStrategy::NeverPrune,
 		_ => PruningStrategy::ByDepth(PRUNE_DEPTH.into()),
 	}
