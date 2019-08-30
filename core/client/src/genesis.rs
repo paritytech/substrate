@@ -153,6 +153,7 @@ mod tests {
 			1000,
 			None,
 			vec![],
+			Default::default(),
 		).genesis_map();
 		let genesis_hash = insert_genesis_block(&mut storage);
 
@@ -182,6 +183,7 @@ mod tests {
 			1000,
 			None,
 			vec![],
+			Default::default(),
 		).genesis_map();
 		let genesis_hash = insert_genesis_block(&mut storage);
 
@@ -211,6 +213,7 @@ mod tests {
 			68,
 			None,
 			vec![],
+			Default::default(),
 		).genesis_map();
 		let genesis_hash = insert_genesis_block(&mut storage);
 

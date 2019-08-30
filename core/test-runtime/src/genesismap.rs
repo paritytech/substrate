@@ -16,7 +16,7 @@
 
 //! Tool for creating the genesis block.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeMap};
 use runtime_io::{blake2_256, twox_128};
 use super::{AuthorityId, AccountId, WASM_BINARY};
 use codec::{Encode, KeyedVec, Joiner};
@@ -31,6 +31,7 @@ pub struct GenesisConfig {
 	heap_pages_override: Option<u64>,
 	/// Additional storage key pairs that will be added to the genesis map.
 	extra_storage: Vec<(Vec<u8>, Vec<u8>)>,
+	child_extra_storage: BTreeMap<Vec<u8>, Vec<(Vec<u8>, Vec<u8>)>>,
 }
 
 impl GenesisConfig {
@@ -41,6 +42,7 @@ impl GenesisConfig {
 		balance: u64,
 		heap_pages_override: Option<u64>,
 		extra_storage: Vec<(Vec<u8>, Vec<u8>)>,
+		child_extra_storage: BTreeMap<Vec<u8>, Vec<(Vec<u8>, Vec<u8>)>>,
 	) -> Self {
 		GenesisConfig {
 			changes_trie_config: match support_changes_trie {
@@ -51,6 +53,7 @@ impl GenesisConfig {
 			balances: endowed_accounts.into_iter().map(|a| (a, balance)).collect(),
 			heap_pages_override,
 			extra_storage,
+			child_extra_storage,
 		}
 	}
 
@@ -78,7 +81,16 @@ impl GenesisConfig {
 		for (key, value) in self.extra_storage.iter().cloned() {
 			map.insert(key, value);
 		}
-		(map, Default::default())
+		let mut child_map = HashMap::new();
+		for (storage_key, extra_storage) in self.child_extra_storage.iter() {
+			let mut map = HashMap::new();
+			for (key, value) in extra_storage.clone().into_iter() {
+				map.insert(key, value);
+			}
+			child_map.insert(storage_key.clone(), map);
+		}
+
+		(map, child_map)
 	}
 }
 

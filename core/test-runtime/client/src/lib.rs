@@ -23,6 +23,7 @@ pub mod trait_tests;
 mod block_builder_ext;
 
 use std::sync::Arc;
+use std::collections::BTreeMap;
 pub use block_builder_ext::BlockBuilderExt;
 pub use generic_test_client::*;
 pub use runtime;
@@ -98,6 +99,7 @@ pub struct GenesisParameters {
 	support_changes_trie: bool,
 	heap_pages_override: Option<u64>,
 	extra_storage: Vec<(Vec<u8>, Vec<u8>)>,
+	child_extra_storage: BTreeMap<Vec<u8>, Vec<(Vec<u8>, Vec<u8>)>>,
 }
 
 impl GenesisParameters {
@@ -117,6 +119,7 @@ impl GenesisParameters {
 			1000,
 			self.heap_pages_override,
 			self.extra_storage.clone(),
+			self.child_extra_storage.clone(),
 		)
 	}
 }
@@ -184,6 +187,18 @@ pub trait TestClientBuilderExt<B>: Sized {
 	/// # Panics
 	///
 	/// Panics if the key is empty.
+	fn add_extra_child_storage<SK: Into<Vec<u8>>, K: Into<Vec<u8>>, V: Into<Vec<u8>>>(
+		self,
+		storage_key: SK,
+		key: K,
+		value: V,
+	) -> Self;
+
+	/// Add an extra child value into the genesis storage.
+	///
+	/// # Panics
+	///
+	/// Panics if the key is empty.
 	fn add_extra_storage<K: Into<Vec<u8>>, V: Into<Vec<u8>>>(self, key: K, value: V) -> Self;
 
 	/// Build the test client.
@@ -217,6 +232,24 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 		self.genesis_init_mut().extra_storage.push((key, value.into()));
 		self
 	}
+
+	fn add_extra_child_storage<SK: Into<Vec<u8>>, K: Into<Vec<u8>>, V: Into<Vec<u8>>>(
+		mut self,
+		storage_key: SK,
+		key: K,
+		value: V,
+	) -> Self {
+		let storage_key = storage_key.into();
+		let key = key.into();
+		assert!(!storage_key.is_empty());
+		assert!(!key.is_empty());
+		self.genesis_init_mut().child_extra_storage
+			.entry(storage_key)
+			.or_insert_with(Default::default)
+			.push((key, value.into()));
+		self
+	}
+
 
 	fn build_with_longest_chain(self) -> (Client<B>, client::LongestChain<B, runtime::Block>) {
 		self.build_with_native_executor(None)
