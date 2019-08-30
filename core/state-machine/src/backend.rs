@@ -111,7 +111,9 @@ pub trait Backend<H: Hasher> {
 	}
 
 	/// Try convert into trie backend.
-	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>>;
+	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
+		None
+	}
 
 	/// Calculate the storage root, with given delta over what is already stored
 	/// in the backend, and produce a "transaction" that can be used to commit.
@@ -145,6 +147,52 @@ pub trait Backend<H: Hasher> {
 		);
 		txs.consolidate(parent_txs);
 		(root, txs)
+	}
+}
+
+impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
+	type Error = T::Error;
+	type Transaction = T::Transaction;
+	type TrieBackendStorage = T::TrieBackendStorage;
+
+	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		(*self).storage(key)
+	}
+
+	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		(*self).child_storage(storage_key, key)
+	}
+
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
+		(*self).for_keys_in_child_storage(storage_key, f)
+	}
+
+	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
+		(*self).for_keys_with_prefix(prefix, f)
+	}
+
+	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], f: F) {
+		(*self).for_child_keys_with_prefix(storage_key, prefix, f)
+	}
+
+	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
+	where
+		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		H::Out: Ord,
+	{
+		(*self).storage_root(delta)
+	}
+
+	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	where
+		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		H::Out: Ord,
+	{
+		(*self).child_storage_root(storage_key, delta)
+	}
+
+	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+		(*self).pairs()
 	}
 }
 

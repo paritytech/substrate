@@ -132,8 +132,8 @@ pub fn native_else_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>
 }
 
 /// The substrate state machine.
-pub struct StateMachine<'a, H, N, B, T, O, Exec> {
-	backend: &'a B,
+pub struct StateMachine<'a, B, H, N, T, O, Exec> {
+	backend: B,
 	changes_trie_storage: Option<&'a T>,
 	offchain_ext: Option<&'a mut O>,
 	overlay: &'a mut OverlayedChanges,
@@ -144,7 +144,7 @@ pub struct StateMachine<'a, H, N, B, T, O, Exec> {
 	_hasher: PhantomData<(H, N)>,
 }
 
-impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
+impl<'a, B, H, N, T, O, Exec> StateMachine<'a, B, H, N, T, O, Exec> where
 	H: Hasher,
 	Exec: CodeExecutor<H>,
 	B: Backend<H>,
@@ -155,7 +155,7 @@ impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 {
 	/// Creates new substrate state machine.
 	pub fn new(
-		backend: &'a B,
+		backend: B,
 		changes_trie_storage: Option<&'a T>,
 		offchain_ext: Option<&'a mut O>,
 		overlay: &'a mut OverlayedChanges,
@@ -219,7 +219,7 @@ impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 	{
 		let mut externalities = ext::Ext::new(
 			self.overlay,
-			self.backend,
+			&self.backend,
 			self.changes_trie_storage,
 			self.offchain_ext.as_mut().map(|x| &mut **x),
 			self.keystore.clone(),
@@ -330,7 +330,7 @@ impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 		Handler: FnOnce(
 			CallResult<R, Exec::Error>,
-			CallResult<R, Exec::Error>
+			CallResult<R, Exec::Error>,
 		) -> CallResult<R, Exec::Error>
 	{
 		// read changes trie configuration. The reason why we're doing it here instead of the
@@ -338,8 +338,7 @@ impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 		// proof-of-execution on light clients. And the proof is recorded by the backend which
 		// is created after OverlayedChanges
 
-		let backend = self.backend.clone();
-		let init_overlay = |overlay: &mut OverlayedChanges, final_check: bool| {
+		let init_overlay = |overlay: &mut OverlayedChanges, final_check: bool, backend: &B| {
 			let changes_trie_config = try_read_overlay_value(
 				overlay,
 				backend,
@@ -347,7 +346,7 @@ impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 			)?;
 			set_changes_trie_config(overlay, changes_trie_config, final_check)
 		};
-		init_overlay(self.overlay, false)?;
+		init_overlay(self.overlay, false, &self.backend)?;
 
 		let result = {
 			let orig_prospective = self.overlay.prospective.clone();
@@ -381,7 +380,7 @@ impl<'a, H, N, B, T, O, Exec> StateMachine<'a, H, N, B, T, O, Exec> where
 		};
 
 		if result.is_ok() {
-			init_overlay(self.overlay, true)?;
+			init_overlay(self.overlay, true, &self.backend)?;
 		}
 
 		result.map_err(|e| Box::new(e) as _)
@@ -432,8 +431,8 @@ where
 	H::Out: Ord + 'static,
 {
 	let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
-	let mut sm = StateMachine::<H, _, _, InMemoryChangesTrieStorage<H, u64>, _, Exec>::new(
-		&proving_backend, None, NeverOffchainExt::new(), overlay, exec, method, call_data, keystore,
+	let mut sm = StateMachine::<_, H, _, InMemoryChangesTrieStorage<H, u64>, _, Exec>::new(
+		proving_backend, None, NeverOffchainExt::new(), overlay, exec, method, call_data, keystore,
 	);
 
 	let (result, _, _) = sm.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
@@ -441,7 +440,7 @@ where
 		false,
 		None,
 	)?;
-	let proof = proving_backend.extract_proof();
+	let proof = sm.backend.extract_proof();
 	Ok((result.into_encoded(), proof))
 }
 
@@ -478,7 +477,7 @@ where
 	Exec: CodeExecutor<H>,
 	H::Out: Ord + 'static,
 {
-	let mut sm = StateMachine::<H, _, _, InMemoryChangesTrieStorage<H, u64>, _, Exec>::new(
+	let mut sm = StateMachine::<_, H, _, InMemoryChangesTrieStorage<H, u64>, _, Exec>::new(
 		trie_backend, None, NeverOffchainExt::new(), overlay, exec, method, call_data, keystore,
 	);
 
@@ -497,7 +496,7 @@ pub fn prove_read<B, H>(
 where
 	B: Backend<H>,
 	H: Hasher,
-	H::Out: Ord
+	H::Out: Ord,
 {
 	let trie_backend = backend.as_trie_backend()
 		.ok_or_else(
@@ -515,7 +514,7 @@ pub fn prove_child_read<B, H>(
 where
 	B: Backend<H>,
 	H: Hasher,
-	H::Out: Ord
+	H::Out: Ord,
 {
 	let trie_backend = backend.as_trie_backend()
 		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<dyn Error>)?;
@@ -530,7 +529,7 @@ pub fn prove_read_on_trie_backend<S, H>(
 where
 	S: trie_backend_essence::TrieBackendStorage<H>,
 	H: Hasher,
-	H::Out: Ord
+	H::Out: Ord,
 {
 	let proving_backend = proving_backend::ProvingBackend::<_, H>::new(trie_backend);
 	let result = proving_backend.storage(key).map_err(|e| Box::new(e) as Box<dyn Error>)?;
@@ -546,7 +545,7 @@ pub fn prove_child_read_on_trie_backend<S, H>(
 where
 	S: trie_backend_essence::TrieBackendStorage<H>,
 	H: Hasher,
-	H::Out: Ord
+	H::Out: Ord,
 {
 	let proving_backend = proving_backend::ProvingBackend::<_, H>::new(trie_backend);
 	let result = proving_backend.child_storage(storage_key, key)
@@ -582,7 +581,6 @@ where
 	let proving_backend = create_proof_check_backend::<H>(root, proof)?;
 	read_child_proof_check_on_proving_backend(&proving_backend, storage_key, key)
 }
-
 
 /// Check storage read proof on pre-created proving backend.
 pub fn read_proof_check_on_proving_backend<H>(
@@ -718,7 +716,7 @@ mod tests {
 		let changes_trie_storage = InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new();
 
 		let mut state_machine = StateMachine::new(
-			&backend,
+			backend,
 			Some(&changes_trie_storage),
 			NeverOffchainExt::new(),
 			&mut overlayed_changes,
@@ -747,7 +745,7 @@ mod tests {
 		let changes_trie_storage = InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new();
 
 		let mut state_machine = StateMachine::new(
-			&backend,
+			backend,
 			Some(&changes_trie_storage),
 			NeverOffchainExt::new(),
 			&mut overlayed_changes,
@@ -773,7 +771,7 @@ mod tests {
 		let changes_trie_storage = InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new();
 
 		let mut state_machine = StateMachine::new(
-			&backend,
+			backend,
 			Some(&changes_trie_storage),
 			NeverOffchainExt::new(),
 			&mut overlayed_changes,
@@ -975,7 +973,7 @@ mod tests {
 		let changes_trie_storage = InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new();
 
 		let mut state_machine = StateMachine::new(
-			&backend,
+			backend,
 			Some(&changes_trie_storage),
 			NeverOffchainExt::new(),
 			&mut overlayed_changes,
@@ -1000,7 +998,7 @@ mod tests {
 		let changes_trie_storage = InMemoryChangesTrieStorage::<Blake2Hasher, u64>::new();
 
 		let mut state_machine = StateMachine::new(
-			&backend,
+			backend,
 			Some(&changes_trie_storage),
 			NeverOffchainExt::new(),
 			&mut overlayed_changes,

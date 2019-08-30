@@ -43,7 +43,7 @@ fn safe_call<F, U>(f: F) -> Result<U>
 pub fn with_native_environment<F, U>(ext: &mut dyn Externalities<Blake2Hasher>, f: F) -> Result<U>
 	where F: UnwindSafe + FnOnce() -> U
 {
-	::runtime_io::with_externalities(ext, move || safe_call(f))
+	runtime_io::with_externalities(ext, move || safe_call(f))
 }
 
 /// Delegate for dispatching a CodeExecutor call to native code.

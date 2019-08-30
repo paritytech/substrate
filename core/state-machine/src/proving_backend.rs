@@ -128,9 +128,8 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 		}
 	}
 
-	/// Consume the backend, extracting the gathered proof in lexicographical order
-	/// by value.
-	pub fn extract_proof(self) -> Vec<Vec<u8>> {
+	/// Consume the backend, extracting the gathered proof in lexicographical order by value.
+	pub fn extract_proof(&self) -> Vec<Vec<u8>> {
 		self.proof_recorder
 			.borrow_mut()
 			.drain()
@@ -202,10 +201,6 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		H::Out: Ord
 	{
 		self.backend.child_storage_root(storage_key, delta)
-	}
-
-	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
-		None
 	}
 }
 

@@ -127,10 +127,7 @@ pub trait AuxStore {
 ///
 /// The same applies for live `BlockImportOperation`s: while an import operation building on a parent `P`
 /// is alive, the state for `P` should not be pruned.
-pub trait Backend<Block, H>: AuxStore + Send + Sync where
-	Block: BlockT,
-	H: Hasher<Out=Block::Hash>,
-{
+pub trait Backend<Block, H>: AuxStore + Send + Sync where Block: BlockT, H: Hasher<Out=Block::Hash> {
 	/// Associated block insertion operation type.
 	type BlockImportOperation: BlockImportOperation<Block, H, State=Self::State>;
 	/// Associated blockchain backend type.
