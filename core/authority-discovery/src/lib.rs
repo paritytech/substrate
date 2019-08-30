@@ -168,8 +168,10 @@ where
 		.encode(&mut signed_addresses)
 		.map_err(Error::Encoding)?;
 
-		self.network
-			.put_value(hash_authority_id(authority_id.0.as_ref())?, signed_addresses);
+		self.network.put_value(
+			hash_authority_id(authority_id.0.as_ref())?,
+			signed_addresses,
+		);
 
 		Ok(())
 	}
@@ -268,8 +270,7 @@ where
 					.collect::<std::result::Result<_, _>>()
 					.map_err(Error::ParsingMultiaddress)?;
 
-			self.address_cache
-				.insert(authority_id.clone(), addresses);
+			self.address_cache.insert(authority_id.clone(), addresses);
 		}
 
 		// Let's update the peerset priority group with the all the addresses we have in our cache.
@@ -521,47 +522,42 @@ mod tests {
 		}
 	}
 
-	impl AuthorityDiscoveryApi<Block, String> for RuntimeApi {
-		fn AuthorityDiscoveryApi_authority_id_runtime_api_impl(
-			&self,
-			_: &BlockId<Block>,
-			_: ExecutionContext,
-			_: Option<()>,
-			_: Vec<u8>,
-		) -> std::result::Result<NativeOrEncoded<Option<String>>, client::error::Error> {
-			return Ok(NativeOrEncoded::Native(Some("test".to_string())));
-		}
+	impl AuthorityDiscoveryApi<Block> for RuntimeApi {
 		fn AuthorityDiscoveryApi_authorities_runtime_api_impl(
 			&self,
 			_: &BlockId<Block>,
 			_: ExecutionContext,
 			_: Option<()>,
 			_: Vec<u8>,
-		) -> std::result::Result<NativeOrEncoded<Vec<String>>, client::error::Error> {
+		) -> std::result::Result<NativeOrEncoded<Vec<AuthorityId>>, client::error::Error> {
 			return Ok(NativeOrEncoded::Native(vec![
-				"test-authority-id-1".to_string(),
-				"test-authority-id-2".to_string(),
+				AuthorityId("test-authority-id-1".as_bytes().to_vec()),
+				AuthorityId("test-authority-id-2".as_bytes().to_vec()),
 			]));
 		}
 		fn AuthorityDiscoveryApi_sign_runtime_api_impl(
 			&self,
 			_: &BlockId<Block>,
 			_: ExecutionContext,
-			_: Option<(std::vec::Vec<u8>, String)>,
+			_: Option<std::vec::Vec<u8>>,
 			_: Vec<u8>,
-		) -> std::result::Result<NativeOrEncoded<Option<Vec<u8>>>, client::error::Error> {
-			return Ok(NativeOrEncoded::Native(Some(
-				"test-signature-1".as_bytes().to_vec(),
-			)));
+		) -> std::result::Result<
+			NativeOrEncoded<Option<(Signature, AuthorityId)>>,
+			client::error::Error,
+		> {
+			return Ok(NativeOrEncoded::Native(Some((
+				Signature("test-signature-1".as_bytes().to_vec()),
+				AuthorityId("test-authority-id-1".as_bytes().to_vec()),
+			))));
 		}
 		fn AuthorityDiscoveryApi_verify_runtime_api_impl(
 			&self,
 			_: &BlockId<Block>,
 			_: ExecutionContext,
-			args: Option<(Vec<u8>, Vec<u8>, String)>,
+			args: Option<(Vec<u8>, Signature, AuthorityId)>,
 			_: Vec<u8>,
 		) -> std::result::Result<NativeOrEncoded<bool>, client::error::Error> {
-			if args.unwrap().1 == "test-signature-1".as_bytes() {
+			if args.unwrap().1 == Signature("test-signature-1".as_bytes().to_vec()) {
 				return Ok(NativeOrEncoded::Native(true));
 			}
 			return Ok(NativeOrEncoded::Native(false));

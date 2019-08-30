@@ -347,10 +347,9 @@ mod tests {
 		externalities.set_keystore(key_store);
 
 		with_externalities(&mut externalities, || {
-			let authority_id = AuthorityDiscovery::authority_id().expect("authority id");
 			let payload = String::from("test payload").into_bytes();
-			let sig =
-				AuthorityDiscovery::sign(payload.clone(), authority_id.clone()).expect("signature");
+			let (sig, authority_id) =
+				AuthorityDiscovery::sign(payload.clone()).expect("signature");
 
 			assert!(AuthorityDiscovery::verify(
 				payload,
