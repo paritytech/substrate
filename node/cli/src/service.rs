@@ -51,9 +51,8 @@ macro_rules! new_full_start {
 		let builder = substrate_service::ServiceBuilder::new_full::<
 			node_primitives::Block, node_runtime::RuntimeApi, node_executor::Executor
 		>($config)?
-			.with_select_chain(|_config, client| {
-				#[allow(deprecated)]
-				Ok(client::LongestChain::new(client.backend().clone()))
+			.with_select_chain(|_config, backend| {
+				Ok(client::LongestChain::new(backend.clone()))
 			})?
 			.with_transaction_pool(|config, client|
 				Ok(transaction_pool::txpool::Pool::new(config, transaction_pool::ChainApi::new(client)))
@@ -105,11 +104,23 @@ macro_rules! new_full {
 	($config:expr) => {{
 		use futures::Future;
 
+		let (
+			is_authority,
+			force_authoring,
+			name,
+			disable_grandpa
+		) = (
+			$config.roles.is_authority(),
+			$config.force_authoring,
+			$config.name.clone(),
+			$config.disable_grandpa
+		);
+
 		let (builder, mut import_setup, inherent_data_providers, mut tasks_to_spawn) = new_full_start!($config);
 
 		let service = builder.with_network_protocol(|_| Ok(crate::service::NodeProtocol::new()))?
-			.with_finality_proof_provider(|client|
-				Ok(Arc::new(grandpa::FinalityProofProvider::new(client.clone(), client)) as _)
+			.with_finality_proof_provider(|client, backend|
+				Ok(Arc::new(grandpa::FinalityProofProvider::new(backend, client)) as _)
 			)?
 			.build()?;
 
@@ -125,7 +136,7 @@ macro_rules! new_full {
 			);
 		}
 
-		if service.config().roles.is_authority() {
+		if is_authority {
 			let proposer = substrate_basic_authorship::ProposerFactory {
 				client: service.client(),
 				transaction_pool: service.transaction_pool(),
@@ -144,7 +155,7 @@ macro_rules! new_full {
 				env: proposer,
 				sync_oracle: service.network(),
 				inherent_data_providers: inherent_data_providers.clone(),
-				force_authoring: service.config().force_authoring,
+				force_authoring: force_authoring,
 				time_source: babe_link,
 			};
 
@@ -157,11 +168,11 @@ macro_rules! new_full {
 			// FIXME #1578 make this available through chainspec
 			gossip_duration: std::time::Duration::from_millis(333),
 			justification_period: 4096,
-			name: Some(service.config().name.clone()),
+			name: Some(name),
 			keystore: Some(service.keystore()),
 		};
 
-		match (service.config().roles.is_authority(), service.config().disable_grandpa) {
+		match (is_authority, disable_grandpa) {
 			(false, false) => {
 				// start the lightweight GRANDPA observer
 				service.spawn_task(Box::new(grandpa::run_grandpa_observer(
@@ -211,21 +222,19 @@ pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisCo
 	let mut tasks_to_spawn = Vec::new();
 
 	let service = ServiceBuilder::new_light::<Block, RuntimeApi, node_executor::Executor>(config)?
-		.with_select_chain(|_config, client| {
-			#[allow(deprecated)]
-			Ok(LongestChain::new(client.backend().clone()))
+		.with_select_chain(|_config, backend| {
+			Ok(LongestChain::new(backend.clone()))
 		})?
 		.with_transaction_pool(|config, client|
 			Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client)))
 		)?
-		.with_import_queue_and_fprb(|_config, client, _select_chain, transaction_pool| {
-			#[allow(deprecated)]
-			let fetch_checker = client.backend().blockchain().fetcher()
+		.with_import_queue_and_fprb(|_config, client, backend, _select_chain, transaction_pool| {
+			let fetch_checker = backend.blockchain().fetcher()
 				.upgrade()
 				.map(|fetcher| fetcher.checker().clone())
 				.ok_or_else(|| "Trying to start light import queue without active fetch checker")?;
 			let block_import = grandpa::light_block_import::<_, _, _, RuntimeApi, _>(
-				client.clone(), Arc::new(fetch_checker), client.clone()
+				client.clone(), backend, Arc::new(fetch_checker), client.clone()
 			)?;
 
 			let finality_proof_import = block_import.clone();
@@ -248,8 +257,8 @@ pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisCo
 			Ok((import_queue, finality_proof_request_builder))
 		})?
 		.with_network_protocol(|_| Ok(NodeProtocol::new()))?
-		.with_finality_proof_provider(|client|
-			Ok(Arc::new(GrandpaFinalityProofProvider::new(client.clone(), client)) as _)
+		.with_finality_proof_provider(|client, backend|
+			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, client)) as _)
 		)?
 		.with_rpc_extensions(|client, pool| {
 			use node_rpc::accounts::{Accounts, AccountsApi};
