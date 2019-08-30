@@ -194,7 +194,11 @@ mod tests {
 		type AuthorityId = AuthorityId;
 		type Call = im_online::Call<Test>;
 		type Event = ();
-		type SubmitTransaction = ();
+		type SubmitTransaction = system::offchain::TransactionSubmitter<
+			(),
+			im_online::Call<Test>,
+			UncheckedExtrinsic<(), im_online::Call<Test>, (), ()>,
+		>;
 		type ReportUnresponsiveness = ();
 		type CurrentElectedSet = DummyCurrentElectedSet<AuthorityId>;
 	}

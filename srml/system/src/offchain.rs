@@ -133,4 +133,3 @@ impl<T, E, S, C, Call> SubmitUnsignedTransaction<T, Call> for TransactionSubmitt
 {
 	type Extrinsic = E;
 }
-
