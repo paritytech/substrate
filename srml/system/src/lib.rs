@@ -118,7 +118,7 @@ use safe_mix::TripletMix;
 use codec::{Encode, Decode};
 
 #[cfg(any(feature = "std", test))]
-use runtime_io::{twox_128, TestExternalities, Blake2Hasher};
+use runtime_io::{TestExternalities, Blake2Hasher};
 
 #[cfg(any(feature = "std", test))]
 use primitives::ChangesTrieConfiguration;
@@ -249,11 +249,6 @@ pub type KeyValue = (Vec<u8>, Vec<u8>);
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error;
-
-		/// Deposits an event into this block's event record.
-		pub fn deposit_event(event: T::Event) {
-			Self::deposit_event_indexed(&[], event);
-		}
 
 		/// A big dispatch that will disallow any other transaction to be included.
 		// TODO: this must be preferable available for testing really (not possible at the moment).
@@ -445,19 +440,17 @@ decl_storage! {
 		#[serde(with = "primitives::bytes")]
 		config(code): Vec<u8>;
 
-		build(
-			|storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
-			config: &GenesisConfig|
-		{
+		build(|config: &GenesisConfig| {
 			use codec::Encode;
 
-			storage.0.insert(well_known_keys::CODE.to_vec(), config.code.clone());
-			storage.0.insert(well_known_keys::EXTRINSIC_INDEX.to_vec(), 0u32.encode());
+			runtime_io::set_storage(well_known_keys::CODE, &config.code);
+			runtime_io::set_storage(well_known_keys::EXTRINSIC_INDEX, &0u32.encode());
 
 			if let Some(ref changes_trie_config) = config.changes_trie_config {
-				storage.0.insert(
-					well_known_keys::CHANGES_TRIE_CONFIG.to_vec(),
-					changes_trie_config.encode());
+				runtime_io::set_storage(
+					well_known_keys::CHANGES_TRIE_CONFIG,
+					&changes_trie_config.encode(),
+				);
 			}
 		});
 	}
@@ -560,6 +553,11 @@ pub fn ensure_none<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), Error>
 }
 
 impl<T: Trait> Module<T> {
+	/// Deposits an event into this block's event record.
+	pub fn deposit_event(event: impl Into<T::Event>) {
+		Self::deposit_event_indexed(&[], event.into());
+	}
+
 	/// Deposits an event into this block's event record adding this event
 	/// to the corresponding topic indexes.
 	///
@@ -718,9 +716,9 @@ impl<T: Trait> Module<T> {
 	#[cfg(any(feature = "std", test))]
 	pub fn externalities() -> TestExternalities<Blake2Hasher> {
 		TestExternalities::new((map![
-			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),
-			twox_128(<Number<T>>::key()).to_vec() => T::BlockNumber::one().encode(),
-			twox_128(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode()
+			<BlockHash<T>>::hashed_key_for(T::BlockNumber::zero()) => [69u8; 32].encode(),
+			<Number<T>>::hashed_key().to_vec() => T::BlockNumber::one().encode(),
+			<ParentHash<T>>::hashed_key().to_vec() => [69u8; 32].encode()
 		], map![]))
 	}
 
@@ -1049,7 +1047,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 	}
 }
 
-/// Nonce check and increment to give replay protection for transactions.
+/// Check for transaction mortality.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckEra<T: Trait + Send + Sync>((Era, rstd::marker::PhantomData<T>));
 
@@ -1073,6 +1071,21 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 	type Call = T::Call;
 	type AdditionalSigned = T::Hash;
 	type Pre = ();
+
+	fn validate(
+		&self,
+		_who: &Self::AccountId,
+		_call: &Self::Call,
+		_info: DispatchInfo,
+		_len: usize,
+	) -> TransactionValidity {
+		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
+		let valid_till = (self.0).0.death(current_u64);
+		ValidTransaction {
+			longevity: valid_till.saturating_sub(current_u64),
+			..Default::default()
+		}.into()
+	}
 
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
 		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
@@ -1520,6 +1533,25 @@ mod tests {
 			System::set_block_number(13);
 			<BlockHash<Test>>::insert(12, H256::repeat_byte(1));
 			assert!(CheckEra::<Test>::from(Era::mortal(4, 12)).additional_signed().is_ok());
+		})
+	}
+
+	#[test]
+	fn signed_ext_check_era_should_change_longevity() {
+		with_externalities(&mut new_test_ext(), || {
+			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal };
+			let len = 0_usize;
+			let ext = (
+				CheckWeight::<Test>(PhantomData),
+				CheckEra::<Test>::from(Era::mortal(16, 256)),
+			);
+			System::set_block_number(17);
+			<BlockHash<Test>>::insert(16, H256::repeat_byte(1));
+
+			assert_eq!(
+				ext.validate(&1, CALL, normal, len).unwrap().longevity,
+				15,
+			);
 		})
 	}
 }

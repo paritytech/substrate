@@ -26,8 +26,8 @@ use sr_primitives::{
 };
 use codec::{Encode, Decode, Input, Output, Error};
 use srml_support::{
-	decl_module, decl_storage, decl_event, ensure, AppendableStorageMap, StorageValue, StorageMap,
-	Parameter, EnumerableStorageMap,
+	decl_module, decl_storage, decl_event, ensure, StorageValue, StorageMap, StorageLinkedMap,
+	Parameter, Dispatchable,
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
 		OnFreeBalanceZero
@@ -356,7 +356,7 @@ decl_module! {
 		/// Period in blocks where an external proposal may not be re-submitted after being vetoed.
 		const CooloffPeriod: T::BlockNumber = T::CooloffPeriod::get();
 
-		fn deposit_event<T>() = default;
+		fn deposit_event() = default;
 
 		/// Propose a sensitive action to be taken.
 		///

@@ -14,12 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Operation on unhashed runtime storage
+//! Operation on unhashed runtime storage.
 
 use crate::rstd::borrow::Borrow;
 use super::{Codec, Encode, Decode, KeyedVec, Vec};
-
-pub mod generator;
 
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Decode + Sized>(key: &[u8]) -> Option<T> {

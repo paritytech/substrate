@@ -57,9 +57,12 @@ use transaction_pool::txpool::{self, ChainApi, Pool as TransactionPool};
 /// The order in which the `with_*` methods are called doesn't matter, as the correct binding of
 /// generics is done when you call `build`.
 ///
-pub struct ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc> {
+pub struct ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
+	TNetP, TExPool, TRpc, Backend>
+{
 	config: Configuration<TCfg, TGen>,
 	client: Arc<TCl>,
+	backend: Arc<Backend>,
 	keystore: Arc<RwLock<Keystore>>,
 	fetcher: Option<TFchr>,
 	select_chain: Option<TSc>,
@@ -72,7 +75,7 @@ pub struct ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFpr
 	marker: PhantomData<(TBl, TRtApi)>,
 }
 
-impl<TCfg, TGen> ServiceBuilder<(), (), TCfg, TGen, (), (), (), (), (), (), (), (), ()>
+impl<TCfg, TGen> ServiceBuilder<(), (), TCfg, TGen, (), (), (), (), (), (), (), (), (), ()>
 where TGen: Serialize + DeserializeOwned + BuildStorage {
 	/// Start the service builder with a configuration.
 	pub fn new_full<TBl: BlockT<Hash=H256>, TRtApi, TExecDisp: NativeExecutionDispatch>(
@@ -95,7 +98,8 @@ where TGen: Serialize + DeserializeOwned + BuildStorage {
 		(),
 		(),
 		(),
-		()
+		(),
+		client_db::Backend<TBl>,
 	>, Error> {
 		let keystore = Keystore::open(config.keystore_path.clone(), config.keystore_password.clone())?;
 
@@ -110,17 +114,20 @@ where TGen: Serialize + DeserializeOwned + BuildStorage {
 
 		let executor = NativeExecutor::<TExecDisp>::new(config.default_heap_pages);
 
-		let client = Arc::new(client_db::new_client(
+		let (client, backend) = client_db::new_client(
 			db_settings,
 			executor,
 			&config.chain_spec,
 			config.execution_strategies.clone(),
 			Some(keystore.clone()),
-		)?);
+		)?;
+
+		let client = Arc::new(client);
 
 		Ok(ServiceBuilder {
 			config,
 			client,
+			backend,
 			keystore,
 			fetcher: None,
 			select_chain: None,
@@ -177,7 +184,8 @@ where TGen: Serialize + DeserializeOwned + BuildStorage {
 		(),
 		(),
 		(),
-		()
+		(),
+		client::light::backend::Backend<client_db::light::LightStorage<TBl>, network::OnDemand<TBl>, Blake2Hasher>,
 	>, Error> {
 		let keystore = Keystore::open(config.keystore_path.clone(), config.keystore_password.clone())?;
 
@@ -196,12 +204,13 @@ where TGen: Serialize + DeserializeOwned + BuildStorage {
 		let light_blockchain = client::light::new_light_blockchain(db_storage);
 		let fetch_checker = Arc::new(client::light::new_fetch_checker(light_blockchain.clone(), executor.clone()));
 		let fetcher = Arc::new(network::OnDemand::new(fetch_checker));
-		let client_backend = client::light::new_light_backend(light_blockchain, fetcher.clone());
-		let client = client::light::new_light(client_backend, fetcher.clone(), &config.chain_spec, executor)?;
+		let backend = client::light::new_light_backend(light_blockchain, fetcher.clone());
+		let client = client::light::new_light(backend.clone(), fetcher.clone(), &config.chain_spec, executor)?;
 
 		Ok(ServiceBuilder {
 			config,
 			client: Arc::new(client),
+			backend,
 			keystore,
 			fetcher: Some(fetcher),
 			select_chain: None,
@@ -216,12 +225,17 @@ where TGen: Serialize + DeserializeOwned + BuildStorage {
 	}
 }
 
-impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc>
-	ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc> {
+impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, Backend>
+	ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, Backend> {
 
 	/// Returns a reference to the client that was stored in this builder.
 	pub fn client(&self) -> &Arc<TCl> {
 		&self.client
+	}
+
+	/// Returns a reference to the backend that was used in this builder.
+	pub fn backend(&self) -> &Arc<Backend> {
+		&self.backend
 	}
 
 	/// Returns a reference to the select-chain that was stored in this builder.
@@ -231,15 +245,16 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 
 	/// Defines which head-of-chain strategy to use.
 	pub fn with_opt_select_chain<USc>(
-		mut self,
-		select_chain_builder: impl FnOnce(&mut Configuration<TCfg, TGen>, Arc<TCl>) -> Result<Option<USc>, Error>
+		self,
+		select_chain_builder: impl FnOnce(&Configuration<TCfg, TGen>, &Arc<Backend>) -> Result<Option<USc>, Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, USc, TImpQu, TFprb, TFpp,
-		TNetP, TExPool, TRpc>, Error> {
-		let select_chain = select_chain_builder(&mut self.config, self.client.clone())?;
+		TNetP, TExPool, TRpc, Backend>, Error> {
+		let select_chain = select_chain_builder(&self.config, &self.backend)?;
 
 		Ok(ServiceBuilder {
 			config: self.config,
 			client: self.client,
+			backend: self.backend,
 			keystore: self.keystore,
 			fetcher: self.fetcher,
 			select_chain,
@@ -256,22 +271,22 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 	/// Defines which head-of-chain strategy to use.
 	pub fn with_select_chain<USc>(
 		self,
-		builder: impl FnOnce(&mut Configuration<TCfg, TGen>, Arc<TCl>) -> Result<USc, Error>
+		builder: impl FnOnce(&Configuration<TCfg, TGen>, &Arc<Backend>) -> Result<USc, Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, USc, TImpQu, TFprb, TFpp,
-		TNetP, TExPool, TRpc>, Error> {
-		self.with_opt_select_chain(|cfg, cl| builder(cfg, cl).map(Option::Some))
+		TNetP, TExPool, TRpc, Backend>, Error> {
+		self.with_opt_select_chain(|cfg, b| builder(cfg, b).map(Option::Some))
 	}
 
 	/// Defines which import queue to use.
 	pub fn with_import_queue<UImpQu>(
-		mut self,
-		builder: impl FnOnce(&mut Configuration<TCfg, TGen>, Arc<TCl>, Option<TSc>, Arc<TExPool>)
+		self,
+		builder: impl FnOnce(&Configuration<TCfg, TGen>, Arc<TCl>, Option<TSc>, Arc<TExPool>)
 			-> Result<UImpQu, Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, UImpQu, TFprb, TFpp,
-			TNetP, TExPool, TRpc>, Error>
+			TNetP, TExPool, TRpc, Backend>, Error>
 	where TSc: Clone {
 		let import_queue = builder(
-			&mut self.config,
+			&self.config,
 			self.client.clone(),
 			self.select_chain.clone(),
 			self.transaction_pool.clone()
@@ -280,6 +295,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 		Ok(ServiceBuilder {
 			config: self.config,
 			client: self.client,
+			backend: self.backend,
 			keystore: self.keystore,
 			fetcher: self.fetcher,
 			select_chain: self.select_chain,
@@ -298,12 +314,13 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 		self,
 		network_protocol_builder: impl FnOnce(&Configuration<TCfg, TGen>) -> Result<UNetP, Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
-		UNetP, TExPool, TRpc>, Error> {
+		UNetP, TExPool, TRpc, Backend>, Error> {
 		let network_protocol = network_protocol_builder(&self.config)?;
 
 		Ok(ServiceBuilder {
 			config: self.config,
 			client: self.client,
+			backend: self.backend,
 			keystore: self.keystore,
 			fetcher: self.fetcher,
 			select_chain: self.select_chain,
@@ -320,7 +337,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 	/// Defines which strategy to use for providing finality proofs.
 	pub fn with_opt_finality_proof_provider(
 		self,
-		builder: impl FnOnce(Arc<TCl>) -> Result<Option<Arc<FinalityProofProvider<TBl>>>, Error>
+		builder: impl FnOnce(Arc<TCl>, Arc<Backend>) -> Result<Option<Arc<dyn FinalityProofProvider<TBl>>>, Error>
 	) -> Result<ServiceBuilder<
 		TBl,
 		TRtApi,
@@ -331,16 +348,18 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 		TSc,
 		TImpQu,
 		TFprb,
-		Arc<FinalityProofProvider<TBl>>,
+		Arc<dyn FinalityProofProvider<TBl>>,
 		TNetP,
 		TExPool,
-		TRpc
+		TRpc,
+		Backend,
 	>, Error> {
-		let finality_proof_provider = builder(self.client.clone())?;
+		let finality_proof_provider = builder(self.client.clone(), self.backend.clone())?;
 
 		Ok(ServiceBuilder {
 			config: self.config,
 			client: self.client,
+			backend: self.backend,
 			keystore: self.keystore,
 			fetcher: self.fetcher,
 			select_chain: self.select_chain,
@@ -357,7 +376,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 	/// Defines which strategy to use for providing finality proofs.
 	pub fn with_finality_proof_provider(
 		self,
-		build: impl FnOnce(Arc<TCl>) -> Result<Arc<FinalityProofProvider<TBl>>, Error>
+		build: impl FnOnce(Arc<TCl>, Arc<Backend>) -> Result<Arc<dyn FinalityProofProvider<TBl>>, Error>
 	) -> Result<ServiceBuilder<
 		TBl,
 		TRtApi,
@@ -368,25 +387,27 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 		TSc,
 		TImpQu,
 		TFprb,
-		Arc<FinalityProofProvider<TBl>>,
+		Arc<dyn FinalityProofProvider<TBl>>,
 		TNetP,
 		TExPool,
-		TRpc
+		TRpc,
+		Backend,
 	>, Error> {
-		self.with_opt_finality_proof_provider(|client| build(client).map(Option::Some))
+		self.with_opt_finality_proof_provider(|client, backend| build(client, backend).map(Option::Some))
 	}
 
 	/// Defines which import queue to use.
 	pub fn with_import_queue_and_opt_fprb<UImpQu, UFprb>(
-		mut self,
-		builder: impl FnOnce(&mut Configuration<TCfg, TGen>, Arc<TCl>, Option<TSc>, Arc<TExPool>)
+		self,
+		builder: impl FnOnce(&Configuration<TCfg, TGen>, Arc<TCl>, Arc<Backend>, Option<TSc>, Arc<TExPool>)
 			-> Result<(UImpQu, Option<UFprb>), Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, UImpQu, UFprb, TFpp,
-		TNetP, TExPool, TRpc>, Error>
+		TNetP, TExPool, TRpc, Backend>, Error>
 	where TSc: Clone {
 		let (import_queue, fprb) = builder(
-			&mut self.config,
+			&self.config,
 			self.client.clone(),
+			self.backend.clone(),
 			self.select_chain.clone(),
 			self.transaction_pool.clone()
 		)?;
@@ -394,6 +415,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 		Ok(ServiceBuilder {
 			config: self.config,
 			client: self.client,
+			backend: self.backend,
 			keystore: self.keystore,
 			fetcher: self.fetcher,
 			select_chain: self.select_chain,
@@ -410,12 +432,12 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 	/// Defines which import queue to use.
 	pub fn with_import_queue_and_fprb<UImpQu, UFprb>(
 		self,
-		builder: impl FnOnce(&mut Configuration<TCfg, TGen>, Arc<TCl>, Option<TSc>, Arc<TExPool>)
+		builder: impl FnOnce(&Configuration<TCfg, TGen>, Arc<TCl>, Arc<Backend>, Option<TSc>, Arc<TExPool>)
 			-> Result<(UImpQu, UFprb), Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, UImpQu, UFprb, TFpp,
-			TNetP, TExPool, TRpc>, Error>
+			TNetP, TExPool, TRpc, Backend>, Error>
 	where TSc: Clone {
-		self.with_import_queue_and_opt_fprb(|cfg, cl, sc, tx| builder(cfg, cl, sc, tx).map(|(q, f)| (q, Some(f))))
+		self.with_import_queue_and_opt_fprb(|cfg, cl, b, sc, tx| builder(cfg, cl, b, sc, tx).map(|(q, f)| (q, Some(f))))
 	}
 
 	/// Defines which transaction pool to use.
@@ -423,12 +445,13 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 		self,
 		transaction_pool_builder: impl FnOnce(transaction_pool::txpool::Options, Arc<TCl>) -> Result<UExPool, Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
-		TNetP, UExPool, TRpc>, Error> {
+		TNetP, UExPool, TRpc, Backend>, Error> {
 		let transaction_pool = transaction_pool_builder(self.config.transaction_pool.clone(), self.client.clone())?;
 
 		Ok(ServiceBuilder {
 			config: self.config,
 			client: self.client,
+			backend: self.backend,
 			keystore: self.keystore,
 			fetcher: self.fetcher,
 			select_chain: self.select_chain,
@@ -447,12 +470,13 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 		self,
 		rpc_ext_builder: impl FnOnce(Arc<TCl>, Arc<TExPool>) -> URpc
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
-		TNetP, TExPool, URpc>, Error> {
+		TNetP, TExPool, URpc, Backend>, Error> {
 		let rpc_extensions = rpc_ext_builder(self.client.clone(), self.transaction_pool.clone());
 
 		Ok(ServiceBuilder {
 			config: self.config,
 			client: self.client,
+			backend: self.backend,
 			keystore: self.keystore,
 			fetcher: self.fetcher,
 			select_chain: self.select_chain,
@@ -508,9 +532,9 @@ pub trait ServiceBuilderRevert {
 	) -> Result<(), Error>;
 }
 
-impl<TBl, TRtApi, TCfg, TGen, TBackend, TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc>
+impl<TBl, TRtApi, TCfg, TGen, TBackend, TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, Backend>
 	ServiceBuilderImport for ServiceBuilder<TBl, TRtApi, TCfg, TGen, Client<TBackend, TExec, TBl, TRtApi>,
-		TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc>
+		TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, Backend>
 where
 	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 	TBackend: 'static + client::backend::Backend<TBl, Blake2Hasher> + Send,
@@ -532,7 +556,7 @@ where
 
 impl<TBl, TRtApi, TCfg, TGen, TBackend, TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc>
 	ServiceBuilderExport for ServiceBuilder<TBl, TRtApi, TCfg, TGen, Client<TBackend, TExec, TBl, TRtApi>,
-		TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc>
+		TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, TBackend>
 where
 	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 	TBackend: 'static + client::backend::Backend<TBl, Blake2Hasher> + Send,
@@ -555,7 +579,7 @@ where
 
 impl<TBl, TRtApi, TCfg, TGen, TBackend, TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc>
 	ServiceBuilderRevert for ServiceBuilder<TBl, TRtApi, TCfg, TGen, Client<TBackend, TExec, TBl, TRtApi>,
-		TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc>
+		TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, TBackend>
 where
 	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 	TBackend: 'static + client::backend::Backend<TBl, Blake2Hasher> + Send,
@@ -583,10 +607,11 @@ ServiceBuilder<
 	TSc,
 	TImpQu,
 	BoxFinalityProofRequestBuilder<TBl>,
-	Arc<FinalityProofProvider<TBl>>,
+	Arc<dyn FinalityProofProvider<TBl>>,
 	TNetP,
 	TransactionPool<TExPoolApi>,
-	TRpc
+	TRpc,
+	TBackend
 > where
 	Client<TBackend, TExec, TBl, TRtApi>: ProvideRuntimeApi,
 	<Client<TBackend, TExec, TBl, TRtApi> as ProvideRuntimeApi>::Api:
@@ -608,7 +633,6 @@ ServiceBuilder<
 {
 	/// Builds the service.
 	pub fn build(self) -> Result<NewService<
-		Configuration<TCfg, TGen>,
 		TBl,
 		Client<TBackend, TExec, TBl, TRtApi>,
 		TSc,
@@ -629,6 +653,7 @@ ServiceBuilder<
 		let (
 			client,
 			fetcher,
+			backend,
 			keystore,
 			select_chain,
 			import_queue,
@@ -640,6 +665,7 @@ ServiceBuilder<
 		) = (
 			self.client,
 			self.fetcher,
+			self.backend,
 			self.keystore,
 			self.select_chain,
 			self.import_queue,
@@ -657,6 +683,7 @@ ServiceBuilder<
 				Ok((
 					client,
 					fetcher,
+					backend,
 					keystore,
 					select_chain,
 					import_queue,

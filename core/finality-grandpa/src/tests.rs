@@ -112,21 +112,17 @@ impl TestNetFactory for GrandpaTestNet {
 		)
 	{
 		match client {
-			PeersClient::Full(ref client) => {
-				#[allow(deprecated)]
-				let select_chain = LongestChain::new(
-					client.backend().clone()
-				);
+			PeersClient::Full(ref client, ref backend) => {
 				let (import, link) = block_import(
 					client.clone(),
 					Arc::new(self.test_config.clone()),
-					select_chain,
+					LongestChain::new(backend.clone()),
 				).expect("Could not create block import for fresh peer.");
 				let justification_import = Box::new(import.clone());
 				let block_import = Box::new(import);
 				(block_import, Some(justification_import), None, None, Mutex::new(Some(link)))
 			},
-			PeersClient::Light(ref client) => {
+			PeersClient::Light(ref client, ref backend) => {
 				use crate::light_import::tests::light_block_import_without_justifications;
 
 				let authorities_provider = Arc::new(self.test_config.clone());
@@ -134,6 +130,7 @@ impl TestNetFactory for GrandpaTestNet {
 				// => light clients will try to fetch finality proofs
 				let import = light_block_import_without_justifications(
 					client.clone(),
+					backend.clone(),
 					authorities_provider,
 					Arc::new(self.test_config.clone())
 				).expect("Could not create block import for fresh peer.");
@@ -150,11 +147,11 @@ impl TestNetFactory for GrandpaTestNet {
 		client: PeersClient
 	) -> Option<Arc<dyn network::FinalityProofProvider<Block>>> {
 		match client {
-			PeersClient::Full(ref client) => {
+			PeersClient::Full(_, ref backend)  => {
 				let authorities_provider = Arc::new(self.test_config.clone());
-				Some(Arc::new(FinalityProofProvider::new(client.clone(), authorities_provider)))
+				Some(Arc::new(FinalityProofProvider::new(backend.clone(), authorities_provider)))
 			},
-			PeersClient::Light(_) => None,
+			PeersClient::Light(_, _) => None,
 		}
 	}
 
@@ -589,10 +586,7 @@ fn transition_3_voters_twice_1_full_observer() {
 		assert_eq!(full_client.info().chain.best_number, 1,
 					"Peer #{} failed to sync", i);
 
-		let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(
-			#[allow(deprecated)]
-			&**full_client.backend()
-		).unwrap();
+		let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(&*full_client).unwrap();
 
 		assert_eq!(set.current(), (0, make_ids(peers_a).as_slice()));
 		assert_eq!(set.pending_changes().count(), 0);
@@ -685,10 +679,7 @@ fn transition_3_voters_twice_1_full_observer() {
 				.for_each(move |_| Ok(()))
 				.map(move |()| {
 					let full_client = client.as_full().expect("only full clients are used in test");
-					let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(
-						#[allow(deprecated)]
-						&**full_client.backend()
-					).unwrap();
+					let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(&*full_client).unwrap();
 
 					assert_eq!(set.current(), (2, make_ids(peers_c).as_slice()));
 					assert_eq!(set.pending_changes().count(), 0);
@@ -963,10 +954,7 @@ fn force_change_to_new_set() {
 				"Peer #{} failed to sync", i);
 
 		let full_client = peer.client().as_full().expect("only full clients are used in test");
-		let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(
-			#[allow(deprecated)]
-			&**full_client.backend()
-		).unwrap();
+		let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(&*full_client).unwrap();
 
 		assert_eq!(set.current(), (1, voters.as_slice()));
 		assert_eq!(set.pending_changes().count(), 0);
@@ -1099,7 +1087,9 @@ fn voter_persists_its_votes() {
 	assert_eq!(net.peer(0).client().info().chain.best_number, 20,
 			   "Peer #{} failed to sync", 0);
 
-	let client = net.peer(0).client().clone();
+
+	let peer = net.peer(0);
+	let client = peer.client().clone();
 	let net = Arc::new(Mutex::new(net));
 
 	// channel between the voter and the main controller.
@@ -1258,9 +1248,8 @@ fn voter_persists_its_votes() {
 					})
 					.for_each(|_| Ok(()))
 					.and_then(move |_| {
-						#[allow(deprecated)]
 						let block_30_hash =
-							net.lock().peer(0).client().as_full().unwrap().backend().blockchain().hash(30).unwrap().unwrap();
+							net.lock().peer(0).client().as_full().unwrap().hash(30).unwrap().unwrap();
 
 						// we restart alice's voter
 						voter_tx.unbounded_send(()).unwrap();

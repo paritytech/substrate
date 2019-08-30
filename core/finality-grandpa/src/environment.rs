@@ -26,8 +26,9 @@ use tokio_timer::Delay;
 use parking_lot::RwLock;
 
 use client::{
-	backend::Backend, BlockchainEvents, CallExecutor, Client, error::Error as ClientError,
-	utils::is_descendent_of,
+	backend::Backend, apply_aux, BlockchainEvents, CallExecutor,
+	Client, error::Error as ClientError, utils::is_descendent_of,
+	blockchain::HeaderBackend, backend::Finalizer,
 };
 use grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
@@ -498,8 +499,7 @@ pub(crate) fn ancestry<B, Block: BlockT<Hash=H256>, E, RA>(
 	if base == block { return Err(GrandpaError::NotDescendent) }
 
 	let tree_route_res = ::client::blockchain::tree_route(
-		#[allow(deprecated)]
-		client.backend().blockchain(),
+		|id| client.header(&id)?.ok_or(client::error::Error::UnknownBlock(format!("{:?}", id))),
 		BlockId::Hash(block),
 		BlockId::Hash(base),
 	);
@@ -632,8 +632,7 @@ where
 				current_rounds,
 			};
 
-			#[allow(deprecated)]
-			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
+			crate::aux_schema::write_voter_set_state(&*self.inner, &set_state)?;
 
 			Ok(Some(set_state))
 		})?;
@@ -674,8 +673,7 @@ where
 				current_rounds,
 			};
 
-			#[allow(deprecated)]
-			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
+			crate::aux_schema::write_voter_set_state(&*self.inner, &set_state)?;
 
 			Ok(Some(set_state))
 		})?;
@@ -726,8 +724,7 @@ where
 				current_rounds,
 			};
 
-			#[allow(deprecated)]
-			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
+			crate::aux_schema::write_voter_set_state(&*self.inner, &set_state)?;
 
 			Ok(Some(set_state))
 		})?;
@@ -785,8 +782,7 @@ where
 				current_rounds,
 			};
 
-			#[allow(deprecated)]
-			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
+			crate::aux_schema::write_voter_set_state(&*self.inner, &set_state)?;
 
 			Ok(Some(set_state))
 		})?;
@@ -875,24 +871,15 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
 	RA: Send + Sync,
 {
-	use client::blockchain::HeaderBackend;
-
-	#[allow(deprecated)]
-	let blockchain = client.backend().blockchain();
-	let info = blockchain.info();
-	if number <= info.finalized_number && blockchain.hash(number)? == Some(hash) {
-		// We might have a race condition on finality, since we can finalize
-		// through either sync (import justification) or through grandpa gossip.
-		// so let's make sure that this finalization request is no longer stale.
-		// This can also happen after a forced change (triggered by the finality
-		// tracker when finality is stalled), since the voter will be restarted
-		// at the median last finalized block, which can be lower than the local
-		// best finalized block.
-		warn!(target: "afg",
-			"Re-finalized block #{:?} ({:?}) in the canonical chain, current best finalized is #{:?}",
-			hash,
-			number,
-			info.finalized_number,
+	let status = client.info().chain;
+	if number <= status.finalized_number && client.hash(number)? == Some(hash) {
+		// This can happen after a forced change (triggered by the finality tracker when finality is stalled), since
+		// the voter will be restarted at the median last finalized block, which can be lower than the local best
+		// finalized block.
+		warn!(target: "afg", "Re-finalized block #{:?} ({:?}) in the canonical chain, current best finalized is #{:?}",
+				hash,
+				number,
+				status.finalized_number,
 		);
 
 		return Ok(());
@@ -929,7 +916,7 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 
 			let write_result = crate::aux_schema::update_consensus_changes(
 				&*consensus_changes,
-				|insert| client.apply_aux(import_op, insert, &[]),
+				|insert| apply_aux(import_op, insert, &[]),
 			);
 
 			if let Err(e) = write_result {
@@ -1022,7 +1009,7 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 			let write_result = crate::aux_schema::update_authority_set::<Block, _, _>(
 				&authority_set,
 				new_authorities.as_ref(),
-				|insert| client.apply_aux(import_op, insert, &[]),
+				|insert| apply_aux(import_op, insert, &[]),
 			);
 
 			if let Err(e) = write_result {
@@ -1053,15 +1040,12 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 
 /// Using the given base get the block at the given height on this chain. The
 /// target block must be an ancestor of base, therefore `height <= base.height`.
-pub(crate) fn canonical_at_height<B, E, Block: BlockT<Hash=H256>, RA>(
-	client: &Client<B, E, Block, RA>,
+pub(crate) fn canonical_at_height<Block: BlockT<Hash=H256>, C: HeaderBackend<Block>>(
+	provider: C,
 	base: (Block::Hash, NumberFor<Block>),
 	base_is_canonical: bool,
 	height: NumberFor<Block>,
-) -> Result<Option<Block::Hash>, ClientError> where
-	B: Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
-{
+) -> Result<Option<Block::Hash>, ClientError> {
 	if height > base.1 {
 		return Ok(None);
 	}
@@ -1070,17 +1054,17 @@ pub(crate) fn canonical_at_height<B, E, Block: BlockT<Hash=H256>, RA>(
 		if base_is_canonical {
 			return Ok(Some(base.0));
 		} else {
-			return Ok(client.block_hash(height).unwrap_or(None));
+			return Ok(provider.hash(height).unwrap_or(None));
 		}
 	} else if base_is_canonical {
-		return Ok(client.block_hash(height).unwrap_or(None));
+		return Ok(provider.hash(height).unwrap_or(None));
 	}
 
 	let one = NumberFor::<Block>::one();
 
 	// start by getting _canonical_ block with number at parent position and then iterating
 	// backwards by hash.
-	let mut current = match client.header(&BlockId::Number(base.1 - one))? {
+	let mut current = match provider.header(BlockId::Number(base.1 - one))? {
 		Some(header) => header,
 		_ => return Ok(None),
 	};
@@ -1089,7 +1073,7 @@ pub(crate) fn canonical_at_height<B, E, Block: BlockT<Hash=H256>, RA>(
 	let mut steps = base.1 - height - one;
 
 	while steps > NumberFor::<Block>::zero() {
-		current = match client.header(&BlockId::Hash(*current.parent_hash()))? {
+		current = match provider.header(BlockId::Hash(*current.parent_hash()))? {
 			Some(header) => header,
 			_ => return Ok(None),
 		};
