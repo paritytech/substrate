@@ -829,7 +829,7 @@ impl<T: Trait> Module<T> {
 			match r {
 				ApplyOutcome::Success => Event::ExtrinsicSuccess,
 				ApplyOutcome::Fail(err) => Event::ExtrinsicFailed(err.clone()),
-			}.into()
+			}
 		);
 
 		let next_extrinsic_index = Self::extrinsic_index().unwrap_or_default() + 1u32;
@@ -1549,7 +1549,7 @@ mod tests {
 			<BlockHash<Test>>::insert(16, H256::repeat_byte(1));
 
 			assert_eq!(
-				ext.validate(&1, CALL, normal, len).unwrap().longevity,
+				ext.validate(&1, CALL, normal, len).into_valid().unwrap().longevity,
 				15,
 			);
 		})
