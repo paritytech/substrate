@@ -141,16 +141,19 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 				Entry::Vacant(entry) => {
 					// ignore temporary values (values that have null value at the end of operation
 					// AND are not in storage at the beginning of operation
-					let existing = if let Some(sk) = storage_key.as_ref() {
-						changes.child_storage(sk, k)
-					} else {
-						changes.storage(k)
-					};
-					if !existing.map(|v| v.is_some()).unwrap_or_default() {
-						if !backend.exists_storage(k).map_err(|e| format!("{}", e))? {
-							return Ok(map);
+					if let Some(sk) = storage_key.as_ref() {
+						if !changes.child_storage(sk, k).map(|v| v.is_some()).unwrap_or_default() {
+							if !backend.exists_child_storage(sk, k).map_err(|e| format!("{}", e))? {
+								return Ok(map);
+							}
 						}
-					}
+					} else {
+						if !changes.storage(k).map(|v| v.is_some()).unwrap_or_default() {
+							if !backend.exists_storage(k).map_err(|e| format!("{}", e))? {
+								return Ok(map);
+							}
+						}
+					};
 
 					let extrinsics = v.extrinsics.as_ref()
 						.expect("filtered by filter() call above; qed")
