@@ -17,8 +17,8 @@
 //! Blockchain API backend for light nodes.
 
 use std::sync::Arc;
-use rpc::futures::future::{result, Future, Either};
 use futures03::{future::ready, FutureExt, TryFutureExt};
+use rpc::futures::future::{result, Future, Either};
 
 use api::Subscriptions;
 use client::{
@@ -29,10 +29,12 @@ use client::{
 	},
 };
 use primitives::{H256, Blake2Hasher};
-use sr_primitives::generic::{BlockId, SignedBlock};
-use sr_primitives::traits::{Block as BlockT};
+use sr_primitives::{
+	generic::{BlockId, SignedBlock},
+	traits::{Block as BlockT},
+};
 
-use super::{ChainBackend, error::FutureResult, client_err};
+use super::{ChainBackend, client_err, error::FutureResult};
 
 /// Blockchain API backend for light nodes. Reads all the data from local
 /// database, if available, or fetches it from remote node otherwise.

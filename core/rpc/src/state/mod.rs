@@ -23,12 +23,13 @@ mod state_light;
 mod tests;
 
 use std::sync::Arc;
-use log::warn;
-use rpc::Result as RpcResult;
-use rpc::futures::{stream, Future, Sink, Stream};
 use futures03::{future, StreamExt as _, TryStreamExt as _};
-
-use sr_primitives::traits::{Block as BlockT, ProvideRuntimeApi};
+use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
+use log::warn;
+use rpc::{
+	Result as RpcResult,
+	futures::{stream, Future, Sink, Stream},
+};
 
 use api::Subscriptions;
 use client::{
@@ -36,11 +37,15 @@ use client::{
 	runtime_api::Metadata,
 	light::{blockchain::RemoteBlockchain, fetcher::Fetcher},
 };
-use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
-use primitives::{Blake2Hasher, Bytes, H256};
-use primitives::storage::{self, StorageKey, StorageData, StorageChangeSet};
+use primitives::{
+	Blake2Hasher, Bytes, H256,
+	storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet},
+};
 use runtime_version::RuntimeVersion;
-use sr_primitives::generic::BlockId;
+use sr_primitives::{
+	generic::BlockId,
+	traits::{Block as BlockT, ProvideRuntimeApi},
+};
 
 use self::error::{Error, FutureResult};
 
@@ -158,7 +163,7 @@ pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 		subscriber: Subscriber<RuntimeVersion>,
 	) {
 		let stream = match self.client().storage_changes_notification_stream(
-			Some(&[StorageKey(storage::well_known_keys::CODE.to_vec())]),
+			Some(&[StorageKey(well_known_keys::CODE.to_vec())]),
 			None,
 		) {
 			Ok(stream) => stream,
@@ -434,6 +439,6 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA>
 	}
 }
 
-pub(crate) fn client_err(err: client::error::Error) -> Error {
+fn client_err(err: client::error::Error) -> Error {
 	Error::Client(Box::new(err))
 }

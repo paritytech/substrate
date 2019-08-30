@@ -23,9 +23,12 @@ mod chain_light;
 mod tests;
 
 use std::sync::Arc;
-use rpc::futures::{stream, Future, Sink, Stream};
 use futures03::{future, StreamExt as _, TryStreamExt as _};
 use log::warn;
+use rpc::{
+	Result as RpcResult,
+	futures::{stream, Future, Sink, Stream},
+};
 
 use api::Subscriptions;
 use client::{
@@ -34,10 +37,12 @@ use client::{
 };
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use primitives::{H256, Blake2Hasher};
-use sr_primitives::generic::{BlockId, SignedBlock};
-use sr_primitives::traits::{Block as BlockT, Header, NumberFor};
+use sr_primitives::{
+	generic::{BlockId, SignedBlock},
+	traits::{Block as BlockT, Header, NumberFor},
+};
+
 use self::error::{Result, Error, FutureResult};
-use rpc::Result as RpcResult;
 
 pub use api::chain::*;
 

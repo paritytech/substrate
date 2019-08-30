@@ -22,13 +22,20 @@ use std::ops::Range;
 use rpc::futures::future::result;
 
 use api::Subscriptions;
-use client::{self, Client, CallExecutor, runtime_api::Metadata};
-use primitives::{H256, Blake2Hasher, Bytes};
-use primitives::storage::{StorageKey, StorageData, StorageChangeSet};
+use client::{
+	Client, CallExecutor, runtime_api::Metadata,
+	backend::Backend, error::Result as ClientResult,
+};
+use primitives::{
+	H256, Blake2Hasher, Bytes,
+	storage::{StorageKey, StorageData, StorageChangeSet},
+};
 use runtime_version::RuntimeVersion;
-use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{Block as BlockT, Header, NumberFor, ProvideRuntimeApi, SaturatedConversion};
-use state_machine::{self, ExecutionStrategy};
+use state_machine::{NeverOffchainExt, ExecutionStrategy};
+use sr_primitives::{
+	generic::BlockId,
+	traits::{Block as BlockT, Header, NumberFor, ProvideRuntimeApi, SaturatedConversion},
+};
 
 use super::{StateBackend, error::{FutureResult, Error, Result}, client_err};
 
@@ -54,7 +61,7 @@ pub struct FullState<B, E, Block: BlockT, RA> {
 impl<B, E, Block: BlockT, RA> FullState<B, E, Block, RA>
 	where
 		Block: BlockT<Hash=H256> + 'static,
-		B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+		B: Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
 {
 	///
@@ -63,7 +70,7 @@ impl<B, E, Block: BlockT, RA> FullState<B, E, Block, RA>
 	}
 
 	/// Returns given block hash or best block hash if None is passed.
-	fn block_or_best(&self, hash: Option<Block::Hash>) -> client::error::Result<Block::Hash> {
+	fn block_or_best(&self, hash: Option<Block::Hash>) -> ClientResult<Block::Hash> {
 		crate::helpers::unwrap_or_else(|| Ok(self.client.info().chain.best_hash), hash)
 	}
 
@@ -212,7 +219,7 @@ impl<B, E, Block: BlockT, RA> FullState<B, E, Block, RA>
 impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, RA>
 	where
 		Block: BlockT<Hash=H256> + 'static,
-		B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+		B: Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
 		RA: Send + Sync + 'static,
 		Client<B, E, Block, RA>: ProvideRuntimeApi,
@@ -240,7 +247,7 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 						&method,
 						&*call_data,
 						ExecutionStrategy::NativeElseWasm,
-						state_machine::NeverOffchainExt::new(),
+						NeverOffchainExt::new(),
 					)
 					.map(Into::into))
 				.map_err(client_err)))

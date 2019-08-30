@@ -17,26 +17,33 @@
 //! State API backend for light nodes.
 
 use std::sync::Arc;
+use codec::Decode;
 use futures03::{future::{ready, Either}, FutureExt, TryFutureExt};
 use hash_db::Hasher;
-use rpc::futures::future::{result, Future};
-use rpc::Result as RpcResult;
+use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
+use rpc::{
+	Result as RpcResult,
+	futures::future::{result, Future},
+};
 
 use api::Subscriptions;
 use client::{
-	self, Client, CallExecutor,
+	Client, CallExecutor, backend::Backend,
 	error::Error as ClientError,
-	light::{blockchain::RemoteBlockchain,
+	light::{
+		blockchain::{future_header, RemoteBlockchain},
 		fetcher::{Fetcher, RemoteCallRequest, RemoteReadRequest, RemoteReadChildRequest},
 	},
 };
-use codec::Decode;
-use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
-use primitives::{H256, Blake2Hasher, Bytes, OpaqueMetadata};
-use primitives::storage::{StorageKey, StorageData, StorageChangeSet};
+use primitives::{
+	H256, Blake2Hasher, Bytes, OpaqueMetadata,
+	storage::{StorageKey, StorageData, StorageChangeSet},
+};
 use runtime_version::RuntimeVersion;
-use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{Block as BlockT, Header as HeaderT};
+use sr_primitives::{
+	generic::BlockId,
+	traits::{Block as BlockT, Header as HeaderT},
+};
 
 use super::{StateBackend, error::{FutureResult, Error}, client_err};
 
@@ -50,7 +57,7 @@ pub struct LightState<Block: BlockT, F: Fetcher<Block>, B, E, RA> {
 impl<Block: BlockT, F: Fetcher<Block> + 'static, B, E, RA> LightState<Block, F, B, E, RA>
 	where
 		Block: BlockT<Hash=H256>,
-		B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+		B: Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
 		RA: Send + Sync + 'static,
 {
@@ -75,7 +82,7 @@ impl<Block: BlockT, F: Fetcher<Block> + 'static, B, E, RA> LightState<Block, F, 
 		block: Option<Block::Hash>,
 	) -> impl std::future::Future<Output = Result<Block::Header, Error>> {
 		let block = self.block_or_best(block);
-		let maybe_header = client::light::blockchain::future_header(
+		let maybe_header = future_header(
 			&*self.remote_blockchain,
 			&*self.fetcher,
 			BlockId::Hash(block),
@@ -83,7 +90,7 @@ impl<Block: BlockT, F: Fetcher<Block> + 'static, B, E, RA> LightState<Block, F, 
 
 		maybe_header.then(move |result|
 			ready(result.and_then(|maybe_header|
-				maybe_header.ok_or(client::error::Error::UnknownBlock(format!("{}", block)))
+				maybe_header.ok_or(ClientError::UnknownBlock(format!("{}", block)))
 			).map_err(client_err)),
 		)
 	}
@@ -92,7 +99,7 @@ impl<Block: BlockT, F: Fetcher<Block> + 'static, B, E, RA> LightState<Block, F, 
 impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, B, E, RA>
 	where
 		Block: BlockT<Hash=H256>,
-		B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+		B: Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
 		RA: Send + Sync + 'static,
 		F: Fetcher<Block> + 'static

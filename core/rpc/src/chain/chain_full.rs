@@ -20,12 +20,14 @@ use std::sync::Arc;
 use rpc::futures::future::result;
 
 use api::Subscriptions;
-use client::{self, Client};
+use client::{backend::Backend, CallExecutor, Client};
 use primitives::{H256, Blake2Hasher};
-use sr_primitives::generic::{BlockId, SignedBlock};
-use sr_primitives::traits::{Block as BlockT};
+use sr_primitives::{
+	generic::{BlockId, SignedBlock},
+	traits::{Block as BlockT},
+};
 
-use super::{ChainBackend, error::FutureResult, client_err};
+use super::{ChainBackend, client_err, error::FutureResult};
 
 /// Blockchain API backend for full nodes. Reads all the data from local database.
 pub struct FullChain<B, E, Block: BlockT, RA> {
@@ -47,8 +49,8 @@ impl<B, E, Block: BlockT, RA> FullChain<B, E, Block, RA> {
 
 impl<B, E, Block, RA> ChainBackend<B, E, Block, RA> for FullChain<B, E, Block, RA> where
 	Block: BlockT<Hash=H256> + 'static,
-	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-	E: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+	B: Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	RA: Send + Sync + 'static,
 {
 	fn client(&self) -> &Arc<Client<B, E, Block, RA>> {
