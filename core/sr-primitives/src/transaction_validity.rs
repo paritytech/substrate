@@ -45,7 +45,9 @@ pub enum InvalidTransaction {
 	BadProof,
 	/// The transaction birth block is ancient.
 	AncientBirthBlock,
-	/// The transaction **alone** would exhaust the resources of a block.
+	/// The transaction would exhaust the resources of current block.
+	///
+	/// The transaction might be valid, but there is not enough resources left in the current block.
 	ExhaustsResources,
 	/// Any other custom invalid validity that is not covered by this enum.
 	Custom(u8),
