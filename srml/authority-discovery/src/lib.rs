@@ -64,7 +64,7 @@ impl<T: Trait> Module<T> {
 	/// set, otherwise this function returns None. The restriction might be
 	/// softened in the future in case a consumer needs to learn own authority
 	/// identifier.
-	pub fn authority_id() -> Option<im_online::AuthorityId> {
+	fn authority_id() -> Option<im_online::AuthorityId> {
 		let authorities = Keys::get();
 
 		let local_keys = im_online::AuthorityId::all();
@@ -84,20 +84,19 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Sign the given payload with the private key corresponding to the given authority id.
-	pub fn sign(payload: Vec<u8>, authority_id: im_online::AuthorityId) -> Option<Vec<u8>> {
-		authority_id.sign(&payload).map(|s| s.encode())
+	pub fn sign(payload: Vec<u8>) -> Option<(im_online::AuthoritySignature, im_online::AuthorityId)> {
+		let authority_id = Module::<T>::authority_id()?;
+		authority_id.sign(&payload).map(|s| (s, authority_id))
 	}
 
 	/// Verify the given signature for the given payload with the given
 	/// authority identifier.
 	pub fn verify(
 		payload: Vec<u8>,
-		signature: Vec<u8>,
+		signature: im_online::AuthoritySignature,
 		authority_id: im_online::AuthorityId,
 	) -> bool {
-		im_online::AuthoritySignature::decode(&mut &signature[..])
-			.map(|s| authority_id.verify(&payload, &s))
-			.unwrap_or(false)
+		authority_id.verify(&payload, &signature)
 	}
 
 	fn initialize_keys(keys: &[im_online::AuthorityId]) {

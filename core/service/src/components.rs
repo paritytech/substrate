@@ -318,7 +318,7 @@ impl<C: Components> AuthorityDiscovery<Self> for C
 where
 	ComponentClient<C>: ProvideRuntimeApi,
 	<ComponentClient<C> as ProvideRuntimeApi>::Api:
-		AuthorityDiscoveryApi<ComponentBlock<C>, <C::Factory as ServiceFactory>::AuthorityId>,
+		AuthorityDiscoveryApi<ComponentBlock<C>>,
 {
 	fn authority_discovery<H, S>(
 		client: Arc<ComponentClient<C>>,
@@ -392,16 +392,6 @@ pub trait ServiceFactory: 'static + Sized {
 	type LightImportQueue: ImportQueue<Self::Block> + 'static;
 	/// The Fork Choice Strategy for the chain.
 	type SelectChain: SelectChain<Self::Block> + 'static;
-	/// Authority identifier used for authority-discovery module.
-	// TODO: Are all of these trait bounds necessary?
-	type AuthorityId: codec::Codec
-		+ std::clone::Clone
-		+ std::cmp::Eq
-		+ std::convert::AsRef<[u8]>
-		+ std::fmt::Debug
-		+ std::hash::Hash
-		+ std::marker::Send
-		+ std::string::ToString;
 
 	//TODO: replace these with a constructor trait. that TransactionPool implements. (#1242)
 	/// Extrinsic pool constructor for the full client.

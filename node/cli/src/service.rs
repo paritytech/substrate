@@ -288,7 +288,6 @@ construct_service_factory! {
 			);
 			io
 		}},
-		AuthorityId = im_online::AuthorityId,
 	}
 }
 

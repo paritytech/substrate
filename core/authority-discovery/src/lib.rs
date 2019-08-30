@@ -43,7 +43,7 @@
 //!
 //!    4. Adds the retrieved external addresses as priority nodes to the peerset.
 
-use authority_discovery_primitives::AuthorityDiscoveryApi;
+use authority_discovery_primitives::{AuthorityDiscoveryApi, AuthorityId, Signature};
 use client::blockchain::HeaderBackend;
 use error::{Error, Result};
 use futures::{prelude::*, sync::mpsc::Receiver};
@@ -66,19 +66,12 @@ mod schema {
 }
 
 /// A AuthorityDiscovery makes a given authority discoverable as well as discovers other authorities.
-pub struct AuthorityDiscovery<AuthorityId, Client, Network, Block>
+pub struct AuthorityDiscovery<Client, Network, Block>
 where
 	Block: BlockT + 'static,
 	Network: NetworkProvider,
-	AuthorityId: std::string::ToString
-		+ codec::Codec
-		+ std::convert::AsRef<[u8]>
-		+ std::clone::Clone
-		+ std::fmt::Debug
-		+ std::hash::Hash
-		+ std::cmp::Eq,
 	Client: ProvideRuntimeApi + Send + Sync + 'static + HeaderBackend<Block>,
-	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block, AuthorityId>,
+	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block>,
 {
 	client: Arc<Client>,
 
@@ -97,30 +90,22 @@ where
 	/// `purge_old_authorities_from_cache` function is called each time we add a new entry.
 	address_cache: HashMap<AuthorityId, Vec<libp2p::Multiaddr>>,
 
-	phantom_authority_id: PhantomData<AuthorityId>,
-	phantom_block: PhantomData<Block>,
+	phantom: PhantomData<Block>,
 }
 
-impl<AuthorityId, Client, Network, Block> AuthorityDiscovery<AuthorityId, Client, Network, Block>
+impl<Client, Network, Block> AuthorityDiscovery<Client, Network, Block>
 where
 	Block: BlockT + 'static,
 	Network: NetworkProvider,
-	AuthorityId: std::string::ToString
-		+ codec::Codec
-		+ std::convert::AsRef<[u8]>
-		+ std::clone::Clone
-		+ std::fmt::Debug
-		+ std::hash::Hash
-		+ std::cmp::Eq,
 	Client: ProvideRuntimeApi + Send + Sync + 'static + HeaderBackend<Block>,
-	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block, AuthorityId>,
+	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block>,
 {
 	/// Return a new authority discovery.
 	pub fn new(
 		client: Arc<Client>,
 		network: Arc<Network>,
 		dht_event_rx: futures::sync::mpsc::Receiver<DhtEvent>,
-	) -> AuthorityDiscovery<AuthorityId, Client, Network, Block> {
+	) -> AuthorityDiscovery<Client, Network, Block> {
 		// Kademlia's default time-to-live for Dht records is 36h, republishing records every 24h. Given that a node
 		// could restart at any point in time, one can not depend on the republishing process, thus publishing own
 		// external addresses should happen on an interval < 36h.
@@ -141,20 +126,12 @@ where
 			publish_interval,
 			query_interval,
 			address_cache,
-			phantom_authority_id: PhantomData,
-			phantom_block: PhantomData,
+			phantom: PhantomData,
 		}
 	}
 
 	fn publish_own_ext_addresses(&mut self) -> Result<()> {
 		let id = BlockId::hash(self.client.info().best_hash);
-
-		let authority_id = self
-			.client
-			.runtime_api()
-			.authority_id(&id)
-			.map_err(Error::CallingRuntime)?
-			.ok_or(Error::RetrievingAuthorityId)?;
 
 		let addresses = self
 			.network
@@ -176,23 +153,23 @@ where
 		.encode(&mut serialized_addresses)
 		.map_err(Error::Encoding)?;
 
-		let sig = self
+		let (signature, authority_id) = self
 			.client
 			.runtime_api()
-			.sign(&id, serialized_addresses.clone(), authority_id.clone())
+			.sign(&id, serialized_addresses.clone())
 			.map_err(Error::CallingRuntime)?
 			.ok_or(Error::SigningDhtPayload)?;
 
 		let mut signed_addresses = vec![];
 		schema::SignedAuthorityAddresses {
 			addresses: serialized_addresses,
-			signature: sig,
+			signature: signature.0,
 		}
 		.encode(&mut signed_addresses)
 		.map_err(Error::Encoding)?;
 
 		self.network
-			.put_value(hash_authority_id(authority_id.as_ref())?, signed_addresses);
+			.put_value(hash_authority_id(authority_id.0.as_ref())?, signed_addresses);
 
 		Ok(())
 	}
@@ -208,7 +185,7 @@ where
 
 		for authority_id in authorities.iter() {
 			self.network
-				.get_value(&hash_authority_id(authority_id.as_ref())?);
+				.get_value(&hash_authority_id(authority_id.0.as_ref())?);
 		}
 
 		Ok(())
@@ -255,12 +232,12 @@ where
 
 		let authorities = authorities
 			.into_iter()
-			.map(|a| hash_authority_id(a.as_ref()).map(|h| (h, a)))
+			.map(|a| hash_authority_id(a.0.as_ref()).map(|h| (h, a)))
 			.collect::<Result<HashMap<_, _>>>()?;
 
 		for (key, value) in values.iter() {
 			// Check if the event origins from an authority in the current authority set.
-			let authority_pub_key: &AuthorityId = authorities
+			let authority_id: &AuthorityId = authorities
 				.get(key)
 				.ok_or(Error::MatchingHashedAuthorityIdWithAuthorityId)?;
 
@@ -273,8 +250,8 @@ where
 				.verify(
 					&id,
 					signed_addresses.addresses.clone(),
-					signed_addresses.signature.clone(),
-					authority_pub_key.clone(),
+					Signature(signed_addresses.signature.clone()),
+					authority_id.clone(),
 				)
 				.map_err(Error::CallingRuntime)?;
 
@@ -292,7 +269,7 @@ where
 					.map_err(Error::ParsingMultiaddress)?;
 
 			self.address_cache
-				.insert(authority_pub_key.clone(), addresses);
+				.insert(authority_id.clone(), addresses);
 		}
 
 		// Let's update the peerset priority group with the all the addresses we have in our cache.
@@ -318,20 +295,12 @@ where
 	}
 }
 
-impl<AuthorityId, Client, Network, Block> futures::Future
-	for AuthorityDiscovery<AuthorityId, Client, Network, Block>
+impl<Client, Network, Block> futures::Future for AuthorityDiscovery<Client, Network, Block>
 where
 	Block: BlockT + 'static,
 	Network: NetworkProvider,
-	AuthorityId: std::string::ToString
-		+ codec::Codec
-		+ std::convert::AsRef<[u8]>
-		+ std::clone::Clone
-		+ std::fmt::Debug
-		+ std::hash::Hash
-		+ std::cmp::Eq,
 	Client: ProvideRuntimeApi + Send + Sync + 'static + HeaderBackend<Block>,
-	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block, AuthorityId>,
+	<Client as ProvideRuntimeApi>::Api: AuthorityDiscoveryApi<Block>,
 {
 	type Item = ();
 	type Error = ();

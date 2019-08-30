@@ -1045,7 +1045,6 @@ macro_rules! construct_service_factory {
 			FinalityProofProvider = { $( $finality_proof_provider_init:tt )* },
 			RpcExtensions = $rpc_extensions_ty:ty
 				$( { $( $rpc_extensions:tt )* } )?,
-			AuthorityId = $authority_id:ty,
 		}
 	) => {
 		$( #[$attr] )*
@@ -1067,7 +1066,6 @@ macro_rules! construct_service_factory {
 			type LightImportQueue = $light_import_queue;
 			type SelectChain = $select_chain;
 			type RpcExtensions = $rpc_extensions_ty;
-			type AuthorityId = $authority_id;
 
 			fn build_full_transaction_pool(
 				config: $crate::TransactionPoolOptions,

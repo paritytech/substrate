@@ -49,6 +49,8 @@ use primitives::OpaqueMetadata;
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
 use im_online::{AuthorityId as ImOnlineId};
 use finality_tracker::{DEFAULT_REPORT_LATENCY, DEFAULT_WINDOW_SIZE};
+use authority_discovery_primitives::{AuthorityId as EncodedAuthorityId, Signature as EncodedSignature};
+use codec::{Encode, Decode};
 
 #[cfg(any(feature = "std", test))]
 pub use sr_primitives::BuildStorage;
@@ -579,20 +581,32 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl authority_discovery_primitives::AuthorityDiscoveryApi<Block, im_online::AuthorityId> for Runtime {
-		fn authority_id() -> Option<im_online::AuthorityId> {
-			AuthorityDiscovery::authority_id()
-		}
-		fn authorities() -> Vec<im_online::AuthorityId> {
-			AuthorityDiscovery::authorities()
-		}
-
-		fn sign(payload: Vec<u8>, authority_id: im_online::AuthorityId) -> Option<Vec<u8>> {
-			AuthorityDiscovery::sign(payload, authority_id)
+	impl authority_discovery_primitives::AuthorityDiscoveryApi<Block> for Runtime {
+		fn authorities() -> Vec<EncodedAuthorityId> {
+			AuthorityDiscovery::authorities().into_iter()
+				.map(|id| id.encode())
+				.map(EncodedAuthorityId)
+				.collect()
 		}
 
-		fn verify(payload: Vec<u8>, signature: Vec<u8>, public_key: im_online::AuthorityId) -> bool {
-			AuthorityDiscovery::verify(payload, signature, public_key)
+		fn sign(payload: Vec<u8>) -> Option<(EncodedSignature, EncodedAuthorityId)> {
+			  AuthorityDiscovery::sign(payload).map(|(sig, id)| {
+            (EncodedSignature(sig.encode()), EncodedAuthorityId(id.encode()))
+        })
+		}
+
+		fn verify(payload: Vec<u8>, signature: EncodedSignature, authority_id: EncodedAuthorityId) -> bool {
+			let signature = match im_online::AuthoritySignature::decode(&mut &signature.0[..]) {
+				Ok(s) => s,
+				_ => return false,
+			};
+
+			let authority_id = match im_online::AuthorityId::decode(&mut &authority_id.0[..]) {
+				Ok(id) => id,
+				_ => return false,
+			};
+
+			AuthorityDiscovery::verify(payload, signature, authority_id)
 		}
 	}
 
