@@ -416,7 +416,7 @@ type DefaultHandler<R, E> = fn(
 /// Storage backend trust level.
 #[derive(Debug, Clone)]
 pub enum BackendTrustLevel {
-	/// Panics from trusted backend are justified and never caught.
+	/// Panics from trusted backends are considered justified, and never caught.
 	Trusted,
 	/// Panics from untrusted backend are caught and interpreted as runtime error.
 	/// Untrusted backend may be missing some parts of the trie, so panics are not considered
