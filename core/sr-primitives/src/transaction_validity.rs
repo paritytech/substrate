@@ -63,9 +63,9 @@ impl InvalidTransaction {
 	}
 }
 
-impl Into<&'static str> for InvalidTransaction {
-	fn into(self) -> &'static str {
-		match self {
+impl From<InvalidTransaction> for &'static str {
+	fn from(invalid: InvalidTransaction) -> &'static str {
+		match invalid {
 			InvalidTransaction::Call => "Transaction call is not expected",
 			InvalidTransaction::Future => "Transaction will be valid in the future",
 			InvalidTransaction::Stale => "Transaction is outdated",
@@ -92,9 +92,9 @@ pub enum UnknownTransaction {
 	Custom(u8),
 }
 
-impl Into<&'static str> for UnknownTransaction {
-	fn into(self) -> &'static str {
-		match self {
+impl From<UnknownTransaction> for &'static str {
+	fn from(unknown: UnknownTransaction) -> &'static str {
+		match unknown {
 			UnknownTransaction::CannotLookup =>
 				"Could not lookup some information to validate the transaction",
 			UnknownTransaction::NoUnsignedValidator =>
@@ -124,9 +124,9 @@ impl TransactionValidityError {
 	}
 }
 
-impl Into<&'static str> for TransactionValidityError {
-	fn into(self) -> &'static str {
-		match self {
+impl From<TransactionValidityError> for &'static str {
+	fn from(err: TransactionValidityError) -> &'static str {
+		match err {
 			TransactionValidityError::Invalid(invalid) => invalid.into(),
 			TransactionValidityError::Unknown(unknown) => unknown.into(),
 		}
@@ -145,15 +145,15 @@ impl From<UnknownTransaction> for TransactionValidityError {
 	}
 }
 
-impl Into<crate::ApplyError> for InvalidTransaction {
-	fn into(self) -> crate::ApplyError {
-		TransactionValidityError::from(self).into()
+impl From<InvalidTransaction> for crate::ApplyError {
+	fn from(invalid: InvalidTransaction) -> crate::ApplyError {
+		TransactionValidityError::from(invalid).into()
 	}
 }
 
-impl Into<crate::ApplyError> for UnknownTransaction {
-	fn into(self) -> crate::ApplyError {
-		TransactionValidityError::from(self).into()
+impl From<UnknownTransaction> for crate::ApplyError {
+	fn from(unknown: UnknownTransaction) -> crate::ApplyError {
+		TransactionValidityError::from(unknown).into()
 	}
 }
 

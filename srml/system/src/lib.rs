@@ -1213,6 +1213,15 @@ mod tests {
 		type Version = ();
 	}
 
+	impl From<Event> for u16 {
+		fn from(e: Event) -> u16 {
+			match e {
+				Event::ExtrinsicSuccess => 100,
+				Event::ExtrinsicFailed(_) => 101,
+			}
+		}
+	}
+
 	type System = Module<Test>;
 
 	const CALL: &<Test as Trait>::Call = &();
@@ -1269,7 +1278,7 @@ mod tests {
 				vec![
 					EventRecord { phase: Phase::ApplyExtrinsic(0), event: 42u16, topics: vec![] },
 					EventRecord { phase: Phase::ApplyExtrinsic(0), event: 100u16, topics: vec![] },
-					EventRecord { phase: Phase::ApplyExtrinsic(1), event: 257u16, topics: vec![] },
+					EventRecord { phase: Phase::ApplyExtrinsic(1), event: 101u16, topics: vec![] },
 					EventRecord { phase: Phase::Finalization, event: 3u16, topics: vec![] }
 				]
 			);
