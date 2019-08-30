@@ -1213,15 +1213,6 @@ mod tests {
 		type Version = ();
 	}
 
-	impl From<Event> for u16 {
-		fn from(e: Event) -> u16 {
-			match e {
-				Event::ExtrinsicSuccess => 100,
-				Event::ExtrinsicFailed(err) => Encode::using_encoded(&err, |s| (s[0] as u16) | ((s[1] as u16) << 8)),
-			}
-		}
-	}
-
 	type System = Module<Test>;
 
 	const CALL: &<Test as Trait>::Call = &();
