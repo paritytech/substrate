@@ -245,7 +245,7 @@ where TGen: Serialize + DeserializeOwned + BuildStorage {
 			fetcher.clone(),
 			&config.chain_spec,
 			executor,
-		))?;
+		)?);
 		let rpc_builder = LightRpcBuilder {
 			client: client.clone(),
 			remote_blockchain,
@@ -402,7 +402,6 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 		TNetP,
 		TExPool,
 		TRpc,
-		TRpcB,
 		TRpcB,
 		Backend,
 	>, Error> {
