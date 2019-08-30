@@ -419,7 +419,7 @@ pub enum BackendTrustLevel {
 	/// Panics from trusted backend are justified and never caught.
 	Trusted,
 	/// Panics from untrusted backend are caught and interpreted as runtime error.
-	/// Untrusted backend may miss some parts of trie => panics are not considered
+	/// Untrusted backend may be missing some parts of the trie, so panics are not considered
 	/// fatal.
 	Untrusted,
 }
