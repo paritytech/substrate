@@ -133,6 +133,11 @@ pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
 impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
 
 pub trait RpcHandlerConstructor<C: Components>{
+
+	type RpcExtra: Clone;
+
+	fn build_rpc_extra(config: &FactoryFullConfiguration<C::Factory>) -> Self::RpcExtra;
+
 	fn new_rpc_handler(
         client: Arc<ComponentClient<C>>,
         network: Arc<network::SyncProvider<ComponentBlock<C>>>,
@@ -140,14 +145,25 @@ pub trait RpcHandlerConstructor<C: Components>{
         rpc_system_info: SystemInfo,
         task_executor: TaskExecutor,
         transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
+		extra: Self::RpcExtra,
     ) -> rpc::RpcHandler;
 }
 
 pub struct DefaultRpcHandlerConstructor;
 
+#[derive(Clone, Default)]
+pub struct DefaultRpcExtra;
+
 impl<C: Components> RpcHandlerConstructor<C> for DefaultRpcHandlerConstructor where
     ComponentClient<C>: ProvideRuntimeApi,
     <ComponentClient<C> as ProvideRuntimeApi>::Api: runtime_api::Metadata<ComponentBlock<C>>{
+
+	type RpcExtra = DefaultRpcExtra;
+
+	fn build_rpc_extra(config: &FactoryFullConfiguration<C::Factory>) -> Self::RpcExtra{
+		Default::default()
+	}
+
 	fn new_rpc_handler(
         client: Arc<ComponentClient<C>>,
         network: Arc<network::SyncProvider<ComponentBlock<C>>>,
@@ -155,6 +171,7 @@ impl<C: Components> RpcHandlerConstructor<C> for DefaultRpcHandlerConstructor wh
         rpc_system_info: SystemInfo,
         task_executor: TaskExecutor,
         transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
+		extra: Self::RpcExtra,
     ) -> rpc::RpcHandler{
 		let client = client.clone();
 		let subscriptions = rpc::apis::Subscriptions::new(task_executor);
@@ -188,6 +205,7 @@ pub trait StartRPC<C: Components> {
 		rpc_ws: Option<SocketAddr>,
 		task_executor: TaskExecutor,
 		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
+		extra: <<C as Components>::RpcHandlerConstructor as RpcHandlerConstructor<C>>::RpcExtra,
 	) -> error::Result<Self::ServersHandle>;
 }
 
@@ -206,9 +224,11 @@ impl<C: Components> StartRPC<Self> for C where
 		rpc_ws: Option<SocketAddr>,
 		task_executor: TaskExecutor,
 		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
+		extra: <<C as Components>::RpcHandlerConstructor as RpcHandlerConstructor<C>>::RpcExtra,
 	) -> error::Result<Self::ServersHandle> {
 		let handler = || {
-            C::RpcHandlerConstructor::new_rpc_handler(client.clone(), network.clone(), should_have_peers, rpc_system_info.clone(), task_executor.clone(), transaction_pool.clone())
+            C::RpcHandlerConstructor::new_rpc_handler(client.clone(), network.clone(),
+			  should_have_peers, rpc_system_info.clone(), task_executor.clone(), transaction_pool.clone(), extra.clone())
 		};
 
 		Ok((
