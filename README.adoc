@@ -406,11 +406,12 @@ https://github.com/paritytech/substrate/blob/master/core/primitives/src/crypto.r
 user can declare any key type.
 
 ```
-curl -H 'Content-Type: application/json' --data '{ "jsonrpc":"2.0", "method":"author_insertKey", "params":["KEY_TYPE", "SEED"],"id":1 }' localhost:9933
+curl -H 'Content-Type: application/json' --data '{ "jsonrpc":"2.0", "method":"author_insertKey", "params":["KEY_TYPE", "SEED", "PUBLIC"],"id":1 }' localhost:9933
 ```
 
 `KEY_TYPE` - needs to be replaced with the 4-character key type identifier.
 `SEED` - is the seed of the key.
+`PUBLIC` - public key for the given key.
 
 == Documentation
 

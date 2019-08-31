@@ -359,8 +359,7 @@ where
 	let genesis_hash = chain_info.chain.genesis_hash;
 
 	let persistent_data = aux_schema::load_persistent(
-		#[allow(deprecated)]
-		&**client.backend(),
+		&*client,
 		genesis_hash,
 		<NumberFor<Block>>::zero(),
 		|| {
@@ -452,7 +451,7 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 			.register_provider(srml_finality_tracker::InherentDataProvider::new(move || {
 				#[allow(deprecated)]
 				{
-					let info = client.backend().blockchain().info();
+					let info = client.info().chain;
 					telemetry!(CONSENSUS_INFO; "afg.finalized";
 						"finalized_number" => ?info.finalized_number,
 						"finalized_hash" => ?info.finalized_hash,
@@ -693,8 +692,7 @@ where
 						(new.canon_hash, new.canon_number),
 					);
 
-					#[allow(deprecated)]
-					aux_schema::write_voter_set_state(&**self.env.inner.backend(), &set_state)?;
+					aux_schema::write_voter_set_state(&*self.env.inner, &set_state)?;
 					Ok(Some(set_state))
 				})?;
 
@@ -722,8 +720,7 @@ where
 					let completed_rounds = voter_set_state.completed_rounds();
 					let set_state = VoterSetState::Paused { completed_rounds };
 
-					#[allow(deprecated)]
-					aux_schema::write_voter_set_state(&**self.env.inner.backend(), &set_state)?;
+					aux_schema::write_voter_set_state(&*self.env.inner, &set_state)?;
 					Ok(Some(set_state))
 				})?;
 

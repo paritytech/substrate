@@ -86,7 +86,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sr_std::prelude::*;
+use rstd::prelude::*;
 use sr_primitives::traits::StaticLookup;
 use sr_primitives::weights::SimpleDispatchInfo;
 use srml_support::{
@@ -106,7 +106,7 @@ pub trait Trait: system::Trait {
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what it's working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn deposit_event<T>() = default;
+		fn deposit_event() = default;
 
 		/// Authenticates the sudo key and dispatches a function call with `Root` origin.
 		///
