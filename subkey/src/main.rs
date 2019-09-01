@@ -29,7 +29,7 @@ use primitives::{
 use codec::{Encode, Decode};
 use sr_primitives::generic::Era;
 use node_primitives::{Balance, Index, Hash};
-use node_runtime::{Call, UncheckedExtrinsic, BalancesCall, Runtime};
+use node_runtime::{Call, UncheckedExtrinsic, SignedPayload, BalancesCall, Runtime, VERSION};
 
 mod vanity;
 
@@ -182,22 +182,21 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 
 			println!("Using a genesis hash of {}", HexDisplay::from(&genesis_hash.as_ref()));
 
-			let raw_payload = (
+			let raw_payload = SignedPayload::from_raw(
 				function,
 				extra(index, 0),
-				(&genesis_hash, &genesis_hash),
+				(VERSION.spec_version as u32, genesis_hash, genesis_hash, (), (), ()),
 			);
-			let signature = raw_payload.using_encoded(|payload| if payload.len() > 256 {
-				signer.sign(&blake2_256(payload)[..])
-			} else {
+			let signature = raw_payload.using_encoded(|payload| {
 				println!("Signing {}", HexDisplay::from(&payload));
 				signer.sign(payload)
 			});
+			let (function, extra, _) = raw_payload.deconstruct();
 			let extrinsic = UncheckedExtrinsic::new_signed(
-				raw_payload.0,
+				function,
 				signer.public().into(),
 				signature.into(),
-				extra(index, 0),
+				extra,
 			);
 			println!("0x{}", hex::encode(&extrinsic.encode()));
 		}

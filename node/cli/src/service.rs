@@ -298,7 +298,7 @@ mod tests {
 		crypto::Pair as CryptoPair, blake2_256,
 		sr25519::Public as AddressPublic, H256,
 	};
-	use sr_primitives::{generic::{BlockId, Era, Digest}, traits::Block, OpaqueExtrinsic};
+	use sr_primitives::{generic::{BlockId, Era, Digest, SignedPayload}, traits::Block, OpaqueExtrinsic};
 	use timestamp;
 	use finality_tracker;
 	use keyring::AccountKeyring;
@@ -471,15 +471,17 @@ mod tests {
 				let check_weight = system::CheckWeight::new();
 				let take_fees = balances::TakeFees::from(0);
 				let extra = (check_version, check_genesis, check_era, check_nonce, check_weight, take_fees);
-
-				let raw_payload = (function, extra.clone(), version, genesis_hash, genesis_hash);
-				let signature = raw_payload.using_encoded(|payload| if payload.len() > 256 {
-					signer.sign(&blake2_256(payload)[..])
-				} else {
+				let raw_payload = SignedPayload::from_raw(
+					function,
+					extra,
+					(version, genesis_hash, genesis_hash, (), (), ())
+				);
+				let signature = raw_payload.using_encoded(|payload|	{
 					signer.sign(payload)
 				});
+				let (function, extra, _) = raw_payload.deconstruct();
 				let xt = UncheckedExtrinsic::new_signed(
-					raw_payload.0,
+					function,
 					from.into(),
 					signature.into(),
 					extra,
