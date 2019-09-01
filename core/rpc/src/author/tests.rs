@@ -26,7 +26,7 @@ use transaction_pool::{
 use futures::Stream;
 use primitives::{
 	H256, blake2_256, hexdisplay::HexDisplay, traits::BareCryptoStore, testing::KeyStore,
-	ed25519, crypto::key_types,
+	ed25519, crypto::{key_types, Pair},
 };
 use test_client::{
 	self, AccountKeyring, runtime::{Extrinsic, Transfer, SessionKeys}, DefaultTestClientBuilderExt,
