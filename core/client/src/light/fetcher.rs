@@ -570,7 +570,8 @@ pub mod tests {
 		let remote_block_id = BlockId::Number(0);
 		let remote_block_hash = remote_client.block_hash(0).unwrap().unwrap();
 		let mut remote_block_header = remote_client.header(&remote_block_id).unwrap().unwrap();
-		remote_block_header.state_root = remote_client.state_at(&remote_block_id).unwrap().storage_root(::std::iter::empty()).0.into();
+		remote_block_header.state_root = remote_client.state_at(&remote_block_id).unwrap()
+			.storage_root(::std::iter::empty()).0.into();
 
 		// 'fetch' read proof from remote node
 		let heap_pages = remote_client.storage(&remote_block_id, &StorageKey(well_known_keys::HEAP_PAGES.to_vec()))
@@ -590,6 +591,46 @@ pub mod tests {
 		let local_executor = NativeExecutor::<test_client::LocalExecutor>::new(None);
 		let local_checker = LightDataChecker::new(Arc::new(DummyBlockchain::new(DummyStorage::new())), local_executor);
 		(local_checker, remote_block_header, remote_read_proof, heap_pages)
+	}
+
+	fn prepare_for_read_child_proof_check() -> (TestChecker, Header, Vec<Vec<u8>>, Vec<u8>) {
+		use test_client::DefaultTestClientBuilderExt;
+		use test_client::TestClientBuilderExt;
+		// prepare remote client
+		let remote_client = test_client::TestClientBuilder::new()
+			.add_extra_child_storage(b":child_storage:default:child1".to_vec(), b"key1".to_vec(), b"value1".to_vec())
+			.build();
+		let remote_block_id = BlockId::Number(0);
+		let remote_block_hash = remote_client.block_hash(0).unwrap().unwrap();
+		let mut remote_block_header = remote_client.header(&remote_block_id).unwrap().unwrap();
+		remote_block_header.state_root = remote_client.state_at(&remote_block_id).unwrap()
+			.storage_root(::std::iter::empty()).0.into();
+
+		// 'fetch' child read proof from remote node
+		let child_value = remote_client.child_storage(
+			&remote_block_id,
+			&StorageKey(b":child_storage:default:child1".to_vec()),
+			&StorageKey(b"key1".to_vec()),
+		).unwrap().unwrap().0;
+		assert_eq!(b"value1"[..], child_value[..]);
+		let remote_read_proof = remote_client.read_child_proof(
+			&remote_block_id,
+			b":child_storage:default:child1",
+			b"key1",
+		).unwrap();
+
+		// check locally
+		let local_storage = InMemoryBlockchain::<Block>::new();
+		local_storage.insert(
+			remote_block_hash,
+			remote_block_header.clone(),
+			None,
+			None,
+			crate::backend::NewBlockState::Final,
+		).unwrap();
+		let local_executor = NativeExecutor::<test_client::LocalExecutor>::new(None);
+		let local_checker = LightDataChecker::new(Arc::new(DummyBlockchain::new(DummyStorage::new())), local_executor);
+		(local_checker, remote_block_header, remote_read_proof, child_value)
 	}
 
 	fn prepare_for_header_proof_check(insert_cht: bool) -> (TestChecker, Hash, Header, Vec<Vec<u8>>) {
@@ -636,6 +677,26 @@ pub mod tests {
 			key: well_known_keys::HEAP_PAGES.to_vec(),
 			retry_count: None,
 		}, remote_read_proof).unwrap().unwrap()[0], heap_pages as u8);
+	}
+
+	#[test]
+	fn storage_child_read_proof_is_generated_and_checked() {
+		let (
+			local_checker,
+			remote_block_header,
+			remote_read_proof,
+			result,
+		) = prepare_for_read_child_proof_check();
+		assert_eq!((&local_checker as &dyn FetchChecker<Block>).check_read_child_proof(
+			&RemoteReadChildRequest::<Header> {
+				block: remote_block_header.hash(),
+				header: remote_block_header,
+				storage_key: b":child_storage:default:child1".to_vec(),
+				key: b"key1".to_vec(),
+				retry_count: None,
+			},
+			remote_read_proof
+		).unwrap().unwrap(), result);
 	}
 
 	#[test]
