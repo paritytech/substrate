@@ -144,15 +144,15 @@ pub struct RemoteBodyRequest<Header: HeaderT> {
 /// is correct (see FetchedDataChecker) and return already checked data.
 pub trait Fetcher<Block: BlockT>: Send + Sync {
 	/// Remote header future.
-	type RemoteHeaderResult: Future<Output = Result<Block::Header, ClientError>>;
+	type RemoteHeaderResult: Future<Output = Result<Block::Header, ClientError>> + Send + 'static;
 	/// Remote storage read future.
-	type RemoteReadResult: Future<Output = Result<Option<Vec<u8>>, ClientError>>;
+	type RemoteReadResult: Future<Output = Result<Option<Vec<u8>>, ClientError>> + Send + 'static;
 	/// Remote call result future.
-	type RemoteCallResult: Future<Output = Result<Vec<u8>, ClientError>>;
+	type RemoteCallResult: Future<Output = Result<Vec<u8>, ClientError>> + Send + 'static;
 	/// Remote changes result future.
-	type RemoteChangesResult: Future<Output = Result<Vec<(NumberFor<Block>, u32)>, ClientError>>;
+	type RemoteChangesResult: Future<Output = Result<Vec<(NumberFor<Block>, u32)>, ClientError>> + Send + 'static;
 	/// Remote block body result future.
-	type RemoteBodyResult: Future<Output = Result<Vec<Block::Extrinsic>, ClientError>>;
+	type RemoteBodyResult: Future<Output = Result<Vec<Block::Extrinsic>, ClientError>> + Send + 'static;
 
 	/// Fetch remote header.
 	fn remote_header(&self, request: RemoteHeaderRequest<Block::Header>) -> Self::RemoteHeaderResult;
@@ -493,7 +493,7 @@ impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H, Number> for RootsStorage<'a
 
 #[cfg(test)]
 pub mod tests {
-	use futures::future::Ready;
+	use futures03::future::Ready;
 	use parking_lot::Mutex;
 	use codec::Decode;
 	use crate::client::tests::prepare_client_with_key_changes;
@@ -521,7 +521,7 @@ pub mod tests {
 	where
 		E: std::convert::From<&'static str>,
 	{
-		futures::future::ready(Err("Not implemented on test node".into()))
+		futures03::future::ready(Err("Not implemented on test node".into()))
 	}
 
 	impl Fetcher<Block> for OkCallFetcher {
@@ -544,7 +544,7 @@ pub mod tests {
 		}
 
 		fn remote_call(&self, _request: RemoteCallRequest<Header>) -> Self::RemoteCallResult {
-			futures::future::ready(Ok((*self.lock()).clone()))
+			futures03::future::ready(Ok((*self.lock()).clone()))
 		}
 
 		fn remote_changes(&self, _request: RemoteChangesRequest<Header>) -> Self::RemoteChangesResult {

@@ -22,6 +22,9 @@ use jsonrpc_core as rpc;
 /// State RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// State RPC future Result type.
+pub type FutureResult<T> = Box<dyn rpc::futures::Future<Item = T, Error = Error> + Send>;
+
 /// State RPC errors.
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
