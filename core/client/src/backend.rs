@@ -16,8 +16,10 @@
 
 //! Substrate Client data backend
 
+use std::sync::Arc;
 use std::collections::HashMap;
 use crate::error;
+use crate::light::blockchain::RemoteBlockchain;
 use primitives::ChangesTrieConfiguration;
 use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use sr_primitives::traits::{Block as BlockT, NumberFor};
@@ -303,4 +305,7 @@ where
 {
 	/// Returns true if the state for given block is available locally.
 	fn is_local_state_available(&self, block: &BlockId<Block>) -> bool;
+	/// Returns reference to blockchain backend that either resolves blockchain data
+	/// locally, or prepares request to fetch that data from remote node.
+	fn remote_blockchain(&self) -> Arc<dyn RemoteBlockchain<Block>>;
 }

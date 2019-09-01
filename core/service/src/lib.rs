@@ -345,6 +345,7 @@ macro_rules! new_impl {
 			};
 			$start_rpc(
 				client.clone(),
+				//light_components.clone(),
 				system_rpc_tx.clone(),
 				system_info.clone(),
 				Arc::new(SpawnTaskHandle { sender: to_spawn_tx.clone() }),

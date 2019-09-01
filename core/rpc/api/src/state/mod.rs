@@ -25,7 +25,7 @@ use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use primitives::Bytes;
 use primitives::storage::{StorageKey, StorageData, StorageChangeSet};
 use runtime_version::RuntimeVersion;
-use self::error::Result;
+use self::error::FutureResult;
 
 pub use self::gen_client::Client as StateClient;
 
@@ -37,23 +37,23 @@ pub trait StateApi<Hash> {
 
 	/// Call a contract at a block's state.
 	#[rpc(name = "state_call", alias("state_callAt"))]
-	fn call(&self, name: String, bytes: Bytes, hash: Option<Hash>) -> Result<Bytes>;
+	fn call(&self, name: String, bytes: Bytes, hash: Option<Hash>) -> FutureResult<Bytes>;
 
 	/// Returns the keys with prefix, leave empty to get all the keys
 	#[rpc(name = "state_getKeys")]
-	fn storage_keys(&self, prefix: StorageKey, hash: Option<Hash>) -> Result<Vec<StorageKey>>;
+	fn storage_keys(&self, prefix: StorageKey, hash: Option<Hash>) -> FutureResult<Vec<StorageKey>>;
 
 	/// Returns a storage entry at a specific block's state.
 	#[rpc(name = "state_getStorage", alias("state_getStorageAt"))]
-	fn storage(&self, key: StorageKey, hash: Option<Hash>) -> Result<Option<StorageData>>;
+	fn storage(&self, key: StorageKey, hash: Option<Hash>) -> FutureResult<Option<StorageData>>;
 
 	/// Returns the hash of a storage entry at a block's state.
 	#[rpc(name = "state_getStorageHash", alias("state_getStorageHashAt"))]
-	fn storage_hash(&self, key: StorageKey, hash: Option<Hash>) -> Result<Option<Hash>>;
+	fn storage_hash(&self, key: StorageKey, hash: Option<Hash>) -> FutureResult<Option<Hash>>;
 
 	/// Returns the size of a storage entry at a block's state.
 	#[rpc(name = "state_getStorageSize", alias("state_getStorageSizeAt"))]
-	fn storage_size(&self, key: StorageKey, hash: Option<Hash>) -> Result<Option<u64>>;
+	fn storage_size(&self, key: StorageKey, hash: Option<Hash>) -> FutureResult<Option<u64>>;
 
 	/// Returns the keys with prefix from a child storage, leave empty to get all the keys
 	#[rpc(name = "state_getChildKeys")]
@@ -62,7 +62,7 @@ pub trait StateApi<Hash> {
 		child_storage_key: StorageKey,
 		prefix: StorageKey,
 		hash: Option<Hash>
-	) -> Result<Vec<StorageKey>>;
+	) -> FutureResult<Vec<StorageKey>>;
 
 	/// Returns a child storage entry at a specific block's state.
 	#[rpc(name = "state_getChildStorage")]
@@ -71,7 +71,7 @@ pub trait StateApi<Hash> {
 		child_storage_key: StorageKey,
 		key: StorageKey,
 		hash: Option<Hash>
-	) -> Result<Option<StorageData>>;
+	) -> FutureResult<Option<StorageData>>;
 
 	/// Returns the hash of a child storage entry at a block's state.
 	#[rpc(name = "state_getChildStorageHash")]
@@ -80,7 +80,7 @@ pub trait StateApi<Hash> {
 		child_storage_key: StorageKey,
 		key: StorageKey,
 		hash: Option<Hash>
-	) -> Result<Option<Hash>>;
+	) -> FutureResult<Option<Hash>>;
 
 	/// Returns the size of a child storage entry at a block's state.
 	#[rpc(name = "state_getChildStorageSize")]
@@ -89,15 +89,15 @@ pub trait StateApi<Hash> {
 		child_storage_key: StorageKey,
 		key: StorageKey,
 		hash: Option<Hash>
-	) -> Result<Option<u64>>;
+	) -> FutureResult<Option<u64>>;
 
 	/// Returns the runtime metadata as an opaque blob.
 	#[rpc(name = "state_getMetadata")]
-	fn metadata(&self, hash: Option<Hash>) -> Result<Bytes>;
+	fn metadata(&self, hash: Option<Hash>) -> FutureResult<Bytes>;
 
 	/// Get the runtime version.
 	#[rpc(name = "state_getRuntimeVersion", alias("chain_getRuntimeVersion"))]
-	fn runtime_version(&self, hash: Option<Hash>) -> Result<RuntimeVersion>;
+	fn runtime_version(&self, hash: Option<Hash>) -> FutureResult<RuntimeVersion>;
 
 	/// Query historical storage entries (by key) starting from a block given as the second parameter.
 	///
@@ -109,7 +109,7 @@ pub trait StateApi<Hash> {
 		keys: Vec<StorageKey>,
 		block: Hash,
 		hash: Option<Hash>
-	) -> Result<Vec<StorageChangeSet<Hash>>>;
+	) -> FutureResult<Vec<StorageChangeSet<Hash>>>;
 
 	/// New runtime version subscription
 	#[pubsub(
