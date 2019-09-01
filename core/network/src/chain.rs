@@ -51,6 +51,9 @@ pub trait Client<Block: BlockT>: Send + Sync {
 	/// Get storage read execution proof.
 	fn read_proof(&self, block: &Block::Hash, key: &[u8]) -> Result<Vec<Vec<u8>>, Error>;
 
+	/// Get child storage read execution proof.
+	fn read_child_proof(&self, block: &Block::Hash, storage_key: &[u8], key: &[u8]) -> Result<Vec<Vec<u8>>, Error>;
+
 	/// Get method execution proof.
 	fn execution_proof(&self, block: &Block::Hash, method: &str, data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), Error>;
 
@@ -111,6 +114,16 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 
 	fn read_proof(&self, block: &Block::Hash, key: &[u8]) -> Result<Vec<Vec<u8>>, Error> {
 		(self as &SubstrateClient<B, E, Block, RA>).read_proof(&BlockId::Hash(block.clone()), key)
+	}
+
+	fn read_child_proof(
+		&self,
+		block: &Block::Hash,
+		storage_key: &[u8],
+		key: &[u8]
+	) -> Result<Vec<Vec<u8>>, Error> {
+		(self as &SubstrateClient<B, E, Block, RA>)
+			.read_child_proof(&BlockId::Hash(block.clone()), storage_key, key)
 	}
 
 	fn execution_proof(&self, block: &Block::Hash, method: &str, data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), Error> {

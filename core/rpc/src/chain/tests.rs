@@ -27,13 +27,11 @@ fn should_return_header() {
 	let core = ::tokio::runtime::Runtime::new().unwrap();
 	let remote = core.executor();
 
-	let client = Chain {
-		client: Arc::new(test_client::new()),
-		subscriptions: Subscriptions::new(Arc::new(remote)),
-	};
+	let client = Arc::new(test_client::new());
+	let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
 	assert_matches!(
-		client.header(Some(client.client.genesis_hash()).into()),
+		api.header(Some(client.genesis_hash()).into()).wait(),
 		Ok(Some(ref x)) if x == &Header {
 			parent_hash: H256::from_low_u64_be(0),
 			number: 0,
@@ -44,7 +42,7 @@ fn should_return_header() {
 	);
 
 	assert_matches!(
-		client.header(None.into()),
+		api.header(None.into()).wait(),
 		Ok(Some(ref x)) if x == &Header {
 			parent_hash: H256::from_low_u64_be(0),
 			number: 0,
@@ -55,7 +53,7 @@ fn should_return_header() {
 	);
 
 	assert_matches!(
-		client.header(Some(H256::from_low_u64_be(5)).into()),
+		api.header(Some(H256::from_low_u64_be(5)).into()).wait(),
 		Ok(None)
 	);
 }
@@ -65,26 +63,24 @@ fn should_return_a_block() {
 	let core = ::tokio::runtime::Runtime::new().unwrap();
 	let remote = core.executor();
 
-	let api = Chain {
-		client: Arc::new(test_client::new()),
-		subscriptions: Subscriptions::new(Arc::new(remote)),
-	};
+	let client = Arc::new(test_client::new());
+	let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
-	let block = api.client.new_block(Default::default()).unwrap().bake().unwrap();
+	let block = client.new_block(Default::default()).unwrap().bake().unwrap();
 	let block_hash = block.hash();
-	api.client.import(BlockOrigin::Own, block).unwrap();
+	client.import(BlockOrigin::Own, block).unwrap();
 
 	// Genesis block is not justified
 	assert_matches!(
-		api.block(Some(api.client.genesis_hash()).into()),
+		api.block(Some(client.genesis_hash()).into()).wait(),
 		Ok(Some(SignedBlock { justification: None, .. }))
 	);
 
 	assert_matches!(
-		api.block(Some(block_hash).into()),
+		api.block(Some(block_hash).into()).wait(),
 		Ok(Some(ref x)) if x.block == Block {
 			header: Header {
-				parent_hash: api.client.genesis_hash(),
+				parent_hash: client.genesis_hash(),
 				number: 1,
 				state_root: x.block.header.state_root.clone(),
 				extrinsics_root: "03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314".parse().unwrap(),
@@ -95,10 +91,10 @@ fn should_return_a_block() {
 	);
 
 	assert_matches!(
-		api.block(None.into()),
+		api.block(None.into()).wait(),
 		Ok(Some(ref x)) if x.block == Block {
 			header: Header {
-				parent_hash: api.client.genesis_hash(),
+				parent_hash: client.genesis_hash(),
 				number: 1,
 				state_root: x.block.header.state_root.clone(),
 				extrinsics_root: "03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314".parse().unwrap(),
@@ -109,7 +105,7 @@ fn should_return_a_block() {
 	);
 
 	assert_matches!(
-		api.block(Some(H256::from_low_u64_be(5)).into()),
+		api.block(Some(H256::from_low_u64_be(5)).into()).wait(),
 		Ok(None)
 	);
 }
@@ -119,40 +115,38 @@ fn should_return_block_hash() {
 	let core = ::tokio::runtime::Runtime::new().unwrap();
 	let remote = core.executor();
 
-	let client = Chain {
-		client: Arc::new(test_client::new()),
-		subscriptions: Subscriptions::new(Arc::new(remote)),
-	};
+	let client = Arc::new(test_client::new());
+	let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
 	assert_matches!(
-		client.block_hash(None.into()),
-		Ok(Some(ref x)) if x == &client.client.genesis_hash()
+		api.block_hash(None.into()),
+		Ok(Some(ref x)) if x == &client.genesis_hash()
 	);
 
 
 	assert_matches!(
-		client.block_hash(Some(0u64.into()).into()),
-		Ok(Some(ref x)) if x == &client.client.genesis_hash()
+		api.block_hash(Some(0u64.into()).into()),
+		Ok(Some(ref x)) if x == &client.genesis_hash()
 	);
 
 	assert_matches!(
-		client.block_hash(Some(1u64.into()).into()),
+		api.block_hash(Some(1u64.into()).into()),
 		Ok(None)
 	);
 
-	let block = client.client.new_block(Default::default()).unwrap().bake().unwrap();
-	client.client.import(BlockOrigin::Own, block.clone()).unwrap();
+	let block = client.new_block(Default::default()).unwrap().bake().unwrap();
+	client.import(BlockOrigin::Own, block.clone()).unwrap();
 
 	assert_matches!(
-		client.block_hash(Some(0u64.into()).into()),
-		Ok(Some(ref x)) if x == &client.client.genesis_hash()
+		api.block_hash(Some(0u64.into()).into()),
+		Ok(Some(ref x)) if x == &client.genesis_hash()
 	);
 	assert_matches!(
-		client.block_hash(Some(1u64.into()).into()),
+		api.block_hash(Some(1u64.into()).into()),
 		Ok(Some(ref x)) if x == &block.hash()
 	);
 	assert_matches!(
-		client.block_hash(Some(::primitives::U256::from(1u64).into()).into()),
+		api.block_hash(Some(::primitives::U256::from(1u64).into()).into()),
 		Ok(Some(ref x)) if x == &block.hash()
 	);
 }
@@ -163,30 +157,28 @@ fn should_return_finalized_hash() {
 	let core = ::tokio::runtime::Runtime::new().unwrap();
 	let remote = core.executor();
 
-	let client = Chain {
-		client: Arc::new(test_client::new()),
-		subscriptions: Subscriptions::new(Arc::new(remote)),
-	};
+	let client = Arc::new(test_client::new());
+	let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
 	assert_matches!(
-		client.finalized_head(),
-		Ok(ref x) if x == &client.client.genesis_hash()
+		api.finalized_head(),
+		Ok(ref x) if x == &client.genesis_hash()
 	);
 
 	// import new block
-	let builder = client.client.new_block(Default::default()).unwrap();
-	client.client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+	let builder = client.new_block(Default::default()).unwrap();
+	client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 	// no finalization yet
 	assert_matches!(
-		client.finalized_head(),
-		Ok(ref x) if x == &client.client.genesis_hash()
+		api.finalized_head(),
+		Ok(ref x) if x == &client.genesis_hash()
 	);
 
 	// finalize
-	client.client.finalize_block(BlockId::number(1), None).unwrap();
+	client.finalize_block(BlockId::number(1), None).unwrap();
 	assert_matches!(
-		client.finalized_head(),
-		Ok(ref x) if x == &client.client.block_hash(1).unwrap().unwrap()
+		api.finalized_head(),
+		Ok(ref x) if x == &client.block_hash(1).unwrap().unwrap()
 	);
 }
 
@@ -197,18 +189,16 @@ fn should_notify_about_latest_block() {
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
-		let api = Chain {
-			client: Arc::new(test_client::new()),
-			subscriptions: Subscriptions::new(Arc::new(remote)),
-		};
+		let client = Arc::new(test_client::new());
+		let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
 		api.subscribe_new_heads(Default::default(), subscriber);
 
 		// assert id assigned
 		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
 
-		let builder = api.client.new_block(Default::default()).unwrap();
-		api.client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+		let builder = client.new_block(Default::default()).unwrap();
+		client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 	}
 
 	// assert initial head sent.
@@ -228,19 +218,17 @@ fn should_notify_about_finalized_block() {
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
-		let api = Chain {
-			client: Arc::new(test_client::new()),
-			subscriptions: Subscriptions::new(Arc::new(remote)),
-		};
+		let client = Arc::new(test_client::new());
+		let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
 		api.subscribe_finalized_heads(Default::default(), subscriber);
 
 		// assert id assigned
 		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
 
-		let builder = api.client.new_block(Default::default()).unwrap();
-		api.client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
-		api.client.finalize_block(BlockId::number(1), None).unwrap();
+		let builder = client.new_block(Default::default()).unwrap();
+		client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+		client.finalize_block(BlockId::number(1), None).unwrap();
 	}
 
 	// assert initial head sent.

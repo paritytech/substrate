@@ -18,7 +18,10 @@ use crate::{NewService, NetworkStatus, NetworkState, error::{self, Error}, DEFAU
 use crate::{SpawnTaskHandle, start_rpc_servers, build_network_future, TransactionPoolAdapter};
 use crate::TaskExecutor;
 use crate::config::Configuration;
-use client::{BlockchainEvents, Client, runtime_api};
+use client::{
+	BlockchainEvents, Client, runtime_api,
+	backend::RemoteBackend, light::blockchain::RemoteBlockchain,
+};
 use codec::{Decode, Encode, IoReader};
 use consensus_common::import_queue::ImportQueue;
 use futures::{prelude::*, sync::mpsc};
@@ -58,7 +61,7 @@ use transaction_pool::txpool::{self, ChainApi, Pool as TransactionPool};
 /// generics is done when you call `build`.
 ///
 pub struct ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
-	TNetP, TExPool, TRpc, Backend>
+	TNetP, TExPool, TRpc, TRpcB, Backend>
 {
 	config: Configuration<TCfg, TGen>,
 	client: Arc<TCl>,
@@ -72,10 +75,68 @@ pub struct ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFpr
 	network_protocol: TNetP,
 	transaction_pool: Arc<TExPool>,
 	rpc_extensions: TRpc,
+	rpc_builder: TRpcB,
 	marker: PhantomData<(TBl, TRtApi)>,
 }
 
-impl<TCfg, TGen> ServiceBuilder<(), (), TCfg, TGen, (), (), (), (), (), (), (), (), (), ()>
+/// Full client type.
+type TFullClient<TBl, TRtApi, TExecDisp> = Client<
+	TFullBackend<TBl>,
+	TFullCallExecutor<TBl, TExecDisp>,
+	TBl,
+	TRtApi,
+>;
+
+/// Full client backend type.
+type TFullBackend<TBl> = client_db::Backend<TBl>;
+
+/// Full client call executor type.
+type TFullCallExecutor<TBl, TExecDisp> = client::LocalCallExecutor<
+	client_db::Backend<TBl>,
+	NativeExecutor<TExecDisp>,
+>;
+
+/// Light client type.
+type TLightClient<TBl, TRtApi, TExecDisp> = Client<
+	TLightBackend<TBl>,
+	TLightCallExecutor<TBl, TExecDisp>,
+	TBl,
+	TRtApi,
+>;
+
+/// Light client backend type.
+type TLightBackend<TBl> = client::light::backend::Backend<
+	client_db::light::LightStorage<TBl>,
+	network::OnDemand<TBl>,
+	Blake2Hasher,
+>;
+
+/// Light call executor type.
+type TLightCallExecutor<TBl, TExecDisp> = client::light::call_executor::RemoteOrLocalCallExecutor<
+	TBl,
+	client::light::backend::Backend<
+		client_db::light::LightStorage<TBl>,
+		network::OnDemand<TBl>,
+		Blake2Hasher
+	>,
+	client::light::call_executor::RemoteCallExecutor<
+		client::light::blockchain::Blockchain<
+			client_db::light::LightStorage<TBl>,
+			network::OnDemand<TBl>
+		>,
+		network::OnDemand<TBl>,
+	>,
+	client::LocalCallExecutor<
+		client::light::backend::Backend<
+			client_db::light::LightStorage<TBl>,
+			network::OnDemand<TBl>,
+			Blake2Hasher
+		>,
+		NativeExecutor<TExecDisp>
+	>,
+>;
+
+impl<TCfg, TGen> ServiceBuilder<(), (), TCfg, TGen, (), (), (), (), (), (), (), (), (), (), ()>
 where TGen: Serialize + DeserializeOwned + BuildStorage {
 	/// Start the service builder with a configuration.
 	pub fn new_full<TBl: BlockT<Hash=H256>, TRtApi, TExecDisp: NativeExecutionDispatch>(
@@ -85,12 +146,7 @@ where TGen: Serialize + DeserializeOwned + BuildStorage {
 		TRtApi,
 		TCfg,
 		TGen,
-		Client<
-			client_db::Backend<TBl>,
-			client::LocalCallExecutor<client_db::Backend<TBl>, NativeExecutor<TExecDisp>>,
-			TBl,
-			TRtApi
-		>,
+		TFullClient<TBl, TRtApi, TExecDisp>,
 		Arc<OnDemand<TBl>>,
 		(),
 		(),
@@ -99,7 +155,8 @@ where TGen: Serialize + DeserializeOwned + BuildStorage {
 		(),
 		(),
 		(),
-		client_db::Backend<TBl>,
+		FullRpcBuilder<TBl, TRtApi, TExecDisp>,
+		TFullBackend<TBl>,
 	>, Error> {
 		let keystore = Keystore::open(config.keystore_path.clone(), config.keystore_password.clone())?;
 
@@ -124,6 +181,8 @@ where TGen: Serialize + DeserializeOwned + BuildStorage {
 
 		let client = Arc::new(client);
 
+		let rpc_builder = FullRpcBuilder { client: client.clone() };
+
 		Ok(ServiceBuilder {
 			config,
 			client,
@@ -137,6 +196,7 @@ where TGen: Serialize + DeserializeOwned + BuildStorage {
 			network_protocol: (),
 			transaction_pool: Arc::new(()),
 			rpc_extensions: Default::default(),
+			rpc_builder,
 			marker: PhantomData,
 		})
 	}
@@ -149,34 +209,7 @@ where TGen: Serialize + DeserializeOwned + BuildStorage {
 		TRtApi,
 		TCfg,
 		TGen,
-		Client<
-			client::light::backend::Backend<client_db::light::LightStorage<TBl>, network::OnDemand<TBl>, Blake2Hasher>,
-			client::light::call_executor::RemoteOrLocalCallExecutor<
-				TBl,
-				client::light::backend::Backend<
-					client_db::light::LightStorage<TBl>,
-					network::OnDemand<TBl>,
-					Blake2Hasher
-				>,
-				client::light::call_executor::RemoteCallExecutor<
-					client::light::blockchain::Blockchain<
-						client_db::light::LightStorage<TBl>,
-						network::OnDemand<TBl>
-					>,
-					network::OnDemand<TBl>,
-				>,
-				client::LocalCallExecutor<
-					client::light::backend::Backend<
-						client_db::light::LightStorage<TBl>,
-						network::OnDemand<TBl>,
-						Blake2Hasher
-					>,
-					NativeExecutor<TExecDisp>
-				>
-			>,
-			TBl,
-			TRtApi
-		>,
+		TLightClient<TBl, TRtApi, TExecDisp>,
 		Arc<OnDemand<TBl>>,
 		(),
 		(),
@@ -185,7 +218,8 @@ where TGen: Serialize + DeserializeOwned + BuildStorage {
 		(),
 		(),
 		(),
-		client::light::backend::Backend<client_db::light::LightStorage<TBl>, network::OnDemand<TBl>, Blake2Hasher>,
+		LightRpcBuilder<TBl, TRtApi, TExecDisp>,
+		TLightBackend<TBl>,
 	>, Error> {
 		let keystore = Keystore::open(config.keystore_path.clone(), config.keystore_password.clone())?;
 
@@ -205,11 +239,22 @@ where TGen: Serialize + DeserializeOwned + BuildStorage {
 		let fetch_checker = Arc::new(client::light::new_fetch_checker(light_blockchain.clone(), executor.clone()));
 		let fetcher = Arc::new(network::OnDemand::new(fetch_checker));
 		let backend = client::light::new_light_backend(light_blockchain, fetcher.clone());
-		let client = client::light::new_light(backend.clone(), fetcher.clone(), &config.chain_spec, executor)?;
+		let remote_blockchain = backend.remote_blockchain();
+		let client = Arc::new(client::light::new_light(
+			backend.clone(),
+			fetcher.clone(),
+			&config.chain_spec,
+			executor,
+		)?);
+		let rpc_builder = LightRpcBuilder {
+			client: client.clone(),
+			remote_blockchain,
+			fetcher: fetcher.clone(),
+		};
 
 		Ok(ServiceBuilder {
 			config,
-			client: Arc::new(client),
+			client,
 			backend,
 			keystore,
 			fetcher: Some(fetcher),
@@ -220,13 +265,15 @@ where TGen: Serialize + DeserializeOwned + BuildStorage {
 			network_protocol: (),
 			transaction_pool: Arc::new(()),
 			rpc_extensions: Default::default(),
+			rpc_builder,
 			marker: PhantomData,
 		})
 	}
 }
 
-impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, Backend>
-	ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, Backend> {
+impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, TRpcB, Backend>
+	ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
+		TNetP, TExPool, TRpc, TRpcB, Backend> {
 
 	/// Returns a reference to the client that was stored in this builder.
 	pub fn client(&self) -> &Arc<TCl> {
@@ -248,7 +295,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 		self,
 		select_chain_builder: impl FnOnce(&Configuration<TCfg, TGen>, &Arc<Backend>) -> Result<Option<USc>, Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, USc, TImpQu, TFprb, TFpp,
-		TNetP, TExPool, TRpc, Backend>, Error> {
+		TNetP, TExPool, TRpc, TRpcB, Backend>, Error> {
 		let select_chain = select_chain_builder(&self.config, &self.backend)?;
 
 		Ok(ServiceBuilder {
@@ -264,6 +311,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			network_protocol: self.network_protocol,
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
+			rpc_builder: self.rpc_builder,
 			marker: self.marker,
 		})
 	}
@@ -273,7 +321,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 		self,
 		builder: impl FnOnce(&Configuration<TCfg, TGen>, &Arc<Backend>) -> Result<USc, Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, USc, TImpQu, TFprb, TFpp,
-		TNetP, TExPool, TRpc, Backend>, Error> {
+		TNetP, TExPool, TRpc, TRpcB, Backend>, Error> {
 		self.with_opt_select_chain(|cfg, b| builder(cfg, b).map(Option::Some))
 	}
 
@@ -283,7 +331,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 		builder: impl FnOnce(&Configuration<TCfg, TGen>, Arc<TCl>, Option<TSc>, Arc<TExPool>)
 			-> Result<UImpQu, Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, UImpQu, TFprb, TFpp,
-			TNetP, TExPool, TRpc, Backend>, Error>
+			TNetP, TExPool, TRpc, TRpcB, Backend>, Error>
 	where TSc: Clone {
 		let import_queue = builder(
 			&self.config,
@@ -305,6 +353,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			network_protocol: self.network_protocol,
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
+			rpc_builder: self.rpc_builder,
 			marker: self.marker,
 		})
 	}
@@ -314,7 +363,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 		self,
 		network_protocol_builder: impl FnOnce(&Configuration<TCfg, TGen>) -> Result<UNetP, Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
-		UNetP, TExPool, TRpc, Backend>, Error> {
+		UNetP, TExPool, TRpc, TRpcB, Backend>, Error> {
 		let network_protocol = network_protocol_builder(&self.config)?;
 
 		Ok(ServiceBuilder {
@@ -330,6 +379,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			network_protocol,
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
+			rpc_builder: self.rpc_builder,
 			marker: self.marker,
 		})
 	}
@@ -352,6 +402,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 		TNetP,
 		TExPool,
 		TRpc,
+		TRpcB,
 		Backend,
 	>, Error> {
 		let finality_proof_provider = builder(self.client.clone(), self.backend.clone())?;
@@ -369,6 +420,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			network_protocol: self.network_protocol,
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
+			rpc_builder: self.rpc_builder,
 			marker: self.marker,
 		})
 	}
@@ -391,6 +443,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 		TNetP,
 		TExPool,
 		TRpc,
+		TRpcB,
 		Backend,
 	>, Error> {
 		self.with_opt_finality_proof_provider(|client, backend| build(client, backend).map(Option::Some))
@@ -402,7 +455,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 		builder: impl FnOnce(&Configuration<TCfg, TGen>, Arc<TCl>, Arc<Backend>, Option<TSc>, Arc<TExPool>)
 			-> Result<(UImpQu, Option<UFprb>), Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, UImpQu, UFprb, TFpp,
-		TNetP, TExPool, TRpc, Backend>, Error>
+		TNetP, TExPool, TRpc, TRpcB, Backend>, Error>
 	where TSc: Clone {
 		let (import_queue, fprb) = builder(
 			&self.config,
@@ -425,6 +478,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			network_protocol: self.network_protocol,
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
+			rpc_builder: self.rpc_builder,
 			marker: self.marker,
 		})
 	}
@@ -435,7 +489,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 		builder: impl FnOnce(&Configuration<TCfg, TGen>, Arc<TCl>, Arc<Backend>, Option<TSc>, Arc<TExPool>)
 			-> Result<(UImpQu, UFprb), Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, UImpQu, UFprb, TFpp,
-			TNetP, TExPool, TRpc, Backend>, Error>
+			TNetP, TExPool, TRpc, TRpcB, Backend>, Error>
 	where TSc: Clone {
 		self.with_import_queue_and_opt_fprb(|cfg, cl, b, sc, tx| builder(cfg, cl, b, sc, tx).map(|(q, f)| (q, Some(f))))
 	}
@@ -445,7 +499,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 		self,
 		transaction_pool_builder: impl FnOnce(transaction_pool::txpool::Options, Arc<TCl>) -> Result<UExPool, Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
-		TNetP, UExPool, TRpc, Backend>, Error> {
+		TNetP, UExPool, TRpc, TRpcB, Backend>, Error> {
 		let transaction_pool = transaction_pool_builder(self.config.transaction_pool.clone(), self.client.clone())?;
 
 		Ok(ServiceBuilder {
@@ -461,6 +515,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			network_protocol: self.network_protocol,
 			transaction_pool: Arc::new(transaction_pool),
 			rpc_extensions: self.rpc_extensions,
+			rpc_builder: self.rpc_builder,
 			marker: self.marker,
 		})
 	}
@@ -470,7 +525,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 		self,
 		rpc_ext_builder: impl FnOnce(Arc<TCl>, Arc<TExPool>) -> URpc
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
-		TNetP, TExPool, URpc, Backend>, Error> {
+		TNetP, TExPool, URpc, TRpcB, Backend>, Error> {
 		let rpc_extensions = rpc_ext_builder(self.client.clone(), self.transaction_pool.clone());
 
 		Ok(ServiceBuilder {
@@ -486,8 +541,87 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			network_protocol: self.network_protocol,
 			transaction_pool: self.transaction_pool,
 			rpc_extensions,
+			rpc_builder: self.rpc_builder,
 			marker: self.marker,
 		})
+	}
+}
+
+/// RPC handlers builder.
+pub trait RpcBuilder<TBl: BlockT, TBackend, TExec, TRtApi> {
+	/// Build chain RPC handler.
+	fn build_chain(&self, subscriptions: rpc::Subscriptions) -> rpc::chain::Chain<TBackend, TExec, TBl, TRtApi>;
+	/// Build state RPC handler.
+	fn build_state(&self, subscriptions: rpc::Subscriptions) -> rpc::state::State<TBackend, TExec, TBl, TRtApi>;
+}
+
+/// RPC handlers builder for full nodes.
+pub struct FullRpcBuilder<TBl: BlockT, TRtApi, TExecDisp> {
+	client: Arc<TFullClient<TBl, TRtApi, TExecDisp>>,
+}
+
+impl<TBl, TRtApi, TExecDisp> RpcBuilder<TBl, TFullBackend<TBl>, TFullCallExecutor<TBl, TExecDisp>, TRtApi>
+	for
+		FullRpcBuilder<TBl, TRtApi, TExecDisp>
+	where
+		TBl: BlockT<Hash=H256>,
+		TRtApi: 'static + Send + Sync,
+		TExecDisp: 'static + NativeExecutionDispatch,
+		TFullClient<TBl, TRtApi, TExecDisp>: ProvideRuntimeApi,
+		<TFullClient<TBl, TRtApi, TExecDisp> as ProvideRuntimeApi>::Api: runtime_api::Metadata<TBl>,
+{
+	fn build_chain(
+		&self,
+		subscriptions: rpc::Subscriptions,
+	) -> rpc::chain::Chain<TFullBackend<TBl>, TFullCallExecutor<TBl, TExecDisp>, TBl, TRtApi> {
+		rpc::chain::new_full(self.client.clone(), subscriptions)
+	}
+
+	fn build_state(
+		&self,
+		subscriptions: rpc::Subscriptions,
+	) -> rpc::state::State<TFullBackend<TBl>, TFullCallExecutor<TBl, TExecDisp>, TBl, TRtApi> {
+		rpc::state::new_full(self.client.clone(), subscriptions)
+	}
+}
+
+/// RPC handlers builder for light nodes.
+pub struct LightRpcBuilder<TBl: BlockT<Hash=H256>, TRtApi, TExecDisp> {
+	client: Arc<TLightClient<TBl, TRtApi, TExecDisp>>,
+	remote_blockchain: Arc<dyn RemoteBlockchain<TBl>>,
+	fetcher: Arc<network::OnDemand<TBl>>,
+}
+
+impl<TBl, TRtApi, TExecDisp> RpcBuilder<TBl, TLightBackend<TBl>, TLightCallExecutor<TBl, TExecDisp>, TRtApi>
+	for
+		LightRpcBuilder<TBl, TRtApi, TExecDisp>
+	where
+		TBl: BlockT<Hash=H256>,
+		TRtApi: 'static + Send + Sync,
+		TExecDisp: 'static + NativeExecutionDispatch,
+{
+	fn build_chain(
+		&self,
+		subscriptions: rpc::Subscriptions,
+	) -> rpc::chain::Chain<TLightBackend<TBl>, TLightCallExecutor<TBl, TExecDisp>, TBl, TRtApi> {
+		rpc::chain::new_light(
+			self.client.clone(),
+			subscriptions,
+			self.remote_blockchain.clone(),
+			self.fetcher.clone(),
+		)
+	}
+
+	fn build_state(
+		&self,
+		subscriptions: rpc::Subscriptions,
+	) -> rpc::state::State<TLightBackend<TBl>, TLightCallExecutor<TBl, TExecDisp>, TBl, TRtApi> {
+		rpc::state::new_light(
+			self.client.clone(),
+			subscriptions,
+			self.remote_blockchain.clone(),
+			self.fetcher.clone(),
+		)
 	}
 }
 
@@ -532,9 +666,9 @@ pub trait ServiceBuilderRevert {
 	) -> Result<(), Error>;
 }
 
-impl<TBl, TRtApi, TCfg, TGen, TBackend, TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, Backend>
+impl<TBl, TRtApi, TCfg, TGen, TBackend, TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, TRpcB, Backend>
 	ServiceBuilderImport for ServiceBuilder<TBl, TRtApi, TCfg, TGen, Client<TBackend, TExec, TBl, TRtApi>,
-		TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, Backend>
+		TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, TRpcB, Backend>
 where
 	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 	TBackend: 'static + client::backend::Backend<TBl, Blake2Hasher> + Send,
@@ -554,9 +688,9 @@ where
 	}
 }
 
-impl<TBl, TRtApi, TCfg, TGen, TBackend, TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc>
+impl<TBl, TRtApi, TCfg, TGen, TBackend, TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, TRpcB>
 	ServiceBuilderExport for ServiceBuilder<TBl, TRtApi, TCfg, TGen, Client<TBackend, TExec, TBl, TRtApi>,
-		TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, TBackend>
+		TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, TRpcB, TBackend>
 where
 	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 	TBackend: 'static + client::backend::Backend<TBl, Blake2Hasher> + Send,
@@ -577,9 +711,9 @@ where
 	}
 }
 
-impl<TBl, TRtApi, TCfg, TGen, TBackend, TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc>
+impl<TBl, TRtApi, TCfg, TGen, TBackend, TExec, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, TRpcB>
 	ServiceBuilderRevert for ServiceBuilder<TBl, TRtApi, TCfg, TGen, Client<TBackend, TExec, TBl, TRtApi>,
-		TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, TBackend>
+		TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, TRpcB, TBackend>
 where
 	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
 	TBackend: 'static + client::backend::Backend<TBl, Blake2Hasher> + Send,
@@ -596,7 +730,7 @@ where
 	}
 }
 
-impl<TBl, TRtApi, TCfg, TGen, TBackend, TExec, TSc, TImpQu, TNetP, TExPoolApi, TRpc>
+impl<TBl, TRtApi, TCfg, TGen, TBackend, TExec, TSc, TImpQu, TNetP, TExPoolApi, TRpc, TRpcB>
 ServiceBuilder<
 	TBl,
 	TRtApi,
@@ -611,7 +745,8 @@ ServiceBuilder<
 	TNetP,
 	TransactionPool<TExPoolApi>,
 	TRpc,
-	TBackend
+	TRpcB,
+	TBackend,
 > where
 	Client<TBackend, TExec, TBl, TRtApi>: ProvideRuntimeApi,
 	<Client<TBackend, TExec, TBl, TRtApi> as ProvideRuntimeApi>::Api:
@@ -630,6 +765,7 @@ ServiceBuilder<
 	TNetP: NetworkSpecialization<TBl>,
 	TExPoolApi: 'static + ChainApi<Block = TBl, Hash = <TBl as BlockT>::Hash>,
 	TRpc: rpc::RpcExtension<rpc::Metadata> + Clone,
+	TRpcB: RpcBuilder<TBl, TBackend, TExec, TRtApi>,
 {
 	/// Builds the service.
 	pub fn build(self) -> Result<NewService<
@@ -661,7 +797,8 @@ ServiceBuilder<
 			finality_proof_provider,
 			network_protocol,
 			transaction_pool,
-			rpc_extensions
+			rpc_extensions,
+			rpc_builder,
 		) = (
 			self.client,
 			self.fetcher,
@@ -673,7 +810,8 @@ ServiceBuilder<
 			self.finality_proof_provider,
 			self.network_protocol,
 			self.transaction_pool,
-			self.rpc_extensions
+			self.rpc_extensions,
+			self.rpc_builder,
 		);
 
 		new_impl!(
@@ -696,12 +834,13 @@ ServiceBuilder<
 			},
 			|h, c, tx| maintain_transaction_pool(h, c, tx),
 			|n, o, p, ns, v| offchain_workers(n, o, p, ns, v),
-			|c, ssb, si, te, tp, ext, ks| start_rpc(c, ssb, si, te, tp, ext, ks),
+			|c, ssb, si, te, tp, ext, ks| start_rpc(&rpc_builder, c, ssb, si, te, tp, ext, ks),
 		)
 	}
 }
 
-pub(crate) fn start_rpc<Api, Backend, Block, Executor, PoolApi>(
+pub(crate) fn start_rpc<Api, Backend, Block, Executor, PoolApi, RpcB>(
+	rpc_builder: &RpcB,
 	client: Arc<Client<Backend, Executor, Block, Api>>,
 	system_send_back: futures03::channel::mpsc::UnboundedSender<rpc::system::Request<Block>>,
 	rpc_system_info: SystemInfo,
@@ -718,11 +857,13 @@ where
 		runtime_api::Metadata<Block> + session::SessionKeys<Block>,
 	Api: Send + Sync + 'static,
 	Executor: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
-	PoolApi: txpool::ChainApi<Hash = Block::Hash, Block = Block> + 'static {
+	PoolApi: txpool::ChainApi<Hash = Block::Hash, Block = Block> + 'static,
+	RpcB: RpcBuilder<Block, Backend, Executor, Api>,
+{
 	use rpc::{chain, state, author, system};
 	let subscriptions = rpc::Subscriptions::new(task_executor.clone());
-	let chain = chain::Chain::new(client.clone(), subscriptions.clone());
-	let state = state::State::new(client.clone(), subscriptions.clone());
+	let chain = rpc_builder.build_chain(subscriptions.clone());
+	let state = rpc_builder.build_state(subscriptions.clone());
 	let author = rpc::author::Author::new(
 		client,
 		transaction_pool,
