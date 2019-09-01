@@ -36,7 +36,7 @@ fn should_return_storage() {
 	const STORAGE_KEY: &[u8] = b":child_storage:default:child";
 	const CHILD_VALUE: &[u8] = b"hello world !";
 
-	let core = tokio::runtime::Runtime::new().unwrap();
+	let mut core = tokio::runtime::Runtime::new().unwrap();
 	let client = TestClientBuilder::new()
 		.add_extra_storage(KEY.to_vec(), VALUE.to_vec())
 		.add_extra_child_storage(STORAGE_KEY.to_vec(), KEY.to_vec(), CHILD_VALUE.to_vec())
@@ -61,8 +61,10 @@ fn should_return_storage() {
 		VALUE.len(),
 	);
 	assert_eq!(
-		client.child_storage(storage_key, key, Some(genesis_hash).into())
-			.map(|x| x.map(|x| x.0.len())).unwrap().unwrap() as usize,
+		core.block_on(
+			client.child_storage(storage_key, key, Some(genesis_hash).into())
+				.map(|x| x.map(|x| x.0.len()))
+		).unwrap().unwrap() as usize,
 		CHILD_VALUE.len(),
 	);
 
