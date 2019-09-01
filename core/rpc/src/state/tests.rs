@@ -30,14 +30,18 @@ use test_client::{
 fn should_return_storage() {
 	const KEY: &[u8] = b":mock";
 	const VALUE: &[u8] = b"hello world";
+	const STORAGE_KEY: &[u8] = b":child_storage:default:child";
+	const CHILD_VALUE: &[u8] = b"hello world !";
 
 	let core = tokio::runtime::Runtime::new().unwrap();
 	let client = TestClientBuilder::new()
 		.add_extra_storage(KEY.to_vec(), VALUE.to_vec())
+		.add_extra_child_storage(STORAGE_KEY.to_vec(), KEY.to_vec(), CHILD_VALUE.to_vec())
 		.build();
 	let genesis_hash = client.genesis_hash();
 	let client = State::new(Arc::new(client), Subscriptions::new(Arc::new(core.executor())));
 	let key = StorageKey(KEY.to_vec());
+	let storage_key = StorageKey(STORAGE_KEY.to_vec());
 
 	assert_eq!(
 		client.storage(key.clone(), Some(genesis_hash).into())
@@ -52,6 +56,12 @@ fn should_return_storage() {
 		client.storage_size(key.clone(), None).unwrap().unwrap() as usize,
 		VALUE.len(),
 	);
+	assert_eq!(
+		client.child_storage(storage_key, key, Some(genesis_hash).into())
+			.map(|x| x.map(|x| x.0.len())).unwrap().unwrap() as usize,
+		CHILD_VALUE.len(),
+	);
+
 }
 
 #[test]

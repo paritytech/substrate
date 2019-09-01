@@ -547,7 +547,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				self.on_finality_proof_request(who, request),
 			GenericMessage::FinalityProofResponse(response) =>
 				return self.on_finality_proof_response(who, response),
-			GenericMessage::RemoteReadChildRequest(_) => {}
+			GenericMessage::RemoteReadChildRequest(request) =>
+				self.on_remote_read_child_request(who, request),
 			GenericMessage::Consensus(msg) => {
 				if self.context_data.peers.get(&who).map_or(false, |peer| peer.info.protocol_version > 2) {
 					self.consensus_gossip.on_incoming(
@@ -1277,6 +1278,36 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				trace!(target: "sync", "Remote read request {} from {} ({} at {}) failed with: {}",
 					request.id,
 					who,
+					request.key.to_hex::<String>(),
+					request.block,
+					error
+				);
+				Default::default()
+			}
+		};
+		self.send_message(
+			who,
+			GenericMessage::RemoteReadResponse(message::RemoteReadResponse {
+				id: request.id,
+				proof,
+			}),
+		);
+	}
+
+	fn on_remote_read_child_request(
+		&mut self,
+		who: PeerId,
+		request: message::RemoteReadChildRequest<B::Hash>,
+	) {
+		trace!(target: "sync", "Remote read child request {} from {} ({} {} at {})",
+			request.id, who, request.storage_key.to_hex::<String>(), request.key.to_hex::<String>(), request.block);
+		let proof = match self.context_data.chain.read_child_proof(&request.block, &request.storage_key, &request.key) {
+			Ok(proof) => proof,
+			Err(error) => {
+				trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",
+					request.id,
+					who,
+					request.storage_key.to_hex::<String>(),
 					request.key.to_hex::<String>(),
 					request.block,
 					error
