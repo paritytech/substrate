@@ -372,7 +372,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		None
 	}
 
-	/// Check if the block is in the canonicalization queue. 
+	/// Check if the block is in the canonicalization queue.
 	pub fn have_block(&self, hash: &BlockHash) -> bool {
 		(self.parents.contains_key(hash) || self.pending_insertions.contains(hash))
 			&& !self.pending_canonicalizations.contains(hash)

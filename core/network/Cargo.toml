@@ -49,7 +49,7 @@ babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../
 [dev-dependencies]
 env_logger = "0.6.2"
 keyring = { package = "substrate-keyring", path = "../../core/keyring" }
-quickcheck = "0.8.5"
+quickcheck = "0.9.0"
 rand = "0.7.0"
 test-client = { package = "substrate-test-runtime-client", path = "../../core/test-runtime/client" }
 test_runtime = { package = "substrate-test-runtime", path = "../../core/test-runtime" }

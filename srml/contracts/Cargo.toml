@@ -6,9 +6,9 @@ edition = "2018"
 
 [dependencies]
 serde = { version = "1.0.99", optional = true, features = ["derive"] }
-pwasm-utils = { version = "0.9.0", default-features = false }
+pwasm-utils = { version = "0.10.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
-parity-wasm = { version = "0.40.0", default-features = false }
+parity-wasm = { version = "0.40.1", default-features = false }
 wasmi-validation = { version = "0.1.0", default-features = false }
 primitives = { package = "substrate-primitives",  path = "../../core/primitives", default-features = false }
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
@@ -22,7 +22,7 @@ timestamp = { package = "srml-timestamp", path = "../timestamp", default-feature
 [dev-dependencies]
 wabt = "0.9.1"
 assert_matches = "1.3.0"
-hex-literal = "0.2.0"
+hex-literal = "0.2.1"
 balances = { package = "srml-balances", path = "../balances" }
 hex = "0.3.2"
 

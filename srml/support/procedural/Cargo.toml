@@ -11,6 +11,6 @@ proc-macro = true
 srml-support-procedural-tools = { path = "./tools" }
 sr-api-macros = { path = "../../../core/sr-api-macros" }
 
-proc-macro2 = "1.0.1"
+proc-macro2 = "1.0.2"
 quote = "1.0.2"
-syn = { version = "1.0.3", features = ["full"] }
+syn = { version = "1.0.5", features = ["full"] }

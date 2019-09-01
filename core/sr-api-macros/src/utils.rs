@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use proc_macro2::{TokenStream, Span};
-use syn::{Result, Ident, FnDecl, parse_quote, Type, Pat, spanned::Spanned, FnArg, Error};
+use syn::{Result, Ident, Signature, parse_quote, Type, Pat, spanned::Spanned, FnArg, Error};
 use quote::quote;
 use std::env;
 use proc_macro_crate::crate_name;
@@ -82,12 +82,12 @@ pub fn return_type_extract_type(rt: &syn::ReturnType) -> Type {
 	}
 }
 
-/// Fold the given `FnDecl` to make it usable on the client side.
+/// Fold the given `Signature` to make it usable on the client side.
 pub fn fold_fn_decl_for_client_side(
-	mut input: FnDecl,
+	mut input: Signature,
 	block_id: &TokenStream,
 	crate_: &TokenStream
-) -> FnDecl {
+) -> Signature {
 	// Add `&self, at:& BlockId` as parameters to each function at the beginning.
 	input.inputs.insert(0, parse_quote!( at: &#block_id ));
 	input.inputs.insert(0, parse_quote!( &self ));
@@ -102,7 +102,7 @@ pub fn fold_fn_decl_for_client_side(
 }
 
 /// Generate an unique pattern based on the given counter, if the given pattern is a `_`.
-pub fn generate_unique_pattern(pat: Pat, counter: &mut u32) -> Pat {
+fn generate_unique_pattern(pat: &Pat, counter: &mut u32) -> Pat {
 	match pat {
 		Pat::Wild(_) => {
 			let generated_name = Ident::new(
@@ -113,21 +113,21 @@ pub fn generate_unique_pattern(pat: Pat, counter: &mut u32) -> Pat {
 
 			parse_quote!( #generated_name )
 		},
-		_ => pat,
+		_ => pat.clone(),
 	}
 }
 
 /// Extracts the name, the type and `&` or ``(if it is a reference or not)
 /// for each parameter in the given function declaration.
-pub fn extract_parameter_names_types_and_borrows(fn_decl: &FnDecl)
+pub fn extract_parameter_names_types_and_borrows(fn_decl: &Signature)
 	-> Result<Vec<(Pat, Type, TokenStream)>>
 {
 	let mut result = Vec::new();
 	let mut generated_pattern_counter = 0;
 	for input in fn_decl.inputs.iter() {
 		match input {
-			FnArg::Captured(arg) => {
-				let (ty, borrow) = match &arg.ty {
+			FnArg::Typed(arg) => {
+				let (ty, borrow) = match &*arg.ty {
 					Type::Reference(t) => {
 						let ty = &t.elem;
 						(parse_quote!( #ty ), quote!( & ))
@@ -136,7 +136,7 @@ pub fn extract_parameter_names_types_and_borrows(fn_decl: &FnDecl)
 				};
 
 				let name =
-					generate_unique_pattern(arg.pat.clone(), &mut generated_pattern_counter);
+					generate_unique_pattern(&*arg.pat, &mut generated_pattern_counter);
 				result.push((name, ty, borrow));
 			},
 			_ => {

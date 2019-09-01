@@ -16,7 +16,7 @@ sr-version = { path = "../../core/sr-version", default-features = false }
 srml-support = { path = "../support", default-features = false }
 
 [dev-dependencies]
-criterion = "0.2.11"
+criterion = "0.3.0"
 
 [features]
 default = ["std"]

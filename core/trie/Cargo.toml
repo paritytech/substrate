@@ -21,11 +21,11 @@ memory-db = { version = "0.15.2", default-features = false }
 primitives = { package = "substrate-primitives",  path = "../primitives", default-features = false }
 
 [dev-dependencies]
-trie-bench = { version = "0.16.2" }
-trie-standardmap = { version = "0.15.2" }
-keccak-hasher = { version = "0.15.2" }
-criterion = "0.2.11"
-hex-literal = "0.2.0"
+trie-bench = "0.16.2"
+trie-standardmap = "0.15.2"
+keccak-hasher = "0.15.2"
+criterion = "0.3.0"
+hex-literal = "0.2.1"
 
 [features]
 default = ["std"]

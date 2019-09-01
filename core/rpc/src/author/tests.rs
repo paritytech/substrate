@@ -147,7 +147,7 @@ fn should_return_pending_extrinsics() {
 	};
 	let ex = uxt(AccountKeyring::Alice, 0);
 	AuthorApi::submit_extrinsic(&p, ex.encode().into()).unwrap();
- 	assert_matches!(
+assert_matches!(
 		p.pending_extrinsics(),
 		Ok(ref expected) if *expected == vec![Bytes(ex.encode())]
 	);
@@ -180,7 +180,7 @@ fn should_remove_extrinsics() {
 		hash::ExtrinsicOrHash::Extrinsic(ex1.encode().into()),
 	]).unwrap();
 
- 	assert_eq!(removed.len(), 3);
+assert_eq!(removed.len(), 3);
 }
 
 #[test]
@@ -200,7 +200,7 @@ fn should_insert_key() {
 	p.insert_key(
 		String::from_utf8(key_types::ED25519.0.to_vec()).expect("Keytype is a valid string"),
 		suri.to_string(),
-		Some(key_pair.public().0.to_vec().into()),
+		key_pair.public().0.to_vec().into(),
 	).expect("Insert key");
 
 	let store_key_pair = keystore.read()

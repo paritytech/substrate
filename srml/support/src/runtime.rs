@@ -299,6 +299,7 @@ macro_rules! __create_decl_macro {
 					)*
 				);
 			};
+			// Parse system module
 			(@inner
 				$runtime:ident;
 				; // there can not be multiple `System`s
@@ -315,6 +316,7 @@ macro_rules! __create_decl_macro {
 					$d( $rest )*
 				);
 			};
+			// Parse instantiable module with generic
 			(@inner
 				$runtime:ident;
 				$d( $system:ident )?;
@@ -334,6 +336,23 @@ macro_rules! __create_decl_macro {
 					$d( $rest )*
 				);
 			};
+			// Parse instantiable module with no generic
+			(@inner
+				$runtime:ident;
+				$d( $system:ident )?;
+				{ $d( $parsed:tt )* };
+				$name:ident : $module:ident:: < $module_instance:ident >:: {
+					$macro_enum_name $d(, $ingore:ident $d( <$ignor:ident> )* )*
+				},
+				$d( $rest:tt )*
+			) => {
+				compile_error!(concat!(
+					"Instantiable module with not generic ", stringify!($macro_enum_name),
+					" cannot be constructed: module `", stringify!($name), "` must have generic ",
+					stringify!($macro_enum_name), "."
+				));
+			};
+			// Parse instantiable module with no generic
 			(@inner
 				$runtime:ident;
 				$d( $system:ident )?;
@@ -353,6 +372,7 @@ macro_rules! __create_decl_macro {
 					$d( $rest )*
 				);
 			};
+			// Ignore keyword
 			(@inner
 				$runtime:ident;
 				$d( $system:ident )?;
@@ -370,6 +390,7 @@ macro_rules! __create_decl_macro {
 					$d( $rest )*
 				);
 			};
+			// Ignore module
 			(@inner
 				$runtime:ident;
 				$d( $system:ident )?;
@@ -384,6 +405,7 @@ macro_rules! __create_decl_macro {
 					$d( $rest )*
 				);
 			};
+			// Expand
 			(@inner
 				$runtime:ident;
 				$system:ident;

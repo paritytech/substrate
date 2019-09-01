@@ -199,7 +199,7 @@ impl<'a, I: AsRef<[u8]>, T: IntoIterator<Item=I>> Request<'a, T> {
 			crate::http_request_add_header(
 				id,
 				header.name(),
-				header.value(),
+				header,
 			).map_err(|_| HttpError::IoError)?
 		}
 
@@ -224,7 +224,7 @@ pub enum Error {
 	/// Deadline has been reached.
 	DeadlineReached,
 	/// Request had timed out.
-	Timeout,
+	IoError,
 	/// Unknown error has been ecountered.
 	Unknown,
 }
@@ -283,8 +283,8 @@ impl PendingRequest {
 			.zip(requests.into_iter())
 			.map(|(status, req)| match status {
 				RequestStatus::DeadlineReached => Err(req),
-				RequestStatus::Timeout => Ok(Err(Error::Timeout)),
-				RequestStatus::Unknown => Ok(Err(Error::Unknown)),
+				RequestStatus::IoError => Ok(Err(Error::IoError)),
+				RequestStatus::Invalid => Ok(Err(Error::Unknown)),
 				RequestStatus::Finished(code) => Ok(Ok(Response::new(req.id, code))),
 			})
 			.collect()

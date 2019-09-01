@@ -62,7 +62,7 @@ fn start_bft<F, C, Block>(
 		}
 		Ok(None) => trace!(target: "bft", "Could not start agreement on top of {}", header.hash()),
 		Err(e) => warn!(target: "bft", "BFT agreement error: {}", e),
- 	}
+}
 }
 
 /// Consensus service. Starts working when created.

@@ -50,6 +50,7 @@ pub use changes_trie::{
 	Storage as ChangesTrieStorage,
 	RootsStorage as ChangesTrieRootsStorage,
 	InMemoryStorage as InMemoryChangesTrieStorage,
+	ConfigurationRange as ChangesTrieConfigurationRange,
 	key_changes, key_changes_proof, key_changes_proof_check,
 	prune as prune_changes_tries,
 	oldest_non_pruned_trie as oldest_non_pruned_changes_trie
@@ -1229,7 +1230,7 @@ mod tests {
 		let remote_backend = trie_backend::tests::test_trie();
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 		let remote_proof = prove_read(remote_backend, b"value2").unwrap().1;
- 		// check proof locally
+	// check proof locally
 		let local_result1 = read_proof_check::<Blake2Hasher>(
 			remote_root,
 			remote_proof.clone(),
@@ -1240,7 +1241,7 @@ mod tests {
 			remote_proof.clone(),
 			&[0xff]
 		).is_ok();
- 		// check that results are correct
+	// check that results are correct
 		assert_eq!(local_result1, Some(vec![24]));
 		assert_eq!(local_result2, false);
 		// on child trie

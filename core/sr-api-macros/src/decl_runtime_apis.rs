@@ -198,10 +198,10 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 
 	// Generate a native call generator for each function of the given trait.
 	for fn_ in fns {
-		let params = extract_parameter_names_types_and_borrows(&fn_.decl)?;
+		let params = extract_parameter_names_types_and_borrows(&fn_)?;
 		let trait_fn_name = &fn_.ident;
 		let fn_name = generate_native_call_generator_fn_name(&fn_.ident);
-		let output = return_type_replace_block_with_node_block(fn_.decl.output.clone());
+		let output = return_type_replace_block_with_node_block(fn_.output.clone());
 		let output_ty = return_type_extract_type(&output);
 		let output = quote!( ::std::result::Result<#output_ty, &'static str> );
 
@@ -217,7 +217,7 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 		});
 		// Same as for the input types, we need to check if we also need to convert the output,
 		// before returning it.
-		let output_conversion = if return_type_is_using_block(&fn_.decl.output) {
+		let output_conversion = if return_type_is_using_block(&fn_.output) {
 			quote!(
 				convert_between_block_types(
 					&res,
@@ -239,17 +239,17 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 		// Replace all `Block` with `NodeBlock`, add `'a` lifetime to references and collect
 		// all the function inputs.
 		let fn_inputs = fn_
-			.decl
+
 			.inputs
 			.iter()
 			.map(|v| fn_arg_replace_block_with_node_block(v.clone()))
 			.map(|v| match v {
-				FnArg::Captured(ref arg) => {
+				FnArg::Typed(ref arg) => {
 					let mut arg = arg.clone();
-					if let Type::Reference(ref mut r) = arg.ty {
+					if let Type::Reference(ref mut r) = *arg.ty {
 						r.lifetime = Some(parse_quote!( 'a ));
 					}
-					FnArg::Captured(arg)
+					FnArg::Typed(arg)
 				},
 				r => r.clone(),
 			});
@@ -310,20 +310,20 @@ fn parse_renamed_attribute(renamed: &Attribute) -> Result<(String, u32)> {
 			} else {
 				let mut itr = list.nested.iter();
 				let old_name = match itr.next() {
-					Some(NestedMeta::Literal(Lit::Str(i))) => {
-						i.value()
+					Some(NestedMeta::Lit(Lit::Str(i))) => {
+						i
 					},
 					_ => return err,
 				};
 
 				let version = match itr.next() {
-					Some(NestedMeta::Literal(Lit::Int(i))) => {
-						i.value() as u32
+					Some(NestedMeta::Lit(Lit::Int(i))) => {
+						i.base10_parse::<u32>()?
 					},
 					_ => return err,
 				};
 
-				Ok((old_name, version))
+				Ok((old_name.value(), version))
 			}
 		},
 		_ => err,
@@ -552,9 +552,9 @@ impl<'a> ToClientSideDecl<'a> {
 	fn fold_trait_item_method(&mut self, method: TraitItemMethod)
 		-> (TraitItemMethod, Option<TraitItemMethod>, TraitItemMethod) {
 		let crate_ = self.crate_;
-		let context_other = quote!( #crate_::runtime_api::ExecutionContext::Other );
+		let context = quote!( #crate_::runtime_api::ExecutionContext::OffchainCall(None) );
 		let fn_impl = self.create_method_runtime_api_impl(method.clone());
-		let fn_decl = self.create_method_decl(method.clone(), context_other);
+		let fn_decl = self.create_method_decl(method.clone(), context);
 		let fn_decl_ctx = self.create_method_decl_with_context(method);
 
 		(fn_decl, fn_impl, fn_decl_ctx)
@@ -565,7 +565,7 @@ impl<'a> ToClientSideDecl<'a> {
 		let context_arg: syn::FnArg = parse_quote!( context: #crate_::runtime_api::ExecutionContext );
 		let mut fn_decl_ctx = self.create_method_decl(method, quote!( context ));
 		fn_decl_ctx.sig.ident = Ident::new(&format!("{}_with_context", &fn_decl_ctx.sig.ident), Span::call_site());
-		fn_decl_ctx.sig.decl.inputs.insert(2, context_arg);
+		fn_decl_ctx.sig.inputs.insert(2, context_arg);
 
 		fn_decl_ctx
 	}
@@ -577,7 +577,7 @@ impl<'a> ToClientSideDecl<'a> {
 			return None;
 		}
 
-		let fn_decl = &method.sig.decl;
+		let fn_decl = &method.sig;
 		let ret_type = return_type_extract_type(&fn_decl.output);
 
 		// Get types and if the value is borrowed from all parameters.
@@ -615,7 +615,7 @@ impl<'a> ToClientSideDecl<'a> {
 	/// api client side. This method will call by default the `method_runtime_api_impl` for doing
 	/// the actual call into the runtime.
 	fn create_method_decl(&mut self, mut method: TraitItemMethod, context: TokenStream) -> TraitItemMethod {
-		let params = match extract_parameter_names_types_and_borrows(&method.sig.decl) {
+		let params = match extract_parameter_names_types_and_borrows(&method.sig) {
 			Ok(res) => res.into_iter().map(|v| v.0).collect::<Vec<_>>(),
 			Err(e) => {
 				self.errors.push(e.to_compile_error());
@@ -623,10 +623,10 @@ impl<'a> ToClientSideDecl<'a> {
 			}
 		};
 		let params2 = params.clone();
-		let ret_type = return_type_extract_type(&method.sig.decl.output);
+		let ret_type = return_type_extract_type(&method.sig.output);
 
-		method.sig.decl = fold_fn_decl_for_client_side(
-			method.sig.decl.clone(),
+		method.sig = fold_fn_decl_for_client_side(
+			method.sig.clone(),
 			&self.block_id,
 			&self.crate_
 		);
@@ -748,9 +748,9 @@ fn parse_runtime_api_version(version: &Attribute) -> Result<u64> {
 			if list.nested.len() > 1 && list.nested.is_empty() {
 				err
 			} else {
-				match list.nested.first().as_ref().map(|v| v.value()) {
-					Some(NestedMeta::Literal(Lit::Int(i))) => {
-						Ok(i.value())
+				match list.nested.first().as_ref() {
+					Some(NestedMeta::Lit(Lit::Int(i))) => {
+						i.base10_parse::<u64>()
 					},
 					_ => err,
 				}
@@ -849,8 +849,8 @@ struct CheckTraitDecl {
 impl<'ast> Visit<'ast> for CheckTraitDecl {
 	fn visit_fn_arg(&mut self, input: &'ast FnArg) {
 		match input {
-			FnArg::Captured(ref arg) => {
-				match arg.pat {
+			FnArg::Typed(ref arg) => {
+				match *arg.pat {
 					Pat::Ident(ref pat) if pat.ident == "at" => {
 						self.errors.push(
 							Error::new(
@@ -863,16 +863,8 @@ impl<'ast> Visit<'ast> for CheckTraitDecl {
 					_ => {}
 				}
 			},
-			FnArg::SelfRef(_) | FnArg::SelfValue(_) => {
+			FnArg::Receiver(_) => {
 				self.errors.push(Error::new(input.span(), "Self values are not supported."))
-			}
-			_ => {
-				self.errors.push(
-					Error::new(
-						input.span(),
-						"Only function arguments in the form `pat: type` are supported."
-					)
-				)
 			}
 		}
 
@@ -897,7 +889,7 @@ impl<'ast> Visit<'ast> for CheckTraitDecl {
 	}
 
 	fn visit_trait_bound(&mut self, input: &'ast TraitBound) {
-		if let Some(last_ident) = input.path.segments.last().map(|v| &v.value().ident) {
+		if let Some(last_ident) = input.path.segments.last().map(|v| &v.ident) {
 			if last_ident == "BlockT" || last_ident == BLOCK_GENERIC_IDENT {
 				self.errors.push(
 					Error::new(

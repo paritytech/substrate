@@ -125,7 +125,7 @@ fn branch_node(has_value: bool, has_children: impl Iterator<Item = bool>) -> [u8
 	result
 }
 
-fn branch_node_buffered<I>(has_value: bool, has_children: I, output: &mut[u8]) 
+fn branch_node_buffered<I>(has_value: bool, has_children: I, output: &mut[u8])
 	where
 		I: Iterator<Item = bool>,
 {

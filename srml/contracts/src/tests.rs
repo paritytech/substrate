@@ -1165,7 +1165,7 @@ fn call_removed_contract() {
 				"contract has been evicted"
 			);
 
- 			// Subsequent contract calls should also fail.
+		// Subsequent contract calls should also fail.
 			assert_err!(
 				Contract::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()),
 				"contract has been evicted"

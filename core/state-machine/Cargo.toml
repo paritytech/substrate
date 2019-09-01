@@ -18,7 +18,7 @@ codec = { package = "parity-scale-codec", version = "1.0.0" }
 num-traits = "0.2.8"
 
 [dev-dependencies]
-hex-literal = "0.2.0"
+hex-literal = "0.2.1"
 
 [features]
 default = []

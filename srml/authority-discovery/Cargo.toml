@@ -17,6 +17,9 @@ srml-support = { path = "../support", default-features = false }
 sr-io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 
+[dev-dependencies]
+sr-staking-primitives = { path = "../../core/sr-staking-primitives", default-features = false }
+
 [features]
 default = ["std"]
 std = [

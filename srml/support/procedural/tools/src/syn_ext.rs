@@ -124,7 +124,7 @@ impl Parse for Meta {
 impl ToTokens for Meta {
 	fn to_tokens(&self, tokens: &mut TokenStream) {
 		match self.inner {
-			syn::Meta::Word(ref ident) => {
+			syn::Meta::Path(ref ident) => {
 				let ident = ident.clone();
 				let toks = quote!{
 					#[#ident]
@@ -187,8 +187,8 @@ impl<P: ToTokens> ToTokens for Opt<P> {
 pub fn extract_type_option(typ: &syn::Type) -> Option<TokenStream> {
 	if let syn::Type::Path(ref path) = typ {
 		let v = path.path.segments.last()?;
-		if v.value().ident == "Option" {
-			if let syn::PathArguments::AngleBracketed(ref a) = v.value().arguments {
+		if v.ident == "Option" {
+			if let syn::PathArguments::AngleBracketed(ref a) = v.arguments {
 				let args = &a.args;
 				return Some(quote!{ #args })
 			}
@@ -228,7 +228,7 @@ impl<'ast> Visit<'ast> for ContainsIdent<'ast> {
 	}
 
 	fn visit_macro(&mut self, input: &'ast syn::Macro) {
-		self.visit_tokenstream(input.tts.clone());
+		self.visit_tokenstream(input.tokens.clone());
 		visit::visit_macro(self, input);
 	}
 }

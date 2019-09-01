@@ -1,7 +1,7 @@
 use primitives::{Pair, Public};
 use node_template_runtime::{
 	AccountId, BabeConfig, BalancesConfig, GenesisConfig, GrandpaConfig,
-	SudoConfig, IndicesConfig, SystemConfig, WASM_BINARY, 
+	SudoConfig, IndicesConfig, SystemConfig, WASM_BINARY,
 };
 use babe_primitives::{AuthorityId as BabeId};
 use grandpa_primitives::{AuthorityId as GrandpaId};
@@ -71,7 +71,7 @@ impl Alternative {
 				|| testnet_genesis(vec![
 					get_authority_keys_from_seed("Alice"),
 					get_authority_keys_from_seed("Bob"),
-				], 
+				],
 				get_from_seed::<AccountId>("Alice"),
 				vec![
 					get_from_seed::<AccountId>("Alice"),
@@ -107,7 +107,7 @@ impl Alternative {
 }
 
 fn testnet_genesis(initial_authorities: Vec<(AccountId, AccountId, GrandpaId, BabeId)>,
-	root_key: AccountId, 
+	root_key: AccountId,
 	endowed_accounts: Vec<AccountId>,
 	_enable_println: bool) -> GenesisConfig {
 	GenesisConfig {

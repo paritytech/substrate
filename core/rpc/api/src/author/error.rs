@@ -16,10 +16,8 @@
 
 //! Authoring RPC module errors.
 
-use client;
-use transaction_pool::txpool;
-use crate::rpc;
 use crate::errors;
+use jsonrpc_core as rpc;
 
 /// Author RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -28,8 +26,10 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
 	/// Client error.
-	Client(client::error::Error),
+	#[display(fmt="Client error: {}", _0)]
+	Client(Box<dyn std::error::Error + Send>),
 	/// Transaction pool error,
+	#[display(fmt="Transaction pool error: {}", _0)]
 	Pool(txpool::error::Error),
 	/// Verification error
 	#[display(fmt="Extrinsic verification error: {}", _0)]
@@ -54,7 +54,7 @@ pub enum Error {
 impl std::error::Error for Error {
 	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
 		match self {
-			Error::Client(ref err) => Some(err),
+			Error::Client(ref err) => Some(&**err),
 			Error::Pool(ref err) => Some(err),
 			Error::Verification(ref err) => Some(&**err),
 			_ => None,
@@ -83,6 +83,8 @@ const POOL_TOO_LOW_PRIORITY: i64 = POOL_INVALID_TX + 4;
 const POOL_CYCLE_DETECTED: i64 = POOL_INVALID_TX + 5;
 /// The transaction was not included to the pool because of the limits.
 const POOL_IMMEDIATELY_DROPPED: i64 = POOL_INVALID_TX + 6;
+/// The key type crypto is not known.
+const UNSUPPORTED_KEY_TYPE: i64 = POOL_INVALID_TX + 7;
 
 impl From<Error> for rpc::Error {
 	fn from(e: Error) -> Self {
@@ -133,6 +135,14 @@ impl From<Error> for rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_IMMEDIATELY_DROPPED),
 				message: "Immediately Dropped" .into(),
 				data: Some("The transaction couldn't enter the pool because of the limit".into()),
+			},
+			Error::UnsupportedKeyType => rpc::Error {
+				code: rpc::ErrorCode::ServerError(UNSUPPORTED_KEY_TYPE),
+				message: "Unknown key type crypto" .into(),
+				data: Some(
+					"The crypto for the given key type is unknown, please add the public key to the \
+					request to insert the key successfully.".into()
+				),
 			},
 			e => errors::internal(e),
 		}

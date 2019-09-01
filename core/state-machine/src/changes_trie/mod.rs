@@ -32,6 +32,19 @@
 //! the last N*digest_level-1 blocks (except for genesis block), mapping these keys
 //! to the set of lower-level digest blocks.
 //!
+//! Changes trie configuration could change within a time. The range of blocks, where
+//! configuration has been active, is given by two blocks: zero and end. Zero block is
+//! the block where configuration has been set. But the first changes trie that uses
+//! this configuration will be built at the block zero+1. If configuration deactivates
+//! at some block, this will be the end block of the configuration. It is also the
+//! zero block of the next configuration.
+//!
+//! If configuration has the end block, it also means that 'skewed digest' has/should
+//! been built at that block. If this is the block where max-level digest should have
+//! been created, than it is simply max-level digest of this configuration. Otherwise,
+//! it is the digest that covers all blocks since last max-level digest block was
+//! created.
+//!
 //! Changes trie only contains the top level storage changes. Sub-level changes
 //! are propagated through its storage root on the top level storage.
 
@@ -41,11 +54,16 @@ mod changes_iterator;
 mod input;
 mod prune;
 mod storage;
+mod surface_iterator;
 
 pub use self::storage::InMemoryStorage;
-pub use self::changes_iterator::{key_changes, key_changes_proof, key_changes_proof_check};
+pub use self::changes_iterator::{
+	key_changes, key_changes_proof,
+	key_changes_proof_check, key_changes_proof_check_with_db,
+};
 pub use self::prune::{prune, oldest_non_pruned_trie};
 
+use std::convert::TryInto;
 use hash_db::{Hasher, Prefix};
 use crate::backend::Backend;
 use num_traits::{One, Zero};
@@ -64,7 +82,7 @@ pub trait BlockNumber:
 	Send + Sync + 'static +
 	::std::fmt::Display +
 	Clone +
-	From<u32> + One + Zero +
+	From<u32> + TryInto<u32> + One + Zero +
 	PartialEq + Ord +
 	::std::ops::Add<Self, Output=Self> + ::std::ops::Sub<Self, Output=Self> +
 	::std::ops::Mul<Self, Output=Self> + ::std::ops::Div<Self, Output=Self> +
@@ -78,7 +96,7 @@ impl<T> BlockNumber for T where T:
 	Send + Sync + 'static +
 	::std::fmt::Display +
 	Clone +
-	From<u32> + One + Zero +
+	From<u32> + TryInto<u32> + One + Zero +
 	PartialEq + Ord +
 	::std::ops::Add<Self, Output=Self> + ::std::ops::Sub<Self, Output=Self> +
 	::std::ops::Mul<Self, Output=Self> + ::std::ops::Div<Self, Output=Self> +
@@ -108,6 +126,8 @@ pub trait RootsStorage<H: Hasher, Number: BlockNumber>: Send + Sync {
 
 /// Changes trie storage. Provides access to trie roots and trie nodes.
 pub trait Storage<H: Hasher, Number: BlockNumber>: RootsStorage<H, Number> {
+	/// Casts from self reference to RootsStorage reference.
+	fn as_roots_storage(&self) -> &dyn RootsStorage<H, Number>;
 	/// Get a trie node.
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String>;
 }
@@ -125,6 +145,17 @@ impl<'a, H: Hasher, N: BlockNumber> crate::TrieBackendStorage<H> for TrieBackend
 
 /// Changes trie configuration.
 pub type Configuration = primitives::ChangesTrieConfiguration;
+
+/// Blocks range where configuration has been constant.
+#[derive(Clone)]
+pub struct ConfigurationRange<'a, N> {
+	/// Active configuration.
+	pub config: &'a Configuration,
+	/// Zero block of this configuration. The configuration is active starting from the next block.
+	pub zero: N,
+	/// End block of this configuration. It is the last block where configuration has been active.
+	pub end: Option<N>,
+}
 
 /// Compute the changes trie root and transaction for given block.
 /// Returns Err(()) if unknown `parent_hash` has been passed.
@@ -144,11 +175,18 @@ pub fn build_changes_trie<'a, B: Backend<H>, S: Storage<H, Number>, H: Hasher, N
 		_ => return Ok(None),
 	};
 
+	// FIXME: remove this in https://github.com/paritytech/substrate/pull/3201
+	let config = ConfigurationRange {
+		config,
+		zero: Zero::zero(),
+		end: None,
+	};
+
 	// build_anchor error should not be considered fatal
 	let parent = storage.build_anchor(parent_hash).map_err(|_| ())?;
 
 	// storage errors are considered fatal (similar to situations when runtime fetches values from storage)
-	let input_pairs = prepare_input::<B, S, H, Number>(backend, storage, config, changes, &parent)
+	let input_pairs = prepare_input::<B, H, Number>(backend, storage, config, changes, &parent)
 		.expect("changes trie: storage access is not allowed to fail within runtime");
 	let mut root = Default::default();
 	let mut mdb = MemoryDB::default();

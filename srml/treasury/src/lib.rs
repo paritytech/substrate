@@ -89,11 +89,6 @@ type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::
 
 const MODULE_ID: ModuleId = ModuleId(*b"py/trsry");
 
-pub const DEFAULT_PROPOSAL_BOND: u32 = 0;
-pub const DEFAULT_PROPOSAL_BOND_MINIMUM: u32 = 0;
-pub const DEFAULT_SPEND_PERIOD: u32 = 0;
-pub const DEFAULT_BURN: u32 = 0;
-
 pub trait Trait: system::Trait {
 	/// The staking balance.
 	type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
@@ -144,7 +139,7 @@ decl_module! {
 		/// Percentage of spare funds (if any) that are burnt per spend period.
 		const Burn: Permill = T::Burn::get();
 
-		fn deposit_event<T>() = default;
+		fn deposit_event() = default;
 		/// Put forward a suggestion for spending. A deposit proportional to the value
 		/// is reserved and slashed if the proposal is rejected. It is returned once the
 		/// proposal is awarded.
