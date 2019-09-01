@@ -45,7 +45,7 @@ mod tests {
 	};
 	use state_machine::{TestExternalities as CoreTestExternalities};
 	use primitives::{
-		NeverNativeValue, NativeOrEncoded, map, traits::{CodeExecutor, Externalities},
+		Blake2Hasher, NeverNativeValue, NativeOrEncoded, map, traits::{CodeExecutor, Externalities},
 	};
 	use sr_primitives::traits::{Header as HeaderT, Hash as HashT, Convert};
 	use sr_primitives::{ApplyOutcome, ApplyError, ApplyResult};
