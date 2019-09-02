@@ -144,7 +144,7 @@ decl_storage! {
 		// ---- State
 		/// The current elected membership. Sorted based on account id.
 		pub Members get(members) config(): Vec<T::AccountId>;
-		/// The total number of vote rounds that have happened, exclusive of the upcoming one.
+		/// The total number of vote rounds that have happened, excluding the upcoming one.
 		pub ElectionRounds get(election_rounds): u32 = Zero::zero();
 
 		/// Votes of a particular voter, with the round index of the votes.
