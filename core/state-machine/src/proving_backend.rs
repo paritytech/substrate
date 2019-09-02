@@ -174,6 +174,10 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		self.backend.for_keys_with_prefix(prefix, f)
 	}
 
+	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
+		self.backend.for_key_values_with_prefix(prefix, f)
+	}
+
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], f: F) {
 		self.backend.for_child_keys_with_prefix(storage_key, prefix, f)
 	}
