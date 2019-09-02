@@ -333,16 +333,10 @@ where
 					// for the canon block the new authority set should start
 					// with. we use the minimum between the median and the local
 					// best finalized block.
-
-					#[allow(deprecated)]
-					let best_finalized_number = self.inner.backend().blockchain().info()
-						.finalized_number;
-
+					let best_finalized_number = self.inner.info().chain.finalized_number;
 					let canon_number = best_finalized_number.min(median_last_finalized_number);
-
-					#[allow(deprecated)]
 					let canon_hash =
-						self.inner.backend().blockchain().header(BlockId::Number(canon_number))
+						self.inner.header(&BlockId::Number(canon_number))
 							.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 							.expect("the given block number is less or equal than the current best finalized number; \
 									 current best finalized number must exist in chain; qed.")
@@ -414,8 +408,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> BlockImport<Block>
 
 		// early exit if block already in chain, otherwise the check for
 		// authority changes will error when trying to re-import a change block
-		#[allow(deprecated)]
-		match self.inner.backend().blockchain().status(BlockId::Hash(hash)) {
+		match self.inner.status(BlockId::Hash(hash)) {
 			Ok(blockchain::BlockStatus::InChain) => return Ok(ImportResult::AlreadyInChain),
 			Ok(blockchain::BlockStatus::Unknown) => {},
 			Err(e) => return Err(ConsensusError::ClientImport(e.to_string()).into()),

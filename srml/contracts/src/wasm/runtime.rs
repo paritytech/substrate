@@ -611,6 +611,16 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
+	// Stores the minimum balance (a.k.a. existential deposit) into the scratch buffer.
+	//
+	// The data is encoded as T::Balance. The current contents of the scratch buffer are
+	// overwritten.
+	ext_minimum_balance(ctx) => {
+		ctx.scratch_buf.clear();
+		ctx.ext.minimum_balance().encode_to(&mut ctx.scratch_buf);
+		Ok(())
+	},
+
 	// Decodes the given buffer as a `T::Call` and adds it to the list
 	// of to-be-dispatched calls.
 	//
