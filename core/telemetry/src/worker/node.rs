@@ -127,7 +127,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 							break NodeSocket::Connected(conn)
 						},
 						Poll::Pending => {
-							if is_writing_data {
+							if is_writing_data && self.connection_timeout.is_none() {
 								self.connection_timeout = Some(Delay::new(Duration::from_millis(500)));
 							}
 							break NodeSocket::Connected(conn)
@@ -184,10 +184,12 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 				Poll::Pending => {},
 				Poll::Ready(Err(err)) => {
 					warn!(target: "telemetry", "Connection timeout error for {} {:?}", self.addr, err);
+					self.connection_timeout = None;
 				}
 				Poll::Ready(Ok(_)) => {
 					println!("Reconnecting");
 					warn!(target: "telemetry", "Server unresponsive from {}", self.addr);
+					self.connection_timeout = None;
 					let timeout = gen_rand_reconnect_delay();
 					self.socket = NodeSocket::WaitingReconnect(timeout);
 				}
