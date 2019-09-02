@@ -134,8 +134,7 @@ impl<B: ChainApi> Pool<B> {
 					} else {
 						Ok(base::Transaction {
 							data: xt,
-							bytes
-							,
+							bytes,
 							hash,
 							priority: validity.priority,
 							requires: validity.requires,
