@@ -25,10 +25,13 @@ use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
 
 /// Configuration of a general Substrate test genesis block.
 pub struct GenesisConfig {
-	pub changes_trie_config: Option<ChangesTrieConfiguration>,
-	pub authorities: Vec<AuthorityId>,
-	pub balances: Vec<(AccountId, u64)>,
-	pub heap_pages_override: Option<u64>,
+	changes_trie_config: Option<ChangesTrieConfiguration>,
+	authorities: Vec<AuthorityId>,
+	balances: Vec<(AccountId, u64)>,
+	heap_pages_override: Option<u64>,
+	/// Additional storage key pairs that will be added to the genesis map.
+	extra_storage: HashMap<Vec<u8>, Vec<u8>>,
+	child_extra_storage: HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
 }
 
 impl GenesisConfig {
@@ -38,6 +41,8 @@ impl GenesisConfig {
 		endowed_accounts: Vec<AccountId>,
 		balance: u64,
 		heap_pages_override: Option<u64>,
+		extra_storage: HashMap<Vec<u8>, Vec<u8>>,
+		child_extra_storage: HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
 	) -> Self {
 		GenesisConfig {
 			changes_trie_config: match support_changes_trie {
@@ -47,6 +52,8 @@ impl GenesisConfig {
 			authorities: authorities.clone(),
 			balances: endowed_accounts.into_iter().map(|a| (a, balance)).collect(),
 			heap_pages_override,
+			extra_storage,
+			child_extra_storage,
 		}
 	}
 
@@ -70,7 +77,10 @@ impl GenesisConfig {
 			map.insert(well_known_keys::CHANGES_TRIE_CONFIG.to_vec(), changes_trie_config.encode());
 		}
 		map.insert(twox_128(&b"sys:auth"[..])[..].to_vec(), self.authorities.encode());
-		(map, Default::default())
+		// Finally, add the extra storage entries.
+		map.extend(self.extra_storage.clone().into_iter());
+
+		(map, self.child_extra_storage.clone())
 	}
 }
 

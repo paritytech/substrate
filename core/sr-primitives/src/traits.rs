@@ -743,13 +743,24 @@ pub trait Extrinsic: Sized {
 	/// The function call.
 	type Call;
 
+	/// The payload we carry for signed extrinsics.
+	///
+	/// Usually it will contain a `Signature` and
+	/// may include some additional data that are specific to signed
+	/// extrinsics.
+	type SignaturePayload;
+
 	/// Is this `Extrinsic` signed?
 	/// If no information are available about signed/unsigned, `None` should be returned.
 	fn is_signed(&self) -> Option<bool> { None }
 
-	/// New instance of an unsigned extrinsic aka "inherent". `None` if this is an opaque
-	/// extrinsic type.
-	fn new_unsigned(_call: Self::Call) -> Option<Self> { None }
+	/// Create new instance of the extrinsic.
+	///
+	/// Extrinsics can be split into:
+	/// 1. Inherents (no signature; created by validators during block production)
+	/// 2. Unsigned Transactions (no signature; represent "system calls" or other special kinds of calls)
+	/// 3. Signed Transactions (with signature; a regular transactions with known origin)
+	fn new(_call: Self::Call, _signed_data: Option<Self::SignaturePayload>) -> Option<Self> { None }
 }
 
 /// Extract the hashing type for a block.

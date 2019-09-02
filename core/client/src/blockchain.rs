@@ -197,21 +197,11 @@ impl<Block: BlockT> TreeRoute<Block> {
 }
 
 /// Compute a tree-route between two blocks. See tree-route docs for more details.
-pub fn tree_route<Block: BlockT, Backend: HeaderBackend<Block>>(
-	backend: &Backend,
+pub fn tree_route<Block: BlockT, F: Fn(BlockId<Block>) -> Result<<Block as BlockT>::Header>>(
+	load_header: F,
 	from: BlockId<Block>,
 	to: BlockId<Block>,
 ) -> Result<TreeRoute<Block>> {
-	use sr_primitives::traits::Header;
-
-	let load_header = |id: BlockId<Block>| {
-		match backend.header(id) {
-			Ok(Some(hdr)) => Ok(hdr),
-			Ok(None) => Err(Error::UnknownBlock(format!("Unknown block {:?}", id))),
-			Err(e) => Err(e),
-		}
-	};
-
 	let mut from = load_header(from)?;
 	let mut to = load_header(to)?;
 

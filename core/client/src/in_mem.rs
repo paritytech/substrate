@@ -223,7 +223,7 @@ impl<Block: BlockT> Blockchain<Block> {
 				None
 			} else {
 				let route = crate::blockchain::tree_route(
-					self,
+					|id| self.header(id)?.ok_or_else(|| error::Error::UnknownBlock(format!("{:?}", id))),
 					BlockId::Hash(best_hash),
 					BlockId::Hash(*header.parent_hash()),
 				)?;
@@ -718,6 +718,10 @@ where
 			.map(|num| num.is_zero())
 			.unwrap_or(false)
 	}
+
+	fn remote_blockchain(&self) -> Arc<dyn crate::light::blockchain::RemoteBlockchain<Block>> {
+		unimplemented!()
+	}
 }
 
 /// Prunable in-memory changes trie storage.
@@ -758,6 +762,10 @@ impl<Block, H> state_machine::ChangesTrieStorage<H, NumberFor<Block>> for Change
 		Block: BlockT,
 		H: Hasher,
 {
+	fn as_roots_storage(&self) -> &dyn state_machine::ChangesTrieRootsStorage<H, NumberFor<Block>> {
+		self
+	}
+
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<state_machine::DBValue>, String> {
 		self.0.get(key, prefix)
 	}

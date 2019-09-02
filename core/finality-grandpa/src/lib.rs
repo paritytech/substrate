@@ -93,10 +93,6 @@ mod light_import;
 mod observer;
 mod until_imported;
 
-#[cfg(feature="service-integration")]
-mod service_integration;
-#[cfg(feature="service-integration")]
-pub use service_integration::{LinkHalfForService, BlockImportForService, BlockImportForLightService};
 pub use communication::Network;
 pub use finality_proof::FinalityProofProvider;
 pub use light_import::light_block_import;
@@ -107,7 +103,6 @@ use environment::{Environment, VoterSetState};
 use import::GrandpaBlockImport;
 use until_imported::UntilGlobalMessageBlocksImported;
 use communication::NetworkBridge;
-use service::TelemetryOnConnect;
 use fg_primitives::{AuthoritySignature, SetId, AuthorityWeight};
 
 // Re-export these two because it's just so damn convenient.
@@ -364,8 +359,7 @@ where
 	let genesis_hash = chain_info.chain.genesis_hash;
 
 	let persistent_data = aux_schema::load_persistent(
-		#[allow(deprecated)]
-		&**client.backend(),
+		&*client,
 		genesis_hash,
 		<NumberFor<Block>>::zero(),
 		|| {
@@ -457,7 +451,7 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 			.register_provider(srml_finality_tracker::InherentDataProvider::new(move || {
 				#[allow(deprecated)]
 				{
-					let info = client.backend().blockchain().info();
+					let info = client.info().chain;
 					telemetry!(CONSENSUS_INFO; "afg.finalized";
 						"finalized_number" => ?info.finalized_number,
 						"finalized_hash" => ?info.finalized_hash,
@@ -484,7 +478,7 @@ pub struct GrandpaParams<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X> {
 	/// Handle to a future that will resolve on exit.
 	pub on_exit: X,
 	/// If supplied, can be used to hook on telemetry connection established events.
-	pub telemetry_on_connect: Option<TelemetryOnConnect>,
+	pub telemetry_on_connect: Option<mpsc::UnboundedReceiver<()>>,
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
@@ -531,7 +525,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 
 	let telemetry_task = if let Some(telemetry_on_connect) = telemetry_on_connect {
 		let authorities = persistent_data.authority_set.clone();
-		let events = telemetry_on_connect.telemetry_connection_sinks
+		let events = telemetry_on_connect
 			.for_each(move |_| {
 				telemetry!(CONSENSUS_INFO; "afg.authority_set";
 					 "authority_set_id" => ?authorities.set_id(),
@@ -698,8 +692,7 @@ where
 						(new.canon_hash, new.canon_number),
 					);
 
-					#[allow(deprecated)]
-					aux_schema::write_voter_set_state(&**self.env.inner.backend(), &set_state)?;
+					aux_schema::write_voter_set_state(&*self.env.inner, &set_state)?;
 					Ok(Some(set_state))
 				})?;
 
@@ -727,8 +720,7 @@ where
 					let completed_rounds = voter_set_state.completed_rounds();
 					let set_state = VoterSetState::Paused { completed_rounds };
 
-					#[allow(deprecated)]
-					aux_schema::write_voter_set_state(&**self.env.inner.backend(), &set_state)?;
+					aux_schema::write_voter_set_state(&*self.env.inner, &set_state)?;
 					Ok(Some(set_state))
 				})?;
 

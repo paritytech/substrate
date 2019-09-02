@@ -413,7 +413,7 @@ decl_module! {
 		/// The fee to be paid for making a transaction; the per-byte portion.
 		const TransactionByteFee: T::Balance = T::TransactionByteFee::get();
 
-		fn deposit_event<T, I>() = default;
+		fn deposit_event() = default;
 
 		/// Transfer some liquid free balance to another account.
 		///
@@ -1187,7 +1187,6 @@ pub struct TakeFees<T: Trait<I>, I: Instance = DefaultInstance>(#[codec(compact)
 
 impl<T: Trait<I>, I: Instance> TakeFees<T, I> {
 	/// utility constructor. Used only in client/factory code.
-	#[cfg(feature = "std")]
 	pub fn from(fee: T::Balance) -> Self {
 		Self(fee)
 	}
