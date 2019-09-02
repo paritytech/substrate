@@ -14,9 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Common traits and types for working with Wasm in Substrate.
+//! Types and traits for interfacing between the host and the wasm runtime.
 
 use std::borrow::Cow;
+
+mod wasmi_impl;
 
 /// Value types supported by Substrate on the boundary between host/Wasm.
 #[derive(Copy, Clone, PartialEq)]
@@ -80,14 +82,14 @@ impl FunctionRef {
 	}
 }
 
-/// Something that has access to the Wasm memory with read/write access.
-pub trait Memory {
+/// Context given to `execute_function` of `Externals`.
+pub trait Context {
 	/// Read memory from `address` into a vector.
-	fn read(&self, address: usize, size: usize) -> Result<Vec<u8>, String>;
+	fn read_memory(&self, address: u32, size: u32) -> Result<Vec<u8>, String>;
 	/// Write the given data at `address` into the memory.
-	fn write(&mut self, address: usize, data: &[u8]) -> Result<(), String>;
+	fn write_memory(&mut self, address: u32, data: &[u8]) -> Result<(), String>;
 	/// Allocate a memory instance of `size` bytes.
-	fn alloc(&mut self, size: usize) -> Result<usize, String>;
+	fn allocate_memory(&mut self, size: u32) -> Result<usize, String>;
 }
 
 /// Something that provides implementations for host functions.
@@ -95,10 +97,17 @@ pub trait Externals {
 	/// Try to resolve the function with the given name and signature.
 	fn resolve_function(name: &str, signature: &Signature) -> Option<FunctionRef>;
 
+	/// Returns the number of host functions this type provides.
+	fn function_count() -> usize;
+
 	/// Execute the function at the given index.
 	///
 	/// - `index` - Is equal to the index given to `FunctionRef`.
 	/// - `args` - The arguments given to the function.
 	/// - `memory` - Provides access to the Wasm memory.
-	fn execute_function(index: usize, args: &[()], memory: &mut dyn Memory) -> Result<Option<Value>, String>;
+	fn execute_function<C: Context>(
+		index: usize,
+		args: &[()],
+		context: &mut C,
+	) -> Result<Option<Value>, String>;
 }

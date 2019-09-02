@@ -5289,6 +5289,13 @@ name = "substrate-wasm-builder-runner"
 version = "1.0.3"
 
 [[package]]
+name = "substrate-wasm-interface"
+version = "2.0.0"
+dependencies = [
+ "wasmi 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "subtle"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

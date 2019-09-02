@@ -35,6 +35,7 @@ use trie::{TrieConfiguration, trie_types::Layout};
 use crate::sandbox;
 use crate::allocator;
 use log::trace;
+use wasm_interface::{Context as ExternalsContext, Externals};
 
 #[cfg(feature="wasm-extern-trace")]
 macro_rules! debug_trace {
@@ -89,16 +90,30 @@ impl<'e, E: Externalities<Blake2Hasher>> sandbox::SandboxCapabilities for Functi
 	}
 }
 
+impl<'e, E: Externalities<Blake2Hasher>> ExternalsContext for FunctionExecutor<'e, E> {
+	fn read_memory(&self, address: u32, size: u32) -> Result<Vec<u8>, String> {
+		self.memory.get(address, size as usize).map_err(Into::into)
+	}
+
+	fn write_memory(&mut self, address: u32, data: &[u8]) -> Result<(), String> {
+		self.memory.set(address, data).map_err(Into::into)
+	}
+
+	fn allocate_memory(&mut self, size: u32) -> Result<usize, String> {
+		self.heap.allocate(size)
+	}
+}
+
 trait WritePrimitive<T: Sized> {
 	fn write_primitive(&self, offset: u32, t: T) -> Result<()>;
 }
 
-impl WritePrimitive<u32> for MemoryInstance {
+impl<T: ExternalsContext> WritePrimitive<u32> for T {
 	fn write_primitive(&self, offset: u32, t: u32) -> Result<()> {
 		use byteorder::{LittleEndian, ByteOrder};
 		let mut r = [0u8; 4];
 		LittleEndian::write_u32(&mut r, t);
-		self.set(offset, &r).map_err(Into::into)
+		self.write_memory(offset, &r).map_err(Into::into)
 	}
 }
 
@@ -106,10 +121,10 @@ trait ReadPrimitive<T: Sized> {
 	fn read_primitive(&self, offset: u32) -> Result<T>;
 }
 
-impl ReadPrimitive<u32> for MemoryInstance {
+impl<T: ExternalsContext> ReadPrimitive<u32> for T {
 	fn read_primitive(&self, offset: u32) -> Result<u32> {
 		use byteorder::{LittleEndian, ByteOrder};
-		let result = self.get(offset, 4)?;
+		let result = self.read_memory(offset, 4)?;
 		Ok(LittleEndian::read_u32(&result))
 	}
 }
