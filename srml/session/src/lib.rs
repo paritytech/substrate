@@ -367,6 +367,11 @@ decl_storage! {
 		/// will be used to determine the validator's session keys.
 		QueuedKeys get(queued_keys): Vec<(T::ValidatorId, T::Keys)>;
 
+		/// Indices of disabled validators.
+		///
+		/// The set is cleared when `on_session_ending` returns a new set of identities.
+		DisabledValidators get(disabled_validators): Vec<u32>;
+
 		/// The next session keys for a validator.
 		///
 		/// The first key is always `DEDUP_KEY_PREFIX` to have all the data in the same branch of
@@ -486,6 +491,11 @@ impl<T: Trait> Module<T> {
 			.collect::<Vec<_>>();
 		<Validators<T>>::put(&validators);
 
+		if changed {
+			// reset disabled validators
+			DisabledValidators::take();
+		}
+
 		let applied_at = session_index + 2;
 
 		// Get next validator set.
@@ -550,13 +560,33 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Disable the validator of index `i`.
-	pub fn disable_index(i: usize) {
-		T::SessionHandler::on_disabled(i);
+	///
+	/// Returns `true` if this causes a third of validators to be already disabled.
+	pub fn disable_index(i: usize) -> bool {
+		let (fire_event, third_reached) = DisabledValidators::mutate(|disabled| {
+			let i = i as u32;
+			if let Err(index) = disabled.binary_search(&i) {
+				let count = <Validators<T>>::get().len();
+				disabled.insert(index, i);
+				(true, disabled.len() >= (count + 2) / 3)
+			} else {
+				(false, false)
+			}
+		});
+
+		if fire_event {
+			T::SessionHandler::on_disabled(i);
+		}
+
+		third_reached
 	}
 
 	/// Disable the validator identified by `c`. (If using with the staking module, this would be
 	/// their *stash* account.)
-	pub fn disable(c: &T::ValidatorId) -> rstd::result::Result<(), ()> {
+	///
+	/// Returns `Ok(true)` if more than third validators in current session is already disabled.
+	/// If used with the staking module it allows to force a new era in such case.
+	pub fn disable(c: &T::ValidatorId) -> rstd::result::Result<bool, ()> {
 		Self::validators().iter().position(|i| i == c).map(Self::disable_index).ok_or(())
 	}
 
@@ -934,5 +964,23 @@ mod tests {
 				)
 			);
 		});
+	}
+
+	#[test]
+	fn return_true_if_more_than_third_is_disabled() {
+		with_externalities(&mut new_test_ext(), || {
+			set_next_validators(vec![1, 2, 3, 4, 5, 6, 7]);
+			force_new_session();
+			initialize_block(1);
+			// apply the new validator set
+			force_new_session();
+			initialize_block(2);
+
+			assert_eq!(Session::disable_index(0), false);
+			assert_eq!(Session::disable_index(1), false);
+			assert_eq!(Session::disable_index(2), true);
+			assert_eq!(Session::disable_index(3), true);
+		});
+
 	}
 }
