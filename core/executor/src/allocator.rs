@@ -430,7 +430,7 @@ mod tests {
 		if let Err(err) = ptr {
 			match err {
 				Error::RequestedAllocationTooLarge => {},
-				e => panic!("Expected out of space error, got: {:?}", e),
+				e => panic!("Expected allocation size too large error, got: {:?}", e),
 			}
 		}
 	}
