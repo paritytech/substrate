@@ -126,11 +126,19 @@ impl FreeingBumpHeapAllocator {
 		let ptr: u32 = if self.heads[list_index] != 0 {
 			// Something from the free list
 			let item = self.heads[list_index];
+			let ptr = item + 8;
+			if ptr + item_size > self.max_heap_size {
+				return Err(Error::AllocatorOutOfSpace);
+			}
+
 			let four_bytes = self.get_heap_4bytes(item)?;
 			self.heads[list_index] = FreeingBumpHeapAllocator::le_bytes_to_u32(four_bytes);
-			item + 8
+			ptr
 		} else {
 			// Nothing to be freed. Bump.
+			if self.bumper + 8 + item_size > self.max_heap_size {
+				return Err(Error::AllocatorOutOfSpace);
+			}
 			self.bump(item_size + 8) + 8
 		};
 
@@ -416,6 +424,42 @@ mod tests {
 			match err {
 				Error::RequestedAllocationTooLarge => {},
 				e => panic!("Expected out of space error, got: {:?}", e),
+			}
+		}
+	}
+
+	#[test]
+	fn should_return_error_when_bumper_greater_than_heap_size() {
+		// given
+		let mem = MemoryInstance::alloc(Pages(1), None).unwrap();
+		let mut heap = FreeingBumpHeapAllocator::new(mem, 0);
+		heap.max_heap_size = 64;
+
+		let ptr1 = heap.allocate(32).unwrap();
+		assert_eq!(ptr1, 8);
+		heap.deallocate(ptr1).expect("failed freeing ptr1");
+		assert_eq!(heap.total_size, 0);
+		assert_eq!(heap.bumper, 40);
+
+		let ptr2 = heap.allocate(16).unwrap();
+		assert_eq!(ptr2, 48);
+		heap.deallocate(ptr2).expect("failed freeing ptr2");
+		assert_eq!(heap.total_size, 0);
+		assert_eq!(heap.bumper, 64);
+
+		// when
+		// the `bumper` value is equal to `max_heap_size` here and any
+		// further allocation which would increment the bumper must fail.
+		// we try to allocate 8 bytes here, which will increment the
+		// bumper since no 8 byte item has been allocated+freed before.
+		let ptr = heap.allocate(8);
+
+		// then
+		assert_eq!(ptr.is_err(), true);
+		if let Err(err) = ptr {
+			match err {
+				Error::AllocatorOutOfSpace => {},
+				e => panic!("Expected allocator out of space error, got: {:?}", e),
 			}
 		}
 	}
