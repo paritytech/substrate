@@ -67,7 +67,7 @@ impl<H: Hasher, Number: BlockNumber> InMemoryStorage<H, Number> {
 	pub fn with_proof(proof: Vec<Vec<u8>>) -> Self {
 		use hash_db::HashDB;
 
-	let mut proof_db = MemoryDB::<H>::default();
+		let mut proof_db = MemoryDB::<H>::default();
 		for item in proof {
 			proof_db.insert(EMPTY_PREFIX, &item);
 		}

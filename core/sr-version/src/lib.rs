@@ -228,9 +228,7 @@ mod apis_serialize {
 	pub fn deserialize_bytes<'de, D>(d: D) -> Result<super::ApiId, D::Error> where
 		D: de::Deserializer<'de>
 	{
-		let bytes = bytes::deserialize_check_len(d, bytes::ExpectedLen::Exact(8))?;
 		let mut arr = [0; 8];
-		arr.copy_from_slice(&bytes);
-		Ok(arr)
+		bytes::deserialize_check_len(d, bytes::ExpectedLen::Exact(&mut arr)).map(|_| arr)
 	}
 }

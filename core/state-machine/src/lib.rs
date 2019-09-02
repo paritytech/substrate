@@ -1241,7 +1241,7 @@ mod tests {
 			remote_proof.clone(),
 			&[0xff]
 		).is_ok();
-	// check that results are correct
+		// check that results are correct
 		assert_eq!(local_result1, Some(vec![24]));
 		assert_eq!(local_result2, false);
 		// on child trie

@@ -199,7 +199,7 @@ impl<'a, I: AsRef<[u8]>, T: IntoIterator<Item=I>> Request<'a, T> {
 			crate::http_request_add_header(
 				id,
 				header.name(),
-				header,
+				header.value(),
 			).map_err(|_| HttpError::IoError)?
 		}
 

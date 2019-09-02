@@ -30,7 +30,6 @@ pub use serde;
 pub use rstd;
 #[doc(hidden)]
 pub use codec;
-#[cfg(feature = "std")]
 #[doc(hidden)]
 pub use once_cell;
 #[doc(hidden)]

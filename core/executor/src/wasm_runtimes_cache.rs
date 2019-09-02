@@ -103,7 +103,7 @@ impl StateSnapshot {
 				// anyway.
 				let contents = mem::replace(segment.value_mut(), vec![]);
 
-				let init_expr = segment.offset().code();
+				let init_expr = segment.offset().as_ref()?.code();
 				// [op, End]
 				if init_expr.len() != 2 {
 					return None;

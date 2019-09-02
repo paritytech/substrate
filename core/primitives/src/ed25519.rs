@@ -395,9 +395,10 @@ impl TraitPair for Pair {
 	///
 	/// You should never need to use this; generate(), generate_with_phrase
 	fn from_seed_slice(seed_slice: &[u8]) -> Result<Pair, SecretStringError> {
-		let secret = ed25519_dalek::SecretKey::from_bytes(seed_slice)
+		use ed25519_dalek::SecretKey;
+		let secret: SecretKey = SecretKey::from_bytes(seed_slice)
 			.map_err(|_| SecretStringError::InvalidSeedLength)?;
-		Ok(Pair(ed25519_dalek::Keypair { secret, public: secret.expand().into() }))
+		Ok(Pair(ed25519_dalek::Keypair { public: (&secret).into(), secret }))
 	}
 
 	/// Derive a child key from a series of given junctions.

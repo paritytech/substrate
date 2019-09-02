@@ -15,7 +15,7 @@ primitives = { package = "substrate-primitives",  path = "../../core/primitives"
 inherents = { package = "substrate-inherents", path = "../../core/inherents", default-features = false }
 srml-support-procedural = { path = "./procedural" }
 paste = "0.1.6"
-once_cell = { version = "0.2.7", default-features = false, optional = true }
+once_cell = { version = "1.0.1", default-features = false, optional = true }
 bitmask = { version = "0.5.0", default-features = false }
 
 [dev-dependencies]

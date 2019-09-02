@@ -115,3 +115,6 @@ is-it-maintained-open-issues = { repository = "paritytech/substrate" }
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+
+[patch.crates-io]
+impl-serde = { path = "../parity-common/primitive-types/impls/serde" }
