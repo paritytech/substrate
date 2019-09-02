@@ -40,8 +40,21 @@ pub struct DigestIndex<Number: BlockNumber> {
 	pub key: Vec<u8>,
 }
 
+/// Key of { childtrie key => Childchange trie } mapping.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ChildIndex<Number: BlockNumber> {
+	/// Block at which this key has been inserted in the trie.
+	pub block: Number,
+	/// Storage key this node is responsible for.
+	pub storage_key: Vec<u8>,
+}
+
 /// Value of { changed key => block/digest block numbers } mapping.
 pub type DigestIndexValue<Number> = Vec<Number>;
+
+/// Value of { changed key => block/digest block numbers } mapping.
+/// That is the root of the child change trie.
+pub type ChildIndexValue = Vec<u8>;
 
 /// Single input pair of changes trie.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -50,6 +63,8 @@ pub enum InputPair<Number: BlockNumber> {
 	ExtrinsicIndex(ExtrinsicIndex<Number>, ExtrinsicIndexValue),
 	/// Element of { key => set of blocks/digest blocks where key has been changed } element mapping.
 	DigestIndex(DigestIndex<Number>, DigestIndexValue<Number>),
+	/// Element of { childtrie key => Childchange trie } where key has been changed } element mapping.
+	ChildIndex(ChildIndex<Number>, ChildIndexValue),
 }
 
 /// Single input key of changes trie.
@@ -59,6 +74,8 @@ pub enum InputKey<Number: BlockNumber> {
 	ExtrinsicIndex(ExtrinsicIndex<Number>),
 	/// Key of { key => set of blocks/digest blocks where key has been changed } element mapping.
 	DigestIndex(DigestIndex<Number>),
+	/// Key of { childtrie key => Childchange trie } where key has been changed } element mapping.
+	ChildIndex(ChildIndex<Number>),
 }
 
 impl<Number: BlockNumber> Into<(Vec<u8>, Vec<u8>)> for InputPair<Number> {
@@ -66,6 +83,7 @@ impl<Number: BlockNumber> Into<(Vec<u8>, Vec<u8>)> for InputPair<Number> {
 		match self {
 			InputPair::ExtrinsicIndex(key, value) => (key.encode(), value.encode()),
 			InputPair::DigestIndex(key, value) => (key.encode(), value.encode()),
+			InputPair::ChildIndex(key, value) => (key.encode(), value.encode()),
 		}
 	}
 }
@@ -75,6 +93,7 @@ impl<Number: BlockNumber> Into<InputKey<Number>> for InputPair<Number> {
 		match self {
 			InputPair::ExtrinsicIndex(key, _) => InputKey::ExtrinsicIndex(key),
 			InputPair::DigestIndex(key, _) => InputKey::DigestIndex(key),
+			InputPair::ChildIndex(key, _) => InputKey::ChildIndex(key),
 		}
 	}
 }
@@ -114,6 +133,22 @@ impl<Number: BlockNumber> Encode for DigestIndex<Number> {
 	}
 }
 
+impl<Number: BlockNumber> ChildIndex<Number> {
+	pub fn key_neutral_prefix(block: Number) -> Vec<u8> {
+		let mut prefix = vec![3];
+		prefix.extend(block.encode());
+		prefix
+	}
+}
+
+impl<Number: BlockNumber> Encode for ChildIndex<Number> {
+	fn encode_to<W: Output>(&self, dest: &mut W) {
+		dest.push_byte(3);
+		self.block.encode_to(dest);
+		self.storage_key.encode_to(dest);
+	}
+}
+
 impl<Number: BlockNumber> codec::EncodeLike for DigestIndex<Number> {}
 
 impl<Number: BlockNumber> Decode for InputKey<Number> {
@@ -126,6 +161,10 @@ impl<Number: BlockNumber> Decode for InputKey<Number> {
 			2 => Ok(InputKey::DigestIndex(DigestIndex {
 				block: Decode::decode(input)?,
 				key: Decode::decode(input)?,
+			})),
+			3 => Ok(InputKey::ChildIndex(ChildIndex {
+				block: Decode::decode(input)?,
+				storage_key: Decode::decode(input)?,
 			})),
 			_ => Err("Invalid input key variant".into()),
 		}

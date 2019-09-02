@@ -535,6 +535,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&self,
 		first: NumberFor<Block>,
 		last: BlockId<Block>,
+		storage_key: Option<&StorageKey>,
 		key: &StorageKey
 	) -> error::Result<Vec<(NumberFor<Block>, u32)>> {
 		let (config, storage) = self.require_changes_trie()?;
@@ -557,6 +558,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				number: last_number,
 			},
 			self.backend.blockchain().info().best_number,
+			storage_key.as_ref().map(|sk| sk.0.as_slice()),
 			&key.0)
 		.and_then(|r| r.map(|r| r.map(|(block, tx)| (block, tx))).collect::<Result<_, _>>())
 		.map_err(|err| error::Error::ChangesTrieAccessFailed(err))
@@ -574,13 +576,15 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		last: Block::Hash,
 		min: Block::Hash,
 		max: Block::Hash,
-		key: &StorageKey
+		storage_key: Option<&StorageKey>,
+		key: &StorageKey,
 	) -> error::Result<ChangesProof<Block::Header>> {
 		self.key_changes_proof_with_cht_size(
 			first,
 			last,
 			min,
 			max,
+			storage_key,
 			key,
 			cht::size(),
 		)
@@ -593,6 +597,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		last: Block::Hash,
 		min: Block::Hash,
 		max: Block::Hash,
+		storage_key: Option<&StorageKey>,
 		key: &StorageKey,
 		cht_size: NumberFor<Block>,
 	) -> error::Result<ChangesProof<Block::Header>> {
@@ -670,7 +675,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				number: last_number,
 			},
 			max_number,
-			&key.0
+			storage_key.as_ref().map(|sk| sk.0.as_slice()),
+			&key.0,
 		)
 		.map_err(|err| error::Error::from(error::Error::ChangesTrieAccessFailed(err)))?;
 
@@ -2580,7 +2586,12 @@ pub(crate) mod tests {
 
 		for (index, (begin, end, key, expected_result)) in test_cases.into_iter().enumerate() {
 			let end = client.block_hash(end).unwrap().unwrap();
-			let actual_result = client.key_changes(begin, BlockId::Hash(end), &StorageKey(key)).unwrap();
+			let actual_result = client.key_changes(
+				begin,
+				BlockId::Hash(end),
+				None,
+				&StorageKey(key),
+			).unwrap();
 			match actual_result == expected_result {
 				true => (),
 				false => panic!(format!("Failed test {}: actual = {:?}, expected = {:?}",

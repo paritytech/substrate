@@ -381,6 +381,10 @@ where
 		// whole state is not available on light node
 	}
 
+	fn for_key_values_with_prefix<A: FnMut(&[u8], &[u8])>(&self, _prefix: &[u8], _action: A) {
+		// whole state is not available on light node
+	}
+
 	fn for_keys_in_child_storage<A: FnMut(&[u8])>(&self, _storage_key: &[u8], _action: A) {
 		// whole state is not available on light node
 	}
@@ -460,6 +464,15 @@ where
 			OnDemandOrGenesisState::Genesis(ref state) => state.for_keys_with_prefix(prefix, action),
 		}
 	}
+
+	fn for_key_values_with_prefix<A: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], action: A) {
+		match *self {
+			OnDemandOrGenesisState::OnDemand(ref state) =>
+				StateBackend::<H>::for_key_values_with_prefix(state, prefix, action),
+			OnDemandOrGenesisState::Genesis(ref state) => state.for_key_values_with_prefix(prefix, action),
+		}
+	}
+
 
 	fn for_keys_in_child_storage<A: FnMut(&[u8])>(&self, storage_key: &[u8], action: A) {
 		match *self {
