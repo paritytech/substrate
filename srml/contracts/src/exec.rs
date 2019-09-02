@@ -154,6 +154,9 @@ pub trait Ext {
 	/// Returns a reference to the timestamp of the current block
 	fn now(&self) -> &MomentOf<Self::T>;
 
+	/// Returns the minimum balance that is required for creating an account.
+	fn minimum_balance(&self) -> BalanceOf<Self::T>;
+
 	/// Returns a random number for the current block with the given subject.
 	fn random(&self, subject: &[u8]) -> SeedOf<Self::T>;
 
@@ -764,6 +767,10 @@ where
 
 	fn now(&self) -> &T::Moment {
 		&self.timestamp
+	}
+
+	fn minimum_balance(&self) -> BalanceOf<T> {
+		self.ctx.config.existential_deposit
 	}
 
 	fn deposit_event(&mut self, topics: Vec<T::Hash>, data: Vec<u8>) {

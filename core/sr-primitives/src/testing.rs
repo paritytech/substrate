@@ -187,6 +187,7 @@ pub struct ExtrinsicWrapper<Xt>(Xt);
 
 impl<Xt> traits::Extrinsic for ExtrinsicWrapper<Xt> {
 	type Call = ();
+	type SignaturePayload = ();
 
 	fn is_signed(&self) -> Option<bool> {
 		None
@@ -274,13 +275,14 @@ impl<Call: Codec + Sync + Send, Context, Extra> Checkable<Context> for TestXt<Ca
 }
 impl<Call: Codec + Sync + Send, Extra> traits::Extrinsic for TestXt<Call, Extra> {
 	type Call = Call;
+	type SignaturePayload = (u64, Extra);
 
 	fn is_signed(&self) -> Option<bool> {
 		Some(self.0.is_some())
 	}
 
-	fn new_unsigned(_c: Call) -> Option<Self> {
-		None
+	fn new(c: Call, sig: Option<Self::SignaturePayload>) -> Option<Self> {
+		Some(TestXt(sig, c))
 	}
 }
 
