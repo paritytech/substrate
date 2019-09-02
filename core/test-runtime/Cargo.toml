@@ -18,7 +18,7 @@ aura-primitives = { package = "substrate-consensus-aura-primitives", path = "../
 babe-primitives = { package = "substrate-consensus-babe-primitives", path = "../consensus/babe/primitives", default-features = false }
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
 runtime_io = { package = "sr-io", path = "../sr-io", default-features = false }
-sr-primitives = {  path = "../sr-primitives", default-features = false }
+sr-primitives = { path = "../sr-primitives", default-features = false }
 session = { package = "substrate-session", path = "../session", default-features = false }
 runtime_version = { package = "sr-version", path = "../sr-version", default-features = false }
 runtime_support = { package = "srml-support", path = "../../srml/support", default-features = false }
@@ -31,6 +31,7 @@ cfg-if = "0.1.6"
 srml-babe = { path = "../../srml/babe", default-features = false }
 srml-timestamp = { path = "../../srml/timestamp", default-features = false }
 srml-system = { path = "../../srml/system", default-features = false }
+historied-data = { path = "../utils/historied-data", default-features = false }
 
 [dev-dependencies]
 substrate-executor = { path = "../executor" }
@@ -71,4 +72,5 @@ std = [
 	"srml-system/std",
 	"app-crypto/std",
 	"session/std",
+	"historied-data/std",
 ]

@@ -128,6 +128,14 @@ fn use_trie_function() {
 }
 
 #[test]
+fn use_history_data() {
+	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::AlwaysWasm).build();
+	let runtime_api = client.runtime_api();
+	let block_id = BlockId::Number(client.info().chain.best_number);
+	assert_eq!(runtime_api.use_history_data(&block_id).unwrap(), 0);
+}
+
+#[test]
 fn test_transactions() {
 	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::AlwaysWasm).build();
 	let runtime_api = client.runtime_api();

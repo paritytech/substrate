@@ -258,6 +258,8 @@ cfg_if! {
 				fn fail_on_wasm() -> u64;
 				/// Trie no_std testing.
 				fn use_trie() -> u64;
+				/// History data no_std testing.
+				fn use_history_data() -> u64;
 				/// Transactional tests.
 				fn use_transactions() -> u64;
 				fn benchmark_indirect_call() -> u64;
@@ -302,6 +304,8 @@ cfg_if! {
 				fn fail_on_wasm() -> u64;
 				/// trie no_std testing
 				fn use_trie() -> u64;
+				/// History data no_std testing.
+				fn use_history_data() -> u64;
 				/// Transactional tests.
 				fn use_transactions() -> u64;
 				fn benchmark_indirect_call() -> u64;
@@ -442,6 +446,34 @@ fn code_using_trie() -> u64 {
 	} else { 103 }
 }
 
+fn historied_data() -> u64 {
+
+	let mut states = historied_data::linear::States::default();
+	let mut value = historied_data::linear::History::default();
+	if value.get(states.as_ref()) != None {
+		// value superior to 100 are error codes.
+		return 101;
+	}
+ 
+	value.set(states.as_ref(), 42u64);
+	states.start_transaction();
+	if value.get(states.as_ref()) != Some(&42) {
+		return 102;
+	}
+	value.set(states.as_ref(), 43u64);
+	if value.get(states.as_ref()) != Some(&43) {
+		return 103;
+	}
+	states.discard_transaction();
+	if value.get(states.as_ref()) != Some(&42) {
+		return 104;
+	}
+ 
+	// 0 for success
+	return 0;
+}
+
+
 impl_opaque_keys! {
 	pub struct SessionKeys {
 		#[id(key_types::ED25519)]
@@ -551,6 +583,10 @@ cfg_if! {
 
 				fn use_trie() -> u64 {
 					code_using_trie()
+				}
+
+				fn use_history_data() -> u64 {
+					historied_data()
 				}
 
 				fn use_transactions() -> u64 {
@@ -743,6 +779,10 @@ cfg_if! {
 
 				fn use_trie() -> u64 {
 					code_using_trie()
+				}
+
+				fn use_history_data() -> u64 {
+					historied_data()
 				}
 
 				fn use_transactions() -> u64 {

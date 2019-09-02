@@ -185,7 +185,9 @@ mod test {
 	use crate::backend::InMemory;
 	use crate::changes_trie::Configuration;
 	use crate::changes_trie::storage::InMemoryStorage;
-	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet, History, TransactionState};
+	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet};
+	use historied_data::linear::{History, States};
+	use historied_data::State as TransactionState;
 	use super::*;
 
 	fn prepare_for_build(zero: u64) -> (
@@ -239,7 +241,7 @@ mod test {
 		]);
 		let changes = OverlayedChanges {
 			changes: OverlayedChangeSet {
-				history: vec![TransactionState::Committed, TransactionState::Pending],
+				history: States::test_vector(vec![TransactionState::Committed, TransactionState::Pending]),
 				children: Default::default(),
 				top: vec![
 					(EXTRINSIC_INDEX.to_vec(), History::from_iter(vec![
@@ -428,7 +430,6 @@ mod test {
 					extrinsics: Some(vec![1].into_iter().collect()),
 				}, 1),
 			]));
-
 
 			let parent = AnchorBlockId { hash: Default::default(), number: zero + 3 };
 			let changes_trie_nodes = prepare_input(

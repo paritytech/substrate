@@ -375,7 +375,8 @@ mod tests {
 	use crate::backend::InMemory;
 	use crate::changes_trie::{Configuration as ChangesTrieConfiguration,
 		InMemoryStorage as InMemoryChangesTrieStorage};
-	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet, History, TransactionState};
+	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet};
+	use historied_data::linear::History;
 	use super::*;
 
 	type TestBackend = InMemory<Blake2Hasher>;
@@ -390,7 +391,7 @@ mod tests {
 				digest_levels: 0,
 			}),
 			changes: OverlayedChangeSet {
-				history: vec![TransactionState::Pending],
+				history: Default::default(),
 				children: Default::default(),
 				top: vec![
 					(EXTRINSIC_INDEX.to_vec(), History::from_iter(vec![

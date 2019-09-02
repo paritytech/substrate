@@ -49,7 +49,7 @@ mod __impl {
 pub use alloc::boxed;
 pub use alloc::rc;
 pub use alloc::vec;
-pub use core::borrow;
+pub use alloc::borrow;
 pub use core::cell;
 pub use core::clone;
 pub use core::cmp;
