@@ -23,7 +23,7 @@ use libp2p::Multiaddr;
 use libp2p::core::transport::Transport;
 use log::{trace, debug, warn, error};
 use rand::Rng as _;
-use std::{collections::VecDeque, fmt, mem, pin::Pin, task::Context, task::Poll, time::{Duration, Instant}};
+use std::{collections::VecDeque, fmt, mem, pin::Pin, task::Context, task::Poll, time::Duration};
 
 /// Maximum number of pending telemetry messages.
 const MAX_PENDING: usize = 10;
@@ -36,10 +36,8 @@ pub struct Node<TTrans: Transport> {
 	socket: NodeSocket<TTrans>,
 	/// Transport used to establish new connections.
 	transport: TTrans,
-    /// Timeout for a connection to the node.
-    connection_timeout: Delay,
-	/// Timestamp of last successful connection, if any.
-	last_connection: Option<Instant>,
+    /// Timeout for a connection to the node that is writing data.
+    connection_timeout: Option<Delay>,
 }
 
 enum NodeSocket<TTrans: Transport> {
@@ -80,8 +78,7 @@ impl<TTrans: Transport> Node<TTrans> {
 			addr,
 			socket: NodeSocket::ReconnectNow,
 			transport,
-			connection_timeout: Delay::new(Duration::from_millis(500)),
-			last_connection: None,
+			connection_timeout: None,
 		}
 	}
 
@@ -120,41 +117,23 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 	/// Polls the node for updates. Must be performed regularly.
 	pub fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<NodeEvent<TSinkErr>> {
 		let mut socket = mem::replace(&mut self.socket, NodeSocket::Poisoned);
-		loop {
-			match Future::poll(Pin::new(&mut self.connection_timeout), cx) {
-				Poll::Pending => break,
-				Poll::Ready(Err(err)) => {
-					warn!(target: "telemetry", "Connection timeout error for {} {:?}", self.addr, err);
-					// Reset the delay.
-					self.connection_timeout = Delay::new(Duration::from_millis(500));
-					// Continue without polling, so that we can't be stuck in an infinite error loop
-					break;
-				}
-				Poll::Ready(Ok(_)) => {
-					let should_reconnect = match self.last_connection {
-						Some(instant) => instant.elapsed() > Duration::from_millis(500),
-						None => true,
-					};
-					if should_reconnect {
-						warn!(target: "telemetry", "Server unresponsive from {}", self.addr);
-						let timeout = gen_rand_reconnect_delay();
-						socket =  NodeSocket::WaitingReconnect(timeout);
-					}
-					// Reset the delay.
-					self.connection_timeout = Delay::new(Duration::from_millis(500));
-				}
-			}
-		}
 		self.socket = loop {
 			match socket {
 				NodeSocket::Connected(mut conn) => {
-					match NodeSocketConnected::poll(Pin::new(&mut conn), cx, &self.addr) {
+					let mut is_writing_data = false;
+					match NodeSocketConnected::poll(Pin::new(&mut conn), cx, &self.addr, &mut is_writing_data) {
 						Poll::Ready(Ok(_)) => {
-							self.last_connection = Some(Instant::now());
+							self.connection_timeout = None;
 							break NodeSocket::Connected(conn)
 						},
-						Poll::Pending => break NodeSocket::Connected(conn),
+						Poll::Pending => {
+							if is_writing_data {
+								self.connection_timeout = Some(Delay::new(Duration::from_millis(500)));
+							}
+							break NodeSocket::Connected(conn)
+						},
 						Poll::Ready(Err(err)) => {
+							self.connection_timeout = None;
 							warn!(target: "telemetry", "Disconnected from {}: {:?}", self.addr, err);
 							let timeout = gen_rand_reconnect_delay();
 							self.socket = NodeSocket::WaitingReconnect(timeout);
@@ -200,6 +179,21 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 			}
 		};
 
+		if let Some(mut timeout) = self.connection_timeout.as_mut() {
+			match Future::poll(Pin::new(&mut timeout), cx) {
+				Poll::Pending => {},
+				Poll::Ready(Err(err)) => {
+					warn!(target: "telemetry", "Connection timeout error for {} {:?}", self.addr, err);
+				}
+				Poll::Ready(Ok(_)) => {
+					println!("Reconnecting");
+					warn!(target: "telemetry", "Server unresponsive from {}", self.addr);
+					let timeout = gen_rand_reconnect_delay();
+					self.socket = NodeSocket::WaitingReconnect(timeout);
+				}
+			}
+		}
+
 		Poll::Pending
 	}
 }
@@ -225,6 +219,7 @@ where TTrans::Output: Sink<BytesMut, Error = TSinkErr>
 		mut self: Pin<&mut Self>,
 		cx: &mut Context,
 		my_addr: &Multiaddr,
+		is_writing_data: &mut bool,
 	) -> Poll<Result<(), TSinkErr>> {
 		loop {
 			if let Some(item) = self.pending.pop_front() {
@@ -241,6 +236,7 @@ where TTrans::Output: Sink<BytesMut, Error = TSinkErr>
 					target: "telemetry", "Successfully sent {:?} bytes message to {}",
 					item_len, my_addr
 				);
+				*is_writing_data = true;
 				self.need_flush = true;
 
 			} else if self.need_flush {
@@ -249,24 +245,23 @@ where TTrans::Output: Sink<BytesMut, Error = TSinkErr>
 					Poll::Ready(Err(err)) => return Poll::Ready(Err(err)),
 					Poll::Ready(Ok(())) => self.need_flush = false,
 				}
-
 			} else {
 				match Stream::poll_next(Pin::new(&mut self.sink), cx) {
 					Poll::Ready(Some(Ok(_))) => {
+						*is_writing_data = false;
 						// We poll the telemetry `Stream` because the underlying implementation relies on
 						// this in order to answer PINGs.
 						// We return a result so that the connection timeout is reset.
 						return Poll::Ready(Ok(()))
 					},
 					Poll::Ready(Some(Err(err))) => {
+						*is_writing_data = false;
 						return Poll::Ready(Err(err))
 					},
-					Poll::Pending | Poll::Ready(None) => break,
+					Poll::Pending | Poll::Ready(None) => return Poll::Pending,
 				}
 			}
 		}
-
-		Poll::Pending
 	}
 }
 
