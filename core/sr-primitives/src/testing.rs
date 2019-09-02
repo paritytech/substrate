@@ -302,7 +302,7 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 		_info: DispatchInfo,
 		_len: usize,
 	) -> TransactionValidity {
-		TransactionValidity::Valid(Default::default())
+		Ok(Default::default())
 	}
 
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,

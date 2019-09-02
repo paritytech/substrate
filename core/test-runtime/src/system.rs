@@ -189,7 +189,7 @@ pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 		p
 	};
 
-	TransactionValidity::Valid(ValidTransaction {
+	Ok(ValidTransaction {
 		priority: tx.amount,
 		requires,
 		provides,

@@ -277,11 +277,7 @@ where
 	/// Changes made to storage should be discarded.
 	pub fn validate_transaction(uxt: Block::Extrinsic) -> TransactionValidity {
 		let encoded_len = uxt.using_encoded(|d| d.len());
-		let xt = match uxt.check(&Default::default()) {
-			// Checks out. Carry on.
-			Ok(xt) => xt,
-			Err(err) => return err.into(),
-		};
+		let xt = uxt.check(&Default::default())?;
 
 		let dispatch_info = xt.get_dispatch_info();
 		xt.validate::<UnsignedValidator>(dispatch_info, encoded_len)
@@ -377,7 +373,7 @@ mod tests {
 
 		fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
 			match call {
-				Call::set_balance(_, _, _) => TransactionValidity::Valid(Default::default()),
+				Call::set_balance(_, _, _) => Ok(Default::default()),
 				_ => UnknownTransaction::NoUnsignedValidator.into(),
 			}
 		}
@@ -574,11 +570,10 @@ mod tests {
 	#[test]
 	fn validate_unsigned() {
 		let xt = sr_primitives::testing::TestXt(None, Call::set_balance(33, 69, 69));
-		let valid = TransactionValidity::Valid(Default::default());
 		let mut t = new_test_ext(1);
 
 		with_externalities(&mut t, || {
-			assert_eq!(Executive::validate_transaction(xt.clone()), valid);
+			assert_eq!(Executive::validate_transaction(xt.clone()), Ok(Default::default()));
 			assert_eq!(
 				Executive::apply_extrinsic(xt),
 				Ok(

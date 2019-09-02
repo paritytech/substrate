@@ -951,14 +951,14 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		// discards any transaction which is bigger than the length or weight limit **alone**, which
 		// is a guarantee that it will fail in the pre-dispatch phase.
 		if let Err(e) = Self::check_block_length(info, len) {
-			return e.into();
+			return Err(e);
 		}
 
 		if let Err(e) = Self::check_weight(info) {
-			return e.into();
+			return Err(e);
 		}
 
-		ValidTransaction { priority: Self::get_priority(info), ..Default::default() }.into()
+		Ok(ValidTransaction { priority: Self::get_priority(info), ..Default::default() })
 	}
 }
 
@@ -1037,13 +1037,13 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 			vec![]
 		};
 
-		ValidTransaction {
+		Ok(ValidTransaction {
 			priority: info.weight as TransactionPriority,
 			requires,
 			provides,
 			longevity: TransactionLongevity::max_value(),
 			propagate: true,
-		}.into()
+		})
 	}
 }
 
@@ -1080,10 +1080,10 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 	) -> TransactionValidity {
 		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
 		let valid_till = (self.0).0.death(current_u64);
-		ValidTransaction {
+		Ok(ValidTransaction {
 			longevity: valid_till.saturating_sub(current_u64),
 			..Default::default()
-		}.into()
+		})
 	}
 
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
@@ -1384,13 +1384,13 @@ mod tests {
 			let info = DispatchInfo::default();
 			let len = 0_usize;
 			// stale
-			assert!(CheckNonce::<Test>(0).validate(&1, CALL, info, len).is_invalid_or_unknown());
+			assert!(CheckNonce::<Test>(0).validate(&1, CALL, info, len).is_err());
 			assert!(CheckNonce::<Test>(0).pre_dispatch(&1, CALL, info, len).is_err());
 			// correct
-			assert!(CheckNonce::<Test>(1).validate(&1, CALL, info, len).is_valid());
+			assert!(CheckNonce::<Test>(1).validate(&1, CALL, info, len).is_ok());
 			assert!(CheckNonce::<Test>(1).pre_dispatch(&1, CALL, info, len).is_ok());
 			// future
-			assert!(CheckNonce::<Test>(5).validate(&1, CALL, info, len).is_valid());
+			assert!(CheckNonce::<Test>(5).validate(&1, CALL, info, len).is_ok());
 			assert!(CheckNonce::<Test>(5).pre_dispatch(&1, CALL, info, len).is_err());
 		})
 	}
@@ -1481,14 +1481,12 @@ mod tests {
 
 			let priority = CheckWeight::<Test>(PhantomData)
 				.validate(&1, CALL, normal, len)
-				.into_valid()
 				.unwrap()
 				.priority;
 			assert_eq!(priority, 100);
 
 			let priority = CheckWeight::<Test>(PhantomData)
 				.validate(&1, CALL, op, len)
-				.into_valid()
 				.unwrap()
 				.priority;
 			assert_eq!(priority, Bounded::max_value());
@@ -1547,10 +1545,7 @@ mod tests {
 			System::set_block_number(17);
 			<BlockHash<Test>>::insert(16, H256::repeat_byte(1));
 
-			assert_eq!(
-				ext.validate(&1, CALL, normal, len).into_valid().unwrap().longevity,
-				15,
-			);
+			assert_eq!(ext.validate(&1, CALL, normal, len).unwrap().longevity, 15);
 		})
 	}
 }

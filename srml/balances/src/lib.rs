@@ -1266,7 +1266,7 @@ impl<T: Trait<I>, I: Instance + Clone + Eq> SignedExtension for TakeFees<T, I> {
 		// NOTE: we probably want to maximize the _fee (of any type) per weight unit_ here, which
 		// will be a bit more than setting the priority to tip. For now, this is enough.
 		r.priority = fee.saturated_into::<TransactionPriority>();
-		r.into()
+		Ok(r)
 	}
 }
 

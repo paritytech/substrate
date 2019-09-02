@@ -871,7 +871,7 @@ pub trait SignedExtension: Codec + MaybeDebug + Sync + Send + Clone + Eq + Parti
 		_info: DispatchInfo,
 		_len: usize,
 	) -> TransactionValidity {
-		ValidTransaction::default().into()
+		Ok(ValidTransaction::default())
 	}
 
 	/// Do any pre-flight stuff for a signed transaction.
@@ -890,7 +890,6 @@ pub trait SignedExtension: Codec + MaybeDebug + Sync + Send + Clone + Eq + Parti
 		len: usize,
 	) -> Result<Self::Pre, crate::ApplyError> {
 		self.validate(who, call, info, len)
-			.into_result()
 			.map(|_| Self::Pre::default())
 			.map_err(Into::into)
 	}
@@ -911,7 +910,7 @@ pub trait SignedExtension: Codec + MaybeDebug + Sync + Send + Clone + Eq + Parti
 		_info: DispatchInfo,
 		_len: usize,
 	) -> TransactionValidity {
-		ValidTransaction::default().into()
+		Ok(ValidTransaction::default())
 	}
 
 	/// Do any pre-flight stuff for a unsigned transaction.
@@ -928,7 +927,6 @@ pub trait SignedExtension: Codec + MaybeDebug + Sync + Send + Clone + Eq + Parti
 		len: usize,
 	) -> Result<Self::Pre, crate::ApplyError> {
 		Self::validate_unsigned(call, info, len)
-			.into_result()
 			.map(|_| Self::Pre::default())
 			.map_err(Into::into)
 	}
@@ -973,11 +971,13 @@ macro_rules! tuple_impl_indexed {
 				len: usize,
 			) -> TransactionValidity {
 				let aggregator = vec![
-					$( <$direct as SignedExtension>::validate(&self.$index, who, call, info, len) ),+
+					$( <$direct as SignedExtension>::validate(&self.$index, who, call, info, len)? ),+
 				];
-				aggregator.into_iter().fold(
-					TransactionValidity::Valid(ValidTransaction::default()),
-					|acc, a| acc.combine_with(|| a)
+				Ok(
+					aggregator.into_iter().fold(
+						ValidTransaction::default(),
+						|acc, a| acc.combine_with(a),
+					)
 				)
 			}
 			fn pre_dispatch(
@@ -994,11 +994,13 @@ macro_rules! tuple_impl_indexed {
 				info: DispatchInfo,
 				len: usize,
 			) -> TransactionValidity {
-				let aggregator = vec![ $( $direct::validate_unsigned(call, info, len) ),+ ];
+				let aggregator = vec![ $( $direct::validate_unsigned(call, info, len)? ),+ ];
 
-				aggregator.into_iter().fold(
-					TransactionValidity::Valid(ValidTransaction::default()),
-					|acc, a| acc.combine_with(|| a)
+				Ok(
+					aggregator.into_iter().fold(
+						ValidTransaction::default(),
+						|acc, a| acc.combine_with(a),
+					)
 				)
 			}
 			fn pre_dispatch_unsigned(

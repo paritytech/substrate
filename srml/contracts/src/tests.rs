@@ -2405,10 +2405,7 @@ fn check_block_gas_limit_works() {
 			);
 
 			let call: Call = crate::Call::update_schedule(Default::default()).into();
-			assert_eq!(
-				check.validate(&0, &call, info, 0),
-				ValidTransaction::default().into(),
-			);
+			assert_eq!(check.validate(&0, &call, info, 0), Ok(Default::default()));
 		}
 	);
 }

@@ -480,7 +480,7 @@ cfg_if! {
 			impl client_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
-						return TransactionValidity::Valid(ValidTransaction {
+						return Ok(ValidTransaction {
 							priority: data.len() as u64,
 							requires: vec![],
 							provides: vec![data],
@@ -664,7 +664,7 @@ cfg_if! {
 			impl client_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
-						return TransactionValidity::Valid(ValidTransaction{
+						return Ok(ValidTransaction{
 							priority: data.len() as u64,
 							requires: vec![],
 							provides: vec![data],

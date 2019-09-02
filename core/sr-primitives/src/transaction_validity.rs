@@ -158,119 +158,22 @@ impl From<UnknownTransaction> for crate::ApplyError {
 }
 
 /// Information on a transaction's validity and, if valid, on how it relates to other transactions.
-#[derive(Clone, PartialEq, Eq, Encode)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub enum TransactionValidity {
-	/// Transaction is invalid.
-	Invalid(InvalidTransaction),
-	/// Transaction is valid.
-	Valid(ValidTransaction),
-	/// Transaction validity can't be determined.
-	Unknown(UnknownTransaction),
-}
-
-impl Into<TransactionValidity> for TransactionValidityError {
-	fn into(self) -> TransactionValidity {
-		match self {
-			TransactionValidityError::Invalid(invalid) => TransactionValidity::Invalid(invalid),
-			TransactionValidityError::Unknown(unknown) => TransactionValidity::Unknown(unknown),
-		}
-	}
-}
+pub type TransactionValidity = Result<ValidTransaction, TransactionValidityError>;
 
 impl Into<TransactionValidity> for InvalidTransaction {
 	fn into(self) -> TransactionValidity {
-		TransactionValidity::Invalid(self)
+		Err(self.into())
 	}
 }
 
 impl Into<TransactionValidity> for UnknownTransaction {
 	fn into(self) -> TransactionValidity {
-		TransactionValidity::Unknown(self)
-	}
-}
-
-impl Into<TransactionValidity> for ValidTransaction {
-	fn into(self) -> TransactionValidity {
-		TransactionValidity::Valid(self)
-	}
-}
-
-impl TransactionValidity {
-	/// Combine two `TransactionValidity`s.
-	///
-	/// If both are valid, they are combined.
-	///
-	/// If one of them is not valid, the non-valid one is returned. If both are not valid, `self` is
-	/// returned.
-	pub fn combine_with<F: FnOnce() -> Self>(self, other: F) -> Self {
-		match self {
-			TransactionValidity::Valid(valid) => {
-				match other() {
-					TransactionValidity::Valid(other_valid) => {
-						TransactionValidity::Valid(valid.combine_with(other_valid))
-					},
-					o => o,
-				}
-			},
-			_ => self,
-		}
-	}
-
-	/// Convert this `TransactionValidity` into a `Result`.
-	pub fn into_result(self) -> Result<ValidTransaction, TransactionValidityError> {
-		match self {
-			TransactionValidity::Valid(valid) => Ok(valid),
-			TransactionValidity::Invalid(invalid) => Err(invalid.into()),
-			TransactionValidity::Unknown(unknown) => Err(unknown.into()),
-		}
-	}
-
-	/// Returns if the validity `invalid` or `unknown`.
-	pub fn is_invalid_or_unknown(&self) -> bool {
-		match self {
-			TransactionValidity::Invalid(_) | TransactionValidity::Unknown(_) => true,
-			TransactionValidity::Valid(_) => false,
-		}
-	}
-
-	/// Returns if the validity `valid`.
-	pub fn is_valid(&self) -> bool {
-		!self.is_invalid_or_unknown()
-	}
-
-	/// Try to convert into `ValidTransaction`.
-	pub fn into_valid(self) -> Option<ValidTransaction> {
-		match self {
-			TransactionValidity::Valid(valid) => Some(valid),
-			_ => None,
-		}
-	}
-}
-
-impl Decode for TransactionValidity {
-	fn decode<I: crate::codec::Input>(value: &mut I) -> Result<Self, codec::Error> {
-		match value.read_byte()? {
-			0 => Ok(TransactionValidity::Invalid(InvalidTransaction::decode(value)?)),
-			1 => {
-				let priority = TransactionPriority::decode(value)?;
-				let requires = Vec::decode(value)?;
-				let provides = Vec::decode(value)?;
-				let longevity = TransactionLongevity::decode(value)?;
-				let propagate = bool::decode(value).unwrap_or(true);
-
-				Ok(TransactionValidity::Valid(ValidTransaction {
-					priority, requires, provides, longevity, propagate,
-				}))
-			},
-			2 => Ok(TransactionValidity::Unknown(UnknownTransaction::decode(value)?)),
-			_ => Err("Invalid transaction validity variant".into()),
-		}
+		Err(self.into())
 	}
 }
 
 /// Information concerning a valid transaction.
-#[derive(Clone, PartialEq, Eq, Encode)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct ValidTransaction {
 	/// Priority of the transaction.
@@ -335,30 +238,8 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn should_decode_with_backward_compat() {
-		let old_encoding = vec![
-			1, 5, 0, 0, 0, 0, 0, 0, 0, 4, 16, 1, 2, 3, 4, 4, 12, 4, 5, 6, 42, 0, 0, 0, 0, 0, 0, 0,
-		];
-
-		assert_eq!(
-			TransactionValidity::decode(&mut &*old_encoding),
-			Ok(
-				TransactionValidity::Valid(
-					ValidTransaction {
-						priority: 5,
-						requires: vec![vec![1, 2, 3, 4]],
-						provides: vec![vec![4, 5, 6]],
-						longevity: 42,
-						propagate: true,
-					}
-				),
-			)
-		);
-	}
-
-	#[test]
 	fn should_encode_and_decode() {
-		let v = TransactionValidity::Valid(ValidTransaction {
+		let v: TransactionValidity = Ok(ValidTransaction {
 			priority: 5,
 			requires: vec![vec![1, 2, 3, 4]],
 			provides: vec![vec![4, 5, 6]],

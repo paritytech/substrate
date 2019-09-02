@@ -62,9 +62,8 @@ where
 		if let Some((ref id, ref extra)) = self.signed {
 			Extra::validate(extra, id, &self.function, info, len)
 		} else {
-			Extra::validate_unsigned(&self.function, info, len).combine_with(
-				|| U::validate_unsigned(&self.function)
-			)
+			let valid = Extra::validate_unsigned(&self.function, info, len)?;
+			Ok(valid.combine_with(U::validate_unsigned(&self.function)?))
 		}
 	}
 

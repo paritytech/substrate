@@ -987,12 +987,12 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 	) -> TransactionValidity {
 		let call = match call.is_sub_type() {
 			Some(call) => call,
-			None => return ValidTransaction::default().into(),
+			None => return Ok(ValidTransaction::default()),
 		};
 
 		match call {
 			Call::claim_surcharge(_, _) | Call::update_schedule(_) =>
-				ValidTransaction::default().into(),
+				Ok(ValidTransaction::default()),
 			Call::put_code(gas_limit, _)
 				| Call::call(_, _, gas_limit, _)
 				| Call::create(_, gas_limit, _, _) => {
@@ -1003,7 +1003,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 					// gas limit reached, revert the transaction and retry again in the future
 					InvalidTransaction::ExhaustsResources.into()
 				} else {
-					ValidTransaction::default().into()
+					Ok(ValidTransaction::default())
 				}
 			},
 			Call::__PhantomItem(_, _)  => unreachable!("Variant is never constructed"),

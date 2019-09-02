@@ -34,7 +34,7 @@ use parking_lot::{Mutex, RwLock};
 use sr_primitives::{
 	generic::BlockId,
 	traits::{self, SaturatedConversion},
-	transaction_validity::{TransactionValidity, TransactionTag as Tag},
+	transaction_validity::{TransactionValidity, TransactionTag as Tag, TransactionValidityError},
 };
 
 pub use crate::base_pool::Limit;
@@ -129,7 +129,7 @@ impl<B: ChainApi> Pool<B> {
 				}
 
 				match self.api.validate_transaction(at, xt.clone())? {
-					TransactionValidity::Valid(validity) => if validity.provides.is_empty() {
+					Ok(validity) => if validity.provides.is_empty() {
 						Err(error::Error::NoTagsProvided.into())
 					} else {
 						Ok(base::Transaction {
@@ -146,10 +146,10 @@ impl<B: ChainApi> Pool<B> {
 								.saturating_add(validity.longevity),
 						})
 					},
-					TransactionValidity::Invalid(e) => {
+					Err(TransactionValidityError::Invalid(e)) => {
 						Err(error::Error::InvalidTransaction(e).into())
 					},
-					TransactionValidity::Unknown(e) => {
+					Err(TransactionValidityError::Unknown(e)) => {
 						self.listener.write().invalid(&hash);
 						Err(error::Error::UnknownTransaction(e).into())
 					},
@@ -245,7 +245,7 @@ impl<B: ChainApi> Pool<B> {
 					None => {
 						let validity = self.api.validate_transaction(parent, extrinsic.clone());
 						match validity {
-							Ok(TransactionValidity::Valid(mut validity)) => {
+							Ok(Ok(mut validity)) => {
 								tags.append(&mut validity.provides);
 							},
 							// silently ignore invalid extrinsics,
@@ -494,7 +494,7 @@ mod tests {
 			if nonce < block_number {
 				Ok(InvalidTransaction::Stale.into())
 			} else {
-				Ok(TransactionValidity::Valid(ValidTransaction {
+				Ok(Ok(ValidTransaction {
 					priority: 4,
 					requires: if nonce > block_number { vec![vec![nonce as u8 - 1]] } else { vec![] },
 					provides: if nonce == INVALID_NONCE { vec![] } else { vec![vec![nonce as u8]] },

@@ -519,16 +519,16 @@ impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
 				return InvalidTransaction::BadProof.into();
 			}
 
-			return TransactionValidity::Valid(ValidTransaction {
+			Ok(ValidTransaction {
 				priority: 0,
 				requires: vec![],
 				provides: vec![(current_session, authority_id).encode()],
 				longevity: TransactionLongevity::max_value(),
 				propagate: true,
 			})
+		} else {
+			InvalidTransaction::Call.into()
 		}
-
-		InvalidTransaction::Call.into()
 	}
 }
 
