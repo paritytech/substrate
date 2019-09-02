@@ -130,36 +130,31 @@ impl<Block: BlockT> AuthoritySetForFinalityChecker<Block> for Arc<dyn FetchCheck
 }
 
 /// Finality proof provider for serving network requests.
-pub struct FinalityProofProvider<B, E, Block: BlockT<Hash=H256>, RA> {
-	client: Arc<Client<B, E, Block, RA>>,
+pub struct FinalityProofProvider<B,  Block: BlockT<Hash=H256>> {
+	backend: Arc<B>,
 	authority_provider: Arc<dyn AuthoritySetForFinalityProver<Block>>,
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA> FinalityProofProvider<B, E, Block, RA>
-	where
-		B: Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
-		RA: Send + Sync,
+impl<B, Block: BlockT<Hash=H256>> FinalityProofProvider<B, Block>
+	where B: Backend<Block, Blake2Hasher> + Send + Sync + 'static
 {
 	/// Create new finality proof provider using:
 	///
-	/// - client for accessing blockchain data;
+	/// - backend for accessing blockchain data;
 	/// - authority_provider for calling and proving runtime methods.
 	pub fn new(
-		client: Arc<Client<B, E, Block, RA>>,
+		backend: Arc<B>,
 		authority_provider: Arc<dyn AuthoritySetForFinalityProver<Block>>,
 	) -> Self {
-		FinalityProofProvider { client, authority_provider }
+		FinalityProofProvider { backend, authority_provider }
 	}
 }
 
-impl<B, E, Block, RA> network::FinalityProofProvider<Block> for FinalityProofProvider<B, E, Block, RA>
+impl<B, Block> network::FinalityProofProvider<Block> for FinalityProofProvider<B, Block>
 	where
 		Block: BlockT<Hash=H256>,
 		NumberFor<Block>: BlockNumberOps,
 		B: Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
-		RA: Send + Sync,
 {
 	fn prove_finality(
 		&self,
@@ -173,8 +168,7 @@ impl<B, E, Block, RA> network::FinalityProofProvider<Block> for FinalityProofPro
 			})?;
 		match request {
 			FinalityProofRequest::Original(request) => prove_finality::<_, _, GrandpaJustification<Block>>(
-				#[allow(deprecated)]
-				&*self.client.backend().blockchain(),
+				&*self.backend.blockchain(),
 				&*self.authority_provider,
 				request.authorities_set_id,
 				request.last_finalized,

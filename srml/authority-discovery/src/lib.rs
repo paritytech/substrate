@@ -44,15 +44,7 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(keys): Vec<AuthorityIdFor<T>>;
-		build(|
-			  storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
-			  config: &GenesisConfig<T>,
-			  | {
-				  sr_io::with_storage(
-					  storage,
-					  || Module::<T>::initialize_keys(&config.keys),
-				  );
-			  })
+		build(|config| Module::<T>::initialize_keys(&config.keys))
 	}
 }
 
@@ -194,7 +186,11 @@ mod tests {
 		type AuthorityId = AuthorityId;
 		type Call = im_online::Call<Test>;
 		type Event = ();
-		type UncheckedExtrinsic = UncheckedExtrinsic<(), im_online::Call<Test>, (), ()>;
+		type SubmitTransaction = system::offchain::TransactionSubmitter<
+			(),
+			im_online::Call<Test>,
+			UncheckedExtrinsic<(), im_online::Call<Test>, (), ()>,
+		>;
 		type ReportUnresponsiveness = ();
 		type CurrentElectedSet = DummyCurrentElectedSet<AuthorityId>;
 	}

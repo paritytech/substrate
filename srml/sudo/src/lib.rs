@@ -86,7 +86,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sr_std::prelude::*;
+use rstd::prelude::*;
 use sr_primitives::traits::StaticLookup;
 use sr_primitives::weights::SimpleDispatchInfo;
 use srml_support::{

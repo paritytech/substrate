@@ -18,7 +18,7 @@
 
 use crate::codec::Codec;
 use runtime_io::{blake2_128, blake2_256, twox_128, twox_256};
-use crate::storage::hashed::generator::StorageHasher;
+use crate::storage::hashed::StorageHasher;
 use crate::Twox64Concat;
 use crate::rstd::prelude::Vec;
 

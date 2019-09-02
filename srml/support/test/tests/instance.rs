@@ -23,11 +23,11 @@ use srml_support::{
 		DecodeDifferent, StorageMetadata, StorageEntryModifier, StorageEntryType, DefaultByteGetter,
 		StorageEntryMetadata, StorageHasher
 	},
+	StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap,
 };
 use inherents::{
 	ProvideInherent, InherentData, InherentIdentifier, RuntimeString, MakeFatalError
 };
-use srml_support::{StorageValue, StorageMap, StorageDoubleMap, EnumerableStorageMap};
 use primitives::{H256, sr25519};
 
 mod system;
@@ -75,7 +75,7 @@ mod module1 {
 
 		add_extra_genesis {
 			config(test) : T::BlockNumber;
-			build(|_, config: &Self| {
+			build(|config: &Self| {
 				println!("{}", config.test);
 			});
 		}
@@ -304,53 +304,27 @@ fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 
 #[test]
 fn storage_instance_independance() {
-	with_externalities(&mut new_test_ext(), || {
-		let mut map = std::collections::btree_map::BTreeMap::new();
-		for key in [
-			module2::Value::<Runtime>::key().to_vec(),
-			module2::Value::<Runtime, module2::Instance1>::key().to_vec(),
-			module2::Value::<Runtime, module2::Instance2>::key().to_vec(),
-			module2::Value::<Runtime, module2::Instance3>::key().to_vec(),
-			module2::Map::<module2::DefaultInstance>::prefix().to_vec(),
-			module2::Map::<module2::Instance1>::prefix().to_vec(),
-			module2::Map::<module2::Instance2>::prefix().to_vec(),
-			module2::Map::<module2::Instance3>::prefix().to_vec(),
-			module2::LinkedMap::<module2::DefaultInstance>::prefix().to_vec(),
-			module2::LinkedMap::<module2::Instance1>::prefix().to_vec(),
-			module2::LinkedMap::<module2::Instance2>::prefix().to_vec(),
-			module2::LinkedMap::<module2::Instance3>::prefix().to_vec(),
-			module2::DoubleMap::<module2::DefaultInstance>::prefix().to_vec(),
-			module2::DoubleMap::<module2::Instance1>::prefix().to_vec(),
-			module2::DoubleMap::<module2::Instance2>::prefix().to_vec(),
-			module2::DoubleMap::<module2::Instance3>::prefix().to_vec(),
-			module2::Map::<module2::DefaultInstance>::key_for(0),
-			module2::Map::<module2::Instance1>::key_for(0).to_vec(),
-			module2::Map::<module2::Instance2>::key_for(0).to_vec(),
-			module2::Map::<module2::Instance3>::key_for(0).to_vec(),
-			module2::LinkedMap::<module2::DefaultInstance>::key_for(0),
-			module2::LinkedMap::<module2::Instance1>::key_for(0).to_vec(),
-			module2::LinkedMap::<module2::Instance2>::key_for(0).to_vec(),
-			module2::LinkedMap::<module2::Instance3>::key_for(0).to_vec(),
-			module2::Map::<module2::DefaultInstance>::key_for(1),
-			module2::Map::<module2::Instance1>::key_for(1).to_vec(),
-			module2::Map::<module2::Instance2>::key_for(1).to_vec(),
-			module2::Map::<module2::Instance3>::key_for(1).to_vec(),
-			module2::LinkedMap::<module2::DefaultInstance>::key_for(1),
-			module2::LinkedMap::<module2::Instance1>::key_for(1).to_vec(),
-			module2::LinkedMap::<module2::Instance2>::key_for(1).to_vec(),
-			module2::LinkedMap::<module2::Instance3>::key_for(1).to_vec(),
-			module2::DoubleMap::<module2::DefaultInstance>::prefix_for(&1),
-			module2::DoubleMap::<module2::Instance1>::prefix_for(&1).to_vec(),
-			module2::DoubleMap::<module2::Instance2>::prefix_for(&1).to_vec(),
-			module2::DoubleMap::<module2::Instance3>::prefix_for(&1).to_vec(),
-			module2::DoubleMap::<module2::DefaultInstance>::key_for(&1, &1),
-			module2::DoubleMap::<module2::Instance1>::key_for(&1, &1).to_vec(),
-			module2::DoubleMap::<module2::Instance2>::key_for(&1, &1).to_vec(),
-			module2::DoubleMap::<module2::Instance3>::key_for(&1, &1).to_vec(),
-		].iter() {
-			assert!(map.insert(key, ()).is_none())
-		}
+	let mut storage = (std::collections::HashMap::new(), std::collections::HashMap::new());
+	runtime_io::with_storage(&mut storage, || {
+		module2::Value::<Runtime>::put(0);
+		module2::Value::<Runtime, module2::Instance1>::put(0);
+		module2::Value::<Runtime, module2::Instance2>::put(0);
+		module2::Value::<Runtime, module2::Instance3>::put(0);
+		module2::Map::<module2::DefaultInstance>::insert(0, 0);
+		module2::Map::<module2::Instance1>::insert(0, 0);
+		module2::Map::<module2::Instance2>::insert(0, 0);
+		module2::Map::<module2::Instance3>::insert(0, 0);
+		module2::LinkedMap::<module2::DefaultInstance>::insert(0, vec![]);
+		module2::LinkedMap::<module2::Instance1>::insert(0, vec![]);
+		module2::LinkedMap::<module2::Instance2>::insert(0, vec![]);
+		module2::LinkedMap::<module2::Instance3>::insert(0, vec![]);
+		module2::DoubleMap::<module2::DefaultInstance>::insert(&0, &0, &0);
+		module2::DoubleMap::<module2::Instance1>::insert(&0, &0, &0);
+		module2::DoubleMap::<module2::Instance2>::insert(&0, &0, &0);
+		module2::DoubleMap::<module2::Instance3>::insert(&0, &0, &0);
 	});
+	// 16 storage values + 4 linked_map head.
+	assert_eq!(storage.0.len(), 16 + 4);
 }
 
 #[test]
