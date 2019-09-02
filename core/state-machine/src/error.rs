@@ -18,7 +18,7 @@ use std::fmt;
 
 /// State Machine Error bound.
 ///
-/// This should reflect WASM error type bound for future compatibility.
+/// This should reflect Wasm error type bound for future compatibility.
 pub trait Error: 'static + fmt::Debug + fmt::Display + Send {}
 
 impl<T: 'static + fmt::Debug + fmt::Display + Send> Error for T {}
