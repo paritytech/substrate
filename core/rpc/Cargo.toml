@@ -21,6 +21,7 @@ state_machine = { package = "substrate-state-machine", path = "../state-machine"
 substrate-executor = { path = "../executor" }
 substrate-keystore = { path = "../keystore" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../transaction-pool" }
+hash-db = { version = "0.15.0", default-features = false }
 
 [dev-dependencies]
 assert_matches = "1.1"

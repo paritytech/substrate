@@ -72,7 +72,14 @@ pub trait Backend<H: Hasher> {
 
 	/// Retrieve all entries keys which start with the given prefix and
 	/// call `f` for each of those keys.
-	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F);
+	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], mut f: F) {
+		self.for_key_values_with_prefix(prefix, |k, _v| f(k))
+	}
+
+	/// Retrieve all entries keys and values of which start with the given prefix and
+	/// call `f` for each of those keys.
+	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F);
+
 
 	/// Retrieve all child entries keys which start with the given prefix and
 	/// call `f` for each of those keys.
@@ -319,6 +326,11 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
 		self.inner.get(&None).map(|map| map.keys().filter(|key| key.starts_with(prefix)).map(|k| &**k).for_each(f));
+	}
+
+	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], mut f: F) {
+		self.inner.get(&None).map(|map| map.iter().filter(|(key, _val)| key.starts_with(prefix))
+			.for_each(|(k, v)| f(k, v)));
 	}
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], mut f: F) {

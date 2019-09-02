@@ -99,7 +99,7 @@ where
 		let block_hash = self.blockchain.expect_block_hash_from_id(id)?;
 		let block_header = self.blockchain.expect_header(id.clone())?;
 
-		futures::executor::block_on(self.fetcher.remote_call(RemoteCallRequest {
+		futures03::executor::block_on(self.fetcher.remote_call(RemoteCallRequest {
 			block: block_hash,
 			header: block_header,
 			method: method.into(),

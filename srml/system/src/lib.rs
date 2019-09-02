@@ -121,6 +121,8 @@ use runtime_io::{TestExternalities, Blake2Hasher};
 #[cfg(any(feature = "std", test))]
 use primitives::ChangesTrieConfiguration;
 
+pub mod offchain;
+
 /// Handler for when a new account has been created.
 pub trait OnNewAccount<AccountId> {
 	/// A new account `who` has been registered.
@@ -441,7 +443,7 @@ decl_storage! {
 	}
 }
 
-pub struct EnsureRoot<AccountId>(::rstd::marker::PhantomData<AccountId>);
+pub struct EnsureRoot<AccountId>(rstd::marker::PhantomData<AccountId>);
 impl<
 	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
 	AccountId,
@@ -455,7 +457,7 @@ impl<
 	}
 }
 
-pub struct EnsureSigned<AccountId>(::rstd::marker::PhantomData<AccountId>);
+pub struct EnsureSigned<AccountId>(rstd::marker::PhantomData<AccountId>);
 impl<
 	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
 	AccountId,
@@ -469,7 +471,7 @@ impl<
 	}
 }
 
-pub struct EnsureSignedBy<Who, AccountId>(::rstd::marker::PhantomData<(Who, AccountId)>);
+pub struct EnsureSignedBy<Who, AccountId>(rstd::marker::PhantomData<(Who, AccountId)>);
 impl<
 	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
 	Who: Contains<AccountId>,
@@ -484,7 +486,7 @@ impl<
 	}
 }
 
-pub struct EnsureNone<AccountId>(::rstd::marker::PhantomData<AccountId>);
+pub struct EnsureNone<AccountId>(rstd::marker::PhantomData<AccountId>);
 impl<
 	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
 	AccountId,
@@ -498,7 +500,7 @@ impl<
 	}
 }
 
-pub struct EnsureNever<T>(::rstd::marker::PhantomData<T>);
+pub struct EnsureNever<T>(rstd::marker::PhantomData<T>);
 impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
 	type Success = T;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
@@ -892,8 +894,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 		}
 	}
 
-	/// Utility constructor for tests and client code.
-	#[cfg(feature = "std")]
+	/// Creates new `SignedExtension` to check weight of the extrinsic.
 	pub fn new() -> Self {
 		Self(PhantomData)
 	}
@@ -948,7 +949,6 @@ impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckWeight<T> {
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckNonce<T: Trait>(#[codec(compact)] T::Index);
 
-#[cfg(feature = "std")]
 impl<T: Trait> CheckNonce<T> {
 	/// utility constructor. Used only in client/factory code.
 	pub fn from(nonce: T::Index) -> Self {
@@ -1022,7 +1022,6 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckEra<T: Trait + Send + Sync>((Era, rstd::marker::PhantomData<T>));
 
-#[cfg(feature = "std")]
 impl<T: Trait + Send + Sync> CheckEra<T> {
 	/// utility constructor. Used only in client/factory code.
 	pub fn from(era: Era) -> Self {
@@ -1077,10 +1076,10 @@ impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckGenesis<T> {
 	}
 }
 
-#[cfg(feature = "std")]
 impl<T: Trait + Send + Sync> CheckGenesis<T> {
+	/// Creates new `SignedExtension` to check genesis hash.
 	pub fn new() -> Self {
-		Self(std::marker::PhantomData)
+		Self(rstd::marker::PhantomData)
 	}
 }
 
@@ -1106,10 +1105,10 @@ impl<T: Trait + Send + Sync> rstd::fmt::Debug for CheckVersion<T> {
 	}
 }
 
-#[cfg(feature = "std")]
 impl<T: Trait + Send + Sync> CheckVersion<T> {
+	/// Create new `SignedExtension` to check runtime version.
 	pub fn new() -> Self {
-		Self(std::marker::PhantomData)
+		Self(rstd::marker::PhantomData)
 	}
 }
 
@@ -1124,10 +1123,10 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckVersion<T> {
 	}
 }
 
-pub struct ChainContext<T>(::rstd::marker::PhantomData<T>);
+pub struct ChainContext<T>(rstd::marker::PhantomData<T>);
 impl<T> Default for ChainContext<T> {
 	fn default() -> Self {
-		ChainContext(::rstd::marker::PhantomData)
+		ChainContext(rstd::marker::PhantomData)
 	}
 }
 

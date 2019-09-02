@@ -75,7 +75,7 @@ use session::historical::IdentificationTuple;
 use sr_io::Printable;
 use sr_primitives::{
 	Perbill, ApplyError,
-	traits::{Convert, Extrinsic as ExtrinsicT, Member},
+	traits::{Convert, Member},
 	transaction_validity::{TransactionValidity, TransactionLongevity, ValidTransaction},
 };
 use sr_staking_primitives::{
@@ -87,11 +87,18 @@ use srml_support::{
 	Parameter, StorageValue, StorageDoubleMap,
 };
 use system::ensure_none;
+use system::offchain::SubmitUnsignedTransaction;
 
 pub mod sr25519 {
 	mod app_sr25519 {
 		use app_crypto::{app_crypto, key_types::IM_ONLINE, sr25519};
 		app_crypto!(sr25519, IM_ONLINE);
+
+		impl From<Signature> for sr_primitives::AnySignature {
+			fn from(sig: Signature) -> Self {
+				sr25519::Signature::from(sig).into()
+			}
+		}
 	}
 
 	/// An i'm online keypair using sr25519 as its crypto.
@@ -109,6 +116,12 @@ pub mod ed25519 {
 	mod app_ed25519 {
 		use app_crypto::{app_crypto, key_types::IM_ONLINE, ed25519};
 		app_crypto!(ed25519, IM_ONLINE);
+
+		impl From<Signature> for sr_primitives::AnySignature {
+			fn from(sig: Signature) -> Self {
+				ed25519::Signature::from(sig).into()
+			}
+		}
 	}
 
 	/// An i'm online keypair using ed25519 as its crypto.
@@ -141,7 +154,6 @@ struct WorkerStatus<BlockNumber> {
 // Error which may occur while executing the off-chain code.
 enum OffchainErr {
 	DecodeWorkerStatus,
-	ExtrinsicCreation,
 	FailedSigning,
 	NetworkState,
 	SubmitTransaction,
@@ -151,7 +163,6 @@ impl Printable for OffchainErr {
 	fn print(self) {
 		match self {
 			OffchainErr::DecodeWorkerStatus => print("Offchain error: decoding WorkerStatus failed!"),
-			OffchainErr::ExtrinsicCreation => print("Offchain error: extrinsic creation failed!"),
 			OffchainErr::FailedSigning => print("Offchain error: signing failed!"),
 			OffchainErr::NetworkState => print("Offchain error: fetching network state failed!"),
 			OffchainErr::SubmitTransaction => print("Offchain error: submitting transaction failed!"),
@@ -183,9 +194,8 @@ pub trait Trait: system::Trait + session::historical::Trait {
 	/// A dispatchable call type.
 	type Call: From<Call<Self>>;
 
-	/// A extrinsic right from the external world. This is unchecked and so
-	/// can contain a signature.
-	type UncheckedExtrinsic: ExtrinsicT<Call=<Self as Trait>::Call> + Encode + Decode;
+	/// A transaction submitter.
+	type SubmitTransaction: SubmitUnsignedTransaction<Self, <Self as Trait>::Call>;
 
 	/// A type that gives us the ability to submit unresponsiveness offence reports.
 	type ReportUnresponsiveness:
@@ -332,9 +342,8 @@ impl<T: Trait> Module<T> {
 
 			let signature = key.sign(&heartbeat_data.encode()).ok_or(OffchainErr::FailedSigning)?;
 			let call = Call::heartbeat(heartbeat_data, signature);
-			let ex = T::UncheckedExtrinsic::new_unsigned(call.into())
-				.ok_or(OffchainErr::ExtrinsicCreation)?;
-			sr_io::submit_transaction(&ex).map_err(|_| OffchainErr::SubmitTransaction)?;
+			T::SubmitTransaction::submit_unsigned(call)
+				.map_err(|_| OffchainErr::SubmitTransaction)?;
 
 			// once finished we set the worker status without comparing
 			// if the existing value changed in the meantime. this is
