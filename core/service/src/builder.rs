@@ -72,6 +72,7 @@ pub struct ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFpr
 	network_protocol: TNetP,
 	transaction_pool: Arc<TExPool>,
 	rpc_extensions: TRpc,
+	dht_event_tx: Option<mpsc::Sender<DhtEvent>>,
 	marker: PhantomData<(TBl, TRtApi)>,
 }
 
@@ -137,6 +138,7 @@ where TGen: Serialize + DeserializeOwned + BuildStorage {
 			network_protocol: (),
 			transaction_pool: Arc::new(()),
 			rpc_extensions: Default::default(),
+			dht_event_tx: None,
 			marker: PhantomData,
 		})
 	}
@@ -220,6 +222,7 @@ where TGen: Serialize + DeserializeOwned + BuildStorage {
 			network_protocol: (),
 			transaction_pool: Arc::new(()),
 			rpc_extensions: Default::default(),
+			dht_event_tx: None,
 			marker: PhantomData,
 		})
 	}
@@ -264,6 +267,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			network_protocol: self.network_protocol,
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
+			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
@@ -305,6 +309,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			network_protocol: self.network_protocol,
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
+			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
@@ -330,6 +335,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			network_protocol,
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
+			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
@@ -369,6 +375,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			network_protocol: self.network_protocol,
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
+			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
@@ -425,6 +432,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			network_protocol: self.network_protocol,
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
+			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
@@ -461,6 +469,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			network_protocol: self.network_protocol,
 			transaction_pool: Arc::new(transaction_pool),
 			rpc_extensions: self.rpc_extensions,
+			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
@@ -486,9 +495,35 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			network_protocol: self.network_protocol,
 			transaction_pool: self.transaction_pool,
 			rpc_extensions,
+			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
+
+		/// Adds a dht event sender to builder to be used by the network to send dht events to the authority discovery
+		/// module.
+		pub fn with_dht_event_tx(
+			self,
+			dht_event_tx: mpsc::Sender<DhtEvent>,
+		) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
+								   TNetP, TExPool, TRpc, Backend>, Error> {
+			Ok(ServiceBuilder {
+				config: self.config,
+				client: self.client,
+				backend: self.backend,
+				keystore: self.keystore,
+				fetcher: self.fetcher,
+				select_chain: self.select_chain,
+				import_queue: self.import_queue,
+				finality_proof_request_builder: self.finality_proof_request_builder,
+				finality_proof_provider: self.finality_proof_provider,
+				network_protocol: self.network_protocol,
+				transaction_pool: self.transaction_pool,
+				rpc_extensions: self.rpc_extensions,
+				dht_event_tx: Some(dht_event_tx),
+				marker: self.marker,
+			})
+		}
 }
 
 /// Implemented on `ServiceBuilder`. Allows importing blocks once you have given all the required
@@ -617,7 +652,6 @@ ServiceBuilder<
 	<Client<TBackend, TExec, TBl, TRtApi> as ProvideRuntimeApi>::Api:
 		runtime_api::Metadata<TBl> +
 		offchain::OffchainWorkerApi<TBl> +
-		authority_discovery_primitives::AuthorityDiscoveryApi<TBl> +
 		runtime_api::TaggedTransactionQueue<TBl> +
 		session::SessionKeys<TBl>,
 	TBl: BlockT<Hash = <Blake2Hasher as Hasher>::Out>,
@@ -662,7 +696,8 @@ ServiceBuilder<
 			finality_proof_provider,
 			network_protocol,
 			transaction_pool,
-			rpc_extensions
+			rpc_extensions,
+			dht_event_tx,
 		) = (
 			self.client,
 			self.fetcher,
@@ -674,7 +709,8 @@ ServiceBuilder<
 			self.finality_proof_provider,
 			self.network_protocol,
 			self.transaction_pool,
-			self.rpc_extensions
+			self.rpc_extensions,
+			self.dht_event_tx,
 		);
 
 		new_impl!(
@@ -692,7 +728,8 @@ ServiceBuilder<
 					finality_proof_provider,
 					network_protocol,
 					transaction_pool,
-					rpc_extensions
+					rpc_extensions,
+					dht_event_tx,
 				))
 			},
 			|h, c, tx| maintain_transaction_pool(h, c, tx),

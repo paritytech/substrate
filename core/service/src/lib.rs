@@ -154,7 +154,8 @@ macro_rules! new_impl {
 			finality_proof_provider,
 			network_protocol,
 			transaction_pool,
-			rpc_extensions
+			rpc_extensions,
+			dht_event_tx,
 		) = $build_components(&$config)?;
 		let import_queue = Box::new(import_queue);
 		let chain_info = client.info().chain;
@@ -356,18 +357,6 @@ macro_rules! new_impl {
 		let rpc_handlers = gen_handler();
 		let rpc = start_rpc_servers(&$config, gen_handler)?;
 
-		// Use bounded channel to ensure back-pressure. Authority discovery is
-		// triggering one event per authority within the current authority set. This
-		// estimates the authority set size to be somewhere below 10 000 thereby
-		// setting the channel buffer size to 10 000.
-		let (dht_event_tx, dht_event_rx) =
-			mpsc::channel::<DhtEvent>(10000);
-		let authority_discovery = substrate_authority_discovery::AuthorityDiscovery::new(
-			client.clone(),
-			network.clone(),
-			dht_event_rx,
-		);
-		let _ = to_spawn_tx.unbounded_send(Box::new(authority_discovery));
 
 		let _ = to_spawn_tx.unbounded_send(Box::new(build_network_future(
 			network_mut,
@@ -666,7 +655,7 @@ fn build_network_future<
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<(NetworkStatus<B>, NetworkState)>>>>,
 	rpc_rx: futures03::channel::mpsc::UnboundedReceiver<rpc::system::Request<B>>,
 	should_have_peers: bool,
-	mut dht_events_tx: mpsc::Sender<DhtEvent>,
+	dht_event_tx: Option<mpsc::Sender<DhtEvent>>,
 ) -> impl Future<Item = (), Error = ()> {
 	// Compatibility shim while we're transitionning to stable Futures.
 	// See https://github.com/paritytech/substrate/issues/3099
@@ -751,7 +740,7 @@ fn build_network_future<
 			// events are being passed on to the authority-discovery module. In the future there might be multiple
 			// consumers of these events. In that case this would need to be refactored to properly dispatch the events,
 			// e.g. via a subscriber model.
-			if let Err(e) = dht_events_tx.try_send(event) {
+			if let Some(Err(e)) = dht_event_tx.as_ref().map(|c| c.clone().try_send(event)) {
 				if e.is_full() {
 					warn!(target: "service", "Dht event channel to authority discovery is full, dropping event.");
 				} else if e.is_disconnected() {

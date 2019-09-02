@@ -2334,6 +2334,7 @@ dependencies = [
  "srml-system 2.0.0",
  "srml-timestamp 2.0.0",
  "structopt 0.2.18 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-authority-discovery 2.0.0",
  "substrate-basic-authorship 2.0.0",
  "substrate-cli 2.0.0",
  "substrate-client 2.0.0",
