@@ -23,7 +23,7 @@ use crate::traits::{
 	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys, ValidateUnsigned,
 	SignedExtension, Dispatchable,
 };
-use crate::{generic, KeyTypeId, ApplyResult, DispatchError};
+use crate::{generic, KeyTypeId, ApplyResult};
 use crate::weights::{GetDispatchInfo, DispatchInfo};
 pub use primitives::H256;
 use primitives::{crypto::{CryptoType, Dummy, key_types, Public}, U256};
@@ -320,8 +320,7 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 			None
 		};
 
-		let res = self.1.dispatch(maybe_who.into());
-		Ok(res.map_err(|e| DispatchError::from(e.into()).into()).into())
+		Ok(self.1.dispatch(maybe_who.into()).into())
 	}
 }
 

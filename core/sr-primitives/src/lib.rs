@@ -679,11 +679,11 @@ impl From<DispatchError> for ApplyOutcome {
 	}
 }
 
-impl From<Result<(), DispatchError>> for ApplyOutcome {
-	fn from(res: Result<(), DispatchError>) -> Self {
+impl<T: Into<DispatchError>> From<Result<(), T>> for ApplyOutcome {
+	fn from(res: Result<(), T>) -> Self {
 		match res {
 			Ok(()) => ApplyOutcome::Success,
-			Err(e) => e.into(),
+			Err(e) => ApplyOutcome::Fail(e.into()),
 		}
 	}
 }

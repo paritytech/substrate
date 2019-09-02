@@ -22,7 +22,6 @@ use crate::traits::{
 };
 use crate::weights::{GetDispatchInfo, DispatchInfo};
 use crate::transaction_validity::TransactionValidity;
-use crate::DispatchError;
 
 /// Definition of something that the external world might want to say; its
 /// existence implies that it has been checked and is good, particularly with
@@ -81,7 +80,7 @@ where
 		};
 		let res = self.function.dispatch(Origin::from(maybe_who));
 		Extra::post_dispatch(pre, info, len);
-		Ok(res.map_err(|e| DispatchError::from(e.into()).into()).into())
+		Ok(res.into())
 	}
 }
 
