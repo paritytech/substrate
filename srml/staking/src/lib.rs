@@ -680,7 +680,7 @@ decl_module! {
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will
 		/// be the account that controls it.
 		///
-		/// `value` must be more than the `existential_deposit` defined in the Balances module.
+		/// `value` must be more than the `minimum_balance` specified by `T::Currency`.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the stash account.
 		///
@@ -759,7 +759,7 @@ decl_module! {
 
 		/// Schedule a portion of the stash to be unlocked ready for transfer out after the bond
 		/// period ends. If this leaves an amount actively bonded less than
-		/// T::Currency::existential_deposit(), then it is increased to the full amount.
+		/// T::Currency::minimum_balance(), then it is increased to the full amount.
 		///
 		/// Once the unlock period is done, you can call `withdraw_unbonded` to actually move
 		/// the funds out of management ready for transfer.
