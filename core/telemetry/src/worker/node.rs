@@ -23,7 +23,7 @@ use libp2p::Multiaddr;
 use libp2p::core::transport::Transport;
 use log::{trace, debug, warn, error};
 use rand::Rng as _;
-use std::{collections::VecDeque, fmt, mem, pin::Pin, task::Context, task::Poll, time::Duration};
+use std::{collections::VecDeque, fmt, mem, pin::Pin, task::Context, task::Poll, time::{Duration, Instant}};
 
 /// Maximum number of pending telemetry messages.
 const MAX_PENDING: usize = 10;
@@ -36,6 +36,10 @@ pub struct Node<TTrans: Transport> {
 	socket: NodeSocket<TTrans>,
 	/// Transport used to establish new connections.
 	transport: TTrans,
+    /// Timeout for a connection to the node.
+    connection_timeout: Delay,
+	/// Timestamp of last successful connection, if any.
+	last_connection: Option<Instant>,
 }
 
 enum NodeSocket<TTrans: Transport> {
@@ -76,6 +80,8 @@ impl<TTrans: Transport> Node<TTrans> {
 			addr,
 			socket: NodeSocket::ReconnectNow,
 			transport,
+			connection_timeout: Delay::new(Duration::from_millis(500)),
+			last_connection: None,
 		}
 	}
 
@@ -114,20 +120,39 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 	/// Polls the node for updates. Must be performed regularly.
 	pub fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<NodeEvent<TSinkErr>> {
 		let mut socket = mem::replace(&mut self.socket, NodeSocket::Poisoned);
+		loop {
+			match Future::poll(Pin::new(&mut self.connection_timeout), cx) {
+				Poll::Pending => break,
+				Poll::Ready(Err(err)) => {
+					warn!(target: "telemetry", "Connection timeout error for {} {:?}", self.addr, err);
+					// Reset the delay.
+					self.connection_timeout = Delay::new(Duration::from_millis(500));
+					// Continue without polling, so that we can't be stuck in an infinite error loop
+					break;
+				}
+				Poll::Ready(Ok(_)) => {
+					let should_reconnect = match self.last_connection {
+						Some(instant) => instant.elapsed() > Duration::from_millis(500),
+						None => true,
+					};
+					if should_reconnect {
+						warn!(target: "telemetry", "Server unresponsive from {}", self.addr);
+						let timeout = gen_rand_reconnect_delay();
+						socket =  NodeSocket::WaitingReconnect(timeout);
+					}
+					// Reset the delay.
+					self.connection_timeout = Delay::new(Duration::from_millis(500));
+				}
+			}
+		}
 		self.socket = loop {
 			match socket {
 				NodeSocket::Connected(mut conn) => {
-					let mut connection_timeout = Delay::new(Duration::from_millis(500));
-					match Future::poll(Pin::new(&mut connection_timeout), cx) {
-						Poll::Pending => {},
-						Poll::Ready(Err(_)) | Poll::Ready(Ok(_)) => {
-							warn!(target: "telemetry", "Server unresponsive from {}", self.addr);
-							let timeout = gen_rand_reconnect_delay();
-							break NodeSocket::WaitingReconnect(timeout)
-						}
-					}
 					match NodeSocketConnected::poll(Pin::new(&mut conn), cx, &self.addr) {
-						Poll::Ready(Ok(v)) => match v {}
+						Poll::Ready(Ok(_)) => {
+							self.last_connection = Some(Instant::now());
+							break NodeSocket::Connected(conn)
+						},
 						Poll::Pending => break NodeSocket::Connected(conn),
 						Poll::Ready(Err(err)) => {
 							warn!(target: "telemetry", "Disconnected from {}: {:?}", self.addr, err);
@@ -199,8 +224,8 @@ where TTrans::Output: Sink<BytesMut, Error = TSinkErr>
 	fn poll(
 		mut self: Pin<&mut Self>,
 		cx: &mut Context,
-		my_addr: &Multiaddr
-	) -> Poll<Result<futures::never::Never, TSinkErr>> {
+		my_addr: &Multiaddr,
+	) -> Poll<Result<(), TSinkErr>> {
 		loop {
 			if let Some(item) = self.pending.pop_front() {
 				if let Poll::Pending = Sink::poll_ready(Pin::new(&mut self.sink), cx) {
@@ -230,7 +255,8 @@ where TTrans::Output: Sink<BytesMut, Error = TSinkErr>
 					Poll::Ready(Some(Ok(_))) => {
 						// We poll the telemetry `Stream` because the underlying implementation relies on
 						// this in order to answer PINGs.
-						// We don't do anything with incoming messages, however.
+						// We return a result so that the connection timeout is reset.
+						return Poll::Ready(Ok(()))
 					},
 					Poll::Ready(Some(Err(err))) => {
 						return Poll::Ready(Err(err))
