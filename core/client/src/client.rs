@@ -917,19 +917,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			return Err(error::Error::NotInFinalizedChain);
 		}
 
-		// find tree route from last finalized to given block.
-		let route_from_finalized = crate::blockchain::tree_route(
-			|id| self.header(&id)?.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id))),
-			BlockId::Hash(info.finalized_hash),
-			BlockId::Hash(parent_hash),
-		)?;
-
-		// the block being imported retracts the last finalized block, refusing to
-		// import.
-		if !route_from_finalized.retracted().is_empty() {
-			return Err(error::Error::NotInFinalizedChain);
-		}
-
 		// this is a fairly arbitrary choice of where to draw the line on making notifications,
 		// but the general goal is to only make notifications when we are already fully synced
 		// and get a new chain head.
