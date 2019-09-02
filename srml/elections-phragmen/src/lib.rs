@@ -137,7 +137,7 @@ decl_storage! {
 		// ---- parameters
 		/// Number of members to elect.
 		pub DesiredMembers get(desired_members) config(): u32;
-		/// How long each seat is kept. This defined the next block number at which an election
+		/// How long each seat is kept. This defines the next block number at which an election
 		/// round will happen.
 		pub TermDuration get(term_duration) config(): T::BlockNumber;
 
