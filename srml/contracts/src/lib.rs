@@ -995,7 +995,8 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 				Ok(ValidTransaction::default()),
 			Call::put_code(gas_limit, _)
 				| Call::call(_, _, gas_limit, _)
-				| Call::create(_, gas_limit, _, _) => {
+				| Call::create(_, gas_limit, _, _)
+			=> {
 				// Check if the specified amount of gas is available in the current block.
 				// This cannot underflow since `gas_spent` is never greater than `T::BlockGasLimit`.
 				let gas_available = T::BlockGasLimit::get() - <Module<T>>::gas_spent();

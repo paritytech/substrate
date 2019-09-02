@@ -651,7 +651,7 @@ impl From<ApplyError> for &'static str {
 	fn from(err: ApplyError) -> &'static str {
 		match err {
 			ApplyError::NoPermission => "Transaction does not have required permissions",
-			ApplyError::BadState => "System in bad state",
+			ApplyError::BadState => "System state currently prevents this transaction",
 			ApplyError::Validity(v) => v.into(),
 		}
 	}
