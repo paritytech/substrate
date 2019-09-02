@@ -141,9 +141,9 @@ where
 /// is going to be different than the `SignaturePayload` - so the thing the extrinsic
 /// actually contains.
 pub struct SignedPayload<Call, Extra: SignedExtension>((
-		Call,
-		Extra,
-		Extra::AdditionalSigned,
+	Call,
+	Extra,
+	Extra::AdditionalSigned,
 ));
 
 impl<Call, Extra> SignedPayload<Call, Extra> where
@@ -153,7 +153,7 @@ impl<Call, Extra> SignedPayload<Call, Extra> where
 	/// Create new `SignedPayload`.
 	///
 	/// This function may fail if `additional_signed` of `Extra` is not available.
-	pub fn new(call: Call, extra: Extra) -> Result<Self, &'static str> {
+	pub fn new(call: Call, extra: Extra) -> Result<Self, TransactionValidityError> {
 		let additional_signed = extra.additional_signed()?;
 		let raw_payload = (call, extra, additional_signed);
 		Ok(Self(raw_payload))
