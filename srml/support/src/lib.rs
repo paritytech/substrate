@@ -27,7 +27,7 @@ extern crate bitmask;
 #[cfg(feature = "std")]
 pub use serde;
 #[doc(hidden)]
-pub use sr_std as rstd;
+pub use rstd;
 #[doc(hidden)]
 pub use codec;
 #[cfg(feature = "std")]
@@ -35,11 +35,11 @@ pub use codec;
 pub use once_cell;
 #[doc(hidden)]
 pub use paste;
+#[cfg(feature = "std")]
+#[doc(hidden)]
+pub use runtime_io::with_storage;
 
-pub use self::storage::hashed::generator::{
-	HashedStorage, Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat
-};
-pub use self::storage::unhashed::generator::UnhashedStorage;
+pub use self::storage::hashed::{Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat};
 
 #[macro_use]
 pub mod dispatch;
@@ -61,9 +61,7 @@ pub mod unsigned;
 mod double_map;
 pub mod traits;
 
-pub use self::storage::{
-	StorageValue, StorageMap, EnumerableStorageMap, StorageDoubleMap, AppendableStorageMap
-};
+pub use self::storage::{StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap};
 pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
 pub use self::double_map::StorageDoubleMapWithHasher;
@@ -327,7 +325,7 @@ mod tests {
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		GenesisConfig::default().build_storage().unwrap().0.into()
+		GenesisConfig::default().build_storage().unwrap().into()
 	}
 
 	type Map = Data;
@@ -339,6 +337,35 @@ mod tests {
 			assert_eq!(OptionLinkedMap::get(1), Some(1));
 			OptionLinkedMap::insert(1, 2);
 			assert_eq!(OptionLinkedMap::get(1), Some(2));
+		});
+	}
+
+	#[test]
+	fn linked_map_swap_works() {
+		with_externalities(&mut new_test_ext(), || {
+			OptionLinkedMap::insert(0, 0);
+			OptionLinkedMap::insert(1, 1);
+			OptionLinkedMap::insert(2, 2);
+			OptionLinkedMap::insert(3, 3);
+
+			let collect = || OptionLinkedMap::enumerate().collect::<Vec<_>>();
+			assert_eq!(collect(), vec![(3, 3), (2, 2), (1, 1), (0, 0)]);
+
+			// Two existing
+			OptionLinkedMap::swap(1, 2);
+			assert_eq!(collect(), vec![(3, 3), (2, 1), (1, 2), (0, 0)]);
+
+			// Back to normal
+			OptionLinkedMap::swap(2, 1);
+			assert_eq!(collect(), vec![(3, 3), (2, 2), (1, 1), (0, 0)]);
+
+			// Left existing
+			OptionLinkedMap::swap(2, 5);
+			assert_eq!(collect(), vec![(5, 2), (3, 3), (1, 1), (0, 0)]);
+
+			// Right existing
+			OptionLinkedMap::swap(5, 2);
+			assert_eq!(collect(), vec![(2, 2), (3, 3), (1, 1), (0, 0)]);
 		});
 	}
 

@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use runtime_io::{with_externalities, Blake2Hasher};
-use srml_support::{StorageValue, StorageMap, StorageDoubleMap};
+use srml_support::{StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap};
 use srml_support::storage::unhashed;
 use codec::{Encode, Decode};
 
@@ -53,7 +53,7 @@ impl Trait for Test {
 }
 
 fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-	GenesisConfig::<Test>::default().build_storage().unwrap().0.into()
+	GenesisConfig::<Test>::default().build_storage().unwrap().into()
 }
 
 #[test]

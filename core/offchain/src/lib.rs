@@ -43,7 +43,7 @@ use client::runtime_api::ApiExt;
 use futures::future::Future;
 use log::{debug, warn};
 use network::NetworkStateInfo;
-use primitives::ExecutionContext;
+use primitives::{offchain, ExecutionContext};
 use sr_primitives::{generic::BlockId, traits::{self, ProvideRuntimeApi}};
 use transaction_pool::txpool::{Pool, ChainApi};
 
@@ -98,9 +98,8 @@ impl<Client, Storage, Block> OffchainWorkers<
 		number: &<Block::Header as traits::Header>::Number,
 		pool: &Arc<Pool<A>>,
 		network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
-	) -> impl Future<Output = ()> where
-		A: ChainApi<Block=Block> + 'static,
-	{
+		is_validator: bool,
+	) -> impl Future<Output = ()> where A: ChainApi<Block=Block> + 'static {
 		let runtime = self.client.runtime_api();
 		let at = BlockId::number(*number);
 		let has_api = runtime.has_api::<dyn OffchainWorkerApi<Block>>(&at);
@@ -112,6 +111,7 @@ impl<Client, Storage, Block> OffchainWorkers<
 				self.db.clone(),
 				at.clone(),
 				network_state.clone(),
+				is_validator,
 			);
 			debug!("Spawning offchain workers at {:?}", at);
 			let number = *number;
@@ -122,7 +122,7 @@ impl<Client, Storage, Block> OffchainWorkers<
 				debug!("Running offchain workers at {:?}", at);
 				let run = runtime.offchain_worker_with_context(
 					&at,
-					ExecutionContext::OffchainWorker(api),
+					ExecutionContext::OffchainCall(Some((api, offchain::Capabilities::all()))),
 					number,
 				);
 				if let Err(e) =	run {
@@ -177,7 +177,7 @@ mod tests {
 
 		// when
 		let offchain = OffchainWorkers::new(client, db);
-		futures::executor::block_on(offchain.on_block_imported(&0u64, &pool, network_state));
+		futures::executor::block_on(offchain.on_block_imported(&0u64, &pool, network_state, false));
 
 		// then
 		assert_eq!(pool.status().ready, 1);

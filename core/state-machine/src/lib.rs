@@ -51,7 +51,8 @@ pub use changes_trie::{
 	RootsStorage as ChangesTrieRootsStorage,
 	InMemoryStorage as InMemoryChangesTrieStorage,
 	BuildCache as ChangesTrieBuildCache,
-	CachedBuildData as ChangesTrieCachedBuildData,
+	CacheAction as ChangesTrieCacheAction,
+	ConfigurationRange as ChangesTrieConfigurationRange,
 	key_changes, key_changes_proof, key_changes_proof_check,
 	prune as prune_changes_tries,
 	oldest_non_pruned_trie as oldest_non_pruned_changes_trie,
@@ -67,7 +68,7 @@ pub use trie_backend::TrieBackend;
 /// Type of changes trie transaction.
 pub type ChangesTrieTransaction<H, N> = (
 	MemoryDB<H>,
-	Option<ChangesTrieCachedBuildData<<H as Hasher>::Out, N>>,
+	Option<ChangesTrieCacheAction<<H as Hasher>::Out, N>>,
 );
 
 /// A wrapper around a child storage key.
@@ -162,13 +163,31 @@ pub trait Externalities<H: Hasher> {
 		self.storage(key).map(|v| H::hash(&v))
 	}
 
+	/// Get child storage value hash. This may be optimized for large values.
+	fn child_storage_hash(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<H::Out> {
+		self.child_storage(storage_key, key).map(|v| H::hash(&v))
+	}
+
 	/// Read original runtime storage, ignoring any overlayed changes.
 	fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>>;
+
+	/// Read original runtime child storage, ignoring any overlayed changes.
+	fn original_child_storage(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Get original storage value hash, ignoring any overlayed changes.
 	/// This may be optimized for large values.
 	fn original_storage_hash(&self, key: &[u8]) -> Option<H::Out> {
 		self.original_storage(key).map(|v| H::hash(&v))
+	}
+
+	/// Get original child storage value hash, ignoring any overlayed changes.
+	/// This may be optimized for large values.
+	fn original_child_storage_hash(
+		&self,
+		storage_key: ChildStorageKey<H>,
+		key: &[u8],
+	) -> Option<H::Out> {
+		self.original_child_storage(storage_key, key).map(|v| H::hash(&v))
 	}
 
 	/// Read child runtime storage.
@@ -210,6 +229,9 @@ pub trait Externalities<H: Hasher> {
 	/// Clear storage entries which keys are start with the given prefix.
 	fn clear_prefix(&mut self, prefix: &[u8]);
 
+	/// Clear child storage entries which keys are start with the given prefix.
+	fn clear_child_prefix(&mut self, storage_key: ChildStorageKey<H>, prefix: &[u8]);
+
 	/// Set or clear a storage entry (`key`) of current contract being called (effective immediately).
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>);
 
@@ -249,6 +271,10 @@ impl NeverOffchainExt {
 }
 
 impl offchain::Externalities for NeverOffchainExt {
+	fn is_validator(&self) -> bool {
+		unreachable!()
+	}
+
 	fn submit_transaction(&mut self, _extrinsic: Vec<u8>) -> Result<(), ()> {
 		unreachable!()
 	}

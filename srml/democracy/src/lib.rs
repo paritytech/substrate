@@ -24,11 +24,11 @@ use sr_primitives::traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin,
 use sr_primitives::weights::SimpleDispatchInfo;
 use codec::{Encode, Decode, Input, Output, Error};
 use srml_support::{
-	decl_module, decl_storage, decl_event, ensure,
-	StorageValue, StorageMap, Parameter, Dispatchable, IsSubType, EnumerableStorageMap,
+	decl_module, decl_storage, decl_event, ensure, StorageValue, StorageMap, StorageLinkedMap,
+	Parameter, Dispatchable,
 	traits::{
-		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier,
-		OnFreeBalanceZero, Get
+		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
+		OnFreeBalanceZero
 	}
 };
 use srml_support::dispatch::Result;
@@ -174,15 +174,8 @@ impl Decode for Vote {
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
-pub const DEFAULT_ENACTMENT_PERIOD: u32 = 0;
-pub const DEFAULT_LAUNCH_PERIOD: u32 = 0;
-pub const DEFAULT_VOTING_PERIOD: u32 = 0;
-pub const DEFAULT_MINIMUM_DEPOSIT: u32 = 0;
-pub const DEFAULT_EMERGENCY_VOTING_PERIOD: u32 = 0;
-pub const DEFAULT_COOLOFF_PERIOD: u32 = 0;
-
 pub trait Trait: system::Trait + Sized {
-	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + IsSubType<Module<Self>, Self>;
+	type Proposal: Parameter + Dispatchable<Origin=Self::Origin>;
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
 	/// Currency type for this module.
@@ -361,7 +354,7 @@ decl_module! {
 		/// Period in blocks where an external proposal may not be re-submitted after being vetoed.
 		const CooloffPeriod: T::BlockNumber = T::CooloffPeriod::get();
 
-		fn deposit_event<T>() = default;
+		fn deposit_event() = default;
 
 		/// Propose a sensitive action to be taken.
 		///
@@ -384,9 +377,8 @@ decl_module! {
 			PublicPropCount::put(index + 1);
 			<DepositOf<T>>::insert(index, (value, vec![who.clone()]));
 
-			let mut props = Self::public_props();
-			props.push((index, (*proposal).clone(), who));
-			<PublicProps<T>>::put(props);
+			let new_prop = (index, (*proposal).clone(), who);
+			<PublicProps<T>>::append_or_put([new_prop].into_iter());
 
 			Self::deposit_event(RawEvent::Proposed(index, value));
 		}
@@ -795,7 +787,7 @@ impl<T: Trait> Module<T> {
 	fn do_vote(who: T::AccountId, ref_index: ReferendumIndex, vote: Vote) -> Result {
 		ensure!(Self::is_active_referendum(ref_index), "vote given for invalid referendum.");
 		if !<VoteOf<T>>::exists(&(ref_index, who.clone())) {
-			<VotersFor<T>>::mutate(ref_index, |voters| voters.push(who.clone()));
+			<VotersFor<T>>::append_or_insert(ref_index, [who.clone()].into_iter());
 		}
 		<VoteOf<T>>::insert(&(ref_index, who), vote);
 		Ok(())
@@ -933,9 +925,9 @@ impl<T: Trait> Module<T> {
 			if info.delay.is_zero() {
 				Self::enact_proposal(info.proposal, index);
 			} else {
-				<DispatchQueue<T>>::mutate(
+				<DispatchQueue<T>>::append_or_insert(
 					now + info.delay,
-					|q| q.push(Some((info.proposal, index)))
+					[Some((info.proposal, index))].into_iter()
 				);
 			}
 		} else {
@@ -953,12 +945,12 @@ impl<T: Trait> Module<T> {
 		if (now % T::LaunchPeriod::get()).is_zero() {
 			// Errors come from the queue being empty. we don't really care about that, and even if
 			// we did, there is nothing we can do here.
-			let _ = Self::launch_next(now.clone());
+			let _ = Self::launch_next(now);
 		}
 
 		// tally up votes for any expiring referenda.
 		for (index, info) in Self::maturing_referenda_at(now).into_iter() {
-			Self::bake_referendum(now.clone(), index, info)?;
+			Self::bake_referendum(now, index, info)?;
 		}
 
 		for (proposal, index) in <DispatchQueue<T>>::take(now).into_iter().filter_map(|x| x) {
@@ -1029,6 +1021,7 @@ mod tests {
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
+		type Version = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 0;
@@ -1094,9 +1087,9 @@ mod tests {
 		balances::GenesisConfig::<Test>{
 			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
 			vesting: vec![],
-		}.assimilate_storage(&mut t.0, &mut t.1).unwrap();
-		GenesisConfig::default().assimilate_storage(&mut t.0, &mut t.1).unwrap();
-		runtime_io::TestExternalities::new_with_children(t)
+		}.assimilate_storage(&mut t).unwrap();
+		GenesisConfig::default().assimilate_storage(&mut t).unwrap();
+		runtime_io::TestExternalities::new(t)
 	}
 
 	type System = system::Module<Test>;

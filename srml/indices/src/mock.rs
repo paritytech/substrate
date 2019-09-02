@@ -87,6 +87,7 @@ impl system::Trait for Runtime {
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
+	type Version = ();
 }
 impl Trait for Runtime {
 	type AccountIndex = u64;
@@ -102,10 +103,10 @@ pub fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		for i in 1..5 { h.insert(i); }
 	}
 
-	let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0;
-	t.extend(GenesisConfig::<Runtime> {
+	let mut t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+	GenesisConfig::<Runtime> {
 		ids: vec![1, 2, 3, 4]
-	}.build_storage().unwrap().0);
+	}.assimilate_storage(&mut t).unwrap();
 	t.into()
 }
 

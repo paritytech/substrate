@@ -256,11 +256,11 @@ pub enum PermissionVersions<AccountId> {
 
 /// Asset permission types
 pub enum PermissionType {
-	/// Permission to update asset permission
+	/// Permission to burn asset permission
 	Burn,
 	/// Permission to mint new asset
 	Mint,
-	/// Permission to burn asset
+	/// Permission to update asset
 	Update,
 }
 
@@ -324,7 +324,7 @@ impl<AccountId> Into<PermissionVersions<AccountId>> for PermissionLatest<Account
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn deposit_event<T>() = default;
+		fn deposit_event() = default;
 
 		/// Create a new kind of asset.
 		fn create(origin, options: AssetOptions<T::Balance, T::AccountId>) -> Result {
@@ -478,16 +478,10 @@ decl_storage! {
 		config(initial_balance): T::Balance;
 		config(endowed_accounts): Vec<T::AccountId>;
 
-		build(|
-			storage: &mut sr_primitives::StorageOverlay,
-			_: &mut sr_primitives::ChildrenStorageOverlay,
-			config: &GenesisConfig<T>| {
+		build(|config: &GenesisConfig<T>| {
 			config.assets.iter().for_each(|asset_id| {
 				config.endowed_accounts.iter().for_each(|account_id| {
-					storage.insert(
-						<FreeBalance<T>>::key_for(asset_id, account_id),
-						<T::Balance as codec::Encode>::encode(&config.initial_balance)
-					);
+					<FreeBalance<T>>::insert(asset_id, account_id, &config.initial_balance);
 				});
 			});
 		});
@@ -1064,6 +1058,7 @@ impl<T: Subtrait> system::Trait for ElevatedTrait<T> {
 	type AvailableBlockRatio = T::AvailableBlockRatio;
 	type WeightMultiplierUpdate = ();
 	type BlockHashCount = T::BlockHashCount;
+	type Version = T::Version;
 }
 impl<T: Subtrait> Trait for ElevatedTrait<T> {
 	type Balance = T::Balance;

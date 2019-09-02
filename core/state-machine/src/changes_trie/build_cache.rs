@@ -32,7 +32,17 @@ pub struct BuildCache<H, N> {
 	/// Map of block (implies changes true) number => changes trie root.
 	roots_by_number: HashMap<N, H>,
 	/// Map of changes trie root =>
-	changed_keys: HashMap<H, HashSet<Vec<u8>>>,
+	changed_keys: HashMap<H, HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>>,
+}
+
+/// The action to perform when block-with-changes-trie is imported.
+#[derive(Debug, PartialEq)]
+pub enum CacheAction<H, N> {
+	/// Cache data that has been collected when CT has been built.
+	CacheBuildData(CachedBuildData<H, N>),
+	/// Clear cache from all existing entries. When new CT configuration enacts,
+	/// we don't need any cached data from previous configuration.
+	Clear,
 }
 
 /// The data that has been cached during changes trie building.
@@ -42,7 +52,7 @@ pub struct CachedBuildData<H, N> {
 	trie_root: H,
 	is_top_level_digest: bool,
 	digest_input_blocks: Vec<N>,
-	changed_keys: HashSet<Vec<u8>>,
+	changed_keys: HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>,
 }
 
 /// The data (without changes trie root) that has been cached during changes trie building.
@@ -50,7 +60,7 @@ pub struct CachedBuildData<H, N> {
 pub(crate) struct IncompleteCachedBuildData<N> {
 	is_top_level_digest: bool,
 	digest_input_blocks: Vec<N>,
-	changed_keys: HashSet<Vec<u8>>,
+	changed_keys: HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>,
 }
 
 impl<H, N> BuildCache<H, N>
@@ -67,22 +77,30 @@ impl<H, N> BuildCache<H, N>
 	}
 
 	/// Get cached changed keys for changes trie with given root.
-	pub fn get(&self, root: &H) -> Option<&HashSet<Vec<u8>>> {
+	pub fn get(&self, root: &H) -> Option<&HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>> {
 		self.changed_keys.get(&root)
 	}
 
 	/// Insert data into cache.
-	pub fn insert(&mut self, data: CachedBuildData<H, N>) {
-		if !data.is_top_level_digest {
-			self.roots_by_number.insert(data.block, data.trie_root.clone());
-			self.changed_keys.insert(data.trie_root, data.changed_keys);
-		}
+	pub fn perform(&mut self, action: CacheAction<H, N>) {
+		match action {
+			CacheAction::CacheBuildData(data) => {
+				if !data.is_top_level_digest {
+					self.roots_by_number.insert(data.block, data.trie_root.clone());
+					self.changed_keys.insert(data.trie_root, data.changed_keys);
+				}
 
-		for digest_input_block in data.digest_input_blocks {
-			let digest_input_block_hash = self.roots_by_number.remove(&digest_input_block);
-			if let Some(digest_input_block_hash) = digest_input_block_hash {
-				self.changed_keys.remove(&digest_input_block_hash);
-			}
+				for digest_input_block in data.digest_input_blocks {
+					let digest_input_block_hash = self.roots_by_number.remove(&digest_input_block);
+					if let Some(digest_input_block_hash) = digest_input_block_hash {
+						self.changed_keys.remove(&digest_input_block_hash);
+					}
+				}
+			},
+			CacheAction::Clear => {
+				self.roots_by_number.clear();
+				self.changed_keys.clear();
+			},
 		}
 	}
 }
@@ -93,7 +111,7 @@ impl<N> IncompleteCachedBuildData<N> {
 		IncompleteCachedBuildData {
 			is_top_level_digest,
 			digest_input_blocks: Vec::new(),
-			changed_keys: HashSet::new(),
+			changed_keys: HashMap::new(),
 		}
 	}
 
@@ -121,10 +139,14 @@ impl<N> IncompleteCachedBuildData<N> {
 		self
 	}
 
-	/// Insert changed keys into cached data.
-	pub(crate) fn insert(mut self, changed_key: Vec<u8>) -> Self {
+	/// Insert changed keys of given storage into cached data.
+	pub(crate) fn insert(
+		mut self,
+		storage_key: Option<Vec<u8>>,
+		changed_keys: HashSet<Vec<u8>>,
+	) -> Self {
 		if !self.is_top_level_digest {
-			self.changed_keys.insert(changed_key);
+			self.changed_keys.insert(storage_key, changed_keys);
 		}
 		self
 	}
@@ -137,23 +159,26 @@ mod tests {
 	#[test]
 	fn updated_keys_are_stored_when_non_top_level_digest_is_built() {
 		let mut data = IncompleteCachedBuildData::<u32>::new(false);
-		data = data.insert(vec![1]);
+		data = data.insert(None, vec![vec![1]].into_iter().collect());
 		assert_eq!(data.changed_keys.len(), 1);
 
 		let mut cache = BuildCache::new();
-		cache.insert(data.complete(1, 1));
+		cache.perform(CacheAction::CacheBuildData(data.complete(1, 1)));
 		assert_eq!(cache.changed_keys.len(), 1);
-		assert_eq!(cache.get(&1).unwrap().clone(), vec![vec![1]].into_iter().collect());
+		assert_eq!(
+			cache.get(&1).unwrap().clone(),
+			vec![(None, vec![vec![1]].into_iter().collect())].into_iter().collect(),
+		);
 	}
 
 	#[test]
 	fn updated_keys_are_not_stored_when_top_level_digest_is_built() {
 		let mut data = IncompleteCachedBuildData::<u32>::new(true);
-		data = data.insert(vec![1]);
+		data = data.insert(None, vec![vec![1]].into_iter().collect());
 		assert_eq!(data.changed_keys.len(), 0);
 
 		let mut cache = BuildCache::new();
-		cache.insert(data.complete(1, 1));
+		cache.perform(CacheAction::CacheBuildData(data.complete(1, 1)));
 		assert_eq!(cache.changed_keys.len(), 0);
 		assert_eq!(cache.get(&1), None);
 	}
@@ -161,36 +186,36 @@ mod tests {
 	#[test]
 	fn obsolete_entries_are_purged_when_new_ct_is_built() {
 		let mut cache = BuildCache::<u32, u32>::new();
-		cache.insert(IncompleteCachedBuildData::new(false)
-			.insert(vec![1])
-			.complete(1, 1));
-		cache.insert(IncompleteCachedBuildData::new(false)
-			.insert(vec![2])
-			.complete(2, 2));
-		cache.insert(IncompleteCachedBuildData::new(false)
-			.insert(vec![3])
-			.complete(3, 3));
+		cache.perform(CacheAction::CacheBuildData(IncompleteCachedBuildData::new(false)
+			.insert(None, vec![vec![1]].into_iter().collect())
+			.complete(1, 1)));
+		cache.perform(CacheAction::CacheBuildData(IncompleteCachedBuildData::new(false)
+			.insert(None, vec![vec![2]].into_iter().collect())
+			.complete(2, 2)));
+		cache.perform(CacheAction::CacheBuildData(IncompleteCachedBuildData::new(false)
+			.insert(None, vec![vec![3]].into_iter().collect())
+			.complete(3, 3)));
 
 		assert_eq!(cache.changed_keys.len(), 3);
 
-		cache.insert(IncompleteCachedBuildData::new(false)
+		cache.perform(CacheAction::CacheBuildData(IncompleteCachedBuildData::new(false)
 			.set_digest_input_blocks(vec![1, 2, 3])
-			.complete(4, 4));
+			.complete(4, 4)));
 
 		assert_eq!(cache.changed_keys.len(), 1);
 
-		cache.insert(IncompleteCachedBuildData::new(false)
-			.insert(vec![8])
-			.complete(8, 8));
-		cache.insert(IncompleteCachedBuildData::new(false)
-			.insert(vec![12])
-			.complete(12, 12));
+		cache.perform(CacheAction::CacheBuildData(IncompleteCachedBuildData::new(false)
+			.insert(None, vec![vec![8]].into_iter().collect())
+			.complete(8, 8)));
+		cache.perform(CacheAction::CacheBuildData(IncompleteCachedBuildData::new(false)
+			.insert(None, vec![vec![12]].into_iter().collect())
+			.complete(12, 12)));
 
 		assert_eq!(cache.changed_keys.len(), 3);
 
-		cache.insert(IncompleteCachedBuildData::new(true)
+		cache.perform(CacheAction::CacheBuildData(IncompleteCachedBuildData::new(true)
 			.set_digest_input_blocks(vec![4, 8, 12])
-			.complete(16, 16));
+			.complete(16, 16)));
 
 		assert_eq!(cache.changed_keys.len(), 0);
 	}

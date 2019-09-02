@@ -20,7 +20,7 @@ use std::{error, fmt, cmp::Ord};
 use log::warn;
 use crate::backend::Backend;
 use crate::changes_trie::{
-	Storage as ChangesTrieStorage, CachedBuildData as ChangesTrieCachedBuildData,
+	Storage as ChangesTrieStorage, CacheAction as ChangesTrieCacheAction,
 	build_changes_trie,
 };
 use crate::{Externalities, OverlayedChanges, ChildStorageKey};
@@ -81,7 +81,7 @@ where
 	/// This differs from `storage_transaction` behavior, because the moment when
 	/// `storage_changes_root` is called matters + we need to remember additional
 	/// data at this moment (block number).
-	changes_trie_transaction: Option<(MemoryDB<H>, H::Out, Option<ChangesTrieCachedBuildData<H::Out, N>>)>,
+	changes_trie_transaction: Option<(MemoryDB<H>, H::Out, Option<ChangesTrieCacheAction<H::Out, N>>)>,
 	/// Additional externalities for offchain workers.
 	///
 	/// If None, some methods from the trait might not be supported.
@@ -207,6 +207,22 @@ where
 			self.backend.child_storage(storage_key.as_ref(), key).expect(EXT_NOT_ALLOWED_TO_FAIL))
 	}
 
+	fn child_storage_hash(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<H::Out> {
+		let _guard = panic_handler::AbortGuard::force_abort();
+		self.overlay.child_storage(storage_key.as_ref(), key).map(|x| x.map(|x| H::hash(x))).unwrap_or_else(||
+			self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL))
+	}
+
+	fn original_child_storage(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<Vec<u8>> {
+		let _guard = panic_handler::AbortGuard::force_abort();
+		self.backend.child_storage(storage_key.as_ref(), key).expect(EXT_NOT_ALLOWED_TO_FAIL)
+	}
+
+	fn original_child_storage_hash(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<H::Out> {
+		let _guard = panic_handler::AbortGuard::force_abort();
+		self.backend.child_storage_hash(storage_key.as_ref(), key).expect(EXT_NOT_ALLOWED_TO_FAIL)
+	}
+
 	fn exists_storage(&self, key: &[u8]) -> bool {
 		let _guard = panic_handler::AbortGuard::force_abort();
 		match self.overlay.storage(key) {
@@ -266,6 +282,16 @@ where
 		});
 	}
 
+	fn clear_child_prefix(&mut self, storage_key: ChildStorageKey<H>, prefix: &[u8]) {
+		let _guard = panic_handler::AbortGuard::force_abort();
+
+		self.mark_dirty();
+		self.overlay.clear_child_prefix(storage_key.as_ref(), prefix);
+		self.backend.for_child_keys_with_prefix(storage_key.as_ref(), prefix, |key| {
+			self.overlay.set_child_storage(storage_key.as_ref().to_vec(), key.to_vec(), None);
+		});
+	}
+
 	fn chain_id(&self) -> u64 {
 		42
 	}
@@ -279,14 +305,13 @@ where
 		let child_storage_keys =
 			self.overlay.prospective.children.keys()
 				.chain(self.overlay.committed.children.keys());
-
 		let child_delta_iter = child_storage_keys.map(|storage_key|
 			(storage_key.clone(), self.overlay.committed.children.get(storage_key)
 				.into_iter()
-				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
+				.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone())))
 				.chain(self.overlay.prospective.children.get(storage_key)
 					.into_iter()
-					.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone()))))));
+					.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone()))))));
 
 
 		// compute and memoize
@@ -311,10 +336,10 @@ where
 
 			let delta = self.overlay.committed.children.get(storage_key)
 				.into_iter()
-				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
+				.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone())))
 				.chain(self.overlay.prospective.children.get(storage_key)
 						.into_iter()
-						.flat_map(|map| map.1.clone().into_iter()));
+						.flat_map(|map| map.clone().into_iter().map(|(k, v)| (k.clone(), v.value.clone()))));
 
 			let root = self.backend.child_storage_root(storage_key, delta).0;
 

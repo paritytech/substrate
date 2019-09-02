@@ -75,6 +75,7 @@ impl system::Trait for Runtime {
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
+	type Version = ();
 }
 
 impl module::Trait for Runtime {
@@ -82,7 +83,7 @@ impl module::Trait for Runtime {
 }
 
 fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-	system::GenesisConfig::default().build_storage::<Runtime>().unwrap().0.into()
+	system::GenesisConfig::default().build_storage::<Runtime>().unwrap().into()
 }
 
 fn deposit_events(n: usize) {

@@ -29,7 +29,7 @@ use primitives::{
 use codec::{Encode, Decode};
 use sr_primitives::generic::Era;
 use node_primitives::{Balance, Index, Hash};
-use node_runtime::{Call, UncheckedExtrinsic, BalancesCall, Runtime};
+use node_runtime::{Call, UncheckedExtrinsic, SignedPayload, BalancesCall, Runtime, VERSION};
 
 mod vanity;
 
@@ -41,7 +41,11 @@ trait Crypto {
 	}
 	fn ss58_from_pair(pair: &Self::Pair) -> String { pair.public().to_ss58check() }
 	fn public_from_pair(pair: &Self::Pair) -> Vec<u8> { pair.public().as_ref().to_owned() }
-	fn print_from_uri(uri: &str, password: Option<&str>) where <Self::Pair as Pair>::Public: Sized + Ss58Codec + AsRef<[u8]> {
+	fn print_from_uri(
+		uri: &str,
+		password: Option<&str>,
+		network_override: Option<Ss58AddressFormat>,
+	) where <Self::Pair as Pair>::Public: Sized + Ss58Codec + AsRef<[u8]> {
 		if let Ok((pair, seed)) = Self::Pair::from_phrase(uri, password) {
 			println!("Secret phrase `{}` is account:\n  Secret seed: 0x{}\n  Public key (hex): 0x{}\n  Address (SS58): {}",
 				uri,
@@ -56,9 +60,10 @@ trait Crypto {
 				Self::ss58_from_pair(&pair)
 			);
 		} else if let Ok((public, v)) = <Self::Pair as Pair>::Public::from_string_with_version(uri) {
+			let v = network_override.unwrap_or(v);
 			println!("Public Key URI `{}` is account:\n  Network ID/version: {}\n  Public key (hex): 0x{}\n  Address (SS58): {}",
 				uri,
-				String::from(Ss58AddressFormat::from(v)),
+				String::from(v),
 				HexDisplay::from(&public.as_ref()),
 				public.to_ss58check_with_version(v)
 			);
@@ -92,6 +97,7 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 {
 	let extra = |i: Index, f: Balance| {
 		(
+			system::CheckVersion::<Runtime>::new(),
 			system::CheckGenesis::<Runtime>::new(),
 			system::CheckEra::<Runtime>::from(Era::Immortal),
 			system::CheckNonce::<Runtime>::from(i),
@@ -100,11 +106,12 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 		)
 	};
 	let password = matches.value_of("password");
-	let maybe_network = matches.value_of("network");
+	let maybe_network: Option<Ss58AddressFormat> = matches.value_of("network")
+		.map(|network| network.try_into()
+			.expect("Invalid network name: must be polkadot/substrate/kusama")
+		);
 	if let Some(network) = maybe_network {
-		let v = network.try_into()
-			.expect("Invalid network name: must be polkadot/substrate/kusama");
-		set_default_ss58_version(v);
+		set_default_ss58_version(network);
 	}
 	match matches.subcommand() {
 		("generate", Some(matches)) => {
@@ -115,17 +122,21 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 					.expect("Invalid number of words given for phrase: must be 12/15/18/21/24")
 				).unwrap_or(MnemonicType::Words12);
 			let mnemonic = Mnemonic::new(words, Language::English);
-			C::print_from_uri(mnemonic.phrase(), password);
+			C::print_from_uri(mnemonic.phrase(), password, maybe_network);
 		}
 		("inspect", Some(matches)) => {
 			let uri = matches.value_of("uri")
 				.expect("URI parameter is required; thus it can't be None; qed");
-			C::print_from_uri(uri, password);
+			C::print_from_uri(uri, password, maybe_network);
 		}
 		("vanity", Some(matches)) => {
 			let desired: String = matches.value_of("pattern").map(str::to_string).unwrap_or_default();
 			let result = vanity::generate_key::<C>(&desired).expect("Key generation failed");
-			C::print_from_uri(&format!("0x{}", HexDisplay::from(&result.seed.as_ref())), None);
+			C::print_from_uri(
+				&format!("0x{}", HexDisplay::from(&result.seed.as_ref())),
+				None,
+				maybe_network
+			);
 		}
 		("sign", Some(matches)) => {
 			let suri = matches.value_of("suri")
@@ -158,7 +169,7 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 			let index = matches.value_of("index")
 				.expect("parameter is required; thus it can't be None; qed");
 			let index = str::parse::<Index>(index)
-				.expect("Invalid 'amount' parameter; expecting an integer.");
+				.expect("Invalid 'index' parameter; expecting an integer.");
 
 			let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
 
@@ -171,22 +182,21 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 
 			println!("Using a genesis hash of {}", HexDisplay::from(&genesis_hash.as_ref()));
 
-			let raw_payload = (
+			let raw_payload = SignedPayload::from_raw(
 				function,
 				extra(index, 0),
-				(&genesis_hash, &genesis_hash),
+				(VERSION.spec_version as u32, genesis_hash, genesis_hash, (), (), ()),
 			);
-			let signature = raw_payload.using_encoded(|payload| if payload.len() > 256 {
-				signer.sign(&blake2_256(payload)[..])
-			} else {
+			let signature = raw_payload.using_encoded(|payload| {
 				println!("Signing {}", HexDisplay::from(&payload));
 				signer.sign(payload)
 			});
+			let (function, extra, _) = raw_payload.deconstruct();
 			let extrinsic = UncheckedExtrinsic::new_signed(
-				raw_payload.0,
+				function,
 				signer.public().into(),
 				signature.into(),
-				extra(index, 0),
+				extra,
 			);
 			println!("0x{}", hex::encode(&extrinsic.encode()));
 		}
@@ -198,7 +208,7 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 			let index = matches.value_of("nonce")
 				.expect("nonce is required; thus it can't be None; qed");
 			let index = str::parse::<Index>(index)
-				.expect("Invalid 'index' parameter; expecting an integer.");
+				.expect("Invalid 'nonce' parameter; expecting an integer.");
 
 			let call = matches.value_of("call")
 				.expect("call is required; thus it can't be None; qed");

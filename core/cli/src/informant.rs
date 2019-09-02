@@ -16,27 +16,17 @@
 
 //! Console informant. Prints sync progress and block events. Runs on the calling thread.
 
-use client::{backend::Backend, BlockchainEvents};
+use client::BlockchainEvents;
 use futures::{Future, Stream};
 use futures03::{StreamExt as _, TryStreamExt as _};
 use log::{info, warn};
 use sr_primitives::{generic::BlockId, traits::Header};
-use service::{Service, Components};
-use tokio::runtime::TaskExecutor;
+use service::AbstractService;
 
 mod display;
 
-/// Spawn informant on the event loop
-#[deprecated(note = "Please use informant::build instead, and then create the task manually")]
-pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExecutor) where
-	C: Components,
-{
-	handle.spawn(exit.until(build(service)).map(|_| ()));
-}
-
 /// Creates an informant in the form of a `Future` that must be polled regularly.
-pub fn build<C>(service: &Service<C>) -> impl Future<Item = (), Error = ()>
-where C: Components {
+pub fn build(service: &impl AbstractService) -> impl Future<Item = (), Error = ()> {
 	let client = service.client();
 
 	let mut display = display::InformantDisplay::new();
@@ -58,8 +48,8 @@ where C: Components {
 		if let Some((ref last_num, ref last_hash)) = last_best {
 			if n.header.parent_hash() != last_hash && n.is_new_best  {
 				let tree_route = ::client::blockchain::tree_route(
-					#[allow(deprecated)]
-					client.backend().blockchain(),
+					|id| client.header(&id)?.ok_or_else(
+						|| client::error::Error::UnknownBlock(format!("{:?}", id))),
 					BlockId::Hash(last_hash.clone()),
 					BlockId::Hash(n.hash),
 				);

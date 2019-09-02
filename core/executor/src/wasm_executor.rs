@@ -281,6 +281,23 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.ext.clear_prefix(&prefix);
 		Ok(())
 	},
+	ext_clear_child_prefix(
+		storage_key_data: *const u8,
+		storage_key_len: u32,
+		prefix_data: *const u8,
+		prefix_len: u32
+	) => {
+		let storage_key = this.memory.get(
+			storage_key_data,
+			storage_key_len as usize
+		).map_err(|_| "Invalid attempt to determine storage_key in ext_clear_child_prefix")?;
+		let storage_key = ChildStorageKey::from_vec(storage_key)
+			.ok_or_else(|| "ext_clear_child_prefix: child storage key is not valid")?;
+		let prefix = this.memory.get(prefix_data, prefix_len as usize)
+			.map_err(|_| "Invalid attempt to determine prefix in ext_clear_child_prefix")?;
+		this.ext.clear_child_prefix(storage_key, &prefix);
+		Ok(())
+	},
 	ext_kill_child_storage(storage_key_data: *const u8, storage_key_len: u32) => {
 		let storage_key = this.memory.get(
 			storage_key_data,
@@ -646,7 +663,12 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			.map_err(|_| "Invalid attempt to get id in ext_ed25519_public_keys")?;
 		let key_type = KeyTypeId(id);
 
-		let keys = runtime_io::ed25519_public_keys(key_type).encode();
+		let keys = this.ext
+			.keystore()
+			.ok_or("No `keystore` associated for the current context!")?
+			.read()
+			.ed25519_public_keys(key_type)
+			.encode();
 
 		let len = keys.len() as u32;
 		let offset = this.heap.allocate(len)? as u32;
@@ -700,7 +722,12 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 					.map_err(|_| "Seed not a valid utf8 string in ext_sr25119_generate")
 			).transpose()?;
 
-		let pubkey = runtime_io::ed25519_generate(key_type, seed);
+		let pubkey = this.ext
+			.keystore()
+			.ok_or("No `keystore` associated for the current context!")?
+			.write()
+			.ed25519_generate_new(key_type, seed)
+			.map_err(|_| "`ed25519` key generation failed")?;
 
 		this.memory.set(out, pubkey.as_ref())
 			.map_err(|_| "Invalid attempt to set out in ext_ed25519_generate".into())
@@ -724,7 +751,15 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let msg = this.memory.get(msg_data, msg_len as usize)
 			.map_err(|_| "Invalid attempt to get message in ext_ed25519_sign")?;
 
-		let signature = runtime_io::ed25519_sign(key_type, &ed25519::Public(pubkey), &msg);
+		let pub_key = ed25519::Public::try_from(pubkey.as_ref())
+			.map_err(|_| "Invalid `ed25519` public key")?;
+
+		let signature = this.ext
+			.keystore()
+			.ok_or("No `keystore` associated for the current context!")?
+			.read()
+			.ed25519_key_pair(key_type, &pub_key)
+			.map(|k| k.sign(msg.as_ref()));
 
 		match signature {
 			Some(signature) => {
@@ -742,7 +777,12 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			.map_err(|_| "Invalid attempt to get id in ext_sr25519_public_keys")?;
 		let key_type = KeyTypeId(id);
 
-		let keys = runtime_io::sr25519_public_keys(key_type).encode();
+		let keys = this.ext
+			.keystore()
+			.ok_or("No `keystore` associated for the current context!")?
+			.read()
+			.sr25519_public_keys(key_type)
+			.encode();
 
 		let len = keys.len() as u32;
 		let offset = this.heap.allocate(len)? as u32;
@@ -796,7 +836,12 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			)
 			.transpose()?;
 
-		let pubkey = runtime_io::sr25519_generate(key_type, seed);
+		let pubkey = this.ext
+			.keystore()
+			.ok_or("No `keystore` associated for the current context!")?
+			.write()
+			.sr25519_generate_new(key_type, seed)
+			.map_err(|_| "`sr25519` key generation failed")?;
 
 		this.memory.set(out, pubkey.as_ref())
 			.map_err(|_| "Invalid attempt to set out in ext_sr25519_generate".into())
@@ -820,7 +865,15 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let msg = this.memory.get(msg_data, msg_len as usize)
 			.map_err(|_| "Invalid attempt to get message in ext_sr25519_sign")?;
 
-		let signature = runtime_io::sr25519_sign(key_type, &sr25519::Public(pubkey), &msg);
+		let pub_key = sr25519::Public::try_from(pubkey.as_ref())
+			.map_err(|_| "Invalid `sr25519` public key")?;
+
+		let signature = this.ext
+			.keystore()
+			.ok_or("No `keystore` associated for the current context!")?
+			.read()
+			.sr25519_key_pair(key_type, &pub_key)
+			.map(|k| k.sign(msg.as_ref()));
 
 		match signature {
 			Some(signature) => {
@@ -858,6 +911,11 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			.map_err(|_| "Invalid attempt to set pubkey in ext_secp256k1_ecdsa_recover")?;
 
 		Ok(0)
+	},
+	ext_is_validator() -> u32 => {
+		this.ext.offchain()
+			.map(|o| if o.is_validator() { 1 } else { 0 })
+			.ok_or("Calling unavailable API ext_is_validator: wasm".into())
 	},
 	ext_submit_transaction(msg_data: *const u8, len: u32) -> u32 => {
 		let extrinsic = this.memory.get(msg_data, len as usize)
@@ -962,7 +1020,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			.map_err(|_| "OOB while ext_local_storage_compare_and_set: wasm")?;
 
 		let res = {
-			if old_value == u32::max_value() {
+			if old_value_len == u32::max_value() {
 				this.ext.offchain()
 					.map(|api| api.local_storage_compare_and_set(kind, &key, None, &new_value))
 					.ok_or_else(|| "Calling unavailable API ext_local_storage_compare_and_set: wasm")?
@@ -1496,11 +1554,11 @@ mod tests {
 
 		assert_eq!(output, b"all ok!".to_vec());
 
-		let expected = TestExternalities::new(map![
+		let expected = TestExternalities::new((map![
 			b"input".to_vec() => b"Hello world".to_vec(),
 			b"foo".to_vec() => b"bar".to_vec(),
 			b"baz".to_vec() => b"bar".to_vec()
-		]);
+		], map![]));
 		assert_eq!(ext, expected);
 	}
 
@@ -1519,11 +1577,11 @@ mod tests {
 
 		assert_eq!(output, b"all ok!".to_vec());
 
-		let expected: TestExternalities<_> = map![
+		let expected = TestExternalities::new((map![
 			b"aaa".to_vec() => b"1".to_vec(),
 			b"aab".to_vec() => b"2".to_vec(),
 			b"bbb".to_vec() => b"5".to_vec()
-		];
+		], map![]));
 		assert_eq!(expected, ext);
 	}
 
@@ -1636,12 +1694,12 @@ mod tests {
 	}
 
 	#[test]
-	fn enumerated_trie_root_should_work() {
+	fn ordered_trie_root_should_work() {
 		let mut ext = TestExternalities::<Blake2Hasher>::default();
 		let trie_input = vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()];
 		let test_code = WASM_BINARY;
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_enumerated_trie_root", &[]).unwrap(),
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_ordered_trie_root", &[]).unwrap(),
 			Layout::<Blake2Hasher>::ordered_trie_root(trie_input.iter()).as_fixed_bytes().encode()
 		);
 	}

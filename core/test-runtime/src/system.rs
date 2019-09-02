@@ -18,7 +18,7 @@
 //! and depositing logs.
 
 use rstd::prelude::*;
-use runtime_io::{storage_root, enumerated_trie_root, storage_changes_root, twox_128, blake2_256};
+use runtime_io::{storage_root, ordered_trie_root, storage_changes_root, twox_128, blake2_256};
 use runtime_support::storage::{self, StorageValue, StorageMap};
 use runtime_support::storage_items;
 use sr_primitives::traits::{Hash as HashT, BlakeTwo256, Header as _};
@@ -62,6 +62,12 @@ pub fn initialize_block(header: &Header) {
 	<ParentHash>::put(&header.parent_hash);
 	<StorageDigest>::put(header.digest());
 	storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
+
+	// try to read something that depends on current header digest
+	// so that it'll be included in execution proof
+	if let Some(generic::DigestItem::Other(v)) = header.digest().logs().iter().next() {
+		let _: Option<u32> = storage::unhashed::get(&v);
+	}
 }
 
 pub fn get_block_number() -> Option<BlockNumber> {
@@ -96,12 +102,18 @@ fn execute_block_with_state_root_handler(
 	// check transaction trie root represents the transactions.
 	let txs = block.extrinsics.iter().map(Encode::encode).collect::<Vec<_>>();
 	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
-	let txs_root = enumerated_trie_root::<Blake2Hasher>(&txs).into();
+	let txs_root = ordered_trie_root::<Blake2Hasher, _, _>(&txs).into();
 	info_expect_equal_hash(&txs_root, &header.extrinsics_root);
 	if let Mode::Overwrite = mode {
 		header.extrinsics_root = txs_root;
 	} else {
 		assert!(txs_root == header.extrinsics_root, "Transaction trie root must be valid.");
+	}
+
+	// try to read something that depends on current header digest
+	// so that it'll be included in execution proof
+	if let Some(generic::DigestItem::Other(v)) = header.digest().logs().iter().next() {
+		let _: Option<u32> = storage::unhashed::get(&v);
 	}
 
 	// execute transactions
@@ -200,14 +212,13 @@ pub fn finalize_block() -> Header {
 	let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX).unwrap();
 	let txs: Vec<_> = (0..extrinsic_index).map(ExtrinsicData::take).collect();
 	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
-	let extrinsics_root = enumerated_trie_root::<Blake2Hasher>(&txs).into();
-	// let mut digest = Digest::default();
+	let extrinsics_root = ordered_trie_root::<Blake2Hasher, _, _>(&txs).into();
 	let number = <Number>::take().expect("Number is set by `initialize_block`");
 	let parent_hash = <ParentHash>::take();
 	let mut digest = <StorageDigest>::take().expect("StorageDigest is set by `initialize_block`");
 
 	let o_new_authorities = <NewAuthorities>::take();
-	// This MUST come after all changes to storage are done.  Otherwise we will fail the
+	// This MUST come after all changes to storage are done. Otherwise we will fail the
 	// “Storage root does not match that calculated” assertion.
 	let storage_root = BlakeTwo256::storage_root();
 	let storage_changes_root = BlakeTwo256::storage_changes_root(parent_hash);
@@ -323,13 +334,13 @@ mod tests {
 			Sr25519Keyring::Bob.to_raw_public(),
 			Sr25519Keyring::Charlie.to_raw_public()
 		];
-		TestExternalities::new(map![
+		TestExternalities::new((map![
 			twox_128(b"latest").to_vec() => vec![69u8; 32],
 			twox_128(b"sys:auth").to_vec() => authorities.encode(),
 			blake2_256(&AccountKeyring::Alice.to_raw_public().to_keyed_vec(b"balance:")).to_vec() => {
 				vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 			}
-		])
+		], map![]))
 	}
 
 	fn block_import_works<F>(block_executor: F) where F: Fn(Block, &mut TestExternalities<Blake2Hasher>) {

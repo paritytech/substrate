@@ -226,7 +226,8 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a, B> {
 		last: <B as BlockT>::Hash,
 		min: <B as BlockT>::Hash,
 		max: <B as BlockT>::Hash,
-		key: Vec<u8>
+		storage_key: Option<Vec<u8>>,
+		key: Vec<u8>,
 	) {
 		let message = message::generic::Message::RemoteChangesRequest(message::RemoteChangesRequest {
 			id,
@@ -234,6 +235,7 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a, B> {
 			last,
 			min,
 			max,
+			storage_key,
 			key,
 		});
 
@@ -547,7 +549,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				self.on_finality_proof_request(who, request),
 			GenericMessage::FinalityProofResponse(response) =>
 				return self.on_finality_proof_response(who, response),
-			GenericMessage::RemoteReadChildRequest(_) => {}
+			GenericMessage::RemoteReadChildRequest(request) =>
+				self.on_remote_read_child_request(who, request),
 			GenericMessage::Consensus(msg) => {
 				if self.context_data.peers.get(&who).map_or(false, |peer| peer.info.protocol_version > 2) {
 					self.consensus_gossip.on_incoming(
@@ -1293,6 +1296,36 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		);
 	}
 
+	fn on_remote_read_child_request(
+		&mut self,
+		who: PeerId,
+		request: message::RemoteReadChildRequest<B::Hash>,
+	) {
+		trace!(target: "sync", "Remote read child request {} from {} ({} {} at {})",
+			request.id, who, request.storage_key.to_hex::<String>(), request.key.to_hex::<String>(), request.block);
+		let proof = match self.context_data.chain.read_child_proof(&request.block, &request.storage_key, &request.key) {
+			Ok(proof) => proof,
+			Err(error) => {
+				trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",
+					request.id,
+					who,
+					request.storage_key.to_hex::<String>(),
+					request.key.to_hex::<String>(),
+					request.block,
+					error
+				);
+				Default::default()
+			}
+		};
+		self.send_message(
+			who,
+			GenericMessage::RemoteReadResponse(message::RemoteReadResponse {
+				id: request.id,
+				proof,
+			}),
+		);
+	}
+
 	fn on_remote_read_response(
 		&mut self,
 		who: PeerId,
@@ -1354,24 +1387,34 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		trace!(target: "sync", "Remote changes proof request {} from {} for key {} ({}..{})",
 			request.id,
 			who,
-			request.key.to_hex::<String>(),
+			if let Some(sk) = request.storage_key.as_ref() {
+				format!("{} : {}", sk.to_hex::<String>(), request.key.to_hex::<String>())
+			} else {
+				request.key.to_hex::<String>()
+			},
 			request.first,
 			request.last
 		);
+		let storage_key = request.storage_key.map(|sk| StorageKey(sk));
 		let key = StorageKey(request.key);
 		let proof = match self.context_data.chain.key_changes_proof(
 			request.first,
 			request.last,
 			request.min,
 			request.max,
-			&key
+			storage_key.as_ref(),
+			&key,
 		) {
 			Ok(proof) => proof,
 			Err(error) => {
 				trace!(target: "sync", "Remote changes proof request {} from {} for key {} ({}..{}) failed with: {}",
 					request.id,
 					who,
-					key.0.to_hex::<String>(),
+					if let Some(sk) = storage_key {
+						format!("{} : {}", sk.0.to_hex::<String>(), key.0.to_hex::<String>())
+					} else {
+						key.0.to_hex::<String>()
+					},
 					request.first,
 					request.last,
 					error

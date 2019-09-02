@@ -67,7 +67,7 @@ impl GenesisInit for () {
 }
 
 /// A builder for creating a test client instance.
-pub struct TestClientBuilder<Executor, Backend, G: GenesisInit = ()> {
+pub struct TestClientBuilder<Executor, Backend, G: GenesisInit> {
 	execution_strategies: ExecutionStrategies,
 	genesis_init: G,
 	child_storage_extension: HashMap<Vec<u8>, Vec<(Vec<u8>, Vec<u8>)>>,
@@ -76,9 +76,10 @@ pub struct TestClientBuilder<Executor, Backend, G: GenesisInit = ()> {
 	keystore: Option<BareCryptoStorePtr>,
 }
 
-impl<Block, Executor> Default for TestClientBuilder<
+impl<Block, Executor, G: GenesisInit> Default for TestClientBuilder<
 	Executor,
 	Backend<Block>,
+	G,
 > where
 	Block: BlockT<Hash=<Blake2Hasher as Hasher>::Out>,
 {
@@ -98,6 +99,11 @@ impl<Block, Executor, G: GenesisInit> TestClientBuilder<
 	pub fn with_default_backend() -> Self {
 		let backend = Arc::new(Backend::new_test(std::u32::MAX, std::u64::MAX));
 		Self::with_backend(backend)
+	}
+
+	/// Give access to the underlying backend of these clients
+	pub fn backend(&self) -> Arc<Backend<Block>> {
+		self.backend.clone()
 	}
 }
 
