@@ -566,7 +566,7 @@ impl<T: Trait> Module<T> {
 		let (fire_event, third_reached) = DisabledValidators::mutate(|disabled| {
 			let i = i as u32;
 			if let Err(index) = disabled.binary_search(&i) {
-				let count = <Validators<T>>::get().len();
+				let count = <Validators<T>>::decode_len().unwrap_or(0);
 				disabled.insert(index, i);
 				(true, disabled.len() >= (count + 2) / 3)
 			} else {
