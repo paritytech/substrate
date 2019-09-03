@@ -1543,7 +1543,7 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 			}
 
 			// make sure to disable validator till the end of this session
-			if let Ok(true) = T::SessionInterface::disable_validator(stash) {
+			if T::SessionInterface::disable_validator(stash).unwrap_or(false) {
 				// force a new era, to select a new validator set
 				ForceEra::put(Forcing::ForceNew);
 			}
