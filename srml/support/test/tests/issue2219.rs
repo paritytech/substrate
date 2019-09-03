@@ -82,7 +82,7 @@ mod module {
 
 	pub trait Trait: system::Trait {}
 
-	srml_support::decl_module! {
+	support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
 
@@ -99,7 +99,7 @@ mod module {
 		}
 	}
 
-	srml_support::decl_storage! {
+	support::decl_storage! {
 		trait Store for Module<T: Trait> as Actors {
 			/// requirements to enter and maintain status in roles
 			pub Parameters get(parameters) build(|config: &GenesisConfig| {
@@ -164,7 +164,7 @@ impl system::Trait for Runtime {
 
 impl module::Trait for Runtime {}
 
-srml_support::construct_runtime!(
+support::construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
 		NodeBlock = Block,

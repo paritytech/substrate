@@ -127,7 +127,7 @@
 //! }
 //! # struct StakingLedger<T: Trait> {
 //! # 	stash: <T as system::Trait>::AccountId,
-//! # 	total: <<T as Trait>::Currency as srml_support::traits::Currency<<T as system::Trait>::AccountId>>::Balance,
+//! # 	total: <<T as Trait>::Currency as support::traits::Currency<<T as system::Trait>::AccountId>>::Balance,
 //! # 	phantom: std::marker::PhantomData<T>,
 //! # }
 //! # const STAKING_ID: [u8; 8] = *b"staking ";

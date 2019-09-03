@@ -226,15 +226,15 @@ macro_rules! __assert_eq_uvec {
 ///
 /// ```rust
 /// # fn main() {
-/// srml_support::assert_eq_error_rate!(10, 10, 0);
-/// srml_support::assert_eq_error_rate!(10, 11, 1);
-/// srml_support::assert_eq_error_rate!(12, 10, 2);
+/// support::assert_eq_error_rate!(10, 10, 0);
+/// support::assert_eq_error_rate!(10, 11, 1);
+/// support::assert_eq_error_rate!(12, 10, 2);
 /// # }
 /// ```
 ///
 /// ```rust,should_panic
 /// # fn main() {
-/// srml_support::assert_eq_error_rate!(12, 10, 1);
+/// support::assert_eq_error_rate!(12, 10, 1);
 /// # }
 /// ```
 #[macro_export]

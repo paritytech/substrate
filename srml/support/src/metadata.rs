@@ -29,11 +29,11 @@ pub use srml_metadata::{
 ///#        type Origin;
 ///#        type BlockNumber;
 ///#    }
-///#    srml_support::decl_module! {
+///#    support::decl_module! {
 ///#        pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 ///#    }
 ///#
-///#    srml_support::decl_storage! {
+///#    support::decl_storage! {
 ///#        trait Store for Module<T: Trait> as TestStorage {}
 ///#    }
 ///# }
@@ -45,7 +45,7 @@ pub use srml_metadata::{
 ///# }
 ///
 /// struct Runtime;
-/// srml_support::impl_runtime_metadata! {
+/// support::impl_runtime_metadata! {
 ///     for Runtime with modules
 ///         module0::Module as Module0 with,
 ///         module1::Module as Module1 with,

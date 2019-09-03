@@ -1227,7 +1227,7 @@ mod tests {
 	pub type Block = sr_primitives::generic::Block<Header, UncheckedExtrinsic>;
 	pub type UncheckedExtrinsic = sr_primitives::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
 
-	srml_support::construct_runtime!(
+	support::construct_runtime!(
 		pub enum Test where
 			Block = Block,
 			NodeBlock = Block,

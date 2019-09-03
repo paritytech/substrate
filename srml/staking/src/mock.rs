@@ -92,7 +92,7 @@ impl_outer_origin!{
 pub struct Author11;
 impl FindAuthor<u64> for Author11 {
 	fn find_author<'a, I>(_digests: I) -> Option<u64>
-		where I: 'a + IntoIterator<Item=(srml_support::ConsensusEngineId, &'a [u8])>
+		where I: 'a + IntoIterator<Item=(support::ConsensusEngineId, &'a [u8])>
 	{
 		Some(11)
 	}

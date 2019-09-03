@@ -31,10 +31,10 @@ pub use crate::sr_primitives::ApplyError;
 /// # mod timestamp {
 /// # 	pub struct Module;
 /// #
-/// # 	impl srml_support::unsigned::ValidateUnsigned for Module {
+/// # 	impl support::unsigned::ValidateUnsigned for Module {
 /// # 		type Call = Call;
 /// #
-/// # 		fn validate_unsigned(call: &Self::Call) -> srml_support::unsigned::TransactionValidity {
+/// # 		fn validate_unsigned(call: &Self::Call) -> support::unsigned::TransactionValidity {
 /// # 			unimplemented!();
 /// # 		}
 /// # 	}
@@ -52,7 +52,7 @@ pub use crate::sr_primitives::ApplyError;
 /// # #[allow(unused)]
 /// pub struct Runtime;
 ///
-/// srml_support::impl_outer_validate_unsigned! {
+/// support::impl_outer_validate_unsigned! {
 /// 	impl ValidateUnsigned for Runtime {
 /// 		Timestamp
 /// 	}

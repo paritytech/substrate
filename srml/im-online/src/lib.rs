@@ -486,10 +486,10 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	}
 }
 
-impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
+impl<T: Trait> support::unsigned::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
 
-	fn validate_unsigned(call: &Self::Call) -> srml_support::unsigned::TransactionValidity {
+	fn validate_unsigned(call: &Self::Call) -> support::unsigned::TransactionValidity {
 		if let Call::heartbeat(heartbeat, signature) = call {
 			if <Module<T>>::is_online_in_current_session(heartbeat.authority_index) {
 				// we already received a heartbeat for this authority

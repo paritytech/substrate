@@ -24,11 +24,11 @@ pub trait Trait {
 	type BlockNumber: Encode + Decode + Default + Clone;
 }
 
-srml_support::decl_module! {
+support::decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 }
 
-srml_support::decl_storage!{
+support::decl_storage!{
 	trait Store for Module<T: Trait> as FinalKeys {
 		pub Value config(value): u32;
 

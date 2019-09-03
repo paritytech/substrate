@@ -277,7 +277,7 @@ pub struct Proof {
 	trie_nodes: Vec<Vec<u8>>,
 }
 
-impl<T: Trait, D: AsRef<[u8]>> srml_support::traits::KeyOwnerProofSystem<(KeyTypeId, D)>
+impl<T: Trait, D: AsRef<[u8]>> support::traits::KeyOwnerProofSystem<(KeyTypeId, D)>
 	for Module<T>
 {
 	type Proof = Proof;
