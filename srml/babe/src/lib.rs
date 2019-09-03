@@ -46,7 +46,7 @@ pub use babe_primitives::{AuthorityId, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH};
 #[cfg(all(feature = "std", test))]
 mod tests;
 
-#[cfg(all(test, feature = "std"))]
+#[cfg(all(feature = "std", test))]
 mod mock;
 
 /// The BABE inherent identifier.
