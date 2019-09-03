@@ -96,7 +96,7 @@ use srml_babe::{
 	BabeInherentData,
 	timestamp::{TimestampInherentData, InherentType as TimestampInherent}
 };
-use consensus_common::{SelectChain, well_known_cache_keys};
+use consensus_common::SelectChain;
 use consensus_common::import_queue::{Verifier, BasicQueue};
 use client::{
 	block_builder::api::BlockBuilder as BlockBuilderApi,
@@ -773,7 +773,8 @@ impl<B, E, Block, RA, PRA, T> Verifier<Block> for BabeVerifier<B, E, Block, RA, 
 		let parent_hash = *header.parent_hash();
 
 		let epoch = epoch(self.api.as_ref(), &BlockId::Hash(parent_hash))
-			.map_err(|e| format!("Could not fetch epoch at {:?}: {:?}", parent_hash, e))?;
+			.ok_or_else(|| format!("Could not fetch epoch at {:?}", parent_hash))?;
+
 		let (epoch, maybe_next_epoch) = epoch.deconstruct();
 		let Epoch { authorities, randomness, epoch_index, secondary_slots, .. } = epoch;
 
@@ -929,29 +930,13 @@ impl MaybeSpanEpoch {
 	}
 }
 
-/// Extract current epoch data from cache and fallback to querying the runtime
-/// if the cache isn't populated.
-fn epoch<B, C>(client: &C, at: &BlockId<B>) -> Result<MaybeSpanEpoch, ConsensusError> where
+/// Extract current epoch data from the runtime.
+fn epoch<B, C>(client: &C, at: &BlockId<B>) -> Option<MaybeSpanEpoch> where
 	B: BlockT,
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: BabeApi<B>,
 {
-	epoch_from_cache(client, at)
-		.or_else(|| epoch_from_runtime(client, at).map(MaybeSpanEpoch::Regular))
-		.ok_or(consensus_common::Error::InvalidAuthoritiesSet)
-}
-
-/// Extract current epoch data from cache.
-fn epoch_from_cache<B, C>(client: &C, at: &BlockId<B>) -> Option<MaybeSpanEpoch> where
-	B: BlockT,
-	C: ProvideCache<B>,
-{
-	// the epoch that is BABE-valid at the block is not the epoch that is cache-valid at the block
-	// we need to go back for maximum two steps
-	client.cache()
-		.and_then(|cache| cache
-			.get_at(&well_known_cache_keys::EPOCH, at)
-			.and_then(|(_, _, v)| Decode::decode(&mut &v[..]).ok()))
+	epoch_from_runtime(client, at).map(MaybeSpanEpoch::Regular)
 }
 
 /// Extract current epoch from runtime.
@@ -1186,41 +1171,6 @@ fn claim_secondary_slot(
 	None
 }
 
-fn initialize_authorities_cache<B, C>(client: &C) -> Result<(), ConsensusError> where
-	B: BlockT,
-	C: ProvideRuntimeApi + ProvideCache<B>,
-	C::Api: BabeApi<B>,
-{
-	// no cache => no initialization
-	let cache = match client.cache() {
-		Some(cache) => cache,
-		None => return Ok(()),
-	};
-
-	// check if we already have initialized the cache
-	let genesis_id = BlockId::Number(Zero::zero());
-	let genesis_epoch: Option<MaybeSpanEpoch> = cache
-		.get_at(&well_known_cache_keys::EPOCH, &genesis_id)
-		.and_then(|(_, _, v)| Decode::decode(&mut &v[..]).ok());
-	if genesis_epoch.is_some() {
-		return Ok(());
-	}
-
-	let map_err = |error| consensus_common::Error::from(consensus_common::Error::ClientImport(
-		format!(
-			"Error initializing authorities cache: {}",
-			error,
-		)));
-
-	let epoch0 = epoch_from_runtime(client, &genesis_id).ok_or(consensus_common::Error::InvalidAuthoritiesSet)?;
-	let mut epoch1 = epoch0.clone();
-	epoch1.epoch_index = 1;
-
-	let genesis_epoch = MaybeSpanEpoch::Genesis(epoch0, epoch1);
-	cache.initialize(&well_known_cache_keys::EPOCH, genesis_epoch.encode())
-		.map_err(map_err)
-}
-
 /// Tree of all epoch changes across all *seen* forks. Data stored in tree is
 /// the hash and block number of the block signaling the epoch change, and the
 /// epoch that was signalled at that block.
@@ -1313,7 +1263,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 	fn import_block(
 		&mut self,
 		mut block: BlockImportParams<Block>,
-		mut new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
+		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_header().hash();
 		let number = block.header.number().clone();
@@ -1389,16 +1339,6 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 		// if there's a pending epoch we'll save the previous epoch changes here
 		// this way we can revert it if there's any error
 		let mut old_epoch_changes = None;
-
-		if let Some(enacted_epoch) = enacted_epoch.as_ref() {
-			let enacted_epoch = &enacted_epoch.data;
-
-			// update the current epoch in the client cache
-			new_cache.insert(
-				well_known_cache_keys::EPOCH,
-				MaybeSpanEpoch::Regular(enacted_epoch.clone()).encode(),
-			);
-		}
 
 		if let Some(next_epoch) = next_epoch_digest {
 			if let Some(enacted_epoch) = enacted_epoch {
@@ -1483,7 +1423,6 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA, T>(
 	T: Send + Sync + 'static,
 {
 	register_babe_inherent_data_provider(&inherent_data_providers, config.get())?;
-	initialize_authorities_cache(&*api)?;
 
 	let verifier = BabeVerifier {
 		client: client.clone(),
