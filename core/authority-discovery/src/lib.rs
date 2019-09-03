@@ -35,7 +35,7 @@
 //!
 //! 2. **Discovers other authorities**
 //!
-//!    1. Retrieves the current set of authorities..
+//!    1. Retrieves the current set of authorities.
 //!
 //!    2. Starts DHT queries for the ids of the authorities.
 //!
@@ -54,6 +54,7 @@ use prost::Message;
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{Block as BlockT, ProvideRuntimeApi};
 use std::collections::{HashMap, HashSet};
+use std::convert::TryInto;
 use std::iter::FromIterator;
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -65,7 +66,7 @@ mod schema {
 	include!(concat!(env!("OUT_DIR"), "/authority_discovery.rs"));
 }
 
-/// A AuthorityDiscovery makes a given authority discoverable as well as discovers other authorities.
+/// An `AuthorityDiscovery` makes a given authority discoverable and discovers other authorities.
 pub struct AuthorityDiscovery<Client, Network, Block>
 where
 	Block: BlockT + 'static,
@@ -137,21 +138,18 @@ where
 			.network
 			.external_addresses()
 			.into_iter()
-			.map(|mut a| {
-				a.push(libp2p::core::multiaddr::Protocol::P2p(
+			.map(|a| {
+				a.with(libp2p::core::multiaddr::Protocol::P2p(
 					self.network.local_peer_id().into(),
-				));
-				a
+				))
 			})
-			.map(|a| a.to_string())
+			.map(|a| a.to_vec())
 			.collect();
 
 		let mut serialized_addresses = vec![];
-		schema::AuthorityAddresses {
-			addresses: addresses,
-		}
-		.encode(&mut serialized_addresses)
-		.map_err(Error::Encoding)?;
+		schema::AuthorityAddresses { addresses }
+			.encode(&mut serialized_addresses)
+			.map_err(Error::Encoding)?;
 
 		let (signature, authority_id) = self
 			.client
@@ -266,7 +264,7 @@ where
 					.map(|a| a.addresses)
 					.map_err(Error::Decoding)?
 					.into_iter()
-					.map(|a| a.parse())
+					.map(|a| a.try_into())
 					.collect::<std::result::Result<_, _>>()
 					.map_err(Error::ParsingMultiaddress)?;
 
