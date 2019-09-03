@@ -72,7 +72,7 @@ use codec::{Encode, Decode};
 use primitives::offchain::{OpaqueNetworkState, StorageKind};
 use rstd::prelude::*;
 use session::historical::IdentificationTuple;
-use sr_io::Printable;
+use runtime_io::Printable;
 use sr_primitives::{
 	Perbill, ApplyError,
 	traits::{Convert, Member},
@@ -277,7 +277,7 @@ decl_module! {
 		// Runs after every block.
 		fn offchain_worker(now: T::BlockNumber) {
 			// Only send messages if we are a potential validator.
-			if sr_io::is_validator() {
+			if runtime_io::is_validator() {
 				Self::offchain(now);
 			}
 		}
@@ -332,7 +332,7 @@ impl<T: Trait> Module<T> {
 					.map(|location| (index as u32, &local_keys[location]))
 			})
 		{
-			let network_state = sr_io::network_state().map_err(|_| OffchainErr::NetworkState)?;
+			let network_state = runtime_io::network_state().map_err(|_| OffchainErr::NetworkState)?;
 			let heartbeat_data = Heartbeat {
 				block_number,
 				network_state,
@@ -362,7 +362,7 @@ impl<T: Trait> Module<T> {
 			done,
 			gossipping_at,
 		};
-		sr_io::local_storage_compare_and_set(
+		runtime_io::local_storage_compare_and_set(
 			StorageKind::PERSISTENT,
 			DB_KEY,
 			curr_worker_status.as_ref().map(Vec::as_slice),
@@ -378,7 +378,7 @@ impl<T: Trait> Module<T> {
 			done,
 			gossipping_at,
 		};
-		sr_io::local_storage_set(
+		runtime_io::local_storage_set(
 			StorageKind::PERSISTENT, DB_KEY, &enc.encode());
 	}
 
@@ -389,7 +389,7 @@ impl<T: Trait> Module<T> {
 		now: T::BlockNumber,
 		next_gossip: T::BlockNumber,
 	) -> Result<(Option<Vec<u8>>, bool), OffchainErr> {
-		let last_gossip = sr_io::local_storage_get(StorageKind::PERSISTENT, DB_KEY);
+		let last_gossip = runtime_io::local_storage_get(StorageKind::PERSISTENT, DB_KEY);
 		match last_gossip {
 			Some(last) => {
 				let worker_status: WorkerStatus<T::BlockNumber> = Decode::decode(&mut &last[..])

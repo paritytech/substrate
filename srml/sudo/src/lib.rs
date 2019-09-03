@@ -126,7 +126,7 @@ decl_module! {
 			let res = match proposal.dispatch(system::RawOrigin::Root.into()) {
 				Ok(_) => true,
 				Err(e) => {
-					sr_io::print(e);
+					runtime_io::print(e);
 					false
 				}
 			};
