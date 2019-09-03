@@ -120,15 +120,19 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 		self.socket = loop {
 			match socket {
 				NodeSocket::Connected(mut conn) => {
-					let mut is_writing_data = false;
+					let mut is_writing_data = self.connection_timeout.is_some();
 					match NodeSocketConnected::poll(Pin::new(&mut conn), cx, &self.addr, &mut is_writing_data) {
 						Poll::Ready(Ok(_)) => {
 							self.connection_timeout = None;
 							break NodeSocket::Connected(conn)
 						},
 						Poll::Pending => {
-							if is_writing_data && self.connection_timeout.is_none() {
-								self.connection_timeout = Some(Delay::new(Duration::from_millis(500)));
+							if is_writing_data {
+								if self.connection_timeout.is_none() {
+									self.connection_timeout = Some(Delay::new(Duration::from_millis(5000)));
+								}
+							} else {
+								self.connection_timeout = None;
 							}
 							break NodeSocket::Connected(conn)
 						},
@@ -187,7 +191,6 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 					self.connection_timeout = None;
 				}
 				Poll::Ready(Ok(_)) => {
-					println!("Reconnecting");
 					warn!(target: "telemetry", "Server unresponsive from {}", self.addr);
 					self.connection_timeout = None;
 					let timeout = gen_rand_reconnect_delay();
@@ -231,39 +234,46 @@ where TTrans::Output: Sink<BytesMut, Error = TSinkErr>
 				}
 
 				let item_len = item.len();
+				*is_writing_data = true;
+
 				if let Err(err) = Sink::start_send(Pin::new(&mut self.sink), item) {
+					*is_writing_data = false;
 					return Poll::Ready(Err(err))
 				}
 				trace!(
 					target: "telemetry", "Successfully sent {:?} bytes message to {}",
 					item_len, my_addr
 				);
-				*is_writing_data = true;
 				self.need_flush = true;
 
 			} else if self.need_flush {
 				match Sink::poll_flush(Pin::new(&mut self.sink), cx) {
 					Poll::Pending => return Poll::Pending,
-					Poll::Ready(Err(err)) => return Poll::Ready(Err(err)),
-					Poll::Ready(Ok(())) => self.need_flush = false,
+					Poll::Ready(Err(err)) => {
+						*is_writing_data = false;
+						return Poll::Ready(Err(err))
+					},
+					Poll::Ready(Ok(())) => {
+						*is_writing_data = false;
+						self.need_flush = false;
+					},
 				}
 			} else {
 				match Stream::poll_next(Pin::new(&mut self.sink), cx) {
 					Poll::Ready(Some(Ok(_))) => {
-						*is_writing_data = false;
 						// We poll the telemetry `Stream` because the underlying implementation relies on
 						// this in order to answer PINGs.
-						// We return a result so that the connection timeout is reset.
-						return Poll::Ready(Ok(()))
+						// We don't do anything with incoming messages, however.
 					},
 					Poll::Ready(Some(Err(err))) => {
-						*is_writing_data = false;
 						return Poll::Ready(Err(err))
 					},
-					Poll::Pending | Poll::Ready(None) => return Poll::Pending,
+					Poll::Pending | Poll::Ready(None) => break,
 				}
 			}
 		}
+
+		Poll::Pending
 	}
 }
 
