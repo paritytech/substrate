@@ -52,7 +52,7 @@ pub trait SlotWorker<B: BlockT> {
 	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo) -> Self::OnSlot;
 }
 
-/// A skeleton implementation for `SlotWorker` which tries to claim a slot at at
+/// A skeleton implementation for `SlotWorker` which tries to claim a slot at
 /// its beginning and tries to produce a block if successfully claimed, timing
 /// out if block production takes too long.
 pub trait SimpleSlotWorker<B: BlockT> {
