@@ -361,7 +361,7 @@ mod tests {
 		service_test::sync(
 			chain_spec::integration_test_config(),
 			|config| new_full(config),
-			|config| new_light(config),
+			|config| new_full(config), // light nodes unsupported
 			block_factory,
 			extrinsic_factory,
 		);
@@ -389,7 +389,7 @@ mod tests {
 		service_test::sync(
 			chain_spec,
 			|config| new_full!(config),
-			|config| new_light(config),
+			|config| new_full(config), // light nodes are unsupported
 			|service, inherent_data_providers| {
 				let mut inherent_data = inherent_data_providers
 					.create_inherent_data()
@@ -500,7 +500,7 @@ mod tests {
 		service_test::consensus(
 			crate::chain_spec::tests::integration_test_config_with_two_authorities(),
 			|config| new_full(config),
-			|config| new_light(config),
+			|config| new_full(config), // light nodes unsupported
 			vec![
 				"//Alice".into(),
 				"//Bob".into(),
