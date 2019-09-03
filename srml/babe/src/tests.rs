@@ -15,13 +15,11 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Consensus extension module tests for BABE consensus.
-#![allow(unused_imports)]
 #![cfg(test)]
 use super::*;
 use runtime_io::with_externalities;
 use mock::{new_test_ext, Babe, Test};
-use sr_primitives::{traits::Header, Digest, testing::UintAuthorityId};
-use babe_primitives::{CompatibleDigestItem, sr25519::AuthorityId};
+use sr_primitives::{traits::Header, Digest};
 use session::ShouldEndSession;
 const EMPTY_RANDOMNESS: [u8; 32] = [
 	74, 25, 49, 128, 53, 97, 244, 49,
