@@ -829,8 +829,8 @@ impl<T: Trait> Module<T> {
 	pub fn note_applied_extrinsic(r: &ApplyOutcome, _encoded_len: u32) {
 		Self::deposit_event(
 			match r {
-				ApplyOutcome::Success => Event::ExtrinsicSuccess,
-				ApplyOutcome::Fail(err) => Event::ExtrinsicFailed(err.clone()),
+				Ok(()) => Event::ExtrinsicSuccess,
+				Err(err) => Event::ExtrinsicFailed(err.clone()),
 			}
 		);
 
@@ -1264,11 +1264,8 @@ mod tests {
 
 			System::initialize(&2, &[0u8; 32].into(), &[0u8; 32].into(), &Default::default());
 			System::deposit_event(42u16);
-			System::note_applied_extrinsic(&ApplyOutcome::Success, 0);
-			System::note_applied_extrinsic(
-				&ApplyOutcome::Fail(DispatchError::new(Some(1), 2, None)),
-				0,
-			);
+			System::note_applied_extrinsic(&Ok(()), 0);
+			System::note_applied_extrinsic(&Err(DispatchError::new(Some(1), 2, None)), 0);
 			System::note_finished_extrinsics();
 			System::deposit_event(3u16);
 			System::finalize();

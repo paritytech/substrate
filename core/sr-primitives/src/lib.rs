@@ -664,27 +664,11 @@ impl From<transaction_validity::TransactionValidityError> for ApplyError {
 }
 
 /// The outcome of applying a transaction.
-#[derive(Eq, PartialEq, Clone, Copy, Decode, Encode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
-pub enum ApplyOutcome {
-	/// The transaction was applied successfully.
-	Success,
-	/// Any error that occurred in a module while dispatching the transaction.
-	Fail(DispatchError),
-}
+pub type ApplyOutcome = Result<(), DispatchError>;
 
 impl From<DispatchError> for ApplyOutcome {
 	fn from(err: DispatchError) -> Self {
-		ApplyOutcome::Fail(err)
-	}
-}
-
-impl<T: Into<DispatchError>> From<Result<(), T>> for ApplyOutcome {
-	fn from(res: Result<(), T>) -> Self {
-		match res {
-			Ok(()) => ApplyOutcome::Success,
-			Err(e) => ApplyOutcome::Fail(e.into()),
-		}
+		Err(err)
 	}
 }
 

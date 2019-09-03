@@ -76,7 +76,7 @@
 
 use rstd::{prelude::*, marker::PhantomData};
 use sr_primitives::{
-	generic::Digest, ApplyResult, ApplyOutcome, weights::GetDispatchInfo,
+	generic::Digest, ApplyResult, weights::GetDispatchInfo,
 	traits::{
 		self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize, OnInitialize,
 		NumberFor, Block as BlockT, OffchainWorker, ValidateUnsigned, Dispatchable
@@ -216,8 +216,8 @@ where
 	fn apply_extrinsic_no_note(uxt: Block::Extrinsic) {
 		let l = uxt.encode().len();
 		match Self::apply_extrinsic_with_len(uxt, l, None) {
-			Ok(ApplyOutcome::Success) => (),
-			Ok(ApplyOutcome::Fail(e)) => runtime_io::print(e),
+			Ok(Ok(())) => (),
+			Ok(Err(e)) => runtime_io::print(e),
 			Err(e) => { let err: &'static str = e.into(); panic!(err) },
 		}
 	}
@@ -552,9 +552,9 @@ mod tests {
 			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
 			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), 0);
 
-			assert_eq!(Executive::apply_extrinsic(xt.clone()).unwrap(), ApplyOutcome::Success);
-			assert_eq!(Executive::apply_extrinsic(x1.clone()).unwrap(), ApplyOutcome::Success);
-			assert_eq!(Executive::apply_extrinsic(x2.clone()).unwrap(), ApplyOutcome::Success);
+			assert!(Executive::apply_extrinsic(xt.clone()).unwrap().is_ok());
+			assert!(Executive::apply_extrinsic(x1.clone()).unwrap().is_ok());
+			assert!(Executive::apply_extrinsic(x2.clone()).unwrap().is_ok());
 
 			// default weight for `TestXt` == encoded length.
 			assert_eq!(<system::Module<Runtime>>::all_extrinsics_weight(), (3 * len).into());
@@ -577,7 +577,7 @@ mod tests {
 			assert_eq!(
 				Executive::apply_extrinsic(xt),
 				Ok(
-					ApplyOutcome::Fail(
+					Err(
 						DispatchError { module: None, error: 0, message: Some("RequireRootOrigin") }
 					)
 				)
@@ -611,7 +611,7 @@ mod tests {
 				if lock == WithdrawReasons::except(WithdrawReason::TransactionPayment) {
 					assert_eq!(
 						Executive::apply_extrinsic(xt).unwrap(),
-						ApplyOutcome::Fail(DispatchError {
+						Err(DispatchError {
 							module: None,
 							error: 0,
 							message: Some("account liquidity restrictions prevent withdrawal"),

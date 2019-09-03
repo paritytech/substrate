@@ -320,7 +320,7 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 			None
 		};
 
-		Ok(self.1.dispatch(maybe_who.into()).into())
+		Ok(self.1.dispatch(maybe_who.into()).map_err(Into::into))
 	}
 }
 

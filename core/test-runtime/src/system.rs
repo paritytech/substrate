@@ -22,8 +22,7 @@ use runtime_io::{storage_root, ordered_trie_root, storage_changes_root, twox_128
 use runtime_support::storage::{self, StorageValue, StorageMap};
 use runtime_support::storage_items;
 use sr_primitives::{
-	traits::{Hash as HashT, BlakeTwo256, Header as _}, generic, ApplyError, ApplyOutcome,
-	ApplyResult,
+	traits::{Hash as HashT, BlakeTwo256, Header as _}, generic, ApplyError, ApplyResult,
 	transaction_validity::{TransactionValidity, ValidTransaction, InvalidTransaction},
 };
 use codec::{KeyedVec, Encode};
@@ -120,7 +119,7 @@ fn execute_block_with_state_root_handler(
 	// execute transactions
 	block.extrinsics.iter().enumerate().for_each(|(i, e)| {
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &(i as u32));
-		execute_transaction_backend(e).unwrap_or_else(|_| panic!("Invalid transaction"));
+		let _ = execute_transaction_backend(e).unwrap_or_else(|_| panic!("Invalid transaction"));
 		storage::unhashed::kill(well_known_keys::EXTRINSIC_INDEX);
 	});
 
@@ -253,7 +252,7 @@ fn execute_transaction_backend(utx: &Extrinsic) -> ApplyResult {
 	match utx {
 		Extrinsic::Transfer(ref transfer, _) => execute_transfer_backend(transfer),
 		Extrinsic::AuthoritiesChange(ref new_auth) => execute_new_authorities_backend(new_auth),
-		Extrinsic::IncludeData(_) => Ok(ApplyOutcome::Success),
+		Extrinsic::IncludeData(_) => Ok(Ok(())),
 		Extrinsic::StorageChange(key, value) => execute_storage_change(key, value.as_ref().map(|v| &**v)),
 	}
 }
@@ -281,12 +280,12 @@ fn execute_transfer_backend(tx: &Transfer) -> ApplyResult {
 	let to_balance: u64 = storage::hashed::get_or(&blake2_256, &to_balance_key, 0);
 	storage::hashed::put(&blake2_256, &from_balance_key, &(from_balance - tx.amount));
 	storage::hashed::put(&blake2_256, &to_balance_key, &(to_balance + tx.amount));
-	Ok(ApplyOutcome::Success)
+	Ok(Ok(()))
 }
 
 fn execute_new_authorities_backend(new_authorities: &[AuthorityId]) -> ApplyResult {
 	NewAuthorities::put(new_authorities.to_vec());
-	Ok(ApplyOutcome::Success)
+	Ok(Ok(()))
 }
 
 fn execute_storage_change(key: &[u8], value: Option<&[u8]>) -> ApplyResult {
@@ -294,7 +293,7 @@ fn execute_storage_change(key: &[u8], value: Option<&[u8]>) -> ApplyResult {
 		Some(value) => storage::unhashed::put_raw(key, value),
 		None => storage::unhashed::kill(key),
 	}
-	Ok(ApplyOutcome::Success)
+	Ok(Ok(()))
 }
 
 #[cfg(feature = "std")]

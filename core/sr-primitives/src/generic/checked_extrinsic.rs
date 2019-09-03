@@ -80,7 +80,7 @@ where
 		};
 		let res = self.function.dispatch(Origin::from(maybe_who));
 		Extra::post_dispatch(pre, info, len);
-		Ok(res.into())
+		Ok(res.map_err(Into::into))
 	}
 }
 

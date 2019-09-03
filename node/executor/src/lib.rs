@@ -784,8 +784,10 @@ mod tests {
 		assert!(r.is_ok());
 		let r = WasmExecutor::new()
 			.call(&mut t, 8, COMPACT_CODE, "BlockBuilder_apply_extrinsic", &vec![].and(&xt())).unwrap();
-		let r = ApplyResult::decode(&mut &r[..]).unwrap();
-		assert_eq!(r, Ok(ApplyOutcome::Success));
+		ApplyResult::decode(&mut &r[..])
+			.unwrap()
+			.expect("Extrensic could be applied")
+			.expect("Extrensic did not fail");
 
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - 1 * transfer_fee(&xt()));
