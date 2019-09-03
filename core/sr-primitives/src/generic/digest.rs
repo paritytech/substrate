@@ -17,7 +17,7 @@
 //! Generic implementation of a digest.
 
 #[cfg(feature = "std")]
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use rstd::prelude::*;
 
@@ -26,7 +26,7 @@ use crate::codec::{Decode, Encode, Input, Error};
 
 /// Generic header digest.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct Digest<Hash: Encode + Decode> {
 	/// A list of logs in the digest.
 	pub logs: Vec<DigestItem<Hash>>,
@@ -102,11 +102,22 @@ pub enum DigestItem<Hash> {
 }
 
 #[cfg(feature = "std")]
-impl<Hash: Encode> ::serde::Serialize for DigestItem<Hash> {
-	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+impl<Hash: Encode> serde::Serialize for DigestItem<Hash> {
+	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
 		self.using_encoded(|bytes| {
-			::primitives::bytes::serialize(bytes, seq)
+			primitives::bytes::serialize(bytes, seq)
 		})
+	}
+}
+
+#[cfg(feature = "std")]
+impl<'a, Hash: Decode> serde::Deserialize<'a> for DigestItem<Hash> {
+	fn deserialize<D>(de: D) -> Result<Self, D::Error> where
+		D: serde::Deserializer<'a>,
+	{
+		let r = primitives::bytes::deserialize(de)?;
+		Decode::decode(&mut &r[..])
+			.map_err(|e| serde::de::Error::custom(format!("Decode error: {}", e)))
 	}
 }
 

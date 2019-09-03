@@ -92,9 +92,6 @@ pub struct RefTrackingState<Block: BlockT> {
 
 impl<B: BlockT> RefTrackingState<B> {
 	fn new(state: DbState, storage: Arc<StorageDb<B>>, parent_hash: Option<B::Hash>) -> RefTrackingState<B> {
-		if let Some(hash) = &parent_hash {
-			storage.state_db.pin(hash);
-		}
 		RefTrackingState {
 			state,
 			parent_hash,
@@ -684,6 +681,10 @@ impl<Block> state_machine::ChangesTrieStorage<Blake2Hasher, NumberFor<Block>>
 where
 	Block: BlockT<Hash=H256>,
 {
+	fn as_roots_storage(&self) -> &dyn state_machine::ChangesTrieRootsStorage<Blake2Hasher, NumberFor<Block>> {
+		self
+	}
+
 	fn get(&self, key: &H256, _prefix: Prefix) -> Result<Option<DBValue>, String> {
 		self.db.get(columns::CHANGES_TRIE, &key[..])
 			.map_err(|err| format!("{}", err))
@@ -1401,7 +1402,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		match self.blockchain.header(block) {
 			Ok(Some(ref hdr)) => {
 				let hash = hdr.hash();
-				if !self.storage.state_db.is_pruned(&hash, (*hdr.number()).saturated_into::<u64>()) {
+				if let Ok(()) = self.storage.state_db.pin(&hash) {
 					let root = H256::from_slice(hdr.state_root().as_ref());
 					let db_state = DbState::new(self.storage.clone(), root);
 					let state = RefTrackingState::new(db_state, self.storage.clone(), Some(hash.clone()));

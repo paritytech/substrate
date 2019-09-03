@@ -87,6 +87,7 @@ impl system::Trait for Runtime {
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
+	type Version = ();
 }
 impl Trait for Runtime {
 	type AccountIndex = u64;

@@ -182,6 +182,7 @@ fn make_test_network() -> (
 		config(),
 		voter_set_state(),
 		Exit,
+		true,
 	);
 
 	(
@@ -447,8 +448,8 @@ fn peer_with_higher_view_leads_to_catch_up_request() {
 	let (tester, mut net) = make_test_network();
 	let test = tester
 		.and_then(move |tester| {
-			// register a peer.
-			tester.gossip_validator.new_peer(&mut NoopContext, &id, network::config::Roles::FULL);
+			// register a peer with authority role.
+			tester.gossip_validator.new_peer(&mut NoopContext, &id, network::config::Roles::AUTHORITY);
 			Ok((tester, id))
 		})
 		.and_then(move |(tester, id)| {

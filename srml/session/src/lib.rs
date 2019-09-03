@@ -124,6 +124,7 @@ use codec::Decode;
 use sr_primitives::{KeyTypeId, AppKey};
 use sr_primitives::weights::SimpleDispatchInfo;
 use sr_primitives::traits::{Convert, Zero, Member, OpaqueKeys};
+use sr_staking_primitives::SessionIndex;
 use srml_support::{
 	dispatch::Result, ConsensusEngineId, StorageValue, StorageDoubleMap, for_each_tuple,
 	decl_module, decl_event, decl_storage,
@@ -136,9 +137,6 @@ mod mock;
 
 #[cfg(feature = "historical")]
 pub mod historical;
-
-/// Simple index type with which we can count sessions.
-pub type SessionIndex = u32;
 
 /// Decides whether the session should be ended.
 pub trait ShouldEndSession<BlockNumber> {
@@ -168,8 +166,15 @@ impl<
 }
 
 /// An event handler for when the session is ending.
+/// TODO [slashing] consider renaming to OnSessionStarting
 pub trait OnSessionEnding<ValidatorId> {
 	/// Handle the fact that the session is ending, and optionally provide the new validator set.
+	///
+	/// Even if the validator-set is the same as before, if any underlying economic
+	/// conditions have changed (i.e. stake-weights), the new validator set must be returned.
+	/// This is necessary for consensus engines making use of the session module to
+	/// issue a validator-set change so misbehavior can be provably associated with the new
+	/// economic conditions as opposed to the old.
 	///
 	/// `ending_index` is the index of the currently ending session.
 	/// The returned validator set, if any, will not be applied until `will_apply_at`.
@@ -185,39 +190,91 @@ impl<A> OnSessionEnding<A> for () {
 	fn on_session_ending(_: SessionIndex, _: SessionIndex) -> Option<Vec<A>> { None }
 }
 
-/// Handler for when a session keys set changes.
+/// Handler for session lifecycle events.
 pub trait SessionHandler<ValidatorId> {
-	/// Session set has changed; act appropriately.
+	/// The given validator set will be used for the genesis session.
+	/// It is guaranteed that the given validator set will also be used
+	/// for the second session, therefore the first call to `on_new_session`
+	/// should provide the same validator set.
+	fn on_genesis_session<Ks: OpaqueKeys>(validators: &[(ValidatorId, Ks)]);
+
+	/// Session set has changed; act appropriately. Note that this can be called
+	/// before initialization of your module.
+	///
+	/// `changed` is true whenever any of the session keys or underlying economic
+	/// identities or weightings behind those keys has changed.
 	fn on_new_session<Ks: OpaqueKeys>(
 		changed: bool,
 		validators: &[(ValidatorId, Ks)],
 		queued_validators: &[(ValidatorId, Ks)],
 	);
 
+	/// A notification for end of the session.
+	///
+	/// Note it is triggered before any `OnSessionEnding` handlers,
+	/// so we can still affect the validator set.
+	fn on_before_session_ending() {}
+
 	/// A validator got disabled. Act accordingly until a new session begins.
 	fn on_disabled(validator_index: usize);
 }
 
-/// One session-key type handler.
+/// A session handler for specific key type.
 pub trait OneSessionHandler<ValidatorId> {
 	/// The key type expected.
 	type Key: Decode + Default + AppKey;
 
-	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, queued_validators: I)
+	fn on_genesis_session<'a, I: 'a>(validators: I)
 		where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
-	fn on_disabled(i: usize);
+
+	/// Session set has changed; act appropriately. Note that this can be called
+	/// before initialization of your module.
+	///
+	/// `changed` is true when at least one of the session keys
+	/// or the underlying economic identities/distribution behind one the
+	/// session keys has changed, false otherwise.
+	///
+	/// The `validators` are the validators of the incoming session, and `queued_validators`
+	/// will follow.
+	fn on_new_session<'a, I: 'a>(
+		changed: bool,
+		validators: I,
+		queued_validators: I,
+	) where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
+
+
+	/// A notification for end of the session.
+	///
+	/// Note it is triggered before any `OnSessionEnding` handlers,
+	/// so we can still affect the validator set.
+	fn on_before_session_ending() {}
+
+	/// A validator got disabled. Act accordingly until a new session begins.
+	fn on_disabled(_validator_index: usize);
+
 }
 
 macro_rules! impl_session_handlers {
 	() => (
 		impl<AId> SessionHandler<AId> for () {
+			fn on_genesis_session<Ks: OpaqueKeys>(_: &[(AId, Ks)]) {}
 			fn on_new_session<Ks: OpaqueKeys>(_: bool, _: &[(AId, Ks)], _: &[(AId, Ks)]) {}
+			fn on_before_session_ending() {}
 			fn on_disabled(_: usize) {}
 		}
 	);
 
 	( $($t:ident)* ) => {
 		impl<AId, $( $t: OneSessionHandler<AId> ),*> SessionHandler<AId> for ( $( $t , )* ) {
+			fn on_genesis_session<Ks: OpaqueKeys>(validators: &[(AId, Ks)]) {
+				$(
+					let our_keys: Box<dyn Iterator<Item=_>> = Box::new(validators.iter()
+						.map(|k| (&k.0, k.1.get::<$t::Key>(<$t::Key as AppKey>::ID)
+							.unwrap_or_default())));
+
+					$t::on_genesis_session(our_keys);
+				)*
+			}
 			fn on_new_session<Ks: OpaqueKeys>(
 				changed: bool,
 				validators: &[(AId, Ks)],
@@ -233,6 +290,13 @@ macro_rules! impl_session_handlers {
 					$t::on_new_session(changed, our_keys, queued_keys);
 				)*
 			}
+
+			fn on_before_session_ending() {
+				$(
+					$t::on_before_session_ending();
+				)*
+			}
+
 			fn on_disabled(i: usize) {
 				$(
 					$t::on_disabled(i);
@@ -295,10 +359,8 @@ decl_storage! {
 		/// Current index of the session.
 		CurrentIndex get(current_index): SessionIndex;
 
-		/// True if anything has changed in this session.
-		Changed: bool;
-
-		/// Queued keys changed.
+		/// True if the underlying economic identities or weighting behind the validators
+		/// has changed in the queued validator set.
 		QueuedChanged: bool;
 
 		/// The queued keys for the next session. When the next session begins, these keys
@@ -319,38 +381,36 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(keys): Vec<(T::ValidatorId, T::Keys)>;
-		build(|
-			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
-			config: &GenesisConfig<T>
-		| {
-			runtime_io::with_storage(storage, || {
-				for (who, keys) in config.keys.iter().cloned() {
-					assert!(
-						<Module<T>>::load_keys(&who).is_none(),
-						"genesis config contained duplicate validator {:?}", who,
-					);
+		build(|config: &GenesisConfig<T>| {
+			for (who, keys) in config.keys.iter().cloned() {
+				assert!(
+					<Module<T>>::load_keys(&who).is_none(),
+					"genesis config contained duplicate validator {:?}", who,
+				);
 
-					<Module<T>>::do_set_keys(&who, keys)
-						.expect("genesis config must not contain duplicates; qed");
-				}
+				<Module<T>>::do_set_keys(&who, keys)
+					.expect("genesis config must not contain duplicates; qed");
+			}
 
-				let initial_validators = T::SelectInitialValidators::select_initial_validators()
-					.unwrap_or_else(|| config.keys.iter().map(|(ref v, _)| v.clone()).collect());
+			let initial_validators = T::SelectInitialValidators::select_initial_validators()
+				.unwrap_or_else(|| config.keys.iter().map(|(ref v, _)| v.clone()).collect());
 
-				assert!(!initial_validators.is_empty(), "Empty validator set in genesis block!");
+			assert!(!initial_validators.is_empty(), "Empty validator set in genesis block!");
 
-				let queued_keys: Vec<_> = initial_validators
-					.iter()
-					.cloned()
-					.map(|v| (
-						v.clone(),
-						<Module<T>>::load_keys(&v).unwrap_or_default(),
-					))
-					.collect();
+			let queued_keys: Vec<_> = initial_validators
+				.iter()
+				.cloned()
+				.map(|v| (
+					v.clone(),
+					<Module<T>>::load_keys(&v).unwrap_or_default(),
+				))
+				.collect();
 
-				<Validators<T>>::put(initial_validators);
-				<QueuedKeys<T>>::put(queued_keys);
-			});
+			// Tell everyone about the genesis session keys
+			T::SessionHandler::on_genesis_session::<T::Keys>(&queued_keys);
+
+			<Validators<T>>::put(initial_validators);
+			<QueuedKeys<T>>::put(queued_keys);
 		});
 	}
 }
@@ -394,13 +454,10 @@ decl_module! {
 
 			Self::do_set_keys(&who, keys)?;
 
-			// Something changed.
-			Changed::put(true);
-
 			Ok(())
 		}
 
-		/// Called when a block is finalized. Will rotate session if it is the last
+		/// Called when a block is initialized. Will rotate session if it is the last
 		/// block of the current session.
 		fn on_initialize(n: T::BlockNumber) {
 			if T::ShouldEndSession::should_end_session(n) {
@@ -418,7 +475,9 @@ impl<T: Trait> Module<T> {
 		let session_index = CurrentIndex::get();
 
 		let changed = QueuedChanged::get();
-		let mut next_changed = Changed::take();
+
+		// Inform the session handlers that a session is going to end.
+		T::SessionHandler::on_before_session_ending();
 
 		// Get queued session keys and validators.
 		let session_keys = <QueuedKeys<T>>::get();
@@ -430,12 +489,16 @@ impl<T: Trait> Module<T> {
 		let applied_at = session_index + 2;
 
 		// Get next validator set.
-		let maybe_validators = T::OnSessionEnding::on_session_ending(session_index, applied_at);
-		let next_validators = if let Some(validators) = maybe_validators {
-			next_changed = true;
-			validators
+		let maybe_next_validators = T::OnSessionEnding::on_session_ending(session_index, applied_at);
+		let (next_validators, next_identities_changed)
+			= if let Some(validators) = maybe_next_validators
+		{
+			// NOTE: as per the documentation on `OnSessionEnding`, we consider
+			// the validator set as having changed even if the validators are the
+			// same as before, as underlying economic conditions may have changed.
+			(validators, true)
 		} else {
-			<Validators<T>>::get()
+			(<Validators<T>>::get(), false)
 		};
 
 		// Increment session index.
@@ -443,9 +506,34 @@ impl<T: Trait> Module<T> {
 		CurrentIndex::put(session_index);
 
 		// Queue next session keys.
-		let queued_amalgamated = next_validators.into_iter()
-			.map(|a| { let k = Self::load_keys(&a).unwrap_or_default(); (a, k) })
-			.collect::<Vec<_>>();
+		let (queued_amalgamated, next_changed) = {
+			// until we are certain there has been a change, iterate the prior
+			// validators along with the current and check for changes
+			let mut changed = next_identities_changed;
+
+			let mut now_session_keys = session_keys.iter();
+			let mut check_next_changed = |keys: &T::Keys| {
+				if changed { return }
+				// since a new validator set always leads to `changed` starting
+				// as true, we can ensure that `now_session_keys` and `next_validators`
+				// have the same length. this function is called once per iteration.
+				if let Some(&(_, ref old_keys)) = now_session_keys.next() {
+					if old_keys != keys {
+						changed = true;
+						return
+					}
+				}
+			};
+			let queued_amalgamated = next_validators.into_iter()
+				.map(|a| {
+					let k = Self::load_keys(&a).unwrap_or_default();
+					check_next_changed(&k);
+					(a, k)
+				})
+				.collect::<Vec<_>>();
+
+			(queued_amalgamated, changed)
+		};
 
 		<QueuedKeys<T>>::put(queued_amalgamated.clone());
 		QueuedChanged::put(next_changed);
@@ -454,13 +542,16 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event(Event::NewSession(session_index));
 
 		// Tell everyone about the new session keys.
-		T::SessionHandler::on_new_session::<T::Keys>(changed, &session_keys, &queued_amalgamated);
+		T::SessionHandler::on_new_session::<T::Keys>(
+			changed,
+			&session_keys,
+			&queued_amalgamated,
+		);
 	}
 
 	/// Disable the validator of index `i`.
 	pub fn disable_index(i: usize) {
 		T::SessionHandler::on_disabled(i);
-		Changed::put(true);
 	}
 
 	/// Disable the validator identified by `c`. (If using with the staking module, this would be
@@ -505,8 +596,6 @@ impl<T: Trait> Module<T> {
 				let key_data = old_keys.get_raw(id);
 				Self::clear_key_owner(id, key_data);
 			}
-
-			Changed::put(true);
 		}
 	}
 
@@ -572,6 +661,7 @@ mod tests {
 	use mock::{
 		NEXT_VALIDATORS, SESSION_CHANGED, TEST_SESSION_CHANGED, authorities, force_new_session,
 		set_next_validators, set_session_length, session_changed, Test, Origin, System, Session,
+		reset_before_session_end_called, before_session_end_called,
 	};
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
@@ -619,13 +709,13 @@ mod tests {
 			Session::on_free_balance_zero(&1);
 			assert_eq!(Session::load_keys(&1), None);
 			assert_eq!(Session::key_owner(id, UintAuthorityId(1).get_raw(id)), None);
-
-			assert!(Changed::get());
 		})
 	}
 
 	#[test]
 	fn authorities_should_track_validators() {
+		reset_before_session_end_called();
+
 		with_externalities(&mut new_test_ext(), || {
 			set_next_validators(vec![1, 2]);
 			force_new_session();
@@ -636,6 +726,8 @@ mod tests {
 			]);
 			assert_eq!(Session::validators(), vec![1, 2, 3]);
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
+			assert!(before_session_end_called());
+			reset_before_session_end_called();
 
 			force_new_session();
 			initialize_block(2);
@@ -645,6 +737,8 @@ mod tests {
 			]);
 			assert_eq!(Session::validators(), vec![1, 2]);
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2)]);
+			assert!(before_session_end_called());
+			reset_before_session_end_called();
 
 			set_next_validators(vec![1, 2, 4]);
 			assert_ok!(Session::set_keys(Origin::signed(4), UintAuthorityId(4).into(), vec![]));
@@ -657,6 +751,7 @@ mod tests {
 			]);
 			assert_eq!(Session::validators(), vec![1, 2]);
 			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2)]);
+			assert!(before_session_end_called());
 
 			force_new_session();
 			initialize_block(4);
@@ -738,38 +833,63 @@ mod tests {
 
 	#[test]
 	fn session_changed_flag_works() {
+		reset_before_session_end_called();
+
 		with_externalities(&mut new_test_ext(), || {
 			TEST_SESSION_CHANGED.with(|l| *l.borrow_mut() = true);
 
 			force_new_session();
 			initialize_block(1);
 			assert!(!session_changed());
+			assert!(before_session_end_called());
+			reset_before_session_end_called();
 
 			force_new_session();
 			initialize_block(2);
 			assert!(!session_changed());
+			assert!(before_session_end_called());
+			reset_before_session_end_called();
 
 			Session::disable_index(0);
 			force_new_session();
 			initialize_block(3);
 			assert!(!session_changed());
+			assert!(before_session_end_called());
+			reset_before_session_end_called();
 
 			force_new_session();
 			initialize_block(4);
 			assert!(session_changed());
+			assert!(before_session_end_called());
+			reset_before_session_end_called();
 
 			force_new_session();
 			initialize_block(5);
 			assert!(!session_changed());
+			assert!(before_session_end_called());
+			reset_before_session_end_called();
 
 			assert_ok!(Session::set_keys(Origin::signed(2), UintAuthorityId(5).into(), vec![]));
 			force_new_session();
 			initialize_block(6);
 			assert!(!session_changed());
+			assert!(before_session_end_called());
+			reset_before_session_end_called();
 
+			// changing the keys of a validator leads to change.
+			assert_ok!(Session::set_keys(Origin::signed(69), UintAuthorityId(69).into(), vec![]));
 			force_new_session();
 			initialize_block(7);
 			assert!(session_changed());
+			assert!(before_session_end_called());
+			reset_before_session_end_called();
+
+			// while changing the keys of a non-validator does not.
+			force_new_session();
+			initialize_block(7);
+			assert!(!session_changed());
+			assert!(before_session_end_called());
+			reset_before_session_end_called();
 		});
 	}
 

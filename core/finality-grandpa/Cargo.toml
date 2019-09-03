@@ -23,7 +23,6 @@ serde_json = "1.0"
 client = { package = "substrate-client", path = "../client" }
 inherents = { package = "substrate-inherents", path = "../../core/inherents" }
 network = { package = "substrate-network", path = "../network" }
-service = { package = "substrate-service", path = "../service", optional = true }
 srml-finality-tracker = { path = "../../srml/finality-tracker" }
 fg_primitives = { package = "substrate-finality-grandpa-primitives", path = "primitives" }
 grandpa = { package = "finality-grandpa", version = "0.9.0", features = ["derive-codec"] }
@@ -37,7 +36,3 @@ babe_primitives = { package = "substrate-consensus-babe-primitives", path = "../
 env_logger = "0.6"
 tokio = "0.1.17"
 tempfile = "3.1"
-
-[features]
-default = ["service-integration"]
-service-integration = ["service"]

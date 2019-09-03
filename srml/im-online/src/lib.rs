@@ -67,39 +67,60 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use primitives::offchain::{OpaqueNetworkState, StorageKind};
+use app_crypto::{AppPublic, RuntimeAppPublic};
 use codec::{Encode, Decode};
+use primitives::offchain::{OpaqueNetworkState, StorageKind};
+use rstd::prelude::*;
+use session::historical::IdentificationTuple;
+use sr_io::Printable;
 use sr_primitives::{
-	ApplyError, traits::{Extrinsic as ExtrinsicT},
+	Perbill, ApplyError,
+	traits::{Convert, Extrinsic as ExtrinsicT, Member},
 	transaction_validity::{TransactionValidity, TransactionLongevity, ValidTransaction},
 };
-use rstd::prelude::*;
-use session::SessionIndex;
-use sr_io::Printable;
+use sr_staking_primitives::{
+	SessionIndex, CurrentElectedSet,
+	offence::{ReportOffence, Offence, Kind},
+};
 use srml_support::{
-	StorageValue, decl_module, decl_event, decl_storage, StorageDoubleMap, print,
+	decl_module, decl_event, decl_storage, print, ensure,
+	Parameter, StorageValue, StorageDoubleMap,
 };
 use system::ensure_none;
-use app_crypto::RuntimeAppPublic;
 
-mod app {
-	pub use app_crypto::sr25519 as crypto;
-	use app_crypto::{app_crypto, key_types::IM_ONLINE, sr25519};
+pub mod sr25519 {
+	mod app_sr25519 {
+		use app_crypto::{app_crypto, key_types::IM_ONLINE, sr25519};
+		app_crypto!(sr25519, IM_ONLINE);
+	}
 
-	app_crypto!(sr25519, IM_ONLINE);
+	/// An i'm online keypair using sr25519 as its crypto.
+	#[cfg(feature = "std")]
+	pub type AuthorityPair = app_sr25519::Pair;
+
+	/// An i'm online signature using sr25519 as its crypto.
+	pub type AuthoritySignature = app_sr25519::Signature;
+
+	/// An i'm online identifier using sr25519 as its crypto.
+	pub type AuthorityId = app_sr25519::Public;
 }
 
-/// A Babe authority keypair. Necessarily equivalent to the schnorrkel public key used in
-/// the main Babe module. If that ever changes, then this must, too.
-#[cfg(feature = "std")]
-pub type AuthorityPair = app::Pair;
+pub mod ed25519 {
+	mod app_ed25519 {
+		use app_crypto::{app_crypto, key_types::IM_ONLINE, ed25519};
+		app_crypto!(ed25519, IM_ONLINE);
+	}
 
-/// A Babe authority signature.
-pub type AuthoritySignature = app::Signature;
+	/// An i'm online keypair using ed25519 as its crypto.
+	#[cfg(feature = "std")]
+	pub type AuthorityPair = app_ed25519::Pair;
 
-/// A Babe authority identifier. Necessarily equivalent to the schnorrkel public key used in
-/// the main Babe module. If that ever changes, then this must, too.
-pub type AuthorityId = app::Public;
+	/// An i'm online signature using ed25519 as its crypto.
+	pub type AuthoritySignature = app_ed25519::Signature;
+
+	/// An i'm online identifier using ed25519 as its crypto.
+	pub type AuthorityId = app_ed25519::Public;
+}
 
 // The local storage database key under which the worker progress status
 // is tracked.
@@ -152,20 +173,36 @@ pub struct Heartbeat<BlockNumber>
 	authority_index: AuthIndex,
 }
 
-pub trait Trait: system::Trait + session::Trait {
-	/// The overarching event type.
-	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
+pub trait Trait: system::Trait + session::historical::Trait {
+	/// The identifier type for an authority.
+	type AuthorityId: Member + Parameter + AppPublic + RuntimeAppPublic + Default;
 
-	/// The function call.
+	/// The overarching event type.
+	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+
+	/// A dispatchable call type.
 	type Call: From<Call<Self>>;
 
 	/// A extrinsic right from the external world. This is unchecked and so
 	/// can contain a signature.
 	type UncheckedExtrinsic: ExtrinsicT<Call=<Self as Trait>::Call> + Encode + Decode;
+
+	/// A type that gives us the ability to submit unresponsiveness offence reports.
+	type ReportUnresponsiveness:
+		ReportOffence<
+			Self::AccountId,
+			IdentificationTuple<Self>,
+			UnresponsivenessOffence<IdentificationTuple<Self>>,
+		>;
+
+	/// A type that returns a validator id from the current elected set of the era.
+	type CurrentElectedSet: CurrentElectedSet<<Self as session::Trait>::ValidatorId>;
 }
 
 decl_event!(
-	pub enum Event {
+	pub enum Event<T> where
+		<T as Trait>::AuthorityId,
+	{
 		/// A new heartbeat was received from `AuthorityId`
 		HeartbeatReceived(AuthorityId),
 	}
@@ -174,15 +211,19 @@ decl_event!(
 decl_storage! {
 	trait Store for Module<T: Trait> as ImOnline {
 		/// The block number when we should gossip.
-		GossipAt get(gossip_at) config(): T::BlockNumber;
+		GossipAt get(gossip_at): T::BlockNumber;
 
 		/// The current set of keys that may issue a heartbeat.
-		Keys get(keys) config(): Vec<AuthorityId>;
+		Keys get(keys): Vec<T::AuthorityId>;
 
 		/// For each session index we keep a mapping of `AuthorityId`
 		/// to `offchain::OpaqueNetworkState`.
 		ReceivedHeartbeats get(received_heartbeats): double_map SessionIndex,
 			blake2_256(AuthIndex) => Vec<u8>;
+	}
+	add_extra_genesis {
+		config(keys): Vec<T::AuthorityId>;
+		build(|config| Module::<T>::initialize_keys(&config.keys))
 	}
 }
 
@@ -194,19 +235,25 @@ decl_module! {
 		fn heartbeat(
 			origin,
 			heartbeat: Heartbeat<T::BlockNumber>,
-			_signature: AuthoritySignature
+			signature: <T::AuthorityId as RuntimeAppPublic>::Signature
 		) {
 			ensure_none(origin)?;
 
 			let current_session = <session::Module<T>>::current_index();
+			ensure!(current_session == heartbeat.session_index, "Outdated heartbeat received.");
 			let exists = <ReceivedHeartbeats>::exists(
 				&current_session,
 				&heartbeat.authority_index
 			);
-			let keys = Keys::get();
+			let keys = Keys::<T>::get();
 			let public = keys.get(heartbeat.authority_index as usize);
 			if let (true, Some(public)) = (!exists, public) {
-				Self::deposit_event(Event::HeartbeatReceived(public.clone()));
+				let signature_valid = heartbeat.using_encoded(|encoded_heartbeat| {
+					public.verify(&encoded_heartbeat, &signature)
+				});
+				ensure!(signature_valid, "Invalid heartbeat signature.");
+
+				Self::deposit_event(Event::<T>::HeartbeatReceived(public.clone()));
 
 				let network_state = heartbeat.network_state.encode();
 				<ReceivedHeartbeats>::insert(
@@ -263,8 +310,8 @@ impl<T: Trait> Module<T> {
 
 	fn do_gossip_at(block_number: T::BlockNumber) -> Result<(), OffchainErr> {
 		// we run only when a local authority key is configured
-		let authorities = Keys::get();
-		let mut local_keys = app::Public::all();
+		let authorities = Keys::<T>::get();
+		let mut local_keys = T::AuthorityId::all();
 		local_keys.sort();
 
 		for (authority_index, key) in authorities.into_iter()
@@ -355,13 +402,27 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
+	fn initialize_keys(keys: &[T::AuthorityId]) {
+		if !keys.is_empty() {
+			assert!(Keys::<T>::get().is_empty(), "Keys are already initialized!");
+			Keys::<T>::put_ref(keys);
+		}
+	}
 }
 
 impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
-	type Key = AuthorityId;
 
-	fn on_new_session<'a, I: 'a>(_changed: bool, _validators: I, next_validators: I)
-		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
+	type Key = T::AuthorityId;
+
+	fn on_genesis_session<'a, I: 'a>(validators: I)
+		where I: Iterator<Item=(&'a T::AccountId, T::AuthorityId)>
+	{
+		let keys = validators.map(|x| x.1).collect::<Vec<_>>();
+		Self::initialize_keys(&keys);
+	}
+
+	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, _queued_validators: I)
+		where I: Iterator<Item=(&'a T::AccountId, T::AuthorityId)>
 	{
 		// Reset heartbeats
 		<ReceivedHeartbeats>::remove_prefix(&<session::Module<T>>::current_index());
@@ -370,7 +431,45 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 		<GossipAt<T>>::put(<system::Module<T>>::block_number());
 
 		// Remember who the authorities are for the new session.
-		Keys::put(next_validators.map(|x| x.1).collect::<Vec<_>>());
+		Keys::<T>::put(validators.map(|x| x.1).collect::<Vec<_>>());
+	}
+
+	fn on_before_session_ending() {
+		let mut unresponsive = vec![];
+
+		let current_session = <session::Module<T>>::current_index();
+
+		let keys = Keys::<T>::get();
+		let current_elected = T::CurrentElectedSet::current_elected_set();
+
+		// The invariant is that these two are of the same length.
+		// TODO: What to do: Uncomment, ignore, a third option?
+		// assert_eq!(keys.len(), current_elected.len());
+
+		for (auth_idx, validator_id) in current_elected.into_iter().enumerate() {
+			let auth_idx = auth_idx as u32;
+			if !<ReceivedHeartbeats>::exists(&current_session, &auth_idx) {
+				let full_identification = T::FullIdentificationOf::convert(validator_id.clone())
+					.expect(
+						"we got the validator_id from current_elected;
+						current_elected is set of currently elected validators;
+						the mapping between the validator id and its full identification should be valid;
+						thus `FullIdentificationOf::convert` can't return `None`;
+						qed",
+					);
+
+				unresponsive.push((validator_id, full_identification));
+			}
+		}
+
+		let validator_set_count = keys.len() as u32;
+		let offence = UnresponsivenessOffence {
+			session_index: current_session,
+			validator_set_count,
+			offenders: unresponsive,
+		};
+
+		T::ReportUnresponsiveness::report_offence(vec![], offence);
 	}
 
 	fn on_disabled(_i: usize) {
@@ -395,7 +494,7 @@ impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
 			}
 
 			// verify that the incoming (unverified) pubkey is actually an authority id
-			let keys = Keys::get();
+			let keys = Keys::<T>::get();
 			let authority_id = match keys.get(heartbeat.authority_index as usize) {
 				Some(id) => id,
 				None => return TransactionValidity::Invalid(ApplyError::BadSignature as i8),
@@ -420,5 +519,76 @@ impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
 		}
 
 		TransactionValidity::Invalid(0)
+	}
+}
+
+/// An offence that is filed if a validator didn't send a heartbeat message.
+pub struct UnresponsivenessOffence<Offender> {
+	/// The current session index in which we report the unresponsive validators.
+	///
+	/// It acts as a time measure for unresponsiveness reports and effectively will always point
+	/// at the end of the session.
+	session_index: SessionIndex,
+	/// The size of the validator set in current session/era.
+	validator_set_count: u32,
+	/// Authorities that were unresponsive during the current era.
+	offenders: Vec<Offender>,
+}
+
+impl<Offender: Clone> Offence<Offender> for UnresponsivenessOffence<Offender> {
+	const ID: Kind = *b"im-online:offlin";
+	type TimeSlot = SessionIndex;
+
+	fn offenders(&self) -> Vec<Offender> {
+		self.offenders.clone()
+	}
+
+	fn session_index(&self) -> SessionIndex {
+		self.session_index
+	}
+
+	fn validator_set_count(&self) -> u32 {
+		self.validator_set_count
+	}
+
+	fn time_slot(&self) -> Self::TimeSlot {
+		self.session_index
+	}
+
+	fn slash_fraction(offenders: u32, validator_set_count: u32) -> Perbill {
+		// the formula is min((3 * (k - 1)) / n, 1) * 0.05
+		let x = Perbill::from_rational_approximation(3 * (offenders - 1), validator_set_count);
+
+		// _ * 0.05
+		// For now, Perbill doesn't support multiplication other than an integer so we perform
+		// a manual scaling.
+		// TODO: #3189 should fix this.
+		let p = (x.into_parts() as u64 * 50_000_000u64) / 1_000_000_000u64;
+		Perbill::from_parts(p as u32)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_unresponsiveness_slash_fraction() {
+		// A single case of unresponsiveness is not slashed.
+		assert_eq!(
+			UnresponsivenessOffence::<()>::slash_fraction(1, 50),
+			Perbill::zero(),
+		);
+
+		assert_eq!(
+			UnresponsivenessOffence::<()>::slash_fraction(3, 50),
+			Perbill::from_parts(6000000), // 0.6%
+		);
+
+		// One third offline should be punished around 5%.
+		assert_eq!(
+			UnresponsivenessOffence::<()>::slash_fraction(17, 50),
+			Perbill::from_parts(48000000), // 4.8%
+		);
 	}
 }

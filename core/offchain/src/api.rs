@@ -17,13 +17,12 @@
 use std::{
 	str::FromStr,
 	sync::Arc,
-	convert::{TryFrom, TryInto},
-	time::{SystemTime, Duration},
+	convert::TryFrom,
 	thread::sleep,
 };
 
 use client::backend::OffchainStorage;
-use futures::{StreamExt as _, Future, future, channel::mpsc};
+use futures::{StreamExt as _, Future, FutureExt as _, future, channel::mpsc};
 use log::{info, debug, warn, error};
 use network::{PeerId, Multiaddr, NetworkStateInfo};
 use codec::{Encode, Decode};
@@ -33,6 +32,9 @@ use primitives::offchain::{
 };
 use sr_primitives::{generic::BlockId, traits::{self, Extrinsic}};
 use transaction_pool::txpool::{Pool, ChainApi};
+
+mod http;
+mod timestamp;
 
 /// A message between the offchain extension and the processing thread.
 enum ExtMessage {
@@ -49,6 +51,8 @@ pub(crate) struct Api<Storage, Block: traits::Block> {
 	_at: BlockId<Block>,
 	/// Is this node a potential validator?
 	is_validator: bool,
+	/// Everything HTTP-related is handled by a different struct.
+	http: http::HttpApi,
 }
 
 fn unavailable_yet<R: Default>(name: &str) -> R {
@@ -89,29 +93,11 @@ where
 	}
 
 	fn timestamp(&mut self) -> Timestamp {
-		let now = SystemTime::now();
-		let epoch_duration = now.duration_since(SystemTime::UNIX_EPOCH);
-		match epoch_duration {
-			Err(_) => {
-				// Current time is earlier than UNIX_EPOCH.
-				Timestamp::from_unix_millis(0)
-			},
-			Ok(d) => {
-				let duration = d.as_millis();
-				// Assuming overflow won't happen for a few hundred years.
-				Timestamp::from_unix_millis(duration.try_into()
-					.expect("epoch milliseconds won't overflow u64 for hundreds of years; qed"))
-			}
-		}
+		timestamp::now()
 	}
 
 	fn sleep_until(&mut self, deadline: Timestamp) {
-		// Get current timestamp.
-		let now = self.timestamp();
-		// Calculate the diff with the deadline.
-		let diff = deadline.diff(&now);
-		// Call thread::sleep for the diff duration.
-		sleep(Duration::from_millis(diff.millis()));
+		sleep(timestamp::timestamp_from_now(deadline));
 	}
 
 	fn random_seed(&mut self) -> [u8; 32] {
@@ -149,58 +135,53 @@ where
 
 	fn http_request_start(
 		&mut self,
-		_method: &str,
-		_uri: &str,
+		method: &str,
+		uri: &str,
 		_meta: &[u8]
 	) -> Result<HttpRequestId, ()> {
-		unavailable_yet::<()>("http_request_start");
-		Err(())
+		self.http.request_start(method, uri)
 	}
 
 	fn http_request_add_header(
 		&mut self,
-		_request_id: HttpRequestId,
-		_name: &str,
-		_value: &str
+		request_id: HttpRequestId,
+		name: &str,
+		value: &str
 	) -> Result<(), ()> {
-		unavailable_yet::<()>("http_request_add_header");
-		Err(())
+		self.http.request_add_header(request_id, name, value)
 	}
 
 	fn http_request_write_body(
 		&mut self,
-		_request_id: HttpRequestId,
-		_chunk: &[u8],
-		_deadline: Option<Timestamp>
+		request_id: HttpRequestId,
+		chunk: &[u8],
+		deadline: Option<Timestamp>
 	) -> Result<(), HttpError> {
-		unavailable_yet::<()>("http_request_write_body");
-		Err(HttpError::IoError)
+		self.http.request_write_body(request_id, chunk, deadline)
 	}
 
 	fn http_response_wait(
 		&mut self,
 		ids: &[HttpRequestId],
-		_deadline: Option<Timestamp>
+		deadline: Option<Timestamp>
 	) -> Vec<HttpRequestStatus> {
-		unavailable_yet::<()>("http_response_wait");
-		ids.iter().map(|_| HttpRequestStatus::Unknown).collect()
+		self.http.response_wait(ids, deadline)
 	}
 
 	fn http_response_headers(
 		&mut self,
-		_request_id: HttpRequestId
+		request_id: HttpRequestId
 	) -> Vec<(Vec<u8>, Vec<u8>)> {
-		unavailable_yet("http_response_headers")
+		self.http.response_headers(request_id)
 	}
 
 	fn http_response_read_body(
 		&mut self,
-		_request_id: HttpRequestId,
-		_buffer: &mut [u8],
-		_deadline: Option<Timestamp>
+		request_id: HttpRequestId,
+		buffer: &mut [u8],
+		deadline: Option<Timestamp>
 	) -> Result<usize, HttpError> {
-		unavailable_yet::<()>("http_response_read_body");
-		Err(HttpError::IoError)
+		self.http.response_read_body(request_id, buffer, deadline)
 	}
 }
 
@@ -276,6 +257,8 @@ pub(crate) struct AsyncApi<A: ChainApi> {
 	receiver: Option<mpsc::UnboundedReceiver<ExtMessage>>,
 	transaction_pool: Arc<Pool<A>>,
 	at: BlockId<A::Block>,
+	/// Everything HTTP-related is handled by a different struct.
+	http: Option<http::HttpWorker>,
 }
 
 impl<A: ChainApi> AsyncApi<A> {
@@ -289,18 +272,22 @@ impl<A: ChainApi> AsyncApi<A> {
 	) -> (Api<S, A::Block>, AsyncApi<A>) {
 		let (sender, rx) = mpsc::unbounded();
 
+		let (http_api, http_worker) = http::http();
+
 		let api = Api {
 			sender,
 			db,
 			network_state,
 			_at: at,
 			is_validator,
+			http: http_api,
 		};
 
 		let async_api = AsyncApi {
 			receiver: Some(rx),
 			transaction_pool,
 			at,
+			http: Some(http_worker),
 		};
 
 		(api, async_api)
@@ -309,13 +296,17 @@ impl<A: ChainApi> AsyncApi<A> {
 	/// Run a processing task for the API
 	pub fn process(mut self) -> impl Future<Output = ()> {
 		let receiver = self.receiver.take().expect("Take invoked only once.");
+		let http = self.http.take().expect("Take invoked only once.");
 
-		receiver.for_each(move |msg| {
+		let extrinsics = receiver.for_each(move |msg| {
 			match msg {
 				ExtMessage::SubmitExtrinsic(ext) => self.submit_extrinsic(ext),
 			}
 			future::ready(())
-		})
+		});
+
+		future::join(extrinsics, http)
+			.map(|((), ())| ())
 	}
 
 	fn submit_extrinsic(&mut self, ext: Vec<u8>) {
@@ -340,7 +331,7 @@ impl<A: ChainApi> AsyncApi<A> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::convert::TryFrom;
+	use std::{convert::{TryFrom, TryInto}, time::SystemTime};
 	use sr_primitives::traits::Zero;
 	use client_db::offchain::LocalStorage;
 	use network::PeerId;

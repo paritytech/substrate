@@ -130,7 +130,10 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 	}
 
 	/// Get value valid at block.
-	pub fn value_at_block(&self, at: &ComplexBlockId<Block>) -> ClientResult<Option<T>> {
+	pub fn value_at_block(
+		&self,
+		at: &ComplexBlockId<Block>,
+	) -> ClientResult<Option<(ComplexBlockId<Block>, Option<ComplexBlockId<Block>>, T)>> {
 		let head = if at.number <= self.best_finalized_block.number {
 			// if the block is older than the best known finalized block
 			// => we're should search for the finalized value
@@ -164,7 +167,7 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 
 		match head {
 			Some(head) => head.search_best_before(&self.storage, at.number)
-				.map(|e| e.map(|e| e.0.value)),
+				.map(|e| e.map(|e| (e.0.valid_from, e.1, e.0.value))),
 			None => Ok(None),
 		}
 	}
@@ -677,7 +680,7 @@ pub mod tests {
 				.with_entry(test_id(100), StorageEntry { prev_valid_from: Some(test_id(30)), value: 100 })
 				.with_entry(test_id(30), StorageEntry { prev_valid_from: None, value: 30 }),
 			1024, test_id(100)
-		).value_at_block(&test_id(50)).unwrap(), Some(30));
+		).value_at_block(&test_id(50)).unwrap(), Some((test_id(30), Some(test_id(100)), 30)));
 		// when block is the best finalized block AND value is some
 		// ---> [100]
 		assert_eq!(ListCache::new(
@@ -687,7 +690,7 @@ pub mod tests {
 				.with_entry(test_id(100), StorageEntry { prev_valid_from: Some(test_id(30)), value: 100 })
 				.with_entry(test_id(30), StorageEntry { prev_valid_from: None, value: 30 }),
 			1024, test_id(100)
-		).value_at_block(&test_id(100)).unwrap(), Some(100));
+		).value_at_block(&test_id(100)).unwrap(), Some((test_id(100), None, 100)));
 		// when block is parallel to the best finalized block
 		// ---- 100
 		// ---> [100]
@@ -708,7 +711,7 @@ pub mod tests {
 				.with_id(50, H256::from_low_u64_be(50))
 				.with_entry(test_id(100), StorageEntry { prev_valid_from: Some(test_id(30)), value: 100 }),
 			1024, test_id(100)
-		).value_at_block(&test_id(200)).unwrap(), Some(100));
+		).value_at_block(&test_id(200)).unwrap(), Some((test_id(100), None, 100)));
 
 		// when block is later than last finalized block AND there are no matching forks
 		// AND block is connected to finalized block AND finalized value is Some
@@ -724,7 +727,7 @@ pub mod tests {
 				.with_header(test_header(4))
 				.with_header(fork_header(0, 2, 3)),
 			1024, test_id(2)
-		).value_at_block(&fork_id(0, 2, 3)).unwrap(), Some(2));
+		).value_at_block(&fork_id(0, 2, 3)).unwrap(), Some((correct_id(2), None, 2)));
 		// when block is later than last finalized block AND there are no matching forks
 		// AND block is not connected to finalized block
 		//    ---   2  --- 3
@@ -754,7 +757,7 @@ pub mod tests {
 				.with_header(test_header(4))
 				.with_header(test_header(5)),
 			1024, test_id(2)
-		).value_at_block(&correct_id(5)).unwrap(), Some(4));
+		).value_at_block(&correct_id(5)).unwrap(), Some((correct_id(4), None, 4)));
 		// when block is later than last finalized block AND it does not fits unfinalized fork
 		// AND it is connected to the finalized block AND finalized value is Some
 		// ---> [2] ----------> [4]
@@ -769,7 +772,7 @@ pub mod tests {
 				.with_header(test_header(4))
 				.with_header(fork_header(0, 2, 3)),
 			1024, test_id(2)
-		).value_at_block(&fork_id(0, 2, 3)).unwrap(), Some(2));
+		).value_at_block(&fork_id(0, 2, 3)).unwrap(), Some((correct_id(2), None, 2)));
 	}
 
 	#[test]

@@ -47,8 +47,7 @@ use elections::VoteIndex;
 use version::NativeVersion;
 use primitives::OpaqueMetadata;
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
-use im_online::{AuthorityId as ImOnlineId};
-use finality_tracker::{DEFAULT_REPORT_LATENCY, DEFAULT_WINDOW_SIZE};
+use im_online::sr25519::{AuthorityId as ImOnlineId};
 
 #[cfg(any(feature = "std", test))]
 pub use sr_primitives::BuildStorage;
@@ -80,8 +79,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 138,
-	impl_version: 138,
+	spec_version: 154,
+	impl_version: 157,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -108,6 +107,7 @@ parameter_types! {
 	pub const MaximumBlockWeight: Weight = 1_000_000_000;
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 	pub const MaximumBlockLength: u32 = 5 * 1024 * 1024;
+	pub const Version: RuntimeVersion = VERSION;
 }
 
 impl system::Trait for Runtime {
@@ -126,6 +126,7 @@ impl system::Trait for Runtime {
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
+	type Version = Version;
 }
 
 parameter_types! {
@@ -225,7 +226,7 @@ impl session::historical::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const SessionsPerEra: session::SessionIndex = 6;
+	pub const SessionsPerEra: sr_staking_primitives::SessionIndex = 6;
 	pub const BondingDuration: staking::EraIndex = 24 * 28;
 }
 
@@ -235,8 +236,8 @@ impl staking::Trait for Runtime {
 	type CurrencyToVote = CurrencyToVoteHandler;
 	type OnRewardMinted = Treasury;
 	type Event = Event;
-	type Slash = ();
-	type Reward = ();
+	type Slash = Treasury; // send the slashed funds to the treasury.
+	type Reward = (); // rewards are minted from the void
 	type SessionsPerEra = SessionsPerEra;
 	type BondingDuration = BondingDuration;
 	type SessionInterface = Self;
@@ -392,18 +393,29 @@ impl sudo::Trait for Runtime {
 }
 
 impl im_online::Trait for Runtime {
+	type AuthorityId = ImOnlineId;
 	type Call = Call;
 	type Event = Event;
 	type UncheckedExtrinsic = UncheckedExtrinsic;
+	type ReportUnresponsiveness = Offences;
+	type CurrentElectedSet = staking::CurrentElectedStashAccounts<Runtime>;
 }
+
+impl offences::Trait for Runtime {
+	type Event = Event;
+	type IdentificationTuple = session::historical::IdentificationTuple<Self>;
+	type OnOffenceHandler = Staking;
+}
+
+impl authority_discovery::Trait for Runtime {}
 
 impl grandpa::Trait for Runtime {
 	type Event = Event;
 }
 
 parameter_types! {
-	pub const WindowSize: BlockNumber = DEFAULT_WINDOW_SIZE.into();
-	pub const ReportLatency: BlockNumber = DEFAULT_REPORT_LATENCY.into();
+	pub const WindowSize: BlockNumber = 101;
+	pub const ReportLatency: BlockNumber = 1000;
 }
 
 impl finality_tracker::Trait for Runtime {
@@ -436,7 +448,9 @@ construct_runtime!(
 		Treasury: treasury::{Module, Call, Storage, Event<T>},
 		Contracts: contracts,
 		Sudo: sudo,
-		ImOnline: im_online::{Module, Call, Storage, Event, ValidateUnsigned, Config<T>},
+		ImOnline: im_online::{Module, Call, Storage, Event<T>, ValidateUnsigned, Config<T>},
+		AuthorityDiscovery: authority_discovery::{Module, Call, Config<T>},
+		Offences: offences::{Module, Call, Storage, Event},
 	}
 );
 
@@ -452,6 +466,7 @@ pub type SignedBlock = generic::SignedBlock<Block>;
 pub type BlockId = generic::BlockId<Block>;
 /// The SignedExtension to the basic transaction logic.
 pub type SignedExtra = (
+	system::CheckVersion<Runtime>,
 	system::CheckGenesis<Runtime>,
 	system::CheckEra<Runtime>,
 	system::CheckNonce<Runtime>,
@@ -548,7 +563,7 @@ impl_runtime_apis! {
 			babe_primitives::BabeConfiguration {
 				median_required_blocks: 1000,
 				slot_duration: Babe::slot_duration(),
-				c: (278, 1000),
+				c: PRIMARY_PROBABILITY,
 			}
 		}
 
@@ -559,13 +574,31 @@ impl_runtime_apis! {
 				epoch_index: Babe::epoch_index(),
 				randomness: Babe::randomness(),
 				duration: EpochDuration::get(),
+				secondary_slots: Babe::secondary_slots().0,
 			}
 		}
 	}
 
-	impl consensus_primitives::ConsensusApi<Block, babe_primitives::AuthorityId> for Runtime {
-		fn authorities() -> Vec<babe_primitives::AuthorityId> {
-			Babe::authorities().into_iter().map(|(a, _)| a).collect()
+	impl authority_discovery_primitives::AuthorityDiscoveryApi<Block, ImOnlineId> for Runtime {
+		fn authority_id() -> Option<ImOnlineId> {
+			AuthorityDiscovery::authority_id()
+		}
+		fn authorities() -> Vec<ImOnlineId> {
+			AuthorityDiscovery::authorities()
+		}
+
+		fn sign(payload: Vec<u8>, authority_id: ImOnlineId) -> Option<Vec<u8>> {
+			AuthorityDiscovery::sign(payload, authority_id)
+		}
+
+		fn verify(payload: Vec<u8>, signature: Vec<u8>, public_key: ImOnlineId) -> bool {
+			AuthorityDiscovery::verify(payload, signature, public_key)
+		}
+	}
+
+	impl node_primitives::AccountNonceApi<Block> for Runtime {
+		fn account_nonce(account: AccountId) -> Index {
+			System::account_nonce(account)
 		}
 	}
 

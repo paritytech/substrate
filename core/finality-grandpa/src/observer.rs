@@ -175,8 +175,10 @@ pub fn run_grandpa_observer<B, E, Block: BlockT<Hash=H256>, N, RA, SC>(
 		network,
 		config.clone(),
 		persistent_data.set_state.clone(),
-		on_exit.clone()
+		on_exit.clone(),
+		false,
 	);
+
 	let observer_work = ObserverWork::new(
 		client,
 		network,
