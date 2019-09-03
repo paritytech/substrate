@@ -14,7 +14,7 @@ session = { package = "srml-session", path = "../session", default-features = fa
 runtime-io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 sr-staking-primitives = { path = "../../core/sr-staking-primitives", default-features = false }
-support = { path = "../support", default-features = false }
+support = { package = "srml-support", path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 
 [features]

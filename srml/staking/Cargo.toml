@@ -14,7 +14,7 @@ phragmen = { package = "substrate-phragmen", path = "../../core/phragmen", defau
 runtime-io ={ package = "sr-io", path = "../../core/sr-io", default-features = false }
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 sr-staking-primitives = { path = "../../core/sr-staking-primitives", default-features = false }
-support = { path = "../support", default-features = false }
+support = { package = "srml-support", path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 session = { package = "srml-session", path = "../session", default-features = false, features = ["historical"] }
 authorship = { package = "srml-authorship", path = "../authorship", default-features = false }
@@ -36,7 +36,7 @@ std = [
 	"codec/std",
 	"rstd/std",
 	"phragmen/std",
-	"runtime_io/std",
+	"runtime-io/std",
 	"support/std",
 	"sr-primitives/std",
 	"sr-staking-primitives/std",

@@ -18,4 +18,4 @@ sr-primitives = { path = "../sr-primitives" }
 
 [features]
 default = [ "std" ]
-std = [ "primitives/std", "codec/std", "serde", "rstd/std", "rio/std" ]
+std = [ "primitives/std", "codec/std", "serde", "rstd/std", "runtime-io/std" ]

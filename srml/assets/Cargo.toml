@@ -10,7 +10,7 @@ codec = { package = "parity-scale-codec", version = "1.0.0", default-features = 
 # Needed for various traits. In our case, `OnFinalize`.
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 # Needed for type-safe access to storage DB.
-support = { path = "../support", default-features = false }
+support = { package = "srml-support", path = "../support", default-features = false }
 # `system` module provides us with all sorts of useful stuff and macros depend on it being around.
 system = { package = "srml-system", path = "../system", default-features = false }
 
