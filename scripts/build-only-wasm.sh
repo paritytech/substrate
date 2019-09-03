@@ -23,7 +23,7 @@ if [ -d $WASM_BUILDER_RUNNER ]; then
   export DEBUG=false
   export OUT_DIR="$PROJECT_ROOT/target/release/build"
   cargo run --release --manifest-path="$WASM_BUILDER_RUNNER/Cargo.toml" \
-    | grep -vE "cargo:rerun-if-|Executing build command"                  \
+    | grep -vE "cargo:rerun-if-|Executing build command"
 else
   cargo build --release -p $1
 fi
