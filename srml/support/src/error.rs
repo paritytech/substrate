@@ -19,6 +19,30 @@
 #[doc(hidden)]
 pub use sr_primitives::traits::LookupError;
 
+/// Declare an error type for a runtime module.
+///
+/// The generated error type inherently has the variants `Other` and `CannotLookup`. `Other` can
+/// hold any `&'static str` error message and is present for convenience/backward compatibility.
+/// The `CannotLookup` variant indicates that some lookup could not be done. For both variants the
+/// error type implements `From<&'static str>` and `From<LookupError>` to make them usable with the
+/// try operator.
+///
+/// # Usage
+///
+/// ```
+/// # use srml_support::decl_error;
+/// decl_error! {
+///     /// Errors that can occur in my module.
+///     pub enum MyError {
+///         /// Hey this is an error message that indicates bla.
+///         MyCoolErrorMessage,
+///         /// You are just not cool enough for my module!
+///         YouAreNotCoolEnough,
+///     }
+/// }
+/// ```
+///
+/// `decl_error!` supports only variants that do not hold any data.
 #[macro_export]
 macro_rules! decl_error {
 	(
