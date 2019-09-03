@@ -24,10 +24,7 @@ use runtime_io::blake2_256;
 use codec::{Decode, Encode, Input, Error};
 use crate::{
 	traits::{self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic},
-	generic::CheckedExtrinsic,
-	transaction_validity::{
-		TransactionValidityError, InvalidTransaction, UnknownTransaction,
-	},
+	generic::CheckedExtrinsic, transaction_validity::{TransactionValidityError, InvalidTransaction},
 };
 
 const TRANSACTION_VERSION: u8 = 3;
@@ -113,7 +110,7 @@ where
 	fn check(self, lookup: &Lookup) -> Result<Self::Checked, TransactionValidityError> {
 		Ok(match self.signature {
 			Some((signed, signature, extra)) => {
-				let signed = lookup.lookup(signed).ok_or(UnknownTransaction::CannotLookup)?;
+				let signed = lookup.lookup(signed)?;
 				let raw_payload = SignedPayload::new(self.function, extra)?;
 				if !raw_payload.using_encoded(|payload| {
 					signature.verify(payload, &signed)

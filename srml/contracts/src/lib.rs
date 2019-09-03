@@ -571,7 +571,7 @@ decl_module! {
 			data: Vec<u8>
 		) -> Result {
 			let origin = ensure_signed(origin)?;
-			let dest = T::Lookup::lookup(dest).ok_or("could not find `dest` account")?;
+			let dest = T::Lookup::lookup(dest)?;
 
 			Self::execute_wasm(origin, gas_limit, |ctx, gas_meter| {
 				ctx.call(dest, value, gas_meter, data)

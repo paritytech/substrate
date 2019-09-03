@@ -22,7 +22,7 @@
 use rstd::{prelude::*, marker::PhantomData, convert::TryInto};
 use codec::{Encode, Codec};
 use srml_support::{StorageValue, StorageMap, Parameter, decl_module, decl_event, decl_storage};
-use sr_primitives::traits::{One, SimpleArithmetic, StaticLookup, Member};
+use sr_primitives::traits::{One, SimpleArithmetic, StaticLookup, Member, LookupError};
 use system::{IsDeadAccount, OnNewAccount};
 
 use self::address::Address as RawAddress;
@@ -225,8 +225,8 @@ impl<T: Trait> StaticLookup for Module<T> {
 	type Source = address::Address<T::AccountId, T::AccountIndex>;
 	type Target = T::AccountId;
 
-	fn lookup(a: Self::Source) -> Option<T::AccountId> {
-		Self::lookup_address(a)
+	fn lookup(a: Self::Source) -> Result<T::AccountId, LookupError> {
+		Self::lookup_address(a).ok_or(LookupError)
 	}
 
 	fn unlookup(a: Self::Target) -> Self::Source {

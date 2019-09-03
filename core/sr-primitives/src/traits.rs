@@ -23,7 +23,9 @@ use runtime_io;
 #[cfg(feature = "std")] use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use primitives::{self, Hasher, Blake2Hasher};
 use crate::codec::{Codec, Encode, Decode, HasCompact};
-use crate::transaction_validity::{ValidTransaction, TransactionValidity, TransactionValidityError};
+use crate::transaction_validity::{
+	ValidTransaction, TransactionValidity, TransactionValidityError, UnknownTransaction,
+};
 use crate::generic::{Digest, DigestItem};
 use crate::weights::DispatchInfo;
 pub use integer_sqrt::IntegerSquareRoot;
@@ -115,6 +117,22 @@ pub trait EnsureOrigin<OuterOrigin> {
 	fn try_origin(o: OuterOrigin) -> result::Result<Self::Success, OuterOrigin>;
 }
 
+/// An error that indicates that a lookup failed.
+#[derive(Encode, Decode)]
+pub struct LookupError;
+
+impl From<LookupError> for &'static str {
+	fn from(_: LookupError) -> &'static str {
+		"Can not lookup"
+	}
+}
+
+impl From<LookupError> for TransactionValidityError {
+	fn from(_: LookupError) -> Self {
+		UnknownTransaction::CannotLookup.into()
+	}
+}
+
 /// Means of changing one type into another in a manner dependent on the source type.
 pub trait Lookup {
 	/// Type to lookup from.
@@ -122,7 +140,7 @@ pub trait Lookup {
 	/// Type to lookup into.
 	type Target;
 	/// Attempt a lookup.
-	fn lookup(&self, s: Self::Source) -> Option<Self::Target>;
+	fn lookup(&self, s: Self::Source) -> Result<Self::Target, LookupError>;
 }
 
 /// Means of changing one type into another in a manner dependent on the source type.
@@ -134,7 +152,7 @@ pub trait StaticLookup {
 	/// Type to lookup into.
 	type Target;
 	/// Attempt a lookup.
-	fn lookup(s: Self::Source) -> Option<Self::Target>;
+	fn lookup(s: Self::Source) -> Result<Self::Target, LookupError>;
 	/// Convert from Target back to Source.
 	fn unlookup(t: Self::Target) -> Self::Source;
 }
@@ -145,14 +163,14 @@ pub struct IdentityLookup<T>(PhantomData<T>);
 impl<T: Codec + Clone + PartialEq + MaybeDebug> StaticLookup for IdentityLookup<T> {
 	type Source = T;
 	type Target = T;
-	fn lookup(x: T) -> Option<T> { Some(x) }
+	fn lookup(x: T) -> Result<T, LookupError> { Ok(x) }
 	fn unlookup(x: T) -> T { x }
 }
 
 impl<T> Lookup for IdentityLookup<T> {
 	type Source = T;
 	type Target = T;
-	fn lookup(&self, x: T) -> Option<T> { Some(x) }
+	fn lookup(&self, x: T) -> Result<T, LookupError> { Ok(x) }
 }
 
 /// Extensible conversion trait. Generic over both source and destination types.

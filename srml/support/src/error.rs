@@ -16,6 +16,9 @@
 
 //! Macro for declaring a module error.
 
+#[doc(hidden)]
+pub use sr_primitives::traits::LookupError;
+
 #[macro_export]
 macro_rules! decl_error {
 	(
@@ -33,6 +36,7 @@ macro_rules! decl_error {
 		$(#[$attr])*
 		pub enum $error {
 			Other(&'static str),
+			CannotLookup,
 			$(
 				$(#[$variant_attr])*
 				$name
@@ -46,7 +50,7 @@ macro_rules! decl_error {
 					self
 					$error
 					{}
-					1,
+					2,
 					$( $name ),*
 				}
 			}
@@ -54,6 +58,7 @@ macro_rules! decl_error {
 			fn as_str(&self) -> &'static str {
 				match self {
 					$error::Other(err) => err,
+					$error::CannotLookup => "Can not lookup",
 					$(
 						$error::$name => stringify!($name),
 					)*
@@ -64,6 +69,12 @@ macro_rules! decl_error {
 		impl From<&'static str> for $error {
 			fn from(val: &'static str) -> $error {
 				$error::Other(val)
+			}
+		}
+
+		impl From<$crate::error::LookupError> for $error {
+			fn from(_: $crate::error::LookupError) -> $error {
+				$error::CannotLookup
 			}
 		}
 
@@ -109,6 +120,7 @@ macro_rules! decl_error {
 	) => {
 		match $self {
 			$error::Other(_) => 0,
+			$error::CannotLookup => 1,
 			$( $generated )*
 		}
 	}

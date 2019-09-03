@@ -103,7 +103,7 @@ use sr_primitives::{
 		InvalidTransaction, TransactionValidity,
 	},
 	traits::{
-		self, CheckEqual, SimpleArithmetic, Zero, SignedExtension, Convert, Lookup,
+		self, CheckEqual, SimpleArithmetic, Zero, SignedExtension, Convert, Lookup, LookupError,
 		SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, SaturatedConversion,
 		MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded,
 	},
@@ -1166,7 +1166,7 @@ impl<T: Trait> Lookup for ChainContext<T> {
 	type Source = <T::Lookup as StaticLookup>::Source;
 	type Target = <T::Lookup as StaticLookup>::Target;
 
-	fn lookup(&self, s: Self::Source) -> Option<Self::Target> {
+	fn lookup(&self, s: Self::Source) -> Result<Self::Target, LookupError> {
 		<T::Lookup as StaticLookup>::lookup(s)
 	}
 }
