@@ -18,7 +18,7 @@ session = { package = "srml-session", path = "../session", default-features = fa
 finality-tracker = { package = "srml-finality-tracker", path = "../finality-tracker", default-features = false }
 
 [dev-dependencies]
-runtime_io = { package = "sr-io", path = "../../core/sr-io" }
+runtime-io ={ package = "sr-io", path = "../../core/sr-io" }
 
 [features]
 default = ["std"]
