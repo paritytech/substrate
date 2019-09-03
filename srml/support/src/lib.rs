@@ -186,7 +186,7 @@ macro_rules! assert_ok {
 /// ```rust
 /// #[macro_use]
 /// # extern crate srml_support;
-/// # use srml_support::{assert_eq_uvec};
+/// # use support::{assert_eq_uvec};
 /// # fn main() {
 /// assert_eq_uvec!(vec![1,2], vec![2,1]);
 /// # }
@@ -195,7 +195,7 @@ macro_rules! assert_ok {
 /// ```rust,should_panic
 /// #[macro_use]
 /// # extern crate srml_support;
-/// # use srml_support::{assert_eq_uvec};
+/// # use support::{assert_eq_uvec};
 /// # fn main() {
 /// assert_eq_uvec!(vec![1,2,3], vec![2,1]);
 /// # }

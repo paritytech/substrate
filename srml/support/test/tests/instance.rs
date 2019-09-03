@@ -16,7 +16,7 @@
 #![recursion_limit="128"]
 
 use runtime_io::{with_externalities, Blake2Hasher};
-use srml_support::{
+use support::{
 	Parameter, traits::Get, parameter_types,
 	sr_primitives::{generic, BuildStorage, traits::{BlakeTwo256, Block as _, Verify}},
 	metadata::{

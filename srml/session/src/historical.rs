@@ -29,10 +29,10 @@ use rstd::prelude::*;
 use codec::{Encode, Decode};
 use sr_primitives::KeyTypeId;
 use sr_primitives::traits::{Convert, OpaqueKeys, Hash as HashT};
-use srml_support::{
+use support::{
 	StorageValue, StorageMap, decl_module, decl_storage,
 };
-use srml_support::{Parameter, print};
+use support::{Parameter, print};
 use substrate_trie::{MemoryDB, Trie, TrieMut, Recorder, EMPTY_PREFIX};
 use substrate_trie::trie_types::{TrieDBMut, TrieDB};
 use super::{SessionIndex, Module as SessionModule};
@@ -321,7 +321,7 @@ mod tests {
 		NEXT_VALIDATORS, force_new_session,
 		set_next_validators, Test, System, Session,
 	};
-	use srml_support::traits::KeyOwnerProofSystem;
+	use support::traits::KeyOwnerProofSystem;
 
 	type Historical = Module<Test>;
 

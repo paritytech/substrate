@@ -22,12 +22,12 @@ use inherents::{
 	RuntimeString, InherentIdentifier, ProvideInherent,
 	InherentData, MakeFatalError,
 };
-use srml_support::StorageValue;
+use support::StorageValue;
 use sr_primitives::traits::{One, Zero, SaturatedConversion};
 use rstd::{prelude::*, result, cmp, vec};
 use codec::Decode;
-use srml_support::{decl_module, decl_storage, for_each_tuple};
-use srml_support::traits::Get;
+use support::{decl_module, decl_storage, for_each_tuple};
+use support::traits::Get;
 use srml_system::{ensure_none, Trait as SystemTrait};
 
 #[cfg(feature = "std")]
@@ -270,7 +270,7 @@ mod tests {
 	use sr_primitives::traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT};
 	use sr_primitives::testing::Header;
 	use sr_primitives::Perbill;
-	use srml_support::{assert_ok, impl_outer_origin, parameter_types};
+	use support::{assert_ok, impl_outer_origin, parameter_types};
 	use srml_system as system;
 	use std::cell::RefCell;
 

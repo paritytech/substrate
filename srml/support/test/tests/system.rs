@@ -1,4 +1,4 @@
-use srml_support::codec::{Encode, Decode};
+use support::codec::{Encode, Decode};
 
 pub trait Trait: 'static + Eq + Clone {
 	type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>

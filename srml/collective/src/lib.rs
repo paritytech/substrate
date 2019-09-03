@@ -27,7 +27,7 @@ use rstd::{prelude::*, result};
 use primitives::u32_trait::Value as U32;
 use sr_primitives::traits::{Hash, EnsureOrigin};
 use sr_primitives::weights::SimpleDispatchInfo;
-use srml_support::{
+use support::{
 	dispatch::{Dispatchable, Parameter}, codec::{Encode, Decode},
 	traits::{ChangeMembers, InitializeMembers}, StorageValue, StorageMap, decl_module, decl_event,
 	decl_storage, ensure,
@@ -379,7 +379,7 @@ impl<
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use srml_support::{Hashable, assert_ok, assert_noop, parameter_types};
+	use support::{Hashable, assert_ok, assert_noop, parameter_types};
 	use system::{EventRecord, Phase};
 	use hex_literal::hex;
 	use runtime_io::with_externalities;

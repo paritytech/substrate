@@ -42,7 +42,7 @@
 //! ## Usage
 //!
 //! ```
-//! use srml_support::{decl_module, dispatch::Result};
+//! use support::{decl_module, dispatch::Result};
 //! use system::ensure_signed;
 //! use srml_im_online::{self as im_online};
 //!
@@ -82,7 +82,7 @@ use sr_staking_primitives::{
 	SessionIndex, CurrentElectedSet,
 	offence::{ReportOffence, Offence, Kind},
 };
-use srml_support::{
+use support::{
 	decl_module, decl_event, decl_storage, print, ensure,
 	Parameter, StorageValue, StorageDoubleMap,
 };

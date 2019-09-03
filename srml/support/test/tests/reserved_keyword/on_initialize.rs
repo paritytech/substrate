@@ -2,7 +2,7 @@ macro_rules! reserved {
 	($($reserved:ident)*) => {
 		$(
 			mod $reserved {
-				pub use srml_support::dispatch::Result;
+				pub use support::dispatch::Result;
 
 				pub trait Trait {
 					type Origin;
@@ -10,7 +10,7 @@ macro_rules! reserved {
 				}
 
 				pub mod system {
-					use srml_support::dispatch::Result;
+					use support::dispatch::Result;
 
 					pub fn ensure_root<R>(_: R) -> Result {
 						Ok(())

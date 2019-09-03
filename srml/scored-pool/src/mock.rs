@@ -19,7 +19,7 @@
 use super::*;
 
 use std::cell::RefCell;
-use srml_support::{impl_outer_origin, parameter_types};
+use support::{impl_outer_origin, parameter_types};
 use primitives::{H256, Blake2Hasher};
 // The testing primitives are very useful for avoiding having to work with signatures
 // or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
