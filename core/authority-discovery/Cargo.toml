@@ -9,24 +9,24 @@ build = "build.rs"
 prost-build = "0.5"
 
 [dependencies]
-network = { package = "substrate-network", path = "../../core/network" }
-sr-primitives = { path = "../../core/sr-primitives" }
-primitives = { package = "substrate-primitives", path = "../primitives" }
-client = { package = "substrate-client", path = "../../core/client" }
 authority-discovery-primitives = { package = "substrate-authority-discovery-primitives", path = "./primitives", default-features = false }
+bytes = "0.4"
+client = { package = "substrate-client", path = "../../core/client" }
 codec = { package = "parity-scale-codec", default-features = false, version = "1.0.3" }
-futures = "0.1.17"
-tokio-timer = "0.2"
+derive_more = "0.14.0"
+futures = "0.1"
 keystore = { package = "substrate-keystore", path = "../../core/keystore" }
 libp2p = { version = "0.12.0", default-features = false, features = ["secp256k1", "libp2p-websocket"] }
-serde_json = "1.0"
 log = "0.4"
-derive_more = "0.14.0"
+network = { package = "substrate-network", path = "../../core/network" }
+primitives = { package = "substrate-primitives", path = "../primitives" }
 prost = "0.5"
-bytes = "0.4"
+serde_json = "1.0"
+sr-primitives = { path = "../../core/sr-primitives" }
+tokio-timer = "0.2"
 
 [dev-dependencies]
-test-client = { package = "substrate-test-runtime-client", path = "../../core/test-runtime/client" }
-peerset = { package = "substrate-peerset", path = "../../core/peerset" }
 parking_lot = { version = "0.9.0" }
-tokio = { version = "0.1.11"}
+peerset = { package = "substrate-peerset", path = "../../core/peerset" }
+test-client = { package = "substrate-test-runtime-client", path = "../../core/test-runtime/client" }
+tokio = { version = "0.1"}
