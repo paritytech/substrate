@@ -15,8 +15,8 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use runtime_io::{with_externalities, Blake2Hasher};
-use srml_support::{StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap};
-use srml_support::storage::unhashed;
+use support::{StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap};
+use support::storage::unhashed;
 use codec::{Encode, Decode};
 
 pub trait Trait {
@@ -24,11 +24,11 @@ pub trait Trait {
 	type BlockNumber: Encode + Decode + Default + Clone;
 }
 
-srml_support::decl_module! {
+support::decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 }
 
-srml_support::decl_storage!{
+support::decl_storage!{
 	trait Store for Module<T: Trait> as FinalKeys {
 		pub Value config(value): u32;
 

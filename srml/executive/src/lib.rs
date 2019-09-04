@@ -81,7 +81,7 @@ use sr_primitives::{generic::Digest, traits::{
 	self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize,
 	OnInitialize, NumberFor, Block as BlockT, OffchainWorker, ValidateUnsigned
 }};
-use srml_support::Dispatchable;
+use support::Dispatchable;
 use codec::{Codec, Encode};
 use system::{extrinsics_root, DigestOf};
 use sr_primitives::{ApplyOutcome, ApplyError};
@@ -362,8 +362,8 @@ mod tests {
 	use sr_primitives::weights::Weight;
 	use sr_primitives::traits::{Header as HeaderT, BlakeTwo256, IdentityLookup, ConvertInto};
 	use sr_primitives::testing::{Digest, Header, Block};
-	use srml_support::{impl_outer_event, impl_outer_origin, parameter_types};
-	use srml_support::traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons, WithdrawReason};
+	use support::{impl_outer_event, impl_outer_origin, parameter_types};
+	use support::traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons, WithdrawReason};
 	use system;
 	use hex_literal::hex;
 
