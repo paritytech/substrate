@@ -66,7 +66,7 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 ///
 /// ```
 /// # #[macro_use]
-/// # extern crate support;
+/// # extern crate srml_support;
 /// # use support::dispatch::Result;
 /// # use srml_system::{self as system, Trait, ensure_signed};
 /// decl_module! {
@@ -106,7 +106,7 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 ///
 /// ```
 /// # #[macro_use]
-/// # extern crate support;
+/// # extern crate srml_support;
 /// # use support::dispatch::Result;
 /// # use srml_system::{self as system, Trait, ensure_signed};
 /// decl_module! {
@@ -131,7 +131,7 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 ///
 /// ```
 /// # #[macro_use]
-/// # extern crate support;
+/// # extern crate srml_support;
 /// # use support::dispatch::Result;
 /// # use srml_system::{self as system, Trait, ensure_signed, ensure_root};
 /// decl_module! {
@@ -155,7 +155,7 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 ///
 /// ```
 /// # #[macro_use]
-/// # extern crate support;
+/// # extern crate srml_support;
 /// # use support::dispatch::Result;
 /// # use srml_system::{self as system, ensure_signed};
 /// # pub struct DefaultInstance;
@@ -183,7 +183,7 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 ///
 /// ```
 /// # #[macro_use]
-/// # extern crate support;
+/// # extern crate srml_support;
 /// # use support::dispatch::Result;
 /// # use srml_system::{self as system, ensure_signed};
 /// pub trait Trait: system::Trait where Self::AccountId: From<u32> {}

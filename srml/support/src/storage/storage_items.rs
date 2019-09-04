@@ -27,7 +27,7 @@
 //!
 //! ```rust
 //! #[macro_use]
-//! extern crate support;
+//! extern crate srml_support;
 //!
 //! type AuthorityId = [u8; 32];
 //! type Balance = u64;

@@ -16,8 +16,8 @@
 
 //! `decl_storage` macro transformation
 
-use support_procedural_tools::syn_ext as ext;
-use support_procedural_tools::{
+use srml_support_procedural_tools::syn_ext as ext;
+use srml_support_procedural_tools::{
 	generate_crate_access, generate_hidden_includes, clean_type_string
 };
 
