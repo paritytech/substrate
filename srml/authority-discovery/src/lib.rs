@@ -29,14 +29,14 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use app_crypto::RuntimeAppPublic;
-use codec::{Encode, Decode};
 use rstd::prelude::*;
 use support::{decl_module, decl_storage, StorageValue};
 
 pub trait Trait: system::Trait + session::Trait + im_online::Trait {}
 
 type AuthorityIdFor<T> = <T as im_online::Trait>::AuthorityId;
-type AuthoritySignatureFor<T> = <<T as im_online::Trait>::AuthorityId as RuntimeAppPublic>::Signature;
+type AuthoritySignatureFor<T> =
+	<<T as im_online::Trait>::AuthorityId as RuntimeAppPublic>::Signature;
 
 decl_storage! {
 	trait Store for Module<T: Trait> as AuthorityDiscovery {
@@ -158,10 +158,7 @@ mod tests {
 
 	pub struct TestOnSessionEnding;
 	impl session::OnSessionEnding<AuthorityId> for TestOnSessionEnding {
-		fn on_session_ending(
-			_: SessionIndex,
-			_: SessionIndex,
-		) -> Option<Vec<AuthorityId>> {
+		fn on_session_ending(_: SessionIndex, _: SessionIndex) -> Option<Vec<AuthorityId>> {
 			None
 		}
 	}
@@ -352,17 +349,12 @@ mod tests {
 
 		with_externalities(&mut externalities, || {
 			let payload = String::from("test payload").into_bytes();
-			let (sig, authority_id) =
-				AuthorityDiscovery::sign(payload.clone()).expect("signature");
+			let (sig, authority_id) = AuthorityDiscovery::sign(&payload).expect("signature");
 
-			assert!(AuthorityDiscovery::verify(
-				payload,
-				sig.clone(),
-				authority_id.clone()
-			));
+			assert!(AuthorityDiscovery::verify(&payload, sig.clone(), authority_id.clone(),));
 
 			assert!(!AuthorityDiscovery::verify(
-				String::from("other payload").into_bytes(),
+				&String::from("other payload").into_bytes(),
 				sig,
 				authority_id
 			))
