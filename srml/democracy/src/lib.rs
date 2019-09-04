@@ -20,12 +20,14 @@
 
 use rstd::prelude::*;
 use rstd::{result, convert::TryFrom};
-use sr_primitives::traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin, Hash};
-use sr_primitives::weights::SimpleDispatchInfo;
+use sr_primitives::{
+	traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin, Hash, Dispatchable},
+	weights::SimpleDispatchInfo,
+};
 use codec::{Encode, Decode, Input, Output, Error};
 use support::{
 	decl_module, decl_storage, decl_event, ensure, StorageValue, StorageMap, StorageLinkedMap,
-	Parameter, Dispatchable,
+	Parameter,
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
 		OnFreeBalanceZero

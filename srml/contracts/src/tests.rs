@@ -22,27 +22,27 @@
 use crate::account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
 use crate::{
 	BalanceOf, ComputeDispatchFee, ContractAddressFor, ContractInfo, ContractInfoOf, GenesisConfig,
-	Module, RawAliveContractInfo, RawEvent, Trait, TrieId, TrieIdFromParentCounter,
-	TrieIdGenerator, Schedule,
+	Module, RawAliveContractInfo, RawEvent, Trait, TrieId, TrieIdFromParentCounter, Schedule,
+	TrieIdGenerator, CheckBlockGasLimit,
 };
 use assert_matches::assert_matches;
 use hex_literal::*;
 use codec::{Decode, Encode, KeyedVec};
 use runtime_io;
 use runtime_io::with_externalities;
-use sr_primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, H256};
-use sr_primitives::traits::{BlakeTwo256, Hash, IdentityLookup};
-use sr_primitives::{Perbill, BuildStorage};
+use sr_primitives::{
+	Perbill, BuildStorage, transaction_validity::{InvalidTransaction, ValidTransaction},
+	traits::{BlakeTwo256, Hash, IdentityLookup, SignedExtension},
+	weights::{DispatchInfo, DispatchClass},
+	testing::{Digest, DigestItem, Header, UintAuthorityId, H256},
+};
 use support::{
 	assert_ok, assert_err, impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types,
 	storage::child, StorageMap, StorageValue, traits::{Currency, Get},
 };
-use std::cell::RefCell;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use primitives::storage::well_known_keys;
-use primitives::Blake2Hasher;
+use std::{cell::RefCell, sync::atomic::{AtomicUsize, Ordering}};
+use primitives::{storage::well_known_keys, Blake2Hasher};
 use system::{self, EventRecord, Phase};
-use {balances, wabt};
 
 mod contract {
 	// Re-export contents of the root. This basically
@@ -2387,6 +2387,25 @@ fn cannot_self_destruct_in_constructor() {
 				),
 				"insufficient remaining balance"
 			);
+		}
+	);
+}
+
+#[test]
+fn check_block_gas_limit_works() {
+	with_externalities(
+		&mut ExtBuilder::default().block_gas_limit(50).build(),
+		|| {
+			let info = DispatchInfo { weight: 100, class: DispatchClass::Normal };
+			let check = CheckBlockGasLimit::<Test>(Default::default());
+			let call: Call = crate::Call::put_code(1000, vec![]).into();
+
+			assert_eq!(
+				check.validate(&0, &call, info, 0), InvalidTransaction::ExhaustsResources.into(),
+			);
+
+			let call: Call = crate::Call::update_schedule(Default::default()).into();
+			assert_eq!(check.validate(&0, &call, info, 0), Ok(Default::default()));
 		}
 	);
 }

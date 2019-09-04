@@ -43,16 +43,16 @@ mod tests {
 	use runtime_support::{Hashable, StorageValue, StorageMap, assert_eq_error_rate, traits::Currency};
 	use state_machine::{CodeExecutor, Externalities, TestExternalities as CoreTestExternalities};
 	use primitives::{Blake2Hasher, NeverNativeValue, NativeOrEncoded, map};
-	use sr_primitives::traits::{Header as HeaderT, Hash as HashT, Convert};
-	use sr_primitives::{ApplyOutcome, ApplyError, ApplyResult};
-	use sr_primitives::weights::{WeightMultiplier, GetDispatchInfo};
+	use node_primitives::{Hash, BlockNumber, Balance};
+	use sr_primitives::{
+		traits::{Header as HeaderT, Hash as HashT, Convert}, ApplyOutcome, ApplyResult,
+		transaction_validity::InvalidTransaction, weights::{WeightMultiplier, GetDispatchInfo},
+	};
 	use contracts::ContractAddressFor;
 	use system::{EventRecord, Phase};
-	use node_primitives::{Hash, BlockNumber, Balance};
 	use node_runtime::{
 		Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances, BuildStorage,
-		System, Event,
-		TransferFee, TransactionBaseFee, TransactionByteFee,
+		System, Event, TransferFee, TransactionBaseFee, TransactionByteFee,
 	};
 	use node_runtime::constants::currency::*;
 	use node_runtime::impls::WeightToFee;
@@ -150,7 +150,7 @@ mod tests {
 			None,
 		).0.unwrap();
 		let r = ApplyResult::decode(&mut &v.as_encoded()[..]).unwrap();
-		assert_eq!(r, Err(ApplyError::CantPay));
+		assert_eq!(r, Err(InvalidTransaction::Payment.into()));
 	}
 
 	#[test]
@@ -186,7 +186,7 @@ mod tests {
 			None,
 		).0.unwrap();
 		let r = ApplyResult::decode(&mut &v.as_encoded()[..]).unwrap();
-		assert_eq!(r, Err(ApplyError::CantPay));
+		assert_eq!(r, Err(InvalidTransaction::Payment.into()));
 	}
 
 	#[test]
@@ -763,7 +763,7 @@ mod tests {
 		let r = WasmExecutor::new()
 			.call(&mut t, 8, COMPACT_CODE, "BlockBuilder_apply_extrinsic", &vec![].and(&xt())).unwrap();
 		let r = ApplyResult::decode(&mut &r[..]).unwrap();
-		assert_eq!(r, Err(ApplyError::CantPay));
+		assert_eq!(r, Err(InvalidTransaction::Payment.into()));
 	}
 
 	#[test]
@@ -784,8 +784,10 @@ mod tests {
 		assert!(r.is_ok());
 		let r = WasmExecutor::new()
 			.call(&mut t, 8, COMPACT_CODE, "BlockBuilder_apply_extrinsic", &vec![].and(&xt())).unwrap();
-		let r = ApplyResult::decode(&mut &r[..]).unwrap();
-		assert_eq!(r, Ok(ApplyOutcome::Success));
+		ApplyResult::decode(&mut &r[..])
+			.unwrap()
+			.expect("Extrinsic could be applied")
+			.expect("Extrinsic did not fail");
 
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - 1 * transfer_fee(&xt()));

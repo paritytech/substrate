@@ -504,7 +504,7 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			ensure!(
 				!total.is_zero(),
-				"stake deposited to present winner and be added to leaderboard should be non-zero"
+				"stake deposited to present winner and be added to leaderboard should be non-zero",
 			);
 
 			let candidate = T::Lookup::lookup(candidate)?;
@@ -1234,7 +1234,7 @@ mod tests {
 			UncheckedExtrinsic = UncheckedExtrinsic
 		{
 			System: system::{Module, Call, Event},
-			Balances: balances::{Module, Call, Event<T>, Config<T>},
+			Balances: balances::{Module, Call, Event<T>, Config<T>, Error},
 			Elections: elections::{Module, Call, Event<T>, Config<T>},
 		}
 	);

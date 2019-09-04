@@ -27,6 +27,13 @@ support::decl_event!(
 	}
 );
 
+support::decl_error! {
+	pub enum Error {
+		TestError,
+		AnotherError
+	}
+}
+
 /// Origin for the system module.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
