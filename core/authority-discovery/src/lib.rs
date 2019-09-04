@@ -308,22 +308,38 @@ where
 			// Process incoming events before triggering new ones.
 			self.handle_dht_events()?;
 
-			if let Ok(Async::Ready(_)) = self.publish_interval.poll() {
+			if let Async::Ready(_) = self
+				.publish_interval
+				.poll()
+				.map_err(Error::PollingTokioTimer)?
+			{
 				// Make sure to call interval.poll until it returns Async::NotReady once. Otherwise, in case one of the
 				// function calls within this block do a `return`, we don't call `interval.poll` again and thereby the
 				// underlying Tokio task is never registered with Tokio's Reactor to be woken up on the next interval
 				// tick.
-				while let Ok(Async::Ready(_)) = self.publish_interval.poll() {}
+				while let Async::Ready(_) = self
+					.publish_interval
+					.poll()
+					.map_err(Error::PollingTokioTimer)?
+				{}
 
 				self.publish_own_ext_addresses()?;
 			}
 
-			if let Ok(Async::Ready(_)) = self.query_interval.poll() {
+			if let Async::Ready(_) = self
+				.query_interval
+				.poll()
+				.map_err(Error::PollingTokioTimer)?
+			{
 				// Make sure to call interval.poll until it returns Async::NotReady once. Otherwise, in case one of the
 				// function calls within this block do a `return`, we don't call `interval.poll` again and thereby the
 				// underlying Tokio task is never registered with Tokio's Reactor to be woken up on the next interval
 				// tick.
-				while let Ok(Async::Ready(_)) = self.query_interval.poll() {}
+				while let Async::Ready(_) = self
+					.query_interval
+					.poll()
+					.map_err(Error::PollingTokioTimer)?
+				{}
 
 				self.request_addresses_of_others()?;
 			}
