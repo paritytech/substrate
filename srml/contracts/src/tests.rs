@@ -33,7 +33,7 @@ use runtime_io::with_externalities;
 use sr_primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, H256};
 use sr_primitives::traits::{BlakeTwo256, Hash, IdentityLookup};
 use sr_primitives::{Perbill, BuildStorage};
-use srml_support::{
+use support::{
 	assert_ok, assert_err, impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types,
 	storage::child, StorageMap, StorageValue, traits::{Currency, Get},
 };
@@ -49,7 +49,7 @@ mod contract {
 	// needs to give a name for the current crate.
 	// This hack is required for `impl_outer_event!`.
 	pub use super::super::*;
-	use srml_support::impl_outer_event;
+	use support::impl_outer_event;
 }
 impl_outer_event! {
 	pub enum MetaEvent for Test {

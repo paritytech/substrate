@@ -24,7 +24,7 @@ use sr_primitives::{
 	traits::IdentityLookup, Perbill,
 	testing::{Header, UintAuthorityId},
 };
-use srml_support::{impl_outer_origin, parameter_types};
+use support::{impl_outer_origin, parameter_types};
 use runtime_io;
 use primitives::{H256, Blake2Hasher};
 

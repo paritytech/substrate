@@ -106,7 +106,7 @@
 //! The Contract module uses the `Currency` trait to handle gas payment, and its types inherit from `Currency`:
 //!
 //! ```
-//! use srml_support::traits::Currency;
+//! use support::traits::Currency;
 //! # pub trait Trait: system::Trait {
 //! # 	type Currency: Currency<Self::AccountId>;
 //! # }
@@ -120,14 +120,14 @@
 //! The Staking module uses the `LockableCurrency` trait to lock a stash account's funds:
 //!
 //! ```
-//! use srml_support::traits::{WithdrawReasons, LockableCurrency};
+//! use support::traits::{WithdrawReasons, LockableCurrency};
 //! use sr_primitives::traits::Bounded;
 //! pub trait Trait: system::Trait {
 //! 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 //! }
 //! # struct StakingLedger<T: Trait> {
 //! # 	stash: <T as system::Trait>::AccountId,
-//! # 	total: <<T as Trait>::Currency as srml_support::traits::Currency<<T as system::Trait>::AccountId>>::Balance,
+//! # 	total: <<T as Trait>::Currency as support::traits::Currency<<T as system::Trait>::AccountId>>::Balance,
 //! # 	phantom: std::marker::PhantomData<T>,
 //! # }
 //! # const STAKING_ID: [u8; 8] = *b"staking ";
@@ -161,13 +161,13 @@
 use rstd::prelude::*;
 use rstd::{cmp, result, mem};
 use codec::{Codec, Encode, Decode};
-use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module};
-use srml_support::traits::{
+use support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module};
+use support::traits::{
 	UpdateBalanceOutcome, Currency, OnFreeBalanceZero, OnUnbalanced,
 	WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 	Imbalance, SignedImbalance, ReservableCurrency, Get,
 };
-use srml_support::dispatch::Result;
+use support::dispatch::Result;
 use sr_primitives::traits::{
 	Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug,
 	Saturating, Bounded, SignedExtension, SaturatedConversion, DispatchError, Convert,

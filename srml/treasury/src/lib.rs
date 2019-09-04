@@ -70,8 +70,8 @@
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use rstd::prelude::*;
-use srml_support::{StorageValue, StorageMap, decl_module, decl_storage, decl_event, ensure, print};
-use srml_support::traits::{
+use support::{StorageValue, StorageMap, decl_module, decl_storage, decl_event, ensure, print};
+use support::traits::{
 	Currency, ExistenceRequirement, Get, Imbalance, OnDilution, OnUnbalanced,
 	ReservableCurrency, WithdrawReason
 };
@@ -357,7 +357,7 @@ mod tests {
 	use super::*;
 
 	use runtime_io::with_externalities;
-	use srml_support::{assert_noop, assert_ok, impl_outer_origin, parameter_types};
+	use support::{assert_noop, assert_ok, impl_outer_origin, parameter_types};
 	use primitives::{H256, Blake2Hasher};
 	use sr_primitives::{Perbill, traits::{BlakeTwo256, OnFinalize, IdentityLookup}, testing::Header};
 

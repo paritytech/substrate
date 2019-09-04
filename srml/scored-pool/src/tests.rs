@@ -19,8 +19,8 @@
 use super::*;
 use mock::*;
 
-use srml_support::{assert_ok, assert_noop};
-use sr_io::with_externalities;
+use support::{assert_ok, assert_noop};
+use runtime_io::with_externalities;
 use sr_primitives::traits::OnInitialize;
 
 type ScoredPool = Module<Test>;

@@ -18,8 +18,8 @@ use crate::{GasSpent, Module, Trait, BalanceOf, NegativeImbalanceOf};
 use rstd::convert::TryFrom;
 use sr_primitives::BLOCK_FULL;
 use sr_primitives::traits::{CheckedMul, Zero, SaturatedConversion, SimpleArithmetic, UniqueSaturatedInto};
-use srml_support::StorageValue;
-use srml_support::traits::{Currency, ExistenceRequirement, Get, Imbalance, OnUnbalanced, WithdrawReason};
+use support::StorageValue;
+use support::traits::{Currency, ExistenceRequirement, Get, Imbalance, OnUnbalanced, WithdrawReason};
 
 #[cfg(test)]
 use std::{any::Any, fmt::Debug};

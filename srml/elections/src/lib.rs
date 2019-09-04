@@ -27,7 +27,7 @@ use rstd::prelude::*;
 use sr_primitives::traits::{Zero, One, StaticLookup, Bounded, Saturating};
 use sr_primitives::weights::SimpleDispatchInfo;
 use runtime_io::print;
-use srml_support::{
+use support::{
 	StorageValue, StorageMap,
 	dispatch::Result, decl_storage, decl_event, ensure, decl_module,
 	traits::{
@@ -1102,7 +1102,7 @@ impl<T: Trait> Module<T> {
 mod tests {
 	use super::*;
 	use std::cell::RefCell;
-	use srml_support::{assert_ok, assert_err, assert_noop, parameter_types};
+	use support::{assert_ok, assert_err, assert_noop, parameter_types};
 	use runtime_io::with_externalities;
 	use primitives::{H256, Blake2Hasher};
 	use sr_primitives::{
@@ -1227,7 +1227,7 @@ mod tests {
 	pub type Block = sr_primitives::generic::Block<Header, UncheckedExtrinsic>;
 	pub type UncheckedExtrinsic = sr_primitives::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
 
-	srml_support::construct_runtime!(
+	support::construct_runtime!(
 		pub enum Test where
 			Block = Block,
 			NodeBlock = Block,

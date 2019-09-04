@@ -125,11 +125,11 @@ use sr_primitives::{KeyTypeId, AppKey};
 use sr_primitives::weights::SimpleDispatchInfo;
 use sr_primitives::traits::{Convert, Zero, Member, OpaqueKeys};
 use sr_staking_primitives::SessionIndex;
-use srml_support::{
+use support::{
 	dispatch::Result, ConsensusEngineId, StorageValue, StorageDoubleMap, for_each_tuple,
 	decl_module, decl_event, decl_storage,
 };
-use srml_support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor}, Parameter};
+use support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor}, Parameter};
 use system::{self, ensure_signed};
 
 #[cfg(test)]
@@ -651,7 +651,7 @@ impl<T: Trait, Inner: FindAuthor<u32>> FindAuthor<T::ValidatorId>
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use srml_support::assert_ok;
+	use support::assert_ok;
 	use runtime_io::with_externalities;
 	use primitives::{Blake2Hasher, crypto::key_types::DUMMY};
 	use sr_primitives::{

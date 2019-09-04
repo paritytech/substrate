@@ -21,7 +21,7 @@
 use super::*;
 use mock::{Balances, ExtBuilder, Runtime, System, info_from_weight, CALL};
 use runtime_io::with_externalities;
-use srml_support::{
+use support::{
 	assert_noop, assert_ok, assert_err,
 	traits::{LockableCurrency, LockIdentifier, WithdrawReason, WithdrawReasons,
 	Currency, ReservableCurrency}

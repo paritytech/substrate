@@ -32,7 +32,7 @@ pub use substrate_finality_grandpa_primitives as fg_primitives;
 
 use rstd::prelude::*;
 use codec::{self as codec, Encode, Decode, Error};
-use srml_support::{
+use support::{
 	decl_event, decl_storage, decl_module, dispatch::Result,
 	storage::StorageValue, storage::StorageMap,
 };

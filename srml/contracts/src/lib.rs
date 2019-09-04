@@ -103,12 +103,12 @@ use runtime_io::blake2_256;
 use sr_primitives::traits::{
 	Hash, StaticLookup, Zero, MaybeSerializeDebug, Member
 };
-use srml_support::dispatch::{Result, Dispatchable};
-use srml_support::{
+use support::dispatch::{Result, Dispatchable};
+use support::{
 	Parameter, StorageMap, StorageValue, decl_module, decl_event, decl_storage, storage::child,
 	parameter_types,
 };
-use srml_support::traits::{OnFreeBalanceZero, OnUnbalanced, Currency, Get};
+use support::traits::{OnFreeBalanceZero, OnUnbalanced, Currency, Get};
 use system::{ensure_signed, RawOrigin, ensure_root};
 use primitives::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
 use timestamp;

@@ -19,7 +19,7 @@
 use super::*;
 
 use std::cell::RefCell;
-use srml_support::{impl_outer_origin, parameter_types};
+use support::{impl_outer_origin, parameter_types};
 use primitives::{H256, Blake2Hasher};
 // The testing primitives are very useful for avoiding having to work with signatures
 // or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
@@ -132,7 +132,7 @@ impl Trait for Test {
 
 // This function basically just builds a genesis storage key/value store according to
 // our desired mockup.
-pub fn new_test_ext() -> sr_io::TestExternalities<Blake2Hasher> {
+pub fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	// We use default for brevity, but you can configure as desired if needed.
 	balances::GenesisConfig::<Test> {

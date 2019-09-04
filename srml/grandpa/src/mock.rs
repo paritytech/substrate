@@ -20,7 +20,7 @@
 
 use sr_primitives::{Perbill, DigestItem, traits::IdentityLookup, testing::{Header, UintAuthorityId}};
 use runtime_io;
-use srml_support::{impl_outer_origin, impl_outer_event, parameter_types};
+use support::{impl_outer_origin, impl_outer_event, parameter_types};
 use primitives::{H256, Blake2Hasher};
 use codec::{Encode, Decode};
 use crate::{AuthorityId, GenesisConfig, Trait, Module, ConsensusLog};

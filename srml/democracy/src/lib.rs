@@ -23,7 +23,7 @@ use rstd::{result, convert::TryFrom};
 use sr_primitives::traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin, Hash};
 use sr_primitives::weights::SimpleDispatchInfo;
 use codec::{Encode, Decode, Input, Output, Error};
-use srml_support::{
+use support::{
 	decl_module, decl_storage, decl_event, ensure, StorageValue, StorageMap, StorageLinkedMap,
 	Parameter, Dispatchable,
 	traits::{
@@ -31,7 +31,7 @@ use srml_support::{
 		OnFreeBalanceZero
 	}
 };
-use srml_support::dispatch::Result;
+use support::dispatch::Result;
 use system::{ensure_signed, ensure_root};
 
 mod vote_threshold;
@@ -970,7 +970,7 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
-	use srml_support::{
+	use support::{
 		impl_outer_origin, impl_outer_dispatch, assert_noop, assert_ok, parameter_types,
 		traits::Contains
 	};

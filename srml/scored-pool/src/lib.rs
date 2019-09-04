@@ -53,7 +53,7 @@
 //! ## Usage
 //!
 //! ```
-//! use srml_support::{decl_module, dispatch::Result};
+//! use support::{decl_module, dispatch::Result};
 //! use system::ensure_signed;
 //! use srml_scored_pool::{self as scored_pool};
 //!
@@ -90,7 +90,7 @@ mod tests;
 
 use codec::{Encode, Decode};
 use rstd::prelude::*;
-use srml_support::{
+use support::{
 	StorageValue, StorageMap, decl_module, decl_storage, decl_event, ensure,
 	traits::{ChangeMembers, InitializeMembers, Currency, Get, ReservableCurrency},
 };

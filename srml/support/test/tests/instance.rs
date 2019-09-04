@@ -16,7 +16,7 @@
 #![recursion_limit="128"]
 
 use runtime_io::{with_externalities, Blake2Hasher};
-use srml_support::{
+use support::{
 	Parameter, traits::Get, parameter_types,
 	sr_primitives::{generic, BuildStorage, traits::{BlakeTwo256, Block as _, Verify}},
 	metadata::{
@@ -48,7 +48,7 @@ mod module1 {
 		type GenericType: Default + Clone + codec::Codec;
 	}
 
-	srml_support::decl_module! {
+	support::decl_module! {
 		pub struct Module<T: Trait<I>, I: InstantiableThing> for enum Call where
 			origin: <T as system::Trait>::Origin,
 			T::BlockNumber: From<u32>
@@ -64,7 +64,7 @@ mod module1 {
 		}
 	}
 
-	srml_support::decl_storage! {
+	support::decl_storage! {
 		trait Store for Module<T: Trait<I>, I: InstantiableThing> as Module1 where
 			T::BlockNumber: From<u32> + std::fmt::Display
 		{
@@ -81,7 +81,7 @@ mod module1 {
 		}
 	}
 
-	srml_support::decl_event! {
+	support::decl_event! {
 		pub enum Event<T, I> where Phantom = std::marker::PhantomData<T> {
 			_Phantom(Phantom),
 			AnotherVariant(u32),
@@ -128,7 +128,7 @@ mod module2 {
 
 	impl<T: Trait<I>, I: Instance> Currency for Module<T, I> {}
 
-	srml_support::decl_module! {
+	support::decl_module! {
 		pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where
 			origin: <T as system::Trait>::Origin
 		{
@@ -136,7 +136,7 @@ mod module2 {
 		}
 	}
 
-	srml_support::decl_storage! {
+	support::decl_storage! {
 		trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Module2 {
 			pub Value config(value): T::Amount;
 			pub Map config(map): map u64 => u64;
@@ -145,7 +145,7 @@ mod module2 {
 		}
 	}
 
-	srml_support::decl_event! {
+	support::decl_event! {
 		pub enum Event<T, I=DefaultInstance> where Amount = <T as Trait<I>>::Amount {
 			Variant(Amount),
 		}
@@ -185,7 +185,7 @@ mod module3 {
 		type Currency2: Currency;
 	}
 
-	srml_support::decl_module! {
+	support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {}
 	}
 }
@@ -244,7 +244,7 @@ impl system::Trait for Runtime {
 	type Event = Event;
 }
 
-srml_support::construct_runtime!(
+support::construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
 		NodeBlock = Block,

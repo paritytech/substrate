@@ -22,8 +22,8 @@ use sr_primitives::{Perbill, traits::{Convert, IdentityLookup}, testing::Header,
 	weights::{DispatchInfo, Weight}};
 use primitives::{H256, Blake2Hasher};
 use runtime_io;
-use srml_support::{impl_outer_origin, parameter_types};
-use srml_support::traits::Get;
+use support::{impl_outer_origin, parameter_types};
+use support::traits::Get;
 use std::cell::RefCell;
 use crate::{GenesisConfig, Module, Trait};
 

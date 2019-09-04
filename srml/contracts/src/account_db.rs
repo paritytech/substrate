@@ -26,8 +26,8 @@ use rstd::collections::btree_map::{BTreeMap, Entry};
 use rstd::prelude::*;
 use runtime_io::blake2_256;
 use sr_primitives::traits::{Bounded, Zero};
-use srml_support::traits::{Currency, Get, Imbalance, SignedImbalance, UpdateBalanceOutcome};
-use srml_support::{storage::child, StorageMap};
+use support::traits::{Currency, Get, Imbalance, SignedImbalance, UpdateBalanceOutcome};
+use support::{storage::child, StorageMap};
 use system;
 
 // Note: we don't provide Option<Contract> because we can't create

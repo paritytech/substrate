@@ -22,9 +22,9 @@
 
 use rstd::{result, prelude::*};
 use rstd::collections::btree_set::BTreeSet;
-use srml_support::{decl_module, decl_storage, for_each_tuple, StorageValue};
-use srml_support::traits::{FindAuthor, VerifySeal, Get};
-use srml_support::dispatch::Result as DispatchResult;
+use support::{decl_module, decl_storage, for_each_tuple, StorageValue};
+use support::traits::{FindAuthor, VerifySeal, Get};
+use support::dispatch::Result as DispatchResult;
 use codec::{Encode, Decode};
 use system::ensure_none;
 use sr_primitives::traits::{Header as HeaderT, One, Zero};
@@ -441,7 +441,7 @@ mod tests {
 	use sr_primitives::testing::Header;
 	use sr_primitives::generic::DigestItem;
 	use sr_primitives::Perbill;
-	use srml_support::{parameter_types, impl_outer_origin, ConsensusEngineId};
+	use support::{parameter_types, impl_outer_origin, ConsensusEngineId};
 
 	impl_outer_origin!{
 		pub enum Origin for Test {}
