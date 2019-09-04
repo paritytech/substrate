@@ -20,9 +20,9 @@ use super::*;
 use runtime_io::with_externalities;
 use sr_primitives::traits::OnInitialize;
 use sr_staking_primitives::offence::{OffenceDetails, OnOffenceHandler};
-use srml_support::{assert_ok, assert_noop, assert_eq_uvec, StorageLinkedMap};
+use support::{assert_ok, assert_noop, assert_eq_uvec, StorageLinkedMap};
 use mock::*;
-use srml_support::traits::{Currency, ReservableCurrency};
+use support::traits::{Currency, ReservableCurrency};
 
 #[test]
 fn basic_setup_works() {

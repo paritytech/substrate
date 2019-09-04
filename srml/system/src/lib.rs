@@ -68,7 +68,7 @@
 //! ### Example - Get random seed and extrinsic count for the current block
 //!
 //! ```
-//! use srml_support::{decl_module, dispatch::Result};
+//! use support::{decl_module, dispatch::Result};
 //! use srml_system::{self as system, ensure_signed};
 //!
 //! pub trait Trait: system::Trait {}
@@ -108,7 +108,7 @@ use sr_primitives::traits::{self, CheckEqual, SimpleArithmetic, Zero, SignedExte
 	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup, One, Bounded, Lookup,
 };
 use primitives::storage::well_known_keys;
-use srml_support::{
+use support::{
 	storage, decl_module, decl_event, decl_storage, StorageDoubleMap, StorageValue, StorageMap,
 	Parameter, for_each_tuple, traits::{Contains, Get}
 };
@@ -1144,7 +1144,7 @@ mod tests {
 	use runtime_io::with_externalities;
 	use primitives::H256;
 	use sr_primitives::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
-	use srml_support::{impl_outer_origin, parameter_types};
+	use support::{impl_outer_origin, parameter_types};
 
 	impl_outer_origin!{
 		pub enum Origin for Test where system = super {}
