@@ -68,7 +68,7 @@ pub use trie_backend::TrieBackend;
 /// Type of changes trie transaction.
 pub type ChangesTrieTransaction<H, N> = (
 	MemoryDB<H>,
-	Option<ChangesTrieCacheAction<<H as Hasher>::Out, N>>,
+	ChangesTrieCacheAction<<H as Hasher>::Out, N>,
 );
 
 /// A wrapper around a child storage key.

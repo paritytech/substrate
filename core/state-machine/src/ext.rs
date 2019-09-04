@@ -81,7 +81,7 @@ where
 	/// This differs from `storage_transaction` behavior, because the moment when
 	/// `storage_changes_root` is called matters + we need to remember additional
 	/// data at this moment (block number).
-	changes_trie_transaction: Option<(MemoryDB<H>, H::Out, Option<ChangesTrieCacheAction<H::Out, N>>)>,
+	changes_trie_transaction: Option<(MemoryDB<H>, H::Out, ChangesTrieCacheAction<H::Out, N>)>,
 	/// Additional externalities for offchain workers.
 	///
 	/// If None, some methods from the trait might not be supported.

@@ -493,7 +493,7 @@ where Block: BlockT<Hash=H256>,
 		update: ChangesTrieTransaction<Blake2Hasher, NumberFor<Block>>,
 	) -> Result<(), client::error::Error> {
 		self.changes_trie_updates = update.0;
-		self.changes_trie_cache_update = update.1;
+		self.changes_trie_cache_update = Some(update.1);
 		Ok(())
 	}
 
@@ -1535,7 +1535,7 @@ mod tests {
 		let mut op = backend.begin_operation().unwrap();
 		backend.begin_state_operation(&mut op, block_id).unwrap();
 		op.set_block_data(header, None, None, NewBlockState::Best).unwrap();
-		op.update_changes_trie((changes_trie_update, None)).unwrap();
+		op.update_changes_trie((changes_trie_update, ChangesTrieCacheAction::DoNothing)).unwrap();
 		backend.commit_operation(op).unwrap();
 
 		header_hash

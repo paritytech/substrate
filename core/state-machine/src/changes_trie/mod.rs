@@ -174,7 +174,7 @@ pub fn build_changes_trie<'a, B: Backend<H>, S: Storage<H, Number>, H: Hasher, N
 	storage: Option<&'a S>,
 	changes: &OverlayedChanges,
 	parent_hash: H::Out,
-) -> Result<Option<(MemoryDB<H>, H::Out, Option<CacheAction<H::Out, Number>>)>, ()>
+) -> Result<Option<(MemoryDB<H>, H::Out, CacheAction<H::Out, Number>)>, ()>
 	where
 		H::Out: Ord + 'static,
 {
@@ -206,6 +206,7 @@ pub fn build_changes_trie<'a, B: Backend<H>, S: Storage<H, Number>, H: Hasher, N
 
 	// prepare cached data
 	let mut cached_data = prepare_cached_build_data(config, block.clone());
+	let needs_changed_keys = cached_data.is_some();
 	cached_data = cached_data
 		.map(|cached_data| cached_data.set_digest_input_blocks(digest_input_blocks));
 
@@ -218,8 +219,10 @@ pub fn build_changes_trie<'a, B: Backend<H>, S: Storage<H, Number>, H: Hasher, N
 			let mut trie = TrieDBMut::<H>::new(&mut mdb, &mut root);
 			let mut storage_changed_keys = HashSet::new();
 			for input_pair in input_pairs {
-				if let Some(key) = input_pair.key() {
-					storage_changed_keys.insert(key.to_vec());
+				if needs_changed_keys {
+					if let Some(key) = input_pair.key() {
+						storage_changed_keys.insert(key.to_vec());
+					}
 				}
 
 				let (key, value) = input_pair.into();
@@ -248,8 +251,10 @@ pub fn build_changes_trie<'a, B: Backend<H>, S: Storage<H, Number>, H: Hasher, N
 
 		let mut storage_changed_keys = HashSet::new();
 		for input_pair in input_pairs {
-			if let Some(key) = input_pair.key() {
-				storage_changed_keys.insert(key.to_vec());
+			if needs_changed_keys {
+				if let Some(key) = input_pair.key() {
+					storage_changed_keys.insert(key.to_vec());
+				}
 			}
 
 			let (key, value) = input_pair.into();
@@ -265,8 +270,10 @@ pub fn build_changes_trie<'a, B: Backend<H>, S: Storage<H, Number>, H: Hasher, N
 
 	let cached_data = cached_data.map(|d| d.complete(block, root.clone()));
 	let cache_action = match is_end_block {
-		false => cached_data.map(CacheAction::CacheBuildData),
-		true => Some(CacheAction::Clear),
+		false => cached_data
+			.map(CacheAction::CacheBuildData)
+			.unwrap_or(CacheAction::DoNothing),
+		true => CacheAction::Clear,
 	};
 	
 	Ok(Some((mdb, root, cache_action)))

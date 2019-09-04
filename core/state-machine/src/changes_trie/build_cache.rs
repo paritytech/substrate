@@ -23,7 +23,8 @@ use std::collections::{HashMap, HashSet};
 /// Helps to avoid read of changes tries from the database when digest trie
 /// is built. It holds changed keys for every block (indexed by changes trie
 /// root) that could be referenced by future digest items. For digest entries
-/// it also holds keys covered by this digest.
+/// it also holds keys covered by this digest. Entries for top level digests
+/// are never created, because they'll never be used to build other digests.
 ///
 /// Entries are pruned from the cache once digest block that is using this entry
 /// is inserted (because digest block will includes all keys from this entry).
@@ -31,13 +32,18 @@ use std::collections::{HashMap, HashSet};
 pub struct BuildCache<H, N> {
 	/// Map of block (implies changes true) number => changes trie root.
 	roots_by_number: HashMap<N, H>,
-	/// Map of changes trie root =>
+	/// Map of changes trie root => set of storage keys that are in this trie.
+	/// The `Option<Vec<u8>>` in inner `HashMap` stands for the child storage key.
+	/// If it is `None`, then the `HashSet` contains keys changed in top-level storage.
+	/// If it is `Some`, then the `HashSet` contains keys changed in child storage, identified by the key.
 	changed_keys: HashMap<H, HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>>,
 }
 
 /// The action to perform when block-with-changes-trie is imported.
 #[derive(Debug, PartialEq)]
 pub enum CacheAction<H, N> {
+	/// No action is required.
+	DoNothing,
 	/// Cache data that has been collected when CT has been built.
 	CacheBuildData(CachedBuildData<H, N>),
 	/// Clear cache from all existing entries. When new CT configuration enacts,
@@ -84,6 +90,7 @@ impl<H, N> BuildCache<H, N>
 	/// Insert data into cache.
 	pub fn perform(&mut self, action: CacheAction<H, N>) {
 		match action {
+			CacheAction::DoNothing => (),
 			CacheAction::CacheBuildData(data) => {
 				if !data.is_top_level_digest {
 					self.roots_by_number.insert(data.block, data.trie_root.clone());
@@ -134,6 +141,9 @@ impl<N> IncompleteCachedBuildData<N> {
 
 	/// Called for digest entries only. Set numbers of blocks that are superseded
 	/// by this new entry.
+	///
+	/// If/when this build data is committed to the cache, entries for these blocks
+	/// will be removed from the cache.
 	pub(crate) fn set_digest_input_blocks(mut self, digest_input_blocks: Vec<N>) -> Self {
 		self.digest_input_blocks = digest_input_blocks;
 		self
