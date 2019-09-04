@@ -342,7 +342,7 @@ fn cache_pruning_strategy<N: From<u32>>(cache: CacheKeyId) -> PruningStrategy<N>
 
 	match cache {
 		// we need to keep changes tries configurations forever (or at least until changes tries,
-		// that were built using this configuration, are not pruned) to make it possible to refer
+		// that were built using this configuration, are pruned) to make it possible to refer
 		// to old changes tries
 		well_known_cache_keys::CHANGES_TRIE_CONFIG => PruningStrategy::NeverPrune,
 		_ => PruningStrategy::ByDepth(PRUNE_DEPTH.into()),
