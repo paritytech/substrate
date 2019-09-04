@@ -110,6 +110,8 @@ pub struct RemoteChangesRequest<Header: HeaderT> {
 	/// Known changes trie roots for the range of blocks [tries_roots.0..max_block].
 	/// Proofs for roots of ascendants of tries_roots.0 are provided by the remote node.
 	pub tries_roots: (Header::Number, Header::Hash, Vec<Header::Hash>),
+	/// Optional Child Storage key to read.
+	pub storage_key: Option<Vec<u8>>,
 	/// Storage key to read.
 	pub key: Vec<u8>,
 	/// Number of times to retry request. None means that default RETRY_COUNT is used.
@@ -307,6 +309,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 				number: request.last_block.0,
 			},
 			remote_max_block,
+			request.storage_key.as_ref().map(Vec::as_slice),
 			&request.key)
 		.map_err(|err| ClientError::ChangesTrieAccessFailed(err))
 	}
@@ -749,7 +752,7 @@ pub mod tests {
 			// 'fetch' changes proof from remote node
 			let key = StorageKey(key);
 			let remote_proof = remote_client.key_changes_proof(
-				begin_hash, end_hash, begin_hash, max_hash, &key
+				begin_hash, end_hash, begin_hash, max_hash, None, &key
 			).unwrap();
 
 			// check proof on local client
@@ -761,6 +764,7 @@ pub mod tests {
 				max_block: (max, max_hash),
 				tries_roots: (begin, begin_hash, local_roots_range),
 				key: key.0,
+				storage_key: None,
 				retry_count: None,
 			};
 			let local_result = local_checker.check_changes_proof(&request, ChangesProof {
@@ -795,7 +799,7 @@ pub mod tests {
 		let b3 = remote_client.block_hash_from_id(&BlockId::Number(3)).unwrap().unwrap();
 		let b4 = remote_client.block_hash_from_id(&BlockId::Number(4)).unwrap().unwrap();
 		let remote_proof = remote_client.key_changes_proof_with_cht_size(
-			b1, b4, b3, b4, &dave, 4
+			b1, b4, b3, b4, None, &dave, 4
 		).unwrap();
 
 		// prepare local checker, having a root of changes trie CHT#0
@@ -814,6 +818,7 @@ pub mod tests {
 			last_block: (4, b4),
 			max_block: (4, b4),
 			tries_roots: (3, b3, vec![remote_roots[2].clone(), remote_roots[3].clone()]),
+			storage_key: None,
 			key: dave.0,
 			retry_count: None,
 		};
@@ -845,7 +850,7 @@ pub mod tests {
 		// 'fetch' changes proof from remote node
 		let key = StorageKey(key);
 		let remote_proof = remote_client.key_changes_proof(
-			begin_hash, end_hash, begin_hash, max_hash, &key).unwrap();
+			begin_hash, end_hash, begin_hash, max_hash, None, &key).unwrap();
 
 		let local_roots_range = local_roots.clone()[(begin - 1) as usize..].to_vec();
 		let request = RemoteChangesRequest::<Header> {
@@ -854,6 +859,7 @@ pub mod tests {
 			last_block: (end, end_hash),
 			max_block: (max, max_hash),
 			tries_roots: (begin, begin_hash, local_roots_range.clone()),
+			storage_key: None,
 			key: key.0,
 			retry_count: None,
 		};
@@ -907,7 +913,7 @@ pub mod tests {
 		let b3 = remote_client.block_hash_from_id(&BlockId::Number(3)).unwrap().unwrap();
 		let b4 = remote_client.block_hash_from_id(&BlockId::Number(4)).unwrap().unwrap();
 		let remote_proof = remote_client.key_changes_proof_with_cht_size(
-			b1, b4, b3, b4, &dave, 4
+			b1, b4, b3, b4, None, &dave, 4
 		).unwrap();
 
 		// fails when changes trie CHT is missing from the local db

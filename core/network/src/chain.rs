@@ -64,6 +64,7 @@ pub trait Client<Block: BlockT>: Send + Sync {
 		last: Block::Hash,
 		min: Block::Hash,
 		max: Block::Hash,
+		storage_key: Option<&StorageKey>,
 		key: &StorageKey
 	) -> Result<ChangesProof<Block::Header>, Error>;
 
@@ -136,9 +137,10 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 		last: Block::Hash,
 		min: Block::Hash,
 		max: Block::Hash,
-		key: &StorageKey
+		storage_key: Option<&StorageKey>,
+		key: &StorageKey,
 	) -> Result<ChangesProof<Block::Header>, Error> {
-		(self as &SubstrateClient<B, E, Block, RA>).key_changes_proof(first, last, min, max, key)
+		(self as &SubstrateClient<B, E, Block, RA>).key_changes_proof(first, last, min, max, storage_key, key)
 	}
 
 	fn is_descendent_of(&self, base: &Block::Hash, block: &Block::Hash) -> Result<bool, Error> {

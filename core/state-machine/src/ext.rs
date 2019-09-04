@@ -319,7 +319,7 @@ where
 		} else {
 			let storage_key = storage_key.as_ref();
 
-			let delta = self.overlay.changes.child_iter(storage_key)
+			let delta = self.overlay.changes.child_iter(Some(storage_key))
 				.map(|(k, v)| (k.to_vec(), v.map(|s| s.to_vec())));
 
 			let root = self.backend.child_storage_root(storage_key, delta).0;

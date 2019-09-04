@@ -29,7 +29,7 @@ use std::collections::HashSet;
 #[cfg(test)]
 use crate::backend::insert_into_memory_db;
 #[cfg(test)]
-use crate::changes_trie::input::InputPair;
+use crate::changes_trie::input::{InputPair, ChildIndex};
 
 /// In-memory implementation of changes trie storage.
 pub struct InMemoryStorage<H: Hasher, Number: BlockNumber> {
@@ -85,10 +85,32 @@ impl<H: Hasher, Number: BlockNumber> InMemoryStorage<H, Number> {
 	}
 
 	#[cfg(test)]
-	pub fn with_inputs(inputs: Vec<(Number, Vec<InputPair<Number>>)>) -> Self {
+	pub fn with_inputs(
+		mut top_inputs: Vec<(Number, Vec<InputPair<Number>>)>,
+		children_inputs: Vec<(Vec<u8>, Vec<(Number, Vec<InputPair<Number>>)>)>,
+	) -> Self {
 		let mut mdb = MemoryDB::default();
 		let mut roots = BTreeMap::new();
-		for (block, pairs) in inputs {
+		for (storage_key, child_input) in children_inputs {
+			for (block, pairs) in child_input {
+				let root = insert_into_memory_db::<H, _>(&mut mdb, pairs.into_iter().map(Into::into));
+		
+				if let Some(root) = root {
+					let ix = if let Some(ix) = top_inputs.iter().position(|v| v.0 == block) {
+						ix
+					} else {
+						top_inputs.push((block.clone(), Default::default()));
+						top_inputs.len() - 1
+					};
+					top_inputs[ix].1.push(InputPair::ChildIndex(
+						ChildIndex { block: block.clone(), storage_key: storage_key.clone() },
+						root.as_ref().to_vec(),
+					));
+				}
+			}
+		}
+
+		for (block, pairs) in top_inputs {
 			let root = insert_into_memory_db::<H, _>(&mut mdb, pairs.into_iter().map(Into::into));
 			if let Some(root) = root {
 				roots.insert(block, root);

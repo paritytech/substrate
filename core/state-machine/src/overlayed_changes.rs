@@ -198,26 +198,35 @@ impl OverlayedChangeSet {
 	}
 
 	/// Iterator over current state of the overlay.
-	pub fn top_iter(&self) -> impl Iterator<Item = (&[u8], Option<&[u8]>)> {
-		self.top_iter_overlay().map(|(k, v)| (k, v.value.as_ref().map(|v| v.as_slice())))
-	}
-
-	/// Iterator over current state of the overlay.
 	pub fn child_iter_overlay(
 		&self,
-		storage_key: &[u8],
+		storage_key: Option<&[u8]>,
 	) -> impl Iterator<Item = (&[u8], &OverlayedValue)> {
-		self.children.get(storage_key)
+		let option_map = if let Some(storage_key) = storage_key.as_ref() {
+			self.children.get(*storage_key)
+		} else {
+			Some(&self.top)
+		};
+		option_map
 			.into_iter()
-			.flat_map(move |child| child.iter()
+			.flat_map(move |map| map.iter()
 				.filter_map(move |(k, v)|
 					v.get(self.history.as_ref()).map(|v| (k.as_slice(), v)))
 			)
 	}
 
 	/// Iterator over current state of the overlay.
-	pub fn child_iter(&self, storage_key: &[u8]) -> impl Iterator<Item = (&[u8], Option<&[u8]>)> {
-		self.child_iter_overlay(storage_key).map(|(k, v)| (k, v.value.as_ref().map(|v| v.as_slice())))
+	pub fn top_iter(&self) -> impl Iterator<Item = (&[u8], Option<&[u8]>)> {
+		self.top_iter_overlay().map(|(k, v)| (k, v.value.as_ref().map(|v| v.as_slice())))
+	}
+
+	/// Iterator over current state of the overlay.
+	pub fn child_iter(
+		&self,
+		storage_key: Option<&[u8]>,
+	) -> impl Iterator<Item = (&[u8], Option<&[u8]>)> {
+		self.child_iter_overlay(storage_key)
+			.map(|(k, v)| (k, v.value.as_ref().map(|v| v.as_slice())))
 	}
 
 	/// Iterator over current state of the overlay.
@@ -467,9 +476,6 @@ impl OverlayedChanges {
 	}
 	
 	/// Consume `OverlayedChanges` and take committed set.
-	///
-	/// Panics:
-	/// Will panic if there are any uncommitted prospective changes.
 	pub fn into_committed(self) -> (
 		impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		impl Iterator<Item=(Vec<u8>, impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>)>,
