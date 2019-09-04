@@ -467,7 +467,8 @@ fn do_finalize_block<B, C, Block: BlockT<Hash=H256>>(
 	// update last finalized block reference
 	data.last_finalized = hash;
 
-	Ok(ImportResult::imported())
+	// we just finalized this block, so if we were importing it, it is now the new best
+	Ok(ImportResult::imported(true))
 }
 
 /// Load light import aux data from the store.

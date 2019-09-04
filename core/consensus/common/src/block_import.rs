@@ -49,6 +49,8 @@ pub struct ImportedAux {
 	pub bad_justification: bool,
 	/// Request a finality proof for the given block.
 	pub needs_finality_proof: bool,
+	/// Whether the block that was imported is the new best block.
+	pub is_new_best: bool,
 }
 
 impl Default for ImportedAux {
@@ -58,15 +60,20 @@ impl Default for ImportedAux {
 			needs_justification: false,
 			bad_justification: false,
 			needs_finality_proof: false,
+			is_new_best: false,
 		}
 	}
 }
 
 impl ImportResult {
-	/// Returns default value for `ImportResult::Imported` with both
-	/// `clear_justification_requests` and `needs_justification` set to false.
-	pub fn imported() -> ImportResult {
-		ImportResult::Imported(ImportedAux::default())
+	/// Returns default value for `ImportResult::Imported` with
+	/// `clear_justification_requests`, `needs_justification`,
+	/// `bad_justification` and `needs_finality_proof` set to false.
+	pub fn imported(is_new_best: bool) -> ImportResult {
+		let mut aux = ImportedAux::default();
+		aux.is_new_best = is_new_best;
+
+		ImportResult::Imported(aux)
 	}
 }
 
