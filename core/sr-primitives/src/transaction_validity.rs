@@ -47,7 +47,7 @@ pub enum InvalidTransaction {
 	AncientBirthBlock,
 	/// The transaction would exhaust the resources of current block.
 	///
-	/// The transaction might be valid, but there is not enough resources left in the current block.
+	/// The transaction might be valid, but there are not enough resources left in the current block.
 	ExhaustsResources,
 	/// Any other custom invalid validity that is not covered by this enum.
 	Custom(u8),
@@ -84,7 +84,7 @@ impl From<InvalidTransaction> for &'static str {
 #[derive(Clone, PartialEq, Eq, Encode, Decode, Copy)]
 #[cfg_attr(feature = "std", derive(Debug, serde::Serialize))]
 pub enum UnknownTransaction {
-	/// Could not lookup some information that are required to validate the transaction.
+	/// Could not lookup some information that is required to validate the transaction.
 	CannotLookup,
 	/// No validator found for the given unsigned transaction.
 	NoUnsignedValidator,
@@ -96,7 +96,7 @@ impl From<UnknownTransaction> for &'static str {
 	fn from(unknown: UnknownTransaction) -> &'static str {
 		match unknown {
 			UnknownTransaction::CannotLookup =>
-				"Could not lookup some information to validate the transaction",
+				"Could not lookup information required to validate the transaction",
 			UnknownTransaction::NoUnsignedValidator =>
 				"Could not find an unsigned validator for the unsigned transaction",
 			UnknownTransaction::Custom(_) => "UnknownTransaction custom error",
@@ -104,7 +104,7 @@ impl From<UnknownTransaction> for &'static str {
 	}
 }
 
-/// The error that can occur while checking the validity of a transaction.
+/// Errors that can occur while checking the validity of a transaction.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, Copy)]
 #[cfg_attr(feature = "std", derive(Debug, serde::Serialize))]
 pub enum TransactionValidityError {
@@ -115,7 +115,7 @@ pub enum TransactionValidityError {
 }
 
 impl TransactionValidityError {
-	/// Returns if the reason for the error was block resource exhaustion.
+	/// Returns `true` if the reason for the error was block resource exhaustion.
 	pub fn exhausted_resources(&self) -> bool {
 		match self {
 			Self::Invalid(e) => e.exhausted_resources(),

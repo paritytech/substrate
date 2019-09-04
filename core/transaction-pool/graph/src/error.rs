@@ -27,7 +27,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
 	/// Transaction is not verifiable yet, but might be in the future.
-	#[display(fmt="Unkown transaction validity: {:?}", _0)]
+	#[display(fmt="Unknown transaction validity: {:?}", _0)]
 	UnknownTransaction(UnknownTransaction),
 	/// Transaction is invalid.
 	#[display(fmt="Invalid transaction validity: {:?}", _0)]

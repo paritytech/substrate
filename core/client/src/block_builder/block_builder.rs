@@ -103,7 +103,7 @@ where
 				ExecutionContext::BlockConstruction,
 				xt.clone()
 			)? {
-				Ok(Ok(())) | Ok(Err(_)) => {
+				Ok(_) => {
 					extrinsics.push(xt);
 					Ok(())
 				}

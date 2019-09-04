@@ -786,8 +786,8 @@ mod tests {
 			.call(&mut t, 8, COMPACT_CODE, "BlockBuilder_apply_extrinsic", &vec![].and(&xt())).unwrap();
 		ApplyResult::decode(&mut &r[..])
 			.unwrap()
-			.expect("Extrensic could be applied")
-			.expect("Extrensic did not fail");
+			.expect("Extrinsic could be applied")
+			.expect("Extrinsic did not fail");
 
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - 1 * transfer_fee(&xt()));
