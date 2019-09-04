@@ -328,7 +328,7 @@ mod test {
 	use primitives::storage::well_known_keys::{EXTRINSIC_INDEX};
 	use crate::backend::InMemory;
 	use crate::changes_trie::{RootsStorage, Configuration, storage::InMemoryStorage};
-	use crate::changes_trie::build_cache::{CacheAction, IncompleteCachedBuildData};
+	use crate::changes_trie::build_cache::{IncompleteCacheAction, IncompleteCachedBuildData};
 	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet};
 	use super::*;
 
@@ -705,13 +705,13 @@ mod test {
 		// "2" child storage:
 		// (keys 105, 106) are now added to block#4 => they appear in l2 digest at block 16
 		let trie_root4 = storage.root(&parent, 4).unwrap().unwrap();
-		let cached_data4 = IncompleteCachedBuildData::new(false)
+		let cached_data4 = IncompleteCacheAction::CacheBuildData(IncompleteCachedBuildData::new())
 			.set_digest_input_blocks(vec![1, 2, 3])
 			.insert(None, vec![vec![100], vec![102]].into_iter().collect())
 			.insert(Some(b"1".to_vec()), vec![vec![103], vec![104]].into_iter().collect())
 			.insert(Some(b"2".to_vec()), vec![vec![105], vec![106]].into_iter().collect())
-			.complete(4, trie_root4);
-		storage.cache_mut().perform(CacheAction::CacheBuildData(cached_data4));
+			.complete(4, &trie_root4);
+		storage.cache_mut().perform(cached_data4);
 
 		let (root_changes_trie_nodes, child_changes_tries_nodes, _) = prepare_input(
 			&backend,

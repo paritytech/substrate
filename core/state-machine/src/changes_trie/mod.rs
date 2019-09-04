@@ -73,7 +73,7 @@ use num_traits::{One, Zero};
 use codec::{Decode, Encode};
 use primitives;
 use crate::changes_trie::build::prepare_input;
-use crate::changes_trie::build_cache::IncompleteCachedBuildData;
+use crate::changes_trie::build_cache::{IncompleteCachedBuildData, IncompleteCacheAction};
 use crate::overlayed_changes::OverlayedChanges;
 use trie::{MemoryDB, DBValue, TrieMut};
 use trie::trie_types::TrieDBMut;
@@ -193,7 +193,6 @@ pub fn build_changes_trie<'a, B: Backend<H>, S: Storage<H, Number>, H: Hasher, N
 	// build_anchor error should not be considered fatal
 	let parent = storage.build_anchor(parent_hash).map_err(|_| ())?;
 	let block = parent.number.clone() + One::one();
-	let is_end_block = Some(&block) == config.end.as_ref();
 
 	// storage errors are considered fatal (similar to situations when runtime fetches values from storage)
 	let (input_pairs, child_input_pairs, digest_input_blocks) = prepare_input::<B, H, Number>(
@@ -205,10 +204,9 @@ pub fn build_changes_trie<'a, B: Backend<H>, S: Storage<H, Number>, H: Hasher, N
 	).expect("changes trie: storage access is not allowed to fail within runtime");
 
 	// prepare cached data
-	let mut cached_data = prepare_cached_build_data(config, block.clone());
-	let needs_changed_keys = cached_data.is_some();
-	cached_data = cached_data
-		.map(|cached_data| cached_data.set_digest_input_blocks(digest_input_blocks));
+	let mut cache_action = prepare_cached_build_data(config, block.clone());
+	let needs_changed_keys = cache_action.collects_changed_keys();
+	cache_action = cache_action.set_digest_input_blocks(digest_input_blocks);
 
 	let mut mdb = MemoryDB::default();
 	let mut child_roots = Vec::with_capacity(child_input_pairs.len());
@@ -231,11 +229,10 @@ pub fn build_changes_trie<'a, B: Backend<H>, S: Storage<H, Number>, H: Hasher, N
 					.expect("changes trie: insertion to trie is not allowed to fail within runtime");
 			}
 
-			cached_data = cached_data
-				.map(|cached_data| cached_data.insert(
-					Some(child_index.storage_key.clone()),
-					storage_changed_keys,
-				));
+			cache_action = cache_action.insert(
+				Some(child_index.storage_key.clone()),
+				storage_changed_keys,
+			);
 		}
 		if not_empty {
 			child_roots.push(input::InputPair::ChildIndex(child_index, root.as_ref().to_vec()));
@@ -261,21 +258,13 @@ pub fn build_changes_trie<'a, B: Backend<H>, S: Storage<H, Number>, H: Hasher, N
 			trie.insert(&key, &value)
 				.expect("changes trie: insertion to trie is not allowed to fail within runtime");
 		}
-		cached_data = cached_data
-			.map(|cached_data| cached_data.insert(
-				None,
-				storage_changed_keys,
-			));
+		cache_action = cache_action.insert(
+			None,
+			storage_changed_keys,
+		);
 	}
 
-	let cached_data = cached_data.map(|d| d.complete(block, root.clone()));
-	let cache_action = match is_end_block {
-		false => cached_data
-			.map(CacheAction::CacheBuildData)
-			.unwrap_or(CacheAction::DoNothing),
-		true => CacheAction::Clear,
-	};
-	
+	let cache_action = cache_action.complete(block, &root);
 	Ok(Some((mdb, root, cache_action)))
 }
 
@@ -283,29 +272,27 @@ pub fn build_changes_trie<'a, B: Backend<H>, S: Storage<H, Number>, H: Hasher, N
 fn prepare_cached_build_data<Number: BlockNumber>(
 	config: ConfigurationRange<Number>,
 	block: Number,
-) -> Option<IncompleteCachedBuildData<Number>> {
+) -> IncompleteCacheAction<Number> {
 	// when digests are not enabled in configuration, we do not need to cache anything
 	// because it'll never be used again for building other tries
+	// => let's clear the cache
 	if !config.config.is_digest_build_enabled() {
-		return None;
+		return IncompleteCacheAction::Clear;
 	}
 
-	// when this is the last block where current configuration is active => there
-	// are no reason to cache anything
+	// when this is the last block where current configuration is active
+	// => let's clear the cache
 	if config.end.as_ref() == Some(&block) {
-		return None;
+		return IncompleteCacheAction::Clear;
 	}
 
 	// we do not need to cache anything when top-level digest trie is created, because
 	// it'll never be used again for building other tries
-	//
-	// but we still want to use cache data to purge obsolete entries from the cache
-	let is_top_level_digest = match config.config.digest_level_at_block(config.zero.clone(), block) {
-		Some((digest_level, _, _)) => digest_level == config.config.digest_levels,
-		_ => false,
-	};
-
-	Some(IncompleteCachedBuildData::new(is_top_level_digest))
+	// => let's clear the cache
+	match config.config.digest_level_at_block(config.zero.clone(), block) {
+		Some((digest_level, _, _)) if digest_level == config.config.digest_levels => IncompleteCacheAction::Clear,
+		_ => IncompleteCacheAction::CacheBuildData(IncompleteCachedBuildData::new()),
+	}
 }
 
 #[cfg(test)]
@@ -313,31 +300,32 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn build_data_is_not_cached_when_digests_are_disabled() {
+	fn cache_is_cleared_when_digests_are_disabled() {
 		let config = Configuration { digest_interval: 0, digest_levels: 0 };
 		let config_range = ConfigurationRange { zero: 0, end: None, config: &config };
-		assert_eq!(prepare_cached_build_data(config_range, 8u32), None);
+		assert_eq!(prepare_cached_build_data(config_range, 8u32), IncompleteCacheAction::Clear);
 	}
 
 	#[test]
 	fn build_data_is_cached_when_digests_are_enabled() {
 		let config = Configuration { digest_interval: 8, digest_levels: 2 };
 		let config_range = ConfigurationRange { zero: 0, end: None, config: &config };
-		assert_eq!(prepare_cached_build_data(config_range.clone(), 4u32).unwrap().is_top_level_digest(), false);
-		assert_eq!(prepare_cached_build_data(config_range, 8u32).unwrap().is_top_level_digest(), false);
+		assert!(prepare_cached_build_data(config_range.clone(), 4u32).collects_changed_keys());
+		assert!(prepare_cached_build_data(config_range.clone(), 7u32).collects_changed_keys());
+		assert!(prepare_cached_build_data(config_range, 8u32).collects_changed_keys());
 	}
 
 	#[test]
-	fn build_data_is_not_cached_when_digests_are_enabled_and_top_level_digest_is_built() {
+	fn cache_is_cleared_when_digests_are_enabled_and_top_level_digest_is_built() {
 		let config = Configuration { digest_interval: 8, digest_levels: 2 };
 		let config_range = ConfigurationRange { zero: 0, end: None, config: &config };
-		assert_eq!(prepare_cached_build_data(config_range, 64u32).unwrap().is_top_level_digest(), true);
+		assert_eq!(prepare_cached_build_data(config_range, 64u32), IncompleteCacheAction::Clear);
 	}
 
 	#[test]
-	fn build_data_is_not_cached_when_end_block_of_configuration_is_built() {
+	fn cache_is_cleared_when_end_block_of_configuration_is_built() {
 		let config = Configuration { digest_interval: 8, digest_levels: 2 };
 		let config_range = ConfigurationRange { zero: 0, end: Some(4u32), config: &config };
-		assert_eq!(prepare_cached_build_data(config_range.clone(), 4u32), None);
+		assert_eq!(prepare_cached_build_data(config_range.clone(), 4u32), IncompleteCacheAction::Clear);
 	}
 }
