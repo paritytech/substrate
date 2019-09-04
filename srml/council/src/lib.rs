@@ -62,6 +62,8 @@ mod tests {
 
 	impl_outer_dispatch! {
 		pub enum Call for Test where origin: Origin {
+			type Error = Error;
+
 			balances::Balances,
 			democracy::Democracy,
 		}
@@ -115,6 +117,7 @@ mod tests {
 		type Header = Header;
 		type WeightMultiplierUpdate = ();
 		type Event = Event;
+		type Error = Error;
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type MaximumBlockLength = MaximumBlockLength;
@@ -136,6 +139,7 @@ mod tests {
 		type TransactionPayment = ();
 		type TransferPayment = ();
 		type DustRemoval = ();
+		type Error = Error;
 		type ExistentialDeposit = ExistentialDeposit;
 		type TransferFee = TransferFee;
 		type CreationFee = CreationFee;

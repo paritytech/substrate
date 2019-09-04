@@ -37,9 +37,9 @@ pub fn grandpa_log(log: ConsensusLog<u64>) -> DigestItem<H256> {
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug, Decode, Encode)]
 pub struct Test;
+
 impl Trait for Test {
 	type Event = TestEvent;
-
 }
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -53,7 +53,7 @@ impl system::Trait for Test {
 	type BlockNumber = u64;
 	type Call = ();
 	type Hash = H256;
-	type Hashing = ::sr_primitives::traits::BlakeTwo256;
+	type Hashing = sr_primitives::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;

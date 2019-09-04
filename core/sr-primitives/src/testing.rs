@@ -20,14 +20,14 @@ use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializ
 use std::{fmt::Debug, ops::Deref, fmt};
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{
-	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys, DispatchError, DispatchResult,
-	ValidateUnsigned, SignedExtension, Dispatchable,
+	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys, ValidateUnsigned,
+	SignedExtension, Dispatchable,
 };
-use crate::{generic, KeyTypeId};
+use crate::{generic, KeyTypeId, ApplyResult};
 use crate::weights::{GetDispatchInfo, DispatchInfo};
 pub use primitives::H256;
 use primitives::{crypto::{CryptoType, Dummy, key_types, Public}, U256};
-use crate::transaction_validity::TransactionValidity;
+use crate::transaction_validity::{TransactionValidity, TransactionValidityError};
 
 /// Authority Id
 #[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug, Hash, Serialize, Deserialize)]
@@ -271,7 +271,7 @@ impl<Call, Extra> Debug for TestXt<Call, Extra> {
 
 impl<Call: Codec + Sync + Send, Context, Extra> Checkable<Context> for TestXt<Call, Extra> {
 	type Checked = Self;
-	fn check(self, _: &Context) -> Result<Self::Checked, &'static str> { Ok(self) }
+	fn check(self, _: &Context) -> Result<Self::Checked, TransactionValidityError> { Ok(self) }
 }
 impl<Call: Codec + Sync + Send, Extra> traits::Extrinsic for TestXt<Call, Extra> {
 	type Call = Call;
@@ -289,7 +289,7 @@ impl<Call: Codec + Sync + Send, Extra> traits::Extrinsic for TestXt<Call, Extra>
 impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 	Call: 'static + Sized + Send + Sync + Clone + Eq + Codec + Debug + Dispatchable<Origin=Origin>,
 	Extra: SignedExtension<AccountId=u64, Call=Call>,
-	Origin: From<Option<u64>>
+	Origin: From<Option<u64>>,
 {
 	type AccountId = u64;
 	type Call = Call;
@@ -297,19 +297,21 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 	fn sender(&self) -> Option<&Self::AccountId> { self.0.as_ref().map(|x| &x.0) }
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
-	fn validate<U: ValidateUnsigned<Call=Self::Call>>(&self,
+	fn validate<U: ValidateUnsigned<Call=Self::Call>>(
+		&self,
 		_info: DispatchInfo,
 		_len: usize,
 	) -> TransactionValidity {
-		TransactionValidity::Valid(Default::default())
+		Ok(Default::default())
 	}
 
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
-	fn dispatch(self,
+	fn apply(
+		self,
 		info: DispatchInfo,
 		len: usize,
-	) -> Result<DispatchResult, DispatchError> {
+	) -> ApplyResult {
 		let maybe_who = if let Some((who, extra)) = self.0 {
 			Extra::pre_dispatch(extra, &who, &self.1, info, len)?;
 			Some(who)
@@ -317,7 +319,8 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 			Extra::pre_dispatch_unsigned(&self.1, info, len)?;
 			None
 		};
-		Ok(self.1.dispatch(maybe_who.into()))
+
+		Ok(self.1.dispatch(maybe_who.into()).map_err(Into::into))
 	}
 }
 
