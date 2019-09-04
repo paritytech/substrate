@@ -18,7 +18,7 @@
 
 use std::collections::HashMap;
 use std::iter::FromIterator;
-use crate::{backend::{Backend, InMemory}};
+use crate::backend::{Backend, InMemory};
 use hash_db::Hasher;
 use trie::{TrieConfiguration, default_child_trie_root};
 use trie::trie_types::Layout;
