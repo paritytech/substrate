@@ -879,11 +879,15 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			fork_choice,
 		);
 
-		telemetry!(SUBSTRATE_INFO; "block.import";
-			"height" => height,
-			"best" => ?hash,
-			"origin" => ?origin
-		);
+		if let Ok(ImportResult::Imported(ref aux)) = result {
+			if aux.is_new_best {
+				telemetry!(SUBSTRATE_INFO; "block.import";
+					"height" => height,
+					"best" => ?hash,
+					"origin" => ?origin
+				);
+			}
+		}
 
 		result
 	}
@@ -914,19 +918,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		// the block is lower than our last finalized block so it must revert
 		// finality, refusing import.
 		if *import_headers.post().number() <= info.finalized_number {
-			return Err(error::Error::NotInFinalizedChain);
-		}
-
-		// find tree route from last finalized to given block.
-		let route_from_finalized = crate::blockchain::tree_route(
-			|id| self.header(&id)?.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id))),
-			BlockId::Hash(info.finalized_hash),
-			BlockId::Hash(parent_hash),
-		)?;
-
-		// the block being imported retracts the last finalized block, refusing to
-		// import.
-		if !route_from_finalized.retracted().is_empty() {
 			return Err(error::Error::NotInFinalizedChain);
 		}
 
@@ -998,7 +989,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			operation.notify_imported = Some((hash, origin, import_headers.into_post(), is_new_best, storage_changes));
 		}
 
-		Ok(ImportResult::imported())
+		Ok(ImportResult::imported(is_new_best))
 	}
 
 	fn block_execution(
@@ -1513,7 +1504,7 @@ impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Blo
 			BlockStatus::KnownBad => return Ok(ImportResult::KnownBad),
 		}
 
-		Ok(ImportResult::imported())
+		Ok(ImportResult::imported(false))
 	}
 }
 
@@ -1541,7 +1532,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 	}
 }
 
-impl<B, E, Block, RA> Finalizer<Block, Blake2Hasher, B> for Client<B, E, Block, RA> where 
+impl<B, E, Block, RA> Finalizer<Block, Blake2Hasher, B> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
 	Block: BlockT<Hash=H256>,
@@ -1565,7 +1556,7 @@ impl<B, E, Block, RA> Finalizer<Block, Blake2Hasher, B> for Client<B, E, Block, 
 	}
 }
 
-impl<B, E, Block, RA> Finalizer<Block, Blake2Hasher, B> for &Client<B, E, Block, RA> where 
+impl<B, E, Block, RA> Finalizer<Block, Blake2Hasher, B> for &Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
 	Block: BlockT<Hash=H256>,
@@ -1846,7 +1837,7 @@ impl<B, E, Block, RA> backend::AuxStore for &Client<B, E, Block, RA>
 		B: backend::Backend<Block, Blake2Hasher>,
 		E: CallExecutor<Block, Blake2Hasher>,
 		Block: BlockT<Hash=H256>,
-{ 
+{
 
 	fn insert_aux<
 		'a,

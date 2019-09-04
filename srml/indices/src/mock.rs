@@ -23,7 +23,7 @@ use ref_thread_local::{ref_thread_local, RefThreadLocal};
 use sr_primitives::testing::Header;
 use sr_primitives::Perbill;
 use primitives::{H256, Blake2Hasher};
-use srml_support::{impl_outer_origin, parameter_types};
+use support::{impl_outer_origin, parameter_types};
 use {runtime_io, system};
 use crate::{GenesisConfig, Module, Trait, IsDeadAccount, OnNewAccount, ResolveHint};
 
