@@ -710,8 +710,12 @@ where
 		self
 	}
 
-	fn cached_changed_keys(&self, root: &H256) -> Option<HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>> {
-		self.cache.read().get(root).cloned()
+	fn with_cached_changed_keys(
+		&self,
+		root: &H256,
+		functor: &mut dyn FnMut(&HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>),
+	) -> bool {
+		self.cache.read().with_changed_keys(root, functor)
 	}
 
 	fn get(&self, key: &H256, _prefix: Prefix) -> Result<Option<DBValue>, String> {

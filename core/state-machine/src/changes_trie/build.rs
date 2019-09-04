@@ -245,21 +245,26 @@ fn prepare_digest_input<'a, H, Number>(
 			};
 
 			// try to get all updated keys from cache
-			if let Some(changed_keys) = storage.cached_changed_keys(&trie_root) {
-				for (storage_key, changed_keys) in changed_keys {
-					let map = match storage_key {
-						Some(storage_key) => child_map
-							.entry(ChildIndex::<Number> {
-								block: block.clone(),
-								storage_key,
-							})
-							.or_default(),
-						None => &mut map,
-					};
-					for changed_key in changed_keys {
-						insert_to_map(map, changed_key);
+			let populated_from_cache = storage.with_cached_changed_keys(
+				&trie_root,
+				&mut |changed_keys| {
+					for (storage_key, changed_keys) in changed_keys {
+						let map = match storage_key {
+							Some(storage_key) => child_map
+								.entry(ChildIndex::<Number> {
+									block: block.clone(),
+									storage_key: storage_key.clone(),
+								})
+								.or_default(),
+							None => &mut map,
+						};
+						for changed_key in changed_keys.iter().cloned() {
+							insert_to_map(map, changed_key);
+						}
 					}
 				}
+			);
+			if populated_from_cache {
 				return Ok((map, child_map));
 			}
 

@@ -636,8 +636,12 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				self
 			}
 
-			fn cached_changed_keys(&self, root: &H256) -> Option<HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>> {
-				self.storage.cached_changed_keys(root)
+			fn with_cached_changed_keys(
+				&self,
+				root: &H256,
+				functor: &mut dyn FnMut(&HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>),
+			) -> bool {
+				self.storage.with_cached_changed_keys(root, functor)
 			}
 
 			fn get(&self, key: &H256, prefix: Prefix) -> Result<Option<DBValue>, String> {

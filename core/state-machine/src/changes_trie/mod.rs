@@ -134,8 +134,13 @@ pub trait RootsStorage<H: Hasher, Number: BlockNumber>: Send + Sync {
 pub trait Storage<H: Hasher, Number: BlockNumber>: RootsStorage<H, Number> {
 	/// Casts from self reference to RootsStorage reference.
 	fn as_roots_storage(&self) -> &dyn RootsStorage<H, Number>;
-	/// Get cached changed keys at trie with given root. Returns None if entry is missing from the cache.
-	fn cached_changed_keys(&self, root: &H::Out) -> Option<HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>>;
+	/// Execute given functor with cached entry for given trie root.
+	/// Returns true if the functor has been called (cache entry exists) and false otherwise.
+	fn with_cached_changed_keys(
+		&self,
+		root: &H::Out,
+		functor: &mut dyn FnMut(&HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>),
+	) -> bool;
 	/// Get a trie node.
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String>;
 }

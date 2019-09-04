@@ -91,6 +91,22 @@ impl<H, N> BuildCache<H, N>
 		self.changed_keys.get(&root)
 	}
 
+	/// Execute given functor with cached entry for given block.
+	/// Returns true if the functor has been called and false otherwise.
+	pub fn with_changed_keys(
+		&self,
+		root: &H,
+		functor: &mut dyn FnMut(&HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>),
+	) -> bool {
+		match self.changed_keys.get(&root) {
+			Some(changed_keys) => {
+				functor(changed_keys);
+				true
+			},
+			None => false,
+		}
+	}
+
 	/// Insert data into cache.
 	pub fn perform(&mut self, action: CacheAction<H, N>) {
 		match action {

@@ -766,8 +766,12 @@ impl<Block, H> state_machine::ChangesTrieStorage<H, NumberFor<Block>> for Change
 		self
 	}
 
-	fn cached_changed_keys(&self, _root: &H::Out) -> Option<HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>> {
-		None
+	fn with_cached_changed_keys(
+		&self,
+		_root: &H::Out,
+		_functor: &mut dyn FnMut(&HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>),
+	) -> bool {
+		false
 	}
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<state_machine::DBValue>, String> {

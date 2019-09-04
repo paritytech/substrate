@@ -176,8 +176,12 @@ impl<H: Hasher, Number: BlockNumber> Storage<H, Number> for InMemoryStorage<H, N
 		self
 	}
 
-	fn cached_changed_keys(&self, root: &H::Out) -> Option<HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>> {
-		self.cache.get(root).cloned()
+	fn with_cached_changed_keys(
+		&self,
+		root: &H::Out,
+		functor: &mut dyn FnMut(&HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>),
+	) -> bool {
+		self.cache.with_changed_keys(root, functor)
 	}
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
