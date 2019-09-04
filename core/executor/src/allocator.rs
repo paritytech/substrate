@@ -477,10 +477,9 @@ mod tests {
 		let ptr = heap.allocate(8);
 
 		// then
-			match ptr.unwrap_err() {
-				Error::AllocatorOutOfSpace => {},
-				e => panic!("Expected allocator out of space error, got: {:?}", e),
-			}
+		match ptr.unwrap_err() {
+			Error::AllocatorOutOfSpace => {},
+			e => panic!("Expected allocator out of space error, got: {:?}", e),
 		}
 	}
 
