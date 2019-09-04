@@ -879,11 +879,15 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			fork_choice,
 		);
 
-		telemetry!(SUBSTRATE_INFO; "block.import";
-			"height" => height,
-			"best" => ?hash,
-			"origin" => ?origin
-		);
+		if let Ok(ImportResult::Imported(ref aux)) = result {
+			if aux.is_new_best {
+				telemetry!(SUBSTRATE_INFO; "block.import";
+					"height" => height,
+					"best" => ?hash,
+					"origin" => ?origin
+				);
+			}
+		}
 
 		result
 	}
@@ -985,7 +989,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			operation.notify_imported = Some((hash, origin, import_headers.into_post(), is_new_best, storage_changes));
 		}
 
-		Ok(ImportResult::imported())
+		Ok(ImportResult::imported(is_new_best))
 	}
 
 	fn block_execution(
@@ -1500,7 +1504,7 @@ impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Blo
 			BlockStatus::KnownBad => return Ok(ImportResult::KnownBad),
 		}
 
-		Ok(ImportResult::imported())
+		Ok(ImportResult::imported(false))
 	}
 }
 

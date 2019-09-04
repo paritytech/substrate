@@ -1011,6 +1011,7 @@ fn allows_reimporting_change_blocks() {
 			clear_justification_requests: false,
 			bad_justification: false,
 			needs_finality_proof: false,
+			is_new_best: true,
 		}),
 	);
 
@@ -1059,6 +1060,7 @@ fn test_bad_justification() {
 			needs_justification: true,
 			clear_justification_requests: false,
 			bad_justification: true,
+			is_new_best: true,
 			..Default::default()
 		}),
 	);
