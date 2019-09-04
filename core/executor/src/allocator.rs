@@ -477,9 +477,7 @@ mod tests {
 		let ptr = heap.allocate(8);
 
 		// then
-		assert_eq!(ptr.is_err(), true);
-		if let Err(err) = ptr {
-			match err {
+			match ptr.unwrap_err() {
 				Error::AllocatorOutOfSpace => {},
 				e => panic!("Expected allocator out of space error, got: {:?}", e),
 			}
