@@ -27,7 +27,7 @@ extern crate bitmask;
 #[cfg(feature = "std")]
 pub use serde;
 #[doc(hidden)]
-pub use sr_std as rstd;
+pub use rstd;
 #[doc(hidden)]
 pub use codec;
 #[cfg(feature = "std")]
@@ -35,11 +35,11 @@ pub use codec;
 pub use once_cell;
 #[doc(hidden)]
 pub use paste;
+#[cfg(feature = "std")]
+#[doc(hidden)]
+pub use runtime_io::with_storage;
 
-pub use self::storage::hashed::generator::{
-	HashedStorage, Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat
-};
-pub use self::storage::unhashed::generator::UnhashedStorage;
+pub use self::storage::hashed::{Twox256, Twox128, Blake2_256, Blake2_128, Twox64Concat};
 
 #[macro_use]
 pub mod dispatch;
@@ -58,17 +58,16 @@ mod runtime;
 pub mod inherent;
 #[macro_use]
 pub mod unsigned;
+#[macro_use]
+pub mod error;
 mod double_map;
 pub mod traits;
 
-pub use self::storage::{
-	StorageValue, StorageMap, EnumerableStorageMap, StorageDoubleMap, AppendableStorageMap,
-	DecodeLengthStorageMap,
-};
+pub use self::storage::{StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap};
 pub use self::hashable::Hashable;
-pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
+pub use self::dispatch::{Parameter, Callable, IsSubType};
 pub use self::double_map::StorageDoubleMapWithHasher;
-pub use runtime_io::{print, storage_root};
+pub use runtime_io::{print, storage_root, Printable};
 pub use sr_primitives::{self, ConsensusEngineId};
 
 /// Macro for easily creating a new implementation of the `Get` trait. Use similarly to
@@ -131,7 +130,7 @@ macro_rules! fail {
 /// Used as `ensure!(expression_to_ensure, expression_to_return_on_false)`.
 #[macro_export]
 macro_rules! ensure {
-	( $x:expr, $y:expr ) => {{
+	( $x:expr, $y:expr $(,)? ) => {{
 		if !$x {
 			$crate::fail!($y);
 		}
@@ -145,7 +144,10 @@ macro_rules! ensure {
 #[macro_export]
 #[cfg(feature = "std")]
 macro_rules! assert_noop {
-	( $x:expr , $y:expr ) => {
+	(
+		$x:expr,
+		$y:expr $(,)?
+	) => {
 		let h = $crate::storage_root();
 		$crate::assert_err!($x, $y);
 		assert_eq!(h, $crate::storage_root());
@@ -162,7 +164,7 @@ macro_rules! assert_noop {
 #[macro_export]
 #[cfg(feature = "std")]
 macro_rules! assert_err {
-	( $x:expr , $y:expr ) => {
+	( $x:expr , $y:expr $(,)? ) => {
 		assert_eq!($x, Err($y));
 	}
 }

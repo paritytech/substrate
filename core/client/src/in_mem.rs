@@ -223,7 +223,7 @@ impl<Block: BlockT> Blockchain<Block> {
 				None
 			} else {
 				let route = crate::blockchain::tree_route(
-					self,
+					|id| self.header(id)?.ok_or_else(|| error::Error::UnknownBlock(format!("{:?}", id))),
 					BlockId::Hash(best_hash),
 					BlockId::Hash(*header.parent_hash()),
 				)?;
@@ -717,6 +717,10 @@ where
 		self.blockchain.expect_block_number_from_id(block)
 			.map(|num| num.is_zero())
 			.unwrap_or(false)
+	}
+
+	fn remote_blockchain(&self) -> Arc<dyn crate::light::blockchain::RemoteBlockchain<Block>> {
+		unimplemented!()
 	}
 }
 

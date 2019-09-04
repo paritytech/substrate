@@ -16,10 +16,8 @@
 
 //! Authoring RPC module errors.
 
-use client;
-use transaction_pool::txpool;
-use crate::rpc;
 use crate::errors;
+use jsonrpc_core as rpc;
 
 /// Author RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -28,8 +26,10 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
 	/// Client error.
-	Client(client::error::Error),
+	#[display(fmt="Client error: {}", _0)]
+	Client(Box<dyn std::error::Error + Send>),
 	/// Transaction pool error,
+	#[display(fmt="Transaction pool error: {}", _0)]
 	Pool(txpool::error::Error),
 	/// Verification error
 	#[display(fmt="Extrinsic verification error: {}", _0)]
@@ -54,7 +54,7 @@ pub enum Error {
 impl std::error::Error for Error {
 	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
 		match self {
-			Error::Client(ref err) => Some(err),
+			Error::Client(ref err) => Some(&**err),
 			Error::Pool(ref err) => Some(err),
 			Error::Verification(ref err) => Some(&**err),
 			_ => None,
@@ -101,15 +101,15 @@ impl From<Error> for rpc::Error {
 				message: format!("Verification Error: {}", e).into(),
 				data: Some(format!("{:?}", e).into()),
 			},
-			Error::Pool(PoolError::InvalidTransaction(code)) => rpc::Error {
+			Error::Pool(PoolError::InvalidTransaction(e)) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_INVALID_TX),
 				message: "Invalid Transaction".into(),
-				data: Some(code.into()),
+				data: serde_json::to_value(e).ok(),
 			},
-			Error::Pool(PoolError::UnknownTransactionValidity(code)) => rpc::Error {
+			Error::Pool(PoolError::UnknownTransaction(e)) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_UNKNOWN_VALIDITY),
 				message: "Unknown Transaction Validity".into(),
-				data: Some(code.into()),
+				data: serde_json::to_value(e).ok(),
 			},
 			Error::Pool(PoolError::TemporarilyBanned) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_TEMPORARILY_BANNED),
@@ -133,7 +133,7 @@ impl From<Error> for rpc::Error {
 			},
 			Error::Pool(PoolError::ImmediatelyDropped) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_IMMEDIATELY_DROPPED),
-				message: "Immediately Dropped" .into(),
+				message: "Immediately Dropped".into(),
 				data: Some("The transaction couldn't enter the pool because of the limit".into()),
 			},
 			Error::UnsupportedKeyType => rpc::Error {

@@ -49,7 +49,7 @@ pub use timestamp;
 
 use rstd::{result, prelude::*};
 use codec::{Encode, Decode};
-use srml_support::{
+use support::{
 	decl_storage, decl_module, Parameter, storage::StorageValue, traits::{Get, FindAuthor},
 	ConsensusEngineId,
 };
@@ -155,15 +155,7 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(authorities): Vec<T::AuthorityId>;
-		build(|
-			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
-			config: &GenesisConfig<T>
-		| {
-			runtime_io::with_storage(
-				storage,
-				|| Module::<T>::initialize_authorities(&config.authorities),
-			);
-		})
+		build(|config| Module::<T>::initialize_authorities(&config.authorities))
 	}
 }
 
