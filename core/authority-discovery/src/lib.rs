@@ -154,7 +154,7 @@ where
 		let (signature, authority_id) = self
 			.client
 			.runtime_api()
-			.sign(&id, serialized_addresses.clone())
+			.sign(&id, &serialized_addresses)
 			.map_err(Error::CallingRuntime)?
 			.ok_or(Error::SigningDhtPayload)?;
 
@@ -241,32 +241,31 @@ where
 				.get(key)
 				.ok_or(Error::MatchingHashedAuthorityIdWithAuthorityId)?;
 
-			let signed_addresses =
-				schema::SignedAuthorityAddresses::decode(value).map_err(Error::Decoding)?;
+			let (signature, addresses): (Signature, Vec<u8>);
+			{
+				let mut signed_addresses =
+					schema::SignedAuthorityAddresses::decode(value).map_err(Error::Decoding)?;
+				signature = Signature(std::mem::replace(&mut signed_addresses.signature, vec![]));
+				addresses = std::mem::replace(&mut signed_addresses.addresses, vec![]);
+			}
 
 			let is_verified = self
 				.client
 				.runtime_api()
-				.verify(
-					&id,
-					signed_addresses.addresses.clone(),
-					Signature(signed_addresses.signature.clone()),
-					authority_id.clone(),
-				)
+				.verify(&id, &addresses, &signature, &authority_id.clone())
 				.map_err(Error::CallingRuntime)?;
 
 			if !is_verified {
 				return Err(Error::VerifyingDhtPayload);
 			}
 
-			let addresses: Vec<libp2p::Multiaddr> =
-				schema::AuthorityAddresses::decode(signed_addresses.addresses)
-					.map(|a| a.addresses)
-					.map_err(Error::Decoding)?
-					.into_iter()
-					.map(|a| a.try_into())
-					.collect::<std::result::Result<_, _>>()
-					.map_err(Error::ParsingMultiaddress)?;
+			let addresses: Vec<libp2p::Multiaddr> = schema::AuthorityAddresses::decode(addresses)
+				.map(|a| a.addresses)
+				.map_err(Error::Decoding)?
+				.into_iter()
+				.map(|a| a.try_into())
+				.collect::<std::result::Result<_, _>>()
+				.map_err(Error::ParsingMultiaddress)?;
 
 			self.address_cache.insert(authority_id.clone(), addresses);
 		}

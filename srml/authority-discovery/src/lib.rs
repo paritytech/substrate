@@ -29,8 +29,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use app_crypto::RuntimeAppPublic;
-use rstd::prelude::*;
 use codec::{Encode, Decode};
+use rstd::prelude::*;
 use srml_support::{decl_module, decl_storage, StorageValue};
 
 pub trait Trait: system::Trait + session::Trait + im_online::Trait {}
@@ -79,19 +79,19 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Sign the given payload with the private key corresponding to the given authority id.
-	pub fn sign(payload: Vec<u8>) -> Option<(AuthoritySignatureFor<T>, AuthorityIdFor<T>)> {
+	pub fn sign(payload: &Vec<u8>) -> Option<(AuthoritySignatureFor<T>, AuthorityIdFor<T>)> {
 		let authority_id = Module::<T>::authority_id()?;
-		authority_id.sign(&payload).map(|s| (s, authority_id))
+		authority_id.sign(payload).map(|s| (s, authority_id))
 	}
 
 	/// Verify the given signature for the given payload with the given
 	/// authority identifier.
 	pub fn verify(
-		payload: Vec<u8>,
+		payload: &Vec<u8>,
 		signature: AuthoritySignatureFor<T>,
 		authority_id: AuthorityIdFor<T>,
 	) -> bool {
-		authority_id.verify(&payload, &signature)
+		authority_id.verify(payload, &signature)
 	}
 
 	fn initialize_keys(keys: &[AuthorityIdFor<T>]) {

@@ -178,7 +178,7 @@ macro_rules! new_full {
 				service.network(),
 				dht_event_rx,
 			);
-			let _ = service.spawn_task(Box::new(authority_discovery));
+			service.spawn_task(Box::new(authority_discovery));
 		}
 
 		let config = grandpa::Config {

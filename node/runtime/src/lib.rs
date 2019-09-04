@@ -621,13 +621,13 @@ impl_runtime_apis! {
 				.collect()
 		}
 
-		fn sign(payload: Vec<u8>) -> Option<(EncodedSignature, EncodedAuthorityId)> {
+		fn sign(payload: &Vec<u8>) -> Option<(EncodedSignature, EncodedAuthorityId)> {
 			  AuthorityDiscovery::sign(payload).map(|(sig, id)| {
             (EncodedSignature(sig.encode()), EncodedAuthorityId(id.encode()))
         })
 		}
 
-		fn verify(payload: Vec<u8>, signature: EncodedSignature, authority_id: EncodedAuthorityId) -> bool {
+		fn verify(payload: &Vec<u8>, signature: &EncodedSignature, authority_id: &EncodedAuthorityId) -> bool {
 			let signature = match ImOnlineSignature::decode(&mut &signature.0[..]) {
 				Ok(s) => s,
 				_ => return false,

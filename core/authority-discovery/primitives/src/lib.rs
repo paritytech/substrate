@@ -40,10 +40,10 @@ decl_runtime_apis! {
 		fn authorities() -> Vec<AuthorityId>;
 
 		/// Sign the given payload with the private key corresponding to the given authority id.
-		fn sign(payload: Vec<u8>) -> Option<(Signature, AuthorityId)>;
+		fn sign(payload: &Vec<u8>) -> Option<(Signature, AuthorityId)>;
 
 		/// Verify the given signature for the given payload with the given
 		/// authority identifier.
-		fn verify(payload: Vec<u8>, signature: Signature, authority_id: AuthorityId) -> bool;
+		fn verify(payload: &Vec<u8>, signature: &Signature, authority_id: &AuthorityId) -> bool;
 	}
 }
