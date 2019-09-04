@@ -480,7 +480,7 @@ macro_rules! impl_outer_event {
 				> for $name {
 					type Error = ();
 
-					fn try_into(self) -> rstd::result::Result<
+					fn try_into(self) -> $crate::rstd::result::Result<
 						$module_name::Event < $( $generic_param, )? $( $module_name::$generic_instance )? >, Self::Error
 					> {
 						match self {
