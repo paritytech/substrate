@@ -24,7 +24,6 @@ pub use srml_metadata::{
 ///
 /// Example:
 /// ```
-///# extern crate srml_support as support;
 ///# mod module0 {
 ///#    pub trait Trait {
 ///#        type Origin;

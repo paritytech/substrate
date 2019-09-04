@@ -28,8 +28,6 @@ pub use crate::sr_primitives::ApplyError;
 /// # Example
 ///
 /// ```
-/// # extern crate srml_support as support;
-/// #
 /// # mod timestamp {
 /// # 	pub struct Module;
 /// #

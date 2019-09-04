@@ -24,7 +24,6 @@ pub use srml_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEn
 /// # Simple Event Example:
 ///
 /// ```rust
-/// # extern crate srml_support as support;
 /// support::decl_event!(
 ///    pub enum Event {
 ///       Success,
@@ -38,7 +37,6 @@ pub use srml_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEn
 /// # Generic Event Example:
 ///
 /// ```rust
-/// # extern crate srml_support as support;
 /// trait Trait {
 ///     type Balance;
 ///     type Token;
@@ -84,7 +82,6 @@ pub use srml_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEn
 ///# struct DefaultInstance;
 ///# trait Instance {}
 ///# impl Instance for DefaultInstance {}
-/// # extern crate srml_support as support;
 /// trait Trait<I: Instance=DefaultInstance> {
 ///     type Balance;
 ///     type Token;
