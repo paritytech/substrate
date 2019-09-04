@@ -19,7 +19,7 @@ use rstd::convert::TryFrom;
 use sr_primitives::traits::{
 	CheckedMul, Zero, SaturatedConversion, SimpleArithmetic, UniqueSaturatedInto,
 };
-use srml_support::{
+use support::{
 	traits::{Currency, ExistenceRequirement, Imbalance, OnUnbalanced, WithdrawReason}, StorageValue,
 };
 

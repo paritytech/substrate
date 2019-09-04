@@ -22,7 +22,7 @@ use crate::rent;
 
 use rstd::prelude::*;
 use sr_primitives::traits::{Bounded, CheckedAdd, CheckedSub, Zero};
-use srml_support::traits::{WithdrawReason, Currency};
+use support::traits::{WithdrawReason, Currency};
 use timestamp;
 
 pub type AccountIdOf<T> = <T as system::Trait>::AccountId;

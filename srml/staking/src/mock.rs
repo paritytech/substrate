@@ -23,8 +23,8 @@ use sr_primitives::testing::{Header, UintAuthorityId};
 use sr_staking_primitives::SessionIndex;
 use primitives::{H256, Blake2Hasher};
 use runtime_io;
-use srml_support::{assert_ok, impl_outer_origin, parameter_types, StorageLinkedMap};
-use srml_support::traits::{Currency, Get, FindAuthor};
+use support::{assert_ok, impl_outer_origin, parameter_types, StorageLinkedMap};
+use support::traits::{Currency, Get, FindAuthor};
 use crate::{
 	EraIndex, GenesisConfig, Module, Trait, StakerStatus, ValidatorPrefs, RewardDestination,
 	Nominators, inflation
@@ -92,7 +92,7 @@ impl_outer_origin!{
 pub struct Author11;
 impl FindAuthor<u64> for Author11 {
 	fn find_author<'a, I>(_digests: I) -> Option<u64>
-		where I: 'a + IntoIterator<Item=(srml_support::ConsensusEngineId, &'a [u8])>
+		where I: 'a + IntoIterator<Item=(support::ConsensusEngineId, &'a [u8])>
 	{
 		Some(11)
 	}

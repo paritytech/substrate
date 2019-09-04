@@ -51,7 +51,7 @@
 //! This is an example of a module that exposes a privileged function:
 //!
 //! ```
-//! use srml_support::{decl_module, dispatch::Result};
+//! use support::{decl_module, dispatch::Result};
 //! use system::ensure_root;
 //!
 //! pub trait Trait: system::Trait {}
@@ -90,7 +90,7 @@ use rstd::prelude::*;
 use sr_primitives::{
 	traits::{StaticLookup, Dispatchable}, weights::SimpleDispatchInfo, DispatchError,
 };
-use srml_support::{StorageValue, Parameter, decl_module, decl_event, decl_storage, ensure};
+use support::{StorageValue, Parameter, decl_module, decl_event, decl_storage, ensure};
 use system::ensure_signed;
 
 pub trait Trait: system::Trait {
@@ -125,7 +125,7 @@ decl_module! {
 				Ok(_) => true,
 				Err(e) => {
 					let e: DispatchError = e.into();
-					sr_io::print(e);
+					runtime_io::print(e);
 					false
 				}
 			};

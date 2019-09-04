@@ -136,7 +136,7 @@
 //! ### Example: Rewarding a validator by id.
 //!
 //! ```
-//! use srml_support::{decl_module, dispatch::Result};
+//! use support::{decl_module, dispatch::Result};
 //! use system::ensure_signed;
 //! use srml_staking::{self as staking};
 //!
@@ -261,7 +261,7 @@ mod benches;
 
 use rstd::{prelude::*, result};
 use codec::{HasCompact, Encode, Decode};
-use srml_support::{
+use support::{
 	StorageValue, StorageMap, StorageLinkedMap, decl_module, decl_event,
 	decl_storage, ensure, traits::{
 		Currency, OnFreeBalanceZero, OnDilution, LockIdentifier, LockableCurrency,

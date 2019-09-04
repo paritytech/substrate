@@ -36,7 +36,7 @@ use sr_primitives::{
 	weights::{DispatchInfo, DispatchClass},
 	testing::{Digest, DigestItem, Header, UintAuthorityId, H256},
 };
-use srml_support::{
+use support::{
 	assert_ok, assert_err, impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types,
 	storage::child, StorageMap, StorageValue, traits::{Currency, Get},
 };
@@ -49,7 +49,7 @@ mod contract {
 	// needs to give a name for the current crate.
 	// This hack is required for `impl_outer_event!`.
 	pub use super::super::*;
-	use srml_support::impl_outer_event;
+	use support::impl_outer_event;
 }
 impl_outer_event! {
 	pub enum MetaEvent for Test {

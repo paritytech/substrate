@@ -301,7 +301,7 @@ mod tests {
 		traits::{Header as HeaderT, BlakeTwo256, IdentityLookup, ConvertInto},
 		transaction_validity::{InvalidTransaction, UnknownTransaction}, ApplyError,
 	};
-	use srml_support::{
+	use support::{
 		impl_outer_event, impl_outer_origin, parameter_types,
 		traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons, WithdrawReason},
 	};
