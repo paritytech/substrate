@@ -139,14 +139,8 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 			);
 		}
 		("sign", Some(matches)) => {
-			let suri = matches.value_of("suri")
-				.expect("secret URI parameter is required; thus it can't be None; qed");
-			let pair = C::pair_from_suri(suri, password);
-			let mut message = vec![];
-			stdin().lock().read_to_end(&mut message).expect("Error reading from stdin");
-			if matches.is_present("hex") {
-				message = hex::decode(&message).expect("Invalid hex in message");
-			}
+			let pair = read_input_pair::<C>(matches, password);
+			let message = read_input_message::<C>(matches);
 			let sig = pair.sign(&message);
 			println!("{}", hex::encode(&sig));
 		}
@@ -247,33 +241,12 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 			println!("0x{}", hex::encode(&extrinsic.encode()));
 		}
 		("verify", Some(matches)) => {
-			let sig_data = matches.value_of("sig")
-				.expect("signature parameter is required; thus it can't be None; qed");
-			let mut sig = <<C as Crypto>::Pair as Pair>::Signature::default();
-			let sig_data = hex::decode(sig_data).expect("signature is invalid hex");
-			if sig_data.len() != sig.as_ref().len() {
-				panic!("signature is an invalid length. {} bytes is not the expected value of {} bytes", sig_data.len(), sig.as_ref().len());
-			}
-			sig.as_mut().copy_from_slice(&sig_data);
-			let hex_uri = matches.value_of("uri")
-				.expect("public uri parameter is required; thus it can't be None; qed");
-			let uri = if hex_uri.starts_with("0x") {
-				&hex_uri[2..]
-			} else {
-				hex_uri
-			};
-			let pubkey = if let Ok(pubkey_vec) = hex::decode(uri) {
-				<C as Crypto>::Public::from_slice(pubkey_vec.as_slice())
-			} else {
-				<C as Crypto>::Pair::from_string(uri, password).ok().map(|p| p.public())
-					.expect("Invalid URI; expecting either a secret URI or a public URI.")
-			};
-			let mut message = vec![];
-			stdin().lock().read_to_end(&mut message).expect("Error reading from stdin");
-			if matches.is_present("hex") {
-				message = hex::decode(&message).expect("Invalid hex in message");
-			}
-			if <<C as Crypto>::Pair as Pair>::verify(&sig, &message, &pubkey) {
+			let signature = read_input_signature::<C>(matches);
+			let pubkey = read_input_public_key::<C>(matches, password);
+			let message = read_input_message::<C>(matches);
+
+			// Verify signature.
+			if <<C as Crypto>::Pair as Pair>::verify(&signature, &message, &pubkey) {
 				println!("Signature verifies correctly.")
 			} else {
 				println!("Signature invalid.")
@@ -281,6 +254,71 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 		}
 		_ => print_usage(&matches),
 	}
+}
+
+fn read_input_signature<C: Crypto>(matches: &clap::ArgMatches) -> <<C as Crypto>::Pair as Pair>::Signature
+	where
+		<<C as Crypto>::Pair as Pair>::Signature: AsRef<[u8]> + AsMut<[u8]> + Default,
+		<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec,
+{
+	let sig_data = matches.value_of("sig")
+		.expect("signature parameter is required; thus it can't be None; qed");
+	let mut signature = <<C as Crypto>::Pair as Pair>::Signature::default();
+	let sig_data = hex::decode(sig_data).expect("signature is invalid hex");
+	if sig_data.len() != signature.as_ref().len() {
+		panic!(
+			"signature is an invalid length. {} bytes is not the expected value of {} bytes",
+			sig_data.len(),
+			signature.as_ref().len(),
+		);
+	}
+	signature.as_mut().copy_from_slice(&sig_data);
+	signature
+}
+
+fn read_input_public_key<C: Crypto>(matches: &clap::ArgMatches, password: Option<&str>) -> <<C as Crypto>::Pair as Pair>::Public
+	where
+		<<C as Crypto>::Pair as Pair>::Signature: AsRef<[u8]> + AsMut<[u8]> + Default,
+		<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec,
+{
+	let hex_uri = matches.value_of("uri")
+		.expect("public uri parameter is required; thus it can't be None; qed");
+	let uri = if hex_uri.starts_with("0x") {
+		&hex_uri[2..]
+	} else {
+		hex_uri
+	};
+	let pubkey = if let Ok(pubkey_vec) = hex::decode(uri) {
+		<C as Crypto>::Public::from_slice(pubkey_vec.as_slice())
+	} else {
+		<C as Crypto>::Pair::from_string(uri, password).ok().map(|p| p.public())
+			.expect("Invalid URI; expecting either a secret URI or a public URI.")
+	};
+	pubkey
+}
+
+fn read_input_message<C: Crypto>(matches: &clap::ArgMatches) -> Vec<u8>
+	where
+		<<C as Crypto>::Pair as Pair>::Signature: AsRef<[u8]> + AsMut<[u8]> + Default,
+		<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec,
+{
+	let mut message = vec![];
+	stdin().lock().read_to_end(&mut message).expect("Error reading from stdin");
+	if matches.is_present("hex") {
+		message = hex::decode(&message).expect("Invalid hex in message");
+	}
+	message
+}
+
+fn read_input_pair<C: Crypto>(matches: &clap::ArgMatches, password: Option<&str>) -> <C as Crypto>::Pair
+	where
+		<<C as Crypto>::Pair as Pair>::Signature: AsRef<[u8]> + AsMut<[u8]> + Default,
+		<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec,
+{
+	let suri = matches.value_of("suri")
+		.expect("secret URI parameter is required; thus it can't be None; qed");
+	let pair = C::pair_from_suri(suri, password);
+	pair
 }
 
 fn main() {
