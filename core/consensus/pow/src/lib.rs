@@ -276,7 +276,7 @@ pub fn import_queue<B, C, Algorithm>(
 }
 
 /// Start the background mining thread for PoW. Note that because PoW mining
-/// is CPU-intensive, it is not possible to use async future to define this.
+/// is CPU-intensive, it is not possible to use an async future to define this.
 /// However, it's not recommended to use background threads in the rest of the
 /// codebase.
 pub fn start_mine<B: BlockT<Hash=H256>, C, Algorithm, E>(
