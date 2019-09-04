@@ -55,7 +55,13 @@ pub mod offchain;
 /// Trait for things which can be printed.
 pub trait Printable {
 	/// Print the object.
-	fn print(self);
+	fn print(&self);
+}
+
+impl Printable for u8 {
+	fn print(&self) {
+		u64::from(*self).print()
+	}
 }
 
 /// Converts a public trait definition into a private trait and set of public functions

@@ -258,9 +258,10 @@ use support::{StorageValue, dispatch::Result, decl_module, decl_storage, decl_ev
 use system::{ensure_signed, ensure_root};
 use codec::{Encode, Decode};
 use sr_primitives::{
-	traits::{SignedExtension, DispatchError, Bounded},
-	transaction_validity::ValidTransaction,
-	weights::{SimpleDispatchInfo, DispatchInfo},
+	traits::{SignedExtension, Bounded}, weights::{SimpleDispatchInfo, DispatchInfo},
+	transaction_validity::{
+		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
+	},
 };
 
 /// Our module's configuration trait. All our types and consts go in here. If the
@@ -561,7 +562,7 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 	type AdditionalSigned = ();
 	type Pre = ();
 
-	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
+	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
 
 	fn validate(
 		&self,
@@ -569,9 +570,11 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 		call: &Self::Call,
 		_info: DispatchInfo,
 		len: usize,
-	) -> rstd::result::Result<ValidTransaction, DispatchError> {
+	) -> TransactionValidity {
 		// if the transaction is too big, just drop it.
-		if len > 200 { return Err(DispatchError::Exhausted) }
+		if len > 200 {
+			return InvalidTransaction::ExhaustsResources.into()
+		}
 
 		// check for `set_dummy`
 		match call {
@@ -582,7 +585,7 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 				valid_tx.priority = Bounded::max_value();
 				Ok(valid_tx)
 			}
-			_ => Ok(Default::default())
+			_ => Ok(Default::default()),
 		}
 	}
 }
@@ -712,12 +715,14 @@ mod tests {
 			let info = DispatchInfo::default();
 
 			assert_eq!(
-				WatchDummy::<Test>(PhantomData).validate(&1, &call, info, 150).unwrap().priority,
-				Bounded::max_value()
+				WatchDummy::<Test>(PhantomData).validate(&1, &call, info, 150)
+					.unwrap()
+					.priority,
+				Bounded::max_value(),
 			);
 			assert_eq!(
 				WatchDummy::<Test>(PhantomData).validate(&1, &call, info, 250),
-				Err(DispatchError::Exhausted)
+				InvalidTransaction::ExhaustsResources.into(),
 			);
 		})
 	}

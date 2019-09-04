@@ -74,9 +74,10 @@ use rstd::prelude::*;
 use session::historical::IdentificationTuple;
 use runtime_io::Printable;
 use sr_primitives::{
-	Perbill, ApplyError,
-	traits::{Convert, Member},
-	transaction_validity::{TransactionValidity, TransactionLongevity, ValidTransaction},
+	traits::{Convert, Member}, Perbill,
+	transaction_validity::{
+		TransactionValidity, TransactionLongevity, ValidTransaction, InvalidTransaction,
+	},
 };
 use sr_staking_primitives::{
 	SessionIndex, CurrentElectedSet,
@@ -160,7 +161,7 @@ enum OffchainErr {
 }
 
 impl Printable for OffchainErr {
-	fn print(self) {
+	fn print(&self) {
 		match self {
 			OffchainErr::DecodeWorkerStatus => print("Offchain error: decoding WorkerStatus failed!"),
 			OffchainErr::FailedSigning => print("Offchain error: signing failed!"),
@@ -489,24 +490,24 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 impl<T: Trait> support::unsigned::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
 
-	fn validate_unsigned(call: &Self::Call) -> support::unsigned::TransactionValidity {
+	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
 		if let Call::heartbeat(heartbeat, signature) = call {
 			if <Module<T>>::is_online_in_current_session(heartbeat.authority_index) {
 				// we already received a heartbeat for this authority
-				return TransactionValidity::Invalid(ApplyError::Stale as i8);
+				return InvalidTransaction::Stale.into();
 			}
 
 			// check if session index from heartbeat is recent
 			let current_session = <session::Module<T>>::current_index();
 			if heartbeat.session_index != current_session {
-				return TransactionValidity::Invalid(ApplyError::Stale as i8);
+				return InvalidTransaction::Stale.into();
 			}
 
 			// verify that the incoming (unverified) pubkey is actually an authority id
 			let keys = Keys::<T>::get();
 			let authority_id = match keys.get(heartbeat.authority_index as usize) {
 				Some(id) => id,
-				None => return TransactionValidity::Invalid(ApplyError::BadSignature as i8),
+				None => return InvalidTransaction::BadProof.into(),
 			};
 
 			// check signature (this is expensive so we do it last).
@@ -515,19 +516,19 @@ impl<T: Trait> support::unsigned::ValidateUnsigned for Module<T> {
 			});
 
 			if !signature_valid {
-				return TransactionValidity::Invalid(ApplyError::BadSignature as i8);
+				return InvalidTransaction::BadProof.into();
 			}
 
-			return TransactionValidity::Valid(ValidTransaction {
+			Ok(ValidTransaction {
 				priority: 0,
 				requires: vec![],
 				provides: vec![(current_session, authority_id).encode()],
 				longevity: TransactionLongevity::max_value(),
 				propagate: true,
 			})
+		} else {
+			InvalidTransaction::Call.into()
 		}
-
-		TransactionValidity::Invalid(0)
 	}
 }
 

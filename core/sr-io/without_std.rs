@@ -1220,7 +1220,7 @@ unsafe fn from_raw_parts(ptr: *mut u8, len: u32) -> Option<Vec<u8>> {
 impl Api for () {}
 
 impl<'a> Printable for &'a [u8] {
-	fn print(self) {
+	fn print(&self) {
 		unsafe {
 			ext_print_hex.get()(self.as_ptr(), self.len() as u32);
 		}
@@ -1228,7 +1228,7 @@ impl<'a> Printable for &'a [u8] {
 }
 
 impl<'a> Printable for &'a str {
-	fn print(self) {
+	fn print(&self) {
 		unsafe {
 			ext_print_utf8.get()(self.as_ptr() as *const u8, self.len() as u32);
 		}
@@ -1236,7 +1236,8 @@ impl<'a> Printable for &'a str {
 }
 
 impl Printable for u64 {
-	fn print(self) {
-		unsafe { ext_print_num.get()(self); }
+	fn print(&self) {
+		unsafe { ext_print_num.get()(*self); }
 	}
 }
+

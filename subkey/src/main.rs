@@ -103,6 +103,7 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 			system::CheckNonce::<Runtime>::from(i),
 			system::CheckWeight::<Runtime>::new(),
 			balances::TakeFees::<Runtime>::from(f),
+			Default::default(),
 		)
 	};
 	let password = matches.value_of("password");
@@ -185,7 +186,7 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 			let raw_payload = SignedPayload::from_raw(
 				function,
 				extra(index, 0),
-				(VERSION.spec_version as u32, genesis_hash, genesis_hash, (), (), ()),
+				(VERSION.spec_version as u32, genesis_hash, genesis_hash, (), (), (), ()),
 			);
 			let signature = raw_payload.using_encoded(|payload| {
 				println!("Signing {}", HexDisplay::from(&payload));

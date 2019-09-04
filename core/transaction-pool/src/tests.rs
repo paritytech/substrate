@@ -39,7 +39,11 @@ impl txpool::ChainApi for TestApi {
 	type Hash = Hash;
 	type Error = error::Error;
 
-	fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: txpool::ExtrinsicFor<Self>) -> error::Result<TransactionValidity> {
+	fn validate_transaction(
+		&self,
+		at: &BlockId<Self::Block>,
+		uxt: txpool::ExtrinsicFor<Self>,
+	) -> error::Result<TransactionValidity> {
 		let expected = index(at);
 		let requires = if expected == uxt.transfer().nonce {
 			vec![]
@@ -48,13 +52,15 @@ impl txpool::ChainApi for TestApi {
 		};
 		let provides = vec![vec![uxt.transfer().nonce as u8]];
 
-		Ok(TransactionValidity::Valid(ValidTransaction {
-			priority: 1,
-			requires,
-			provides,
-			longevity: 64,
-			propagate: true,
-		}))
+		Ok(
+			Ok(ValidTransaction {
+				priority: 1,
+				requires,
+				provides,
+				longevity: 64,
+				propagate: true,
+			})
+		)
 	}
 
 	fn block_id_to_number(&self, at: &BlockId<Self::Block>) -> error::Result<Option<txpool::NumberFor<Self>>> {

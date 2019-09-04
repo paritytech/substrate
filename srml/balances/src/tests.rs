@@ -232,7 +232,7 @@ fn default_indexing_on_new_accounts_should_not_work2() {
 			// ext_deposit is 10, value is 9, not satisfies for ext_deposit
 			assert_noop!(
 				Balances::transfer(Some(1).into(), 5, 9),
-				"value too low to create account"
+				"value too low to create account",
 			);
 			assert_eq!(Balances::is_dead_account(&5), true); // account 5 should not exist
 			assert_eq!(Balances::free_balance(&1), 100);
@@ -359,7 +359,7 @@ fn force_transfer_works() {
 		let _ = Balances::deposit_creating(&1, 111);
 		assert_noop!(
 			Balances::force_transfer(Some(2).into(), 1, 2, 69),
-			"bad origin: expected to be a root origin"
+			"RequireRootOrigin",
 		);
 		assert_ok!(Balances::force_transfer(RawOrigin::Root.into(), 1, 2, 69));
 		assert_eq!(Balances::total_balance(&1), 42);
@@ -389,7 +389,10 @@ fn balance_transfer_when_reserved_should_not_work() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		let _ = Balances::deposit_creating(&1, 111);
 		assert_ok!(Balances::reserve(&1, 69));
-		assert_noop!(Balances::transfer(Some(1).into(), 2, 69), "balance too low to send value");
+		assert_noop!(
+			Balances::transfer(Some(1).into(), 2, 69),
+			"balance too low to send value",
+		);
 	});
 }
 
@@ -517,7 +520,7 @@ fn transferring_too_high_value_should_not_panic() {
 
 		assert_err!(
 			Balances::transfer(Some(1).into(), 2, u64::max_value()),
-			"destination balance too high to receive value"
+			"destination balance too high to receive value",
 		);
 
 		assert_eq!(Balances::free_balance(&1), u64::max_value());
@@ -595,7 +598,7 @@ fn transfer_overflow_isnt_exploitable() {
 
 			assert_err!(
 				Balances::transfer(Some(1).into(), 5, evil_value),
-				"got overflow after adding a fee to value"
+				"got overflow after adding a fee to value",
 			);
 		}
 	);
@@ -680,7 +683,7 @@ fn unvested_balance_should_not_transfer() {
 			assert_eq!(Balances::vesting_balance(&1), 45);
 			assert_noop!(
 				Balances::transfer(Some(1).into(), 2, 56),
-				"vesting balance too high to send value"
+				"vesting balance too high to send value",
 			); // Account 1 cannot send more than vested amount
 		}
 	);

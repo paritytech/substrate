@@ -58,14 +58,16 @@ mod runtime;
 pub mod inherent;
 #[macro_use]
 pub mod unsigned;
+#[macro_use]
+pub mod error;
 mod double_map;
 pub mod traits;
 
 pub use self::storage::{StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap};
 pub use self::hashable::Hashable;
-pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
+pub use self::dispatch::{Parameter, Callable, IsSubType};
 pub use self::double_map::StorageDoubleMapWithHasher;
-pub use runtime_io::{print, storage_root};
+pub use runtime_io::{print, storage_root, Printable};
 pub use sr_primitives::{self, ConsensusEngineId};
 
 /// Macro for easily creating a new implementation of the `Get` trait. Use similarly to
@@ -128,7 +130,7 @@ macro_rules! fail {
 /// Used as `ensure!(expression_to_ensure, expression_to_return_on_false)`.
 #[macro_export]
 macro_rules! ensure {
-	( $x:expr, $y:expr ) => {{
+	( $x:expr, $y:expr $(,)? ) => {{
 		if !$x {
 			$crate::fail!($y);
 		}
@@ -142,7 +144,10 @@ macro_rules! ensure {
 #[macro_export]
 #[cfg(feature = "std")]
 macro_rules! assert_noop {
-	( $x:expr , $y:expr ) => {
+	(
+		$x:expr,
+		$y:expr $(,)?
+	) => {
 		let h = $crate::storage_root();
 		$crate::assert_err!($x, $y);
 		assert_eq!(h, $crate::storage_root());
@@ -159,7 +164,7 @@ macro_rules! assert_noop {
 #[macro_export]
 #[cfg(feature = "std")]
 macro_rules! assert_err {
-	( $x:expr , $y:expr ) => {
+	( $x:expr , $y:expr $(,)? ) => {
 		assert_eq!($x, Err($y));
 	}
 }

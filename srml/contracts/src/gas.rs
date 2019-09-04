@@ -16,10 +16,12 @@
 
 use crate::{GasSpent, Module, Trait, BalanceOf, NegativeImbalanceOf};
 use rstd::convert::TryFrom;
-use sr_primitives::BLOCK_FULL;
-use sr_primitives::traits::{CheckedMul, Zero, SaturatedConversion, SimpleArithmetic, UniqueSaturatedInto};
-use support::StorageValue;
-use support::traits::{Currency, ExistenceRequirement, Get, Imbalance, OnUnbalanced, WithdrawReason};
+use sr_primitives::traits::{
+	CheckedMul, Zero, SaturatedConversion, SimpleArithmetic, UniqueSaturatedInto,
+};
+use support::{
+	traits::{Currency, ExistenceRequirement, Imbalance, OnUnbalanced, WithdrawReason}, StorageValue,
+};
 
 #[cfg(test)]
 use std::{any::Any, fmt::Debug};
@@ -200,14 +202,6 @@ pub fn buy_gas<T: Trait>(
 	transactor: &T::AccountId,
 	gas_limit: Gas,
 ) -> Result<(GasMeter<T>, NegativeImbalanceOf<T>), &'static str> {
-	// Check if the specified amount of gas is available in the current block.
-	// This cannot underflow since `gas_spent` is never greater than `T::BlockGasLimit`.
-	let gas_available = T::BlockGasLimit::get() - <Module<T>>::gas_spent();
-	if gas_limit > gas_available {
-		// gas limit reached, revert the transaction and retry again in the future
-		return Err(BLOCK_FULL);
-	}
-
 	// Buy the specified amount of gas.
 	let gas_price = <Module<T>>::gas_price();
 	let cost = if gas_price.is_zero() {

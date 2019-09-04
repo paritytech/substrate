@@ -63,6 +63,15 @@
 //! This creates a new smart contract account and calls its contract deploy handler to initialize the contract.
 //! * `call` - Makes a call to an account, optionally transferring some balance.
 //!
+//! ### Signed Extensions
+//!
+//! The contracts module defines the following extension:
+//!
+//!   - [`CheckBlockGasLimit`]: Ensures that the transaction does not exceeds the block gas limit.
+//!
+//! The signed extension needs to be added as signed extra to the transaction type to be used in the
+//! runtime.
+//!
 //! ## Usage
 //!
 //! The Contract module is a work in progress. The following examples show how this Contract module can be
@@ -100,15 +109,19 @@ use primitives::crypto::UncheckedFrom;
 use rstd::{prelude::*, marker::PhantomData};
 use codec::{Codec, Encode, Decode};
 use runtime_io::blake2_256;
-use sr_primitives::traits::{
-	Hash, StaticLookup, Zero, MaybeSerializeDebug, Member
+use sr_primitives::{
+	traits::{Hash, StaticLookup, Zero, MaybeSerializeDebug, Member, SignedExtension},
+	weights::DispatchInfo,
+	transaction_validity::{
+		ValidTransaction, InvalidTransaction, TransactionValidity, TransactionValidityError,
+	},
 };
 use support::dispatch::{Result, Dispatchable};
 use support::{
 	Parameter, StorageMap, StorageValue, decl_module, decl_event, decl_storage, storage::child,
 	parameter_types,
 };
-use support::traits::{OnFreeBalanceZero, OnUnbalanced, Currency, Get};
+use support::{traits::{OnFreeBalanceZero, OnUnbalanced, Currency, Get}, IsSubType};
 use system::{ensure_signed, RawOrigin, ensure_root};
 use primitives::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
 use timestamp;
@@ -321,7 +334,7 @@ pub trait Trait: timestamp::Trait {
 	type Currency: Currency<Self::AccountId>;
 
 	/// The outer call dispatch type.
-	type Call: Parameter + Dispatchable<Origin=<Self as system::Trait>::Origin>;
+	type Call: Parameter + Dispatchable<Origin=<Self as system::Trait>::Origin> + IsSubType<Module<Self>, Self>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -597,15 +610,17 @@ decl_module! {
 		/// the sender is not eligible for the reward.
 		fn claim_surcharge(origin, dest: T::AccountId, aux_sender: Option<T::AccountId>) {
 			let origin = origin.into();
-			let (signed, rewarded) = match origin {
-				Ok(system::RawOrigin::Signed(ref account)) if aux_sender.is_none() => {
+			let (signed, rewarded) = match (origin, aux_sender) {
+				(Ok(system::RawOrigin::Signed(account)), None) => {
 					(true, account)
 				},
-				Ok(system::RawOrigin::None) if aux_sender.is_some() => {
-					(false, aux_sender.as_ref().expect("checked above"))
+				(Ok(system::RawOrigin::None), Some(aux_sender)) => {
+					(false, aux_sender)
 				},
-				_ => return Err("Invalid surcharge claim: origin must be signed or \
-								inherent and auxiliary sender only provided on inherent")
+				_ => return Err(
+					"Invalid surcharge claim: origin must be signed or \
+					inherent and auxiliary sender only provided on inherent"
+				),
 			};
 
 			// Add some advantage for block producers (who send unsigned extrinsics) by
@@ -619,7 +634,7 @@ decl_module! {
 
 			// If poking the contract has lead to eviction of the contract, give out the rewards.
 			if rent::try_evict::<T>(&dest, handicap) == rent::RentOutcome::Evicted {
-				T::Currency::deposit_into_existing(rewarded, T::SurchargeReward::get())?;
+				T::Currency::deposit_into_existing(&rewarded, T::SurchargeReward::get())?;
 			}
 		}
 
@@ -934,6 +949,65 @@ impl Default for Schedule {
 			max_table_size: 16 * 1024,
 			enable_println: false,
 			max_subject_len: 32,
+		}
+	}
+}
+
+/// `SignedExtension` that checks if a transaction would exhausts the block gas limit.
+#[derive(Encode, Decode, Clone, Eq, PartialEq)]
+pub struct CheckBlockGasLimit<T: Trait + Send + Sync>(PhantomData<T>);
+
+impl<T: Trait + Send + Sync> Default for CheckBlockGasLimit<T> {
+	fn default() -> Self {
+		Self(PhantomData)
+	}
+}
+
+#[cfg(feature = "std")]
+impl<T: Trait + Send + Sync> std::fmt::Debug for CheckBlockGasLimit<T> {
+	fn fmt(&self, _: &mut std::fmt::Formatter) -> std::fmt::Result {
+		Ok(())
+	}
+}
+
+impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
+	type AccountId = T::AccountId;
+	type Call = <T as Trait>::Call;
+	type AdditionalSigned = ();
+	type Pre = ();
+
+	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
+
+	fn validate(
+		&self,
+		_: &Self::AccountId,
+		call: &Self::Call,
+		_: DispatchInfo,
+		_: usize,
+	) -> TransactionValidity {
+		let call = match call.is_sub_type() {
+			Some(call) => call,
+			None => return Ok(ValidTransaction::default()),
+		};
+
+		match call {
+			Call::claim_surcharge(_, _) | Call::update_schedule(_) =>
+				Ok(ValidTransaction::default()),
+			Call::put_code(gas_limit, _)
+				| Call::call(_, _, gas_limit, _)
+				| Call::create(_, gas_limit, _, _)
+			=> {
+				// Check if the specified amount of gas is available in the current block.
+				// This cannot underflow since `gas_spent` is never greater than `T::BlockGasLimit`.
+				let gas_available = T::BlockGasLimit::get() - <Module<T>>::gas_spent();
+				if *gas_limit > gas_available {
+					// gas limit reached, revert the transaction and retry again in the future
+					InvalidTransaction::ExhaustsResources.into()
+				} else {
+					Ok(ValidTransaction::default())
+				}
+			},
+			Call::__PhantomItem(_, _)  => unreachable!("Variant is never constructed"),
 		}
 	}
 }
