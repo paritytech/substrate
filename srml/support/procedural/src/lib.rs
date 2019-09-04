@@ -48,15 +48,15 @@ use proc_macro::TokenStream;
 /// Basic storage consists of a name and a type; supported types are:
 ///
 /// * Value: `Foo: type`: Implements the
-///   [`StorageValue`](../srml_support/storage/trait.StorageValue.html) trait using the
-///   [`StorageValue generator`](../srml_support/storage/generator/trait.StorageValue.html).
+///   [`StorageValue`](../support/storage/trait.StorageValue.html) trait using the
+///   [`StorageValue generator`](../support/storage/generator/trait.StorageValue.html).
 ///
 /// * Map: `Foo: map hasher($hash) type => type`: Implements the
-///   [`StorageMap`](../srml_support/storage/trait.StorageMap.html) trait using the
-///   [`StorageMap generator`](../srml_support/storage/generator/trait.StorageMap.html).
+///   [`StorageMap`](../support/storage/trait.StorageMap.html) trait using the
+///   [`StorageMap generator`](../support/storage/generator/trait.StorageMap.html).
 ///
 ///   `$hash` representing a choice of hashing algorithms available in the
-///   [`Hashable`](../srml_support/trait.Hashable.html) trait.
+///   [`Hashable`](../support/trait.Hashable.html) trait.
 ///
 ///   `hasher($hash)` is optional and its default is `blake2_256`.
 ///
@@ -66,11 +66,11 @@ use proc_macro::TokenStream;
 ///   `blake2_256` must be used. Otherwise, other values in storage can be compromised.
 ///
 /// * Linked map: `Foo: linked_map hasher($hash) type => type`: Implements the
-///   [`StorageLinkedMap`](../srml_support/storage/trait.StorageLinkedMap.html) trait using the
-///   [`StorageLinkedMap generator`](../srml_support/storage/generator/trait.StorageLinkedMap.html).
+///   [`StorageLinkedMap`](../support/storage/trait.StorageLinkedMap.html) trait using the
+///   [`StorageLinkedMap generator`](../support/storage/generator/trait.StorageLinkedMap.html).
 ///
 ///   `$hash` representing a choice of hashing algorithms available in the
-///   [`Hashable`](../srml_support/trait.Hashable.html) trait.
+///   [`Hashable`](../support/trait.Hashable.html) trait.
 ///
 ///   `hasher($hash)` is optional and its default is `blake2_256`.
 ///
@@ -80,11 +80,11 @@ use proc_macro::TokenStream;
 ///   `blake2_256` must be used. Otherwise, other values in storage can be compromised.
 ///
 /// * Double map: `Foo: double_map hasher($hash1) u32, $hash2(u32) => u32`: Implements the
-///   [`StorageDoubleMap`](../srml_support/storage/trait.StorageDoubleMap.html) trait using the
-///   [`StorageDoubleMap generator`](../srml_support/storage/generator/trait.StorageDoubleMap.html).
+///   [`StorageDoubleMap`](../support/storage/trait.StorageDoubleMap.html) trait using the
+///   [`StorageDoubleMap generator`](../support/storage/generator/trait.StorageDoubleMap.html).
 ///
 ///   `$hash1` and `$hash2` representing choices of hashing algorithms available in the
-///   [`Hashable`](../srml_support/trait.Hashable.html) trait.
+///   [`Hashable`](../support/trait.Hashable.html) trait.
 ///
 ///   `hasher($hash)` is optional and its default is `blake2_256`.
 ///

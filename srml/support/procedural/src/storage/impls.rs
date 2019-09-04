@@ -16,7 +16,7 @@
 
 use crate::storage::transformation::{DeclStorageTypeInfos, InstanceOpts};
 
-use srml_support_procedural_tools::syn_ext as ext;
+use support_procedural_tools::syn_ext as ext;
 use proc_macro2::TokenStream as TokenStream2;
 use syn::Ident;
 use quote::quote;

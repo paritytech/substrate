@@ -18,8 +18,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-/// Export ourself as `srml_support` to make tests happy.
-extern crate self as srml_support;
+/// Export ourself as `support` to make tests happy.
+extern crate self as support;
 
 #[macro_use]
 extern crate bitmask;
@@ -111,7 +111,7 @@ macro_rules! parameter_types {
 }
 
 #[doc(inline)]
-pub use srml_support_procedural::decl_storage;
+pub use support_procedural::decl_storage;
 
 /// Return Err of the expression: `return Err($expression);`.
 ///
@@ -185,7 +185,7 @@ macro_rules! assert_ok {
 ///
 /// ```rust
 /// #[macro_use]
-/// # extern crate srml_support;
+/// # extern crate support;
 /// # use support::{assert_eq_uvec};
 /// # fn main() {
 /// assert_eq_uvec!(vec![1,2], vec![2,1]);
@@ -194,7 +194,7 @@ macro_rules! assert_ok {
 ///
 /// ```rust,should_panic
 /// #[macro_use]
-/// # extern crate srml_support;
+/// # extern crate support;
 /// # use support::{assert_eq_uvec};
 /// # fn main() {
 /// assert_eq_uvec!(vec![1,2,3], vec![2,1]);
