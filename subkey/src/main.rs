@@ -141,7 +141,6 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 		("sign", Some(matches)) => {
 			let suri = matches.value_of("suri")
 				.expect("secret URI parameter is required; thus it can't be None; qed");
-			println!("suri = {}", suri);
 			let pair = C::pair_from_suri(suri, password);
 			let mut message = vec![];
 			stdin().lock().read_to_end(&mut message).expect("Error reading from stdin");
