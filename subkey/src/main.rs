@@ -234,43 +234,49 @@ fn execute<C: Crypto>(matches: ArgMatches) where
 
 			println!("0x{}", hex::encode(&extrinsic.encode()));
 		}
-		("sign", Some(matches)) => do_sign::<C>(matches, password),
-		("verify", Some(matches)) => do_verify::<C>(matches, password),
+		("sign", Some(matches)) => {
+			let message = read_input_message(matches);
+			do_sign::<C>(matches, message, password)
+		},
+		("verify", Some(matches)) => {
+			let message = read_input_message(matches);
+			do_verify::<C>(matches, message, password);
+		},
 		_ => print_usage(&matches),
 	}
 }
 
-fn do_sign<C: Crypto>(matches: &ArgMatches, password: Option<&str>) 
+fn do_sign<C: Crypto>(matches: &ArgMatches, message: Vec<u8>, password: Option<&str>) 
 	where
 		<<C as Crypto>::Pair as Pair>::Signature: AsRef<[u8]> + AsMut<[u8]> + Default,
 		<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec,
 {
 	let pair = read_input_pair::<C>(matches, password);
-	let message = read_input_message(matches);
 	let signature = pair.sign(&message);
 	print_signature::<C>(signature);
 }
 
-fn do_verify<C: Crypto>(matches: &ArgMatches, password: Option<&str>)
+fn do_verify<C: Crypto>(matches: &ArgMatches, message: Vec<u8>, password: Option<&str>) -> bool
 	where
 		<<C as Crypto>::Pair as Pair>::Signature: AsRef<[u8]> + AsMut<[u8]> + Default,
 		<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec,
 {
 	let signature = read_input_signature::<C>(matches);
 	let pubkey = read_input_public_key::<C>(matches, password);
-	let message = read_input_message(matches);
-	verify_signature::<C>(signature, message, pubkey);
+	verify_signature::<C>(signature, message, pubkey)
 }
 
 fn verify_signature<C: Crypto>(
 	signature: <<C as Crypto>::Pair as Pair>::Signature,
 	message: Vec<u8>,
 	pubkey: <<C as Crypto>::Pair as Pair>::Public,
-) {
+) -> bool {
 	if <<C as Crypto>::Pair as Pair>::verify(&signature, &message, &pubkey) {
-		println!("Signature verifies correctly.")
+		println!("Signature verifies correctly.");
+		true
 	} else {
-		println!("Signature invalid.")
+		println!("Signature invalid.");
+		false
 	}
 }
 
@@ -360,7 +366,8 @@ fn print_usage(matches: &ArgMatches) {
 
 #[cfg(test)]
 mod tests {
-	use super::{Hash, Decode};
+	use super::*;
+
 	#[test]
 	fn should_work() {
 		let s = "0123456789012345678901234567890123456789012345678901234567890123";
@@ -375,4 +382,27 @@ mod tests {
 
 		assert_eq!(d1, d2);
 	}
+
+	#[test]
+	fn sign_should_work() {
+		let arg_vec = vec![
+			"subkey",
+			"verify",
+			"363cba435260d06893f62da68bd23a13e5f140d13ffa8048d82acaa55b541c5329\
+				a183d06c0c78f91a4c8e77786caf517897e1bfff40de9aa1ebf833668a2c88",
+			"0x1cb277eac4de723b6c41acfcd6f0b0dcd5d003cf5506253efa787c61ddde7520",
+		];
+		let yaml = load_yaml!("cli.yml");
+		let matches = App::from_yaml(yaml).get_matches_from(arg_vec);
+		let matches = matches.subcommand().1.unwrap();
+		let password = None;
+		let message = "Blah Blah\n".as_bytes().to_vec();
+		assert!(do_verify::<Sr25519>(matches, message, password));
+	}
+
+	// fn verify_should_work() {
+	// 	let matches = ArgMatches {};
+	// 	let password = None;
+	// 	do_verify(matches, password);
+	// }
 }
