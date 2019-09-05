@@ -17,7 +17,7 @@
 use crate::traits::{AugmentClap, GetLogFilter};
 
 use std::path::PathBuf;
-use structopt::{StructOpt, clap::{arg_enum, _clap_count_exprs, App, AppSettings, SubCommand, Arg}};
+use structopt::{StructOpt, clap::{arg_enum, App, AppSettings, _clap_count_exprs, SubCommand, Arg}};
 use client;
 
 pub use crate::execution_strategy::ExecutionStrategy;

@@ -49,7 +49,7 @@ mod tests {
 		AccountKeyring, Sr25519Keyring,
 	};
 	use primitives::{Blake2Hasher, map};
-	use hex::*;
+	use hex_literal::*;
 
 	native_executor_instance!(
 		Executor,
