@@ -28,5 +28,6 @@ std = [
 	"rstd/std",
 	"support/std",
 	"sr-primitives/std",
+	"runtime-io/std",
 	"system/std",
 ]
