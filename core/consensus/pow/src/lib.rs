@@ -16,10 +16,10 @@
 
 //! Proof of work consensus for Substrate.
 //!
-//! To use this engine, you can either implement a standalone `PowAlgorithm`
-//! or use the runtime PoW algorithm engine. The runtime engine requires you
-//! to implement the `PowApi` defined in `substrate-consensus-pow-primitives`.
-//! There is also a helper module in SRML (`srml-pow`) to make the process easier.
+//! To use this engine, you can need to have a struct that implements
+//! `PowAlgorithm`. After that, pass an instance of the struct, along
+//! with other necessary client references to `import_queue` to setup
+//! the queue. Use the `start_mine` function for basic CPU mining.
 
 use std::sync::Arc;
 use std::thread;
