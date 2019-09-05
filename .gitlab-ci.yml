@@ -332,6 +332,36 @@ check_warnings:
     - docker push $CONTAINER_IMAGE:$VERSION
     - docker push $CONTAINER_IMAGE:latest
 
+test-srml-contracts-waterfall:
+  stage:                           publish
+  # this is the set of integration tests for srml-contracts that requires the substrate binary
+  <<:                              *docker-env
+  dependencies:
+    - build-linux-substrate
+  only:
+    - nightly
+  variables:
+    GIT_STRATEGY:                  none
+
+  # integration tests for srml-contracts
+  # so the idea is that they would be coded in JS and they would speak with a running node in background
+  # the node would be a default node
+  # the rest is simple actually. Some rust (nightly most likely also some stable) code, potentially some AssemblyScript
+  # so more precisely something like this
+    # submodule update
+    # building all ink contracts (requires nightly rustc)
+    # doing yarn (= some npm/js magic)
+    # downloading a substrate-node
+    # spinning it up in background exposing RPC interface locally
+    # then running yarn start, which uses the local RPC
+  script:
+    - git clone https://github.com/paritytech/srml-contracts-waterfall.git .
+    - git submodule update --init
+    - ./build.sh
+    - ./artifacts/substrate/substrate purge-chain --dev -y
+    - ./artifacts/substrate/substrate --dev
+    - yarn && yarn test
+
 publish-docker-substrate:
   stage:                           publish
   <<:                              *publish-docker-release
