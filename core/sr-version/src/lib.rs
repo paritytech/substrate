@@ -191,7 +191,6 @@ mod apis_serialize {
 	pub fn serialize_bytesref<S>(&apis: &&super::ApiId, ser: S) -> Result<S::Ok, S::Error> where
 		S: Serializer,
 	{
-		let mut _buf = [0; std::mem::size_of::<super::ApiId>() * 2 + 2]; // 17 == 1 + 8 * 2
 		bytes::serialize(apis, ser)
 	}
 
