@@ -80,8 +80,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 154,
-	impl_version: 159,
+	spec_version: 155,
+	impl_version: 155,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -360,6 +360,10 @@ parameter_types! {
 	pub const ContractTransactionBaseFee: Balance = 1 * CENTS;
 	pub const ContractTransactionByteFee: Balance = 10 * MILLICENTS;
 	pub const ContractFee: Balance = 1 * CENTS;
+	pub const TombstoneDeposit: Balance = 1 * DOLLARS;
+	pub const RentByteFee: Balance = 1 * DOLLARS;
+	pub const RentDepositOffset: Balance = 1000 * DOLLARS;
+	pub const SurchargeReward: Balance = 150 * DOLLARS;
 }
 
 impl contracts::Trait for Runtime {
@@ -371,11 +375,11 @@ impl contracts::Trait for Runtime {
 	type TrieIdGenerator = contracts::TrieIdFromParentCounter<Runtime>;
 	type GasPayment = ();
 	type SignedClaimHandicap = contracts::DefaultSignedClaimHandicap;
-	type TombstoneDeposit = contracts::DefaultTombstoneDeposit;
+	type TombstoneDeposit = TombstoneDeposit;
 	type StorageSizeOffset = contracts::DefaultStorageSizeOffset;
-	type RentByteFee = contracts::DefaultRentByteFee;
-	type RentDepositOffset = contracts::DefaultRentDepositOffset;
-	type SurchargeReward = contracts::DefaultSurchargeReward;
+	type RentByteFee = RentByteFee;
+	type RentDepositOffset = RentDepositOffset;
+	type SurchargeReward = SurchargeReward;
 	type TransferFee = ContractTransferFee;
 	type CreationFee = ContractCreationFee;
 	type TransactionBaseFee = ContractTransactionBaseFee;
@@ -445,6 +449,7 @@ impl system::offchain::CreateTransaction<Runtime, UncheckedExtrinsic> for Runtim
 			system::CheckNonce::<Runtime>::from(index),
 			system::CheckWeight::<Runtime>::new(),
 			balances::TakeFees::<Runtime>::from(tip),
+			Default::default(),
 		);
 		let raw_payload = SignedPayload::new(call, extra).ok()?;
 		let signature = F::sign(account.clone(), &raw_payload)?;
@@ -465,7 +470,7 @@ construct_runtime!(
 		Timestamp: timestamp::{Module, Call, Storage, Inherent},
 		Authorship: authorship::{Module, Call, Storage, Inherent},
 		Indices: indices,
-		Balances: balances,
+		Balances: balances::{default, Error},
 		Staking: staking::{default, OfflineWorker},
 		Session: session::{Module, Call, Storage, Event, Config<T>},
 		Democracy: democracy::{Module, Call, Storage, Config, Event<T>},
@@ -501,7 +506,8 @@ pub type SignedExtra = (
 	system::CheckEra<Runtime>,
 	system::CheckNonce<Runtime>,
 	system::CheckWeight<Runtime>,
-	balances::TakeFees<Runtime>
+	balances::TakeFees<Runtime>,
+	contracts::CheckBlockGasLimit<Runtime>,
 );
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, Signature, SignedExtra>;

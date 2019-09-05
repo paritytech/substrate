@@ -1,4 +1,4 @@
-use srml_support::codec::{Encode, Decode};
+use support::codec::{Encode, Decode};
 
 pub trait Trait: 'static + Eq + Clone {
 	type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
@@ -10,7 +10,7 @@ pub trait Trait: 'static + Eq + Clone {
 	type Event: From<Event>;
 }
 
-srml_support::decl_module! {
+support::decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 	}
 }
@@ -20,12 +20,19 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-srml_support::decl_event!(
+support::decl_event!(
 	pub enum Event {
 		ExtrinsicSuccess,
 		ExtrinsicFailed,
 	}
 );
+
+support::decl_error! {
+	pub enum Error {
+		TestError,
+		AnotherError
+	}
+}
 
 /// Origin for the system module.
 #[derive(PartialEq, Eq, Clone)]

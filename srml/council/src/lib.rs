@@ -39,8 +39,8 @@ mod tests {
 	// These re-exports are here for a reason, edit with care
 	pub use super::*;
 	pub use runtime_io::with_externalities;
-	use srml_support::{impl_outer_origin, impl_outer_event, impl_outer_dispatch, parameter_types};
-	use srml_support::traits::Get;
+	use support::{impl_outer_origin, impl_outer_event, impl_outer_dispatch, parameter_types};
+	use support::traits::Get;
 	pub use primitives::{H256, Blake2Hasher, u32_trait::{_1, _2, _3, _4}};
 	pub use sr_primitives::traits::{BlakeTwo256, IdentityLookup};
 	pub use sr_primitives::testing::{Digest, DigestItem, Header};
@@ -62,6 +62,8 @@ mod tests {
 
 	impl_outer_dispatch! {
 		pub enum Call for Test where origin: Origin {
+			type Error = Error;
+
 			balances::Balances,
 			democracy::Democracy,
 		}
@@ -115,6 +117,7 @@ mod tests {
 		type Header = Header;
 		type WeightMultiplierUpdate = ();
 		type Event = Event;
+		type Error = Error;
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type MaximumBlockLength = MaximumBlockLength;
@@ -136,6 +139,7 @@ mod tests {
 		type TransactionPayment = ();
 		type TransferPayment = ();
 		type DustRemoval = ();
+		type Error = Error;
 		type ExistentialDeposit = ExistentialDeposit;
 		type TransferFee = TransferFee;
 		type CreationFee = CreationFee;

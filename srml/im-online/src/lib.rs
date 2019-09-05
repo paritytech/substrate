@@ -42,7 +42,7 @@
 //! ## Usage
 //!
 //! ```
-//! use srml_support::{decl_module, dispatch::Result};
+//! use support::{decl_module, dispatch::Result};
 //! use system::ensure_signed;
 //! use srml_im_online::{self as im_online};
 //!
@@ -72,17 +72,18 @@ use codec::{Encode, Decode};
 use primitives::offchain::{OpaqueNetworkState, StorageKind};
 use rstd::prelude::*;
 use session::historical::IdentificationTuple;
-use sr_io::Printable;
+use runtime_io::Printable;
 use sr_primitives::{
-	Perbill, ApplyError,
-	traits::{Convert, Member},
-	transaction_validity::{TransactionValidity, TransactionLongevity, ValidTransaction},
+	traits::{Convert, Member}, Perbill,
+	transaction_validity::{
+		TransactionValidity, TransactionLongevity, ValidTransaction, InvalidTransaction,
+	},
 };
 use sr_staking_primitives::{
 	SessionIndex, CurrentElectedSet,
 	offence::{ReportOffence, Offence, Kind},
 };
-use srml_support::{
+use support::{
 	decl_module, decl_event, decl_storage, print, ensure,
 	Parameter, StorageValue, StorageDoubleMap,
 };
@@ -160,7 +161,7 @@ enum OffchainErr {
 }
 
 impl Printable for OffchainErr {
-	fn print(self) {
+	fn print(&self) {
 		match self {
 			OffchainErr::DecodeWorkerStatus => print("Offchain error: decoding WorkerStatus failed!"),
 			OffchainErr::FailedSigning => print("Offchain error: signing failed!"),
@@ -277,7 +278,7 @@ decl_module! {
 		// Runs after every block.
 		fn offchain_worker(now: T::BlockNumber) {
 			// Only send messages if we are a potential validator.
-			if sr_io::is_validator() {
+			if runtime_io::is_validator() {
 				Self::offchain(now);
 			}
 		}
@@ -332,7 +333,7 @@ impl<T: Trait> Module<T> {
 					.map(|location| (index as u32, &local_keys[location]))
 			})
 		{
-			let network_state = sr_io::network_state().map_err(|_| OffchainErr::NetworkState)?;
+			let network_state = runtime_io::network_state().map_err(|_| OffchainErr::NetworkState)?;
 			let heartbeat_data = Heartbeat {
 				block_number,
 				network_state,
@@ -362,7 +363,7 @@ impl<T: Trait> Module<T> {
 			done,
 			gossipping_at,
 		};
-		sr_io::local_storage_compare_and_set(
+		runtime_io::local_storage_compare_and_set(
 			StorageKind::PERSISTENT,
 			DB_KEY,
 			curr_worker_status.as_ref().map(Vec::as_slice),
@@ -378,7 +379,7 @@ impl<T: Trait> Module<T> {
 			done,
 			gossipping_at,
 		};
-		sr_io::local_storage_set(
+		runtime_io::local_storage_set(
 			StorageKind::PERSISTENT, DB_KEY, &enc.encode());
 	}
 
@@ -389,7 +390,7 @@ impl<T: Trait> Module<T> {
 		now: T::BlockNumber,
 		next_gossip: T::BlockNumber,
 	) -> Result<(Option<Vec<u8>>, bool), OffchainErr> {
-		let last_gossip = sr_io::local_storage_get(StorageKind::PERSISTENT, DB_KEY);
+		let last_gossip = runtime_io::local_storage_get(StorageKind::PERSISTENT, DB_KEY);
 		match last_gossip {
 			Some(last) => {
 				let worker_status: WorkerStatus<T::BlockNumber> = Decode::decode(&mut &last[..])
@@ -486,27 +487,27 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	}
 }
 
-impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
+impl<T: Trait> support::unsigned::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
 
-	fn validate_unsigned(call: &Self::Call) -> srml_support::unsigned::TransactionValidity {
+	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
 		if let Call::heartbeat(heartbeat, signature) = call {
 			if <Module<T>>::is_online_in_current_session(heartbeat.authority_index) {
 				// we already received a heartbeat for this authority
-				return TransactionValidity::Invalid(ApplyError::Stale as i8);
+				return InvalidTransaction::Stale.into();
 			}
 
 			// check if session index from heartbeat is recent
 			let current_session = <session::Module<T>>::current_index();
 			if heartbeat.session_index != current_session {
-				return TransactionValidity::Invalid(ApplyError::Stale as i8);
+				return InvalidTransaction::Stale.into();
 			}
 
 			// verify that the incoming (unverified) pubkey is actually an authority id
 			let keys = Keys::<T>::get();
 			let authority_id = match keys.get(heartbeat.authority_index as usize) {
 				Some(id) => id,
-				None => return TransactionValidity::Invalid(ApplyError::BadSignature as i8),
+				None => return InvalidTransaction::BadProof.into(),
 			};
 
 			// check signature (this is expensive so we do it last).
@@ -515,19 +516,19 @@ impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
 			});
 
 			if !signature_valid {
-				return TransactionValidity::Invalid(ApplyError::BadSignature as i8);
+				return InvalidTransaction::BadProof.into();
 			}
 
-			return TransactionValidity::Valid(ValidTransaction {
+			Ok(ValidTransaction {
 				priority: 0,
 				requires: vec![],
 				provides: vec![(current_session, authority_id).encode()],
 				longevity: TransactionLongevity::max_value(),
 				propagate: true,
 			})
+		} else {
+			InvalidTransaction::Call.into()
 		}
-
-		TransactionValidity::Invalid(0)
 	}
 }
 
