@@ -116,28 +116,28 @@ cargo-check-subkey:
     - sccache -s
 
 
-test-linux-stable:                 &test-linux
-  stage:                           test
-  <<:                              *docker-env
-  variables:
-    # Enable debug assertions since we are running optimized builds for testing
-    # but still want to have debug assertions.
-    RUSTFLAGS: -Cdebug-assertions=y
-  except:
-    variables:
-      - $DEPLOY_TAG
-  script:
-    - time cargo test --all --release --verbose --locked |
-        tee output.log
-    - sccache -s
-  after_script:
-    - echo "___Collecting warnings for check_warnings job___"
-    - awk '/^warning:/,/^$/ { print }' output.log > ${CI_COMMIT_SHORT_SHA}_warnings.log
-  artifacts:
-    name:                          $CI_COMMIT_SHORT_SHA
-    expire_in:                     24 hrs
-    paths:
-      - ${CI_COMMIT_SHORT_SHA}_warnings.log
+# test-linux-stable:                 &test-linux
+#   stage:                           test
+#   <<:                              *docker-env
+#   variables:
+#     # Enable debug assertions since we are running optimized builds for testing
+#     # but still want to have debug assertions.
+#     RUSTFLAGS: -Cdebug-assertions=y
+#   except:
+#     variables:
+#       - $DEPLOY_TAG
+#   script:
+#     - time cargo test --all --release --verbose --locked |
+#         tee output.log
+#     - sccache -s
+#   after_script:
+#     - echo "___Collecting warnings for check_warnings job___"
+#     - awk '/^warning:/,/^$/ { print }' output.log > ${CI_COMMIT_SHORT_SHA}_warnings.log
+#   artifacts:
+#     name:                          $CI_COMMIT_SHORT_SHA
+#     expire_in:                     24 hrs
+#     paths:
+#       - ${CI_COMMIT_SHORT_SHA}_warnings.log
 
 
 test-srml-staking:                 &test-srml-staking
@@ -161,28 +161,28 @@ test-srml-staking:                 &test-srml-staking
 
 
 
-test-linux-stable-int:
-  <<:                              *test-linux
-  except:
-    refs:
-      - /^v[0-9]+\.[0-9]+.*$/      # i.e. v1.0, v2.1rc1
-    variables:
-      - $DEPLOY_TAG
-  script:
-    - echo "___Logs will be partly shown at the end in case of failure.___"
-    - echo "___Full log will be saved to the job artifacts only in case of failure.___"
-    - RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
-        time cargo test -p node-cli --release --verbose --locked -- --ignored --test-threads=1
-        &> ${CI_COMMIT_SHORT_SHA}_int_failure.log
-    - sccache -s
-  after_script:
-    - awk '/FAILED|^error\[/,0' ${CI_COMMIT_SHORT_SHA}_int_failure.log
-  artifacts:
-    name:                          $CI_COMMIT_SHORT_SHA
-    when:                          on_failure
-    expire_in:                     24 hrs
-    paths:
-      - ${CI_COMMIT_SHORT_SHA}_int_failure.log
+# test-linux-stable-int:
+#   <<:                              *test-linux
+#   except:
+#     refs:
+#       - /^v[0-9]+\.[0-9]+.*$/      # i.e. v1.0, v2.1rc1
+#     variables:
+#       - $DEPLOY_TAG
+#   script:
+#     - echo "___Logs will be partly shown at the end in case of failure.___"
+#     - echo "___Full log will be saved to the job artifacts only in case of failure.___"
+#     - RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
+#         time cargo test -p node-cli --release --verbose --locked -- --ignored --test-threads=1
+#         &> ${CI_COMMIT_SHORT_SHA}_int_failure.log
+#     - sccache -s
+#   after_script:
+#     - awk '/FAILED|^error\[/,0' ${CI_COMMIT_SHORT_SHA}_int_failure.log
+#   artifacts:
+#     name:                          $CI_COMMIT_SHORT_SHA
+#     when:                          on_failure
+#     expire_in:                     24 hrs
+#     paths:
+#       - ${CI_COMMIT_SHORT_SHA}_int_failure.log
 
 
 check-web-wasm:
@@ -223,7 +223,7 @@ build-linux-substrate:
   stage:                           build
   <<:                              *collect-artifacts
   <<:                              *docker-env
-  <<:                              *build-only
+  # <<:                              *build-only
   except:
     variables:
       - $DEPLOY_TAG
@@ -286,24 +286,24 @@ build-rust-doc-release:
     - echo "<meta http-equiv=refresh content=0;url=substrate_service/index.html>" > ./crate-docs/index.html
     - sccache -s
 
-check_warnings:
-  stage:                           build
-  <<:                              *docker-env
-  except:
-    variables:
-      - $DEPLOY_TAG
-  variables:
-    GIT_STRATEGY:                  none
-  dependencies:
-    - test-linux-stable
-  script:
-    - if [ -s ${CI_COMMIT_SHORT_SHA}_warnings.log ]; then
-        cat ${CI_COMMIT_SHORT_SHA}_warnings.log;
-        exit 1;
-      else
-        echo "___No warnings___";
-      fi
-  allow_failure:                   true
+# check_warnings:
+#   stage:                           build
+#   <<:                              *docker-env
+#   except:
+#     variables:
+#       - $DEPLOY_TAG
+#   variables:
+#     GIT_STRATEGY:                  none
+#   dependencies:
+#     - test-linux-stable
+#   script:
+#     - if [ -s ${CI_COMMIT_SHORT_SHA}_warnings.log ]; then
+#         cat ${CI_COMMIT_SHORT_SHA}_warnings.log;
+#         exit 1;
+#       else
+#         echo "___No warnings___";
+#       fi
+#   allow_failure:                   true
 
 #### stage:                        publish
 
@@ -336,13 +336,13 @@ test-srml-contracts-waterfall:
   stage:                           publish
   # this is the set of integration tests for srml-contracts that requires the substrate binary
   <<:                              *docker-env
+  # <<:                              *build-only
   dependencies:
     - build-linux-substrate
-  only:
-    - nightly
+  # only:
+  #   - nightly
   variables:
     GIT_STRATEGY:                  none
-
   # integration tests for srml-contracts
   # so the idea is that they would be coded in JS and they would speak with a running node in background
   # the node would be a default node
