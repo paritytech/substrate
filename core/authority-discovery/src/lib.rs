@@ -241,13 +241,11 @@ where
 				.get(key)
 				.ok_or(Error::MatchingHashedAuthorityIdWithAuthorityId)?;
 
-			let (signature, addresses): (Signature, Vec<u8>);
-			{
-				let mut signed_addresses =
-					schema::SignedAuthorityAddresses::decode(value).map_err(Error::Decoding)?;
-				signature = Signature(std::mem::replace(&mut signed_addresses.signature, vec![]));
-				addresses = std::mem::replace(&mut signed_addresses.addresses, vec![]);
-			}
+			let schema::SignedAuthorityAddresses {
+				signature,
+				addresses,
+			} = schema::SignedAuthorityAddresses::decode(value).map_err(Error::Decoding)?;
+			let signature = Signature(signature);
 
 			let is_verified = self
 				.client
@@ -552,7 +550,7 @@ mod tests {
 			&self,
 			_: &BlockId<Block>,
 			_: ExecutionContext,
-			_: Option<std::vec::Vec<u8>>,
+			_: Option<&std::vec::Vec<u8>>,
 			_: Vec<u8>,
 		) -> std::result::Result<
 			NativeOrEncoded<Option<(Signature, AuthorityId)>>,
@@ -567,10 +565,10 @@ mod tests {
 			&self,
 			_: &BlockId<Block>,
 			_: ExecutionContext,
-			args: Option<(Vec<u8>, Signature, AuthorityId)>,
+			args: Option<(&Vec<u8>, &Signature, &AuthorityId)>,
 			_: Vec<u8>,
 		) -> std::result::Result<NativeOrEncoded<bool>, client::error::Error> {
-			if args.unwrap().1 == Signature("test-signature-1".as_bytes().to_vec()) {
+			if *args.unwrap().1 == Signature("test-signature-1".as_bytes().to_vec()) {
 				return Ok(NativeOrEncoded::Native(true));
 			}
 			return Ok(NativeOrEncoded::Native(false));
@@ -655,11 +653,11 @@ mod tests {
 		// Create sample dht event.
 
 		let authority_id_1 = hash_authority_id("test-authority-id-1".as_bytes()).unwrap();
-		let address_1 = "/ip6/2001:db8::".to_string();
+		let address_1: libp2p::Multiaddr = "/ip6/2001:db8::".parse().unwrap();
 
 		let mut serialized_addresses = vec![];
 		schema::AuthorityAddresses {
-			addresses: vec![address_1.clone()],
+			addresses: vec![address_1.to_vec()],
 		}
 		.encode(&mut serialized_addresses)
 		.unwrap();
@@ -687,7 +685,7 @@ mod tests {
 				network.set_priority_group_call.lock().unwrap()[0],
 				(
 					"authorities".to_string(),
-					HashSet::from_iter(vec![address_1.parse().unwrap()].into_iter())
+					HashSet::from_iter(vec![address_1.clone()].into_iter())
 				)
 			);
 
