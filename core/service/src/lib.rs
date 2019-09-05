@@ -343,6 +343,186 @@ impl<Components: components::Components> Service<Components> {
 		})
 	}
 
+	pub fn new_foreign(
+		mut config: FactoryFullConfiguration<Components::Factory>,
+		task_executor: TaskExecutor,
+	) -> Result<Self, error::Error> {
+		let (signal, exit) = ::exit_future::signal();
+
+		// Create client
+		let executor = NativeExecutor::new(config.default_heap_pages);
+
+		let mut keystore = Keystore::open(config.keystore_path.as_str().into())?;
+
+		// This is meant to be for testing only
+		// FIXME #1063 remove this
+		for seed in &config.keys {
+			keystore.generate_from_seed(seed)?;
+		}
+		// Keep the public key for telemetry
+		let public_key = match keystore.contents()?.get(0) {
+			Some(public_key) => public_key.clone(),
+			None => {
+				let key = keystore.generate("")?;
+				let public_key = key.public();
+				info!("Generated a new keypair: {:?}", public_key);
+
+				public_key
+			}
+		};
+
+		let (client, on_demand) = Components::build_client(&config, executor)?;
+		let import_queue = Box::new(Components::build_import_queue(&mut config, client.clone())?);
+		let best_header = client.best_block_header()?;
+
+		let version = config.full_version();
+		info!("Best block: #{}", best_header.number());
+		telemetry!(SUBSTRATE_INFO; "node.start"; "height" => best_header.number().as_(), "best" => ?best_header.hash());
+
+		let network_protocol = <Components::Factory>::build_network_protocol(&config)?;
+		let identify_specialization = <Components::Factory>::build_identify_specialization(&config)?;
+		let transaction_pool = Arc::new(
+			Components::build_transaction_pool(config.transaction_pool.clone(), client.clone())?
+		);
+		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter::<Components> {
+			imports_external_transactions: !(config.roles == Roles::LIGHT),
+			pool: transaction_pool.clone(),
+			client: client.clone(),
+		});
+
+		let network_params = network::config::Params {
+			config: network::config::ProtocolConfig { roles: config.roles },
+			network_config: config.network.clone(),
+			chain: client.clone(),
+			on_demand: on_demand.as_ref().map(|d| d.clone() as _),
+			transaction_pool: transaction_pool_adapter.clone() as _,
+			specialization: network_protocol,
+			identify_specialization: identify_specialization,
+		};
+
+		let protocol_id = {
+			let protocol_id_full = match config.chain_spec.protocol_id() {
+				Some(pid) => pid,
+				None => {
+					warn!("Using default protocol ID {:?} because none is configured in the \
+						chain specs", DEFAULT_PROTOCOL_ID
+					);
+					DEFAULT_PROTOCOL_ID
+				}
+			}.as_bytes();
+			network::ProtocolId::from(protocol_id_full)
+		};
+
+		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
+		let (network, network_chan) = network::Service::new(
+			network_params,
+			protocol_id,
+			import_queue
+		)?;
+		on_demand.map(|on_demand| on_demand.set_network_sender(network_chan));
+
+		let inherents_pool = Arc::new(InherentsPool::default());
+		let offchain_workers = None;
+
+		{
+			// block notifications
+			let network = Arc::downgrade(&network);
+			let txpool = Arc::downgrade(&transaction_pool);
+			let wclient = Arc::downgrade(&client);
+			let offchain = offchain_workers.as_ref().map(Arc::downgrade);
+
+			let events = client.import_notification_stream()
+				.for_each(move |notification| {
+					let number = *notification.header.number();
+
+					if let Some(network) = network.upgrade() {
+						network.on_block_imported(notification.hash, notification.header);
+					}
+
+					if let (Some(txpool), Some(client)) = (txpool.upgrade(), wclient.upgrade()) {
+						Components::RuntimeServices::maintain_transaction_pool(
+							&BlockId::hash(notification.hash),
+							&*client,
+							&*txpool,
+						).map_err(|e| warn!("Pool error processing new block: {:?}", e))?;
+					}
+
+					if let (Some(txpool), Some(offchain)) = (txpool.upgrade(), offchain.as_ref().and_then(|o| o.upgrade())) {
+						Components::RuntimeServices::offchain_workers(
+							&number,
+							&offchain,
+							&txpool,
+						).map_err(|e| warn!("Offchain workers error processing new block: {:?}", e))?;
+					}
+
+					Ok(())
+				})
+				.select(exit.clone())
+				.then(|_| Ok(()));
+			task_executor.spawn(events);
+		}
+
+		{
+			// finality notifications
+			let network = Arc::downgrade(&network);
+
+			// A utility stream that drops all ready items and only returns the last one.
+			// This is used to only keep the last finality notification and avoid
+			// overloading the sync module with notifications.
+			struct MostRecentNotification<B: BlockT>(futures::stream::Fuse<FinalityNotifications<B>>);
+
+			impl<B: BlockT> Stream for MostRecentNotification<B> {
+				type Item = <FinalityNotifications<B> as Stream>::Item;
+				type Error = <FinalityNotifications<B> as Stream>::Error;
+
+				fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+					let mut last = None;
+					let last = loop {
+						match self.0.poll()? {
+							Async::Ready(Some(item)) => { last = Some(item) }
+							Async::Ready(None) => match last {
+								None => return Ok(Async::Ready(None)),
+								Some(last) => break last,
+							},
+							Async::NotReady => match last {
+								None => return Ok(Async::NotReady),
+								Some(last) => break last,
+							},
+						}
+					};
+
+					Ok(Async::Ready(Some(last)))
+				}
+			}
+
+			let events = MostRecentNotification(client.finality_notification_stream().fuse())
+				.for_each(move |notification| {
+					if let Some(network) = network.upgrade() {
+						network.on_block_finalized(notification.hash, notification.header);
+					}
+					Ok(())
+				})
+				.select(exit.clone())
+				.then(|_| Ok(()));
+
+			task_executor.spawn(events);
+		}
+
+		Ok(Service {
+			client,
+			network: Some(network),
+			transaction_pool,
+			inherents_pool,
+			keystore,
+			exit,
+			signal: Some(signal),
+			config,
+			_rpc: Box::new(()),
+			_telemetry: None,
+			_offchain_workers: None
+		})
+	}
+
 	/// give the authority key, if we are an authority and have a key
 	pub fn authority_key(&self) -> Option<primitives::ed25519::Pair> {
 		if self.config.roles != Roles::AUTHORITY { return None }

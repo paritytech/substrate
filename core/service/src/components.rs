@@ -560,6 +560,16 @@ impl<Factory: ServiceFactory> LightComponents<Factory> {
 			}
 		)
 	}
+
+	pub fn new_foreign(
+		config: FactoryFullConfiguration<Factory>,
+		task_executor: TaskExecutor
+	) -> Result<Self, error::Error> {
+		Ok(Self {
+			_factory: Default::default(),
+			service: Service::new_foreign(config, task_executor)?,
+		})
+	}
 }
 
 impl<Factory: ServiceFactory> Deref for LightComponents<Factory> {
