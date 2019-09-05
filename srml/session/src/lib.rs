@@ -121,7 +121,7 @@
 
 use rstd::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use codec::Decode;
-use sr_primitives::{KeyTypeId, AppKey};
+use sr_primitives::{KeyTypeId, AppKey, Perbill};
 use sr_primitives::weights::SimpleDispatchInfo;
 use sr_primitives::traits::{Convert, Zero, Member, OpaqueKeys};
 use sr_staking_primitives::SessionIndex;
@@ -345,6 +345,12 @@ pub trait Trait: system::Trait {
 	/// The keys.
 	type Keys: OpaqueKeys + Member + Parameter + Default;
 
+	/// The fraction of validators set that is safe to be disabled.
+	///
+	/// After the threshold is reached `disabled` method starts to return true,
+	/// which in combination with `srml_staking` forces a new era.
+	type DisabledValidatorsThreshold: Get<Perbill>;
+
 	/// Select initial validators.
 	type SelectInitialValidators: SelectInitialValidators<Self::ValidatorId>;
 }
@@ -561,14 +567,16 @@ impl<T: Trait> Module<T> {
 
 	/// Disable the validator of index `i`.
 	///
-	/// Returns `true` if this causes a third of validators to be already disabled.
+	/// Returns `true` if this causes a `DisabledValidatorsThreshold` of validators
+	/// to be already disabled.
 	pub fn disable_index(i: usize) -> bool {
-		let (fire_event, third_reached) = DisabledValidators::mutate(|disabled| {
+		let (fire_event, threshold_reached) = DisabledValidators::mutate(|disabled| {
 			let i = i as u32;
 			if let Err(index) = disabled.binary_search(&i) {
-				let count = <Validators<T>>::decode_len().unwrap_or(0);
+				let count = <Validators<T>>::decode_len().unwrap_or(0) as u32;
+				let threshold = T::DisabledValidatorsThreshold::get() * count;
 				disabled.insert(index, i);
-				(true, disabled.len() >= (count + 2) / 3)
+				(true, disabled.len() as u32 > threshold)
 			} else {
 				(false, false)
 			}
@@ -578,13 +586,14 @@ impl<T: Trait> Module<T> {
 			T::SessionHandler::on_disabled(i);
 		}
 
-		third_reached
+		threshold_reached
 	}
 
-	/// Disable the validator identified by `c`. (If using with the staking module, this would be
-	/// their *stash* account.)
+	/// Disable the validator identified by `c`. (If using with the staking module,
+	/// this would be their *stash* account.)
 	///
-	/// Returns `Ok(true)` if more than third validators in current session is already disabled.
+	/// Returns `Ok(true)` if more than `DisabledValidatorsThreshold` validators in current
+	/// session is already disabled.
 	/// If used with the staking module it allows to force a new era in such case.
 	pub fn disable(c: &T::ValidatorId) -> rstd::result::Result<bool, ()> {
 		Self::validators().iter().position(|i| i == c).map(Self::disable_index).ok_or(())
