@@ -276,7 +276,7 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 			Some(&self.changes_trie_storage),
 			&self.overlay,
 			parent,
-		)?.map(|(_, root)| root))
+		)?.map(|(_, root, _)| root))
 	}
 
 	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities> {
