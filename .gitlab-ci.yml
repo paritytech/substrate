@@ -355,6 +355,11 @@ test-srml-contracts-waterfall:
     # spinning it up in background exposing RPC interface locally
     # then running yarn start, which uses the local RPC
   script:
+    - echo 'deb http://deb.debian.org/debian/ buster main' > /etc/apt/sources.list.d/wabt.list
+    - printf 'Package: *\nPin: release a=buster\nPin-Priority: 100\n' > /etc/apt/preferences.d/limit-buster
+    - apt update
+    - apt install wabt
+    - cargo install pwasm-utils-cli --bin wasm-prune --force
     - git clone https://github.com/paritytech/srml-contracts-waterfall.git
     - cd ./srml-contracts-waterfall
     - git submodule update --init
