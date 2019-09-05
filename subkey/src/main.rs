@@ -20,7 +20,7 @@ extern crate test;
 
 use std::{str::FromStr, io::{stdin, Read}, convert::TryInto};
 use hex_literal::hex;
-use clap::load_yaml;
+use clap::{load_yaml, ArgMatches, App};
 use bip39::{Mnemonic, Language, MnemonicType};
 use primitives::{
 	ed25519, sr25519, hexdisplay::HexDisplay, Pair, Public, blake2_256,
@@ -91,7 +91,7 @@ impl Crypto for Sr25519 {
 	type Public = sr25519::Public;
 }
 
-fn execute<C: Crypto>(matches: clap::ArgMatches) where
+fn execute<C: Crypto>(matches: ArgMatches) where
 	<<C as Crypto>::Pair as Pair>::Signature: AsRef<[u8]> + AsMut<[u8]> + Default,
 	<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec,
 {
@@ -137,12 +137,6 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 				None,
 				maybe_network
 			);
-		}
-		("sign", Some(matches)) => {
-			let pair = read_input_pair::<C>(matches, password);
-			let message = read_input_message::<C>(matches);
-			let sig = pair.sign(&message);
-			println!("{}", hex::encode(&sig));
 		}
 		("transfer", Some(matches)) => {
 			let signer = matches.value_of("from")
@@ -240,23 +234,53 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 
 			println!("0x{}", hex::encode(&extrinsic.encode()));
 		}
-		("verify", Some(matches)) => {
-			let signature = read_input_signature::<C>(matches);
-			let pubkey = read_input_public_key::<C>(matches, password);
-			let message = read_input_message::<C>(matches);
-
-			// Verify signature.
-			if <<C as Crypto>::Pair as Pair>::verify(&signature, &message, &pubkey) {
-				println!("Signature verifies correctly.")
-			} else {
-				println!("Signature invalid.")
-			}
-		}
+		("sign", Some(matches)) => do_sign::<C>(matches, password),
+		("verify", Some(matches)) => do_verify::<C>(matches, password),
 		_ => print_usage(&matches),
 	}
 }
 
-fn read_input_signature<C: Crypto>(matches: &clap::ArgMatches) -> <<C as Crypto>::Pair as Pair>::Signature
+fn do_sign<C: Crypto>(matches: &ArgMatches, password: Option<&str>) 
+	where
+		<<C as Crypto>::Pair as Pair>::Signature: AsRef<[u8]> + AsMut<[u8]> + Default,
+		<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec,
+{
+	let pair = read_input_pair::<C>(matches, password);
+	let message = read_input_message(matches);
+	let signature = pair.sign(&message);
+	print_signature::<C>(signature);
+}
+
+fn do_verify<C: Crypto>(matches: &ArgMatches, password: Option<&str>)
+	where
+		<<C as Crypto>::Pair as Pair>::Signature: AsRef<[u8]> + AsMut<[u8]> + Default,
+		<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec,
+{
+	let signature = read_input_signature::<C>(matches);
+	let pubkey = read_input_public_key::<C>(matches, password);
+	let message = read_input_message(matches);
+	verify_signature::<C>(signature, message, pubkey);
+}
+
+fn verify_signature<C: Crypto>(
+	signature: <<C as Crypto>::Pair as Pair>::Signature,
+	message: Vec<u8>,
+	pubkey: <<C as Crypto>::Pair as Pair>::Public,
+) {
+	if <<C as Crypto>::Pair as Pair>::verify(&signature, &message, &pubkey) {
+		println!("Signature verifies correctly.")
+	} else {
+		println!("Signature invalid.")
+	}
+}
+
+fn print_signature<C: Crypto>(signature: <<C as Crypto>::Pair as Pair>::Signature) {
+	println!("{}", hex::encode(&signature));
+}
+
+fn read_input_signature<C: Crypto>(
+	matches: &ArgMatches,
+) -> <<C as Crypto>::Pair as Pair>::Signature
 	where
 		<<C as Crypto>::Pair as Pair>::Signature: AsRef<[u8]> + AsMut<[u8]> + Default,
 		<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec,
@@ -276,32 +300,26 @@ fn read_input_signature<C: Crypto>(matches: &clap::ArgMatches) -> <<C as Crypto>
 	signature
 }
 
-fn read_input_public_key<C: Crypto>(matches: &clap::ArgMatches, password: Option<&str>) -> <<C as Crypto>::Pair as Pair>::Public
+fn read_input_public_key<C: Crypto>(
+	matches: &ArgMatches,
+	password: Option<&str>,
+) -> <<C as Crypto>::Pair as Pair>::Public 
 	where
 		<<C as Crypto>::Pair as Pair>::Signature: AsRef<[u8]> + AsMut<[u8]> + Default,
 		<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec,
 {
-	let hex_uri = matches.value_of("uri")
+	let uri = matches.value_of("uri")
 		.expect("public uri parameter is required; thus it can't be None; qed");
-	let uri = if hex_uri.starts_with("0x") {
-		&hex_uri[2..]
-	} else {
-		hex_uri
-	};
-	let pubkey = if let Ok(pubkey_vec) = hex::decode(uri) {
+	let uri = if uri.starts_with("0x") { &uri[2..] } else { uri };
+	if let Ok(pubkey_vec) = hex::decode(uri) {
 		<C as Crypto>::Public::from_slice(pubkey_vec.as_slice())
 	} else {
 		<C as Crypto>::Pair::from_string(uri, password).ok().map(|p| p.public())
 			.expect("Invalid URI; expecting either a secret URI or a public URI.")
-	};
-	pubkey
+	}
 }
 
-fn read_input_message<C: Crypto>(matches: &clap::ArgMatches) -> Vec<u8>
-	where
-		<<C as Crypto>::Pair as Pair>::Signature: AsRef<[u8]> + AsMut<[u8]> + Default,
-		<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec,
-{
+fn read_input_message(matches: &ArgMatches) -> Vec<u8> {
 	let mut message = vec![];
 	stdin().lock().read_to_end(&mut message).expect("Error reading from stdin");
 	if matches.is_present("hex") {
@@ -310,20 +328,22 @@ fn read_input_message<C: Crypto>(matches: &clap::ArgMatches) -> Vec<u8>
 	message
 }
 
-fn read_input_pair<C: Crypto>(matches: &clap::ArgMatches, password: Option<&str>) -> <C as Crypto>::Pair
+fn read_input_pair<C: Crypto>(
+	matches: &ArgMatches,
+	password: Option<&str>,
+) -> <C as Crypto>::Pair
 	where
 		<<C as Crypto>::Pair as Pair>::Signature: AsRef<[u8]> + AsMut<[u8]> + Default,
 		<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec,
 {
 	let suri = matches.value_of("suri")
 		.expect("secret URI parameter is required; thus it can't be None; qed");
-	let pair = C::pair_from_suri(suri, password);
-	pair
+	C::pair_from_suri(suri, password)
 }
 
 fn main() {
 	let yaml = load_yaml!("cli.yml");
-	let matches = clap::App::from_yaml(yaml)
+	let matches = App::from_yaml(yaml)
 		.version(env!("CARGO_PKG_VERSION"))
 		.get_matches();
 
@@ -334,7 +354,7 @@ fn main() {
 	}
 }
 
-fn print_usage(matches: &clap::ArgMatches) {
+fn print_usage(matches: &ArgMatches) {
 	println!("{}", matches.usage());
 }
 
