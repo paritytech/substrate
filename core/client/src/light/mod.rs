@@ -67,8 +67,8 @@ pub fn new_light<B, S, F, GS, RA, E>(
 >, B, RA>>
 	where
 		B: BlockT<Hash=H256>,
-		S: BlockchainStorage<B>,
-		F: Fetcher<B>,
+		S: BlockchainStorage<B> + 'static,
+		F: Fetcher<B> + 'static,
 		GS: BuildStorage,
 		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
 {

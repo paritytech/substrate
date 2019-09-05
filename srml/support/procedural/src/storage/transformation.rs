@@ -330,11 +330,11 @@ fn decl_store_extra_genesis(
 						let v = (#builder)(&self);
 						<
 							#name<#struct_trait #instance> as
-							#scrate::storage::hashed::generator::StorageValue<#typ>
-						>::put(&v, storage);
+							#scrate::storage::StorageValue<#typ>
+						>::put(&v);
 					}}
 				},
-				DeclStorageTypeInfosKind::Map { key_type, .. } => {
+				DeclStorageTypeInfosKind::Map { key_type, is_linked, .. } => {
 					let struct_trait = if ext::type_contains_ident(&type_infos.value_type, traitinstance)
 						|| ext::type_contains_ident(key_type, traitinstance)
 					{
@@ -344,13 +344,19 @@ fn decl_store_extra_genesis(
 						quote!()
 					};
 
+					let map = if is_linked {
+						quote! { StorageLinkedMap }
+					} else {
+						quote! { StorageMap }
+					};
+
 					quote!{{
 						let data = (#builder)(&self);
 						data.into_iter().for_each(|(k, v)| {
 							<
 								#name<#struct_trait #instance> as
-								#scrate::storage::hashed::generator::StorageMap<#key_type, #typ>
-							>::insert(&k, &v, storage);
+								#scrate::storage::#map<#key_type, #typ>
+							>::insert(&k, &v);
 						});
 					}}
 				},
@@ -370,8 +376,8 @@ fn decl_store_extra_genesis(
 						data.into_iter().for_each(|(k1, k2, v)| {
 							<
 								#name<#struct_trait #instance> as
-								#scrate::storage::unhashed::generator::StorageDoubleMap<#key1_type, #key2_type, #typ>
-							>::insert(&k1, &k2, &v, storage);
+								#scrate::storage::StorageDoubleMap<#key1_type, #key2_type, #typ>
+							>::insert(&k1, &k2, &v);
 						});
 					}}
 				},
@@ -380,7 +386,7 @@ fn decl_store_extra_genesis(
 	}
 
 	let mut has_scall = false;
-	let mut scall = quote!{ ( |_, _| {} ) };
+	let mut scall = quote!{ let scall: fn(&Self) = |_| {}; scall };
 	let mut genesis_extrafields = TokenStream2::new();
 	let mut genesis_extrafields_default = TokenStream2::new();
 
@@ -418,14 +424,7 @@ fn decl_store_extra_genesis(
 					assimilate_require_generic |= ext::expr_contains_ident(&expr.content, traitinstance);
 					let content = &expr.content;
 					scall = quote_spanned! { expr.span() =>
-						let scall: fn(
-							&mut (
-								#scrate::sr_primitives::StorageOverlay,
-								#scrate::sr_primitives::ChildrenStorageOverlay
-							),
-							&Self
-						) = #content;
-						scall
+						let scall: fn(&Self) = #content; scall
 					};
 					has_scall = true;
 				},
@@ -558,13 +557,13 @@ fn decl_store_extra_genesis(
 						#scrate::sr_primitives::ChildrenStorageOverlay,
 					),
 				) -> std::result::Result<(), String> #fn_where_clause {
-					let storage = &mut tuple_storage.0;
+					#scrate::with_storage(tuple_storage, || {
+						#builders
 
-					#builders
+						#scall(&self);
 
-					#scall(tuple_storage, &self);
-
-					Ok(())
+						Ok(())
+					})
 				}
 			}
 
@@ -771,17 +770,6 @@ fn decl_storage_items(
 		// Propagate doc attributes.
 		let attrs = attrs.inner.iter().filter_map(|a| a.parse_meta().ok()).filter(|m| m.name() == "doc");
 
-		// create default value delegator
-		let default_delegator_ident = Ident::new(
-			&format!("{}{}", name.to_string(), "DefaultDelegator"),
-			proc_macro2::Span::call_site(),
-		);
-		let default_delegator_return = if !type_infos.is_option {
-			quote! { Some(#fielddefault) }
-		} else {
-			quote! { #fielddefault }
-		};
-
 		let i = impls::Impls {
 			scrate,
 			visibility,
@@ -791,8 +779,6 @@ fn decl_storage_items(
 			instance_opts,
 			type_infos,
 			fielddefault,
-			default_delegator_ident,
-			default_delegator_return,
 			prefix: build_prefix(cratename, name),
 			name,
 			attrs,
@@ -903,14 +889,14 @@ fn impl_store_fns(
 					quote!{
 						#( #[ #attrs ] )*
 						pub fn #get_fn() -> #value_type {
-							<#name<#struct_trait #instance> as
-								#scrate::storage::hashed::generator::StorageValue<#typ>> :: get(
-									&#scrate::storage::RuntimeStorage
-								)
+							<
+								#name<#struct_trait #instance> as
+								#scrate::storage::StorageValue<#typ>
+							>::get()
 						}
 					}
 				},
-				DeclStorageTypeInfosKind::Map { key_type, .. } => {
+				DeclStorageTypeInfosKind::Map { key_type, is_linked, .. } => {
 					let struct_trait = if ext::type_contains_ident(&type_infos.value_type, traitinstance)
 						|| ext::type_contains_ident(key_type, traitinstance)
 					{
@@ -919,13 +905,19 @@ fn impl_store_fns(
 						quote!()
 					};
 
+					let map = if is_linked {
+						quote! { StorageLinkedMap }
+					} else {
+						quote! { StorageMap }
+					};
+
 					quote!{
 						#( #[ #attrs ] )*
 						pub fn #get_fn<K: #scrate::rstd::borrow::Borrow<#key_type>>(key: K) -> #value_type {
 							<
 								#name<#struct_trait #instance> as
-								#scrate::storage::hashed::generator::StorageMap<#key_type, #typ>
-							>::get(key.borrow(), &#scrate::storage::RuntimeStorage)
+								#scrate::storage::#map<#key_type, #typ>
+							>::get(key.borrow())
 						}
 					}
 				}
@@ -949,8 +941,8 @@ fn impl_store_fns(
 						{
 							<
 								#name<#struct_trait #instance> as
-								#scrate::storage::unhashed::generator::StorageDoubleMap<#key1_type, #key2_type, #typ>
-							>::get(k1, k2, &#scrate::storage::RuntimeStorage)
+								#scrate::storage::StorageDoubleMap<#key1_type, #key2_type, #typ>
+							>::get(k1, k2)
 						}
 					}
 				}

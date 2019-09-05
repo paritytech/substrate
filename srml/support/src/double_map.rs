@@ -19,7 +19,7 @@
 use crate::rstd::prelude::*;
 use crate::codec::{Codec, Encode};
 use crate::storage::unhashed;
-use sr_std::borrow::Borrow;
+use rstd::borrow::Borrow;
 
 /// An implementation of a map with a two keys.
 ///
