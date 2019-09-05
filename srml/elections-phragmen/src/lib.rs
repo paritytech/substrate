@@ -234,7 +234,7 @@ decl_module! {
 		/// their bond is slashed.
 		///
 		/// A defunct voter is defined to be:
-		///   - a voter who's current submitted votes are all invalid. i.e. all of them are no
+		///   - a voter whose current submitted votes are all invalid. i.e. all of them are no
 		///     longer a candidate nor an active member.
 		///
 		/// # <weight>
