@@ -75,13 +75,6 @@
 //! - [`Call`](./enum.Call.html)
 //! - [`Module`](./struct.Module.html)
 
-// TODO: we don't hold the voters accountable in any sense; a voter can remove themselves (unbond)
-// right after an election (even if their voted for some winners) and they can be reported right
-// after an election. We should probably add some accountability here. Simplest would be that voters
-// cannot remove/report as long as they have a voted target who is in the member list.
-
-// TODO: update the weights with O values.
-
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sr_primitives::traits::{Zero, StaticLookup, Bounded, Convert};
@@ -185,15 +178,18 @@ decl_module! {
 		/// and keep some for further transactions.
 		///
 		/// # <weight>
-		/// O(1)
+		/// #### State
+		/// Reads: O(1)
+		/// Writes: O(V) given `V` votes. V is bounded by 16.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
 		fn vote(origin, votes: Vec<T::AccountId>, value: BalanceOf<T>) {
 			let who = ensure_signed(origin)?;
 
-			let candidates_count = <Candidates<T>>::decode_len().unwrap_or(0);
+			let candidates_count = <Candidates<T>>::decode_len().unwrap_or(0) as usize;
+			let members_count = <Members<T>>::decode_len().unwrap_or(0) as usize;
 			// addition is valid: candidates and members never overlap.
-			let allowed_votes = candidates_count as usize + Self::members().len();
+			let allowed_votes = candidates_count + members_count;
 
 			ensure!(!allowed_votes.is_zero(), "cannot vote when no candidates or members exist");
 			ensure!(votes.len() <= allowed_votes, "cannot vote more than candidates");
@@ -226,7 +222,13 @@ decl_module! {
 		}
 
 		/// Remove `origin` as a voter. This removes the lock and returns the bond.
-		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
+		///
+		/// # <weight>
+		/// #### State
+		/// Reads: O(1)
+		/// Writes: O(1)
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn remove_voter(origin) {
 			let who = ensure_signed(origin)?;
 
@@ -244,9 +246,11 @@ decl_module! {
 		///     longer a candidate nor an active member.
 		///
 		/// # <weight>
-		/// O(NLogM) given M current candidates and N votes for `target`.
+		/// #### State
+		/// Reads: O(NLogM) given M current candidates and N votes for `target`.
+		/// Writes: O(1)
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
 		fn report_defunct_voter(origin, target: <T::Lookup as StaticLookup>::Source) {
 			let reporter = ensure_signed(origin)?;
 			let target = T::Lookup::lookup(target)?;
@@ -258,9 +262,7 @@ decl_module! {
 			// function O(MLonN) with N candidates in total and M of them being voted by `target`.
 			// We could easily add another mapping to be able to check if someone is a candidate in
 			// `O(1)` but that would make the process of removing candidates at the end of each
-			// round slightly harder.
-			//
-			// Note that for now we have a bound of number of votes (`N`).
+			// round slightly harder. Note that for now we have a bound of number of votes (`N`).
 			let valid = Self::is_defunct_voter(&target);
 			if valid {
 				// reporter will get the voting bond of the target
@@ -285,18 +287,22 @@ decl_module! {
 		///   - Win and become a member. Members will eventually get their stash back.
 		///   - Become a runner-up. Runner-ups are reserved members in case one gets forcefully
 		///     removed.
+		///
 		/// # <weight>
-		/// O(LogN) Given N candidates.
+		/// #### State
+		/// Reads: O(LogN) Given N candidates.
+		/// Writes: O(1)
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn submit_candidacy(origin) {
 			let who = ensure_signed(origin)?;
 
 			let is_candidate = Self::is_candidate(&who);
-			ensure!(!is_candidate.is_ok(), "duplicate candidate submission");
-			ensure!(!Self::is_member(&who), "member cannot re-submit candidacy");
+			ensure!(is_candidate.is_err(), "duplicate candidate submission");
 			// assured to be an error, error always contains the index.
 			let index = is_candidate.unwrap_err();
+
+			ensure!(!Self::is_member(&who), "member cannot re-submit candidacy");
 
 			T::Currency::reserve(&who, T::CandidacyBond::get())
 				.map_err(|_| "candidate does not have enough funds")?;
@@ -305,8 +311,11 @@ decl_module! {
 		}
 
 		/// Set the desired member count. Changes will be effective at the beginning of next round.
+		///
 		/// # <weight>
-		/// O(1)
+		/// #### State
+		/// Reads: O(1)
+		/// Writes: O(1)
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn set_desired_member_count(origin, #[compact] count: u32) {
@@ -322,7 +331,9 @@ decl_module! {
 		/// Note that this does not affect the designated block number of the next election.
 		///
 		/// # <weight>
-		/// O(LogN) given N candidates + O(phragmen)
+		/// #### State
+		/// Reads: O(do_phragmen)
+		/// Writes: O(do_phragmen)
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(2_000_000)]
 		fn remove_member(origin, who: <T::Lookup as StaticLookup>::Source) {
@@ -360,6 +371,12 @@ decl_module! {
 		}
 
 		/// Set the duration of each term. This will affect the next election's block number.
+		///
+		/// # <weight>
+		/// #### State
+		/// Reads: O(1)
+		/// Writes: O(1)
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn set_term_duration(origin, #[compact] count: T::BlockNumber) {
 			ensure_root(origin)?;
@@ -396,14 +413,14 @@ impl<T: Trait> Module<T> {
 	/// Check if `who` is a candidate. It returns the insert index if the element does not exists as
 	/// an error.
 	///
-	/// O(LogN) given N candidates.
+	/// State: O(LogN) given N candidates.
 	fn is_candidate(who: &T::AccountId) -> Result<(), usize> {
 		Self::candidates().binary_search(who).map(|_| ())
 	}
 
 	/// Check if `who` is a voter. It may or may not be a _current_ one.
 	///
-	/// O(1).
+	/// State: O(1).
 	fn is_voter(who: &T::AccountId) -> bool {
 		<StakeOf<T>>::exists(who)
 	}
@@ -464,6 +481,12 @@ impl<T: Trait> Module<T> {
 	/// Run the phragmen election with all required side processes and state updates.
 	///
 	/// Calls the appropriate `ChangeMembers` function variant internally.
+	///
+	/// # <weight>
+	/// #### State
+	/// Reads: O(C + V*E) where C = candidates, V voters and E votes per voter exits.
+	/// Writes: O(M + R) with M desired members and R runner-ups.
+	/// # </weight>
 	fn do_phragmen() {
 		let desired_seats = Self::desired_members() as usize;
 		let desired_runner_ups = Self::desired_runner_ups() as usize;
