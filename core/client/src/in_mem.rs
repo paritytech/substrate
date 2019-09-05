@@ -16,7 +16,7 @@
 
 //! In memory client backend
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use parking_lot::{RwLock, Mutex};
 use primitives::{ChangesTrieConfiguration, storage::well_known_keys};
@@ -24,7 +24,7 @@ use sr_primitives::generic::{BlockId, DigestItem};
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor};
 use sr_primitives::{Justification, StorageOverlay, ChildrenStorageOverlay};
 use state_machine::backend::{Backend as StateBackend, InMemory};
-use state_machine::{self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId};
+use state_machine::{self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId, ChangesTrieTransaction};
 use hash_db::{Hasher, Prefix};
 use trie::MemoryDB;
 use consensus::well_known_cache_keys::Id as CacheKeyId;
@@ -484,8 +484,8 @@ where
 		Ok(())
 	}
 
-	fn update_changes_trie(&mut self, update: MemoryDB<H>) -> error::Result<()> {
-		self.changes_trie_update = Some(update);
+	fn update_changes_trie(&mut self, update: ChangesTrieTransaction<H, NumberFor<Block>>) -> error::Result<()> {
+		self.changes_trie_update = Some(update.0);
 		Ok(())
 	}
 
@@ -764,6 +764,14 @@ impl<Block, H> state_machine::ChangesTrieStorage<H, NumberFor<Block>> for Change
 {
 	fn as_roots_storage(&self) -> &dyn state_machine::ChangesTrieRootsStorage<H, NumberFor<Block>> {
 		self
+	}
+
+	fn with_cached_changed_keys(
+		&self,
+		_root: &H::Out,
+		_functor: &mut dyn FnMut(&HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>),
+	) -> bool {
+		false
 	}
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<state_machine::DBValue>, String> {
