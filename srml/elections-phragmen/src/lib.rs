@@ -186,7 +186,7 @@ decl_module! {
 
 			// TODO: use decode_len #3071 and remove candidate_count.
 			let candidates_count = Self::candidate_count();
-			// addition is valid: candidates adn members never overlap.
+			// addition is valid: candidates and members never overlap.
 			let allowed_votes = candidates_count as usize + Self::members().len();
 
 			ensure!(!allowed_votes.is_zero(), "cannot vote when no candidates or members exist");
