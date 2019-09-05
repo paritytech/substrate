@@ -43,7 +43,8 @@ use sr_primitives::{
 use state_machine::{
 	DBValue, Backend as StateBackend, CodeExecutor, ChangesTrieAnchorBlockId,
 	ExecutionStrategy, ExecutionManager, prove_read, prove_child_read,
-	ChangesTrieRootsStorage, ChangesTrieStorage, ChangesTrieConfigurationRange,
+	ChangesTrieRootsStorage, ChangesTrieStorage,
+	ChangesTrieTransaction, ChangesTrieConfigurationRange,
 	key_changes, key_changes_proof, OverlayedChanges, NeverOffchainExt,
 };
 use executor::{RuntimeVersion, RuntimeInfo};
@@ -86,7 +87,7 @@ type StorageUpdate<B, Block> = <
 		<B as backend::Backend<Block, Blake2Hasher>>::BlockImportOperation
 			as BlockImportOperation<Block, Blake2Hasher>
 	>::State as state_machine::Backend<Blake2Hasher>>::Transaction;
-type ChangesUpdate = trie::MemoryDB<Blake2Hasher>;
+type ChangesUpdate<Block> = ChangesTrieTransaction<Blake2Hasher, NumberFor<Block>>;
 
 /// Execution strategies settings.
 #[derive(Debug, Clone)]
@@ -635,6 +636,14 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				self
 			}
 
+			fn with_cached_changed_keys(
+				&self,
+				root: &H256,
+				functor: &mut dyn FnMut(&HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>),
+			) -> bool {
+				self.storage.with_cached_changed_keys(root, functor)
+			}
+
 			fn get(&self, key: &H256, prefix: Prefix) -> Result<Option<DBValue>, String> {
 				self.storage.get(key, prefix)
 			}
@@ -879,11 +888,15 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			fork_choice,
 		);
 
-		telemetry!(SUBSTRATE_INFO; "block.import";
-			"height" => height,
-			"best" => ?hash,
-			"origin" => ?origin
-		);
+		if let Ok(ImportResult::Imported(ref aux)) = result {
+			if aux.is_new_best {
+				telemetry!(SUBSTRATE_INFO; "block.import";
+					"height" => height,
+					"best" => ?hash,
+					"origin" => ?origin
+				);
+			}
+		}
 
 		result
 	}
@@ -985,7 +998,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			operation.notify_imported = Some((hash, origin, import_headers.into_post(), is_new_best, storage_changes));
 		}
 
-		Ok(ImportResult::imported())
+		Ok(ImportResult::imported(is_new_best))
 	}
 
 	fn block_execution(
@@ -997,7 +1010,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		body: Option<Vec<Block::Extrinsic>>,
 	) -> error::Result<(
 		Option<StorageUpdate<B, Block>>,
-		Option<Option<ChangesUpdate>>,
+		Option<Option<ChangesUpdate<Block>>>,
 		Option<(
 			Vec<(Vec<u8>, Option<Vec<u8>>)>,
 			Vec<(Vec<u8>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>
@@ -1500,7 +1513,7 @@ impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Blo
 			BlockStatus::KnownBad => return Ok(ImportResult::KnownBad),
 		}
 
-		Ok(ImportResult::imported())
+		Ok(ImportResult::imported(false))
 	}
 }
 
@@ -1528,7 +1541,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 	}
 }
 
-impl<B, E, Block, RA> Finalizer<Block, Blake2Hasher, B> for Client<B, E, Block, RA> where 
+impl<B, E, Block, RA> Finalizer<Block, Blake2Hasher, B> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
 	Block: BlockT<Hash=H256>,
@@ -1552,7 +1565,7 @@ impl<B, E, Block, RA> Finalizer<Block, Blake2Hasher, B> for Client<B, E, Block, 
 	}
 }
 
-impl<B, E, Block, RA> Finalizer<Block, Blake2Hasher, B> for &Client<B, E, Block, RA> where 
+impl<B, E, Block, RA> Finalizer<Block, Blake2Hasher, B> for &Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
 	Block: BlockT<Hash=H256>,
@@ -1833,7 +1846,7 @@ impl<B, E, Block, RA> backend::AuxStore for &Client<B, E, Block, RA>
 		B: backend::Backend<Block, Blake2Hasher>,
 		E: CallExecutor<Block, Blake2Hasher>,
 		Block: BlockT<Hash=H256>,
-{ 
+{
 
 	fn insert_aux<
 		'a,

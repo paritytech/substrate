@@ -17,8 +17,7 @@
 //! Transaction validity interface.
 
 use rstd::prelude::*;
-use crate::codec::{Encode, Decode, Error};
-use crate::traits::DispatchError;
+use crate::codec::{Encode, Decode};
 
 /// Priority for a transaction. Additive. Higher is better.
 pub type TransactionPriority = u64;
@@ -30,29 +29,151 @@ pub type TransactionLongevity = u64;
 /// Tag for a transaction. No two transactions with the same tag should be placed on-chain.
 pub type TransactionTag = Vec<u8>;
 
-/// Information on a transaction's validity and, if valid, on how it relates to other transactions.
-#[derive(Clone, PartialEq, Eq, Encode)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub enum TransactionValidity {
-	/// Transaction is invalid. Details are described by the error code.
-	Invalid(i8),
-	/// Transaction is valid.
-	Valid(ValidTransaction),
-	/// Transaction validity can't be determined.
-	Unknown(i8),
+/// An invalid transaction validity.
+#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy)]
+#[cfg_attr(feature = "std", derive(Debug, serde::Serialize))]
+pub enum InvalidTransaction {
+	/// The call of the transaction is not expected.
+	Call,
+	/// General error to do with the inability to pay some fees (e.g. account balance too low).
+	Payment,
+	/// General error to do with the transaction not yet being valid (e.g. nonce too high).
+	Future,
+	/// General error to do with the transaction being outdated (e.g. nonce too low).
+	Stale,
+	/// General error to do with the transaction's proofs (e.g. signature).
+	BadProof,
+	/// The transaction birth block is ancient.
+	AncientBirthBlock,
+	/// The transaction would exhaust the resources of current block.
+	///
+	/// The transaction might be valid, but there are not enough resources left in the current block.
+	ExhaustsResources,
+	/// Any other custom invalid validity that is not covered by this enum.
+	Custom(u8),
 }
 
-impl From<Result<ValidTransaction, DispatchError>> for TransactionValidity {
-	fn from(r: Result<ValidTransaction, DispatchError>) -> Self {
-		match r {
-			Ok(v) => TransactionValidity::Valid(v),
-			Err(e) => TransactionValidity::Invalid(e.into()),
+impl InvalidTransaction {
+	/// Returns if the reason for the invalidity was block resource exhaustion.
+	pub fn exhausted_resources(&self) -> bool {
+		match self {
+			Self::ExhaustsResources => true,
+			_ => false,
 		}
 	}
 }
 
+impl From<InvalidTransaction> for &'static str {
+	fn from(invalid: InvalidTransaction) -> &'static str {
+		match invalid {
+			InvalidTransaction::Call => "Transaction call is not expected",
+			InvalidTransaction::Future => "Transaction will be valid in the future",
+			InvalidTransaction::Stale => "Transaction is outdated",
+			InvalidTransaction::BadProof => "Transaction has a bad signature",
+			InvalidTransaction::AncientBirthBlock => "Transaction has an ancient birth block",
+			InvalidTransaction::ExhaustsResources =>
+				"Transaction would exhausts the block limits",
+			InvalidTransaction::Payment =>
+				"Inability to pay some fees (e.g. account balance too low)",
+			InvalidTransaction::Custom(_) => "InvalidTransaction custom error",
+		}
+	}
+}
+
+/// An unknown transaction validity.
+#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy)]
+#[cfg_attr(feature = "std", derive(Debug, serde::Serialize))]
+pub enum UnknownTransaction {
+	/// Could not lookup some information that is required to validate the transaction.
+	CannotLookup,
+	/// No validator found for the given unsigned transaction.
+	NoUnsignedValidator,
+	/// Any other custom unknown validity that is not covered by this enum.
+	Custom(u8),
+}
+
+impl From<UnknownTransaction> for &'static str {
+	fn from(unknown: UnknownTransaction) -> &'static str {
+		match unknown {
+			UnknownTransaction::CannotLookup =>
+				"Could not lookup information required to validate the transaction",
+			UnknownTransaction::NoUnsignedValidator =>
+				"Could not find an unsigned validator for the unsigned transaction",
+			UnknownTransaction::Custom(_) => "UnknownTransaction custom error",
+		}
+	}
+}
+
+/// Errors that can occur while checking the validity of a transaction.
+#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy)]
+#[cfg_attr(feature = "std", derive(Debug, serde::Serialize))]
+pub enum TransactionValidityError {
+	/// The transaction is invalid.
+	Invalid(InvalidTransaction),
+	/// Transaction validity can't be determined.
+	Unknown(UnknownTransaction),
+}
+
+impl TransactionValidityError {
+	/// Returns `true` if the reason for the error was block resource exhaustion.
+	pub fn exhausted_resources(&self) -> bool {
+		match self {
+			Self::Invalid(e) => e.exhausted_resources(),
+			Self::Unknown(_) => false,
+		}
+	}
+}
+
+impl From<TransactionValidityError> for &'static str {
+	fn from(err: TransactionValidityError) -> &'static str {
+		match err {
+			TransactionValidityError::Invalid(invalid) => invalid.into(),
+			TransactionValidityError::Unknown(unknown) => unknown.into(),
+		}
+	}
+}
+
+impl From<InvalidTransaction> for TransactionValidityError {
+	fn from(err: InvalidTransaction) -> Self {
+		TransactionValidityError::Invalid(err)
+	}
+}
+
+impl From<UnknownTransaction> for TransactionValidityError {
+	fn from(err: UnknownTransaction) -> Self {
+		TransactionValidityError::Unknown(err)
+	}
+}
+
+impl From<InvalidTransaction> for crate::ApplyError {
+	fn from(invalid: InvalidTransaction) -> crate::ApplyError {
+		TransactionValidityError::from(invalid).into()
+	}
+}
+
+impl From<UnknownTransaction> for crate::ApplyError {
+	fn from(unknown: UnknownTransaction) -> crate::ApplyError {
+		TransactionValidityError::from(unknown).into()
+	}
+}
+
+/// Information on a transaction's validity and, if valid, on how it relates to other transactions.
+pub type TransactionValidity = Result<ValidTransaction, TransactionValidityError>;
+
+impl Into<TransactionValidity> for InvalidTransaction {
+	fn into(self) -> TransactionValidity {
+		Err(self.into())
+	}
+}
+
+impl Into<TransactionValidity> for UnknownTransaction {
+	fn into(self) -> TransactionValidity {
+		Err(self.into())
+	}
+}
+
 /// Information concerning a valid transaction.
-#[derive(Clone, PartialEq, Eq, Encode)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct ValidTransaction {
 	/// Priority of the transaction.
@@ -112,49 +233,13 @@ impl ValidTransaction {
 	}
 }
 
-impl Decode for TransactionValidity {
-	fn decode<I: crate::codec::Input>(value: &mut I) -> Result<Self, Error> {
-		match value.read_byte()? {
-			0 => Ok(TransactionValidity::Invalid(i8::decode(value)?)),
-			1 => {
-				let priority = TransactionPriority::decode(value)?;
-				let requires = Vec::decode(value)?;
-				let provides = Vec::decode(value)?;
-				let longevity = TransactionLongevity::decode(value)?;
-				let propagate = bool::decode(value).unwrap_or(true);
-
-				Ok(TransactionValidity::Valid(ValidTransaction {
-					priority, requires, provides, longevity, propagate,
-				}))
-			},
-			2 => Ok(TransactionValidity::Unknown(i8::decode(value)?)),
-			_ => Err("Invalid transaction validity variant".into()),
-		}
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
 
 	#[test]
-	fn should_decode_with_backward_compat() {
-		let old_encoding = vec![
-			1, 5, 0, 0, 0, 0, 0, 0, 0, 4, 16, 1, 2, 3, 4, 4, 12, 4, 5, 6, 42, 0, 0, 0, 0, 0, 0, 0
-		];
-
-		assert_eq!(TransactionValidity::decode(&mut &*old_encoding), Ok(TransactionValidity::Valid(ValidTransaction {
-			priority: 5,
-			requires: vec![vec![1, 2, 3, 4]],
-			provides: vec![vec![4, 5, 6]],
-			longevity: 42,
-			propagate: true,
-		})));
-	}
-
-	#[test]
 	fn should_encode_and_decode() {
-		let v = TransactionValidity::Valid(ValidTransaction {
+		let v: TransactionValidity = Ok(ValidTransaction {
 			priority: 5,
 			requires: vec![vec![1, 2, 3, 4]],
 			provides: vec![vec![4, 5, 6]],
@@ -165,7 +250,7 @@ mod tests {
 		let encoded = v.encode();
 		assert_eq!(
 			encoded,
-			vec![1, 5, 0, 0, 0, 0, 0, 0, 0, 4, 16, 1, 2, 3, 4, 4, 12, 4, 5, 6, 42, 0, 0, 0, 0, 0, 0, 0, 0]
+			vec![0, 5, 0, 0, 0, 0, 0, 0, 0, 4, 16, 1, 2, 3, 4, 4, 12, 4, 5, 6, 42, 0, 0, 0, 0, 0, 0, 0, 0]
 		);
 
 		// decode back

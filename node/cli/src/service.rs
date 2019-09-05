@@ -470,11 +470,19 @@ mod tests {
 				let check_nonce = system::CheckNonce::from(index);
 				let check_weight = system::CheckWeight::new();
 				let take_fees = balances::TakeFees::from(0);
-				let extra = (check_version, check_genesis, check_era, check_nonce, check_weight, take_fees);
+				let extra = (
+					check_version,
+					check_genesis,
+					check_era,
+					check_nonce,
+					check_weight,
+					take_fees,
+					Default::default(),
+				);
 				let raw_payload = SignedPayload::from_raw(
 					function,
 					extra,
-					(version, genesis_hash, genesis_hash, (), (), ())
+					(version, genesis_hash, genesis_hash, (), (), (), ())
 				);
 				let signature = raw_payload.using_encoded(|payload|	{
 					signer.sign(payload)
