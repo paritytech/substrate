@@ -20,6 +20,14 @@
 //! `PowAlgorithm`. After that, pass an instance of the struct, along
 //! with other necessary client references to `import_queue` to setup
 //! the queue. Use the `start_mine` function for basic CPU mining.
+//!
+//! The auxiliary storage for PoW engine only stores the total difficulty.
+//! For other storage requirements for particular PoW algorithm (such as
+//! the actual difficulty for each particular blocks), you can take a client
+//! reference in your `PowAlgorithm` implementation, and use a separate prefix
+//! for the auxiliary storage. It is also possible to just use the runtime
+//! as the storage, but it is not recommended as it won't work well with light
+//! clients.
 
 use std::sync::Arc;
 use std::thread;
@@ -45,6 +53,7 @@ use log::*;
 /// Auxiliary storage prefix for PoW engine.
 pub const POW_AUX_PREFIX: [u8; 4] = *b"PoW:";
 
+/// Get the auxiliary storage key used by engine to store total difficulty.
 fn aux_key(hash: &H256) -> Vec<u8> {
 	POW_AUX_PREFIX.iter().chain(&hash[..])
 		.cloned().collect::<Vec<_>>()
