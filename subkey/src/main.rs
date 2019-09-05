@@ -114,7 +114,7 @@ fn execute<C: Crypto>(matches: ArgMatches)
 			system::CheckWeight::<Runtime>::new(),
 			balances::TakeFees::<Runtime>::from(f),
 		)
-	};
+	}; 
 	let password = matches.value_of("password");
 	let maybe_network: Option<Ss58AddressFormat> = matches.value_of("network")
 		.map(|network| network.try_into()
@@ -130,11 +130,17 @@ fn execute<C: Crypto>(matches: ArgMatches)
 		}
 		("sign", Some(matches)) => {
 			let message = read_input_message(matches);
-			do_sign::<C>(matches, message, password);
+			let signature = do_sign::<C>(matches, message, password);
+			println!("{}", signature);
 		},
 		("verify", Some(matches)) => {
 			let message = read_input_message(matches);
-			do_verify::<C>(matches, message, password);
+			let valid_signature = do_verify::<C>(matches, message, password);
+			if valid_signature {
+				println!("Signature verifies correctly.");
+			} else {
+				println!("Signature invalid.");
+			}
 		},
 		("inspect", Some(matches)) => {
 			let uri = matches.value_of("uri")
@@ -201,9 +207,7 @@ fn execute<C: Crypto>(matches: ArgMatches)
 			println!("0x{}", hex::encode(&extrinsic.encode()));
 		}
 		("sign-transaction", Some(matches)) => {
-			let s = matches.value_of("suri")
-				.expect("secret URI parameter is required; thus it can't be None; qed");
-			let signer = Sr25519::pair_from_suri(s, password);
+			let signer = read_input_pair::<Sr25519>(matches, password);
 
 			let index = matches.value_of("nonce")
 				.expect("nonce is required; thus it can't be None; qed");
@@ -273,21 +277,7 @@ fn do_verify<C: Crypto>(matches: &ArgMatches, message: Vec<u8>, password: Option
 {
 	let signature = read_input_signature::<C>(matches);
 	let pubkey = read_input_public_key::<C>(matches, password);
-	verify_signature::<C>(signature, message, pubkey)
-}
-
-fn verify_signature<C: Crypto>(
-	signature: SignatureOf<C>,
-	message: Vec<u8>,
-	pubkey: PublicOf<C>,
-) -> bool {
-	if <<C as Crypto>::Pair as Pair>::verify(&signature, &message, &pubkey) {
-		println!("Signature verifies correctly.");
-		true
-	} else {
-		println!("Signature invalid.");
-		false
-	}
+	<<C as Crypto>::Pair as Pair>::verify(&signature, &message, &pubkey)
 }
 
 fn format_signature<C: Crypto>(signature: SignatureOf<C>) -> String {
