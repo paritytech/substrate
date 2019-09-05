@@ -86,8 +86,9 @@
 
 use sr_primitives::traits::{Zero, StaticLookup, Bounded, Convert};
 use sr_primitives::weights::SimpleDispatchInfo;
-use srml_support::{StorageValue, StorageMap, EnumerableStorageMap, decl_storage, decl_event, ensure,
-	decl_module, dispatch,
+use srml_support::{
+	StorageValue, StorageMap, StorageLinkedMap,
+	decl_storage, decl_event, ensure, decl_module, dispatch,
 	traits::{
 		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
 		ChangeMembers, OnUnbalanced,
@@ -190,7 +191,7 @@ decl_module! {
 		fn vote(origin, votes: Vec<T::AccountId>, value: BalanceOf<T>) {
 			let who = ensure_signed(origin)?;
 
-			let candidates_count = <Candidates<T>>::decode_length();
+			let candidates_count = <Candidates<T>>::decode_len().unwrap_or(0);
 			// addition is valid: candidates and members never overlap.
 			let allowed_votes = candidates_count as usize + Self::members().len();
 
@@ -756,7 +757,7 @@ mod tests {
 			assert_eq!(Elections::runner_ups(), vec![]);
 
 			assert_eq!(Elections::candidates(), vec![]);
-			assert_eq!(<Candidates<Test>>::decode_length(), 0);
+			assert_eq!(<Candidates<Test>>::decode_len().unwrap(), 0);
 			assert!(Elections::is_candidate(&1).is_err());
 
 			assert_eq!(all_voters(), vec![]);
@@ -1172,7 +1173,7 @@ mod tests {
 			assert_eq!(Elections::votes_of(4), vec![4]);
 
 			assert_eq!(Elections::candidates(), vec![3, 4, 5]);
-			assert_eq!(<Candidates<Test>>::decode_length(), 3);
+			assert_eq!(<Candidates<Test>>::decode_len().unwrap(), 3);
 
 			assert_eq!(Elections::election_rounds(), 0);
 
@@ -1183,7 +1184,7 @@ mod tests {
 			assert_eq!(Elections::runner_ups(), vec![]);
 			assert_eq_uvec!(all_voters(), vec![2, 3, 4]);
 			assert_eq!(Elections::candidates(), vec![]);
-			assert_eq!(<Candidates<Test>>::decode_length(), 0);
+			assert_eq!(<Candidates<Test>>::decode_len().unwrap(), 0);
 
 			assert_eq!(Elections::election_rounds(), 1);
 		});
@@ -1411,7 +1412,7 @@ mod tests {
 			assert_ok!(Elections::vote(Origin::signed(4), vec![4], 40));
 			assert_ok!(Elections::vote(Origin::signed(5), vec![5], 50));
 
-			assert_eq!(<Candidates<Test>>::decode_length(), 3);
+			assert_eq!(<Candidates<Test>>::decode_len().unwrap(), 3);
 
 			assert_eq!(Elections::election_rounds(), 0);
 
