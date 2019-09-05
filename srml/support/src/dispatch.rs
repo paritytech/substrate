@@ -20,7 +20,7 @@
 pub use crate::rstd::{result, prelude::{Vec, Clone, Eq, PartialEq}, marker};
 #[cfg(feature = "std")]
 pub use std::fmt;
-pub use crate::codec::{Codec, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
+pub use crate::codec::{Codec, EncodeLike, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
 pub use srml_metadata::{
 	FunctionMetadata, DecodeDifferent, DecodeDifferentArray, FunctionArgumentMetadata,
 	ModuleConstantMetadata, DefaultByte, DefaultByteGetter,
@@ -49,16 +49,16 @@ pub trait Callable<T> {
 pub type CallableCallFor<A, T> = <A as Callable<T>>::Call;
 
 #[cfg(feature = "std")]
-pub trait Parameter: Codec + Clone + Eq + fmt::Debug {}
+pub trait Parameter: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 
 #[cfg(feature = "std")]
-impl<T> Parameter for T where T: Codec + Clone + Eq + fmt::Debug {}
+impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 
 #[cfg(not(feature = "std"))]
-pub trait Parameter: Codec + Clone + Eq {}
+pub trait Parameter: Codec + EncodeLike + Clone + Eq {}
 
 #[cfg(not(feature = "std"))]
-impl<T> Parameter for T where T: Codec + Clone + Eq {}
+impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq {}
 
 /// Declares a `Module` struct and a `Call` enum, which implements the dispatch logic.
 ///

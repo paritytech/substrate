@@ -19,7 +19,7 @@
 //! NOTE: If you're looking for `parameter_types`, it has moved in to the top-level module.
 
 use crate::rstd::{prelude::*, result, marker::PhantomData, ops::Div};
-use crate::codec::{Codec, Encode, Decode};
+use crate::codec::{FullCodec, Codec, Encode, Decode};
 use primitives::u32_trait::Value as U32;
 use crate::sr_primitives::traits::{MaybeSerializeDebug, SimpleArithmetic, Saturating};
 use crate::sr_primitives::ConsensusEngineId;
@@ -252,7 +252,7 @@ pub enum SignedImbalance<B, P: Imbalance<B>>{
 impl<
 	P: Imbalance<B, Opposite=N>,
 	N: Imbalance<B, Opposite=P>,
-	B: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default,
+	B: SimpleArithmetic + FullCodec + Copy + MaybeSerializeDebug + Default,
 > SignedImbalance<B, P> {
 	pub fn zero() -> Self {
 		SignedImbalance::Positive(P::zero())
@@ -315,7 +315,7 @@ impl<
 /// Abstraction over a fungible assets system.
 pub trait Currency<AccountId> {
 	/// The balance of an account.
-	type Balance: SimpleArithmetic + Codec + Copy + MaybeSerializeDebug + Default;
+	type Balance: SimpleArithmetic + FullCodec + Copy + MaybeSerializeDebug + Default;
 
 	/// The opaque token type for an imbalance. This is returned by unbalanced operations
 	/// and must be dealt with. It may be dropped but cannot be cloned.
@@ -613,7 +613,7 @@ bitmask! {
 }
 
 pub trait Time {
-	type Moment: SimpleArithmetic + Codec + Clone + Default + Copy;
+	type Moment: SimpleArithmetic + FullCodec + Clone + Default + Copy;
 
 	fn now() -> Self::Moment;
 }

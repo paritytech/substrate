@@ -380,7 +380,7 @@ decl_module! {
 			<DepositOf<T>>::insert(index, (value, vec![who.clone()]));
 
 			let new_prop = (index, (*proposal).clone(), who);
-			<PublicProps<T>>::append_or_put([new_prop].into_iter());
+			<PublicProps<T>>::append_or_put(&[new_prop][..]);
 
 			Self::deposit_event(RawEvent::Proposed(index, value));
 		}
@@ -788,10 +788,10 @@ impl<T: Trait> Module<T> {
 	/// Actually enact a vote, if legit.
 	fn do_vote(who: T::AccountId, ref_index: ReferendumIndex, vote: Vote) -> Result {
 		ensure!(Self::is_active_referendum(ref_index), "vote given for invalid referendum.");
-		if !<VoteOf<T>>::exists(&(ref_index, who.clone())) {
-			<VotersFor<T>>::append_or_insert(ref_index, [who.clone()].into_iter());
+		if !<VoteOf<T>>::exists((ref_index, &who)) {
+			<VotersFor<T>>::append_or_insert(ref_index, &[&who][..]);
 		}
-		<VoteOf<T>>::insert(&(ref_index, who), vote);
+		<VoteOf<T>>::insert((ref_index, &who), vote);
 		Ok(())
 	}
 
@@ -929,7 +929,7 @@ impl<T: Trait> Module<T> {
 			} else {
 				<DispatchQueue<T>>::append_or_insert(
 					now + info.delay,
-					[Some((info.proposal, index))].into_iter()
+					&[Some((info.proposal, index))][..]
 				);
 			}
 		} else {
