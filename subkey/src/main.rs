@@ -236,7 +236,7 @@ fn execute<C: Crypto>(matches: ArgMatches) where
 		}
 		("sign", Some(matches)) => {
 			let message = read_input_message(matches);
-			do_sign::<C>(matches, message, password)
+			do_sign::<C>(matches, message, password);
 		},
 		("verify", Some(matches)) => {
 			let message = read_input_message(matches);
@@ -246,14 +246,14 @@ fn execute<C: Crypto>(matches: ArgMatches) where
 	}
 }
 
-fn do_sign<C: Crypto>(matches: &ArgMatches, message: Vec<u8>, password: Option<&str>) 
+fn do_sign<C: Crypto>(matches: &ArgMatches, message: Vec<u8>, password: Option<&str>) -> String
 	where
 		<<C as Crypto>::Pair as Pair>::Signature: AsRef<[u8]> + AsMut<[u8]> + Default,
 		<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec,
 {
 	let pair = read_input_pair::<C>(matches, password);
 	let signature = pair.sign(&message);
-	print_signature::<C>(signature);
+	format_signature::<C>(signature)
 }
 
 fn do_verify<C: Crypto>(matches: &ArgMatches, message: Vec<u8>, password: Option<&str>) -> bool
@@ -280,8 +280,8 @@ fn verify_signature<C: Crypto>(
 	}
 }
 
-fn print_signature<C: Crypto>(signature: <<C as Crypto>::Pair as Pair>::Signature) {
-	println!("{}", hex::encode(&signature));
+fn format_signature<C: Crypto>(signature: <<C as Crypto>::Pair as Pair>::Signature) -> String {
+	format!("{}", hex::encode(&signature))
 }
 
 fn read_input_signature<C: Crypto>(
@@ -384,25 +384,34 @@ mod tests {
 	}
 
 	#[test]
-	fn sign_should_work() {
+	fn verify_should_work() {
+		
+	}
+
+	#[test]
+	fn sign_verify_should_work() {
+		// Sign the message.
 		let arg_vec = vec![
 			"subkey",
-			"verify",
-			"363cba435260d06893f62da68bd23a13e5f140d13ffa8048d82acaa55b541c5329\
-				a183d06c0c78f91a4c8e77786caf517897e1bfff40de9aa1ebf833668a2c88",
-			"0x1cb277eac4de723b6c41acfcd6f0b0dcd5d003cf5506253efa787c61ddde7520",
+			"sign",
+			"0x3da0f3f09b73d263dccfcd3f78b1fba24ba06e4d7a99f2674ed2a0ba358c0e3c",
 		];
 		let yaml = load_yaml!("cli.yml");
 		let matches = App::from_yaml(yaml).get_matches_from(arg_vec);
 		let matches = matches.subcommand().1.unwrap();
 		let password = None;
 		let message = "Blah Blah\n".as_bytes().to_vec();
+		let signature = do_sign::<Sr25519>(matches, message.clone(), password);
+
+		// Verify the signature.
+		let arg_vec = vec![
+			"subkey",
+			"verify",
+			&signature[..],
+			"0x1cb277eac4de723b6c41acfcd6f0b0dcd5d003cf5506253efa787c61ddde7520",
+		];
+		let matches = App::from_yaml(yaml).get_matches_from(arg_vec);
+		let matches = matches.subcommand().1.unwrap();
 		assert!(do_verify::<Sr25519>(matches, message, password));
 	}
-
-	// fn verify_should_work() {
-	// 	let matches = ArgMatches {};
-	// 	let password = None;
-	// 	do_verify(matches, password);
-	// }
 }
