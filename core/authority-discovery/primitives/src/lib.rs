@@ -30,7 +30,7 @@ decl_runtime_apis! {
 	/// set, as well as sign and verify Kademlia Dht external address payloads
 	/// from and to other authorities.
 	pub trait AuthorityDiscoveryApi<AuthorityId: Codec> {
-		/// Returns own authority identifier iff it is part of the current authority
+		/// Returns own authority identifier if it is part of the current authority
 		/// set, otherwise this function returns None. The restriction might be
 		/// softened in the future in case a consumer needs to learn own authority
 		/// identifier.
