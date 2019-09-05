@@ -103,6 +103,7 @@ pub struct Edge<AccountId> {
 pub type PhragmenAssignment<AccountId> = (AccountId, ExtendedBalance);
 
 /// Final result of the phragmen election.
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct PhragmenResult<AccountId> {
 	/// Just winners zipped with their approval stake. Note that the approval stake is merely the
 	/// sub of their received stake and could be used for very basic sorting and approval voting.
