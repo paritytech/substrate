@@ -45,7 +45,7 @@ trait Crypto {
 		uri: &str,
 		password: Option<&str>,
 		network_override: Option<Ss58AddressFormat>,
-	) where <Self::Pair as Pair>::Public: Sized + Ss58Codec + AsRef<[u8]> {
+	) where <Self::Pair as Pair>::Public: PublicT {
 		if let Ok((pair, seed)) = Self::Pair::from_phrase(uri, password) {
 			println!("Secret phrase `{}` is account:\n  Secret seed: 0x{}\n  Public key (hex): 0x{}\n  Address (SS58): {}",
 				uri,
@@ -91,9 +91,19 @@ impl Crypto for Sr25519 {
 	type Public = sr25519::Public;
 }
 
-fn execute<C: Crypto>(matches: ArgMatches) where
-	<<C as Crypto>::Pair as Pair>::Signature: AsRef<[u8]> + AsMut<[u8]> + Default,
-	<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec,
+type SignatureOf<C> = <<C as Crypto>::Pair as Pair>::Signature;
+type PublicOf<C> = <<C as Crypto>::Pair as Pair>::Public;
+
+trait SignatureT: AsRef<[u8]> + AsMut<[u8]> + Default {}
+trait PublicT: Sized + AsRef<[u8]> + Ss58Codec {}
+
+impl SignatureT for sr25519::Signature {}
+impl SignatureT for ed25519::Signature {}
+impl PublicT for sr25519::Public {}
+impl PublicT for ed25519::Public {}
+
+fn execute<C: Crypto>(matches: ArgMatches)
+	where SignatureOf<C>: SignatureT, PublicOf<C>: PublicT,
 {
 	let extra = |i: Index, f: Balance| {
 		(
@@ -251,9 +261,7 @@ fn generate_mnemonic(matches: &ArgMatches) -> Mnemonic {
 }
 
 fn do_sign<C: Crypto>(matches: &ArgMatches, message: Vec<u8>, password: Option<&str>) -> String
-	where
-		<<C as Crypto>::Pair as Pair>::Signature: AsRef<[u8]> + AsMut<[u8]> + Default,
-		<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec,
+	where SignatureOf<C>: SignatureT, PublicOf<C>: PublicT,
 {
 	let pair = read_input_pair::<C>(matches, password);
 	let signature = pair.sign(&message);
@@ -261,9 +269,7 @@ fn do_sign<C: Crypto>(matches: &ArgMatches, message: Vec<u8>, password: Option<&
 }
 
 fn do_verify<C: Crypto>(matches: &ArgMatches, message: Vec<u8>, password: Option<&str>) -> bool
-	where
-		<<C as Crypto>::Pair as Pair>::Signature: AsRef<[u8]> + AsMut<[u8]> + Default,
-		<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec,
+	where SignatureOf<C>: SignatureT, PublicOf<C>: PublicT,
 {
 	let signature = read_input_signature::<C>(matches);
 	let pubkey = read_input_public_key::<C>(matches, password);
@@ -271,9 +277,9 @@ fn do_verify<C: Crypto>(matches: &ArgMatches, message: Vec<u8>, password: Option
 }
 
 fn verify_signature<C: Crypto>(
-	signature: <<C as Crypto>::Pair as Pair>::Signature,
+	signature: SignatureOf<C>,
 	message: Vec<u8>,
-	pubkey: <<C as Crypto>::Pair as Pair>::Public,
+	pubkey: PublicOf<C>,
 ) -> bool {
 	if <<C as Crypto>::Pair as Pair>::verify(&signature, &message, &pubkey) {
 		println!("Signature verifies correctly.");
@@ -284,16 +290,12 @@ fn verify_signature<C: Crypto>(
 	}
 }
 
-fn format_signature<C: Crypto>(signature: <<C as Crypto>::Pair as Pair>::Signature) -> String {
+fn format_signature<C: Crypto>(signature: SignatureOf<C>) -> String {
 	format!("{}", hex::encode(&signature))
 }
 
-fn read_input_signature<C: Crypto>(
-	matches: &ArgMatches,
-) -> <<C as Crypto>::Pair as Pair>::Signature
-	where
-		<<C as Crypto>::Pair as Pair>::Signature: AsRef<[u8]> + AsMut<[u8]> + Default,
-		<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec,
+fn read_input_signature<C: Crypto>(matches: &ArgMatches) -> SignatureOf<C>
+	where SignatureOf<C>: SignatureT, PublicOf<C>: PublicT,
 {
 	let sig_data = matches.value_of("sig")
 		.expect("signature parameter is required; thus it can't be None; qed");
@@ -313,10 +315,8 @@ fn read_input_signature<C: Crypto>(
 fn read_input_public_key<C: Crypto>(
 	matches: &ArgMatches,
 	password: Option<&str>,
-) -> <<C as Crypto>::Pair as Pair>::Public 
-	where
-		<<C as Crypto>::Pair as Pair>::Signature: AsRef<[u8]> + AsMut<[u8]> + Default,
-		<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec,
+) -> PublicOf<C>
+	where SignatureOf<C>: SignatureT, PublicOf<C>: PublicT,
 {
 	let uri = matches.value_of("uri")
 		.expect("public uri parameter is required; thus it can't be None; qed");
@@ -342,9 +342,7 @@ fn read_input_pair<C: Crypto>(
 	matches: &ArgMatches,
 	password: Option<&str>,
 ) -> <C as Crypto>::Pair
-	where
-		<<C as Crypto>::Pair as Pair>::Signature: AsRef<[u8]> + AsMut<[u8]> + Default,
-		<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec,
+	where SignatureOf<C>: SignatureT, PublicOf<C>: PublicT,
 {
 	let suri = matches.value_of("suri")
 		.expect("secret URI parameter is required; thus it can't be None; qed");
@@ -372,9 +370,8 @@ fn print_usage(matches: &ArgMatches) {
 mod tests {
 	use super::*;
 
-	fn test_generate_sign_verify<CryptoType: Crypto>() where
-		<<CryptoType as Crypto>::Pair as Pair>::Signature: AsRef<[u8]> + AsMut<[u8]> + Default,
-		<<CryptoType as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec,
+	fn test_generate_sign_verify<CryptoType: Crypto>()
+		where SignatureOf<CryptoType>: SignatureT, PublicOf<CryptoType>: PublicT,
 	{
 		let yaml = load_yaml!("cli.yml");
 		let app = App::from_yaml(yaml);
