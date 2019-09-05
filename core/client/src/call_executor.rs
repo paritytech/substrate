@@ -17,15 +17,15 @@
 use std::{sync::Arc, cmp::Ord, panic::UnwindSafe, result, cell::RefCell, rc::Rc};
 use codec::{Encode, Decode};
 use sr_primitives::{
-	generic::BlockId, traits::Block as BlockT,
+	generic::BlockId, traits::Block as BlockT, traits::NumberFor,
 };
 use state_machine::{
 	self, OverlayedChanges, Ext, CodeExecutor, ExecutionManager,
 	ExecutionStrategy, NeverOffchainExt, backend::Backend as _,
+	ChangesTrieTransaction,
 };
 use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use hash_db::Hasher;
-use trie::MemoryDB;
 use primitives::{offchain, H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue};
 
 use crate::runtime_api::{ProofRecorder, InitializeBlock};
@@ -111,7 +111,14 @@ where
 		manager: ExecutionManager<F>,
 		native_call: Option<NC>,
 		side_effects_handler: Option<&mut O>,
-	) -> Result<(NativeOrEncoded<R>, (S::Transaction, H::Out), Option<MemoryDB<H>>), error::Error>;
+	) -> Result<
+		(
+			NativeOrEncoded<R>,
+			(S::Transaction, H::Out),
+			Option<ChangesTrieTransaction<Blake2Hasher, NumberFor<B>>>
+		),
+		error::Error,
+	>;
 
 	/// Execute a call to a contract on top of given state, gathering execution proof.
 	///
@@ -345,7 +352,7 @@ where
 	) -> error::Result<(
 		NativeOrEncoded<R>,
 		(S::Transaction, <Blake2Hasher as Hasher>::Out),
-		Option<MemoryDB<Blake2Hasher>>,
+		Option<ChangesTrieTransaction<Blake2Hasher, NumberFor<Block>>>,
 	)> {
 		state_machine::new(
 			state,

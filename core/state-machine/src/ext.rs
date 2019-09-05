@@ -19,7 +19,10 @@
 use std::{error, fmt, cmp::Ord};
 use log::warn;
 use crate::backend::Backend;
-use crate::changes_trie::{Storage as ChangesTrieStorage, build_changes_trie};
+use crate::changes_trie::{
+	Storage as ChangesTrieStorage, CacheAction as ChangesTrieCacheAction,
+	build_changes_trie,
+};
 use crate::{Externalities, OverlayedChanges, ChildStorageKey};
 use hash_db::Hasher;
 use primitives::{offchain, storage::well_known_keys::is_child_storage_key, traits::BareCryptoStorePtr};
@@ -78,7 +81,7 @@ where
 	/// This differs from `storage_transaction` behavior, because the moment when
 	/// `storage_changes_root` is called matters + we need to remember additional
 	/// data at this moment (block number).
-	changes_trie_transaction: Option<(MemoryDB<H>, H::Out)>,
+	changes_trie_transaction: Option<(MemoryDB<H>, H::Out, ChangesTrieCacheAction<H::Out, N>)>,
 	/// Additional externalities for offchain workers.
 	///
 	/// If None, some methods from the trait might not be supported.
@@ -119,14 +122,14 @@ where
 	}
 
 	/// Get the transaction necessary to update the backend.
-	pub fn transaction(mut self) -> ((B::Transaction, H::Out), Option<MemoryDB<H>>) {
+	pub fn transaction(mut self) -> ((B::Transaction, H::Out), Option<crate::ChangesTrieTransaction<H, N>>) {
 		let _ = self.storage_root();
 
 		let (storage_transaction, changes_trie_transaction) = (
 			self.storage_transaction
 				.expect("storage_transaction always set after calling storage root; qed"),
 			self.changes_trie_transaction
-				.map(|(tx, _)| tx),
+				.map(|(tx, _, cache)| (tx, cache)),
 		);
 
 		(
@@ -355,7 +358,7 @@ where
 			self.overlay,
 			parent_hash,
 		)?;
-		Ok(self.changes_trie_transaction.as_ref().map(|(_, root)| root.clone()))
+		Ok(self.changes_trie_transaction.as_ref().map(|(_, root, _)| root.clone()))
 	}
 
 	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities> {

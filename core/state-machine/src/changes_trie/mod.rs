@@ -49,6 +49,7 @@
 //! are propagated through its storage root on the top level storage.
 
 mod build;
+mod build_cache;
 mod build_iterator;
 mod changes_iterator;
 mod input;
@@ -56,6 +57,7 @@ mod prune;
 mod storage;
 mod surface_iterator;
 
+pub use self::build_cache::{BuildCache, CachedBuildData, CacheAction};
 pub use self::storage::InMemoryStorage;
 pub use self::changes_iterator::{
 	key_changes, key_changes_proof,
@@ -63,6 +65,7 @@ pub use self::changes_iterator::{
 };
 pub use self::prune::{prune, oldest_non_pruned_trie};
 
+use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use hash_db::{Hasher, Prefix};
 use crate::backend::Backend;
@@ -70,6 +73,7 @@ use num_traits::{One, Zero};
 use codec::{Decode, Encode};
 use primitives;
 use crate::changes_trie::build::prepare_input;
+use crate::changes_trie::build_cache::{IncompleteCachedBuildData, IncompleteCacheAction};
 use crate::overlayed_changes::OverlayedChanges;
 use trie::{MemoryDB, DBValue, TrieMut};
 use trie::trie_types::TrieDBMut;
@@ -84,6 +88,7 @@ pub trait BlockNumber:
 	Clone +
 	From<u32> + TryInto<u32> + One + Zero +
 	PartialEq + Ord +
+	::std::hash::Hash +
 	::std::ops::Add<Self, Output=Self> + ::std::ops::Sub<Self, Output=Self> +
 	::std::ops::Mul<Self, Output=Self> + ::std::ops::Div<Self, Output=Self> +
 	::std::ops::Rem<Self, Output=Self> +
@@ -98,6 +103,7 @@ impl<T> BlockNumber for T where T:
 	Clone +
 	From<u32> + TryInto<u32> + One + Zero +
 	PartialEq + Ord +
+	::std::hash::Hash +
 	::std::ops::Add<Self, Output=Self> + ::std::ops::Sub<Self, Output=Self> +
 	::std::ops::Mul<Self, Output=Self> + ::std::ops::Div<Self, Output=Self> +
 	::std::ops::Rem<Self, Output=Self> +
@@ -128,6 +134,13 @@ pub trait RootsStorage<H: Hasher, Number: BlockNumber>: Send + Sync {
 pub trait Storage<H: Hasher, Number: BlockNumber>: RootsStorage<H, Number> {
 	/// Casts from self reference to RootsStorage reference.
 	fn as_roots_storage(&self) -> &dyn RootsStorage<H, Number>;
+	/// Execute given functor with cached entry for given trie root.
+	/// Returns true if the functor has been called (cache entry exists) and false otherwise.
+	fn with_cached_changed_keys(
+		&self,
+		root: &H::Out,
+		functor: &mut dyn FnMut(&HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>),
+	) -> bool;
 	/// Get a trie node.
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String>;
 }
@@ -166,7 +179,7 @@ pub fn build_changes_trie<'a, B: Backend<H>, S: Storage<H, Number>, H: Hasher, N
 	storage: Option<&'a S>,
 	changes: &OverlayedChanges,
 	parent_hash: H::Out,
-) -> Result<Option<(MemoryDB<H>, H::Out)>, ()>
+) -> Result<Option<(MemoryDB<H>, H::Out, CacheAction<H::Out, Number>)>, ()>
 	where
 		H::Out: Ord + 'static,
 {
@@ -184,15 +197,22 @@ pub fn build_changes_trie<'a, B: Backend<H>, S: Storage<H, Number>, H: Hasher, N
 
 	// build_anchor error should not be considered fatal
 	let parent = storage.build_anchor(parent_hash).map_err(|_| ())?;
+	let block = parent.number.clone() + One::one();
 
 	// storage errors are considered fatal (similar to situations when runtime fetches values from storage)
-	let (input_pairs, child_input_pairs) = prepare_input::<B, H, Number>(
+	let (input_pairs, child_input_pairs, digest_input_blocks) = prepare_input::<B, H, Number>(
 		backend,
 		storage,
-		config,
+		config.clone(),
 		changes,
 		&parent,
 	).expect("changes trie: storage access is not allowed to fail within runtime");
+
+	// prepare cached data
+	let mut cache_action = prepare_cached_build_data(config, block.clone());
+	let needs_changed_keys = cache_action.collects_changed_keys();
+	cache_action = cache_action.set_digest_input_blocks(digest_input_blocks);
+
 	let mut mdb = MemoryDB::default();
 	let mut child_roots = Vec::with_capacity(child_input_pairs.len());
 	for (child_index, input_pairs) in child_input_pairs {
@@ -200,11 +220,24 @@ pub fn build_changes_trie<'a, B: Backend<H>, S: Storage<H, Number>, H: Hasher, N
 		let mut root = Default::default();
 		{
 			let mut trie = TrieDBMut::<H>::new(&mut mdb, &mut root);
-			for (key, value) in input_pairs.map(Into::into) {
+			let mut storage_changed_keys = HashSet::new();
+			for input_pair in input_pairs {
+				if needs_changed_keys {
+					if let Some(key) = input_pair.key() {
+						storage_changed_keys.insert(key.to_vec());
+					}
+				}
+
+				let (key, value) = input_pair.into();
 				not_empty = true;
 				trie.insert(&key, &value)
 					.expect("changes trie: insertion to trie is not allowed to fail within runtime");
 			}
+
+			cache_action = cache_action.insert(
+				Some(child_index.storage_key.clone()),
+				storage_changed_keys,
+			);
 		}
 		if not_empty {
 			child_roots.push(input::InputPair::ChildIndex(child_index, root.as_ref().to_vec()));
@@ -213,11 +246,91 @@ pub fn build_changes_trie<'a, B: Backend<H>, S: Storage<H, Number>, H: Hasher, N
 	let mut root = Default::default();
 	{
 		let mut trie = TrieDBMut::<H>::new(&mut mdb, &mut root);
-		for (key, value) in input_pairs.chain(child_roots.into_iter()).map(Into::into) {
+		for (key, value) in child_roots.into_iter().map(Into::into) {
 			trie.insert(&key, &value)
 				.expect("changes trie: insertion to trie is not allowed to fail within runtime");
 		}
+
+		let mut storage_changed_keys = HashSet::new();
+		for input_pair in input_pairs {
+			if needs_changed_keys {
+				if let Some(key) = input_pair.key() {
+					storage_changed_keys.insert(key.to_vec());
+				}
+			}
+
+			let (key, value) = input_pair.into();
+			trie.insert(&key, &value)
+				.expect("changes trie: insertion to trie is not allowed to fail within runtime");
+		}
+		cache_action = cache_action.insert(
+			None,
+			storage_changed_keys,
+		);
 	}
 
-	Ok(Some((mdb, root)))
+	let cache_action = cache_action.complete(block, &root);
+	Ok(Some((mdb, root, cache_action)))
+}
+
+/// Prepare empty cached build data for given block.
+fn prepare_cached_build_data<Number: BlockNumber>(
+	config: ConfigurationRange<Number>,
+	block: Number,
+) -> IncompleteCacheAction<Number> {
+	// when digests are not enabled in configuration, we do not need to cache anything
+	// because it'll never be used again for building other tries
+	// => let's clear the cache
+	if !config.config.is_digest_build_enabled() {
+		return IncompleteCacheAction::Clear;
+	}
+
+	// when this is the last block where current configuration is active
+	// => let's clear the cache
+	if config.end.as_ref() == Some(&block) {
+		return IncompleteCacheAction::Clear;
+	}
+
+	// we do not need to cache anything when top-level digest trie is created, because
+	// it'll never be used again for building other tries
+	// => let's clear the cache
+	match config.config.digest_level_at_block(config.zero.clone(), block) {
+		Some((digest_level, _, _)) if digest_level == config.config.digest_levels => IncompleteCacheAction::Clear,
+		_ => IncompleteCacheAction::CacheBuildData(IncompleteCachedBuildData::new()),
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn cache_is_cleared_when_digests_are_disabled() {
+		let config = Configuration { digest_interval: 0, digest_levels: 0 };
+		let config_range = ConfigurationRange { zero: 0, end: None, config: &config };
+		assert_eq!(prepare_cached_build_data(config_range, 8u32), IncompleteCacheAction::Clear);
+	}
+
+	#[test]
+	fn build_data_is_cached_when_digests_are_enabled() {
+		let config = Configuration { digest_interval: 8, digest_levels: 2 };
+		let config_range = ConfigurationRange { zero: 0, end: None, config: &config };
+		assert!(prepare_cached_build_data(config_range.clone(), 4u32).collects_changed_keys());
+		assert!(prepare_cached_build_data(config_range.clone(), 7u32).collects_changed_keys());
+		assert!(prepare_cached_build_data(config_range, 8u32).collects_changed_keys());
+	}
+
+	#[test]
+	fn cache_is_cleared_when_digests_are_enabled_and_top_level_digest_is_built() {
+		let config = Configuration { digest_interval: 8, digest_levels: 2 };
+		let config_range = ConfigurationRange { zero: 0, end: None, config: &config };
+		assert_eq!(prepare_cached_build_data(config_range, 64u32), IncompleteCacheAction::Clear);
+	}
+
+	#[test]
+	fn cache_is_cleared_when_end_block_of_configuration_is_built() {
+		let config = Configuration { digest_interval: 8, digest_levels: 2 };
+		let config_range = ConfigurationRange { zero: 0, end: Some(4u32), config: &config };
+		assert_eq!(prepare_cached_build_data(config_range.clone(), 4u32), IncompleteCacheAction::Clear);
+	}
 }
