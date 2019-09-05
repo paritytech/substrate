@@ -30,7 +30,7 @@ use crate::traits::{
 };
 
 macro_rules! implement_per_thing {
-	($name:ident, $test_mod:ident, $max:tt, $type:ty, $upper_type:ty, $title:expr $(,)?) => {
+	($name:ident, $test_mod:ident, [$($test_units:tt),+], $max:tt, $type:ty, $upper_type:ty, $title:expr $(,)?) => {
 		/// A fixed point representation of a number between in the range [0, 1].
 		///
 		#[doc = $title]
@@ -265,9 +265,8 @@ macro_rules! implement_per_thing {
 			#[test]
 			fn per_thing_mul_works() {
 				use primitive_types::U256;
-				// TODO: bring back the test for u32.
-				per_thing_mul_test!(u64);
-				per_thing_mul_test!(u128);
+
+				$(per_thing_mul_test!($test_units);)*
 			}
 
 			macro_rules! per_thing_from_rationale_approx_test {
@@ -292,11 +291,17 @@ macro_rules! implement_per_thing {
 					);
 					// no accurate anymore but won't overflow.
 					assert_eq!(
-						$name::from_rational_approximation($num_type::max_value() - 1, $num_type::max_value()),
+						$name::from_rational_approximation(
+							$num_type::max_value() - 1,
+							$num_type::max_value()
+						),
 						$name::one(),
 					);
 					assert_eq_error_rate!(
-						$name::from_rational_approximation($num_type::max_value() / 3, $num_type::max_value()).0,
+						$name::from_rational_approximation(
+							$num_type::max_value() / 3,
+							$num_type::max_value()
+						).0,
 						$name::from_parts($max / 3).0,
 						2
 					);
@@ -330,10 +335,7 @@ macro_rules! implement_per_thing {
 					$name::from_rational_approximation(1, $max+1),
 					$name::zero(),
 				);
-				// TODO: bring back the test for u32.
-				// per_thing_from_rationale_approx_test!(u32);
-				per_thing_from_rationale_approx_test!(u64);
-				per_thing_from_rationale_approx_test!(u128);
+				$(per_thing_from_rationale_approx_test!($test_units);)*
 			}
 
 			#[test]
@@ -431,6 +433,7 @@ macro_rules! implement_per_thing {
 implement_per_thing!(
 	Permill,
 	test_permill,
+	[u32, u64, u128],
 	1_000_000u32,
 	u32,
 	u64,
@@ -439,6 +442,7 @@ implement_per_thing!(
 implement_per_thing!(
 	Perbill,
 	test_perbill,
+	[u32, u64, u128],
 	1_000_000_000u32,
 	u32,
 	u64,
@@ -447,6 +451,7 @@ implement_per_thing!(
 implement_per_thing!(
 	Perquintill,
 	test_perquintill,
+	[u64, u128],
 	1_000_000_000_000_000_000u64,
 	u64,
 	u128,
@@ -455,6 +460,7 @@ implement_per_thing!(
 implement_per_thing!(
 	Percent,
 	test_per_cent,
+	[u32, u64, u128],
 	100u32,
 	u32,
 	u32,
@@ -610,10 +616,15 @@ pub struct Rational128(u128, u128);
 /// assumptions of a bigger type (u128) being available, or simply create a per-thing and use the
 /// multiplication implementation provided there.
 pub mod helpers_128bit {
+	/// return the number of bits that are needed to store `n`.
+	pub(crate) fn bits_of(n: u128) -> u32 {
+		128 - n.leading_zeros()
+	}
+
 	/// Tries to compute `a * b / c`. The approach is:
 	///   - Simply try a * b / c.
-	///   - Swap the operations in case the former multiplication overflows. Divide first. This might
-	///     collapse to zero.
+	///   - Swap the operations in case the former multiplication overflows. Divide first. This
+	///     might collapse to zero.
 	///
 	/// If none worked then return Error.
 	pub fn multiply_by_rational(a: u128, b: u128, c: u128) -> Result<u128, &'static str> {
@@ -628,29 +639,38 @@ pub mod helpers_128bit {
 		}
 	}
 
-	/// Performs [`multiply_by_rational`]. In case of failure, it greedily tries to shift the numerator
-	/// (`b`) and denominator (`c`) (looking at the whole thing is `a * b / c`) until the multiplication
-	/// fits. This is guaranteed to work if `b < c`.
+	/// Performs [`multiply_by_rational`]. In case of failure, it greedily tries to shift the
+	/// numerator (`b`) and denominator (`c`) (looking at the whole thing is `a * b / c`) until the
+	/// multiplication fits. This is guaranteed to work if `b < c`.
 	///
 	/// In case `b > c` and overflow happens, `a` is returned.
 	///
-	// TODO: we can probably guess what is the sweet spot by examining the bit length of the number
-	// rather than just multiplying them and incrementing the shift value.
+	/// c must be greater than or equal to 1.
 	pub fn safe_multiply_by_rational(a: u128, b: u128, c: u128) -> u128 {
+		if a == 0 { return 0; }
+		let c = c.max(1);
 		// safe to start with 1. 0 already failed.
-		let mut shift = 1;
 		multiply_by_rational(a, b, c).unwrap_or_else(|_| {
-			loop {
-				let shifted_b = b >> shift;
-				if let Some(val) = a.checked_mul(shifted_b) {
-					let shifted_c = c >> shift;
-					break val / shifted_c.max(1);
-				}
-				shift += 1;
+			// we assume the best case (to prevent accuracy loss). Both a and b are the smallest
+			// numbers in their bit range. in this case their multiplication can take at least `a +
+			// b - 1` bits. Hence, we can always start with this amount of shift.
+			let bits_needed = bits_of(a) + bits_of(b) - 1;
 
-				// defensive only. Before reaching here, shifted_b must have been 1, in which case
-				// multiplying it with a should have NOT overflowed.
-				if shifted_b == 0 { break 0; }
+			// unwrapping is defensive-only. if `multiply_by_rational` fails, then `bits_needed`
+			// should exceed 128.
+			let mut shift = bits_needed.checked_sub(128).unwrap_or(1);
+			loop {
+				if let Some(shifted_b) = b.checked_shr(shift) {
+					if let Some(val) = a.checked_mul(shifted_b) {
+						let shifted_c = c.checked_shr(shift).unwrap_or(c);
+						break val / shifted_c.max(1);
+					}
+					shift += 1;
+				} else {
+					// defensive only. Before reaching here, shifted_b must have been 1, in which
+					// case multiplying it with a should have NOT overflowed.
+					break 0;
+				}
 			}
 		})
 	}
@@ -682,7 +702,7 @@ impl Rational128 {
 		self.1
 	}
 
-	/// Convert self to a similar rational number where to denominator is the given `den`.
+	/// Convert self to a similar rational number where denominator is the given `den`.
 	pub fn to_den(self, den: u128) -> Result<Self, &'static str> {
 		if den >= self.1 {
 			let n = helpers_128bit::multiply_by_rational(den, self.0, self.1)?;
@@ -733,9 +753,7 @@ impl Rational128 {
 
 	/// Addition. Simply tries to unify the denominators and add the numerators.
 	///
-	/// Overflow might happen during any of the steps. None is returned in such cases.
-	///
-	/// TODO: actually return None.
+	/// Overflow might happen during any of the steps. Error is returned in such cases.
 	pub fn checked_add(self, other: Self) -> Result<Self, &'static str> {
 		let lcm = self.lcm(&other)?;
 		let self_scaled = self.to_den(lcm)?;
@@ -798,7 +816,6 @@ mod test_rational128 {
 	fn r(p: u128, q: u128) -> Rational128 {
 		Rational128(p, q)
 	}
-
 
 	#[test]
 	fn to_denom_works() {
@@ -873,6 +890,21 @@ mod test_rational128 {
 		assert!(r(1, 1490000000000200000) > r(1, 1490000000000200001));
 	}
 
+	#[test]
+	fn bits_of_works() {
+		assert_eq!(bits_of(0), 0);
+		assert_eq!(bits_of(1), 1);
+		assert_eq!(bits_of(2), 2);
+		assert_eq!(bits_of(3), 2);
+
+		assert_eq!(bits_of(15), 4);
+		assert_eq!(bits_of(16), 5);
+
+		assert_eq!(bits_of(MAX64), 64);
+		assert_eq!(bits_of(MAX64 - 1), 64);
+		assert_eq!(bits_of(MAX64 / 2), 63);
+		assert_eq!(bits_of(MAX64 + 1), 65);
+	}
 
 	#[test]
 	fn safe_multiply_by_rational_works() {
@@ -898,6 +930,13 @@ mod test_rational128 {
 			MAX64
 		);
 
+		// ultimate test
+		assert_eq!(
+			safe_multiply_by_rational(MAX128, MAX128 / 2, MAX128),
+			MAX128 / 2
+		);
+
+		// overflow -- simply returns `a`
 		assert_eq!(
 			safe_multiply_by_rational(MAX128 / 2, 3, 1),
 			MAX128 / 2
@@ -917,7 +956,7 @@ mod test_rational128 {
 		);
 
 		assert_eq!(
-			multiply_by_rational(MAX64, MAX128 / 2, MAX128 - 1),
+			multiply_by_rational(MAX64, MAX128 / 2, MAX128),
 			Err("division will collapse to zero")
 		);
 		assert_eq!(

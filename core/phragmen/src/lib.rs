@@ -35,7 +35,7 @@
 
 use rstd::{prelude::*, collections::btree_map::BTreeMap};
 use sr_primitives::{helpers_128bit::safe_multiply_by_rational, Perbill, Rational128};
-use sr_primitives::traits::{Zero, Convert, Member, SimpleArithmetic};
+use sr_primitives::traits::{Zero, Convert, Member, SimpleArithmetic, Saturating};
 
 /// A type in which performing operations on balances and stakes of candidates and voters are safe.
 ///
@@ -282,9 +282,11 @@ pub fn elect<AccountId, Balance, FS, C>(
 		for e in &mut n.edges {
 			if let Some(c) = elected_candidates.iter().cloned().find(|c| *c == e.who) {
 				if c != n.who {
-					let ratio = if n.load == e.load {
-						// Full support. No need to calculate.
-							Rational128::from(ACCURACY, ACCURACY)
+					let per_bill_parts =
+					{
+						if n.load == e.load {
+							// Full support. No need to calculate.
+							ACCURACY
 						} else {
 							if e.load.d() == n.load.d() {
 								let nom = if let Some(x) = ACCURACY.checked_mul(e.load.n()) {
@@ -298,19 +300,16 @@ pub fn elect<AccountId, Balance, FS, C>(
 									// defensive only. This can never saturate.
 									e_load.saturating_mul(ACCURACY) / n_load
 								};
-								Rational128::from(nom, ACCURACY)
+								nom
 							} else {
 								// defensive only. Both edge and nominator loads are built from
 								// scores, hence MUST have the same denominator.
-								// TODO: proper error handling.
-								panic!();
-								Rational128::zero()
+								Zero::zero()
 							}
-						};
-						// TODO: we can actually not return a rational and just return the numerator
-						// ratio is guaranteed to have denominator billion.
-						let per_thing = Perbill::from_parts(ratio.n().min(ACCURACY) as u32);
-						assignment.1.push((e.who.clone(), per_thing));
+						}
+					};
+					let per_thing = Perbill::from_parts(per_bill_parts.min(ACCURACY) as u32);
+					assignment.1.push((e.who.clone(), per_thing));
 				}
 			}
 		}
@@ -319,7 +318,7 @@ pub fn elect<AccountId, Balance, FS, C>(
 			// To ensure an assertion indicating: no stake from the nominator going to waste,
 			// we add a minimal post-processing to equally assign all of the leftover stake ratios.
 			let vote_count = assignment.1.len() as u32;
-			let l = assignment.1.len();
+			let len = assignment.1.len();
 			let sum = assignment.1.iter()
 				.map(|a| a.1.deconstruct())
 				.sum::<u32>();
@@ -328,9 +327,10 @@ pub fn elect<AccountId, Balance, FS, C>(
 			let diff_per_vote = (diff / vote_count).min(accuracy);
 
 			if diff_per_vote > 0 {
-				for i in 0..l {
-					let new_parts = assignment.1[i%l].1.deconstruct().saturating_add(diff_per_vote);
-					assignment.1[i%l].1 = Perbill::from_parts(new_parts);
+				for i in 0..len {
+					let current_ratio = assignment.1[i%len].1;
+					let next_ratio = current_ratio.saturating_add(Perbill::from_parts(diff_per_vote));
+					assignment.1[i%len].1 = next_ratio;
 				}
 			}
 
@@ -338,9 +338,9 @@ pub fn elect<AccountId, Balance, FS, C>(
 			// safe to cast it to usize.
 			let remainder = diff - diff_per_vote * vote_count;
 			for i in 0..remainder as usize {
-				// TODO: this can be written a bit nicer I assume.
-				let new_parts = assignment.1[i%l].1.deconstruct().saturating_add(1);
-				assignment.1[i%l].1 = Perbill::from_parts(new_parts);
+				let current_ratio = assignment.1[i%len].1;
+				let next_ratio = current_ratio.saturating_add(Perbill::from_parts(1));
+				assignment.1[i%len].1 = next_ratio;
 			}
 			assigned.push(assignment);
 		}
