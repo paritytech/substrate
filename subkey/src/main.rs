@@ -115,15 +115,17 @@ fn execute<C: Crypto>(matches: ArgMatches) where
 	}
 	match matches.subcommand() {
 		("generate", Some(matches)) => {
-			// create a new randomly generated mnemonic phrase
-			let words = matches.value_of("words")
-				.map(|x| usize::from_str(x).expect("Invalid number given for --words"))
-				.map(|x| MnemonicType::for_word_count(x)
-					.expect("Invalid number of words given for phrase: must be 12/15/18/21/24")
-				).unwrap_or(MnemonicType::Words12);
-			let mnemonic = Mnemonic::new(words, Language::English);
+			let mnemonic = generate_mnemonic(matches);
 			C::print_from_uri(mnemonic.phrase(), password, maybe_network);
 		}
+		("sign", Some(matches)) => {
+			let message = read_input_message(matches);
+			do_sign::<C>(matches, message, password);
+		},
+		("verify", Some(matches)) => {
+			let message = read_input_message(matches);
+			do_verify::<C>(matches, message, password);
+		},
 		("inspect", Some(matches)) => {
 			let uri = matches.value_of("uri")
 				.expect("URI parameter is required; thus it can't be None; qed");
@@ -234,16 +236,18 @@ fn execute<C: Crypto>(matches: ArgMatches) where
 
 			println!("0x{}", hex::encode(&extrinsic.encode()));
 		}
-		("sign", Some(matches)) => {
-			let message = read_input_message(matches);
-			do_sign::<C>(matches, message, password);
-		},
-		("verify", Some(matches)) => {
-			let message = read_input_message(matches);
-			do_verify::<C>(matches, message, password);
-		},
 		_ => print_usage(&matches),
 	}
+}
+
+fn generate_mnemonic(matches: &ArgMatches) -> Mnemonic {
+	// create a new randomly generated mnemonic phrase
+	let words = matches.value_of("words")
+		.map(|x| usize::from_str(x).expect("Invalid number given for --words"))
+		.map(|x| MnemonicType::for_word_count(x)
+			.expect("Invalid number of words given for phrase: must be 12/15/18/21/24")
+		).unwrap_or(MnemonicType::Words12);
+	Mnemonic::new(words, Language::English)
 }
 
 fn do_sign<C: Crypto>(matches: &ArgMatches, message: Vec<u8>, password: Option<&str>) -> String
@@ -368,6 +372,64 @@ fn print_usage(matches: &ArgMatches) {
 mod tests {
 	use super::*;
 
+	fn test_generate_sign_verify<CryptoType: Crypto>() where
+		<<CryptoType as Crypto>::Pair as Pair>::Signature: AsRef<[u8]> + AsMut<[u8]> + Default,
+		<<CryptoType as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec,
+	{
+		let yaml = load_yaml!("cli.yml");
+		let app = App::from_yaml(yaml);
+		let password = None;
+
+		// Generate public key and seed.
+		let arg_vec = vec![
+			"subkey",
+			"generate",
+		];
+
+		let matches = app.clone().get_matches_from(arg_vec);
+		let matches = matches.subcommand().1.unwrap();
+		let mnemonic = generate_mnemonic(matches);
+
+		let (pair, seed) = <<CryptoType as Crypto>::Pair as Pair>::from_phrase(
+			mnemonic.phrase(),
+			password,
+		).unwrap();
+		let public_key = format!("0x{}", HexDisplay::from(&CryptoType::public_from_pair(&pair)));
+		let seed = format!("0x{}", HexDisplay::from(&seed.as_ref()));
+
+		// Sign a message using previous seed.
+		let arg_vec = vec![
+			"subkey",
+			"sign",
+			&seed[..],
+		];
+		let matches = app.get_matches_from(arg_vec);
+		let matches = matches.subcommand().1.unwrap();
+		let message = "Blah Blah\n".as_bytes().to_vec();
+		let signature = do_sign::<CryptoType>(matches, message.clone(), password);
+
+		// Verify the previous signature.
+		let arg_vec = vec![
+			"subkey",
+			"verify",
+			&signature[..],
+			&public_key[..],
+		];
+		let matches = App::from_yaml(yaml).get_matches_from(arg_vec);
+		let matches = matches.subcommand().1.unwrap();
+		assert!(do_verify::<CryptoType>(matches, message, password));
+	}
+
+	#[test]
+	fn generate_sign_verify_should_work_for_ed25519() {
+		test_generate_sign_verify::<Ed25519>();
+	}
+
+	#[test]
+	fn generate_sign_verify_should_work_for_sr25519() {
+		test_generate_sign_verify::<Sr25519>();
+	}
+
 	#[test]
 	fn should_work() {
 		let s = "0123456789012345678901234567890123456789012345678901234567890123";
@@ -381,37 +443,5 @@ mod tests {
 		};
 
 		assert_eq!(d1, d2);
-	}
-
-	#[test]
-	fn verify_should_work() {
-		
-	}
-
-	#[test]
-	fn sign_verify_should_work() {
-		// Sign the message.
-		let arg_vec = vec![
-			"subkey",
-			"sign",
-			"0x3da0f3f09b73d263dccfcd3f78b1fba24ba06e4d7a99f2674ed2a0ba358c0e3c",
-		];
-		let yaml = load_yaml!("cli.yml");
-		let matches = App::from_yaml(yaml).get_matches_from(arg_vec);
-		let matches = matches.subcommand().1.unwrap();
-		let password = None;
-		let message = "Blah Blah\n".as_bytes().to_vec();
-		let signature = do_sign::<Sr25519>(matches, message.clone(), password);
-
-		// Verify the signature.
-		let arg_vec = vec![
-			"subkey",
-			"verify",
-			&signature[..],
-			"0x1cb277eac4de723b6c41acfcd6f0b0dcd5d003cf5506253efa787c61ddde7520",
-		];
-		let matches = App::from_yaml(yaml).get_matches_from(arg_vec);
-		let matches = matches.subcommand().1.unwrap();
-		assert!(do_verify::<Sr25519>(matches, message, password));
 	}
 }
