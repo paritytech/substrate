@@ -30,3 +30,4 @@
 #![warn(missing_docs)]
 
 pub mod accounts;
+pub mod contracts;

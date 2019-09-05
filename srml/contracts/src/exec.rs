@@ -75,11 +75,12 @@ pub type ExecResult = Result<ExecReturnValue, ExecError>;
 /// wrap the error string into an ExecutionError with the provided buffer and return from the
 /// enclosing function. This macro is used instead of .map_err(..)? in order to avoid taking
 /// ownership of buffer unless there is an error.
+#[macro_export]
 macro_rules! try_or_exec_error {
 	($e:expr, $buffer:expr) => {
 		match $e {
 			Ok(val) => val,
-			Err(reason) => return Err(ExecError { reason, buffer: $buffer }),
+			Err(reason) => return Err($crate::exec::ExecError { reason, buffer: $buffer }),
 		}
 	}
 }
@@ -189,15 +190,6 @@ pub trait Loader<T: Trait> {
 	/// Load the main portion of the code specified by the `code_hash`. This executable
 	/// is called for each call to a contract.
 	fn load_main(&self, code_hash: &CodeHash<T>) -> Result<Self::Executable, &'static str>;
-}
-
-/// Struct that records a request to deposit an event with a list of topics.
-#[cfg_attr(any(feature = "std", test), derive(Debug, PartialEq, Eq))]
-pub struct IndexedEvent<T: Trait> {
-	/// A list of topics this event will be deposited with.
-	pub topics: Vec<T::Hash>,
-	/// The event to deposit.
-	pub event: Event<T>,
 }
 
 /// A trait that represent a virtual machine.
