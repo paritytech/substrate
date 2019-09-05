@@ -23,7 +23,7 @@ use hex_literal::hex;
 use clap::{load_yaml, ArgMatches, App};
 use bip39::{Mnemonic, Language, MnemonicType};
 use primitives::{
-	ed25519, sr25519, hexdisplay::HexDisplay, Pair, Public, blake2_256,
+	ed25519, sr25519, H256, hexdisplay::HexDisplay, Pair, Public, blake2_256,
 	crypto::{Ss58Codec, set_default_ss58_version, Ss58AddressFormat}
 };
 use codec::{Encode, Decode};
@@ -161,32 +161,12 @@ fn execute<C: Crypto>(matches: ArgMatches)
 				.expect("parameter is required; thus it can't be None; qed");
 			let signer = Sr25519::pair_from_suri(signer, password);
 
-			let to = matches.value_of("to")
-				.expect("parameter is required; thus it can't be None; qed");
-			let to = sr25519::Public::from_string(to).ok().or_else(||
-				sr25519::Pair::from_string(to, password).ok().map(|p| p.public())
-			).expect("Invalid 'to' URI; expecting either a secret URI or a public URI.");
-
-			let amount = matches.value_of("amount")
-				.expect("parameter is required; thus it can't be None; qed");
-			let amount = str::parse::<Balance>(amount)
-				.expect("Invalid 'amount' parameter; expecting an integer.");
-
-			let index = matches.value_of("index")
-				.expect("parameter is required; thus it can't be None; qed");
-			let index = str::parse::<Index>(index)
-				.expect("Invalid 'index' parameter; expecting an integer.");
+			let to = read_public_key::<Sr25519>(matches.value_of("to"), password);
+			let amount = read_amount(matches.value_of("amount"));
+			let index = read_index(matches.value_of("index"));
 
 			let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
-
-			let genesis_hash: Hash = match matches.value_of("genesis").unwrap_or("alex") {
-				"elm" => hex!["10c08714a10c7da78f40a60f6f732cf0dba97acfb5e2035445b032386157d5c3"].into(),
-				"alex" => hex!["dcd1346701ca8396496e52aa2785b1748deb6db09551b72159dcb3e08991025b"].into(),
-				h => hex::decode(h).ok().and_then(|x| Decode::decode(&mut &x[..]).ok())
-					.expect("Invalid genesis hash or unrecognised chain identifier"),
-			};
-
-			println!("Using a genesis hash of {}", HexDisplay::from(&genesis_hash.as_ref()));
+			let genesis_hash = read_genesis_hash(matches);
 
 			let raw_payload = SignedPayload::from_raw(
 				function,
@@ -208,25 +188,13 @@ fn execute<C: Crypto>(matches: ArgMatches)
 		}
 		("sign-transaction", Some(matches)) => {
 			let signer = read_input_pair::<Sr25519>(matches, password);
+			let index = read_index(matches.value_of("nonce"));
+			let call = matches.value_of("call").expect("call is required; qed");
 
-			let index = matches.value_of("nonce")
-				.expect("nonce is required; thus it can't be None; qed");
-			let index = str::parse::<Index>(index)
-				.expect("Invalid 'nonce' parameter; expecting an integer.");
-
-			let call = matches.value_of("call")
-				.expect("call is required; thus it can't be None; qed");
 			let function: Call = hex::decode(&call).ok()
 				.and_then(|x| Decode::decode(&mut &x[..]).ok()).unwrap();
 
-			let genesis_hash: Hash = match matches.value_of("genesis").unwrap_or("alex") {
-				"elm" => hex!["10c08714a10c7da78f40a60f6f732cf0dba97acfb5e2035445b032386157d5c3"].into(),
-				"alex" => hex!["dcd1346701ca8396496e52aa2785b1748deb6db09551b72159dcb3e08991025b"].into(),
-				h => hex::decode(h).ok().and_then(|x| Decode::decode(&mut &x[..]).ok())
-					.expect("Invalid genesis hash or unrecognised chain identifier"),
-			};
-
-			println!("Using a genesis hash of {}", HexDisplay::from(&genesis_hash.as_ref()));
+			let genesis_hash = read_genesis_hash(matches);
 
 			let raw_payload = (
 				function,
@@ -276,12 +244,23 @@ fn do_verify<C: Crypto>(matches: &ArgMatches, message: Vec<u8>, password: Option
 	where SignatureOf<C>: SignatureT, PublicOf<C>: PublicT,
 {
 	let signature = read_input_signature::<C>(matches);
-	let pubkey = read_input_public_key::<C>(matches, password);
+	let pubkey = read_public_key::<C>(matches.value_of("uri"), password);
 	<<C as Crypto>::Pair as Pair>::verify(&signature, &message, &pubkey)
 }
 
 fn format_signature<C: Crypto>(signature: SignatureOf<C>) -> String {
 	format!("{}", hex::encode(&signature))
+}
+
+fn read_genesis_hash(matches: &ArgMatches) -> H256 {
+	let genesis_hash: Hash = match matches.value_of("genesis").unwrap_or("alex") {
+		"elm" => hex!["10c08714a10c7da78f40a60f6f732cf0dba97acfb5e2035445b032386157d5c3"].into(),
+		"alex" => hex!["dcd1346701ca8396496e52aa2785b1748deb6db09551b72159dcb3e08991025b"].into(),
+		h => hex::decode(h).ok().and_then(|x| Decode::decode(&mut &x[..]).ok())
+			.expect("Invalid genesis hash or unrecognised chain identifier"),
+	};
+	println!("Using a genesis hash of {}", HexDisplay::from(&genesis_hash.as_ref()));
+	genesis_hash
 }
 
 fn read_input_signature<C: Crypto>(matches: &ArgMatches) -> SignatureOf<C>
@@ -302,14 +281,23 @@ fn read_input_signature<C: Crypto>(matches: &ArgMatches) -> SignatureOf<C>
 	signature
 }
 
-fn read_input_public_key<C: Crypto>(
-	matches: &ArgMatches,
+fn read_index(matched_index: Option<&str>) -> Index {
+	let index = matched_index.expect("parameter is required; thus it can't be None; qed");
+	str::parse::<Index>(index).expect("Invalid 'nonce' parameter; expecting an integer.")
+}
+
+fn read_amount(matched_amount: Option<&str>) -> Balance {
+	let amount = matched_amount.expect("parameter is required; thus it can't be None; qed");
+	str::parse::<Balance>(amount).expect("Invalid 'amount' parameter; expecting an integer.")
+}
+
+fn read_public_key<C: Crypto>(
+	matched_uri: Option<&str>,
 	password: Option<&str>,
 ) -> PublicOf<C>
 	where SignatureOf<C>: SignatureT, PublicOf<C>: PublicT,
 {
-	let uri = matches.value_of("uri")
-		.expect("public uri parameter is required; thus it can't be None; qed");
+	let uri = matched_uri.expect("parameter is required; thus it can't be None; qed");
 	let uri = if uri.starts_with("0x") { &uri[2..] } else { uri };
 	if let Ok(pubkey_vec) = hex::decode(uri) {
 		<C as Crypto>::Public::from_slice(pubkey_vec.as_slice())
@@ -335,7 +323,7 @@ fn read_input_pair<C: Crypto>(
 	where SignatureOf<C>: SignatureT, PublicOf<C>: PublicT,
 {
 	let suri = matches.value_of("suri")
-		.expect("secret URI parameter is required; thus it can't be None; qed");
+		.expect("parameter is required; thus it can't be None; qed");
 	C::pair_from_suri(suri, password)
 }
 
