@@ -360,6 +360,9 @@ test-srml-contracts-waterfall:
     - apt update
     - apt install wabt
     - cargo install pwasm-utils-cli --bin wasm-prune --force
+    - cat ~/.cargo/env
+    - export PATH="$HOME/.cargo/bin:$PATH"
+    - source ~/.cargo/env
     - git clone https://github.com/paritytech/srml-contracts-waterfall.git
     - cd ./srml-contracts-waterfall
     - git submodule update --init
