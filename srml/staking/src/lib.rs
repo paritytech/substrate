@@ -1001,7 +1001,7 @@ impl<T: Trait> Module<T> {
 
 	/// The total balance that can be slashed from a validator controller account as of
 	/// right now.
-	pub fn slashable_balance_of(who: &T::AccountId) -> BalanceOf<T> {
+	pub fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
 		Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
 	}
 
