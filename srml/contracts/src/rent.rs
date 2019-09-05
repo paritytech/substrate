@@ -17,9 +17,15 @@
 use crate::{BalanceOf, ContractInfo, ContractInfoOf, TombstoneContractInfo,
 	Trait, contract_child_trie, AliveContractInfo};
 use sr_primitives::traits::{Bounded, CheckedDiv, CheckedMul, Saturating, Zero,
+<<<<<<< HEAD
 	SaturatedConversion, Hash as HashT};
 use srml_support::traits::{Currency, ExistenceRequirement, Get, WithdrawReason};
 use srml_support::StorageMap;
+=======
+	SaturatedConversion};
+use support::traits::{Currency, ExistenceRequirement, Get, WithdrawReason};
+use support::StorageMap;
+>>>>>>> master
 
 #[derive(PartialEq, Eq, Copy, Clone)]
 #[must_use]

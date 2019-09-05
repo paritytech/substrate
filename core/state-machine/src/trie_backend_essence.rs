@@ -110,6 +110,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 	}
 
 	/// Execute given closure for all keys starting with prefix.
+<<<<<<< HEAD
 	pub fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
 		child_trie: ChildTrieReadRef,
@@ -124,9 +125,17 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 
 		let f = |key: &[u8]| {
 			if !key.starts_with(prefix) {
+=======
+	pub fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], mut f: F) {
+		let root_vec = match self.storage(storage_key) {
+			Ok(v) => v.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key)),
+			Err(e) => {
+				debug!(target: "trie", "Error while iterating child storage: {}", e);
+>>>>>>> master
 				return;
 			}
 
+<<<<<<< HEAD
 			f(key);
 		};
 	
@@ -137,10 +146,26 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 		) {
 			debug!(target: "trie", "Error while iterating child storage: {}", e);
 		}
+=======
+		self.keys_values_with_prefix_inner(&root, prefix, |k, _v| f(k))
+>>>>>>> master
 	}
 
 	/// Execute given closure for all keys starting with prefix.
 	pub fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], mut f: F) {
+<<<<<<< HEAD
+=======
+		self.keys_values_with_prefix_inner(&self.root, prefix, |k, _v| f(k))
+	}
+
+
+	fn keys_values_with_prefix_inner<F: FnMut(&[u8], &[u8])>(
+		&self,
+		root: &H::Out,
+		prefix: &[u8],
+		mut f: F,
+	) {
+>>>>>>> master
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral {
 			storage: &self.storage,
@@ -155,13 +180,13 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 			iter.seek(prefix)?;
 
 			for x in iter {
-				let (key, _) = x?;
+				let (key, value) = x?;
 
 				if !key.starts_with(prefix) {
 					break;
 				}
 
-				f(&key);
+				f(&key, &value);
 			}
 
 			Ok(())
@@ -170,6 +195,11 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 		if let Err(e) = iter() {
 			debug!(target: "trie", "Error while iterating by prefix: {}", e);
 		}
+	}
+
+	/// Execute given closure for all key and values starting with prefix.
+	pub fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
+		self.keys_values_with_prefix_inner(&self.root, prefix, f)
 	}
 
 }

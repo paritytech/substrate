@@ -15,9 +15,16 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::*;
+use super::state_full::split_range;
 use self::error::Error;
 
+use std::sync::Arc;
 use assert_matches::assert_matches;
+<<<<<<< HEAD
+=======
+use futures::stream::Stream;
+use primitives::storage::well_known_keys;
+>>>>>>> master
 use sr_io::blake2_256;
 use test_client::{
 	prelude::*,
@@ -29,28 +36,41 @@ use test_client::{
 fn should_return_storage() {
 	const KEY: &[u8] = b":mock";
 	const VALUE: &[u8] = b"hello world";
+	const STORAGE_KEY: &[u8] = b":child_storage:default:child";
+	const CHILD_VALUE: &[u8] = b"hello world !";
 
-	let core = tokio::runtime::Runtime::new().unwrap();
+	let mut core = tokio::runtime::Runtime::new().unwrap();
 	let client = TestClientBuilder::new()
 		.add_extra_storage(KEY.to_vec(), VALUE.to_vec())
+		.add_extra_child_storage(STORAGE_KEY.to_vec(), KEY.to_vec(), CHILD_VALUE.to_vec())
 		.build();
 	let genesis_hash = client.genesis_hash();
-	let client = State::new(Arc::new(client), Subscriptions::new(Arc::new(core.executor())));
+	let client = new_full(Arc::new(client), Subscriptions::new(Arc::new(core.executor())));
 	let key = StorageKey(KEY.to_vec());
+	let storage_key = StorageKey(STORAGE_KEY.to_vec());
 
 	assert_eq!(
-		client.storage(key.clone(), Some(genesis_hash).into())
+		client.storage(key.clone(), Some(genesis_hash).into()).wait()
 			.map(|x| x.map(|x| x.0.len())).unwrap().unwrap() as usize,
 		VALUE.len(),
 	);
 	assert_matches!(
-		client.storage_hash(key.clone(), Some(genesis_hash).into()).map(|x| x.is_some()),
+		client.storage_hash(key.clone(), Some(genesis_hash).into()).wait()
+			.map(|x| x.is_some()),
 		Ok(true)
 	);
 	assert_eq!(
-		client.storage_size(key.clone(), None).unwrap().unwrap() as usize,
+		client.storage_size(key.clone(), None).wait().unwrap().unwrap() as usize,
 		VALUE.len(),
 	);
+	assert_eq!(
+		core.block_on(
+			client.child_storage(storage_key, key, Some(genesis_hash).into())
+				.map(|x| x.map(|x| x.0.len()))
+		).unwrap().unwrap() as usize,
+		CHILD_VALUE.len(),
+	);
+
 }
 
 #[test]
@@ -60,22 +80,27 @@ fn should_return_child_storage() {
 		.add_child_storage("test", "key", vec![42_u8])
 		.build());
 	let genesis_hash = client.genesis_hash();
+<<<<<<< HEAD
 	let client = State::new(client, Subscriptions::new(Arc::new(core.executor())));
 	let child_key = StorageKey(b"test".to_vec());
+=======
+	let client = new_full(client, Subscriptions::new(Arc::new(core.executor())));
+	let child_key = StorageKey(well_known_keys::CHILD_STORAGE_KEY_PREFIX.iter().chain(b"test").cloned().collect());
+>>>>>>> master
 	let key = StorageKey(b"key".to_vec());
 
 
 	assert_matches!(
-		client.child_storage(child_key.clone(), key.clone(), Some(genesis_hash).into()),
+		client.child_storage(child_key.clone(), key.clone(), Some(genesis_hash).into()).wait(),
 		Ok(Some(StorageData(ref d))) if d[0] == 42 && d.len() == 1
 	);
 	assert_matches!(
 		client.child_storage_hash(child_key.clone(), key.clone(), Some(genesis_hash).into())
-			.map(|x| x.is_some()),
+			.wait().map(|x| x.is_some()),
 		Ok(true)
 	);
 	assert_matches!(
-		client.child_storage_size(child_key.clone(), key.clone(), None),
+		client.child_storage_size(child_key.clone(), key.clone(), None).wait(),
 		Ok(Some(1))
 	);
 }
@@ -85,10 +110,10 @@ fn should_call_contract() {
 	let core = tokio::runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
 	let genesis_hash = client.genesis_hash();
-	let client = State::new(client, Subscriptions::new(Arc::new(core.executor())));
+	let client = new_full(client, Subscriptions::new(Arc::new(core.executor())));
 
 	assert_matches!(
-		client.call("balanceOf".into(), Bytes(vec![1,2,3]), Some(genesis_hash).into()),
+		client.call("balanceOf".into(), Bytes(vec![1,2,3]), Some(genesis_hash).into()).wait(),
 		Err(Error::Client(_))
 	)
 }
@@ -100,21 +125,22 @@ fn should_notify_about_storage_changes() {
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
-		let api = State::new(Arc::new(test_client::new()), Subscriptions::new(Arc::new(remote)));
+		let client = Arc::new(test_client::new());
+		let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
 		api.subscribe_storage(Default::default(), subscriber, None.into());
 
 		// assert id assigned
 		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
 
-		let mut builder = api.client.new_block(Default::default()).unwrap();
+		let mut builder = client.new_block(Default::default()).unwrap();
 		builder.push_transfer(runtime::Transfer {
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Ferdie.into(),
 			amount: 42,
 			nonce: 0,
 		}).unwrap();
-		api.client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+		client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 	}
 
 	// assert notification sent to transport
@@ -131,7 +157,8 @@ fn should_send_initial_storage_changes_and_notifications() {
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
-		let api = State::new(Arc::new(test_client::new()), Subscriptions::new(Arc::new(remote)));
+		let client = Arc::new(test_client::new());
+		let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
 		let alice_balance_key = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into()));
 
@@ -142,14 +169,14 @@ fn should_send_initial_storage_changes_and_notifications() {
 		// assert id assigned
 		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
 
-		let mut builder = api.client.new_block(Default::default()).unwrap();
+		let mut builder = client.new_block(Default::default()).unwrap();
 		builder.push_transfer(runtime::Transfer {
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Ferdie.into(),
 			amount: 42,
 			nonce: 0,
 		}).unwrap();
-		api.client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+		client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 	}
 
 	// assert initial values sent to transport
@@ -166,7 +193,7 @@ fn should_send_initial_storage_changes_and_notifications() {
 fn should_query_storage() {
 	fn run_tests(client: Arc<TestClient>) {
 		let core = tokio::runtime::Runtime::new().unwrap();
-		let api = State::new(client.clone(), Subscriptions::new(Arc::new(core.executor())));
+		let api = new_full(client.clone(), Subscriptions::new(Arc::new(core.executor())));
 
 		let add_block = |nonce| {
 			let mut builder = client.new_block(Default::default()).unwrap();
@@ -220,7 +247,7 @@ fn should_query_storage() {
 			Some(block1_hash).into(),
 		);
 
-		assert_eq!(result.unwrap(), expected);
+		assert_eq!(result.wait().unwrap(), expected);
 
 		// Query all changes
 		let result = api.query_storage(
@@ -238,7 +265,7 @@ fn should_query_storage() {
 			],
 			child_changes: vec![],
 		});
-		assert_eq!(result.unwrap(), expected);
+		assert_eq!(result.wait().unwrap(), expected);
 	}
 
 	run_tests(Arc::new(test_client::new()));
@@ -260,7 +287,7 @@ fn should_return_runtime_version() {
 	let core = tokio::runtime::Runtime::new().unwrap();
 
 	let client = Arc::new(test_client::new());
-	let api = State::new(client.clone(), Subscriptions::new(Arc::new(core.executor())));
+	let api = new_full(client.clone(), Subscriptions::new(Arc::new(core.executor())));
 
 	let result = "{\"specName\":\"test\",\"implName\":\"parity-test\",\"authoringVersion\":1,\
 		\"specVersion\":1,\"implVersion\":1,\"apis\":[[\"0xdf6acb689907609b\",2],\
@@ -268,7 +295,7 @@ fn should_return_runtime_version() {
 		[\"0xc6e9a76309f39b09\",1],[\"0xdd718d5cc53262d4\",1],[\"0xcbca25e39f142387\",1],\
 		[\"0xf78b278be53f454c\",1],[\"0xab3c0572291feb8b\",1]]}";
 
-	let runtime_version = api.runtime_version(None.into()).unwrap();
+	let runtime_version = api.runtime_version(None.into()).wait().unwrap();
 	let serialized = serde_json::to_string(&runtime_version).unwrap();
 	assert_eq!(serialized, result);
 
@@ -283,7 +310,7 @@ fn should_notify_on_runtime_version_initially() {
 
 	{
 		let client = Arc::new(test_client::new());
-		let api = State::new(client.clone(), Subscriptions::new(Arc::new(core.executor())));
+		let api = new_full(client.clone(), Subscriptions::new(Arc::new(core.executor())));
 
 		api.subscribe_runtime_version(Default::default(), subscriber);
 

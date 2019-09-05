@@ -136,7 +136,7 @@
 //! ### Example: Rewarding a validator by id.
 //!
 //! ```
-//! use srml_support::{decl_module, dispatch::Result};
+//! use support::{decl_module, dispatch::Result};
 //! use system::ensure_signed;
 //! use srml_staking::{self as staking};
 //!
@@ -259,12 +259,10 @@ pub mod inflation;
 #[cfg(all(feature = "bench", test))]
 mod benches;
 
-#[cfg(feature = "std")]
-use runtime_io::with_storage;
 use rstd::{prelude::*, result};
 use codec::{HasCompact, Encode, Decode};
-use srml_support::{
-	StorageValue, StorageMap, EnumerableStorageMap, decl_module, decl_event,
+use support::{
+	StorageValue, StorageMap, StorageLinkedMap, decl_module, decl_event,
 	decl_storage, ensure, traits::{
 		Currency, OnFreeBalanceZero, OnDilution, LockIdentifier, LockableCurrency,
 		WithdrawReasons, WithdrawReason, OnUnbalanced, Imbalance, Get, Time
@@ -619,6 +617,7 @@ decl_storage! {
 	add_extra_genesis {
 		config(stakers):
 			Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>;
+<<<<<<< HEAD
 		build(|
 			storage: &mut sr_primitives::StorageContent,
 			config: &GenesisConfig<T>
@@ -650,6 +649,35 @@ decl_storage! {
 					};
 				}
 			});
+=======
+		build(|config: &GenesisConfig<T>| {
+			for &(ref stash, ref controller, balance, ref status) in &config.stakers {
+				assert!(
+					T::Currency::free_balance(&stash) >= balance,
+					"Stash does not have enough balance to bond."
+				);
+				let _ = <Module<T>>::bond(
+					T::Origin::from(Some(stash.clone()).into()),
+					T::Lookup::unlookup(controller.clone()),
+					balance,
+					RewardDestination::Staked,
+				);
+				let _ = match status {
+					StakerStatus::Validator => {
+						<Module<T>>::validate(
+							T::Origin::from(Some(controller.clone()).into()),
+							Default::default(),
+						)
+					},
+					StakerStatus::Nominator(votes) => {
+						<Module<T>>::nominate(
+							T::Origin::from(Some(controller.clone()).into()),
+							votes.iter().map(|l| T::Lookup::unlookup(l.clone())).collect(),
+						)
+					}, _ => Ok(())
+				};
+			}
+>>>>>>> master
 		});
 	}
 }
@@ -686,7 +714,7 @@ decl_module! {
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will
 		/// be the account that controls it.
 		///
-		/// `value` must be more than the `existential_deposit` defined in the Balances module.
+		/// `value` must be more than the `minimum_balance` specified by `T::Currency`.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the stash account.
 		///
@@ -765,7 +793,7 @@ decl_module! {
 
 		/// Schedule a portion of the stash to be unlocked ready for transfer out after the bond
 		/// period ends. If this leaves an amount actively bonded less than
-		/// T::Currency::existential_deposit(), then it is increased to the full amount.
+		/// T::Currency::minimum_balance(), then it is increased to the full amount.
 		///
 		/// Once the unlock period is done, you can call `withdraw_unbonded` to actually move
 		/// the funds out of management ready for transfer.
@@ -888,8 +916,8 @@ decl_module! {
 			ensure!(!targets.is_empty(), "targets cannot be empty");
 			let targets = targets.into_iter()
 				.take(MAX_NOMINATIONS)
-				.map(T::Lookup::lookup)
-				.collect::<result::Result<Vec<T::AccountId>, &'static str>>()?;
+				.map(|t| T::Lookup::lookup(t))
+				.collect::<result::Result<Vec<T::AccountId>, _>>()?;
 
 			<Validators<T>>::remove(stash);
 			<Nominators<T>>::insert(stash, targets);

@@ -22,7 +22,7 @@
 use super::*;
 
 use babe_primitives::AuthorityPair;
-use client::{LongestChain, block_builder::BlockBuilder};
+use client::block_builder::BlockBuilder;
 use consensus_common::NoNetwork as DummyOracle;
 use network::test::*;
 use network::test::{Block as TestBlock, PeersClient};
@@ -203,12 +203,16 @@ fn run_one_test() {
 	let mut runtime = current_thread::Runtime::new().unwrap();
 	let mut keystore_paths = Vec::new();
 	for (peer_id, seed) in peers {
+		let mut net = net.lock();
+		let peer = net.peer(*peer_id);
+		let client = peer.client().as_full().expect("Only full clients are used in tests").clone();
+		let select_chain = peer.select_chain().expect("Full client has select_chain");
+		
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 		let keystore = keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
 		keystore.write().insert_ephemeral_from_seed::<AuthorityPair>(seed).expect("Generates authority key");
 		keystore_paths.push(keystore_path);
 
-		let client = net.lock().peer(*peer_id).client().as_full().unwrap();
 		let environ = DummyFactory(client.clone());
 		import_notifications.push(
 			client.import_notification_stream()
@@ -222,9 +226,6 @@ fn run_one_test() {
 		register_babe_inherent_data_provider(
 			&inherent_data_providers, config.get()
 		).expect("Registers babe inherent data provider");
-
-		#[allow(deprecated)]
-		let select_chain = LongestChain::new(client.backend().clone());
 
 		runtime.spawn(start_babe(BabeParams {
 			config,

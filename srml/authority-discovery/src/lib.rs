@@ -31,7 +31,7 @@
 use app_crypto::RuntimeAppPublic;
 use codec::{Decode, Encode};
 use rstd::prelude::*;
-use srml_support::{decl_module, decl_storage, StorageValue};
+use support::{decl_module, decl_storage, StorageValue};
 
 pub trait Trait: system::Trait + session::Trait + im_online::Trait {}
 
@@ -44,6 +44,7 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(keys): Vec<AuthorityIdFor<T>>;
+<<<<<<< HEAD
 		build(|
 			  storage: &mut sr_primitives::StorageContent,
 			  config: &GenesisConfig<T>,
@@ -53,6 +54,9 @@ decl_storage! {
 					  || Module::<T>::initialize_keys(&config.keys),
 				  );
 			  })
+=======
+		build(|config| Module::<T>::initialize_keys(&config.keys))
+>>>>>>> master
 	}
 }
 
@@ -140,13 +144,13 @@ mod tests {
 	use app_crypto::Pair;
 	use primitives::testing::KeyStore;
 	use primitives::{crypto::key_types, sr25519, traits::BareCryptoStore, H256};
-	use sr_io::{with_externalities, TestExternalities};
+	use runtime_io::{with_externalities, TestExternalities};
 	use sr_primitives::generic::UncheckedExtrinsic;
 	use sr_primitives::testing::{Header, UintAuthorityId};
 	use sr_primitives::traits::{ConvertInto, IdentityLookup, OpaqueKeys};
 	use sr_primitives::Perbill;
 	use sr_staking_primitives::CurrentElectedSet;
-	use srml_support::{impl_outer_origin, parameter_types};
+	use support::{impl_outer_origin, parameter_types};
 
 	type AuthorityDiscovery = Module<Test>;
 	type SessionIndex = u32;
@@ -194,7 +198,11 @@ mod tests {
 		type AuthorityId = AuthorityId;
 		type Call = im_online::Call<Test>;
 		type Event = ();
-		type UncheckedExtrinsic = UncheckedExtrinsic<(), im_online::Call<Test>, (), ()>;
+		type SubmitTransaction = system::offchain::TransactionSubmitter<
+			(),
+			im_online::Call<Test>,
+			UncheckedExtrinsic<(), im_online::Call<Test>, (), ()>,
+		>;
 		type ReportUnresponsiveness = ();
 		type CurrentElectedSet = DummyCurrentElectedSet<AuthorityId>;
 	}

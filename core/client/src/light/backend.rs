@@ -22,10 +22,14 @@ use std::sync::{Arc, Weak};
 use parking_lot::{RwLock, Mutex};
 
 use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
+<<<<<<< HEAD
 use primitives::child_trie::ChildTrie;
 use primitives::child_trie::ChildTrieReadRef;
 use state_machine::{Backend as StateBackend, TrieBackend};
 use state_machine::backend::{InMemory as InMemoryState, StorageContent};
+=======
+use state_machine::{Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState, ChangesTrieTransaction};
+>>>>>>> master
 use sr_primitives::traits::{Block as BlockT, NumberFor, Zero, Header};
 use crate::in_mem::{self, check_genesis_storage};
 use crate::backend::{
@@ -234,8 +238,8 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 impl<S, F, Block, H> RemoteBackend<Block, H> for Backend<S, F, H>
 where
 	Block: BlockT,
-	S: BlockchainStorage<Block>,
-	F: Fetcher<Block>,
+	S: BlockchainStorage<Block> + 'static,
+	F: Fetcher<Block> + 'static,
 	H: Hasher<Out=Block::Hash>,
 	H::Out: Ord,
 {
@@ -244,6 +248,10 @@ where
 			&& self.blockchain.expect_block_number_from_id(block)
 				.map(|num| num.is_zero())
 				.unwrap_or(false)
+	}
+
+	fn remote_blockchain(&self) -> Arc<dyn crate::light::blockchain::RemoteBlockchain<Block>> {
+		self.blockchain.clone()
 	}
 }
 
@@ -283,7 +291,7 @@ where
 		Ok(())
 	}
 
-	fn update_changes_trie(&mut self, _update: MemoryDB<H>) -> ClientResult<()> {
+	fn update_changes_trie(&mut self, _update: ChangesTrieTransaction<H, NumberFor<Block>>) -> ClientResult<()> {
 		// we're not storing anything locally => ignore changes
 		Ok(())
 	}
@@ -358,7 +366,7 @@ where
 			*self.cached_header.write() = Some(cached_header);
 		}
 
-		futures::executor::block_on(
+		futures03::executor::block_on(
 			self.fetcher.upgrade().ok_or(ClientError::NotAvailableOnLightClient)?
 				.remote_read(RemoteReadRequest {
 					block: self.block,
@@ -377,7 +385,15 @@ where
 		// whole state is not available on light node
 	}
 
+<<<<<<< HEAD
 	fn for_keys_in_child_storage<A: FnMut(&[u8])>(&self, _child_trie: ChildTrieReadRef, _action: A) {
+=======
+	fn for_key_values_with_prefix<A: FnMut(&[u8], &[u8])>(&self, _prefix: &[u8], _action: A) {
+		// whole state is not available on light node
+	}
+
+	fn for_keys_in_child_storage<A: FnMut(&[u8])>(&self, _storage_key: &[u8], _action: A) {
+>>>>>>> master
 		// whole state is not available on light node
 	}
 
@@ -457,7 +473,20 @@ where
 		}
 	}
 
+<<<<<<< HEAD
 	fn for_keys_in_child_storage<A: FnMut(&[u8])>(&self, child_trie: ChildTrieReadRef, action: A) {
+=======
+	fn for_key_values_with_prefix<A: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], action: A) {
+		match *self {
+			OnDemandOrGenesisState::OnDemand(ref state) =>
+				StateBackend::<H>::for_key_values_with_prefix(state, prefix, action),
+			OnDemandOrGenesisState::Genesis(ref state) => state.for_key_values_with_prefix(prefix, action),
+		}
+	}
+
+
+	fn for_keys_in_child_storage<A: FnMut(&[u8])>(&self, storage_key: &[u8], action: A) {
+>>>>>>> master
 		match *self {
 			OnDemandOrGenesisState::OnDemand(ref state) =>
 				StateBackend::<H>::for_keys_in_child_storage(state, child_trie, action),

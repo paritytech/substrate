@@ -36,7 +36,7 @@ mod utils;
 use std::sync::Arc;
 use std::path::PathBuf;
 use std::io;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use client::backend::NewBlockState;
 use client::blockchain::HeaderBackend;
@@ -59,7 +59,7 @@ use sr_primitives::traits::{
 };
 use state_machine::backend::Backend as StateBackend;
 use executor::RuntimeInfo;
-use state_machine::{CodeExecutor, DBValue};
+use state_machine::{CodeExecutor, DBValue, ChangesTrieTransaction, ChangesTrieCacheAction, ChangesTrieBuildCache};
 use crate::utils::{Meta, db_err, meta_keys, read_db, block_id_to_lookup_key, read_meta};
 use client::leaves::{LeafSet, FinalizationDisplaced};
 use client::children;
@@ -142,8 +142,17 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 		self.state.for_keys_with_prefix(prefix, f)
 	}
 
+<<<<<<< HEAD
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, child_trie: ChildTrieReadRef, f: F) {
 		self.state.for_keys_in_child_storage(child_trie, f)
+=======
+	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
+		self.state.for_key_values_with_prefix(prefix, f)
+	}
+
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
+		self.state.for_keys_in_child_storage(storage_key, f)
+>>>>>>> master
 	}
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
@@ -207,9 +216,16 @@ pub fn new_client<E, S, Block, RA>(
 	genesis_storage: S,
 	execution_strategies: ExecutionStrategies,
 	keystore: Option<primitives::traits::BareCryptoStorePtr>,
-) -> Result<
-	client::Client<Backend<Block>,
-	client::LocalCallExecutor<Backend<Block>, E>, Block, RA>, client::error::Error
+) -> Result<(
+		client::Client<
+			Backend<Block>,
+			client::LocalCallExecutor<Backend<Block>, E>,
+			Block,
+			RA,
+		>,
+		Arc<Backend<Block>>,
+	),
+	client::error::Error,
 >
 	where
 		Block: BlockT<Hash=H256>,
@@ -218,7 +234,10 @@ pub fn new_client<E, S, Block, RA>(
 {
 	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
 	let executor = client::LocalCallExecutor::new(backend.clone(), executor, keystore);
-	Ok(client::Client::new(backend, executor, genesis_storage, execution_strategies)?)
+	Ok((
+		client::Client::new(backend.clone(), executor, genesis_storage, execution_strategies)?,
+		backend,
+	))
 }
 
 pub(crate) mod columns {
@@ -401,6 +420,7 @@ pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	storage_updates: StorageCollection,
 	child_storage_updates: ChildStorageCollection,
 	changes_trie_updates: MemoryDB<H>,
+	changes_trie_cache_update: Option<ChangesTrieCacheAction<H::Out, NumberFor<Block>>>,
 	pending_block: Option<PendingBlock<Block>>,
 	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<(BlockId<Block>, Option<Justification>)>,
@@ -478,8 +498,12 @@ where Block: BlockT<Hash=H256>,
 		Ok(root)
 	}
 
-	fn update_changes_trie(&mut self, update: MemoryDB<Blake2Hasher>) -> Result<(), client::error::Error> {
-		self.changes_trie_updates = update;
+	fn update_changes_trie(
+		&mut self,
+		update: ChangesTrieTransaction<Blake2Hasher, NumberFor<Block>>,
+	) -> Result<(), client::error::Error> {
+		self.changes_trie_updates = update.0;
+		self.changes_trie_cache_update = Some(update.1);
 		Ok(())
 	}
 
@@ -558,6 +582,7 @@ pub struct DbChangesTrieStorage<Block: BlockT> {
 	db: Arc<dyn KeyValueDB>,
 	meta: Arc<RwLock<Meta<NumberFor<Block>, Block::Hash>>>,
 	min_blocks_to_keep: Option<u32>,
+	cache: RwLock<ChangesTrieBuildCache<Block::Hash, NumberFor<Block>>>,
 	_phantom: ::std::marker::PhantomData<Block>,
 }
 
@@ -567,6 +592,11 @@ impl<Block: BlockT<Hash=H256>> DbChangesTrieStorage<Block> {
 		for (key, (val, _)) in changes_trie.drain() {
 			tx.put(columns::CHANGES_TRIE, &key[..], &val);
 		}
+	}
+
+	/// Commit changes into changes trie build cache.
+	pub fn commit_cache(&self, cache_update: ChangesTrieCacheAction<Block::Hash, NumberFor<Block>>) {
+		self.cache.write().perform(cache_update);
 	}
 
 	/// Prune obsolete changes tries.
@@ -692,6 +722,14 @@ where
 		self
 	}
 
+	fn with_cached_changed_keys(
+		&self,
+		root: &H256,
+		functor: &mut dyn FnMut(&HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>),
+	) -> bool {
+		self.cache.read().with_changed_keys(root, functor)
+	}
+
 	fn get(&self, key: &H256, _prefix: Prefix) -> Result<Option<DBValue>, String> {
 		self.db.get(columns::CHANGES_TRIE, &key[..])
 			.map_err(|err| format!("{}", err))
@@ -776,6 +814,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			db,
 			meta,
 			min_blocks_to_keep: if is_archive_pruning { None } else { Some(MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR) },
+			cache: RwLock::new(ChangesTrieBuildCache::new()),
 			_phantom: Default::default(),
 		};
 
@@ -878,7 +917,9 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		// cannot find tree route with empty DB.
 		if meta.best_hash != Default::default() {
 			let tree_route = ::client::blockchain::tree_route(
-				&self.blockchain,
+				|id| self.blockchain.header(id)?.ok_or_else(
+					|| client::error::Error::UnknownBlock(format!("{:?}", id))
+				),
 				BlockId::Hash(meta.best_hash),
 				BlockId::Hash(route_to),
 			)?;
@@ -1089,7 +1130,6 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			self.changes_tries_storage.commit(&mut transaction, changes_trie_updates);
 			let cache = operation.old_state.release(); // release state reference so that it can be finalized
 
-
 			if finalized {
 				// TODO: ensure best chain contains this block.
 				self.ensure_sequential_finalization(header, Some(last_finalized_hash))?;
@@ -1145,6 +1185,10 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		};
 
 		let write_result = self.storage.db.write(transaction).map_err(db_err);
+
+		if let Some(changes_trie_cache_update) = operation.changes_trie_cache_update {
+			self.changes_tries_storage.commit_cache(changes_trie_cache_update);
+		}
 
 		if let Some((number, hash, enacted, retracted, displaced_leaf, is_best, mut cache)) = imported {
 			if let Err(e) = write_result {
@@ -1279,6 +1323,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			storage_updates: Default::default(),
 			child_storage_updates: Default::default(),
 			changes_trie_updates: MemoryDB::default(),
+			changes_trie_cache_update: None,
 			aux_ops: Vec::new(),
 			finalized_blocks: Vec::new(),
 			set_head: None,
@@ -1506,7 +1551,7 @@ mod tests {
 		let mut op = backend.begin_operation().unwrap();
 		backend.begin_state_operation(&mut op, block_id).unwrap();
 		op.set_block_data(header, None, None, NewBlockState::Best).unwrap();
-		op.update_changes_trie(changes_trie_update).unwrap();
+		op.update_changes_trie((changes_trie_update, ChangesTrieCacheAction::Clear)).unwrap();
 		backend.commit_operation(op).unwrap();
 
 		header_hash
@@ -2025,6 +2070,7 @@ mod tests {
 	#[test]
 	fn tree_route_works() {
 		let backend = Backend::<Block>::new_test(1000, 100);
+		let blockchain = backend.blockchain();
 		let block0 = insert_header(&backend, 0, Default::default(), Vec::new(), Default::default());
 
 		// fork from genesis: 3 prong.
@@ -2038,7 +2084,7 @@ mod tests {
 
 		{
 			let tree_route = ::client::blockchain::tree_route(
-				backend.blockchain(),
+				|id| blockchain.header(id)?.ok_or_else(|| client::error::Error::UnknownBlock(format!("{:?}", id))),
 				BlockId::Hash(a3),
 				BlockId::Hash(b2)
 			).unwrap();
@@ -2050,7 +2096,7 @@ mod tests {
 
 		{
 			let tree_route = ::client::blockchain::tree_route(
-				backend.blockchain(),
+				|id| blockchain.header(id)?.ok_or_else(|| client::error::Error::UnknownBlock(format!("{:?}", id))),
 				BlockId::Hash(a1),
 				BlockId::Hash(a3),
 			).unwrap();
@@ -2062,7 +2108,7 @@ mod tests {
 
 		{
 			let tree_route = ::client::blockchain::tree_route(
-				backend.blockchain(),
+				|id| blockchain.header(id)?.ok_or_else(|| client::error::Error::UnknownBlock(format!("{:?}", id))),
 				BlockId::Hash(a3),
 				BlockId::Hash(a1),
 			).unwrap();
@@ -2074,7 +2120,7 @@ mod tests {
 
 		{
 			let tree_route = ::client::blockchain::tree_route(
-				backend.blockchain(),
+				|id| blockchain.header(id)?.ok_or_else(|| client::error::Error::UnknownBlock(format!("{:?}", id))),
 				BlockId::Hash(a2),
 				BlockId::Hash(a2),
 			).unwrap();
@@ -2088,13 +2134,14 @@ mod tests {
 	#[test]
 	fn tree_route_child() {
 		let backend = Backend::<Block>::new_test(1000, 100);
+		let blockchain = backend.blockchain();
 
 		let block0 = insert_header(&backend, 0, Default::default(), Vec::new(), Default::default());
 		let block1 = insert_header(&backend, 1, block0, Vec::new(), Default::default());
 
 		{
 			let tree_route = ::client::blockchain::tree_route(
-				backend.blockchain(),
+				|id| blockchain.header(id)?.ok_or_else(|| client::error::Error::UnknownBlock(format!("{:?}", id))),
 				BlockId::Hash(block0),
 				BlockId::Hash(block1),
 			).unwrap();

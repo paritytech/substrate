@@ -101,10 +101,16 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 
 		let children = self.overlay.committed.children.clone().into_iter()
 			.chain(self.overlay.prospective.children.clone().into_iter())
+<<<<<<< HEAD
 			.flat_map(|(_keyspace, changeset)| {
 				let child_trie = changeset.child_trie;
 				changeset.values.into_iter()
 					.map(move |(k, v)| (Some(child_trie.clone()), k, v))
+=======
+			.flat_map(|(keyspace, map)| {
+				map.into_iter()
+					.map(|(k, v)| (Some(keyspace.clone()), k, v.value))
+>>>>>>> master
 					.collect::<Vec<_>>()
 			});
 
@@ -247,6 +253,7 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 	fn chain_id(&self) -> u64 { 42 }
 
 	fn storage_root(&mut self) -> H::Out {
+<<<<<<< HEAD
 		let child_storage_tries =
 			self.overlay.prospective.children.values()
 				.chain(self.overlay.committed.children.values())
@@ -263,6 +270,21 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 
 			(child_trie, committed_iter.chain(prospective_iter))
 		});
+=======
+
+		let child_storage_keys =
+			self.overlay.prospective.children.keys()
+				.chain(self.overlay.committed.children.keys());
+
+		let child_delta_iter = child_storage_keys.map(|storage_key|
+			(storage_key.clone(), self.overlay.committed.children.get(storage_key)
+				.into_iter()
+				.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone())))
+				.chain(self.overlay.prospective.children.get(storage_key)
+					.into_iter()
+					.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone()))))));
+
+>>>>>>> master
 
 		// compute and memoize
 		let delta = self.overlay.committed.top.iter().map(|(k, v)| (k.clone(), v.value.clone()))
@@ -276,11 +298,20 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 		let (root, is_empty, _) = {
 			let delta = self.overlay.committed.children.get(keyspace)
 				.into_iter()
+<<<<<<< HEAD
 				.flat_map(|map| map.values.iter().map(|(k, v)| (k.clone(), v.clone())))
 				.chain(self.overlay.prospective.children.get(keyspace)
 					.into_iter()
 					.flat_map(|map| map.values.clone().into_iter()));
 			self.backend.child_storage_root(child_trie, delta)
+=======
+				.flat_map(|map| map.clone().into_iter().map(|(k, v)| (k, v.value)))
+				.chain(self.overlay.prospective.children.get(storage_key)
+						.into_iter()
+						.flat_map(|map| map.clone().into_iter().map(|(k, v)| (k, v.value))));
+
+			self.backend.child_storage_root(storage_key, delta)
+>>>>>>> master
 		};
 		if is_empty {
 			self.overlay.set_storage(child_trie.parent_trie().clone(), None);
@@ -297,7 +328,7 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 			Some(&self.changes_trie_storage),
 			&self.overlay,
 			parent,
-		)?.map(|(_, root)| root))
+		)?.map(|(_, root, _)| root))
 	}
 
 	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities> {

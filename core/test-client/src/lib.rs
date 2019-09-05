@@ -100,6 +100,11 @@ impl<Block, Executor, G: GenesisInit> TestClientBuilder<
 		let backend = Arc::new(Backend::new_test(std::u32::MAX, std::u64::MAX));
 		Self::with_backend(backend)
 	}
+
+	/// Give access to the underlying backend of these clients
+	pub fn backend(&self) -> Arc<Backend<Block>> {
+		self.backend.clone()
+	}
 }
 
 impl<Executor, Backend, G: GenesisInit> TestClientBuilder<Executor, Backend, G> {

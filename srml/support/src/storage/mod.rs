@@ -19,103 +19,31 @@
 use crate::rstd::prelude::*;
 use crate::rstd::{borrow::Borrow, iter::FromIterator};
 use codec::{Codec, Encode, Decode, KeyedVec, EncodeAppend};
+<<<<<<< HEAD
 use hashed::generator::{HashedStorage, StorageHasher};
 use unhashed::generator::UnhashedStorage;
 use crate::traits::{StorageDefault, Len};
 use primitives::child_trie::ChildTrie;
 use primitives::child_trie::ChildTrieReadRef;
 use primitives::storage::well_known_keys;
+=======
+use crate::traits::Len;
+>>>>>>> master
 
 #[macro_use]
 pub mod storage_items;
 pub mod unhashed;
 pub mod hashed;
-
-/// The underlying runtime storage.
-pub struct RuntimeStorage;
-
-impl<H: StorageHasher> HashedStorage<H> for RuntimeStorage {
-	fn exists(&self, key: &[u8]) -> bool {
-		hashed::exists(&H::hash, key)
-	}
-
-	/// Load the bytes of a key from storage. Can panic if the type is incorrect.
-	fn get<T: Decode>(&self, key: &[u8]) -> Option<T> {
-		hashed::get(&H::hash, key)
-	}
-
-	/// Put a value in under a key.
-	fn put<T: Encode>(&mut self, key: &[u8], val: &T) {
-		hashed::put(&H::hash, key, val)
-	}
-
-	/// Remove the bytes of a key from storage.
-	fn kill(&mut self, key: &[u8]) {
-		hashed::kill(&H::hash, key)
-	}
-
-	/// Take a value from storage, deleting it after reading.
-	fn take<T: Decode>(&mut self, key: &[u8]) -> Option<T> {
-		hashed::take(&H::hash, key)
-	}
-
-	fn get_raw(&self, key: &[u8]) -> Option<Vec<u8>> {
-		hashed::get_raw(&H::hash, key)
-	}
-
-	fn put_raw(&mut self, key: &[u8], value: &[u8]) {
-		hashed::put_raw(&H::hash, key, value)
-	}
-}
-
-impl UnhashedStorage for RuntimeStorage {
-	fn exists(&self, key: &[u8]) -> bool {
-		unhashed::exists(key)
-	}
-
-	/// Load the bytes of a key from storage. Can panic if the type is incorrect.
-	fn get<T: Decode>(&self, key: &[u8]) -> Option<T> {
-		unhashed::get(key)
-	}
-
-	/// Put a value in under a key.
-	fn put<T: Encode + ?Sized>(&mut self, key: &[u8], val: &T) {
-		unhashed::put(key, val)
-	}
-
-	/// Remove the bytes of a key from storage.
-	fn kill(&mut self, key: &[u8]) {
-		unhashed::kill(key)
-	}
-
-	/// Remove the bytes of a key from storage.
-	fn kill_prefix(&mut self, prefix: &[u8]) {
-		unhashed::kill_prefix(prefix)
-	}
-
-	/// Take a value from storage, deleting it after reading.
-	fn take<T: Decode>(&mut self, key: &[u8]) -> Option<T> {
-		unhashed::take(key)
-	}
-
-	fn get_raw(&self, key: &[u8]) -> Option<Vec<u8>> {
-		unhashed::get_raw(key)
-	}
-
-	fn put_raw(&mut self, key: &[u8], value: &[u8]) {
-		unhashed::put_raw(key, value)
-	}
-}
+pub mod child;
+pub mod generator;
 
 /// A trait for working with macro-generated storage values under the substrate storage API.
 pub trait StorageValue<T: Codec> {
 	/// The type that get/take return.
 	type Query;
-	/// Something that can provide the default value of this storage type.
-	type Default: StorageDefault<T>;
 
 	/// Get the storage key.
-	fn key() -> &'static [u8];
+	fn hashed_key() -> [u8; 16];
 
 	/// Does the value (explicitly) exist in storage?
 	fn exists() -> bool;
@@ -169,72 +97,16 @@ pub trait StorageValue<T: Codec> {
 	///
 	/// `T` is required to implement `Codec::DecodeLength`.
 	fn decode_len() -> Result<usize, &'static str>
-		where T: codec::DecodeLength, T: Len;
-}
-
-impl<T: Codec, U> StorageValue<T> for U where U: hashed::generator::StorageValue<T> {
-	type Query = U::Query;
-	type Default = U::Default;
-
-	fn key() -> &'static [u8] {
-		<U as hashed::generator::StorageValue<T>>::key()
-	}
-	fn exists() -> bool {
-		U::exists(&RuntimeStorage)
-	}
-	fn get() -> Self::Query {
-		U::get(&RuntimeStorage)
-	}
-	fn put<Arg: Borrow<T>>(val: Arg) {
-		U::put(val.borrow(), &mut RuntimeStorage)
-	}
-	fn put_ref<Arg: ?Sized + Encode>(val: &Arg) where T: AsRef<Arg> {
-		U::put_ref(val, &mut RuntimeStorage)
-	}
-	fn mutate<R, F: FnOnce(&mut Self::Query) -> R>(f: F) -> R {
-		U::mutate(f, &mut RuntimeStorage)
-	}
-	fn kill() {
-		U::kill(&mut RuntimeStorage)
-	}
-	fn take() -> Self::Query {
-		U::take(&mut RuntimeStorage)
-	}
-	fn append<'a, I, R>(items: R) -> Result<(), &'static str> where
-		I: 'a + Encode,
-		T: EncodeAppend<Item=I>,
-		R: IntoIterator<Item=&'a I>,
-		R::IntoIter: ExactSizeIterator,
-	{
-		U::append(items, &mut RuntimeStorage)
-	}
-	fn append_or_put<'a, I, R>(items: R) where
-		I: 'a + Encode + Clone,
-		T: EncodeAppend<Item=I> + FromIterator<I>,
-		R: IntoIterator<Item=&'a I> + Clone,
-		R::IntoIter: ExactSizeIterator,
-	{
-		U::append_or_put(items, &mut RuntimeStorage)
-	}
-	fn decode_len() -> Result<usize, &'static str>
-		where T: codec::DecodeLength, T: Len
-	{
-		U::decode_len(&mut RuntimeStorage)
-	}
+		where T: codec::DecodeLength + Len;
 }
 
 /// A strongly-typed map in storage.
 pub trait StorageMap<K: Codec, V: Codec> {
 	/// The type that get/take return.
 	type Query;
-	/// Something that can provide the default value of this storage type.
-	type Default: StorageDefault<V>;
-
-	/// Get the prefix key in storage.
-	fn prefix() -> &'static [u8];
 
 	/// Get the storage key used to fetch a value corresponding to a specific key.
-	fn key_for<KeyArg: Borrow<K>>(key: KeyArg) -> Vec<u8>;
+	fn hashed_key_for<KeyArg: Borrow<K>>(key: KeyArg) -> Vec<u8>;
 
 	/// Does the value (explicitly) exist in storage?
 	fn exists<KeyArg: Borrow<K>>(key: KeyArg) -> bool;
@@ -260,189 +132,100 @@ pub trait StorageMap<K: Codec, V: Codec> {
 
 	/// Take the value under a key.
 	fn take<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query;
-}
-
-impl<K: Codec, V: Codec, U> StorageMap<K, V> for U where U: hashed::generator::StorageMap<K, V> {
-	type Query = U::Query;
-	type Default = U::Default;
-
-	fn prefix() -> &'static [u8] {
-		<U as hashed::generator::StorageMap<K, V>>::prefix()
-	}
-
-	fn key_for<KeyArg: Borrow<K>>(key: KeyArg) -> Vec<u8> {
-		<U as hashed::generator::StorageMap<K, V>>::key_for(key.borrow())
-	}
-
-	fn exists<KeyArg: Borrow<K>>(key: KeyArg) -> bool {
-		U::exists(key.borrow(), &RuntimeStorage)
-	}
-
-	fn get<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query {
-		U::get(key.borrow(), &RuntimeStorage)
-	}
-
-	fn swap<KeyArg1: Borrow<K>, KeyArg2: Borrow<K>>(key1: KeyArg1, key2: KeyArg2) {
-		U::swap(key1.borrow(), key2.borrow(), &mut RuntimeStorage)
-	}
-
-	fn insert<KeyArg: Borrow<K>, ValArg: Borrow<V>>(key: KeyArg, val: ValArg) {
-		U::insert(key.borrow(), val.borrow(), &mut RuntimeStorage)
-	}
-
-	fn insert_ref<KeyArg: Borrow<K>, ValArg: ?Sized + Encode>(key: KeyArg, val: &ValArg) where V: AsRef<ValArg> {
-		U::insert_ref(key.borrow(), val, &mut RuntimeStorage)
-	}
-
-	fn remove<KeyArg: Borrow<K>>(key: KeyArg) {
-		U::remove(key.borrow(), &mut RuntimeStorage)
-	}
-
-	fn mutate<KeyArg: Borrow<K>, R, F: FnOnce(&mut Self::Query) -> R>(key: KeyArg, f: F) -> R {
-		U::mutate(key.borrow(), f, &mut RuntimeStorage)
-	}
-
-	fn take<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query {
-		U::take(key.borrow(), &mut RuntimeStorage)
-	}
-}
-
-/// A storage map with values that can be appended to.
-pub trait AppendableStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
-	/// Append the given item to the value in the storage.
-	///
-	/// `T` is required to implement `codec::EncodeAppend`.
-	fn append<'a, KeyArg, I, R>(
-		key: KeyArg,
-		items: R,
-	) -> Result<(), &'static str> where
-		KeyArg: Borrow<K>,
-		I: 'a + codec::Encode,
-		V: EncodeAppend<Item=I>,
-		R: IntoIterator<Item=&'a I> + Clone,
-		R::IntoIter: ExactSizeIterator;
 
 	/// Append the given items to the value in the storage.
 	///
-	/// `T` is required to implement `codec::EncodeAppend`.
-	///
-	/// Upon any failure, it replaces `items` as the new value (assuming that the previous stored
-	/// data is simply corrupt and no longer usable).
-	///
-	/// WARNING: use with care; if your use-case is not _exactly_ as what this function is doing,
-	/// you should use append and sensibly handle failure within the runtime code if it happens.
-	fn append_or_insert<'a, KeyArg, I, R>(
-		key: KeyArg,
-		items: R,
-	) where
-		KeyArg: Borrow<K>,
-		I: 'a + codec::Encode + Clone,
-		V: codec::EncodeAppend<Item=I> + FromIterator<I>,
-		R: IntoIterator<Item=&'a I> + Clone,
-		R::IntoIter: ExactSizeIterator;
-}
-
-impl<K: Codec, V: Codec, U> AppendableStorageMap<K, V> for U
-	where U: hashed::generator::AppendableStorageMap<K, V>
-{
-	fn append<'a, KeyArg, I, R>(
-		key: KeyArg,
-		items: R,
-	) -> Result<(), &'static str> where
+	/// `V` is required to implement `codec::EncodeAppend`.
+	fn append<'a, I, R, KeyArg>(key: KeyArg, items: R) -> Result<(), &'static str>
+	where
 		KeyArg: Borrow<K>,
 		I: 'a + codec::Encode,
-		V: EncodeAppend<Item=I>,
+		V: codec::EncodeAppend<Item=I>,
 		R: IntoIterator<Item=&'a I> + Clone,
-		R::IntoIter: ExactSizeIterator,
-	{
-		U::append(key.borrow(), items, &mut RuntimeStorage)
-	}
+		R::IntoIter: ExactSizeIterator;
 
-	fn append_or_insert<'a, KeyArg, I, R>(
-		key: KeyArg,
-		items: R,
-	) where
+	/// Safely append the given items to the value in the storage. If a codec error occurs, then the
+	/// old (presumably corrupt) value is replaced with the given `items`.
+	///
+	/// `T` is required to implement `codec::EncodeAppend`.
+	fn append_or_insert<'a, I, R, KeyArg>(key: KeyArg, items: R)
+	where
 		KeyArg: Borrow<K>,
 		I: 'a + codec::Encode + Clone,
-		V: codec::EncodeAppend<Item=I> + FromIterator<I>,
+		V: codec::EncodeAppend<Item=I> + crate::rstd::iter::FromIterator<I>,
 		R: IntoIterator<Item=&'a I> + Clone,
-		R::IntoIter: ExactSizeIterator,
-	{
-		U::append_or_insert(key.borrow(), items, &mut RuntimeStorage)
-	}
-}
+		R::IntoIter: ExactSizeIterator;
 
-/// A storage map with a decodable length.
-pub trait DecodeLengthStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
 	/// Read the length of the value in a fast way, without decoding the entire value.
 	///
 	/// `T` is required to implement `Codec::DecodeLength`.
 	///
-	/// Has the same logic as [`StorageValue`](trait.StorageValue.html).
+	/// Note that `0` is returned as the default value if no encoded value exists at the given key.
+	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
+	/// function for this purpose.
 	fn decode_len<KeyArg: Borrow<K>>(key: KeyArg) -> Result<usize, &'static str>
-		where V: codec::DecodeLength, V: Len;
+		where V: codec::DecodeLength + Len;
 }
 
-impl <K: Codec, V: Codec, U> DecodeLengthStorageMap<K, V> for U
-	where U: hashed::generator::DecodeLengthStorageMap<K, V>
-{
-	fn decode_len<KeyArg: Borrow<K>>(key: KeyArg) -> Result<usize, &'static str>
-		where V: codec::DecodeLength, V: Len
-	{
-		U::decode_len(key.borrow(), &mut RuntimeStorage)
-	}
-}
-
-/// A storage map that can be enumerated.
+/// A strongly-typed linked map in storage.
 ///
-/// Primarily useful for off-chain computations.
-/// Runtime implementors should avoid enumerating storage entries on-chain.
-pub trait EnumerableStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
+/// Similar to `StorageMap` but allows to enumerate other elements and doesn't implement append.
+pub trait StorageLinkedMap<K: Codec, V: Codec> {
+	/// The type that get/take return.
+	type Query;
+
+	/// The type that iterates over all `(key, value)`.
+	type Enumerator: Iterator<Item = (K, V)>;
+
+	/// Does the value (explicitly) exist in storage?
+	fn exists<KeyArg: Borrow<K>>(key: KeyArg) -> bool;
+
+	/// Load the value associated with the given key from the map.
+	fn get<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query;
+
+	/// Swap the values of two keys.
+	fn swap<KeyArg1: Borrow<K>, KeyArg2: Borrow<K>>(key1: KeyArg1, key2: KeyArg2);
+
+	/// Store a value to be associated with the given key from the map.
+	fn insert<KeyArg: Borrow<K>, ValArg: Borrow<V>>(key: KeyArg, val: ValArg);
+
+	/// Store a value under this key into the provided storage instance; this can take any reference
+	/// type that derefs to `T` (and has `Encode` implemented).
+	fn insert_ref<KeyArg: Borrow<K>, ValArg: ?Sized + Encode>(key: KeyArg, val: &ValArg) where V: AsRef<ValArg>;
+
+	/// Remove the value under a key.
+	fn remove<KeyArg: Borrow<K>>(key: KeyArg);
+
+	/// Mutate the value under a key.
+	fn mutate<KeyArg: Borrow<K>, R, F: FnOnce(&mut Self::Query) -> R>(key: KeyArg, f: F) -> R;
+
+	/// Take the value under a key.
+	fn take<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query;
+
 	/// Return current head element.
 	fn head() -> Option<K>;
 
 	/// Enumerate all elements in the map.
-	fn enumerate() -> Box<dyn Iterator<Item = (K, V)>> where K: 'static, V: 'static;
-}
+	fn enumerate() -> Self::Enumerator;
 
-impl<K: Codec, V: Codec, U> EnumerableStorageMap<K, V> for U
-	where U: hashed::generator::EnumerableStorageMap<K, V>
-{
-	fn head() -> Option<K> {
-		<U as hashed::generator::EnumerableStorageMap<K, V>>::head(&RuntimeStorage)
-	}
-
-	fn enumerate() -> Box<dyn Iterator<Item = (K, V)>> where K: 'static, V: 'static {
-		<U as hashed::generator::EnumerableStorageMap<K, V>>::enumerate(&RuntimeStorage)
-	}
+	/// Read the length of the value in a fast way, without decoding the entire value.
+	///
+	/// `T` is required to implement `Codec::DecodeLength`.
+	///
+	/// Note that `0` is returned as the default value if no encoded value exists at the given key.
+	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
+	/// function for this purpose.
+	fn decode_len<KeyArg: Borrow<K>>(key: KeyArg) -> Result<usize, &'static str>
+		where V: codec::DecodeLength + Len;
 }
 
 /// An implementation of a map with a two keys.
 ///
 /// It provides an important ability to efficiently remove all entries
 /// that have a common first key.
-///
-/// # Mapping of keys to a storage path
-///
-/// The storage key (i.e. the key under which the `Value` will be stored) is created from two parts.
-/// The first part is a hash of a concatenation of the `PREFIX` and `Key1`. And the second part
-/// is a hash of a `Key2`.
-///
-/// /!\ be careful while choosing the Hash, indeed malicious could craft second keys to lower the trie.
 pub trait StorageDoubleMap<K1: Encode, K2: Encode, V: Codec> {
 	/// The type that get/take returns.
 	type Query;
-
-	fn prefix() -> &'static [u8];
-
-	fn key_for<KArg1, KArg2>(k1: &KArg1, k2: &KArg2) -> Vec<u8>
-	where
-		K1: Borrow<KArg1>,
-		K2: Borrow<KArg2>,
-		KArg1: ?Sized + Encode,
-		KArg2: ?Sized + Encode;
-
-	fn prefix_for<KArg1>(k1: &KArg1) -> Vec<u8> where KArg1: ?Sized + Encode, K1: Borrow<KArg1>;
 
 	fn exists<KArg1, KArg2>(k1: &KArg1, k2: &KArg2) -> bool
 	where
@@ -504,6 +287,7 @@ pub trait StorageDoubleMap<K1: Encode, K2: Encode, V: Codec> {
 		I: codec::Encode,
 		V: EncodeAppend<Item=I>;
 }
+<<<<<<< HEAD
 
 impl<K1: Encode, K2: Encode, V: Codec, U> StorageDoubleMap<K1, K2, V> for U
 where
@@ -757,3 +541,5 @@ pub mod child {
 
 	pub use super::unhashed::StorageVec;
 }
+=======
+>>>>>>> master

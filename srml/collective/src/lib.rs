@@ -27,7 +27,7 @@ use rstd::{prelude::*, result};
 use primitives::u32_trait::Value as U32;
 use sr_primitives::traits::{Hash, EnsureOrigin};
 use sr_primitives::weights::SimpleDispatchInfo;
-use srml_support::{
+use support::{
 	dispatch::{Dispatchable, Parameter}, codec::{Encode, Decode},
 	traits::{ChangeMembers, InitializeMembers}, StorageValue, StorageMap, decl_module, decl_event,
 	decl_storage, ensure,
@@ -99,6 +99,7 @@ decl_storage! {
 	add_extra_genesis {
 		config(phantom): rstd::marker::PhantomData<I>;
 		config(members): Vec<T::AccountId>;
+<<<<<<< HEAD
 		build(|
 			storage: &mut sr_primitives::StorageContent,
 			config: &Self,
@@ -108,6 +109,9 @@ decl_storage! {
 				|| Module::<T, I>::initialize_members(&config.members),
 			);
 		})
+=======
+		build(|config| Module::<T, I>::initialize_members(&config.members))
+>>>>>>> master
 	}
 }
 
@@ -387,7 +391,7 @@ impl<
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use srml_support::{Hashable, assert_ok, assert_noop, parameter_types};
+	use support::{Hashable, assert_ok, assert_noop, parameter_types};
 	use system::{EventRecord, Phase};
 	use hex_literal::hex;
 	use runtime_io::with_externalities;
@@ -435,7 +439,7 @@ mod tests {
 	pub type Block = sr_primitives::generic::Block<Header, UncheckedExtrinsic>;
 	pub type UncheckedExtrinsic = sr_primitives::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
 
-	srml_support::construct_runtime!(
+	support::construct_runtime!(
 		pub enum Test where
 			Block = Block,
 			NodeBlock = Block,

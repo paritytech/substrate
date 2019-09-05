@@ -478,6 +478,7 @@ decl_storage! {
 		config(initial_balance): T::Balance;
 		config(endowed_accounts): Vec<T::AccountId>;
 
+<<<<<<< HEAD
 		build(|
 			storage: &mut sr_primitives::StorageContent,
 			config: &GenesisConfig<T>| {
@@ -487,6 +488,12 @@ decl_storage! {
 						<FreeBalance<T>>::key_for(asset_id, account_id),
 						<T::Balance as codec::Encode>::encode(&config.initial_balance)
 					);
+=======
+		build(|config: &GenesisConfig<T>| {
+			config.assets.iter().for_each(|asset_id| {
+				config.endowed_accounts.iter().for_each(|account_id| {
+					<FreeBalance<T>>::insert(asset_id, account_id, &config.initial_balance);
+>>>>>>> master
 				});
 			});
 		});

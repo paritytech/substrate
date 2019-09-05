@@ -32,7 +32,7 @@ pub use substrate_finality_grandpa_primitives as fg_primitives;
 
 use rstd::prelude::*;
 use codec::{self as codec, Encode, Decode, Error};
-use srml_support::{
+use support::{
 	decl_event, decl_storage, decl_module, dispatch::Result,
 	storage::StorageValue, storage::StorageMap,
 };
@@ -162,6 +162,7 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(authorities): Vec<(AuthorityId, AuthorityWeight)>;
+<<<<<<< HEAD
 		build(|
 			storage: &mut sr_primitives::StorageContent,
 			config: &GenesisConfig
@@ -171,6 +172,9 @@ decl_storage! {
 				|| Module::<T>::initialize_authorities(&config.authorities),
 			);
 		})
+=======
+		build(|config| Module::<T>::initialize_authorities(&config.authorities))
+>>>>>>> master
 	}
 }
 
