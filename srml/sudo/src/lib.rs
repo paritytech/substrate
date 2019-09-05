@@ -51,7 +51,7 @@
 //! This is an example of a module that exposes a privileged function:
 //!
 //! ```
-//! use srml_support::{decl_module, dispatch::Result};
+//! use support::{decl_module, dispatch::Result};
 //! use system::ensure_root;
 //!
 //! pub trait Trait: system::Trait {}
@@ -86,13 +86,11 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sr_std::prelude::*;
-use sr_primitives::traits::StaticLookup;
-use sr_primitives::weights::SimpleDispatchInfo;
-use srml_support::{
-	StorageValue, Parameter, Dispatchable, decl_module, decl_event,
-	decl_storage, ensure
+use rstd::prelude::*;
+use sr_primitives::{
+	traits::{StaticLookup, Dispatchable}, weights::SimpleDispatchInfo, DispatchError,
 };
+use support::{StorageValue, Parameter, decl_module, decl_event, decl_storage, ensure};
 use system::ensure_signed;
 
 pub trait Trait: system::Trait {
@@ -106,7 +104,7 @@ pub trait Trait: system::Trait {
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what it's working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn deposit_event<T>() = default;
+		fn deposit_event() = default;
 
 		/// Authenticates the sudo key and dispatches a function call with `Root` origin.
 		///
@@ -126,7 +124,8 @@ decl_module! {
 			let res = match proposal.dispatch(system::RawOrigin::Root.into()) {
 				Ok(_) => true,
 				Err(e) => {
-					sr_io::print(e);
+					let e: DispatchError = e.into();
+					runtime_io::print(e);
 					false
 				}
 			};

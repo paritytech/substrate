@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-srml-support-procedural-tools-derive = { path = "./derive" }
+srml-support-procedural-tools-derive = { package = "srml-support-procedural-tools-derive", path = "./derive" }
 proc-macro2 = "0.4.27"
 quote = { version = "0.6.12" }
 syn = { version = "0.15.30", features = ["full"] }

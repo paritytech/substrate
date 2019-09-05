@@ -17,15 +17,12 @@
 //! Tests for the module.
 
 use super::*;
+use mock::*;
 use runtime_io::with_externalities;
 use sr_primitives::traits::OnInitialize;
 use sr_staking_primitives::offence::{OffenceDetails, OnOffenceHandler};
-use srml_support::{
-	assert_ok, assert_noop, assert_eq_uvec, assert_eq_error_rate,
-	EnumerableStorageMap
-};
-use mock::*;
-use srml_support::traits::{Currency, ReservableCurrency};
+use support::{assert_ok, assert_noop, assert_eq_uvec, assert_eq_error_rate, StorageLinkedMap};
+use support::traits::{Currency, ReservableCurrency};
 
 #[test]
 fn basic_setup_works() {
@@ -775,7 +772,7 @@ fn cannot_transfer_staked_balance() {
 		// Confirm account 11 cannot transfer as a result
 		assert_noop!(
 			Balances::transfer(Origin::signed(11), 20, 1),
-			"account liquidity restrictions prevent withdrawal"
+			"account liquidity restrictions prevent withdrawal",
 		);
 
 		// Give account 11 extra free balance
@@ -804,7 +801,7 @@ fn cannot_transfer_staked_balance_2() {
 		// Confirm account 21 can transfer at most 1000
 		assert_noop!(
 			Balances::transfer(Origin::signed(21), 20, 1001),
-			"account liquidity restrictions prevent withdrawal"
+			"account liquidity restrictions prevent withdrawal",
 		);
 		assert_ok!(Balances::transfer(Origin::signed(21), 20, 1000));
 	});

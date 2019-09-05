@@ -13,8 +13,8 @@ rstd = { package = "sr-std", path = "../../core/sr-std", default-features = fals
 serde = { version = "1.0", optional = true }
 session = { package = "srml-session", path = "../session", default-features = false }
 im-online = { package = "srml-im-online", path = "../im-online", default-features = false }
-srml-support = { path = "../support", default-features = false }
-sr-io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
+support = { package = "srml-support", path = "../support", default-features = false }
+runtime-io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 
 [dev-dependencies]
@@ -30,8 +30,8 @@ std = [
 	"serde",
 	"session/std",
 	"im-online/std",
-	"srml-support/std",
-	"sr-io/std",
+	"support/std",
+	"runtime-io/std",
 	"system/std",
 	"app-crypto/std",
 ]
