@@ -355,7 +355,7 @@ pub fn elect<AccountId, Balance, FS, C>(
 /// * `tolerance`: maximum difference that can occur before an early quite happens.
 /// * `iterations`: maximum number of iterations that will be processed.
 /// * `stake_of`: something that can return the stake stake of a particular candidate or voter.
-pub fn equalize<Balance, AccountId, C, FS>(
+pub fn equalize<Balance, AccountId, FS, C>(
 	mut assignments: Vec<(AccountId, Vec<PhragmenAssignment<AccountId>>)>,
 	supports: &mut SupportMap<AccountId>,
 	tolerance: ExtendedBalance,
@@ -497,11 +497,11 @@ mod tests {
 	use rstd::collections::btree_map::BTreeMap;
 	use support::assert_eq_uvec;
 
-	pub struct C;
-	impl Convert<u64, u64> for C {
+	pub struct TestCurrencyToVote;
+	impl Convert<u64, u64> for TestCurrencyToVote {
 		fn convert(x: u64) -> u64 { x }
 	}
-	impl Convert<u128, u64> for C {
+	impl Convert<u128, u64> for TestCurrencyToVote {
 		fn convert(x: u128) -> u64 { x.saturated_into() }
 	}
 
@@ -699,7 +699,7 @@ mod tests {
 		];
 		let stake_of = |x: &u64| { if *x >= 10 { *x }  else { 0 }};
 		let PhragmenResult { winners, assignments } =
-			elect::<_, _, _, C>(2, 2, candidates, voters, stake_of, false).unwrap();
+			elect::<_, _, _, TestCurrencyToVote>(2, 2, candidates, voters, stake_of, false).unwrap();
 
 		assert_eq_uvec!(winners, vec![2, 3]);
 		assert_eq_uvec!(
