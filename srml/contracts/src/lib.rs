@@ -677,6 +677,7 @@ impl<T: Trait> Module<T> {
 		let (mut gas_meter, imbalance) =
 			try_or_exec_error!(
 				gas::buy_gas::<T>(&origin, gas_limit),
+				// We don't have a spare buffer here in the first place, so create a new empty one.
 				Vec::new()
 			);
 
