@@ -192,12 +192,13 @@ fn print_extrinsic(function: Call, index: Index, signer: <Sr25519 as Crypto>::Pa
 			system::CheckNonce::<Runtime>::from(i),
 			system::CheckWeight::<Runtime>::new(),
 			balances::TakeFees::<Runtime>::from(f),
+			Default::default(),
 		)
 	};
 	let raw_payload = SignedPayload::from_raw(
 		function,
 		extra(index, 0),
-		(VERSION.spec_version as u32, genesis_hash, genesis_hash, (), (), ()),
+		(VERSION.spec_version as u32, genesis_hash, genesis_hash, (), (), (), ()),
 	);
 	let signature = raw_payload.using_encoded(|payload| {
 		println!("Signing {}", HexDisplay::from(&payload));

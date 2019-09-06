@@ -254,13 +254,14 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::marker::PhantomData;
-use srml_support::{StorageValue, dispatch::Result, decl_module, decl_storage, decl_event};
+use support::{StorageValue, dispatch::Result, decl_module, decl_storage, decl_event};
 use system::{ensure_signed, ensure_root};
 use codec::{Encode, Decode};
 use sr_primitives::{
-	traits::{SignedExtension, DispatchError, Bounded},
-	transaction_validity::ValidTransaction,
-	weights::{SimpleDispatchInfo, DispatchInfo},
+	traits::{SignedExtension, Bounded}, weights::{SimpleDispatchInfo, DispatchInfo},
+	transaction_validity::{
+		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
+	},
 };
 
 /// Our module's configuration trait. All our types and consts go in here. If the
@@ -561,7 +562,7 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 	type AdditionalSigned = ();
 	type Pre = ();
 
-	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
+	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
 
 	fn validate(
 		&self,
@@ -569,20 +570,22 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 		call: &Self::Call,
 		_info: DispatchInfo,
 		len: usize,
-	) -> rstd::result::Result<ValidTransaction, DispatchError> {
+	) -> TransactionValidity {
 		// if the transaction is too big, just drop it.
-		if len > 200 { return Err(DispatchError::Exhausted) }
+		if len > 200 {
+			return InvalidTransaction::ExhaustsResources.into()
+		}
 
 		// check for `set_dummy`
 		match call {
 			Call::set_dummy(..) => {
-				rio::print("set_dummy was received.");
+				runtime_io::print("set_dummy was received.");
 
 				let mut valid_tx = ValidTransaction::default();
 				valid_tx.priority = Bounded::max_value();
 				Ok(valid_tx)
 			}
-			_ => Ok(Default::default())
+			_ => Ok(Default::default()),
 		}
 	}
 }
@@ -591,8 +594,8 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 mod tests {
 	use super::*;
 
-	use srml_support::{assert_ok, impl_outer_origin, parameter_types};
-	use rio::with_externalities;
+	use support::{assert_ok, impl_outer_origin, parameter_types};
+	use runtime_io::with_externalities;
 	use primitives::{H256, Blake2Hasher};
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
@@ -662,7 +665,7 @@ mod tests {
 
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
-	fn new_test_ext() -> rio::TestExternalities<Blake2Hasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
 		balances::GenesisConfig::<Test>::default().assimilate_storage(&mut t).unwrap();
@@ -712,12 +715,14 @@ mod tests {
 			let info = DispatchInfo::default();
 
 			assert_eq!(
-				WatchDummy::<Test>(PhantomData).validate(&1, &call, info, 150).unwrap().priority,
-				Bounded::max_value()
+				WatchDummy::<Test>(PhantomData).validate(&1, &call, info, 150)
+					.unwrap()
+					.priority,
+				Bounded::max_value(),
 			);
 			assert_eq!(
 				WatchDummy::<Test>(PhantomData).validate(&1, &call, info, 250),
-				Err(DispatchError::Exhausted)
+				InvalidTransaction::ExhaustsResources.into(),
 			);
 		})
 	}

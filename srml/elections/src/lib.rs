@@ -27,7 +27,7 @@ use rstd::prelude::*;
 use sr_primitives::traits::{Zero, One, StaticLookup, Bounded, Saturating};
 use sr_primitives::weights::SimpleDispatchInfo;
 use runtime_io::print;
-use srml_support::{
+use support::{
 	StorageValue, StorageMap,
 	dispatch::Result, decl_storage, decl_event, ensure, decl_module,
 	traits::{
@@ -504,7 +504,7 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			ensure!(
 				!total.is_zero(),
-				"stake deposited to present winner and be added to leaderboard should be non-zero"
+				"stake deposited to present winner and be added to leaderboard should be non-zero",
 			);
 
 			let candidate = T::Lookup::lookup(candidate)?;
@@ -1102,7 +1102,7 @@ impl<T: Trait> Module<T> {
 mod tests {
 	use super::*;
 	use std::cell::RefCell;
-	use srml_support::{assert_ok, assert_err, assert_noop, parameter_types};
+	use support::{assert_ok, assert_err, assert_noop, parameter_types};
 	use runtime_io::with_externalities;
 	use primitives::{H256, Blake2Hasher};
 	use sr_primitives::{
@@ -1227,14 +1227,14 @@ mod tests {
 	pub type Block = sr_primitives::generic::Block<Header, UncheckedExtrinsic>;
 	pub type UncheckedExtrinsic = sr_primitives::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
 
-	srml_support::construct_runtime!(
+	support::construct_runtime!(
 		pub enum Test where
 			Block = Block,
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic
 		{
 			System: system::{Module, Call, Event},
-			Balances: balances::{Module, Call, Event<T>, Config<T>},
+			Balances: balances::{Module, Call, Event<T>, Config<T>, Error},
 			Elections: elections::{Module, Call, Event<T>, Config<T>},
 		}
 	);
