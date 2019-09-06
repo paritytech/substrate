@@ -160,7 +160,7 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 					(
 						cached_runtime.with(|module|
 							self.fallback
-								.call_in_wasm_module(module, method, data)
+								.call_in_wasm_module(ext, module, method, data)
 								.map(NativeOrEncoded::Encoded)
 						),
 						false
@@ -170,7 +170,7 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 					(
 						cached_runtime.with(|module|
 							self.fallback
-								.call_in_wasm_module(module, method, data)
+								.call_in_wasm_module(ext, module, method, data)
 								.map(NativeOrEncoded::Encoded)
 						),
 						false

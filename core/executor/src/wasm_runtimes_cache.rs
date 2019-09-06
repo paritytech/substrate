@@ -325,7 +325,7 @@ impl RuntimesCache {
 			);
 
 		let version = wasm_executor
-			.call_in_wasm_module(&instance, "Core_version", &[])
+			.call_in_wasm_module(ext, &instance, "Core_version", &[])
 			.ok()
 			.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()).ok());
 		Ok(Rc::new(CachedRuntime {

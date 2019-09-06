@@ -198,7 +198,6 @@ impl_wasm_host_interface! {
 	#[inherent_externals]
 	impl FunctionExecutor where this {
 		ext_malloc(size: WordSize) -> Pointer<u8> {
-			println!("AMMMALLO: {}", size);
 			let r = this.heap.allocate(size).map_err(|e| format!("{:?}", e))?;
 			debug_trace!(target: "sr-io", "malloc {} bytes at {}", size, r);
 			Ok(r)
@@ -1297,7 +1296,7 @@ impl WasmExecutor {
 		let module = wasmi::Module::from_buffer(code)?;
 		let module = Self::instantiate_module(heap_pages, &module)?;
 
-		runtime_io::with_externalities(ext, || self.call_in_wasm_module(&module, method, data))
+		self.call_in_wasm_module(ext, &module, method, data)
 	}
 
 	/// Call a given method with a custom signature in the given code.
@@ -1320,14 +1319,12 @@ impl WasmExecutor {
 		let module = wasmi::Module::from_buffer(code)?;
 		let module = Self::instantiate_module(heap_pages, &module)?;
 
-		runtime_io::with_externalities(
+		self.call_in_wasm_module_with_custom_signature(
 			ext,
-			|| self.call_in_wasm_module_with_custom_signature(
-					&module,
-					method,
-					create_parameters,
-					filter_result,
-				)
+			&module,
+			method,
+			create_parameters,
+			filter_result,
 		)
 	}
 
@@ -1357,13 +1354,15 @@ impl WasmExecutor {
 	}
 
 	/// Call a given method in the given wasm-module runtime.
-	pub fn call_in_wasm_module(
+	pub fn call_in_wasm_module<E: Externalities<Blake2Hasher>>(
 		&self,
+		ext: &mut E,
 		module_instance: &ModuleRef,
 		method: &str,
 		data: &[u8],
 	) -> Result<Vec<u8>> {
 		self.call_in_wasm_module_with_custom_signature(
+			ext,
 			module_instance,
 			method,
 			|alloc| {
@@ -1384,11 +1383,13 @@ impl WasmExecutor {
 
 	/// Call a given method in the given wasm-module runtime.
 	fn call_in_wasm_module_with_custom_signature<
+		E: Externalities<Blake2Hasher>,
 		F: FnOnce(&mut dyn FnMut(&[u8]) -> Result<u32>) -> Result<Vec<RuntimeValue>>,
 		FR: FnOnce(Option<RuntimeValue>, &MemoryRef) -> Result<Option<R>>,
 		R,
 	>(
 		&self,
+		ext: &mut E,
 		module_instance: &ModuleRef,
 		method: &str,
 		create_parameters: F,
@@ -1413,7 +1414,10 @@ impl WasmExecutor {
 			fec.write_memory(offset, data).map(|_| offset.into()).map_err(Into::into)
 		})?;
 
-		let result = module_instance.invoke_export(method, &parameters, &mut fec);
+		let result = runtime_io::with_externalities(
+			ext,
+			|| module_instance.invoke_export(method, &parameters, &mut fec),
+		);
 
 		match result {
 			Ok(val) => match filter_result(val, &memory)? {
