@@ -42,7 +42,7 @@
 //! ## Usage
 //!
 //! ```
-//! use srml_support::{decl_module, dispatch::Result};
+//! use support::{decl_module, dispatch::Result};
 //! use system::ensure_signed;
 //! use srml_im_online::{self as im_online};
 //!
@@ -72,26 +72,34 @@ use codec::{Encode, Decode};
 use primitives::offchain::{OpaqueNetworkState, StorageKind};
 use rstd::prelude::*;
 use session::historical::IdentificationTuple;
-use sr_io::Printable;
+use runtime_io::Printable;
 use sr_primitives::{
-	Perbill, ApplyError,
-	traits::{Convert, Extrinsic as ExtrinsicT, Member},
-	transaction_validity::{TransactionValidity, TransactionLongevity, ValidTransaction},
+	traits::{Convert, Member}, Perbill,
+	transaction_validity::{
+		TransactionValidity, TransactionLongevity, ValidTransaction, InvalidTransaction,
+	},
 };
 use sr_staking_primitives::{
 	SessionIndex, CurrentElectedSet,
 	offence::{ReportOffence, Offence, Kind},
 };
-use srml_support::{
+use support::{
 	decl_module, decl_event, decl_storage, print, ensure,
 	Parameter, StorageValue, StorageDoubleMap,
 };
 use system::ensure_none;
+use system::offchain::SubmitUnsignedTransaction;
 
 pub mod sr25519 {
 	mod app_sr25519 {
 		use app_crypto::{app_crypto, key_types::IM_ONLINE, sr25519};
 		app_crypto!(sr25519, IM_ONLINE);
+
+		impl From<Signature> for sr_primitives::AnySignature {
+			fn from(sig: Signature) -> Self {
+				sr25519::Signature::from(sig).into()
+			}
+		}
 	}
 
 	/// An i'm online keypair using sr25519 as its crypto.
@@ -109,6 +117,12 @@ pub mod ed25519 {
 	mod app_ed25519 {
 		use app_crypto::{app_crypto, key_types::IM_ONLINE, ed25519};
 		app_crypto!(ed25519, IM_ONLINE);
+
+		impl From<Signature> for sr_primitives::AnySignature {
+			fn from(sig: Signature) -> Self {
+				ed25519::Signature::from(sig).into()
+			}
+		}
 	}
 
 	/// An i'm online keypair using ed25519 as its crypto.
@@ -141,17 +155,15 @@ struct WorkerStatus<BlockNumber> {
 // Error which may occur while executing the off-chain code.
 enum OffchainErr {
 	DecodeWorkerStatus,
-	ExtrinsicCreation,
 	FailedSigning,
 	NetworkState,
 	SubmitTransaction,
 }
 
 impl Printable for OffchainErr {
-	fn print(self) {
+	fn print(&self) {
 		match self {
 			OffchainErr::DecodeWorkerStatus => print("Offchain error: decoding WorkerStatus failed!"),
-			OffchainErr::ExtrinsicCreation => print("Offchain error: extrinsic creation failed!"),
 			OffchainErr::FailedSigning => print("Offchain error: signing failed!"),
 			OffchainErr::NetworkState => print("Offchain error: fetching network state failed!"),
 			OffchainErr::SubmitTransaction => print("Offchain error: submitting transaction failed!"),
@@ -183,9 +195,8 @@ pub trait Trait: system::Trait + session::historical::Trait {
 	/// A dispatchable call type.
 	type Call: From<Call<Self>>;
 
-	/// A extrinsic right from the external world. This is unchecked and so
-	/// can contain a signature.
-	type UncheckedExtrinsic: ExtrinsicT<Call=<Self as Trait>::Call> + Encode + Decode;
+	/// A transaction submitter.
+	type SubmitTransaction: SubmitUnsignedTransaction<Self, <Self as Trait>::Call>;
 
 	/// A type that gives us the ability to submit unresponsiveness offence reports.
 	type ReportUnresponsiveness:
@@ -223,22 +234,14 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(keys): Vec<T::AuthorityId>;
-		build(|
-			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
-			config: &GenesisConfig<T>
-		| {
-			sr_io::with_storage(
-				storage,
-				|| Module::<T>::initialize_keys(&config.keys),
-			);
-		})
+		build(|config| Module::<T>::initialize_keys(&config.keys))
 	}
 }
 
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn deposit_event<T>() = default;
+		fn deposit_event() = default;
 
 		fn heartbeat(
 			origin,
@@ -275,7 +278,7 @@ decl_module! {
 		// Runs after every block.
 		fn offchain_worker(now: T::BlockNumber) {
 			// Only send messages if we are a potential validator.
-			if sr_io::is_validator() {
+			if runtime_io::is_validator() {
 				Self::offchain(now);
 			}
 		}
@@ -330,7 +333,7 @@ impl<T: Trait> Module<T> {
 					.map(|location| (index as u32, &local_keys[location]))
 			})
 		{
-			let network_state = sr_io::network_state().map_err(|_| OffchainErr::NetworkState)?;
+			let network_state = runtime_io::network_state().map_err(|_| OffchainErr::NetworkState)?;
 			let heartbeat_data = Heartbeat {
 				block_number,
 				network_state,
@@ -340,9 +343,8 @@ impl<T: Trait> Module<T> {
 
 			let signature = key.sign(&heartbeat_data.encode()).ok_or(OffchainErr::FailedSigning)?;
 			let call = Call::heartbeat(heartbeat_data, signature);
-			let ex = T::UncheckedExtrinsic::new_unsigned(call.into())
-				.ok_or(OffchainErr::ExtrinsicCreation)?;
-			sr_io::submit_transaction(ex.encode()).map_err(|_| OffchainErr::SubmitTransaction)?;
+			T::SubmitTransaction::submit_unsigned(call)
+				.map_err(|_| OffchainErr::SubmitTransaction)?;
 
 			// once finished we set the worker status without comparing
 			// if the existing value changed in the meantime. this is
@@ -361,7 +363,7 @@ impl<T: Trait> Module<T> {
 			done,
 			gossipping_at,
 		};
-		sr_io::local_storage_compare_and_set(
+		runtime_io::local_storage_compare_and_set(
 			StorageKind::PERSISTENT,
 			DB_KEY,
 			curr_worker_status.as_ref().map(Vec::as_slice),
@@ -377,7 +379,7 @@ impl<T: Trait> Module<T> {
 			done,
 			gossipping_at,
 		};
-		sr_io::local_storage_set(
+		runtime_io::local_storage_set(
 			StorageKind::PERSISTENT, DB_KEY, &enc.encode());
 	}
 
@@ -388,7 +390,7 @@ impl<T: Trait> Module<T> {
 		now: T::BlockNumber,
 		next_gossip: T::BlockNumber,
 	) -> Result<(Option<Vec<u8>>, bool), OffchainErr> {
-		let last_gossip = sr_io::local_storage_get(StorageKind::PERSISTENT, DB_KEY);
+		let last_gossip = runtime_io::local_storage_get(StorageKind::PERSISTENT, DB_KEY);
 		match last_gossip {
 			Some(last) => {
 				let worker_status: WorkerStatus<T::BlockNumber> = Decode::decode(&mut &last[..])
@@ -485,27 +487,27 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	}
 }
 
-impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
+impl<T: Trait> support::unsigned::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
 
-	fn validate_unsigned(call: &Self::Call) -> srml_support::unsigned::TransactionValidity {
+	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
 		if let Call::heartbeat(heartbeat, signature) = call {
 			if <Module<T>>::is_online_in_current_session(heartbeat.authority_index) {
 				// we already received a heartbeat for this authority
-				return TransactionValidity::Invalid(ApplyError::Stale as i8);
+				return InvalidTransaction::Stale.into();
 			}
 
 			// check if session index from heartbeat is recent
 			let current_session = <session::Module<T>>::current_index();
 			if heartbeat.session_index != current_session {
-				return TransactionValidity::Invalid(ApplyError::Stale as i8);
+				return InvalidTransaction::Stale.into();
 			}
 
 			// verify that the incoming (unverified) pubkey is actually an authority id
 			let keys = Keys::<T>::get();
 			let authority_id = match keys.get(heartbeat.authority_index as usize) {
 				Some(id) => id,
-				None => return TransactionValidity::Invalid(ApplyError::BadSignature as i8),
+				None => return InvalidTransaction::BadProof.into(),
 			};
 
 			// check signature (this is expensive so we do it last).
@@ -514,19 +516,19 @@ impl<T: Trait> srml_support::unsigned::ValidateUnsigned for Module<T> {
 			});
 
 			if !signature_valid {
-				return TransactionValidity::Invalid(ApplyError::BadSignature as i8);
+				return InvalidTransaction::BadProof.into();
 			}
 
-			return TransactionValidity::Valid(ValidTransaction {
+			Ok(ValidTransaction {
 				priority: 0,
 				requires: vec![],
 				provides: vec![(current_session, authority_id).encode()],
 				longevity: TransactionLongevity::max_value(),
 				propagate: true,
 			})
+		} else {
+			InvalidTransaction::Call.into()
 		}
-
-		TransactionValidity::Invalid(0)
 	}
 }
 

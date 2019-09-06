@@ -19,11 +19,11 @@ pub trait Trait {
 	type Origin;
 }
 
-srml_support::decl_module! {
+support::decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 }
 
-srml_support::decl_storage! {
+support::decl_storage! {
 	trait Store for Module<T: Trait> as Example {
 		pub AppendableDM config(t): double_map u32, blake2_256(T::BlockNumber) => Vec<u32>;
 	}

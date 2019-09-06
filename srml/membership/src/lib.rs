@@ -22,8 +22,8 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sr_std::prelude::*;
-use srml_support::{
+use rstd::prelude::*;
+use support::{
 	StorageValue, decl_module, decl_storage, decl_event, traits::{ChangeMembers, InitializeMembers},
 };
 use system::ensure_root;
@@ -61,17 +61,12 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(members): Vec<T::AccountId>;
-		config(phantom): sr_std::marker::PhantomData<I>;
-		build(|
-			storage: &mut (sr_primitives::StorageOverlay, sr_primitives::ChildrenStorageOverlay),
-			config: &Self,
-		| {
-			sr_io::with_storage(storage, || {
-				let mut members = config.members.clone();
-				members.sort();
-				T::MembershipInitialized::initialize_members(&members);
-				<Members<T, I>>::put(members);
-			});
+		config(phantom): rstd::marker::PhantomData<I>;
+		build(|config: &Self| {
+			let mut members = config.members.clone();
+			members.sort();
+			T::MembershipInitialized::initialize_members(&members);
+			<Members<T, I>>::put(members);
 		})
 	}
 }
@@ -90,7 +85,7 @@ decl_event!(
 		/// The membership was reset; see the transaction for who the new set is.
 		MembersReset,
 		/// Phantom member, never used.
-		Dummy(sr_std::marker::PhantomData<(AccountId, Event)>),
+		Dummy(rstd::marker::PhantomData<(AccountId, Event)>),
 	}
 );
 
@@ -99,7 +94,7 @@ decl_module! {
 		for enum Call
 		where origin: T::Origin
 	{
-		fn deposit_event<T, I>() = default;
+		fn deposit_event() = default;
 
 		/// Add a member `who` to the set.
 		///
@@ -197,8 +192,8 @@ mod tests {
 	use super::*;
 
 	use std::cell::RefCell;
-	use srml_support::{assert_ok, assert_noop, impl_outer_origin, parameter_types};
-	use sr_io::with_externalities;
+	use support::{assert_ok, assert_noop, impl_outer_origin, parameter_types};
+	use runtime_io::with_externalities;
 	use primitives::{H256, Blake2Hasher};
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
@@ -286,7 +281,7 @@ mod tests {
 
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
-	fn new_test_ext() -> sr_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
 		GenesisConfig::<Test>{

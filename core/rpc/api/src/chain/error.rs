@@ -14,35 +14,49 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! System RPC module errors.
 
-use crate::rpc;
-use crate::system::helpers::Health;
+//! Error helpers for Chain RPC module.
 
-/// System RPC Result type.
+use crate::errors;
+use jsonrpc_core as rpc;
+
+/// Chain RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// System RPC errors.
+/// State RPC future Result type.
+pub type FutureResult<T> = Box<dyn rpc::futures::Future<Item = T, Error = Error> + Send>;
+
+/// Chain RPC errors.
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
-	/// Provided block range couldn't be resolved to a list of blocks.
-	#[display(fmt = "Node is not fully functional: {}", _0)]
-	NotHealthy(Health),
+	/// Client error.
+	#[display(fmt="Client error: {}", _0)]
+	Client(Box<dyn std::error::Error + Send>),
+	/// Other error type.
+	Other(String),
 }
 
-impl std::error::Error for Error {}
+impl std::error::Error for Error {
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		match self {
+			Error::Client(ref err) => Some(&**err),
+			_ => None,
+		}
+	}
+}
 
-/// Base code for all system errors.
-const BASE_ERROR: i64 = 2000;
+/// Base error code for all chain errors.
+const BASE_ERROR: i64 = 3000;
 
 impl From<Error> for rpc::Error {
 	fn from(e: Error) -> Self {
 		match e {
-			Error::NotHealthy(ref h) => rpc::Error {
+			Error::Other(message) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(BASE_ERROR + 1),
-				message: format!("{}", e),
-				data: serde_json::to_value(h).ok(),
+				message,
+				data: None,
 			},
+			e => errors::internal(e),
 		}
 	}
 }
