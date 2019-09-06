@@ -102,6 +102,19 @@ impl SignatureT for ed25519::Signature {}
 impl PublicT for sr25519::Public {}
 impl PublicT for ed25519::Public {}
 
+fn main() {
+	let yaml = load_yaml!("cli.yml");
+	let matches = App::from_yaml(yaml)
+		.version(env!("CARGO_PKG_VERSION"))
+		.get_matches();
+
+	if matches.is_present("ed25519") {
+		execute::<Ed25519>(matches)
+	} else {
+		execute::<Sr25519>(matches)
+	}
+}
+
 fn execute<C: Crypto>(matches: ArgMatches)
 	where SignatureOf<C>: SignatureT, PublicOf<C>: PublicT,
 { 
@@ -303,19 +316,6 @@ fn read_input_pair<C: Crypto>(
 {
 	let suri = matched_suri.expect("parameter is required; thus it can't be None; qed");
 	C::pair_from_suri(suri, password)
-}
-
-fn main() {
-	let yaml = load_yaml!("cli.yml");
-	let matches = App::from_yaml(yaml)
-		.version(env!("CARGO_PKG_VERSION"))
-		.get_matches();
-
-	if matches.is_present("ed25519") {
-		execute::<Ed25519>(matches)
-	} else {
-		execute::<Sr25519>(matches)
-	}
 }
 
 fn print_usage(matches: &ArgMatches) {
