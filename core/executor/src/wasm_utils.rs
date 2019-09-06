@@ -77,7 +77,7 @@ impl<T> ConvertibleToWasm for *mut T {
 #[macro_export]
 macro_rules! convert_args {
 	() => ([]);
-	( $( $t:ty ),* ) => ( [ $( { use $crate::wasm_utils::ConvertibleToWasm; <$t>::VALUE_TYPE }, )* ] );
+	( $( $t:ty ),* ) => ( [ $( <$t as $crate::wasm_interface::IntoValue>::VALUE_TYPE, )* ] );
 }
 
 /// Generates a WASM signature for given list of parameters.
@@ -85,14 +85,13 @@ macro_rules! convert_args {
 macro_rules! gen_signature {
 	( ( $( $params: ty ),* ) ) => (
 		{
-			$crate::wasmi::Signature::new(&convert_args!($($params),*)[..], None)
+			$crate::wasm_interface::Signature::new_with_args(&convert_args!( $( $params ),* )[..])
 		}
 	);
-
 	( ( $( $params: ty ),* ) -> $returns: ty ) => (
 		{
-			$crate::wasmi::Signature::new(&convert_args!($($params),*)[..], Some({
-				use $crate::wasm_utils::ConvertibleToWasm; <$returns>::VALUE_TYPE
+			$crate::wasm_interface::Signature::new(&convert_args!( $( $params ),*) [..], Some({
+				<$returns as $crate::wasm_interface::IntoValue>::VALUE_TYPE
 			}))
 		}
 	);
@@ -100,17 +99,21 @@ macro_rules! gen_signature {
 
 macro_rules! resolve_fn {
 	(@iter $index:expr, $sig_var:ident, $name_var:ident) => ();
-	(@iter $index:expr, $sig_var:ident, $name_var:ident $name:ident ( $( $params:ty ),* ) $( -> $returns:ty )* => $($tail:tt)* ) => (
+	(@iter
+		$index:expr,
+		$sig_var:ident,
+		$name_var:ident
+		$name:ident ( $( $params:ty ),* ) $( -> $returns:ty )?;
+		$( $tail:tt )*
+	) => (
 		if $name_var == stringify!($name) {
-			let signature = gen_signature!( ( $( $params ),* ) $( -> $returns )* );
-			if $sig_var != &signature {
-				return Err($crate::wasmi::Error::Instantiation(
-					format!("Export {} has different signature {:?}", $name_var, $sig_var),
-				));
+			let fn_signature = gen_signature!( ( $( $params ),* ) $( -> $returns )? );
+			if $sig_var != &fn_signature {
+				return Err(format!("Export {} has different signature {:?}", $name_var, $sig_var));
 			}
-			return Ok($crate::wasmi::FuncInstance::alloc_host(signature, $index));
+			return Ok(Some($crate::wasm_interface::FunctionRef::new(fn_signature, $index)));
 		}
-		resolve_fn!(@iter $index + 1, $sig_var, $name_var $($tail)*)
+		resolve_fn!(@iter $index + 1, $sig_var, $name_var $( $tail )*)
 	);
 
 	($sig_var:ident, $name_var:ident, $($tail:tt)* ) => (
@@ -123,11 +126,11 @@ macro_rules! resolve_fn {
 macro_rules! unmarshall_args {
 	( $body:tt, $objectname:ident, $args_iter:ident, $( $names:ident : $params:ty ),*) => ({
 		$(
-			let $names : <$params as $crate::wasm_utils::ConvertibleToWasm>::NativeType =
+			let $names : $params =
 				$args_iter.next()
-					.and_then(|rt_val| rt_val.try_into())
+					.and_then(|val| <$params as $crate::wasm_interface::TryFromValue>::try_from_value(val))
 					.expect(
-						"`$args_iter` comes from an argument of Externals::invoke_index;
+						"`$args_iter` comes from an argument of Externals::execute_function;
 						args to an external call always matches the signature of the external;
 						external signatures are built with count and types and in order defined by `$params`;
 						here, we iterating on `$params`;
@@ -149,7 +152,7 @@ macro_rules! unmarshall_args {
 #[inline(always)]
 pub fn constrain_closure<R, F>(f: F) -> F
 where
-	F: FnOnce() -> Result<R, crate::error::Error>
+	F: FnOnce() -> Result<R, String>
 {
 	f
 }
@@ -158,19 +161,17 @@ where
 #[macro_export]
 macro_rules! marshall {
 	( $args_iter:ident, $objectname:ident, ( $( $names:ident : $params:ty ),* ) -> $returns:ty => $body:tt ) => ({
-		let body = $crate::wasm_utils::constrain_closure::<
-			<$returns as $crate::wasm_utils::ConvertibleToWasm>::NativeType, _
-		>(|| {
+		let body = $crate::wasm_utils::constrain_closure::<$returns, _>(|| {
 			unmarshall_args!($body, $objectname, $args_iter, $( $names : $params ),*)
 		});
-		let r = body().map_err(wasmi::Trap::from)?;
-		return Ok(Some({ use $crate::wasm_utils::ConvertibleToWasm; r.to_runtime_value() }))
+		let r = body()?;
+		return Ok(Some($crate::wasm_interface::IntoValue::into_value(r)))
 	});
 	( $args_iter:ident, $objectname:ident, ( $( $names:ident : $params:ty ),* ) => $body:tt ) => ({
 		let body = $crate::wasm_utils::constrain_closure::<(), _>(|| {
 			unmarshall_args!($body, $objectname, $args_iter, $( $names : $params ),*)
 		});
-		body().map_err(wasmi::Trap::from)?;
+		body()?;
 		return Ok(None)
 	})
 }
@@ -193,7 +194,7 @@ macro_rules! dispatch_fn {
 		$name:ident ( $( $names:ident : $params:ty ),* ) $( -> $returns:ty )* => $body:tt $($tail:tt)*
 	) => (
 		if $index_ident == $index {
-			{ marshall!($args_iter, $objectname, ( $( $names : $params ),* ) $( -> $returns )* => $body) }
+			marshall!($args_iter, $objectname, ( $( $names : $params ),* ) $( -> $returns )* => $body)
 		}
 		dispatch_fn!( @iter $index + 1, $index_ident, $objectname, $args_iter $($tail)*)
 	);
@@ -203,54 +204,102 @@ macro_rules! dispatch_fn {
 	);
 }
 
-/// Implements `wasmi::Externals` trait and `Resolver` for given struct.
+macro_rules! count_fns {
+	(@iter $index:expr,) => {
+		$index
+	};
+	(@iter $index:expr, $name:ident $( $tail:tt )* ) => (
+		count_fns!(@iter $index + 1, $( $tail )*)
+	);
+	( $( $tail:tt )* ) => (
+		count_fns!(@iter 0, $( $tail )*);
+	);
+}
+
+/// Implements the wasm host interface for the given type.
 #[macro_export]
-macro_rules! impl_function_executor {
+macro_rules! impl_wasm_host_interface {
 	(
-		$objectname:ident : $structname:ty,
-		$(
-			$name:ident
-			( $( $names:ident : $params:ty ),* $(,)? )
-			$( -> $returns:ty )? => { $( $body:tt )* },
-		)*
-		=> $( $pre:tt )+
-	) => (
-		impl $( $pre ) + $structname {
-			#[allow(unused)]
-			fn resolver() -> &'static dyn $crate::wasmi::ModuleImportResolver {
-				struct Resolver;
-				impl $crate::wasmi::ModuleImportResolver for Resolver {
-					fn resolve_func(
-						&self,
-						name: &str,
-						signature: &$crate::wasmi::Signature
-					) -> std::result::Result<$crate::wasmi::FuncRef, $crate::wasmi::Error> {
-						resolve_fn!(
-							signature,
-							name,
-							$( $name( $( $params ),* ) $( -> $returns )? => )*
-						);
-
-						Err($crate::wasmi::Error::Instantiation(
-							format!("Export {} not found", name),
-						))
-					}
-				}
-				&Resolver
-			}
+		#[inherent_externals]
+		impl $( < $( $gen:tt $(: $bound:path )? ),* > )? $interface_name:ident $( < $( $ty_gen:tt ),* > )?
+			where $this:ident
+		{
+			$(
+				$name:ident($( $names:ident : $params:ty ),* $(,)? ) $( -> $returns:ty )?
+				{ $( $body:tt )* }
+			)*
 		}
+	) => (
+		impl $(< $( $gen $(: $bound )? ),* >)? $crate::wasm_interface::InherentExternals
+			for $interface_name $( < $( $ty_gen ),* > )?
+		{
+			fn resolve_function(
+				name: &str,
+				signature: &$crate::wasm_interface::Signature,
+			) -> std::result::Result<Option<$crate::wasm_interface::FunctionRef>, String> {
+				resolve_fn!(
+					signature,
+					name,
+					$( $name( $( $params ),* ) $( -> $returns )?; )*
+				);
 
-		impl $( $pre ) + $crate::wasmi::Externals for $structname {
-			fn invoke_index(
+				Ok(None)
+			}
+			fn function_count() -> usize {
+				count_fns!( $( $name )* )
+			}
+			fn execute_function<A: Iterator<Item=$crate::wasm_interface::Value>>(
 				&mut self,
 				index: usize,
-				args: $crate::wasmi::RuntimeArgs,
-			) -> std::result::Result<Option<$crate::wasmi::RuntimeValue>, $crate::wasmi::Trap> {
-				let $objectname = self;
-				let mut args = args.as_ref().iter();
+				mut args: A,
+			) -> std::result::Result<Option<$crate::wasm_interface::Value>, String> {
+				let $this = self;
 				dispatch_fn! {
 					index,
-					$objectname,
+					$interface_name,
+					args,
+					$( $name( $( $names : $params ),* ) $( -> $returns )? => { $( $body )* } ),*
+				};
+			}
+		}
+	);
+	(
+		impl $( < $( $gen:tt $(: $bound:path )? ),* > )? $interface_name:ident $( < $( $ty_gen:tt ),* > )?
+			where $context:ident
+		{
+			$(
+				$name:ident($( $names:ident : $params:ty ),* $(,)? ) $( -> $returns:ty )?
+				{ $( $body:tt )* }
+			)*
+		}
+	) => (
+		impl $(< $( $gen $(: $bound )? ),* >)? $crate::wasm_interface::Externals
+			for $interface_name $( < $( $ty_gen ),* > )?
+		{
+			fn resolve_function(
+				name: &str,
+				signature: &$crate::wasm_interface::Signature,
+			) -> std::result::Result<Option<$crate::wasm_interface::FunctionRef>, String> {
+				resolve_fn!(
+					signature,
+					name,
+					$( $name( $( $params ),* ) $( -> $returns )?; )*
+				);
+
+				Ok(None)
+			}
+			fn function_count() -> usize {
+				count_fns!( $( $name )* )
+			}
+			fn execute_function<A: Iterator<Item=$crate::wasm_interface::Value>>(
+				index: usize,
+				mut args: A,
+				context: &mut dyn $crate::wasm_interface::ExternalsContext,
+			) -> std::result::Result<Option<$crate::wasm_interface::Value>, String> {
+				let mut $context = context;
+				dispatch_fn! {
+					index,
+					$interface_name,
 					args,
 					$( $name( $( $names : $params ),* ) $( -> $returns )? => { $( $body )* } ),*
 				};

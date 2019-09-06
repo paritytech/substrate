@@ -312,7 +312,7 @@ impl RuntimesCache {
 		let data_segments = extract_data_segments(&code)?;
 
 		// Instantiate this module.
-		let instance = WasmExecutor::instantiate_module::<E>(heap_pages as usize, &module)
+		let instance = WasmExecutor::instantiate_module(heap_pages as usize, &module)
 			.map_err(CacheError::Instantiation)?;
 
 		// Take state snapshot before executing anything.
@@ -325,7 +325,7 @@ impl RuntimesCache {
 			);
 
 		let version = wasm_executor
-			.call_in_wasm_module(ext, &instance, "Core_version", &[])
+			.call_in_wasm_module(&instance, "Core_version", &[])
 			.ok()
 			.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()).ok());
 		Ok(Rc::new(CachedRuntime {

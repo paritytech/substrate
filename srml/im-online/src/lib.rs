@@ -342,7 +342,7 @@ impl<T: Trait> Module<T> {
 			let call = Call::heartbeat(heartbeat_data, signature);
 			let ex = T::UncheckedExtrinsic::new_unsigned(call.into())
 				.ok_or(OffchainErr::ExtrinsicCreation)?;
-			sr_io::submit_transaction(&ex).map_err(|_| OffchainErr::SubmitTransaction)?;
+			sr_io::submit_transaction(ex.encode()).map_err(|_| OffchainErr::SubmitTransaction)?;
 
 			// once finished we set the worker status without comparing
 			// if the existing value changed in the meantime. this is
