@@ -612,11 +612,11 @@ pub struct NetworkWorker<B: BlockT + 'static, S: NetworkSpecialization<B>, H: Ex
 	light_client_rqs: Option<mpsc::UnboundedReceiver<RequestData<B>>>,
 }
 
-impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for NetworkWorker<B, S, H> {
-	type Item = ();
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Stream for NetworkWorker<B, S, H> {
+	type Item = Event;
 	type Error = io::Error;
 
-	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
 		// Poll the import queue for actions to perform.
 		let _ = futures03::future::poll_fn(|cx| {
 			self.import_queue.poll_actions(cx, &mut NetworkLink {
@@ -636,7 +636,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 			// Process the next message coming from the `NetworkService`.
 			let msg = match self.from_worker.poll() {
 				Ok(Async::Ready(Some(msg))) => msg,
-				Ok(Async::Ready(None)) | Err(_) => return Ok(Async::Ready(())),
+				Ok(Async::Ready(None)) | Err(_) => return Ok(Async::Ready(None)),
 				Ok(Async::NotReady) => break,
 			};
 
@@ -677,8 +677,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Future for Ne
 				Ok(Async::Ready(Some(BehaviourOut::SubstrateAction(outcome)))) => outcome,
 				Ok(Async::Ready(Some(BehaviourOut::Dht(ev)))) => {
 					self.network_service.user_protocol_mut()
-						.on_event(Event::Dht(ev));
-					CustomMessageOutcome::None
+						.on_event(Event::Dht(ev.clone()));
+
+					return Ok(Async::Ready(Some(Event::Dht(ev))));
 				},
 				Ok(Async::Ready(None)) => CustomMessageOutcome::None,
 				Err(err) => {

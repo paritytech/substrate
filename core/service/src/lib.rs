@@ -39,7 +39,7 @@ use client::{runtime_api::BlockT, Client};
 use exit_future::Signal;
 use futures::prelude::*;
 use futures03::stream::{StreamExt as _, TryStreamExt as _};
-use network::{NetworkService, NetworkState, specialization::NetworkSpecialization};
+use network::{NetworkService, NetworkState, specialization::NetworkSpecialization, Event, DhtEvent};
 use log::{log, warn, debug, error, Level};
 use codec::{Encode, Decode};
 use primitives::{Blake2Hasher, H256};
@@ -154,7 +154,8 @@ macro_rules! new_impl {
 			finality_proof_provider,
 			network_protocol,
 			transaction_pool,
-			rpc_extensions
+			rpc_extensions,
+			dht_event_tx,
 		) = $build_components(&$config)?;
 		let import_queue = Box::new(import_queue);
 		let chain_info = client.info().chain;
@@ -357,12 +358,14 @@ macro_rules! new_impl {
 		let rpc_handlers = gen_handler();
 		let rpc = start_rpc_servers(&$config, gen_handler)?;
 
+
 		let _ = to_spawn_tx.unbounded_send(Box::new(build_network_future(
 			network_mut,
 			client.clone(),
 			network_status_sinks.clone(),
 			system_rpc_rx,
-			has_bootnodes
+			has_bootnodes,
+			dht_event_tx,
 		)
 			.map_err(|_| ())
 			.select(exit.clone())
@@ -653,6 +656,7 @@ fn build_network_future<
 	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<(NetworkStatus<B>, NetworkState)>>>>,
 	rpc_rx: futures03::channel::mpsc::UnboundedReceiver<rpc::system::Request<B>>,
 	should_have_peers: bool,
+	dht_event_tx: Option<mpsc::Sender<DhtEvent>>,
 ) -> impl Future<Item = (), Error = ()> {
 	// Compatibility shim while we're transitionning to stable Futures.
 	// See https://github.com/paritytech/substrate/issues/3099
@@ -730,11 +734,21 @@ fn build_network_future<
 		}
 
 		// Main network polling.
-		match network.poll() {
-			Ok(Async::NotReady) => {}
-			Err(err) => warn!(target: "service", "Error in network: {:?}", err),
-			Ok(Async::Ready(())) => warn!(target: "service", "Network service finished"),
-		}
+		while let Ok(Async::Ready(Some(Event::Dht(event)))) = network.poll().map_err(|err| {
+			warn!(target: "service", "Error in network: {:?}", err);
+		}) {
+			// Given that core/authority-discovery is the only upper stack consumer of Dht events at the moment, all Dht
+			// events are being passed on to the authority-discovery module. In the future there might be multiple
+			// consumers of these events. In that case this would need to be refactored to properly dispatch the events,
+			// e.g. via a subscriber model.
+			if let Some(Err(e)) = dht_event_tx.as_ref().map(|c| c.clone().try_send(event)) {
+				if e.is_full() {
+					warn!(target: "service", "Dht event channel to authority discovery is full, dropping event.");
+				} else if e.is_disconnected() {
+					warn!(target: "service", "Dht event channel to authority discovery is disconnected, dropping event.");
+				}
+			}
+		};
 
 		// Now some diagnostic for performances.
 		let polling_dur = before_polling.elapsed();
