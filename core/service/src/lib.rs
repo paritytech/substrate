@@ -237,6 +237,7 @@ macro_rules! new_impl {
 							&BlockId::hash(notification.hash),
 							&*client,
 							&*txpool,
+							&notification.retracted,
 						).map_err(|e| warn!("Pool error processing new block: {:?}", e))?;
 					}
 
