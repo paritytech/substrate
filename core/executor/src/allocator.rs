@@ -133,9 +133,10 @@ impl FreeingBumpHeapAllocator {
 			// Something from the free list
 			let item = self.heads[list_index];
 			let ptr = item + PREFIX_SIZE;
-			if ptr + item_size > self.max_heap_size {
-				return Err(Error::AllocatorOutOfSpace);
-			}
+			assert!(
+				ptr + item_size <= self.max_heap_size,
+				"Pointer and requested allocation size outside of heap!"
+			);
 
 			let four_bytes = self.get_heap_4bytes(item)?;
 			self.heads[list_index] = FreeingBumpHeapAllocator::le_bytes_to_u32(four_bytes);
