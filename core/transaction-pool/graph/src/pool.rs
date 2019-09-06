@@ -114,7 +114,9 @@ pub struct Pool<B: ChainApi> {
 
 impl<B: ChainApi> Pool<B> {
 	/// Imports a bunch of unverified extrinsics to the pool
-	pub fn submit_at<T>(&self, at: &BlockId<B::Block>, xts: T, force: bool) -> Result<Vec<Result<ExHash<B>, B::Error>>, B::Error> where
+	pub fn submit_at<T>(&self, at: &BlockId<B::Block>, xts: T, force: bool)
+		-> Result<Vec<Result<ExHash<B>, B::Error>>, B::Error>
+	where
 		T: IntoIterator<Item=ExtrinsicFor<B>>
 	{
 		let block_number = self.api.block_id_to_number(at)?
