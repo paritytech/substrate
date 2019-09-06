@@ -1001,8 +1001,8 @@ impl<T: Trait> Module<T> {
 
 	/// The total balance that can be slashed from a validator controller account as of
 	/// right now.
-	pub fn slashable_balance(who: &T::AccountId) -> BalanceOf<T> {
-		Self::stakers(who).total
+	pub fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
+		Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
 	}
 
 	// MUTABLES (DANGEROUS)
@@ -1229,10 +1229,6 @@ impl<T: Trait> Module<T> {
 		let (_slot_stake, maybe_new_validators) = Self::select_validators();
 
 		maybe_new_validators
-	}
-
-	fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
-		Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
 	}
 
 	/// Select a new validator set from the assembled stakers and their role preferences.
