@@ -155,11 +155,8 @@ fn execute<C: Crypto>(matches: ArgMatches)
 		("vanity", Some(matches)) => {
 			let desired: String = matches.value_of("pattern").map(str::to_string).unwrap_or_default();
 			let result = vanity::generate_key::<C>(&desired).expect("Key generation failed");
-			C::print_from_uri(
-				&format!("0x{}", HexDisplay::from(&result.seed.as_ref())),
-				None,
-				maybe_network
-			);
+			let formated_seed = format!("0x{}", HexDisplay::from(&result.seed.as_ref()));
+			C::print_from_uri(&formated_seed, None, maybe_network);
 		}
 		("transfer", Some(matches)) => {
 			let signer = read_input_pair::<Sr25519>(matches.value_of("from"), password);
@@ -185,37 +182,6 @@ fn execute<C: Crypto>(matches: ArgMatches)
 		}
 		_ => print_usage(&matches),
 	}
-}
-
-fn print_extrinsic(function: Call, index: Index, signer: <Sr25519 as Crypto>::Pair, genesis_hash: H256) {
-	let extra = |i: Index, f: Balance| {
-		(
-			system::CheckVersion::<Runtime>::new(),
-			system::CheckGenesis::<Runtime>::new(),
-			system::CheckEra::<Runtime>::from(Era::Immortal),
-			system::CheckNonce::<Runtime>::from(i),
-			system::CheckWeight::<Runtime>::new(),
-			balances::TakeFees::<Runtime>::from(f),
-			Default::default(),
-		)
-	};
-	let raw_payload = SignedPayload::from_raw(
-		function,
-		extra(index, 0),
-		(VERSION.spec_version as u32, genesis_hash, genesis_hash, (), (), (), ()),
-	);
-	let signature = raw_payload.using_encoded(|payload| {
-		signer.sign(payload)
-	});
-	let (function, extra, _) = raw_payload.deconstruct();
-	let extrinsic = UncheckedExtrinsic::new_signed(
-		function,
-		signer.public().into(),
-		signature.into(),
-		extra,
-	);
-
-	println!("0x{}", hex::encode(&extrinsic.encode()));
 }
 
 /// Creates a new randomly generated mnemonic phrase.
@@ -244,9 +210,6 @@ fn do_verify<C: Crypto>(matches: &ArgMatches, message: Vec<u8>, password: Option
 	<<C as Crypto>::Pair as Pair>::verify(&signature, &message, &pubkey)
 }
 
-fn format_signature<C: Crypto>(signature: SignatureOf<C>) -> String {
-	format!("{}", hex::encode(&signature))
-}
 
 fn read_genesis_hash(matches: &ArgMatches) -> H256 {
 	let genesis_hash: Hash = match matches.value_of("genesis").unwrap_or("alex") {
@@ -268,7 +231,7 @@ fn read_input_signature<C: Crypto>(matches: &ArgMatches) -> SignatureOf<C>
 	let sig_data = hex::decode(sig_data).expect("signature is invalid hex");
 	if sig_data.len() != signature.as_ref().len() {
 		panic!(
-			"signature is an invalid length. {} bytes is not the expected value of {} bytes",
+			"signature has an invalid length. read {} bytes, expected {} bytes",
 			sig_data.len(),
 			signature.as_ref().len(),
 		);
@@ -320,6 +283,41 @@ fn read_input_pair<C: Crypto>(
 {
 	let suri = matched_suri.expect("parameter is required; thus it can't be None; qed");
 	C::pair_from_suri(suri, password)
+}
+
+fn format_signature<C: Crypto>(signature: SignatureOf<C>) -> String {
+	format!("{}", hex::encode(&signature))
+}
+
+fn print_extrinsic(function: Call, index: Index, signer: <Sr25519 as Crypto>::Pair, genesis_hash: H256) {
+	let extra = |i: Index, f: Balance| {
+		(
+			system::CheckVersion::<Runtime>::new(),
+			system::CheckGenesis::<Runtime>::new(),
+			system::CheckEra::<Runtime>::from(Era::Immortal),
+			system::CheckNonce::<Runtime>::from(i),
+			system::CheckWeight::<Runtime>::new(),
+			balances::TakeFees::<Runtime>::from(f),
+			Default::default(),
+		)
+	};
+	let raw_payload = SignedPayload::from_raw(
+		function,
+		extra(index, 0),
+		(VERSION.spec_version as u32, genesis_hash, genesis_hash, (), (), (), ()),
+	);
+	let signature = raw_payload.using_encoded(|payload| {
+		signer.sign(payload)
+	});
+	let (function, extra, _) = raw_payload.deconstruct();
+	let extrinsic = UncheckedExtrinsic::new_signed(
+		function,
+		signer.public().into(),
+		signature.into(),
+		extra,
+	);
+
+	println!("0x{}", hex::encode(&extrinsic.encode()));
 }
 
 fn print_usage(matches: &ArgMatches) {
