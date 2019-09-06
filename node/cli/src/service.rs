@@ -103,6 +103,8 @@ macro_rules! new_full_start {
 macro_rules! new_full {
 	($config:expr) => {{
 		use futures::Future;
+		use futures::sync::mpsc;
+		use network::DhtEvent;
 
 		let (
 			is_authority,
@@ -118,10 +120,18 @@ macro_rules! new_full {
 
 		let (builder, mut import_setup, inherent_data_providers, mut tasks_to_spawn) = new_full_start!($config);
 
+		// Dht event channel from the network to the authority discovery module. Use bounded channel to ensure
+		// back-pressure. Authority discovery is triggering one event per authority within the current authority set.
+		// This estimates the authority set size to be somewhere below 10 000 thereby setting the channel buffer size to
+		// 10 000.
+		let (dht_event_tx, dht_event_rx) =
+			mpsc::channel::<DhtEvent>(10000);
+
 		let service = builder.with_network_protocol(|_| Ok(crate::service::NodeProtocol::new()))?
 			.with_finality_proof_provider(|client, backend|
 				Ok(Arc::new(grandpa::FinalityProofProvider::new(backend, client)) as _)
 			)?
+			.with_dht_event_tx(dht_event_tx)?
 			.build()?;
 
 		let (block_import, link_half, babe_link) = import_setup.take()
@@ -162,6 +172,13 @@ macro_rules! new_full {
 			let babe = babe::start_babe(babe_config)?;
 			let select = babe.select(service.on_exit()).then(|_| Ok(()));
 			service.spawn_task(Box::new(select));
+
+			let authority_discovery = authority_discovery::AuthorityDiscovery::new(
+				service.client(),
+				service.network(),
+				dht_event_rx,
+			);
+			service.spawn_task(Box::new(authority_discovery));
 		}
 
 		let config = grandpa::Config {
