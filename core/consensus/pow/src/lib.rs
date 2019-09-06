@@ -31,6 +31,7 @@
 
 use std::sync::Arc;
 use std::thread;
+use std::collections::HashMap;
 use client::{
 	BlockOf, blockchain::{HeaderBackend, ProvideCache},
 	block_builder::api::BlockBuilder as BlockBuilderApi, backend::AuxStore,
@@ -73,7 +74,7 @@ impl PowAux {
 
 		match client.get_aux(&key).map_err(|e| format!("{:?}", e))? {
 			Some(bytes) => PowAux::decode(&mut &bytes[..]).map_err(|e| format!("{:?}", e)),
-			None => Ok(Default::default()),
+			None => Ok(PowAux::default()),
 		}
 	}
 }
@@ -288,12 +289,18 @@ pub fn import_queue<B, C, Algorithm>(
 /// is CPU-intensive, it is not possible to use an async future to define this.
 /// However, it's not recommended to use background threads in the rest of the
 /// codebase.
+///
+/// `preruntime` is a parameter that allows a custom additional pre-runtime
+/// digest to be inserted for blocks being built. This can encode authorship
+/// information, or just be a graffiti. `round` is for number of rounds the
+/// CPU miner runs each time. This parameter should be tweaked so that each
+/// mining round is within sub-second time.
 pub fn start_mine<B: BlockT<Hash=H256>, C, Algorithm, E>(
 	mut block_import: BoxBlockImport<B>,
 	client: Arc<C>,
 	algorithm: Algorithm,
 	mut env: E,
-	preruntime: Vec<u8>,
+	preruntime: Option<Vec<u8>>,
 	round: u32,
 	inherent_data_providers: inherents::InherentDataProviders,
 ) where
@@ -313,7 +320,7 @@ pub fn start_mine<B: BlockT<Hash=H256>, C, Algorithm, E>(
 				client.as_ref(),
 				&algorithm,
 				&mut env,
-				&preruntime,
+				preruntime.as_ref(),
 				round,
 				&inherent_data_providers
 			) {
@@ -334,7 +341,7 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E>(
 	client: &C,
 	algorithm: &Algorithm,
 	env: &mut E,
-	preruntime: &[u8],
+	preruntime: Option<&Vec<u8>>,
 	round: u32,
 	inherent_data_providers: &inherents::InherentDataProviders,
 ) -> Result<(), String> where
@@ -354,7 +361,9 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E>(
 		let inherent_data = inherent_data_providers
 			.create_inherent_data().map_err(String::from)?;
 		let mut inherent_digest = Digest::default();
-		inherent_digest.push(DigestItem::PreRuntime(POW_ENGINE_ID, preruntime.to_vec()));
+		if let Some(preruntime) = &preruntime {
+			inherent_digest.push(DigestItem::PreRuntime(POW_ENGINE_ID, preruntime.to_vec()));
+		}
 		let block = futures::executor::block_on(proposer.propose(
 			inherent_data,
 			inherent_digest,
@@ -402,7 +411,7 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E>(
 			fork_choice: ForkChoiceStrategy::Custom(true),
 		};
 
-		block_import.import_block(import_block, Default::default())
+		block_import.import_block(import_block, HashMap::default())
 			.map_err(|e| format!("Error with block built on {:?}: {:?}", best_hash, e))?;
 	}
 }
