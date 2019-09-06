@@ -14,7 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Rust implementation of Substrate contracts.
+//! Wasm interface module.
+//!
+//! This module defines and implements the wasm part of Substrate Host Interface and provides
+//! an interface for calling into the wasm runtime.
 
 use std::{collections::HashMap, convert::TryFrom, str};
 use tiny_keccak;
