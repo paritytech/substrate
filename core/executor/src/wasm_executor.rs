@@ -16,7 +16,7 @@
 
 //! Rust implementation of Substrate contracts.
 
-use std::{convert::TryFrom, str, ptr};
+use std::{convert::TryFrom, str};
 use tiny_keccak;
 use secp256k1;
 
@@ -35,7 +35,7 @@ use trie::{TrieConfiguration, trie_types::Layout};
 use crate::sandbox;
 use crate::allocator;
 use log::trace;
-use wasm_interface::{ExternalsContext, Externals, InherentExternals};
+use wasm_interface::{ExternalsContext, Externals, InherentExternals, Pointer, WordSize};
 
 #[cfg(feature="wasm-extern-trace")]
 macro_rules! debug_trace {
@@ -72,59 +72,59 @@ impl sandbox::SandboxCapabilities for FunctionExecutor {
 	fn store_mut(&mut self) -> &mut sandbox::Store {
 		&mut self.sandbox_store
 	}
-	fn allocate(&mut self, len: u32) -> Result<*mut u8> {
+	fn allocate(&mut self, len: WordSize) -> Result<Pointer<u8>> {
 		self.heap.allocate(len)
 	}
-	fn deallocate(&mut self, ptr: *const u8) -> Result<()> {
+	fn deallocate(&mut self, ptr: Pointer<u8>) -> Result<()> {
 		self.heap.deallocate(ptr)
 	}
-	fn write_memory(&mut self, ptr: *const u8, data: &[u8]) -> Result<()> {
-		self.memory.set(ptr as u32, data).map_err(Into::into)
+	fn write_memory(&mut self, ptr: Pointer<u8>, data: &[u8]) -> Result<()> {
+		self.memory.set(ptr.into(), data).map_err(Into::into)
 	}
-	fn read_memory(&self, ptr: *const u8, len: u32) -> Result<Vec<u8>> {
-		self.memory.get(ptr as u32, len as usize).map_err(Into::into)
+	fn read_memory(&self, ptr: Pointer<u8>, len: WordSize) -> Result<Vec<u8>> {
+		self.memory.get(ptr.into(), len as usize).map_err(Into::into)
 	}
 }
 
 impl ExternalsContext for FunctionExecutor {
-	fn read_memory_into(&self, address: *const u8, dest: &mut [u8]) -> std::result::Result<(), String> {
-		self.memory.get_into(address as u32, dest).map_err(|e| format!("{:?}", e))
+	fn read_memory_into(&self, address: Pointer<u8>, dest: &mut [u8]) -> std::result::Result<(), String> {
+		self.memory.get_into(address.into(), dest).map_err(|e| format!("{:?}", e))
 	}
 
-	fn write_memory(&mut self, address: *const u8, data: &[u8]) -> std::result::Result<(), String> {
-		self.memory.set(address as u32, data).map_err(|e| format!("{:?}", e))
+	fn write_memory(&mut self, address: Pointer<u8>, data: &[u8]) -> std::result::Result<(), String> {
+		self.memory.set(address.into(), data).map_err(|e| format!("{:?}", e))
 	}
 
-	fn allocate_memory(&mut self, size: u32) -> std::result::Result<*mut u8, String> {
+	fn allocate_memory(&mut self, size: WordSize) -> std::result::Result<Pointer<u8>, String> {
 		self.heap.allocate(size).map_err(|e| format!("{:?}", e))
 	}
 
-	fn deallocate_memory(&mut self, ptr: *const u8) -> std::result::Result<(), String> {
+	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> std::result::Result<(), String> {
 		self.heap.deallocate(ptr).map_err(|e| format!("{:?}", e))
 	}
 }
 
 trait WritePrimitive<T: Sized> {
-	fn write_primitive(&mut self, ptr: *const T, t: T) -> std::result::Result<(), String>;
+	fn write_primitive(&mut self, ptr: Pointer<T>, t: T) -> std::result::Result<(), String>;
 }
 
 impl WritePrimitive<u32> for &mut dyn ExternalsContext {
-	fn write_primitive(&mut self, ptr: *const u32, t: u32) -> std::result::Result<(), String> {
+	fn write_primitive(&mut self, ptr: Pointer<u32>, t: u32) -> std::result::Result<(), String> {
 		use byteorder::{LittleEndian, ByteOrder};
 		let mut r = [0u8; 4];
 		LittleEndian::write_u32(&mut r, t);
-		self.write_memory(ptr as _, &r)
+		self.write_memory(ptr.cast(), &r)
 	}
 }
 
 trait ReadPrimitive<T: Sized> {
-	fn read_primitive(&self, offset: *const T) -> std::result::Result<T, String>;
+	fn read_primitive(&self, offset: Pointer<T>) -> std::result::Result<T, String>;
 }
 
 impl ReadPrimitive<u32> for &mut dyn ExternalsContext {
-	fn read_primitive(&self, ptr: *const u32) -> std::result::Result<u32, String> {
+	fn read_primitive(&self, ptr: Pointer<u32>) -> std::result::Result<u32, String> {
 		use byteorder::{LittleEndian, ByteOrder};
-		let result = self.read_memory(ptr as _, 4)?;
+		let result = self.read_memory(ptr.cast(), 4)?;
 		Ok(LittleEndian::read_u32(&result))
 	}
 }
@@ -197,14 +197,14 @@ impl wasmi::Externals for FunctionExecutor {
 impl_wasm_host_interface! {
 	#[inherent_externals]
 	impl FunctionExecutor where this {
-		ext_malloc(size: u32) -> *mut u8 {
+		ext_malloc(size: WordSize) -> Pointer<u8> {
 			println!("AMMMALLO: {}", size);
 			let r = this.heap.allocate(size).map_err(|e| format!("{:?}", e))?;
 			debug_trace!(target: "sr-io", "malloc {} bytes at {}", size, r);
-			Ok(r as *mut u8)
+			Ok(r)
 		}
 
-		ext_free(addr: *mut u8) {
+		ext_free(addr: Pointer<u8>) {
 			this.heap.deallocate(addr).map_err(|e| format!("{:?}", e))?;
 			debug_trace!(target: "sr-io", "free {}", addr);
 			Ok(())
@@ -212,10 +212,10 @@ impl_wasm_host_interface! {
 
 		ext_sandbox_instantiate(
 			dispatch_thunk_idx: u32,
-			wasm_ptr: *const u8,
-			wasm_len: u32,
-			imports_ptr: *const u8,
-			imports_len: u32,
+			wasm_ptr: Pointer<u8>,
+			wasm_len: WordSize,
+			imports_ptr: Pointer<u8>,
+			imports_len: WordSize,
 			state: u32,
 		) -> u32 {
 			let wasm = this.read_memory(wasm_ptr, wasm_len)
@@ -251,12 +251,12 @@ impl_wasm_host_interface! {
 
 		ext_sandbox_invoke(
 			instance_idx: u32,
-			export_ptr: *const u8,
-			export_len: u32,
-			args_ptr: *const u8,
-			args_len: u32,
-			return_val_ptr: *const u8,
-			return_val_len: u32,
+			export_ptr: Pointer<u8>,
+			export_len: WordSize,
+			args_ptr: Pointer<u8>,
+			args_len: WordSize,
+			return_val_ptr: Pointer<u8>,
+			return_val_len: WordSize,
 			state: u32,
 		) -> u32 {
 			use codec::{Decode, Encode};
@@ -297,19 +297,24 @@ impl_wasm_host_interface! {
 			}
 		}
 
-		ext_sandbox_memory_new(initial: u32, maximum: u32) -> u32 {
+		ext_sandbox_memory_new(initial: WordSize, maximum: WordSize) -> u32 {
 			let mem_idx = this.sandbox_store.new_memory(initial, maximum).map_err(|e| format!("{:?}", e))?;
 			Ok(mem_idx)
 		}
 
-		ext_sandbox_memory_get(memory_idx: u32, offset: u32, buf_ptr: *mut u8, buf_len: u32) -> u32 {
+		ext_sandbox_memory_get(
+			memory_idx: u32,
+			offset: WordSize,
+			buf_ptr: Pointer<u8>,
+			buf_len: WordSize,
+		) -> u32 {
 			let sandboxed_memory = this.sandbox_store.memory(memory_idx).map_err(|e| format!("{:?}", e))?;
 
 			match MemoryInstance::transfer(
 				&sandboxed_memory,
 				offset as usize,
 				&this.memory,
-				buf_ptr as usize,
+				buf_ptr.into(),
 				buf_len as usize,
 			) {
 				Ok(()) => Ok(sandbox_primitives::ERR_OK),
@@ -317,12 +322,17 @@ impl_wasm_host_interface! {
 			}
 		}
 
-		ext_sandbox_memory_set(memory_idx: u32, offset: u32, val_ptr: *const u8, val_len: u32) -> u32 {
+		ext_sandbox_memory_set(
+			memory_idx: u32,
+			offset: WordSize,
+			val_ptr: Pointer<u8>,
+			val_len: WordSize,
+		) -> u32 {
 			let sandboxed_memory = this.sandbox_store.memory(memory_idx).map_err(|e| format!("{:?}", e))?;
 
 			match MemoryInstance::transfer(
 				&this.memory,
-				val_ptr as usize,
+				val_ptr.into(),
 				&sandboxed_memory,
 				offset as usize,
 				val_len as usize,
@@ -343,7 +353,7 @@ struct SubstrateExternals;
 
 impl_wasm_host_interface! {
 	impl SubstrateExternals where context {
-		ext_print_utf8(utf8_data: *const u8, utf8_len: u32) {
+		ext_print_utf8(utf8_data: Pointer<u8>, utf8_len: WordSize) {
 			println!("PRINT\n\n");
 			if let Ok(utf8) = context.read_memory(utf8_data, utf8_len) {
 				if let Ok(message) = String::from_utf8(utf8) {
@@ -353,7 +363,7 @@ impl_wasm_host_interface! {
 			Ok(())
 		}
 
-		ext_print_hex(data: *const u8, len: u32) {
+		ext_print_hex(data: Pointer<u8>, len: WordSize) {
 			if let Ok(hex) = context.read_memory(data, len) {
 				println!("{}", HexDisplay::from(&hex));
 			}
@@ -365,7 +375,12 @@ impl_wasm_host_interface! {
 			Ok(())
 		}
 
-		ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32) {
+		ext_set_storage(
+			key_data: Pointer<u8>,
+			key_len: WordSize,
+			value_data: Pointer<u8>,
+			value_len: WordSize,
+		) {
 			let key = context.read_memory(key_data, key_len)
 				.map_err(|_| "Invalid attempt to determine key in ext_set_storage")?;
 			let value = context.read_memory(value_data, value_len)
@@ -375,12 +390,12 @@ impl_wasm_host_interface! {
 		}
 
 		ext_set_child_storage(
-			storage_key_data: *const u8,
-			storage_key_len: u32,
-			key_data: *const u8,
-			key_len: u32,
-			value_data: *const u8,
-			value_len: u32,
+			storage_key_data: Pointer<u8>,
+			storage_key_len: WordSize,
+			key_data: Pointer<u8>,
+			key_len: WordSize,
+			value_data: Pointer<u8>,
+			value_len: WordSize,
 		) {
 			let storage_key = context.read_memory(storage_key_data, storage_key_len)
 				.map_err(|_| "Invalid attempt to determine storage_key in ext_set_child_storage")?;
@@ -394,10 +409,10 @@ impl_wasm_host_interface! {
 		}
 
 		ext_clear_child_storage(
-			storage_key_data: *const u8,
-			storage_key_len: u32,
-			key_data: *const u8,
-			key_len: u32,
+			storage_key_data: Pointer<u8>,
+			storage_key_len: WordSize,
+			key_data: Pointer<u8>,
+			key_len: WordSize,
 		) {
 			let storage_key = context.read_memory(storage_key_data, storage_key_len)
 				.map_err(|_| "Invalid attempt to determine storage_key in ext_clear_child_storage")?;
@@ -408,24 +423,24 @@ impl_wasm_host_interface! {
 			Ok(())
 		}
 
-		ext_clear_storage(key_data: *const u8, key_len: u32) {
+		ext_clear_storage(key_data: Pointer<u8>, key_len: WordSize) {
 			let key = context.read_memory(key_data, key_len)
 				.map_err(|_| "Invalid attempt to determine key in ext_clear_storage")?;
 			runtime_io::clear_storage(&key);
 			Ok(())
 		}
 
-		ext_exists_storage(key_data: *const u8, key_len: u32) -> u32 {
+		ext_exists_storage(key_data: Pointer<u8>, key_len: WordSize) -> u32 {
 			let key = context.read_memory(key_data, key_len)
 				.map_err(|_| "Invalid attempt to determine key in ext_exists_storage")?;
 			Ok(if runtime_io::exists_storage(&key) { 1 } else { 0 })
 		}
 
 		ext_exists_child_storage(
-			storage_key_data: *const u8,
-			storage_key_len: u32,
-			key_data: *const u8,
-			key_len: u32,
+			storage_key_data: Pointer<u8>,
+			storage_key_len: WordSize,
+			key_data: Pointer<u8>,
+			key_len: WordSize,
 		) -> u32 {
 			let storage_key = context.read_memory(storage_key_data, storage_key_len)
 				.map_err(|_| "Invalid attempt to determine storage_key in ext_exists_child_storage")?;
@@ -435,7 +450,7 @@ impl_wasm_host_interface! {
 			Ok(if runtime_io::exists_child_storage(&storage_key, &key) { 1 } else { 0 })
 		}
 
-		ext_clear_prefix(prefix_data: *const u8, prefix_len: u32) {
+		ext_clear_prefix(prefix_data: Pointer<u8>, prefix_len: WordSize) {
 			let prefix = context.read_memory(prefix_data, prefix_len)
 				.map_err(|_| "Invalid attempt to determine prefix in ext_clear_prefix")?;
 			runtime_io::clear_prefix(&prefix);
@@ -443,10 +458,10 @@ impl_wasm_host_interface! {
 		}
 
 		ext_clear_child_prefix(
-			storage_key_data: *const u8,
-			storage_key_len: u32,
-			prefix_data: *const u8,
-			prefix_len: u32,
+			storage_key_data: Pointer<u8>,
+			storage_key_len: WordSize,
+			prefix_data: Pointer<u8>,
+			prefix_len: WordSize,
 		) {
 			let storage_key = context.read_memory(storage_key_data, storage_key_len)
 				.map_err(|_| "Invalid attempt to determine storage_key in ext_clear_child_prefix")?;
@@ -457,7 +472,7 @@ impl_wasm_host_interface! {
 			Ok(())
 		}
 
-		ext_kill_child_storage(storage_key_data: *const u8, storage_key_len: u32) {
+		ext_kill_child_storage(storage_key_data: Pointer<u8>, storage_key_len: WordSize) {
 			let storage_key = context.read_memory(storage_key_data, storage_key_len)
 				.map_err(|_| "Invalid attempt to determine storage_key in ext_kill_child_storage")?;
 			runtime_io::kill_child_storage(&storage_key);
@@ -465,7 +480,11 @@ impl_wasm_host_interface! {
 			Ok(())
 		}
 
-		ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8 {
+		ext_get_allocated_storage(
+			key_data: Pointer<u8>,
+			key_len: WordSize,
+			written_out: Pointer<u32>,
+		) -> Pointer<u8> {
 			let key = context.read_memory(key_data, key_len)
 				.map_err(|_| "Invalid attempt to determine key in ext_get_allocated_storage")?;
 			let maybe_value = runtime_io::storage(&key);
@@ -480,17 +499,17 @@ impl_wasm_host_interface! {
 			} else {
 				context.write_primitive(written_out, u32::max_value())
 					.map_err(|_| "Invalid attempt to write failed written_out in ext_get_allocated_storage")?;
-				Ok(ptr::null_mut())
+				Ok(Pointer::null())
 			}
 		}
 
 		ext_get_allocated_child_storage(
-			storage_key_data: *const u8,
-			storage_key_len: u32,
-			key_data: *const u8,
-			key_len: u32,
-			written_out: *mut u32,
-		) -> *mut u8 {
+			storage_key_data: Pointer<u8>,
+			storage_key_len: WordSize,
+			key_data: Pointer<u8>,
+			key_len: WordSize,
+			written_out: Pointer<u32>,
+		) -> Pointer<u8> {
 			let storage_key = context.read_memory(storage_key_data, storage_key_len)
 				.map_err(|_| "Invalid attempt to determine storage_key in ext_get_allocated_child_storage")?;
 			let key = context.read_memory(key_data, key_len)
@@ -508,17 +527,17 @@ impl_wasm_host_interface! {
 			} else {
 				context.write_primitive(written_out, u32::max_value())
 					.map_err(|_| "Invalid attempt to write failed written_out in ext_get_allocated_child_storage")?;
-				Ok(ptr::null_mut())
+				Ok(Pointer::null())
 			}
 		}
 
 		ext_get_storage_into(
-			key_data: *const u8,
-			key_len: u32,
-			value_data: *mut u8,
-			value_len: u32,
-			value_offset: u32,
-		) -> u32 {
+			key_data: Pointer<u8>,
+			key_len: WordSize,
+			value_data: Pointer<u8>,
+			value_len: WordSize,
+			value_offset: WordSize,
+		) -> WordSize {
 			let key = context.read_memory(key_data, key_len)
 				.map_err(|_| "Invalid attempt to get key in ext_get_storage_into")?;
 			let maybe_value = runtime_io::storage(&key);
@@ -535,14 +554,14 @@ impl_wasm_host_interface! {
 		}
 
 		ext_get_child_storage_into(
-			storage_key_data: *const u8,
-			storage_key_len: u32,
-			key_data: *const u8,
-			key_len: u32,
-			value_data: *mut u8,
-			value_len: u32,
-			value_offset: u32,
-		) -> u32 {
+			storage_key_data: Pointer<u8>,
+			storage_key_len: WordSize,
+			key_data: Pointer<u8>,
+			key_len: WordSize,
+			value_data: Pointer<u8>,
+			value_len: WordSize,
+			value_offset: WordSize,
+		) -> WordSize {
 			let storage_key = context.read_memory(storage_key_data, storage_key_len)
 				.map_err(|_| "Invalid attempt to determine storage_key in ext_get_child_storage_into")?;
 			let key = context.read_memory(key_data, key_len)
@@ -561,7 +580,7 @@ impl_wasm_host_interface! {
 			}
 		}
 
-		ext_storage_root(result: *mut u8) {
+		ext_storage_root(result: Pointer<u8>) {
 			let r = runtime_io::storage_root();
 			context.write_memory(result, r.as_ref())
 				.map_err(|_| "Invalid attempt to set memory in ext_storage_root")?;
@@ -569,10 +588,10 @@ impl_wasm_host_interface! {
 		}
 
 		ext_child_storage_root(
-			storage_key_data: *const u8,
-			storage_key_len: u32,
-			written_out: *mut u32
-		) -> *mut u8 {
+			storage_key_data: Pointer<u8>,
+			storage_key_len: WordSize,
+			written_out: Pointer<u32>,
+		) -> Pointer<u8> {
 			let storage_key = context.read_memory(storage_key_data, storage_key_len)
 				.map_err(|_| "Invalid attempt to determine storage_key in ext_child_storage_root")?;
 			let value = runtime_io::child_storage_root(&storage_key);
@@ -586,9 +605,9 @@ impl_wasm_host_interface! {
 		}
 
 		ext_storage_changes_root(
-			parent_hash_data: *const u8,
-			_len: u32,
-			result: *mut u8,
+			parent_hash_data: Pointer<u8>,
+			_len: WordSize,
+			result: Pointer<u8>,
 		) -> u32 {
 			let mut parent_hash = [0u8; 32];
 			context.read_memory_into(parent_hash_data, &mut parent_hash[..])
@@ -605,18 +624,18 @@ impl_wasm_host_interface! {
 		}
 
 		ext_blake2_256_enumerated_trie_root(
-			values_data: *const u8,
-			lens_data: *const u32,
-			lens_len: u32,
-			result: *mut u8,
+			values_data: Pointer<u8>,
+			lens_data: Pointer<u32>,
+			lens_len: WordSize,
+			result: Pointer<u8>,
 		) {
-			let values = (0..lens_len as isize)
-				.map(|i| context.read_primitive(unsafe { lens_data.offset(i) }))
+			let values = (0..lens_len)
+				.map(|i| context.read_primitive(lens_data.offset(i)))
 				.collect::<std::result::Result<Vec<u32>, _>>()?
 				.into_iter()
 				.scan(0u32, |acc, v| { let o = *acc; *acc += v; Some((o, v)) })
 				.map(|(offset, len)|
-					context.read_memory(unsafe { values_data.offset(offset as isize) }, len)
+					context.read_memory(values_data.offset(offset), len)
 						.map_err(|_|
 							"Invalid attempt to get memory in ext_blake2_256_enumerated_trie_root"
 						)
@@ -632,7 +651,7 @@ impl_wasm_host_interface! {
 			Ok(runtime_io::chain_id())
 		}
 
-		ext_twox_64(data: *const u8, len: u32, out: *mut u8) {
+		ext_twox_64(data: Pointer<u8>, len: WordSize, out: Pointer<u8>) {
 			let result: [u8; 8] = if len == 0 {
 				let hashed = twox_64(&[0u8; 0]);
 				hashed
@@ -648,7 +667,7 @@ impl_wasm_host_interface! {
 			Ok(())
 		}
 
-		ext_twox_128(data: *const u8, len: u32, out: *mut u8) {
+		ext_twox_128(data: Pointer<u8>, len: WordSize, out: Pointer<u8>) {
 			let result: [u8; 16] = if len == 0 {
 				let hashed = twox_128(&[0u8; 0]);
 				hashed
@@ -664,7 +683,7 @@ impl_wasm_host_interface! {
 			Ok(())
 		}
 
-		ext_twox_256(data: *const u8, len: u32, out: *mut u8) {
+		ext_twox_256(data: Pointer<u8>, len: WordSize, out: Pointer<u8>) {
 			let result: [u8; 32] = if len == 0 {
 				twox_256(&[0u8; 0])
 			} else {
@@ -677,7 +696,7 @@ impl_wasm_host_interface! {
 			Ok(())
 		}
 
-		ext_blake2_128(data: *const u8, len: u32, out: *mut u8) {
+		ext_blake2_128(data: Pointer<u8>, len: WordSize, out: Pointer<u8>) {
 			let result: [u8; 16] = if len == 0 {
 				let hashed = blake2_128(&[0u8; 0]);
 				hashed
@@ -693,7 +712,7 @@ impl_wasm_host_interface! {
 			Ok(())
 		}
 
-		ext_blake2_256(data: *const u8, len: u32, out: *mut u8) {
+		ext_blake2_256(data: Pointer<u8>, len: WordSize, out: Pointer<u8>) {
 			let result: [u8; 32] = if len == 0 {
 				blake2_256(&[0u8; 0])
 			} else {
@@ -706,7 +725,7 @@ impl_wasm_host_interface! {
 			Ok(())
 		}
 
-		ext_keccak_256(data: *const u8, len: u32, out: *mut u8) {
+		ext_keccak_256(data: Pointer<u8>, len: WordSize, out: Pointer<u8>) {
 			let result: [u8; 32] = if len == 0 {
 				tiny_keccak::keccak256(&[0u8; 0])
 			} else {
@@ -719,7 +738,7 @@ impl_wasm_host_interface! {
 			Ok(())
 		}
 
-		ext_ed25519_public_keys(id_data: *const u8, result_len: *mut u32) -> *mut u8 {
+		ext_ed25519_public_keys(id_data: Pointer<u8>, result_len: Pointer<u32>) -> Pointer<u8> {
 			let mut id = [0u8; 4];
 			context.read_memory_into(id_data, &mut id[..])
 				.map_err(|_| "Invalid attempt to get id in ext_ed25519_public_keys")?;
@@ -739,10 +758,10 @@ impl_wasm_host_interface! {
 		}
 
 		ext_ed25519_verify(
-			msg_data: *const u8,
-			msg_len: u32,
-			sig_data: *const u8,
-			pubkey_data: *const u8,
+			msg_data: Pointer<u8>,
+			msg_len: WordSize,
+			sig_data: Pointer<u8>,
+			pubkey_data: Pointer<u8>,
 		) -> u32 {
 			let mut sig = [0u8; 64];
 			context.read_memory_into(sig_data, &mut sig[..])
@@ -760,7 +779,12 @@ impl_wasm_host_interface! {
 			})
 		}
 
-		ext_ed25519_generate(id_data: *const u8, seed: *const u8, seed_len: u32, out: *mut u8) {
+		ext_ed25519_generate(
+			id_data: Pointer<u8>,
+			seed: Pointer<u8>,
+			seed_len: WordSize,
+			out: Pointer<u8>,
+		) {
 			let mut id = [0u8; 4];
 			context.read_memory_into(id_data, &mut id[..])
 				.map_err(|_| "Invalid attempt to get id in ext_ed25519_generate")?;
@@ -788,11 +812,11 @@ impl_wasm_host_interface! {
 		}
 
 		ext_ed25519_sign(
-			id_data: *const u8,
-			pubkey_data: *const u8,
-			msg_data: *const u8,
-			msg_len: u32,
-			out: *mut u8,
+			id_data: Pointer<u8>,
+			pubkey_data: Pointer<u8>,
+			msg_data: Pointer<u8>,
+			msg_len: WordSize,
+			out: Pointer<u8>,
 		) -> u32 {
 			let mut id = [0u8; 4];
 			context.read_memory_into(id_data, &mut id[..])
@@ -821,7 +845,7 @@ impl_wasm_host_interface! {
 			}
 		}
 
-		ext_sr25519_public_keys(id_data: *const u8, result_len: *mut u32) -> *mut u8 {
+		ext_sr25519_public_keys(id_data: Pointer<u8>, result_len: Pointer<u32>) -> Pointer<u8> {
 			let mut id = [0u8; 4];
 			context.read_memory_into(id_data, &mut id[..])
 				.map_err(|_| "Invalid attempt to get id in ext_sr25519_public_keys")?;
@@ -841,10 +865,10 @@ impl_wasm_host_interface! {
 		}
 
 		ext_sr25519_verify(
-			msg_data: *const u8,
-			msg_len: u32,
-			sig_data: *const u8,
-			pubkey_data: *const u8,
+			msg_data: Pointer<u8>,
+			msg_len: WordSize,
+			sig_data: Pointer<u8>,
+			pubkey_data: Pointer<u8>,
 		) -> u32 {
 			let mut sig = [0u8; 64];
 			context.read_memory_into(sig_data, &mut sig[..])
@@ -862,7 +886,12 @@ impl_wasm_host_interface! {
 			})
 		}
 
-		ext_sr25519_generate(id_data: *const u8, seed: *const u8, seed_len: u32, out: *mut u8) {
+		ext_sr25519_generate(
+			id_data: Pointer<u8>,
+			seed: Pointer<u8>,
+			seed_len: WordSize,
+			out: Pointer<u8>,
+		) {
 			let mut id = [0u8; 4];
 			context.read_memory_into(id_data, &mut id[..])
 				.map_err(|_| "Invalid attempt to get id in ext_sr25519_generate")?;
@@ -890,11 +919,11 @@ impl_wasm_host_interface! {
 		}
 
 		ext_sr25519_sign(
-			id_data: *const u8,
-			pubkey_data: *const u8,
-			msg_data: *const u8,
-			msg_len: u32,
-			out: *mut u8,
+			id_data: Pointer<u8>,
+			pubkey_data: Pointer<u8>,
+			msg_data: Pointer<u8>,
+			msg_len: WordSize,
+			out: Pointer<u8>,
 		) -> u32 {
 			let mut id = [0u8; 4];
 			context.read_memory_into(id_data, &mut id[..])
@@ -924,9 +953,9 @@ impl_wasm_host_interface! {
 		}
 
 		ext_secp256k1_ecdsa_recover(
-			msg_data: *const u8,
-			sig_data: *const u8,
-			pubkey_data: *mut u8,
+			msg_data: Pointer<u8>,
+			sig_data: Pointer<u8>,
+			pubkey_data: Pointer<u8>,
 		) -> u32 {
 			let mut sig = [0u8; 65];
 			context.read_memory_into(sig_data, &mut sig[..])
@@ -961,7 +990,7 @@ impl_wasm_host_interface! {
 			if runtime_io::is_validator() { Ok(1) } else { Ok(0) }
 		}
 
-		ext_submit_transaction(msg_data: *const u8, len: u32) -> u32 {
+		ext_submit_transaction(msg_data: Pointer<u8>, len: WordSize) -> u32 {
 			let extrinsic = context.read_memory(msg_data, len)
 				.map_err(|_| "OOB while ext_submit_transaction: wasm")?;
 
@@ -970,7 +999,7 @@ impl_wasm_host_interface! {
 			Ok(if res.is_ok() { 0 } else { 1 })
 		}
 
-		ext_network_state(written_out: *mut u32) -> *mut u8 {
+		ext_network_state(written_out: Pointer<u32>) -> Pointer<u8> {
 			let res = runtime_io::network_state();
 
 			let encoded = res.encode();
@@ -994,7 +1023,7 @@ impl_wasm_host_interface! {
 			Ok(())
 		}
 
-		ext_random_seed(seed_data: *mut u8) {
+		ext_random_seed(seed_data: Pointer<u8>) {
 			// NOTE the runtime as assumptions about seed size.
 			let seed = runtime_io::random_seed();
 
@@ -1005,10 +1034,10 @@ impl_wasm_host_interface! {
 
 		ext_local_storage_set(
 			kind: u32,
-			key: *const u8,
-			key_len: u32,
-			value: *const u8,
-			value_len: u32,
+			key: Pointer<u8>,
+			key_len: WordSize,
+			value: Pointer<u8>,
+			value_len: WordSize,
 		) {
 			let kind = offchain::StorageKind::try_from(kind)
 					.map_err(|_| "storage kind OOB while ext_local_storage_set: wasm")?;
@@ -1024,10 +1053,10 @@ impl_wasm_host_interface! {
 
 		ext_local_storage_get(
 			kind: u32,
-			key: *const u8,
-			key_len: u32,
-			value_len: *mut u32,
-		) -> *mut u8 {
+			key: Pointer<u8>,
+			key_len: WordSize,
+			value_len: Pointer<u32>,
+		) -> Pointer<u8> {
 			let kind = offchain::StorageKind::try_from(kind)
 					.map_err(|_| "storage kind OOB while ext_local_storage_get: wasm")?;
 			let key = context.read_memory(key, key_len)
@@ -1041,7 +1070,7 @@ impl_wasm_host_interface! {
 					.map_err(|_| "Invalid attempt to set memory in ext_local_storage_get")?;
 				(offset, value.len() as u32)
 			} else {
-				(ptr::null_mut(), u32::max_value())
+				(Pointer::null(), u32::max_value())
 			};
 
 			context.write_primitive(value_len, len)
@@ -1052,12 +1081,12 @@ impl_wasm_host_interface! {
 
 		ext_local_storage_compare_and_set(
 			kind: u32,
-			key: *const u8,
-			key_len: u32,
-			old_value: *const u8,
-			old_value_len: u32,
-			new_value: *const u8,
-			new_value_len: u32,
+			key: Pointer<u8>,
+			key_len: WordSize,
+			old_value: Pointer<u8>,
+			old_value_len: WordSize,
+			new_value: Pointer<u8>,
+			new_value_len: WordSize,
 		) -> u32 {
 			let kind = offchain::StorageKind::try_from(kind)
 					.map_err(|_| "storage kind OOB while ext_local_storage_compare_and_set: wasm")?;
@@ -1086,12 +1115,12 @@ impl_wasm_host_interface! {
 		}
 
 		ext_http_request_start(
-			method: *const u8,
-			method_len: u32,
-			url: *const u8,
-			url_len: u32,
-			meta: *const u8,
-			meta_len: u32,
+			method: Pointer<u8>,
+			method_len: WordSize,
+			url: Pointer<u8>,
+			url_len: WordSize,
+			meta: Pointer<u8>,
+			meta_len: WordSize,
 		) -> u32 {
 			let method = context.read_memory(method, method_len)
 				.map_err(|_| "OOB while ext_http_request_start: wasm")?;
@@ -1116,10 +1145,10 @@ impl_wasm_host_interface! {
 
 		ext_http_request_add_header(
 			request_id: u32,
-			name: *const u8,
-			name_len: u32,
-			value: *const u8,
-			value_len: u32
+			name: Pointer<u8>,
+			name_len: WordSize,
+			value: Pointer<u8>,
+			value_len: WordSize,
 		) -> u32 {
 			let name = context.read_memory(name, name_len)
 				.map_err(|_| "OOB while ext_http_request_add_header: wasm")?;
@@ -1142,8 +1171,8 @@ impl_wasm_host_interface! {
 
 		ext_http_request_write_body(
 			request_id: u32,
-			chunk: *const u8,
-			chunk_len: u32,
+			chunk: Pointer<u8>,
+			chunk_len: WordSize,
 			deadline: u64,
 		) -> u32 {
 			let chunk = context.read_memory(chunk, chunk_len)
@@ -1162,14 +1191,14 @@ impl_wasm_host_interface! {
 		}
 
 		ext_http_response_wait(
-			ids: *const u32,
-			ids_len: u32,
-			statuses: *mut u32,
+			ids: Pointer<u32>,
+			ids_len: WordSize,
+			statuses: Pointer<u32>,
 			deadline: u64,
 		) {
-			let ids = (0..ids_len as isize)
+			let ids = (0..ids_len)
 				.map(|i|
-					 context.read_primitive(unsafe { ids.offset(i) })
+					 context.read_primitive(ids.offset(i))
 						.map(|id: u32| offchain::HttpRequestId(id as u16))
 						.map_err(|_| "OOB while ext_http_response_wait: wasm")
 				)
@@ -1183,7 +1212,7 @@ impl_wasm_host_interface! {
 				.take(ids_len as usize);
 
 			for (i, status) in res {
-				context.write_primitive(unsafe { statuses.offset(i as isize) }, status)
+				context.write_primitive(statuses.offset(i as u32), status)
 					.map_err(|_| "Invalid attempt to set memory in ext_http_response_wait")?;
 			}
 
@@ -1192,8 +1221,8 @@ impl_wasm_host_interface! {
 
 		ext_http_response_headers(
 			request_id: u32,
-			written_out: *mut u32,
-		) -> *mut u8 {
+			written_out: Pointer<u32>,
+		) -> Pointer<u8> {
 			use codec::Encode;
 
 			let headers = runtime_io::http_response_headers(offchain::HttpRequestId(request_id as u16));
@@ -1212,10 +1241,10 @@ impl_wasm_host_interface! {
 
 		ext_http_response_read_body(
 			request_id: u32,
-			buffer: *mut u8,
-			buffer_len: u32,
+			buffer: Pointer<u8>,
+			buffer_len: WordSize,
 			deadline: u64,
-		) -> u32 {
+		) -> WordSize {
 			let mut internal_buffer = Vec::with_capacity(buffer_len as usize);
 			internal_buffer.resize(buffer_len as usize, 0);
 
@@ -1381,7 +1410,7 @@ impl WasmExecutor {
 
 		let parameters = create_parameters(&mut |data: &[u8]| {
 			let offset = fec.allocate_memory(data.len() as u32)?;
-			fec.write_memory(offset, data).map(|_| offset as u32).map_err(Into::into)
+			fec.write_memory(offset, data).map(|_| offset.into()).map_err(Into::into)
 		})?;
 
 		let result = module_instance.invoke_export(method, &parameters, &mut fec);

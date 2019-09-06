@@ -26,6 +26,7 @@ use wasmi::{
 	Externals, FuncRef, ImportResolver, MemoryInstance, MemoryRef, Module, ModuleInstance,
 	ModuleRef, RuntimeArgs, RuntimeValue, Trap, TrapKind, memory_units::Pages,
 };
+use wasm_interface::{Pointer, WordSize};
 
 /// Index of a function inside the supervisor.
 ///
@@ -150,7 +151,7 @@ pub trait SandboxCapabilities {
 	/// Returns `Err` if allocation not possible or errors during heap management.
 	///
 	/// Returns pointer to the allocated block.
-	fn allocate(&mut self, len: u32) -> Result<*mut u8>;
+	fn allocate(&mut self, len: WordSize) -> Result<Pointer<u8>>;
 
 	/// Deallocate space specified by the pointer that was previously returned by [`allocate`].
 	///
@@ -159,21 +160,21 @@ pub trait SandboxCapabilities {
 	/// Returns `Err` if deallocation not possible or because of errors in heap management.
 	///
 	/// [`allocate`]: #tymethod.allocate
-	fn deallocate(&mut self, ptr: *const u8) -> Result<()>;
+	fn deallocate(&mut self, ptr: Pointer<u8>) -> Result<()>;
 
 	/// Write `data` into the supervisor memory at offset specified by `ptr`.
 	///
 	/// # Errors
 	///
 	/// Returns `Err` if `ptr + data.len()` is out of bounds.
-	fn write_memory(&mut self, ptr: *const u8, data: &[u8]) -> Result<()>;
+	fn write_memory(&mut self, ptr: Pointer<u8>, data: &[u8]) -> Result<()>;
 
 	/// Read `len` bytes from the supervisor memory.
 	///
 	/// # Errors
 	///
 	/// Returns `Err` if `ptr + len` is out of bounds.
-	fn read_memory(&self, ptr: *const u8, len: u32) -> Result<Vec<u8>>;
+	fn read_memory(&self, ptr: Pointer<u8>, len: WordSize) -> Result<Vec<u8>>;
 }
 
 /// Implementation of [`Externals`] that allows execution of guest module with
@@ -243,7 +244,7 @@ impl<'a, FE: SandboxCapabilities + Externals + 'a> Externals for GuestExternals<
 		let result = ::wasmi::FuncInstance::invoke(
 			&dispatch_thunk,
 			&[
-				RuntimeValue::I32(invoke_args_ptr as i32),
+				RuntimeValue::I32(u32::from(invoke_args_ptr) as i32),
 				RuntimeValue::I32(invoke_args_data.len() as i32),
 				RuntimeValue::I32(state as i32),
 				RuntimeValue::I32(func_idx.0 as i32),
@@ -267,9 +268,9 @@ impl<'a, FE: SandboxCapabilities + Externals + 'a> Externals for GuestExternals<
 		};
 
 		let serialized_result_val = self.supervisor_externals
-			.read_memory(serialized_result_val_ptr as *const u8, serialized_result_val_len)?;
+			.read_memory(Pointer::new(serialized_result_val_ptr), serialized_result_val_len)?;
 		self.supervisor_externals
-			.deallocate(serialized_result_val_ptr as *const u8)?;
+			.deallocate(Pointer::new(serialized_result_val_ptr))?;
 
 		// We do not have to check the signature here, because it's automatically
 		// checked by wasmi.

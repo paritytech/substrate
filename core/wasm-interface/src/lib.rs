@@ -16,7 +16,7 @@
 
 //! Types and traits for interfacing between the host and the wasm runtime.
 
-use std::borrow::Cow;
+use std::{borrow::Cow, marker::PhantomData, mem};
 
 mod wasmi_impl;
 
@@ -37,6 +37,72 @@ pub enum Value {
 	/// An `i64` value.
 	I64(i64),
 }
+
+/// Type to represent a pointer in wasm at the host.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub struct Pointer<T> {
+	ptr: u32,
+	_marker: PhantomData<T>,
+}
+
+impl<T> Pointer<T> {
+	/// Create a new instance of `Self`.
+	pub fn new(ptr: u32) -> Self {
+		Self {
+			ptr,
+			_marker: Default::default(),
+		}
+	}
+
+	/// Calculate the offset from this pointer.
+	///
+	/// `offset`is in units of `T`. So, `3` means `3 * mem::size_of::<T>()` as offset to the pointer.
+	pub fn offset(self, offset: u32) -> Self {
+		Self {
+			ptr: self.ptr + offset * mem::size_of::<T>() as u32,
+			_marker: Default::default(),
+		}
+	}
+
+	/// Create a null pointer.
+	pub fn null() -> Self {
+		Self::new(0)
+	}
+
+	/// Cast this pointer of type `T` to a pointer of type `R`.
+	pub fn cast<R>(self) -> Pointer<R> {
+		Pointer::new(self.ptr)
+	}
+}
+
+impl<T> From<Pointer<T>> for u32 {
+	fn from(ptr: Pointer<T>) -> Self {
+		ptr.ptr
+	}
+}
+
+impl<T> From<Pointer<T>> for usize {
+	fn from(ptr: Pointer<T>) -> Self {
+		ptr.ptr as _
+	}
+}
+
+impl<T> IntoValue for Pointer<T> {
+	const VALUE_TYPE: ValueType = ValueType::I32;
+	fn into_value(self) -> Value { Value::I32(self.ptr as _) }
+}
+
+impl<T> TryFromValue for Pointer<T> {
+	fn try_from_value(val: Value) -> Option<Self> {
+		match val {
+			Value::I32(val) => Some(Self::new(val as _)),
+			_ => None,
+		}
+	}
+}
+
+/// The word size used in wasm. Normally known as `usize` in Rust.
+pub type WordSize = u32;
 
 /// The Signature of a function
 #[derive(Eq, PartialEq, Debug)]
@@ -93,20 +159,20 @@ impl FunctionRef {
 /// Context used by `Externals` to interact with the allocator and the memory of the wasm instance.
 pub trait ExternalsContext {
 	/// Read memory from `address` into a vector.
-	fn read_memory(&self, address: *const u8, size: u32) -> Result<Vec<u8>, String> {
+	fn read_memory(&self, address: Pointer<u8>, size: WordSize) -> Result<Vec<u8>, String> {
 		let mut vec = Vec::with_capacity(size as usize);
 		unsafe { vec.set_len(size as usize); }
 		self.read_memory_into(address, &mut vec)?;
 		Ok(vec)
 	}
 	/// Read memory into the given `dest` buffer from `address`.
-	fn read_memory_into(&self, address: *const u8, dest: &mut [u8]) -> Result<(), String>;
+	fn read_memory_into(&self, address: Pointer<u8>, dest: &mut [u8]) -> Result<(), String>;
 	/// Write the given data at `address` into the memory.
-	fn write_memory(&mut self, address: *const u8, data: &[u8]) -> Result<(), String>;
+	fn write_memory(&mut self, address: Pointer<u8>, data: &[u8]) -> Result<(), String>;
 	/// Allocate a memory instance of `size` bytes.
-	fn allocate_memory(&mut self, size: u32) -> Result<*mut u8, String>;
+	fn allocate_memory(&mut self, size: WordSize) -> Result<Pointer<u8>, String>;
 	/// Deallocate a given memory instance.
-	fn deallocate_memory(&mut self, ptr: *const u8) -> Result<(), String>;
+	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> Result<(), String>;
 }
 
 /// Something that provides implementations for host functions.
@@ -197,4 +263,22 @@ impl_into_and_from_value! {
 	i64, I64,
 	*const T, <T>, I32,
 	*mut T, <T>, I32,
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn pointer_offset_works() {
+		let ptr = Pointer::<u32>::null();
+
+		assert_eq!(ptr.offset(10), Pointer::new(40));
+		assert_eq!(ptr.offset(32), Pointer::new(128));
+
+		let ptr = Pointer::<u64>::null();
+
+		assert_eq!(ptr.offset(10), Pointer::new(80));
+		assert_eq!(ptr.offset(32), Pointer::new(256));
+	}
 }

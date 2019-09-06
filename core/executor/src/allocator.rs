@@ -19,8 +19,8 @@
 
 use crate::error::{Error, Result};
 use log::trace;
-use wasmi::MemoryRef;
-use wasmi::memory_units::Bytes;
+use wasmi::{MemoryRef, memory_units::Bytes};
+use wasm_interface::{Pointer, WordSize};
 
 // The pointers need to be aligned to 8 bytes.
 const ALIGNMENT: u32 = 8;
@@ -79,7 +79,7 @@ impl FreeingBumpHeapAllocator {
 
 	/// Gets requested number of bytes to allocate and returns a pointer.
 	/// The maximum size which can be allocated at once is 16 MiB.
-	pub fn allocate(&mut self, size: u32) -> Result<*mut u8> {
+	pub fn allocate(&mut self, size: WordSize) -> Result<Pointer<u8>> {
 		if size > MAX_POSSIBLE_ALLOCATION {
 			return Err(Error::RequestedAllocationTooLarge);
 		}
@@ -109,12 +109,12 @@ impl FreeingBumpHeapAllocator {
 		self.total_size = self.total_size + item_size + 8;
 		trace!(target: "wasm-heap", "Heap size is {} bytes after allocation", self.total_size);
 
-		Ok((self.ptr_offset + ptr) as _)
+		Ok(Pointer::new(self.ptr_offset + ptr))
 	}
 
 	/// Deallocates the space which was allocated for a pointer.
-	pub fn deallocate(&mut self, ptr: *const u8) -> Result<()> {
-		let ptr = ptr as u32 - self.ptr_offset;
+	pub fn deallocate(&mut self, ptr: Pointer<u8>) -> Result<()> {
+		let ptr = u32::from(ptr) - self.ptr_offset;
 		if ptr < 8 {
 			return Err(error("Invalid pointer for deallocation"));
 		}
@@ -174,7 +174,6 @@ impl FreeingBumpHeapAllocator {
 	fn set_heap_4bytes(&mut self, ptr: u32, value: [u8; 4]) -> Result<()> {
 		self.heap.set(self.ptr_offset + ptr, &value).map_err(Into::into)
 	}
-
 }
 
 #[cfg(test)]
@@ -186,8 +185,8 @@ mod tests {
 	const PAGE_SIZE: u32 = 65536;
 
 	/// Makes a pointer out of the given address.
-	fn to_pointer(address: u32) -> *mut u8 {
-		address as _
+	fn to_pointer(address: u32) -> Pointer<u8> {
+		Pointer::new(address)
 	}
 
 	#[test]
@@ -260,7 +259,7 @@ mod tests {
 		// then
 		// then the heads table should contain a pointer to the
 		// prefix of ptr2 in the leftmost entry
-		assert_eq!(to_pointer(heap.heads[0]), unsafe { ptr2.offset(-8) });
+		assert_eq!(heap.heads[0], u32::from(ptr2) - 8);
 	}
 
 	#[test]
@@ -306,12 +305,12 @@ mod tests {
 		heap.deallocate(ptr3).unwrap();
 
 		// then
-		assert_eq!(to_pointer(heap.heads[0]), unsafe { ptr3.offset(-8) });
+		assert_eq!(heap.heads[0], u32::from(ptr3) - 8);
 
 		let ptr4 = heap.allocate(8).unwrap();
 		assert_eq!(ptr4, ptr3);
 
-		assert_eq!(to_pointer(heap.heads[0]), unsafe { ptr2.offset(-8) });
+		assert_eq!(heap.heads[0], u32::from(ptr2) - 8);
 	}
 
 	#[test]
