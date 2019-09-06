@@ -1562,7 +1562,7 @@ fn bond_with_no_staked_value() {
 	.nominate(false)
 	.minimum_validator_count(1)
 	.build(), || {
-				// Can't bond with 1
+		// Can't bond with 1
 		assert_noop!(
 			Staking::bond(Origin::signed(1), 2, 1, RewardDestination::Controller),
 			"can not bond with value less than minimum balance"

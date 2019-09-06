@@ -639,6 +639,16 @@ pub trait Time {
 
 impl WithdrawReasons {
 	/// Choose all variants except for `one`.
+	///
+	/// ```rust
+	/// # use srml_support::traits::{WithdrawReason, WithdrawReasons};
+	/// # fn main() {
+	/// assert_eq!(
+	/// 	WithdrawReason::Fee | WithdrawReason::Transfer | WithdrawReason::Reserve,
+	/// 	WithdrawReasons::except(WithdrawReason::TransactionPayment),
+	///	);
+	/// # }
+	/// ```
 	pub fn except(one: WithdrawReason) -> WithdrawReasons {
 		let mut mask = Self::all();
 		mask.toggle(one);
