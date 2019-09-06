@@ -152,10 +152,11 @@ impl FunctionExecutor {
 					return Ok(func.into())
 				}
 
-				if let Some(func) = SubstrateExternals::resolve_function(
+				if let Some(mut func) = SubstrateExternals::resolve_function(
 					name,
 					&signature,
 				).map_err(wasmi::Error::Instantiation)? {
+					func.offset_index(FunctionExecutor::function_count());
 					return Ok(func.into())
 				}
 
@@ -179,7 +180,7 @@ impl wasmi::Externals for FunctionExecutor {
 				.map_err(wasmi::Trap::from)
 				.map(|v| v.map(Into::into))
 		} else if index < SubstrateExternals::function_count() + Self::function_count() {
-			return SubstrateExternals::execute_function(index, args, self)
+			return SubstrateExternals::execute_function(index - Self::function_count(), args, self)
 				.map_err(Error::FunctionExecution)
 				.map_err(wasmi::Trap::from)
 				.map(|v| v.map(Into::into))
@@ -197,6 +198,7 @@ impl_wasm_host_interface! {
 	#[inherent_externals]
 	impl FunctionExecutor where this {
 		ext_malloc(size: u32) -> *mut u8 {
+			println!("AMMMALLO: {}", size);
 			let r = this.heap.allocate(size).map_err(|e| format!("{:?}", e))?;
 			debug_trace!(target: "sr-io", "malloc {} bytes at {}", size, r);
 			Ok(r as *mut u8)
@@ -342,6 +344,7 @@ struct SubstrateExternals;
 impl_wasm_host_interface! {
 	impl SubstrateExternals where context {
 		ext_print_utf8(utf8_data: *const u8, utf8_len: u32) {
+			println!("PRINT\n\n");
 			if let Ok(utf8) = context.read_memory(utf8_data, utf8_len) {
 				if let Ok(message) = String::from_utf8(utf8) {
 					println!("{}", message);

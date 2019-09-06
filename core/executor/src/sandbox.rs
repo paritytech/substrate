@@ -643,7 +643,10 @@ mod tests {
 		if let Err(err) = res {
 			assert_eq!(
 				format!("{}", err),
-				format!("{}", wasmi::Error::Trap(Error::AllocatorOutOfSpace.into()))
+				format!(
+					"{}",
+					wasmi::Error::Trap(Error::FunctionExecution("AllocatorOutOfSpace".into()).into()),
+				),
 			);
 		}
 	}

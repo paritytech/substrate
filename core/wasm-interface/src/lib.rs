@@ -83,6 +83,11 @@ impl FunctionRef {
 			index,
 		}
 	}
+
+	/// Add the given offset to the internal index.
+	pub fn offset_index(&mut self, offset: usize) {
+		self.index += offset;
+	}
 }
 
 /// Context used by `Externals` to interact with the allocator and the memory of the wasm instance.
