@@ -4690,6 +4690,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-consensus-pow"
+version = "2.0.0"
+dependencies = [
+ "futures-preview 0.3.0-alpha.17 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-scale-codec 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 2.0.0",
+ "srml-timestamp 2.0.0",
+ "substrate-client 2.0.0",
+ "substrate-consensus-common 2.0.0",
+ "substrate-consensus-pow-primitives 2.0.0",
+ "substrate-inherents 2.0.0",
+ "substrate-primitives 2.0.0",
+]
+
+[[package]]
+name = "substrate-consensus-pow-primitives"
+version = "2.0.0"
+dependencies = [
+ "sr-primitives 2.0.0",
+ "sr-std 2.0.0",
+ "substrate-client 2.0.0",
+ "substrate-primitives 2.0.0",
+]
+
+[[package]]
 name = "substrate-consensus-rhd"
 version = "2.0.0"
 dependencies = [
