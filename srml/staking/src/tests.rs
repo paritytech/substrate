@@ -666,14 +666,17 @@ fn bonding_controller_should_fail() {
 		// 1 = stash, 2 = controller, should work
 		assert_ok!(Staking::bond(Origin::signed(1), 2, 500, RewardDestination::default()));
 		// try to bond 2, should fail
-		assert_noop!(Staking::bond(Origin::signed(2), 3, 500, RewardDestination::default()), "stash already acting as a controller");
+		assert_noop!(Staking::bond(Origin::signed(2), 3, 500, RewardDestination::default()),
+			"stash already acting as a controller");
 		// try to bond 3 and set 1 as the controller, should fail
-		assert_noop!(Staking::bond(Origin::signed(3), 1, 500, RewardDestination::default()), "controller is already bonded as a stash");
+		assert_noop!(Staking::bond(Origin::signed(3), 1, 500, RewardDestination::default()),
+			"controller is already bonded as a stash");
 
 		// 3 = stash, 4 = controller, should work
 		assert_ok!(Staking::bond(Origin::signed(3), 4, 500, RewardDestination::default()));
 		// try to change the controller of 1 to 3, should fail
-		assert_noop!(Staking::set_controller(Origin::signed(1), 3), "controller is already bonded as a stash");
+		assert_noop!(Staking::set_controller(Origin::signed(1), 3),
+			"controller is already bonded as a stash");
 	});
 }
 
