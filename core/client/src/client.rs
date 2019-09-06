@@ -976,7 +976,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				BlockId::Hash(info.best_hash),
 				BlockId::Hash(parent_hash),
 			)?;
-			route_from_best.retracted().iter().map(|e| e.hash.clone()).collect()
+			route_from_best.retracted().iter().rev().map(|e| e.hash.clone()).collect()
 		} else {
 			Vec::default()
 		};
