@@ -22,7 +22,7 @@
 //! wasm and compiled.
 //! - It defines the environment for the wasm execution, namely the host functions that are to be
 //! provided into the wasm runtime module.
-//! - It also provides a required infrastructure for executing the current wasm runtime (specified
+//! - It also provides the required infrastructure for executing the current wasm runtime (specified
 //! by the current value of `:code` in the provided externalities), i.e. interfacing with
 //! wasm engine used, instance cache.
 
