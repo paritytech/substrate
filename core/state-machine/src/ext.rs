@@ -19,16 +19,11 @@
 use std::{error, fmt, cmp::Ord};
 use log::warn;
 use crate::backend::Backend;
-<<<<<<< HEAD
-use crate::changes_trie::{Storage as ChangesTrieStorage, build_changes_trie};
-use crate::{Externalities, OverlayedChanges, OverlayedValueResult};
-=======
 use crate::changes_trie::{
 	Storage as ChangesTrieStorage, CacheAction as ChangesTrieCacheAction,
 	build_changes_trie,
 };
-use crate::{Externalities, OverlayedChanges, ChildStorageKey};
->>>>>>> master
+use crate::{Externalities, OverlayedChanges, OverlayedValueResult};
 use hash_db::Hasher;
 use primitives::{
 	offchain,
@@ -360,7 +355,6 @@ where
 			return root.clone();
 		}
 
-<<<<<<< HEAD
 		let child_storage_tries =
 			self.overlay.prospective.children.values()
 				.chain(self.overlay.committed.children.values())
@@ -370,26 +364,13 @@ where
 			let keyspace = child_trie.keyspace();
 			let committed_iter = self.overlay.committed.children
 				.get(keyspace).into_iter()
-				.flat_map(|map| map.values.iter().map(|(k, v)| (k.clone(), v.clone())));
+				.flat_map(|map| map.values.iter().map(|(k, v)| (k.clone(), v.value.clone())));
 			let prospective_iter = self.overlay.prospective.children
 				.get(keyspace).into_iter()
-				.flat_map(|map| map.values.iter().map(|(k, v)| (k.clone(), v.clone())));
+				.flat_map(|map| map.values.iter().map(|(k, v)| (k.clone(), v.value.clone())));
 
 			(child_trie, committed_iter.chain(prospective_iter))
 		});
-=======
-		let child_storage_keys =
-			self.overlay.prospective.children.keys()
-				.chain(self.overlay.committed.children.keys());
-		let child_delta_iter = child_storage_keys.map(|storage_key|
-			(storage_key.clone(), self.overlay.committed.children.get(storage_key)
-				.into_iter()
-				.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone())))
-				.chain(self.overlay.prospective.children.get(storage_key)
-					.into_iter()
-					.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone()))))));
-
->>>>>>> master
 
 		// compute and memoize
 		let delta = self.overlay.committed.top.iter().map(|(k, v)| (k.clone(), v.value.clone()))
@@ -411,25 +392,21 @@ where
 			let keyspace = child_trie.keyspace();
 			let delta = self.overlay.committed.children.get(keyspace)
 				.into_iter()
-<<<<<<< HEAD
-				.flat_map(|map| map.values.iter().map(|(k, v)| (k.clone(), v.clone())))
+				.flat_map(|map| map.values.iter().map(|(k, v)| (k.clone(), v.value.clone())))
 				.chain(self.overlay.prospective.children.get(keyspace)
 					.into_iter()
-					.flat_map(|map| map.values.clone().into_iter()));
-			let root = self.backend.child_storage_root(child_trie, delta).0;
-=======
-				.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone())))
-				.chain(self.overlay.prospective.children.get(storage_key)
-						.into_iter()
-						.flat_map(|map| map.clone().into_iter().map(|(k, v)| (k.clone(), v.value.clone()))));
-
-			let root = self.backend.child_storage_root(storage_key, delta).0;
->>>>>>> master
-
-			self.overlay.set_storage(
-				child_trie.parent_trie().clone(),
-				Some(child_trie.encoded_with_root(&root[..]))
-			);
+						.flat_map(|map| {
+							map.values.clone().into_iter().map(|(k, v)| (k.clone(), v.value.clone()))
+						}));
+			let (root, is_empty, _) = self.backend.child_storage_root(child_trie, delta);
+			if is_empty {
+				self.overlay.set_storage(child_trie.parent_trie().clone(), None);
+			} else {
+				self.overlay.set_storage(
+					child_trie.parent_trie().clone(),
+					Some(child_trie.encoded_with_root(&root[..])),
+				);
+			}
 
 			root
 		}

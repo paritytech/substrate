@@ -29,6 +29,7 @@ pub use generic_test_client::*;
 pub use runtime;
 
 use primitives::sr25519;
+use primitives::child_trie::ChildTrie;
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT};
 
@@ -99,7 +100,7 @@ pub struct GenesisParameters {
 	support_changes_trie: bool,
 	heap_pages_override: Option<u64>,
 	extra_storage: HashMap<Vec<u8>, Vec<u8>>,
-	child_extra_storage: HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
+	child_extra_storage: HashMap<Vec<u8>, (HashMap<Vec<u8>, Vec<u8>>, ChildTrie)>,
 }
 
 impl GenesisParameters {
@@ -126,7 +127,6 @@ impl GenesisParameters {
 
 impl generic_test_client::GenesisInit for GenesisParameters {
 	fn genesis_storage(&self) -> StorageContent {
-		use codec::Encode;
 		let mut storage = self.genesis_config().genesis_map();
 
 		let child_roots = storage.children.iter().map(|(_, child)| {
@@ -188,9 +188,9 @@ pub trait TestClientBuilderExt<B>: Sized {
 	/// # Panics
 	///
 	/// Panics if the key is empty.
-	fn add_extra_child_storage<SK: Into<Vec<u8>>, K: Into<Vec<u8>>, V: Into<Vec<u8>>>(
+	fn add_extra_child_storage<K: Into<Vec<u8>>, V: Into<Vec<u8>>>(
 		self,
-		storage_key: SK,
+		child_trie: &ChildTrie,
 		key: K,
 		value: V,
 	) -> Self;
@@ -234,19 +234,19 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 		self
 	}
 
-	fn add_extra_child_storage<SK: Into<Vec<u8>>, K: Into<Vec<u8>>, V: Into<Vec<u8>>>(
+	fn add_extra_child_storage<K: Into<Vec<u8>>, V: Into<Vec<u8>>>(
 		mut self,
-		storage_key: SK,
+		child_trie: &ChildTrie,
 		key: K,
 		value: V,
 	) -> Self {
-		let storage_key = storage_key.into();
+		let storage_key = child_trie.parent_slice().to_vec();
 		let key = key.into();
 		assert!(!storage_key.is_empty());
 		assert!(!key.is_empty());
 		self.genesis_init_mut().child_extra_storage
 			.entry(storage_key)
-			.or_insert_with(Default::default)
+			.or_insert_with(|| (Default::default(), child_trie.clone())).0
 			.insert(key, value.into());
 		self
 	}

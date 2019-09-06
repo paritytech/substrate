@@ -397,18 +397,13 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		self.inner.top.keys().filter(|key| key.starts_with(prefix)).map(|k| &**k).for_each(f);
 	}
 
-<<<<<<< HEAD
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, child_trie: ChildTrieReadRef, mut f: F) {
-		self.inner.children.get(child_trie.keyspace()).map(|m| m.0.keys().for_each(|k| f(&k)));
-=======
 	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], mut f: F) {
-		self.inner.get(&None).map(|map| map.iter().filter(|(key, _val)| key.starts_with(prefix))
-			.for_each(|(k, v)| f(k, v)));
+		self.inner.top.iter().filter(|(key, _val)| key.starts_with(prefix))
+			.for_each(|(k, v)| f(k, v));
 	}
 
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], mut f: F) {
-		self.inner.get(&Some(storage_key.to_vec())).map(|map| map.keys().for_each(|k| f(&k)));
->>>>>>> master
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, child_trie: ChildTrieReadRef, mut f: F) {
+		self.inner.children.get(child_trie.keyspace()).map(|m| m.0.keys().for_each(|k| f(&k)));
 	}
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(

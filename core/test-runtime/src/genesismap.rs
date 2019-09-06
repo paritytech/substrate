@@ -21,6 +21,7 @@ use runtime_io::{blake2_256, twox_128};
 use super::{AuthorityId, AccountId, WASM_BINARY};
 use codec::{Encode, KeyedVec, Joiner};
 use primitives::{ChangesTrieConfiguration, map, storage::well_known_keys};
+use primitives::child_trie::ChildTrie;
 use sr_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
 
 /// Configuration of a general Substrate test genesis block.
@@ -31,7 +32,7 @@ pub struct GenesisConfig {
 	heap_pages_override: Option<u64>,
 	/// Additional storage key pairs that will be added to the genesis map.
 	extra_storage: HashMap<Vec<u8>, Vec<u8>>,
-	child_extra_storage: HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
+	child_extra_storage: HashMap<Vec<u8>, (HashMap<Vec<u8>, Vec<u8>>, ChildTrie)>,
 }
 
 impl GenesisConfig {
@@ -42,7 +43,7 @@ impl GenesisConfig {
 		balance: u64,
 		heap_pages_override: Option<u64>,
 		extra_storage: HashMap<Vec<u8>, Vec<u8>>,
-		child_extra_storage: HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
+		child_extra_storage: HashMap<Vec<u8>, (HashMap<Vec<u8>, Vec<u8>>, ChildTrie)>,
 	) -> Self {
 		GenesisConfig {
 			changes_trie_config: match support_changes_trie {
@@ -75,16 +76,9 @@ impl GenesisConfig {
 		}
 		map.insert(twox_128(&b"sys:auth"[..])[..].to_vec(), self.authorities.encode());
 		// Finally, add the extra storage entries.
-<<<<<<< HEAD
-		for (key, value) in self.extra_storage.iter().cloned() {
-			map.insert(key, value);
-		}
-		sr_primitives::StorageContent{ top: map, children: Default::default()}
-=======
 		map.extend(self.extra_storage.clone().into_iter());
 
-		(map, self.child_extra_storage.clone())
->>>>>>> master
+		sr_primitives::StorageContent{ top: map, children: self.child_extra_storage.clone()}
 	}
 }
 

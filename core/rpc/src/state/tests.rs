@@ -20,11 +20,8 @@ use self::error::Error;
 
 use std::sync::Arc;
 use assert_matches::assert_matches;
-<<<<<<< HEAD
-=======
 use futures::stream::Stream;
 use primitives::storage::well_known_keys;
->>>>>>> master
 use sr_io::blake2_256;
 use test_client::{
 	prelude::*,
@@ -34,15 +31,17 @@ use test_client::{
 
 #[test]
 fn should_return_storage() {
+	use primitives::child_trie::ChildTrie;
 	const KEY: &[u8] = b":mock";
 	const VALUE: &[u8] = b"hello world";
-	const STORAGE_KEY: &[u8] = b":child_storage:default:child";
+	const STORAGE_KEY: &[u8] = b":default:child";
 	const CHILD_VALUE: &[u8] = b"hello world !";
 
+	let child_trie = ChildTrie::fetch_or_new(|_| None, |_| (), STORAGE_KEY, || 1u128);
 	let mut core = tokio::runtime::Runtime::new().unwrap();
 	let client = TestClientBuilder::new()
 		.add_extra_storage(KEY.to_vec(), VALUE.to_vec())
-		.add_extra_child_storage(STORAGE_KEY.to_vec(), KEY.to_vec(), CHILD_VALUE.to_vec())
+		.add_extra_child_storage(&child_trie, KEY.to_vec(), CHILD_VALUE.to_vec())
 		.build();
 	let genesis_hash = client.genesis_hash();
 	let client = new_full(Arc::new(client), Subscriptions::new(Arc::new(core.executor())));
@@ -80,13 +79,8 @@ fn should_return_child_storage() {
 		.add_child_storage("test", "key", vec![42_u8])
 		.build());
 	let genesis_hash = client.genesis_hash();
-<<<<<<< HEAD
-	let client = State::new(client, Subscriptions::new(Arc::new(core.executor())));
-	let child_key = StorageKey(b"test".to_vec());
-=======
 	let client = new_full(client, Subscriptions::new(Arc::new(core.executor())));
 	let child_key = StorageKey(well_known_keys::CHILD_STORAGE_KEY_PREFIX.iter().chain(b"test").cloned().collect());
->>>>>>> master
 	let key = StorageKey(b"key".to_vec());
 
 

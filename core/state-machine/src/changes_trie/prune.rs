@@ -201,7 +201,7 @@ fn max_digest_intervals_to_keep<Number: BlockNumber>(
 mod tests {
 	use std::collections::HashSet;
 	use trie::MemoryDB;
-	use primitives::Blake2Hasher;
+	use primitives::{Blake2Hasher, child_trie::ChildTrie};
 	use crate::backend::insert_into_memory_db;
 	use crate::changes_trie::storage::InMemoryStorage;
 	use codec::Encode;
@@ -229,7 +229,8 @@ mod tests {
 	#[test]
 	fn prune_works() {
 		fn prepare_storage() -> InMemoryStorage<Blake2Hasher, u64> {
-
+			let child_trie = ChildTrie::fetch_or_new(|_| None, |_| (), &b"1"[..], || 1u128);
+	
 			let child_key = ChildIndex { block: 67u64, storage_key: b"1".to_vec() }.encode();
 			let mut mdb1 = MemoryDB::<Blake2Hasher>::default();
 			let root1 = insert_into_memory_db::<Blake2Hasher, _>(
@@ -244,20 +245,16 @@ mod tests {
 				None
 			).unwrap();
 			let mut mdb3 = MemoryDB::<Blake2Hasher>::default();
-<<<<<<< HEAD
-			let root3 = insert_into_memory_db::<Blake2Hasher, _>(
+			let ch_root3 = insert_into_memory_db::<Blake2Hasher, _>(
 				&mut mdb3,
-				vec![(vec![13], vec![23]), (vec![14], vec![24])],
-				None
+				vec![(vec![110], vec![120])],
+				Some(child_trie.node_ref()),
 			).unwrap();
-=======
-			let ch_root3 = insert_into_memory_db::<Blake2Hasher, _>(&mut mdb3, vec![(vec![110], vec![120])]).unwrap();
 			let root3 = insert_into_memory_db::<Blake2Hasher, _>(&mut mdb3, vec![
 				(vec![13], vec![23]),
 				(vec![14], vec![24]),
 				(child_key, ch_root3.as_ref().encode()),
-			]).unwrap();
->>>>>>> master
+			], None).unwrap();
 			let mut mdb4 = MemoryDB::<Blake2Hasher>::default();
 			let root4 = insert_into_memory_db::<Blake2Hasher, _>(
 				&mut mdb4,

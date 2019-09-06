@@ -617,39 +617,6 @@ decl_storage! {
 	add_extra_genesis {
 		config(stakers):
 			Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>;
-<<<<<<< HEAD
-		build(|
-			storage: &mut sr_primitives::StorageContent,
-			config: &GenesisConfig<T>
-		| {
-			with_storage(storage, || {
-				for &(ref stash, ref controller, balance, ref status) in &config.stakers {
-					assert!(
-						T::Currency::free_balance(&stash) >= balance,
-						"Stash does not have enough balance to bond."
-					);
-					let _ = <Module<T>>::bond(
-						T::Origin::from(Some(stash.clone()).into()),
-						T::Lookup::unlookup(controller.clone()),
-						balance,
-						RewardDestination::Staked
-					);
-					let _ = match status {
-						StakerStatus::Validator => {
-							<Module<T>>::validate(
-								T::Origin::from(Some(controller.clone()).into()),
-								Default::default()
-							)
-						}, StakerStatus::Nominator(votes) => {
-							<Module<T>>::nominate(
-								T::Origin::from(Some(controller.clone()).into()),
-								votes.iter().map(|l| {T::Lookup::unlookup(l.clone())}).collect()
-							)
-						}, _ => Ok(())
-					};
-				}
-			});
-=======
 		build(|config: &GenesisConfig<T>| {
 			for &(ref stash, ref controller, balance, ref status) in &config.stakers {
 				assert!(
@@ -677,7 +644,6 @@ decl_storage! {
 					}, _ => Ok(())
 				};
 			}
->>>>>>> master
 		});
 	}
 }

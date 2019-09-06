@@ -25,6 +25,9 @@ use crate::changes_trie::{BuildCache, RootsStorage, Storage, AnchorBlockId, Bloc
 use crate::trie_backend_essence::TrieBackendStorage;
 
 #[cfg(test)]
+use primitives::child_trie::ChildTrie;
+
+#[cfg(test)]
 use crate::backend::insert_into_memory_db;
 #[cfg(test)]
 use crate::changes_trie::input::{InputPair, ChildIndex};
@@ -93,17 +96,17 @@ impl<H: Hasher, Number: BlockNumber> InMemoryStorage<H, Number> {
 	#[cfg(test)]
 	pub fn with_inputs(
 		mut top_inputs: Vec<(Number, Vec<InputPair<Number>>)>,
-		children_inputs: Vec<(Vec<u8>, Vec<(Number, Vec<InputPair<Number>>)>)>,
+		children_inputs: Vec<(ChildTrie, Vec<(Number, Vec<InputPair<Number>>)>)>,
 	) -> Self {
 		let mut mdb = MemoryDB::default();
 		let mut roots = BTreeMap::new();
-<<<<<<< HEAD
-		for (block, pairs) in inputs {
-			let root = insert_into_memory_db::<H, _>(&mut mdb, pairs.into_iter().map(Into::into), None);
-=======
-		for (storage_key, child_input) in children_inputs {
+		for (child_trie, child_input) in children_inputs {
 			for (block, pairs) in child_input {
-				let root = insert_into_memory_db::<H, _>(&mut mdb, pairs.into_iter().map(Into::into));
+				let root = insert_into_memory_db::<H, _>(
+					&mut mdb,
+					pairs.into_iter().map(Into::into),
+					Some(child_trie.node_ref()),
+				);
 		
 				if let Some(root) = root {
 					let ix = if let Some(ix) = top_inputs.iter().position(|v| v.0 == block) {
@@ -113,7 +116,7 @@ impl<H: Hasher, Number: BlockNumber> InMemoryStorage<H, Number> {
 						top_inputs.len() - 1
 					};
 					top_inputs[ix].1.push(InputPair::ChildIndex(
-						ChildIndex { block: block.clone(), storage_key: storage_key.clone() },
+						ChildIndex { block: block.clone(), storage_key: child_trie.parent_slice().to_vec() },
 						root.as_ref().to_vec(),
 					));
 				}
@@ -121,8 +124,7 @@ impl<H: Hasher, Number: BlockNumber> InMemoryStorage<H, Number> {
 		}
 
 		for (block, pairs) in top_inputs {
-			let root = insert_into_memory_db::<H, _>(&mut mdb, pairs.into_iter().map(Into::into));
->>>>>>> master
+			let root = insert_into_memory_db::<H, _>(&mut mdb, pairs.into_iter().map(Into::into), None);
 			if let Some(root) = root {
 				roots.insert(block, root);
 			}

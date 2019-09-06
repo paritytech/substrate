@@ -190,20 +190,27 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 		child_storage_key: StorageKey,
 		key: StorageKey,
 	) -> FutureResult<Option<StorageData>> {
-		let fetcher = self.fetcher.clone();
-		let child_storage = self.resolve_header(block)
-			.then(move |result| match result {
-				Ok(header) => Either::Left(fetcher.remote_read_child(RemoteReadChildRequest {
-					block: header.hash(),
-					header,
-					storage_key: child_storage_key.0,
-					key: key.0,
-					retry_count: Default::default(),
-				}).then(|result| ready(result.map(|data| data.map(StorageData)).map_err(client_err)))),
-				Err(error) => Either::Right(ready(Err(error))),
-			});
+		let block_id = BlockId::Hash(self.block_or_best(block));
+		// using client to benefit from cache (not chaining query)
+		if let Ok(Some(child_trie)) = self.client.child_trie(&block_id, &child_storage_key) {
+			if let Some(child_trie) = child_trie.child_trie_read() {
+				let fetcher = self.fetcher.clone();
+				let child_storage = self.resolve_header(block)
+					.then(move |result| match result {
+						Ok(header) => Either::Left(fetcher.remote_read_child(RemoteReadChildRequest {
+							block: header.hash(),
+							header,
+							child_trie,
+							key: key.0,
+							retry_count: Default::default(),
+						}).then(|result| ready(result.map(|data| data.map(StorageData)).map_err(client_err)))),
+						Err(error) => Either::Right(ready(Err(error))),
+					});
 
-		Box::new(child_storage.boxed().compat())
+				return Box::new(child_storage.boxed().compat())
+			}
+		}
+		Box::new(result(Ok(None)))
 	}
 
 	fn child_storage_hash(

@@ -80,17 +80,12 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		self.essence.for_keys_with_prefix(prefix, f)
 	}
 
-<<<<<<< HEAD
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, child_trie: ChildTrieReadRef, f: F) {
-		self.essence.for_keys_in_child_storage(child_trie, f)
-=======
 	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
 		self.essence.for_key_values_with_prefix(prefix, f)
 	}
 
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
-		self.essence.for_keys_in_child_storage(storage_key, f)
->>>>>>> master
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, child_trie: ChildTrieReadRef, f: F) {
+		self.essence.for_keys_in_child_storage(child_trie, f)
 	}
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(

@@ -147,11 +147,16 @@ impl<B, E, Block: BlockT, RA> FullState<B, E, Block, RA>
 	) -> Result<()> {
 		for block in range.unfiltered_range.start..range.unfiltered_range.end {
 			let block_hash = range.hashes[block].clone();
-			let mut block_changes = StorageChangeSet { block: block_hash.clone(), changes: Vec::new() };
+			let mut block_changes = StorageChangeSet {
+				block: block_hash.clone(),
+				changes: Vec::new(),
+				child_changes: Vec::new(),
+			};
 			let id = BlockId::hash(block_hash);
 			for key in keys {
 				let (has_changed, data) = {
-					let curr_data = self.client.storage(&id, key).map_err(client_err)?;
+					let curr_data = self.client.storage(&id, key)
+						.map_err(client_err)?;
 					match last_values.get(key) {
 						Some(prev_data) => (curr_data != *prev_data, curr_data),
 						None => (true, curr_data),
@@ -202,7 +207,11 @@ impl<B, E, Block: BlockT, RA> FullState<B, E, Block, RA>
 				}
 
 				changes_map.entry(block)
-					.or_insert_with(|| StorageChangeSet { block: block_hash, changes: Vec::new() })
+					.or_insert_with(|| StorageChangeSet {
+						block: block_hash,
+						changes: Vec::new(),
+						child_changes: Vec::new(),
+					})
 					.changes.push((key.clone(), value_at_block.clone()));
 				last_block = Some(block);
 				last_value = value_at_block;
@@ -294,7 +303,14 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 	) -> FutureResult<Vec<StorageKey>> {
 		Box::new(result(
 			self.block_or_best(block)
-				.and_then(|block| self.client.child_storage_keys(&BlockId::Hash(block), &child_storage_key, &prefix))
+				.and_then(|block| {
+					let block = BlockId::Hash(block);
+					if let Some(subtrie) = self.client.child_trie(&block, &child_storage_key)? {
+						self.client.child_storage_keys(&block, subtrie.node_ref(), &prefix)
+					} else {
+						Ok(Vec::new())
+					}
+				})
 				.map_err(client_err)))
 	}
 
@@ -306,7 +322,14 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 	) -> FutureResult<Option<StorageData>> {
 		Box::new(result(
 			self.block_or_best(block)
-				.and_then(|block| self.client.child_storage(&BlockId::Hash(block), &child_storage_key, &key))
+				.and_then(|block| {
+					let block = BlockId::Hash(block);
+					if let Some(subtrie) = self.client.child_trie(&block, &child_storage_key)? {
+            self.client.child_storage(&block, subtrie.node_ref(), &key)
+					} else {
+						Ok(None)
+					}
+        })
 				.map_err(client_err)))
 	}
 
@@ -318,7 +341,14 @@ impl<B, E, Block, RA> StateBackend<B, E, Block, RA> for FullState<B, E, Block, R
 	) -> FutureResult<Option<Block::Hash>> {
 		Box::new(result(
 			self.block_or_best(block)
-				.and_then(|block| self.client.child_storage_hash(&BlockId::Hash(block), &child_storage_key, &key))
+				.and_then(|block| {
+					let block = BlockId::Hash(block);
+					if let Some(subtrie) = self.client.child_trie(&block, &child_storage_key)? {
+            self.client.child_storage_hash(&block, subtrie.node_ref(), &key)
+					} else {
+						Ok(None)
+					}
+        })
 				.map_err(client_err)))
 	}
 

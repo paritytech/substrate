@@ -1303,14 +1303,23 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		request: message::RemoteReadChildRequest<B::Hash>,
 	) {
 		trace!(target: "sync", "Remote read child request {} from {} ({} {} at {})",
-			request.id, who, request.storage_key.to_hex::<String>(), request.key.to_hex::<String>(), request.block);
-		let proof = match self.context_data.chain.read_child_proof(&request.block, &request.storage_key, &request.key) {
+			request.id,
+			who,
+			request.child_trie.keyspace.to_hex::<String>(),
+			request.key.to_hex::<String>(),
+			request.block,
+		);
+		let proof = match self.context_data.chain.read_child_proof(
+			&request.block,
+			request.child_trie.node_ref(),
+			&request.key,
+		) {
 			Ok(proof) => proof,
 			Err(error) => {
 				trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",
 					request.id,
 					who,
-					request.storage_key.to_hex::<String>(),
+					request.child_trie.keyspace.to_hex::<String>(),
 					request.key.to_hex::<String>(),
 					request.block,
 					error

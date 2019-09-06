@@ -97,7 +97,6 @@ use support::{
 use system::{self, ensure_root, ensure_signed};
 use sr_primitives::{
 	traits::{EnsureOrigin, SimpleArithmetic, MaybeSerializeDebug, Zero, StaticLookup},
-	StorageContent,
 };
 
 type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
@@ -172,35 +171,6 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(members): Vec<T::AccountId>;
-<<<<<<< HEAD
-		config(phantom): sr_std::marker::PhantomData<I>;
-		build(|
-			storage: &mut StorageContent,
-			config: &Self,
-		| {
-			sr_io::with_storage(storage, || {
-				let mut pool = config.pool.clone();
-
-				// reserve balance for each candidate in the pool.
-				// panicking here is ok, since this just happens one time, pre-genesis.
-				pool
-					.iter()
-					.for_each(|(who, _)| {
-						T::Currency::reserve(&who, T::CandidateDeposit::get())
-							.expect("balance too low to create candidacy");
-						<CandidateExists<T, I>>::insert(who, true);
-					});
-
-				/// Sorts the `Pool` by score in a descending order. Entities which
-				/// have a score of `None` are sorted to the beginning of the vec.
-				pool.sort_by_key(|(_, maybe_score)|
-					Reverse(maybe_score.unwrap_or_default())
-				);
-
-				<Pool<T, I>>::put(&pool);
-				<Module<T, I>>::refresh_members(pool, ChangeReceiver::MembershipInitialized);
-			});
-=======
 		config(phantom): rstd::marker::PhantomData<I>;
 		build(|config| {
 			let mut pool = config.pool.clone();
@@ -223,7 +193,6 @@ decl_storage! {
 
 			<Pool<T, I>>::put(&pool);
 			<Module<T, I>>::refresh_members(pool, ChangeReceiver::MembershipInitialized);
->>>>>>> master
 		})
 	}
 }

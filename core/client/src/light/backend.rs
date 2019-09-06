@@ -22,14 +22,10 @@ use std::sync::{Arc, Weak};
 use parking_lot::{RwLock, Mutex};
 
 use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
-<<<<<<< HEAD
 use primitives::child_trie::ChildTrie;
 use primitives::child_trie::ChildTrieReadRef;
-use state_machine::{Backend as StateBackend, TrieBackend};
+use state_machine::{Backend as StateBackend, TrieBackend, ChangesTrieTransaction};
 use state_machine::backend::{InMemory as InMemoryState, StorageContent};
-=======
-use state_machine::{Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState, ChangesTrieTransaction};
->>>>>>> master
 use sr_primitives::traits::{Block as BlockT, NumberFor, Zero, Header};
 use crate::in_mem::{self, check_genesis_storage};
 use crate::backend::{
@@ -385,15 +381,11 @@ where
 		// whole state is not available on light node
 	}
 
-<<<<<<< HEAD
-	fn for_keys_in_child_storage<A: FnMut(&[u8])>(&self, _child_trie: ChildTrieReadRef, _action: A) {
-=======
 	fn for_key_values_with_prefix<A: FnMut(&[u8], &[u8])>(&self, _prefix: &[u8], _action: A) {
 		// whole state is not available on light node
 	}
 
-	fn for_keys_in_child_storage<A: FnMut(&[u8])>(&self, _storage_key: &[u8], _action: A) {
->>>>>>> master
+	fn for_keys_in_child_storage<A: FnMut(&[u8])>(&self, _child_trie: ChildTrieReadRef, _action: A) {
 		// whole state is not available on light node
 	}
 
@@ -473,9 +465,6 @@ where
 		}
 	}
 
-<<<<<<< HEAD
-	fn for_keys_in_child_storage<A: FnMut(&[u8])>(&self, child_trie: ChildTrieReadRef, action: A) {
-=======
 	fn for_key_values_with_prefix<A: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], action: A) {
 		match *self {
 			OnDemandOrGenesisState::OnDemand(ref state) =>
@@ -484,9 +473,7 @@ where
 		}
 	}
 
-
-	fn for_keys_in_child_storage<A: FnMut(&[u8])>(&self, storage_key: &[u8], action: A) {
->>>>>>> master
+	fn for_keys_in_child_storage<A: FnMut(&[u8])>(&self, child_trie: ChildTrieReadRef, action: A) {
 		match *self {
 			OnDemandOrGenesisState::OnDemand(ref state) =>
 				StateBackend::<H>::for_keys_in_child_storage(state, child_trie, action),

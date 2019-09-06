@@ -376,13 +376,15 @@ impl<'a, H, Number> Iterator for ProvingDrilldownIterator<'a, H, Number>
 #[cfg(test)]
 mod tests {
 	use std::iter::FromIterator;
-	use primitives::Blake2Hasher;
+	use primitives::{Blake2Hasher, child_trie::ChildTrie};
 	use crate::changes_trie::Configuration;
 	use crate::changes_trie::input::InputPair;
 	use crate::changes_trie::storage::InMemoryStorage;
 	use super::*;
 
 	fn prepare_for_drilldown() -> (Configuration, InMemoryStorage<Blake2Hasher, u64>) {
+		let child_trie = ChildTrie::fetch_or_new(|_| None, |_| (), &b"1"[..], || 1u128);
+	
 		let config = Configuration { digest_interval: 4, digest_levels: 2 };
 		let backend = InMemoryStorage::with_inputs(vec![
 			// digest: 1..4 => [(3, 0)]
@@ -418,7 +420,7 @@ mod tests {
 			(16, vec![
 				InputPair::DigestIndex(DigestIndex { block: 16, key: vec![42] }, vec![4, 8]),
 			]),
-		], vec![(b"1".to_vec(), vec![
+		], vec![(child_trie, vec![
 				(1, vec![
 					InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 1, key: vec![42] }, vec![0]),
 				]),

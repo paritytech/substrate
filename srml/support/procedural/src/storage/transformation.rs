@@ -424,15 +424,7 @@ fn decl_store_extra_genesis(
 					assimilate_require_generic |= ext::expr_contains_ident(&expr.content, traitinstance);
 					let content = &expr.content;
 					scall = quote_spanned! { expr.span() =>
-<<<<<<< HEAD
-						let scall: fn(
-							&mut #scrate::sr_primitives::StorageContent,
-							&Self
-						) = #content;
-						scall
-=======
 						let scall: fn(&Self) = #content; scall
->>>>>>> master
 					};
 					has_scall = true;
 				},
@@ -562,12 +554,8 @@ fn decl_store_extra_genesis(
 					self,
 					tuple_storage: &mut #scrate::sr_primitives::StorageContent,
 				) -> std::result::Result<(), String> #fn_where_clause {
-<<<<<<< HEAD
-					let storage = &mut tuple_storage.top;
-=======
 					#scrate::with_storage(tuple_storage, || {
 						#builders
->>>>>>> master
 
 						#scall(&self);
 

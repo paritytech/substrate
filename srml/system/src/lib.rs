@@ -444,21 +444,6 @@ decl_storage! {
 		#[serde(with = "primitives::bytes")]
 		config(code): Vec<u8>;
 
-<<<<<<< HEAD
-		build(
-			|storage: &mut sr_primitives::StorageContent,
-			config: &GenesisConfig|
-		{
-			use codec::Encode;
-
-			storage.top.insert(well_known_keys::CODE.to_vec(), config.code.clone());
-			storage.top.insert(well_known_keys::EXTRINSIC_INDEX.to_vec(), 0u32.encode());
-
-			if let Some(ref changes_trie_config) = config.changes_trie_config {
-				storage.top.insert(
-					well_known_keys::CHANGES_TRIE_CONFIG.to_vec(),
-					changes_trie_config.encode());
-=======
 		build(|config: &GenesisConfig| {
 			use codec::Encode;
 
@@ -470,7 +455,6 @@ decl_storage! {
 					well_known_keys::CHANGES_TRIE_CONFIG,
 					&changes_trie_config.encode(),
 				);
->>>>>>> master
 			}
 		});
 	}
@@ -735,19 +719,11 @@ impl<T: Trait> Module<T> {
 	/// Get the basic externalities for this module, useful for tests.
 	#[cfg(any(feature = "std", test))]
 	pub fn externalities() -> TestExternalities<Blake2Hasher> {
-<<<<<<< HEAD
 		TestExternalities::new(StorageContent{ top: map![
-			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),
-			twox_128(<Number<T>>::key()).to_vec() => T::BlockNumber::one().encode(),
-			twox_128(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode()
-		], children: map![]})
-=======
-		TestExternalities::new((map![
 			<BlockHash<T>>::hashed_key_for(T::BlockNumber::zero()) => [69u8; 32].encode(),
 			<Number<T>>::hashed_key().to_vec() => T::BlockNumber::one().encode(),
 			<ParentHash<T>>::hashed_key().to_vec() => [69u8; 32].encode()
-		], map![]))
->>>>>>> master
+		], children: map![]})
 	}
 
 	/// Set the block number to something in particular. Can be used as an alternative to

@@ -162,19 +162,7 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(authorities): Vec<(AuthorityId, AuthorityWeight)>;
-<<<<<<< HEAD
-		build(|
-			storage: &mut sr_primitives::StorageContent,
-			config: &GenesisConfig
-		| {
-			runtime_io::with_storage(
-				storage,
-				|| Module::<T>::initialize_authorities(&config.authorities),
-			);
-		})
-=======
 		build(|config| Module::<T>::initialize_authorities(&config.authorities))
->>>>>>> master
 	}
 }
 

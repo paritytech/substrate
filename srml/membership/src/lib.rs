@@ -28,8 +28,6 @@ use support::{
 };
 use system::ensure_root;
 use sr_primitives::{traits::EnsureOrigin, weights::SimpleDispatchInfo};
-#[cfg(feature = "std")]
-use sr_primitives::StorageContent;
 
 pub trait Trait<I=DefaultInstance>: system::Trait {
 	/// The overarching event type.
@@ -63,26 +61,12 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(members): Vec<T::AccountId>;
-<<<<<<< HEAD
-		config(phantom): sr_std::marker::PhantomData<I>;
-		build(|
-			storage: &mut StorageContent,
-			config: &Self,
-		| {
-			sr_io::with_storage(storage, || {
-				let mut members = config.members.clone();
-				members.sort();
-				T::MembershipInitialized::initialize_members(&members);
-				<Members<T, I>>::put(members);
-			});
-=======
 		config(phantom): rstd::marker::PhantomData<I>;
 		build(|config: &Self| {
 			let mut members = config.members.clone();
 			members.sort();
 			T::MembershipInitialized::initialize_members(&members);
 			<Members<T, I>>::put(members);
->>>>>>> master
 		})
 	}
 }

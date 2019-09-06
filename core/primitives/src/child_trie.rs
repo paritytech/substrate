@@ -302,6 +302,17 @@ impl ChildTrie {
 		enc
 	}
 
+	/// Convenience conversion function.
+	pub fn child_trie_read(&self) -> Option<ChildTrieRead> {
+		self.root.as_ref().map(|root|
+			ChildTrieRead {
+				root: root.clone(),
+				keyspace: self.keyspace.clone(),
+			}
+		)
+	}
+
+
 	/// Function accessing all child trie fields and returning
 	/// tuple of pointer and size from them.
 	pub fn ptr_child_trie(&self) -> PtrChildTrie {
@@ -316,6 +327,7 @@ impl ChildTrie {
 			self.extension.len() as u32,
 		)
 	}
+
 	/// Function to access all child trie fields.
 	pub fn to_ptr_vec(&self) -> (&[u8], Option<&[u8]>, &[u8], &[u8]) {
 		(

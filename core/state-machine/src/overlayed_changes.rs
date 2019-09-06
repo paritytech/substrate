@@ -53,11 +53,8 @@ pub struct OverlayedValue {
 #[derive(Debug, Clone)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct ChildOverlayChangeSet {
-	/// Currently change trie are not manage for child trie value
-	/// and we only keep trace of extrinsic index globally.
-	pub extrinsics: Option<BTreeSet<u32>>,
 	/// Mapping of key with optional value, if value is `None` that is a removal.
-	pub values: HashMap<Vec<u8>, Option<Vec<u8>>>,
+	pub values: HashMap<Vec<u8>, OverlayedValue>,
 	/// Child trie value.
 	pub child_trie: ChildTrie,
 }
@@ -69,14 +66,10 @@ pub struct OverlayedChangeSet {
 	/// Top level storage changes.
 	pub top: HashMap<Vec<u8>, OverlayedValue>,
 	/// Child storage changes.
-<<<<<<< HEAD
 	pub children: HashMap<KeySpace, ChildOverlayChangeSet>,
 	/// Association from parent storage location to keyspace.
 	/// If value is none the child is moved or deleted.
 	pub pending_child: HashMap<Vec<u8>, Option<KeySpace>>,
-=======
-	pub children: HashMap<Vec<u8>, HashMap<Vec<u8>, OverlayedValue>>,
->>>>>>> master
 }
 
 #[cfg(test)]
@@ -149,11 +142,11 @@ impl OverlayedChanges {
 		}
 	}
 
-<<<<<<< HEAD
 	/// Get the `OverlayedValueResult` for a given child key.
 	pub fn child_storage(&self, child_trie: ChildTrieReadRef, key: &[u8]) -> OverlayedValueResult {
 		let keyspace = child_trie.keyspace();
-		match self.prospective.children.get(keyspace).and_then(|map| map.values.get(key)) {
+		match self.prospective.children.get(keyspace)
+			.and_then(|map| map.values.get(key).map(|v| &v.value)) {
 			Some(Some(val)) =>
 				return OverlayedValueResult::Modified(val.as_ref()),
 			Some(None) =>
@@ -161,7 +154,8 @@ impl OverlayedChanges {
 			None => (),
 		}
 
-		match self.committed.children.get(keyspace).and_then(|map| map.values.get(key)) {
+		match self.committed.children.get(keyspace)
+			.and_then(|map| map.values.get(key).map(|v| &v.value)) {
 			Some(Some(val)) =>
 				return OverlayedValueResult::Modified(val.as_ref()),
 			Some(None) =>
@@ -192,22 +186,6 @@ impl OverlayedChanges {
 			},
 			Some(None) => return Some(None),
 			None => (),
-=======
-	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be refered
-	/// to the backend); Some(None) if the key has been deleted. Some(Some(...)) for a key whose
-	/// value has been set.
-	pub fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Option<Option<&[u8]>> {
-		if let Some(map) = self.prospective.children.get(storage_key) {
-			if let Some(val) = map.get(key) {
-				return Some(val.value.as_ref().map(AsRef::as_ref));
-			}
-		}
-
-		if let Some(map) = self.committed.children.get(storage_key) {
-			if let Some(val) = map.get(key) {
-				return Some(val.value.as_ref().map(AsRef::as_ref));
-			}
->>>>>>> master
 		}
 
 		None
@@ -234,7 +212,6 @@ impl OverlayedChanges {
 	/// `None` can be used to delete a value specified by the given key.
 	pub(crate) fn set_child_storage(&mut self, child_trie: &ChildTrie, key: Vec<u8>, val: Option<Vec<u8>>) {
 		let extrinsic_index = self.extrinsic_index();
-<<<<<<< HEAD
 		let p = &mut self.prospective.children;
 		let pc = &mut self.prospective.pending_child;
 		let map_entry = p.entry(child_trie.keyspace().clone())
@@ -242,23 +219,15 @@ impl OverlayedChanges {
 				let parent = child_trie.parent_slice().to_vec();
 				pc.insert(parent, Some(child_trie.keyspace().clone()));
 				ChildOverlayChangeSet {
-					extrinsics: None,
 					values: Default::default(),
 					child_trie: child_trie.clone(),
 				}
 			});
-		map_entry.values.insert(key, val);
-
-		if let Some(extrinsic) = extrinsic_index {
-			map_entry.extrinsics.get_or_insert_with(Default::default)
-=======
-		let map_entry = self.prospective.children.entry(storage_key).or_default();
-		let entry = map_entry.entry(key).or_default();
+		let entry = map_entry.values.entry(key).or_default();
 		entry.value = val;
 
 		if let Some(extrinsic) = extrinsic_index {
 			entry.extrinsics.get_or_insert_with(Default::default)
->>>>>>> master
 				.insert(extrinsic);
 		}
 	}
@@ -267,45 +236,34 @@ impl OverlayedChanges {
 	/// - keyspace
 	/// - root
 	/// - parent path
+  /// TODO EMCH merge removed the extrinsic local to a child trie
+  /// it should update the storage_key value extrinsics (parent).
 	pub(crate) fn set_child_trie(&mut self, child_trie: ChildTrie) -> bool {
-		let extrinsic_index = self.extrinsic_index();
 		if let Some(Some(old_ct)) = self.prospective.pending_child
 			.get(child_trie.parent_slice()) {
 			let old_ct = self.prospective.children.get_mut(old_ct)
 				.expect("pending entry always have a children association; qed");
-			let exts = &mut old_ct.extrinsics;
 			let old_ct = &mut old_ct.child_trie;
 			if old_ct.is_updatable_with(&child_trie) {
 				*old_ct = child_trie;
-				if let Some(extrinsic) = extrinsic_index {
-					exts.get_or_insert_with(Default::default)
-						.insert(extrinsic);
-				}
 			} else {
 				return false;
 			}
 		} else {
-			let mut exts = if let Some(old_ct) = self.committed.pending_child
+			if let Some(old_ct) = self.committed.pending_child
 				.get(child_trie.parent_slice()).and_then(|k|
 					k.as_ref().and_then(|k| self.committed.children.get(k))) {
 				if old_ct.child_trie.root_initial_value() != child_trie.root_initial_value()
 					|| old_ct.child_trie.keyspace() != child_trie.keyspace()
 					|| old_ct.child_trie.parent_slice() != child_trie.parent_slice() {
 					return false;
-				} else {
-					old_ct.extrinsics.clone()
 				}
-			} else { Default::default() };
+			}
 			self.prospective.pending_child
 				.insert(child_trie.parent_slice().to_vec(), Some(child_trie.keyspace().clone()));
-			if let Some(extrinsic) = extrinsic_index {
-				exts.get_or_insert_with(Default::default)
-					.insert(extrinsic);
-			}
 			self.prospective.children.insert(
 				child_trie.keyspace().to_vec(),
 				ChildOverlayChangeSet {
-					extrinsics: exts,
 					values: Default::default(),
 					child_trie: child_trie.clone(),
 				}
@@ -313,8 +271,6 @@ impl OverlayedChanges {
 		}
 		true
 	}
-
-
 
 	/// Clear child storage of given storage key.
 	///
@@ -326,37 +282,22 @@ impl OverlayedChanges {
 		let extrinsic_index = self.extrinsic_index();
 		let map_entry = self.prospective.children.entry(child_trie.keyspace().clone())
 			.or_insert_with(|| ChildOverlayChangeSet {
-				extrinsics: None,
 				values: Default::default(),
 				child_trie: child_trie.clone(),
 			});
 
-<<<<<<< HEAD
-		if let Some(extrinsic) = extrinsic_index {
-			map_entry.extrinsics.get_or_insert_with(Default::default)
-				.insert(extrinsic);
-		}
-
-		map_entry.values.values_mut().for_each(|e| *e = None);
-
-		if let Some(ChildOverlayChangeSet {values: committed_map, ..}) =
-			self.committed.children.get(child_trie.keyspace()) {
-			for (key, _) in committed_map.iter() {
-				map_entry.values.insert(key.clone(), None);
-=======
-		map_entry.values_mut().for_each(|e| {
+		map_entry.values.values_mut().for_each(|e| {
 			if let Some(extrinsic) = extrinsic_index {
 				e.extrinsics.get_or_insert_with(Default::default)
 					.insert(extrinsic);
 			}
-
 			e.value = None;
 		});
 
-		if let Some(committed_map) = self.committed.children.get(storage_key) {
-			for (key, value) in committed_map.iter() {
-				if !map_entry.contains_key(key) {
-					map_entry.insert(key.clone(), OverlayedValue {
+		if let Some(child_set) = self.committed.children.get(child_trie.keyspace()) {
+			for (key, value) in child_set.values.iter() {
+				if !map_entry.values.contains_key(key) {
+					map_entry.values.insert(key.clone(), OverlayedValue {
 						value: None,
 						extrinsics: extrinsic_index.map(|i| {
 							let mut e = value.extrinsics.clone()
@@ -366,7 +307,6 @@ impl OverlayedChanges {
 						}),
 					});
 				}
->>>>>>> master
 			}
 		}
 	}
@@ -410,29 +350,19 @@ impl OverlayedChanges {
 
 	pub(crate) fn clear_child_prefix(&mut self, child_trie: &ChildTrie, prefix: &[u8]) {
 		let extrinsic_index = self.extrinsic_index();
-<<<<<<< HEAD
-		let map_entry = self.prospective.children.entry(child_trie.keyspace().clone())
+		let map_entry = self.prospective.children.entry(child_trie.keyspace().to_vec())
 			.or_insert_with(|| ChildOverlayChangeSet {
-				extrinsics: None,
 				values: Default::default(),
 				child_trie: child_trie.clone(),
 			});
 
-		for (key, entry) in map_entry.values.iter_mut() {
-=======
-		let map_entry = self.prospective.children.entry(storage_key.to_vec()).or_default();
 
-		for (key, entry) in map_entry.iter_mut() {
->>>>>>> master
+		for (key, entry) in map_entry.values.iter_mut() {
 			if key.starts_with(prefix) {
 				entry.value = None;
 
 				if let Some(extrinsic) = extrinsic_index {
-<<<<<<< HEAD
-					map_entry.extrinsics.get_or_insert_with(Default::default)
-=======
 					entry.extrinsics.get_or_insert_with(Default::default)
->>>>>>> master
 						.insert(extrinsic);
 				}
 			}
@@ -441,23 +371,13 @@ impl OverlayedChanges {
 		if let Some(child_committed) = self.committed.children.get(child_trie.keyspace()) {
 			// Then do the same with keys from commited changes.
 			// NOTE that we are making changes in the prospective change set.
-<<<<<<< HEAD
 			for key in child_committed.values.keys() {
 				if key.starts_with(prefix) {
 					let entry = map_entry.values.entry(key.clone()).or_default();
-					*entry = None;
-
-					if let Some(extrinsic) = extrinsic_index {
-						map_entry.extrinsics.get_or_insert_with(Default::default)
-=======
-			for key in child_committed.keys() {
-				if key.starts_with(prefix) {
-					let entry = map_entry.entry(key.clone()).or_default();
 					entry.value = None;
 
 					if let Some(extrinsic) = extrinsic_index {
 						entry.extrinsics.get_or_insert_with(Default::default)
->>>>>>> master
 							.insert(extrinsic);
 					}
 				}
@@ -484,32 +404,20 @@ impl OverlayedChanges {
 						.extend(prospective_extrinsics);
 				}
 			}
-<<<<<<< HEAD
-			for (storage_key, ChildOverlayChangeSet {extrinsics, values, child_trie}) in self.prospective.children.drain() {
-				let entry = self.committed.children.entry(storage_key)
+			for (keyspace, ChildOverlayChangeSet {mut values, child_trie}) in self.prospective.children.drain() {
+				let child_set = self.committed.children.entry(keyspace)
 					.or_insert_with(|| ChildOverlayChangeSet {
-						extrinsics: None,
 						values: Default::default(),
 						child_trie: child_trie.clone(),
 					});
-				entry.values.extend(values.iter().map(|(k, v)| (k.clone(), v.clone())));
-				entry.child_trie = child_trie;
-
-				if let Some(prospective_extrinsics) = extrinsics {
-					entry.extrinsics.get_or_insert_with(Default::default)
-						.extend(prospective_extrinsics);
-=======
-			for (storage_key, mut map) in self.prospective.children.drain() {
-				let map_dest = self.committed.children.entry(storage_key).or_default();
-				for (key, val) in map.drain() {
-					let entry = map_dest.entry(key).or_default();
+				for (key, val) in values.drain() {
+					let entry = child_set.values.entry(key).or_default();
 					entry.value = val.value;
 
 					if let Some(prospective_extrinsics) = val.extrinsics {
 						entry.extrinsics.get_or_insert_with(Default::default)
 							.extend(prospective_extrinsics);
 					}
->>>>>>> master
 				}
 			}
 			self.committed.pending_child.extend(self.prospective.pending_child.drain());
@@ -526,12 +434,8 @@ impl OverlayedChanges {
 	){
 		assert!(self.prospective.is_empty());
 		(self.committed.top.into_iter().map(|(k, v)| (k, v.value)),
-<<<<<<< HEAD
-			self.committed.children.into_iter().map(|(sk, v)| (sk, v.values.into_iter())))
-=======
 			self.committed.children.into_iter()
-				.map(|(sk, v)| (sk, v.into_iter().map(|(k, v)| (k, v.value)))))
->>>>>>> master
+				.map(|(ks, v)| (ks, v.values.into_iter().map(|(k, v)| (k, v.value)))))
 	}
 
 	/// Inserts storage entry responsible for current extrinsic index.

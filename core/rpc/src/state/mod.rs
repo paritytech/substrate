@@ -68,101 +68,17 @@ pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 	/// Call runtime method at given block.
 	fn call(
 		&self,
-<<<<<<< HEAD
-		range: &QueryStorageRange<Block>,
-		keys: &[StorageKey],
-		last_values: &mut HashMap<StorageKey, Option<StorageData>>,
-		changes: &mut Vec<StorageChangeSet<Block::Hash>>,
-	) -> Result<()> {
-		for block in range.unfiltered_range.start..range.unfiltered_range.end {
-			let block_hash = range.hashes[block].clone();
-			let mut block_changes = StorageChangeSet {
-				block: block_hash.clone(),
-				changes: Vec::new(),
-				child_changes: Vec::new(),
-			};
-			let id = BlockId::hash(block_hash);
-			for key in keys {
-				let (has_changed, data) = {
-					let curr_data = self.client.storage(&id, key)
-						.map_err(client_err)?;
-					match last_values.get(key) {
-						Some(prev_data) => (curr_data != *prev_data, curr_data),
-						None => (true, curr_data),
-					}
-				};
-				if has_changed {
-					block_changes.changes.push((key.clone(), data.clone()));
-				}
-				last_values.insert(key.clone(), data);
-			}
-			if !block_changes.changes.is_empty() {
-				changes.push(block_changes);
-			}
-		}
-		Ok(())
-	}
-=======
 		block: Option<Block::Hash>,
 		method: String,
 		call_data: Bytes,
 	) -> FutureResult<Bytes>;
->>>>>>> master
 
 	/// Returns the keys with prefix, leave empty to get all the keys.
 	fn storage_keys(
 		&self,
-<<<<<<< HEAD
-		range: &QueryStorageRange<Block>,
-		keys: &[StorageKey],
-		last_values: &HashMap<StorageKey, Option<StorageData>>,
-		changes: &mut Vec<StorageChangeSet<Block::Hash>>,
-	) -> Result<()> {
-		let (begin, end) = match range.filtered_range {
-			Some(ref filtered_range) => (
-				range.first_number + filtered_range.start.saturated_into(),
-				BlockId::Hash(range.hashes[filtered_range.end - 1].clone())
-			),
-			None => return Ok(()),
-		};
-		let mut changes_map: BTreeMap<NumberFor<Block>, StorageChangeSet<Block::Hash>> = BTreeMap::new();
-		for key in keys {
-			let mut last_block = None;
-			let mut last_value = last_values.get(key).cloned().unwrap_or_default();
-			for (block, _) in self.client.key_changes(begin, end, key).map_err(client_err)?.into_iter().rev() {
-				if last_block == Some(block) {
-					continue;
-				}
-
-				let block_hash = range.hashes[(block - range.first_number).saturated_into::<usize>()].clone();
-				let id = BlockId::Hash(block_hash);
-				let value_at_block = self.client.storage(&id, key).map_err(client_err)?;
-				if last_value == value_at_block {
-					continue;
-				}
-
-				changes_map.entry(block)
-					.or_insert_with(|| StorageChangeSet {
-						block: block_hash,
-						changes: Vec::new(),
-						child_changes: Vec::new(),
-					}).changes.push((key.clone(), value_at_block.clone()));
-				last_block = Some(block);
-				last_value = value_at_block;
-			}
-		}
-		if let Some(additional_capacity) = changes_map.len().checked_sub(changes.len()) {
-			changes.reserve(additional_capacity);
-		}
-		changes.extend(changes_map.into_iter().map(|(_, cs)| cs));
-		Ok(())
-	}
-}
-=======
 		block: Option<Block::Hash>,
 		prefix: StorageKey,
 	) -> FutureResult<Vec<StorageKey>>;
->>>>>>> master
 
 	/// Returns a storage entry at a specific block's state.
 	fn storage(
@@ -183,24 +99,9 @@ pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 		&self,
 		block: Option<Block::Hash>,
 		key: StorageKey,
-<<<<<<< HEAD
-		block: Option<Block::Hash>
-	) -> Result<Option<StorageData>> {
-		let block = BlockId::Hash(self.unwrap_or_best(block)?);
-		trace!(target: "rpc", "Querying child storage at {:?} for key {}", block, HexDisplay::from(&key.0));
-		if let Some(subtrie) = self.client.child_trie(&block, &child_storage_key)
-			.map_err(client_err)? {
-			Ok(self.client.child_storage(&block, subtrie.node_ref(), &key)
-				.map_err(client_err)?
-			)
-		} else {
-			Ok(None)
-		}
-=======
 	) -> FutureResult<Option<u64>> {
 		Box::new(self.storage(block, key)
 			.map(|x| x.map(|x| x.0.len() as u64)))
->>>>>>> master
 	}
 
 	/// Returns the keys with prefix from a child storage, leave empty to get all the keys
@@ -208,26 +109,8 @@ pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 		&self,
 		block: Option<Block::Hash>,
 		child_storage_key: StorageKey,
-<<<<<<< HEAD
-		key_prefix: StorageKey,
-		block: Option<Block::Hash>
-	) -> Result<Vec<StorageKey>> {
-		let block = BlockId::Hash(self.unwrap_or_best(block)?);
-		trace!(target: "rpc", "Querying child storage keys at {:?}", block);
-		if let Some(subtrie) = self.client.child_trie(&block, &child_storage_key)
-			.map_err(client_err)? {
-			Ok(self.client
-				.child_storage_keys(&block, subtrie.node_ref(), &key_prefix)
-				.map_err(client_err)?
-			)
-		} else {
-			Ok(Vec::new())
-		}
-	}
-=======
 		prefix: StorageKey,
 	) -> FutureResult<Vec<StorageKey>>;
->>>>>>> master
 
 	/// Returns a child storage entry at a specific block's state.
 	fn child_storage(
@@ -243,28 +126,7 @@ pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 		block: Option<Block::Hash>,
 		child_storage_key: StorageKey,
 		key: StorageKey,
-<<<<<<< HEAD
-		block: Option<Block::Hash>
-	) -> Result<Option<Block::Hash>> {
-		let block = BlockId::Hash(self.unwrap_or_best(block)?);
-		trace!(
-			target: "rpc", "Querying child storage hash at {:?} for key {}",
-			block,
-			HexDisplay::from(&key.0),
-		);
-		if let Some(subtrie) = self.client.child_trie(&block, &child_storage_key)
-			.map_err(client_err)? {
-			Ok(self.client
-				.child_storage_hash(&block, subtrie.node_ref(), &key)
-				.map_err(client_err)?
-			)
-		} else {
-			Ok(None)
-		}
-	}
-=======
 	) -> FutureResult<Option<Block::Hash>>;
->>>>>>> master
 
 	/// Returns the size of a child storage entry at a block's state.
 	fn child_storage_size(

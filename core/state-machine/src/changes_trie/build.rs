@@ -16,6 +16,7 @@
 
 //! Structures and functions required to build changes trie for given block.
 
+use primitives::child_trie::ChildTrie;
 use std::collections::{BTreeMap, BTreeSet};
 use std::collections::btree_map::Entry;
 use codec::Decode;
@@ -100,19 +101,19 @@ fn prepare_extrinsics_input<'a, B, H, Number>(
 		Number: BlockNumber,
 {
 
-	let mut children_keys = BTreeSet::<Vec<u8>>::new();
+	let mut children_tries = BTreeSet::<ChildTrie>::new();
 	let mut children_result = BTreeMap::new();
-	for (storage_key, _) in changes.prospective.children.iter()
+	for (_ks, v) in changes.prospective.children.iter()
 		.chain(changes.committed.children.iter()) {
-		children_keys.insert(storage_key.clone());
+		children_tries.insert(v.child_trie.clone());
 	}
-	for storage_key in children_keys {
+	for child_trie in children_tries {
 		let child_index = ChildIndex::<Number> {
 			block: block.clone(),
-			storage_key: storage_key.clone(),
+			storage_key: child_trie.parent_slice().to_vec(),
 		};
 	
-		let iter = prepare_extrinsics_input_inner(backend, block, changes, Some(storage_key))?;
+		let iter = prepare_extrinsics_input_inner(backend, block, changes, Some(child_trie))?;
 		children_result.insert(child_index, iter);
 	}
 
@@ -125,15 +126,20 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 	backend: &'a B,
 	block: &Number,
 	changes: &'a OverlayedChanges,
-	storage_key: Option<Vec<u8>>,
+	child_trie: Option<ChildTrie>,
 ) -> Result<impl Iterator<Item=InputPair<Number>> + 'a, String>
 	where
 		B: Backend<H>,
 		H: Hasher,
 		Number: BlockNumber,
 {
-	let (committed, prospective) = if let Some(sk) = storage_key.as_ref() {
-		(changes.committed.children.get(sk), changes.prospective.children.get(sk))
+	let (committed, prospective) = if let Some(ct) = child_trie.as_ref() {
+		(
+			changes.committed.children.get(ct.keyspace())
+				.map(|cs| &cs.values),
+			changes.prospective.children.get(ct.keyspace())
+				.map(|cs| &cs.values),
+		)
 	} else {
 		(Some(&changes.committed.top), Some(&changes.prospective.top))
 	};
@@ -145,31 +151,28 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 				Entry::Vacant(entry) => {
 					// ignore temporary values (values that have null value at the end of operation
 					// AND are not in storage at the beginning of operation
-<<<<<<< HEAD
-					match changes.storage(k) {
-						OverlayedValueResult::NotFound
-						| OverlayedValueResult::Deleted => {
-							if !backend.exists_storage(k).map_err(|e| format!("{}", e))? {
-								return Ok(map)
-							}
-						},
-						OverlayedValueResult::Modified(_val) => (),
-					}
-=======
-					if let Some(sk) = storage_key.as_ref() {
-						if !changes.child_storage(sk, k).map(|v| v.is_some()).unwrap_or_default() {
-							if !backend.exists_child_storage(sk, k).map_err(|e| format!("{}", e))? {
-								return Ok(map);
-							}
+	
+					if let Some(ct) = child_trie.as_ref() {
+						match changes.child_storage(ct.node_ref(), k) {
+							OverlayedValueResult::NotFound
+							| OverlayedValueResult::Deleted => {
+								if !backend.exists_storage(k).map_err(|e| format!("{}", e))? {
+									return Ok(map)
+								}
+							},
+							OverlayedValueResult::Modified(_val) => (),
 						}
 					} else {
-						if !changes.storage(k).map(|v| v.is_some()).unwrap_or_default() {
-							if !backend.exists_storage(k).map_err(|e| format!("{}", e))? {
-								return Ok(map);
-							}
+						match changes.storage(k) {
+							OverlayedValueResult::NotFound
+							| OverlayedValueResult::Deleted => {
+								if !backend.exists_storage(k).map_err(|e| format!("{}", e))? {
+									return Ok(map)
+								}
+							},
+							OverlayedValueResult::Modified(_val) => (),
 						}
 					};
->>>>>>> master
 
 					let extrinsics = v.extrinsics.as_ref()
 						.expect("filtered by filter() call above; qed")
@@ -341,12 +344,12 @@ fn prepare_digest_input<'a, H, Number>(
 #[cfg(test)]
 mod test {
 	use codec::Encode;
-	use primitives::Blake2Hasher;
+	use primitives::{Blake2Hasher, map};
 	use primitives::storage::well_known_keys::{EXTRINSIC_INDEX};
 	use crate::backend::InMemory;
 	use crate::changes_trie::{RootsStorage, Configuration, storage::InMemoryStorage};
 	use crate::changes_trie::build_cache::{IncompleteCacheAction, IncompleteCachedBuildData};
-	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet};
+	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet, ChildOverlayChangeSet};
 	use super::*;
 
 	fn prepare_for_build(zero: u64) -> (
@@ -364,8 +367,12 @@ mod test {
 			(vec![104], vec![255]),
 			(vec![105], vec![255]),
 		].into_iter().collect::<::std::collections::HashMap<_, _>>().into();
-		let child_trie_key1 = b"1".to_vec();
-		let child_trie_key2 = b"2".to_vec();
+		let child_trie_key1 = b":child_storage:default:1".to_vec();
+		let child_trie_key2 = b":child_storage:default:2".to_vec();
+		let child_trie1 = ChildTrie::fetch_or_new(|_| None, |_| (), &b"1"[..], || 3u128);
+		let child_trie2 = ChildTrie::fetch_or_new(|_| None, |_| (), &b"2"[..], || 4u128);
+		let keyspace1 = child_trie1.keyspace().to_vec();
+		let keyspace2 = child_trie2.keyspace().to_vec();
 		let storage = InMemoryStorage::with_inputs(vec![
 			(zero + 1, vec![
 				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 1, key: vec![100] }, vec![1, 3]),
@@ -399,7 +406,7 @@ mod test {
 			]),
 			(zero + 9, Vec::new()), (zero + 10, Vec::new()), (zero + 11, Vec::new()), (zero + 12, Vec::new()),
 			(zero + 13, Vec::new()), (zero + 14, Vec::new()), (zero + 15, Vec::new()),
-		], vec![(child_trie_key1.clone(), vec![
+		], vec![(child_trie1.clone(), vec![
 				(zero + 1, vec![
 					InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 1, key: vec![100] }, vec![1, 3]),
 					InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 1, key: vec![101] }, vec![0, 2]),
@@ -417,52 +424,68 @@ mod test {
 		]);
 		let changes = OverlayedChanges {
 			prospective: OverlayedChangeSet { top: vec![
-				(vec![100], OverlayedValue {
-					value: Some(vec![200]),
-					extrinsics: Some(vec![0, 2].into_iter().collect())
-				}),
-				(vec![103], OverlayedValue {
-					value: None,
-					extrinsics: Some(vec![0, 1].into_iter().collect())
-				}),
-			].into_iter().collect(),
+					(vec![100], OverlayedValue {
+						value: Some(vec![200]),
+						extrinsics: Some(vec![0, 2].into_iter().collect())
+					}),
+					(vec![103], OverlayedValue {
+						value: None,
+						extrinsics: Some(vec![0, 1].into_iter().collect())
+					}),
+				].into_iter().collect(),
 				children: vec![
-					(child_trie_key1.clone(), vec![
-						(vec![100], OverlayedValue {
-							value: Some(vec![200]),
-							extrinsics: Some(vec![0, 2].into_iter().collect())
-						})
-					].into_iter().collect()),
-					(child_trie_key2, vec![
-						(vec![100], OverlayedValue {
-							value: Some(vec![200]),
-							extrinsics: Some(vec![0, 2].into_iter().collect())
-						})
-					].into_iter().collect()),
-				].into_iter().collect()
+					(keyspace1.clone(), ChildOverlayChangeSet {
+						child_trie: child_trie1.clone(),
+						values: vec![
+							(vec![100], OverlayedValue {
+								value: Some(vec![200]),
+								extrinsics: Some(vec![0, 2].into_iter().collect())
+							})
+						].into_iter().collect()
+					}),
+					(keyspace2.clone(), ChildOverlayChangeSet {
+						child_trie: child_trie2,
+						values: vec![
+							(vec![100], OverlayedValue {
+								value: Some(vec![200]),
+								extrinsics: Some(vec![0, 2].into_iter().collect())
+							})
+						].into_iter().collect()
+					}),
+				].into_iter().collect(),
+				pending_child: map![
+					child_trie_key1.clone() => Some(keyspace1.clone()),
+					child_trie_key2 => Some(keyspace2) 
+				],
 			},
 			committed: OverlayedChangeSet { top: vec![
-				(EXTRINSIC_INDEX.to_vec(), OverlayedValue {
-					value: Some(3u32.encode()),
-					extrinsics: None,
-				}),
-				(vec![100], OverlayedValue {
-					value: Some(vec![202]),
-					extrinsics: Some(vec![3].into_iter().collect())
-				}),
-				(vec![101], OverlayedValue {
-					value: Some(vec![203]),
-					extrinsics: Some(vec![1].into_iter().collect())
-				}),
-			].into_iter().collect(),
-				children: vec![
-					(child_trie_key1, vec![
-						(vec![100], OverlayedValue {
-							value: Some(vec![202]),
-							extrinsics: Some(vec![3].into_iter().collect())
-						})
-					].into_iter().collect()),
+					(EXTRINSIC_INDEX.to_vec(), OverlayedValue {
+						value: Some(3u32.encode()),
+						extrinsics: None,
+					}),
+					(vec![100], OverlayedValue {
+						value: Some(vec![202]),
+						extrinsics: Some(vec![3].into_iter().collect())
+					}),
+					(vec![101], OverlayedValue {
+						value: Some(vec![203]),
+						extrinsics: Some(vec![1].into_iter().collect())
+					}),
 				].into_iter().collect(),
+				children: vec![
+					(keyspace1.clone(), ChildOverlayChangeSet {
+						child_trie: child_trie1,
+						values: vec![
+							(vec![100], OverlayedValue {
+								value: Some(vec![202]),
+								extrinsics: Some(vec![3].into_iter().collect())
+							})
+						].into_iter().collect()
+					}),
+				].into_iter().collect(),
+				pending_child: map![
+					child_trie_key1 => Some(keyspace1)
+				],
 			},
 			changes_trie_config: Some(config.clone()),
 		};

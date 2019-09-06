@@ -22,13 +22,8 @@ use std::{
 };
 
 use fnv::{FnvHashSet, FnvHashMap};
-<<<<<<< HEAD
-use futures::channel::mpsc;
-use primitives::storage::{StorageKey, StorageData, StorageKeySpace};
-=======
 use futures03::channel::mpsc;
-use primitives::storage::{StorageKey, StorageData};
->>>>>>> master
+use primitives::storage::{StorageKey, StorageData, StorageKeySpace};
 use sr_primitives::traits::Block as BlockT;
 
 /// Storage change set
@@ -351,13 +346,8 @@ mod tests {
 	fn triggering_change_should_notify_wildcard_listeners() {
 		// given
 		let mut notifications = StorageNotifications::<Block>::default();
-<<<<<<< HEAD
 		let child_filter = [(StorageKeySpace(vec![4]), None)];
-		let mut recv = futures::executor::block_on_stream(
-=======
-		let child_filter = [(StorageKey(vec![4]), None)];
 		let mut recv = futures03::executor::block_on_stream(
->>>>>>> master
 			notifications.listen(None, Some(&child_filter[..]))
 		);
 
@@ -391,13 +381,8 @@ mod tests {
 	fn should_only_notify_interested_listeners() {
 		// given
 		let mut notifications = StorageNotifications::<Block>::default();
-<<<<<<< HEAD
 		let child_filter = [(StorageKeySpace(vec![4]), Some(vec![StorageKey(vec![5])]))];
-		let mut recv1 = futures::executor::block_on_stream(
-=======
-		let child_filter = [(StorageKey(vec![4]), Some(vec![StorageKey(vec![5])]))];
 		let mut recv1 = futures03::executor::block_on_stream(
->>>>>>> master
 			notifications.listen(Some(&[StorageKey(vec![1])]), None)
 		);
 		let mut recv2 = futures03::executor::block_on_stream(
@@ -443,13 +428,8 @@ mod tests {
 		// given
 		let mut notifications = StorageNotifications::<Block>::default();
 		{
-<<<<<<< HEAD
 			let child_filter = [(StorageKeySpace(vec![4]), Some(vec![StorageKey(vec![5])]))];
-			let _recv1 = futures::executor::block_on_stream(
-=======
-			let child_filter = [(StorageKey(vec![4]), Some(vec![StorageKey(vec![5])]))];
 			let _recv1 = futures03::executor::block_on_stream(
->>>>>>> master
 				notifications.listen(Some(&[StorageKey(vec![1])]), None)
 			);
 			let _recv2 = futures03::executor::block_on_stream(
@@ -458,13 +438,8 @@ mod tests {
 			let _recv3 = futures03::executor::block_on_stream(
 				notifications.listen(None, None)
 			);
-<<<<<<< HEAD
-			let _recv4 = futures::executor::block_on_stream(
-				notifications.listen(None, Some(&child_filter[..]))
-=======
 			let _recv4 = futures03::executor::block_on_stream(
 				notifications.listen(None, Some(&child_filter))
->>>>>>> master
 			);
 			assert_eq!(notifications.listeners.len(), 2);
 			assert_eq!(notifications.wildcard_listeners.len(), 2);

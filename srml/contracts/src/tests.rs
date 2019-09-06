@@ -40,16 +40,9 @@ use support::{
 	assert_ok, assert_err, impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types,
 	storage::child, StorageMap, StorageValue, traits::{Currency, Get},
 };
-<<<<<<< HEAD
-use std::cell::RefCell;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use primitives::child_trie::ChildTrie;
-use primitives::storage::well_known_keys;
-use primitives::Blake2Hasher;
-=======
 use std::{cell::RefCell, sync::atomic::{AtomicUsize, Ordering}};
 use primitives::{storage::well_known_keys, Blake2Hasher};
->>>>>>> master
 use system::{self, EventRecord, Phase};
 
 mod contract {

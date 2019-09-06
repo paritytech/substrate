@@ -381,22 +381,6 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(keys): Vec<(T::ValidatorId, T::Keys)>;
-<<<<<<< HEAD
-		build(|
-			storage: &mut sr_primitives::StorageContent,
-			config: &GenesisConfig<T>
-		| {
-			runtime_io::with_storage(storage, || {
-				for (who, keys) in config.keys.iter().cloned() {
-					assert!(
-						<Module<T>>::load_keys(&who).is_none(),
-						"genesis config contained duplicate validator {:?}", who,
-					);
-
-					<Module<T>>::do_set_keys(&who, keys)
-						.expect("genesis config must not contain duplicates; qed");
-				}
-=======
 		build(|config: &GenesisConfig<T>| {
 			for (who, keys) in config.keys.iter().cloned() {
 				assert!(
@@ -407,7 +391,6 @@ decl_storage! {
 				<Module<T>>::do_set_keys(&who, keys)
 					.expect("genesis config must not contain duplicates; qed");
 			}
->>>>>>> master
 
 			let initial_validators = T::SelectInitialValidators::select_initial_validators()
 				.unwrap_or_else(|| config.keys.iter().map(|(ref v, _)| v.clone()).collect());
