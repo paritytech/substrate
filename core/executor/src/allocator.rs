@@ -251,19 +251,6 @@ mod tests {
 	}
 
 	#[test]
-	fn should_use_minimum_allocation_size_for_zero_allocations() {
-		// given
-		let mem = MemoryInstance::alloc(Pages(1), None).unwrap();
-		let mut heap = FreeingBumpHeapAllocator::new(mem, 0);
-
-		// when
-		let ptr = heap.allocate(0).unwrap();
-
-		// then
-		assert_eq!(heap.total_size, MIN_POSSIBLE_ALLOCATION + PREFIX_SIZE);
-	}
-
-	#[test]
 	fn should_always_align_pointers_to_multiples_of_8() {
 		// given
 		let mem = MemoryInstance::alloc(Pages(1), None).unwrap();
