@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Rust implementation of Substrate contracts.
+//! Utilities for defining the wasm host environment.
 
 use wasmi::{ValueType, RuntimeValue};
 use wasmi::nan_preserving_float::{F32, F64};
