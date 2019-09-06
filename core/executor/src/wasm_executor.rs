@@ -852,9 +852,7 @@ impl_wasm_host_interface! {
 			let msg = context.read_memory(msg_data, msg_len)
 				.map_err(|_| "Invalid attempt to get message in ext_sr25519_verify")?;
 
-println!("HELLO {:?} \n {} {}", sig.as_ref(), msg_data as u32, msg_len);
 			Ok(if sr25519::Pair::verify_weak(&sig, &msg, &pubkey) {
-				println!("CORRECT");
 				0
 			} else {
 				1
@@ -1543,11 +1541,11 @@ mod tests {
 		let test_code = WASM_BINARY;
 		assert_eq!(
 			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_twox_256", &[]).unwrap(),
-			hex!("99e9d85137db46ef4bbea33613baafd56f963c64b1f3685a4eb4abd67ff6203a")
+			hex!("99e9d85137db46ef4bbea33613baafd56f963c64b1f3685a4eb4abd67ff6203a"),
 		);
 		assert_eq!(
 			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_twox_256", b"Hello world!").unwrap(),
-			hex!("b27dfd7f223f177f2a13647b533599af0c07f68bda23d96d059da2b451a35a74")
+			hex!("b27dfd7f223f177f2a13647b533599af0c07f68bda23d96d059da2b451a35a74"),
 		);
 	}
 

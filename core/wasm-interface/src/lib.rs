@@ -90,6 +90,7 @@ pub trait ExternalsContext {
 	/// Read memory from `address` into a vector.
 	fn read_memory(&self, address: *const u8, size: u32) -> Result<Vec<u8>, String> {
 		let mut vec = Vec::with_capacity(size as usize);
+		unsafe { vec.set_len(size as usize); }
 		self.read_memory_into(address, &mut vec)?;
 		Ok(vec)
 	}
