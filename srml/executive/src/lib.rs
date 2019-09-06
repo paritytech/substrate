@@ -621,7 +621,7 @@ mod tests {
 				));
 
 				if lock == WithdrawReasons::except(WithdrawReason::TransactionPayment) {
-					assert!(Executive::apply_extrinsic(xt).map(Result::is_ok).unwrap_or(false));
+					assert!(Executive::apply_extrinsic(xt).unwrap().is_ok());
 					// tx fee has been deducted.
 					assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 111 - 10 - weight);
 				} else {
