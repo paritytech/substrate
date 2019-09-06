@@ -596,9 +596,6 @@ mod tests {
 
 	#[test]
 	fn can_pay_for_tx_fee_on_full_lock() {
-		// NOTE: this feature (`WithdrawReasons::except(xxx)`) was at some point used to lock the
-		// bonded values of staking and democracy. Currently not used anymore and such modules lock
-		// for all operations. Nonetheless, this test checks this feature of `WithdrawReasons`.
 		let id: LockIdentifier = *b"0       ";
 		let execute_with_lock = |lock: WithdrawReasons| {
 			let mut t = new_test_ext(1);
