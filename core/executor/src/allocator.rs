@@ -374,12 +374,9 @@ mod tests {
 		let ptr = heap.allocate(PAGE_SIZE - 13);
 
 		// then
-		assert_eq!(ptr.is_err(), true);
-		if let Err(err) = ptr {
-			match err {
-				Error::AllocatorOutOfSpace => {},
-				_ => panic!("Expected out of space error"),
-			}
+		match ptr.unwrap_err() {
+			Error::AllocatorOutOfSpace => {},
+			e => panic!("Expected allocator out of space error, got: {:?}", e),
 		}
 	}
 
@@ -396,12 +393,9 @@ mod tests {
 
 		// then
 		// there is no room for another half page incl. its 8 byte prefix
-		assert_eq!(ptr2.is_err(), true);
-		if let Err(err) = ptr2 {
-			match err {
-				Error::AllocatorOutOfSpace => {},
-				_ => panic!("Expected out of space error"),
-			}
+		match ptr2.unwrap_err() {
+			Error::AllocatorOutOfSpace => {},
+			e => panic!("Expected allocator out of space error, got: {:?}", e),
 		}
 	}
 
@@ -429,12 +423,9 @@ mod tests {
 		let ptr = heap.allocate(MAX_POSSIBLE_ALLOCATION + 1);
 
 		// then
-		assert_eq!(ptr.is_err(), true);
-		if let Err(err) = ptr {
-			match err {
-				Error::RequestedAllocationTooLarge => {},
-				e => panic!("Expected allocation size too large error, got: {:?}", e),
-			}
+		match ptr.unwrap_err() {
+			Error::RequestedAllocationTooLarge => {},
+			e => panic!("Expected allocation size too large error, got: {:?}", e),
 		}
 	}
 
