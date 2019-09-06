@@ -114,7 +114,9 @@ pub struct Pool<B: ChainApi> {
 
 impl<B: ChainApi> Pool<B> {
 	/// Imports a bunch of unverified extrinsics to the pool
-	pub fn submit_at<T>(&self, at: &BlockId<B::Block>, xts: T) -> Result<Vec<Result<ExHash<B>, B::Error>>, B::Error> where
+	pub fn submit_at<T>(&self, at: &BlockId<B::Block>, xts: T, force: bool)
+		-> Result<Vec<Result<ExHash<B>, B::Error>>, B::Error>
+	where
 		T: IntoIterator<Item=ExtrinsicFor<B>>
 	{
 		let block_number = self.api.block_id_to_number(at)?
@@ -124,7 +126,7 @@ impl<B: ChainApi> Pool<B> {
 			.into_iter()
 			.map(|xt| -> Result<_, B::Error> {
 				let (hash, bytes) = self.api.hash_and_length(&xt);
-				if self.rotator.is_banned(&hash) {
+				if !force && self.rotator.is_banned(&hash) {
 					return Err(error::Error::TemporarilyBanned.into())
 				}
 
@@ -207,7 +209,7 @@ impl<B: ChainApi> Pool<B> {
 
 	/// Imports one unverified extrinsic to the pool
 	pub fn submit_one(&self, at: &BlockId<B::Block>, xt: ExtrinsicFor<B>) -> Result<ExHash<B>, B::Error> {
-		Ok(self.submit_at(at, ::std::iter::once(xt))?.pop().expect("One extrinsic passed; one result returned; qed")?)
+		Ok(self.submit_at(at, ::std::iter::once(xt), false)?.pop().expect("One extrinsic passed; one result returned; qed")?)
 	}
 
 	/// Import a single extrinsic and starts to watch their progress in the pool.
@@ -306,7 +308,7 @@ impl<B: ChainApi> Pool<B> {
 		// try to re-submit pruned transactions since some of them might be still valid.
 		// note that `known_imported_hashes` will be rejected here due to temporary ban.
 		let hashes = status.pruned.iter().map(|tx| tx.hash.clone()).collect::<Vec<_>>();
-		let results = self.submit_at(at, status.pruned.into_iter().map(|tx| tx.data.clone()))?;
+		let results = self.submit_at(at, status.pruned.into_iter().map(|tx| tx.data.clone()), false)?;
 
 		// Collect the hashes of transactions that now became invalid (meaning that they are successfully pruned).
 		let hashes = results.into_iter().enumerate().filter_map(|(idx, r)| match r.map_err(error::IntoPoolError::into_pool_error) {
