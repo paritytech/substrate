@@ -29,6 +29,9 @@ use sr_primitives::traits;
 /// Contracts RPC methods.
 #[rpc]
 pub trait ContractsApi {
+	/// Performs a call to a contract.
+	///
+	/// This can be used for calling getter-like functions which don't change any state.
 	#[rpc(name = "contracts_call")]
 	fn call(
 		&self,
@@ -40,6 +43,7 @@ pub trait ContractsApi {
 	) -> Result<ContractExecResult>;
 }
 
+/// An implementation of contract specific RPC methods.
 pub struct Contracts<C> {
 	client: Arc<C>,
 }
@@ -69,12 +73,9 @@ where
 		let best = self.client.info().best_hash;
 		let at = BlockId::hash(best);
 
-		const RUNTIME_ERROR: i64 = 1; // TODO:
-		const CONTRACT_ERROR: i64 = 2; // TODO:
-
 		let exec_result = api.call(&at, origin, dest, value, gas_limit, input_data)
 			.map_err(|e| Error {
-				code: ErrorCode::ServerError(RUNTIME_ERROR),
+				code: ErrorCode::ServerError(crate::constants::RUNTIME_ERROR),
 				message: "Runtime trapped while executing a contract.".into(),
 				data: Some(format!("{:?}", e).into()),
 			})?;
