@@ -704,10 +704,18 @@ decl_module! {
 				return Err("stash already bonded")
 			}
 
+			if <Ledger<T>>::exists(&stash) {
+				return Err("stash already acting as a controller")
+			}
+
 			let controller = T::Lookup::lookup(controller)?;
 
 			if <Ledger<T>>::exists(&controller) {
 				return Err("controller already paired")
+			}
+
+			if <Bonded<T>>::exists(&controller) {
+				return Err("controller is already bonded as a stash")
 			}
 
 			// reject a bond which is considered to be _dust_.
@@ -947,6 +955,9 @@ decl_module! {
 			if <Ledger<T>>::exists(&controller) {
 				return Err("controller already paired")
 			}
+			if <Bonded<T>>::exists(&controller) {
+				return Err("controller is already bonded as a stash")
+			}
 			if controller != old_controller {
 				<Bonded<T>>::insert(&stash, &controller);
 				if let Some(l) = <Ledger<T>>::take(&old_controller) {
@@ -976,7 +987,7 @@ decl_module! {
 		}
 
 		/// Force there to be a new era at the end of the next session. After this, it will be
-		/// reset to normal (non-forced) behaviour.
+		/// reset to normal (non-forced) behavior.
 		///
 		/// # <weight>
 		/// - No arguments.

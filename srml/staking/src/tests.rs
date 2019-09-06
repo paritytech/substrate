@@ -656,6 +656,28 @@ fn double_controlling_should_fail() {
 }
 
 #[test]
+fn bonding_controller_should_fail() {
+	with_externalities(&mut ExtBuilder::default()
+	.build(),
+	|| {
+		// put some money in accounts that we'll use
+		for i in 1..5 { let _ = Balances::make_free_balance_be(&i, 2000); }
+
+		// 1 = stash, 2 = controller, should work
+		assert_ok!(Staking::bond(Origin::signed(1), 2, 500, RewardDestination::default()));
+		// try to bond 2, should fail
+		assert_noop!(Staking::bond(Origin::signed(2), 3, 500, RewardDestination::default()), "stash already acting as a controller");
+		// try to bond 3 and set 1 as the controller, should fail
+		assert_noop!(Staking::bond(Origin::signed(3), 1, 500, RewardDestination::default()), "controller is already bonded as a stash");
+
+		// 3 = stash, 4 = controller, should work
+		assert_ok!(Staking::bond(Origin::signed(3), 4, 500, RewardDestination::default()));
+		// try to change the controller of 1 to 3, should fail
+		assert_noop!(Staking::set_controller(Origin::signed(1), 3), "controller is already bonded as a stash");
+	});
+}
+
+#[test]
 fn session_and_eras_work() {
 	with_externalities(&mut ExtBuilder::default()
 		.build(),
