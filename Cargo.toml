@@ -64,6 +64,7 @@ members = [
 	"core/utils/fork-tree",
 	"core/utils/wasm-builder",
 	"core/utils/wasm-builder-runner",
+	"core/authority-discovery",
 	"srml/support",
 	"srml/support/procedural",
 	"srml/support/procedural/tools",
