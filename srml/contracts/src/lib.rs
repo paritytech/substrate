@@ -103,7 +103,7 @@ use crate::account_db::{AccountDb, DirectAccountDb};
 use crate::wasm::{WasmLoader, WasmVm};
 
 pub use crate::gas::{Gas, GasMeter};
-pub use crate::exec::ExecResult;
+pub use crate::exec::{ExecResult, ExecReturnValue, ExecError, StatusCode};
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
@@ -649,7 +649,10 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-	/// TODO:
+	/// Perform a call to a specified contract.
+	///
+	/// This function is similar to `Self::call`, but doesn't perform any lookups and better
+	/// suitable for calling directly from Rust.
 	pub fn bare_call(
 		origin: T::AccountId,
 		dest: T::AccountId,
