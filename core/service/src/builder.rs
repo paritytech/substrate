@@ -28,7 +28,7 @@ use futures::{prelude::*, sync::mpsc};
 use futures03::{FutureExt as _, compat::Compat, StreamExt as _, TryStreamExt as _};
 use keystore::{Store as Keystore, KeyStorePtr};
 use log::{info, warn};
-use network::{FinalityProofProvider, OnDemand, NetworkService, NetworkStateInfo};
+use network::{FinalityProofProvider, OnDemand, NetworkService, NetworkStateInfo, DhtEvent};
 use network::{config::BoxFinalityProofRequestBuilder, specialization::NetworkSpecialization};
 use parking_lot::{Mutex, RwLock};
 use primitives::{Blake2Hasher, H256, Hasher};
@@ -76,6 +76,7 @@ pub struct ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFpr
 	transaction_pool: Arc<TExPool>,
 	rpc_extensions: TRpc,
 	rpc_builder: TRpcB,
+	dht_event_tx: Option<mpsc::Sender<DhtEvent>>,
 	marker: PhantomData<(TBl, TRtApi)>,
 }
 
@@ -197,6 +198,7 @@ where TGen: Serialize + DeserializeOwned + BuildStorage {
 			transaction_pool: Arc::new(()),
 			rpc_extensions: Default::default(),
 			rpc_builder,
+			dht_event_tx: None,
 			marker: PhantomData,
 		})
 	}
@@ -266,6 +268,7 @@ where TGen: Serialize + DeserializeOwned + BuildStorage {
 			transaction_pool: Arc::new(()),
 			rpc_extensions: Default::default(),
 			rpc_builder,
+			dht_event_tx: None,
 			marker: PhantomData,
 		})
 	}
@@ -312,6 +315,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			rpc_builder: self.rpc_builder,
+			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
@@ -354,6 +358,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			rpc_builder: self.rpc_builder,
+			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
@@ -380,6 +385,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			rpc_builder: self.rpc_builder,
+			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
@@ -421,6 +427,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			rpc_builder: self.rpc_builder,
+			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
@@ -479,6 +486,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			rpc_builder: self.rpc_builder,
+			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
@@ -516,6 +524,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			transaction_pool: Arc::new(transaction_pool),
 			rpc_extensions: self.rpc_extensions,
 			rpc_builder: self.rpc_builder,
+			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
@@ -542,9 +551,36 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			transaction_pool: self.transaction_pool,
 			rpc_extensions,
 			rpc_builder: self.rpc_builder,
+			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
+
+		/// Adds a dht event sender to builder to be used by the network to send dht events to the authority discovery
+		/// module.
+		pub fn with_dht_event_tx(
+			self,
+			dht_event_tx: mpsc::Sender<DhtEvent>,
+		) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
+								   TNetP, TExPool, TRpc, TRpcB, Backend>, Error> {
+			Ok(ServiceBuilder {
+				config: self.config,
+				client: self.client,
+				backend: self.backend,
+				keystore: self.keystore,
+				fetcher: self.fetcher,
+				select_chain: self.select_chain,
+				import_queue: self.import_queue,
+				finality_proof_request_builder: self.finality_proof_request_builder,
+				finality_proof_provider: self.finality_proof_provider,
+				network_protocol: self.network_protocol,
+				transaction_pool: self.transaction_pool,
+				rpc_extensions: self.rpc_extensions,
+				rpc_builder: self.rpc_builder,
+				dht_event_tx: Some(dht_event_tx),
+				marker: self.marker,
+			})
+		}
 }
 
 /// RPC handlers builder.
@@ -798,6 +834,7 @@ ServiceBuilder<
 			network_protocol,
 			transaction_pool,
 			rpc_extensions,
+			dht_event_tx,
 			rpc_builder,
 		) = (
 			self.client,
@@ -811,6 +848,7 @@ ServiceBuilder<
 			self.network_protocol,
 			self.transaction_pool,
 			self.rpc_extensions,
+			self.dht_event_tx,
 			self.rpc_builder,
 		);
 
@@ -829,7 +867,8 @@ ServiceBuilder<
 					finality_proof_provider,
 					network_protocol,
 					transaction_pool,
-					rpc_extensions
+					rpc_extensions,
+					dht_event_tx,
 				))
 			},
 			|h, c, tx| maintain_transaction_pool(h, c, tx),
