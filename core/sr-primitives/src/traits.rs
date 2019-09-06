@@ -590,77 +590,43 @@ impl<H: PartialEq + Eq + MaybeDebug> CheckEqual for super::generic::DigestItem<H
 	}
 }
 
-/// A type that implements Serialize and Debug when in std environment.
-#[cfg(feature = "std")]
-pub trait MaybeSerializeDebugButNotDeserialize: Serialize + Debug {}
-#[cfg(feature = "std")]
-impl<T: Serialize + Debug> MaybeSerializeDebugButNotDeserialize for T {}
+macro_rules! impl_maybe_marker {
+	( $( $(#[$doc:meta])+ $trait_name:ident: $($trait_bound:path),+ );+ ) => {
+		$(
+			$(#[$doc])+
+			#[cfg(feature = "std")]
+			pub trait $trait_name: $($trait_bound +)+ {}
+			#[cfg(feature = "std")]
+			impl<T: $($trait_bound +)+> $trait_name for T {}
 
-/// A type that implements Serialize and Debug when in std environment.
-#[cfg(not(feature = "std"))]
-pub trait MaybeSerializeDebugButNotDeserialize {}
-#[cfg(not(feature = "std"))]
-impl<T> MaybeSerializeDebugButNotDeserialize for T {}
+			$(#[$doc])+
+			#[cfg(not(feature = "std"))]
+			pub trait $trait_name {}
+			#[cfg(not(feature = "std"))]
+			impl<T> $trait_name for T {}
+		)+
+	}
+}
 
-/// A type that implements Serialize when in std environment.
-#[cfg(feature = "std")]
-pub trait MaybeSerialize: Serialize {}
-#[cfg(feature = "std")]
-impl<T: Serialize> MaybeSerialize for T {}
+impl_maybe_marker!(
+	/// A type that implements Debug when in std environment.
+	MaybeDebug: Debug;
 
-/// A type that implements Serialize when in std environment.
-#[cfg(not(feature = "std"))]
-pub trait MaybeSerialize {}
-#[cfg(not(feature = "std"))]
-impl<T> MaybeSerialize for T {}
+	/// A type that implements Display when in std environment.
+	MaybeDisplay: Display;
 
-/// A type that implements Serialize, DeserializeOwned and Debug when in std environment.
-#[cfg(feature = "std")]
-pub trait MaybeSerializeDebug: Serialize + DeserializeOwned + Debug {}
-#[cfg(feature = "std")]
-impl<T: Serialize + DeserializeOwned + Debug> MaybeSerializeDebug for T {}
+	/// A type that implements Hash when in std environment.
+	MaybeHash: ::rstd::hash::Hash;
 
-/// A type that implements Serialize, DeserializeOwned and Debug when in std environment.
-#[cfg(not(feature = "std"))]
-pub trait MaybeSerializeDebug {}
-#[cfg(not(feature = "std"))]
-impl<T> MaybeSerializeDebug for T {}
+	/// A type that implements Serialize when in std environment.
+	MaybeSerialize: Serialize;
 
-/// A type that implements Debug when in std environment.
-#[cfg(feature = "std")]
-pub trait MaybeDebug: Debug {}
-#[cfg(feature = "std")]
-impl<T: Debug> MaybeDebug for T {}
+	/// A type that implements Serialize, DeserializeOwned and Debug when in std environment.
+	MaybeSerializeDebug: Debug, DeserializeOwned, Serialize;
 
-/// A type that implements Debug when in std environment.
-#[cfg(not(feature = "std"))]
-pub trait MaybeDebug {}
-#[cfg(not(feature = "std"))]
-impl<T> MaybeDebug for T {}
-
-/// A type that implements Display when in std environment.
-#[cfg(feature = "std")]
-pub trait MaybeDisplay: Display {}
-#[cfg(feature = "std")]
-impl<T: Display> MaybeDisplay for T {}
-
-/// A type that implements Display when in std environment.
-#[cfg(not(feature = "std"))]
-pub trait MaybeDisplay {}
-#[cfg(not(feature = "std"))]
-impl<T> MaybeDisplay for T {}
-
-/// A type that implements Hash when in std environment.
-#[cfg(feature = "std")]
-pub trait MaybeHash: ::rstd::hash::Hash {}
-#[cfg(feature = "std")]
-impl<T: ::rstd::hash::Hash> MaybeHash for T {}
-
-/// A type that implements Hash when in std environment.
-#[cfg(not(feature = "std"))]
-pub trait MaybeHash {}
-#[cfg(not(feature = "std"))]
-impl<T> MaybeHash for T {}
+	/// A type that implements Serialize and Debug when in std environment.
+	MaybeSerializeDebugButNotDeserialize: Debug, Serialize
+);
 
 /// A type that provides a randomness beacon.
 pub trait RandomnessBeacon {
