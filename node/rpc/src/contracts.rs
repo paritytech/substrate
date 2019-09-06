@@ -18,20 +18,23 @@
 
 use std::sync::Arc;
 
+use client::blockchain::HeaderBackend;
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
-use client::blockchain::HeaderBackend;
 use node_primitives::{
-	AccountId, Balance, Block, BlockId, ContractsApi as ContractsRuntimeApi, ContractExecResult,
+	AccountId, Balance, Block, BlockId, ContractExecResult, ContractsApi as ContractsRuntimeApi,
 };
 use sr_primitives::traits;
 
 /// Contracts RPC methods.
 #[rpc]
 pub trait ContractsApi {
-	/// Performs a call to a contract.
+	/// Executes a call to a contract.
 	///
-	/// This can be used for calling getter-like functions which don't change any state.
+	/// This call is performed locally without submitting any transactions. Thus executing this
+	/// won't change any state. Nonetheless, the calling state-changing contracts is still possible.
+	///
+	/// This method is useful for calling getter-like methods on contracts.
 	#[rpc(name = "contracts_call")]
 	fn call(
 		&self,
@@ -49,6 +52,7 @@ pub struct Contracts<C> {
 }
 
 impl<C> Contracts<C> {
+	/// Create new `Contracts` with the given reference to the client.
 	pub fn new(client: Arc<C>) -> Self {
 		Contracts { client }
 	}
@@ -73,7 +77,8 @@ where
 		let best = self.client.info().best_hash;
 		let at = BlockId::hash(best);
 
-		let exec_result = api.call(&at, origin, dest, value, gas_limit, input_data)
+		let exec_result = api
+			.call(&at, origin, dest, value, gas_limit, input_data)
 			.map_err(|e| Error {
 				code: ErrorCode::ServerError(crate::constants::RUNTIME_ERROR),
 				message: "Runtime trapped while executing a contract.".into(),
