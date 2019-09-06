@@ -131,24 +131,26 @@ fn execute<C: Crypto>(matches: ArgMatches)
 			let mnemonic = generate_mnemonic(matches);
 			C::print_from_uri(mnemonic.phrase(), password, maybe_network);
 		}
-		("sign", Some(matches)) => {
-			let message = read_input_message(matches);
-			let signature = do_sign::<C>(matches, message, password);
-			println!("{}", signature);
-		},
-		("verify", Some(matches)) => {
-			let message = read_input_message(matches);
-			let valid_signature = do_verify::<C>(matches, message, password);
-			if valid_signature {
-				println!("Signature verifies correctly.");
-			} else {
-				println!("Signature invalid.");
-			}
-		},
 		("inspect", Some(matches)) => {
 			let uri = matches.value_of("uri")
 				.expect("URI parameter is required; thus it can't be None; qed");
 			C::print_from_uri(uri, password, maybe_network);
+		}
+		("sign", Some(matches)) => {
+			let should_decode = matches.is_present("hex");
+			let message = read_message_from_stdin(should_decode);
+			let signature = do_sign::<C>(matches, message, password);
+			println!("{}", signature);
+		}
+		("verify", Some(matches)) => {
+			let should_decode = matches.is_present("hex");
+			let message = read_message_from_stdin(should_decode);
+			let is_valid_signature = do_verify::<C>(matches, message, password);
+			if is_valid_signature {
+				println!("Signature verifies correctly.");
+			} else {
+				println!("Signature invalid.");
+			}
 		}
 		("vanity", Some(matches)) => {
 			let desired: String = matches.value_of("pattern").map(str::to_string).unwrap_or_default();
@@ -161,22 +163,24 @@ fn execute<C: Crypto>(matches: ArgMatches)
 		}
 		("transfer", Some(matches)) => {
 			let signer = read_input_pair::<Sr25519>(matches.value_of("from"), password);
+			let index = read_index(matches.value_of("index"));
+			let genesis_hash = read_genesis_hash(matches);
+
 			let to = read_public_key::<Sr25519>(matches.value_of("to"), password);
 			let amount = read_amount(matches.value_of("amount"));
-			let index = read_index(matches.value_of("index"));
 			let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
-			let genesis_hash = read_genesis_hash(matches);
 
 			print_extrinsic(function, index, signer, genesis_hash);
 		}
 		("sign-transaction", Some(matches)) => {
 			let signer = read_input_pair::<Sr25519>(matches.value_of("suri"), password);
 			let index = read_index(matches.value_of("nonce"));
+			let genesis_hash = read_genesis_hash(matches);
+
 			let call = matches.value_of("call").expect("call is required; qed");
 			let function: Call = hex::decode(&call).ok()
 				.and_then(|x| Decode::decode(&mut &x[..]).ok()).unwrap();
-			let genesis_hash = read_genesis_hash(matches);
-
+			
 			print_extrinsic(function, index, signer, genesis_hash);
 		}
 		_ => print_usage(&matches),
@@ -201,7 +205,6 @@ fn print_extrinsic(function: Call, index: Index, signer: <Sr25519 as Crypto>::Pa
 		(VERSION.spec_version as u32, genesis_hash, genesis_hash, (), (), (), ()),
 	);
 	let signature = raw_payload.using_encoded(|payload| {
-		println!("Signing {}", HexDisplay::from(&payload));
 		signer.sign(payload)
 	});
 	let (function, extra, _) = raw_payload.deconstruct();
@@ -215,8 +218,8 @@ fn print_extrinsic(function: Call, index: Index, signer: <Sr25519 as Crypto>::Pa
 	println!("0x{}", hex::encode(&extrinsic.encode()));
 }
 
+/// Creates a new randomly generated mnemonic phrase.
 fn generate_mnemonic(matches: &ArgMatches) -> Mnemonic {
-	// create a new randomly generated mnemonic phrase
 	let words = matches.value_of("words")
 		.map(|x| usize::from_str(x).expect("Invalid number given for --words"))
 		.map(|x| MnemonicType::for_word_count(x)
@@ -300,10 +303,10 @@ fn read_public_key<C: Crypto>(
 	}
 }
 
-fn read_input_message(matches: &ArgMatches) -> Vec<u8> {
+fn read_message_from_stdin(should_decode: bool) -> Vec<u8> {
 	let mut message = vec![];
 	stdin().lock().read_to_end(&mut message).expect("Error reading from stdin");
-	if matches.is_present("hex") {
+	if  should_decode {
 		message = hex::decode(&message).expect("Invalid hex in message");
 	}
 	message
