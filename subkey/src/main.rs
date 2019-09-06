@@ -23,7 +23,7 @@ use hex_literal::hex;
 use clap::{load_yaml, ArgMatches, App};
 use bip39::{Mnemonic, Language, MnemonicType};
 use primitives::{
-	ed25519, sr25519, H256, hexdisplay::HexDisplay, Pair, Public, blake2_256,
+	ed25519, sr25519, H256, hexdisplay::HexDisplay, Pair, Public,
 	crypto::{Ss58Codec, set_default_ss58_version, Ss58AddressFormat}
 };
 use codec::{Encode, Decode};
@@ -193,27 +193,23 @@ fn execute<C: Crypto>(matches: ArgMatches)
 
 			let function: Call = hex::decode(&call).ok()
 				.and_then(|x| Decode::decode(&mut &x[..]).ok()).unwrap();
-
 			let genesis_hash = read_genesis_hash(matches);
 
-			let raw_payload = (
+			let raw_payload = SignedPayload::from_raw(
 				function,
 				extra(index, 0),
-				(&genesis_hash, &genesis_hash),
+				(VERSION.spec_version as u32, genesis_hash, genesis_hash, (), (), ()),
 			);
-			let signature = raw_payload.using_encoded(|payload|
-				if payload.len() > 256 {
-					signer.sign(&blake2_256(payload)[..])
-				} else {
-					signer.sign(payload)
-				}
-			);
-
+			let signature = raw_payload.using_encoded(|payload| {
+				println!("Signing {}", HexDisplay::from(&payload));
+				signer.sign(payload)
+			});
+			let (function, extra, _) = raw_payload.deconstruct();
 			let extrinsic = UncheckedExtrinsic::new_signed(
-				raw_payload.0,
+				function,
 				signer.public().into(),
 				signature.into(),
-				extra(index, 0),
+				extra,
 			);
 
 			println!("0x{}", hex::encode(&extrinsic.encode()));
