@@ -160,18 +160,19 @@ fn execute<C: Crypto>(matches: ArgMatches)
 		}
 		("transfer", Some(matches)) => {
 			let signer = read_input_pair::<Sr25519>(matches.value_of("from"), password);
-			let index = read_index(matches.value_of("index"));
+			let index = read_required_parameter::<Index>(matches, "index");
 			let genesis_hash = read_genesis_hash(matches);
 
 			let to = read_public_key::<Sr25519>(matches.value_of("to"), password);
-			let amount = read_amount(matches.value_of("amount"));
+			let amount = read_required_parameter::<Balance>(matches, "amount");
 			let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
 
 			print_extrinsic(function, index, signer, genesis_hash);
 		}
 		("sign-transaction", Some(matches)) => {
 			let signer = read_input_pair::<Sr25519>(matches.value_of("suri"), password);
-			let index = read_index(matches.value_of("nonce"));
+			let index = read_required_parameter::<Index>(matches, "nonce");
+			
 			let genesis_hash = read_genesis_hash(matches);
 
 			let call = matches.value_of("call").expect("call is required; qed");
@@ -240,14 +241,11 @@ fn read_input_signature<C: Crypto>(matches: &ArgMatches) -> SignatureOf<C>
 	signature
 }
 
-fn read_index(matched_index: Option<&str>) -> Index {
-	let index = matched_index.expect("parameter is required; thus it can't be None; qed");
-	str::parse::<Index>(index).expect("Invalid 'nonce' parameter; expecting an integer.")
-}
-
-fn read_amount(matched_amount: Option<&str>) -> Balance {
-	let amount = matched_amount.expect("parameter is required; thus it can't be None; qed");
-	str::parse::<Balance>(amount).expect("Invalid 'amount' parameter; expecting an integer.")
+fn read_required_parameter<T: FromStr>(matches: &ArgMatches, name: &str) -> T 
+	where <T as FromStr>::Err: std::fmt::Debug
+{
+	let str_value = matches.value_of(name).expect("parameter is required; thus it can't be None; qed");
+	str::parse::<T>(str_value).expect("Invalid 'nonce' parameter; expecting an integer.")
 }
 
 fn read_public_key<C: Crypto>(
