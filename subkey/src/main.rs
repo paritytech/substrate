@@ -33,7 +33,7 @@ use node_runtime::{Call, UncheckedExtrinsic, SignedPayload, BalancesCall, Runtim
 
 mod vanity;
 
-trait Crypto {
+trait Crypto: Sized {
 	type Pair: Pair<Public=Self::Public>;
 	type Public: Public + Ss58Codec + AsRef<[u8]> + std::hash::Hash;
 	fn pair_from_suri(suri: &str, password: Option<&str>) -> Self::Pair {
@@ -49,7 +49,7 @@ trait Crypto {
 		if let Ok((pair, seed)) = Self::Pair::from_phrase(uri, password) {
 			println!("Secret phrase `{}` is account:\n  Secret seed: 0x{}\n  Public key (hex): 0x{}\n  Address (SS58): {}",
 				uri,
-				HexDisplay::from(&seed.as_ref()),
+				format_seed::<Self>(seed),
 				HexDisplay::from(&Self::public_from_pair(&pair)),
 				Self::ss58_from_pair(&pair)
 			);
@@ -93,6 +93,7 @@ impl Crypto for Sr25519 {
 
 type SignatureOf<C> = <<C as Crypto>::Pair as Pair>::Signature;
 type PublicOf<C> = <<C as Crypto>::Pair as Pair>::Public;
+type SeedOf<C> = <<C as Crypto>::Pair as Pair>::Seed;
 
 trait SignatureT: AsRef<[u8]> + AsMut<[u8]> + Default {}
 trait PublicT: Sized + AsRef<[u8]> + Ss58Codec {}
@@ -155,7 +156,7 @@ fn execute<C: Crypto>(matches: ArgMatches)
 		("vanity", Some(matches)) => {
 			let desired: String = matches.value_of("pattern").map(str::to_string).unwrap_or_default();
 			let result = vanity::generate_key::<C>(&desired).expect("Key generation failed");
-			let formated_seed = format!("0x{}", HexDisplay::from(&result.seed.as_ref()));
+			let formated_seed = format_seed::<C>(result.seed);
 			C::print_from_uri(&formated_seed, None, maybe_network);
 		}
 		("transfer", Some(matches)) => {
@@ -172,7 +173,6 @@ fn execute<C: Crypto>(matches: ArgMatches)
 		("sign-transaction", Some(matches)) => {
 			let signer = read_input_pair::<Sr25519>(matches.value_of("suri"), password);
 			let index = read_required_parameter::<Index>(matches, "nonce");
-			
 			let genesis_hash = read_genesis_hash(matches);
 
 			let call = matches.value_of("call").expect("call is required; qed");
@@ -287,6 +287,10 @@ fn format_signature<C: Crypto>(signature: SignatureOf<C>) -> String {
 	format!("{}", hex::encode(&signature))
 }
 
+fn format_seed<C: Crypto>(seed: SeedOf<C>) -> String {
+	format!("0x{}", HexDisplay::from(&seed.as_ref()))
+}
+
 fn print_extrinsic(function: Call, index: Index, signer: <Sr25519 as Crypto>::Pair, genesis_hash: H256) {
 	let extra = |i: Index, f: Balance| {
 		(
@@ -348,7 +352,7 @@ mod tests {
 			password,
 		).unwrap();
 		let public_key = format!("0x{}", HexDisplay::from(&CryptoType::public_from_pair(&pair)));
-		let seed = format!("0x{}", HexDisplay::from(&seed.as_ref()));
+		let seed = format_seed::<CryptoType>(seed);
 
 		// Sign a message using previous seed.
 		let arg_vec = vec![
