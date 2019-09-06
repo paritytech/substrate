@@ -35,6 +35,15 @@ pub type StorageCollection = Vec<(Vec<u8>, Option<Vec<u8>>)>;
 /// In memory arrays of storage values for multiple child tries.
 pub type ChildStorageCollection = Vec<(Vec<u8>, StorageCollection)>;
 
+pub(crate) struct ImportSummary<Block: BlockT> {
+	pub(crate) hash: Block::Hash,
+	pub(crate) origin: BlockOrigin,
+	pub(crate) header: Block::Header,
+	pub(crate) is_new_best: bool,
+	pub(crate) storage_changes: Option<(StorageCollection, ChildStorageCollection)>,
+	pub(crate) retracted: Vec<Block::Hash>,
+}
+
 /// Import operation wrapper
 pub struct ClientImportOperation<
 	Block: BlockT,
@@ -42,15 +51,7 @@ pub struct ClientImportOperation<
 	B: Backend<Block, H>,
 > {
 	pub(crate) op: B::BlockImportOperation,
-	pub(crate) notify_imported: Option<(
-		Block::Hash,
-		BlockOrigin,
-		Block::Header,
-		bool,
-		Option<(
-			StorageCollection,
-			ChildStorageCollection,
-		)>)>,
+	pub(crate) notify_imported: Option<ImportSummary<Block>>,
 	pub(crate) notify_finalized: Vec<Block::Hash>,
 }
 

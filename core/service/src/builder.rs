@@ -871,7 +871,7 @@ ServiceBuilder<
 					dht_event_tx,
 				))
 			},
-			|h, c, tx| maintain_transaction_pool(h, c, tx),
+			|h, c, tx, r| maintain_transaction_pool(h, c, tx, r),
 			|n, o, p, ns, v| offchain_workers(n, o, p, ns, v),
 			|c, ssb, si, te, tp, ext, ks| start_rpc(&rpc_builder, c, ssb, si, te, tp, ext, ks),
 		)
@@ -924,6 +924,7 @@ pub(crate) fn maintain_transaction_pool<Api, Backend, Block, Executor, PoolApi>(
 	id: &BlockId<Block>,
 	client: &Client<Backend, Executor, Block, Api>,
 	transaction_pool: &TransactionPool<PoolApi>,
+	retracted: &[Block::Hash],
 ) -> error::Result<()> where
 	Block: BlockT<Hash = <Blake2Hasher as primitives::Hasher>::Out>,
 	Backend: client::backend::Backend<Block, Blake2Hasher>,
@@ -932,6 +933,16 @@ pub(crate) fn maintain_transaction_pool<Api, Backend, Block, Executor, PoolApi>(
 	Executor: client::CallExecutor<Block, Blake2Hasher>,
 	PoolApi: txpool::ChainApi<Hash = Block::Hash, Block = Block>,
 {
+	// Put transactions from retracted blocks back into the pool.
+	for r in retracted {
+		if let Some(block) = client.block(&BlockId::hash(*r))? {
+			let extrinsics = block.block.extrinsics();
+			if let Err(e) = transaction_pool.submit_at(id, extrinsics.iter().cloned(), true) {
+				warn!("Error re-submitting transactions: {:?}", e);
+			}
+		}
+	}
+
 	// Avoid calling into runtime if there is nothing to prune from the pool anyway.
 	if transaction_pool.status().is_empty() {
 		return Ok(())
@@ -1007,10 +1018,67 @@ mod tests {
 			&id,
 			&client,
 			&pool,
+			&[]
 		).unwrap();
 
 		// then
 		assert_eq!(pool.status().ready, 0);
+		assert_eq!(pool.status().future, 0);
+	}
+
+	#[test]
+	fn should_add_reverted_transactions_to_the_pool() {
+		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
+		let client = Arc::new(client);
+		let pool = TransactionPool::new(Default::default(), ::transaction_pool::ChainApi::new(client.clone()));
+		let transaction = Transfer {
+			amount: 5,
+			nonce: 0,
+			from: AccountKeyring::Alice.into(),
+			to: Default::default(),
+		}.into_signed_tx();
+		let best = longest_chain.best_chain().unwrap();
+
+		// store the transaction in the pool
+		pool.submit_one(&BlockId::hash(best.hash()), transaction.clone()).unwrap();
+
+		// import the block
+		let mut builder = client.new_block(Default::default()).unwrap();
+		builder.push(transaction.clone()).unwrap();
+		let block = builder.bake().unwrap();
+		let block1_hash = block.header().hash();
+		let id = BlockId::hash(block1_hash.clone());
+		client.import(BlockOrigin::Own, block).unwrap();
+
+		// fire notification - this should clean up the queue
+		assert_eq!(pool.status().ready, 1);
+		maintain_transaction_pool(
+			&id,
+			&client,
+			&pool,
+			&[]
+		).unwrap();
+
+		// then
+		assert_eq!(pool.status().ready, 0);
+		assert_eq!(pool.status().future, 0);
+
+		// import second block
+		let builder = client.new_block_at(&BlockId::hash(best.hash()), Default::default()).unwrap();
+		let block = builder.bake().unwrap();
+		let id = BlockId::hash(block.header().hash());
+		client.import(BlockOrigin::Own, block).unwrap();
+
+		// fire notification - this should add the transaction back to the pool.
+		maintain_transaction_pool(
+			&id,
+			&client,
+			&pool,
+			&[block1_hash]
+		).unwrap();
+
+		// then
+		assert_eq!(pool.status().ready, 1);
 		assert_eq!(pool.status().future, 0);
 	}
 }
