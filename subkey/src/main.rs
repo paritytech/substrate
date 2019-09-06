@@ -104,17 +104,7 @@ impl PublicT for ed25519::Public {}
 
 fn execute<C: Crypto>(matches: ArgMatches)
 	where SignatureOf<C>: SignatureT, PublicOf<C>: PublicT,
-{
-	let extra = |i: Index, f: Balance| {
-		(
-			system::CheckVersion::<Runtime>::new(),
-			system::CheckGenesis::<Runtime>::new(),
-			system::CheckEra::<Runtime>::from(Era::Immortal),
-			system::CheckNonce::<Runtime>::from(i),
-			system::CheckWeight::<Runtime>::new(),
-			balances::TakeFees::<Runtime>::from(f),
-		)
-	}; 
+{ 
 	let password = matches.value_of("password");
 	let maybe_network: Option<Ss58AddressFormat> = matches.value_of("network")
 		.map(|network| network.try_into()
@@ -157,65 +147,58 @@ fn execute<C: Crypto>(matches: ArgMatches)
 			);
 		}
 		("transfer", Some(matches)) => {
-			let signer = matches.value_of("from")
-				.expect("parameter is required; thus it can't be None; qed");
-			let signer = Sr25519::pair_from_suri(signer, password);
-
+			let signer = read_input_pair::<Sr25519>(matches.value_of("from"), password);
 			let to = read_public_key::<Sr25519>(matches.value_of("to"), password);
 			let amount = read_amount(matches.value_of("amount"));
 			let index = read_index(matches.value_of("index"));
-
 			let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
 			let genesis_hash = read_genesis_hash(matches);
 
-			let raw_payload = SignedPayload::from_raw(
-				function,
-				extra(index, 0),
-				(VERSION.spec_version as u32, genesis_hash, genesis_hash, (), (), ()),
-			);
-			let signature = raw_payload.using_encoded(|payload| {
-				println!("Signing {}", HexDisplay::from(&payload));
-				signer.sign(payload)
-			});
-			let (function, extra, _) = raw_payload.deconstruct();
-			let extrinsic = UncheckedExtrinsic::new_signed(
-				function,
-				signer.public().into(),
-				signature.into(),
-				extra,
-			);
-			println!("0x{}", hex::encode(&extrinsic.encode()));
+			print_extrinsic(function, index, signer, genesis_hash);
 		}
 		("sign-transaction", Some(matches)) => {
-			let signer = read_input_pair::<Sr25519>(matches, password);
+			let signer = read_input_pair::<Sr25519>(matches.value_of("suri"), password);
 			let index = read_index(matches.value_of("nonce"));
 			let call = matches.value_of("call").expect("call is required; qed");
-
 			let function: Call = hex::decode(&call).ok()
 				.and_then(|x| Decode::decode(&mut &x[..]).ok()).unwrap();
 			let genesis_hash = read_genesis_hash(matches);
 
-			let raw_payload = SignedPayload::from_raw(
-				function,
-				extra(index, 0),
-				(VERSION.spec_version as u32, genesis_hash, genesis_hash, (), (), ()),
-			);
-			let signature = raw_payload.using_encoded(|payload| {
-				println!("Signing {}", HexDisplay::from(&payload));
-				signer.sign(payload)
-			});
-			let (function, extra, _) = raw_payload.deconstruct();
-			let extrinsic = UncheckedExtrinsic::new_signed(
-				function,
-				signer.public().into(),
-				signature.into(),
-				extra,
-			);
-
-			println!("0x{}", hex::encode(&extrinsic.encode()));
+			print_extrinsic(function, index, signer, genesis_hash);
 		}
 		_ => print_usage(&matches),
 	}
+}
+
+fn print_extrinsic(function: Call, index: Index, signer: <Sr25519 as Crypto>::Pair, genesis_hash: H256) {
+	let extra = |i: Index, f: Balance| {
+		(
+			system::CheckVersion::<Runtime>::new(),
+			system::CheckGenesis::<Runtime>::new(),
+			system::CheckEra::<Runtime>::from(Era::Immortal),
+			system::CheckNonce::<Runtime>::from(i),
+			system::CheckWeight::<Runtime>::new(),
+			balances::TakeFees::<Runtime>::from(f),
+		)
+	};
+	let raw_payload = SignedPayload::from_raw(
+		function,
+		extra(index, 0),
+		(VERSION.spec_version as u32, genesis_hash, genesis_hash, (), (), ()),
+	);
+	let signature = raw_payload.using_encoded(|payload| {
+		println!("Signing {}", HexDisplay::from(&payload));
+		signer.sign(payload)
+	});
+	let (function, extra, _) = raw_payload.deconstruct();
+	let extrinsic = UncheckedExtrinsic::new_signed(
+		function,
+		signer.public().into(),
+		signature.into(),
+		extra,
+	);
+
+	println!("0x{}", hex::encode(&extrinsic.encode()));
 }
 
 fn generate_mnemonic(matches: &ArgMatches) -> Mnemonic {
@@ -231,7 +214,7 @@ fn generate_mnemonic(matches: &ArgMatches) -> Mnemonic {
 fn do_sign<C: Crypto>(matches: &ArgMatches, message: Vec<u8>, password: Option<&str>) -> String
 	where SignatureOf<C>: SignatureT, PublicOf<C>: PublicT,
 {
-	let pair = read_input_pair::<C>(matches, password);
+	let pair = read_input_pair::<C>(matches.value_of("suri"), password);
 	let signature = pair.sign(&message);
 	format_signature::<C>(signature)
 }
@@ -313,13 +296,12 @@ fn read_input_message(matches: &ArgMatches) -> Vec<u8> {
 }
 
 fn read_input_pair<C: Crypto>(
-	matches: &ArgMatches,
+	matched_suri: Option<&str>,
 	password: Option<&str>,
 ) -> <C as Crypto>::Pair
 	where SignatureOf<C>: SignatureT, PublicOf<C>: PublicT,
 {
-	let suri = matches.value_of("suri")
-		.expect("parameter is required; thus it can't be None; qed");
+	let suri = matched_suri.expect("parameter is required; thus it can't be None; qed");
 	C::pair_from_suri(suri, password)
 }
 
