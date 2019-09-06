@@ -609,7 +609,7 @@ mod tests {
 				);
 				let xt = sr_primitives::testing::TestXt(
 					sign_extra(1, 0, 0),
-					Call::System(SystemCall::remark(vec![1u8]))
+					Call::System(SystemCall::remark(vec![1u8])),
 				);
 				let weight = xt.get_dispatch_info().weight as u64;
 				Executive::initialize_block(&Header::new(
