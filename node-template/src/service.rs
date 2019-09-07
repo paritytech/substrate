@@ -6,7 +6,7 @@ use substrate_client::LongestChain;
 use babe::{import_queue, start_babe, Config};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use futures::prelude::*;
-use node_template_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi, WASM_BINARY};
+use node_template_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi};
 use substrate_service::{error::{Error as ServiceError}, AbstractService, Configuration, ServiceBuilder};
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use inherents::InherentDataProviders;
