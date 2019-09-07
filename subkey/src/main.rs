@@ -40,32 +40,34 @@ trait Crypto: Sized {
 		Self::Pair::from_string(suri, password).expect("Invalid phrase")
 	}
 	fn ss58_from_pair(pair: &Self::Pair) -> String { pair.public().to_ss58check() }
-	fn public_from_pair(pair: &Self::Pair) -> Vec<u8> { pair.public().as_ref().to_owned() }
+	fn public_from_pair(pair: &Self::Pair) -> Self::Public { pair.public() }
 	fn print_from_uri(
 		uri: &str,
 		password: Option<&str>,
 		network_override: Option<Ss58AddressFormat>,
 	) where <Self::Pair as Pair>::Public: PublicT {
 		if let Ok((pair, seed)) = Self::Pair::from_phrase(uri, password) {
-			println!("Secret phrase `{}` is account:\n  Secret seed: 0x{}\n  Public key (hex): 0x{}\n  Address (SS58): {}",
+			let public_key = Self::public_from_pair(&pair);
+			println!("Secret phrase `{}` is account:\n  Secret seed: 0x{}\n  Public key (hex): {}\n  Address (SS58): {}",
 				uri,
 				format_seed::<Self>(seed),
-				HexDisplay::from(&Self::public_from_pair(&pair)),
+				format_public_key::<Self>(public_key),
 				Self::ss58_from_pair(&pair)
 			);
 		} else if let Ok(pair) = Self::Pair::from_string(uri, password) {
-			println!("Secret Key URI `{}` is account:\n  Public key (hex): 0x{}\n  Address (SS58): {}",
+			let public_key = Self::public_from_pair(&pair);
+			println!("Secret Key URI `{}` is account:\n  Public key (hex): {}\n  Address (SS58): {}",
 				uri,
-				HexDisplay::from(&Self::public_from_pair(&pair)),
+				format_public_key::<Self>(public_key),
 				Self::ss58_from_pair(&pair)
 			);
-		} else if let Ok((public, v)) = <Self::Pair as Pair>::Public::from_string_with_version(uri) {
+		} else if let Ok((public_key, v)) = <Self::Pair as Pair>::Public::from_string_with_version(uri) {
 			let v = network_override.unwrap_or(v);
 			println!("Public Key URI `{}` is account:\n  Network ID/version: {}\n  Public key (hex): 0x{}\n  Address (SS58): {}",
 				uri,
 				String::from(v),
-				HexDisplay::from(&public.as_ref()),
-				public.to_ss58check_with_version(v)
+				format_public_key::<Self>(public_key.clone()),
+				public_key.to_ss58check_with_version(v)
 			);
 		} else {
 			println!("Invalid phrase/URI given");
@@ -200,17 +202,32 @@ fn do_sign<C: Crypto>(matches: &ArgMatches, message: Vec<u8>, password: Option<&
 {
 	let pair = read_input_pair::<C>(matches.value_of("suri"), password);
 	let signature = pair.sign(&message);
-	format_signature::<C>(signature)
+	format_signature::<C>(&signature)
 }
 
 fn do_verify<C: Crypto>(matches: &ArgMatches, message: Vec<u8>, password: Option<&str>) -> bool
 	where SignatureOf<C>: SignatureT, PublicOf<C>: PublicT,
 {
-	let signature = read_input_signature::<C>(matches);
+	let signature = read_signature::<C>(matches);
 	let pubkey = read_public_key::<C>(matches.value_of("uri"), password);
 	<<C as Crypto>::Pair as Pair>::verify(&signature, &message, &pubkey)
 }
 
+fn read_message_from_stdin(should_decode: bool) -> Vec<u8> {
+	let mut message = vec![];
+	stdin().lock().read_to_end(&mut message).expect("Error reading from stdin");
+	if  should_decode {
+		message = hex::decode(&message).expect("Invalid hex in message");
+	}
+	message
+}
+
+fn read_required_parameter<T: FromStr>(matches: &ArgMatches, name: &str) -> T
+	where <T as FromStr>::Err: std::fmt::Debug
+{
+	let str_value = matches.value_of(name).expect("parameter is required; thus it can't be None; qed");
+	str::parse::<T>(str_value).expect("Invalid 'nonce' parameter; expecting an integer.")
+}
 
 fn read_genesis_hash(matches: &ArgMatches) -> H256 {
 	let genesis_hash: Hash = match matches.value_of("genesis").unwrap_or("alex") {
@@ -223,7 +240,7 @@ fn read_genesis_hash(matches: &ArgMatches) -> H256 {
 	genesis_hash
 }
 
-fn read_input_signature<C: Crypto>(matches: &ArgMatches) -> SignatureOf<C>
+fn read_signature<C: Crypto>(matches: &ArgMatches) -> SignatureOf<C>
 	where SignatureOf<C>: SignatureT, PublicOf<C>: PublicT,
 {
 	let sig_data = matches.value_of("sig")
@@ -239,13 +256,6 @@ fn read_input_signature<C: Crypto>(matches: &ArgMatches) -> SignatureOf<C>
 	}
 	signature.as_mut().copy_from_slice(&sig_data);
 	signature
-}
-
-fn read_required_parameter<T: FromStr>(matches: &ArgMatches, name: &str) -> T 
-	where <T as FromStr>::Err: std::fmt::Debug
-{
-	let str_value = matches.value_of(name).expect("parameter is required; thus it can't be None; qed");
-	str::parse::<T>(str_value).expect("Invalid 'nonce' parameter; expecting an integer.")
 }
 
 fn read_public_key<C: Crypto>(
@@ -264,15 +274,6 @@ fn read_public_key<C: Crypto>(
 	}
 }
 
-fn read_message_from_stdin(should_decode: bool) -> Vec<u8> {
-	let mut message = vec![];
-	stdin().lock().read_to_end(&mut message).expect("Error reading from stdin");
-	if  should_decode {
-		message = hex::decode(&message).expect("Invalid hex in message");
-	}
-	message
-}
-
 fn read_input_pair<C: Crypto>(
 	matched_suri: Option<&str>,
 	password: Option<&str>,
@@ -283,13 +284,18 @@ fn read_input_pair<C: Crypto>(
 	C::pair_from_suri(suri, password)
 }
 
-fn format_signature<C: Crypto>(signature: SignatureOf<C>) -> String {
-	format!("{}", hex::encode(&signature))
+fn format_signature<C: Crypto>(signature: &SignatureOf<C>) -> String {
+	format!("{}", hex::encode(signature))
 }
 
 fn format_seed<C: Crypto>(seed: SeedOf<C>) -> String {
 	format!("0x{}", HexDisplay::from(&seed.as_ref()))
 }
+
+fn format_public_key<C: Crypto>(public_key: PublicOf<C>) -> String {
+	format!("0x{}", HexDisplay::from(&public_key.as_ref()))
+}
+
 
 fn print_extrinsic(function: Call, index: Index, signer: <Sr25519 as Crypto>::Pair, genesis_hash: H256) {
 	let extra = |i: Index, f: Balance| {
@@ -338,10 +344,7 @@ mod tests {
 		let password = None;
 
 		// Generate public key and seed.
-		let arg_vec = vec![
-			"subkey",
-			"generate",
-		];
+		let arg_vec = vec!["subkey", "generate"];
 
 		let matches = app.clone().get_matches_from(arg_vec);
 		let matches = matches.subcommand().1.unwrap();
@@ -355,23 +358,16 @@ mod tests {
 		let seed = format_seed::<CryptoType>(seed);
 
 		// Sign a message using previous seed.
-		let arg_vec = vec![
-			"subkey",
-			"sign",
-			&seed[..],
-		];
+		let arg_vec = vec!["subkey", "sign", &seed[..]];
+
 		let matches = app.get_matches_from(arg_vec);
 		let matches = matches.subcommand().1.unwrap();
 		let message = "Blah Blah\n".as_bytes().to_vec();
 		let signature = do_sign::<CryptoType>(matches, message.clone(), password);
 
 		// Verify the previous signature.
-		let arg_vec = vec![
-			"subkey",
-			"verify",
-			&signature[..],
-			&public_key[..],
-		];
+		let arg_vec = vec!["subkey", "verify", &signature[..], &public_key[..]];
+
 		let matches = App::from_yaml(yaml).get_matches_from(arg_vec);
 		let matches = matches.subcommand().1.unwrap();
 		assert!(do_verify::<CryptoType>(matches, message, password));
