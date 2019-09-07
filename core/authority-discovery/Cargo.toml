@@ -9,7 +9,7 @@ build = "build.rs"
 prost-build = "0.5"
 
 [dependencies]
-authority-discovery-primitives = { package = "substrate-authority-discovery-primitives", path = "./primitives", default-features = false }
+authority-discovery-primitives = { package = "substrate-authority-discovery-primitives", path = "./primitives" }
 bytes = "0.4"
 client = { package = "substrate-client", path = "../../core/client" }
 codec = { package = "parity-scale-codec", default-features = false, version = "1.0.3" }
