@@ -6,10 +6,10 @@ edition = "2018"
 
 [dependencies]
 serde = { version = "1.0.99", optional = true, features = ["derive"] }
-pwasm-utils = { git = "https://github.com/paritytech/wasm-utils", branch = "bump-parity-wasm", default-features = false }
+pwasm-utils = "0.11.0"
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 parity-wasm = { version = "0.40.1", default-features = false }
-wasmi-validation = { git = "https://github.com/paritytech/wasmi", branch = "update-parity-wasm", optional = true }
+wasmi-validation = "0.2.0"
 primitives = { package = "substrate-primitives",  path = "../../core/primitives", default-features = false }
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 runtime-io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
