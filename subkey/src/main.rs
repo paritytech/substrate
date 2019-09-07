@@ -192,7 +192,9 @@ where
 			let amount = read_required_parameter::<Balance>(matches, "amount");
 			let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
 
-			print_extrinsic(function, index, signer, genesis_hash);
+			let extrinsic = create_extrinsic(function, index, signer, genesis_hash);
+
+			print_extrinsic(extrinsic);
 		}
 		("sign-transaction", Some(matches)) => {
 			let signer = read_input_pair::<Sr25519>(matches.value_of("suri"), password);
@@ -205,7 +207,9 @@ where
 				.and_then(|x| Decode::decode(&mut &x[..]).ok())
 				.unwrap();
 
-			print_extrinsic(function, index, signer, genesis_hash);
+			let extrinsic = create_extrinsic(function, index, signer, genesis_hash);
+
+			print_extrinsic(extrinsic);
 		}
 		_ => print_usage(&matches),
 	}
@@ -348,12 +352,12 @@ fn format_public_key<C: Crypto>(public_key: PublicOf<C>) -> String {
 	format!("0x{}", HexDisplay::from(&public_key.as_ref()))
 }
 
-fn print_extrinsic(
+fn create_extrinsic(
 	function: Call,
 	index: Index,
 	signer: <Sr25519 as Crypto>::Pair,
 	genesis_hash: H256,
-) {
+) -> UncheckedExtrinsic {
 	let extra = |i: Index, f: Balance| {
 		(
 			system::CheckVersion::<Runtime>::new(),
@@ -380,9 +384,16 @@ fn print_extrinsic(
 	);
 	let signature = raw_payload.using_encoded(|payload| signer.sign(payload));
 	let (function, extra, _) = raw_payload.deconstruct();
-	let extrinsic =
-		UncheckedExtrinsic::new_signed(function, signer.public().into(), signature.into(), extra);
+	
+	UncheckedExtrinsic::new_signed(
+		function,
+		signer.public().into(),
+		signature.into(),
+		extra,
+	)
+}
 
+fn print_extrinsic(extrinsic: UncheckedExtrinsic) {
 	println!("0x{}", hex::encode(&extrinsic.encode()));
 }
 
@@ -441,6 +452,12 @@ mod tests {
 	#[test]
 	fn generate_sign_verify_should_work_for_sr25519() {
 		test_generate_sign_verify::<Sr25519>();
+	}
+
+	#[test]
+	fn extrinsic_creation_should_work() {
+		// print_extrinsic(function: Call, index: Index, signer: <Sr25519 as Crypto>::Pair, genesis_hash: H256)
+		// assert!(uxt.check(&Default::default()).is_ok());
 	}
 
 	#[test]
