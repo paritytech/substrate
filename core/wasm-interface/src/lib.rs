@@ -56,7 +56,7 @@ impl<T> Pointer<T> {
 
 	/// Calculate the offset from this pointer.
 	///
-	/// `offset`is in units of `T`. So, `3` means `3 * mem::size_of::<T>()` as offset to the pointer.
+	/// `offset` is in units of `T`. So, `3` means `3 * mem::size_of::<T>()` as offset to the pointer.
 	pub fn offset(self, offset: u32) -> Self {
 		Self {
 			ptr: self.ptr + offset * mem::size_of::<T>() as u32,
@@ -209,7 +209,6 @@ pub trait InherentExternals {
 	///
 	/// - `index` - Is equal to the index given to `FunctionRef`.
 	/// - `args` - The arguments given to the function.
-	/// - `context` - Provides access to the allocator and memory of the memory wasm instance.
 	fn execute_function<A: Iterator<Item=Value>>(
 		&mut self,
 		index: usize,
