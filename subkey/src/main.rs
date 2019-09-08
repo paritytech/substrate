@@ -146,6 +146,11 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 			let mut message = vec![];
 			stdin().lock().read_to_end(&mut message).expect("Error reading from stdin");
 			if matches.is_present("hex") {
+				if let Some(last_char) = message.last() {
+					if *last_char == b'\n' {
+						message.pop();
+					}
+				}
 				message = hex::decode(&message).expect("Invalid hex in message");
 			}
 			let sig = pair.sign(&message);
@@ -264,6 +269,11 @@ fn execute<C: Crypto>(matches: clap::ArgMatches) where
 			let mut message = vec![];
 			stdin().lock().read_to_end(&mut message).expect("Error reading from stdin");
 			if matches.is_present("hex") {
+				if let Some(last_char) = message.last() {
+					if *last_char == b'\n' {
+						message.pop();
+					}
+				}
 				message = hex::decode(&message).expect("Invalid hex in message");
 			}
 			if <<C as Crypto>::Pair as Pair>::verify(&sig, &message, &pubkey) {
