@@ -815,12 +815,7 @@ impl<B: BlockT> ChainSync<B> {
 	/// with or without errors.
 	pub fn on_justification_import(&mut self, hash: B::Hash, number: NumberFor<B>, success: bool) {
 		let finalization_result = if success { Ok((hash, number)) } else { Err(()) };
-		if !self.extra_justifications.try_finalize_root((hash, number), finalization_result, true) {
-			debug!(target: "sync", "Got justification import result for unknown justification {:?} {:?} request.",
-				hash,
-				number,
-			)
-		}
+		self.extra_justifications.try_finalize_root((hash, number), finalization_result, true);
 		self.is_idle = false;
 	}
 
