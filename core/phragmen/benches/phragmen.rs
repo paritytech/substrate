@@ -152,9 +152,10 @@ macro_rules! phragmen_benches {
         #[bench]
         fn $name(b: &mut Bencher) {
 			let (v, n, t, e, eq_iter, eq_tol) = $tup;
-			println!("");
+			println!("----------------------");
 			println!(
-				r#"++ Benchmark: {} Validators // {} Nominators // {} Edges-per-nominator // {} total edges // electing {} // Equalize: {} iterations -- {} tolerance"#,
+				"++ Benchmark: {} Validators // {} Nominators // {} Edges-per-nominator // {} \
+				total edges // electing {} // Equalize: {} iterations -- {} tolerance",
 				v, n, e, e * n, t, eq_iter, eq_tol,
 			);
 			do_phragmen(b, v, n, t, e, eq_iter, eq_tol);

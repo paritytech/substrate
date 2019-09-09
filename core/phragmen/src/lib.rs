@@ -495,14 +495,14 @@ mod tests {
 	use super::{elect, ACCURACY, PhragmenResult};
 	use sr_primitives::traits::{Convert, Member, SaturatedConversion};
 	use rstd::collections::btree_map::BTreeMap;
-	use support::assert_eq_uvec;
+	use support::{assert_eq_uvec, assert_eq_error_rate};
 
-	pub struct TestCurrencyToVote;
-	impl Convert<u64, u64> for TestCurrencyToVote {
-		fn convert(x: u64) -> u64 { x }
+	struct TestCurrencyToVote;
+	impl Convert<Balance, u64> for TestCurrencyToVote {
+		fn convert(x: Balance) -> u64 { x.saturated_into() }
 	}
-	impl Convert<u128, u64> for TestCurrencyToVote {
-		fn convert(x: u128) -> u64 { x.saturated_into() }
+	impl Convert<u128, Balance> for TestCurrencyToVote {
+		fn convert(x: u128) -> Balance { x }
 	}
 
 	#[derive(Default, Debug)]
@@ -530,13 +530,16 @@ mod tests {
 
 	type _PhragmenAssignment<AccountId> = (AccountId, f64);
 
+	type Balance = u128;
+	type AccountId = u64;
+
 	#[derive(Debug)]
-	pub struct _PhragmenResult<AccountId> {
+	struct _PhragmenResult<AccountId> {
 		pub winners: Vec<AccountId>,
 		pub assignments: Vec<(AccountId, Vec<_PhragmenAssignment<AccountId>>)>
 	}
 
-	pub fn elect_poc<AccountId, FS>(
+	fn elect_poc<AccountId, FS>(
 		candidate_count: usize,
 		minimum_candidate_count: usize,
 		initial_candidates: Vec<AccountId>,
@@ -545,7 +548,7 @@ mod tests {
 		self_vote: bool,
 	) -> Option<_PhragmenResult<AccountId>> where
 		AccountId: Default + Ord + Member + Copy,
-		for<'r> FS: Fn(&'r AccountId) -> u64,
+		for<'r> FS: Fn(&'r AccountId) -> Balance,
 	{
 		let mut elected_candidates: Vec<AccountId>;
 		let mut assigned: Vec<(AccountId, Vec<_PhragmenAssignment<AccountId>>)>;
@@ -657,7 +660,9 @@ mod tests {
 					}
 				}
 			}
-			assigned.push(assignment);
+			if assignment.1.len() > 0 {
+				assigned.push(assignment);
+			}
 		}
 
 		Some(_PhragmenResult {
@@ -666,15 +671,67 @@ mod tests {
 		})
 	}
 
+	fn create_stake_of(stakes: &[(AccountId, Balance)]) -> Box<dyn Fn(&AccountId) -> Balance> {
+		let mut storage = BTreeMap::<AccountId, Balance>::new();
+		stakes.iter().for_each(|s| { storage.insert(s.0, s.1); });
+		let stake_of = move |who: &AccountId| -> Balance { storage.get(who).unwrap().to_owned() };
+		Box::new(stake_of)
+	}
+
+	fn run_and_compare(
+		candidates: Vec<AccountId>,
+		voters: Vec<(AccountId, Vec<AccountId>)>,
+		stake_of: Box<dyn Fn(&AccountId) -> Balance>,
+		to_elect: usize,
+		min_to_elect: usize,
+		self_vote: bool,
+	) {
+		// run fixed point code.
+		let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote>(
+			to_elect,
+			min_to_elect,
+			candidates.clone(),
+			voters.clone(),
+			&stake_of,
+			self_vote,
+		).unwrap();
+
+		// run float poc code.
+		let truth_value = elect_poc(
+			to_elect,
+			min_to_elect,
+			candidates,
+			voters,
+			&stake_of,
+			self_vote,
+		).unwrap();
+
+		assert_eq!(winners, truth_value.winners);
+
+		for (nominator, assigned) in assignments {
+			if let Some(float_assignments) = truth_value.assignments.iter().find(|x| x.0 == nominator) {
+				for (candidate, ratio) in assigned {
+					if let Some(float_assignment) = float_assignments.1.iter().find(|x| x.0 == candidate ) {
+						assert_eq_error_rate!((float_assignment.1 * ACCURACY as f64).round() as u128, ratio, 1);
+					} else {
+						panic!("candidate mismatch. This should never happen.")
+					}
+				}
+			} else {
+				panic!("nominator mismatch. This should never happen.")
+			}
+		}
+	}
+
 	#[test]
-	fn float_poc_works() {
+	fn float_phragmen_poc_works() {
 		let candidates = vec![1, 2, 3];
 		let voters = vec![
 			(10, vec![1, 2]),
 			(20, vec![1, 3]),
 			(30, vec![2, 3]),
 		];
-		let stake_of = |x: &u64| { if *x >= 10 { *x }  else { 0 }};
+		let stake_of = create_stake_of(&[(10, 10), (20, 20), (30, 30)]);
 		let _PhragmenResult { winners, assignments } =
 			elect_poc(2, 2, candidates, voters, stake_of, false).unwrap();
 
@@ -684,22 +741,28 @@ mod tests {
 			vec![
 				(10, vec![(2, 1.0)]),
 				(20, vec![(3, 1.0)]),
-				(30, vec![(2, 0.5), (3, 0.5)])
+				(30, vec![(2, 0.5), (3, 0.5)]),
 			]
 		);
 	}
 
 	#[test]
-	fn phragmen_works() {
+	fn phragmen_poc_works() {
 		let candidates = vec![1, 2, 3];
 		let voters = vec![
 			(10, vec![1, 2]),
 			(20, vec![1, 3]),
 			(30, vec![2, 3]),
 		];
-		let stake_of = |x: &u64| { if *x >= 10 { *x }  else { 0 }};
-		let PhragmenResult { winners, assignments } =
-			elect::<_, _, _, TestCurrencyToVote>(2, 2, candidates, voters, stake_of, false).unwrap();
+
+		let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote>(
+			2,
+			2,
+			candidates,
+			voters,
+			create_stake_of(&[(10, 10), (20, 20), (30, 30)]),
+			false,
+		).unwrap();
 
 		assert_eq_uvec!(winners, vec![2, 3]);
 		assert_eq_uvec!(
@@ -707,8 +770,45 @@ mod tests {
 			vec![
 				(10, vec![(2, ACCURACY)]),
 				(20, vec![(3, ACCURACY)]),
-				(30, vec![(2, ACCURACY/2), (3, ACCURACY/2)])
+				(30, vec![(2, ACCURACY/2), (3, ACCURACY/2)]),
 			]
 		);
+	}
+
+	#[test]
+	fn phragmen_poc_2_works() {
+		let candidates = vec![10, 20, 30];
+		let voters = vec![
+			(2, vec![10, 20, 30]),
+			(4, vec![10, 20, 40]),
+		];
+		let stake_of = create_stake_of(&[
+			(10, 1000),
+			(20, 1000),
+			(30, 1000),
+			(40, 1000),
+			(2, 500),
+			(4, 500),
+		]);
+
+		run_and_compare(candidates, voters, stake_of, 2, 2, true);
+	}
+
+	#[test]
+	fn phragmen_poc_3_works() {
+		let candidates = vec![10, 20, 30];
+		let voters = vec![
+			(2, vec![10, 20, 30]),
+			(4, vec![10, 20, 40]),
+		];
+		let stake_of = create_stake_of(&[
+			(10, 1000),
+			(20, 1000),
+			(30, 1000),
+			(2, 50),
+			(4, 1000),
+		]);
+
+		run_and_compare(candidates, voters, stake_of, 2, 2, true);
 	}
 }
