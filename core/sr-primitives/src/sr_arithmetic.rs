@@ -88,10 +88,6 @@ macro_rules! implement_per_thing {
 			pub fn from_rational_approximation<N>(p: N, q: N) -> Self
 				where N: Clone + Ord + From<$type> + TryInto<$type> + ops::Div<N, Output=N>
 			{
-			// TODO: double check with @thiolliere the new bound. If your fraction type has a max
-			// that fits in u64, then you cannot build a rational from it that is `2u8 / 4u8` So
-			// using `SimpleArithmetic` here was okay as long as we don't add a new fraction type
-			// which is embedded in a u64. With perquintill we have to change this.
 				// q cannot be zero.
 				let q = q.max((1 as $type).into());
 				// p should not be bigger than q.
@@ -99,9 +95,23 @@ macro_rules! implement_per_thing {
 
 				let factor = (q.clone() / $max.into()).max((1 as $type).into());
 
-				// q cannot overflow: (q / (q/$max)) < $max. p < q hence p also cannot overflow.
-				let p_reduce: $type = (p / factor.clone()).try_into().unwrap_or_else(|_| panic!());
-				let q_reduce: $type = (q / factor.clone()).try_into().unwrap_or_else(|_| panic!());
+				// q cannot overflow: (q / (q/$max)) < 2 * $max. p < q hence p also cannot overflow.
+				// this implies that $type must be able to fit 2 * $max.
+				let q_reduce: $type = (q / factor.clone())
+					.try_into()
+					.map_err(|_| "Failed to convert")
+					.expect(
+						"q / (q/$max) < (2 * $max). Macro prevents any type being created that \
+						does not satisfy this; qed"
+					);
+				let p_reduce: $type = (p / factor.clone())
+					.try_into()
+					.map_err(|_| "Failed to convert")
+					.expect(
+						"q / (q/$max) < (2 * $max). Macro prevents any type being created that \
+						does not satisfy this; qed"
+					);
+
 				// `p_reduced` and `q_reduced` are withing $type. Mul by another $max will always
 				// fit in $upper_type. This is guaranteed by the macro tests.
 				let part =
@@ -115,7 +125,8 @@ macro_rules! implement_per_thing {
 
 		impl Saturating for $name {
 			fn saturating_add(self, rhs: Self) -> Self {
-				Self::from_parts(self.0 + rhs.0)
+				// defensive-only: since `$max * 2 < $type::max_value()`, this can never overflow.
+				Self::from_parts(self.0.saturating_add(rhs.0))
 			}
 			fn saturating_sub(self, rhs: Self) -> Self {
 				Self::from_parts(self.0.saturating_sub(rhs.0))
@@ -198,11 +209,15 @@ macro_rules! implement_per_thing {
 		mod $test_mod {
 			use codec::{Encode, Decode};
 			use super::{$name, Saturating};
-			use srml_support::assert_eq_error_rate;
+			use crate::{assert_eq_error_rate, traits::Zero};
+
 
 			#[test]
 			fn macro_expanded_correctly() {
-				assert!($max < <$type>::max_value());
+				// needed for the `from_percent` to work.
+				assert!($max >= 100);
+				// needed for `from_rational_approximation`
+				assert!(2 * $max < <$type>::max_value());
 				assert!(($max as $upper_type) < <$upper_type>::max_value());
 				// for something like percent they can be the same.
 				assert!((<$type>::max_value() as $upper_type) <= <$upper_type>::max_value());
@@ -242,6 +257,17 @@ macro_rules! implement_per_thing {
 					let per_thingy: $name = decoded.into();
 					assert_eq!(per_thingy, $name(n));
 				}
+			}
+
+			#[test]
+			fn per_thing_api_works() {
+				// some really basic stuff
+				assert_eq!($name::zero(), $name::from_parts(Zero::zero()));
+				assert_eq!($name::one(), $name::from_parts($max));
+				assert_eq!($name::accuracy(), $max);
+				assert_eq!($name::from_percent(0), $name::from_parts(Zero::zero()));
+				assert_eq!($name::from_percent(10), $name::from_parts($max / 10));
+				assert_eq!($name::from_percent(100), $name::from_parts($max));
 			}
 
 			macro_rules! per_thing_mul_test {
@@ -289,6 +315,13 @@ macro_rules! implement_per_thing {
 						$name::from_rational_approximation(1 as $num_type, 10),
 						$name::from_percent(10),
 					);
+					assert_eq!(
+						$name::from_rational_approximation(
+							(1 * $max) as $num_type,
+							(4 * $max) as $num_type,
+						),
+						$name::from_percent(25),
+					);
 					// no accurate anymore but won't overflow.
 					assert_eq!(
 						$name::from_rational_approximation(
@@ -334,6 +367,10 @@ macro_rules! implement_per_thing {
 				assert_eq!(
 					$name::from_rational_approximation(1, $max+1),
 					$name::zero(),
+				);
+				assert_eq!(
+					$name::from_rational_approximation(3 * $max / 2, 3 * $max),
+					$name::from_percent(50),
 				);
 				$(per_thing_from_rationale_approx_test!($test_units);)*
 			}
@@ -508,7 +545,7 @@ impl Fixed64 {
 
 	/// Performs a saturated multiply and accumulate by unsigned number.
 	///
-	/// Returns a saturated `n + (self * n)`.
+	/// Returns a saturated `int + (self * int)`.
 	pub fn saturated_multiply_accumulate<N>(&self, int: N) -> N
 	where
 		N: TryFrom<u64> + From<u32> + UniqueSaturatedInto<u32> + Bounded + Clone + Saturating +
@@ -646,7 +683,7 @@ pub mod helpers_128bit {
 	/// In case `b > c` and overflow happens, `a` is returned.
 	///
 	/// c must be greater than or equal to 1.
-	pub fn safe_multiply_by_rational(a: u128, b: u128, c: u128) -> u128 {
+	pub fn multiply_by_rational_greedy(a: u128, b: u128, c: u128) -> u128 {
 		if a == 0 { return 0; }
 		let c = c.max(1);
 		// safe to start with 1. 0 already failed.
@@ -907,38 +944,38 @@ mod test_rational128 {
 	}
 
 	#[test]
-	fn safe_multiply_by_rational_works() {
+	fn multiply_by_rational_greedy_works() {
 		// basics
-		assert_eq!(safe_multiply_by_rational(7, 2, 3), 7 * 2 / 3);
-		assert_eq!(safe_multiply_by_rational(7, 20, 30), 7 * 2 / 3);
-		assert_eq!(safe_multiply_by_rational(20, 7, 30), 7 * 2 / 3);
+		assert_eq!(multiply_by_rational_greedy(7, 2, 3), 7 * 2 / 3);
+		assert_eq!(multiply_by_rational_greedy(7, 20, 30), 7 * 2 / 3);
+		assert_eq!(multiply_by_rational_greedy(20, 7, 30), 7 * 2 / 3);
 
 		// Where simple swap helps.
-		assert_eq!(safe_multiply_by_rational(MAX128, 2, 3), MAX128 / 3 * 2);
+		assert_eq!(multiply_by_rational_greedy(MAX128, 2, 3), MAX128 / 3 * 2);
 		assert_eq!(
-			safe_multiply_by_rational(MAX128, 555, 1000),
+			multiply_by_rational_greedy(MAX128, 555, 1000),
 			MAX128 / 1000 * 555
 		);
 
 		// This can't work with just swap.
 		assert_eq!(
-			safe_multiply_by_rational(MAX64, MAX128 / 2, MAX128-1),
+			multiply_by_rational_greedy(MAX64, MAX128 / 2, MAX128-1),
 			MAX64 / 2
 		);
 		assert_eq!(
-			safe_multiply_by_rational(MAX64, MAX128, MAX128 - 1),
+			multiply_by_rational_greedy(MAX64, MAX128, MAX128 - 1),
 			MAX64
 		);
 
 		// ultimate test
 		assert_eq!(
-			safe_multiply_by_rational(MAX128, MAX128 / 2, MAX128),
+			multiply_by_rational_greedy(MAX128, MAX128 / 2, MAX128),
 			MAX128 / 2
 		);
 
 		// overflow -- simply returns `a`
 		assert_eq!(
-			safe_multiply_by_rational(MAX128 / 2, 3, 1),
+			multiply_by_rational_greedy(MAX128 / 2, 3, 1),
 			MAX128 / 2
 		);
 	}
@@ -959,6 +996,14 @@ mod test_rational128 {
 			multiply_by_rational(MAX64, MAX128 / 2, MAX128),
 			Err("division will collapse to zero")
 		);
+
+		// TODO: `multiply_by_rational` computes this super inaccurate. Either re-think it or remove
+		// it. This test will fail for now.
+		assert_eq!(
+			multiply_by_rational(2*MAX64 - 1, MAX64, MAX64).unwrap(),
+			2*MAX64 - 1
+		);
+
 		assert_eq!(
 			multiply_by_rational(MAX64, MAX128, MAX128 - 1).unwrap(),
 			MAX64

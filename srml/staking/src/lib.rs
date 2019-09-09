@@ -1186,7 +1186,6 @@ impl<T: Trait> Module<T> {
 			let total_points = rewards.total;
 			for (v, points) in validators.iter().zip(rewards.rewards.into_iter()) {
 				if points != 0 {
-					// let reward = multiply_by_rational(total_payout, points, total_points);
 					let reward = Perbill::from_rational_approximation(points, total_points) * total_payout;
 					total_imbalance.subsume(Self::reward_validator(v, reward));
 				}

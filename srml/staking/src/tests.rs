@@ -19,9 +19,9 @@
 use super::*;
 use mock::*;
 use runtime_io::with_externalities;
-use sr_primitives::traits::OnInitialize;
+use sr_primitives::{assert_eq_error_rate, traits::OnInitialize};
 use sr_staking_primitives::offence::{OffenceDetails, OnOffenceHandler};
-use support::{assert_ok, assert_noop, assert_eq_uvec, assert_eq_error_rate, StorageLinkedMap};
+use support::{assert_ok, assert_noop, assert_eq_uvec, StorageLinkedMap};
 use support::traits::{Currency, ReservableCurrency};
 
 #[test]
