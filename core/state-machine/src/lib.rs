@@ -430,7 +430,8 @@ pub enum ExecutionManager<F> {
 	/// Execute with the native equivalent if it is compatible with the given wasm module; otherwise fall back to the wasm.
 	NativeWhenPossible,
 	/// Use the given wasm module. The backend on which code is executed code could be
-	/// trusted or untrusted.
+	/// trusted to provide all storage or not (i.e. the light client cannot be trusted to provide
+	/// for all storage queries since the storage entries it has come from an external node).
 	AlwaysWasm(BackendTrustLevel),
 	/// Run with both the wasm and the native variant (if compatible). Call `F` in the case of any discrepency.
 	Both(F),
