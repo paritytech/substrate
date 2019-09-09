@@ -53,8 +53,7 @@ use wasmi::MemoryRef;
 use wasmi::memory_units::Bytes;
 
 // The pointers need to be aligned to 8 bytes. This is because the
-// maximum value type handled by wasm32 is u64; hence we need to make
-// sure that pointers are always aligned by 8 bytes.
+// maximum value type handled by wasm32 is u64.
 const ALIGNMENT: u32 = 8;
 
 // The pointer returned by `allocate()` needs to fulfill the alignment
