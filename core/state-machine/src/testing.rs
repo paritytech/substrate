@@ -284,7 +284,7 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 	where
 		H: Hasher,
 		N: ChangesTrieBlockNumber,
-		H::Out: Ord + 'static
+		H::Out: Ord + 'static,
 {
 	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities> {
 		self.offchain
