@@ -260,8 +260,6 @@ impl_into_and_from_value! {
 	i32, I32,
 	u64, I64,
 	i64, I64,
-	*const T, <T>, I32,
-	*mut T, <T>, I32,
 }
 
 #[cfg(test)]
