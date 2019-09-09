@@ -182,6 +182,11 @@ impl FreeingBumpHeapAllocator {
 		Ok(())
 	}
 
+	/// Increases the `bumper` by `item_size + PREFIX_SIZE`.
+	///
+	/// Returns the `bumper` from before the increase.
+	/// Returns an `Error::AllocatorOutOfSpace` if the operation
+	/// would exhaust the heap.
 	fn bump(&mut self, item_size: u32) -> Result<u32> {
 		if self.bumper + PREFIX_SIZE + item_size > self.max_heap_size {
 			return Err(Error::AllocatorOutOfSpace);
