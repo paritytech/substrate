@@ -328,9 +328,9 @@ pub fn elect<AccountId, Balance, FS, C>(
 
 			if diff_per_vote > 0 {
 				for i in 0..len {
-					let current_ratio = assignment.1[i%len].1;
+					let current_ratio = assignment.1[i % len].1;
 					let next_ratio = current_ratio.saturating_add(Perbill::from_parts(diff_per_vote));
-					assignment.1[i%len].1 = next_ratio;
+					assignment.1[i % len].1 = next_ratio;
 				}
 			}
 
@@ -338,9 +338,9 @@ pub fn elect<AccountId, Balance, FS, C>(
 			// safe to cast it to usize.
 			let remainder = diff - diff_per_vote * vote_count;
 			for i in 0..remainder as usize {
-				let current_ratio = assignment.1[i%len].1;
+				let current_ratio = assignment.1[i % len].1;
 				let next_ratio = current_ratio.saturating_add(Perbill::from_parts(1));
-				assignment.1[i%len].1 = next_ratio;
+				assignment.1[i % len].1 = next_ratio;
 			}
 			assigned.push(assignment);
 		}
