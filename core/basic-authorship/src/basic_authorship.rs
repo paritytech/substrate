@@ -250,7 +250,7 @@ mod tests {
 		let chain_api = transaction_pool::ChainApi::new(client.clone());
 		let txpool = Arc::new(TransactionPool::new(Default::default(), chain_api));
 
-		txpool.submit_at(&BlockId::number(0), vec![extrinsic(0), extrinsic(1)]).unwrap();
+		txpool.submit_at(&BlockId::number(0), vec![extrinsic(0), extrinsic(1)], false).unwrap();
 
 		let mut proposer_factory = ProposerFactory {
 			client: client.clone(),

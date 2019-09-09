@@ -47,9 +47,13 @@ pub fn with_native_environment<F, U>(ext: &mut dyn Externalities<Blake2Hasher>, 
 	::runtime_io::with_externalities(ext, move || safe_call(f))
 }
 
-/// Delegate for dispatching a CodeExecutor call to native code.
+/// Delegate for dispatching a CodeExecutor call.
+///
+/// By dispatching we mean that we execute a runtime function specified by it's name.
 pub trait NativeExecutionDispatch: Send + Sync {
-	/// Dispatch a method and input data to be executed natively.
+	/// Dispatch a method in the runtime.
+	///
+	/// If the method with the specified name doesn't exist then `Err` is returned.
 	fn dispatch(ext: &mut dyn Externalities<Blake2Hasher>, method: &str, data: &[u8]) -> Result<Vec<u8>>;
 
 	/// Provide native runtime version.
