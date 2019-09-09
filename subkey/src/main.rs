@@ -60,7 +60,7 @@ trait Crypto: Sized {
 	{
 		if let Ok((pair, seed)) = Self::Pair::from_phrase(uri, password) {
 			let public_key = Self::public_from_pair(&pair);
-			println!("Secret phrase `{}` is account:\n  Secret seed: 0x{}\n  Public key (hex): {}\n  Address (SS58): {}",
+			println!("Secret phrase `{}` is account:\n  Secret seed: {}\n  Public key (hex): {}\n  Address (SS58): {}",
 				uri,
 				format_seed::<Self>(seed),
 				format_public_key::<Self>(public_key),
@@ -78,7 +78,7 @@ trait Crypto: Sized {
 			<Self::Pair as Pair>::Public::from_string_with_version(uri)
 		{
 			let v = network_override.unwrap_or(v);
-			println!("Public Key URI `{}` is account:\n  Network ID/version: {}\n  Public key (hex): 0x{}\n  Address (SS58): {}",
+			println!("Public Key URI `{}` is account:\n  Network ID/version: {}\n  Public key (hex): {}\n  Address (SS58): {}",
 				uri,
 				String::from(v),
 				format_public_key::<Self>(public_key.clone()),
