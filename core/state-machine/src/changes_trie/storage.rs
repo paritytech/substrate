@@ -16,16 +16,14 @@
 
 //! Changes trie storage utilities.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet, HashMap};
 use hash_db::{Hasher, Prefix, EMPTY_PREFIX};
 use trie::DBValue;
 use trie::MemoryDB;
 use parking_lot::RwLock;
-use crate::changes_trie::{RootsStorage, Storage, AnchorBlockId, BlockNumber};
+use crate::changes_trie::{BuildCache, RootsStorage, Storage, AnchorBlockId, BlockNumber};
 use crate::trie_backend_essence::TrieBackendStorage;
 
-#[cfg(test)]
-use std::collections::HashSet;
 #[cfg(test)]
 use crate::backend::insert_into_memory_db;
 #[cfg(test)]
@@ -34,6 +32,7 @@ use crate::changes_trie::input::{InputPair, ChildIndex};
 /// In-memory implementation of changes trie storage.
 pub struct InMemoryStorage<H: Hasher, Number: BlockNumber> {
 	data: RwLock<InMemoryStorageData<H, Number>>,
+	cache: BuildCache<H::Out, Number>,
 }
 
 /// Adapter for using changes trie storage as a TrieBackendEssence' storage.
@@ -55,6 +54,7 @@ impl<H: Hasher, Number: BlockNumber> InMemoryStorage<H, Number> {
 				roots: BTreeMap::new(),
 				mdb,
 			}),
+			cache: BuildCache::new(),
 		}
 	}
 
@@ -74,6 +74,11 @@ impl<H: Hasher, Number: BlockNumber> InMemoryStorage<H, Number> {
 		Self::with_db(proof_db)
 	}
 
+	/// Get mutable cache reference.
+	pub fn cache_mut(&mut self) -> &mut BuildCache<H::Out, Number> {
+		&mut self.cache
+	}
+
 	/// Create the storage with given blocks.
 	pub fn with_blocks(blocks: Vec<(Number, H::Out)>) -> Self {
 		Self {
@@ -81,6 +86,7 @@ impl<H: Hasher, Number: BlockNumber> InMemoryStorage<H, Number> {
 				roots: blocks.into_iter().collect(),
 				mdb: MemoryDB::default(),
 			}),
+			cache: BuildCache::new(),
 		}
 	}
 
@@ -122,6 +128,7 @@ impl<H: Hasher, Number: BlockNumber> InMemoryStorage<H, Number> {
 				roots,
 				mdb,
 			}),
+			cache: BuildCache::new(),
 		}
 	}
 
@@ -167,6 +174,14 @@ impl<H: Hasher, Number: BlockNumber> RootsStorage<H, Number> for InMemoryStorage
 impl<H: Hasher, Number: BlockNumber> Storage<H, Number> for InMemoryStorage<H, Number> {
 	fn as_roots_storage(&self) -> &dyn RootsStorage<H, Number> {
 		self
+	}
+
+	fn with_cached_changed_keys(
+		&self,
+		root: &H::Out,
+		functor: &mut dyn FnMut(&HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>),
+	) -> bool {
+		self.cache.with_changed_keys(root, functor)
 	}
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
