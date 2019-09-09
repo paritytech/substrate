@@ -23,6 +23,8 @@ impl From<Value> for wasmi::RuntimeValue {
 		match value {
 			Value::I32(val) => Self::I32(val),
 			Value::I64(val) => Self::I64(val),
+			Value::F32(val) => Self::F32(val.into()),
+			Value::F64(val) => Self::F64(val.into()),
 		}
 	}
 }
@@ -32,7 +34,8 @@ impl From<wasmi::RuntimeValue> for Value {
 		match value {
 			wasmi::RuntimeValue::I32(val) => Self::I32(val),
 			wasmi::RuntimeValue::I64(val) => Self::I64(val),
-			o => panic!("`wasmi::Value` `{:?}` not supported by Substrate.", o)
+			wasmi::RuntimeValue::F32(val) => Self::F32(val.into()),
+			wasmi::RuntimeValue::F64(val) => Self::F64(val.into()),
 		}
 	}
 }
@@ -42,6 +45,8 @@ impl From<ValueType> for wasmi::ValueType {
 		match value {
 			ValueType::I32 => Self::I32,
 			ValueType::I64 => Self::I64,
+			ValueType::F32 => Self::F32,
+			ValueType::F64 => Self::F64,
 		}
 	}
 }
@@ -51,7 +56,8 @@ impl From<wasmi::ValueType> for ValueType {
 		match value {
 			wasmi::ValueType::I32 => Self::I32,
 			wasmi::ValueType::I64 => Self::I64,
-			o => panic!("`wasmi::ValueType` `{:?}` not supported by Substrate.", o)
+			wasmi::ValueType::F32 => Self::F32,
+			wasmi::ValueType::F64 => Self::F64,
 		}
 	}
 }

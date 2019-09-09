@@ -27,15 +27,23 @@ pub enum ValueType {
 	I32,
 	/// An `i64` value type.
 	I64,
+	/// An `f32` value type.
+	F32,
+	/// An `f64` value type.
+	F64,
 }
 
 /// Values supported by Substrate on the boundary between host/Wasm.
-#[derive(Eq, PartialEq, Debug, Clone, Copy)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum Value {
 	/// An `i32` value.
 	I32(i32),
 	/// An `i64` value.
 	I64(i64),
+	/// An nan-preserving `f32` value.
+	F32(u32),
+	/// An nan-preserving `f64` value.
+	F64(u64),
 }
 
 /// Type to represent a pointer in wasm at the host.
