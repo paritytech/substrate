@@ -29,7 +29,7 @@ use wasmi::{
 };
 use state_machine::Externalities;
 use crate::error::{Error, Result};
-use codec::Encode;
+use codec::{Encode, Decode};
 use primitives::{
 	blake2_128, blake2_256, twox_64, twox_128, twox_256, ed25519, sr25519, Pair, crypto::KeyTypeId,
 	offchain, hexdisplay::HexDisplay, sandbox as sandbox_primitives, Blake2Hasher,
@@ -38,7 +38,7 @@ use trie::{TrieConfiguration, trie_types::Layout};
 use crate::sandbox;
 use crate::allocator;
 use log::trace;
-use wasm_interface::{HostFunctionsContext, HostFunctions, InherentHostFunctions, Pointer, WordSize};
+use wasm_interface::{FunctionContext, HostFunctions, Pointer, WordSize, Sandbox, MemoryId};
 
 #[cfg(feature="wasm-extern-trace")]
 macro_rules! debug_trace {
@@ -89,7 +89,7 @@ impl sandbox::SandboxCapabilities for FunctionExecutor {
 	}
 }
 
-impl HostFunctionsContext for FunctionExecutor {
+impl FunctionContext for FunctionExecutor {
 	fn read_memory_into(&self, address: Pointer<u8>, dest: &mut [u8]) -> std::result::Result<(), String> {
 		self.memory.get_into(address.into(), dest).map_err(|e| format!("{:?}", e))
 	}
@@ -105,13 +105,142 @@ impl HostFunctionsContext for FunctionExecutor {
 	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> std::result::Result<(), String> {
 		self.heap.deallocate(ptr).map_err(|e| format!("{:?}", e))
 	}
+
+	fn sandbox(&mut self) -> &mut dyn Sandbox {
+		self
+	}
+}
+
+impl Sandbox for FunctionExecutor {
+	fn memory_get(
+		&self,
+		memory_id: MemoryId,
+		offset: WordSize,
+		buf_ptr: Pointer<u8>,
+		buf_len: WordSize,
+	) -> std::result::Result<u32, String> {
+		let sandboxed_memory = self.sandbox_store.memory(memory_id).map_err(|e| format!("{:?}", e))?;
+
+		match MemoryInstance::transfer(
+			&sandboxed_memory,
+			offset as usize,
+			&self.memory,
+			buf_ptr.into(),
+			buf_len as usize,
+		) {
+			Ok(()) => Ok(sandbox_primitives::ERR_OK),
+			Err(_) => Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+		}
+	}
+
+	fn memory_set(
+		&mut self,
+		memory_id: MemoryId,
+		offset: WordSize,
+		val_ptr: Pointer<u8>,
+		val_len: WordSize,
+	) -> std::result::Result<u32, String> {
+		let sandboxed_memory = self.sandbox_store.memory(memory_id).map_err(|e| format!("{:?}", e))?;
+
+		match MemoryInstance::transfer(
+			&self.memory,
+			val_ptr.into(),
+			&sandboxed_memory,
+			offset as usize,
+			val_len as usize,
+		) {
+			Ok(()) => Ok(sandbox_primitives::ERR_OK),
+			Err(_) => Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+		}
+	}
+
+	fn memory_teardown(&mut self, memory_id: MemoryId) -> std::result::Result<(), String> {
+		self.sandbox_store.memory_teardown(memory_id).map_err(|e| format!("{:?}", e))
+	}
+
+	fn memory_new(
+		&mut self,
+		initial: WordSize,
+		maximum: WordSize,
+	) -> std::result::Result<MemoryId, String> {
+		self.sandbox_store.new_memory(initial, maximum).map_err(|e| format!("{:?}", e))
+	}
+
+	fn invoke(
+		&mut self,
+		instance_id: u32,
+		export_name: &str,
+		args: &[u8],
+		return_val: Pointer<u8>,
+		return_val_len: WordSize,
+		state: u32,
+	) -> std::result::Result<u32, String> {
+		trace!(target: "sr-sandbox", "invoke, instance_idx={}", instance_id);
+
+		// Deserialize arguments and convert them into wasmi types.
+		let args = Vec::<sandbox_primitives::TypedValue>::decode(&mut &args[..])
+			.map_err(|_| "Can't decode serialized arguments for the invocation")?
+			.into_iter()
+			.map(Into::into)
+			.collect::<Vec<_>>();
+
+		let instance = self.sandbox_store.instance(instance_id).map_err(|e| format!("{:?}", e))?;
+		let result = instance.invoke(export_name, &args, self, state);
+
+		match result {
+			Ok(None) => Ok(sandbox_primitives::ERR_OK),
+			Ok(Some(val)) => {
+				// Serialize return value and write it back into the memory.
+				sandbox_primitives::ReturnValue::Value(val.into()).using_encoded(|val| {
+					if val.len() > return_val_len as usize {
+						Err("Return value buffer is too small")?;
+					}
+					self.write_memory(return_val, val).map_err(|_| "Return value buffer is OOB")?;
+					Ok(sandbox_primitives::ERR_OK)
+				})
+			}
+			Err(_) => Ok(sandbox_primitives::ERR_EXECUTION),
+		}
+	}
+
+	fn instance_teardown(&mut self, instance_id: u32) -> std::result::Result<(), String> {
+		self.sandbox_store.instance_teardown(instance_id).map_err(|e| format!("{:?}", e))
+	}
+
+	fn instance_new(
+		&mut self,
+		dispatch_thunk_id: u32,
+		wasm: &[u8],
+		raw_env_def: &[u8],
+		state: u32,
+	) -> std::result::Result<u32, String> {
+		// Extract a dispatch thunk from instance's table by the specified index.
+		let dispatch_thunk = {
+			let table = self.table.as_ref()
+				.ok_or_else(|| "Runtime doesn't have a table; sandbox is unavailable")?;
+			table.get(dispatch_thunk_id)
+				.map_err(|_| "dispatch_thunk_idx is out of the table bounds")?
+				.ok_or_else(|| "dispatch_thunk_idx points on an empty table entry")?
+				.clone()
+		};
+
+		let instance_idx_or_err_code =
+			match sandbox::instantiate(self, dispatch_thunk, wasm, raw_env_def, state) {
+				Ok(instance_idx) => instance_idx,
+				Err(sandbox::InstantiationError::StartTrapped) =>
+					sandbox_primitives::ERR_EXECUTION,
+				Err(_) => sandbox_primitives::ERR_MODULE,
+			};
+
+		Ok(instance_idx_or_err_code as u32)
+	}
 }
 
 trait WritePrimitive<T: Sized> {
 	fn write_primitive(&mut self, ptr: Pointer<T>, t: T) -> std::result::Result<(), String>;
 }
 
-impl WritePrimitive<u32> for &mut dyn HostFunctionsContext {
+impl WritePrimitive<u32> for &mut dyn FunctionContext {
 	fn write_primitive(&mut self, ptr: Pointer<u32>, t: u32) -> std::result::Result<(), String> {
 		use byteorder::{LittleEndian, ByteOrder};
 		let mut r = [0u8; 4];
@@ -124,7 +253,7 @@ trait ReadPrimitive<T: Sized> {
 	fn read_primitive(&self, offset: Pointer<T>) -> std::result::Result<T, String>;
 }
 
-impl ReadPrimitive<u32> for &mut dyn HostFunctionsContext {
+impl ReadPrimitive<u32> for &mut dyn FunctionContext {
 	fn read_primitive(&self, ptr: Pointer<u32>) -> std::result::Result<u32, String> {
 		use byteorder::{LittleEndian, ByteOrder};
 		let result = self.read_memory(ptr.cast(), 4)?;
@@ -147,25 +276,29 @@ impl FunctionExecutor {
 			fn resolve_func(&self, name: &str, signature: &wasmi::Signature)
 				-> std::result::Result<wasmi::FuncRef, wasmi::Error>
 			{
-				let signature = signature.into();
-				if let Some(func) = FunctionExecutor::resolve_function(
-					name,
-					&signature,
-				).map_err(wasmi::Error::Instantiation)? {
-					return Ok(func.into())
-				}
+				let signature = wasm_interface::Signature::from(signature);
 
-				if let Some(mut func) = SubstrateExternals::resolve_function(
-					name,
-					&signature,
-				).map_err(wasmi::Error::Instantiation)? {
-					func.offset_index(FunctionExecutor::function_count());
-					return Ok(func.into())
+				if let Some((index, func)) = SubstrateExternals::functions().iter()
+					.enumerate()
+					.find(|f| name == f.1.name())
+				{
+					if signature == func.signature() {
+						Ok(wasmi::FuncInstance::alloc_host(signature.into(), index))
+					} else {
+						Err(wasmi::Error::Instantiation(
+							format!(
+								"Invalid signature for function `{}` expected `{:?}`, got `{:?}`",
+								func.name(),
+								signature,
+								func.signature(),
+							)
+						))
+					}
+				} else {
+					Err(wasmi::Error::Instantiation(
+						format!("Export {} not found", name),
+					))
 				}
-
-				Err(wasmi::Error::Instantiation(
-					format!("Export {} not found", name),
-				))
 			}
 		}
 		&Resolver
@@ -176,38 +309,31 @@ impl wasmi::Externals for FunctionExecutor {
 	fn invoke_index(&mut self, index: usize, args: wasmi::RuntimeArgs)
 		-> std::result::Result<Option<wasmi::RuntimeValue>, wasmi::Trap>
 	{
-		let args = args.as_ref().iter().copied().map(Into::into);
-		if index < Self::function_count() {
-			return self.execute_function(index, args)
-				.map_err(Error::FunctionExecution)
-				.map_err(wasmi::Trap::from)
-				.map(|v| v.map(Into::into))
-		} else if index < SubstrateExternals::function_count() + Self::function_count() {
-			return SubstrateExternals::execute_function(index - Self::function_count(), args, self)
-				.map_err(Error::FunctionExecution)
-				.map_err(wasmi::Trap::from)
-				.map(|v| v.map(Into::into))
-		} else {
-			Err(
-				wasmi::Trap::from(
-					Error::from(format!("Could not find host function with index: {}", index))
-				)
+		let mut args = args.as_ref().iter().copied().map(Into::into);
+		let function = SubstrateExternals::functions().get(index).ok_or_else(||
+			Error::from(
+				format!("Could not find host function with index: {}", index),
 			)
-		}
+		)?;
+
+		function.execute(self, &mut args)
+			.map_err(Error::FunctionExecution)
+			.map_err(wasmi::Trap::from)
+			.map(|v| v.map(Into::into))
 	}
 }
+struct SubstrateExternals;
 
 impl_wasm_host_interface! {
-	#[inherent_externals]
-	impl FunctionExecutor where this {
+	impl SubstrateExternals where context {
 		ext_malloc(size: WordSize) -> Pointer<u8> {
-			let r = this.heap.allocate(size).map_err(|e| format!("{:?}", e))?;
+			let r = context.allocate_memory(size)?;
 			debug_trace!(target: "sr-io", "malloc {} bytes at {}", size, r);
 			Ok(r)
 		}
 
 		ext_free(addr: Pointer<u8>) {
-			this.heap.deallocate(addr).map_err(|e| format!("{:?}", e))?;
+			context.deallocate_memory(addr)?;
 			debug_trace!(target: "sr-io", "free {}", addr);
 			Ok(())
 		}
@@ -220,35 +346,16 @@ impl_wasm_host_interface! {
 			imports_len: WordSize,
 			state: u32,
 		) -> u32 {
-			let wasm = this.read_memory(wasm_ptr, wasm_len)
+			let wasm = context.read_memory(wasm_ptr, wasm_len)
 				.map_err(|_| "OOB while ext_sandbox_instantiate: wasm")?;
-			let raw_env_def = this.read_memory(imports_ptr, imports_len)
+			let raw_env_def = context.read_memory(imports_ptr, imports_len)
 				.map_err(|_| "OOB while ext_sandbox_instantiate: imports")?;
 
-			// Extract a dispatch thunk from instance's table by the specified index.
-			let dispatch_thunk = {
-				let table = this.table.as_ref()
-					.ok_or_else(|| "Runtime doesn't have a table; sandbox is unavailable")?;
-				table.get(dispatch_thunk_idx)
-					.map_err(|_| "dispatch_thunk_idx is out of the table bounds")?
-					.ok_or_else(|| "dispatch_thunk_idx points on an empty table entry")?
-					.clone()
-			};
-
-			let instance_idx_or_err_code =
-				match sandbox::instantiate(this, dispatch_thunk, &wasm, &raw_env_def, state) {
-					Ok(instance_idx) => instance_idx,
-					Err(sandbox::InstantiationError::StartTrapped) =>
-						sandbox_primitives::ERR_EXECUTION,
-					Err(_) => sandbox_primitives::ERR_MODULE,
-				};
-
-			Ok(instance_idx_or_err_code as u32)
+			context.sandbox().instance_new(dispatch_thunk_idx, &wasm, &raw_env_def, state)
 		}
 
 		ext_sandbox_instance_teardown(instance_idx: u32) {
-			this.sandbox_store.instance_teardown(instance_idx).map_err(|e| format!("{:?}", e))?;
-			Ok(())
+			context.sandbox().instance_teardown(instance_idx)
 		}
 
 		ext_sandbox_invoke(
@@ -261,10 +368,7 @@ impl_wasm_host_interface! {
 			return_val_len: WordSize,
 			state: u32,
 		) -> u32 {
-			use codec::{Decode, Encode};
-
-			trace!(target: "sr-sandbox", "invoke, instance_idx={}", instance_idx);
-			let export = this.read_memory(export_ptr, export_len)
+			let export = context.read_memory(export_ptr, export_len)
 				.map_err(|_| "OOB while ext_sandbox_invoke: export")
 				.and_then(|b|
 					String::from_utf8(b)
@@ -272,36 +376,21 @@ impl_wasm_host_interface! {
 				)?;
 
 			// Deserialize arguments and convert them into wasmi types.
-			let serialized_args = this.read_memory(args_ptr, args_len)
+			let serialized_args = context.read_memory(args_ptr, args_len)
 				.map_err(|_| "OOB while ext_sandbox_invoke: args")?;
-			let args = Vec::<sandbox_primitives::TypedValue>::decode(&mut &serialized_args[..])
-				.map_err(|_| "Can't decode serialized arguments for the invocation")?
-				.into_iter()
-				.map(Into::into)
-				.collect::<Vec<_>>();
 
-			let instance = this.sandbox_store.instance(instance_idx).map_err(|e| format!("{:?}", e))?;
-			let result = instance.invoke(&export, &args, this, state);
-
-			match result {
-				Ok(None) => Ok(sandbox_primitives::ERR_OK),
-				Ok(Some(val)) => {
-					// Serialize return value and write it back into the memory.
-					sandbox_primitives::ReturnValue::Value(val.into()).using_encoded(|val| {
-						if val.len() > return_val_len as usize {
-							Err("Return value buffer is too small")?;
-						}
-						this.write_memory(return_val_ptr, val).map_err(|_| "Return value buffer is OOB")?;
-						Ok(sandbox_primitives::ERR_OK)
-					})
-				}
-				Err(_) => Ok(sandbox_primitives::ERR_EXECUTION),
-			}
+			context.sandbox().invoke(
+				instance_idx,
+				&export,
+				&serialized_args,
+				return_val_ptr,
+				return_val_len,
+				state,
+			)
 		}
 
 		ext_sandbox_memory_new(initial: WordSize, maximum: WordSize) -> u32 {
-			let mem_idx = this.sandbox_store.new_memory(initial, maximum).map_err(|e| format!("{:?}", e))?;
-			Ok(mem_idx)
+			context.sandbox().memory_new(initial, maximum)
 		}
 
 		ext_sandbox_memory_get(
@@ -310,18 +399,7 @@ impl_wasm_host_interface! {
 			buf_ptr: Pointer<u8>,
 			buf_len: WordSize,
 		) -> u32 {
-			let sandboxed_memory = this.sandbox_store.memory(memory_idx).map_err(|e| format!("{:?}", e))?;
-
-			match MemoryInstance::transfer(
-				&sandboxed_memory,
-				offset as usize,
-				&this.memory,
-				buf_ptr.into(),
-				buf_len as usize,
-			) {
-				Ok(()) => Ok(sandbox_primitives::ERR_OK),
-				Err(_) => Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-			}
+			context.sandbox().memory_get(memory_idx, offset, buf_ptr, buf_len)
 		}
 
 		ext_sandbox_memory_set(
@@ -330,31 +408,13 @@ impl_wasm_host_interface! {
 			val_ptr: Pointer<u8>,
 			val_len: WordSize,
 		) -> u32 {
-			let sandboxed_memory = this.sandbox_store.memory(memory_idx).map_err(|e| format!("{:?}", e))?;
-
-			match MemoryInstance::transfer(
-				&this.memory,
-				val_ptr.into(),
-				&sandboxed_memory,
-				offset as usize,
-				val_len as usize,
-			) {
-				Ok(()) => Ok(sandbox_primitives::ERR_OK),
-				Err(_) => Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-			}
+			context.sandbox().memory_set(memory_idx, offset, val_ptr, val_len)
 		}
 
 		ext_sandbox_memory_teardown(memory_idx: u32) {
-			this.sandbox_store.memory_teardown(memory_idx).map_err(|e| format!("{:?}", e))?;
-			Ok(())
+			context.sandbox().memory_teardown(memory_idx)
 		}
-	}
-}
 
-struct SubstrateExternals;
-
-impl_wasm_host_interface! {
-	impl SubstrateExternals where context {
 		ext_print_utf8(utf8_data: Pointer<u8>, utf8_len: WordSize) {
 			if let Ok(utf8) = context.read_memory(utf8_data, utf8_len) {
 				if let Ok(message) = String::from_utf8(utf8) {

@@ -16,7 +16,7 @@
 
 //! Types and traits for interfacing between the host and the wasm runtime.
 
-use std::{borrow::Cow, marker::PhantomData, mem};
+use std::{borrow::Cow, marker::PhantomData, mem, iter::Iterator};
 
 mod wasmi_impl;
 
@@ -105,7 +105,7 @@ impl<T> TryFromValue for Pointer<T> {
 pub type WordSize = u32;
 
 /// The Signature of a function
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Eq, PartialEq, Debug, Clone)]
 pub struct Signature {
 	/// The arguments of a function.
 	pub args: Cow<'static, [ValueType]>,
@@ -132,32 +132,22 @@ impl Signature {
 
 }
 
-/// A reference to a host function.
-#[derive(Eq, PartialEq, Debug)]
-pub struct FunctionRef {
-	/// The signature of the function.
-	pub signature: Signature,
-	/// The index of the function at the host.
-	pub index: usize,
+/// Something that provides a function implementation on the host for a wasm function.
+pub trait Function {
+	/// Returns the name of this function.
+	fn name(&self) -> &str;
+	/// Returns the signature of this function.
+	fn signature(&self) -> Signature;
+	/// Execute this function with the given arguments.
+	fn execute(
+		&self,
+		context: &mut dyn FunctionContext,
+		args: &mut dyn Iterator<Item=Value>,
+	) -> Result<Option<Value>, String>;
 }
 
-impl FunctionRef {
-	/// Create a new instance of `FunctionRef`.
-	pub fn new(signature: Signature, index: usize) -> Self {
-		Self {
-			signature,
-			index,
-		}
-	}
-
-	/// Add the given offset to the internal index.
-	pub fn offset_index(&mut self, offset: usize) {
-		self.index += offset;
-	}
-}
-
-/// Context used by `HostFunctions` to interact with the allocator and the memory of the wasm instance.
-pub trait HostFunctionsContext {
+/// Context used by `Function` to interact with the allocator and the memory of the wasm instance.
+pub trait FunctionContext {
 	/// Read memory from `address` into a vector.
 	fn read_memory(&self, address: Pointer<u8>, size: WordSize) -> Result<Vec<u8>, String> {
 		let mut vec = Vec::with_capacity(size as usize);
@@ -173,47 +163,61 @@ pub trait HostFunctionsContext {
 	fn allocate_memory(&mut self, size: WordSize) -> Result<Pointer<u8>, String>;
 	/// Deallocate a given memory instance.
 	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> Result<(), String>;
+	/// Provides access to the sandbox.
+	fn sandbox(&mut self) -> &mut dyn Sandbox;
+}
+
+/// Sandbox memory identifier.
+pub type MemoryId = u32;
+
+/// Something that provides access to the sandbox.
+pub trait Sandbox {
+	/// Get sandbox memory from the `memory_id` instance at `offset` into the given buffer.
+	fn memory_get(
+		&self,
+		memory_id: MemoryId,
+		offset: WordSize,
+		buf_ptr: Pointer<u8>,
+		buf_len: WordSize,
+	) -> Result<u32, String>;
+	/// Set sandbox memory from the given value.
+	fn memory_set(
+		&mut self,
+		memory_id: MemoryId,
+		offset: WordSize,
+		val_ptr: Pointer<u8>,
+		val_len: WordSize,
+	) -> Result<u32, String>;
+	/// Delete a memory instance.
+	fn memory_teardown(&mut self, memory_id: MemoryId) -> Result<(), String>;
+	/// Create a new memory instance with the given `initial` size and the `maximum` size.
+	fn memory_new(&mut self, initial: WordSize, maximum: WordSize) -> Result<MemoryId, String>;
+	/// Invoke an exported function by a name.
+	fn invoke(
+		&mut self,
+		instance_id: u32,
+		export_name: &str,
+		args: &[u8],
+		return_val: Pointer<u8>,
+		return_val_len: WordSize,
+		state: u32,
+	) -> Result<u32, String>;
+	/// Delete a sandbox instance.
+	fn instance_teardown(&mut self, instance_id: u32) -> Result<(), String>;
+	/// Create a new sandbox instance.
+	fn instance_new(
+		&mut self,
+		dispatch_thunk_id: u32,
+		wasm: &[u8],
+		raw_env_def: &[u8],
+		state: u32,
+	) -> Result<u32, String>;
 }
 
 /// Something that provides implementations for host functions.
 pub trait HostFunctions {
-	/// Try to resolve the function with the given name and signature.
-	fn resolve_function(name: &str, signature: &Signature) -> Result<Option<FunctionRef>, String>;
-
-	/// Returns the number of host functions this type provides.
-	fn function_count() -> usize;
-
-	/// Execute the function at the given index.
-	///
-	/// - `index` - Is equal to the index given to `FunctionRef`.
-	/// - `args` - The arguments given to the function.
-	/// - `context` - Provides access to the allocator and memory of the memory wasm instance.
-	fn execute_function<A: Iterator<Item=Value>>(
-		index: usize,
-		args: A,
-		context: &mut dyn HostFunctionsContext,
-	) -> Result<Option<Value>, String>;
-}
-
-/// Something that provides implementations for inherent host functions.
-///
-/// Will be used interanlly by Substrate to provide functions like `malloc`, `free` etc.
-pub trait InherentHostFunctions {
-	/// Try to resolve the function with the given name and signature.
-	fn resolve_function(name: &str, signature: &Signature) -> Result<Option<FunctionRef>, String>;
-
-	/// Returns the number of host functions this type provides.
-	fn function_count() -> usize;
-
-	/// Execute the function at the given index.
-	///
-	/// - `index` - Is equal to the index given to `FunctionRef`.
-	/// - `args` - The arguments given to the function.
-	fn execute_function<A: Iterator<Item=Value>>(
-		&mut self,
-		index: usize,
-		args: A,
-	) -> Result<Option<Value>, String>;
+	/// Returns all host functions.
+	fn functions() -> &'static [&'static dyn Function];
 }
 
 /// Something that can be converted into a wasm compatible `Value`.
