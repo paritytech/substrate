@@ -138,7 +138,7 @@ impl<B: BlockT> ExtraRequests<B> {
 		}
 
 		if best_finalized_number > self.best_seen_finalized_number {
-			match self.tree.finalize_with_ancestors(
+			match self.tree.finalize(
 				best_finalized_hash,
 				best_finalized_number,
 				&is_descendent_of,
