@@ -28,7 +28,7 @@ use sr_primitives::traits::{One, Block as BlockT, Header as HeaderT, NumberFor};
 use state_machine::{
 	self, Backend as StateBackend, CodeExecutor, OverlayedChanges,
 	ExecutionStrategy, ChangesTrieTransaction, create_proof_check_backend,
-	execution_proof_check_on_trie_backend, ExecutionManager, NeverOffchainExt
+	execution_proof_check_on_trie_backend, ExecutionManager,
 };
 use hash_db::Hasher;
 
@@ -353,7 +353,14 @@ mod tests {
 			_manager: ExecutionManager<F>,
 			_native_call: Option<NC>,
 			_side_effects_handler: Option<&mut O>,
-		) -> Result<(NativeOrEncoded<R>, (S::Transaction, H256), Option<MemoryDB<Blake2Hasher>>), ClientError> {
+		) -> Result<
+			(
+				NativeOrEncoded<R>,
+				(S::Transaction, H256),
+				Option<ChangesTrieTransaction<Blake2Hasher, NumberFor<Block>>>,
+			),
+			ClientError,
+		> {
 			unreachable!()
 		}
 
