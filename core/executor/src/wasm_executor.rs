@@ -35,7 +35,7 @@ use trie::{TrieConfiguration, trie_types::Layout};
 use crate::sandbox;
 use crate::allocator;
 use log::trace;
-use wasm_interface::{ExternalsContext, Externals, InherentExternals, Pointer, WordSize};
+use wasm_interface::{HostFunctionsContext, HostFunctions, InherentHostFunctions, Pointer, WordSize};
 
 #[cfg(feature="wasm-extern-trace")]
 macro_rules! debug_trace {
@@ -86,7 +86,7 @@ impl sandbox::SandboxCapabilities for FunctionExecutor {
 	}
 }
 
-impl ExternalsContext for FunctionExecutor {
+impl HostFunctionsContext for FunctionExecutor {
 	fn read_memory_into(&self, address: Pointer<u8>, dest: &mut [u8]) -> std::result::Result<(), String> {
 		self.memory.get_into(address.into(), dest).map_err(|e| format!("{:?}", e))
 	}
@@ -108,7 +108,7 @@ trait WritePrimitive<T: Sized> {
 	fn write_primitive(&mut self, ptr: Pointer<T>, t: T) -> std::result::Result<(), String>;
 }
 
-impl WritePrimitive<u32> for &mut dyn ExternalsContext {
+impl WritePrimitive<u32> for &mut dyn HostFunctionsContext {
 	fn write_primitive(&mut self, ptr: Pointer<u32>, t: u32) -> std::result::Result<(), String> {
 		use byteorder::{LittleEndian, ByteOrder};
 		let mut r = [0u8; 4];
@@ -121,7 +121,7 @@ trait ReadPrimitive<T: Sized> {
 	fn read_primitive(&self, offset: Pointer<T>) -> std::result::Result<T, String>;
 }
 
-impl ReadPrimitive<u32> for &mut dyn ExternalsContext {
+impl ReadPrimitive<u32> for &mut dyn HostFunctionsContext {
 	fn read_primitive(&self, ptr: Pointer<u32>) -> std::result::Result<u32, String> {
 		use byteorder::{LittleEndian, ByteOrder};
 		let result = self.read_memory(ptr.cast(), 4)?;
@@ -353,7 +353,6 @@ struct SubstrateExternals;
 impl_wasm_host_interface! {
 	impl SubstrateExternals where context {
 		ext_print_utf8(utf8_data: Pointer<u8>, utf8_len: WordSize) {
-			println!("PRINT\n\n");
 			if let Ok(utf8) = context.read_memory(utf8_data, utf8_len) {
 				if let Ok(message) = String::from_utf8(utf8) {
 					println!("{}", message);
@@ -1634,8 +1633,6 @@ mod tests {
 		let mut calldata = vec![];
 		calldata.extend_from_slice(key.public().as_ref());
 		calldata.extend_from_slice(sig.as_ref());
-
-		println!("SIG: {:?}", sig.0.as_ref());
 
 		assert_eq!(
 			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sr25519_verify", &calldata).unwrap(),

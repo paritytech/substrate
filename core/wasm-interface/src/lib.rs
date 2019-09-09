@@ -156,8 +156,8 @@ impl FunctionRef {
 	}
 }
 
-/// Context used by `Externals` to interact with the allocator and the memory of the wasm instance.
-pub trait ExternalsContext {
+/// Context used by `HostFunctions` to interact with the allocator and the memory of the wasm instance.
+pub trait HostFunctionsContext {
 	/// Read memory from `address` into a vector.
 	fn read_memory(&self, address: Pointer<u8>, size: WordSize) -> Result<Vec<u8>, String> {
 		let mut vec = Vec::with_capacity(size as usize);
@@ -176,7 +176,7 @@ pub trait ExternalsContext {
 }
 
 /// Something that provides implementations for host functions.
-pub trait Externals {
+pub trait HostFunctions {
 	/// Try to resolve the function with the given name and signature.
 	fn resolve_function(name: &str, signature: &Signature) -> Result<Option<FunctionRef>, String>;
 
@@ -191,14 +191,14 @@ pub trait Externals {
 	fn execute_function<A: Iterator<Item=Value>>(
 		index: usize,
 		args: A,
-		context: &mut dyn ExternalsContext,
+		context: &mut dyn HostFunctionsContext,
 	) -> Result<Option<Value>, String>;
 }
 
 /// Something that provides implementations for inherent host functions.
 ///
 /// Will be used interanlly by Substrate to provide functions like `malloc`, `free` etc.
-pub trait InherentExternals {
+pub trait InherentHostFunctions {
 	/// Try to resolve the function with the given name and signature.
 	fn resolve_function(name: &str, signature: &Signature) -> Result<Option<FunctionRef>, String>;
 

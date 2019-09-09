@@ -173,7 +173,7 @@ macro_rules! impl_wasm_host_interface {
 			)*
 		}
 	) => (
-		impl $(< $( $gen $(: $bound )? ),* >)? $crate::wasm_interface::InherentExternals
+		impl $(< $( $gen $(: $bound )? ),* >)? $crate::wasm_interface::InherentHostFunctions
 			for $interface_name $( < $( $ty_gen ),* > )?
 		{
 			fn resolve_function(
@@ -216,7 +216,7 @@ macro_rules! impl_wasm_host_interface {
 			)*
 		}
 	) => (
-		impl $(< $( $gen $(: $bound )? ),* >)? $crate::wasm_interface::Externals
+		impl $(< $( $gen $(: $bound )? ),* >)? $crate::wasm_interface::HostFunctions
 			for $interface_name $( < $( $ty_gen ),* > )?
 		{
 			fn resolve_function(
@@ -237,7 +237,7 @@ macro_rules! impl_wasm_host_interface {
 			fn execute_function<A: Iterator<Item=$crate::wasm_interface::Value>>(
 				index: usize,
 				mut args: A,
-				context: &mut dyn $crate::wasm_interface::ExternalsContext,
+				context: &mut dyn $crate::wasm_interface::HostFunctionsContext,
 			) -> std::result::Result<Option<$crate::wasm_interface::Value>, String> {
 				let mut $context = context;
 				dispatch_fn! {

@@ -261,16 +261,16 @@ impl<'a, FE: SandboxCapabilities + Externals + 'a> Externals for GuestExternals<
 				let v = v as u64;
 				let ptr = (v as u64 >> 32) as u32;
 				let len = (v & 0xFFFFFFFF) as u32;
-				(ptr, len)
+				(Pointer::new(ptr), len)
 			}
 			Ok(_) => return Err(trap("Supervisor function returned unexpected result!")),
 			Err(_) => return Err(trap("Supervisor function trapped!")),
 		};
 
 		let serialized_result_val = self.supervisor_externals
-			.read_memory(Pointer::new(serialized_result_val_ptr), serialized_result_val_len)?;
+			.read_memory(serialized_result_val_ptr, serialized_result_val_len)?;
 		self.supervisor_externals
-			.deallocate(Pointer::new(serialized_result_val_ptr))?;
+			.deallocate(serialized_result_val_ptr)?;
 
 		// We do not have to check the signature here, because it's automatically
 		// checked by wasmi.
