@@ -48,10 +48,10 @@ macro_rules! implement_per_thing {
 			/// Everything.
 			pub fn one() -> Self { Self($max) }
 
-			/// consume self and deconstruct into a raw numeric type.
+			/// Consume self and deconstruct into a raw numeric type.
 			pub fn deconstruct(self) -> $type { self.0 }
 
-			/// return the scale at which this per-thing is working.
+			/// Return the scale at which this per-thing is working.
 			pub const fn accuracy() -> $type { $max }
 
 			/// From an explicitly defined number of parts per maximum of the type.
@@ -510,7 +510,7 @@ implement_per_thing!(
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Fixed64(i64);
 
-/// The maximum value of the `Fixed64` type
+/// The accuracy of the `Fixed64` type.
 const DIV: i64 = 1_000_000_000;
 
 impl Fixed64 {
