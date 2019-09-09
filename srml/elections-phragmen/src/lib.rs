@@ -52,16 +52,15 @@
 //!
 //! Candidates also reserve a bond as they submit candidacy. A candidate cannot take their candidacy
 //! back. A candidate can end up in one of the below situations:
-//!   - **Winner**: A winner is kept as a _member_. They must still have a bond in reserve and they
-//!     are automatically counted as a candidate for the next election.
+//!	  - **Winner**: A winner is kept as a _member_. They must still have a bond in reserve and they
+//!		are automatically counted as a candidate for the next election.
 //!   - **Loser**: Any of the candidate who are not a winner are left as losers. A loser might be an
-//!     _outgoing member_, meaning that they are an active member who failed to keep their spot. In
-//!     this case, the outgoing member will get their bond back. Otherwise, the bond is slashed from
-//!     the loser candidate.
+//!		_outgoing member_, meaning that they are an active member who failed to keep their spot. In
+//!		this case, the outgoing member will get their bond back. Otherwise, the bond is slashed from
+//!		the loser candidate.
 //!   - **Runner-up**: Runner ups are the best candidates immediately after the winners. The number
-//!     of runner-ups to keep is configurable. Runner-ups serve one major role: if a member is
-//!     forcefully removed, the next best runner-up is chosen as a replacement. If not, a new
-//!     election is triggered.
+//!		of runner-ups to keep is configurable. Runner-ups are used, in order that they are elected,
+//! 	as replacements when a candidate is kicked by `remove_member()`.
 //!
 //! Note that with the members being the default candidates for the next round and votes persisting
 //! in storage, the election system is entirely stable given no further input. This means that if
