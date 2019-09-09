@@ -23,14 +23,14 @@
 //! **Important**: This crate is unstable and the API and usage may change.
 //!
 
-mod service;
-mod sync;
+pub mod service;
+pub mod sync;
 #[macro_use]
-mod protocol;
-mod chain;
-mod blocks;
-mod on_demand;
-mod util;
+pub mod protocol;
+pub mod chain;
+pub mod blocks;
+pub mod on_demand;
+pub mod util;
 pub mod config;
 pub mod consensus_gossip;
 pub mod error;

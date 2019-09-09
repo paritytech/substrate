@@ -81,9 +81,9 @@ pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
 #[derive(Clone)]
 pub struct NetworkLink<B: BlockT, S: NetworkSpecialization<B>> {
 	/// The protocol sender
-	pub(crate) protocol_sender: Sender<ProtocolMsg<B, S>>,
+	pub protocol_sender: Sender<ProtocolMsg<B, S>>,
 	/// The network sender
-	pub(crate) network_sender: NetworkChan<B>,
+	pub network_sender: NetworkChan<B>,
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
