@@ -184,7 +184,7 @@ where
 			C::print_from_uri(&formated_seed, None, maybe_network);
 		}
 		("transfer", Some(matches)) => {
-			let signer = read_input_pair::<Sr25519>(matches.value_of("from"), password);
+			let signer = read_pair::<Sr25519>(matches.value_of("from"), password);
 			let index = read_required_parameter::<Index>(matches, "index");
 			let genesis_hash = read_genesis_hash(matches);
 
@@ -197,7 +197,7 @@ where
 			print_extrinsic(extrinsic);
 		}
 		("sign-transaction", Some(matches)) => {
-			let signer = read_input_pair::<Sr25519>(matches.value_of("suri"), password);
+			let signer = read_pair::<Sr25519>(matches.value_of("suri"), password);
 			let index = read_required_parameter::<Index>(matches, "nonce");
 			let genesis_hash = read_genesis_hash(matches);
 
@@ -233,7 +233,7 @@ where
 	SignatureOf<C>: SignatureT,
 	PublicOf<C>: PublicT,
 {
-	let pair = read_input_pair::<C>(matches.value_of("suri"), password);
+	let pair = read_pair::<C>(matches.value_of("suri"), password);
 	let signature = pair.sign(&message);
 	format_signature::<C>(&signature)
 }
@@ -328,7 +328,7 @@ where
 	}
 }
 
-fn read_input_pair<C: Crypto>(
+fn read_pair<C: Crypto>(
 	matched_suri: Option<&str>,
 	password: Option<&str>,
 ) -> <C as Crypto>::Pair
