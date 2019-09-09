@@ -563,11 +563,12 @@ impl<Factory: ServiceFactory> LightComponents<Factory> {
 
 	pub fn new_foreign(
 		config: FactoryFullConfiguration<Factory>,
+		network_provider: impl super::NetworkProvider<Self>,
 		task_executor: TaskExecutor
 	) -> Result<Self, error::Error> {
 		Ok(Self {
 			_factory: Default::default(),
-			service: Service::new_foreign(config, task_executor)?,
+			service: Service::new_foreign(config, network_provider, task_executor)?,
 		})
 	}
 }

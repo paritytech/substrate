@@ -69,6 +69,22 @@ pub use tokio::runtime::TaskExecutor;
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
+pub type ComponentParams<C: components::Components> = network::config::Params<
+	FactoryBlock<<C as components::Components>::Factory>,
+	<<C as components::Components>::Factory as ServiceFactory>::NetworkProtocol,
+	ComponentExHash<C>,
+	<<C as components::Components>::Factory as ServiceFactory>::IdentifySpecialization,
+>;
+
+pub trait NetworkProvider<C: components::Components> {
+	fn get_shard_network(
+		&self,
+		params: ComponentParams<C>,
+		protocol_id: network::ProtocolId,
+		import_queue: Box<dyn consensus_common::import_queue::ImportQueue<FactoryBlock<C::Factory>>>,
+	) -> Result<network::NetworkChan<FactoryBlock<C::Factory>>, network::Error>;
+}
+
 /// Substrate service.
 pub struct Service<Components: components::Components> {
 	client: Arc<ComponentClient<Components>>,
@@ -345,6 +361,7 @@ impl<Components: components::Components> Service<Components> {
 
 	pub fn new_foreign(
 		mut config: FactoryFullConfiguration<Components::Factory>,
+		network_provider: impl NetworkProvider<Components>,
 		task_executor: TaskExecutor,
 	) -> Result<Self, error::Error> {
 		let (signal, exit) = ::exit_future::signal();
@@ -414,14 +431,15 @@ impl<Components: components::Components> Service<Components> {
 		};
 
 		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
-		let (network, network_chan) = network::Service::new(
+		let network_chan = network_provider.get_shard_network(
 			network_params,
 			protocol_id,
-			import_queue
+			import_queue,
 		)?;
 		on_demand.map(|on_demand| on_demand.set_network_sender(network_chan));
 
 		let inherents_pool = Arc::new(InherentsPool::default());
+		/*
 		let offchain_workers = None;
 
 		{
@@ -507,10 +525,11 @@ impl<Components: components::Components> Service<Components> {
 
 			task_executor.spawn(events);
 		}
+		*/
 
 		Ok(Service {
 			client,
-			network: Some(network),
+			network: None,
 			transaction_pool,
 			inherents_pool,
 			keystore,

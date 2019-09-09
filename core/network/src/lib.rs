@@ -42,6 +42,7 @@ pub mod test;
 
 pub use chain::Client as ClientHandle;
 pub use service::{Service, FetchFuture, TransactionPool, ManageNetwork, NetworkMsg, SyncProvider, ExHashT};
+pub use service::NetworkChan;
 pub use protocol::{ProtocolStatus, PeerInfo, Context};
 pub use sync::{Status as SyncStatus, SyncState};
 pub use network_libp2p::{
