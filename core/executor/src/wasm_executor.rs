@@ -242,9 +242,7 @@ trait WritePrimitive<T: Sized> {
 
 impl WritePrimitive<u32> for &mut dyn FunctionContext {
 	fn write_primitive(&mut self, ptr: Pointer<u32>, t: u32) -> std::result::Result<(), String> {
-		use byteorder::{LittleEndian, ByteOrder};
-		let mut r = [0u8; 4];
-		LittleEndian::write_u32(&mut r, t);
+		let r = t.to_le_bytes();
 		self.write_memory(ptr.cast(), &r)
 	}
 }
@@ -255,9 +253,9 @@ trait ReadPrimitive<T: Sized> {
 
 impl ReadPrimitive<u32> for &mut dyn FunctionContext {
 	fn read_primitive(&self, ptr: Pointer<u32>) -> std::result::Result<u32, String> {
-		use byteorder::{LittleEndian, ByteOrder};
-		let result = self.read_memory(ptr.cast(), 4)?;
-		Ok(LittleEndian::read_u32(&result))
+		let mut r = [0u8; 4];
+		self.read_memory_into(ptr.cast(), &mut r)?;
+		Ok(u32::from_le_bytes(r))
 	}
 }
 
