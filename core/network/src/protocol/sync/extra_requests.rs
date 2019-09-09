@@ -138,7 +138,10 @@ impl<B: BlockT> ExtraRequests<B> {
 		}
 
 		if best_finalized_number > self.best_seen_finalized_number {
-			match self.tree.finalize(
+			// normally we'll receive finality notifications for every block => finalize would be enough
+			// but if many blocks are finalized at once, some notifications may be omitted
+			// => let's use finalize_with_ancestors here
+			match self.tree.finalize_with_ancestors(
 				best_finalized_hash,
 				best_finalized_number,
 				&is_descendent_of,
@@ -435,6 +438,26 @@ mod tests {
 
 		// ensure that there's no request for #6
 		assert_eq!(finality_proofs.pending_requests.iter().collect::<Vec<_>>(), Vec::<&(Hash, u64)>::new());
+	}
+
+	#[test]
+	fn anecstor_roots_are_finalized_when_finality_notification_is_missed() {
+		let mut finality_proofs = ExtraRequests::<Block>::new();
+
+		let hash4 = [4; 32].into();
+		let hash5 = [5; 32].into();
+
+		fn is_descendent_of(base: &Hash, target: &Hash) -> Result<bool, ClientError> {
+			Ok(target[0] >= base[0])
+		}
+
+		// schedule request for #4
+		finality_proofs.schedule((hash4, 4), is_descendent_of);
+
+		// receive finality notification for #5 (missing notification for #4!!!)
+		finality_proofs.importing_requests.insert((hash4, 5));
+		finality_proofs.on_block_finalized(&hash5, 5, is_descendent_of).unwrap();
+		assert_eq!(finality_proofs.tree.roots().count(), 0);
 	}
 
 	// Some Arbitrary instances to allow easy construction of random peer sets:
