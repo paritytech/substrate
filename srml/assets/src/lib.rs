@@ -130,7 +130,7 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use srml_support::{StorageValue, StorageMap, Parameter, decl_module, decl_event, decl_storage, ensure};
+use support::{StorageValue, StorageMap, Parameter, decl_module, decl_event, decl_storage, ensure};
 use sr_primitives::traits::{Member, SimpleArithmetic, Zero, StaticLookup};
 use system::ensure_signed;
 use sr_primitives::traits::One;
@@ -240,7 +240,7 @@ mod tests {
 	use super::*;
 
 	use runtime_io::with_externalities;
-	use srml_support::{impl_outer_origin, assert_ok, assert_noop, parameter_types};
+	use support::{impl_outer_origin, assert_ok, assert_noop, parameter_types};
 	use primitives::{H256, Blake2Hasher};
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.

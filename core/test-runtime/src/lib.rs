@@ -38,7 +38,9 @@ use substrate_client::{
 };
 use sr_primitives::{
 	ApplyResult, create_runtime_str, Perbill, impl_opaque_keys,
-	transaction_validity::{TransactionValidity, ValidTransaction},
+	transaction_validity::{
+		TransactionValidity, ValidTransaction, TransactionValidityError, InvalidTransaction,
+	},
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
 		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup,
@@ -123,17 +125,17 @@ impl serde::Serialize for Extrinsic {
 impl BlindCheckable for Extrinsic {
 	type Checked = Self;
 
-	fn check(self) -> Result<Self, &'static str> {
+	fn check(self) -> Result<Self, TransactionValidityError> {
 		match self {
 			Extrinsic::AuthoritiesChange(new_auth) => Ok(Extrinsic::AuthoritiesChange(new_auth)),
 			Extrinsic::Transfer(transfer, signature) => {
 				if sr_primitives::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
 					Ok(Extrinsic::Transfer(transfer, signature))
 				} else {
-					Err(sr_primitives::BAD_SIGNATURE)
+					Err(InvalidTransaction::BadProof.into())
 				}
 			},
-			Extrinsic::IncludeData(_) => Err(sr_primitives::BAD_SIGNATURE),
+			Extrinsic::IncludeData(_) => Err(InvalidTransaction::BadProof.into()),
 			Extrinsic::StorageChange(key, value) => Ok(Extrinsic::StorageChange(key, value)),
 		}
 	}
@@ -478,7 +480,7 @@ cfg_if! {
 			impl client_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
-						return TransactionValidity::Valid(ValidTransaction {
+						return Ok(ValidTransaction {
 							priority: data.len() as u64,
 							requires: vec![],
 							provides: vec![data],
@@ -662,7 +664,7 @@ cfg_if! {
 			impl client_api::TaggedTransactionQueue<Block> for Runtime {
 				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
-						return TransactionValidity::Valid(ValidTransaction{
+						return Ok(ValidTransaction{
 							priority: data.len() as u64,
 							requires: vec![],
 							provides: vec![data],

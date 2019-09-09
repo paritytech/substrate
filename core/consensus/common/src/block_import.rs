@@ -39,7 +39,7 @@ pub enum ImportResult {
 }
 
 /// Auxiliary data associated with an imported block result.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct ImportedAux {
 	/// Clear all pending justification requests.
 	pub clear_justification_requests: bool,
@@ -49,24 +49,19 @@ pub struct ImportedAux {
 	pub bad_justification: bool,
 	/// Request a finality proof for the given block.
 	pub needs_finality_proof: bool,
-}
-
-impl Default for ImportedAux {
-	fn default() -> ImportedAux {
-		ImportedAux {
-			clear_justification_requests: false,
-			needs_justification: false,
-			bad_justification: false,
-			needs_finality_proof: false,
-		}
-	}
+	/// Whether the block that was imported is the new best block.
+	pub is_new_best: bool,
 }
 
 impl ImportResult {
-	/// Returns default value for `ImportResult::Imported` with both
-	/// `clear_justification_requests` and `needs_justification` set to false.
-	pub fn imported() -> ImportResult {
-		ImportResult::Imported(ImportedAux::default())
+	/// Returns default value for `ImportResult::Imported` with
+	/// `clear_justification_requests`, `needs_justification`,
+	/// `bad_justification` and `needs_finality_proof` set to false.
+	pub fn imported(is_new_best: bool) -> ImportResult {
+		let mut aux = ImportedAux::default();
+		aux.is_new_best = is_new_best;
+
+		ImportResult::Imported(aux)
 	}
 }
 

@@ -4210,7 +4210,6 @@ dependencies = [
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
  "srml-support 2.0.0",
- "srml-support-procedural 2.0.0",
  "srml-system 2.0.0",
  "substrate-primitives 2.0.0",
 ]

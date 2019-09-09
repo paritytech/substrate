@@ -24,11 +24,11 @@ use std::{
 use codec::{Encode, Decode};
 use primitives::{offchain, H256, Blake2Hasher, convert_hash, NativeOrEncoded};
 use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{One, Block as BlockT, Header as HeaderT};
+use sr_primitives::traits::{One, Block as BlockT, Header as HeaderT, NumberFor};
 use state_machine::{
 	self, Backend as StateBackend, CodeExecutor, OverlayedChanges,
-	ExecutionStrategy, create_proof_check_backend,
-	execution_proof_check_on_trie_backend, ExecutionManager,
+	ExecutionStrategy, ChangesTrieTransaction, create_proof_check_backend,
+	execution_proof_check_on_trie_backend, ExecutionManager, NeverOffchainExt
 };
 use hash_db::Hasher;
 
@@ -38,7 +38,6 @@ use crate::call_executor::CallExecutor;
 use crate::error::{Error as ClientError, Result as ClientResult};
 use crate::light::fetcher::RemoteCallRequest;
 use executor::{RuntimeVersion, NativeVersion};
-use trie::MemoryDB;
 
 /// Call executor that is able to execute calls only on genesis state.
 ///
@@ -171,7 +170,7 @@ impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
 	) -> ClientResult<(
 		NativeOrEncoded<R>,
 		(S::Transaction, <Blake2Hasher as Hasher>::Out),
-		Option<MemoryDB<Blake2Hasher>>,
+		Option<ChangesTrieTransaction<Blake2Hasher, NumberFor<Block>>>,
 	)> {
 		Err(ClientError::NotAvailableOnLightClient)
 	}
