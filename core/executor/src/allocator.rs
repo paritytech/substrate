@@ -142,10 +142,7 @@ impl FreeingBumpHeapAllocator {
 			ptr
 		} else {
 			// Nothing to be freed. Bump.
-			if self.bumper + PREFIX_SIZE + item_size > self.max_heap_size {
-				return Err(Error::AllocatorOutOfSpace);
-			}
-			self.bump(item_size + PREFIX_SIZE) + PREFIX_SIZE
+			self.bump(item_size)? + PREFIX_SIZE
 		};
 
 		// Reset prefix
@@ -185,10 +182,14 @@ impl FreeingBumpHeapAllocator {
 		Ok(())
 	}
 
-	fn bump(&mut self, n: u32) -> u32 {
+	fn bump(&mut self, item_size: u32) -> Result<u32> {
+		if self.bumper + PREFIX_SIZE + item_size > self.max_heap_size {
+			return Err(Error::AllocatorOutOfSpace);
+		}
+
 		let res = self.bumper;
-		self.bumper += n;
-		res
+		self.bumper += item_size + PREFIX_SIZE;
+		Ok(res)
 	}
 
 	fn le_bytes_to_u32(arr: [u8; 4]) -> u32 {
