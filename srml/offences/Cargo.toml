@@ -29,4 +29,5 @@ std = [
 	"sr-staking-primitives/std",
 	"support/std",
 	"system/std",
+	"runtime-io/std",
 ]

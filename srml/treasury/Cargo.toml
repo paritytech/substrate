@@ -27,4 +27,5 @@ std = [
 	"support/std",
 	"system/std",
 	"balances/std",
+	"runtime-io/std",
 ]

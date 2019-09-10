@@ -34,5 +34,6 @@ std = [
 	"sr-primitives/std",
 	"sr-staking-primitives/std",
 	"timestamp/std",
-	"substrate-trie/std"
+	"substrate-trie/std",
+	"runtime-io/std",
 ]

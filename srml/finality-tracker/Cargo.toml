@@ -27,4 +27,5 @@ std = [
 	"sr-primitives/std",
 	"srml-system/std",
 	"inherents/std",
+	"runtime-io/std",
 ]
