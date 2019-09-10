@@ -188,7 +188,7 @@ impl<B, E, Block: BlockT, RA> FullState<B, E, Block, RA>
 		for key in keys {
 			let mut last_block = None;
 			let mut last_value = last_values.get(key).cloned().unwrap_or_default();
-			let key_changes = self.client.key_changes(begin, end, key).map_err(client_err)?;
+			let key_changes = self.client.key_changes(begin, end, None, key).map_err(client_err)?;
 			for (block, _) in key_changes.into_iter().rev() {
 				if last_block == Some(block) {
 					continue;

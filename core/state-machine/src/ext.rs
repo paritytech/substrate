@@ -20,7 +20,9 @@ use std::{error, fmt, cmp::Ord};
 use log::warn;
 use crate::{
 	backend::Backend, OverlayedChanges,
-	changes_trie::{Storage as ChangesTrieStorage, build_changes_trie},
+	changes_trie::{
+		Storage as ChangesTrieStorage, CacheAction as ChangesTrieCacheAction, build_changes_trie,
+	},
 };
 use hash_db::Hasher;
 use primitives::{
@@ -82,7 +84,7 @@ where
 	/// This differs from `storage_transaction` behavior, because the moment when
 	/// `storage_changes_root` is called matters + we need to remember additional
 	/// data at this moment (block number).
-	changes_trie_transaction: Option<(MemoryDB<H>, H::Out)>,
+	changes_trie_transaction: Option<(MemoryDB<H>, H::Out, ChangesTrieCacheAction<H::Out, N>)>,
 	/// Additional externalities for offchain workers.
 	///
 	/// If None, some methods from the trait might not be supported.
@@ -123,14 +125,14 @@ where
 	}
 
 	/// Get the transaction necessary to update the backend.
-	pub fn transaction(mut self) -> ((B::Transaction, H::Out), Option<MemoryDB<H>>) {
+	pub fn transaction(mut self) -> ((B::Transaction, H::Out), Option<crate::ChangesTrieTransaction<H, N>>) {
 		let _ = self.storage_root();
 
 		let (storage_transaction, changes_trie_transaction) = (
 			self.storage_transaction
 				.expect("storage_transaction always set after calling storage root; qed"),
 			self.changes_trie_transaction
-				.map(|(tx, _)| tx),
+				.map(|(tx, _, cache)| (tx, cache)),
 		);
 
 		(
@@ -309,10 +311,10 @@ where
 		let child_delta_iter = child_storage_keys.map(|storage_key|
 			(storage_key.clone(), self.overlay.committed.children.get(storage_key)
 				.into_iter()
-				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
+				.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone())))
 				.chain(self.overlay.prospective.children.get(storage_key)
 					.into_iter()
-					.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone()))))));
+					.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone()))))));
 
 
 		// compute and memoize
@@ -337,10 +339,10 @@ where
 
 			let delta = self.overlay.committed.children.get(storage_key)
 				.into_iter()
-				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
+				.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone())))
 				.chain(self.overlay.prospective.children.get(storage_key)
 						.into_iter()
-						.flat_map(|map| map.1.clone().into_iter()));
+						.flat_map(|map| map.clone().into_iter().map(|(k, v)| (k.clone(), v.value.clone()))));
 
 			let root = self.backend.child_storage_root(storage_key, delta).0;
 
@@ -359,7 +361,7 @@ where
 			self.overlay,
 			parent_hash,
 		)?;
-		Ok(self.changes_trie_transaction.as_ref().map(|(_, root)| root.clone()))
+		Ok(self.changes_trie_transaction.as_ref().map(|(_, root, _)| root.clone()))
 	}
 
 	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities> {

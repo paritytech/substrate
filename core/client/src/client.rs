@@ -42,7 +42,8 @@ use sr_primitives::{
 use state_machine::{
 	DBValue, Backend as StateBackend, ChangesTrieAnchorBlockId, ExecutionStrategy, ExecutionManager,
 	prove_read, prove_child_read, ChangesTrieRootsStorage, ChangesTrieStorage,
-	ChangesTrieConfigurationRange, key_changes, key_changes_proof, OverlayedChanges,
+	ChangesTrieTransaction, ChangesTrieConfigurationRange, key_changes, key_changes_proof,
+	OverlayedChanges,
 };
 use executor::{RuntimeVersion, RuntimeInfo};
 use consensus::{
@@ -59,7 +60,7 @@ use crate::{
 	},
 	backend::{
 		self, BlockImportOperation, PrunableStateChangesTrieStorage,
-		ClientImportOperation, Finalizer,
+		ClientImportOperation, Finalizer, ImportSummary,
 	},
 	blockchain::{
 		self, Info as ChainInfo, Backend as ChainBackend,
@@ -84,7 +85,7 @@ type StorageUpdate<B, Block> = <
 		<B as backend::Backend<Block, Blake2Hasher>>::BlockImportOperation
 			as BlockImportOperation<Block, Blake2Hasher>
 	>::State as state_machine::Backend<Blake2Hasher>>::Transaction;
-type ChangesUpdate = trie::MemoryDB<Blake2Hasher>;
+type ChangesUpdate<Block> = ChangesTrieTransaction<Blake2Hasher, NumberFor<Block>>;
 
 /// Execution strategies settings.
 #[derive(Debug, Clone)]
@@ -196,6 +197,8 @@ pub struct BlockImportNotification<Block: BlockT> {
 	pub header: Block::Header,
 	/// Is this the new best block.
 	pub is_new_best: bool,
+	/// List of retracted blocks ordered by block number.
+	pub retracted: Vec<Block::Hash>,
 }
 
 /// Summary of a finalized block.
@@ -533,6 +536,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&self,
 		first: NumberFor<Block>,
 		last: BlockId<Block>,
+		storage_key: Option<&StorageKey>,
 		key: &StorageKey
 	) -> error::Result<Vec<(NumberFor<Block>, u32)>> {
 		let (config, storage) = self.require_changes_trie()?;
@@ -555,6 +559,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				number: last_number,
 			},
 			self.backend.blockchain().info().best_number,
+			storage_key.as_ref().map(|sk| sk.0.as_slice()),
 			&key.0)
 		.and_then(|r| r.map(|r| r.map(|(block, tx)| (block, tx))).collect::<Result<_, _>>())
 		.map_err(|err| error::Error::ChangesTrieAccessFailed(err))
@@ -572,13 +577,15 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		last: Block::Hash,
 		min: Block::Hash,
 		max: Block::Hash,
-		key: &StorageKey
+		storage_key: Option<&StorageKey>,
+		key: &StorageKey,
 	) -> error::Result<ChangesProof<Block::Header>> {
 		self.key_changes_proof_with_cht_size(
 			first,
 			last,
 			min,
 			max,
+			storage_key,
 			key,
 			cht::size(),
 		)
@@ -591,6 +598,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		last: Block::Hash,
 		min: Block::Hash,
 		max: Block::Hash,
+		storage_key: Option<&StorageKey>,
 		key: &StorageKey,
 		cht_size: NumberFor<Block>,
 	) -> error::Result<ChangesProof<Block::Header>> {
@@ -626,6 +634,14 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		impl<'a, Block: BlockT> ChangesTrieStorage<Blake2Hasher, NumberFor<Block>> for AccessedRootsRecorder<'a, Block> {
 			fn as_roots_storage(&self) -> &dyn state_machine::ChangesTrieRootsStorage<Blake2Hasher, NumberFor<Block>> {
 				self
+			}
+
+			fn with_cached_changed_keys(
+				&self,
+				root: &H256,
+				functor: &mut dyn FnMut(&HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>),
+			) -> bool {
+				self.storage.with_cached_changed_keys(root, functor)
 			}
 
 			fn get(&self, key: &H256, prefix: Prefix) -> Result<Option<DBValue>, String> {
@@ -668,7 +684,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				number: last_number,
 			},
 			max_number,
-			&key.0
+			storage_key.as_ref().map(|sk| sk.0.as_slice()),
+			&key.0,
 		)
 		.map_err(|err| error::Error::from(error::Error::ChangesTrieAccessFailed(err)))?;
 
@@ -871,11 +888,15 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			fork_choice,
 		);
 
-		telemetry!(SUBSTRATE_INFO; "block.import";
-			"height" => height,
-			"best" => ?hash,
-			"origin" => ?origin
-		);
+		if let Ok(ImportResult::Imported(ref aux)) = result {
+			if aux.is_new_best {
+				telemetry!(SUBSTRATE_INFO; "block.import";
+					"height" => height,
+					"best" => ?hash,
+					"origin" => ?origin
+				);
+			}
+		}
 
 		result
 	}
@@ -906,19 +927,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		// the block is lower than our last finalized block so it must revert
 		// finality, refusing import.
 		if *import_headers.post().number() <= info.finalized_number {
-			return Err(error::Error::NotInFinalizedChain);
-		}
-
-		// find tree route from last finalized to given block.
-		let route_from_finalized = crate::blockchain::tree_route(
-			|id| self.header(&id)?.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id))),
-			BlockId::Hash(info.finalized_hash),
-			BlockId::Hash(parent_hash),
-		)?;
-
-		// the block being imported retracts the last finalized block, refusing to
-		// import.
-		if !route_from_finalized.retracted().is_empty() {
 			return Err(error::Error::NotInFinalizedChain);
 		}
 
@@ -960,6 +968,17 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			crate::backend::NewBlockState::Normal
 		};
 
+		let retracted = if is_new_best {
+			let route_from_best = crate::blockchain::tree_route(
+				|id| self.header(&id)?.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id))),
+				BlockId::Hash(info.best_hash),
+				BlockId::Hash(parent_hash),
+			)?;
+			route_from_best.retracted().iter().rev().map(|e| e.hash.clone()).collect()
+		} else {
+			Vec::default()
+		};
+
 		trace!("Imported {}, (#{}), best={}, origin={:?}", hash, import_headers.post().number(), is_new_best, origin);
 
 		operation.op.set_block_data(
@@ -987,10 +1006,17 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				operation.notify_finalized.push(hash);
 			}
 
-			operation.notify_imported = Some((hash, origin, import_headers.into_post(), is_new_best, storage_changes));
+			operation.notify_imported = Some(ImportSummary {
+				hash,
+				origin,
+				header: import_headers.into_post(),
+				is_new_best,
+				storage_changes,
+				retracted,
+			})
 		}
 
-		Ok(ImportResult::imported())
+		Ok(ImportResult::imported(is_new_best))
 	}
 
 	fn block_execution(
@@ -1002,7 +1028,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		body: Option<Vec<Block::Extrinsic>>,
 	) -> error::Result<(
 		Option<StorageUpdate<B, Block>>,
-		Option<Option<ChangesUpdate>>,
+		Option<Option<ChangesUpdate<Block>>>,
 		Option<(
 			Vec<(Vec<u8>, Option<Vec<u8>>)>,
 			Vec<(Vec<u8>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>
@@ -1159,33 +1185,24 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	fn notify_imported(
 		&self,
-		notify_import: (
-			Block::Hash, BlockOrigin,
-			Block::Header,
-			bool,
-			Option<(
-				Vec<(Vec<u8>, Option<Vec<u8>>)>,
-				Vec<(Vec<u8>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>,
-				)
-			>),
+		notify_import: ImportSummary<Block>,
 	) -> error::Result<()> {
-		let (hash, origin, header, is_new_best, storage_changes) = notify_import;
-
-		if let Some(storage_changes) = storage_changes {
+		if let Some(storage_changes) = notify_import.storage_changes {
 			// TODO [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
 			self.storage_notifications.lock()
 				.trigger(
-					&hash,
+					&notify_import.hash,
 					storage_changes.0.into_iter(),
 					storage_changes.1.into_iter().map(|(sk, v)| (sk, v.into_iter())),
 				);
 		}
 
 		let notification = BlockImportNotification::<Block> {
-			hash,
-			origin,
-			header,
-			is_new_best,
+			hash: notify_import.hash,
+			origin: notify_import.origin,
+			header: notify_import.header,
+			is_new_best: notify_import.is_new_best,
+			retracted: notify_import.retracted,
 		};
 
 		self.import_notification_sinks.lock()
@@ -1505,7 +1522,7 @@ impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Blo
 			BlockStatus::KnownBad => return Ok(ImportResult::KnownBad),
 		}
 
-		Ok(ImportResult::imported())
+		Ok(ImportResult::imported(false))
 	}
 }
 
@@ -1533,7 +1550,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 	}
 }
 
-impl<B, E, Block, RA> Finalizer<Block, Blake2Hasher, B> for Client<B, E, Block, RA> where 
+impl<B, E, Block, RA> Finalizer<Block, Blake2Hasher, B> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
 	Block: BlockT<Hash=H256>,
@@ -1557,7 +1574,7 @@ impl<B, E, Block, RA> Finalizer<Block, Blake2Hasher, B> for Client<B, E, Block, 
 	}
 }
 
-impl<B, E, Block, RA> Finalizer<Block, Blake2Hasher, B> for &Client<B, E, Block, RA> where 
+impl<B, E, Block, RA> Finalizer<Block, Blake2Hasher, B> for &Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
 	Block: BlockT<Hash=H256>,
@@ -1838,7 +1855,7 @@ impl<B, E, Block, RA> backend::AuxStore for &Client<B, E, Block, RA>
 		B: backend::Backend<Block, Blake2Hasher>,
 		E: CallExecutor<Block, Blake2Hasher>,
 		Block: BlockT<Hash=H256>,
-{ 
+{
 
 	fn insert_aux<
 		'a,
@@ -2578,7 +2595,12 @@ pub(crate) mod tests {
 
 		for (index, (begin, end, key, expected_result)) in test_cases.into_iter().enumerate() {
 			let end = client.block_hash(end).unwrap().unwrap();
-			let actual_result = client.key_changes(begin, BlockId::Hash(end), &StorageKey(key)).unwrap();
+			let actual_result = client.key_changes(
+				begin,
+				BlockId::Hash(end),
+				None,
+				&StorageKey(key),
+			).unwrap();
 			match actual_result == expected_result {
 				true => (),
 				false => panic!(format!("Failed test {}: actual = {:?}, expected = {:?}",

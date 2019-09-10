@@ -61,7 +61,7 @@
 //! ### Get current timestamp
 //!
 //! ```
-//! use srml_support::{decl_module, dispatch::Result};
+//! use support::{decl_module, dispatch::Result};
 //! # use srml_timestamp as timestamp;
 //! use system::ensure_signed;
 //!
@@ -96,8 +96,8 @@ use codec::Encode;
 use codec::Decode;
 #[cfg(feature = "std")]
 use inherents::ProvideInherentData;
-use srml_support::{StorageValue, Parameter, decl_storage, decl_module, for_each_tuple};
-use srml_support::traits::{Time, Get};
+use support::{StorageValue, Parameter, decl_storage, decl_module, for_each_tuple};
+use support::traits::{Time, Get};
 use sr_primitives::traits::{
 	SimpleArithmetic, Zero, SaturatedConversion, Scale
 };
@@ -338,7 +338,7 @@ impl<T: Trait> Time for Module<T> {
 mod tests {
 	use super::*;
 
-	use srml_support::{impl_outer_origin, assert_ok, parameter_types};
+	use support::{impl_outer_origin, assert_ok, parameter_types};
 	use runtime_io::{with_externalities, TestExternalities};
 	use primitives::H256;
 	use sr_primitives::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};

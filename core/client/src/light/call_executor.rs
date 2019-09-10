@@ -28,10 +28,10 @@ use primitives::{
 	traits::CodeExecutor,
 };
 use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{One, Block as BlockT, Header as HeaderT};
+use sr_primitives::traits::{One, Block as BlockT, Header as HeaderT, NumberFor};
 use state_machine::{
 	self, Backend as StateBackend, OverlayedChanges, ExecutionStrategy, create_proof_check_backend,
-	execution_proof_check_on_trie_backend, ExecutionManager,
+	execution_proof_check_on_trie_backend, ExecutionManager, ChangesTrieTransaction,
 };
 use hash_db::Hasher;
 
@@ -42,7 +42,6 @@ use crate::call_executor::CallExecutor;
 use crate::error::{Error as ClientError, Result as ClientResult};
 use crate::light::fetcher::{Fetcher, RemoteCallRequest};
 use executor::{RuntimeVersion, NativeVersion};
-use trie::MemoryDB;
 
 /// Call executor that executes methods on remote node, querying execution proof
 /// and checking proof by re-executing locally.
@@ -187,7 +186,7 @@ where
 	) -> ClientResult<(
 		NativeOrEncoded<R>,
 		(S::Transaction, <Blake2Hasher as Hasher>::Out),
-		Option<MemoryDB<Blake2Hasher>>,
+		Option<ChangesTrieTransaction<Blake2Hasher, NumberFor<Block>>>,
 	)> {
 		Err(ClientError::NotAvailableOnLightClient.into())
 	}
@@ -367,7 +366,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 	) -> ClientResult<(
 		NativeOrEncoded<R>,
 		(S::Transaction, <Blake2Hasher as Hasher>::Out),
-		Option<MemoryDB<Blake2Hasher>>,
+		Option<ChangesTrieTransaction<Blake2Hasher, NumberFor<Block>>>,
 	)> {
 		// there's no actual way/need to specify native/wasm execution strategy on light node
 		// => we can safely ignore passed values

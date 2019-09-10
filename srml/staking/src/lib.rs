@@ -136,7 +136,7 @@
 //! ### Example: Rewarding a validator by id.
 //!
 //! ```
-//! use srml_support::{decl_module, dispatch::Result};
+//! use support::{decl_module, dispatch::Result};
 //! use system::ensure_signed;
 //! use srml_staking::{self as staking};
 //!
@@ -261,7 +261,7 @@ mod benches;
 
 use rstd::{prelude::*, result};
 use codec::{HasCompact, Encode, Decode};
-use srml_support::{
+use support::{
 	StorageValue, StorageMap, StorageLinkedMap, decl_module, decl_event,
 	decl_storage, ensure, traits::{
 		Currency, OnFreeBalanceZero, OnDilution, LockIdentifier, LockableCurrency,
@@ -680,7 +680,7 @@ decl_module! {
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will
 		/// be the account that controls it.
 		///
-		/// `value` must be more than the `existential_deposit` defined in the Balances module.
+		/// `value` must be more than the `minimum_balance` specified by `T::Currency`.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the stash account.
 		///
@@ -759,7 +759,7 @@ decl_module! {
 
 		/// Schedule a portion of the stash to be unlocked ready for transfer out after the bond
 		/// period ends. If this leaves an amount actively bonded less than
-		/// T::Currency::existential_deposit(), then it is increased to the full amount.
+		/// T::Currency::minimum_balance(), then it is increased to the full amount.
 		///
 		/// Once the unlock period is done, you can call `withdraw_unbonded` to actually move
 		/// the funds out of management ready for transfer.
@@ -882,8 +882,8 @@ decl_module! {
 			ensure!(!targets.is_empty(), "targets cannot be empty");
 			let targets = targets.into_iter()
 				.take(MAX_NOMINATIONS)
-				.map(T::Lookup::lookup)
-				.collect::<result::Result<Vec<T::AccountId>, &'static str>>()?;
+				.map(|t| T::Lookup::lookup(t))
+				.collect::<result::Result<Vec<T::AccountId>, _>>()?;
 
 			<Validators<T>>::remove(stash);
 			<Nominators<T>>::insert(stash, targets);
@@ -1001,8 +1001,8 @@ impl<T: Trait> Module<T> {
 
 	/// The total balance that can be slashed from a validator controller account as of
 	/// right now.
-	pub fn slashable_balance(who: &T::AccountId) -> BalanceOf<T> {
-		Self::stakers(who).total
+	pub fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
+		Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
 	}
 
 	// MUTABLES (DANGEROUS)
@@ -1229,10 +1229,6 @@ impl<T: Trait> Module<T> {
 		let (_slot_stake, maybe_new_validators) = Self::select_validators();
 
 		maybe_new_validators
-	}
-
-	fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
-		Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
 	}
 
 	/// Select a new validator set from the assembled stakers and their role preferences.
