@@ -162,7 +162,8 @@ pub trait Externalities<H: Hasher> {
 	/// Get the identity of the chain.
 	fn chain_id(&self) -> u64;
 
-	/// Get the trie root of the current storage map. This will also update all child storage keys in the top-level storage map.
+	/// Get the trie root of the current storage map. This will also update all child storage keys
+	/// in the top-level storage map.
 	fn storage_root(&mut self) -> H::Out where H::Out: Ord;
 
 	/// Get the trie root of a child storage map. This will also update the value of the child
