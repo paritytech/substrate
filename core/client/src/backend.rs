@@ -144,7 +144,7 @@ pub trait Finalizer<Block: BlockT, H: Hasher<Out=Block::Hash>, B: Backend<Block,
 		notify: bool,
 	) -> error::Result<()>;
 
-		
+
 	/// Finalize a block. This will implicitly finalize all blocks up to it and
 	/// fire finality notifications.
 	///

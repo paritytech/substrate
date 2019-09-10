@@ -27,12 +27,12 @@ use wasmi::{
 	Module, ModuleInstance, MemoryInstance, MemoryRef, TableRef, ImportsBuilder, ModuleRef,
 	memory_units::Pages, RuntimeValue::{I32, I64, self},
 };
-use state_machine::Externalities;
 use crate::error::{Error, Result};
 use codec::{Encode, Decode};
 use primitives::{
 	blake2_128, blake2_256, twox_64, twox_128, twox_256, ed25519, sr25519, Pair, crypto::KeyTypeId,
-	offchain, hexdisplay::HexDisplay, sandbox as sandbox_primitives, Blake2Hasher,
+	offchain, hexdisplay::HexDisplay, sandbox as sandbox_primitives, H256, Blake2Hasher,
+	traits::Externalities, child_storage_key::ChildStorageKey,
 };
 use trie::{TrieConfiguration, trie_types::Layout};
 use crate::sandbox;

@@ -16,12 +16,11 @@
 
 use primitives::{
 	blake2_128, blake2_256, twox_128, twox_256, twox_64, ed25519, Blake2Hasher, sr25519, Pair,
+	traits::Externalities, child_storage_key::ChildStorageKey,
 };
 // Switch to this after PoC-3
 // pub use primitives::BlakeHasher;
-pub use substrate_state_machine::{
-	Externalities, BasicExternalities, TestExternalities, ChildStorageKey,
-};
+pub use substrate_state_machine::{BasicExternalities, TestExternalities};
 
 use environmental::environmental;
 use primitives::{offchain, hexdisplay::HexDisplay, H256};
@@ -40,7 +39,7 @@ impl<T: Hasher> HasherBounds for T {}
 ///
 /// Panicking here is aligned with what the `without_std` environment would do
 /// in the case of an invalid child storage key.
-fn child_storage_key_or_panic(storage_key: &[u8]) -> ChildStorageKey<Blake2Hasher> {
+fn child_storage_key_or_panic(storage_key: &[u8]) -> ChildStorageKey {
 	match ChildStorageKey::from_slice(storage_key) {
 		Some(storage_key) => storage_key,
 		None => panic!("child storage key is invalid"),

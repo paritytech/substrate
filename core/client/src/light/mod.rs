@@ -24,10 +24,9 @@ pub mod fetcher;
 use std::sync::Arc;
 
 use executor::RuntimeInfo;
-use primitives::{H256, Blake2Hasher};
+use primitives::{H256, Blake2Hasher, traits::CodeExecutor};
 use sr_primitives::BuildStorage;
 use sr_primitives::traits::Block as BlockT;
-use state_machine::CodeExecutor;
 
 use crate::call_executor::LocalCallExecutor;
 use crate::client::Client;

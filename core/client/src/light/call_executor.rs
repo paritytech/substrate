@@ -23,13 +23,15 @@ use std::{
 };
 
 use codec::{Encode, Decode};
-use primitives::{offchain, H256, Blake2Hasher, convert_hash, NativeOrEncoded};
+use primitives::{
+	offchain::{self, NeverOffchainExt}, H256, Blake2Hasher, convert_hash, NativeOrEncoded,
+	traits::CodeExecutor,
+};
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{One, Block as BlockT, Header as HeaderT, NumberFor};
 use state_machine::{
-	self, Backend as StateBackend, CodeExecutor, OverlayedChanges,
-	ExecutionStrategy, ChangesTrieTransaction, create_proof_check_backend,
-	execution_proof_check_on_trie_backend, ExecutionManager, NeverOffchainExt
+	self, Backend as StateBackend, OverlayedChanges, ExecutionStrategy, create_proof_check_backend,
+	execution_proof_check_on_trie_backend, ExecutionManager, ChangesTrieTransaction,
 };
 use hash_db::Hasher;
 
@@ -451,7 +453,7 @@ pub fn prove_execution<Block, S, E>(
 pub fn check_execution_proof<Header, E, H>(
 	executor: &E,
 	request: &RemoteCallRequest<Header>,
-	remote_proof: Vec<Vec<u8>>
+	remote_proof: Vec<Vec<u8>>,
 ) -> ClientResult<Vec<u8>>
 	where
 		Header: HeaderT,
@@ -482,16 +484,14 @@ pub fn check_execution_proof<Header, E, H>(
 	)?;
 
 	// execute method
-	let local_result = execution_proof_check_on_trie_backend::<H, _>(
+	execution_proof_check_on_trie_backend::<H, _>(
 		&trie_backend,
 		&mut changes,
 		executor,
 		&request.method,
 		&request.call_data,
 		None,
-	)?;
-
-	Ok(local_result)
+	).map_err(Into::into)
 }
 
 #[cfg(test)]
@@ -568,8 +568,14 @@ mod tests {
 		backend.blockchain().insert(hash0, header0, None, None, NewBlockState::Final).unwrap();
 		backend.blockchain().insert(hash1, header1, None, None, NewBlockState::Final).unwrap();
 
-		let local_executor = RemoteCallExecutor::new(Arc::new(backend.blockchain().clone()), Arc::new(OkCallFetcher::new(vec![1])));
-		let remote_executor = RemoteCallExecutor::new(Arc::new(backend.blockchain().clone()), Arc::new(OkCallFetcher::new(vec![2])));
+		let local_executor = RemoteCallExecutor::new(
+			Arc::new(backend.blockchain().clone()),
+			Arc::new(OkCallFetcher::new(vec![1])),
+		);
+		let remote_executor = RemoteCallExecutor::new(
+			Arc::new(backend.blockchain().clone()),
+			Arc::new(OkCallFetcher::new(vec![2])),
+		);
 		let remote_or_local = RemoteOrLocalCallExecutor::new(backend, remote_executor, local_executor);
 		assert_eq!(
 			remote_or_local.call(

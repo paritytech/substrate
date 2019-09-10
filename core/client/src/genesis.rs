@@ -24,7 +24,10 @@ pub fn construct_genesis_block<
 > (
 	state_root: Block::Hash
 ) -> Block {
-	let extrinsics_root = <<<Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(::std::iter::empty::<(&[u8], &[u8])>());
+	let extrinsics_root = <<<Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
+		std::iter::empty::<(&[u8], &[u8])>(),
+	);
+
 	Block::new(
 		<<Block as BlockT>::Header as HeaderT>::new(
 			Zero::zero(),
@@ -41,14 +44,16 @@ pub fn construct_genesis_block<
 mod tests {
 	use codec::{Encode, Decode, Joiner};
 	use executor::native_executor_instance;
-	use state_machine::{self, OverlayedChanges, ExecutionStrategy, InMemoryChangesTrieStorage};
+	use state_machine::{
+		StateMachine, OverlayedChanges, ExecutionStrategy, InMemoryChangesTrieStorage,
+	};
 	use state_machine::backend::InMemory;
 	use test_client::{
 		runtime::genesismap::{GenesisConfig, insert_genesis_block},
 		runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest},
 		AccountKeyring, Sr25519Keyring,
 	};
-	use primitives::{Blake2Hasher, map};
+	use primitives::{Blake2Hasher, map, offchain::NeverOffchainExt};
 	use hex::*;
 
 	native_executor_instance!(
@@ -85,10 +90,10 @@ mod tests {
 		let hash = header.hash();
 		let mut overlay = OverlayedChanges::default();
 
-		state_machine::new(
+		StateMachine::new(
 			backend,
 			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
-			state_machine::NeverOffchainExt::new(),
+			NeverOffchainExt::new(),
 			&mut overlay,
 			&executor(),
 			"Core_initialize_block",
@@ -99,10 +104,10 @@ mod tests {
 		).unwrap();
 
 		for tx in transactions.iter() {
-			state_machine::new(
+			StateMachine::new(
 				backend,
 				Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
-				state_machine::NeverOffchainExt::new(),
+				NeverOffchainExt::new(),
 				&mut overlay,
 				&executor(),
 				"BlockBuilder_apply_extrinsic",
@@ -113,10 +118,10 @@ mod tests {
 			).unwrap();
 		}
 
-		let (ret_data, _, _) = state_machine::new(
+		let (ret_data, _, _) = StateMachine::new(
 			backend,
 			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
-			state_machine::NeverOffchainExt::new(),
+			NeverOffchainExt::new(),
 			&mut overlay,
 			&executor(),
 			"BlockBuilder_finalize_block",
@@ -161,10 +166,10 @@ mod tests {
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
 
 		let mut overlay = OverlayedChanges::default();
-		let _ = state_machine::new(
+		let _ = StateMachine::new(
 			&backend,
 			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
-			state_machine::NeverOffchainExt::new(),
+			NeverOffchainExt::new(),
 			&mut overlay,
 			&executor(),
 			"Core_execute_block",
@@ -191,10 +196,10 @@ mod tests {
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
 
 		let mut overlay = OverlayedChanges::default();
-		let _ = state_machine::new(
+		let _ = StateMachine::new(
 			&backend,
 			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
-			state_machine::NeverOffchainExt::new(),
+			NeverOffchainExt::new(),
 			&mut overlay,
 			&executor(),
 			"Core_execute_block",
@@ -221,10 +226,10 @@ mod tests {
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
 
 		let mut overlay = OverlayedChanges::default();
-		let r = state_machine::new(
+		let r = StateMachine::new(
 			&backend,
 			Some(&InMemoryChangesTrieStorage::<_, u64>::new()),
-			state_machine::NeverOffchainExt::new(),
+			NeverOffchainExt::new(),
 			&mut overlay,
 			&executor(),
 			"Core_execute_block",

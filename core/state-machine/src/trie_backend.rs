@@ -57,8 +57,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> {
 	}
 }
 
-impl super::Error for String {}
-
 impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	H::Out: Ord,
 {

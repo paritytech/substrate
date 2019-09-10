@@ -16,7 +16,8 @@
 
 //! The overlayed changes to state.
 
-#[cfg(test)] use std::iter::FromIterator;
+#[cfg(test)]
+use std::iter::FromIterator;
 use std::collections::{HashMap, BTreeSet};
 use codec::Decode;
 use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
@@ -350,12 +351,12 @@ impl From<Option<Vec<u8>>> for OverlayedValue {
 #[cfg(test)]
 mod tests {
 	use hex_literal::hex;
-	use primitives::{Blake2Hasher, H256};
-	use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
+	use primitives::{
+		Blake2Hasher, H256, traits::Externalities, storage::well_known_keys::EXTRINSIC_INDEX,
+	};
 	use crate::backend::InMemory;
 	use crate::changes_trie::InMemoryStorage as InMemoryChangesTrieStorage;
 	use crate::ext::Ext;
-	use crate::Externalities;
 	use super::*;
 
 	fn strip_extrinsic_index(map: &HashMap<Vec<u8>, OverlayedValue>) -> HashMap<Vec<u8>, OverlayedValue> {
