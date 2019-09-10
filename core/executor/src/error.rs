@@ -65,7 +65,7 @@ pub enum Error {
 	#[display(fmt="The runtime has the `start` function")]
 	RuntimeHasStartFn,
 	/// Some other error occurred
-	Other(&'static str),
+	Other(String),
 	/// Some error occurred in the allocator
 	#[display(fmt="Error in allocator: {}", _0)]
 	Allocator(&'static str),
@@ -75,6 +75,9 @@ pub enum Error {
 	/// Someone tried to allocate more memory than the allowed maximum per allocation.
 	#[display(fmt="Requested allocation size is too large")]
 	RequestedAllocationTooLarge,
+	/// Executing the given function failed with the given error.
+	#[display(fmt="Function execution failed with: {}", _0)]
+	FunctionExecution(String),
 }
 
 impl std::error::Error for Error {
@@ -90,8 +93,8 @@ impl std::error::Error for Error {
 
 impl wasmi::HostError for Error {}
 
-impl From<&'static str> for Error {
-	fn from(err: &'static str) -> Error {
+impl From<String> for Error {
+	fn from(err: String) -> Error {
 		Error::Other(err)
 	}
 }

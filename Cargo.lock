@@ -4868,7 +4868,6 @@ name = "substrate-executor"
 version = "2.0.0"
 dependencies = [
  "assert_matches 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "derive_more 0.14.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4887,6 +4886,7 @@ dependencies = [
  "substrate-serializer 2.0.0",
  "substrate-state-machine 2.0.0",
  "substrate-trie 2.0.0",
+ "substrate-wasm-interface 2.0.0",
  "tiny-keccak 1.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "wabt 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmi 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5463,6 +5463,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "substrate-wasm-builder-runner"
 version = "1.0.3"
+
+[[package]]
+name = "substrate-wasm-interface"
+version = "2.0.0"
+dependencies = [
+ "wasmi 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "subtle"
