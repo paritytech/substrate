@@ -38,7 +38,9 @@ use trie::{TrieConfiguration, trie_types::Layout};
 use crate::sandbox;
 use crate::allocator;
 use log::trace;
-use wasm_interface::{FunctionContext, HostFunctions, Pointer, WordSize, Sandbox, MemoryId};
+use wasm_interface::{
+	FunctionContext, HostFunctions, Pointer, WordSize, Sandbox, MemoryId, PointerType,
+};
 
 #[cfg(feature="wasm-extern-trace")]
 macro_rules! debug_trace {
@@ -236,7 +238,7 @@ impl Sandbox for FunctionExecutor {
 	}
 }
 
-trait WritePrimitive<T: Sized> {
+trait WritePrimitive<T: PointerType> {
 	fn write_primitive(&mut self, ptr: Pointer<T>, t: T) -> std::result::Result<(), String>;
 }
 
@@ -247,7 +249,7 @@ impl WritePrimitive<u32> for &mut dyn FunctionContext {
 	}
 }
 
-trait ReadPrimitive<T: Sized> {
+trait ReadPrimitive<T: PointerType> {
 	fn read_primitive(&self, offset: Pointer<T>) -> std::result::Result<T, String>;
 }
 
@@ -689,12 +691,12 @@ impl_wasm_host_interface! {
 			result: Pointer<u8>,
 		) {
 			let values = (0..lens_len)
-				.map(|i| context.read_primitive(lens_data.offset(i)))
+				.map(|i| context.read_primitive(lens_data.offset(i).ok_or("Pointer overflow")?))
 				.collect::<std::result::Result<Vec<u32>, _>>()?
 				.into_iter()
 				.scan(0u32, |acc, v| { let o = *acc; *acc += v; Some((o, v)) })
 				.map(|(offset, len)|
-					context.read_memory(values_data.offset(offset), len)
+					context.read_memory(values_data.offset(offset).ok_or("Pointer overflow")?, len)
 						.map_err(|_|
 							"Invalid attempt to get memory in ext_blake2_256_enumerated_trie_root"
 						)
@@ -1257,7 +1259,7 @@ impl_wasm_host_interface! {
 		) {
 			let ids = (0..ids_len)
 				.map(|i|
-					 context.read_primitive(ids.offset(i))
+					 context.read_primitive(ids.offset(i).ok_or("Point overflow")?)
 						.map(|id: u32| offchain::HttpRequestId(id as u16))
 						.map_err(|_| "OOB while ext_http_response_wait: wasm")
 				)
@@ -1271,7 +1273,7 @@ impl_wasm_host_interface! {
 				.take(ids_len as usize);
 
 			for (i, status) in res {
-				context.write_primitive(statuses.offset(i as u32), status)
+				context.write_primitive(statuses.offset(i as u32).ok_or("Point overflow")?, status)
 					.map_err(|_| "Invalid attempt to set memory in ext_http_response_wait")?;
 			}
 

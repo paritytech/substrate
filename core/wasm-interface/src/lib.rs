@@ -46,14 +46,37 @@ pub enum Value {
 	F64(u64),
 }
 
+/// Provides `Sealed` trait to prevent implementing trait `PointerType` outside of this crate.
+mod private {
+	pub trait Sealed {}
+
+	impl Sealed for u8 {}
+	impl Sealed for u16 {}
+	impl Sealed for u32 {}
+	impl Sealed for u64 {}
+}
+
+/// Something that can be wrapped in a wasm `Pointer`.
+///
+/// This trait is sealed.
+pub trait PointerType: Sized {
+	/// The size of the type in wasm.
+	const SIZE: u32 = mem::size_of::<Self>() as u32;
+}
+
+impl PointerType for u8 {}
+impl PointerType for u16 {}
+impl PointerType for u32 {}
+impl PointerType for u64 {}
+
 /// Type to represent a pointer in wasm at the host.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub struct Pointer<T> {
+pub struct Pointer<T: PointerType> {
 	ptr: u32,
 	_marker: PhantomData<T>,
 }
 
-impl<T> Pointer<T> {
+impl<T: PointerType> Pointer<T> {
 	/// Create a new instance of `Self`.
 	pub fn new(ptr: u32) -> Self {
 		Self {
@@ -65,11 +88,15 @@ impl<T> Pointer<T> {
 	/// Calculate the offset from this pointer.
 	///
 	/// `offset` is in units of `T`. So, `3` means `3 * mem::size_of::<T>()` as offset to the pointer.
-	pub fn offset(self, offset: u32) -> Self {
-		Self {
-			ptr: self.ptr + offset * mem::size_of::<T>() as u32,
-			_marker: Default::default(),
-		}
+	///
+	/// Returns an `Option` to respect that the pointer could probably overflow.
+	pub fn offset(self, offset: u32) -> Option<Self> {
+		offset.checked_mul(T::SIZE).and_then(|o| self.ptr.checked_add(o)).map(|ptr| {
+			Self {
+				ptr,
+				_marker: Default::default(),
+			}
+		})
 	}
 
 	/// Create a null pointer.
@@ -78,29 +105,29 @@ impl<T> Pointer<T> {
 	}
 
 	/// Cast this pointer of type `T` to a pointer of type `R`.
-	pub fn cast<R>(self) -> Pointer<R> {
+	pub fn cast<R: PointerType>(self) -> Pointer<R> {
 		Pointer::new(self.ptr)
 	}
 }
 
-impl<T> From<Pointer<T>> for u32 {
+impl<T: PointerType> From<Pointer<T>> for u32 {
 	fn from(ptr: Pointer<T>) -> Self {
 		ptr.ptr
 	}
 }
 
-impl<T> From<Pointer<T>> for usize {
+impl<T: PointerType> From<Pointer<T>> for usize {
 	fn from(ptr: Pointer<T>) -> Self {
 		ptr.ptr as _
 	}
 }
 
-impl<T> IntoValue for Pointer<T> {
+impl<T: PointerType> IntoValue for Pointer<T> {
 	const VALUE_TYPE: ValueType = ValueType::I32;
 	fn into_value(self) -> Value { Value::I32(self.ptr as _) }
 }
 
-impl<T> TryFromValue for Pointer<T> {
+impl<T: PointerType> TryFromValue for Pointer<T> {
 	fn try_from_value(val: Value) -> Option<Self> {
 		match val {
 			Value::I32(val) => Some(Self::new(val as _)),
@@ -282,12 +309,12 @@ mod tests {
 	fn pointer_offset_works() {
 		let ptr = Pointer::<u32>::null();
 
-		assert_eq!(ptr.offset(10), Pointer::new(40));
-		assert_eq!(ptr.offset(32), Pointer::new(128));
+		assert_eq!(ptr.offset(10).unwrap(), Pointer::new(40));
+		assert_eq!(ptr.offset(32).unwrap(), Pointer::new(128));
 
 		let ptr = Pointer::<u64>::null();
 
-		assert_eq!(ptr.offset(10), Pointer::new(80));
-		assert_eq!(ptr.offset(32), Pointer::new(256));
+		assert_eq!(ptr.offset(10).unwrap(), Pointer::new(80));
+		assert_eq!(ptr.offset(32).unwrap(), Pointer::new(256));
 	}
 }
