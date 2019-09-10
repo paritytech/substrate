@@ -189,7 +189,7 @@ pub trait FunctionContext {
 	/// Read memory from `address` into a vector.
 	fn read_memory(&self, address: Pointer<u8>, size: WordSize) -> Result<Vec<u8>> {
 		let mut vec = Vec::with_capacity(size as usize);
-		unsafe { vec.set_len(size as usize); }
+		vec.resize(size as usize, 0);
 		self.read_memory_into(address, &mut vec)?;
 		Ok(vec)
 	}
@@ -229,7 +229,8 @@ pub trait Sandbox {
 	/// Delete a memory instance.
 	fn memory_teardown(&mut self, memory_id: MemoryId) -> Result<()>;
 	/// Create a new memory instance with the given `initial` size and the `maximum` size.
-	fn memory_new(&mut self, initial: WordSize, maximum: WordSize) -> Result<MemoryId>;
+	/// The size is given in wasm pages.
+	fn memory_new(&mut self, initial: u32, maximum: u32) -> Result<MemoryId>;
 	/// Invoke an exported function by a name.
 	fn invoke(
 		&mut self,

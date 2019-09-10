@@ -163,8 +163,8 @@ impl Sandbox for FunctionExecutor {
 
 	fn memory_new(
 		&mut self,
-		initial: WordSize,
-		maximum: WordSize,
+		initial: u32,
+		maximum: u32,
 	) -> WResult<MemoryId> {
 		self.sandbox_store.new_memory(initial, maximum).map_err(|e| format!("{:?}", e))
 	}
