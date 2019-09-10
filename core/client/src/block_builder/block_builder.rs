@@ -97,21 +97,40 @@ where
 		let block_id = &self.block_id;
 		let extrinsics = &mut self.extrinsics;
 
-		self.api.map_api_result(|api| {
-			match api.apply_extrinsic_with_context(
-				block_id,
-				ExecutionContext::BlockConstruction,
-				xt.clone()
-			)? {
-				Ok(_) => {
-					extrinsics.push(xt);
-					Ok(())
+		if self.api.has_api_with::<dyn BlockBuilderApi<Block>, _>(block_id, |version| version < 3)? {
+			self.api.map_api_result(|api| {
+				#[allow(deprecated)]
+				match api.apply_extrinsic_before_version_4_with_context(
+					block_id,
+					ExecutionContext::BlockConstruction,
+					xt.clone(),
+				)? {
+					Ok(_) => {
+						extrinsics.push(xt);
+						Ok(())
+					}
+					Err(e) => {
+						Err(error::Error::Msg(format!("Apply extrinsic failed: {:?}", e)))
+					}
 				}
-				Err(e) => {
-					Err(error::Error::ApplyExtrinsicFailed(e))
+			})
+		} else {
+			self.api.map_api_result(|api| {
+				match api.apply_extrinsic_with_context(
+					block_id,
+					ExecutionContext::BlockConstruction,
+					xt.clone(),
+				)? {
+					Ok(_) => {
+						extrinsics.push(xt);
+						Ok(())
+					}
+					Err(e) => {
+						Err(error::Error::ApplyExtrinsicFailed(e))
+					}
 				}
-			}
-		})
+			})
+		}
 	}
 
 	/// Consume the builder to return a valid `Block` containing all pushed extrinsics.

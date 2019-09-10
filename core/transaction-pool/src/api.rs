@@ -20,7 +20,7 @@ use std::{
 	sync::Arc,
 	marker::PhantomData,
 };
-use client::{runtime_api::TaggedTransactionQueue, blockchain::HeaderBackend};
+use client::{runtime_api::{TaggedTransactionQueue, ApiExt}, blockchain::HeaderBackend};
 use codec::Encode;
 use txpool;
 use primitives::{
@@ -63,8 +63,19 @@ impl<T, Block> txpool::ChainApi for ChainApi<T, Block> where
 	type Hash = H256;
 	type Error = error::Error;
 
-	fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: txpool::ExtrinsicFor<Self>) -> error::Result<TransactionValidity> {
-		Ok(self.client.runtime_api().validate_transaction(at, uxt)?)
+	fn validate_transaction(
+		&self,
+		at: &BlockId<Self::Block>,
+		uxt: txpool::ExtrinsicFor<Self>,
+	) -> error::Result<TransactionValidity> {
+		let api = self.client.runtime_api();
+
+		if api.has_api_with::<dyn TaggedTransactionQueue<Block>, _>(at, |v| v < 2)? {
+			#[allow(deprecated)]
+			api.validate_transaction_before_version_2(at, uxt).map(Into::into).map_err(Into::into)
+		} else {
+			api.validate_transaction(at, uxt).map_err(Into::into)
+		}
 	}
 
 	fn block_id_to_number(&self, at: &BlockId<Self::Block>) -> error::Result<Option<txpool::NumberFor<Self>>> {

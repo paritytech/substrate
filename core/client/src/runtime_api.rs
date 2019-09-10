@@ -28,7 +28,11 @@ pub use sr_primitives::{
 		Block as BlockT, GetNodeBlockType, GetRuntimeBlockType,
 		Header as HeaderT, ApiRef, RuntimeApiInfo, Hash as HashT,
 	},
-	generic::BlockId, transaction_validity::TransactionValidity,
+	generic::BlockId,
+	transaction_validity::{
+		TransactionValidity, ValidTransaction, TransactionLongevity, TransactionPriority,
+		InvalidTransaction, UnknownTransaction,
+	},
 };
 #[doc(hidden)]
 pub use primitives::{offchain, ExecutionContext};
@@ -155,6 +159,52 @@ pub trait CallRuntimeAt<Block: BlockT> {
 	fn runtime_version_at(&self, at: &BlockId<Block>) -> error::Result<RuntimeVersion>;
 }
 
+/// Information on a transaction's validity and, if valid, on how it relates to other transactions.
+///
+/// Deprecated and just present for compatibility reasons.
+#[derive(Clone, PartialEq, Eq, Encode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub enum TransactionValidityOld {
+	/// Transaction is invalid. Details are described by the error code.
+	Invalid(i8),
+	/// Transaction is valid.
+	Valid(ValidTransaction),
+	/// Transaction validity can't be determined.
+	Unknown(i8),
+}
+
+impl Decode for TransactionValidityOld {
+	fn decode<I: codec::Input>(value: &mut I) -> Result<Self, codec::Error> {
+		match value.read_byte()? {
+			0 => Ok(TransactionValidityOld::Invalid(i8::decode(value)?)),
+			1 => {
+				let priority = TransactionPriority::decode(value)?;
+				let requires = rstd::vec::Vec::decode(value)?;
+				let provides = rstd::vec::Vec::decode(value)?;
+				let longevity = TransactionLongevity::decode(value)?;
+				let propagate = bool::decode(value).unwrap_or(true);
+				Ok(TransactionValidityOld::Valid(ValidTransaction {
+					priority, requires, provides, longevity, propagate,
+				}))
+			},
+			2 => Ok(TransactionValidityOld::Unknown(i8::decode(value)?)),
+			_ => Err("Invalid transaction validity variant".into()),
+		}
+	}
+}
+
+impl From<TransactionValidityOld> for TransactionValidity {
+	fn from(old: TransactionValidityOld) -> Self {
+		match old {
+			TransactionValidityOld::Invalid(invalid) =>
+				InvalidTransaction::Custom(invalid as u8).into(),
+			TransactionValidityOld::Unknown(unknown) =>
+				UnknownTransaction::Custom(unknown as u8).into(),
+			TransactionValidityOld::Valid(valid) => Ok(valid),
+		}
+	}
+}
+
 decl_runtime_apis! {
 	/// The `Core` api trait that is mandatory for each runtime.
 	#[core_trait]
@@ -179,7 +229,11 @@ decl_runtime_apis! {
 	}
 
 	/// The `TaggedTransactionQueue` api trait for interfering with the new transaction queue.
+	#[api_version(2)]
 	pub trait TaggedTransactionQueue {
+		/// Validate the given transaction.
+		#[changed_in(2)]
+		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidityOld;
 		/// Validate the given transaction.
 		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity;
 	}
