@@ -58,7 +58,7 @@ use sr_primitives::{Perbill, traits::SimpleArithmetic};
 
 /// Linear function truncated to positive part `y = max(0, b [+ or -] a*x)` for `P_NPoS` usage.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-struct Linear {
+pub struct Linear {
 	// Negate the `a*x` term.
 	negative_a: bool,
 	// Per-billion representation of `a`, the x coefficient.
@@ -69,8 +69,7 @@ struct Linear {
 
 impl Linear {
 	/// Compute `f(n/d)*d`. This is useful to avoid loss of precision.
-	fn calculate_for_fraction_times_denominator<N>(&self, n: N, d: N) -> N
-	where
+	fn calculate_for_fraction_times_denominator<N>(&self, n: N, d: N) -> N where
 		N: SimpleArithmetic + Clone
 	{
 		if self.negative_a {
@@ -83,7 +82,7 @@ impl Linear {
 
 /// Piecewise Linear function for `P_NPoS` usage
 #[derive(Debug, PartialEq, Eq)]
-struct PiecewiseLinear {
+pub struct PiecewiseLinear {
 	/// Array of tuples of an abscissa in a per-billion representation and a linear function.
 	///
 	/// Abscissas in the array must be in order from the lowest to the highest.
@@ -93,6 +92,8 @@ struct PiecewiseLinear {
 	///     n-th + 1 element, and is defined by the linear function of the n-th element
 	/// * last segment doesn't end
 	pieces: [(u32, Linear); 20],
+	// TODO: ^^^ should be `Vec` to avoid hard specification if it being 20, anywhere that expects
+	// it to be 20 should be changed to use `pieces.len()` instead.
 }
 
 impl PiecewiseLinear {
@@ -109,40 +110,54 @@ impl PiecewiseLinear {
 	}
 }
 
-/// Piecewise linear approximation of `I_NPoS`.
-///
-/// Using the constants:
-/// * `I_0` = 0.025;
-/// * `i_ideal` = 0.2;
-/// * `x_ideal` = 0.5;
-/// * `d` = 0.05;
-///
-/// This approximation is tested to be close to real one by an error less than 1% see
-/// `i_npos_precision` test.
-const I_NPOS: PiecewiseLinear = PiecewiseLinear {
-	pieces: [
-		(0, Linear { negative_a: false, a: 150000000, b: 25000000 }),
-		(500000000, Linear { negative_a: true, a: 986493987, b: 593246993 }),
-		(507648979, Linear { negative_a: true, a: 884661327, b: 541551747 }),
-		(515726279, Linear { negative_a: true, a: 788373842, b: 491893761 }),
-		(524282719, Linear { negative_a: true, a: 697631517, b: 444319128 }),
-		(533378749, Linear { negative_a: true, a: 612434341, b: 398876765 }),
-		(543087019, Linear { negative_a: true, a: 532782338, b: 355618796 }),
-		(553495919, Linear { negative_a: true, a: 458675508, b: 314600968 }),
-		(564714479, Linear { negative_a: true, a: 390113843, b: 275883203 }),
-		(576879339, Linear { negative_a: true, a: 327097341, b: 239530285 }),
-		(590164929, Linear { negative_a: true, a: 269626004, b: 205612717 }),
-		(604798839, Linear { negative_a: true, a: 217699848, b: 174207838 }),
-		(621085859, Linear { negative_a: true, a: 171318873, b: 145401271 }),
-		(639447429, Linear { negative_a: true, a: 130483080, b: 119288928 }),
-		(660489879, Linear { negative_a: true, a: 95192479, b: 95979842 }),
-		(685131379, Linear { negative_a: true, a: 65447076, b: 75600334 }),
-		(714860569, Linear { negative_a: true, a: 41246910, b: 58300589 }),
-		(752334749, Linear { negative_a: true, a: 22592084, b: 44265915 }),
-		(803047659, Linear { negative_a: true, a: 9482996, b: 33738693 }),
-		(881691659, Linear { negative_a: true, a: 2572702, b: 27645944 })
-	]
-};
+// TODO: Document properly
+/// Accepts a number of expressions to create a instance of PiecewiseLinear which represents the
+/// NPoS curve (as detailed
+/// [here](http://research.web3.foundation/en/latest/polkadot/Token%20Economics/#inflation-model) )
+/// for those parameters. Parameters are:
+/// - `min_inflation`: the minimal amount to be rewarded between validators, expressed as a fraction
+///   of total issuance. Known as `I_0` in the literature.
+/// - `ideal_stake`: the fraction of total issued tokens that should be actively staked behind
+///   validators. Known as `x_ideal` in the literature.
+/// - `max_inflation`: the maximum amount to be rewarded between validators, expressed as a fraction
+///   of total issuance. This is attained only when `ideal_stake` is achieved.
+/// - `falloff`: Known as `decay_rate` in the literature. A co-efficient dictating the strength of
+///   the global incentivisation to get the `ideal_stake`. A higher number results in less typical
+///   inflation at the cost of greater volatility for validators.
+/// - `piece_count`: The total number of pieces in the curve. A greater number uses more resources
+///   but results in higher accuracy.
+macro_rules! npos_reward_curve {
+	($min_inflation:expr, $ideal_stake:expr, $max_inflation:expr, $falloff:expr, $piece_count:expr) => {
+		use $crate::inflation::{Linear, PiecewiseLinear};
+		// TODO: actually create according to parameters passed.
+		PiecewiseLinear { pieces: [
+			// TODO: PiecewiseLinear has private fields; these will probably need to be public since
+			// this macro will be invoked outside of this module.
+			(0, Linear { negative_a: false, a: 150000000, b: 25000000 }),
+			(500000000, Linear { negative_a: true, a: 986493987, b: 593246993 }),
+			(507648979, Linear { negative_a: true, a: 884661327, b: 541551747 }),
+			(515726279, Linear { negative_a: true, a: 788373842, b: 491893761 }),
+			(524282719, Linear { negative_a: true, a: 697631517, b: 444319128 }),
+			(533378749, Linear { negative_a: true, a: 612434341, b: 398876765 }),
+			(543087019, Linear { negative_a: true, a: 532782338, b: 355618796 }),
+			(553495919, Linear { negative_a: true, a: 458675508, b: 314600968 }),
+			(564714479, Linear { negative_a: true, a: 390113843, b: 275883203 }),
+			(576879339, Linear { negative_a: true, a: 327097341, b: 239530285 }),
+			(590164929, Linear { negative_a: true, a: 269626004, b: 205612717 }),
+			(604798839, Linear { negative_a: true, a: 217699848, b: 174207838 }),
+			(621085859, Linear { negative_a: true, a: 171318873, b: 145401271 }),
+			(639447429, Linear { negative_a: true, a: 130483080, b: 119288928 }),
+			(660489879, Linear { negative_a: true, a: 95192479, b: 95979842 }),
+			(685131379, Linear { negative_a: true, a: 65447076, b: 75600334 }),
+			(714860569, Linear { negative_a: true, a: 41246910, b: 58300589 }),
+			(752334749, Linear { negative_a: true, a: 22592084, b: 44265915 }),
+			(803047659, Linear { negative_a: true, a: 9482996, b: 33738693 }),
+			(881691659, Linear { negative_a: true, a: 2572702, b: 27645944 })
+			// TODO: Linear has private fields; these will probably need to be public since this
+			// macro will be invoked outside of this module.
+		] }
+	}
+}
 
 /// Second per year for the Julian year (365.25 days).
 const SECOND_PER_YEAR: u32 = 3600 * 24 * 36525 / 100;
@@ -156,11 +171,11 @@ const SECOND_PER_YEAR: u32 = 3600 * 24 * 36525 / 100;
 /// i.e.  `P_NPoS(x) = I_NPoS(x) * current_total_token * era_duration / year_duration`
 ///
 /// I_NPoS is the desired yearly inflation rate for nominated proof of stake.
-pub fn compute_total_payout<N>(npos_token_staked: N, total_tokens: N, era_duration: N) -> N where
+pub fn compute_total_payout<N>(curve: &PiecewiseLinear, npos_token_staked: N, total_tokens: N, era_duration: N) -> N where
 	N: SimpleArithmetic + Clone
 {
 	let year_duration: N = SECOND_PER_YEAR.into();
-	I_NPOS.calculate_for_fraction_times_denominator(npos_token_staked, total_tokens)
+	curve.calculate_for_fraction_times_denominator(npos_token_staked, total_tokens)
 		* era_duration / year_duration
 }
 
@@ -168,6 +183,8 @@ pub fn compute_total_payout<N>(npos_token_staked: N, total_tokens: N, era_durati
 #[cfg(test)]
 mod test_inflation {
 	use std::convert::TryInto;
+	use crate::inflation::PiecewiseLinear;
+	use sr_primitives::traits::SimpleArithmetic;
 
 	// Function `y = a*x + b` using float used for testing precision of Linear
 	#[derive(Debug)]
@@ -200,6 +217,8 @@ mod test_inflation {
 	const x_ideal: f64 = 0.5;
 	const d: f64 = 0.05;
 
+	const I_NPoS: PiecewiseLinear = npos_reward_curve!(0.025, 0.5, 0.1, 0.05, 20);
+
 	// Left part from `x_ideal`
 	fn I_left(x: f64) -> f64 {
 		I_0 + x * (i_ideal - I_0 / x_ideal)
@@ -219,31 +238,37 @@ mod test_inflation {
 		}
 	}
 
+	pub fn compute_total_payout<N>(npos_token_staked: N, total_tokens: N, era_duration: N) -> N where
+		N: SimpleArithmetic + Clone
+	{
+		super::compute_total_payout(&I_NPoS, npos_token_staked. total_tokens, era_duration)
+	}
+
 	#[test]
 	fn npos_curve_is_sensible() {
 		const YEAR: u64 = 365 * 24 * 60 * 60;
 		//super::I_NPOS.calculate_for_fraction_times_denominator(25, 100)
-		assert_eq!(super::compute_total_payout(0, 100_000, YEAR), 2_498);
-		assert_eq!(super::compute_total_payout(5_000, 100_000, YEAR), 3_247);
-		assert_eq!(super::compute_total_payout(25_000, 100_000, YEAR), 6_245);
-		assert_eq!(super::compute_total_payout(40_000, 100_000, YEAR), 8_494);
-		assert_eq!(super::compute_total_payout(50_000, 100_000, YEAR), 9_993);
-		assert_eq!(super::compute_total_payout(60_000, 100_000, YEAR), 4_380);
-		assert_eq!(super::compute_total_payout(75_000, 100_000, YEAR), 2_735);
-		assert_eq!(super::compute_total_payout(95_000, 100_000, YEAR), 2_518);
-		assert_eq!(super::compute_total_payout(100_000, 100_000, YEAR), 2_505);
+		assert_eq!(compute_total_payout(0, 100_000, YEAR), 2_498);
+		assert_eq!(compute_total_payout(5_000, 100_000, YEAR), 3_247);
+		assert_eq!(compute_total_payout(25_000, 100_000, YEAR), 6_245);
+		assert_eq!(compute_total_payout(40_000, 100_000, YEAR), 8_494);
+		assert_eq!(compute_total_payout(50_000, 100_000, YEAR), 9_993);
+		assert_eq!(compute_total_payout(60_000, 100_000, YEAR), 4_380);
+		assert_eq!(compute_total_payout(75_000, 100_000, YEAR), 2_735);
+		assert_eq!(compute_total_payout(95_000, 100_000, YEAR), 2_518);
+		assert_eq!(compute_total_payout(100_000, 100_000, YEAR), 2_505);
 
 		const DAY: u64 = 24 * 60 * 60;
-		assert_eq!(super::compute_total_payout(25_000, 100_000, DAY), 17);
-		assert_eq!(super::compute_total_payout(50_000, 100_000, DAY), 27);
-		assert_eq!(super::compute_total_payout(75_000, 100_000, DAY), 7);
+		assert_eq!(compute_total_payout(25_000, 100_000, DAY), 17);
+		assert_eq!(compute_total_payout(50_000, 100_000, DAY), 27);
+		assert_eq!(compute_total_payout(75_000, 100_000, DAY), 7);
 
 		const SIX_HOURS: u64 = 6 * 60 * 60;
-		assert_eq!(super::compute_total_payout(25_000, 100_000, SIX_HOURS), 4);
-		assert_eq!(super::compute_total_payout(50_000, 100_000, SIX_HOURS), 6);
-		assert_eq!(super::compute_total_payout(75_000, 100_000, SIX_HOURS), 1);
+		assert_eq!(compute_total_payout(25_000, 100_000, SIX_HOURS), 4);
+		assert_eq!(compute_total_payout(50_000, 100_000, SIX_HOURS), 6);
+		assert_eq!(compute_total_payout(75_000, 100_000, SIX_HOURS), 1);
 
-		assert_eq!(super::compute_total_payout(2_500_000_000_000_000_000_000_000_000u128, 5_000_000_000_000_000_000_000_000_000u128, 60 * 60), 57_038_558_065_252_110_426_648);
+		assert_eq!(compute_total_payout(2_500_000_000_000_000_000_000_000_000u128, 5_000_000_000_000_000_000_000_000_000u128, 60 * 60), 57_038_558_065_252_110_426_648);
 	}
 
 	// Compute approximation of I_NPoS into piecewise linear function

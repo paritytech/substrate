@@ -527,6 +527,9 @@ pub trait Trait: system::Trait {
 
 	/// Interface for interacting with a session module.
 	type SessionInterface: self::SessionInterface<Self::AccountId>;
+
+	/// The NPoS reward curve to use.
+	type RewardCurve: Get<&'static inflation::PiecewiseLinear>;
 }
 
 /// Mode of era-forcing.
@@ -1177,6 +1180,7 @@ impl<T: Trait> Module<T> {
 			let total_rewarded_stake = Self::slot_stake() * validator_len;
 
 			let total_payout = inflation::compute_total_payout(
+				&T::RewardCurve::get(),
 				total_rewarded_stake.clone(),
 				T::Currency::total_issuance(),
 				// Duration of era; more than u32::MAX is rewarded as u32::MAX.
