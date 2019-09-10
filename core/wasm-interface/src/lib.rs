@@ -16,9 +16,12 @@
 
 //! Types and traits for interfacing between the host and the wasm runtime.
 
-use std::{borrow::Cow, marker::PhantomData, mem, iter::Iterator};
+use std::{borrow::Cow, marker::PhantomData, mem, iter::Iterator, result};
 
 mod wasmi_impl;
+
+/// Result type used by traits in this crate.
+pub type Result<T> = result::Result<T, String>;
 
 /// Value types supported by Substrate on the boundary between host/Wasm.
 #[derive(Copy, Clone, PartialEq, Debug, Eq)]
@@ -178,26 +181,26 @@ pub trait Function {
 		&self,
 		context: &mut dyn FunctionContext,
 		args: &mut dyn Iterator<Item=Value>,
-	) -> Result<Option<Value>, String>;
+	) -> Result<Option<Value>>;
 }
 
 /// Context used by `Function` to interact with the allocator and the memory of the wasm instance.
 pub trait FunctionContext {
 	/// Read memory from `address` into a vector.
-	fn read_memory(&self, address: Pointer<u8>, size: WordSize) -> Result<Vec<u8>, String> {
+	fn read_memory(&self, address: Pointer<u8>, size: WordSize) -> Result<Vec<u8>> {
 		let mut vec = Vec::with_capacity(size as usize);
 		unsafe { vec.set_len(size as usize); }
 		self.read_memory_into(address, &mut vec)?;
 		Ok(vec)
 	}
 	/// Read memory into the given `dest` buffer from `address`.
-	fn read_memory_into(&self, address: Pointer<u8>, dest: &mut [u8]) -> Result<(), String>;
+	fn read_memory_into(&self, address: Pointer<u8>, dest: &mut [u8]) -> Result<()>;
 	/// Write the given data at `address` into the memory.
-	fn write_memory(&mut self, address: Pointer<u8>, data: &[u8]) -> Result<(), String>;
+	fn write_memory(&mut self, address: Pointer<u8>, data: &[u8]) -> Result<()>;
 	/// Allocate a memory instance of `size` bytes.
-	fn allocate_memory(&mut self, size: WordSize) -> Result<Pointer<u8>, String>;
+	fn allocate_memory(&mut self, size: WordSize) -> Result<Pointer<u8>>;
 	/// Deallocate a given memory instance.
-	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> Result<(), String>;
+	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> Result<()>;
 	/// Provides access to the sandbox.
 	fn sandbox(&mut self) -> &mut dyn Sandbox;
 }
@@ -214,7 +217,7 @@ pub trait Sandbox {
 		offset: WordSize,
 		buf_ptr: Pointer<u8>,
 		buf_len: WordSize,
-	) -> Result<u32, String>;
+	) -> Result<u32>;
 	/// Set sandbox memory from the given value.
 	fn memory_set(
 		&mut self,
@@ -222,11 +225,11 @@ pub trait Sandbox {
 		offset: WordSize,
 		val_ptr: Pointer<u8>,
 		val_len: WordSize,
-	) -> Result<u32, String>;
+	) -> Result<u32>;
 	/// Delete a memory instance.
-	fn memory_teardown(&mut self, memory_id: MemoryId) -> Result<(), String>;
+	fn memory_teardown(&mut self, memory_id: MemoryId) -> Result<()>;
 	/// Create a new memory instance with the given `initial` size and the `maximum` size.
-	fn memory_new(&mut self, initial: WordSize, maximum: WordSize) -> Result<MemoryId, String>;
+	fn memory_new(&mut self, initial: WordSize, maximum: WordSize) -> Result<MemoryId>;
 	/// Invoke an exported function by a name.
 	fn invoke(
 		&mut self,
@@ -236,9 +239,9 @@ pub trait Sandbox {
 		return_val: Pointer<u8>,
 		return_val_len: WordSize,
 		state: u32,
-	) -> Result<u32, String>;
+	) -> Result<u32>;
 	/// Delete a sandbox instance.
-	fn instance_teardown(&mut self, instance_id: u32) -> Result<(), String>;
+	fn instance_teardown(&mut self, instance_id: u32) -> Result<()>;
 	/// Create a new sandbox instance.
 	fn instance_new(
 		&mut self,
@@ -246,7 +249,7 @@ pub trait Sandbox {
 		wasm: &[u8],
 		raw_env_def: &[u8],
 		state: u32,
-	) -> Result<u32, String>;
+	) -> Result<u32>;
 }
 
 /// Something that provides implementations for host functions.

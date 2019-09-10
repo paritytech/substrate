@@ -40,6 +40,7 @@ use crate::allocator;
 use log::trace;
 use wasm_interface::{
 	FunctionContext, HostFunctions, Pointer, WordSize, Sandbox, MemoryId, PointerType,
+	Result as WResult,
 };
 
 #[cfg(feature="wasm-extern-trace")]
@@ -92,19 +93,19 @@ impl sandbox::SandboxCapabilities for FunctionExecutor {
 }
 
 impl FunctionContext for FunctionExecutor {
-	fn read_memory_into(&self, address: Pointer<u8>, dest: &mut [u8]) -> std::result::Result<(), String> {
+	fn read_memory_into(&self, address: Pointer<u8>, dest: &mut [u8]) -> WResult<()> {
 		self.memory.get_into(address.into(), dest).map_err(|e| format!("{:?}", e))
 	}
 
-	fn write_memory(&mut self, address: Pointer<u8>, data: &[u8]) -> std::result::Result<(), String> {
+	fn write_memory(&mut self, address: Pointer<u8>, data: &[u8]) -> WResult<()> {
 		self.memory.set(address.into(), data).map_err(|e| format!("{:?}", e))
 	}
 
-	fn allocate_memory(&mut self, size: WordSize) -> std::result::Result<Pointer<u8>, String> {
+	fn allocate_memory(&mut self, size: WordSize) -> WResult<Pointer<u8>> {
 		self.heap.allocate(size).map_err(|e| format!("{:?}", e))
 	}
 
-	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> std::result::Result<(), String> {
+	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> WResult<()> {
 		self.heap.deallocate(ptr).map_err(|e| format!("{:?}", e))
 	}
 
@@ -120,7 +121,7 @@ impl Sandbox for FunctionExecutor {
 		offset: WordSize,
 		buf_ptr: Pointer<u8>,
 		buf_len: WordSize,
-	) -> std::result::Result<u32, String> {
+	) -> WResult<u32> {
 		let sandboxed_memory = self.sandbox_store.memory(memory_id).map_err(|e| format!("{:?}", e))?;
 
 		match MemoryInstance::transfer(
@@ -141,7 +142,7 @@ impl Sandbox for FunctionExecutor {
 		offset: WordSize,
 		val_ptr: Pointer<u8>,
 		val_len: WordSize,
-	) -> std::result::Result<u32, String> {
+	) -> WResult<u32> {
 		let sandboxed_memory = self.sandbox_store.memory(memory_id).map_err(|e| format!("{:?}", e))?;
 
 		match MemoryInstance::transfer(
@@ -156,7 +157,7 @@ impl Sandbox for FunctionExecutor {
 		}
 	}
 
-	fn memory_teardown(&mut self, memory_id: MemoryId) -> std::result::Result<(), String> {
+	fn memory_teardown(&mut self, memory_id: MemoryId) -> WResult<()> {
 		self.sandbox_store.memory_teardown(memory_id).map_err(|e| format!("{:?}", e))
 	}
 
@@ -164,7 +165,7 @@ impl Sandbox for FunctionExecutor {
 		&mut self,
 		initial: WordSize,
 		maximum: WordSize,
-	) -> std::result::Result<MemoryId, String> {
+	) -> WResult<MemoryId> {
 		self.sandbox_store.new_memory(initial, maximum).map_err(|e| format!("{:?}", e))
 	}
 
@@ -176,7 +177,7 @@ impl Sandbox for FunctionExecutor {
 		return_val: Pointer<u8>,
 		return_val_len: WordSize,
 		state: u32,
-	) -> std::result::Result<u32, String> {
+	) -> WResult<u32> {
 		trace!(target: "sr-sandbox", "invoke, instance_idx={}", instance_id);
 
 		// Deserialize arguments and convert them into wasmi types.
@@ -205,7 +206,7 @@ impl Sandbox for FunctionExecutor {
 		}
 	}
 
-	fn instance_teardown(&mut self, instance_id: u32) -> std::result::Result<(), String> {
+	fn instance_teardown(&mut self, instance_id: u32) -> WResult<()> {
 		self.sandbox_store.instance_teardown(instance_id).map_err(|e| format!("{:?}", e))
 	}
 
@@ -215,7 +216,7 @@ impl Sandbox for FunctionExecutor {
 		wasm: &[u8],
 		raw_env_def: &[u8],
 		state: u32,
-	) -> std::result::Result<u32, String> {
+	) -> WResult<u32> {
 		// Extract a dispatch thunk from instance's table by the specified index.
 		let dispatch_thunk = {
 			let table = self.table.as_ref()
@@ -239,22 +240,22 @@ impl Sandbox for FunctionExecutor {
 }
 
 trait WritePrimitive<T: PointerType> {
-	fn write_primitive(&mut self, ptr: Pointer<T>, t: T) -> std::result::Result<(), String>;
+	fn write_primitive(&mut self, ptr: Pointer<T>, t: T) -> WResult<()>;
 }
 
 impl WritePrimitive<u32> for &mut dyn FunctionContext {
-	fn write_primitive(&mut self, ptr: Pointer<u32>, t: u32) -> std::result::Result<(), String> {
+	fn write_primitive(&mut self, ptr: Pointer<u32>, t: u32) -> WResult<()> {
 		let r = t.to_le_bytes();
 		self.write_memory(ptr.cast(), &r)
 	}
 }
 
 trait ReadPrimitive<T: PointerType> {
-	fn read_primitive(&self, offset: Pointer<T>) -> std::result::Result<T, String>;
+	fn read_primitive(&self, offset: Pointer<T>) -> WResult<T>;
 }
 
 impl ReadPrimitive<u32> for &mut dyn FunctionContext {
-	fn read_primitive(&self, ptr: Pointer<u32>) -> std::result::Result<u32, String> {
+	fn read_primitive(&self, ptr: Pointer<u32>) -> WResult<u32> {
 		let mut r = [0u8; 4];
 		self.read_memory_into(ptr.cast(), &mut r)?;
 		Ok(u32::from_le_bytes(r))
