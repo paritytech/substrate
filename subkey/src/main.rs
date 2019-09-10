@@ -26,9 +26,7 @@ use node_primitives::{Balance, Hash, Index};
 use node_runtime::{BalancesCall, Call, Runtime, SignedPayload, UncheckedExtrinsic, VERSION};
 use primitives::{
 	crypto::{set_default_ss58_version, Ss58AddressFormat, Ss58Codec},
-	ed25519,
-	hexdisplay::HexDisplay,
-	sr25519, Pair, Public, H256,
+	ed25519, sr25519, Pair, Public, H256, hexdisplay::HexDisplay,
 };
 use sr_primitives::generic::Era;
 use std::{
