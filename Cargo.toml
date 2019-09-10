@@ -19,6 +19,7 @@ vergen = "3"
 
 [workspace]
 members = [
+	"core/authority-discovery",
 	"core/application-crypto",
 	"core/cli",
 	"core/client",
@@ -64,7 +65,7 @@ members = [
 	"core/utils/fork-tree",
 	"core/utils/wasm-builder",
 	"core/utils/wasm-builder-runner",
-	"core/authority-discovery",
+	"core/wasm-interface",
 	"srml/support",
 	"srml/support/procedural",
 	"srml/support/procedural/tools",
