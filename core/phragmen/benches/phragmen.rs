@@ -108,7 +108,8 @@ fn do_phragmen(
 			let elected_stashes = r.winners;
 			let mut assignments = r.assignments;
 
-			let to_votes = |b: Balance| <TestCurrencyToVote as Convert<Balance, u128>>::convert(b) as u128;
+			let to_votes = |b: Balance|
+				<TestCurrencyToVote as Convert<Balance, u128>>::convert(b) as u128;
 			let ratio_of = |b, r: u128| r.saturating_mul(to_votes(b)) / ACCURACY;
 
 			// Initialize the support of each candidate.
