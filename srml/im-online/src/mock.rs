@@ -89,6 +89,13 @@ impl session::historical::OnSessionEnding<u64, u64> for TestOnSessionEnding {
 	}
 }
 
+pub struct InitialValidators;
+impl session::SelectInitialValidators<u64> for InitialValidators {
+	fn select_initial_validators() -> Option<Vec<u64>> {
+		Some(vec![1, 2, 3])
+	}
+}
+
 impl session::Trait for Runtime {
 	type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
 	type OnSessionEnding = session::historical::NoteHistoricalRoot<Runtime, TestOnSessionEnding>;
@@ -97,7 +104,7 @@ impl session::Trait for Runtime {
 	type ValidatorIdOf = ConvertInto;
 	type Keys = UintAuthorityId;
 	type Event = ();
-	type SelectInitialValidators = ();
+	type SelectInitialValidators = InitialValidators;
 }
 
 impl session::historical::Trait for Runtime {

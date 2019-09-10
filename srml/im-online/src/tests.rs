@@ -19,9 +19,8 @@
 #![cfg(test)]
 
 use super::*;
-use crate::mock::{
-	ImOnline, new_test_ext,
-};
+use crate::mock::*;
+use primitives::offchain::OpaquePeerId;
 use runtime_io::with_externalities;
 
 
@@ -51,10 +50,19 @@ fn should_correctly_report_offline_validators() {
 		// given
 
 		// when
+		ImOnline::heartbeat(Origin::system(system::RawOrigin::None), Heartbeat {
+			block_number: 1,
+			network_state: OpaqueNetworkState {
+				peer_id: OpaquePeerId(vec![1]),
+				external_addresses: vec![],
+			},
+			session_index: 0,
+			authority_index: 1,
+		}, Default::default()).unwrap();
 
 		// then
 		assert!(ImOnline::is_online_in_current_session(1));
-		assert!(ImOnline::is_online_in_current_session(2));
-		assert!(ImOnline::is_online_in_current_session(3));
+		assert!(!ImOnline::is_online_in_current_session(2));
+		assert!(!ImOnline::is_online_in_current_session(3));
 	});
 }

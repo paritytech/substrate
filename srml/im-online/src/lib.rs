@@ -257,6 +257,8 @@ decl_module! {
 				&heartbeat.authority_index
 			);
 			let keys = Keys::<T>::get();
+			// TODO [ToDr] This is invalid. We should fail in case authority_index is not there or the report already
+			// exists, otherwise you an spam the chain with huge amounts of reports like this.
 			let public = keys.get(heartbeat.authority_index as usize);
 			if let (true, Some(public)) = (!exists, public) {
 				let signature_valid = heartbeat.using_encoded(|encoded_heartbeat| {
