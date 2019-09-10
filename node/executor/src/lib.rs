@@ -40,22 +40,25 @@ mod tests {
 	use runtime_io;
 	use substrate_executor::WasmExecutor;
 	use codec::{Encode, Decode, Joiner};
-	use runtime_support::{Hashable, StorageValue, StorageMap, assert_eq_error_rate, traits::Currency};
-	use state_machine::{CodeExecutor, Externalities, TestExternalities as CoreTestExternalities};
-	use primitives::{Blake2Hasher, NeverNativeValue, NativeOrEncoded, map};
-	use sr_primitives::traits::{Header as HeaderT, Hash as HashT, Convert};
-	use sr_primitives::{ApplyOutcome, ApplyError, ApplyResult};
-	use sr_primitives::weights::{WeightMultiplier, GetDispatchInfo};
+	use runtime_support::{
+		Hashable, StorageValue, StorageMap, assert_eq_error_rate, traits::Currency,
+	};
+	use state_machine::TestExternalities as CoreTestExternalities;
+	use primitives::{
+		Blake2Hasher, NeverNativeValue, NativeOrEncoded, map, traits::{CodeExecutor, Externalities},
+	};
+	use sr_primitives::{
+		traits::{Header as HeaderT, Hash as HashT, Convert}, ApplyOutcome, ApplyError, ApplyResult,
+		weights::{WeightMultiplier, GetDispatchInfo},
+	};
 	use contracts::ContractAddressFor;
 	use system::{EventRecord, Phase};
 	use node_primitives::{Hash, BlockNumber, Balance};
 	use node_runtime::{
 		Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances, BuildStorage,
-		System, Event,
-		TransferFee, TransactionBaseFee, TransactionByteFee,
+		System, Event, TransferFee, TransactionBaseFee, TransactionByteFee,
+		constants::currency::*, impls::WeightToFee,
 	};
-	use node_runtime::constants::currency::*;
-	use node_runtime::impls::WeightToFee;
 	use node_testing::keyring::*;
 	use wabt;
 

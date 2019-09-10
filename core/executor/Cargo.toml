@@ -11,7 +11,6 @@ runtime_io = { package = "sr-io", path = "../sr-io" }
 primitives = { package = "substrate-primitives", path = "../primitives" }
 trie = { package = "substrate-trie", path = "../trie" }
 serializer = { package = "substrate-serializer", path = "../serializer" }
-state_machine = { package = "substrate-state-machine", path = "../state-machine"  }
 runtime_version = { package = "sr-version", path = "../sr-version" }
 panic-handler = { package = "substrate-panic-handler", path = "../panic-handler" }
 wasm-interface = { package = "substrate-wasm-interface", path = "../wasm-interface" }
@@ -30,6 +29,7 @@ hex-literal = "0.2.0"
 runtime-test = { package = "substrate-runtime-test", path = "runtime-test" }
 substrate-client = { path = "../client" }
 substrate-offchain = { path = "../offchain/" }
+state_machine = { package = "substrate-state-machine", path = "../state-machine"  }
 
 [features]
 default = []
