@@ -48,6 +48,8 @@ pub use runtime_version::{RuntimeVersion, NativeVersion};
 pub use codec::Codec;
 #[doc(hidden)]
 pub use primitives::Blake2Hasher;
+#[doc(hidden)]
+pub use wasm_interface;
 
 /// Provides runtime information.
 pub trait RuntimeInfo {

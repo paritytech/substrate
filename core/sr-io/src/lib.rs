@@ -279,7 +279,7 @@ export_api! {
 		/// Submit transaction to the pool.
 		///
 		/// The transaction will end up in the pool.
-		fn submit_transaction<T: codec::Encode>(data: &T) -> Result<(), ()>;
+		fn submit_transaction(data: Vec<u8>) -> Result<(), ()>;
 
 		/// Returns information about the local node's network state.
 		fn network_state() -> Result<OpaqueNetworkState, ()>;

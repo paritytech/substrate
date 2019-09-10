@@ -282,7 +282,11 @@ impl RuntimesCache {
 			},
 			Entry::Vacant(v) => {
 				trace!(target: "runtimes_cache", "no instance found in cache, creating now.");
-				let result = Self::create_wasm_instance(wasm_executor, ext, heap_pages);
+				let result = Self::create_wasm_instance(
+					wasm_executor,
+					ext,
+					heap_pages,
+				);
 				if let Err(ref err) = result {
 					warn!(target: "runtimes_cache", "cannot create a runtime: {:?}", err);
 				}
@@ -305,10 +309,10 @@ impl RuntimesCache {
 		//
 		// A return of this error actually indicates that there is a problem in logic, since
 		// we just loaded and validated the `module` above.
-		let data_segments = extract_data_segments(&code).ok_or(CacheError::CantDeserializeWasm)?;
+		let data_segments = extract_data_segments(&code)?;
 
 		// Instantiate this module.
-		let instance = WasmExecutor::instantiate_module::<E>(heap_pages as usize, &module)
+		let instance = WasmExecutor::instantiate_module(heap_pages as usize, &module)
 			.map_err(CacheError::Instantiation)?;
 
 		// Take state snapshot before executing anything.
@@ -335,12 +339,14 @@ impl RuntimesCache {
 /// Extract the data segments from the given wasm code.
 ///
 /// Returns `Err` if the given wasm code cannot be deserialized.
-fn extract_data_segments(wasm_code: &[u8]) -> Option<Vec<DataSegment>> {
-	let raw_module: RawModule = deserialize_buffer(wasm_code).ok()?;
+fn extract_data_segments(wasm_code: &[u8]) -> Result<Vec<DataSegment>, CacheError> {
+	let raw_module: RawModule = deserialize_buffer(wasm_code)
+		.map_err(|_| CacheError::CantDeserializeWasm)?;
+
 	let segments = raw_module
 		.data_section()
 		.map(|ds| ds.entries())
 		.unwrap_or(&[])
 		.to_vec();
-	Some(segments)
+	Ok(segments)
 }
