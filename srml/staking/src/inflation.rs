@@ -242,14 +242,11 @@ mod test_inflation {
 		assert_eq!(super::compute_total_payout(25_000, 100_000, SIX_HOURS), 4);
 		assert_eq!(super::compute_total_payout(50_000, 100_000, SIX_HOURS), 6);
 		assert_eq!(super::compute_total_payout(75_000, 100_000, SIX_HOURS), 1);
+
+		assert_eq!(super::compute_total_payout(2_500_000_000_000_000_000_000_000_000u128, 5_000_000_000_000_000_000_000_000_000u128, 60 * 60), 57_038_558_065_252_110_426_648);
 	}
 
-	#[test]
-	fn npos_curve_is_sensible() {
-		
-	}
-
-		// Compute approximation of I_NPoS into piecewise linear function
+	// Compute approximation of I_NPoS into piecewise linear function
 	fn I_NPoS_points() -> super::PiecewiseLinear {
 		let mut points = vec![];
 
