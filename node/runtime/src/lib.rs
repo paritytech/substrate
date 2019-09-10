@@ -407,7 +407,6 @@ impl im_online::Trait for Runtime {
 	type Event = Event;
 	type SubmitTransaction = SubmitTransaction;
 	type ReportUnresponsiveness = Offences;
-	type CurrentElectedSet = staking::CurrentElectedStashAccounts<Runtime>;
 }
 
 impl offences::Trait for Runtime {

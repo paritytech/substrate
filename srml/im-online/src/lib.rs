@@ -67,7 +67,7 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use app_crypto::{AppPublic, RuntimeAppPublic, AppSignature};
+use app_crypto::{AppPublic, RuntimeAppPublic};
 use codec::{Encode, Decode};
 use primitives::offchain::{OpaqueNetworkState, StorageKind};
 use rstd::prelude::*;
@@ -80,7 +80,7 @@ use sr_primitives::{
 	},
 };
 use sr_staking_primitives::{
-	SessionIndex, CurrentElectedSet,
+	SessionIndex,
 	offence::{ReportOffence, Offence, Kind},
 };
 use support::{
@@ -205,9 +205,6 @@ pub trait Trait: system::Trait + session::historical::Trait {
 			IdentificationTuple<Self>,
 			UnresponsivenessOffence<IdentificationTuple<Self>>,
 		>;
-
-	/// A type that returns a validator id from the current elected set of the era.
-	type CurrentElectedSet: CurrentElectedSet<<Self as session::Trait>::ValidatorId>;
 }
 
 decl_event!(
@@ -450,19 +447,19 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 		let current_session = <session::Module<T>>::current_index();
 
 		let keys = Keys::<T>::get();
-		let current_elected = T::CurrentElectedSet::current_elected_set();
+		let current_validators = <session::Module<T>>::validators();
 
 		// The invariant is that these two are of the same length.
 		// TODO: What to do: Uncomment, ignore, a third option?
-		// assert_eq!(keys.len(), current_elected.len());
+		// assert_eq!(keys.len(), current_validators.len());
 
-		for (auth_idx, validator_id) in current_elected.into_iter().enumerate() {
+		for (auth_idx, validator_id) in current_validators.into_iter().enumerate() {
 			let auth_idx = auth_idx as u32;
 			if !<ReceivedHeartbeats>::exists(&current_session, &auth_idx) {
 				let full_identification = T::FullIdentificationOf::convert(validator_id.clone())
 					.expect(
-						"we got the validator_id from current_elected;
-						current_elected is set of currently elected validators;
+						"we got the validator_id from current_validators;
+						current_validators is set of currently acting validators;
 						the mapping between the validator id and its full identification should be valid;
 						thus `FullIdentificationOf::convert` can't return `None`;
 						qed",
