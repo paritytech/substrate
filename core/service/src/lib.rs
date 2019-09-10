@@ -111,13 +111,15 @@ pub type TaskExecutor = Arc<dyn Executor<Box<dyn Future<Item = (), Error = ()> +
 #[derive(Clone)]
 pub struct SpawnTaskHandle {
 	sender: mpsc::UnboundedSender<Box<dyn Future<Item = (), Error = ()> + Send>>,
+	on_exit: exit_future::Exit,
 }
 
 impl Executor<Box<dyn Future<Item = (), Error = ()> + Send>> for SpawnTaskHandle {
 	fn execute(
 		&self,
-		future: Box<dyn Future<Item = (), Error = ()> + Send>
+		future: Box<dyn Future<Item = (), Error = ()> + Send>,
 	) -> Result<(), futures::future::ExecuteError<Box<dyn Future<Item = (), Error = ()> + Send>>> {
+		let future = Box::new(future.select(self.on_exit.clone()).then(|_| Ok(())));
 		if let Err(err) = self.sender.unbounded_send(future) {
 			let kind = futures::future::ExecuteErrorKind::Shutdown;
 			Err(futures::future::ExecuteError::new(kind, err.into_inner()))
@@ -350,7 +352,7 @@ macro_rules! new_impl {
 				//light_components.clone(),
 				system_rpc_tx.clone(),
 				system_info.clone(),
-				Arc::new(SpawnTaskHandle { sender: to_spawn_tx.clone() }),
+				Arc::new(SpawnTaskHandle { sender: to_spawn_tx.clone(), on_exit: exit.clone() }),
 				transaction_pool.clone(),
 				rpc_extensions.clone(),
 				keystore.clone(),
@@ -544,22 +546,25 @@ where
 	}
 
 	fn spawn_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
+		let task = task.select(self.on_exit()).then(|_| Ok(()));
 		let _ = self.to_spawn_tx.unbounded_send(Box::new(task));
 	}
 
 	fn spawn_essential_task(&self, task: impl Future<Item = (), Error = ()> + Send + 'static) {
 		let essential_failed = self.essential_failed.clone();
-		let essential_task = Box::new(task.map_err(move |_| {
+		let essential_task = task.map_err(move |_| {
 			error!("Essential task failed. Shutting down service.");
 			essential_failed.store(true, Ordering::Relaxed);
-		}));
+		});
+		let task = essential_task.select(self.on_exit()).then(|_| Ok(()));
 
-		let _ = self.to_spawn_tx.unbounded_send(essential_task);
+		let _ = self.to_spawn_tx.unbounded_send(Box::new(task));
 	}
 
 	fn spawn_task_handle(&self) -> SpawnTaskHandle {
 		SpawnTaskHandle {
 			sender: self.to_spawn_tx.clone(),
+			on_exit: self.on_exit(),
 		}
 	}
 
@@ -589,7 +594,7 @@ where
 		self.transaction_pool.clone()
 	}
 
-	fn on_exit(&self) -> ::exit_future::Exit {
+	fn on_exit(&self) -> exit_future::Exit {
 		self.exit.clone()
 	}
 }
