@@ -145,10 +145,12 @@ const I_NPOS: PiecewiseLinear = PiecewiseLinear {
 	]
 };
 
-/// Second per year for the Julian year (365.25 days).
-const SECOND_PER_YEAR: u32 = 3600*24*36525/100;
+/// Millisecond per year for the Julian year (365.25 days).
+const MILLISECOND_PER_YEAR: u64 = 1000 * 3600 * 24 * 36525/100;
 
 /// The total payout to all validators (and their nominators) per era.
+///
+/// `era_duration` is expressed in millisecond.
 ///
 /// Named P_NPoS in the [paper](http://research.web3.foundation/en/latest/polkadot/Token%20Ec
 /// onomics/#inflation-model).
@@ -157,13 +159,12 @@ const SECOND_PER_YEAR: u32 = 3600*24*36525/100;
 /// i.e.  `P_NPoS(x) = I_NPoS(x) * current_total_token * era_duration / year_duration`
 ///
 /// I_NPoS is the desired yearly inflation rate for nominated proof of stake.
-pub fn compute_total_payout<N>(npos_token_staked: N, total_tokens: N, era_duration: N) -> N
+pub fn compute_total_payout<N>(npos_token_staked: N, total_tokens: N, era_duration: u32) -> N
 where
 	N: SimpleArithmetic + Clone
 {
-	let year_duration: N = SECOND_PER_YEAR.into();
-	I_NPOS.calculate_for_fraction_times_denominator(npos_token_staked, total_tokens)
-		* era_duration / year_duration
+	Perbill::from_rational_approximation(era_duration as u64, MILLISECOND_PER_YEAR)
+		* I_NPOS.calculate_for_fraction_times_denominator(npos_token_staked, total_tokens)
 }
 
 #[allow(non_upper_case_globals, non_snake_case)] // To stick with paper notations

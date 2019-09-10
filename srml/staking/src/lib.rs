@@ -1177,7 +1177,7 @@ impl<T: Trait> Module<T> {
 				total_rewarded_stake.clone(),
 				T::Currency::total_issuance(),
 				// Era of duration more than u32::MAX is rewarded as u32::MAX.
-				<BalanceOf<T>>::from(era_duration.saturated_into::<u32>()),
+				era_duration.saturated_into::<u32>(),
 			);
 
 			let mut total_imbalance = <PositiveImbalanceOf<T>>::zero();
