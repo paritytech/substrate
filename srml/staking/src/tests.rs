@@ -1943,9 +1943,9 @@ fn reward_from_authorship_event_handler_works() {
 		assert_eq!(<CurrentElected<Test>>::get(), vec![21, 11]);
 
 		// 21 is rewarded as an uncle producer
-		// 11 is rewarded as a block procuder and uncle referencer and uncle producer
-		assert_eq!(CurrentEraRewards::get().rewards, vec![1, 20+2*3 + 1]);
-		assert_eq!(CurrentEraRewards::get().total, 28);
+		// 11 is rewarded as a block producer and uncle referencer and uncle producer
+		assert_eq!(CurrentEraPointsEarned::get().individual, vec![1, 20 + 2 * 3 + 1]);
+		assert_eq!(CurrentEraPointsEarned::get().total, 28);
 	})
 }
 
@@ -1972,8 +1972,8 @@ fn add_reward_points_fns_works() {
 			(11, 1),
 		]);
 
-		assert_eq!(CurrentEraRewards::get().rewards, vec![2, 4]);
-		assert_eq!(CurrentEraRewards::get().total, 6);
+		assert_eq!(CurrentEraPointsEarned::get().individual, vec![2, 4]);
+		assert_eq!(CurrentEraPointsEarned::get().total, 6);
 	})
 }
 

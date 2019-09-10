@@ -428,7 +428,7 @@ pub fn start_era(era_index: EraIndex) {
 
 pub fn current_total_payout_for_duration(duration: u64) -> u64 {
 	let res = inflation::compute_total_payout(
-		<Module<Test>>::slot_stake()*2,
+		<Module<Test>>::slot_stake() * 2,
 		Balances::total_issuance(),
 		duration,
 	);
