@@ -82,7 +82,7 @@ pub trait SubmitSignedTransaction<T: crate::Trait, Call> {
 			::create_transaction::<Self::Signer>(call, id, expected)
 			.ok_or(())?;
 		let xt = Self::Extrinsic::new(call, Some(signature_data)).ok_or(())?;
-		runtime_io::submit_transaction(&xt)
+		runtime_io::submit_transaction(xt.encode())
 	}
 }
 
@@ -97,7 +97,7 @@ pub trait SubmitUnsignedTransaction<T: crate::Trait, Call> {
 	/// and `Err` if transaction was rejected from the pool.
 	fn submit_unsigned(call: impl Into<Call>) -> Result<(), ()> {
 		let xt = Self::Extrinsic::new(call.into(), None).ok_or(())?;
-		runtime_io::submit_transaction(&xt)
+		runtime_io::submit_transaction(xt.encode())
 	}
 }
 

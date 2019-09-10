@@ -334,9 +334,9 @@ impl OffchainApi for () {
 		}, "is_validator can be called only in the offchain worker context")
 	}
 
-	fn submit_transaction<T: codec::Encode>(data: &T) -> Result<(), ()> {
+	fn submit_transaction(data: Vec<u8>) -> Result<(), ()> {
 		with_offchain(|ext| {
-			ext.submit_transaction(codec::Encode::encode(data))
+			ext.submit_transaction(data)
 		}, "submit_transaction can be called only in the offchain worker context")
 	}
 
