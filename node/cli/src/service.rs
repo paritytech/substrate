@@ -102,7 +102,6 @@ macro_rules! new_full_start {
 /// concrete types instead.
 macro_rules! new_full {
 	($config:expr) => {{
-		use futures::Future;
 		use futures::sync::mpsc;
 		use network::DhtEvent;
 
@@ -118,7 +117,7 @@ macro_rules! new_full {
 			$config.disable_grandpa
 		);
 
-		let (builder, mut import_setup, inherent_data_providers, mut tasks_to_spawn) = new_full_start!($config);
+		let (builder, mut import_setup, inherent_data_providers, tasks_to_spawn) = new_full_start!($config);
 
 		// Dht event channel from the network to the authority discovery module. Use bounded channel to ensure
 		// back-pressure. Authority discovery is triggering one event per authority within the current authority set.
@@ -138,13 +137,7 @@ macro_rules! new_full {
 				.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
 		// spawn any futures that were created in the previous setup steps
-		for task in tasks_to_spawn.drain(..) {
-			service.spawn_task(
-				task.select(service.on_exit())
-					.map(|_| ())
-					.map_err(|_| ())
-			);
-		}
+		tasks_to_spawn.into_iter().for_each(|t| service.spawn_task(t));
 
 		if is_authority {
 			let proposer = substrate_basic_authorship::ProposerFactory {
@@ -170,15 +163,14 @@ macro_rules! new_full {
 			};
 
 			let babe = babe::start_babe(babe_config)?;
-			let select = babe.select(service.on_exit()).then(|_| Ok(()));
-			service.spawn_task(Box::new(select));
+			service.spawn_essential_task(babe);
 
 			let authority_discovery = authority_discovery::AuthorityDiscovery::new(
 				service.client(),
 				service.network(),
 				dht_event_rx,
 			);
-			service.spawn_task(Box::new(authority_discovery));
+			service.spawn_task(authority_discovery);
 		}
 
 		let config = grandpa::Config {
