@@ -18,17 +18,31 @@
 
 use std::sync::Arc;
 
+use serde::{Serialize, Deserialize};
 use client::blockchain::HeaderBackend;
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
 use node_primitives::{
 	AccountId, Balance, Block, BlockId, ContractExecResult, ContractsApi as ContractsRuntimeApi,
 };
-use sr_primitives::traits;
+use sr_primitives::traits::{
+	self,
+	Block as BlockT,
+};
+
+/// A struct that encodes RPC parameters required for a call to a smart-contract.
+#[derive(Serialize, Deserialize)]
+pub struct CallRequest {
+	origin: AccountId,
+	dest: AccountId,
+	value: Balance,
+	gas_limit: u64,
+	input_data: Vec<u8>,
+}
 
 /// Contracts RPC methods.
 #[rpc]
-pub trait ContractsApi {
+pub trait ContractsApi<BlockHash> {
 	/// Executes a call to a contract.
 	///
 	/// This call is performed locally without submitting any transactions. Thus executing this
@@ -38,11 +52,8 @@ pub trait ContractsApi {
 	#[rpc(name = "contracts_call")]
 	fn call(
 		&self,
-		origin: AccountId,
-		dest: AccountId,
-		value: Balance,
-		gas_limit: u64,
-		input_data: Vec<u8>,
+		call_request: CallRequest,
+		at: Option<BlockHash>,
 	) -> Result<ContractExecResult>;
 }
 
@@ -58,7 +69,7 @@ impl<C> Contracts<C> {
 	}
 }
 
-impl<C> ContractsApi for Contracts<C>
+impl<C> ContractsApi<<Block as BlockT>::Hash> for Contracts<C>
 where
 	C: Send + Sync + 'static,
 	C: traits::ProvideRuntimeApi,
@@ -67,16 +78,22 @@ where
 {
 	fn call(
 		&self,
-		origin: AccountId,
-		dest: AccountId,
-		value: Balance,
-		gas_limit: u64,
-		input_data: Vec<u8>,
+		call_request: CallRequest,
+		at: Option<<Block as BlockT>::Hash>,
 	) -> Result<ContractExecResult> {
 		let api = self.client.runtime_api();
-		let best = self.client.info().best_hash;
-		let at = BlockId::hash(best);
+		let at = BlockId::hash(at.unwrap_or_else(||
+			// If the block hash is not supplied assume the best block.
+			self.client.info().best_hash
+		));
 
+		let CallRequest {
+			origin,
+			dest,
+			value,
+			gas_limit,
+			input_data
+		} = call_request;
 		let exec_result = api
 			.call(&at, origin, dest, value, gas_limit, input_data)
 			.map_err(|e| Error {
