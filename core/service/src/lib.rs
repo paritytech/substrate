@@ -79,6 +79,7 @@ pub type ComponentParams<C: components::Components> = network::config::Params<
 pub trait NetworkProvider<C: components::Components> {
 	fn get_shard_network(
 		&self,
+		shard_num: u32,
 		params: ComponentParams<C>,
 		protocol_id: network::ProtocolId,
 		import_queue: Box<dyn consensus_common::import_queue::ImportQueue<FactoryBlock<C::Factory>>>,
@@ -362,6 +363,7 @@ impl<Components: components::Components> Service<Components> {
 	pub fn new_foreign(
 		mut config: FactoryFullConfiguration<Components::Factory>,
 		network_provider: impl NetworkProvider<Components>,
+		shard_num: u32,
 		task_executor: TaskExecutor,
 	) -> Result<Self, error::Error> {
 		let (signal, exit) = ::exit_future::signal();
@@ -432,6 +434,7 @@ impl<Components: components::Components> Service<Components> {
 
 		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
 		let network_chan = network_provider.get_shard_network(
+			shard_num,
 			network_params,
 			protocol_id,
 			import_queue,
