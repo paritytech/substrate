@@ -38,7 +38,7 @@ impl<'a> ChildStorageKey<'a> {
 
 	/// Create a new `ChildStorageKey` from a vector.
 	///
-	/// `storage_key` has should start with `:child_storage:default:`
+	/// `storage_key` need to start with `:child_storage:default:`
 	/// See `is_child_trie_key_valid` for more details.
 	pub fn from_vec(key: Vec<u8>) -> Option<Self> {
 		Self::new(Cow::Owned(key))
@@ -46,7 +46,7 @@ impl<'a> ChildStorageKey<'a> {
 
 	/// Create a new `ChildStorageKey` from a slice.
 	///
-	/// `storage_key` has should start with `:child_storage:default:`
+	/// `storage_key` need to start with `:child_storage:default:`
 	/// See `is_child_trie_key_valid` for more details.
 	pub fn from_slice(key: &'a [u8]) -> Option<Self> {
 		Self::new(Cow::Borrowed(key))
