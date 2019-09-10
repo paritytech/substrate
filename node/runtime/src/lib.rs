@@ -231,6 +231,7 @@ impl session::historical::Trait for Runtime {
 parameter_types! {
 	pub const SessionsPerEra: sr_staking_primitives::SessionIndex = 6;
 	pub const BondingDuration: staking::EraIndex = 24 * 28;
+	pub const RewardCurve: PiecewiseLinear = &npos_reward_curve!(0.025, 0.5, 0.1, 0.05, 20);
 }
 
 impl staking::Trait for Runtime {
@@ -244,6 +245,7 @@ impl staking::Trait for Runtime {
 	type SessionsPerEra = SessionsPerEra;
 	type BondingDuration = BondingDuration;
 	type SessionInterface = Self;
+	type RewardCurve = RewardCurve;
 }
 
 parameter_types! {
