@@ -1179,8 +1179,8 @@ impl<T: Trait> Module<T> {
 			let total_payout = inflation::compute_total_payout(
 				total_rewarded_stake.clone(),
 				T::Currency::total_issuance(),
-				// Duration of era; more than u32::MAX is rewarded as u32::MAX.
-				<BalanceOf<T>>::from(era_duration.saturated_into::<u32>()),
+				// Duration of era; more than u64::MAX is rewarded as u64::MAX.
+				era_duration.saturated_into::<u64>(),
 			);
 
 			let mut total_imbalance = <PositiveImbalanceOf<T>>::zero();
