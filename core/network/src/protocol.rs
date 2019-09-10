@@ -25,7 +25,7 @@ use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use primitives::storage::StorageKey;
 use consensus::{
 	BlockOrigin,
-	block_validation::{BlockAnnounceValidator, Validation},
+	block_validation::BlockAnnounceValidator,
 	import_queue::{BlockImportResult, BlockImportError, IncomingBlock, Origin}
 };
 use sr_primitives::{generic::BlockId, ConsensusEngineId, Justification};
@@ -115,8 +115,6 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
 	/// Handles opening the unique substream and sending and receiving raw messages.
 	behaviour: LegacyProto<B, Substream<StreamMuxerBox>>,
-	/// A type to check incoming block announcements.
-	block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send + Sync>
 }
 
 /// A peer that we are connected to
@@ -368,7 +366,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send + Sync>
 	) -> error::Result<(Protocol<B, S, H>, peerset::PeersetHandle)> {
 		let info = chain.info();
-		let sync = ChainSync::new(config.roles, chain.clone(), &info, finality_proof_request_builder);
+		let sync = ChainSync::new(
+			config.roles,
+			chain.clone(),
+			&info,
+			finality_proof_request_builder,
+			block_announce_validator);
 		let (peerset, peerset_handle) = peerset::Peerset::from_config(peerset_config);
 		let versions = &((MIN_VERSION as u8)..=(CURRENT_VERSION as u8)).collect::<Vec<u8>>();
 		let behaviour = LegacyProto::new(protocol_id, versions, peerset);
@@ -391,7 +394,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			finality_proof_provider,
 			peerset_handle: peerset_handle.clone(),
 			behaviour,
-			block_announce_validator
 		};
 
 		Ok((protocol, peerset_handle))
@@ -1060,26 +1062,16 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	}
 
 	fn on_block_announce(&mut self, who: PeerId, announce: BlockAnnounce<B::Header>) -> CustomMessageOutcome<B> {
-		let header = announce.header;
-		let hash = header.hash();
+		let hash = announce.header.hash();
 		if let Some(ref mut peer) = self.context_data.peers.get_mut(&who) {
 			peer.known_blocks.insert(hash.clone());
 		}
 		self.light_dispatch.update_best_number(LightDispatchIn {
 			behaviour: &mut self.behaviour,
 			peerset: self.peerset_handle.clone(),
-		}, who.clone(), *header.number());
+		}, who.clone(), *announce.header.number());
 
-		match self.block_announce_validator.validate(&header, &announce.data) {
-			Ok(Validation::Success) => (),
-			Ok(Validation::Failure) => return CustomMessageOutcome::None,
-			Err(e) => {
-				warn!(target: "sync", "block validation failed: {}", e);
-				return CustomMessageOutcome::None
-			}
-		}
-
-		match self.sync.on_block_announce(who.clone(), hash, &header) {
+		match self.sync.on_block_announce(who.clone(), &announce) {
 			sync::OnBlockAnnounce::Request(peer, req) => {
 				self.send_message(peer, GenericMessage::BlockRequest(req));
 				return CustomMessageOutcome::None
@@ -1114,7 +1106,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				blocks: vec![
 					message::generic::BlockData {
 						hash: hash,
-						header: Some(header),
+						header: Some(announce.header),
 						body: None,
 						receipt: None,
 						message_queue: None,

@@ -29,10 +29,23 @@
 
 use blocks::BlockCollection;
 use client::{ClientInfo, error::Error as ClientError};
-use consensus::{BlockOrigin, BlockStatus, import_queue::{IncomingBlock, BlockImportResult, BlockImportError}};
+use consensus::{
+	BlockOrigin,
+	BlockStatus,
+	block_validation::{BlockAnnounceValidator, Validation},
+	import_queue::{IncomingBlock, BlockImportResult, BlockImportError}
+};
 use crate::{
 	config::{Roles, BoxFinalityProofRequestBuilder},
-	message::{self, generic::FinalityProofRequest, BlockAttributes, BlockRequest, BlockResponse, FinalityProofResponse},
+	message::{
+		BlockAnnounce,
+		BlockAttributes,
+		BlockRequest,
+		BlockResponse,
+		FinalityProofResponse,
+		self,
+		generic::FinalityProofRequest,
+	},
 	protocol
 };
 use either::Either;
@@ -122,6 +135,8 @@ pub struct ChainSync<B: BlockT> {
 	request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 	/// A flag that caches idle state with no pending requests.
 	is_idle: bool,
+	/// A type to check incoming block announcements.
+	block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send + Sync>
 }
 
 /// All the data we have about a Peer that we are trying to sync with
@@ -271,7 +286,8 @@ impl<B: BlockT> ChainSync<B> {
 		role: Roles,
 		client: Arc<dyn crate::chain::Client<B>>,
 		info: &ClientInfo<B>,
-		request_builder: Option<BoxFinalityProofRequestBuilder<B>>
+		request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
+		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send + Sync>
 	) -> Self {
 		let mut required_block_attributes = BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION;
 
@@ -293,6 +309,7 @@ impl<B: BlockT> ChainSync<B> {
 			best_importing_number: Zero::zero(),
 			request_builder,
 			is_idle: false,
+			block_announce_validator,
 		}
 	}
 
@@ -885,7 +902,9 @@ impl<B: BlockT> ChainSync<B> {
 	/// header (call `on_block_data`). The network request isn't sent
 	/// in this case. Both hash and header is passed as an optimization
 	/// to avoid rehashing the header.
-	pub fn on_block_announce(&mut self, who: PeerId, hash: B::Hash, header: &B::Header) -> OnBlockAnnounce<B> {
+	pub fn on_block_announce(&mut self, who: PeerId, announce: &BlockAnnounce<B::Header>) -> OnBlockAnnounce<B> {
+		let header = &announce.header;
+		let hash = header.hash();
 		let number = *header.number();
 		debug!(target: "sync", "Received block announcement with number {:?}", number);
 		if number.is_zero() {
@@ -928,6 +947,19 @@ impl<B: BlockT> ChainSync<B> {
 		if known || self.is_already_downloading(&hash) {
 			trace!(target: "sync", "Known block announce from {}: {}", who, hash);
 			return OnBlockAnnounce::Nothing
+		}
+
+		// Let external validator check the block announcement.
+		match self.block_announce_validator.validate(&header, &announce.data) {
+			Ok(Validation::Success) => (),
+			Ok(Validation::Failure) => {
+				debug!(target: "sync", "block announcement validation of block {} from {} failed", hash, who);
+				return OnBlockAnnounce::Nothing
+			}
+			Err(e) => {
+				error!(target: "sync", "block announcement validation errored: {}", e);
+				return OnBlockAnnounce::Nothing
+			}
 		}
 
 		// stale block case
