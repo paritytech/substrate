@@ -455,12 +455,6 @@ mod tests {
 	}
 
 	#[test]
-	fn extrinsic_creation_should_work() {
-		// print_extrinsic(function: Call, index: Index, signer: <Sr25519 as Crypto>::Pair, genesis_hash: H256)
-		// assert!(uxt.check(&Default::default()).is_ok());
-	}
-
-	#[test]
 	fn should_work() {
 		let s = "0123456789012345678901234567890123456789012345678901234567890123";
 
