@@ -47,7 +47,7 @@ pub fn panic(info: &PanicInfo) -> ! {
 
 #[cfg(not(feature = "no_oom"))]
 #[alloc_error_handler]
-pub extern fn oom(_: ::core::alloc::Layout) -> ! {
+pub extern fn oom(_: core::alloc::Layout) -> ! {
 	static OOM_MSG: &str = "Runtime memory exhausted. Aborting";
 
 	unsafe {
@@ -980,10 +980,9 @@ impl OffchainApi for () {
 		unsafe { ext_is_validator.get()() == 1 }
 	}
 
-	fn submit_transaction<T: codec::Encode>(data: &T) -> Result<(), ()> {
-		let encoded_data = codec::Encode::encode(data);
+	fn submit_transaction(data: Vec<u8>) -> Result<(), ()> {
 		let ret = unsafe {
-			ext_submit_transaction.get()(encoded_data.as_ptr(), encoded_data.len() as u32)
+			ext_submit_transaction.get()(data.as_ptr(), data.len() as u32)
 		};
 
 		if ret == 0 {
