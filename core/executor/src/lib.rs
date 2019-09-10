@@ -43,11 +43,12 @@ pub use wasmi;
 pub use wasm_executor::WasmExecutor;
 pub use native_executor::{with_native_environment, NativeExecutor, NativeExecutionDispatch};
 pub use wasm_runtimes_cache::RuntimesCache;
-pub use state_machine::Externalities;
 pub use runtime_version::{RuntimeVersion, NativeVersion};
 pub use codec::Codec;
 #[doc(hidden)]
-pub use primitives::Blake2Hasher;
+pub use primitives::{Blake2Hasher, traits::Externalities};
+#[doc(hidden)]
+pub use wasm_interface;
 
 /// Provides runtime information.
 pub trait RuntimeInfo {

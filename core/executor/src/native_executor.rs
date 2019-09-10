@@ -16,12 +16,11 @@
 
 use std::{result, cell::RefCell, panic::UnwindSafe};
 use crate::error::{Error, Result};
-use state_machine::{CodeExecutor, Externalities};
 use crate::wasm_executor::WasmExecutor;
 use runtime_version::{NativeVersion, RuntimeVersion};
 use codec::{Decode, Encode};
 use crate::RuntimeInfo;
-use primitives::{Blake2Hasher, NativeOrEncoded};
+use primitives::{Blake2Hasher, NativeOrEncoded, traits::{CodeExecutor, Externalities}};
 use log::{trace, warn};
 
 use crate::RuntimesCache;
@@ -35,7 +34,7 @@ fn safe_call<F, U>(f: F) -> Result<U>
 {
 	// Substrate uses custom panic hook that terminates process on panic. Disable termination for the native call.
 	let _guard = panic_handler::AbortGuard::force_unwind();
-	::std::panic::catch_unwind(f).map_err(|_| Error::Runtime)
+	std::panic::catch_unwind(f).map_err(|_| Error::Runtime)
 }
 
 /// Set up the externalities and safe calling environment to execute calls to a native runtime.
@@ -44,7 +43,7 @@ fn safe_call<F, U>(f: F) -> Result<U>
 pub fn with_native_environment<F, U>(ext: &mut dyn Externalities<Blake2Hasher>, f: F) -> Result<U>
 	where F: UnwindSafe + FnOnce() -> U
 {
-	::runtime_io::with_externalities(ext, move || safe_call(f))
+	runtime_io::with_externalities(ext, move || safe_call(f))
 }
 
 /// Delegate for dispatching a CodeExecutor call.
