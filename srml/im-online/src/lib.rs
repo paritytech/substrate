@@ -67,6 +67,9 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod mock;
+mod tests;
+
 use app_crypto::{AppPublic, RuntimeAppPublic};
 use codec::{Encode, Decode};
 use primitives::offchain::{OpaqueNetworkState, StorageKind};
@@ -449,10 +452,6 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 		let keys = Keys::<T>::get();
 		let current_validators = <session::Module<T>>::validators();
 
-		// The invariant is that these two are of the same length.
-		// TODO: What to do: Uncomment, ignore, a third option?
-		// assert_eq!(keys.len(), current_validators.len());
-
 		for (auth_idx, validator_id) in current_validators.into_iter().enumerate() {
 			let auth_idx = auth_idx as u32;
 			if !<ReceivedHeartbeats>::exists(&current_session, &auth_idx) {
@@ -572,30 +571,5 @@ impl<Offender: Clone> Offence<Offender> for UnresponsivenessOffence<Offender> {
 		// TODO: #3189 should fix this.
 		let p = (x.into_parts() as u64 * 50_000_000u64) / 1_000_000_000u64;
 		Perbill::from_parts(p as u32)
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn test_unresponsiveness_slash_fraction() {
-		// A single case of unresponsiveness is not slashed.
-		assert_eq!(
-			UnresponsivenessOffence::<()>::slash_fraction(1, 50),
-			Perbill::zero(),
-		);
-
-		assert_eq!(
-			UnresponsivenessOffence::<()>::slash_fraction(3, 50),
-			Perbill::from_parts(6000000), // 0.6%
-		);
-
-		// One third offline should be punished around 5%.
-		assert_eq!(
-			UnresponsivenessOffence::<()>::slash_fraction(17, 50),
-			Perbill::from_parts(48000000), // 4.8%
-		);
 	}
 }
