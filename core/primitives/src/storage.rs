@@ -78,7 +78,7 @@ pub mod well_known_keys {
 
 	/// Determine whether a child trie key is valid.
 	///
-	/// For now, the only valid child trie key is `:child_storage:default:`.
+	/// For now, the only valid child trie keys are those starting with `:child_storage:default:`.
 	///
 	/// `child_trie_root` and `child_delta_trie_root` can panic if invalid value is provided to them.
 	pub fn is_child_trie_key_valid(storage_key: &[u8]) -> bool {
