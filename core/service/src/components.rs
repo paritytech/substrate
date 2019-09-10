@@ -563,7 +563,7 @@ impl<Factory: ServiceFactory> LightComponents<Factory> {
 
 	pub fn new_foreign(
 		config: FactoryFullConfiguration<Factory>,
-		network_provider: impl super::NetworkProvider<Self>,
+		network_provider: impl super::NetworkProvider<Factory, ComponentExHash<Self>>,
 		shard_num: u32,
 		task_executor: TaskExecutor
 	) -> Result<Self, error::Error> {

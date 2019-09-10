@@ -69,21 +69,27 @@ pub use tokio::runtime::TaskExecutor;
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
-pub type ComponentParams<C: components::Components> = network::config::Params<
-	FactoryBlock<<C as components::Components>::Factory>,
-	<<C as components::Components>::Factory as ServiceFactory>::NetworkProtocol,
-	ComponentExHash<C>,
-	<<C as components::Components>::Factory as ServiceFactory>::IdentifySpecialization,
+pub type ForeignNetParams<F, EH> where
+	F: ServiceFactory,
+	EH: network::service::ExHashT,
+= network::config::Params<
+	FactoryBlock<F>,
+	<F as ServiceFactory>::NetworkProtocol,
+	EH,
+	<F as ServiceFactory>::IdentifySpecialization,
 >;
 
-pub trait NetworkProvider<C: components::Components> {
+pub trait NetworkProvider<F, EH> where
+	F: ServiceFactory,
+	EH: network::service::ExHashT,
+{
 	fn get_shard_network(
 		&self,
 		shard_num: u32,
-		params: ComponentParams<C>,
+		params: ForeignNetParams<F, EH>,
 		protocol_id: network::ProtocolId,
-		import_queue: Box<dyn consensus_common::import_queue::ImportQueue<FactoryBlock<C::Factory>>>,
-	) -> Result<network::NetworkChan<FactoryBlock<C::Factory>>, network::Error>;
+		import_queue: Box<dyn consensus_common::import_queue::ImportQueue<FactoryBlock<F>>>,
+	) -> Result<network::NetworkChan<FactoryBlock<F>>, network::Error>;
 }
 
 /// Substrate service.
@@ -362,7 +368,7 @@ impl<Components: components::Components> Service<Components> {
 
 	pub fn new_foreign(
 		mut config: FactoryFullConfiguration<Components::Factory>,
-		network_provider: impl NetworkProvider<Components>,
+		network_provider: impl NetworkProvider<Components::Factory, ComponentExHash<Components>>,
 		shard_num: u32,
 		task_executor: TaskExecutor,
 	) -> Result<Self, error::Error> {
