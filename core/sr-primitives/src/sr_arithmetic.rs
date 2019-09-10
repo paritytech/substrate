@@ -653,6 +653,8 @@ pub struct Rational128(u128, u128);
 /// assumptions of a bigger type (u128) being available, or simply create a per-thing and use the
 /// multiplication implementation provided there.
 pub mod helpers_128bit {
+	use super::Perquintill;
+
 	/// return the number of bits that are needed to store `n`.
 	pub(crate) fn bits_of(n: u128) -> u32 {
 		128 - n.leading_zeros()
@@ -664,15 +666,19 @@ pub mod helpers_128bit {
 	///     might collapse to zero.
 	///
 	/// If none worked then return Error.
+	///
+	/// c must be greater than or equal to 1.
 	pub fn multiply_by_rational(a: u128, b: u128, c: u128) -> Result<u128, &'static str> {
+		if a == 0 { return Ok(0); }
+		let c = c.max(1);
 		// This is the safest way to go. Try it.
 		if let Some(x) = a.checked_mul(b) {
 			Ok(x / c)
+		} else if b <= c {
+			let per_thing = Perquintill::from_rational_approximation(b, c);
+			Ok(per_thing * a)
 		} else {
-			let bigger = a.max(b);
-			let smaller = a.min(b);
-			if bigger < c { return Err("division will collapse to zero"); }
-			(bigger / c).checked_mul(smaller).ok_or("multiplication overflow")
+			Err("can not multiply by rational in this type")
 		}
 	}
 
@@ -741,8 +747,10 @@ impl Rational128 {
 
 	/// Convert self to a similar rational number where denominator is the given `den`.
 	pub fn to_den(self, den: u128) -> Result<Self, &'static str> {
-		if den >= self.1 {
-			let n = helpers_128bit::multiply_by_rational(den, self.0, self.1)?;
+		if den == self.1 { Ok(self) }
+		else if den > self.1 {
+			let n = helpers_128bit::multiply_by_rational(den, self.0, self.1)
+				.map_err(|_| "failed to convert to denominator")?;
 			Ok(Self(n, den))
 		} else {
 			let div = self.1 / den;
@@ -767,10 +775,6 @@ impl Rational128 {
 		if other.is_zero() {
 			self
 		} else {
-			debug_assert!(
-				self.1 == other.1,
-				"cannot lazily add two rationals with different denominator"
-			);
 			Self(self.0.saturating_add(other.0) ,self.1)
 		}
 	}
@@ -780,10 +784,6 @@ impl Rational128 {
 		if other.is_zero() {
 			self
 		} else {
-			debug_assert!(
-				self.1 == other.1,
-				"cannot lazily add two rationals with different denominator"
-			);
 			Self(self.0.saturating_sub(other.0) ,self.1)
 		}
 	}
@@ -795,7 +795,6 @@ impl Rational128 {
 		let lcm = self.lcm(&other)?;
 		let self_scaled = self.to_den(lcm)?;
 		let other_scaled = other.to_den(lcm)?;
-
 		let n = self_scaled.0.checked_add(other_scaled.0)
 			.ok_or("overflow while adding numerators")?;
 		Ok(Self(n, self_scaled.1))
@@ -885,8 +884,14 @@ mod test_rational128 {
 		assert_eq!(r(5, 30).lcm(&r(1, 10)).unwrap(), 30);
 
 		// large numbers
-		assert_eq!(r(1_000_000_000, MAX128).lcm(&r(7_000_000_000, MAX128-1)), Err("multiplication overflow"));
-		assert_eq!(r(1_000_000_000, MAX64).lcm(&r(7_000_000_000, MAX64-1)), Ok(340282366920938463408034375210639556610));
+		assert_eq!(
+			r(1_000_000_000, MAX128).lcm(&r(7_000_000_000, MAX128-1)),
+			Err("can not multiply by rational in this type"),
+		);
+		assert_eq!(
+			r(1_000_000_000, MAX64).lcm(&r(7_000_000_000, MAX64-1)),
+			Ok(340282366920938463408034375210639556610),
+		);
 		assert!(340282366920938463408034375210639556610 < MAX128);
 	}
 
@@ -897,8 +902,18 @@ mod test_rational128 {
 		assert_eq!(r(3, 10).checked_add(r(3, 7)).unwrap(), r(51, 70));
 
 		// errors
-		assert!(r(1, MAX128).checked_add(r(1, MAX128-1)).is_err());
-		assert_eq!(r(MAX128, MAX128).checked_add(r(MAX128, MAX128)), Err("overflow while adding numerators"));
+		assert_eq!(
+			r(1, MAX128).checked_add(r(1, MAX128-1)),
+			Err("can not multiply by rational in this type"),
+		);
+		assert_eq!(
+			r(7, MAX128).checked_add(r(MAX128, MAX128)),
+			Err("overflow while adding numerators"),
+		);
+		assert_eq!(
+			r(MAX128, MAX128).checked_add(r(MAX128, MAX128)),
+			Err("overflow while adding numerators"),
+		);
 
 	}
 
@@ -909,8 +924,18 @@ mod test_rational128 {
 		assert_eq!(r(6, 10).checked_sub(r(3, 7)).unwrap(), r(12, 70));
 
 		// errors
-		assert_eq!(r(7, MAX128).checked_add(r(MAX128, MAX128)), Err("overflow while adding numerators"));
-		assert_eq!(r(1, 10).checked_sub(r(2,10)), Err("overflow while subtracting numerators"));
+		assert_eq!(
+			r(2, MAX128).checked_sub(r(1, MAX128-1)),
+			Err("can not multiply by rational in this type"),
+		);
+		assert_eq!(
+			r(7, MAX128).checked_sub(r(MAX128, MAX128)),
+			Err("overflow while subtracting numerators"),
+		);
+		assert_eq!(
+			r(1, 10).checked_sub(r(2,10)),
+			Err("overflow while subtracting numerators"),
+		);
 	}
 
 	#[test]
@@ -951,20 +976,28 @@ mod test_rational128 {
 		assert_eq!(multiply_by_rational_greedy(20, 7, 30), 7 * 2 / 3);
 
 		// Where simple swap helps.
-		assert_eq!(multiply_by_rational_greedy(MAX128, 2, 3), MAX128 / 3 * 2);
+		assert_eq!(
+			multiply_by_rational_greedy(MAX128, 2, 3),
+			226854911280625642082061493673886498661,
+		);
 		assert_eq!(
 			multiply_by_rational_greedy(MAX128, 555, 1000),
-			MAX128 / 1000 * 555
+			188856713641120847222172907124631357357,
 		);
 
 		// This can't work with just swap.
 		assert_eq!(
 			multiply_by_rational_greedy(MAX64, MAX128 / 2, MAX128-1),
-			MAX64 / 2
+			MAX64 / 2,
 		);
 		assert_eq!(
 			multiply_by_rational_greedy(MAX64, MAX128, MAX128 - 1),
-			MAX64
+			MAX64,
+		);
+
+		assert_eq!(
+			multiply_by_rational_greedy(2*MAX64 - 1, MAX64, MAX64),
+			2*MAX64 - 1,
 		);
 
 		// ultimate test
@@ -986,32 +1019,38 @@ mod test_rational128 {
 		assert_eq!(multiply_by_rational(7, 20, 30).unwrap(), 7 * 2 / 3);
 		assert_eq!(multiply_by_rational(20, 7, 30).unwrap(), 7 * 2 / 3);
 
-		assert_eq!(multiply_by_rational(MAX128, 2, 3).unwrap(), MAX128 / 3 * 2);
+		// we are bound by the accuracy of perquintill here. Ideally it should give `MAX128 / 3 * 2`
+		assert_eq!(
+			multiply_by_rational(MAX128, 2, 3).unwrap(),
+			226854911280625642082061493673886498661,
+		);
 		assert_eq!(
 			multiply_by_rational(MAX128, 555, 1000).unwrap(),
-			MAX128 / 1000 * 555
+			188856713641120847222172907124631357357,
+		);
+		assert_eq!(multiply_by_rational(MAX128, MAX128 - 1, MAX128).unwrap(), MAX128);
+
+		assert_eq!(
+			multiply_by_rational(MAX64, MAX128 / 2, MAX128).unwrap(),
+			MAX64 / 2,
+		);
+		assert_eq!(
+			multiply_by_rational(2 * MAX64 - 1, MAX64, MAX64).unwrap(),
+			2 * MAX64 - 1,
+		);
+		assert_eq!(
+			multiply_by_rational(2 * MAX64 - 1, MAX64 - 1, MAX64).unwrap(),
+			2 * MAX64 - 1,
 		);
 
 		assert_eq!(
-			multiply_by_rational(MAX64, MAX128 / 2, MAX128),
-			Err("division will collapse to zero")
-		);
-
-		// TODO: `multiply_by_rational` computes this super inaccurate. Either re-think it or remove
-		// it. This test will fail for now.
-		assert_eq!(
-			multiply_by_rational(2*MAX64 - 1, MAX64, MAX64).unwrap(),
-			2*MAX64 - 1
-		);
-
-		assert_eq!(
-			multiply_by_rational(MAX64, MAX128, MAX128 - 1).unwrap(),
-			MAX64
+			multiply_by_rational(MAX64, MAX128, MAX128 - 1),
+			Err("can not multiply by rational in this type"),
 		);
 
 		assert_eq!(
 			multiply_by_rational(MAX128 - 1000, 3, 1),
-			Err("multiplication overflow")
+			Err("can not multiply by rational in this type"),
 		);
 	}
 }
