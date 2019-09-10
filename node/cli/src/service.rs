@@ -295,15 +295,15 @@ mod tests {
 	use node_runtime::constants::{currency::CENTS, time::{PRIMARY_PROBABILITY, SLOT_DURATION}};
 	use codec::{Encode, Decode};
 	use primitives::{
-		crypto::Pair as CryptoPair, blake2_256,
+		crypto::Pair as CryptoPair,
 		sr25519::Public as AddressPublic, H256,
 	};
 	use sr_primitives::{generic::{BlockId, Era, Digest, SignedPayload}, traits::Block, OpaqueExtrinsic};
 	use timestamp;
 	use finality_tracker;
 	use keyring::AccountKeyring;
-	use substrate_service::AbstractService;
-	use crate::service::{new_full, new_light};
+	use substrate_service::{AbstractService, Roles};
+	use crate::service::new_full;
 
 	#[cfg(feature = "rhd")]
 	fn test_sync() {
@@ -361,7 +361,11 @@ mod tests {
 		service_test::sync(
 			chain_spec::integration_test_config(),
 			|config| new_full(config),
-			|config| new_full(config), // light nodes unsupported
+			|mut config| {
+				// light nodes are unsupported
+				config.roles = Roles::FULL;
+				new_full(config)
+			},
 			block_factory,
 			extrinsic_factory,
 		);
@@ -389,7 +393,11 @@ mod tests {
 		service_test::sync(
 			chain_spec,
 			|config| new_full!(config),
-			|config| new_full(config), // light nodes are unsupported
+			|mut config| {
+				// light nodes are unsupported
+				config.roles = Roles::FULL;
+				new_full(config)
+			},
 			|service, inherent_data_providers| {
 				let mut inherent_data = inherent_data_providers
 					.create_inherent_data()
@@ -500,7 +508,11 @@ mod tests {
 		service_test::consensus(
 			crate::chain_spec::tests::integration_test_config_with_two_authorities(),
 			|config| new_full(config),
-			|config| new_full(config), // light nodes unsupported
+			|mut config| {
+				// light nodes are unsupported
+				config.roles = Roles::FULL;
+				new_full(config)
+			},
 			vec![
 				"//Alice".into(),
 				"//Bob".into(),
