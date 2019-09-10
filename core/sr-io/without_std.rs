@@ -1239,4 +1239,3 @@ impl Printable for u64 {
 		unsafe { ext_print_num.get()(*self); }
 	}
 }
-
