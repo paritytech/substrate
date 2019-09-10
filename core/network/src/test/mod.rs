@@ -294,11 +294,11 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 				Default::default()
 			};
 			self.block_import.import_block(import_block, cache).expect("block_import failed");
-			self.network.on_block_imported(hash, header, Vec::new()); // TODO
+			self.network.on_block_imported(hash, header, Vec::new());
 			at = hash;
 		}
 
-		self.network.service().announce_block(at.clone(), Vec::new()); // TODO
+		self.network.service().announce_block(at.clone(), Vec::new());
 		at
 	}
 
@@ -349,7 +349,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 	/// Test helper to compare the blockchain state of multiple (networked)
 	/// clients.
 	/// Potentially costly, as it creates in-memory copies of both blockchains in order
-	/// to compare them. If you have easier/softer checks that are sufficient, e.g. 
+	/// to compare them. If you have easier/softer checks that are sufficient, e.g.
 	/// by using .info(), you should probably use it instead of this.
 	pub fn blockchain_canon_equals(&self, other: &Self) -> bool {
 		if let (Some(mine), Some(others)) = (self.backend.clone(), other.backend.clone()) {

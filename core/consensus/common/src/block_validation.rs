@@ -33,8 +33,6 @@ impl<T: Chain<B>, B: Block> Chain<B> for Arc<T> {
 }
 
 /// Result of `BlockAnnounceValidator::validate`.
-///
-/// In addition to success or failure, a validation may be inconclusive.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Validation {
 	/// Valid block announcement.

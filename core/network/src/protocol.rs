@@ -363,7 +363,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 		protocol_id: ProtocolId,
 		peerset_config: peerset::PeersetConfig,
-		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send + Sync>
+		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>
 	) -> error::Result<(Protocol<B, S, H>, peerset::PeersetHandle)> {
 		let info = chain.info();
 		let sync = ChainSync::new(

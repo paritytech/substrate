@@ -444,7 +444,7 @@ fn can_sync_small_non_best_forks() {
 	assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
 	assert!(!net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
 
-	net.peer(0).announce_block(small_hash, Vec::new()); // TODO
+	net.peer(0).announce_block(small_hash, Vec::new());
 
 	// after announcing, peer 1 downloads the block.
 

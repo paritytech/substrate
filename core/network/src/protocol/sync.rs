@@ -136,7 +136,7 @@ pub struct ChainSync<B: BlockT> {
 	/// A flag that caches idle state with no pending requests.
 	is_idle: bool,
 	/// A type to check incoming block announcements.
-	block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send + Sync>
+	block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>
 }
 
 /// All the data we have about a Peer that we are trying to sync with
@@ -287,7 +287,7 @@ impl<B: BlockT> ChainSync<B> {
 		client: Arc<dyn crate::chain::Client<B>>,
 		info: &ClientInfo<B>,
 		request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
-		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send + Sync>
+		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>
 	) -> Self {
 		let mut required_block_attributes = BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION;
 

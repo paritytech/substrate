@@ -721,7 +721,7 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 
 			// announce our block hash to peers and propagate the
 			// message.
-			self.network.announce(target_hash, Vec::new()); // TODO
+			self.network.announce(target_hash, Vec::new()); // TODO: Use additional data once available.
 
 			let topic = round_topic::<Block>(self.round, self.set_id);
 			self.network.gossip_message(topic, message.encode(), false);

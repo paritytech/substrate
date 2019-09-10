@@ -82,7 +82,7 @@ pub struct Params<B: BlockT, S, H: ExHashT> {
 	pub specialization: S,
 
 	/// Type to check incoming block announcements.
-	pub block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send + Sync>
+	pub block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>
 }
 
 bitflags! {
