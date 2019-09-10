@@ -29,6 +29,7 @@ use sr_primitives::traits::{
 	self,
 	Block as BlockT,
 };
+use rpc_primitives::number;
 
 /// A struct that encodes RPC parameters required for a call to a smart-contract.
 #[derive(Serialize, Deserialize)]
@@ -36,7 +37,7 @@ pub struct CallRequest {
 	origin: AccountId,
 	dest: AccountId,
 	value: Balance,
-	gas_limit: u64,
+	gas_limit: number::NumberOrHex<u64>,
 	input_data: Vec<u8>,
 }
 
@@ -94,6 +95,12 @@ where
 			gas_limit,
 			input_data
 		} = call_request;
+		let gas_limit = gas_limit.to_number().map_err(|e| Error {
+			code: ErrorCode::InvalidParams,
+			message: e,
+			data: None,
+		})?;
+
 		let exec_result = api
 			.call(&at, origin, dest, value, gas_limit, input_data)
 			.map_err(|e| Error {
