@@ -111,7 +111,7 @@ fn prepare_extrinsics_input<'a, B, H, Number>(
 			block: block.clone(),
 			storage_key: storage_key.clone(),
 		};
-	
+
 		let iter = prepare_extrinsics_input_inner(backend, block, changes, Some(storage_key))?;
 		children_result.insert(child_index, iter);
 	}
@@ -120,7 +120,7 @@ fn prepare_extrinsics_input<'a, B, H, Number>(
 
 	Ok((top, children_result))
 }
-	
+
 fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 	backend: &'a B,
 	block: &Number,
