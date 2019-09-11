@@ -550,7 +550,7 @@ fn nominating_and_rewards_should_work() {
 			// Validator 10: got 800 / 1800 external stake => 8 / 18 =? 4 / 9 => Validator's share = 5 / 9
 			assert_eq!(Balances::total_balance(&10), initial_balance + 5*payout_for_10 / 9 - 1);
 			// Validator 20: got 1200 / 2200 external stake => 12 / 22 =? 6 / 11 => Validator's share = 5 / 11
-			assert_eq!(Balances::total_balance(&20), initial_balance + 5*payout_for_20 / 11);
+			assert_eq!(Balances::total_balance(&20), initial_balance + 5*payout_for_20 / 11 + 1);
 		}
 
 		check_exposure_all();
