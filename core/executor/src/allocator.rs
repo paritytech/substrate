@@ -442,13 +442,13 @@ mod tests {
 		heap.max_heap_size = 64;
 
 		let ptr1 = heap.allocate(32).unwrap();
-		assert_eq!(ptr1, PREFIX_SIZE);
+		assert_eq!(ptr1, to_pointer(PREFIX_SIZE));
 		heap.deallocate(ptr1).expect("failed freeing ptr1");
 		assert_eq!(heap.total_size, 0);
 		assert_eq!(heap.bumper, 40);
 
 		let ptr2 = heap.allocate(16).unwrap();
-		assert_eq!(ptr2, 48);
+		assert_eq!(ptr2, to_pointer(48));
 		heap.deallocate(ptr2).expect("failed freeing ptr2");
 		assert_eq!(heap.total_size, 0);
 		assert_eq!(heap.bumper, 64);
