@@ -83,7 +83,7 @@ fn should_correctly_mark_online_validator_when_heartbeat_is_received() {
 }
 
 #[test]
-fn should_report_offline_validators() {
+fn should_generate_heartbeats() {
 	let mut ext = new_test_ext();
 	let (offchain, state) = TestOffchainExt::new();
 	ext.set_offchain_externalities(offchain);
@@ -103,5 +103,17 @@ fn should_report_offline_validators() {
 		ImOnline::offchain(2);
 
 		// then
+		let transaction = state.write().transactions.pop().unwrap();
+		// All validators have `0` as their session key, so we generate 3 transactions.
+		assert_eq!(state.read().transactions.len(), 2);
+		// check stuff about the transaction.
+		let ex: Extrinsic = Decode::decode(&mut &*transaction).unwrap();
+		let heartbeat = match ex.1 {
+			crate::mock::Call::ImOnline(crate::Call::heartbeat(h, _)) => h,
+			e => panic!("Unexpected call: {:?}", e),
+		};
+
+		// TODO [Kian] assert stuff
+		assert_eq!(heartbeat.block_number, 5);
 	});
 }

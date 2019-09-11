@@ -117,7 +117,8 @@ impl session::historical::Trait for Runtime {
 	type FullIdentificationOf = ConvertInto;
 }
 
-type Extrinsic = TestXt<Call, ()>;
+/// An extrinsic type used for tests.
+pub type Extrinsic = TestXt<Call, ()>;
 type SubmitTransaction = system::offchain::TransactionSubmitter<(), Call, Extrinsic>;
 
 impl Trait for Runtime {
