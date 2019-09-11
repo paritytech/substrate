@@ -26,6 +26,7 @@ decl_runtime_apis! {
 	/// The offchain worker api.
 	pub trait OffchainWorkerApi {
 		/// Starts the off-chain task for given block number.
+		#[skip_initialize_block]
 		fn offchain_worker(number: NumberFor<Block>);
 	}
 }

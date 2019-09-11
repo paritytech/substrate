@@ -6,7 +6,7 @@ use substrate_client::LongestChain;
 use babe::{import_queue, start_babe, Config};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use futures::prelude::*;
-use node_template_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi, WASM_BINARY};
+use node_template_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi};
 use substrate_service::{error::{Error as ServiceError}, AbstractService, Configuration, ServiceBuilder};
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use inherents::InherentDataProviders;
@@ -18,7 +18,7 @@ pub use substrate_executor::NativeExecutor;
 native_executor_instance!(
 	pub Executor,
 	node_template_runtime::api::dispatch,
-	node_template_runtime::native_version
+	node_template_runtime::native_version,
 );
 
 construct_simple_protocol! {

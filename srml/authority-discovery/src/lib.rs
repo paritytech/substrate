@@ -29,13 +29,14 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use app_crypto::RuntimeAppPublic;
-use codec::{Decode, Encode};
 use rstd::prelude::*;
 use support::{decl_module, decl_storage, StorageValue};
 
 pub trait Trait: system::Trait + session::Trait + im_online::Trait {}
 
 type AuthorityIdFor<T> = <T as im_online::Trait>::AuthorityId;
+type AuthoritySignatureFor<T> =
+	<<T as im_online::Trait>::AuthorityId as RuntimeAppPublic>::Signature;
 
 decl_storage! {
 	trait Store for Module<T: Trait> as AuthorityDiscovery {
@@ -58,7 +59,7 @@ impl<T: Trait> Module<T> {
 	/// set, otherwise this function returns None. The restriction might be
 	/// softened in the future in case a consumer needs to learn own authority
 	/// identifier.
-	pub fn authority_id() -> Option<AuthorityIdFor<T>> {
+	fn authority_id() -> Option<AuthorityIdFor<T>> {
 		let authorities = Keys::<T>::get();
 
 		let local_keys = <AuthorityIdFor<T>>::all();
@@ -78,20 +79,19 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Sign the given payload with the private key corresponding to the given authority id.
-	pub fn sign(payload: Vec<u8>, authority_id: AuthorityIdFor<T>) -> Option<Vec<u8>> {
-		authority_id.sign(&payload).map(|s| s.encode())
+	pub fn sign(payload: &Vec<u8>) -> Option<(AuthoritySignatureFor<T>, AuthorityIdFor<T>)> {
+		let authority_id = Module::<T>::authority_id()?;
+		authority_id.sign(payload).map(|s| (s, authority_id))
 	}
 
 	/// Verify the given signature for the given payload with the given
 	/// authority identifier.
 	pub fn verify(
-		payload: Vec<u8>,
-		signature: Vec<u8>,
+		payload: &Vec<u8>,
+		signature: AuthoritySignatureFor<T>,
 		authority_id: AuthorityIdFor<T>,
 	) -> bool {
-		<AuthorityIdFor<T> as RuntimeAppPublic>::Signature::decode(&mut &signature[..])
-			.map(|s| authority_id.verify(&payload, &s))
-			.unwrap_or(false)
+		authority_id.verify(payload, &signature)
 	}
 
 	fn initialize_keys(keys: &[AuthorityIdFor<T>]) {
@@ -158,10 +158,7 @@ mod tests {
 
 	pub struct TestOnSessionEnding;
 	impl session::OnSessionEnding<AuthorityId> for TestOnSessionEnding {
-		fn on_session_ending(
-			_: SessionIndex,
-			_: SessionIndex,
-		) -> Option<Vec<AuthorityId>> {
+		fn on_session_ending(_: SessionIndex, _: SessionIndex) -> Option<Vec<AuthorityId>> {
 			None
 		}
 	}
@@ -351,19 +348,13 @@ mod tests {
 		externalities.set_keystore(key_store);
 
 		with_externalities(&mut externalities, || {
-			let authority_id = AuthorityDiscovery::authority_id().expect("authority id");
 			let payload = String::from("test payload").into_bytes();
-			let sig =
-				AuthorityDiscovery::sign(payload.clone(), authority_id.clone()).expect("signature");
+			let (sig, authority_id) = AuthorityDiscovery::sign(&payload).expect("signature");
 
-			assert!(AuthorityDiscovery::verify(
-				payload,
-				sig.clone(),
-				authority_id.clone()
-			));
+			assert!(AuthorityDiscovery::verify(&payload, sig.clone(), authority_id.clone(),));
 
 			assert!(!AuthorityDiscovery::verify(
-				String::from("other payload").into_bytes(),
+				&String::from("other payload").into_bytes(),
 				sig,
 				authority_id
 			))

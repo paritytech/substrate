@@ -22,13 +22,15 @@ use std::{
 };
 
 use codec::{Encode, Decode};
-use primitives::{offchain, H256, Blake2Hasher, convert_hash, NativeOrEncoded};
+use primitives::{
+	offchain, H256, Blake2Hasher, convert_hash, NativeOrEncoded,
+	traits::CodeExecutor,
+};
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{One, Block as BlockT, Header as HeaderT, NumberFor};
 use state_machine::{
-	self, Backend as StateBackend, CodeExecutor, OverlayedChanges,
-	ExecutionStrategy, ChangesTrieTransaction, create_proof_check_backend,
-	execution_proof_check_on_trie_backend, ExecutionManager,
+	self, Backend as StateBackend, OverlayedChanges, ExecutionStrategy, create_proof_check_backend,
+	execution_proof_check_on_trie_backend, ExecutionManager, ChangesTrieTransaction,
 };
 use hash_db::Hasher;
 
@@ -236,7 +238,7 @@ pub fn prove_execution<Block, S, E>(
 pub fn check_execution_proof<Header, E, H>(
 	executor: &E,
 	request: &RemoteCallRequest<Header>,
-	remote_proof: Vec<Vec<u8>>
+	remote_proof: Vec<Vec<u8>>,
 ) -> ClientResult<Vec<u8>>
 	where
 		Header: HeaderT,
@@ -267,22 +269,20 @@ pub fn check_execution_proof<Header, E, H>(
 	)?;
 
 	// execute method
-	let local_result = execution_proof_check_on_trie_backend::<H, _>(
+	execution_proof_check_on_trie_backend::<H, _>(
 		&trie_backend,
 		&mut changes,
 		executor,
 		&request.method,
 		&request.call_data,
 		None,
-	)?;
-
-	Ok(local_result)
+	).map_err(Into::into)
 }
 
 #[cfg(test)]
 mod tests {
 	use consensus::BlockOrigin;
-	use state_machine::NeverOffchainExt;
+	use primitives::offchain::NeverOffchainExt;
 	use test_client::{self, runtime::{Header, Digest, Block}, ClientExt, TestClient};
 	use executor::NativeExecutor;
 	use crate::backend::{Backend, NewBlockState};
