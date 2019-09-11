@@ -301,7 +301,6 @@ impl<T: Trait> Module<T> {
 	pub(crate) fn offchain(now: T::BlockNumber) {
 		let next_gossip = <GossipAt<T>>::get();
 		let check = Self::check_not_yet_gossipped(now, next_gossip);
-		println!("Starting: {:?}", check);
 		let (curr_worker_status, not_yet_gossipped) = match check {
 			Ok((s, v)) => (s, v),
 			Err(err) => {
@@ -309,7 +308,6 @@ impl<T: Trait> Module<T> {
 				return;
 			},
 		};
-		println!("{:?}, {:?}, {:?}", next_gossip, now, not_yet_gossipped);
 		if next_gossip < now && not_yet_gossipped {
 			let value_set = Self::compare_and_set_worker_status(now, false, curr_worker_status);
 			if !value_set {
@@ -331,18 +329,15 @@ impl<T: Trait> Module<T> {
 		let authorities = Keys::<T>::get();
 		let mut local_keys = T::AuthorityId::all();
 		local_keys.sort();
-		println!("LocalKeys: {:?}", local_keys);
 
 		for (authority_index, key) in authorities.into_iter()
 			.enumerate()
 			.filter_map(|(index, authority)| {
-				println!("Looking: {:?},{:?} in {:?}", index, authority, local_keys);
 				local_keys.binary_search(&authority)
 					.ok()
 					.map(|location| (index as u32, &local_keys[location]))
 			})
 		{
-			println!("Signing.");
 			let network_state = runtime_io::network_state().map_err(|_| OffchainErr::NetworkState)?;
 			let heartbeat_data = Heartbeat {
 				block_number,

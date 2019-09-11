@@ -125,12 +125,16 @@ impl app_crypto::RuntimeAppPublic for UintAuthorityId {
 impl OpaqueKeys for UintAuthorityId {
 	type KeyTypeIds = std::iter::Cloned<std::slice::Iter<'static, KeyTypeId>>;
 
-	fn key_ids() -> Self::KeyTypeIds { [key_types::DUMMY].iter().cloned() }
+	fn key_ids() -> Self::KeyTypeIds {
+		[key_types::DUMMY].iter().cloned()
+	}
+
 	fn get_raw(&self, _: KeyTypeId) -> &[u8] {
 		self.as_ref()
 	}
+
 	fn get<T: Decode>(&self, _: KeyTypeId) -> Option<T> {
-		self.0.using_encoded(|mut x| T::decode(&mut x)).ok()
+		self.using_encoded(|mut x| T::decode(&mut x)).ok()
 	}
 }
 
