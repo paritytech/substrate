@@ -28,7 +28,7 @@ use futures::{prelude::*, sync::mpsc};
 use futures03::{FutureExt as _, compat::Compat, StreamExt as _, TryStreamExt as _};
 use keystore::{Store as Keystore, KeyStorePtr};
 use log::{info, warn};
-use network::{FinalityProofProvider, OnDemand, NetworkService, NetworkStateInfo};
+use network::{FinalityProofProvider, OnDemand, NetworkService, NetworkStateInfo, DhtEvent};
 use network::{config::BoxFinalityProofRequestBuilder, specialization::NetworkSpecialization};
 use parking_lot::{Mutex, RwLock};
 use primitives::{Blake2Hasher, H256, Hasher};
@@ -76,6 +76,7 @@ pub struct ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFpr
 	transaction_pool: Arc<TExPool>,
 	rpc_extensions: TRpc,
 	rpc_builder: TRpcB,
+	dht_event_tx: Option<mpsc::Sender<DhtEvent>>,
 	marker: PhantomData<(TBl, TRtApi)>,
 }
 
@@ -197,6 +198,7 @@ where TGen: Serialize + DeserializeOwned + BuildStorage {
 			transaction_pool: Arc::new(()),
 			rpc_extensions: Default::default(),
 			rpc_builder,
+			dht_event_tx: None,
 			marker: PhantomData,
 		})
 	}
@@ -266,6 +268,7 @@ where TGen: Serialize + DeserializeOwned + BuildStorage {
 			transaction_pool: Arc::new(()),
 			rpc_extensions: Default::default(),
 			rpc_builder,
+			dht_event_tx: None,
 			marker: PhantomData,
 		})
 	}
@@ -312,6 +315,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			rpc_builder: self.rpc_builder,
+			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
@@ -354,6 +358,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			rpc_builder: self.rpc_builder,
+			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
@@ -380,6 +385,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			rpc_builder: self.rpc_builder,
+			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
@@ -421,6 +427,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			rpc_builder: self.rpc_builder,
+			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
@@ -479,6 +486,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			rpc_builder: self.rpc_builder,
+			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
@@ -516,6 +524,7 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			transaction_pool: Arc::new(transaction_pool),
 			rpc_extensions: self.rpc_extensions,
 			rpc_builder: self.rpc_builder,
+			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
@@ -542,9 +551,36 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 			transaction_pool: self.transaction_pool,
 			rpc_extensions,
 			rpc_builder: self.rpc_builder,
+			dht_event_tx: self.dht_event_tx,
 			marker: self.marker,
 		})
 	}
+
+		/// Adds a dht event sender to builder to be used by the network to send dht events to the authority discovery
+		/// module.
+		pub fn with_dht_event_tx(
+			self,
+			dht_event_tx: mpsc::Sender<DhtEvent>,
+		) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
+								   TNetP, TExPool, TRpc, TRpcB, Backend>, Error> {
+			Ok(ServiceBuilder {
+				config: self.config,
+				client: self.client,
+				backend: self.backend,
+				keystore: self.keystore,
+				fetcher: self.fetcher,
+				select_chain: self.select_chain,
+				import_queue: self.import_queue,
+				finality_proof_request_builder: self.finality_proof_request_builder,
+				finality_proof_provider: self.finality_proof_provider,
+				network_protocol: self.network_protocol,
+				transaction_pool: self.transaction_pool,
+				rpc_extensions: self.rpc_extensions,
+				rpc_builder: self.rpc_builder,
+				dht_event_tx: Some(dht_event_tx),
+				marker: self.marker,
+			})
+		}
 }
 
 /// RPC handlers builder.
@@ -798,6 +834,7 @@ ServiceBuilder<
 			network_protocol,
 			transaction_pool,
 			rpc_extensions,
+			dht_event_tx,
 			rpc_builder,
 		) = (
 			self.client,
@@ -811,6 +848,7 @@ ServiceBuilder<
 			self.network_protocol,
 			self.transaction_pool,
 			self.rpc_extensions,
+			self.dht_event_tx,
 			self.rpc_builder,
 		);
 
@@ -829,10 +867,11 @@ ServiceBuilder<
 					finality_proof_provider,
 					network_protocol,
 					transaction_pool,
-					rpc_extensions
+					rpc_extensions,
+					dht_event_tx,
 				))
 			},
-			|h, c, tx| maintain_transaction_pool(h, c, tx),
+			|h, c, tx, r| maintain_transaction_pool(h, c, tx, r),
 			|n, o, p, ns, v| offchain_workers(n, o, p, ns, v),
 			|c, ssb, si, te, tp, ext, ks| start_rpc(&rpc_builder, c, ssb, si, te, tp, ext, ks),
 		)
@@ -885,6 +924,7 @@ pub(crate) fn maintain_transaction_pool<Api, Backend, Block, Executor, PoolApi>(
 	id: &BlockId<Block>,
 	client: &Client<Backend, Executor, Block, Api>,
 	transaction_pool: &TransactionPool<PoolApi>,
+	retracted: &[Block::Hash],
 ) -> error::Result<()> where
 	Block: BlockT<Hash = <Blake2Hasher as primitives::Hasher>::Out>,
 	Backend: client::backend::Backend<Block, Blake2Hasher>,
@@ -893,6 +933,16 @@ pub(crate) fn maintain_transaction_pool<Api, Backend, Block, Executor, PoolApi>(
 	Executor: client::CallExecutor<Block, Blake2Hasher>,
 	PoolApi: txpool::ChainApi<Hash = Block::Hash, Block = Block>,
 {
+	// Put transactions from retracted blocks back into the pool.
+	for r in retracted {
+		if let Some(block) = client.block(&BlockId::hash(*r))? {
+			let extrinsics = block.block.extrinsics();
+			if let Err(e) = transaction_pool.submit_at(id, extrinsics.iter().cloned(), true) {
+				warn!("Error re-submitting transactions: {:?}", e);
+			}
+		}
+	}
+
 	// Avoid calling into runtime if there is nothing to prune from the pool anyway.
 	if transaction_pool.status().is_empty() {
 		return Ok(())
@@ -968,10 +1018,67 @@ mod tests {
 			&id,
 			&client,
 			&pool,
+			&[]
 		).unwrap();
 
 		// then
 		assert_eq!(pool.status().ready, 0);
+		assert_eq!(pool.status().future, 0);
+	}
+
+	#[test]
+	fn should_add_reverted_transactions_to_the_pool() {
+		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
+		let client = Arc::new(client);
+		let pool = TransactionPool::new(Default::default(), ::transaction_pool::ChainApi::new(client.clone()));
+		let transaction = Transfer {
+			amount: 5,
+			nonce: 0,
+			from: AccountKeyring::Alice.into(),
+			to: Default::default(),
+		}.into_signed_tx();
+		let best = longest_chain.best_chain().unwrap();
+
+		// store the transaction in the pool
+		pool.submit_one(&BlockId::hash(best.hash()), transaction.clone()).unwrap();
+
+		// import the block
+		let mut builder = client.new_block(Default::default()).unwrap();
+		builder.push(transaction.clone()).unwrap();
+		let block = builder.bake().unwrap();
+		let block1_hash = block.header().hash();
+		let id = BlockId::hash(block1_hash.clone());
+		client.import(BlockOrigin::Own, block).unwrap();
+
+		// fire notification - this should clean up the queue
+		assert_eq!(pool.status().ready, 1);
+		maintain_transaction_pool(
+			&id,
+			&client,
+			&pool,
+			&[]
+		).unwrap();
+
+		// then
+		assert_eq!(pool.status().ready, 0);
+		assert_eq!(pool.status().future, 0);
+
+		// import second block
+		let builder = client.new_block_at(&BlockId::hash(best.hash()), Default::default()).unwrap();
+		let block = builder.bake().unwrap();
+		let id = BlockId::hash(block.header().hash());
+		client.import(BlockOrigin::Own, block).unwrap();
+
+		// fire notification - this should add the transaction back to the pool.
+		maintain_transaction_pool(
+			&id,
+			&client,
+			&pool,
+			&[block1_hash]
+		).unwrap();
+
+		// then
+		assert_eq!(pool.status().ready, 1);
 		assert_eq!(pool.status().future, 0);
 	}
 }

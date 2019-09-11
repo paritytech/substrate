@@ -115,7 +115,7 @@ fn prepare_extrinsics_input<'a, B, H, Number>(
 
 	Ok((top, children_result))
 }
-	
+
 fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 	backend: &'a B,
 	block: &Number,
