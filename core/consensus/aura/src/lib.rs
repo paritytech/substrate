@@ -806,7 +806,7 @@ mod tests {
 			keystore.write().insert_ephemeral_from_seed::<AuthorityPair>(&key.to_seed())
 				.expect("Creates authority key");
 			keystore_paths.push(keystore_path);
-			
+
 			let environ = DummyFactory(client.clone());
 			import_notifications.push(
 				client.import_notification_stream()

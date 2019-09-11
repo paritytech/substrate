@@ -461,25 +461,45 @@ pub fn check_execution_proof<Header, E, H>(
 		H: Hasher,
 		H::Out: Ord + 'static,
 {
+	check_execution_proof_with_make_header(
+		executor,
+		request,
+		remote_proof,
+		|header| <Header as HeaderT>::new(
+			*header.number() + One::one(),
+			Default::default(),
+			Default::default(),
+			header.hash(),
+			Default::default(),
+		),
+	)
+}
+
+fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Header) -> Header>(
+	executor: &E,
+	request: &RemoteCallRequest<Header>,
+	remote_proof: Vec<Vec<u8>>,
+	make_next_header: MakeNextHeader,
+) -> ClientResult<Vec<u8>>
+	where
+		Header: HeaderT,
+		E: CodeExecutor<H>,
+		H: Hasher,
+		H::Out: Ord + 'static,
+{
 	let local_state_root = request.header.state_root();
 	let root: H::Out = convert_hash(&local_state_root);
 
 	// prepare execution environment + check preparation proof
 	let mut changes = OverlayedChanges::default();
 	let trie_backend = create_proof_check_backend(root, remote_proof)?;
-	let next_block = <Header as HeaderT>::new(
-		*request.header.number() + One::one(),
-		Default::default(),
-		Default::default(),
-		request.header.hash(),
-		Default::default(),
-	);
+	let next_header = make_next_header(&request.header);
 	execution_proof_check_on_trie_backend::<H, _>(
 		&trie_backend,
 		&mut changes,
 		executor,
 		"Core_initialize_block",
-		&next_block.encode(),
+		&next_header.encode(),
 		None,
 	)?;
 
@@ -530,6 +550,43 @@ mod tests {
 			(remote_result, local_result)
 		}
 
+		fn execute_with_proof_failure(remote_client: &TestClient, at: u64, method: &'static str) {
+			let remote_block_id = BlockId::Number(at);
+			let remote_header = remote_client.header(&remote_block_id).unwrap().unwrap();
+
+			// 'fetch' execution proof from remote node
+			let (_, remote_execution_proof) = remote_client.execution_proof(
+				&remote_block_id,
+				method,
+				&[]
+			).unwrap();
+
+			// check remote execution proof locally
+			let local_executor = NativeExecutor::<test_client::LocalExecutor>::new(None);
+			let execution_result = check_execution_proof_with_make_header(
+				&local_executor,
+				&RemoteCallRequest {
+					block: test_client::runtime::Hash::default(),
+					header: remote_header,
+					method: method.into(),
+					call_data: vec![],
+					retry_count: None,
+				},
+				remote_execution_proof,
+				|header| <Header as HeaderT>::new(
+					at + 1,
+					Default::default(),
+					Default::default(),
+					header.hash(),
+					header.digest().clone(), // this makes next header wrong
+				),
+			);
+			match execution_result {
+				Err(crate::error::Error::Execution(_)) => (),
+				_ => panic!("Unexpected execution result: {:?}", execution_result),
+			}
+		}
+
 		// prepare remote client
 		let remote_client = test_client::new();
 		for i in 1u32..3u32 {
@@ -546,15 +603,24 @@ mod tests {
 		let (remote, local) = execute(&remote_client, 0, "Core_version");
 		assert_eq!(remote, local);
 
+		let (remote, local) = execute(&remote_client, 2, "Core_version");
+		assert_eq!(remote, local);
+
 		// check method that requires environment
 		let (_, block) = execute(&remote_client, 0, "BlockBuilder_finalize_block");
 		let local_block: Header = Decode::decode(&mut &block[..]).unwrap();
 		assert_eq!(local_block.number, 1);
 
-		// check method that requires environment
 		let (_, block) = execute(&remote_client, 2, "BlockBuilder_finalize_block");
 		let local_block: Header = Decode::decode(&mut &block[..]).unwrap();
 		assert_eq!(local_block.number, 3);
+
+		// check that proof check doesn't panic even if proof is incorrect AND no panic handler is set
+		execute_with_proof_failure(&remote_client, 2, "Core_version");
+
+		// check that proof check doesn't panic even if proof is incorrect AND panic handler is set
+		panic_handler::set("TEST");
+		execute_with_proof_failure(&remote_client, 2, "Core_version");
 	}
 
 	#[test]
