@@ -47,6 +47,83 @@ fn test_unresponsiveness_slash_fraction() {
 }
 
 #[test]
+fn should_report_offline_validators() {
+	with_externalities(&mut new_test_ext(), || {
+		// given
+		let block = 1;
+		System::set_block_number(block);
+		// buffer new validators
+		Session::rotate_session();
+		// enact the change and buffer another one
+		let validators = vec![1, 2, 3, 4, 5, 6];
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(validators.clone()));
+		Session::rotate_session();
+
+		// when
+		// we end current session and start the next one
+		Session::rotate_session();
+
+		// then
+		let offences = OFFENCES.with(|l| l.replace(vec![]));
+		assert_eq!(offences, vec![
+			(vec![], crate::UnresponsivenessOffence {
+				session_index: 2,
+				validator_set_count: 3,
+				offenders: vec![
+					(1, 1),
+					(2, 2),
+					(3, 3),
+				],
+			})
+		]);
+
+		// should not report when heartbeat is sent
+		for (idx, v) in validators.into_iter().take(4).enumerate() {
+			heartbeat(block, 3, idx as u32, v.into());
+		}
+		Session::rotate_session();
+
+		// then
+		let offences = OFFENCES.with(|l| l.replace(vec![]));
+		assert_eq!(offences, vec![
+			(vec![], crate::UnresponsivenessOffence {
+				session_index: 3,
+				validator_set_count: 6,
+				offenders: vec![
+					(5, 5),
+					(6, 6),
+				],
+			})
+		]);
+	});
+}
+
+fn heartbeat(
+	block: u64,
+	session_index: u32,
+	authority_index: u32,
+	id: UintAuthorityId,
+) {
+	let heartbeat = Heartbeat {
+		block_number: block,
+		network_state: OpaqueNetworkState {
+			peer_id: OpaquePeerId(vec![1]),
+			external_addresses: vec![],
+		},
+		session_index,
+		authority_index,
+	};
+	let signature = id.sign(&heartbeat.encode()).unwrap();
+
+	// when
+	ImOnline::heartbeat(
+		Origin::system(system::RawOrigin::None),
+		heartbeat,
+		signature
+	).unwrap();
+}
+
+#[test]
 fn should_correctly_mark_online_validator_when_heartbeat_is_received() {
 	with_externalities(&mut new_test_ext(), || {
 		// given
@@ -54,26 +131,13 @@ fn should_correctly_mark_online_validator_when_heartbeat_is_received() {
 		System::set_block_number(block);
 		// buffer new validators
 		Session::rotate_session();
-		// enact the change
+		// enact the change and buffer another one
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3, 4, 5, 6]));
 		Session::rotate_session();
 		assert!(!ImOnline::is_online_in_current_session(0));
-		let heartbeat = Heartbeat {
-			block_number: block,
-			network_state: OpaqueNetworkState {
-				peer_id: OpaquePeerId(vec![1]),
-				external_addresses: vec![],
-			},
-			session_index: 2,
-			authority_index: 0,
-		};
-		let signature = UintAuthorityId(1).sign(&heartbeat.encode()).unwrap();
 
 		// when
-		ImOnline::heartbeat(
-			Origin::system(system::RawOrigin::None),
-			heartbeat,
-			signature
-		).unwrap();
+		heartbeat(block, 2, 0, 1.into());
 
 		// then
 		assert!(ImOnline::is_online_in_current_session(0));

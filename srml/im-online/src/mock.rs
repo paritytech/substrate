@@ -22,7 +22,7 @@ use std::cell::RefCell;
 
 use crate::{Module, Trait};
 use sr_primitives::Perbill;
-use sr_staking_primitives::SessionIndex;
+use sr_staking_primitives::{SessionIndex, offence::ReportOffence};
 use sr_primitives::testing::{Header, UintAuthorityId, TestXt};
 use sr_primitives::traits::{IdentityLookup, BlakeTwo256, ConvertInto};
 use primitives::{H256, Blake2Hasher};
@@ -120,13 +120,27 @@ impl session::historical::Trait for Runtime {
 /// An extrinsic type used for tests.
 pub type Extrinsic = TestXt<Call, ()>;
 type SubmitTransaction = system::offchain::TransactionSubmitter<(), Call, Extrinsic>;
+type IdentificationTuple = (u64, u64);
+type Offence = crate::UnresponsivenessOffence<IdentificationTuple>;
+
+thread_local! {
+	pub static OFFENCES: RefCell<Vec<(Vec<u64>, Offence)>> = RefCell::new(vec![]);
+}
+
+/// A mock offence report handler.
+pub struct OffenceHandler;
+impl ReportOffence<u64, IdentificationTuple, Offence> for OffenceHandler {
+	fn report_offence(reporters: Vec<u64>, offence: Offence) {
+		OFFENCES.with(|l| l.borrow_mut().push((reporters, offence)));
+	}
+}
 
 impl Trait for Runtime {
 	type AuthorityId = UintAuthorityId;
 	type Event = ();
 	type Call = Call;
 	type SubmitTransaction = SubmitTransaction;
-	type ReportUnresponsiveness = ();
+	type ReportUnresponsiveness = OffenceHandler;
 }
 
 pub fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {

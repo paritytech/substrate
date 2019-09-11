@@ -445,7 +445,6 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 		// Tell the offchain worker to start making the next session's heartbeats.
 		<GossipAt<T>>::put(<system::Module<T>>::block_number());
 
-
 		// Remember who the authorities are for the new session.
 		Keys::<T>::put(validators.map(|x| x.1).collect::<Vec<_>>());
 	}
@@ -460,7 +459,8 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 
 		for (auth_idx, validator_id) in current_validators.into_iter().enumerate() {
 			let auth_idx = auth_idx as u32;
-			if !<ReceivedHeartbeats>::exists(&current_session, &auth_idx) {
+			let exists = <ReceivedHeartbeats>::exists(&current_session, &auth_idx);
+			if !exists {
 				let full_identification = T::FullIdentificationOf::convert(validator_id.clone())
 					.expect(
 						"we got the validator_id from current_validators;
@@ -472,6 +472,10 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 
 				unresponsive.push((validator_id, full_identification));
 			}
+		}
+
+		if unresponsive.is_empty() {
+			return;
 		}
 
 		let validator_set_count = keys.len() as u32;
@@ -535,6 +539,7 @@ impl<T: Trait> support::unsigned::ValidateUnsigned for Module<T> {
 }
 
 /// An offence that is filed if a validator didn't send a heartbeat message.
+#[cfg_attr(feature = "std", derive(Clone, Debug, PartialEq, Eq))]
 pub struct UnresponsivenessOffence<Offender> {
 	/// The current session index in which we report the unresponsive validators.
 	///
