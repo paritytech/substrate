@@ -17,7 +17,7 @@
 //! Testing utilities.
 
 use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializer};
-use std::{fmt::Debug, ops::Deref, fmt, cmp::Ordering, cell::RefCell};
+use std::{fmt::Debug, ops::Deref, fmt, cell::RefCell};
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{
 	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys, ValidateUnsigned,
@@ -30,24 +30,12 @@ use primitives::{crypto::{CryptoType, Dummy, key_types, Public}, U256};
 use crate::transaction_validity::{TransactionValidity, TransactionValidityError};
 
 /// Authority Id
-#[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug, Hash, Serialize, Deserialize)]
+#[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug, Hash, Serialize, Deserialize, PartialOrd, Ord)]
 pub struct UintAuthorityId(pub u64);
 
 impl From<u64> for UintAuthorityId {
 	fn from(id: u64) -> Self {
 		UintAuthorityId(id)
-	}
-}
-
-impl PartialOrd for UintAuthorityId {
-	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-		self.0.partial_cmp(&other.0)
-	}
-}
-
-impl Ord for UintAuthorityId {
-	fn cmp(&self, other: &Self) -> Ordering {
-		self.0.cmp(&other.0)
 	}
 }
 
