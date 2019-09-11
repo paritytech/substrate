@@ -222,29 +222,37 @@ mod test_inflation {
 
 	#[test]
 	fn npos_curve_is_sensible() {
-		const YEAR: u64 = 365 * 24 * 60 * 60;
+		const YEAR: u64 = 365 * 24 * 60 * 60 * 1000;
 		//super::I_NPOS.calculate_for_fraction_times_denominator(25, 100)
-		assert_eq!(super::compute_total_payout(0, 100_000, YEAR), 2_498);
-		assert_eq!(super::compute_total_payout(5_000, 100_000, YEAR), 3_247);
-		assert_eq!(super::compute_total_payout(25_000, 100_000, YEAR), 6_245);
-		assert_eq!(super::compute_total_payout(40_000, 100_000, YEAR), 8_494);
-		assert_eq!(super::compute_total_payout(50_000, 100_000, YEAR), 9_993);
-		assert_eq!(super::compute_total_payout(60_000, 100_000, YEAR), 4_380);
-		assert_eq!(super::compute_total_payout(75_000, 100_000, YEAR), 2_735);
-		assert_eq!(super::compute_total_payout(95_000, 100_000, YEAR), 2_518);
-		assert_eq!(super::compute_total_payout(100_000, 100_000, YEAR), 2_505);
+		assert_eq!(super::compute_total_payout(0, 100_000u64, YEAR), 2_498);
+		assert_eq!(super::compute_total_payout(5_000, 100_000u64, YEAR), 3_247);
+		assert_eq!(super::compute_total_payout(25_000, 100_000u64, YEAR), 6_245);
+		assert_eq!(super::compute_total_payout(40_000, 100_000u64, YEAR), 8_494);
+		assert_eq!(super::compute_total_payout(50_000, 100_000u64, YEAR), 9_993);
+		assert_eq!(super::compute_total_payout(60_000, 100_000u64, YEAR), 4_380);
+		assert_eq!(super::compute_total_payout(75_000, 100_000u64, YEAR), 2_735);
+		assert_eq!(super::compute_total_payout(95_000, 100_000u64, YEAR), 2_518);
+		assert_eq!(super::compute_total_payout(100_000, 100_000u64, YEAR), 2_505);
 
-		const DAY: u64 = 24 * 60 * 60;
-		assert_eq!(super::compute_total_payout(25_000, 100_000, DAY), 17);
-		assert_eq!(super::compute_total_payout(50_000, 100_000, DAY), 27);
-		assert_eq!(super::compute_total_payout(75_000, 100_000, DAY), 7);
+		const DAY: u64 = 24 * 60 * 60 * 1000;
+		assert_eq!(super::compute_total_payout(25_000, 100_000u64, DAY), 17);
+		assert_eq!(super::compute_total_payout(50_000, 100_000u64, DAY), 27);
+		assert_eq!(super::compute_total_payout(75_000, 100_000u64, DAY), 7);
 
-		const SIX_HOURS: u64 = 6 * 60 * 60;
-		assert_eq!(super::compute_total_payout(25_000, 100_000, SIX_HOURS), 4);
-		assert_eq!(super::compute_total_payout(50_000, 100_000, SIX_HOURS), 6);
-		assert_eq!(super::compute_total_payout(75_000, 100_000, SIX_HOURS), 1);
+		const SIX_HOURS: u64 = 6 * 60 * 60 * 1000;
+		assert_eq!(super::compute_total_payout(25_000, 100_000u64, SIX_HOURS), 4);
+		assert_eq!(super::compute_total_payout(50_000, 100_000u64, SIX_HOURS), 6);
+		assert_eq!(super::compute_total_payout(75_000, 100_000u64, SIX_HOURS), 1);
 
-		assert_eq!(super::compute_total_payout(2_500_000_000_000_000_000_000_000_000u128, 5_000_000_000_000_000_000_000_000_000u128, 60 * 60), 57_038_558_065_252_110_426_648);
+		const HOUR: u64 = 60 * 60 * 1000;
+		assert_eq!(
+			super::compute_total_payout(
+				2_500_000_000_000_000_000_000_000_000u128,
+				5_000_000_000_000_000_000_000_000_000u128,
+				HOUR
+			),
+			57_038_500_000_000_000_000_000
+		);
 	}
 
 	// Compute approximation of I_NPoS into piecewise linear function
