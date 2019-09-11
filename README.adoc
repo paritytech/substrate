@@ -277,9 +277,9 @@ Or just run the tests of a specific package (i.e. `cargo test -p srml-assets`)
 You can start a development chain with:
 
 [source, shell]
-cargo run \-- --dev
+cargo run --release -- --dev
 
-Detailed logs may be shown by running the node with the following environment variables set: `RUST_LOG=debug RUST_BACKTRACE=1 cargo run \-- --dev`.
+Detailed logs may be shown by running the node with the following environment variables set: `RUST_LOG=debug RUST_BACKTRACE=1 cargo run --release \-- --dev`.
 
 If you want to see the multi-node consensus algorithm in action locally, then you can create a local testnet with two validator nodes for Alice and Bob, who are the initial authorities of the genesis chain specification that have been endowed with a testnet DOTs. We'll give each node a name and expose them so they are listed on link:https://telemetry.polkadot.io/#/Local%20Testnet[Telemetry]. You'll need two terminal windows open.
 
