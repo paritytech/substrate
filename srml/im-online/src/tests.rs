@@ -23,6 +23,7 @@ use crate::mock::*;
 use offchain::testing::TestOffchainExt;
 use primitives::offchain::OpaquePeerId;
 use runtime_io::with_externalities;
+use support::{dispatch, assert_noop};
 use sr_primitives::testing::UintAuthorityId;
 
 
@@ -79,7 +80,7 @@ fn should_report_offline_validators() {
 
 		// should not report when heartbeat is sent
 		for (idx, v) in validators.into_iter().take(4).enumerate() {
-			heartbeat(block, 3, idx as u32, v.into());
+			let _ = heartbeat(block, 3, idx as u32, v.into()).unwrap();
 		}
 		Session::rotate_session();
 
@@ -103,7 +104,7 @@ fn heartbeat(
 	session_index: u32,
 	authority_index: u32,
 	id: UintAuthorityId,
-) {
+) -> dispatch::Result {
 	let heartbeat = Heartbeat {
 		block_number,
 		network_state: OpaqueNetworkState {
@@ -115,34 +116,65 @@ fn heartbeat(
 	};
 	let signature = id.sign(&heartbeat.encode()).unwrap();
 
-	// when
 	ImOnline::heartbeat(
 		Origin::system(system::RawOrigin::None),
 		heartbeat,
 		signature
-	).unwrap();
+	)
 }
 
 #[test]
-fn should_correctly_mark_online_validator_when_heartbeat_is_received() {
+fn should_mark_online_validator_when_heartbeat_is_received() {
 	with_externalities(&mut new_test_ext(), || {
+		advance_session();
 		// given
-		let block = 1;
-		System::set_block_number(block);
-		// buffer new validators
-		Session::rotate_session();
-		// enact the change and buffer another one
 		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3, 4, 5, 6]));
-		Session::rotate_session();
+		assert_eq!(Session::validators(), Vec::<u64>::new());
+		// enact the change and buffer another one
+		advance_session();
+
+		assert_eq!(Session::current_index(), 2);
+		// TODO: hmmm...
+		assert_eq!(Session::validators(), vec![1, 2, 3]);
+
 		assert!(!ImOnline::is_online_in_current_session(0));
+		assert!(!ImOnline::is_online_in_current_session(1));
+		assert!(!ImOnline::is_online_in_current_session(2));
 
 		// when
-		heartbeat(block, 2, 0, 1.into());
+		let _ = heartbeat(1, 2, 0, 1.into()).unwrap();
 
 		// then
 		assert!(ImOnline::is_online_in_current_session(0));
 		assert!(!ImOnline::is_online_in_current_session(1));
 		assert!(!ImOnline::is_online_in_current_session(2));
+
+		// and when
+		let _ = heartbeat(1, 2, 2, 3.into()).unwrap();
+
+		// then
+		assert!(ImOnline::is_online_in_current_session(0));
+		assert!(!ImOnline::is_online_in_current_session(1));
+		assert!(ImOnline::is_online_in_current_session(2));
+	});
+}
+
+#[test]
+fn late_heartbeat_should_fail() {
+	with_externalities(&mut new_test_ext(), || {
+		advance_session();
+		// given
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 4, 4, 5, 6]));
+		assert_eq!(Session::validators(), Vec::<u64>::new());
+		// enact the change and buffer another one
+		advance_session();
+
+		assert_eq!(Session::current_index(), 2);
+		assert_eq!(Session::validators(), vec![1, 2, 3]);
+
+		// when
+		assert_noop!(heartbeat(1, 3, 0, 1.into()), "Outdated heartbeat received.");
+		assert_noop!(heartbeat(1, 1, 0, 1.into()), "Outdated heartbeat received.");
 	});
 }
 

@@ -39,6 +39,58 @@ impl_outer_dispatch! {
 	}
 }
 
+thread_local! {
+	pub static VALIDATORS: RefCell<Option<Vec<u64>>> = RefCell::new(Some(vec![1, 2, 3]));
+}
+
+pub struct TestOnSessionEnding;
+impl session::OnSessionEnding<u64> for TestOnSessionEnding {
+	fn on_session_ending(_ending_index: SessionIndex, _will_apply_at: SessionIndex)
+		-> Option<Vec<u64>>
+	{
+		VALIDATORS.with(|l| l.borrow_mut().take())
+	}
+}
+
+impl session::historical::OnSessionEnding<u64, u64> for TestOnSessionEnding {
+	fn on_session_ending(_ending_index: SessionIndex, _will_apply_at: SessionIndex)
+		-> Option<(Vec<u64>, Vec<(u64, u64)>)>
+	{
+		VALIDATORS.with(|l| l
+			.borrow_mut()
+			.take()
+			.map(|validators| {
+				let full_identification = validators.iter().map(|v| (*v, *v)).collect();
+				(validators, full_identification)
+			})
+		)
+	}
+}
+
+/// An extrinsic type used for tests.
+pub type Extrinsic = TestXt<Call, ()>;
+type SubmitTransaction = system::offchain::TransactionSubmitter<(), Call, Extrinsic>;
+type IdentificationTuple = (u64, u64);
+type Offence = crate::UnresponsivenessOffence<IdentificationTuple>;
+
+thread_local! {
+	pub static OFFENCES: RefCell<Vec<(Vec<u64>, Offence)>> = RefCell::new(vec![]);
+}
+
+/// A mock offence report handler.
+pub struct OffenceHandler;
+impl ReportOffence<u64, IdentificationTuple, Offence> for OffenceHandler {
+	fn report_offence(reporters: Vec<u64>, offence: Offence) {
+		OFFENCES.with(|l| l.borrow_mut().push((reporters, offence)));
+	}
+}
+
+pub fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	let t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+	t.into()
+}
+
+
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Runtime;
 
@@ -73,34 +125,6 @@ parameter_types! {
 	pub const Offset: u64 = 0;
 }
 
-thread_local! {
-	pub static VALIDATORS: RefCell<Option<Vec<u64>>> = RefCell::new(Some(vec![1, 2, 3]));
-}
-
-pub struct TestOnSessionEnding;
-impl session::OnSessionEnding<u64> for TestOnSessionEnding {
-	fn on_session_ending(_ending_index: SessionIndex, _will_apply_at: SessionIndex)
-		-> Option<Vec<u64>>
-	{
-		VALIDATORS.with(|l| l.borrow_mut().take())
-	}
-}
-
-impl session::historical::OnSessionEnding<u64, u64> for TestOnSessionEnding {
-	fn on_session_ending(_ending_index: SessionIndex, _will_apply_at: SessionIndex)
-		-> Option<(Vec<u64>, Vec<(u64, u64)>)>
-	{
-		VALIDATORS.with(|l| l
-			.borrow_mut()
-			.take()
-			.map(|validators| {
-				let full_identification = validators.iter().map(|v| (*v, *v)).collect();
-				(validators, full_identification)
-			})
-		)
-	}
-}
-
 impl session::Trait for Runtime {
 	type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
 	type OnSessionEnding = session::historical::NoteHistoricalRoot<Runtime, TestOnSessionEnding>;
@@ -117,24 +141,6 @@ impl session::historical::Trait for Runtime {
 	type FullIdentificationOf = ConvertInto;
 }
 
-/// An extrinsic type used for tests.
-pub type Extrinsic = TestXt<Call, ()>;
-type SubmitTransaction = system::offchain::TransactionSubmitter<(), Call, Extrinsic>;
-type IdentificationTuple = (u64, u64);
-type Offence = crate::UnresponsivenessOffence<IdentificationTuple>;
-
-thread_local! {
-	pub static OFFENCES: RefCell<Vec<(Vec<u64>, Offence)>> = RefCell::new(vec![]);
-}
-
-/// A mock offence report handler.
-pub struct OffenceHandler;
-impl ReportOffence<u64, IdentificationTuple, Offence> for OffenceHandler {
-	fn report_offence(reporters: Vec<u64>, offence: Offence) {
-		OFFENCES.with(|l| l.borrow_mut().push((reporters, offence)));
-	}
-}
-
 impl Trait for Runtime {
 	type AuthorityId = UintAuthorityId;
 	type Event = ();
@@ -143,12 +149,14 @@ impl Trait for Runtime {
 	type ReportUnresponsiveness = OffenceHandler;
 }
 
-pub fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-	let t = system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
-	t.into()
-}
-
 /// Im Online module.
 pub type ImOnline = Module<Runtime>;
 pub type System = system::Module<Runtime>;
 pub type Session = session::Module<Runtime>;
+
+pub fn advance_session() {
+	let now = System::block_number();
+	System::set_block_number(now + 1);
+	Session::rotate_session();
+	assert_eq!(Session::current_index(), (now / Period::get()) as u32);
+}
