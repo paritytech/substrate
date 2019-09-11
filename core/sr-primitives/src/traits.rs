@@ -891,7 +891,7 @@ pub trait ModuleDispatchError {
 	fn as_str(&self) -> &'static str;
 }
 
-#[impl_for_tuples(1, 18)]
+#[impl_for_tuples(1, 12)]
 impl<AccountId, Call> SignedExtension for Tuple {
 	for_tuples!( where #( Tuple: SignedExtension<AccountId=AccountId, Call=Call> )* );
 	type AccountId = AccountId;
