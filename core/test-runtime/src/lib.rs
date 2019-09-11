@@ -902,7 +902,7 @@ fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic) {
 }
 
 fn test_read_storage() {
-	const KEY: &[u8] = b":test_storage";
+	const KEY: &[u8] = b":read_storage";
 	runtime_io::set_storage(KEY, b"test");
 
 	let mut v = [0u8; 4];
@@ -921,8 +921,8 @@ fn test_read_storage() {
 }
 
 fn test_read_child_storage() {
-	const CHILD_KEY: &[u8] = b":default:mock";
-	const KEY: &[u8] = b":test_storage";
+	const CHILD_KEY: &[u8] = b":child_storage:default:read_child_storage";
+	const KEY: &[u8] = b":read_child_storage";
 	runtime_io::set_child_storage(CHILD_KEY, KEY, b"test");
 
 	let mut v = [0u8; 4];
@@ -1038,7 +1038,9 @@ mod tests {
 
 	#[test]
 	fn test_storage() {
-		let client = TestClientBuilder::new().build();
+		let client = TestClientBuilder::new()
+			.set_execution_strategy(ExecutionStrategy::Both)
+			.build();
 		let runtime_api = client.runtime_api();
 		let block_id = BlockId::Number(client.info().chain.best_number);
 

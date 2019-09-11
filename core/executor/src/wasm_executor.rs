@@ -31,8 +31,8 @@ use crate::error::{Error, Result};
 use codec::{Encode, Decode};
 use primitives::{
 	blake2_128, blake2_256, twox_64, twox_128, twox_256, ed25519, sr25519, Pair, crypto::KeyTypeId,
-	offchain, hexdisplay::HexDisplay, sandbox as sandbox_primitives, H256, Blake2Hasher,
-	traits::Externalities, child_storage_key::ChildStorageKey,
+	offchain, hexdisplay::HexDisplay, sandbox as sandbox_primitives, Blake2Hasher,
+	traits::Externalities,
 };
 use trie::{TrieConfiguration, trie_types::Layout};
 use crate::sandbox;
@@ -605,10 +605,12 @@ impl_wasm_host_interface! {
 			let maybe_value = runtime_io::storage(&key);
 
 			if let Some(value) = maybe_value {
-				let value = &value[value_offset as usize..];
-				let written = std::cmp::min(value_len as usize, value.len());
-				context.write_memory(value_data, &value[..written])
-					.map_err(|_| "Invalid attempt to set value in ext_get_storage_into")?;
+				if (value_offset as usize) < value.len() {
+					let value = &value[value_offset as usize..];
+					let written = std::cmp::min(value_len as usize, value.len());
+					context.write_memory(value_data, &value[..written])
+						.map_err(|_| "Invalid attempt to set value in ext_get_storage_into")?;
+				}
 				Ok(value.len() as u32)
 			} else {
 				Ok(u32::max_value())
@@ -632,10 +634,12 @@ impl_wasm_host_interface! {
 			let maybe_value = runtime_io::child_storage(&storage_key, &key);
 
 			if let Some(value) = maybe_value {
-				let value = &value[value_offset as usize..];
-				let written = std::cmp::min(value_len as usize, value.len());
-				context.write_memory(value_data, &value[..written])
-					.map_err(|_| "Invalid attempt to set value in ext_get_child_storage_into")?;
+				if (value_offset as usize) < value.len() {
+					let value = &value[value_offset as usize..];
+					let written = std::cmp::min(value_len as usize, value.len());
+					context.write_memory(value_data, &value[..written])
+						.map_err(|_| "Invalid attempt to set value in ext_get_child_storage_into")?;
+				}
 				Ok(value.len() as u32)
 			} else {
 				Ok(u32::max_value())
