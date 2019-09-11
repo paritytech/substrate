@@ -629,9 +629,9 @@ impl_wasm_host_interface! {
 			)?;
 
 			if let Some(value) = maybe_value {
-				let value = &value[value.len().min(value_offset as usize)..];
-				let written = std::cmp::min(value_len as usize, value.len());
-				context.write_memory(value_data, &value[..written])
+				let data = &value[value.len().min(value_offset as usize)..];
+				let written = std::cmp::min(value_len as usize, data.len());
+				context.write_memory(value_data, &data[..written])
 					.map_err(|_| "Invalid attempt to set value in ext_get_storage_into")?;
 				Ok(value.len() as u32)
 			} else {
@@ -658,11 +658,11 @@ impl_wasm_host_interface! {
 			)?;
 
 			if let Some(value) = maybe_value {
-				let value = &value[value.len().min(value_offset as usize)..];
-				let written = std::cmp::min(value_len as usize, value.len());
-				context.write_memory(value_data, &value[..written])
-					.map_err(|_| "Invalid attempt to set value in ext_get_child_storage_into")?;
-				Ok(value.len() as u32)
+				let data = &value[value.len().min(value_offset as usize)..];
+				let written = std::cmp::min(value_len as usize, data.len());
+				context.write_memory(value_data, &data[..written])
+					.map_err(|_| "Invalid attempt to get value in ext_get_child_storage_into")?;
+				Ok(data.len() as u32)
 			} else {
 				Ok(u32::max_value())
 			}
