@@ -28,10 +28,7 @@ use api::Subscriptions;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use log::warn;
 use codec::{Encode, Decode};
-use primitives::{
-	Bytes, Blake2Hasher, H256, ed25519, sr25519, crypto::{Pair, Public, key_types},
-	traits::BareCryptoStorePtr,
-};
+use primitives::{Bytes, Blake2Hasher, H256, traits::BareCryptoStorePtr};
 use sr_primitives::{generic, traits::{self, ProvideRuntimeApi}};
 use transaction_pool::{
 	txpool::{
@@ -98,7 +95,6 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 	) -> Result<()> {
 		let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
 		let mut keystore = self.keystore.write();
-		let maybe_password = keystore.password();
 		keystore.insert_unknown(key_type, &suri, &public[..])
 			.map_err(|_| Error::KeyStoreUnavailable)?;
 		Ok(())

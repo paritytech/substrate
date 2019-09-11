@@ -39,7 +39,7 @@ use sr_primitives::{ApplyResult, impl_opaque_keys, generic, create_runtime_str, 
 use sr_primitives::transaction_validity::TransactionValidity;
 use sr_primitives::weights::Weight;
 use sr_primitives::traits::{
-	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup,
+	self, BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, SaturatedConversion,
 };
 use version::RuntimeVersion;
 use elections::VoteIndex;
@@ -47,7 +47,10 @@ use elections::VoteIndex;
 use version::NativeVersion;
 use primitives::OpaqueMetadata;
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
-use im_online::sr25519::{AuthorityId as ImOnlineId};
+use im_online::sr25519::{AuthorityId as ImOnlineId, AuthoritySignature as ImOnlineSignature};
+use authority_discovery_primitives::{AuthorityId as EncodedAuthorityId, Signature as EncodedSignature};
+use codec::{Encode, Decode};
+use system::offchain::TransactionSubmitter;
 
 #[cfg(any(feature = "std", test))]
 pub use sr_primitives::BuildStorage;
@@ -79,8 +82,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 154,
-	impl_version: 157,
+	spec_version: 155,
+	impl_version: 156,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -190,7 +193,7 @@ impl authorship::Trait for Runtime {
 	type EventHandler = Staking;
 }
 
-type SessionHandlers = (Grandpa, Babe, ImOnline);
+type SessionHandlers = (Grandpa, Babe, ImOnline, AuthorityDiscovery);
 
 impl_opaque_keys! {
 	pub struct SessionKeys {
@@ -359,6 +362,10 @@ parameter_types! {
 	pub const ContractTransactionBaseFee: Balance = 1 * CENTS;
 	pub const ContractTransactionByteFee: Balance = 10 * MILLICENTS;
 	pub const ContractFee: Balance = 1 * CENTS;
+	pub const TombstoneDeposit: Balance = 1 * DOLLARS;
+	pub const RentByteFee: Balance = 1 * DOLLARS;
+	pub const RentDepositOffset: Balance = 1000 * DOLLARS;
+	pub const SurchargeReward: Balance = 150 * DOLLARS;
 }
 
 impl contracts::Trait for Runtime {
@@ -370,11 +377,11 @@ impl contracts::Trait for Runtime {
 	type TrieIdGenerator = contracts::TrieIdFromParentCounter<Runtime>;
 	type GasPayment = ();
 	type SignedClaimHandicap = contracts::DefaultSignedClaimHandicap;
-	type TombstoneDeposit = contracts::DefaultTombstoneDeposit;
+	type TombstoneDeposit = TombstoneDeposit;
 	type StorageSizeOffset = contracts::DefaultStorageSizeOffset;
-	type RentByteFee = contracts::DefaultRentByteFee;
-	type RentDepositOffset = contracts::DefaultRentDepositOffset;
-	type SurchargeReward = contracts::DefaultSurchargeReward;
+	type RentByteFee = RentByteFee;
+	type RentDepositOffset = RentDepositOffset;
+	type SurchargeReward = SurchargeReward;
 	type TransferFee = ContractTransferFee;
 	type CreationFee = ContractCreationFee;
 	type TransactionBaseFee = ContractTransactionBaseFee;
@@ -392,11 +399,13 @@ impl sudo::Trait for Runtime {
 	type Proposal = Call;
 }
 
+type SubmitTransaction = TransactionSubmitter<ImOnlineId, Runtime, UncheckedExtrinsic>;
+
 impl im_online::Trait for Runtime {
 	type AuthorityId = ImOnlineId;
 	type Call = Call;
 	type Event = Event;
-	type UncheckedExtrinsic = UncheckedExtrinsic;
+	type SubmitTransaction = SubmitTransaction;
 	type ReportUnresponsiveness = Offences;
 	type CurrentElectedSet = staking::CurrentElectedStashAccounts<Runtime>;
 }
@@ -424,6 +433,34 @@ impl finality_tracker::Trait for Runtime {
 	type ReportLatency = ReportLatency;
 }
 
+impl system::offchain::CreateTransaction<Runtime, UncheckedExtrinsic> for Runtime {
+	type Signature = Signature;
+
+	fn create_transaction<F: system::offchain::Signer<AccountId, Self::Signature>>(
+		call: Call,
+		account: AccountId,
+		index: Index,
+	) -> Option<(Call, <UncheckedExtrinsic as traits::Extrinsic>::SignaturePayload)> {
+		let period = 1 << 8;
+		let current_block = System::block_number().saturated_into::<u64>();
+		let tip = 0;
+		let extra: SignedExtra = (
+			system::CheckVersion::<Runtime>::new(),
+			system::CheckGenesis::<Runtime>::new(),
+			system::CheckEra::<Runtime>::from(generic::Era::mortal(period, current_block)),
+			system::CheckNonce::<Runtime>::from(index),
+			system::CheckWeight::<Runtime>::new(),
+			balances::TakeFees::<Runtime>::from(tip),
+			Default::default(),
+		);
+		let raw_payload = SignedPayload::new(call, extra).ok()?;
+		let signature = F::sign(account.clone(), &raw_payload)?;
+		let address = Indices::unlookup(account);
+		let (call, extra, _) = raw_payload.deconstruct();
+		Some((call, (address, signature, extra)))
+	}
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -435,7 +472,7 @@ construct_runtime!(
 		Timestamp: timestamp::{Module, Call, Storage, Inherent},
 		Authorship: authorship::{Module, Call, Storage, Inherent},
 		Indices: indices,
-		Balances: balances,
+		Balances: balances::{default, Error},
 		Staking: staking::{default, OfflineWorker},
 		Session: session::{Module, Call, Storage, Event, Config<T>},
 		Democracy: democracy::{Module, Call, Storage, Config, Event<T>},
@@ -471,10 +508,13 @@ pub type SignedExtra = (
 	system::CheckEra<Runtime>,
 	system::CheckNonce<Runtime>,
 	system::CheckWeight<Runtime>,
-	balances::TakeFees<Runtime>
+	balances::TakeFees<Runtime>,
+	contracts::CheckBlockGasLimit<Runtime>,
 );
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, Signature, SignedExtra>;
+/// The payload being signed in transactions.
+pub type SignedPayload = generic::SignedPayload<Call, SignedExtra>;
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Call, SignedExtra>;
 /// Executive: handles dispatch to the various modules.
@@ -579,20 +619,32 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl authority_discovery_primitives::AuthorityDiscoveryApi<Block, ImOnlineId> for Runtime {
-		fn authority_id() -> Option<ImOnlineId> {
-			AuthorityDiscovery::authority_id()
-		}
-		fn authorities() -> Vec<ImOnlineId> {
-			AuthorityDiscovery::authorities()
-		}
-
-		fn sign(payload: Vec<u8>, authority_id: ImOnlineId) -> Option<Vec<u8>> {
-			AuthorityDiscovery::sign(payload, authority_id)
+	impl authority_discovery_primitives::AuthorityDiscoveryApi<Block> for Runtime {
+		fn authorities() -> Vec<EncodedAuthorityId> {
+			AuthorityDiscovery::authorities().into_iter()
+				.map(|id| id.encode())
+				.map(EncodedAuthorityId)
+				.collect()
 		}
 
-		fn verify(payload: Vec<u8>, signature: Vec<u8>, public_key: ImOnlineId) -> bool {
-			AuthorityDiscovery::verify(payload, signature, public_key)
+		fn sign(payload: &Vec<u8>) -> Option<(EncodedSignature, EncodedAuthorityId)> {
+			  AuthorityDiscovery::sign(payload).map(|(sig, id)| {
+            (EncodedSignature(sig.encode()), EncodedAuthorityId(id.encode()))
+        })
+		}
+
+		fn verify(payload: &Vec<u8>, signature: &EncodedSignature, authority_id: &EncodedAuthorityId) -> bool {
+			let signature = match ImOnlineSignature::decode(&mut &signature.0[..]) {
+				Ok(s) => s,
+				_ => return false,
+			};
+
+			let authority_id = match ImOnlineId::decode(&mut &authority_id.0[..]) {
+				Ok(id) => id,
+				_ => return false,
+			};
+
+			AuthorityDiscovery::verify(payload, signature, authority_id)
 		}
 	}
 
@@ -607,5 +659,30 @@ impl_runtime_apis! {
 			let seed = seed.as_ref().map(|s| rstd::str::from_utf8(&s).expect("Seed is an utf8 string"));
 			SessionKeys::generate(seed)
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use sr_primitives::app_crypto::RuntimeAppPublic;
+	use system::offchain::SubmitSignedTransaction;
+
+	fn is_submit_signed_transaction<T, Signer>(_arg: T) where
+		T: SubmitSignedTransaction<
+			Runtime,
+			Call,
+			Extrinsic=UncheckedExtrinsic,
+			CreateTransaction=Runtime,
+			Signer=Signer,
+		>,
+		Signer: RuntimeAppPublic + From<AccountId>,
+		Signer::Signature: Into<Signature>,
+	{}
+
+	#[test]
+	fn validate_bounds() {
+		let x = SubmitTransaction::default();
+		is_submit_signed_transaction(x);
 	}
 }

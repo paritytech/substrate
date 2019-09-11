@@ -21,9 +21,11 @@ use std::fmt;
 
 use rstd::prelude::*;
 use runtime_io::blake2_256;
-use crate::codec::{Decode, Encode, Input, Error};
-use crate::traits::{self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic};
-use super::CheckedExtrinsic;
+use codec::{Decode, Encode, Input, Error};
+use crate::{
+	traits::{self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic},
+	generic::CheckedExtrinsic, transaction_validity::{TransactionValidityError, InvalidTransaction},
+};
 
 const TRANSACTION_VERSION: u8 = 3;
 
@@ -72,12 +74,22 @@ impl<Address, Call, Signature, Extra: SignedExtension> Extrinsic
 {
 	type Call = Call;
 
+	type SignaturePayload = (
+		Address,
+		Signature,
+		Extra,
+	);
+
 	fn is_signed(&self) -> Option<bool> {
 		Some(self.signature.is_some())
 	}
 
-	fn new_unsigned(function: Call) -> Option<Self> {
-		Some(UncheckedExtrinsic::new_unsigned(function))
+	fn new(function: Call, signed_data: Option<Self::SignaturePayload>) -> Option<Self> {
+		Some(if let Some((address, signature, extra)) = signed_data {
+			UncheckedExtrinsic::new_signed(function, address, signature, extra)
+		} else {
+			UncheckedExtrinsic::new_unsigned(function)
+		})
 	}
 }
 
@@ -91,34 +103,84 @@ where
 	Signature: Member + traits::Verify<Signer=AccountId>,
 	Extra: SignedExtension<AccountId=AccountId>,
 	AccountId: Member + MaybeDisplay,
-	Lookup: traits::Lookup<Source=Address, Target=AccountId>
+	Lookup: traits::Lookup<Source=Address, Target=AccountId>,
 {
 	type Checked = CheckedExtrinsic<AccountId, Call, Extra>;
 
-	fn check(self, lookup: &Lookup) -> Result<Self::Checked, &'static str> {
+	fn check(self, lookup: &Lookup) -> Result<Self::Checked, TransactionValidityError> {
 		Ok(match self.signature {
 			Some((signed, signature, extra)) => {
-				let additional_signed = extra.additional_signed()?;
-				let raw_payload = (self.function, extra, additional_signed);
 				let signed = lookup.lookup(signed)?;
+				let raw_payload = SignedPayload::new(self.function, extra)?;
 				if !raw_payload.using_encoded(|payload| {
-					if payload.len() > 256 {
-						signature.verify(&blake2_256(payload)[..], &signed)
-					} else {
-						signature.verify(payload, &signed)
-					}
+					signature.verify(payload, &signed)
 				}) {
-					return Err(crate::BAD_SIGNATURE)
+					return Err(InvalidTransaction::BadProof.into())
 				}
+
+				let (function, extra, _) = raw_payload.deconstruct();
 				CheckedExtrinsic {
-					signed: Some((signed, raw_payload.1)),
-					function: raw_payload.0,
+					signed: Some((signed, extra)),
+					function,
 				}
 			}
 			None => CheckedExtrinsic {
 				signed: None,
 				function: self.function,
 			},
+		})
+	}
+}
+
+/// A payload that has been signed for an unchecked extrinsics.
+///
+/// Note that the payload that we sign to produce unchecked extrinsic signature
+/// is going to be different than the `SignaturePayload` - so the thing the extrinsic
+/// actually contains.
+pub struct SignedPayload<Call, Extra: SignedExtension>((
+	Call,
+	Extra,
+	Extra::AdditionalSigned,
+));
+
+impl<Call, Extra> SignedPayload<Call, Extra> where
+	Call: Encode,
+	Extra: SignedExtension,
+{
+	/// Create new `SignedPayload`.
+	///
+	/// This function may fail if `additional_signed` of `Extra` is not available.
+	pub fn new(call: Call, extra: Extra) -> Result<Self, TransactionValidityError> {
+		let additional_signed = extra.additional_signed()?;
+		let raw_payload = (call, extra, additional_signed);
+		Ok(Self(raw_payload))
+	}
+
+	/// Create new `SignedPayload` from raw components.
+	pub fn from_raw(call: Call, extra: Extra, additional_signed: Extra::AdditionalSigned) -> Self {
+		Self((call, extra, additional_signed))
+	}
+
+	/// Deconstruct the payload into it's components.
+	pub fn deconstruct(self) -> (Call, Extra, Extra::AdditionalSigned) {
+		self.0
+	}
+}
+
+impl<Call, Extra> Encode for SignedPayload<Call, Extra> where
+	Call: Encode,
+	Extra: SignedExtension,
+{
+	/// Get an encoded version of this payload.
+	///
+	/// Payloads longer than 256 bytes are going to be `blake2_256`-hashed.
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		self.0.using_encoded(|payload| {
+			if payload.len() > 256 {
+				f(&blake2_256(payload)[..])
+			} else {
+				f(payload)
+			}
 		})
 	}
 }
@@ -196,7 +258,12 @@ where
 	Extra: SignedExtension,
 {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "UncheckedExtrinsic({:?}, {:?})", self.signature.as_ref().map(|x| (&x.0, &x.2)), self.function)
+		write!(
+			f,
+			"UncheckedExtrinsic({:?}, {:?})",
+			self.signature.as_ref().map(|x| (&x.0, &x.2)),
+			self.function,
+		)
 	}
 }
 
@@ -205,15 +272,10 @@ mod tests {
 	use super::*;
 	use runtime_io::blake2_256;
 	use crate::codec::{Encode, Decode};
-	use crate::traits::{SignedExtension, Lookup};
+	use crate::traits::{SignedExtension, IdentityLookup};
 	use serde::{Serialize, Deserialize};
 
-	struct TestContext;
-	impl Lookup for TestContext {
-		type Source = u64;
-		type Target = u64;
-		fn lookup(&self, s: u64) -> Result<u64, &'static str> { Ok(s) }
-	}
+	type TestContext = IdentityLookup<u64>;
 
 	#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Encode, Decode)]
 	struct TestSig(u64, Vec<u8>);
@@ -238,7 +300,7 @@ mod tests {
 		type AdditionalSigned = ();
 		type Pre = ();
 
-		fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
+		fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
 	}
 
 	type Ex = UncheckedExtrinsic<TestAccountId, TestCall, TestSig, TestExtra>;
@@ -280,7 +342,7 @@ mod tests {
 	fn unsigned_check_should_work() {
 		let ux = Ex::new_unsigned(vec![0u8; 0]);
 		assert!(!ux.is_signed().unwrap_or(false));
-		assert!(<Ex as Checkable<TestContext>>::check(ux, &TestContext).is_ok());
+		assert!(<Ex as Checkable<TestContext>>::check(ux, &Default::default()).is_ok());
 	}
 
 	#[test]
@@ -289,10 +351,13 @@ mod tests {
 			vec![0u8; 0],
 			TEST_ACCOUNT,
 			TestSig(TEST_ACCOUNT, vec![0u8; 0]),
-			TestExtra
+			TestExtra,
 		);
 		assert!(ux.is_signed().unwrap_or(false));
-		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err(crate::BAD_SIGNATURE));
+		assert_eq!(
+			<Ex as Checkable<TestContext>>::check(ux, &Default::default()),
+			Err(InvalidTransaction::BadProof.into()),
+		);
 	}
 
 	#[test]
@@ -301,12 +366,12 @@ mod tests {
 			vec![0u8; 0],
 			TEST_ACCOUNT,
 			TestSig(TEST_ACCOUNT, (vec![0u8; 0], TestExtra).encode()),
-			TestExtra
+			TestExtra,
 		);
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(
-			<Ex as Checkable<TestContext>>::check(ux, &TestContext),
-			Ok(CEx { signed: Some((TEST_ACCOUNT, TestExtra)), function: vec![0u8; 0] })
+			<Ex as Checkable<TestContext>>::check(ux, &Default::default()),
+			Ok(CEx { signed: Some((TEST_ACCOUNT, TestExtra)), function: vec![0u8; 0] }),
 		);
 	}
 

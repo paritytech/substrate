@@ -49,7 +49,7 @@ pub use timestamp;
 
 use rstd::{result, prelude::*};
 use codec::{Encode, Decode};
-use srml_support::{
+use support::{
 	decl_storage, decl_module, Parameter, storage::StorageValue, traits::{Get, FindAuthor},
 	ConsensusEngineId,
 };

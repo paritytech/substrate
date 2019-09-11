@@ -23,7 +23,7 @@ use jsonrpc_core::Result as RpcResult;
 use jsonrpc_core::futures::Future;
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
-use self::error::Result;
+use self::error::{FutureResult, Result};
 
 pub use self::gen_client::Client as ChainClient;
 
@@ -35,11 +35,11 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 
 	/// Get header of a relay chain block.
 	#[rpc(name = "chain_getHeader")]
-	fn header(&self, hash: Option<Hash>) -> Result<Option<Header>>;
+	fn header(&self, hash: Option<Hash>) -> FutureResult<Option<Header>>;
 
 	/// Get header and body of a relay chain block.
 	#[rpc(name = "chain_getBlock")]
-	fn block(&self, hash: Option<Hash>) -> Result<Option<SignedBlock>>;
+	fn block(&self, hash: Option<Hash>) -> FutureResult<Option<SignedBlock>>;
 
 	/// Get hash of the n-th block in the canon chain.
 	///

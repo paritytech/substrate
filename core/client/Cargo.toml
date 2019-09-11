@@ -10,7 +10,8 @@ fnv = { version = "1.0", optional = true }
 log = { version = "0.4", optional = true }
 parking_lot = { version = "0.9.0", optional = true }
 hex = { package = "hex-literal", version = "0.2", optional = true }
-futures-preview = { version = "=0.3.0-alpha.17", optional = true }
+futures = { version = "0.1", optional = true }
+futures03 = { package = "futures-preview", version = "=0.3.0-alpha.17", features = ["compat"], optional = true }
 consensus = { package = "substrate-consensus-common", path = "../consensus/common", optional = true }
 executor = { package = "substrate-executor", path = "../executor", optional = true }
 state-machine = { package = "substrate-state-machine", path = "../state-machine", optional = true }
@@ -32,6 +33,7 @@ env_logger = "0.6"
 tempfile = "3.1"
 test-client = { package = "substrate-test-runtime-client", path = "../test-runtime/client" }
 kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
+panic-handler = { package = "substrate-panic-handler", path = "../panic-handler" }
 
 [features]
 default = ["std"]
@@ -49,7 +51,8 @@ std = [
 	"fnv",
 	"log",
 	"hex",
-	"futures-preview",
+	"futures",
+	"futures03",
 	"executor",
 	"state-machine",
 	"keyring",

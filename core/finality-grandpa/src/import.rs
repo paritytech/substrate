@@ -497,6 +497,8 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> BlockImport<Block>
 						"Imported unjustified block #{} that enacts authority set change, waiting for finality for enactment.",
 						number,
 					);
+
+					imported_aux.needs_justification = true;
 				}
 
 				// we have imported block with consensus data changes, but without justification
@@ -504,8 +506,6 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> BlockImport<Block>
 				if enacts_consensus_change {
 					self.consensus_changes.lock().note_change((number, hash));
 				}
-
-				imported_aux.needs_justification = true;
 			}
 		}
 

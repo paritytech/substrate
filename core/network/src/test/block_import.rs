@@ -16,8 +16,9 @@
 
 //! Testing block import logic.
 
+use consensus::ImportedAux;
 use consensus::import_queue::{
-	import_single_block, IncomingBlock, BasicQueue, BlockImportError, BlockImportResult
+	import_single_block, BasicQueue, BlockImportError, BlockImportResult, IncomingBlock,
 };
 use test_client::{self, prelude::*};
 use test_client::runtime::{Block, Hash};
@@ -45,9 +46,13 @@ fn prepare_good_block() -> (TestClient, Hash, u64, PeerId, IncomingBlock<Block>)
 #[test]
 fn import_single_good_block_works() {
 	let (_, _hash, number, peer_id, block) = prepare_good_block();
+
+	let mut expected_aux = ImportedAux::default();
+	expected_aux.is_new_best = true;
+
 	match import_single_block(&mut test_client::new(), BlockOrigin::File, block, &mut PassThroughVerifier(true)) {
 		Ok(BlockImportResult::ImportedUnknown(ref num, ref aux, ref org))
-			if *num == number && *aux == Default::default() && *org == Some(peer_id) => {}
+			if *num == number && *aux == expected_aux && *org == Some(peer_id) => {}
 		_ => panic!()
 	}
 }

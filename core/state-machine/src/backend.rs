@@ -16,16 +16,15 @@
 
 //! State machine backends. These manage the code and storage of contracts.
 
-use std::{error, fmt};
-use std::cmp::Ord;
-use std::collections::HashMap;
-use std::marker::PhantomData;
+use std::{error, fmt, cmp::Ord, collections::HashMap, marker::PhantomData};
 use log::warn;
 use hash_db::Hasher;
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::TrieBackendStorage;
-use trie::{TrieMut, MemoryDB, child_trie_root, default_child_trie_root, TrieConfiguration};
-use trie::trie_types::{TrieDBMut, Layout};
+use trie::{
+	TrieMut, MemoryDB, child_trie_root, default_child_trie_root, TrieConfiguration,
+	trie_types::{TrieDBMut, Layout},
+};
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
@@ -72,7 +71,14 @@ pub trait Backend<H: Hasher> {
 
 	/// Retrieve all entries keys which start with the given prefix and
 	/// call `f` for each of those keys.
-	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F);
+	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], mut f: F) {
+		self.for_key_values_with_prefix(prefix, |k, _v| f(k))
+	}
+
+	/// Retrieve all entries keys and values of which start with the given prefix and
+	/// call `f` for each of those keys.
+	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F);
+
 
 	/// Retrieve all child entries keys which start with the given prefix and
 	/// call `f` for each of those keys.
@@ -112,7 +118,9 @@ pub trait Backend<H: Hasher> {
 	}
 
 	/// Try convert into trie backend.
-	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>>;
+	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
+		None
+	}
 
 	/// Calculate the storage root, with given delta over what is already stored
 	/// in the backend, and produce a "transaction" that can be used to commit.
@@ -147,7 +155,56 @@ pub trait Backend<H: Hasher> {
 		txs.consolidate(parent_txs);
 		(root, txs)
 	}
+}
 
+impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
+	type Error = T::Error;
+	type Transaction = T::Transaction;
+	type TrieBackendStorage = T::TrieBackendStorage;
+
+	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		(*self).storage(key)
+	}
+
+	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		(*self).child_storage(storage_key, key)
+	}
+
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
+		(*self).for_keys_in_child_storage(storage_key, f)
+	}
+
+	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
+		(*self).for_keys_with_prefix(prefix, f)
+	}
+
+	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(&self, storage_key: &[u8], prefix: &[u8], f: F) {
+		(*self).for_child_keys_with_prefix(storage_key, prefix, f)
+	}
+
+	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
+	where
+		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		H::Out: Ord,
+	{
+		(*self).storage_root(delta)
+	}
+
+	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	where
+		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		H::Out: Ord,
+	{
+		(*self).child_storage_root(storage_key, delta)
+	}
+
+	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+		(*self).pairs()
+	}
+
+	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
+		(*self).for_key_values_with_prefix(prefix, f);
+	}
 }
 
 /// Trait that allows consolidate two transactions together.
@@ -291,8 +348,6 @@ impl<H: Hasher> From<Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)>> for InMem
 	}
 }
 
-impl super::Error for Void {}
-
 impl<H: Hasher> InMemory<H> {
 	/// child storage key iterator
 	pub fn child_storage_keys(&self) -> impl Iterator<Item=&[u8]> {
@@ -319,6 +374,11 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
 		self.inner.get(&None).map(|map| map.keys().filter(|key| key.starts_with(prefix)).map(|k| &**k).for_each(f));
+	}
+
+	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], mut f: F) {
+		self.inner.get(&None).map(|map| map.iter().filter(|(key, _val)| key.starts_with(prefix))
+			.for_each(|(k, v)| f(k, v)));
 	}
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], mut f: F) {
