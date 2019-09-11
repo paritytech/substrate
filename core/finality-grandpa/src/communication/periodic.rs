@@ -194,6 +194,12 @@ impl<B: BlockT, N: Network<B>> Future for BlockAnnouncer<B, N> {
 				Ok(Async::Ready(())) => {
 					self.delay.reset(rebroadcast_instant());
 
+					debug!(
+						target: "afg",
+						"Re-announcing latest voted blocks due to lack of progress: {:?}",
+						self.latest_voted_blocks,
+					);
+
 					for block in self.latest_voted_blocks.iter() {
 						self.net.announce(*block);
 					}
