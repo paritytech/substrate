@@ -199,7 +199,7 @@ fn create_wasm_workspace_project(wasm_workspace: &Path, cargo_manifest: &Path) {
 	// Add `profile` with release and dev
 	let mut release_profile = Table::new();
 	release_profile.insert("panic".into(), "abort".into());
-	release_profile.insert("lto".into(), "true".into());
+	release_profile.insert("lto".into(), true.into());
 
 	let mut dev_profile = Table::new();
 	dev_profile.insert("panic".into(), "abort".into());
