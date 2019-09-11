@@ -506,55 +506,63 @@ mod tests {
 	}
 
 	#[derive(Default, Debug)]
-	struct _Candidate<AccountId> {
-		who: AccountId,
+	struct _Candidate<A> {
+		who: A,
 		score: f64,
 		approval_stake: f64,
 		elected: bool,
 	}
 
 	#[derive(Default, Debug)]
-	struct _Voter<AccountId> {
-		who: AccountId,
-		edges: Vec<_Edge<AccountId>>,
+	struct _Voter<A> {
+		who: A,
+		edges: Vec<_Edge<A>>,
 		budget: f64,
 		load: f64,
 	}
 
 	#[derive(Default, Debug)]
-	struct _Edge<AccountId> {
-		who: AccountId,
+	struct _Edge<A> {
+		who: A,
 		load: f64,
 		candidate_index: usize,
 	}
 
-	type _PhragmenAssignment<AccountId> = (AccountId, f64);
+	#[derive(Default, Debug, PartialEq)]
+	pub struct _Support<A> {
+		pub own: f64,
+		pub total: f64,
+		pub others: Vec<_PhragmenAssignment<A>>,
+	}
+
+	type _PhragmenAssignment<A> = (A, f64);
+	type _SupportMap<A> = BTreeMap<A, _Support<A>>;
 
 	type Balance = u128;
 	type AccountId = u64;
 
-	#[derive(Debug)]
-	struct _PhragmenResult<AccountId> {
-		pub winners: Vec<AccountId>,
-		pub assignments: Vec<(AccountId, Vec<_PhragmenAssignment<AccountId>>)>
+	#[derive(Debug, Clone)]
+	struct _PhragmenResult<A: Clone> {
+		pub winners: Vec<A>,
+		pub assignments: Vec<(A, Vec<_PhragmenAssignment<A>>)>
 	}
 
-	fn elect_poc<AccountId, FS>(
+	fn elect_float<A, FS>(
 		candidate_count: usize,
 		minimum_candidate_count: usize,
-		initial_candidates: Vec<AccountId>,
-		initial_voters: Vec<(AccountId, Vec<AccountId>)>,
+		initial_candidates: Vec<A>,
+		initial_voters: Vec<(A, Vec<A>)>,
 		stake_of: FS,
 		self_vote: bool,
-	) -> Option<_PhragmenResult<AccountId>> where
-		AccountId: Default + Ord + Member + Copy,
-		for<'r> FS: Fn(&'r AccountId) -> Balance,
+	) -> Option<_PhragmenResult<A>> where
+		A: Default + Ord + Member + Copy,
+		for<'r> FS: Fn(&'r A) -> Balance,
 	{
-		let mut elected_candidates: Vec<AccountId>;
-		let mut assigned: Vec<(AccountId, Vec<_PhragmenAssignment<AccountId>>)>;
-		let mut c_idx_cache = BTreeMap::<AccountId, usize>::new();
+		let mut elected_candidates: Vec<A>;
+		let mut assigned: Vec<(A, Vec<_PhragmenAssignment<A>>)>;
+		let mut c_idx_cache = BTreeMap::<A, usize>::new();
 		let num_voters = initial_candidates.len() + initial_voters.len();
-		let mut voters: Vec<_Voter<AccountId>> = Vec::with_capacity(num_voters);
+		let mut voters: Vec<_Voter<A>> = Vec::with_capacity(num_voters);
 
 		let mut candidates = if self_vote {
 			initial_candidates.into_iter().map(|who| {
@@ -576,7 +584,7 @@ mod tests {
 				c_idx_cache.insert(c.who.clone(), i);
 				c
 			})
-			.collect::<Vec<_Candidate<AccountId>>>()
+			.collect::<Vec<_Candidate<A>>>()
 		} else {
 			initial_candidates.into_iter()
 				.enumerate()
@@ -584,7 +592,7 @@ mod tests {
 					c_idx_cache.insert(who.clone(), idx);
 					_Candidate { who, ..Default::default() }
 				})
-				.collect::<Vec<_Candidate<AccountId>>>()
+				.collect::<Vec<_Candidate<A>>>()
 		};
 
 		if candidates.len() < minimum_candidate_count {
@@ -593,7 +601,7 @@ mod tests {
 
 		voters.extend(initial_voters.into_iter().map(|(who, votes)| {
 			let voter_stake = stake_of(&who) as f64;
-			let mut edges: Vec<_Edge<AccountId>> = Vec::with_capacity(votes.len());
+			let mut edges: Vec<_Edge<A>> = Vec::with_capacity(votes.len());
 			for v in votes {
 				if let Some(idx) = c_idx_cache.get(&v) {
 					candidates[*idx].approval_stake = candidates[*idx].approval_stake + voter_stake;
@@ -671,7 +679,138 @@ mod tests {
 		})
 	}
 
-	fn create_stake_of(stakes: &[(AccountId, Balance)]) -> Box<dyn Fn(&AccountId) -> Balance> {
+	pub fn equalize_float<A, FS>(
+		mut assignments: Vec<(A, Vec<_PhragmenAssignment<A>>)>,
+		supports: &mut _SupportMap<A>,
+		tolerance: f64,
+		iterations: usize,
+		stake_of: FS,
+	) where
+		for<'r> FS: Fn(&'r A) -> Balance,
+		A: Ord + Clone + std::fmt::Debug,
+	{
+		for _i in 0..iterations {
+			let mut max_diff = 0.0;
+			for (voter, assignment) in assignments.iter_mut() {
+				let voter_budget = stake_of(&voter);
+				let diff = do_equalize_float(
+					voter,
+					voter_budget,
+					assignment,
+					supports,
+					tolerance,
+				);
+				if diff > max_diff { max_diff = diff; }
+			}
+
+			if max_diff < tolerance {
+				break;
+			}
+		}
+	}
+
+	fn do_equalize_float<A>(
+		voter: &A,
+		budget_balance: Balance,
+		elected_edges: &mut Vec<_PhragmenAssignment<A>>,
+		support_map: &mut _SupportMap<A>,
+		tolerance: f64
+	) -> f64 where
+		A: Ord + Clone,
+	{
+		let budget = budget_balance as f64;
+		if elected_edges.is_empty() { return 0.0; }
+
+		let stake_used = elected_edges
+			.iter()
+			.fold(0.0, |s, e| s + e.1);
+
+		let backed_stakes_iter = elected_edges
+			.iter()
+			.filter_map(|e| support_map.get(&e.0))
+			.map(|e| e.total);
+
+		let backing_backed_stake = elected_edges
+			.iter()
+			.filter(|e| e.1 > 0.0)
+			.filter_map(|e| support_map.get(&e.0))
+			.map(|e| e.total)
+			.collect::<Vec<f64>>();
+
+		let mut difference;
+		if backing_backed_stake.len() > 0 {
+			let max_stake = backing_backed_stake
+				.iter()
+				.max_by(|x, y| x.partial_cmp(&y).unwrap_or(rstd::cmp::Ordering::Equal))
+				.expect("vector with positive length will have a max; qed");
+			let min_stake = backed_stakes_iter
+				.min_by(|x, y| x.partial_cmp(&y).unwrap_or(rstd::cmp::Ordering::Equal))
+				.expect("iterator with positive length will have a min; qed");
+
+			difference = max_stake - min_stake;
+			difference = difference + budget - stake_used;
+			if difference < tolerance {
+				return difference;
+			}
+		} else {
+			difference = budget;
+		}
+
+		// Undo updates to support
+		elected_edges.iter_mut().for_each(|e| {
+			if let Some(support) = support_map.get_mut(&e.0) {
+				support.total = support.total - e.1;
+				support.others.retain(|i_support| i_support.0 != *voter);
+			}
+			e.1 = 0.0;
+		});
+
+		// todo: rewrite.
+		elected_edges.sort_unstable_by(|x, y|
+			if let Some(x) = support_map.get(&x.0) {
+				if let Some(y) = support_map.get(&y.0) {
+					x.total.partial_cmp(&y.total).unwrap_or(rstd::cmp::Ordering::Equal)
+				} else {
+					rstd::cmp::Ordering::Equal
+				}
+			} else {
+				rstd::cmp::Ordering::Equal
+			}
+		);
+
+		let mut cumulative_stake = 0.0;
+		let mut last_index = elected_edges.len() - 1;
+		elected_edges.iter_mut().enumerate().for_each(|(idx, e)| {
+			if let Some(support) = support_map.get_mut(&e.0) {
+				let stake = support.total;
+				let stake_mul = stake * (idx as f64);
+				let stake_sub = stake_mul - cumulative_stake;
+				if stake_sub > budget {
+					last_index = idx.checked_sub(1).unwrap_or(0);
+					return
+				}
+				cumulative_stake = cumulative_stake + stake;
+			}
+		});
+
+		let last_stake = elected_edges[last_index].1;
+		let split_ways = last_index + 1;
+		let excess = budget + cumulative_stake - last_stake * (split_ways as f64);
+		elected_edges.iter_mut().take(split_ways).for_each(|e| {
+			if let Some(support) = support_map.get_mut(&e.0) {
+				e.1 = excess / (split_ways as f64) + last_stake - support.total;
+				support.total = support.total + e.1;
+				support.others.push((voter.clone(), e.1));
+			}
+		});
+
+		difference
+	}
+
+
+	fn create_stake_of(stakes: &[(AccountId, Balance)])
+		-> Box<dyn Fn(&AccountId) -> Balance>
+	{
 		let mut storage = BTreeMap::<AccountId, Balance>::new();
 		stakes.iter().for_each(|s| { storage.insert(s.0, s.1); });
 		let stake_of = move |who: &AccountId| -> Balance { storage.get(who).unwrap().to_owned() };
@@ -697,7 +836,7 @@ mod tests {
 		).unwrap();
 
 		// run float poc code.
-		let truth_value = elect_poc(
+		let truth_value = elect_float(
 			to_elect,
 			min_to_elect,
 			candidates,
@@ -708,7 +847,7 @@ mod tests {
 
 		assert_eq!(winners, truth_value.winners);
 
-		for (nominator, assigned) in assignments {
+		for (nominator, assigned) in assignments.clone() {
 			if let Some(float_assignments) = truth_value.assignments.iter().find(|x| x.0 == nominator) {
 				for (candidate, ratio) in assigned {
 					if let Some(float_assignment) = float_assignments.1.iter().find(|x| x.0 == candidate ) {
@@ -723,6 +862,36 @@ mod tests {
 		}
 	}
 
+	fn build_support_map<FS>(
+		result: &mut _PhragmenResult<AccountId>,
+		stake_of: FS,
+	) -> _SupportMap<AccountId>
+		where for<'r> FS: Fn(&'r AccountId) -> Balance
+	{
+		let mut supports = <_SupportMap<AccountId>>::new();
+		result.winners
+			.iter()
+			.map(|e| (e, stake_of(e) as f64))
+			.for_each(|(e, s)| {
+				let item = _Support { own: s, total: s, ..Default::default() };
+				supports.insert(e.clone(), item);
+			});
+
+		for (n, assignment) in result.assignments.iter_mut() {
+			for (c, r) in assignment.iter_mut() {
+				let nominator_stake = stake_of(n) as f64;
+				let other_stake = nominator_stake * *r;
+				if let Some(support) = supports.get_mut(c) {
+					support.total = support.total + other_stake;
+					support.others.push((n.clone(), other_stake));
+				}
+				*r = other_stake;
+			}
+		}
+
+		supports
+	}
+
 	#[test]
 	fn float_phragmen_poc_works() {
 		let candidates = vec![1, 2, 3];
@@ -731,9 +900,10 @@ mod tests {
 			(20, vec![1, 3]),
 			(30, vec![2, 3]),
 		];
-		let stake_of = create_stake_of(&[(10, 10), (20, 20), (30, 30)]);
-		let _PhragmenResult { winners, assignments } =
-			elect_poc(2, 2, candidates, voters, stake_of, false).unwrap();
+		let stake_of = create_stake_of(&[(10, 10), (20, 20), (30, 30), (1, 0), (2, 0), (3, 0)]);
+		let mut phragmen_result = elect_float(2, 2, candidates, voters, &stake_of, false).unwrap();
+		let winners = phragmen_result.clone().winners;
+		let assignments = phragmen_result.clone().assignments;
 
 		assert_eq_uvec!(winners, vec![2, 3]);
 		assert_eq_uvec!(
@@ -743,6 +913,28 @@ mod tests {
 				(20, vec![(3, 1.0)]),
 				(30, vec![(2, 0.5), (3, 0.5)]),
 			]
+		);
+
+		let mut support_map = build_support_map(&mut phragmen_result, &stake_of);
+
+		assert_eq!(
+			support_map.get(&2).unwrap(),
+			&_Support { own: 0.0, total: 25.0, others: vec![(10u64, 10.0), (30u64, 15.0)]}
+		);
+		assert_eq!(
+			support_map.get(&3).unwrap(),
+			&_Support { own: 0.0, total: 35.0, others: vec![(20u64, 20.0), (30u64, 15.0)]}
+		);
+
+		equalize_float(phragmen_result.assignments, &mut support_map, 0.0, 2, stake_of);
+
+		assert_eq!(
+			support_map.get(&2).unwrap(),
+			&_Support { own: 0.0, total: 30.0, others: vec![(10u64, 10.0), (30u64, 20.0)]}
+		);
+		assert_eq!(
+			support_map.get(&3).unwrap(),
+			&_Support { own: 0.0, total: 30.0, others: vec![(20u64, 20.0), (30u64, 10.0)]}
 		);
 	}
 

@@ -16,12 +16,6 @@
 //! Note that execution times will not be accurate in an absolute scale, since
 //! - Everything is executed in the context of `TestExternalities`
 //! - Everything is executed in native environment.
-//!
-//! Run using:
-//!
-//! ```zsh
-//!  cargo bench --features bench --color always
-//! ```
 
 #![feature(test)]
 
