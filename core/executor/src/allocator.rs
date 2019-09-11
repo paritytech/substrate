@@ -133,7 +133,8 @@ impl FreeingBumpHeapAllocator {
 			let ptr = item + PREFIX_SIZE;
 			assert!(
 				ptr + item_size <= self.max_heap_size,
-				"Pointer and requested allocation size outside of heap!"
+				"Pointer is looked up in list of free entries, into which
+				only valid values are inserted; qed"
 			);
 
 			let four_bytes = self.get_heap_4bytes(item)?;
