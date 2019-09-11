@@ -23,16 +23,15 @@ use std::future::Future;
 
 use hash_db::{HashDB, Hasher, EMPTY_PREFIX};
 use codec::{Decode, Encode};
-use primitives::{ChangesTrieConfiguration, convert_hash};
+use primitives::{ChangesTrieConfiguration, convert_hash, traits::CodeExecutor};
 use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
 	SimpleArithmetic, CheckedConversion, Zero,
 };
 use state_machine::{
-	CodeExecutor, ChangesTrieRootsStorage,
-	ChangesTrieAnchorBlockId, ChangesTrieConfigurationRange,
-	TrieBackend, read_proof_check, key_changes_proof_check,
-	create_proof_check_backend_storage, read_child_proof_check,
+	ChangesTrieRootsStorage, ChangesTrieAnchorBlockId, ChangesTrieConfigurationRange,
+	TrieBackend, read_proof_check, key_changes_proof_check, create_proof_check_backend_storage,
+	read_child_proof_check,
 };
 
 use crate::cht;
@@ -460,7 +459,7 @@ struct RootsStorage<'a, Number: SimpleArithmetic, Hash: 'a> {
 impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H, Number> for RootsStorage<'a, Number, Hash>
 	where
 		H: Hasher,
-		Number: ::std::fmt::Display + Clone + SimpleArithmetic + Encode + Decode + Send + Sync + 'static,
+		Number: ::std::fmt::Display + ::std::hash::Hash + Clone + SimpleArithmetic + Encode + Decode + Send + Sync + 'static,
 		Hash: 'a + Send + Sync + Clone + AsRef<[u8]>,
 {
 	fn build_anchor(

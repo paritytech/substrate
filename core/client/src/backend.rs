@@ -24,10 +24,9 @@ use primitives::ChangesTrieConfiguration;
 use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use sr_primitives::traits::{Block as BlockT, NumberFor};
 use state_machine::backend::Backend as StateBackend;
-use state_machine::ChangesTrieStorage as StateChangesTrieStorage;
+use state_machine::{ChangesTrieStorage as StateChangesTrieStorage, ChangesTrieTransaction};
 use consensus::{well_known_cache_keys, BlockOrigin};
 use hash_db::Hasher;
-use trie::MemoryDB;
 use parking_lot::Mutex;
 
 /// In memory array of storage values.
@@ -36,6 +35,15 @@ pub type StorageCollection = Vec<(Vec<u8>, Option<Vec<u8>>)>;
 /// In memory arrays of storage values for multiple child tries.
 pub type ChildStorageCollection = Vec<(Vec<u8>, StorageCollection)>;
 
+pub(crate) struct ImportSummary<Block: BlockT> {
+	pub(crate) hash: Block::Hash,
+	pub(crate) origin: BlockOrigin,
+	pub(crate) header: Block::Header,
+	pub(crate) is_new_best: bool,
+	pub(crate) storage_changes: Option<(StorageCollection, ChildStorageCollection)>,
+	pub(crate) retracted: Vec<Block::Hash>,
+}
+
 /// Import operation wrapper
 pub struct ClientImportOperation<
 	Block: BlockT,
@@ -43,15 +51,7 @@ pub struct ClientImportOperation<
 	B: Backend<Block, H>,
 > {
 	pub(crate) op: B::BlockImportOperation,
-	pub(crate) notify_imported: Option<(
-		Block::Hash,
-		BlockOrigin,
-		Block::Header,
-		bool,
-		Option<(
-			StorageCollection,
-			ChildStorageCollection,
-		)>)>,
+	pub(crate) notify_imported: Option<ImportSummary<Block>>,
 	pub(crate) notify_finalized: Vec<Block::Hash>,
 }
 
@@ -116,7 +116,7 @@ pub trait BlockImportOperation<Block, H> where
 		child_update: ChildStorageCollection,
 	) -> error::Result<()>;
 	/// Inject changes trie data into the database.
-	fn update_changes_trie(&mut self, update: MemoryDB<H>) -> error::Result<()>;
+	fn update_changes_trie(&mut self, update: ChangesTrieTransaction<H, NumberFor<Block>>) -> error::Result<()>;
 	/// Insert auxiliary keys. Values are `None` if should be deleted.
 	fn insert_aux<I>(&mut self, ops: I) -> error::Result<()>
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>;
@@ -144,7 +144,7 @@ pub trait Finalizer<Block: BlockT, H: Hasher<Out=Block::Hash>, B: Backend<Block,
 		notify: bool,
 	) -> error::Result<()>;
 
-		
+
 	/// Finalize a block. This will implicitly finalize all blocks up to it and
 	/// fire finality notifications.
 	///

@@ -78,6 +78,17 @@ pub enum InputKey<Number: BlockNumber> {
 	ChildIndex(ChildIndex<Number>),
 }
 
+impl<Number: BlockNumber> InputPair<Number> {
+	/// Extract storage key that this pair corresponds to.
+	pub fn key(&self) -> Option<&[u8]> {
+		match *self {
+			InputPair::ExtrinsicIndex(ref key, _) => Some(&key.key),
+			InputPair::DigestIndex(ref key, _) => Some(&key.key),
+			InputPair::ChildIndex(_, _) => None,
+		}
+	}
+}
+
 impl<Number: BlockNumber> Into<(Vec<u8>, Vec<u8>)> for InputPair<Number> {
 	fn into(self) -> (Vec<u8>, Vec<u8>) {
 		match self {

@@ -55,7 +55,13 @@ pub mod offchain;
 /// Trait for things which can be printed.
 pub trait Printable {
 	/// Print the object.
-	fn print(self);
+	fn print(&self);
+}
+
+impl Printable for u8 {
+	fn print(&self) {
+		u64::from(*self).print()
+	}
 }
 
 /// Converts a public trait definition into a private trait and set of public functions
@@ -273,7 +279,7 @@ export_api! {
 		/// Submit transaction to the pool.
 		///
 		/// The transaction will end up in the pool.
-		fn submit_transaction<T: codec::Encode>(data: &T) -> Result<(), ()>;
+		fn submit_transaction(data: Vec<u8>) -> Result<(), ()>;
 
 		/// Returns information about the local node's network state.
 		fn network_state() -> Result<OpaqueNetworkState, ()>;
