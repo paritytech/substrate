@@ -158,7 +158,7 @@ impl FreeingBumpHeapAllocator {
 	/// Deallocates the space which was allocated for a pointer.
 	pub fn deallocate(&mut self, ptr: u32) -> Result<()> {
 		let ptr = ptr - self.ptr_offset;
-		if ptr < 8 {
+		if ptr < PREFIX_SIZE {
 			return Err(error("Invalid pointer for deallocation"));
 		}
 
