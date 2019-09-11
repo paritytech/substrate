@@ -22,7 +22,7 @@ use futures::sync::mpsc;
 use sr_primitives::traits::{NumberFor, Block as BlockT};
 use network::PeerId;
 use tokio_timer::Delay;
-use log::warn;
+use log::{debug, warn};
 use codec::Encode;
 
 use std::time::{Instant, Duration};
@@ -35,7 +35,22 @@ fn rebroadcast_instant() -> Instant {
 }
 
 /// A sender used to send neighbor packets to a background job.
-pub(super) type NeighborPacketSender<B> = mpsc::UnboundedSender<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>;
+#[derive(Clone)]
+pub(super) struct NeighborPacketSender<B: BlockT>(
+	mpsc::UnboundedSender<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>
+);
+
+impl<B: BlockT> NeighborPacketSender<B> {
+	pub fn send(
+		&self,
+		who: Vec<network::PeerId>,
+		neighbor_packet: NeighborPacket<NumberFor<B>>,
+	) {
+		if let Err(err) = self.0.unbounded_send((who, neighbor_packet)) {
+			debug!(target: "afg", "Failed to send neighbor packet: {:?}", err);
+		}
+	}
+}
 
 /// Does the work of sending neighbor packets, asynchronously.
 ///
@@ -89,5 +104,5 @@ pub(super) fn neighbor_packet_worker<B, N>(net: N) -> (
 		}
 	});
 
-	(work, tx)
+	(work, NeighborPacketSender(tx))
 }
