@@ -54,11 +54,9 @@ impl StorageApi for () {
 
 	fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
 		ext::with(|ext| ext.storage(key).map(|value| {
-			if value_offset < value.len() {
-				let value = &value[value_offset..];
-				let written = std::cmp::min(value.len(), value_out.len());
-				value_out[..written].copy_from_slice(&value[..written]);
-			}
+			let value = &value[value_offset.min(value.len())..];
+			let written = std::cmp::min(value.len(), value_out.len());
+			value_out[..written].copy_from_slice(&value[..written]);
 			value.len()
 		})).expect("read_storage cannot be called outside of an Externalities-provided environment.")
 	}
