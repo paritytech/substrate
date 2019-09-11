@@ -66,7 +66,7 @@ fn should_report_offline_validators() {
 		// then
 		let offences = OFFENCES.with(|l| l.replace(vec![]));
 		assert_eq!(offences, vec![
-			(vec![], crate::UnresponsivenessOffence {
+			(vec![], UnresponsivenessOffence {
 				session_index: 2,
 				validator_set_count: 3,
 				offenders: vec![
@@ -86,7 +86,7 @@ fn should_report_offline_validators() {
 		// then
 		let offences = OFFENCES.with(|l| l.replace(vec![]));
 		assert_eq!(offences, vec![
-			(vec![], crate::UnresponsivenessOffence {
+			(vec![], UnresponsivenessOffence {
 				session_index: 3,
 				validator_set_count: 6,
 				offenders: vec![
@@ -99,13 +99,13 @@ fn should_report_offline_validators() {
 }
 
 fn heartbeat(
-	block: u64,
+	block_number: u64,
 	session_index: u32,
 	authority_index: u32,
 	id: UintAuthorityId,
 ) {
 	let heartbeat = Heartbeat {
-		block_number: block,
+		block_number,
 		network_state: OpaqueNetworkState {
 			peer_id: OpaquePeerId(vec![1]),
 			external_addresses: vec![],
@@ -177,7 +177,11 @@ fn should_generate_heartbeats() {
 			e => panic!("Unexpected call: {:?}", e),
 		};
 
-		// TODO [Kian] assert stuff
-		assert_eq!(heartbeat.block_number, 5);
+		assert_eq!(heartbeat, Heartbeat {
+			block_number: 2,
+			network_state: runtime_io::network_state().unwrap(),
+			session_index: 2,
+			authority_index: 2,
+		});
 	});
 }
