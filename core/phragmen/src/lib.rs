@@ -37,6 +37,9 @@ use rstd::{prelude::*, collections::btree_map::BTreeMap};
 use sr_primitives::PerU128;
 use sr_primitives::traits::{Zero, Convert, Member, SimpleArithmetic};
 
+mod mock;
+mod tests;
+
 /// Type used as the fraction.
 type Fraction = PerU128;
 
