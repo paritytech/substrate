@@ -142,11 +142,10 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> From<StorageTuple> for TestExternalit
 	}
 }
 
-impl<H, N> Externalities<H> for TestExternalities<H, N>
-	where
-		H: Hasher,
-		N: ChangesTrieBlockNumber,
-		H::Out: Ord + 'static
+impl<H, N> Externalities<H> for TestExternalities<H, N> where
+	H: Hasher,
+	N: ChangesTrieBlockNumber,
+	H::Out: Ord + 'static,
 {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||

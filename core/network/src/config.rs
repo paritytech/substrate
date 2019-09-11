@@ -205,23 +205,23 @@ pub enum ParseErr {
 }
 
 impl fmt::Display for ParseErr {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ParseErr::MultiaddrParse(err) => write!(f, "{}", err),
-            ParseErr::InvalidPeerId => write!(f, "Peer id at the end of the address is invalid"),
-            ParseErr::PeerIdMissing => write!(f, "Peer id is missing from the address"),
-        }
-    }
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			ParseErr::MultiaddrParse(err) => write!(f, "{}", err),
+			ParseErr::InvalidPeerId => write!(f, "Peer id at the end of the address is invalid"),
+			ParseErr::PeerIdMissing => write!(f, "Peer id is missing from the address"),
+		}
+	}
 }
 
 impl std::error::Error for ParseErr {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            ParseErr::MultiaddrParse(err) => Some(err),
-            ParseErr::InvalidPeerId => None,
-            ParseErr::PeerIdMissing => None,
-        }
-    }
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		match self {
+			ParseErr::MultiaddrParse(err) => Some(err),
+			ParseErr::InvalidPeerId => None,
+			ParseErr::PeerIdMissing => None,
+		}
+	}
 }
 
 impl From<multiaddr::Error> for ParseErr {

@@ -43,7 +43,7 @@ use state_machine::{
 	DBValue, Backend as StateBackend, ChangesTrieAnchorBlockId, ExecutionStrategy, ExecutionManager,
 	prove_read, prove_child_read, ChangesTrieRootsStorage, ChangesTrieStorage,
 	ChangesTrieTransaction, ChangesTrieConfigurationRange, key_changes, key_changes_proof,
-	OverlayedChanges,
+	OverlayedChanges, BackendTrustLevel,
 };
 use executor::{RuntimeVersion, RuntimeInfo};
 use consensus::{
@@ -1043,7 +1043,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				let get_execution_manager = |execution_strategy: ExecutionStrategy| {
 					match execution_strategy {
 						ExecutionStrategy::NativeElseWasm => ExecutionManager::NativeElseWasm,
-						ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
+						ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm(BackendTrustLevel::Trusted),
 						ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
 						ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
 							let header = import_headers.post();
