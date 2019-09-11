@@ -18,17 +18,18 @@
 
 use std::collections::{HashMap};
 use hash_db::Hasher;
-use crate::backend::{InMemory, Backend};
-use primitives::storage::well_known_keys::is_child_storage_key;
-use crate::changes_trie::{
-	build_changes_trie, InMemoryStorage as ChangesTrieInMemoryStorage,
-	BlockNumber as ChangesTrieBlockNumber,
+use crate::{
+	backend::{InMemory, Backend}, OverlayedChanges,
+	changes_trie::{
+		build_changes_trie, InMemoryStorage as ChangesTrieInMemoryStorage,
+		BlockNumber as ChangesTrieBlockNumber,
+	},
 };
 use primitives::{
-	storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES}, traits::BareCryptoStorePtr, offchain
+	storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES, is_child_storage_key},
+	traits::{BareCryptoStorePtr, Externalities}, offchain, child_storage_key::ChildStorageKey,
 };
 use codec::Encode;
-use super::{ChildStorageKey, Externalities, OverlayedChanges};
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
 
@@ -141,11 +142,10 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> From<StorageTuple> for TestExternalit
 	}
 }
 
-impl<H, N> Externalities<H> for TestExternalities<H, N>
-	where
-		H: Hasher,
-		N: ChangesTrieBlockNumber,
-		H::Out: Ord + 'static
+impl<H, N> Externalities<H> for TestExternalities<H, N> where
+	H: Hasher,
+	N: ChangesTrieBlockNumber,
+	H::Out: Ord + 'static,
 {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
@@ -156,7 +156,7 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 		self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
 	}
 
-	fn child_storage(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<Vec<u8>> {
+	fn child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
 		self.overlay
 			.child_storage(storage_key.as_ref(), key)
 			.map(|x| x.map(|x| x.to_vec()))
@@ -166,7 +166,7 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 			)
 	}
 
-	fn original_child_storage(&self, storage_key: ChildStorageKey<H>, key: &[u8]) -> Option<Vec<u8>> {
+	fn original_child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
 		self.backend
 			.child_storage(storage_key.as_ref(), key)
 			.map(|x| x.map(|x| x.to_vec()))
@@ -183,14 +183,14 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 
 	fn place_child_storage(
 		&mut self,
-		storage_key: ChildStorageKey<H>,
+		storage_key: ChildStorageKey,
 		key: Vec<u8>,
 		value: Option<Vec<u8>>
 	) {
 		self.overlay.set_child_storage(storage_key.into_owned(), key, value);
 	}
 
-	fn kill_child_storage(&mut self, storage_key: ChildStorageKey<H>) {
+	fn kill_child_storage(&mut self, storage_key: ChildStorageKey) {
 		let backend = &self.backend;
 		let overlay = &mut self.overlay;
 
@@ -214,7 +214,7 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 		});
 	}
 
-	fn clear_child_prefix(&mut self, storage_key: ChildStorageKey<H>, prefix: &[u8]) {
+	fn clear_child_prefix(&mut self, storage_key: ChildStorageKey, prefix: &[u8]) {
 
 		self.overlay.clear_child_prefix(storage_key.as_ref(), prefix);
 
@@ -249,7 +249,7 @@ impl<H, N> Externalities<H> for TestExternalities<H, N>
 
 	}
 
-	fn child_storage_root(&mut self, storage_key: ChildStorageKey<H>) -> Vec<u8> {
+	fn child_storage_root(&mut self, storage_key: ChildStorageKey) -> Vec<u8> {
 		let storage_key = storage_key.as_ref();
 
 		let (root, is_empty, _) = {
