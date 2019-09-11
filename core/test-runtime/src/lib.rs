@@ -596,7 +596,8 @@ cfg_if! {
 				}
 
 				fn test_storage() {
-					test_storage();
+					test_read_storage();
+					test_read_child_storage();
 				}
 			}
 
@@ -815,7 +816,8 @@ cfg_if! {
 				}
 
 				fn test_storage() {
-					test_storage();
+					test_read_storage();
+					test_read_child_storage();
 				}
 			}
 
@@ -899,9 +901,8 @@ fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic) {
 	(signature, public0)
 }
 
-fn test_storage() {
+fn test_read_storage() {
 	const KEY: &[u8] = b":test_storage";
-
 	runtime_io::set_storage(KEY, b"test");
 
 	let mut v = [0u8; 4];
@@ -915,6 +916,27 @@ fn test_storage() {
 
 	let mut v = [0u8; 4];
 	let r = runtime_io::read_storage(KEY, &mut v, 8);
+	assert_eq!(r, Some(4));
+	assert_eq!(&v, &[0, 0, 0, 0]);
+}
+
+fn test_read_child_storage() {
+	const CHILD_KEY: &[u8] = b":default:mock";
+	const KEY: &[u8] = b":test_storage";
+	runtime_io::set_child_storage(CHILD_KEY, KEY, b"test");
+
+	let mut v = [0u8; 4];
+	let r = runtime_io::read_child_storage(
+		CHILD_KEY,
+		KEY,
+		&mut v,
+		0
+	);
+	assert_eq!(r, Some(4));
+	assert_eq!(&v, b"test");
+
+	let mut v = [0u8; 4];
+	let r = runtime_io::read_child_storage(CHILD_KEY, KEY, &mut v, 8);
 	assert_eq!(r, Some(4));
 	assert_eq!(&v, &[0, 0, 0, 0]);
 }
@@ -1015,7 +1037,7 @@ mod tests {
 	}
 
 	#[test]
-	fn read_storage() {
+	fn test_storage() {
 		let client = TestClientBuilder::new().build();
 		let runtime_api = client.runtime_api();
 		let block_id = BlockId::Number(client.info().chain.best_number);
