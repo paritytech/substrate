@@ -4149,6 +4149,7 @@ dependencies = [
  "srml-support 2.0.0",
  "srml-system 2.0.0",
  "substrate-application-crypto 2.0.0",
+ "substrate-offchain 2.0.0",
  "substrate-primitives 2.0.0",
 ]
 
@@ -4524,7 +4525,6 @@ dependencies = [
  "sr-primitives 2.0.0",
  "substrate-authority-discovery-primitives 2.0.0",
  "substrate-client 2.0.0",
- "substrate-keystore 2.0.0",
  "substrate-network 2.0.0",
  "substrate-peerset 2.0.0",
  "substrate-primitives 2.0.0",
