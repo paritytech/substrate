@@ -33,6 +33,8 @@ use rpc_primitives::number;
 
 /// A struct that encodes RPC parameters required for a call to a smart-contract.
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all="camelCase")]
+#[serde(deny_unknown_fields)]
 pub struct CallRequest {
 	origin: AccountId,
 	dest: AccountId,
