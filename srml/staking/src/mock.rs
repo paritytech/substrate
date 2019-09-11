@@ -391,16 +391,16 @@ pub fn assert_is_stash(acc: u64) {
 pub fn bond_validator(acc: u64, val: u64) {
 	// a = controller
 	// a + 1 = stash
-	let _ = Balances::make_free_balance_be(&(acc+1), val);
-	assert_ok!(Staking::bond(Origin::signed(acc+1), acc, val, RewardDestination::Controller));
+	let _ = Balances::make_free_balance_be(&(acc + 1), val);
+	assert_ok!(Staking::bond(Origin::signed(acc + 1), acc, val, RewardDestination::Controller));
 	assert_ok!(Staking::validate(Origin::signed(acc), ValidatorPrefs::default()));
 }
 
 pub fn bond_nominator(acc: u64, val: u64, target: Vec<u64>) {
 	// a = controller
 	// a + 1 = stash
-	let _ = Balances::make_free_balance_be(&(acc+1), val);
-	assert_ok!(Staking::bond(Origin::signed(acc+1), acc, val, RewardDestination::Controller));
+	let _ = Balances::make_free_balance_be(&(acc + 1), val);
+	assert_ok!(Staking::bond(Origin::signed(acc + 1), acc, val, RewardDestination::Controller));
 	assert_ok!(Staking::nominate(Origin::signed(acc), target));
 }
 
@@ -414,7 +414,7 @@ pub fn start_session(session_index: SessionIndex) {
 	let session_index = session_index + 1;
 	for i in Session::current_index()..session_index {
 		System::set_block_number((i + 1).into());
-		Timestamp::set_timestamp(System::block_number());
+		Timestamp::set_timestamp(System::block_number() * 1000);
 		Session::on_initialize(System::block_number());
 	}
 
@@ -428,7 +428,7 @@ pub fn start_era(era_index: EraIndex) {
 
 pub fn current_total_payout_for_duration(duration: u64) -> u64 {
 	let res = inflation::compute_total_payout(
-		<Module<Test>>::slot_stake()*2,
+		<Module<Test>>::slot_stake() * 2,
 		Balances::total_issuance(),
 		duration,
 	);
