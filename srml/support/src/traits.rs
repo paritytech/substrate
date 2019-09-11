@@ -24,8 +24,6 @@ use primitives::u32_trait::Value as U32;
 use crate::sr_primitives::traits::{MaybeSerializeDebug, SimpleArithmetic, Saturating};
 use crate::sr_primitives::ConsensusEngineId;
 
-use super::for_each_tuple;
-
 /// Anything that can have a `::len()` method.
 pub trait Len {
 	/// Return the length of data type.
@@ -63,28 +61,11 @@ impl<V: PartialEq, T: Get<V>> Contains<V> for T {
 }
 
 /// The account with the given id was killed.
+#[impl_trait_for_tuples::impl_for_tuples(30)]
 pub trait OnFreeBalanceZero<AccountId> {
 	/// The account was the given id was killed.
 	fn on_free_balance_zero(who: &AccountId);
 }
-
-macro_rules! impl_on_free_balance_zero {
-	() => (
-		impl<AccountId> OnFreeBalanceZero<AccountId> for () {
-			fn on_free_balance_zero(_: &AccountId) {}
-		}
-	);
-
-	( $($t:ident)* ) => {
-		impl<AccountId, $($t: OnFreeBalanceZero<AccountId>),*> OnFreeBalanceZero<AccountId> for ($($t,)*) {
-			fn on_free_balance_zero(who: &AccountId) {
-				$($t::on_free_balance_zero(who);)*
-			}
-		}
-	}
-}
-
-for_each_tuple!(impl_on_free_balance_zero);
 
 /// Trait for a hook to get called when some balance has been minted, causing dilution.
 pub trait OnDilution<Balance> {

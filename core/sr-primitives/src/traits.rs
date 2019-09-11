@@ -19,8 +19,10 @@
 use rstd::prelude::*;
 use rstd::{self, result, marker::PhantomData, convert::{TryFrom, TryInto}};
 use runtime_io;
-#[cfg(feature = "std")] use std::fmt::{Debug, Display};
-#[cfg(feature = "std")] use serde::{Serialize, Deserialize, de::DeserializeOwned};
+#[cfg(feature = "std")]
+use std::fmt::{Debug, Display};
+#[cfg(feature = "std")]
+use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use primitives::{self, Hasher, Blake2Hasher};
 use crate::codec::{Codec, Encode, Decode, HasCompact};
 use crate::transaction_validity::{
@@ -38,6 +40,7 @@ use rstd::ops::{
 	RemAssign, Shl, Shr
 };
 use crate::AppKey;
+use impl_trait_for_tuples::impl_for_tuples;
 
 /// A lazy value.
 pub trait Lazy<T: ?Sized> {
@@ -404,21 +407,19 @@ impl<T:
 
 /// The block finalization trait. Implementing this lets you express what should happen
 /// for your module when the block is ending.
+#[impl_for_tuples(30)]
 pub trait OnFinalize<BlockNumber> {
 	/// The block is being finalized. Implement to have something happen.
 	fn on_finalize(_n: BlockNumber) {}
 }
 
-impl<N> OnFinalize<N> for () {}
-
 /// The block initialization trait. Implementing this lets you express what should happen
 /// for your module when the block is beginning (right before the first extrinsic is executed).
+#[impl_for_tuples(30)]
 pub trait OnInitialize<BlockNumber> {
 	/// The block is being initialized. Implement to have something happen.
 	fn on_initialize(_n: BlockNumber) {}
 }
-
-impl<N> OnInitialize<N> for () {}
 
 /// Off-chain computation trait.
 ///
@@ -428,6 +429,7 @@ impl<N> OnInitialize<N> for () {}
 ///
 /// NOTE: This function runs off-chain, so it can access the block state,
 /// but cannot preform any alterations.
+#[impl_for_tuples(30)]
 pub trait OffchainWorker<BlockNumber> {
 	/// This function is being called on every block.
 	///
@@ -435,47 +437,6 @@ pub trait OffchainWorker<BlockNumber> {
 	/// Any state alterations are lost and are not persisted.
 	fn generate_extrinsics(_n: BlockNumber) {}
 }
-
-impl<N> OffchainWorker<N> for () {}
-
-macro_rules! tuple_impl {
-	($first:ident, $($rest:ident,)+) => {
-		tuple_impl!([$first] [$first] [$($rest)+]);
-	};
-	([$($direct:ident)+] [$($reverse:ident)+] []) => {
-		impl<
-			Number: Copy,
-			$($direct: OnFinalize<Number>),+
-		> OnFinalize<Number> for ($($direct),+,) {
-			fn on_finalize(n: Number) {
-				$($reverse::on_finalize(n);)+
-			}
-		}
-		impl<
-			Number: Copy,
-			$($direct: OnInitialize<Number>),+
-		> OnInitialize<Number> for ($($direct),+,) {
-			fn on_initialize(n: Number) {
-				$($direct::on_initialize(n);)+
-			}
-		}
-		impl<
-			Number: Copy,
-			$($direct: OffchainWorker<Number>),+
-		> OffchainWorker<Number> for ($($direct),+,) {
-			fn generate_extrinsics(n: Number) {
-				$($direct::generate_extrinsics(n);)+
-			}
-		}
-	};
-	([$($direct:ident)+] [$($reverse:ident)+] [$first:ident $($rest:ident)*]) => {
-		tuple_impl!([$($direct)+] [$($reverse)+] []);
-		tuple_impl!([$($direct)+ $first] [$first $($reverse)+] [$($rest)*]);
-	};
-}
-
-#[allow(non_snake_case)]
-tuple_impl!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,);
 
 /// Abstraction around hashing
 pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stupid bug in the Rust compiler believes derived
@@ -930,96 +891,62 @@ pub trait ModuleDispatchError {
 	fn as_str(&self) -> &'static str;
 }
 
-macro_rules! tuple_impl_indexed {
-	($first:ident, $($rest:ident,)+ ; $first_index:tt, $($rest_index:tt,)+) => {
-		tuple_impl_indexed!([$first] [$($rest)+] ; [$first_index,] [$($rest_index,)+]);
-	};
-	([$($direct:ident)+] ; [$($index:tt,)+]) => {
-		impl<
-			AccountId,
-			Call,
-			$($direct: SignedExtension<AccountId=AccountId, Call=Call>),+
-		> SignedExtension for ($($direct),+,) {
-			type AccountId = AccountId;
-			type Call = Call;
-			type AdditionalSigned = ( $( $direct::AdditionalSigned, )+ );
-			type Pre =  ($($direct::Pre,)+);
-			fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
-				Ok(( $( self.$index.additional_signed()?, )+ ))
-			}
-			fn validate(
-				&self,
-				who: &Self::AccountId,
-				call: &Self::Call,
-				info: DispatchInfo,
-				len: usize,
-			) -> TransactionValidity {
-				let aggregator = vec![
-					$( <$direct as SignedExtension>::validate(&self.$index, who, call, info, len)? ),+
-				];
-				Ok(
-					aggregator.into_iter().fold(
-						ValidTransaction::default(),
-						|acc, a| acc.combine_with(a),
-					)
-				)
-			}
-			fn pre_dispatch(
-				self,
-				who: &Self::AccountId,
-				call: &Self::Call,
-				info: DispatchInfo,
-				len: usize,
-			) -> Result<Self::Pre, $crate::ApplyError> {
-				Ok(($(self.$index.pre_dispatch(who, call, info, len)?,)+))
-			}
-			fn validate_unsigned(
-				call: &Self::Call,
-				info: DispatchInfo,
-				len: usize,
-			) -> TransactionValidity {
-				let aggregator = vec![ $( $direct::validate_unsigned(call, info, len)? ),+ ];
+#[impl_for_tuples(1, 12)]
+impl<AccountId, Call> SignedExtension for Tuple {
+	for_tuples!( where #( Tuple: SignedExtension<AccountId=AccountId, Call=Call> )* );
+	type AccountId = AccountId;
+	type Call = Call;
+	for_tuples!( type AdditionalSigned = ( #( Tuple::AdditionalSigned ),* ); );
+	for_tuples!( type Pre = ( #( Tuple::Pre ),* ); );
 
-				Ok(
-					aggregator.into_iter().fold(
-						ValidTransaction::default(),
-						|acc, a| acc.combine_with(a),
-					)
-				)
-			}
-			fn pre_dispatch_unsigned(
-				call: &Self::Call,
-				info: DispatchInfo,
-				len: usize,
-			) -> Result<Self::Pre, $crate::ApplyError> {
-				Ok(($($direct::pre_dispatch_unsigned(call, info, len)?,)+))
-			}
-			fn post_dispatch(
-				pre: Self::Pre,
-				info: DispatchInfo,
-				len: usize,
-			) {
-				$($direct::post_dispatch(pre.$index, info, len);)+
-			}
-		}
+	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
+		Ok(for_tuples!( ( #( Tuple.additional_signed()? ),* ) ))
+	}
 
-	};
-	([$($direct:ident)+] [] ; [$($index:tt,)+] []) => {
-		tuple_impl_indexed!([$($direct)+] ; [$($index,)+]);
-	};
-	(
-		[$($direct:ident)+] [$first:ident $($rest:ident)*]
-		;
-		[$($index:tt,)+] [$first_index:tt, $($rest_index:tt,)*]
-	) => {
-		tuple_impl_indexed!([$($direct)+] ; [$($index,)+]);
-		tuple_impl_indexed!([$($direct)+ $first] [$($rest)*] ; [$($index,)+ $first_index,] [$($rest_index,)*]);
-	};
+	fn validate(
+		&self,
+		who: &Self::AccountId,
+		call: &Self::Call,
+		info: DispatchInfo,
+		len: usize,
+	) -> TransactionValidity {
+		let valid = ValidTransaction::default();
+		for_tuples!( #( let valid = valid.combine_with(Tuple.validate(who, call, info, len)?); )* );
+		Ok(valid)
+	}
+
+	fn pre_dispatch(self, who: &Self::AccountId, call: &Self::Call, info: DispatchInfo, len: usize)
+		-> Result<Self::Pre, crate::ApplyError>
+	{
+		Ok(for_tuples!( ( #( Tuple.pre_dispatch(who, call, info, len)? ),* ) ))
+	}
+
+	fn validate_unsigned(
+		call: &Self::Call,
+		info: DispatchInfo,
+		len: usize,
+	) -> TransactionValidity {
+		let valid = ValidTransaction::default();
+		for_tuples!( #( let valid = valid.combine_with(Tuple::validate_unsigned(call, info, len)?); )* );
+		Ok(valid)
+	}
+
+	fn pre_dispatch_unsigned(
+		call: &Self::Call,
+		info: DispatchInfo,
+		len: usize,
+	) -> Result<Self::Pre, crate::ApplyError> {
+		Ok(for_tuples!( ( #( Tuple::pre_dispatch_unsigned(call, info, len)? ),* ) ))
+	}
+
+	fn post_dispatch(
+		pre: Self::Pre,
+		info: DispatchInfo,
+		len: usize,
+	) {
+		for_tuples!( #( Tuple::post_dispatch(pre.Tuple, info, len); )* )
+	}
 }
-
-// TODO: merge this into `tuple_impl` once codec supports `trait Codec` for longer tuple lengths. #3152
-#[allow(non_snake_case)]
-tuple_impl_indexed!(A, B, C, D, E, F, G, H, I, J, ; 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,);
 
 /// Only for bare bone testing when you don't care about signed extensions at all.
 #[cfg(feature = "std")]

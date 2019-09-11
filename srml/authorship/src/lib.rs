@@ -22,7 +22,7 @@
 
 use rstd::{result, prelude::*};
 use rstd::collections::btree_set::BTreeSet;
-use support::{decl_module, decl_storage, for_each_tuple, StorageValue};
+use support::{decl_module, decl_storage, StorageValue};
 use support::traits::{FindAuthor, VerifySeal, Get};
 use support::dispatch::Result as DispatchResult;
 use codec::{Encode, Decode};
@@ -112,6 +112,7 @@ pub trait Trait: system::Trait {
 
 /// An event handler for the authorship module. There is a dummy implementation
 /// for `()`, which does nothing.
+#[impl_trait_for_tuples::impl_for_tuples(30)]
 pub trait EventHandler<Author, BlockNumber> {
 	/// Note that the given account ID is the author of the current block.
 	fn note_author(author: Author);
@@ -120,30 +121,6 @@ pub trait EventHandler<Author, BlockNumber> {
 	/// blocks older than the current block it is (age >= 0, so siblings are allowed)
 	fn note_uncle(author: Author, age: BlockNumber);
 }
-
-macro_rules! impl_event_handler {
-	() => (
-		impl<A, B> EventHandler<A, B> for () {
-			fn note_author(_author: A) { }
-			fn note_uncle(_author: A, _age: B) { }
-		}
-	);
-
-	( $($t:ident)* ) => {
-		impl<Author: Clone, BlockNumber: Clone, $($t: EventHandler<Author, BlockNumber>),*>
-			EventHandler<Author, BlockNumber> for ($($t,)*)
-		{
-			fn note_author(author: Author) {
-				$($t::note_author(author.clone());)*
-			}
-			fn note_uncle(author: Author, age: BlockNumber) {
-				$($t::note_uncle(author.clone(), age.clone());)*
-			}
-		}
-	}
-}
-
-for_each_tuple!(impl_event_handler);
 
 /// Additional filtering on uncles that pass preliminary ancestry checks.
 ///

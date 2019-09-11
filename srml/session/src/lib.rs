@@ -126,8 +126,8 @@ use sr_primitives::weights::SimpleDispatchInfo;
 use sr_primitives::traits::{Convert, Zero, Member, OpaqueKeys};
 use sr_staking_primitives::SessionIndex;
 use support::{
-	dispatch::Result, ConsensusEngineId, StorageValue, StorageDoubleMap, for_each_tuple,
-	decl_module, decl_event, decl_storage,
+	dispatch::Result, ConsensusEngineId, StorageValue, StorageDoubleMap, decl_module, decl_event,
+	decl_storage,
 };
 use support::{ensure, traits::{OnFreeBalanceZero, Get, FindAuthor}, Parameter};
 use system::{self, ensure_signed};
@@ -251,62 +251,51 @@ pub trait OneSessionHandler<ValidatorId> {
 
 	/// A validator got disabled. Act accordingly until a new session begins.
 	fn on_disabled(_validator_index: usize);
-
 }
 
-macro_rules! impl_session_handlers {
-	() => (
-		impl<AId> SessionHandler<AId> for () {
-			fn on_genesis_session<Ks: OpaqueKeys>(_: &[(AId, Ks)]) {}
-			fn on_new_session<Ks: OpaqueKeys>(_: bool, _: &[(AId, Ks)], _: &[(AId, Ks)]) {}
-			fn on_before_session_ending() {}
-			fn on_disabled(_: usize) {}
-		}
-	);
+#[impl_trait_for_tuples::impl_for_tuples(30)]
+#[tuple_types_no_default_trait_bound]
+impl<AId> SessionHandler<AId> for Tuple {
+	for_tuples!( where #( Tuple: OneSessionHandler<AId> )* );
 
-	( $($t:ident)* ) => {
-		impl<AId, $( $t: OneSessionHandler<AId> ),*> SessionHandler<AId> for ( $( $t , )* ) {
-			fn on_genesis_session<Ks: OpaqueKeys>(validators: &[(AId, Ks)]) {
-				$(
-					let our_keys: Box<dyn Iterator<Item=_>> = Box::new(validators.iter()
-						.map(|k| (&k.0, k.1.get::<$t::Key>(<$t::Key as AppKey>::ID)
-							.unwrap_or_default())));
+	fn on_genesis_session<Ks: OpaqueKeys>(validators: &[(AId, Ks)]) {
+		for_tuples!(
+			#(
+				let our_keys: Box<dyn Iterator<Item=_>> = Box::new(validators.iter()
+					.map(|k| (&k.0, k.1.get::<Tuple::Key>(<Tuple::Key as AppKey>::ID)
+						.unwrap_or_default())));
 
-					$t::on_genesis_session(our_keys);
-				)*
-			}
-			fn on_new_session<Ks: OpaqueKeys>(
-				changed: bool,
-				validators: &[(AId, Ks)],
-				queued_validators: &[(AId, Ks)],
-			) {
-				$(
-					let our_keys: Box<dyn Iterator<Item=_>> = Box::new(validators.iter()
-						.map(|k| (&k.0, k.1.get::<$t::Key>(<$t::Key as AppKey>::ID)
-							.unwrap_or_default())));
-					let queued_keys: Box<dyn Iterator<Item=_>> = Box::new(queued_validators.iter()
-						.map(|k| (&k.0, k.1.get::<$t::Key>(<$t::Key as AppKey>::ID)
-							.unwrap_or_default())));
-					$t::on_new_session(changed, our_keys, queued_keys);
-				)*
-			}
+				Tuple::on_genesis_session(our_keys);
+			)*
+		)
+	}
 
-			fn on_before_session_ending() {
-				$(
-					$t::on_before_session_ending();
-				)*
-			}
+	fn on_new_session<Ks: OpaqueKeys>(
+		changed: bool,
+		validators: &[(AId, Ks)],
+		queued_validators: &[(AId, Ks)],
+	) {
+		for_tuples!(
+			#(
+				let our_keys: Box<dyn Iterator<Item=_>> = Box::new(validators.iter()
+					.map(|k| (&k.0, k.1.get::<Tuple::Key>(<Tuple::Key as AppKey>::ID)
+						.unwrap_or_default())));
+				let queued_keys: Box<dyn Iterator<Item=_>> = Box::new(queued_validators.iter()
+					.map(|k| (&k.0, k.1.get::<Tuple::Key>(<Tuple::Key as AppKey>::ID)
+						.unwrap_or_default())));
+				Tuple::on_new_session(changed, our_keys, queued_keys);
+			)*
+		)
+	}
 
-			fn on_disabled(i: usize) {
-				$(
-					$t::on_disabled(i);
-				)*
-			}
-		}
+	fn on_before_session_ending() {
+		for_tuples!( #( Tuple::on_before_session_ending(); )* )
+	}
+
+	fn on_disabled(i: usize) {
+		for_tuples!( #( Tuple::on_disabled(i); )* )
 	}
 }
-
-for_each_tuple!(impl_session_handlers);
 
 /// Handler for selecting the genesis validator set.
 pub trait SelectInitialValidators<ValidatorId> {
