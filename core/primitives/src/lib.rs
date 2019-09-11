@@ -54,6 +54,7 @@ pub mod crypto;
 
 pub mod u32_trait;
 
+pub mod child_storage_key;
 pub mod ed25519;
 pub mod sr25519;
 pub mod hash;
