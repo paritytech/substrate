@@ -289,8 +289,8 @@ impl<H, B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<C, E, I
 		self.block_import.clone()
 	}
 
-	fn epoch_data(&self, block: &B::Hash) -> Result<Self::EpochData, consensus_common::Error> {
-		epoch_from_runtime(self.client.as_ref(), &BlockId::Hash(*block))
+	fn epoch_data(&self, parent: &B::Hash) -> Result<Self::EpochData, consensus_common::Error> {
+		epoch(self.client.as_ref(), &BlockId::Hash(*parent))
 			.ok_or(consensus_common::Error::InvalidAuthoritiesSet)
 	}
 
@@ -772,7 +772,7 @@ impl<B, E, Block, RA, PRA, T> Verifier<Block> for BabeVerifier<B, E, Block, RA, 
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
 
-		let epoch = epoch(self.api.as_ref(), &BlockId::Hash(parent_hash))
+		let epoch = epoch(self.api.as_ref(), hash, parent_hash)
 			.ok_or_else(|| format!("Could not fetch epoch at {:?}", parent_hash))?;
 
 		let (epoch, maybe_next_epoch) = epoch.deconstruct();
@@ -931,21 +931,18 @@ impl MaybeSpanEpoch {
 }
 
 /// Extract current epoch data from the runtime.
-fn epoch<B, C>(client: &C, at: &BlockId<B>) -> Option<MaybeSpanEpoch> where
+fn epoch<B, C>(
+	client: &C,
+	parent_hash: B::Hash,
+	parent_number: NumberFor<B>,
+	slot_num: SlotNumber,
+) -> Option<MaybeSpanEpoch> where
 	B: BlockT,
 	C: ProvideRuntimeApi + ProvideCache<B>,
 	C::Api: BabeApi<B>,
 {
-	epoch_from_runtime(client, at).map(MaybeSpanEpoch::Regular)
-}
-
-/// Extract current epoch from runtime.
-fn epoch_from_runtime<B, C>(client: &C, at: &BlockId<B>) -> Option<Epoch> where
-	B: BlockT,
-	C: ProvideRuntimeApi,
-	C::Api: BabeApi<B>,
-{
-	if client.runtime_api().has_api::<dyn BabeApi<B>>(at).unwrap_or(false) {
+	let at = BlockId::Hash(parent_hash);
+	let epoch = if client.runtime_api().has_api::<dyn BabeApi<B>>(&at).unwrap_or(false) {
 		let s = BabeApi::epoch(&*client.runtime_api(), at).ok()?;
 		if s.authorities.is_empty() {
 			error!("No authorities!");
@@ -956,7 +953,30 @@ fn epoch_from_runtime<B, C>(client: &C, at: &BlockId<B>) -> Option<Epoch> where
 	} else {
 		error!("bad api!");
 		None
+	};
+	let epoch = epoch?;
+
+	let next_start = epoch.start_slot + epoch.duration;
+	if slot_num < next_start { return Some(epoch) }
+
+	// find_node_where will give you the node in the fork-tree which is an ancestor
+	// of the `parent_hash` by default. if the last epoch was signalled at the parent_hash,
+	// then it won't be returned. we need to create a new fake chain head hash which
+	// "descends" from our parent-hash.
+	let fake_head_hash = {
+		let mut h = parent_hash.clone();
+		// dirty trick: flip the last bit of the parent hash to create a hash
+		// which has not been in the chain before (assuming a strong hash function).
+		h.as_mut()[0] ^= 0b10000000;
+		h
 	}
+	let is_descendent_of = is_descendent_of(client, Some((fake_head_hash, parent_hash)));
+	let enacted_epoch = epoch_changes.find_node_where(
+		&fake_head_hash,
+		&(parent_number + One::one()),
+		&is_descendent_of,
+		&|epoch| epoch.start_slot == next_start,
+	).map_err(|e| ConsensusError::from(ConsensusError::ClientImport(e.to_string())))?;
 }
 
 /// The BABE import queue type.
