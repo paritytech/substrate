@@ -216,9 +216,12 @@ macro_rules! implement_per_thing {
 			fn macro_expanded_correctly() {
 				// needed for the `from_percent` to work.
 				assert!($max >= 100);
+				assert!($max % 100 == 0);
+
 				// needed for `from_rational_approximation`
 				assert!(2 * $max < <$type>::max_value());
 				assert!(($max as $upper_type) < <$upper_type>::max_value());
+
 				// for something like percent they can be the same.
 				assert!((<$type>::max_value() as $upper_type) <= <$upper_type>::max_value());
 				assert!(($max as $upper_type).checked_mul($max.into()).is_some());
@@ -552,15 +555,18 @@ impl Fixed64 {
 		ops::Rem<N, Output=N> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> +
 		ops::Add<N, Output=N>,
 	{
-		let parts = self.0;
-		let positive = parts > 0;
+		let div = DIV as u64;
+		let positive = self.0 > 0;
+		// safe to convert as absolute value.
+		let parts = self.0.checked_abs().unwrap_or(Bounded::max_value()) as u64;
+
 
 		// will always fit.
-		let natural_parts: u64 = (parts / DIV) as u64;
+		let natural_parts = parts / div;
 		// might saturate.
 		let natural_parts: N = natural_parts.saturated_into();
 		// fractional parts can always fit into u32.
-		let perbill_parts = (parts.abs() % DIV) as u32;
+		let perbill_parts = (parts % div) as u32;
 
 		let n = int.clone().saturating_mul(natural_parts);
 		let p = Perbill::from_parts(perbill_parts) * int.clone();
