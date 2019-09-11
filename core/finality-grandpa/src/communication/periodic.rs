@@ -120,6 +120,7 @@ struct BlockAnnouncer<B: BlockT, N> {
 	net: N,
 	block_rx: mpsc::UnboundedReceiver<B::Hash>,
 	latest_voted_blocks: VecDeque<B::Hash>,
+	reannounce_after: Duration,
 	delay: Delay,
 }
 
@@ -131,6 +132,27 @@ pub(super) fn block_announce_worker<B: BlockT, N: Network<B>>(net: N) -> (
 	impl Future<Item = (), Error = ()>,
 	BlockAnnounceSender<B>,
 ) {
+	block_announce_worker_aux(net, REBROADCAST_AFTER)
+}
+
+#[cfg(test)]
+pub(super) fn block_announce_worker_with_delay<B: BlockT, N: Network<B>>(
+	net: N,
+	reannounce_after: Duration,
+) -> (
+	impl Future<Item = (), Error = ()>,
+	BlockAnnounceSender<B>,
+) {
+	block_announce_worker_aux(net, reannounce_after)
+}
+
+fn block_announce_worker_aux<B: BlockT, N: Network<B>>(
+	net: N,
+	reannounce_after: Duration,
+) -> (
+	impl Future<Item = (), Error = ()>,
+	BlockAnnounceSender<B>,
+) {
 	let latest_voted_blocks = VecDeque::with_capacity(LATEST_VOTED_BLOCKS_TO_ANNOUNCE);
 
 	let (block_tx, block_rx) = mpsc::unbounded();
@@ -139,7 +161,8 @@ pub(super) fn block_announce_worker<B: BlockT, N: Network<B>>(net: N) -> (
 		net,
 		block_rx,
 		latest_voted_blocks,
-		delay: Delay::new(rebroadcast_instant()),
+		reannounce_after,
+		delay: Delay::new(Instant::now() + reannounce_after),
 	};
 
 	(announcer, BlockAnnounceSender(block_tx))
@@ -160,6 +183,10 @@ impl<B: BlockT, N> BlockAnnouncer<B, N> {
 
 		false
 	}
+
+	fn reset_delay(&mut self) {
+		self.delay.reset(Instant::now() + self.reannounce_after);
+	}
 }
 
 impl<B: BlockT, N: Network<B>> Future for BlockAnnouncer<B, N> {
@@ -174,7 +201,7 @@ impl<B: BlockT, N: Network<B>> Future for BlockAnnouncer<B, N> {
 				Async::Ready(Some(block)) => {
 					if self.note_block(block) {
 						self.net.announce(block);
-						self.delay.reset(rebroadcast_instant());
+						self.reset_delay();
 					}
 				},
 				Async::NotReady => break,
@@ -183,16 +210,16 @@ impl<B: BlockT, N: Network<B>> Future for BlockAnnouncer<B, N> {
 
 		// after the delay fires announce all blocks that we have stored. note
 		// that this only happens if we don't receive any new blocks above for
-		// the duration of `rebroadcast_instant`. has to be done in a loop
-		// because it needs to be polled after re-scheduling.
+		// the duration of `reannounce_after`. has to be done in a loop because
+		// it needs to be polled after re-scheduling.
 		loop {
 			match self.delay.poll() {
 				Err(e) => {
 					warn!(target: "afg", "Error in periodic block announcer timer: {:?}", e);
-					self.delay.reset(rebroadcast_instant());
+					self.reset_delay();
 				},
 				Ok(Async::Ready(())) => {
-					self.delay.reset(rebroadcast_instant());
+					self.reset_delay();
 
 					debug!(
 						target: "afg",

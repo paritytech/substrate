@@ -504,10 +504,14 @@ fn periodically_reannounce_voted_blocks_on_stall() {
 	use futures::try_ready;
 	use std::collections::HashSet;
 	use std::sync::Arc;
+	use std::time::Duration;
 	use parking_lot::Mutex;
 
 	let (tester, net) = make_test_network();
-	let (announce_worker, announce_sender) = super::periodic::block_announce_worker(net);
+	let (announce_worker, announce_sender) = super::periodic::block_announce_worker_with_delay(
+		net,
+		Duration::from_secs(1),
+	);
 
 	let hashes = Arc::new(Mutex::new(Vec::new()));
 
@@ -530,7 +534,8 @@ fn periodically_reannounce_voted_blocks_on_stall() {
 
 				let remaining_hashes = self.remaining_hashes.clone();
 				self.events_fut = Box::new(tester.filter_network_events(move |event| match event {
-					Event::Announce(h) => remaining_hashes.lock().remove(&h),
+					Event::Announce(h) =>
+						remaining_hashes.lock().remove(&h) || panic!("unexpected announce"),
 					_ => false,
 				}));
 
