@@ -85,11 +85,9 @@ impl StorageApi for () {
 			let storage_key = child_storage_key_or_panic(storage_key);
 			ext.child_storage(storage_key, key)
 				.map(|value| {
-					if value_offset < value.len() {
-						let value = &value[value_offset..];
-						let written = std::cmp::min(value.len(), value_out.len());
-						value_out[..written].copy_from_slice(&value[..written]);
-					}
+					let value = &value[value_offset.min(value.len())..];
+					let written = std::cmp::min(value.len(), value_out.len());
+					value_out[..written].copy_from_slice(&value[..written]);
 					value.len()
 				})
 		})
