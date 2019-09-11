@@ -37,7 +37,7 @@ use rstd::ops::{
 	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
 	RemAssign, Shl, Shr
 };
-use crate::AppKey;
+use app_crypto::AppKey;
 
 /// A lazy value.
 pub trait Lazy<T: ?Sized> {

@@ -17,6 +17,9 @@ sr-staking-primitives = { path = "../../core/sr-staking-primitives", default-fea
 support = { package = "srml-support", path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 
+[dev-dependencies]
+offchain = { package = "substrate-offchain", path = "../../core/offchain" }
+
 [features]
 default = ["std", "session/historical"]
 std = [

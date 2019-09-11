@@ -20,8 +20,10 @@
 
 use super::*;
 use crate::mock::*;
+use offchain::testing::TestOffchainExt;
 use primitives::offchain::OpaquePeerId;
 use runtime_io::with_externalities;
+use sr_primitives::testing::UintAuthorityId;
 
 
 #[test]
@@ -45,24 +47,61 @@ fn test_unresponsiveness_slash_fraction() {
 }
 
 #[test]
-fn should_correctly_report_offline_validators() {
+fn should_correctly_mark_online_validator_when_heartbeat_is_received() {
 	with_externalities(&mut new_test_ext(), || {
 		// given
-
-		// when
-		ImOnline::heartbeat(Origin::system(system::RawOrigin::None), Heartbeat {
-			block_number: 1,
+		let block = 1;
+		System::set_block_number(block);
+		// buffer new validators
+		Session::rotate_session();
+		// enact the change
+		Session::rotate_session();
+		assert!(!ImOnline::is_online_in_current_session(0));
+		let heartbeat = Heartbeat {
+			block_number: block,
 			network_state: OpaqueNetworkState {
 				peer_id: OpaquePeerId(vec![1]),
 				external_addresses: vec![],
 			},
-			session_index: 0,
-			authority_index: 1,
-		}, Default::default()).unwrap();
+			session_index: 2,
+			authority_index: 0,
+		};
+		let signature = UintAuthorityId(1).sign(&heartbeat.encode()).unwrap();
+
+		// when
+		ImOnline::heartbeat(
+			Origin::system(system::RawOrigin::None),
+			heartbeat,
+			signature
+		).unwrap();
 
 		// then
-		assert!(ImOnline::is_online_in_current_session(1));
+		assert!(ImOnline::is_online_in_current_session(0));
+		assert!(!ImOnline::is_online_in_current_session(1));
 		assert!(!ImOnline::is_online_in_current_session(2));
-		assert!(!ImOnline::is_online_in_current_session(3));
+	});
+}
+
+#[test]
+fn should_report_offline_validators() {
+	let mut ext = new_test_ext();
+	let (offchain, state) = TestOffchainExt::new();
+	ext.set_offchain_externalities(offchain);
+
+	with_externalities(&mut ext, || {
+		// given
+		let block = 1;
+		System::set_block_number(block);
+		// buffer new validators
+		Session::rotate_session();
+		// enact the change and buffer another one
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3, 4, 5, 6]));
+		Session::rotate_session();
+
+		// when
+		UintAuthorityId::set_all_keys(vec![0, 1, 2]);
+		ImOnline::offchain(2);
+
+		// then
 	});
 }

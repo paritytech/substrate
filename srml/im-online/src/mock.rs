@@ -18,6 +18,8 @@
 
 #![cfg(test)]
 
+use std::cell::RefCell;
+
 use crate::{Module, Trait};
 use sr_primitives::Perbill;
 use sr_staking_primitives::SessionIndex;
@@ -71,13 +73,16 @@ parameter_types! {
 	pub const Offset: u64 = 0;
 }
 
+thread_local! {
+	pub static VALIDATORS: RefCell<Option<Vec<u64>>> = RefCell::new(Some(vec![1, 2, 3]));
+}
 
 pub struct TestOnSessionEnding;
 impl session::OnSessionEnding<u64> for TestOnSessionEnding {
 	fn on_session_ending(_ending_index: SessionIndex, _will_apply_at: SessionIndex)
 		-> Option<Vec<u64>>
 	{
-		None
+		VALIDATORS.with(|l| l.borrow_mut().take())
 	}
 }
 
@@ -85,26 +90,26 @@ impl session::historical::OnSessionEnding<u64, u64> for TestOnSessionEnding {
 	fn on_session_ending(_ending_index: SessionIndex, _will_apply_at: SessionIndex)
 		-> Option<(Vec<u64>, Vec<(u64, u64)>)>
 	{
-		None
-	}
-}
-
-pub struct InitialValidators;
-impl session::SelectInitialValidators<u64> for InitialValidators {
-	fn select_initial_validators() -> Option<Vec<u64>> {
-		Some(vec![1, 2, 3])
+		VALIDATORS.with(|l| l
+			.borrow_mut()
+			.take()
+			.map(|validators| {
+				let full_identification = validators.iter().map(|v| (*v, *v)).collect();
+				(validators, full_identification)
+			})
+		)
 	}
 }
 
 impl session::Trait for Runtime {
 	type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
 	type OnSessionEnding = session::historical::NoteHistoricalRoot<Runtime, TestOnSessionEnding>;
-	type SessionHandler = ();
+	type SessionHandler = (ImOnline, );
 	type ValidatorId = u64;
 	type ValidatorIdOf = ConvertInto;
 	type Keys = UintAuthorityId;
 	type Event = ();
-	type SelectInitialValidators = InitialValidators;
+	type SelectInitialValidators = ();
 }
 
 impl session::historical::Trait for Runtime {
@@ -116,7 +121,7 @@ type Extrinsic = TestXt<Call, ()>;
 type SubmitTransaction = system::offchain::TransactionSubmitter<(), Call, Extrinsic>;
 
 impl Trait for Runtime {
-	type AuthorityId = crate::sr25519::AuthorityId;
+	type AuthorityId = UintAuthorityId;
 	type Event = ();
 	type Call = Call;
 	type SubmitTransaction = SubmitTransaction;
@@ -131,3 +136,4 @@ pub fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 /// Im Online module.
 pub type ImOnline = Module<Runtime>;
 pub type System = system::Module<Runtime>;
+pub type Session = session::Module<Runtime>;

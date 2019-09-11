@@ -70,7 +70,7 @@
 mod mock;
 mod tests;
 
-use app_crypto::{AppPublic, RuntimeAppPublic};
+use app_crypto::RuntimeAppPublic;
 use codec::{Encode, Decode};
 use primitives::offchain::{OpaqueNetworkState, StorageKind};
 use rstd::prelude::*;
@@ -139,15 +139,15 @@ pub mod ed25519 {
 	pub type AuthorityId = app_ed25519::Public;
 }
 
-// The local storage database key under which the worker progress status
-// is tracked.
+/// The local storage database key under which the worker progress status
+/// is tracked.
 const DB_KEY: &[u8] = b"srml/im-online-worker-status";
 
-// It's important to persist the worker state, since e.g. the
-// server could be restarted while starting the gossip process, but before
-// finishing it. With every execution of the off-chain worker we check
-// if we need to recover and resume gossipping or if there is already
-// another off-chain worker in the process of gossipping.
+/// It's important to persist the worker state, since e.g. the
+/// server could be restarted while starting the gossip process, but before
+/// finishing it. With every execution of the off-chain worker we check
+/// if we need to recover and resume gossipping or if there is already
+/// another off-chain worker in the process of gossipping.
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 struct WorkerStatus<BlockNumber> {
@@ -155,7 +155,8 @@ struct WorkerStatus<BlockNumber> {
 	gossipping_at: BlockNumber,
 }
 
-// Error which may occur while executing the off-chain code.
+/// Error which may occur while executing the off-chain code.
+#[cfg_attr(feature = "std", derive(Debug))]
 enum OffchainErr {
 	DecodeWorkerStatus,
 	FailedSigning,
@@ -190,7 +191,7 @@ pub struct Heartbeat<BlockNumber>
 
 pub trait Trait: system::Trait + session::historical::Trait {
 	/// The identifier type for an authority.
-	type AuthorityId: Member + Parameter + AppPublic + RuntimeAppPublic + Default;
+	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + Ord;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -257,8 +258,6 @@ decl_module! {
 				&heartbeat.authority_index
 			);
 			let keys = Keys::<T>::get();
-			// TODO [ToDr] This is invalid. We should fail in case authority_index is not there or the report already
-			// exists, otherwise you an spam the chain with huge amounts of reports like this.
 			let public = keys.get(heartbeat.authority_index as usize);
 			if let (true, Some(public)) = (!exists, public) {
 				let signature_valid = heartbeat.using_encoded(|encoded_heartbeat| {
@@ -274,6 +273,10 @@ decl_module! {
 					&heartbeat.authority_index,
 					&network_state
 				);
+			} else if exists {
+				Err("Duplicated heartbeat.")?
+			} else {
+				Err("Non existent public key.")?
 			}
 		}
 
@@ -295,9 +298,10 @@ impl<T: Trait> Module<T> {
 		<ReceivedHeartbeats>::exists(&current_session, &authority_index)
 	}
 
-	fn offchain(now: T::BlockNumber) {
+	pub(crate) fn offchain(now: T::BlockNumber) {
 		let next_gossip = <GossipAt<T>>::get();
 		let check = Self::check_not_yet_gossipped(now, next_gossip);
+		println!("Starting: {:?}", check);
 		let (curr_worker_status, not_yet_gossipped) = match check {
 			Ok((s, v)) => (s, v),
 			Err(err) => {
@@ -305,6 +309,7 @@ impl<T: Trait> Module<T> {
 				return;
 			},
 		};
+		println!("{:?}, {:?}, {:?}", next_gossip, now, not_yet_gossipped);
 		if next_gossip < now && not_yet_gossipped {
 			let value_set = Self::compare_and_set_worker_status(now, false, curr_worker_status);
 			if !value_set {
@@ -326,15 +331,18 @@ impl<T: Trait> Module<T> {
 		let authorities = Keys::<T>::get();
 		let mut local_keys = T::AuthorityId::all();
 		local_keys.sort();
+		println!("LocalKeys: {:?}", local_keys);
 
 		for (authority_index, key) in authorities.into_iter()
 			.enumerate()
 			.filter_map(|(index, authority)| {
+				println!("Looking: {:?},{:?} in {:?}", index, authority, local_keys);
 				local_keys.binary_search(&authority)
 					.ok()
 					.map(|location| (index as u32, &local_keys[location]))
 			})
 		{
+			println!("Signing.");
 			let network_state = runtime_io::network_state().map_err(|_| OffchainErr::NetworkState)?;
 			let heartbeat_data = Heartbeat {
 				block_number,
@@ -441,6 +449,7 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 
 		// Tell the offchain worker to start making the next session's heartbeats.
 		<GossipAt<T>>::put(<system::Module<T>>::block_number());
+
 
 		// Remember who the authorities are for the new session.
 		Keys::<T>::put(validators.map(|x| x.1).collect::<Vec<_>>());

@@ -121,7 +121,7 @@
 
 use rstd::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use codec::Decode;
-use sr_primitives::{KeyTypeId, AppKey};
+use sr_primitives::{KeyTypeId, RuntimeAppPublic};
 use sr_primitives::weights::SimpleDispatchInfo;
 use sr_primitives::traits::{Convert, Zero, Member, OpaqueKeys};
 use sr_staking_primitives::SessionIndex;
@@ -222,7 +222,7 @@ pub trait SessionHandler<ValidatorId> {
 /// A session handler for specific key type.
 pub trait OneSessionHandler<ValidatorId> {
 	/// The key type expected.
-	type Key: Decode + Default + AppKey;
+	type Key: Decode + Default + RuntimeAppPublic;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
 		where I: Iterator<Item=(&'a ValidatorId, Self::Key)>, ValidatorId: 'a;
@@ -269,7 +269,7 @@ macro_rules! impl_session_handlers {
 			fn on_genesis_session<Ks: OpaqueKeys>(validators: &[(AId, Ks)]) {
 				$(
 					let our_keys: Box<dyn Iterator<Item=_>> = Box::new(validators.iter()
-						.map(|k| (&k.0, k.1.get::<$t::Key>(<$t::Key as AppKey>::ID)
+						.map(|k| (&k.0, k.1.get::<$t::Key>(<$t::Key as RuntimeAppPublic>::ID)
 							.unwrap_or_default())));
 
 					$t::on_genesis_session(our_keys);
@@ -282,10 +282,10 @@ macro_rules! impl_session_handlers {
 			) {
 				$(
 					let our_keys: Box<dyn Iterator<Item=_>> = Box::new(validators.iter()
-						.map(|k| (&k.0, k.1.get::<$t::Key>(<$t::Key as AppKey>::ID)
+						.map(|k| (&k.0, k.1.get::<$t::Key>(<$t::Key as RuntimeAppPublic>::ID)
 							.unwrap_or_default())));
 					let queued_keys: Box<dyn Iterator<Item=_>> = Box::new(queued_validators.iter()
-						.map(|k| (&k.0, k.1.get::<$t::Key>(<$t::Key as AppKey>::ID)
+						.map(|k| (&k.0, k.1.get::<$t::Key>(<$t::Key as RuntimeAppPublic>::ID)
 							.unwrap_or_default())));
 					$t::on_new_session(changed, our_keys, queued_keys);
 				)*
