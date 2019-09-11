@@ -289,7 +289,7 @@ impl<H, B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<C, E, I
 		self.block_import.clone()
 	}
 
-	fn epoch_data(&self, parent: &B::Hash) -> Result<Self::EpochData, consensus_common::Error> {
+	fn epoch_data(&self, parent: &B::Header) -> Result<Self::EpochData, consensus_common::Error> {
 		epoch(self.client.as_ref(), &BlockId::Hash(*parent))
 			.ok_or(consensus_common::Error::InvalidAuthoritiesSet)
 	}
@@ -930,12 +930,17 @@ impl MaybeSpanEpoch {
 	}
 }
 
-/// Extract current epoch data from the runtime.
+/// Extract current epoch data from the runtime. Returns `None` if there is
+/// no epoch to draw data from.
+///
+/// In a chain which does not issue the expected epoch-change digests, this will
+/// return `None`, because there will be no item in the fork-tree.
 fn epoch<B, C>(
 	client: &C,
 	parent_hash: B::Hash,
 	parent_number: NumberFor<B>,
 	slot_num: SlotNumber,
+	epoch_changes: SharedEpochChanges<B>,
 ) -> Option<MaybeSpanEpoch> where
 	B: BlockT,
 	C: ProvideRuntimeApi + ProvideCache<B>,
@@ -959,17 +964,19 @@ fn epoch<B, C>(
 	let next_start = epoch.start_slot + epoch.duration;
 	if slot_num < next_start { return Some(epoch) }
 
+	let epoch_changes = epoch_changes.lock();
+
 	// find_node_where will give you the node in the fork-tree which is an ancestor
 	// of the `parent_hash` by default. if the last epoch was signalled at the parent_hash,
 	// then it won't be returned. we need to create a new fake chain head hash which
 	// "descends" from our parent-hash.
 	let fake_head_hash = {
 		let mut h = parent_hash.clone();
-		// dirty trick: flip the last bit of the parent hash to create a hash
+		// dirty trick: flip the first bit of the parent hash to create a hash
 		// which has not been in the chain before (assuming a strong hash function).
 		h.as_mut()[0] ^= 0b10000000;
 		h
-	}
+	};
 	let is_descendent_of = is_descendent_of(client, Some((fake_head_hash, parent_hash)));
 	let enacted_epoch = epoch_changes.find_node_where(
 		&fake_head_hash,
