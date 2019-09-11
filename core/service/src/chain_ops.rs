@@ -21,6 +21,7 @@ use crate::error;
 use crate::chain_spec::ChainSpec;
 
 #[macro_export]
+/// Export blocks
 macro_rules! export_blocks {
 ($client:ident, $exit:ident, $output:ident, $from:ident, $to:ident, $json:ident) => {{
 	let mut block = $from;
@@ -36,7 +37,7 @@ macro_rules! export_blocks {
 	}
 
 	let (exit_send, exit_recv) = std::sync::mpsc::channel();
-	::std::thread::spawn(move || {
+	std::thread::spawn(move || {
 		let _ = $exit.wait();
 		let _ = exit_send.send(());
 	});
@@ -76,6 +77,7 @@ macro_rules! export_blocks {
 }
 
 #[macro_export]
+/// Import blocks
 macro_rules! import_blocks {
 ($block:ty, $client:ident, $queue:ident, $exit:ident, $input:ident) => {{
 	use consensus_common::import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult};
@@ -119,7 +121,7 @@ macro_rules! import_blocks {
 	}
 
 	let (exit_send, exit_recv) = std::sync::mpsc::channel();
-	::std::thread::spawn(move || {
+	std::thread::spawn(move || {
 		let _ = $exit.wait();
 		let _ = exit_send.send(());
 	});
@@ -204,6 +206,7 @@ macro_rules! import_blocks {
 }
 
 #[macro_export]
+/// Revert a chain
 macro_rules! revert_chain {
 ($client:ident, $blocks:ident) => {{
 	let reverted = $client.revert($blocks)?;
