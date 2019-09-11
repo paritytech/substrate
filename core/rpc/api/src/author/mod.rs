@@ -84,4 +84,3 @@ pub trait AuthorApi<Hash, BlockHash> {
 		id: SubscriptionId
 	) -> Result<bool>;
 }
-

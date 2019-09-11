@@ -89,13 +89,26 @@ pub enum ExecutionStrategy {
 	NativeElseWasm,
 }
 
+/// Storage backend trust level.
+#[derive(Debug, Clone)]
+pub enum BackendTrustLevel {
+	/// Panics from trusted backends are considered justified, and never caught.
+	Trusted,
+	/// Panics from untrusted backend are caught and interpreted as runtime error.
+	/// Untrusted backend may be missing some parts of the trie, so panics are not considered
+	/// fatal.
+	Untrusted,
+}
+
 /// Like `ExecutionStrategy` only it also stores a handler in case of consensus failure.
 #[derive(Clone)]
 pub enum ExecutionManager<F> {
 	/// Execute with the native equivalent if it is compatible with the given wasm module; otherwise fall back to the wasm.
 	NativeWhenPossible,
-	/// Use the given wasm module.
-	AlwaysWasm,
+	/// Use the given wasm module. The backend on which code is executed code could be
+	/// trusted to provide all storage or not (i.e. the light client cannot be trusted to provide
+	/// for all storage queries since the storage entries it has come from an external node).
+	AlwaysWasm(BackendTrustLevel),
 	/// Run with both the wasm and the native variant (if compatible). Call `F` in the case of any discrepency.
 	Both(F),
 	/// First native, then if that fails or is not possible, wasm.
@@ -106,7 +119,7 @@ impl<'a, F> From<&'a ExecutionManager<F>> for ExecutionStrategy {
 	fn from(s: &'a ExecutionManager<F>) -> Self {
 		match *s {
 			ExecutionManager::NativeWhenPossible => ExecutionStrategy::NativeWhenPossible,
-			ExecutionManager::AlwaysWasm => ExecutionStrategy::AlwaysWasm,
+			ExecutionManager::AlwaysWasm(_) => ExecutionStrategy::AlwaysWasm,
 			ExecutionManager::NativeElseWasm => ExecutionStrategy::NativeElseWasm,
 			ExecutionManager::Both(_) => ExecutionStrategy::Both,
 		}
@@ -119,7 +132,7 @@ impl ExecutionStrategy {
 		self,
 	) -> ExecutionManager<DefaultHandler<R, E>> {
 		match self {
-			ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
+			ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm(BackendTrustLevel::Trusted),
 			ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
 			ExecutionStrategy::NativeElseWasm => ExecutionManager::NativeElseWasm,
 			ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
@@ -137,6 +150,16 @@ impl ExecutionStrategy {
 /// Evaluate to ExecutionManager::NativeElseWasm, without having to figure out the type.
 pub fn native_else_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
 	ExecutionManager::NativeElseWasm
+}
+
+/// Evaluate to ExecutionManager::AlwaysWasm with trusted backend, without having to figure out the type.
+fn always_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
+	ExecutionManager::AlwaysWasm(BackendTrustLevel::Trusted)
+}
+
+/// Evaluate ExecutionManager::AlwaysWasm with untrusted backend, without having to figure out the type.
+fn always_untrusted_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
+	ExecutionManager::AlwaysWasm(BackendTrustLevel::Untrusted)
 }
 
 /// The substrate state machine.
@@ -375,7 +398,11 @@ impl<'a, B, H, N, T, O, Exec> StateMachine<'a, B, H, N, T, O, Exec> where
 						orig_prospective,
 					)
 				},
-				ExecutionManager::AlwaysWasm => {
+				ExecutionManager::AlwaysWasm(trust_level) => {
+					let _abort_guard = match trust_level {
+						BackendTrustLevel::Trusted => None,
+						BackendTrustLevel::Untrusted => Some(panic_handler::AbortGuard::never_abort()),
+					};
 					let res = self.execute_aux(compute_tx, false, native_call);
 					(res.0, res.2, res.3)
 				},
@@ -444,7 +471,7 @@ where
 	);
 
 	let (result, _, _) = sm.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
-		native_else_wasm(),
+		always_wasm(),
 		false,
 		None,
 	)?;
@@ -490,7 +517,7 @@ where
 	);
 
 	sm.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
-		native_else_wasm(),
+		always_untrusted_wasm(),
 		false,
 		None,
 	).map(|(result, _, _)| result.into_encoded())
