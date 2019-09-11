@@ -280,6 +280,8 @@ cfg_if! {
 				///
 				/// Returns the signature generated for the message `sr25519`.
 				fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic);
+				/// Run various tests against storage.
+				fn test_storage();
 			}
 		}
 	} else {
@@ -322,6 +324,8 @@ cfg_if! {
 				///
 				/// Returns the signature generated for the message `sr25519`.
 				fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic);
+				/// Run various tests against storage.
+				fn test_storage();
 			}
 		}
 	}
@@ -590,6 +594,11 @@ cfg_if! {
 				fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic) {
 					test_sr25519_crypto()
 				}
+
+				fn test_storage() {
+					test_read_storage();
+					test_read_child_storage();
+				}
 			}
 
 			impl aura_primitives::AuraApi<Block, AuraId> for Runtime {
@@ -805,6 +814,11 @@ cfg_if! {
 				fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic) {
 					test_sr25519_crypto()
 				}
+
+				fn test_storage() {
+					test_read_storage();
+					test_read_child_storage();
+				}
 			}
 
 			impl aura_primitives::AuraApi<Block, AuraId> for Runtime {
@@ -885,6 +899,46 @@ fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic) {
 	let signature = public0.sign(&"sr25519").expect("Generates a valid `sr25519` signature.");
 	assert!(public0.verify(&"sr25519", &signature));
 	(signature, public0)
+}
+
+fn test_read_storage() {
+	const KEY: &[u8] = b":read_storage";
+	runtime_io::set_storage(KEY, b"test");
+
+	let mut v = [0u8; 4];
+	let r = runtime_io::read_storage(
+		KEY,
+		&mut v,
+		0
+	);
+	assert_eq!(r, Some(4));
+	assert_eq!(&v, b"test");
+
+	let mut v = [0u8; 4];
+	let r = runtime_io::read_storage(KEY, &mut v, 8);
+	assert_eq!(r, Some(4));
+	assert_eq!(&v, &[0, 0, 0, 0]);
+}
+
+fn test_read_child_storage() {
+	const CHILD_KEY: &[u8] = b":child_storage:default:read_child_storage";
+	const KEY: &[u8] = b":read_child_storage";
+	runtime_io::set_child_storage(CHILD_KEY, KEY, b"test");
+
+	let mut v = [0u8; 4];
+	let r = runtime_io::read_child_storage(
+		CHILD_KEY,
+		KEY,
+		&mut v,
+		0
+	);
+	assert_eq!(r, Some(4));
+	assert_eq!(&v, b"test");
+
+	let mut v = [0u8; 4];
+	let r = runtime_io::read_child_storage(CHILD_KEY, KEY, &mut v, 8);
+	assert_eq!(r, Some(4));
+	assert_eq!(&v, &[0, 0, 0, 0]);
 }
 
 #[cfg(test)]
@@ -980,5 +1034,16 @@ mod tests {
 		// Allocation of 1024k while having ~2048k should succeed.
 		let ret = runtime_api.vec_with_capacity(&new_block_id, 1048576);
 		assert!(ret.is_ok());
+	}
+
+	#[test]
+	fn test_storage() {
+		let client = TestClientBuilder::new()
+			.set_execution_strategy(ExecutionStrategy::Both)
+			.build();
+		let runtime_api = client.runtime_api();
+		let block_id = BlockId::Number(client.info().chain.best_number);
+
+		runtime_api.test_storage(&block_id).unwrap();
 	}
 }
