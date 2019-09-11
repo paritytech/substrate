@@ -115,6 +115,9 @@ impl FreeingBumpHeapAllocator {
 
 	/// Gets requested number of bytes to allocate and returns a pointer.
 	/// The maximum size which can be allocated at once is 16 MiB.
+	/// There is no minimum size, but whatever size is passed into
+	/// this function is rounded to the next power of two. If the requested
+	/// size is below 8 bytes it will be rounded up to 8 bytes.
 	pub fn allocate(&mut self, size: WordSize) -> Result<Pointer<u8>> {
 		if size > MAX_POSSIBLE_ALLOCATION {
 			return Err(Error::RequestedAllocationTooLarge);
