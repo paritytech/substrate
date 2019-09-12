@@ -293,6 +293,7 @@ parameter_types! {
 	pub const CandidacyBond: Balance = 10 * DOLLARS;
 	pub const VotingBond: Balance = 1 * DOLLARS;
 	pub const VotingFee: Balance = 2 * DOLLARS;
+	pub const MinimumVotingLock: Balance = 1 * DOLLARS;
 	pub const PresentSlashPerVoter: Balance = 1 * CENTS;
 	pub const CarryCount: u32 = 6;
 	// one additional vote should go by before an inactive voter can be reaped.
@@ -312,6 +313,7 @@ impl elections::Trait for Runtime {
 	type CandidacyBond = CandidacyBond;
 	type VotingBond = VotingBond;
 	type VotingFee = VotingFee;
+	type MinimumVotingLock = MinimumVotingLock;
 	type PresentSlashPerVoter = PresentSlashPerVoter;
 	type CarryCount = CarryCount;
 	type InactiveGracePeriod = InactiveGracePeriod;
