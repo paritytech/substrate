@@ -129,19 +129,23 @@ pub enum CellStatus {
 
 const MODULE_ID: LockIdentifier = *b"py/elect";
 
+/// Number of voters grouped in one chunk.
 pub const VOTER_SET_SIZE: usize = 64;
+/// NUmber of approvals grouped in one chunk.
 pub const APPROVAL_SET_SIZE: usize = 8;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 
+/// Index used to access chunks.
 type SetIndex = u32;
+/// Index used to count voting rounds.
 pub type VoteIndex = u32;
-
-// all three must be in sync.
+/// Underlying data type of the approvals.
 type ApprovalFlag = u32;
-pub const APPROVAL_FLAG_LEN: usize = 32;
+/// Number of approval flags that can fit into [`ApprovalFlag`] type.
+const APPROVAL_FLAG_LEN: usize = 32;
 
 pub trait Trait: system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -347,8 +351,8 @@ decl_module! {
 			Self::do_set_approvals(who, votes, index, hint, value)
 		}
 
-		/// Set candidate approvals from a proxy. Approval slots stay valid as long as candidates in those slots
-		/// are registered.
+		/// Set candidate approvals from a proxy. Approval slots stay valid as long as candidates in
+		/// those slots are registered.
 		///
 		/// # <weight>
 		/// - Same as `set_approvals` with one additional storage read.
@@ -365,8 +369,8 @@ decl_module! {
 		}
 
 		/// Remove a voter. For it not to be a bond-consuming no-op, all approved candidate indices
-		/// must now be either unregistered or registered to a candidate that registered the slot after
-		/// the voter gave their last approval set.
+		/// must now be either unregistered or registered to a candidate that registered the slot
+		/// after the voter gave their last approval set.
 		///
 		/// Both indices must be provided as explained in [`voter_at`] function.
 		///
@@ -390,7 +394,8 @@ decl_module! {
 			ensure!(!Self::presentation_active(), "cannot reap during presentation period");
 			ensure!(Self::voter_info(&reporter).is_some(), "reporter must be a voter");
 
-			let info = Self::voter_info(&who).ok_or("target for inactivity cleanup must be active")?;
+			let info = Self::voter_info(&who)
+				.ok_or("target for inactivity cleanup must be active")?;
 			let last_active = info.last_active;
 
 			ensure!(assumed_vote_index == Self::vote_index(), "vote index not current");
@@ -429,8 +434,8 @@ decl_module! {
 			);
 
 			if valid {
-				// This only fails if `reporter` doesn't exist, which it clearly must do since its the origin.
-				// Still, it's no more harmful to propagate any error at this point.
+				// This only fails if `reporter` doesn't exist, which it clearly must do since its
+				// the origin. Still, it's no more harmful to propagate any error at this point.
 				T::Currency::repatriate_reserved(&who, &reporter, T::VotingBond::get())?;
 				Self::deposit_event(RawEvent::VoterReaped(who, reporter));
 			} else {
@@ -506,9 +511,10 @@ decl_module! {
 			CandidateCount::put(count as u32 + 1);
 		}
 
-		/// Claim that `signed` is one of the top Self::carry_count() + current_vote().1 candidates.
-		/// Only works if the `block_number >= current_vote().0` and `< current_vote().0 + presentation_duration()`
-		/// `signed` should have at least
+		/// Claim that `candidate` is one of the top `carry_count + desired_seats` candidates. Only
+		/// works iff the presentation period is active. `candidate` should have at least collected
+		/// some non-zero `total` votes and `origin` must have enough funds to pay for a potential
+		/// slash.
 		///
 		/// # <weight>
 		/// - O(voters) compute.
@@ -529,7 +535,8 @@ decl_module! {
 
 			let candidate = T::Lookup::lookup(candidate)?;
 			ensure!(index == Self::vote_index(), "index not current");
-			let (_, _, expiring) = Self::next_finalize().ok_or("cannot present outside of presentation period")?;
+			let (_, _, expiring) = Self::next_finalize()
+				.ok_or("cannot present outside of presentation period")?;
 			let bad_presentation_punishment =
 				T::PresentSlashPerVoter::get()
 				* BalanceOf::<T>::from(Self::voter_count() as u32);
@@ -538,11 +545,15 @@ decl_module! {
 				"presenter must have sufficient slashable funds"
 			);
 
-			let mut leaderboard = Self::leaderboard().ok_or("leaderboard must exist while present phase active")?;
+			let mut leaderboard = Self::leaderboard()
+				.ok_or("leaderboard must exist while present phase active")?;
 			ensure!(total > leaderboard[0].0, "candidate not worthy of leaderboard");
 
 			if let Some(p) = Self::members().iter().position(|&(ref c, _)| c == &candidate) {
-				ensure!(p < expiring.len(), "candidate must not form a duplicated member if elected");
+				ensure!(
+					p < expiring.len(),
+					"candidate must not form a duplicated member if elected"
+				);
 			}
 
 			let voters = Self::all_voters();
@@ -691,8 +702,8 @@ impl<T: Trait> Module<T> {
 			} else {
 				// next tally begins once enough members expire to bring members below desired.
 				if desired_seats <= coming {
-					// the entire amount of desired seats is less than those new members - we'll have
-					// to wait until they expire.
+					// the entire amount of desired seats is less than those new members - we'll
+					// have to wait until they expire.
 					Some(next_possible + Self::term_duration())
 				} else {
 					Some(c[c.len() - (desired_seats - coming) as usize].1)
@@ -744,11 +755,18 @@ impl<T: Trait> Module<T> {
 
 		ensure!(!Self::presentation_active(), "no approval changes during presentation period");
 		ensure!(index == Self::vote_index(), "incorrect vote index");
-		ensure!(!candidates_len.is_zero(), "amount of candidates to receive approval votes should be non-zero");
-		// Prevent a vote from voters that provide a list of votes that exceeds the candidates length
-		// since otherwise an attacker may be able to submit a very long list of `votes` that far exceeds
-		// the amount of candidates and waste more computation than a reasonable voting bond would cover.
-		ensure!(candidates_len >= votes.len(), "amount of candidate votes cannot exceed amount of candidates");
+		ensure!(
+			!candidates_len.is_zero(),
+			"amount of candidates to receive approval votes should be non-zero"
+		);
+		// Prevent a vote from voters that provide a list of votes that exceeds the candidates
+		// length since otherwise an attacker may be able to submit a very long list of `votes` that
+		// far exceeds the amount of candidates and waste more computation than a reasonable voting
+		// bond would cover.
+		ensure!(
+			candidates_len >= votes.len(),
+			"amount of candidate votes cannot exceed amount of candidates"
+		);
 		ensure!(value >= T::MinimumVotingLock::get(), "locked value must be more than limit");
 
 		// Amount to be locked up.
@@ -834,11 +852,14 @@ impl<T: Trait> Module<T> {
 		let members = Self::members();
 		let desired_seats = Self::desired_seats() as usize;
 		let number = <system::Module<T>>::block_number();
-		let expiring = members.iter().take_while(|i| i.1 <= number).map(|i| i.0.clone()).collect::<Vec<_>>();
+		let expiring =
+			members.iter().take_while(|i| i.1 <= number).map(|i| i.0.clone()).collect::<Vec<_>>();
 		let retaining_seats = members.len() - expiring.len();
 		if retaining_seats < desired_seats {
 			let empty_seats = desired_seats - retaining_seats;
-			<NextFinalize<T>>::put((number + Self::presentation_duration(), empty_seats as u32, expiring));
+			<NextFinalize<T>>::put(
+				(number + Self::presentation_duration(), empty_seats as u32, expiring)
+			);
 
 			// initialize leaderboard.
 			let leaderboard_size = empty_seats + T::CarryCount::get() as usize;
@@ -848,14 +869,16 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Finalize the vote, removing each of the `removals` and inserting `seats` of the most approved
-	/// candidates in their place. If the total number of members is less than the desired membership
-	/// a new vote is started.
-	/// Clears all presented candidates, returning the bond of the elected ones.
+	/// Finalize the vote, removing each of the `removals` and inserting `seats` of the most
+	/// approved candidates in their place. If the total number of members is less than the desired
+	/// membership a new vote is started. Clears all presented candidates, returning the bond of the
+	/// elected ones.
 	fn finalize_tally() -> Result {
 		let (_, coming, expiring): (T::BlockNumber, u32, Vec<T::AccountId>) =
-			<NextFinalize<T>>::take().ok_or("finalize can only be called after a tally is started.")?;
-		let leaderboard: Vec<(BalanceOf<T>, T::AccountId)> = <Leaderboard<T>>::take().unwrap_or_default();
+			<NextFinalize<T>>::take()
+				.ok_or("finalize can only be called after a tally is started.")?;
+		let leaderboard: Vec<(BalanceOf<T>, T::AccountId)> = <Leaderboard<T>>::take()
+			.unwrap_or_default();
 		let new_expiry = <system::Module<T>>::block_number() + Self::term_duration();
 
 		// return bond to winners.
@@ -925,9 +948,11 @@ impl<T: Trait> Module<T> {
 			}
 		}
 		// discard any superfluous slots.
-		if let Some(last_index) = new_candidates.iter().rposition(|c| *c != T::AccountId::default()) {
-			new_candidates.truncate(last_index + 1);
-		}
+		if let Some(last_index) = new_candidates
+			.iter()
+			.rposition(|c| *c != T::AccountId::default()) {
+				new_candidates.truncate(last_index + 1);
+			}
 
 		Self::deposit_event(RawEvent::TallyFinalized(incoming, outgoing));
 
@@ -981,8 +1006,8 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// A more sophisticated version of `voter_at`. Will be kept separate as most often it is an overdue
-	/// compared to `voter_at`. Only used when setting approvals.
+	/// A more sophisticated version of `voter_at`. Will be kept separate as most often it is an
+	/// overdue compared to `voter_at`. Only used when setting approvals.
 	fn cell_status(set_index: SetIndex, vec_index: usize) -> CellStatus {
 		let set = Self::voters(set_index);
 		if vec_index < set.len() {
@@ -1002,13 +1027,15 @@ impl<T: Trait> Module<T> {
 		approvals_flag_vec
 			.chunks(APPROVAL_SET_SIZE)
 			.enumerate()
-			.for_each(|(index, slice)| <ApprovalsOf<T>>::insert((who.clone(), index as SetIndex), slice.to_vec()));
+			.for_each(|(index, slice)| <ApprovalsOf<T>>::insert(
+				(who.clone(), index as SetIndex), slice.to_vec())
+			);
 	}
 
 	/// shorthand for fetching a specific approval of a voter at a specific (global) index.
 	///
-	/// Using this function to read a vote is preferred as it reads `APPROVAL_SET_SIZE` items of type
-	/// `ApprovalFlag` from storage at most; not all of them.
+	/// Using this function to read a vote is preferred as it reads `APPROVAL_SET_SIZE` items of
+	/// type `ApprovalFlag` from storage at most; not all of them.
 	///
 	/// Note that false is returned in case of no-vote or an explicit `false`.
 	fn approvals_of_at(who: &T::AccountId, index: usize) -> bool {
@@ -1062,7 +1089,9 @@ impl<T: Trait> Module<T> {
 		let mut result = Vec::with_capacity(chunk.len());
 		if chunk.is_empty() { return vec![] }
 		chunk.into_iter()
-			.map(|num| (0..APPROVAL_FLAG_LEN).map(|bit| Self::bit_at(num, bit)).collect::<Vec<bool>>())
+			.map(|num|
+				(0..APPROVAL_FLAG_LEN).map(|bit| Self::bit_at(num, bit)).collect::<Vec<bool>>()
+			)
 			.for_each(|c| {
 				let last_approve = match c.iter().rposition(|n| *n) {
 					Some(index) => index + 1,
