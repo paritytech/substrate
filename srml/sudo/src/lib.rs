@@ -116,7 +116,7 @@ decl_module! {
 		/// - One DB write (event).
 		/// - Unknown weight of derivative `proposal` execution.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(0)]
+		#[weight = SimpleDispatchInfo::FreeOperational]
 		fn sudo(origin, proposal: Box<T::Proposal>) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
