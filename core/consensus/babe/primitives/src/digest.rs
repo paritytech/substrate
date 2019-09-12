@@ -17,12 +17,10 @@
 //! Private implementation details of BABE digests.
 
 #[cfg(feature = "std")]
-use super::AuthoritySignature;
-#[cfg(feature = "std")]
-use super::{BABE_ENGINE_ID, Epoch};
+use super::{BABE_ENGINE_ID, AuthoritySignature};
 #[cfg(not(feature = "std"))]
 use super::{VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH};
-use super::{AuthorityIndex, SlotNumber};
+use super::{AuthorityId, AuthorityIndex, SlotNumber, BabeAuthorityWeight};
 #[cfg(feature = "std")]
 use sr_primitives::{DigestItem, generic::OpaqueDigestItemId};
 #[cfg(feature = "std")]
@@ -179,6 +177,17 @@ impl Decode for BabePreDigest {
 	}
 }
 
+/// Information about the next epoch. This is broadcast in the first block
+/// of the epoch.
+#[derive(Clone, Encode, Decode)]
+pub struct NextEpochDescriptor {
+	/// The authorities.
+	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
+
+	/// The value of randomness to use for the slot-assignment.
+	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+}
+
 /// A digest item which is usable with BABE consensus.
 #[cfg(feature = "std")]
 pub trait CompatibleDigestItem: Sized {
@@ -195,7 +204,7 @@ pub trait CompatibleDigestItem: Sized {
 	fn as_babe_seal(&self) -> Option<AuthoritySignature>;
 
 	/// If this item is a BABE epoch, return it.
-	fn as_babe_epoch(&self) -> Option<Epoch>;
+	fn as_next_epoch_descriptor(&self) -> Option<NextEpochDescriptor>;
 }
 
 #[cfg(feature = "std")]
@@ -218,7 +227,7 @@ impl<Hash> CompatibleDigestItem for DigestItem<Hash> where
 		self.try_to(OpaqueDigestItemId::Seal(&BABE_ENGINE_ID))
 	}
 
-	fn as_babe_epoch(&self) -> Option<Epoch> {
+	fn as_next_epoch_descriptor(&self) -> Option<NextEpochDescriptor> {
 		self.try_to(OpaqueDigestItemId::Consensus(&BABE_ENGINE_ID))
 	}
 }

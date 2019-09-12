@@ -157,6 +157,6 @@ decl_runtime_apis! {
 		/// only the value provided by this type at genesis will be used.
 		///
 		/// Dynamic configuration may be supported in the future.
-		fn startup_data() -> BabeConfiguration;
+		fn configuration() -> BabeConfiguration;
 	}
 }
