@@ -77,8 +77,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	/// A handle to a `BlockImport`.
 	fn block_import(&self) -> Arc<Mutex<Self::BlockImport>>;
 
-	/// Returns the epoch data necessary for authoring.
-	fn epoch_data(&self, header: &B::Header) -> Result<Self::EpochData, consensus_common::Error>;
+	/// Returns the epoch data necessary for authoring. For time-dependent epochs,
+	/// use the provided slot number as a canonical source of time.
+	fn epoch_data(&self, header: &B::Header, slot_number: u64) -> Result<Self::EpochData, consensus_common::Error>;
 
 	/// Returns the number of authorities given the epoch data.
 	fn authorities_len(&self, epoch_data: &Self::EpochData) -> usize;
@@ -120,7 +121,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		let (timestamp, slot_number, slot_duration) =
 			(slot_info.timestamp, slot_info.number, slot_info.duration);
 
-		let epoch_data = match self.epoch_data(&chain_head) {
+		let epoch_data = match self.epoch_data(&chain_head, slot_number) {
 			Ok(epoch_data) => epoch_data,
 			Err(err) => {
 				warn!("Unable to fetch epoch data at block {:?}: {:?}", chain_head.hash(), err);
