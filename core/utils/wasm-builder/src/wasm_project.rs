@@ -221,7 +221,10 @@ fn create_wasm_workspace_project(wasm_workspace: &Path, cargo_manifest: &Path) {
 	if let Some(mut patch) = workspace_toml.remove("patch").and_then(|p| p.try_into::<Table>().ok()) {
 		// Iterate over all patches and make the patch path absolute from the workspace root path.
 		patch.iter_mut()
-			.filter_map(|p| p.1.as_table_mut())
+			.filter_map(|p|
+				p.1.as_table_mut().map(|t| t.iter_mut().filter_map(|t| t.1.as_table_mut()))
+			)
+			.flatten()
 			.for_each(|p|
 				p.iter_mut()
 					.filter(|(k, _)| k == &"path")
