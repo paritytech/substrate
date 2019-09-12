@@ -16,12 +16,11 @@
 
 use primitives::{
 	blake2_128, blake2_256, twox_128, twox_256, twox_64, ed25519, Blake2Hasher, sr25519, Pair,
+	traits::Externalities, child_storage_key::ChildStorageKey,
 };
 // Switch to this after PoC-3
 // pub use primitives::BlakeHasher;
-pub use substrate_state_machine::{
-	Externalities, BasicExternalities, TestExternalities, ChildStorageKey,
-};
+pub use substrate_state_machine::{BasicExternalities, TestExternalities};
 
 use environmental::environmental;
 use primitives::{offchain, hexdisplay::HexDisplay, H256};
@@ -40,7 +39,7 @@ impl<T: Hasher> HasherBounds for T {}
 ///
 /// Panicking here is aligned with what the `without_std` environment would do
 /// in the case of an invalid child storage key.
-fn child_storage_key_or_panic(storage_key: &[u8]) -> ChildStorageKey<Blake2Hasher> {
+fn child_storage_key_or_panic(storage_key: &[u8]) -> ChildStorageKey {
 	match ChildStorageKey::from_slice(storage_key) {
 		Some(storage_key) => storage_key,
 		None => panic!("child storage key is invalid"),
@@ -55,9 +54,9 @@ impl StorageApi for () {
 
 	fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
 		ext::with(|ext| ext.storage(key).map(|value| {
-			let value = &value[value_offset..];
-			let written = std::cmp::min(value.len(), value_out.len());
-			value_out[..written].copy_from_slice(&value[..written]);
+			let data = &value[value_offset.min(value.len())..];
+			let written = std::cmp::min(data.len(), value_out.len());
+			value_out[..written].copy_from_slice(&data[..written]);
 			value.len()
 		})).expect("read_storage cannot be called outside of an Externalities-provided environment.")
 	}
@@ -86,9 +85,9 @@ impl StorageApi for () {
 			let storage_key = child_storage_key_or_panic(storage_key);
 			ext.child_storage(storage_key, key)
 				.map(|value| {
-					let value = &value[value_offset..];
-					let written = std::cmp::min(value.len(), value_out.len());
-					value_out[..written].copy_from_slice(&value[..written]);
+					let data = &value[value_offset.min(value.len())..];
+					let written = std::cmp::min(data.len(), value_out.len());
+					value_out[..written].copy_from_slice(&data[..written]);
 					value.len()
 				})
 		})
@@ -334,9 +333,9 @@ impl OffchainApi for () {
 		}, "is_validator can be called only in the offchain worker context")
 	}
 
-	fn submit_transaction<T: codec::Encode>(data: &T) -> Result<(), ()> {
+	fn submit_transaction(data: Vec<u8>) -> Result<(), ()> {
 		with_offchain(|ext| {
-			ext.submit_transaction(codec::Encode::encode(data))
+			ext.submit_transaction(data)
 		}, "submit_transaction can be called only in the offchain worker context")
 	}
 

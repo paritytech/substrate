@@ -207,7 +207,7 @@ fn run_one_test() {
 		let peer = net.peer(*peer_id);
 		let client = peer.client().as_full().expect("Only full clients are used in tests").clone();
 		let select_chain = peer.select_chain().expect("Full client has select_chain");
-		
+
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 		let keystore = keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
 		keystore.write().insert_ephemeral_from_seed::<AuthorityPair>(seed).expect("Generates authority key");
