@@ -176,14 +176,14 @@ mod tests {
 
 	#[test]
 	fn does_not_abort() {
-		set("test");
+		set("test", "1.2.3");
 		let _guard = AbortGuard::force_unwind();
 		::std::panic::catch_unwind(|| panic!()).ok();
 	}
 
 	#[test]
 	fn does_not_abort_after_never_abort() {
-		set("test");
+		set("test", "1.2.3");
 		let _guard = AbortGuard::never_abort();
 		let _guard = AbortGuard::force_abort();
 		std::panic::catch_unwind(|| panic!()).ok();
