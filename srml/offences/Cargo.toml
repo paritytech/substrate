@@ -15,7 +15,7 @@ support = { package = "srml-support", path = "../support", default-features = fa
 system = { package = "srml-system", path = "../system", default-features = false }
 
 [dev-dependencies]
-runtime-io ={ package = "sr-io", path = "../../core/sr-io", default-features = false }
+runtime-io = { package = "sr-io", path = "../../core/sr-io" }
 substrate-primitives = { path = "../../core/primitives" }
 
 [features]
@@ -29,5 +29,4 @@ std = [
 	"sr-staking-primitives/std",
 	"support/std",
 	"system/std",
-	"runtime-io/std",
 ]

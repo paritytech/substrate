@@ -15,7 +15,7 @@ srml-system = { path = "../system", default-features = false }
 
 [dev-dependencies]
 primitives = { package = "substrate-primitives",  path = "../../core/primitives", default-features = false }
-runtime-io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
+runtime-io = { package = "sr-io", path = "../../core/sr-io" }
 
 [features]
 default = ["std"]
@@ -27,5 +27,4 @@ std = [
 	"sr-primitives/std",
 	"srml-system/std",
 	"inherents/std",
-	"runtime-io/std",
 ]

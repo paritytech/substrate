@@ -27,5 +27,4 @@ std = [
 	"support/std",
 	"serde",
 	"system/std",
-	"runtime-io/std",
 ]
