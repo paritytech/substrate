@@ -25,13 +25,15 @@ use sr_primitives::{
 	impl_opaque_keys, key_types::DUMMY,
 };
 use sr_version::RuntimeVersion;
-use support::srml_support::{impl_outer_origin, parameter_types};
+use support::{impl_outer_origin, parameter_types};
 use runtime_io;
 use primitives::{H256, Blake2Hasher};
 
 impl_outer_origin!{
 	pub enum Origin for Test {}
 }
+
+type DummyValidatorId = u64;
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -56,7 +58,7 @@ impl system::Trait for Test {
 	type Hash = H256;
 	type Version = Version;
 	type Hashing = sr_primitives::traits::BlakeTwo256;
-	type AccountId = u64;
+	type AccountId = DummyValidatorId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type WeightMultiplierUpdate = ();
@@ -76,9 +78,9 @@ impl_opaque_keys! {
 
 impl session::Trait for Test {
 	type Event = ();
-	type ValidatorId = u64;
+	type ValidatorId = <Self as system::Trait>::AccountId;
 	type ShouldEndSession = Babe;
-	type SessionHandler = (Babe,);
+	type SessionHandler = (Babe,Babe,);
 	type OnSessionEnding = ();
 	type ValidatorIdOf = ();
 	type SelectInitialValidators = ();
@@ -96,7 +98,7 @@ impl Trait for Test {
 	type ExpectedBlockTime = ExpectedBlockTime;
 }
 
-pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blake2Hasher> {
+pub fn new_test_ext(authorities: Vec<DummyValidatorId>) -> runtime_io::TestExternalities<Blake2Hasher> {
 	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	GenesisConfig {
 		authorities: authorities.into_iter().map(|a| (UintAuthorityId(a).to_public_key(), 1)).collect(),
