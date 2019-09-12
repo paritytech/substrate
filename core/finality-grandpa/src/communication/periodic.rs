@@ -178,10 +178,10 @@ impl<B: BlockT, N> BlockAnnouncer<B, N> {
 
 			self.latest_voted_blocks.push_back(block);
 
-			return true;
+			true
+		} else {
+			false
 		}
-
-		false
 	}
 
 	fn reset_delay(&mut self) {
@@ -208,16 +208,17 @@ impl<B: BlockT, N: Network<B>> Future for BlockAnnouncer<B, N> {
 			}
 		}
 
-		// after the delay fires announce all blocks that we have stored. note
-		// that this only happens if we don't receive any new blocks above for
-		// the duration of `reannounce_after`. has to be done in a loop because
-		// it needs to be polled after re-scheduling.
+		// check the reannouncement delay timer, has to be done in a loop
+		// because it needs to be polled after re-scheduling.
 		loop {
 			match self.delay.poll() {
 				Err(e) => {
 					warn!(target: "afg", "Error in periodic block announcer timer: {:?}", e);
 					self.reset_delay();
 				},
+				// after the delay fires announce all blocks that we have
+				// stored. note that this only happens if we don't receive any
+				// new blocks above for the duration of `reannounce_after`.
 				Ok(Async::Ready(())) => {
 					self.reset_delay();
 
