@@ -25,7 +25,7 @@ use sr_primitives::{
 	impl_opaque_keys, key_types::DUMMY,
 };
 use sr_version::RuntimeVersion;
-use srml_support::{impl_outer_origin, parameter_types};
+use support::srml_support::{impl_outer_origin, parameter_types};
 use runtime_io;
 use primitives::{H256, Blake2Hasher};
 
