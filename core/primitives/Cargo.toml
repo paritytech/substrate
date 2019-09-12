@@ -38,7 +38,7 @@ substrate-serializer = { path = "../serializer" }
 pretty_assertions = "0.6.1"
 hex-literal = "0.2.1"
 rand = "0.7.0"
-criterion = "0.3.0"
+criterion = "0.2.11"
 
 [[bench]]
 name = "benches"
