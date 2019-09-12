@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 log = "0.4.8"
 tokio = "0.1.22"
-futures = "0.1.28"
+futures = "0.1.29"
 exit-future = "0.1.4"
 jsonrpc-core = "13.1.0"
 cli = { package = "substrate-cli", path = "../../core/cli" }

@@ -108,29 +108,18 @@ type TLightClient<TBl, TRtApi, TExecDisp> = Client<
 /// Light client backend type.
 type TLightBackend<TBl> = client::light::backend::Backend<
 	client_db::light::LightStorage<TBl>,
-	network::OnDemand<TBl>,
 	Blake2Hasher,
 >;
 
 /// Light call executor type.
-type TLightCallExecutor<TBl, TExecDisp> = client::light::call_executor::RemoteOrLocalCallExecutor<
-	TBl,
+type TLightCallExecutor<TBl, TExecDisp> = client::light::call_executor::GenesisCallExecutor<
 	client::light::backend::Backend<
 		client_db::light::LightStorage<TBl>,
-		network::OnDemand<TBl>,
 		Blake2Hasher
-	>,
-	client::light::call_executor::RemoteCallExecutor<
-		client::light::blockchain::Blockchain<
-			client_db::light::LightStorage<TBl>,
-			network::OnDemand<TBl>
-		>,
-		network::OnDemand<TBl>,
 	>,
 	client::LocalCallExecutor<
 		client::light::backend::Backend<
 			client_db::light::LightStorage<TBl>,
-			network::OnDemand<TBl>,
 			Blake2Hasher
 		>,
 		NativeExecutor<TExecDisp>
@@ -240,11 +229,10 @@ where TGen: Serialize + DeserializeOwned + BuildStorage {
 		let light_blockchain = client::light::new_light_blockchain(db_storage);
 		let fetch_checker = Arc::new(client::light::new_fetch_checker(light_blockchain.clone(), executor.clone()));
 		let fetcher = Arc::new(network::OnDemand::new(fetch_checker));
-		let backend = client::light::new_light_backend(light_blockchain, fetcher.clone());
+		let backend = client::light::new_light_backend(light_blockchain);
 		let remote_blockchain = backend.remote_blockchain();
 		let client = Arc::new(client::light::new_light(
 			backend.clone(),
-			fetcher.clone(),
 			&config.chain_spec,
 			executor,
 		)?);
@@ -459,15 +447,22 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 	/// Defines which import queue to use.
 	pub fn with_import_queue_and_opt_fprb<UImpQu, UFprb>(
 		self,
-		builder: impl FnOnce(&Configuration<TCfg, TGen>, Arc<TCl>, Arc<Backend>, Option<TSc>, Arc<TExPool>)
-			-> Result<(UImpQu, Option<UFprb>), Error>
+		builder: impl FnOnce(
+			&Configuration<TCfg, TGen>,
+			Arc<TCl>,
+			Arc<Backend>,
+			Option<TFchr>,
+			Option<TSc>,
+			Arc<TExPool>,
+		) -> Result<(UImpQu, Option<UFprb>), Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, UImpQu, UFprb, TFpp,
 		TNetP, TExPool, TRpc, TRpcB, Backend>, Error>
-	where TSc: Clone {
+	where TSc: Clone, TFchr: Clone {
 		let (import_queue, fprb) = builder(
 			&self.config,
 			self.client.clone(),
 			self.backend.clone(),
+			self.fetcher.clone(),
 			self.select_chain.clone(),
 			self.transaction_pool.clone()
 		)?;
@@ -494,12 +489,21 @@ impl<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPo
 	/// Defines which import queue to use.
 	pub fn with_import_queue_and_fprb<UImpQu, UFprb>(
 		self,
-		builder: impl FnOnce(&Configuration<TCfg, TGen>, Arc<TCl>, Arc<Backend>, Option<TSc>, Arc<TExPool>)
-			-> Result<(UImpQu, UFprb), Error>
+		builder: impl FnOnce(
+			&Configuration<TCfg, TGen>,
+			Arc<TCl>,
+			Arc<Backend>,
+			Option<TFchr>,
+			Option<TSc>,
+			Arc<TExPool>,
+		) -> Result<(UImpQu, UFprb), Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCfg, TGen, TCl, TFchr, TSc, UImpQu, UFprb, TFpp,
 			TNetP, TExPool, TRpc, TRpcB, Backend>, Error>
-	where TSc: Clone {
-		self.with_import_queue_and_opt_fprb(|cfg, cl, b, sc, tx| builder(cfg, cl, b, sc, tx).map(|(q, f)| (q, Some(f))))
+	where TSc: Clone, TFchr: Clone {
+		self.with_import_queue_and_opt_fprb(|cfg, cl, b, f, sc, tx|
+			builder(cfg, cl, b, f, sc, tx)
+				.map(|(q, f)| (q, Some(f)))
+		)
 	}
 
 	/// Defines which transaction pool to use.

@@ -24,7 +24,7 @@ primitives = { package = "substrate-primitives",  path = "../primitives", defaul
 trie-bench = "0.16.2"
 trie-standardmap = "0.15.2"
 keccak-hasher = "0.15.2"
-criterion = "0.2.11"
+criterion = "0.3.0"
 hex-literal = "0.2.1"
 
 [features]

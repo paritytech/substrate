@@ -7,7 +7,7 @@ build = "build.rs"
 
 [dependencies]
 log = { version = "0.4.8", optional = true }
-serde = { version = "1.0.99", optional = true, features = ["derive"] }
+serde = { version = "1.0.100", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 keyring = { package = "substrate-keyring", path = "../keyring", optional = true }
 substrate-client = { path = "../client", default-features = false }

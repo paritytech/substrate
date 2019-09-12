@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 env_logger = "0.6.2"
-futures = "0.1.28"
+futures = "0.1.29"
 hyper = "0.12.33"
 jsonrpc-core-client = { version = "13.1.0", features = ["http", "ws"] }
 log = "0.4.8"

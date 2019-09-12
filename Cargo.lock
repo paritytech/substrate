@@ -1381,6 +1381,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "impl-trait-for-tuples"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "proc-macro2 1.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "quote 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "syn 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "indexmap"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2416,6 +2426,7 @@ dependencies = [
  "substrate-client 2.0.0",
  "substrate-keyring 2.0.0",
  "substrate-primitives 2.0.0",
+ "substrate-rpc-primitives 2.0.0",
  "substrate-transaction-pool 2.0.0",
 ]
 
@@ -3818,6 +3829,7 @@ dependencies = [
 name = "sr-primitives"
 version = "2.0.0"
 dependencies = [
+ "impl-trait-for-tuples 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "integer-sqrt 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3930,6 +3942,7 @@ dependencies = [
 name = "srml-authorship"
 version = "0.1.0"
 dependencies = [
+ "impl-trait-for-tuples 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
  "sr-primitives 2.0.0",
@@ -4088,6 +4101,7 @@ dependencies = [
 name = "srml-finality-tracker"
 version = "2.0.0"
 dependencies = [
+ "impl-trait-for-tuples 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.100 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
@@ -4224,6 +4238,7 @@ dependencies = [
 name = "srml-session"
 version = "2.0.0"
 dependencies = [
+ "impl-trait-for-tuples 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4282,6 +4297,7 @@ name = "srml-support"
 version = "2.0.0"
 dependencies = [
  "bitmask 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "impl-trait-for-tuples 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "once_cell 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "paste 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4347,6 +4363,7 @@ name = "srml-system"
 version = "2.0.0"
 dependencies = [
  "criterion 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
+ "impl-trait-for-tuples 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.100 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4362,6 +4379,7 @@ dependencies = [
 name = "srml-timestamp"
 version = "2.0.0"
 dependencies = [
+ "impl-trait-for-tuples 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.100 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
@@ -4626,6 +4644,7 @@ dependencies = [
  "substrate-executor 2.0.0",
  "substrate-inherents 2.0.0",
  "substrate-keyring 2.0.0",
+ "substrate-panic-handler 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-state-machine 2.0.0",
  "substrate-telemetry 2.0.0",
@@ -5142,6 +5161,7 @@ dependencies = [
  "substrate-network 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-rpc-api 2.0.0",
+ "substrate-rpc-primitives 2.0.0",
  "substrate-session 2.0.0",
  "substrate-state-machine 2.0.0",
  "substrate-test-runtime-client 2.0.0",
@@ -5166,7 +5186,16 @@ dependencies = [
  "serde_json 1.0.40 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-version 2.0.0",
  "substrate-primitives 2.0.0",
+ "substrate-rpc-primitives 2.0.0",
  "substrate-transaction-graph 2.0.0",
+]
+
+[[package]]
+name = "substrate-rpc-primitives"
+version = "2.0.0"
+dependencies = [
+ "serde 1.0.100 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-primitives 2.0.0",
 ]
 
 [[package]]
@@ -6588,6 +6617,7 @@ dependencies = [
 "checksum idna 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "02e2673c30ee86b5b96a9cb52ad15718aa1f966f5ab9ad54a8b95d5ca33120a9"
 "checksum impl-codec 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "78c441b3d2b5e24b407161e76d482b7bbd29b5da357707839ac40d95152f031f"
 "checksum impl-serde 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "bbb1ea6188aca47a0eaeeb330d8a82f16cd500f30b897062d23922568727333a"
+"checksum impl-trait-for-tuples 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3a9213bd15aa3f974ed007e12e520c435af21e0bb9b016c0874f05eec30034cf"
 "checksum indexmap 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "a61202fbe46c4a951e9404a720a0180bcf3212c750d735cb5c4ba4dc551299f3"
 "checksum integer-sqrt 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "ea155abb3ba6f382a75f1418988c05fe82959ed9ce727de427f9cfd425b0c903"
 "checksum interleaved-ordered 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "141340095b15ed7491bd3d4ced9d20cebfb826174b6bb03386381f62b01e3d77"

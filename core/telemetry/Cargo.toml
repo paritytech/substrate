@@ -10,11 +10,11 @@ bytes = "0.4.12"
 parking_lot = "0.9.0"
 futures01 = { package = "futures", version = "0.1" }
 futures-preview = { version = "0.3.0-alpha.18", features = ["compat"] }
-futures-timer = "0.3.0"
+futures-timer = "0.4.0"
 libp2p = { version = "0.12.0", default-features = false, features = ["libp2p-websocket"] }
 log = "0.4.8"
 rand = "0.7.0"
-serde = { version = "1.0.99", features = ["derive"] }
+serde = { version = "1.0.100", features = ["derive"] }
 slog = { version = "2.5.2", features = ["nested-values"] }
 # TODO: we're using slog-async just to be able to clone records; See https://github.com/slog-rs/slog/issues/221,
 # https://github.com/paritytech/substrate/issues/2823 and https://github.com/paritytech/substrate/issues/3260

@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 impl-serde = { version = "0.2.1", optional = true }
-serde = { version = "1.0.99", optional = true, features = ["derive"] }
+serde = { version = "1.0.100", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "1.0.5", default-features = false, features = ["derive"] }
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
 sr-primitives = {  path = "../sr-primitives", default-features = false }

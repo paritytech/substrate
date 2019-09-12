@@ -174,13 +174,12 @@ where
 }
 
 impl<'a, B, T, H, N, O> Externalities<H> for Ext<'a, H, N, B, T, O>
-where
-	H: Hasher,
+where	H: Hasher,
 	B: 'a + Backend<H>,
 	T: 'a + ChangesTrieStorage<H, N>,
-	O: 'a + offchain::Externalities,
 	H::Out: Ord + 'static,
 	N: crate::changes_trie::BlockNumber,
+	O: 'a + offchain::Externalities,
 {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::force_abort();
@@ -371,6 +370,7 @@ where
 	fn keystore(&self) -> Option<BareCryptoStorePtr> {
 		self.keystore.clone()
 	}
+
 }
 
 #[cfg(test)]
