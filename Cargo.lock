@@ -2429,6 +2429,7 @@ dependencies = [
  "substrate-client 2.0.0",
  "substrate-keyring 2.0.0",
  "substrate-primitives 2.0.0",
+ "substrate-rpc-primitives 2.0.0",
  "substrate-transaction-pool 2.0.0",
 ]
 
@@ -5164,6 +5165,7 @@ dependencies = [
  "substrate-network 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-rpc-api 2.0.0",
+ "substrate-rpc-primitives 2.0.0",
  "substrate-session 2.0.0",
  "substrate-state-machine 2.0.0",
  "substrate-test-runtime-client 2.0.0",
@@ -5188,7 +5190,16 @@ dependencies = [
  "serde_json 1.0.40 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-version 2.0.0",
  "substrate-primitives 2.0.0",
+ "substrate-rpc-primitives 2.0.0",
  "substrate-transaction-graph 2.0.0",
+]
+
+[[package]]
+name = "substrate-rpc-primitives"
+version = "2.0.0"
+dependencies = [
+ "serde 1.0.97 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-primitives 2.0.0",
 ]
 
 [[package]]
