@@ -494,7 +494,7 @@ mod tests {
 		execute_with_proof_failure(&remote_client, 2, "Core_version");
 
 		// check that proof check doesn't panic even if proof is incorrect AND panic handler is set
-		panic_handler::set("TEST");
+		panic_handler::set("TEST", "1.2.3");
 		execute_with_proof_failure(&remote_client, 2, "Core_version");
 	}
 
