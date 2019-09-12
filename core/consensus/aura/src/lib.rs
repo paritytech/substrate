@@ -217,7 +217,7 @@ impl<H, B, C, E, I, P, Error, SO> slots::SimpleSlotWorker<B> for AuraWorker<C, E
 		self.block_import.clone()
 	}
 
-	fn epoch_data(&self, header: &B::Header) -> Result<Self::EpochData, consensus_common::Error> {
+	fn epoch_data(&self, header: &B::Header, _slot_number: u64) -> Result<Self::EpochData, consensus_common::Error> {
 		authorities(self.client.as_ref(), &BlockId::Hash(header.hash()))
 	}
 
