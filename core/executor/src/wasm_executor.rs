@@ -54,7 +54,7 @@ macro_rules! debug_trace {
 }
 
 struct FunctionExecutor {
-	sandbox_store: sandbox::Store,
+	sandbox_store: sandbox::Store<wasmi::FuncRef>,
 	heap: allocator::FreeingBumpHeapAllocator,
 	memory: MemoryRef,
 	table: Option<TableRef>,
@@ -72,10 +72,12 @@ impl FunctionExecutor {
 }
 
 impl sandbox::SandboxCapabilities for FunctionExecutor {
-	fn store(&self) -> &sandbox::Store {
+	type SupervisorFuncRef = wasmi::FuncRef;
+
+	fn store(&self) -> &sandbox::Store<Self::SupervisorFuncRef> {
 		&self.sandbox_store
 	}
-	fn store_mut(&mut self) -> &mut sandbox::Store {
+	fn store_mut(&mut self) -> &mut sandbox::Store<Self::SupervisorFuncRef> {
 		&mut self.sandbox_store
 	}
 	fn allocate(&mut self, len: WordSize) -> Result<Pointer<u8>> {
@@ -89,6 +91,32 @@ impl sandbox::SandboxCapabilities for FunctionExecutor {
 	}
 	fn read_memory(&self, ptr: Pointer<u8>, len: WordSize) -> Result<Vec<u8>> {
 		self.memory.get(ptr.into(), len as usize).map_err(Into::into)
+	}
+
+	fn invoke(
+		&mut self,
+		dispatch_thunk: &Self::SupervisorFuncRef,
+		invoke_args_ptr: Pointer<u8>,
+		invoke_args_len: WordSize,
+		state: u32,
+		func_idx: sandbox::SupervisorFuncIndex,
+	) -> Result<i64>
+	{
+		let result = wasmi::FuncInstance::invoke(
+			dispatch_thunk,
+			&[
+				RuntimeValue::I32(u32::from(invoke_args_ptr) as i32),
+				RuntimeValue::I32(invoke_args_len as i32),
+				RuntimeValue::I32(state as i32),
+				RuntimeValue::I32(usize::from(func_idx) as i32),
+			],
+			self,
+		);
+		match result {
+			Ok(Some(RuntimeValue::I64(val))) => Ok(val),
+			Ok(_) => return Err("Supervisor function returned unexpected result!".into()),
+			Err(err) => Err(Error::Trap(err)),
+		}
 	}
 }
 
