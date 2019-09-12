@@ -187,10 +187,11 @@ fn create_wasm_workspace_project(wasm_workspace: &Path, cargo_manifest: &Path) {
 		.manifest_path(cargo_manifest)
 		.exec()
 		.expect("`cargo metadata` can not fail on project `Cargo.toml`; qed");
+	let workspace_root_path = crate_metadata.workspace_root;
 
 	let mut workspace_toml: Table = toml::from_str(
 		&fs::read_to_string(
-			crate_metadata.workspace_root.join("Cargo.toml"),
+			workspace_root_path.join("Cargo.toml"),
 		).expect("Workspace root `Cargo.toml` exists; qed")
 	).expect("Workspace root `Cargo.toml` is a valid toml file; qed");
 
@@ -217,8 +218,21 @@ fn create_wasm_workspace_project(wasm_workspace: &Path, cargo_manifest: &Path) {
 	wasm_workspace_toml.insert("workspace".into(), workspace.into());
 
 	// Add patch section from the project root `Cargo.toml`
-	if let Some(patch) = workspace_toml.remove("patch") {
-		wasm_workspace_toml.insert("patch".into(), patch);
+	if let Some(mut patch) = workspace_toml.remove("patch").and_then(|p| p.try_into::<Table>().ok()) {
+		// Iterate over all patches and make the patch path absolute from the workspace root path.
+		patch.iter_mut()
+			.filter_map(|p| p.1.as_table_mut())
+			.for_each(|p|
+				p.iter_mut()
+					.filter(|(k, _)| k == &"path")
+					.for_each(|(_, v)| {
+						if let Some(path) = v.as_str() {
+							*v = workspace_root_path.join(path).display().to_string().into();
+						}
+					})
+			);
+
+		wasm_workspace_toml.insert("patch".into(), patch.into());
 	}
 
 	fs::write(
