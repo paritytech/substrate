@@ -58,7 +58,7 @@
 //!		_outgoing member_, meaning that they are an active member who failed to keep their spot. In
 //!		this case, the outgoing member will get their bond back. Otherwise, the bond is slashed from
 //!		the loser candidate.
-//!   - **Runner-up**: Runner ups are the best candidates immediately after the winners. The number
+//!   - **Runner-up**: Runners-up are the best candidates immediately after the winners. The number
 //!		of runner-ups to keep is configurable. Runner-ups are used, in order that they are elected,
 //! 	as replacements when a candidate is kicked by `remove_member()`.
 //!
