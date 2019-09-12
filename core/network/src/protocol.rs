@@ -1036,7 +1036,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			if inserted || force {
 				let message = GenericMessage::BlockAnnounce(message::BlockAnnounce {
 					header: header.clone(),
-					state: if peer.info.protocol_version >=4  {
+					state: if peer.info.protocol_version >= 4  {
 						if is_best {
 							Some(message::BlockState::Best)
 						} else {
