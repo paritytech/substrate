@@ -9,8 +9,6 @@ edition = "2018"
 rstd = { package = "sr-std", path = "../../sr-std", default-features = false }
 smallvec = { version = "0.6", optional = true }
 
-[dev-dependencies]
-
 [features]
 default = ["std"]
 std = [

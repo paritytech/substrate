@@ -106,7 +106,7 @@ fn prepare_extrinsics_input<'a, B, H, Number>(
 			block: block.clone(),
 			storage_key: storage_key.to_vec(),
 		};
-	
+
 		let iter = prepare_extrinsics_input_inner(backend, block, changes, Some(storage_key.to_vec()))?;
 		children_result.insert(child_index, iter);
 	}

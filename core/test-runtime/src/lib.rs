@@ -448,34 +448,6 @@ fn code_using_trie() -> u64 {
 	} else { 103 }
 }
 
-fn historied_data() -> u64 {
-
-	let mut states = historied_data::linear::States::default();
-	let mut value = historied_data::linear::History::default();
-	if value.get(states.as_ref()) != None {
-		// value superior to 100 are error codes.
-		return 101;
-	}
- 
-	value.set(states.as_ref(), 42u64);
-	states.start_transaction();
-	if value.get(states.as_ref()) != Some(&42) {
-		return 102;
-	}
-	value.set(states.as_ref(), 43u64);
-	if value.get(states.as_ref()) != Some(&43) {
-		return 103;
-	}
-	states.discard_transaction();
-	if value.get(states.as_ref()) != Some(&42) {
-		return 104;
-	}
- 
-	// 0 for success
-	return 0;
-}
-
-
 impl_opaque_keys! {
 	pub struct SessionKeys {
 		#[id(key_types::ED25519)]
@@ -588,7 +560,7 @@ cfg_if! {
 				}
 
 				fn use_history_data() -> u64 {
-					historied_data()
+					test_historied_data()
 				}
 
 				fn use_transactions() -> u64 {
@@ -784,7 +756,7 @@ cfg_if! {
 				}
 
 				fn use_history_data() -> u64 {
-					historied_data()
+					test_historied_data()
 				}
 
 				fn use_transactions() -> u64 {
@@ -937,6 +909,33 @@ fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic) {
 	let signature = public0.sign(&"sr25519").expect("Generates a valid `sr25519` signature.");
 	assert!(public0.verify(&"sr25519", &signature));
 	(signature, public0)
+}
+
+fn test_historied_data() -> u64 {
+
+	let mut states = historied_data::linear::States::default();
+	let mut value = historied_data::linear::History::default();
+	if value.get(states.as_ref()) != None {
+		// value greater than 100 are error codes.
+		return 101;
+	}
+ 
+	value.set(states.as_ref(), 42u64);
+	states.start_transaction();
+	if value.get(states.as_ref()) != Some(&42) {
+		return 102;
+	}
+	value.set(states.as_ref(), 43u64);
+	if value.get(states.as_ref()) != Some(&43) {
+		return 103;
+	}
+	states.discard_transaction();
+	if value.get(states.as_ref()) != Some(&42) {
+		return 104;
+	}
+ 
+	// 0 for success
+	0
 }
 
 #[cfg(test)]

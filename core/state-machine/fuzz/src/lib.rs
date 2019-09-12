@@ -239,17 +239,18 @@ impl RefOverlayedChanges {
 	}
 }
 
+// Those are error previously found through fuzzing.
+// They were fixed, but we keep the vectors to check
+// for regression without needing to run fuzzing.
 #[test]
-fn debug_that() {
-//50, 208, 50, 38, 46, 58, 209, 50, 216, 255, 255
-
-//238, 0, 36, 43, 50, 46, 38, 211, 0, 0, 61
-
-//50, 255, 38, 38, 186, 35, 46, 43, 46, 35, 255, 255, 102, 67
-
-//0x6e,0xff,0xf7,0x0,0x6e,0xff,0xff,0x2d,0xff,0xff,0xff,0xe
-
-	let input = vec![
+fn previous_fuzzed_error() {
+	let inputs = [
+		vec![50, 208, 50, 38, 46, 58, 209, 50, 216, 255, 255],
+		vec![238, 0, 36, 43, 50, 46, 38, 211, 0, 0, 61],
+		vec![50, 255, 38, 38, 186, 35, 46, 43, 46, 35, 255, 255, 102, 67],
+		vec![0x6e, 0xff, 0xf7, 0x0, 0x6e, 0xff, 0xff, 0x2d, 0xff, 0xff, 0xff, 0xe],
 	];
-	fuzz_transactions_inner(&input[..], true);
+	for input in inputs.iter() {
+		fuzz_transactions_inner(&input[..], true);
+	}
 }

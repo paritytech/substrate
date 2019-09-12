@@ -30,7 +30,6 @@ pub mod generator;
 
 /// Execute under a transactional layer.
 ///
-///
 /// If the result of execution is an error,
 /// the transactional layer get reverted; otherwhise
 /// it is committed.

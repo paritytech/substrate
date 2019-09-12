@@ -96,23 +96,21 @@ fn commit_drop_commit_and_get(b: &mut Bencher, input: &Vec<u8>) {
 	});
 }
 
-
-
-
 fn bench_overlay_commit_drop_commit(c: &mut Criterion) {
 	let inp = get_content(12, CONTENT_KEY_SIZE * 100);
 	let inps = vec![inp];
 	c.bench_function_over_inputs("commit_drop_commit", commit_drop_commit, inps);
 }
+
 fn bench_overlay_commit_drop_commit_get(c: &mut Criterion) {
 	let inp = get_content(12, CONTENT_KEY_SIZE * 100);
 	let inps = vec![inp];
 	c.bench_function_over_inputs("commit_drop_commit_get", commit_drop_commit_and_get, inps);
 }
 
-
 criterion_group!(benches,
 	bench_overlay_commit_drop_commit,
 	bench_overlay_commit_drop_commit_get,
 );
+
 criterion_main!(benches);
