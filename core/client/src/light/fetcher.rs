@@ -221,15 +221,15 @@ pub trait FetchChecker<Block: BlockT>: Send + Sync {
 }
 
 /// Remote data checker.
-pub struct LightDataChecker<E, H, B: BlockT, S: BlockchainStorage<B>, F> {
-	blockchain: Arc<Blockchain<S, F>>,
+pub struct LightDataChecker<E, H, B: BlockT, S: BlockchainStorage<B>> {
+	blockchain: Arc<Blockchain<S>>,
 	executor: E,
 	_hasher: PhantomData<(B, H)>,
 }
 
-impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F> {
+impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 	/// Create new light data checker.
-	pub fn new(blockchain: Arc<Blockchain<S, F>>, executor: E) -> Self {
+	pub fn new(blockchain: Arc<Blockchain<S>>, executor: E) -> Self {
 		Self {
 			blockchain, executor, _hasher: PhantomData
 		}
@@ -367,14 +367,13 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 	}
 }
 
-impl<E, Block, H, S, F> FetchChecker<Block> for LightDataChecker<E, H, Block, S, F>
+impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 	where
 		Block: BlockT,
 		E: CodeExecutor<H>,
 		H: Hasher,
 		H::Out: Ord + 'static,
 		S: BlockchainStorage<Block>,
-		F: Send + Sync,
 {
 	fn check_header_proof(
 		&self,
@@ -563,7 +562,6 @@ pub mod tests {
 		Blake2Hasher,
 		Block,
 		DummyStorage,
-		OkCallFetcher,
 	>;
 
 	fn prepare_for_read_proof_check() -> (TestChecker, Header, Vec<Vec<u8>>, u32) {
