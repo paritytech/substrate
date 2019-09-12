@@ -24,7 +24,7 @@ pub use timestamp;
 
 use rstd::{result, prelude::*};
 use support::{decl_storage, decl_module, StorageValue, StorageMap, traits::FindAuthor, traits::Get};
-use timestamp::{OnTimestampSet};
+use timestamp::OnTimestampSet;
 use sr_primitives::{generic::DigestItem, ConsensusEngineId, Perbill};
 use sr_primitives::traits::{IsMember, SaturatedConversion, Saturating, RandomnessBeacon};
 use sr_staking_primitives::{
