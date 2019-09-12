@@ -170,7 +170,7 @@ decl_module! {
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), "only the current sudo key can sudo");
 
-			let who = T::Lookup::lookup(new)?;
+			let who = T::Lookup::lookup(who)?;
 
 			let res = match proposal.dispatch(system::RawOrigin::Signed(who).into()) {
 				Ok(_) => true,
