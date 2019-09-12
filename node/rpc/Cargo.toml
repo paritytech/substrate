@@ -17,6 +17,7 @@ codec = { package = "parity-scale-codec", version = "1.0.0" }
 serde = { version = "1.0", features = ["derive"] }
 sr-primitives = { path = "../../core/sr-primitives" }
 substrate-primitives = { path = "../../core/primitives" }
+rpc-primitives = { package = "substrate-rpc-primitives", path = "../../core/rpc/primitives" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
 
 [dev-dependencies]
