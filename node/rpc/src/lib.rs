@@ -30,3 +30,11 @@
 #![warn(missing_docs)]
 
 pub mod accounts;
+pub mod contracts;
+
+mod constants {
+	/// A status code indicating an error happened while trying to call into the runtime.
+	///
+	/// This typically means that the runtime trapped.
+	pub const RUNTIME_ERROR: i64 = 1;
+}
