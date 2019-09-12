@@ -19,3 +19,4 @@ runtime_version = { package = "sr-version", path = "../../sr-version" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 txpool = { package = "substrate-transaction-graph", path = "../../transaction-pool/graph" }
+rpc-primitives = { package = "substrate-rpc-primitives", path = "../../rpc/primitives" }
