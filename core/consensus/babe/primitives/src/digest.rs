@@ -22,7 +22,7 @@ use super::AuthoritySignature;
 use super::{BABE_ENGINE_ID, Epoch};
 #[cfg(not(feature = "std"))]
 use super::{VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH};
-use super::{AuthorityIndex, BabeBlockWeight, SlotNumber};
+use super::{AuthorityIndex, SlotNumber};
 #[cfg(feature = "std")]
 use sr_primitives::{DigestItem, generic::OpaqueDigestItemId};
 #[cfg(feature = "std")]
@@ -52,8 +52,6 @@ pub enum BabePreDigest {
 		authority_index: super::AuthorityIndex,
 		/// Slot number
 		slot_number: SlotNumber,
-		/// Chain weight (measured in number of Primary blocks)
-		weight: BabeBlockWeight,
 	},
 	/// A secondary deterministic slot assignment.
 	Secondary {
@@ -61,8 +59,6 @@ pub enum BabePreDigest {
 		authority_index: super::AuthorityIndex,
 		/// Slot number
 		slot_number: SlotNumber,
-		/// Chain weight (measured in number of Primary blocks)
-		weight: BabeBlockWeight,
 	},
 }
 
@@ -83,14 +79,6 @@ impl BabePreDigest {
 			BabePreDigest::Secondary { slot_number, .. } => *slot_number,
 		}
 	}
-
-	/// Returns the weight of the pre digest.
-	pub fn weight(&self) -> BabeBlockWeight {
-		match self {
-			BabePreDigest::Primary { weight, .. } => *weight,
-			BabePreDigest::Secondary { weight, .. } => *weight,
-		}
-	}
 }
 
 /// The prefix used by BABE for its VRF keys.
@@ -100,26 +88,24 @@ pub const BABE_VRF_PREFIX: &'static [u8] = b"substrate-babe-vrf";
 #[derive(Copy, Clone, Encode, Decode)]
 pub enum RawBabePreDigest {
 	/// A primary VRF-based slot assignment.
+	#[codec(index = "1")]
 	Primary {
 		/// Authority index
 		authority_index: AuthorityIndex,
 		/// Slot number
 		slot_number: SlotNumber,
-		/// Chain weight (measured in number of Primary blocks)
-		weight: BabeBlockWeight,
 		/// VRF output
 		vrf_output: [u8; VRF_OUTPUT_LENGTH],
 		/// VRF proof
 		vrf_proof: [u8; VRF_PROOF_LENGTH],
 	},
 	/// A secondary deterministic slot assignment.
+	#[codec(index = "2")]
 	Secondary {
 		/// Authority index
 		authority_index: AuthorityIndex,
 		/// Slot number
 		slot_number: SlotNumber,
-		/// Chain weight (measured in number of Primary blocks)
-		weight: BabeBlockWeight,
 	},
 }
 
@@ -142,25 +128,21 @@ impl Encode for BabePreDigest {
 				vrf_proof,
 				authority_index,
 				slot_number,
-				weight,
 			} => {
 				RawBabePreDigest::Primary {
 					vrf_output: *vrf_output.as_bytes(),
 					vrf_proof: vrf_proof.to_bytes(),
 					authority_index: *authority_index,
 					slot_number: *slot_number,
-					weight: *weight,
 				}
 			},
 			BabePreDigest::Secondary {
 				authority_index,
 				slot_number,
-				weight,
 			} => {
 				RawBabePreDigest::Secondary {
 					authority_index: *authority_index,
 					slot_number: *slot_number,
-					weight: *weight,
 				}
 			},
 		};
@@ -176,7 +158,7 @@ impl codec::EncodeLike for BabePreDigest {}
 impl Decode for BabePreDigest {
 	fn decode<R: Input>(i: &mut R) -> Result<Self, Error> {
 		let pre_digest = match Decode::decode(i)? {
-			RawBabePreDigest::Primary { vrf_output, vrf_proof, authority_index, slot_number, weight } => {
+			RawBabePreDigest::Primary { vrf_output, vrf_proof, authority_index, slot_number } => {
 				// Verify (at compile time) that the sizes in babe_primitives are correct
 				let _: [u8; super::VRF_OUTPUT_LENGTH] = vrf_output;
 				let _: [u8; super::VRF_PROOF_LENGTH] = vrf_proof;
@@ -186,11 +168,10 @@ impl Decode for BabePreDigest {
 					vrf_output: VRFOutput::from_bytes(&vrf_output).map_err(convert_error)?,
 					authority_index,
 					slot_number,
-					weight,
 				}
 			},
-			RawBabePreDigest::Secondary { authority_index, slot_number, weight } => {
-				BabePreDigest::Secondary { authority_index, slot_number, weight }
+			RawBabePreDigest::Secondary { authority_index, slot_number } => {
+				BabePreDigest::Secondary { authority_index, slot_number }
 			},
 		};
 
