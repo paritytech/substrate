@@ -67,14 +67,13 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use app_crypto::{AppPublic, RuntimeAppPublic, AppSignature};
+use app_crypto::{AppPublic, RuntimeAppPublic};
 use codec::{Encode, Decode};
 use primitives::offchain::{OpaqueNetworkState, StorageKind};
 use rstd::prelude::*;
 use session::historical::IdentificationTuple;
-use runtime_io::Printable;
 use sr_primitives::{
-	traits::{Convert, Member}, Perbill,
+	traits::{Convert, Member, Printable}, Perbill,
 	transaction_validity::{
 		TransactionValidity, TransactionLongevity, ValidTransaction, InvalidTransaction,
 	},

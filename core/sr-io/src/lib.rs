@@ -29,9 +29,6 @@
 use hash_db::Hasher;
 use rstd::vec::Vec;
 
-#[doc(hidden)]
-pub use codec;
-
 pub use primitives::Blake2Hasher;
 use primitives::{
 	crypto::KeyTypeId, ed25519, sr25519,
@@ -51,18 +48,6 @@ pub enum EcdsaVerifyError {
 }
 
 pub mod offchain;
-
-/// Trait for things which can be printed.
-pub trait Printable {
-	/// Print the object.
-	fn print(&self);
-}
-
-impl Printable for u8 {
-	fn print(&self) {
-		u64::from(*self).print()
-	}
-}
 
 /// Converts a public trait definition into a private trait and set of public functions
 /// that assume the trait is implemented for `()` for ease of calling.
@@ -188,12 +173,12 @@ export_api! {
 		/// The current relay chain identifier.
 		fn chain_id() -> u64;
 
-		/// Print a printable value.
-		fn print<T>(value: T)
-		where
-			T: Printable,
-			T: Sized
-		;
+		/// Print a number.
+		fn print_num(val: u64);
+		/// Print any valid `utf8` buffer.
+		fn print_utf8(utf8: &[u8]);
+		/// Print any `u8` slice as hex.
+		fn print_hex(data: &[u8]);
 	}
 }
 

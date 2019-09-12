@@ -217,7 +217,7 @@ where
 		let l = uxt.encode().len();
 		match Self::apply_extrinsic_with_len(uxt, l, None) {
 			Ok(Ok(())) => (),
-			Ok(Err(e)) => runtime_io::print(e),
+			Ok(Err(e)) => sr_primitives::print(e),
 			Err(e) => { let err: &'static str = e.into(); panic!(err) },
 		}
 	}

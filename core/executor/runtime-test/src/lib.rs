@@ -8,9 +8,10 @@ include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 use rstd::{vec::Vec, slice, vec};
 
 use runtime_io::{
-	set_storage, storage, clear_prefix, print, blake2_128, blake2_256,
+	set_storage, storage, clear_prefix, blake2_128, blake2_256,
 	twox_128, twox_256, ed25519_verify, sr25519_verify, ordered_trie_root
 };
+use sr_primitives::print;
 use primitives::{ed25519, sr25519};
 
 macro_rules! impl_stubs {

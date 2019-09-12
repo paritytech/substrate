@@ -802,10 +802,23 @@ impl OtherApi for () {
 		}
 	}
 
-	fn print<T: Printable + Sized>(value: T) {
-		value.print()
+	fn print_num(val: u64) {
+		unsafe {
+			ext_print_num.get()(val);
+		}
 	}
 
+	fn print_utf8(utf8: &[u8]) {
+		unsafe {
+			ext_print_utf8.get()(utf8.as_ptr(), utf8.len() as u32);
+		}
+	}
+
+	fn print_hex(data: &[u8]) {
+		unsafe {
+			ext_print_hex.get()(data.as_ptr(), data.len() as u32);
+		}
+	}
 }
 
 impl HashingApi for () {
@@ -1218,24 +1231,3 @@ unsafe fn from_raw_parts(ptr: *mut u8, len: u32) -> Option<Vec<u8>> {
 
 impl Api for () {}
 
-impl<'a> Printable for &'a [u8] {
-	fn print(&self) {
-		unsafe {
-			ext_print_hex.get()(self.as_ptr(), self.len() as u32);
-		}
-	}
-}
-
-impl<'a> Printable for &'a str {
-	fn print(&self) {
-		unsafe {
-			ext_print_utf8.get()(self.as_ptr() as *const u8, self.len() as u32);
-		}
-	}
-}
-
-impl Printable for u64 {
-	fn print(&self) {
-		unsafe { ext_print_num.get()(*self); }
-	}
-}

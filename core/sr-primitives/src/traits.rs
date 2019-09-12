@@ -565,9 +565,9 @@ impl CheckEqual for primitives::H256 {
 	#[cfg(not(feature = "std"))]
 	fn check_equal(&self, other: &Self) {
 		if self != other {
-			runtime_io::print("Hash not equal");
-			runtime_io::print(self.as_bytes());
-			runtime_io::print(other.as_bytes());
+			"Hash not equal".print();
+			self.as_bytes().print();
+			other.as_bytes().print();
 		}
 	}
 }
@@ -583,9 +583,9 @@ impl<H: PartialEq + Eq + MaybeDebug> CheckEqual for super::generic::DigestItem<H
 	#[cfg(not(feature = "std"))]
 	fn check_equal(&self, other: &Self) {
 		if self != other {
-			runtime_io::print("DigestItem not equal");
-			runtime_io::print(&Encode::encode(self)[..]);
-			runtime_io::print(&Encode::encode(other)[..]);
+			"DigestItem not equal".print();
+			(&Encode::encode(self)[..]).print();
+			(&Encode::encode(other)[..]).print();
 		}
 	}
 }
@@ -1230,76 +1230,6 @@ impl<T: Encode + Decode + Default, Id: Encode + Decode + TypeId> AccountIdConver
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::AccountIdConversion;
-	use crate::codec::{Encode, Decode, Input};
-
-	#[derive(Encode, Decode, Default, PartialEq, Debug)]
-	struct U32Value(u32);
-	impl super::TypeId for U32Value {
-		const TYPE_ID: [u8; 4] = [0x0d, 0xf0, 0xfe, 0xca];
-	}
-	// cafef00d
-
-	#[derive(Encode, Decode, Default, PartialEq, Debug)]
-	struct U16Value(u16);
-	impl super::TypeId for U16Value {
-		const TYPE_ID: [u8; 4] = [0xfe, 0xca, 0x0d, 0xf0];
-	}
-	// f00dcafe
-
-	type AccountId = u64;
-
-	#[test]
-	fn into_account_should_work() {
-		let r: AccountId = U32Value::into_account(&U32Value(0xdeadbeef));
-		assert_eq!(r, 0x_deadbeef_cafef00d);
-	}
-
-	#[test]
-	fn try_from_account_should_work() {
-		let r = U32Value::try_from_account(&0x_deadbeef_cafef00d_u64);
-		assert_eq!(r.unwrap(), U32Value(0xdeadbeef));
-	}
-
-	#[test]
-	fn into_account_with_fill_should_work() {
-		let r: AccountId = U16Value::into_account(&U16Value(0xc0da));
-		assert_eq!(r, 0x_0000_c0da_f00dcafe);
-	}
-
-	#[test]
-	fn try_from_account_with_fill_should_work() {
-		let r = U16Value::try_from_account(&0x0000_c0da_f00dcafe_u64);
-		assert_eq!(r.unwrap(), U16Value(0xc0da));
-	}
-
-	#[test]
-	fn bad_try_from_account_should_fail() {
-		let r = U16Value::try_from_account(&0x0000_c0de_baadcafe_u64);
-		assert!(r.is_none());
-		let r = U16Value::try_from_account(&0x0100_c0da_f00dcafe_u64);
-		assert!(r.is_none());
-	}
-
-	#[test]
-	fn trailing_zero_should_work() {
-		let mut t = super::TrailingZeroInput(&[1, 2, 3]);
-		assert_eq!(t.remaining_len(), Ok(None));
-		let mut buffer = [0u8; 2];
-		assert_eq!(t.read(&mut buffer), Ok(()));
-		assert_eq!(t.remaining_len(), Ok(None));
-		assert_eq!(buffer, [1, 2]);
-		assert_eq!(t.read(&mut buffer), Ok(()));
-		assert_eq!(t.remaining_len(), Ok(None));
-		assert_eq!(buffer, [3, 0]);
-		assert_eq!(t.read(&mut buffer), Ok(()));
-		assert_eq!(t.remaining_len(), Ok(None));
-		assert_eq!(buffer, [0, 0]);
-	}
-}
-
 /// Calls a given macro a number of times with a set of fixed params and an incrementing numeral.
 /// e.g.
 /// ```nocompile
@@ -1390,4 +1320,104 @@ macro_rules! impl_opaque_keys {
 			}
 		}
 	};
+}
+
+/// Trait for things which can be printed from the runtime.
+pub trait Printable {
+	/// Print the object.
+	fn print(&self);
+}
+
+impl Printable for u8 {
+	fn print(&self) {
+		u64::from(*self).print()
+	}
+}
+
+impl Printable for &[u8] {
+	fn print(&self) {
+		runtime_io::print_hex(self);
+	}
+}
+
+impl Printable for &str {
+	fn print(&self) {
+		runtime_io::print_utf8(self.as_bytes());
+	}
+}
+
+impl Printable for u64 {
+	fn print(&self) {
+		runtime_io::print_num(*self);
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::AccountIdConversion;
+	use crate::codec::{Encode, Decode, Input};
+
+	#[derive(Encode, Decode, Default, PartialEq, Debug)]
+	struct U32Value(u32);
+	impl super::TypeId for U32Value {
+		const TYPE_ID: [u8; 4] = [0x0d, 0xf0, 0xfe, 0xca];
+	}
+	// cafef00d
+
+	#[derive(Encode, Decode, Default, PartialEq, Debug)]
+	struct U16Value(u16);
+	impl super::TypeId for U16Value {
+		const TYPE_ID: [u8; 4] = [0xfe, 0xca, 0x0d, 0xf0];
+	}
+	// f00dcafe
+
+	type AccountId = u64;
+
+	#[test]
+	fn into_account_should_work() {
+		let r: AccountId = U32Value::into_account(&U32Value(0xdeadbeef));
+		assert_eq!(r, 0x_deadbeef_cafef00d);
+	}
+
+	#[test]
+	fn try_from_account_should_work() {
+		let r = U32Value::try_from_account(&0x_deadbeef_cafef00d_u64);
+		assert_eq!(r.unwrap(), U32Value(0xdeadbeef));
+	}
+
+	#[test]
+	fn into_account_with_fill_should_work() {
+		let r: AccountId = U16Value::into_account(&U16Value(0xc0da));
+		assert_eq!(r, 0x_0000_c0da_f00dcafe);
+	}
+
+	#[test]
+	fn try_from_account_with_fill_should_work() {
+		let r = U16Value::try_from_account(&0x0000_c0da_f00dcafe_u64);
+		assert_eq!(r.unwrap(), U16Value(0xc0da));
+	}
+
+	#[test]
+	fn bad_try_from_account_should_fail() {
+		let r = U16Value::try_from_account(&0x0000_c0de_baadcafe_u64);
+		assert!(r.is_none());
+		let r = U16Value::try_from_account(&0x0100_c0da_f00dcafe_u64);
+		assert!(r.is_none());
+	}
+
+	#[test]
+	fn trailing_zero_should_work() {
+		let mut t = super::TrailingZeroInput(&[1, 2, 3]);
+		assert_eq!(t.remaining_len(), Ok(None));
+		let mut buffer = [0u8; 2];
+		assert_eq!(t.read(&mut buffer), Ok(()));
+		assert_eq!(t.remaining_len(), Ok(None));
+		assert_eq!(buffer, [1, 2]);
+		assert_eq!(t.read(&mut buffer), Ok(()));
+		assert_eq!(t.remaining_len(), Ok(None));
+		assert_eq!(buffer, [3, 0]);
+		assert_eq!(t.read(&mut buffer), Ok(()));
+		assert_eq!(t.remaining_len(), Ok(None));
+		assert_eq!(buffer, [0, 0]);
+	}
 }

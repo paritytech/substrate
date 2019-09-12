@@ -15,15 +15,14 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use primitives::{
-	blake2_128, blake2_256, twox_128, twox_256, twox_64, ed25519, Blake2Hasher, sr25519, Pair,
-	traits::Externalities, child_storage_key::ChildStorageKey,
+	blake2_128, blake2_256, twox_128, twox_256, twox_64, ed25519, Blake2Hasher, sr25519, Pair, H256,
+	traits::Externalities, child_storage_key::ChildStorageKey, hexdisplay::HexDisplay, offchain,
 };
 // Switch to this after PoC-3
 // pub use primitives::BlakeHasher;
 pub use substrate_state_machine::{BasicExternalities, TestExternalities};
 
 use environmental::environmental;
-use primitives::{offchain, hexdisplay::HexDisplay, H256};
 use trie::{TrieConfiguration, trie_types::Layout};
 
 use std::{collections::HashMap, convert::TryFrom};
@@ -195,8 +194,18 @@ impl OtherApi for () {
 		).unwrap_or(0)
 	}
 
-	fn print<T: Printable + Sized>(value: T) {
-		value.print()
+	fn print_num(val: u64) {
+		println!("{}", val);
+	}
+
+	fn print_utf8(utf8: &[u8]) {
+		if let Ok(data) = std::str::from_utf8(utf8) {
+			println!("{}", data)
+		}
+	}
+
+	fn print_hex(data: &[u8]) {
+		println!("{}", HexDisplay::from(&data));
 	}
 }
 
@@ -475,24 +484,6 @@ pub fn with_storage<R, F: FnOnce() -> R>(
 	*storage = ext.into_storages();
 
 	r
-}
-
-impl<'a> Printable for &'a [u8] {
-	fn print(&self) {
-		println!("Runtime: {}", HexDisplay::from(self));
-	}
-}
-
-impl<'a> Printable for &'a str {
-	fn print(&self) {
-		println!("Runtime: {}", self);
-	}
-}
-
-impl Printable for u64 {
-	fn print(&self) {
-		println!("Runtime: {}", self);
-	}
 }
 
 #[cfg(test)]

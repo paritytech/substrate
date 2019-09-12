@@ -24,9 +24,9 @@
 #![recursion_limit="128"]
 
 use rstd::prelude::*;
-use sr_primitives::traits::{Zero, One, StaticLookup, Bounded, Saturating};
-use sr_primitives::weights::SimpleDispatchInfo;
-use runtime_io::print;
+use sr_primitives::{
+	print, traits::{Zero, One, StaticLookup, Bounded, Saturating}, weights::SimpleDispatchInfo,
+};
 use support::{
 	StorageValue, StorageMap,
 	dispatch::Result, decl_storage, decl_event, ensure, decl_module,
