@@ -47,7 +47,6 @@ use client::LocalCallExecutor;
 /// Test client light database backend.
 pub type LightBackend<Block> = client::light::backend::Backend<
 	client_db::light::LightStorage<Block>,
-	LightFetcher,
 	Blake2Hasher,
 >;
 

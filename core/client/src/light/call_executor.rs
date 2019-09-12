@@ -14,17 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Light client call executor. Executes methods on remote full nodes, fetching
-//! execution proof and checking it locally.
+//! Methods that light client could use to execute runtime calls.
 
 use std::{
 	collections::HashSet, sync::Arc, panic::UnwindSafe, result,
-	marker::PhantomData, cell::RefCell, rc::Rc,
+	cell::RefCell, rc::Rc,
 };
 
 use codec::{Encode, Decode};
 use primitives::{
-	offchain::{self, NeverOffchainExt}, H256, Blake2Hasher, convert_hash, NativeOrEncoded,
+	offchain, H256, Blake2Hasher, convert_hash, NativeOrEncoded,
 	traits::CodeExecutor,
 };
 use sr_primitives::generic::BlockId;
@@ -37,211 +36,40 @@ use hash_db::Hasher;
 
 use crate::runtime_api::{ProofRecorder, InitializeBlock};
 use crate::backend::RemoteBackend;
-use crate::blockchain::Backend as ChainBackend;
 use crate::call_executor::CallExecutor;
 use crate::error::{Error as ClientError, Result as ClientResult};
-use crate::light::fetcher::{Fetcher, RemoteCallRequest};
+use crate::light::fetcher::RemoteCallRequest;
 use executor::{RuntimeVersion, NativeVersion};
 
-/// Call executor that executes methods on remote node, querying execution proof
-/// and checking proof by re-executing locally.
-pub struct RemoteCallExecutor<B, F> {
-	blockchain: Arc<B>,
-	fetcher: Arc<F>,
-}
-
-/// Remote or local call executor.
+/// Call executor that is able to execute calls only on genesis state.
 ///
-/// Calls are executed locally if state is available locally. Otherwise, calls
-/// are redirected to remote call executor.
-pub struct RemoteOrLocalCallExecutor<Block: BlockT<Hash=H256>, B, R, L> {
+/// Trying to execute call on non-genesis state leads to error.
+pub struct GenesisCallExecutor<B, L> {
 	backend: Arc<B>,
-	remote: R,
 	local: L,
-	_block: PhantomData<Block>,
 }
 
-impl<B, F> Clone for RemoteCallExecutor<B, F> {
+impl<B, L> GenesisCallExecutor<B, L> {
+	/// Create new genesis call executor.
+	pub fn new(backend: Arc<B>, local: L) -> Self {
+		Self { backend, local }
+	}
+}
+
+impl<B, L: Clone> Clone for GenesisCallExecutor<B, L> {
 	fn clone(&self) -> Self {
-		RemoteCallExecutor {
-			blockchain: self.blockchain.clone(),
-			fetcher: self.fetcher.clone(),
-		}
-	}
-}
-
-impl<B, F> RemoteCallExecutor<B, F> {
-	/// Creates new instance of remote call executor.
-	pub fn new(blockchain: Arc<B>, fetcher: Arc<F>) -> Self {
-		RemoteCallExecutor { blockchain, fetcher }
-	}
-}
-
-impl<B, F, Block> CallExecutor<Block, Blake2Hasher> for RemoteCallExecutor<B, F>
-where
-	Block: BlockT<Hash=H256>,
-	B: ChainBackend<Block>,
-	F: Fetcher<Block>,
-	Block::Hash: Ord,
-{
-	type Error = ClientError;
-
-	fn call<
-		O: offchain::Externalities,
-	>(
-		&self,
-		id: &BlockId<Block>,
-		method: &str,
-		call_data: &[u8],
-		_strategy: ExecutionStrategy,
-		_side_effects_handler: Option<&mut O>,
-	) -> ClientResult<Vec<u8>>
-	{
-		let block_hash = self.blockchain.expect_block_hash_from_id(id)?;
-		let block_header = self.blockchain.expect_header(id.clone())?;
-
-		futures03::executor::block_on(self.fetcher.remote_call(RemoteCallRequest {
-			block: block_hash,
-			header: block_header,
-			method: method.into(),
-			call_data: call_data.to_vec(),
-			retry_count: None,
-		}))
-	}
-
-	fn contextual_call<
-		'a,
-		O: offchain::Externalities,
-		IB: Fn() -> ClientResult<()>,
-		EM: Fn(
-			Result<NativeOrEncoded<R>, Self::Error>,
-			Result<NativeOrEncoded<R>, Self::Error>
-		) -> Result<NativeOrEncoded<R>, Self::Error>,
-		R: Encode + Decode + PartialEq,
-		NC,
-	>(
-		&self,
-		_initialize_block_fn: IB,
-		at: &BlockId<Block>,
-		method: &str,
-		call_data: &[u8],
-		changes: &RefCell<OverlayedChanges>,
-		initialize_block: InitializeBlock<'a, Block>,
-		execution_manager: ExecutionManager<EM>,
-		_native_call: Option<NC>,
-		side_effects_handler: Option<&mut O>,
-		_recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
-		_enable_keystore: bool,
-	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
-		let block_initialized = match initialize_block {
-			InitializeBlock::Do(ref init_block) => {
-				init_block.borrow().is_some()
-			},
-			InitializeBlock::Skip => false,
-		};
-
-		// it is only possible to execute contextual call if changes are empty
-		if !changes.borrow().is_empty() || block_initialized {
-			return Err(ClientError::NotAvailableOnLightClient.into());
-		}
-
-		self.call(
-			at,
-			method,
-			call_data,
-			(&execution_manager).into(),
-			side_effects_handler,
-		).map(NativeOrEncoded::Encoded)
-	}
-
-	fn runtime_version(&self, id: &BlockId<Block>) -> ClientResult<RuntimeVersion> {
-		let call_result = self.call(
-			id,
-			"Core_version",
-			&[],
-			ExecutionStrategy::NativeElseWasm,
-			NeverOffchainExt::new()
-		)?;
-		RuntimeVersion::decode(&mut call_result.as_slice())
-			.map_err(|_| ClientError::VersionInvalid.into())
-	}
-
-	fn call_at_state<
-		O: offchain::Externalities,
-		S: StateBackend<Blake2Hasher>,
-		FF: FnOnce(
-			Result<NativeOrEncoded<R>, Self::Error>,
-			Result<NativeOrEncoded<R>, Self::Error>
-		) -> Result<NativeOrEncoded<R>, Self::Error>,
-		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, &'static str>,
-	>(&self,
-		_state: &S,
-		_changes: &mut OverlayedChanges,
-		_method: &str,
-		_call_data: &[u8],
-		_m: ExecutionManager<FF>,
-		_native_call: Option<NC>,
-		_side_effects_handler: Option<&mut O>,
-	) -> ClientResult<(
-		NativeOrEncoded<R>,
-		(S::Transaction, <Blake2Hasher as Hasher>::Out),
-		Option<ChangesTrieTransaction<Blake2Hasher, NumberFor<Block>>>,
-	)> {
-		Err(ClientError::NotAvailableOnLightClient.into())
-	}
-
-	fn prove_at_trie_state<S: state_machine::TrieBackendStorage<Blake2Hasher>>(
-		&self,
-		_state: &state_machine::TrieBackend<S, Blake2Hasher>,
-		_changes: &mut OverlayedChanges,
-		_method: &str,
-		_call_data: &[u8]
-	) -> ClientResult<(Vec<u8>, Vec<Vec<u8>>)> {
-		Err(ClientError::NotAvailableOnLightClient.into())
-	}
-
-	fn native_runtime_version(&self) -> Option<&NativeVersion> {
-		None
-	}
-}
-
-impl<Block, B, R, L> Clone for RemoteOrLocalCallExecutor<Block, B, R, L>
-	where
-		Block: BlockT<Hash=H256>,
-		B: RemoteBackend<Block, Blake2Hasher>,
-		R: CallExecutor<Block, Blake2Hasher> + Clone,
-		L: CallExecutor<Block, Blake2Hasher> + Clone,
-{
-	fn clone(&self) -> Self {
-		RemoteOrLocalCallExecutor {
+		GenesisCallExecutor {
 			backend: self.backend.clone(),
-			remote: self.remote.clone(),
 			local: self.local.clone(),
-			_block: Default::default(),
 		}
 	}
 }
 
-impl<Block, B, Remote, Local> RemoteOrLocalCallExecutor<Block, B, Remote, Local>
+impl<Block, B, Local> CallExecutor<Block, Blake2Hasher> for
+	GenesisCallExecutor<B, Local>
 	where
 		Block: BlockT<Hash=H256>,
 		B: RemoteBackend<Block, Blake2Hasher>,
-		Remote: CallExecutor<Block, Blake2Hasher>,
-		Local: CallExecutor<Block, Blake2Hasher>,
-{
-	/// Creates new instance of remote/local call executor.
-	pub fn new(backend: Arc<B>, remote: Remote, local: Local) -> Self {
-		RemoteOrLocalCallExecutor { backend, remote, local, _block: Default::default(), }
-	}
-}
-
-impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
-	RemoteOrLocalCallExecutor<Block, B, Remote, Local>
-	where
-		Block: BlockT<Hash=H256>,
-		B: RemoteBackend<Block, Blake2Hasher>,
-		Remote: CallExecutor<Block, Blake2Hasher>,
 		Local: CallExecutor<Block, Blake2Hasher>,
 {
 	type Error = ClientError;
@@ -258,7 +86,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 	) -> ClientResult<Vec<u8>> {
 		match self.backend.is_local_state_available(id) {
 			true => self.local.call(id, method, call_data, strategy, side_effects_handler),
-			false => self.remote.call(id, method, call_data, strategy, side_effects_handler),
+			false => Err(ClientError::NotAvailableOnLightClient),
 		}
 	}
 
@@ -313,36 +141,14 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 				recorder,
 				enable_keystore,
 			).map_err(|e| ClientError::Execution(Box::new(e.to_string()))),
-			false => CallExecutor::contextual_call::<
-				_,
-				_,
-				fn(
-					Result<NativeOrEncoded<R>, Remote::Error>,
-					Result<NativeOrEncoded<R>, Remote::Error>,
-				) -> Result<NativeOrEncoded<R>, Remote::Error>,
-				_,
-				NC
-			>(
-				&self.remote,
-				initialize_block_fn,
-				at,
-				method,
-				call_data,
-				changes,
-				initialize_block,
-				ExecutionManager::NativeWhenPossible,
-				native_call,
-				side_effects_handler,
-				recorder,
-				enable_keystore,
-			).map_err(|e| ClientError::Execution(Box::new(e.to_string()))),
+			false => Err(ClientError::NotAvailableOnLightClient),
 		}
 	}
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> ClientResult<RuntimeVersion> {
 		match self.backend.is_local_state_available(id) {
 			true => self.local.runtime_version(id),
-			false => self.remote.runtime_version(id),
+			false => Err(ClientError::NotAvailableOnLightClient),
 		}
 	}
 
@@ -356,50 +162,29 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 		R: Encode + Decode + PartialEq,
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	>(&self,
-		state: &S,
-		changes: &mut OverlayedChanges,
-		method: &str,
-		call_data: &[u8],
+		_state: &S,
+		_changes: &mut OverlayedChanges,
+		_method: &str,
+		_call_data: &[u8],
 		_manager: ExecutionManager<FF>,
-		native_call: Option<NC>,
-		side_effects_handler: Option<&mut O>,
+		_native_call: Option<NC>,
+		_side_effects_handler: Option<&mut O>,
 	) -> ClientResult<(
 		NativeOrEncoded<R>,
 		(S::Transaction, <Blake2Hasher as Hasher>::Out),
 		Option<ChangesTrieTransaction<Blake2Hasher, NumberFor<Block>>>,
 	)> {
-		// there's no actual way/need to specify native/wasm execution strategy on light node
-		// => we can safely ignore passed values
-
-		CallExecutor::call_at_state::<
-				_,
-				_,
-				fn(
-					Result<NativeOrEncoded<R>, Remote::Error>,
-					Result<NativeOrEncoded<R>, Remote::Error>,
-				) -> Result<NativeOrEncoded<R>, Remote::Error>,
-				_,
-				NC
-			>(
-				&self.remote,
-				state,
-				changes,
-				method,
-				call_data,
-				ExecutionManager::NativeWhenPossible,
-				native_call,
-				side_effects_handler,
-			).map_err(|e| ClientError::Execution(Box::new(e.to_string())))
+		Err(ClientError::NotAvailableOnLightClient)
 	}
 
 	fn prove_at_trie_state<S: state_machine::TrieBackendStorage<Blake2Hasher>>(
 		&self,
-		state: &state_machine::TrieBackend<S, Blake2Hasher>,
-		changes: &mut OverlayedChanges,
-		method: &str,
-		call_data: &[u8]
+		_state: &state_machine::TrieBackend<S, Blake2Hasher>,
+		_changes: &mut OverlayedChanges,
+		_method: &str,
+		_call_data: &[u8]
 	) -> ClientResult<(Vec<u8>, Vec<Vec<u8>>)> {
-		self.remote.prove_at_trie_state(state, changes, method, call_data)
+		Err(ClientError::NotAvailableOnLightClient)
 	}
 
 	fn native_runtime_version(&self) -> Option<&NativeVersion> {
@@ -517,12 +302,102 @@ fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Head
 #[cfg(test)]
 mod tests {
 	use consensus::BlockOrigin;
-	use test_client::{self, runtime::{Header, Digest}, ClientExt, TestClient};
+	use primitives::offchain::NeverOffchainExt;
+	use test_client::{self, runtime::{Header, Digest, Block}, ClientExt, TestClient};
 	use executor::NativeExecutor;
 	use crate::backend::{Backend, NewBlockState};
 	use crate::in_mem::Backend as InMemBackend;
-	use crate::light::fetcher::tests::OkCallFetcher;
 	use super::*;
+
+	struct DummyCallExecutor;
+
+	impl CallExecutor<Block, Blake2Hasher> for DummyCallExecutor {
+		type Error = ClientError;
+
+		fn call<O: offchain::Externalities>(
+			&self,
+			_id: &BlockId<Block>,
+			_method: &str,
+			_call_data: &[u8],
+			_strategy: ExecutionStrategy,
+			_side_effects_handler: Option<&mut O>,
+		) -> Result<Vec<u8>, ClientError> {
+			Ok(vec![42])
+		}
+
+		fn contextual_call<
+			'a,
+			O: offchain::Externalities,
+			IB: Fn() -> ClientResult<()>,
+			EM: Fn(
+				Result<NativeOrEncoded<R>, Self::Error>,
+				Result<NativeOrEncoded<R>, Self::Error>
+			) -> Result<NativeOrEncoded<R>, Self::Error>,
+			R: Encode + Decode + PartialEq,
+			NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
+		>(
+			&self,
+			_initialize_block_fn: IB,
+			_at: &BlockId<Block>,
+			_method: &str,
+			_call_data: &[u8],
+			_changes: &RefCell<OverlayedChanges>,
+			_initialize_block: InitializeBlock<'a, Block>,
+			_execution_manager: ExecutionManager<EM>,
+			_native_call: Option<NC>,
+			_side_effects_handler: Option<&mut O>,
+			_proof_recorder: &Option<Rc<RefCell<ProofRecorder<Block>>>>,
+			_enable_keystore: bool,
+		) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
+			unreachable!()
+		}
+
+		fn runtime_version(&self, _id: &BlockId<Block>) -> Result<RuntimeVersion, ClientError> {
+			unreachable!()
+		}
+
+		fn call_at_state<
+			O: offchain::Externalities,
+			S: state_machine::Backend<Blake2Hasher>,
+			F: FnOnce(
+				Result<NativeOrEncoded<R>, Self::Error>,
+				Result<NativeOrEncoded<R>, Self::Error>
+			) -> Result<NativeOrEncoded<R>, Self::Error>,
+			R: Encode + Decode + PartialEq,
+			NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
+		>(&self,
+			_state: &S,
+			_overlay: &mut OverlayedChanges,
+			_method: &str,
+			_call_data: &[u8],
+			_manager: ExecutionManager<F>,
+			_native_call: Option<NC>,
+			_side_effects_handler: Option<&mut O>,
+		) -> Result<
+			(
+				NativeOrEncoded<R>,
+				(S::Transaction, H256),
+				Option<ChangesTrieTransaction<Blake2Hasher, NumberFor<Block>>>,
+			),
+			ClientError,
+		> {
+			unreachable!()
+		}
+
+		fn prove_at_trie_state<S: state_machine::TrieBackendStorage<Blake2Hasher>>(
+			&self,
+			_trie_state: &state_machine::TrieBackend<S, Blake2Hasher>,
+			_overlay: &mut OverlayedChanges,
+			_method: &str,
+			_call_data: &[u8]
+		) -> Result<(Vec<u8>, Vec<Vec<u8>>), ClientError> {
+			unreachable!()
+		}
+
+		fn native_runtime_version(&self) -> Option<&NativeVersion> {
+			unreachable!()
+		}
+	}
 
 	#[test]
 	fn execution_proof_is_generated_and_checked() {
@@ -624,8 +499,8 @@ mod tests {
 	}
 
 	#[test]
-	fn code_is_executed_locally_or_remotely() {
-		let backend = Arc::new(InMemBackend::new());
+	fn code_is_executed_at_genesis_only() {
+		let backend = Arc::new(InMemBackend::<Block, Blake2Hasher>::new());
 		let def = H256::default();
 		let header0 = test_client::runtime::Header::new(0, def, def, def, Default::default());
 		let hash0 = header0.hash();
@@ -634,34 +509,29 @@ mod tests {
 		backend.blockchain().insert(hash0, header0, None, None, NewBlockState::Final).unwrap();
 		backend.blockchain().insert(hash1, header1, None, None, NewBlockState::Final).unwrap();
 
-		let local_executor = RemoteCallExecutor::new(
-			Arc::new(backend.blockchain().clone()),
-			Arc::new(OkCallFetcher::new(vec![1])),
-		);
-		let remote_executor = RemoteCallExecutor::new(
-			Arc::new(backend.blockchain().clone()),
-			Arc::new(OkCallFetcher::new(vec![2])),
-		);
-		let remote_or_local = RemoteOrLocalCallExecutor::new(backend, remote_executor, local_executor);
+		let genesis_executor = GenesisCallExecutor::new(backend, DummyCallExecutor);
 		assert_eq!(
-			remote_or_local.call(
+			genesis_executor.call(
 				&BlockId::Number(0),
 				"test_method",
 				&[],
 				ExecutionStrategy::NativeElseWasm,
 				NeverOffchainExt::new(),
 			).unwrap(),
-			vec![1],
+			vec![42],
 		);
-		assert_eq!(
-			remote_or_local.call(
-				&BlockId::Number(1),
-				"test_method",
-				&[],
-				ExecutionStrategy::NativeElseWasm,
-				NeverOffchainExt::new(),
-			).unwrap(),
-			vec![2],
+
+		let call_on_unavailable = genesis_executor.call(
+			&BlockId::Number(1),
+			"test_method",
+			&[],
+			ExecutionStrategy::NativeElseWasm,
+			NeverOffchainExt::new(),
 		);
+
+		match call_on_unavailable {
+			Err(ClientError::NotAvailableOnLightClient) => (),
+			_ => unreachable!("unexpected result: {:?}", call_on_unavailable),
+		}
 	}
 }

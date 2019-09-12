@@ -18,7 +18,7 @@
 //! Everything else is requested from full nodes on demand.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 use parking_lot::{RwLock, Mutex};
 
 use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
@@ -32,7 +32,6 @@ use crate::backend::{
 use crate::blockchain::HeaderBackend as BlockchainHeaderBackend;
 use crate::error::{Error as ClientError, Result as ClientResult};
 use crate::light::blockchain::{Blockchain, Storage as BlockchainStorage};
-use crate::light::fetcher::{Fetcher, RemoteReadRequest};
 use hash_db::Hasher;
 use trie::MemoryDB;
 use consensus::well_known_cache_keys;
@@ -40,14 +39,14 @@ use consensus::well_known_cache_keys;
 const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type and always succeeds; qed";
 
 /// Light client backend.
-pub struct Backend<S, F, H: Hasher> {
-	blockchain: Arc<Blockchain<S, F>>,
+pub struct Backend<S, H: Hasher> {
+	blockchain: Arc<Blockchain<S>>,
 	genesis_state: RwLock<Option<InMemoryState<H>>>,
 	import_lock: Mutex<()>,
 }
 
 /// Light block (header and justification) import operation.
-pub struct ImportOperation<Block: BlockT, S, F, H: Hasher> {
+pub struct ImportOperation<Block: BlockT, S, H: Hasher> {
 	header: Option<Block::Header>,
 	cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	leaf_state: NewBlockState,
@@ -55,28 +54,21 @@ pub struct ImportOperation<Block: BlockT, S, F, H: Hasher> {
 	finalized_blocks: Vec<BlockId<Block>>,
 	set_head: Option<BlockId<Block>>,
 	storage_update: Option<InMemoryState<H>>,
-	_phantom: ::std::marker::PhantomData<(S, F)>,
+	_phantom: ::std::marker::PhantomData<(S)>,
 }
 
-/// On-demand state.
-pub struct OnDemandState<Block: BlockT, S, F> {
-	fetcher: Weak<F>,
-	blockchain: Weak<Blockchain<S, F>>,
-	block: Block::Hash,
-	cached_header: RwLock<Option<Block::Header>>,
-}
-
-/// On-demand or in-memory genesis state.
-pub enum OnDemandOrGenesisState<Block: BlockT, S, F, H: Hasher> {
-	/// On-demand state - storage values are fetched from remote nodes.
-	OnDemand(OnDemandState<Block, S, F>),
+/// Either in-memory genesis state, or locally-unavailable state.
+pub enum GenesisOrUnavailableState<H: Hasher> {
 	/// Genesis state - storage values are stored in-memory.
 	Genesis(InMemoryState<H>),
+	/// We know that state exists, but all calls will fail with error, because it
+	/// isn't locally available.
+	Unavailable,
 }
 
-impl<S, F, H: Hasher> Backend<S, F, H> {
+impl<S, H: Hasher> Backend<S, H> {
 	/// Create new light backend.
-	pub fn new(blockchain: Arc<Blockchain<S, F>>) -> Self {
+	pub fn new(blockchain: Arc<Blockchain<S>>) -> Self {
 		Self {
 			blockchain,
 			genesis_state: RwLock::new(None),
@@ -85,12 +77,12 @@ impl<S, F, H: Hasher> Backend<S, F, H> {
 	}
 
 	/// Get shared blockchain reference.
-	pub fn blockchain(&self) -> &Arc<Blockchain<S, F>> {
+	pub fn blockchain(&self) -> &Arc<Blockchain<S>> {
 		&self.blockchain
 	}
 }
 
-impl<S: AuxStore, F, H: Hasher> AuxStore for Backend<S, F, H> {
+impl<S: AuxStore, H: Hasher> AuxStore for Backend<S, H> {
 	fn insert_aux<
 		'a,
 		'b: 'a,
@@ -106,16 +98,15 @@ impl<S: AuxStore, F, H: Hasher> AuxStore for Backend<S, F, H> {
 	}
 }
 
-impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
+impl<S, Block, H> ClientBackend<Block, H> for Backend<S, H> where
 	Block: BlockT,
 	S: BlockchainStorage<Block>,
-	F: Fetcher<Block>,
 	H: Hasher<Out=Block::Hash>,
 	H::Out: Ord,
 {
-	type BlockImportOperation = ImportOperation<Block, S, F, H>;
-	type Blockchain = Blockchain<S, F>;
-	type State = OnDemandOrGenesisState<Block, S, F, H>;
+	type BlockImportOperation = ImportOperation<Block, S, H>;
+	type Blockchain = Blockchain<S>;
+	type State = GenesisOrUnavailableState<H>;
 	type ChangesTrieStorage = in_mem::ChangesTrieStorage<Block, H>;
 	type OffchainStorage = in_mem::OffchainStorage;
 
@@ -183,7 +174,7 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 		self.blockchain.storage().finalize_header(block)
 	}
 
-	fn blockchain(&self) -> &Blockchain<S, F> {
+	fn blockchain(&self) -> &Blockchain<S> {
 		&self.blockchain
 	}
 
@@ -205,22 +196,17 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 		// special case for genesis block
 		if block_number.is_zero() {
 			if let Some(genesis_state) = self.genesis_state.read().clone() {
-				return Ok(OnDemandOrGenesisState::Genesis(genesis_state));
+				return Ok(GenesisOrUnavailableState::Genesis(genesis_state));
 			}
 		}
 
-		// else create on-demand state
-		let block_hash = self.blockchain.expect_block_hash_from_id(&block)?;
-		Ok(OnDemandOrGenesisState::OnDemand(OnDemandState {
-			fetcher: self.blockchain.fetcher(),
-			blockchain: Arc::downgrade(&self.blockchain),
-			block: block_hash,
-			cached_header: RwLock::new(None),
-		}))
+		// else return unavailable state. We do not return error here, because error
+		// would mean that we do not know this state at all. But we know that it exists
+		Ok(GenesisOrUnavailableState::Unavailable)
 	}
 
 	fn revert(&self, _n: NumberFor<Block>) -> ClientResult<NumberFor<Block>> {
-		Err(ClientError::NotAvailableOnLightClient.into())
+		Err(ClientError::NotAvailableOnLightClient)
 	}
 
 	fn get_import_lock(&self) -> &Mutex<()> {
@@ -228,11 +214,10 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 	}
 }
 
-impl<S, F, Block, H> RemoteBackend<Block, H> for Backend<S, F, H>
+impl<S, Block, H> RemoteBackend<Block, H> for Backend<S, H>
 where
 	Block: BlockT,
 	S: BlockchainStorage<Block> + 'static,
-	F: Fetcher<Block> + 'static,
 	H: Hasher<Out=Block::Hash>,
 	H::Out: Ord,
 {
@@ -248,15 +233,14 @@ where
 	}
 }
 
-impl<S, F, Block, H> BlockImportOperation<Block, H> for ImportOperation<Block, S, F, H>
+impl<S, Block, H> BlockImportOperation<Block, H> for ImportOperation<Block, S, H>
 where
 	Block: BlockT,
-	F: Fetcher<Block>,
 	S: BlockchainStorage<Block>,
 	H: Hasher<Out=Block::Hash>,
 	H::Out: Ord,
 {
-	type State = OnDemandOrGenesisState<Block, S, F, H>;
+	type State = GenesisOrUnavailableState<H>;
 
 	fn state(&self) -> ClientResult<Option<&Self::State>> {
 		// None means 'locally-stateless' backend
@@ -341,99 +325,9 @@ where
 	}
 }
 
-impl<Block, S, F, H> StateBackend<H> for OnDemandState<Block, S, F>
-where
-	Block: BlockT,
-	S: BlockchainStorage<Block>,
-	F: Fetcher<Block>,
-	H: Hasher<Out=Block::Hash>,
-{
-	type Error = ClientError;
-	type Transaction = ();
-	type TrieBackendStorage = MemoryDB<H>;
-
-	fn storage(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
-		let mut header = self.cached_header.read().clone();
-		if header.is_none() {
-			let cached_header = self.blockchain.upgrade()
-				.ok_or_else(|| ClientError::UnknownBlock(format!("{}", self.block)))
-				.and_then(|blockchain| blockchain.expect_header(BlockId::Hash(self.block)))?;
-			header = Some(cached_header.clone());
-			*self.cached_header.write() = Some(cached_header);
-		}
-
-		futures03::executor::block_on(
-			self.fetcher.upgrade().ok_or(ClientError::NotAvailableOnLightClient)?
-				.remote_read(RemoteReadRequest {
-					block: self.block,
-					header: header.expect("if block above guarantees that header is_some(); qed"),
-					key: key.to_vec(),
-					retry_count: None,
-				})
-		)
-	}
-
-	fn child_storage(&self, _storage_key: &[u8], _key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
-		Err(ClientError::NotAvailableOnLightClient.into())
-	}
-
-	fn for_keys_with_prefix<A: FnMut(&[u8])>(&self, _prefix: &[u8], _action: A) {
-		// whole state is not available on light node
-	}
-
-	fn for_key_values_with_prefix<A: FnMut(&[u8], &[u8])>(&self, _prefix: &[u8], _action: A) {
-		// whole state is not available on light node
-	}
-
-	fn for_keys_in_child_storage<A: FnMut(&[u8])>(&self, _storage_key: &[u8], _action: A) {
-		// whole state is not available on light node
-	}
-
-	fn for_child_keys_with_prefix<A: FnMut(&[u8])>(
-		&self,
-		_storage_key: &[u8],
-		_prefix: &[u8],
-		_action: A,
-	) {
-		// whole state is not available on light node
-	}
-
-	fn storage_root<I>(&self, _delta: I) -> (H::Out, Self::Transaction)
+impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
-	{
-		(H::Out::default(), ())
-	}
-
-	fn child_storage_root<I>(&self, _key: &[u8], _delta: I) -> (Vec<u8>, bool, Self::Transaction)
-	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
-	{
-		(H::Out::default().as_ref().to_vec(), true, ())
-	}
-
-	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		// whole state is not available on light node
-		Vec::new()
-	}
-
-	fn keys(&self, _prefix: &[u8]) -> Vec<Vec<u8>> {
-		// whole state is not available on light node
-		Vec::new()
-	}
-
-	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
-		None
-	}
-}
-
-impl<Block, S, F, H> StateBackend<H> for OnDemandOrGenesisState<Block, S, F, H>
-where
-	Block: BlockT,
-	F: Fetcher<Block>,
-	S: BlockchainStorage<Block>,
-	H: Hasher<Out=Block::Hash>,
-	H::Out: Ord,
+		H::Out: Ord,
 {
 	type Error = ClientError;
 	type Transaction = ();
@@ -441,44 +335,39 @@ where
 
 	fn storage(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
 		match *self {
-			OnDemandOrGenesisState::OnDemand(ref state) =>
-				StateBackend::<H>::storage(state, key),
-			OnDemandOrGenesisState::Genesis(ref state) =>
+			GenesisOrUnavailableState::Genesis(ref state) =>
 				Ok(state.storage(key).expect(IN_MEMORY_EXPECT_PROOF)),
+			GenesisOrUnavailableState::Unavailable => Err(ClientError::NotAvailableOnLightClient),
 		}
 	}
 
 	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
 		match *self {
-			OnDemandOrGenesisState::OnDemand(ref state) =>
-				StateBackend::<H>::child_storage(state, storage_key, key),
-			OnDemandOrGenesisState::Genesis(ref state) =>
+			GenesisOrUnavailableState::Genesis(ref state) =>
 				Ok(state.child_storage(storage_key, key).expect(IN_MEMORY_EXPECT_PROOF)),
+			GenesisOrUnavailableState::Unavailable => Err(ClientError::NotAvailableOnLightClient),
 		}
 	}
 
 	fn for_keys_with_prefix<A: FnMut(&[u8])>(&self, prefix: &[u8], action: A) {
 		match *self {
-			OnDemandOrGenesisState::OnDemand(ref state) =>
-				StateBackend::<H>::for_keys_with_prefix(state, prefix, action),
-			OnDemandOrGenesisState::Genesis(ref state) => state.for_keys_with_prefix(prefix, action),
+			GenesisOrUnavailableState::Genesis(ref state) => state.for_keys_with_prefix(prefix, action),
+			GenesisOrUnavailableState::Unavailable => (),
 		}
 	}
 
 	fn for_key_values_with_prefix<A: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], action: A) {
 		match *self {
-			OnDemandOrGenesisState::OnDemand(ref state) =>
-				StateBackend::<H>::for_key_values_with_prefix(state, prefix, action),
-			OnDemandOrGenesisState::Genesis(ref state) => state.for_key_values_with_prefix(prefix, action),
+			GenesisOrUnavailableState::Genesis(ref state) => state.for_key_values_with_prefix(prefix, action),
+			GenesisOrUnavailableState::Unavailable => (),
 		}
 	}
 
 
 	fn for_keys_in_child_storage<A: FnMut(&[u8])>(&self, storage_key: &[u8], action: A) {
 		match *self {
-			OnDemandOrGenesisState::OnDemand(ref state) =>
-				StateBackend::<H>::for_keys_in_child_storage(state, storage_key, action),
-			OnDemandOrGenesisState::Genesis(ref state) => state.for_keys_in_child_storage(storage_key, action),
+			GenesisOrUnavailableState::Genesis(ref state) => state.for_keys_in_child_storage(storage_key, action),
+			GenesisOrUnavailableState::Unavailable => (),
 		}
 	}
 
@@ -489,10 +378,9 @@ where
 		action: A,
 	) {
 		match *self {
-			OnDemandOrGenesisState::OnDemand(ref state) =>
-				StateBackend::<H>::for_child_keys_with_prefix(state, storage_key, prefix, action),
-			OnDemandOrGenesisState::Genesis(ref state) =>
+			GenesisOrUnavailableState::Genesis(ref state) =>
 				state.for_child_keys_with_prefix(storage_key, prefix, action),
+			GenesisOrUnavailableState::Unavailable => (),
 		}
 	}
 
@@ -501,12 +389,9 @@ where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
 		match *self {
-			OnDemandOrGenesisState::OnDemand(ref state) =>
-				StateBackend::<H>::storage_root(state, delta),
-			OnDemandOrGenesisState::Genesis(ref state) => {
-				let (root, _) = state.storage_root(delta);
-				(root, ())
-			},
+			GenesisOrUnavailableState::Genesis(ref state) =>
+				(state.storage_root(delta).0, ()),
+			GenesisOrUnavailableState::Unavailable => (H::Out::default(), ()),
 		}
 	}
 
@@ -515,35 +400,32 @@ where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
 		match *self {
-			OnDemandOrGenesisState::OnDemand(ref state) =>
-				StateBackend::<H>::child_storage_root(state, key, delta),
-			OnDemandOrGenesisState::Genesis(ref state) => {
+			GenesisOrUnavailableState::Genesis(ref state) => {
 				let (root, is_equal, _) = state.child_storage_root(key, delta);
 				(root, is_equal, ())
 			},
+			GenesisOrUnavailableState::Unavailable => (H::Out::default().as_ref().to_vec(), true, ()),
 		}
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		match *self {
-			OnDemandOrGenesisState::OnDemand(ref state) =>
-				StateBackend::<H>::pairs(state),
-			OnDemandOrGenesisState::Genesis(ref state) => state.pairs(),
+			GenesisOrUnavailableState::Genesis(ref state) => state.pairs(),
+			GenesisOrUnavailableState::Unavailable => Vec::new(),
 		}
 	}
 
 	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
 		match *self {
-			OnDemandOrGenesisState::OnDemand(ref state) =>
-				StateBackend::<H>::keys(state, prefix),
-			OnDemandOrGenesisState::Genesis(ref state) => state.keys(prefix),
+			GenesisOrUnavailableState::Genesis(ref state) => state.keys(prefix),
+			GenesisOrUnavailableState::Unavailable => Vec::new(),
 		}
 	}
 
 	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
 		match self {
-			OnDemandOrGenesisState::OnDemand(ref mut state) => state.as_trie_backend(),
-			OnDemandOrGenesisState::Genesis(ref mut state) => state.as_trie_backend(),
+			GenesisOrUnavailableState::Genesis(ref mut state) => state.as_trie_backend(),
+			GenesisOrUnavailableState::Unavailable => None,
 		}
 	}
 }
@@ -561,24 +443,24 @@ mod tests {
 		let def = Default::default();
 		let header0 = test_client::runtime::Header::new(0, def, def, def, Default::default());
 
-		let backend: Backend<_, _, Blake2Hasher> = Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())));
+		let backend: Backend<_, Blake2Hasher> = Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())));
 		let mut op = backend.begin_operation().unwrap();
 		op.set_block_data(header0, None, None, NewBlockState::Final).unwrap();
 		op.reset_storage(Default::default(), Default::default()).unwrap();
 		backend.commit_operation(op).unwrap();
 
 		match backend.state_at(BlockId::Number(0)).unwrap() {
-			OnDemandOrGenesisState::Genesis(_) => (),
+			GenesisOrUnavailableState::Genesis(_) => (),
 			_ => panic!("unexpected state"),
 		}
 	}
 
 	#[test]
-	fn remote_state_is_created_when_genesis_state_is_inavailable() {
-		let backend: Backend<_, _, Blake2Hasher> = Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())));
+	fn unavailable_state_is_created_when_genesis_state_is_unavailable() {
+		let backend: Backend<_, Blake2Hasher> = Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())));
 
 		match backend.state_at(BlockId::Number(0)).unwrap() {
-			OnDemandOrGenesisState::OnDemand(_) => (),
+			GenesisOrUnavailableState::Unavailable => (),
 			_ => panic!("unexpected state"),
 		}
 	}
