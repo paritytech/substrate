@@ -271,11 +271,13 @@ pub mod generic {
 	pub struct BlockAnnounce<H> {
 		/// New block header.
 		pub header: H,
-		/// Block state. TODO: Remove `Option` when v4 becomes common.
+		/// Block state. TODO: Remove `Option` and custom encoding when v4 becomes common.
 		pub state: Option<BlockState>,
 	}
 
-	// custom Encode/Decode impl to maintain backwards compatibility with v3
+	// Custom Encode/Decode impl to maintain backwards compatibility with v3.
+	// This assumes that the packet contains nothing but the announcement message.
+	// TODO: Get rid of it once protocol v4 is common.
 	impl<H: Encode> Encode for BlockAnnounce<H> {
 		fn encode_to<T: Output>(&self, dest: &mut T) {
 			self.header.encode_to(dest);
