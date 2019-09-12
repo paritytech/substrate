@@ -1021,7 +1021,7 @@ impl<T: Trait> Module<T> {
 			&ledger.stash,
 			ledger.total,
 			T::BlockNumber::max_value(),
-			WithdrawReasons::except(WithdrawReason::TransactionPayment),
+			WithdrawReasons::all(),
 		);
 		<Ledger<T>>::insert(controller, ledger);
 	}
