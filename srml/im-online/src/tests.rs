@@ -134,7 +134,6 @@ fn should_mark_online_validator_when_heartbeat_is_received() {
 		advance_session();
 
 		assert_eq!(Session::current_index(), 2);
-		// TODO: hmmm...
 		assert_eq!(Session::validators(), vec![1, 2, 3]);
 
 		assert!(!ImOnline::is_online_in_current_session(0));
