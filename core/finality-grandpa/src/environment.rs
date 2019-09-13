@@ -871,6 +871,11 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
 	RA: Send + Sync,
 {
+	// NOTE: lock must be held through writing to DB to avoid race. this lock
+	//       also implicitly synchronizes the check for last finalized number
+	//       below.
+	let mut authority_set = authority_set.inner().write();
+
 	let status = client.info().chain;
 	if number <= status.finalized_number && client.hash(number)? == Some(hash) {
 		// This can happen after a forced change (triggered by the finality tracker when finality is stalled), since
@@ -884,9 +889,6 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 
 		return Ok(());
 	}
-
-	// lock must be held through writing to DB to avoid race
-	let mut authority_set = authority_set.inner().write();
 
 	// FIXME #1483: clone only when changed
 	let old_authority_set = authority_set.clone();

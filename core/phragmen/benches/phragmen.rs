@@ -16,27 +16,35 @@
 //! Note that execution times will not be accurate in an absolute scale, since
 //! - Everything is executed in the context of `TestExternalities`
 //! - Everything is executed in native environment.
-//!
-//! Run using:
-//!
-//! ```zsh
-//!  cargo bench --features bench --color always
-//! ```
 
+#![feature(test)]
+
+extern crate test;
 use test::Bencher;
-use runtime_io::with_externalities;
-use mock::*;
-use super::*;
-use phragmen;
+
 use rand::{self, Rng};
+extern crate substrate_phragmen as phragmen;
+use phragmen::{Support, SupportMap, ACCURACY};
+
+use std::collections::BTreeMap;
+use sr_primitives::traits::{Convert, SaturatedConversion};
 
 const VALIDATORS: u64 = 1000;
 const NOMINATORS: u64 = 10_000;
 const EDGES: u64 = 2;
 const TO_ELECT: usize = 100;
-const STAKE: u64 = 1000;
+const STAKE: Balance = 1000;
 
-type C<T> = <T as Trait>::CurrencyToVote;
+type Balance = u128;
+type AccountId = u64;
+
+pub struct TestCurrencyToVote;
+impl Convert<Balance, u64> for TestCurrencyToVote {
+	fn convert(x: Balance) -> u64 { x.saturated_into() }
+}
+impl Convert<u128, Balance> for TestCurrencyToVote {
+	fn convert(x: u128) -> Balance { x.saturated_into() }
+}
 
 fn do_phragmen(
 	b: &mut Bencher,
@@ -47,84 +55,89 @@ fn do_phragmen(
 	eq_iters: usize,
 	_eq_tolerance: u128,
 ) {
-	with_externalities(&mut ExtBuilder::default().nominate(false).build(), || {
-		assert!(num_vals > votes_per);
-		let rr = |a, b| rand::thread_rng().gen_range(a as usize, b as usize) as u64;
+	assert!(num_vals > votes_per);
+	let rr = |a, b| rand::thread_rng().gen_range(a as usize, b as usize) as Balance;
 
-		// prefix to distinguish the validator and nominator account ranges.
-		let np = 10_000;
+	// prefix to distinguish the validator and nominator account ranges.
+	let np = 10_000;
 
-		(1 ..= 2*num_vals)
-			.step_by(2)
-			.for_each(|acc| bond_validator(acc, STAKE + rr(10, 50)));
+	let mut candidates = vec![];
+	let mut voters = vec![];
+	let mut slashable_balance_of: BTreeMap<AccountId, Balance> = BTreeMap::new();
 
-		(np ..= (np + 2*num_noms))
-			.step_by(2)
-			.for_each(|acc| {
-				let mut stashes_to_vote = (1 ..= 2*num_vals)
-					.step_by(2)
-					.map(|ctrl| ctrl + 1)
-					.collect::<Vec<AccountId>>();
-				let votes = (0 .. votes_per)
-					.map(|_| {
-						stashes_to_vote.remove(rr(0, stashes_to_vote.len()) as usize)
-					})
-					.collect::<Vec<AccountId>>();
-				bond_nominator(acc, STAKE + rr(10, 50), votes);
-			});
+	(1 ..= num_vals)
+		.for_each(|acc| {
+			candidates.push(acc);
+			slashable_balance_of.insert(acc, STAKE + rr(10, 50));
+		});
 
-		b.iter(|| {
-			let r = phragmen::elect::<_, _, _, <Test as Trait>::CurrencyToVote>(
-				count,
-				1_usize,
-				<Validators<Test>>::enumerate().map(|(who, _)| who).collect::<Vec<u64>>(),
-				<Nominators<Test>>::enumerate().collect(),
-				Staking::slashable_balance_of,
-				true,
-			).unwrap();
+	(np ..= (np + num_noms))
+		.for_each(|acc| {
+			let mut stashes_to_vote = candidates.clone();
+			let votes = (0 .. votes_per)
+				.map(|_| {
+					stashes_to_vote.remove(rr(0, stashes_to_vote.len()) as usize)
+				})
+				.collect::<Vec<AccountId>>();
+			voters.push((acc, votes));
+			slashable_balance_of.insert(acc, STAKE + rr(10, 50));
+		});
 
-			// Do the benchmarking with equalize.
-			if eq_iters > 0 {
-				let elected_stashes = r.winners;
-				let mut assignments = r.assignments;
+	let slashable_balance = |who: &AccountId| -> Balance {
+		*slashable_balance_of.get(who).unwrap()
+	};
 
-				let to_votes = |b: Balance|
-				<C<Test> as Convert<Balance, AccountId>>::convert(b) as ExtendedBalance;
-				let ratio_of = |b, r: ExtendedBalance| r.saturating_mul(to_votes(b)) / ACCURACY;
+	b.iter(|| {
+		let r = phragmen::elect::<AccountId, Balance, _, TestCurrencyToVote>(
+			count,
+			1_usize,
+			candidates.clone(),
+			voters.clone(),
+			slashable_balance,
+			true,
+		).unwrap();
 
-				// Initialize the support of each candidate.
-				let mut supports = <SupportMap<u64>>::new();
-				elected_stashes
-					.iter()
-					.map(|e| (e, to_votes(Staking::slashable_balance_of(e))))
-					.for_each(|(e, s)| {
-						let item = Support { own: s, total: s, ..Default::default() };
-						supports.insert(e.clone(), item);
-					});
+		// Do the benchmarking with equalize.
+		if eq_iters > 0 {
+			let elected_stashes = r.winners;
+			let mut assignments = r.assignments;
 
-				for (n, assignment) in assignments.iter_mut() {
-					for (c, r) in assignment.iter_mut() {
-						let nominator_stake = Staking::slashable_balance_of(n);
-						let other_stake = ratio_of(nominator_stake, *r);
-						if let Some(support) = supports.get_mut(c) {
-							support.total = support.total.saturating_add(other_stake);
-							support.others.push((n.clone(), other_stake));
-						}
-						*r = other_stake;
+			let to_votes = |b: Balance|
+				<TestCurrencyToVote as Convert<Balance, u128>>::convert(b) as u128;
+			let ratio_of = |b, r: u128| r.saturating_mul(to_votes(b)) / ACCURACY;
+
+			// Initialize the support of each candidate.
+			let mut supports = <SupportMap<u64>>::new();
+			elected_stashes
+				.iter()
+				.map(|e| (e, to_votes(slashable_balance(e))))
+				.for_each(|(e, s)| {
+					let item = Support { own: s, total: s, ..Default::default() };
+					supports.insert(e.clone(), item);
+				});
+
+			for (n, assignment) in assignments.iter_mut() {
+				for (c, r) in assignment.iter_mut() {
+					let nominator_stake = slashable_balance(n);
+					let other_stake = ratio_of(nominator_stake, *r);
+					if let Some(support) = supports.get_mut(c) {
+						support.total = support.total.saturating_add(other_stake);
+						support.others.push((n.clone(), other_stake));
 					}
+					*r = other_stake;
 				}
-
-				let tolerance = 0_u128;
-				let iterations = 2_usize;
-				phragmen::equalize::<_, _, <Test as Trait>::CurrencyToVote, _>(
-					assignments,
-					&mut supports,
-					tolerance,
-					iterations,
-					Staking::slashable_balance_of,
-				);
 			}
-		})
+
+			let tolerance = 0_u128;
+			let iterations = 2_usize;
+			phragmen::equalize::<_, _, _, TestCurrencyToVote>(
+				assignments,
+				&mut supports,
+				tolerance,
+				iterations,
+				slashable_balance,
+			);
+		}
 	})
 }
 
@@ -134,11 +147,10 @@ macro_rules! phragmen_benches {
         #[bench]
         fn $name(b: &mut Bencher) {
 			let (v, n, t, e, eq_iter, eq_tol) = $tup;
-			println!("");
+			println!("----------------------");
 			println!(
-				r#"
-++ Benchmark: {} Validators // {} Nominators // {} Edges-per-nominator // {} total edges //
-electing {} // Equalize: {} iterations -- {} tolerance"#,
+				"++ Benchmark: {} Validators // {} Nominators // {} Edges-per-nominator // {} \
+				total edges // electing {} // Equalize: {} iterations -- {} tolerance",
 				v, n, e, e * n, t, eq_iter, eq_tol,
 			);
 			do_phragmen(b, v, n, t, e, eq_iter, eq_tol);

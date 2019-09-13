@@ -113,9 +113,10 @@ decl_module! {
 		/// # <weight>
 		/// - O(1).
 		/// - Limited storage reads.
-		/// - No DB writes.
+		/// - One DB write (event).
+		/// - Unknown weight of derivative `proposal` execution.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(1_000_000)]
+		#[weight = SimpleDispatchInfo::FreeOperational]
 		fn sudo(origin, proposal: Box<T::Proposal>) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
@@ -151,6 +152,37 @@ decl_module! {
 			Self::deposit_event(RawEvent::KeyChanged(Self::key()));
 			<Key<T>>::put(new);
 		}
+
+		/// Authenticates the sudo key and dispatches a function call with `Signed` origin from
+		/// a given account.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - Limited storage reads.
+		/// - One DB write (event).
+		/// - Unknown weight of derivative `proposal` execution.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedOperational(0)]
+		fn sudo_as(origin, who: <T::Lookup as StaticLookup>::Source, proposal: Box<T::Proposal>) {
+			// This is a public call, so we ensure that the origin is some signed account.
+			let sender = ensure_signed(origin)?;
+			ensure!(sender == Self::key(), "only the current sudo key can sudo");
+
+			let who = T::Lookup::lookup(who)?;
+
+			let res = match proposal.dispatch(system::RawOrigin::Signed(who).into()) {
+				Ok(_) => true,
+				Err(e) => {
+					let e: DispatchError = e.into();
+					runtime_io::print(e);
+					false
+				}
+			};
+
+			Self::deposit_event(RawEvent::SudoAsDone(res));
+		}
 	}
 }
 
@@ -160,6 +192,8 @@ decl_event!(
 		Sudid(bool),
 		/// The sudoer just switched identity; the old key is supplied.
 		KeyChanged(AccountId),
+		/// A sudo just took place.
+		SudoAsDone(bool),
 	}
 );
 

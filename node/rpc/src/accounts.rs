@@ -31,8 +31,6 @@ use transaction_pool::txpool::{self, Pool};
 
 pub use self::gen_client::Client as AccountsClient;
 
-const RUNTIME_ERROR: i64 = 1;
-
 /// Accounts RPC methods.
 #[rpc]
 pub trait AccountsApi {
@@ -75,7 +73,7 @@ where
 		let at = BlockId::hash(best);
 
 		let nonce = api.account_nonce(&at, account.clone()).map_err(|e| Error {
-			code: ErrorCode::ServerError(RUNTIME_ERROR),
+			code: ErrorCode::ServerError(crate::constants::RUNTIME_ERROR),
 			message: "Unable to query nonce.".into(),
 			data: Some(format!("{:?}", e).into()),
 		})?;
