@@ -64,7 +64,7 @@ impl FunctionExecutor {
 	fn new(m: MemoryRef, heap_base: u32, t: Option<TableRef>) -> Result<Self> {
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
-			heap: allocator::FreeingBumpHeapAllocator::new(m.clone(), heap_base),
+			heap: allocator::FreeingBumpHeapAllocator::new(heap_base),
 			memory: m,
 			table: t,
 		})
@@ -81,10 +81,16 @@ impl sandbox::SandboxCapabilities for FunctionExecutor {
 		&mut self.sandbox_store
 	}
 	fn allocate(&mut self, len: WordSize) -> Result<Pointer<u8>> {
-		self.heap.allocate(len)
+		let heap = &mut self.heap;
+		self.memory.with_direct_access_mut(|mem| {
+			heap.allocate(mem, len)
+		})
 	}
 	fn deallocate(&mut self, ptr: Pointer<u8>) -> Result<()> {
-		self.heap.deallocate(ptr)
+		let heap = &mut self.heap;
+		self.memory.with_direct_access_mut(|mem| {
+			heap.deallocate(mem, ptr)
+		})
 	}
 	fn write_memory(&mut self, ptr: Pointer<u8>, data: &[u8]) -> Result<()> {
 		self.memory.set(ptr.into(), data).map_err(Into::into)
@@ -130,11 +136,17 @@ impl FunctionContext for FunctionExecutor {
 	}
 
 	fn allocate_memory(&mut self, size: WordSize) -> WResult<Pointer<u8>> {
-		self.heap.allocate(size).map_err(|e| format!("{:?}", e))
+		let heap = &mut self.heap;
+		self.memory.with_direct_access_mut(|mem| {
+			heap.allocate(mem, size).map_err(|e| format!("{:?}", e))
+		})
 	}
 
 	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> WResult<()> {
-		self.heap.deallocate(ptr).map_err(|e| format!("{:?}", e))
+		let heap = &mut self.heap;
+		self.memory.with_direct_access_mut(|mem| {
+			heap.deallocate(mem, ptr).map_err(|e| format!("{:?}", e))
+		})
 	}
 
 	fn sandbox(&mut self) -> &mut dyn Sandbox {
