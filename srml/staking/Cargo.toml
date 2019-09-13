@@ -23,11 +23,9 @@ authorship = { package = "srml-authorship", path = "../authorship", default-feat
 primitives = { package = "substrate-primitives",  path = "../../core/primitives" }
 balances = { package = "srml-balances", path = "../balances" }
 timestamp = { package = "srml-timestamp", path = "../timestamp" }
-rand = "0.6.5"
 
 [features]
 equalize = []
-bench = []
 default = ["std", "equalize"]
 std = [
 	"serde",
