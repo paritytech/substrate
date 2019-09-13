@@ -66,12 +66,27 @@ pub struct OnDemandState<Block: BlockT, S, F> {
 	cached_header: RwLock<Option<Block::Header>>,
 }
 
+impl<Block: BlockT, S, F> std::fmt::Debug for OnDemandState<Block, S, F> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "OnDemand at {:?}", self.block)
+	}
+}
+
 /// On-demand or in-memory genesis state.
 pub enum OnDemandOrGenesisState<Block: BlockT, S, F, H: Hasher> {
 	/// On-demand state - storage values are fetched from remote nodes.
 	OnDemand(OnDemandState<Block, S, F>),
 	/// Genesis state - storage values are stored in-memory.
 	Genesis(InMemoryState<H>),
+}
+
+impl<Block: BlockT, S, F, H: Hasher> std::fmt::Debug for OnDemandOrGenesisState<Block, S, F, H> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match *self {
+			OnDemandOrGenesisState::OnDemand(ref state) => state.fmt(f),
+			OnDemandOrGenesisState::Genesis(ref state) => state.fmt(f),
+		}
+	}
 }
 
 impl<S, F, H: Hasher> Backend<S, F, H> {
