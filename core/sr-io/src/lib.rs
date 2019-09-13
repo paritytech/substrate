@@ -39,6 +39,7 @@ use primitives::{
 		Timestamp, HttpRequestId, HttpRequestStatus, HttpError, StorageKind, OpaqueNetworkState,
 	},
 };
+use impl_trait_for_tuples::impl_for_tuples;
 
 /// Error verifying ECDSA signature
 pub enum EcdsaVerifyError {
@@ -60,7 +61,28 @@ pub trait Printable {
 
 impl Printable for u8 {
 	fn print(&self) {
-		u64::from(*self).print()
+		(*self as u64).print()
+	}
+}
+
+impl Printable for u32 {
+	fn print(&self) {
+		(*self as u64).print()
+	}
+}
+
+impl Printable for usize {
+	fn print(&self) {
+		(*self as u64).print()
+	}
+}
+
+#[impl_for_tuples(1, 12)]
+impl Printable for Tuple {
+	for_tuples!( where #( Tuple: Printable )* );
+
+	fn print(&self) {
+		for_tuples!( #( Tuple.print(); )* )
 	}
 }
 
