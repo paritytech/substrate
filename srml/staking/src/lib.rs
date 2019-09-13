@@ -243,21 +243,13 @@
 
 #![recursion_limit="128"]
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(all(feature = "bench", test), feature(test))]
 
-#[cfg(all(feature = "bench", test))]
-extern crate test;
-
-#[cfg(any(feature = "bench", test))]
+#[cfg(test)]
 mod mock;
-
 #[cfg(test)]
 mod tests;
 
 pub mod inflation;
-
-#[cfg(all(feature = "bench", test))]
-mod benches;
 
 use rstd::{prelude::*, result};
 use codec::{HasCompact, Encode, Decode};
@@ -1295,7 +1287,7 @@ impl<T: Trait> Module<T> {
 			if cfg!(feature = "equalize") {
 				let tolerance = 0_u128;
 				let iterations = 2_usize;
-				equalize::<_, _, T::CurrencyToVote, _>(
+				equalize::<_, _, _, T::CurrencyToVote>(
 					assignments,
 					&mut supports,
 					tolerance,
