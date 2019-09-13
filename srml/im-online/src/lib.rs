@@ -67,7 +67,7 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use app_crypto::{AppPublic, RuntimeAppPublic, AppSignature};
+use app_crypto::{AppPublic, RuntimeAppPublic};
 use codec::{Encode, Decode};
 use primitives::offchain::{OpaqueNetworkState, StorageKind};
 use rstd::prelude::*;
