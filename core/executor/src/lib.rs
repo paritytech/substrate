@@ -37,7 +37,7 @@ mod native_executor;
 mod sandbox;
 mod allocator;
 mod host_interface;
-mod wasm_runtimes_cache;
+mod wasm_runtime;
 
 pub mod error;
 pub use wasmi;

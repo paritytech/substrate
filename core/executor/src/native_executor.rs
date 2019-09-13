@@ -16,11 +16,10 @@
 
 use std::{result, cell::RefCell, panic::UnwindSafe};
 use crate::error::{Error, Result};
-use crate::wasm_runtimes_cache::RuntimesCache;
-use crate::wasmi_execution::call_in_wasm_module;
+use crate::wasm_runtime::{RuntimesCache, WasmRuntime};
+use crate::RuntimeInfo;
 use runtime_version::{NativeVersion, RuntimeVersion};
 use codec::{Decode, Encode};
-use crate::RuntimeInfo;
 use primitives::{Blake2Hasher, NativeOrEncoded, traits::{CodeExecutor, Externalities}};
 use log::{trace, warn};
 
@@ -87,6 +86,20 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 			default_heap_pages: default_heap_pages.unwrap_or(DEFAULT_HEAP_PAGES),
 		}
 	}
+
+	fn with_runtime<E, R>(
+		&self,
+		ext: &mut E,
+		f: impl for <'a> FnOnce(&'a mut dyn WasmRuntime, &'a mut E) -> Result<R>
+	) -> Result<R>
+		where E: Externalities<Blake2Hasher>
+	{
+		RUNTIMES_CACHE.with(|cache| {
+			let mut cache = cache.borrow_mut();
+			let runtime = cache.fetch_runtime(ext, self.default_heap_pages)?;
+			f(runtime, ext)
+		})
+	}
 }
 
 impl<D: NativeExecutionDispatch> Clone for NativeExecutor<D> {
@@ -108,17 +121,13 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 		&self,
 		ext: &mut E,
 	) -> Option<RuntimeVersion> {
-		RUNTIMES_CACHE.with(|cache| {
-			let cache = &mut cache.borrow_mut();
-
-			match cache.fetch_runtime(ext, self.default_heap_pages) {
-				Ok(runtime) => runtime.version(),
-				Err(e) => {
-					warn!(target: "executor", "Failed to fetch runtime: {:?}", e);
-					None
-				}
+		match self.with_runtime(ext, |runtime, _ext| Ok(runtime.version())) {
+			Ok(version) => version,
+			Err(e) => {
+				warn!(target: "executor", "Failed to fetch runtime: {:?}", e);
+				None
 			}
-		})
+		}
 	}
 }
 
@@ -138,13 +147,9 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 		use_native: bool,
 		native_call: Option<NC>,
 	) -> (Result<NativeOrEncoded<R>>, bool){
-		RUNTIMES_CACHE.with(|cache| {
-			let cache = &mut cache.borrow_mut();
-			let cached_runtime = match cache.fetch_runtime(ext, self.default_heap_pages) {
-				Ok(cached_runtime) => cached_runtime,
-				Err(e) => return (Err(e), false),
-			};
-			let onchain_version = cached_runtime.version();
+		let mut used_native = false;
+		let result = self.with_runtime(ext, |runtime, ext| {
+			let onchain_version = runtime.version();
 			match (
 				use_native,
 				onchain_version
@@ -161,23 +166,9 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 							.as_ref()
 							.map_or_else(||"<None>".into(), |v| format!("{}", v))
 					);
-					(
-						cached_runtime.with(|module|
-							call_in_wasm_module(ext, module, method, data)
-								.map(NativeOrEncoded::Encoded)
-						),
-						false
-					)
+					runtime.call(ext, method, data).map(NativeOrEncoded::Encoded)
 				}
-				(false, _, _) => {
-					(
-						cached_runtime.with(|module|
-							call_in_wasm_module(ext, module, method, data)
-								.map(NativeOrEncoded::Encoded)
-						),
-						false
-					)
-				}
+				(false, _, _) => runtime.call(ext, method, data).map(NativeOrEncoded::Encoded),
 				(true, true, Some(call)) => {
 					trace!(
 						target: "executor",
@@ -187,11 +178,13 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 							.as_ref()
 							.map_or_else(||"<None>".into(), |v| format!("{}", v))
 					);
-					(
-						with_native_environment(ext, move || (call)())
-							.and_then(|r| r.map(NativeOrEncoded::Native).map_err(|s| Error::ApiError(s.to_string()))),
-						true
-					)
+
+					used_native = true;
+					with_native_environment(ext, move || (call)())
+						.and_then(|r| r
+							.map(NativeOrEncoded::Native)
+							.map_err(|s| Error::ApiError(s.to_string()))
+						)
 				}
 				_ => {
 					trace!(
@@ -200,10 +193,13 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 						self.native_version.runtime_version,
 						onchain_version.as_ref().map_or_else(||"<None>".into(), |v| format!("{}", v))
 					);
-					(D::dispatch(ext, method, data).map(NativeOrEncoded::Encoded), true)
+
+					used_native = true;
+					D::dispatch(ext, method, data).map(NativeOrEncoded::Encoded)
 				}
 			}
-		})
+		});
+		(result, used_native)
 	}
 }
 

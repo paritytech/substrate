@@ -321,8 +321,8 @@ impl wasmi::Externals for FunctionExecutor {
 ///
 /// This should be used for tests only.
 #[cfg(test)]
-pub fn call<E: Externalities<Blake2Hasher>>(
-	ext: &mut E,
+pub fn call(
+	ext: &mut dyn Externalities<Blake2Hasher>,
 	heap_pages: usize,
 	code: &[u8],
 	method: &str,
@@ -360,8 +360,8 @@ fn get_heap_base(module: &ModuleRef) -> Result<u32> {
 }
 
 /// Call a given method in the given wasm-module runtime.
-pub fn call_in_wasm_module<E: Externalities<Blake2Hasher>>(
-	ext: &mut E,
+pub fn call_in_wasm_module(
+	ext: &mut dyn Externalities<Blake2Hasher>,
 	module_instance: &ModuleRef,
 	method: &str,
 	data: &[u8],
@@ -388,12 +388,11 @@ pub fn call_in_wasm_module<E: Externalities<Blake2Hasher>>(
 
 /// Call a given method in the given wasm-module runtime.
 fn call_in_wasm_module_with_custom_signature<
-	E: Externalities<Blake2Hasher>,
 	F: FnOnce(&mut dyn FnMut(&[u8]) -> Result<u32>) -> Result<Vec<RuntimeValue>>,
 	FR: FnOnce(Option<RuntimeValue>, &MemoryRef) -> Result<Option<R>>,
 	R,
 >(
-	ext: &mut E,
+	ext: &mut dyn Externalities<Blake2Hasher>,
 	module_instance: &ModuleRef,
 	method: &str,
 	create_parameters: F,
