@@ -191,14 +191,16 @@ impl OverlayedChangeSet {
 		self.history.commit_transaction();
 	}
 
-	/// Iterator over current state of the overlay.
+	/// Iterator over current state of the top level overlay, including change trie information.
 	pub fn top_iter_overlay(&self) -> impl Iterator<Item = (&[u8], &OverlayedValue)> {
 		self.top.iter()
 			.filter_map(move |(k, v)|
 				v.get(self.history.as_ref()).map(|v| (k.as_slice(), v)))
 	}
 
-	/// Iterator over current state of the overlay.
+	/// Iterator over current state of a given child overlay, including change trie information.
+	/// Can be use to return top level storage by using a `None` storage key,
+	/// `top_iter_overlay` method should be use instead if possible.
 	pub fn child_iter_overlay(
 		&self,
 		storage_key: Option<&[u8]>,
@@ -216,12 +218,14 @@ impl OverlayedChangeSet {
 			)
 	}
 
-	/// Iterator over current state of the overlay.
+	/// Iterator over current state of the top level overlay, values only.
 	pub fn top_iter(&self) -> impl Iterator<Item = (&[u8], Option<&[u8]>)> {
 		self.top_iter_overlay().map(|(k, v)| (k, v.value.as_ref().map(|v| v.as_slice())))
 	}
 
-	/// Iterator over current state of the overlay.
+	/// Iterator over current state of a given child overlay, values only.
+	/// Can be use to return top level storage by using a `None` storage key,
+	/// `top_iter` method should be use instead if possible.
 	pub fn child_iter(
 		&self,
 		storage_key: Option<&[u8]>,
@@ -230,18 +234,7 @@ impl OverlayedChangeSet {
 			.map(|(k, v)| (k, v.value.as_ref().map(|v| v.as_slice())))
 	}
 
-	/// Iterator over current state of the overlay.
-	pub fn children_iter_overlay(
-		&self,
-	) -> impl Iterator<Item=(&[u8], impl Iterator<Item = (&[u8], &OverlayedValue)>)> {
-		self.children.iter()
-			.map(move |(keyspace, child)| (keyspace.as_slice(), child.iter()
-				.filter_map(move |(k, v)|
-					v.get(self.history.as_ref()).map(|v| (k.as_slice(), v)))
-			))
-	}
-
-	/// Iterator over current state of the overlay.
+	/// Iterator over current state of all children overlays, values only.
 	pub fn children_iter(
 		&self,
 	) -> impl Iterator<Item=(&[u8], impl Iterator<Item = (&[u8], Option<&[u8]>)>)> {
@@ -253,7 +246,8 @@ impl OverlayedChangeSet {
 			))
 	}
 
-	/// Iterator over current state of the overlay.
+	/// Iterator over current state of all children overlays, values only.
+	/// Similar to `children_iter` but with key and value as `Vec<u8>`.
 	pub fn owned_children_iter<'a>(
 		&'a self,
 	) -> impl Iterator<Item=(Vec<u8>, impl Iterator<Item = (Vec<u8>, Option<Vec<u8>>)> + 'a)> + 'a {
@@ -262,6 +256,17 @@ impl OverlayedChangeSet {
 				.filter_map(move |(k, v)|
 					v.get(self.history.as_ref())
 						.map(|v| (k.to_vec(), v.value.as_ref().map(|v| v.to_vec()))))
+			))
+	}
+
+	/// Iterator over current state of all children overlays, including change trie information.
+	pub fn children_iter_overlay(
+		&self,
+	) -> impl Iterator<Item=(&[u8], impl Iterator<Item = (&[u8], &OverlayedValue)>)> {
+		self.children.iter()
+			.map(move |(keyspace, child)| (keyspace.as_slice(), child.iter()
+				.filter_map(move |(k, v)|
+					v.get(self.history.as_ref()).map(|v| (k.as_slice(), v)))
 			))
 	}
 
@@ -278,6 +283,7 @@ impl OverlayedChangeSet {
 		}
 		result
 	}
+
 	/// Test only method to access current commited changes.
 	/// It is here to keep old test compatibility and should be
 	/// avoid for new tests.
