@@ -31,7 +31,7 @@ OUTPUT:
 `subkey` expects a message to come in on STDIN, one way to sign a message would look like this:
 
 ```bash
-echo <msg> | subkey sign <seed,mnemonic>
+echo -n <msg> | subkey sign <seed,mnemonic>
 
 OUTPUT:
 a69da4a6ccbf81dbbbfad235fa12cf8528c18012b991ae89214de8d20d29c1280576ced6eb38b7406d1b7e03231df6dd4a5257546ddad13259356e1c3adfb509
@@ -40,7 +40,7 @@ a69da4a6ccbf81dbbbfad235fa12cf8528c18012b991ae89214de8d20d29c1280576ced6eb38b740
 === Verifying a signature
 
 ```bash
-echo <msg> | subkey verify <sig> <address>
+echo -n <msg> | subkey verify <sig> <address>
 
 OUTPUT:
 Signature verifies correctly.
