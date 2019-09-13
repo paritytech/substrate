@@ -22,12 +22,12 @@
 
 use rstd::{result, prelude::*};
 use rstd::collections::btree_set::BTreeSet;
-use srml_support::{decl_module, decl_storage, for_each_tuple, StorageValue};
-use srml_support::traits::{FindAuthor, VerifySeal, Get};
-use srml_support::dispatch::Result as DispatchResult;
+use support::{decl_module, decl_storage, StorageValue};
+use support::traits::{FindAuthor, VerifySeal, Get};
+use support::dispatch::Result as DispatchResult;
 use codec::{Encode, Decode};
 use system::ensure_none;
-use sr_primitives::traits::{SimpleArithmetic, Header as HeaderT, One, Zero};
+use sr_primitives::traits::{Header as HeaderT, One, Zero};
 use sr_primitives::weights::SimpleDispatchInfo;
 use inherents::{
 	RuntimeString, InherentIdentifier, ProvideInherent,
@@ -112,6 +112,7 @@ pub trait Trait: system::Trait {
 
 /// An event handler for the authorship module. There is a dummy implementation
 /// for `()`, which does nothing.
+#[impl_trait_for_tuples::impl_for_tuples(30)]
 pub trait EventHandler<Author, BlockNumber> {
 	/// Note that the given account ID is the author of the current block.
 	fn note_author(author: Author);
@@ -120,30 +121,6 @@ pub trait EventHandler<Author, BlockNumber> {
 	/// blocks older than the current block it is (age >= 0, so siblings are allowed)
 	fn note_uncle(author: Author, age: BlockNumber);
 }
-
-macro_rules! impl_event_handler {
-	() => (
-		impl<A, B> EventHandler<A, B> for () {
-			fn note_author(_author: A) { }
-			fn note_uncle(_author: A, _age: B) { }
-		}
-	);
-
-	( $($t:ident)* ) => {
-		impl<Author: Clone, BlockNumber: Clone, $($t: EventHandler<Author, BlockNumber>),*>
-			EventHandler<Author, BlockNumber> for ($($t,)*)
-		{
-			fn note_author(author: Author) {
-				$($t::note_author(author.clone());)*
-			}
-			fn note_uncle(author: Author, age: BlockNumber) {
-				$($t::note_uncle(author.clone(), age.clone());)*
-			}
-		}
-	}
-}
-
-for_each_tuple!(impl_event_handler);
 
 /// Additional filtering on uncles that pass preliminary ancestry checks.
 ///
@@ -236,29 +213,14 @@ decl_storage! {
 	}
 }
 
-fn prune_old_uncles<BlockNumber, Hash, Author>(
-	minimum_height: BlockNumber,
-	uncles: &mut Vec<UncleEntryItem<BlockNumber, Hash, Author>>
-) where BlockNumber: SimpleArithmetic {
-	let prune_entries = uncles.iter().take_while(|item| match item {
-		UncleEntryItem::Uncle(_, _) => true,
-		UncleEntryItem::InclusionHeight(height) => height < &minimum_height,
-	});
-	let prune_index = prune_entries.count();
-
-	let _ = uncles.drain(..prune_index);
-}
-
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn on_initialize(now: T::BlockNumber) {
 			let uncle_generations = T::UncleGenerations::get();
-			let mut uncles = <Self as Store>::Uncles::get();
-
 			// prune uncles that are older than the allowed number of generations.
 			if uncle_generations <= now {
 				let minimum_height = now - uncle_generations;
-				prune_old_uncles(minimum_height, &mut uncles)
+				Self::prune_old_uncles(minimum_height)
 			}
 
 			<Self as Store>::DidSetUncles::put(false);
@@ -387,6 +349,18 @@ impl<T: Trait> Module<T> {
 		// check uncle validity.
 		T::FilterUncle::filter_uncle(&uncle, accumulator)
 	}
+
+	fn prune_old_uncles(minimum_height: T::BlockNumber) {
+		let mut uncles = <Self as Store>::Uncles::get();
+		let prune_entries = uncles.iter().take_while(|item| match item {
+			UncleEntryItem::Uncle(_, _) => true,
+			UncleEntryItem::InclusionHeight(height) => height < &minimum_height,
+		});
+		let prune_index = prune_entries.count();
+
+		let _ = uncles.drain(..prune_index);
+		<Self as Store>::Uncles::put(uncles);
+	}
 }
 
 impl<T: Trait> ProvideInherent for Module<T> {
@@ -444,7 +418,7 @@ mod tests {
 	use sr_primitives::testing::Header;
 	use sr_primitives::generic::DigestItem;
 	use sr_primitives::Perbill;
-	use srml_support::{parameter_types, impl_outer_origin, ConsensusEngineId};
+	use support::{parameter_types, impl_outer_origin, ConsensusEngineId};
 
 	impl_outer_origin!{
 		pub enum Origin for Test {}
@@ -476,6 +450,7 @@ mod tests {
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
+		type Version = ();
 	}
 
 	parameter_types! {
@@ -568,15 +543,21 @@ mod tests {
 	#[test]
 	fn prune_old_uncles_works() {
 		use UncleEntryItem::*;
-		let mut uncles = vec![
-			InclusionHeight(1u32), Uncle((), Some(())), Uncle((), None), Uncle((), None),
-			InclusionHeight(2u32), Uncle((), None),
-			InclusionHeight(3u32), Uncle((), None),
-		];
+		with_externalities(&mut new_test_ext(), || {
+			let hash = Default::default();
+			let author = Default::default();
+			let uncles = vec![
+				InclusionHeight(1u64), Uncle(hash, Some(author)), Uncle(hash, None), Uncle(hash, None),
+				InclusionHeight(2u64), Uncle(hash, None),
+				InclusionHeight(3u64), Uncle(hash, None),
+			];
 
-		prune_old_uncles(3, &mut uncles);
+			<Authorship as Store>::Uncles::put(uncles);
+			Authorship::prune_old_uncles(3);
 
-		assert_eq!(uncles, vec![InclusionHeight(3), Uncle((), None)]);
+			let uncles = <Authorship as Store>::Uncles::get();
+			assert_eq!(uncles, vec![InclusionHeight(3u64), Uncle(hash, None)]);
+		})
 	}
 
 	#[test]

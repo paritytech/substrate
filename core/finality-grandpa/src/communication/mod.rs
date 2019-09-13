@@ -50,7 +50,9 @@ use crate::environment::HasVoted;
 use gossip::{
 	GossipMessage, FullCatchUpMessage, FullCommitMessage, VoteOrPrecommitMessage, GossipValidator
 };
-use fg_primitives::{AuthorityPair, AuthorityId, AuthoritySignature};
+use fg_primitives::{
+	AuthorityPair, AuthorityId, AuthoritySignature, SetId as SetIdNumber, RoundNumber,
+};
 
 pub mod gossip;
 mod periodic;
@@ -129,12 +131,12 @@ pub trait Network<Block: BlockT>: Clone + Send + 'static {
 }
 
 /// Create a unique topic for a round and set-id combo.
-pub(crate) fn round_topic<B: BlockT>(round: u64, set_id: u64) -> B::Hash {
+pub(crate) fn round_topic<B: BlockT>(round: RoundNumber, set_id: SetIdNumber) -> B::Hash {
 	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-{}", set_id, round).as_bytes())
 }
 
 /// Create a unique topic for global messages on a set ID.
-pub(crate) fn global_topic<B: BlockT>(set_id: u64) -> B::Hash {
+pub(crate) fn global_topic<B: BlockT>(set_id: SetIdNumber) -> B::Hash {
 	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-GLOBAL", set_id).as_bytes())
 }
 
@@ -231,24 +233,31 @@ pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
 	service: N,
 	validator: Arc<GossipValidator<B>>,
 	neighbor_sender: periodic::NeighborPacketSender<B>,
+	announce_sender: periodic::BlockAnnounceSender<B>,
 }
 
 impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	/// Create a new NetworkBridge to the given NetworkService. Returns the service
 	/// handle and a future that must be polled to completion to finish startup.
-	/// If a voter set state is given it registers previous round votes with the
-	/// gossip service.
+	/// On creation it will register previous rounds' votes with the gossip
+	/// service taken from the VoterSetState.
 	pub(crate) fn new(
 		service: N,
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,
 		on_exit: impl Future<Item=(),Error=()> + Clone + Send + 'static,
+		catch_up_enabled: bool,
 	) -> (
 		Self,
 		impl futures::Future<Item = (), Error = ()> + Send + 'static,
 	) {
 
-		let (validator, report_stream) = GossipValidator::new(config, set_state.clone());
+		let (validator, report_stream) = GossipValidator::new(
+			config,
+			set_state.clone(),
+			catch_up_enabled,
+		);
+
 		let validator = Arc::new(validator);
 		service.register_validator(validator.clone());
 
@@ -291,9 +300,10 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		}
 
 		let (rebroadcast_job, neighbor_sender) = periodic::neighbor_packet_worker(service.clone());
+		let (announce_job, announce_sender) = periodic::block_announce_worker(service.clone());
 		let reporting_job = report_stream.consume(service.clone());
 
-		let bridge = NetworkBridge { service, validator, neighbor_sender };
+		let bridge = NetworkBridge { service, validator, neighbor_sender, announce_sender };
 
 		let startup_work = futures::future::lazy(move || {
 			// lazily spawn these jobs onto their own tasks. the lazy future has access
@@ -301,6 +311,8 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			let mut executor = tokio_executor::DefaultExecutor::current();
 			executor.spawn(Box::new(rebroadcast_job.select(on_exit.clone()).then(|_| Ok(()))))
 				.expect("failed to spawn grandpa rebroadcast job task");
+			executor.spawn(Box::new(announce_job.select(on_exit.clone()).then(|_| Ok(()))))
+				.expect("failed to spawn grandpa block announce job task");
 			executor.spawn(Box::new(reporting_job.select(on_exit.clone()).then(|_| Ok(()))))
 				.expect("failed to spawn grandpa reporting job task");
 			Ok(())
@@ -320,18 +332,12 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		self.validator.note_set(
 			set_id,
 			voters.voters().iter().map(|(v, _)| v.clone()).collect(),
-			|to, neighbor| self.service.send_message(
-				to,
-				GossipMessage::<B>::from(neighbor).encode()
-			),
+			|to, neighbor| self.neighbor_sender.send(to, neighbor),
 		);
 
 		self.validator.note_round(
 			round,
-			|to, neighbor| self.service.send_message(
-				to,
-				GossipMessage::<B>::from(neighbor).encode()
-			),
+			|to, neighbor| self.neighbor_sender.send(to, neighbor),
 		);
 	}
 
@@ -422,6 +428,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			network: self.service.clone(),
 			locals,
 			sender: tx,
+			announce_sender: self.announce_sender.clone(),
 			has_voted,
 		};
 
@@ -447,18 +454,25 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		self.validator.note_set(
 			set_id,
 			voters.voters().iter().map(|(v, _)| v.clone()).collect(),
-			|to, neighbor| self.service.send_message(to, GossipMessage::<B>::from(neighbor).encode()),
+			|to, neighbor| self.neighbor_sender.send(to, neighbor),
 		);
 
 		let service = self.service.clone();
 		let topic = global_topic::<B>(set_id.0);
-		let incoming = incoming_global(service, topic, voters, self.validator.clone());
+		let incoming = incoming_global(
+			service,
+			topic,
+			voters,
+			self.validator.clone(),
+			self.neighbor_sender.clone(),
+		);
 
 		let outgoing = CommitsOut::<B, N>::new(
 			self.service.clone(),
 			set_id.0,
 			is_voter,
 			self.validator.clone(),
+			self.neighbor_sender.clone(),
 		);
 
 		let outgoing = outgoing.with(|out| {
@@ -475,6 +489,7 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 	topic: B::Hash,
 	voters: Arc<VoterSet<AuthorityId>>,
 	gossip_validator: Arc<GossipValidator<B>>,
+	neighbor_sender: periodic::NeighborPacketSender<B>,
 ) -> impl Stream<Item = CommunicationIn<B>, Error = Error> {
 	let process_commit = move |
 		msg: FullCommitMessage<B>,
@@ -512,6 +527,7 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 		let finalized_number = commit.target_number;
 		let gossip_validator = gossip_validator.clone();
 		let service = service.clone();
+		let neighbor_sender = neighbor_sender.clone();
 		let cb = move |outcome| match outcome {
 			voter::CommitProcessingOutcome::Good(_) => {
 				// if it checks out, gossip it. not accounting for
@@ -519,10 +535,7 @@ fn incoming_global<B: BlockT, N: Network<B>>(
 				// finalized number.
 				gossip_validator.note_commit_finalized(
 					finalized_number,
-					|to, neighbor_msg| service.send_message(
-						to,
-						GossipMessage::<B>::from(neighbor_msg).encode(),
-					),
+					|to, neighbor| neighbor_sender.send(to, neighbor),
 				);
 
 				service.gossip_message(topic, notification.message.clone(), false);
@@ -608,29 +621,30 @@ impl<B: BlockT, N: Network<B>> Clone for NetworkBridge<B, N> {
 			service: self.service.clone(),
 			validator: Arc::clone(&self.validator),
 			neighbor_sender: self.neighbor_sender.clone(),
+			announce_sender: self.announce_sender.clone(),
 		}
 	}
 }
 
-fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec<u8> {
+fn localized_payload<E: Encode>(round: RoundNumber, set_id: SetIdNumber, message: &E) -> Vec<u8> {
 	(message, round, set_id).encode()
 }
 
-/// Type-safe wrapper around u64 when indicating that it's a round number.
+/// Type-safe wrapper around a round number.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Encode, Decode)]
-pub struct Round(pub u64);
+pub struct Round(pub RoundNumber);
 
-/// Type-safe wrapper around u64 when indicating that it's a set ID.
+/// Type-safe wrapper around a set ID.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Encode, Decode)]
-pub struct SetId(pub u64);
+pub struct SetId(pub SetIdNumber);
 
 // check a message.
 pub(crate) fn check_message_sig<Block: BlockT>(
 	message: &Message<Block>,
 	id: &AuthorityId,
 	signature: &AuthoritySignature,
-	round: u64,
-	set_id: u64,
+	round: RoundNumber,
+	set_id: SetIdNumber,
 ) -> Result<(), ()> {
 	let as_public = id.clone();
 	let encoded_raw = localized_payload(round, set_id, message);
@@ -650,10 +664,11 @@ pub(crate) fn check_message_sig<Block: BlockT>(
 /// `ed25519` and `BLS` signatures (which we might use in the future), care must
 /// be taken when switching to different key types.
 struct OutgoingMessages<Block: BlockT, N: Network<Block>> {
-	round: u64,
-	set_id: u64,
+	round: RoundNumber,
+	set_id: SetIdNumber,
 	locals: Option<(AuthorityPair, AuthorityId)>,
 	sender: mpsc::UnboundedSender<SignedMessage<Block>>,
+	announce_sender: periodic::BlockAnnounceSender<Block>,
 	network: N,
 	has_voted: HasVoted<Block>,
 }
@@ -711,10 +726,10 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 				"block" => ?target_hash, "round" => ?self.round, "set_id" => ?self.set_id,
 			);
 
-			// announce our block hash to peers and propagate the
-			// message.
-			self.network.announce(target_hash);
+			// send the target block hash to the background block announcer
+			self.announce_sender.send(target_hash);
 
+			// propagate the message to peers
 			let topic = round_topic::<Block>(self.round, self.set_id);
 			self.network.gossip_message(topic, message.encode(), false);
 
@@ -845,8 +860,8 @@ fn check_catch_up<Block: BlockT>(
 
 	fn check_signatures<'a, B, I>(
 		messages: I,
-		round: u64,
-		set_id: u64,
+		round: RoundNumber,
+		set_id: SetIdNumber,
 		mut signatures_checked: usize,
 	) -> Result<usize, i32> where
 		B: BlockT,
@@ -907,30 +922,33 @@ struct CommitsOut<Block: BlockT, N: Network<Block>> {
 	set_id: SetId,
 	is_voter: bool,
 	gossip_validator: Arc<GossipValidator<Block>>,
+	neighbor_sender: periodic::NeighborPacketSender<Block>,
 }
 
 impl<Block: BlockT, N: Network<Block>> CommitsOut<Block, N> {
 	/// Create a new commit output stream.
 	pub(crate) fn new(
 		network: N,
-		set_id: u64,
+		set_id: SetIdNumber,
 		is_voter: bool,
 		gossip_validator: Arc<GossipValidator<Block>>,
+		neighbor_sender: periodic::NeighborPacketSender<Block>,
 	) -> Self {
 		CommitsOut {
 			network,
 			set_id: SetId(set_id),
 			is_voter,
 			gossip_validator,
+			neighbor_sender,
 		}
 	}
 }
 
 impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
-	type SinkItem = (u64, Commit<Block>);
+	type SinkItem = (RoundNumber, Commit<Block>);
 	type SinkError = Error;
 
-	fn start_send(&mut self, input: (u64, Commit<Block>)) -> StartSend<Self::SinkItem, Error> {
+	fn start_send(&mut self, input: (RoundNumber, Commit<Block>)) -> StartSend<Self::SinkItem, Error> {
 		if !self.is_voter {
 			return Ok(AsyncSink::Ready);
 		}
@@ -964,10 +982,7 @@ impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
 		// before gossiping
 		self.gossip_validator.note_commit_finalized(
 			commit.target_number,
-			|to, neighbor| self.network.send_message(
-				to,
-				GossipMessage::<Block>::from(neighbor).encode(),
-			),
+			|to, neighbor| self.neighbor_sender.send(to, neighbor),
 		);
 		self.network.gossip_message(topic, message.encode(), false);
 

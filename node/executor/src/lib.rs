@@ -30,37 +30,38 @@ use substrate_executor::native_executor_instance;
 native_executor_instance!(
 	pub Executor,
 	node_runtime::api::dispatch,
-	node_runtime::native_version,
-	node_runtime::WASM_BINARY
+	node_runtime::native_version
 );
 
 #[cfg(test)]
 mod tests {
 	use super::Executor;
-	use {balances, contracts, indices, staking, system, timestamp};
+	use {balances, contracts, indices, system, timestamp};
 	use runtime_io;
 	use substrate_executor::WasmExecutor;
 	use codec::{Encode, Decode, Joiner};
-	use keyring::{AccountKeyring, Ed25519Keyring, Sr25519Keyring};
-	use runtime_support::{Hashable, StorageValue, StorageMap, assert_eq_error_rate, traits::Currency};
-	use state_machine::{CodeExecutor, Externalities, TestExternalities as CoreTestExternalities};
-	use primitives::{ twox_128, blake2_256, Blake2Hasher, ChangesTrieConfiguration, NeverNativeValue, NativeOrEncoded};
-	use node_primitives::{Hash, BlockNumber, AccountId, Balance, Index};
-	use sr_primitives::traits::{Header as HeaderT, Hash as HashT, Convert};
-	use sr_primitives::{generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
-	use sr_primitives::weights::{WeightMultiplier, GetDispatchInfo};
+	use runtime_support::{
+		Hashable, StorageValue, StorageMap, assert_eq_error_rate, traits::Currency,
+	};
+	use state_machine::TestExternalities as CoreTestExternalities;
+	use primitives::{
+		Blake2Hasher, NeverNativeValue, NativeOrEncoded, map,
+		traits::{CodeExecutor, Externalities},
+	};
+	use sr_primitives::{
+		traits::{Header as HeaderT, Hash as HashT, Convert}, ApplyOutcome, ApplyResult,
+		transaction_validity::InvalidTransaction, weights::{WeightMultiplier, GetDispatchInfo},
+	};
 	use contracts::ContractAddressFor;
 	use system::{EventRecord, Phase};
 	use node_runtime::{
 		Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances, BuildStorage,
-		GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System, SystemConfig,
-		GrandpaConfig, IndicesConfig, ContractsConfig, Event, SessionKeys, SignedExtra,
-		TransferFee, TransactionBaseFee, TransactionByteFee,
+		System, Event, TransferFee, TransactionBaseFee, TransactionByteFee,
+		constants::currency::*, impls::WeightToFee,
 	};
-	use node_runtime::constants::currency::*;
-	use node_runtime::impls::WeightToFee;
+	use node_primitives::{Balance, Hash, BlockNumber};
+	use node_testing::keyring::*;
 	use wabt;
-	use primitives::map;
 
 	/// The wasm runtime code.
 	///
@@ -79,7 +80,13 @@ mod tests {
 
 	const GENESIS_HASH: [u8; 32] = [69u8; 32];
 
+	const VERSION: u32 = node_runtime::VERSION.spec_version;
+
 	type TestExternalities<H> = CoreTestExternalities<H, u64>;
+
+	fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
+		node_testing::keyring::sign(xt, VERSION, GENESIS_HASH)
+	}
 
 	/// Default transfer fee
 	fn transfer_fee<E: Encode>(extrinsic: &E) -> Balance {
@@ -93,64 +100,6 @@ mod tests {
 		// weight = <system::Module<Runtime>>::next_weight_multiplier().apply_to(weight);
 		let weight_fee = <Runtime as balances::Trait>::WeightToFee::convert(weight);
 		length_fee + weight_fee + TransferFee::get()
-	}
-
-	fn alice() -> AccountId {
-		AccountKeyring::Alice.into()
-	}
-
-	fn bob() -> AccountId {
-		AccountKeyring::Bob.into()
-	}
-
-	fn charlie() -> AccountId {
-		AccountKeyring::Charlie.into()
-	}
-
-	fn dave() -> AccountId {
-		AccountKeyring::Dave.into()
-	}
-
-	fn eve() -> AccountId {
-		AccountKeyring::Eve.into()
-	}
-
-	fn ferdie() -> AccountId {
-		AccountKeyring::Ferdie.into()
-	}
-
-	fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
-		match xt.signed {
-			Some((signed, extra)) => {
-				let payload = (xt.function, extra.clone(), GENESIS_HASH, GENESIS_HASH);
-				let key = AccountKeyring::from_public(&signed).unwrap();
-				let signature = payload.using_encoded(|b| {
-					if b.len() > 256 {
-						key.sign(&runtime_io::blake2_256(b))
-					} else {
-						key.sign(b)
-					}
-				}).into();
-				UncheckedExtrinsic {
-					signature: Some((indices::address::Address::Id(signed), signature, extra)),
-					function: payload.0,
-				}
-			}
-			None => UncheckedExtrinsic {
-				signature: None,
-				function: xt.function,
-			},
-		}
-	}
-
-	fn signed_extra(nonce: Index, extra_fee: Balance) -> SignedExtra {
-		(
-			system::CheckGenesis::new(),
-			system::CheckEra::from(Era::mortal(256, 0)),
-			system::CheckNonce::from(nonce),
-			system::CheckWeight::new(),
-			balances::TakeFees::from(extra_fee)
-		)
 	}
 
 	fn default_transfer_call() -> balances::Call<Runtime> {
@@ -175,16 +124,16 @@ mod tests {
 	#[test]
 	fn panic_execution_with_foreign_code_gives_error() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, (map![
-			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
+			<balances::FreeBalance<Runtime>>::hashed_key_for(alice()) => {
 				69_u128.encode()
 			},
-			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => {
+			<balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
 				69_u128.encode()
 			},
-			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => {
+			<indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => {
 				0_u128.encode()
 			},
-			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => {
+			<system::BlockHash<Runtime>>::hashed_key_for(0) => {
 				vec![0u8; 32]
 			}
 		], map![]));
@@ -205,22 +154,22 @@ mod tests {
 			None,
 		).0.unwrap();
 		let r = ApplyResult::decode(&mut &v.as_encoded()[..]).unwrap();
-		assert_eq!(r, Err(ApplyError::CantPay));
+		assert_eq!(r, Err(InvalidTransaction::Payment.into()));
 	}
 
 	#[test]
 	fn bad_extrinsic_with_native_equivalent_code_gives_error() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, (map![
-			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
+			<balances::FreeBalance<Runtime>>::hashed_key_for(alice()) => {
 				69_u128.encode()
 			},
-			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => {
+			<balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
 				69_u128.encode()
 			},
-			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => {
+			<indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => {
 				0_u128.encode()
 			},
-			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => {
+			<system::BlockHash<Runtime>>::hashed_key_for(0) => {
 				vec![0u8; 32]
 			}
 		], map![]));
@@ -241,20 +190,20 @@ mod tests {
 			None,
 		).0.unwrap();
 		let r = ApplyResult::decode(&mut &v.as_encoded()[..]).unwrap();
-		assert_eq!(r, Err(ApplyError::CantPay));
+		assert_eq!(r, Err(InvalidTransaction::Payment.into()));
 	}
 
 	#[test]
 	fn successful_execution_with_native_equivalent_code_gives_ok() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, (map![
-			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
+			<balances::FreeBalance<Runtime>>::hashed_key_for(alice()) => {
 				(111 * DOLLARS).encode()
 			},
-			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => {
+			<balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
 				(111 * DOLLARS).encode()
 			},
-			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
+			<indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => vec![0u8; 16],
+			<system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
 		], map![]));
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
@@ -283,14 +232,14 @@ mod tests {
 	#[test]
 	fn successful_execution_with_foreign_code_gives_ok() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, (map![
-			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
+			<balances::FreeBalance<Runtime>>::hashed_key_for(alice()) => {
 				(111 * DOLLARS).encode()
 			},
-			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => {
+			<balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
 				(111 * DOLLARS).encode()
 			},
-			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
+			<indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => vec![0u8; 16],
+			<system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
 		], map![]));
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
@@ -316,86 +265,11 @@ mod tests {
 		});
 	}
 
-	fn to_session_keys(
-		ed25519_keyring: &Ed25519Keyring,
-		sr25519_keyring: &Sr25519Keyring,
-	) -> SessionKeys {
-		SessionKeys {
-			grandpa: ed25519_keyring.to_owned().public().into(),
-			babe: sr25519_keyring.to_owned().public().into(),
-			im_online: sr25519_keyring.to_owned().public().into(),
-		}
-	}
-
 	fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<Blake2Hasher> {
-		let mut ext = TestExternalities::new_with_code(code, GenesisConfig {
-			system: Some(SystemConfig {
-				changes_trie_config: if support_changes_trie { Some(ChangesTrieConfiguration {
-					digest_interval: 2,
-					digest_levels: 2,
-				}) } else { None },
-				.. Default::default()
-			}),
-			indices: Some(IndicesConfig {
-				ids: vec![alice(), bob(), charlie(), dave(), eve(), ferdie()],
-			}),
-			balances: Some(BalancesConfig {
-				balances: vec![
-					(alice(), 111 * DOLLARS),
-					(bob(), 100 * DOLLARS),
-					(charlie(), 100_000_000 * DOLLARS),
-					(dave(), 111 * DOLLARS),
-					(eve(), 101 * DOLLARS),
-					(ferdie(), 100 * DOLLARS),
-				],
-				vesting: vec![],
-			}),
-			session: Some(SessionConfig {
-				keys: vec![
-					(alice(), to_session_keys(
-						&Ed25519Keyring::Alice,
-						&Sr25519Keyring::Alice,
-					)),
-					(bob(), to_session_keys(
-						&Ed25519Keyring::Bob,
-						&Sr25519Keyring::Bob,
-					)),
-					(charlie(), to_session_keys(
-						&Ed25519Keyring::Charlie,
-						&Sr25519Keyring::Charlie,
-					)),
-				]
-			}),
-			staking: Some(StakingConfig {
-				current_era: 0,
-				stakers: vec![
-					(dave(), alice(), 111 * DOLLARS, staking::StakerStatus::Validator),
-					(eve(), bob(), 100 * DOLLARS, staking::StakerStatus::Validator),
-					(ferdie(), charlie(), 100 * DOLLARS, staking::StakerStatus::Validator)
-				],
-				validator_count: 3,
-				minimum_validator_count: 0,
-				offline_slash: Perbill::zero(),
-				offline_slash_grace: 0,
-				invulnerables: vec![alice(), bob(), charlie()],
-				.. Default::default()
-			}),
-			contracts: Some(ContractsConfig {
-				current_schedule: Default::default(),
-				gas_price: 1 * MILLICENTS,
-			}),
-			babe: Some(Default::default()),
-			grandpa: Some(GrandpaConfig {
-				authorities: vec![],
-			}),
-			im_online: Some(Default::default()),
-			democracy: Some(Default::default()),
-			collective_Instance1: Some(Default::default()),
-			collective_Instance2: Some(Default::default()),
-			membership_Instance1: Some(Default::default()),
-			elections: Some(Default::default()),
-			sudo: Some(Default::default()),
-		}.build_storage().unwrap());
+		let mut ext = TestExternalities::new_with_code(
+			code,
+			node_testing::genesis::config(support_changes_trie, Some(code)).build_storage().unwrap(),
+		);
 		ext.changes_trie_storage().insert(0, GENESIS_HASH.into(), Default::default());
 		ext
 	}
@@ -877,14 +751,14 @@ mod tests {
 	#[test]
 	fn panic_execution_gives_error() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, (map![
-			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
+			<balances::FreeBalance<Runtime>>::hashed_key_for(alice()) => {
 				0_u128.encode()
 			},
-			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => {
+			<balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
 				0_u128.encode()
 			},
-			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
+			<indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => vec![0u8; 16],
+			<system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
 		], map![]));
 
 		let r = WasmExecutor::new()
@@ -893,20 +767,20 @@ mod tests {
 		let r = WasmExecutor::new()
 			.call(&mut t, 8, COMPACT_CODE, "BlockBuilder_apply_extrinsic", &vec![].and(&xt())).unwrap();
 		let r = ApplyResult::decode(&mut &r[..]).unwrap();
-		assert_eq!(r, Err(ApplyError::CantPay));
+		assert_eq!(r, Err(InvalidTransaction::Payment.into()));
 	}
 
 	#[test]
 	fn successful_execution_gives_ok() {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, (map![
-			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
+			<balances::FreeBalance<Runtime>>::hashed_key_for(alice()) => {
 				(111 * DOLLARS).encode()
 			},
-			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => {
+			<balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
 				(111 * DOLLARS).encode()
 			},
-			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
+			<indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => vec![0u8; 16],
+			<system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
 		], map![]));
 
 		let r = WasmExecutor::new()
@@ -914,8 +788,10 @@ mod tests {
 		assert!(r.is_ok());
 		let r = WasmExecutor::new()
 			.call(&mut t, 8, COMPACT_CODE, "BlockBuilder_apply_extrinsic", &vec![].and(&xt())).unwrap();
-		let r = ApplyResult::decode(&mut &r[..]).unwrap();
-		assert_eq!(r, Ok(ApplyOutcome::Success));
+		ApplyResult::decode(&mut &r[..])
+			.unwrap()
+			.expect("Extrinsic could be applied")
+			.expect("Extrinsic did not fail");
 
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(Balances::total_balance(&alice()), 42 * DOLLARS - 1 * transfer_fee(&xt()));
@@ -953,15 +829,12 @@ mod tests {
 
 	#[test]
 	fn should_import_block_with_test_client() {
-		use test_client::{ClientExt, TestClientBuilder, consensus::BlockOrigin};
+		use node_testing::client::{ClientExt, TestClientBuilderExt, TestClientBuilder, consensus::BlockOrigin};
 
-		let client = TestClientBuilder::default()
-			.build_with_native_executor::<Block, node_runtime::RuntimeApi, _>(executor())
-			.0;
-
+		let client = TestClientBuilder::new().build();
 		let block1 = changes_trie_block();
 		let block_data = block1.0;
-		let block = Block::decode(&mut &block_data[..]).unwrap();
+		let block = node_primitives::Block::decode(&mut &block_data[..]).unwrap();
 
 		client.import(BlockOrigin::Own, block).unwrap();
 	}
@@ -1059,17 +932,17 @@ mod tests {
 		//   - 1 milldot based on current polkadot runtime.
 		// (this baed on assigning 0.1 CENT to the cheapest tx with `weight = 100`)
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, (map![
-			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => {
+			<balances::FreeBalance<Runtime>>::hashed_key_for(alice()) => {
 				(100 * DOLLARS).encode()
 			},
-			blake2_256(&<balances::FreeBalance<Runtime>>::key_for(bob())).to_vec() => {
+			<balances::FreeBalance<Runtime>>::hashed_key_for(bob()) => {
 				(10 * DOLLARS).encode()
 			},
-			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => {
+			<balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
 				(110 * DOLLARS).encode()
 			},
-			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			blake2_256(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
+			<indices::NextEnumSet<Runtime>>::hashed_key().to_vec() => vec![0u8; 16],
+			<system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
 		], map![]));
 
 		let tip = 1_000_000;

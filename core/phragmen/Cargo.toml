@@ -1,0 +1,19 @@
+[package]
+name = "substrate-phragmen"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+sr-primitives = { path = "../sr-primitives", default-features = false }
+rstd = { package = "sr-std", path = "../sr-std", default-features = false }
+
+[dev-dependencies]
+support = { package = "srml-support", path = "../../srml/support" }
+
+[features]
+default = ["std"]
+std = [
+	"rstd/std",
+	"sr-primitives/std",
+]

@@ -10,9 +10,11 @@ safe-mix = { version = "1.0", default-features = false}
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 primitives = { package = "substrate-primitives",  path = "../../core/primitives", default-features = false }
 rstd = { package = "sr-std", path = "../../core/sr-std", default-features = false }
-runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
+runtime-io ={ package = "sr-io", path = "../../core/sr-io", default-features = false }
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
-srml-support = { path = "../support", default-features = false }
+sr-version = { path = "../../core/sr-version", default-features = false }
+support = { package = "srml-support", path = "../support", default-features = false }
+impl-trait-for-tuples = "0.1"
 
 [dev-dependencies]
 criterion = "0.2"
@@ -25,9 +27,10 @@ std = [
 	"codec/std",
 	"primitives/std",
 	"rstd/std",
-	"runtime_io/std",
-	"srml-support/std",
+	"runtime-io/std",
+	"support/std",
 	"sr-primitives/std",
+	"sr-version/std",
 ]
 
 [[bench]]

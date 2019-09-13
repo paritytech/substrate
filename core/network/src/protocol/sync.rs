@@ -815,12 +815,7 @@ impl<B: BlockT> ChainSync<B> {
 	/// with or without errors.
 	pub fn on_justification_import(&mut self, hash: B::Hash, number: NumberFor<B>, success: bool) {
 		let finalization_result = if success { Ok((hash, number)) } else { Err(()) };
-		if !self.extra_justifications.try_finalize_root((hash, number), finalization_result, true) {
-			debug!(target: "sync", "Got justification import result for unknown justification {:?} {:?} request.",
-				hash,
-				number,
-			)
-		}
+		self.extra_justifications.try_finalize_root((hash, number), finalization_result, true);
 		self.is_idle = false;
 	}
 
@@ -922,10 +917,10 @@ impl<B: BlockT> ChainSync<B> {
 		}
 		// We assume that the announced block is the latest they have seen, and so our common number
 		// is either one further ahead or it's the one they just announced, if we know about it.
-		if header.parent_hash() == &self.best_queued_hash || known_parent {
-			peer.common_number = number - One::one();
-		} else if known {
+		if known {
 			peer.common_number = number
+		} else if header.parent_hash() == &self.best_queued_hash || known_parent {
+			peer.common_number = number - One::one();
 		}
 		self.is_idle = false;
 

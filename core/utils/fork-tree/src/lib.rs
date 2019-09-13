@@ -240,14 +240,16 @@ impl<H, N, V> ForkTree<H, N, V> where
 	/// with the given hash exists. All other roots are pruned, and the children
 	/// of the finalized node become the new roots.
 	pub fn finalize_root(&mut self, hash: &H) -> Option<V> {
-		if let Some(position) = self.roots.iter().position(|node| node.hash == *hash) {
-			let node = self.roots.swap_remove(position);
-			self.roots = node.children;
-			self.best_finalized_number = Some(node.number);
-			return Some(node.data);
-		}
+		self.roots.iter().position(|node| node.hash == *hash)
+			.map(|position| self.finalize_root_at(position))
+	}
 
-		None
+	/// Finalize root at given positiion. See `finalize_root` comment for details.
+	fn finalize_root_at(&mut self, position: usize) -> V {
+		let node = self.roots.swap_remove(position);
+		self.roots = node.children;
+		self.best_finalized_number = Some(node.number);
+		return node.data;
 	}
 
 	/// Finalize a node in the tree. This method will make sure that the node
@@ -295,6 +297,79 @@ impl<H, N, V> ForkTree<H, N, V> where
 
 			retain
 		});
+
+		self.best_finalized_number = Some(number);
+
+		if changed {
+			Ok(FinalizationResult::Changed(None))
+		} else {
+			Ok(FinalizationResult::Unchanged)
+		}
+	}
+
+	/// Finalize a node in the tree and all its ancestors. The given function
+	/// `is_descendent_of` should return `true` if the second hash (target) is
+	// a descendent of the first hash (base).
+	pub fn finalize_with_ancestors<F, E>(
+		&mut self,
+		hash: &H,
+		number: N,
+		is_descendent_of: &F,
+	) -> Result<FinalizationResult<V>, Error<E>>
+		where E: std::error::Error,
+				F: Fn(&H, &H) -> Result<bool, E>
+	{
+		if let Some(ref best_finalized_number) = self.best_finalized_number {
+			if number <= *best_finalized_number {
+				return Err(Error::Revert);
+			}
+		}
+
+		// check if one of the current roots is being finalized
+		if let Some(root) = self.finalize_root(hash) {
+			return Ok(FinalizationResult::Changed(Some(root)));
+		}
+
+		// we need to:
+		// 1) remove all roots that are not ancestors AND not descendants of finalized block;
+		// 2) if node is descendant - just leave it;
+		// 3) if node is ancestor - 'open it'
+		let mut changed = false;
+		let mut idx = 0;
+		while idx != self.roots.len() {
+			let (is_finalized, is_descendant, is_ancestor) = {
+				let root = &self.roots[idx];
+				let is_finalized = root.hash == *hash;
+				let is_descendant = !is_finalized
+					&& root.number > number && is_descendent_of(hash, &root.hash).unwrap_or(false);
+				let is_ancestor = !is_finalized && !is_descendant
+					&& root.number < number && is_descendent_of(&root.hash, hash).unwrap_or(false);
+				(is_finalized, is_descendant, is_ancestor)
+			};
+
+			// if we have met finalized root - open it and return
+			if is_finalized {
+				return Ok(FinalizationResult::Changed(Some(self.finalize_root_at(idx))));
+			}
+
+			// if node is descendant of finalized block - just leave it as is
+			if is_descendant {
+				idx += 1;
+				continue;
+			}
+
+			// if node is ancestor of finalized block - remove it and continue with children
+			if is_ancestor {
+				let root = self.roots.swap_remove(idx);
+				self.roots.extend(root.children);
+				changed = true;
+				continue;
+			}
+
+			// if node is neither ancestor, nor descendant of the finalized block - remove it
+			self.roots.swap_remove(idx);
+			changed = true;
+		}
 
 		self.best_finalized_number = Some(number);
 
@@ -580,23 +655,32 @@ mod test {
 		//   /   - G
 		//  /   /
 		// A - F - H - I
+		//          \
+		//           - L - M - N
+		//              \
+		//               - O
 		//  \
 		//   — J - K
 		//
+		// (where N is not a part of fork tree)
 		let is_descendent_of = |base: &&str, block: &&str| -> Result<bool, TestError> {
-			let letters = vec!["B", "C", "D", "E", "F", "G", "H", "I", "J", "K"];
+			let letters = vec!["B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"];
 			match (*base, *block) {
 				("A", b) => Ok(letters.into_iter().any(|n| n == b)),
 				("B", b) => Ok(b == "C" || b == "D" || b == "E"),
 				("C", b) => Ok(b == "D" || b == "E"),
 				("D", b) => Ok(b == "E"),
 				("E", _) => Ok(false),
-				("F", b) => Ok(b == "G" || b == "H" || b == "I"),
+				("F", b) => Ok(b == "G" || b == "H" || b == "I" || b == "L" || b == "M" || b == "N" || b == "O"),
 				("G", _) => Ok(false),
-				("H", b) => Ok(b == "I"),
+				("H", b) => Ok(b == "I" || b == "L" || b == "M" || b == "O"),
 				("I", _) => Ok(false),
 				("J", b) => Ok(b == "K"),
 				("K", _) => Ok(false),
+				("L", b) => Ok(b == "M" || b == "O" || b == "N"),
+				("M", b) => Ok(b == "N"),
+				("N", _) => Ok(false),
+				("O", _) => Ok(false),
 				("0", _) => Ok(true),
 				_ => Ok(false),
 			}
@@ -614,6 +698,9 @@ mod test {
 
 		tree.import("H", 3, (), &is_descendent_of).unwrap();
 		tree.import("I", 4, (), &is_descendent_of).unwrap();
+		tree.import("L", 4, (), &is_descendent_of).unwrap();
+		tree.import("M", 5, (), &is_descendent_of).unwrap();
+		tree.import("O", 5, (), &is_descendent_of).unwrap();
 
 		tree.import("J", 2, (), &is_descendent_of).unwrap();
 		tree.import("K", 3, (), &is_descendent_of).unwrap();
@@ -770,7 +857,7 @@ mod test {
 
 		assert_eq!(
 			tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
-			vec![("I", 4)],
+			vec![("I", 4), ("L", 4)],
 		);
 
 		// finalizing a node from another fork that isn't part of the tree clears the tree
@@ -780,6 +867,71 @@ mod test {
 		);
 
 		assert!(tree.roots.is_empty());
+	}
+
+	#[test]
+	fn finalize_with_ancestor_works() {
+		let (mut tree, is_descendent_of) = test_fork_tree();
+
+		let original_roots = tree.roots.clone();
+
+		// finalizing a block prior to any in the node doesn't change the tree
+		assert_eq!(
+			tree.finalize_with_ancestors(&"0", 0, &is_descendent_of),
+			Ok(FinalizationResult::Unchanged),
+		);
+
+		assert_eq!(tree.roots, original_roots);
+
+		// finalizing "A" opens up three possible forks
+		assert_eq!(
+			tree.finalize_with_ancestors(&"A", 1, &is_descendent_of),
+			Ok(FinalizationResult::Changed(Some(()))),
+		);
+
+		assert_eq!(
+			tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+			vec![("B", 2), ("F", 2), ("J", 2)],
+		);
+
+		// finalizing H:
+		// 1) removes roots that are not ancestors/descendants of H (B, J)
+		// 2) opens root that is ancestor of H (F -> G+H)
+		// 3) finalizes the just opened root H (H -> I + L)
+		assert_eq!(
+			tree.finalize_with_ancestors(&"H", 3, &is_descendent_of),
+			Ok(FinalizationResult::Changed(Some(()))),
+		);
+
+		assert_eq!(
+			tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+			vec![("I", 4), ("L", 4)],
+		);
+
+		assert_eq!(
+			tree.best_finalized_number,
+			Some(3),
+		);
+
+		// finalizing N (which is not a part of the tree):
+		// 1) removes roots that are not ancestors/descendants of N (I)
+		// 2) opens root that is ancestor of N (L -> M+O)
+		// 3) removes roots that are not ancestors/descendants of N (O)
+		// 4) opens root that is ancestor of N (M -> {})
+		assert_eq!(
+			tree.finalize_with_ancestors(&"N", 6, &is_descendent_of),
+			Ok(FinalizationResult::Changed(None)),
+		);
+
+		assert_eq!(
+			tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+			vec![],
+		);
+
+		assert_eq!(
+			tree.best_finalized_number,
+			Some(6),
+		);
 	}
 
 	#[test]
@@ -927,7 +1079,9 @@ mod test {
 			vec![
 				("A", 1),
 				("J", 2), ("K", 3),
-				("F", 2), ("H", 3), ("I", 4),
+				("F", 2), ("H", 3), ("L", 4), ("O", 5),
+				("M", 5),
+				("I", 4),
 				("G", 3),
 				("B", 2), ("C", 3), ("D", 4), ("E", 5),
 			],

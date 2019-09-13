@@ -27,9 +27,10 @@ use rstd::{prelude::*, result};
 use primitives::u32_trait::Value as U32;
 use sr_primitives::traits::{Hash, EnsureOrigin};
 use sr_primitives::weights::SimpleDispatchInfo;
-use srml_support::{
-	dispatch::{Dispatchable, Parameter}, codec::{Encode, Decode}, traits::ChangeMembers,
-	StorageValue, StorageMap, decl_module, decl_event, decl_storage, ensure
+use support::{
+	dispatch::{Dispatchable, Parameter}, codec::{Encode, Decode},
+	traits::{ChangeMembers, InitializeMembers}, StorageValue, StorageMap, decl_module, decl_event,
+	decl_storage, ensure,
 };
 use system::{self, ensure_signed, ensure_root};
 
@@ -93,10 +94,12 @@ decl_storage! {
 		/// Proposals so far.
 		pub ProposalCount get(proposal_count): u32;
 		/// The current members of the collective. This is stored sorted (just by value).
-		pub Members get(members) config(): Vec<T::AccountId>;
+		pub Members get(members): Vec<T::AccountId>;
 	}
 	add_extra_genesis {
 		config(phantom): rstd::marker::PhantomData<I>;
+		config(members): Vec<T::AccountId>;
+		build(|config| Module::<T, I>::initialize_members(&config.members))
 	}
 }
 
@@ -127,7 +130,7 @@ decl_event!(
 // operational class.
 decl_module! {
 	pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where origin: <T as system::Trait>::Origin {
-		fn deposit_event<T, I>() = default;
+		fn deposit_event() = default;
 
 		/// Set the collective's membership manually to `new_members`. Be nice to the chain and
 		/// provide it pre-sorted.
@@ -282,6 +285,15 @@ impl<T: Trait<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 	}
 }
 
+impl<T: Trait<I>, I: Instance> InitializeMembers<T::AccountId> for Module<T, I> {
+	fn initialize_members(members: &[T::AccountId]) {
+		if !members.is_empty() {
+			assert!(<Members<T, I>>::get().is_empty(), "Members are already initialized!");
+			<Members<T, I>>::put_ref(members);
+		}
+	}
+}
+
 /// Ensure that the origin `o` represents at least `n` members. Returns `Ok` or an `Err`
 /// otherwise.
 pub fn ensure_members<OuterOrigin, AccountId, I>(o: OuterOrigin, n: MemberCount)
@@ -367,7 +379,7 @@ impl<
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use srml_support::{Hashable, assert_ok, assert_noop, parameter_types};
+	use support::{Hashable, assert_ok, assert_noop, parameter_types};
 	use system::{EventRecord, Phase};
 	use hex_literal::hex;
 	use runtime_io::with_externalities;
@@ -399,6 +411,7 @@ mod tests {
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
+		type Version = ();
 	}
 	impl Trait<Instance1> for Test {
 		type Origin = Origin;
@@ -414,7 +427,7 @@ mod tests {
 	pub type Block = sr_primitives::generic::Block<Header, UncheckedExtrinsic>;
 	pub type UncheckedExtrinsic = sr_primitives::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
 
-	srml_support::construct_runtime!(
+	support::construct_runtime!(
 		pub enum Test where
 			Block = Block,
 			NodeBlock = Block,

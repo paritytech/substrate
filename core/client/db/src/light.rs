@@ -213,7 +213,7 @@ impl<Block: BlockT> LightStorage<Block> {
 		let meta = self.meta.read();
 		if meta.best_hash != Default::default() {
 			let tree_route = ::client::blockchain::tree_route(
-				self,
+				|id| self.header(id)?.ok_or_else(|| client::error::Error::UnknownBlock(format!("{:?}", id))),
 				BlockId::Hash(meta.best_hash),
 				BlockId::Hash(route_to),
 			)?;
@@ -562,10 +562,10 @@ pub(crate) mod tests {
 		header
 	}
 
-	pub fn insert_block<F: Fn() -> Header>(
+	pub fn insert_block<F: FnMut() -> Header>(
 		db: &LightStorage<Block>,
 		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
-		header: F,
+		mut header: F,
 	) -> Hash {
 		let header = header();
 		let hash = header.hash();
@@ -780,7 +780,7 @@ pub(crate) mod tests {
 
 		{
 			let tree_route = ::client::blockchain::tree_route(
-				&db,
+				|id| db.header(id)?.ok_or_else(|| client::error::Error::UnknownBlock(format!("{:?}", id))),
 				BlockId::Hash(a3),
 				BlockId::Hash(b2)
 			).unwrap();
@@ -792,7 +792,7 @@ pub(crate) mod tests {
 
 		{
 			let tree_route = ::client::blockchain::tree_route(
-				&db,
+				|id| db.header(id)?.ok_or_else(|| client::error::Error::UnknownBlock(format!("{:?}", id))),
 				BlockId::Hash(a1),
 				BlockId::Hash(a3),
 			).unwrap();
@@ -804,7 +804,7 @@ pub(crate) mod tests {
 
 		{
 			let tree_route = ::client::blockchain::tree_route(
-				&db,
+				|id| db.header(id)?.ok_or_else(|| client::error::Error::UnknownBlock(format!("{:?}", id))),
 				BlockId::Hash(a3),
 				BlockId::Hash(a1),
 			).unwrap();
@@ -816,7 +816,7 @@ pub(crate) mod tests {
 
 		{
 			let tree_route = ::client::blockchain::tree_route(
-				&db,
+				|id| db.header(id)?.ok_or_else(|| client::error::Error::UnknownBlock(format!("{:?}", id))),
 				BlockId::Hash(a2),
 				BlockId::Hash(a2),
 			).unwrap();
@@ -850,7 +850,7 @@ pub(crate) mod tests {
 
 		fn get_authorities(cache: &dyn BlockchainCache<Block>, at: BlockId<Block>) -> Option<Vec<AuthorityId>> {
 			cache.get_at(&well_known_cache_keys::AUTHORITIES, &at)
-				.and_then(|val| Decode::decode(&mut &val[..]).ok())
+				.and_then(|(_, _, val)| Decode::decode(&mut &val[..]).ok())
 		}
 
 		let auth1 = || AuthorityId::from_raw([1u8; 32]);
@@ -1030,21 +1030,40 @@ pub(crate) mod tests {
 
 	#[test]
 	fn cache_can_be_initialized_after_genesis_inserted() {
-		let db = LightStorage::<Block>::new_test();
+		let (genesis_hash, storage) = {
+			let db = LightStorage::<Block>::new_test();
 
-		// before cache is initialized => None
-		assert_eq!(db.cache().get_at(b"test", &BlockId::Number(0)), None);
+			// before cache is initialized => None
+			assert_eq!(db.cache().get_at(b"test", &BlockId::Number(0)), None);
 
-		// insert genesis block (no value for cache is provided)
-		insert_block(&db, HashMap::new(), || default_header(&Default::default(), 0));
+			// insert genesis block (no value for cache is provided)
+			let mut genesis_hash = None;
+			insert_block(&db, HashMap::new(), || {
+				let header = default_header(&Default::default(), 0);
+				genesis_hash = Some(header.hash());
+				header
+			});
 
-		// after genesis is inserted => None
-		assert_eq!(db.cache().get_at(b"test", &BlockId::Number(0)), None);
+			// after genesis is inserted => None
+			assert_eq!(db.cache().get_at(b"test", &BlockId::Number(0)), None);
 
-		// initialize cache
-		db.cache().initialize(b"test", vec![42]).unwrap();
+			// initialize cache
+			db.cache().initialize(b"test", vec![42]).unwrap();
 
-		// after genesis is inserted + cache is initialized => Some
-		assert_eq!(db.cache().get_at(b"test", &BlockId::Number(0)), Some(vec![42]));
+			// after genesis is inserted + cache is initialized => Some
+			assert_eq!(
+				db.cache().get_at(b"test", &BlockId::Number(0)),
+				Some(((0, genesis_hash.unwrap()), None, vec![42])),
+			);
+
+			(genesis_hash, db.db)
+		};
+
+		// restart && check that after restart value is read from the cache
+		let db = LightStorage::<Block>::from_kvdb(storage as Arc<_>).expect("failed to create test-db");
+		assert_eq!(
+			db.cache().get_at(b"test", &BlockId::Number(0)),
+			Some(((0, genesis_hash.unwrap()), None, vec![42])),
+		);
 	}
 }

@@ -29,13 +29,15 @@ use rstd::prelude::*;
 use codec::{Encode, Decode};
 use sr_primitives::KeyTypeId;
 use sr_primitives::traits::{Convert, OpaqueKeys, Hash as HashT};
-use srml_support::{
+use support::{
 	StorageValue, StorageMap, decl_module, decl_storage,
 };
-use srml_support::{Parameter, print};
+use support::{Parameter, print};
 use substrate_trie::{MemoryDB, Trie, TrieMut, Recorder, EMPTY_PREFIX};
 use substrate_trie::trie_types::{TrieDBMut, TrieDB};
 use super::{SessionIndex, Module as SessionModule};
+
+type ValidatorCount = u32;
 
 /// Trait necessary for the historical module.
 pub trait Trait: super::Trait {
@@ -55,8 +57,8 @@ pub trait Trait: super::Trait {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Session {
-		/// Mapping from historical session indices to session-data root hash.
-		HistoricalSessions get(historical_root): map SessionIndex => Option<T::Hash>;
+		/// Mapping from historical session indices to session-data root hash and validator count.
+		HistoricalSessions get(historical_root): map SessionIndex => Option<(T::Hash, ValidatorCount)>;
 		/// Queued full identifications for queued sessions whose validators have become obsolete.
 		CachedObsolete get(cached_obsolete): map SessionIndex
 			=> Option<Vec<(T::ValidatorId, T::FullIdentification)>>;
@@ -121,8 +123,9 @@ impl<T: Trait, I> crate::OnSessionEnding<T::ValidatorId> for NoteHistoricalRoot<
 		// do all of this _before_ calling the other `on_session_ending` impl
 		// so that we have e.g. correct exposures from the _current_.
 
+		let count = <SessionModule<T>>::validators().len() as u32;
 		match ProvingTrie::<T>::generate_for(ending) {
-			Ok(trie) => <HistoricalSessions<T>>::insert(ending, &trie.root),
+			Ok(trie) => <HistoricalSessions<T>>::insert(ending, &(trie.root, count)),
 			Err(reason) => {
 				print("Failed to generate historical ancestry-inclusion proof.");
 				print(reason);
@@ -274,11 +277,11 @@ pub struct Proof {
 	trie_nodes: Vec<Vec<u8>>,
 }
 
-impl<T: Trait, D: AsRef<[u8]>> srml_support::traits::KeyOwnerProofSystem<(KeyTypeId, D)>
+impl<T: Trait, D: AsRef<[u8]>> support::traits::KeyOwnerProofSystem<(KeyTypeId, D)>
 	for Module<T>
 {
 	type Proof = Proof;
-	type FullIdentification = IdentificationTuple<T>;
+	type IdentificationTuple = IdentificationTuple<T>;
 
 	fn prove(key: (KeyTypeId, D)) -> Option<Self::Proof> {
 		let session = <SessionModule<T>>::current_index();
@@ -300,7 +303,7 @@ impl<T: Trait, D: AsRef<[u8]>> srml_support::traits::KeyOwnerProofSystem<(KeyTyp
 				T::FullIdentificationOf::convert(owner.clone()).map(move |id| (owner, id))
 			)
 		} else {
-			let root = <HistoricalSessions<T>>::get(&proof.session)?;
+			let (root, _) = <HistoricalSessions<T>>::get(&proof.session)?;
 			let trie = ProvingTrie::<T>::from_nodes(root, &proof.trie_nodes);
 
 			trie.query(id, data.as_ref())
@@ -318,7 +321,7 @@ mod tests {
 		NEXT_VALIDATORS, force_new_session,
 		set_next_validators, Test, System, Session,
 	};
-	use srml_support::traits::KeyOwnerProofSystem;
+	use support::traits::KeyOwnerProofSystem;
 
 	type Historical = Module<Test>;
 

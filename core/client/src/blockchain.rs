@@ -106,7 +106,13 @@ pub trait Cache<Block: BlockT>: Send + Sync {
 	/// Otherwise cache may end up in inconsistent state.
 	fn initialize(&self, key: &well_known_cache_keys::Id, value_at_genesis: Vec<u8>) -> Result<()>;
 	/// Returns cached value by the given key.
-	fn get_at(&self, key: &well_known_cache_keys::Id, block: &BlockId<Block>) -> Option<Vec<u8>>;
+	///
+	/// Returned tuple is the range where value has been active and the value itself.
+	fn get_at(
+		&self,
+		key: &well_known_cache_keys::Id,
+		block: &BlockId<Block>,
+	) -> Option<((NumberFor<Block>, Block::Hash), Option<(NumberFor<Block>, Block::Hash)>, Vec<u8>)>;
 }
 
 /// Blockchain info
@@ -191,21 +197,11 @@ impl<Block: BlockT> TreeRoute<Block> {
 }
 
 /// Compute a tree-route between two blocks. See tree-route docs for more details.
-pub fn tree_route<Block: BlockT, Backend: HeaderBackend<Block>>(
-	backend: &Backend,
+pub fn tree_route<Block: BlockT, F: Fn(BlockId<Block>) -> Result<<Block as BlockT>::Header>>(
+	load_header: F,
 	from: BlockId<Block>,
 	to: BlockId<Block>,
 ) -> Result<TreeRoute<Block>> {
-	use sr_primitives::traits::Header;
-
-	let load_header = |id: BlockId<Block>| {
-		match backend.header(id) {
-			Ok(Some(hdr)) => Ok(hdr),
-			Ok(None) => Err(Error::UnknownBlock(format!("Unknown block {:?}", id))),
-			Err(e) => Err(e),
-		}
-	};
-
 	let mut from = load_header(from)?;
 	let mut to = load_header(to)?;
 

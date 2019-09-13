@@ -24,7 +24,7 @@ use serde::{Serialize, Deserialize};
 use primitives::storage::{StorageKey, StorageData};
 use sr_primitives::{BuildStorage, StorageOverlay, ChildrenStorageOverlay};
 use serde_json as json;
-use crate::components::RuntimeGenesis;
+use crate::RuntimeGenesis;
 use network::Multiaddr;
 use tel::TelemetryEndpoints;
 
@@ -81,6 +81,7 @@ impl<'a, G: RuntimeGenesis> BuildStorage for &'a ChainSpec<G> {
 			)),
 		}
 	}
+
 	fn assimilate_storage(self, _: &mut (StorageOverlay, ChildrenStorageOverlay)) -> Result<(), String> {
 		Err("`assimilate_storage` not implemented for `ChainSpec`.".into())
 	}

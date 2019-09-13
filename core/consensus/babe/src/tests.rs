@@ -20,14 +20,13 @@
 // https://github.com/paritytech/substrate/issues/2532
 #![allow(deprecated)]
 use super::*;
-use super::generic::DigestItem;
 
 use babe_primitives::AuthorityPair;
-use client::{LongestChain, block_builder::BlockBuilder};
+use client::block_builder::BlockBuilder;
 use consensus_common::NoNetwork as DummyOracle;
 use network::test::*;
 use network::test::{Block as TestBlock, PeersClient};
-use sr_primitives::traits::{Block as BlockT, DigestFor};
+use sr_primitives::{generic::DigestItem, traits::{Block as BlockT, DigestFor}};
 use network::config::ProtocolConfig;
 use tokio::runtime::current_thread;
 use keyring::sr25519::Keyring;
@@ -35,7 +34,8 @@ use client::BlockchainEvents;
 use test_client;
 use log::debug;
 use std::{time::Duration, borrow::Borrow, cell::RefCell};
-type Item = generic::DigestItem<Hash>;
+
+type Item = DigestItem<Hash>;
 
 type Error = client::error::Error;
 
@@ -88,7 +88,14 @@ type TestHeader = <TestBlock as BlockT>::Header;
 type TestExtrinsic = <TestBlock as BlockT>::Extrinsic;
 
 pub struct TestVerifier {
-	inner: BabeVerifier<PeersFullClient>,
+	inner: BabeVerifier<
+		test_client::Backend,
+		test_client::Executor,
+		TestBlock,
+		test_client::runtime::RuntimeApi,
+		PeersFullClient,
+		(),
+	>,
 	mutator: Mutator,
 }
 
@@ -126,9 +133,9 @@ impl TestNetFactory for BabeTestNet {
 	fn make_verifier(&self, client: PeersClient, _cfg: &ProtocolConfig)
 		-> Self::Verifier
 	{
-		let api = client.as_full().expect("only full clients are used in test");
+		let client = client.as_full().expect("only full clients are used in test");
 		trace!(target: "babe", "Creating a verifier");
-		let config = Config::get_or_compute(&*api)
+		let config = Config::get_or_compute(&*client)
 			.expect("slot duration available");
 		let inherent_data_providers = InherentDataProviders::new();
 		register_babe_inherent_data_provider(
@@ -139,10 +146,12 @@ impl TestNetFactory for BabeTestNet {
 
 		TestVerifier {
 			inner: BabeVerifier {
-				api,
+				client: client.clone(),
+				api: client,
 				inherent_data_providers,
 				config,
 				time_source: Default::default(),
+				transaction_pool : Default::default(),
 			},
 			mutator: MUTATOR.with(|s| s.borrow().clone()),
 		}
@@ -194,12 +203,16 @@ fn run_one_test() {
 	let mut runtime = current_thread::Runtime::new().unwrap();
 	let mut keystore_paths = Vec::new();
 	for (peer_id, seed) in peers {
+		let mut net = net.lock();
+		let peer = net.peer(*peer_id);
+		let client = peer.client().as_full().expect("Only full clients are used in tests").clone();
+		let select_chain = peer.select_chain().expect("Full client has select_chain");
+
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 		let keystore = keystore::Store::open(keystore_path.path(), None).expect("Creates keystore");
 		keystore.write().insert_ephemeral_from_seed::<AuthorityPair>(seed).expect("Generates authority key");
 		keystore_paths.push(keystore_path);
 
-		let client = net.lock().peer(*peer_id).client().as_full().unwrap();
 		let environ = DummyFactory(client.clone());
 		import_notifications.push(
 			client.import_notification_stream()
@@ -213,9 +226,6 @@ fn run_one_test() {
 		register_babe_inherent_data_provider(
 			&inherent_data_providers, config.get()
 		).expect("Registers babe inherent data provider");
-
-		#[allow(deprecated)]
-		let select_chain = LongestChain::new(client.backend().clone());
 
 		runtime.spawn(start_babe(BabeParams {
 			config,
@@ -316,19 +326,32 @@ fn can_author_block() {
 		.expect("Generates authority pair");
 
 	let mut i = 0;
-	let epoch = Epoch {
+	let mut epoch = Epoch {
 		start_slot: 0,
 		authorities: vec![(pair.public(), 1)],
 		randomness: [0; 32],
 		epoch_index: 1,
 		duration: 100,
+		secondary_slots: true,
 	};
+
+	let parent_weight = 0;
+
+	// with secondary slots enabled it should never be empty
+	match claim_slot(i, parent_weight, &epoch, (3, 10), &keystore) {
+		None => i += 1,
+		Some(s) => debug!(target: "babe", "Authored block {:?}", s.0),
+	}
+
+	// otherwise with only vrf-based primary slots we might need to try a couple
+	// of times.
+	epoch.secondary_slots = false;
 	loop {
-		match claim_slot(i, epoch.clone(), (3, 10), &keystore) {
+		match claim_slot(i, parent_weight, &epoch, (3, 10), &keystore) {
 			None => i += 1,
 			Some(s) => {
 				debug!(target: "babe", "Authored block {:?}", s.0);
-				break
+				break;
 			}
 		}
 	}
@@ -340,7 +363,7 @@ fn authorities_call_works() {
 	let client = test_client::new();
 
 	assert_eq!(client.info().chain.best_number, 0);
-	assert_eq!(epoch(&client, &BlockId::Number(0)).unwrap().authorities, vec![
+	assert_eq!(epoch(&client, &BlockId::Number(0)).unwrap().into_regular().unwrap().authorities, vec![
 		(Keyring::Alice.public().into(), 1),
 		(Keyring::Bob.public().into(), 1),
 		(Keyring::Charlie.public().into(), 1),

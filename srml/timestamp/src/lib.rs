@@ -61,7 +61,7 @@
 //! ### Get current timestamp
 //!
 //! ```
-//! use srml_support::{decl_module, dispatch::Result};
+//! use support::{decl_module, dispatch::Result};
 //! # use srml_timestamp as timestamp;
 //! use system::ensure_signed;
 //!
@@ -96,8 +96,8 @@ use codec::Encode;
 use codec::Decode;
 #[cfg(feature = "std")]
 use inherents::ProvideInherentData;
-use srml_support::{StorageValue, Parameter, decl_storage, decl_module, for_each_tuple};
-use srml_support::traits::{Time, Get};
+use support::{StorageValue, Parameter, decl_storage, decl_module};
+use support::traits::{Time, Get};
 use sr_primitives::traits::{
 	SimpleArithmetic, Zero, SaturatedConversion, Scale
 };
@@ -183,33 +183,16 @@ impl ProvideInherentData for InherentDataProvider {
 }
 
 /// A trait which is called when the timestamp is set.
+#[impl_trait_for_tuples::impl_for_tuples(30)]
 pub trait OnTimestampSet<Moment> {
 	fn on_timestamp_set(moment: Moment);
 }
-
-macro_rules! impl_timestamp_set {
-	() => (
-		impl<Moment> OnTimestampSet<Moment> for () {
-			fn on_timestamp_set(_: Moment) {}
-		}
-	);
-
-	( $($t:ident)* ) => {
-		impl<Moment: Clone, $($t: OnTimestampSet<Moment>),*> OnTimestampSet<Moment> for ($($t,)*) {
-			fn on_timestamp_set(moment: Moment) {
-				$($t::on_timestamp_set(moment.clone());)*
-			}
-		}
-	}
-}
-
-for_each_tuple!(impl_timestamp_set);
 
 /// The module configuration trait
 pub trait Trait: system::Trait {
 	/// Type used for expressing timestamp.
 	type Moment: Parameter + Default + SimpleArithmetic
-		+ Scale<Self::BlockNumber, Output = Self::Moment>;
+		+ Scale<Self::BlockNumber, Output = Self::Moment> + Copy;
 
 	/// Something which can be notified when the timestamp is set. Set this to `()` if not needed.
 	type OnTimestampSet: OnTimestampSet<Self::Moment>;
@@ -246,7 +229,7 @@ decl_module! {
 				Self::now().is_zero() || now >= Self::now() + T::MinimumPeriod::get(),
 				"Timestamp must increment by at least <MinimumPeriod> between sequential blocks"
 			);
-			<Self as Store>::Now::put(now.clone());
+			<Self as Store>::Now::put(now);
 			<Self as Store>::DidUpdate::put(true);
 
 			<T::OnTimestampSet as OnTimestampSet<_>>::on_timestamp_set(now);
@@ -338,7 +321,7 @@ impl<T: Trait> Time for Module<T> {
 mod tests {
 	use super::*;
 
-	use srml_support::{impl_outer_origin, assert_ok, parameter_types};
+	use support::{impl_outer_origin, assert_ok, parameter_types};
 	use runtime_io::{with_externalities, TestExternalities};
 	use primitives::H256;
 	use sr_primitives::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
@@ -371,6 +354,7 @@ mod tests {
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
+		type Version = ();
 	}
 	parameter_types! {
 		pub const MinimumPeriod: u64 = 5;

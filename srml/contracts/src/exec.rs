@@ -22,7 +22,7 @@ use crate::rent;
 
 use rstd::prelude::*;
 use sr_primitives::traits::{Bounded, CheckedAdd, CheckedSub, Zero};
-use srml_support::traits::{WithdrawReason, Currency};
+use support::traits::{WithdrawReason, Currency};
 use timestamp;
 
 pub type AccountIdOf<T> = <T as system::Trait>::AccountId;
@@ -75,11 +75,12 @@ pub type ExecResult = Result<ExecReturnValue, ExecError>;
 /// wrap the error string into an ExecutionError with the provided buffer and return from the
 /// enclosing function. This macro is used instead of .map_err(..)? in order to avoid taking
 /// ownership of buffer unless there is an error.
+#[macro_export]
 macro_rules! try_or_exec_error {
 	($e:expr, $buffer:expr) => {
 		match $e {
 			Ok(val) => val,
-			Err(reason) => return Err(ExecError { reason, buffer: $buffer }),
+			Err(reason) => return Err($crate::exec::ExecError { reason, buffer: $buffer }),
 		}
 	}
 }
@@ -154,6 +155,9 @@ pub trait Ext {
 	/// Returns a reference to the timestamp of the current block
 	fn now(&self) -> &MomentOf<Self::T>;
 
+	/// Returns the minimum balance that is required for creating an account.
+	fn minimum_balance(&self) -> BalanceOf<Self::T>;
+
 	/// Returns a random number for the current block with the given subject.
 	fn random(&self, subject: &[u8]) -> SeedOf<Self::T>;
 
@@ -186,15 +190,6 @@ pub trait Loader<T: Trait> {
 	/// Load the main portion of the code specified by the `code_hash`. This executable
 	/// is called for each call to a contract.
 	fn load_main(&self, code_hash: &CodeHash<T>) -> Result<Self::Executable, &'static str>;
-}
-
-/// Struct that records a request to deposit an event with a list of topics.
-#[cfg_attr(any(feature = "std", test), derive(Debug, PartialEq, Eq))]
-pub struct IndexedEvent<T: Trait> {
-	/// A list of topics this event will be deposited with.
-	pub topics: Vec<T::Hash>,
-	/// The event to deposit.
-	pub event: Event<T>,
 }
 
 /// A trait that represent a virtual machine.
@@ -267,6 +262,7 @@ pub enum DeferredAction<T: Trait> {
 }
 
 pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
+	pub parent: Option<&'a ExecutionContext<'a, T, V, L>>,
 	pub self_account: T::AccountId,
 	pub self_trie_id: Option<TrieId>,
 	pub overlay: OverlayAccountDb<'a, T>,
@@ -291,6 +287,7 @@ where
 	/// account (not a contract).
 	pub fn top_level(origin: T::AccountId, cfg: &'a Config<T>, vm: &'a V, loader: &'a L) -> Self {
 		ExecutionContext {
+			parent: None,
 			self_trie_id: None,
 			self_account: origin,
 			overlay: OverlayAccountDb::<T>::new(&DirectAccountDb),
@@ -308,6 +305,7 @@ where
 		-> ExecutionContext<'b, T, V, L>
 	{
 		ExecutionContext {
+			parent: Some(self),
 			self_trie_id: trie_id,
 			self_account: dest,
 			overlay: OverlayAccountDb::new(&self.overlay),
@@ -385,13 +383,29 @@ where
 						nested.loader.load_main(&dest_code_hash),
 						input_data
 					);
-					nested.vm
+					let output = nested.vm
 						.execute(
 							&executable,
 							nested.new_call_context(caller, value),
 							input_data,
 							gas_meter,
-						)
+						)?;
+
+					// Destroy contract if insufficient remaining balance.
+					if nested.overlay.get_balance(&dest) < nested.config.existential_deposit {
+						let parent = nested.parent
+							.expect("a nested execution context must have a parent; qed");
+						if parent.is_live(&dest) {
+							return Err(ExecError {
+								reason: "contract cannot be destroyed during recursive execution",
+								buffer: output.data,
+							});
+						}
+
+						nested.overlay.destroy_contract(&dest);
+					}
+
+					Ok(output)
 				}
 				None => Ok(ExecReturnValue { status: STATUS_SUCCESS, data: Vec::new() }),
 			}
@@ -464,6 +478,14 @@ where
 					gas_meter,
 				)?;
 
+			// Error out if insufficient remaining balance.
+			if nested.overlay.get_balance(&dest) < nested.config.existential_deposit {
+				return Err(ExecError {
+					reason: "insufficient remaining balance",
+					buffer: output.data,
+				});
+			}
+
 			// Deposit an instantiation event.
 			nested.deferred.push(DeferredAction::DepositEvent {
 				event: RawEvent::Instantiated(caller.clone(), dest.clone()),
@@ -506,6 +528,13 @@ where
 		}
 
 		Ok(output)
+	}
+
+	/// Returns whether a contract, identified by address, is currently live in the execution
+	/// stack, meaning it is in the middle of an execution.
+	fn is_live(&self, account: &T::AccountId) -> bool {
+		&self.self_account == account ||
+			self.parent.map_or(false, |parent| parent.is_live(account))
 	}
 }
 
@@ -730,6 +759,10 @@ where
 
 	fn now(&self) -> &T::Moment {
 		&self.timestamp
+	}
+
+	fn minimum_balance(&self) -> BalanceOf<T> {
+		self.ctx.config.existential_deposit
 	}
 
 	fn deposit_event(&mut self, topics: Vec<T::Hash>, data: Vec<u8>) {

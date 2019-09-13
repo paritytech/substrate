@@ -22,12 +22,12 @@ use inherents::{
 	RuntimeString, InherentIdentifier, ProvideInherent,
 	InherentData, MakeFatalError,
 };
-use srml_support::StorageValue;
+use support::StorageValue;
 use sr_primitives::traits::{One, Zero, SaturatedConversion};
 use rstd::{prelude::*, result, cmp, vec};
 use codec::Decode;
-use srml_support::{decl_module, decl_storage, for_each_tuple};
-use srml_support::traits::Get;
+use support::{decl_module, decl_storage};
+use support::traits::Get;
 use srml_system::{ensure_none, Trait as SystemTrait};
 
 #[cfg(feature = "std")]
@@ -214,29 +214,12 @@ impl<T: Trait> Module<T> {
 }
 
 /// Called when finalization stalled at a given number.
+#[impl_trait_for_tuples::impl_for_tuples(30)]
 pub trait OnFinalizationStalled<N> {
 	/// The parameter here is how many more blocks to wait before applying
 	/// changes triggered by finality stalling.
 	fn on_stalled(further_wait: N, median: N);
 }
-
-macro_rules! impl_on_stalled {
-	() => (
-		impl<N> OnFinalizationStalled<N> for () {
-			fn on_stalled(_: N, _: N) {}
-		}
-	);
-
-	( $($t:ident)* ) => {
-		impl<NUM: Clone, $($t: OnFinalizationStalled<NUM>),*> OnFinalizationStalled<NUM> for ($($t,)*) {
-			fn on_stalled(further_wait: NUM, median: NUM) {
-				$($t::on_stalled(further_wait.clone(), median.clone());)*
-			}
-		}
-	}
-}
-
-for_each_tuple!(impl_on_stalled);
 
 impl<T: Trait> ProvideInherent for Module<T> {
 	type Call = Call<T>;
@@ -265,12 +248,12 @@ impl<T: Trait> ProvideInherent for Module<T> {
 mod tests {
 	use super::*;
 
-	use sr_io::{with_externalities, TestExternalities};
+	use runtime_io::{with_externalities, TestExternalities};
 	use primitives::H256;
 	use sr_primitives::traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT};
 	use sr_primitives::testing::Header;
 	use sr_primitives::Perbill;
-	use srml_support::{assert_ok, impl_outer_origin, parameter_types};
+	use support::{assert_ok, impl_outer_origin, parameter_types};
 	use srml_system as system;
 	use std::cell::RefCell;
 
@@ -321,6 +304,7 @@ mod tests {
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
+		type Version = ();
 	}
 	parameter_types! {
 		pub const WindowSize: u64 = 11;

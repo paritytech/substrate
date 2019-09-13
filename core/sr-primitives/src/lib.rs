@@ -40,13 +40,13 @@ pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 use rstd::{prelude::*, ops, convert::{TryInto, TryFrom}};
 use primitives::{crypto, ed25519, sr25519, hash::{H256, H512}};
 use codec::{Encode, Decode, CompactAs};
+use traits::{SaturatedConversion, UniqueSaturatedInto, Saturating, Bounded, CheckedSub, CheckedAdd};
 
 #[cfg(feature = "std")]
 pub mod testing;
 
 pub mod weights;
 pub mod traits;
-use traits::{SaturatedConversion, UniqueSaturatedInto, Saturating, Bounded, CheckedSub, CheckedAdd};
 
 pub mod generic;
 pub mod transaction_validity;
@@ -57,19 +57,6 @@ pub use generic::{DigestItem, Digest};
 /// Re-export this since it's part of the API of this crate.
 pub use primitives::crypto::{key_types, KeyTypeId, CryptoType};
 pub use app_crypto::AppKey;
-
-/// A message indicating an invalid signature in extrinsic.
-pub const BAD_SIGNATURE: &str = "bad signature in extrinsic";
-
-/// Full block error message.
-///
-/// This allows modules to indicate that given transaction is potentially valid
-/// in the future, but can't be executed in the current state.
-/// Note this error should be returned early in the execution to prevent DoS,
-/// cause the fees are not being paid if this error is returned.
-///
-/// Example: block gas limit is reached (the transaction can be retried in the next block though).
-pub const BLOCK_FULL: &str = "block size limit is reached";
 
 /// Justification type.
 pub type Justification = Vec<u8>;
@@ -297,6 +284,18 @@ impl Perbill {
 		let part = p_reduce as u64 * 1_000_000_000u64 / q_reduce as u64;
 
 		Perbill(part as u32)
+	}
+
+	/// Return the product of multiplication of this value by itself.
+	pub fn square(self) -> Self {
+		let p: u64 = self.0 as u64 * self.0 as u64;
+		let q: u64 = 1_000_000_000 * 1_000_000_000;
+		Self::from_rational_approximation(p, q)
+	}
+
+	/// Take out the raw parts-per-billions.
+	pub fn into_parts(self) -> u32 {
+		self.0
 	}
 }
 
@@ -624,52 +623,110 @@ impl From<ed25519::Signature> for AnySignature {
 	}
 }
 
-#[derive(Eq, PartialEq, Clone, Copy, Decode)]
+#[derive(Eq, PartialEq, Clone, Copy, Decode, Encode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
-#[repr(u8)]
-/// Outcome of a valid extrinsic application. Capable of being sliced.
-pub enum ApplyOutcome {
-	/// Successful application (extrinsic reported no issue).
-	Success = 0,
-	/// Failed application (extrinsic was probably a no-op other than fees).
-	Fail = 1,
-}
-
-impl codec::Encode for ApplyOutcome {
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		f(&[*self as u8])
-	}
-}
-
-impl codec::EncodeLike for ApplyOutcome {}
-
-#[derive(Eq, PartialEq, Clone, Copy, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
-#[repr(u8)]
 /// Reason why an extrinsic couldn't be applied (i.e. invalid extrinsic).
 pub enum ApplyError {
-	/// Bad signature.
-	BadSignature = 0,
-	/// Nonce too low.
-	Stale = 1,
-	/// Nonce too high.
-	Future = 2,
-	/// Sending account had too low a balance.
-	CantPay = 3,
-	/// Block is full, no more extrinsics can be applied.
-	FullBlock = 255,
+	/// General error to do with the permissions of the sender.
+	NoPermission,
+
+	/// General error to do with the state of the system in general.
+	BadState,
+
+	/// Any error to do with the transaction validity.
+	Validity(transaction_validity::TransactionValidityError),
 }
 
-impl codec::Encode for ApplyError {
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		f(&[*self as u8])
+impl ApplyError {
+	/// Returns if the reason for the error was block resource exhaustion.
+	pub fn exhausted_resources(&self) -> bool {
+		match self {
+			Self::Validity(e) => e.exhausted_resources(),
+			_ => false,
+		}
 	}
 }
 
-impl codec::EncodeLike for ApplyError {}
+impl From<ApplyError> for &'static str {
+	fn from(err: ApplyError) -> &'static str {
+		match err {
+			ApplyError::NoPermission => "Transaction does not have required permissions",
+			ApplyError::BadState => "System state currently prevents this transaction",
+			ApplyError::Validity(v) => v.into(),
+		}
+	}
+}
+
+impl From<transaction_validity::TransactionValidityError> for ApplyError {
+	fn from(err: transaction_validity::TransactionValidityError) -> Self {
+		ApplyError::Validity(err)
+	}
+}
+
+/// The outcome of applying a transaction.
+pub type ApplyOutcome = Result<(), DispatchError>;
+
+impl From<DispatchError> for ApplyOutcome {
+	fn from(err: DispatchError) -> Self {
+		Err(err)
+	}
+}
 
 /// Result from attempt to apply an extrinsic.
 pub type ApplyResult = Result<ApplyOutcome, ApplyError>;
+
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+/// Reason why a dispatch call failed
+pub struct DispatchError {
+	/// Module index, matching the metadata module index
+	pub module: Option<u8>,
+	/// Module specific error value
+	pub error: u8,
+	/// Optional error message.
+	#[codec(skip)]
+	pub message: Option<&'static str>,
+}
+
+impl DispatchError {
+	/// Create a new instance of `DispatchError`.
+	pub fn new(module: Option<u8>, error: u8, message: Option<&'static str>) -> Self {
+		Self {
+			module,
+			error,
+			message,
+		}
+	}
+}
+
+impl runtime_io::Printable for DispatchError {
+	fn print(&self) {
+		"DispatchError".print();
+		if let Some(module) = self.module {
+			module.print();
+		}
+		self.error.print();
+		if let Some(msg) = self.message {
+			msg.print();
+		}
+	}
+}
+
+impl traits::ModuleDispatchError for &'static str {
+	fn as_u8(&self) -> u8 {
+		0
+	}
+
+	fn as_str(&self) -> &'static str {
+		self
+	}
+}
+
+impl From<&'static str> for DispatchError {
+	fn from(err: &'static str) -> DispatchError {
+		DispatchError::new(None, 0, Some(err))
+	}
+}
 
 /// Verify a signature on an encoded value in a lazy manner. This can be
 /// an optimization if the signature scheme has an "unsigned" escape hash.
@@ -835,16 +892,12 @@ impl<'a> ::serde::Deserialize<'a> for OpaqueExtrinsic {
 
 impl traits::Extrinsic for OpaqueExtrinsic {
 	type Call = ();
-
-	fn is_signed(&self) -> Option<bool> {
-		None
-	}
-
-	fn new_unsigned(_call: Self::Call) -> Option<Self> { None }
+	type SignaturePayload = ();
 }
 
 #[cfg(test)]
 mod tests {
+	use super::DispatchError;
 	use crate::codec::{Encode, Decode};
 	use super::{Perbill, Permill};
 
@@ -958,5 +1011,44 @@ mod tests {
 			Permill::from_parts(999_999) * std::u128::MAX,
 			((Into::<U256>::into(std::u128::MAX) * 999_999u32) / 1_000_000u32).as_u128()
 		);
+	}
+
+	#[test]
+	fn dispatch_error_encoding() {
+		let error = DispatchError {
+			module: Some(1),
+			error: 2,
+			message: Some("error message"),
+		};
+		let encoded = error.encode();
+		let decoded = DispatchError::decode(&mut &encoded[..]).unwrap();
+		assert_eq!(encoded, vec![1, 1, 2]);
+		assert_eq!(
+			decoded,
+			DispatchError {
+				module: Some(1),
+				error: 2,
+				message: None,
+			},
+		);
+	}
+
+	#[test]
+	fn per_bill_square() {
+		const FIXTURES: &[(u32, u32)] = &[
+			(0, 0),
+			(1250000, 1562), // (0.00125, 0.000001562)
+			(255300000, 65178090), // (0.2553, 0.06517809)
+			(500000000, 250000000), // (0.5, 0.25)
+			(999995000, 999990000), // (0.999995, 0.999990000, but ideally 0.99999000002)
+			(1000000000, 1000000000),
+		];
+
+		for &(x, r) in FIXTURES {
+			assert_eq!(
+				Perbill::from_parts(x).square(),
+				Perbill::from_parts(r),
+			);
+		}
 	}
 }

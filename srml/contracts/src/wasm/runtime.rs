@@ -70,10 +70,6 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 			special_trap: None,
 		}
 	}
-
-	fn memory(&self) -> &sandbox::Memory {
-		&self.memory
-	}
 }
 
 pub(crate) fn to_execution_result<E: Ext>(
@@ -612,6 +608,16 @@ define_env!(Env, <E: Ext>,
 	ext_now(ctx) => {
 		ctx.scratch_buf.clear();
 		ctx.ext.now().encode_to(&mut ctx.scratch_buf);
+		Ok(())
+	},
+
+	// Stores the minimum balance (a.k.a. existential deposit) into the scratch buffer.
+	//
+	// The data is encoded as T::Balance. The current contents of the scratch buffer are
+	// overwritten.
+	ext_minimum_balance(ctx) => {
+		ctx.scratch_buf.clear();
+		ctx.ext.minimum_balance().encode_to(&mut ctx.scratch_buf);
 		Ok(())
 	},
 

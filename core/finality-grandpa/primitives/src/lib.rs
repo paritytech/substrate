@@ -52,6 +52,12 @@ pub type AuthorityWeight = u64;
 /// The index of an authority.
 pub type AuthorityIndex = u64;
 
+/// The identifier of a GRANDPA set.
+pub type SetId = u64;
+
+/// The round indicator.
+pub type RoundNumber = u64;
+
 /// A scheduled change of authority set.
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[derive(Clone, Eq, PartialEq, Encode, Decode)]

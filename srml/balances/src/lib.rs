@@ -72,8 +72,6 @@
 //! - [`Imbalance`](../srml_support/traits/trait.Imbalance.html): Functions for handling
 //! imbalances between total issuance in the system and account balances. Must be used when a function
 //! creates new funds (e.g. a reward) or destroys some funds (e.g. a system fee).
-//! - [`MakePayment`](../srml_support/traits/trait.MakePayment.html): Simple trait designed
-//! for hooking into a transaction payment.
 //! - [`IsDeadAccount`](../srml_system/trait.IsDeadAccount.html): Determiner to say whether a
 //! given account is unused.
 //!
@@ -88,6 +86,17 @@
 //!
 //! - `vesting_balance` - Get the amount that is currently being vested and cannot be transferred out of this account.
 //!
+//! ### Signed Extensions
+//!
+//! The balances module defines the following extensions:
+//!
+//!   - [`TakeFees`]: Consumes fees proportional to the length and weight of the transaction.
+//!     Additionally, it can contain a single encoded payload as a `tip`. The inclusion priority
+//!     is increased proportional to the tip.
+//!
+//! Lookup the runtime aggregator file (e.g. `node/runtime`) to see the full list of signed
+//! extensions included in a chain.
+//!
 //! ## Usage
 //!
 //! The following examples show how to use the Balances module in your custom module.
@@ -97,7 +106,7 @@
 //! The Contract module uses the `Currency` trait to handle gas payment, and its types inherit from `Currency`:
 //!
 //! ```
-//! use srml_support::traits::Currency;
+//! use support::traits::Currency;
 //! # pub trait Trait: system::Trait {
 //! # 	type Currency: Currency<Self::AccountId>;
 //! # }
@@ -111,14 +120,14 @@
 //! The Staking module uses the `LockableCurrency` trait to lock a stash account's funds:
 //!
 //! ```
-//! use srml_support::traits::{WithdrawReasons, LockableCurrency};
+//! use support::traits::{WithdrawReasons, LockableCurrency};
 //! use sr_primitives::traits::Bounded;
 //! pub trait Trait: system::Trait {
 //! 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 //! }
 //! # struct StakingLedger<T: Trait> {
 //! # 	stash: <T as system::Trait>::AccountId,
-//! # 	total: <<T as Trait>::Currency as srml_support::traits::Currency<<T as system::Trait>::AccountId>>::Balance,
+//! # 	total: <<T as Trait>::Currency as support::traits::Currency<<T as system::Trait>::AccountId>>::Balance,
 //! # 	phantom: std::marker::PhantomData<T>,
 //! # }
 //! # const STAKING_ID: [u8; 8] = *b"staking ";
@@ -152,31 +161,32 @@
 use rstd::prelude::*;
 use rstd::{cmp, result, mem};
 use codec::{Codec, Encode, Decode};
-use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module};
-use srml_support::traits::{
-	UpdateBalanceOutcome, Currency, OnFreeBalanceZero, OnUnbalanced,
-	WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
-	Imbalance, SignedImbalance, ReservableCurrency, Get,
+use support::{
+	StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module,
+	traits::{
+		UpdateBalanceOutcome, Currency, OnFreeBalanceZero, OnUnbalanced,
+		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
+		Imbalance, SignedImbalance, ReservableCurrency, Get,
+	},
+	dispatch::Result,
 };
-use srml_support::dispatch::Result;
-use sr_primitives::traits::{
-	Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug,
-	Saturating, Bounded, SignedExtension, SaturatedConversion, DispatchError, Convert,
+use sr_primitives::{
+	transaction_validity::{
+		TransactionPriority, ValidTransaction, InvalidTransaction, TransactionValidityError,
+		TransactionValidity,
+	},
+	traits::{
+		Zero, SimpleArithmetic, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug,
+		Saturating, Bounded, SignedExtension, SaturatedConversion, Convert,
+	},
+	weights::{DispatchInfo, SimpleDispatchInfo, Weight},
 };
-use sr_primitives::transaction_validity::{TransactionPriority, ValidTransaction};
-use sr_primitives::weights::{DispatchInfo, SimpleDispatchInfo, Weight};
 use system::{IsDeadAccount, OnNewAccount, ensure_signed, ensure_root};
 
 mod mock;
 mod tests;
 
 pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
-
-pub const DEFAULT_EXISTENTIAL_DEPOSIT: u32 = 0;
-pub const DEFAULT_TRANSFER_FEE: u32 = 0;
-pub const DEFAULT_CREATION_FEE: u32 = 0;
-pub const DEFAULT_TRANSACTION_BASE_FEE: u32 = 0;
-pub const DEFAULT_TRANSACTION_BYTE_FEE: u32 = 0;
 
 pub trait Subtrait<I: Instance = DefaultInstance>: system::Trait {
 	/// The balance of an account.
@@ -410,7 +420,7 @@ decl_module! {
 		/// The fee to be paid for making a transaction; the per-byte portion.
 		const TransactionByteFee: T::Balance = T::TransactionByteFee::get();
 
-		fn deposit_event<T, I>() = default;
+		fn deposit_event() = default;
 
 		/// Transfer some liquid free balance to another account.
 		///
@@ -459,7 +469,7 @@ decl_module! {
 		/// - Independent of the arguments.
 		/// - Contains a limited number of reads and writes.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(500_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(50_000)]
 		fn set_balance(
 			origin,
 			who: <T::Lookup as StaticLookup>::Source,
@@ -484,6 +494,21 @@ decl_module! {
 				mem::drop(NegativeImbalance::<T, I>::new(current_reserved - new_reserved));
 			}
 			Self::set_reserved_balance(&who, new_reserved);
+		}
+
+		/// Exactly as `transfer`, except the origin must be root and the source account may be
+		/// specified.
+		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
+		pub fn force_transfer(
+			origin,
+			source: <T::Lookup as StaticLookup>::Source,
+			dest: <T::Lookup as StaticLookup>::Source,
+			#[compact] value: T::Balance
+		) {
+			ensure_root(origin)?;
+			let source = T::Lookup::lookup(source)?;
+			let dest = T::Lookup::lookup(dest)?;
+			<Self as Currency<_>>::transfer(&source, &dest, value)?;
 		}
 	}
 }
@@ -777,6 +802,7 @@ impl<T: Subtrait<I>, I: Instance> system::Trait for ElevatedTrait<T, I> {
 	type MaximumBlockWeight = T::MaximumBlockWeight;
 	type MaximumBlockLength = T::MaximumBlockLength;
 	type AvailableBlockRatio = T::AvailableBlockRatio;
+	type Version = T::Version;
 }
 impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type Balance = T::Balance;
@@ -823,12 +849,12 @@ where
 	}
 
 	fn burn(mut amount: Self::Balance) -> Self::PositiveImbalance {
-		<TotalIssuance<T, I>>::mutate(|issued|
-			issued.checked_sub(&amount).unwrap_or_else(|| {
+		<TotalIssuance<T, I>>::mutate(|issued| {
+			*issued = issued.checked_sub(&amount).unwrap_or_else(|| {
 				amount = *issued;
 				Zero::zero()
-			})
-		);
+			});
+		});
 		PositiveImbalance::new(amount)
 	}
 
@@ -1168,7 +1194,6 @@ pub struct TakeFees<T: Trait<I>, I: Instance = DefaultInstance>(#[codec(compact)
 
 impl<T: Trait<I>, I: Instance> TakeFees<T, I> {
 	/// utility constructor. Used only in client/factory code.
-	#[cfg(feature = "std")]
 	pub fn from(fee: T::Balance) -> Self {
 		Self(fee)
 	}
@@ -1217,7 +1242,7 @@ impl<T: Trait<I>, I: Instance + Clone + Eq> SignedExtension for TakeFees<T, I> {
 	type Call = T::Call;
 	type AdditionalSigned = ();
 	type Pre = ();
-	fn additional_signed(&self) -> rstd::result::Result<(), &'static str> { Ok(()) }
+	fn additional_signed(&self) -> rstd::result::Result<(), TransactionValidityError> { Ok(()) }
 
 	fn validate(
 		&self,
@@ -1225,15 +1250,18 @@ impl<T: Trait<I>, I: Instance + Clone + Eq> SignedExtension for TakeFees<T, I> {
 		_call: &Self::Call,
 		info: DispatchInfo,
 		len: usize,
-	) -> rstd::result::Result<ValidTransaction, DispatchError> {
+	) -> TransactionValidity {
 		// pay any fees.
 		let fee = Self::compute_fee(len, info, self.0);
-		let imbalance = <Module<T, I>>::withdraw(
+		let imbalance = match <Module<T, I>>::withdraw(
 			who,
 			fee,
 			WithdrawReason::TransactionPayment,
 			ExistenceRequirement::KeepAlive,
-		).map_err(|_| DispatchError::Payment)?;
+		) {
+			Ok(imbalance) => imbalance,
+			Err(_) => return InvalidTransaction::Payment.into(),
+		};
 		T::TransactionPayment::on_unbalanced(imbalance);
 
 		let mut r = ValidTransaction::default();

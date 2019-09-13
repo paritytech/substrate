@@ -16,12 +16,11 @@
 
 use std::{result, cell::RefCell, panic::UnwindSafe};
 use crate::error::{Error, Result};
-use state_machine::{CodeExecutor, Externalities};
 use crate::wasm_executor::WasmExecutor;
 use runtime_version::{NativeVersion, RuntimeVersion};
 use codec::{Decode, Encode};
 use crate::RuntimeInfo;
-use primitives::{Blake2Hasher, NativeOrEncoded};
+use primitives::{Blake2Hasher, NativeOrEncoded, traits::{CodeExecutor, Externalities}};
 use log::{trace, warn};
 
 use crate::RuntimesCache;
@@ -35,7 +34,7 @@ fn safe_call<F, U>(f: F) -> Result<U>
 {
 	// Substrate uses custom panic hook that terminates process on panic. Disable termination for the native call.
 	let _guard = panic_handler::AbortGuard::force_unwind();
-	::std::panic::catch_unwind(f).map_err(|_| Error::Runtime)
+	std::panic::catch_unwind(f).map_err(|_| Error::Runtime)
 }
 
 /// Set up the externalities and safe calling environment to execute calls to a native runtime.
@@ -44,15 +43,16 @@ fn safe_call<F, U>(f: F) -> Result<U>
 pub fn with_native_environment<F, U>(ext: &mut dyn Externalities<Blake2Hasher>, f: F) -> Result<U>
 	where F: UnwindSafe + FnOnce() -> U
 {
-	::runtime_io::with_externalities(ext, move || safe_call(f))
+	runtime_io::with_externalities(ext, move || safe_call(f))
 }
 
-/// Delegate for dispatching a CodeExecutor call to native code.
+/// Delegate for dispatching a CodeExecutor call.
+///
+/// By dispatching we mean that we execute a runtime function specified by it's name.
 pub trait NativeExecutionDispatch: Send + Sync {
-	/// Get the wasm code that the native dispatch will be equivalent to.
-	fn native_equivalent() -> &'static [u8];
-
-	/// Dispatch a method and input data to be executed natively.
+	/// Dispatch a method in the runtime.
+	///
+	/// If the method with the specified name doesn't exist then `Err` is returned.
 	fn dispatch(ext: &mut dyn Externalities<Blake2Hasher>, method: &str, data: &[u8]) -> Result<Vec<u8>>;
 
 	/// Provide native runtime version.
@@ -211,19 +211,13 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 /// Implements a `NativeExecutionDispatch` for provided parameters.
 #[macro_export]
 macro_rules! native_executor_instance {
-	( $pub:vis $name:ident, $dispatcher:path, $version:path, $code:expr) => {
+	( $pub:vis $name:ident, $dispatcher:path, $version:path $(,)?) => {
 		/// A unit struct which implements `NativeExecutionDispatch` feeding in the hard-coded runtime.
 		$pub struct $name;
-		$crate::native_executor_instance!(IMPL $name, $dispatcher, $version, $code);
+		$crate::native_executor_instance!(IMPL $name, $dispatcher, $version);
 	};
-	(IMPL $name:ident, $dispatcher:path, $version:path, $code:expr) => {
+	(IMPL $name:ident, $dispatcher:path, $version:path) => {
 		impl $crate::NativeExecutionDispatch for $name {
-			fn native_equivalent() -> &'static [u8] {
-				// WARNING!!! This assumes that the runtime was built *before* the main project. Until we
-				// get a proper build script, this must be strictly adhered to or things will go wrong.
-				$code
-			}
-
 			fn dispatch(
 				ext: &mut $crate::Externalities<$crate::Blake2Hasher>,
 				method: &str,

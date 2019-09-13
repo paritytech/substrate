@@ -29,12 +29,12 @@ use crate::watcher::Watcher;
 use serde::Serialize;
 use log::debug;
 
-use futures::sync::mpsc;
+use futures::channel::mpsc;
 use parking_lot::{Mutex, RwLock};
 use sr_primitives::{
 	generic::BlockId,
 	traits::{self, SaturatedConversion},
-	transaction_validity::{TransactionValidity, TransactionTag as Tag},
+	transaction_validity::{TransactionValidity, TransactionTag as Tag, TransactionValidityError},
 };
 
 pub use crate::base_pool::Limit;
@@ -114,7 +114,9 @@ pub struct Pool<B: ChainApi> {
 
 impl<B: ChainApi> Pool<B> {
 	/// Imports a bunch of unverified extrinsics to the pool
-	pub fn submit_at<T>(&self, at: &BlockId<B::Block>, xts: T) -> Result<Vec<Result<ExHash<B>, B::Error>>, B::Error> where
+	pub fn submit_at<T>(&self, at: &BlockId<B::Block>, xts: T, force: bool)
+		-> Result<Vec<Result<ExHash<B>, B::Error>>, B::Error>
+	where
 		T: IntoIterator<Item=ExtrinsicFor<B>>
 	{
 		let block_number = self.api.block_id_to_number(at)?
@@ -124,16 +126,17 @@ impl<B: ChainApi> Pool<B> {
 			.into_iter()
 			.map(|xt| -> Result<_, B::Error> {
 				let (hash, bytes) = self.api.hash_and_length(&xt);
-				if self.rotator.is_banned(&hash) {
+				if !force && self.rotator.is_banned(&hash) {
 					return Err(error::Error::TemporarilyBanned.into())
 				}
 
 				match self.api.validate_transaction(at, xt.clone())? {
-					TransactionValidity::Valid(validity) => {
+					Ok(validity) => if validity.provides.is_empty() {
+						Err(error::Error::NoTagsProvided.into())
+					} else {
 						Ok(base::Transaction {
 							data: xt,
-							bytes
-							,
+							bytes,
 							hash,
 							priority: validity.priority,
 							requires: validity.requires,
@@ -144,12 +147,12 @@ impl<B: ChainApi> Pool<B> {
 								.saturating_add(validity.longevity),
 						})
 					},
-					TransactionValidity::Invalid(e) => {
+					Err(TransactionValidityError::Invalid(e)) => {
 						Err(error::Error::InvalidTransaction(e).into())
 					},
-					TransactionValidity::Unknown(e) => {
+					Err(TransactionValidityError::Unknown(e)) => {
 						self.listener.write().invalid(&hash);
-						Err(error::Error::UnknownTransactionValidity(e).into())
+						Err(error::Error::UnknownTransaction(e).into())
 					},
 				}
 			})
@@ -206,7 +209,7 @@ impl<B: ChainApi> Pool<B> {
 
 	/// Imports one unverified extrinsic to the pool
 	pub fn submit_one(&self, at: &BlockId<B::Block>, xt: ExtrinsicFor<B>) -> Result<ExHash<B>, B::Error> {
-		Ok(self.submit_at(at, ::std::iter::once(xt))?.pop().expect("One extrinsic passed; one result returned; qed")?)
+		Ok(self.submit_at(at, ::std::iter::once(xt), false)?.pop().expect("One extrinsic passed; one result returned; qed")?)
 	}
 
 	/// Import a single extrinsic and starts to watch their progress in the pool.
@@ -243,7 +246,7 @@ impl<B: ChainApi> Pool<B> {
 					None => {
 						let validity = self.api.validate_transaction(parent, extrinsic.clone());
 						match validity {
-							Ok(TransactionValidity::Valid(mut validity)) => {
+							Ok(Ok(mut validity)) => {
 								tags.append(&mut validity.provides);
 							},
 							// silently ignore invalid extrinsics,
@@ -305,7 +308,7 @@ impl<B: ChainApi> Pool<B> {
 		// try to re-submit pruned transactions since some of them might be still valid.
 		// note that `known_imported_hashes` will be rejected here due to temporary ban.
 		let hashes = status.pruned.iter().map(|tx| tx.hash.clone()).collect::<Vec<_>>();
-		let results = self.submit_at(at, status.pruned.into_iter().map(|tx| tx.data.clone()))?;
+		let results = self.submit_at(at, status.pruned.into_iter().map(|tx| tx.data.clone()), false)?;
 
 		// Collect the hashes of transactions that now became invalid (meaning that they are successfully pruned).
 		let hashes = results.into_iter().enumerate().filter_map(|(idx, r)| match r.map_err(error::IntoPoolError::into_pool_error) {
@@ -452,12 +455,13 @@ fn fire_events<H, H2, Ex>(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sr_primitives::transaction_validity::ValidTransaction;
-	use futures::Stream;
+	use sr_primitives::transaction_validity::{ValidTransaction, InvalidTransaction};
 	use codec::Encode;
 	use test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
 	use assert_matches::assert_matches;
 	use crate::watcher;
+
+	const INVALID_NONCE: u64 = 254;
 
 	#[derive(Debug, Default)]
 	struct TestApi {
@@ -470,8 +474,11 @@ mod tests {
 		type Error = error::Error;
 
 		/// Verify extrinsic at given block.
-		fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: ExtrinsicFor<Self>) -> Result<TransactionValidity, Self::Error> {
-
+		fn validate_transaction(
+			&self,
+			at: &BlockId<Self::Block>,
+			uxt: ExtrinsicFor<Self>,
+		) -> Result<TransactionValidity, Self::Error> {
 			let block_number = self.block_id_to_number(at)?.unwrap();
 			let nonce = uxt.transfer().nonce;
 
@@ -486,12 +493,12 @@ mod tests {
 			}
 
 			if nonce < block_number {
-				Ok(TransactionValidity::Invalid(0))
+				Ok(InvalidTransaction::Stale.into())
 			} else {
-				Ok(TransactionValidity::Valid(ValidTransaction {
+				Ok(Ok(ValidTransaction {
 					priority: 4,
 					requires: if nonce > block_number { vec![vec![nonce as u8 - 1]] } else { vec![] },
-					provides: vec![vec![nonce as u8]],
+					provides: if nonce == INVALID_NONCE { vec![] } else { vec![vec![nonce as u8]] },
 					longevity: 3,
 					propagate: true,
 				}))
@@ -605,9 +612,9 @@ mod tests {
 		};
 
 		// then
-		let mut it = stream.wait();
-		assert_eq!(it.next(), Some(Ok(())));
-		assert_eq!(it.next(), Some(Ok(())));
+		let mut it = futures::executor::block_on_stream(stream);
+		assert_eq!(it.next(), Some(()));
+		assert_eq!(it.next(), Some(()));
 		assert_eq!(it.next(), None);
 	}
 
@@ -724,6 +731,24 @@ mod tests {
 		assert_eq!(pool.status().future, 0);
 	}
 
+	#[test]
+	fn should_reject_transactions_with_no_provides() {
+		// given
+		let pool = pool();
+
+		// when
+		let err = pool.submit_one(&BlockId::Number(0), uxt(Transfer {
+			from: AccountId::from_h256(H256::from_low_u64_be(1)),
+			to: AccountId::from_h256(H256::from_low_u64_be(2)),
+			amount: 5,
+			nonce: INVALID_NONCE,
+		})).unwrap_err();
+
+		// then
+		assert_eq!(pool.status().ready, 0);
+		assert_eq!(pool.status().future, 0);
+		assert_matches!(err, error::Error::NoTagsProvided);
+	}
 
 	mod listener {
 		use super::*;
@@ -747,9 +772,9 @@ mod tests {
 			assert_eq!(pool.status().future, 0);
 
 			// then
-			let mut stream = watcher.into_stream().wait();
-			assert_eq!(stream.next(), Some(Ok(watcher::Status::Ready)));
-			assert_eq!(stream.next(), Some(Ok(watcher::Status::Finalized(H256::from_low_u64_be(2).into()))));
+			let mut stream = futures::executor::block_on_stream(watcher.into_stream());
+			assert_eq!(stream.next(), Some(watcher::Status::Ready));
+			assert_eq!(stream.next(), Some(watcher::Status::Finalized(H256::from_low_u64_be(2).into())));
 			assert_eq!(stream.next(), None);
 		}
 
@@ -772,9 +797,9 @@ mod tests {
 			assert_eq!(pool.status().future, 0);
 
 			// then
-			let mut stream = watcher.into_stream().wait();
-			assert_eq!(stream.next(), Some(Ok(watcher::Status::Ready)));
-			assert_eq!(stream.next(), Some(Ok(watcher::Status::Finalized(H256::from_low_u64_be(2).into()))));
+			let mut stream = futures::executor::block_on_stream(watcher.into_stream());
+			assert_eq!(stream.next(), Some(watcher::Status::Ready));
+			assert_eq!(stream.next(), Some(watcher::Status::Finalized(H256::from_low_u64_be(2).into())));
 			assert_eq!(stream.next(), None);
 		}
 
@@ -801,9 +826,9 @@ mod tests {
 			assert_eq!(pool.status().ready, 2);
 
 			// then
-			let mut stream = watcher.into_stream().wait();
-			assert_eq!(stream.next(), Some(Ok(watcher::Status::Future)));
-			assert_eq!(stream.next(), Some(Ok(watcher::Status::Ready)));
+			let mut stream = futures::executor::block_on_stream(watcher.into_stream());
+			assert_eq!(stream.next(), Some(watcher::Status::Future));
+			assert_eq!(stream.next(), Some(watcher::Status::Ready));
 		}
 
 		#[test]
@@ -824,9 +849,9 @@ mod tests {
 
 
 			// then
-			let mut stream = watcher.into_stream().wait();
-			assert_eq!(stream.next(), Some(Ok(watcher::Status::Ready)));
-			assert_eq!(stream.next(), Some(Ok(watcher::Status::Invalid)));
+			let mut stream = futures::executor::block_on_stream(watcher.into_stream());
+			assert_eq!(stream.next(), Some(watcher::Status::Ready));
+			assert_eq!(stream.next(), Some(watcher::Status::Invalid));
 			assert_eq!(stream.next(), None);
 		}
 
@@ -851,9 +876,9 @@ mod tests {
 
 
 			// then
-			let mut stream = watcher.into_stream().wait();
-			assert_eq!(stream.next(), Some(Ok(watcher::Status::Ready)));
-			assert_eq!(stream.next(), Some(Ok(watcher::Status::Broadcast(peers))));
+			let mut stream = futures::executor::block_on_stream(watcher.into_stream());
+			assert_eq!(stream.next(), Some(watcher::Status::Ready));
+			assert_eq!(stream.next(), Some(watcher::Status::Broadcast(peers)));
 		}
 
 		#[test]
@@ -888,9 +913,9 @@ mod tests {
 			assert_eq!(pool.status().ready, 1);
 
 			// then
-			let mut stream = watcher.into_stream().wait();
-			assert_eq!(stream.next(), Some(Ok(watcher::Status::Ready)));
-			assert_eq!(stream.next(), Some(Ok(watcher::Status::Dropped)));
+			let mut stream = futures::executor::block_on_stream(watcher.into_stream());
+			assert_eq!(stream.next(), Some(watcher::Status::Ready));
+			assert_eq!(stream.next(), Some(watcher::Status::Dropped));
 		}
 
 		#[test]

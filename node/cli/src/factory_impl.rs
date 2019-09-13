@@ -51,11 +51,13 @@ type Number = <<node_primitives::Block as BlockT>::Header as HeaderT>::Number;
 impl<Number> FactoryState<Number> {
 	fn build_extra(index: node_primitives::Index, phase: u64) -> node_runtime::SignedExtra {
 		(
+			system::CheckVersion::new(),
 			system::CheckGenesis::new(),
 			system::CheckEra::from(Era::mortal(256, phase)),
 			system::CheckNonce::from(index),
 			system::CheckWeight::new(),
-			balances::TakeFees::from(0)
+			balances::TakeFees::from(0),
+			Default::default(),
 		)
 	}
 }
@@ -132,12 +134,12 @@ impl RuntimeAdapter for FactoryState<Number> {
 		key: &Self::Secret,
 		destination: &Self::AccountId,
 		amount: &Self::Balance,
+		version: u32,
 		genesis_hash: &<Self::Block as BlockT>::Hash,
 		prior_block_hash: &<Self::Block as BlockT>::Hash,
 	) -> <Self::Block as BlockT>::Extrinsic {
 		let index = self.extract_index(&sender, prior_block_hash);
 		let phase = self.extract_phase(*prior_block_hash);
-
 		sign::<Self>(CheckedExtrinsic {
 			signed: Some((sender.clone(), Self::build_extra(index, phase))),
 			function: Call::Balances(
@@ -146,7 +148,7 @@ impl RuntimeAdapter for FactoryState<Number> {
 					(*amount).into()
 				)
 			)
-		}, key, (genesis_hash.clone(), prior_block_hash.clone(), (), (), ()))
+		}, key, (version, genesis_hash.clone(), prior_block_hash.clone(), (), (), (), ()))
 	}
 
 	fn inherent_extrinsics(&self) -> InherentData {
