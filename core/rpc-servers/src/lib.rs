@@ -47,7 +47,11 @@ pub fn rpc_handler<M: PubSubMetadata>(
 		methods.sort();
 		let methods = serde_json::to_value(&methods)
 			.expect("Serialization of Vec<String> is infallible; qed");
-		move |_| Ok(methods.clone())
+
+		move |_| Ok(serde_json::json!({
+			"version": 1,
+			"methods": methods.clone(),
+		}))
 	});
 	io
 }
