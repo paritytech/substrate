@@ -190,7 +190,7 @@ pub mod ext {
 			storage_key_data: *const u8,
 			storage_key_len: u32,
 			prefix_data: *const u8,
-			prefix_len: u32
+			prefix_len: u32,
 		);
 		/// Gets the value of the given key from storage.
 		///
@@ -217,7 +217,7 @@ pub mod ext {
 			key_len: u32,
 			value_data: *mut u8,
 			value_len: u32,
-			value_offset: u32
+			value_offset: u32,
 		) -> u32;
 		/// Gets the trie root of the storage.
 		fn ext_storage_root(result: *mut u8);
@@ -228,7 +228,10 @@ pub mod ext {
 		/// - `1` if the change trie root was found.
 		/// - `0` if the change trie root was not found.
 		fn ext_storage_changes_root(
-			parent_hash_data: *const u8, parent_hash_len: u32, result: *mut u8) -> u32;
+			parent_hash_data: *const u8,
+			parent_hash_len: u32,
+			result: *mut u8,
+		) -> u32;
 
 		/// A child storage function.
 		///
@@ -241,7 +244,7 @@ pub mod ext {
 			key_data: *const u8,
 			key_len: u32,
 			value_data: *const u8,
-			value_len: u32
+			value_len: u32,
 		);
 		/// A child storage function.
 		///
@@ -252,7 +255,7 @@ pub mod ext {
 			storage_key_data: *const u8,
 			storage_key_len: u32,
 			key_data: *const u8,
-			key_len: u32
+			key_len: u32,
 		);
 		/// A child storage function.
 		///
@@ -263,7 +266,7 @@ pub mod ext {
 			storage_key_data: *const u8,
 			storage_key_len: u32,
 			key_data: *const u8,
-			key_len: u32
+			key_len: u32,
 		) -> u32;
 		/// A child storage function.
 		///
@@ -281,7 +284,7 @@ pub mod ext {
 			storage_key_len: u32,
 			key_data: *const u8,
 			key_len: u32,
-			written_out: *mut u32
+			written_out: *mut u32,
 		) -> *mut u8;
 		/// A child storage function.
 		///
@@ -295,7 +298,7 @@ pub mod ext {
 			key_len: u32,
 			value_data: *mut u8,
 			value_len: u32,
-			value_offset: u32
+			value_offset: u32,
 		) -> u32;
 		/// Commits all changes and calculates the child-storage root.
 		///
@@ -460,7 +463,7 @@ pub mod ext {
 			old_value: *const u8,
 			old_value_len: u32,
 			new_value: *const u8,
-			new_value_len: u32
+			new_value_len: u32,
 		) -> u32;
 
 		/// Read a value from local storage.
@@ -488,7 +491,7 @@ pub mod ext {
 			url: *const u8,
 			url_len: u32,
 			meta: *const u8,
-			meta_len: u32
+			meta_len: u32,
 		) -> u32;
 
 		/// Add a header to the request.
@@ -502,7 +505,7 @@ pub mod ext {
 			name: *const u8,
 			name_len: u32,
 			value: *const u8,
-			value_len: u32
+			value_len: u32,
 		) -> u32;
 
 		/// Write a chunk of request body.
@@ -518,7 +521,7 @@ pub mod ext {
 			request_id: u32,
 			chunk: *const u8,
 			chunk_len: u32,
-			deadline: u64
+			deadline: u64,
 		) -> u32;
 
 		/// Block and wait for the responses for given requests.
@@ -532,7 +535,7 @@ pub mod ext {
 			ids: *const u32,
 			ids_len: u32,
 			statuses: *mut u32,
-			deadline: u64
+			deadline: u64,
 		);
 
 		/// Read all response headers.
@@ -545,7 +548,7 @@ pub mod ext {
 		/// - In case invalid `id` is passed it returns a pointer to parity-encoded empty vector.
 		fn ext_http_response_headers(
 			id: u32,
-			written_out: *mut u32
+			written_out: *mut u32,
 		) -> *mut u8;
 
 		/// Read a chunk of body response to given buffer.
@@ -567,7 +570,7 @@ pub mod ext {
 			id: u32,
 			buffer: *mut u8,
 			buffer_len: u32,
-			deadline: u64
+			deadline: u64,
 		) -> u32;
 	}
 }
@@ -858,18 +861,18 @@ impl CryptoApi for () {
 		ed25519::Public(res)
 	}
 
-	fn ed25519_sign<M: AsRef<[u8]>>(
+	fn ed25519_sign(
 		id: KeyTypeId,
 		pubkey: &ed25519::Public,
-		msg: &M,
+		msg: &[u8],
 	) -> Option<ed25519::Signature> {
 		let mut res = [0u8; 64];
 		let success = unsafe {
 			ext_ed25519_sign.get()(
 				id.0.as_ptr(),
 				pubkey.0.as_ptr(),
-				msg.as_ref().as_ptr(),
-				msg.as_ref().len() as u32,
+				msg.as_ptr(),
+				msg.len() as u32,
 				res.as_mut_ptr(),
 			) == 0
 		};
@@ -909,18 +912,18 @@ impl CryptoApi for () {
 		sr25519::Public(res)
 	}
 
-	fn sr25519_sign<M: AsRef<[u8]>>(
+	fn sr25519_sign(
 		id: KeyTypeId,
 		pubkey: &sr25519::Public,
-		msg: &M,
+		msg: &[u8],
 	) -> Option<sr25519::Signature> {
 		let mut res = [0u8; 64];
 		let success = unsafe {
 			ext_sr25519_sign.get()(
 				id.0.as_ptr(),
 				pubkey.0.as_ptr(),
-				msg.as_ref().as_ptr(),
-				msg.as_ref().len() as u32,
+				msg.as_ptr(),
+				msg.len() as u32,
 				res.as_mut_ptr(),
 			) == 0
 		};

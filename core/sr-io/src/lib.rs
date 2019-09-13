@@ -57,7 +57,6 @@ macro_rules! export_api {
 			$(
 				$( #[$attr:meta] )*
 				fn $name:ident
-					$(< $( $g_name:ident $( : $g_ty:path )? ),+ >)?
 					( $( $arg:ident : $arg_ty:ty ),* $(,)? )
 					$( -> $ret:ty )?
 					$( where $( $w_name:path : $w_ty:path ),+ )?;
@@ -68,18 +67,18 @@ macro_rules! export_api {
 		pub(crate) trait $trait_name {
 			$(
 				$( #[$attr] )*
-				fn $name $(< $( $g_name $( : $g_ty )? ),+ >)? ( $($arg : $arg_ty ),* ) $( -> $ret )?
+				fn $name ( $($arg : $arg_ty ),* ) $( -> $ret )?
 				$( where $( $w_name : $w_ty ),+ )?;
 			)*
 		}
 
 		$(
 			$( #[$attr] )*
-			pub fn $name $(< $( $g_name $( : $g_ty )? ),+ >)? ( $($arg : $arg_ty ),* ) $( -> $ret )?
+			pub fn $name ( $($arg : $arg_ty ),* ) $( -> $ret )?
 				$( where $( $w_name : $w_ty ),+ )?
 			{
 				#[allow(deprecated)]
-				<()>:: $name $(::< $( $g_name ),+ > )?  ( $( $arg ),* )
+				<()>:: $name ( $( $arg ),* )
 			}
 		)*
 	}
@@ -177,10 +176,10 @@ export_api! {
 		/// key type in the keystore.
 		///
 		/// Returns the raw signature.
-		fn ed25519_sign<M: AsRef<[u8]>>(
+		fn ed25519_sign(
 			id: KeyTypeId,
 			pubkey: &ed25519::Public,
-			msg: &M,
+			msg: &[u8],
 		) -> Option<ed25519::Signature>;
 		/// Verify an ed25519 signature.
 		///
@@ -197,10 +196,10 @@ export_api! {
 		/// key type in the keystore.
 		///
 		/// Returns the raw signature.
-		fn sr25519_sign<M: AsRef<[u8]>>(
+		fn sr25519_sign(
 			id: KeyTypeId,
 			pubkey: &sr25519::Public,
-			msg: &M,
+			msg: &[u8],
 		) -> Option<sr25519::Signature>;
 		/// Verify an sr25519 signature.
 		///
@@ -283,7 +282,7 @@ export_api! {
 			kind: StorageKind,
 			key: &[u8],
 			old_value: Option<&[u8]>,
-			new_value: &[u8]
+			new_value: &[u8],
 		) -> bool;
 
 		/// Gets a value from the local storage.
@@ -300,14 +299,14 @@ export_api! {
 		fn http_request_start(
 			method: &str,
 			uri: &str,
-			meta: &[u8]
+			meta: &[u8],
 		) -> Result<HttpRequestId, ()>;
 
 		/// Append header to the request.
 		fn http_request_add_header(
 			request_id: HttpRequestId,
 			name: &str,
-			value: &str
+			value: &str,
 		) -> Result<(), ()>;
 
 		/// Write a chunk of request body.
@@ -319,7 +318,7 @@ export_api! {
 		fn http_request_write_body(
 			request_id: HttpRequestId,
 			chunk: &[u8],
-			deadline: Option<Timestamp>
+			deadline: Option<Timestamp>,
 		) -> Result<(), HttpError>;
 
 		/// Block and wait for the responses for given requests.
@@ -331,16 +330,14 @@ export_api! {
 		/// Passing `None` as deadline blocks forever.
 		fn http_response_wait(
 			ids: &[HttpRequestId],
-			deadline: Option<Timestamp>
+			deadline: Option<Timestamp>,
 		) -> Vec<HttpRequestStatus>;
 
 		/// Read all response headers.
 		///
 		/// Returns a vector of pairs `(HeaderKey, HeaderValue)`.
 		/// NOTE response headers have to be read before response body.
-		fn http_response_headers(
-			request_id: HttpRequestId
-		) -> Vec<(Vec<u8>, Vec<u8>)>;
+		fn http_response_headers(request_id: HttpRequestId) -> Vec<(Vec<u8>, Vec<u8>)>;
 
 		/// Read a chunk of body response to given buffer.
 		///
@@ -353,7 +350,7 @@ export_api! {
 		fn http_response_read_body(
 			request_id: HttpRequestId,
 			buffer: &mut [u8],
-			deadline: Option<Timestamp>
+			deadline: Option<Timestamp>,
 		) -> Result<usize, HttpError>;
 	}
 }

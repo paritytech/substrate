@@ -216,10 +216,10 @@ impl CryptoApi for () {
 		}).expect("`ed25519_generate` cannot be called outside of an Externalities-provided environment.")
 	}
 
-	fn ed25519_sign<M: AsRef<[u8]>>(
+	fn ed25519_sign(
 		id: KeyTypeId,
 		pubkey: &ed25519::Public,
-		msg: &M,
+		msg: &[u8],
 	) -> Option<ed25519::Signature> {
 		let pub_key = ed25519::Public::try_from(pubkey.as_ref()).ok()?;
 
@@ -228,7 +228,7 @@ impl CryptoApi for () {
 				.expect("No `keystore` associated for the current context!")
 				.read()
 				.ed25519_key_pair(id, &pub_key)
-				.map(|k| k.sign(msg.as_ref()))
+				.map(|k| k.sign(msg))
 		}).expect("`ed25519_sign` cannot be called outside of an Externalities-provided environment.")
 	}
 
@@ -255,10 +255,10 @@ impl CryptoApi for () {
 		}).expect("`sr25519_generate` cannot be called outside of an Externalities-provided environment.")
 	}
 
-	fn sr25519_sign<M: AsRef<[u8]>>(
+	fn sr25519_sign(
 		id: KeyTypeId,
 		pubkey: &sr25519::Public,
-		msg: &M,
+		msg: &[u8],
 	) -> Option<sr25519::Signature> {
 		let pub_key = sr25519::Public::try_from(pubkey.as_ref()).ok()?;
 
@@ -267,7 +267,7 @@ impl CryptoApi for () {
 				.expect("No `keystore` associated for the current context!")
 				.read()
 				.sr25519_key_pair(id, &pub_key)
-				.map(|k| k.sign(msg.as_ref()))
+				.map(|k| k.sign(msg))
 		}).expect("`sr25519_sign` cannot be called outside of an Externalities-provided environment.")
 	}
 
@@ -385,7 +385,7 @@ impl OffchainApi for () {
 	fn http_request_start(
 		method: &str,
 		uri: &str,
-		meta: &[u8]
+		meta: &[u8],
 	) -> Result<offchain::HttpRequestId, ()> {
 		with_offchain(|ext| {
 			ext.http_request_start(method, uri, meta)
@@ -395,7 +395,7 @@ impl OffchainApi for () {
 	fn http_request_add_header(
 		request_id: offchain::HttpRequestId,
 		name: &str,
-		value: &str
+		value: &str,
 	) -> Result<(), ()> {
 		with_offchain(|ext| {
 			ext.http_request_add_header(request_id, name, value)
@@ -405,7 +405,7 @@ impl OffchainApi for () {
 	fn http_request_write_body(
 		request_id: offchain::HttpRequestId,
 		chunk: &[u8],
-		deadline: Option<offchain::Timestamp>
+		deadline: Option<offchain::Timestamp>,
 	) -> Result<(), offchain::HttpError> {
 		with_offchain(|ext| {
 			ext.http_request_write_body(request_id, chunk, deadline)
@@ -414,7 +414,7 @@ impl OffchainApi for () {
 
 	fn http_response_wait(
 		ids: &[offchain::HttpRequestId],
-		deadline: Option<offchain::Timestamp>
+		deadline: Option<offchain::Timestamp>,
 	) -> Vec<offchain::HttpRequestStatus> {
 		with_offchain(|ext| {
 			ext.http_response_wait(ids, deadline)
@@ -422,7 +422,7 @@ impl OffchainApi for () {
 	}
 
 	fn http_response_headers(
-		request_id: offchain::HttpRequestId
+		request_id: offchain::HttpRequestId,
 	) -> Vec<(Vec<u8>, Vec<u8>)> {
 		with_offchain(|ext| {
 			ext.http_response_headers(request_id)
@@ -432,7 +432,7 @@ impl OffchainApi for () {
 	fn http_response_read_body(
 		request_id: offchain::HttpRequestId,
 		buffer: &mut [u8],
-		deadline: Option<offchain::Timestamp>
+		deadline: Option<offchain::Timestamp>,
 	) -> Result<usize, offchain::HttpError> {
 		with_offchain(|ext| {
 			ext.http_response_read_body(request_id, buffer, deadline)
