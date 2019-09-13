@@ -125,6 +125,8 @@ pub const RANDOMNESS_LENGTH: usize = 32;
 
 const UNDER_CONSTRUCTION_SEGMENT_LENGTH: usize = 256;
 
+type MaybeVrf = Option<[u8; 32 /* VRF_OUTPUT_LENGTH */]>;
+
 decl_storage! {
 	trait Store for Module<T: Trait> as Babe {
 		/// Current epoch index.
@@ -170,9 +172,9 @@ decl_storage! {
 		SegmentIndex build(|_| 0): u32;
 		UnderConstruction: map u32 => Vec<[u8; 32 /* VRF_OUTPUT_LENGTH */]>;
 
-		/// Temporary value (cleared at block finalization) which is true
+		/// Temporary value (cleared at block finalization) which is `Some`
 		/// if per-block initialization has already been called for current block.
-		Initialized get(initialized): Option<bool>;
+		Initialized get(initialized): Option<MaybeVrf>;
 	}
 	add_extra_genesis {
 		config(authorities): Vec<(AuthorityId, BabeAuthorityWeight)>;
@@ -201,7 +203,14 @@ decl_module! {
 
 		/// Block finalization
 		fn on_finalize() {
-			Initialized::kill();
+			// at the end of the block, we can safely include the new VRF output
+			// from this block into the under-construction randomness. If we've determined
+			// that this block was the first in a new epoch, the changeover logic has
+			// already occurred at this point, so the under-construction randomness
+			// will only contain outputs from the right epoch.
+			if let Some(Some(vrf_output)) = Initialized::take() {
+				Self::deposit_vrf_output(&vrf_output);
+			}
 		}
 	}
 }
@@ -355,12 +364,20 @@ impl<T: Trait> Module<T> {
 	fn do_initialize() {
 		// since do_initialize can be called twice (if session module is present)
 		// => let's ensure that we only modify the storage once per block
-		let initialized = Self::initialized().unwrap_or(false);
+		let initialized = Self::initialized().is_some();
 		if initialized {
 			return;
 		}
 
-		Initialized::put(true);
+		#[derive(Default)]
+		struct Guard { maybe_vrf: MaybeVrf };
+		impl Drop for Guard {
+			fn drop(&mut self) {
+				Initialized::put(self.maybe_vrf.take())
+			}
+		}
+
+		let mut guard = Guard::default();
 		for digest in Self::get_inherent_digests()
 			.logs
 			.iter()
@@ -390,10 +407,13 @@ impl<T: Trait> Module<T> {
 			CurrentSlot::put(digest.slot_number());
 
 			if let RawBabePreDigest::Primary { vrf_output, .. } = digest {
-				Self::deposit_vrf_output(&vrf_output);
+				// place the VRF output into the `Initialized` storage item
+				// and it'll be put onto the under-construction randomness
+				// later, once we've decided which epoch this block is in.
+				guard.maybe_vrf = Some(vrf_output);
 			}
 
-			return;
+			break
 		}
 	}
 
@@ -445,7 +465,7 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 		// by the session module to be called before this.
 		#[cfg(debug_assertions)]
 		{
-			assert_eq!(Initialized::get(), Some(true));
+			assert!(Self::initialized().is_some())
 		}
 
 		// Update epoch index
