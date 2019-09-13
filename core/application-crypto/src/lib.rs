@@ -213,6 +213,7 @@ macro_rules! app_crypto {
 		}
 
 		impl $crate::RuntimeAppPublic for Public where $public: $crate::RuntimePublic<Signature=$sig> {
+			const ID: $crate::KeyTypeId = $key_type;
 			type Signature = Signature;
 
 			fn all() -> $crate::Vec<Self> {

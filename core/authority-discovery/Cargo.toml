@@ -15,7 +15,6 @@ client = { package = "substrate-client", path = "../../core/client" }
 codec = { package = "parity-scale-codec", default-features = false, version = "1.0.3" }
 derive_more = "0.14.0"
 futures = "0.1"
-keystore = { package = "substrate-keystore", path = "../../core/keystore" }
 libp2p = { version = "0.12.0", default-features = false, features = ["secp256k1", "libp2p-websocket"] }
 log = "0.4"
 network = { package = "substrate-network", path = "../../core/network" }
