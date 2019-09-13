@@ -126,44 +126,6 @@ pub mod ext {
 		}
 	}
 
-	/// Ensures we use the right crypto when calling into native
-	pub trait ExternTrieCrypto: Hasher {
-		/// A trie root formed from the enumerated items.
-		fn ordered_trie_root<
-			A: AsRef<[u8]>,
-			I: IntoIterator<Item = A>
-		>(values: I) -> Self::Out;
-	}
-
-	/// Additional bounds for Hasher trait for without_std.
-	pub trait HasherBounds: ExternTrieCrypto {}
-	impl<T: ExternTrieCrypto + Hasher> HasherBounds for T {}
-
-	// Ensures we use a Blake2_256-flavored Hasher when calling into native
-	impl ExternTrieCrypto for Blake2Hasher {
-		fn ordered_trie_root<
-			A: AsRef<[u8]>,
-			I: IntoIterator<Item = A>
-		>(items: I) -> Self::Out {
-			let mut values = Vec::new();
-			let mut lengths = Vec::new();
-			for v in items.into_iter() {
-				values.extend_from_slice(v.as_ref());
-				lengths.push((v.as_ref().len() as u32).to_le());
-			}
-			let mut result: [u8; 32] = Default::default();
-			unsafe {
-				ext_blake2_256_enumerated_trie_root.get()(
-					values.as_ptr(),
-					lengths.as_ptr(),
-					lengths.len() as u32,
-					result.as_mut_ptr()
-				);
-			}
-			result.into()
-		}
-	}
-
 	/// Declare extern functions
 	macro_rules! extern_functions {
 		(
@@ -777,21 +739,28 @@ impl StorageApi for () {
 		}
 	}
 
-	fn trie_root<
-		H: Hasher + ExternTrieCrypto,
-		I: IntoIterator<Item = (A, B)>,
-		A: AsRef<[u8]> + Ord,
-		B: AsRef<[u8]>,
-	>(_input: I) -> H::Out {
+
+	fn blake2_256_trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
 		unimplemented!()
 	}
 
-	fn ordered_trie_root<
-		H: Hasher + ExternTrieCrypto,
-		I: IntoIterator<Item = A>,
-		A: AsRef<[u8]>
-	>(values: I) -> H::Out {
-		H::ordered_trie_root(values)
+	fn blake2_256_ordered_trie_root(input: Vec<Vec<u8>>) -> H256 {
+		let mut values = Vec::new();
+		let mut lengths = Vec::new();
+		for v in input {
+			values.extend_from_slice(&v);
+			lengths.push((v.len() as u32).to_le());
+		}
+		let mut result: [u8; 32] = Default::default();
+		unsafe {
+			ext_blake2_256_enumerated_trie_root.get()(
+				values.as_ptr(),
+				lengths.as_ptr(),
+				lengths.len() as u32,
+				result.as_mut_ptr(),
+			);
+		}
+		result.into()
 	}
 }
 

@@ -285,7 +285,8 @@ macro_rules! for_each_tuple {
 mod tests {
 	use super::*;
 	use codec::Codec;
-	use runtime_io::{with_externalities, Blake2Hasher};
+	use runtime_io::with_externalities;
+	use primitives::Blake2Hasher;
 	pub use srml_metadata::{
 		DecodeDifferent, StorageEntryMetadata, StorageMetadata, StorageEntryType,
 		StorageEntryModifier, DefaultByte, DefaultByteGetter, StorageHasher

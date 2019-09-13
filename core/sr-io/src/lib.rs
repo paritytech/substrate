@@ -29,9 +29,8 @@
 use hash_db::Hasher;
 use rstd::vec::Vec;
 
-pub use primitives::Blake2Hasher;
 use primitives::{
-	crypto::KeyTypeId, ed25519, sr25519,
+	crypto::KeyTypeId, ed25519, sr25519, H256,
 	offchain::{
 		Timestamp, HttpRequestId, HttpRequestStatus, HttpError, StorageKind, OpaqueNetworkState,
 	},
@@ -145,26 +144,10 @@ export_api! {
 		fn storage_changes_root(parent_hash: [u8; 32]) -> Option<[u8; 32]>;
 
 		/// A trie root formed from the iterated items.
-		fn trie_root<H, I, A, B>(input: I) -> H::Out
-		where
-			I: IntoIterator<Item = (A, B)>,
-			A: AsRef<[u8]>,
-			A: Ord,
-			B: AsRef<[u8]>,
-			H: Hasher,
-			H: self::imp::HasherBounds,
-			H::Out: Ord
-		;
+		fn blake2_256_trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> H256;
 
 		/// A trie root formed from the enumerated items.
-		fn ordered_trie_root<H, I, A>(input: I) -> H::Out
-		where
-			I: IntoIterator<Item = A>,
-			A: AsRef<[u8]>,
-			H: Hasher,
-			H: self::imp::HasherBounds,
-			H::Out: Ord
-		;
+		fn blake2_256_ordered_trie_root(input: Vec<Vec<u8>>) -> H256;
 	}
 }
 

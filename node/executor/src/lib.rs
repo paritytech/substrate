@@ -49,7 +49,7 @@ mod tests {
 		traits::{CodeExecutor, Externalities},
 	};
 	use sr_primitives::{
-		traits::{Header as HeaderT, Hash as HashT, Convert}, ApplyOutcome, ApplyResult,
+		traits::{Header as HeaderT, Hash as HashT, Convert}, ApplyResult,
 		transaction_validity::InvalidTransaction, weights::{WeightMultiplier, GetDispatchInfo},
 	};
 	use contracts::ContractAddressFor;
