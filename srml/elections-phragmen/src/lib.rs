@@ -1401,20 +1401,27 @@ mod tests {
 	fn election_state_is_uninterrupted() {
 		// what I mean by uninterrupted:
 		// given no input or stimulants the same members are re-elected.
-		with_externalities(&mut ExtBuilder::default().build(), || {
+		with_externalities(&mut ExtBuilder::default().desired_runners_up(2).build(), || {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(3)));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(2)));
 
-			assert_ok!(Elections::vote(Origin::signed(4), vec![4], 40));
 			assert_ok!(Elections::vote(Origin::signed(5), vec![5], 50));
+			assert_ok!(Elections::vote(Origin::signed(4), vec![4], 40));
+			assert_ok!(Elections::vote(Origin::signed(3), vec![3], 30));
+			assert_ok!(Elections::vote(Origin::signed(2), vec![2], 20));
 
 			let check_at_block = |b: u32| {
 				System::set_block_number(b.into());
 				assert_ok!(Elections::end_block(System::block_number()));
 				// we keep re-electing the same folks.
 				assert_eq!(Elections::members(), vec![4, 5]);
+				assert_eq!(Elections::runners_up(), vec![2, 3]);
+				// no new candidates but old members and runners-up are always added.
+				assert_eq!(Elections::candidates(), vec![]);
 				assert_eq!(Elections::election_rounds(), b / 5);
-				assert_eq_uvec!(all_voters(), vec![5, 4]);
+				assert_eq_uvec!(all_voters(), vec![2, 3, 4, 5]);
 			};
 
 			// this state will always persist when no further input is given.
