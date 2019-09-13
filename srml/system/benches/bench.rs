@@ -17,8 +17,8 @@
 use criterion::{Criterion, criterion_group, criterion_main, black_box};
 use srml_system as system;
 use support::{decl_module, decl_event, impl_outer_origin, impl_outer_event};
-use runtime_io::{with_externalities, Blake2Hasher};
-use primitives::H256;
+use runtime_io::with_externalities;
+use primitives::{H256, Blake2Hasher};
 use sr_primitives::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 mod module {
