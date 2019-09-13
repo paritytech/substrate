@@ -40,6 +40,12 @@ pub fn rpc_handler<M: PubSubMetadata>(
 ) -> RpcHandler<M> {
 	let mut io = pubsub::PubSubHandler::default();
 	extension.augment(&mut io);
+
+	let methods = serde_json::to_value(
+		&io.iter().map(|x| x.0.clone()).collect::<Vec<String>>(),
+	).expect("Serialization of Vec<String> is infallible; qed");
+
+	io.add_method("rpc_methods", move |_| Ok(methods.clone()));
 	io
 }
 
