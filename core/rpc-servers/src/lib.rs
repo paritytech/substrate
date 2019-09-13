@@ -41,11 +41,14 @@ pub fn rpc_handler<M: PubSubMetadata>(
 	let mut io = pubsub::PubSubHandler::default();
 	extension.augment(&mut io);
 
-	let methods = serde_json::to_value(
-		&io.iter().map(|x| x.0.clone()).collect::<Vec<String>>(),
-	).expect("Serialization of Vec<String> is infallible; qed");
-
-	io.add_method("rpc_methods", move |_| Ok(methods.clone()));
+	// add an endpoint to list all available methods.
+	let mut methods = io.iter().map(|x| x.0.clone()).collect::<Vec<String>>();
+	io.add_method("rpc_methods", {
+		methods.sort();
+		let methods = serde_json::to_value(&methods)
+			.expect("Serialization of Vec<String> is infallible; qed");
+		move |_| Ok(methods.clone())
+	});
 	io
 }
 
