@@ -53,8 +53,8 @@ use support::{
 	decl_storage, decl_module, Parameter, storage::StorageValue, traits::{Get, FindAuthor},
 	ConsensusEngineId,
 };
-use app_crypto::AppPublic;
 use sr_primitives::{
+	RuntimeAppPublic,
 	traits::{SaturatedConversion, Saturating, Zero, Member, IsMember}, generic::DigestItem,
 };
 use timestamp::OnTimestampSet;
@@ -142,7 +142,7 @@ impl ProvideInherentData for InherentDataProvider {
 
 pub trait Trait: timestamp::Trait {
 	/// The identifier type for an authority.
-	type AuthorityId: Member + Parameter + AppPublic + Default;
+	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default;
 }
 
 decl_storage! {
