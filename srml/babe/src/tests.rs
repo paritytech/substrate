@@ -95,7 +95,7 @@ fn check_epoch_change() {
 
 		// Check that we got the expected digest.
 		let Digest { ref logs } = header.digest;
-		assert_eq!(logs.len(), 1, "should only have 1 digest here");
+		assert_eq!(logs.len(), 2, "should have exactly 2 digests here");
 		let (engine_id, mut epoch) = logs[0].as_consensus().unwrap();
 		assert_eq!(BABE_ENGINE_ID, engine_id, "we should only have a BABE consensus digest here");
 		let Epoch {
