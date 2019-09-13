@@ -436,24 +436,28 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 
 	/// Reads storage value at a given block + key, returning read proof.
-	pub fn read_proof(&self, id: &BlockId<Block>, key: &[u8]) -> error::Result<Vec<Vec<u8>>> {
+	pub fn read_proof<I>(&self, id: &BlockId<Block>, keys: I) -> error::Result<Vec<Vec<u8>>> where
+		I: IntoIterator,
+		I::Item: AsRef<[u8]>,
+	{
 		self.state_at(id)
-			.and_then(|state| prove_read(state, key)
-				.map(|(_, proof)| proof)
+			.and_then(|state| prove_read(state, keys)
 				.map_err(Into::into))
 	}
 
 	/// Reads child storage value at a given block + storage_key + key, returning
 	/// read proof.
-	pub fn read_child_proof(
+	pub fn read_child_proof<I>(
 		&self,
 		id: &BlockId<Block>,
 		storage_key: &[u8],
-		key: &[u8]
-	) -> error::Result<Vec<Vec<u8>>> {
+		keys: I,
+	) -> error::Result<Vec<Vec<u8>>> where
+		I: IntoIterator,
+		I::Item: AsRef<[u8]>,
+	{
 		self.state_at(id)
-			.and_then(|state| prove_child_read(state, storage_key, key)
-				.map(|(_, proof)| proof)
+			.and_then(|state| prove_child_read(state, storage_key, keys)
 				.map_err(Into::into))
 	}
 
