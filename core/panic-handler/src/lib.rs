@@ -51,8 +51,13 @@ enum OnPanic {
 ///
 /// The `bug_url` parameter is an invitation for users to visit that URL to submit a bug report
 /// in the case where a panic happens.
-pub fn set(bug_url: &'static str) {
-	panic::set_hook(Box::new(move |c| panic_hook(c, bug_url)));
+pub fn set(bug_url: &'static str, version: &str) {
+	panic::set_hook(Box::new({
+		let version = version.to_string();
+		move |c| {
+			panic_hook(c, bug_url, &version)
+		}
+	}));
 }
 
 macro_rules! ABOUT_PANIC {
@@ -124,7 +129,7 @@ impl Drop for AbortGuard {
 }
 
 /// Function being called when a panic happens.
-fn panic_hook(info: &PanicInfo, report_url: &'static str) {
+fn panic_hook(info: &PanicInfo, report_url: &'static str, version: &str) {
 	let location = info.location();
 	let file = location.as_ref().map(|l| l.file()).unwrap_or("<unknown>");
 	let line = location.as_ref().map(|l| l.line()).unwrap_or(0);
@@ -146,6 +151,8 @@ fn panic_hook(info: &PanicInfo, report_url: &'static str) {
 
 	let _ = writeln!(stderr, "");
 	let _ = writeln!(stderr, "====================");
+	let _ = writeln!(stderr, "");
+	let _ = writeln!(stderr, "Version: {}", version);
 	let _ = writeln!(stderr, "");
 	let _ = writeln!(stderr, "{:?}", backtrace);
 	let _ = writeln!(stderr, "");
@@ -169,14 +176,14 @@ mod tests {
 
 	#[test]
 	fn does_not_abort() {
-		set("test");
+		set("test", "1.2.3");
 		let _guard = AbortGuard::force_unwind();
 		::std::panic::catch_unwind(|| panic!()).ok();
 	}
 
 	#[test]
 	fn does_not_abort_after_never_abort() {
-		set("test");
+		set("test", "1.2.3");
 		let _guard = AbortGuard::never_abort();
 		let _guard = AbortGuard::force_abort();
 		std::panic::catch_unwind(|| panic!()).ok();

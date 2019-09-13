@@ -26,7 +26,7 @@ use support::StorageValue;
 use sr_primitives::traits::{One, Zero, SaturatedConversion};
 use rstd::{prelude::*, result, cmp, vec};
 use codec::Decode;
-use support::{decl_module, decl_storage, for_each_tuple};
+use support::{decl_module, decl_storage};
 use support::traits::Get;
 use srml_system::{ensure_none, Trait as SystemTrait};
 
@@ -214,29 +214,12 @@ impl<T: Trait> Module<T> {
 }
 
 /// Called when finalization stalled at a given number.
+#[impl_trait_for_tuples::impl_for_tuples(30)]
 pub trait OnFinalizationStalled<N> {
 	/// The parameter here is how many more blocks to wait before applying
 	/// changes triggered by finality stalling.
 	fn on_stalled(further_wait: N, median: N);
 }
-
-macro_rules! impl_on_stalled {
-	() => (
-		impl<N> OnFinalizationStalled<N> for () {
-			fn on_stalled(_: N, _: N) {}
-		}
-	);
-
-	( $($t:ident)* ) => {
-		impl<NUM: Clone, $($t: OnFinalizationStalled<NUM>),*> OnFinalizationStalled<NUM> for ($($t,)*) {
-			fn on_stalled(further_wait: NUM, median: NUM) {
-				$($t::on_stalled(further_wait.clone(), median.clone());)*
-			}
-		}
-	}
-}
-
-for_each_tuple!(impl_on_stalled);
 
 impl<T: Trait> ProvideInherent for Module<T> {
 	type Call = Call<T>;
