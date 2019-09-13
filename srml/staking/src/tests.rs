@@ -1307,7 +1307,7 @@ fn phragmen_poc_works() {
 	// 40  has load  0 and supported
 	// 40  with stake  0
 
-	// 	Sequential Phragmén with post processing gives
+	// Sequential Phragmén with post processing gives
 	// 10  is elected with stake  1500.0 and score  0.0005
 	// 20  is elected with stake  1500.0 and score  0.00075
 	//
@@ -1408,58 +1408,6 @@ fn phragmen_poc_works() {
 		check_exposure_all();
 		check_nominator_all();
 	});
-}
-
-#[test]
-fn phragmen_poc_2_works() {
-	// tests the encapsulated phragmen::elect function.
-	// Votes  [
-	// 	('10', 1000, ['10']),
-	// 	('20', 1000, ['20']),
-	// 	('30', 1000, ['30']),
-	// 	('2', 50, ['10', '20']),
-	// 	('4', 1000, ['10', '30'])
-	// ]
-	// Sequential Phragmén gives
-	// 10  is elected with stake  1705.7377049180327 and score  0.0004878048780487805
-	// 30  is elected with stake  1344.2622950819673 and score  0.0007439024390243903
-	with_externalities(&mut ExtBuilder::default().nominate(false).build(), || {
-		// initial setup of 10 and 20, both validators
-		assert_eq_uvec!(validator_controllers(), vec![20, 10]);
-
-		// Bond [30, 31] as the third validator
-		assert_ok!(Staking::bond_extra(Origin::signed(31), 999));
-		assert_ok!(Staking::validate(Origin::signed(30), ValidatorPrefs::default()));
-
-		// bond [2,1](A), [4,3](B), as 2 nominators
-		for i in &[1, 3] { let _ = Balances::deposit_creating(i, 2000); }
-
-		assert_ok!(Staking::bond(Origin::signed(1), 2, 50, RewardDestination::default()));
-		assert_ok!(Staking::nominate(Origin::signed(2), vec![11, 21]));
-
-		assert_ok!(Staking::bond(Origin::signed(3), 4, 1000, RewardDestination::default()));
-		assert_ok!(Staking::nominate(Origin::signed(4), vec![11, 31]));
-
-		let results = phragmen::elect::<_, _, _, <Test as Trait>::CurrencyToVote>(
-			2,
-			Staking::minimum_validator_count() as usize,
-			<Validators<Test>>::enumerate().map(|(who, _)| who).collect::<Vec<u64>>(),
-			<Nominators<Test>>::enumerate().collect(),
-			Staking::slashable_balance_of,
-			true,
-		);
-
-		let phragmen::PhragmenResult { winners, assignments } = results.unwrap();
-
-		// 10 and 30 must be the winners
-		assert_eq!(winners, vec![11, 31]);
-		assert_eq!(assignments, vec![
-			(3, vec![(11, 2816371998), (31, 1478595298)]),
-			(1, vec![(11, 4294967296)]),
-		]);
-		check_exposure_all();
-		check_nominator_all();
-	})
 }
 
 #[test]
