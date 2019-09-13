@@ -20,9 +20,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unused_must_use, unsafe_code, unused_variables)]
 
-// TODO: @marcio uncomment this when BabeEquivocation is integrated.
-// #![forbid(dead_code)]
-
 pub use timestamp;
 
 use rstd::{result, prelude::*};
@@ -34,16 +31,17 @@ use sr_staking_primitives::{
 	SessionIndex,
 	offence::{Offence, Kind},
 };
-use sr_primitives::weights::SimpleDispatchInfo;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
 use codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-use babe_primitives::{BABE_ENGINE_ID, ConsensusLog, BabeAuthorityWeight, Epoch, RawBabePreDigest};
+use babe_primitives::{
+	BABE_ENGINE_ID, ConsensusLog, BabeAuthorityWeight, NextEpochDescriptor, RawBabePreDigest,
+	SlotNumber,
+};
 pub use babe_primitives::{AuthorityId, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH};
-use system::ensure_root;
 
 /// The BABE inherent identifier.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"babeslot";
@@ -118,7 +116,7 @@ impl ProvideInherentData for InherentDataProvider {
 }
 
 pub trait Trait: timestamp::Trait {
-	type EpochDuration: Get<u64>;
+	type EpochDuration: Get<SlotNumber>;
 	type ExpectedBlockTime: Get<Self::Moment>;
 }
 
@@ -135,21 +133,12 @@ decl_storage! {
 		/// Current epoch authorities.
 		pub Authorities get(authorities): Vec<(AuthorityId, BabeAuthorityWeight)>;
 
-		/// Slot at which the current epoch started. It is possible that no
-		/// block was authored at the given slot and the epoch change was
-		/// signalled later than this.
-		pub EpochStartSlot get(epoch_start_slot): u64;
+		/// The slot at which the first epoch actually started. This is 0
+		/// until the first block of the chain.
+		pub GenesisSlot get(genesis_slot): u64;
 
 		/// Current slot number.
 		pub CurrentSlot get(current_slot): u64;
-
-		/// Whether secondary slots are enabled in case the VRF-based slot is
-		/// empty for the current epoch and the next epoch, respectively.
-		pub SecondarySlots get(secondary_slots): (bool, bool) = (true, true);
-
-		/// Pending change to enable/disable secondary slots which will be
-		/// triggered at `current_epoch + 2`.
-		pub PendingSecondarySlotsChange get(pending_secondary_slots_change): Option<bool> = None;
 
 		/// The epoch randomness for the *current* epoch.
 		///
@@ -214,20 +203,6 @@ decl_module! {
 		fn on_finalize() {
 			Initialized::kill();
 		}
-
-		/// Sets a pending change to enable / disable secondary slot assignment.
-		/// The pending change will be set at the end of the current epoch and
-		/// will be enacted at `current_epoch + 2`.
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
-		fn set_pending_secondary_slots_change(origin, change: Option<bool>) {
-			ensure_root(origin)?;
-			match change {
-				Some(change) =>	PendingSecondarySlotsChange::put(change),
-				None => {
-					PendingSecondarySlotsChange::take();
-				},
-			}
-		}
 	}
 }
 
@@ -269,15 +244,25 @@ impl<T: Trait> IsMember<AuthorityId> for Module<T> {
 }
 
 impl<T: Trait> session::ShouldEndSession<T::BlockNumber> for Module<T> {
-	fn should_end_session(_: T::BlockNumber) -> bool {
+	fn should_end_session(now: T::BlockNumber) -> bool {
 		// it might be (and it is in current implementation) that session module is calling
 		// should_end_session() from it's own on_initialize() handler
 		// => because session on_initialize() is called earlier than ours, let's ensure
 		// that we have synced with digest before checking if session should be ended
 		Self::do_initialize();
 
-		let diff = CurrentSlot::get().saturating_sub(EpochStartSlot::get());
-		diff >= T::EpochDuration::get()
+		// The session has technically ended during the passage of time
+		// between this block and the last, but we have to "end" the session now,
+		// since there is no earlier possible block we could have done it.
+		//
+		// The exception is for block 1: the genesis has slot 0, so we treat
+		// epoch 0 as having started at the slot of block 1. We want to use
+		// the same randomness and validator set as signalled in the genesis,
+		// so we don't rotate the session.
+		now != sr_primitives::traits::One::one() && {
+			let diff = CurrentSlot::get().saturating_sub(Self::current_epoch_start());
+			diff >= T::EpochDuration::get()
+		}
 	}
 }
 
@@ -336,6 +321,13 @@ impl<T: Trait> Module<T> {
 		<T as timestamp::Trait>::MinimumPeriod::get().saturating_mul(2.into())
 	}
 
+	// finds the start slot of the current epoch. only guaranteed to
+	// give correct results after `do_initialize` of the first block
+	// in the chain (as its result is based off of `GenesisSlot`).
+	fn current_epoch_start() -> SlotNumber {
+		(EpochIndex::get() * T::EpochDuration::get()) + GenesisSlot::get()
+	}
+
 	fn deposit_consensus<U: Encode>(new: U) {
 		let log: DigestItem<T::Hash> = DigestItem::Consensus(BABE_ENGINE_ID, new.encode());
 		<system::Module<T>>::deposit_log(log.into())
@@ -379,8 +371,20 @@ impl<T: Trait> Module<T> {
 				None
 			})
 		{
-			if EpochStartSlot::get() == 0 {
-				EpochStartSlot::put(digest.slot_number());
+			// on the first non-zero block (i.e. block #1)
+			// this is where the first epoch (epoch #0) actually starts.
+			// we need to adjust internal storage accordingly.
+			if GenesisSlot::get() == 0 {
+				GenesisSlot::put(digest.slot_number());
+
+				// deposit a log because this is the first block in epoch #0
+				// we use the same values as genesis because
+				let next = NextEpochDescriptor {
+					authorities: Self::authorities(),
+					randomness: Self::randomness(),
+				};
+
+				Self::deposit_consensus(ConsensusLog::NextEpochData(next))
 			}
 
 			CurrentSlot::put(digest.slot_number());
@@ -437,7 +441,12 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, queued_validators: I)
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
-		Self::do_initialize();
+		// PRECONDITION: `should_end_session` has done initialization and is guaranteed
+		// by the session module to be called before this.
+		#[cfg(debug_assertions)]
+		{
+			assert_eq!(Initialized::get(), Some(true));
+		}
 
 		// Update epoch index
 		let epoch_index = EpochIndex::get()
@@ -452,21 +461,6 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 		}).collect::<Vec<_>>();
 
 		Authorities::put(authorities);
-
-		// Update epoch start slot.
-		let now = CurrentSlot::get();
-		EpochStartSlot::mutate(|previous| {
-			loop {
-				// on the first epoch we must account for skipping at least one
-				// whole epoch, in case the first block is authored with a slot
-				// number far in the past.
-				if now.saturating_sub(*previous) < T::EpochDuration::get() {
-					break;
-				}
-
-				*previous = previous.saturating_add(T::EpochDuration::get());
-			}
-		});
 
 		// Update epoch randomness.
 		let next_epoch_index = epoch_index
@@ -484,34 +478,11 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 			(k, 1)
 		}).collect::<Vec<_>>();
 
-		let next_epoch_start_slot = EpochStartSlot::get().saturating_add(T::EpochDuration::get());
 		let next_randomness = NextRandomness::get();
 
-		// Update any pending secondary slots change
-		let mut secondary_slots = SecondarySlots::get();
-
-		// change for E + 1 now becomes change at E
-		secondary_slots.0 = secondary_slots.1;
-
-		if let Some(change) = PendingSecondarySlotsChange::take() {
-			// if there's a pending change schedule it for E + 1
-			secondary_slots.1 = change;
-		} else {
-			// otherwise E + 1 will have the same value as E
-			secondary_slots.1 = secondary_slots.0;
-		}
-
-		SecondarySlots::mutate(|secondary| {
-			*secondary = secondary_slots;
-		});
-
-		let next = Epoch {
-			epoch_index: next_epoch_index,
-			start_slot: next_epoch_start_slot,
-			duration: T::EpochDuration::get(),
+		let next = NextEpochDescriptor {
 			authorities: next_authorities,
 			randomness: next_randomness,
-			secondary_slots: secondary_slots.1,
 		};
 
 		Self::deposit_consensus(ConsensusLog::NextEpochData(next))

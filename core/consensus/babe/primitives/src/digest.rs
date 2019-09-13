@@ -33,6 +33,8 @@ use schnorrkel::{
 	SignatureError, errors::MultiSignatureStage,
 	vrf::{VRFProof, VRFOutput, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH}
 };
+use rstd::vec::Vec;
+
 
 /// A BABE pre-runtime digest. This contains all data required to validate a
 /// block and for the BABE runtime module. Slots can be assigned to a primary
@@ -179,7 +181,8 @@ impl Decode for BabePreDigest {
 
 /// Information about the next epoch. This is broadcast in the first block
 /// of the epoch.
-#[derive(Clone, Encode, Decode)]
+#[derive(Decode, Encode, Default, PartialEq, Eq, Clone)]
+#[cfg_attr(any(feature = "std", test), derive(Debug))]
 pub struct NextEpochDescriptor {
 	/// The authorities.
 	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,

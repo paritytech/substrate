@@ -28,7 +28,7 @@ use substrate_client::decl_runtime_apis;
 
 #[cfg(feature = "std")]
 pub use digest::{BabePreDigest, CompatibleDigestItem};
-pub use digest::{BABE_VRF_PREFIX, RawBabePreDigest};
+pub use digest::{BABE_VRF_PREFIX, RawBabePreDigest, NextEpochDescriptor};
 
 mod app {
 	use app_crypto::{app_crypto, key_types::BABE, sr25519};
@@ -92,26 +92,24 @@ pub struct Epoch {
 	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 	/// Randomness for this epoch
 	pub randomness: [u8; VRF_OUTPUT_LENGTH],
-	/// Whether secondary slot assignments should be used during the epoch.
-	pub secondary_slots: bool,
 }
 
 /// An consensus log item for BABE.
 #[derive(Decode, Encode, Clone, PartialEq, Eq)]
 pub enum ConsensusLog {
-	/// The epoch has changed. This provides information about the
-	/// epoch _after_ next: what slot number it will start at, who are the authorities (and their weights)
-	/// and the next epoch randomness. The information for the _next_ epoch should already
-	/// be available.
+	/// The epoch has changed. This provides information about the _next_
+	/// epoch - information about the _current_ epoch (i.e. the one we've just
+	/// entered) should already be available earlier in the chain.
 	#[codec(index = "1")]
-	NextEpochData(Epoch),
+	NextEpochData(NextEpochDescriptor),
 	/// Disable the authority with given index.
 	#[codec(index = "2")]
 	OnDisabled(AuthorityIndex),
 }
 
 /// Configuration data used by the BABE consensus engine.
-#[derive(Clone, Hash, PartialEq, Eq, Debug, Encode, Decode)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+#[cfg_attr(any(feature = "std", test), derive(Debug))]
 pub struct BabeConfiguration {
 	/// The slot duration in milliseconds for BABE. Currently, only
 	/// the value provided by this type at genesis will be used.
