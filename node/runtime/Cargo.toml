@@ -42,6 +42,7 @@ membership = { package = "srml-membership", path = "../../srml/membership", defa
 offences = { package = "srml-offences", path = "../../srml/offences", default-features = false }
 session = { package = "srml-session", path = "../../srml/session", default-features = false, features = ["historical"] }
 staking = { package = "srml-staking", path = "../../srml/staking", default-features = false }
+srml-staking-reward-curve = { path = "../../srml/staking/reward-curve"}
 sudo = { package = "srml-sudo", path = "../../srml/sudo", default-features = false }
 support = { package = "srml-support", path = "../../srml/support", default-features = false }
 system = { package = "srml-system", path = "../../srml/system", default-features = false }

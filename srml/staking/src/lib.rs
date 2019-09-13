@@ -269,11 +269,14 @@ use support::{
 	}
 };
 use session::{historical::OnSessionEnding, SelectInitialValidators};
-use sr_primitives::Perbill;
-use sr_primitives::weights::SimpleDispatchInfo;
-use sr_primitives::traits::{
-	Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded, SimpleArithmetic,
-	SaturatedConversion,
+use sr_primitives::{
+	Perbill,
+	curve::PiecewiseLinear,
+	weights::SimpleDispatchInfo,
+	traits::{
+		Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded, SimpleArithmetic,
+		SaturatedConversion,
+	}
 };
 use phragmen::{elect, equalize, Support, SupportMap, ExtendedBalance, ACCURACY};
 use sr_staking_primitives::{
@@ -529,7 +532,7 @@ pub trait Trait: system::Trait {
 	type SessionInterface: self::SessionInterface<Self::AccountId>;
 
 	/// The NPoS reward curve to use.
-	type RewardCurve: Get<&'static inflation::PiecewiseLinear>;
+	type RewardCurve: Get<&'static PiecewiseLinear<'static>>;
 }
 
 /// Mode of era-forcing.
