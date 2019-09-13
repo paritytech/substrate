@@ -257,7 +257,7 @@ use support::{
 	StorageValue, StorageMap, StorageLinkedMap, decl_module, decl_event,
 	decl_storage, ensure, traits::{
 		Currency, OnFreeBalanceZero, OnDilution, LockIdentifier, LockableCurrency,
-		WithdrawReasons, WithdrawReason, OnUnbalanced, Imbalance, Get, Time
+		WithdrawReasons, OnUnbalanced, Imbalance, Get, Time
 	}
 };
 use session::{historical::OnSessionEnding, SelectInitialValidators};
@@ -1013,7 +1013,7 @@ impl<T: Trait> Module<T> {
 			&ledger.stash,
 			ledger.total,
 			T::BlockNumber::max_value(),
-			WithdrawReasons::except(WithdrawReason::TransactionPayment),
+			WithdrawReasons::all(),
 		);
 		<Ledger<T>>::insert(controller, ledger);
 	}
