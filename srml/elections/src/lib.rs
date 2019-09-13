@@ -222,10 +222,10 @@ decl_storage! {
 
 		// ---- permanent state (always relevant, changes only at the finalization of voting)
 
-		//  The current membership. When there's a vote going on, this should still be used for
-		//  executive matters. The block number (second element in the tuple) is the block that
-		//  their position is active until (calculated by the sum of the block number when the
-		//  member was elected and their term duration).
+		///  The current membership. When there's a vote going on, this should still be used for
+		///  executive matters. The block number (second element in the tuple) is the block that
+		///  their position is active until (calculated by the sum of the block number when the
+		///  member was elected and their term duration).
 		pub Members get(members) config(): Vec<(T::AccountId, T::BlockNumber)>;
 		/// The total number of vote rounds that have happened or are in progress.
 		pub VoteCount get(vote_index): VoteIndex;
