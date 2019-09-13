@@ -128,7 +128,7 @@ where
 		debug_assert_eq!(
 			self.header.extrinsics_root().clone(),
 			HashFor::<Block>::ordered_trie_root(
-				self.extrinsics.iter().map(Encode::encode)
+				self.extrinsics.iter().map(Encode::encode).collect(),
 			),
 		);
 
