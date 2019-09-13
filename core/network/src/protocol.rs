@@ -1278,7 +1278,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		who: PeerId,
 		request: message::RemoteReadRequest<B::Hash>,
 	) {
-		let keys_str = match request.keys.len() {
+		let keys_str = || match request.keys.len() {
 			1 => request.keys[0].to_hex::<String>(),
 			_ => format!(
 				"{}..{}",
@@ -1288,14 +1288,14 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		};
 
 		trace!(target: "sync", "Remote read request {} from {} ({} at {})",
-			request.id, who, keys_str, request.block);
+			request.id, who, keys_str(), request.block);
 		let proof = match self.context_data.chain.read_proof(&request.block, &request.keys) {
 			Ok(proof) => proof,
 			Err(error) => {
 				trace!(target: "sync", "Remote read request {} from {} ({} at {}) failed with: {}",
 					request.id,
 					who,
-					keys_str,
+					keys_str(),
 					request.block,
 					error
 				);
@@ -1316,7 +1316,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		who: PeerId,
 		request: message::RemoteReadChildRequest<B::Hash>,
 	) {
-		let keys_str = match request.keys.len() {
+		let keys_str = || match request.keys.len() {
 			1 => request.keys[0].to_hex::<String>(),
 			_ => format!(
 				"{}..{}",
@@ -1326,7 +1326,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		};
 
 		trace!(target: "sync", "Remote read child request {} from {} ({} {} at {})",
-			request.id, who, request.storage_key.to_hex::<String>(), keys_str, request.block);
+			request.id, who, request.storage_key.to_hex::<String>(), keys_str(), request.block);
 		let proof = match self.context_data.chain.read_child_proof(
 			&request.block,
 			&request.storage_key,
@@ -1338,7 +1338,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					request.id,
 					who,
 					request.storage_key.to_hex::<String>(),
-					keys_str,
+					keys_str(),
 					request.block,
 					error
 				);
