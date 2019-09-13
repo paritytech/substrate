@@ -1527,7 +1527,7 @@ mod tests {
 		let header = Header {
 			number,
 			parent_hash,
-			state_root: BlakeTwo256::trie_root::<_, &[u8], &[u8]>(Vec::new()),
+			state_root: BlakeTwo256::trie_root(Vec::new()),
 			digest,
 			extrinsics_root,
 		};

@@ -436,7 +436,9 @@ impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 		body: Vec<Block::Extrinsic>
 	) -> ClientResult<Vec<Block::Extrinsic>> {
 		// TODO: #2621
-		let	extrinsics_root = HashFor::<Block>::ordered_trie_root(body.iter().map(Encode::encode));
+		let	extrinsics_root = HashFor::<Block>::ordered_trie_root(
+			body.iter().map(Encode::encode).collect(),
+		);
 		if *request.header.extrinsics_root() == extrinsics_root {
 			Ok(body)
 		} else {

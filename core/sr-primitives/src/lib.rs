@@ -699,7 +699,7 @@ impl DispatchError {
 	}
 }
 
-impl runtime_io::Printable for DispatchError {
+impl traits::Printable for DispatchError {
 	fn print(&self) {
 		"DispatchError".print();
 		if let Some(module) = self.module {
@@ -893,6 +893,11 @@ impl<'a> ::serde::Deserialize<'a> for OpaqueExtrinsic {
 impl traits::Extrinsic for OpaqueExtrinsic {
 	type Call = ();
 	type SignaturePayload = ();
+}
+
+/// Print something that implements `Printable` from the runtime.
+pub fn print(print: impl traits::Printable) {
+	print.print();
 }
 
 #[cfg(test)]

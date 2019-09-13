@@ -126,7 +126,7 @@ decl_module! {
 				Ok(_) => true,
 				Err(e) => {
 					let e: DispatchError = e.into();
-					runtime_io::print(e);
+					sr_primitives::print(e);
 					false
 				}
 			};
@@ -176,7 +176,7 @@ decl_module! {
 				Ok(_) => true,
 				Err(e) => {
 					let e: DispatchError = e.into();
-					runtime_io::print(e);
+					sr_primitives::print(e);
 					false
 				}
 			};
