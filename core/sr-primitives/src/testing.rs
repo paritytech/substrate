@@ -17,7 +17,7 @@
 //! Testing utilities.
 
 use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializer};
-use std::{fmt::Debug, ops::Deref, fmt};
+use std::{fmt::Debug, ops::Deref, fmt, cell::RefCell};
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{
 	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys, ValidateUnsigned,
@@ -30,8 +30,14 @@ use primitives::{crypto::{CryptoType, Dummy, key_types, Public}, U256};
 use crate::transaction_validity::{TransactionValidity, TransactionValidityError};
 
 /// Authority Id
-#[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug, Hash, Serialize, Deserialize)]
+#[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug, Hash, Serialize, Deserialize, PartialOrd, Ord)]
 pub struct UintAuthorityId(pub u64);
+
+impl From<u64> for UintAuthorityId {
+	fn from(id: u64) -> Self {
+		UintAuthorityId(id)
+	}
+}
 
 impl UintAuthorityId {
 	/// Convert this authority id into a public key.
@@ -47,34 +53,44 @@ impl CryptoType for UintAuthorityId {
 
 impl AsRef<[u8]> for UintAuthorityId {
 	fn as_ref(&self) -> &[u8] {
+		// Unsafe, i know, but it's test code and it's just there because it's really convenient to
+		// keep `UintAuthorityId` as a u64 under the hood.
 		unsafe {
 			std::slice::from_raw_parts(&self.0 as *const u64 as *const _, std::mem::size_of::<u64>())
 		}
 	}
 }
 
+thread_local! {
+	/// A list of all UintAuthorityId keys returned to the runtime.
+	static ALL_KEYS: RefCell<Vec<UintAuthorityId>> = RefCell::new(vec![]);
+}
+
+impl UintAuthorityId {
+	/// Set the list of keys returned by the runtime call for all keys of that type.
+	pub fn set_all_keys<T: Into<UintAuthorityId>>(keys: impl IntoIterator<Item=T>) {
+		ALL_KEYS.with(|l| *l.borrow_mut() = keys.into_iter().map(Into::into).collect())
+	}
+}
+
 impl app_crypto::RuntimeAppPublic for UintAuthorityId {
+	const ID: KeyTypeId = key_types::DUMMY;
+
 	type Signature = u64;
 
 	fn all() -> Vec<Self> {
-		unimplemented!("`all()` not available for `UintAuthorityId`.")
+		ALL_KEYS.with(|l| l.borrow().clone())
 	}
 
-	#[cfg(feature = "std")]
 	fn generate_pair(_: Option<&str>) -> Self {
 		use rand::RngCore;
 		UintAuthorityId(rand::thread_rng().next_u64())
 	}
 
-	#[cfg(not(feature = "std"))]
-	fn generate_pair(_: Option<&str>) -> Self {
-		unimplemented!("`generate_pair` not implemented for `UIntAuthorityId` on `no_std`.")
-	}
-
 	fn sign<M: AsRef<[u8]>>(&self, msg: &M) -> Option<Self::Signature> {
 		let mut signature = [0u8; 8];
 		msg.as_ref().iter()
-			.chain(rstd::iter::repeat(&42u8))
+			.chain(std::iter::repeat(&42u8))
 			.take(8)
 			.enumerate()
 			.for_each(|(i, v)| { signature[i] = *v; });
@@ -85,7 +101,7 @@ impl app_crypto::RuntimeAppPublic for UintAuthorityId {
 	fn verify<M: AsRef<[u8]>>(&self, msg: &M, signature: &Self::Signature) -> bool {
 		let mut msg_signature = [0u8; 8];
 		msg.as_ref().iter()
-			.chain(rstd::iter::repeat(&42))
+			.chain(std::iter::repeat(&42))
 			.take(8)
 			.enumerate()
 			.for_each(|(i, v)| { msg_signature[i] = *v; });
@@ -97,19 +113,16 @@ impl app_crypto::RuntimeAppPublic for UintAuthorityId {
 impl OpaqueKeys for UintAuthorityId {
 	type KeyTypeIds = std::iter::Cloned<std::slice::Iter<'static, KeyTypeId>>;
 
-	fn key_ids() -> Self::KeyTypeIds { [key_types::DUMMY].iter().cloned() }
-	// Unsafe, i know, but it's test code and it's just there because it's really convenient to
-	// keep `UintAuthorityId` as a u64 under the hood.
-	fn get_raw(&self, _: KeyTypeId) -> &[u8] {
-		unsafe {
-			std::slice::from_raw_parts(
-				&self.0 as *const _ as *const u8,
-				std::mem::size_of::<u64>(),
-			)
-		}
+	fn key_ids() -> Self::KeyTypeIds {
+		[key_types::DUMMY].iter().cloned()
 	}
+
+	fn get_raw(&self, _: KeyTypeId) -> &[u8] {
+		self.as_ref()
+	}
+
 	fn get<T: Decode>(&self, _: KeyTypeId) -> Option<T> {
-		self.0.using_encoded(|mut x| T::decode(&mut x)).ok()
+		self.using_encoded(|mut x| T::decode(&mut x)).ok()
 	}
 }
 

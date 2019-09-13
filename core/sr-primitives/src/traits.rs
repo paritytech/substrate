@@ -39,7 +39,7 @@ use rstd::ops::{
 	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
 	RemAssign, Shl, Shr
 };
-use crate::AppKey;
+use app_crypto::AppKey;
 use impl_trait_for_tuples::impl_for_tuples;
 
 /// A lazy value.

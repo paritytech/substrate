@@ -56,7 +56,7 @@ pub use generic::{DigestItem, Digest};
 
 /// Re-export this since it's part of the API of this crate.
 pub use primitives::crypto::{key_types, KeyTypeId, CryptoType};
-pub use app_crypto::AppKey;
+pub use app_crypto::RuntimeAppPublic;
 
 /// Justification type.
 pub type Justification = Vec<u8>;
