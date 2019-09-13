@@ -18,7 +18,7 @@
 //! and depositing logs.
 
 use rstd::prelude::*;
-use runtime_io::{storage_root, ordered_trie_root, storage_changes_root, twox_128, blake2_256};
+use runtime_io::{storage_root, storage_changes_root, twox_128, blake2_256};
 use runtime_support::storage::{self, StorageValue, StorageMap};
 use runtime_support::storage_items;
 use sr_primitives::{
@@ -29,7 +29,7 @@ use codec::{KeyedVec, Encode};
 use crate::{
 	AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest, AuthorityId
 };
-use primitives::{Blake2Hasher, storage::well_known_keys};
+use primitives::storage::well_known_keys;
 
 const NONCE_OF: &[u8] = b"nonce:";
 const BALANCE_OF: &[u8] = b"balance:";
@@ -101,8 +101,7 @@ fn execute_block_with_state_root_handler(
 
 	// check transaction trie root represents the transactions.
 	let txs = block.extrinsics.iter().map(Encode::encode).collect::<Vec<_>>();
-	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
-	let txs_root = ordered_trie_root::<Blake2Hasher, _, _>(&txs).into();
+	let txs_root = BlakeTwo256::ordered_trie_root(txs);
 	info_expect_equal_hash(&txs_root, &header.extrinsics_root);
 	if let Mode::Overwrite = mode {
 		header.extrinsics_root = txs_root;
@@ -211,8 +210,7 @@ pub fn execute_transaction(utx: Extrinsic) -> ApplyResult {
 pub fn finalize_block() -> Header {
 	let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX).unwrap();
 	let txs: Vec<_> = (0..extrinsic_index).map(ExtrinsicData::take).collect();
-	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
-	let extrinsics_root = ordered_trie_root::<Blake2Hasher, _, _>(&txs).into();
+	let extrinsics_root = BlakeTwo256::ordered_trie_root(txs).into();
 	let number = <Number>::take().expect("Number is set by `initialize_block`");
 	let parent_hash = <ParentHash>::take();
 	let mut digest = <StorageDigest>::take().expect("StorageDigest is set by `initialize_block`");
@@ -311,9 +309,9 @@ fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 #[cfg(not(feature = "std"))]
 fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 	if given != expected {
-		runtime_io::print("Hash not equal");
-		runtime_io::print(given.as_bytes());
-		runtime_io::print(expected.as_bytes());
+		sr_primitives::print("Hash not equal");
+		sr_primitives::print(given.as_bytes());
+		sr_primitives::print(expected.as_bytes());
 	}
 }
 

@@ -90,15 +90,14 @@ pub fn insert_genesis_block(
 		HashMap<Vec<u8>, HashMap<Vec<u8>, Vec<u8>>>,
 	)
 ) -> primitives::hash::H256 {
-
 	let child_roots = storage.1.iter().map(|(sk, child_map)| {
 		let state_root = <<<crate::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
-			child_map.clone().into_iter()
+			child_map.clone().into_iter().collect(),
 		);
 		(sk.clone(), state_root.encode())
 	});
 	let state_root = <<<crate::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
-		storage.0.clone().into_iter().chain(child_roots)
+		storage.0.clone().into_iter().chain(child_roots).collect()
 	);
 	let block: crate::Block = substrate_client::genesis::construct_genesis_block(state_root);
 	let genesis_hash = block.header.hash();
