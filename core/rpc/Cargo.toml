@@ -17,6 +17,7 @@ runtime_version = { package = "sr-version", path = "../sr-version" }
 serde_json = "1.0"
 session = { package = "substrate-session", path = "../session" }
 sr-primitives = { path = "../sr-primitives" }
+rpc-primitives = { package = "substrate-rpc-primitives", path = "primitives" }
 state_machine = { package = "substrate-state-machine", path = "../state-machine" }
 substrate-executor = { path = "../executor" }
 substrate-keystore = { path = "../keystore" }

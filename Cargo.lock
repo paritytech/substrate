@@ -2429,6 +2429,7 @@ dependencies = [
  "substrate-client 2.0.0",
  "substrate-keyring 2.0.0",
  "substrate-primitives 2.0.0",
+ "substrate-rpc-primitives 2.0.0",
  "substrate-transaction-pool 2.0.0",
 ]
 
@@ -4264,7 +4265,6 @@ name = "srml-staking"
 version = "2.0.0"
 dependencies = [
  "parity-scale-codec 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.97 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 2.0.0",
@@ -5100,6 +5100,8 @@ dependencies = [
 name = "substrate-phragmen"
 version = "2.0.0"
 dependencies = [
+ "rand 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 2.0.0",
  "sr-primitives 2.0.0",
  "sr-std 2.0.0",
  "srml-support 2.0.0",
@@ -5164,6 +5166,7 @@ dependencies = [
  "substrate-network 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-rpc-api 2.0.0",
+ "substrate-rpc-primitives 2.0.0",
  "substrate-session 2.0.0",
  "substrate-state-machine 2.0.0",
  "substrate-test-runtime-client 2.0.0",
@@ -5188,7 +5191,16 @@ dependencies = [
  "serde_json 1.0.40 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-version 2.0.0",
  "substrate-primitives 2.0.0",
+ "substrate-rpc-primitives 2.0.0",
  "substrate-transaction-graph 2.0.0",
+]
+
+[[package]]
+name = "substrate-rpc-primitives"
+version = "2.0.0"
+dependencies = [
+ "serde 1.0.97 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-primitives 2.0.0",
 ]
 
 [[package]]
@@ -5463,7 +5475,7 @@ dependencies = [
 
 [[package]]
 name = "substrate-wasm-builder"
-version = "1.0.5"
+version = "1.0.6"
 dependencies = [
  "build-helper 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "cargo_metadata 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",

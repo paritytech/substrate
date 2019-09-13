@@ -20,9 +20,14 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use rstd::prelude::*;
 use sr_primitives::{
 	generic, traits::{Verify, BlakeTwo256}, OpaqueExtrinsic, AnySignature
 };
+
+#[cfg(feature = "std")]
+use serde::{Serialize, Deserialize};
+use codec::{Encode, Decode};
 
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -67,10 +72,43 @@ pub type BlockId = generic::BlockId<Block>;
 /// Opaque, encoded, unchecked extrinsic.
 pub type UncheckedExtrinsic = OpaqueExtrinsic;
 
+/// A result of execution of a contract.
+#[derive(Eq, PartialEq, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+pub enum ContractExecResult {
+	/// The contract returned successfully.
+	///
+	/// There is a status code and, optionally, some data returned by the contract.
+	Success {
+		/// Status code returned by the contract.
+		status: u8,
+		/// Output data returned by the contract.
+		///
+		/// Can be empty.
+		data: Vec<u8>,
+	},
+	/// The contract execution either trapped or returned an error.
+	Error,
+}
+
 client::decl_runtime_apis! {
 	/// The API to query account account nonce (aka index).
 	pub trait AccountNonceApi {
 		/// Get current account nonce of given `AccountId`.
 		fn account_nonce(account: AccountId) -> Index;
+	}
+
+	/// The API to interact with contracts without using executive.
+	pub trait ContractsApi {
+		/// Perform a call from a specified account to a given contract.
+		///
+		/// See the contracts' `call` dispatchable function for more details.
+		fn call(
+			origin: AccountId,
+			dest: AccountId,
+			value: Balance,
+			gas_limit: u64,
+			input_data: Vec<u8>,
+		) -> ContractExecResult;
 	}
 }
