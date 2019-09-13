@@ -113,7 +113,7 @@ fn fuzz_transactions_inner(input: &[u8], check_gc: bool) {
 fn check_values(overlayed: &OverlayedChanges, ref_overlayed: &RefOverlayedChanges) -> (bool, usize) {
 	let mut len = 0;
 	let mut success = true;
-	for (key, value) in overlayed.top_iter() {
+	for (key, value) in overlayed.iter_values(None) {
 
 		let ref_value = ref_overlayed.storage(key);
 		if Some(value) != ref_value {

@@ -102,7 +102,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N> {
 
 	/// Return a new backend with all pending value.
 	pub fn commit_all(&self) -> InMemory<H> {
-		let top = self.overlay.changes.top_iter_overlay()
+		let top = self.overlay.changes.iter_overlay(None)
 			.map(|(k, v)| (None, k.to_vec(), v.value.clone()));
 
 		let children = self.overlay.changes.children_iter_overlay()
@@ -229,7 +229,7 @@ impl<H, N> Externalities<H> for TestExternalities<H, N> where
 		let child_delta_iter = self.overlay.changes.owned_children_iter();
 
 		// compute and memoize
-		let delta = self.overlay.changes.top_iter().map(|(k, v)| (k.to_vec(), v.map(|s| s.to_vec())));
+		let delta = self.overlay.changes.iter_values(None).map(|(k, v)| (k.to_vec(), v.map(|s| s.to_vec())));
 		self.backend.full_storage_root(delta, child_delta_iter).0
 
 	}
@@ -238,7 +238,7 @@ impl<H, N> Externalities<H> for TestExternalities<H, N> where
 		let storage_key = storage_key.as_ref();
 
 		let (root, is_empty, _) = {
-			let delta = self.overlay.changes.child_iter(Some(storage_key))
+			let delta = self.overlay.changes.iter_values(Some(storage_key))
 				.map(|(k, v)| (k.to_vec(), v.map(|s| s.to_vec())));
 
 			self.backend.child_storage_root(storage_key, delta)

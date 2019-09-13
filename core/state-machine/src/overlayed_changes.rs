@@ -191,17 +191,8 @@ impl OverlayedChangeSet {
 		self.history.commit_transaction();
 	}
 
-	/// Iterator over current state of the top level overlay, including change trie information.
-	pub fn top_iter_overlay(&self) -> impl Iterator<Item = (&[u8], &OverlayedValue)> {
-		self.top.iter()
-			.filter_map(move |(k, v)|
-				v.get(self.history.as_ref()).map(|v| (k.as_slice(), v)))
-	}
-
-	/// Iterator over current state of a given child overlay, including change trie information.
-	/// Can be use to return top level storage by using a `None` storage key,
-	/// `top_iter_overlay` method should be use instead if possible.
-	pub fn child_iter_overlay(
+	/// Iterator over current state of a given overlay, including change trie information.
+	pub fn iter_overlay(
 		&self,
 		storage_key: Option<&[u8]>,
 	) -> impl Iterator<Item = (&[u8], &OverlayedValue)> {
@@ -218,19 +209,12 @@ impl OverlayedChangeSet {
 			)
 	}
 
-	/// Iterator over current state of the top level overlay, values only.
-	pub fn top_iter(&self) -> impl Iterator<Item = (&[u8], Option<&[u8]>)> {
-		self.top_iter_overlay().map(|(k, v)| (k, v.value.as_ref().map(|v| v.as_slice())))
-	}
-
-	/// Iterator over current state of a given child overlay, values only.
-	/// Can be use to return top level storage by using a `None` storage key,
-	/// `top_iter` method should be use instead if possible.
-	pub fn child_iter(
+	/// Iterator over current state of a given overlay, values only.
+	pub fn iter_values(
 		&self,
 		storage_key: Option<&[u8]>,
 	) -> impl Iterator<Item = (&[u8], Option<&[u8]>)> {
-		self.child_iter_overlay(storage_key)
+		self.iter_overlay(storage_key)
 			.map(|(k, v)| (k, v.value.as_ref().map(|v| v.as_slice())))
 	}
 
@@ -543,11 +527,6 @@ impl OverlayedChanges {
 					.unwrap_or(NO_EXTRINSIC_INDEX)),
 			false => None,
 		}
-	}
-
-	/// Iterator over current state of the overlay.
-	pub fn top_iter(&self) -> impl Iterator<Item = (&[u8], Option<&[u8]>)> {
-		self.changes.top_iter()
 	}
 
 	#[cfg(any(test, feature = "test"))]

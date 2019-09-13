@@ -903,7 +903,7 @@ mod tests {
 		overlay.commit_prospective();
 
 		overlay.discard_prospective();
-		let values: HashMap<_, _>	= overlay.changes.top_iter()
+		let values: HashMap<_, _>	= overlay.changes.iter_values(None)
 			.map(|(k, v)| (k.to_vec(), v.map(|s| s.to_vec()))).collect();
 		assert_eq!(
 			values,

@@ -128,7 +128,7 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 		Number: BlockNumber,
 {
 
-	changes.changes.child_iter_overlay(storage_key.as_ref().map(|r| r.as_slice()))
+	changes.changes.iter_overlay(storage_key.as_ref().map(|r| r.as_slice()))
 		.filter(|( _, v)| v.extrinsics.is_some())
 		.try_fold(BTreeMap::new(), |mut map: BTreeMap<&[u8], (ExtrinsicIndex<Number>, Vec<u32>)>, (k, v)| {
 			match map.entry(k) {
