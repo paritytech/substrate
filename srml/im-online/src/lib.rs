@@ -67,20 +67,22 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use app_crypto::{AppPublic, RuntimeAppPublic, AppSignature};
+mod mock;
+mod tests;
+
+use app_crypto::RuntimeAppPublic;
 use codec::{Encode, Decode};
 use primitives::offchain::{OpaqueNetworkState, StorageKind};
 use rstd::prelude::*;
 use session::historical::IdentificationTuple;
-use runtime_io::Printable;
 use sr_primitives::{
-	traits::{Convert, Member}, Perbill,
+	traits::{Convert, Member, Printable}, Perbill,
 	transaction_validity::{
 		TransactionValidity, TransactionLongevity, ValidTransaction, InvalidTransaction,
 	},
 };
 use sr_staking_primitives::{
-	SessionIndex, CurrentElectedSet,
+	SessionIndex,
 	offence::{ReportOffence, Offence, Kind},
 };
 use support::{
@@ -136,15 +138,15 @@ pub mod ed25519 {
 	pub type AuthorityId = app_ed25519::Public;
 }
 
-// The local storage database key under which the worker progress status
-// is tracked.
+/// The local storage database key under which the worker progress status
+/// is tracked.
 const DB_KEY: &[u8] = b"srml/im-online-worker-status";
 
-// It's important to persist the worker state, since e.g. the
-// server could be restarted while starting the gossip process, but before
-// finishing it. With every execution of the off-chain worker we check
-// if we need to recover and resume gossipping or if there is already
-// another off-chain worker in the process of gossipping.
+/// It's important to persist the worker state, since e.g. the
+/// server could be restarted while starting the gossip process, but before
+/// finishing it. With every execution of the off-chain worker we check
+/// if we need to recover and resume gossipping or if there is already
+/// another off-chain worker in the process of gossipping.
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 struct WorkerStatus<BlockNumber> {
@@ -152,7 +154,8 @@ struct WorkerStatus<BlockNumber> {
 	gossipping_at: BlockNumber,
 }
 
-// Error which may occur while executing the off-chain code.
+/// Error which may occur while executing the off-chain code.
+#[cfg_attr(feature = "std", derive(Debug))]
 enum OffchainErr {
 	DecodeWorkerStatus,
 	FailedSigning,
@@ -187,7 +190,7 @@ pub struct Heartbeat<BlockNumber>
 
 pub trait Trait: system::Trait + session::historical::Trait {
 	/// The identifier type for an authority.
-	type AuthorityId: Member + Parameter + AppPublic + RuntimeAppPublic + Default;
+	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + Ord;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -205,9 +208,6 @@ pub trait Trait: system::Trait + session::historical::Trait {
 			IdentificationTuple<Self>,
 			UnresponsivenessOffence<IdentificationTuple<Self>>,
 		>;
-
-	/// A type that returns a validator id from the current elected set of the era.
-	type CurrentElectedSet: CurrentElectedSet<<Self as session::Trait>::ValidatorId>;
 }
 
 decl_event!(
@@ -272,6 +272,10 @@ decl_module! {
 					&heartbeat.authority_index,
 					&network_state
 				);
+			} else if exists {
+				Err("Duplicated heartbeat.")?
+			} else {
+				Err("Non existent public key.")?
 			}
 		}
 
@@ -293,7 +297,7 @@ impl<T: Trait> Module<T> {
 		<ReceivedHeartbeats>::exists(&current_session, &authority_index)
 	}
 
-	fn offchain(now: T::BlockNumber) {
+	pub(crate) fn offchain(now: T::BlockNumber) {
 		let next_gossip = <GossipAt<T>>::get();
 		let check = Self::check_not_yet_gossipped(now, next_gossip);
 		let (curr_worker_status, not_yet_gossipped) = match check {
@@ -450,19 +454,16 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 		let current_session = <session::Module<T>>::current_index();
 
 		let keys = Keys::<T>::get();
-		let current_elected = T::CurrentElectedSet::current_elected_set();
+		let current_validators = <session::Module<T>>::validators();
 
-		// The invariant is that these two are of the same length.
-		// TODO: What to do: Uncomment, ignore, a third option?
-		// assert_eq!(keys.len(), current_elected.len());
-
-		for (auth_idx, validator_id) in current_elected.into_iter().enumerate() {
+		for (auth_idx, validator_id) in current_validators.into_iter().enumerate() {
 			let auth_idx = auth_idx as u32;
-			if !<ReceivedHeartbeats>::exists(&current_session, &auth_idx) {
+			let exists = <ReceivedHeartbeats>::exists(&current_session, &auth_idx);
+			if !exists {
 				let full_identification = T::FullIdentificationOf::convert(validator_id.clone())
 					.expect(
-						"we got the validator_id from current_elected;
-						current_elected is set of currently elected validators;
+						"we got the validator_id from current_validators;
+						current_validators is set of currently acting validators;
 						the mapping between the validator id and its full identification should be valid;
 						thus `FullIdentificationOf::convert` can't return `None`;
 						qed",
@@ -470,6 +471,10 @@ impl<T: Trait> session::OneSessionHandler<T::AccountId> for Module<T> {
 
 				unresponsive.push((validator_id, full_identification));
 			}
+		}
+
+		if unresponsive.is_empty() {
+			return;
 		}
 
 		let validator_set_count = keys.len() as u32;
@@ -533,6 +538,7 @@ impl<T: Trait> support::unsigned::ValidateUnsigned for Module<T> {
 }
 
 /// An offence that is filed if a validator didn't send a heartbeat message.
+#[cfg_attr(feature = "std", derive(Clone, Debug, PartialEq, Eq))]
 pub struct UnresponsivenessOffence<Offender> {
 	/// The current session index in which we report the unresponsive validators.
 	///
@@ -575,30 +581,5 @@ impl<Offender: Clone> Offence<Offender> for UnresponsivenessOffence<Offender> {
 		// TODO: #3189 should fix this.
 		let p = (x.into_parts() as u64 * 50_000_000u64) / 1_000_000_000u64;
 		Perbill::from_parts(p as u32)
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn test_unresponsiveness_slash_fraction() {
-		// A single case of unresponsiveness is not slashed.
-		assert_eq!(
-			UnresponsivenessOffence::<()>::slash_fraction(1, 50),
-			Perbill::zero(),
-		);
-
-		assert_eq!(
-			UnresponsivenessOffence::<()>::slash_fraction(3, 50),
-			Perbill::from_parts(6000000), // 0.6%
-		);
-
-		// One third offline should be punished around 5%.
-		assert_eq!(
-			UnresponsivenessOffence::<()>::slash_fraction(17, 50),
-			Perbill::from_parts(48000000), // 4.8%
-		);
 	}
 }

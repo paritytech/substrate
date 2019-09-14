@@ -69,8 +69,8 @@ pub enum Error {
 	/// Some error occurred in the allocator
 	#[display(fmt="Error in allocator: {}", _0)]
 	Allocator(&'static str),
-	/// The allocator run out of space.
-	#[display(fmt="Allocator run out of space")]
+	/// The allocator ran out of space.
+	#[display(fmt="Allocator ran out of space")]
 	AllocatorOutOfSpace,
 	/// Someone tried to allocate more memory than the allowed maximum per allocation.
 	#[display(fmt="Requested allocation size is too large")]

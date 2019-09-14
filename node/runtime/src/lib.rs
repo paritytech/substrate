@@ -82,8 +82,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 157,
-	impl_version: 157,
+	spec_version: 158,
+	impl_version: 159,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -293,6 +293,7 @@ parameter_types! {
 	pub const CandidacyBond: Balance = 10 * DOLLARS;
 	pub const VotingBond: Balance = 1 * DOLLARS;
 	pub const VotingFee: Balance = 2 * DOLLARS;
+	pub const MinimumVotingLock: Balance = 1 * DOLLARS;
 	pub const PresentSlashPerVoter: Balance = 1 * CENTS;
 	pub const CarryCount: u32 = 6;
 	// one additional vote should go by before an inactive voter can be reaped.
@@ -312,6 +313,7 @@ impl elections::Trait for Runtime {
 	type CandidacyBond = CandidacyBond;
 	type VotingBond = VotingBond;
 	type VotingFee = VotingFee;
+	type MinimumVotingLock = MinimumVotingLock;
 	type PresentSlashPerVoter = PresentSlashPerVoter;
 	type CarryCount = CarryCount;
 	type InactiveGracePeriod = InactiveGracePeriod;
@@ -407,7 +409,6 @@ impl im_online::Trait for Runtime {
 	type Event = Event;
 	type SubmitTransaction = SubmitTransaction;
 	type ReportUnresponsiveness = Offences;
-	type CurrentElectedSet = staking::CurrentElectedStashAccounts<Runtime>;
 }
 
 impl offences::Trait for Runtime {
