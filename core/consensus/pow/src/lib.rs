@@ -63,6 +63,8 @@ fn aux_key(hash: &H256) -> Vec<u8> {
 /// Auxiliary storage data for PoW.
 #[derive(Encode, Decode, Clone, Debug, Default)]
 pub struct PowAux {
+	/// Difficulty.
+	pub difficulty: Difficulty,
 	/// Total difficulty.
 	pub total_difficulty: Difficulty,
 }
@@ -208,6 +210,7 @@ impl<B: BlockT<Hash=H256>, C, Algorithm> Verifier<B> for PowVerifier<C, Algorith
 			header,
 			BlockId::Hash(parent_hash),
 		)?;
+		aux.difficulty = difficulty;
 		aux.total_difficulty = aux.total_difficulty.saturating_add(difficulty);
 
 		if let Some(inner_body) = body.take() {
@@ -396,6 +399,7 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E>(
 			}
 		};
 
+		aux.difficulty = difficulty;
 		aux.total_difficulty = aux.total_difficulty.saturating_add(difficulty);
 		let hash = header.hash();
 
