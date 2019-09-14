@@ -10,6 +10,7 @@ substrate-client = { path = "../../../client", default-features = false }
 rstd = { package = "sr-std", path = "../../../sr-std", default-features = false }
 sr-primitives = { path = "../../../sr-primitives", default-features = false }
 primitives = { package = "substrate-primitives", path = "../../../primitives", default-features = false }
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 
 [features]
 default = ["std"]
@@ -18,4 +19,5 @@ std = [
 	"substrate-client/std",
 	"sr-primitives/std",
 	"primitives/std",
+	"codec/std",
 ]
