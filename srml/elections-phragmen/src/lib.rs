@@ -76,7 +76,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sr_primitives::traits::{Zero, StaticLookup, Bounded, Convert};
+use sr_primitives::{print, traits::{Zero, StaticLookup, Bounded, Convert}};
 use sr_primitives::weights::SimpleDispatchInfo;
 use srml_support::{
 	StorageValue, StorageMap, StorageLinkedMap,
@@ -385,8 +385,8 @@ decl_module! {
 		/// What to do at the end of each block. Checks if an election needs to happen or not.
 		fn on_initialize(n: T::BlockNumber) {
 			if let Err(e) = Self::end_block(n) {
-				runtime_io::print("Guru meditation");
-				runtime_io::print(e);
+				print("Guru meditation");
+				print(e);
 			}
 		}
 	}
