@@ -369,16 +369,7 @@ impl<T: Trait> Module<T> {
 			return;
 		}
 
-		#[derive(Default)]
-		struct Guard { maybe_vrf: MaybeVrf };
-		impl Drop for Guard {
-			fn drop(&mut self) {
-				Initialized::put(self.maybe_vrf.take())
-			}
-		}
-
-		let mut guard = Guard::default();
-		for digest in Self::get_inherent_digests()
+		let maybe_pre_digest = Self::get_inherent_digests()
 			.logs
 			.iter()
 			.filter_map(|s| s.as_pre_runtime())
@@ -387,7 +378,9 @@ impl<T: Trait> Module<T> {
 			} else {
 				None
 			})
-		{
+			.next();
+
+		let maybe_vrf = maybe_pre_digest.and_then(|digest| {
 			// on the first non-zero block (i.e. block #1)
 			// this is where the first epoch (epoch #0) actually starts.
 			// we need to adjust internal storage accordingly.
@@ -410,11 +403,13 @@ impl<T: Trait> Module<T> {
 				// place the VRF output into the `Initialized` storage item
 				// and it'll be put onto the under-construction randomness
 				// later, once we've decided which epoch this block is in.
-				guard.maybe_vrf = Some(vrf_output);
+				Some(vrf_output)
+			} else {
+				None
 			}
+		});
 
-			break
-		}
+		Initialized::put(maybe_vrf);
 	}
 
 	/// Call this function exactly once when an epoch changes, to update the
