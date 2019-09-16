@@ -24,7 +24,7 @@ use test::Bencher;
 
 use rand::{self, Rng};
 extern crate substrate_phragmen as phragmen;
-use phragmen::{Support, SupportMap};
+use phragmen::{Support, SupportMap, PhragmenStakedAssignment};
 
 use std::collections::BTreeMap;
 use sr_primitives::traits::{Convert, SaturatedConversion};
@@ -100,7 +100,7 @@ fn do_phragmen(
 		// Do the benchmarking with equalize.
 		if eq_iters > 0 {
 			let elected_stashes = r.winners;
-			let mut assignments = r.assignments;
+			let assignments = r.assignments;
 
 			let to_votes = |b: Balance|
 				<TestCurrencyToVote as Convert<Balance, u128>>::convert(b) as u128;
@@ -115,22 +115,37 @@ fn do_phragmen(
 					supports.insert(e.clone(), item);
 				});
 
-			for (n, assignment) in assignments.iter_mut() {
-				for (c, per_thing) in assignment.iter_mut() {
-					let nominator_stake = slashable_balance(n);
+			// build support struct.
+			for (n, assignment) in assignments.iter() {
+				for (c, per_thing) in assignment.iter() {
+					let nominator_stake = to_votes(slashable_balance(n));
 					let other_stake = *per_thing * nominator_stake;
 					if let Some(support) = supports.get_mut(c) {
 						support.total = support.total.saturating_add(other_stake);
 						support.others.push((n.clone(), other_stake));
 					}
-					*r = other_stake;
 				}
 			}
 
+			let mut staked_assignments
+					: Vec<(AccountId, Vec<PhragmenStakedAssignment<AccountId>>)>
+					= Vec::with_capacity(assignments.len());
+				for (n, assignment) in assignments.iter() {
+					let mut staked_assignment
+						: Vec<PhragmenStakedAssignment<AccountId>>
+						= Vec::with_capacity(assignment.len());
+					for (c, per_thing) in assignment.iter() {
+						let nominator_stake = to_votes(slashable_balance(n));
+						let other_stake = *per_thing * nominator_stake;
+						staked_assignment.push((c.clone(), other_stake));
+					}
+					staked_assignments.push((n.clone(), staked_assignment));
+				}
+
 			let tolerance = 0_u128;
 			let iterations = 2_usize;
-			phragmen::equalize::<_, _, _, TestCurrencyToVote>(
-				assignments,
+			phragmen::equalize::<_, _, TestCurrencyToVote, _>(
+				staked_assignments,
 				&mut supports,
 				tolerance,
 				iterations,
