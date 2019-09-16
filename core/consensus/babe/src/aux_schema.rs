@@ -22,10 +22,15 @@ use codec::{Decode, Encode};
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
 use sr_primitives::traits::Block as BlockT;
+use babe_primitives::BabeBlockWeight;
 
 use super::{EpochChanges, SharedEpochChanges};
 
 const BABE_EPOCH_CHANGES: &[u8] = b"babe_epoch_changes";
+
+fn block_weight_key<H: Encode>(block_hash: H) -> Vec<u8> {
+	(b"block_weight", block_hash).encode()
+}
 
 fn load_decode<B, T>(backend: &B, key: &[u8]) -> ClientResult<Option<T>>
 	where
@@ -68,4 +73,28 @@ pub(crate) fn write_epoch_changes<Block: BlockT, F, R>(
 	write_aux(
 		&[(BABE_EPOCH_CHANGES, encoded_epoch_changes.as_slice())],
 	)
+}
+
+/// Write the weight of a block ot aux storage.
+pub(crate) fn write_block_weight<H: Encode, F, R>(
+	block_hash: H,
+	block_weight: &BabeBlockWeight,
+	write_aux: F,
+) -> R where
+	F: FnOnce(&[(Vec<u8>, &[u8])]) -> R,
+{
+
+	let key = block_weight_key(block_hash);
+	block_weight.using_encoded(|s|
+		write_aux(
+			&[(key, s)],
+		)
+	)
+}
+
+pub(crate) fn load_block_weight<H: Encode, B: AuxStore>(
+	block_hash: H,
+	backend: &B,
+) -> ClientResult<Option<BabeBlockWeight>> {
+	load_decode(backend, block_weight_key(block_hash).as_slice())
 }
