@@ -289,18 +289,9 @@ pub fn elect<AccountId, Balance, FS, C>(
 							ACCURACY
 						} else {
 							if e.load.d() == n.load.d() {
-								let nom = if let Some(x) = ACCURACY.checked_mul(e.load.n()) {
-									// check if we can peacefully compute the desired accuracy
-									x / n.load.n()
-								} else {
-									// Presumably both numbers are quite large. Shifting both
-									// will preserve the ratio.
-									let n_load = n.load.n() >> 32;
-									let e_load = e.load.n() >> 32;
-									// defensive only. This can never saturate.
-									e_load.saturating_mul(ACCURACY) / n_load
-								};
-								nom
+								// return e.load / n.load in the scale of parts per `ACCURACY`.
+								let desired_scale: u128 = ACCURACY;
+								multiply_by_rational_greedy(desired_scale, e.load.n(), n.load.n())
 							} else {
 								// defensive only. Both edge and nominator loads are built from
 								// scores, hence MUST have the same denominator.

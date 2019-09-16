@@ -58,7 +58,10 @@ pub use primitives::crypto::{key_types, KeyTypeId, CryptoType};
 pub use app_crypto::AppKey;
 
 /// Re-export arithmetic stuff.
-pub use sr_arithmetic::{Perbill, Permill, Percent, Rational128, Fixed64};
+pub use sr_arithmetic::{
+	Perquintill, Perbill, Permill, Percent,
+	Rational128, Fixed64
+};
 /// Re-export 128 bit helpers from sr_arithmetic
 pub use sr_arithmetic::helpers_128bit;
 

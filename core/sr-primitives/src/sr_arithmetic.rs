@@ -162,6 +162,7 @@ macro_rules! implement_per_thing {
 			type Output = N;
 			fn mul(self, b: N) -> Self::Output {
 				let maximum: N = $max.into();
+				let upper_max: $upper_type = $max.into();
 				let part: N = self.0.into();
 
 				let rem_multiplied_divided = {
@@ -177,8 +178,12 @@ macro_rules! implement_per_thing {
 
 					// `rem_multiplied_upper` is less than $max^2 therefore divided by $max it fits
 					// in $type. remember that $type always fits $max.
-					let rem_multiplied_divided_sized =
-						(rem_multiplied_upper / ($max as $upper_type)) as $type;
+					let mut rem_multiplied_divided_sized =
+						(rem_multiplied_upper / upper_max) as $type;
+					// fix a tiny rounding error
+					if rem_multiplied_upper % upper_max > upper_max / 2 {
+							rem_multiplied_divided_sized += 1;
+					}
 
 					// `rem_multiplied_divided_sized` is inferior to b, thus it can be converted
 					// back to N type
@@ -242,13 +247,12 @@ macro_rules! implement_per_thing {
 			#[test]
 			fn compact_encoding() {
 				let tests = [
+					// assume all per_things have the size u8 at least.
 					(0 as $type, 1usize),
+					(1 as $type, 1usize),
 					(63, 1),
 					(64, 2),
-					(16383, 2),
-					(16384, 4),
-					(1073741823, 4),
-					(1073741824, 5),
+					(65, 2),
 					(<$type>::max_value(), <$type>::max_value().encode().len() + 1)
 				];
 				for &(n, l) in &tests {
@@ -276,16 +280,27 @@ macro_rules! implement_per_thing {
 			macro_rules! per_thing_mul_test {
 				($num_type:tt) => {
 					// multiplication from all sort of from_percent
-					assert_eq!($name::from_percent(100) * $num_type::max_value(), $num_type::max_value());
 					assert_eq!(
-						$name::from_percent(99) * $num_type::max_value(),
-						((Into::<U256>::into($num_type::max_value()) * 99u32) / 100u32).as_u128() as $num_type
+						$name::from_percent(100) * $num_type::max_value(),
+						$num_type::max_value()
 					);
-					assert_eq!($name::from_percent(50) * $num_type::max_value(), $num_type::max_value() / 2);
-					assert_eq!($name::from_percent(1) * $num_type::max_value(), $num_type::max_value() / 100);
+					assert_eq_error_rate!(
+						$name::from_percent(99) * $num_type::max_value(),
+						((Into::<U256>::into($num_type::max_value()) * 99u32) / 100u32).as_u128() as $num_type,
+						1,
+					);
+					assert_eq!(
+						$name::from_percent(50) * $num_type::max_value(),
+						$num_type::max_value() / 2,
+					);
+					assert_eq_error_rate!(
+						$name::from_percent(1) * $num_type::max_value(),
+						$num_type::max_value() / 100,
+						1,
+					);
 					assert_eq!($name::from_percent(0) * $num_type::max_value(), 0);
 
-					// multiplication with bounds
+					// // multiplication with bounds
 					assert_eq!($name::one() * $num_type::max_value(), $num_type::max_value());
 					assert_eq!($name::zero() * $num_type::max_value(), 0);
 				}
@@ -295,7 +310,21 @@ macro_rules! implement_per_thing {
 			fn per_thing_mul_works() {
 				use primitive_types::U256;
 
+				// accuracy test
+				assert_eq!($name::from_rational_approximation(1 as $type, 3) * 30 as $type, 10);
+
 				$(per_thing_mul_test!($test_units);)*
+			}
+
+			#[test]
+			fn per_thing_multiplication_with_large_number() {
+				use primitive_types::U256;
+				let max_minus_one = $max - 1;
+				assert_eq_error_rate!(
+					$name::from_parts(max_minus_one) * std::u128::MAX,
+					((Into::<U256>::into(std::u128::MAX) * max_minus_one) / $max).as_u128(),
+					1,
+				);
 			}
 
 			macro_rules! per_thing_from_rationale_approx_test {
@@ -319,11 +348,12 @@ macro_rules! implement_per_thing {
 						$name::from_percent(10),
 					);
 					assert_eq!(
-						$name::from_rational_approximation(
-							(1 * $max) as $num_type,
-							(4 * $max) as $num_type,
-						),
+						$name::from_rational_approximation(1 as $num_type, 4),
 						$name::from_percent(25),
+					);
+					assert_eq!(
+						$name::from_rational_approximation(1 as $num_type, 4),
+						$name::from_rational_approximation(2 as $num_type, 8),
 					);
 					// no accurate anymore but won't overflow.
 					assert_eq!(
@@ -350,6 +380,9 @@ macro_rules! implement_per_thing {
 
 			#[test]
 			fn per_thing_from_rationale_approx_works() {
+				// This is just to make sure something like Percent which _might_ get built from a
+				// u8 does not overflow in the context of this test.
+				let max_value = $max as $upper_type;
 				// almost at the edge
 				assert_eq!(
 					$name::from_rational_approximation($max - 1, $max + 1),
@@ -372,20 +405,10 @@ macro_rules! implement_per_thing {
 					$name::zero(),
 				);
 				assert_eq!(
-					$name::from_rational_approximation(3 * $max / 2, 3 * $max),
+					$name::from_rational_approximation(3 * max_value / 2, 3 * max_value),
 					$name::from_percent(50),
 				);
 				$(per_thing_from_rationale_approx_test!($test_units);)*
-			}
-
-			#[test]
-			fn per_thing_multiplication_with_large_number() {
-				use primitive_types::U256;
-				let max_minus_one = $max - 1;
-				assert_eq!(
-					$name::from_parts(max_minus_one) * std::u128::MAX,
-					((Into::<U256>::into(std::u128::MAX) * max_minus_one) / $max).as_u128()
-				);
 			}
 
 			#[test]
@@ -442,7 +465,10 @@ macro_rules! implement_per_thing {
 				assert_eq!($name::from_percent(100).square(), $name::from_percent(100));
 				assert_eq!($name::from_percent(50).square(), $name::from_percent(25));
 				assert_eq!($name::from_percent(10).square(), $name::from_percent(1));
-				assert_eq!($name::from_percent(2).square(), $name::from_parts(4 * $max / 10_000));
+				assert_eq!(
+					$name::from_percent(2).square(),
+					$name::from_parts((4 * ($max as $upper_type) / 100 / 100) as $type)
+				);
 			}
 
 			#[test]
@@ -471,6 +497,15 @@ macro_rules! implement_per_thing {
 }
 
 implement_per_thing!(
+	Percent,
+	test_per_cent,
+	[u32, u64, u128],
+	100u8,
+	u8,
+	u16,
+	"_Percent_",
+);
+implement_per_thing!(
 	Permill,
 	test_permill,
 	[u32, u64, u128],
@@ -496,15 +531,6 @@ implement_per_thing!(
 	u64,
 	u128,
 	"_Parts per Quintillion_",
-);
-implement_per_thing!(
-	Percent,
-	test_per_cent,
-	[u32, u64, u128],
-	100u32,
-	u32,
-	u32,
-	"_Percent_",
 );
 
 /// An unsigned fixed point number. Can hold any value in the range [-9_223_372_036, 9_223_372_036]
@@ -660,6 +686,7 @@ pub struct Rational128(u128, u128);
 /// multiplication implementation provided there.
 pub mod helpers_128bit {
 	use super::Perquintill;
+	use crate::traits::Zero;
 
 	/// return the number of bits that are needed to store `n`.
 	pub(crate) fn bits_of(n: u128) -> u32 {
@@ -667,20 +694,33 @@ pub mod helpers_128bit {
 	}
 
 	/// Tries to compute `a * b / c`. The approach is:
-	///   - Simply try a * b / c.
-	///   - Swap the operations in case the former multiplication overflows. Divide first. This
-	///     might collapse to zero.
+	///   - Simply try `a * b / c`.
+	///   - Else: Swap the operations (divide first) if `a > c` (division is possible) and `b <= c`
+	///     (overflow cannot happen)
+	///   - Else: Try and compute a perquintillion from `b / c` if `b <= c`.
+	///   - Else: return `Err`.
 	///
 	/// If none worked then return Error.
 	///
 	/// c must be greater than or equal to 1.
 	pub fn multiply_by_rational(a: u128, b: u128, c: u128) -> Result<u128, &'static str> {
-		if a == 0 { return Ok(0); }
+		if a.is_zero() { return Ok(Zero::zero()); }
 		let c = c.max(1);
-		// This is the safest way to go. Try it.
+
 		if let Some(x) = a.checked_mul(b) {
+			// This is the safest way to go. Try it.
 			Ok(x / c)
+		} else if a > c && b <= c {
+			// if it can be safely swapped and it is a fraction, then swap. The operations in this
+			// block cannot overflow since b <= c.
+			let q = a / c;
+			let r = a % c;
+			let r_additional = (r * b) / c; // todo check overflow
+			Ok(q * b + r_additional) // todo check overflow
 		} else if b <= c {
+			// If it will overflow because b <= c but both b and c are in ridiculously large scales,
+			// then try and collapse them down to quintillion. This is one step of the greedy
+			// method, which keeps reducing the accuracy until they fit.
 			let per_thing = Perquintill::from_rational_approximation(b, c);
 			Ok(per_thing * a)
 		} else {
@@ -696,8 +736,9 @@ pub mod helpers_128bit {
 	///
 	/// c must be greater than or equal to 1.
 	pub fn multiply_by_rational_greedy(a: u128, b: u128, c: u128) -> u128 {
-		if a == 0 { return 0; }
+		if a.is_zero() { return Zero::zero(); }
 		let c = c.max(1);
+
 		// safe to start with 1. 0 already failed.
 		multiply_by_rational(a, b, c).unwrap_or_else(|_| {
 			// we assume the best case (to prevent accuracy loss). Both a and b are the smallest
@@ -762,7 +803,6 @@ impl Rational128 {
 			let div = self.1 / den;
 			Ok(Self(self.0 / div.max(1), den))
 		}
-
 	}
 
 	/// Get the least common divisor of self and `other`.
@@ -770,7 +810,7 @@ impl Rational128 {
 	/// Arithmetic operations like normal `Add` and `Sub` are not provided. This can be used to
 	/// easily implement them.
 	pub fn lcm(&self, other: &Self) -> Result<u128, &'static str> {
-		// THIS should be tested better: two large numbers that are almost the same.
+		// this should be tested better: two large numbers that are almost the same.
 		if self.1 == other.1 { return Ok(self.1) }
 		let g = gcd(self.1, other.1);
 		helpers_128bit::multiply_by_rational(self.1 , other.1, g)
@@ -851,9 +891,11 @@ impl Eq for Rational128 {}
 mod test_rational128 {
 	use super::*;
 	use super::helpers_128bit::*;
+	use crate::assert_eq_error_rate;
 
 	const MAX128: u128 = u128::max_value();
 	const MAX64: u128 = u64::max_value() as u128;
+	const MAX64_2: u128 = 2 * u64::max_value() as u128;
 
 	fn r(p: u128, q: u128) -> Rational128 {
 		Rational128(p, q)
@@ -870,7 +912,10 @@ mod test_rational128 {
 		assert_eq!(r(MAX128 / 2, MAX128).to_den(10).unwrap(), r(5, 10));
 
 		// large to perbill
-		assert_eq!(r(MAX128 / 2, MAX128).to_den(1000_000_000).unwrap(), r(500_000_000, 1000_000_000));
+		assert_eq!(
+			r(MAX128 / 2, MAX128).to_den(1000_000_000).unwrap(),
+			r(500_000_000, 1000_000_000)
+		);
 
 		// large to large
 		assert_eq!(r(MAX128 / 2, MAX128).to_den(MAX128/2).unwrap(), r(MAX128/4, MAX128/2));
@@ -899,6 +944,7 @@ mod test_rational128 {
 			Ok(340282366920938463408034375210639556610),
 		);
 		assert!(340282366920938463408034375210639556610 < MAX128);
+		assert!(340282366920938463408034375210639556610 == MAX64 * (MAX64 - 1));
 	}
 
 	#[test]
@@ -920,7 +966,6 @@ mod test_rational128 {
 			r(MAX128, MAX128).checked_add(r(MAX128, MAX128)),
 			Err("overflow while adding numerators"),
 		);
-
 	}
 
 	#[test]
@@ -975,70 +1020,32 @@ mod test_rational128 {
 	}
 
 	#[test]
-	fn multiply_by_rational_greedy_works() {
-		// basics
-		assert_eq!(multiply_by_rational_greedy(7, 2, 3), 7 * 2 / 3);
-		assert_eq!(multiply_by_rational_greedy(7, 20, 30), 7 * 2 / 3);
-		assert_eq!(multiply_by_rational_greedy(20, 7, 30), 7 * 2 / 3);
-
-		// Where simple swap helps.
-		assert_eq!(
-			multiply_by_rational_greedy(MAX128, 2, 3),
-			226854911280625642082061493673886498661,
-		);
-		assert_eq!(
-			multiply_by_rational_greedy(MAX128, 555, 1000),
-			188856713641120847222172907124631357357,
-		);
-
-		// This can't work with just swap.
-		assert_eq!(
-			multiply_by_rational_greedy(MAX64, MAX128 / 2, MAX128-1),
-			MAX64 / 2,
-		);
-		assert_eq!(
-			multiply_by_rational_greedy(MAX64, MAX128, MAX128 - 1),
-			MAX64,
-		);
-
-		assert_eq!(
-			multiply_by_rational_greedy(2*MAX64 - 1, MAX64, MAX64),
-			2*MAX64 - 1,
-		);
-
-		// ultimate test
-		assert_eq!(
-			multiply_by_rational_greedy(MAX128, MAX128 / 2, MAX128),
-			MAX128 / 2
-		);
-
-		// overflow -- simply returns `a`
-		assert_eq!(
-			multiply_by_rational_greedy(MAX128 / 2, 3, 1),
-			MAX128 / 2
-		);
-	}
-
-	#[test]
 	fn multiply_by_rational_works() {
 		assert_eq!(multiply_by_rational(7, 2, 3).unwrap(), 7 * 2 / 3);
 		assert_eq!(multiply_by_rational(7, 20, 30).unwrap(), 7 * 2 / 3);
 		assert_eq!(multiply_by_rational(20, 7, 30).unwrap(), 7 * 2 / 3);
 
-		// we are bound by the accuracy of perquintill here. Ideally it should give `MAX128 / 3 * 2`
+		// computed with swap
 		assert_eq!(
+			// MAX128 % 3 == 0
 			multiply_by_rational(MAX128, 2, 3).unwrap(),
-			226854911280625642082061493673886498661,
+			MAX128 / 3 * 2,
 		);
 		assert_eq!(
-			multiply_by_rational(MAX128, 555, 1000).unwrap(),
-			188856713641120847222172907124631357357,
+			// MAX128 % 7 == 3
+			multiply_by_rational(MAX128, 5, 7).unwrap(),
+			(MAX128 / 7 * 5) + (3 * 5 / 7),
 		);
-		assert_eq!(multiply_by_rational(MAX128, MAX128 - 1, MAX128).unwrap(), MAX128);
 
 		assert_eq!(
-			multiply_by_rational(MAX64, MAX128 / 2, MAX128).unwrap(),
-			MAX64 / 2,
+			// MAX128 % 7 == 3
+			multiply_by_rational(MAX128, 11 , 13).unwrap(),
+			(MAX128 / 13 * 11) + (8 * 11 / 13),
+		);
+		assert_eq!(
+			// MAX128 % 1000 == 455
+			multiply_by_rational(MAX128, 555, 1000).unwrap(),
+			(MAX128 / 1000 * 555) + (455 * 555 / 1000),
 		);
 		assert_eq!(
 			multiply_by_rational(2 * MAX64 - 1, MAX64, MAX64).unwrap(),
@@ -1046,17 +1053,50 @@ mod test_rational128 {
 		);
 		assert_eq!(
 			multiply_by_rational(2 * MAX64 - 1, MAX64 - 1, MAX64).unwrap(),
-			2 * MAX64 - 1,
+			2 * MAX64 - 3,
 		);
 
+		// these are calculated with perquintillion. The cannot be swapped.
 		assert_eq!(
-			multiply_by_rational(MAX64, MAX128, MAX128 - 1),
-			Err("can not multiply by rational in this type"),
+			// MAX128 % 1000 == 455
+			multiply_by_rational(1_000_000_000, MAX128 / 8, MAX128 / 2).unwrap(),
+			1_000_000_000 / 4,
 		);
 
+		// interesting edge cases.
 		assert_eq!(
-			multiply_by_rational(MAX128 - 1000, 3, 1),
+			multiply_by_rational(MAX128, MAX128 - 1, MAX128).unwrap(),
+			MAX128,
+		);
+		assert_eq!(
+			multiply_by_rational(MAX64, MAX128 / 2, MAX128).unwrap(),
+			MAX64 / 2,
+		);
+
+		// fails to compute. have to use the greedy, lossy version here
+		assert_eq!(
+			multiply_by_rational(MAX64 + 100, MAX64_2, MAX64_2 / 2),
 			Err("can not multiply by rational in this type"),
+		);
+		assert_eq!(
+			multiply_by_rational(MAX64 + 100, MAX64_2 * 100, MAX64_2 * 100 / 2),
+			Err("can not multiply by rational in this type"),
+		);
+	}
+
+	#[test]
+	fn multiply_by_rational_greedy_works() {
+		// with some error
+		assert_eq_error_rate!(
+			multiply_by_rational_greedy(MAX64 + 100, MAX64_2, MAX64_2 / 2),
+			(MAX64 + 100) * 2,
+			5,
+		);
+		// with some error
+		assert_eq_error_rate!(
+			multiply_by_rational_greedy(MAX64 + 100, MAX64_2 * 100, MAX64_2 * 100 / 2),
+			(MAX64 + 100) * 2,
+			5,
 		);
 	}
 }
@@ -1083,14 +1123,26 @@ mod tests_fixed64 {
 
 	macro_rules! saturating_mul_acc_test {
 		($num_type:tt) => {
-			assert_eq!(Fixed64::from_rational(100, 1).saturated_multiply_accumulate(10 as $num_type), 1010);
-			assert_eq!(Fixed64::from_rational(100, 2).saturated_multiply_accumulate(10 as $num_type), 510);
-			assert_eq!(Fixed64::from_rational(100, 3).saturated_multiply_accumulate(0 as $num_type), 0);
+			assert_eq!(
+				Fixed64::from_rational(100, 1).saturated_multiply_accumulate(10 as $num_type),
+				1010,
+			);
+			assert_eq!(
+				Fixed64::from_rational(100, 2).saturated_multiply_accumulate(10 as $num_type),
+				510,
+			);
+			assert_eq!(
+				Fixed64::from_rational(100, 3).saturated_multiply_accumulate(0 as $num_type),
+				0,
+			);
 			assert_eq!(
 				Fixed64::from_rational(5, 1).saturated_multiply_accumulate($num_type::max_value()),
 				$num_type::max_value()
 			);
-			assert_eq!(max().saturated_multiply_accumulate($num_type::max_value()), $num_type::max_value());
+			assert_eq!(
+				max().saturated_multiply_accumulate($num_type::max_value()),
+				$num_type::max_value()
+			);
 		}
 	}
 
