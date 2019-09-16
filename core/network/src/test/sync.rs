@@ -499,7 +499,7 @@ fn light_peer_imports_header_from_announce() {
 	let mut runtime = current_thread::Runtime::new().unwrap();
 
 	fn import_with_announce(net: &mut TestNet, runtime: &mut current_thread::Runtime, hash: H256) {
-		net.peer(0).announce_block(hash, Vec::new()); // TODO
+		net.peer(0).announce_block(hash, Vec::new());
 
 		runtime.block_on(futures::future::poll_fn::<(), (), _>(|| {
 			net.poll();
