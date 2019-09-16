@@ -1882,12 +1882,11 @@ pub mod utils {
 	/// represent the current block `hash` and its `parent hash`, if given the
 	/// function that's returned will assume that `hash` isn't part of the local DB
 	/// yet, and all searches in the DB will instead reference the parent.
-	pub fn is_descendent_of<'a, B, E, Block: BlockT<Hash=H256>, RA>(
-		client: &'a Client<B, E, Block, RA>,
+	pub fn is_descendent_of<'a, Block: BlockT<Hash=H256>, T>(
+		client: &'a T,
 		current: Option<(&'a H256, &'a H256)>,
 	) -> impl Fn(&H256, &H256) -> Result<bool, error::Error> + 'a
-		where B: Backend<Block, Blake2Hasher>,
-			  E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+		where T: ChainHeaderBackend<Block>,
 	{
 		move |base, hash| {
 			if base == hash { return Ok(false); }
@@ -1905,7 +1904,7 @@ pub mod utils {
 			}
 
 			let tree_route = blockchain::tree_route(
-				|id| client.header(&id)?.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id))),
+				|id| client.header(id)?.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id))),
 				BlockId::Hash(*hash),
 				BlockId::Hash(*base),
 			)?;

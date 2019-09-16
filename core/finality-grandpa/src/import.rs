@@ -294,7 +294,7 @@ where
 		// returns a function for checking whether a block is a descendent of another
 		// consistent with querying client directly after importing the block.
 		let parent_hash = *block.header.parent_hash();
-		let is_descendent_of = is_descendent_of(&self.inner, Some((&hash, &parent_hash)));
+		let is_descendent_of = is_descendent_of(&*self.inner, Some((&hash, &parent_hash)));
 
 		let mut guard = InnerGuard {
 			guard: Some(self.authority_set.inner().write()),
