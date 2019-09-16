@@ -102,7 +102,6 @@ cargo-check-benches:
   <<:                              *docker-env
   script:
     - BUILD_DUMMY_WASM_BINARY=1 time cargo +nightly check --benches --all
-    - sccache -s
     - cd ./core/state-machine/fuzz
     - time cargo check
     - sccache -s

@@ -8,11 +8,11 @@
 
 // Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.	If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Transactional overlay implementation.
 //!
@@ -71,7 +71,7 @@ impl<V> History<V> {
 	pub fn from_iter(input: impl IntoIterator<Item = (V, usize)>) -> Self {
 		let mut history = History::default();
 		for v in input {
-			history.unsafe_push(v.0, v.1);
+			history.push_unchecked(v.0, v.1);
 		}
 		history
 	}
@@ -103,7 +103,7 @@ impl<V> History<V> {
 	/// This method shall only be call after a `get_mut` where
 	/// the returned index indicate that a `set` will result
 	/// in appending a value.
-	pub fn unsafe_push(&mut self, value: V, history_index: usize) {
+	pub fn push_unchecked(&mut self, value: V, history_index: usize) {
 		self.0.push((value, history_index))
 	}
 
@@ -117,7 +117,7 @@ impl<V> History<V> {
 				return;
 			}
 		}
-		self.unsafe_push(value, history.len() - 1);
+		self.push_unchecked(value, history.len() - 1);
 	}
 
 	fn mut_ref(&mut self, index: usize) -> &mut V {
@@ -372,7 +372,7 @@ impl<V> History<V> {
 
 	/// Access to latest pending value (non dropped state in history).
 	///
-	/// This method remove latest dropped value up to the latest valid value.
+	/// This method removes latest dropped values up to the latest valid value.
 	pub fn get_mut(&mut self, history: &[TransactionState]) -> Option<(&mut V, usize)> {
 
 		let mut index = self.len();
@@ -404,25 +404,24 @@ impl<V> History<V> {
 	}
 
 
-	/// Garbage collect a history, act as a `get_mut` with additional cost.
+	/// Garbage collect the history, act as a `get_mut` with additional cost.
 	/// To run `eager`, a `transaction_index` parameter of all `TxPending` states
 	/// must be provided, then all dropped value are removed even if it means shifting
 	/// array byte. Otherwhise we mainly garbage collect up to last Commit state
 	/// (truncate left size).
-	pub fn gc(
+	pub fn get_mut_pruning(
 		&mut self,
 		history: &[TransactionState],
 		transaction_index: Option<&[usize]>,
 	) -> Option<(&mut V, usize)> {
-		if let Some(transaction_index) = transaction_index {
-			let mut transaction_index = &transaction_index[..];
+		if let Some(mut transaction_index) = transaction_index {
 			let mut index = self.len();
 			if index == 0 {
 				return None;
 			}
 			// indicates that we got a value to return up to previous
 			// `TxPending` so values in between can be dropped.
-			let mut bellow_value = usize::max_value();
+			let mut below_value = usize::max_value();
 			let mut result: Option<(usize, usize)> = None;
 			// internal method: should be use properly
 			// (history of the right overlay change set
@@ -442,7 +441,7 @@ impl<V> History<V> {
 					},
 					TransactionState::Pending
 					| TransactionState::Prospective => {
-						if history_index >= bellow_value {
+						if history_index >= below_value {
 							self.remove(index);
 							result.as_mut().map(|(i, _)| *i = *i - 1);
 						} else {
@@ -450,18 +449,18 @@ impl<V> History<V> {
 								result = Some((index, history_index));
 							}
 							// move to next previous `TxPending`
-							while bellow_value > history_index {
+							while below_value > history_index {
 								// mut slice pop
 								let split = transaction_index.split_last()
 									.map(|(v, sl)| (*v, sl))
 									.unwrap_or((0, &[]));
-								bellow_value = split.0;
+								below_value = split.0;
 								transaction_index = split.1;
 							}
 						}
 					},
 					TransactionState::TxPending => {
-						if history_index >= bellow_value {
+						if history_index >= below_value {
 							self.remove(index);
 							result.as_mut().map(|(i, _)| *i = *i - 1);
 						} else {
@@ -469,7 +468,7 @@ impl<V> History<V> {
 								result = Some((index, history_index));
 							}
 						}
-						bellow_value = usize::max_value();
+						below_value = usize::max_value();
 					},
 					TransactionState::Dropped => {
 						self.remove(index);

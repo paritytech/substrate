@@ -80,7 +80,7 @@ impl FromIterator<(Vec<u8>, OverlayedValue)> for OverlayedChangeSet {
 		let mut result = OverlayedChangeSet::default();
 		result.top = iter.into_iter().map(|(k, v)| (k, {
 			let mut history = History::default();
-			history.unsafe_push(v, 0);
+			history.push_unchecked(v, 0);
 			history
 		})).collect();
 		result
@@ -123,7 +123,7 @@ fn set_with_extrinsic_inner_overlayed_value(
 			let mut extrinsics = current.extrinsics.clone();
 			extrinsics.get_or_insert_with(Default::default)
 				.insert(extrinsic_index);
-			h_value.unsafe_push(OverlayedValue {
+			h_value.push_unchecked(OverlayedValue {
 				value,
 				extrinsics,
 			}, state);
@@ -133,7 +133,7 @@ fn set_with_extrinsic_inner_overlayed_value(
 		extrinsics.get_or_insert_with(Default::default)
 			.insert(extrinsic_index);
 
-		h_value.unsafe_push(OverlayedValue {
+		h_value.push_unchecked(OverlayedValue {
 			 value,
 			 extrinsics,
 		}, state);
@@ -153,9 +153,9 @@ impl OverlayedChangeSet {
 		let history = self.history.as_ref();
 		let eager = || eager.as_ref().map(|t| t.as_slice());
 		// retain does change values
-		self.top.retain(|_, h_value| h_value.gc(history, eager()).is_some());
+		self.top.retain(|_, h_value| h_value.get_mut_pruning(history, eager()).is_some());
 		self.children.retain(|_, m| {
-			m.retain(|_, h_value| h_value.gc(history, eager()).is_some());
+			m.retain(|_, h_value| h_value.get_mut_pruning(history, eager()).is_some());
 			m.len() > 0
 		});
 	}
