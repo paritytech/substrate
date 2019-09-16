@@ -740,7 +740,7 @@ mod tests {
 			}
 		}
 
-		fn make_verifier(&self, client: PeersClient, _cfg: &ProtocolConfig)
+		fn make_verifier(&self, client: PeersClient, _cfg: &ProtocolConfig, _peer_data: &())
 			-> Self::Verifier
 		{
 			match client {
