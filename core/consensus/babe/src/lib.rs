@@ -126,6 +126,7 @@ pub use epoch_changes::{EpochChanges, SharedEpochChanges};
 // FIXME: Once Rust has higher-kinded types, the duplication between this
 // and `super::babe::Config` can be eliminated.
 // https://github.com/paritytech/substrate/issues/2434
+#[derive(Clone)]
 pub struct Config(slots::SlotDuration<BabeConfiguration>);
 
 impl Config {
@@ -1042,81 +1043,78 @@ fn calculate_primary_threshold(
 	calc().unwrap_or(u128::max_value())
 }
 
-// /// Tries to claim the given slot number. This method starts by trying to claim
-// /// a primary VRF based slot. If we are not able to claim it, then if we have
-// /// secondary slots enabled for the given epoch, we will fallback to trying to
-// /// claim a secondary slot.
-// fn claim_slot(
-// 	slot_number: SlotNumber,
-// 	parent_weight: BabeBlockWeight,
-// 	epoch: &Epoch,
-// 	c: (u64, u64),
-// 	keystore: &KeyStorePtr,
-// ) -> Option<(BabePreDigest, AuthorityPair)> {
-// 	claim_primary_slot(slot_number, parent_weight, epoch, c, keystore)
-// 		.or_else(|| {
-// 			if epoch.secondary_slots {
-// 				claim_secondary_slot(
-// 					slot_number,
-// 					parent_weight,
-// 					&epoch.authorities,
-// 					keystore,
-// 					epoch.randomness,
-// 				)
-// 			} else {
-// 				None
-// 			}
-// 		})
-// }
+/// Tries to claim the given slot number. This method starts by trying to claim
+/// a primary VRF based slot. If we are not able to claim it, then if we have
+/// secondary slots enabled for the given epoch, we will fallback to trying to
+/// claim a secondary slot.
+fn claim_slot(
+	slot_number: SlotNumber,
+	epoch: &Epoch,
+	config: &Config,
+	c: (u64, u64),
+	keystore: &KeyStorePtr,
+) -> Option<(BabePreDigest, AuthorityPair)> {
+	claim_primary_slot(slot_number, epoch, c, keystore)
+		.or_else(|| {
+			if config.secondary_slots {
+				claim_secondary_slot(
+					slot_number,
+					&epoch.authorities,
+					keystore,
+					epoch.randomness,
+				)
+			} else {
+				None
+			}
+		})
+}
 
-// /// Claim a primary slot if it is our turn.  Returns `None` if it is not our turn.
-// /// This hashes the slot number, epoch, genesis hash, and chain randomness into
-// /// the VRF.  If the VRF produces a value less than `threshold`, it is our turn,
-// /// so it returns `Some(_)`. Otherwise, it returns `None`.
-// fn claim_primary_slot(
-// 	slot_number: SlotNumber,
-// 	parent_weight: BabeBlockWeight,
-// 	epoch: &Epoch,
-// 	c: (u64, u64),
-// 	keystore: &KeyStorePtr,
-// ) -> Option<(BabePreDigest, AuthorityPair)> {
-// 	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
-// 	let keystore = keystore.read();
+/// Claim a primary slot if it is our turn.  Returns `None` if it is not our turn.
+/// This hashes the slot number, epoch, genesis hash, and chain randomness into
+/// the VRF.  If the VRF produces a value less than `threshold`, it is our turn,
+/// so it returns `Some(_)`. Otherwise, it returns `None`.
+fn claim_primary_slot(
+	slot_number: SlotNumber,
+	epoch: &Epoch,
+	c: (u64, u64),
+	keystore: &KeyStorePtr,
+) -> Option<(BabePreDigest, AuthorityPair)> {
+	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
+	let keystore = keystore.read();
 
-// 	for (pair, authority_index) in authorities.iter()
-// 		.enumerate()
-// 		.flat_map(|(i, a)| {
-// 			keystore.key_pair::<AuthorityPair>(&a.0).ok().map(|kp| (kp, i))
-// 		})
-// 	{
-// 		let transcript = make_transcript(randomness, slot_number, *epoch_index);
+	for (pair, authority_index) in authorities.iter()
+		.enumerate()
+		.flat_map(|(i, a)| {
+			keystore.key_pair::<AuthorityPair>(&a.0).ok().map(|kp| (kp, i))
+		})
+	{
+		let transcript = make_transcript(randomness, slot_number, *epoch_index);
 
-// 		// Compute the threshold we will use.
-// 		//
-// 		// We already checked that authorities contains `key.public()`, so it can't
-// 		// be empty.  Therefore, this division in `calculate_threshold` is safe.
-// 		let threshold = calculate_primary_threshold(c, authorities, authority_index);
+		// Compute the threshold we will use.
+		//
+		// We already checked that authorities contains `key.public()`, so it can't
+		// be empty.  Therefore, this division in `calculate_threshold` is safe.
+		let threshold = calculate_primary_threshold(c, authorities, authority_index);
 
-// 		let pre_digest = get_keypair(&pair)
-// 			.vrf_sign_after_check(transcript, |inout| check_primary_threshold(inout, threshold))
-// 			.map(|s| {
-// 				BabePreDigest::Primary {
-// 					slot_number,
-// 					vrf_output: s.0.to_output(),
-// 					vrf_proof: s.1,
-// 					authority_index: authority_index as u32,
-// 					weight: parent_weight + 1,
-// 				}
-// 			});
+		let pre_digest = get_keypair(&pair)
+			.vrf_sign_after_check(transcript, |inout| check_primary_threshold(inout, threshold))
+			.map(|s| {
+				BabePreDigest::Primary {
+					slot_number,
+					vrf_output: s.0.to_output(),
+					vrf_proof: s.1,
+					authority_index: authority_index as u32,
+				}
+			});
 
-// 		// early exit on first successful claim
-// 		if let Some(pre_digest) = pre_digest {
-// 			return Some((pre_digest, pair));
-// 		}
-// 	}
+		// early exit on first successful claim
+		if let Some(pre_digest) = pre_digest {
+			return Some((pre_digest, pair));
+		}
+	}
 
-// 	None
-// }
+	None
+}
 
 /// Get the expected secondary author for the given slot and with given
 /// authorities. This should always assign the slot to some authority unless the
@@ -1142,45 +1140,45 @@ fn secondary_slot_author(
 	Some(&expected_author.0)
 }
 
-// /// Claim a secondary slot if it is our turn to propose, returning the
-// /// pre-digest to use when authoring the block, or `None` if it is not our turn
-// /// to propose.
-// fn claim_secondary_slot(
-// 	slot_number: SlotNumber,
-// 	authorities: &[(AuthorityId, BabeAuthorityWeight)],
-// 	keystore: &KeyStorePtr,
-// 	randomness: [u8; 32],
-// ) -> Option<(BabePreDigest, AuthorityPair)> {
-// 	if authorities.is_empty() {
-// 		return None;
-// 	}
+/// Claim a secondary slot if it is our turn to propose, returning the
+/// pre-digest to use when authoring the block, or `None` if it is not our turn
+/// to propose.
+fn claim_secondary_slot(
+	slot_number: SlotNumber,
+	authorities: &[(AuthorityId, BabeAuthorityWeight)],
+	keystore: &KeyStorePtr,
+	randomness: [u8; 32],
+) -> Option<(BabePreDigest, AuthorityPair)> {
+	if authorities.is_empty() {
+		return None;
+	}
 
-// 	let expected_author = secondary_slot_author(
-// 		slot_number,
-// 		authorities,
-// 		randomness,
-// 	)?;
+	let expected_author = secondary_slot_author(
+		slot_number,
+		authorities,
+		randomness,
+	)?;
 
-// 	let keystore = keystore.read();
+	let keystore = keystore.read();
 
-// 	for (pair, authority_index) in authorities.iter()
-// 		.enumerate()
-// 		.flat_map(|(i, a)| {
-// 			keystore.key_pair::<AuthorityPair>(&a.0).ok().map(|kp| (kp, i))
-// 		})
-// 	{
-// 		if pair.public() == *expected_author {
-// 			let pre_digest = BabePreDigest::Secondary {
-// 				slot_number,
-// 				authority_index: authority_index as u32,
-// 			};
+	for (pair, authority_index) in authorities.iter()
+		.enumerate()
+		.flat_map(|(i, a)| {
+			keystore.key_pair::<AuthorityPair>(&a.0).ok().map(|kp| (kp, i))
+		})
+	{
+		if pair.public() == *expected_author {
+			let pre_digest = BabePreDigest::Secondary {
+				slot_number,
+				authority_index: authority_index as u32,
+			};
 
-// 			return Some((pre_digest, pair));
-// 		}
-// 	}
+			return Some((pre_digest, pair));
+		}
+	}
 
-// 	None
-// }
+	None
+}
 
 /// A block-import handler for BABE.
 ///
@@ -1195,6 +1193,7 @@ pub struct BabeBlockImport<B, E, Block: BlockT, I, RA, PRA> {
 	client: Arc<Client<B, E, Block, RA>>,
 	api: Arc<PRA>,
 	epoch_changes: SharedEpochChanges<Block>,
+	config: Config,
 }
 
 impl<B, E, Block: BlockT, I: Clone, RA, PRA> Clone for BabeBlockImport<B, E, Block, I, RA, PRA> {
@@ -1204,6 +1203,7 @@ impl<B, E, Block: BlockT, I: Clone, RA, PRA> Clone for BabeBlockImport<B, E, Blo
 			client: self.client.clone(),
 			api: self.api.clone(),
 			epoch_changes: self.epoch_changes.clone(),
+			config: self.config.clone(),
 		}
 	}
 }
@@ -1214,162 +1214,162 @@ impl<B, E, Block: BlockT, I, RA, PRA> BabeBlockImport<B, E, Block, I, RA, PRA> {
 		api: Arc<PRA>,
 		epoch_changes: SharedEpochChanges<Block>,
 		block_import: I,
+		config: Config,
 	) -> Self {
 		BabeBlockImport {
 			client,
 			api,
 			inner: block_import,
 			epoch_changes,
+			config,
 		}
 	}
 }
 
-// impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block, I, RA, PRA> where
-// 	Block: BlockT<Hash=H256>,
-// 	I: BlockImport<Block> + Send + Sync,
-// 	I::Error: Into<ConsensusError>,
-// 	B: Backend<Block, Blake2Hasher> + 'static,
-// 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
-// 	RA: Send + Sync,
-// 	PRA: ProvideRuntimeApi + ProvideCache<Block>,
-// 	PRA::Api: BabeApi<Block>,
-// {
-// 	type Error = ConsensusError;
+impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block, I, RA, PRA> where
+	Block: BlockT<Hash=H256>,
+	I: BlockImport<Block> + Send + Sync,
+	I::Error: Into<ConsensusError>,
+	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+	RA: Send + Sync,
+	PRA: ProvideRuntimeApi + ProvideCache<Block>,
+	PRA::Api: BabeApi<Block>,
+{
+	type Error = ConsensusError;
 
-// 	fn import_block(
-// 		&mut self,
-// 		mut block: BlockImportParams<Block>,
-// 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
-// 	) -> Result<ImportResult, Self::Error> {
-// 		let hash = block.post_header().hash();
-// 		let number = block.header.number().clone();
+	fn import_block(
+		&mut self,
+		mut block: BlockImportParams<Block>,
+		new_cache: HashMap<CacheKeyId, Vec<u8>>,
+	) -> Result<ImportResult, Self::Error> {
+		let hash = block.post_header().hash();
+		let number = block.header.number().clone();
 
-// 		// early exit if block already in chain, otherwise the check for
-// 		// epoch changes will error when trying to re-import an epoch change
-// 		match self.client.status(BlockId::Hash(hash)) {
-// 			Ok(blockchain::BlockStatus::InChain) => return Ok(ImportResult::AlreadyInChain),
-// 			Ok(blockchain::BlockStatus::Unknown) => {},
-// 			Err(e) => return Err(ConsensusError::ClientImport(e.to_string()).into()),
-// 		}
+		// early exit if block already in chain, otherwise the check for
+		// epoch changes will error when trying to re-import an epoch change
+		match self.client.status(BlockId::Hash(hash)) {
+			Ok(blockchain::BlockStatus::InChain) => return Ok(ImportResult::AlreadyInChain),
+			Ok(blockchain::BlockStatus::Unknown) => {},
+			Err(e) => return Err(ConsensusError::ClientImport(e.to_string()).into()),
+		}
 
-// 		let slot_number = {
-// 			let pre_digest = find_pre_digest::<Block>(&block.header)
-// 				.expect("valid babe headers must contain a predigest; \
-// 						 header has been already verified; qed");
-// 			pre_digest.slot_number()
-// 		};
+		let slot_number = {
+			let pre_digest = find_pre_digest::<Block>(&block.header)
+				.expect("valid babe headers must contain a predigest; \
+						 header has been already verified; qed");
+			pre_digest.slot_number()
+		};
 
-// 		let mut epoch_changes = self.epoch_changes.lock();
+		let mut epoch_changes = self.epoch_changes.lock();
 
-// 		// check if there's any epoch change expected to happen at this slot.
-// 		// `epoch` is the epoch to verify the block under, and `first_in_epoch` is true
-// 		// if this is the first block in its chain for that epoch.
-// 		let (epoch, first_in_epoch) = if number == sr_primitives::traits::One::one() {
-// 			// The first block of the chain is a special-case, since it is
-// 			// implied to kick off the genesis epoch.
-// 			unimplemented!();
-// 		} else {
-// 			let parent_hash = *block.header.parent_hash();
-// 			let parent_header = self.client.header(&BlockId::Hash(parent_hash))
-// 				.ok_or_else(|| ConsensusError::ChainLookup(format!(
-// 					"Parent ({}) of {} unavailable. Cannot import",
-// 					parent_hash,
-// 					hash,
-// 				)))?;
+		// check if there's any epoch change expected to happen at this slot.
+		// `epoch` is the epoch to verify the block under, and `first_in_epoch` is true
+		// if this is the first block in its chain for that epoch.
+		let (epoch, first_in_epoch) = if number == sr_primitives::traits::One::one() {
+			// The first block of the chain is a special-case, since it is
+			// implied to kick off the genesis epoch.
+			let epoch = Epoch {
+				epoch_index: 0,
+				start_slot: slot_number,
+				duration: self.config.epoch_length,
+				authorities: self.config.genesis_authorities.clone(),
+				randomness: self.config.randomness.clone(),
+			};
 
+			(epoch, true)
+		} else {
+			let parent_hash = *block.header.parent_hash();
+			let parent_header = self.client.header(&BlockId::Hash(parent_hash))
+				.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
+				.ok_or_else(|| ConsensusError::ChainLookup(format!(
+					"Parent ({}) of {} unavailable. Cannot import",
+					parent_hash,
+					hash,
+				)))?;
 
-// 			let epoch = epoch_changes.epoch_for_child_of(
-// 				&parent_hash,
-// 				*parent_header.number(),
-// 				slot_number,
-// 			)
-// 				.ok_or_else(|e| ConsensusError::ClientImport(
-// 					format!("Block {} is not valid under any epoch.", hash)
-// 				))?;
+			let parent_slot = find_pre_digest::<Block>(&parent_header)
+				.map(|d| d.slot_number())
+				.expect("parent is non-genesis; valid BABE headers contain a pre-digest; \
+						 header has already been verified; qed");
 
-// 			// TODO: get slot number of parent, and if < epoch.start_slot,
-// 			// then `first_in_epoch = true`.
-// 			let first_in_epoch: bool = unimplemented!();
-// 			(epoch, first_in_epoch)
-// 		};
+			let epoch = epoch_changes.epoch_for_child_of(
+				&parent_hash,
+				*parent_header.number(),
+				slot_number,
+			)
+				.ok_or_else(|| ConsensusError::ClientImport(
+					format!("Block {} is not valid under any epoch.", hash)
+				))?;
 
-// 		if first_in_epoch {
-// 			let next_epoch_digest = find_next_epoch_digest::<Block>(&block.header)
-// 				.map_err(|e| ConsensusError::from(ConsensusError::ClientImport(e.to_string())))?;
-// 		}
+			let first_in_epoch = parent_slot < epoch.start_slot;
+			(epoch, first_in_epoch)
+		};
 
-// 		match (first_in_epoch, next_epoch_digest.is_some()) {
-// 			(true, true) => {},
-// 			(false, false) => {},
-// 			(true, false) => {
-// 				return Err(
-// 					ConsensusError::ClientImport(
-// 						"Expected epoch change to happen by this block".into(),
-// 					)
-// 				);
-// 			},
-// 			(false, true) => {
-// 				if !check_roots()? {
-// 					return Err(ConsensusError::ClientImport("Unexpected epoch change".into()));
-// 				}
-// 			},
-// 		}
+		// search for this all the time so we can reject unexpected announcements.
+		let next_epoch_digest = find_next_epoch_digest::<Block>(&block.header)
+			.map_err(|e| ConsensusError::from(ConsensusError::ClientImport(e.to_string())))?;
 
-// 		// if there's a pending epoch we'll save the previous epoch changes here
-// 		// this way we can revert it if there's any error
-// 		let mut old_epoch_changes = None;
+		match (first_in_epoch, next_epoch_digest.is_some()) {
+			(true, true) => {},
+			(false, false) => {},
+			(true, false) => {
+				return Err(
+					ConsensusError::ClientImport(
+						"Expected epoch change to happen by this block".into(),
+					)
+				);
+			},
+			(false, true) => {
+				return Err(ConsensusError::ClientImport("Unexpected epoch change".into()));
+			},
+		}
 
-// 		if let Some(next_epoch) = next_epoch_digest {
-// 			if let Some(enacted_epoch) = enacted_epoch {
-// 				let enacted_epoch = &enacted_epoch.data;
-// 				if next_epoch.epoch_index.checked_sub(enacted_epoch.epoch_index) != Some(1) {
-// 					return Err(ConsensusError::ClientImport(format!(
-// 						"Invalid BABE epoch change: expected next epoch to be {:?}, got {:?}",
-// 						enacted_epoch.epoch_index.saturating_add(1),
-// 						next_epoch.epoch_index,
-// 					)));
-// 				}
-// 			}
+		// if there's a pending epoch we'll save the previous epoch changes here
+		// this way we can revert it if there's any error
+		let mut old_epoch_changes = None;
 
-// 			old_epoch_changes = Some(epoch_changes.clone());
+		if let Some(next_epoch_descriptor) = next_epoch_digest {
+			let next_epoch = epoch.increment(next_epoch_descriptor);
 
-// 			// track the epoch change in the fork tree
-// 			epoch_changes.import(
-// 				hash,
-// 				number,
-// 				next_epoch,
-// 				&is_descendent_of,
-// 			).map_err(|e| ConsensusError::from(ConsensusError::ClientImport(e.to_string())))?;
+			old_epoch_changes = Some(epoch_changes.clone());
 
-// 			crate::aux_schema::write_epoch_changes::<Block, _, _>(
-// 				&*epoch_changes,
-// 				|insert| block.auxiliary.extend(
-// 					insert.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
-// 				)
-// 			);
-// 		}
+			// track the epoch change in the fork tree
+			epoch_changes.import(
+				hash,
+				number,
+				next_epoch,
+			);
 
-// 		let import_result = self.inner.import_block(block, new_cache);
+			crate::aux_schema::write_epoch_changes::<Block, _, _>(
+				&*epoch_changes,
+				|insert| block.auxiliary.extend(
+					insert.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
+				)
+			);
+		}
 
-// 		// revert to the original epoch changes in case there's an error
-// 		// importing the block
-// 		if let Err(_) = import_result {
-// 			if let Some(old_epoch_changes) = old_epoch_changes {
-// 				*epoch_changes = old_epoch_changes;
-// 			}
-// 		}
+		let import_result = self.inner.import_block(block, new_cache);
 
-// 		import_result.map_err(Into::into)
-// 	}
+		// revert to the original epoch changes in case there's an error
+		// importing the block
+		if let Err(_) = import_result {
+			if let Some(old_epoch_changes) = old_epoch_changes {
+				*epoch_changes = old_epoch_changes;
+			}
+		}
 
-// 	fn check_block(
-// 		&mut self,
-// 		hash: Block::Hash,
-// 		parent_hash: Block::Hash,
-// 	) -> Result<ImportResult, Self::Error> {
-// 		self.inner.check_block(hash, parent_hash).map_err(Into::into)
-// 	}
-// }
+		import_result.map_err(Into::into)
+	}
+
+	fn check_block(
+		&mut self,
+		hash: Block::Hash,
+		parent_hash: Block::Hash,
+	) -> Result<ImportResult, Self::Error> {
+		self.inner.check_block(hash, parent_hash).map_err(Into::into)
+	}
+}
 
 // /// Start an import queue for the BABE consensus algorithm. This method returns
 // /// the import queue, some data that needs to be passed to the block authoring
@@ -1413,7 +1413,7 @@ impl<B, E, Block: BlockT, I, RA, PRA> BabeBlockImport<B, E, Block, I, RA, PRA> {
 // 		api: api.clone(),
 // 		inherent_data_providers,
 // 		babe_link: babe_link.clone(),
-// 		config,
+// 		config: config.clone(),
 // 		transaction_pool,
 // 	};
 
@@ -1422,6 +1422,7 @@ impl<B, E, Block: BlockT, I, RA, PRA> BabeBlockImport<B, E, Block, I, RA, PRA> {
 // 		api,
 // 		babe_link.epoch_changes.clone(),
 // 		block_import,
+//		config,
 // 	);
 
 // 	let epoch_changes = babe_link.epoch_changes.clone();
