@@ -110,7 +110,7 @@ impl<B: BlockT> Drop for RefTrackingState<B> {
 	}
 }
 
-impl <Block: BlockT> std::fmt::Debug for RefTrackingState<Block> {
+impl<Block: BlockT> std::fmt::Debug for RefTrackingState<Block> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "Block {:?}", self.parent_hash)
 	}
