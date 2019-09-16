@@ -96,10 +96,10 @@ impl<Block: BlockT> EpochChanges<Block> {
 		let is_descendent_of = descendent_of_builder
 			.build_is_descendent_of(None);
 
-		// prune everything except for the first node _above_ the just-finalized block
-		// because it may represent the epoch that descendents of the finalized block
-		// are in.
-		unimplemented!()
+		// prune any epochs which could not be _live_ as of the children of the
+		// finalized block.
+		// i.e. re-root the fork tree to the earliest ancestor of (hash, number)
+		// where epoch.start_slot + epoch.duration >= slot(hash)
 	}
 
 	/// Finds the epoch for a child of the given block, assuming the given slot number.
