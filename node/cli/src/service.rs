@@ -83,11 +83,17 @@ macro_rules! new_full_start {
 				Ok(import_queue)
 			})?
 			.with_rpc_extensions(|client, pool| {
-				use node_rpc::accounts::{Accounts, AccountsApi};
+				use node_rpc::{
+					accounts::{Accounts, AccountsApi},
+					contracts::{Contracts, ContractsApi},
+				};
 
-				let mut io = jsonrpc_core::IoHandler::<substrate_service::RpcMetadata>::default();
+				let mut io = jsonrpc_core::IoHandler::default();
 				io.extend_with(
-					AccountsApi::to_delegate(Accounts::new(client, pool))
+					AccountsApi::to_delegate(Accounts::new(client.clone(), pool))
+				);
+				io.extend_with(
+					ContractsApi::to_delegate(Contracts::new(client))
 				);
 				io
 			})?;
