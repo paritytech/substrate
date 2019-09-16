@@ -324,9 +324,6 @@ impl<H, B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E
 			let signature = pair.sign(header_hash.as_ref());
 			let signature_digest_item = <DigestItemFor<B> as CompatibleDigestItem>::babe_seal(signature);
 
-			// When we building our own blocks we always author on top of the
-			// current best according to `SelectChain`, therefore our own block
-			// proposal should always become the new best.
 			BlockImportParams {
 				origin: BlockOrigin::Own,
 				header,
@@ -335,9 +332,10 @@ impl<H, B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E
 				body: Some(body),
 				finalized: false,
 				auxiliary: Vec::new(), // block-weight is written in block import.
-				// TODO: all fork-choice should be the responsibility of the
-				// underlying `BlockImport`.
-				fork_choice: ForkChoiceStrategy::Custom(true),
+				// TODO: block-import handles fork choice and this shouldn't even have the
+				// option to specify one.
+				// https://github.com/paritytech/substrate/issues/3623
+				fork_choice: ForkChoiceStrategy::LongestChain,
 			}
 		})
 	}
@@ -797,7 +795,7 @@ impl<B, E, Block, RA, PRA, T> Verifier<Block> for BabeVerifier<B, E, Block, RA, 
 
 		let pre_digest = find_pre_digest::<Block>(&header)?;
 		let epoch = {
-			let epoch_changes = self.babe_link.epoch_changes.lock();
+			let mut epoch_changes = self.babe_link.epoch_changes.lock();
 			epoch_changes.epoch_for_child_of(
 				&parent_hash,
 				parent_header.number().clone(),
@@ -855,36 +853,6 @@ impl<B, E, Block, RA, PRA, T> Verifier<Block> for BabeVerifier<B, E, Block, RA, 
 					"babe.checked_and_importing";
 					"pre_header" => ?pre_header);
 
-				// The fork choice rule is that we pick the heaviest chain (i.e.
-				// more primary blocks), if there's a tie we go with the longest
-				// chain.
-				let new_best = {
-					let (last_best, last_best_number) = {
-						let info = self.client.info().chain;
-						(info.best_hash, info.best_number)
-					};
-
-					let last_best_weight = if last_best == parent_hash {
-						// the parent=genesis case is already covered for loading parent weight,
-						// so we don't need to cover again here.
-						parent_weight
-					} else {
-						aux_schema::load_block_weight(&*self.client, last_best)
-							.map_err(|e| e.to_string())?
-							.ok_or_else(
-								|| format!("No block weight for parent header.")
-							)?
-					};
-
-					if verified_info.weight > last_best_weight {
-						true
-					} else if verified_info.weight == last_best_weight {
-						*pre_header.number() > last_best_number
-					} else {
-						false
-					}
-				};
-
 				let import_block = BlockImportParams {
 					origin,
 					header: pre_header,
@@ -893,7 +861,10 @@ impl<B, E, Block, RA, PRA, T> Verifier<Block> for BabeVerifier<B, E, Block, RA, 
 					finalized: false,
 					justification,
 					auxiliary: Vec::new(),
-					fork_choice: ForkChoiceStrategy::Custom(new_best),
+					// TODO: block-import handles fork choice and this shouldn't even have the
+					// option to specify one.
+					// https://github.com/paritytech/substrate/issues/3623
+					fork_choice: ForkChoiceStrategy::LongestChain,
 				};
 
 				Ok((import_block, Default::default()))
@@ -1201,7 +1172,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 		// if this is the first block in its chain for that epoch.
 		//
 		// also provides the total weight of the chain, including the imported block.
-		let (epoch, first_in_epoch, total_weight) = if number == sr_primitives::traits::One::one() {
+		let (epoch, first_in_epoch, parent_weight) = if number == sr_primitives::traits::One::one() {
 			// The first block of the chain is a special-case, since it is
 			// implied to kick off the genesis epoch.
 			let epoch = Epoch {
@@ -1212,7 +1183,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 				randomness: self.config.randomness.clone(),
 			};
 
-			(epoch, true, 0 + pre_digest.added_weight())
+			(epoch, true, 0)
 		} else {
 			let parent_hash = *block.header.parent_hash();
 			let parent_header = self.client.header(&BlockId::Hash(parent_hash))
@@ -1244,8 +1215,10 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 				))?;
 
 			let first_in_epoch = parent_slot < epoch.start_slot;
-			(epoch, first_in_epoch, parent_weight + pre_digest.added_weight())
+			(epoch, first_in_epoch, parent_weight)
 		};
+
+		let total_weight = parent_weight + pre_digest.added_weight();
 
 		// search for this all the time so we can reject unexpected announcements.
 		let next_epoch_digest = find_next_epoch_digest::<Block>(&block.header)
@@ -1297,6 +1270,36 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 				values.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
 			),
 		);
+
+		// The fork choice rule is that we pick the heaviest chain (i.e.
+		// more primary blocks), if there's a tie we go with the longest
+		// chain.
+		block.fork_choice = {
+			let (last_best, last_best_number) = {
+				let info = self.client.info().chain;
+				(info.best_hash, info.best_number)
+			};
+
+			let last_best_weight = if &last_best == block.header.parent_hash() {
+				// the parent=genesis case is already covered for loading parent weight,
+				// so we don't need to cover again here.
+				parent_weight
+			} else {
+				aux_schema::load_block_weight(&*self.client, last_best)
+					.map_err(|e| ConsensusError::ChainLookup(format!("{:?}", e)))?
+					.ok_or_else(
+						|| ConsensusError::ChainLookup(format!("No block weight for parent header."))
+					)?
+			};
+
+			ForkChoiceStrategy::Custom(if total_weight > last_best_weight {
+				true
+			} else if total_weight == last_best_weight {
+				number > last_best_number
+			} else {
+				false
+			})
+		};
 
 		let import_result = self.inner.import_block(block, new_cache);
 
