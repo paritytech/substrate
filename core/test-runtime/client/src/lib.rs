@@ -122,12 +122,12 @@ impl generic_test_client::GenesisInit for GenesisParameters {
 
 		let child_roots = storage.1.iter().map(|(sk, child_map)| {
 			let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
-				child_map.clone().into_iter()
+				child_map.clone().into_iter().collect()
 			);
 			(sk.clone(), state_root.encode())
 		});
 		let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
-			storage.0.clone().into_iter().chain(child_roots)
+			storage.0.clone().into_iter().chain(child_roots).collect()
 		);
 		let block: runtime::Block = client::genesis::construct_genesis_block(state_root);
 		storage.0.extend(additional_storage_with_genesis(&block));

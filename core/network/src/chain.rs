@@ -49,10 +49,15 @@ pub trait Client<Block: BlockT>: Send + Sync {
 	fn header_proof(&self, block_number: <Block::Header as HeaderT>::Number) -> Result<(Block::Header, Vec<Vec<u8>>), Error>;
 
 	/// Get storage read execution proof.
-	fn read_proof(&self, block: &Block::Hash, key: &[u8]) -> Result<Vec<Vec<u8>>, Error>;
+	fn read_proof(&self, block: &Block::Hash, keys: &[Vec<u8>]) -> Result<Vec<Vec<u8>>, Error>;
 
 	/// Get child storage read execution proof.
-	fn read_child_proof(&self, block: &Block::Hash, storage_key: &[u8], key: &[u8]) -> Result<Vec<Vec<u8>>, Error>;
+	fn read_child_proof(
+		&self,
+		block: &Block::Hash,
+		storage_key: &[u8],
+		keys: &[Vec<u8>],
+	) -> Result<Vec<Vec<u8>>, Error>;
 
 	/// Get method execution proof.
 	fn execution_proof(&self, block: &Block::Hash, method: &str, data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), Error>;
@@ -113,18 +118,18 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 		(self as &SubstrateClient<B, E, Block, RA>).header_proof(&BlockId::Number(block_number))
 	}
 
-	fn read_proof(&self, block: &Block::Hash, key: &[u8]) -> Result<Vec<Vec<u8>>, Error> {
-		(self as &SubstrateClient<B, E, Block, RA>).read_proof(&BlockId::Hash(block.clone()), key)
+	fn read_proof(&self, block: &Block::Hash, keys: &[Vec<u8>]) -> Result<Vec<Vec<u8>>, Error> {
+		(self as &SubstrateClient<B, E, Block, RA>).read_proof(&BlockId::Hash(block.clone()), keys)
 	}
 
 	fn read_child_proof(
 		&self,
 		block: &Block::Hash,
 		storage_key: &[u8],
-		key: &[u8]
+		keys: &[Vec<u8>],
 	) -> Result<Vec<Vec<u8>>, Error> {
 		(self as &SubstrateClient<B, E, Block, RA>)
-			.read_child_proof(&BlockId::Hash(block.clone()), storage_key, key)
+			.read_child_proof(&BlockId::Hash(block.clone()), storage_key, keys)
 	}
 
 	fn execution_proof(&self, block: &Block::Hash, method: &str, data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), Error> {
