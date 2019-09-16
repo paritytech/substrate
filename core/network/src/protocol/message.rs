@@ -284,7 +284,7 @@ pub mod generic {
 		/// Block at which to perform call.
 		pub block: H,
 		/// Storage key.
-		pub key: Vec<u8>,
+		pub keys: Vec<Vec<u8>>,
 	}
 
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
@@ -297,7 +297,7 @@ pub mod generic {
 		/// Child Storage key.
 		pub storage_key: Vec<u8>,
 		/// Storage key.
-		pub key: Vec<u8>,
+		pub keys: Vec<Vec<u8>>,
 	}
 
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]

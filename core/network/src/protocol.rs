@@ -172,11 +172,17 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a, B> {
 		self.behaviour.send_packet(who, message)
 	}
 
-	fn send_read_request(&mut self, who: &PeerId, id: RequestId, block: <B as BlockT>::Hash, key: Vec<u8>) {
+	fn send_read_request(
+		&mut self,
+		who: &PeerId,
+		id: RequestId,
+		block: <B as BlockT>::Hash,
+		keys: Vec<Vec<u8>>,
+	) {
 		let message = message::generic::Message::RemoteReadRequest(message::RemoteReadRequest {
 			id,
 			block,
-			key,
+			keys,
 		});
 
 		self.behaviour.send_packet(who, message)
@@ -188,13 +194,13 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a, B> {
 		id: RequestId,
 		block: <B as BlockT>::Hash,
 		storage_key: Vec<u8>,
-		key: Vec<u8>
+		keys: Vec<Vec<u8>>,
 	) {
 		let message = message::generic::Message::RemoteReadChildRequest(message::RemoteReadChildRequest {
 			id,
 			block,
 			storage_key,
-			key,
+			keys,
 		});
 
 		self.behaviour.send_packet(who, message)
@@ -1272,15 +1278,24 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		who: PeerId,
 		request: message::RemoteReadRequest<B::Hash>,
 	) {
+		let keys_str = || match request.keys.len() {
+			1 => request.keys[0].to_hex::<String>(),
+			_ => format!(
+				"{}..{}",
+				request.keys[0].to_hex::<String>(),
+				request.keys[request.keys.len() - 1].to_hex::<String>(),
+			),
+		};
+
 		trace!(target: "sync", "Remote read request {} from {} ({} at {})",
-			request.id, who, request.key.to_hex::<String>(), request.block);
-		let proof = match self.context_data.chain.read_proof(&request.block, &request.key) {
+			request.id, who, keys_str(), request.block);
+		let proof = match self.context_data.chain.read_proof(&request.block, &request.keys) {
 			Ok(proof) => proof,
 			Err(error) => {
 				trace!(target: "sync", "Remote read request {} from {} ({} at {}) failed with: {}",
 					request.id,
 					who,
-					request.key.to_hex::<String>(),
+					keys_str(),
 					request.block,
 					error
 				);
@@ -1301,16 +1316,29 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		who: PeerId,
 		request: message::RemoteReadChildRequest<B::Hash>,
 	) {
+		let keys_str = || match request.keys.len() {
+			1 => request.keys[0].to_hex::<String>(),
+			_ => format!(
+				"{}..{}",
+				request.keys[0].to_hex::<String>(),
+				request.keys[request.keys.len() - 1].to_hex::<String>(),
+			),
+		};
+
 		trace!(target: "sync", "Remote read child request {} from {} ({} {} at {})",
-			request.id, who, request.storage_key.to_hex::<String>(), request.key.to_hex::<String>(), request.block);
-		let proof = match self.context_data.chain.read_child_proof(&request.block, &request.storage_key, &request.key) {
+			request.id, who, request.storage_key.to_hex::<String>(), keys_str(), request.block);
+		let proof = match self.context_data.chain.read_child_proof(
+			&request.block,
+			&request.storage_key,
+			&request.keys,
+		) {
 			Ok(proof) => proof,
 			Err(error) => {
 				trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",
 					request.id,
 					who,
 					request.storage_key.to_hex::<String>(),
-					request.key.to_hex::<String>(),
+					keys_str(),
 					request.block,
 					error
 				);

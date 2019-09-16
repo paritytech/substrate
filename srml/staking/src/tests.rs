@@ -535,14 +535,30 @@ fn nominating_and_rewards_should_work() {
 		let payout_for_20 = 2 * total_payout_1 / 3;
 		if cfg!(feature = "equalize") {
 			// Nominator 2: has [400 / 2000 ~ 1 / 5 from 10] + [600 / 2000 ~ 3 / 10 from 20]'s reward.
-			assert_eq!(Balances::total_balance(&2), initial_balance + payout_for_10 / 5 + payout_for_20 * 3 / 10);
+			assert_eq_error_rate!(
+				Balances::total_balance(&2),
+				initial_balance + payout_for_10 / 5 + payout_for_20 * 3 / 10,
+				2,
+			);
 			// Nominator 4: has [400 / 2000 ~ 1 / 5 from 20] + [600 / 2000 ~ 3 / 10 from 10]'s reward.
-			assert_eq!(Balances::total_balance(&4), initial_balance + payout_for_20 / 5 + payout_for_10 * 3 / 10);
+			assert_eq_error_rate!(
+				Balances::total_balance(&4),
+				initial_balance + payout_for_20 / 5 + payout_for_10 * 3 / 10,
+				2,
+			);
 
 			// Validator 10: got 1000 / 2000 external stake.
-			assert_eq_error_rate!(Balances::total_balance(&10), initial_balance + payout_for_10 / 2, 1);
+			assert_eq_error_rate!(
+				Balances::total_balance(&10),
+				initial_balance + payout_for_10 / 2,
+				1,
+			);
 			// Validator 20: got 1000 / 2000 external stake.
-			assert_eq_error_rate!(Balances::total_balance(&20), initial_balance + payout_for_20 / 2, 1);
+			assert_eq_error_rate!(
+				Balances::total_balance(&20),
+				initial_balance + payout_for_20 / 2,
+				1,
+			);
 		} else {
 			// Nominator 2: has [400/1800 ~ 2/9 from 10] + [600/2200 ~ 3/11 from 20]'s reward. ==> 2/9 + 3/11
 			assert_eq_error_rate!(
@@ -558,9 +574,17 @@ fn nominating_and_rewards_should_work() {
 			);
 
 			// Validator 10: got 800 / 1800 external stake => 8/18 =? 4/9 => Validator's share = 5/9
-			assert_eq_error_rate!(Balances::total_balance(&10), initial_balance + 5 * payout_for_10 / 9 - 1, 1);
+			assert_eq_error_rate!(
+				Balances::total_balance(&10),
+				initial_balance + 5 * payout_for_10 / 9 - 1,
+				1,
+			);
 			// Validator 20: got 1200 / 2200 external stake => 12/22 =? 6/11 => Validator's share = 5/11
-			assert_eq_error_rate!(Balances::total_balance(&20), initial_balance + 5 * payout_for_20 / 11, 1);
+			assert_eq_error_rate!(
+				Balances::total_balance(&20),
+				initial_balance + 5 * payout_for_20 / 11,
+				1,
+			);
 		}
 
 		check_exposure_all();
@@ -1294,192 +1318,6 @@ fn on_free_balance_zero_stash_removes_nominator() {
 	});
 }
 
-#[test]
-fn phragmen_poc_works() {
-	// Tests the POC test of the phragmen, mentioned in the paper and reference implementation.
-	// Initial votes:
-	// Votes  [
-	// ('2', 500, ['10', '20', '30']),
-	// ('4', 500, ['10', '20', '40']),
-	// ('10', 1000, ['10']),
-	// ('20', 1000, ['20']),
-	// ('30', 1000, ['30']),
-	// ('40', 1000, ['40'])]
-	//
-	// Sequential Phragmén gives
-	// 10  is elected with stake  1666.6666666666665 and score  0.0005
-	// 20  is elected with stake  1333.3333333333333 and score  0.00075
-
-	// 2  has load  0.00075 and supported
-	// 10  with stake  333.3333333333333 20  with stake  166.66666666666666 30  with stake  0.0
-	// 4  has load  0.00075 and supported
-	// 10  with stake  333.3333333333333 20  with stake  166.66666666666666 40  with stake  0.0
-	// 10  has load  0.0005 and supported
-	// 10  with stake  1000.0
-	// 20  has load  0.00075 and supported
-	// 20  with stake  1000.0
-	// 30  has load  0 and supported
-	// 30  with stake  0
-	// 40  has load  0 and supported
-	// 40  with stake  0
-
-	// 	Sequential Phragmén with post processing gives
-	// 10  is elected with stake  1500.0 and score  0.0005
-	// 20  is elected with stake  1500.0 and score  0.00075
-	//
-	// 10  has load  0.0005 and supported
-	// 10  with stake  1000.0
-	// 20  has load  0.00075 and supported
-	// 20  with stake  1000.0
-	// 30  has load  0 and supported
-	// 30  with stake  0
-	// 40  has load  0 and supported
-	// 40  with stake  0
-	// 2  has load  0.00075 and supported
-	// 10  with stake  166.66666666666674 20  with stake  333.33333333333326 30  with stake  0
-	// 4  has load  0.00075 and supported
-	// 10  with stake  333.3333333333333 20  with stake  166.66666666666666 40  with stake  0.0
-	with_externalities(&mut ExtBuilder::default()
-		.nominate(false)
-		.validator_pool(true)
-		.build(),
-	|| {
-		// We don't really care about this. At this point everything is even.
-		assert_eq_uvec!(validator_controllers(), vec![40, 30]);
-
-		// Set payees to Controller
-		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
-		assert_ok!(Staking::set_payee(Origin::signed(20), RewardDestination::Controller));
-		assert_ok!(Staking::set_payee(Origin::signed(30), RewardDestination::Controller));
-		assert_ok!(Staking::set_payee(Origin::signed(40), RewardDestination::Controller));
-
-		// no one is a nominator
-		assert_eq!(<Nominators<Test>>::enumerate().count(), 0 as usize);
-
-		// bond [2,1] / [4,3] a nominator
-		let _ = Balances::deposit_creating(&1, 1000);
-		let _ = Balances::deposit_creating(&3, 1000);
-
-		assert_ok!(Staking::bond(Origin::signed(1), 2, 500, RewardDestination::default()));
-		assert_ok!(Staking::nominate(Origin::signed(2), vec![11, 21, 31]));
-
-		assert_ok!(Staking::bond(Origin::signed(3), 4, 500, RewardDestination::default()));
-		assert_ok!(Staking::nominate(Origin::signed(4), vec![11, 21, 41]));
-
-		// New era => election algorithm will trigger
-		start_era(1);
-
-		assert_eq_uvec!(validator_controllers(), vec![20, 10]);
-
-		assert_eq!(Staking::stakers(11).own, 1000);
-		assert_eq!(Staking::stakers(21).own, 1000);
-
-		if cfg!(feature = "equalize") {
-			assert_eq_error_rate!(Staking::stakers(11).total, 1000 + 500, 2);
-			assert_eq_error_rate!(Staking::stakers(21).total, 1000 + 500, 2);
-		} else {
-			assert_eq_error_rate!(Staking::stakers(11).total, 1000 + 333, 2);
-			assert_eq_error_rate!(Staking::stakers(21).total, 1000 + 666, 2);
-		}
-
-		// Nominator's stake distribution.
-		assert_eq!(Staking::stakers(11).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![3, 1]);
-		assert_eq!(Staking::stakers(21).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![3, 1]);
-
-		if cfg!(feature = "equalize") {
-			assert_eq_uvec!(
-				Staking::stakers(11).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(),
-				vec![333, 166]
-			);
-			assert_eq!(
-				Staking::stakers(11).others.iter().map(|e| e.value).sum::<BalanceOf<Test>>(),
-				499
-			);
-			assert_eq_uvec!(
-				Staking::stakers(21).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(),
-				vec![333, 166]
-			);
-			assert_eq!(
-				Staking::stakers(21).others.iter().map(|e| e.value).sum::<BalanceOf<Test>>(),
-				499
-			);
-		} else {
-			assert_eq_uvec!(
-				Staking::stakers(11).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(),
-				vec![166, 166]
-			);
-			assert_eq!(
-				Staking::stakers(11).others.iter().map(|e| e.value).sum::<BalanceOf<Test>>(),
-				332
-			);
-			assert_eq_uvec!(
-				Staking::stakers(21).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(),
-				vec![333, 333]
-			);
-			assert_eq!(
-				Staking::stakers(21).others.iter().map(|e| e.value).sum::<BalanceOf<Test>>(),
-				666
-			);
-		}
-		check_exposure_all();
-		check_nominator_all();
-	});
-}
-
-#[test]
-fn phragmen_poc_2_works() {
-	// tests the encapsulated phragmen::elect function.
-	// Votes  [
-	// 	('10', 1000, ['10']),
-	// 	('20', 1000, ['20']),
-	// 	('30', 1000, ['30']),
-	// 	('2', 50, ['10', '20']),
-	// 	('4', 1000, ['10', '30'])
-	// ]
-	// Sequential Phragmén gives
-	// 10  is elected with stake  1705.7377049180327 and score  0.0004878048780487805
-	// 30  is elected with stake  1344.2622950819673 and score  0.0007439024390243903
-	with_externalities(&mut ExtBuilder::default().nominate(false).build(), || {
-		// initial setup of 10 and 20, both validators
-		assert_eq_uvec!(validator_controllers(), vec![20, 10]);
-
-		// Bond [30, 31] as the third validator
-		assert_ok!(Staking::bond_extra(Origin::signed(31), 999));
-		assert_ok!(Staking::validate(Origin::signed(30), ValidatorPrefs::default()));
-
-		// bond [2,1](A), [4,3](B), as 2 nominators
-		for i in &[1, 3] { let _ = Balances::deposit_creating(i, 2000); }
-
-		assert_ok!(Staking::bond(Origin::signed(1), 2, 50, RewardDestination::default()));
-		assert_ok!(Staking::nominate(Origin::signed(2), vec![11, 21]));
-
-		assert_ok!(Staking::bond(Origin::signed(3), 4, 1000, RewardDestination::default()));
-		assert_ok!(Staking::nominate(Origin::signed(4), vec![11, 31]));
-
-		let results = phragmen::elect::<_, _, _, <Test as Trait>::CurrencyToVote>(
-			2,
-			Staking::minimum_validator_count() as usize,
-			<Validators<Test>>::enumerate().map(|(who, _)| who).collect::<Vec<u64>>(),
-			<Nominators<Test>>::enumerate().collect(),
-			Staking::slashable_balance_of,
-			true,
-		);
-
-		let phragmen::PhragmenResult { winners, assignments } = results.unwrap();
-
-		// 10 and 30 must be the winners
-		assert_eq!(winners, vec![11, 31]);
-		assert_eq!(assignments, vec![
-			(3, vec![
-				(11, sr_primitives::Perbill::from_parts(655737705)),
-				(31, sr_primitives::Perbill::from_parts(344262295))
-			]),
-			(1, vec![(11, sr_primitives::Perbill::from_percent(100))]),
-		]);
-		check_exposure_all();
-		check_nominator_all();
-	})
-}
 
 #[test]
 fn switching_roles() {
@@ -1723,7 +1561,7 @@ fn phragmen_linear_worse_case_equalize() {
 }
 
 #[test]
-fn phragmen_chooses_correct_number_of_validators() {
+fn new_era_elects_correct_number_of_validators() {
 	with_externalities(&mut ExtBuilder::default()
 		.nominate(true)
 		.validator_pool(true)

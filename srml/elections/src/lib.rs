@@ -24,9 +24,9 @@
 #![recursion_limit="128"]
 
 use rstd::prelude::*;
-use sr_primitives::traits::{Zero, One, StaticLookup, Bounded, Saturating};
-use sr_primitives::weights::SimpleDispatchInfo;
-use runtime_io::print;
+use sr_primitives::{
+	print, traits::{Zero, One, StaticLookup, Bounded, Saturating}, weights::SimpleDispatchInfo,
+};
 use support::{
 	StorageValue, StorageMap,
 	dispatch::Result, decl_storage, decl_event, ensure, decl_module,
@@ -37,6 +37,9 @@ use support::{
 };
 use codec::{Encode, Decode};
 use system::{self, ensure_signed, ensure_root};
+
+mod mock;
+mod tests;
 
 // no polynomial attacks:
 //
@@ -126,19 +129,23 @@ pub enum CellStatus {
 
 const MODULE_ID: LockIdentifier = *b"py/elect";
 
+/// Number of voters grouped in one chunk.
 pub const VOTER_SET_SIZE: usize = 64;
+/// NUmber of approvals grouped in one chunk.
 pub const APPROVAL_SET_SIZE: usize = 8;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 
+/// Index used to access chunks.
 type SetIndex = u32;
+/// Index used to count voting rounds.
 pub type VoteIndex = u32;
-
-// all three must be in sync.
+/// Underlying data type of the approvals.
 type ApprovalFlag = u32;
-pub const APPROVAL_FLAG_LEN: usize = 32;
+/// Number of approval flags that can fit into [`ApprovalFlag`] type.
+const APPROVAL_FLAG_LEN: usize = 32;
 
 pub trait Trait: system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -174,6 +181,9 @@ pub trait Trait: system::Trait {
 	/// _hole_ index and replace it.
 	type VotingFee: Get<BalanceOf<Self>>;
 
+	/// Minimum about that can be used as the locked value for voting.
+	type MinimumVotingLock: Get<BalanceOf<Self>>;
+
 	/// The punishment, per voter, if you provide an invalid presentation. A
 	/// reasonable default value is 1.
 	type PresentSlashPerVoter: Get<BalanceOf<Self>>;
@@ -202,6 +212,7 @@ pub trait Trait: system::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as Council {
 		// ---- parameters
+
 		/// How long to give each top candidate to present themselves after the vote ends.
 		pub PresentationDuration get(presentation_duration) config(): T::BlockNumber;
 		/// How long each position is active for.
@@ -210,23 +221,24 @@ decl_storage! {
 		pub DesiredSeats get(desired_seats) config(): u32;
 
 		// ---- permanent state (always relevant, changes only at the finalization of voting)
-		/// The current membership. When there's a vote going on, this should still be used for executive
-		/// matters. The block number (second element in the tuple) is the block that their position is
-		/// active until (calculated by the sum of the block number when the member was elected
-		/// and their term duration).
+
+		///  The current membership. When there's a vote going on, this should still be used for
+		///  executive matters. The block number (second element in the tuple) is the block that
+		///  their position is active until (calculated by the sum of the block number when the
+		///  member was elected and their term duration).
 		pub Members get(members) config(): Vec<(T::AccountId, T::BlockNumber)>;
 		/// The total number of vote rounds that have happened or are in progress.
 		pub VoteCount get(vote_index): VoteIndex;
 
 		// ---- persistent state (always relevant, changes constantly)
-		/// A list of votes for each voter. The votes are stored as numeric values and parsed in a bit-wise manner.
-		///
-		/// In order to get a human-readable representation (`Vec<bool>`), use [`all_approvals_of`].
-		///
-		/// Furthermore, each vector of scalars is chunked with the cap of `APPROVAL_SET_SIZE`.
+
+		// A list of votes for each voter. The votes are stored as numeric values and parsed in a
+		// bit-wise manner. In order to get a human-readable representation (`Vec<bool>`), use
+		// [`all_approvals_of`]. Furthermore, each vector of scalars is chunked with the cap of
+		// `APPROVAL_SET_SIZE`.
 		pub ApprovalsOf get(approvals_of): map (T::AccountId, SetIndex) => Vec<ApprovalFlag>;
-		/// The vote index and list slot that the candidate `who` was registered or `None` if they are not
-		/// currently registered.
+		/// The vote index and list slot that the candidate `who` was registered or `None` if they
+		/// are not currently registered.
 		pub RegisterInfoOf get(candidate_reg_info): map T::AccountId => Option<(VoteIndex, u32)>;
 		/// Basic information about a voter.
 		pub VoterInfoOf get(voter_info): map T::AccountId => Option<VoterInfo<BalanceOf<T>>>;
@@ -242,11 +254,13 @@ decl_storage! {
 		pub CandidateCount get(candidate_count): u32;
 
 		// ---- temporary state (only relevant during finalization/presentation)
+
 		/// The accounts holding the seats that will become free on the next tally.
 		pub NextFinalize get(next_finalize): Option<(T::BlockNumber, u32, Vec<T::AccountId>)>;
-		/// Get the leaderboard if we're in the presentation phase. The first element is the weight of each entry;
-		/// It may be the direct summed approval stakes, or a weighted version of it.
-		pub Leaderboard get(leaderboard): Option<Vec<(BalanceOf<T>, T::AccountId)> >; // ORDERED low -> high
+		/// Get the leaderboard if we're in the presentation phase. The first element is the weight
+		/// of each entry; It may be the direct summed approval stakes, or a weighted version of it.
+		/// Sorted from low to high.
+		pub Leaderboard get(leaderboard): Option<Vec<(BalanceOf<T>, T::AccountId)> >;
 
 		/// Who is able to vote for whom. Value is the fund-holding account, key is the
 		/// vote-transaction-sending account.
@@ -284,6 +298,9 @@ decl_module! {
 		/// is 1000.
 		const VotingPeriod: T::BlockNumber = T::VotingPeriod::get();
 
+		/// Minimum about that can be used as the locked value for voting.
+		const MinimumVotingLock: BalanceOf<T> = T::MinimumVotingLock::get();
+
 		/// Decay factor of weight when being accumulated. It should typically be set to
 		/// __at least__ `membership_size -1` to keep the collective secure.
 		/// When set to `N`, it indicates `(1/N)^t` of staked is decayed at weight
@@ -301,21 +318,21 @@ decl_module! {
 		/// Set candidate approvals. Approval slots stay valid as long as candidates in those slots
 		/// are registered.
 		///
-		/// Locks the total balance of caller indefinitely.
-		/// Only [`retract_voter`] or [`reap_inactive_voter`] can unlock the balance.
+		/// Locks `value` from the balance of `origin` indefinitely. Only [`retract_voter`] or
+		/// [`reap_inactive_voter`] can unlock the balance.
 		///
 		/// `hint` argument is interpreted differently based on:
-		/// - if `origin` is setting approvals for the first time: The index will be checked
-		/// for being a valid _hole_ in the voter list.
+		/// - if `origin` is setting approvals for the first time: The index will be checked for
+		///   being a valid _hole_ in the voter list.
 		///   - if the hint is correctly pointing to a hole, no fee is deducted from `origin`.
-		///   - Otherwise, the call will succeed but the index is ignored and simply a push to the last chunk
-		///   with free space happens. If the new push causes a new chunk to be created, a fee indicated by
-		///   [`VotingFee`] is deducted.
+		///   - Otherwise, the call will succeed but the index is ignored and simply a push to the
+		///     last chunk with free space happens. If the new push causes a new chunk to be
+		///     created, a fee indicated by [`VotingFee`] is deducted.
 		/// - if `origin` is already a voter: the index __must__ be valid and point to the correct
-		/// position of the `origin` in the current voters list.
+		///   position of the `origin` in the current voters list.
 		///
-		/// Note that any trailing `false` votes in `votes` is ignored; In approval voting, not voting for a candidate
-		/// and voting false, are equal.
+		/// Note that any trailing `false` votes in `votes` is ignored; In approval voting, not
+		/// voting for a candidate and voting false, are equal.
 		///
 		/// # <weight>
 		/// - O(1).
@@ -323,13 +340,19 @@ decl_module! {
 		/// - Argument `votes` is limited in length to number of candidates.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(2_500_000)]
-		fn set_approvals(origin, votes: Vec<bool>, #[compact] index: VoteIndex, hint: SetIndex) -> Result {
+		fn set_approvals(
+			origin,
+			votes: Vec<bool>,
+			#[compact] index: VoteIndex,
+			hint: SetIndex,
+			value: BalanceOf<T>
+		) -> Result {
 			let who = ensure_signed(origin)?;
-			Self::do_set_approvals(who, votes, index, hint)
+			Self::do_set_approvals(who, votes, index, hint, value)
 		}
 
-		/// Set candidate approvals from a proxy. Approval slots stay valid as long as candidates in those slots
-		/// are registered.
+		/// Set candidate approvals from a proxy. Approval slots stay valid as long as candidates in
+		/// those slots are registered.
 		///
 		/// # <weight>
 		/// - Same as `set_approvals` with one additional storage read.
@@ -338,15 +361,16 @@ decl_module! {
 		fn proxy_set_approvals(origin,
 			votes: Vec<bool>,
 			#[compact] index: VoteIndex,
-			hint: SetIndex
+			hint: SetIndex,
+			value: BalanceOf<T>
 		) -> Result {
 			let who = Self::proxy(ensure_signed(origin)?).ok_or("not a proxy")?;
-			Self::do_set_approvals(who, votes, index, hint)
+			Self::do_set_approvals(who, votes, index, hint, value)
 		}
 
 		/// Remove a voter. For it not to be a bond-consuming no-op, all approved candidate indices
-		/// must now be either unregistered or registered to a candidate that registered the slot after
-		/// the voter gave their last approval set.
+		/// must now be either unregistered or registered to a candidate that registered the slot
+		/// after the voter gave their last approval set.
 		///
 		/// Both indices must be provided as explained in [`voter_at`] function.
 		///
@@ -370,7 +394,8 @@ decl_module! {
 			ensure!(!Self::presentation_active(), "cannot reap during presentation period");
 			ensure!(Self::voter_info(&reporter).is_some(), "reporter must be a voter");
 
-			let info = Self::voter_info(&who).ok_or("target for inactivity cleanup must be active")?;
+			let info = Self::voter_info(&who)
+				.ok_or("target for inactivity cleanup must be active")?;
 			let last_active = info.last_active;
 
 			ensure!(assumed_vote_index == Self::vote_index(), "vote index not current");
@@ -409,8 +434,8 @@ decl_module! {
 			);
 
 			if valid {
-				// This only fails if `reporter` doesn't exist, which it clearly must do since its the origin.
-				// Still, it's no more harmful to propagate any error at this point.
+				// This only fails if `reporter` doesn't exist, which it clearly must do since its
+				// the origin. Still, it's no more harmful to propagate any error at this point.
 				T::Currency::repatriate_reserved(&who, &reporter, T::VotingBond::get())?;
 				Self::deposit_event(RawEvent::VoterReaped(who, reporter));
 			} else {
@@ -486,9 +511,10 @@ decl_module! {
 			CandidateCount::put(count as u32 + 1);
 		}
 
-		/// Claim that `signed` is one of the top Self::carry_count() + current_vote().1 candidates.
-		/// Only works if the `block_number >= current_vote().0` and `< current_vote().0 + presentation_duration()`
-		/// `signed` should have at least
+		/// Claim that `candidate` is one of the top `carry_count + desired_seats` candidates. Only
+		/// works iff the presentation period is active. `candidate` should have at least collected
+		/// some non-zero `total` votes and `origin` must have enough funds to pay for a potential
+		/// slash.
 		///
 		/// # <weight>
 		/// - O(voters) compute.
@@ -509,7 +535,8 @@ decl_module! {
 
 			let candidate = T::Lookup::lookup(candidate)?;
 			ensure!(index == Self::vote_index(), "index not current");
-			let (_, _, expiring) = Self::next_finalize().ok_or("cannot present outside of presentation period")?;
+			let (_, _, expiring) = Self::next_finalize()
+				.ok_or("cannot present outside of presentation period")?;
 			let bad_presentation_punishment =
 				T::PresentSlashPerVoter::get()
 				* BalanceOf::<T>::from(Self::voter_count() as u32);
@@ -518,11 +545,15 @@ decl_module! {
 				"presenter must have sufficient slashable funds"
 			);
 
-			let mut leaderboard = Self::leaderboard().ok_or("leaderboard must exist while present phase active")?;
+			let mut leaderboard = Self::leaderboard()
+				.ok_or("leaderboard must exist while present phase active")?;
 			ensure!(total > leaderboard[0].0, "candidate not worthy of leaderboard");
 
 			if let Some(p) = Self::members().iter().position(|&(ref c, _)| c == &candidate) {
-				ensure!(p < expiring.len(), "candidate must not form a duplicated member if elected");
+				ensure!(
+					p < expiring.len(),
+					"candidate must not form a duplicated member if elected"
+				);
 			}
 
 			let voters = Self::all_voters();
@@ -671,8 +702,8 @@ impl<T: Trait> Module<T> {
 			} else {
 				// next tally begins once enough members expire to bring members below desired.
 				if desired_seats <= coming {
-					// the entire amount of desired seats is less than those new members - we'll have
-					// to wait until they expire.
+					// the entire amount of desired seats is less than those new members - we'll
+					// have to wait until they expire.
 					Some(next_possible + Self::term_duration())
 				} else {
 					Some(c[c.len() - (desired_seats - coming) as usize].1)
@@ -713,19 +744,33 @@ impl<T: Trait> Module<T> {
 	/// Actually do the voting.
 	///
 	/// The voter index must be provided as explained in [`voter_at`] function.
-	fn do_set_approvals(who: T::AccountId, votes: Vec<bool>, index: VoteIndex, hint: SetIndex) -> Result {
+	fn do_set_approvals(
+		who: T::AccountId,
+		votes: Vec<bool>,
+		index: VoteIndex,
+		hint: SetIndex,
+		value: BalanceOf<T>,
+	) -> Result {
 		let candidates_len = <Self as Store>::Candidates::decode_len().unwrap_or(0_usize);
 
 		ensure!(!Self::presentation_active(), "no approval changes during presentation period");
 		ensure!(index == Self::vote_index(), "incorrect vote index");
-		ensure!(!candidates_len.is_zero(), "amount of candidates to receive approval votes should be non-zero");
-		// Prevent a vote from voters that provide a list of votes that exceeds the candidates length
-		// since otherwise an attacker may be able to submit a very long list of `votes` that far exceeds
-		// the amount of candidates and waste more computation than a reasonable voting bond would cover.
-		ensure!(candidates_len >= votes.len(), "amount of candidate votes cannot exceed amount of candidates");
+		ensure!(
+			!candidates_len.is_zero(),
+			"amount of candidates to receive approval votes should be non-zero"
+		);
+		// Prevent a vote from voters that provide a list of votes that exceeds the candidates
+		// length since otherwise an attacker may be able to submit a very long list of `votes` that
+		// far exceeds the amount of candidates and waste more computation than a reasonable voting
+		// bond would cover.
+		ensure!(
+			candidates_len >= votes.len(),
+			"amount of candidate votes cannot exceed amount of candidates"
+		);
+		ensure!(value >= T::MinimumVotingLock::get(), "locked value must be more than limit");
 
 		// Amount to be locked up.
-		let mut locked_balance = T::Currency::total_balance(&who);
+		let mut locked_balance = value.min(T::Currency::total_balance(&who));
 		let mut pot_to_set = Zero::zero();
 		let hint = hint as usize;
 
@@ -785,7 +830,7 @@ impl<T: Trait> Module<T> {
 			&who,
 			locked_balance,
 			T::BlockNumber::max_value(),
-			WithdrawReasons::except(WithdrawReason::TransactionPayment),
+			WithdrawReasons::all(),
 		);
 
 		<VoterInfoOf<T>>::insert(
@@ -807,11 +852,14 @@ impl<T: Trait> Module<T> {
 		let members = Self::members();
 		let desired_seats = Self::desired_seats() as usize;
 		let number = <system::Module<T>>::block_number();
-		let expiring = members.iter().take_while(|i| i.1 <= number).map(|i| i.0.clone()).collect::<Vec<_>>();
+		let expiring =
+			members.iter().take_while(|i| i.1 <= number).map(|i| i.0.clone()).collect::<Vec<_>>();
 		let retaining_seats = members.len() - expiring.len();
 		if retaining_seats < desired_seats {
 			let empty_seats = desired_seats - retaining_seats;
-			<NextFinalize<T>>::put((number + Self::presentation_duration(), empty_seats as u32, expiring));
+			<NextFinalize<T>>::put(
+				(number + Self::presentation_duration(), empty_seats as u32, expiring)
+			);
 
 			// initialize leaderboard.
 			let leaderboard_size = empty_seats + T::CarryCount::get() as usize;
@@ -821,14 +869,16 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Finalize the vote, removing each of the `removals` and inserting `seats` of the most approved
-	/// candidates in their place. If the total number of members is less than the desired membership
-	/// a new vote is started.
-	/// Clears all presented candidates, returning the bond of the elected ones.
+	/// Finalize the vote, removing each of the `removals` and inserting `seats` of the most
+	/// approved candidates in their place. If the total number of members is less than the desired
+	/// membership a new vote is started. Clears all presented candidates, returning the bond of the
+	/// elected ones.
 	fn finalize_tally() -> Result {
 		let (_, coming, expiring): (T::BlockNumber, u32, Vec<T::AccountId>) =
-			<NextFinalize<T>>::take().ok_or("finalize can only be called after a tally is started.")?;
-		let leaderboard: Vec<(BalanceOf<T>, T::AccountId)> = <Leaderboard<T>>::take().unwrap_or_default();
+			<NextFinalize<T>>::take()
+				.ok_or("finalize can only be called after a tally is started.")?;
+		let leaderboard: Vec<(BalanceOf<T>, T::AccountId)> = <Leaderboard<T>>::take()
+			.unwrap_or_default();
 		let new_expiry = <system::Module<T>>::block_number() + Self::term_duration();
 
 		// return bond to winners.
@@ -898,9 +948,11 @@ impl<T: Trait> Module<T> {
 			}
 		}
 		// discard any superfluous slots.
-		if let Some(last_index) = new_candidates.iter().rposition(|c| *c != T::AccountId::default()) {
-			new_candidates.truncate(last_index + 1);
-		}
+		if let Some(last_index) = new_candidates
+			.iter()
+			.rposition(|c| *c != T::AccountId::default()) {
+				new_candidates.truncate(last_index + 1);
+			}
 
 		Self::deposit_event(RawEvent::TallyFinalized(incoming, outgoing));
 
@@ -954,8 +1006,8 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// A more sophisticated version of `voter_at`. Will be kept separate as most often it is an overdue
-	/// compared to `voter_at`. Only used when setting approvals.
+	/// A more sophisticated version of `voter_at`. Will be kept separate as most often it is an
+	/// overdue compared to `voter_at`. Only used when setting approvals.
 	fn cell_status(set_index: SetIndex, vec_index: usize) -> CellStatus {
 		let set = Self::voters(set_index);
 		if vec_index < set.len() {
@@ -975,13 +1027,15 @@ impl<T: Trait> Module<T> {
 		approvals_flag_vec
 			.chunks(APPROVAL_SET_SIZE)
 			.enumerate()
-			.for_each(|(index, slice)| <ApprovalsOf<T>>::insert((who.clone(), index as SetIndex), slice.to_vec()));
+			.for_each(|(index, slice)| <ApprovalsOf<T>>::insert(
+				(who.clone(), index as SetIndex), slice.to_vec())
+			);
 	}
 
 	/// shorthand for fetching a specific approval of a voter at a specific (global) index.
 	///
-	/// Using this function to read a vote is preferred as it reads `APPROVAL_SET_SIZE` items of type
-	/// `ApprovalFlag` from storage at most; not all of them.
+	/// Using this function to read a vote is preferred as it reads `APPROVAL_SET_SIZE` items of
+	/// type `ApprovalFlag` from storage at most; not all of them.
 	///
 	/// Note that false is returned in case of no-vote or an explicit `false`.
 	fn approvals_of_at(who: &T::AccountId, index: usize) -> bool {
@@ -1035,7 +1089,9 @@ impl<T: Trait> Module<T> {
 		let mut result = Vec::with_capacity(chunk.len());
 		if chunk.is_empty() { return vec![] }
 		chunk.into_iter()
-			.map(|num| (0..APPROVAL_FLAG_LEN).map(|bit| Self::bit_at(num, bit)).collect::<Vec<bool>>())
+			.map(|num|
+				(0..APPROVAL_FLAG_LEN).map(|bit| Self::bit_at(num, bit)).collect::<Vec<bool>>()
+			)
 			.for_each(|c| {
 				let last_approve = match c.iter().rposition(|n| *n) {
 					Some(index) => index + 1,
@@ -1095,1816 +1151,5 @@ impl<T: Trait> Module<T> {
 			r += offset
 		}
 		r
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use std::cell::RefCell;
-	use support::{assert_ok, assert_err, assert_noop, parameter_types};
-	use runtime_io::with_externalities;
-	use primitives::{H256, Blake2Hasher};
-	use sr_primitives::{
-		Perbill, traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header, BuildStorage
-	};
-	use crate as elections;
-
-	parameter_types! {
-		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: u32 = 1024;
-		pub const MaximumBlockLength: u32 = 2 * 1024;
-		pub const AvailableBlockRatio: Perbill = Perbill::one();
-	}
-	impl system::Trait for Test {
-		type Origin = Origin;
-		type Index = u64;
-		type BlockNumber = u64;
-		type Call = ();
-		type Hash = H256;
-		type Hashing = BlakeTwo256;
-		type AccountId = u64;
-		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = Header;
-		type Event = Event;
-		type WeightMultiplierUpdate = ();
-		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type MaximumBlockLength = MaximumBlockLength;
-		type AvailableBlockRatio = AvailableBlockRatio;
-		type Version = ();
-	}
-	parameter_types! {
-		pub const ExistentialDeposit: u64 = 0;
-		pub const TransferFee: u64 = 0;
-		pub const CreationFee: u64 = 0;
-		pub const TransactionBaseFee: u64 = 0;
-		pub const TransactionByteFee: u64 = 0;
-	}
-	impl balances::Trait for Test {
-		type Balance = u64;
-		type OnNewAccount = ();
-		type OnFreeBalanceZero = ();
-		type Event = Event;
-		type TransactionPayment = ();
-		type TransferPayment = ();
-		type DustRemoval = ();
-		type ExistentialDeposit = ExistentialDeposit;
-		type TransferFee = TransferFee;
-		type CreationFee = CreationFee;
-		type TransactionBaseFee = TransactionBaseFee;
-		type TransactionByteFee = TransactionByteFee;
-		type WeightToFee = ();
-	}
-	parameter_types! {
-		pub const CandidacyBond: u64 = 3;
-		pub const CarryCount: u32 = 2;
-		pub const InactiveGracePeriod: u32 = 1;
-		pub const VotingPeriod: u64 = 4;
-	}
-
-	thread_local! {
-		static VOTER_BOND: RefCell<u64> = RefCell::new(0);
-		static VOTING_FEE: RefCell<u64> = RefCell::new(0);
-		static PRESENT_SLASH_PER_VOTER: RefCell<u64> = RefCell::new(0);
-		static DECAY_RATIO: RefCell<u32> = RefCell::new(0);
-		static MEMBERS: RefCell<Vec<u64>> = RefCell::new(vec![]);
-	}
-
-	pub struct VotingBond;
-	impl Get<u64> for VotingBond {
-		fn get() -> u64 { VOTER_BOND.with(|v| *v.borrow()) }
-	}
-
-	pub struct VotingFee;
-	impl Get<u64> for VotingFee {
-		fn get() -> u64 { VOTING_FEE.with(|v| *v.borrow()) }
-	}
-
-	pub struct PresentSlashPerVoter;
-	impl Get<u64> for PresentSlashPerVoter {
-		fn get() -> u64 { PRESENT_SLASH_PER_VOTER.with(|v| *v.borrow()) }
-	}
-
-	pub struct DecayRatio;
-	impl Get<u32> for DecayRatio {
-		fn get() -> u32 { DECAY_RATIO.with(|v| *v.borrow()) }
-	}
-
-	pub struct TestChangeMembers;
-	impl ChangeMembers<u64> for TestChangeMembers {
-		fn change_members_sorted(incoming: &[u64], outgoing: &[u64], new: &[u64]) {
-			let mut old_plus_incoming = MEMBERS.with(|m| m.borrow().to_vec());
-			old_plus_incoming.extend_from_slice(incoming);
-			old_plus_incoming.sort();
-			let mut new_plus_outgoing = new.to_vec();
-			new_plus_outgoing.extend_from_slice(outgoing);
-			new_plus_outgoing.sort();
-			assert_eq!(old_plus_incoming, new_plus_outgoing);
-
-			MEMBERS.with(|m| *m.borrow_mut() = new.to_vec());
-		}
-	}
-
-	impl Trait for Test {
-		type Event = Event;
-		type Currency = Balances;
-		type BadPresentation = ();
-		type BadReaper = ();
-		type BadVoterIndex = ();
-		type LoserCandidate = ();
-		type ChangeMembers = TestChangeMembers;
-		type CandidacyBond = CandidacyBond;
-		type VotingBond = VotingBond;
-		type VotingFee = VotingFee;
-		type PresentSlashPerVoter = PresentSlashPerVoter;
-		type CarryCount = CarryCount;
-		type InactiveGracePeriod = InactiveGracePeriod;
-		type VotingPeriod = VotingPeriod;
-		type DecayRatio = DecayRatio;
-	}
-
-	pub type Block = sr_primitives::generic::Block<Header, UncheckedExtrinsic>;
-	pub type UncheckedExtrinsic = sr_primitives::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
-
-	support::construct_runtime!(
-		pub enum Test where
-			Block = Block,
-			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic
-		{
-			System: system::{Module, Call, Event},
-			Balances: balances::{Module, Call, Event<T>, Config<T>, Error},
-			Elections: elections::{Module, Call, Event<T>, Config<T>},
-		}
-	);
-
-	pub struct ExtBuilder {
-		balance_factor: u64,
-		decay_ratio: u32,
-		desired_seats: u32,
-		voting_fee: u64,
-		voter_bond: u64,
-		bad_presentation_punishment: u64,
-	}
-
-	impl Default for ExtBuilder {
-		fn default() -> Self {
-			Self {
-				balance_factor: 1,
-				decay_ratio: 24,
-				desired_seats: 2,
-				voting_fee: 0,
-				voter_bond: 0,
-				bad_presentation_punishment: 1,
-			}
-		}
-	}
-
-	impl ExtBuilder {
-		pub fn balance_factor(mut self, factor: u64) -> Self {
-			self.balance_factor = factor;
-			self
-		}
-		pub fn decay_ratio(mut self, ratio: u32) -> Self {
-			self.decay_ratio = ratio;
-			self
-		}
-		pub fn voting_fee(mut self, fee: u64) -> Self {
-			self.voting_fee = fee;
-			self
-		}
-		pub fn bad_presentation_punishment(mut self, fee: u64) -> Self {
-			self.bad_presentation_punishment = fee;
-			self
-		}
-		pub fn voter_bond(mut self, fee: u64) -> Self {
-			self.voter_bond = fee;
-			self
-		}
-		pub fn desired_seats(mut self, seats: u32) -> Self {
-			self.desired_seats = seats;
-			self
-		}
-		pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
-			VOTER_BOND.with(|v| *v.borrow_mut() = self.voter_bond);
-			VOTING_FEE.with(|v| *v.borrow_mut() = self.voting_fee);
-			PRESENT_SLASH_PER_VOTER.with(|v| *v.borrow_mut() = self.bad_presentation_punishment);
-			DECAY_RATIO.with(|v| *v.borrow_mut() = self.decay_ratio);
-			GenesisConfig {
-				balances: Some(balances::GenesisConfig::<Test>{
-					balances: vec![
-						(1, 10 * self.balance_factor),
-						(2, 20 * self.balance_factor),
-						(3, 30 * self.balance_factor),
-						(4, 40 * self.balance_factor),
-						(5, 50 * self.balance_factor),
-						(6, 60 * self.balance_factor)
-					],
-					vesting: vec![],
-				}),
-				elections: Some(elections::GenesisConfig::<Test>{
-					members: vec![],
-					desired_seats: self.desired_seats,
-					presentation_duration: 2,
-					term_duration: 5,
-				}),
-			}.build_storage().unwrap().into()
-		}
-	}
-
-	fn voter_ids() -> Vec<u64> {
-		Elections::all_voters().iter().map(|v| v.unwrap_or(0) ).collect::<Vec<u64>>()
-	}
-
-	fn vote(i: u64, l: usize) {
-		let _ = Balances::make_free_balance_be(&i, 20);
-		assert_ok!(Elections::set_approvals(Origin::signed(i), (0..l).map(|_| true).collect::<Vec<bool>>(), 0, 0));
-	}
-
-	fn vote_at(i: u64, l: usize, index: VoteIndex) {
-		let _ = Balances::make_free_balance_be(&i, 20);
-		assert_ok!(Elections::set_approvals(Origin::signed(i), (0..l).map(|_| true).collect::<Vec<bool>>(), 0, index));
-	}
-
-	fn create_candidate(i: u64, index: u32) {
-		let _ = Balances::make_free_balance_be(&i, 20);
-		assert_ok!(Elections::submit_candidacy(Origin::signed(i), index));
-	}
-
-	fn bond() -> u64 {
-		<Test as Trait>::VotingBond::get()
-	}
-
-	fn balances(who: &u64) -> (u64, u64) {
-		(Balances::free_balance(who), Balances::reserved_balance(who))
-	}
-
-	#[test]
-	fn bool_to_flag_should_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			assert_eq!(Elections::bool_to_flag(vec![]), vec![]);
-			assert_eq!(Elections::bool_to_flag(vec![false]), vec![0]);
-			assert_eq!(Elections::bool_to_flag(vec![true]), vec![1]);
-			assert_eq!(Elections::bool_to_flag(vec![true, true, true, true]), vec![15]);
-			assert_eq!(Elections::bool_to_flag(vec![true, true, true, true, true]), vec![15 + 16]);
-
-			let set_1 = vec![
-					true, false, false, false, // 0x1
-					false, true, true, true, // 0xE
-			];
-			assert_eq!(
-				Elections::bool_to_flag(set_1.clone()),
-				vec![0x00_00_00_E1_u32]
-			);
-			assert_eq!(
-				Elections::flag_to_bool(vec![0x00_00_00_E1_u32]),
-				set_1
-			);
-
-			let set_2 = vec![
-					false, false, false, true, // 0x8
-					false, true, false, true, // 0xA
-			];
-			assert_eq!(
-				Elections::bool_to_flag(set_2.clone()),
-				vec![0x00_00_00_A8_u32]
-			);
-			assert_eq!(
-				Elections::flag_to_bool(vec![0x00_00_00_A8_u32]),
-				set_2
-			);
-
-			let mut rhs = (0..100/APPROVAL_FLAG_LEN).map(|_| 0xFFFFFFFF_u32).collect::<Vec<u32>>();
-			// NOTE: this might be need change based on `APPROVAL_FLAG_LEN`.
-			rhs.extend(vec![0x00_00_00_0F]);
-			assert_eq!(
-				Elections::bool_to_flag((0..100).map(|_| true).collect()),
-				rhs
-			)
-		})
-	}
-
-	#[test]
-	fn params_should_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(1);
-			assert_eq!(Elections::next_vote_from(1), 4);
-			assert_eq!(Elections::next_vote_from(4), 4);
-			assert_eq!(Elections::next_vote_from(5), 8);
-			assert_eq!(Elections::vote_index(), 0);
-			assert_eq!(Elections::presentation_duration(), 2);
-			assert_eq!(Elections::term_duration(), 5);
-			assert_eq!(Elections::desired_seats(), 2);
-
-			assert_eq!(Elections::members(), vec![]);
-			assert_eq!(Elections::next_tally(), Some(4));
-			assert_eq!(Elections::presentation_active(), false);
-			assert_eq!(Elections::next_finalize(), None);
-
-			assert_eq!(Elections::candidates(), Vec::<u64>::new());
-			assert_eq!(Elections::is_a_candidate(&1), false);
-			assert_eq!(Elections::candidate_reg_info(1), None);
-
-			assert_eq!(Elections::voters(0), Vec::<Option<u64>>::new());
-			assert_eq!(Elections::voter_info(1), None);
-			assert_eq!(Elections::all_approvals_of(&1), vec![]);
-		});
-	}
-
-	#[test]
-	fn voter_set_growth_should_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(3), 1));
-
-			// create 65. 64 (set0) + 1 (set1)
-			(1..=63).for_each(|i| vote(i, 2));
-			assert_eq!(Elections::next_nonfull_voter_set(), 0);
-			vote(64, 2);
-			assert_eq!(Elections::next_nonfull_voter_set(), 1);
-			vote(65, 2);
-
-			let set1 = Elections::voters(0);
-			let set2 = Elections::voters(1);
-
-			assert_eq!(set1.len(), 64);
-			assert_eq!(set2.len(), 1);
-
-			assert_eq!(set1[0], Some(1));
-			assert_eq!(set1[10], Some(11));
-			assert_eq!(set2[0], Some(65));
-		})
-	}
-
-	#[test]
-	fn voter_set_reclaim_should_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(3), 1));
-
-			(1..=129).for_each(|i| vote(i, 2));
-			assert_eq!(Elections::next_nonfull_voter_set(), 2);
-
-			assert_ok!(Elections::retract_voter(Origin::signed(11), 10));
-
-			assert_ok!(Elections::retract_voter(Origin::signed(66), 65));
-			assert_ok!(Elections::retract_voter(Origin::signed(67), 66));
-
-			// length does not show it but holes do exist.
-			assert_eq!(Elections::voters(0).len(), 64);
-			assert_eq!(Elections::voters(1).len(), 64);
-			assert_eq!(Elections::voters(2).len(), 1);
-
-			assert_eq!(Elections::voters(0)[10], None);
-			assert_eq!(Elections::voters(1)[1], None);
-			assert_eq!(Elections::voters(1)[2], None);
-			// Next set with capacity is 2.
-			assert_eq!(Elections::next_nonfull_voter_set(), 2);
-
-			// But we can fill a hole.
-			vote_at(130, 2, 10);
-
-			// Nothing added to set 2. A hole was filled.
-			assert_eq!(Elections::voters(0).len(), 64);
-			assert_eq!(Elections::voters(1).len(), 64);
-			assert_eq!(Elections::voters(2).len(), 1);
-
-			// and the next two (scheduled) to the second set.
-			assert_eq!(Elections::next_nonfull_voter_set(), 2);
-		})
-	}
-
-	#[test]
-	fn approvals_set_growth_should_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			// create candidates and voters.
-			(1..=250).for_each(|i| create_candidate(i, (i-1) as u32));
-			(1..=250).for_each(|i| vote(i, i as usize));
-
-			// all approvals of should return the exact expected vector.
-			assert_eq!(Elections::all_approvals_of(&180), (0..180).map(|_| true).collect::<Vec<bool>>());
-
-			assert_eq!(Elections::all_approvals_of(&32), (0..32).map(|_| true).collect::<Vec<bool>>());
-			assert_eq!(Elections::all_approvals_of(&8), (0..8).map(|_| true).collect::<Vec<bool>>());
-			assert_eq!(Elections::all_approvals_of(&64), (0..64).map(|_| true).collect::<Vec<bool>>());
-			assert_eq!(Elections::all_approvals_of(&65), (0..65).map(|_| true).collect::<Vec<bool>>());
-			assert_eq!(Elections::all_approvals_of(&63), (0..63).map(|_| true).collect::<Vec<bool>>());
-
-			// NOTE: assuming that APPROVAL_SET_SIZE is more or less small-ish. Might fail otherwise.
-			let full_sets = (180 / APPROVAL_FLAG_LEN) / APPROVAL_SET_SIZE;
-			let left_over = (180 / APPROVAL_FLAG_LEN) / APPROVAL_SET_SIZE;
-			let rem = 180 % APPROVAL_FLAG_LEN;
-
-			// grab and check the last full set, if it exists.
-			if full_sets > 0 {
-				assert_eq!(
-					Elections::approvals_of((180, (full_sets-1) as SetIndex )),
-					Elections::bool_to_flag((0..APPROVAL_SET_SIZE * APPROVAL_FLAG_LEN).map(|_| true).collect::<Vec<bool>>())
-				);
-			}
-
-			// grab and check the last, half-empty, set.
-			if left_over > 0 {
-				assert_eq!(
-					Elections::approvals_of((180, full_sets as SetIndex)),
-					Elections::bool_to_flag((0..left_over * APPROVAL_FLAG_LEN + rem).map(|_| true).collect::<Vec<bool>>())
-				);
-			}
-		})
-	}
-
-
-	#[test]
-	fn cell_status_works() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(3), 1));
-
-			(1..=63).for_each(|i| vote(i, 2));
-
-			assert_ok!(Elections::retract_voter(Origin::signed(11), 10));
-			assert_ok!(Elections::retract_voter(Origin::signed(21), 20));
-
-			assert_eq!(Elections::cell_status(0, 10), CellStatus::Hole);
-			assert_eq!(Elections::cell_status(0, 0), CellStatus::Occupied);
-			assert_eq!(Elections::cell_status(0, 20), CellStatus::Hole);
-			assert_eq!(Elections::cell_status(0, 63), CellStatus::Head);
-			assert_eq!(Elections::cell_status(1, 0), CellStatus::Head);
-			assert_eq!(Elections::cell_status(1, 10), CellStatus::Head);
-		})
-	}
-
-	#[test]
-	fn initial_set_approvals_ignores_voter_index() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 0));
-
-			// Last argument is essentially irrelevant. You might get or miss a tip.
-			assert_ok!(Elections::set_approvals(Origin::signed(3), vec![true], 0, 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(4), vec![true], 0, 5));
-			assert_ok!(Elections::set_approvals(Origin::signed(5), vec![true], 0, 100));
-
-			// indices are more or less ignored. all is pushed.
-			assert_eq!(voter_ids(), vec![3, 4, 5]);
-		})
-	}
-
-	#[test]
-	fn bad_approval_index_slashes_voters_and_bond_reduces_stake() {
-		with_externalities(&mut ExtBuilder::default().voting_fee(5).voter_bond(2).build(), || {
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(3), 1));
-
-			(1..=63).for_each(|i| vote(i, 2));
-			assert_eq!(Balances::free_balance(&1), 20 - 5 - 2); // -5 fee -2 bond
-			assert_eq!(Balances::free_balance(&10), 20 - 2);
-			assert_eq!(Balances::free_balance(&60), 20 - 2);
-
-			// still no fee
-			vote(64, 2);
-			assert_eq!(Balances::free_balance(&64), 20 - 2); // -2 bond
-			assert_eq!(
-				Elections::voter_info(&64).unwrap(),
-				VoterInfo { last_win: 0, last_active: 0, stake: 20, pot:0 }
-			);
-
-			assert_eq!(Elections::next_nonfull_voter_set(), 1);
-
-			// now we charge the next voter.
-			vote(65, 2);
-			assert_eq!(Balances::free_balance(&65), 20 - 5 - 2);
-			assert_eq!(
-				Elections::voter_info(&65).unwrap(),
-				VoterInfo { last_win: 0, last_active: 0, stake: 15, pot:0 }
-			);
-		});
-	}
-
-	#[test]
-	fn subsequent_set_approvals_checks_voter_index() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 0));
-
-			assert_ok!(Elections::set_approvals(Origin::signed(3), vec![true], 0, 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(4), vec![true], 0, 5));
-			assert_ok!(Elections::set_approvals(Origin::signed(5), vec![true], 0, 100));
-
-			// invalid index
-			assert_noop!(Elections::set_approvals(Origin::signed(4), vec![true], 0, 5), "invalid voter index");
-			// wrong index
-			assert_noop!(Elections::set_approvals(Origin::signed(4), vec![true], 0, 0), "wrong voter index");
-			// correct
-			assert_ok!(Elections::set_approvals(Origin::signed(4), vec![true], 0, 1));
-		})
-	}
-
-	#[test]
-	fn voter_index_does_not_take_holes_into_account() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(3), 1));
-
-			// create 65. 64 (set0) + 1 (set1)
-			(1..=65).for_each(|i| vote(i, 2));
-
-			// account 65 has global index 65.
-			assert_eq!(Elections::voter_at(64).unwrap(), 65);
-
-			assert_ok!(Elections::retract_voter(Origin::signed(1), 0));
-			assert_ok!(Elections::retract_voter(Origin::signed(2), 1));
-
-			// still the same. These holes are in some other set.
-			assert_eq!(Elections::voter_at(64).unwrap(), 65);
-			// proof: can submit a new approval with the old index.
-			assert_noop!(Elections::set_approvals(Origin::signed(65), vec![false, true], 0, 64 - 2), "wrong voter index");
-			assert_ok!(Elections::set_approvals(Origin::signed(65), vec![false, true], 0, 64));
-		})
-	}
-
-	#[test]
-	fn simple_candidate_submission_should_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(1);
-			assert_eq!(Elections::candidates(), Vec::<u64>::new());
-			assert_eq!(Elections::candidate_reg_info(1), None);
-			assert_eq!(Elections::candidate_reg_info(2), None);
-			assert_eq!(Elections::is_a_candidate(&1), false);
-			assert_eq!(Elections::is_a_candidate(&2), false);
-
-			assert_ok!(Elections::submit_candidacy(Origin::signed(1), 0));
-			assert_eq!(Elections::candidates(), vec![1]);
-			assert_eq!(Elections::candidate_reg_info(1), Some((0, 0)));
-			assert_eq!(Elections::candidate_reg_info(2), None);
-			assert_eq!(Elections::is_a_candidate(&1), true);
-			assert_eq!(Elections::is_a_candidate(&2), false);
-
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 1));
-			assert_eq!(Elections::candidates(), vec![1, 2]);
-			assert_eq!(Elections::candidate_reg_info(1), Some((0, 0)));
-			assert_eq!(Elections::candidate_reg_info(2), Some((0, 1)));
-			assert_eq!(Elections::is_a_candidate(&1), true);
-			assert_eq!(Elections::is_a_candidate(&2), true);
-		});
-	}
-
-	fn new_test_ext_with_candidate_holes() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = ExtBuilder::default().build();
-		with_externalities(&mut t, || {
-			<Candidates<Test>>::put(vec![0, 0, 1]);
-			CandidateCount::put(1);
-			<RegisterInfoOf<Test>>::insert(1, (0, 2));
-		});
-		t
-	}
-
-	#[test]
-	fn candidate_submission_using_free_slot_should_work() {
-		let mut t = new_test_ext_with_candidate_holes();
-
-		with_externalities(&mut t, || {
-			System::set_block_number(1);
-			assert_eq!(Elections::candidates(), vec![0, 0, 1]);
-
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 1));
-			assert_eq!(Elections::candidates(), vec![0, 2, 1]);
-
-			assert_ok!(Elections::submit_candidacy(Origin::signed(3), 0));
-			assert_eq!(Elections::candidates(), vec![3, 2, 1]);
-		});
-	}
-
-	#[test]
-	fn candidate_submission_using_alternative_free_slot_should_work() {
-		let mut t = new_test_ext_with_candidate_holes();
-
-		with_externalities(&mut t, || {
-			System::set_block_number(1);
-			assert_eq!(Elections::candidates(), vec![0, 0, 1]);
-
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 0));
-			assert_eq!(Elections::candidates(), vec![2, 0, 1]);
-
-			assert_ok!(Elections::submit_candidacy(Origin::signed(3), 1));
-			assert_eq!(Elections::candidates(), vec![2, 3, 1]);
-		});
-	}
-
-	#[test]
-	fn candidate_submission_not_using_free_slot_should_not_work() {
-		let mut t = new_test_ext_with_candidate_holes();
-
-		with_externalities(&mut t, || {
-			System::set_block_number(1);
-			assert_noop!(Elections::submit_candidacy(Origin::signed(4), 3), "invalid candidate slot");
-		});
-	}
-
-	#[test]
-	fn bad_candidate_slot_submission_should_not_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(1);
-			assert_eq!(Elections::candidates(), Vec::<u64>::new());
-			assert_noop!(Elections::submit_candidacy(Origin::signed(1), 1), "invalid candidate slot");
-		});
-	}
-
-	#[test]
-	fn non_free_candidate_slot_submission_should_not_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(1);
-			assert_eq!(Elections::candidates(), Vec::<u64>::new());
-			assert_ok!(Elections::submit_candidacy(Origin::signed(1), 0));
-			assert_eq!(Elections::candidates(), vec![1]);
-			assert_noop!(Elections::submit_candidacy(Origin::signed(2), 0), "invalid candidate slot");
-		});
-	}
-
-	#[test]
-	fn dupe_candidate_submission_should_not_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(1);
-			assert_eq!(Elections::candidates(), Vec::<u64>::new());
-			assert_ok!(Elections::submit_candidacy(Origin::signed(1), 0));
-			assert_eq!(Elections::candidates(), vec![1]);
-			assert_noop!(Elections::submit_candidacy(Origin::signed(1), 1), "duplicate candidate submission");
-		});
-	}
-
-	#[test]
-	fn poor_candidate_submission_should_not_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(1);
-			assert_eq!(Elections::candidates(), Vec::<u64>::new());
-			assert_noop!(Elections::submit_candidacy(Origin::signed(7), 0), "candidate has not enough funds");
-		});
-	}
-
-	#[test]
-	fn balance_should_lock_to_the_maximum() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(1);
-			assert_eq!(Elections::candidates(), Vec::<u64>::new());
-			assert_eq!(Balances::free_balance(&2), 20);
-
-			assert_ok!(Elections::submit_candidacy(Origin::signed(5), 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(2), vec![true], 0, 0));
-
-			assert_eq!(Balances::free_balance(&2), 20 - bond() );
-			assert_noop!(Balances::reserve(&2, 1), "account liquidity restrictions prevent withdrawal"); // locked.
-
-			// deposit a bit more.
-			let _ = Balances::deposit_creating(&2, 100);
-			assert_ok!(Balances::reserve(&2, 1)); // locked but now has enough.
-
-			assert_ok!(Elections::set_approvals(Origin::signed(2), vec![true], 0, 0));
-			assert_noop!(Balances::reserve(&2, 1), "account liquidity restrictions prevent withdrawal"); // locked.
-			assert_eq!(Balances::locks(&2).len(), 1);
-			assert_eq!(Balances::locks(&2)[0].amount, 100 + 20);
-
-			assert_ok!(Elections::retract_voter(Origin::signed(2), 0));
-
-			assert_eq!(Balances::locks(&2).len(), 0);
-			assert_eq!(Balances::free_balance(&2), 120 - 1); // 1 ok call to .reserve() happened.
-			assert_ok!(Balances::reserve(&2, 1)); // unlocked.
-		});
-	}
-
-	#[test]
-	fn balance_should_lock_on_submit_approvals_unlock_on_retract() {
-		with_externalities(&mut ExtBuilder::default().voter_bond(8).voting_fee(0).build(), || {
-			System::set_block_number(1);
-			assert_eq!(Elections::candidates(), Vec::<u64>::new());
-			assert_eq!(Balances::free_balance(&2), 20);
-
-			assert_ok!(Elections::submit_candidacy(Origin::signed(5), 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(2), vec![true], 0, 0));
-
-			assert_eq!(Balances::free_balance(&2), 12); // 20 - 8 (bond)
-			assert_noop!(Balances::reserve(&2, 10), "account liquidity restrictions prevent withdrawal"); // locked.
-
-			assert_ok!(Elections::retract_voter(Origin::signed(2), 0));
-
-			assert_eq!(Balances::free_balance(&2), 20);
-			assert_ok!(Balances::reserve(&2, 10)); // unlocked.
-		});
-	}
-
-	#[test]
-	fn accumulating_weight_and_decaying_should_work() {
-		with_externalities(&mut ExtBuilder::default().balance_factor(10).build(), || {
-			System::set_block_number(4);
-			assert!(!Elections::presentation_active());
-
-			assert_ok!(Elections::submit_candidacy(Origin::signed(6), 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(5), 1));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(1), 2));
-
-			assert_ok!(Elections::set_approvals(Origin::signed(6), vec![true, false, false], 0, 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(5), vec![false, true, false], 0, 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(1), vec![false, false, true], 0, 0));
-
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(6);
-			assert!(Elections::presentation_active());
-
-			assert_eq!(Elections::present_winner(Origin::signed(6), 6, 600, 0), Ok(()));
-			assert_eq!(Elections::present_winner(Origin::signed(5), 5, 500, 0), Ok(()));
-			assert_eq!(Elections::present_winner(Origin::signed(1), 1, 100, 0), Ok(()));
-			assert_eq!(Elections::leaderboard(), Some(vec![(0, 0), (100, 1), (500, 5), (600, 6)]));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			assert_eq!(Elections::members(), vec![(6, 11), (5, 11)]);
-			assert_eq!(Elections::voter_info(6).unwrap(), VoterInfo { last_win: 1, last_active: 0, stake: 600, pot: 0});
-			assert_eq!(Elections::voter_info(5).unwrap(), VoterInfo { last_win: 1, last_active: 0, stake: 500, pot: 0});
-			assert_eq!(Elections::voter_info(1).unwrap(), VoterInfo { last_win: 0, last_active: 0, stake: 100, pot: 0});
-
-			System::set_block_number(12);
-			// retract needed to unlock approval funds => submit candidacy again.
-			assert_ok!(Elections::retract_voter(Origin::signed(6), 0));
-			assert_ok!(Elections::retract_voter(Origin::signed(5), 1));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(6), 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(5), 1));
-			assert_ok!(Elections::set_approvals(Origin::signed(6), vec![true, false, false], 1, 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(5), vec![false, true, false], 1, 1));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(14);
-			assert!(Elections::presentation_active());
-			assert_eq!(Elections::present_winner(Origin::signed(6), 6, 600, 1), Ok(()));
-			assert_eq!(Elections::present_winner(Origin::signed(5), 5, 500, 1), Ok(()));
-			assert_eq!(Elections::present_winner(Origin::signed(1), 1, 100 + Elections::get_offset(100, 1), 1), Ok(()));
-			assert_eq!(Elections::leaderboard(), Some(vec![(0, 0), (100 + 96, 1), (500, 5), (600, 6)]));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			assert_eq!(Elections::members(), vec![(6, 19), (5, 19)]);
-			assert_eq!(
-				Elections::voter_info(6).unwrap(),
-				VoterInfo { last_win: 2, last_active: 1, stake: 600, pot:0 }
-			);
-			assert_eq!(Elections::voter_info(5).unwrap(), VoterInfo { last_win: 2, last_active: 1, stake: 500, pot:0 });
-			assert_eq!(Elections::voter_info(1).unwrap(), VoterInfo { last_win: 0, last_active: 0, stake: 100, pot:0 });
-
-			System::set_block_number(20);
-			assert_ok!(Elections::retract_voter(Origin::signed(6), 0));
-			assert_ok!(Elections::retract_voter(Origin::signed(5), 1));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(6), 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(5), 1));
-			assert_ok!(Elections::set_approvals(Origin::signed(6), vec![true, false, false], 2, 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(5), vec![false, true, false], 2, 1));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(22);
-			assert!(Elections::presentation_active());
-			assert_eq!(Elections::present_winner(Origin::signed(6), 6, 600, 2), Ok(()));
-			assert_eq!(Elections::present_winner(Origin::signed(5), 5, 500, 2), Ok(()));
-			assert_eq!(Elections::present_winner(Origin::signed(1), 1, 100 + Elections::get_offset(100, 2), 2), Ok(()));
-			assert_eq!(Elections::leaderboard(), Some(vec![(0, 0), (100 + 96 + 93, 1), (500, 5), (600, 6)]));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			assert_eq!(Elections::members(), vec![(6, 27), (5, 27)]);
-			assert_eq!(
-				Elections::voter_info(6).unwrap(),
-				VoterInfo { last_win: 3, last_active: 2, stake: 600, pot: 0}
-			);
-			assert_eq!(Elections::voter_info(5).unwrap(), VoterInfo { last_win: 3, last_active: 2, stake: 500, pot: 0});
-			assert_eq!(Elections::voter_info(1).unwrap(), VoterInfo { last_win: 0, last_active: 0, stake: 100, pot: 0});
-
-
-			System::set_block_number(28);
-			assert_ok!(Elections::retract_voter(Origin::signed(6), 0));
-			assert_ok!(Elections::retract_voter(Origin::signed(5), 1));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(6), 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(5), 1));
-			assert_ok!(Elections::set_approvals(Origin::signed(6), vec![true, false, false], 3, 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(5), vec![false, true, false], 3, 1));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(30);
-			assert!(Elections::presentation_active());
-			assert_eq!(Elections::present_winner(Origin::signed(6), 6, 600, 3), Ok(()));
-			assert_eq!(Elections::present_winner(Origin::signed(5), 5, 500, 3), Ok(()));
-			assert_eq!(Elections::present_winner(Origin::signed(1), 1, 100 + Elections::get_offset(100, 3), 3), Ok(()));
-			assert_eq!(Elections::leaderboard(), Some(vec![(0, 0), (100 + 96 + 93 + 90, 1), (500, 5), (600, 6)]));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			assert_eq!(Elections::members(), vec![(6, 35), (5, 35)]);
-			assert_eq!(
-				Elections::voter_info(6).unwrap(),
-				VoterInfo { last_win: 4, last_active: 3, stake: 600, pot: 0}
-			);
-			assert_eq!(Elections::voter_info(5).unwrap(), VoterInfo { last_win: 4, last_active: 3, stake: 500, pot: 0});
-			assert_eq!(Elections::voter_info(1).unwrap(), VoterInfo { last_win: 0, last_active: 0, stake: 100, pot: 0});
-		})
-	}
-
-	#[test]
-	fn winning_resets_accumulated_pot() {
-		with_externalities(&mut ExtBuilder::default().balance_factor(10).build(), || {
-			System::set_block_number(4);
-			assert!(!Elections::presentation_active());
-
-			assert_ok!(Elections::submit_candidacy(Origin::signed(6), 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(4), 1));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(3), 2));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 3));
-
-			assert_ok!(Elections::set_approvals(Origin::signed(6), vec![true, false, false, false], 0, 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(4), vec![false, true, false, false], 0, 1));
-			assert_ok!(Elections::set_approvals(Origin::signed(3), vec![false, false, true, true], 0, 2));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(6);
-			assert!(Elections::presentation_active());
-			assert_eq!(Elections::present_winner(Origin::signed(6), 6, 600, 0), Ok(()));
-			assert_eq!(Elections::present_winner(Origin::signed(4), 4, 400, 0), Ok(()));
-			assert_eq!(Elections::present_winner(Origin::signed(3), 3, 300, 0), Ok(()));
-			assert_eq!(Elections::present_winner(Origin::signed(2), 2, 300, 0), Ok(()));
-			assert_eq!(Elections::leaderboard(), Some(vec![(300, 2), (300, 3), (400, 4), (600, 6)]));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			assert_eq!(Elections::members(), vec![(6, 11), (4, 11)]);
-
-			System::set_block_number(12);
-			assert_ok!(Elections::retract_voter(Origin::signed(6), 0));
-			assert_ok!(Elections::retract_voter(Origin::signed(4), 1));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(6), 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(4), 1));
-			assert_ok!(Elections::set_approvals(Origin::signed(6), vec![true, false, false, false], 1, 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(4), vec![false, true, false, false], 1, 1));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(14);
-			assert!(Elections::presentation_active());
-			assert_eq!(Elections::present_winner(Origin::signed(6), 6, 600, 1), Ok(()));
-			assert_eq!(Elections::present_winner(Origin::signed(4), 4, 400, 1), Ok(()));
-			assert_eq!(Elections::present_winner(Origin::signed(3), 3, 300 + Elections::get_offset(300, 1), 1), Ok(()));
-			assert_eq!(Elections::present_winner(Origin::signed(2), 2, 300 + Elections::get_offset(300, 1), 1), Ok(()));
-			assert_eq!(Elections::leaderboard(), Some(vec![(400, 4), (588, 2), (588, 3), (600, 6)]));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			assert_eq!(Elections::members(), vec![(6, 19), (3, 19)]);
-
-			System::set_block_number(20);
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(22);
-			// 2 will not get re-elected with 300 + 288, instead just 300.
-			// because one of 3's candidates (3) won in previous round
-			// 4 on the other hand will get extra weight since it was unlucky.
-			assert_eq!(Elections::present_winner(Origin::signed(3), 2, 300, 2), Ok(()));
-			assert_eq!(Elections::present_winner(Origin::signed(4), 4, 400 + Elections::get_offset(400, 1), 2), Ok(()));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			assert_eq!(Elections::members(), vec![(4, 27), (2, 27)]);
-		})
-	}
-
-	#[test]
-	fn resubmitting_approvals_stores_pot() {
-		with_externalities(&mut ExtBuilder::default()
-			.voter_bond(0)
-			.voting_fee(0)
-			.balance_factor(10)
-			.build(),
-		|| { System::set_block_number(4);
-			assert!(!Elections::presentation_active());
-
-			assert_ok!(Elections::submit_candidacy(Origin::signed(6), 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(5), 1));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(1), 2));
-
-			assert_ok!(Elections::set_approvals(Origin::signed(6), vec![true, false, false], 0, 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(5), vec![false, true, false], 0, 1));
-			assert_ok!(Elections::set_approvals(Origin::signed(1), vec![false, false, true], 0, 2));
-
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(6);
-			assert!(Elections::presentation_active());
-
-			assert_eq!(Elections::present_winner(Origin::signed(6), 6, 600, 0), Ok(()));
-			assert_eq!(Elections::present_winner(Origin::signed(5), 5, 500, 0), Ok(()));
-			assert_eq!(Elections::present_winner(Origin::signed(1), 1, 100, 0), Ok(()));
-			assert_eq!(Elections::leaderboard(), Some(vec![(0, 0), (100, 1), (500, 5), (600, 6)]));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			assert_eq!(Elections::members(), vec![(6, 11), (5, 11)]);
-
-			System::set_block_number(12);
-			assert_ok!(Elections::retract_voter(Origin::signed(6), 0));
-			assert_ok!(Elections::retract_voter(Origin::signed(5), 1));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(6), 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(5), 1));
-			assert_ok!(Elections::set_approvals(Origin::signed(6), vec![true, false, false], 1, 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(5), vec![false, true, false], 1, 1));
-			// give 1 some new high balance
-			let _ = Balances::make_free_balance_be(&1, 997);
-			assert_ok!(Elections::set_approvals(Origin::signed(1), vec![false, false, true], 1, 2));
-			assert_eq!(Elections::voter_info(1).unwrap(),
-				VoterInfo {
-					stake: 1000, // 997 + 3 which is candidacy bond.
-					pot: Elections::get_offset(100, 1),
-					last_active: 1,
-					last_win: 1,
-				}
-			);
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			assert_eq!(Elections::members(), vec![(6, 11), (5, 11)]);
-
-			System::set_block_number(14);
-			assert!(Elections::presentation_active());
-			assert_eq!(Elections::present_winner(Origin::signed(6), 6, 600, 1), Ok(()));
-			assert_eq!(Elections::present_winner(Origin::signed(5), 5, 500, 1), Ok(()));
-			assert_eq!(Elections::present_winner(Origin::signed(1), 1, 1000 + 96 /* pot */, 1), Ok(()));
-			assert_eq!(Elections::leaderboard(), Some(vec![(0, 0), (500, 5), (600, 6), (1096, 1)]));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			assert_eq!(Elections::members(), vec![(1, 19), (6, 19)]);
-		})
-	}
-
-	#[test]
-	fn get_offset_should_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			assert_eq!(Elections::get_offset(100, 0), 0);
-			assert_eq!(Elections::get_offset(100, 1), 96);
-			assert_eq!(Elections::get_offset(100, 2), 96 + 93);
-			assert_eq!(Elections::get_offset(100, 3), 96 + 93 + 90);
-			assert_eq!(Elections::get_offset(100, 4), 96 + 93 + 90 + 87);
-			// limit
-			assert_eq!(Elections::get_offset(100, 1000), 100 * 24);
-
-			assert_eq!(Elections::get_offset(50_000_000_000, 0), 0);
-			assert_eq!(Elections::get_offset(50_000_000_000, 1), 48_000_000_000);
-			assert_eq!(Elections::get_offset(50_000_000_000, 2), 48_000_000_000 + 46_080_000_000);
-			assert_eq!(Elections::get_offset(50_000_000_000, 3), 48_000_000_000 + 46_080_000_000 + 44_236_800_000);
-			assert_eq!(
-				Elections::get_offset(50_000_000_000, 4),
-				48_000_000_000 + 46_080_000_000 + 44_236_800_000 + 42_467_328_000
-			);
-			// limit
-			assert_eq!(Elections::get_offset(50_000_000_000, 1000), 50_000_000_000 * 24);
-		})
-	}
-
-	#[test]
-	fn get_offset_with_zero_decay() {
-		with_externalities(&mut ExtBuilder::default().decay_ratio(0).build(), || {
-			assert_eq!(Elections::get_offset(100, 0), 0);
-			assert_eq!(Elections::get_offset(100, 1), 0);
-			assert_eq!(Elections::get_offset(100, 2), 0);
-			assert_eq!(Elections::get_offset(100, 3), 0);
-			// limit
-			assert_eq!(Elections::get_offset(100, 1000), 0);
-		})
-	}
-
-	#[test]
-	fn voting_should_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(1);
-
-			assert_ok!(Elections::submit_candidacy(Origin::signed(5), 0));
-
-			assert_ok!(Elections::set_approvals(Origin::signed(1), vec![true], 0, 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(4), vec![true], 0, 1));
-
-			assert_eq!(Elections::all_approvals_of(&1), vec![true]);
-			assert_eq!(Elections::all_approvals_of(&4), vec![true]);
-			assert_eq!(voter_ids(), vec![1, 4]);
-
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 1));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(3), 2));
-
-			assert_ok!(Elections::set_approvals(Origin::signed(2), vec![false, true, true], 0, 2));
-			assert_ok!(Elections::set_approvals(Origin::signed(3), vec![false, true, true], 0, 3));
-
-			assert_eq!(Elections::all_approvals_of(&1), vec![true]);
-			assert_eq!(Elections::all_approvals_of(&4), vec![true]);
-			assert_eq!(Elections::all_approvals_of(&2), vec![false, true, true]);
-			assert_eq!(Elections::all_approvals_of(&3), vec![false, true, true]);
-
-			assert_eq!(voter_ids(), vec![1, 4, 2, 3]);
-		});
-	}
-
-	#[test]
-	fn proxy_voting_should_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(1);
-
-			assert_ok!(Elections::submit_candidacy(Origin::signed(5), 0));
-
-			<Proxy<Test>>::insert(11, 1);
-			<Proxy<Test>>::insert(12, 2);
-			<Proxy<Test>>::insert(13, 3);
-			<Proxy<Test>>::insert(14, 4);
-			assert_ok!(Elections::proxy_set_approvals(Origin::signed(11), vec![true], 0, 0));
-			assert_ok!(Elections::proxy_set_approvals(Origin::signed(14), vec![true], 0, 1));
-
-			assert_eq!(Elections::all_approvals_of(&1), vec![true]);
-			assert_eq!(Elections::all_approvals_of(&4), vec![true]);
-			assert_eq!(voter_ids(), vec![1, 4]);
-
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 1));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(3), 2));
-
-			assert_ok!(Elections::proxy_set_approvals(Origin::signed(12), vec![false, true, true], 0, 2));
-			assert_ok!(Elections::proxy_set_approvals(Origin::signed(13), vec![false, true, true], 0, 3));
-
-			assert_eq!(Elections::all_approvals_of(&1), vec![true]);
-			assert_eq!(Elections::all_approvals_of(&4), vec![true]);
-			assert_eq!(Elections::all_approvals_of(&2), vec![false, true, true]);
-			assert_eq!(Elections::all_approvals_of(&3), vec![false, true, true]);
-
-			assert_eq!(voter_ids(), vec![1, 4, 2, 3]);
-		});
-	}
-
-	#[test]
-	fn setting_any_approval_vote_count_without_any_candidate_count_should_not_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(1);
-
-			assert_eq!(Elections::candidates().len(), 0);
-
-			assert_noop!(
-				Elections::set_approvals(Origin::signed(4), vec![], 0, 0),
-				"amount of candidates to receive approval votes should be non-zero"
-			);
-		});
-	}
-
-	#[test]
-	fn setting_an_approval_vote_count_more_than_candidate_count_should_not_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(1);
-
-			assert_ok!(Elections::submit_candidacy(Origin::signed(5), 0));
-			assert_eq!(Elections::candidates().len(), 1);
-
-			assert_noop!(
-				Elections::set_approvals(Origin::signed(4),vec![true, true], 0, 0),
-				"amount of candidate votes cannot exceed amount of candidates"
-			);
-		});
-	}
-
-	#[test]
-	fn resubmitting_voting_should_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(1);
-
-			assert_ok!(Elections::submit_candidacy(Origin::signed(5), 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(4), vec![true], 0, 0));
-
-			assert_eq!(Elections::all_approvals_of(&4), vec![true]);
-
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 1));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(3), 2));
-			assert_eq!(Elections::candidates().len(), 3);
-			assert_ok!(Elections::set_approvals(Origin::signed(4), vec![true, false, true], 0, 0));
-
-			assert_eq!(Elections::all_approvals_of(&4), vec![true, false, true]);
-		});
-	}
-
-	#[test]
-	fn retracting_voter_should_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(1);
-
-			assert_ok!(Elections::submit_candidacy(Origin::signed(5), 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 1));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(3), 2));
-			assert_eq!(Elections::candidates().len(), 3);
-
-			assert_ok!(Elections::set_approvals(Origin::signed(1), vec![true], 0, 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(2), vec![false, true, true], 0, 1));
-			assert_ok!(Elections::set_approvals(Origin::signed(3), vec![false, true, true], 0, 2));
-			assert_ok!(Elections::set_approvals(Origin::signed(4), vec![true, false, true], 0, 3));
-
-			assert_eq!(voter_ids(), vec![1, 2, 3, 4]);
-			assert_eq!(Elections::all_approvals_of(&1), vec![true]);
-			assert_eq!(Elections::all_approvals_of(&2), vec![false, true, true]);
-			assert_eq!(Elections::all_approvals_of(&3), vec![false, true, true]);
-			assert_eq!(Elections::all_approvals_of(&4), vec![true, false, true]);
-
-			assert_ok!(Elections::retract_voter(Origin::signed(1), 0));
-
-			assert_eq!(voter_ids(), vec![0, 2, 3, 4]);
-			assert_eq!(Elections::all_approvals_of(&1), Vec::<bool>::new());
-			assert_eq!(Elections::all_approvals_of(&2), vec![false, true, true]);
-			assert_eq!(Elections::all_approvals_of(&3), vec![false, true, true]);
-			assert_eq!(Elections::all_approvals_of(&4), vec![true, false, true]);
-
-			assert_ok!(Elections::retract_voter(Origin::signed(2), 1));
-
-			assert_eq!(voter_ids(), vec![0, 0, 3, 4]);
-			assert_eq!(Elections::all_approvals_of(&1), Vec::<bool>::new());
-			assert_eq!(Elections::all_approvals_of(&2), Vec::<bool>::new());
-			assert_eq!(Elections::all_approvals_of(&3), vec![false, true, true]);
-			assert_eq!(Elections::all_approvals_of(&4), vec![true, false, true]);
-
-			assert_ok!(Elections::retract_voter(Origin::signed(3), 2));
-
-			assert_eq!(voter_ids(), vec![0, 0, 0, 4]);
-			assert_eq!(Elections::all_approvals_of(&1), Vec::<bool>::new());
-			assert_eq!(Elections::all_approvals_of(&2), Vec::<bool>::new());
-			assert_eq!(Elections::all_approvals_of(&3), Vec::<bool>::new());
-			assert_eq!(Elections::all_approvals_of(&4), vec![true, false, true]);
-		});
-	}
-
-	#[test]
-	fn invalid_retraction_index_should_not_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(1);
-			assert_ok!(Elections::submit_candidacy(Origin::signed(3), 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(1), vec![true], 0, 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(2), vec![true], 0, 0));
-			assert_eq!(voter_ids(), vec![1, 2]);
-			assert_noop!(Elections::retract_voter(Origin::signed(1), 1), "retraction index mismatch");
-		});
-	}
-
-	#[test]
-	fn overflow_retraction_index_should_not_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(1);
-			assert_ok!(Elections::submit_candidacy(Origin::signed(3), 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(1), vec![true], 0, 0));
-			assert_noop!(Elections::retract_voter(Origin::signed(1), 1), "retraction index invalid");
-		});
-	}
-
-	#[test]
-	fn non_voter_retraction_should_not_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(1);
-			assert_ok!(Elections::submit_candidacy(Origin::signed(3), 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(1), vec![true], 0, 0));
-			assert_noop!(Elections::retract_voter(Origin::signed(2), 0), "cannot retract non-voter");
-		});
-	}
-
-	#[test]
-	fn approval_storage_should_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(3), 1));
-
-			assert_ok!(Elections::set_approvals(Origin::signed(2), vec![true, false], 0, 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(3), vec![false, false], 0, 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(4), vec![], 0, 0));
-
-			assert_eq!(Elections::all_approvals_of(&2), vec![true]);
-			// NOTE: these two are stored in mem differently though.
-			assert_eq!(Elections::all_approvals_of(&3), vec![]);
-			assert_eq!(Elections::all_approvals_of(&4), vec![]);
-
-			assert_eq!(Elections::approvals_of((3, 0)), vec![0]);
-			assert_eq!(Elections::approvals_of((4, 0)), vec![]);
-		});
-	}
-
-	#[test]
-	fn simple_tally_should_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(4);
-			assert!(!Elections::presentation_active());
-
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(5), 1));
-			assert_ok!(Elections::set_approvals(Origin::signed(2), vec![true], 0, 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(5), vec![false, true], 0, 0));
-			assert_eq!(voter_ids(), vec![2, 5]);
-			assert_eq!(Elections::all_approvals_of(&2), vec![true]);
-			assert_eq!(Elections::all_approvals_of(&5), vec![false, true]);
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(6);
-			assert!(Elections::presentation_active());
-			assert_eq!(Elections::present_winner(Origin::signed(4), 2, 20, 0), Ok(()));
-			assert_eq!(Elections::present_winner(Origin::signed(4), 5, 50, 0), Ok(()));
-			assert_eq!(Elections::leaderboard(), Some(vec![(0, 0), (0, 0), (20, 2), (50, 5)]));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			assert!(!Elections::presentation_active());
-			assert_eq!(Elections::members(), vec![(5, 11), (2, 11)]);
-
-			assert!(!Elections::is_a_candidate(&2));
-			assert!(!Elections::is_a_candidate(&5));
-			assert_eq!(Elections::vote_index(), 1);
-			assert_eq!(Elections::voter_info(2), Some(VoterInfo { last_win: 1, last_active: 0, stake: 20, pot: 0 }));
-			assert_eq!(Elections::voter_info(5), Some(VoterInfo { last_win: 1, last_active: 0, stake: 50, pot: 0 }));
-		});
-	}
-
-	#[test]
-	fn seats_should_be_released() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(4);
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(5), 1));
-			assert_ok!(Elections::set_approvals(Origin::signed(2), vec![true, false], 0, 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(5), vec![false, true], 0, 0));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(6);
-			assert!(Elections::presentation_active());
-			assert_eq!(Elections::present_winner(Origin::signed(4), 2, 20, 0), Ok(()));
-			assert_eq!(Elections::present_winner(Origin::signed(4), 5, 50, 0), Ok(()));
-			assert_eq!(Elections::leaderboard(), Some(vec![(0, 0), (0, 0), (20, 2), (50, 5)]));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			assert_eq!(Elections::members(), vec![(5, 11), (2, 11)]);
-			let mut current = System::block_number();
-			let free_block;
-			loop {
-				current += 1;
-				System::set_block_number(current);
-				assert_ok!(Elections::end_block(System::block_number()));
-				if Elections::members().len() == 0 {
-					free_block = current;
-					break;
-				}
-			}
-			// 11 + 2 which is the next voting period.
-			assert_eq!(free_block, 14);
-		});
-	}
-
-	#[test]
-	fn presentations_with_zero_staked_deposit_should_not_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(4);
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(2), vec![true], 0, 0));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(6);
-			assert_noop!(
-				Elections::present_winner(Origin::signed(4), 2, 0, 0),
-				"stake deposited to present winner and be added to leaderboard should be non-zero"
-			);
-		});
-	}
-
-	#[test]
-	fn double_presentations_should_be_punished() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			assert!(Balances::can_slash(&4, 10));
-
-			System::set_block_number(4);
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(5), 1));
-			assert_ok!(Elections::set_approvals(Origin::signed(2), vec![true, false], 0, 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(5), vec![false, true], 0, 0));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(6);
-			assert_ok!(Elections::present_winner(Origin::signed(4), 2, 20, 0));
-			assert_ok!(Elections::present_winner(Origin::signed(4), 5, 50, 0));
-			assert_eq!(Elections::present_winner(Origin::signed(4), 5, 50, 0), Err("duplicate presentation"));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			assert_eq!(Elections::members(), vec![(5, 11), (2, 11)]);
-			assert_eq!(Balances::total_balance(&4), 38);
-		});
-	}
-
-	#[test]
-	fn retracting_inactive_voter_should_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(4);
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(2), vec![true], 0, 0));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(6);
-			assert_ok!(Elections::present_winner(Origin::signed(4), 2, 20, 0));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(8);
-			assert_ok!(Elections::submit_candidacy(Origin::signed(5), 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(5), vec![true], 1, 0));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(10);
-			assert_ok!(Elections::present_winner(Origin::signed(4), 5, 50, 1));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			assert_ok!(Elections::reap_inactive_voter(Origin::signed(5),
-				(voter_ids().iter().position(|&i| i == 5).unwrap() as u32).into(),
-				2, (voter_ids().iter().position(|&i| i == 2).unwrap() as u32).into(),
-				2
-			));
-
-			assert_eq!(voter_ids(), vec![0, 5]);
-			assert_eq!(Elections::all_approvals_of(&2).len(), 0);
-			assert_eq!(Balances::total_balance(&2), 20);
-			assert_eq!(Balances::total_balance(&5), 50);
-		});
-	}
-
-	#[test]
-	fn presenting_for_double_election_should_not_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(4);
-			assert_eq!(Elections::submit_candidacy(Origin::signed(2), 0), Ok(()));
-			assert_ok!(Elections::set_approvals(Origin::signed(2), vec![true], 0, 0));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(6);
-			assert_ok!(Elections::present_winner(Origin::signed(4), 2, 20, 0));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(8);
-			// NOTE: This is now mandatory to disable the lock
-			assert_ok!(Elections::retract_voter(Origin::signed(2), 0));
-			assert_eq!(Elections::submit_candidacy(Origin::signed(2), 0), Ok(()));
-			assert_ok!(Elections::set_approvals(Origin::signed(2), vec![true], 1, 0));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(10);
-			assert_noop!(
-				Elections::present_winner(Origin::signed(4), 2, 20, 1),
-				"candidate must not form a duplicated member if elected"
-			);
-		});
-	}
-
-	#[test]
-	fn retracting_inactive_voter_with_other_candidates_in_slots_should_work() {
-		with_externalities(&mut ExtBuilder::default().voter_bond(2).build(), || {
-			System::set_block_number(4);
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(2), vec![true], 0, 0));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(6);
-			assert_ok!(Elections::present_winner(Origin::signed(4), 2, 20, 0));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(8);
-			assert_ok!(Elections::submit_candidacy(Origin::signed(5), 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(5), vec![true], 1, 0));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(10);
-			assert_ok!(Elections::present_winner(Origin::signed(4), 5, 50, 1));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(11);
-			assert_ok!(Elections::submit_candidacy(Origin::signed(1), 0));
-
-			assert_ok!(Elections::reap_inactive_voter(Origin::signed(5),
-				(voter_ids().iter().position(|&i| i == 5).unwrap() as u32).into(),
-				2, (voter_ids().iter().position(|&i| i == 2).unwrap() as u32).into(),
-				2
-			));
-
-			assert_eq!(voter_ids(), vec![0, 5]);
-			assert_eq!(Elections::all_approvals_of(&2).len(), 0);
-		});
-	}
-
-	#[test]
-	fn retracting_inactive_voter_with_bad_reporter_index_should_not_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(4);
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(2), vec![true], 0, 0));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(6);
-			assert_ok!(Elections::present_winner(Origin::signed(4), 2, 20, 0));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(8);
-			assert_ok!(Elections::submit_candidacy(Origin::signed(5), 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(5), vec![true], 1, 0));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(10);
-			assert_ok!(Elections::present_winner(Origin::signed(4), 5, 50, 1));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			assert_noop!(Elections::reap_inactive_voter(Origin::signed(2),
-				42,
-				2, (voter_ids().iter().position(|&i| i == 2).unwrap() as u32).into(),
-				2
-			), "invalid reporter index");
-		});
-	}
-
-	#[test]
-	fn retracting_inactive_voter_with_bad_target_index_should_not_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(4);
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(2), vec![true], 0, 0));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(6);
-			assert_ok!(Elections::present_winner(Origin::signed(4), 2, 20, 0));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(8);
-			assert_ok!(Elections::submit_candidacy(Origin::signed(5), 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(5), vec![true], 1, 0));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(10);
-			assert_ok!(Elections::present_winner(Origin::signed(4), 5, 50, 1));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			assert_noop!(Elections::reap_inactive_voter(Origin::signed(2),
-				(voter_ids().iter().position(|&i| i == 2).unwrap() as u32).into(),
-				2, 42,
-				2
-			), "invalid target index");
-		});
-	}
-
-	#[test]
-	fn attempting_to_retract_active_voter_should_slash_reporter() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(4);
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(3), 1));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(4), 2));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(5), 3));
-			assert_ok!(Elections::set_approvals(Origin::signed(2), vec![true, false, false, false], 0, 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(3), vec![false, true, false, false], 0, 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(4), vec![false, false, true, false], 0, 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(5), vec![false, false, false, true], 0, 0));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(6);
-			assert_ok!(Elections::present_winner(Origin::signed(4), 2, 20, 0));
-			assert_ok!(Elections::present_winner(Origin::signed(4), 3, 30, 0));
-			assert_ok!(Elections::present_winner(Origin::signed(4), 4, 40, 0));
-			assert_ok!(Elections::present_winner(Origin::signed(4), 5, 50, 0));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(8);
-			assert_ok!(Elections::set_desired_seats(Origin::ROOT, 3));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(10);
-			assert_ok!(Elections::present_winner(Origin::signed(4), 2, 20 + Elections::get_offset(20, 1), 1));
-			assert_ok!(Elections::present_winner(Origin::signed(4), 3, 30 + Elections::get_offset(30, 1), 1));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			assert_eq!(Elections::vote_index(), 2);
-			assert_eq!(<Test as Trait>::InactiveGracePeriod::get(), 1);
-			assert_eq!(<Test as Trait>::VotingPeriod::get(), 4);
-			assert_eq!(Elections::voter_info(4), Some(VoterInfo { last_win: 1, last_active: 0, stake: 40, pot: 0 }));
-
-			assert_ok!(Elections::reap_inactive_voter(Origin::signed(4),
-				(voter_ids().iter().position(|&i| i == 4).unwrap() as u32).into(),
-				2,
-				(voter_ids().iter().position(|&i| i == 2).unwrap() as u32).into(),
-				2
-			));
-
-			assert_eq!(voter_ids(), vec![2, 3, 0, 5]);
-			assert_eq!(Elections::all_approvals_of(&4).len(), 0);
-			assert_eq!(Balances::total_balance(&4), 40);
-		});
-	}
-
-	#[test]
-	fn attempting_to_retract_inactive_voter_by_nonvoter_should_not_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(4);
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(2), vec![true], 0, 0));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(6);
-			assert_ok!(Elections::present_winner(Origin::signed(4), 2, 20, 0));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(8);
-			assert_ok!(Elections::submit_candidacy(Origin::signed(5), 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(5), vec![true], 1, 0));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(10);
-			assert_ok!(Elections::present_winner(Origin::signed(4), 5, 50, 1));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			assert_noop!(Elections::reap_inactive_voter(Origin::signed(4),
-				0,
-				2, (voter_ids().iter().position(|&i| i == 2).unwrap() as u32).into(),
-				2
-			), "reporter must be a voter");
-		});
-	}
-
-	#[test]
-	fn presenting_loser_should_not_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(4);
-			assert_ok!(Elections::submit_candidacy(Origin::signed(1), 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(6), vec![true], 0, 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 1));
-			assert_ok!(Elections::set_approvals(Origin::signed(2), vec![false, true], 0, 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(3), 2));
-			assert_ok!(Elections::set_approvals(Origin::signed(3), vec![false, false, true], 0, 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(4), 3));
-			assert_ok!(Elections::set_approvals(Origin::signed(4), vec![false, false, false, true], 0, 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(5), 4));
-			assert_ok!(Elections::set_approvals(Origin::signed(5), vec![false, false, false, false, true], 0, 0));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(6);
-			assert_ok!(Elections::present_winner(Origin::signed(4), 1, 60, 0));
-			assert_ok!(Elections::present_winner(Origin::signed(4), 3, 30, 0));
-			assert_ok!(Elections::present_winner(Origin::signed(4), 4, 40, 0));
-			assert_ok!(Elections::present_winner(Origin::signed(4), 5, 50, 0));
-
-			assert_eq!(Elections::leaderboard(), Some(vec![
-				(30, 3),
-				(40, 4),
-				(50, 5),
-				(60, 1)
-			]));
-
-			assert_noop!(Elections::present_winner(Origin::signed(4), 2, 20, 0), "candidate not worthy of leaderboard");
-		});
-	}
-
-	#[test]
-	fn presenting_loser_first_should_not_matter() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(4);
-			assert_ok!(Elections::submit_candidacy(Origin::signed(1), 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(6), vec![true], 0, 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 1));
-			assert_ok!(Elections::set_approvals(Origin::signed(2), vec![false, true], 0, 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(3), 2));
-			assert_ok!(Elections::set_approvals(Origin::signed(3), vec![false, false, true], 0, 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(4), 3));
-			assert_ok!(Elections::set_approvals(Origin::signed(4), vec![false, false, false, true], 0, 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(5), 4));
-			assert_ok!(Elections::set_approvals(Origin::signed(5), vec![false, false, false, false, true], 0, 0));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(6);
-			assert_ok!(Elections::present_winner(Origin::signed(4), 2, 20, 0));
-			assert_ok!(Elections::present_winner(Origin::signed(4), 1, 60, 0));
-			assert_ok!(Elections::present_winner(Origin::signed(4), 3, 30, 0));
-			assert_ok!(Elections::present_winner(Origin::signed(4), 4, 40, 0));
-			assert_ok!(Elections::present_winner(Origin::signed(4), 5, 50, 0));
-
-			assert_eq!(Elections::leaderboard(), Some(vec![
-				(30, 3),
-				(40, 4),
-				(50, 5),
-				(60, 1)
-			]));
-		});
-	}
-
-	#[test]
-	fn present_outside_of_presentation_period_should_not_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(4);
-			assert!(!Elections::presentation_active());
-			assert_noop!(
-				Elections::present_winner(Origin::signed(5), 5, 1, 0),
-				"cannot present outside of presentation period"
-			);
-		});
-	}
-
-	#[test]
-	fn present_with_invalid_vote_index_should_not_work() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(4);
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(5), 1));
-			assert_ok!(Elections::set_approvals(Origin::signed(2), vec![true, false], 0, 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(5), vec![false, true], 0, 0));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(6);
-			assert_noop!(Elections::present_winner(Origin::signed(4), 2, 20, 1), "index not current");
-		});
-	}
-
-	#[test]
-	fn present_when_presenter_is_poor_should_not_work() {
-		let test_present = |p| {
-			with_externalities(&mut ExtBuilder::default()
-				.voting_fee(5)
-				.voter_bond(2)
-				.bad_presentation_punishment(p)
-				.build(),
-			|| {
-				System::set_block_number(4);
-				let _ = Balances::make_free_balance_be(&1, 15);
-				assert!(!Elections::presentation_active());
-
-				assert_ok!(Elections::submit_candidacy(Origin::signed(1), 0)); // -3
-				assert_eq!(Balances::free_balance(&1), 12);
-				assert_ok!(Elections::set_approvals(Origin::signed(1), vec![true], 0, 0)); // -2 -5
-				assert_ok!(Elections::end_block(System::block_number()));
-
-				System::set_block_number(6);
-				assert_eq!(Balances::free_balance(&1), 5);
-				assert_eq!(Balances::reserved_balance(&1), 5);
-				if p > 5 {
-					assert_noop!(Elections::present_winner(
-						Origin::signed(1), 1, 10, 0),
-						"presenter must have sufficient slashable funds"
-					);
-				} else {
-					assert_ok!(Elections::present_winner(Origin::signed(1), 1, 10, 0));
-				}
-			});
-		};
-		test_present(4);
-		test_present(6);
-	}
-
-	#[test]
-	fn invalid_present_tally_should_slash() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(4);
-			assert!(!Elections::presentation_active());
-			assert_eq!(Balances::total_balance(&4), 40);
-
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(5), 1));
-			assert_ok!(Elections::set_approvals(Origin::signed(2), vec![true, false], 0, 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(5), vec![false, true], 0, 0));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(6);
-			assert_err!(Elections::present_winner(Origin::signed(4), 2, 80, 0), "incorrect total");
-
-			assert_eq!(Balances::total_balance(&4), 38);
-		});
-	}
-
-	#[test]
-	fn runners_up_should_be_kept() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(4);
-			assert!(!Elections::presentation_active());
-
-			assert_ok!(Elections::submit_candidacy(Origin::signed(1), 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(6), vec![true], 0, 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 1));
-			assert_ok!(Elections::set_approvals(Origin::signed(2), vec![false, true], 0, 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(3), 2));
-			assert_ok!(Elections::set_approvals(Origin::signed(3), vec![false, false, true], 0, 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(4), 3));
-			assert_ok!(Elections::set_approvals(Origin::signed(4), vec![false, false, false, true], 0, 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(5), 4));
-			assert_ok!(Elections::set_approvals(Origin::signed(5), vec![false, false, false, false, true], 0, 0));
-
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(6);
-			assert!(Elections::presentation_active());
-			assert_ok!(Elections::present_winner(Origin::signed(4), 1, 60, 0));
-			// leaderboard length is the empty seats plus the carry count (i.e. 5 + 2), where those
-			// to be carried are the lowest and stored in lowest indices
-			assert_eq!(Elections::leaderboard(), Some(vec![
-				(0, 0),
-				(0, 0),
-				(0, 0),
-				(60, 1)
-			]));
-			assert_ok!(Elections::present_winner(Origin::signed(4), 3, 30, 0));
-			assert_ok!(Elections::present_winner(Origin::signed(4), 4, 40, 0));
-			assert_ok!(Elections::present_winner(Origin::signed(4), 5, 50, 0));
-			assert_eq!(Elections::leaderboard(), Some(vec![
-				(30, 3),
-				(40, 4),
-				(50, 5),
-				(60, 1)
-			]));
-
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			assert!(!Elections::presentation_active());
-			assert_eq!(Elections::members(), vec![(1, 11), (5, 11)]);
-
-			assert!(!Elections::is_a_candidate(&1));
-			assert!(!Elections::is_a_candidate(&5));
-			assert!(!Elections::is_a_candidate(&2));
-			assert!(Elections::is_a_candidate(&3));
-			assert!(Elections::is_a_candidate(&4));
-			assert_eq!(Elections::vote_index(), 1);
-			assert_eq!(Elections::voter_info(2), Some(VoterInfo { last_win: 0, last_active: 0, stake: 20, pot: 0 }));
-			assert_eq!(Elections::voter_info(3), Some(VoterInfo { last_win: 0, last_active: 0, stake: 30, pot: 0 }));
-			assert_eq!(Elections::voter_info(4), Some(VoterInfo { last_win: 0, last_active: 0, stake: 40, pot: 0 }));
-			assert_eq!(Elections::voter_info(5), Some(VoterInfo { last_win: 1, last_active: 0, stake: 50, pot: 0 }));
-			assert_eq!(Elections::voter_info(6), Some(VoterInfo { last_win: 1, last_active: 0, stake: 60, pot: 0 }));
-			assert_eq!(Elections::candidate_reg_info(3), Some((0, 2)));
-			assert_eq!(Elections::candidate_reg_info(4), Some((0, 3)));
-		});
-	}
-
-	#[test]
-	fn second_tally_should_use_runners_up() {
-		with_externalities(&mut ExtBuilder::default().build(), || {
-			System::set_block_number(4);
-			assert_ok!(Elections::submit_candidacy(Origin::signed(1), 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(6), vec![true], 0, 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 1));
-			assert_ok!(Elections::set_approvals(Origin::signed(2), vec![false, true], 0, 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(3), 2));
-			assert_ok!(Elections::set_approvals(Origin::signed(3), vec![false, false, true], 0, 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(4), 3));
-			assert_ok!(Elections::set_approvals(Origin::signed(4), vec![false, false, false, true], 0, 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(5), 4));
-			assert_ok!(Elections::set_approvals(Origin::signed(5), vec![false, false, false, false, true], 0, 0));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(6);
-			assert_ok!(Elections::present_winner(Origin::signed(4), 1, 60, 0));
-			assert_ok!(Elections::present_winner(Origin::signed(4), 3, 30, 0));
-			assert_ok!(Elections::present_winner(Origin::signed(4), 4, 40, 0));
-			assert_ok!(Elections::present_winner(Origin::signed(4), 5, 50, 0));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(8);
-			assert_ok!(Elections::set_approvals(Origin::signed(6), vec![false, false, true, false], 1, 0));
-			assert_ok!(Elections::set_desired_seats(Origin::ROOT, 3));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(10);
-			assert_ok!(Elections::present_winner(Origin::signed(4), 3, 30 + Elections::get_offset(30, 1) + 60, 1));
-			assert_ok!(Elections::present_winner(Origin::signed(4), 4, 40 + Elections::get_offset(40, 1), 1));
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			assert!(!Elections::presentation_active());
-			assert_eq!(Elections::members(), vec![(1, 11), (5, 11), (3, 15)]);
-
-			assert!(!Elections::is_a_candidate(&1));
-			assert!(!Elections::is_a_candidate(&2));
-			assert!(!Elections::is_a_candidate(&3));
-			assert!(!Elections::is_a_candidate(&5));
-			assert!(Elections::is_a_candidate(&4));
-			assert_eq!(Elections::vote_index(), 2);
-			assert_eq!(Elections::voter_info(2), Some( VoterInfo { last_win: 0, last_active: 0, stake: 20, pot: 0}));
-			assert_eq!(Elections::voter_info(3), Some( VoterInfo { last_win: 2, last_active: 0, stake: 30, pot: 0}));
-			assert_eq!(Elections::voter_info(4), Some( VoterInfo { last_win: 0, last_active: 0, stake: 40, pot: 0}));
-			assert_eq!(Elections::voter_info(5), Some( VoterInfo { last_win: 1, last_active: 0, stake: 50, pot: 0}));
-			assert_eq!(
-				Elections::voter_info(6),
-				Some(VoterInfo { last_win: 2, last_active: 1, stake: 60, pot: 0})
-			);
-
-			assert_eq!(Elections::candidate_reg_info(4), Some((0, 3)));
-		});
-	}
-
-	#[test]
-	fn loser_candidates_bond_gets_slashed() {
-		with_externalities(&mut ExtBuilder::default().desired_seats(1).build(), || {
-			System::set_block_number(4);
-			assert!(!Elections::presentation_active());
-
-			assert_ok!(Elections::submit_candidacy(Origin::signed(1), 0));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(2), 1));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(3), 2));
-			assert_ok!(Elections::submit_candidacy(Origin::signed(4), 3));
-
-			assert_eq!(balances(&2), (17, 3));
-
-			assert_ok!(Elections::set_approvals(Origin::signed(5), vec![true], 0, 0));
-			assert_ok!(Elections::set_approvals(Origin::signed(1), vec![false, true, true, true], 0, 0));
-
-			assert_ok!(Elections::end_block(System::block_number()));
-
-			System::set_block_number(6);
-			assert!(Elections::presentation_active());
-			assert_eq!(Elections::present_winner(Origin::signed(4), 4, 10, 0), Ok(()));
-			assert_eq!(Elections::present_winner(Origin::signed(3), 3, 10, 0), Ok(()));
-			assert_eq!(Elections::present_winner(Origin::signed(2), 2, 10, 0), Ok(()));
-			assert_eq!(Elections::present_winner(Origin::signed(1), 1, 50, 0), Ok(()));
-
-
-			// winner + carry
-			assert_eq!(Elections::leaderboard(), Some(vec![(10, 3), (10, 4), (50, 1)]));
-			assert_ok!(Elections::end_block(System::block_number()));
-			assert!(!Elections::presentation_active());
-			assert_eq!(Elections::members(), vec![(1, 11)]);
-
-			// account 2 is not a runner up or in leaderboard.
-			assert_eq!(balances(&2), (17, 0));
-		});
 	}
 }
