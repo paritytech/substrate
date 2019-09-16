@@ -371,7 +371,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			chain.clone(),
 			&info,
 			finality_proof_request_builder,
-			block_announce_validator);
+			block_announce_validator,
+		);
 		let (peerset, peerset_handle) = peerset::Peerset::from_config(peerset_config);
 		let versions = &((MIN_VERSION as u8)..=(CURRENT_VERSION as u8)).collect::<Vec<u8>>();
 		let behaviour = LegacyProto::new(protocol_id, versions, peerset);
