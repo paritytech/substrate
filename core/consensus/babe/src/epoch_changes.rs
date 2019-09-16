@@ -26,6 +26,42 @@ use parking_lot::{Mutex, MutexGuard};
 use sr_primitives::traits::{Block as BlockT, NumberFor};
 use codec::{Encode, Decode};
 use client::error::Error as ClientError;
+use client::utils as client_utils;
+use client::blockchain::HeaderBackend;
+use primitives::H256;
+
+/// A builder for `is_descendent_of` functions.
+pub trait IsDescendentOfBuilder<'a, Block: BlockT> {
+	/// The error returned by the function.
+	type Error;
+	/// A function that can tell you if the second parameter is a descendent of
+	/// the first.
+	type IsDescendentOf: Fn(&Block::Hash, &Block::Hash) -> Result<bool, Self::Error> + 'a;
+
+	/// Build an `is_descendent_of` function.
+	///
+	/// The `current` parameter can be `Some` with the details a fresh block whose
+	/// details aren't yet stored, but its parent is.
+	///
+	/// The format of `current` when `Some` is `(current, current_parent)`.
+	fn build_is_descendent_of(&self, current: Option<(&'a Block::Hash, &'a Block::Hash)>)
+		-> Self::IsDescendentOf;
+}
+
+// TODO: relying on Hash = H256 is awful.
+// https://github.com/paritytech/substrate/issues/3624
+impl<'a, Block: BlockT<Hash=H256>, T> IsDescendentOfBuilder<'a, Block> for &'a T
+	where T: HeaderBackend<Block>
+{
+	type Error = ClientError;
+	type IsDescendentOf = Box<dyn Fn(&H256, &H256) -> Result<bool, ClientError> + 'a>;
+
+	fn build_is_descendent_of(&self, current: Option<(&'a H256, &'a H256)>)
+		-> Self::IsDescendentOf
+	{
+		Box::new(client_utils::is_descendent_of(*self, current))
+	}
+}
 
 /// Tree of all epoch changes across all *seen* forks. Data stored in tree is
 /// the hash and block number of the block signaling the epoch change, and the
@@ -42,14 +78,20 @@ impl<Block: BlockT> EpochChanges<Block> {
 	}
 
 	/// Prune out finalized epochs, except for the ancestor of the finalized block.
-	pub fn prune_finalized(&mut self, hash: &Block::Hash, number: NumberFor<Block>) {
+	pub fn prune_finalized<'a>(
+		&mut self,
+		descendent_of_builder: impl IsDescendentOfBuilder<'a, Block>,
+		hash: &Block::Hash,
+		number: NumberFor<Block>,
+	) {
 		// TODO: needs "is-descendent-of"
 		unimplemented!()
 	}
 
 	/// Finds the epoch for a child of the given block, assuming the given slot number.
-	pub fn epoch_for_child_of(
+	pub fn epoch_for_child_of<'a>(
 		&mut self,
+		descendent_of_builder: impl IsDescendentOfBuilder<'a, Block>,
 		parent_hash: &Block::Hash,
 		parent_number: NumberFor<Block>,
 		slot_number: SlotNumber,
@@ -82,8 +124,9 @@ impl<Block: BlockT> EpochChanges<Block> {
 	}
 
 	/// Import a new epoch-change, signalled at the given block.
-	pub fn import(
+	pub fn import<'a>(
 		&mut self,
+		descendent_of_builder: impl IsDescendentOfBuilder<'a, Block>,
 		hash: Block::Hash,
 		number: NumberFor<Block>,
 		epoch: Epoch,
