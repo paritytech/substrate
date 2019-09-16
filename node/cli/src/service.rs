@@ -156,7 +156,7 @@ macro_rules! new_full {
 				sync_oracle: service.network(),
 				inherent_data_providers: inherent_data_providers.clone(),
 				force_authoring: force_authoring,
-				time_source: babe_link,
+				babe_link,
 			};
 
 			let babe = babe::start_babe(babe_config)?;

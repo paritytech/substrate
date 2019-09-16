@@ -102,10 +102,15 @@ pub enum RawBabePreDigest {
 	/// A secondary deterministic slot assignment.
 	#[codec(index = "2")]
 	Secondary {
-		/// Authority index
-		authority_index: AuthorityIndex,
 		/// Slot number
 		slot_number: SlotNumber,
+		/// Authority index
+		///
+		/// This is not strictly-speaking necessary, since the secondary slots
+		/// are assigned based on slot number and epoch randomness. But including
+		/// it makes things easier for higher-level users of the chain data to
+		/// be aware of the author of a secondary-slot block.
+		authority_index: AuthorityIndex,
 	},
 }
 

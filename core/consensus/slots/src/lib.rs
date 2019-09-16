@@ -357,7 +357,8 @@ impl SlotData for u64 {
 }
 
 /// A slot duration. Create with `get_or_compute`.
-// The internal member should stay private here.
+// The internal member should stay private here to maintain invariants of
+// `get_or_compute`.
 #[derive(Clone, Copy, Debug, Encode, Decode, Hash, PartialOrd, Ord, PartialEq, Eq)]
 pub struct SlotDuration<T>(T);
 
