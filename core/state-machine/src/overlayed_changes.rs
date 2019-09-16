@@ -550,7 +550,7 @@ impl OverlayedChanges {
 	pub fn top_count_keyvalue_pair(&self) -> usize {
 		let mut result = 0;
 		for (_, v) in self.changes.top.iter() {
-			result += v.internal_item_counts()
+			result += v.len()
 		}
 		result
 	}

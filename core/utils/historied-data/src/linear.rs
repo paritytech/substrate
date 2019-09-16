@@ -87,14 +87,15 @@ impl<V> History<V> {
 	}
 
 	#[cfg(any(test, feature = "test"))]
-	/// Debugging function for test and fuzzing.
-	pub fn internal_item_counts(&self) -> usize {
+	pub fn len(&self) -> usize {
 		self.0.len()
 	}
 
+	#[cfg(not(any(test, feature = "test")))]
 	fn len(&self) -> usize {
 		self.0.len()
 	}
+
 
 	fn truncate(&mut self, index: usize) {
 		self.0.truncate(index)
