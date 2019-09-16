@@ -285,6 +285,7 @@ impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I
 			parent.number().clone(),
 			slot_number,
 		)
+			.map_err(|e| ConsensusError::ChainLookup(format!("{:?}", e)))?
 			.ok_or(consensus_common::Error::InvalidAuthoritiesSet)
 	}
 
@@ -796,7 +797,9 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 				&parent_hash,
 				parent_header.number().clone(),
 				pre_digest.slot_number(),
-			).ok_or_else(|| format!("Could not fetch epoch at {:?}", parent_hash))?
+			)
+				.map_err(|e| format!("{:?}", e))?
+				.ok_or_else(|| format!("Could not fetch epoch at {:?}", parent_hash))?
 		};
 
 		// load parent weight, special-casing the genesis.
@@ -1207,6 +1210,9 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 				*parent_header.number(),
 				slot_number,
 			)
+				.map_err(|e: fork_tree::Error<client::error::Error>| ConsensusError::ChainLookup(
+					format!("Could not look up epoch: {:?}", e)
+				))?
 				.ok_or_else(|| ConsensusError::ClientImport(
 					format!("Block {} is not valid under any epoch.", hash)
 				))?;
@@ -1378,11 +1384,12 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
 		.for_each(move |notification| {
 			// TODO: supply is-descendent-of and maybe write to disk _now_
 			// as opposed to waiting for the next epoch?
-			epoch_changes.lock().prune_finalized(
-				&*client,
-				&notification.hash,
-				*notification.header.number(),
-			);
+			// also reinstate :)
+			// epoch_changes.lock().prune_finalized(
+			// 	&*client,
+			// 	&notification.hash,
+			// 	*notification.header.number(),
+			// );
 
 			Ok(())
 		});

@@ -1873,8 +1873,9 @@ where
 /// Utility methods for the client.
 pub mod utils {
 	use super::*;
-	use crate::{backend::Backend, blockchain, error};
+	use crate::{blockchain, error};
 	use primitives::H256;
+	use std::borrow::Borrow;
 
 	/// Returns a function for checking block ancestry, the returned function will
 	/// return `true` if the given hash (second parameter) is a descendent of the
@@ -1882,14 +1883,16 @@ pub mod utils {
 	/// represent the current block `hash` and its `parent hash`, if given the
 	/// function that's returned will assume that `hash` isn't part of the local DB
 	/// yet, and all searches in the DB will instead reference the parent.
-	pub fn is_descendent_of<'a, Block: BlockT<Hash=H256>, T>(
+	pub fn is_descendent_of<'a, Block: BlockT<Hash=H256>, T, H: Borrow<H256> + 'a>(
 		client: &'a T,
-		current: Option<(&'a H256, &'a H256)>,
+		current: Option<(H, H)>,
 	) -> impl Fn(&H256, &H256) -> Result<bool, error::Error> + 'a
 		where T: ChainHeaderBackend<Block>,
 	{
 		move |base, hash| {
 			if base == hash { return Ok(false); }
+
+			let current = current.as_ref().map(|(c, p)| (c.borrow(), p.borrow()));
 
 			let mut hash = hash;
 			if let Some((current_hash, current_parent_hash)) = current {

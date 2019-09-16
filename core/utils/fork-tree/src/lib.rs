@@ -153,6 +153,8 @@ impl<H, N, V> ForkTree<H, N, V> where
 	/// should return `true` if the second hash (target) is a descendent of the
 	/// first hash (base). This method assumes that nodes in the same branch are
 	/// imported in order.
+	///
+	/// Returns `true` if the imported node is a root.
 	pub fn import<F, E>(
 		&mut self,
 		mut hash: H,
