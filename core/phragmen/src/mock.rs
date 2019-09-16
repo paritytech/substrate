@@ -18,7 +18,7 @@
 
 #![cfg(test)]
 
-use crate::{elect, PhragmenResult};
+use crate::{elect, PhragmenResult, PhragmenAssignment};
 use sr_primitives::{
 	assert_eq_error_rate, Perbill,
 	traits::{Convert, Member, SaturatedConversion}
@@ -345,6 +345,14 @@ pub(crate) fn create_stake_of(stakes: &[(AccountId, Balance)])
 	Box::new(stake_of)
 }
 
+
+pub fn check_assignments(assignments: Vec<(AccountId, Vec<PhragmenAssignment<AccountId>>)>) {
+	for (_, a) in assignments {
+		let sum: u32 = a.iter().map(|(_, p)| p.deconstruct()).sum();
+		assert_eq_error_rate!(sum, Perbill::accuracy(), 5);
+	}
+}
+
 pub(crate) fn run_and_compare(
 	candidates: Vec<AccountId>,
 	voters: Vec<(AccountId, Vec<AccountId>)>,
@@ -392,6 +400,8 @@ pub(crate) fn run_and_compare(
 			panic!("nominator mismatch. This should never happen.")
 		}
 	}
+
+	check_assignments(assignments);
 }
 
 pub(crate) fn build_support_map<FS>(

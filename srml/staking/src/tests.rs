@@ -1581,26 +1581,6 @@ fn new_era_elects_correct_number_of_validators() {
 	})
 }
 
-
-#[test]
-fn phragmen_score_should_be_accurate_on_large_stakes() {
-	with_externalities(&mut ExtBuilder::default()
-		.nominate(false)
-		.build(),
-	|| {
-		bond_validator(2, u64::max_value()-1);
-		bond_validator(4, u64::max_value()-3);
-		bond_validator(6, u64::max_value()-2);
-		bond_validator(8, u64::max_value()-4);
-
-		start_era(1);
-
-		assert_eq_uvec!(validator_controllers(), vec![6, 2]);
-		check_exposure_all();
-		check_nominator_all();
-	})
-}
-
 #[test]
 fn phragmen_should_not_overflow_validators() {
 	with_externalities(&mut ExtBuilder::default()
@@ -1671,84 +1651,6 @@ fn phragmen_should_not_overflow_ultimate() {
 		// Saturate.
 		assert_eq!(Staking::stakers(3).total, u64::max_value());
 		assert_eq!(Staking::stakers(5).total, u64::max_value());
-	})
-}
-
-
-#[test]
-fn phragmen_large_scale_test() {
-	with_externalities(&mut ExtBuilder::default()
-		.nominate(false)
-		.minimum_validator_count(1)
-		.validator_count(20)
-		.build(),
-	|| {
-		let _ = Staking::chill(Origin::signed(10));
-		let _ = Staking::chill(Origin::signed(20));
-		let _ = Staking::chill(Origin::signed(30));
-		let prefix = 200;
-
-		bond_validator(prefix + 2,  1);
-		bond_validator(prefix + 4,  100);
-		bond_validator(prefix + 6,  1000000);
-		bond_validator(prefix + 8,  100000000001000);
-		bond_validator(prefix + 10, 100000000002000);
-		bond_validator(prefix + 12, 100000000003000);
-		bond_validator(prefix + 14, 400000000000000);
-		bond_validator(prefix + 16, 400000000001000);
-		bond_validator(prefix + 18, 18000000000000000);
-		bond_validator(prefix + 20, 20000000000000000);
-		bond_validator(prefix + 22, 500000000000100000);
-		bond_validator(prefix + 24, 500000000000200000);
-
-		bond_nominator(50, 990000000000000000, vec![
-			prefix + 3,
-			prefix + 5,
-			prefix + 7,
-			prefix + 9,
-			prefix + 11,
-			prefix + 13,
-			prefix + 15,
-			prefix + 17,
-			prefix + 19,
-			prefix + 21,
-			prefix + 23,
-			prefix + 25]
-		);
-
-		start_era(1);
-
-		check_exposure_all();
-		check_nominator_all();
-	})
-}
-
-#[test]
-fn phragmen_large_scale_test_2() {
-	with_externalities(&mut ExtBuilder::default()
-		.nominate(false)
-		.minimum_validator_count(1)
-		.validator_count(2)
-		.build(),
-	|| {
-		let _ = Staking::chill(Origin::signed(10));
-		let _ = Staking::chill(Origin::signed(20));
-		let nom_budget: u64 = 1_000_000_000_000_000_000;
-		let c_budget: u64 = 4_000_000;
-
-		bond_validator(2, c_budget as u64);
-		bond_validator(4, c_budget as u64);
-
-		bond_nominator(50, nom_budget, vec![3, 5]);
-
-		start_era(1);
-
-		// Each exposure => total == own + sum(others)
-		check_exposure_all();
-		check_nominator_all();
-
-		assert_total_expo(3, nom_budget / 2 + c_budget);
-		assert_total_expo(5, nom_budget / 2 + c_budget);
 	})
 }
 
