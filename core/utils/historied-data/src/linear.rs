@@ -26,17 +26,27 @@ use crate::State as TransactionState;
 use rstd::vec::Vec;
 use rstd::vec;
 
+/// An entry at a given history height.
+#[derive(Debug, Clone)]
+#[cfg_attr(any(test, feature = "test"), derive(PartialEq))]
+pub struct HistoriedValue<V> {
+	/// The stored value.
+	pub value: V,
+	/// The moment in history when the value got set.
+	pub index: usize,
+}
+
 /// Array like buffer for in memory storage.
 /// By in memory we expect that this will
 /// not required persistence and is not serialized.
 #[cfg(not(feature = "std"))]
-type MemoryOnly<V> = Vec<(V, usize)>;
+type MemoryOnly<V> = Vec<HistoriedValue<V>>;
 
 /// Array like buffer for in memory storage.
 /// By in memory we expect that this will
 /// not required persistence and is not serialized.
 #[cfg(feature = "std")]
-type MemoryOnly<V> = smallvec::SmallVec<[(V, usize); ALLOCATED_HISTORY]>;
+type MemoryOnly<V> = smallvec::SmallVec<[HistoriedValue<V>; ALLOCATED_HISTORY]>;
 
 /// Size of preallocated history per element.
 /// Currently at two for committed and prospective only.
@@ -62,16 +72,16 @@ impl<V> Default for History<V> {
 // buffer specific functions.
 impl<V> History<V> {
 
-	fn get_state(&self, index: usize) -> (&V, usize) {
-		(&self.0[index].0, self.0[index].1)
+	fn get_state(&self, index: usize) -> &HistoriedValue<V> {
+		&self.0[index]
 	}
 
 	#[cfg(any(test, feature = "test"))]
 	/// Create an history from an existing history.
-	pub fn from_iter(input: impl IntoIterator<Item = (V, usize)>) -> Self {
+	pub fn from_iter(input: impl IntoIterator<Item = HistoriedValue<V>>) -> Self {
 		let mut history = History::default();
 		for v in input {
-			history.push_unchecked(v.0, v.1);
+			history.push_unchecked(v);
 		}
 		history
 	}
@@ -90,7 +100,7 @@ impl<V> History<V> {
 		self.0.truncate(index)
 	}
 
-	fn pop(&mut self) -> Option<(V, usize)> {
+	fn pop(&mut self) -> Option<HistoriedValue<V>> {
 		self.0.pop()
 	}
 
@@ -103,8 +113,8 @@ impl<V> History<V> {
 	/// This method shall only be call after a `get_mut` where
 	/// the returned index indicate that a `set` will result
 	/// in appending a value.
-	pub fn push_unchecked(&mut self, value: V, history_index: usize) {
-		self.0.push((value, history_index))
+	pub fn push_unchecked(&mut self, value: HistoriedValue<V>) {
+		self.0.push(value)
 	}
 
 	/// Set a value, it uses a state history as parameter.
@@ -117,11 +127,14 @@ impl<V> History<V> {
 				return;
 			}
 		}
-		self.push_unchecked(value, history.len() - 1);
+		self.push_unchecked(HistoriedValue{
+			value,
+			index: history.len() - 1,
+		});
 	}
 
 	fn mut_ref(&mut self, index: usize) -> &mut V {
-		&mut self.0[index].0
+		&mut self.0[index].value
 	}
 
 }
@@ -260,14 +273,14 @@ impl<V> History<V> {
 		debug_assert!(history.len() >= index);
 		while index > 0 {
 			index -= 1;
-			let (v, history_index) = self.get_state(index);
-			match history[history_index] {
+			let HistoriedValue { value, index: history_index } = self.get_state(index);
+			match history[*history_index] {
 				TransactionState::Dropped => (),
 				TransactionState::Pending
 				| TransactionState::TxPending
 				| TransactionState::Prospective
 				| TransactionState::Committed =>
-					return Some(v),
+					return Some(value),
 			}
 		}
 		None
@@ -282,7 +295,7 @@ impl<V> History<V> {
 		debug_assert!(history.len() >= index);
 		while index > 0 {
 			index -= 1;
-			let history_index = self.get_state(index).1;
+			let history_index = self.get_state(index).index;
 			match history[history_index] {
 				TransactionState::Dropped => (),
 				TransactionState::Pending
@@ -290,7 +303,7 @@ impl<V> History<V> {
 				| TransactionState::Prospective
 				| TransactionState::Committed => {
 					self.truncate(index + 1);
-					return self.pop().map(|v| v.0);
+					return self.pop().map(|v| v.value);
 				},
 			}
 		}
@@ -308,12 +321,12 @@ impl<V> History<V> {
 		debug_assert!(history.len() >= index);
 		while index > 0 {
 			index -= 1;
-			let (v, history_index) = self.get_state(index);
-			match history[history_index] {
+			let HistoriedValue { value, index: history_index } = self.get_state(index);
+			match history[*history_index] {
 				TransactionState::Pending
 				| TransactionState::TxPending
 				| TransactionState::Prospective =>
-					return Some(v),
+					return Some(value),
 				TransactionState::Committed
 				| TransactionState::Dropped => (),
 			}
@@ -331,9 +344,9 @@ impl<V> History<V> {
 		debug_assert!(history.len() >= index);
 		while index > 0 {
 			index -= 1;
-			let (v, history_index) = self.get_state(index);
-			match history[history_index] {
-				TransactionState::Committed => return Some(v),
+			let HistoriedValue { value, index: history_index } = self.get_state(index);
+			match history[*history_index] {
+				TransactionState::Committed => return Some(value),
 				TransactionState::Pending
 				| TransactionState::TxPending
 				| TransactionState::Prospective
@@ -355,11 +368,11 @@ impl<V> History<V> {
 		debug_assert!(history.len() >= index);
 		while index > 0 {
 			index -= 1;
-			let history_index = self.get_state(index).1;
+			let history_index = self.get_state(index).index;
 			match history[history_index] {
 				TransactionState::Committed => {
 					self.truncate(index + 1);
-					return self.pop().map(|v| v.0);
+					return self.pop().map(|v| v.value);
 				},
 				TransactionState::Pending
 				| TransactionState::TxPending
@@ -385,7 +398,7 @@ impl<V> History<V> {
 		debug_assert!(history.len() >= index);
 		while index > 0 {
 			index -= 1;
-			let history_index = self.get_state(index).1;
+			let history_index = self.get_state(index).index;
 			match history[history_index] {
 				TransactionState::Committed => {
 					// here we could gc all preceding values but that is additional cost
@@ -429,7 +442,7 @@ impl<V> History<V> {
 			debug_assert!(history.len() >= index);
 			while index > 0 {
 				index -= 1;
-				let history_index = self.get_state(index).1;
+				let history_index = self.get_state(index).index;
 				match history[history_index] {
 					TransactionState::Committed => {
 						for _ in 0..index {

@@ -22,7 +22,7 @@ use std::collections::{HashMap, BTreeSet};
 use codec::Decode;
 use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
 use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
-use historied_data::linear::{States, History};
+use historied_data::linear::{States, History, HistoriedValue};
 use historied_data::State as TransactionState;
 use historied_data::DEFAULT_GC_CONF;
 
@@ -78,9 +78,9 @@ impl FromIterator<(Vec<u8>, OverlayedValue)> for OverlayedChangeSet {
 	fn from_iter<T: IntoIterator<Item = (Vec<u8>, OverlayedValue)>>(iter: T) -> Self {
 
 		let mut result = OverlayedChangeSet::default();
-		result.top = iter.into_iter().map(|(k, v)| (k, {
+		result.top = iter.into_iter().map(|(k, value)| (k, {
 			let mut history = History::default();
-			history.push_unchecked(v, 0);
+			history.push_unchecked(HistoriedValue { value, index: 0 });
 			history
 		})).collect();
 		result
@@ -123,20 +123,26 @@ fn set_with_extrinsic_inner_overlayed_value(
 			let mut extrinsics = current.extrinsics.clone();
 			extrinsics.get_or_insert_with(Default::default)
 				.insert(extrinsic_index);
-			h_value.push_unchecked(OverlayedValue {
-				value,
-				extrinsics,
-			}, state);
+			h_value.push_unchecked(HistoriedValue {
+				value: OverlayedValue {
+					value,
+					extrinsics,
+				},
+				index: state,
+			});
 		}
 	} else {
 		let mut extrinsics: Option<BTreeSet<u32>> = None;
 		extrinsics.get_or_insert_with(Default::default)
 			.insert(extrinsic_index);
 
-		h_value.push_unchecked(OverlayedValue {
-			 value,
-			 extrinsics,
-		}, state);
+		h_value.push_unchecked(HistoriedValue {
+			value: OverlayedValue {
+				value,
+				extrinsics,
+			},
+			index: state,
+		});
 
 	}
 }
