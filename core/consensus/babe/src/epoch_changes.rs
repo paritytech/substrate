@@ -80,6 +80,16 @@ impl<Block: BlockT> EpochChanges<Block> {
 			.and_then(|n| n)
 			.map(|n| n.data.clone())
 	}
+
+	/// Import a new epoch-change, signalled at the given block.
+	pub fn import(
+		&mut self,
+		hash: Block::Hash,
+		number: NumberFor<Block>,
+		epoch: Epoch,
+	) {
+		unimplemented!()
+	}
 }
 
 /// A shared epoch changes tree.
