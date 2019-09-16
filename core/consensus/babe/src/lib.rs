@@ -69,12 +69,12 @@ use consensus_common::import_queue::{
 use consensus_common::well_known_cache_keys::Id as CacheKeyId;
 use sr_primitives::{generic::{BlockId, OpaqueDigestItemId}, Justification};
 use sr_primitives::traits::{
-	Block as BlockT, Header, DigestItemFor, NumberFor, ProvideRuntimeApi,
+	Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi,
 	Zero,
 };
 use keystore::KeyStorePtr;
-use codec::{Decode, Encode};
-use parking_lot::{Mutex, MutexGuard};
+use codec::Encode;
+use parking_lot::Mutex;
 use primitives::{blake2_256, Blake2Hasher, H256, Pair, Public, U256};
 use merlin::Transcript;
 use inherents::{InherentDataProviders, InherentData};
@@ -109,7 +109,7 @@ use client::{
 use slots::{CheckedHeader, check_equivocation};
 use futures::prelude::*;
 use futures01::Stream as _;
-use log::{error, warn, debug, info, trace};
+use log::{warn, debug, info, trace};
 
 use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible};
 
@@ -294,7 +294,7 @@ impl<H, B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E
 
 	fn claim_slot(
 		&self,
-		header: &B::Header,
+		_parent_header: &B::Header,
 		slot_number: u64,
 		epoch_data: &Epoch,
 	) -> Option<Self::Claim> {
@@ -447,7 +447,6 @@ struct VerificationParams<'a, B: 'a + BlockT> {
 struct VerifiedHeaderInfo<B: BlockT> {
 	pre_digest: DigestItemFor<B>,
 	seal: DigestItemFor<B>,
-	weight: BabeBlockWeight,
 }
 
 /// Check a header has been signed by the right key. If the slot is too far in
@@ -557,7 +556,6 @@ fn check_header<B: BlockT + Sized, C: AuxStore>(
 	let info = VerifiedHeaderInfo {
 		pre_digest: CompatibleDigestItem::babe_pre_digest(pre_digest),
 		seal,
-		weight,
 	};
 	Ok(CheckedHeader::Checked(header, info))
 }
@@ -671,16 +669,15 @@ impl<Block: BlockT> SlotCompatible for BabeLink<Block> {
 }
 
 /// A verifier for Babe blocks.
-pub struct BabeVerifier<B, E, Block: BlockT, RA, PRA, T> {
+pub struct BabeVerifier<B, E, Block: BlockT, RA, PRA> {
 	client: Arc<Client<B, E, Block, RA>>,
 	api: Arc<PRA>,
 	inherent_data_providers: inherents::InherentDataProviders,
 	config: Config,
 	babe_link: BabeLink<Block>,
-	transaction_pool: Option<Arc<T>>,
 }
 
-impl<B, E, Block: BlockT, RA, PRA, T> BabeVerifier<B, E, Block, RA, PRA, T> {
+impl<B, E, Block: BlockT, RA, PRA> BabeVerifier<B, E, Block, RA, PRA> {
 	fn check_inherents(
 		&self,
 		block: Block,
@@ -750,14 +747,13 @@ fn median_algorithm(
 	}
 }
 
-impl<B, E, Block, RA, PRA, T> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA, T> where
+impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA> where
 	Block: BlockT<Hash=H256>,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 	RA: Send + Sync,
 	PRA: ProvideRuntimeApi + Send + Sync + AuxStore + ProvideCache<Block>,
 	PRA::Api: BlockBuilderApi<Block> + BabeApi<Block>,
-	T: Send + Sync + 'static,
 {
 	fn verify(
 		&mut self,
@@ -1329,7 +1325,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 /// authoring when importing its own blocks, and a future that must be run to
 /// completion and is responsible for listening to finality notifications and
 /// pruning the epoch changes tree.
-pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA, T>(
+pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
 	config: Config,
 	block_import: I,
 	justification_import: Option<BoxJustificationImport<Block>>,
@@ -1337,7 +1333,6 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA, T>(
 	client: Arc<Client<B, E, Block, RA>>,
 	api: Arc<PRA>,
 	inherent_data_providers: InherentDataProviders,
-	transaction_pool: Option<Arc<T>>,
 ) -> ClientResult<(
 	BabeImportQueue<Block>,
 	BabeLink<Block>,
@@ -1351,7 +1346,6 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA, T>(
 	RA: Send + Sync + 'static,
 	PRA: ProvideRuntimeApi + ProvideCache<Block> + Send + Sync + AuxStore + 'static,
 	PRA::Api: BlockBuilderApi<Block> + BabeApi<Block>,
-	T: Send + Sync + 'static,
 {
 	register_babe_inherent_data_provider(&inherent_data_providers, config.slot_duration)?;
 
@@ -1366,7 +1360,6 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA, T>(
 		inherent_data_providers,
 		babe_link: babe_link.clone(),
 		config: config.clone(),
-		transaction_pool,
 	};
 
 	let block_import = BabeBlockImport::new(
