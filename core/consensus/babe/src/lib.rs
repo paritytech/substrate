@@ -188,59 +188,59 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC> {
 	pub babe_link: BabeLink<B>,
 }
 
-// /// Start the babe worker. The returned future should be run in a tokio runtime.
-// pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
-// 	config,
-// 	client,
-// 	keystore,
-// 	select_chain,
-// 	block_import,
-// 	env,
-// 	sync_oracle,
-// 	inherent_data_providers,
-// 	force_authoring,
-// 	babe_link,
-// }: BabeParams<B, C, E, I, SO, SC>) -> Result<
-// 	impl futures01::Future<Item=(), Error=()>,
-// 	consensus_common::Error,
-// > where
-// 	B: BlockT<Header=H>,
-// 	C: ProvideRuntimeApi + ProvideCache<B> + ProvideUncles<B> + Send + Sync + 'static,
-// 	C::Api: BabeApi<B>,
-// 	SC: SelectChain<B> + 'static,
-// 	E: Environment<B, Error=Error> + Send + Sync,
-// 	E::Proposer: Proposer<B, Error=Error>,
-// 	<E::Proposer as Proposer<B>>::Create: Unpin + Send + 'static,
-// 	H: Header<Hash=B::Hash>,
-// 	I: BlockImport<B> + Send + Sync + 'static,
-// 	Error: std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
-// 	SO: SyncOracle + Send + Sync + Clone,
-// {
-// 	let worker = BabeWorker {
-// 		client: client.clone(),
-// 		block_import: Arc::new(Mutex::new(block_import)),
-// 		env,
-// 		sync_oracle: sync_oracle.clone(),
-// 		force_authoring,
-// 		keystore,
-// 		epoch_changes: babe_link.epoch_changes.clone(),
-//		config: config.clone(),
-// 	};
-// 	register_babe_inherent_data_provider(&inherent_data_providers, config.0.slot_duration())?;
-// 	uncles::register_uncles_inherent_data_provider(
-// 		client.clone(),
-// 		select_chain.clone(),
-// 		&inherent_data_providers,
-// 	)?;
-// 	Ok(slots::start_slot_worker(
-// 		config.0,
-// 		select_chain,
-// 		worker,
-// 		sync_oracle,
-// 		inherent_data_providers,
-// 		babe_link,
-// 	).map(|()| Ok::<(), ()>(())).compat())
-// }
+/// Start the babe worker. The returned future should be run in a tokio runtime.
+pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
+	config,
+	client,
+	keystore,
+	select_chain,
+	block_import,
+	env,
+	sync_oracle,
+	inherent_data_providers,
+	force_authoring,
+	babe_link,
+}: BabeParams<B, C, E, I, SO, SC>) -> Result<
+	impl futures01::Future<Item=(), Error=()>,
+	consensus_common::Error,
+> where
+	B: BlockT<Header=H>,
+	C: ProvideRuntimeApi + ProvideCache<B> + ProvideUncles<B> + Send + Sync + 'static,
+	C::Api: BabeApi<B>,
+	SC: SelectChain<B> + 'static,
+	E: Environment<B, Error=Error> + Send + Sync,
+	E::Proposer: Proposer<B, Error=Error>,
+	<E::Proposer as Proposer<B>>::Create: Unpin + Send + 'static,
+	H: Header<Hash=B::Hash>,
+	I: BlockImport<B> + Send + Sync + 'static,
+	Error: std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
+	SO: SyncOracle + Send + Sync + Clone,
+{
+	let worker = BabeWorker {
+		client: client.clone(),
+		block_import: Arc::new(Mutex::new(block_import)),
+		env,
+		sync_oracle: sync_oracle.clone(),
+		force_authoring,
+		keystore,
+		epoch_changes: babe_link.epoch_changes.clone(),
+		config: config.clone(),
+	};
+	register_babe_inherent_data_provider(&inherent_data_providers, config.0.slot_duration())?;
+	uncles::register_uncles_inherent_data_provider(
+		client.clone(),
+		select_chain.clone(),
+		&inherent_data_providers,
+	)?;
+	Ok(slots::start_slot_worker(
+		config.0,
+		select_chain,
+		worker,
+		sync_oracle,
+		inherent_data_providers,
+		babe_link,
+	).map(|()| Ok::<(), ()>(())).compat())
+}
 
 struct BabeWorker<B: BlockT, C, E, I, SO> {
 	client: Arc<C>,
@@ -796,17 +796,14 @@ impl<B, E, Block, RA, PRA, T> Verifier<Block> for BabeVerifier<B, E, Block, RA, 
 			.ok_or_else(|| format!("Parent header {:?} not found.", parent_hash))?;
 
 		let pre_digest = find_pre_digest::<Block>(&header)?;
-
-		// TODO: Get epoch for header we're verifying.
-		// let epoch = epoch(
-		// 	self.api.as_ref(),
-		// 	parent_hash,
-		// 	parent_header.number().clone(),
-		// 	pre_digest.slot_number(),
-		// 	&self.babe_link.epoch_changes,
-		// )
-		// 	.ok_or_else(|| format!("Could not fetch epoch at {:?}", parent_hash))?;
-		let epoch = unimplemented!();
+		let epoch = {
+			let epoch_changes = self.babe_link.epoch_changes.lock();
+			epoch_changes.epoch_for_child_of(
+				&parent_hash,
+				parent_header.number().clone(),
+				pre_digest.slot_number(),
+			).ok_or_else(|| format!("Could not fetch epoch at {:?}", parent_hash))?
+		};
 
 		// load parent weight, special-casing the genesis.
 		let parent_weight = aux_schema::load_block_weight(&*self.client, parent_hash)
@@ -911,46 +908,6 @@ impl<B, E, Block, RA, PRA, T> Verifier<Block> for BabeVerifier<B, E, Block, RA, 
 		}
 	}
 }
-
-// /// Extract current epoch data from the runtime. Returns `None` if there is
-// /// no epoch to draw data from.
-// ///
-// /// In a chain which does not issue the expected epoch-change digests, this will
-// /// return `None`, because there will be no item in the fork-tree.
-// fn epoch<B, C>(
-// 	client: &C,
-// 	parent_hash: B::Hash,
-// 	parent_number: NumberFor<B>,
-// 	slot_number: SlotNumber,
-// 	is_descendent_of: impl Fn(&B::Hash, &B::Hash) -> ClientResult<bool>,
-// 	epoch_changes: &SharedEpochChanges<B>,
-// ) -> Option<Epoch> where
-// 	B: BlockT,
-// 	C: ProvideRuntimeApi + ProvideCache<B> + HeaderBackend<B>,
-// 	C::Api: BabeApi<B>,
-// {
-
-// 	let at = BlockId::Hash(parent_hash);
-// 	let epoch = if client.runtime_api().has_api::<dyn BabeApi<B>>(&at).unwrap_or(false) {
-// 		let s = BabeApi::epoch(&*client.runtime_api(), &at).ok()?;
-// 		if s.authorities.is_empty() {
-// 			error!("No authorities!");
-// 			None
-// 		} else {
-// 			Some(s)
-// 		}
-// 	} else {
-// 		error!("bad api!");
-// 		None
-// 	};
-// 	let epoch = epoch?;
-
-// 	epoch_changes.lock().epoch_for_child_of(
-// 		&parent_hash,
-// 		&parent_number,
-// 		slot_number,
-// 	)
-// }
 
 /// The BABE import queue type.
 pub type BabeImportQueue<B> = BasicQueue<B>;
