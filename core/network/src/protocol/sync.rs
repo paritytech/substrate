@@ -917,7 +917,7 @@ impl<B: BlockT> ChainSync<B> {
 		if let PeerSyncState::AncestorSearch(_, _) = peer.state {
 			return OnBlockAnnounce::Nothing
 		}
-		// If the announced block is the latest they have seen, our common number
+		// If the announced block is the best they have seen, our common number
 		// is either one further ahead or it's the one they just announced, if we know about it.
 		if known && is_best {
 			peer.common_number = number
