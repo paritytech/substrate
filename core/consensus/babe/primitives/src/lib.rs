@@ -85,13 +85,26 @@ pub struct Epoch {
 	/// The epoch index
 	pub epoch_index: u64,
 	/// The starting slot of the epoch,
-	pub start_slot: u64,
+	pub start_slot: SlotNumber,
 	/// The duration of this epoch
 	pub duration: SlotNumber,
 	/// The authorities and their weights
 	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 	/// Randomness for this epoch
 	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+}
+
+impl Epoch {
+	/// "increment" the epoch, with given descriptor for the next.
+	pub fn increment(&self, descriptor: NextEpochDescriptor) -> Epoch {
+		Epoch {
+			epoch_index: self.epoch_index + 1,
+			start_slot: self.start_slot + self.duration,
+			duration: self.duration,
+			authorities: descriptor.authorities,
+			randomness: descriptor.randomness,
+		}
+	}
 }
 
 /// An consensus log item for BABE.
@@ -131,7 +144,7 @@ pub struct BabeConfiguration {
 	/// The authorities for the genesis epoch.
 	pub genesis_authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 
-	/// The randomness for this epoch.
+	/// The randomness for the genesis epoch.
 	pub randomness: [u8; VRF_OUTPUT_LENGTH],
 
 	/// Whether this chain should run with secondary slots, which are assigned
