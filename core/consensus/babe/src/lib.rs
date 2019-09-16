@@ -189,7 +189,7 @@ pub struct BabeParams<B: BlockT, C, E, I, SO, SC> {
 }
 
 /// Start the babe worker. The returned future should be run in a tokio runtime.
-pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
+pub fn start_babe<B, C, SC, E, I, SO, Error>(BabeParams {
 	config,
 	client,
 	keystore,
@@ -204,14 +204,14 @@ pub fn start_babe<B, C, SC, E, I, SO, Error, H>(BabeParams {
 	impl futures01::Future<Item=(), Error=()>,
 	consensus_common::Error,
 > where
-	B: BlockT<Header=H>,
-	C: ProvideRuntimeApi + ProvideCache<B> + ProvideUncles<B> + Send + Sync + 'static,
+	B: BlockT<Hash=H256>,
+	C: ProvideRuntimeApi + ProvideCache<B> + ProvideUncles<B>
+		+ HeaderBackend<B> + Send + Sync + 'static,
 	C::Api: BabeApi<B>,
 	SC: SelectChain<B> + 'static,
 	E: Environment<B, Error=Error> + Send + Sync,
 	E::Proposer: Proposer<B, Error=Error>,
 	<E::Proposer as Proposer<B>>::Create: Unpin + Send + 'static,
-	H: Header<Hash=B::Hash>,
 	I: BlockImport<B> + Send + Sync + 'static,
 	Error: std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
@@ -253,14 +253,13 @@ struct BabeWorker<B: BlockT, C, E, I, SO> {
 	config: Config,
 }
 
-impl<H, B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I, SO> where
-	B: BlockT<Header=H>,
-	C: ProvideRuntimeApi + ProvideCache<B>,
+impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I, SO> where
+	B: BlockT<Hash=H256>,
+	C: ProvideRuntimeApi + ProvideCache<B> + HeaderBackend<B>,
 	C::Api: BabeApi<B>,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<E::Proposer as Proposer<B>>::Create: Unpin + Send + 'static,
-	H: Header<Hash=B::Hash>,
 	I: BlockImport<B> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Clone,
 	Error: std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
@@ -281,6 +280,7 @@ impl<H, B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E
 
 	fn epoch_data(&self, parent: &B::Header, slot_number: u64) -> Result<Self::EpochData, consensus_common::Error> {
 		self.epoch_changes.lock().epoch_for_child_of(
+			&*self.client,
 			&parent.hash(),
 			parent.number().clone(),
 			slot_number,
@@ -355,14 +355,13 @@ impl<H, B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E
 	}
 }
 
-impl<H, B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<B, C, E, I, SO> where
-	B: BlockT<Header=H>,
-	C: ProvideRuntimeApi + ProvideCache<B> + Send + Sync,
+impl<B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<B, C, E, I, SO> where
+	B: BlockT<Hash=H256>,
+	C: ProvideRuntimeApi + ProvideCache<B> + HeaderBackend<B> + Send + Sync,
 	C::Api: BabeApi<B>,
 	E: Environment<B, Error=Error> + Send + Sync,
 	E::Proposer: Proposer<B, Error=Error>,
 	<E::Proposer as Proposer<B>>::Create: Unpin + Send + 'static,
-	H: Header<Hash=B::Hash>,
 	I: BlockImport<B> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
 	Error: std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
@@ -793,6 +792,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 		let epoch = {
 			let mut epoch_changes = self.babe_link.epoch_changes.lock();
 			epoch_changes.epoch_for_child_of(
+				&*self.client,
 				&parent_hash,
 				parent_header.number().clone(),
 				pre_digest.slot_number(),
@@ -1202,6 +1202,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 				))?;
 
 			let epoch = epoch_changes.epoch_for_child_of(
+				&*self.client,
 				&parent_hash,
 				*parent_header.number(),
 				slot_number,
@@ -1246,6 +1247,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 
 			// track the epoch change in the fork tree
 			epoch_changes.import(
+				&*self.client,
 				hash,
 				number,
 				next_epoch,
@@ -1377,6 +1379,7 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
 			// TODO: supply is-descendent-of and maybe write to disk _now_
 			// as opposed to waiting for the next epoch?
 			epoch_changes.lock().prune_finalized(
+				&*client,
 				&notification.hash,
 				*notification.header.number(),
 			);
