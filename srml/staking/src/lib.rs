@@ -269,7 +269,7 @@ use sr_primitives::traits::{
 };
 use phragmen::{elect, equalize, Support, SupportMap, ExtendedBalance, ACCURACY};
 use sr_staking_primitives::{
-	SessionIndex, CurrentElectedSet,
+	SessionIndex,
 	offence::{OnOffenceHandler, OffenceDetails, Offence, ReportOffence},
 };
 #[cfg(feature = "std")]
@@ -1584,14 +1584,5 @@ impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
 				RawEvent::OldSlashingReportDiscarded(offence_session)
 			)
 		}
-	}
-}
-
-/// Returns the currently elected validator set represented by their stash accounts.
-pub struct CurrentElectedStashAccounts<T>(rstd::marker::PhantomData<T>);
-
-impl<T: Trait> CurrentElectedSet<T::AccountId> for CurrentElectedStashAccounts<T> {
-	fn current_elected_set() -> Vec<T::AccountId> {
-		<Module<T>>::current_elected()
 	}
 }

@@ -42,7 +42,7 @@ impl RuntimePublic for Public {
 	}
 
 	fn sign<M: AsRef<[u8]>>(&self, key_type: KeyTypeId, msg: &M) -> Option<Self::Signature> {
-		runtime_io::sr25519_sign(key_type, self, msg)
+		runtime_io::sr25519_sign(key_type, self, msg.as_ref())
 	}
 
 	fn verify<M: AsRef<[u8]>>(&self, msg: &M, signature: &Self::Signature) -> bool {

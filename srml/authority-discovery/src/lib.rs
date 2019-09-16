@@ -137,7 +137,6 @@ mod tests {
 	use sr_primitives::testing::{Header, UintAuthorityId};
 	use sr_primitives::traits::{ConvertInto, IdentityLookup, OpaqueKeys};
 	use sr_primitives::Perbill;
-	use sr_staking_primitives::CurrentElectedSet;
 	use support::{impl_outer_origin, parameter_types};
 
 	type AuthorityDiscovery = Module<Test>;
@@ -148,13 +147,6 @@ mod tests {
 	impl Trait for Test {}
 
 	type AuthorityId = im_online::sr25519::AuthorityId;
-
-	pub struct DummyCurrentElectedSet<T>(std::marker::PhantomData<T>);
-	impl<T> CurrentElectedSet<T> for DummyCurrentElectedSet<T> {
-		fn current_elected_set() -> Vec<T> {
-			vec![]
-		}
-	}
 
 	pub struct TestOnSessionEnding;
 	impl session::OnSessionEnding<AuthorityId> for TestOnSessionEnding {
@@ -189,7 +181,6 @@ mod tests {
 			UncheckedExtrinsic<(), im_online::Call<Test>, (), ()>,
 		>;
 		type ReportUnresponsiveness = ();
-		type CurrentElectedSet = DummyCurrentElectedSet<AuthorityId>;
 	}
 
 	pub type BlockNumber = u64;

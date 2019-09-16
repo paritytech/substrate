@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 #![recursion_limit="128"]
 
-use runtime_io::{with_externalities, Blake2Hasher};
+use runtime_io::with_externalities;
 use support::{
 	Parameter, traits::Get, parameter_types,
 	sr_primitives::{generic, BuildStorage, traits::{BlakeTwo256, Block as _, Verify}},
@@ -28,7 +28,7 @@ use support::{
 use inherents::{
 	ProvideInherent, InherentData, InherentIdentifier, RuntimeString, MakeFatalError
 };
-use primitives::{H256, sr25519};
+use primitives::{H256, sr25519, Blake2Hasher};
 
 mod system;
 
