@@ -16,7 +16,7 @@ runtime_io = { package = "sr-io", path = "../sr-io", default-features = false }
 log = { version = "0.4", optional = true }
 paste = { version = "0.1"}
 rand = { version = "0.7.0", optional = true }
-impl-trait-for-tuples = "0.1"
+impl-trait-for-tuples = "0.1.1"
 
 [dev-dependencies]
 serde_json = "1.0"
