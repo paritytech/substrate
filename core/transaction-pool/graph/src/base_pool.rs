@@ -361,6 +361,10 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 		removed
 	}
 
+	pub fn remove_transactions(&mut self, hashes: &[Hash]) {
+		self.remove_invalid(hashes);
+	}
+
 	/// Prunes transactions that provide given list of tags.
 	///
 	/// This will cause all transactions that provide these tags to be removed from the pool,
@@ -410,6 +414,24 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 			ready_bytes: self.ready.bytes(),
 			future: self.future.len(),
 			future_bytes: self.future.bytes(),
+		}
+	}
+
+	/// Import new provides from outside
+	pub fn import_provides(&mut self, tags: impl IntoIterator<Item=Tag>) {
+		let mut to_import = vec![];
+		for tag in tags {
+			to_import.append(&mut self.future.satisfy_tags(::std::iter::once(&tag)));
+			// clear stale
+			self.future.remove_stale(::std::iter::once(&tag));
+		}
+		for tx in to_import{
+			match self.import_to_ready(tx){
+				Ok(_res)=>{ /* not deal */ },
+				Err(e)=>{
+					warn!(target: "txpool", "import relay transfer failed: {:?}", e);
+				},
+			}
 		}
 	}
 }

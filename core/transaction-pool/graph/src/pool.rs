@@ -28,7 +28,7 @@ use crate::rotator::PoolRotator;
 use crate::watcher::Watcher;
 use serde::Serialize;
 use error_chain::bail;
-use log::debug;
+use log::{debug, info};
 
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
@@ -151,6 +151,7 @@ impl<B: ChainApi> Pool<B> {
 				}
 			})
 			.map(|tx| {
+				info!(target:"pool", "import a tx to pool");
 				let imported = self.pool.write().import(tx?)?;
 
 				if let base::Imported::Ready { .. } = imported {
@@ -224,6 +225,7 @@ impl<B: ChainApi> Pool<B> {
 		let mut tags = Vec::with_capacity(extrinsics.len());
 		// Get details of all extrinsics that are already in the pool
 		let hashes = extrinsics.iter().map(|extrinsic| self.api.hash_and_length(extrinsic).0).collect::<Vec<_>>();
+		let mut relay_hashes = vec![];
 		let in_pool = self.pool.read().by_hash(&hashes);
 		{
 			// Zip the ones from the pool with the full list (we get pairs `(Extrinsic, Option<TransactionDetails>)`)
@@ -233,7 +235,11 @@ impl<B: ChainApi> Pool<B> {
 				match *existing_in_pool {
 					// reuse the tags for extrinsis that were found in the pool
 					Some(ref transaction) => {
-						tags.extend(transaction.provides.iter().cloned());
+						if transaction.provides.len() == 0 {
+							relay_hashes.push(transaction.hash.clone());
+						} else {
+							tags.extend(transaction.provides.iter().cloned());
+						}
 					},
 					// if it's not found in the pool query the runtime at parent block
 					// to get validity info and tags that the extrinsic provides.
@@ -251,7 +257,7 @@ impl<B: ChainApi> Pool<B> {
 				}
 			}
 		}
-
+		self.pool.write().remove_transactions(relay_hashes.as_slice());
 		self.prune_tags(at, tags, in_pool.into_iter().filter_map(|x| x).map(|x| x.hash.clone()))?;
 
 		Ok(())
@@ -415,6 +421,12 @@ impl<B: ChainApi> Pool<B> {
 	/// Returns pool status.
 	pub fn status(&self) -> base::Status {
 		self.pool.read().status()
+	}
+
+	/// Import provides from outside
+	/// now just for relay transfer
+	pub fn import_provides(&self, tags: impl IntoIterator<Item=Tag>) {
+		self.pool.write().import_provides(tags);
 	}
 
 	/// Returns transaction hash

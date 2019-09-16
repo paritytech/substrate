@@ -9,6 +9,7 @@ error-chain = "0.12"
 futures = "0.1"
 log = "0.4"
 parking_lot = "0.7.1"
+parity-codec = "3.2"
 serde = { version = "1.0", features = ["derive"] }
 substrate-primitives = { path = "../../primitives" }
 sr-primitives = { path = "../../sr-primitives" }
