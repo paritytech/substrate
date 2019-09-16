@@ -126,7 +126,8 @@ pub struct BlockImportParams<Block: BlockT> {
 	/// Contains a list of key-value pairs. If values are `None`, the keys
 	/// will be deleted.
 	pub auxiliary: Vec<(Vec<u8>, Option<Vec<u8>>)>,
-	/// Fork choice strategy of this import.
+	/// Fork choice strategy of this import. This should only be set by a
+	/// synchronous import, otherwise it may race against other imports.
 	pub fork_choice: ForkChoiceStrategy,
 }
 

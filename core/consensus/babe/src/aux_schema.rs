@@ -95,8 +95,8 @@ pub(crate) fn write_block_weight<H: Encode, F, R>(
 
 /// Load the weight associated with a block.
 pub(crate) fn load_block_weight<H: Encode, B: AuxStore>(
-	block_hash: H,
 	backend: &B,
+	block_hash: H,
 ) -> ClientResult<Option<BabeBlockWeight>> {
 	load_decode(backend, block_weight_key(block_hash).as_slice())
 }

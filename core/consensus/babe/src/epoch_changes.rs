@@ -89,12 +89,14 @@ pub struct SharedEpochChanges<Block: BlockT> {
 }
 
 impl<Block: BlockT> SharedEpochChanges<Block> {
+	/// Create a new instance of the `SharedEpochChanges`.
 	pub fn new() -> Self {
 		SharedEpochChanges {
 			inner: Arc::new(Mutex::new(EpochChanges::<Block>::new()))
 		}
 	}
 
+	/// Lock the shared epoch changes,
 	pub fn lock(&self) -> MutexGuard<EpochChanges<Block>> {
 		self.inner.lock()
 	}
