@@ -302,7 +302,7 @@ impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I
 		claim_slot(
 			slot_number,
 			epoch_data,
-			&self.config,
+			&*self.config,
 			&self.keystore,
 		)
 	}
@@ -956,7 +956,7 @@ fn calculate_primary_threshold(
 fn claim_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
-	config: &Config,
+	config: &BabeConfiguration,
 	keystore: &KeyStorePtr,
 ) -> Option<(BabePreDigest, AuthorityPair)> {
 	claim_primary_slot(slot_number, epoch, config.c, keystore)

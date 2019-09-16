@@ -98,7 +98,12 @@ impl TestNetFactory for GrandpaTestNet {
 		}
 	}
 
-	fn make_verifier(&self, _client: PeersClient, _cfg: &ProtocolConfig) -> Self::Verifier {
+	fn make_verifier(
+		&self,
+		_client: PeersClient,
+		_cfg: &ProtocolConfig,
+		_: &PeerData,
+	) -> Self::Verifier {
 		PassThroughVerifier(false) // use non-instant finality.
 	}
 
