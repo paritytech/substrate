@@ -23,6 +23,7 @@ substrate-executor = { path = "../executor" }
 substrate-keystore = { path = "../keystore" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../transaction-pool" }
 hash-db = { version = "0.15.0", default-features = false }
+parking_lot = { version = "0.9.0" }
 
 [dev-dependencies]
 assert_matches = "1.1"

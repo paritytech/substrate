@@ -174,7 +174,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 				.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
 				.send_all(Compat::new(watcher.into_stream().map(|v| Ok::<_, ()>(Ok(v)))))
 				.map(|_| ())
-		})
+		});
 	}
 
 	fn unwatch_extrinsic(&self, _metadata: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool> {
