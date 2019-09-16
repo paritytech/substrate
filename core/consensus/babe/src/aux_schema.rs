@@ -100,25 +100,3 @@ pub(crate) fn load_block_weight<H: Encode, B: AuxStore>(
 ) -> ClientResult<Option<BabeBlockWeight>> {
 	load_decode(backend, block_weight_key(block_hash).as_slice())
 }
-
-/// Write the weight of a block ot aux storage.
-pub(crate) fn write_config<H: Encode, F, R>(
-	config: BabeConfiguration,
-	write_aux: F,
-) -> R where
-	F: FnOnce(&[(Vec<u8>, &[u8])]) -> R,
-{
-
-	config.using_encoded(|s|
-		write_aux(
-			&[(BABE_CONFIG.to_vec(), s)],
-		)
-	)
-}
-
-/// Load the BABE configuration from disk.
-pub(crate) fn load_config<H: Encode, B: AuxStore>(
-	backend: &B,
-) -> ClientResult<Option<BabeConfiguration>> {
-	load_decode(backend, BABE_CONFIG)
-}
