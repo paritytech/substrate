@@ -451,6 +451,12 @@ struct VerificationParams<'a, B: 'a + BlockT> {
 	config: &'a Config,
 }
 
+struct VerifiedHeaderInfo<B: BlockT> {
+	pre_digest: DigestItemFor<B>,
+	seal: DigestItemFor<B>,
+	weight: BabeBlockWeight,
+}
+
 /// Check a header has been signed by the right key. If the slot is too far in
 /// the future, an error will be returned. If successful, returns the pre-header
 /// and the digest item containing the seal.
@@ -465,7 +471,7 @@ struct VerificationParams<'a, B: 'a + BlockT> {
 fn check_header<B: BlockT + Sized, C: AuxStore>(
 	params: VerificationParams<B>,
 	client: &C,
-) -> Result<CheckedHeader<B::Header, (DigestItemFor<B>, DigestItemFor<B>)>, String> where
+) -> Result<CheckedHeader<B::Header, VerifiedHeaderInfo<B>>, String> where
 	DigestItemFor<B>: CompatibleDigestItem,
 {
 	let VerificationParams {
@@ -560,8 +566,12 @@ fn check_header<B: BlockT + Sized, C: AuxStore>(
 		);
 	}
 
-	let pre_digest = CompatibleDigestItem::babe_pre_digest(pre_digest);
-	Ok(CheckedHeader::Checked(header, (pre_digest, seal)))
+	let info = VerifiedHeaderInfo {
+		pre_digest: CompatibleDigestItem::babe_pre_digest(pre_digest),
+		seal,
+		weight,
+	};
+	Ok(CheckedHeader::Checked(header, info))
 }
 
 /// Check a primary slot proposal header. We validate that the given header is
@@ -682,226 +692,245 @@ pub struct BabeVerifier<B, E, Block: BlockT, RA, PRA, T> {
 	transaction_pool: Option<Arc<T>>,
 }
 
-// impl<B, E, Block: BlockT, RA, PRA, T> BabeVerifier<B, E, Block, RA, PRA, T> {
-// 	fn check_inherents(
-// 		&self,
-// 		block: Block,
-// 		block_id: BlockId<Block>,
-// 		inherent_data: InherentData,
-// 	) -> Result<(), String>
-// 		where PRA: ProvideRuntimeApi, PRA::Api: BlockBuilderApi<Block>
-// 	{
-// 		let inherent_res = self.api.runtime_api().check_inherents(
-// 			&block_id,
-// 			block,
-// 			inherent_data,
-// 		).map_err(|e| format!("{:?}", e))?;
+impl<B, E, Block: BlockT, RA, PRA, T> BabeVerifier<B, E, Block, RA, PRA, T> {
+	fn check_inherents(
+		&self,
+		block: Block,
+		block_id: BlockId<Block>,
+		inherent_data: InherentData,
+	) -> Result<(), String>
+		where PRA: ProvideRuntimeApi, PRA::Api: BlockBuilderApi<Block>
+	{
+		let inherent_res = self.api.runtime_api().check_inherents(
+			&block_id,
+			block,
+			inherent_data,
+		).map_err(|e| format!("{:?}", e))?;
 
-// 		if !inherent_res.ok() {
-// 			inherent_res
-// 				.into_errors()
-// 				.try_for_each(|(i, e)| {
-// 					Err(self.inherent_data_providers.error_to_string(&i, &e))
-// 				})
-// 		} else {
-// 			Ok(())
-// 		}
-// 	}
-// }
+		if !inherent_res.ok() {
+			inherent_res
+				.into_errors()
+				.try_for_each(|(i, e)| {
+					Err(self.inherent_data_providers.error_to_string(&i, &e))
+				})
+		} else {
+			Ok(())
+		}
+	}
+}
 
-// #[allow(dead_code)]
-// fn median_algorithm(
-// 	median_required_blocks: u64,
-// 	slot_duration: u64,
-// 	slot_number: u64,
-// 	slot_now: u64,
-// 	time_source: &mut (Option<Duration>, Vec<(Instant, u64)>),
-// ) {
-// 	let num_timestamps = time_source.1.len();
-// 	if num_timestamps as u64 >= median_required_blocks && median_required_blocks > 0 {
-// 		let mut new_list: Vec<_> = time_source.1.iter().map(|&(t, sl)| {
-// 			let offset: u128 = u128::from(slot_duration)
-// 				.checked_mul(1_000_000u128) // self.config.get() returns *milliseconds*
-// 				.and_then(|x| {
-// 					x.checked_mul(u128::from(slot_number).saturating_sub(u128::from(sl)))
-// 				})
-// 				.expect("we cannot have timespans long enough for this to overflow; qed");
+#[allow(dead_code)]
+fn median_algorithm(
+	median_required_blocks: u64,
+	slot_duration: u64,
+	slot_number: u64,
+	slot_now: u64,
+	time_source: &mut (Option<Duration>, Vec<(Instant, u64)>),
+) {
+	let num_timestamps = time_source.1.len();
+	if num_timestamps as u64 >= median_required_blocks && median_required_blocks > 0 {
+		let mut new_list: Vec<_> = time_source.1.iter().map(|&(t, sl)| {
+			let offset: u128 = u128::from(slot_duration)
+				.checked_mul(1_000_000u128) // self.config.get() returns *milliseconds*
+				.and_then(|x| {
+					x.checked_mul(u128::from(slot_number).saturating_sub(u128::from(sl)))
+				})
+				.expect("we cannot have timespans long enough for this to overflow; qed");
 
-// 			const NANOS_PER_SEC: u32 = 1_000_000_000;
-// 			let nanos = (offset % u128::from(NANOS_PER_SEC)) as u32;
-// 			let secs = (offset / u128::from(NANOS_PER_SEC)) as u64;
+			const NANOS_PER_SEC: u32 = 1_000_000_000;
+			let nanos = (offset % u128::from(NANOS_PER_SEC)) as u32;
+			let secs = (offset / u128::from(NANOS_PER_SEC)) as u64;
 
-// 			t + Duration::new(secs, nanos)
-// 		}).collect();
+			t + Duration::new(secs, nanos)
+		}).collect();
 
-// 		// FIXME #2926: use a selection algorithm instead of a full sorting algorithm.
-// 		new_list.sort_unstable();
+		// FIXME #2926: use a selection algorithm instead of a full sorting algorithm.
+		new_list.sort_unstable();
 
-// 		let &median = new_list
-// 			.get(num_timestamps / 2)
-// 			.expect("we have at least one timestamp, so this is a valid index; qed");
+		let &median = new_list
+			.get(num_timestamps / 2)
+			.expect("we have at least one timestamp, so this is a valid index; qed");
 
-// 		let now = Instant::now();
-// 		if now >= median {
-// 			time_source.0.replace(now - median);
-// 		}
+		let now = Instant::now();
+		if now >= median {
+			time_source.0.replace(now - median);
+		}
 
-// 		time_source.1.clear();
-// 	} else {
-// 		time_source.1.push((Instant::now(), slot_now))
-// 	}
-// }
+		time_source.1.clear();
+	} else {
+		time_source.1.push((Instant::now(), slot_now))
+	}
+}
 
-// impl<B, E, Block, RA, PRA, T> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA, T> where
-// 	Block: BlockT<Hash=H256>,
-// 	B: Backend<Block, Blake2Hasher> + 'static,
-// 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
-// 	RA: Send + Sync,
-// 	PRA: ProvideRuntimeApi + Send + Sync + AuxStore + ProvideCache<Block>,
-// 	PRA::Api: BlockBuilderApi<Block> + BabeApi<Block>,
-// 	T: Send + Sync + 'static,
-// {
-// 	fn verify(
-// 		&mut self,
-// 		origin: BlockOrigin,
-// 		header: Block::Header,
-// 		justification: Option<Justification>,
-// 		mut body: Option<Vec<Block::Extrinsic>>,
-// 	) -> Result<(BlockImportParams<Block>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
-// 		trace!(
-// 			target: "babe",
-// 			"Verifying origin: {:?} header: {:?} justification: {:?} body: {:?}",
-// 			origin,
-// 			header,
-// 			justification,
-// 			body,
-// 		);
+impl<B, E, Block, RA, PRA, T> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA, T> where
+	Block: BlockT<Hash=H256>,
+	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+	RA: Send + Sync,
+	PRA: ProvideRuntimeApi + Send + Sync + AuxStore + ProvideCache<Block>,
+	PRA::Api: BlockBuilderApi<Block> + BabeApi<Block>,
+	T: Send + Sync + 'static,
+{
+	fn verify(
+		&mut self,
+		origin: BlockOrigin,
+		header: Block::Header,
+		justification: Option<Justification>,
+		mut body: Option<Vec<Block::Extrinsic>>,
+	) -> Result<(BlockImportParams<Block>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+		use sr_primitives::traits::One;
 
-// 		debug!(target: "babe", "We have {:?} logs in this header", header.digest().logs().len());
-// 		let mut inherent_data = self
-// 			.inherent_data_providers
-// 			.create_inherent_data()
-// 			.map_err(String::from)?;
+		trace!(
+			target: "babe",
+			"Verifying origin: {:?} header: {:?} justification: {:?} body: {:?}",
+			origin,
+			header,
+			justification,
+			body,
+		);
 
-// 		let (_, slot_now, _) = self.babe_link.extract_timestamp_and_slot(&inherent_data)
-// 			.map_err(|e| format!("Could not extract timestamp and slot: {:?}", e))?;
+		debug!(target: "babe", "We have {:?} logs in this header", header.digest().logs().len());
+		let mut inherent_data = self
+			.inherent_data_providers
+			.create_inherent_data()
+			.map_err(String::from)?;
 
-// 		let hash = header.hash();
-// 		let parent_hash = *header.parent_hash();
+		let (_, slot_now, _) = self.babe_link.extract_timestamp_and_slot(&inherent_data)
+			.map_err(|e| format!("Could not extract timestamp and slot: {:?}", e))?;
 
-// 		let parent_header = self.client.header(&BlockId::Hash(parent_hash))
-// 			.map_err(|e| format!("Could not fetch parent header {:?}: {:?}", parent_hash, e))?
-// 			.ok_or_else(|| format!("Parent header {:?} not found.", parent_hash))?;
+		let hash = header.hash();
+		let parent_hash = *header.parent_hash();
 
-// 		let pre_digest = find_pre_digest(&header)?;
+		let parent_header = self.client.header(&BlockId::Hash(parent_hash))
+			.map_err(|e| format!("Could not fetch parent header {:?}: {:?}", parent_hash, e))?
+			.ok_or_else(|| format!("Parent header {:?} not found.", parent_hash))?;
 
-// 		let epoch = epoch(
-// 			self.api.as_ref(),
-// 			parent_hash,
-// 			parent_header.number().clone(),
-// 			pre_digest.slot_number(),
-// 			&self.babe_link.epoch_changes,
-// 		)
-// 			.ok_or_else(|| format!("Could not fetch epoch at {:?}", parent_hash))?;
+		let pre_digest = find_pre_digest::<Block>(&header)?;
 
-// 		let Epoch { authorities, randomness, epoch_index, secondary_slots, .. } = epoch;
+		// TODO: Get epoch for header we're verifying.
+		// let epoch = epoch(
+		// 	self.api.as_ref(),
+		// 	parent_hash,
+		// 	parent_header.number().clone(),
+		// 	pre_digest.slot_number(),
+		// 	&self.babe_link.epoch_changes,
+		// )
+		// 	.ok_or_else(|| format!("Could not fetch epoch at {:?}", parent_hash))?;
+		let epoch = unimplemented!();
 
-// 		// We add one to the current slot to allow for some small drift.
-// 		// FIXME #1019 in the future, alter this queue to allow deferring of headers
-// 		let mut checked_header = check_header::<Block, PRA, T>(
-// 			(header.clone(), pre_digest.clone()),
-// 			parent_header.clone(),
-// 			slot_now + 1,
-// 			&authorities,
-// 			&self.api,
-// 			randomness,
-// 			epoch_index,
-// 			secondary_slots,
-// 			self.config.c(),
-// 			self.transaction_pool.as_ref().map(|x| &**x),
-// 		);
+		// load parent weight, special-casing the genesis.
+		let parent_weight = aux_schema::load_block_weight(&*self.client, parent_hash)
+			.map_err(|e| e.to_string())?
+			.or(if header.number() == &One::one() { Some(0) } else { None })
+			.ok_or_else(
+				|| format!("No block weight for parent header.")
+			)?;
 
-// 		let checked_header = checked_header?;
-// 		match checked_header {
-// 			CheckedHeader::Checked(pre_header, (pre_digest, seal)) => {
-// 				let babe_pre_digest = pre_digest.as_babe_pre_digest()
-// 					.expect("check_header always returns a pre-digest digest item; qed");
+		// We add one to the current slot to allow for some small drift.
+		// FIXME #1019 in the future, alter this queue to allow deferring of headers
+		let v_params = VerificationParams {
+			header,
+			pre_digest: Some(pre_digest.clone()),
+			parent_weight,
+			slot_now,
+			epoch: &epoch,
+			config: &self.config,
+		};
+		let checked_header = check_header::<Block, PRA>(v_params, &self.api)?;
 
-// 				let slot_number = babe_pre_digest.slot_number();
+		match checked_header {
+			CheckedHeader::Checked(pre_header, verified_info) => {
+				let babe_pre_digest = verified_info.pre_digest.as_babe_pre_digest()
+					.expect("check_header always returns a pre-digest digest item; qed");
 
-// 				// if the body is passed through, we need to use the runtime
-// 				// to check that the internally-set timestamp in the inherents
-// 				// actually matches the slot set in the seal.
-// 				if let Some(inner_body) = body.take() {
-// 					inherent_data.babe_replace_inherent_data(slot_number);
-// 					let block = Block::new(pre_header.clone(), inner_body);
+				let slot_number = babe_pre_digest.slot_number();
 
-// 					self.check_inherents(
-// 						block.clone(),
-// 						BlockId::Hash(parent_hash),
-// 						inherent_data,
-// 					)?;
+				// if the body is passed through, we need to use the runtime
+				// to check that the internally-set timestamp in the inherents
+				// actually matches the slot set in the seal.
+				if let Some(inner_body) = body.take() {
+					inherent_data.babe_replace_inherent_data(slot_number);
+					let block = Block::new(pre_header.clone(), inner_body);
 
-// 					let (_, inner_body) = block.deconstruct();
-// 					body = Some(inner_body);
-// 				}
+					self.check_inherents(
+						block.clone(),
+						BlockId::Hash(parent_hash),
+						inherent_data,
+					)?;
 
-// 				trace!(target: "babe", "Checked {:?}; importing.", pre_header);
-// 				telemetry!(
-// 					CONSENSUS_TRACE;
-// 					"babe.checked_and_importing";
-// 					"pre_header" => ?pre_header);
+					let (_, inner_body) = block.deconstruct();
+					body = Some(inner_body);
+				}
 
-// 				// The fork choice rule is that we pick the heaviest chain (i.e.
-// 				// more primary blocks), if there's a tie we go with the longest
-// 				// chain.
-// 				let new_best = {
-// 					let (last_best, last_best_number) = {
-// 						let info = self.client.info().chain;
-// 						(info.best_hash, info.best_number)
-// 					};
+				trace!(target: "babe", "Checked {:?}; importing.", pre_header);
+				telemetry!(
+					CONSENSUS_TRACE;
+					"babe.checked_and_importing";
+					"pre_header" => ?pre_header);
 
-// 					let best_header = self.client.header(&BlockId::Hash(last_best))
-// 												 .map_err(|_| "Failed fetching best header")?
-// 					.expect("parent_header must be imported; qed");
+				// The fork choice rule is that we pick the heaviest chain (i.e.
+				// more primary blocks), if there's a tie we go with the longest
+				// chain.
+				let new_best = {
+					let (last_best, last_best_number) = {
+						let info = self.client.info().chain;
+						(info.best_hash, info.best_number)
+					};
 
-// 					let best_weight = find_pre_digest::<Block>(&best_header)
-// 						.map(|babe_pre_digest| babe_pre_digest.weight())?;
+					let last_best_weight = if last_best == parent_hash {
+						// the parent=genesis case is already covered for loading parent weight,
+						// so we don't need to cover again here.
+						parent_weight
+					} else {
+						aux_schema::load_block_weight(&*self.client, last_best)
+							.map_err(|e| e.to_string())?
+							.ok_or_else(
+								|| format!("No block weight for parent header.")
+							)?
+					};
 
-// 					let new_weight = babe_pre_digest.weight();
+					if verified_info.weight > last_best_weight {
+						true
+					} else if verified_info.weight == last_best_weight {
+						*pre_header.number() > last_best_number
+					} else {
+						false
+					}
+				};
 
-// 					if new_weight > best_weight {
-// 						true
-// 					} else if new_weight == best_weight {
-// 						*pre_header.number() > last_best_number
-// 					} else {
-// 						false
-// 					}
-// 				};
+				let mut auxiliary = Vec::new();
 
-// 				let import_block = BlockImportParams {
-// 					origin,
-// 					header: pre_header,
-// 					post_digests: vec![seal],
-// 					body,
-// 					finalized: false,
-// 					justification,
-// 					auxiliary: Vec::new(),
-// 					fork_choice: ForkChoiceStrategy::Custom(new_best),
-// 				};
+				aux_schema::write_block_weight(
+					hash,
+					&verified_info.weight,
+					|values| auxiliary.extend(
+						values.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
+					),
+				);
 
-// 				Ok((import_block, Default::default()))
-// 			}
-// 			CheckedHeader::Deferred(a, b) => {
-// 				debug!(target: "babe", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
-// 				telemetry!(CONSENSUS_DEBUG; "babe.header_too_far_in_future";
-// 					"hash" => ?hash, "a" => ?a, "b" => ?b
-// 				);
-// 				Err(format!("Header {:?} rejected: too far in the future", hash))
-// 			}
-// 		}
-// 	}
-// }
+				let import_block = BlockImportParams {
+					origin,
+					header: pre_header,
+					post_digests: vec![verified_info.seal],
+					body,
+					finalized: false,
+					justification,
+					auxiliary,
+					fork_choice: ForkChoiceStrategy::Custom(new_best),
+				};
+
+				Ok((import_block, Default::default()))
+			}
+			CheckedHeader::Deferred(a, b) => {
+				debug!(target: "babe", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
+				telemetry!(CONSENSUS_DEBUG; "babe.header_too_far_in_future";
+					"hash" => ?hash, "a" => ?a, "b" => ?b
+				);
+				Err(format!("Header {:?} rejected: too far in the future", hash))
+			}
+		}
+	}
+}
 
 // /// Extract current epoch data from the runtime. Returns `None` if there is
 // /// no epoch to draw data from.
