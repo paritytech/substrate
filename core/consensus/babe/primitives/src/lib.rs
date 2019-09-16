@@ -145,7 +145,7 @@ impl slots::SlotData for BabeConfiguration {
 		self.slot_duration
 	}
 
-	const SLOT_KEY: &'static [u8] = b"babe_bootstrap_data";
+	const SLOT_KEY: &'static [u8] = b"babe_configuration";
 }
 
 decl_runtime_apis! {
