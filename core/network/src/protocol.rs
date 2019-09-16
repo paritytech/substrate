@@ -1036,7 +1036,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 		let message = GenericMessage::BlockAnnounce(message::BlockAnnounce {
 			header: header.clone(),
-			data
+			data,
 		});
 
 		for (who, ref mut peer) in self.context_data.peers.iter_mut() {
