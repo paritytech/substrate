@@ -79,6 +79,15 @@ impl BabePreDigest {
 			BabePreDigest::Secondary { slot_number, .. } => *slot_number,
 		}
 	}
+
+	/// Returns the weight _added_ by this digest, not the cumulative weight
+	/// of the chain.
+	pub fn added_weight(&self) -> crate::BabeBlockWeight {
+		match self {
+			BabePreDigest::Primary { .. } => 1,
+			BabePreDigest::Secondary { .. } => 0,
+		}
+	}
 }
 
 /// The prefix used by BABE for its VRF keys.

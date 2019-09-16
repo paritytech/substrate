@@ -76,7 +76,7 @@ pub(crate) fn write_epoch_changes<Block: BlockT, F, R>(
 	)
 }
 
-/// Write the weight of a block ot aux storage.
+/// Write the cumulative chain-weight of a block ot aux storage.
 pub(crate) fn write_block_weight<H: Encode, F, R>(
 	block_hash: H,
 	block_weight: &BabeBlockWeight,
@@ -93,7 +93,7 @@ pub(crate) fn write_block_weight<H: Encode, F, R>(
 	)
 }
 
-/// Load the weight associated with a block.
+/// Load the cumulative chain-weight associated with a block.
 pub(crate) fn load_block_weight<H: Encode, B: AuxStore>(
 	backend: &B,
 	block_hash: H,
