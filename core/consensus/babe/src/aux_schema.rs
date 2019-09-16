@@ -22,12 +22,11 @@ use codec::{Decode, Encode};
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError};
 use sr_primitives::traits::Block as BlockT;
-use babe_primitives::{BabeBlockWeight, BabeConfiguration};
+use babe_primitives::BabeBlockWeight;
 
 use super::{EpochChanges, SharedEpochChanges};
 
 const BABE_EPOCH_CHANGES: &[u8] = b"babe_epoch_changes";
-const BABE_CONFIG: &[u8] = b"babe_configuration";
 
 fn block_weight_key<H: Encode>(block_hash: H) -> Vec<u8> {
 	(b"block_weight", block_hash).encode()
