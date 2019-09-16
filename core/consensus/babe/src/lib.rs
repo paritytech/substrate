@@ -732,7 +732,7 @@ fn median_algorithm(
 	if num_timestamps as u64 >= median_required_blocks && median_required_blocks > 0 {
 		let mut new_list: Vec<_> = time_source.1.iter().map(|&(t, sl)| {
 			let offset: u128 = u128::from(slot_duration)
-				.checked_mul(1_000_000u128) // self.config.get() returns *milliseconds*
+				.checked_mul(1_000_000u128) // self.config.slot_duration returns milliseconds
 				.and_then(|x| {
 					x.checked_mul(u128::from(slot_number).saturating_sub(u128::from(sl)))
 				})
@@ -1371,86 +1371,84 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 	}
 }
 
-// /// Start an import queue for the BABE consensus algorithm. This method returns
-// /// the import queue, some data that needs to be passed to the block authoring
-// /// logic (`BabeLink`), a `BabeBlockImport` which should be used by the
-// /// authoring when importing its own blocks, and a future that must be run to
-// /// completion and is responsible for listening to finality notifications and
-// /// pruning the epoch changes tree.
-// pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA, T>(
-// 	config: Config,
-// 	block_import: I,
-// 	justification_import: Option<BoxJustificationImport<Block>>,
-// 	finality_proof_import: Option<BoxFinalityProofImport<Block>>,
-// 	client: Arc<Client<B, E, Block, RA>>,
-// 	api: Arc<PRA>,
-// 	inherent_data_providers: InherentDataProviders,
-// 	transaction_pool: Option<Arc<T>>,
-// ) -> ClientResult<(
-// 	BabeImportQueue<Block>,
-// 	BabeLink<Block>,
-// 	BabeBlockImport<B, E, Block, I, RA, PRA>,
-// 	impl futures01::Future<Item = (), Error = ()>,
-// )> where
-// 	B: Backend<Block, Blake2Hasher> + 'static,
-// 	I: BlockImport<Block> + Clone + Send + Sync + 'static,
-// 	I::Error: Into<ConsensusError>,
-// 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync + 'static,
-// 	RA: Send + Sync + 'static,
-// 	PRA: ProvideRuntimeApi + ProvideCache<Block> + Send + Sync + AuxStore + 'static,
-// 	PRA::Api: BlockBuilderApi<Block> + BabeApi<Block>,
-// 	T: Send + Sync + 'static,
-// {
-// 	register_babe_inherent_data_provider(&inherent_data_providers, config.get())?;
+/// Start an import queue for the BABE consensus algorithm. This method returns
+/// the import queue, some data that needs to be passed to the block authoring
+/// logic (`BabeLink`), a `BabeBlockImport` which should be used by the
+/// authoring when importing its own blocks, and a future that must be run to
+/// completion and is responsible for listening to finality notifications and
+/// pruning the epoch changes tree.
+pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA, T>(
+	config: Config,
+	block_import: I,
+	justification_import: Option<BoxJustificationImport<Block>>,
+	finality_proof_import: Option<BoxFinalityProofImport<Block>>,
+	client: Arc<Client<B, E, Block, RA>>,
+	api: Arc<PRA>,
+	inherent_data_providers: InherentDataProviders,
+	transaction_pool: Option<Arc<T>>,
+) -> ClientResult<(
+	BabeImportQueue<Block>,
+	BabeLink<Block>,
+	BabeBlockImport<B, E, Block, I, RA, PRA>,
+	impl futures01::Future<Item = (), Error = ()>,
+)> where
+	B: Backend<Block, Blake2Hasher> + 'static,
+	I: BlockImport<Block> + Clone + Send + Sync + 'static,
+	I::Error: Into<ConsensusError>,
+	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync + 'static,
+	RA: Send + Sync + 'static,
+	PRA: ProvideRuntimeApi + ProvideCache<Block> + Send + Sync + AuxStore + 'static,
+	PRA::Api: BlockBuilderApi<Block> + BabeApi<Block>,
+	T: Send + Sync + 'static,
+{
+	register_babe_inherent_data_provider(&inherent_data_providers, config.slot_duration)?;
 
-// 	let babe_link = BabeLink {
-// 		time_source: Default::default(),
-// 		epoch_changes: aux_schema::load_epoch_changes(&*client)?,
-// 	};
+	let babe_link = BabeLink {
+		time_source: Default::default(),
+		epoch_changes: aux_schema::load_epoch_changes(&*client)?,
+	};
 
-// 	let verifier = BabeVerifier {
-// 		client: client.clone(),
-// 		api: api.clone(),
-// 		inherent_data_providers,
-// 		babe_link: babe_link.clone(),
-// 		config: config.clone(),
-// 		transaction_pool,
-// 	};
+	let verifier = BabeVerifier {
+		client: client.clone(),
+		api: api.clone(),
+		inherent_data_providers,
+		babe_link: babe_link.clone(),
+		config: config.clone(),
+		transaction_pool,
+	};
 
-// 	let block_import = BabeBlockImport::new(
-// 		client.clone(),
-// 		api,
-// 		babe_link.epoch_changes.clone(),
-// 		block_import,
-//		config,
-// 	);
+	let block_import = BabeBlockImport::new(
+		client.clone(),
+		api,
+		babe_link.epoch_changes.clone(),
+		block_import,
+		config,
+	);
 
-// 	let epoch_changes = babe_link.epoch_changes.clone();
-// 	let pruning_task = client.finality_notification_stream()
-// 		.map(|v| Ok::<_, ()>(v)).compat()
-// 		.for_each(move |notification| {
-// 			let is_descendent_of = is_descendent_of(&client, None);
-// 			epoch_changes.lock().prune(
-// 				&notification.hash,
-// 				*notification.header.number(),
-// 				&is_descendent_of,
-// 			).map_err(|e| {
-// 				debug!(target: "babe", "Error pruning epoch changes fork tree: {:?}", e)
-// 			})?;
+	let epoch_changes = babe_link.epoch_changes.clone();
+	let pruning_task = client.finality_notification_stream()
+		.map(|v| Ok::<_, ()>(v)).compat()
+		.for_each(move |notification| {
+			// TODO: supply is-descendent-of and maybe write to disk _now_
+			// as opposed to waiting for the next epoch?
+			epoch_changes.lock().prune_finalized(
+				&notification.hash,
+				*notification.header.number(),
+			);
 
-// 			Ok(())
-// 		});
+			Ok(())
+		});
 
-// 	let babe_link = verifier.babe_link.clone();
-// 	let queue = BasicQueue::new(
-// 		verifier,
-// 		Box::new(block_import.clone()),
-// 		justification_import,
-// 		finality_proof_import,
-// 	);
+	let babe_link = verifier.babe_link.clone();
+	let queue = BasicQueue::new(
+		verifier,
+		Box::new(block_import.clone()),
+		justification_import,
+		finality_proof_import,
+	);
 
-// 	Ok((queue, babe_link, block_import, pruning_task))
-// }
+	Ok((queue, babe_link, block_import, pruning_task))
+}
 
 // /// BABE test helpers. Utility methods for manually authoring blocks.
 // #[cfg(feature = "test-helpers")]
