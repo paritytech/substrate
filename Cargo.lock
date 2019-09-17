@@ -5218,6 +5218,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-runtime-interface"
+version = "2.0.0"
+dependencies = [
+ "parity-scale-codec 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-std 2.0.0",
+ "substrate-wasm-interface 2.0.0",
+]
+
+[[package]]
 name = "substrate-runtime-test"
 version = "2.0.0"
 dependencies = [

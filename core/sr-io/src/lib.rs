@@ -216,7 +216,7 @@ export_api! {
 export_api! {
 	pub(crate) trait HashingApi {
 		/// Conduct a 256-bit Keccak hash.
-		fn keccak_256(data: &[u8]) -> [u8; 32] ;
+		fn keccak_256(data: &[u8]) -> [u8; 32];
 
 		/// Conduct a 128-bit Blake2 hash.
 		fn blake2_128(data: &[u8]) -> [u8; 16];

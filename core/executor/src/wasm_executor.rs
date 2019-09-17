@@ -40,7 +40,7 @@ use crate::allocator;
 use log::trace;
 use wasm_interface::{
 	FunctionContext, HostFunctions, Pointer, WordSize, Sandbox, MemoryId, PointerType,
-	Result as WResult,
+	Result as WResult, ReadPrimitive, WritePrimitive,
 };
 
 #[cfg(feature="wasm-extern-trace")]
@@ -236,29 +236,6 @@ impl Sandbox for FunctionExecutor {
 			};
 
 		Ok(instance_idx_or_err_code as u32)
-	}
-}
-
-trait WritePrimitive<T: PointerType> {
-	fn write_primitive(&mut self, ptr: Pointer<T>, t: T) -> WResult<()>;
-}
-
-impl WritePrimitive<u32> for &mut dyn FunctionContext {
-	fn write_primitive(&mut self, ptr: Pointer<u32>, t: u32) -> WResult<()> {
-		let r = t.to_le_bytes();
-		self.write_memory(ptr.cast(), &r)
-	}
-}
-
-trait ReadPrimitive<T: PointerType> {
-	fn read_primitive(&self, offset: Pointer<T>) -> WResult<T>;
-}
-
-impl ReadPrimitive<u32> for &mut dyn FunctionContext {
-	fn read_primitive(&self, ptr: Pointer<u32>) -> WResult<u32> {
-		let mut r = [0u8; 4];
-		self.read_memory_into(ptr.cast(), &mut r)?;
-		Ok(u32::from_le_bytes(r))
 	}
 }
 

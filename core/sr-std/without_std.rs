@@ -49,6 +49,7 @@ mod __impl {
 pub use alloc::boxed;
 pub use alloc::rc;
 pub use alloc::vec;
+pub use core::any;
 pub use core::cell;
 pub use core::clone;
 pub use core::cmp;

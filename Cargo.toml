@@ -44,6 +44,7 @@ members = [
 	"core/rpc",
 	"core/rpc/primitives",
 	"core/rpc-servers",
+	"core/runtime-interface",
 	"core/serializer",
 	"core/service",
 	"core/service/test",

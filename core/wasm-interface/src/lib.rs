@@ -119,6 +119,12 @@ impl<T: PointerType> From<Pointer<T>> for u32 {
 	}
 }
 
+impl<T: PointerType> From<Pointer<T>> for u64 {
+	fn from(ptr: Pointer<T>) -> Self {
+		u64::from(ptr.ptr)
+	}
+}
+
 impl<T: PointerType> From<Pointer<T>> for usize {
 	fn from(ptr: Pointer<T>) -> Self {
 		ptr.ptr as _
@@ -303,6 +309,44 @@ impl_into_and_from_value! {
 	i32, I32,
 	u64, I64,
 	i64, I64,
+}
+
+pub trait WritePrimitive<T: PointerType> {
+	fn write_primitive(&mut self, ptr: Pointer<T>, t: T) -> Result<()>;
+}
+
+impl WritePrimitive<u32> for &mut dyn FunctionContext {
+	fn write_primitive(&mut self, ptr: Pointer<u32>, t: u32) -> Result<()> {
+		let r = t.to_le_bytes();
+		self.write_memory(ptr.cast(), &r)
+	}
+}
+
+impl WritePrimitive<u64> for &mut dyn FunctionContext {
+	fn write_primitive(&mut self, ptr: Pointer<u64>, t: u64) -> Result<()> {
+		let r = t.to_le_bytes();
+		self.write_memory(ptr.cast(), &r)
+	}
+}
+
+pub trait ReadPrimitive<T: PointerType> {
+	fn read_primitive(&self, offset: Pointer<T>) -> Result<T>;
+}
+
+impl ReadPrimitive<u32> for &mut dyn FunctionContext {
+	fn read_primitive(&self, ptr: Pointer<u32>) -> Result<u32> {
+		let mut r = [0u8; 4];
+		self.read_memory_into(ptr.cast(), &mut r)?;
+		Ok(u32::from_le_bytes(r))
+	}
+}
+
+impl ReadPrimitive<u64> for &mut dyn FunctionContext {
+	fn read_primitive(&self, ptr: Pointer<u64>) -> Result<u64> {
+		let mut r = [0u8; 8];
+		self.read_memory_into(ptr.cast(), &mut r)?;
+		Ok(u64::from_le_bytes(r))
+	}
 }
 
 #[cfg(test)]
