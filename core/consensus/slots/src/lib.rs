@@ -208,6 +208,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			let slot_after_building = SignedDuration::default().slot_now(slot_duration);
 			if slot_after_building != slot_number {
 				info!("Discarding proposal for slot {}; block production took too long", slot_number);
+				// If the node was compiled with debug, tell the user to use release optimizations.
+				#[cfg(debug_assertions)]
+				info!("Recompile your node in `--release` mode to mitigate this problem.");
 				telemetry!(CONSENSUS_INFO; "slots.discarding_proposal_took_too_long";
 					"slot" => slot_number,
 				);
