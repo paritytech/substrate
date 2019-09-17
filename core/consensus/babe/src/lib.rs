@@ -1293,6 +1293,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 				&*self.client,
 				hash,
 				number,
+				*block.header.parent_hash(),
 				next_epoch,
 			);
 

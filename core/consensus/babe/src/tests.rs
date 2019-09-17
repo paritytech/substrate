@@ -21,7 +21,7 @@
 #![allow(deprecated)]
 use super::*;
 
-use babe_primitives::AuthorityPair;
+use babe_primitives::{AuthorityPair, SlotNumber};
 use client::block_builder::BlockBuilder;
 use consensus_common::NoNetwork as DummyOracle;
 use consensus_common::import_queue::{
@@ -50,8 +50,19 @@ type TestClient = client::Client<
 	test_client::runtime::RuntimeApi,
 >;
 
-struct DummyFactory(Arc<TestClient>);
-struct DummyProposer(u64, Arc<TestClient>);
+#[derive(Clone)]
+struct DummyFactory {
+	client: Arc<TestClient>,
+	epoch_changes: crate::SharedEpochChanges<TestBlock>,
+	config: Config,
+}
+
+struct DummyProposer {
+	factory: DummyFactory,
+	parent_hash: Hash,
+	parent_number: u64,
+	parent_slot: SlotNumber,
+}
 
 impl Environment<TestBlock> for DummyFactory {
 	type Proposer = DummyProposer;
@@ -60,7 +71,17 @@ impl Environment<TestBlock> for DummyFactory {
 	fn init(&mut self, parent_header: &<TestBlock as BlockT>::Header)
 		-> Result<DummyProposer, Error>
 	{
-		Ok(DummyProposer(parent_header.number + 1, self.0.clone()))
+
+		let parent_slot = crate::find_pre_digest::<TestBlock>(parent_header)
+			.expect("parent header has a pre-digest")
+			.slot_number();
+
+		Ok(DummyProposer {
+			factory: self.clone(),
+			parent_hash: parent_header.hash(),
+			parent_number: *parent_header.number(),
+			parent_slot,
+		})
 	}
 }
 
@@ -71,10 +92,50 @@ impl Proposer<TestBlock> for DummyProposer {
 	fn propose(
 		&mut self,
 		_: InherentData,
-		digests: DigestFor<TestBlock>,
+		pre_digests: DigestFor<TestBlock>,
 		_: Duration,
 	) -> Self::Create {
-		future::ready(self.1.new_block(digests).unwrap().bake().map_err(|e| e.into()))
+		let block_builder = self.factory.client.new_block_at(
+			&BlockId::Hash(self.parent_hash),
+			pre_digests,
+		).unwrap();
+		let mut block = match block_builder.bake().map_err(|e| e.into()) {
+			Ok(b) => b,
+			Err(e) => return future::ready(Err(e)),
+		};
+
+		let this_slot = crate::find_pre_digest::<TestBlock>(block.header())
+			.expect("baked block has valid pre-digest")
+			.slot_number();
+
+		// figure out if we should add a consensus digest, since the test runtime
+		// doesn't.
+		let mut epoch_changes = self.factory.epoch_changes.lock();
+		let epoch = epoch_changes.epoch_for_child_of(
+			&*self.factory.client,
+			&self.parent_hash,
+			self.parent_number,
+			this_slot,
+			|slot| self.factory.config.genesis_epoch(slot),
+		)
+			.expect("client has data to find epoch")
+			.expect("can compute epoch for baked block");
+
+		let first_in_epoch = self.parent_slot < epoch.start_slot;
+		if first_in_epoch {
+			// push a `Consensus` digest signalling next change.
+			// we just reuse the same randomness and authorities as the prior
+			// epoch. this will break when we add light client support, since
+			// that will re-check the randomness logic off-chain.
+			let digest_data = ConsensusLog::NextEpochData(NextEpochDescriptor {
+				authorities: epoch.authorities.clone(),
+				randomness: epoch.randomness.clone(),
+			}).encode();
+			let digest = DigestItem::Consensus(BABE_ENGINE_ID, digest_data);
+			block.header.digest_mut().push(digest)
+		}
+
+		future::ready(Ok(block))
 	}
 }
 
@@ -255,7 +316,14 @@ fn run_one_test() {
 		let mut got_own = false;
 		let mut got_other = false;
 
-		let environ = DummyFactory(client.clone());
+		let data = peer.data.as_ref().expect("babe link set up during initialization");
+
+		let environ = DummyFactory {
+			client: client.clone(),
+			config: data.link.config.clone(),
+			epoch_changes: data.link.epoch_changes.clone(),
+		};
+
 		import_notifications.push(
 			// run each future until we get one of our own blocks with number higher than 5
 			// that was produced locally.
@@ -267,8 +335,6 @@ fn run_one_test() {
 						got_other = true;
 					}
 
-					println!("got_own={} got_other={}", got_own, got_other);
-
 					// continue until we have at least one block of our own
 					// and one of another peer.
 					!(got_own && got_other)
@@ -276,7 +342,6 @@ fn run_one_test() {
 				.for_each(|_| future::ready(()) )
 		);
 
-		let data = peer.data.as_ref().expect("babe link set up during initialization");
 
 		runtime.spawn(start_babe(BabeParams {
 			block_import: data.block_import.lock().take().expect("import set up during init"),
@@ -302,7 +367,7 @@ fn run_one_test() {
 
 #[test]
 fn authoring_blocks() {
-	env_logger::try_init().unwrap();
+	MUTATOR.with(|s| *s.borrow_mut() = Arc::new(move |_| ()));
 	run_one_test()
 }
 
@@ -416,6 +481,7 @@ fn can_author_block() {
 	}
 }
 
+// TODO: reinstate this, using the correct APIs now that `fn epoch` is gone.
 // #[test]
 // fn authorities_call_works() {
 // 	let _ = env_logger::try_init();
