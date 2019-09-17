@@ -375,7 +375,7 @@ fn can_author_block() {
 		.expect("Generates authority pair");
 
 	let mut i = 0;
-	let mut epoch = Epoch {
+	let epoch = Epoch {
 		start_slot: 0,
 		authorities: vec![(pair.public(), 1)],
 		randomness: [0; 32],
@@ -391,8 +391,6 @@ fn can_author_block() {
 		randomness: [0; 32],
 		secondary_slots: true,
 	};
-
-	let parent_weight = 0;
 
 	// with secondary slots enabled it should never be empty
 	match claim_slot(i, &epoch, &config, &keystore) {

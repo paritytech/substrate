@@ -90,16 +90,19 @@ impl<Block: BlockT> EpochChanges<Block> {
 	pub fn prune_finalized<D: IsDescendentOfBuilder<Block>>(
 		&mut self,
 		descendent_of_builder: D,
-		hash: &Block::Hash,
-		number: NumberFor<Block>,
+		_hash: &Block::Hash,
+		_number: NumberFor<Block>,
 	) -> Result<(), fork_tree::Error<D::Error>> {
-		let is_descendent_of = descendent_of_builder
+		let _is_descendent_of = descendent_of_builder
 			.build_is_descendent_of(None);
 
+		// TODO:
 		// prune any epochs which could not be _live_ as of the children of the
 		// finalized block.
 		// i.e. re-root the fork tree to the earliest ancestor of (hash, number)
 		// where epoch.start_slot + epoch.duration >= slot(hash)
+
+		Ok(())
 	}
 
 	/// Finds the epoch for a child of the given block, assuming the given slot number.
