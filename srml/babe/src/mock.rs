@@ -18,7 +18,7 @@
 #![allow(dead_code, unused_imports)]
 
 use super::{Trait, Module, GenesisConfig};
-use babe_primitives::sr25519::AuthorityId;
+use babe_primitives::AuthorityId;
 use sr_primitives::{
 	traits::IdentityLookup, Perbill,
 	testing::{Header, UintAuthorityId},

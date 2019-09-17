@@ -68,9 +68,9 @@ fn check_epoch_change() {
 		System::initialize(&1, &Default::default(), &Default::default(), &Default::default());
 
 		// Check that we do not change sessions on the genesis block.
-		assert!(!Babe::should_end_session(0), "Genesis does not change sessions");
+		assert!(!Babe::should_end_session(0), "Genesis starts the first session change sessions");
 		assert!(
-			!Babe::should_end_session(200000),
+			!Babe::should_end_session(1),
 			"BABE does not include the block number in epoch calculations",
 		);
 		let header = System::finalize();
@@ -79,32 +79,34 @@ fn check_epoch_change() {
 		assert_eq!(header.digest, Digest { logs: vec![] });
 
 		// Re-initialize.
+		System::initialize(&2, &header.hash(), &Default::default(), &Default::default());
+		CurrentSlot::put(2);
+		let header = System::finalize();
+		assert_eq!(header.digest, Digest { logs: vec![] });
+		assert!(!Babe::should_end_session(2));
+
+		// Re-initialize.
 		System::initialize(&3, &header.hash(), &Default::default(), &Default::default());
-		EpochStartSlot::put(1);
 		CurrentSlot::put(3);
 		let header = System::finalize();
 		assert_eq!(header.digest, Digest { logs: vec![] });
-		assert!(!Babe::should_end_session(0));
+		assert!(Babe::should_end_session(3));
 
 		// Rotate the session
-		System::initialize(&4, &header.hash(), &Default::default(), &Default::default());
-		CurrentSlot::put(4);
-		assert!(Babe::should_end_session(0), "we change sessions at slot 4");
-		Babe::randomness_change_epoch(1);
+		// System::initialize(&4, &header.hash(), &Default::default(), &Default::default());
+		// CurrentSlot::put(4);
+		// assert!(Babe::should_end_session(0), "we change sessions at slot 4");
+		Session::rotate_session();
 		let header = System::finalize();
 
 		// Check that we got the expected digest.
 		let Digest { ref logs } = header.digest;
-		assert_eq!(logs.len(), 2, "should have exactly 2 digests here");
+		assert_eq!(logs.len(), 2, "should have exactly 1 digest here");
 		let (engine_id, mut epoch) = logs[0].as_consensus().unwrap();
 		assert_eq!(BABE_ENGINE_ID, engine_id, "we should only have a BABE consensus digest here");
-		let Epoch {
-			start_slot,
-			duration,
-			epoch_index,
+		let NextEpochDescriptor {
 			authorities,
 			randomness,
-			secondary_slots,
 		} = match ConsensusLog::decode(&mut epoch).unwrap() {
 			ConsensusLog::NextEpochData(e) => e,
 			ConsensusLog::OnDisabled(_) => panic!("we have not disabled any authorities yet!"),
@@ -112,12 +114,20 @@ fn check_epoch_change() {
 
 		// Check that the fields of the digest are correct
 		assert_eq!(EpochDuration::get(), 3, "wrong epoch duration");
-		assert_eq!(duration, EpochDuration::get(), "wrong epoch duration");
-		assert_eq!(start_slot, 2 * EpochDuration::get() + 1, "we should start at the next epoch");
-		assert_eq!(epoch_index, 2, "we are at epoch 2");
 		assert_eq!(authorities, []);
 		assert_eq!(randomness, EXPECTED_RANDOMNESS, "incorrect randomness");
-		assert!(secondary_slots, "secondary slots missed");
+
+		let (engine_id, mut epoch) = logs[1].as_consensus().unwrap();
+		assert_eq!(BABE_ENGINE_ID, engine_id, "we should only have a BABE consensus digest here");
+		let NextEpochDescriptor {
+			authorities,
+			randomness,
+		} = match ConsensusLog::decode(&mut epoch).unwrap() {
+			ConsensusLog::NextEpochData(e) => e,
+			ConsensusLog::OnDisabled(_) => panic!("we have not disabled any authorities yet!"),
+		};
+		assert_eq!(authorities, []);
+		assert_eq!(randomness, EXPECTED_RANDOMNESS, "incorrect randomness");
 	})
 }
 
