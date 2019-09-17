@@ -28,7 +28,7 @@ use crate::config::build_multiaddr;
 use log::trace;
 use crate::chain::FinalityProofProvider;
 use client::{
-	self, ClientInfo, BlockchainEvents, BlockImportNotification, FinalityNotifications,
+	self, ClientInfo, BlockchainEvents, BlockImportNotification, FinalityNotifications, ImportNotifications,
 	FinalityNotification, LongestChain
 };
 use client::error::Result as ClientResult;
@@ -186,6 +186,13 @@ impl PeersClient {
 		match *self {
 			PeersClient::Full(ref client, ref _backend) => client.finality_notification_stream(),
 			PeersClient::Light(ref client, ref _backend) => client.finality_notification_stream(),
+		}
+	}
+
+	pub fn import_notification_stream(&self) -> ImportNotifications<Block>{
+		match *self {
+			PeersClient::Full(ref client, ref _backend) => client.import_notification_stream(),
+			PeersClient::Light(ref client, ref _backend) => client.import_notification_stream(),
 		}
 	}
 
