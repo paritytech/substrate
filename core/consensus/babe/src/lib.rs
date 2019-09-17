@@ -102,9 +102,8 @@ use consensus_common::import_queue::{Verifier, BasicQueue};
 use client::{
 	block_builder::api::BlockBuilder as BlockBuilderApi,
 	blockchain::{self, HeaderBackend, ProvideCache}, BlockchainEvents, CallExecutor, Client,
-	runtime_api::ApiExt, error::Result as ClientResult, backend::{AuxStore, Backend},
+	error::Result as ClientResult, backend::{AuxStore, Backend},
 	ProvideUncles,
-	utils::is_descendent_of,
 };
 use slots::{CheckedHeader, check_equivocation};
 use futures::prelude::*;
@@ -382,6 +381,14 @@ macro_rules! babe_err {
 	};
 }
 
+macro_rules! babe_info {
+	($($i: expr),+) => {
+		{ info!(target: "babe", $($i),+)
+		; format!($($i),+)
+		}
+	};
+}
+
 /// Extract the BABE pre digest from the given header. Pre-runtime digests are
 /// mandatory, the function will return `Err` if none is found.
 fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<BabePreDigest, String>
@@ -434,8 +441,6 @@ struct VerificationParams<'a, B: 'a + BlockT> {
 	/// verification code had to read it, it can be included here to avoid duplicate
 	/// work.
 	pre_digest: Option<BabePreDigest>,
-	/// The total weight of the chain indicated by the parent block.
-	parent_weight: BabeBlockWeight,
 	/// the slot number of the current time.
 	slot_now: SlotNumber,
 	/// epoch descriptor of the epoch this block _should_ be under, if it's valid.
@@ -469,7 +474,6 @@ fn check_header<B: BlockT + Sized, C: AuxStore>(
 	let VerificationParams {
 		mut header,
 		pre_digest,
-		parent_weight,
 		slot_now,
 		epoch,
 		config,
@@ -532,7 +536,6 @@ fn check_header<B: BlockT + Sized, C: AuxStore>(
 		}
 	}
 
-	let weight = parent_weight + pre_digest.added_weight();
 	let author = &authorities[pre_digest.authority_index() as usize].0;
 
 	// the header is valid but let's check if there was something else already
@@ -544,12 +547,12 @@ fn check_header<B: BlockT + Sized, C: AuxStore>(
 		&header,
 		author,
 	).map_err(|e| e.to_string())? {
-		info!(
+		babe_info!(
 			"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
 			author,
 			pre_digest.slot_number(),
 			equivocation_proof.fst_header().hash(),
-			equivocation_proof.snd_header().hash(),
+			equivocation_proof.snd_header().hash()
 		);
 	}
 
@@ -762,8 +765,6 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 		justification: Option<Justification>,
 		mut body: Option<Vec<Block::Extrinsic>>,
 	) -> Result<(BlockImportParams<Block>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
-		use sr_primitives::traits::One;
-
 		trace!(
 			target: "babe",
 			"Verifying origin: {:?} header: {:?} justification: {:?} body: {:?}",
@@ -802,20 +803,11 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 				.ok_or_else(|| format!("Could not fetch epoch at {:?}", parent_hash))?
 		};
 
-		// load parent weight, special-casing the genesis.
-		let parent_weight = aux_schema::load_block_weight(&*self.client, parent_hash)
-			.map_err(|e| e.to_string())?
-			.or(if header.number() == &One::one() { Some(0) } else { None })
-			.ok_or_else(
-				|| format!("No block weight for parent header.")
-			)?;
-
 		// We add one to the current slot to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of headers
 		let v_params = VerificationParams {
 			header,
 			pre_digest: Some(pre_digest.clone()),
-			parent_weight,
 			slot_now,
 			epoch: &epoch,
 			config: &self.config,
@@ -1251,13 +1243,24 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 
 			old_epoch_changes = Some(epoch_changes.clone());
 
+			babe_info!("New epoch {} launching at block {} (block slot {} >= start slot {}).",
+				epoch.epoch_index, hash, slot_number, epoch.start_slot);
+			babe_info!("Next epoch starts at slot {}", next_epoch.start_slot);
+
 			// track the epoch change in the fork tree
-			epoch_changes.import(
+			let res = epoch_changes.import(
 				&*self.client,
 				hash,
 				number,
 				next_epoch,
 			);
+
+			if let Err(e) = res {
+				let err = ConsensusError::ClientImport(format!("{:?}", e));
+				babe_err!("Failed to launch next epoch: {:?}", e);
+				*epoch_changes = old_epoch_changes.expect("set `Some` above and not taken; qed");
+				return Err(err);
+			}
 
 			crate::aux_schema::write_epoch_changes::<Block, _, _>(
 				&*epoch_changes,
@@ -1384,12 +1387,15 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
 		.for_each(move |notification| {
 			// TODO: supply is-descendent-of and maybe write to disk _now_
 			// as opposed to waiting for the next epoch?
-			// also reinstate :)
-			// epoch_changes.lock().prune_finalized(
-			// 	&*client,
-			// 	&notification.hash,
-			// 	*notification.header.number(),
-			// );
+			let res = epoch_changes.lock().prune_finalized(
+				&*client,
+				&notification.hash,
+				*notification.header.number(),
+			);
+
+			if let Err(e) = res {
+				babe_err!("Could not prune expired epoch changes: {:?}", e);
+			}
 
 			Ok(())
 		});
