@@ -682,7 +682,7 @@ fn build_network_future<
 
 		// We poll `imported_blocks_stream`.
 		while let Ok(Async::Ready(Some(notification))) = imported_blocks_stream.poll() {
-			network.on_block_imported(notification.hash, notification.header);
+			network.on_block_imported(notification.hash, notification.header, notification.is_new_best);
 		}
 
 		// We poll `finality_notification_stream`, but we only take the last event.
