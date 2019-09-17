@@ -28,7 +28,7 @@ use crate::config::build_multiaddr;
 use log::trace;
 use crate::chain::FinalityProofProvider;
 use client::{
-	self, ClientInfo, BlockchainEvents, BlockImportNotification, FinalityNotifications,
+	self, ClientInfo, BlockchainEvents, BlockImportNotification, FinalityNotifications, ImportNotifications,
 	FinalityNotification, LongestChain
 };
 use client::error::Result as ClientResult;
@@ -189,6 +189,13 @@ impl PeersClient {
 		}
 	}
 
+	pub fn import_notification_stream(&self) -> ImportNotifications<Block>{
+		match *self {
+			PeersClient::Full(ref client, ref _backend) => client.import_notification_stream(),
+			PeersClient::Light(ref client, ref _backend) => client.import_notification_stream(),
+		}
+	}
+
 	pub fn finalize_block(
 		&self,
 		id: BlockId<Block>,
@@ -293,7 +300,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 				Default::default()
 			};
 			self.block_import.import_block(import_block, cache).expect("block_import failed");
-			self.network.on_block_imported(hash, header);
+			self.network.on_block_imported(hash, header, true);
 			at = hash;
 		}
 
@@ -655,7 +662,7 @@ pub trait TestNetFactory: Sized {
 
 				// We poll `imported_blocks_stream`.
 				while let Ok(Async::Ready(Some(notification))) = peer.imported_blocks_stream.poll() {
-					peer.network.on_block_imported(notification.hash, notification.header);
+					peer.network.on_block_imported(notification.hash, notification.header, true);
 				}
 
 				// We poll `finality_notification_stream`, but we only take the last event.

@@ -208,6 +208,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			let slot_after_building = SignedDuration::default().slot_now(slot_duration);
 			if slot_after_building != slot_number {
 				info!("Discarding proposal for slot {}; block production took too long", slot_number);
+				// If the node was compiled with debug, tell the user to use release optimizations.
+				#[cfg(build_type="debug")]
+				info!("Recompile your node in `--release` mode to mitigate this problem.");
 				telemetry!(CONSENSUS_INFO; "slots.discarding_proposal_took_too_long";
 					"slot" => slot_number,
 				);
@@ -394,7 +397,7 @@ impl<T: Clone> SlotDuration<T> {
 			Some(v) => <T as codec::Decode>::decode(&mut &v[..])
 				.map(SlotDuration)
 				.map_err(|_| {
-					::client::error::Error::Backend({
+					client::error::Error::Backend({
 						error!(target: "slots", "slot duration kept in invalid format");
 						format!("slot duration kept in invalid format")
 					})

@@ -64,9 +64,9 @@ const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1100);
 const PROPAGATE_TIMEOUT: time::Duration = time::Duration::from_millis(2900);
 
 /// Current protocol version.
-pub(crate) const CURRENT_VERSION: u32 = 3;
+pub(crate) const CURRENT_VERSION: u32 = 4;
 /// Lowest version we support
-pub(crate) const MIN_VERSION: u32 = 2;
+pub(crate) const MIN_VERSION: u32 = 3;
 
 // Maximum allowed entries in `BlockResponse`
 const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
@@ -172,11 +172,17 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a, B> {
 		self.behaviour.send_packet(who, message)
 	}
 
-	fn send_read_request(&mut self, who: &PeerId, id: RequestId, block: <B as BlockT>::Hash, key: Vec<u8>) {
+	fn send_read_request(
+		&mut self,
+		who: &PeerId,
+		id: RequestId,
+		block: <B as BlockT>::Hash,
+		keys: Vec<Vec<u8>>,
+	) {
 		let message = message::generic::Message::RemoteReadRequest(message::RemoteReadRequest {
 			id,
 			block,
-			key,
+			keys,
 		});
 
 		self.behaviour.send_packet(who, message)
@@ -188,13 +194,13 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a, B> {
 		id: RequestId,
 		block: <B as BlockT>::Hash,
 		storage_key: Vec<u8>,
-		key: Vec<u8>
+		keys: Vec<Vec<u8>>,
 	) {
 		let message = message::generic::Message::RemoteReadChildRequest(message::RemoteReadChildRequest {
 			id,
 			block,
 			storage_key,
-			key,
+			keys,
 		});
 
 		self.behaviour.send_packet(who, message)
@@ -1022,14 +1028,33 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			return;
 		}
 
+		let is_best = self.context_data.chain.info().chain.best_hash == hash;
+		debug!(target: "sync", "Reannouncing block {:?}", hash);
+		self.send_announcement(&header, is_best, true)
+	}
+
+	fn send_announcement(&mut self, header: &B::Header, is_best: bool, force: bool) {
 		let hash = header.hash();
 
-		let message = GenericMessage::BlockAnnounce(message::BlockAnnounce { header: header.clone() });
-
 		for (who, ref mut peer) in self.context_data.peers.iter_mut() {
-			trace!(target: "sync", "Reannouncing block {:?} to {}", hash, who);
-			peer.known_blocks.insert(hash);
-			self.behaviour.send_packet(who, message.clone())
+			trace!(target: "sync", "Announcing block {:?} to {}", hash, who);
+			let inserted = peer.known_blocks.insert(hash);
+			if inserted || force {
+				let message = GenericMessage::BlockAnnounce(message::BlockAnnounce {
+					header: header.clone(),
+					state: if peer.info.protocol_version >= 4  {
+						if is_best {
+							Some(message::BlockState::Best)
+						} else {
+							Some(message::BlockState::Normal)
+						}
+					} else  {
+						None
+					}
+				});
+
+				self.behaviour.send_packet(who, message)
+			}
 		}
 	}
 
@@ -1066,7 +1091,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			peerset: self.peerset_handle.clone(),
 		}, who.clone(), *header.number());
 
-		match self.sync.on_block_announce(who.clone(), hash, &header) {
+		let is_their_best = match announce.state.unwrap_or(message::BlockState::Best) {
+			message::BlockState::Best => true,
+			message::BlockState::Normal => false,
+		};
+
+		match self.sync.on_block_announce(who.clone(), hash, &header, is_their_best) {
 			sync::OnBlockAnnounce::Request(peer, req) => {
 				self.send_message(peer, GenericMessage::BlockRequest(req));
 				return CustomMessageOutcome::None
@@ -1126,8 +1156,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	/// Call this when a block has been imported in the import queue and we should announce it on
 	/// the network.
-	pub fn on_block_imported(&mut self, hash: B::Hash, header: &B::Header) {
-		self.sync.update_chain_info(header);
+	pub fn on_block_imported(&mut self, hash: B::Hash, header: &B::Header, is_best: bool) {
+		if is_best {
+			self.sync.update_chain_info(header);
+		}
 		self.specialization.on_block_imported(
 			&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle),
 			hash.clone(),
@@ -1140,15 +1172,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 
 		// send out block announcements
-
-		let message = GenericMessage::BlockAnnounce(message::BlockAnnounce { header: header.clone() });
-
-		for (who, ref mut peer) in self.context_data.peers.iter_mut() {
-			if peer.known_blocks.insert(hash.clone()) {
-				trace!(target: "sync", "Announcing block {:?} to {}", hash, who);
-				self.behaviour.send_packet(who, message.clone())
-			}
-		}
+		self.send_announcement(&header, is_best, false);
 	}
 
 	/// Call this when a block has been finalized. The sync layer may have some additional
@@ -1272,15 +1296,24 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		who: PeerId,
 		request: message::RemoteReadRequest<B::Hash>,
 	) {
+		let keys_str = || match request.keys.len() {
+			1 => request.keys[0].to_hex::<String>(),
+			_ => format!(
+				"{}..{}",
+				request.keys[0].to_hex::<String>(),
+				request.keys[request.keys.len() - 1].to_hex::<String>(),
+			),
+		};
+
 		trace!(target: "sync", "Remote read request {} from {} ({} at {})",
-			request.id, who, request.key.to_hex::<String>(), request.block);
-		let proof = match self.context_data.chain.read_proof(&request.block, &request.key) {
+			request.id, who, keys_str(), request.block);
+		let proof = match self.context_data.chain.read_proof(&request.block, &request.keys) {
 			Ok(proof) => proof,
 			Err(error) => {
 				trace!(target: "sync", "Remote read request {} from {} ({} at {}) failed with: {}",
 					request.id,
 					who,
-					request.key.to_hex::<String>(),
+					keys_str(),
 					request.block,
 					error
 				);
@@ -1301,16 +1334,29 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		who: PeerId,
 		request: message::RemoteReadChildRequest<B::Hash>,
 	) {
+		let keys_str = || match request.keys.len() {
+			1 => request.keys[0].to_hex::<String>(),
+			_ => format!(
+				"{}..{}",
+				request.keys[0].to_hex::<String>(),
+				request.keys[request.keys.len() - 1].to_hex::<String>(),
+			),
+		};
+
 		trace!(target: "sync", "Remote read child request {} from {} ({} {} at {})",
-			request.id, who, request.storage_key.to_hex::<String>(), request.key.to_hex::<String>(), request.block);
-		let proof = match self.context_data.chain.read_child_proof(&request.block, &request.storage_key, &request.key) {
+			request.id, who, request.storage_key.to_hex::<String>(), keys_str(), request.block);
+		let proof = match self.context_data.chain.read_child_proof(
+			&request.block,
+			&request.storage_key,
+			&request.keys,
+		) {
 			Ok(proof) => proof,
 			Err(error) => {
 				trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",
 					request.id,
 					who,
 					request.storage_key.to_hex::<String>(),
-					request.key.to_hex::<String>(),
+					keys_str(),
 					request.block,
 					error
 				);
