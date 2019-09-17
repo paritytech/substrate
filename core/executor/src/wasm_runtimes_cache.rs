@@ -99,7 +99,12 @@ impl StateSnapshot {
 				// anyway.
 				let contents = mem::replace(segment.value_mut(), vec![]);
 
-				let init_expr = segment.offset().code();
+				let init_expr = match segment.offset() {
+					Some(offset) => offset.code(),
+					// Return if the segment is passive
+					None => return None
+				};
+
 				// [op, End]
 				if init_expr.len() != 2 {
 					return None;
