@@ -107,7 +107,6 @@ use client::{
 };
 use slots::{CheckedHeader, check_equivocation};
 use futures::prelude::*;
-use futures01::Stream as _;
 use log::{warn, debug, info, trace};
 
 use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible};
@@ -238,7 +237,7 @@ pub fn start_babe<B, C, SC, E, I, SO, Error>(BabeParams {
 	E: Environment<B, Error=Error> + Send + Sync,
 	E::Proposer: Proposer<B, Error=Error>,
 	<E::Proposer as Proposer<B>>::Create: Unpin + Send + 'static,
-	I: BlockImport<B> + Send + Sync + 'static,
+	I: BlockImport<B,Error=ConsensusError> + Send + Sync + 'static,
 	Error: std::error::Error + Send + From<::consensus_common::Error> + From<I::Error> + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
 {

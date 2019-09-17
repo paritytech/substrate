@@ -192,7 +192,31 @@ pub trait BlockImport<B: BlockT> {
 	) -> Result<ImportResult, Self::Error>;
 }
 
-impl<B: BlockT, T, E: ::std::error::Error + Send + 'static> BlockImport<B> for Arc<T>
+impl<B: BlockT> BlockImport<B> for crate::import_queue::BoxBlockImport<B> {
+	type Error = crate::error::Error;
+
+	/// Check block preconditions.
+	fn check_block(
+		&mut self,
+		hash: B::Hash,
+		parent_hash: B::Hash,
+	) -> Result<ImportResult, Self::Error> {
+		(**self).check_block(hash, parent_hash)
+	}
+
+	/// Import a block.
+	///
+	/// Cached data can be accessed through the blockchain cache.
+	fn import_block(
+		&mut self,
+		block: BlockImportParams<B>,
+		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
+	) -> Result<ImportResult, Self::Error> {
+		(**self).import_block(block, cache)
+	}
+}
+
+impl<B: BlockT, T, E: std::error::Error + Send + 'static> BlockImport<B> for Arc<T>
 where for<'r> &'r T: BlockImport<B, Error = E>
 {
 	type Error = E;
