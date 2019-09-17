@@ -128,7 +128,7 @@ macro_rules! new_full {
 			.with_dht_event_tx(dht_event_tx)?
 			.build()?;
 
-		let (block_import, link_half, babe_link) = import_setup.take()
+		let (link_half, babe_link) = import_setup.take()
 				.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
 		// spawn any futures that were created in the previous setup steps
@@ -149,7 +149,6 @@ macro_rules! new_full {
 				keystore: service.keystore(),
 				client,
 				select_chain,
-				block_import,
 				env: proposer,
 				sync_oracle: service.network(),
 				inherent_data_providers: inherent_data_providers.clone(),
