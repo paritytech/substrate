@@ -17,7 +17,7 @@
 //! Concrete externalities implementation.
 
 use std::{error, fmt, cmp::Ord};
-use log::warn;
+use log::{warn, trace};
 use crate::{
 	backend::Backend, OverlayedChanges,
 	changes_trie::{
@@ -28,6 +28,7 @@ use hash_db::Hasher;
 use primitives::{
 	offchain, storage::well_known_keys::is_child_storage_key,
 	traits::{BareCryptoStorePtr, Externalities}, child_storage_key::ChildStorageKey,
+	hexdisplay::HexDisplay,
 };
 use trie::{MemoryDB, default_child_trie_root};
 use trie::trie_types::Layout;
@@ -91,6 +92,8 @@ where
 	offchain_externalities: Option<&'a mut O>,
 	/// The keystore that manages the keys of the node.
 	keystore: Option<BareCryptoStorePtr>,
+	/// Pseudo-unique id used for tracing.
+	pub id: u16,
 	/// Dummy usage of N arg.
 	_phantom: ::std::marker::PhantomData<N>,
 }
@@ -120,6 +123,7 @@ where
 			changes_trie_transaction: None,
 			offchain_externalities,
 			keystore,
+			id: rand::random(),
 			_phantom: Default::default(),
 		}
 	}
@@ -183,66 +187,137 @@ where	H: Hasher,
 {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
-			self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL))
+		let result = self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
+			self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL));
+		trace!(target: "state-trace", "{:04x}: Get {}={:?}",
+			self.id,
+			HexDisplay::from(&key),
+			result.as_ref().map(HexDisplay::from)
+		);
+		result
 	}
 
 	fn storage_hash(&self, key: &[u8]) -> Option<H::Out> {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		self.overlay.storage(key).map(|x| x.map(|x| H::hash(x))).unwrap_or_else(||
-			self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL))
+		let result = self.overlay.storage(key).map(|x| x.map(|x| H::hash(x))).unwrap_or_else(||
+			self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL));
+		trace!(target: "state-trace", "{:04x}: Hash {}={:?}",
+			self.id,
+			HexDisplay::from(&key),
+			result,
+		);
+		result
 	}
 
 	fn original_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
+		let result = self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
+		trace!(target: "state-trace", "{:04x}: GetOriginal {}={:?}",
+			self.id,
+			HexDisplay::from(&key),
+			result.as_ref().map(HexDisplay::from)
+		);
+		result
 	}
 
 	fn original_storage_hash(&self, key: &[u8]) -> Option<H::Out> {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL)
+		let result = self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL);
+		trace!(target: "state-trace", "{:04x}: GetOriginalHash {}={:?}",
+			self.id,
+			HexDisplay::from(&key),
+			result,
+		);
+		result
 	}
 
 	fn child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		self.overlay.child_storage(storage_key.as_ref(), key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
-			self.backend.child_storage(storage_key.as_ref(), key).expect(EXT_NOT_ALLOWED_TO_FAIL))
+		let result = self.overlay.child_storage(storage_key.as_ref(), key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
+			self.backend.child_storage(storage_key.as_ref(), key).expect(EXT_NOT_ALLOWED_TO_FAIL));
+		trace!(target: "state-trace", "{:04x}: GetChild({}) {}={:?}",
+			self.id,
+			HexDisplay::from(&storage_key.as_ref()),
+			HexDisplay::from(&key),
+			result.as_ref().map(HexDisplay::from)
+		);
+		result
 	}
 
 	fn child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<H::Out> {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		self.overlay.child_storage(storage_key.as_ref(), key).map(|x| x.map(|x| H::hash(x))).unwrap_or_else(||
-			self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL))
+		let result = self.overlay.child_storage(storage_key.as_ref(), key).map(|x| x.map(|x| H::hash(x))).unwrap_or_else(||
+			self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL));
+		trace!(target: "state-trace", "{:04x}: ChildHash({}) {}={:?}",
+			self.id,
+			HexDisplay::from(&storage_key.as_ref()),
+			HexDisplay::from(&key),
+			result,
+		);
+		result
 	}
 
 	fn original_child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		self.backend.child_storage(storage_key.as_ref(), key).expect(EXT_NOT_ALLOWED_TO_FAIL)
+		let result = self.backend.child_storage(storage_key.as_ref(), key).expect(EXT_NOT_ALLOWED_TO_FAIL);
+		trace!(target: "state-trace", "{:04x}: ChildOriginal({}) {}={:?}",
+			self.id,
+			HexDisplay::from(&storage_key.as_ref()),
+			HexDisplay::from(&key),
+			result.as_ref().map(HexDisplay::from),
+		);
+		result
 	}
 
 	fn original_child_storage_hash(&self, storage_key: ChildStorageKey, key: &[u8]) -> Option<H::Out> {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		self.backend.child_storage_hash(storage_key.as_ref(), key).expect(EXT_NOT_ALLOWED_TO_FAIL)
+		let result = self.backend.child_storage_hash(storage_key.as_ref(), key).expect(EXT_NOT_ALLOWED_TO_FAIL);
+		trace!(target: "state-trace", "{}: ChildHashOriginal({}) {}={:?}",
+			self.id,
+			HexDisplay::from(&storage_key.as_ref()),
+			HexDisplay::from(&key),
+			result,
+		);
+		result
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> bool {
 		let _guard = panic_handler::AbortGuard::force_abort();
-		match self.overlay.storage(key) {
+		let result = match self.overlay.storage(key) {
 			Some(x) => x.is_some(),
 			_ => self.backend.exists_storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL),
-		}
+		};
+		trace!(target: "state-trace", "{:04x}: Exists {}={:?}",
+			self.id,
+			HexDisplay::from(&key),
+			result,
+		);
+		result
+
 	}
 
 	fn exists_child_storage(&self, storage_key: ChildStorageKey, key: &[u8]) -> bool {
 		let _guard = panic_handler::AbortGuard::force_abort();
 
-		match self.overlay.child_storage(storage_key.as_ref(), key) {
+		let result = match self.overlay.child_storage(storage_key.as_ref(), key) {
 			Some(x) => x.is_some(),
 			_ => self.backend.exists_child_storage(storage_key.as_ref(), key).expect(EXT_NOT_ALLOWED_TO_FAIL),
-		}
+		};
+		trace!(target: "state-trace", "{:04x}: ChildExists({}) {}={:?}",
+			self.id,
+			HexDisplay::from(&storage_key.as_ref()),
+			HexDisplay::from(&key),
+			result,
+		);
+		result
 	}
 
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) {
+		trace!(target: "state-trace", "{:04x}: Put {}={:?}",
+			self.id,
+			HexDisplay::from(&key),
+			value.as_ref().map(HexDisplay::from)
+		);
 		let _guard = panic_handler::AbortGuard::force_abort();
 		if is_child_storage_key(&key) {
 			warn!(target: "trie", "Refuse to directly set child storage key");
@@ -254,6 +329,12 @@ where	H: Hasher,
 	}
 
 	fn place_child_storage(&mut self, storage_key: ChildStorageKey, key: Vec<u8>, value: Option<Vec<u8>>) {
+		trace!(target: "state-trace", "{:04x}: PutChild({}) {}={:?}",
+			self.id,
+			HexDisplay::from(&storage_key.as_ref()),
+			HexDisplay::from(&key),
+			value.as_ref().map(HexDisplay::from)
+		);
 		let _guard = panic_handler::AbortGuard::force_abort();
 
 		self.mark_dirty();
@@ -261,6 +342,10 @@ where	H: Hasher,
 	}
 
 	fn kill_child_storage(&mut self, storage_key: ChildStorageKey) {
+		trace!(target: "state-trace", "{:04x}: KillChild({})",
+			self.id,
+			HexDisplay::from(&storage_key.as_ref()),
+		);
 		let _guard = panic_handler::AbortGuard::force_abort();
 
 		self.mark_dirty();
@@ -271,6 +356,10 @@ where	H: Hasher,
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
+		trace!(target: "state-trace", "{:04x}: ClearPrefix {}",
+			self.id,
+			HexDisplay::from(&prefix),
+		);
 		let _guard = panic_handler::AbortGuard::force_abort();
 		if is_child_storage_key(prefix) {
 			warn!(target: "trie", "Refuse to directly clear prefix that is part of child storage key");
@@ -285,6 +374,11 @@ where	H: Hasher,
 	}
 
 	fn clear_child_prefix(&mut self, storage_key: ChildStorageKey, prefix: &[u8]) {
+		trace!(target: "state-trace", "{:04x}: ClearChildPrefix({}) {}",
+			self.id,
+			HexDisplay::from(&storage_key.as_ref()),
+			HexDisplay::from(&prefix),
+		);
 		let _guard = panic_handler::AbortGuard::force_abort();
 
 		self.mark_dirty();
@@ -301,6 +395,10 @@ where	H: Hasher,
 	fn storage_root(&mut self) -> H::Out {
 		let _guard = panic_handler::AbortGuard::force_abort();
 		if let Some((_, ref root)) = self.storage_transaction {
+			trace!(target: "state-trace", "{:04x}: Root (cached) {}",
+				self.id,
+				HexDisplay::from(&root.as_ref()),
+			);
 			return root.clone();
 		}
 
@@ -322,17 +420,27 @@ where	H: Hasher,
 
 		let (root, transaction) = self.backend.full_storage_root(delta, child_delta_iter);
 		self.storage_transaction = Some((transaction, root));
+		trace!(target: "state-trace", "{:04x}: Root {}",
+			self.id,
+			HexDisplay::from(&root.as_ref()),
+		);
 		root
 	}
 
 	fn child_storage_root(&mut self, storage_key: ChildStorageKey) -> Vec<u8> {
 		let _guard = panic_handler::AbortGuard::force_abort();
 		if self.storage_transaction.is_some() {
-			self
+			let root = self
 				.storage(storage_key.as_ref())
 				.unwrap_or(
 					default_child_trie_root::<Layout<H>>(storage_key.as_ref())
-				)
+				);
+			trace!(target: "state-trace", "{:04x}: ChildRoot({}) (cached) {}",
+				self.id,
+				HexDisplay::from(&storage_key.as_ref()),
+				HexDisplay::from(&root.as_ref()),
+			);
+			root
 		} else {
 			let storage_key = storage_key.as_ref();
 
@@ -347,6 +455,11 @@ where	H: Hasher,
 
 			self.overlay.set_storage(storage_key.to_vec(), Some(root.to_vec()));
 
+			trace!(target: "state-trace", "{:04x}: ChildRoot({}) {}",
+				self.id,
+				HexDisplay::from(&storage_key.as_ref()),
+				HexDisplay::from(&root.as_ref()),
+			);
 			root
 
 		}
@@ -360,7 +473,13 @@ where	H: Hasher,
 			self.overlay,
 			parent_hash,
 		)?;
-		Ok(self.changes_trie_transaction.as_ref().map(|(_, root, _)| root.clone()))
+		let result = Ok(self.changes_trie_transaction.as_ref().map(|(_, root, _)| root.clone()));
+		trace!(target: "state-trace", "{:04x}: ChangesRoot({}) {:?}",
+			self.id,
+			HexDisplay::from(&parent_hash.as_ref()),
+			result,
+		);
+		result
 	}
 
 	fn offchain(&mut self) -> Option<&mut dyn offchain::Externalities> {
