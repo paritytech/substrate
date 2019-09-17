@@ -62,8 +62,14 @@ use std::time::{Duration, Instant};
 
 mod error;
 /// Dht payload schemas generated from Protobuf definitions via Prost crate in build.rs.
+#[cfg(not(target_os = "windows"))]
 mod schema {
-	include!(concat!(env!("OUT_DIR"), "/authority_discovery.rs"));
+    include!(concat!(env!("OUT_DIR"), "/authority_discovery.rs"));
+}
+
+#[cfg(target_os = "windows")]
+mod schema {
+    include!(concat!(env!("OUT_DIR"), r"\authority_discovery.rs"));
 }
 
 /// An `AuthorityDiscovery` makes a given authority discoverable and discovers other authorities.
