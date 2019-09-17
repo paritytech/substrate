@@ -156,22 +156,32 @@ impl<Block: BlockT> EpochChanges<Block> {
 	}
 
 	/// Import a new epoch-change, signalled at the given block.
+	///
+	/// This assumes that the given block is prospective (i.e. has not been
+	/// imported yet), but its parent has. This is why the parent hash needs
+	/// to be provided.
 	pub fn import<D: IsDescendentOfBuilder<Block>>(
 		&mut self,
 		descendent_of_builder: D,
 		hash: Block::Hash,
 		number: NumberFor<Block>,
+		parent_hash: Block::Hash,
 		epoch: Epoch,
 	) -> Result<(), fork_tree::Error<D::Error>> {
 		let is_descendent_of = descendent_of_builder
-			.build_is_descendent_of(None);
+			.build_is_descendent_of(Some((hash, parent_hash)));
 
-		self.inner.import(
+		let res = self.inner.import(
 			hash,
 			number,
 			epoch,
 			&is_descendent_of,
-		).map(|_| ())
+		);
+
+		match res {
+			Ok(_) | Err(fork_tree::Error::Duplicate) => Ok(()),
+			Err(e) => Err(e),
+		}
 	}
 }
 
@@ -202,3 +212,13 @@ impl<Block: BlockT> From<EpochChanges<Block>> for SharedEpochChanges<Block> {
 		}
 	}
 }
+
+// TODO: write tests within the scope of this module.
+//
+// 1. mock up an `IsDescendentOfBuilder`. Don't use the `Client` - these tests should be
+// minimal and focused.
+//
+// 2. test that epochs can indeed change between blocks by observing one result before
+// epoch end slot and another after
+//
+// 3. Test that this always gives you the right epoch based on the fork you're on.
