@@ -59,32 +59,83 @@ use sr_primitives::{
 
 use super::{StateBackend, error::{FutureResult, Error}, client_err};
 
+/// Storage data map of storage keys => (optional) storage value.
+type StorageMap = HashMap<StorageKey, Option<StorageData>>;
+
 /// State API backend for light nodes.
 pub struct LightState<Block: BlockT, F: Fetcher<Block>, B, E, RA> {
 	client: Arc<Client<B, E, Block, RA>>,
 	subscriptions: Subscriptions,
-	version_subscriptions: SharedRequests<Block::Hash, RuntimeVersion>,
-	storage_subscriptions: Arc<Mutex<StorageSubscriptions>>,
+	version_subscriptions: SimpleSubscriptions<Block::Hash, RuntimeVersion>,
+	storage_subscriptions: Arc<Mutex<StorageSubscriptions<Block>>>,
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 	fetcher: Arc<F>,
 }
 
+/// Shared requests container.
+trait SharedRequests<Hash, V>: Clone + Send + Sync {
+	/// Tries to listen for already issued request, or issues request.
+	///
+	/// Returns true if requests has been issued.
+	fn listen_request(
+		&self,
+		block: Hash,
+		sender: Sender<Result<V, ()>>,
+	) -> bool;
+
+	/// Returns (and forgets) all listeners for given request.
+	fn on_response_received(&self, block: Hash) -> Vec<Sender<Result<V, ()>>>;
+}
+
 /// Storage subscriptions data.
-struct StorageSubscriptions {
+struct StorageSubscriptions<Block: BlockT> {
+	/// Active storage requests.
+	active_requests: HashMap<Block::Hash, Vec<Sender<Result<StorageMap, ()>>>>,
 	/// Map of subscription => keys that this subscription watch for.
 	keys_by_subscription: HashMap<SubscriptionId, HashSet<StorageKey>>,
 	/// Map of key => set of subscriptions that watch this key.
 	subscriptions_by_key: HashMap<StorageKey, HashSet<SubscriptionId>>,
 }
 
-/// Map of shared requests. Requests are grouped by block hash, then by key.
-/// Requests are shared if both block and key match.
-type SharedRequests<Hash, V> = Arc<Mutex<
-	HashMap<
-		Hash,
-		Vec<Sender<Result<V, ()>>>,
-	>,
->>;
+impl<Block: BlockT> SharedRequests<Block::Hash, StorageMap> for Arc<Mutex<StorageSubscriptions<Block>>> {
+	fn listen_request(
+		&self,
+		block: Block::Hash,
+		sender: Sender<Result<StorageMap, ()>>,
+	) -> bool {
+		let mut subscriptions = self.lock();
+		let active_requests_at = subscriptions.active_requests.entry(block).or_default();
+		active_requests_at.push(sender);
+		active_requests_at.len() == 1
+	}
+
+	fn on_response_received(&self, block: Block::Hash) -> Vec<Sender<Result<StorageMap, ()>>> {
+		self.lock().active_requests.remove(&block).unwrap_or_default()
+	}
+}
+
+/// Simple, maybe shared, subscription data that shares per block requests.
+type SimpleSubscriptions<Hash, V> = Arc<Mutex<HashMap<Hash, Vec<Sender<Result<V, ()>>>>>>;
+
+impl<Hash, V> SharedRequests<Hash, V> for SimpleSubscriptions<Hash, V> where
+	Hash: Send + Eq + std::hash::Hash,
+	V: Send,
+{
+	fn listen_request(
+		&self,
+		block: Hash,
+		sender: Sender<Result<V, ()>>,
+	) -> bool {
+		let mut subscriptions = self.lock();
+		let active_requests_at = subscriptions.entry(block).or_default();
+		active_requests_at.push(sender);
+		active_requests_at.len() == 1
+	}
+
+	fn on_response_received(&self, block: Hash) -> Vec<Sender<Result<V, ()>>> {
+		self.lock().remove(&block).unwrap_or_default()
+	}
+}
 
 impl<Block: BlockT, F: Fetcher<Block> + 'static, B, E, RA> LightState<Block, F, B, E, RA>
 	where
@@ -105,6 +156,7 @@ impl<Block: BlockT, F: Fetcher<Block> + 'static, B, E, RA> LightState<Block, F, 
 			subscriptions,
 			version_subscriptions: Arc::new(Mutex::new(HashMap::new())),
 			storage_subscriptions: Arc::new(Mutex::new(StorageSubscriptions {
+				active_requests: HashMap::new(),
 				keys_by_subscription: HashMap::new(),
 				subscriptions_by_key: HashMap::new(),
 			})),
@@ -284,7 +336,8 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 			let initial_block = self.block_or_best(None);
 			let initial_keys = keys_to_check.iter().cloned().collect::<Vec<_>>();
 
-			let changes_stream = subscription_stream::<Block, _, _, _, _, _, _, _>(
+			let changes_stream = subscription_stream::<Block, _, _, _, _, _, _, _, _>(
+				storage_subscriptions.clone(),
 				self.client
 					.import_notification_stream()
 					.map(|notification| Ok::<_, ()>(notification.hash))
@@ -304,12 +357,13 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 						.keys()
 						.map(|k| k.0.clone())
 						.collect();
-					display_error(storage(
+
+					storage(
 						&*remote_blockchain,
 						fetcher.clone(),
 						block,
 						keys,
-					))
+					)
 				},
 				move |block, old_value, new_value| {
 					// let's only select keys which are valid for this subscription
@@ -393,7 +447,8 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 			let version_subscriptions = self.version_subscriptions.clone();
 			let initial_block = self.block_or_best(None);
 
-			let versions_stream = subscription_stream::<Block, _, _, _, _, _, _, _>(
+			let versions_stream = subscription_stream::<Block, _, _, _, _, _, _, _, _>(
+				version_subscriptions,
 				self.client
 					.import_notification_stream()
 					.map(|notification| Ok::<_, ()>(notification.hash))
@@ -403,21 +458,11 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 					fetcher.clone(),
 					initial_block,
 				).map(move |r| r.map(|r| (initial_block, r)))),
-				move |block| {
-					let fetcher = fetcher.clone();
-					let remote_blockchain = remote_blockchain.clone();
-					let issue_request = move |block| runtime_version(
-						&*remote_blockchain,
-						fetcher,
-						block,
-					);
-
-					maybe_share_remote_request::<Block, _, _, _>(
-						version_subscriptions.clone(),
-						block,
-						issue_request,
-					)
-				},
+				move |block| runtime_version(
+					&*remote_blockchain,
+					fetcher.clone(),
+					block,
+				),
 				|_, old_version, new_version| {
 					let version_differs = old_version
 						.as_ref()
@@ -534,23 +579,26 @@ fn storage<Block: BlockT, F: Fetcher<Block>>(
 /// if value has changed from previous block, emits (stream) item.
 fn subscription_stream<
 	Block,
+	Requests,
 	FutureBlocksStream,
 	V, N,
 	InitialRequestFuture,
 	IssueRequest, IssueRequestFuture,
 	CompareValues,
 >(
+	shared_requests: Requests,
 	future_blocks_stream: FutureBlocksStream,
 	initial_request: InitialRequestFuture,
 	issue_request: IssueRequest,
 	compare_values: CompareValues,
 ) -> impl Stream<Item=N, Error=()> where
 	Block: BlockT<Hash=H256>,
+	Requests: 'static + SharedRequests<Block::Hash, V>,
 	FutureBlocksStream: Stream<Item=Block::Hash, Error=()>,
 	V: Send + 'static + Clone,
 	InitialRequestFuture: std::future::Future<Output = Result<(Block::Hash, V), ()>> + Send + 'static,
 	IssueRequest: 'static + Fn(Block::Hash) -> IssueRequestFuture,
-	IssueRequestFuture: std::future::Future<Output = Result<V, ()>> + Send + 'static,
+	IssueRequestFuture: std::future::Future<Output = Result<V, Error>> + Send + 'static,
 	CompareValues: Fn(Block::Hash, Option<&V>, &V) -> Option<N>,
 {
 	// we need to send initial value first, then we'll only be sending if value has changed
@@ -567,9 +615,11 @@ fn subscription_stream<
 	// we do not want to stop stream if single request fails
 	// (the warning should have been already issued by the request issuer)
 	let future_values_stream = future_blocks_stream
-		.and_then(move |block| ignore_error(issue_request(block).map(move |r| r.map(|v| (block, v))))
-			.boxed()
-			.compat());
+		.and_then(move |block| ignore_error(maybe_share_remote_request::<Block, _, _, _, _>(
+			shared_requests.clone(),
+			block,
+			&issue_request,
+		).map(move |r| r.map(|v| (block, v)))).boxed().compat());
 
 	// now let's return changed values for selected blocks
 	initial_value_stream
@@ -587,23 +637,21 @@ fn subscription_stream<
 
 /// Request some data from remote node, probably reusing response from already
 /// (in-progress) existing request.
-fn maybe_share_remote_request<Block: BlockT, V, IssueRequest, IssueRequestFuture>(
-	shared_requests: SharedRequests<Block::Hash, V>,
+fn maybe_share_remote_request<Block: BlockT, Requests, V, IssueRequest, IssueRequestFuture>(
+	shared_requests: Requests,
 	block: Block::Hash,
-	issue_request: IssueRequest,
+	issue_request: &IssueRequest,
 ) -> impl std::future::Future<Output = Result<V, ()>> where
 	V: Clone,
-	IssueRequest: FnOnce(Block::Hash) -> IssueRequestFuture,
+	Requests: SharedRequests<Block::Hash, V>,
+	IssueRequest: Fn(Block::Hash) -> IssueRequestFuture,
 	IssueRequestFuture: std::future::Future<Output = Result<V, Error>>,
 {
 	let (sender, receiver) = channel();
-	let active_requests = shared_requests.clone();
-	let mut active_requests = active_requests.lock();
-	let active_requests_at = active_requests.entry(block).or_default();
-	active_requests_at.push(sender);
+	let need_issue_request = shared_requests.listen_request(block, sender);
 
 	// if that isn't the first request - just listen for existing request' response
-	if active_requests_at.len() != 1 {
+	if !need_issue_request {
 		return Either::Right(receiver.then(|r| ready(r.unwrap_or(Err(())))));
 	}
 
@@ -612,13 +660,11 @@ fn maybe_share_remote_request<Block: BlockT, V, IssueRequest, IssueRequestFuture
 	Either::Left(
 		display_error(issue_request(block))
 			.then(move |remote_result| {
-				let mut shared_requests = shared_requests.lock();
-				if let Some(shared_requests_at) = shared_requests.remove(&block) {
-					// skip first element, because this future is the first element
-					for receiver in shared_requests_at.into_iter().skip(1) {
-						if let Err(_) = receiver.send(remote_result.clone()) {
-							// we don't care if receiver has been dropped already
-						}
+				let listeners = shared_requests.on_response_received(block);
+				// skip first element, because this future is the first element
+				for receiver in listeners.into_iter().skip(1) {
+					if let Err(_) = receiver.send(remote_result.clone()) {
+						// we don't care if receiver has been dropped already
 					}
 				}
 
@@ -660,7 +706,8 @@ mod tests {
 
 	#[test]
 	fn subscription_stream_works() {
-		let stream = subscription_stream::<Block, _, _, _, _, _, _, _>(
+		let stream = subscription_stream::<Block, _, _, _, _, _, _, _, _>(
+			SimpleSubscriptions::default(),
 			futures_ordered(vec![result(Ok(H256::from([2; 32]))), result(Ok(H256::from([3; 32])))]),
 			ready(Ok((H256::from([1; 32]), 100))),
 			|block| match block[0] {
@@ -682,11 +729,12 @@ mod tests {
 
 	#[test]
 	fn subscription_stream_ignores_failed_requests() {
-		let stream = subscription_stream::<Block, _, _, _, _, _, _, _>(
+		let stream = subscription_stream::<Block, _, _, _, _, _, _, _, _>(
+			SimpleSubscriptions::default(),
 			futures_ordered(vec![result(Ok(H256::from([2; 32]))), result(Ok(H256::from([3; 32])))]),
 			ready(Ok((H256::from([1; 32]), 100))),
 			|block| match block[0] {
-				2 => ready(Err(())),
+				2 => ready(Err(client_err(ClientError::NotAvailableOnLightClient))),
 				3 => ready(Ok(200)),
 				_ => unreachable!("should not issue additional requests"),
 			},
@@ -706,7 +754,7 @@ mod tests {
 	fn maybe_share_remote_request_shares_request() {
 		type UnreachableFuture = futures03::future::Ready<Result<u32, Error>>;
 
-		let shared_requests = Arc::new(Mutex::new(HashMap::new()));
+		let shared_requests = SimpleSubscriptions::default();
 
 		// let's 'issue' requests for B1
 		shared_requests.lock().insert(
@@ -715,7 +763,7 @@ mod tests {
 		);
 
 		// make sure that no additional requests are issued when we're asking for B1
-		let _ = maybe_share_remote_request::<Block, _, _, UnreachableFuture>(
+		let _ = maybe_share_remote_request::<Block, _, _, _, UnreachableFuture>(
 			shared_requests.clone(),
 			H256::from([1; 32]),
 			&|_| unreachable!("no duplicate requests issued"),
@@ -723,12 +771,12 @@ mod tests {
 
 		// make sure that additional requests is issued when we're asking for B2
 		let request_issued = Arc::new(Mutex::new(false));
-		let _ = maybe_share_remote_request::<Block, _, _, UnreachableFuture>(
+		let _ = maybe_share_remote_request::<Block, _, _, _, UnreachableFuture>(
 			shared_requests.clone(),
 			H256::from([2; 32]),
 			&|_| {
 				*request_issued.lock() = true;
-				ready(Ok(42))
+				ready(Ok(Default::default()))
 			},
 		);
 		assert!(*request_issued.lock());
