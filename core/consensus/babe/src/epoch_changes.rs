@@ -106,14 +106,17 @@ impl<Block: BlockT> EpochChanges<Block> {
 	}
 
 	/// Finds the epoch for a child of the given block, assuming the given slot number.
-	pub fn epoch_for_child_of<D: IsDescendentOfBuilder<Block>>(
+	pub fn epoch_for_child_of<D: IsDescendentOfBuilder<Block>, G>(
 		&mut self,
 		descendent_of_builder: D,
 		parent_hash: &Block::Hash,
 		parent_number: NumberFor<Block>,
 		slot_number: SlotNumber,
-	) -> Result<Option<Epoch>, fork_tree::Error<D::Error>> {
-		use sr_primitives::traits::One;
+		make_genesis: G,
+	) -> Result<Option<Epoch>, fork_tree::Error<D::Error>>
+		where G: FnOnce(SlotNumber) -> Epoch
+	{
+		use sr_primitives::traits::{One, Zero};
 
 		// find_node_where will give you the node in the fork-tree which is an ancestor
 		// of the `parent_hash` by default. if the last epoch was signalled at the parent_hash,
@@ -123,6 +126,25 @@ impl<Block: BlockT> EpochChanges<Block> {
 
 		let is_descendent_of = descendent_of_builder
 			.build_is_descendent_of(Some((fake_head_hash, *parent_hash)));
+
+		if parent_number == Zero::zero() {
+			// need to insert the genesis epoch.
+			let genesis_epoch = make_genesis(slot_number);
+			let res = self.inner.import(
+				*parent_hash,
+				parent_number,
+				genesis_epoch.clone(),
+				&is_descendent_of,
+			);
+
+			match res {
+				Ok(_) | Err(fork_tree::Error::Duplicate) => {},
+				Err(e) => return Err(e),
+			}
+
+			return Ok(Some(genesis_epoch))
+		}
+
 
 		self.inner.find_node_where(
 			&fake_head_hash,
