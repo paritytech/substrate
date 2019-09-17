@@ -49,6 +49,7 @@ variables:
     - schedules
     - web
     - /^[0-9]+$/                   # PRs
+    - polkadot-v0.5
   tags:
     - linux-docker
 
@@ -57,6 +58,7 @@ variables:
     - master
     - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
     - web
+    - polkadot-v0.5
 
 
 
