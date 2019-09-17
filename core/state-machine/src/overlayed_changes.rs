@@ -112,15 +112,15 @@ fn set_with_extrinsic_inner_overlayed_value(
 	extrinsic_index: u32,
 ) {
 	let state = history.len() - 1;
-	if let Some((mut current, current_index)) = h_value.get_mut(history) {
+	if let Some(current) = h_value.get_mut(history) {
 
-		if current_index == state {
-			current.value = value;
-			current.extrinsics.get_or_insert_with(Default::default)
+		if current.index == state {
+			current.value.value = value;
+			current.value.extrinsics.get_or_insert_with(Default::default)
 				.insert(extrinsic_index);
 
 		} else {
-			let mut extrinsics = current.extrinsics.clone();
+			let mut extrinsics = current.value.extrinsics.clone();
 			extrinsics.get_or_insert_with(Default::default)
 				.insert(extrinsic_index);
 			h_value.push_unchecked(HistoriedValue {

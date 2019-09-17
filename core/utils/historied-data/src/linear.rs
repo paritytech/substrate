@@ -36,6 +36,21 @@ pub struct HistoriedValue<V> {
 	pub index: usize,
 }
 
+impl<V> From<(V, usize)> for HistoriedValue<V> {
+	fn from(input: (V, usize)) -> HistoriedValue<V> {
+		HistoriedValue { value: input.0, index: input.1 }
+	}
+}
+
+impl<V> HistoriedValue<V> {
+	fn as_ref(&self) -> HistoriedValue<&V> {
+		HistoriedValue {
+			value: &self.value,
+			index: self.index,
+		}
+	}
+}
+
 /// Array like buffer for in memory storage.
 /// By in memory we expect that this will
 /// not required persistence and is not serialized.
@@ -72,8 +87,8 @@ impl<V> Default for History<V> {
 // buffer specific functions.
 impl<V> History<V> {
 
-	fn get_state(&self, index: usize) -> &HistoriedValue<V> {
-		&self.0[index]
+	fn get_state(&self, index: usize) -> HistoriedValue<&V> {
+		self.0[index].as_ref()
 	}
 
 	#[cfg(any(test, feature = "test"))]
@@ -95,7 +110,6 @@ impl<V> History<V> {
 	fn len(&self) -> usize {
 		self.0.len()
 	}
-
 
 	fn truncate(&mut self, index: usize) {
 		self.0.truncate(index)
@@ -122,13 +136,13 @@ impl<V> History<V> {
 	/// This method uses `get_mut` and do remove pending
 	/// dropped value.
 	pub fn set(&mut self, history: &[TransactionState], value: V) {
-		if let Some((v, index)) = self.get_mut(history) {
-			if index == history.len() - 1 {
-				*v = value;
+		if let Some(v) = self.get_mut(history) {
+			if v.index == history.len() - 1 {
+				*v.value = value;
 				return;
 			}
 		}
-		self.push_unchecked(HistoriedValue{
+		self.push_unchecked(HistoriedValue {
 			value,
 			index: history.len() - 1,
 		});
@@ -275,7 +289,7 @@ impl<V> History<V> {
 		while index > 0 {
 			index -= 1;
 			let HistoriedValue { value, index: history_index } = self.get_state(index);
-			match history[*history_index] {
+			match history[history_index] {
 				TransactionState::Dropped => (),
 				TransactionState::Pending
 				| TransactionState::TxPending
@@ -323,7 +337,7 @@ impl<V> History<V> {
 		while index > 0 {
 			index -= 1;
 			let HistoriedValue { value, index: history_index } = self.get_state(index);
-			match history[*history_index] {
+			match history[history_index] {
 				TransactionState::Pending
 				| TransactionState::TxPending
 				| TransactionState::Prospective =>
@@ -346,7 +360,7 @@ impl<V> History<V> {
 		while index > 0 {
 			index -= 1;
 			let HistoriedValue { value, index: history_index } = self.get_state(index);
-			match history[*history_index] {
+			match history[history_index] {
 				TransactionState::Committed => return Some(value),
 				TransactionState::Pending
 				| TransactionState::TxPending
@@ -387,7 +401,7 @@ impl<V> History<V> {
 	/// Access to latest pending value (non dropped state in history).
 	///
 	/// This method removes latest dropped values up to the latest valid value.
-	pub fn get_mut(&mut self, history: &[TransactionState]) -> Option<(&mut V, usize)> {
+	pub fn get_mut(&mut self, history: &[TransactionState]) -> Option<HistoriedValue<&mut V>> {
 
 		let mut index = self.len();
 		if index == 0 {
@@ -404,12 +418,12 @@ impl<V> History<V> {
 				TransactionState::Committed => {
 					// here we could gc all preceding values but that is additional cost
 					// and get_mut should stop at pending following committed.
-					return Some((self.mut_ref(index), history_index))
+					return Some((self.mut_ref(index), history_index).into())
 				},
 				TransactionState::Pending
 				| TransactionState::TxPending
 				| TransactionState::Prospective => {
-					return Some((self.mut_ref(index), history_index))
+					return Some((self.mut_ref(index), history_index).into())
 				},
 				TransactionState::Dropped => { let _ = self.pop(); },
 			}
@@ -427,7 +441,7 @@ impl<V> History<V> {
 		&mut self,
 		history: &[TransactionState],
 		transaction_index: Option<&[usize]>,
-	) -> Option<(&mut V, usize)> {
+	) -> Option<HistoriedValue<&mut V>> {
 		if let Some(mut transaction_index) = transaction_index {
 			let mut index = self.len();
 			if index == 0 {
@@ -490,11 +504,11 @@ impl<V> History<V> {
 				}
 			}
 			if let Some((index, history_index)) = result {
-				Some((self.mut_ref(index), history_index))
+				Some((self.mut_ref(index), history_index).into())
 			} else { None }
 
 		} else {
-			return self.get_mut(history);
+			self.get_mut(history)
 		}
 	}
 
