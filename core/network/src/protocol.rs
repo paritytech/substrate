@@ -64,9 +64,9 @@ const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1100);
 const PROPAGATE_TIMEOUT: time::Duration = time::Duration::from_millis(2900);
 
 /// Current protocol version.
-pub(crate) const CURRENT_VERSION: u32 = 3;
+pub(crate) const CURRENT_VERSION: u32 = 4;
 /// Lowest version we support
-pub(crate) const MIN_VERSION: u32 = 2;
+pub(crate) const MIN_VERSION: u32 = 3;
 
 // Maximum allowed entries in `BlockResponse`
 const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
@@ -1028,14 +1028,33 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			return;
 		}
 
+		let is_best = self.context_data.chain.info().chain.best_hash == hash;
+		debug!(target: "sync", "Reannouncing block {:?}", hash);
+		self.send_announcement(&header, is_best, true)
+	}
+
+	fn send_announcement(&mut self, header: &B::Header, is_best: bool, force: bool) {
 		let hash = header.hash();
 
-		let message = GenericMessage::BlockAnnounce(message::BlockAnnounce { header: header.clone() });
-
 		for (who, ref mut peer) in self.context_data.peers.iter_mut() {
-			trace!(target: "sync", "Reannouncing block {:?} to {}", hash, who);
-			peer.known_blocks.insert(hash);
-			self.behaviour.send_packet(who, message.clone())
+			trace!(target: "sync", "Announcing block {:?} to {}", hash, who);
+			let inserted = peer.known_blocks.insert(hash);
+			if inserted || force {
+				let message = GenericMessage::BlockAnnounce(message::BlockAnnounce {
+					header: header.clone(),
+					state: if peer.info.protocol_version >= 4  {
+						if is_best {
+							Some(message::BlockState::Best)
+						} else {
+							Some(message::BlockState::Normal)
+						}
+					} else  {
+						None
+					}
+				});
+
+				self.behaviour.send_packet(who, message)
+			}
 		}
 	}
 
@@ -1072,7 +1091,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			peerset: self.peerset_handle.clone(),
 		}, who.clone(), *header.number());
 
-		match self.sync.on_block_announce(who.clone(), hash, &header) {
+		let is_their_best = match announce.state.unwrap_or(message::BlockState::Best) {
+			message::BlockState::Best => true,
+			message::BlockState::Normal => false,
+		};
+
+		match self.sync.on_block_announce(who.clone(), hash, &header, is_their_best) {
 			sync::OnBlockAnnounce::Request(peer, req) => {
 				self.send_message(peer, GenericMessage::BlockRequest(req));
 				return CustomMessageOutcome::None
@@ -1132,8 +1156,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	/// Call this when a block has been imported in the import queue and we should announce it on
 	/// the network.
-	pub fn on_block_imported(&mut self, hash: B::Hash, header: &B::Header) {
-		self.sync.update_chain_info(header);
+	pub fn on_block_imported(&mut self, hash: B::Hash, header: &B::Header, is_best: bool) {
+		if is_best {
+			self.sync.update_chain_info(header);
+		}
 		self.specialization.on_block_imported(
 			&mut ProtocolContext::new(&mut self.context_data, &mut self.behaviour, &self.peerset_handle),
 			hash.clone(),
@@ -1146,15 +1172,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 
 		// send out block announcements
-
-		let message = GenericMessage::BlockAnnounce(message::BlockAnnounce { header: header.clone() });
-
-		for (who, ref mut peer) in self.context_data.peers.iter_mut() {
-			if peer.known_blocks.insert(hash.clone()) {
-				trace!(target: "sync", "Announcing block {:?} to {}", hash, who);
-				self.behaviour.send_packet(who, message.clone())
-			}
-		}
+		self.send_announcement(&header, is_best, false);
 	}
 
 	/// Call this when a block has been finalized. The sync layer may have some additional

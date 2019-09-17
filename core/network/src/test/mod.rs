@@ -300,7 +300,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 				Default::default()
 			};
 			self.block_import.import_block(import_block, cache).expect("block_import failed");
-			self.network.on_block_imported(hash, header);
+			self.network.on_block_imported(hash, header, true);
 			at = hash;
 		}
 
@@ -662,7 +662,7 @@ pub trait TestNetFactory: Sized {
 
 				// We poll `imported_blocks_stream`.
 				while let Ok(Async::Ready(Some(notification))) = peer.imported_blocks_stream.poll() {
-					peer.network.on_block_imported(notification.hash, notification.header);
+					peer.network.on_block_imported(notification.hash, notification.header, true);
 				}
 
 				// We poll `finality_notification_stream`, but we only take the last event.
