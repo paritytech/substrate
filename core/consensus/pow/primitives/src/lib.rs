@@ -43,4 +43,12 @@ decl_runtime_apis! {
 		/// Return the timestamp in the current block.
 		fn timestamp() -> Moment;
 	}
+
+	/// API for those chains that put their difficulty adjustment algorithm directly
+	/// onto runtime. Note that while putting difficulty adjustment algorithm to
+	/// runtime is safe, putting the PoW algorithm on runtime is not.
+	pub trait DifficultyApi {
+		/// Return the target difficulty of the next block.
+		fn difficulty() -> Difficulty;
+	}
 }
