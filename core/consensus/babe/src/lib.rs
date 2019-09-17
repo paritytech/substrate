@@ -110,6 +110,7 @@ use slots::{CheckedHeader, check_equivocation};
 use futures::prelude::*;
 use futures01::Stream as _;
 use log::{error, warn, debug, info, trace};
+use pdqselect::select;
 
 use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible};
 
@@ -717,8 +718,8 @@ fn median_algorithm(
 			t + Duration::new(secs, nanos)
 		}).collect();
 
-		// FIXME #2926: use a selection algorithm instead of a full sorting algorithm.
-		new_list.sort_unstable();
+		// Use a partial sort to move the median timestamp to the middle of the list
+		select(&mut new_list, num_timestamps / 2);
 
 		let &median = new_list
 			.get(num_timestamps / 2)
