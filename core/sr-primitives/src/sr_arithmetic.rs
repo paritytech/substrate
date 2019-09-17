@@ -182,7 +182,7 @@ macro_rules! implement_per_thing {
 						(rem_multiplied_upper / upper_max) as $type;
 					// fix a tiny rounding error
 					if rem_multiplied_upper % upper_max > upper_max / 2 {
-							rem_multiplied_divided_sized += 1;
+						rem_multiplied_divided_sized += 1;
 					}
 
 					// `rem_multiplied_divided_sized` is inferior to b, thus it can be converted
@@ -584,7 +584,7 @@ impl Fixed64 {
 		let div = DIV as u64;
 		let positive = self.0 > 0;
 		// safe to convert as absolute value.
-		let parts = self.0.checked_abs().unwrap_or(Bounded::max_value()) as u64;
+		let parts = self.0.checked_abs().map(|v| v as u64).unwrap_or(i64::max_value() as u64 + 1);
 
 
 		// will always fit.
@@ -715,8 +715,8 @@ pub mod helpers_128bit {
 			// block cannot overflow since b <= c.
 			let q = a / c;
 			let r = a % c;
-			let r_additional = (r * b) / c; // todo check overflow
-			Ok(q * b + r_additional) // todo check overflow
+			let r_additional = (r.saturating_mul(b)) / c;
+			Ok((q * b).saturating_add(r_additional))
 		} else if b <= c {
 			// If it will overflow because b <= c but both b and c are in ridiculously large scales,
 			// then try and collapse them down to quintillion. This is one step of the greedy
