@@ -122,6 +122,7 @@ impl Verifier<TestBlock> for TestVerifier {
 pub struct PeerData {
 	link: BabeLink<TestBlock>,
 	inherent_data_providers: InherentDataProviders,
+	block_import: Mutex<Option<BoxBlockImport<TestBlock>>>,
 }
 
 impl TestNetFactory for BabeTestNet {
@@ -146,36 +147,24 @@ impl TestNetFactory for BabeTestNet {
 			Option<PeerData>,
 		)
 	{
-		use futures01::Future;
-
 		let client = client.as_full().expect("only full clients are tested");
 		let inherent_data_providers = InherentDataProviders::new();
 
 		let config = Config::get_or_compute(&*client).expect("config available");
-
-		register_babe_inherent_data_provider(
-			&inherent_data_providers,
-			config.slot_duration,
-		).expect("Registers babe inherent data provider");
-
-		let (_queue, link, import, background) = crate::import_queue(
+		let (block_import, link) = crate::block_import(
 			config,
 			client.clone(),
-			None,
-			None,
 			client.clone(),
 			client.clone(),
-			inherent_data_providers.clone(),
-		).expect("can initialize import queue");
+		).expect("can initialize block-import");
 
-		std::thread::spawn(move || background.wait().unwrap());
-
+		let data_block_import = Mutex::new(Some(Box::new(block_import.clone()) as BoxBlockImport<_>));
 		(
-			Box::new(import),
+			Box::new(block_import),
 			None,
 			None,
 			None,
-			Some(PeerData { link, inherent_data_providers }),
+			Some(PeerData { link, inherent_data_providers, block_import: data_block_import }),
 		)
 	}
 
@@ -190,10 +179,6 @@ impl TestNetFactory for BabeTestNet {
 	{
 		let client = client.as_full().expect("only full clients are used in test");
 		trace!(target: "babe", "Creating a verifier");
-		let config = Config::get_or_compute(&*client)
-			.expect("slot duration available");
-
-		trace!(target: "babe", "Provider registered");
 
 		// ensure block import and verifier are linked correctly.
 		let data = maybe_link.as_ref().expect("babe link always provided to verifier instantiation");
@@ -203,8 +188,9 @@ impl TestNetFactory for BabeTestNet {
 				client: client.clone(),
 				api: client,
 				inherent_data_providers: data.inherent_data_providers.clone(),
-				config,
-				babe_link: data.link.clone(),
+				config: data.link.config.clone(),
+				epoch_changes: data.link.epoch_changes.clone(),
+				time_source: data.link.time_source.clone(),
 			},
 			mutator: MUTATOR.with(|s| s.borrow().clone()),
 		}
@@ -266,19 +252,34 @@ fn run_one_test() {
 		keystore.write().insert_ephemeral_from_seed::<AuthorityPair>(seed).expect("Generates authority key");
 		keystore_paths.push(keystore_path);
 
+		let mut got_own = false;
+		let mut got_other = false;
+
 		let environ = DummyFactory(client.clone());
 		import_notifications.push(
+			// run each future until we get one of our own blocks with number higher than 5
+			// that was produced locally.
 			client.import_notification_stream()
-				.take_while(|n| future::ready(!(n.origin != BlockOrigin::Own && n.header.number() < &5)))
-				.for_each(move |_| future::ready(()))
+				.take_while(move |n| future::ready(n.header.number() < &5 || {
+					if n.origin == BlockOrigin::Own {
+						got_own = true;
+					} else {
+						got_other = true;
+					}
+
+					println!("got_own={} got_other={}", got_own, got_other);
+
+					// continue until we have at least one block of our own
+					// and one of another peer.
+					!(got_own && got_other)
+				}))
+				.for_each(|_| future::ready(()) )
 		);
 
-		let config = Config::get_or_compute(&*client).expect("slot duration available");
 		let data = peer.data.as_ref().expect("babe link set up during initialization");
 
 		runtime.spawn(start_babe(BabeParams {
-			config,
-			block_import: client.clone(),
+			block_import: data.block_import.lock().take().expect("import set up during init"),
 			select_chain,
 			client,
 			env: environ,
@@ -300,7 +301,10 @@ fn run_one_test() {
 }
 
 #[test]
-fn authoring_blocks() { run_one_test() }
+fn authoring_blocks() {
+	env_logger::try_init().unwrap();
+	run_one_test()
+}
 
 #[test]
 #[should_panic]
