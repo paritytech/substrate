@@ -1228,6 +1228,17 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		self.sync.request_justification(&hash, number)
 	}
 
+	/// Request syncing for the given block from given set of peers.
+	/// Uses `protocol` to queue a new block download request and tries to dispatch all pending
+	/// requests.
+	pub fn sync_fork(&mut self, peers: Vec<PeerId>, hash: &B::Hash, number: NumberFor<B>) {
+		let requests = self.sync.sync_fork(peers, hash, number);
+		for (who, request) in requests {
+			self.update_peer_info(&who);
+			self.send_message(who, GenericMessage::BlockRequest(request));
+		}
+	}
+
 	/// A batch of blocks have been processed, with or without errors.
 	/// Call this when a batch of blocks have been processed by the importqueue, with or without
 	/// errors.

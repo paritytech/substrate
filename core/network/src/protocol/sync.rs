@@ -441,6 +441,53 @@ impl<B: BlockT> ChainSync<B> {
 		})
 	}
 
+	/// Request syncing for the given block from given set of peers.
+	// This is similar to on_block_announce with unknown parent hash.
+	pub fn sync_fork(&mut self, peers: Vec<PeerId>, hash: &B::Hash, number: NumberFor<B>) ->
+		Vec<(PeerId, BlockRequest<B>)>
+	{
+		debug!(target: "sync", "Explicit sync request for block {:?} with {:?}", hash, peers);
+		if self.is_known(&hash) || self.is_already_downloading(&hash) {
+			debug!(target: "sync", "Refusing to sync known hash {:?}", hash);
+			return Vec::default();
+		}
+
+		let block_status = self.client.block_status(&BlockId::Number(number - One::one()))
+			.unwrap_or(BlockStatus::Unknown);
+		if block_status == BlockStatus::InChainPruned {
+			trace!(target: "sync", "Refusing to sync ancient block {:?}", hash);
+			return Vec::default();
+		}
+
+		self.is_idle = false;
+		let mut requests = Vec::new();
+		for peer_id in peers {
+			let peer = if let Some(peer) = self.peers.get_mut(&peer_id) {
+				peer
+			} else {
+				debug!(target: "sync", "Called sync_fork with a bad peer ID");
+				continue;
+			};
+			if let PeerSyncState::AncestorSearch(_, _) = peer.state {
+				continue;
+			}
+
+			if number > peer.best_number {
+				peer.best_number = number;
+				peer.best_hash = hash.clone();
+			}
+
+			if number <= self.best_queued_number {
+				if let Some(request) = self.download_unknown_stale(&peer_id, &hash) {
+					requests.push((peer_id, request));
+				}
+			} else if let Some((_, request)) = self.select_new_blocks(peer_id.clone()) {
+				requests.push((peer_id, request));
+			}
+		}
+		requests
+	}
+
 	/// Get an iterator over all scheduled justification requests.
 	pub fn justification_requests(&mut self) -> impl Iterator<Item = (PeerId, BlockRequest<B>)> + '_ {
 		let peers = &mut self.peers;
