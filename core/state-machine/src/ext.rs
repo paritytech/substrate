@@ -264,7 +264,7 @@ where	H: Hasher,
 			self.id,
 			HexDisplay::from(&storage_key.as_ref()),
 			HexDisplay::from(&key),
-			result.as_ref().map(HexDisplay::from)
+			result.as_ref().map(HexDisplay::from),
 		);
 		result
 	}

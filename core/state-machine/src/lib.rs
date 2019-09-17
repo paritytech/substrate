@@ -264,7 +264,7 @@ impl<'a, B, H, N, T, O, Exec> StateMachine<'a, B, H, N, T, O, Exec> where
 			id,
 			self.method,
 			self.backend,
-			HexDisplay::from(&self.call_data)
+			HexDisplay::from(&self.call_data),
 		);
 		let (result, was_native) = self.exec.call(
 			&mut externalities,
