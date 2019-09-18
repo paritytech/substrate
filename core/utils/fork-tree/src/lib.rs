@@ -230,8 +230,8 @@ impl<H, N, V> ForkTree<H, N, V> where
 			let node = root.find_node_where(hash, number, is_descendent_of, predicate)?;
 
 			// found the node, early exit
-			if let Some(node) = node {
-				return Ok(node);
+			if let FindOutcome::Found(node) = node {
+				return Ok(Some(node));
 			}
 		}
 
@@ -512,6 +512,17 @@ impl<H, N, V> ForkTree<H, N, V> where
 mod node_implementation {
 	use super::*;
 
+	/// The outcome of a search within a node.
+	pub enum FindOutcome<T> {
+		// this is the node we were looking for.
+		Found(T),
+		// not the node we're looking for. contains a flag indicating
+		// whether the node was a descendent. true implies the predicate failed.
+		Failure(bool),
+		// Abort search.
+		Abort,
+	}
+
 	#[derive(Clone, Debug, Decode, Encode, PartialEq)]
 	pub struct Node<H, N, V> {
 		pub hash: H,
@@ -575,23 +586,26 @@ mod node_implementation {
 			number: &N,
 			is_descendent_of: &F,
 			predicate: &P,
-		) -> Result<Option<Option<&Node<H, N, V>>>, Error<E>>
+		) -> Result<FindOutcome<&Node<H, N, V>>, Error<E>>
 			where E: std::error::Error,
 				  F: Fn(&H, &H) -> Result<bool, E>,
 				  P: Fn(&V) -> bool,
 		{
 			// stop searching this branch
 			if *number < self.number {
-				return Ok(None);
+				return Ok(FindOutcome::Failure(false));
 			}
+
+			let mut known_descendent_of = false;
 
 			// continue depth-first search through all children
 			for node in self.children.iter() {
-				let node = node.find_node_where(hash, number, is_descendent_of, predicate)?;
-
 				// found node, early exit
-				if node.is_some() {
-					return Ok(node);
+				match node.find_node_where(hash, number, is_descendent_of, predicate)? {
+					FindOutcome::Abort => return Ok(FindOutcome::Abort),
+					FindOutcome::Found(x) => return Ok(FindOutcome::Found(x)),
+					FindOutcome::Failure(true) => { known_descendent_of = true },
+					FindOutcome::Failure(false) => {},
 				}
 			}
 
@@ -599,24 +613,25 @@ mod node_implementation {
 			// searching for is a descendent of this node then we will stop the
 			// search here, since there aren't any more children and we found
 			// the correct node so we don't want to backtrack.
-			if is_descendent_of(&self.hash, hash)? {
+			let is_descendent_of = known_descendent_of || is_descendent_of(&self.hash, hash)?;
+			if is_descendent_of {
 				// if the predicate passes we return the node
 				if predicate(&self.data) {
-					Ok(Some(Some(self)))
+					Ok(FindOutcome::Found(self))
 
 				// otherwise we stop the search returning `None`
 				} else {
-					Ok(Some(None))
+					Ok(FindOutcome::Abort)
 				}
 			} else {
-				Ok(None)
+				Ok(FindOutcome::Failure(is_descendent_of))
 			}
 		}
 	}
 }
 
 // Workaround for: https://github.com/rust-lang/rust/issues/34537
-use node_implementation::Node;
+use node_implementation::{Node, FindOutcome};
 
 struct ForkTreeIterator<'a, H, N, V> {
 	stack: Vec<&'a Node<H, N, V>>,
