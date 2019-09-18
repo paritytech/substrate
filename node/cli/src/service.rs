@@ -99,7 +99,7 @@ macro_rules! new_full_start {
 /// We need to use a macro because the test suit doesn't work with an opaque service. It expects
 /// concrete types instead.
 macro_rules! new_full {
-	($config:expr) => {{
+	($config:expr, $with_startup_data: expr) => {{
 		use futures::sync::mpsc;
 		use network::DhtEvent;
 
@@ -133,6 +133,8 @@ macro_rules! new_full {
 
 		let (block_import, grandpa_link, babe_link) = import_setup.take()
 				.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
+
+		($with_startup_data)(&block_import, &babe_link);
 
 		if is_authority {
 			let proposer = substrate_basic_authorship::ProposerFactory {
@@ -207,6 +209,9 @@ macro_rules! new_full {
 		}
 
 		Ok((service, inherent_data_providers))
+	}};
+	($config:expr) => {{
+		new_full!($config, |_, _| {})
 	}}
 }
 
@@ -277,17 +282,21 @@ mod tests {
 	use std::sync::Arc;
 	use babe::CompatibleDigestItem;
 	use consensus_common::{
-		Environment, Proposer, BlockImportParams, BlockOrigin, ForkChoiceStrategy
+		Environment, Proposer, BlockImportParams, BlockOrigin, ForkChoiceStrategy, BlockImport,
 	};
-	use node_primitives::DigestItem;
+	use node_primitives::{Block, DigestItem};
 	use node_runtime::{BalancesCall, Call, UncheckedExtrinsic};
-	use node_runtime::constants::{currency::CENTS, time::{PRIMARY_PROBABILITY, SLOT_DURATION}};
+	use node_runtime::constants::{currency::CENTS, time::SLOT_DURATION};
 	use codec::{Encode, Decode};
 	use primitives::{
 		crypto::Pair as CryptoPair,
 		sr25519::Public as AddressPublic, H256,
 	};
-	use sr_primitives::{generic::{BlockId, Era, Digest, SignedPayload}, traits::Block, OpaqueExtrinsic};
+	use sr_primitives::{
+		generic::{BlockId, Era, Digest, SignedPayload},
+		traits::Block as BlockT,
+		OpaqueExtrinsic,
+	};
 	use timestamp;
 	use finality_tracker;
 	use keyring::AccountKeyring;
@@ -381,13 +390,21 @@ mod tests {
 
 		service_test::sync(
 			chain_spec,
-			|config| new_full!(config),
+			|config| {
+				let mut setup_handles = None;
+				new_full!(config, |
+					block_import: &babe::BabeBlockImport<_, _, Block, _, _, _>,
+					babe_link: &babe::BabeLink<Block>,
+				| {
+					setup_handles = Some((block_import.clone(), babe_link.clone()));
+				}).map(move |(node, x)| (node, (x, setup_handles.unwrap())))
+			},
 			|mut config| {
 				// light nodes are unsupported
 				config.roles = Roles::FULL;
 				new_full(config)
 			},
-			|service, inherent_data_providers| {
+			|service, &mut (ref inherent_data_providers, (ref mut block_import, ref babe_link))| {
 				let mut inherent_data = inherent_data_providers
 					.create_inherent_data()
 					.expect("Creates inherent data.");
@@ -410,8 +427,8 @@ mod tests {
 						slot_num,
 						&parent_header,
 						&*service.client(),
-						PRIMARY_PROBABILITY,
 						&keystore,
+						&babe_link,
 					) {
 						break babe_pre_digest;
 					}
@@ -439,7 +456,7 @@ mod tests {
 				);
 				slot_num += 1;
 
-				BlockImportParams {
+				let params = BlockImportParams {
 					origin: BlockOrigin::File,
 					header: new_header,
 					justification: None,
@@ -448,7 +465,10 @@ mod tests {
 					finalized: true,
 					auxiliary: Vec::new(),
 					fork_choice: ForkChoiceStrategy::LongestChain,
-				}
+				};
+
+				block_import.import_block(params, Default::default())
+					.expect("error importing test block");
 			},
 			|service, _| {
 				let amount = 5 * CENTS;

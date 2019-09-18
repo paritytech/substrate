@@ -1482,6 +1482,9 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 	}
 }
 
+/// NOTE: only use this implementation when you are sure there are NO consensus-level BlockImport
+/// objects. Otherwise, importing blocks directly into the client would be bypassing
+/// important verification work.
 impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
@@ -1491,6 +1494,13 @@ impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Blo
 
 	/// Import a checked and validated block. If a justification is provided in
 	/// `BlockImportParams` then `finalized` *must* be true.
+	///
+	/// NOTE: only use this implementation when there are NO consensus-level BlockImport
+	/// objects. Otherwise, importing blocks directly into the client would be bypassing
+	/// important verification work.
+	///
+	/// If you are not sure that there are no BlockImport objects provided by the consensus
+	/// algorithm, don't use this function.
 	fn import_block(
 		&mut self,
 		import_block: BlockImportParams<Block>,
