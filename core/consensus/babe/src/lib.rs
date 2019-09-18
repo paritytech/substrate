@@ -349,7 +349,7 @@ impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I
 		slot_number: SlotNumber,
 		epoch_data: &Epoch,
 	) -> Option<Self::Claim> {
-		babe_info!("Attempting to claim slot {}", slot_number);
+		debug!(target: "babe", "Attempting to claim slot {}", slot_number);
 		let s = claim_slot(
 			slot_number,
 			epoch_data,
@@ -358,7 +358,7 @@ impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I
 		);
 
 		if let Some(_) = s {
-			babe_info!("Claimed slot {}", slot_number);
+			debug!(target: "babe", "Claimed slot {}", slot_number);
 		}
 
 		s
@@ -1219,10 +1219,10 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 			let parent_hash = *block.header.parent_hash();
 			let parent_header = self.client.header(&BlockId::Hash(parent_hash))
 				.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
-				.ok_or_else(|| ConsensusError::ChainLookup(format!(
+				.ok_or_else(|| ConsensusError::ChainLookup(babe_err!(
 					"Parent ({}) of {} unavailable. Cannot import",
 					parent_hash,
-					hash,
+					hash
 				)))?;
 
 			let parent_slot = find_pre_digest::<Block>(&parent_header)
@@ -1233,7 +1233,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 			let parent_weight = aux_schema::load_block_weight(&*self.client, parent_hash)
 				.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 				.ok_or_else(|| ConsensusError::ClientImport(
-					format!("Parent block of {} has no associated weight", hash)
+					babe_err!("Parent block of {} has no associated weight", hash)
 				))?;
 
 			let epoch = epoch_changes.epoch_for_child_of(
@@ -1244,10 +1244,10 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 				|slot| self.config.genesis_epoch(slot),
 			)
 				.map_err(|e: fork_tree::Error<client::error::Error>| ConsensusError::ChainLookup(
-					format!("Could not look up epoch: {:?}", e)
+					babe_err!("Could not look up epoch: {:?}", e)
 				))?
 				.ok_or_else(|| ConsensusError::ClientImport(
-					format!("Block {} is not valid under any epoch.", hash)
+					babe_err!("Block {} is not valid under any epoch.", hash)
 				))?;
 
 			let first_in_epoch = parent_slot < epoch.start_slot;
@@ -1266,7 +1266,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 			(true, false) => {
 				return Err(
 					ConsensusError::ClientImport(
-						"Expected epoch change to happen by this block".into(),
+						babe_err!("Expected epoch change to happen at {:?}, s{}", hash, slot_number),
 					)
 				);
 			},
@@ -1296,6 +1296,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 				*block.header.parent_hash(),
 				next_epoch,
 			);
+
 
 			if let Err(e) = res {
 				let err = ConsensusError::ClientImport(format!("{:?}", e));
@@ -1448,42 +1449,37 @@ pub fn import_queue<B, E, Block: BlockT<Hash=H256>, I, RA, PRA>(
 	))
 }
 
-// /// BABE test helpers. Utility methods for manually authoring blocks.
-// #[cfg(feature = "test-helpers")]
-// pub mod test_helpers {
-// 	use super::*;
+/// BABE test helpers. Utility methods for manually authoring blocks.
+#[cfg(feature = "test-helpers")]
+pub mod test_helpers {
+	use super::*;
 
-// 	/// Try to claim the given slot and return a `BabePreDigest` if
-// 	/// successful.
-// 	pub fn claim_slot<B, C>(
-// 		slot_number: u64,
-// 		parent: &B::Header,
-// 		client: &C,
-// 		c: (u64, u64),
-// 		keystore: &KeyStorePtr,
-// 		link: &BabeLink<B>,
-// 	) -> Option<BabePreDigest> where
-// 		B: BlockT,
-// 		C: ProvideRuntimeApi + ProvideCache<B> + HeaderBackend<B>,
-// 		C::Api: BabeApi<B>,
-// 	{
-// 		let epoch = epoch(
-// 			client,
-// 			parent.hash(),
-// 			parent.number(),
-// 			slot_number,
-// 			&link.epoch_changes,
-// 		).unwrap();
+	/// Try to claim the given slot and return a `BabePreDigest` if
+	/// successful.
+	pub fn claim_slot<B, C>(
+		slot_number: u64,
+		parent: &B::Header,
+		client: &C,
+		keystore: &KeyStorePtr,
+		link: &BabeLink<B>,
+	) -> Option<BabePreDigest> where
+		B: BlockT<Hash=H256>,
+		C: ProvideRuntimeApi + ProvideCache<B> + HeaderBackend<B>,
+		C::Api: BabeApi<B>,
+	{
+		let epoch = link.epoch_changes.lock().epoch_for_child_of(
+			client,
+			&parent.hash(),
+			parent.number().clone(),
+			slot_number,
+			|slot| link.config.genesis_epoch(slot),
+		).unwrap().unwrap();
 
-// 		let weight = find_pre_digest::<B>(parent).ok()
-// 			.map(|d| d.weight())?;
-
-// 		super::claim_slot(
-// 			slot_number,
-// 			weight,
-// 			&epoch,
-// 			c,
-// 			keystore,
-// 		).map(|(digest, _)| digest)
-// 	}
-// }
+		super::claim_slot(
+			slot_number,
+			&epoch,
+			&link.config,
+			keystore,
+		).map(|(digest, _)| digest)
+	}
+}
