@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use runtime_io::{with_externalities, Blake2Hasher};
+use runtime_io::with_externalities;
+use primitives::Blake2Hasher;
 use support::{StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap};
 use support::storage::unhashed;
 use codec::{Encode, Decode};

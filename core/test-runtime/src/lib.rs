@@ -188,7 +188,7 @@ pub type Header = sr_primitives::generic::Header<BlockNumber, BlakeTwo256>;
 
 /// Run whatever tests we have.
 pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
-	use runtime_io::print;
+	use sr_primitives::print;
 
 	print("run_tests...");
 	let block = Block::decode(&mut input).unwrap();

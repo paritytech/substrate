@@ -1,4 +1,3 @@
-
 // Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
@@ -12,12 +11,13 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
-#![cfg_attr(not(feature = "std"), no_std)]
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! A crate which contains primitives that are useful for implementation that uses staking
-//! approaches in general. Definitions related to sessions, slashing, etc go here.
+use std::env;
 
-pub mod offence;
-
-/// Simple index type with which we can count sessions.
-pub type SessionIndex = u32;
+fn main() {
+	if let Ok(profile) = env::var("PROFILE") {
+		println!("cargo:rustc-cfg=build_type=\"{}\"", profile);
+	}
+}

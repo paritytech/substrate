@@ -110,6 +110,12 @@ impl<B: BlockT> Drop for RefTrackingState<B> {
 	}
 }
 
+impl<Block: BlockT> std::fmt::Debug for RefTrackingState<Block> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "Block {:?}", self.parent_hash)
+	}
+}
+
 impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 	type Error =  <DbState as StateBackend<Blake2Hasher>>::Error;
 	type Transaction = <DbState as StateBackend<Blake2Hasher>>::Transaction;
@@ -1527,7 +1533,7 @@ mod tests {
 		let header = Header {
 			number,
 			parent_hash,
-			state_root: BlakeTwo256::trie_root::<_, &[u8], &[u8]>(Vec::new()),
+			state_root: BlakeTwo256::trie_root(Vec::new()),
 			digest,
 			extrinsics_root,
 		};

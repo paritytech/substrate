@@ -15,15 +15,14 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use primitives::{
-	blake2_128, blake2_256, twox_128, twox_256, twox_64, ed25519, Blake2Hasher, sr25519, Pair,
-	traits::Externalities, child_storage_key::ChildStorageKey,
+	blake2_128, blake2_256, twox_128, twox_256, twox_64, ed25519, Blake2Hasher, sr25519, Pair, H256,
+	traits::Externalities, child_storage_key::ChildStorageKey, hexdisplay::HexDisplay, offchain,
 };
 // Switch to this after PoC-3
 // pub use primitives::BlakeHasher;
 pub use substrate_state_machine::{BasicExternalities, TestExternalities};
 
 use environmental::environmental;
-use primitives::{offchain, hexdisplay::HexDisplay, H256};
 use trie::{TrieConfiguration, trie_types::Layout};
 
 use std::{collections::HashMap, convert::TryFrom};
@@ -166,25 +165,12 @@ impl StorageApi for () {
 		).unwrap_or(Ok(None)).expect("Invalid parent hash passed to storage_changes_root")
 	}
 
-	fn trie_root<H, I, A, B>(input: I) -> H::Out
-	where
-		I: IntoIterator<Item = (A, B)>,
-		A: AsRef<[u8]> + Ord,
-		B: AsRef<[u8]>,
-		H: Hasher,
-		H::Out: Ord,
-	{
-		Layout::<H>::trie_root(input)
+	fn blake2_256_trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
+		Layout::<Blake2Hasher>::trie_root(input)
 	}
 
-	fn ordered_trie_root<H, I, A>(input: I) -> H::Out
-	where
-		I: IntoIterator<Item = A>,
-		A: AsRef<[u8]>,
-		H: Hasher,
-		H::Out: Ord,
-	{
-		Layout::<H>::ordered_trie_root(input)
+	fn blake2_256_ordered_trie_root(input: Vec<Vec<u8>>) -> H256 {
+		Layout::<Blake2Hasher>::ordered_trie_root(input)
 	}
 }
 
@@ -195,8 +181,18 @@ impl OtherApi for () {
 		).unwrap_or(0)
 	}
 
-	fn print<T: Printable + Sized>(value: T) {
-		value.print()
+	fn print_num(val: u64) {
+		println!("{}", val);
+	}
+
+	fn print_utf8(utf8: &[u8]) {
+		if let Ok(data) = std::str::from_utf8(utf8) {
+			println!("{}", data)
+		}
+	}
+
+	fn print_hex(data: &[u8]) {
+		println!("{}", HexDisplay::from(&data));
 	}
 }
 
@@ -220,10 +216,10 @@ impl CryptoApi for () {
 		}).expect("`ed25519_generate` cannot be called outside of an Externalities-provided environment.")
 	}
 
-	fn ed25519_sign<M: AsRef<[u8]>>(
+	fn ed25519_sign(
 		id: KeyTypeId,
 		pubkey: &ed25519::Public,
-		msg: &M,
+		msg: &[u8],
 	) -> Option<ed25519::Signature> {
 		let pub_key = ed25519::Public::try_from(pubkey.as_ref()).ok()?;
 
@@ -232,7 +228,7 @@ impl CryptoApi for () {
 				.expect("No `keystore` associated for the current context!")
 				.read()
 				.ed25519_key_pair(id, &pub_key)
-				.map(|k| k.sign(msg.as_ref()))
+				.map(|k| k.sign(msg))
 		}).expect("`ed25519_sign` cannot be called outside of an Externalities-provided environment.")
 	}
 
@@ -259,10 +255,10 @@ impl CryptoApi for () {
 		}).expect("`sr25519_generate` cannot be called outside of an Externalities-provided environment.")
 	}
 
-	fn sr25519_sign<M: AsRef<[u8]>>(
+	fn sr25519_sign(
 		id: KeyTypeId,
 		pubkey: &sr25519::Public,
-		msg: &M,
+		msg: &[u8],
 	) -> Option<sr25519::Signature> {
 		let pub_key = sr25519::Public::try_from(pubkey.as_ref()).ok()?;
 
@@ -271,7 +267,7 @@ impl CryptoApi for () {
 				.expect("No `keystore` associated for the current context!")
 				.read()
 				.sr25519_key_pair(id, &pub_key)
-				.map(|k| k.sign(msg.as_ref()))
+				.map(|k| k.sign(msg))
 		}).expect("`sr25519_sign` cannot be called outside of an Externalities-provided environment.")
 	}
 
@@ -389,7 +385,7 @@ impl OffchainApi for () {
 	fn http_request_start(
 		method: &str,
 		uri: &str,
-		meta: &[u8]
+		meta: &[u8],
 	) -> Result<offchain::HttpRequestId, ()> {
 		with_offchain(|ext| {
 			ext.http_request_start(method, uri, meta)
@@ -399,7 +395,7 @@ impl OffchainApi for () {
 	fn http_request_add_header(
 		request_id: offchain::HttpRequestId,
 		name: &str,
-		value: &str
+		value: &str,
 	) -> Result<(), ()> {
 		with_offchain(|ext| {
 			ext.http_request_add_header(request_id, name, value)
@@ -409,7 +405,7 @@ impl OffchainApi for () {
 	fn http_request_write_body(
 		request_id: offchain::HttpRequestId,
 		chunk: &[u8],
-		deadline: Option<offchain::Timestamp>
+		deadline: Option<offchain::Timestamp>,
 	) -> Result<(), offchain::HttpError> {
 		with_offchain(|ext| {
 			ext.http_request_write_body(request_id, chunk, deadline)
@@ -418,7 +414,7 @@ impl OffchainApi for () {
 
 	fn http_response_wait(
 		ids: &[offchain::HttpRequestId],
-		deadline: Option<offchain::Timestamp>
+		deadline: Option<offchain::Timestamp>,
 	) -> Vec<offchain::HttpRequestStatus> {
 		with_offchain(|ext| {
 			ext.http_response_wait(ids, deadline)
@@ -426,7 +422,7 @@ impl OffchainApi for () {
 	}
 
 	fn http_response_headers(
-		request_id: offchain::HttpRequestId
+		request_id: offchain::HttpRequestId,
 	) -> Vec<(Vec<u8>, Vec<u8>)> {
 		with_offchain(|ext| {
 			ext.http_response_headers(request_id)
@@ -436,7 +432,7 @@ impl OffchainApi for () {
 	fn http_response_read_body(
 		request_id: offchain::HttpRequestId,
 		buffer: &mut [u8],
-		deadline: Option<offchain::Timestamp>
+		deadline: Option<offchain::Timestamp>,
 	) -> Result<usize, offchain::HttpError> {
 		with_offchain(|ext| {
 			ext.http_response_read_body(request_id, buffer, deadline)
@@ -475,24 +471,6 @@ pub fn with_storage<R, F: FnOnce() -> R>(
 	*storage = ext.into_storages();
 
 	r
-}
-
-impl<'a> Printable for &'a [u8] {
-	fn print(&self) {
-		println!("Runtime: {}", HexDisplay::from(self));
-	}
-}
-
-impl<'a> Printable for &'a str {
-	fn print(&self) {
-		println!("Runtime: {}", self);
-	}
-}
-
-impl Printable for u64 {
-	fn print(&self) {
-		println!("Runtime: {}", self);
-	}
 }
 
 #[cfg(test)]

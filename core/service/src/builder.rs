@@ -821,12 +821,9 @@ ServiceBuilder<
 			TBl
 		>,
 	>, Error> {
-		let mut config = self.config;
-		session::generate_initial_session_keys(
-			self.client.clone(),
-			config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default()
-		)?;
-		let (
+		let ServiceBuilder {
+			marker: _,
+			mut config,
 			client,
 			fetcher,
 			backend,
@@ -840,21 +837,12 @@ ServiceBuilder<
 			rpc_extensions,
 			dht_event_tx,
 			rpc_builder,
-		) = (
-			self.client,
-			self.fetcher,
-			self.backend,
-			self.keystore,
-			self.select_chain,
-			self.import_queue,
-			self.finality_proof_request_builder,
-			self.finality_proof_provider,
-			self.network_protocol,
-			self.transaction_pool,
-			self.rpc_extensions,
-			self.dht_event_tx,
-			self.rpc_builder,
-		);
+		} = self;
+
+		session::generate_initial_session_keys(
+			client.clone(),
+			config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default()
+		)?;
 
 		new_impl!(
 			TBl,

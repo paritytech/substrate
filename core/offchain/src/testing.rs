@@ -67,6 +67,8 @@ pub struct State {
 	pub persistent_storage: client::in_mem::OffchainStorage,
 	/// Local storage
 	pub local_storage: client::in_mem::OffchainStorage,
+	/// A vector of transactions submitted from the runtime.
+	pub transactions: Vec<Vec<u8>>,
 }
 
 impl State {
@@ -138,12 +140,17 @@ impl offchain::Externalities for TestOffchainExt {
 		unimplemented!("not needed in tests so far")
 	}
 
-	fn submit_transaction(&mut self, _ex: Vec<u8>) -> Result<(), ()> {
-		unimplemented!("not needed in tests so far")
+	fn submit_transaction(&mut self, ex: Vec<u8>) -> Result<(), ()> {
+		let mut state = self.0.write();
+		state.transactions.push(ex);
+		Ok(())
 	}
 
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
-		unimplemented!("not needed in tests so far")
+		Ok(OpaqueNetworkState {
+			peer_id: Default::default(),
+			external_addresses: vec![],
+		})
 	}
 
 	fn timestamp(&mut self) -> Timestamp {

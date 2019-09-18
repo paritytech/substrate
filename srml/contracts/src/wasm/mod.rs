@@ -1359,12 +1359,7 @@ mod tests {
 			vec![0x00, 0x01, 0x2a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe5, 0x14, 0x00])
 		]);
 
-		assert_eq!(gas_meter.gas_left(), 50_000
-			- 6            // Explicit
-			- 13 - 1 - 1   // Deposit event
-			- (13 + 33)    // read memory
-			+ 1 // ????
-		);
+		assert_eq!(gas_meter.gas_left(), 49934);
 	}
 
 	const CODE_DEPOSIT_EVENT_MAX_TOPICS: &str = r#"

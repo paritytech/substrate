@@ -96,7 +96,10 @@ pub trait RuntimePublic: Sized {
 }
 
 /// A runtime interface for an application's public key.
-pub trait RuntimeAppPublic: Sized {
+pub trait RuntimeAppPublic: Sized  {
+	/// An identifier for this application-specific key type.
+	const ID: KeyTypeId;
+
 	/// The signature that will be generated when signing with the corresponding private key.
 	type Signature: Codec + MaybeDebugHash + Eq + PartialEq + Clone;
 

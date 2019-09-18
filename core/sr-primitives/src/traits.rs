@@ -39,7 +39,7 @@ use rstd::ops::{
 	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
 	RemAssign, Shl, Shr
 };
-use crate::AppKey;
+use app_crypto::AppKey;
 use impl_trait_for_tuples::impl_for_tuples;
 
 /// A lazy value.
@@ -439,8 +439,9 @@ pub trait OffchainWorker<BlockNumber> {
 }
 
 /// Abstraction around hashing
-pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stupid bug in the Rust compiler believes derived
-																	// traits must be fulfilled by all type parameters.
+// Stupid bug in the Rust compiler believes derived
+// traits must be fulfilled by all type parameters.
+pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {
 	/// The hash type produced.
 	type Output: Member + MaybeSerializeDebug + rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + Copy
 		+ Default + Encode + Decode;
@@ -456,18 +457,11 @@ pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stup
 		Encode::using_encoded(s, Self::hash)
 	}
 
-	/// Iterator-based version of `ordered_trie_root`.
-	fn ordered_trie_root<
-		I: IntoIterator<Item = A>,
-		A: AsRef<[u8]>
-	>(input: I) -> Self::Output;
+	/// The ordered Patricia tree root of the given `input`.
+	fn ordered_trie_root(input: Vec<Vec<u8>>) -> Self::Output;
 
-	/// The Patricia tree root of the given mapping as an iterator.
-	fn trie_root<
-		I: IntoIterator<Item = (A, B)>,
-		A: AsRef<[u8]> + Ord,
-		B: AsRef<[u8]>
-	>(input: I) -> Self::Output;
+	/// The Patricia tree root of the given mapping.
+	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> Self::Output;
 
 	/// Acquire the global storage root.
 	fn storage_root() -> Self::Output;
@@ -487,22 +481,19 @@ impl Hash for BlakeTwo256 {
 	fn hash(s: &[u8]) -> Self::Output {
 		runtime_io::blake2_256(s).into()
 	}
-	fn trie_root<
-		I: IntoIterator<Item = (A, B)>,
-		A: AsRef<[u8]> + Ord,
-		B: AsRef<[u8]>
-	>(input: I) -> Self::Output {
-		runtime_io::trie_root::<Blake2Hasher, _, _, _>(input).into()
+
+	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> Self::Output {
+		runtime_io::blake2_256_trie_root(input)
 	}
-	fn ordered_trie_root<
-		I: IntoIterator<Item = A>,
-		A: AsRef<[u8]>
-	>(input: I) -> Self::Output {
-		runtime_io::ordered_trie_root::<Blake2Hasher, _, _>(input).into()
+
+	fn ordered_trie_root(input: Vec<Vec<u8>>) -> Self::Output {
+		runtime_io::blake2_256_ordered_trie_root(input)
 	}
+
 	fn storage_root() -> Self::Output {
 		runtime_io::storage_root().into()
 	}
+
 	fn storage_changes_root(parent_hash: Self::Output) -> Option<Self::Output> {
 		runtime_io::storage_changes_root(parent_hash.into()).map(Into::into)
 	}
@@ -519,16 +510,20 @@ impl CheckEqual for primitives::H256 {
 	fn check_equal(&self, other: &Self) {
 		use primitives::hexdisplay::HexDisplay;
 		if self != other {
-			println!("Hash: given={}, expected={}", HexDisplay::from(self.as_fixed_bytes()), HexDisplay::from(other.as_fixed_bytes()));
+			println!(
+				"Hash: given={}, expected={}",
+				HexDisplay::from(self.as_fixed_bytes()),
+				HexDisplay::from(other.as_fixed_bytes()),
+			);
 		}
 	}
 
 	#[cfg(not(feature = "std"))]
 	fn check_equal(&self, other: &Self) {
 		if self != other {
-			runtime_io::print("Hash not equal");
-			runtime_io::print(self.as_bytes());
-			runtime_io::print(other.as_bytes());
+			"Hash not equal".print();
+			self.as_bytes().print();
+			other.as_bytes().print();
 		}
 	}
 }
@@ -544,9 +539,9 @@ impl<H: PartialEq + Eq + MaybeDebug> CheckEqual for super::generic::DigestItem<H
 	#[cfg(not(feature = "std"))]
 	fn check_equal(&self, other: &Self) {
 		if self != other {
-			runtime_io::print("DigestItem not equal");
-			runtime_io::print(&Encode::encode(self)[..]);
-			runtime_io::print(&Encode::encode(other)[..]);
+			"DigestItem not equal".print();
+			(&Encode::encode(self)[..]).print();
+			(&Encode::encode(other)[..]).print();
 		}
 	}
 }
@@ -1157,76 +1152,6 @@ impl<T: Encode + Decode + Default, Id: Encode + Decode + TypeId> AccountIdConver
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::AccountIdConversion;
-	use crate::codec::{Encode, Decode, Input};
-
-	#[derive(Encode, Decode, Default, PartialEq, Debug)]
-	struct U32Value(u32);
-	impl super::TypeId for U32Value {
-		const TYPE_ID: [u8; 4] = [0x0d, 0xf0, 0xfe, 0xca];
-	}
-	// cafef00d
-
-	#[derive(Encode, Decode, Default, PartialEq, Debug)]
-	struct U16Value(u16);
-	impl super::TypeId for U16Value {
-		const TYPE_ID: [u8; 4] = [0xfe, 0xca, 0x0d, 0xf0];
-	}
-	// f00dcafe
-
-	type AccountId = u64;
-
-	#[test]
-	fn into_account_should_work() {
-		let r: AccountId = U32Value::into_account(&U32Value(0xdeadbeef));
-		assert_eq!(r, 0x_deadbeef_cafef00d);
-	}
-
-	#[test]
-	fn try_from_account_should_work() {
-		let r = U32Value::try_from_account(&0x_deadbeef_cafef00d_u64);
-		assert_eq!(r.unwrap(), U32Value(0xdeadbeef));
-	}
-
-	#[test]
-	fn into_account_with_fill_should_work() {
-		let r: AccountId = U16Value::into_account(&U16Value(0xc0da));
-		assert_eq!(r, 0x_0000_c0da_f00dcafe);
-	}
-
-	#[test]
-	fn try_from_account_with_fill_should_work() {
-		let r = U16Value::try_from_account(&0x0000_c0da_f00dcafe_u64);
-		assert_eq!(r.unwrap(), U16Value(0xc0da));
-	}
-
-	#[test]
-	fn bad_try_from_account_should_fail() {
-		let r = U16Value::try_from_account(&0x0000_c0de_baadcafe_u64);
-		assert!(r.is_none());
-		let r = U16Value::try_from_account(&0x0100_c0da_f00dcafe_u64);
-		assert!(r.is_none());
-	}
-
-	#[test]
-	fn trailing_zero_should_work() {
-		let mut t = super::TrailingZeroInput(&[1, 2, 3]);
-		assert_eq!(t.remaining_len(), Ok(None));
-		let mut buffer = [0u8; 2];
-		assert_eq!(t.read(&mut buffer), Ok(()));
-		assert_eq!(t.remaining_len(), Ok(None));
-		assert_eq!(buffer, [1, 2]);
-		assert_eq!(t.read(&mut buffer), Ok(()));
-		assert_eq!(t.remaining_len(), Ok(None));
-		assert_eq!(buffer, [3, 0]);
-		assert_eq!(t.read(&mut buffer), Ok(()));
-		assert_eq!(t.remaining_len(), Ok(None));
-		assert_eq!(buffer, [0, 0]);
-	}
-}
-
 /// Calls a given macro a number of times with a set of fixed params and an incrementing numeral.
 /// e.g.
 /// ```nocompile
@@ -1317,4 +1242,104 @@ macro_rules! impl_opaque_keys {
 			}
 		}
 	};
+}
+
+/// Trait for things which can be printed from the runtime.
+pub trait Printable {
+	/// Print the object.
+	fn print(&self);
+}
+
+impl Printable for u8 {
+	fn print(&self) {
+		u64::from(*self).print()
+	}
+}
+
+impl Printable for &[u8] {
+	fn print(&self) {
+		runtime_io::print_hex(self);
+	}
+}
+
+impl Printable for &str {
+	fn print(&self) {
+		runtime_io::print_utf8(self.as_bytes());
+	}
+}
+
+impl Printable for u64 {
+	fn print(&self) {
+		runtime_io::print_num(*self);
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::AccountIdConversion;
+	use crate::codec::{Encode, Decode, Input};
+
+	#[derive(Encode, Decode, Default, PartialEq, Debug)]
+	struct U32Value(u32);
+	impl super::TypeId for U32Value {
+		const TYPE_ID: [u8; 4] = [0x0d, 0xf0, 0xfe, 0xca];
+	}
+	// cafef00d
+
+	#[derive(Encode, Decode, Default, PartialEq, Debug)]
+	struct U16Value(u16);
+	impl super::TypeId for U16Value {
+		const TYPE_ID: [u8; 4] = [0xfe, 0xca, 0x0d, 0xf0];
+	}
+	// f00dcafe
+
+	type AccountId = u64;
+
+	#[test]
+	fn into_account_should_work() {
+		let r: AccountId = U32Value::into_account(&U32Value(0xdeadbeef));
+		assert_eq!(r, 0x_deadbeef_cafef00d);
+	}
+
+	#[test]
+	fn try_from_account_should_work() {
+		let r = U32Value::try_from_account(&0x_deadbeef_cafef00d_u64);
+		assert_eq!(r.unwrap(), U32Value(0xdeadbeef));
+	}
+
+	#[test]
+	fn into_account_with_fill_should_work() {
+		let r: AccountId = U16Value::into_account(&U16Value(0xc0da));
+		assert_eq!(r, 0x_0000_c0da_f00dcafe);
+	}
+
+	#[test]
+	fn try_from_account_with_fill_should_work() {
+		let r = U16Value::try_from_account(&0x0000_c0da_f00dcafe_u64);
+		assert_eq!(r.unwrap(), U16Value(0xc0da));
+	}
+
+	#[test]
+	fn bad_try_from_account_should_fail() {
+		let r = U16Value::try_from_account(&0x0000_c0de_baadcafe_u64);
+		assert!(r.is_none());
+		let r = U16Value::try_from_account(&0x0100_c0da_f00dcafe_u64);
+		assert!(r.is_none());
+	}
+
+	#[test]
+	fn trailing_zero_should_work() {
+		let mut t = super::TrailingZeroInput(&[1, 2, 3]);
+		assert_eq!(t.remaining_len(), Ok(None));
+		let mut buffer = [0u8; 2];
+		assert_eq!(t.read(&mut buffer), Ok(()));
+		assert_eq!(t.remaining_len(), Ok(None));
+		assert_eq!(buffer, [1, 2]);
+		assert_eq!(t.read(&mut buffer), Ok(()));
+		assert_eq!(t.remaining_len(), Ok(None));
+		assert_eq!(buffer, [3, 0]);
+		assert_eq!(t.read(&mut buffer), Ok(()));
+		assert_eq!(t.remaining_len(), Ok(None));
+		assert_eq!(buffer, [0, 0]);
+	}
 }
