@@ -159,7 +159,7 @@ pub enum NativeOrEncoded<R> {
 #[cfg(feature = "std")]
 impl<R: codec::Encode> ::std::fmt::Debug for NativeOrEncoded<R> {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-		self.as_encoded().as_ref().fmt(f)
+		hexdisplay::HexDisplay::from(&self.as_encoded().as_ref()).fmt(f)
 	}
 }
 
