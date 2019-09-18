@@ -68,7 +68,7 @@ use fg_primitives::{GrandpaApi, AuthorityPair};
 use keystore::KeyStorePtr;
 use inherents::InherentDataProviders;
 use consensus_common::SelectChain;
-use primitives::{H256, Blake2Hasher};
+use primitives::{H256, Blake2Hasher, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG, CONSENSUS_WARN};
 use serde_json;
 
@@ -523,11 +523,15 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 
 	register_finality_tracker_inherent_data_provider(client.clone(), &inherent_data_providers)?;
 
+	let conf = config.clone();
 	let telemetry_task = if let Some(telemetry_on_connect) = telemetry_on_connect {
 		let authorities = persistent_data.authority_set.clone();
 		let events = telemetry_on_connect
 			.for_each(move |_| {
+				let maybe_authority_id = authority_id(&authorities.current_authorities(), &conf.keystore)
+					.unwrap_or(Default::default());
 				telemetry!(CONSENSUS_INFO; "afg.authority_set";
+					"authority_id" => format!("{}", maybe_authority_id),
 					"authority_set_id" => ?authorities.set_id(),
 					"authorities" => {
 						let curr = authorities.current_authorities();
@@ -839,6 +843,26 @@ fn is_voter(
 	match keystore {
 		Some(keystore) => voters.voters().iter()
 			.find_map(|(p, _)| keystore.read().key_pair::<AuthorityPair>(&p).ok()),
+		None => None,
+	}
+}
+
+/// Returns the authority id of this node, if available.
+fn authority_id(
+	voters: &VoterSet<AuthorityId>,
+	keystore: &Option<KeyStorePtr>,
+) -> Option<AuthorityId> {
+	match keystore {
+		Some(keystore) => {
+			voters
+				.voters()
+				.iter()
+				.find_map(|(p, _)| {
+					keystore.read().key_pair::<AuthorityPair>(&p)
+						.ok()
+						.map(|ap| ap.public())
+				})
+		}
 		None => None,
 	}
 }
