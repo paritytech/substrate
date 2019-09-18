@@ -261,6 +261,9 @@ pub trait Ss58Codec: Sized {
 		Self::from_ss58check_with_version(s)
 			.and_then(|(r, v)| match v {
 				Ss58AddressFormat::SubstrateAccountDirect => Ok(r),
+				Ss58AddressFormat::PolkadotAccountDirect => Ok(r),
+				Ss58AddressFormat::KusamaAccountDirect => Ok(r),
+				Ss58AddressFormat::DothereumAccountDirect => Ok(r),
 				v if v == *DEFAULT_VERSION.lock() => Ok(r),
 				_ => Err(PublicError::UnknownVersion),
 			})
@@ -273,6 +276,9 @@ pub trait Ss58Codec: Sized {
 		Self::from_string_with_version(s)
 			.and_then(|(r, v)| match v {
 				Ss58AddressFormat::SubstrateAccountDirect => Ok(r),
+				Ss58AddressFormat::PolkadotAccountDirect => Ok(r),
+				Ss58AddressFormat::KusamaAccountDirect => Ok(r),
+				Ss58AddressFormat::DothereumAccountDirect => Ok(r),
 				v if v == *DEFAULT_VERSION.lock() => Ok(r),
 				_ => Err(PublicError::UnknownVersion),
 			})
