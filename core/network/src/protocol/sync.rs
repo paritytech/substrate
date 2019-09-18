@@ -29,23 +29,14 @@
 
 use blocks::BlockCollection;
 use client::{ClientInfo, error::Error as ClientError};
-use consensus::{
-	BlockOrigin,
-	BlockStatus,
+use consensus::{BlockOrigin, BlockStatus,
 	block_validation::{BlockAnnounceValidator, Validation},
 	import_queue::{IncomingBlock, BlockImportResult, BlockImportError}
 };
 use crate::{
 	config::{Roles, BoxFinalityProofRequestBuilder},
-	message::{
-		BlockAnnounce,
-		BlockAttributes,
-		BlockRequest,
-		BlockResponse,
-		FinalityProofResponse,
-		self,
-		generic::FinalityProofRequest,
-	},
+	message::{self, generic::FinalityProofRequest, BlockAnnounce, BlockAttributes, BlockRequest, BlockResponse,
+	FinalityProofResponse},
 	protocol
 };
 use either::Either;
