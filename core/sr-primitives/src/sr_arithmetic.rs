@@ -715,7 +715,7 @@ pub mod helpers_128bit {
 			// block cannot overflow since b <= c.
 			let q = a / c;
 			let r = a % c;
-			let r_additional = (r.saturating_mul(b)) / c;
+			let r_additional = multiply_by_rational_greedy(r, b, c);
 			Ok((q * b).saturating_add(r_additional))
 		} else if b <= c {
 			// If it will overflow because b <= c but both b and c are in ridiculously large scales,
@@ -892,6 +892,10 @@ mod test_rational128 {
 	use super::*;
 	use super::helpers_128bit::*;
 	use crate::assert_eq_error_rate;
+	use rand::{
+		Rng,
+		distributions::uniform::SampleUniform,
+	};
 
 	const MAX128: u128 = u128::max_value();
 	const MAX64: u128 = u64::max_value() as u128;
@@ -899,6 +903,39 @@ mod test_rational128 {
 
 	fn r(p: u128, q: u128) -> Rational128 {
 		Rational128(p, q)
+	}
+
+	fn mul_div(a: u128, b: u128, c: u128) -> u128 {
+		use primitive_types::U256;
+		if a.is_zero() { return Zero::zero(); }
+		let c = c.max(1);
+
+		// e for extended
+		let ae: U256 = a.into();
+		let be: U256 = b.into();
+		let ce: U256 = c.into();
+
+		let r = ae * be / ce;
+		if r > u128::max_value().into() {
+			a
+		} else {
+			r.as_u128()
+		}
+	}
+
+	#[test]
+	fn truth_value_function_works() {
+		assert_eq!(
+			mul_div(2u128.pow(100), 8, 4),
+			2u128.pow(101)
+		);
+		assert_eq!(
+			mul_div(2u128.pow(100), 4, 8),
+			2u128.pow(99)
+		);
+
+		// and it returns a if result cannot fit
+		assert_eq!(mul_div(MAX128 - 10, 2, 1), MAX128 - 10);
 	}
 
 	#[test]
@@ -1036,7 +1073,6 @@ mod test_rational128 {
 			multiply_by_rational(MAX128, 5, 7).unwrap(),
 			(MAX128 / 7 * 5) + (3 * 5 / 7),
 		);
-
 		assert_eq!(
 			// MAX128 % 7 == 3
 			multiply_by_rational(MAX128, 11 , 13).unwrap(),
@@ -1054,6 +1090,13 @@ mod test_rational128 {
 		assert_eq!(
 			multiply_by_rational(2 * MAX64 - 1, MAX64 - 1, MAX64).unwrap(),
 			2 * MAX64 - 3,
+		);
+
+		// computed with swapping but swap itself will fallback into greedy to get the remainder
+		assert_eq_error_rate!(
+			multiply_by_rational(2u128.pow(66) - 1, 2u128.pow(65) - 1, 2u128.pow(65)).unwrap(),
+			mul_div(2u128.pow(66) - 1, 2u128.pow(65) - 1, 2u128.pow(65)),
+			1,
 		);
 
 		// these are calculated with perquintillion. The cannot be swapped.
@@ -1099,6 +1142,62 @@ mod test_rational128 {
 			5,
 		);
 	}
+
+	#[test]
+	fn fuzz_multiply_by_rational_u32() {
+		fuzz_multiply_by_rational::<u32>(1_000_000, 0, true);
+	}
+
+	#[test]
+	fn fuzz_multiply_by_rational_u64() {
+		fuzz_multiply_by_rational::<u64>(1_000_000, 0, true);
+	}
+
+	#[test]
+	fn fuzz_multiply_by_rational_u128() {
+		fuzz_multiply_by_rational::<u128>(1_000_000, 0, false);
+	}
+
+	fn fuzz_multiply_by_rational<T>(
+		iters: usize,
+		maximum_error: u128,
+		do_print: bool,
+	)
+		where T: std::fmt::Display + Bounded + Zero + SampleUniform + Into<u128> + Copy
+	{
+		let mut rng = rand::thread_rng();
+		let mut average_diff = 0.0;
+
+		for _ in 0..iters {
+			let a = rng.gen_range::<T, T, T>(Zero::zero(), Bounded::max_value());
+			let c = rng.gen_range::<T, T, T>(Zero::zero(), Bounded::max_value());
+			let b = rng.gen_range::<T, T, T>(Zero::zero(), c);
+
+			let a: u128 = a.into();
+			let b: u128 = b.into();
+			let c: u128 = c.into();
+
+			let truth = mul_div(a, b, c);
+			let result = multiply_by_rational_greedy(a, b, c);
+			let diff = truth.max(result) - truth.min(result);
+			let loss_ratio = diff as f64 / truth as f64;
+			average_diff += loss_ratio;
+
+			if do_print && diff > maximum_error {
+				println!("++ Computed with more loss than expected: {} * {} / {}", a, b, c);
+				println!("++ Expected {}", truth);
+				println!("+++++++ Got {}", result);
+
+			}
+		}
+		// print report
+		println!(
+			"## Fuzzed with {} numbers. Average error was {}",
+			iters,
+			average_diff / (iters as f64),
+		);
+	}
+
 }
 
 
