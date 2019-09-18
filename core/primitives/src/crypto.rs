@@ -393,7 +393,8 @@ impl From<Ss58AddressFormat> for String {
 ///
 /// Current known "versions" are:
 /// - 0 direct (payload) checksum for 32-byte *25519 Polkadot addresses.
-/// - 2 direct (payload) checksum for 32-byte *25519 Polkadot Milestone 'K' addresses.
+/// - 2 direct (payload) checksum for 32-byte *25519 Kusama addresses.
+/// - 20 direct (payload) checksum for 32-byte *25519 Dothereum addresses.
 /// - 42 direct (payload) checksum for 32-byte *25519 addresses on any Substrate-based network.
 #[cfg(feature = "std")]
 pub fn set_default_ss58_version(version: Ss58AddressFormat) {
