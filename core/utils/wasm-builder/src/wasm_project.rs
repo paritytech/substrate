@@ -270,7 +270,7 @@ fn create_project(cargo_manifest: &Path, wasm_workspace: &Path) -> PathBuf {
 				crate-type = ["cdylib"]
 
 				[dependencies]
-				wasm_project = {{ package = "{crate_name}", path = "{crate_path}", default-features = false, features = [ "no_std" ] }}
+				wasm_project = {{ package = "{crate_name}", path = "{crate_path}", default-features = false }}
 			"#,
 			crate_name = crate_name,
 			crate_path = crate_path.display(),
