@@ -28,9 +28,6 @@ hex = "0.3"
 
 [features]
 default = ["std"]
-core = [
-	"wasmi-validation/core",
-]
 std = [
 	"serde",
 	"codec/std",

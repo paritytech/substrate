@@ -30,7 +30,7 @@ authorship = { package = "srml-authorship", path = "../../srml/authorship", defa
 babe = { package = "srml-babe", path = "../../srml/babe", default-features = false }
 balances = { package = "srml-balances", path = "../../srml/balances", default-features = false }
 collective = { package = "srml-collective", path = "../../srml/collective", default-features = false }
-contracts = { package = "srml-contracts", path = "../../srml/contracts", default-features = false, features = ["core"] }
+contracts = { package = "srml-contracts", path = "../../srml/contracts", default-features = false }
 democracy = { package = "srml-democracy", path = "../../srml/democracy", default-features = false }
 elections = { package = "srml-elections", path = "../../srml/elections", default-features = false }
 executive = { package = "srml-executive", path = "../../srml/executive", default-features = false }
