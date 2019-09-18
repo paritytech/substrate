@@ -340,7 +340,7 @@ impl From<Ss58AddressFormat> for u8 {
 			Ss58AddressFormat::SubstrateAccountDirect => 42,
 			Ss58AddressFormat::PolkadotAccountDirect => 0,
 			Ss58AddressFormat::KusamaAccountDirect => 2,
-			Ss58AddressFormat::DothereumAccountDirect => 4,
+			Ss58AddressFormat::DothereumAccountDirect => 20,
 			Ss58AddressFormat::Custom(n) => n,
 		}
 	}
@@ -354,7 +354,7 @@ impl TryFrom<u8> for Ss58AddressFormat {
 			42 => Ok(Ss58AddressFormat::SubstrateAccountDirect),
 			0 => Ok(Ss58AddressFormat::PolkadotAccountDirect),
 			2 => Ok(Ss58AddressFormat::KusamaAccountDirect),
-			4 => Ok(Ss58AddressFormat::DothereumAccountDirect),
+			20 => Ok(Ss58AddressFormat::DothereumAccountDirect),
 			_ => Err(()),
 		}
 	}
