@@ -153,9 +153,16 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 				Ok(header) => Either::Left(fetcher.remote_read(RemoteReadRequest {
 					block: header.hash(),
 					header,
-					key: key.0,
+					keys: vec![key.0.clone()],
 					retry_count: Default::default(),
-				}).then(|result| ready(result.map(|data| data.map(StorageData)).map_err(client_err)))),
+				}).then(move |result| ready(result
+					.map(|mut data| data
+						.remove(&key.0)
+						.expect("successful result has entry for all keys; qed")
+						.map(StorageData)
+					)
+					.map_err(client_err)
+				))),
 				Err(error) => Either::Right(ready(Err(error))),
 			});
 
@@ -197,9 +204,16 @@ impl<Block, F, B, E, RA> StateBackend<B, E, Block, RA> for LightState<Block, F, 
 					block: header.hash(),
 					header,
 					storage_key: child_storage_key.0,
-					key: key.0,
+					keys: vec![key.0.clone()],
 					retry_count: Default::default(),
-				}).then(|result| ready(result.map(|data| data.map(StorageData)).map_err(client_err)))),
+				}).then(move |result| ready(result
+					.map(|mut data| data
+						.remove(&key.0)
+						.expect("successful result has entry for all keys; qed")
+						.map(StorageData)
+					)
+					.map_err(client_err)
+				))),
 				Err(error) => Either::Right(ready(Err(error))),
 			});
 

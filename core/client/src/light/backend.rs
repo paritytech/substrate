@@ -325,6 +325,15 @@ where
 	}
 }
 
+impl<H: Hasher> std::fmt::Debug for GenesisOrUnavailableState<H> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match *self {
+			GenesisOrUnavailableState::Genesis(ref state) => state.fmt(f),
+			GenesisOrUnavailableState::Unavailable => write!(f, "Unavailable"),
+		}
+	}
+}
+
 impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 	where
 		H::Out: Ord,
