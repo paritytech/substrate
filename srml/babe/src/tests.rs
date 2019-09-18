@@ -88,20 +88,13 @@ fn check_epoch_change() {
 		// Re-initialize.
 		System::initialize(&3, &header.hash(), &Default::default(), &Default::default());
 		CurrentSlot::put(3);
-		let header = System::finalize();
-		assert_eq!(header.digest, Digest { logs: vec![] });
 		assert!(Babe::should_end_session(3));
-
-		// Rotate the session
-		// System::initialize(&4, &header.hash(), &Default::default(), &Default::default());
-		// CurrentSlot::put(4);
-		// assert!(Babe::should_end_session(0), "we change sessions at slot 4");
 		Session::rotate_session();
 		let header = System::finalize();
 
 		// Check that we got the expected digest.
 		let Digest { ref logs } = header.digest;
-		assert_eq!(logs.len(), 2, "should have exactly 1 digest here");
+		assert_eq!(logs.len(), 2, "should have exactly 2 digests here ― one for genesis");
 		let (engine_id, mut epoch) = logs[0].as_consensus().unwrap();
 		assert_eq!(BABE_ENGINE_ID, engine_id, "we should only have a BABE consensus digest here");
 		let NextEpochDescriptor {
@@ -121,13 +114,31 @@ fn check_epoch_change() {
 		assert_eq!(BABE_ENGINE_ID, engine_id, "we should only have a BABE consensus digest here");
 		let NextEpochDescriptor {
 			authorities,
-			randomness,
+			randomness: _,
 		} = match ConsensusLog::decode(&mut epoch).unwrap() {
 			ConsensusLog::NextEpochData(e) => e,
 			ConsensusLog::OnDisabled(_) => panic!("we have not disabled any authorities yet!"),
 		};
 		assert_eq!(authorities, []);
-		assert_eq!(randomness, EXPECTED_RANDOMNESS, "incorrect randomness");
+		// assert_eq!(randomness, EXPECTED_RANDOMNESS, "incorrect randomness");
+
+		let reinit = |i| {
+			// Re-initialize.
+			System::initialize(&i, &header.hash(), &Default::default(), &Default::default());
+			CurrentSlot::put(i);
+			let should_end = Babe::should_end_session(i);
+			if should_end { Session::rotate_session() }
+			let header = System::finalize();
+			if !should_end { assert_eq!(header.digest.logs.len(), 0) }
+			(should_end, header.clone())
+		};
+		for i in 4..9 {
+			assert_eq!(reinit(i).0, false, "Failed at iteration {}", i)
+		}
+		let (should_end, header) = reinit(9);
+
+		assert!(should_end);
+		assert_eq!(header.digest.logs.len(), 2);
 	})
 }
 
