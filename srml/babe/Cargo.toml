@@ -33,7 +33,7 @@ std = [
 	"codec/std",
 	"rstd/std",
 	"support/std",
-	"sr-version/std",
+	# "sr-version/std",
 	"sr-primitives/std",
 	"sr-staking-primitives/std",
 	"system/std",
