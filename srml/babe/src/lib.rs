@@ -392,6 +392,7 @@ impl<T: Trait> Module<T> {
 			// we need to adjust internal storage accordingly.
 			if GenesisSlot::get() == 0 {
 				GenesisSlot::put(digest.slot_number());
+				debug_assert_ne!(GenesisSlot::get(), 0);
 
 				// deposit a log because this is the first block in epoch #0
 				// we use the same values as genesis because
