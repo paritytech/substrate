@@ -193,6 +193,11 @@ You will also need to install the following packages:
 [source, shell]
 sudo apt install cmake pkg-config libssl-dev git clang libclang-dev
 
+- Linux on ARM:
+`rust-lld` is required for linking wasm, but is missing on non Tier 1 platforms.
+So, use this https://github.com/Plume-org/Plume/blob/master/script/wasm-deps.sh[script]
+to build `lld` and create the symlink `/usr/bin/rust-lld` to the build binary.
+
  - Mac:
 [source, shell]
 brew install cmake pkg-config openssl git llvm
