@@ -22,7 +22,7 @@ rand = "0.7.1"
 [dev-dependencies]
 hex-literal = "0.2.0"
 criterion = "0.2"
-rand = "0.6"
+rand = { version = "0.7.1", features = ["small_rng"] }
 historied-data = { path = "../utils/historied-data", features = ["std", "test"] }
 
 [[bench]]
