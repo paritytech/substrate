@@ -20,7 +20,7 @@
 
 use std::sync::Arc;
 
-use babe::{import_queue, Config};
+use babe;
 use client::{self, LongestChain};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use node_executor;
@@ -47,7 +47,6 @@ macro_rules! new_full_start {
 		type RpcExtension = jsonrpc_core::IoHandler<substrate_rpc::Metadata>;
 		let mut import_setup = None;
 		let inherent_data_providers = inherents::InherentDataProviders::new();
-		let mut tasks_to_spawn = Vec::new();
 
 		let builder = substrate_service::ServiceBuilder::new_full::<
 			node_primitives::Block, node_runtime::RuntimeApi, node_executor::Executor
@@ -58,36 +57,40 @@ macro_rules! new_full_start {
 			.with_transaction_pool(|config, client|
 				Ok(transaction_pool::txpool::Pool::new(config, transaction_pool::ChainApi::new(client)))
 			)?
-			.with_import_queue(|_config, client, mut select_chain, transaction_pool| {
+			.with_import_queue(|_config, client, mut select_chain, _transaction_pool| {
 				let select_chain = select_chain.take()
 					.ok_or_else(|| substrate_service::Error::SelectChainRequired)?;
-				let (block_import, link_half) =
+				let (grandpa_block_import, grandpa_link) =
 					grandpa::block_import::<_, _, _, node_runtime::RuntimeApi, _, _>(
 						client.clone(), client.clone(), select_chain
 					)?;
-				let justification_import = block_import.clone();
+				let justification_import = grandpa_block_import.clone();
 
-				let (import_queue, babe_link, babe_block_import, pruning_task) = babe::import_queue(
+				let (block_import, babe_link) = babe::block_import(
 					babe::Config::get_or_compute(&*client)?,
-					block_import,
+					grandpa_block_import,
+					client.clone(),
+					client.clone(),
+				)?;
+
+				let import_queue = babe::import_queue(
+					babe_link.clone(),
+					block_import.clone(),
 					Some(Box::new(justification_import)),
 					None,
 					client.clone(),
 					client,
 					inherent_data_providers.clone(),
-					Some(transaction_pool)
 				)?;
 
-				import_setup = Some((babe_block_import.clone(), link_half, babe_link));
-				tasks_to_spawn.push(Box::new(pruning_task));
-
+				import_setup = Some((block_import, grandpa_link, babe_link));
 				Ok(import_queue)
 			})?
 			.with_rpc_extensions(|client, pool| -> RpcExtension {
 				node_rpc::create(client, pool)
 			})?;
 
-		(builder, import_setup, inherent_data_providers, tasks_to_spawn)
+		(builder, import_setup, inherent_data_providers)
 	}}
 }
 
@@ -112,7 +115,7 @@ macro_rules! new_full {
 			$config.disable_grandpa
 		);
 
-		let (builder, mut import_setup, inherent_data_providers, tasks_to_spawn) = new_full_start!($config);
+		let (builder, mut import_setup, inherent_data_providers) = new_full_start!($config);
 
 		// Dht event channel from the network to the authority discovery module. Use bounded channel to ensure
 		// back-pressure. Authority discovery is triggering one event per authority within the current authority set.
@@ -128,11 +131,8 @@ macro_rules! new_full {
 			.with_dht_event_tx(dht_event_tx)?
 			.build()?;
 
-		let (link_half, babe_link) = import_setup.take()
+		let (block_import, grandpa_link, babe_link) = import_setup.take()
 				.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
-
-		// spawn any futures that were created in the previous setup steps
-		tasks_to_spawn.into_iter().for_each(|t| service.spawn_task(t));
 
 		if is_authority {
 			let proposer = substrate_basic_authorship::ProposerFactory {
@@ -145,14 +145,14 @@ macro_rules! new_full {
 				.ok_or(substrate_service::Error::SelectChainRequired)?;
 
 			let babe_config = babe::BabeParams {
-				config: babe::Config::get_or_compute(&*client)?,
 				keystore: service.keystore(),
 				client,
 				select_chain,
 				env: proposer,
+				block_import,
 				sync_oracle: service.network(),
 				inherent_data_providers: inherent_data_providers.clone(),
-				force_authoring: force_authoring,
+				force_authoring,
 				babe_link,
 			};
 
@@ -180,7 +180,7 @@ macro_rules! new_full {
 				// start the lightweight GRANDPA observer
 				service.spawn_task(Box::new(grandpa::run_grandpa_observer(
 					config,
-					link_half,
+					grandpa_link,
 					service.network(),
 					service.on_exit(),
 				)?));
@@ -189,7 +189,7 @@ macro_rules! new_full {
 				// start the full GRANDPA voter
 				let grandpa_config = grandpa::GrandpaParams {
 					config: config,
-					link: link_half,
+					link: grandpa_link,
 					network: service.network(),
 					inherent_data_providers: inherent_data_providers.clone(),
 					on_exit: service.on_exit(),
@@ -219,11 +219,8 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 /// Builds a new service for a light client.
 pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisConfig>)
 -> Result<impl AbstractService, ServiceError> {
-	use futures::Future;
-
 	type RpcExtension = jsonrpc_core::IoHandler<substrate_rpc::Metadata>;
 	let inherent_data_providers = InherentDataProviders::new();
-	let mut tasks_to_spawn = Vec::new();
 
 	let service = ServiceBuilder::new_light::<Block, RuntimeApi, node_executor::Executor>(config)?
 		.with_select_chain(|_config, backend| {
@@ -232,30 +229,34 @@ pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisCo
 		.with_transaction_pool(|config, client|
 			Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client)))
 		)?
-		.with_import_queue_and_fprb(|_config, client, backend, fetcher, _select_chain, transaction_pool| {
+		.with_import_queue_and_fprb(|_config, client, backend, fetcher, _select_chain, _tx_pool| {
 			let fetch_checker = fetcher
 				.map(|fetcher| fetcher.checker().clone())
 				.ok_or_else(|| "Trying to start light import queue without active fetch checker")?;
-			let block_import = grandpa::light_block_import::<_, _, _, RuntimeApi, _>(
+			let grandpa_block_import = grandpa::light_block_import::<_, _, _, RuntimeApi, _>(
 				client.clone(), backend, Arc::new(fetch_checker), client.clone()
 			)?;
 
-			let finality_proof_import = block_import.clone();
+			let finality_proof_import = grandpa_block_import.clone();
 			let finality_proof_request_builder =
 				finality_proof_import.create_finality_proof_request_builder();
 
-			let (import_queue, _, _, pruning_task) = import_queue(
-				Config::get_or_compute(&*client)?,
-				block_import,
+			let (babe_block_import, babe_link) = babe::block_import(
+				babe::Config::get_or_compute(&*client)?,
+				grandpa_block_import,
+				client.clone(),
+				client.clone(),
+			)?;
+
+			let import_queue = babe::import_queue(
+				babe_link,
+				babe_block_import,
 				None,
 				Some(Box::new(finality_proof_import)),
 				client.clone(),
 				client,
 				inherent_data_providers.clone(),
-				Some(transaction_pool)
 			)?;
-
-			tasks_to_spawn.push(Box::new(pruning_task));
 
 			Ok((import_queue, finality_proof_request_builder))
 		})?
@@ -267,15 +268,6 @@ pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisCo
 			node_rpc::create(client, pool)
 		})?
 		.build()?;
-
-	// spawn any futures that were created in the previous setup steps
-	for task in tasks_to_spawn.drain(..) {
-		service.spawn_task(
-			task.select(service.on_exit())
-				.map(|_| ())
-				.map_err(|_| ())
-		);
-	}
 
 	Ok(service)
 }
