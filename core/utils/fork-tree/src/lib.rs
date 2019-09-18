@@ -573,9 +573,10 @@ mod node_implementation {
 			}
 		}
 
-		/// Find a node in the tree that is the lowest ancestor of the given
-		/// block hash and which passes the given predicate. The given function
-		/// `is_descendent_of` should return `true` if the second hash (target)
+		/// Find a node in the tree that is the deepest ancestor of the given
+		/// block hash which also passes the given predicate, backtracking
+		/// when the predicate fails.
+		/// The given function `is_descendent_of` should return `true` if the second hash (target)
 		/// is a descendent of the first hash (base).
 		// FIXME: it would be useful if this returned a mutable reference but
 		// rustc can't deal with lifetimes properly. an option would be to try
@@ -604,7 +605,13 @@ mod node_implementation {
 				match node.find_node_where(hash, number, is_descendent_of, predicate)? {
 					FindOutcome::Abort => return Ok(FindOutcome::Abort),
 					FindOutcome::Found(x) => return Ok(FindOutcome::Found(x)),
-					FindOutcome::Failure(true) => { known_descendent_of = true },
+					FindOutcome::Failure(true) => {
+						// if the block was a descendent of this child,
+						// then it cannot be a descendent of any others,
+						// so we don't search them.
+						known_descendent_of = true;
+						break;
+					},
 					FindOutcome::Failure(false) => {},
 				}
 			}
@@ -617,15 +624,13 @@ mod node_implementation {
 			if is_descendent_of {
 				// if the predicate passes we return the node
 				if predicate(&self.data) {
-					Ok(FindOutcome::Found(self))
-
-				// otherwise we stop the search returning `None`
-				} else {
-					Ok(FindOutcome::Abort)
+					return Ok(FindOutcome::Found(self));
 				}
-			} else {
-				Ok(FindOutcome::Failure(is_descendent_of))
 			}
+
+			// otherwise, tell our ancestor that we failed, and whether
+			// the block was a descendent.
+			Ok(FindOutcome::Failure(is_descendent_of))
 		}
 	}
 }
@@ -1214,7 +1219,7 @@ mod test {
 	}
 
 	#[test]
-	fn find_node_doesnt_backtrack_after_finding_highest_descending_node() {
+	fn find_node_backtracks_after_finding_highest_descending_node() {
 		let mut tree = ForkTree::new();
 
 		//
@@ -1232,11 +1237,12 @@ mod test {
 		};
 
 		tree.import("A", 1, 1, &is_descendent_of).unwrap();
-		tree.import("B", 2, 4, &is_descendent_of).unwrap();
+		tree.import("B", 2, 2, &is_descendent_of).unwrap();
 		tree.import("C", 2, 4, &is_descendent_of).unwrap();
 
-		// when searching the tree we reach both node `B` and `C`, but the
-		// predicate doesn't pass. still, we should not backtrack to node `A`.
+		// when searching the tree we reach node `C`, but the
+		// predicate doesn't pass. we should backtrack to `B`, but not to `A`,
+		// since "B" fulfills the predicate.
 		let node = tree.find_node_where(
 			&"D",
 			&3,
@@ -1244,6 +1250,6 @@ mod test {
 			&|data| *data < 3,
 		).unwrap();
 
-		assert_eq!(node, None);
+		assert_eq!(node.unwrap().hash, "B");
 	}
 }
