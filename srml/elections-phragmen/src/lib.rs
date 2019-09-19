@@ -492,7 +492,7 @@ impl<T: Trait> Module<T> {
 		let num_to_elect = desired_runners_up + desired_seats;
 
 		let mut candidates = Self::candidates();
-		// candidates who exactly called `submit_candidacy`. Only these folks are at the risk of
+		// candidates who explicitly called `submit_candidacy`. Only these folks are at the risk of
 		// losing their bond.
 		let mut exposed_candidates = candidates.clone();
 		// current members are always a candidate for the next round as well.
