@@ -294,9 +294,9 @@ fn compute_points(input: &INposInput) -> Vec<(u32, u32)> {
 			let prev = points.last().unwrap();
 			// Compute the y corresponding to x=1_000_000 using the this point and the previous one.
 			let y = next_y + (
-				(next_x - 1_000_000) as u128
-				* (prev.1 - next_y) as u128
-				/ (next_x - prev.0) as u128
+				(next_x - 1_000_000) as u64
+				* (prev.1 - next_y) as u64
+				/ (next_x - prev.0) as u64
 			) as u32;
 			points.push((1_000_000, y));
 			return points;
