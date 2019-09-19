@@ -4,10 +4,11 @@ mod log;
 
 use log::log2;
 use proc_macro::TokenStream;
-use quote::{quote, ToTokens};
-use syn::parse::{Parse, ParseStream};
 use proc_macro2::{TokenStream as TokenStream2, Span};
 use proc_macro_crate::crate_name;
+use quote::{quote, ToTokens};
+use std::convert::TryInto;
+use syn::parse::{Parse, ParseStream};
 
 /// Accepts a number of expressions to create a instance of PiecewiseLinear which represents the
 /// NPoS curve (as detailed
@@ -243,7 +244,8 @@ impl INPoS {
 	fn from_input(input: &INposInput) -> Self {
 		INPoS {
 			i_0: input.min_inflation,
-			i_ideal: (input.max_inflation as u64 * MILLION as u64 / input.ideal_stake as u64) as u32,
+			i_ideal: (input.max_inflation as u64 * MILLION as u64 / input.ideal_stake as u64)
+				.try_into().unwrap(),
 			i_ideal_times_x_ideal: input.max_inflation,
 			x_ideal: input.ideal_stake,
 			d: input.falloff,
@@ -256,7 +258,9 @@ impl INPoS {
 		}
 		let log = log2(self.i_ideal_times_x_ideal - self.i_0, y - self.i_0);
 
-		self.x_ideal + ((self.d as u64 * log as u64) / 1_000_000) as u32
+		let term: u32 = ((self.d as u64 * log as u64) / 1_000_000).try_into().unwrap();
+
+		self.x_ideal + term
 	}
 }
 
@@ -293,11 +297,15 @@ fn compute_points(input: &INposInput) -> Vec<(u32, u32)> {
 		if next_x >= 1_000_000 {
 			let prev = points.last().unwrap();
 			// Compute the y corresponding to x=1_000_000 using the this point and the previous one.
-			let y = next_y + (
+
+			let delta_y: u32 = (
 				(next_x - 1_000_000) as u64
 				* (prev.1 - next_y) as u64
 				/ (next_x - prev.0) as u64
-			) as u32;
+			).try_into().unwrap();
+
+			let y = next_y + delta_y;
+
 			points.push((1_000_000, y));
 			return points;
 		}
