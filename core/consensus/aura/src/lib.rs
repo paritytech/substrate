@@ -245,7 +245,7 @@ impl<H, B, C, E, I, P, Error, SO> slots::SimpleSlotWorker<B> for AuraWorker<C, E
 		]
 	}
 
-	fn import_block(&self) -> Box<dyn Fn(
+	fn block_import_params(&self) -> Box<dyn Fn(
 		B::Header,
 		&B::Hash,
 		Vec<B::Extrinsic>,
@@ -541,7 +541,7 @@ impl<B: BlockT, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
 						_ => None,
 					});
 
-				let import_block = BlockImportParams {
+				let block_import_params = BlockImportParams {
 					origin,
 					header: pre_header,
 					post_digests: vec![seal],
@@ -552,7 +552,7 @@ impl<B: BlockT, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
 					fork_choice: ForkChoiceStrategy::LongestChain,
 				};
 
-				Ok((import_block, maybe_keys))
+				Ok((block_import_params, maybe_keys))
 			}
 			CheckedHeader::Deferred(a, b) => {
 				debug!(target: "aura", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
