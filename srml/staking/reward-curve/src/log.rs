@@ -2,6 +2,15 @@
 pub fn log2(p: u32, q: u32) -> u32 {
 	assert!(p >= q);
 	assert!(p <= u32::max_value()/2);
+
+	// This restriction should not be mandatory. But function is only tested and used for this.
+	assert!(p <= 1_000_000);
+	assert!(q <= 1_000_000);
+
+	if p == q {
+		return 0
+	}
+
 	let mut n = 0;
 	while !(p >= 2u32.pow(n)*q) || !(p < 2u32.pow(n+1)*q) {
 		n += 1;
@@ -44,16 +53,15 @@ pub fn log2(p: u32, q: u32) -> u32 {
 
 #[test]
 fn test_log() {
-	let mil = 1_000_000;
-	let test = |a: u32| {
-		let i = log2(mil, a);
-		let f = (mil as f64 / a as f64).log(2.0) * mil as f64;
-		assert!((i as i64 - f.floor() as i64).abs() < 6);
-	};
+	let div = 1_000;
+	for p in 0..=div {
+		for q in 1..=p {
+			let p = (1_000_000 as u64 * p as u64 / div as u64) as u32;
+			let q = (1_000_000 as u64 * q as u64 / div as u64) as u32;
 
-	for i in 1..1_000_000 {
-		test(i as u32)
+			let res = - (log2(p, q) as i64);
+			let expected = ((q as f64 / p as f64).log(2.0) * 1_000_000 as f64).round() as i64;
+			assert!((res - expected).abs() <= 6);
+		}
 	}
 }
-
-// TODO TODO: test a bit more
