@@ -723,9 +723,10 @@ pub mod helpers_128bit {
 
 	/// Performs [`multiply_by_rational`]. In case of failure, if `b < c` it tries to approximate
 	/// the ratio into a perquintillion and return a lossy result. Otherwise, a best effort approach
-	/// if shifting both b and c is performed until multiply_by_rational can work.
+	/// of shifting both b and c is performed until multiply_by_rational can work.
 	///
-	/// In case `b > c` and overflow happens, `a` is returned.
+	/// This function can very well be lossy and as the name suggests, perform a best effort in the
+	/// scope of u128 numbers. In case `b > c` and overflow happens, `a` is returned.
 	///
 	/// c must be greater than or equal to 1.
 	pub fn multiply_by_rational_best_effort(a: u128, b: u128, c: u128) -> u128 {
