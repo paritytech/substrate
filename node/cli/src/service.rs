@@ -44,6 +44,7 @@ construct_simple_protocol! {
 /// be able to perform chain operations.
 macro_rules! new_full_start {
 	($config:expr) => {{
+		type RpcExtension = jsonrpc_core::IoHandler<substrate_rpc::Metadata>;
 		let mut import_setup = None;
 		let inherent_data_providers = inherents::InherentDataProviders::new();
 		let mut tasks_to_spawn = Vec::new();
@@ -82,14 +83,8 @@ macro_rules! new_full_start {
 
 				Ok(import_queue)
 			})?
-			.with_rpc_extensions(|client, pool| {
-				use node_rpc::accounts::{Accounts, AccountsApi};
-
-				let mut io = jsonrpc_core::IoHandler::<substrate_service::RpcMetadata>::default();
-				io.extend_with(
-					AccountsApi::to_delegate(Accounts::new(client, pool))
-				);
-				io
+			.with_rpc_extensions(|client, pool| -> RpcExtension {
+				node_rpc::create(client, pool)
 			})?;
 
 		(builder, import_setup, inherent_data_providers, tasks_to_spawn)
@@ -227,6 +222,7 @@ pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisCo
 -> Result<impl AbstractService, ServiceError> {
 	use futures::Future;
 
+	type RpcExtension = jsonrpc_core::IoHandler<substrate_rpc::Metadata>;
 	let inherent_data_providers = InherentDataProviders::new();
 	let mut tasks_to_spawn = Vec::new();
 
@@ -268,20 +264,8 @@ pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisCo
 		.with_finality_proof_provider(|client, backend|
 			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, client)) as _)
 		)?
-		.with_rpc_extensions(|client, pool| {
-			use node_rpc::{
-				accounts::{Accounts, AccountsApi},
-				contracts::{Contracts, ContractsApi},
-			};
-
-			let mut io = jsonrpc_core::IoHandler::default();
-			io.extend_with(
-				AccountsApi::to_delegate(Accounts::new(client.clone(), pool))
-			);
-			io.extend_with(
-				ContractsApi::to_delegate(Contracts::new(client))
-			);
-			io
+		.with_rpc_extensions(|client, pool| -> RpcExtension {
+			node_rpc::create(client, pool)
 		})?
 		.build()?;
 
