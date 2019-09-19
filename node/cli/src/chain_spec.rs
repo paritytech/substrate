@@ -404,6 +404,7 @@ pub(crate) mod tests {
 				config.roles = Roles::FULL;
 				new_full(config)
 			},
+			true,
 		);
 	}
 }
