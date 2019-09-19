@@ -95,7 +95,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	fn pre_digest_data(&self, slot_number: u64, claim: &Self::Claim) -> Vec<sr_primitives::DigestItem<B::Hash>>;
 
 	/// Returns a function which produces a `BlockImportParams`.
-	fn import_block(&self) -> Box<dyn Fn(
+	fn block_import_params(&self) -> Box<dyn Fn(
 		B::Header,
 		&B::Hash,
 		Vec<B::Extrinsic>,
@@ -198,7 +198,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			futures::future::Either::Right((Err(err), _)) => Err(err),
 		});
 
-		let import_block = self.import_block();
+		let block_import_params_maker = self.block_import_params();
 		let block_import = self.block_import();
 		let logging_target = self.logging_target();
 
@@ -223,7 +223,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			let header_hash = header.hash();
 			let parent_hash = header.parent_hash().clone();
 
-			let import_block = import_block(
+			let block_import_params = block_import_params_maker(
 				header,
 				&header_hash,
 				body,
@@ -232,17 +232,17 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 			info!("Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
 					header_num,
-					import_block.post_header().hash(),
+					block_import_params.post_header().hash(),
 					header_hash,
 			);
 
 			telemetry!(CONSENSUS_INFO; "slots.pre_sealed_block";
 				"header_num" => ?header_num,
-				"hash_now" => ?import_block.post_header().hash(),
+				"hash_now" => ?block_import_params.post_header().hash(),
 				"hash_previously" => ?header_hash,
 			);
 
-			if let Err(err) = block_import.lock().import_block(import_block, Default::default()) {
+			if let Err(err) = block_import.lock().import_block(block_import_params, Default::default()) {
 				warn!(target: logging_target,
 					"Error with block built on {:?}: {:?}",
 					parent_hash,
