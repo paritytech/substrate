@@ -223,9 +223,9 @@ Finally, all changes are `commit`-ted into the underlying overlay. The complexit
 - Only for the first invocation of the contract: up to 5 DB reads and one DB write as well as logic executed by `ensure_can_withdraw`, `withdraw`, `make_free_balance_be`.
 - On top of that for every invocation: Up to 5 DB reads. DB read of the code is of dynamic size. There can also be up to 2 DB writes (if flushed to the storage). Additionally, if the source account removal takes place a DB write will be performed per one storage entry that the account has.
 
-## Create
+## Instantiate
 
-This function takes the code of the constructor and input data. Creation of a contract consists of the following steps:
+This function takes the code of the constructor and input data. Instantiation of a contract consists of the following steps:
 
 1. Initialization of the execution context.
 2. Calling `DetermineContractAddress` hook to determine an address for the contract,
@@ -303,7 +303,7 @@ Loading `input_data` should be charged in any case.
 
 **complexity**: All complexity comes from loading buffers and executing `call` executive function. The former component is proportional to the sizes of `callee`, `value` and `input_data` buffers. The latter component completely depends on the complexity of `call` executive function, and also dominated by it.
 
-## ext_create
+## ext_instantiate
 
 This function receives the following arguments:
 

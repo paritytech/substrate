@@ -478,7 +478,7 @@ mod tests {
 
 	const CODE_CREATE: &str = r#"
 (module
-	;; ext_create(
+	;; ext_instantiate(
 	;;     code_ptr: u32,
 	;;     code_len: u32,
 	;;     gas: u64,
@@ -487,11 +487,11 @@ mod tests {
 	;;     input_data_ptr: u32,
 	;;     input_data_len: u32,
 	;; ) -> u32
-	(import "env" "ext_create" (func $ext_create (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
+	(import "env" "ext_instantiate" (func $ext_instantiate (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
 		(drop
-			(call $ext_create
+			(call $ext_instantiate
 				(i32.const 16)   ;; Pointer to `code_hash`
 				(i32.const 32)   ;; Length of `code_hash`
 				(i64.const 0)    ;; How much gas to devote for the execution. 0 = all.
