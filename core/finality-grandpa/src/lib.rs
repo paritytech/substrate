@@ -528,15 +528,15 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 		let events = telemetry_on_connect
 			.for_each(move |_| {
 				telemetry!(CONSENSUS_INFO; "afg.authority_set";
-					 "authority_set_id" => ?authorities.set_id(),
-					 "authorities" => {
+					"authority_set_id" => ?authorities.set_id(),
+					"authorities" => {
 						let curr = authorities.current_authorities();
 						let voters = curr.voters();
 						let authorities: Vec<String> =
 							voters.iter().map(|(id, _)| id.to_string()).collect();
 						serde_json::to_string(&authorities)
 							.expect("authorities is always at least an empty vector; elements are always of type string")
-					 }
+					}
 				);
 				Ok(())
 			})
