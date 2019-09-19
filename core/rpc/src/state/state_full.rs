@@ -27,11 +27,11 @@ use client::{
 	backend::Backend, error::Result as ClientResult,
 };
 use primitives::{
-	H256, Blake2Hasher, Bytes,
+	H256, Blake2Hasher, Bytes, offchain::NeverOffchainExt,
 	storage::{StorageKey, StorageData, StorageChangeSet},
 };
 use runtime_version::RuntimeVersion;
-use state_machine::{NeverOffchainExt, ExecutionStrategy};
+use state_machine::ExecutionStrategy;
 use sr_primitives::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header, NumberFor, ProvideRuntimeApi, SaturatedConversion},

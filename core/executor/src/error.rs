@@ -16,7 +16,6 @@
 
 //! Rust executor possible errors.
 
-use state_machine;
 use serializer;
 use wasmi;
 
@@ -66,16 +65,19 @@ pub enum Error {
 	#[display(fmt="The runtime has the `start` function")]
 	RuntimeHasStartFn,
 	/// Some other error occurred
-	Other(&'static str),
+	Other(String),
 	/// Some error occurred in the allocator
 	#[display(fmt="Error in allocator: {}", _0)]
 	Allocator(&'static str),
-	/// The allocator run out of space.
-	#[display(fmt="Allocator run out of space")]
+	/// The allocator ran out of space.
+	#[display(fmt="Allocator ran out of space")]
 	AllocatorOutOfSpace,
 	/// Someone tried to allocate more memory than the allowed maximum per allocation.
 	#[display(fmt="Requested allocation size is too large")]
 	RequestedAllocationTooLarge,
+	/// Executing the given function failed with the given error.
+	#[display(fmt="Function execution failed with: {}", _0)]
+	FunctionExecution(String),
 }
 
 impl std::error::Error for Error {
@@ -89,12 +91,10 @@ impl std::error::Error for Error {
 	}
 }
 
-impl state_machine::Error for Error {}
-
 impl wasmi::HostError for Error {}
 
-impl From<&'static str> for Error {
-	fn from(err: &'static str) -> Error {
+impl From<String> for Error {
+	fn from(err: String) -> Error {
 		Error::Other(err)
 	}
 }

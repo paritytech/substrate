@@ -31,7 +31,18 @@ use std::cell::Cell;
 use std::thread;
 
 thread_local! {
-	static ABORT: Cell<bool> = Cell::new(true);
+	static ON_PANIC: Cell<OnPanic> = Cell::new(OnPanic::Abort);
+}
+
+/// Panic action.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum OnPanic {
+	/// Abort when panic occurs.
+	Abort,
+	/// Unwind when panic occurs.
+	Unwind,
+	/// Always unwind even if someone changes strategy to Abort afterwards.
+	NeverAbort,
 }
 
 /// Set the panic hook.
@@ -40,8 +51,13 @@ thread_local! {
 ///
 /// The `bug_url` parameter is an invitation for users to visit that URL to submit a bug report
 /// in the case where a panic happens.
-pub fn set(bug_url: &'static str) {
-	panic::set_hook(Box::new(move |c| panic_hook(c, bug_url)));
+pub fn set(bug_url: &'static str, version: &str) {
+	panic::set_hook(Box::new({
+		let version = version.to_string();
+		move |c| {
+			panic_hook(c, bug_url, &version)
+		}
+	}));
 }
 
 macro_rules! ABOUT_PANIC {
@@ -52,10 +68,13 @@ This is a bug. Please report it at:
 ")}
 
 /// Set aborting flag. Returns previous value of the flag.
-fn set_abort(enabled: bool) -> bool {
-	ABORT.with(|flag| {
-		let prev = flag.get();
-		flag.set(enabled);
+fn set_abort(on_panic: OnPanic) -> OnPanic {
+	ON_PANIC.with(|val| {
+		let prev = val.get();
+		match prev {
+			OnPanic::Abort | OnPanic::Unwind => val.set(on_panic),
+			OnPanic::NeverAbort => (),
+		}
 		prev
 	})
 }
@@ -69,7 +88,7 @@ fn set_abort(enabled: bool) -> bool {
 /// > the `AbortGuard` on the stack and let it destroy itself naturally.
 pub struct AbortGuard {
 	/// Value that was in `ABORT` before we created this guard.
-	previous_val: bool,
+	previous_val: OnPanic,
 	/// Marker so that `AbortGuard` doesn't implement `Send`.
 	_not_send: PhantomData<std::rc::Rc<()>>
 }
@@ -79,7 +98,7 @@ impl AbortGuard {
 	/// unwind the stack (unless another guard is created afterwards).
 	pub fn force_unwind() -> AbortGuard {
 		AbortGuard {
-			previous_val: set_abort(false),
+			previous_val: set_abort(OnPanic::Unwind),
 			_not_send: PhantomData
 		}
 	}
@@ -88,7 +107,16 @@ impl AbortGuard {
 	/// abort the process (unless another guard is created afterwards).
 	pub fn force_abort() -> AbortGuard {
 		AbortGuard {
-			previous_val: set_abort(true),
+			previous_val: set_abort(OnPanic::Abort),
+			_not_send: PhantomData
+		}
+	}
+
+	/// Create a new guard. While the guard is alive, panics that happen in the current thread will
+	/// **never** abort the process (even if `AbortGuard::force_abort()` guard will be created afterwards).
+	pub fn never_abort() -> AbortGuard {
+		AbortGuard {
+			previous_val: set_abort(OnPanic::NeverAbort),
 			_not_send: PhantomData
 		}
 	}
@@ -101,7 +129,7 @@ impl Drop for AbortGuard {
 }
 
 /// Function being called when a panic happens.
-fn panic_hook(info: &PanicInfo, report_url: &'static str) {
+fn panic_hook(info: &PanicInfo, report_url: &'static str, version: &str) {
 	let location = info.location();
 	let file = location.as_ref().map(|l| l.file()).unwrap_or("<unknown>");
 	let line = location.as_ref().map(|l| l.line()).unwrap_or(0);
@@ -124,6 +152,8 @@ fn panic_hook(info: &PanicInfo, report_url: &'static str) {
 	let _ = writeln!(stderr, "");
 	let _ = writeln!(stderr, "====================");
 	let _ = writeln!(stderr, "");
+	let _ = writeln!(stderr, "Version: {}", version);
+	let _ = writeln!(stderr, "");
 	let _ = writeln!(stderr, "{:?}", backtrace);
 	let _ = writeln!(stderr, "");
 	let _ = writeln!(
@@ -133,8 +163,8 @@ fn panic_hook(info: &PanicInfo, report_url: &'static str) {
 	);
 
 	let _ = writeln!(stderr, ABOUT_PANIC!(), report_url);
-	ABORT.with(|flag| {
-		if flag.get() {
+	ON_PANIC.with(|val| {
+		if val.get() == OnPanic::Abort {
 			::std::process::exit(1);
 		}
 	})
@@ -146,8 +176,16 @@ mod tests {
 
 	#[test]
 	fn does_not_abort() {
-		set("test");
+		set("test", "1.2.3");
 		let _guard = AbortGuard::force_unwind();
 		::std::panic::catch_unwind(|| panic!()).ok();
+	}
+
+	#[test]
+	fn does_not_abort_after_never_abort() {
+		set("test", "1.2.3");
+		let _guard = AbortGuard::never_abort();
+		let _guard = AbortGuard::force_abort();
+		std::panic::catch_unwind(|| panic!()).ok();
 	}
 }

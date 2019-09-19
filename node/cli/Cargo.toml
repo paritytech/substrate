@@ -11,7 +11,7 @@ log = "0.4"
 tokio = "0.1.7"
 futures = "0.1"
 exit-future = "0.1"
-jsonrpc-core = "13.1.0"
+jsonrpc-core = "13.2.0"
 cli = { package = "substrate-cli", path = "../../core/cli" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
 sr-io = { path = "../../core/sr-io" }

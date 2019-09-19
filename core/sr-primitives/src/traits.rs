@@ -19,8 +19,10 @@
 use rstd::prelude::*;
 use rstd::{self, result, marker::PhantomData, convert::{TryFrom, TryInto}};
 use runtime_io;
-#[cfg(feature = "std")] use std::fmt::{Debug, Display};
-#[cfg(feature = "std")] use serde::{Serialize, Deserialize, de::DeserializeOwned};
+#[cfg(feature = "std")]
+use std::fmt::{Debug, Display};
+#[cfg(feature = "std")]
+use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use primitives::{self, Hasher, Blake2Hasher};
 use crate::codec::{Codec, Encode, Decode, HasCompact};
 use crate::transaction_validity::{
@@ -37,7 +39,8 @@ use rstd::ops::{
 	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
 	RemAssign, Shl, Shr
 };
-use crate::AppKey;
+use app_crypto::AppKey;
+use impl_trait_for_tuples::impl_for_tuples;
 
 /// A lazy value.
 pub trait Lazy<T: ?Sized> {
@@ -404,21 +407,19 @@ impl<T:
 
 /// The block finalization trait. Implementing this lets you express what should happen
 /// for your module when the block is ending.
+#[impl_for_tuples(30)]
 pub trait OnFinalize<BlockNumber> {
 	/// The block is being finalized. Implement to have something happen.
 	fn on_finalize(_n: BlockNumber) {}
 }
 
-impl<N> OnFinalize<N> for () {}
-
 /// The block initialization trait. Implementing this lets you express what should happen
 /// for your module when the block is beginning (right before the first extrinsic is executed).
+#[impl_for_tuples(30)]
 pub trait OnInitialize<BlockNumber> {
 	/// The block is being initialized. Implement to have something happen.
 	fn on_initialize(_n: BlockNumber) {}
 }
-
-impl<N> OnInitialize<N> for () {}
 
 /// Off-chain computation trait.
 ///
@@ -428,6 +429,7 @@ impl<N> OnInitialize<N> for () {}
 ///
 /// NOTE: This function runs off-chain, so it can access the block state,
 /// but cannot preform any alterations.
+#[impl_for_tuples(30)]
 pub trait OffchainWorker<BlockNumber> {
 	/// This function is being called on every block.
 	///
@@ -436,50 +438,10 @@ pub trait OffchainWorker<BlockNumber> {
 	fn generate_extrinsics(_n: BlockNumber) {}
 }
 
-impl<N> OffchainWorker<N> for () {}
-
-macro_rules! tuple_impl {
-	($first:ident, $($rest:ident,)+) => {
-		tuple_impl!([$first] [$first] [$($rest)+]);
-	};
-	([$($direct:ident)+] [$($reverse:ident)+] []) => {
-		impl<
-			Number: Copy,
-			$($direct: OnFinalize<Number>),+
-		> OnFinalize<Number> for ($($direct),+,) {
-			fn on_finalize(n: Number) {
-				$($reverse::on_finalize(n);)+
-			}
-		}
-		impl<
-			Number: Copy,
-			$($direct: OnInitialize<Number>),+
-		> OnInitialize<Number> for ($($direct),+,) {
-			fn on_initialize(n: Number) {
-				$($direct::on_initialize(n);)+
-			}
-		}
-		impl<
-			Number: Copy,
-			$($direct: OffchainWorker<Number>),+
-		> OffchainWorker<Number> for ($($direct),+,) {
-			fn generate_extrinsics(n: Number) {
-				$($direct::generate_extrinsics(n);)+
-			}
-		}
-	};
-	([$($direct:ident)+] [$($reverse:ident)+] [$first:ident $($rest:ident)*]) => {
-		tuple_impl!([$($direct)+] [$($reverse)+] []);
-		tuple_impl!([$($direct)+ $first] [$first $($reverse)+] [$($rest)*]);
-	};
-}
-
-#[allow(non_snake_case)]
-tuple_impl!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,);
-
 /// Abstraction around hashing
-pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stupid bug in the Rust compiler believes derived
-																	// traits must be fulfilled by all type parameters.
+// Stupid bug in the Rust compiler believes derived
+// traits must be fulfilled by all type parameters.
+pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {
 	/// The hash type produced.
 	type Output: Member + MaybeSerializeDebug + rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + Copy
 		+ Default + Encode + Decode;
@@ -495,18 +457,11 @@ pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stup
 		Encode::using_encoded(s, Self::hash)
 	}
 
-	/// Iterator-based version of `ordered_trie_root`.
-	fn ordered_trie_root<
-		I: IntoIterator<Item = A>,
-		A: AsRef<[u8]>
-	>(input: I) -> Self::Output;
+	/// The ordered Patricia tree root of the given `input`.
+	fn ordered_trie_root(input: Vec<Vec<u8>>) -> Self::Output;
 
-	/// The Patricia tree root of the given mapping as an iterator.
-	fn trie_root<
-		I: IntoIterator<Item = (A, B)>,
-		A: AsRef<[u8]> + Ord,
-		B: AsRef<[u8]>
-	>(input: I) -> Self::Output;
+	/// The Patricia tree root of the given mapping.
+	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> Self::Output;
 
 	/// Acquire the global storage root.
 	fn storage_root() -> Self::Output;
@@ -526,22 +481,19 @@ impl Hash for BlakeTwo256 {
 	fn hash(s: &[u8]) -> Self::Output {
 		runtime_io::blake2_256(s).into()
 	}
-	fn trie_root<
-		I: IntoIterator<Item = (A, B)>,
-		A: AsRef<[u8]> + Ord,
-		B: AsRef<[u8]>
-	>(input: I) -> Self::Output {
-		runtime_io::trie_root::<Blake2Hasher, _, _, _>(input).into()
+
+	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> Self::Output {
+		runtime_io::blake2_256_trie_root(input)
 	}
-	fn ordered_trie_root<
-		I: IntoIterator<Item = A>,
-		A: AsRef<[u8]>
-	>(input: I) -> Self::Output {
-		runtime_io::ordered_trie_root::<Blake2Hasher, _, _>(input).into()
+
+	fn ordered_trie_root(input: Vec<Vec<u8>>) -> Self::Output {
+		runtime_io::blake2_256_ordered_trie_root(input)
 	}
+
 	fn storage_root() -> Self::Output {
 		runtime_io::storage_root().into()
 	}
+
 	fn storage_changes_root(parent_hash: Self::Output) -> Option<Self::Output> {
 		runtime_io::storage_changes_root(parent_hash.into()).map(Into::into)
 	}
@@ -558,16 +510,20 @@ impl CheckEqual for primitives::H256 {
 	fn check_equal(&self, other: &Self) {
 		use primitives::hexdisplay::HexDisplay;
 		if self != other {
-			println!("Hash: given={}, expected={}", HexDisplay::from(self.as_fixed_bytes()), HexDisplay::from(other.as_fixed_bytes()));
+			println!(
+				"Hash: given={}, expected={}",
+				HexDisplay::from(self.as_fixed_bytes()),
+				HexDisplay::from(other.as_fixed_bytes()),
+			);
 		}
 	}
 
 	#[cfg(not(feature = "std"))]
 	fn check_equal(&self, other: &Self) {
 		if self != other {
-			runtime_io::print("Hash not equal");
-			runtime_io::print(self.as_bytes());
-			runtime_io::print(other.as_bytes());
+			"Hash not equal".print();
+			self.as_bytes().print();
+			other.as_bytes().print();
 		}
 	}
 }
@@ -583,9 +539,9 @@ impl<H: PartialEq + Eq + MaybeDebug> CheckEqual for super::generic::DigestItem<H
 	#[cfg(not(feature = "std"))]
 	fn check_equal(&self, other: &Self) {
 		if self != other {
-			runtime_io::print("DigestItem not equal");
-			runtime_io::print(&Encode::encode(self)[..]);
-			runtime_io::print(&Encode::encode(other)[..]);
+			"DigestItem not equal".print();
+			(&Encode::encode(self)[..]).print();
+			(&Encode::encode(other)[..]).print();
 		}
 	}
 }
@@ -930,96 +886,62 @@ pub trait ModuleDispatchError {
 	fn as_str(&self) -> &'static str;
 }
 
-macro_rules! tuple_impl_indexed {
-	($first:ident, $($rest:ident,)+ ; $first_index:tt, $($rest_index:tt,)+) => {
-		tuple_impl_indexed!([$first] [$($rest)+] ; [$first_index,] [$($rest_index,)+]);
-	};
-	([$($direct:ident)+] ; [$($index:tt,)+]) => {
-		impl<
-			AccountId,
-			Call,
-			$($direct: SignedExtension<AccountId=AccountId, Call=Call>),+
-		> SignedExtension for ($($direct),+,) {
-			type AccountId = AccountId;
-			type Call = Call;
-			type AdditionalSigned = ( $( $direct::AdditionalSigned, )+ );
-			type Pre =  ($($direct::Pre,)+);
-			fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
-				Ok(( $( self.$index.additional_signed()?, )+ ))
-			}
-			fn validate(
-				&self,
-				who: &Self::AccountId,
-				call: &Self::Call,
-				info: DispatchInfo,
-				len: usize,
-			) -> TransactionValidity {
-				let aggregator = vec![
-					$( <$direct as SignedExtension>::validate(&self.$index, who, call, info, len)? ),+
-				];
-				Ok(
-					aggregator.into_iter().fold(
-						ValidTransaction::default(),
-						|acc, a| acc.combine_with(a),
-					)
-				)
-			}
-			fn pre_dispatch(
-				self,
-				who: &Self::AccountId,
-				call: &Self::Call,
-				info: DispatchInfo,
-				len: usize,
-			) -> Result<Self::Pre, $crate::ApplyError> {
-				Ok(($(self.$index.pre_dispatch(who, call, info, len)?,)+))
-			}
-			fn validate_unsigned(
-				call: &Self::Call,
-				info: DispatchInfo,
-				len: usize,
-			) -> TransactionValidity {
-				let aggregator = vec![ $( $direct::validate_unsigned(call, info, len)? ),+ ];
+#[impl_for_tuples(1, 12)]
+impl<AccountId, Call> SignedExtension for Tuple {
+	for_tuples!( where #( Tuple: SignedExtension<AccountId=AccountId, Call=Call> )* );
+	type AccountId = AccountId;
+	type Call = Call;
+	for_tuples!( type AdditionalSigned = ( #( Tuple::AdditionalSigned ),* ); );
+	for_tuples!( type Pre = ( #( Tuple::Pre ),* ); );
 
-				Ok(
-					aggregator.into_iter().fold(
-						ValidTransaction::default(),
-						|acc, a| acc.combine_with(a),
-					)
-				)
-			}
-			fn pre_dispatch_unsigned(
-				call: &Self::Call,
-				info: DispatchInfo,
-				len: usize,
-			) -> Result<Self::Pre, $crate::ApplyError> {
-				Ok(($($direct::pre_dispatch_unsigned(call, info, len)?,)+))
-			}
-			fn post_dispatch(
-				pre: Self::Pre,
-				info: DispatchInfo,
-				len: usize,
-			) {
-				$($direct::post_dispatch(pre.$index, info, len);)+
-			}
-		}
+	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
+		Ok(for_tuples!( ( #( Tuple.additional_signed()? ),* ) ))
+	}
 
-	};
-	([$($direct:ident)+] [] ; [$($index:tt,)+] []) => {
-		tuple_impl_indexed!([$($direct)+] ; [$($index,)+]);
-	};
-	(
-		[$($direct:ident)+] [$first:ident $($rest:ident)*]
-		;
-		[$($index:tt,)+] [$first_index:tt, $($rest_index:tt,)*]
-	) => {
-		tuple_impl_indexed!([$($direct)+] ; [$($index,)+]);
-		tuple_impl_indexed!([$($direct)+ $first] [$($rest)*] ; [$($index,)+ $first_index,] [$($rest_index,)*]);
-	};
+	fn validate(
+		&self,
+		who: &Self::AccountId,
+		call: &Self::Call,
+		info: DispatchInfo,
+		len: usize,
+	) -> TransactionValidity {
+		let valid = ValidTransaction::default();
+		for_tuples!( #( let valid = valid.combine_with(Tuple.validate(who, call, info, len)?); )* );
+		Ok(valid)
+	}
+
+	fn pre_dispatch(self, who: &Self::AccountId, call: &Self::Call, info: DispatchInfo, len: usize)
+		-> Result<Self::Pre, crate::ApplyError>
+	{
+		Ok(for_tuples!( ( #( Tuple.pre_dispatch(who, call, info, len)? ),* ) ))
+	}
+
+	fn validate_unsigned(
+		call: &Self::Call,
+		info: DispatchInfo,
+		len: usize,
+	) -> TransactionValidity {
+		let valid = ValidTransaction::default();
+		for_tuples!( #( let valid = valid.combine_with(Tuple::validate_unsigned(call, info, len)?); )* );
+		Ok(valid)
+	}
+
+	fn pre_dispatch_unsigned(
+		call: &Self::Call,
+		info: DispatchInfo,
+		len: usize,
+	) -> Result<Self::Pre, crate::ApplyError> {
+		Ok(for_tuples!( ( #( Tuple::pre_dispatch_unsigned(call, info, len)? ),* ) ))
+	}
+
+	fn post_dispatch(
+		pre: Self::Pre,
+		info: DispatchInfo,
+		len: usize,
+	) {
+		for_tuples!( #( Tuple::post_dispatch(pre.Tuple, info, len); )* )
+	}
 }
-
-// TODO: merge this into `tuple_impl` once codec supports `trait Codec` for longer tuple lengths. #3152
-#[allow(non_snake_case)]
-tuple_impl_indexed!(A, B, C, D, E, F, G, H, I, J, ; 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,);
 
 /// Only for bare bone testing when you don't care about signed extensions at all.
 #[cfg(feature = "std")]
@@ -1230,76 +1152,6 @@ impl<T: Encode + Decode + Default, Id: Encode + Decode + TypeId> AccountIdConver
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::AccountIdConversion;
-	use crate::codec::{Encode, Decode, Input};
-
-	#[derive(Encode, Decode, Default, PartialEq, Debug)]
-	struct U32Value(u32);
-	impl super::TypeId for U32Value {
-		const TYPE_ID: [u8; 4] = [0x0d, 0xf0, 0xfe, 0xca];
-	}
-	// cafef00d
-
-	#[derive(Encode, Decode, Default, PartialEq, Debug)]
-	struct U16Value(u16);
-	impl super::TypeId for U16Value {
-		const TYPE_ID: [u8; 4] = [0xfe, 0xca, 0x0d, 0xf0];
-	}
-	// f00dcafe
-
-	type AccountId = u64;
-
-	#[test]
-	fn into_account_should_work() {
-		let r: AccountId = U32Value::into_account(&U32Value(0xdeadbeef));
-		assert_eq!(r, 0x_deadbeef_cafef00d);
-	}
-
-	#[test]
-	fn try_from_account_should_work() {
-		let r = U32Value::try_from_account(&0x_deadbeef_cafef00d_u64);
-		assert_eq!(r.unwrap(), U32Value(0xdeadbeef));
-	}
-
-	#[test]
-	fn into_account_with_fill_should_work() {
-		let r: AccountId = U16Value::into_account(&U16Value(0xc0da));
-		assert_eq!(r, 0x_0000_c0da_f00dcafe);
-	}
-
-	#[test]
-	fn try_from_account_with_fill_should_work() {
-		let r = U16Value::try_from_account(&0x0000_c0da_f00dcafe_u64);
-		assert_eq!(r.unwrap(), U16Value(0xc0da));
-	}
-
-	#[test]
-	fn bad_try_from_account_should_fail() {
-		let r = U16Value::try_from_account(&0x0000_c0de_baadcafe_u64);
-		assert!(r.is_none());
-		let r = U16Value::try_from_account(&0x0100_c0da_f00dcafe_u64);
-		assert!(r.is_none());
-	}
-
-	#[test]
-	fn trailing_zero_should_work() {
-		let mut t = super::TrailingZeroInput(&[1, 2, 3]);
-		assert_eq!(t.remaining_len(), Ok(None));
-		let mut buffer = [0u8; 2];
-		assert_eq!(t.read(&mut buffer), Ok(()));
-		assert_eq!(t.remaining_len(), Ok(None));
-		assert_eq!(buffer, [1, 2]);
-		assert_eq!(t.read(&mut buffer), Ok(()));
-		assert_eq!(t.remaining_len(), Ok(None));
-		assert_eq!(buffer, [3, 0]);
-		assert_eq!(t.read(&mut buffer), Ok(()));
-		assert_eq!(t.remaining_len(), Ok(None));
-		assert_eq!(buffer, [0, 0]);
-	}
-}
-
 /// Calls a given macro a number of times with a set of fixed params and an incrementing numeral.
 /// e.g.
 /// ```nocompile
@@ -1390,4 +1242,104 @@ macro_rules! impl_opaque_keys {
 			}
 		}
 	};
+}
+
+/// Trait for things which can be printed from the runtime.
+pub trait Printable {
+	/// Print the object.
+	fn print(&self);
+}
+
+impl Printable for u8 {
+	fn print(&self) {
+		u64::from(*self).print()
+	}
+}
+
+impl Printable for &[u8] {
+	fn print(&self) {
+		runtime_io::print_hex(self);
+	}
+}
+
+impl Printable for &str {
+	fn print(&self) {
+		runtime_io::print_utf8(self.as_bytes());
+	}
+}
+
+impl Printable for u64 {
+	fn print(&self) {
+		runtime_io::print_num(*self);
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::AccountIdConversion;
+	use crate::codec::{Encode, Decode, Input};
+
+	#[derive(Encode, Decode, Default, PartialEq, Debug)]
+	struct U32Value(u32);
+	impl super::TypeId for U32Value {
+		const TYPE_ID: [u8; 4] = [0x0d, 0xf0, 0xfe, 0xca];
+	}
+	// cafef00d
+
+	#[derive(Encode, Decode, Default, PartialEq, Debug)]
+	struct U16Value(u16);
+	impl super::TypeId for U16Value {
+		const TYPE_ID: [u8; 4] = [0xfe, 0xca, 0x0d, 0xf0];
+	}
+	// f00dcafe
+
+	type AccountId = u64;
+
+	#[test]
+	fn into_account_should_work() {
+		let r: AccountId = U32Value::into_account(&U32Value(0xdeadbeef));
+		assert_eq!(r, 0x_deadbeef_cafef00d);
+	}
+
+	#[test]
+	fn try_from_account_should_work() {
+		let r = U32Value::try_from_account(&0x_deadbeef_cafef00d_u64);
+		assert_eq!(r.unwrap(), U32Value(0xdeadbeef));
+	}
+
+	#[test]
+	fn into_account_with_fill_should_work() {
+		let r: AccountId = U16Value::into_account(&U16Value(0xc0da));
+		assert_eq!(r, 0x_0000_c0da_f00dcafe);
+	}
+
+	#[test]
+	fn try_from_account_with_fill_should_work() {
+		let r = U16Value::try_from_account(&0x0000_c0da_f00dcafe_u64);
+		assert_eq!(r.unwrap(), U16Value(0xc0da));
+	}
+
+	#[test]
+	fn bad_try_from_account_should_fail() {
+		let r = U16Value::try_from_account(&0x0000_c0de_baadcafe_u64);
+		assert!(r.is_none());
+		let r = U16Value::try_from_account(&0x0100_c0da_f00dcafe_u64);
+		assert!(r.is_none());
+	}
+
+	#[test]
+	fn trailing_zero_should_work() {
+		let mut t = super::TrailingZeroInput(&[1, 2, 3]);
+		assert_eq!(t.remaining_len(), Ok(None));
+		let mut buffer = [0u8; 2];
+		assert_eq!(t.read(&mut buffer), Ok(()));
+		assert_eq!(t.remaining_len(), Ok(None));
+		assert_eq!(buffer, [1, 2]);
+		assert_eq!(t.read(&mut buffer), Ok(()));
+		assert_eq!(t.remaining_len(), Ok(None));
+		assert_eq!(buffer, [3, 0]);
+		assert_eq!(t.read(&mut buffer), Ok(()));
+		assert_eq!(t.remaining_len(), Ok(None));
+		assert_eq!(buffer, [0, 0]);
+	}
 }

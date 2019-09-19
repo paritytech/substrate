@@ -100,7 +100,7 @@ impl<H: Hasher, Number: BlockNumber> InMemoryStorage<H, Number> {
 		for (storage_key, child_input) in children_inputs {
 			for (block, pairs) in child_input {
 				let root = insert_into_memory_db::<H, _>(&mut mdb, pairs.into_iter().map(Into::into));
-		
+
 				if let Some(root) = root {
 					let ix = if let Some(ix) = top_inputs.iter().position(|v| v.0 == block) {
 						ix

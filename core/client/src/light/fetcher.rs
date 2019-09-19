@@ -17,22 +17,21 @@
 //! Light client data fetcher. Fetches requested data from remote full nodes.
 
 use std::sync::Arc;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::marker::PhantomData;
 use std::future::Future;
 
 use hash_db::{HashDB, Hasher, EMPTY_PREFIX};
 use codec::{Decode, Encode};
-use primitives::{ChangesTrieConfiguration, convert_hash};
+use primitives::{ChangesTrieConfiguration, convert_hash, traits::CodeExecutor};
 use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
 	SimpleArithmetic, CheckedConversion, Zero,
 };
 use state_machine::{
-	CodeExecutor, ChangesTrieRootsStorage,
-	ChangesTrieAnchorBlockId, ChangesTrieConfigurationRange,
-	TrieBackend, read_proof_check, key_changes_proof_check,
-	create_proof_check_backend_storage, read_child_proof_check,
+	ChangesTrieRootsStorage, ChangesTrieAnchorBlockId, ChangesTrieConfigurationRange,
+	TrieBackend, read_proof_check, key_changes_proof_check, create_proof_check_backend_storage,
+	read_child_proof_check,
 };
 
 use crate::cht;
@@ -74,7 +73,7 @@ pub struct RemoteReadRequest<Header: HeaderT> {
 	/// Header of block at which read is performed.
 	pub header: Header,
 	/// Storage key to read.
-	pub key: Vec<u8>,
+	pub keys: Vec<Vec<u8>>,
 	/// Number of times to retry request. None means that default RETRY_COUNT is used.
 	pub retry_count: Option<usize>,
 }
@@ -89,7 +88,7 @@ pub struct RemoteReadChildRequest<Header: HeaderT> {
 	/// Storage key for child.
 	pub storage_key: Vec<u8>,
 	/// Child storage key to read.
-	pub key: Vec<u8>,
+	pub keys: Vec<Vec<u8>>,
 	/// Number of times to retry request. None means that default RETRY_COUNT is used.
 	pub retry_count: Option<usize>,
 }
@@ -148,7 +147,7 @@ pub trait Fetcher<Block: BlockT>: Send + Sync {
 	/// Remote header future.
 	type RemoteHeaderResult: Future<Output = Result<Block::Header, ClientError>> + Send + 'static;
 	/// Remote storage read future.
-	type RemoteReadResult: Future<Output = Result<Option<Vec<u8>>, ClientError>> + Send + 'static;
+	type RemoteReadResult: Future<Output = Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>> + Send + 'static;
 	/// Remote call result future.
 	type RemoteCallResult: Future<Output = Result<Vec<u8>, ClientError>> + Send + 'static;
 	/// Remote changes result future.
@@ -194,13 +193,13 @@ pub trait FetchChecker<Block: BlockT>: Send + Sync {
 		&self,
 		request: &RemoteReadRequest<Block::Header>,
 		remote_proof: Vec<Vec<u8>>
-	) -> ClientResult<Option<Vec<u8>>>;
+	) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>>;
 	/// Check remote storage read proof.
 	fn check_read_child_proof(
 		&self,
 		request: &RemoteReadChildRequest<Block::Header>,
 		remote_proof: Vec<Vec<u8>>
-	) -> ClientResult<Option<Vec<u8>>>;
+	) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>>;
 	/// Check remote method execution proof.
 	fn check_execution_proof(
 		&self,
@@ -222,15 +221,15 @@ pub trait FetchChecker<Block: BlockT>: Send + Sync {
 }
 
 /// Remote data checker.
-pub struct LightDataChecker<E, H, B: BlockT, S: BlockchainStorage<B>, F> {
-	blockchain: Arc<Blockchain<S, F>>,
+pub struct LightDataChecker<E, H, B: BlockT, S: BlockchainStorage<B>> {
+	blockchain: Arc<Blockchain<S>>,
 	executor: E,
 	_hasher: PhantomData<(B, H)>,
 }
 
-impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F> {
+impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 	/// Create new light data checker.
-	pub fn new(blockchain: Arc<Blockchain<S, F>>, executor: E) -> Self {
+	pub fn new(blockchain: Arc<Blockchain<S>>, executor: E) -> Self {
 		Self {
 			blockchain, executor, _hasher: PhantomData
 		}
@@ -368,14 +367,13 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 	}
 }
 
-impl<E, Block, H, S, F> FetchChecker<Block> for LightDataChecker<E, H, Block, S, F>
+impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 	where
 		Block: BlockT,
 		E: CodeExecutor<H>,
 		H: Hasher,
 		H::Out: Ord + 'static,
 		S: BlockchainStorage<Block>,
-		F: Send + Sync,
 {
 	fn check_header_proof(
 		&self,
@@ -397,23 +395,26 @@ impl<E, Block, H, S, F> FetchChecker<Block> for LightDataChecker<E, H, Block, S,
 	fn check_read_proof(
 		&self,
 		request: &RemoteReadRequest<Block::Header>,
-		remote_proof: Vec<Vec<u8>>
-	) -> ClientResult<Option<Vec<u8>>> {
-		read_proof_check::<H>(convert_hash(request.header.state_root()), remote_proof, &request.key)
-			.map_err(Into::into)
+		remote_proof: Vec<Vec<u8>>,
+	) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>> {
+		read_proof_check::<H, _>(
+			convert_hash(request.header.state_root()),
+			remote_proof,
+			request.keys.iter(),
+		).map_err(Into::into)
 	}
 
 	fn check_read_child_proof(
 		&self,
 		request: &RemoteReadChildRequest<Block::Header>,
 		remote_proof: Vec<Vec<u8>>
-	) -> ClientResult<Option<Vec<u8>>> {
-		read_child_proof_check::<H>(
+	) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>> {
+		read_child_proof_check::<H, _>(
 			convert_hash(request.header.state_root()),
 			remote_proof,
 			&request.storage_key,
-			&request.key)
-			.map_err(Into::into)
+			request.keys.iter(),
+		).map_err(Into::into)
 	}
 
 	fn check_execution_proof(
@@ -438,7 +439,9 @@ impl<E, Block, H, S, F> FetchChecker<Block> for LightDataChecker<E, H, Block, S,
 		body: Vec<Block::Extrinsic>
 	) -> ClientResult<Vec<Block::Extrinsic>> {
 		// TODO: #2621
-		let	extrinsics_root = HashFor::<Block>::ordered_trie_root(body.iter().map(Encode::encode));
+		let	extrinsics_root = HashFor::<Block>::ordered_trie_root(
+			body.iter().map(Encode::encode).collect(),
+		);
 		if *request.header.extrinsics_root() == extrinsics_root {
 			Ok(body)
 		} else {
@@ -529,7 +532,7 @@ pub mod tests {
 
 	impl Fetcher<Block> for OkCallFetcher {
 		type RemoteHeaderResult = Ready<Result<Header, ClientError>>;
-		type RemoteReadResult = Ready<Result<Option<Vec<u8>>, ClientError>>;
+		type RemoteReadResult = Ready<Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>>;
 		type RemoteCallResult = Ready<Result<Vec<u8>, ClientError>>;
 		type RemoteChangesResult = Ready<Result<Vec<(NumberFor<Block>, u32)>, ClientError>>;
 		type RemoteBodyResult = Ready<Result<Vec<Extrinsic>, ClientError>>;
@@ -564,7 +567,6 @@ pub mod tests {
 		Blake2Hasher,
 		Block,
 		DummyStorage,
-		OkCallFetcher,
 	>;
 
 	fn prepare_for_read_proof_check() -> (TestChecker, Header, Vec<Vec<u8>>, u32) {
@@ -580,7 +582,10 @@ pub mod tests {
 		let heap_pages = remote_client.storage(&remote_block_id, &StorageKey(well_known_keys::HEAP_PAGES.to_vec()))
 			.unwrap()
 			.and_then(|v| Decode::decode(&mut &v.0[..]).ok()).unwrap();
-		let remote_read_proof = remote_client.read_proof(&remote_block_id, well_known_keys::HEAP_PAGES).unwrap();
+		let remote_read_proof = remote_client.read_proof(
+			&remote_block_id,
+			&[well_known_keys::HEAP_PAGES],
+		).unwrap();
 
 		// check remote read proof locally
 		let local_storage = InMemoryBlockchain::<Block>::new();
@@ -619,7 +624,7 @@ pub mod tests {
 		let remote_read_proof = remote_client.read_child_proof(
 			&remote_block_id,
 			b":child_storage:default:child1",
-			b"key1",
+			&[b"key1"],
 		).unwrap();
 
 		// check locally
@@ -677,9 +682,9 @@ pub mod tests {
 		assert_eq!((&local_checker as &dyn FetchChecker<Block>).check_read_proof(&RemoteReadRequest::<Header> {
 			block: remote_block_header.hash(),
 			header: remote_block_header,
-			key: well_known_keys::HEAP_PAGES.to_vec(),
+			keys: vec![well_known_keys::HEAP_PAGES.to_vec()],
 			retry_count: None,
-		}, remote_read_proof).unwrap().unwrap()[0], heap_pages as u8);
+		}, remote_read_proof).unwrap().remove(well_known_keys::HEAP_PAGES).unwrap().unwrap()[0], heap_pages as u8);
 	}
 
 	#[test]
@@ -695,11 +700,11 @@ pub mod tests {
 				block: remote_block_header.hash(),
 				header: remote_block_header,
 				storage_key: b":child_storage:default:child1".to_vec(),
-				key: b"key1".to_vec(),
+				keys: vec![b"key1".to_vec()],
 				retry_count: None,
 			},
 			remote_read_proof
-		).unwrap().unwrap(), result);
+		).unwrap().remove(b"key1".as_ref()).unwrap().unwrap(), result);
 	}
 
 	#[test]

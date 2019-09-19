@@ -19,7 +19,7 @@
 pub extern crate alloc;
 
 extern "C" {
-	fn ext_malloc(size: usize) -> *mut u8;
+	fn ext_malloc(size: u32) -> *mut u8;
 	fn ext_free(ptr: *mut u8);
 }
 
@@ -37,7 +37,7 @@ mod __impl {
 
 	unsafe impl GlobalAlloc for WasmAllocator {
 		unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-			super::ext_malloc(layout.size()) as *mut u8
+			super::ext_malloc(layout.size() as u32) as *mut u8
 		}
 
 		unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
@@ -49,7 +49,6 @@ mod __impl {
 pub use alloc::boxed;
 pub use alloc::rc;
 pub use alloc::vec;
-pub use core::borrow;
 pub use core::cell;
 pub use core::clone;
 pub use core::cmp;
@@ -75,4 +74,9 @@ pub mod collections {
 	pub use alloc::collections::btree_map;
 	pub use alloc::collections::btree_set;
 	pub use alloc::collections::vec_deque;
+}
+
+pub mod borrow {
+	pub use core::borrow::*;
+	pub use alloc::borrow::*;
 }

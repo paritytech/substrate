@@ -49,7 +49,6 @@ use crate::protocol::{self, Protocol, Context, CustomMessageOutcome, PeerInfo};
 use crate::protocol::consensus_gossip::{ConsensusGossip, MessageRecipient as GossipMessageRecipient};
 use crate::protocol::{event::Event, light_dispatch::{AlwaysBadChecker, RequestData}};
 use crate::protocol::specialization::NetworkSpecialization;
-use crate::protocol::message::BlockAnnounce;
 use crate::protocol::sync::SyncState;
 
 /// Minimum Requirements for a Hash within Networking
@@ -297,10 +296,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkWorker
 	}
 
 	/// You must call this when a new block is imported by the client.
-	pub fn on_block_imported(&mut self, hash: B::Hash, header: B::Header, data: Vec<u8>) {
-		self.network_service
-			.user_protocol_mut()
-			.on_block_imported(hash, BlockAnnounce { header, data });
+	pub fn on_block_imported(&mut self, hash: B::Hash, header: B::Header, data: Vec<u8>, is_best: bool) {
+		self.network_service.user_protocol_mut().on_block_imported(hash, &header, data, is_best);
 	}
 
 	/// You must call this when a new block is finalized by the client.

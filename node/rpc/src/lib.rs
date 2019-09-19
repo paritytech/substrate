@@ -29,4 +29,42 @@
 
 #![warn(missing_docs)]
 
+use std::sync::Arc;
+
+use node_primitives::{Block, AccountNonceApi, ContractsApi};
+use sr_primitives::traits::ProvideRuntimeApi;
+use transaction_pool::txpool::{ChainApi, Pool};
+
 pub mod accounts;
+pub mod contracts;
+
+mod constants {
+	/// A status code indicating an error happened while trying to call into the runtime.
+	///
+	/// This typically means that the runtime trapped.
+	pub const RUNTIME_ERROR: i64 = 1;
+}
+
+/// Instantiate all RPC extensions.
+pub fn create<C, P, M>(client: Arc<C>, pool: Arc<Pool<P>>) -> jsonrpc_core::IoHandler<M> where
+	C: ProvideRuntimeApi,
+	C: client::blockchain::HeaderBackend<Block>,
+	C: Send + Sync + 'static,
+	C::Api: AccountNonceApi<Block> + ContractsApi<Block>,
+	P: ChainApi + Sync + Send + 'static,
+	M: jsonrpc_core::Metadata + Default,
+{
+	use self::{
+		accounts::{Accounts, AccountsApi},
+		contracts::{Contracts, ContractsApi},
+	};
+
+	let mut io = jsonrpc_core::IoHandler::default();
+	io.extend_with(
+		AccountsApi::to_delegate(Accounts::new(client.clone(), pool))
+	);
+	io.extend_with(
+		ContractsApi::to_delegate(Contracts::new(client))
+	);
+	io
+}

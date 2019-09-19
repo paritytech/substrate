@@ -590,9 +590,8 @@ where
 				info!(target: "finality", "Imported justification for block #{} that triggers \
 					command {}, signaling voter.", number, command);
 
-				if let Err(e) = self.send_voter_commands.unbounded_send(command) {
-					return Err(ConsensusError::ClientImport(e.to_string()).into());
-				}
+				// send the command to the voter
+				let _ = self.send_voter_commands.unbounded_send(command);
 			},
 			Err(CommandOrError::Error(e)) => {
 				return Err(match e {

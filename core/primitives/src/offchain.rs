@@ -160,7 +160,7 @@ pub struct OpaqueNetworkState {
 }
 
 /// Simple blob to hold a `PeerId` without committing to its format.
-#[derive(Clone, Eq, PartialEq, Encode, Decode)]
+#[derive(Default, Clone, Eq, PartialEq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct OpaquePeerId(pub Vec<u8>);
 
@@ -663,6 +663,112 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 	}
 }
 
+/// An implementation of offchain extensions that should never be triggered.
+pub enum NeverOffchainExt {}
+
+impl NeverOffchainExt {
+	/// Create new offchain extensions.
+	pub fn new<'a>() -> Option<&'a mut Self> {
+		None
+	}
+}
+
+impl Externalities for NeverOffchainExt {
+	fn is_validator(&self) -> bool {
+		unreachable!()
+	}
+
+	fn submit_transaction(&mut self, _extrinsic: Vec<u8>) -> Result<(), ()> {
+		unreachable!()
+	}
+
+	fn network_state(
+		&self,
+	) -> Result<OpaqueNetworkState, ()> {
+		unreachable!()
+	}
+
+	fn timestamp(&mut self) -> Timestamp {
+		unreachable!()
+	}
+
+	fn sleep_until(&mut self, _deadline: Timestamp) {
+		unreachable!()
+	}
+
+	fn random_seed(&mut self) -> [u8; 32] {
+		unreachable!()
+	}
+
+	fn local_storage_set(&mut self, _kind: StorageKind, _key: &[u8], _value: &[u8]) {
+		unreachable!()
+	}
+
+	fn local_storage_compare_and_set(
+		&mut self,
+		_kind: StorageKind,
+		_key: &[u8],
+		_old_value: Option<&[u8]>,
+		_new_value: &[u8],
+	) -> bool {
+		unreachable!()
+	}
+
+	fn local_storage_get(&mut self, _kind: StorageKind, _key: &[u8]) -> Option<Vec<u8>> {
+		unreachable!()
+	}
+
+	fn http_request_start(
+		&mut self,
+		_method: &str,
+		_uri: &str,
+		_meta: &[u8]
+	) -> Result<HttpRequestId, ()> {
+		unreachable!()
+	}
+
+	fn http_request_add_header(
+		&mut self,
+		_request_id: HttpRequestId,
+		_name: &str,
+		_value: &str
+	) -> Result<(), ()> {
+		unreachable!()
+	}
+
+	fn http_request_write_body(
+		&mut self,
+		_request_id: HttpRequestId,
+		_chunk: &[u8],
+		_deadline: Option<Timestamp>
+	) -> Result<(), HttpError> {
+		unreachable!()
+	}
+
+	fn http_response_wait(
+		&mut self,
+		_ids: &[HttpRequestId],
+		_deadline: Option<Timestamp>
+	) -> Vec<HttpRequestStatus> {
+		unreachable!()
+	}
+
+	fn http_response_headers(
+		&mut self,
+		_request_id: HttpRequestId
+	) -> Vec<(Vec<u8>, Vec<u8>)> {
+		unreachable!()
+	}
+
+	fn http_response_read_body(
+		&mut self,
+		_request_id: HttpRequestId,
+		_buffer: &mut [u8],
+		_deadline: Option<Timestamp>
+	) -> Result<usize, HttpError> {
+		unreachable!()
+	}
+}
 
 #[cfg(test)]
 mod tests {

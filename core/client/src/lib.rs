@@ -121,7 +121,7 @@ pub use crate::client::{
 #[cfg(feature = "std")]
 pub use crate::notifications::{StorageEventStream, StorageChangeSet};
 #[cfg(feature = "std")]
-pub use state_machine::{ExecutionStrategy, NeverOffchainExt};
+pub use state_machine::ExecutionStrategy;
 #[cfg(feature = "std")]
 pub use crate::leaves::LeafSet;
 

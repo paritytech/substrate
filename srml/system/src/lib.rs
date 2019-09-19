@@ -112,42 +112,25 @@ use sr_primitives::{
 use primitives::storage::well_known_keys;
 use support::{
 	storage, decl_module, decl_event, decl_storage, StorageDoubleMap, StorageValue, StorageMap,
-	Parameter, for_each_tuple, traits::{Contains, Get}, decl_error,
+	Parameter, traits::{Contains, Get}, decl_error,
 };
 use safe_mix::TripletMix;
 use codec::{Encode, Decode};
 
 #[cfg(any(feature = "std", test))]
-use runtime_io::{TestExternalities, Blake2Hasher};
+use runtime_io::TestExternalities;
 
 #[cfg(any(feature = "std", test))]
-use primitives::ChangesTrieConfiguration;
+use primitives::{ChangesTrieConfiguration, Blake2Hasher};
 
 pub mod offchain;
 
 /// Handler for when a new account has been created.
+#[impl_trait_for_tuples::impl_for_tuples(30)]
 pub trait OnNewAccount<AccountId> {
 	/// A new account `who` has been registered.
 	fn on_new_account(who: &AccountId);
 }
-
-macro_rules! impl_on_new_account {
-	() => (
-		impl<AccountId> OnNewAccount<AccountId> for () {
-			fn on_new_account(_: &AccountId) {}
-		}
-	);
-
-	( $($t:ident)* ) => {
-		impl<AccountId, $($t: OnNewAccount<AccountId>),*> OnNewAccount<AccountId> for ($($t,)*) {
-			fn on_new_account(who: &AccountId) {
-				$($t::on_new_account(who);)*
-			}
-		}
-	}
-}
-
-for_each_tuple!(impl_on_new_account);
 
 /// Determiner to say whether a given account is unused.
 pub trait IsDeadAccount<AccountId> {
@@ -168,8 +151,7 @@ pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output
 
 /// Compute the trie root of a list of extrinsics.
 pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
-	let xts = xts.iter().map(Vec::as_slice).collect::<Vec<_>>();
-	H::ordered_trie_root(&xts)
+	H::ordered_trie_root(xts)
 }
 
 pub trait Trait: 'static + Eq + Clone {
