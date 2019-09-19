@@ -22,6 +22,14 @@ use wasm_interface::{FunctionContext, IntoValue, TryFromValue, Pointer, Result};
 
 use codec::{Encode, Decode};
 
+#[doc(hidden)]
+pub use primitives::{Blake2Hasher, traits::Externalities};
+
+pub use proc_macro::runtime_interface;
+
+pub fn with_externalities<F: FnOnce(&mut dyn Externalities<Blake2Hasher>) -> R, R>(f: F) -> R {
+	unimplemented!()
+}
 pub trait AsFFIArg {
 	/// The owned rust type that converts into `Self::FFIType`.
 	type RTOwned: IntoFFIArg<Self::FFIType>;
@@ -202,6 +210,22 @@ impl<T: 'static + Decode> FromWasmFFIArg<u64> for &[T] {
 			Ok(unsafe { mem::transmute(vec) })
 		} else {
 			Ok(Vec::<T>::decode(&mut &vec[..]).expect("Wasm to Host values are encoded correctly; qed"))
+		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[runtime_interface]
+	trait Test {
+		fn test() {
+
+		}
+
+		fn test_with_self(&self) {
+
 		}
 	}
 }

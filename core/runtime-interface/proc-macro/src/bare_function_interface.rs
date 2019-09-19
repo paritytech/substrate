@@ -1,0 +1,174 @@
+// Copyright 2019 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
+//! Generates the bare function interface for a given trait definition.
+
+use crate::utils::{generate_crate_access, create_host_function_ident};
+
+use syn::{
+	Ident, ItemTrait, TraitItemMethod, FnArg, Signature, Pat, PatType, Type, Result, ReturnType,
+	TraitItem,
+};
+
+use proc_macro2::{TokenStream, Span};
+
+use quote::quote;
+
+/// Generate the bare-function interface.
+pub fn generate(trait_def: &ItemTrait) -> Result<TokenStream> {
+	let trait_name = &trait_def.ident;
+	trait_def
+		.items
+		.iter()
+		.filter_map(|i| match i {
+			TraitItem::Method(ref method) => Some(method),
+			_ => None,
+		})
+		.try_fold(TokenStream::new(), |mut t, m| {
+			t.extend(function_for_method(trait_name, m)?);
+			Ok(t)
+		})
+}
+
+/// Generates the bare function implementation for the given method.
+fn function_for_method(trait_name: &Ident, method: &TraitItemMethod) -> Result<TokenStream> {
+	let std_impl = function_std_impl(trait_name, method)?;
+	let no_std_impl = function_no_std_impl(method)?;
+	let function_impl_name = create_function_impl_ident(&method.sig.ident);
+	let function_name = &method.sig.ident;
+	let args = get_function_arguments(&method.sig);
+	let arg_names = get_function_argument_names(&method.sig);
+	let return_value = &method.sig.output;
+
+	Ok(
+		quote! {
+			pub fn #function_name( #( #args, )* ) #return_value {
+				#std_impl
+
+				#no_std_impl
+
+				#function_impl_name( #( #arg_names, )* )
+			}
+		}
+	)
+}
+
+/// Generates the bare function implementation for `cfg(not(feature = "std"))`.
+fn function_no_std_impl(method: &TraitItemMethod) -> Result<TokenStream> {
+	let function_name = create_function_impl_ident(&method.sig.ident);
+	let host_function_name = create_host_function_ident(&method.sig.ident);
+	let args = get_function_arguments(&method.sig);
+	let arg_names = get_function_argument_names(&method.sig);
+	let arg_names2 = get_function_argument_names(&method.sig);
+	let arg_types = get_function_argument_types_without_ref(&method.sig);
+	let crate_ = generate_crate_access();
+	let return_value = &method.sig.output;
+	let convert_return_value = match return_value {
+		ReturnType::Default => quote!(),
+		ReturnType::Type(_, ref ty) => quote! {
+			<#ty as #crate_::FromFFIArg<_>>::from_ffi_arg(result)
+		}
+	};
+
+	Ok(
+		quote! {
+			#[cfg(not(feature = "std"))]
+			fn #function_name( #( #args, )* ) #return_value {
+				use #crate_::IntoFFIArg as _;
+
+				// Generate all ffi arg wrappers.
+				#(
+					let #arg_names = <#arg_types as #crate_::AsFFIArg>::as_ffi_arg(&#arg_names);
+				)*
+
+				// Call the host function
+				let result = unsafe { #host_function_name( #( #arg_names2.into_ffi_arg() )* ) };
+
+				#convert_return_value
+			}
+		}
+	)
+}
+
+/// Generates the bare function implementation for `cfg(feature = "std")`.
+fn function_std_impl(trait_name: &Ident, method: &TraitItemMethod) -> Result<TokenStream> {
+	let method_name = &method.sig.ident;
+	let function_name = create_function_impl_ident(&method.sig.ident);
+	let args = get_function_arguments(&method.sig);
+	let arg_names = get_function_argument_names(&method.sig);
+	let crate_ = generate_crate_access();
+	let return_value = &method.sig.output;
+
+	let call_to_trait = if takes_self_argument(&method.sig) {
+		quote! {
+			#crate_::with_externalities(|ext| #trait_name::#method_name(&ext, #( #arg_names, )*))
+		}
+	} else {
+		quote! {
+			<&mut dyn #crate_::Externalities<#crate_::Blake2Hasher> as #trait_name>::#method_name(
+				#( #arg_names, )*
+			)
+		}
+	};
+
+	Ok(
+		quote! {
+			#[cfg(feature = "std")]
+			fn #function_name( #( #args, )* ) #return_value {
+				#call_to_trait
+			}
+		}
+	)
+}
+
+/// Create the function identifier for the internal implementation function.
+fn create_function_impl_ident(method_name: &Ident) -> Ident {
+	Ident::new(&format!("{}_impl", method_name), Span::call_site())
+}
+
+/// Returns the function arguments of the given `Signature`, minus any `self` arguments.
+fn get_function_arguments<'a>(sig: &'a Signature) -> impl Iterator<Item = &'a PatType> {
+	sig.inputs
+		.iter()
+		.filter_map(|a| match a {
+			FnArg::Receiver(_) => None,
+			FnArg::Typed(pat_type) => Some(pat_type),
+		})
+}
+
+/// Returns the function argument names of the given `Signature`, minus any `self`.
+fn get_function_argument_names<'a>(sig: &'a Signature) -> impl Iterator<Item = &'a Box<Pat>> {
+	get_function_arguments(sig).map(|pt| &pt.pat)
+}
+
+/// Returns the function argument types, minus any `Self` type. If any of the arguments is a reference,
+/// the underlying type without the ref is returned.
+fn get_function_argument_types_without_ref<'a>(sig: &'a Signature) -> impl Iterator<Item = &'a Box<Type>> {
+	get_function_arguments(sig)
+		.map(|pt| &pt.ty)
+		.map(|ty| match &**ty {
+			Type::Reference(type_ref) => &type_ref.elem,
+			_ => ty,
+		})
+}
+
+/// Returns if the given `Signature` takes a `self` argument.
+fn takes_self_argument(sig: &Signature) -> bool {
+	match sig.inputs.first() {
+		Some(FnArg::Receiver(_)) => true,
+		_ => false,
+	}
+}

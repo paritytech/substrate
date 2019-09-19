@@ -7,8 +7,10 @@ edition = "2018"
 [dependencies]
 wasm-interface = { package = "substrate-wasm-interface", path = "../wasm-interface", optional = true }
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
+primitives = { package = "substrate-primitives", path = "../primitives", default-features = false }
+proc-macro = { package = "substrate-runtime-interface-proc-macro", path = "proc-macro" }
 codec = { package = "parity-scale-codec", version = "1.0.5", default-features = false }
 
 [features]
 default = [ "std" ]
-std = [ "wasm-interface", "rstd/std", "codec/std" ]
+std = [ "wasm-interface", "rstd/std", "codec/std", "primitives/std" ]
