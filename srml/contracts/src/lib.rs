@@ -59,7 +59,7 @@
 //! ### Dispatchable functions
 //!
 //! * `put_code` - Stores the given binary Wasm code into the chain's storage and returns its `code_hash`.
-//! * `create` - Deploys a new contract from the given `code_hash`, optionally transferring some balance.
+//! * `instantiate` - Deploys a new contract from the given `code_hash`, optionally transferring some balance.
 //! This creates a new smart contract account and calls its contract deploy handler to initialize the contract.
 //! * `call` - Makes a call to an account, optionally transferring some balance.
 //!
@@ -812,7 +812,7 @@ decl_event! {
 		<T as system::Trait>::AccountId,
 		<T as system::Trait>::Hash
 	{
-		/// Transfer happened `from` to `to` with given `value` as part of a `call` or `create`.
+		/// Transfer happened `from` to `to` with given `value` as part of a `call` or `instantiate`.
 		Transfer(AccountId, AccountId, Balance),
 
 		/// Contract deployed by address at the specified address.
