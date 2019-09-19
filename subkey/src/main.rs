@@ -140,7 +140,7 @@ where
 	let maybe_network: Option<Ss58AddressFormat> = matches.value_of("network").map(|network| {
 		network
 			.try_into()
-			.expect("Invalid network name: must be polkadot/substrate/kusama")
+			.expect("Invalid network name: must be polkadot/substrate/kusama/dothereum")
 	});
 	if let Some(network) = maybe_network {
 		set_default_ss58_version(network);
@@ -382,7 +382,7 @@ fn create_extrinsic(
 	);
 	let signature = raw_payload.using_encoded(|payload| signer.sign(payload));
 	let (function, extra, _) = raw_payload.deconstruct();
-	
+
 	UncheckedExtrinsic::new_signed(
 		function,
 		signer.public().into(),
