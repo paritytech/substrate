@@ -212,7 +212,7 @@ impl_opaque_keys! {
 // TODO: Introduce some structure to tie these together to make it a bit less of a footgun. This
 // should be easy, since OneSessionHandler trait provides the `Key` as an associated type. #2858
 parameter_types! {
-	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(20);
+	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(17);
 }
 
 impl session::Trait for Runtime {
