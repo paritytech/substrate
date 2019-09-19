@@ -38,9 +38,9 @@ use client::{
 };
 use sr_primitives::Justification;
 use sr_primitives::generic::{BlockId, Digest, DigestItem};
-use sr_primitives::traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi};
+use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Saturating, ProvideRuntimeApi};
 use srml_timestamp::{TimestampInherentData, InherentError as TIError};
-use pow_primitives::{Difficulty, Seal, POW_ENGINE_ID};
+use pow_primitives::{Seal, POW_ENGINE_ID};
 use primitives::H256;
 use inherents::{InherentDataProviders, InherentData};
 use consensus_common::{
@@ -62,36 +62,42 @@ fn aux_key(hash: &H256) -> Vec<u8> {
 
 /// Auxiliary storage data for PoW.
 #[derive(Encode, Decode, Clone, Debug, Default)]
-pub struct PowAux {
+pub struct PowAux<Difficulty> {
 	/// Difficulty.
 	pub difficulty: Difficulty,
 	/// Total difficulty.
 	pub total_difficulty: Difficulty,
 }
 
-impl PowAux {
+impl<Difficulty> PowAux<Difficulty> where
+	Difficulty: Decode + Default,
+{
 	/// Read the auxiliary from client.
 	pub fn read<C: AuxStore>(client: &C, hash: &H256) -> Result<Self, String> {
 		let key = aux_key(hash);
 
 		match client.get_aux(&key).map_err(|e| format!("{:?}", e))? {
-			Some(bytes) => PowAux::decode(&mut &bytes[..]).map_err(|e| format!("{:?}", e)),
-			None => Ok(PowAux::default()),
+			Some(bytes) => Self::decode(&mut &bytes[..])
+				.map_err(|e| format!("{:?}", e)),
+			None => Ok(Self::default()),
 		}
 	}
 }
 
 /// Algorithm used for proof of work.
 pub trait PowAlgorithm<B: BlockT> {
+	/// Difficulty for the algorithm.
+	type Difficulty: Saturating + Default + Encode + Decode + Ord + Clone + Copy;
+
 	/// Get the next block's difficulty.
-	fn difficulty(&self, parent: &BlockId<B>) -> Result<Difficulty, String>;
+	fn difficulty(&self, parent: &BlockId<B>) -> Result<Self::Difficulty, String>;
 	/// Verify proof of work against the given difficulty.
 	fn verify(
 		&self,
 		parent: &BlockId<B>,
 		pre_hash: &H256,
 		seal: &Seal,
-		difficulty: Difficulty,
+		difficulty: Self::Difficulty,
 	) -> Result<bool, String>;
 	/// Mine a seal that satisfy the given difficulty.
 	fn mine(
@@ -99,7 +105,7 @@ pub trait PowAlgorithm<B: BlockT> {
 		parent: &BlockId<B>,
 		pre_hash: &H256,
 		seed: &H256,
-		difficulty: Difficulty,
+		difficulty: Self::Difficulty,
 		round: u32,
 	) -> Result<Option<Seal>, String>;
 }
@@ -116,7 +122,7 @@ impl<C, Algorithm> PowVerifier<C, Algorithm> {
 		&self,
 		mut header: B::Header,
 		parent_block_id: BlockId<B>,
-	) -> Result<(B::Header, Difficulty, DigestItem<H256>), String> where
+	) -> Result<(B::Header, Algorithm::Difficulty, DigestItem<H256>), String> where
 		Algorithm: PowAlgorithm<B>,
 	{
 		let hash = header.hash();

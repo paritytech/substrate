@@ -20,19 +20,11 @@
 
 use rstd::vec::Vec;
 use sr_primitives::ConsensusEngineId;
-use codec::Decode;
+use codec::{Encode, Decode};
 use substrate_client::decl_runtime_apis;
 
 /// The `ConsensusEngineId` of PoW.
 pub const POW_ENGINE_ID: ConsensusEngineId = [b'p', b'o', b'w', b'_'];
-
-/// Type of difficulty.
-///
-/// For runtime designed for Substrate, it's always possible to fit its total
-/// difficulty range under `u128::max_value()` because it can be freely scaled
-/// up or scaled down. Very few PoW chains use difficulty values
-/// larger than `u128::max_value()`.
-pub type Difficulty = u128;
 
 /// Type of seal.
 pub type Seal = Vec<u8>;
@@ -47,7 +39,7 @@ decl_runtime_apis! {
 	/// API for those chains that put their difficulty adjustment algorithm directly
 	/// onto runtime. Note that while putting difficulty adjustment algorithm to
 	/// runtime is safe, putting the PoW algorithm on runtime is not.
-	pub trait DifficultyApi {
+	pub trait DifficultyApi<Difficulty: Decode> {
 		/// Return the target difficulty of the next block.
 		fn difficulty() -> Difficulty;
 	}
