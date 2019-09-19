@@ -117,7 +117,7 @@ impl<Hash, Number> EpochChanges<Hash, Number> where
 		// prune any epochs which could not be _live_ as of the children of the
 		// finalized block.
 		// i.e. re-root the fork tree to the oldest ancestor of (hash, number)
-		// where epoch.start_slot + epoch.duration >= slot(hash)
+		// where epoch.end_slot() >= slot(hash)
 
 		Ok(())
 	}
@@ -254,7 +254,7 @@ mod tests {
 
 	impl std::error::Error for TestError {}
 
-	impl<'a, F: 'a , H: 'a + PartialEq> IsDescendentOfBuilder<H> for &'a F
+	impl<'a, F: 'a , H: 'a + PartialEq + std::fmt::Debug> IsDescendentOfBuilder<H> for &'a F
 		where F: Fn(&H, &H) -> Result<bool, TestError>
 	{
 		type Error = TestError;
@@ -266,7 +266,8 @@ mod tests {
 			let f = *self;
 			Box::new(move |base, head| {
 				let mut head = head;
-				if let Some((ref c_parent, ref c_head)) = current {
+
+				if let Some((ref c_head, ref c_parent)) = current {
 					if head == c_head {
 						if base == c_parent {
 							return Ok(true);
@@ -327,5 +328,100 @@ mod tests {
 		).unwrap().unwrap();
 
 		assert_eq!(block_in_genesis_epoch, genesis_epoch);
+	}
+
+	#[test]
+	fn epoch_changes_between_blocks() {
+		//
+		// A - B
+		//  \
+		//   — C
+		//
+		let is_descendent_of = |base: &Hash, block: &Hash| -> Result<bool, TestError> {
+			match (base, *block) {
+				(b"A", b) => Ok(b == *b"B" || b == *b"C" || b == *b"D"),
+				(b"B", b) | (b"C", b) => Ok(b == *b"D"),
+				(b"0", _) => Ok(true),
+				_ => Ok(false),
+			}
+		};
+
+		let make_genesis = |slot| Epoch {
+			epoch_index: 0,
+			start_slot: slot,
+			duration: 100,
+			authorities: Vec::new(),
+			randomness: [0; 32],
+		};
+
+		let mut epoch_changes = EpochChanges::new();
+		let genesis_epoch = epoch_changes.epoch_for_child_of(
+			&is_descendent_of,
+			b"0",
+			0,
+			100,
+			&make_genesis,
+		).unwrap().unwrap();
+
+		assert_eq!(genesis_epoch, make_genesis(100));
+
+		let epoch_1 = genesis_epoch.increment(babe_primitives::NextEpochDescriptor {
+			authorities: Vec::new(),
+			randomness: [1; 32],
+		});
+
+		epoch_changes.import(
+			&is_descendent_of,
+			*b"A",
+			1,
+			*b"0",
+			epoch_1.clone(),
+		).unwrap();
+
+		assert!(is_descendent_of(b"0", b"A").unwrap());
+
+		let end_slot = genesis_epoch.end_slot();
+		assert_eq!(end_slot, epoch_1.start_slot);
+
+		{
+			// x is still within the genesis epoch.
+			let x = epoch_changes.epoch_for_child_of(
+				&is_descendent_of,
+				b"A",
+				1,
+				end_slot - 1,
+				&make_genesis,
+			).unwrap().unwrap();
+
+			assert_eq!(x, genesis_epoch);
+		}
+
+		{
+			// x is now at the next epoch, because the block is now at the
+			// start slot of epoch 1.
+			let x = epoch_changes.epoch_for_child_of(
+				&is_descendent_of,
+				b"A",
+				1,
+				end_slot,
+				&make_genesis,
+			).unwrap().unwrap();
+
+			assert_eq!(x, epoch_1);
+		}
+
+		{
+			// x is now at the next epoch, because the block is now after
+			// start slot of epoch 1.
+			let x = epoch_changes.epoch_for_child_of(
+				&is_descendent_of,
+				b"A",
+				1,
+				epoch_1.end_slot() - 1,
+				&make_genesis,
+			).unwrap().unwrap();
+
+			assert_eq!(x, epoch_1);
+		}
 	}
 }

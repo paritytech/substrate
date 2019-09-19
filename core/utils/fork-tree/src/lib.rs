@@ -210,7 +210,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 		self.node_iter().map(|node| (&node.hash, &node.number, &node.data))
 	}
 
-	/// Find a node in the tree that is the lowest ancestor of the given
+	/// Find a node in the tree that is the deepest ancestor of the given
 	/// block hash and which passes the given predicate. The given function
 	/// `is_descendent_of` should return `true` if the second hash (target)
 	/// is a descendent of the first hash (base).
