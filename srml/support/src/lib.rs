@@ -67,8 +67,8 @@ pub use self::storage::{StorageValue, StorageMap, StorageLinkedMap, StorageDoubl
 pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Callable, IsSubType};
 pub use self::double_map::StorageDoubleMapWithHasher;
-pub use runtime_io::{print, storage_root, Printable};
-pub use sr_primitives::{self, ConsensusEngineId};
+pub use runtime_io::storage_root;
+pub use sr_primitives::{self, ConsensusEngineId, print, traits::Printable};
 
 /// Macro for easily creating a new implementation of the `Get` trait. Use similarly to
 /// how you would declare a `const`:
@@ -266,26 +266,12 @@ pub enum Void {}
 #[doc(hidden)]
 pub use serde::{Serialize, Deserialize};
 
-/// Programatically create derivations for tuples of up to 19 elements. You provide a second macro
-/// which is called once per tuple size, along with a number of identifiers, one for each element
-/// of the tuple.
-#[macro_export]
-macro_rules! for_each_tuple {
-	($m:ident) => {
-		for_each_tuple! { @IMPL $m !! A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, }
-	};
-	(@IMPL $m:ident !!) => { $m! { } };
-	(@IMPL $m:ident !! $h:ident, $($t:ident,)*) => {
-		$m! { $h $($t)* }
-		for_each_tuple! { @IMPL $m !! $($t,)* }
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use codec::Codec;
-	use runtime_io::{with_externalities, Blake2Hasher};
+	use runtime_io::with_externalities;
+	use primitives::Blake2Hasher;
 	pub use srml_metadata::{
 		DecodeDifferent, StorageEntryMetadata, StorageMetadata, StorageEntryType,
 		StorageEntryModifier, DefaultByte, DefaultByteGetter, StorageHasher

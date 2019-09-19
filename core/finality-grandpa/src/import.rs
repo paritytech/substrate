@@ -497,6 +497,8 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> BlockImport<Block>
 						"Imported unjustified block #{} that enacts authority set change, waiting for finality for enactment.",
 						number,
 					);
+
+					imported_aux.needs_justification = true;
 				}
 
 				// we have imported block with consensus data changes, but without justification
@@ -504,8 +506,6 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC> BlockImport<Block>
 				if enacts_consensus_change {
 					self.consensus_changes.lock().note_change((number, hash));
 				}
-
-				imported_aux.needs_justification = true;
 			}
 		}
 
@@ -590,9 +590,8 @@ where
 				info!(target: "finality", "Imported justification for block #{} that triggers \
 					command {}, signaling voter.", number, command);
 
-				if let Err(e) = self.send_voter_commands.unbounded_send(command) {
-					return Err(ConsensusError::ClientImport(e.to_string()).into());
-				}
+				// send the command to the voter
+				let _ = self.send_voter_commands.unbounded_send(command);
 			},
 			Err(CommandOrError::Error(e)) => {
 				return Err(match e {

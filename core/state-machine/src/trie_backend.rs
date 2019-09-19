@@ -57,7 +57,11 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> {
 	}
 }
 
-impl super::Error for String {}
+impl<S: TrieBackendStorage<H>, H: Hasher> std::fmt::Debug for TrieBackend<S, H> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "TrieBackend")
+	}
+}
 
 impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	H::Out: Ord,

@@ -705,7 +705,9 @@ impl<CC, RP> StructOpt for CoreParams<CC, RP> where
 		)
 		.subcommand(
 			ExportBlocksCmd::augment_clap(SubCommand::with_name("export-blocks"))
-				.about("Export blocks to a file.")
+				.about("Export blocks to a file. This file can only be re-imported \
+						if it is in binary format (not JSON!)."
+					)
 		)
 		.subcommand(
 			ImportBlocksCmd::augment_clap(SubCommand::with_name("import-blocks"))

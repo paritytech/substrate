@@ -47,18 +47,20 @@ use hash_db::{Hasher, Prefix};
 use kvdb::{KeyValueDB, DBTransaction};
 use trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
 use parking_lot::{Mutex, RwLock};
-use primitives::{H256, Blake2Hasher, ChangesTrieConfiguration, convert_hash};
+use primitives::{H256, Blake2Hasher, ChangesTrieConfiguration, convert_hash, traits::CodeExecutor};
 use primitives::storage::well_known_keys;
 use sr_primitives::{
 	generic::{BlockId, DigestItem}, Justification, StorageOverlay, ChildrenStorageOverlay,
-	BuildStorage
+	BuildStorage,
 };
 use sr_primitives::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero, One, SaturatedConversion
 };
-use state_machine::backend::Backend as StateBackend;
 use executor::RuntimeInfo;
-use state_machine::{CodeExecutor, DBValue, ChangesTrieTransaction, ChangesTrieCacheAction, ChangesTrieBuildCache};
+use state_machine::{
+	DBValue, ChangesTrieTransaction, ChangesTrieCacheAction, ChangesTrieBuildCache,
+	backend::Backend as StateBackend,
+};
 use crate::utils::{Meta, db_err, meta_keys, read_db, block_id_to_lookup_key, read_meta};
 use client::leaves::{LeafSet, FinalizationDisplaced};
 use client::children;
@@ -105,6 +107,12 @@ impl<B: BlockT> Drop for RefTrackingState<B> {
 		if let Some(hash) = &self.parent_hash {
 			self.storage.state_db.unpin(hash);
 		}
+	}
+}
+
+impl<Block: BlockT> std::fmt::Debug for RefTrackingState<Block> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "Block {:?}", self.parent_hash)
 	}
 }
 
@@ -1525,7 +1533,7 @@ mod tests {
 		let header = Header {
 			number,
 			parent_hash,
-			state_root: BlakeTwo256::trie_root::<_, &[u8], &[u8]>(Vec::new()),
+			state_root: BlakeTwo256::trie_root(Vec::new()),
 			digest,
 			extrinsics_root,
 		};

@@ -9,7 +9,9 @@ sr-primitives = { path = "../sr-primitives", default-features = false }
 rstd = { package = "sr-std", path = "../sr-std", default-features = false }
 
 [dev-dependencies]
+runtime-io ={ package = "sr-io", path = "../sr-io" }
 support = { package = "srml-support", path = "../../srml/support" }
+rand = "0.7.0"
 
 [features]
 default = ["std"]

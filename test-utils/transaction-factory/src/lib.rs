@@ -116,7 +116,7 @@ where
 	let best_header: Result<<Block as BlockT>::Header, cli::error::Error> =
 		select_chain.best_chain().map_err(|e| format!("{:?}", e).into());
 	let mut best_hash = best_header?.hash();
-	let best_block_id = BlockId::<Block>::hash(best_hash);
+	let mut best_block_id = BlockId::<Block>::hash(best_hash);
 	let version = client.runtime_version_at(&best_block_id)?.spec_version;
 	let genesis_hash = client.block_hash(Zero::zero())?
 		.expect("Genesis block always exists; qed").into();
@@ -140,6 +140,7 @@ where
 		),
 	} {
 		best_hash = block.header().hash();
+		best_block_id = BlockId::<Block>::hash(best_hash);
 		import_block(&client, block);
 
 		info!("Imported block at {}", factory_state.block_no());

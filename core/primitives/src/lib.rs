@@ -54,6 +54,7 @@ pub mod crypto;
 
 pub mod u32_trait;
 
+pub mod child_storage_key;
 pub mod ed25519;
 pub mod sr25519;
 pub mod hash;
@@ -158,7 +159,7 @@ pub enum NativeOrEncoded<R> {
 #[cfg(feature = "std")]
 impl<R: codec::Encode> ::std::fmt::Debug for NativeOrEncoded<R> {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-		self.as_encoded().as_ref().fmt(f)
+		hexdisplay::HexDisplay::from(&self.as_encoded().as_ref()).fmt(f)
 	}
 }
 

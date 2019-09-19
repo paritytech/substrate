@@ -75,4 +75,22 @@ pub mod well_known_keys {
 		// Other code might depend on this, so be careful changing this.
 		key.starts_with(CHILD_STORAGE_KEY_PREFIX)
 	}
+
+	/// Determine whether a child trie key is valid.
+	///
+	/// For now, the only valid child trie keys are those starting with `:child_storage:default:`.
+	///
+	/// `child_trie_root` and `child_delta_trie_root` can panic if invalid value is provided to them.
+	pub fn is_child_trie_key_valid(storage_key: &[u8]) -> bool {
+		let has_right_prefix = storage_key.starts_with(b":child_storage:default:");
+		if has_right_prefix {
+			// This is an attempt to catch a change of `is_child_storage_key`, which
+			// just checks if the key has prefix `:child_storage:` at the moment of writing.
+			debug_assert!(
+				is_child_storage_key(&storage_key),
+				"`is_child_trie_key_valid` is a subset of `is_child_storage_key`",
+			);
+		}
+		has_right_prefix
+	}
 }

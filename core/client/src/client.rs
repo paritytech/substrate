@@ -26,10 +26,9 @@ use parking_lot::{Mutex, RwLock};
 use codec::{Encode, Decode};
 use hash_db::{Hasher, Prefix};
 use primitives::{
-	Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash,
-	NeverNativeValue, ExecutionContext, NativeOrEncoded,
-	storage::{StorageKey, StorageData, well_known_keys},
-	offchain,
+	Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash, NeverNativeValue, ExecutionContext,
+	NativeOrEncoded, storage::{StorageKey, StorageData, well_known_keys},
+	offchain::{NeverOffchainExt, self}, traits::CodeExecutor,
 };
 use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
 use sr_primitives::{
@@ -41,11 +40,10 @@ use sr_primitives::{
 	},
 };
 use state_machine::{
-	DBValue, Backend as StateBackend, CodeExecutor, ChangesTrieAnchorBlockId,
-	ExecutionStrategy, ExecutionManager, prove_read, prove_child_read,
-	ChangesTrieRootsStorage, ChangesTrieStorage,
-	ChangesTrieTransaction, ChangesTrieConfigurationRange,
-	key_changes, key_changes_proof, OverlayedChanges, NeverOffchainExt,
+	DBValue, Backend as StateBackend, ChangesTrieAnchorBlockId, ExecutionStrategy, ExecutionManager,
+	prove_read, prove_child_read, ChangesTrieRootsStorage, ChangesTrieStorage,
+	ChangesTrieTransaction, ChangesTrieConfigurationRange, key_changes, key_changes_proof,
+	OverlayedChanges, BackendTrustLevel,
 };
 use executor::{RuntimeVersion, RuntimeInfo};
 use consensus::{
@@ -62,7 +60,7 @@ use crate::{
 	},
 	backend::{
 		self, BlockImportOperation, PrunableStateChangesTrieStorage,
-		ClientImportOperation, Finalizer,
+		ClientImportOperation, Finalizer, ImportSummary,
 	},
 	blockchain::{
 		self, Info as ChainInfo, Backend as ChainBackend,
@@ -199,6 +197,8 @@ pub struct BlockImportNotification<Block: BlockT> {
 	pub header: Block::Header,
 	/// Is this the new best block.
 	pub is_new_best: bool,
+	/// List of retracted blocks ordered by block number.
+	pub retracted: Vec<Block::Hash>,
 }
 
 /// Summary of a finalized block.
@@ -436,24 +436,28 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 
 	/// Reads storage value at a given block + key, returning read proof.
-	pub fn read_proof(&self, id: &BlockId<Block>, key: &[u8]) -> error::Result<Vec<Vec<u8>>> {
+	pub fn read_proof<I>(&self, id: &BlockId<Block>, keys: I) -> error::Result<Vec<Vec<u8>>> where
+		I: IntoIterator,
+		I::Item: AsRef<[u8]>,
+	{
 		self.state_at(id)
-			.and_then(|state| prove_read(state, key)
-				.map(|(_, proof)| proof)
+			.and_then(|state| prove_read(state, keys)
 				.map_err(Into::into))
 	}
 
 	/// Reads child storage value at a given block + storage_key + key, returning
 	/// read proof.
-	pub fn read_child_proof(
+	pub fn read_child_proof<I>(
 		&self,
 		id: &BlockId<Block>,
 		storage_key: &[u8],
-		key: &[u8]
-	) -> error::Result<Vec<Vec<u8>>> {
+		keys: I,
+	) -> error::Result<Vec<Vec<u8>>> where
+		I: IntoIterator,
+		I::Item: AsRef<[u8]>,
+	{
 		self.state_at(id)
-			.and_then(|state| prove_child_read(state, storage_key, key)
-				.map(|(_, proof)| proof)
+			.and_then(|state| prove_child_read(state, storage_key, keys)
 				.map_err(Into::into))
 	}
 
@@ -968,6 +972,17 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			crate::backend::NewBlockState::Normal
 		};
 
+		let retracted = if is_new_best {
+			let route_from_best = crate::blockchain::tree_route(
+				|id| self.header(&id)?.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id))),
+				BlockId::Hash(info.best_hash),
+				BlockId::Hash(parent_hash),
+			)?;
+			route_from_best.retracted().iter().rev().map(|e| e.hash.clone()).collect()
+		} else {
+			Vec::default()
+		};
+
 		trace!("Imported {}, (#{}), best={}, origin={:?}", hash, import_headers.post().number(), is_new_best, origin);
 
 		operation.op.set_block_data(
@@ -995,7 +1010,14 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				operation.notify_finalized.push(hash);
 			}
 
-			operation.notify_imported = Some((hash, origin, import_headers.into_post(), is_new_best, storage_changes));
+			operation.notify_imported = Some(ImportSummary {
+				hash,
+				origin,
+				header: import_headers.into_post(),
+				is_new_best,
+				storage_changes,
+				retracted,
+			})
 		}
 
 		Ok(ImportResult::imported(is_new_best))
@@ -1025,7 +1047,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				let get_execution_manager = |execution_strategy: ExecutionStrategy| {
 					match execution_strategy {
 						ExecutionStrategy::NativeElseWasm => ExecutionManager::NativeElseWasm,
-						ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
+						ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm(BackendTrustLevel::Trusted),
 						ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
 						ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
 							let header = import_headers.post();
@@ -1167,33 +1189,24 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	fn notify_imported(
 		&self,
-		notify_import: (
-			Block::Hash, BlockOrigin,
-			Block::Header,
-			bool,
-			Option<(
-				Vec<(Vec<u8>, Option<Vec<u8>>)>,
-				Vec<(Vec<u8>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>,
-				)
-			>),
+		notify_import: ImportSummary<Block>,
 	) -> error::Result<()> {
-		let (hash, origin, header, is_new_best, storage_changes) = notify_import;
-
-		if let Some(storage_changes) = storage_changes {
+		if let Some(storage_changes) = notify_import.storage_changes {
 			// TODO [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
 			self.storage_notifications.lock()
 				.trigger(
-					&hash,
+					&notify_import.hash,
 					storage_changes.0.into_iter(),
 					storage_changes.1.into_iter().map(|(sk, v)| (sk, v.into_iter())),
 				);
 		}
 
 		let notification = BlockImportNotification::<Block> {
-			hash,
-			origin,
-			header,
-			is_new_best,
+			hash: notify_import.hash,
+			origin: notify_import.origin,
+			header: notify_import.header,
+			is_new_best: notify_import.is_new_best,
+			retracted: notify_import.retracted,
 		};
 
 		self.import_notification_sinks.lock()

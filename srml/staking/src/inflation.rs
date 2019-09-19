@@ -97,8 +97,7 @@ struct PiecewiseLinear {
 
 impl PiecewiseLinear {
 	/// Compute `f(n/d)*d`. This is useful to avoid loss of precision.
-	fn calculate_for_fraction_times_denominator<N>(&self, n: N, d: N) -> N
-	where
+	fn calculate_for_fraction_times_denominator<N>(&self, n: N, d: N) -> N where
 		N: SimpleArithmetic + Clone
 	{
 		let part = self.pieces.iter()
@@ -145,10 +144,9 @@ const I_NPOS: PiecewiseLinear = PiecewiseLinear {
 	]
 };
 
-/// Second per year for the Julian year (365.25 days).
-const SECOND_PER_YEAR: u32 = 3600*24*36525/100;
-
 /// The total payout to all validators (and their nominators) per era.
+///
+/// `era_duration` is expressed in millisecond.
 ///
 /// Named P_NPoS in the [paper](http://research.web3.foundation/en/latest/polkadot/Token%20Ec
 /// onomics/#inflation-model).
@@ -157,13 +155,14 @@ const SECOND_PER_YEAR: u32 = 3600*24*36525/100;
 /// i.e.  `P_NPoS(x) = I_NPoS(x) * current_total_token * era_duration / year_duration`
 ///
 /// I_NPoS is the desired yearly inflation rate for nominated proof of stake.
-pub fn compute_total_payout<N>(npos_token_staked: N, total_tokens: N, era_duration: N) -> N
-where
+pub fn compute_total_payout<N>(npos_token_staked: N, total_tokens: N, era_duration: u64) -> N where
 	N: SimpleArithmetic + Clone
 {
-	let year_duration: N = SECOND_PER_YEAR.into();
-	I_NPOS.calculate_for_fraction_times_denominator(npos_token_staked, total_tokens)
-		* era_duration / year_duration
+	// Milliseconds per year for the Julian year (365.25 days).
+	const MILLISECONDS_PER_YEAR: u64 = 1000 * 3600 * 24 * 36525 / 100;
+
+	Perbill::from_rational_approximation(era_duration as u64, MILLISECONDS_PER_YEAR)
+		* I_NPOS.calculate_for_fraction_times_denominator(npos_token_staked, total_tokens)
 }
 
 #[allow(non_upper_case_globals, non_snake_case)] // To stick with paper notations
@@ -182,12 +181,12 @@ mod test_inflation {
 		fn new(x0: f64, y0: f64, x1: f64, y1: f64) -> Self {
 			LinearFloat {
 				a: (y1 - y0) / (x1 - x0),
-				b: (x0*y1 - x1*y0) / (x0 - x1),
+				b: (x0 * y1 - x1 * y0) / (x0 - x1),
 			}
 		}
 
 		fn compute(&self, x: f64) -> f64 {
-			self.a*x + self.b
+			self.a * x + self.b
 		}
 	}
 
@@ -204,12 +203,12 @@ mod test_inflation {
 
 	// Left part from `x_ideal`
 	fn I_left(x: f64) -> f64 {
-		I_0 + x * (i_ideal - I_0/x_ideal)
+		I_0 + x * (i_ideal - I_0 / x_ideal)
 	}
 
 	// Right part from `x_ideal`
 	fn I_right(x: f64) -> f64 {
-		I_0 + (i_ideal*x_ideal - I_0) * 2_f64.powf((x_ideal-x)/d)
+		I_0 + (i_ideal * x_ideal - I_0) * 2_f64.powf((x_ideal - x) / d)
 	}
 
 	// Definition of I_NPoS in float
@@ -219,6 +218,41 @@ mod test_inflation {
 		} else {
 			I_right(x)
 		}
+	}
+
+	#[test]
+	fn npos_curve_is_sensible() {
+		const YEAR: u64 = 365 * 24 * 60 * 60 * 1000;
+		//super::I_NPOS.calculate_for_fraction_times_denominator(25, 100)
+		assert_eq!(super::compute_total_payout(0, 100_000u64, YEAR), 2_498);
+		assert_eq!(super::compute_total_payout(5_000, 100_000u64, YEAR), 3_247);
+		assert_eq!(super::compute_total_payout(25_000, 100_000u64, YEAR), 6_245);
+		assert_eq!(super::compute_total_payout(40_000, 100_000u64, YEAR), 8_494);
+		assert_eq!(super::compute_total_payout(50_000, 100_000u64, YEAR), 9_993);
+		assert_eq!(super::compute_total_payout(60_000, 100_000u64, YEAR), 4_380);
+		assert_eq!(super::compute_total_payout(75_000, 100_000u64, YEAR), 2_735);
+		assert_eq!(super::compute_total_payout(95_000, 100_000u64, YEAR), 2_518);
+		assert_eq!(super::compute_total_payout(100_000, 100_000u64, YEAR), 2_505);
+
+		const DAY: u64 = 24 * 60 * 60 * 1000;
+		assert_eq!(super::compute_total_payout(25_000, 100_000u64, DAY), 17);
+		assert_eq!(super::compute_total_payout(50_000, 100_000u64, DAY), 27);
+		assert_eq!(super::compute_total_payout(75_000, 100_000u64, DAY), 7);
+
+		const SIX_HOURS: u64 = 6 * 60 * 60 * 1000;
+		assert_eq!(super::compute_total_payout(25_000, 100_000u64, SIX_HOURS), 4);
+		assert_eq!(super::compute_total_payout(50_000, 100_000u64, SIX_HOURS), 6);
+		assert_eq!(super::compute_total_payout(75_000, 100_000u64, SIX_HOURS), 1);
+
+		const HOUR: u64 = 60 * 60 * 1000;
+		assert_eq!(
+			super::compute_total_payout(
+				2_500_000_000_000_000_000_000_000_000u128,
+				5_000_000_000_000_000_000_000_000_000u128,
+				HOUR
+			),
+			57_038_500_000_000_000_000_000
+		);
 	}
 
 	// Compute approximation of I_NPoS into piecewise linear function
@@ -265,7 +299,7 @@ mod test_inflation {
 			// Test error is not overflowed
 
 			// Quick test on one point
-			if (I_right((x0 + next_x1)/2.0) - (y0 + next_y1)/2.0).abs() > GEN_ERROR {
+			if (I_right((x0 + next_x1) / 2.0) - (y0 + next_y1) / 2.0).abs() > GEN_ERROR {
 				error_overflowed = true;
 			}
 
@@ -298,7 +332,7 @@ mod test_inflation {
 		let pieces: Vec<(u32, super::Linear)> = (0..points.len()-1)
 			.map(|i| {
 				let p0 = points[i];
-				let p1 = points[i+1];
+				let p1 = points[i + 1];
 
 				let linear = LinearFloat::new(p0.0, p0.1, p1.0, p1.1);
 
@@ -333,7 +367,7 @@ mod test_inflation {
 	}
 
 	/// This test ensure that i_npos piecewise linear approximation is close to the actual function.
-	/// It does compare the result from a computation in integer of different capcity and in f64.
+	/// It does compare the result from a computation in integer of different capacity and in f64.
 	#[test]
 	fn i_npos_precision() {
 		const STEP_PRECISION: f64 = 0.000_001;

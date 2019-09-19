@@ -5,12 +5,13 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-jsonrpc-core = "13.1.0"
-pubsub = { package = "jsonrpc-pubsub", version = "13.1.0" }
+jsonrpc-core = "13.2.0"
+pubsub = { package = "jsonrpc-pubsub", version = "13.2.0" }
 log = "0.4"
 serde = "1.0"
+serde_json = "1.0"
 sr-primitives = { path = "../sr-primitives" }
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
-http = { package = "jsonrpc-http-server", version = "13.1.0" }
-ws = { package = "jsonrpc-ws-server", version = "13.1.0" }
+http = { package = "jsonrpc-http-server", version = "13.2.0" }
+ws = { package = "jsonrpc-ws-server", version = "13.2.0" }
