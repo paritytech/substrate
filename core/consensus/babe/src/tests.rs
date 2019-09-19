@@ -121,7 +121,7 @@ impl Proposer<TestBlock> for DummyProposer {
 		// doesn't.
 		let mut epoch_changes = self.factory.epoch_changes.lock();
 		let epoch = epoch_changes.epoch_for_child_of(
-			&*self.factory.client,
+			descendent_query(&*self.factory.client),
 			&self.parent_hash,
 			self.parent_number,
 			this_slot,
