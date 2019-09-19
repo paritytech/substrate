@@ -121,7 +121,7 @@
 
 use rstd::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use codec::Decode;
-use sr_primitives::{KeyTypeId, AppKey, Perbill, RuntimeAppPublic};
+use sr_primitives::{KeyTypeId, Perbill, RuntimeAppPublic};
 use sr_primitives::weights::SimpleDispatchInfo;
 use sr_primitives::traits::{Convert, Zero, Member, OpaqueKeys};
 use sr_staking_primitives::SessionIndex;
