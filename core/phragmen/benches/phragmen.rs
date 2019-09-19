@@ -110,7 +110,7 @@ fn do_phragmen(
 			let mut supports = <SupportMap<u64>>::new();
 			elected_stashes
 				.iter()
-				.map(|e| (e, to_votes(slashable_balance(e))))
+				.map(|(e, _)| (e, to_votes(slashable_balance(e))))
 				.for_each(|(e, s)| {
 					let item = Support { own: s, total: s, ..Default::default() };
 					supports.insert(e.clone(), item);
