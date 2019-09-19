@@ -63,10 +63,6 @@ impl<'a> PiecewiseLinear<'a> {
 			// Must not saturate as prev abscissa > next abscissa
 			next.0.into_parts().saturating_sub(prev.0.into_parts()),
 		);
-		// println!("{}", delta_y.clone().saturated_into::<u128>());
-		// println!("{:?}: {:?}", prev.1, d.clone().saturated_into::<u128>());
-		// println!("prev: {:?}:{:?}", prev.0, prev.1);
-		// println!("next: {:?}:{:?}", next.0, next.1);
 
 		// If both substration are same sign then result is positive
 		if (n > prev.0 * d.clone()) == (next.1.into_parts() > prev.1.into_parts()) {
@@ -104,4 +100,65 @@ fn multiply_by_rational_saturating<N>(value: N, p: u32, q: u32) -> N
 
 	// Can saturate if p > q
 	result_divisor_part.saturating_add(result_remainder_part)
+}
+
+#[test]
+fn test_multiply_by_rational_saturating() {
+	use std::convert::TryInto;
+
+	let div = 100u32;
+	for value in 0..=div {
+		for p in 0..=div {
+			for q in 1..=div {
+				let value: u64 = (value as u128 * u64::max_value() as u128 / div as u128)
+					.try_into().unwrap();
+				let p = (p as u64 * u32::max_value() as u64 / div as u64)
+					.try_into().unwrap();
+				let q = (q as u64 * u32::max_value() as u64 / div as u64)
+					.try_into().unwrap();
+
+				assert_eq!(
+					multiply_by_rational_saturating(value, p, q),
+					(value as u128 * p as u128 / q as u128)
+						.try_into().unwrap_or(u64::max_value())
+				);
+			}
+		}
+	}
+}
+
+#[test]
+fn test_calculate_for_fraction_times_denominator() {
+	use std::convert::TryInto;
+
+	let curve = PiecewiseLinear {
+		points: &[
+			(Perbill::from_parts(0_000_000_000), Perbill::from_parts(0_500_000_000)),
+			(Perbill::from_parts(0_500_000_000), Perbill::from_parts(1_000_000_000)),
+			(Perbill::from_parts(1_000_000_000), Perbill::from_parts(0_000_000_000)),
+		]
+	};
+
+	pub fn formal_calculate_for_fraction_times_denominator(n: u64, d: u64) -> u64 {
+		if n <= Perbill::from_parts(0_500_000_000) * d.clone() {
+			n + d / 2
+		} else {
+			(d as u128 * 2 - n as u128 * 2).try_into().unwrap()
+		}
+	}
+
+	let div = 100u32;
+	for d in 0..=div {
+		for n in 0..=d {
+			let d: u64 = (d as u128 * u64::max_value() as u128 / div as u128)
+				.try_into().unwrap();
+			let n: u64 = (n as u128 * u64::max_value() as u128 / div as u128)
+				.try_into().unwrap();
+
+			let res = curve.calculate_for_fraction_times_denominator(n, d);
+			let expected = formal_calculate_for_fraction_times_denominator(n, d);
+
+			assert!(abs_sub(res, expected) <= 1);
+		}
+	}
 }
