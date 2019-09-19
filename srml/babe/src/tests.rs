@@ -102,6 +102,7 @@ fn first_block_epoch_zero_start() {
 		assert_eq!(NextRandomness::get(), [0; 32]);
 
 		assert_eq!(header.digest.logs.len(), 2);
+		assert_eq!(pre_digest.logs.len(), 1);
 		assert_eq!(header.digest.logs[0], pre_digest.logs[0]);
 
 		let authorities = Babe::authorities();
