@@ -531,7 +531,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 				let maybe_authority_id = authority_id(&authorities.current_authorities(), &conf.keystore)
 					.unwrap_or(Default::default());
 				telemetry!(CONSENSUS_INFO; "afg.authority_set";
-					"authority_id" => format!("{}", maybe_authority_id),
+					"authority_id" => maybe_authority_id.to_string(),
 					"authority_set_id" => ?authorities.set_id(),
 					"authorities" => {
 						let curr = authorities.current_authorities();
