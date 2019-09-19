@@ -590,7 +590,7 @@ decl_module! {
 		///   after the execution is saved as the `code` of the account. That code will be invoked
 		///   upon any call received by this account.
 		/// - The contract is initialized.
-		pub fn create(
+		pub fn instantiate(
 			origin,
 			#[compact] endowment: BalanceOf<T>,
 			#[compact] gas_limit: Gas,
@@ -1018,7 +1018,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 				Ok(ValidTransaction::default()),
 			Call::put_code(gas_limit, _)
 				| Call::call(_, _, gas_limit, _)
-				| Call::create(_, gas_limit, _, _)
+				| Call::instantiate(_, gas_limit, _, _)
 			=> {
 				// Check if the specified amount of gas is available in the current block.
 				// This cannot underflow since `gas_spent` is never greater than `T::BlockGasLimit`.
