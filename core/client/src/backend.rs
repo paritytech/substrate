@@ -42,7 +42,6 @@ pub(crate) struct ImportSummary<Block: BlockT> {
 	pub(crate) is_new_best: bool,
 	pub(crate) storage_changes: Option<(StorageCollection, ChildStorageCollection)>,
 	pub(crate) retracted: Vec<Block::Hash>,
-	pub(crate) associated_data: Vec<u8>,
 }
 
 /// Import operation wrapper

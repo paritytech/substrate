@@ -658,7 +658,7 @@ pub trait TestNetFactory: Sized {
 
 				// We poll `imported_blocks_stream`.
 				while let Ok(Async::Ready(Some(notification))) = peer.imported_blocks_stream.poll() {
-					peer.network.on_block_imported(notification.hash, notification.header, notification.associated_data);
+					peer.network.on_block_imported(notification.hash, notification.header, Vec::new());
 				}
 
 				// We poll `finality_notification_stream`, but we only take the last event.

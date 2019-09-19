@@ -186,8 +186,6 @@ pub struct BlockImportNotification<Block: BlockT> {
 	pub is_new_best: bool,
 	/// List of retracted blocks ordered by block number.
 	pub retracted: Vec<Block::Hash>,
-	/// Any data associated with this block import.
-	pub associated_data: Vec<u8>,
 }
 
 /// Summary of a finalized block.
@@ -1002,7 +1000,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				is_new_best,
 				storage_changes,
 				retracted,
-				associated_data: Vec::new(), // TODO
 			})
 		}
 
@@ -1190,7 +1187,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			header: notify_import.header,
 			is_new_best: notify_import.is_new_best,
 			retracted: notify_import.retracted,
-			associated_data: notify_import.associated_data,
 		};
 
 		self.import_notification_sinks.lock()
