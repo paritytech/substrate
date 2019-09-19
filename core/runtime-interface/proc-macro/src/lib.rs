@@ -29,6 +29,7 @@ use inflector::Inflector;
 use utils::generate_runtime_interface_include;
 
 mod bare_function_interface;
+mod host_function_interface;
 mod trait_decl_impl;
 mod utils;
 
@@ -47,6 +48,7 @@ fn runtime_interface_impl(trait_def: ItemTrait) -> Result<TokenStream> {
 	let crate_include = generate_runtime_interface_include();
 	let mod_name = Ident::new(&trait_def.ident.to_string().to_snake_case(), Span::call_site());
 	let trait_decl_impl = trait_decl_impl::process(&trait_def)?;
+	let host_functions = host_function_interface::generate(&trait_def)?;
 
 	let res = quote! {
 		pub mod #mod_name {
@@ -56,6 +58,8 @@ fn runtime_interface_impl(trait_def: ItemTrait) -> Result<TokenStream> {
 			#bare_functions
 
 			#trait_decl_impl
+
+			#host_functions
 		}
 	};
 

@@ -16,12 +16,12 @@
 
 //! Generates the bare function interface for a given trait definition.
 
-use crate::utils::{generate_crate_access, create_host_function_ident};
-
-use syn::{
-	Ident, ItemTrait, TraitItemMethod, FnArg, Signature, Pat, PatType, Type, Result, ReturnType,
-	TraitItem,
+use crate::utils::{
+	generate_crate_access, create_host_function_ident, get_function_arguments,
+	get_function_argument_names, get_function_argument_types_without_ref,
 };
+
+use syn::{Ident, ItemTrait, TraitItemMethod, FnArg, Signature, Result, ReturnType, TraitItem};
 
 use proc_macro2::{TokenStream, Span};
 
@@ -114,7 +114,7 @@ fn function_std_impl(trait_name: &Ident, method: &TraitItemMethod) -> Result<Tok
 
 	let call_to_trait = if takes_self_argument(&method.sig) {
 		quote! {
-			#crate_::with_externalities(|ext| #trait_name::#method_name(&ext, #( #arg_names, )*))
+			#crate_::with_externalities(|mut ext| ext.#method_name(#( #arg_names, )*))
 		}
 	} else {
 		quote! {
@@ -137,32 +137,6 @@ fn function_std_impl(trait_name: &Ident, method: &TraitItemMethod) -> Result<Tok
 /// Create the function identifier for the internal implementation function.
 fn create_function_impl_ident(method_name: &Ident) -> Ident {
 	Ident::new(&format!("{}_impl", method_name), Span::call_site())
-}
-
-/// Returns the function arguments of the given `Signature`, minus any `self` arguments.
-fn get_function_arguments<'a>(sig: &'a Signature) -> impl Iterator<Item = &'a PatType> {
-	sig.inputs
-		.iter()
-		.filter_map(|a| match a {
-			FnArg::Receiver(_) => None,
-			FnArg::Typed(pat_type) => Some(pat_type),
-		})
-}
-
-/// Returns the function argument names of the given `Signature`, minus any `self`.
-fn get_function_argument_names<'a>(sig: &'a Signature) -> impl Iterator<Item = &'a Box<Pat>> {
-	get_function_arguments(sig).map(|pt| &pt.pat)
-}
-
-/// Returns the function argument types, minus any `Self` type. If any of the arguments is a reference,
-/// the underlying type without the ref is returned.
-fn get_function_argument_types_without_ref<'a>(sig: &'a Signature) -> impl Iterator<Item = &'a Box<Type>> {
-	get_function_arguments(sig)
-		.map(|pt| &pt.ty)
-		.map(|ty| match &**ty {
-			Type::Reference(type_ref) => &type_ref.elem,
-			_ => ty,
-		})
 }
 
 /// Returns if the given `Signature` takes a `self` argument.

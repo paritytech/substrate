@@ -20,7 +20,7 @@ use crate::utils::generate_crate_access;
 
 use syn::{
 	ItemTrait, TraitItemMethod, Result, TraitItem, Error, fold::{self, Fold}, spanned::Spanned,
-	Visibility,
+	Visibility, Receiver
 };
 
 use proc_macro2::TokenStream;
@@ -91,6 +91,14 @@ impl Fold for ToEssentialTraitDef {
 
 		trait_def.vis = Visibility::Inherited;
 		trait_def
+	}
+
+	fn fold_receiver(&mut self, mut receiver: Receiver) -> Receiver {
+		if receiver.reference.is_none() {
+			self.push_error(&receiver, "Taking `Self` by value is not allowed");
+		}
+
+		receiver
 	}
 }
 

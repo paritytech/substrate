@@ -18,7 +18,7 @@
 
 use proc_macro2::{TokenStream, Span};
 
-use syn::{Ident, Error};
+use syn::{Ident, Error, Signature, Pat, PatType, FnArg, Type};
 
 use proc_macro_crate::crate_name;
 
@@ -59,4 +59,32 @@ pub fn generate_crate_access() -> TokenStream {
 /// Create the host function identifier for the given function name.
 pub fn create_host_function_ident(name: &Ident) -> Ident {
 	Ident::new(&format!("ext_{}", name), Span::call_site())
+}
+
+/// Returns the function arguments of the given `Signature`, minus any `self` arguments.
+pub fn get_function_arguments<'a>(sig: &'a Signature) -> impl Iterator<Item = &'a PatType> {
+	sig.inputs
+		.iter()
+		.filter_map(|a| match a {
+			FnArg::Receiver(_) => None,
+			FnArg::Typed(pat_type) => Some(pat_type),
+		})
+}
+
+/// Returns the function argument names of the given `Signature`, minus any `self`.
+pub fn get_function_argument_names<'a>(sig: &'a Signature) -> impl Iterator<Item = &'a Box<Pat>> {
+	get_function_arguments(sig).map(|pt| &pt.pat)
+}
+
+/// Returns the function argument types, minus any `Self` type. If any of the arguments
+/// is a reference, the underlying type without the ref is returned.
+pub fn get_function_argument_types_without_ref<'a>(
+	sig: &'a Signature,
+) -> impl Iterator<Item = &'a Box<Type>> {
+	get_function_arguments(sig)
+		.map(|pt| &pt.ty)
+		.map(|ty| match &**ty {
+			Type::Reference(type_ref) => &type_ref.elem,
+			_ => ty,
+		})
 }

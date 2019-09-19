@@ -118,7 +118,7 @@ impl<T: ?Sized + AsRef<[u8]>> IntoFFIArg<u64> for T {
 	}
 }
 
-impl<T: 'static + Encode> AsFFIArg for &[T] {
+impl<T: 'static + Encode> AsFFIArg for [T] {
 	type RTOwned = Vec<u8>;
 	type RTBorrowed = [u8];
 	type FFIType = u64;
@@ -220,12 +220,15 @@ mod tests {
 
 	#[runtime_interface]
 	trait Test {
-		fn test() {
-
+		fn test(lol: Vec<u8>) -> Vec<u8> {
+			Vec::new()
 		}
 
-		fn test_with_self(&self) {
+		fn test_with_self(&mut self, data: &[u8]) {
+			self.clear_storage(data);
+		}
 
+		fn test_with_self2(&self, data: &[u8]) {
 		}
 	}
 }
