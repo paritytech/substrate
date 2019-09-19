@@ -38,9 +38,9 @@ use client::{
 };
 use sr_primitives::Justification;
 use sr_primitives::generic::{BlockId, Digest, DigestItem};
-use sr_primitives::traits::{Block as BlockT, Header as HeaderT, Saturating, ProvideRuntimeApi};
+use sr_primitives::traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi};
 use srml_timestamp::{TimestampInherentData, InherentError as TIError};
-use pow_primitives::{Seal, POW_ENGINE_ID};
+use pow_primitives::{Seal, TotalDifficulty, POW_ENGINE_ID};
 use primitives::H256;
 use inherents::{InherentDataProviders, InherentData};
 use consensus_common::{
@@ -87,7 +87,7 @@ impl<Difficulty> PowAux<Difficulty> where
 /// Algorithm used for proof of work.
 pub trait PowAlgorithm<B: BlockT> {
 	/// Difficulty for the algorithm.
-	type Difficulty: Saturating + Default + Encode + Decode + Ord + Clone + Copy;
+	type Difficulty: TotalDifficulty + Default + Encode + Decode + Ord + Clone + Copy;
 
 	/// Get the next block's difficulty.
 	fn difficulty(&self, parent: &BlockId<B>) -> Result<Self::Difficulty, String>;
@@ -217,7 +217,7 @@ impl<B: BlockT<Hash=H256>, C, Algorithm> Verifier<B> for PowVerifier<C, Algorith
 			BlockId::Hash(parent_hash),
 		)?;
 		aux.difficulty = difficulty;
-		aux.total_difficulty = aux.total_difficulty.saturating_add(difficulty);
+		aux.total_difficulty.add(difficulty);
 
 		if let Some(inner_body) = body.take() {
 			let block = B::new(checked_header.clone(), inner_body);
@@ -406,7 +406,7 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E>(
 		};
 
 		aux.difficulty = difficulty;
-		aux.total_difficulty = aux.total_difficulty.saturating_add(difficulty);
+		aux.total_difficulty.add(difficulty);
 		let hash = header.hash();
 
 		let key = aux_key(&hash);

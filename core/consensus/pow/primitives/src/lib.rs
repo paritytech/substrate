@@ -29,6 +29,11 @@ pub const POW_ENGINE_ID: ConsensusEngineId = [b'p', b'o', b'w', b'_'];
 /// Type of seal.
 pub type Seal = Vec<u8>;
 
+/// Define methods that total difficulty should implement.
+pub trait TotalDifficulty {
+	fn add(&mut self, other: Self);
+}
+
 decl_runtime_apis! {
 	/// API necessary for timestamp-based difficulty adjustment algorithms.
 	pub trait TimestampApi<Moment: Decode> {
