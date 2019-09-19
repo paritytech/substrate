@@ -110,6 +110,7 @@ use futures::prelude::*;
 use log::{warn, debug, info, trace};
 
 use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible};
+use epoch_changes::descendent_query;
 
 mod aux_schema;
 mod epoch_changes;
@@ -266,7 +267,7 @@ pub fn start_babe<B, C, SC, E, I, SO, Error>(BabeParams {
 			// TODO: supply is-descendent-of and maybe write to disk _now_
 			// as opposed to waiting for the next epoch?
 			let res = epoch_changes.lock().prune_finalized(
-				&*client,
+				descendent_query(&*client),
 				&notification.hash,
 				*notification.header.number(),
 			);
@@ -329,7 +330,7 @@ impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I
 
 	fn epoch_data(&self, parent: &B::Header, slot_number: u64) -> Result<Self::EpochData, consensus_common::Error> {
 		self.epoch_changes.lock().epoch_for_child_of(
-			&*self.client,
+			descendent_query(&*self.client),
 			&parent.hash(),
 			parent.number().clone(),
 			slot_number,
@@ -841,7 +842,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 		let epoch = {
 			let mut epoch_changes = self.epoch_changes.lock();
 			epoch_changes.epoch_for_child_of(
-				&*self.client,
+				descendent_query(&*self.client),
 				&parent_hash,
 				parent_header.number().clone(),
 				pre_digest.slot_number(),
@@ -1237,7 +1238,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 				))?;
 
 			let epoch = epoch_changes.epoch_for_child_of(
-				&*self.client,
+				descendent_query(&*self.client),
 				&parent_hash,
 				*parent_header.number(),
 				slot_number,
@@ -1290,7 +1291,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 
 			// track the epoch change in the fork tree
 			let res = epoch_changes.import(
-				&*self.client,
+				descendent_query(&*self.client),
 				hash,
 				number,
 				*block.header.parent_hash(),
@@ -1468,7 +1469,7 @@ pub mod test_helpers {
 		C::Api: BabeApi<B>,
 	{
 		let epoch = link.epoch_changes.lock().epoch_for_child_of(
-			client,
+			descendent_query(client),
 			&parent.hash(),
 			parent.number().clone(),
 			slot_number,
