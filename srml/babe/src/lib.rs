@@ -348,10 +348,6 @@ impl<T: Trait> Module<T> {
 		<system::Module<T>>::deposit_log(log.into())
 	}
 
-	fn get_inherent_digests() -> system::DigestOf<T> {
-		<system::Module<T>>::digest()
-	}
-
 	fn deposit_vrf_output(vrf_output: &[u8; VRF_OUTPUT_LENGTH]) {
 		let segment_idx = <SegmentIndex>::get();
 		let mut segment = <UnderConstruction>::get(&segment_idx);
@@ -375,7 +371,7 @@ impl<T: Trait> Module<T> {
 			return;
 		}
 
-		let maybe_pre_digest = Self::get_inherent_digests()
+		let maybe_pre_digest = <system::Module<T>>::digest()
 			.logs
 			.iter()
 			.filter_map(|s| s.as_pre_runtime())

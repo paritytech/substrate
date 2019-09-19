@@ -15,18 +15,35 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Consensus extension module tests for BABE consensus.
-#![cfg(test)]
+
 use super::*;
 use runtime_io::with_externalities;
 use mock::{new_test_ext, Babe, Test};
-use sr_primitives::{traits::Header, Digest};
+use sr_primitives::{traits::OnFinalize, testing::{Digest, DigestItem}};
 use session::ShouldEndSession;
+
 const EMPTY_RANDOMNESS: [u8; 32] = [
 	74, 25, 49, 128, 53, 97, 244, 49,
 	222, 202, 176, 2, 231, 66, 95, 10,
 	133, 49, 213, 228, 86, 161, 164, 127,
 	217, 153, 138, 37, 48, 192, 248, 0,
 ];
+
+fn make_pre_digest(
+	authority_index: babe_primitives::AuthorityIndex,
+	slot_number: babe_primitives::SlotNumber,
+	vrf_output: [u8; babe_primitives::VRF_OUTPUT_LENGTH],
+	vrf_proof: [u8; babe_primitives::VRF_PROOF_LENGTH],
+) -> Digest {
+	let digest_data = babe_primitives::RawBabePreDigest::Primary {
+		authority_index,
+		slot_number,
+		vrf_output,
+		vrf_proof,
+	};
+	let log = DigestItem::PreRuntime(babe_primitives::BABE_ENGINE_ID, digest_data.encode());
+	Digest { logs: vec![log] }
+}
 
 #[test]
 fn empty_randomness_is_correct() {
@@ -55,90 +72,49 @@ type Session = session::Module<Test>;
 type EpochDuration = <Test as super::Trait>::EpochDuration;
 
 #[test]
-fn check_epoch_change() {
+fn first_block_epoch_zero_start() {
 	with_externalities(&mut new_test_ext(vec![0, 1, 2, 3]), || {
-		const EXPECTED_RANDOMNESS: [u8; 32] = [
-			2, 232, 2, 244, 166, 226, 138, 102,
-			132, 237, 9, 130, 42, 88, 216, 122,
-			74, 210, 211, 143, 83, 217, 31, 210,
-			129, 101, 20, 125, 168, 0, 36, 78,
-		];
-
-		// We start out at genesis.
-		System::initialize(&1, &Default::default(), &Default::default(), &Default::default());
-
-		// Check that we do not change sessions on the genesis block.
-		assert!(!Babe::should_end_session(0), "Genesis starts the first session change sessions");
-		assert!(
-			!Babe::should_end_session(1),
-			"BABE does not include the block number in epoch calculations",
+		let genesis_slot = 100;
+		let first_vrf = [1; 32];
+		let pre_digest = make_pre_digest(
+			0,
+			genesis_slot,
+			first_vrf,
+			[0xff; 64],
 		);
+
+		assert_eq!(Babe::genesis_slot(), 0);
+		System::initialize(&1, &Default::default(), &Default::default(), &pre_digest);
+
+		// see implementation of the function for details why: we issue an
+		// epoch-change digest but don't do it via the normal session mechanism.
+		assert!(!Babe::should_end_session(1));
+		assert_eq!(Babe::genesis_slot(), genesis_slot);
+		assert_eq!(Babe::current_slot(), genesis_slot);
+		assert_eq!(Babe::epoch_index(), 0);
+
+		Babe::on_finalize(1);
 		let header = System::finalize();
 
-		// We should have no logs yet.
-		assert_eq!(header.digest, Digest { logs: vec![] });
+		assert_eq!(SegmentIndex::get(), 0);
+		assert_eq!(UnderConstruction::get(0), vec![first_vrf]);
+		assert_eq!(Babe::randomness(), [0; 32]);
+		assert_eq!(NextRandomness::get(), [0; 32]);
 
-		// Re-initialize.
-		System::initialize(&2, &header.hash(), &Default::default(), &Default::default());
-		CurrentSlot::put(2);
-		let header = System::finalize();
-		assert_eq!(header.digest, Digest { logs: vec![] });
-		assert!(!Babe::should_end_session(2));
-
-		// Re-initialize.
-		System::initialize(&3, &header.hash(), &Default::default(), &Default::default());
-		CurrentSlot::put(3);
-		assert!(Babe::should_end_session(3));
-		Session::rotate_session();
-		let header = System::finalize();
-
-		// Check that we got the expected digest.
-		let Digest { ref logs } = header.digest;
-		assert_eq!(logs.len(), 2, "should have exactly 2 digests here ― one for genesis");
-		let (engine_id, mut epoch) = logs[0].as_consensus().unwrap();
-		assert_eq!(BABE_ENGINE_ID, engine_id, "we should only have a BABE consensus digest here");
-		let NextEpochDescriptor {
-			authorities,
-			randomness,
-		} = match ConsensusLog::decode(&mut epoch).unwrap() {
-			ConsensusLog::NextEpochData(e) => e,
-			ConsensusLog::OnDisabled(_) => panic!("we have not disabled any authorities yet!"),
-		};
-
-		// Check that the fields of the digest are correct
-		assert_eq!(EpochDuration::get(), 3, "wrong epoch duration");
-		assert_eq!(authorities, []);
-		assert_eq!(randomness, EXPECTED_RANDOMNESS, "incorrect randomness");
-
-		let (engine_id, mut epoch) = logs[1].as_consensus().unwrap();
-		assert_eq!(BABE_ENGINE_ID, engine_id, "we should only have a BABE consensus digest here");
-		let NextEpochDescriptor {
-			authorities,
-			randomness: _,
-		} = match ConsensusLog::decode(&mut epoch).unwrap() {
-			ConsensusLog::NextEpochData(e) => e,
-			ConsensusLog::OnDisabled(_) => panic!("we have not disabled any authorities yet!"),
-		};
-		assert_eq!(authorities, []);
-		// assert_eq!(randomness, EXPECTED_RANDOMNESS, "incorrect randomness");
-
-		let reinit = |i| {
-			// Re-initialize.
-			System::initialize(&i, &header.hash(), &Default::default(), &Default::default());
-			CurrentSlot::put(i);
-			let should_end = Babe::should_end_session(i);
-			if should_end { Session::rotate_session() }
-			let header = System::finalize();
-			if !should_end { assert_eq!(header.digest.logs.len(), 0) }
-			(should_end, header.clone())
-		};
-		for i in 4..9 {
-			assert_eq!(reinit(i).0, false, "Failed at iteration {}", i)
-		}
-		let (should_end, header) = reinit(9);
-
-		assert!(should_end);
 		assert_eq!(header.digest.logs.len(), 2);
+		assert_eq!(header.digest.logs[0], pre_digest.logs[0]);
+
+		let authorities = Babe::authorities();
+		let consensus_log = babe_primitives::ConsensusLog::NextEpochData(
+			babe_primitives::NextEpochDescriptor {
+				authorities,
+				randomness: Babe::randomness(),
+			}
+		);
+		let consensus_digest = DigestItem::Consensus(BABE_ENGINE_ID, consensus_log.encode());
+
+		// first epoch descriptor has same info as last.
+		assert_eq!(header.digest.logs[1], consensus_digest.clone())
 	})
 }
 
