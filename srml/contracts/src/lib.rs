@@ -59,7 +59,7 @@
 //! ### Dispatchable functions
 //!
 //! * `put_code` - Stores the given binary Wasm code into the chain's storage and returns its `code_hash`.
-//! * `create` - Deploys a new contract from the given `code_hash`, optionally transferring some balance.
+//! * `instantiate` - Deploys a new contract from the given `code_hash`, optionally transferring some balance.
 //! This creates a new smart contract account and calls its contract deploy handler to initialize the contract.
 //! * `call` - Makes a call to an account, optionally transferring some balance.
 //!
@@ -590,7 +590,7 @@ decl_module! {
 		///   after the execution is saved as the `code` of the account. That code will be invoked
 		///   upon any call received by this account.
 		/// - The contract is initialized.
-		pub fn create(
+		pub fn instantiate(
 			origin,
 			#[compact] endowment: BalanceOf<T>,
 			#[compact] gas_limit: Gas,
@@ -812,7 +812,7 @@ decl_event! {
 		<T as system::Trait>::AccountId,
 		<T as system::Trait>::Hash
 	{
-		/// Transfer happened `from` to `to` with given `value` as part of a `call` or `create`.
+		/// Transfer happened `from` to `to` with given `value` as part of a `call` or `instantiate`.
 		Transfer(AccountId, AccountId, Balance),
 
 		/// Contract deployed by address at the specified address.
@@ -1018,7 +1018,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 				Ok(ValidTransaction::default()),
 			Call::put_code(gas_limit, _)
 				| Call::call(_, _, gas_limit, _)
-				| Call::create(_, gas_limit, _, _)
+				| Call::instantiate(_, gas_limit, _, _)
 			=> {
 				// Check if the specified amount of gas is available in the current block.
 				// This cannot underflow since `gas_spent` is never greater than `T::BlockGasLimit`.

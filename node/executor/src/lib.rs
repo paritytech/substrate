@@ -673,7 +673,7 @@ mod tests {
 				CheckedExtrinsic {
 					signed: Some((charlie(), signed_extra(1, 0))),
 					function: Call::Contracts(
-						contracts::Call::create::<Runtime>(1 * DOLLARS, 10_000, transfer_ch, Vec::new())
+						contracts::Call::instantiate::<Runtime>(1 * DOLLARS, 10_000, transfer_ch, Vec::new())
 					),
 				},
 				CheckedExtrinsic {
