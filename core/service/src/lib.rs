@@ -345,7 +345,7 @@ macro_rules! new_impl {
 				chain_name: $config.chain_spec.name().into(),
 				impl_name: $config.impl_name.into(),
 				impl_version: $config.impl_version.into(),
-				properties: $config.chain_spec.properties(),
+				properties: $config.chain_spec.properties().clone(),
 			};
 			$start_rpc(
 				client.clone(),
