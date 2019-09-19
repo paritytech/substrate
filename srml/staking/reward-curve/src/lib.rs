@@ -128,11 +128,11 @@ impl core::fmt::Display for Bounds {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
 		write!(
 			f,
-			"{} {}, {} {}",
+			"{}{:07}; {:07}{}",
 			if self.min_strict { "]" } else { "[" },
 			self.min,
 			self.max,
-			if self.min_strict { "[" } else { "]" },
+			if self.max_strict { "[" } else { "]" },
 		)
 	}
 }
@@ -146,7 +146,7 @@ fn parse_field<Token: Parse + Default + ToTokens>(input: ParseStream, bounds: Bo
 	let value: u32 = value_lit.base10_parse()?;
 	if !bounds.check(value) {
 		return Err(syn::Error::new(value_lit.span(), format!(
-			"Invalid {:?}: {},  must be in {}", Token::default().to_token_stream(), value, bounds,
+			"Invalid {}: {},  must be in {}", Token::default().to_token_stream(), value, bounds,
 		)));
 	}
 
@@ -194,7 +194,7 @@ impl Parse for INposInput {
 		<syn::Token![,]>::parse(&args_input)?;
 		let falloff = parse_field::<keyword::falloff>(&args_input, Bounds {
 			min: 0_010_000,
-			min_strict: true,
+			min_strict: false,
 			max: 1_000_000,
 			max_strict: false,
 		})?;

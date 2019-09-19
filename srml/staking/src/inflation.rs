@@ -67,7 +67,7 @@ mod test {
 		assert_eq!(super::compute_total_payout(&I_NPOS, 60_000, 100_000u64, YEAR), 4_379);
 		assert_eq!(super::compute_total_payout(&I_NPOS, 75_000, 100_000u64, YEAR), 2_733);
 		assert_eq!(super::compute_total_payout(&I_NPOS, 95_000, 100_000u64, YEAR), 2_513);
-		assert_eq!(super::compute_total_payout(&I_NPOS, 100_000, 100_000u64, YEAR), 2_504);
+		assert_eq!(super::compute_total_payout(&I_NPOS, 100_000, 100_000u64, YEAR), 2_505);
 
 		const DAY: u64 = 24 * 60 * 60 * 1000;
 		assert_eq!(super::compute_total_payout(&I_NPOS, 25_000, 100_000u64, DAY), 17);
