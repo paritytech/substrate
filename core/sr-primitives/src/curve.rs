@@ -75,7 +75,7 @@ impl<'a> PiecewiseLinear<'a> {
 }
 
 // Compute value * p / q.
-// This is guarantee not to overflow on whatever values nor loose precision.
+// This is guaranteed not to overflow on whatever values nor lose precision.
 // `q` must be superior to zero.
 fn multiply_by_rational_saturating<N>(value: N, p: u32, q: u32) -> N
 	where N: SimpleArithmetic + Clone
