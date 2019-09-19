@@ -528,8 +528,11 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 		let authorities = persistent_data.authority_set.clone();
 		let events = telemetry_on_connect
 			.for_each(move |_| {
-				let maybe_authority_id = authority_id(&authorities.current_authorities(), &conf.keystore)
+				let curr = authorities.current_authorities();
+				let mut auths = curr.voters().into_iter().map(|(p, _)| p);
+				let maybe_authority_id = authority_id(&mut auths, &conf.keystore)
 					.unwrap_or(Default::default());
+
 				telemetry!(CONSENSUS_INFO; "afg.authority_set";
 					"authority_id" => maybe_authority_id.to_string(),
 					"authority_set_id" => ?authorities.set_id(),
@@ -846,16 +849,16 @@ fn is_voter(
 }
 
 /// Returns the authority id of this node, if available.
-fn authority_id(
-	voters: &VoterSet<AuthorityId>,
+fn authority_id<'a, I>(
+	authorities: &mut I,
 	keystore: &Option<KeyStorePtr>,
-) -> Option<AuthorityId> {
+) -> Option<AuthorityId> where
+	I: Iterator<Item = &'a AuthorityId>,
+{
 	match keystore {
 		Some(keystore) => {
-			voters
-				.voters()
-				.iter()
-				.find_map(|(p, _)| {
+			authorities
+				.find_map(|p| {
 					keystore.read().key_pair::<AuthorityPair>(&p)
 						.ok()
 						.map(|ap| ap.public())
