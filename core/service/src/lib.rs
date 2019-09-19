@@ -38,6 +38,7 @@ use parking_lot::Mutex;
 use client::{runtime_api::BlockT, Client};
 use exit_future::Signal;
 use futures::prelude::*;
+use futures03::executor::block_on;
 use futures03::stream::{StreamExt as _, TryStreamExt as _};
 use network::{NetworkService, NetworkState, specialization::NetworkSpecialization, Event, DhtEvent};
 use log::{log, warn, debug, error, Level};
@@ -236,12 +237,13 @@ macro_rules! new_impl {
 					let txpool = txpool.upgrade();
 
 					if let (Some(txpool), Some(client)) = (txpool.as_ref(), wclient.upgrade()) {
-						$maintain_transaction_pool(
+						let future = $maintain_transaction_pool(
 							&BlockId::hash(notification.hash),
-							&*client,
+							&client,
 							&*txpool,
 							&notification.retracted,
 						).map_err(|e| warn!("Pool error processing new block: {:?}", e))?;
+						let _ = to_spawn_tx_.unbounded_send(future);
 					}
 
 					let offchain = offchain.as_ref().and_then(|o| o.upgrade());
@@ -920,7 +922,10 @@ where
 		match Decode::decode(&mut &encoded[..]) {
 			Ok(uxt) => {
 				let best_block_id = BlockId::hash(self.client.info().chain.best_hash);
-				match self.pool.submit_one(&best_block_id, uxt) {
+				let import_future = self.pool.submit_one(&best_block_id, uxt);
+				let import_result = block_on(import_future);
+
+				match import_result {
 					Ok(hash) => Some(hash),
 					Err(e) => match e.into_pool_error() {
 						Ok(txpool::error::Error::AlreadyImported(hash)) => {
@@ -953,6 +958,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use futures03::executor::block_on;
 	use consensus_common::SelectChain;
 	use sr_primitives::traits::BlindCheckable;
 	use substrate_test_runtime_client::{prelude::*, runtime::{Extrinsic, Transfer}};
@@ -964,7 +970,7 @@ mod tests {
 		let client = Arc::new(client);
 		let pool = Arc::new(TransactionPool::new(
 			Default::default(),
-			transaction_pool::ChainApi::new(client.clone())
+			transaction_pool::FullChainApi::new(client.clone())
 		));
 		let best = longest_chain.best_chain().unwrap();
 		let transaction = Transfer {
@@ -973,8 +979,8 @@ mod tests {
 			from: AccountKeyring::Alice.into(),
 			to: Default::default(),
 		}.into_signed_tx();
-		pool.submit_one(&BlockId::hash(best.hash()), transaction.clone()).unwrap();
-		pool.submit_one(&BlockId::hash(best.hash()), Extrinsic::IncludeData(vec![1])).unwrap();
+		block_on(pool.submit_one(&BlockId::hash(best.hash()), transaction.clone())).unwrap();
+		block_on(pool.submit_one(&BlockId::hash(best.hash()), Extrinsic::IncludeData(vec![1]))).unwrap();
 		assert_eq!(pool.status().ready, 2);
 
 		// when

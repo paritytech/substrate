@@ -424,7 +424,7 @@ pub fn sync<G, Fb, F, Lb, L, B, E, U>(
 	let first_user_data = &network.full_nodes[0].2;
 	let best_block = BlockId::number(first_service.get().client().info().chain.best_number);
 	let extrinsic = extrinsic_factory(&first_service.get(), first_user_data);
-	first_service.get().transaction_pool().submit_one(&best_block, extrinsic).unwrap();
+	futures03::executor::block_on(first_service.get().transaction_pool().submit_one(&best_block, extrinsic)).unwrap();
 	network.run_until_all_full(
 		|_index, service| service.get().transaction_pool().ready().count() == 1,
 		|_index, _service| true,

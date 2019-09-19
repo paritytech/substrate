@@ -24,8 +24,13 @@ use client::{
 };
 use codec::{Decode, Encode, IoReader};
 use consensus_common::import_queue::ImportQueue;
-use futures::{prelude::*, sync::mpsc};
-use futures03::{FutureExt as _, compat::Compat, StreamExt as _, TryStreamExt as _};
+use futures::{prelude::*, sync::mpsc, future::{result, Either}};
+use futures03::{
+	compat::Compat,
+	future::ready,
+	FutureExt as _, TryFutureExt as _,
+	StreamExt as _, TryStreamExt as _,
+};
 use keystore::{Store as Keystore, KeyStorePtr};
 use log::{info, warn};
 use network::{FinalityProofProvider, OnDemand, NetworkService, NetworkStateInfo, DhtEvent};
@@ -896,6 +901,7 @@ where
 	let chain = rpc_builder.build_chain(subscriptions.clone());
 	let state = rpc_builder.build_state(subscriptions.clone());
 	let author = rpc::author::Author::new(
+		task_executor.clone(),
 		client,
 		transaction_pool,
 		subscriptions,
@@ -914,39 +920,54 @@ where
 
 pub(crate) fn maintain_transaction_pool<Api, Backend, Block, Executor, PoolApi>(
 	id: &BlockId<Block>,
-	client: &Client<Backend, Executor, Block, Api>,
+	client: &Arc<Client<Backend, Executor, Block, Api>>,
 	transaction_pool: &TransactionPool<PoolApi>,
 	retracted: &[Block::Hash],
-) -> error::Result<()> where
+) -> error::Result<Box<dyn Future<Item = (), Error = ()> + Send>> where
 	Block: BlockT<Hash = <Blake2Hasher as primitives::Hasher>::Out>,
-	Backend: client::backend::Backend<Block, Blake2Hasher>,
+	Backend: 'static + client::backend::Backend<Block, Blake2Hasher>,
 	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi,
 	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api: runtime_api::TaggedTransactionQueue<Block>,
-	Executor: client::CallExecutor<Block, Blake2Hasher>,
-	PoolApi: txpool::ChainApi<Hash = Block::Hash, Block = Block>,
+	Executor: 'static + client::CallExecutor<Block, Blake2Hasher>,
+	PoolApi: 'static + txpool::ChainApi<Hash = Block::Hash, Block = Block>,
+	Api: 'static,
 {
 	// Put transactions from retracted blocks back into the pool.
-	for r in retracted {
-		if let Some(block) = client.block(&BlockId::hash(*r))? {
-			let extrinsics = block.block.extrinsics();
-			if let Err(e) = transaction_pool.submit_at(id, extrinsics.iter().cloned(), true) {
-				warn!("Error re-submitting transactions: {:?}", e);
-			}
+	let client_copy = client.clone();
+	let retracted_transactions = retracted.to_vec().into_iter()
+		.filter_map(move |hash| client_copy.block(&BlockId::hash(hash)).ok().unwrap_or(None))
+		.flat_map(|block| block.block.deconstruct().1.into_iter());
+	let resubmit_future = match transaction_pool.submit_at(id, retracted_transactions, true) {
+		Ok(resubmit_future) => Either::A(resubmit_future
+			.then(|_| ready(Ok(())))
+			.boxed()
+			.compat()
+		),
+		Err(e) => {
+			warn!("Error re-submitting transactions: {:?}", e);
+			Either::B(result(Ok(())))
 		}
-	}
+	};
 
 	// Avoid calling into runtime if there is nothing to prune from the pool anyway.
 	if transaction_pool.status().is_empty() {
-		return Ok(())
+		return Ok(Box::new(resubmit_future))
 	}
 
-	if let Some(block) = client.block(id)? {
-		let parent_id = BlockId::hash(*block.block.header().parent_hash());
-		let extrinsics = block.block.extrinsics();
-		transaction_pool.prune(id, &parent_id, extrinsics).map_err(|e| format!("{:?}", e))?;
-	}
+	let block = client.block(id)?;
+	Ok(match block {
+		Some(block) => {
+			let parent_id = BlockId::hash(*block.block.header().parent_hash());
+			let prune_future = transaction_pool
+				.prune(id, &parent_id, block.block.extrinsics())
+				.boxed()
+				.compat()
+				.map_err(|e| { format!("{:?}", e); });
 
-	Ok(())
+			Box::new(resubmit_future.and_then(|_| prune_future))
+		},
+		None => Box::new(resubmit_future),
+	})
 }
 
 pub(crate) fn offchain_workers<Api, Backend, Block, Executor, PoolApi>(
@@ -978,6 +999,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use futures03::executor::block_on;
 	use consensus_common::{BlockOrigin, SelectChain};
 	use substrate_test_runtime_client::{prelude::*, runtime::Transfer};
 
@@ -985,7 +1007,7 @@ mod tests {
 	fn should_remove_transactions_from_the_pool() {
 		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
 		let client = Arc::new(client);
-		let pool = TransactionPool::new(Default::default(), ::transaction_pool::ChainApi::new(client.clone()));
+		let pool = TransactionPool::new(Default::default(), ::transaction_pool::FullChainApi::new(client.clone()));
 		let transaction = Transfer {
 			amount: 5,
 			nonce: 0,
@@ -995,7 +1017,7 @@ mod tests {
 		let best = longest_chain.best_chain().unwrap();
 
 		// store the transaction in the pool
-		pool.submit_one(&BlockId::hash(best.hash()), transaction.clone()).unwrap();
+		block_on(pool.submit_one(&BlockId::hash(best.hash()), transaction.clone())).unwrap();
 
 		// import the block
 		let mut builder = client.new_block(Default::default()).unwrap();
@@ -1011,7 +1033,7 @@ mod tests {
 			&client,
 			&pool,
 			&[]
-		).unwrap();
+		).unwrap().wait().unwrap();
 
 		// then
 		assert_eq!(pool.status().ready, 0);
@@ -1022,7 +1044,7 @@ mod tests {
 	fn should_add_reverted_transactions_to_the_pool() {
 		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
 		let client = Arc::new(client);
-		let pool = TransactionPool::new(Default::default(), ::transaction_pool::ChainApi::new(client.clone()));
+		let pool = TransactionPool::new(Default::default(), ::transaction_pool::FullChainApi::new(client.clone()));
 		let transaction = Transfer {
 			amount: 5,
 			nonce: 0,
@@ -1032,7 +1054,7 @@ mod tests {
 		let best = longest_chain.best_chain().unwrap();
 
 		// store the transaction in the pool
-		pool.submit_one(&BlockId::hash(best.hash()), transaction.clone()).unwrap();
+		block_on(pool.submit_one(&BlockId::hash(best.hash()), transaction.clone())).unwrap();
 
 		// import the block
 		let mut builder = client.new_block(Default::default()).unwrap();
@@ -1049,7 +1071,7 @@ mod tests {
 			&client,
 			&pool,
 			&[]
-		).unwrap();
+		).unwrap().wait().unwrap();
 
 		// then
 		assert_eq!(pool.status().ready, 0);
@@ -1067,7 +1089,7 @@ mod tests {
 			&client,
 			&pool,
 			&[block1_hash]
-		).unwrap();
+		).unwrap().wait().unwrap();
 
 		// then
 		assert_eq!(pool.status().ready, 1);
