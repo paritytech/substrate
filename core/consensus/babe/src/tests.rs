@@ -37,7 +37,7 @@ use keyring::sr25519::Keyring;
 use client::BlockchainEvents;
 use test_client;
 use log::debug;
-use std::{time::Duration, borrow::Borrow, cell::RefCell};
+use std::{time::Duration, cell::RefCell};
 
 type Item = DigestItem<Hash>;
 
@@ -50,11 +50,20 @@ type TestClient = client::Client<
 	test_client::runtime::RuntimeApi,
 >;
 
+#[derive(Copy, Clone, PartialEq)]
+enum Stage {
+	PreSeal,
+	PostSeal,
+}
+
+type Mutator = Arc<dyn Fn(&mut TestHeader, Stage) + Send + Sync>;
+
 #[derive(Clone)]
 struct DummyFactory {
 	client: Arc<TestClient>,
 	epoch_changes: crate::SharedEpochChanges<TestBlock>,
 	config: Config,
+	mutator: Mutator,
 }
 
 struct DummyProposer {
@@ -135,14 +144,38 @@ impl Proposer<TestBlock> for DummyProposer {
 			block.header.digest_mut().push(digest)
 		}
 
+		// mutate the block header according to the mutator.
+		(self.factory.mutator)(&mut block.header, Stage::PreSeal);
+
 		future::ready(Ok(block))
 	}
 }
 
-type Mutator = Arc<dyn for<'r> Fn(&'r mut TestHeader) + Send + Sync>;
-
 thread_local! {
-	static MUTATOR: RefCell<Mutator> = RefCell::new(Arc::new(|_|()));
+	static MUTATOR: RefCell<Mutator> = RefCell::new(Arc::new(|_, _|()));
+}
+
+#[derive(Clone)]
+struct PanickingBlockImport<B>(B);
+
+impl<B: BlockImport<TestBlock>> BlockImport<TestBlock> for PanickingBlockImport<B> {
+	type Error = B::Error;
+
+	fn import_block(
+		&mut self,
+		block: BlockImportParams<TestBlock>,
+		new_cache: HashMap<CacheKeyId, Vec<u8>>,
+	) -> Result<ImportResult, Self::Error> {
+		Ok(self.0.import_block(block, new_cache).expect("importing block failed"))
+	}
+
+	fn check_block(
+		&mut self,
+		hash: Hash,
+		parent_hash: Hash,
+	) -> Result<ImportResult, Self::Error> {
+		Ok(self.0.check_block(hash, parent_hash).expect("checking block failed"))
+	}
 }
 
 pub struct BabeTestNet {
@@ -174,8 +207,8 @@ impl Verifier<TestBlock> for TestVerifier {
 		justification: Option<Justification>,
 		body: Option<Vec<TestExtrinsic>>,
 	) -> Result<(BlockImportParams<TestBlock>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
-		let cb: &(dyn Fn(&mut TestHeader) + Send + Sync) = self.mutator.borrow();
-		cb(&mut header);
+		// apply post-sealing mutations (i.e. stripping seal, if desired).
+		(self.mutator)(&mut header, Stage::PostSeal);
 		Ok(self.inner.verify(origin, header, justification, body).expect("verification failed!"))
 	}
 }
@@ -219,6 +252,8 @@ impl TestNetFactory for BabeTestNet {
 			client.clone(),
 		).expect("can initialize block-import");
 
+		let block_import = PanickingBlockImport(block_import);
+
 		let data_block_import = Mutex::new(Some(Box::new(block_import.clone()) as BoxBlockImport<_>));
 		(
 			Box::new(block_import),
@@ -229,7 +264,6 @@ impl TestNetFactory for BabeTestNet {
 		)
 	}
 
-	/// KLUDGE: this function gets the mutator from thread-local storage.
 	fn make_verifier(
 		&self,
 		client: PeersClient,
@@ -253,7 +287,7 @@ impl TestNetFactory for BabeTestNet {
 				epoch_changes: data.link.epoch_changes.clone(),
 				time_source: data.link.time_source.clone(),
 			},
-			mutator: MUTATOR.with(|s| s.borrow().clone()),
+			mutator: MUTATOR.with(|m| m.borrow().clone()),
 		}
 	}
 
@@ -288,8 +322,13 @@ fn rejects_empty_block() {
 	})
 }
 
-fn run_one_test() {
+fn run_one_test(
+	mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static,
+) {
 	let _ = env_logger::try_init();
+	let mutator = Arc::new(mutator) as Mutator;
+
+	MUTATOR.with(|m| *m.borrow_mut() = mutator.clone());
 	let net = BabeTestNet::new(3);
 
 	let peers = &[
@@ -302,6 +341,7 @@ fn run_one_test() {
 	let mut import_notifications = Vec::new();
 	let mut runtime = current_thread::Runtime::new().unwrap();
 	let mut keystore_paths = Vec::new();
+
 	for (peer_id, seed) in peers {
 		let mut net = net.lock();
 		let peer = net.peer(*peer_id);
@@ -322,6 +362,7 @@ fn run_one_test() {
 			client: client.clone(),
 			config: data.link.config.clone(),
 			epoch_changes: data.link.epoch_changes.clone(),
+			mutator: mutator.clone(),
 		};
 
 		import_notifications.push(
@@ -367,47 +408,40 @@ fn run_one_test() {
 
 #[test]
 fn authoring_blocks() {
-	MUTATOR.with(|s| *s.borrow_mut() = Arc::new(move |_| ()));
-	run_one_test()
+	run_one_test(|_, _| ())
 }
 
 #[test]
 #[should_panic]
 fn rejects_missing_inherent_digest() {
-	MUTATOR.with(|s| *s.borrow_mut() = Arc::new(move |header: &mut TestHeader| {
+	run_one_test(|header: &mut TestHeader, stage| {
 		let v = std::mem::replace(&mut header.digest_mut().logs, vec![]);
 		header.digest_mut().logs = v.into_iter()
-			.filter(|v| v.as_babe_pre_digest().is_none())
+			.filter(|v| stage == Stage::PostSeal || v.as_babe_pre_digest().is_none())
 			.collect()
-	}));
-	run_one_test()
+	})
 }
 
 #[test]
 #[should_panic]
 fn rejects_missing_seals() {
-	MUTATOR.with(|s| *s.borrow_mut() = Arc::new(move |header: &mut TestHeader| {
+	run_one_test(|header: &mut TestHeader, stage| {
 		let v = std::mem::replace(&mut header.digest_mut().logs, vec![]);
 		header.digest_mut().logs = v.into_iter()
-			.filter(|v| v.as_babe_seal().is_none())
+			.filter(|v| stage == Stage::PreSeal || v.as_babe_seal().is_none())
 			.collect()
-	}));
-	run_one_test()
+	})
 }
 
-// TODO: this test assumes that the test runtime will trigger epoch changes
-// which isn't the case since it doesn't include the session module.
 #[test]
 #[should_panic]
-#[ignore]
 fn rejects_missing_consensus_digests() {
-	MUTATOR.with(|s| *s.borrow_mut() = Arc::new(move |header: &mut TestHeader| {
+	run_one_test(|header: &mut TestHeader, stage| {
 		let v = std::mem::replace(&mut header.digest_mut().logs, vec![]);
 		header.digest_mut().logs = v.into_iter()
-			.filter(|v| v.as_next_epoch_descriptor().is_none())
+			.filter(|v| stage == Stage::PostSeal || v.as_next_epoch_descriptor().is_none())
 			.collect()
-	}));
-	run_one_test()
+	});
 }
 
 #[test]

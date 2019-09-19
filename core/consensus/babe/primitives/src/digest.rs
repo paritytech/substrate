@@ -246,6 +246,10 @@ impl<Hash> CompatibleDigestItem for DigestItem<Hash> where
 
 	fn as_next_epoch_descriptor(&self) -> Option<NextEpochDescriptor> {
 		self.try_to(OpaqueDigestItemId::Consensus(&BABE_ENGINE_ID))
+			.and_then(|x: super::ConsensusLog| match x {
+				super::ConsensusLog::NextEpochData(n) => Some(n),
+				_ => None,
+			})
 	}
 }
 
