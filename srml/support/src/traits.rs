@@ -659,6 +659,16 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 	/// Set the new members; they **must already be sorted**. This will compute the diff and use it to
 	/// call `change_members_sorted`.
 	fn set_members_sorted(new_members: &[AccountId], old_members: &[AccountId]) {
+		let (incoming, outgoing) = Self::compute_members_diff(new_members, old_members);
+		Self::change_members_sorted(&incoming[..], &outgoing[..], &new_members);
+	}
+
+	/// Set the new members; they **must already be sorted**. This will compute the diff and use it to
+	/// call `change_members_sorted`.
+	fn compute_members_diff(
+		new_members: &[AccountId],
+		old_members: &[AccountId]
+	) -> (Vec<AccountId>, Vec<AccountId>) {
 		let mut old_iter = old_members.iter();
 		let mut new_iter = new_members.iter();
 		let mut incoming = Vec::new();
@@ -686,8 +696,7 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 				}
 			}
 		}
-
-		Self::change_members_sorted(&incoming[..], &outgoing[..], &new_members);
+		(incoming, outgoing)
 	}
 }
 

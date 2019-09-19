@@ -1241,7 +1241,7 @@ impl<T: Trait> Module<T> {
 		);
 
 		if let Some(phragmen_result) = maybe_phragmen_result {
-			let elected_stashes = phragmen_result.winners;
+			let elected_stashes = phragmen_result.winners.iter().map(|(s, _)| s.clone()).collect::<Vec<T::AccountId>>();
 			let mut assignments = phragmen_result.assignments;
 
 			// helper closure.
@@ -1284,7 +1284,8 @@ impl<T: Trait> Module<T> {
 				}
 			}
 
-			if cfg!(feature = "equalize") {
+			#[cfg(feature = "equalize")]
+			{
 				let tolerance = 0_u128;
 				let iterations = 2_usize;
 				equalize::<_, _, _, T::CurrencyToVote>(
