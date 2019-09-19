@@ -243,21 +243,13 @@
 
 #![recursion_limit="128"]
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(all(feature = "bench", test), feature(test))]
 
-#[cfg(all(feature = "bench", test))]
-extern crate test;
-
-#[cfg(any(feature = "bench", test))]
+#[cfg(test)]
 mod mock;
-
 #[cfg(test)]
 mod tests;
 
 pub mod inflation;
-
-#[cfg(all(feature = "bench", test))]
-mod benches;
 
 use rstd::{prelude::*, result};
 use codec::{HasCompact, Encode, Decode};
@@ -265,7 +257,7 @@ use support::{
 	StorageValue, StorageMap, StorageLinkedMap, decl_module, decl_event,
 	decl_storage, ensure, traits::{
 		Currency, OnFreeBalanceZero, OnDilution, LockIdentifier, LockableCurrency,
-		WithdrawReasons, WithdrawReason, OnUnbalanced, Imbalance, Get, Time
+		WithdrawReasons, OnUnbalanced, Imbalance, Get, Time
 	}
 };
 use session::{historical::OnSessionEnding, SelectInitialValidators};
@@ -280,7 +272,7 @@ use sr_primitives::{
 };
 use phragmen::{elect, equalize, Support, SupportMap, ExtendedBalance, ACCURACY};
 use sr_staking_primitives::{
-	SessionIndex, CurrentElectedSet,
+	SessionIndex,
 	offence::{OnOffenceHandler, OffenceDetails, Offence, ReportOffence},
 };
 #[cfg(feature = "std")]
@@ -465,7 +457,11 @@ type MomentOf<T>= <<T as Trait>::Time as Time>::Moment;
 /// This is needed because `Staking` sets the `ValidatorIdOf` of the `session::Trait`
 pub trait SessionInterface<AccountId>: system::Trait {
 	/// Disable a given validator by stash ID.
-	fn disable_validator(validator: &AccountId) -> Result<(), ()>;
+	///
+	/// Returns `true` if new era should be forced at the end of this session.
+	/// This allows preventing a situation where there is too many validators
+	/// disabled and block production stalls.
+	fn disable_validator(validator: &AccountId) -> Result<bool, ()>;
 	/// Get the validators from session.
 	fn validators() -> Vec<AccountId>;
 	/// Prune historical session tries up to but not including the given index.
@@ -483,7 +479,7 @@ impl<T: Trait> SessionInterface<<T as system::Trait>::AccountId> for T where
 	T::SelectInitialValidators: session::SelectInitialValidators<<T as system::Trait>::AccountId>,
 	T::ValidatorIdOf: Convert<<T as system::Trait>::AccountId, Option<<T as system::Trait>::AccountId>>
 {
-	fn disable_validator(validator: &<T as system::Trait>::AccountId) -> Result<(), ()> {
+	fn disable_validator(validator: &<T as system::Trait>::AccountId) -> Result<bool, ()> {
 		<session::Module<T>>::disable(validator)
 	}
 
@@ -1027,7 +1023,7 @@ impl<T: Trait> Module<T> {
 			&ledger.stash,
 			ledger.total,
 			T::BlockNumber::max_value(),
-			WithdrawReasons::except(WithdrawReason::TransactionPayment),
+			WithdrawReasons::all(),
 		);
 		<Ledger<T>>::insert(controller, ledger);
 	}
@@ -1256,7 +1252,7 @@ impl<T: Trait> Module<T> {
 		);
 
 		if let Some(phragmen_result) = maybe_phragmen_result {
-			let elected_stashes = phragmen_result.winners;
+			let elected_stashes = phragmen_result.winners.iter().map(|(s, _)| s.clone()).collect::<Vec<T::AccountId>>();
 			let mut assignments = phragmen_result.assignments;
 
 			// helper closure.
@@ -1299,10 +1295,11 @@ impl<T: Trait> Module<T> {
 				}
 			}
 
-			if cfg!(feature = "equalize") {
+			#[cfg(feature = "equalize")]
+			{
 				let tolerance = 0_u128;
 				let iterations = 2_usize;
-				equalize::<_, _, T::CurrencyToVote, _>(
+				equalize::<_, _, _, T::CurrencyToVote>(
 					assignments,
 					&mut supports,
 					tolerance,
@@ -1545,10 +1542,11 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 				continue;
 			}
 
-			// make sure to disable validator in next sessions
-			let _ = T::SessionInterface::disable_validator(stash);
-			// force a new era, to select a new validator set
-			ForceEra::put(Forcing::ForceNew);
+			// make sure to disable validator till the end of this session
+			if T::SessionInterface::disable_validator(stash).unwrap_or(false) {
+				// force a new era, to select a new validator set
+				ForceEra::put(Forcing::ForceNew);
+			}
 			// actually slash the validator
 			let slashed_amount = Self::slash_validator(stash, amount, exposure, &mut journal);
 
@@ -1599,14 +1597,5 @@ impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
 				RawEvent::OldSlashingReportDiscarded(offence_session)
 			)
 		}
-	}
-}
-
-/// Returns the currently elected validator set represented by their stash accounts.
-pub struct CurrentElectedStashAccounts<T>(rstd::marker::PhantomData<T>);
-
-impl<T: Trait> CurrentElectedSet<T::AccountId> for CurrentElectedStashAccounts<T> {
-	fn current_elected_set() -> Vec<T::AccountId> {
-		<Module<T>>::current_elected()
 	}
 }

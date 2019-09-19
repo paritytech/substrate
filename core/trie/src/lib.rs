@@ -33,14 +33,14 @@ pub use trie_stream::TrieStream;
 /// The Substrate format implementation of `NodeCodec`.
 pub use node_codec::NodeCodec;
 /// Various re-exports from the `trie-db` crate.
-pub use trie_db::{Trie, TrieMut, DBValue, Recorder, CError,
-	Query, TrieLayout, TrieConfiguration, nibble_ops};
+pub use trie_db::{
+	Trie, TrieMut, DBValue, Recorder, CError, Query, TrieLayout, TrieConfiguration, nibble_ops,
+};
 /// Various re-exports from the `memory-db` crate.
 pub use memory_db::KeyFunction;
 pub use memory_db::prefixed_key;
 /// Various re-exports from the `hash-db` crate.
 pub use hash_db::{HashDB as HashDBT, EMPTY_PREFIX};
-
 
 #[derive(Default)]
 /// substrate trie layout

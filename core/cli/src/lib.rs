@@ -77,7 +77,7 @@ const NODE_KEY_ED25519_FILE: &str = "secret_ed25519";
 
 /// Executable version. Used to pass version information from the root crate.
 pub struct VersionInfo {
-	/// Implemtation name.
+	/// Implementaiton name.
 	pub name: &'static str,
 	/// Implementation version.
 	pub version: &'static str,
@@ -191,12 +191,12 @@ where
 	I: IntoIterator,
 	<I as IntoIterator>::Item: Into<std::ffi::OsString> + Clone,
 {
-	panic_handler::set(version.support_url);
-
 	let full_version = service::config::full_version_from_strs(
 		version.version,
 		version.commit
 	);
+
+	panic_handler::set(version.support_url, &full_version);
 
 	let matches = CoreParams::<CC, RP>::clap()
 		.name(version.executable_name)

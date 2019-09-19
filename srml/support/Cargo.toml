@@ -17,7 +17,7 @@ srml-support-procedural = { package = "srml-support-procedural", path = "./proce
 paste = "0.1"
 once_cell = { version = "0.1.6", default-features = false, optional = true }
 bitmask = { version = "0.5", default-features = false }
-impl-trait-for-tuples = "0.1"
+impl-trait-for-tuples = "0.1.1"
 
 [dev-dependencies]
 pretty_assertions = "0.6.1"

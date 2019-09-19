@@ -425,7 +425,7 @@ fn instantiate_and_call_and_deposit_event() {
 			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
 
 			// Check at the end to get hash on error easily
-			let creation = Contract::create(
+			let creation = Contract::instantiate(
 				Origin::signed(ALICE),
 				100,
 				100_000,
@@ -522,7 +522,7 @@ fn dispatch_call() {
 				},
 			]);
 
-			assert_ok!(Contract::create(
+			assert_ok!(Contract::instantiate(
 				Origin::signed(ALICE),
 				100,
 				100_000,
@@ -643,7 +643,7 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 				},
 			]);
 
-			assert_ok!(Contract::create(
+			assert_ok!(Contract::instantiate(
 				Origin::signed(ALICE),
 				100,
 				100_000,
@@ -859,7 +859,7 @@ fn storage_size() {
 			// Create
 			Balances::deposit_creating(&ALICE, 1_000_000);
 			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
-			assert_ok!(Contract::create(
+			assert_ok!(Contract::instantiate(
 				Origin::signed(ALICE),
 				30_000,
 				100_000, code_hash.into(),
@@ -889,7 +889,7 @@ fn deduct_blocks() {
 			// Create
 			Balances::deposit_creating(&ALICE, 1_000_000);
 			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
-			assert_ok!(Contract::create(
+			assert_ok!(Contract::instantiate(
 				Origin::signed(ALICE),
 				30_000,
 				100_000, code_hash.into(),
@@ -986,7 +986,7 @@ fn claim_surcharge(blocks: u64, trigger_call: impl Fn() -> bool, removes: bool) 
 			// Create
 			Balances::deposit_creating(&ALICE, 1_000_000);
 			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
-			assert_ok!(Contract::create(
+			assert_ok!(Contract::instantiate(
 				Origin::signed(ALICE),
 				100,
 				100_000, code_hash.into(),
@@ -1022,7 +1022,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			// Create
 			Balances::deposit_creating(&ALICE, 1_000_000);
 			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm.clone()));
-			assert_ok!(Contract::create(
+			assert_ok!(Contract::instantiate(
 				Origin::signed(ALICE),
 				100,
 				100_000, code_hash.into(),
@@ -1061,7 +1061,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			// Create
 			Balances::deposit_creating(&ALICE, 1_000_000);
 			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm.clone()));
-			assert_ok!(Contract::create(
+			assert_ok!(Contract::instantiate(
 				Origin::signed(ALICE),
 				1_000,
 				100_000, code_hash.into(),
@@ -1099,7 +1099,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			// Create
 			Balances::deposit_creating(&ALICE, 1_000_000);
 			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm.clone()));
-			assert_ok!(Contract::create(
+			assert_ok!(Contract::instantiate(
 				Origin::signed(ALICE),
 				50+Balances::minimum_balance(),
 				100_000, code_hash.into(),
@@ -1146,7 +1146,7 @@ fn call_removed_contract() {
 			// Create
 			Balances::deposit_creating(&ALICE, 1_000_000);
 			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm.clone()));
-			assert_ok!(Contract::create(
+			assert_ok!(Contract::instantiate(
 				Origin::signed(ALICE),
 				100,
 				100_000, code_hash.into(),
@@ -1234,7 +1234,7 @@ fn default_rent_allowance_on_create() {
 			// Create
 			Balances::deposit_creating(&ALICE, 1_000_000);
 			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
-			assert_ok!(Contract::create(
+			assert_ok!(Contract::instantiate(
 				Origin::signed(ALICE),
 				30_000,
 				100_000,
@@ -1374,7 +1374,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 
 			// Create an account with address `BOB` with code `CODE_SET_RENT`.
 			// The input parameter sets the rent allowance to 0.
-			assert_ok!(Contract::create(
+			assert_ok!(Contract::instantiate(
 				Origin::signed(ALICE),
 				30_000,
 				100_000,
@@ -1411,7 +1411,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 			/// Note that we can't use `ALICE` for creating `DJANGO` so we create yet another
 			/// account `CHARLIE` and create `DJANGO` with it.
 			Balances::deposit_creating(&CHARLIE, 1_000_000);
-			assert_ok!(Contract::create(
+			assert_ok!(Contract::instantiate(
 				Origin::signed(CHARLIE),
 				30_000,
 				100_000,
@@ -1537,7 +1537,7 @@ fn storage_max_value_limit() {
 			// Create
 			Balances::deposit_creating(&ALICE, 1_000_000);
 			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
-			assert_ok!(Contract::create(
+			assert_ok!(Contract::instantiate(
 				Origin::signed(ALICE),
 				30_000,
 				100_000,
@@ -1906,7 +1906,7 @@ fn deploy_and_call_other_contract() {
 			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, callee_wasm));
 			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, caller_wasm));
 
-			assert_ok!(Contract::create(
+			assert_ok!(Contract::instantiate(
 				Origin::signed(ALICE),
 				100_000,
 				100_000,
@@ -2036,7 +2036,7 @@ fn self_destruct_by_draining_balance() {
 			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
 
 			// Instantiate the BOB contract.
-			assert_ok!(Contract::create(
+			assert_ok!(Contract::instantiate(
 				Origin::signed(ALICE),
 				100_000,
 				100_000,
@@ -2075,7 +2075,7 @@ fn cannot_self_destruct_while_live() {
 			assert_ok!(Contract::put_code(Origin::signed(ALICE), 100_000, wasm));
 
 			// Instantiate the BOB contract.
-			assert_ok!(Contract::create(
+			assert_ok!(Contract::instantiate(
 				Origin::signed(ALICE),
 				100_000,
 				100_000,
@@ -2280,7 +2280,7 @@ fn destroy_contract_and_transfer_funds() {
 
 			// This deploys the BOB contract, which in turn deploys the CHARLIE contract during
 			// construction.
-			assert_ok!(Contract::create(
+			assert_ok!(Contract::instantiate(
 				Origin::signed(ALICE),
 				200_000,
 				100_000,
@@ -2378,7 +2378,7 @@ fn cannot_self_destruct_in_constructor() {
 			// Fail to instantiate the BOB contract since its final balance is below existential
 			// deposit.
 			assert_err!(
-				Contract::create(
+				Contract::instantiate(
 					Origin::signed(ALICE),
 					100_000,
 					100_000,

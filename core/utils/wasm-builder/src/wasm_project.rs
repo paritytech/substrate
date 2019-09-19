@@ -88,7 +88,7 @@ pub fn create_and_compile(
 	let _lock = WorkspaceLock::new(&wasm_workspace_root);
 
 	let project = create_project(cargo_manifest, &wasm_workspace);
-	create_wasm_workspace_project(&wasm_workspace);
+	create_wasm_workspace_project(&wasm_workspace, cargo_manifest);
 
 	build_project(&project, default_rustflags);
 	let (wasm_binary, bloaty) = compact_wasm_file(
@@ -172,7 +172,7 @@ fn get_wasm_workspace_root() -> PathBuf {
 	panic!("Could not find target dir in: {}", build_helper::out_dir().display())
 }
 
-fn create_wasm_workspace_project(wasm_workspace: &Path) {
+fn create_wasm_workspace_project(wasm_workspace: &Path, cargo_manifest: &Path) {
 	let members = WalkDir::new(wasm_workspace)
 		.min_depth(1)
 		.max_depth(1)
@@ -181,25 +181,66 @@ fn create_wasm_workspace_project(wasm_workspace: &Path) {
 		.map(|d| d.into_path())
 		.filter(|p| p.is_dir() && !p.ends_with("target"))
 		.filter_map(|p| p.file_name().map(|f| f.to_owned()).and_then(|s| s.into_string().ok()))
-		.map(|s| format!("\"{}\", ", s))
-		.collect::<String>();
+		.collect::<Vec<_>>();
+
+	let crate_metadata = MetadataCommand::new()
+		.manifest_path(cargo_manifest)
+		.exec()
+		.expect("`cargo metadata` can not fail on project `Cargo.toml`; qed");
+	let workspace_root_path = crate_metadata.workspace_root;
+
+	let mut workspace_toml: Table = toml::from_str(
+		&fs::read_to_string(
+			workspace_root_path.join("Cargo.toml"),
+		).expect("Workspace root `Cargo.toml` exists; qed")
+	).expect("Workspace root `Cargo.toml` is a valid toml file; qed");
+
+	let mut wasm_workspace_toml = Table::new();
+
+	// Add `profile` with release and dev
+	let mut release_profile = Table::new();
+	release_profile.insert("panic".into(), "abort".into());
+	release_profile.insert("lto".into(), true.into());
+
+	let mut dev_profile = Table::new();
+	dev_profile.insert("panic".into(), "abort".into());
+
+	let mut profile = Table::new();
+	profile.insert("release".into(), release_profile.into());
+	profile.insert("dev".into(), dev_profile.into());
+
+	wasm_workspace_toml.insert("profile".into(), profile.into());
+
+	// Add `workspace` with members
+	let mut workspace = Table::new();
+	workspace.insert("members".into(), members.into());
+
+	wasm_workspace_toml.insert("workspace".into(), workspace.into());
+
+	// Add patch section from the project root `Cargo.toml`
+	if let Some(mut patch) = workspace_toml.remove("patch").and_then(|p| p.try_into::<Table>().ok()) {
+		// Iterate over all patches and make the patch path absolute from the workspace root path.
+		patch.iter_mut()
+			.filter_map(|p|
+				p.1.as_table_mut().map(|t| t.iter_mut().filter_map(|t| t.1.as_table_mut()))
+			)
+			.flatten()
+			.for_each(|p|
+				p.iter_mut()
+					.filter(|(k, _)| k == &"path")
+					.for_each(|(_, v)| {
+						if let Some(path) = v.as_str() {
+							*v = workspace_root_path.join(path).display().to_string().into();
+						}
+					})
+			);
+
+		wasm_workspace_toml.insert("patch".into(), patch.into());
+	}
 
 	fs::write(
 		wasm_workspace.join("Cargo.toml"),
-		format!(
-			r#"
-				[profile.release]
-				panic = "abort"
-				lto = true
-
-				[profile.dev]
-				panic = "abort"
-
-				[workspace]
-				members = [ {members} ]
-			"#,
-			members = members,
-		)
+		toml::to_string_pretty(&wasm_workspace_toml).expect("Wasm workspace toml is valid; qed"),
 	).expect("WASM workspace `Cargo.toml` writing can not fail; qed");
 }
 
@@ -229,7 +270,7 @@ fn create_project(cargo_manifest: &Path, wasm_workspace: &Path) -> PathBuf {
 				crate-type = ["cdylib"]
 
 				[dependencies]
-				wasm_project = {{ package = "{crate_name}", path = "{crate_path}", default-features = false, features = [ "no_std" ] }}
+				wasm_project = {{ package = "{crate_name}", path = "{crate_path}", default-features = false }}
 			"#,
 			crate_name = crate_name,
 			crate_path = crate_path.display(),

@@ -151,6 +151,7 @@ parameter_types! {
 	pub const Period: BlockNumber = 1;
 	pub const Offset: BlockNumber = 0;
 	pub const UncleGenerations: u64 = 0;
+	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
 }
 impl session::Trait for Test {
 	type OnSessionEnding = session::historical::NoteHistoricalRoot<Test, Staking>;
@@ -161,6 +162,7 @@ impl session::Trait for Test {
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = crate::StashOf<Test>;
 	type SelectInitialValidators = Staking;
+	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 }
 
 impl session::historical::Trait for Test {

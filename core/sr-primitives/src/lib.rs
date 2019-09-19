@@ -57,7 +57,7 @@ pub use generic::{DigestItem, Digest};
 
 /// Re-export this since it's part of the API of this crate.
 pub use primitives::crypto::{key_types, KeyTypeId, CryptoType};
-pub use app_crypto::AppKey;
+pub use app_crypto::RuntimeAppPublic;
 
 /// Justification type.
 pub type Justification = Vec<u8>;
@@ -700,7 +700,7 @@ impl DispatchError {
 	}
 }
 
-impl runtime_io::Printable for DispatchError {
+impl traits::Printable for DispatchError {
 	fn print(&self) {
 		"DispatchError".print();
 		if let Some(module) = self.module {
@@ -894,6 +894,11 @@ impl<'a> ::serde::Deserialize<'a> for OpaqueExtrinsic {
 impl traits::Extrinsic for OpaqueExtrinsic {
 	type Call = ();
 	type SignaturePayload = ();
+}
+
+/// Print something that implements `Printable` from the runtime.
+pub fn print(print: impl traits::Printable) {
+	print.print();
 }
 
 #[cfg(test)]
