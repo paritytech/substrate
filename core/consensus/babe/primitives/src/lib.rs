@@ -105,6 +105,12 @@ impl Epoch {
 			randomness: descriptor.randomness,
 		}
 	}
+
+	/// Produce the "end slot" of the epoch. This is NOT inclusive to the epoch,
+	// i.e. the slots covered by the epoch are `self.start_slot .. self.end_slot()`.
+	pub fn end_slot(&self) -> SlotNumber {
+		self.start_slot + self.duration
+	}
 }
 
 /// An consensus log item for BABE.
