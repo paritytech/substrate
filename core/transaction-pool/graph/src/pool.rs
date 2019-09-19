@@ -146,7 +146,7 @@ impl<B: ChainApi> Pool<B> {
 		at: &BlockId<B::Block>,
 		xt: ExtrinsicFor<B>,
 	) -> impl Future<Output=Result<ExHash<B>, B::Error>> {
-		match self.submit_at(at, ::std::iter::once(xt), false) {
+		match self.submit_at(at, std::iter::once(xt), false) {
 			Ok(import_future) => Either::Left(import_future
 				.map(|mut import_result| import_result
 					.pop()
