@@ -688,78 +688,82 @@ pub mod helpers_128bit {
 	use super::Perquintill;
 	use crate::traits::Zero;
 
-	/// return the number of bits that are needed to store `n`.
-	pub(crate) fn bits_of(n: u128) -> u32 {
-		128 - n.leading_zeros()
-	}
+	const ERROR: &'static str = "can not accurately multiply by rational in this type";
 
-	/// Tries to compute `a * b / c`. The approach is:
+	/// Safely and accurately compute `a * b / c`. The approach is:
 	///   - Simply try `a * b / c`.
-	///   - Else: Swap the operations (divide first) if `a > c` (division is possible) and `b <= c`
+	///   - Else, swap the operations (divide first) if `a > c` (division is possible) and `b <= c`
 	///     (overflow cannot happen)
-	///   - Else: Try and compute a perquintillion from `b / c` if `b <= c`.
-	///   - Else: return `Err`.
+	///   - At any point, given an overflow or accuracy loss, return an Error.
 	///
-	/// If none worked then return Error.
-	///
-	/// c must be greater than or equal to 1.
+	/// Invariant: c must be greater than or equal to 1.
+	/// This might not return Ok even if `b < c`.
 	pub fn multiply_by_rational(a: u128, b: u128, c: u128) -> Result<u128, &'static str> {
-		if a.is_zero() { return Ok(Zero::zero()); }
+		if a.is_zero() || b.is_zero() { return Ok(Zero::zero()); }
 		let c = c.max(1);
 
 		if let Some(x) = a.checked_mul(b) {
 			// This is the safest way to go. Try it.
 			Ok(x / c)
-		} else if a > c && b <= c {
-			// if it can be safely swapped and it is a fraction, then swap. The operations in this
-			// block cannot overflow since b <= c.
+		} else if a > c {
+			// if it can be safely swapped and it is a fraction, then swap.
 			let q = a / c;
 			let r = a % c;
-			let r_additional = multiply_by_rational_greedy(r, b, c);
-			Ok((q * b).saturating_add(r_additional))
-		} else if b <= c {
-			// If it will overflow because b <= c but both b and c are in ridiculously large scales,
-			// then try and collapse them down to quintillion. This is one step of the greedy
-			// method, which keeps reducing the accuracy until they fit.
-			let per_thing = Perquintill::from_rational_approximation(b, c);
-			Ok(per_thing * a)
+			let r_additional = multiply_by_rational(r, b, c)?;
+
+			let q_part = q.checked_mul(b)
+				.ok_or(ERROR)?;
+			let result = q_part.checked_add(r_additional)
+				.ok_or(ERROR)?;
+			Ok(result)
 		} else {
-			Err("can not multiply by rational in this type")
+			Err(ERROR)
 		}
 	}
 
-	/// Performs [`multiply_by_rational`]. In case of failure, it greedily tries to shift the
-	/// numerator (`b`) and denominator (`c`) (looking at the whole thing is `a * b / c`) until the
-	/// multiplication fits. This is guaranteed to work if `b < c`.
+	/// Performs [`multiply_by_rational`]. In case of failure, if `b < c` it tries to approximate
+	/// the ratio into a perquintillion and return a lossy result. Otherwise, a best effort approach
+	/// if shifting both b and c is performed until multiply_by_rational can work.
 	///
 	/// In case `b > c` and overflow happens, `a` is returned.
 	///
 	/// c must be greater than or equal to 1.
-	pub fn multiply_by_rational_greedy(a: u128, b: u128, c: u128) -> u128 {
-		if a.is_zero() { return Zero::zero(); }
+	pub fn multiply_by_rational_best_effort(a: u128, b: u128, c: u128) -> u128 {
+		if a.is_zero() || b.is_zero() { return Zero::zero(); }
 		let c = c.max(1);
 
-		// safe to start with 1. 0 already failed.
+		// unwrap the loop once. This favours performance over readability.
 		multiply_by_rational(a, b, c).unwrap_or_else(|_| {
-			// we assume the best case (to prevent accuracy loss). Both a and b are the smallest
-			// numbers in their bit range. in this case their multiplication can take at least `a +
-			// b - 1` bits. Hence, we can always start with this amount of shift.
-			let bits_needed = bits_of(a) + bits_of(b) - 1;
+			if b <= c {
+				let per_thing = Perquintill::from_rational_approximation(b, c);
+				per_thing * a
+			} else {
+				let mut shift = 1;
+				let mut shifted_b = b.checked_shr(shift).unwrap_or(0);
+				let mut shifted_c = c.checked_shr(shift).unwrap_or(0);
 
-			// unwrapping is defensive-only. if `multiply_by_rational` fails, then `bits_needed`
-			// should exceed 128.
-			let mut shift = bits_needed.checked_sub(128).unwrap_or(1);
-			loop {
-				if let Some(shifted_b) = b.checked_shr(shift) {
-					if let Some(val) = a.checked_mul(shifted_b) {
-						let shifted_c = c.checked_shr(shift).unwrap_or(c);
-						break val / shifted_c.max(1);
+				loop {
+					if shifted_b.is_zero() || shifted_c.is_zero() {
+						break a
 					}
-					shift += 1;
-				} else {
-					// defensive only. Before reaching here, shifted_b must have been 1, in which
-					// case multiplying it with a should have NOT overflowed.
-					break 0;
+					match multiply_by_rational(a, shifted_b, shifted_c) {
+						Ok(r) => break r,
+						Err(_) => {
+							shift = shift + 1;
+							// by the time we reach here, b >= 1 && c >= 1. Before panic, they have
+							// to be zero which is prevented to happen by the break.
+							shifted_b = b.checked_shr(shift)
+								.expect(
+									"b >= 1 && c >= 1; break prevents them from ever being zero; \
+									panic can only happen after either us zero; qed"
+								);
+							shifted_c = c.checked_shr(shift)
+								.expect(
+									"b >= 1 && c >= 1; break prevents them from ever being zero; \
+									panic can only happen after either us zero; qed"
+								);
+						}
+					}
 				}
 			}
 		})
@@ -892,10 +896,7 @@ mod test_rational128 {
 	use super::*;
 	use super::helpers_128bit::*;
 	use crate::assert_eq_error_rate;
-	use rand::{
-		Rng,
-		distributions::uniform::SampleUniform,
-	};
+	use rand::Rng;
 
 	const MAX128: u128 = u128::max_value();
 	const MAX64: u128 = u64::max_value() as u128;
@@ -974,7 +975,7 @@ mod test_rational128 {
 		// large numbers
 		assert_eq!(
 			r(1_000_000_000, MAX128).lcm(&r(7_000_000_000, MAX128-1)),
-			Err("can not multiply by rational in this type"),
+			Err("can not accurately multiply by rational in this type"),
 		);
 		assert_eq!(
 			r(1_000_000_000, MAX64).lcm(&r(7_000_000_000, MAX64-1)),
@@ -993,7 +994,7 @@ mod test_rational128 {
 		// errors
 		assert_eq!(
 			r(1, MAX128).checked_add(r(1, MAX128-1)),
-			Err("can not multiply by rational in this type"),
+			Err("can not accurately multiply by rational in this type"),
 		);
 		assert_eq!(
 			r(7, MAX128).checked_add(r(MAX128, MAX128)),
@@ -1014,7 +1015,7 @@ mod test_rational128 {
 		// errors
 		assert_eq!(
 			r(2, MAX128).checked_sub(r(1, MAX128-1)),
-			Err("can not multiply by rational in this type"),
+			Err("can not accurately multiply by rational in this type"),
 		);
 		assert_eq!(
 			r(7, MAX128).checked_sub(r(MAX128, MAX128)),
@@ -1038,22 +1039,6 @@ mod test_rational128 {
 		assert!(r(1, 2) == r(1, 2));
 
 		assert!(r(1, 1490000000000200000) > r(1, 1490000000000200001));
-	}
-
-	#[test]
-	fn bits_of_works() {
-		assert_eq!(bits_of(0), 0);
-		assert_eq!(bits_of(1), 1);
-		assert_eq!(bits_of(2), 2);
-		assert_eq!(bits_of(3), 2);
-
-		assert_eq!(bits_of(15), 4);
-		assert_eq!(bits_of(16), 5);
-
-		assert_eq!(bits_of(MAX64), 64);
-		assert_eq!(bits_of(MAX64 - 1), 64);
-		assert_eq!(bits_of(MAX64 / 2), 63);
-		assert_eq!(bits_of(MAX64 + 1), 65);
 	}
 
 	#[test]
@@ -1083,6 +1068,7 @@ mod test_rational128 {
 			multiply_by_rational(MAX128, 555, 1000).unwrap(),
 			(MAX128 / 1000 * 555) + (455 * 555 / 1000),
 		);
+
 		assert_eq!(
 			multiply_by_rational(2 * MAX64 - 1, MAX64, MAX64).unwrap(),
 			2 * MAX64 - 1,
@@ -1092,93 +1078,81 @@ mod test_rational128 {
 			2 * MAX64 - 3,
 		);
 
-		// computed with swapping but swap itself will fallback into greedy to get the remainder
-		assert_eq_error_rate!(
-			multiply_by_rational(2u128.pow(66) - 1, 2u128.pow(65) - 1, 2u128.pow(65)).unwrap(),
-			mul_div(2u128.pow(66) - 1, 2u128.pow(65) - 1, 2u128.pow(65)),
-			1,
-		);
 
-		// these are calculated with perquintillion. The cannot be swapped.
 		assert_eq!(
-			// MAX128 % 1000 == 455
-			multiply_by_rational(1_000_000_000, MAX128 / 8, MAX128 / 2).unwrap(),
-			1_000_000_000 / 4,
-		);
-
-		// interesting edge cases.
-		assert_eq!(
-			multiply_by_rational(MAX128, MAX128 - 1, MAX128).unwrap(),
-			MAX128,
+			multiply_by_rational(MAX64 + 100, MAX64_2, MAX64_2 / 2).unwrap(),
+			(MAX64 + 100) * 2,
 		);
 		assert_eq!(
-			multiply_by_rational(MAX64, MAX128 / 2, MAX128).unwrap(),
-			MAX64 / 2,
+			multiply_by_rational(MAX64 + 100, MAX64_2 / 100, MAX64_2 / 200).unwrap(),
+			(MAX64 + 100) * 2,
 		);
 
 		// fails to compute. have to use the greedy, lossy version here
-		assert_eq!(
-			multiply_by_rational(MAX64 + 100, MAX64_2, MAX64_2 / 2),
-			Err("can not multiply by rational in this type"),
-		);
-		assert_eq!(
-			multiply_by_rational(MAX64 + 100, MAX64_2 * 100, MAX64_2 * 100 / 2),
-			Err("can not multiply by rational in this type"),
-		);
+		assert!(multiply_by_rational(2u128.pow(66) - 1, 2u128.pow(65) - 1, 2u128.pow(65)).is_err());
+		assert!(multiply_by_rational(1_000_000_000, MAX128 / 8, MAX128 / 2).is_err());
 	}
 
 	#[test]
-	fn multiply_by_rational_greedy_works() {
-		// with some error
+	fn multiply_by_rational_best_effort_works() {
 		assert_eq_error_rate!(
-			multiply_by_rational_greedy(MAX64 + 100, MAX64_2, MAX64_2 / 2),
+			multiply_by_rational_best_effort(MAX64 + 100, MAX64_2, MAX64_2 / 2),
 			(MAX64 + 100) * 2,
-			5,
+			10,
 		);
-		// with some error
 		assert_eq_error_rate!(
-			multiply_by_rational_greedy(MAX64 + 100, MAX64_2 * 100, MAX64_2 * 100 / 2),
+			multiply_by_rational_best_effort(MAX64 + 100, MAX64_2 * 100, MAX64_2 * 100 / 2),
 			(MAX64 + 100) * 2,
-			5,
+			10,
+		);
+		assert_eq_error_rate!(
+			multiply_by_rational_best_effort(2u128.pow(66) - 1, 2u128.pow(65) - 1, 2u128.pow(65)),
+			mul_div(2u128.pow(66) - 1, 2u128.pow(65) - 1, 2u128.pow(65)),
+			10,
+		);
+		assert_eq_error_rate!(
+			multiply_by_rational_best_effort(1_000_000_000, MAX128 / 8, MAX128 / 2),
+			1_000_000_000 / 4,
+			10,
+		);
+
+		assert_eq!(
+			multiply_by_rational_best_effort(MAX128, MAX128 - 1, MAX128),
+			MAX128,
+		);
+
+		assert_eq!(
+			multiply_by_rational_best_effort(MAX64, MAX128 / 2, MAX128),
+			MAX64 / 2,
 		);
 	}
 
-	#[test]
-	fn fuzz_multiply_by_rational_u32() {
-		fuzz_multiply_by_rational::<u32>(1_000_000, 0, true);
-	}
-
-	#[test]
-	fn fuzz_multiply_by_rational_u64() {
-		fuzz_multiply_by_rational::<u64>(1_000_000, 0, true);
-	}
-
-	#[test]
-	fn fuzz_multiply_by_rational_u128() {
-		fuzz_multiply_by_rational::<u128>(1_000_000, 0, false);
-	}
-
-	fn fuzz_multiply_by_rational<T>(
+	fn do_fuzz_multiply_by_rational<F>(
 		iters: usize,
+		bits: u32,
 		maximum_error: u128,
 		do_print: bool,
-	)
-		where T: std::fmt::Display + Bounded + Zero + SampleUniform + Into<u128> + Copy
-	{
+		bounded: bool,
+		mul_fn: F,
+	) where F: Fn(u128, u128, u128) -> u128 {
 		let mut rng = rand::thread_rng();
 		let mut average_diff = 0.0;
+		let upper_bound = 2u128.pow(bits);
 
 		for _ in 0..iters {
-			let a = rng.gen_range::<T, T, T>(Zero::zero(), Bounded::max_value());
-			let c = rng.gen_range::<T, T, T>(Zero::zero(), Bounded::max_value());
-			let b = rng.gen_range::<T, T, T>(Zero::zero(), c);
+			let a = rng.gen_range(0u128, upper_bound);
+			let c = rng.gen_range(0u128, upper_bound);
+			let b = rng.gen_range(
+				0u128,
+				if bounded { c } else { upper_bound }
+			);
 
 			let a: u128 = a.into();
 			let b: u128 = b.into();
 			let c: u128 = c.into();
 
 			let truth = mul_div(a, b, c);
-			let result = multiply_by_rational_greedy(a, b, c);
+			let result = mul_fn(a, b, c);
 			let diff = truth.max(result) - truth.min(result);
 			let loss_ratio = diff as f64 / truth as f64;
 			average_diff += loss_ratio;
@@ -1187,9 +1161,9 @@ mod test_rational128 {
 				println!("++ Computed with more loss than expected: {} * {} / {}", a, b, c);
 				println!("++ Expected {}", truth);
 				println!("+++++++ Got {}", result);
-
 			}
 		}
+
 		// print report
 		println!(
 			"## Fuzzed with {} numbers. Average error was {}",
@@ -1198,6 +1172,81 @@ mod test_rational128 {
 		);
 	}
 
+	#[test]
+	fn fuzz_multiply_by_rational_best_effort_32() {
+		let f = |a, b, c| multiply_by_rational_best_effort(a, b, c);
+		println!("\nInvariant: b < c");
+		do_fuzz_multiply_by_rational(1_000_000, 32, 0, false, true, f);
+		println!("every possibility");
+		do_fuzz_multiply_by_rational(1_000_000, 32, 0, false, false, f);
+	}
+
+	#[test]
+	fn fuzz_multiply_by_rational_best_effort_64() {
+		let f = |a, b, c| multiply_by_rational_best_effort(a, b, c);
+		println!("\nInvariant: b < c");
+		do_fuzz_multiply_by_rational(1_000_000, 64, 0, false, true, f);
+		println!("every possibility");
+		do_fuzz_multiply_by_rational(1_000_000, 64, 0, false, false, f);
+	}
+
+	#[test]
+	fn fuzz_multiply_by_rational_best_effort_96() {
+		let f = |a, b, c| multiply_by_rational_best_effort(a, b, c);
+		// println!("\nInvariant: b < c");
+		// do_fuzz_multiply_by_rational(1_000_000, 96, 0, false, true, f);
+		println!("every possibility");
+		// do_fuzz_multiply_by_rational(1_000_000, 96, 0, false, false, f);
+		do_fuzz_multiply_by_rational(10, 96, 0, true, false, f);
+	}
+
+	#[test]
+	fn fuzz_multiply_by_rational_best_effort_128() {
+		let f = |a, b, c| multiply_by_rational_best_effort(a, b, c);
+		println!("\nInvariant: b < c");
+		do_fuzz_multiply_by_rational(1_000_000, 127, 0, false, true, f);
+		println!("every possibility");
+		do_fuzz_multiply_by_rational(1_000_000, 127, 0, false, false, f);
+	}
+
+	#[test]
+	fn fuzz_multiply_by_rational_32() {
+		// if Err just return the truth value. We don't care about such cases. The point of this
+		// fuzzing is to make sure: if `multiply_by_rational` returns `Ok`, it must be 100% accurate
+		// returning `Err` is fine.
+		let f = |a, b, c| multiply_by_rational(a, b, c).unwrap_or(mul_div(a, b, c));
+		println!("\nInvariant: b < c");
+		do_fuzz_multiply_by_rational(1_000_000, 32, 0, false, true, f);
+		println!("every possibility");
+		do_fuzz_multiply_by_rational(1_000_000, 32, 0, false, false, f);
+	}
+
+	#[test]
+	fn fuzz_multiply_by_rational_64() {
+		let f = |a, b, c| multiply_by_rational(a, b, c).unwrap_or(mul_div(a, b, c));
+		println!("\nInvariant: b < c");
+		do_fuzz_multiply_by_rational(1_000_000, 64, 0, false, true, f);
+		println!("every possibility");
+		do_fuzz_multiply_by_rational(1_000_000, 64, 0, false, false, f);
+	}
+
+	#[test]
+	fn fuzz_multiply_by_rational_96() {
+		let f = |a, b, c| multiply_by_rational(a, b, c).unwrap_or(mul_div(a, b, c));
+		println!("\nInvariant: b < c");
+		do_fuzz_multiply_by_rational(1_000_000, 96, 0, false, true, f);
+		println!("every possibility");
+		do_fuzz_multiply_by_rational(1_000_000, 96, 0, false, false, f);
+	}
+
+	#[test]
+	fn fuzz_multiply_by_rational_128() {
+		let f = |a, b, c| multiply_by_rational(a, b, c).unwrap_or(mul_div(a, b, c));
+		println!("\nInvariant: b < c");
+		do_fuzz_multiply_by_rational(1_000_000, 127, 0, false, true, f);
+		println!("every possibility");
+		do_fuzz_multiply_by_rational(1_000_000, 127, 0, false, false, f);
+	}
 }
 
 

@@ -34,7 +34,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::{prelude::*, collections::btree_map::BTreeMap};
-use sr_primitives::{helpers_128bit::multiply_by_rational_greedy, Perbill, Rational128};
+use sr_primitives::{helpers_128bit::multiply_by_rational_best_effort, Perbill, Rational128};
 use sr_primitives::traits::{Zero, Convert, Member, SimpleArithmetic, Saturating};
 
 mod mock;
@@ -246,7 +246,11 @@ pub fn elect<AccountId, Balance, FS, C>(
 			for e in &n.edges {
 				let c = &mut candidates[e.candidate_index];
 				if !c.elected && !c.approval_stake.is_zero() {
-					let temp_n = multiply_by_rational_greedy(n.load.n(), n.budget, c.approval_stake);
+					let temp_n = multiply_by_rational_best_effort(
+						n.load.n(),
+						n.budget,
+						c.approval_stake,
+					);
 					let temp_d = n.load.d();
 					let temp = Rational128::from(temp_n, temp_d);
 					c.score = c.score.lazy_saturating_add(temp);
@@ -291,7 +295,11 @@ pub fn elect<AccountId, Balance, FS, C>(
 							if e.load.d() == n.load.d() {
 								// return e.load / n.load.
 								let desired_scale: u128 = Perbill::accuracy().into();
-								multiply_by_rational_greedy(desired_scale, e.load.n(), n.load.n())
+								multiply_by_rational_best_effort(
+									desired_scale,
+									e.load.n(),
+									n.load.n(),
+								)
 							} else {
 								// defensive only. Both edge and nominator loads are built from
 								// scores, hence MUST have the same denominator.
@@ -300,7 +308,9 @@ pub fn elect<AccountId, Balance, FS, C>(
 						}
 					};
 					// safer to .min() inside as well to argue as u32 is safe.
-					let per_thing = Perbill::from_parts(per_bill_parts.min(Perbill::accuracy().into()) as u32);
+					let per_thing = Perbill::from_parts(
+						per_bill_parts.min(Perbill::accuracy().into()) as u32
+					);
 					assignment.1.push((e.who.clone(), per_thing));
 				}
 			}
@@ -321,7 +331,8 @@ pub fn elect<AccountId, Balance, FS, C>(
 			if diff_per_vote > 0 {
 				for i in 0..len {
 					let current_ratio = assignment.1[i % len].1;
-					let next_ratio = current_ratio.saturating_add(Perbill::from_parts(diff_per_vote));
+					let next_ratio = current_ratio
+						.saturating_add(Perbill::from_parts(diff_per_vote));
 					assignment.1[i % len].1 = next_ratio;
 				}
 			}
