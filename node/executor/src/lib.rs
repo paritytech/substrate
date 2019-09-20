@@ -41,7 +41,7 @@ mod tests {
 	use substrate_executor::WasmExecutor;
 	use codec::{Encode, Decode, Joiner};
 	use runtime_support::{
-		Hashable, StorageValue, StorageMap, assert_eq_error_rate, traits::Currency,
+		Hashable, StorageValue, StorageMap, traits::Currency,
 	};
 	use state_machine::TestExternalities as CoreTestExternalities;
 	use primitives::{
@@ -49,6 +49,7 @@ mod tests {
 		traits::{CodeExecutor, Externalities},
 	};
 	use sr_primitives::{
+		assert_eq_error_rate,
 		traits::{Header as HeaderT, Hash as HashT, Convert}, ApplyResult,
 		transaction_validity::InvalidTransaction, weights::{WeightMultiplier, GetDispatchInfo},
 	};
