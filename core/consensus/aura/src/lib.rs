@@ -33,7 +33,7 @@ use std::{sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fm
 use codec::{Encode, Decode, Codec};
 use consensus_common::{self, BlockImport, Environment, Proposer,
 	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
-	SelectChain, well_known_cache_keys::{self, Id as CacheKeyId}
+	SelectChain,
 };
 use consensus_common::import_queue::{
 	Verifier, BasicQueue, BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
@@ -41,6 +41,7 @@ use consensus_common::import_queue::{
 use client::{
 	block_builder::api::BlockBuilder as BlockBuilderApi, blockchain::ProvideCache,
 	runtime_api::ApiExt, error::Result as CResult, backend::AuxStore, BlockOf,
+	well_known_cache_keys::{self, Id as CacheKeyId},
 };
 
 use sr_primitives::{generic::{BlockId, OpaqueDigestItemId}, Justification};
