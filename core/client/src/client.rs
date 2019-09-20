@@ -172,7 +172,7 @@ pub struct ClientInfo<Block: BlockT> {
 	/// Genesis block hash.
 	pub genesis_hash: Block::Hash,
 	/// The head of the finalized chain.
-	pub finalied_hash: Block::Hash,
+	pub finalized_hash: Block::Hash,
 	/// Last finalized block number.
 	pub finalized_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	/// State Cache Size currently used by the backend
