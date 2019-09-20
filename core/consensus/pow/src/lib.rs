@@ -382,7 +382,7 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E>(
 		let block = futures::executor::block_on(proposer.propose(
 			inherent_data,
 			inherent_digest,
-			std::time::Duration::new(0, 0)
+			std::time::Duration::new(0, 100)
 		)).map_err(|e| format!("Block proposing error: {:?}", e))?;
 
 		let (header, body) = block.deconstruct();
