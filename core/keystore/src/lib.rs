@@ -24,7 +24,7 @@ use primitives::{
 	crypto::{KeyTypeId, Pair as PairT, Public, IsWrappedBy, Protected}, traits::BareCryptoStore,
 };
 
-::{AppKey, AppPublic, AppPair, ed25519, sr25519};
+use app_crypto::{AppKey, AppPublic, AppPair, ed25519, sr25519};
 
 use parking_lot::RwLock;
 
