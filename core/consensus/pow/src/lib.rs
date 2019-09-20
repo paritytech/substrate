@@ -320,6 +320,7 @@ pub fn start_mine<B: BlockT<Hash=H256>, C, Algorithm, E, SO>(
 	preruntime: Option<Vec<u8>>,
 	round: u32,
 	mut sync_oracle: SO,
+	build_time: std::time::Duration,
 	inherent_data_providers: inherents::InherentDataProviders,
 ) where
 	C: HeaderBackend<B> + AuxStore + 'static,
@@ -342,6 +343,7 @@ pub fn start_mine<B: BlockT<Hash=H256>, C, Algorithm, E, SO>(
 				preruntime.as_ref(),
 				round,
 				&mut sync_oracle,
+				build_time.clone(),
 				&inherent_data_providers
 			) {
 				Ok(()) => (),
@@ -363,6 +365,7 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E, SO>(
 	preruntime: Option<&Vec<u8>>,
 	round: u32,
 	sync_oracle: &mut SO,
+	build_time: std::time::Duration,
 	inherent_data_providers: &inherents::InherentDataProviders,
 ) -> Result<(), String> where
 	C: HeaderBackend<B> + AuxStore,
@@ -394,7 +397,7 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E, SO>(
 		let block = futures::executor::block_on(proposer.propose(
 			inherent_data,
 			inherent_digest,
-			std::time::Duration::new(0, 100)
+			build_time.clone(),
 		)).map_err(|e| format!("Block proposing error: {:?}", e))?;
 
 		let (header, body) = block.deconstruct();
