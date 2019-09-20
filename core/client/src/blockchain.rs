@@ -132,10 +132,10 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> {
 
 			let info = self.info();
 
-			let canon_hash = self.hash(*target_header.number())?
-				.ok_or_else(|| Error::from(format!("failed to get hash for block number {}", target_header.number())))?;
+			// this can be `None` if the best chain is shorter than the target header.
+			let maybe_canon_hash = self.hash(*target_header.number())?;
 
-			if canon_hash == target_hash {
+			if maybe_canon_hash.as_ref() == Some(&target_hash) {
 				// if a `max_number` is given we try to fetch the block at the
 				// given depth, if it doesn't exist or `max_number` is not
 				// provided, we continue to search from all leaves below.

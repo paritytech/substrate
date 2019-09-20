@@ -1621,7 +1621,7 @@ const CODE_CALLER_CONTRACT: &str = r#"
 	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
 	(import "env" "ext_balance" (func $ext_balance))
 	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
-	(import "env" "ext_create" (func $ext_create (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
+	(import "env" "ext_instantiate" (func $ext_instantiate (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
 	(import "env" "ext_println" (func $ext_println (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
@@ -1677,7 +1677,7 @@ const CODE_CALLER_CONTRACT: &str = r#"
 
 		;; Fail to deploy the contract since it returns a non-zero exit status.
 		(set_local $exit_code
-			(call $ext_create
+			(call $ext_instantiate
 				(i32.const 24)	;; Pointer to the code hash.
 				(i32.const 32)	;; Length of the code hash.
 				(i64.const 0)	;; How much gas to devote for the execution. 0 = all.
@@ -1705,7 +1705,7 @@ const CODE_CALLER_CONTRACT: &str = r#"
 
 		;; Fail to deploy the contract due to insufficient gas.
 		(set_local $exit_code
-			(call $ext_create
+			(call $ext_instantiate
 				(i32.const 24)	;; Pointer to the code hash.
 				(i32.const 32)	;; Length of the code hash.
 				(i64.const 200)	;; How much gas to devote for the execution.
@@ -1733,7 +1733,7 @@ const CODE_CALLER_CONTRACT: &str = r#"
 
 		;; Deploy the contract successfully.
 		(set_local $exit_code
-			(call $ext_create
+			(call $ext_instantiate
 				(i32.const 24)	;; Pointer to the code hash.
 				(i32.const 32)	;; Length of the code hash.
 				(i64.const 0)	;; How much gas to devote for the execution. 0 = all.
@@ -2118,7 +2118,7 @@ const CODE_DESTROY_AND_TRANSFER: &str = r#"
 	(import "env" "ext_get_storage" (func $ext_get_storage (param i32) (result i32)))
 	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32 i32)))
 	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
-	(import "env" "ext_create" (func $ext_create (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
+	(import "env" "ext_instantiate" (func $ext_instantiate (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(func $assert (param i32)
@@ -2149,7 +2149,7 @@ const CODE_DESTROY_AND_TRANSFER: &str = r#"
 		;; Deploy the contract with the provided code hash.
 		(call $assert
 			(i32.eq
-				(call $ext_create
+				(call $ext_instantiate
 					(i32.const 48)	;; Pointer to the code hash.
 					(i32.const 32)	;; Length of the code hash.
 					(i64.const 0)	;; How much gas to devote for the execution. 0 = all.

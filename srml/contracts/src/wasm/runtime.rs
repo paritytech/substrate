@@ -29,7 +29,7 @@ use rstd::mem;
 use codec::{Decode, Encode};
 use sr_primitives::traits::{Bounded, SaturatedConversion};
 
-/// The value returned from ext_call and ext_create contract external functions if the call or
+/// The value returned from ext_call and ext_instantiate contract external functions if the call or
 /// instantiation traps. This value is chosen as if the execution does not trap, the return value
 /// will always be an 8-bit integer, so 0x0100 is the smallest value that could not be returned.
 const TRAP_RETURN_CODE: u32 = 0x0100;
@@ -456,7 +456,7 @@ define_env!(Env, <E: Ext>,
 	// - value_len: length of the value buffer.
 	// - input_data_ptr: a pointer to a buffer to be used as input data to the initializer code.
 	// - input_data_len: length of the input data buffer.
-	ext_create(
+	ext_instantiate(
 		ctx,
 		code_hash_ptr: u32,
 		code_hash_len: u32,
