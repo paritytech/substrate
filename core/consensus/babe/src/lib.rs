@@ -110,7 +110,6 @@ use slots::{CheckedHeader, check_equivocation};
 use futures::prelude::*;
 use futures01::Stream as _;
 use log::{error, warn, debug, info, trace};
-use pdqselect::select;
 
 use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible};
 
