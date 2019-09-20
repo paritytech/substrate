@@ -118,6 +118,14 @@ pub struct PowVerifier<C, Algorithm> {
 }
 
 impl<C, Algorithm> PowVerifier<C, Algorithm> {
+	pub fn new(
+		client: Arc<C>,
+		algorithm: Algorithm,
+		inherent_data_providers: inherents::InherentDataProviders,
+	) -> Self {
+		Self { client, algorithm, inherent_data_providers }
+	}
+
 	fn check_header<B: BlockT<Hash=H256>>(
 		&self,
 		mut header: B::Header,
@@ -249,7 +257,7 @@ impl<B: BlockT<Hash=H256>, C, Algorithm> Verifier<B> for PowVerifier<C, Algorith
 }
 
 /// Register the PoW inherent data provider, if not registered already.
-fn register_pow_inherent_data_provider(
+pub fn register_pow_inherent_data_provider(
 	inherent_data_providers: &InherentDataProviders,
 ) -> Result<(), consensus_common::Error> {
 	if !inherent_data_providers.has_provider(&srml_timestamp::INHERENT_IDENTIFIER) {
