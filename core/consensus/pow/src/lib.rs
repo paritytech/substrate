@@ -418,6 +418,16 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E>(
 		let hash = header.hash();
 
 		let key = aux_key(&hash);
+		let best_hash = client.info().best_hash;
+		let best_header = client.header(BlockId::Hash(best_hash))
+			.map_err(|e| format!("Fetching best header failed: {:?}", e))?
+			.ok_or("Best header does not exist")?;
+		let best_aux = PowAux::read(client, &best_hash)?;
+
+		if best_aux.total_difficulty > aux.total_difficulty {
+			continue 'outer
+		}
+
 		let import_block = BlockImportParams {
 			origin: BlockOrigin::Own,
 			header,
