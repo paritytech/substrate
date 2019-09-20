@@ -35,7 +35,7 @@ use crate::base_pool::Transaction;
 /// 1: number
 /// 2: hash
 /// 3: parent_hash
-pub type RelayTag = (Compact<u32>, Compact<u32>, Vec<u8>, Vec<u8>);
+pub type RelayTag = (Compact<u16>, Compact<u64>, Vec<u8>, Vec<u8>);
 
 /// Transaction with partially satisfied dependencies.
 pub struct WaitingTransaction<Hash, Ex> {
