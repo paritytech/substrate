@@ -26,6 +26,8 @@ use std::env;
 
 use quote::quote;
 
+use inflector::Inflector;
+
 /// Generates the include for the runtime-interface crate.
 pub fn generate_runtime_interface_include() -> TokenStream {
 	if env::var("CARGO_PKG_NAME").unwrap() == "substrate-runtime-interface" {
@@ -57,8 +59,15 @@ pub fn generate_crate_access() -> TokenStream {
 }
 
 /// Create the host function identifier for the given function name.
-pub fn create_host_function_ident(name: &Ident) -> Ident {
-	Ident::new(&format!("ext_{}", name), Span::call_site())
+pub fn create_host_function_ident(name: &Ident, trait_name: &Ident) -> Ident {
+	Ident::new(
+		&format!(
+			"ext_{}_{}",
+			trait_name.to_string().to_snake_case(),
+			name,
+		),
+		Span::call_site(),
+	)
 }
 
 /// Returns the function arguments of the given `Signature`, minus any `self` arguments.

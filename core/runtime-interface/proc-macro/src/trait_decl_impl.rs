@@ -93,7 +93,7 @@ impl Fold for ToEssentialTraitDef {
 		trait_def
 	}
 
-	fn fold_receiver(&mut self, mut receiver: Receiver) -> Receiver {
+	fn fold_receiver(&mut self, receiver: Receiver) -> Receiver {
 		if receiver.reference.is_none() {
 			self.push_error(&receiver, "Taking `Self` by value is not allowed");
 		}

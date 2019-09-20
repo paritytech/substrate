@@ -21,10 +21,7 @@ use crate::utils::{
 	get_function_argument_types_without_ref,
 };
 
-use syn::{
-	ItemTrait, TraitItemMethod, Result, ReturnType,
-	TraitItem
-};
+use syn::{ItemTrait, TraitItemMethod, Result, ReturnType, Ident, TraitItem};
 
 use proc_macro2::TokenStream;
 
@@ -32,6 +29,7 @@ use quote::quote;
 
 /// Generate the interface.
 pub fn generate(trait_def: &ItemTrait) -> Result<TokenStream> {
+	let trait_name = &trait_def.ident;
 	trait_def
 		.items
 		.iter()
@@ -40,17 +38,17 @@ pub fn generate(trait_def: &ItemTrait) -> Result<TokenStream> {
 			_ => None,
 		})
 		.try_fold(TokenStream::new(), |mut t, m| {
-			t.extend(generate_extern_host_function(m)?);
+			t.extend(generate_extern_host_function(m, trait_name)?);
 			Ok(t)
 		})
 }
 
 /// Generate the extern host function for the given method.
-fn generate_extern_host_function(method: &TraitItemMethod) -> Result<TokenStream> {
+fn generate_extern_host_function(method: &TraitItemMethod, trait_name: &Ident) -> Result<TokenStream> {
 	let crate_ = generate_crate_access();
 	let arg_types = get_function_argument_types_without_ref(&method.sig);
 	let arg_names = get_function_argument_names(&method.sig);
-	let function = create_host_function_ident(&method.sig.ident);
+	let function = create_host_function_ident(&method.sig.ident, trait_name);
 
 	let output = match method.sig.output {
 		ReturnType::Default => quote!(),

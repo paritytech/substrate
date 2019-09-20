@@ -46,7 +46,7 @@ pub fn generate(trait_def: &ItemTrait) -> Result<TokenStream> {
 /// Generates the bare function implementation for the given method.
 fn function_for_method(trait_name: &Ident, method: &TraitItemMethod) -> Result<TokenStream> {
 	let std_impl = function_std_impl(trait_name, method)?;
-	let no_std_impl = function_no_std_impl(method)?;
+	let no_std_impl = function_no_std_impl(trait_name, method)?;
 	let function_impl_name = create_function_impl_ident(&method.sig.ident);
 	let function_name = &method.sig.ident;
 	let args = get_function_arguments(&method.sig);
@@ -67,9 +67,9 @@ fn function_for_method(trait_name: &Ident, method: &TraitItemMethod) -> Result<T
 }
 
 /// Generates the bare function implementation for `cfg(not(feature = "std"))`.
-fn function_no_std_impl(method: &TraitItemMethod) -> Result<TokenStream> {
+fn function_no_std_impl(trait_name: &Ident, method: &TraitItemMethod) -> Result<TokenStream> {
 	let function_name = create_function_impl_ident(&method.sig.ident);
-	let host_function_name = create_host_function_ident(&method.sig.ident);
+	let host_function_name = create_host_function_ident(&method.sig.ident, trait_name);
 	let args = get_function_arguments(&method.sig);
 	let arg_names = get_function_argument_names(&method.sig);
 	let arg_names2 = get_function_argument_names(&method.sig);

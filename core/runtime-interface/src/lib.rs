@@ -64,6 +64,16 @@ pub trait IntoWasmFFIArg<T> {
 	fn into_wasm_ffi_arg(self_instance: Self::SelfInstance, context: &mut dyn FunctionContext) -> Result<T>;
 }
 
+pub trait IntoPreAllocatedWasmFFIArg<T> {
+	type SelfInstance;
+
+	fn into_wasm_ffi_arg(
+		self_instance: Self::SelfInstance,
+		context: &mut dyn FunctionContext,
+		allocated: T,
+	) -> Result<()>;
+}
+
 pub enum FFIArg<'a, T, O, R: ?Sized = O> where O: IntoFFIArg<T>, R: IntoFFIArg<T> {
 	Ref(&'a R, std::marker::PhantomData<T>),
 	Owned(O),
