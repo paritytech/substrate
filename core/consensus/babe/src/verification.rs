@@ -15,12 +15,14 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Verification for BABE headers.
-// use primitives::H256;
+use schnorrkel::vrf::{VRFOutput, VRFProof};
 use sr_primitives::{DigestItem, traits::Header};
-use babe_primitives::{Epoch, BabePreDigest, CompatibleDigestItem};
+use primitives::{Pair, Public};
+use babe_primitives::{Epoch, BabePreDigest, CompatibleDigestItem, BabeAuthorityWeight, AuthorityId};
+use babe_primitives::{AuthoritySignature, SlotNumber, BabeBlockWeight, AuthorityIndex, AuthorityPair};
 use slots::CheckedHeader;
 use log::{debug, trace};
-use super::{find_pre_digest};
+use super::{find_pre_digest, make_transcript, calculate_primary_threshold, check_primary_threshold, secondary_slot_author};
 
 /// Check a header has been signed by the right key. If the slot is too far in
 /// the future, an error will be returned. If successful, returns the pre-header
@@ -77,7 +79,7 @@ pub(super) fn check_header<H: Header>(
 
 			let digest = (vrf_output, vrf_proof, *authority_index, *slot_number, *weight);
 
-			super::check_primary_header::<H>(
+			check_primary_header::<H>(
 				pre_hash,
 				digest,
 				sig,
@@ -93,7 +95,7 @@ pub(super) fn check_header<H: Header>(
 
 			let digest = (*authority_index, *slot_number, *weight);
 
-			super::check_secondary_header::<H>(
+			check_secondary_header::<H>(
 				pre_hash,
 				digest,
 				sig,
@@ -109,4 +111,96 @@ pub(super) fn check_header<H: Header>(
 
 	let pre_digest = CompatibleDigestItem::babe_pre_digest(pre_digest);
 	Ok(CheckedHeader::Checked(header, (pre_digest, seal)))
+}
+
+/// Check a primary slot proposal header. We validate that the given header is
+/// properly signed by the expected authority, and that the contained VRF proof
+/// is valid. Additionally, the weight of this block must increase compared to
+/// its parent since it is a primary block.
+fn check_primary_header<H: Header>(
+	pre_hash: H::Hash,
+	pre_digest: (&VRFOutput, &VRFProof, AuthorityIndex, SlotNumber, BabeBlockWeight),
+	signature: AuthoritySignature,
+	parent_weight: BabeBlockWeight,
+	authorities: &[(AuthorityId, BabeAuthorityWeight)],
+	randomness: [u8; 32],
+	epoch_index: u64,
+	c: (u64, u64),
+) -> Result<(), String> {
+	let (vrf_output, vrf_proof, authority_index, slot_number, weight) = pre_digest;
+	if weight != parent_weight + 1 {
+		return Err("Invalid weight: should increase with Primary block.".into());
+	}
+
+	let author = &authorities[authority_index as usize].0;
+
+	if AuthorityPair::verify(&signature, pre_hash, &author) {
+		let (inout, _) = {
+			let transcript = make_transcript(
+				&randomness,
+				slot_number,
+				epoch_index,
+			);
+
+			schnorrkel::PublicKey::from_bytes(author.as_slice()).and_then(|p| {
+				p.vrf_verify(transcript, vrf_output, vrf_proof)
+			}).map_err(|s| {
+				format!("VRF verification failed: {:?}", s)
+			})?
+		};
+
+		let threshold = calculate_primary_threshold(c, authorities, authority_index as usize);
+		if !check_primary_threshold(&inout, threshold) {
+			return Err(format!("VRF verification of block by author {:?} failed: \
+								  threshold {} exceeded", author, threshold));
+		}
+
+		Ok(())
+	} else {
+		Err(format!("Bad signature on {:?}", pre_hash))
+	}
+}
+
+/// Check a secondary slot proposal header. We validate that the given header is
+/// properly signed by the expected authority, which we have a deterministic way
+/// of computing. Additionally, the weight of this block must stay the same
+/// compared to its parent since it is a secondary block.
+fn check_secondary_header<H: Header>(
+	pre_hash: H::Hash,
+	pre_digest: (AuthorityIndex, SlotNumber, BabeBlockWeight),
+	signature: AuthoritySignature,
+	parent_weight: BabeBlockWeight,
+	authorities: &[(AuthorityId, BabeAuthorityWeight)],
+	randomness: [u8; 32],
+) -> Result<(), String> {
+	let (authority_index, slot_number, weight) = pre_digest;
+
+	if weight != parent_weight {
+		return Err("Invalid weight: Should stay the same with secondary block.".into());
+	}
+
+	// check the signature is valid under the expected authority and
+	// chain state.
+	let expected_author = secondary_slot_author(
+		slot_number,
+		authorities,
+		randomness,
+	).ok_or_else(|| "No secondary author expected.".to_string())?;
+
+	let author = &authorities[authority_index as usize].0;
+
+	if expected_author != author {
+		let msg = format!("Invalid author: Expected secondary author: {:?}, got: {:?}.",
+			expected_author,
+			author,
+		);
+
+		return Err(msg);
+	}
+
+	if AuthorityPair::verify(&signature, pre_hash.as_ref(), author) {
+		Ok(())
+	} else {
+		Err(format!("Bad signature on {:?}", pre_hash))
+	}
 }
