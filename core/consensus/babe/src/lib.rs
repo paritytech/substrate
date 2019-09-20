@@ -542,7 +542,7 @@ pub struct BabeVerifier<B, E, Block: BlockT, RA, PRA, T> {
 	inherent_data_providers: inherents::InherentDataProviders,
 	config: Config,
 	time_source: BabeLink,
-	_transaction_pool: Option<Arc<T>>,
+	transaction_pool: Option<Arc<T>>,
 }
 
 impl<B, E, Block: BlockT, RA, PRA, T> BabeVerifier<B, E, Block, RA, PRA, T> {
