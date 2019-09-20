@@ -44,7 +44,7 @@ use pow_primitives::{Seal, TotalDifficulty, POW_ENGINE_ID};
 use primitives::H256;
 use inherents::{InherentDataProviders, InherentData};
 use consensus_common::{
-	BlockImportParams, BlockOrigin, ForkChoiceStrategy,
+	BlockImportParams, BlockOrigin, ForkChoiceStrategy, SyncOracle,
 	well_known_cache_keys::Id as CacheKeyId, Environment, Proposer,
 };
 use consensus_common::import_queue::{BoxBlockImport, BasicQueue, Verifier};
@@ -312,19 +312,21 @@ pub fn import_queue<B, C, Algorithm>(
 /// information, or just be a graffiti. `round` is for number of rounds the
 /// CPU miner runs each time. This parameter should be tweaked so that each
 /// mining round is within sub-second time.
-pub fn start_mine<B: BlockT<Hash=H256>, C, Algorithm, E>(
+pub fn start_mine<B: BlockT<Hash=H256>, C, Algorithm, E, SO>(
 	mut block_import: BoxBlockImport<B>,
 	client: Arc<C>,
 	algorithm: Algorithm,
 	mut env: E,
 	preruntime: Option<Vec<u8>>,
 	round: u32,
+	mut sync_oracle: SO,
 	inherent_data_providers: inherents::InherentDataProviders,
 ) where
 	C: HeaderBackend<B> + AuxStore + 'static,
 	Algorithm: PowAlgorithm<B> + Send + Sync + 'static,
 	E: Environment<B> + Send + Sync + 'static,
 	E::Error: std::fmt::Debug,
+	SO: SyncOracle + Send + Sync + 'static,
 {
 	if let Err(_) = register_pow_inherent_data_provider(&inherent_data_providers) {
 		warn!("Registering inherent data provider for timestamp failed");
@@ -339,6 +341,7 @@ pub fn start_mine<B: BlockT<Hash=H256>, C, Algorithm, E>(
 				&mut env,
 				preruntime.as_ref(),
 				round,
+				&mut sync_oracle,
 				&inherent_data_providers
 			) {
 				Ok(()) => (),
@@ -352,21 +355,29 @@ pub fn start_mine<B: BlockT<Hash=H256>, C, Algorithm, E>(
 	});
 }
 
-fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E>(
+fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E, SO>(
 	block_import: &mut BoxBlockImport<B>,
 	client: &C,
 	algorithm: &Algorithm,
 	env: &mut E,
 	preruntime: Option<&Vec<u8>>,
 	round: u32,
+	sync_oracle: &mut SO,
 	inherent_data_providers: &inherents::InherentDataProviders,
 ) -> Result<(), String> where
 	C: HeaderBackend<B> + AuxStore,
 	Algorithm: PowAlgorithm<B>,
 	E: Environment<B>,
 	E::Error: std::fmt::Debug,
+	SO: SyncOracle,
 {
 	'outer: loop {
+		if sync_oracle.is_major_syncing() {
+			debug!(target: "pow", "Skipping proposal due to sync.");
+			std::thread::sleep(std::time::Duration::new(1, 0));
+			continue 'outer
+		}
+
 		let best_hash = client.info().best_hash;
 		let best_header = client.header(BlockId::Hash(best_hash))
 			.map_err(|e| format!("Fetching best header failed: {:?}", e))?
