@@ -73,7 +73,7 @@ use sr_primitives::traits::{
 use keystore::KeyStorePtr;
 use codec::{Decode, Encode};
 use parking_lot::{Mutex, MutexGuard};
-use primitives::{blake2_256, Blake2Hasher, H256, Pair, Public, U256};
+use primitives::{blake2_256, Blake2Hasher, H256, Pair, U256};
 use merlin::Transcript;
 use inherents::{InherentDataProviders, InherentData};
 use substrate_telemetry::{
@@ -81,12 +81,7 @@ use substrate_telemetry::{
 	CONSENSUS_TRACE,
 	CONSENSUS_DEBUG,
 };
-use schnorrkel::{
-	keys::Keypair,
-	vrf::{
-		VRFProof, VRFInOut, VRFOutput,
-	},
-};
+use schnorrkel::{keys::Keypair, vrf::VRFInOut};
 use consensus_common::{
 	self, BlockImport, Environment, Proposer,
 	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
