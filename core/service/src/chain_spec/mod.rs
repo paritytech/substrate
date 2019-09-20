@@ -17,5 +17,6 @@
 //! Substrate chain configurations.
 
 mod chain_spec;
+mod extension;
 
 pub use chain_spec::{ChainSpec, Properties};
