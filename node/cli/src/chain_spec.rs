@@ -17,14 +17,12 @@
 //! Substrate chain configurations.
 
 use primitives::{Pair, Public, crypto::UncheckedInto};
-pub use node_primitives::{AccountId, Balance};
 use node_runtime::{
 	AuthorityDiscoveryConfig, BabeConfig, BalancesConfig, ContractsConfig, CouncilConfig, DemocracyConfig,
 	ElectionsConfig, GrandpaConfig, ImOnlineConfig, IndicesConfig, SessionConfig, SessionKeys, StakerStatus,
 	StakingConfig, SudoConfig, SystemConfig, TechnicalCommitteeConfig, WASM_BINARY,
 };
 use node_runtime::constants::{time::*, currency::*};
-pub use node_runtime::GenesisConfig;
 use substrate_service;
 use hex_literal::hex;
 use substrate_telemetry::TelemetryEndpoints;
@@ -33,11 +31,19 @@ use babe_primitives::{AuthorityId as BabeId};
 use im_online::sr25519::{AuthorityId as ImOnlineId};
 use sr_primitives::Perbill;
 
+pub use node_primitives::{AccountId, Balance};
+pub use node_runtime::GenesisConfig;
+
 const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 
-/// Specialized `ChainSpec`.
-pub type ChainSpec = substrate_service::ChainSpec<GenesisConfig>;
+//pub type Extensions = chain_spec::Forks<BlockNumber, Option<()>>;
+pub type Extensions = Option<()>;
 
+/// Specialized `ChainSpec`.
+pub type ChainSpec = substrate_service::ChainSpec<
+	GenesisConfig,
+	Extensions,
+>;
 /// Flaming Fir testnet generator
 pub fn flaming_fir_config() -> Result<ChainSpec, String> {
 	ChainSpec::from_json_bytes(&include_bytes!("../res/flaming-fir.json")[..])
@@ -191,7 +197,7 @@ pub fn staging_testnet_config() -> ChainSpec {
 		Some(TelemetryEndpoints::new(vec![(STAGING_TELEMETRY_URL.to_string(), 0)])),
 		None,
 		None,
-		None,
+		Default::default(),
 	)
 }
 

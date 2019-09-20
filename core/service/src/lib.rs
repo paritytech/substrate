@@ -47,7 +47,7 @@ use sr_primitives::traits::NumberFor;
 pub use self::error::Error;
 pub use self::builder::{ServiceBuilder, ServiceBuilderExport, ServiceBuilderImport, ServiceBuilderRevert};
 pub use config::{Configuration, Roles, PruningMode};
-pub use chain_spec::{ChainSpec, Properties, RuntimeGenesis};
+pub use chain_spec::{ChainSpec, Properties, RuntimeGenesis, Extensions as ChainSpecExtensions};
 pub use transaction_pool::txpool::{
 	self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError
 };
@@ -794,8 +794,8 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Drop for
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(not(target_os = "unknown"))]
-fn start_rpc_servers<C, G, H: FnMut() -> rpc_servers::RpcHandler<rpc::Metadata>>(
-	config: &Configuration<C, G>,
+fn start_rpc_servers<C, G, E, H: FnMut() -> rpc_servers::RpcHandler<rpc::Metadata>>(
+	config: &Configuration<C, G, E>,
 	mut gen_handler: H
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	fn maybe_start_server<T, F>(address: Option<SocketAddr>, mut start: F) -> Result<Option<T>, io::Error>
@@ -835,8 +835,8 @@ fn start_rpc_servers<C, G, H: FnMut() -> rpc_servers::RpcHandler<rpc::Metadata>>
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(target_os = "unknown")]
-fn start_rpc_servers<C, G, H: FnMut() -> components::RpcHandler>(
-	_: &Configuration<C, G>,
+fn start_rpc_servers<C, G, E, H: FnMut() -> components::RpcHandler>(
+	_: &Configuration<C, G, E>,
 	_: H
 ) -> Result<Box<std::any::Any + Send + Sync>, error::Error> {
 	Ok(Box::new(()))
@@ -877,7 +877,7 @@ fn transactions_to_propagate<PoolApi, B, H, E>(pool: &TransactionPool<PoolApi>)
 where
 	PoolApi: ChainApi<Block=B, Hash=H, Error=E>,
 	B: BlockT,
-	H: std::hash::Hash + Eq + sr_primitives::traits::Member + serde::Serialize,
+	H: std::hash::Hash + Eq + sr_primitives::traits::Member + sr_primitives::traits::MaybeSerialize,
 	E: txpool::error::IntoPoolError + From<txpool::error::Error>,
 {
 	pool.ready()
@@ -896,7 +896,7 @@ where
 	C: network::ClientHandle<B> + Send + Sync,
 	PoolApi: ChainApi<Block=B, Hash=H, Error=E>,
 	B: BlockT,
-	H: std::hash::Hash + Eq + sr_primitives::traits::Member + serde::Serialize,
+	H: std::hash::Hash + Eq + sr_primitives::traits::Member + sr_primitives::traits::MaybeSerialize,
 	E: txpool::error::IntoPoolError + From<txpool::error::Error>,
 {
 	fn transactions(&self) -> Vec<(H, <B as BlockT>::Extrinsic)> {

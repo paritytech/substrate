@@ -68,7 +68,7 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 	}
 }
 
-impl<'a, G: RuntimeGenesis> BuildStorage for &'a ChainSpec<G> {
+impl<'a, G: RuntimeGenesis, E> BuildStorage for &'a ChainSpec<G, E> {
 	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
 		match self.genesis.resolve()? {
 			Genesis::Runtime(gc) => gc.build_storage(),
@@ -119,10 +119,13 @@ struct ChainSpecFile<E> {
 /// Arbitrary properties defined in chain spec as a JSON object
 pub type Properties = json::map::Map<String, json::Value>;
 
-type Empty = Option<()>;
+/// A type denoting empty extensions.
+///
+/// We use `Option` here since `()` is not flattenable by serde.
+pub type NoExtension = Option<()>;
 
 /// A configuration of a chain. Can be used to build a genesis block.
-pub struct ChainSpec<G, E = Empty> {
+pub struct ChainSpec<G, E = NoExtension> {
 	spec: ChainSpecFile<E>,
 	genesis: GenesisSource<G>,
 }

@@ -211,14 +211,17 @@ macro_rules! new_full {
 	}}
 }
 
+/// A specialized configuration object for setting up the node..
+pub type NodeConfiguration<C> = Configuration<C, GenesisConfig, crate::chain_spec::Extensions>;
+
 /// Builds a new service for a full client.
-pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisConfig>)
+pub fn new_full<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 -> Result<impl AbstractService, ServiceError> {
 	new_full!(config).map(|(service, _)| service)
 }
 
 /// Builds a new service for a light client.
-pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisConfig>)
+pub fn new_light<C: Send + Default + 'static>(config: NodeConfiguration<C>)
 -> Result<impl AbstractService, ServiceError> {
 	use futures::Future;
 

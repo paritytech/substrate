@@ -81,7 +81,7 @@ macro_rules! impl_trivial {
 	}
 }
 
-impl_trivial!(u8, u16, u32, u64, usize, String, Vec<u8>);
+impl_trivial!((), u8, u16, u32, u64, usize, String, Vec<u8>);
 
 impl<T: Extension> Extension for Option<T> {
 	type Fork = Option<T::Fork>;
@@ -110,9 +110,17 @@ impl<T: Fork> Fork for Option<T> {
 }
 
 /// A collection of `ChainSpec` extensions.
-pub trait Extensions {
+pub trait Extensions: Extension + Serialize + DeserializeOwned + Clone {
 	/// Get an extension of specific type.
 	fn get<T: Extension + 'static>(&self) -> Option<&T>;
+}
+
+impl Extensions for () {
+	fn get<T: Extension + 'static>(&self) -> Option<&T> { None }
+}
+
+impl Extensions for Option<()> {
+	fn get<T: Extension + 'static>(&self) -> Option<&T> { None }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -122,6 +130,17 @@ pub struct Forks<BlockNumber: Ord, T: Extension> where
 	#[serde(flatten)]
 	base: T,
 	forks: BTreeMap<BlockNumber, T::Fork>,
+}
+
+impl<B: Ord, T: Extension + Default> Default for Forks<B, T> where
+	T::Fork: Serialize + DeserializeOwned,
+{
+	fn default() -> Self {
+		Self {
+			base: Default::default(),
+			forks: Default::default(),
+		}
+	}
 }
 
 impl<B: Ord, T: Extension + Clone> Forks<B, T> where

@@ -19,7 +19,7 @@
 mod chain_spec;
 mod extension;
 
-pub use chain_spec::{ChainSpec, Properties};
+pub use chain_spec::{ChainSpec, Properties, NoExtension};
 pub use extension::{Extension, Extensions, Fork, Forks};
 pub use chain_spec_derive::ChainSpecExtension;
 
