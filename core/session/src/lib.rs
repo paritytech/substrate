@@ -53,7 +53,7 @@ where
 	client::Client<B, E, Block, RA>: ProvideRuntimeApi,
 	<client::Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: SessionKeys<Block>,
 {
-	let info = client.info().chain;
+	let info = client.info();
 	let runtime_api = client.runtime_api();
 
 	for seed in seeds {

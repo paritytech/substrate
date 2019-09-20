@@ -316,7 +316,7 @@ mod tests {
 		let keys: Vec<&ed25519::Pair> = vec![&*alice, &*bob];
 		let dummy_runtime = ::tokio::runtime::Runtime::new().unwrap();
 		let block_factory = |service: &<Factory as service::ServiceFactory>::FullService| {
-			let block_id = BlockId::number(service.client().info().chain.best_number);
+			let block_id = BlockId::number(service.client().info().best_number);
 			let parent_header = service.client().header(&block_id).unwrap().unwrap();
 			let consensus_net = ConsensusNetwork::new(service.network(), service.client().clone());
 			let proposer_factory = consensus::ProposerFactory {
@@ -394,7 +394,7 @@ mod tests {
 					.expect("Creates inherent data.");
 				inherent_data.replace_data(finality_tracker::INHERENT_IDENTIFIER, &1u64);
 
-				let parent_id = BlockId::number(service.client().info().chain.best_number);
+				let parent_id = BlockId::number(service.client().info().best_number);
 				let parent_header = service.client().header(&parent_id).unwrap().unwrap();
 				let mut proposer_factory = substrate_basic_authorship::ProposerFactory {
 					client: service.client(),
@@ -456,7 +456,7 @@ mod tests {
 				let to = AddressPublic::from_raw(bob.public().0);
 				let from = AddressPublic::from_raw(charlie.public().0);
 				let genesis_hash = service.client().block_hash(0).unwrap().unwrap();
-				let best_block_id = BlockId::number(service.client().info().chain.best_number);
+				let best_block_id = BlockId::number(service.client().info().best_number);
 				let version = service.client().runtime_version_at(&best_block_id).unwrap().spec_version;
 				let signer = charlie.clone();
 

@@ -185,7 +185,7 @@ pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 				.filter_map(move |_| {
 					let info = client.info();
 					let version = client
-						.runtime_version_at(&BlockId::hash(info.chain.best_hash))
+						.runtime_version_at(&BlockId::hash(info.best_hash))
 						.map_err(client_err)
 						.map_err(Into::into);
 					if previous_version != version {
@@ -239,7 +239,7 @@ pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 		// initial values
 		let initial = stream::iter_result(keys
 			.map(|keys| {
-				let block = self.client().info().chain.best_hash;
+				let block = self.client().info().best_hash;
 				let changes = keys
 					.into_iter()
 					.map(|key| self.storage(Some(block.clone()).into(), key.clone())

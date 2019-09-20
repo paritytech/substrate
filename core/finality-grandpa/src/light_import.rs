@@ -66,7 +66,7 @@ pub fn light_block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 		PRA::Api: GrandpaApi<Block>,
 {
 	let info = client.info();
-	let import_data = load_aux_import_data(info.chain.finalized_hash, &*client, api)?;
+	let import_data = load_aux_import_data(info.finalized_hash, &*client, api)?;
 	Ok(GrandpaLightBlockImport {
 		client,
 		backend,
@@ -160,7 +160,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> FinalityProofImport<Block>
 
 	fn on_start(&mut self) -> Vec<(Block::Hash, NumberFor<Block>)> {
 		let mut out = Vec::new();
-		let chain_info = self.client.info().chain;
+		let chain_info = self.client.info();
 
 		let data = self.data.read();
 		for (pending_number, pending_hash) in data.consensus_changes.pending_changes() {
@@ -653,7 +653,7 @@ pub mod tests {
 			origin: BlockOrigin::Own,
 			header: Header {
 				number: 1,
-				parent_hash: client.info().chain.best_hash,
+				parent_hash: client.info().best_hash,
 				state_root: Default::default(),
 				digest: Default::default(),
 				extrinsics_root: Default::default(),

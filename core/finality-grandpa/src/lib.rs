@@ -356,7 +356,7 @@ where
 	use sr_primitives::traits::Zero;
 
 	let chain_info = client.info();
-	let genesis_hash = chain_info.chain.genesis_hash;
+	let genesis_hash = chain_info.genesis_hash;
 
 	let persistent_data = aux_schema::load_persistent(
 		&*client,
@@ -451,7 +451,7 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 			.register_provider(srml_finality_tracker::InherentDataProvider::new(move || {
 				#[allow(deprecated)]
 				{
-					let info = client.info().chain;
+					let info = client.info();
 					telemetry!(CONSENSUS_INFO; "afg.finalized";
 						"finalized_number" => ?info.finalized_number,
 						"finalized_hash" => ?info.finalized_hash,
@@ -637,8 +637,8 @@ where
 				let chain_info = self.env.inner.info();
 
 				let last_finalized = (
-					chain_info.chain.finalized_hash,
-					chain_info.chain.finalized_number,
+					chain_info.finalized_hash,
+					chain_info.finalized_number,
 				);
 
 				let global_comms = global_communication(

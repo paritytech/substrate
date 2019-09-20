@@ -160,7 +160,7 @@ macro_rules! new_impl {
 			dht_event_tx,
 		) = $build_components(&$config)?;
 		let import_queue = Box::new(import_queue);
-		let chain_info = client.info().chain;
+		let chain_info = client.info();
 
 		let version = $config.full_version();
 		info!("Highest known block at #{}", chain_info.best_number);
@@ -295,11 +295,11 @@ macro_rules! new_impl {
 		network_status_sinks.lock().push(netstat_tx);
 		let tel_task = netstat_rx.for_each(move |(net_status, network_state)| {
 			let info = client_.info();
-			let best_number = info.chain.best_number.saturated_into::<u64>();
-			let best_hash = info.chain.best_hash;
+			let best_number = info.best_number.saturated_into::<u64>();
+			let best_hash = info.best_hash;
 			let num_peers = net_status.num_connected_peers;
 			let txpool_status = transaction_pool_.status();
-			let finalized_number: u64 = info.chain.finalized_number.saturated_into::<u64>();
+			let finalized_number: u64 = info.finalized_number.saturated_into::<u64>();
 			let bandwidth_download = net_status.average_download_per_sec;
 			let bandwidth_upload = net_status.average_upload_per_sec;
 
@@ -328,7 +328,7 @@ macro_rules! new_impl {
 				"cpu" => cpu_usage,
 				"memory" => memory,
 				"finalized_height" => finalized_number,
-				"finalized_hash" => ?info.chain.finalized_hash,
+				"finalized_hash" => ?info.finalized_hash,
 				"bandwidth_download" => bandwidth_download,
 				"bandwidth_upload" => bandwidth_upload,
 				"used_state_cache_size" => used_state_cache_size,
@@ -919,7 +919,7 @@ where
 		let encoded = transaction.encode();
 		match Decode::decode(&mut &encoded[..]) {
 			Ok(uxt) => {
-				let best_block_id = BlockId::hash(self.client.info().chain.best_hash);
+				let best_block_id = BlockId::hash(self.client.info().best_hash);
 				match self.pool.submit_one(&best_block_id, uxt) {
 					Ok(hash) => Some(hash),
 					Err(e) => match e.into_pool_error() {

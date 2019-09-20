@@ -40,7 +40,7 @@ pub fn build(service: &impl AbstractService) -> impl Future<Item = (), Error = (
 	let client = service.client();
 	let mut last_best = {
 		let info = client.info();
-		Some((info.chain.best_number, info.chain.best_hash))
+		Some((info.best_number, info.best_hash))
 	};
 
 	let display_block_import = client.import_notification_stream().map(|v| Ok::<_, ()>(v)).compat().for_each(move |n| {

@@ -28,7 +28,7 @@ macro_rules! export_blocks {
 	let last = match $to {
 		Some(v) if v.is_zero() => One::one(),
 		Some(v) => v,
-		None => $client.info().chain.best_number,
+		None => $client.info().best_number,
 	};
 
 	if last < block {
@@ -194,7 +194,7 @@ macro_rules! import_blocks {
 			);
 		}
 		if link.imported_blocks >= count {
-			info!("Imported {} blocks. Best: #{}", block_count, $client.info().chain.best_number);
+			info!("Imported {} blocks. Best: #{}", block_count, $client.info().best_number);
 			Ok(Async::Ready(()))
 		} else {
 			Ok(Async::NotReady)
@@ -207,7 +207,7 @@ macro_rules! import_blocks {
 macro_rules! revert_chain {
 ($client:ident, $blocks:ident) => {{
 	let reverted = $client.revert($blocks)?;
-	let info = $client.info().chain;
+	let info = $client.info();
 
 	if reverted.is_zero() {
 		info!("There aren't any non-finalized blocks to revert.");

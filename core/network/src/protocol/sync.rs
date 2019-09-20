@@ -283,8 +283,8 @@ impl<B: BlockT> ChainSync<B> {
 			client,
 			peers: HashMap::new(),
 			blocks: BlockCollection::new(),
-			best_queued_hash: info.chain.best_hash,
-			best_queued_number: info.chain.best_number,
+			best_queued_hash: info.best_hash,
+			best_queued_number: info.best_number,
 			extra_finality_proofs: ExtraRequests::new(),
 			extra_justifications: ExtraRequests::new(),
 			role,
@@ -1016,8 +1016,8 @@ impl<B: BlockT> ChainSync<B> {
 		self.best_importing_number = Zero::zero();
 		self.blocks.clear();
 		let info = self.client.info();
-		self.best_queued_hash = info.chain.best_hash;
-		self.best_queued_number = info.chain.best_number;
+		self.best_queued_hash = info.best_hash;
+		self.best_queued_number = info.best_number;
 		self.is_idle = false;
 		debug!(target:"sync", "Restarted with {} ({})", self.best_queued_number, self.best_queued_hash);
 		let old_peers = std::mem::replace(&mut self.peers, HashMap::new());

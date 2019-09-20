@@ -101,7 +101,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 	}
 
 	fn rotate_keys(&self) -> Result<Bytes> {
-		let best_block_hash = self.client.info().chain.best_hash;
+		let best_block_hash = self.client.info().best_hash;
 		self.client.runtime_api().generate_session_keys(
 			&generic::BlockId::Hash(best_block_hash),
 			None,
@@ -110,7 +110,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 
 	fn submit_extrinsic(&self, ext: Bytes) -> Result<ExHash<P>> {
 		let xt = Decode::decode(&mut &ext[..])?;
-		let best_block_hash = self.client.info().chain.best_hash;
+		let best_block_hash = self.client.info().best_hash;
 		self.pool
 			.submit_one(&generic::BlockId::hash(best_block_hash), xt)
 			.map_err(|e| e.into_pool_error()
@@ -150,7 +150,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 		xt: Bytes
 	) {
 		let submit = || -> Result<_> {
-			let best_block_hash = self.client.info().chain.best_hash;
+			let best_block_hash = self.client.info().best_hash;
 			let dxt = <<P as PoolChainApi>::Block as traits::Block>::Extrinsic::decode(&mut &xt[..])?;
 			self.pool
 				.submit_and_watch(&generic::BlockId::hash(best_block_hash), dxt)

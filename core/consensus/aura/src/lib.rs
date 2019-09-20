@@ -850,7 +850,7 @@ mod tests {
 	fn authorities_call_works() {
 		let client = test_client::new();
 
-		assert_eq!(client.info().chain.best_number, 0);
+		assert_eq!(client.info().best_number, 0);
 		assert_eq!(authorities(&client, &BlockId::Number(0)).unwrap(), vec![
 			Keyring::Alice.public().into(),
 			Keyring::Bob.public().into(),

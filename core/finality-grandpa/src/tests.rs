@@ -460,7 +460,7 @@ fn finalize_3_voters_no_observers() {
 	net.block_until_sync(&mut runtime);
 
 	for i in 0..3 {
-		assert_eq!(net.peer(i).client().info().chain.best_number, 20,
+		assert_eq!(net.peer(i).client().info().best_number, 20,
 			"Peer #{} failed to sync", i);
 	}
 
@@ -583,7 +583,7 @@ fn transition_3_voters_twice_1_full_observer() {
 
 	for (i, peer) in net.lock().peers().iter().enumerate() {
 		let full_client = peer.client().as_full().expect("only full clients are used in test");
-		assert_eq!(full_client.info().chain.best_number, 1,
+		assert_eq!(full_client.info().best_number, 1,
 					"Peer #{} failed to sync", i);
 
 		let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(&*full_client).unwrap();
@@ -799,7 +799,7 @@ fn sync_justifications_on_change_blocks() {
 	net.block_until_sync(&mut runtime);
 
 	for i in 0..4 {
-		assert_eq!(net.peer(i).client().info().chain.best_number, 25,
+		assert_eq!(net.peer(i).client().info().best_number, 25,
 			"Peer #{} failed to sync", i);
 	}
 
@@ -876,7 +876,7 @@ fn finalizes_multiple_pending_changes_in_order() {
 
 	// all peers imported both change blocks
 	for i in 0..6 {
-		assert_eq!(net.peer(i).client().info().chain.best_number, 30,
+		assert_eq!(net.peer(i).client().info().best_number, 30,
 			"Peer #{} failed to sync", i);
 	}
 
@@ -897,7 +897,7 @@ fn doesnt_vote_on_the_tip_of_the_chain() {
 	net.block_until_sync(&mut runtime);
 
 	for i in 0..3 {
-		assert_eq!(net.peer(i).client().info().chain.best_number, 100,
+		assert_eq!(net.peer(i).client().info().best_number, 100,
 			"Peer #{} failed to sync", i);
 	}
 
@@ -933,7 +933,7 @@ fn force_change_to_new_set() {
 
 	{
 		// add a forced transition at block 12.
-		let parent_hash = net.lock().peer(0).client().info().chain.best_hash;
+		let parent_hash = net.lock().peer(0).client().info().best_hash;
 		forced_transitions.lock().insert(parent_hash, (0, ScheduledChange {
 			next_authorities: voters.clone(),
 			delay: 10,
@@ -950,7 +950,7 @@ fn force_change_to_new_set() {
 	net.lock().block_until_sync(&mut runtime);
 
 	for (i, peer) in net.lock().peers().iter().enumerate() {
-		assert_eq!(peer.client().info().chain.best_number, 26,
+		assert_eq!(peer.client().info().best_number, 26,
 				"Peer #{} failed to sync", i);
 
 		let full_client = peer.client().as_full().expect("only full clients are used in test");
@@ -1086,7 +1086,7 @@ fn voter_persists_its_votes() {
 	net.peer(0).push_blocks(20, false);
 	net.block_until_sync(&mut runtime);
 
-	assert_eq!(net.peer(0).client().info().chain.best_number, 20,
+	assert_eq!(net.peer(0).client().info().best_number, 20,
 			   "Peer #{} failed to sync", 0);
 
 
@@ -1246,7 +1246,7 @@ fn voter_persists_its_votes() {
 				let round_tx = round_tx.clone();
 				future::Either::A(tokio_timer::Interval::new_interval(Duration::from_millis(200))
 					.take_while(move |_| {
-						Ok(net2.lock().peer(1).client().info().chain.best_number != 40)
+						Ok(net2.lock().peer(1).client().info().best_number != 40)
 					})
 					.for_each(|_| Ok(()))
 					.and_then(move |_| {
@@ -1322,7 +1322,7 @@ fn finalize_3_voters_1_light_observer() {
 	net.block_until_sync(&mut runtime);
 
 	for i in 0..4 {
-		assert_eq!(net.peer(i).client().info().chain.best_number, 20,
+		assert_eq!(net.peer(i).client().info().best_number, 20,
 			"Peer #{} failed to sync", i);
 	}
 
@@ -1371,7 +1371,7 @@ fn finality_proof_is_fetched_by_light_client_when_consensus_data_changes() {
 
 	// check that the block#1 is finalized on light client
 	runtime.block_on(futures::future::poll_fn(move || -> std::result::Result<_, ()> {
-		if net.lock().peer(1).client().info().chain.finalized_number == 1 {
+		if net.lock().peer(1).client().info().finalized_number == 1 {
 			Ok(Async::Ready(()))
 		} else {
 			net.lock().poll();
@@ -1416,7 +1416,7 @@ fn empty_finality_proof_is_returned_to_light_client_when_authority_set_is_differ
 
 	// add a forced transition at block 5.
 	if FORCE_CHANGE {
-		let parent_hash = net.lock().peer(0).client().info().chain.best_hash;
+		let parent_hash = net.lock().peer(0).client().info().best_hash;
 		forced_transitions.lock().insert(parent_hash, (0, ScheduledChange {
 			next_authorities: voters.clone(),
 			delay: 3,
@@ -1441,7 +1441,7 @@ fn empty_finality_proof_is_returned_to_light_client_when_authority_set_is_differ
 
 	// check block, finalized on light client
 	assert_eq!(
-		net.lock().peer(3).client().info().chain.finalized_number,
+		net.lock().peer(3).client().info().finalized_number,
 		if FORCE_CHANGE { 0 } else { 10 },
 	);
 }

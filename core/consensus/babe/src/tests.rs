@@ -362,7 +362,7 @@ fn authorities_call_works() {
 	let _ = env_logger::try_init();
 	let client = test_client::new();
 
-	assert_eq!(client.info().chain.best_number, 0);
+	assert_eq!(client.info().best_number, 0);
 	assert_eq!(epoch(&client, &BlockId::Number(0)).unwrap().into_regular().unwrap().authorities, vec![
 		(Keyring::Alice.public().into(), 1),
 		(Keyring::Bob.public().into(), 1),

@@ -54,8 +54,8 @@ impl<B: BlockT> InformantDisplay<B> {
 
 	/// Displays the informant by calling `info!`.
 	pub fn display(&mut self, info: &ClientInfo<B>, net_status: NetworkStatus<B>) {
-		let best_number = info.chain.best_number;
-		let best_hash = info.chain.best_hash;
+		let best_number = info.best_number;
+		let best_hash = info.best_hash;
 		let speed = speed::<B>(best_number, self.last_number, self.last_update);
 		self.last_update = time::Instant::now();
 		self.last_number = Some(best_number);
@@ -74,8 +74,8 @@ impl<B: BlockT> InformantDisplay<B> {
 			Colour::White.bold().paint(format!("{}", net_status.num_connected_peers)),
 			Colour::White.paint(format!("{}", best_number)),
 			best_hash,
-			Colour::White.paint(format!("{}", info.chain.finalized_number)),
-			info.chain.finalized_hash,
+			Colour::White.paint(format!("{}", info.finalized_number)),
+			info.finalized_hash,
 			TransferRateFormat(net_status.average_download_per_sec),
 			TransferRateFormat(net_status.average_upload_per_sec),
 		);

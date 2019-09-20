@@ -367,8 +367,8 @@ fn own_blocks_are_announced() {
 
 	net.block_until_sync(&mut runtime);
 
-	assert_eq!(net.peer(0).client.info().chain.best_number, 1);
-	assert_eq!(net.peer(1).client.info().chain.best_number, 1);
+	assert_eq!(net.peer(0).client.info().best_number, 1);
+	assert_eq!(net.peer(1).client.info().best_number, 1);
 	let peer0 = &net.peers()[0];
 	assert!(net.peers()[1].blockchain_canon_equals(peer0));
 	(net.peers()[2].blockchain_canon_equals(peer0));
@@ -389,9 +389,9 @@ fn blocks_are_not_announced_by_light_nodes() {
 
 	// Sync between 0 and 1.
 	net.peer(0).push_blocks(1, false);
-	assert_eq!(net.peer(0).client.info().chain.best_number, 1);
+	assert_eq!(net.peer(0).client.info().best_number, 1);
 	net.block_until_sync(&mut runtime);
-	assert_eq!(net.peer(1).client.info().chain.best_number, 1);
+	assert_eq!(net.peer(1).client.info().best_number, 1);
 
 	// Add another node and remove node 0.
 	net.add_full_peer(&ProtocolConfig::default());
@@ -403,7 +403,7 @@ fn blocks_are_not_announced_by_light_nodes() {
 		net.poll();
 		delay.poll().map_err(|_| ())
 	})).unwrap();
-	assert_eq!(net.peer(1).client.info().chain.best_number, 0);
+	assert_eq!(net.peer(1).client.info().best_number, 0);
 }
 
 #[test]
@@ -416,13 +416,13 @@ fn can_sync_small_non_best_forks() {
 
 	// small fork + reorg on peer 1.
 	net.peer(0).push_blocks_at(BlockId::Number(30), 2, true);
-	let small_hash = net.peer(0).client().info().chain.best_hash;
+	let small_hash = net.peer(0).client().info().best_hash;
 	net.peer(0).push_blocks_at(BlockId::Number(30), 10, false);
-	assert_eq!(net.peer(0).client().info().chain.best_number, 40);
+	assert_eq!(net.peer(0).client().info().best_number, 40);
 
 	// peer 1 only ever had the long fork.
 	net.peer(1).push_blocks(10, false);
-	assert_eq!(net.peer(1).client().info().chain.best_number, 40);
+	assert_eq!(net.peer(1).client().info().best_number, 40);
 
 	assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
 	assert!(net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_none());
@@ -439,7 +439,7 @@ fn can_sync_small_non_best_forks() {
 
 	// synchronization: 0 synced to longer chain and 1 didn't sync to small chain.
 
-	assert_eq!(net.peer(0).client().info().chain.best_number, 40);
+	assert_eq!(net.peer(0).client().info().best_number, 40);
 
 	assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
 	assert!(!net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
@@ -475,8 +475,8 @@ fn can_not_sync_from_light_peer() {
 	net.block_until_sync(&mut runtime);
 
 	// ensure #0 && #1 have the same best block
-	let full0_info = net.peer(0).client.info().chain;
-	let light_info = net.peer(1).client.info().chain;
+	let full0_info = net.peer(0).client.info();
+	let light_info = net.peer(1).client.info();
 	assert_eq!(full0_info.best_number, 1);
 	assert_eq!(light_info.best_number, 1);
 	assert_eq!(light_info.best_hash, full0_info.best_hash);
