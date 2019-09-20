@@ -415,7 +415,11 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E>(
 
 		aux.difficulty = difficulty;
 		aux.total_difficulty.add(difficulty);
-		let hash = header.hash();
+		let hash = {
+			let mut header = header.clone();
+			header.digest_mut().push(DigestItem::Seal(POW_ENGINE_ID, seal.clone()));
+			header.hash()
+		};
 
 		let key = aux_key(&hash);
 		let best_hash = client.info().best_hash;
