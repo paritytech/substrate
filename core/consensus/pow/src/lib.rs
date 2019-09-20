@@ -347,8 +347,6 @@ pub fn start_mine<B: BlockT<Hash=H256>, C, Algorithm, E>(
 					e
 				),
 			}
-
-			std::thread::sleep(std::time::Duration::new(1, 0));
 		}
 	});
 }
