@@ -324,7 +324,7 @@ impl<H, B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<C, E, I
 		]
 	}
 
-	fn import_block(&self) -> Box<dyn Fn(
+	fn block_import_params(&self) -> Box<dyn Fn(
 		B::Header,
 		&B::Hash,
 		Vec<B::Extrinsic>,
@@ -879,7 +879,7 @@ impl<B, E, Block, RA, PRA, T> Verifier<Block> for BabeVerifier<B, E, Block, RA, 
 					}
 				};
 
-				let import_block = BlockImportParams {
+				let block_import_params = BlockImportParams {
 					origin,
 					header: pre_header,
 					post_digests: vec![seal],
@@ -890,7 +890,7 @@ impl<B, E, Block, RA, PRA, T> Verifier<Block> for BabeVerifier<B, E, Block, RA, 
 					fork_choice: ForkChoiceStrategy::Custom(new_best),
 				};
 
-				Ok((import_block, Default::default()))
+				Ok((block_import_params, Default::default()))
 			}
 			CheckedHeader::Deferred(a, b) => {
 				debug!(target: "babe", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);

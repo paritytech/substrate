@@ -101,7 +101,7 @@ cargo-check-benches:
   stage:                           test
   <<:                              *docker-env
   script:
-    - BUILD_DUMMY_WASM_BINARY=1 time cargo check --benches --all
+    - BUILD_DUMMY_WASM_BINARY=1 time cargo +nightly check --benches --all
     - sccache -s
 
 

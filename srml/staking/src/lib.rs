@@ -243,21 +243,13 @@
 
 #![recursion_limit="128"]
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(all(feature = "bench", test), feature(test))]
 
-#[cfg(all(feature = "bench", test))]
-extern crate test;
-
-#[cfg(any(feature = "bench", test))]
+#[cfg(test)]
 mod mock;
-
 #[cfg(test)]
 mod tests;
 
 pub mod inflation;
-
-#[cfg(all(feature = "bench", test))]
-mod benches;
 
 use rstd::{prelude::*, result};
 use codec::{HasCompact, Encode, Decode};
@@ -265,7 +257,7 @@ use support::{
 	StorageValue, StorageMap, StorageLinkedMap, decl_module, decl_event,
 	decl_storage, ensure, traits::{
 		Currency, OnFreeBalanceZero, OnDilution, LockIdentifier, LockableCurrency,
-		WithdrawReasons, WithdrawReason, OnUnbalanced, Imbalance, Get, Time
+		WithdrawReasons, OnUnbalanced, Imbalance, Get, Time
 	}
 };
 use session::{historical::OnSessionEnding, SelectInitialValidators};
@@ -277,7 +269,7 @@ use sr_primitives::traits::{
 };
 use phragmen::{elect, equalize, Support, SupportMap, ExtendedBalance, ACCURACY};
 use sr_staking_primitives::{
-	SessionIndex, CurrentElectedSet,
+	SessionIndex,
 	offence::{OnOffenceHandler, OffenceDetails, Offence, ReportOffence},
 };
 #[cfg(feature = "std")]
@@ -292,24 +284,27 @@ const STAKING_ID: LockIdentifier = *b"staking ";
 /// Counter for the number of eras that have passed.
 pub type EraIndex = u32;
 
+/// Counter for the number of "reward" points earned by a given validator.
+pub type Points = u32;
+
 /// Reward points of an era. Used to split era total payout between validators.
 #[derive(Encode, Decode, Default)]
-pub struct EraRewards {
+pub struct EraPoints {
 	/// Total number of points. Equals the sum of reward points for each validator.
-	total: u32,
-	/// Reward at one index correspond to reward for validator in current_elected of this index.
-	/// Thus this reward vec is only valid for one elected set.
-	rewards: Vec<u32>,
+	total: Points,
+	/// The reward points earned by a given validator. The index of this vec corresponds to the
+	/// index into the current validator set.
+	individual: Vec<Points>,
 }
 
-impl EraRewards {
+impl EraPoints {
 	/// Add the reward to the validator at the given index. Index must be valid
 	/// (i.e. `index < current_elected.len()`).
 	fn add_points_to_index(&mut self, index: u32, points: u32) {
 		if let Some(new_total) = self.total.checked_add(points) {
 			self.total = new_total;
-			self.rewards.resize((index as usize + 1).max(self.rewards.len()), 0);
-			self.rewards[index as usize] += points; // Addition is less than total
+			self.individual.resize((index as usize + 1).max(self.individual.len()), 0);
+			self.individual[index as usize] += points; // Addition is less than total
 		}
 	}
 }
@@ -459,7 +454,11 @@ type MomentOf<T>= <<T as Trait>::Time as Time>::Moment;
 /// This is needed because `Staking` sets the `ValidatorIdOf` of the `session::Trait`
 pub trait SessionInterface<AccountId>: system::Trait {
 	/// Disable a given validator by stash ID.
-	fn disable_validator(validator: &AccountId) -> Result<(), ()>;
+	///
+	/// Returns `true` if new era should be forced at the end of this session.
+	/// This allows preventing a situation where there is too many validators
+	/// disabled and block production stalls.
+	fn disable_validator(validator: &AccountId) -> Result<bool, ()>;
 	/// Get the validators from session.
 	fn validators() -> Vec<AccountId>;
 	/// Prune historical session tries up to but not including the given index.
@@ -477,7 +476,7 @@ impl<T: Trait> SessionInterface<<T as system::Trait>::AccountId> for T where
 	T::SelectInitialValidators: session::SelectInitialValidators<<T as system::Trait>::AccountId>,
 	T::ValidatorIdOf: Convert<<T as system::Trait>::AccountId, Option<<T as system::Trait>::AccountId>>
 {
-	fn disable_validator(validator: &<T as system::Trait>::AccountId) -> Result<(), ()> {
+	fn disable_validator(validator: &<T as system::Trait>::AccountId) -> Result<bool, ()> {
 		<session::Module<T>>::disable(validator)
 	}
 
@@ -590,7 +589,7 @@ decl_storage! {
 		pub CurrentEraStartSessionIndex get(current_era_start_session_index): SessionIndex;
 
 		/// Rewards for the current era. Using indices of current elected set.
-		CurrentEraRewards get(current_era_reward): EraRewards;
+		CurrentEraPointsEarned get(current_era_reward): EraPoints;
 
 		/// The amount of balance actively at stake for each validator slot, currently.
 		///
@@ -1018,7 +1017,7 @@ impl<T: Trait> Module<T> {
 			&ledger.stash,
 			ledger.total,
 			T::BlockNumber::max_value(),
-			WithdrawReasons::except(WithdrawReason::TransactionPayment),
+			WithdrawReasons::all(),
 		);
 		<Ledger<T>>::insert(controller, ledger);
 	}
@@ -1161,7 +1160,7 @@ impl<T: Trait> Module<T> {
 	/// get a chance to set their session keys.
 	fn new_era(start_session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		// Payout
-		let rewards = CurrentEraRewards::take();
+		let points = CurrentEraPointsEarned::take();
 		let now = T::Time::now();
 		let previous_era_start = <CurrentEraStart<T>>::mutate(|v| {
 			rstd::mem::replace(v, now)
@@ -1176,21 +1175,22 @@ impl<T: Trait> Module<T> {
 			let total_payout = inflation::compute_total_payout(
 				total_rewarded_stake.clone(),
 				T::Currency::total_issuance(),
-				// Era of duration more than u32::MAX is rewarded as u32::MAX.
-				<BalanceOf<T>>::from(era_duration.saturated_into::<u32>()),
+				// Duration of era; more than u64::MAX is rewarded as u64::MAX.
+				era_duration.saturated_into::<u64>(),
 			);
 
 			let mut total_imbalance = <PositiveImbalanceOf<T>>::zero();
 
-			let total_points = rewards.total;
-			for (v, points) in validators.iter().zip(rewards.rewards.into_iter()) {
-				if points != 0 {
-					let reward = multiply_by_rational(total_payout, points, total_points);
+			for (v, p) in validators.iter().zip(points.individual.into_iter()) {
+				if p != 0 {
+					let reward = multiply_by_rational(total_payout, p, points.total);
 					total_imbalance.subsume(Self::reward_validator(v, reward));
 				}
 			}
 
 			let total_reward = total_imbalance.peek();
+			// assert!(total_reward <= total_payout)
+
 			Self::deposit_event(RawEvent::Reward(total_reward));
 			T::Reward::on_unbalanced(total_imbalance);
 			T::OnRewardMinted::on_dilution(total_reward, total_rewarded_stake);
@@ -1245,7 +1245,7 @@ impl<T: Trait> Module<T> {
 		);
 
 		if let Some(phragmen_result) = maybe_phragmen_result {
-			let elected_stashes = phragmen_result.winners;
+			let elected_stashes = phragmen_result.winners.iter().map(|(s, _)| s.clone()).collect::<Vec<T::AccountId>>();
 			let mut assignments = phragmen_result.assignments;
 
 			// helper closure.
@@ -1288,10 +1288,11 @@ impl<T: Trait> Module<T> {
 				}
 			}
 
-			if cfg!(feature = "equalize") {
+			#[cfg(feature = "equalize")]
+			{
 				let tolerance = 0_u128;
 				let iterations = 2_usize;
-				equalize::<_, _, T::CurrencyToVote, _>(
+				equalize::<_, _, _, T::CurrencyToVote>(
 					assignments,
 					&mut supports,
 					tolerance,
@@ -1376,7 +1377,7 @@ impl<T: Trait> Module<T> {
 	/// COMPLEXITY: Complexity is `number_of_validator_to_reward x current_elected_len`.
 	/// If you need to reward lots of validator consider using `reward_by_indices`.
 	pub fn reward_by_ids(validators_points: impl IntoIterator<Item = (T::AccountId, u32)>) {
-		CurrentEraRewards::mutate(|rewards| {
+		CurrentEraPointsEarned::mutate(|rewards| {
 			let current_elected = <Module<T>>::current_elected();
 			for (validator, points) in validators_points.into_iter() {
 				if let Some(index) = current_elected.iter()
@@ -1396,7 +1397,7 @@ impl<T: Trait> Module<T> {
 		// TODO: This can be optimised once #3302 is implemented.
 		let current_elected_len = <Module<T>>::current_elected().len() as u32;
 
-		CurrentEraRewards::mutate(|rewards| {
+		CurrentEraPointsEarned::mutate(|rewards| {
 			for (validator_index, points) in validators_points.into_iter() {
 				if validator_index < current_elected_len {
 					rewards.add_points_to_index(validator_index, points);
@@ -1534,10 +1535,11 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 				continue;
 			}
 
-			// make sure to disable validator in next sessions
-			let _ = T::SessionInterface::disable_validator(stash);
-			// force a new era, to select a new validator set
-			ForceEra::put(Forcing::ForceNew);
+			// make sure to disable validator till the end of this session
+			if T::SessionInterface::disable_validator(stash).unwrap_or(false) {
+				// force a new era, to select a new validator set
+				ForceEra::put(Forcing::ForceNew);
+			}
 			// actually slash the validator
 			let slashed_amount = Self::slash_validator(stash, amount, exposure, &mut journal);
 
@@ -1588,14 +1590,5 @@ impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
 				RawEvent::OldSlashingReportDiscarded(offence_session)
 			)
 		}
-	}
-}
-
-/// Returns the currently elected validator set represented by their stash accounts.
-pub struct CurrentElectedStashAccounts<T>(rstd::marker::PhantomData<T>);
-
-impl<T: Trait> CurrentElectedSet<T::AccountId> for CurrentElectedStashAccounts<T> {
-	fn current_elected_set() -> Vec<T::AccountId> {
-		<Module<T>>::current_elected()
 	}
 }

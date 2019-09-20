@@ -17,12 +17,12 @@
 //! Substrate blockchain API.
 
 pub mod error;
-pub mod number;
 
 use jsonrpc_core::Result as RpcResult;
 use jsonrpc_core::futures::Future;
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
+use rpc_primitives::number;
 use self::error::{FutureResult, Result};
 
 pub use self::gen_client::Client as ChainClient;

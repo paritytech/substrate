@@ -31,7 +31,7 @@ use crate::error::{Error, Result};
 use codec::{Encode, Decode};
 use primitives::{
 	blake2_128, blake2_256, twox_64, twox_128, twox_256, ed25519, sr25519, Pair, crypto::KeyTypeId,
-	offchain, hexdisplay::HexDisplay, sandbox as sandbox_primitives, Blake2Hasher,
+	offchain, sandbox as sandbox_primitives, Blake2Hasher,
 	traits::Externalities,
 };
 use trie::{TrieConfiguration, trie_types::Layout};
@@ -418,22 +418,20 @@ impl_wasm_host_interface! {
 
 		ext_print_utf8(utf8_data: Pointer<u8>, utf8_len: WordSize) {
 			if let Ok(utf8) = context.read_memory(utf8_data, utf8_len) {
-				if let Ok(message) = String::from_utf8(utf8) {
-					println!("{}", message);
-				}
+				runtime_io::print_utf8(&utf8);
 			}
 			Ok(())
 		}
 
 		ext_print_hex(data: Pointer<u8>, len: WordSize) {
 			if let Ok(hex) = context.read_memory(data, len) {
-				println!("{}", HexDisplay::from(&hex));
+				runtime_io::print_hex(&hex);
 			}
 			Ok(())
 		}
 
 		ext_print_num(number: u64) {
-			println!("{}", number);
+			runtime_io::print_num(number);
 			Ok(())
 		}
 
@@ -629,9 +627,9 @@ impl_wasm_host_interface! {
 			)?;
 
 			if let Some(value) = maybe_value {
-				let value = &value[value_offset as usize..];
-				let written = std::cmp::min(value_len as usize, value.len());
-				context.write_memory(value_data, &value[..written])
+				let data = &value[value.len().min(value_offset as usize)..];
+				let written = std::cmp::min(value_len as usize, data.len());
+				context.write_memory(value_data, &data[..written])
 					.map_err(|_| "Invalid attempt to set value in ext_get_storage_into")?;
 				Ok(value.len() as u32)
 			} else {
@@ -658,10 +656,10 @@ impl_wasm_host_interface! {
 			)?;
 
 			if let Some(value) = maybe_value {
-				let value = &value[value_offset as usize..];
-				let written = std::cmp::min(value_len as usize, value.len());
-				context.write_memory(value_data, &value[..written])
-					.map_err(|_| "Invalid attempt to set value in ext_get_child_storage_into")?;
+				let data = &value[value.len().min(value_offset as usize)..];
+				let written = std::cmp::min(value_len as usize, data.len());
+				context.write_memory(value_data, &data[..written])
+					.map_err(|_| "Invalid attempt to get value in ext_get_child_storage_into")?;
 				Ok(value.len() as u32)
 			} else {
 				Ok(u32::max_value())

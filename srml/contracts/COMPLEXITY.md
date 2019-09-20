@@ -317,13 +317,13 @@ It consists of the following steps:
 1. Loading `init_code` buffer from the sandbox memory (see sandboxing memory get) and then decoding it.
 2. Loading `value` buffer from the sandbox memory and then decoding it.
 3. Loading `input_data` buffer from the sandbox memory.
-4. Invoking `create` executive function.
+4. Invoking `instantiate` executive function.
 
 Loading of `value` buffer should be charged. This is because the size of the buffer is specified by the calling code, even though marshaled representation is, essentially, of constant size. This can be fixed by assigning an upper bound for size for `Balance`.
 
 Loading `init_code` and `input_data` should be charged in any case.
 
-**complexity**: All complexity comes from loading buffers and executing `create` executive function. The former component is proportional to the sizes of `init_code`, `value` and `input_data` buffers. The latter component completely depends on the complexity of `create` executive function and also dominated by it.
+**complexity**: All complexity comes from loading buffers and executing `instantiate` executive function. The former component is proportional to the sizes of `init_code`, `value` and `input_data` buffers. The latter component completely depends on the complexity of `instantiate` executive function and also dominated by it.
 
 ## ext_return
 

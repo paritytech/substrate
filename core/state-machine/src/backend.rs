@@ -30,7 +30,7 @@ use trie::{
 /// to it.
 ///
 /// The clone operation (if implemented) should be cheap.
-pub trait Backend<H: Hasher> {
+pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// An error type when fetching data is not possible.
 	type Error: super::Error;
 
@@ -252,6 +252,12 @@ pub struct InMemory<H: Hasher> {
 	inner: HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>,
 	trie: Option<TrieBackend<MemoryDB<H>, H>>,
 	_hasher: PhantomData<H>,
+}
+
+impl<H: Hasher> std::fmt::Debug for InMemory<H> {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "InMemory ({} values)", self.inner.len())
+	}
 }
 
 impl<H: Hasher> Default for InMemory<H> {

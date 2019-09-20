@@ -137,7 +137,6 @@ mod tests {
 	use sr_primitives::testing::{Header, UintAuthorityId};
 	use sr_primitives::traits::{ConvertInto, IdentityLookup, OpaqueKeys};
 	use sr_primitives::Perbill;
-	use sr_staking_primitives::CurrentElectedSet;
 	use support::{impl_outer_origin, parameter_types};
 
 	type AuthorityDiscovery = Module<Test>;
@@ -149,18 +148,15 @@ mod tests {
 
 	type AuthorityId = im_online::sr25519::AuthorityId;
 
-	pub struct DummyCurrentElectedSet<T>(std::marker::PhantomData<T>);
-	impl<T> CurrentElectedSet<T> for DummyCurrentElectedSet<T> {
-		fn current_elected_set() -> Vec<T> {
-			vec![]
-		}
-	}
-
 	pub struct TestOnSessionEnding;
 	impl session::OnSessionEnding<AuthorityId> for TestOnSessionEnding {
 		fn on_session_ending(_: SessionIndex, _: SessionIndex) -> Option<Vec<AuthorityId>> {
 			None
 		}
+	}
+
+	parameter_types! {
+		pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
 	}
 
 	impl session::Trait for Test {
@@ -172,6 +168,7 @@ mod tests {
 		type ValidatorId = AuthorityId;
 		type ValidatorIdOf = ConvertInto;
 		type SelectInitialValidators = ();
+		type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 	}
 
 	impl session::historical::Trait for Test {
@@ -189,7 +186,6 @@ mod tests {
 			UncheckedExtrinsic<(), im_online::Call<Test>, (), ()>,
 		>;
 		type ReportUnresponsiveness = ();
-		type CurrentElectedSet = DummyCurrentElectedSet<AuthorityId>;
 	}
 
 	pub type BlockNumber = u64;

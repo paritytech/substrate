@@ -73,20 +73,11 @@ pub type Executor = client::LocalCallExecutor<
 pub type LightBackend = generic_test_client::LightBackend<runtime::Block>;
 
 /// Test client light executor.
-pub type LightExecutor = client::light::call_executor::RemoteOrLocalCallExecutor<
-	runtime::Block,
+pub type LightExecutor = client::light::call_executor::GenesisCallExecutor<
 	LightBackend,
-	client::light::call_executor::RemoteCallExecutor<
-		client::light::blockchain::Blockchain<
-			client_db::light::LightStorage<runtime::Block>,
-			LightFetcher
-		>,
-		LightFetcher
-	>,
 	client::LocalCallExecutor<
 		client::light::backend::Backend<
 			client_db::light::LightStorage<runtime::Block>,
-			LightFetcher,
 			Blake2Hasher
 		>,
 		NativeExecutor<LocalExecutor>
@@ -131,12 +122,12 @@ impl generic_test_client::GenesisInit for GenesisParameters {
 
 		let child_roots = storage.1.iter().map(|(sk, child_map)| {
 			let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
-				child_map.clone().into_iter()
+				child_map.clone().into_iter().collect()
 			);
 			(sk.clone(), state_root.encode())
 		});
 		let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
-			storage.0.clone().into_iter().chain(child_roots)
+			storage.0.clone().into_iter().chain(child_roots).collect()
 		);
 		let block: runtime::Block = client::genesis::construct_genesis_block(state_root);
 		storage.0.extend(additional_storage_with_genesis(&block));
@@ -271,22 +262,16 @@ pub fn new_light() -> (
 	let blockchain = Arc::new(client::light::blockchain::Blockchain::new(storage));
 	let backend = Arc::new(LightBackend::new(blockchain.clone()));
 	let executor = NativeExecutor::new(None);
-	let fetcher = Arc::new(LightFetcher);
-	let remote_call_executor = client::light::call_executor::RemoteCallExecutor::new(
-		blockchain.clone(),
-		fetcher,
-	);
 	let local_call_executor = client::LocalCallExecutor::new(backend.clone(), executor, None);
 	let call_executor = LightExecutor::new(
 		backend.clone(),
-		remote_call_executor,
 		local_call_executor,
 	);
 
-	(TestClientBuilder::with_backend(backend.clone())
-		.build_with_executor(call_executor)
-		.0,
-	backend,
+	(
+		TestClientBuilder::with_backend(backend.clone())
+			.build_with_executor(call_executor)
+			.0,
+		backend,
 	)
-
 }

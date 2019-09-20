@@ -160,7 +160,7 @@ pub struct OpaqueNetworkState {
 }
 
 /// Simple blob to hold a `PeerId` without committing to its format.
-#[derive(Clone, Eq, PartialEq, Encode, Decode)]
+#[derive(Default, Clone, Eq, PartialEq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct OpaquePeerId(pub Vec<u8>);
 

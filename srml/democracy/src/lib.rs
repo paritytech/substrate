@@ -562,7 +562,7 @@ decl_module! {
 
 		fn on_initialize(n: T::BlockNumber) {
 			if let Err(e) = Self::end_block(n) {
-				runtime_io::print(e);
+				sr_primitives::print(e);
 			}
 		}
 
