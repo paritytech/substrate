@@ -21,8 +21,8 @@ use crate::{RuntimePublic, KeyTypeId};
 pub use primitives::sr25519::*;
 
 mod app {
-	use crate::KeyTypeId;
-	crate::app_crypto!(super, KeyTypeId(*b"sr25"));
+	use primitives::testing::SR25519;
+	crate::app_crypto!(super, SR25519);
 }
 
 pub use app::Public as AppPublic;

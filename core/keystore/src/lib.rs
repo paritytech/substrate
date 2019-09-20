@@ -318,7 +318,7 @@ impl BareCryptoStore for Store {
 mod tests {
 	use super::*;
 	use tempdir::TempDir;
-	use primitives::crypto::{Ss58Codec};
+	use primitives::{testing::{SR25519}, crypto::{Ss58Codec}};
 
 	#[test]
 	fn basic_store() {
@@ -403,8 +403,6 @@ mod tests {
 
 	#[test]
 	fn store_unknown_and_extract_it() {
-		const SR25519: KeyTypeId = KeyTypeId(*b"sr25");
-
 		let temp_dir = TempDir::new("keystore").unwrap();
 		let store = Store::open(temp_dir.path(), None).unwrap();
 

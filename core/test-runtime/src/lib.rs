@@ -25,7 +25,14 @@ pub mod system;
 use rstd::{prelude::*, marker::PhantomData};
 use codec::{Encode, Decode, Input, Error};
 
-use primitives::{Blake2Hasher, OpaqueMetadata};
+use primitives::{
+	Blake2Hasher,
+	OpaqueMetadata,
+	testing::{
+		ED25519,
+		SR25519,
+	}
+};
 use app_crypto::{ed25519, sr25519, RuntimeAppPublic};
 pub use app_crypto;
 use trie_db::{TrieMut, Trie};
@@ -48,7 +55,6 @@ use sr_primitives::{
 };
 use runtime_version::RuntimeVersion;
 pub use primitives::{hash::H256};
-use app_crypto::KeyTypeId;
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
 use runtime_support::{impl_outer_origin, parameter_types};
@@ -445,8 +451,6 @@ fn code_using_trie() -> u64 {
 	} else { 103 }
 }
 
-const ED25519: KeyTypeId = KeyTypeId(*b"ed25");
-const SR25519: KeyTypeId = KeyTypeId(*b"sr25");
 impl_opaque_keys! {
 	pub struct SessionKeys {
 		#[id(ED25519)]
