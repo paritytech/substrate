@@ -534,10 +534,8 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 					"authority_id" => maybe_authority_id.to_string(),
 					"authority_set_id" => ?authorities.set_id(),
 					"authorities" => {
-						let curr = authorities.current_authorities();
-						let voters = curr.voters();
-						let authorities: Vec<String> =
-							voters.iter().map(|(id, _)| id.to_string()).collect();
+						let authorities: Vec<String> = curr.voters()
+							.iter().map(|(id, _)| id.to_string()).collect();
 						serde_json::to_string(&authorities)
 							.expect("authorities is always at least an empty vector; elements are always of type string")
 					}
