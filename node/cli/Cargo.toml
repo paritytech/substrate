@@ -54,7 +54,7 @@ keystore = { package = "substrate-keystore", path = "../../core/keystore" }
 babe = { package = "substrate-consensus-babe", path = "../../core/consensus/babe", features = ["test-helpers"] }
 consensus-common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 service-test = { package = "substrate-service-test", path = "../../core/service/test" }
-futures03 = { package = "futures-preview", version = "=0.3.0-alpha.17" }
+futures03 = { package = "futures-preview", version = "0.3.0-alpha.18" }
 tempfile = "3.1"
 
 [build-dependencies]
