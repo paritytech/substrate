@@ -47,7 +47,8 @@ use sr_primitives::{
 	},
 };
 use runtime_version::RuntimeVersion;
-pub use primitives::{hash::H256, crypto::key_types};
+pub use primitives::{hash::H256};
+use app_crypto::KeyTypeId;
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
 use runtime_support::{impl_outer_origin, parameter_types};
@@ -444,11 +445,13 @@ fn code_using_trie() -> u64 {
 	} else { 103 }
 }
 
+const ED25519: KeyTypeId = KeyTypeId(*b"ed25");
+const SR25519: KeyTypeId = KeyTypeId(*b"sr25");
 impl_opaque_keys! {
 	pub struct SessionKeys {
-		#[id(key_types::ED25519)]
+		#[id(ED25519)]
 		pub ed25519: ed25519::AppPublic,
-		#[id(key_types::SR25519)]
+		#[id(SR25519)]
 		pub sr25519: sr25519::AppPublic,
 	}
 }
