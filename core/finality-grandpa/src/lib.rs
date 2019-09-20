@@ -637,10 +637,26 @@ where
 			"name" => ?self.env.config.name(), "set_id" => ?self.env.set_id
 		);
 
+		let chain_info = self.env.inner.info();
+
+		let maybe_authority_id = is_voter(&self.env.voters, &self.env.config.keystore)
+			.map(|ap| ap.public())
+			.unwrap_or(Default::default());
+		telemetry!(CONSENSUS_INFO; "afg.authority_set";
+			"number" => ?chain_info.chain.finalized_number,
+			"hash" => ?chain_info.chain.finalized_hash,
+			"authority_id" => maybe_authority_id.to_string(),
+			"authority_set_id" => ?self.env.set_id,
+			"authorities" => {
+				let authorities: Vec<String> = self.env.voters.voters()
+					.iter().map(|(id, _)| id.to_string()).collect();
+				serde_json::to_string(&authorities)
+					.expect("authorities is always at least an empty vector; elements are always of type string")
+			},
+		);
+
 		match &*self.env.voter_set_state.read() {
 			VoterSetState::Live { completed_rounds, .. } => {
-				let chain_info = self.env.inner.info();
-
 				let last_finalized = (
 					chain_info.chain.finalized_hash,
 					chain_info.chain.finalized_number,
