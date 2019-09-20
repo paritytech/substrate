@@ -114,6 +114,7 @@ use log::{error, warn, debug, info, trace};
 use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible};
 
 mod aux_schema;
+mod verification;
 #[cfg(test)]
 mod tests;
 pub use babe_primitives::{AuthorityId, AuthorityPair, AuthoritySignature};
@@ -305,7 +306,7 @@ impl<H, B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<C, E, I
 		epoch_data: &Self::EpochData,
 	) -> Option<Self::Claim> {
 		let parent_weight = {
-			let pre_digest = find_pre_digest::<B>(&header).ok()?;
+			let pre_digest = find_pre_digest::<B::Header>(&header).ok()?;
 			pre_digest.weight()
 		};
 
@@ -396,8 +397,7 @@ macro_rules! babe_err {
 
 /// Extract the BABE pre digest from the given header. Pre-runtime digests are
 /// mandatory, the function will return `Err` if none is found.
-fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<BabePreDigest, String>
-	where DigestItemFor<B>: CompatibleDigestItem,
+fn find_pre_digest<H: Header>(header: &H) -> Result<BabePreDigest, String>
 {
 	// genesis block doesn't contain a pre digest so let's generate a
 	// dummy one to not break any invariants in the rest of the code
@@ -439,130 +439,12 @@ fn find_next_epoch_digest<B: BlockT>(header: &B::Header) -> Result<Option<Epoch>
 	Ok(epoch_digest)
 }
 
-/// Check a header has been signed by the right key. If the slot is too far in
-/// the future, an error will be returned. If successful, returns the pre-header
-/// and the digest item containing the seal.
-///
-/// The seal must be the last digest.  Otherwise, the whole header is considered
-/// unsigned.  This is required for security and must not be changed.
-///
-/// This digest item will always return `Some` when used with `as_babe_pre_digest`.
-///
-/// The given header can either be from a primary or secondary slot assignment,
-/// with each having different validation logic.
-// FIXME #1018 needs misbehavior types. The `transaction_pool` parameter will be
-// used to submit such misbehavior reports.
-fn check_header<B: BlockT + Sized, C: AuxStore, T>(
-	mut header: B::Header,
-	parent_header: B::Header,
-	slot_now: u64,
-	authorities: &[(AuthorityId, BabeAuthorityWeight)],
-	client: &C,
-	randomness: [u8; 32],
-	epoch_index: u64,
-	secondary_slots: bool,
-	c: (u64, u64),
-	_transaction_pool: Option<&T>,
-) -> Result<CheckedHeader<B::Header, (DigestItemFor<B>, DigestItemFor<B>)>, String> where
-	DigestItemFor<B>: CompatibleDigestItem,
-	T: Send + Sync + 'static,
-{
-	trace!(target: "babe", "Checking header");
-	let seal = match header.digest_mut().pop() {
-		Some(x) => x,
-		None => return Err(babe_err!("Header {:?} is unsealed", header.hash())),
-	};
-
-	let sig = seal.as_babe_seal().ok_or_else(|| {
-		babe_err!("Header {:?} has a bad seal", header.hash())
-	})?;
-
-	// the pre-hash of the header doesn't include the seal
-	// and that's what we sign
-	let pre_hash = header.hash();
-
-	let pre_digest = find_pre_digest::<B>(&header)?;
-
-	if pre_digest.slot_number() > slot_now {
-		header.digest_mut().push(seal);
-		return Ok(CheckedHeader::Deferred(header, pre_digest.slot_number()));
-	}
-
-	if pre_digest.authority_index() > authorities.len() as u32 {
-		return Err(babe_err!("Slot author not found"));
-	}
-
-	let parent_weight = {
-		let parent_pre_digest = find_pre_digest::<B>(&parent_header)?;
-		parent_pre_digest.weight()
-	};
-
-	match &pre_digest {
-		BabePreDigest::Primary { vrf_output, vrf_proof, authority_index, slot_number, weight } => {
-			debug!(target: "babe", "Verifying Primary block");
-
-			let digest = (vrf_output, vrf_proof, *authority_index, *slot_number, *weight);
-
-			check_primary_header::<B>(
-				pre_hash,
-				digest,
-				sig,
-				parent_weight,
-				authorities,
-				randomness,
-				epoch_index,
-				c,
-			)?;
-		},
-		BabePreDigest::Secondary { authority_index, slot_number, weight } if secondary_slots => {
-			debug!(target: "babe", "Verifying Secondary block");
-
-			let digest = (*authority_index, *slot_number, *weight);
-
-			check_secondary_header::<B>(
-				pre_hash,
-				digest,
-				sig,
-				parent_weight,
-				&authorities,
-				randomness,
-			)?;
-		},
-		_ => {
-			return Err(babe_err!("Secondary slot assignments are disabled for the current epoch."));
-		}
-	}
-
-	let author = &authorities[pre_digest.authority_index() as usize].0;
-
-	// the header is valid but let's check if there was something else already
-	// proposed at the same slot by the given author
-	if let Some(equivocation_proof) = check_equivocation(
-		client,
-		slot_now,
-		pre_digest.slot_number(),
-		&header,
-		author,
-	).map_err(|e| e.to_string())? {
-		info!(
-			"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
-			author,
-			pre_digest.slot_number(),
-			equivocation_proof.fst_header().hash(),
-			equivocation_proof.snd_header().hash(),
-		);
-	}
-
-	let pre_digest = CompatibleDigestItem::babe_pre_digest(pre_digest);
-	Ok(CheckedHeader::Checked(header, (pre_digest, seal)))
-}
-
 /// Check a primary slot proposal header. We validate that the given header is
 /// properly signed by the expected authority, and that the contained VRF proof
 /// is valid. Additionally, the weight of this block must increase compared to
 /// its parent since it is a primary block.
-fn check_primary_header<B: BlockT + Sized>(
-	pre_hash: B::Hash,
+fn check_primary_header<H: Header>(
+	pre_hash: H::Hash,
 	pre_digest: (&VRFOutput, &VRFProof, AuthorityIndex, SlotNumber, BabeBlockWeight),
 	signature: AuthoritySignature,
 	parent_weight: BabeBlockWeight,
@@ -570,9 +452,7 @@ fn check_primary_header<B: BlockT + Sized>(
 	randomness: [u8; 32],
 	epoch_index: u64,
 	c: (u64, u64),
-) -> Result<(), String>
-	where DigestItemFor<B>: CompatibleDigestItem,
-{
+) -> Result<(), String> {
 	let (vrf_output, vrf_proof, authority_index, slot_number, weight) = pre_digest;
 	if weight != parent_weight + 1 {
 		return Err("Invalid weight: should increase with Primary block.".into());
@@ -611,8 +491,8 @@ fn check_primary_header<B: BlockT + Sized>(
 /// properly signed by the expected authority, which we have a deterministic way
 /// of computing. Additionally, the weight of this block must stay the same
 /// compared to its parent since it is a secondary block.
-fn check_secondary_header<B: BlockT>(
-	pre_hash: B::Hash,
+fn check_secondary_header<H: Header>(
+	pre_hash: H::Hash,
 	pre_digest: (AuthorityIndex, SlotNumber, BabeBlockWeight),
 	signature: AuthoritySignature,
 	parent_weight: BabeBlockWeight,
@@ -662,7 +542,7 @@ pub struct BabeVerifier<B, E, Block: BlockT, RA, PRA, T> {
 	inherent_data_providers: inherents::InherentDataProviders,
 	config: Config,
 	time_source: BabeLink,
-	transaction_pool: Option<Arc<T>>,
+	_transaction_pool: Option<Arc<T>>,
 }
 
 impl<B, E, Block: BlockT, RA, PRA, T> BabeVerifier<B, E, Block, RA, PRA, T> {
@@ -775,7 +655,7 @@ impl<B, E, Block, RA, PRA, T> Verifier<Block> for BabeVerifier<B, E, Block, RA, 
 		let epoch = epoch(self.api.as_ref(), &BlockId::Hash(parent_hash))
 			.map_err(|e| format!("Could not fetch epoch at {:?}: {:?}", parent_hash, e))?;
 		let (epoch, maybe_next_epoch) = epoch.deconstruct();
-		let Epoch { authorities, randomness, epoch_index, secondary_slots, .. } = epoch;
+		let Epoch { ref authorities, epoch_index, .. } = epoch;
 
 		let parent_header = self.client.header(&BlockId::Hash(parent_hash))
 			.map_err(|e| format!("Could not fetch parent header {:?}: {:?}", parent_hash, e))?
@@ -783,35 +663,25 @@ impl<B, E, Block, RA, PRA, T> Verifier<Block> for BabeVerifier<B, E, Block, RA, 
 
 		// We add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of headers
-		let mut checked_header = check_header::<Block, PRA, T>(
+		let mut checked_header = verification::check_header::<Block::Header>(
 			header.clone(),
 			parent_header.clone(),
 			slot_now + 1,
-			&authorities,
-			&self.api,
-			randomness,
-			epoch_index,
-			secondary_slots,
+			&epoch,
 			self.config.c(),
-			self.transaction_pool.as_ref().map(|x| &**x),
 		);
 
 		// if we have failed to check header using (presumably) current epoch AND we're probably in the next epoch
 		// => check using next epoch
 		// (this is only possible on the light client at epoch#0)
 		if epoch_index == 0 && checked_header.is_err() {
-			if let Some(Epoch { authorities, randomness, epoch_index, .. }) = maybe_next_epoch {
-				let checked_header_next = check_header::<Block, PRA, T>(
-					header,
+			if let Some(epoch) = maybe_next_epoch {
+				let checked_header_next = verification::check_header::<Block::Header>(
+					header.clone(),
 					parent_header,
 					slot_now + 1,
-					&authorities,
-					&self.api,
-					randomness,
-					epoch_index,
-					secondary_slots,
+					&epoch,
 					self.config.c(),
-					self.transaction_pool.as_ref().map(|x| &**x),
 				);
 
 				match checked_header_next {
@@ -821,13 +691,33 @@ impl<B, E, Block, RA, PRA, T> Verifier<Block> for BabeVerifier<B, E, Block, RA, 
 			}
 		}
 
-		let checked_header = checked_header?;
-		match checked_header {
+		// let checked_header: CheckedHeader = checked_header?;
+		match checked_header? {
 			CheckedHeader::Checked(pre_header, (pre_digest, seal)) => {
 				let babe_pre_digest = pre_digest.as_babe_pre_digest()
 					.expect("check_header always returns a pre-digest digest item; qed");
 
 				let slot_number = babe_pre_digest.slot_number();
+
+				let author = &authorities[(&babe_pre_digest).authority_index() as usize].0;
+
+				// the header is valid but let's check if there was something else already
+				// proposed at the same slot by the given author
+				if let Some(equivocation_proof) = check_equivocation(
+					&*self.api,
+					slot_now,
+					babe_pre_digest.slot_number(),
+					&header,
+					author,
+				).map_err(|e| e.to_string())? {
+					info!(
+						"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
+						author,
+						babe_pre_digest.slot_number(),
+						equivocation_proof.fst_header().hash(),
+						equivocation_proof.snd_header().hash(),
+					);
+				}
 
 				// if the body is passed through, we need to use the runtime
 				// to check that the internally-set timestamp in the inherents
@@ -865,7 +755,7 @@ impl<B, E, Block, RA, PRA, T> Verifier<Block> for BabeVerifier<B, E, Block, RA, 
 												 .map_err(|_| "Failed fetching best header")?
 					.expect("parent_header must be imported; qed");
 
-					let best_weight = find_pre_digest::<Block>(&best_header)
+					let best_weight = find_pre_digest::<Block::Header>(&best_header)
 						.map(|babe_pre_digest| babe_pre_digest.weight())?;
 
 					let new_weight = babe_pre_digest.weight();
@@ -1327,7 +1217,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 		}
 
 		let slot_number = {
-			let pre_digest = find_pre_digest::<Block>(&block.header)
+			let pre_digest = find_pre_digest::<Block::Header>(&block.header)
 				.expect("valid babe headers must contain a predigest; \
 						 header has been already verified; qed");
 			pre_digest.slot_number()
@@ -1552,7 +1442,7 @@ pub mod test_helpers {
 			_ => unreachable!("it is always Regular epoch on full nodes"),
 		};
 
-		let weight = find_pre_digest::<B>(parent).ok()
+		let weight = find_pre_digest::<B::Header>(parent).ok()
 			.map(|d| d.weight())?;
 
 		super::claim_slot(
