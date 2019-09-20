@@ -19,6 +19,8 @@
 use std::fmt::Debug;
 use std::collections::BTreeMap;
 
+use serde::{Serialize, Deserialize, de::DeserializeOwned};
+
 /// A `ChainSpec` extension.
 pub trait Extension: Sized {
 	/// An associated type containing fork definition.
@@ -46,7 +48,7 @@ pub trait Fork: Sized {
 	fn combine_with(&mut self, other: Self);
 
 	/// Attempt to convert to the base type if all parameters are set.
-	fn to_base(self) -> Result<Self::Base, Self>;
+	fn to_base(self) -> Option<Self::Base>;
 }
 
 macro_rules! impl_trivial {
@@ -72,8 +74,8 @@ macro_rules! impl_trivial {
 				*self = other;
 			}
 
-			fn to_base(self) -> Result<Self::Base, Self> {
-				Ok(self)
+			fn to_base(self) -> Option<Self::Base> {
+				Some(self)
 			}
 		}
 	}
@@ -102,9 +104,8 @@ impl<T: Fork> Fork for Option<T> {
 		};
 	}
 
-	fn to_base(self) -> Result<Self::Base, Self> {
-		// TODO [ToDr] Handle error
-		Ok(self.map(|x| x.to_base().ok().unwrap()))
+	fn to_base(self) -> Option<Self::Base> {
+		self.map(|x| x.to_base())
 	}
 }
 
@@ -114,9 +115,9 @@ pub trait Extensions {
 	fn get<T: Extension + 'static>(&self) -> Option<&T>;
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Forks<BlockNumber: Ord, T: Extension> where
-	T::Fork: serde::Serialize + serde::de::DeserializeOwned,
+	T::Fork: Serialize + DeserializeOwned,
 {
 	#[serde(flatten)]
 	base: T,
@@ -124,7 +125,7 @@ pub struct Forks<BlockNumber: Ord, T: Extension> where
 }
 
 impl<B: Ord, T: Extension + Clone> Forks<B, T> where
-	T::Fork: serde::Serialize + serde::de::DeserializeOwned + Clone + Debug,
+	T::Fork: Serialize + DeserializeOwned + Clone + Debug,
 {
 	/// Create new fork definition given the base and the forks.
 	pub fn new(base: T, forks: BTreeMap<B, T::Fork>) -> Self {
@@ -135,10 +136,8 @@ impl<B: Ord, T: Extension + Clone> Forks<B, T> where
 	pub fn for_block(&self, block: B) -> T {
 		let mut start = self.base.clone().to_fork();
 
-		println!("Starting: {:?}", start);
 		for (_, fork) in self.forks.range(..=block) {
 			start.combine_with(fork.clone());
-			println!("Combined: {:?} + {:?}", start, fork);
 		}
 
 		start
@@ -150,85 +149,19 @@ impl<B: Ord, T: Extension + Clone> Forks<B, T> where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use serde::{Serialize, Deserialize};
+	use chain_spec_derive::ChainSpecExtension;
 
-	#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+	#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ChainSpecExtension)]
 	pub struct Extension1 {
 		pub test: u64,
 	}
 
-	impl Extension for Extension1 {
-		type Fork = Extension1Fork;
-
-		fn to_fork(self) -> Self::Fork {
-			Extension1Fork {
-				test: Some(self.test.to_fork()),
-			}
-		}
-	}
-
-	#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-	pub struct Extension1Fork {
-		pub test: Option<u64>,
-	}
-
-	impl Fork for Extension1Fork {
-		type Base = Extension1;
-
-		fn combine_with(&mut self, other: Self) {
-			self.test.combine_with(other.test);
-		}
-
-		fn to_base(self) -> Result<Self::Base, Self> {
-			if self.test.is_none() {
-				Err(self)
-			} else {
-				Ok(Extension1 {
-					test: self.test.unwrap(),
-				})
-			}
-		}
-	}
-
-	#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+	#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ChainSpecExtension)]
 	pub struct Extension2 {
 		pub test: u8,
 	}
 
-	impl Extension for Extension2 {
-		type Fork = Extension2Fork;
-
-		fn to_fork(self) -> Self::Fork {
-			Extension2Fork {
-				test: Some(self.test.to_fork()),
-			}
-		}
-	}
-
-	#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-	pub struct Extension2Fork {
-		pub test: Option<u8>,
-	}
-
-	impl Fork for Extension2Fork {
-		type Base = Extension2;
-
-		fn combine_with(&mut self, other: Self) {
-			self.test.combine_with(other.test)
-		}
-
-		fn to_base(self) -> Result<Self::Base, Self> {
-			if self.test.is_none() {
-				Err(self)
-			} else {
-				Ok(Extension2 {
-					test: self.test.unwrap().to_base().unwrap(),
-				})
-			}
-		}
-	}
-
-	#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+	#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ChainSpecExtension)]
 	pub struct Extensions {
 		pub ext1: Extension1,
 		pub ext2: Extension2,
@@ -242,43 +175,6 @@ mod tests {
 				x if x == TypeId::of::<Extension1>() => Any::downcast_ref(&self.ext1),
 				x if x == TypeId::of::<Extension2>() => Any::downcast_ref(&self.ext2),
 				_ => None,
-			}
-		}
-	}
-
-	impl Extension for Extensions {
-		type Fork = ExtensionsFork;
-
-		fn to_fork(self) -> Self::Fork {
-			ExtensionsFork {
-				ext1: Some(self.ext1.to_fork()),
-				ext2: Some(self.ext2.to_fork()),
-			}
-		}
-	}
-
-	#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-	pub struct ExtensionsFork {
-		pub ext1: Option<Extension1Fork>,
-		pub ext2: Option<Extension2Fork>,
-	}
-
-	impl Fork for ExtensionsFork {
-		type Base = Extensions;
-
-		fn combine_with(&mut self, other: Self) {
-			self.ext1.combine_with(other.ext1);
-			self.ext2.combine_with(other.ext2);
-		}
-
-		fn to_base(self) -> Result<Self::Base, Self> {
-			if self.ext1.is_none() || self.ext2.is_none() {
-				Err(self)
-			} else {
-				Ok(Extensions {
-					ext1: self.ext1.unwrap().to_base().unwrap(),
-					ext2: self.ext2.unwrap().to_base().unwrap(),
-				})
 			}
 		}
 	}
@@ -335,20 +231,4 @@ mod tests {
 
 		assert!(forks.for_block(10).get::<Extension2>().is_some());
 	}
-
-
-	// #[derive(ChainSpecExtension)]
-	// pub struct Extension1 {
-	// 	pub test: u64,
-	// }
-    //
-	// #[derive(ChainSpecExtension)]
-	// pub struct Extension2 {
-	// 	pub test: u8,
-	// }
-    //
-	// extensions! {
-	// 	ext1: Extension1,
-	// 	ext2: Extension2,
-	// }
 }

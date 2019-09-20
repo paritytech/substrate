@@ -16,9 +16,8 @@
 
 //! Chain utilities.
 
-use crate::RuntimeGenesis;
 use crate::error;
-use crate::chain_spec::ChainSpec;
+use chain_spec::{ChainSpec, RuntimeGenesis};
 
 #[macro_export]
 macro_rules! export_blocks {

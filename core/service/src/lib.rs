@@ -19,7 +19,6 @@
 
 #![warn(missing_docs)]
 
-mod chain_spec;
 pub mod config;
 #[macro_use]
 pub mod chain_ops;
@@ -31,7 +30,6 @@ use std::net::SocketAddr;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
-use serde::{Serialize, de::DeserializeOwned};
 use futures::sync::mpsc;
 use parking_lot::Mutex;
 
@@ -43,14 +41,13 @@ use network::{NetworkService, NetworkState, specialization::NetworkSpecializatio
 use log::{log, warn, debug, error, Level};
 use codec::{Encode, Decode};
 use primitives::{Blake2Hasher, H256};
-use sr_primitives::BuildStorage;
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::NumberFor;
 
 pub use self::error::Error;
 pub use self::builder::{ServiceBuilder, ServiceBuilderExport, ServiceBuilderImport, ServiceBuilderRevert};
 pub use config::{Configuration, Roles, PruningMode};
-pub use chain_spec::{ChainSpec, Properties};
+pub use chain_spec::{ChainSpec, Properties, RuntimeGenesis};
 pub use transaction_pool::txpool::{
 	self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError
 };
@@ -99,10 +96,6 @@ pub struct NewService<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	keystore: keystore::KeyStorePtr,
 	marker: PhantomData<TBl>,
 }
-
-/// A set of traits for the runtime genesis config.
-pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
-impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
 
 /// Alias for a an implementation of `futures::future::Executor`.
 pub type TaskExecutor = Arc<dyn Executor<Box<dyn Future<Item = (), Error = ()> + Send>> + Send + Sync>;

@@ -14,9 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Substrate chain configurations.
+//! Macros to derive chain spec extension traits implementation.
 
-mod chain_spec;
-mod extension;
+extern crate proc_macro;
 
-pub use chain_spec::{ChainSpec, Properties};
+mod impl_extension;
+
+use proc_macro::TokenStream;
+
+#[proc_macro_derive(ChainSpecExtension)]
+pub fn extension_derive(input: TokenStream) -> TokenStream {
+	let ast = syn::parse(input).unwrap();
+	impl_extension::impl_extension_derive(&ast)
+}

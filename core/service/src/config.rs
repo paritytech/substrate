@@ -22,7 +22,7 @@ pub use network::config::{ExtTransport, NetworkConfiguration, Roles};
 
 use std::{path::PathBuf, net::SocketAddr};
 use transaction_pool;
-use crate::chain_spec::ChainSpec;
+use chain_spec::ChainSpec;
 use primitives::crypto::Protected;
 use sr_primitives::BuildStorage;
 use serde::{Serialize, de::DeserializeOwned};

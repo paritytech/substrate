@@ -292,7 +292,7 @@ mod tests {
 	#[test]
 	fn should_deserailize_example_chain_spec() {
 		let spec1 = TestSpec::from_json_bytes(Cow::Owned(
-			include_bytes!("../../res/chain_spec.json").to_vec()
+			include_bytes!("../res/chain_spec.json").to_vec()
 		)).unwrap();
 		let spec2 = TestSpec::from_json_file(
 			PathBuf::from("./res/chain_spec.json")
@@ -312,7 +312,7 @@ mod tests {
 	#[test]
 	fn should_deserialize_chain_spec_with_extensions() {
 		let spec = TestSpec2::from_json_bytes(Cow::Owned(
-			include_bytes!("../../res/chain_spec2.json").to_vec()
+			include_bytes!("../res/chain_spec2.json").to_vec()
 		)).unwrap();
 
 		assert_eq!(spec.extensions().my_property, "Test Extension");
