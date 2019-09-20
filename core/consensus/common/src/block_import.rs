@@ -21,9 +21,8 @@ use sr_primitives::Justification;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
-use crate::well_known_cache_keys;
 
-use crate::import_queue::Verifier;
+use crate::import_queue::{Verifier, CacheKeyId};
 
 /// Block import result.
 #[derive(Debug, PartialEq, Eq)]
@@ -182,7 +181,7 @@ pub trait BlockImport<B: BlockT> {
 	fn import_block(
 		&mut self,
 		block: BlockImportParams<B>,
-		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
+		cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error>;
 }
 
@@ -202,7 +201,7 @@ where for<'r> &'r T: BlockImport<B, Error = E>
 	fn import_block(
 		&mut self,
 		block: BlockImportParams<B>,
-		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
+		cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		(&**self).import_block(block, cache)
 	}

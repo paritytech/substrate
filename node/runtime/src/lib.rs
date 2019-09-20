@@ -82,8 +82,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to equal spec_version. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 158,
-	impl_version: 160,
+	spec_version: 159,
+	impl_version: 159,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -211,6 +211,9 @@ impl_opaque_keys! {
 // `SessionKeys`.
 // TODO: Introduce some structure to tie these together to make it a bit less of a footgun. This
 // should be easy, since OneSessionHandler trait provides the `Key` as an associated type. #2858
+parameter_types! {
+	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(17);
+}
 
 impl session::Trait for Runtime {
 	type OnSessionEnding = Staking;
@@ -221,6 +224,7 @@ impl session::Trait for Runtime {
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = staking::StashOf<Self>;
 	type SelectInitialValidators = Staking;
+	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 }
 
 impl session::historical::Trait for Runtime {
