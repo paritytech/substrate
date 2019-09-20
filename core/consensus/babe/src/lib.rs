@@ -718,7 +718,7 @@ fn median_algorithm(
 		}).collect();
 
 		// Use a partial sort to move the median timestamp to the middle of the list
-		select(&mut new_list, num_timestamps / 2);
+		pdqselect::select(&mut new_list, num_timestamps / 2);
 
 		let &median = new_list
 			.get(num_timestamps / 2)
