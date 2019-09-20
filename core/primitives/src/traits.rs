@@ -181,7 +181,7 @@ pub trait Externalities<H: Hasher> {
 	/// Create a new transactional layer.
 	fn storage_start_transaction(&mut self);
 
-	/// Discard a transactional layer, pending changes of every trasaction below this layer are
+	/// Discard a transactional layer, pending changes of every transaction behind this layer are
 	/// dropped (including committed changes) .
 	fn storage_discard_transaction(&mut self);
 

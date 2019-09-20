@@ -38,8 +38,9 @@ pub struct OverlayedChanges {
 	/// runtime if it supports change tries.
 	pub(crate) changes_trie_config: Option<ChangesTrieConfig>,
 	/// Counter of number of operation between garbage collection.
-	/// Add or delete cost one, additional cost per size by counting a fix size
-	/// as a unit.
+	/// Changing or deleting a value increment this counter by one.
+	/// An additional cost for data added is added for every n bytes of data.
+	/// n is currently defined by `DEFAULT_GC_CONF`.
 	pub(crate) operation_from_last_gc: usize,
 }
 
@@ -56,12 +57,14 @@ pub struct OverlayedValue {
 
 /// Overlayed change set, keep history of values.
 ///
-/// This does not work by stacking hashmap for transaction,
-/// but store history of value instead.
+/// This does not work by stacking hashmaps per transaction,
+/// but by storing history of a value instead.
 /// Value validity is given by a global indexed state history.
-/// When dropping or committing a layer of transaction,
-/// history for each values is kept until
-/// next mutable access to the value.
+/// When dropping or committing a transaction layer,
+/// full history for each values is kept until
+/// next garbage collection.
+/// Note that on mutable access terminal values corresponding
+/// to a deleted layer are also dropped.
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct OverlayedChangeSet {
@@ -113,12 +116,10 @@ fn set_with_extrinsic_inner_overlayed_value(
 ) {
 	let state = history.len() - 1;
 	if let Some(current) = h_value.get_mut(history) {
-
 		if current.index == state {
 			current.value.value = value;
 			current.value.extrinsics.get_or_insert_with(Default::default)
 				.insert(extrinsic_index);
-
 		} else {
 			let mut extrinsics = current.value.extrinsics.clone();
 			extrinsics.get_or_insert_with(Default::default)
@@ -162,7 +163,7 @@ impl OverlayedChangeSet {
 		self.top.retain(|_, h_value| h_value.get_mut_pruning(history, eager()).is_some());
 		self.children.retain(|_, m| {
 			m.retain(|_, h_value| h_value.get_mut_pruning(history, eager()).is_some());
-			m.len() > 0
+			!m.is_empty()
 		});
 	}
 

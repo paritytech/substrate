@@ -15,9 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Substrate state machine fuzzing implementations.
-use substrate_state_machine::{
-	OverlayedChanges,
-};
+use substrate_state_machine::OverlayedChanges;
 use std::collections::HashMap;
 
 /// Size of key, max 255

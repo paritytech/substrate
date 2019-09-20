@@ -1362,22 +1362,19 @@ impl_wasm_host_interface! {
 		ext_storage_start_transaction() {
 			with_external_storage(move ||
 				Ok(runtime_io::storage_start_transaction())
-			)?;
-			Ok(())
+			)
 		}
 
 		ext_storage_discard_transaction() {
 			with_external_storage(move ||
 				Ok(runtime_io::storage_discard_transaction())
-			)?;
-			Ok(())
+			)
 		}
 
 		ext_storage_commit_transaction() {
 			with_external_storage(move ||
 				Ok(runtime_io::storage_commit_transaction())
-			)?;
-			Ok(())
+			)
 		}
 	}
 }

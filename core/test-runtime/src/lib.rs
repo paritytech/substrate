@@ -261,7 +261,7 @@ cfg_if! {
 				/// Trie no_std testing.
 				fn use_trie() -> u64;
 				/// History data no_std testing.
-				fn use_history_data() -> u64;
+				fn use_history_data();
 				/// Transactional tests.
 				fn use_transactions() -> u64;
 				fn benchmark_indirect_call() -> u64;
@@ -309,7 +309,7 @@ cfg_if! {
 				/// trie no_std testing
 				fn use_trie() -> u64;
 				/// History data no_std testing.
-				fn use_history_data() -> u64;
+				fn use_history_data();
 				/// Transactional tests.
 				fn use_transactions() -> u64;
 				fn benchmark_indirect_call() -> u64;
@@ -563,7 +563,7 @@ cfg_if! {
 					code_using_trie()
 				}
 
-				fn use_history_data() -> u64 {
+				fn use_history_data() {
 					test_historied_data()
 				}
 
@@ -764,7 +764,7 @@ cfg_if! {
 					code_using_trie()
 				}
 
-				fn use_history_data() -> u64 {
+				fn use_history_data() {
 					test_historied_data()
 				}
 
@@ -925,31 +925,26 @@ fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic) {
 	(signature, public0)
 }
 
-fn test_historied_data() -> u64 {
-
+fn test_historied_data() {
 	let mut states = historied_data::linear::States::default();
 	let mut value = historied_data::linear::History::default();
 	if value.get(states.as_ref()) != None {
-		// value greater than 100 are error codes.
-		return 101;
+		panic!("Got a value for empty data");
 	}
  
 	value.set(states.as_ref(), 42u64);
 	states.start_transaction();
 	if value.get(states.as_ref()) != Some(&42) {
-		return 102;
+		panic!("Got a wrong result accessing a one element data");
 	}
 	value.set(states.as_ref(), 43u64);
 	if value.get(states.as_ref()) != Some(&43) {
-		return 103;
+		panic!("Got a wrong result accessing a two element data");
 	}
 	states.discard_transaction();
 	if value.get(states.as_ref()) != Some(&42) {
-		return 104;
+		panic!("Got a wrong result accessing a one element data after a discard");
 	}
- 
-	// 0 for success
-	0
 }
 
 fn test_read_storage() {
