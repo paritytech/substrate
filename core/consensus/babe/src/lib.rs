@@ -1212,11 +1212,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 		// if this is the first block in its chain for that epoch.
 		//
 		// also provides the total weight of the chain, including the imported block.
-		let (epoch, first_in_epoch, parent_weight) = if number == sr_primitives::traits::One::one() {
-			// The first block of the chain is a special-case, since it is
-			// implied to kick off the genesis epoch.
-			(self.config.genesis_epoch(slot_number), true, 0)
-		} else {
+		let (epoch, first_in_epoch, parent_weight) = {
 			let parent_hash = *block.header.parent_hash();
 			let parent_header = self.client.header(&BlockId::Hash(parent_hash))
 				.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
@@ -1231,11 +1227,15 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 				.expect("parent is non-genesis; valid BABE headers contain a pre-digest; \
 						 header has already been verified; qed");
 
-			let parent_weight = aux_schema::load_block_weight(&*self.client, parent_hash)
-				.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
-				.ok_or_else(|| ConsensusError::ClientImport(
-					babe_err!("Parent block of {} has no associated weight", hash)
-				))?;
+			let parent_weight = if *parent_header.number() == Zero::zero() {
+				0
+			} else {
+				aux_schema::load_block_weight(&*self.client, parent_hash)
+					.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
+					.ok_or_else(|| ConsensusError::ClientImport(
+						babe_err!("Parent block of {} has no associated weight", hash)
+					))?
+			};
 
 			let epoch = epoch_changes.epoch_for_child_of(
 				descendent_query(&*self.client),

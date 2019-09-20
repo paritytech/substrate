@@ -94,16 +94,10 @@ impl Environment<TestBlock> for DummyFactory {
 	}
 }
 
-impl Proposer<TestBlock> for DummyProposer {
-	type Error = Error;
-	type Create = future::Ready<Result<TestBlock, Error>>;
-
-	fn propose(
-		&mut self,
-		_: InherentData,
-		pre_digests: DigestFor<TestBlock>,
-		_: Duration,
-	) -> Self::Create {
+impl DummyProposer {
+	fn propose_with(&mut self, pre_digests: DigestFor<TestBlock>)
+		-> future::Ready<Result<TestBlock, Error>>
+	{
 		let block_builder = self.factory.client.new_block_at(
 			&BlockId::Hash(self.parent_hash),
 			pre_digests,
@@ -148,6 +142,20 @@ impl Proposer<TestBlock> for DummyProposer {
 		(self.factory.mutator)(&mut block.header, Stage::PreSeal);
 
 		future::ready(Ok(block))
+	}
+}
+
+impl Proposer<TestBlock> for DummyProposer {
+	type Error = Error;
+	type Create = future::Ready<Result<TestBlock, Error>>;
+
+	fn propose(
+		&mut self,
+		_: InherentData,
+		pre_digests: DigestFor<TestBlock>,
+		_: Duration,
+	) -> Self::Create {
+		self.propose_with(pre_digests)
 	}
 }
 
@@ -513,6 +521,80 @@ fn can_author_block() {
 			}
 		}
 	}
+}
+
+#[test]
+fn importing_block_one_sets_genesis_epoch() {
+	let mut net = BabeTestNet::new(1);
+
+	let peer = net.peer(0);
+	let data = peer.data.as_ref().expect("babe link set up during initialization");
+	let client = peer.client().as_full().expect("Only full clients are used in tests").clone();
+
+	let mut environ = DummyFactory {
+		client: client.clone(),
+		config: data.link.config.clone(),
+		epoch_changes: data.link.epoch_changes.clone(),
+		mutator: Arc::new(|_, _| ()),
+	};
+
+	let genesis_header = client.header(&BlockId::Number(0)).unwrap().unwrap();
+
+	let mut proposer = environ.init(&genesis_header).unwrap();
+	let babe_claim = Item::babe_pre_digest(babe_primitives::BabePreDigest::Secondary {
+		authority_index: 0,
+		slot_number: 999,
+	});
+	let pre_digest = sr_primitives::generic::Digest { logs: vec![babe_claim] };
+
+	let genesis_epoch = data.link.config.genesis_epoch(999);
+
+	let mut block = futures::executor::block_on(proposer.propose_with(pre_digest)).unwrap();
+
+	// seal by alice.
+	let seal = {
+		// sign the pre-sealed hash of the block and then
+		// add it to a digest item.
+		let pair = AuthorityPair::from_seed(&[1; 32]);
+		let pre_hash = block.header.hash();
+		let signature = pair.sign(pre_hash.as_ref());
+		Item::babe_seal(signature)
+	};
+
+	let post_hash = {
+		block.header.digest_mut().push(seal.clone());
+		let h = block.header.hash();
+		block.header.digest_mut().pop();
+		h
+	};
+	assert_eq!(*block.header.number(), 1);
+	let (header, body) = block.deconstruct();
+
+	let post_digests = vec![seal];
+	let mut block_import = data.block_import.lock().take().expect("import set up during init");
+	block_import.import_block(
+		BlockImportParams {
+			origin: BlockOrigin::Own,
+			header,
+			justification: None,
+			post_digests,
+			body: Some(body),
+			finalized: false,
+			auxiliary: Vec::new(),
+			fork_choice: ForkChoiceStrategy::LongestChain,
+		},
+		Default::default(),
+	).unwrap();
+
+	let mut epoch_changes = data.link.epoch_changes.lock();
+	let epoch_for_second_block = epoch_changes.epoch_for_child_of(
+		descendent_query(&*client),
+		&post_hash,
+		1,
+		1000,
+		|slot| data.link.config.genesis_epoch(slot),
+	).unwrap().unwrap();
+	assert_eq!(epoch_for_second_block, genesis_epoch);
 }
 
 // TODO: reinstate this, using the correct APIs now that `fn epoch` is gone.
