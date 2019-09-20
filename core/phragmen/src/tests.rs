@@ -157,7 +157,7 @@ fn phragmen_accuracy_on_large_scale_only_validators() {
 		true,
 	).unwrap();
 
-	assert_eq_uvec!(winners, vec![1, 5]);
+	assert_eq_uvec!(winners, vec![(1, 18446744073709551614u128), (5, 18446744073709551613u128)]);
 	assert_eq!(assignments.len(), 0);
 	check_assignments(assignments);
 }
@@ -188,12 +188,67 @@ fn phragmen_accuracy_on_large_scale_validators_and_nominators() {
 		true,
 	).unwrap();
 
-	assert_eq_uvec!(winners, vec![2, 1]);
+	assert_eq_uvec!(winners, vec![(2, 36893488147419103226u128), (1, 36893488147419103219u128)]);
 	assert_eq!(
 		assignments,
 		vec![(13, vec![(1, Perbill::one())]), (14, vec![(2, Perbill::one())])]
 	);
 	check_assignments(assignments);
+}
+
+#[test]
+fn phragmen_accuracy_on_small_scale_self_vote() {
+	let candidates = vec![40, 10, 20, 30];
+	let voters = vec![];
+	let stake_of = create_stake_of(&[
+		(40, 0),
+		(10, 1),
+		(20, 2),
+		(30, 1),
+	]);
+
+	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote>(
+		3,
+		3,
+		candidates,
+		voters,
+		stake_of,
+		true,
+	).unwrap();
+
+	assert_eq_uvec!(winners, vec![(20, 2), (10, 1), (30, 1)]);
+}
+
+#[test]
+fn phragmen_accuracy_on_small_scale_no_self_vote() {
+	let candidates = vec![40, 10, 20, 30];
+	let voters = vec![
+		(1, vec![10]),
+		(2, vec![20]),
+		(3, vec![30]),
+		(4, vec![40]),
+	];
+	let stake_of = create_stake_of(&[
+		(40, 1000), // don't care
+		(10, 1000), // don't care
+		(20, 1000), // don't care
+		(30, 1000), // don't care
+		(4, 0),
+		(1, 1),
+		(2, 2),
+		(3, 1),
+	]);
+
+	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote>(
+		3,
+		3,
+		candidates,
+		voters,
+		stake_of,
+		false,
+	).unwrap();
+
+	assert_eq_uvec!(winners, vec![(20, 2), (10, 1), (30, 1)]);
 }
 
 #[test]
@@ -227,7 +282,7 @@ fn phragmen_large_scale_test() {
 		true,
 	).unwrap();
 
-	assert_eq_uvec!(winners, vec![24, 22]);
+	assert_eq_uvec!(winners, vec![(24, 1490000000000200000u128), (22, 1490000000000100000u128)]);
 	check_assignments(assignments);
 }
 
@@ -254,7 +309,7 @@ fn phragmen_large_scale_test_2() {
 		true,
 	).unwrap();
 
-	assert_eq_uvec!(winners, vec![2, 4]);
+	assert_eq_uvec!(winners, vec![(2, 1000000000004000000u128), (4, 1000000000004000000u128)]);
 	assert_eq!(
 		assignments,
 		vec![(50, vec![(2, Perbill::from_parts(500000001)), (4, Perbill::from_parts(499999999))])],

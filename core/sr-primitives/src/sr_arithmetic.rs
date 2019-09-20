@@ -317,6 +317,15 @@ macro_rules! implement_per_thing {
 			}
 
 			#[test]
+			fn per_thing_mul_rounds_to_nearest_number() {
+				assert_eq!($name::from_percent(33) * 10u64, 3);
+				assert_eq!($name::from_percent(34) * 10u64, 3);
+				assert_eq!($name::from_percent(35) * 10u64, 3);
+				assert_eq!($name::from_percent(36) * 10u64, 4);
+				assert_eq!($name::from_percent(36) * 10u64, 4);
+			}
+
+			#[test]
 			fn per_thing_multiplication_with_large_number() {
 				use primitive_types::U256;
 				let max_minus_one = $max - 1;
