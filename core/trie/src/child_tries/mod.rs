@@ -26,7 +26,11 @@ use rstd::vec::Vec;
 use trie_db::{TrieConfiguration, DBValue, Query};
 use hash_db::{HashDB, HashDBRef, PlainDB, PlainDBRef};
 
-/// Definition for a child trie.
+/// Trait for a child trie configuration struct to implement. One
+/// child trie should have one corresponding `ChildTrie` definition.
+///
+/// To use this, add the resulting struct type into `with_child_trie`
+/// macro.
 pub trait ChildTrie {
 	/// Default root of the child trie.
 	fn default_root<L: TrieConfiguration>(&self) -> Vec<u8>;
