@@ -47,6 +47,7 @@ pub mod testing;
 
 pub mod weights;
 pub mod traits;
+pub mod curve;
 
 pub mod generic;
 pub mod transaction_validity;
