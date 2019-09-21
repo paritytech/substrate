@@ -34,7 +34,9 @@ use parking_lot::{Mutex, RwLock};
 use primitives::{Blake2Hasher, H256, Hasher};
 use rpc::{self, system::SystemInfo};
 use sr_primitives::{BuildStorage, generic::BlockId};
-use sr_primitives::traits::{Block as BlockT, ProvideRuntimeApi, NumberFor, One, Zero, Header, SaturatedConversion};
+use sr_primitives::traits::{
+	Block as BlockT, Extrinsic, ProvideRuntimeApi, NumberFor, One, Zero, Header, SaturatedConversion
+};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use serde::{Serialize, de::DeserializeOwned};
 use std::{io::{Read, Write, Seek}, marker::PhantomData, sync::Arc, sync::atomic::AtomicBool};
