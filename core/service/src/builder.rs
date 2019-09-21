@@ -929,7 +929,13 @@ pub(crate) fn maintain_transaction_pool<Api, Backend, Block, Executor, PoolApi>(
 	for r in retracted {
 		if let Some(block) = client.block(&BlockId::hash(*r))? {
 			let extrinsics = block.block.extrinsics();
-			if let Err(e) = transaction_pool.submit_at(id, extrinsics.iter().cloned(), true) {
+			if let Err(e) = transaction_pool.submit_at(
+				id,
+				extrinsics.iter().filter(|e| {
+					e.is_signed().unwrap_or(false)
+				}).cloned(),
+				true
+			) {
 				warn!("Error re-submitting transactions: {:?}", e);
 			}
 		}
