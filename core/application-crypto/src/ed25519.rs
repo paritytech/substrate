@@ -59,7 +59,7 @@ mod tests {
 						ED25519,
 				},
 				crypto::Pair,
-				traits::BareCryptoStore as _
+				traits::BareCryptoStore as _,
 		};
 	use test_client::{
 		TestClientBuilder, DefaultTestClientBuilderExt, TestClientBuilderExt,
