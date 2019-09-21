@@ -22,7 +22,8 @@ use babe_primitives::{Epoch, BabePreDigest, CompatibleDigestItem, BabeAuthorityW
 use babe_primitives::{AuthoritySignature, SlotNumber, BabeBlockWeight, AuthorityIndex, AuthorityPair};
 use slots::CheckedHeader;
 use log::{debug, trace};
-use super::{find_pre_digest, make_transcript, calculate_primary_threshold, check_primary_threshold, secondary_slot_author};
+use super::{find_pre_digest, make_transcript, calculate_primary_threshold, check_primary_threshold};
+use super::secondary_slot_author;
 
 /// Check a header has been signed by the right key. If the slot is too far in
 /// the future, an error will be returned. If successful, returns the pre-header
