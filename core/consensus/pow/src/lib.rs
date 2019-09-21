@@ -45,8 +45,7 @@ use pow_primitives::{Seal, TotalDifficulty, POW_ENGINE_ID};
 use primitives::H256;
 use inherents::{InherentDataProviders, InherentData};
 use consensus_common::{
-	BlockImportParams, BlockOrigin, ForkChoiceStrategy, SyncOracle,
-	well_known_cache_keys::Id as CacheKeyId, Environment, Proposer,
+	BlockImportParams, BlockOrigin, ForkChoiceStrategy, SyncOracle, Environment, Proposer,
 };
 use consensus_common::import_queue::{BoxBlockImport, BasicQueue, Verifier};
 use codec::{Encode, Decode};
