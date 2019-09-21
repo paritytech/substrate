@@ -32,7 +32,10 @@ use hash_db::{HashDB, HashDBRef, PlainDB, PlainDBRef};
 /// To use this, add the resulting struct type into `with_child_trie`
 /// macro.
 pub trait ChildTrie {
-	/// Default root of the child trie.
+	/// The hash value which should be returned for an empty child trie.
+	/// In current Substrate's child trie implementation, empty child trie
+	/// value are never written into the root storage. Instead, when this
+	/// value is encountered, it is removed from the root trie.
 	fn default_root<L: TrieConfiguration>(&self) -> Vec<u8>;
 
 	/// Given its ordered contents, closed form, calculate a child trie's root.
