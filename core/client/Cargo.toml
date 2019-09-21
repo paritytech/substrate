@@ -11,7 +11,7 @@ log = { version = "0.4", optional = true }
 parking_lot = { version = "0.9.0", optional = true }
 hex = { package = "hex-literal", version = "0.2", optional = true }
 futures = { version = "0.1", optional = true }
-futures03 = { package = "futures-preview", version = "=0.3.0-alpha.17", features = ["compat"], optional = true }
+futures03 = { package = "futures-preview", version = "0.3.0-alpha.18", features = ["compat"], optional = true }
 consensus = { package = "substrate-consensus-common", path = "../consensus/common", optional = true }
 executor = { package = "substrate-executor", path = "../executor", optional = true }
 state-machine = { package = "substrate-state-machine", path = "../state-machine", optional = true }

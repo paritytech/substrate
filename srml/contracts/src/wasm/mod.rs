@@ -471,14 +471,14 @@ mod tests {
 				to: 9,
 				value: 6,
 				data: vec![1, 2, 3, 4],
-				gas_left: 49970,
+				gas_left: 49971,
 			}]
 		);
 	}
 
 	const CODE_CREATE: &str = r#"
 (module
-	;; ext_create(
+	;; ext_instantiate(
 	;;     code_ptr: u32,
 	;;     code_len: u32,
 	;;     gas: u64,
@@ -487,11 +487,11 @@ mod tests {
 	;;     input_data_ptr: u32,
 	;;     input_data_len: u32,
 	;; ) -> u32
-	(import "env" "ext_create" (func $ext_create (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
+	(import "env" "ext_instantiate" (func $ext_instantiate (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
 		(drop
-			(call $ext_create
+			(call $ext_instantiate
 				(i32.const 16)   ;; Pointer to `code_hash`
 				(i32.const 32)   ;; Length of `code_hash`
 				(i64.const 0)    ;; How much gas to devote for the execution. 0 = all.
@@ -533,7 +533,7 @@ mod tests {
 				code_hash: [0x11; 32].into(),
 				endowment: 3,
 				data: vec![1, 2, 3, 4],
-				gas_left: 49946,
+				gas_left: 49947,
 			}]
 		);
 	}
@@ -1359,11 +1359,7 @@ mod tests {
 			vec![0x00, 0x01, 0x2a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe5, 0x14, 0x00])
 		]);
 
-		assert_eq!(gas_meter.gas_left(), 50_000
-			- 6            // Explicit
-			- 13 - 1 - 1   // Deposit event
-			- (13 + 33)    // read memory
-		);
+		assert_eq!(gas_meter.gas_left(), 49934);
 	}
 
 	const CODE_DEPOSIT_EVENT_MAX_TOPICS: &str = r#"

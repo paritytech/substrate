@@ -27,13 +27,12 @@ use state_machine::backend::{Backend as StateBackend, InMemory};
 use state_machine::{self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId, ChangesTrieTransaction};
 use hash_db::{Hasher, Prefix};
 use trie::MemoryDB;
-use consensus::well_known_cache_keys::Id as CacheKeyId;
 
 use crate::error;
 use crate::backend::{self, NewBlockState, StorageCollection, ChildStorageCollection};
 use crate::light;
 use crate::leaves::LeafSet;
-use crate::blockchain::{self, BlockStatus, HeaderBackend};
+use crate::blockchain::{self, BlockStatus, HeaderBackend, well_known_cache_keys::Id as CacheKeyId};
 
 struct PendingBlock<B: BlockT> {
 	block: StoredBlock<B>,

@@ -49,7 +49,6 @@ use executor::{RuntimeVersion, RuntimeInfo};
 use consensus::{
 	Error as ConsensusError, BlockImportParams,
 	ImportResult, BlockOrigin, ForkChoiceStrategy,
-	well_known_cache_keys::Id as CacheKeyId,
 	SelectChain, self,
 };
 
@@ -65,6 +64,7 @@ use crate::{
 	blockchain::{
 		self, Info as ChainInfo, Backend as ChainBackend,
 		HeaderBackend as ChainHeaderBackend, ProvideCache, Cache,
+		well_known_cache_keys::Id as CacheKeyId,
 	},
 	call_executor::{CallExecutor, LocalCallExecutor},
 	notifications::{StorageNotifications, StorageEventStream},
@@ -436,24 +436,28 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 
 	/// Reads storage value at a given block + key, returning read proof.
-	pub fn read_proof(&self, id: &BlockId<Block>, key: &[u8]) -> error::Result<Vec<Vec<u8>>> {
+	pub fn read_proof<I>(&self, id: &BlockId<Block>, keys: I) -> error::Result<Vec<Vec<u8>>> where
+		I: IntoIterator,
+		I::Item: AsRef<[u8]>,
+	{
 		self.state_at(id)
-			.and_then(|state| prove_read(state, key)
-				.map(|(_, proof)| proof)
+			.and_then(|state| prove_read(state, keys)
 				.map_err(Into::into))
 	}
 
 	/// Reads child storage value at a given block + storage_key + key, returning
 	/// read proof.
-	pub fn read_child_proof(
+	pub fn read_child_proof<I>(
 		&self,
 		id: &BlockId<Block>,
 		storage_key: &[u8],
-		key: &[u8]
-	) -> error::Result<Vec<Vec<u8>>> {
+		keys: I,
+	) -> error::Result<Vec<Vec<u8>>> where
+		I: IntoIterator,
+		I::Item: AsRef<[u8]>,
+	{
 		self.state_at(id)
-			.and_then(|state| prove_child_read(state, storage_key, key)
-				.map(|(_, proof)| proof)
+			.and_then(|state| prove_child_read(state, storage_key, keys)
 				.map_err(Into::into))
 	}
 
@@ -1700,10 +1704,10 @@ where
 
 			let info = self.backend.blockchain().info();
 
-			let canon_hash = self.backend.blockchain().hash(*target_header.number())?
-				.ok_or_else(|| error::Error::from(format!("failed to get hash for block number {}", target_header.number())))?;
+			// this can be `None` if the best chain is shorter than the target header.
+			let maybe_canon_hash = self.backend.blockchain().hash(*target_header.number())?;
 
-			if canon_hash == target_hash {
+			if maybe_canon_hash.as_ref() == Some(&target_hash) {
 				// if a `max_number` is given we try to fetch the block at the
 				// given depth, if it doesn't exist or `max_number` is not
 				// provided, we continue to search from all leaves below.

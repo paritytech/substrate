@@ -35,6 +35,7 @@ use std::collections::HashMap;
 use client::{
 	BlockOf, blockchain::{HeaderBackend, ProvideCache},
 	block_builder::api::BlockBuilder as BlockBuilderApi, backend::AuxStore,
+	well_known_cache_keys::Id as CacheKeyId,
 };
 use sr_primitives::Justification;
 use sr_primitives::generic::{BlockId, Digest, DigestItem};

@@ -28,10 +28,12 @@ use crate::config::build_multiaddr;
 use log::trace;
 use crate::chain::FinalityProofProvider;
 use client::{
-	self, ClientInfo, BlockchainEvents, BlockImportNotification, FinalityNotifications,
-	FinalityNotification, LongestChain
+	self, ClientInfo, BlockchainEvents, BlockImportNotification,
+	FinalityNotifications, ImportNotifications,
+	FinalityNotification, LongestChain,
+	error::Result as ClientResult,
+	well_known_cache_keys::{self, Id as CacheKeyId},
 };
-use client::error::Result as ClientResult;
 use client::block_builder::BlockBuilder;
 use client::backend::{AuxStore, Backend, Finalizer};
 use crate::config::Roles;
@@ -40,7 +42,7 @@ use consensus::import_queue::{
 	BoxBlockImport, BoxJustificationImport, Verifier, BoxFinalityProofImport,
 };
 use consensus::block_import::{BlockImport, ImportResult};
-use consensus::{Error as ConsensusError, well_known_cache_keys::{self, Id as CacheKeyId}};
+use consensus::Error as ConsensusError;
 use consensus::{BlockOrigin, ForkChoiceStrategy, BlockImportParams, JustificationImport};
 use futures::prelude::*;
 use futures03::{StreamExt as _, TryStreamExt as _};
@@ -189,6 +191,13 @@ impl PeersClient {
 		}
 	}
 
+	pub fn import_notification_stream(&self) -> ImportNotifications<Block>{
+		match *self {
+			PeersClient::Full(ref client, ref _backend) => client.import_notification_stream(),
+			PeersClient::Light(ref client, ref _backend) => client.import_notification_stream(),
+		}
+	}
+
 	pub fn finalize_block(
 		&self,
 		id: BlockId<Block>,
@@ -293,7 +302,7 @@ impl<D, S: NetworkSpecialization<Block>> Peer<D, S> {
 				Default::default()
 			};
 			self.block_import.import_block(import_block, cache).expect("block_import failed");
-			self.network.on_block_imported(hash, header);
+			self.network.on_block_imported(hash, header, true);
 			at = hash;
 		}
 
@@ -655,7 +664,7 @@ pub trait TestNetFactory: Sized {
 
 				// We poll `imported_blocks_stream`.
 				while let Ok(Async::Ready(Some(notification))) = peer.imported_blocks_stream.poll() {
-					peer.network.on_block_imported(notification.hash, notification.header);
+					peer.network.on_block_imported(notification.hash, notification.header, true);
 				}
 
 				// We poll `finality_notification_stream`, but we only take the last event.
