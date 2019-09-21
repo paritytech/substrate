@@ -728,7 +728,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			match request.direction {
 				message::Direction::Ascending => id = BlockId::Number(number + One::one()),
 				message::Direction::Descending => {
-					if number.is_zero() {
+					if number.is_one() {
 						break;
 					}
 					id = BlockId::Hash(parent_hash)
@@ -1232,11 +1232,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Uses `protocol` to queue a new block download request and tries to dispatch all pending
 	/// requests.
 	pub fn sync_fork(&mut self, peers: Vec<PeerId>, hash: &B::Hash, number: NumberFor<B>) {
-		let requests = self.sync.sync_fork(peers, hash, number);
-		for (who, request) in requests {
-			self.update_peer_info(&who);
-			self.send_message(who, GenericMessage::BlockRequest(request));
-		}
+		self.sync.sync_fork(peers, hash, number)
 	}
 
 	/// A batch of blocks have been processed, with or without errors.
