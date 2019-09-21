@@ -34,6 +34,7 @@ use client::BlockchainEvents;
 use test_client;
 use log::debug;
 use std::{time::Duration, borrow::Borrow, cell::RefCell};
+use inherents::InherentError;
 
 type Item = DigestItem<Hash>;
 
@@ -109,7 +110,7 @@ impl Verifier<TestBlock> for TestVerifier {
 		mut header: TestHeader,
 		justification: Option<Justification>,
 		body: Option<Vec<TestExtrinsic>>,
-	) -> Result<(BlockImportParams<TestBlock>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+	) -> Result<(BlockImportParams<TestBlock>, Option<Vec<(CacheKeyId, Vec<u8>)>>), InherentError> {
 		let cb: &(dyn Fn(&mut TestHeader) + Send + Sync) = self.mutator.borrow();
 		cb(&mut header);
 		Ok(self.inner.verify(origin, header, justification, body).expect("verification failed!"))

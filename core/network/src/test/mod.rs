@@ -58,6 +58,7 @@ use sr_primitives::Justification;
 use crate::service::TransactionPool;
 use crate::specialization::NetworkSpecialization;
 use test_client::{self, AccountKeyring};
+use inherents::InherentError;
 
 pub use test_client::runtime::{Block, Extrinsic, Hash, Transfer};
 pub use test_client::{TestClient, TestClientBuilder, TestClientBuilderExt};
@@ -79,7 +80,7 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 		header: B::Header,
 		justification: Option<Justification>,
 		body: Option<Vec<B::Extrinsic>>
-	) -> Result<(BlockImportParams<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+	) -> Result<(BlockImportParams<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), InherentError> {
 		let maybe_keys = header.digest()
 			.log(|l| l.try_as_raw(OpaqueDigestItemId::Consensus(b"aura"))
 				.or_else(|| l.try_as_raw(OpaqueDigestItemId::Consensus(b"babe")))
@@ -449,7 +450,7 @@ impl<B: BlockT, T: ?Sized + Verifier<B>> Verifier<B> for VerifierAdapter<T> {
 		header: B::Header,
 		justification: Option<Justification>,
 		body: Option<Vec<B::Extrinsic>>
-	) -> Result<(BlockImportParams<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+	) -> Result<(BlockImportParams<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), InherentError> {
 		self.0.lock().verify(origin, header, justification, body)
 	}
 }

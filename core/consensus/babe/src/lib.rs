@@ -75,7 +75,7 @@ use codec::{Decode, Encode};
 use parking_lot::{Mutex, MutexGuard};
 use primitives::{blake2_256, Blake2Hasher, H256, Pair, Public, U256};
 use merlin::Transcript;
-use inherents::{InherentDataProviders, InherentData};
+use inherents::{InherentDataProviders, InherentData, InherentError};
 use substrate_telemetry::{
 	telemetry,
 	CONSENSUS_TRACE,
@@ -671,7 +671,7 @@ impl<B, E, Block: BlockT, RA, PRA, T> BabeVerifier<B, E, Block, RA, PRA, T> {
 		block: Block,
 		block_id: BlockId<Block>,
 		inherent_data: InherentData,
-	) -> Result<(), String>
+	) -> Result<(), InherentError>
 		where PRA: ProvideRuntimeApi, PRA::Api: BlockBuilderApi<Block>
 	{
 		let inherent_res = self.api.runtime_api().check_inherents(
@@ -684,7 +684,7 @@ impl<B, E, Block: BlockT, RA, PRA, T> BabeVerifier<B, E, Block, RA, PRA, T> {
 			inherent_res
 				.into_errors()
 				.try_for_each(|(i, e)| {
-					Err(self.inherent_data_providers.error_to_string(&i, &e))
+					Err(self.inherent_data_providers.decode_error(&i, &e))
 				})
 		} else {
 			Ok(())
@@ -750,7 +750,7 @@ impl<B, E, Block, RA, PRA, T> Verifier<Block> for BabeVerifier<B, E, Block, RA, 
 		header: Block::Header,
 		justification: Option<Justification>,
 		mut body: Option<Vec<Block::Extrinsic>>,
-	) -> Result<(BlockImportParams<Block>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+	) -> Result<(BlockImportParams<Block>, Option<Vec<(CacheKeyId, Vec<u8>)>>), InherentError> {
 		trace!(
 			target: "babe",
 			"Verifying origin: {:?} header: {:?} justification: {:?} body: {:?}",
@@ -862,8 +862,8 @@ impl<B, E, Block, RA, PRA, T> Verifier<Block> for BabeVerifier<B, E, Block, RA, 
 					};
 
 					let best_header = self.client.header(&BlockId::Hash(last_best))
-												 .map_err(|_| "Failed fetching best header")?
-					.expect("parent_header must be imported; qed");
+						.map_err(|_| String::from("Failed fetching best header"))?
+						.expect("parent_header must be imported; qed");
 
 					let best_weight = find_pre_digest::<Block>(&best_header)
 						.map(|babe_pre_digest| babe_pre_digest.weight())?;
@@ -897,7 +897,7 @@ impl<B, E, Block, RA, PRA, T> Verifier<Block> for BabeVerifier<B, E, Block, RA, 
 				telemetry!(CONSENSUS_DEBUG; "babe.header_too_far_in_future";
 					"hash" => ?hash, "a" => ?a, "b" => ?b
 				);
-				Err(format!("Header {:?} rejected: too far in the future", hash))
+				Err(format!("Header {:?} rejected: too far in the future", hash).into())
 			}
 		}
 	}

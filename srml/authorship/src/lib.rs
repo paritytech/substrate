@@ -31,8 +31,10 @@ use sr_primitives::traits::{Header as HeaderT, One, Zero};
 use sr_primitives::weights::SimpleDispatchInfo;
 use inherents::{
 	RuntimeString, InherentIdentifier, ProvideInherent,
-	InherentData, MakeFatalError,
+	InherentData, MakeFatalError
 };
+#[cfg(feature = "std")]
+use inherents::InherentError;
 
 /// The identifier for the `uncles` inherent.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"uncles00";
@@ -80,8 +82,8 @@ where F: Fn() -> Vec<H>
 		}
 	}
 
-	fn error_to_string(&self, _error: &[u8]) -> Option<String> {
-		Some(format!("no further information"))
+	fn decode_error(&self, _error: &[u8]) -> Option<InherentError> {
+		Some(format!("no further information").into())
 	}
 }
 

@@ -326,7 +326,8 @@ fn do_import_finality_proof<B, C, Block: BlockT<Hash=H256>, J>(
 	let block_origin = BlockOrigin::NetworkBroadcast;
 	for header_to_import in finality_effects.headers_to_import {
 		let (block_to_import, new_authorities) = verifier.verify(block_origin, header_to_import, None, None)
-			.map_err(|e| ConsensusError::ClientImport(e))?;
+			// TODO: remove this `.to_string()` call
+			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
 		assert!(block_to_import.justification.is_none(), "We have passed None as justification to verifier.verify");
 
 		let mut cache = HashMap::new();

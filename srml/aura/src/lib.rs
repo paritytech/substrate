@@ -62,7 +62,7 @@ use timestamp::OnTimestampSet;
 use timestamp::TimestampInherentData;
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
-use inherents::{InherentDataProviders, ProvideInherentData};
+use inherents::{InherentDataProviders, ProvideInherentData, InherentError};
 use substrate_consensus_aura_primitives::{AURA_ENGINE_ID, ConsensusLog, AuthorityIndex};
 
 mod mock;
@@ -135,8 +135,10 @@ impl ProvideInherentData for InherentDataProvider {
 		inherent_data.put_data(INHERENT_IDENTIFIER, &slot_num)
 	}
 
-	fn error_to_string(&self, error: &[u8]) -> Option<String> {
-		RuntimeString::decode(&mut &error[..]).map(Into::into).ok()
+	fn decode_error(&self, error: &[u8]) -> Option<InherentError> {
+		RuntimeString::decode(&mut &error[..])
+			.map(|e| e.to_string().into())
+			.ok()
 	}
 }
 

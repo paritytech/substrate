@@ -32,6 +32,7 @@ use crate::block_import::{
 	BlockImport, BlockOrigin, BlockImportParams, ImportedAux, JustificationImport, ImportResult,
 	FinalityProofImport,
 };
+use inherents::InherentError;
 
 pub use basic_queue::BasicQueue;
 
@@ -79,7 +80,7 @@ pub trait Verifier<B: BlockT>: Send + Sync {
 		header: B::Header,
 		justification: Option<Justification>,
 		body: Option<Vec<B::Extrinsic>>,
-	) -> Result<(BlockImportParams<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String>;
+	) -> Result<(BlockImportParams<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), InherentError>;
 }
 
 /// Blocks import queue API.
@@ -229,7 +230,8 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 			} else {
 				trace!(target: "sync", "Verifying {}({}) failed: {}", number, hash, msg);
 			}
-			BlockImportError::VerificationFailed(peer.clone(), msg)
+			// TODO: remove this `.to_string()` call
+			BlockImportError::VerificationFailed(peer.clone(), msg.to_string())
 		})?;
 
 	let mut cache = HashMap::new();

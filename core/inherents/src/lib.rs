@@ -41,7 +41,7 @@ use rstd::{collections::btree_map::{BTreeMap, IntoIter, Entry}, vec::Vec};
 use parking_lot::RwLock;
 
 #[cfg(feature = "std")]
-use std::{sync::Arc, format};
+use std::{sync::Arc, format, fmt::{Debug, Display}, convert::From};
 
 pub use sr_primitives::RuntimeString;
 
@@ -275,15 +275,15 @@ impl InherentDataProviders {
 		Ok(data)
 	}
 
-	/// Converts a given encoded error into a `String`.
+	/// Decode the given encoded error.
 	///
 	/// Useful if the implementation encouters an error for an identifier it does not know.
-	pub fn error_to_string(&self, identifier: &InherentIdentifier, error: &[u8]) -> String {
+	pub fn decode_error(&self, identifier: &InherentIdentifier, error: &[u8]) -> InherentError {
 		let res = self.providers.read().iter().filter_map(|p|
 			if p.inherent_identifier() == identifier {
 				Some(
-					p.error_to_string(error)
-						.unwrap_or_else(|| error_to_string_fallback(identifier))
+					p.decode_error(error)
+						.unwrap_or_else(|| decode_error_fallback(identifier))
 				)
 			} else {
 				None
@@ -295,8 +295,28 @@ impl InherentDataProviders {
 			None => format!(
 				"Error while checking inherent of type \"{}\", but this inherent type is unknown.",
 				String::from_utf8_lossy(identifier)
-			)
+			).into()
 		}
+	}
+}
+
+#[cfg(feature = "std")]
+/// An error related to a `ProvideInherentData`.
+pub trait InherentDataProviderError: Debug + Display {}
+
+#[cfg(feature = "std")]
+/// A boxed `InherentDataProviderError`.
+pub type InherentError = Box<dyn InherentDataProviderError>;
+
+// TODO: These are to make transitioning to proper error structs smoother. Remove these eventually.
+
+#[cfg(feature = "std")]
+impl InherentDataProviderError for String {}
+
+#[cfg(feature = "std")]
+impl From<String> for InherentError {
+	fn from(string: String) -> Self {
+		Box::new(string) as Self
 	}
 }
 
@@ -317,19 +337,19 @@ pub trait ProvideInherentData {
 	/// The data should be stored in the given `InherentData` structure.
 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), RuntimeString>;
 
-	/// Convert the given encoded error to a string.
+	/// Decode the given encoded error.
 	///
 	/// If the given error could not be decoded, `None` should be returned.
-	fn error_to_string(&self, error: &[u8]) -> Option<String>;
+	fn decode_error(&self, error: &[u8]) -> Option<InherentError>;
 }
 
 /// A fallback function, if the decoding of an error fails.
 #[cfg(feature = "std")]
-fn error_to_string_fallback(identifier: &InherentIdentifier) -> String {
+fn decode_error_fallback(identifier: &InherentIdentifier) -> InherentError {
 	format!(
 		"Error while checking inherent of type \"{}\", but error could not be decoded.",
 		String::from_utf8_lossy(identifier)
-	)
+	).into()
 }
 
 /// Did we encounter a fatal error while checking an inherent?
@@ -458,8 +478,8 @@ mod tests {
 			data.put_data(TEST_INHERENT_0, &42)
 		}
 
-		fn error_to_string(&self, _: &[u8]) -> Option<String> {
-			Some(ERROR_TO_STRING.into())
+		fn decode_error(&self, _: &[u8]) -> Option<InherentError> {
+			Some(String::from(ERROR_TO_STRING).into())
 		}
 	}
 
@@ -501,12 +521,13 @@ mod tests {
 		assert!(provider.is_registered());
 
 		assert_eq!(
-			&providers.error_to_string(&TEST_INHERENT_0, &[1, 2]), ERROR_TO_STRING
+			&providers.decode_error(&TEST_INHERENT_0, &[1, 2]).to_string(), ERROR_TO_STRING
 		);
 
 		assert!(
 			providers
-				.error_to_string(&TEST_INHERENT_1, &[1, 2])
+				.decode_error(&TEST_INHERENT_1, &[1, 2])
+				.to_string()
 				.contains("inherent type is unknown")
 		);
 	}

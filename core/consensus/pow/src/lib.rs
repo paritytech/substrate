@@ -40,10 +40,10 @@ use client::{
 use sr_primitives::Justification;
 use sr_primitives::generic::{BlockId, Digest, DigestItem};
 use sr_primitives::traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi};
-use srml_timestamp::{TimestampInherentData, InherentError as TIError};
+use srml_timestamp::{TimestampInherentData, TimestampError};
 use pow_primitives::{Difficulty, Seal, POW_ENGINE_ID};
 use primitives::H256;
-use inherents::{InherentDataProviders, InherentData};
+use inherents::{InherentDataProviders, InherentData, InherentError};
 use consensus_common::{
 	BlockImportParams, BlockOrigin, ForkChoiceStrategy,
 	Environment, Proposer,
@@ -152,7 +152,7 @@ impl<C, Algorithm> PowVerifier<C, Algorithm> {
 		block_id: BlockId<B>,
 		inherent_data: InherentData,
 		timestamp_now: u64,
-	) -> Result<(), String> where
+	) -> Result<(), InherentError> where
 		C: ProvideRuntimeApi, C::Api: BlockBuilderApi<B>
 	{
 		const MAX_TIMESTAMP_DRIFT_SECS: u64 = 60;
@@ -166,16 +166,16 @@ impl<C, Algorithm> PowVerifier<C, Algorithm> {
 		if !inherent_res.ok() {
 			inherent_res
 				.into_errors()
-				.try_for_each(|(i, e)| match TIError::try_from(&i, &e) {
-					Some(TIError::ValidAtTimestamp(timestamp)) => {
+				.try_for_each(|(i, e)| match TimestampError::try_from(&i, &e) {
+					Some(TimestampError::ValidAtTimestamp(timestamp)) => {
 						if timestamp > timestamp_now + MAX_TIMESTAMP_DRIFT_SECS {
-							return Err("Rejecting block too far in future".into());
+							return Err(format!("Rejecting block too far in future").into());
 						}
 
 						Ok(())
 					},
-					Some(TIError::Other(e)) => Err(e.into()),
-					None => Err(self.inherent_data_providers.error_to_string(&i, &e)),
+					Some(TimestampError::Other(e)) => Err(format!("{}", e).into()),
+					None => Err(self.inherent_data_providers.decode_error(&i, &e)),
 				})
 		} else {
 			Ok(())
@@ -194,7 +194,7 @@ impl<B: BlockT<Hash=H256>, C, Algorithm> Verifier<B> for PowVerifier<C, Algorith
 		header: B::Header,
 		justification: Option<Justification>,
 		mut body: Option<Vec<B::Extrinsic>>,
-	) -> Result<(BlockImportParams<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+	) -> Result<(BlockImportParams<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), InherentError> {
 		let inherent_data = self.inherent_data_providers
 			.create_inherent_data().map_err(String::from)?;
 		let timestamp_now = inherent_data.timestamp_inherent_data().map_err(String::from)?;

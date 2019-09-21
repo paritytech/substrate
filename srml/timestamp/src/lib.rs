@@ -104,6 +104,10 @@ use sr_primitives::traits::{
 use sr_primitives::weights::SimpleDispatchInfo;
 use system::ensure_none;
 use inherents::{RuntimeString, InherentIdentifier, ProvideInherent, IsFatalError, InherentData};
+#[cfg(feature = "std")]
+use inherents::InherentError;
+#[cfg(feature = "std")]
+use std::fmt;
 
 /// The identifier for the `timestamp` inherent.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"timstap0";
@@ -113,7 +117,7 @@ pub type InherentType = u64;
 /// Errors that can occur while checking the timestamp inherent.
 #[derive(Encode)]
 #[cfg_attr(feature = "std", derive(Debug, Decode))]
-pub enum InherentError {
+pub enum TimestampError {
 	/// The timestamp is valid in the future.
 	/// This is a non-fatal-error and will not stop checking the inherents.
 	ValidAtTimestamp(InherentType),
@@ -121,21 +125,28 @@ pub enum InherentError {
 	Other(RuntimeString),
 }
 
-impl IsFatalError for InherentError {
+impl IsFatalError for TimestampError {
 	fn is_fatal_error(&self) -> bool {
 		match self {
-			InherentError::ValidAtTimestamp(_) => false,
-			InherentError::Other(_) => true,
+			TimestampError::ValidAtTimestamp(_) => false,
+			TimestampError::Other(_) => true,
 		}
 	}
 }
 
-impl InherentError {
+#[cfg(feature = "std")]
+impl fmt::Display for TimestampError {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "{:?}", self)
+	}
+}
+
+impl TimestampError {
 	/// Try to create an instance ouf of the given identifier and data.
 	#[cfg(feature = "std")]
 	pub fn try_from(id: &InherentIdentifier, data: &[u8]) -> Option<Self> {
 		if id == &INHERENT_IDENTIFIER {
-			<InherentError as codec::Decode>::decode(&mut &data[..]).ok()
+			<TimestampError as codec::Decode>::decode(&mut &data[..]).ok()
 		} else {
 			None
 		}
@@ -177,8 +188,8 @@ impl ProvideInherentData for InherentDataProvider {
 			})
 	}
 
-	fn error_to_string(&self, error: &[u8]) -> Option<String> {
-		InherentError::try_from(&INHERENT_IDENTIFIER, error).map(|e| format!("{:?}", e))
+	fn decode_error(&self, error: &[u8]) -> Option<InherentError> {
+		TimestampError::try_from(&INHERENT_IDENTIFIER, error).map(|e| format!("{:?}", e).into())
 	}
 }
 
@@ -275,7 +286,7 @@ fn extract_inherent_data(data: &InherentData) -> Result<InherentType, RuntimeStr
 
 impl<T: Trait> ProvideInherent for Module<T> {
 	type Call = Call<T>;
-	type Error = InherentError;
+	type Error = TimestampError;
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 	fn create_inherent(data: &InherentData) -> Option<Self::Call> {
@@ -295,13 +306,13 @@ impl<T: Trait> ProvideInherent for Module<T> {
 			_ => return Ok(()),
 		};
 
-		let data = extract_inherent_data(data).map_err(|e| InherentError::Other(e))?;
+		let data = extract_inherent_data(data).map_err(|e| TimestampError::Other(e))?;
 
 		let minimum = (Self::now() + T::MinimumPeriod::get()).saturated_into::<u64>();
 		if t > data + MAX_TIMESTAMP_DRIFT {
-			Err(InherentError::Other("Timestamp too far in future to accept".into()))
+			Err(TimestampError::Other("Timestamp too far in future to accept".into()))
 		} else if t < minimum {
-			Err(InherentError::ValidAtTimestamp(minimum))
+			Err(TimestampError::ValidAtTimestamp(minimum))
 		} else {
 			Ok(())
 		}

@@ -48,7 +48,7 @@ use sr_primitives::{generic::{BlockId, OpaqueDigestItemId}, Justification};
 use sr_primitives::traits::{Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi, Zero, Member};
 
 use primitives::crypto::Pair;
-use inherents::{InherentDataProviders, InherentData};
+use inherents::{InherentDataProviders, InherentData, InherentError};
 
 use futures::prelude::*;
 use parking_lot::Mutex;
@@ -56,7 +56,7 @@ use log::{debug, info, trace};
 
 use srml_aura::{
 	InherentType as AuraInherent, AuraInherentData,
-	timestamp::{TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError}
+	timestamp::{TimestampInherentData, InherentType as TimestampInherent, TimestampError}
 };
 use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
@@ -419,7 +419,7 @@ impl<C, P, T> AuraVerifier<C, P, T>
 		block_id: BlockId<B>,
 		inherent_data: InherentData,
 		timestamp_now: u64,
-	) -> Result<(), String>
+	) -> Result<(), InherentError>
 		where C: ProvideRuntimeApi, C::Api: BlockBuilderApi<B>
 	{
 		const MAX_TIMESTAMP_DRIFT_SECS: u64 = 60;
@@ -433,12 +433,12 @@ impl<C, P, T> AuraVerifier<C, P, T>
 		if !inherent_res.ok() {
 			inherent_res
 				.into_errors()
-				.try_for_each(|(i, e)| match TIError::try_from(&i, &e) {
-					Some(TIError::ValidAtTimestamp(timestamp)) => {
+				.try_for_each(|(i, e)| match TimestampError::try_from(&i, &e) {
+					Some(TimestampError::ValidAtTimestamp(timestamp)) => {
 						// halt import until timestamp is valid.
 						// reject when too far ahead.
 						if timestamp > timestamp_now + MAX_TIMESTAMP_DRIFT_SECS {
-							return Err("Rejecting block too far in future".into());
+							return Err(format!("Rejecting block too far in future").into());
 						}
 
 						let diff = timestamp.saturating_sub(timestamp_now);
@@ -453,8 +453,8 @@ impl<C, P, T> AuraVerifier<C, P, T>
 						thread::sleep(Duration::from_secs(diff));
 						Ok(())
 					},
-					Some(TIError::Other(e)) => Err(e.into()),
-					None => Err(self.inherent_data_providers.error_to_string(&i, &e)),
+					Some(TimestampError::Other(e)) => Err(format!("{}", e).into()),
+					None => Err(self.inherent_data_providers.decode_error(&i, &e)),
 				})
 		} else {
 			Ok(())
@@ -478,7 +478,7 @@ impl<B: BlockT, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
 		header: B::Header,
 		justification: Option<Justification>,
 		mut body: Option<Vec<B::Extrinsic>>,
-	) -> Result<(BlockImportParams<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+	) -> Result<(BlockImportParams<B>, Option<Vec<(CacheKeyId, Vec<u8>)>>), InherentError> {
 		let mut inherent_data = self.inherent_data_providers.create_inherent_data().map_err(String::from)?;
 		let (timestamp_now, slot_now, _) = AuraSlotCompatible.extract_timestamp_and_slot(&inherent_data)
 			.map_err(|e| format!("Could not extract timestamp and slot: {:?}", e))?;
@@ -560,7 +560,7 @@ impl<B: BlockT, C, P, T> Verifier<B> for AuraVerifier<C, P, T> where
 				telemetry!(CONSENSUS_DEBUG; "aura.header_too_far_in_future";
 					"hash" => ?hash, "a" => ?a, "b" => ?b
 				);
-				Err(format!("Header {:?} rejected: too far in the future", hash))
+				Err(format!("Header {:?} rejected: too far in the future", hash).into())
 			}
 		}
 	}

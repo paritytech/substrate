@@ -29,6 +29,8 @@ use codec::Decode;
 use support::{decl_module, decl_storage};
 use support::traits::Get;
 use srml_system::{ensure_none, Trait as SystemTrait};
+#[cfg(feature = "std")]
+use inherents::InherentError;
 
 #[cfg(feature = "std")]
 use codec::Encode;
@@ -76,8 +78,8 @@ impl<F, N: Encode> inherents::ProvideInherentData for InherentDataProvider<F, N>
 			.and_then(|n| inherent_data.put_data(INHERENT_IDENTIFIER, &n))
 	}
 
-	fn error_to_string(&self, _error: &[u8]) -> Option<String> {
-		Some(format!("no further information"))
+	fn decode_error(&self, _error: &[u8]) -> Option<InherentError> {
+		Some(format!("no further information").into())
 	}
 }
 
