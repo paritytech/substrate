@@ -24,7 +24,7 @@ use rstd::vec::Vec;
 use trie_db::{TrieConfiguration, DBValue, Query, Trie, TrieMut};
 use hash_db::{HashDB, HashDBRef, PlainDB, PlainDBRef};
 
-/// Default child trie.
+/// Child trie with the same configuration as the root trie.
 pub struct DefaultChildTrie;
 
 impl ChildTrie for DefaultChildTrie {
