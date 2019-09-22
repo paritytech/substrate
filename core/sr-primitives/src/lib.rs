@@ -59,7 +59,13 @@ pub use generic::{DigestItem, Digest};
 pub use primitives::crypto::{key_types, KeyTypeId, CryptoType};
 pub use app_crypto::RuntimeAppPublic;
 
-/// Justification type.
+/// An abstraction over justification for a block's validity under a consensus algorithm.
+///
+/// Essentially a finality proof. The exact formulation will vary between consensus
+/// algorithms. In the case where there are multiple valid proofs, inclusion within
+/// the block itself would allow swapping justifications to change the block's hash
+/// (and thus fork the chain). Sending a `Justification` alongside a block instead
+/// bypasses this problem.
 pub type Justification = Vec<u8>;
 
 use traits::{Verify, Lazy};
