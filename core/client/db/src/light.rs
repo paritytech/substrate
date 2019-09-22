@@ -236,7 +236,12 @@ impl<Block: BlockT> LightStorage<Block> {
 	/// In the case where the new best block is a block to be imported, `route_to`
 	/// should be the parent of `best_to`. In the case where we set an existing block
 	/// to be best, `route_to` should equal to `best_to`.
-	fn set_head_with_transaction(&self, transaction: &mut DBTransaction, route_to: Block::Hash, best_to: (NumberFor<Block>, Block::Hash)) -> Result<(), client::error::Error> {
+	fn set_head_with_transaction(
+		&self,
+		transaction: &mut DBTransaction,
+		route_to: Block::Hash,
+		best_to: (NumberFor<Block>, Block::Hash),
+	) -> ClientResult<()> {
 		let lookup_key = utils::number_and_hash_to_lookup_key(best_to.0, &best_to.1)?;
 
 		// handle reorg.

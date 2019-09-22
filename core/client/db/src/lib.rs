@@ -960,7 +960,12 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	/// In the case where the new best block is a block to be imported, `route_to`
 	/// should be the parent of `best_to`. In the case where we set an existing block
 	/// to be best, `route_to` should equal to `best_to`.
-	fn set_head_with_transaction(&self, transaction: &mut DBTransaction, route_to: Block::Hash, best_to: (NumberFor<Block>, Block::Hash)) -> ClientResult<(Vec<Block::Hash>, Vec<Block::Hash>)> {
+	fn set_head_with_transaction(
+		&self,
+		transaction: &mut DBTransaction,
+		route_to: Block::Hash,
+		best_to: (NumberFor<Block>, Block::Hash),
+	) -> ClientResult<(Vec<Block::Hash>, Vec<Block::Hash>)> {
 		let mut enacted = Vec::default();
 		let mut retracted = Vec::default();
 
@@ -1389,7 +1394,11 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		})
 	}
 
-	fn begin_state_operation(&self, operation: &mut Self::BlockImportOperation, block: BlockId<Block>) -> ClientResult<()> {
+	fn begin_state_operation(
+		&self,
+		operation: &mut Self::BlockImportOperation,
+		block: BlockId<Block>,
+	) -> ClientResult<()> {
 		operation.old_state = self.state_at(block)?;
 		Ok(())
 	}
