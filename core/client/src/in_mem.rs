@@ -300,8 +300,17 @@ impl<Block: BlockT> HeaderBackend<Block> for Blockchain<Block> {
 		unimplemented!()
 	}
 
-	fn get_light_header(&self, _id: BlockId<Block>) -> error::Result<Option<LightHeader<Block>>> {
-		unimplemented!()
+	fn get_light_header(&self, id: BlockId<Block>) -> error::Result<Option<LightHeader<Block>>> {
+		Ok(self.id(id).and_then(|hash| {
+			self.storage.read().blocks.get(&hash).map(
+				|b| LightHeader {
+					hash: b.header().hash().clone(),
+					number: b.header().number().clone(),
+					parent: b.header().parent_hash().clone(),
+					ancestor: b.header().parent_hash().clone(),
+				}
+			)
+		}))
 	}
 
 	fn info(&self) -> blockchain::Info<Block> {

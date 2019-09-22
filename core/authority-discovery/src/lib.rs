@@ -44,7 +44,7 @@
 //!    4. Adds the retrieved external addresses as priority nodes to the peerset.
 
 use authority_discovery_primitives::{AuthorityDiscoveryApi, AuthorityId, Signature};
-use client::blockchain::HeaderBackend;
+use client::blockchain::{HeaderBackend, LightHeader};
 use error::{Error, Result};
 use futures::{prelude::*, sync::mpsc::Receiver};
 use log::{debug, error, log_enabled, warn};
@@ -441,6 +441,17 @@ mod tests {
 			_id: BlockId<Block>,
 		) -> std::result::Result<Option<Block::Header>, client::error::Error> {
 			Ok(None)
+		}
+
+		fn set_light_header(&self, _data: LightHeader<Block>) {
+			unimplemented!()
+		}
+
+		fn get_light_header(
+			&self,
+			_id: BlockId<Block>,
+		) -> std::result::Result<Option<LightHeader<Block>>, client::error::Error> {
+			unimplemented!()
 		}
 
 		fn info(&self) -> client::blockchain::Info<Block> {

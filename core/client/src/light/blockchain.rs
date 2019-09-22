@@ -264,11 +264,11 @@ pub mod tests {
 			Err(ClientError::Backend("Test error".into()))
 		}
 
-		fn set_light_header(&self, data: LightHeader<Block>) {
+		fn set_light_header(&self, _data: LightHeader<Block>) {
 			unimplemented!()
 		}
 
-		fn get_light_header(&self, id: BlockId<Block>) -> ClientResult<Option<LightHeader<Block>>> {
+		fn get_light_header(&self, _id: BlockId<Block>) -> ClientResult<Option<LightHeader<Block>>> {
 			Err(ClientError::Backend("Test error".into()))
 		}
 
