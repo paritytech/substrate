@@ -62,7 +62,7 @@ use crate::{
 		ClientImportOperation, Finalizer, ImportSummary,
 	},
 	blockchain::{
-		self, Info as ChainInfo, Backend as ChainBackend,
+		self, Info as ChainInfo, Backend as ChainBackend, LightHeader,
 		HeaderBackend as ChainHeaderBackend, ProvideCache, Cache,
 		well_known_cache_keys::Id as CacheKeyId,
 	},
@@ -967,7 +967,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 		let retracted = if is_new_best {
 			let route_from_best = crate::blockchain::tree_route(
-				|id| self.header(&id)?.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id))),
+				|id| self.get_light_header(&id)?
+					.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id))),
 				BlockId::Hash(info.best_hash),
 				BlockId::Hash(parent_hash),
 			)?;
@@ -1101,7 +1102,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		}
 
 		let route_from_finalized = crate::blockchain::tree_route(
-			|id| self.header(&id)?.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id))),
+			|id| self.get_light_header(&id)?
+				.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id))),
 			BlockId::Hash(last_finalized),
 			BlockId::Hash(block),
 		)?;
@@ -1114,7 +1116,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		}
 
 		let route_from_best = crate::blockchain::tree_route(
-			|id| self.header(&id)?.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id))),
+			|id| self.get_light_header(&id)?
+				.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id))),
 			BlockId::Hash(best_block),
 			BlockId::Hash(block),
 		)?;
@@ -1249,6 +1252,16 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		self.backend.blockchain().header(*id)
 	}
 
+	/// Get block light header.
+	pub fn get_light_header(&self, id: &BlockId<Block>) -> error::Result<Option<LightHeader<Block>>> {
+		self.backend.blockchain().get_light_header(*id)
+	}
+
+	/// Set block light header.
+	pub fn set_light_header(&self, data: LightHeader<Block>) {
+		self.backend.blockchain().set_light_header(data)
+	}
+
 	/// Get block body by id.
 	pub fn body(&self, id: &BlockId<Block>) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
 		self.backend.blockchain().body(*id)
@@ -1345,6 +1358,14 @@ impl<B, E, Block, RA> ChainHeaderBackend<Block> for Client<B, E, Block, RA> wher
 		self.backend.blockchain().header(id)
 	}
 
+	fn get_light_header(&self, id: BlockId<Block>) -> error::Result<Option<LightHeader<Block>>> {
+		self.backend.blockchain().get_light_header(id)
+	}
+
+	fn set_light_header(&self, data: LightHeader<Block>) {
+		self.backend.blockchain().set_light_header(data)
+	}
+
 	fn info(&self) -> blockchain::Info<Block> {
 		self.backend.blockchain().info()
 	}
@@ -1370,6 +1391,14 @@ impl<B, E, Block, RA> ChainHeaderBackend<Block> for &Client<B, E, Block, RA> whe
 {
 	fn header(&self, id: BlockId<Block>) -> error::Result<Option<Block::Header>> {
 		(**self).backend.blockchain().header(id)
+	}
+
+	fn get_light_header(&self, id: BlockId<Block>) -> error::Result<Option<LightHeader<Block>>> {
+		(**self).get_light_header(&id)
+	}
+
+	fn set_light_header(&self, data: LightHeader<Block>) {
+		(**self).set_light_header(data)
 	}
 
 	fn info(&self) -> blockchain::Info<Block> {
@@ -1831,13 +1860,15 @@ pub mod utils {
 				}
 			}
 
-			let tree_route = blockchain::tree_route(
-				|id| client.header(id)?.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id))),
+			let ancestor = blockchain::lowest_common_ancestor(
+				|id| client.get_light_header(&id)?
+					.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id))),
+				|data| client.set_light_header(data),
 				BlockId::Hash(*hash),
 				BlockId::Hash(*base),
 			)?;
 
-			Ok(tree_route.common_block().hash == *base)
+			Ok(ancestor.0 == *base)
 		}
 	}
 }
