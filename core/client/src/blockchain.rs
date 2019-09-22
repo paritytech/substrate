@@ -26,6 +26,19 @@ use parking_lot::Mutex;
 
 use crate::error::{Error, Result};
 
+/// Light header. Used to efficiently traverse the tree.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct LightHeader<Block: BlockT> {
+	/// Hash of the header.
+	pub hash: Block::Hash,
+	/// Block number.
+	pub number: NumberFor<Block>,
+	/// Hash of parent header.
+	pub parent: Block::Hash,
+	/// Hash of an ancestor header. Used to jump through the tree.
+	pub ancestor: Block::Hash,
+}
+
 /// Blockchain database header backend. Does not perform any validation.
 pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 	/// Get block header. Returns `None` if block is not found.
@@ -38,6 +51,13 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 	fn number(&self, hash: Block::Hash) -> Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>>;
 	/// Get block hash by number. Returns `None` if the header is not in the chain.
 	fn hash(&self, number: NumberFor<Block>) -> Result<Option<Block::Hash>>;
+
+	/// Get light header, usually from an in-memory cache, without hitting database.
+	/// Returns `None` if the header is not in the chain.
+	fn get_light_header(&self, id: BlockId<Block>) -> Result<Option<LightHeader<Block>>>;
+
+	/// Set light header. This could only involve modifying an in-memory cache.
+	fn set_light_header(&self, data: LightHeader<Block>);
 
 	/// Convert an arbitrary block ID into a block hash.
 	fn block_hash_from_id(&self, id: &BlockId<Block>) -> Result<Option<Block::Hash>> {
@@ -314,56 +334,128 @@ impl<Block: BlockT> TreeRoute<Block> {
 	}
 }
 
+/// Get lowest common ancestor between two blocks in the tree.
+///
+/// Note: this implementation is efficient because of our current query pattern:
+/// lca(best, final) (O(h)), lca(best + 1, final) (O(1)), lca(best + 2, final) (O(1)), etc.
+pub fn lowest_common_ancestor<
+	Block: BlockT,
+	F: Fn(BlockId<Block>) -> Result<LightHeader<Block>>,
+	S: Fn(LightHeader<Block>),
+>(
+	get_light_header: F,
+	set_light_header: S,
+	id_one: BlockId<Block>,
+	id_two: BlockId<Block>,
+) -> Result<(Block::Hash, NumberFor<Block>)> {
+
+	let mut header_one = get_light_header(id_one)?;
+	let mut header_two = get_light_header(id_two)?;
+
+	let mut orig_header_one = header_one.clone();
+	let mut orig_header_two = header_two.clone();
+
+	// We move through ancestor links as much as possible, since ancestor >= parent.
+
+	while header_one.number > header_two.number {
+		let ancestor_one_id = BlockId::hash(header_one.ancestor);
+		let ancestor_one = get_light_header(ancestor_one_id)?;
+
+		if ancestor_one.number >= header_two.number {
+			header_one = ancestor_one;
+		} else {
+			break
+		}
+	}
+
+	while header_one.number < header_two.number {
+		let ancestor_two_id = BlockId::hash(header_two.ancestor);
+		let ancestor_two = get_light_header(ancestor_two_id)?;
+
+		if ancestor_two.number >= header_one.number {
+			header_two = ancestor_two;
+		} else {
+			break
+		}
+	}
+
+	// Then we move the remaining path using parent links.
+
+	while header_one.hash != header_two.hash {
+		if header_one.number > header_two.number {
+			let parent_one_id = BlockId::hash(header_one.parent);
+			header_one = get_light_header(parent_one_id)?;
+		} else {
+			let parent_two_id = BlockId::hash(header_two.parent);
+			header_two = get_light_header(parent_two_id)?;
+		}
+	}
+
+	// Update cached ancestor links.
+
+	if orig_header_one.number > header_one.number {
+		orig_header_one.ancestor = header_one.hash;
+		set_light_header(orig_header_one);
+	}
+
+	if orig_header_two.number > header_one.number {
+		orig_header_two.ancestor = header_one.hash;
+		set_light_header(orig_header_two);
+	}
+
+	Ok((header_one.hash, header_one.number))
+}
+
 /// Compute a tree-route between two blocks. See tree-route docs for more details.
-pub fn tree_route<Block: BlockT, F: Fn(BlockId<Block>) -> Result<<Block as BlockT>::Header>>(
-	load_header: F,
+pub fn tree_route<Block: BlockT, F: Fn(BlockId<Block>) -> Result<LightHeader<Block>>>(
+	get_light_header: F,
 	from: BlockId<Block>,
 	to: BlockId<Block>,
 ) -> Result<TreeRoute<Block>> {
-	let mut from = load_header(from)?;
-	let mut to = load_header(to)?;
+	let mut from = get_light_header(from)?;
+	let mut to = get_light_header(to)?;
 
 	let mut from_branch = Vec::new();
 	let mut to_branch = Vec::new();
 
-	while to.number() > from.number() {
+	while to.number > from.number {
 		to_branch.push(RouteEntry {
-			number: to.number().clone(),
-			hash: to.hash(),
+			number: to.number,
+			hash: to.hash,
 		});
 
-		to = load_header(BlockId::Hash(*to.parent_hash()))?;
+		to = get_light_header(BlockId::Hash(to.parent))?;
 	}
 
-	while from.number() > to.number() {
+	while from.number > to.number {
 		from_branch.push(RouteEntry {
-			number: from.number().clone(),
-			hash: from.hash(),
+			number: from.number,
+			hash: from.hash,
 		});
-		from = load_header(BlockId::Hash(*from.parent_hash()))?;
+		from = get_light_header(BlockId::Hash(from.parent))?;
 	}
 
 	// numbers are equal now. walk backwards until the block is the same
 
 	while to != from {
 		to_branch.push(RouteEntry {
-			number: to.number().clone(),
-			hash: to.hash(),
+			number: to.number,
+			hash: to.hash,
 		});
-		to = load_header(BlockId::Hash(*to.parent_hash()))?;
+		to = get_light_header(BlockId::Hash(to.parent))?;
 
 		from_branch.push(RouteEntry {
-			number: from.number().clone(),
-			hash: from.hash(),
+			number: from.number,
+			hash: from.hash,
 		});
-		from = load_header(BlockId::Hash(*from.parent_hash()))?;
+		from = get_light_header(BlockId::Hash(from.parent))?;
 	}
 
 	// add the pivot block. and append the reversed to-branch (note that it's reverse order originalls)
 	let pivot = from_branch.len();
 	from_branch.push(RouteEntry {
-		number: to.number().clone(),
-		hash: to.hash(),
+		number: to.number,
+		hash: to.hash,
 	});
 	from_branch.extend(to_branch.into_iter().rev());
 
