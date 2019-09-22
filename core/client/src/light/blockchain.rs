@@ -27,7 +27,7 @@ use crate::backend::{AuxStore, NewBlockState};
 use crate::blockchain::{
 	Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache,
 	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo, ProvideCache,
-	well_known_cache_keys,
+	well_known_cache_keys, LightHeader
 };
 use crate::cht;
 use crate::error::{Error as ClientError, Result as ClientResult};
@@ -121,6 +121,14 @@ impl<S, Block> BlockchainHeaderBackend<Block> for Blockchain<S> where Block: Blo
 			LocalOrRemote::Remote(_) => Err(ClientError::NotAvailableOnLightClient),
 			LocalOrRemote::Unknown => Ok(None),
 		}
+	}
+
+	fn set_light_header(&self, data: LightHeader<Block>) {
+		self.storage.set_light_header(data)
+	}
+
+	fn get_light_header(&self, id: BlockId<Block>) -> ClientResult<Option<LightHeader<Block>>> {
+		self.storage.get_light_header(id)
 	}
 
 	fn info(&self) -> BlockchainInfo<Block> {
