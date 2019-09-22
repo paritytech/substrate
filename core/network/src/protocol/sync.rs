@@ -550,14 +550,14 @@ impl<B: BlockT> ChainSync<B> {
 		let attrs = &self.required_block_attributes;
 		let sync_requests = &self.sync_requests;
 		let mut have_requests = false;
-		let last_finalized = self.client.info().chain.finalized_hash;
+		let last_finalized = self.client.info().chain.finalized_number;
 		let best_queued = self.best_queued_number;
 		let iter = self.peers.iter_mut().filter_map(move |(id, peer)| {
 			if !peer.state.is_available() {
 				trace!(target: "sync", "Peer {} is busy", id);
 				return None
 			}
-			if let Some((hash, req)) = explicit_sync_request(id, sync_requests, best_queued, &last_finalized, attrs) {
+			if let Some((hash, req)) = explicit_sync_request(id, sync_requests, best_queued, last_finalized, attrs) {
 				trace!(target: "sync", "Downloading explicitly requested block {:?} from {}", hash, id);
 				peer.state = PeerSyncState::DownloadingStale(hash);
 				have_requests = true;
@@ -1276,8 +1276,8 @@ fn explicit_sync_request<B: BlockT>(
 	id: &PeerId,
 	requests: &HashMap<B::Hash, SyncRequest<B>>,
 	best_num: NumberFor<B>,
-	finalized: &B::Hash,
-	attributs: &message::BlockAttributes,
+	finalized: NumberFor<B>,
+	attributes: &message::BlockAttributes,
 ) -> Option<(B::Hash, BlockRequest<B>)>
 {
 	for (hash, r) in requests {
@@ -1288,11 +1288,11 @@ fn explicit_sync_request<B: BlockT>(
 			trace!(target: "sync", "Downloading requested fork {:?} from {}", hash, id);
 			return Some((hash.clone(), message::generic::BlockRequest {
 				id: 0,
-				fields: attributs.clone(),
+				fields: attributes.clone(),
 				from: message::FromBlock::Hash(hash.clone()),
-				to: Some(finalized.clone()),
+				to: None,
 				direction: message::Direction::Descending,
-				max: None,
+				max: Some((r.number - finalized).saturated_into::<u32>()), // up to the last finalized block
 			}))
 		}
 	}

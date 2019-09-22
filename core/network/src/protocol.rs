@@ -728,7 +728,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			match request.direction {
 				message::Direction::Ascending => id = BlockId::Number(number + One::one()),
 				message::Direction::Descending => {
-					if number.is_one() {
+					if number.is_zero() {
 						break;
 					}
 					id = BlockId::Hash(parent_hash)
