@@ -32,7 +32,9 @@ use crate::error;
 use crate::backend::{self, NewBlockState, StorageCollection, ChildStorageCollection};
 use crate::light;
 use crate::leaves::LeafSet;
-use crate::blockchain::{self, BlockStatus, HeaderBackend, well_known_cache_keys::Id as CacheKeyId};
+use crate::blockchain::{
+	self, BlockStatus, HeaderBackend, LightHeader, well_known_cache_keys::Id as CacheKeyId
+};
 
 struct PendingBlock<B: BlockT> {
 	block: StoredBlock<B>,
@@ -222,7 +224,8 @@ impl<Block: BlockT> Blockchain<Block> {
 				None
 			} else {
 				let route = crate::blockchain::tree_route(
-					|id| self.header(id)?.ok_or_else(|| error::Error::UnknownBlock(format!("{:?}", id))),
+					|id| self.get_light_header(id)?
+						.ok_or_else(|| error::Error::UnknownBlock(format!("{:?}", id))),
 					BlockId::Hash(best_hash),
 					BlockId::Hash(*header.parent_hash()),
 				)?;
@@ -291,6 +294,14 @@ impl<Block: BlockT> HeaderBackend<Block> for Blockchain<Block> {
 		Ok(self.id(id).and_then(|hash| {
 			self.storage.read().blocks.get(&hash).map(|b| b.header().clone())
 		}))
+	}
+
+	fn set_light_header(&self, _data: LightHeader<Block>) {
+		unimplemented!()
+	}
+
+	fn get_light_header(&self, _id: BlockId<Block>) -> error::Result<Option<LightHeader<Block>>> {
+		unimplemented!()
 	}
 
 	fn info(&self) -> blockchain::Info<Block> {
