@@ -111,22 +111,24 @@ pub trait PowAlgorithm<B: BlockT> {
 }
 
 /// A verifier for PoW blocks.
-pub struct PowVerifier<C, Algorithm> {
+pub struct PowVerifier<B: BlockT<Hash=H256>, C, Algorithm> {
 	client: Arc<C>,
 	algorithm: Algorithm,
 	inherent_data_providers: inherents::InherentDataProviders,
+	check_inherents_after: <<B as BlockT>::Header as HeaderT>::Number,
 }
 
-impl<C, Algorithm> PowVerifier<C, Algorithm> {
+impl<B: BlockT<Hash=H256>, C, Algorithm> PowVerifier<B, C, Algorithm> {
 	pub fn new(
 		client: Arc<C>,
 		algorithm: Algorithm,
+		check_inherents_after: <<B as BlockT>::Header as HeaderT>::Number,
 		inherent_data_providers: inherents::InherentDataProviders,
 	) -> Self {
-		Self { client, algorithm, inherent_data_providers }
+		Self { client, algorithm, inherent_data_providers, check_inherents_after }
 	}
 
-	fn check_header<B: BlockT<Hash=H256>>(
+	fn check_header(
 		&self,
 		mut header: B::Header,
 		parent_block_id: BlockId<B>,
@@ -161,7 +163,7 @@ impl<C, Algorithm> PowVerifier<C, Algorithm> {
 		Ok((header, difficulty, seal))
 	}
 
-	fn check_inherents<B: BlockT<Hash=H256>>(
+	fn check_inherents(
 		&self,
 		block: B,
 		block_id: BlockId<B>,
@@ -171,6 +173,10 @@ impl<C, Algorithm> PowVerifier<C, Algorithm> {
 		C: ProvideRuntimeApi, C::Api: BlockBuilderApi<B>
 	{
 		const MAX_TIMESTAMP_DRIFT_SECS: u64 = 60;
+
+		if *block.header().number() < self.check_inherents_after {
+			return Ok(())
+		}
 
 		let inherent_res = self.client.runtime_api().check_inherents(
 			&block_id,
@@ -198,7 +204,7 @@ impl<C, Algorithm> PowVerifier<C, Algorithm> {
 	}
 }
 
-impl<B: BlockT<Hash=H256>, C, Algorithm> Verifier<B> for PowVerifier<C, Algorithm> where
+impl<B: BlockT<Hash=H256>, C, Algorithm> Verifier<B> for PowVerifier<B, C, Algorithm> where
 	C: ProvideRuntimeApi + Send + Sync + HeaderBackend<B> + AuxStore + ProvideCache<B> + BlockOf,
 	C::Api: BlockBuilderApi<B>,
 	Algorithm: PowAlgorithm<B> + Send + Sync,
@@ -220,7 +226,7 @@ impl<B: BlockT<Hash=H256>, C, Algorithm> Verifier<B> for PowVerifier<C, Algorith
 		let best_aux = PowAux::read(self.client.as_ref(), &best_hash)?;
 		let mut aux = PowAux::read(self.client.as_ref(), &parent_hash)?;
 
-		let (checked_header, difficulty, seal) = self.check_header::<B>(
+		let (checked_header, difficulty, seal) = self.check_header(
 			header,
 			BlockId::Hash(parent_hash),
 		)?;
@@ -278,6 +284,7 @@ pub fn import_queue<B, C, Algorithm>(
 	block_import: BoxBlockImport<B>,
 	client: Arc<C>,
 	algorithm: Algorithm,
+	check_inherents_after: <<B as BlockT>::Header as HeaderT>::Number,
 	inherent_data_providers: InherentDataProviders,
 ) -> Result<PowImportQueue<B>, consensus_common::Error> where
 	B: BlockT<Hash=H256>,
@@ -288,11 +295,12 @@ pub fn import_queue<B, C, Algorithm>(
 {
 	register_pow_inherent_data_provider(&inherent_data_providers)?;
 
-	let verifier = PowVerifier {
-		client: client.clone(),
+	let verifier = PowVerifier::new(
+		client.clone(),
 		algorithm,
+		check_inherents_after,
 		inherent_data_providers,
-	};
+	);
 
 	Ok(BasicQueue::new(
 		verifier,
