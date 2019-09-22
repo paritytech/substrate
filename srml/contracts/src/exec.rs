@@ -1539,7 +1539,7 @@ mod tests {
 		let mut loader = MockLoader::empty();
 		let dummy_ch = loader.insert(|_| exec_success());
 		let instantiated_contract_address = Rc::new(RefCell::new(None::<u64>));
-		let creator_ch = loader.insert({
+		let instantiator_ch = loader.insert({
 			let dummy_ch = dummy_ch.clone();
 			let instantiated_contract_address = Rc::clone(&instantiated_contract_address);
 			move |ctx| {
@@ -1562,7 +1562,7 @@ mod tests {
 				let cfg = Config::preload();
 				let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 				ctx.overlay.set_balance(&ALICE, 1000);
-				ctx.overlay.instantiate_contract(&BOB, creator_ch).unwrap();
+				ctx.overlay.instantiate_contract(&BOB, instantiator_ch).unwrap();
 
 				assert_matches!(
 					ctx.call(BOB, 20, &mut GasMeter::<Test>::with_limit(1000, 1), vec![]),
@@ -1600,7 +1600,7 @@ mod tests {
 		let dummy_ch = loader.insert(
 			|_| Err(ExecError { reason: "It's a trap!", buffer: Vec::new() })
 		);
-		let creator_ch = loader.insert({
+		let instantiator_ch = loader.insert({
 			let dummy_ch = dummy_ch.clone();
 			move |ctx| {
 				// Instantiate a contract and save it's address in `instantiated_contract_address`.
@@ -1624,7 +1624,7 @@ mod tests {
 				let cfg = Config::preload();
 				let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 				ctx.overlay.set_balance(&ALICE, 1000);
-				ctx.overlay.instantiate_contract(&BOB, creator_ch).unwrap();
+				ctx.overlay.instantiate_contract(&BOB, instantiator_ch).unwrap();
 
 				assert_matches!(
 					ctx.call(BOB, 20, &mut GasMeter::<Test>::with_limit(1000, 1), vec![]),
