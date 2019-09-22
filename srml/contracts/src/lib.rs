@@ -405,7 +405,7 @@ pub trait Trait: timestamp::Trait {
 	type CallBaseFee: Get<Gas>;
 
 	/// The base fee charged for instantiating a contract.
-	type InstantiationBaseFee: Get<Gas>;
+	type InstantiateBaseFee: Get<Gas>;
 
 	/// The maximum nesting level of a call/instantiate stack.
 	type MaxDepth: Get<u32>;
@@ -507,7 +507,7 @@ decl_module! {
 
 		/// The base fee charged for instantiating a contract. A reasonable default value
 		/// is 175.
-		const InstantiationBaseFee: Gas = T::InstantiationBaseFee::get();
+		const InstantiateBaseFee: Gas = T::InstantiateBaseFee::get();
 
 		/// The maximum nesting level of a call/instantiate stack. A reasonable default
 		/// value is 100.
