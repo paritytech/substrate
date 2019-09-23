@@ -411,11 +411,11 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E, SO>(
 		let (header, body) = block.deconstruct();
 		let seed = H256::random();
 		let (difficulty, seal) = {
-			loop {
-				let difficulty = algorithm.difficulty(
-					&BlockId::Hash(best_hash),
-				)?;
+			let difficulty = algorithm.difficulty(
+				&BlockId::Hash(best_hash),
+			)?;
 
+			loop {
 				let seal = algorithm.mine(
 					&BlockId::Hash(best_hash),
 					&header.hash(),
