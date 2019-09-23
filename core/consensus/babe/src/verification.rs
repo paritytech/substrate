@@ -16,14 +16,38 @@
 
 //! Verification for BABE headers.
 use schnorrkel::vrf::{VRFOutput, VRFProof};
-use sr_primitives::{DigestItem, traits::Header};
+use sr_primitives::{traits::Header, traits::DigestItemFor};
 use primitives::{Pair, Public};
-use babe_primitives::{Epoch, BabePreDigest, CompatibleDigestItem, BabeAuthorityWeight, AuthorityId};
-use babe_primitives::{AuthoritySignature, SlotNumber, BabeBlockWeight, AuthorityIndex, AuthorityPair};
+use babe_primitives::{Epoch, BabePreDigest, CompatibleDigestItem, AuthorityId};
+use babe_primitives::{AuthoritySignature, SlotNumber, AuthorityIndex, AuthorityPair};
 use slots::CheckedHeader;
 use log::{debug, trace};
 use super::{find_pre_digest, make_transcript, calculate_primary_threshold, check_primary_threshold};
-use super::secondary_slot_author;
+use super::{secondary_slot_author, BlockT};
+
+pub(super) struct VerificationParams<'a, B: 'a + BlockT> {
+	/// the header being verified.
+	pub(super) header: B::Header,
+	/// the pre-digest of the header being verified. this is optional - if prior
+	/// verification code had to read it, it can be included here to avoid duplicate
+	/// work.
+	pub(super) pre_digest: Option<BabePreDigest>,
+	/// the slot number of the current time.
+	pub(super) slot_now: SlotNumber,
+	/// epoch descriptor of the epoch this block _should_ be under, if it's valid.
+	pub(super) epoch: &'a Epoch,
+	/// genesis config of this BABE chain.
+	pub(super) config: &'a super::Config,
+}
+
+macro_rules! babe_err {
+	($($i: expr),+) => {
+		{
+			debug!(target: "babe", $($i),+);
+			format!($($i),+)
+		}
+	};
+}
 
 /// Check a header has been signed by the right key. If the slot is too far in
 /// the future, an error will be returned. If successful, returns the pre-header
@@ -36,129 +60,135 @@ use super::secondary_slot_author;
 ///
 /// The given header can either be from a primary or secondary slot assignment,
 /// with each having different validation logic.
-pub(super) fn check_header<H: Header>(
-	mut header: H,
-	parent_header: H,
-	slot_now: u64,
-	epoch: &Epoch,
-	c: (u64, u64),
-) -> Result<CheckedHeader<H, (DigestItem<H::Hash>, DigestItem<H::Hash>)>, String> {
+pub(super) fn check_header<B: BlockT + Sized>(
+	params: VerificationParams<B>,
+) -> Result<CheckedHeader<B::Header, VerifiedHeaderInfo<B>>, String> where
+	DigestItemFor<B>: CompatibleDigestItem,
+{
+	let VerificationParams {
+		mut header,
+		pre_digest,
+		slot_now,
+		epoch,
+		config,
+	} = params;
+
+	let authorities = &epoch.authorities;
+	let pre_digest = pre_digest.map(Ok).unwrap_or_else(|| find_pre_digest::<B::Header>(&header))?;
+
 	trace!(target: "babe", "Checking header");
-	let Epoch { authorities, randomness, epoch_index, secondary_slots, .. } = epoch;
 	let seal = match header.digest_mut().pop() {
 		Some(x) => x,
-		None => return Err(format!("Header {:?} is unsealed", header.hash())),
+		None => return Err(babe_err!("Header {:?} is unsealed", header.hash())),
 	};
 
 	let sig = seal.as_babe_seal().ok_or_else(|| {
-		format!("Header {:?} has a bad seal", header.hash())
+		babe_err!("Header {:?} has a bad seal", header.hash())
 	})?;
 
 	// the pre-hash of the header doesn't include the seal
 	// and that's what we sign
 	let pre_hash = header.hash();
 
-	let pre_digest = find_pre_digest::<H>(&header)?;
-
 	if pre_digest.slot_number() > slot_now {
 		header.digest_mut().push(seal);
 		return Ok(CheckedHeader::Deferred(header, pre_digest.slot_number()));
 	}
 
-	if pre_digest.authority_index() > authorities.len() as u32 {
-		return Err(format!("Slot author not found"));
-	}
-
-	let parent_weight = {
-		let parent_pre_digest = find_pre_digest::<H>(&parent_header)?;
-		parent_pre_digest.weight()
+	let author = match authorities.get(pre_digest.authority_index() as usize) {
+		Some(author) => author.0.clone(),
+		None => return Err(babe_err!("Slot author not found")),
 	};
 
 	match &pre_digest {
-		BabePreDigest::Primary { vrf_output, vrf_proof, authority_index, slot_number, weight } => {
+		BabePreDigest::Primary { vrf_output, vrf_proof, authority_index, slot_number } => {
 			debug!(target: "babe", "Verifying Primary block");
 
-			let digest = (vrf_output, vrf_proof, *authority_index, *slot_number, *weight);
+			let digest = (vrf_output, vrf_proof, *authority_index, *slot_number);
 
-			check_primary_header::<H>(
+			check_primary_header::<B>(
 				pre_hash,
 				digest,
 				sig,
-				parent_weight,
-				authorities,
-				*randomness,
-				*epoch_index,
-				c,
+				&epoch,
+				config.c,
 			)?;
 		},
-		BabePreDigest::Secondary { authority_index, slot_number, weight } if *secondary_slots => {
+		BabePreDigest::Secondary { authority_index, slot_number } if config.secondary_slots => {
 			debug!(target: "babe", "Verifying Secondary block");
 
-			let digest = (*authority_index, *slot_number, *weight);
+			let digest = (*authority_index, *slot_number);
 
-			check_secondary_header::<H>(
+			check_secondary_header::<B>(
 				pre_hash,
 				digest,
 				sig,
-				parent_weight,
-				&authorities,
-				*randomness,
+				&epoch,
 			)?;
 		},
 		_ => {
-			return Err(format!("Secondary slot assignments are disabled for the current epoch."));
+			return Err(babe_err!("Secondary slot assignments are disabled for the current epoch."));
 		}
 	}
 
-	let pre_digest = CompatibleDigestItem::babe_pre_digest(pre_digest);
-	Ok(CheckedHeader::Checked(header, (pre_digest, seal)))
+	let info = VerifiedHeaderInfo {
+		pre_digest: CompatibleDigestItem::babe_pre_digest(pre_digest),
+		seal,
+		author,
+	};
+	Ok(CheckedHeader::Checked(header, info))
+}
+
+pub(super) struct VerifiedHeaderInfo<B: BlockT> {
+	pub(super) pre_digest: DigestItemFor<B>,
+	pub(super) seal: DigestItemFor<B>,
+	pub(super) author: AuthorityId,
 }
 
 /// Check a primary slot proposal header. We validate that the given header is
 /// properly signed by the expected authority, and that the contained VRF proof
 /// is valid. Additionally, the weight of this block must increase compared to
 /// its parent since it is a primary block.
-fn check_primary_header<H: Header>(
-	pre_hash: H::Hash,
-	pre_digest: (&VRFOutput, &VRFProof, AuthorityIndex, SlotNumber, BabeBlockWeight),
+fn check_primary_header<B: BlockT + Sized>(
+	pre_hash: B::Hash,
+	pre_digest: (&VRFOutput, &VRFProof, AuthorityIndex, SlotNumber),
 	signature: AuthoritySignature,
-	parent_weight: BabeBlockWeight,
-	authorities: &[(AuthorityId, BabeAuthorityWeight)],
-	randomness: [u8; 32],
-	epoch_index: u64,
+	epoch: &Epoch,
 	c: (u64, u64),
 ) -> Result<(), String> {
-	let (vrf_output, vrf_proof, authority_index, slot_number, weight) = pre_digest;
-	if weight != parent_weight + 1 {
-		return Err("Invalid weight: should increase with Primary block.".into());
-	}
+	let (vrf_output, vrf_proof, authority_index, slot_number) = pre_digest;
 
-	let author = &authorities[authority_index as usize].0;
+	let author = &epoch.authorities[authority_index as usize].0;
 
 	if AuthorityPair::verify(&signature, pre_hash, &author) {
 		let (inout, _) = {
 			let transcript = make_transcript(
-				&randomness,
+				&epoch.randomness,
 				slot_number,
-				epoch_index,
+				epoch.epoch_index,
 			);
 
 			schnorrkel::PublicKey::from_bytes(author.as_slice()).and_then(|p| {
 				p.vrf_verify(transcript, vrf_output, vrf_proof)
 			}).map_err(|s| {
-				format!("VRF verification failed: {:?}", s)
+				babe_err!("VRF verification failed: {:?}", s)
 			})?
 		};
 
-		let threshold = calculate_primary_threshold(c, authorities, authority_index as usize);
+		let threshold = calculate_primary_threshold(
+			c,
+			&epoch.authorities,
+			authority_index as usize,
+		);
+
 		if !check_primary_threshold(&inout, threshold) {
-			return Err(format!("VRF verification of block by author {:?} failed: \
+			return Err(babe_err!("VRF verification of block by author {:?} failed: \
 								  threshold {} exceeded", author, threshold));
 		}
 
 		Ok(())
 	} else {
-		Err(format!("Bad signature on {:?}", pre_hash))
+		Err(babe_err!("Bad signature on {:?}", pre_hash))
 	}
 }
 
@@ -166,29 +196,23 @@ fn check_primary_header<H: Header>(
 /// properly signed by the expected authority, which we have a deterministic way
 /// of computing. Additionally, the weight of this block must stay the same
 /// compared to its parent since it is a secondary block.
-fn check_secondary_header<H: Header>(
-	pre_hash: H::Hash,
-	pre_digest: (AuthorityIndex, SlotNumber, BabeBlockWeight),
+fn check_secondary_header<B: BlockT>(
+	pre_hash: B::Hash,
+	pre_digest: (AuthorityIndex, SlotNumber),
 	signature: AuthoritySignature,
-	parent_weight: BabeBlockWeight,
-	authorities: &[(AuthorityId, BabeAuthorityWeight)],
-	randomness: [u8; 32],
+	epoch: &Epoch,
 ) -> Result<(), String> {
-	let (authority_index, slot_number, weight) = pre_digest;
-
-	if weight != parent_weight {
-		return Err("Invalid weight: Should stay the same with secondary block.".into());
-	}
+	let (authority_index, slot_number) = pre_digest;
 
 	// check the signature is valid under the expected authority and
 	// chain state.
 	let expected_author = secondary_slot_author(
 		slot_number,
-		authorities,
-		randomness,
+		&epoch.authorities,
+		epoch.randomness,
 	).ok_or_else(|| "No secondary author expected.".to_string())?;
 
-	let author = &authorities[authority_index as usize].0;
+	let author = &epoch.authorities[authority_index as usize].0;
 
 	if expected_author != author {
 		let msg = format!("Invalid author: Expected secondary author: {:?}, got: {:?}.",

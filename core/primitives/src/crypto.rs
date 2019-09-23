@@ -780,10 +780,6 @@ impl<'a> TryFrom<&'a str> for KeyTypeId {
 pub mod key_types {
 	use super::KeyTypeId;
 
-	/// Key type for generic S/R 25519 key.
-	pub const SR25519: KeyTypeId = KeyTypeId(*b"sr25");
-	/// Key type for generic Ed25519 key.
-	pub const ED25519: KeyTypeId = KeyTypeId(*b"ed25");
 	/// Key type for Babe module, build-in.
 	pub const BABE: KeyTypeId = KeyTypeId(*b"babe");
 	/// Key type for Grandpa module, build-in.
