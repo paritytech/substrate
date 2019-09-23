@@ -162,7 +162,7 @@ use rstd::prelude::*;
 use rstd::{cmp, result, mem};
 use codec::{Codec, Encode, Decode};
 use support::{
-	StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module,
+	StorageValue, Parameter, decl_event, decl_storage, decl_module,
 	traits::{
 		UpdateBalanceOutcome, Currency, OnFreeBalanceZero, OnUnbalanced,
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,

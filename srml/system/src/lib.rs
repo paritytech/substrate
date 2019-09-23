@@ -111,7 +111,7 @@ use sr_primitives::{
 
 use primitives::storage::well_known_keys;
 use support::{
-	storage, decl_module, decl_event, decl_storage, StorageDoubleMap, StorageValue, StorageMap,
+	storage, decl_module, decl_event, decl_storage,
 	Parameter, traits::{Contains, Get}, decl_error,
 };
 use safe_mix::TripletMix;
