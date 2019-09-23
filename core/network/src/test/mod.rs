@@ -461,7 +461,12 @@ pub trait TestNetFactory: Sized {
 
 	/// These two need to be implemented!
 	fn from_config(config: &ProtocolConfig) -> Self;
-	fn make_verifier(&self, client: PeersClient, config: &ProtocolConfig) -> Self::Verifier;
+	fn make_verifier(
+		&self,
+		client: PeersClient,
+		config: &ProtocolConfig,
+		peer_data: &Self::PeerData,
+	) -> Self::Verifier;
 
 	/// Get reference to peer.
 	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData, Self::Specialization>;
@@ -509,11 +514,22 @@ pub trait TestNetFactory: Sized {
 		let backend = test_client_builder.backend();
 		let (c, longest_chain) = test_client_builder.build_with_longest_chain();
 		let client = Arc::new(c);
-		let verifier = self.make_verifier(PeersClient::Full(client.clone(), backend.clone()), config);
-		let verifier = VerifierAdapter(Arc::new(Mutex::new(Box::new(verifier) as Box<_>)));
-		let (block_import, justification_import, finality_proof_import, finality_proof_request_builder, data)
-			= self.make_block_import(PeersClient::Full(client.clone(), backend.clone()));
+
+		let (
+			block_import,
+			justification_import,
+			finality_proof_import,
+			finality_proof_request_builder,
+			data,
+		) = self.make_block_import(PeersClient::Full(client.clone(), backend.clone()));
 		let block_import = BlockImportAdapter(Arc::new(Mutex::new(block_import)));
+
+		let verifier = self.make_verifier(
+			PeersClient::Full(client.clone(), backend.clone()),
+			config,
+			&data,
+		);
+		let verifier = VerifierAdapter(Arc::new(Mutex::new(Box::new(verifier) as Box<_>)));
 
 		let import_queue = Box::new(BasicQueue::new(
 			verifier.clone(),
@@ -572,11 +588,21 @@ pub trait TestNetFactory: Sized {
 
 		let (c, backend) = test_client::new_light();
 		let client = Arc::new(c);
-		let verifier = self.make_verifier(PeersClient::Light(client.clone(), backend.clone()), &config);
-		let verifier = VerifierAdapter(Arc::new(Mutex::new(Box::new(verifier) as Box<_>)));
-		let (block_import, justification_import, finality_proof_import, finality_proof_request_builder, data)
-			= self.make_block_import(PeersClient::Light(client.clone(), backend.clone()));
+		let (
+			block_import,
+			justification_import,
+			finality_proof_import,
+			finality_proof_request_builder,
+			data,
+		) = self.make_block_import(PeersClient::Light(client.clone(), backend.clone()));
 		let block_import = BlockImportAdapter(Arc::new(Mutex::new(block_import)));
+
+		let verifier = self.make_verifier(
+			PeersClient::Light(client.clone(), backend.clone()),
+			&config,
+			&data,
+		);
+		let verifier = VerifierAdapter(Arc::new(Mutex::new(Box::new(verifier) as Box<_>)));
 
 		let import_queue = Box::new(BasicQueue::new(
 			verifier.clone(),
@@ -696,7 +722,7 @@ impl TestNetFactory for TestNet {
 		}
 	}
 
-	fn make_verifier(&self, _client: PeersClient, _config: &ProtocolConfig)
+	fn make_verifier(&self, _client: PeersClient, _config: &ProtocolConfig, _peer_data: &())
 		-> Self::Verifier
 	{
 		PassThroughVerifier(false)
@@ -742,8 +768,8 @@ impl TestNetFactory for JustificationTestNet {
 		JustificationTestNet(TestNet::from_config(config))
 	}
 
-	fn make_verifier(&self, client: PeersClient, config: &ProtocolConfig) -> Self::Verifier {
-		self.0.make_verifier(client, config)
+	fn make_verifier(&self, client: PeersClient, config: &ProtocolConfig, peer_data: &()) -> Self::Verifier {
+		self.0.make_verifier(client, config, peer_data)
 	}
 
 	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData, Self::Specialization> {

@@ -69,7 +69,7 @@ impl_outer_dispatch! {
 thread_local! {
 	static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
 	static TRANSFER_FEE: RefCell<u64> = RefCell::new(0);
-	static CREATION_FEE: RefCell<u64> = RefCell::new(0);
+	static INSTANTIATION_FEE: RefCell<u64> = RefCell::new(0);
 	static BLOCK_GAS_LIMIT: RefCell<u64> = RefCell::new(0);
 }
 
@@ -85,7 +85,7 @@ impl Get<u64> for TransferFee {
 
 pub struct CreationFee;
 impl Get<u64> for CreationFee {
-	fn get() -> u64 { CREATION_FEE.with(|v| *v.borrow()) }
+	fn get() -> u64 { INSTANTIATION_FEE.with(|v| *v.borrow()) }
 }
 
 pub struct BlockGasLimit;
@@ -155,7 +155,7 @@ parameter_types! {
 	pub const TransactionByteFee: u64 = 6;
 	pub const ContractFee: u64 = 21;
 	pub const CallBaseFee: u64 = 135;
-	pub const CreateBaseFee: u64 = 175;
+	pub const InstantiateBaseFee: u64 = 175;
 	pub const MaxDepth: u32 = 100;
 	pub const MaxValueSize: u32 = 16_384;
 }
@@ -179,7 +179,7 @@ impl Trait for Test {
 	type TransactionByteFee = TransactionByteFee;
 	type ContractFee = ContractFee;
 	type CallBaseFee = CallBaseFee;
-	type CreateBaseFee = CreateBaseFee;
+	type InstantiateBaseFee = InstantiateBaseFee;
 	type MaxDepth = MaxDepth;
 	type MaxValueSize = MaxValueSize;
 	type BlockGasLimit = BlockGasLimit;
@@ -233,7 +233,7 @@ pub struct ExtBuilder {
 	gas_price: u64,
 	block_gas_limit: u64,
 	transfer_fee: u64,
-	creation_fee: u64,
+	instantiation_fee: u64,
 }
 impl Default for ExtBuilder {
 	fn default() -> Self {
@@ -242,7 +242,7 @@ impl Default for ExtBuilder {
 			gas_price: 2,
 			block_gas_limit: 100_000_000,
 			transfer_fee: 0,
-			creation_fee: 0,
+			instantiation_fee: 0,
 		}
 	}
 }
@@ -263,14 +263,14 @@ impl ExtBuilder {
 		self.transfer_fee = transfer_fee;
 		self
 	}
-	pub fn creation_fee(mut self, creation_fee: u64) -> Self {
-		self.creation_fee = creation_fee;
+	pub fn instantiation_fee(mut self, instantiation_fee: u64) -> Self {
+		self.instantiation_fee = instantiation_fee;
 		self
 	}
 	pub fn set_associated_consts(&self) {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
 		TRANSFER_FEE.with(|v| *v.borrow_mut() = self.transfer_fee);
-		CREATION_FEE.with(|v| *v.borrow_mut() = self.creation_fee);
+		INSTANTIATION_FEE.with(|v| *v.borrow_mut() = self.instantiation_fee);
 		BLOCK_GAS_LIMIT.with(|v| *v.borrow_mut() = self.block_gas_limit);
 	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
@@ -651,7 +651,7 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 				vec![],
 			));
 
-			// Call the newly created contract. The contract is expected to dispatch a call
+			// Call the newly instantiated contract. The contract is expected to dispatch a call
 			// and then trap.
 			assert_err!(
 				Contract::call(
@@ -1225,7 +1225,7 @@ const CODE_CHECK_DEFAULT_RENT_ALLOWANCE: &str = r#"
 "#;
 
 #[test]
-fn default_rent_allowance_on_create() {
+fn default_rent_allowance_on_instantiate() {
 	let (wasm, code_hash) = compile_module::<Test>(CODE_CHECK_DEFAULT_RENT_ALLOWANCE).unwrap();
 
 	with_externalities(
@@ -1621,7 +1621,7 @@ const CODE_CALLER_CONTRACT: &str = r#"
 	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
 	(import "env" "ext_balance" (func $ext_balance))
 	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
-	(import "env" "ext_create" (func $ext_create (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
+	(import "env" "ext_instantiate" (func $ext_instantiate (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
 	(import "env" "ext_println" (func $ext_println (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
@@ -1677,7 +1677,7 @@ const CODE_CALLER_CONTRACT: &str = r#"
 
 		;; Fail to deploy the contract since it returns a non-zero exit status.
 		(set_local $exit_code
-			(call $ext_create
+			(call $ext_instantiate
 				(i32.const 24)	;; Pointer to the code hash.
 				(i32.const 32)	;; Length of the code hash.
 				(i64.const 0)	;; How much gas to devote for the execution. 0 = all.
@@ -1705,7 +1705,7 @@ const CODE_CALLER_CONTRACT: &str = r#"
 
 		;; Fail to deploy the contract due to insufficient gas.
 		(set_local $exit_code
-			(call $ext_create
+			(call $ext_instantiate
 				(i32.const 24)	;; Pointer to the code hash.
 				(i32.const 32)	;; Length of the code hash.
 				(i64.const 200)	;; How much gas to devote for the execution.
@@ -1733,7 +1733,7 @@ const CODE_CALLER_CONTRACT: &str = r#"
 
 		;; Deploy the contract successfully.
 		(set_local $exit_code
-			(call $ext_create
+			(call $ext_instantiate
 				(i32.const 24)	;; Pointer to the code hash.
 				(i32.const 32)	;; Length of the code hash.
 				(i64.const 0)	;; How much gas to devote for the execution. 0 = all.
@@ -2118,7 +2118,7 @@ const CODE_DESTROY_AND_TRANSFER: &str = r#"
 	(import "env" "ext_get_storage" (func $ext_get_storage (param i32) (result i32)))
 	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32 i32)))
 	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
-	(import "env" "ext_create" (func $ext_create (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
+	(import "env" "ext_instantiate" (func $ext_instantiate (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(func $assert (param i32)
@@ -2149,7 +2149,7 @@ const CODE_DESTROY_AND_TRANSFER: &str = r#"
 		;; Deploy the contract with the provided code hash.
 		(call $assert
 			(i32.eq
-				(call $ext_create
+				(call $ext_instantiate
 					(i32.const 48)	;; Pointer to the code hash.
 					(i32.const 32)	;; Length of the code hash.
 					(i64.const 0)	;; How much gas to devote for the execution. 0 = all.

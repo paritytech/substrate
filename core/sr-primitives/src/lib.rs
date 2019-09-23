@@ -46,6 +46,8 @@ pub mod testing;
 
 pub mod weights;
 pub mod traits;
+pub mod curve;
+
 pub mod generic;
 pub mod transaction_validity;
 pub mod sr_arithmetic;
@@ -65,7 +67,13 @@ pub use sr_arithmetic::{
 /// Re-export 128 bit helpers from sr_arithmetic
 pub use sr_arithmetic::helpers_128bit;
 
-/// Justification type.
+/// An abstraction over justification for a block's validity under a consensus algorithm.
+///
+/// Essentially a finality proof. The exact formulation will vary between consensus
+/// algorithms. In the case where there are multiple valid proofs, inclusion within
+/// the block itself would allow swapping justifications to change the block's hash
+/// (and thus fork the chain). Sending a `Justification` alongside a block instead
+/// bypasses this problem.
 pub type Justification = Vec<u8>;
 
 use traits::{Verify, Lazy};

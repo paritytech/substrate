@@ -20,7 +20,7 @@
 
 use std::sync::Arc;
 
-use babe::{import_queue, Config};
+use babe;
 use client::{self, LongestChain};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use node_executor;
@@ -47,7 +47,6 @@ macro_rules! new_full_start {
 		type RpcExtension = jsonrpc_core::IoHandler<substrate_rpc::Metadata>;
 		let mut import_setup = None;
 		let inherent_data_providers = inherents::InherentDataProviders::new();
-		let mut tasks_to_spawn = Vec::new();
 
 		let builder = substrate_service::ServiceBuilder::new_full::<
 			node_primitives::Block, node_runtime::RuntimeApi, node_executor::Executor
@@ -58,36 +57,40 @@ macro_rules! new_full_start {
 			.with_transaction_pool(|config, client|
 				Ok(transaction_pool::txpool::Pool::new(config, transaction_pool::ChainApi::new(client)))
 			)?
-			.with_import_queue(|_config, client, mut select_chain, transaction_pool| {
+			.with_import_queue(|_config, client, mut select_chain, _transaction_pool| {
 				let select_chain = select_chain.take()
 					.ok_or_else(|| substrate_service::Error::SelectChainRequired)?;
-				let (block_import, link_half) =
+				let (grandpa_block_import, grandpa_link) =
 					grandpa::block_import::<_, _, _, node_runtime::RuntimeApi, _, _>(
 						client.clone(), client.clone(), select_chain
 					)?;
-				let justification_import = block_import.clone();
+				let justification_import = grandpa_block_import.clone();
 
-				let (import_queue, babe_link, babe_block_import, pruning_task) = babe::import_queue(
+				let (block_import, babe_link) = babe::block_import(
 					babe::Config::get_or_compute(&*client)?,
-					block_import,
+					grandpa_block_import,
+					client.clone(),
+					client.clone(),
+				)?;
+
+				let import_queue = babe::import_queue(
+					babe_link.clone(),
+					block_import.clone(),
 					Some(Box::new(justification_import)),
 					None,
 					client.clone(),
 					client,
 					inherent_data_providers.clone(),
-					Some(transaction_pool)
 				)?;
 
-				import_setup = Some((babe_block_import.clone(), link_half, babe_link));
-				tasks_to_spawn.push(Box::new(pruning_task));
-
+				import_setup = Some((block_import, grandpa_link, babe_link));
 				Ok(import_queue)
 			})?
 			.with_rpc_extensions(|client, pool| -> RpcExtension {
 				node_rpc::create(client, pool)
 			})?;
 
-		(builder, import_setup, inherent_data_providers, tasks_to_spawn)
+		(builder, import_setup, inherent_data_providers)
 	}}
 }
 
@@ -96,7 +99,7 @@ macro_rules! new_full_start {
 /// We need to use a macro because the test suit doesn't work with an opaque service. It expects
 /// concrete types instead.
 macro_rules! new_full {
-	($config:expr) => {{
+	($config:expr, $with_startup_data: expr) => {{
 		use futures::sync::mpsc;
 		use network::DhtEvent;
 
@@ -112,7 +115,7 @@ macro_rules! new_full {
 			$config.disable_grandpa
 		);
 
-		let (builder, mut import_setup, inherent_data_providers, tasks_to_spawn) = new_full_start!($config);
+		let (builder, mut import_setup, inherent_data_providers) = new_full_start!($config);
 
 		// Dht event channel from the network to the authority discovery module. Use bounded channel to ensure
 		// back-pressure. Authority discovery is triggering one event per authority within the current authority set.
@@ -128,11 +131,10 @@ macro_rules! new_full {
 			.with_dht_event_tx(dht_event_tx)?
 			.build()?;
 
-		let (block_import, link_half, babe_link) = import_setup.take()
+		let (block_import, grandpa_link, babe_link) = import_setup.take()
 				.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
-		// spawn any futures that were created in the previous setup steps
-		tasks_to_spawn.into_iter().for_each(|t| service.spawn_task(t));
+		($with_startup_data)(&block_import, &babe_link);
 
 		if is_authority {
 			let proposer = substrate_basic_authorship::ProposerFactory {
@@ -145,16 +147,15 @@ macro_rules! new_full {
 				.ok_or(substrate_service::Error::SelectChainRequired)?;
 
 			let babe_config = babe::BabeParams {
-				config: babe::Config::get_or_compute(&*client)?,
 				keystore: service.keystore(),
 				client,
 				select_chain,
-				block_import,
 				env: proposer,
+				block_import,
 				sync_oracle: service.network(),
 				inherent_data_providers: inherent_data_providers.clone(),
-				force_authoring: force_authoring,
-				time_source: babe_link,
+				force_authoring,
+				babe_link,
 			};
 
 			let babe = babe::start_babe(babe_config)?;
@@ -181,7 +182,7 @@ macro_rules! new_full {
 				// start the lightweight GRANDPA observer
 				service.spawn_task(Box::new(grandpa::run_grandpa_observer(
 					config,
-					link_half,
+					grandpa_link,
 					service.network(),
 					service.on_exit(),
 				)?));
@@ -190,7 +191,7 @@ macro_rules! new_full {
 				// start the full GRANDPA voter
 				let grandpa_config = grandpa::GrandpaParams {
 					config: config,
-					link: link_half,
+					link: grandpa_link,
 					network: service.network(),
 					inherent_data_providers: inherent_data_providers.clone(),
 					on_exit: service.on_exit(),
@@ -208,6 +209,9 @@ macro_rules! new_full {
 		}
 
 		Ok((service, inherent_data_providers))
+	}};
+	($config:expr) => {{
+		new_full!($config, |_, _| {})
 	}}
 }
 
@@ -220,11 +224,8 @@ pub fn new_full<C: Send + Default + 'static>(config: Configuration<C, GenesisCon
 /// Builds a new service for a light client.
 pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisConfig>)
 -> Result<impl AbstractService, ServiceError> {
-	use futures::Future;
-
 	type RpcExtension = jsonrpc_core::IoHandler<substrate_rpc::Metadata>;
 	let inherent_data_providers = InherentDataProviders::new();
-	let mut tasks_to_spawn = Vec::new();
 
 	let service = ServiceBuilder::new_light::<Block, RuntimeApi, node_executor::Executor>(config)?
 		.with_select_chain(|_config, backend| {
@@ -233,30 +234,34 @@ pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisCo
 		.with_transaction_pool(|config, client|
 			Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client)))
 		)?
-		.with_import_queue_and_fprb(|_config, client, backend, fetcher, _select_chain, transaction_pool| {
+		.with_import_queue_and_fprb(|_config, client, backend, fetcher, _select_chain, _tx_pool| {
 			let fetch_checker = fetcher
 				.map(|fetcher| fetcher.checker().clone())
 				.ok_or_else(|| "Trying to start light import queue without active fetch checker")?;
-			let block_import = grandpa::light_block_import::<_, _, _, RuntimeApi, _>(
+			let grandpa_block_import = grandpa::light_block_import::<_, _, _, RuntimeApi, _>(
 				client.clone(), backend, Arc::new(fetch_checker), client.clone()
 			)?;
 
-			let finality_proof_import = block_import.clone();
+			let finality_proof_import = grandpa_block_import.clone();
 			let finality_proof_request_builder =
 				finality_proof_import.create_finality_proof_request_builder();
 
-			let (import_queue, _, _, pruning_task) = import_queue(
-				Config::get_or_compute(&*client)?,
-				block_import,
+			let (babe_block_import, babe_link) = babe::block_import(
+				babe::Config::get_or_compute(&*client)?,
+				grandpa_block_import,
+				client.clone(),
+				client.clone(),
+			)?;
+
+			let import_queue = babe::import_queue(
+				babe_link,
+				babe_block_import,
 				None,
 				Some(Box::new(finality_proof_import)),
 				client.clone(),
 				client,
 				inherent_data_providers.clone(),
-				Some(transaction_pool)
 			)?;
-
-			tasks_to_spawn.push(Box::new(pruning_task));
 
 			Ok((import_queue, finality_proof_request_builder))
 		})?
@@ -269,15 +274,6 @@ pub fn new_light<C: Send + Default + 'static>(config: Configuration<C, GenesisCo
 		})?
 		.build()?;
 
-	// spawn any futures that were created in the previous setup steps
-	for task in tasks_to_spawn.drain(..) {
-		service.spawn_task(
-			task.select(service.on_exit())
-				.map(|_| ())
-				.map_err(|_| ())
-		);
-	}
-
 	Ok(service)
 }
 
@@ -286,22 +282,26 @@ mod tests {
 	use std::sync::Arc;
 	use babe::CompatibleDigestItem;
 	use consensus_common::{
-		Environment, Proposer, BlockImportParams, BlockOrigin, ForkChoiceStrategy
+		Environment, Proposer, BlockImportParams, BlockOrigin, ForkChoiceStrategy, BlockImport,
 	};
-	use node_primitives::DigestItem;
+	use node_primitives::{Block, DigestItem};
 	use node_runtime::{BalancesCall, Call, UncheckedExtrinsic};
-	use node_runtime::constants::{currency::CENTS, time::{PRIMARY_PROBABILITY, SLOT_DURATION}};
+	use node_runtime::constants::{currency::CENTS, time::SLOT_DURATION};
 	use codec::{Encode, Decode};
 	use primitives::{
-		crypto::Pair as CryptoPair, blake2_256,
+		crypto::Pair as CryptoPair,
 		sr25519::Public as AddressPublic, H256,
 	};
-	use sr_primitives::{generic::{BlockId, Era, Digest, SignedPayload}, traits::Block, OpaqueExtrinsic};
+	use sr_primitives::{
+		generic::{BlockId, Era, Digest, SignedPayload},
+		traits::Block as BlockT,
+		OpaqueExtrinsic,
+	};
 	use timestamp;
 	use finality_tracker;
 	use keyring::AccountKeyring;
-	use substrate_service::AbstractService;
-	use crate::service::{new_full, new_light};
+	use substrate_service::{AbstractService, Roles};
+	use crate::service::new_full;
 
 	#[cfg(feature = "rhd")]
 	fn test_sync() {
@@ -359,7 +359,11 @@ mod tests {
 		service_test::sync(
 			chain_spec::integration_test_config(),
 			|config| new_full(config),
-			|config| new_light(config),
+			|mut config| {
+				// light nodes are unsupported
+				config.roles = Roles::FULL;
+				new_full(config)
+			},
 			block_factory,
 			extrinsic_factory,
 		);
@@ -386,9 +390,21 @@ mod tests {
 
 		service_test::sync(
 			chain_spec,
-			|config| new_full!(config),
-			|config| new_light(config),
-			|service, inherent_data_providers| {
+			|config| {
+				let mut setup_handles = None;
+				new_full!(config, |
+					block_import: &babe::BabeBlockImport<_, _, Block, _, _, _>,
+					babe_link: &babe::BabeLink<Block>,
+				| {
+					setup_handles = Some((block_import.clone(), babe_link.clone()));
+				}).map(move |(node, x)| (node, (x, setup_handles.unwrap())))
+			},
+			|mut config| {
+				// light nodes are unsupported
+				config.roles = Roles::FULL;
+				new_full(config)
+			},
+			|service, &mut (ref inherent_data_providers, (ref mut block_import, ref babe_link))| {
 				let mut inherent_data = inherent_data_providers
 					.create_inherent_data()
 					.expect("Creates inherent data.");
@@ -411,8 +427,8 @@ mod tests {
 						slot_num,
 						&parent_header,
 						&*service.client(),
-						PRIMARY_PROBABILITY,
 						&keystore,
+						&babe_link,
 					) {
 						break babe_pre_digest;
 					}
@@ -440,7 +456,7 @@ mod tests {
 				);
 				slot_num += 1;
 
-				BlockImportParams {
+				let params = BlockImportParams {
 					origin: BlockOrigin::File,
 					header: new_header,
 					justification: None,
@@ -449,7 +465,10 @@ mod tests {
 					finalized: true,
 					auxiliary: Vec::new(),
 					fork_choice: ForkChoiceStrategy::LongestChain,
-				}
+				};
+
+				block_import.import_block(params, Default::default())
+					.expect("error importing test block");
 			},
 			|service, _| {
 				let amount = 5 * CENTS;
@@ -506,7 +525,11 @@ mod tests {
 		service_test::consensus(
 			crate::chain_spec::tests::integration_test_config_with_two_authorities(),
 			|config| new_full(config),
-			|config| new_light(config),
+			|mut config| {
+				// light nodes are unsupported
+				config.roles = Roles::FULL;
+				new_full(config)
+			},
 			vec![
 				"//Alice".into(),
 				"//Bob".into(),

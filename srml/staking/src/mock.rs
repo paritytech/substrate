@@ -18,6 +18,7 @@
 
 use std::{collections::HashSet, cell::RefCell};
 use sr_primitives::Perbill;
+use sr_primitives::curve::PiecewiseLinear;
 use sr_primitives::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize, SaturatedConversion};
 use sr_primitives::testing::{Header, UintAuthorityId};
 use sr_staking_primitives::SessionIndex;
@@ -182,9 +183,20 @@ impl timestamp::Trait for Test {
 	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
 }
+srml_staking_reward_curve::build! {
+	const I_NPOS: PiecewiseLinear<'static> = curve!(
+		min_inflation: 0_025_000,
+		max_inflation: 0_100_000,
+		ideal_stake: 0_500_000,
+		falloff: 0_050_000,
+		max_piece_count: 40,
+		test_precision: 0_005_000,
+	);
+}
 parameter_types! {
 	pub const SessionsPerEra: SessionIndex = 3;
 	pub const BondingDuration: EraIndex = 3;
+	pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
 }
 impl Trait for Test {
 	type Currency = balances::Module<Self>;
@@ -197,6 +209,7 @@ impl Trait for Test {
 	type SessionsPerEra = SessionsPerEra;
 	type BondingDuration = BondingDuration;
 	type SessionInterface = Self;
+	type RewardCurve = RewardCurve;
 }
 
 pub struct ExtBuilder {
@@ -430,6 +443,7 @@ pub fn start_era(era_index: EraIndex) {
 
 pub fn current_total_payout_for_duration(duration: u64) -> u64 {
 	let res = inflation::compute_total_payout(
+		<Test as Trait>::RewardCurve::get(),
 		<Module<Test>>::slot_stake() * 2,
 		Balances::total_issuance(),
 		duration,
