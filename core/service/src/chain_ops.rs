@@ -17,7 +17,7 @@
 //! Chain utilities.
 
 use crate::error;
-use chain_spec::{ChainSpec, RuntimeGenesis, Extensions};
+use chain_spec::{ChainSpec, RuntimeGenesis, Extension};
 
 #[macro_export]
 macro_rules! export_blocks {
@@ -220,7 +220,7 @@ macro_rules! revert_chain {
 /// Build a chain spec json
 pub fn build_spec<G, E>(spec: ChainSpec<G, E>, raw: bool) -> error::Result<String> where
 	G: RuntimeGenesis,
-	E: Extensions,
+	E: Extension,
 {
 	Ok(spec.to_json(raw)?)
 }

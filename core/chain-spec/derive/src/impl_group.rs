@@ -21,11 +21,11 @@ use proc_macro_crate::crate_name;
 
 const CRATE_NAME: &str = "substrate-chain-spec";
 
-pub fn impl_extension_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
+pub fn impl_group_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
 	let err = || {
 		let err = Error::new(
 			Span::call_site(),
-			"ChainSpecExtension is only avaible for structs with named fields."
+			"ChainSpecGroup is only avaible for structs with named fields."
 		).to_compile_error();
 		quote!( #err ).into()
 	};
@@ -68,11 +68,11 @@ pub fn impl_extension_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
 			#fork_fields
 		}
 
-		impl #impl_generics #crate_name::Extension for #name #ty_generics #where_clause {
+		impl #impl_generics #crate_name::Group for #name #ty_generics #where_clause {
 			type Fork = #fork_name #ty_generics;
 
 			fn to_fork(self) -> Self::Fork {
-				use #crate_name::Extension;
+				use #crate_name::Group;
 				#to_fork
 			}
 		}
@@ -102,7 +102,7 @@ fn generate_fork_fields(
 ) -> TokenStream {
 	let crate_name = std::iter::repeat(crate_name);
 	quote! {
-		#( pub #names: Option<<#types as #crate_name::Extension>::Fork>, )*
+		#( pub #names: Option<<#types as #crate_name::Group>::Fork>, )*
 	}
 }
 

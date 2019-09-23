@@ -47,7 +47,7 @@ use sr_primitives::traits::NumberFor;
 pub use self::error::Error;
 pub use self::builder::{ServiceBuilder, ServiceBuilderExport, ServiceBuilderImport, ServiceBuilderRevert};
 pub use config::{Configuration, Roles, PruningMode};
-pub use chain_spec::{ChainSpec, Properties, RuntimeGenesis, Extensions as ChainSpecExtensions};
+pub use chain_spec::{ChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension};
 pub use transaction_pool::txpool::{
 	self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError
 };

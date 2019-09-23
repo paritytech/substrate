@@ -18,12 +18,17 @@
 
 extern crate proc_macro;
 
-mod impl_extension;
+mod impl_group;
 
 use proc_macro::TokenStream;
 
-#[proc_macro_derive(ChainSpecExtension)]
-pub fn extension_derive(input: TokenStream) -> TokenStream {
+#[proc_macro_derive(ChainSpecGroup)]
+pub fn group_derive(input: TokenStream) -> TokenStream {
 	let ast = syn::parse(input).unwrap();
-	impl_extension::impl_extension_derive(&ast)
+	impl_group::impl_group_derive(&ast)
+}
+
+#[proc_macro_derive(ChainSpecExtension)]
+pub fn extensions_derive(input: TokenStream) -> TokenStream {
+	unimplemented!()
 }

@@ -30,7 +30,7 @@ use client::ExecutionStrategies;
 use service::{
 	config::Configuration,
 	ServiceBuilderExport, ServiceBuilderImport, ServiceBuilderRevert,
-	RuntimeGenesis, ChainSpecExtensions, PruningMode, ChainSpec,
+	RuntimeGenesis, ChainSpecExtension, PruningMode, ChainSpec,
 };
 use network::{
 	self, multiaddr::Protocol,
@@ -123,7 +123,7 @@ fn generate_node_name() -> String {
 
 fn load_spec<F, G, E>(cli: &SharedParams, factory: F) -> error::Result<ChainSpec<G, E>> where
 	G: RuntimeGenesis,
-	E: ChainSpecExtensions,
+	E: ChainSpecExtension,
 	F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 {
 	let chain_key = get_chain_key(cli);
@@ -275,7 +275,7 @@ impl<'a, RP> ParseAndPrepareRun<'a, RP> {
 		RP: StructOpt + Clone,
 		C: Default,
 		G: RuntimeGenesis,
-		E: ChainSpecExtensions,
+		E: ChainSpecExtension,
 		Exit: IntoExit,
 		RS: FnOnce(Exit, RunCmd, RP, Configuration<C, G, E>) -> Result<(), String>
 	{
@@ -299,7 +299,7 @@ impl<'a> ParseAndPrepareBuildSpec<'a> {
 	) -> error::Result<()> where
 		S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 		G: RuntimeGenesis,
-		E: ChainSpecExtensions,
+		E: ChainSpecExtension,
 	{
 		info!("Building chain spec");
 		let raw_output = self.params.raw;
@@ -332,7 +332,7 @@ impl<'a> ParseAndPrepareExport<'a> {
 		B: ServiceBuilderExport,
 		C: Default,
 		G: RuntimeGenesis,
-		E: ChainSpecExtensions,
+		E: ChainSpecExtension,
 		Exit: IntoExit
 	{
 		let config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
@@ -371,7 +371,7 @@ impl<'a> ParseAndPrepareImport<'a> {
 		B: ServiceBuilderImport,
 		C: Default,
 		G: RuntimeGenesis,
-		E: ChainSpecExtensions,
+		E: ChainSpecExtension,
 		Exit: IntoExit
 	{
 		let mut config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
@@ -410,7 +410,7 @@ impl<'a> ParseAndPreparePurge<'a> {
 	) -> error::Result<()> where
 		S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 		G: RuntimeGenesis,
-		E: ChainSpecExtensions,
+		E: ChainSpecExtension,
 	{
 		let config = create_config_with_db_path::<(), _, _, _>(spec_factory, &self.params.shared_params, self.version)?;
 		let db_path = config.database_path;
@@ -464,7 +464,7 @@ impl<'a> ParseAndPrepareRevert<'a> {
 		B: ServiceBuilderRevert,
 		C: Default,
 		G: RuntimeGenesis,
-		E: ChainSpecExtensions,
+		E: ChainSpecExtension,
 	{
 		let config = create_config_with_db_path(spec_factory, &self.params.shared_params, self.version)?;
 		let blocks = self.params.num;
@@ -626,7 +626,7 @@ fn create_run_node_config<C, G, E, S>(
 where
 	C: Default,
 	G: RuntimeGenesis,
-	E: ChainSpecExtensions,
+	E: ChainSpecExtension,
 	S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 {
 	let spec = load_spec(&cli.shared_params, spec_factory)?;
@@ -772,7 +772,7 @@ fn with_default_boot_node<G, E>(
 ) -> error::Result<()>
 where
 	G: RuntimeGenesis,
-	E: ChainSpecExtensions,
+	E: ChainSpecExtension,
 {
 	if spec.boot_nodes().is_empty() {
 		let base_path = base_path(&cli.shared_params, version);
@@ -797,7 +797,7 @@ pub fn create_config_with_db_path<C, G, E, S>(
 where
 	C: Default,
 	G: RuntimeGenesis,
-	E: ChainSpecExtensions,
+	E: ChainSpecExtension,
 	S: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
 {
 	let spec = load_spec(cli, spec_factory)?;

@@ -22,7 +22,7 @@ pub use network::config::{ExtTransport, NetworkConfiguration, Roles};
 
 use std::{path::PathBuf, net::SocketAddr};
 use transaction_pool;
-use chain_spec::{ChainSpec, RuntimeGenesis, Extensions, NoExtension};
+use chain_spec::{ChainSpec, RuntimeGenesis, Extension, NoExtension};
 use primitives::crypto::Protected;
 use target_info::Target;
 use tel::TelemetryEndpoints;
@@ -96,7 +96,7 @@ pub struct Configuration<C, G, E = NoExtension> {
 impl<C, G, E> Configuration<C, G, E> where
 	C: Default,
 	G: RuntimeGenesis,
-	E: Extensions,
+	E: Extension,
 {
 	/// Create default config for given chain spec.
 	pub fn default_with_spec(chain_spec: ChainSpec<G, E>) -> Self {

@@ -22,7 +22,7 @@ use client::{
 	BlockchainEvents, Client, runtime_api,
 	backend::RemoteBackend, light::blockchain::RemoteBlockchain,
 };
-use chain_spec::{RuntimeGenesis, Extensions};
+use chain_spec::{RuntimeGenesis, Extension};
 use codec::{Decode, Encode, IoReader};
 use consensus_common::import_queue::ImportQueue;
 use futures::{prelude::*, sync::mpsc};
@@ -129,7 +129,7 @@ type TLightCallExecutor<TBl, TExecDisp> = client::light::call_executor::GenesisC
 >;
 
 impl<TCfg, TGen, TCSExt> ServiceBuilder<(), (), TCfg, TGen, TCSExt, (), (), (), (), (), (), (), (), (), (), ()>
-where TGen: RuntimeGenesis, TCSExt: Extensions {
+where TGen: RuntimeGenesis, TCSExt: Extension {
 	/// Start the service builder with a configuration.
 	pub fn new_full<TBl: BlockT<Hash=H256>, TRtApi, TExecDisp: NativeExecutionDispatch>(
 		config: Configuration<TCfg, TGen, TCSExt>
@@ -805,7 +805,7 @@ ServiceBuilder<
 	TRtApi: 'static + Send + Sync,
 	TCfg: Default,
 	TGen: RuntimeGenesis,
-	TCSExt: Extensions,
+	TCSExt: Extension,
 	TBackend: 'static + client::backend::Backend<TBl, Blake2Hasher> + Send,
 	TExec: 'static + client::CallExecutor<TBl, Blake2Hasher> + Send + Sync + Clone,
 	TSc: Clone,
