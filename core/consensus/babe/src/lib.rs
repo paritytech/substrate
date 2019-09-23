@@ -780,8 +780,8 @@ fn median_algorithm(
 			t + Duration::new(secs, nanos)
 		}).collect();
 
-		// FIXME #2926: use a selection algorithm instead of a full sorting algorithm.
-		new_list.sort_unstable();
+		// Use a partial sort to move the median timestamp to the middle of the list
+		pdqselect::select(&mut new_list, num_timestamps / 2);
 
 		let &median = new_list
 			.get(num_timestamps / 2)
