@@ -596,18 +596,6 @@ impl_runtime_apis! {
 	}
 
 	impl fg_primitives::GrandpaApi<Block> for Runtime {
-		fn grandpa_pending_change(digest: &DigestFor<Block>)
-			-> Option<ScheduledChange<NumberFor<Block>>>
-		{
-			Grandpa::pending_change(digest)
-		}
-
-		fn grandpa_forced_change(digest: &DigestFor<Block>)
-			-> Option<(NumberFor<Block>, ScheduledChange<NumberFor<Block>>)>
-		{
-			Grandpa::forced_change(digest)
-		}
-
 		fn grandpa_authorities() -> Vec<(GrandpaId, GrandpaWeight)> {
 			Grandpa::grandpa_authorities()
 		}

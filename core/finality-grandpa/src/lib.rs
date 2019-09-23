@@ -339,10 +339,10 @@ pub struct LinkHalf<B, E, Block: BlockT<Hash=H256>, RA, SC> {
 /// to it.
 pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA, SC>(
 	client: Arc<Client<B, E, Block, RA>>,
-	api: Arc<PRA>,
+	api: &PRA,
 	select_chain: SC,
 ) -> Result<(
-		GrandpaBlockImport<B, E, Block, RA, PRA, SC>,
+		GrandpaBlockImport<B, E, Block, RA, SC>,
 		LinkHalf<B, E, Block, RA, SC>
 	), ClientError>
 where
@@ -381,7 +381,6 @@ where
 			persistent_data.authority_set.clone(),
 			voter_commands_tx,
 			persistent_data.consensus_changes.clone(),
-			api,
 		),
 		LinkHalf {
 			client,
