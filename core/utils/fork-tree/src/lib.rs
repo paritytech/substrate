@@ -153,6 +153,8 @@ impl<H, N, V> ForkTree<H, N, V> where
 	/// should return `true` if the second hash (target) is a descendent of the
 	/// first hash (base). This method assumes that nodes in the same branch are
 	/// imported in order.
+	///
+	/// Returns `true` if the imported node is a root.
 	pub fn import<F, E>(
 		&mut self,
 		mut hash: H,
@@ -208,7 +210,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 		self.node_iter().map(|node| (&node.hash, &node.number, &node.data))
 	}
 
-	/// Find a node in the tree that is the lowest ancestor of the given
+	/// Find a node in the tree that is the deepest ancestor of the given
 	/// block hash and which passes the given predicate. The given function
 	/// `is_descendent_of` should return `true` if the second hash (target)
 	/// is a descendent of the first hash (base).
@@ -228,8 +230,8 @@ impl<H, N, V> ForkTree<H, N, V> where
 			let node = root.find_node_where(hash, number, is_descendent_of, predicate)?;
 
 			// found the node, early exit
-			if let Some(node) = node {
-				return Ok(node);
+			if let FindOutcome::Found(node) = node {
+				return Ok(Some(node));
 			}
 		}
 
@@ -510,6 +512,17 @@ impl<H, N, V> ForkTree<H, N, V> where
 mod node_implementation {
 	use super::*;
 
+	/// The outcome of a search within a node.
+	pub enum FindOutcome<T> {
+		// this is the node we were looking for.
+		Found(T),
+		// not the node we're looking for. contains a flag indicating
+		// whether the node was a descendent. true implies the predicate failed.
+		Failure(bool),
+		// Abort search.
+		Abort,
+	}
+
 	#[derive(Clone, Debug, Decode, Encode, PartialEq)]
 	pub struct Node<H, N, V> {
 		pub hash: H,
@@ -560,9 +573,10 @@ mod node_implementation {
 			}
 		}
 
-		/// Find a node in the tree that is the lowest ancestor of the given
-		/// block hash and which passes the given predicate. The given function
-		/// `is_descendent_of` should return `true` if the second hash (target)
+		/// Find a node in the tree that is the deepest ancestor of the given
+		/// block hash which also passes the given predicate, backtracking
+		/// when the predicate fails.
+		/// The given function `is_descendent_of` should return `true` if the second hash (target)
 		/// is a descendent of the first hash (base).
 		// FIXME: it would be useful if this returned a mutable reference but
 		// rustc can't deal with lifetimes properly. an option would be to try
@@ -573,23 +587,32 @@ mod node_implementation {
 			number: &N,
 			is_descendent_of: &F,
 			predicate: &P,
-		) -> Result<Option<Option<&Node<H, N, V>>>, Error<E>>
+		) -> Result<FindOutcome<&Node<H, N, V>>, Error<E>>
 			where E: std::error::Error,
 				  F: Fn(&H, &H) -> Result<bool, E>,
 				  P: Fn(&V) -> bool,
 		{
 			// stop searching this branch
 			if *number < self.number {
-				return Ok(None);
+				return Ok(FindOutcome::Failure(false));
 			}
+
+			let mut known_descendent_of = false;
 
 			// continue depth-first search through all children
 			for node in self.children.iter() {
-				let node = node.find_node_where(hash, number, is_descendent_of, predicate)?;
-
 				// found node, early exit
-				if node.is_some() {
-					return Ok(node);
+				match node.find_node_where(hash, number, is_descendent_of, predicate)? {
+					FindOutcome::Abort => return Ok(FindOutcome::Abort),
+					FindOutcome::Found(x) => return Ok(FindOutcome::Found(x)),
+					FindOutcome::Failure(true) => {
+						// if the block was a descendent of this child,
+						// then it cannot be a descendent of any others,
+						// so we don't search them.
+						known_descendent_of = true;
+						break;
+					},
+					FindOutcome::Failure(false) => {},
 				}
 			}
 
@@ -597,24 +620,23 @@ mod node_implementation {
 			// searching for is a descendent of this node then we will stop the
 			// search here, since there aren't any more children and we found
 			// the correct node so we don't want to backtrack.
-			if is_descendent_of(&self.hash, hash)? {
+			let is_descendent_of = known_descendent_of || is_descendent_of(&self.hash, hash)?;
+			if is_descendent_of {
 				// if the predicate passes we return the node
 				if predicate(&self.data) {
-					Ok(Some(Some(self)))
-
-				// otherwise we stop the search returning `None`
-				} else {
-					Ok(Some(None))
+					return Ok(FindOutcome::Found(self));
 				}
-			} else {
-				Ok(None)
 			}
+
+			// otherwise, tell our ancestor that we failed, and whether
+			// the block was a descendent.
+			Ok(FindOutcome::Failure(is_descendent_of))
 		}
 	}
 }
 
 // Workaround for: https://github.com/rust-lang/rust/issues/34537
-use node_implementation::Node;
+use node_implementation::{Node, FindOutcome};
 
 struct ForkTreeIterator<'a, H, N, V> {
 	stack: Vec<&'a Node<H, N, V>>,
@@ -1197,7 +1219,7 @@ mod test {
 	}
 
 	#[test]
-	fn find_node_doesnt_backtrack_after_finding_highest_descending_node() {
+	fn find_node_backtracks_after_finding_highest_descending_node() {
 		let mut tree = ForkTree::new();
 
 		//
@@ -1215,11 +1237,12 @@ mod test {
 		};
 
 		tree.import("A", 1, 1, &is_descendent_of).unwrap();
-		tree.import("B", 2, 4, &is_descendent_of).unwrap();
+		tree.import("B", 2, 2, &is_descendent_of).unwrap();
 		tree.import("C", 2, 4, &is_descendent_of).unwrap();
 
-		// when searching the tree we reach both node `B` and `C`, but the
-		// predicate doesn't pass. still, we should not backtrack to node `A`.
+		// when searching the tree we reach node `C`, but the
+		// predicate doesn't pass. we should backtrack to `B`, but not to `A`,
+		// since "B" fulfills the predicate.
 		let node = tree.find_node_where(
 			&"D",
 			&3,
@@ -1227,6 +1250,6 @@ mod test {
 			&|data| *data < 3,
 		).unwrap();
 
-		assert_eq!(node, None);
+		assert_eq!(node.unwrap().hash, "B");
 	}
 }

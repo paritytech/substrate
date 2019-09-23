@@ -105,6 +105,7 @@ pub trait ImportQueue<B: BlockT>: Send {
 		number: NumberFor<B>,
 		finality_proof: Vec<u8>
 	);
+
 	/// Polls for actions to perform on the network.
 	///
 	/// This method should behave in a way similar to `Future::poll`. It can register the current
