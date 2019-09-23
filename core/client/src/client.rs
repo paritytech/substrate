@@ -1482,6 +1482,9 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 	}
 }
 
+/// NOTE: only use this implementation when you are sure there are NO consensus-level BlockImport
+/// objects. Otherwise, importing blocks directly into the client would be bypassing
+/// important verification work.
 impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
@@ -1491,6 +1494,13 @@ impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Blo
 
 	/// Import a checked and validated block. If a justification is provided in
 	/// `BlockImportParams` then `finalized` *must* be true.
+	///
+	/// NOTE: only use this implementation when there are NO consensus-level BlockImport
+	/// objects. Otherwise, importing blocks directly into the client would be bypassing
+	/// important verification work.
+	///
+	/// If you are not sure that there are no BlockImport objects provided by the consensus
+	/// algorithm, don't use this function.
 	fn import_block(
 		&mut self,
 		import_block: BlockImportParams<Block>,
@@ -1899,8 +1909,9 @@ where
 /// Utility methods for the client.
 pub mod utils {
 	use super::*;
-	use crate::{backend::Backend, blockchain, error};
+	use crate::{blockchain, error};
 	use primitives::H256;
+	use std::borrow::Borrow;
 
 	/// Returns a function for checking block ancestry, the returned function will
 	/// return `true` if the given hash (second parameter) is a descendent of the
@@ -1908,15 +1919,16 @@ pub mod utils {
 	/// represent the current block `hash` and its `parent hash`, if given the
 	/// function that's returned will assume that `hash` isn't part of the local DB
 	/// yet, and all searches in the DB will instead reference the parent.
-	pub fn is_descendent_of<'a, B, E, Block: BlockT<Hash=H256>, RA>(
-		client: &'a Client<B, E, Block, RA>,
-		current: Option<(&'a H256, &'a H256)>,
+	pub fn is_descendent_of<'a, Block: BlockT<Hash=H256>, T, H: Borrow<H256> + 'a>(
+		client: &'a T,
+		current: Option<(H, H)>,
 	) -> impl Fn(&H256, &H256) -> Result<bool, error::Error> + 'a
-		where B: Backend<Block, Blake2Hasher>,
-			  E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+		where T: ChainHeaderBackend<Block>,
 	{
 		move |base, hash| {
 			if base == hash { return Ok(false); }
+
+			let current = current.as_ref().map(|(c, p)| (c.borrow(), p.borrow()));
 
 			let mut hash = hash;
 			if let Some((current_hash, current_parent_hash)) = current {
@@ -1931,7 +1943,7 @@ pub mod utils {
 			}
 
 			let tree_route = blockchain::tree_route(
-				|id| client.header(&id)?.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id))),
+				|id| client.header(id)?.ok_or_else(|| Error::UnknownBlock(format!("{:?}", id))),
 				BlockId::Hash(*hash),
 				BlockId::Hash(*base),
 			)?;

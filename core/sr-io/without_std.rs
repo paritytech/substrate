@@ -20,7 +20,7 @@ pub use rstd::{mem, slice};
 
 use core::{intrinsics, panic::PanicInfo};
 use rstd::{vec::Vec, cell::Cell, convert::TryInto};
-use primitives::{offchain, Blake2Hasher};
+use primitives::offchain;
 use codec::Decode;
 
 #[cfg(not(feature = "no_panic_handler"))]
@@ -732,7 +732,7 @@ impl StorageApi for () {
 	}
 
 
-	fn blake2_256_trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
+	fn blake2_256_trie_root(_input: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
 		unimplemented!()
 	}
 

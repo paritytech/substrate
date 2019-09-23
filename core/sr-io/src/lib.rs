@@ -26,7 +26,6 @@
 #![cfg_attr(feature = "std", doc = "Substrate runtime standard library as compiled when linked with Rust's standard library.")]
 #![cfg_attr(not(feature = "std"), doc = "Substrate's runtime standard library as compiled without Rust's standard library.")]
 
-use hash_db::Hasher;
 use rstd::vec::Vec;
 
 use primitives::{
