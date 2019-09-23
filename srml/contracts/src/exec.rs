@@ -421,7 +421,7 @@ where
 	) -> Result<(T::AccountId, ExecReturnValue), ExecError> {
 		if self.depth == self.config.max_depth as usize {
 			return Err(ExecError {
-				reason: "reached maximum depth, cannot create",
+				reason: "reached maximum depth, cannot instantiate",
 				buffer: input_data,
 			});
 		}
