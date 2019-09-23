@@ -33,7 +33,6 @@ use network::config::BoxFinalityProofRequestBuilder;
 use sr_primitives::{generic::DigestItem, traits::{Block as BlockT, DigestFor}};
 use network::config::ProtocolConfig;
 use tokio::runtime::current_thread;
-use keyring::sr25519::Keyring;
 use client::BlockchainEvents;
 use test_client;
 use log::debug;
@@ -113,7 +112,7 @@ impl DummyProposer {
 
 		// figure out if we should add a consensus digest, since the test runtime
 		// doesn't.
-		let mut epoch_changes = self.factory.epoch_changes.lock();
+		let epoch_changes = self.factory.epoch_changes.lock();
 		let epoch = epoch_changes.epoch_for_child_of(
 			descendent_query(&*self.factory.client),
 			&self.parent_hash,
@@ -122,7 +121,8 @@ impl DummyProposer {
 			|slot| self.factory.config.genesis_epoch(slot),
 		)
 			.expect("client has data to find epoch")
-			.expect("can compute epoch for baked block");
+			.expect("can compute epoch for baked block")
+			.into_inner();
 
 		let first_in_epoch = self.parent_slot < epoch.start_slot;
 		if first_in_epoch {
@@ -586,27 +586,13 @@ fn importing_block_one_sets_genesis_epoch() {
 		Default::default(),
 	).unwrap();
 
-	let mut epoch_changes = data.link.epoch_changes.lock();
+	let epoch_changes = data.link.epoch_changes.lock();
 	let epoch_for_second_block = epoch_changes.epoch_for_child_of(
 		descendent_query(&*client),
 		&post_hash,
 		1,
 		1000,
 		|slot| data.link.config.genesis_epoch(slot),
-	).unwrap().unwrap();
+	).unwrap().unwrap().into_inner();
 	assert_eq!(epoch_for_second_block, genesis_epoch);
 }
-
-// TODO: reinstate this, using the correct APIs now that `fn epoch` is gone.
-// #[test]
-// fn authorities_call_works() {
-// 	let _ = env_logger::try_init();
-// 	let client = test_client::new();
-
-// 	assert_eq!(client.info().chain.best_number, 0);
-// 	assert_eq!(epoch(&client, &BlockId::Number(0)).unwrap().into_regular().unwrap().authorities, vec![
-// 		(Keyring::Alice.public().into(), 1),
-// 		(Keyring::Bob.public().into(), 1),
-// 		(Keyring::Charlie.public().into(), 1),
-// 	]);
-// }

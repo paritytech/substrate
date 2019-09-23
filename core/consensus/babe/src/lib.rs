@@ -337,6 +337,7 @@ impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I
 			|slot| self.config.genesis_epoch(slot)
 		)
 			.map_err(|e| ConsensusError::ChainLookup(format!("{:?}", e)))?
+			.map(|e| e.into_inner())
 			.ok_or(consensus_common::Error::InvalidAuthoritiesSet)
 	}
 
@@ -840,7 +841,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 
 		let pre_digest = find_pre_digest::<Block>(&header)?;
 		let epoch = {
-			let mut epoch_changes = self.epoch_changes.lock();
+			let epoch_changes = self.epoch_changes.lock();
 			epoch_changes.epoch_for_child_of(
 				descendent_query(&*self.client),
 				&parent_hash,
@@ -858,7 +859,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 			header,
 			pre_digest: Some(pre_digest.clone()),
 			slot_now,
-			epoch: &epoch,
+			epoch: epoch.as_ref(),
 			config: &self.config,
 		};
 		let checked_header = check_header::<Block, PRA>(v_params, &self.api)?;
@@ -1251,7 +1252,7 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 					babe_err!("Block {} is not valid under any epoch.", hash)
 				))?;
 
-			let first_in_epoch = parent_slot < epoch.start_slot;
+			let first_in_epoch = parent_slot < epoch.as_ref().start_slot;
 			(epoch, first_in_epoch, parent_weight)
 		};
 
@@ -1286,8 +1287,8 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 			old_epoch_changes = Some(epoch_changes.clone());
 
 			babe_info!("New epoch {} launching at block {} (block slot {} >= start slot {}).",
-				epoch.epoch_index, hash, slot_number, epoch.start_slot);
-			babe_info!("Next epoch starts at slot {}", next_epoch.start_slot);
+				epoch.as_ref().epoch_index, hash, slot_number, epoch.as_ref().start_slot);
+			babe_info!("Next epoch starts at slot {}", next_epoch.as_ref().start_slot);
 
 			// track the epoch change in the fork tree
 			let res = epoch_changes.import(
@@ -1478,7 +1479,7 @@ pub mod test_helpers {
 
 		super::claim_slot(
 			slot_number,
-			&epoch,
+			epoch.as_ref(),
 			&link.config,
 			keystore,
 		).map(|(digest, _)| digest)
