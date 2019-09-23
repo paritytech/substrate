@@ -169,3 +169,13 @@ impl<B, Block> VotingRulesBuilder<B, Block> where
 		}
 	}
 }
+
+impl<Block: BlockT> VotingRule<Block> for Box<dyn VotingRule<Block>> {
+	fn restrict_vote(
+		&self,
+		best_target: &Block::Header,
+		current_target: &Block::Header,
+	) -> Option<(Block::Hash, NumberFor<Block>)> {
+		(**self).restrict_vote(best_target, current_target)
+	}
+}

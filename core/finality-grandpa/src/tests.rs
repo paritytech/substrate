@@ -1565,3 +1565,89 @@ fn voter_catches_up_to_latest_round_when_behind() {
 	let drive_to_completion = futures::future::poll_fn(|| { net.lock().poll(); Ok(Async::NotReady) });
 	let _ = runtime.block_on(test.select(drive_to_completion).map_err(|_| ())).unwrap();
 }
+
+#[test]
+fn grandpa_environment_respects_voting_rules() {
+	use grandpa::Chain;
+
+	let peers = &[Ed25519Keyring::Alice];
+	let voters = make_ids(peers);
+
+	let mut net = GrandpaTestNet::new(TestApi::new(voters), 1);
+	let peer = net.peer(0);
+	let network_service = peer.network_service().clone();
+	let link = peer.data.lock().take().unwrap();
+
+	// create a voter environment with a given voting rule
+	let environment = |voting_rule: Box<dyn VotingRule<Block>>| {
+		let PersistentData {
+			ref authority_set,
+			ref consensus_changes,
+			ref set_state,
+			..
+		} = link.persistent_data;
+
+		let config = Config {
+			gossip_duration: TEST_GOSSIP_DURATION,
+			justification_period: 32,
+			keystore: None,
+			name: None,
+		};
+
+		let (network, _) = NetworkBridge::new(
+			network_service.clone(),
+			config.clone(),
+			set_state.clone(),
+			Exit,
+			true,
+		);
+
+		Environment {
+			authority_set: authority_set.clone(),
+			config: config.clone(),
+			consensus_changes: consensus_changes.clone(),
+			inner: link.client.clone(),
+			select_chain: link.select_chain.clone(),
+			set_id: authority_set.set_id(),
+			voter_set_state: set_state.clone(),
+			voters: Arc::new(authority_set.current_authorities()),
+			network,
+			voting_rule,
+		}
+	};
+
+	// add 20 blocks
+	peer.push_blocks(20, false);
+
+	// create an environment with no voting rule restrictions
+	let unrestricted_env = environment(Box::new(()));
+
+	// and another another one restricted to votes below best block
+	let restricted_env = environment(Box::new(voting_rule::AlwaysBehindBestBlock));
+
+	// both environments should return block 15, which is 3/4 of the way in the unfinalized chain
+	assert_eq!(
+		unrestricted_env.best_chain_containing(peer.client().info().chain.finalized_hash).unwrap().1,
+		15,
+	);
+
+	assert_eq!(
+		restricted_env.best_chain_containing(peer.client().info().chain.finalized_hash).unwrap().1,
+		15,
+	);
+
+	// we finalize block 19 with block 20 being the best block
+	peer.client().finalize_block(BlockId::Number(19), None, false).unwrap();
+
+	// the unrestricted environment should propose block 20 for voting
+	assert_eq!(
+		unrestricted_env.best_chain_containing(peer.client().info().chain.finalized_hash).unwrap().1,
+		20,
+	);
+
+	// while the restricted environment will always make sure we don't vote on the best block
+	assert_eq!(
+		restricted_env.best_chain_containing(peer.client().info().chain.finalized_hash).unwrap().1,
+		19,
+	);
+}
