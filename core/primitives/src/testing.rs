@@ -17,7 +17,14 @@
 //! Types that should only be used for testing!
 
 #[cfg(feature = "std")]
-use crate::{ed25519, sr25519, crypto::{Public, Pair, KeyTypeId}};
+use crate::{ed25519, sr25519, crypto::{Public, Pair}};
+use crate::crypto::KeyTypeId; // No idea why this import had to move from
+                              // the previous line, but now the compiler is happy
+
+/// Key type for generic Ed25519 key.
+pub const ED25519: KeyTypeId = KeyTypeId(*b"ed25");
+/// Key type for generic Sr 25519 key.
+pub const SR25519: KeyTypeId = KeyTypeId(*b"sr25");
 
 /// A keystore implementation usable in tests.
 #[cfg(feature = "std")]
@@ -126,18 +133,20 @@ impl crate::traits::BareCryptoStore for KeyStore {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{sr25519, crypto::key_types, traits::BareCryptoStore};
+	use crate::{sr25519, traits::BareCryptoStore};
+	use crate::testing::{ED25519, SR25519};
+
 
 	#[test]
 	fn store_key_and_extract() {
 		let store = KeyStore::new();
 
 		let public = store.write()
-			.ed25519_generate_new(key_types::ED25519, None)
+			.ed25519_generate_new(ED25519, None)
 			.expect("Genrates key");
 
 		let store_key_pair = store.read()
-			.ed25519_key_pair(key_types::ED25519, &public)
+			.ed25519_key_pair(ED25519, &public)
 			.expect("Key should exists in store");
 
 		assert_eq!(public, store_key_pair.public());
@@ -151,13 +160,13 @@ mod tests {
 		let key_pair = sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
 
 		store.write().insert_unknown(
-			key_types::SR25519,
+			SR25519,
 			secret_uri,
 			key_pair.public().as_ref(),
 		).expect("Inserts unknown key");
 
 		let store_key_pair = store.read().sr25519_key_pair(
-			key_types::SR25519,
+			SR25519,
 			&key_pair.public(),
 		).expect("Gets key pair from keystore");
 

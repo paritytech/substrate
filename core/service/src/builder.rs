@@ -35,7 +35,9 @@ use parking_lot::{Mutex, RwLock};
 use primitives::{Blake2Hasher, H256, Hasher};
 use rpc::{self, system::SystemInfo};
 use sr_primitives::generic::BlockId;
-use sr_primitives::traits::{Block as BlockT, ProvideRuntimeApi, NumberFor, One, Zero, Header, SaturatedConversion};
+use sr_primitives::traits::{
+	Block as BlockT, Extrinsic, ProvideRuntimeApi, NumberFor, One, Zero, Header, SaturatedConversion
+};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use std::{io::{Read, Write, Seek}, marker::PhantomData, sync::Arc, sync::atomic::AtomicBool};
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
@@ -935,7 +937,13 @@ pub(crate) fn maintain_transaction_pool<Api, Backend, Block, Executor, PoolApi>(
 	for r in retracted {
 		if let Some(block) = client.block(&BlockId::hash(*r))? {
 			let extrinsics = block.block.extrinsics();
-			if let Err(e) = transaction_pool.submit_at(id, extrinsics.iter().cloned(), true) {
+			if let Err(e) = transaction_pool.submit_at(
+				id,
+				extrinsics.iter().filter(|e| {
+					e.is_signed().unwrap_or(false)
+				}).cloned(),
+				true
+			) {
 				warn!("Error re-submitting transactions: {:?}", e);
 			}
 		}
