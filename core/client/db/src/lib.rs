@@ -60,6 +60,7 @@ use executor::RuntimeInfo;
 use state_machine::{
 	DBValue, ChangesTrieTransaction, ChangesTrieCacheAction, ChangesTrieBuildCache,
 	backend::Backend as StateBackend,
+	TODO,
 };
 use crate::utils::{Meta, db_err, meta_keys, read_db, block_id_to_lookup_key, read_meta};
 use client::leaves::{LeafSet, FinalizationDisplaced};
@@ -71,6 +72,8 @@ pub use state_db::PruningMode;
 
 #[cfg(feature = "test-helpers")]
 use client::in_mem::Backend as InMemoryBackend;
+#[cfg(feature = "test-helpers")]
+use state_machine::backend::InMemoryTransaction;
 
 const CANONICALIZATION_DELAY: u64 = 4096;
 const MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR: u32 = 32768;
@@ -79,7 +82,11 @@ const MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR: u32 = 32768;
 const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
-pub type DbState = state_machine::TrieBackend<Arc<dyn state_machine::Storage<Blake2Hasher>>, Blake2Hasher>;
+pub type DbState = state_machine::TrieBackend<
+	Arc<dyn state_machine::Storage<Blake2Hasher>>,
+	Blake2Hasher,
+	Arc<dyn state_machine::OffstateStorage>,
+>;
 
 /// A reference tracking state.
 ///
@@ -119,6 +126,7 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 	type Error =  <DbState as StateBackend<Blake2Hasher>>::Error;
 	type Transaction = <DbState as StateBackend<Blake2Hasher>>::Transaction;
 	type TrieBackendStorage = <DbState as StateBackend<Blake2Hasher>>::TrieBackendStorage;
+	type OffstateBackendStorage = <DbState as StateBackend<Blake2Hasher>>::OffstateBackendStorage;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.storage(key)
@@ -170,8 +178,27 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 		self.state.child_storage_root(storage_key, delta)
 	}
 
+	fn offstate_transaction<I>(&self, delta: I) -> Self::Transaction
+		where
+			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
+	{
+		self.state.offstate_transaction(delta)
+	}
+
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		self.state.pairs()
+	}
+
+	fn children_storage_keys(&self) -> Vec<Vec<u8>> {
+		self.state.children_storage_keys()
+	}
+
+	fn child_pairs(&self, child_storage_key: &[u8]) -> Vec<(Vec<u8>, Vec<u8>)> {
+		self.state.child_pairs(child_storage_key)
+	}
+
+	fn offstate_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+		self.state.offstate_pairs()
 	}
 
 	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
@@ -182,7 +209,9 @@ impl<B: BlockT> StateBackend<Blake2Hasher> for RefTrackingState<B> {
 		self.state.child_keys(child_key, prefix)
 	}
 
-	fn as_trie_backend(&mut self) -> Option<&state_machine::TrieBackend<Self::TrieBackendStorage, Blake2Hasher>> {
+	fn as_trie_backend(&mut self) -> Option<
+		&state_machine::TrieBackend<Self::TrieBackendStorage, Blake2Hasher, Self::OffstateBackendStorage>
+	> {
 		self.state.as_trie_backend()
 	}
 }
@@ -408,7 +437,7 @@ impl<Block: BlockT> client::blockchain::ProvideCache<Block> for BlockchainDb<Blo
 /// Database transaction
 pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	old_state: CachingState<Blake2Hasher, RefTrackingState<Block>, Block>,
-	db_updates: PrefixedMemoryDB<H>,
+	db_updates: (PrefixedMemoryDB<H>, Vec<(Vec<u8>, Option<Vec<u8>>)>),
 	storage_updates: StorageCollection,
 	child_storage_updates: ChildStorageCollection,
 	changes_trie_updates: MemoryDB<H>,
@@ -461,7 +490,10 @@ where Block: BlockT<Hash=H256>,
 		// Currently cache isn't implemented on full nodes.
 	}
 
-	fn update_db_storage(&mut self, update: PrefixedMemoryDB<Blake2Hasher>) -> Result<(), client::error::Error> {
+	fn update_db_storage(
+		&mut self,
+		update: (PrefixedMemoryDB<Blake2Hasher>, Vec<(Vec<u8>, Option<Vec<u8>>)>),
+	) -> Result<(), client::error::Error> {
 		self.db_updates = update;
 		Ok(())
 	}
@@ -488,7 +520,8 @@ where Block: BlockT<Hash=H256>,
 
 		let (root, transaction) = self.old_state.full_storage_root(
 			top.into_iter().map(|(k, v)| (k, Some(v))),
-			child_delta
+			child_delta,
+			None,
 		);
 
 		self.db_updates = transaction;
@@ -855,7 +888,12 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			let id = BlockId::Hash(hash);
 			let justification = self.blockchain.justification(id).unwrap();
 			let body = self.blockchain.body(id).unwrap();
-			let state = self.state_at(id).unwrap().pairs();
+			let state = self.state_at(id).unwrap();
+			let mut storage: Vec<_> = state.pairs().into_iter().map(|(k, v)| (None, k, Some(v))).collect();
+			for child_key in state.children_storage_keys() {
+				storage.extend(state.child_pairs(child_key.as_slice())
+					.into_iter().map(|(k, v)| (Some(child_key.clone()), k, Some(v))));
+			}
 
 			let new_block_state = if number.is_zero() {
 				NewBlockState::Final
@@ -866,7 +904,10 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			};
 			let mut op = inmem.begin_operation().unwrap();
 			op.set_block_data(header, body, justification, new_block_state).unwrap();
-			op.update_db_storage(state.into_iter().map(|(k, v)| (None, k, Some(v))).collect()).unwrap();
+			op.update_db_storage(InMemoryTransaction {
+				storage,
+				offstate: state.offstate_pairs().into_iter().map(|(k, v)| (k, Some(v))).collect(),
+			}).unwrap();
 			inmem.commit_operation(op).unwrap();
 		}
 
@@ -1103,16 +1144,32 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			}
 
 			let mut changeset: state_db::ChangeSet<Vec<u8>> = state_db::ChangeSet::default();
-			for (key, (val, rc)) in operation.db_updates.drain() {
+			for (key, (val, rc)) in operation.db_updates.0.drain() {
 				if rc > 0 {
 					changeset.inserted.push((key, val.to_vec()));
 				} else if rc < 0 {
 					changeset.deleted.push(key);
 				}
 			}
+			// remove duplicate
+			let mut map_offstate: HashMap<_, _> = operation.db_updates.1.into_iter().collect();
+			let mut offstate_changeset: state_db::ChangeSet<Vec<u8>> = state_db::ChangeSet::default();
+			for (key, option_val) in map_offstate.drain() {
+				if let Some(val) = option_val {
+					offstate_changeset.inserted.push((key, val.to_vec()));
+				} else {
+					offstate_changeset.deleted.push(key);
+				}
+			}
 			let number_u64 = number.saturated_into::<u64>();
-			let commit = self.storage.state_db.insert_block(&hash, number_u64, &pending_block.header.parent_hash(), changeset)
-				.map_err(|e: state_db::Error<io::Error>| client::error::Error::from(format!("State database error: {:?}", e)))?;
+			let commit = self.storage.state_db.insert_block(
+				&hash,
+				number_u64,
+				&pending_block.header.parent_hash(),
+				changeset,
+				offstate_changeset,
+			).map_err(|e: state_db::Error<io::Error>|
+				client::error::Error::from(format!("State database error: {:?}", e)))?;
 			apply_state_commit(&mut transaction, commit);
 
 			// Check if need to finalize. Genesis is always finalized instantly.
@@ -1314,7 +1371,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		Ok(BlockImportOperation {
 			pending_block: None,
 			old_state,
-			db_updates: PrefixedMemoryDB::default(),
+			db_updates: (PrefixedMemoryDB::default(), Default::default()),
 			storage_updates: Default::default(),
 			child_storage_updates: Default::default(),
 			changes_trie_updates: MemoryDB::default(),
@@ -1439,7 +1496,9 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			BlockId::Hash(h) if h == Default::default() => {
 				let genesis_storage = DbGenesisStorage::new();
 				let root = genesis_storage.0.clone();
-				let db_state = DbState::new(Arc::new(genesis_storage), root);
+				// TODO EMCH see genesis impl: that is empty storage
+				let genesis_offstate = TODO;
+				let db_state = DbState::new(Arc::new(genesis_storage), root, Arc::new(genesis_offstate));
 				let state = RefTrackingState::new(db_state, self.storage.clone(), None);
 				return Ok(CachingState::new(state, self.shared_cache.clone(), None));
 			},
@@ -1451,7 +1510,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 				let hash = hdr.hash();
 				if let Ok(()) = self.storage.state_db.pin(&hash) {
 					let root = H256::from_slice(hdr.state_root().as_ref());
-					let db_state = DbState::new(self.storage.clone(), root);
+					let db_state = DbState::new(self.storage.clone(), root, Arc::new(TODO));
 					let state = RefTrackingState::new(db_state, self.storage.clone(), Some(hash.clone()));
 					Ok(CachingState::new(state, self.shared_cache.clone(), Some(hash)))
 				} else {

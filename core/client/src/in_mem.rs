@@ -497,7 +497,8 @@ where
 
 		let (root, transaction) = self.old_state.full_storage_root(
 			top.into_iter().map(|(k, v)| (k, Some(v))),
-			child_delta
+			child_delta,
+			None,
 		);
 
 		self.new_state = Some(InMemory::from(transaction));

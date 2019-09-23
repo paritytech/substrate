@@ -291,7 +291,11 @@ where
 		}
 
 		let storage_update: InMemoryState<H> = storage.into();
-		let (storage_root, _) = storage_update.full_storage_root(::std::iter::empty(), child_delta);
+		let (storage_root, _) = storage_update.full_storage_root(
+			::std::iter::empty(),
+			child_delta,
+			::std::iter::empty(),
+		);
 		self.storage_update = Some(storage_update);
 
 		Ok(storage_root)
@@ -340,6 +344,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 	type Error = ClientError;
 	type Transaction = ();
 	type TrieBackendStorage = MemoryDB<H>;
+	type OffstateBackendStorage = state_machine::offstate_backend::TODO;
 
 	fn storage(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
 		match *self {
@@ -416,9 +421,37 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
+	fn offstate_transaction<I>(&self, _delta: I) -> Self::Transaction
+	where
+		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
+	{
+		()
+	}
+
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) => state.pairs(),
+			GenesisOrUnavailableState::Unavailable => Vec::new(),
+		}
+	}
+
+	fn children_storage_keys(&self) -> Vec<Vec<u8>> {
+		match *self {
+			GenesisOrUnavailableState::Genesis(ref state) => state.children_storage_keys(),
+			GenesisOrUnavailableState::Unavailable => Vec::new(),
+		}
+	}
+
+	fn child_pairs(&self, child_storage_key: &[u8]) -> Vec<(Vec<u8>, Vec<u8>)> {
+		match *self {
+			GenesisOrUnavailableState::Genesis(ref state) => state.child_pairs(child_storage_key),
+			GenesisOrUnavailableState::Unavailable => Vec::new(),
+		}
+	}
+
+	fn offstate_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+		match *self {
+			GenesisOrUnavailableState::Genesis(ref state) => state.offstate_pairs(),
 			GenesisOrUnavailableState::Unavailable => Vec::new(),
 		}
 	}
@@ -430,7 +463,9 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
+	fn as_trie_backend(&mut self) -> Option<
+		&TrieBackend<Self::TrieBackendStorage, H, Self::OffstateBackendStorage>
+	> {
 		match self {
 			GenesisOrUnavailableState::Genesis(ref mut state) => state.as_trie_backend(),
 			GenesisOrUnavailableState::Unavailable => None,

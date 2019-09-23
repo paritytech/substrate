@@ -30,8 +30,10 @@ use trie;
 use primitives::{H256, convert_hash};
 use sr_primitives::traits::{Header as HeaderT, SimpleArithmetic, Zero, One};
 use state_machine::backend::InMemory as InMemoryState;
+use state_machine::backend::InMemoryTransaction;
 use state_machine::{MemoryDB, TrieBackend, Backend as StateBackend,
 	prove_read_on_trie_backend, read_proof_check, read_proof_check_on_proving_backend};
+use state_machine::offstate_backend::TODO;
 
 use crate::error::{Error as ClientError, Result as ClientResult};
 
@@ -100,7 +102,10 @@ pub fn build_proof<Header, Hasher, BlocksI, HashesI>(
 		.into_iter()
 		.map(|(k, v)| (None, k, Some(v)))
 		.collect::<Vec<_>>();
-	let mut storage = InMemoryState::<Hasher>::default().update(transaction);
+	let mut storage = InMemoryState::<Hasher>::default().update(InMemoryTransaction {
+		storage: transaction,
+		offstate: Default::default(),
+	});
 	let trie_storage = storage.as_trie_backend()
 		.expect("InMemoryState::as_trie_backend always returns Some; qed");
 	prove_read_on_trie_backend(
@@ -143,7 +148,7 @@ pub fn check_proof_on_proving_backend<Header, Hasher>(
 	local_root: Header::Hash,
 	local_number: Header::Number,
 	remote_hash: Header::Hash,
-	proving_backend: &TrieBackend<MemoryDB<Hasher>, Hasher>,
+	proving_backend: &TrieBackend<MemoryDB<Hasher>, Hasher, TODO>,
 ) -> ClientResult<()>
 	where
 		Header: HeaderT,

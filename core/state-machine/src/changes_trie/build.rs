@@ -427,7 +427,8 @@ mod test {
 							extrinsics: Some(vec![0, 2].into_iter().collect())
 						})
 					].into_iter().collect()),
-				].into_iter().collect()
+				].into_iter().collect(),
+				offstate: vec![].into_iter().collect(),
 			},
 			committed: OverlayedChangeSet { top: vec![
 				(EXTRINSIC_INDEX.to_vec(), OverlayedValue {
@@ -451,6 +452,7 @@ mod test {
 						})
 					].into_iter().collect()),
 				].into_iter().collect(),
+				offstate: vec![].into_iter().collect(),
 			},
 			changes_trie_config: Some(config.clone()),
 		};

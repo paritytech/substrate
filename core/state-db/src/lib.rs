@@ -200,7 +200,14 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		})
 	}
 
-	pub fn insert_block<E: fmt::Debug>(&mut self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, mut changeset: ChangeSet<Key>) -> Result<CommitSet<Key>, Error<E>> {
+	pub fn insert_block<E: fmt::Debug>(
+		&mut self,
+		hash: &BlockHash,
+		number: u64,
+		parent_hash: &BlockHash,
+		mut changeset: ChangeSet<Key>,
+		mut offstate_changeset: ChangeSet<Key>,
+	) -> Result<CommitSet<Key>, Error<E>> {
 		match self.mode {
 			PruningMode::ArchiveAll => {
 				changeset.deleted.clear();
@@ -370,8 +377,15 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	}
 
 	/// Add a new non-canonical block.
-	pub fn insert_block<E: fmt::Debug>(&self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, changeset: ChangeSet<Key>) -> Result<CommitSet<Key>, Error<E>> {
-		self.db.write().insert_block(hash, number, parent_hash, changeset)
+	pub fn insert_block<E: fmt::Debug>(
+		&self,
+		hash: &BlockHash,
+		number: u64,
+		parent_hash: &BlockHash,
+		changeset: ChangeSet<Key>,
+		offstate_changeset: ChangeSet<Key>,
+	) -> Result<CommitSet<Key>, Error<E>> {
+		self.db.write().insert_block(hash, number, parent_hash, changeset, offstate_changeset)
 	}
 
 	/// Finalize a previously inserted block.
