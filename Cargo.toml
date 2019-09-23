@@ -96,7 +96,6 @@ members = [
 	"srml/session",
 	"srml/staking",
 	"srml/staking/reward-curve",
-	"srml/staking/reward-curve/test",
 	"srml/sudo",
 	"srml/system",
 	"srml/timestamp",

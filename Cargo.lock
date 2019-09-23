@@ -3969,6 +3969,7 @@ dependencies = [
  "sr-primitives 2.0.0",
  "sr-staking-primitives 2.0.0",
  "sr-std 2.0.0",
+ "sr-version 2.0.0",
  "srml-session 2.0.0",
  "srml-support 2.0.0",
  "srml-system 2.0.0",
@@ -3976,6 +3977,7 @@ dependencies = [
  "substrate-consensus-babe-primitives 2.0.0",
  "substrate-inherents 2.0.0",
  "substrate-primitives 2.0.0",
+ "substrate-test-runtime 2.0.0",
 ]
 
 [[package]]
