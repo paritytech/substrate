@@ -30,7 +30,7 @@ use node_primitives::{
 	Moment, Signature, ContractExecResult,
 };
 use babe_primitives::{AuthorityId as BabeId};
-use grandpa::fg_primitives::{self, ScheduledChange};
+use grandpa::fg_primitives;
 use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
 	runtime_api as client_api, impl_runtime_apis
@@ -42,7 +42,7 @@ use sr_primitives::curve::PiecewiseLinear;
 use sr_primitives::transaction_validity::TransactionValidity;
 use sr_primitives::weights::Weight;
 use sr_primitives::traits::{
-	self, BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup, SaturatedConversion,
+	self, BlakeTwo256, Block as BlockT, NumberFor, StaticLookup, SaturatedConversion,
 };
 use version::RuntimeVersion;
 use elections::VoteIndex;
