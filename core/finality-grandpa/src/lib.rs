@@ -92,11 +92,13 @@ mod justification;
 mod light_import;
 mod observer;
 mod until_imported;
+mod voting_rule;
 
 pub use communication::Network;
 pub use finality_proof::FinalityProofProvider;
 pub use light_import::light_block_import;
 pub use observer::run_grandpa_observer;
+pub use voting_rule::{AlwaysBehindBestBlock, VotingRule, VotingRulesBuilder};
 
 use aux_schema::PersistentData;
 use environment::{Environment, VoterSetState};
@@ -466,7 +468,7 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 }
 
 /// Parameters used to run Grandpa.
-pub struct GrandpaParams<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X> {
+pub struct GrandpaParams<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X> {
 	/// Configuration for the GRANDPA service.
 	pub config: Config,
 	/// A link to the block import worker.
@@ -479,12 +481,14 @@ pub struct GrandpaParams<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X> {
 	pub on_exit: X,
 	/// If supplied, can be used to hook on telemetry connection established events.
 	pub telemetry_on_connect: Option<mpsc::UnboundedReceiver<()>>,
+	/// An optional voting rule to restrict target votes.
+	pub voting_rule: Option<VR>,
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
 /// block import worker that has already been instantiated with `block_import`.
-pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
-	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, X>,
+pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
+	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, VR, X>,
 ) -> client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -492,6 +496,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 	N: Network<Block> + Send + Sync + 'static,
 	N::In: Send + 'static,
 	SC: SelectChain<Block> + 'static,
+	VR: VotingRule<Block> + Clone + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
 	RA: Send + Sync + 'static,
@@ -504,6 +509,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 		inherent_data_providers,
 		on_exit,
 		telemetry_on_connect,
+		voting_rule,
 	} = grandpa_params;
 
 	let LinkHalf {
@@ -556,8 +562,9 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 		config,
 		network,
 		select_chain,
+		voting_rule,
 		persistent_data,
-		voter_commands_rx
+		voter_commands_rx,
 	);
 
 	let voter_work = voter_work
@@ -578,13 +585,13 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 
 /// Future that powers the voter.
 #[must_use]
-struct VoterWork<B, E, Block: BlockT, N: Network<Block>, RA, SC> {
+struct VoterWork<B, E, Block: BlockT, N: Network<Block>, RA, SC, VR> {
 	voter: Box<dyn Future<Item = (), Error = CommandOrError<Block::Hash, NumberFor<Block>>> + Send>,
-	env: Arc<Environment<B, E, Block, N, RA, SC>>,
+	env: Arc<Environment<B, E, Block, N, RA, SC, VR>>,
 	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 }
 
-impl<B, E, Block, N, RA, SC> VoterWork<B, E, Block, N, RA, SC>
+impl<B, E, Block, N, RA, SC, VR> VoterWork<B, E, Block, N, RA, SC, VR>
 where
 	Block: BlockT<Hash=H256>,
 	N: Network<Block> + Sync,
@@ -594,12 +601,14 @@ where
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	SC: SelectChain<Block> + 'static,
+	VR: VotingRule<Block> + Clone + 'static,
 {
 	fn new(
 		client: Arc<Client<B, E, Block, RA>>,
 		config: Config,
 		network: NetworkBridge<Block, N>,
 		select_chain: SC,
+		voting_rule: Option<VR>,
 		persistent_data: PersistentData<Block>,
 		voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 	) -> Self {
@@ -608,6 +617,7 @@ where
 		let env = Arc::new(Environment {
 			inner: client,
 			select_chain,
+			voting_rule,
 			voters: Arc::new(voters),
 			config,
 			network,
@@ -728,6 +738,7 @@ where
 					authority_set: self.env.authority_set.clone(),
 					consensus_changes: self.env.consensus_changes.clone(),
 					network: self.env.network.clone(),
+					voting_rule: self.env.voting_rule.clone(),
 				});
 
 				self.rebuild_voter();
@@ -752,7 +763,7 @@ where
 	}
 }
 
-impl<B, E, Block, N, RA, SC> Future for VoterWork<B, E, Block, N, RA, SC>
+impl<B, E, Block, N, RA, SC, VR> Future for VoterWork<B, E, Block, N, RA, SC, VR>
 where
 	Block: BlockT<Hash=H256>,
 	N: Network<Block> + Sync,
@@ -762,6 +773,7 @@ where
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	SC: SelectChain<Block> + 'static,
+	VR: VotingRule<Block> + Clone + 'static,
 {
 	type Item = ();
 	type Error = Error;
@@ -806,8 +818,8 @@ where
 }
 
 #[deprecated(since = "1.1", note = "Please switch to run_grandpa_voter.")]
-pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
-	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, X>,
+pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
+	grandpa_params: GrandpaParams<B, E, Block, N, RA, SC, VR, X>,
 ) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -818,6 +830,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, X>(
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
 	RA: Send + Sync + 'static,
+	VR: VotingRule<Block> + Clone + 'static,
 	X: Future<Item=(),Error=()> + Clone + Send + 'static,
 {
 	run_grandpa_voter(grandpa_params)
