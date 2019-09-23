@@ -25,14 +25,14 @@
 //!
 //! This module extends accounts based on the `Currency` trait to have smart-contract functionality. It can
 //! be used with other modules that implement accounts based on `Currency`. These "smart-contract accounts"
-//! have the ability to create smart-contracts and make calls to other contract and non-contract accounts.
+//! have the ability to instantiate smart-contracts and make calls to other contract and non-contract accounts.
 //!
 //! The smart-contract code is stored once in a `code_cache`, and later retrievable via its `code_hash`.
 //! This means that multiple smart-contracts can be instantiated from the same `code_cache`, without replicating
 //! the code each time.
 //!
 //! When a smart-contract is called, its associated code is retrieved via the code hash and gets executed.
-//! This call can alter the storage entries of the smart-contract account, create new smart-contracts,
+//! This call can alter the storage entries of the smart-contract account, instantiate new smart-contracts,
 //! or call other smart-contracts.
 //!
 //! Finally, when an account is reaped, its associated code and storage of the smart-contract account
@@ -60,7 +60,8 @@
 //!
 //! * `put_code` - Stores the given binary Wasm code into the chain's storage and returns its `code_hash`.
 //! * `instantiate` - Deploys a new contract from the given `code_hash`, optionally transferring some balance.
-//! This creates a new smart contract account and calls its contract deploy handler to initialize the contract.
+//! This instantiates a new smart contract account and calls its contract deploy handler to
+//! initialize the contract.
 //! * `call` - Makes a call to an account, optionally transferring some balance.
 //!
 //! ### Signed Extensions
@@ -74,8 +75,8 @@
 //!
 //! ## Usage
 //!
-//! The Contract module is a work in progress. The following examples show how this Contract module can be
-//! used to create and call contracts.
+//! The Contract module is a work in progress. The following examples show how this Contract module
+//! can be used to instantiate and call contracts.
 //!
 //! * [`ink`](https://github.com/paritytech/ink) is
 //! an [`eDSL`](https://wiki.haskell.org/Embedded_domain_specific_language) that enables writing
@@ -298,37 +299,37 @@ pub type NegativeImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::NegativeImbalance;
 
 parameter_types! {
-	/// A resonable default value for [`Trait::SignedClaimedHandicap`].
+	/// A reasonable default value for [`Trait::SignedClaimedHandicap`].
 	pub const DefaultSignedClaimHandicap: u32 = 2;
-	/// A resonable default value for [`Trait::TombstoneDeposit`].
+	/// A reasonable default value for [`Trait::TombstoneDeposit`].
 	pub const DefaultTombstoneDeposit: u32 = 16;
-	/// A resonable default value for [`Trait::StorageSizeOffset`].
+	/// A reasonable default value for [`Trait::StorageSizeOffset`].
 	pub const DefaultStorageSizeOffset: u32 = 8;
-	/// A resonable default value for [`Trait::RentByteFee`].
+	/// A reasonable default value for [`Trait::RentByteFee`].
 	pub const DefaultRentByteFee: u32 = 4;
-	/// A resonable default value for [`Trait::RentDepositOffset`].
+	/// A reasonable default value for [`Trait::RentDepositOffset`].
 	pub const DefaultRentDepositOffset: u32 = 1000;
-	/// A resonable default value for [`Trait::SurchargeReward`].
+	/// A reasonable default value for [`Trait::SurchargeReward`].
 	pub const DefaultSurchargeReward: u32 = 150;
-	/// A resonable default value for [`Trait::TransferFee`].
+	/// A reasonable default value for [`Trait::TransferFee`].
 	pub const DefaultTransferFee: u32 = 0;
-	/// A resonable default value for [`Trait::CreationFee`].
-	pub const DefaultCreationFee: u32 = 0;
-	/// A resonable default value for [`Trait::TransactionBaseFee`].
+	/// A reasonable default value for [`Trait::InstantiationFee`].
+	pub const DefaultInstantiationFee: u32 = 0;
+	/// A reasonable default value for [`Trait::TransactionBaseFee`].
 	pub const DefaultTransactionBaseFee: u32 = 0;
-	/// A resonable default value for [`Trait::TransactionByteFee`].
+	/// A reasonable default value for [`Trait::TransactionByteFee`].
 	pub const DefaultTransactionByteFee: u32 = 0;
-	/// A resonable default value for [`Trait::ContractFee`].
+	/// A reasonable default value for [`Trait::ContractFee`].
 	pub const DefaultContractFee: u32 = 21;
-	/// A resonable default value for [`Trait::CallBaseFee`].
+	/// A reasonable default value for [`Trait::CallBaseFee`].
 	pub const DefaultCallBaseFee: u32 = 1000;
-	/// A resonable default value for [`Trait::CreateBaseFee`].
-	pub const DefaultCreateBaseFee: u32 = 1000;
-	/// A resonable default value for [`Trait::MaxDepth`].
+	/// A reasonable default value for [`Trait::InstantiateBaseFee`].
+	pub const DefaultInstantiateBaseFee: u32 = 1000;
+	/// A reasonable default value for [`Trait::MaxDepth`].
 	pub const DefaultMaxDepth: u32 = 1024;
-	/// A resonable default value for [`Trait::MaxValueSize`].
+	/// A reasonable default value for [`Trait::MaxValueSize`].
 	pub const DefaultMaxValueSize: u32 = 16_384;
-	/// A resonable default value for [`Trait::BlockGasLimit`].
+	/// A reasonable default value for [`Trait::BlockGasLimit`].
 	pub const DefaultBlockGasLimit: u32 = 10_000_000;
 }
 
@@ -341,13 +342,13 @@ pub trait Trait: timestamp::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
-	/// A function type to get the contract address given the creator.
+	/// A function type to get the contract address given the instantiator.
 	type DetermineContractAddress: ContractAddressFor<CodeHash<Self>, Self::AccountId>;
 
 	/// A function type that computes the fee for dispatching the given `Call`.
 	///
-	/// It is recommended (though not required) for this function to return a fee that would be taken
-	/// by the Executive module for regular dispatch.
+	/// It is recommended (though not required) for this function to return a fee that would be
+	/// taken by the Executive module for regular dispatch.
 	type ComputeDispatchFee: ComputeDispatchFee<<Self as Trait>::Call, BalanceOf<Self>>;
 
 	/// trie id generator
@@ -365,7 +366,7 @@ pub trait Trait: timestamp::Trait {
 	/// The minimum amount required to generate a tombstone.
 	type TombstoneDeposit: Get<BalanceOf<Self>>;
 
-	/// Size of a contract at the time of creation. This is a simple way to ensure
+	/// Size of a contract at the time of instantiation. This is a simple way to ensure
 	/// that empty contracts eventually gets deleted.
 	type StorageSizeOffset: Get<u32>;
 
@@ -397,16 +398,16 @@ pub trait Trait: timestamp::Trait {
 	/// The fee to be paid for making a transaction; the per-byte portion.
 	type TransactionByteFee: Get<BalanceOf<Self>>;
 
-	/// The fee required to create a contract instance.
+	/// The fee required to instantiate a contract instance.
 	type ContractFee: Get<BalanceOf<Self>>;
 
 	/// The base fee charged for calling into a contract.
 	type CallBaseFee: Get<Gas>;
 
-	/// The base fee charged for creating a contract.
-	type CreateBaseFee: Get<Gas>;
+	/// The base fee charged for instantiating a contract.
+	type InstantiateBaseFee: Get<Gas>;
 
-	/// The maximum nesting level of a call/create stack.
+	/// The maximum nesting level of a call/instantiate stack.
 	type MaxDepth: Get<u32>;
 
 	/// The maximum size of a storage value in bytes.
@@ -464,8 +465,8 @@ decl_module! {
 		/// The minimum amount required to generate a tombstone.
 		const TombstoneDeposit: BalanceOf<T> = T::TombstoneDeposit::get();
 
-		/// Size of a contract at the time of creation. This is a simple way to ensure
-		/// that empty contracts eventually gets deleted.
+		/// Size of a contract at the time of instantiaion. This is a simple way to ensure that
+		/// empty contracts eventually gets deleted.
 		const StorageSizeOffset: u32 = T::StorageSizeOffset::get();
 
 		/// Price of a byte of storage per one block interval. Should be greater than 0.
@@ -496,7 +497,7 @@ decl_module! {
 		/// The fee to be paid for making a transaction; the per-byte portion.
 		const TransactionByteFee: BalanceOf<T> = T::TransactionByteFee::get();
 
-		/// The fee required to create a contract instance. A reasonable default value
+		/// The fee required to instantiate a contract instance. A reasonable default value
 		/// is 21.
 		const ContractFee: BalanceOf<T> = T::ContractFee::get();
 
@@ -504,11 +505,11 @@ decl_module! {
 		/// value is 135.
 		const CallBaseFee: Gas = T::CallBaseFee::get();
 
-		/// The base fee charged for creating a contract. A reasonable default value
+		/// The base fee charged for instantiating a contract. A reasonable default value
 		/// is 175.
-		const CreateBaseFee: Gas = T::CreateBaseFee::get();
+		const InstantiateBaseFee: Gas = T::InstantiateBaseFee::get();
 
-		/// The maximum nesting level of a call/create stack. A reasonable default
+		/// The maximum nesting level of a call/instantiate stack. A reasonable default
 		/// value is 100.
 		const MaxDepth: u32 = T::MaxDepth::get();
 
