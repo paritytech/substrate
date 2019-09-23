@@ -155,7 +155,7 @@ parameter_types! {
 	pub const TransactionByteFee: u64 = 6;
 	pub const ContractFee: u64 = 21;
 	pub const CallBaseFee: u64 = 135;
-	pub const InstantiationBaseFee: u64 = 175;
+	pub const InstantiateBaseFee: u64 = 175;
 	pub const MaxDepth: u32 = 100;
 	pub const MaxValueSize: u32 = 16_384;
 }
@@ -179,7 +179,7 @@ impl Trait for Test {
 	type TransactionByteFee = TransactionByteFee;
 	type ContractFee = ContractFee;
 	type CallBaseFee = CallBaseFee;
-	type InstantiationBaseFee = InstantiationBaseFee;
+	type InstantiateBaseFee = InstantiateBaseFee;
 	type MaxDepth = MaxDepth;
 	type MaxValueSize = MaxValueSize;
 	type BlockGasLimit = BlockGasLimit;
