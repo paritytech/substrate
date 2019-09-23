@@ -52,6 +52,48 @@ subcommands:
             long: hex
             help: The message on STDIN is hex-encoded data
             takes_value: false
+  - hard-sign:
+      about: Sign data by wookong hardware
+      args:
+        - hex:
+            short: h
+            long: hex
+            help: The message on STDIN is hex-encoded data
+            takes_value: false
+  - hard-gen:
+     about: generate seed by wookong hardware
+  - hard-format:
+      about: format wookong hardware
+  - hard-getpub:
+      about: get public key from wookong hardware
+  - hard-import:
+      about: import seed to wookong hardware
+      args:
+        - hex:
+            short: h
+            long: hex
+            help: The message on STDIN is hex-encoded data
+            takes_value: false
+  - hard-transfer:
+      about: make transfer by using secret in wookong hardware
+      args:
+        - to:
+            index: 1
+            required: true
+            help: The destination account public key URI.
+        - amount:
+            index: 2
+            required: true
+            help: The number of units to transfer.
+        - index:
+            index: 3
+            required: true
+            help: The signing account's transaction index.
+        - genesis:
+            short: g
+            long: genesis
+            help: The genesis hash or a recognised chain identifier (dev, elm, alex).
+            takes_value: true
   - transfer:
       about: Author and sign a Node balances::Transfer transaction with a given (secret) key
       args:

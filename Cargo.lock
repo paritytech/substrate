@@ -1212,6 +1212,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "hex-view"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
 name = "hmac"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3780,6 +3785,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "solo"
+version = "0.1.1"
+dependencies = [
+ "cc 1.0.38 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "sourcefile"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4519,6 +4531,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "subhd"
+version = "0.1.0"
+dependencies = [
+ "cc 1.0.38 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hex-view 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solo 0.1.1",
+ "substrate-primitives 2.0.0",
+]
+
+[[package]]
 name = "subkey"
 version = "2.0.0"
 dependencies = [
@@ -4533,6 +4555,7 @@ dependencies = [
  "sr-primitives 2.0.0",
  "srml-balances 2.0.0",
  "srml-system 2.0.0",
+ "subhd 0.1.0",
  "substrate-bip39 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-primitives 2.0.0",
  "tiny-bip39 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -6643,6 +6666,7 @@ dependencies = [
 "checksum hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)" = "805026a5d0141ffc30abb3be3173848ad46a1b1664fe632428479619a3644d77"
 "checksum hex-literal 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "c3da68162fdd2147e66682e78e729bd77f93b4c99656db058c5782d8c6b6225a"
 "checksum hex-literal-impl 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "06095d08c7c05760f11a071b3e1d4c5b723761c01bd8d7201c30a9536668a612"
+"checksum hex-view 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)" = "494e16c9fe4dd02a88f3fe9ec0f27e38045691ea0ceb11603670f220ff5ca97f"
 "checksum hmac 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7a13f4163aa0c5ca1be584aace0e2212b2e41be5478218d4f657f5f778b2ae2a"
 "checksum hmac 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)" = "5dcb5e64cda4c23119ab41ba960d1e170a774c8e4b9d9e6a9bc18aabf5e59695"
 "checksum hmac-drbg 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "4fe727d41d2eec0a6574d887914347e5ff96a3b87177817e2a9820c5c87fecc2"
