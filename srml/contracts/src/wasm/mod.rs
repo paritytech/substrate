@@ -173,7 +173,7 @@ mod tests {
 	}
 
 	#[derive(Debug, PartialEq, Eq)]
-	struct CreateEntry {
+	struct InstantiateEntry {
 		code_hash: H256,
 		endowment: u64,
 		data: Vec<u8>,
@@ -192,7 +192,7 @@ mod tests {
 	pub struct MockExt {
 		storage: HashMap<StorageKey, Vec<u8>>,
 		rent_allowance: u64,
-		creates: Vec<CreateEntry>,
+		instantiates: Vec<InstantiateEntry>,
 		transfers: Vec<TransferEntry>,
 		dispatches: Vec<DispatchEntry>,
 		restores: Vec<RestoreEntry>,
@@ -220,7 +220,7 @@ mod tests {
 			gas_meter: &mut GasMeter<Test>,
 			data: Vec<u8>,
 		) -> Result<(u64, ExecReturnValue), ExecError> {
-			self.creates.push(CreateEntry {
+			self.instantiates.push(InstantiateEntry {
 				code_hash: code_hash.clone(),
 				endowment,
 				data: data.to_vec(),
@@ -476,7 +476,7 @@ mod tests {
 		);
 	}
 
-	const CODE_CREATE: &str = r#"
+	const CODE_INSTANTIATE: &str = r#"
 (module
 	;; ext_instantiate(
 	;;     code_ptr: u32,
@@ -507,7 +507,7 @@ mod tests {
 	;; Amount of value to transfer.
 	;; Represented by u64 (8 bytes long) in little endian.
 	(data (i32.const 4) "\03\00\00\00\00\00\00\00")
-	;; Input data to pass to the contract being created.
+	;; Input data to pass to the contract being instantiated.
 	(data (i32.const 12) "\01\02\03\04")
 	;; Hash of code.
 	(data (i32.const 16)
@@ -518,18 +518,18 @@ mod tests {
 "#;
 
 	#[test]
-	fn contract_create() {
+	fn contract_instantiate() {
 		let mut mock_ext = MockExt::default();
 		let _ = execute(
-			CODE_CREATE,
+			CODE_INSTANTIATE,
 			vec![],
 			&mut mock_ext,
 			&mut GasMeter::with_limit(50_000, 1),
 		).unwrap();
 
 		assert_eq!(
-			&mock_ext.creates,
-			&[CreateEntry {
+			&mock_ext.instantiates,
+			&[InstantiateEntry {
 				code_hash: [0x11; 32].into(),
 				endowment: 3,
 				data: vec![1, 2, 3, 4],

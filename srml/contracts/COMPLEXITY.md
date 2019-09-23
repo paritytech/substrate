@@ -123,7 +123,7 @@ While these functions only modify the local `Map`, if changes made by them are c
 
 **complexity**: Each lookup has a logarithmical computing time to the number of already inserted entries. No additional memory is required.
 
-## create_contract
+## instantiate_contract
 
 Calls `contract_exists` and if it doesn't exist, do not modify the local `Map` similarly to `set_rent_allowance`.
 
@@ -174,7 +174,7 @@ Assuming marshaled size of a balance value is of the constant size we can neglec
 
 ## Initialization
 
-Before a call or create can be performed the execution context must be initialized.
+Before a call or instantiate can be performed the execution context must be initialized.
 
 For the first call or instantiation in the handling of an extrinsic, this involves two calls:
 
@@ -213,7 +213,7 @@ and on top of that at most once per block:
 - `kill_child_storage`
 - mutation of `ContractInfoOf`
 
-Loading code most likely will trigger a DB read, since the code is immutable and therefore will not get into the cache (unless a suicide removes it, or it has been created in the same call chain).
+Loading code most likely will trigger a DB read, since the code is immutable and therefore will not get into the cache (unless a suicide removes it, or it has been instantiated in the same call chain).
 
 Also, `transfer` can make up to 2 DB reads and up to 2 DB writes (if flushed to the storage) in the standard case. If removal of the source account takes place then it will additionally perform a DB write per one storage entry that the account has.
 
@@ -229,9 +229,9 @@ This function takes the code of the constructor and input data. Instantiation of
 
 1. Initialization of the execution context.
 2. Calling `DetermineContractAddress` hook to determine an address for the contract,
-3. `transfer`-ing funds between self and the newly created contract.
+3. `transfer`-ing funds between self and the newly instantiated contract.
 4. Executing the constructor code. This will yield the final code of the code.
-5. Storing the code for the newly created contract in the overlay.
+5. Storing the code for the newly instantiated contract in the overlay.
 6. Committing overlayed changed to the underlying `AccountDb`.
 
 **Note** that the complexity of executing the constructor code should be considered separately.
