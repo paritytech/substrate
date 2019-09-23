@@ -942,7 +942,8 @@ impl<B: BlockT> ChainSync<B> {
 		}
 
 		// Let external validator check the block announcement.
-		match self.block_announce_validator.validate(&header, &announce.data) {
+		let assoc_data = announce.data.as_ref().map(|v| v.as_slice()).unwrap_or(&[]);
+		match self.block_announce_validator.validate(&header, assoc_data) {
 			Ok(Validation::Success) => (),
 			Ok(Validation::Failure) => {
 				debug!(target: "sync", "block announcement validation of block {} from {} failed", hash, who);

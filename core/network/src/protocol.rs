@@ -1061,7 +1061,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					} else  {
 						None
 					},
-					data: data.clone()
+					data: if peer.info.protocol_version >= 4 {
+						Some(data.clone())
+					} else {
+						None
+					},
 				});
 
 				self.behaviour.send_packet(who, message)
