@@ -31,7 +31,7 @@
 
 #[macro_use]
 mod wasm_utils;
-mod wasm_executor;
+mod wasmi_execution;
 #[macro_use]
 mod native_executor;
 mod sandbox;
@@ -41,9 +41,7 @@ mod wasm_runtimes_cache;
 
 pub mod error;
 pub use wasmi;
-pub use wasm_executor::WasmExecutor;
 pub use native_executor::{with_native_environment, NativeExecutor, NativeExecutionDispatch};
-pub use wasm_runtimes_cache::RuntimesCache;
 pub use runtime_version::{RuntimeVersion, NativeVersion};
 pub use codec::Codec;
 #[doc(hidden)]

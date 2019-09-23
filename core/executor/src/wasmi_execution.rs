@@ -315,198 +315,154 @@ impl wasmi::Externals for FunctionExecutor {
 	}
 }
 
-/// Wasm rust executor for contracts.
+/// Call a given method in the given code.
 ///
-/// Executes the provided code in a sandboxed wasm runtime.
-#[derive(Debug, Clone)]
-pub struct WasmExecutor;
+/// Signature of this method needs to be `(I32, I32) -> I64`.
+///
+/// This should be used for tests only.
+#[cfg(test)]
+pub fn call<E: Externalities<Blake2Hasher>>(
+	ext: &mut E,
+	heap_pages: usize,
+	code: &[u8],
+	method: &str,
+	data: &[u8],
+) -> Result<Vec<u8>> {
+	let module = wasmi::Module::from_buffer(code)?;
+	let module = instantiate_module(heap_pages, &module)?;
 
-impl WasmExecutor {
-	/// Create a new instance.
-	pub fn new() -> Self {
-		WasmExecutor
+	call_in_wasm_module(ext, &module, method, data)
+}
+
+fn get_mem_instance(module: &ModuleRef) -> Result<MemoryRef> {
+	Ok(module
+		.export_by_name("memory")
+		.ok_or_else(|| Error::InvalidMemoryReference)?
+		.as_memory()
+		.ok_or_else(|| Error::InvalidMemoryReference)?
+		.clone())
+}
+
+/// Find the global named `__heap_base` in the given wasm module instance and
+/// tries to get its value.
+fn get_heap_base(module: &ModuleRef) -> Result<u32> {
+	let heap_base_val = module
+		.export_by_name("__heap_base")
+		.ok_or_else(|| Error::HeapBaseNotFoundOrInvalid)?
+		.as_global()
+		.ok_or_else(|| Error::HeapBaseNotFoundOrInvalid)?
+		.get();
+
+	match heap_base_val {
+		wasmi::RuntimeValue::I32(v) => Ok(v as u32),
+		_ => Err(Error::HeapBaseNotFoundOrInvalid),
 	}
+}
 
-	/// Call a given method in the given code.
-	///
-	/// Signature of this method needs to be `(I32, I32) -> I64`.
-	///
-	/// This should be used for tests only.
-	pub fn call<E: Externalities<Blake2Hasher>>(
-		&self,
-		ext: &mut E,
-		heap_pages: usize,
-		code: &[u8],
-		method: &str,
-		data: &[u8],
-	) -> Result<Vec<u8>> {
-		let module = wasmi::Module::from_buffer(code)?;
-		let module = Self::instantiate_module(heap_pages, &module)?;
-
-		self.call_in_wasm_module(ext, &module, method, data)
-	}
-
-	/// Call a given method with a custom signature in the given code.
-	///
-	/// This should be used for tests only.
-	pub fn call_with_custom_signature<
-		E: Externalities<Blake2Hasher>,
-		F: FnOnce(&mut dyn FnMut(&[u8]) -> Result<u32>) -> Result<Vec<RuntimeValue>>,
-		FR: FnOnce(Option<RuntimeValue>, &MemoryRef) -> Result<Option<R>>,
-		R,
-	>(
-		&self,
-		ext: &mut E,
-		heap_pages: usize,
-		code: &[u8],
-		method: &str,
-		create_parameters: F,
-		filter_result: FR,
-	) -> Result<R> {
-		let module = wasmi::Module::from_buffer(code)?;
-		let module = Self::instantiate_module(heap_pages, &module)?;
-
-		self.call_in_wasm_module_with_custom_signature(
-			ext,
-			&module,
-			method,
-			create_parameters,
-			filter_result,
-		)
-	}
-
-	fn get_mem_instance(module: &ModuleRef) -> Result<MemoryRef> {
-		Ok(module
-			.export_by_name("memory")
-			.ok_or_else(|| Error::InvalidMemoryReference)?
-			.as_memory()
-			.ok_or_else(|| Error::InvalidMemoryReference)?
-			.clone())
-	}
-
-	/// Find the global named `__heap_base` in the given wasm module instance and
-	/// tries to get its value.
-	fn get_heap_base(module: &ModuleRef) -> Result<u32> {
-		let heap_base_val = module
-			.export_by_name("__heap_base")
-			.ok_or_else(|| Error::HeapBaseNotFoundOrInvalid)?
-			.as_global()
-			.ok_or_else(|| Error::HeapBaseNotFoundOrInvalid)?
-			.get();
-
-		match heap_base_val {
-			wasmi::RuntimeValue::I32(v) => Ok(v as u32),
-			_ => Err(Error::HeapBaseNotFoundOrInvalid),
-		}
-	}
-
-	/// Call a given method in the given wasm-module runtime.
-	pub fn call_in_wasm_module<E: Externalities<Blake2Hasher>>(
-		&self,
-		ext: &mut E,
-		module_instance: &ModuleRef,
-		method: &str,
-		data: &[u8],
-	) -> Result<Vec<u8>> {
-		self.call_in_wasm_module_with_custom_signature(
-			ext,
-			module_instance,
-			method,
-			|alloc| {
-				let offset = alloc(data)?;
-				Ok(vec![I32(offset as i32), I32(data.len() as i32)])
-			},
-			|res, memory| {
-				if let Some(I64(r)) = res {
-					let offset = r as u32;
-					let length = (r as u64 >> 32) as usize;
-					memory.get(offset, length).map_err(|_| Error::Runtime).map(Some)
-				} else {
-					Ok(None)
-				}
+/// Call a given method in the given wasm-module runtime.
+pub fn call_in_wasm_module<E: Externalities<Blake2Hasher>>(
+	ext: &mut E,
+	module_instance: &ModuleRef,
+	method: &str,
+	data: &[u8],
+) -> Result<Vec<u8>> {
+	call_in_wasm_module_with_custom_signature(
+		ext,
+		module_instance,
+		method,
+		|alloc| {
+			let offset = alloc(data)?;
+			Ok(vec![I32(offset as i32), I32(data.len() as i32)])
+		},
+		|res, memory| {
+			if let Some(I64(r)) = res {
+				let offset = r as u32;
+				let length = (r as u64 >> 32) as usize;
+				memory.get(offset, length).map_err(|_| Error::Runtime).map(Some)
+			} else {
+				Ok(None)
 			}
-		)
-	}
-
-	/// Call a given method in the given wasm-module runtime.
-	fn call_in_wasm_module_with_custom_signature<
-		E: Externalities<Blake2Hasher>,
-		F: FnOnce(&mut dyn FnMut(&[u8]) -> Result<u32>) -> Result<Vec<RuntimeValue>>,
-		FR: FnOnce(Option<RuntimeValue>, &MemoryRef) -> Result<Option<R>>,
-		R,
-	>(
-		&self,
-		ext: &mut E,
-		module_instance: &ModuleRef,
-		method: &str,
-		create_parameters: F,
-		filter_result: FR,
-	) -> Result<R> {
-		// extract a reference to a linear memory, optional reference to a table
-		// and then initialize FunctionExecutor.
-		let memory = Self::get_mem_instance(module_instance)?;
-		let table: Option<TableRef> = module_instance
-			.export_by_name("__indirect_function_table")
-			.and_then(|e| e.as_table().cloned());
-		let heap_base = Self::get_heap_base(module_instance)?;
-
-		let mut fec = FunctionExecutor::new(
-			memory.clone(),
-			heap_base,
-			table,
-		)?;
-
-		let parameters = create_parameters(&mut |data: &[u8]| {
-			let offset = fec.allocate_memory(data.len() as u32)?;
-			fec.write_memory(offset, data).map(|_| offset.into()).map_err(Into::into)
-		})?;
-
-		let result = runtime_io::with_externalities(
-			ext,
-			|| module_instance.invoke_export(method, &parameters, &mut fec),
-		);
-
-		match result {
-			Ok(val) => match filter_result(val, &memory)? {
-				Some(val) => Ok(val),
-				None => Err(Error::InvalidReturn),
-			},
-			Err(e) => {
-				trace!(
-					target: "wasm-executor",
-					"Failed to execute code with {} pages",
-					memory.current_size().0
-				);
-				Err(e.into())
-			},
 		}
-	}
+	)
+}
 
-	/// Prepare module instance
-	pub fn instantiate_module(
-		heap_pages: usize,
-		module: &Module,
-	) -> Result<ModuleRef> {
-		// start module instantiation. Don't run 'start' function yet.
-		let intermediate_instance = ModuleInstance::new(
-			module,
-			&ImportsBuilder::new()
+/// Call a given method in the given wasm-module runtime.
+fn call_in_wasm_module_with_custom_signature<
+	E: Externalities<Blake2Hasher>,
+	F: FnOnce(&mut dyn FnMut(&[u8]) -> Result<u32>) -> Result<Vec<RuntimeValue>>,
+	FR: FnOnce(Option<RuntimeValue>, &MemoryRef) -> Result<Option<R>>,
+	R,
+>(
+	ext: &mut E,
+	module_instance: &ModuleRef,
+	method: &str,
+	create_parameters: F,
+	filter_result: FR,
+) -> Result<R> {
+	// extract a reference to a linear memory, optional reference to a table
+	// and then initialize FunctionExecutor.
+	let memory = get_mem_instance(module_instance)?;
+	let table: Option<TableRef> = module_instance
+		.export_by_name("__indirect_function_table")
+		.and_then(|e| e.as_table().cloned());
+	let heap_base = get_heap_base(module_instance)?;
+
+	let mut fec = FunctionExecutor::new(
+		memory.clone(),
+		heap_base,
+		table,
+	)?;
+
+	let parameters = create_parameters(&mut |data: &[u8]| {
+		let offset = fec.allocate_memory(data.len() as u32)?;
+		fec.write_memory(offset, data).map(|_| offset.into()).map_err(Into::into)
+	})?;
+
+	let result = runtime_io::with_externalities(
+		ext,
+		|| module_instance.invoke_export(method, &parameters, &mut fec),
+	);
+
+	match result {
+		Ok(val) => match filter_result(val, &memory)? {
+			Some(val) => Ok(val),
+			None => Err(Error::InvalidReturn),
+		},
+		Err(e) => {
+			trace!(
+				target: "wasm-executor",
+				"Failed to execute code with {} pages",
+				memory.current_size().0
+			);
+			Err(e.into())
+		},
+	}
+}
+
+/// Prepare module instance
+pub fn instantiate_module(
+	heap_pages: usize,
+	module: &Module,
+) -> Result<ModuleRef> {
+	// start module instantiation. Don't run 'start' function yet.
+	let intermediate_instance = ModuleInstance::new(
+		module,
+		&ImportsBuilder::new()
 			.with_resolver("env", FunctionExecutor::resolver())
-		)?;
+	)?;
 
-		// Verify that the module has the heap base global variable.
-		let _ = Self::get_heap_base(intermediate_instance.not_started_instance())?;
+	// Verify that the module has the heap base global variable.
+	let _ = get_heap_base(intermediate_instance.not_started_instance())?;
 
-		// Extract a reference to a linear memory.
-		let memory = Self::get_mem_instance(intermediate_instance.not_started_instance())?;
-		memory.grow(Pages(heap_pages)).map_err(|_| Error::Runtime)?;
+	// Extract a reference to a linear memory.
+	let memory = get_mem_instance(intermediate_instance.not_started_instance())?;
+	memory.grow(Pages(heap_pages)).map_err(|_| Error::Runtime)?;
 
-		if intermediate_instance.has_start() {
-			// Runtime is not allowed to have the `start` function.
-			Err(Error::RuntimeHasStartFn)
-		} else {
-			Ok(intermediate_instance.assert_no_start())
-		}
+	if intermediate_instance.has_start() {
+		// Runtime is not allowed to have the `start` function.
+		Err(Error::RuntimeHasStartFn)
+	} else {
+		Ok(intermediate_instance.assert_no_start())
 	}
 }
 
@@ -529,7 +485,7 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = WASM_BINARY;
 
-		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_empty_return", &[]).unwrap();
+		let output = call(&mut ext, 8, &test_code[..], "test_empty_return", &[]).unwrap();
 		assert_eq!(output, vec![0u8; 0]);
 	}
 
@@ -538,13 +494,13 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = WASM_BINARY;
 
-		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_panic", &[]);
+		let output = call(&mut ext, 8, &test_code[..], "test_panic", &[]);
 		assert!(output.is_err());
 
-		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_conditional_panic", &[]);
+		let output = call(&mut ext, 8, &test_code[..], "test_conditional_panic", &[]);
 		assert_eq!(output.unwrap(), vec![0u8; 0]);
 
-		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_conditional_panic", &[2]);
+		let output = call(&mut ext, 8, &test_code[..], "test_conditional_panic", &[2]);
 		assert!(output.is_err());
 	}
 
@@ -554,7 +510,7 @@ mod tests {
 		ext.set_storage(b"foo".to_vec(), b"bar".to_vec());
 		let test_code = WASM_BINARY;
 
-		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_data_in", b"Hello world").unwrap();
+		let output = call(&mut ext, 8, &test_code[..], "test_data_in", b"Hello world").unwrap();
 
 		assert_eq!(output, b"all ok!".to_vec());
 
@@ -577,7 +533,7 @@ mod tests {
 		let test_code = WASM_BINARY;
 
 		// This will clear all entries which prefix is "ab".
-		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_clear_prefix", b"ab").unwrap();
+		let output = call(&mut ext, 8, &test_code[..], "test_clear_prefix", b"ab").unwrap();
 
 		assert_eq!(output, b"all ok!".to_vec());
 
@@ -594,11 +550,11 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = WASM_BINARY;
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_blake2_256", &[]).unwrap(),
+			call(&mut ext, 8, &test_code[..], "test_blake2_256", &[]).unwrap(),
 			blake2_256(&b""[..]).encode()
 		);
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_blake2_256", b"Hello world!").unwrap(),
+			call(&mut ext, 8, &test_code[..], "test_blake2_256", b"Hello world!").unwrap(),
 			blake2_256(&b"Hello world!"[..]).encode()
 		);
 	}
@@ -608,11 +564,11 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = WASM_BINARY;
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_blake2_128", &[]).unwrap(),
+			call(&mut ext, 8, &test_code[..], "test_blake2_128", &[]).unwrap(),
 			blake2_128(&b""[..]).encode()
 		);
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_blake2_128", b"Hello world!").unwrap(),
+			call(&mut ext, 8, &test_code[..], "test_blake2_128", b"Hello world!").unwrap(),
 			blake2_128(&b"Hello world!"[..]).encode()
 		);
 	}
@@ -622,11 +578,11 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = WASM_BINARY;
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_twox_256", &[]).unwrap(),
+			call(&mut ext, 8, &test_code[..], "test_twox_256", &[]).unwrap(),
 			hex!("99e9d85137db46ef4bbea33613baafd56f963c64b1f3685a4eb4abd67ff6203a"),
 		);
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_twox_256", b"Hello world!").unwrap(),
+			call(&mut ext, 8, &test_code[..], "test_twox_256", b"Hello world!").unwrap(),
 			hex!("b27dfd7f223f177f2a13647b533599af0c07f68bda23d96d059da2b451a35a74"),
 		);
 	}
@@ -636,11 +592,11 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = WASM_BINARY;
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_twox_128", &[]).unwrap(),
+			call(&mut ext, 8, &test_code[..], "test_twox_128", &[]).unwrap(),
 			hex!("99e9d85137db46ef4bbea33613baafd5")
 		);
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_twox_128", b"Hello world!").unwrap(),
+			call(&mut ext, 8, &test_code[..], "test_twox_128", b"Hello world!").unwrap(),
 			hex!("b27dfd7f223f177f2a13647b533599af")
 		);
 	}
@@ -656,7 +612,7 @@ mod tests {
 		calldata.extend_from_slice(sig.as_ref());
 
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_ed25519_verify", &calldata).unwrap(),
+			call(&mut ext, 8, &test_code[..], "test_ed25519_verify", &calldata).unwrap(),
 			vec![1]
 		);
 
@@ -666,7 +622,7 @@ mod tests {
 		calldata.extend_from_slice(other_sig.as_ref());
 
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_ed25519_verify", &calldata).unwrap(),
+			call(&mut ext, 8, &test_code[..], "test_ed25519_verify", &calldata).unwrap(),
 			vec![0]
 		);
 	}
@@ -682,7 +638,7 @@ mod tests {
 		calldata.extend_from_slice(sig.as_ref());
 
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sr25519_verify", &calldata).unwrap(),
+			call(&mut ext, 8, &test_code[..], "test_sr25519_verify", &calldata).unwrap(),
 			vec![1]
 		);
 
@@ -692,7 +648,7 @@ mod tests {
 		calldata.extend_from_slice(other_sig.as_ref());
 
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sr25519_verify", &calldata).unwrap(),
+			call(&mut ext, 8, &test_code[..], "test_sr25519_verify", &calldata).unwrap(),
 			vec![0]
 		);
 	}
@@ -703,7 +659,7 @@ mod tests {
 		let trie_input = vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()];
 		let test_code = WASM_BINARY;
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_ordered_trie_root", &[]).unwrap(),
+			call(&mut ext, 8, &test_code[..], "test_ordered_trie_root", &[]).unwrap(),
 			Layout::<Blake2Hasher>::ordered_trie_root(trie_input.iter()).as_fixed_bytes().encode()
 		);
 	}
@@ -717,7 +673,7 @@ mod tests {
 		ext.set_offchain_externalities(offchain);
 		let test_code = WASM_BINARY;
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_offchain_local_storage", &[]).unwrap(),
+			call(&mut ext, 8, &test_code[..], "test_offchain_local_storage", &[]).unwrap(),
 			vec![0]
 		);
 		assert_eq!(state.read().persistent_storage.get(b"", b"test"), Some(vec![]));
@@ -744,7 +700,7 @@ mod tests {
 
 		let test_code = WASM_BINARY;
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_offchain_http", &[]).unwrap(),
+			call(&mut ext, 8, &test_code[..], "test_offchain_http", &[]).unwrap(),
 			vec![0]
 		);
 	}

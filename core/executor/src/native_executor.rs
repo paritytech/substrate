@@ -16,14 +16,13 @@
 
 use std::{result, cell::RefCell, panic::UnwindSafe};
 use crate::error::{Error, Result};
-use crate::wasm_executor::WasmExecutor;
+use crate::wasm_runtimes_cache::RuntimesCache;
+use crate::wasmi_execution::call_in_wasm_module;
 use runtime_version::{NativeVersion, RuntimeVersion};
 use codec::{Decode, Encode};
 use crate::RuntimeInfo;
 use primitives::{Blake2Hasher, NativeOrEncoded, traits::{CodeExecutor, Externalities}};
 use log::{trace, warn};
-
-use crate::RuntimesCache;
 
 thread_local! {
 	static RUNTIMES_CACHE: RefCell<RuntimesCache> = RefCell::new(RuntimesCache::new());
@@ -65,8 +64,6 @@ pub trait NativeExecutionDispatch: Send + Sync {
 pub struct NativeExecutor<D> {
 	/// Dummy field to avoid the compiler complaining about us not using `D`.
 	_dummy: ::std::marker::PhantomData<D>,
-	/// The fallback executor in case native isn't available.
-	fallback: WasmExecutor,
 	/// Native runtime version info.
 	native_version: NativeVersion,
 	/// The number of 64KB pages to allocate for Wasm execution.
@@ -78,7 +75,6 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 	pub fn new(default_heap_pages: Option<u64>) -> Self {
 		NativeExecutor {
 			_dummy: Default::default(),
-			fallback: WasmExecutor::new(),
 			native_version: D::native_version(),
 			default_heap_pages: default_heap_pages,
 		}
@@ -89,7 +85,6 @@ impl<D: NativeExecutionDispatch> Clone for NativeExecutor<D> {
 	fn clone(&self) -> Self {
 		NativeExecutor {
 			_dummy: Default::default(),
-			fallback: self.fallback.clone(),
 			native_version: D::native_version(),
 			default_heap_pages: self.default_heap_pages,
 		}
@@ -108,7 +103,7 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 		RUNTIMES_CACHE.with(|cache| {
 			let cache = &mut cache.borrow_mut();
 
-			match cache.fetch_runtime(&self.fallback, ext, self.default_heap_pages) {
+			match cache.fetch_runtime(ext, self.default_heap_pages) {
 				Ok(runtime) => runtime.version(),
 				Err(e) => {
 					warn!(target: "executor", "Failed to fetch runtime: {:?}", e);
@@ -137,9 +132,7 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 	) -> (Result<NativeOrEncoded<R>>, bool){
 		RUNTIMES_CACHE.with(|cache| {
 			let cache = &mut cache.borrow_mut();
-			let cached_runtime = match cache.fetch_runtime(
-				&self.fallback, ext, self.default_heap_pages,
-			) {
+			let cached_runtime = match cache.fetch_runtime(ext, self.default_heap_pages) {
 				Ok(cached_runtime) => cached_runtime,
 				Err(e) => return (Err(e), false),
 			};
@@ -162,8 +155,7 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 					);
 					(
 						cached_runtime.with(|module|
-							self.fallback
-								.call_in_wasm_module(ext, module, method, data)
+							call_in_wasm_module(ext, module, method, data)
 								.map(NativeOrEncoded::Encoded)
 						),
 						false
@@ -172,8 +164,7 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 				(false, _, _) => {
 					(
 						cached_runtime.with(|module|
-							self.fallback
-								.call_in_wasm_module(ext, module, method, data)
+							call_in_wasm_module(ext, module, method, data)
 								.map(NativeOrEncoded::Encoded)
 						),
 						false

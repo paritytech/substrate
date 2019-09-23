@@ -17,7 +17,7 @@
 //! Implements a cache for pre-created Wasm runtime module instances.
 
 use crate::error::Error;
-use crate::wasm_executor::WasmExecutor;
+use crate::wasmi_execution;
 use log::{trace, warn};
 use codec::Decode;
 use parity_wasm::elements::{deserialize_buffer, DataSegment, Instruction, Module as RawModule};
@@ -219,9 +219,6 @@ impl RuntimesCache {
 	///
 	/// # Parameters
 	///
-	/// `wasm_executor`- Rust wasm executor. Executes the provided code in a
-	/// sandboxed Wasm runtime.
-	///
 	/// `ext` - Externalities to use for the runtime. This is used for setting
 	/// up an initial runtime instance. The parameter is only needed for calling
 	/// into the Wasm module to find out the `Core_version`.
@@ -243,7 +240,6 @@ impl RuntimesCache {
 	/// identifier `memory` can be found in the runtime.
 	pub fn fetch_runtime<E: Externalities<Blake2Hasher>>(
 		&mut self,
-		wasm_executor: &WasmExecutor,
 		ext: &mut E,
 		default_heap_pages: Option<u64>,
 	) -> Result<Rc<CachedRuntime>, Error> {
@@ -273,7 +269,7 @@ impl RuntimesCache {
 							target: "runtimes_cache",
 							"heap_pages were changed. Reinstantiating the instance"
 						);
-						*result = Self::create_wasm_instance(wasm_executor, ext, heap_pages);
+						*result = create_wasm_instance(ext, heap_pages);
 						if let Err(ref err) = result {
 							warn!(target: "runtimes_cache", "cannot create a runtime: {:?}", err);
 						}
@@ -283,11 +279,7 @@ impl RuntimesCache {
 			},
 			Entry::Vacant(v) => {
 				trace!(target: "runtimes_cache", "no instance found in cache, creating now.");
-				let result = Self::create_wasm_instance(
-					wasm_executor,
-					ext,
-					heap_pages,
-				);
+				let result = create_wasm_instance(ext, heap_pages);
 				if let Err(ref err) = result {
 					warn!(target: "runtimes_cache", "cannot create a runtime: {:?}", err);
 				}
@@ -295,46 +287,44 @@ impl RuntimesCache {
 			}
 		}
 	}
+}
 
-	fn create_wasm_instance<E: Externalities<Blake2Hasher>>(
-		wasm_executor: &WasmExecutor,
-		ext: &mut E,
-		heap_pages: u64,
-	) -> Result<Rc<CachedRuntime>, CacheError> {
-		let code = ext
-			.original_storage(well_known_keys::CODE)
-			.ok_or(CacheError::CodeNotFound)?;
-		let module = WasmModule::from_buffer(&code).map_err(|_| CacheError::InvalidModule)?;
+fn create_wasm_instance<E: Externalities<Blake2Hasher>>(
+	ext: &mut E,
+	heap_pages: u64,
+) -> Result<Rc<CachedRuntime>, CacheError> {
+	let code = ext
+		.original_storage(well_known_keys::CODE)
+		.ok_or(CacheError::CodeNotFound)?;
+	let module = WasmModule::from_buffer(&code).map_err(|_| CacheError::InvalidModule)?;
 
-		// Extract the data segments from the wasm code.
-		//
-		// A return of this error actually indicates that there is a problem in logic, since
-		// we just loaded and validated the `module` above.
-		let data_segments = extract_data_segments(&code)?;
+	// Extract the data segments from the wasm code.
+	//
+	// A return of this error actually indicates that there is a problem in logic, since
+	// we just loaded and validated the `module` above.
+	let data_segments = extract_data_segments(&code)?;
 
-		// Instantiate this module.
-		let instance = WasmExecutor::instantiate_module(heap_pages as usize, &module)
-			.map_err(CacheError::Instantiation)?;
+	// Instantiate this module.
+	let instance = wasmi_execution::instantiate_module(heap_pages as usize, &module)
+		.map_err(CacheError::Instantiation)?;
 
-		// Take state snapshot before executing anything.
-		let state_snapshot = StateSnapshot::take(&instance, data_segments, heap_pages)
-			.expect(
-				"`take` returns `Err` if the module is not valid;
+	// Take state snapshot before executing anything.
+	let state_snapshot = StateSnapshot::take(&instance, data_segments, heap_pages)
+		.expect(
+			"`take` returns `Err` if the module is not valid;
 				we already loaded module above, thus the `Module` is proven to be valid at this point;
 				qed
 				",
-			);
+		);
 
-		let version = wasm_executor
-			.call_in_wasm_module(ext, &instance, "Core_version", &[])
-			.ok()
-			.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()).ok());
-		Ok(Rc::new(CachedRuntime {
-			instance,
-			version,
-			state_snapshot,
-		}))
-	}
+	let version = wasmi_execution::call_in_wasm_module(ext, &instance, "Core_version", &[])
+		.ok()
+		.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()).ok());
+	Ok(Rc::new(CachedRuntime {
+		instance,
+		version,
+		state_snapshot,
+	}))
 }
 
 /// Extract the data segments from the given wasm code.
