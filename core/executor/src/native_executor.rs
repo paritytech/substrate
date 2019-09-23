@@ -28,6 +28,9 @@ thread_local! {
 	static RUNTIMES_CACHE: RefCell<RuntimesCache> = RefCell::new(RuntimesCache::new());
 }
 
+/// Default num of pages for the heap
+const DEFAULT_HEAP_PAGES: u64 = 1024;
+
 fn safe_call<F, U>(f: F) -> Result<U>
 	where F: UnwindSafe + FnOnce() -> U
 {
@@ -67,16 +70,21 @@ pub struct NativeExecutor<D> {
 	/// Native runtime version info.
 	native_version: NativeVersion,
 	/// The number of 64KB pages to allocate for Wasm execution.
-	default_heap_pages: Option<u64>,
+	default_heap_pages: u64,
 }
 
 impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 	/// Create new instance.
+	///
+	/// # Parameters
+	///
+	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
+	/// 	Defaults to `DEFAULT_HEAP_PAGES` if `None` is provided.
 	pub fn new(default_heap_pages: Option<u64>) -> Self {
 		NativeExecutor {
 			_dummy: Default::default(),
 			native_version: D::native_version(),
-			default_heap_pages: default_heap_pages,
+			default_heap_pages: default_heap_pages.unwrap_or(DEFAULT_HEAP_PAGES),
 		}
 	}
 }

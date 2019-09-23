@@ -180,9 +180,6 @@ impl StateSnapshot {
 	}
 }
 
-/// Default num of pages for the heap
-const DEFAULT_HEAP_PAGES: u64 = 1024;
-
 /// Cache for the runtimes.
 ///
 /// When an instance is requested for the first time it is added to this
@@ -224,7 +221,6 @@ impl RuntimesCache {
 	/// into the Wasm module to find out the `Core_version`.
 	///
 	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
-	/// Defaults to `DEFAULT_HEAP_PAGES` if `None` is provided.
 	///
 	/// # Return value
 	///
@@ -241,7 +237,7 @@ impl RuntimesCache {
 	pub fn fetch_runtime<E: Externalities<Blake2Hasher>>(
 		&mut self,
 		ext: &mut E,
-		default_heap_pages: Option<u64>,
+		default_heap_pages: u64,
 	) -> Result<Rc<CachedRuntime>, Error> {
 		let code_hash = ext
 			.original_storage_hash(well_known_keys::CODE)
@@ -250,8 +246,7 @@ impl RuntimesCache {
 		let heap_pages = ext
 			.storage(well_known_keys::HEAP_PAGES)
 			.and_then(|pages| u64::decode(&mut &pages[..]).ok())
-			.or(default_heap_pages)
-			.unwrap_or(DEFAULT_HEAP_PAGES);
+			.unwrap_or(default_heap_pages);
 
 		// This is direct result from fighting with borrowck.
 		let handle_result =
