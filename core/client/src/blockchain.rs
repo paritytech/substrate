@@ -107,7 +107,7 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> {
 		&self,
 		target_hash: Block::Hash,
 		maybe_max_number: Option<NumberFor<Block>>,
-		import_lock: &Mutex<()>
+		import_lock: &Mutex<()>,
 	) -> Result<Option<Block::Hash>> {
 		let target_header = {
 			match self.header(BlockId::Hash(target_hash))? {
