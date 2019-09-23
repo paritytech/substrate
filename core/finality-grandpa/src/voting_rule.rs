@@ -14,6 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Handling custom voting rules for GRANDPA.
+//!
+//! This exposes the `VotingRule` trait used to implement arbitrary voting
+//! restrictions that are taken into account by the GRANDPA environment when
+//! selecting a finality target to vote on.
+
 use std::sync::Arc;
 
 use client::blockchain::HeaderBackend;
@@ -21,7 +27,14 @@ use primitives::H256;
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{Block as BlockT, Header, NumberFor, One, Zero};
 
+/// A trait for custom voting rules in GRANDPA.
 pub trait VotingRule<Block: BlockT>: Send + Sync {
+	/// Restrict the given `current_target` vote, returning the block hash and
+	/// number of the block to vote on, and `None` in case the vote should not
+	/// be restricted.
+	///
+	/// The contract of this interface requires that when restricting a vote,
+	/// the returned value **must** be an ancestor of the given `current_target`.
 	fn restrict_vote(
 		&self,
 		best_target: &Block::Header,
@@ -39,6 +52,8 @@ impl<Block: BlockT> VotingRule<Block> for () {
 	}
 }
 
+/// A custom voting rule that guarantees that our vote is always behind the best
+/// block, in the best case exactly one block behind it.
 #[derive(Clone)]
 pub struct AlwaysBehindBestBlock;
 impl<Block: BlockT> VotingRule<Block> for AlwaysBehindBestBlock {
@@ -110,6 +125,8 @@ impl<B, Block> VotingRule<Block> for VotingRules<B, Block> where
 	}
 }
 
+/// A builder of a composite voting rule that applies a set of rules to
+/// progressively restrict the vote.
 pub struct VotingRulesBuilder<B, Block> {
 	backend: Arc<B>,
 	rules: Vec<Box<dyn VotingRule<Block>>>,
@@ -119,6 +136,7 @@ impl<B, Block> VotingRulesBuilder<B, Block> where
 	B: HeaderBackend<Block>,
 	Block: BlockT<Hash = H256>,
 {
+	/// Return a new voting rule builder using the given backend.
 	pub fn new(backend: Arc<B>) -> Self {
 		VotingRulesBuilder {
 			backend,
@@ -126,6 +144,7 @@ impl<B, Block> VotingRulesBuilder<B, Block> where
 		}
 	}
 
+	/// Add a new voting rule to the builder.
 	pub fn add<R>(mut self, rule: R) -> Self where
 		R: VotingRule<Block> + 'static,
 	{
@@ -133,6 +152,7 @@ impl<B, Block> VotingRulesBuilder<B, Block> where
 		self
 	}
 
+	/// Add all given voting rules to the builder.
 	pub fn add_all<I>(mut self, rules: I) -> Self where
 		I: IntoIterator<Item=Box<dyn VotingRule<Block>>>,
 	{
@@ -140,6 +160,8 @@ impl<B, Block> VotingRulesBuilder<B, Block> where
 		self
 	}
 
+	/// Return a new `VotingRule` that applies all of the previously added
+	/// voting rules in-order.
 	pub fn build(self) -> impl VotingRule<Block> + Clone {
 		VotingRules {
 			backend: self.backend,
