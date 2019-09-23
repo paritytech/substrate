@@ -485,6 +485,10 @@ where
 				// restrict vote according to the given voting rule, if the
 				// voting rule doesn't restrict the vote then we keep the
 				// previous target.
+				//
+				// note that we pass the original `best_header`, i.e. before the
+				// 3/4 unfinalized chain and authority set limit filters, which
+				// can be considered mandatory/implicit voting rules.
 				self.voting_rule
 					.restrict_vote(&best_header, &target_header)
 					.or(Some((target_hash, target_number)))
