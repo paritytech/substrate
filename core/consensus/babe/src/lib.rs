@@ -66,7 +66,6 @@ use consensus_common::ImportResult;
 use consensus_common::import_queue::{
 	BoxJustificationImport, BoxFinalityProofImport,
 };
-use consensus_common::well_known_cache_keys::Id as CacheKeyId;
 use sr_primitives::{generic::{BlockId, OpaqueDigestItemId}, Justification};
 use sr_primitives::traits::{
 	Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi,
@@ -98,7 +97,7 @@ use srml_babe::{
 	timestamp::{TimestampInherentData, InherentType as TimestampInherent}
 };
 use consensus_common::SelectChain;
-use consensus_common::import_queue::{Verifier, BasicQueue};
+use consensus_common::import_queue::{Verifier, BasicQueue, CacheKeyId};
 use client::{
 	block_builder::api::BlockBuilder as BlockBuilderApi,
 	blockchain::{self, HeaderBackend, ProvideCache}, BlockchainEvents, CallExecutor, Client,
@@ -372,7 +371,7 @@ impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I
 		]
 	}
 
-	fn import_block(&self) -> Box<dyn Fn(
+	fn block_import_params(&self) -> Box<dyn Fn(
 		B::Header,
 		&B::Hash,
 		Vec<B::Extrinsic>,
@@ -894,7 +893,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 					"babe.checked_and_importing";
 					"pre_header" => ?pre_header);
 
-				let import_block = BlockImportParams {
+				let block_import_params = BlockImportParams {
 					origin,
 					header: pre_header,
 					post_digests: vec![verified_info.seal],
@@ -908,7 +907,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 					fork_choice: ForkChoiceStrategy::LongestChain,
 				};
 
-				Ok((import_block, Default::default()))
+				Ok((block_import_params, Default::default()))
 			}
 			CheckedHeader::Deferred(a, b) => {
 				debug!(target: "babe", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);

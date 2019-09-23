@@ -106,9 +106,11 @@ pub struct Edge<AccountId> {
 pub type PhragmenAssignment<AccountId> = (AccountId, ExtendedBalance);
 
 /// Final result of the phragmen election.
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct PhragmenResult<AccountId> {
-	/// Just winners.
-	pub winners: Vec<AccountId>,
+	/// Just winners zipped with their approval stake. Note that the approval stake is merely the
+	/// sub of their received stake and could be used for very basic sorting and approval voting.
+	pub winners: Vec<(AccountId, ExtendedBalance)>,
 	/// Individual assignments. for each tuple, the first elements is a voter and the second
 	/// is the list of candidates that it supports.
 	pub assignments: Vec<(AccountId, Vec<PhragmenAssignment<AccountId>>)>
@@ -166,7 +168,7 @@ pub fn elect<AccountId, Balance, FS, C>(
 		<C as Convert<Balance, u64>>::convert(b) as ExtendedBalance;
 
 	// return structures
-	let mut elected_candidates: Vec<AccountId>;
+	let mut elected_candidates: Vec<(AccountId, ExtendedBalance)>;
 	let mut assigned: Vec<(AccountId, Vec<PhragmenAssignment<AccountId>>)>;
 
 	// used to cache and access candidates index.
@@ -282,7 +284,7 @@ pub fn elect<AccountId, Balance, FS, C>(
 				}
 			}
 
-			elected_candidates.push(winner.who.clone());
+			elected_candidates.push((winner.who.clone(), winner.approval_stake));
 		} else {
 			break
 		}
@@ -292,8 +294,8 @@ pub fn elect<AccountId, Balance, FS, C>(
 	for n in &mut voters {
 		let mut assignment = (n.who.clone(), vec![]);
 		for e in &mut n.edges {
-			if let Some(c) = elected_candidates.iter().cloned().find(|c| *c == e.who) {
-				if c != n.who {
+			if let Some(c) = elected_candidates.iter().cloned().find(|(c, _)| *c == e.who) {
+				if c.0 != n.who {
 					let ratio = {
 						// Full support. No need to calculate.
 						if *n.load == *e.load { ACCURACY }

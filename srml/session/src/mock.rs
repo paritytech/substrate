@@ -183,6 +183,10 @@ impl timestamp::Trait for Test {
 	type MinimumPeriod = MinimumPeriod;
 }
 
+parameter_types! {
+	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
+}
+
 impl Trait for Test {
 	type ShouldEndSession = TestShouldEndSession;
 	#[cfg(feature = "historical")]
@@ -195,6 +199,7 @@ impl Trait for Test {
 	type Keys = MockSessionKeys;
 	type Event = ();
 	type SelectInitialValidators = ();
+	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 }
 
 #[cfg(feature = "historical")]

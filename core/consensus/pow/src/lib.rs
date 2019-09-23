@@ -35,6 +35,7 @@ use std::collections::HashMap;
 use client::{
 	BlockOf, blockchain::{HeaderBackend, ProvideCache},
 	block_builder::api::BlockBuilder as BlockBuilderApi, backend::AuxStore,
+	well_known_cache_keys::Id as CacheKeyId,
 };
 use sr_primitives::Justification;
 use sr_primitives::generic::{BlockId, Digest, DigestItem};
@@ -45,7 +46,7 @@ use primitives::H256;
 use inherents::{InherentDataProviders, InherentData};
 use consensus_common::{
 	BlockImportParams, BlockOrigin, ForkChoiceStrategy,
-	well_known_cache_keys::Id as CacheKeyId, Environment, Proposer,
+	Environment, Proposer,
 };
 use consensus_common::import_queue::{BoxBlockImport, BasicQueue, Verifier};
 use codec::{Encode, Decode};

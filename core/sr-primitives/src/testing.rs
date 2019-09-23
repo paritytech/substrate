@@ -39,6 +39,12 @@ impl From<u64> for UintAuthorityId {
 	}
 }
 
+impl From<UintAuthorityId> for u64 {
+	fn from(id: UintAuthorityId) -> u64 {
+		id.0
+	}
+}
+
 impl UintAuthorityId {
 	/// Convert this authority id into a public key.
 	pub fn to_public_key<T: Public>(&self) -> T {

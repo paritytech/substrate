@@ -121,7 +121,7 @@
 
 use rstd::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use codec::Decode;
-use sr_primitives::{KeyTypeId, RuntimeAppPublic};
+use sr_primitives::{KeyTypeId, Perbill, RuntimeAppPublic};
 use sr_primitives::weights::SimpleDispatchInfo;
 use sr_primitives::traits::{Convert, Zero, Member, OpaqueKeys};
 use sr_staking_primitives::SessionIndex;
@@ -334,6 +334,12 @@ pub trait Trait: system::Trait {
 	/// The keys.
 	type Keys: OpaqueKeys + Member + Parameter + Default;
 
+	/// The fraction of validators set that is safe to be disabled.
+	///
+	/// After the threshold is reached `disabled` method starts to return true,
+	/// which in combination with `srml_staking` forces a new era.
+	type DisabledValidatorsThreshold: Get<Perbill>;
+
 	/// Select initial validators.
 	type SelectInitialValidators: SelectInitialValidators<Self::ValidatorId>;
 }
@@ -355,6 +361,11 @@ decl_storage! {
 		/// The queued keys for the next session. When the next session begins, these keys
 		/// will be used to determine the validator's session keys.
 		QueuedKeys get(queued_keys): Vec<(T::ValidatorId, T::Keys)>;
+
+		/// Indices of disabled validators.
+		///
+		/// The set is cleared when `on_session_ending` returns a new set of identities.
+		DisabledValidators get(disabled_validators): Vec<u32>;
 
 		/// The next session keys for a validator.
 		///
@@ -475,6 +486,11 @@ impl<T: Trait> Module<T> {
 			.collect::<Vec<_>>();
 		<Validators<T>>::put(&validators);
 
+		if changed {
+			// reset disabled validators
+			DisabledValidators::take();
+		}
+
 		let applied_at = session_index + 2;
 
 		// Get next validator set.
@@ -539,13 +555,36 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Disable the validator of index `i`.
-	pub fn disable_index(i: usize) {
-		T::SessionHandler::on_disabled(i);
+	///
+	/// Returns `true` if this causes a `DisabledValidatorsThreshold` of validators
+	/// to be already disabled.
+	pub fn disable_index(i: usize) -> bool {
+		let (fire_event, threshold_reached) = DisabledValidators::mutate(|disabled| {
+			let i = i as u32;
+			if let Err(index) = disabled.binary_search(&i) {
+				let count = <Validators<T>>::decode_len().unwrap_or(0) as u32;
+				let threshold = T::DisabledValidatorsThreshold::get() * count;
+				disabled.insert(index, i);
+				(true, disabled.len() as u32 > threshold)
+			} else {
+				(false, false)
+			}
+		});
+
+		if fire_event {
+			T::SessionHandler::on_disabled(i);
+		}
+
+		threshold_reached
 	}
 
-	/// Disable the validator identified by `c`. (If using with the staking module, this would be
-	/// their *stash* account.)
-	pub fn disable(c: &T::ValidatorId) -> rstd::result::Result<(), ()> {
+	/// Disable the validator identified by `c`. (If using with the staking module,
+	/// this would be their *stash* account.)
+	///
+	/// Returns `Ok(true)` if more than `DisabledValidatorsThreshold` validators in current
+	/// session is already disabled.
+	/// If used with the staking module it allows to force a new era in such case.
+	pub fn disable(c: &T::ValidatorId) -> rstd::result::Result<bool, ()> {
 		Self::validators().iter().position(|i| i == c).map(Self::disable_index).ok_or(())
 	}
 
@@ -923,5 +962,23 @@ mod tests {
 				)
 			);
 		});
+	}
+
+	#[test]
+	fn return_true_if_more_than_third_is_disabled() {
+		with_externalities(&mut new_test_ext(), || {
+			set_next_validators(vec![1, 2, 3, 4, 5, 6, 7]);
+			force_new_session();
+			initialize_block(1);
+			// apply the new validator set
+			force_new_session();
+			initialize_block(2);
+
+			assert_eq!(Session::disable_index(0), false);
+			assert_eq!(Session::disable_index(1), false);
+			assert_eq!(Session::disable_index(2), true);
+			assert_eq!(Session::disable_index(3), true);
+		});
+
 	}
 }

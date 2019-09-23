@@ -261,11 +261,14 @@ use support::{
 	}
 };
 use session::{historical::OnSessionEnding, SelectInitialValidators};
-use sr_primitives::Perbill;
-use sr_primitives::weights::SimpleDispatchInfo;
-use sr_primitives::traits::{
-	Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded, SimpleArithmetic,
-	SaturatedConversion,
+use sr_primitives::{
+	Perbill,
+	curve::PiecewiseLinear,
+	weights::SimpleDispatchInfo,
+	traits::{
+		Convert, Zero, One, StaticLookup, CheckedSub, Saturating, Bounded, SimpleArithmetic,
+		SaturatedConversion,
+	}
 };
 use phragmen::{elect, equalize, Support, SupportMap, ExtendedBalance, ACCURACY};
 use sr_staking_primitives::{
@@ -454,7 +457,11 @@ type MomentOf<T>= <<T as Trait>::Time as Time>::Moment;
 /// This is needed because `Staking` sets the `ValidatorIdOf` of the `session::Trait`
 pub trait SessionInterface<AccountId>: system::Trait {
 	/// Disable a given validator by stash ID.
-	fn disable_validator(validator: &AccountId) -> Result<(), ()>;
+	///
+	/// Returns `true` if new era should be forced at the end of this session.
+	/// This allows preventing a situation where there is too many validators
+	/// disabled and block production stalls.
+	fn disable_validator(validator: &AccountId) -> Result<bool, ()>;
 	/// Get the validators from session.
 	fn validators() -> Vec<AccountId>;
 	/// Prune historical session tries up to but not including the given index.
@@ -472,7 +479,7 @@ impl<T: Trait> SessionInterface<<T as system::Trait>::AccountId> for T where
 	T::SelectInitialValidators: session::SelectInitialValidators<<T as system::Trait>::AccountId>,
 	T::ValidatorIdOf: Convert<<T as system::Trait>::AccountId, Option<<T as system::Trait>::AccountId>>
 {
-	fn disable_validator(validator: &<T as system::Trait>::AccountId) -> Result<(), ()> {
+	fn disable_validator(validator: &<T as system::Trait>::AccountId) -> Result<bool, ()> {
 		<session::Module<T>>::disable(validator)
 	}
 
@@ -519,6 +526,9 @@ pub trait Trait: system::Trait {
 
 	/// Interface for interacting with a session module.
 	type SessionInterface: self::SessionInterface<Self::AccountId>;
+
+	/// The NPoS reward curve to use.
+	type RewardCurve: Get<&'static PiecewiseLinear<'static>>;
 }
 
 /// Mode of era-forcing.
@@ -1169,6 +1179,7 @@ impl<T: Trait> Module<T> {
 			let total_rewarded_stake = Self::slot_stake() * validator_len;
 
 			let total_payout = inflation::compute_total_payout(
+				&T::RewardCurve::get(),
 				total_rewarded_stake.clone(),
 				T::Currency::total_issuance(),
 				// Duration of era; more than u64::MAX is rewarded as u64::MAX.
@@ -1241,7 +1252,7 @@ impl<T: Trait> Module<T> {
 		);
 
 		if let Some(phragmen_result) = maybe_phragmen_result {
-			let elected_stashes = phragmen_result.winners;
+			let elected_stashes = phragmen_result.winners.iter().map(|(s, _)| s.clone()).collect::<Vec<T::AccountId>>();
 			let mut assignments = phragmen_result.assignments;
 
 			// helper closure.
@@ -1284,7 +1295,8 @@ impl<T: Trait> Module<T> {
 				}
 			}
 
-			if cfg!(feature = "equalize") {
+			#[cfg(feature = "equalize")]
+			{
 				let tolerance = 0_u128;
 				let iterations = 2_usize;
 				equalize::<_, _, _, T::CurrencyToVote>(
@@ -1530,10 +1542,11 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, session::historical::Identificati
 				continue;
 			}
 
-			// make sure to disable validator in next sessions
-			let _ = T::SessionInterface::disable_validator(stash);
-			// force a new era, to select a new validator set
-			ForceEra::put(Forcing::ForceNew);
+			// make sure to disable validator till the end of this session
+			if T::SessionInterface::disable_validator(stash).unwrap_or(false) {
+				// force a new era, to select a new validator set
+				ForceEra::put(Forcing::ForceNew);
+			}
 			// actually slash the validator
 			let slashed_amount = Self::slash_validator(stash, amount, exposure, &mut journal);
 

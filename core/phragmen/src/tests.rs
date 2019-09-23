@@ -35,7 +35,7 @@ fn float_phragmen_poc_works() {
 	let winners = phragmen_result.clone().winners;
 	let assignments = phragmen_result.clone().assignments;
 
-	assert_eq_uvec!(winners, vec![2, 3]);
+	assert_eq_uvec!(winners, vec![(2, 40), (3, 50)]);
 	assert_eq_uvec!(
 		assignments,
 		vec![
@@ -86,7 +86,7 @@ fn phragmen_poc_works() {
 		false,
 	).unwrap();
 
-	assert_eq_uvec!(winners, vec![2, 3]);
+	assert_eq_uvec!(winners, vec![(2, 40), (3, 50)]);
 	assert_eq_uvec!(
 		assignments,
 		vec![
