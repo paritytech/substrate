@@ -69,7 +69,7 @@ pub use tokio::runtime::TaskExecutor;
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
-pub type ForeignNetParams<F, EH> where
+pub type NetworkProviderParams<F, EH> where
 	F: ServiceFactory,
 	EH: network::service::ExHashT,
 = network::config::Params<
@@ -83,10 +83,10 @@ pub trait NetworkProvider<F, EH> where
 	F: ServiceFactory,
 	EH: network::service::ExHashT,
 {
-	fn get_shard_network(
+	fn provide_network(
 		&self,
-		shard_num: u32,
-		params: ForeignNetParams<F, EH>,
+		network_id: u32,
+		params: NetworkProviderParams<F, EH>,
 		protocol_id: network::ProtocolId,
 		import_queue: Box<dyn consensus_common::import_queue::ImportQueue<FactoryBlock<F>>>,
 	) -> Result<network::NetworkChan<FactoryBlock<F>>, network::Error>;
@@ -366,10 +366,10 @@ impl<Components: components::Components> Service<Components> {
 		})
 	}
 
-	pub fn new_foreign(
+	pub fn new_from_provider(
 		mut config: FactoryFullConfiguration<Components::Factory>,
 		network_provider: impl NetworkProvider<Components::Factory, ComponentExHash<Components>>,
-		shard_num: u32,
+		network_id: u32,
 		task_executor: TaskExecutor,
 	) -> Result<Self, error::Error> {
 		let (signal, exit) = ::exit_future::signal();
@@ -439,8 +439,8 @@ impl<Components: components::Components> Service<Components> {
 		};
 
 		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
-		let network_chan = network_provider.get_shard_network(
-			shard_num,
+		let network_chan = network_provider.provide_network(
+			network_id,
 			network_params,
 			protocol_id,
 			import_queue,
