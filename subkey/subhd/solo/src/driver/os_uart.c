@@ -20,7 +20,7 @@ int uart_init(int *dev)
 #elif TARGET_OS_MAC
     fd = open("/dev/tty.SLAB_USBtoUART", O_RDWR | O_NOCTTY | O_NONBLOCK); 
 #else
-#   error "Unsupport platform for uart"
+#   //error "Unsupport platform for uart"
 #endif
     
     if (fd < 0) /* Error Checking */
