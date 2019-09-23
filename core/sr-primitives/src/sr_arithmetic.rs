@@ -22,7 +22,7 @@ use crate::serde::{Serialize, Deserialize};
 use rstd::{
 	ops, prelude::*,
 	convert::{TryInto, TryFrom},
-	cmp::{min, max, Ordering}
+	cmp::Ordering,
 };
 use codec::{Encode, Decode};
 use crate::traits::{
@@ -669,26 +669,6 @@ impl CheckedAdd for Fixed64 {
 	}
 }
 
-/// Helper gcd function used in Rational128 implementation.
-fn gcd(a: u128, b: u128) -> u128 {
-	match ((a, b), (a & 1, b & 1)) {
-		((x, y), _) if x == y => y,
-		((0, x), _) | ((x, 0), _) => x,
-		((x, y), (0, 1)) | ((y, x), (1, 0)) => gcd(x >> 1, y),
-		((x, y), (0, 0)) => gcd(x >> 1, y >> 1) << 1,
-		((x, y), (1, 1)) => {
-			let (x, y) = (min(x, y), max(x, y));
-			gcd((y - x) >> 1, x)
-		},
-		_ => unreachable!(),
-    }
-}
-
-/// A wrapper for any rational number with a 128 bit numerator and denominator.
-#[derive(Clone, Copy, Default)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub struct Rational128(u128, u128);
-
 /// Some helper functions to work with 128bit numbers. Note that the functionality provided here is
 /// only sensible to use with 128bit numbers because for smaller sizes, you can always rely on
 /// assumptions of a bigger type (u128) being available, or simply create a per-thing and use the
@@ -696,8 +676,24 @@ pub struct Rational128(u128, u128);
 pub mod helpers_128bit {
 	use super::Perquintill;
 	use crate::traits::Zero;
+	use rstd::cmp::{min, max};
 
 	const ERROR: &'static str = "can not accurately multiply by rational in this type";
+
+	/// Helper gcd function used in Rational128 implementation.
+	pub fn gcd(a: u128, b: u128) -> u128 {
+		match ((a, b), (a & 1, b & 1)) {
+			((x, y), _) if x == y => y,
+			((0, x), _) | ((x, 0), _) => x,
+			((x, y), (0, 1)) | ((y, x), (1, 0)) => gcd(x >> 1, y),
+			((x, y), (0, 0)) => gcd(x >> 1, y >> 1) << 1,
+			((x, y), (1, 1)) => {
+				let (x, y) = (min(x, y), max(x, y));
+				gcd((y - x) >> 1, x)
+			},
+			_ => unreachable!(),
+		}
+	}
 
 	/// Safely and accurately compute `a * b / c`. The approach is:
 	///   - Simply try `a * b / c`.
@@ -709,7 +705,16 @@ pub mod helpers_128bit {
 	/// This might not return Ok even if `b < c`.
 	pub fn multiply_by_rational(a: u128, b: u128, c: u128) -> Result<u128, &'static str> {
 		if a.is_zero() || b.is_zero() { return Ok(Zero::zero()); }
+
+		// invariant: C cannot be zero.
 		let c = c.max(1);
+
+		// a and b are interchangeable by definition in this function. It always helps to assume the
+		// bigger of which is being multiplied by a `0 < b/c < 1`. Hence, a should be the bigger and
+		// b the smaller one.
+		let t = a;
+		let a = a.max(b);
+		let b = t.min(b);
 
 		if let Some(x) = a.checked_mul(b) {
 			// This is the safest way to go. Try it.
@@ -780,6 +785,11 @@ pub mod helpers_128bit {
 	}
 }
 
+/// A wrapper for any rational number with a 128 bit numerator and denominator.
+#[derive(Clone, Copy, Default, Eq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct Rational128(u128, u128);
+
 impl Rational128 {
 	/// Nothing.
 	pub fn zero() -> Self {
@@ -796,6 +806,11 @@ impl Rational128 {
 		Self(n, d.max(1))
 	}
 
+	/// Build from a raw `n/d`. This could lead to / 0 if not properly handled.
+	pub fn from_unchecked(n: u128, d: u128) -> Self {
+		Self(n, d)
+	}
+
 	/// Return the numerator.
 	pub fn n(&self) -> u128 {
 		self.0
@@ -806,27 +821,32 @@ impl Rational128 {
 		self.1
 	}
 
-	/// Convert self to a similar rational number where denominator is the given `den`.
+	/// Convert `self` to a similar rational number where denominator is the given `den`.
+	//
+	/// This only returns if the result is accurate. `Err` is returned if the result cannot be
+	/// accurately calculated.
 	pub fn to_den(self, den: u128) -> Result<Self, &'static str> {
-		if den == self.1 { Ok(self) }
-		else if den > self.1 {
-			let n = helpers_128bit::multiply_by_rational(den, self.0, self.1)
-				.map_err(|_| "failed to convert to denominator")?;
-			Ok(Self(n, den))
+		if den == self.1 {
+			Ok(self)
 		} else {
-			let div = self.1 / den;
-			Ok(Self(self.0 / div.max(1), den))
+			if den > self.1 {
+				let n = helpers_128bit::multiply_by_rational(self.0, den, self.1)?;
+				Ok(Self(n, den))
+			} else {
+				let div = self.1 / den;
+				Ok(Self(self.0 / div.max(1), den))
+			}
 		}
 	}
 
-	/// Get the least common divisor of self and `other`.
+	/// Get the least common divisor of `self` and `other`.
 	///
-	/// Arithmetic operations like normal `Add` and `Sub` are not provided. This can be used to
-	/// easily implement them.
+	/// This only returns if the result is accurate. `Err` is returned if the result cannot be
+	/// accurately calculated.
 	pub fn lcm(&self, other: &Self) -> Result<u128, &'static str> {
 		// this should be tested better: two large numbers that are almost the same.
 		if self.1 == other.1 { return Ok(self.1) }
-		let g = gcd(self.1, other.1);
+		let g = helpers_128bit::gcd(self.1, other.1);
 		helpers_128bit::multiply_by_rational(self.1 , other.1, g)
 	}
 
@@ -880,25 +900,53 @@ impl PartialOrd for Rational128 {
 	}
 }
 
+/// Note that this implementation can very well be lossy. TODO #3670
 impl Ord for Rational128 {
 	fn cmp(&self, other: &Self) -> Ordering {
-		let lcm = self.1.saturating_mul(other.1).saturating_mul(gcd(self.1, other.1));
-		let self_scaled = self.0 * (lcm / self.1);
-		let other_scaled = other.0 * (lcm / other.1);
-		self_scaled.cmp(&other_scaled)
+		// handle some edge cases.
+		if self.1 == other.1 {
+			self.0.cmp(&other.0)
+		} else if self.1.is_zero() {
+			Ordering::Greater
+		} else if other.1.is_zero() {
+			Ordering::Less
+		} else {
+			// general lossy case
+			let saturated_lcm = helpers_128bit::multiply_by_rational_best_effort(
+				self.1,
+				other.1,
+				helpers_128bit::gcd(self.1, other.1)
+			);
+			let self_scaled = self.to_den(saturated_lcm)
+				.unwrap_or(Self(Bounded::max_value(), self.1));
+			let other_scaled = other.to_den(saturated_lcm)
+				.unwrap_or(Self(Bounded::max_value(), other.1));
+			self_scaled.n().cmp(&other_scaled.n())
+		}
 	}
 }
 
+/// Note that this implementation can very well be lossy. TODO #3670
 impl PartialEq for Rational128 {
     fn eq(&self, other: &Self) -> bool {
-		let lcm = self.1.saturating_mul(other.1).saturating_mul(gcd(self.1, other.1));
-		let self_scaled = self.0 * (lcm / self.1);
-		let other_scaled = other.0 * (lcm / other.1);
-		self_scaled.eq(&other_scaled)
+		// handle some edge cases.
+		if self.1 == other.1 {
+			self.0.eq(&other.0)
+		} else {
+			// general lossy case
+			let saturated_lcm = helpers_128bit::multiply_by_rational_best_effort(
+				self.1,
+				other.1,
+				helpers_128bit::gcd(self.1, other.1)
+			);
+			let self_scaled = self.to_den(saturated_lcm)
+				.unwrap_or(Self(Bounded::max_value(), self.1));
+			let other_scaled = other.to_den(saturated_lcm)
+				.unwrap_or(Self(Bounded::max_value(), other.1));
+			self_scaled.n().eq(&other_scaled.n())
+		}
     }
 }
-
-impl Eq for Rational128 {}
 
 
 #[cfg(test)]
@@ -952,21 +1000,21 @@ mod test_rational128 {
 	#[test]
 	fn to_denom_works() {
 		// simple up and down
-		assert_eq!(r(1, 5).to_den(10).unwrap(), r(2, 10));
-		assert_eq!(r(4, 10).to_den(5).unwrap(), r(2, 5));
+		assert_eq!(r(1, 5).to_den(10), Ok(r(2, 10)));
+		assert_eq!(r(4, 10).to_den(5), Ok(r(2, 5)));
 
 		// up and down with large numbers
-		assert_eq!(r(MAX128 - 10, MAX128).to_den(10).unwrap(), r(9, 10));
-		assert_eq!(r(MAX128 / 2, MAX128).to_den(10).unwrap(), r(5, 10));
+		assert_eq!(r(MAX128 - 10, MAX128).to_den(10), Ok(r(9, 10)));
+		assert_eq!(r(MAX128 / 2, MAX128).to_den(10), Ok(r(5, 10)));
 
-		// large to perbill
+		// large to perbill. This is very well needed for phragmen.
 		assert_eq!(
-			r(MAX128 / 2, MAX128).to_den(1000_000_000).unwrap(),
-			r(500_000_000, 1000_000_000)
+			r(MAX128 / 2, MAX128).to_den(1000_000_000),
+			Ok(r(500_000_000, 1000_000_000))
 		);
 
 		// large to large
-		assert_eq!(r(MAX128 / 2, MAX128).to_den(MAX128/2).unwrap(), r(MAX128/4, MAX128/2));
+		assert_eq!(r(MAX128 / 2, MAX128).to_den(MAX128/2), Ok(r(MAX128/4, MAX128/2)));
 	}
 
 	#[test]
@@ -1101,6 +1149,18 @@ mod test_rational128 {
 		// fails to compute. have to use the greedy, lossy version here
 		assert!(multiply_by_rational(2u128.pow(66) - 1, 2u128.pow(65) - 1, 2u128.pow(65)).is_err());
 		assert!(multiply_by_rational(1_000_000_000, MAX128 / 8, MAX128 / 2).is_err());
+	}
+
+	#[test]
+	fn multiply_by_rational_a_b_are_interchangeable() {
+		assert_eq!(
+			multiply_by_rational(10, MAX128, MAX128 / 2),
+			Ok(20),
+		);
+		assert_eq!(
+			multiply_by_rational(MAX128, 10, MAX128 / 2),
+			Ok(20),
+		);
 	}
 
 	#[test]

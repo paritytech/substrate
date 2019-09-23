@@ -207,7 +207,7 @@ fn phragmen_accuracy_on_small_scale_self_vote() {
 		(30, 1),
 	]);
 
-	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote>(
+	let PhragmenResult { winners, assignments: _ } = elect::<_, _, _, TestCurrencyToVote>(
 		3,
 		3,
 		candidates,
@@ -239,7 +239,7 @@ fn phragmen_accuracy_on_small_scale_no_self_vote() {
 		(3, 1),
 	]);
 
-	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote>(
+	let PhragmenResult { winners, assignments: _ } = elect::<_, _, _, TestCurrencyToVote>(
 		3,
 		3,
 		candidates,

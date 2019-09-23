@@ -239,9 +239,12 @@ pub fn elect<AccountId, Balance, FS, C>(
 		for c in &mut candidates {
 			if !c.elected {
 				// 1 / approval_stake == (DEN / approval_stake) / DEN. If approval_stake is zero,
-				// then the ratio should be as large as possible, essentially `1`.
-				// TODO: someone with approval_stake 1 and 0 should be treated differently??
-				c.score = Rational128::from(DEN.checked_div(c.approval_stake).unwrap_or(DEN), DEN);
+				// then the ratio should be as large as possible, essentially `infinity`.
+				if c.approval_stake.is_zero() {
+					c.score = Rational128::from_unchecked(DEN, 0);
+				} else {
+					c.score = Rational128::from(DEN / c.approval_stake, DEN);
+				}
 			}
 		}
 
