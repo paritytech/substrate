@@ -68,8 +68,6 @@ fn check_module() {
 }
 
 type System = system::Module<Test>;
-type Session = session::Module<Test>;
-type EpochDuration = <Test as super::Trait>::EpochDuration;
 
 #[test]
 fn first_block_epoch_zero_start() {

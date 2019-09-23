@@ -48,6 +48,7 @@ parameter_types! {
 	pub const EpochDuration: u64 = 3;
 	pub const ExpectedBlockTime: u64 = 1;
 	pub const Version: RuntimeVersion = test_runtime::VERSION;
+	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(16);
 }
 
 impl system::Trait for Test {
@@ -85,6 +86,7 @@ impl session::Trait for Test {
 	type ValidatorIdOf = ();
 	type SelectInitialValidators = ();
 	type Keys = MockSessionKeys;
+	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 }
 
 impl timestamp::Trait for Test {

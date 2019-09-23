@@ -857,7 +857,7 @@ impl<B, E, Block, RA, PRA> Verifier<Block> for BabeVerifier<B, E, Block, RA, PRA
 		let v_params = VerificationParams {
 			header,
 			pre_digest: Some(pre_digest.clone()),
-			slot_now,
+			slot_now: slot_now + 1,
 			epoch: epoch.as_ref(),
 			config: &self.config,
 		};

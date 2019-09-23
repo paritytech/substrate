@@ -332,15 +332,6 @@ impl<Block: BlockT> From<EpochChangesFor<Block>> for SharedEpochChanges<Block> {
 	}
 }
 
-// TODO: write tests within the scope of this module.
-//
-// 1. mock up an `IsDescendentOfBuilder`. Don't use the `Client` - these tests should be
-// minimal and focused.
-//
-// 2. test that epochs can indeed change between blocks by observing one result before
-// epoch end slot and another after
-//
-// 3. Test that this always gives you the right epoch based on the fork you're on.
 #[cfg(test)]
 mod tests {
 	use super::*;

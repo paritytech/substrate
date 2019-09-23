@@ -370,7 +370,6 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(any())]
 	#[ignore]
 	fn test_sync() {
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
