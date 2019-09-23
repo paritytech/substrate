@@ -110,26 +110,23 @@ impl<T: Fork> Fork for Option<T> {
 }
 
 /// A collection of `ChainSpec` extensions.
-pub trait Extension: Group + Serialize + DeserializeOwned + Clone {
+pub trait Extension: Serialize + DeserializeOwned + Clone {
 	/// Get an extension of specific type.
-	fn get<T: Group + 'static>(&self) -> Option<&T>;
+	fn get<T: 'static>(&self) -> Option<&T>;
 }
 
-impl Extension for () {
-	fn get<T: Group + 'static>(&self) -> Option<&T> { None }
+impl Extension for crate::NoExtension {
+	fn get<T: 'static>(&self) -> Option<&T> { None }
 }
 
-impl Extension for Option<()> {
-	fn get<T: Group + 'static>(&self) -> Option<&T> { None }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct Forks<BlockNumber: Ord, T: Group> where
 	T::Fork: Serialize + DeserializeOwned,
 {
+	forks: BTreeMap<BlockNumber, T::Fork>,
 	#[serde(flatten)]
 	base: T,
-	forks: BTreeMap<BlockNumber, T::Fork>,
 }
 
 impl<B: Ord, T: Group + Default> Default for Forks<B, T> where
@@ -165,32 +162,51 @@ impl<B: Ord, T: Group + Clone> Forks<B, T> where
 	}
 }
 
+impl<B, E> Extension for Forks<B, E> where
+	B: Ord + Clone + Serialize + DeserializeOwned,
+	E: Extension + Group + Clone + 'static,
+	E::Fork: Serialize + DeserializeOwned + Clone,
+{
+	fn get<T: 'static>(&self) -> Option<&T> {
+		use std::any::{TypeId, Any};
+
+		match TypeId::of::<T>() {
+			x if x == TypeId::of::<E>() => Any::downcast_ref(&self.base),
+			_ => self.base.get(),
+		}
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use chain_spec_derive::{ChainSpecGroup, ChainSpecExtension};
 
 	#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ChainSpecGroup)]
+	#[serde(deny_unknown_fields)]
 	pub struct Extension1 {
 		pub test: u64,
 	}
 
 	#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ChainSpecGroup)]
+	#[serde(deny_unknown_fields)]
 	pub struct Extension2 {
 		pub test: u8,
 	}
 
-	#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ChainSpecExtension)]
+	#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ChainSpecGroup, ChainSpecExtension)]
+	#[serde(deny_unknown_fields)]
 	pub struct Extensions {
 		pub ext1: Extension1,
 		pub ext2: Extension2,
 	}
 
 	#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ChainSpecExtension)]
+	#[serde(deny_unknown_fields)]
 	pub struct Ext2 {
-		pub non_fork: Extension1,
 		#[serde(flatten)]
-		pub forks: Forks<u64, Extensions>,
+		ext1: Extension1,
+		forkable: Forks<u64, Extensions>,
 	}
 
 	#[test]
@@ -199,32 +215,32 @@ mod tests {
 
 		let ext: Ext2 = serde_json::from_str(r#"
 {
-	"non_fork": {
-		"test": 11
-	},
-	"ext1": {
-		"test": 15
-	},
-	"ext2": {
-		"test": 123
-	},
-	"forks": {
-		"1": {
-			"ext1": { "test": 5 }
+	"test": 11,
+	"forkable": {
+		"ext1": {
+			"test": 15
 		},
-		"2": {
-			"ext2": { "test": 5 }
+		"ext2": {
+			"test": 123
 		},
-		"5": {
-			"ext2": { "test": 1 }
+		"forks": {
+			"1": {
+				"ext1": { "test": 5 }
+			},
+			"2": {
+				"ext2": { "test": 5 }
+			},
+			"5": {
+				"ext2": { "test": 1 }
+			}
 		}
 	}
 }
 		"#).unwrap();
 
-		assert_eq!(ext.get::<Extension1>(), Extension1 {
+		assert_eq!(ext.get::<Extension1>(), Some(&Extension1 {
 			test: 11
-		});
+		}));
 
 		// get forks definition
 		let forks = ext.get::<Forks<u64, Extensions>>().unwrap();
