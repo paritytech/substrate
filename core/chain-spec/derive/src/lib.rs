@@ -18,17 +18,18 @@
 
 extern crate proc_macro;
 
-mod impl_group;
+mod impls;
 
 use proc_macro::TokenStream;
 
 #[proc_macro_derive(ChainSpecGroup)]
 pub fn group_derive(input: TokenStream) -> TokenStream {
-	let ast = syn::parse(input).unwrap();
-	impl_group::impl_group_derive(&ast)
+	let ast = syn::parse(input).expect("Invalid AST");
+	impls::group_derive(&ast)
 }
 
 #[proc_macro_derive(ChainSpecExtension)]
 pub fn extensions_derive(input: TokenStream) -> TokenStream {
-	unimplemented!()
+	let ast = syn::parse(input).expect("Invalid AST");
+	impls::extension_derive(&ast)
 }

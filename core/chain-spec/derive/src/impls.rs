@@ -21,7 +21,43 @@ use proc_macro_crate::crate_name;
 
 const CRATE_NAME: &str = "substrate-chain-spec";
 
-pub fn impl_group_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
+/// Implements `Extension's` `Group` accessor.
+///
+/// The struct that derives this implementation will be usable within the `ChainSpec` file.
+/// The derive implements a by-type accessor method.
+pub fn extension_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
+	// the extension needs to be a group as well, so we call `derive`
+	// and only add the `Extension` implementation.
+	derive(ast, Some(Box::new(|crate_name, name, generics: &syn::Generics, field_names, field_types| {
+		let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
+		quote! {
+			impl #impl_generics #crate_name::Extension for #name #ty_generics #where_clause {
+				fn get<T: #crate_name::Extension + 'static>(&self) -> Option<&T> {
+					use std::any::{Any, TypeId};
+
+					match TypeId::of::<T>() {
+						#( x if x == TypeId::of::<#field_types>() => Any::downcast_ref(&self.#field_names) )*,
+						_ => None,
+					}
+				}
+			}
+		}
+	})))
+}
+
+
+/// Implements required traits and creates `Fork` structs for `ChainSpec` custom parameter group.
+pub fn group_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
+	derive(ast, None)
+}
+
+pub fn derive(
+	ast: &DeriveInput,
+	extra: Option<Box<dyn Fn(
+		&Ident, &Ident, &syn::Generics, &[&Ident], &[&syn::Type]
+	) -> TokenStream>>
+) -> proc_macro::TokenStream {
 	let err = || {
 		let err = Error::new(
 			Span::call_site(),
@@ -57,10 +93,16 @@ pub fn impl_group_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
 	let field_names = fields.named.iter().flat_map(|x| x.ident.as_ref()).collect::<Vec<_>>();
 	let field_types = fields.named.iter().map(|x| &x.ty).collect::<Vec<_>>();
 
+	let extra = match extra {
+		Some(x) => (&*x)(&crate_name, &name, &ast.generics, &field_names, &field_types),
+		None => quote! {}
+	};
+
 	let fork_fields = generate_fork_fields(&crate_name, &field_names, &field_types);
 	let to_fork = generate_base_to_fork(&fork_name, &field_names);
 	let combine_with = generate_combine_with(&field_names);
 	let to_base = generate_fork_to_base(name, &field_names);
+
 
 	let gen = quote! {
 		#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -90,6 +132,8 @@ pub fn impl_group_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
 				#to_base
 			}
 		}
+
+		#extra
 	};
 
 	gen.into()

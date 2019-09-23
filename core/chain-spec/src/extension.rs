@@ -193,18 +193,6 @@ mod tests {
 		pub forks: Forks<u64, Extensions>,
 	}
 
-	// impl super::Extension for Extensions {
-	// 	fn get<T: Extension + 'static>(&self) -> Option<&T> {
-	// 		use std::any::{Any, TypeId};
-    //
-	// 		match TypeId::of::<T>() {
-	// 			x if x == TypeId::of::<Extension1>() => Any::downcast_ref(&self.ext1),
-	// 			x if x == TypeId::of::<Extension2>() => Any::downcast_ref(&self.ext2),
-	// 			_ => None,
-	// 		}
-	// 	}
-	// }
-
 	#[test]
 	fn forks_should_work_correctly() {
 		use super::Extension as _ ;
