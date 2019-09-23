@@ -481,8 +481,8 @@ pub struct GrandpaParams<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X> {
 	pub on_exit: X,
 	/// If supplied, can be used to hook on telemetry connection established events.
 	pub telemetry_on_connect: Option<mpsc::UnboundedReceiver<()>>,
-	/// An optional voting rule to restrict target votes.
-	pub voting_rule: Option<VR>,
+	/// A voting rule used to potentially restrict target votes.
+	pub voting_rule: VR,
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
@@ -608,7 +608,7 @@ where
 		config: Config,
 		network: NetworkBridge<Block, N>,
 		select_chain: SC,
-		voting_rule: Option<VR>,
+		voting_rule: VR,
 		persistent_data: PersistentData<Block>,
 		voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 	) -> Self {

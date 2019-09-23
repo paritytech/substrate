@@ -379,7 +379,7 @@ pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA, SC, VR
 	pub(crate) network: crate::communication::NetworkBridge<Block, N>,
 	pub(crate) set_id: SetId,
 	pub(crate) voter_set_state: SharedVoterSetState<Block>,
-	pub(crate) voting_rule: Option<VR>,
+	pub(crate) voting_rule: VR,
 }
 
 impl<B, E, Block: BlockT, N: Network<Block>, RA, SC, VR> Environment<B, E, Block, N, RA, SC, VR> {
@@ -482,12 +482,11 @@ where
 						.expect("Header known to exist after `best_containing` call; qed");
 				}
 
-				// restrict vote according to the given voting rule, if any. if
-				// a voting rule is given but doesn't restrict the vote then we
-				// keep the previous target.
+				// restrict vote according to the given voting rule, if the
+				// voting rule doesn't restrict the vote then we keep the
+				// previous target.
 				self.voting_rule
-					.as_ref()
-					.and_then(|rule| rule.restrict_vote(&best_header, &target_header))
+					.restrict_vote(&best_header, &target_header)
 					.or(Some((target_hash, target_number)))
 			},
 			Ok(None) => {

@@ -424,6 +424,7 @@ fn run_to_completion_with<F>(
 			inherent_data_providers: InherentDataProviders::new(),
 			on_exit: Exit,
 			telemetry_on_connect: None,
+			voting_rule: (),
 		};
 		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
@@ -537,6 +538,7 @@ fn finalize_3_voters_1_full_observer() {
 			inherent_data_providers: InherentDataProviders::new(),
 			on_exit: Exit,
 			telemetry_on_connect: None,
+			voting_rule: (),
 		};
 		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
@@ -702,6 +704,7 @@ fn transition_3_voters_twice_1_full_observer() {
 			inherent_data_providers: InherentDataProviders::new(),
 			on_exit: Exit,
 			telemetry_on_connect: None,
+			voting_rule: (),
 		};
 		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
@@ -1150,6 +1153,7 @@ fn voter_persists_its_votes() {
 							inherent_data_providers: InherentDataProviders::new(),
 							on_exit: Exit,
 							telemetry_on_connect: None,
+							voting_rule: (),
 						};
 
 						let voter = run_grandpa_voter(grandpa_params)
@@ -1479,6 +1483,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 			inherent_data_providers: InherentDataProviders::new(),
 			on_exit: Exit,
 			telemetry_on_connect: None,
+			voting_rule: (),
 		};
 
 		Box::new(run_grandpa_voter(grandpa_params).expect("all in order with client and network"))
