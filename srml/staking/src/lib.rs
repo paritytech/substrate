@@ -254,8 +254,8 @@ pub mod inflation;
 use rstd::{prelude::*, result};
 use codec::{HasCompact, Encode, Decode};
 use support::{
-	StorageValue, StorageMap, StorageLinkedMap, decl_module, decl_event,
-	decl_storage, ensure, traits::{
+	decl_module, decl_event, decl_storage, ensure,
+	traits::{
 		Currency, OnFreeBalanceZero, OnDilution, LockIdentifier, LockableCurrency,
 		WithdrawReasons, OnUnbalanced, Imbalance, Get, Time
 	}

@@ -121,7 +121,7 @@ use sr_primitives::{
 };
 use support::dispatch::{Result, Dispatchable};
 use support::{
-	Parameter, StorageMap, StorageValue, decl_module, decl_event, decl_storage, storage::child,
+	Parameter, decl_module, decl_event, decl_storage, storage::child,
 	parameter_types,
 };
 use support::{traits::{OnFreeBalanceZero, OnUnbalanced, Currency, Get}, IsSubType};

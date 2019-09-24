@@ -29,7 +29,7 @@ use sr_primitives::traits::{Hash, EnsureOrigin};
 use sr_primitives::weights::SimpleDispatchInfo;
 use support::{
 	dispatch::{Dispatchable, Parameter}, codec::{Encode, Decode},
-	traits::{ChangeMembers, InitializeMembers}, StorageValue, StorageMap, decl_module, decl_event,
+	traits::{ChangeMembers, InitializeMembers}, decl_module, decl_event,
 	decl_storage, ensure,
 };
 use system::{self, ensure_signed, ensure_root};

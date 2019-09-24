@@ -28,7 +28,6 @@ use sr_primitives::{
 	print, traits::{Zero, One, StaticLookup, Bounded, Saturating}, weights::SimpleDispatchInfo,
 };
 use support::{
-	StorageValue, StorageMap,
 	dispatch::Result, decl_storage, decl_event, ensure, decl_module,
 	traits::{
 		Currency, ExistenceRequirement, Get, LockableCurrency, LockIdentifier,

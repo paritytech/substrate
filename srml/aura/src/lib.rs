@@ -50,7 +50,7 @@ pub use timestamp;
 use rstd::{result, prelude::*};
 use codec::{Encode, Decode};
 use support::{
-	decl_storage, decl_module, Parameter, storage::StorageValue, traits::{Get, FindAuthor},
+	decl_storage, decl_module, Parameter, traits::{Get, FindAuthor},
 	ConsensusEngineId,
 };
 use sr_primitives::{

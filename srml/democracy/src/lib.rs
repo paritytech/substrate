@@ -26,7 +26,7 @@ use sr_primitives::{
 };
 use codec::{Encode, Decode, Input, Output, Error};
 use support::{
-	decl_module, decl_storage, decl_event, ensure, StorageValue, StorageMap, StorageLinkedMap,
+	decl_module, decl_storage, decl_event, ensure,
 	Parameter,
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
