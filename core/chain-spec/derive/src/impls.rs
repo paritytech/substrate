@@ -20,17 +20,28 @@ use syn::{DeriveInput, Ident, Error};
 use proc_macro_crate::crate_name;
 
 const CRATE_NAME: &str = "substrate-chain-spec";
+const ATTRIBUTE_NAME: &str = "forks";
 
 /// Implements `Extension's` `Group` accessor.
 ///
 /// The struct that derives this implementation will be usable within the `ChainSpec` file.
 /// The derive implements a by-type accessor method.
 pub fn extension_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
-	derive(ast, |crate_name, name, generics: &syn::Generics, field_names, field_types| {
+	derive(ast, |crate_name, name, generics: &syn::Generics, field_names, field_types, fields| {
 		let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+		let forks = fields.named.iter().find_map(|f| {
+			if f.attrs.iter().any(|attr| attr.path.is_ident(ATTRIBUTE_NAME)) {
+				let typ = &f.ty;
+				Some(quote! { #typ })
+			} else {
+				None
+			}
+		}).unwrap_or_else(|| quote! { #crate_name::NoExtension });
 
 		quote! {
 			impl #impl_generics #crate_name::Extension for #name #ty_generics #where_clause {
+				type Forks = #forks;
+
 				fn get<T: 'static>(&self) -> Option<&T> {
 					use std::any::{Any, TypeId};
 
@@ -47,7 +58,7 @@ pub fn extension_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
 
 /// Implements required traits and creates `Fork` structs for `ChainSpec` custom parameter group.
 pub fn group_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
-	derive(ast, |crate_name, name, generics: &syn::Generics, field_names, field_types| {
+	derive(ast, |crate_name, name, generics: &syn::Generics, field_names, field_types, _fields| {
 		let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 		let fork_name = Ident::new(&format!("{}Fork", name), Span::call_site());
 
@@ -91,7 +102,7 @@ pub fn group_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
 pub fn derive(
 	ast: &DeriveInput,
 	derive: impl Fn(
-		&Ident, &Ident, &syn::Generics, Vec<&Ident>, Vec<&syn::Type>
+		&Ident, &Ident, &syn::Generics, Vec<&Ident>, Vec<&syn::Type>, &syn::FieldsNamed,
 	) -> TokenStream,
 ) -> proc_macro::TokenStream {
 	let err = || {
@@ -112,10 +123,11 @@ pub fn derive(
 		_ => return err(),
 	};
 
+	const PROOF: &str = "CARGO_PKG_NAME always defined when compiling; qed";
 	let name = &ast.ident;
 	let crate_name = match crate_name(CRATE_NAME) {
 		Ok(chain_spec_name) => chain_spec_name,
-		Err(e) => if std::env::var("CARGO_PKG_NAME").unwrap() == CRATE_NAME {
+		Err(e) => if std::env::var("CARGO_PKG_NAME").expect(PROOF) == CRATE_NAME {
 			"crate".to_string()
 		} else {
 			let err = Error::new(Span::call_site(), &e).to_compile_error();
@@ -126,7 +138,7 @@ pub fn derive(
 	let field_names = fields.named.iter().flat_map(|x| x.ident.as_ref()).collect::<Vec<_>>();
 	let field_types = fields.named.iter().map(|x| &x.ty).collect::<Vec<_>>();
 
-	derive(&crate_name, name, &ast.generics, field_names, field_types).into()
+	derive(&crate_name, name, &ast.generics, field_names, field_types, fields).into()
 }
 
 fn generate_fork_fields(

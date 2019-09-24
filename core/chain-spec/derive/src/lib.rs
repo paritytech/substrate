@@ -30,7 +30,7 @@ pub fn group_derive(input: TokenStream) -> TokenStream {
 	}
 }
 
-#[proc_macro_derive(ChainSpecExtension)]
+#[proc_macro_derive(ChainSpecExtension, attributes(forks))]
 pub fn extensions_derive(input: TokenStream) -> TokenStream {
 	match syn::parse(input) {
 		Ok(ast) => impls::extension_derive(&ast),

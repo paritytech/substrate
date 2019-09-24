@@ -22,7 +22,7 @@ use std::collections::BTreeMap;
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
 
 /// A `ChainSpec` extension.
-pub trait Group: Sized {
+pub trait Group: Clone + Sized {
 	/// An associated type containing fork definition.
 	type Fork: Fork<Base=Self>;
 
@@ -37,7 +37,7 @@ pub trait Group: Sized {
 /// only one parameter as part of the fork.
 /// The forks can be combined (summed up) to specify
 /// a complete set of parameters
-pub trait Fork: Sized {
+pub trait Fork: Serialize + DeserializeOwned + Clone + Sized {
 	/// A base `Group` type.
 	type Base: Group<Fork=Self>;
 
@@ -111,27 +111,47 @@ impl<T: Fork> Fork for Option<T> {
 
 /// A collection of `ChainSpec` extensions.
 pub trait Extension: Serialize + DeserializeOwned + Clone {
+	type Forks: IsForks;
+
 	/// Get an extension of specific type.
 	fn get<T: 'static>(&self) -> Option<&T>;
+
+	/// Get forkable extensions of specific type.
+	fn forks<BlockNumber, T>(&self) -> Option<Forks<BlockNumber, T>> where
+		BlockNumber: Ord + Clone + 'static,
+		T: Group + 'static,
+		<<Self::Forks as IsForks>::Extension as Group>::Fork: Extension,
+	{
+		self.get::<Forks<BlockNumber, <Self::Forks as IsForks>::Extension>>()?
+			.for_type()
+	}
 }
 
 impl Extension for crate::NoExtension {
+	type Forks = Self;
+
 	fn get<T: 'static>(&self) -> Option<&T> { None }
+}
+
+pub trait IsForks {
+	type BlockNumber: Ord + 'static;
+	type Extension: Extension + Group + 'static;
+}
+
+impl IsForks for Option<()> {
+	type BlockNumber = u64;
+	type Extension = Self;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
-pub struct Forks<BlockNumber: Ord, T: Group> where
-	T::Fork: Serialize + DeserializeOwned,
-{
+pub struct Forks<BlockNumber: Ord, T: Group> {
 	forks: BTreeMap<BlockNumber, T::Fork>,
 	#[serde(flatten)]
 	base: T,
 }
 
-impl<B: Ord, T: Group + Default> Default for Forks<B, T> where
-	T::Fork: Serialize + DeserializeOwned,
-{
+impl<B: Ord, T: Group + Default> Default for Forks<B, T> {
 	fn default() -> Self {
 		Self {
 			base: Default::default(),
@@ -140,8 +160,8 @@ impl<B: Ord, T: Group + Default> Default for Forks<B, T> where
 	}
 }
 
-impl<B: Ord, T: Group + Clone> Forks<B, T> where
-	T::Fork: Serialize + DeserializeOwned + Clone + Debug,
+impl<B: Ord, T: Group> Forks<B, T> where
+	T::Fork: Debug,
 {
 	/// Create new fork definition given the base and the forks.
 	pub fn new(base: T, forks: BTreeMap<B, T::Fork>) -> Self {
@@ -162,16 +182,23 @@ impl<B: Ord, T: Group + Clone> Forks<B, T> where
 	}
 }
 
-impl<B: Ord + Clone, T: Group + Extension + Clone> Forks<B, T> where
-	T::Fork: Serialize + DeserializeOwned + Extension,
+impl<B, T> IsForks for Forks<B, T> where
+	B: Ord + 'static,
+	T: Group + Extension + 'static,
+{
+	type BlockNumber = B;
+	type Extension = T;
+}
+
+impl<B: Ord + Clone, T: Group + Extension> Forks<B, T> where
+	T::Fork: Extension,
 {
 	/// Get forks definition for a subset of this extension.
 	///
 	/// Returns the `Forks` struct, but limited to a particular type
 	/// within the extension.
 	pub fn for_type<X>(&self) -> Option<Forks<B, X>> where
-		X: Group + Clone + 'static,
-		X::Fork: Serialize + DeserializeOwned + Clone,
+		X: Group + 'static,
 	{
 		let base = self.base.get::<X>()?.clone();
 		let forks = self.forks.iter().filter_map(|(k, v)| {
@@ -186,16 +213,32 @@ impl<B: Ord + Clone, T: Group + Extension + Clone> Forks<B, T> where
 }
 
 impl<B, E> Extension for Forks<B, E> where
-	B: Ord + Clone + Serialize + DeserializeOwned,
-	E: Extension + Group + Clone + 'static,
-	E::Fork: Serialize + DeserializeOwned + Clone,
+	B: Serialize + DeserializeOwned + Ord + Clone + 'static,
+	E: Extension + Group + 'static,
 {
+	type Forks = Self;
+
 	fn get<T: 'static>(&self) -> Option<&T> {
 		use std::any::{TypeId, Any};
 
 		match TypeId::of::<T>() {
 			x if x == TypeId::of::<E>() => Any::downcast_ref(&self.base),
 			_ => self.base.get(),
+		}
+	}
+
+	fn forks<BlockNumber, T>(&self) -> Option<Forks<BlockNumber, T>> where
+		BlockNumber: Ord + Clone + 'static,
+		T: Group + 'static,
+		<<Self::Forks as IsForks>::Extension as Group>::Fork: Extension,
+	{
+		use std::any::{TypeId, Any};
+
+		if TypeId::of::<BlockNumber>() == TypeId::of::<B>() {
+			Any::downcast_ref(&self.for_type::<T>()?).cloned()
+		} else {
+			self.get::<Forks<BlockNumber, <Self::Forks as IsForks>::Extension>>()?
+				.for_type()
 		}
 	}
 }
@@ -229,6 +272,7 @@ mod tests {
 	pub struct Ext2 {
 		#[serde(flatten)]
 		ext1: Extension1,
+		#[forks]
 		forkable: Forks<u64, Extensions>,
 	}
 
@@ -298,5 +342,13 @@ mod tests {
 		assert_eq!(ext2.at_block(0), Extension2 { test: 123 });
 		assert_eq!(ext2.at_block(2), Extension2 { test: 5 });
 		assert_eq!(ext2.at_block(10), Extension2 { test: 1 });
+
+		// make sure that it can return forks correctly
+		let ext2_2 = forks.forks::<u64, Extension2>().unwrap();
+		assert_eq!(ext2, ext2_2);
+
+		// also ext should be able to return forks correctly:
+		let ext2_3 = ext.forks::<u64, Extension2>().unwrap();
+		assert_eq!(ext2_2, ext2_3);
 	}
 }
