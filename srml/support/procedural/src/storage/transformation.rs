@@ -384,7 +384,7 @@ fn decl_store_extra_genesis(
 							<
 								#name<#struct_trait #instance> as
 								#scrate::storage::StorageDoubleMap<#key1_type, #key2_type, #typ>
-							>::insert(&k1, &k2, &v);
+							>::insert::<#key1_type, #key2_type, #typ>(k1, k2, v);
 						});
 					}}
 				},
@@ -939,10 +939,10 @@ fn impl_store_fns(
 					};
 
 					quote!{
-						pub fn #get_fn<KArg1, KArg2>(k1: &KArg1, k2: &KArg2) -> #value_type
+						pub fn #get_fn<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> #value_type
 						where
-							KArg1: ?Sized + #scrate::codec::EncodeLike<#key1_type>,
-							KArg2: ?Sized + #scrate::codec::EncodeLike<#key2_type>,
+							KArg1: #scrate::codec::EncodeLike<#key1_type>,
+							KArg2: #scrate::codec::EncodeLike<#key2_type>,
 						{
 							<
 								#name<#struct_trait #instance> as
