@@ -18,7 +18,7 @@
 
 use proc_macro2::{TokenStream, Span};
 
-use syn::{Ident, Error, Signature, Pat, PatType, FnArg, Type};
+use syn::{Ident, Error, Signature, Pat, PatType, FnArg, Type, token};
 
 use proc_macro_crate::crate_name;
 
@@ -95,5 +95,30 @@ pub fn get_function_argument_types_without_ref<'a>(
 		.map(|ty| match &**ty {
 			Type::Reference(type_ref) => &type_ref.elem,
 			_ => ty,
+		})
+}
+
+/// Returns the function argument names and types, minus any `self`. If any of the arguments
+/// is a reference, the underlying type without the ref is returned.
+pub fn get_function_argument_names_and_types_without_ref<'a>(
+	sig: &'a Signature,
+) -> impl Iterator<Item = (&'a Box<Pat>, &'a Box<Type>)> {
+	get_function_arguments(sig)
+		.map(|pt| match &*pt.ty {
+			Type::Reference(type_ref) => (&pt.pat, &type_ref.elem),
+			_ => (&pt.pat, &pt.ty),
+		})
+}
+
+/// Returns the `&`/`&mut` for all function argument types, minus the `self` arg. If a function
+/// argument is not a reference, `None` is returned.
+pub fn get_function_argument_types_ref_and_mut<'a>(
+	sig: &'a Signature,
+) -> impl Iterator<Item = Option<(&'a token::And, Option<&'a token::Mut>)>> {
+	get_function_arguments(sig)
+		.map(|pt| &pt.ty)
+		.map(|ty| match &**ty {
+			Type::Reference(type_ref) => Some((&type_ref.and_token, type_ref.mutability.as_ref())),
+			_ => None,
 		})
 }

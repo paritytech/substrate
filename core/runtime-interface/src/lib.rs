@@ -25,6 +25,9 @@ use codec::{Encode, Decode};
 #[doc(hidden)]
 pub use primitives::{Blake2Hasher, traits::Externalities};
 
+#[doc(hidden)]
+pub use wasm_interface;
+
 pub use proc_macro::runtime_interface;
 
 pub fn with_externalities<F: FnOnce(&mut dyn Externalities<Blake2Hasher>) -> R, R>(f: F) -> R {
@@ -44,7 +47,7 @@ pub trait FromFFIArg<T>: Sized {
 	fn from_ffi_arg(arg: T) -> Self;
 }
 
-pub trait FromWasmFFIArg<T>: Sized {
+pub trait FromWasmFFIArg<T> {
 	/// The `Self` instance returned by `from_wasm_ffi_arg`.
 	///
 	/// For types that are do not implement `Sized` we can not return `Self`. So, we need to use a
@@ -59,9 +62,7 @@ pub trait IntoFFIArg<T> {
 }
 
 pub trait IntoWasmFFIArg<T> {
-	type SelfInstance;
-
-	fn into_wasm_ffi_arg(self_instance: Self::SelfInstance, context: &mut dyn FunctionContext) -> Result<T>;
+	fn into_wasm_ffi_arg(self, context: &mut dyn FunctionContext) -> Result<T>;
 }
 
 pub trait IntoPreAllocatedWasmFFIArg<T> {
@@ -174,29 +175,11 @@ impl<T: 'static + Decode> FromFFIArg<u64> for Vec<T> {
 }
 
 impl<T: 'static + Encode> IntoWasmFFIArg<u64> for Vec<T> {
-	type SelfInstance = Vec<T>;
-
-	fn into_wasm_ffi_arg(self_instance: Vec<T>, context: &mut dyn FunctionContext) -> Result<u64> {
-		<&[T] as IntoWasmFFIArg<u64>>::into_wasm_ffi_arg(self_instance, context)
-	}
-}
-
-impl<T: 'static + Decode> FromWasmFFIArg<u64> for Vec<T> {
-	type SelfInstance = Vec<T>;
-
-	fn from_wasm_ffi_arg(context: &mut dyn FunctionContext, arg: u64) -> Result<Vec<T>> {
-		<&[T] as FromWasmFFIArg<u64>>::from_wasm_ffi_arg(context, arg)
-	}
-}
-
-impl<T: 'static + Encode> IntoWasmFFIArg<u64> for &[T] {
-	type SelfInstance = Vec<T>;
-
-	fn into_wasm_ffi_arg(self_instance: Vec<T>, context: &mut dyn FunctionContext) -> Result<u64> {
+	fn into_wasm_ffi_arg(self, context: &mut dyn FunctionContext) -> Result<u64> {
 		let vec: Cow<'_, [u8]> = if TypeId::of::<T>() == TypeId::of::<u8>() {
-			unsafe { Cow::Borrowed(std::mem::transmute(&self_instance[..])) }
+			unsafe { Cow::Borrowed(std::mem::transmute(&self[..])) }
 		} else {
-			Cow::Owned(self_instance.encode())
+			Cow::Owned(self.encode())
 		};
 
 		let ptr = context.allocate_memory(vec.as_ref().len() as u32)?;
@@ -206,7 +189,15 @@ impl<T: 'static + Encode> IntoWasmFFIArg<u64> for &[T] {
 	}
 }
 
-impl<T: 'static + Decode> FromWasmFFIArg<u64> for &[T] {
+impl<T: 'static + Decode> FromWasmFFIArg<u64> for Vec<T> {
+	type SelfInstance = Vec<T>;
+
+	fn from_wasm_ffi_arg(context: &mut dyn FunctionContext, arg: u64) -> Result<Vec<T>> {
+		<[T] as FromWasmFFIArg<u64>>::from_wasm_ffi_arg(context, arg)
+	}
+}
+
+impl<T: 'static + Decode> FromWasmFFIArg<u64> for [T] {
 	type SelfInstance = Vec<T>;
 
 	fn from_wasm_ffi_arg(context: &mut dyn FunctionContext, arg: u64) -> Result<Vec<T>> {
