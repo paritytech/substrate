@@ -85,7 +85,7 @@ use proc_macro::TokenStream;
 ///    previous and the next element.
 ///
 ///    Each linked map has a special key in the tire that can be queried and it can be particularly
-///    useful to query all items: `$hash(head of module_name ++ " " ++ storage_name`). This will
+///    useful to query all items: `"head of  " ++ module_name ++ " " ++ storage_name`). This will
 ///    return a key `K` that can be later on used with the aforementioned `$hash(module_name ++ " "
 ///    ++ storage_name ++ encoding(K))` to fetch the head. For consequent elements, the
 ///    [`Linkage`](../srml_support/storage/generator/struct.Linkage.html) can be used.
