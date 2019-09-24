@@ -261,8 +261,12 @@ pub trait Sandbox {
 
 /// Something that provides implementations for host functions.
 pub trait HostFunctions {
-	/// Returns all host functions.
-	fn functions() -> &'static [&'static dyn Function];
+	/// Returns the function at the given index.
+	///
+	/// Panics if the given index is invalid.
+	fn get_function(index: usize) -> &'static dyn Function;
+	/// Returns the number of host functions.
+	fn num_functions() -> usize;
 }
 
 /// Something that can be converted into a wasm compatible `Value`.

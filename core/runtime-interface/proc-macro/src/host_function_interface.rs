@@ -98,6 +98,14 @@ fn generate_host_functions_struct(trait_def: &ItemTrait) -> Result<TokenStream> 
 		})
 		.map(generate_host_function_implementation)
 		.collect::<Result<Vec<_>>>()?;
+	let host_functions_count = trait_def
+		.items
+		.iter()
+		.filter(|i| match i {
+			TraitItem::Method(_) => true,
+			_ => false,
+		})
+		.count();
 
 	Ok(
 		quote! {
@@ -107,8 +115,12 @@ fn generate_host_functions_struct(trait_def: &ItemTrait) -> Result<TokenStream> 
 
 			#[cfg(feature = "std")]
 			impl #crate_::wasm_interface::HostFunctions for HostFunctions {
-				fn functions() -> &'static [&'static dyn #crate_::wasm_interface::Function] {
-					&[ #( #host_functions ),* ]
+				fn get_function(index: usize) -> &'static dyn #crate_::wasm_interface::Function {
+					[ #( #host_functions ),* ][index]
+				}
+
+				fn num_functions() -> usize {
+					#host_functions_count
 				}
 			}
 		}

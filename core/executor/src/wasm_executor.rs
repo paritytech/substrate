@@ -255,28 +255,35 @@ impl FunctionExecutor {
 				-> std::result::Result<wasmi::FuncRef, wasmi::Error>
 			{
 				let signature = wasm_interface::Signature::from(signature);
+				let num_functions = SubstrateExternals::num_functions();
+				let mut function_index = 0;
 
-				if let Some((index, func)) = SubstrateExternals::functions().iter()
-					.enumerate()
-					.find(|f| name == f.1.name())
-				{
-					if signature == func.signature() {
-						Ok(wasmi::FuncInstance::alloc_host(signature.into(), index))
-					} else {
-						Err(wasmi::Error::Instantiation(
-							format!(
-								"Invalid signature for function `{}` expected `{:?}`, got `{:?}`",
-								func.name(),
-								signature,
-								func.signature(),
+				while function_index < num_functions {
+					let function = SubstrateExternals::get_function(function_index);
+
+					if name == function.name() {
+						if signature == function.signature() {
+							return Ok(
+								wasmi::FuncInstance::alloc_host(signature.into(), function_index),
 							)
-						))
+						} else {
+							return Err(wasmi::Error::Instantiation(
+								format!(
+									"Invalid signature for function `{}` expected `{:?}`, got `{:?}`",
+									function.name(),
+									signature,
+									function.signature(),
+								),
+							))
+						}
 					}
-				} else {
-					Err(wasmi::Error::Instantiation(
-						format!("Export {} not found", name),
-					))
+
+					function_index += 1;
 				}
+
+				Err(wasmi::Error::Instantiation(
+					format!("Export {} not found", name),
+				))
 			}
 		}
 		&Resolver
@@ -287,17 +294,21 @@ impl wasmi::Externals for FunctionExecutor {
 	fn invoke_index(&mut self, index: usize, args: wasmi::RuntimeArgs)
 		-> std::result::Result<Option<wasmi::RuntimeValue>, wasmi::Trap>
 	{
-		let mut args = args.as_ref().iter().copied().map(Into::into);
-		let function = SubstrateExternals::functions().get(index).ok_or_else(||
-			Error::from(
-				format!("Could not find host function with index: {}", index),
+		if index >= SubstrateExternals::num_functions() {
+			Err(
+				Error::from(
+					format!("Could not find host function with index: {}", index),
+				).into()
 			)
-		)?;
+		} else {
+			let mut args = args.as_ref().iter().copied().map(Into::into);
 
-		function.execute(self, &mut args)
-			.map_err(Error::FunctionExecution)
-			.map_err(wasmi::Trap::from)
-			.map(|v| v.map(Into::into))
+			SubstrateExternals::get_function(index)
+				.execute(self, &mut args)
+				.map_err(Error::FunctionExecution)
+				.map_err(wasmi::Trap::from)
+				.map(|v| v.map(Into::into))
+		}
 	}
 }
 struct SubstrateExternals;
