@@ -20,7 +20,7 @@
 
 use rstd::vec::Vec;
 use sr_primitives::ConsensusEngineId;
-use codec::{Encode, Decode};
+use codec::Decode;
 use substrate_client::decl_runtime_apis;
 
 /// The `ConsensusEngineId` of PoW.
@@ -32,6 +32,20 @@ pub type Seal = Vec<u8>;
 /// Define methods that total difficulty should implement.
 pub trait TotalDifficulty {
 	fn add(&mut self, other: Self);
+}
+
+impl TotalDifficulty for primitives::U256 {
+	fn add(&mut self, other: Self) {
+		let ret = self.saturating_add(other);
+		*self = ret;
+	}
+}
+
+impl TotalDifficulty for u128 {
+	fn add(&mut self, other: Self) {
+		let ret = self.saturating_add(other);
+		*self = ret;
+	}
 }
 
 decl_runtime_apis! {
