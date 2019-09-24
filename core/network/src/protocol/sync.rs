@@ -667,7 +667,7 @@ impl<B: BlockT> ChainSync<B> {
 			peer.state = PeerSyncState::Available;
 
 			// We only request one justification at a time
-			debug_assert_eq!(1, response.blocks.len());
+			debug_assert!(response.blocks.len() < 2);
 
 			if let Some(block) = response.blocks.into_iter().next() {
 				if hash != block.hash {
