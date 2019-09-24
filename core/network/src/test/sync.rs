@@ -444,7 +444,7 @@ fn can_sync_small_non_best_forks() {
 	assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
 	assert!(!net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
 
-	net.peer(0).announce_block(small_hash);
+	net.peer(0).announce_block(small_hash, Vec::new());
 
 	// after announcing, peer 1 downloads the block.
 
@@ -499,7 +499,7 @@ fn light_peer_imports_header_from_announce() {
 	let mut runtime = current_thread::Runtime::new().unwrap();
 
 	fn import_with_announce(net: &mut TestNet, runtime: &mut current_thread::Runtime, hash: H256) {
-		net.peer(0).announce_block(hash);
+		net.peer(0).announce_block(hash, Vec::new());
 
 		runtime.block_on(futures::future::poll_fn::<(), (), _>(|| {
 			net.poll();

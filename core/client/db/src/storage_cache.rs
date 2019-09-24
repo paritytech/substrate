@@ -285,6 +285,12 @@ pub struct CachingState<H: Hasher, S: StateBackend<H>, B: BlockT> {
 	pub cache: CacheChanges<H, B>
 }
 
+impl<H: Hasher, S: StateBackend<H>, B: BlockT> std::fmt::Debug for CachingState<H, S, B> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "Block {:?}", self.cache.parent_hash)
+	}
+}
+
 impl<H: Hasher, B: BlockT> CacheChanges<H, B> {
 	/// Propagate local cache into the shared cache and synchronize
 	/// the shared cache with the best block state.

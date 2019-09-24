@@ -8,7 +8,7 @@ edition = "2018"
 api = { package = "substrate-rpc-api", path = "./api" }
 client = { package = "substrate-client", path = "../client" }
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-futures03 = { package = "futures-preview", version = "0.3.0-alpha.17", features = ["compat"] }
+futures03 = { package = "futures-preview", version = "0.3.0-alpha.18", features = ["compat"] }
 jsonrpc-pubsub = "13.1.0"
 log = "0.4"
 primitives = { package = "substrate-primitives", path = "../primitives" }

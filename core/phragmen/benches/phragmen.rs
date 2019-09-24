@@ -16,7 +16,7 @@
 //! Note that execution times will not be accurate in an absolute scale, since
 //! - Everything is executed in the context of `TestExternalities`
 //! - Everything is executed in native environment.
-
+#![cfg(feature = "bench")]
 #![feature(test)]
 
 extern crate test;
@@ -110,7 +110,7 @@ fn do_phragmen(
 			let mut supports = <SupportMap<u64>>::new();
 			elected_stashes
 				.iter()
-				.map(|e| (e, to_votes(slashable_balance(e))))
+				.map(|(e, _)| (e, to_votes(slashable_balance(e))))
 				.for_each(|(e, s)| {
 					let item = Support { own: s, total: s, ..Default::default() };
 					supports.insert(e.clone(), item);

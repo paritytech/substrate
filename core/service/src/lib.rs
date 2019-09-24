@@ -190,6 +190,9 @@ macro_rules! new_impl {
 			network::config::ProtocolId::from(protocol_id_full)
 		};
 
+		let block_announce_validator =
+			Box::new(consensus_common::block_validation::DefaultBlockAnnounceValidator::new(client.clone()));
+
 		let network_params = network::config::Params {
 			roles: $config.roles,
 			network_config: $config.network.clone(),
@@ -201,6 +204,7 @@ macro_rules! new_impl {
 			import_queue,
 			protocol_id,
 			specialization: network_protocol,
+			block_announce_validator,
 		};
 
 		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
@@ -682,7 +686,7 @@ fn build_network_future<
 
 		// We poll `imported_blocks_stream`.
 		while let Ok(Async::Ready(Some(notification))) = imported_blocks_stream.poll() {
-			network.on_block_imported(notification.hash, notification.header, notification.is_new_best);
+			network.on_block_imported(notification.hash, notification.header, Vec::new(), notification.is_new_best);
 		}
 
 		// We poll `finality_notification_stream`, but we only take the last event.

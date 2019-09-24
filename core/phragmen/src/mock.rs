@@ -69,7 +69,7 @@ pub(crate) type AccountId = u64;
 
 #[derive(Debug, Clone)]
 pub(crate) struct _PhragmenResult<A: Clone> {
-	pub winners: Vec<A>,
+	pub winners: Vec<(A, Balance)>,
 	pub assignments: Vec<(A, Vec<_PhragmenAssignment<A>>)>
 }
 
@@ -84,7 +84,7 @@ pub(crate) fn elect_float<A, FS>(
 	A: Default + Ord + Member + Copy,
 	for<'r> FS: Fn(&'r A) -> Balance,
 {
-	let mut elected_candidates: Vec<A>;
+	let mut elected_candidates: Vec<(A, Balance)>;
 	let mut assigned: Vec<(A, Vec<_PhragmenAssignment<A>>)>;
 	let mut c_idx_cache = BTreeMap::<A, usize>::new();
 	let num_voters = initial_candidates.len() + initial_voters.len();
@@ -178,7 +178,7 @@ pub(crate) fn elect_float<A, FS>(
 				}
 			}
 
-			elected_candidates.push(winner.who.clone());
+			elected_candidates.push((winner.who.clone(), winner.approval_stake as Balance));
 		} else {
 			break
 		}
@@ -187,7 +187,7 @@ pub(crate) fn elect_float<A, FS>(
 	for n in &mut voters {
 		let mut assignment = (n.who.clone(), vec![]);
 		for e in &mut n.edges {
-			if let Some(c) = elected_candidates.iter().cloned().find(|c| *c == e.who) {
+			if let Some(c) = elected_candidates.iter().cloned().map(|(c, _)| c).find(|c| *c == e.who) {
 				if c != n.who {
 					let ratio = e.load / n.load;
 					assignment.1.push((e.who.clone(), ratio));
@@ -397,7 +397,7 @@ pub(crate) fn build_support_map<FS>(
 	let mut supports = <_SupportMap<AccountId>>::new();
 	result.winners
 		.iter()
-		.map(|e| (e, stake_of(e) as f64))
+		.map(|(e, _)| (e, stake_of(e) as f64))
 		.for_each(|(e, s)| {
 			let item = _Support { own: s, total: s, ..Default::default() };
 			supports.insert(e.clone(), item);

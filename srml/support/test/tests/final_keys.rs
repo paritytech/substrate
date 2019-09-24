@@ -16,7 +16,6 @@
 
 use runtime_io::with_externalities;
 use primitives::Blake2Hasher;
-use support::{StorageValue, StorageMap, StorageLinkedMap, StorageDoubleMap};
 use support::storage::unhashed;
 use codec::{Encode, Decode};
 

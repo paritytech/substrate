@@ -113,7 +113,7 @@ pub use crate::call_executor::{CallExecutor, LocalCallExecutor};
 pub use crate::client::{
 	new_with_backend,
 	new_in_mem,
-	BlockBody, BlockStatus, ImportNotifications, FinalityNotifications, BlockchainEvents,
+	BlockBody, ImportNotifications, FinalityNotifications, BlockchainEvents,
 	BlockImportNotification, Client, ClientInfo, ExecutionStrategies, FinalityNotification,
 	LongestChain, BlockOf, ProvideUncles,
 	utils, apply_aux,
@@ -124,6 +124,8 @@ pub use crate::notifications::{StorageEventStream, StorageChangeSet};
 pub use state_machine::ExecutionStrategy;
 #[cfg(feature = "std")]
 pub use crate::leaves::LeafSet;
+#[cfg(feature = "std")]
+pub use crate::blockchain::well_known_cache_keys;
 
 #[doc(inline)]
 pub use sr_api_macros::{decl_runtime_apis, impl_runtime_apis};

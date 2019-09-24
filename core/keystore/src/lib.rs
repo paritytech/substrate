@@ -318,7 +318,7 @@ impl BareCryptoStore for Store {
 mod tests {
 	use super::*;
 	use tempdir::TempDir;
-	use primitives::crypto::{Ss58Codec, key_types};
+	use primitives::{testing::{SR25519}, crypto::{Ss58Codec}};
 
 	#[test]
 	fn basic_store() {
@@ -410,14 +410,14 @@ mod tests {
 		let key_pair = sr25519::AppPair::from_string(secret_uri, None).expect("Generates key pair");
 
 		store.write().insert_unknown(
-			key_types::SR25519,
+			SR25519,
 			secret_uri,
 			key_pair.public().as_ref(),
 		).expect("Inserts unknown key");
 
 		let store_key_pair = store.read().key_pair_by_type::<sr25519::AppPair>(
 			&key_pair.public(),
-			key_types::SR25519,
+			SR25519,
 		).expect("Gets key pair from keystore");
 
 		assert_eq!(key_pair.public(), store_key_pair.public());

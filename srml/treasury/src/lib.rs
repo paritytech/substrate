@@ -70,7 +70,7 @@
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use rstd::prelude::*;
-use support::{StorageValue, StorageMap, decl_module, decl_storage, decl_event, ensure, print};
+use support::{decl_module, decl_storage, decl_event, ensure, print};
 use support::traits::{
 	Currency, ExistenceRequirement, Get, Imbalance, OnDilution, OnUnbalanced,
 	ReservableCurrency, WithdrawReason
