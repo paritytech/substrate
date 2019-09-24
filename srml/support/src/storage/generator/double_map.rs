@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use rstd::prelude::*;
-use codec::{FullCodec, FullEncode, Encode, EncodeLike, EncodeAppend};
+use codec::{Ref, FullCodec, FullEncode, Encode, EncodeLike, EncodeAppend};
 use crate::{storage::{self, unhashed, hashed::StorageHasher}, rstd::borrow::Borrow};
 
 /// Generator for `StorageDoubleMap` used by `decl_storage`.
@@ -50,9 +50,9 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	fn from_query_to_optional_value(v: Self::Query) -> Option<V>;
 
 	/// Generate the first part of the key used in top storage.
-	fn storage_double_map_final_key1<KArg1>(k1: &KArg1) -> <Self::Hasher1 as StorageHasher>::Output
+	fn storage_double_map_final_key1<KArg1>(k1: KArg1) -> <Self::Hasher1 as StorageHasher>::Output
 	where
-		KArg1: ?Sized + EncodeLike<K1>,
+		KArg1: EncodeLike<K1>,
 	{
 		let mut final_key1 = Self::key1_prefix().to_vec();
 		k1.encode_to(&mut final_key1);
@@ -60,10 +60,10 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	}
 
 	/// Generate the full key used in top storage.
-	fn storage_double_map_final_key<KArg1, KArg2>(k1: &KArg1, k2: &KArg2) -> Vec<u8>
+	fn storage_double_map_final_key<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Vec<u8>
 	where
-		KArg1: ?Sized + EncodeLike<K1>,
-		KArg2: ?Sized + EncodeLike<K2>,
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2>,
 	{
 		let mut final_key = Self::storage_double_map_final_key1(k1).as_ref().to_vec();
 		final_key.extend_from_slice(k2.using_encoded(Self::Hasher2::hash).as_ref());
@@ -80,26 +80,26 @@ where
 {
 	type Query = G::Query;
 
-	fn exists<KArg1, KArg2>(k1: &KArg1, k2: &KArg2) -> bool
+	fn exists<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> bool
 	where
-		KArg1: ?Sized + EncodeLike<K1>,
-		KArg2: ?Sized + EncodeLike<K2>,
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2>,
 	{
 		unhashed::exists(&Self::storage_double_map_final_key(k1, k2))
 	}
 
-	fn get<KArg1, KArg2>(k1: &KArg1, k2: &KArg2) -> Self::Query
+	fn get<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Self::Query
 	where
-		KArg1: ?Sized + EncodeLike<K1>,
-		KArg2: ?Sized + EncodeLike<K2>,
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2>,
 	{
 		G::from_optional_value_to_query(unhashed::get(&Self::storage_double_map_final_key(k1, k2)))
 	}
 
-	fn take<KArg1, KArg2>(k1: &KArg1, k2: &KArg2) -> Self::Query
+	fn take<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Self::Query
 	where
-		KArg1: ?Sized + EncodeLike<K1>,
-		KArg2: ?Sized + EncodeLike<K2>,
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2>,
 	{
 		let final_key = Self::storage_double_map_final_key(k1, k2);
 
@@ -107,46 +107,47 @@ where
 		G::from_optional_value_to_query(value)
 	}
 
-	fn insert<KArg1, KArg2, VArg>(k1: &KArg1, k2: &KArg2, val: &VArg)
+	fn insert<KArg1, KArg2, VArg>(k1: KArg1, k2: KArg2, val: VArg)
 	where
-		KArg1: ?Sized + EncodeLike<K1>,
-		KArg2: ?Sized + EncodeLike<K2>,
-		VArg: ?Sized + EncodeLike<V>,
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2>,
+		VArg: EncodeLike<V>,
 	{
 		unhashed::put(&Self::storage_double_map_final_key(k1, k2), &val.borrow())
 	}
 
-	fn remove<KArg1, KArg2>(k1: &KArg1, k2: &KArg2)
+	fn remove<KArg1, KArg2>(k1: KArg1, k2: KArg2)
 	where
-		KArg1: ?Sized + EncodeLike<K1>,
-		KArg2: ?Sized + EncodeLike<K2>,
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2>,
 	{
 		unhashed::kill(&Self::storage_double_map_final_key(k1, k2))
 	}
 
-	fn remove_prefix<KArg1>(k1: &KArg1) where KArg1: ?Sized + EncodeLike<K1> {
+	fn remove_prefix<KArg1>(k1: KArg1) where KArg1: EncodeLike<K1> {
 		unhashed::kill_prefix(Self::storage_double_map_final_key1(k1).as_ref())
 	}
 
-	fn mutate<KArg1, KArg2, R, F>(k1: &KArg1, k2: &KArg2, f: F) -> R
+	fn mutate<KArg1, KArg2, R, F>(k1: KArg1, k2: KArg2, f: F) -> R
 	where
-		KArg1: ?Sized + EncodeLike<K1>,
-		KArg2: ?Sized + EncodeLike<K2>,
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2>,
 		F: FnOnce(&mut Self::Query) -> R,
 	{
-		let mut val = G::get(k1, k2);
+		let final_key = Self::storage_double_map_final_key(k1, k2);
+		let mut val = G::from_optional_value_to_query(unhashed::get(final_key.as_ref()));
 
 		let ret = f(&mut val);
 		match G::from_query_to_optional_value(val) {
-			Some(ref val) => G::insert(k1, k2, val),
-			None => G::remove(k1, k2),
+			Some(ref val) => unhashed::put(final_key.as_ref(), val),
+			None => unhashed::kill(final_key.as_ref()),
 		}
 		ret
 	}
 
 	fn append<Items, Item, EncodeLikeItem, KArg1, KArg2>(
-		k1: &KArg1,
-		k2: &KArg2,
+		k1: KArg1,
+		k2: KArg2,
 		items: Items,
 	) -> Result<(), &'static str>
 	where
@@ -178,8 +179,8 @@ where
 	}
 
 	fn append_or_insert<Items, Item, EncodeLikeItem, KArg1, KArg2>(
-		k1: &KArg1,
-		k2: &KArg2,
+		k1: KArg1,
+		k2: KArg2,
 		items: Items,
 	)
 	where
@@ -191,7 +192,7 @@ where
 		Items: IntoIterator<Item=EncodeLikeItem> + Clone + EncodeLike<V>,
 		Items::IntoIter: ExactSizeIterator
 	{
-		Self::append(k1, k2, items.clone())
-			.unwrap_or_else(|_| Self::insert(k1, k2, &items));
+		Self::append(Ref::from(&k1), Ref::from(&k2), items.clone())
+			.unwrap_or_else(|_| Self::insert(k1, k2, items));
 	}
 }

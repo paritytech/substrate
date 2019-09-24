@@ -212,43 +212,43 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	/// The type that get/take returns.
 	type Query;
 
-	fn exists<KArg1, KArg2>(k1: &KArg1, k2: &KArg2) -> bool
+	fn exists<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> bool
 	where
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>;
 
-	fn get<KArg1, KArg2>(k1: &KArg1, k2: &KArg2) -> Self::Query
+	fn get<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Self::Query
 	where
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>;
 
-	fn take<KArg1, KArg2>(k1: &KArg1, k2: &KArg2) -> Self::Query
+	fn take<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Self::Query
 	where
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>;
 
-	fn insert<KArg1, KArg2, VArg>(k1: &KArg1, k2: &KArg2, val: &VArg)
+	fn insert<KArg1, KArg2, VArg>(k1: KArg1, k2: KArg2, val: VArg)
 	where
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>,
 		VArg: EncodeLike<V>;
 
-	fn remove<KArg1, KArg2>(k1: &KArg1, k2: &KArg2)
+	fn remove<KArg1, KArg2>(k1: KArg1, k2: KArg2)
 	where
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>;
 
-	fn remove_prefix<KArg1>(k1: &KArg1) where KArg1: ?Sized + EncodeLike<K1>;
+	fn remove_prefix<KArg1>(k1: KArg1) where KArg1: ?Sized + EncodeLike<K1>;
 
-	fn mutate<KArg1, KArg2, R, F>(k1: &KArg1, k2: &KArg2, f: F) -> R
+	fn mutate<KArg1, KArg2, R, F>(k1: KArg1, k2: KArg2, f: F) -> R
 	where
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>,
 		F: FnOnce(&mut Self::Query) -> R;
 
 	fn append<Items, Item, EncodeLikeItem, KArg1, KArg2>(
-		k1: &KArg1,
-		k2: &KArg2,
+		k1: KArg1,
+		k2: KArg2,
 		items: Items,
 	) -> Result<(), &'static str>
 	where
@@ -261,8 +261,8 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		Items::IntoIter: ExactSizeIterator;
 
 	fn append_or_insert<Items, Item, EncodeLikeItem, KArg1, KArg2>(
-		k1: &KArg1,
-		k2: &KArg2,
+		k1: KArg1,
+		k2: KArg2,
 		items: Items,
 	)
 	where
