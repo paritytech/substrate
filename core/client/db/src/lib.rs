@@ -1770,7 +1770,7 @@ mod tests {
 
 			op.reset_storage(storage.iter().cloned().collect(), Default::default()).unwrap();
 
-			key = op.db_updates.insert(EMPTY_PREFIX, b"hello");
+			key = op.db_updates.0.insert(EMPTY_PREFIX, b"hello");
 			op.set_block_data(
 				header,
 				Some(vec![]),
@@ -1806,8 +1806,8 @@ mod tests {
 			).0.into();
 			let hash = header.hash();
 
-			op.db_updates.insert(EMPTY_PREFIX, b"hello");
-			op.db_updates.remove(&key, EMPTY_PREFIX);
+			op.db_updates.0.insert(EMPTY_PREFIX, b"hello");
+			op.db_updates.0.remove(&key, EMPTY_PREFIX);
 			op.set_block_data(
 				header,
 				Some(vec![]),
@@ -1843,7 +1843,7 @@ mod tests {
 			).0.into();
 			let hash = header.hash();
 
-			op.db_updates.remove(&key, EMPTY_PREFIX);
+			op.db_updates.0.remove(&key, EMPTY_PREFIX);
 			op.set_block_data(
 				header,
 				Some(vec![]),

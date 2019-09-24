@@ -44,6 +44,9 @@ use log::trace;
 /// Database value type.
 pub type DBValue = Vec<u8>;
 
+/// Offstate storage key definition.
+pub type OffstateKey = Vec<u8>;
+
 /// Basic set of requirements for the Block hash and node key types.
 pub trait Hash: Send + Sync + Sized + Eq + PartialEq + Clone + Default + fmt::Debug + Codec + std::hash::Hash + 'static {}
 impl<T: Send + Sync + Sized + Eq + PartialEq + Clone + Default + fmt::Debug + Codec + std::hash::Hash + 'static> Hash for T {}
@@ -63,6 +66,14 @@ pub trait NodeDb {
 
 	/// Get state trie node.
 	fn get(&self, key: &Self::Key) -> Result<Option<DBValue>, Self::Error>;
+}
+
+/// Backend database trait. Read-only.
+pub trait OffstateDb {
+	type Error: fmt::Debug;
+
+	/// Get state trie node.
+	fn get_offstate(&self, key: &[u8]) -> Result<Option<DBValue>, Self::Error>;
 }
 
 /// Error type.
@@ -120,6 +131,8 @@ pub struct CommitSet<H: Hash> {
 	pub data: ChangeSet<H>,
 	/// Metadata changes.
 	pub meta: ChangeSet<Vec<u8>>,
+	/// Offstate data changes.
+	pub offstate: ChangeSet<OffstateKey>,
 }
 
 /// Pruning constraints. If none are specified pruning is
@@ -206,19 +219,21 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		number: u64,
 		parent_hash: &BlockHash,
 		mut changeset: ChangeSet<Key>,
-		mut offstate_changeset: ChangeSet<Key>,
+		mut offstate_changeset: ChangeSet<OffstateKey>,
 	) -> Result<CommitSet<Key>, Error<E>> {
 		match self.mode {
 			PruningMode::ArchiveAll => {
 				changeset.deleted.clear();
+				offstate_changeset.deleted.clear();
 				// write changes immediately
 				Ok(CommitSet {
 					data: changeset,
 					meta: Default::default(),
+					offstate: offstate_changeset,
 				})
 			},
 			PruningMode::Constrained(_) | PruningMode::ArchiveCanonical => {
-				self.non_canonical.insert(hash, number, parent_hash, changeset)
+				self.non_canonical.insert(hash, number, parent_hash, changeset, offstate_changeset)
 			}
 		}
 	}
@@ -340,6 +355,17 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		db.get(key.as_ref()).map_err(|e| Error::Db(e))
 	}
 
+	pub fn get_offstate<D: OffstateDb>(
+		&self,
+		key: &[u8],
+		db: &D,
+	) -> Result<Option<DBValue>, Error<D::Error>>	{
+		if let Some(value) = self.non_canonical.get_offstate(key) {
+			return Ok(Some(value));
+		}
+		db.get_offstate(key).map_err(|e| Error::Db(e))
+	}
+
 	pub fn apply_pending(&mut self) {
 		self.non_canonical.apply_pending();
 		if let Some(pruning) = &mut self.pruning {
@@ -383,7 +409,7 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 		number: u64,
 		parent_hash: &BlockHash,
 		changeset: ChangeSet<Key>,
-		offstate_changeset: ChangeSet<Key>,
+		offstate_changeset: ChangeSet<OffstateKey>,
 	) -> Result<CommitSet<Key>, Error<E>> {
 		self.db.write().insert_block(hash, number, parent_hash, changeset, offstate_changeset)
 	}
@@ -409,6 +435,16 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	{
 		self.db.read().get(key, db)
 	}
+
+	/// Get a value from non-canonical/pruning overlay or the backing DB.
+	pub fn get_offstate<D: OffstateDb>(
+		&self,
+		key: &[u8],
+		db: &D,
+	) -> Result<Option<DBValue>, Error<D::Error>> {
+		self.db.read().get_offstate(key, db)
+	}
+
 
 	/// Revert all non-canonical blocks with the best block number.
 	/// Returns a database commit or `None` if not possible.
@@ -443,10 +479,11 @@ mod tests {
 	use std::io;
 	use primitives::H256;
 	use crate::{StateDb, PruningMode, Constraints};
-	use crate::test::{make_db, make_changeset, TestDb};
+	use crate::test::{make_db, make_changeset, make_offstate_changeset, TestDb};
 
 	fn make_test_db(settings: PruningMode) -> (TestDb, StateDb<H256, H256>) {
 		let mut db = make_db(&[91, 921, 922, 93, 94]);
+		db.initialize_offstate(&[81, 821, 822, 83, 84]);
 		let state_db = StateDb::new(settings, &db).unwrap();
 
 		db.commit(
@@ -456,6 +493,7 @@ mod tests {
 					1,
 					&H256::from_low_u64_be(0),
 					make_changeset(&[1], &[91]),
+					make_offstate_changeset(&[1], &[81]),
 				)
 				.unwrap(),
 		);
@@ -466,6 +504,7 @@ mod tests {
 					2,
 					&H256::from_low_u64_be(1),
 					make_changeset(&[21], &[921, 1]),
+					make_offstate_changeset(&[21], &[821, 1]),
 				)
 				.unwrap(),
 		);
@@ -476,6 +515,7 @@ mod tests {
 					2,
 					&H256::from_low_u64_be(1),
 					make_changeset(&[22], &[922]),
+					make_offstate_changeset(&[22], &[822]),
 				)
 				.unwrap(),
 		);
@@ -486,6 +526,7 @@ mod tests {
 					3,
 					&H256::from_low_u64_be(21),
 					make_changeset(&[3], &[93]),
+					make_offstate_changeset(&[3], &[83]),
 				)
 				.unwrap(),
 		);
@@ -499,6 +540,7 @@ mod tests {
 					4,
 					&H256::from_low_u64_be(3),
 					make_changeset(&[4], &[94]),
+					make_offstate_changeset(&[4], &[84]),
 				)
 				.unwrap(),
 		);
@@ -515,6 +557,7 @@ mod tests {
 	fn full_archive_keeps_everything() {
 		let (db, sdb) = make_test_db(PruningMode::ArchiveAll);
 		assert!(db.data_eq(&make_db(&[1, 21, 22, 3, 4, 91, 921, 922, 93, 94])));
+		assert!(db.offstate_eq(&[1, 21, 22, 3, 4, 81, 821, 822, 83, 84]));
 		assert!(!sdb.is_pruned(&H256::from_low_u64_be(0), 0));
 	}
 
@@ -522,6 +565,7 @@ mod tests {
 	fn canonical_archive_keeps_canonical() {
 		let (db, _) = make_test_db(PruningMode::ArchiveCanonical);
 		assert!(db.data_eq(&make_db(&[1, 21, 3, 91, 921, 922, 93, 94])));
+		assert!(db.offstate_eq(&[1, 21, 3, 81, 821, 822, 83, 84]));
 	}
 
 	#[test]
@@ -531,6 +575,7 @@ mod tests {
 			max_mem: None,
 		}));
 		assert!(db.data_eq(&make_db(&[21, 3, 922, 94])));
+		assert!(db.offstate_eq(&[21, 3, 822, 84]));
 	}
 
 	#[test]
@@ -544,6 +589,7 @@ mod tests {
 		assert!(sdb.is_pruned(&H256::from_low_u64_be(21), 2));
 		assert!(sdb.is_pruned(&H256::from_low_u64_be(22), 2));
 		assert!(db.data_eq(&make_db(&[21, 3, 922, 93, 94])));
+		assert!(db.offstate_eq(&[21, 3, 822, 83, 84]));
 	}
 
 	#[test]
@@ -557,5 +603,6 @@ mod tests {
 		assert!(!sdb.is_pruned(&H256::from_low_u64_be(21), 2));
 		assert!(sdb.is_pruned(&H256::from_low_u64_be(22), 2));
 		assert!(db.data_eq(&make_db(&[1, 21, 3, 921, 922, 93, 94])));
+		assert!(db.offstate_eq(&[1, 21, 3, 821, 822, 83, 84]));
 	}
 }

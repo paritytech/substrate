@@ -18,12 +18,13 @@
 
 use std::collections::HashMap;
 use primitives::H256;
-use crate::{DBValue, ChangeSet, CommitSet, MetaDb, NodeDb};
+use crate::{DBValue, ChangeSet, CommitSet, MetaDb, NodeDb, OffstateDb, OffstateKey};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct TestDb {
 	pub data: HashMap<H256, DBValue>,
 	pub meta: HashMap<Vec<u8>, DBValue>,
+	pub offstate: HashMap<OffstateKey, DBValue>,
 }
 
 impl MetaDb for TestDb {
@@ -31,6 +32,14 @@ impl MetaDb for TestDb {
 
 	fn get_meta(&self, key: &[u8]) -> Result<Option<DBValue>, ()> {
 		Ok(self.meta.get(key).cloned())
+	}
+}
+
+impl OffstateDb for TestDb {
+	type Error = ();
+
+	fn get_offstate(&self, key: &[u8]) -> Result<Option<DBValue>, ()> {
+		Ok(self.offstate.get(key).cloned())
 	}
 }
 
@@ -59,6 +68,16 @@ impl TestDb {
 	pub fn data_eq(&self, other: &TestDb) -> bool {
 		self.data == other.data
 	}
+
+	pub fn offstate_eq(&self, values: &[u64]) -> bool {
+		let data = make_offstate_changeset(values, &[]);
+		self.offstate == data.inserted.into_iter().collect()
+	}
+
+	pub fn initialize_offstate(&mut self, inserted: &[u64]) {
+		let data = make_offstate_changeset(inserted, &[]);
+		self.offstate = data.inserted.into_iter().collect();
+	}
 }
 
 pub fn make_changeset(inserted: &[u64], deleted: &[u64]) -> ChangeSet<H256> {
@@ -73,10 +92,31 @@ pub fn make_changeset(inserted: &[u64], deleted: &[u64]) -> ChangeSet<H256> {
 	}
 }
 
+pub fn make_offstate_changeset(inserted: &[u64], deleted: &[u64]) -> ChangeSet<OffstateKey> {
+	ChangeSet {
+		inserted: inserted
+			.iter()
+			.map(|v| {(
+				H256::from_low_u64_be(*v).as_bytes().to_vec(),
+				H256::from_low_u64_be(*v).as_bytes().to_vec(),
+			)})
+			.collect(),
+		deleted: deleted.iter().map(|v| H256::from_low_u64_be(*v).as_bytes().to_vec()).collect(),
+	}
+}
+
 pub fn make_commit(inserted: &[u64], deleted: &[u64]) -> CommitSet<H256> {
 	CommitSet {
 		data: make_changeset(inserted, deleted),
 		meta: ChangeSet::default(),
+		offstate: ChangeSet::default(),
+	}
+}
+
+impl CommitSet<H256> {
+	pub fn initialize_offstate(&mut self, inserted: &[u64], deleted: &[u64]) {
+		let data = make_offstate_changeset(inserted, deleted);
+		self.offstate = data;
 	}
 }
 
@@ -89,6 +129,7 @@ pub fn make_db(inserted: &[u64]) -> TestDb {
 			})
 			.collect(),
 		meta: Default::default(),
+		offstate: Default::default(),
 	}
 }
 
