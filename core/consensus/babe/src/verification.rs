@@ -22,8 +22,8 @@ use babe_primitives::{Epoch, BabePreDigest, CompatibleDigestItem, AuthorityId};
 use babe_primitives::{AuthoritySignature, SlotNumber, AuthorityIndex, AuthorityPair};
 use slots::CheckedHeader;
 use log::{debug, trace};
-use super::{find_pre_digest, make_transcript, calculate_primary_threshold, check_primary_threshold};
-use super::{secondary_slot_author, BlockT};
+use super::{find_pre_digest, BlockT};
+use super::authorship::{make_transcript, calculate_primary_threshold, check_primary_threshold, secondary_slot_author};
 
 pub(super) struct VerificationParams<'a, B: 'a + BlockT> {
 	/// the header being verified.

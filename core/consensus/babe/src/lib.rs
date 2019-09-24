@@ -72,17 +72,14 @@ use sr_primitives::traits::{
 	Zero,
 };
 use keystore::KeyStorePtr;
-use codec::Encode;
 use parking_lot::Mutex;
-use primitives::{blake2_256, Blake2Hasher, H256, Pair, U256};
-use merlin::Transcript;
+use primitives::{Blake2Hasher, H256, Pair};
 use inherents::{InherentDataProviders, InherentData};
 use substrate_telemetry::{
 	telemetry,
 	CONSENSUS_TRACE,
 	CONSENSUS_DEBUG,
 };
-use schnorrkel::{keys::Keypair, vrf::VRFInOut};
 use consensus_common::{
 	self, BlockImport, Environment, Proposer,
 	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
@@ -99,15 +96,16 @@ use client::{
 	error::Result as ClientResult, backend::{AuxStore, Backend},
 	ProvideUncles,
 };
-use slots::{CheckedHeader, check_equivocation};
+use ::slots::{CheckedHeader, check_equivocation};
 use futures::prelude::*;
 use log::{warn, debug, info, trace};
-
-use slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible};
+use ::slots::{SlotWorker, SlotData, SlotInfo, SlotCompatible};
 use epoch_changes::descendent_query;
 mod aux_schema;
 mod verification;
 mod epoch_changes;
+mod authorship;
+mod slots;
 #[cfg(test)]
 mod tests;
 pub use babe_primitives::{
@@ -138,7 +136,7 @@ macro_rules! babe_info {
 // and `super::babe::Config` can be eliminated.
 // https://github.com/paritytech/substrate/issues/2434
 #[derive(Clone)]
-pub struct Config(slots::SlotDuration<BabeConfiguration>);
+pub struct Config(::slots::SlotDuration<BabeConfiguration>);
 
 impl Config {
 	/// Either fetch the slot duration from disk or compute it from the genesis
@@ -147,7 +145,7 @@ impl Config {
 		C: AuxStore + ProvideRuntimeApi, C::Api: BabeApi<B>,
 	{
 		trace!(target: "babe", "Getting slot duration");
-		match slots::SlotDuration::get_or_compute(client, |a, b| a.configuration(b)).map(Self) {
+		match ::slots::SlotDuration::get_or_compute(client, |a, b| a.configuration(b)).map(Self) {
 			Ok(s) => Ok(s),
 			Err(s) => {
 				warn!(target: "babe", "Failed to get slot duration");
@@ -274,7 +272,7 @@ pub fn start_babe<B, C, SC, E, I, SO, Error>(BabeParams {
 		});
 
 	babe_info!("Starting BABE Authorship worker");
-	let slot_worker = slots::start_slot_worker(
+	let slot_worker = ::slots::start_slot_worker(
 		config.0,
 		select_chain,
 		worker,
@@ -297,7 +295,7 @@ struct BabeWorker<B: BlockT, C, E, I, SO> {
 	config: Config,
 }
 
-impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I, SO> where
+impl<B, C, E, I, Error, SO> ::slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I, SO> where
 	B: BlockT<Hash=H256>,
 	C: ProvideRuntimeApi + ProvideCache<B> + HeaderBackend<B>,
 	C::Api: BabeApi<B>,
@@ -346,7 +344,7 @@ impl<B, C, E, I, Error, SO> slots::SimpleSlotWorker<B> for BabeWorker<B, C, E, I
 		epoch_data: &Epoch,
 	) -> Option<Self::Claim> {
 		debug!(target: "babe", "Attempting to claim slot {}", slot_number);
-		let s = claim_slot(
+		let s = slots::claim_slot(
 			slot_number,
 			epoch_data,
 			&*self.config,
@@ -423,7 +421,7 @@ impl<B, C, E, I, Error, SO> SlotWorker<B> for BabeWorker<B, C, E, I, SO> where
 	type OnSlot = Pin<Box<dyn Future<Output = Result<(), consensus_common::Error>> + Send>>;
 
 	fn on_slot(&mut self, chain_head: B::Header, slot_info: SlotInfo) -> Self::OnSlot {
-		<Self as slots::SimpleSlotWorker<B>>::on_slot(self, chain_head, slot_info)
+		<Self as ::slots::SimpleSlotWorker<B>>::on_slot(self, chain_head, slot_info)
 	}
 }
 
@@ -734,193 +732,6 @@ fn register_babe_inherent_data_provider(
 	} else {
 		Ok(())
 	}
-}
-
-fn get_keypair(q: &AuthorityPair) -> &Keypair {
-	use primitives::crypto::IsWrappedBy;
-	primitives::sr25519::Pair::from_ref(q).as_ref()
-}
-
-#[allow(deprecated)]
-fn make_transcript(
-	randomness: &[u8],
-	slot_number: u64,
-	epoch: u64,
-) -> Transcript {
-	let mut transcript = Transcript::new(&BABE_ENGINE_ID);
-	transcript.commit_bytes(b"slot number", &slot_number.to_le_bytes());
-	transcript.commit_bytes(b"current epoch", &epoch.to_le_bytes());
-	transcript.commit_bytes(b"chain randomness", randomness);
-	transcript
-}
-
-/// Returns true if the given VRF output is lower than the given threshold,
-/// false otherwise.
-fn check_primary_threshold(inout: &VRFInOut, threshold: u128) -> bool {
-	u128::from_le_bytes(inout.make_bytes::<[u8; 16]>(BABE_VRF_PREFIX)) < threshold
-}
-
-/// Calculates the primary selection threshold for a given authority, taking
-/// into account `c` (`1 - c` represents the probability of a slot being empty).
-fn calculate_primary_threshold(
-	c: (u64, u64),
-	authorities: &[(AuthorityId, BabeAuthorityWeight)],
-	authority_index: usize,
-) -> u128 {
-	use num_bigint::BigUint;
-	use num_rational::BigRational;
-	use num_traits::{cast::ToPrimitive, identities::One};
-
-	let c = c.0 as f64 / c.1 as f64;
-
-	let theta =
-		authorities[authority_index].1 as f64 /
-		authorities.iter().map(|(_, weight)| weight).sum::<u64>() as f64;
-
-	let calc = || {
-		let p = BigRational::from_float(1f64 - (1f64 - c).powf(theta))?;
-		let numer = p.numer().to_biguint()?;
-		let denom = p.denom().to_biguint()?;
-		((BigUint::one() << 128) * numer / denom).to_u128()
-	};
-
-	calc().unwrap_or(u128::max_value())
-}
-
-/// Tries to claim the given slot number. This method starts by trying to claim
-/// a primary VRF based slot. If we are not able to claim it, then if we have
-/// secondary slots enabled for the given epoch, we will fallback to trying to
-/// claim a secondary slot.
-fn claim_slot(
-	slot_number: SlotNumber,
-	epoch: &Epoch,
-	config: &BabeConfiguration,
-	keystore: &KeyStorePtr,
-) -> Option<(BabePreDigest, AuthorityPair)> {
-	claim_primary_slot(slot_number, epoch, config.c, keystore)
-		.or_else(|| {
-			if config.secondary_slots {
-				claim_secondary_slot(
-					slot_number,
-					&epoch.authorities,
-					keystore,
-					epoch.randomness,
-				)
-			} else {
-				None
-			}
-		})
-}
-
-/// Claim a primary slot if it is our turn.  Returns `None` if it is not our turn.
-/// This hashes the slot number, epoch, genesis hash, and chain randomness into
-/// the VRF.  If the VRF produces a value less than `threshold`, it is our turn,
-/// so it returns `Some(_)`. Otherwise, it returns `None`.
-fn claim_primary_slot(
-	slot_number: SlotNumber,
-	epoch: &Epoch,
-	c: (u64, u64),
-	keystore: &KeyStorePtr,
-) -> Option<(BabePreDigest, AuthorityPair)> {
-	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
-	let keystore = keystore.read();
-
-	for (pair, authority_index) in authorities.iter()
-		.enumerate()
-		.flat_map(|(i, a)| {
-			keystore.key_pair::<AuthorityPair>(&a.0).ok().map(|kp| (kp, i))
-		})
-	{
-		let transcript = make_transcript(randomness, slot_number, *epoch_index);
-
-		// Compute the threshold we will use.
-		//
-		// We already checked that authorities contains `key.public()`, so it can't
-		// be empty.  Therefore, this division in `calculate_threshold` is safe.
-		let threshold = calculate_primary_threshold(c, authorities, authority_index);
-
-		let pre_digest = get_keypair(&pair)
-			.vrf_sign_after_check(transcript, |inout| check_primary_threshold(inout, threshold))
-			.map(|s| {
-				BabePreDigest::Primary {
-					slot_number,
-					vrf_output: s.0.to_output(),
-					vrf_proof: s.1,
-					authority_index: authority_index as u32,
-				}
-			});
-
-		// early exit on first successful claim
-		if let Some(pre_digest) = pre_digest {
-			return Some((pre_digest, pair));
-		}
-	}
-
-	None
-}
-
-/// Get the expected secondary author for the given slot and with given
-/// authorities. This should always assign the slot to some authority unless the
-/// authorities list is empty.
-fn secondary_slot_author(
-	slot_number: u64,
-	authorities: &[(AuthorityId, BabeAuthorityWeight)],
-	randomness: [u8; 32],
-) -> Option<&AuthorityId> {
-	if authorities.is_empty() {
-		return None;
-	}
-
-	let rand = U256::from((randomness, slot_number).using_encoded(blake2_256));
-
-	let authorities_len = U256::from(authorities.len());
-	let idx = rand % authorities_len;
-
-	let expected_author = authorities.get(idx.as_u32() as usize)
-		.expect("authorities not empty; index constrained to list length; \
-				this is a valid index; qed");
-
-	Some(&expected_author.0)
-}
-
-/// Claim a secondary slot if it is our turn to propose, returning the
-/// pre-digest to use when authoring the block, or `None` if it is not our turn
-/// to propose.
-fn claim_secondary_slot(
-	slot_number: SlotNumber,
-	authorities: &[(AuthorityId, BabeAuthorityWeight)],
-	keystore: &KeyStorePtr,
-	randomness: [u8; 32],
-) -> Option<(BabePreDigest, AuthorityPair)> {
-	if authorities.is_empty() {
-		return None;
-	}
-
-	let expected_author = secondary_slot_author(
-		slot_number,
-		authorities,
-		randomness,
-	)?;
-
-	let keystore = keystore.read();
-
-	for (pair, authority_index) in authorities.iter()
-		.enumerate()
-		.flat_map(|(i, a)| {
-			keystore.key_pair::<AuthorityPair>(&a.0).ok().map(|kp| (kp, i))
-		})
-	{
-		if pair.public() == *expected_author {
-			let pre_digest = BabePreDigest::Secondary {
-				slot_number,
-				authority_index: authority_index as u32,
-			};
-
-			return Some((pre_digest, pair));
-		}
-	}
-
-	None
 }
 
 /// A block-import handler for BABE.
@@ -1273,7 +1084,7 @@ pub mod test_helpers {
 			|slot| link.config.genesis_epoch(slot),
 		).unwrap().unwrap();
 
-		super::claim_slot(
+		crate::slots::claim_slot(
 			slot_number,
 			epoch.as_ref(),
 			&link.config,
