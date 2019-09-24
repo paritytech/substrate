@@ -47,7 +47,7 @@ use state_machine::{
 };
 use executor::{RuntimeVersion, RuntimeInfo};
 use consensus::{
-	Error as ConsensusError, BlockImportParams,
+	Error as ConsensusError, BlockStatus, BlockImportParams,
 	ImportResult, BlockOrigin, ForkChoiceStrategy,
 	SelectChain, self,
 };
@@ -169,21 +169,6 @@ pub struct ClientInfo<Block: BlockT> {
 	pub chain: ChainInfo<Block>,
 	/// State Cache Size currently used by the backend
 	pub used_state_cache_size: Option<usize>,
-}
-
-/// Block status.
-#[derive(Debug, PartialEq, Eq)]
-pub enum BlockStatus {
-	/// Added to the import queue.
-	Queued,
-	/// Already in the blockchain and the state is available.
-	InChainWithState,
-	/// In the blockchain, but the state is not available.
-	InChainPruned,
-	/// Block or parent is known to be bad.
-	KnownBad,
-	/// Not in the queue or the blockchain.
-	Unknown,
 }
 
 /// Summary of an imported block
@@ -1187,10 +1172,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(())
 	}
 
-	fn notify_imported(
-		&self,
-		notify_import: ImportSummary<Block>,
-	) -> error::Result<()> {
+	fn notify_imported(&self, notify_import: ImportSummary<Block>) -> error::Result<()> {
 		if let Some(storage_changes) = notify_import.storage_changes {
 			// TODO [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
 			self.storage_notifications.lock()
@@ -1836,6 +1818,16 @@ pub mod utils {
 
 			Ok(tree_route.common_block().hash == *base)
 		}
+	}
+}
+
+impl<BE, E, B, RA> consensus::block_validation::Chain<B> for Client<BE, E, B, RA>
+	where BE: backend::Backend<B, Blake2Hasher>,
+		  E: CallExecutor<B, Blake2Hasher>,
+		  B: BlockT<Hash = H256>
+{
+	fn block_status(&self, id: &BlockId<B>) -> Result<BlockStatus, Box<dyn std::error::Error + Send>> {
+		Client::block_status(self, id).map_err(|e| Box::new(e) as Box<_>)
 	}
 }
 
