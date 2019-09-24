@@ -74,8 +74,9 @@ pub struct ScheduledChange<N> {
 pub enum ConsensusLog<N: Codec> {
 	/// Schedule an authority set change.
 	///
-	/// Precedence towards earlier or later digest items can be given
-	/// based on the rules of the chain.
+	/// The earliest digest of this type in a single block will be respected,
+	/// provided that there is no `ForcedChange` digest. If there is, then the
+	/// `ForcedChange` will take precedence.
 	///
 	/// No change should be scheduled if one is already and the delay has not
 	/// passed completely.
@@ -90,8 +91,8 @@ pub enum ConsensusLog<N: Codec> {
 	/// Forced changes are applied after a delay of _imported_ blocks,
 	/// while pending changes are applied after a delay of _finalized_ blocks.
 	///
-	/// Precedence towards earlier or later digest items can be given
-	/// based on the rules of the chain.
+	/// The earliest digest of this type in a single block will be respected,
+	/// with others ignored.
 	///
 	/// No change should be scheduled if one is already and the delay has not
 	/// passed completely.
