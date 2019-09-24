@@ -497,6 +497,11 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> NetworkServic
 	}
 
 	/// Adds a `PeerId` and its address as reserved.
+	/// Note that this function should not be used for recent blocks.
+	/// Sync should be able to download all the recent forks normally.
+	/// `sync_fork` should only be used if external code detects that there's
+	/// a stale fork missing.
+	/// Passing empty `peers` set effectively removes the sync request.
 	pub fn sync_fork(&self, peers: Vec<PeerId>, hash: B::Hash, number: NumberFor<B>) {
 		let _ = self
 			.to_worker
