@@ -770,12 +770,12 @@ pub mod helpers_128bit {
 							shifted_b = b.checked_shr(shift)
 								.expect(
 									"b >= 1 && c >= 1; break prevents them from ever being zero; \
-									panic can only happen after either us zero; qed"
+									panic can only happen after either is zero; qed"
 								);
 							shifted_c = c.checked_shr(shift)
 								.expect(
 									"b >= 1 && c >= 1; break prevents them from ever being zero; \
-									panic can only happen after either us zero; qed"
+									panic can only happen after either is zero; qed"
 								);
 						}
 					}
