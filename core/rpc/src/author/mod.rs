@@ -171,7 +171,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 				.boxed()
 				.compat()
 				.map_err(|e| e.into_pool_error()
-					.map(|e| error::Error::from(e))
+					.map(error::Error::from)
 					.unwrap_or_else(|e| error::Error::Verification(Box::new(e)).into())
 				))
 		};
@@ -194,7 +194,6 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 					.send_all(Compat::new(watcher.into_stream().map(|v| Ok::<_, ()>(Ok(v)))))
 					.map(|_| ())
 			}));
-
 
 		if self.executor.execute(Box::new(subscription_future)).is_err() {
 			error!("Failed to spawn watch extrinsic task");
