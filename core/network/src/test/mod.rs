@@ -420,8 +420,13 @@ impl<T: ?Sized> Clone for BlockImportAdapter<T> {
 impl<T: ?Sized + BlockImport<Block>> BlockImport<Block> for BlockImportAdapter<T> {
 	type Error = T::Error;
 
-	fn check_block(&mut self, hash: Hash, parent_hash: Hash) -> Result<ImportResult, Self::Error> {
-		self.0.lock().check_block(hash, parent_hash)
+	fn check_block(
+		&mut self,
+		hash: Hash,
+		number: NumberFor<Block>,
+		parent_hash: Hash,
+	) -> Result<ImportResult, Self::Error> {
+		self.0.lock().check_block(hash, number, parent_hash)
 	}
 
 	fn import_block(

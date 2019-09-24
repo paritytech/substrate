@@ -1446,9 +1446,10 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for BabeBlockImport<B, E, Block
 	fn check_block(
 		&mut self,
 		hash: Block::Hash,
+		number: NumberFor<Block>,
 		parent_hash: Block::Hash,
 	) -> Result<ImportResult, Self::Error> {
-		self.inner.check_block(hash, parent_hash).map_err(Into::into)
+		self.inner.check_block(hash, number, parent_hash).map_err(Into::into)
 	}
 }
 

@@ -87,6 +87,8 @@ type StorageUpdate<B, Block> = <
 	>::State as state_machine::Backend<Blake2Hasher>>::Transaction;
 type ChangesUpdate<Block> = ChangesTrieTransaction<Blake2Hasher, NumberFor<Block>>;
 
+pub type ForkBlocks<Block> = HashMap<NumberFor<Block>, <Block as BlockT>::Hash>;
+
 /// Execution strategies settings.
 #[derive(Debug, Clone)]
 pub struct ExecutionStrategies {
@@ -123,6 +125,7 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	finality_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<FinalityNotification<Block>>>>,
 	// holds the block hash currently being imported. TODO: replace this with block queue
 	importing_block: RwLock<Option<Block::Hash>>,
+	fork_blocks: ForkBlocks<Block>,
 	execution_strategies: ExecutionStrategies,
 	_phantom: PhantomData<RA>,
 }
@@ -278,7 +281,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		B: backend::LocalBackend<Block, Blake2Hasher>
 {
 	let call_executor = LocalCallExecutor::new(backend.clone(), executor, keystore);
-	Client::new(backend, call_executor, build_genesis_storage, Default::default())
+	Client::new(backend, call_executor, build_genesis_storage, Default::default(), Default::default())
 }
 
 /// Figure out the block type for a given type (for now, just a `Client`).
@@ -305,6 +308,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		backend: Arc<B>,
 		executor: E,
 		build_genesis_storage: S,
+		fork_blocks: ForkBlocks<Block>,
 		execution_strategies: ExecutionStrategies
 	) -> error::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
@@ -333,6 +337,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			import_notification_sinks: Default::default(),
 			finality_notification_sinks: Default::default(),
 			importing_block: Default::default(),
+			fork_blocks,
 			execution_strategies,
 			_phantom: Default::default(),
 		})
@@ -1508,8 +1513,22 @@ impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Blo
 	fn check_block(
 		&mut self,
 		hash: Block::Hash,
+		number: NumberFor<Block>,
 		parent_hash: Block::Hash,
 	) -> Result<ImportResult, Self::Error> {
+
+		if let Some(h) = self.fork_blocks.get(&number) {
+			if &hash != h  {
+				trace!(
+					"Rejecting block from known invalid fork. Got {:?}, expected: {:?} at height {}",
+					hash,
+					h,
+					number
+				);
+				return Ok(ImportResult::KnownBad);
+			}
+		}
+
 		match self.block_status(&BlockId::Hash(parent_hash))
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 		{
@@ -1525,6 +1544,7 @@ impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Blo
 			BlockStatus::Unknown | BlockStatus::InChainPruned => {},
 			BlockStatus::KnownBad => return Ok(ImportResult::KnownBad),
 		}
+
 
 		Ok(ImportResult::imported(false))
 	}
@@ -1548,9 +1568,10 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 	fn check_block(
 		&mut self,
 		hash: Block::Hash,
+		number: NumberFor<Block>,
 		parent_hash: Block::Hash,
 	) -> Result<ImportResult, Self::Error> {
-		(&*self).check_block(hash, parent_hash)
+		(&*self).check_block(hash, number, parent_hash)
 	}
 }
 

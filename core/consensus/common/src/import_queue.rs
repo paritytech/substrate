@@ -217,7 +217,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 		}
 	};
 
-	match import_error(import_handle.check_block(hash, parent))? {
+	match import_error(import_handle.check_block(hash, number, parent))? {
 		BlockImportResult::ImportedUnknown { .. } => (),
 		r => return Ok(r), // Any other successful result means that the block is already imported.
 	}

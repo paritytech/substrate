@@ -164,10 +164,17 @@ where TGen: RuntimeGenesis, TCSExt: Extension {
 
 		let executor = NativeExecutor::<TExecDisp>::new(config.default_heap_pages);
 
+		let fork_blocks = config.chain_spec
+			.extensions()
+			.get::<client::ForkBlocks<TBl>>()
+			.cloned()
+			.unwrap_or_default();
+
 		let (client, backend) = client_db::new_client(
 			db_settings,
 			executor,
 			&config.chain_spec,
+			fork_blocks,
 			config.execution_strategies.clone(),
 			Some(keystore.clone()),
 		)?;

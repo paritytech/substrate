@@ -16,12 +16,15 @@
 
 //! Substrate chain configurations.
 
+use chain_spec::ChainSpecExtension;
 use primitives::{Pair, Public, crypto::UncheckedInto};
+use serde::{Serialize, Deserialize};
 use node_runtime::{
 	AuthorityDiscoveryConfig, BabeConfig, BalancesConfig, ContractsConfig, CouncilConfig, DemocracyConfig,
 	ElectionsConfig, GrandpaConfig, ImOnlineConfig, IndicesConfig, SessionConfig, SessionKeys, StakerStatus,
 	StakingConfig, SudoConfig, SystemConfig, TechnicalCommitteeConfig, WASM_BINARY,
 };
+use node_runtime::Block;
 use node_runtime::constants::{time::*, currency::*};
 use substrate_service;
 use hex_literal::hex;
@@ -36,8 +39,10 @@ pub use node_runtime::GenesisConfig;
 
 const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 
-//pub type Extensions = chain_spec::Forks<BlockNumber, Option<()>>;
-pub type Extensions = Option<()>;
+#[derive(Default, Clone, Serialize, Deserialize, ChainSpecExtension)]
+pub struct Extensions {
+	pub fork_blocks: client::ForkBlocks<Block>,
+}
 
 /// Specialized `ChainSpec`.
 pub type ChainSpec = substrate_service::ChainSpec<
@@ -333,7 +338,16 @@ fn development_config_genesis() -> GenesisConfig {
 
 /// Development config (single validator Alice)
 pub fn development_config() -> ChainSpec {
-	ChainSpec::from_genesis("Development", "dev", development_config_genesis, vec![], None, None, None, None)
+	ChainSpec::from_genesis(
+		"Development",
+		"dev",
+		development_config_genesis,
+		vec![],
+		None,
+		None,
+		None,
+		Default::default(),
+	)
 }
 
 fn local_testnet_genesis() -> GenesisConfig {
@@ -350,7 +364,16 @@ fn local_testnet_genesis() -> GenesisConfig {
 
 /// Local testnet config (multivalidator Alice + Bob)
 pub fn local_testnet_config() -> ChainSpec {
-	ChainSpec::from_genesis("Local Testnet", "local_testnet", local_testnet_genesis, vec![], None, None, None, None)
+	ChainSpec::from_genesis(
+		"Local Testnet",
+		"local_testnet",
+		local_testnet_genesis,
+		vec![],
+		None,
+		None,
+		None,
+		Default::default(),
+	)
 }
 
 #[cfg(test)]
@@ -380,7 +403,7 @@ pub(crate) mod tests {
 			None,
 			None,
 			None,
-			None,
+			Default::default(),
 		)
 	}
 
@@ -394,7 +417,7 @@ pub(crate) mod tests {
 			None,
 			None,
 			None,
-			None,
+			Default::default(),
 		)
 	}
 

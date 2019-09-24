@@ -162,6 +162,29 @@ impl<B: Ord, T: Group + Clone> Forks<B, T> where
 	}
 }
 
+impl<B: Ord + Clone, T: Group + Extension + Clone> Forks<B, T> where
+	T::Fork: Serialize + DeserializeOwned + Extension,
+{
+	/// Get forks definition for a subset of this extension.
+	///
+	/// Returns the `Forks` struct, but limited to a particular type
+	/// within the extension.
+	pub fn for_type<X>(&self) -> Option<Forks<B, X>> where
+		X: Group + Clone + 'static,
+		X::Fork: Serialize + DeserializeOwned + Clone,
+	{
+		let base = self.base.get::<X>()?.clone();
+		let forks = self.forks.iter().filter_map(|(k, v)| {
+			Some((k.clone(), v.get::<X::Fork>()?.clone()))
+		}).collect();
+
+		Some(Forks {
+			base,
+			forks,
+		})
+	}
+}
+
 impl<B, E> Extension for Forks<B, E> where
 	B: Ord + Clone + Serialize + DeserializeOwned,
 	E: Extension + Group + Clone + 'static,

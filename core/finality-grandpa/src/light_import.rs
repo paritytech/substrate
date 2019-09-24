@@ -143,9 +143,10 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> BlockImport<Block>
 	fn check_block(
 		&mut self,
 		hash: Block::Hash,
+		number: NumberFor<Block>,
 		parent_hash: Block::Hash,
 	) -> Result<ImportResult, Self::Error> {
-		self.client.check_block(hash, parent_hash)
+		self.client.check_block(hash, number, parent_hash)
 	}
 }
 
@@ -592,9 +593,10 @@ pub mod tests {
 		fn check_block(
 			&mut self,
 			hash: Block::Hash,
+			number: NumberFor<Block>,
 			parent_hash: Block::Hash,
 		) -> Result<ImportResult, Self::Error> {
-			self.0.check_block(hash, parent_hash)
+			self.0.check_block(hash, number, parent_hash)
 		}
 	}
 

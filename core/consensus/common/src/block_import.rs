@@ -172,6 +172,7 @@ pub trait BlockImport<B: BlockT> {
 	fn check_block(
 		&mut self,
 		hash: B::Hash,
+		number: NumberFor<B>,
 		parent_hash: B::Hash,
 	) -> Result<ImportResult, Self::Error>;
 
@@ -193,9 +194,10 @@ where for<'r> &'r T: BlockImport<B, Error = E>
 	fn check_block(
 		&mut self,
 		hash: B::Hash,
+		number: NumberFor<B>,
 		parent_hash: B::Hash,
 	) -> Result<ImportResult, Self::Error> {
-		(&**self).check_block(hash, parent_hash)
+		(&**self).check_block(hash, number, parent_hash)
 	}
 
 	fn import_block(
