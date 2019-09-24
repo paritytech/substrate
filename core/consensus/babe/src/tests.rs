@@ -106,7 +106,7 @@ impl DummyProposer {
 			Err(e) => return future::ready(Err(e)),
 		};
 
-		let this_slot = crate::find_pre_digest::(block.header())
+		let this_slot = crate::find_pre_digest(block.header())
 			.expect("baked block has valid pre-digest")
 			.slot_number();
 
