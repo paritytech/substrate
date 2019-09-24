@@ -63,9 +63,9 @@ fn aux_key(hash: &H256) -> Vec<u8> {
 /// Auxiliary storage data for PoW.
 #[derive(Encode, Decode, Clone, Debug, Default)]
 pub struct PowAux<Difficulty> {
-	/// Difficulty.
+	/// Difficulty of the current block.
 	pub difficulty: Difficulty,
-	/// Total difficulty.
+	/// Total difficulty up to current block.
 	pub total_difficulty: Difficulty,
 }
 
