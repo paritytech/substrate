@@ -758,7 +758,7 @@ mod test3 {
 #[cfg(test)]
 #[allow(dead_code)]
 mod test_append_and_len {
-	use crate::storage::{StorageMap, StorageValue, StorageLinkedMap};
+	use crate::storage::{StorageMap, StorageValue};
 	use runtime_io::{with_externalities, TestExternalities};
 	use codec::{Encode, Decode};
 

@@ -72,10 +72,14 @@ fn final_keys() {
 		k.extend(1u32.encode());
 		assert_eq!(unhashed::get::<u32>(&runtime_io::twox_128(&k)), Some(2u32));
 
+		let head = b"head of FinalKeys LinkedMap".to_vec();
+		assert_eq!(unhashed::get::<u32>(&runtime_io::blake2_256(&head)), None);
+
 		LinkedMap::insert(1, 2);
 		let mut k = b"FinalKeys LinkedMap".to_vec();
 		k.extend(1u32.encode());
 		assert_eq!(unhashed::get::<u32>(&runtime_io::blake2_256(&k)), Some(2u32));
+		assert_eq!(unhashed::get::<u32>(&runtime_io::blake2_256(&head)), Some(1u32));
 
 		LinkedMap2::insert(1, 2);
 		let mut k = b"FinalKeys LinkedMap2".to_vec();
