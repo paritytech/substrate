@@ -91,12 +91,13 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 	}
 
 	fn mutate<KeyArg: EncodeLike<K>, R, F: FnOnce(&mut Self::Query) -> R>(key: KeyArg, f: F) -> R {
-		let mut val = G::get(Ref::from(&key));
+		let final_key = Self::storage_map_final_key(key);
+		let mut val = G::from_optional_value_to_query(unhashed::get(final_key.as_ref()));
 
 		let ret = f(&mut val);
 		match G::from_query_to_optional_value(val) {
-			Some(ref val) => G::insert(key, val),
-			None => G::remove(key),
+			Some(ref val) => unhashed::put(final_key.as_ref(), &val.borrow()),
+			None => unhashed::kill(final_key.as_ref()),
 		}
 		ret
 	}
