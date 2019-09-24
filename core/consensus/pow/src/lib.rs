@@ -104,7 +104,6 @@ pub trait PowAlgorithm<B: BlockT> {
 		&self,
 		parent: &BlockId<B>,
 		pre_hash: &H256,
-		seed: &H256,
 		difficulty: Self::Difficulty,
 		round: u32,
 	) -> Result<Option<Seal>, String>;
@@ -409,7 +408,6 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E, SO>(
 		)).map_err(|e| format!("Block proposing error: {:?}", e))?;
 
 		let (header, body) = block.deconstruct();
-		let seed = H256::random();
 		let (difficulty, seal) = {
 			let difficulty = algorithm.difficulty(
 				&BlockId::Hash(best_hash),
@@ -419,7 +417,6 @@ fn mine_loop<B: BlockT<Hash=H256>, C, Algorithm, E, SO>(
 				let seal = algorithm.mine(
 					&BlockId::Hash(best_hash),
 					&header.hash(),
-					&seed,
 					difficulty,
 					round,
 				)?;
