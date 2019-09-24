@@ -34,7 +34,6 @@ use rstd::prelude::*;
 use codec::{self as codec, Encode, Decode, Error};
 use support::{
 	decl_event, decl_storage, decl_module, dispatch::Result,
-	storage::StorageValue, storage::StorageMap,
 };
 use sr_primitives::{
 	generic::{DigestItem, OpaqueDigestItemId}, traits::Zero,

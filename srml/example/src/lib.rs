@@ -254,7 +254,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::marker::PhantomData;
-use support::{StorageValue, dispatch::Result, decl_module, decl_storage, decl_event};
+use support::{dispatch::Result, decl_module, decl_storage, decl_event};
 use system::{ensure_signed, ensure_root};
 use codec::{Encode, Decode};
 use sr_primitives::{

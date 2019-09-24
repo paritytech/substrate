@@ -21,7 +21,7 @@
 
 use rstd::{prelude::*, marker::PhantomData, convert::TryInto};
 use codec::{Encode, Codec};
-use support::{StorageValue, StorageMap, Parameter, decl_module, decl_event, decl_storage};
+use support::{Parameter, decl_module, decl_event, decl_storage};
 use sr_primitives::traits::{One, SimpleArithmetic, StaticLookup, Member, LookupError};
 use system::{IsDeadAccount, OnNewAccount};
 
