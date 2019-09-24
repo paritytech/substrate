@@ -969,12 +969,15 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		trace!(target: "sync", "Received {} extrinsics from {}", extrinsics.len(), who);
 		if let Some(ref mut peer) = self.context_data.peers.get_mut(&who) {
 			for t in extrinsics {
-				if let Some(hash) = self.transaction_pool.import(&t) {
-					self.peerset_handle.report_peer(who.clone(), NEW_EXTRINSIC_REPUTATION_CHANGE);
-					peer.known_extrinsics.insert(hash);
-				} else {
-					trace!(target: "sync", "Extrinsic rejected");
-				}
+				let hash = self.transaction_pool.hash_of(&t);
+				peer.known_extrinsics.insert(hash);
+
+				self.transaction_pool.import(
+					self.peerset_handle.clone().into(),
+					who.clone(),
+					NEW_EXTRINSIC_REPUTATION_CHANGE,
+					t,
+				);
 			}
 		}
 	}

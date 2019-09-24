@@ -38,9 +38,14 @@ use parking_lot::Mutex;
 use client::{runtime_api::BlockT, Client};
 use exit_future::Signal;
 use futures::prelude::*;
-use futures03::executor::block_on;
-use futures03::stream::{StreamExt as _, TryStreamExt as _};
-use network::{NetworkService, NetworkState, specialization::NetworkSpecialization, Event, DhtEvent};
+use futures03::{
+	future::{ready, FutureExt as _, TryFutureExt as _},
+	stream::{StreamExt as _, TryStreamExt as _},
+};
+use network::{
+	NetworkService, NetworkState, specialization::NetworkSpecialization,
+	Event, DhtEvent, PeerId, ReportHandle,
+};
 use log::{log, warn, debug, error, Level};
 use codec::{Encode, Decode};
 use primitives::{Blake2Hasher, H256};
@@ -176,6 +181,7 @@ macro_rules! new_impl {
 			imports_external_transactions: !$config.roles.is_light(),
 			pool: transaction_pool.clone(),
 			client: client.clone(),
+			executor: Arc::new(SpawnTaskHandle { sender: to_spawn_tx.clone(), on_exit: exit.clone() }),
 		});
 
 		let protocol_id = {
@@ -876,6 +882,7 @@ pub struct TransactionPoolAdapter<C, P> {
 	imports_external_transactions: bool,
 	pool: Arc<P>,
 	client: Arc<C>,
+	executor: TaskExecutor,
 }
 
 /// Get transactions for propagation.
@@ -903,7 +910,7 @@ impl<B, H, C, PoolApi, E> network::TransactionPool<H, B> for
 	TransactionPoolAdapter<C, TransactionPool<PoolApi>>
 where
 	C: network::ClientHandle<B> + Send + Sync,
-	PoolApi: ChainApi<Block=B, Hash=H, Error=E>,
+	PoolApi: 'static + ChainApi<Block=B, Hash=H, Error=E>,
 	B: BlockT,
 	H: std::hash::Hash + Eq + sr_primitives::traits::Member + serde::Serialize,
 	E: txpool::error::IntoPoolError + From<txpool::error::Error>,
@@ -912,10 +919,14 @@ where
 		transactions_to_propagate(&self.pool)
 	}
 
-	fn import(&self, transaction: &<B as BlockT>::Extrinsic) -> Option<H> {
+	fn hash_of(&self, transaction: &B::Extrinsic) -> H {
+		self.pool.hash_of(transaction)
+	}
+
+	fn import(&self, report_handle: ReportHandle, who: PeerId, reputation_change: i32, transaction: B::Extrinsic) {
 		if !self.imports_external_transactions {
 			debug!("Transaction rejected");
-			return None;
+			return;
 		}
 
 		let encoded = transaction.encode();
@@ -923,30 +934,25 @@ where
 			Ok(uxt) => {
 				let best_block_id = BlockId::hash(self.client.info().chain.best_hash);
 				let import_future = self.pool.submit_one(&best_block_id, uxt);
-				let import_result = block_on(import_future);
+				let import_future = import_future
+					.then(move |import_result| {
+						match import_result {
+							Ok(_) => report_handle.report_peer(who, reputation_change),
+							Err(e) => match e.into_pool_error() {
+								Ok(txpool::error::Error::AlreadyImported(_)) => (),
+								Ok(e) => debug!("Error adding transaction to the pool: {:?}", e),
+								Err(e) => debug!("Error converting pool error: {:?}", e),
+							}
+						}
+						ready(Ok(()))
+					})
+					.compat();
 
-				match import_result {
-					Ok(hash) => Some(hash),
-					Err(e) => match e.into_pool_error() {
-						Ok(txpool::error::Error::AlreadyImported(hash)) => {
-							hash.downcast::<H>().ok()
-								.map(|x| x.as_ref().clone())
-						},
-						Ok(e) => {
-							debug!("Error adding transaction to the pool: {:?}", e);
-							None
-						},
-						Err(e) => {
-							debug!("Error converting pool error: {:?}", e);
-							None
-						},
-					}
+				if let Err(e) = self.executor.execute(Box::new(import_future)) {
+					warn!("Error scheduling extrinsic import: {:?}", e);
 				}
 			}
-			Err(e) => {
-				debug!("Error decoding transaction {}", e);
-				None
-			}
+			Err(e) => debug!("Error decoding transaction {}", e),
 		}
 	}
 
