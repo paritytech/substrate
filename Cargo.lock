@@ -2759,7 +2759,7 @@ dependencies = [
 [[package]]
 name = "parity-scale-codec"
 version = "1.0.5"
-source = "git+https://github.com/paritytech/parity-scale-codec?branch=gui-wip-append-2#b1bdec92c80aec099945c0a1a211d09d210432a5"
+source = "git+https://github.com/paritytech/parity-scale-codec?branch=gui-wip-append-2#67ff3a83e458c848115d752038dc2af898d528de"
 dependencies = [
  "arrayvec 0.4.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "bitvec 0.14.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2771,7 +2771,7 @@ dependencies = [
 [[package]]
 name = "parity-scale-codec-derive"
 version = "1.0.2"
-source = "git+https://github.com/paritytech/parity-scale-codec?branch=gui-wip-append-2#b1bdec92c80aec099945c0a1a211d09d210432a5"
+source = "git+https://github.com/paritytech/parity-scale-codec?branch=gui-wip-append-2#67ff3a83e458c848115d752038dc2af898d528de"
 dependencies = [
  "proc-macro-crate 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "proc-macro2 0.4.30 (registry+https://github.com/rust-lang/crates.io-index)",

@@ -1027,7 +1027,7 @@ impl<T: Trait> Module<T> {
 			.chunks(APPROVAL_SET_SIZE)
 			.enumerate()
 			.for_each(|(index, slice)| <ApprovalsOf<T>>::insert(
-				(who.clone(), index as SetIndex), slice.to_vec())
+				(&who, index as SetIndex), slice)
 			);
 	}
 

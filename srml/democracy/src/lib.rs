@@ -24,7 +24,7 @@ use sr_primitives::{
 	traits::{Zero, Bounded, CheckedMul, CheckedDiv, EnsureOrigin, Hash, Dispatchable},
 	weights::SimpleDispatchInfo,
 };
-use codec::{Encode, Decode, Input, Output, Error};
+use codec::{Ref, Encode, Decode, Input, Output, Error};
 use support::{
 	decl_module, decl_storage, decl_event, ensure,
 	Parameter,
@@ -377,10 +377,10 @@ decl_module! {
 
 			let index = Self::public_prop_count();
 			PublicPropCount::put(index + 1);
-			<DepositOf<T>>::insert(index, (value, vec![who.clone()]));
+			<DepositOf<T>>::insert(index, (value, &[&who][..]));
 
-			let new_prop = (index, (*proposal).clone(), who);
-			<PublicProps<T>>::append_or_put(&[new_prop][..]);
+			let new_prop = (index, proposal, who);
+			<PublicProps<T>>::append_or_put(&[Ref::from(&new_prop)][..]);
 
 			Self::deposit_event(RawEvent::Proposed(index, value));
 		}
@@ -609,7 +609,7 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		pub fn delegate(origin, to: T::AccountId, conviction: Conviction) {
 			let who = ensure_signed(origin)?;
-			<Delegations<T>>::insert(who.clone(), (to.clone(), conviction));
+			<Delegations<T>>::insert(&who, (&to, conviction));
 			// Currency is locked indefinitely as long as it's delegated.
 			T::Currency::extend_lock(
 				DEMOCRACY_ID,
