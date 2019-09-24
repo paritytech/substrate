@@ -49,7 +49,7 @@ macro_rules! new_full_start {
 					.ok_or_else(|| substrate_service::Error::SelectChainRequired)?;
 				let (grandpa_block_import, grandpa_link) =
 					grandpa::block_import::<_, _, _, node_template_runtime::RuntimeApi, _, _>(
-						client.clone(), client.clone(), select_chain
+						client.clone(), &*client, select_chain
 					)?;
 				let justification_import = grandpa_block_import.clone();
 
