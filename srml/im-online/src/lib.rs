@@ -86,8 +86,7 @@ use sr_staking_primitives::{
 	offence::{ReportOffence, Offence, Kind},
 };
 use support::{
-	decl_module, decl_event, decl_storage, print, ensure,
-	Parameter, StorageValue, StorageDoubleMap,
+	decl_module, decl_event, decl_storage, print, ensure, Parameter
 };
 use system::ensure_none;
 use system::offchain::SubmitUnsignedTransaction;

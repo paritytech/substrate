@@ -29,7 +29,7 @@ use rstd::{
 	collections::btree_set::BTreeSet,
 };
 use support::{
-	StorageMap, StorageDoubleMap, decl_module, decl_event, decl_storage, Parameter,
+	decl_module, decl_event, decl_storage, Parameter,
 };
 use sr_primitives::{
 	Perbill,

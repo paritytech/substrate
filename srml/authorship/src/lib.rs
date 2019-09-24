@@ -22,7 +22,7 @@
 
 use rstd::{result, prelude::*};
 use rstd::collections::btree_set::BTreeSet;
-use support::{decl_module, decl_storage, StorageValue};
+use support::{decl_module, decl_storage};
 use support::traits::{FindAuthor, VerifySeal, Get};
 use support::dispatch::Result as DispatchResult;
 use codec::{Encode, Decode};
