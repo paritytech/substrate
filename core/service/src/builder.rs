@@ -39,7 +39,9 @@ use parking_lot::{Mutex, RwLock};
 use primitives::{Blake2Hasher, H256, Hasher};
 use rpc::{self, system::SystemInfo};
 use sr_primitives::{BuildStorage, generic::BlockId};
-use sr_primitives::traits::{Block as BlockT, ProvideRuntimeApi, NumberFor, One, Zero, Header, SaturatedConversion};
+use sr_primitives::traits::{
+	Block as BlockT, Extrinsic, ProvideRuntimeApi, NumberFor, One, Zero, Header, SaturatedConversion
+};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use serde::{Serialize, de::DeserializeOwned};
 use std::{io::{Read, Write, Seek}, marker::PhantomData, sync::Arc, sync::atomic::AtomicBool};
@@ -936,7 +938,8 @@ pub(crate) fn maintain_transaction_pool<Api, Backend, Block, Executor, PoolApi>(
 	let client_copy = client.clone();
 	let retracted_transactions = retracted.to_vec().into_iter()
 		.filter_map(move |hash| client_copy.block(&BlockId::hash(hash)).ok().unwrap_or(None))
-		.flat_map(|block| block.block.deconstruct().1.into_iter());
+		.flat_map(|block| block.block.deconstruct().1.into_iter())
+		.filter(|tx| tx.is_signed().unwrap_or(false));
 	let resubmit_future = transaction_pool
 		.submit_at(id, retracted_transactions, true)
 		.then(|resubmit_result| ready(match resubmit_result {

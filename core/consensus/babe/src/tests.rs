@@ -21,19 +21,22 @@
 #![allow(deprecated)]
 use super::*;
 
-use babe_primitives::AuthorityPair;
+use babe_primitives::{AuthorityPair, SlotNumber};
 use client::block_builder::BlockBuilder;
 use consensus_common::NoNetwork as DummyOracle;
+use consensus_common::import_queue::{
+	BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport,
+};
 use network::test::*;
 use network::test::{Block as TestBlock, PeersClient};
+use network::config::BoxFinalityProofRequestBuilder;
 use sr_primitives::{generic::DigestItem, traits::{Block as BlockT, DigestFor}};
 use network::config::ProtocolConfig;
 use tokio::runtime::current_thread;
-use keyring::sr25519::Keyring;
 use client::BlockchainEvents;
 use test_client;
 use log::debug;
-use std::{time::Duration, borrow::Borrow, cell::RefCell};
+use std::{time::Duration, cell::RefCell};
 
 type Item = DigestItem<Hash>;
 
@@ -46,8 +49,28 @@ type TestClient = client::Client<
 	test_client::runtime::RuntimeApi,
 >;
 
-struct DummyFactory(Arc<TestClient>);
-struct DummyProposer(u64, Arc<TestClient>);
+#[derive(Copy, Clone, PartialEq)]
+enum Stage {
+	PreSeal,
+	PostSeal,
+}
+
+type Mutator = Arc<dyn Fn(&mut TestHeader, Stage) + Send + Sync>;
+
+#[derive(Clone)]
+struct DummyFactory {
+	client: Arc<TestClient>,
+	epoch_changes: crate::SharedEpochChanges<TestBlock>,
+	config: Config,
+	mutator: Mutator,
+}
+
+struct DummyProposer {
+	factory: DummyFactory,
+	parent_hash: Hash,
+	parent_number: u64,
+	parent_slot: SlotNumber,
+}
 
 impl Environment<TestBlock> for DummyFactory {
 	type Proposer = DummyProposer;
@@ -56,7 +79,69 @@ impl Environment<TestBlock> for DummyFactory {
 	fn init(&mut self, parent_header: &<TestBlock as BlockT>::Header)
 		-> Result<DummyProposer, Error>
 	{
-		Ok(DummyProposer(parent_header.number + 1, self.0.clone()))
+
+		let parent_slot = crate::find_pre_digest::<TestBlock>(parent_header)
+			.expect("parent header has a pre-digest")
+			.slot_number();
+
+		Ok(DummyProposer {
+			factory: self.clone(),
+			parent_hash: parent_header.hash(),
+			parent_number: *parent_header.number(),
+			parent_slot,
+		})
+	}
+}
+
+impl DummyProposer {
+	fn propose_with(&mut self, pre_digests: DigestFor<TestBlock>)
+		-> future::Ready<Result<TestBlock, Error>>
+	{
+		let block_builder = self.factory.client.new_block_at(
+			&BlockId::Hash(self.parent_hash),
+			pre_digests,
+		).unwrap();
+		let mut block = match block_builder.bake().map_err(|e| e.into()) {
+			Ok(b) => b,
+			Err(e) => return future::ready(Err(e)),
+		};
+
+		let this_slot = crate::find_pre_digest::<TestBlock>(block.header())
+			.expect("baked block has valid pre-digest")
+			.slot_number();
+
+		// figure out if we should add a consensus digest, since the test runtime
+		// doesn't.
+		let epoch_changes = self.factory.epoch_changes.lock();
+		let epoch = epoch_changes.epoch_for_child_of(
+			descendent_query(&*self.factory.client),
+			&self.parent_hash,
+			self.parent_number,
+			this_slot,
+			|slot| self.factory.config.genesis_epoch(slot),
+		)
+			.expect("client has data to find epoch")
+			.expect("can compute epoch for baked block")
+			.into_inner();
+
+		let first_in_epoch = self.parent_slot < epoch.start_slot;
+		if first_in_epoch {
+			// push a `Consensus` digest signalling next change.
+			// we just reuse the same randomness and authorities as the prior
+			// epoch. this will break when we add light client support, since
+			// that will re-check the randomness logic off-chain.
+			let digest_data = ConsensusLog::NextEpochData(NextEpochDescriptor {
+				authorities: epoch.authorities.clone(),
+				randomness: epoch.randomness.clone(),
+			}).encode();
+			let digest = DigestItem::Consensus(BABE_ENGINE_ID, digest_data);
+			block.header.digest_mut().push(digest)
+		}
+
+		// mutate the block header according to the mutator.
+		(self.factory.mutator)(&mut block.header, Stage::PreSeal);
+
+		future::ready(Ok(block))
 	}
 }
 
@@ -67,21 +152,42 @@ impl Proposer<TestBlock> for DummyProposer {
 	fn propose(
 		&mut self,
 		_: InherentData,
-		digests: DigestFor<TestBlock>,
+		pre_digests: DigestFor<TestBlock>,
 		_: Duration,
 	) -> Self::Create {
-		future::ready(self.1.new_block(digests).unwrap().bake().map_err(|e| e.into()))
+		self.propose_with(pre_digests)
 	}
 }
 
-type Mutator = Arc<dyn for<'r> Fn(&'r mut TestHeader) + Send + Sync>;
-
 thread_local! {
-	static MUTATOR: RefCell<Mutator> = RefCell::new(Arc::new(|_|()));
+	static MUTATOR: RefCell<Mutator> = RefCell::new(Arc::new(|_, _|()));
+}
+
+#[derive(Clone)]
+struct PanickingBlockImport<B>(B);
+
+impl<B: BlockImport<TestBlock>> BlockImport<TestBlock> for PanickingBlockImport<B> {
+	type Error = B::Error;
+
+	fn import_block(
+		&mut self,
+		block: BlockImportParams<TestBlock>,
+		new_cache: HashMap<CacheKeyId, Vec<u8>>,
+	) -> Result<ImportResult, Self::Error> {
+		Ok(self.0.import_block(block, new_cache).expect("importing block failed"))
+	}
+
+	fn check_block(
+		&mut self,
+		hash: Hash,
+		parent_hash: Hash,
+	) -> Result<ImportResult, Self::Error> {
+		Ok(self.0.check_block(hash, parent_hash).expect("checking block failed"))
+	}
 }
 
 pub struct BabeTestNet {
-	peers: Vec<Peer<(), DummySpecialization>>,
+	peers: Vec<Peer<Option<PeerData>, DummySpecialization>>,
 }
 
 type TestHeader = <TestBlock as BlockT>::Header;
@@ -94,7 +200,6 @@ pub struct TestVerifier {
 		TestBlock,
 		test_client::runtime::RuntimeApi,
 		PeersFullClient,
-		(),
 	>,
 	mutator: Mutator,
 }
@@ -110,16 +215,22 @@ impl Verifier<TestBlock> for TestVerifier {
 		justification: Option<Justification>,
 		body: Option<Vec<TestExtrinsic>>,
 	) -> Result<(BlockImportParams<TestBlock>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
-		let cb: &(dyn Fn(&mut TestHeader) + Send + Sync) = self.mutator.borrow();
-		cb(&mut header);
+		// apply post-sealing mutations (i.e. stripping seal, if desired).
+		(self.mutator)(&mut header, Stage::PostSeal);
 		Ok(self.inner.verify(origin, header, justification, body).expect("verification failed!"))
 	}
+}
+
+pub struct PeerData {
+	link: BabeLink<TestBlock>,
+	inherent_data_providers: InherentDataProviders,
+	block_import: Mutex<Option<BoxBlockImport<TestBlock>>>,
 }
 
 impl TestNetFactory for BabeTestNet {
 	type Specialization = DummySpecialization;
 	type Verifier = TestVerifier;
-	type PeerData = ();
+	type PeerData = Option<PeerData>;
 
 	/// Create new test network with peers and given config.
 	fn from_config(_config: &ProtocolConfig) -> Self {
@@ -129,31 +240,62 @@ impl TestNetFactory for BabeTestNet {
 		}
 	}
 
-	/// KLUDGE: this function gets the mutator from thread-local storage.
-	fn make_verifier(&self, client: PeersClient, _cfg: &ProtocolConfig)
+	fn make_block_import(&self, client: PeersClient)
+		-> (
+			BoxBlockImport<Block>,
+			Option<BoxJustificationImport<Block>>,
+			Option<BoxFinalityProofImport<Block>>,
+			Option<BoxFinalityProofRequestBuilder<Block>>,
+			Option<PeerData>,
+		)
+	{
+		let client = client.as_full().expect("only full clients are tested");
+		let inherent_data_providers = InherentDataProviders::new();
+
+		let config = Config::get_or_compute(&*client).expect("config available");
+		let (block_import, link) = crate::block_import(
+			config,
+			client.clone(),
+			client.clone(),
+			client.clone(),
+		).expect("can initialize block-import");
+
+		let block_import = PanickingBlockImport(block_import);
+
+		let data_block_import = Mutex::new(Some(Box::new(block_import.clone()) as BoxBlockImport<_>));
+		(
+			Box::new(block_import),
+			None,
+			None,
+			None,
+			Some(PeerData { link, inherent_data_providers, block_import: data_block_import }),
+		)
+	}
+
+	fn make_verifier(
+		&self,
+		client: PeersClient,
+		_cfg: &ProtocolConfig,
+		maybe_link: &Option<PeerData>,
+	)
 		-> Self::Verifier
 	{
 		let client = client.as_full().expect("only full clients are used in test");
 		trace!(target: "babe", "Creating a verifier");
-		let config = Config::get_or_compute(&*client)
-			.expect("slot duration available");
-		let inherent_data_providers = InherentDataProviders::new();
-		register_babe_inherent_data_provider(
-			&inherent_data_providers,
-			config.get()
-		).expect("Registers babe inherent data provider");
-		trace!(target: "babe", "Provider registered");
+
+		// ensure block import and verifier are linked correctly.
+		let data = maybe_link.as_ref().expect("babe link always provided to verifier instantiation");
 
 		TestVerifier {
 			inner: BabeVerifier {
 				client: client.clone(),
 				api: client,
-				inherent_data_providers,
-				config,
-				time_source: Default::default(),
-				transaction_pool : Default::default(),
+				inherent_data_providers: data.inherent_data_providers.clone(),
+				config: data.link.config.clone(),
+				epoch_changes: data.link.epoch_changes.clone(),
+				time_source: data.link.time_source.clone(),
 			},
-			mutator: MUTATOR.with(|s| s.borrow().clone()),
+			mutator: MUTATOR.with(|m| m.borrow().clone()),
 		}
 	}
 
@@ -188,8 +330,13 @@ fn rejects_empty_block() {
 	})
 }
 
-fn run_one_test() {
+fn run_one_test(
+	mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static,
+) {
 	let _ = env_logger::try_init();
+	let mutator = Arc::new(mutator) as Mutator;
+
+	MUTATOR.with(|m| *m.borrow_mut() = mutator.clone());
 	let net = BabeTestNet::new(3);
 
 	let peers = &[
@@ -202,6 +349,7 @@ fn run_one_test() {
 	let mut import_notifications = Vec::new();
 	let mut runtime = current_thread::Runtime::new().unwrap();
 	let mut keystore_paths = Vec::new();
+
 	for (peer_id, seed) in peers {
 		let mut net = net.lock();
 		let peer = net.peer(*peer_id);
@@ -213,30 +361,46 @@ fn run_one_test() {
 		keystore.write().insert_ephemeral_from_seed::<AuthorityPair>(seed).expect("Generates authority key");
 		keystore_paths.push(keystore_path);
 
-		let environ = DummyFactory(client.clone());
+		let mut got_own = false;
+		let mut got_other = false;
+
+		let data = peer.data.as_ref().expect("babe link set up during initialization");
+
+		let environ = DummyFactory {
+			client: client.clone(),
+			config: data.link.config.clone(),
+			epoch_changes: data.link.epoch_changes.clone(),
+			mutator: mutator.clone(),
+		};
+
 		import_notifications.push(
+			// run each future until we get one of our own blocks with number higher than 5
+			// that was produced locally.
 			client.import_notification_stream()
-				.take_while(|n| future::ready(!(n.origin != BlockOrigin::Own && n.header.number() < &5)))
-				.for_each(move |_| future::ready(()))
+				.take_while(move |n| future::ready(n.header.number() < &5 || {
+					if n.origin == BlockOrigin::Own {
+						got_own = true;
+					} else {
+						got_other = true;
+					}
+
+					// continue until we have at least one block of our own
+					// and one of another peer.
+					!(got_own && got_other)
+				}))
+				.for_each(|_| future::ready(()) )
 		);
 
-		let config = Config::get_or_compute(&*client).expect("slot duration available");
-
-		let inherent_data_providers = InherentDataProviders::new();
-		register_babe_inherent_data_provider(
-			&inherent_data_providers, config.get()
-		).expect("Registers babe inherent data provider");
 
 		runtime.spawn(start_babe(BabeParams {
-			config,
-			block_import: client.clone(),
+			block_import: data.block_import.lock().take().expect("import set up during init"),
 			select_chain,
 			client,
 			env: environ,
 			sync_oracle: DummyOracle,
-			inherent_data_providers,
+			inherent_data_providers: data.inherent_data_providers.clone(),
 			force_authoring: false,
-			time_source: Default::default(),
+			babe_link: data.link.clone(),
 			keystore,
 		}).expect("Starts babe"));
 	}
@@ -251,45 +415,41 @@ fn run_one_test() {
 }
 
 #[test]
-fn authoring_blocks() { run_one_test() }
+fn authoring_blocks() {
+	run_one_test(|_, _| ())
+}
 
 #[test]
 #[should_panic]
 fn rejects_missing_inherent_digest() {
-	MUTATOR.with(|s| *s.borrow_mut() = Arc::new(move |header: &mut TestHeader| {
+	run_one_test(|header: &mut TestHeader, stage| {
 		let v = std::mem::replace(&mut header.digest_mut().logs, vec![]);
 		header.digest_mut().logs = v.into_iter()
-			.filter(|v| v.as_babe_pre_digest().is_none())
+			.filter(|v| stage == Stage::PostSeal || v.as_babe_pre_digest().is_none())
 			.collect()
-	}));
-	run_one_test()
+	})
 }
 
 #[test]
 #[should_panic]
 fn rejects_missing_seals() {
-	MUTATOR.with(|s| *s.borrow_mut() = Arc::new(move |header: &mut TestHeader| {
+	run_one_test(|header: &mut TestHeader, stage| {
 		let v = std::mem::replace(&mut header.digest_mut().logs, vec![]);
 		header.digest_mut().logs = v.into_iter()
-			.filter(|v| v.as_babe_seal().is_none())
+			.filter(|v| stage == Stage::PreSeal || v.as_babe_seal().is_none())
 			.collect()
-	}));
-	run_one_test()
+	})
 }
 
-// TODO: this test assumes that the test runtime will trigger epoch changes
-// which isn't the case since it doesn't include the session module.
 #[test]
 #[should_panic]
-#[ignore]
 fn rejects_missing_consensus_digests() {
-	MUTATOR.with(|s| *s.borrow_mut() = Arc::new(move |header: &mut TestHeader| {
+	run_one_test(|header: &mut TestHeader, stage| {
 		let v = std::mem::replace(&mut header.digest_mut().logs, vec![]);
 		header.digest_mut().logs = v.into_iter()
-			.filter(|v| v.as_babe_epoch().is_none())
+			.filter(|v| stage == Stage::PostSeal || v.as_next_epoch_descriptor().is_none())
 			.collect()
-	}));
-	run_one_test()
+	});
 }
 
 #[test]
@@ -326,28 +486,34 @@ fn can_author_block() {
 		.expect("Generates authority pair");
 
 	let mut i = 0;
-	let mut epoch = Epoch {
+	let epoch = Epoch {
 		start_slot: 0,
 		authorities: vec![(pair.public(), 1)],
 		randomness: [0; 32],
 		epoch_index: 1,
 		duration: 100,
+	};
+
+	let mut config = crate::BabeConfiguration {
+		slot_duration: 1000,
+		epoch_length: 100,
+		c: (3, 10),
+		genesis_authorities: Vec::new(),
+		randomness: [0; 32],
 		secondary_slots: true,
 	};
 
-	let parent_weight = 0;
-
 	// with secondary slots enabled it should never be empty
-	match claim_slot(i, parent_weight, &epoch, (3, 10), &keystore) {
+	match claim_slot(i, &epoch, &config, &keystore) {
 		None => i += 1,
 		Some(s) => debug!(target: "babe", "Authored block {:?}", s.0),
 	}
 
 	// otherwise with only vrf-based primary slots we might need to try a couple
 	// of times.
-	epoch.secondary_slots = false;
+	config.secondary_slots = false;
 	loop {
-		match claim_slot(i, parent_weight, &epoch, (3, 10), &keystore) {
+		match claim_slot(i, &epoch, &config, &keystore) {
 			None => i += 1,
 			Some(s) => {
 				debug!(target: "babe", "Authored block {:?}", s.0);
@@ -358,14 +524,75 @@ fn can_author_block() {
 }
 
 #[test]
-fn authorities_call_works() {
-	let _ = env_logger::try_init();
-	let client = test_client::new();
+fn importing_block_one_sets_genesis_epoch() {
+	let mut net = BabeTestNet::new(1);
 
-	assert_eq!(client.info().chain.best_number, 0);
-	assert_eq!(epoch(&client, &BlockId::Number(0)).unwrap().into_regular().unwrap().authorities, vec![
-		(Keyring::Alice.public().into(), 1),
-		(Keyring::Bob.public().into(), 1),
-		(Keyring::Charlie.public().into(), 1),
-	]);
+	let peer = net.peer(0);
+	let data = peer.data.as_ref().expect("babe link set up during initialization");
+	let client = peer.client().as_full().expect("Only full clients are used in tests").clone();
+
+	let mut environ = DummyFactory {
+		client: client.clone(),
+		config: data.link.config.clone(),
+		epoch_changes: data.link.epoch_changes.clone(),
+		mutator: Arc::new(|_, _| ()),
+	};
+
+	let genesis_header = client.header(&BlockId::Number(0)).unwrap().unwrap();
+
+	let mut proposer = environ.init(&genesis_header).unwrap();
+	let babe_claim = Item::babe_pre_digest(babe_primitives::BabePreDigest::Secondary {
+		authority_index: 0,
+		slot_number: 999,
+	});
+	let pre_digest = sr_primitives::generic::Digest { logs: vec![babe_claim] };
+
+	let genesis_epoch = data.link.config.genesis_epoch(999);
+
+	let mut block = futures::executor::block_on(proposer.propose_with(pre_digest)).unwrap();
+
+	// seal by alice.
+	let seal = {
+		// sign the pre-sealed hash of the block and then
+		// add it to a digest item.
+		let pair = AuthorityPair::from_seed(&[1; 32]);
+		let pre_hash = block.header.hash();
+		let signature = pair.sign(pre_hash.as_ref());
+		Item::babe_seal(signature)
+	};
+
+	let post_hash = {
+		block.header.digest_mut().push(seal.clone());
+		let h = block.header.hash();
+		block.header.digest_mut().pop();
+		h
+	};
+	assert_eq!(*block.header.number(), 1);
+	let (header, body) = block.deconstruct();
+
+	let post_digests = vec![seal];
+	let mut block_import = data.block_import.lock().take().expect("import set up during init");
+	block_import.import_block(
+		BlockImportParams {
+			origin: BlockOrigin::Own,
+			header,
+			justification: None,
+			post_digests,
+			body: Some(body),
+			finalized: false,
+			auxiliary: Vec::new(),
+			fork_choice: ForkChoiceStrategy::LongestChain,
+		},
+		Default::default(),
+	).unwrap();
+
+	let epoch_changes = data.link.epoch_changes.lock();
+	let epoch_for_second_block = epoch_changes.epoch_for_child_of(
+		descendent_query(&*client),
+		&post_hash,
+		1,
+		1000,
+		|slot| data.link.config.genesis_epoch(slot),
+	).unwrap().unwrap().into_inner();
+	assert_eq!(epoch_for_second_block, genesis_epoch);
 }
