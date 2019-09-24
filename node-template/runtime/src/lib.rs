@@ -14,11 +14,11 @@ use sr_primitives::{
 	ApplyResult, transaction_validity::TransactionValidity, generic, create_runtime_str,
 	impl_opaque_keys, AnySignature
 };
-use sr_primitives::traits::{NumberFor, BlakeTwo256, Block as BlockT, DigestFor, StaticLookup, Verify, ConvertInto};
+use sr_primitives::traits::{NumberFor, BlakeTwo256, Block as BlockT, StaticLookup, Verify, ConvertInto};
 use sr_primitives::weights::Weight;
 use babe::{AuthorityId as BabeId};
 use grandpa::{AuthorityId as GrandpaId, AuthorityWeight as GrandpaWeight};
-use grandpa::fg_primitives::{self, ScheduledChange};
+use grandpa::fg_primitives;
 use client::{
 	block_builder::api::{CheckInherentsResult, InherentData, self as block_builder_api},
 	runtime_api as client_api, impl_runtime_apis
@@ -356,18 +356,6 @@ impl_runtime_apis! {
 	}
 
 	impl fg_primitives::GrandpaApi<Block> for Runtime {
-		fn grandpa_pending_change(digest: &DigestFor<Block>)
-			-> Option<ScheduledChange<NumberFor<Block>>>
-		{
-			Grandpa::pending_change(digest)
-		}
-
-		fn grandpa_forced_change(digest: &DigestFor<Block>)
-			-> Option<(NumberFor<Block>, ScheduledChange<NumberFor<Block>>)>
-		{
-			Grandpa::forced_change(digest)
-		}
-
 		fn grandpa_authorities() -> Vec<(GrandpaId, GrandpaWeight)> {
 			Grandpa::grandpa_authorities()
 		}
