@@ -15,33 +15,27 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::{
-	collections::{HashSet, HashMap},
 	hash,
+	collections::HashMap,
 	sync::Arc,
-	time,
 };
 
 use crate::base_pool as base;
 use crate::error;
-use crate::listener::Listener;
-use crate::rotator::PoolRotator;
 use crate::watcher::Watcher;
 use serde::Serialize;
-use log::debug;
 
 use futures::{
 	Future, FutureExt,
 	channel::mpsc,
 	future::{Either, ready, join_all},
 };
-use parking_lot::{Mutex, RwLock};
 use sr_primitives::{
 	generic::BlockId,
 	traits::{self, SaturatedConversion},
 	transaction_validity::{TransactionValidity, TransactionTag as Tag, TransactionValidityError},
 };
-
-pub use crate::base_pool::Limit;
+use crate::validated_pool::{ValidatedPool, ValidatedTransaction};
 
 /// Modification notification event stream type;
 pub type EventStream = mpsc::UnboundedReceiver<()>;
@@ -56,6 +50,12 @@ pub type ExtrinsicFor<A> = <<A as ChainApi>::Block as traits::Block>::Extrinsic;
 pub type NumberFor<A> = traits::NumberFor<<A as ChainApi>::Block>;
 /// A type of transaction stored in the pool
 pub type TransactionFor<A> = Arc<base::Transaction<ExHash<A>, ExtrinsicFor<A>>>;
+/// A type of validated transaction stored in the pool.
+pub type ValidatedTransactionFor<A> = ValidatedTransaction<
+	ExHash<A>,
+	ExtrinsicFor<A>,
+	<A as ChainApi>::Error,
+>;
 
 /// Concrete extrinsic validation and query logic.
 pub trait ChainApi: Send + Sync {
@@ -89,19 +89,19 @@ pub trait ChainApi: Send + Sync {
 #[derive(Debug, Clone)]
 pub struct Options {
 	/// Ready queue limits.
-	pub ready: Limit,
+	pub ready: base::Limit,
 	/// Future queue limits.
-	pub future: Limit,
+	pub future: base::Limit,
 }
 
 impl Default for Options {
 	fn default() -> Self {
 		Options {
-			ready: Limit {
+			ready: base::Limit {
 				count: 512,
 				total_bytes: 10 * 1024 * 1024,
 			},
-			future: Limit {
+			future: base::Limit {
 				count: 128,
 				total_bytes: 1 * 1024 * 1024,
 			},
@@ -109,35 +109,33 @@ impl Default for Options {
 	}
 }
 
-/// Extrinsics pool.
+/// Extrinsics pool that performs validation.
 pub struct Pool<B: ChainApi> {
-	data: SharedPoolData<B>,
+	validated_pool: SharedValidatedPool<B>,
 }
 
-/// Extrinsics pool shared data.
-struct SharedPoolData<B: ChainApi>(Arc<PoolData<B>>);
-
-/// Extrinsics pool data.
-struct PoolData<B: ChainApi> {
-	api: B,
-	options: Options,
-	listener: RwLock<Listener<ExHash<B>, BlockHash<B>>>,
-	pool: RwLock<base::BasePool<
-		ExHash<B>,
-		ExtrinsicFor<B>,
-	>>,
-	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<()>>>,
-	rotator: PoolRotator<ExHash<B>>,
-}
+/// Shared validated extrinsics pool.
+struct SharedValidatedPool<B: ChainApi>(Arc<ValidatedPool<B>>);
 
 impl<B: ChainApi> Pool<B> {
+	/// Create a new transaction pool.
+	pub fn new(options: Options, api: B) -> Self {
+		Pool {
+			validated_pool: SharedValidatedPool(Arc::new(ValidatedPool::new(options, api))),
+		}
+	}
+
 	/// Imports a bunch of unverified extrinsics to the pool
 	pub fn submit_at<T>(&self, at: &BlockId<B::Block>, xts: T, force: bool)
-		-> Result<impl Future<Output=Vec<Result<ExHash<B>, B::Error>>>, B::Error>
+		-> impl Future<Output=Result<Vec<Result<ExHash<B>, B::Error>>, B::Error>>
 	where
 		T: IntoIterator<Item=ExtrinsicFor<B>>
 	{
-		self.data.submit_at(at, xts, force)
+		let validated_pool = self.validated_pool.clone();
+		self.validated_pool
+			.verify(at, xts, force)
+			.map(move |validated_transactions| validated_transactions
+				.map(|validated_transactions| validated_pool.0.submit(validated_transactions)))
 	}
 
 	/// Imports one unverified extrinsic to the pool
@@ -146,15 +144,11 @@ impl<B: ChainApi> Pool<B> {
 		at: &BlockId<B::Block>,
 		xt: ExtrinsicFor<B>,
 	) -> impl Future<Output=Result<ExHash<B>, B::Error>> {
-		match self.submit_at(at, std::iter::once(xt), false) {
-			Ok(import_future) => Either::Left(import_future
-				.map(|mut import_result| import_result
-					.pop()
-					.expect("One extrinsic passed; one result returned; qed")
-				)
-			),
-			Err(error) => Either::Right(ready(Err(error))),
-		}
+		self.submit_at(at, std::iter::once(xt), false)
+			.map(|import_result| import_result.and_then(|mut import_result| import_result
+				.pop()
+				.expect("One extrinsic passed; one result returned; qed")
+			))
 	}
 
 	/// Import a single extrinsic and starts to watch their progress in the pool.
@@ -163,9 +157,16 @@ impl<B: ChainApi> Pool<B> {
 		at: &BlockId<B::Block>,
 		xt: ExtrinsicFor<B>,
 	) -> impl Future<Output=Result<Watcher<ExHash<B>, BlockHash<B>>, B::Error>> {
-		let hash = self.data.0.api.hash_and_length(&xt).0;
-		let watcher = self.data.0.listener.write().create_watcher(hash);
-		self.submit_one(at, xt).map(move |r| r.map(|_| watcher))
+		let block_number = match self.validated_pool.resolve_block_number(at) {
+			Ok(block_number) => block_number,
+			Err(err) => return Either::Left(ready(Err(err)))
+		};
+
+		let validated_pool = self.validated_pool.clone();
+		Either::Right(
+			self.validated_pool.verify_one(at, block_number, xt, false)
+				.map(move |validated_transactions| validated_pool.0.submit_and_watch(validated_transactions))
+		)
 	}
 
 	/// Prunes ready transactions.
@@ -180,45 +181,7 @@ impl<B: ChainApi> Pool<B> {
 		parent: &BlockId<B::Block>,
 		extrinsics: &[ExtrinsicFor<B>],
 	) -> impl Future<Output=Result<(), B::Error>> {
-		// Get details of all extrinsics that are already in the pool
-		let hashes = extrinsics.iter()
-			.map(|extrinsic| self.data.0.api.hash_and_length(extrinsic).0)
-			.collect::<Vec<_>>();
-		let in_pool = self.data.0.pool.read().by_hash(&hashes);
-
-		// Zip the ones from the pool with the full list (we get pairs `(Extrinsic, Option<TransactionDetails>)`)
-		let all = extrinsics.iter().zip(in_pool.iter());
-
-		// Prepare future that collect tags for all extrinsics
-		let future_tags = join_all(all
-			.map(|(extrinsic, existing_in_pool)|
-				match *existing_in_pool {
-					// reuse the tags for extrinsics that were found in the pool
-					Some(ref transaction) => Either::Left(
-						ready(transaction.provides.clone())
-					),
-					// if it's not found in the pool query the runtime at parent block
-					// to get validity info and tags that the extrinsic provides.
-					None => Either::Right(self.data.0.api.validate_transaction(parent, extrinsic.clone())
-						.then(|validity| ready(match validity {
-							Ok(Ok(validity)) => validity.provides,
-							// silently ignore invalid extrinsics,
-							// cause they might just be inherent
-							_ => Vec::new(),
-						}))),
-				}
-			));
-
-		// Prune all transactions that provide collected tags
-		let data = self.data.clone();
-		let at_clone = at.clone();
-		future_tags.then(move |tags|
-			data.prune_tags(
-				&at_clone,
-				tags.into_iter().flat_map(|t| t),
-				in_pool.into_iter().filter_map(|x| x).map(|x| x.hash.clone()),
-			)
-		)
+		self.validated_pool.prune(at, parent, extrinsics)
 	}
 
 	/// Prunes ready transactions that provide given list of tags.
@@ -230,6 +193,9 @@ impl<B: ChainApi> Pool<B> {
 	/// Moreover for each provided tag we remove transactions in the pool that:
 	/// 1. Provide that tag directly
 	/// 2. Are a dependency of pruned transaction.
+	///
+	/// Returns transactions that have been removed from the pool and must be reverified
+	/// before reinserting to the pool.
 	///
 	/// By removing predecessor transactions as well we might actually end up
 	/// pruning too much, so all removed transactions are reverified against
@@ -245,189 +211,89 @@ impl<B: ChainApi> Pool<B> {
 		tags: impl IntoIterator<Item=Tag>,
 		known_imported_hashes: impl IntoIterator<Item=ExHash<B>> + Clone,
 	) -> impl Future<Output=Result<(), B::Error>> {
-		self.data.prune_tags(at, tags, known_imported_hashes)
-	}
-
-	/// Removes stale transactions from the pool.
-	///
-	/// Stale transactions are transaction beyond their longevity period.
-	/// Note this function does not remove transactions that are already included in the chain.
-	/// See `prune_tags` if you want this.
-	pub fn clear_stale(&self, at: &BlockId<B::Block>) -> Result<(), B::Error> {
-		self.data.clear_stale(at)
-	}
-
-	/// Create a new transaction pool.
-	pub fn new(options: Options, api: B) -> Self {
-		Pool {
-			data: SharedPoolData(Arc::new(PoolData {
-				api,
-				options,
-				listener: Default::default(),
-				pool: Default::default(),
-				import_notification_sinks: Default::default(),
-				rotator: Default::default(),
-			})),
-		}
+		self.validated_pool.prune_tags(at, tags, known_imported_hashes)
 	}
 
 	/// Return an event stream of transactions imported to the pool.
 	pub fn import_notification_stream(&self) -> EventStream {
-		let (sink, stream) = mpsc::unbounded();
-		self.data.0.import_notification_sinks.lock().push(sink);
-		stream
+		self.validated_pool.0.import_notification_stream()
 	}
 
 	/// Invoked when extrinsics are broadcasted.
 	pub fn on_broadcasted(&self, propagated: HashMap<ExHash<B>, Vec<String>>) {
-		let mut listener = self.data.0.listener.write();
-		for (hash, peers) in propagated.into_iter() {
-			listener.broadcasted(&hash, peers);
-		}
+		self.validated_pool.0.on_broadcasted(propagated)
 	}
 
 	/// Remove from the pool.
 	pub fn remove_invalid(&self, hashes: &[ExHash<B>]) -> Vec<TransactionFor<B>> {
-		self.data.remove_invalid(hashes)
+		self.validated_pool.0.remove_invalid(hashes)
 	}
 
 	/// Get an iterator for ready transactions ordered by priority
 	pub fn ready(&self) -> impl Iterator<Item=TransactionFor<B>> {
-		self.data.0.pool.read().ready()
+		self.validated_pool.0.ready()
 	}
 
 	/// Returns pool status.
 	pub fn status(&self) -> base::Status {
-		self.data.0.pool.read().status()
+		self.validated_pool.0.status()
 	}
 
 	/// Returns transaction hash
 	pub fn hash_of(&self, xt: &ExtrinsicFor<B>) -> ExHash<B> {
-		self.data.0.api.hash_and_length(xt).0
+		self.validated_pool.0.api().hash_and_length(xt).0
 	}
 }
 
-impl<B: ChainApi> Clone for SharedPoolData<B> {
+impl<B: ChainApi> Clone for SharedValidatedPool<B> {
 	fn clone(&self) -> Self {
 		Self(self.0.clone())
 	}
 }
 
-impl<B: ChainApi> SharedPoolData<B> {
-	/// Imports a bunch of unverified extrinsics to the pool
-	pub fn submit_at<T>(&self, at: &BlockId<B::Block>, xts: T, force: bool)
-		-> Result<impl Future<Output=Vec<Result<ExHash<B>, B::Error>>>, B::Error>
-	where
-		T: IntoIterator<Item=ExtrinsicFor<B>>
-	{
-		let block_number = self.0.api.block_id_to_number(at)?
-			.ok_or_else(|| error::Error::InvalidBlockId(format!("{:?}", at)).into())?;
+impl<B: ChainApi> SharedValidatedPool<B> {
+	/// Prunes ready transactions.
+	fn prune(
+		&self,
+		at: &BlockId<B::Block>,
+		parent: &BlockId<B::Block>,
+		extrinsics: &[ExtrinsicFor<B>],
+	) -> impl Future<Output=Result<(), B::Error>> {
+		// Get details of all extrinsics that are already in the pool
+		let (in_pool_hashes, in_pool_tags) = self.0.extrinsics_tags(extrinsics);
 
-		// for each xt, prepare a validation future
-		let validation_futures = xts.into_iter().map(move |xt| {
-			let (hash, bytes) = self.0.api.hash_and_length(&xt);
-			if !force && self.0.rotator.is_banned(&hash) {
-				return Either::Left(ready(Err(error::Error::TemporarilyBanned.into())))
-			}
+		// Zip the ones from the pool with the full list (we get pairs `(Extrinsic, Option<Vec<Tag>>)`)
+		let all = extrinsics.iter().zip(in_pool_tags.into_iter());
 
-			let self_clone = self.clone();
-			Either::Right(self.0.api.validate_transaction(at, xt.clone())
-				.then(move |validation_result| ready(validation_result.and_then(|validity|
-					match validity {
-						Ok(validity) => if validity.provides.is_empty() {
-							Err(error::Error::NoTagsProvided.into())
-						} else {
-							Ok(base::Transaction {
-								data: xt,
-								bytes,
-								hash,
-								priority: validity.priority,
-								requires: validity.requires,
-								provides: validity.provides,
-								propagate: validity.propagate,
-								valid_till: block_number
-									.saturated_into::<u64>()
-									.saturating_add(validity.longevity),
-							})
-						},
-						Err(TransactionValidityError::Invalid(e)) => {
-							Err(error::Error::InvalidTransaction(e).into())
-						},
-						Err(TransactionValidityError::Unknown(e)) => {
-							self_clone.0.listener.write().invalid(&hash);
-							Err(error::Error::UnknownTransaction(e).into())
-						},
-					}
-				)))
-			)
-		});
+		// Prepare future that collect tags for all extrinsics
+		let future_tags = join_all(all
+			.map(|(extrinsic, in_pool_tags)|
+				match in_pool_tags {
+					// reuse the tags for extrinsics that were found in the pool
+					Some(tags) => Either::Left(
+						ready(tags)
+					),
+					// if it's not found in the pool query the runtime at parent block
+					// to get validity info and tags that the extrinsic provides.
+					None => Either::Right(self.0.api().validate_transaction(parent, extrinsic.clone())
+						.then(|validity| ready(match validity {
+							Ok(Ok(validity)) => validity.provides,
+							// silently ignore invalid extrinsics,
+							// cause they might just be inherent
+							_ => Vec::new(),
+						}))),
+				}
+			));
 
-		// make single validation future that waits all until all extrinsics are validated
-		let validation_future = join_all(validation_futures);
-
-		// and then import all successfully validated extrinsics at once + enforce limits
-		let self_clone = self.clone();
-		let import_future = validation_future
-			.then(move |validation_results| ready({
-				let import_results = validation_results
-					.into_iter()
-					.map(|validation_result| {
-						let imported = self_clone.0.pool.write().import(validation_result?)?;
-
-						if let base::Imported::Ready { .. } = imported {
-							self_clone.0.import_notification_sinks
-								.lock()
-								.retain(|sink| sink.unbounded_send(()).is_ok());
-						}
-
-						let mut listener = self_clone.0.listener.write();
-						fire_events(&mut *listener, &imported);
-						Ok(imported.hash().clone())
-					})
-					.collect::<Vec<_>>();
-
-				let removed = self_clone.enforce_limits();
-
-				import_results.into_iter().map(|res| match res {
-					Ok(ref hash) if removed.contains(hash) => Err(error::Error::ImmediatelyDropped.into()),
-					other => other,
-				}).collect::<Vec<Result<ExHash<B>, B::Error>>>()
-			}));
-
-		Ok(import_future)
+		// Prune transactions by tags
+		let at = at.clone();
+		let validated_pool = self.clone();
+		future_tags.then(move |tags| validated_pool.prune_tags(
+			&at,
+			tags.into_iter().flat_map(|tags| tags),
+			in_pool_hashes,
+		))
 	}
-
-	/// Remove extrinsics that ary beyond pool limits.
-	fn enforce_limits(&self) -> HashSet<ExHash<B>> {
-		let status = self.0.pool.read().status();
-		let ready_limit = &self.0.options.ready;
-		let future_limit = &self.0.options.future;
-
-		debug!(target: "txpool", "Pool Status: {:?}", status);
-
-		if ready_limit.is_exceeded(status.ready, status.ready_bytes)
-			|| future_limit.is_exceeded(status.future, status.future_bytes) {
-			// clean up the pool
-			let removed = {
-				let mut pool = self.0.pool.write();
-				let removed = pool.enforce_limits(ready_limit, future_limit)
-					.into_iter().map(|x| x.hash.clone()).collect::<HashSet<_>>();
-				// ban all removed transactions
-				self.0.rotator.ban(&std::time::Instant::now(), removed.iter().map(|x| x.clone()));
-				removed
-			};
-			// run notifications
-			let mut listener = self.0.listener.write();
-			for h in &removed {
-				listener.dropped(h, None);
-			}
-
-			removed
-		} else {
-			Default::default()
-		}
-	}
-
 
 	/// Prunes ready transactions that provide given list of tags.
 	fn prune_tags(
@@ -436,163 +302,129 @@ impl<B: ChainApi> SharedPoolData<B> {
 		tags: impl IntoIterator<Item=Tag>,
 		known_imported_hashes: impl IntoIterator<Item=ExHash<B>> + Clone,
 	) -> impl Future<Output=Result<(), B::Error>> {
-		// Perform tag-based pruning in the base pool
-		let status = self.0.pool.write().prune_tags(tags);
-		// Notify event listeners of all transactions
-		// that were promoted to `Ready` or were dropped.
-		{
-			let mut listener = self.0.listener.write();
-			for promoted in &status.promoted {
-				fire_events(&mut *listener, promoted);
-			}
-			for f in &status.failed {
-				listener.dropped(f, None);
-			}
-		}
-		// make sure that we don't revalidate extrinsics that were part of the recently
+		// Prune all transactions that provide given tags
+		let prune_status = match self.0.prune_tags(tags) {
+			Ok(prune_status) => prune_status,
+			Err(e) => return Either::Left(ready(Err(e))),
+		};
+
+		// Make sure that we don't revalidate extrinsics that were part of the recently
 		// imported block. This is especially important for UTXO-like chains cause the
 		// inputs are pruned so such transaction would go to future again.
-		self.0.rotator.ban(&std::time::Instant::now(), known_imported_hashes.clone().into_iter());
+		self.0.ban(&std::time::Instant::now(), known_imported_hashes.clone().into_iter());
 
-		// try to re-submit pruned transactions since some of them might be still valid.
+		// Try to re-validate pruned transactions since some of them might be still valid.
 		// note that `known_imported_hashes` will be rejected here due to temporary ban.
-		let hashes = status.pruned.iter().map(|tx| tx.hash.clone()).collect::<Vec<_>>();
-		let results_future = self.submit_at(at, status.pruned.into_iter().map(|tx| tx.data.clone()), false);
-		let results_future = match results_future {
-			Ok(results_future) => results_future,
+		let pruned_hashes = prune_status.pruned.iter().map(|tx| tx.hash.clone()).collect::<Vec<_>>();
+		let pruned_transactions = prune_status.pruned.into_iter().map(|tx| tx.data.clone());
+		let reverify_future = self.verify(at, pruned_transactions, false);
+
+		// And finally - submit reverified transactions back to the pool
+		let at = at.clone();
+		let validated_pool = self.clone();
+		Either::Right(reverify_future.then(move |reverified_transactions|
+			ready(reverified_transactions.and_then(|reverified_transactions|
+				validated_pool.0.resubmit_pruned(
+					&at,
+					known_imported_hashes,
+					pruned_hashes,
+					reverified_transactions,
+				))
+			)))
+	}
+
+	/// Resolves block number by id.
+	fn resolve_block_number(&self, at: &BlockId<B::Block>) -> Result<NumberFor<B>, B::Error> {
+		self.0.api().block_id_to_number(at)
+			.and_then(|number| number.ok_or_else(||
+				error::Error::InvalidBlockId(format!("{:?}", at)).into()))
+	}
+
+	/// Returns future that validates a bunch of transactions at given block.
+	fn verify(
+		&self,
+		at: &BlockId<B::Block>,
+		xts: impl IntoIterator<Item=ExtrinsicFor<B>>,
+		force: bool,
+	) -> impl Future<Output=Result<Vec<ValidatedTransactionFor<B>>, B::Error>> {
+		// we need a block number to compute tx validity
+		let block_number = match self.resolve_block_number(at) {
+			Ok(block_number) => block_number,
 			Err(err) => return Either::Left(ready(Err(err))),
 		};
 
-		// Collect the hashes of transactions that now became invalid (meaning that they are successfully pruned).
-		let hashes_future = results_future.then(move |results| ready(results
-			.into_iter()
-			.enumerate()
-			.filter_map(move |(idx, r)| match r.map_err(error::IntoPoolError::into_pool_error) {
-				Err(Ok(error::Error::InvalidTransaction(_))) => Some(hashes[idx].clone()),
-				_ => None,
-			})
-		));
+		// for each xt, prepare a validation future
+		let validation_futures = xts.into_iter().map(move |xt|
+			self.verify_one(at, block_number, xt, force)
+		);
 
-		// Fire `pruned` notifications for collected hashes and make sure to include
-		// `known_imported_hashes` since they were just imported as part of the block.
-		let self_clone = self.clone();
-		let at_clone = at.clone();
-		let hashes_future = hashes_future.then(move |hashes| {
-			let notify = || {
-				let hashes = hashes.chain(known_imported_hashes.into_iter());
-
-				let header_hash = self_clone.0.api.block_id_to_hash(&at_clone)?
-					.ok_or_else(|| error::Error::InvalidBlockId(format!("{:?}", at_clone)).into())?;
-				let mut listener = self_clone.0.listener.write();
-				for h in hashes {
-					listener.pruned(header_hash, &h);
-				}
-
-				Ok(())
-			};
-
-			ready(notify())
-		});
-
-		// perform regular cleanup of old transactions in the pool
-		// and update temporary bans.
-		let self_clone = self.clone();
-		let at_clone = at.clone();
-		Either::Right(hashes_future.then(move |r| ready(match r {
-			Ok(()) => self_clone.clear_stale(&at_clone),
-			Err(err) => Err(err),
-		})))
+		// make single validation future that waits all until all extrinsics are validated
+		Either::Right(join_all(validation_futures).then(|x| ready(Ok(x))))
 	}
 
-	/// Removes stale transactions from the pool.
-	fn clear_stale(&self, at: &BlockId<B::Block>) -> Result<(), B::Error> {
-		let block_number = self.0.api.block_id_to_number(at)?
-			.ok_or_else(|| error::Error::InvalidBlockId(format!("{:?}", at)).into())?
-			.saturated_into::<u64>();
-		let now = time::Instant::now();
-		let to_remove = {
-			self.0.pool.read().ready()
-				.filter(|tx| self.0.rotator.ban_if_stale(&now, block_number, &tx))
-				.map(|tx| tx.hash.clone())
-				.collect::<Vec<_>>()
-		};
-		let futures_to_remove: Vec<ExHash<B>> = {
-			let p = self.0.pool.read();
-			let mut hashes = Vec::new();
-			for tx in p.futures() {
-				if self.0.rotator.ban_if_stale(&now, block_number, &tx) {
-					hashes.push(tx.hash.clone());
-				}
-			}
-			hashes
-		};
-		// removing old transactions
-		self.remove_invalid(&to_remove);
-		self.remove_invalid(&futures_to_remove);
-		// clear banned transactions timeouts
-		self.0.rotator.clear_timeouts(&now);
-
-		Ok(())
-	}
-
-	/// Remove from the pool.
-	fn remove_invalid(&self, hashes: &[ExHash<B>]) -> Vec<TransactionFor<B>> {
-		// temporarily ban invalid transactions
-		debug!(target: "txpool", "Banning invalid transactions: {:?}", hashes);
-		self.0.rotator.ban(&time::Instant::now(), hashes.iter().cloned());
-
-		let invalid = self.0.pool.write().remove_invalid(hashes);
-
-		let mut listener = self.0.listener.write();
-		for tx in &invalid {
-			listener.invalid(&tx.hash);
+	/// Returns future that validates single transaction at given block.
+	fn verify_one(
+		&self,
+		block_id: &BlockId<B::Block>,
+		block_number: NumberFor<B>,
+		xt: ExtrinsicFor<B>,
+		force: bool,
+	) -> impl Future<Output=ValidatedTransactionFor<B>> {
+		let (hash, bytes) = self.0.api().hash_and_length(&xt);
+		if !force && self.0.is_banned(&hash) {
+			return Either::Left(ready(ValidatedTransaction::Invalid(error::Error::TemporarilyBanned.into())))
 		}
 
-		invalid
-	}
-}
-
-fn fire_events<H, H2, Ex>(
-	listener: &mut Listener<H, H2>,
-	imported: &base::Imported<H, Ex>,
-) where
-	H: hash::Hash + Eq + traits::Member + Serialize,
-	H2: Clone,
-{
-	match *imported {
-		base::Imported::Ready { ref promoted, ref failed, ref removed, ref hash } => {
-			listener.ready(hash, None);
-			for f in failed {
-				listener.invalid(f);
-			}
-			for r in removed {
-				listener.dropped(&r.hash, Some(hash));
-			}
-			for p in promoted {
-				listener.ready(p, None);
-			}
-		},
-		base::Imported::Future { ref hash } => {
-			listener.future(hash)
-		},
+		Either::Right(self.0.api().validate_transaction(block_id, xt.clone())
+			.then(move |validation_result| ready(match validation_result {
+				Ok(validity) => match validity {
+					Ok(validity) => if validity.provides.is_empty() {
+						ValidatedTransaction::Invalid(error::Error::NoTagsProvided.into())
+					} else {
+						ValidatedTransaction::Valid(base::Transaction {
+							data: xt,
+							bytes,
+							hash,
+							priority: validity.priority,
+							requires: validity.requires,
+							provides: validity.provides,
+							propagate: validity.propagate,
+							valid_till: block_number
+								.saturated_into::<u64>()
+								.saturating_add(validity.longevity),
+						})
+					},
+					Err(TransactionValidityError::Invalid(e)) =>
+						ValidatedTransaction::Invalid(error::Error::InvalidTransaction(e).into()),
+					Err(TransactionValidityError::Unknown(e)) =>
+						ValidatedTransaction::Unknown(hash, error::Error::UnknownTransaction(e).into()),
+				},
+				Err(e) => ValidatedTransaction::Invalid(e),
+			})))
 	}
 }
 
 #[cfg(test)]
 mod tests {
+	use std::{
+		collections::HashMap,
+		time::Instant,
+	};
+	use parking_lot::Mutex;
 	use futures::executor::block_on;
 	use super::*;
 	use sr_primitives::transaction_validity::{ValidTransaction, InvalidTransaction};
 	use codec::Encode;
 	use test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
 	use assert_matches::assert_matches;
+	use crate::base_pool::Limit;
 	use crate::watcher;
 
 	const INVALID_NONCE: u64 = 254;
 
-	#[derive(Debug, Default)]
+	#[derive(Clone, Debug, Default)]
 	struct TestApi {
-		delay: Mutex<Option<std::sync::mpsc::Receiver<()>>>,
+		delay: Arc<Mutex<Option<std::sync::mpsc::Receiver<()>>>>,
 	}
 
 	impl ChainApi for TestApi {
@@ -697,7 +529,7 @@ mod tests {
 		});
 
 		// when
-		pool.data.0.rotator.ban(&time::Instant::now(), vec![pool.hash_of(&uxt)]);
+		pool.validated_pool.0.rotator().ban(&Instant::now(), vec![pool.hash_of(&uxt)]);
 		let res = block_on(pool.submit_one(&BlockId::Number(0), uxt));
 		assert_eq!(pool.status().ready, 0);
 		assert_eq!(pool.status().future, 0);
@@ -770,16 +602,16 @@ mod tests {
 		}))).unwrap();
 
 		// when
-		pool.clear_stale(&BlockId::Number(5)).unwrap();
+		pool.validated_pool.0.clear_stale(&BlockId::Number(5)).unwrap();
 
 		// then
 		assert_eq!(pool.ready().count(), 0);
 		assert_eq!(pool.status().future, 0);
 		assert_eq!(pool.status().ready, 0);
 		// make sure they are temporarily banned as well
-		assert!(pool.data.0.rotator.is_banned(&hash1));
-		assert!(pool.data.0.rotator.is_banned(&hash2));
-		assert!(pool.data.0.rotator.is_banned(&hash3));
+		assert!(pool.validated_pool.0.rotator().is_banned(&hash1));
+		assert!(pool.validated_pool.0.rotator().is_banned(&hash2));
+		assert!(pool.validated_pool.0.rotator().is_banned(&hash3));
 	}
 
 	#[test]
@@ -794,10 +626,10 @@ mod tests {
 		}))).unwrap();
 
 		// when
-		block_on(pool.prune_tags(&BlockId::Number(1), vec![vec![0]], vec![hash1.clone()])).unwrap();
+		block_on(pool.validated_pool.prune_tags(&BlockId::Number(1), vec![vec![0]], vec![hash1.clone()])).unwrap();
 
 		// then
-		assert!(pool.data.0.rotator.is_banned(&hash1));
+		assert!(pool.validated_pool.0.rotator().is_banned(&hash1));
 	}
 
 	#[test]
@@ -830,8 +662,8 @@ mod tests {
 
 		// then
 		assert_eq!(pool.status().future, 1);
-		assert!(pool.data.0.rotator.is_banned(&hash1));
-		assert!(!pool.data.0.rotator.is_banned(&hash2));
+		assert!(pool.validated_pool.0.rotator().is_banned(&hash1));
+		assert!(!pool.validated_pool.0.rotator().is_banned(&hash2));
 	}
 
 	#[test]
@@ -895,7 +727,7 @@ mod tests {
 			assert_eq!(pool.status().future, 0);
 
 			// when
-			block_on(pool.prune_tags(&BlockId::Number(2), vec![vec![0u8]], vec![])).unwrap();
+			block_on(pool.validated_pool.prune_tags(&BlockId::Number(2), vec![vec![0u8]], vec![])).unwrap();
 			assert_eq!(pool.status().ready, 0);
 			assert_eq!(pool.status().future, 0);
 
@@ -920,7 +752,7 @@ mod tests {
 			assert_eq!(pool.status().future, 0);
 
 			// when
-			block_on(pool.prune_tags(&BlockId::Number(2), vec![vec![0u8]], vec![2u64])).unwrap();
+			block_on(pool.validated_pool.prune_tags(&BlockId::Number(2), vec![vec![0u8]], vec![2u64])).unwrap();
 			assert_eq!(pool.status().ready, 0);
 			assert_eq!(pool.status().future, 0);
 
@@ -973,7 +805,7 @@ mod tests {
 			assert_eq!(pool.status().ready, 1);
 
 			// when
-			pool.remove_invalid(&[*watcher.hash()]);
+			pool.validated_pool.0.remove_invalid(&[*watcher.hash()]);
 
 
 			// then
@@ -1053,7 +885,7 @@ mod tests {
 			let (ready, is_ready) = std::sync::mpsc::sync_channel(0);
 			let (tx, rx) = std::sync::mpsc::sync_channel(1);
 			let mut api = TestApi::default();
-			api.delay = Mutex::new(rx.into());
+			api.delay = Arc::new(Mutex::new(rx.into()));
 			let pool = Arc::new(Pool::new(Default::default(), api));
 
 			// when
@@ -1085,7 +917,7 @@ mod tests {
 			assert_eq!(pool.status().ready, 1);
 
 			// Now block import happens before the second transaction is able to finish verification.
-			block_on(pool.prune_tags(&BlockId::Number(1), vec![provides], vec![])).unwrap();
+			block_on(pool.validated_pool.prune_tags(&BlockId::Number(1), vec![provides], vec![])).unwrap();
 			assert_eq!(pool.status().ready, 0);
 
 

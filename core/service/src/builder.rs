@@ -24,7 +24,7 @@ use client::{
 };
 use codec::{Decode, Encode, IoReader};
 use consensus_common::import_queue::ImportQueue;
-use futures::{prelude::*, sync::mpsc, future::{result, Either}};
+use futures::{prelude::*, sync::mpsc};
 use futures03::{
 	compat::Compat,
 	future::ready,
@@ -937,17 +937,16 @@ pub(crate) fn maintain_transaction_pool<Api, Backend, Block, Executor, PoolApi>(
 	let retracted_transactions = retracted.to_vec().into_iter()
 		.filter_map(move |hash| client_copy.block(&BlockId::hash(hash)).ok().unwrap_or(None))
 		.flat_map(|block| block.block.deconstruct().1.into_iter());
-	let resubmit_future = match transaction_pool.submit_at(id, retracted_transactions, true) {
-		Ok(resubmit_future) => Either::A(resubmit_future
-			.then(|_| ready(Ok(())))
-			.boxed()
-			.compat()
-		),
-		Err(e) => {
-			warn!("Error re-submitting transactions: {:?}", e);
-			Either::B(result(Ok(())))
-		}
-	};
+	let resubmit_future = transaction_pool
+		.submit_at(id, retracted_transactions, true)
+		.then(|resubmit_result| ready(match resubmit_result {
+			Ok(_) => Ok(()),
+			Err(e) => {
+				warn!("Error re-submitting transactions: {:?}", e);
+				Ok(())
+			}
+		}))
+		.compat();
 
 	// Avoid calling into runtime if there is nothing to prune from the pool anyway.
 	if transaction_pool.status().is_empty() {
