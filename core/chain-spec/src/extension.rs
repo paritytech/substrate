@@ -175,7 +175,7 @@ impl<B: Ord + Clone, T: Group + Extension + Clone> Forks<B, T> where
 	{
 		let base = self.base.get::<X>()?.clone();
 		let forks = self.forks.iter().filter_map(|(k, v)| {
-			Some((k.clone(), v.get::<X::Fork>()?.clone()))
+			Some((k.clone(), v.get::<Option<X::Fork>>()?.clone()?))
 		}).collect();
 
 		Some(Forks {
@@ -291,7 +291,12 @@ mod tests {
 			ext1: Extension1 { test: 5 },
 			ext2: Extension2 { test: 1 },
 		});
-
 		assert!(forks.at_block(10).get::<Extension2>().is_some());
+
+		// filter forks for `Extension2`
+		let ext2 = forks.for_type::<Extension2>().unwrap();
+		assert_eq!(ext2.at_block(0), Extension2 { test: 123 });
+		assert_eq!(ext2.at_block(2), Extension2 { test: 5 });
+		assert_eq!(ext2.at_block(10), Extension2 { test: 1 });
 	}
 }

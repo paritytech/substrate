@@ -57,7 +57,7 @@ pub fn group_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
 		let to_base = generate_fork_to_base(name, &field_names);
 
 		quote! {
-			#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+			#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ChainSpecExtension)]
 			pub struct #fork_name #ty_generics #where_clause {
 				#fork_fields
 			}
