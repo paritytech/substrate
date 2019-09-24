@@ -43,21 +43,30 @@ pub trait WasmRuntime {
 	fn version(&self) -> Option<RuntimeVersion>;
 }
 
+/// Specification of different methods of executing the runtime Wasm code.
+#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
+pub enum WasmExecutionMethod {
+	/// Uses the Wasmi interpreter.
+	Interpreted,
+}
+
 /// Cache for the runtimes.
 ///
-/// When an instance is requested for the first time it is added to this
-/// cache. Furthermore its initial memory and values of mutable globals are preserved here. Follow-up
-/// requests to fetch a runtime return this one instance with the memory
-/// reset to the initial memory. So, one runtime instance is reused for
-/// every fetch request.
+/// When an instance is requested for the first time it is added to this cache. Metadata is kept
+/// with the instance so that it can be efficiently reinitialized.
+///
+/// When using the Wasmi interpreter execution method, the metadata includes the initial memory and
+/// values of mutable globals. Follow-up requests to fetch a runtime return this one instance with
+/// the memory reset to the initial memory. So, one runtime instance is reused for every fetch
+/// request.
 ///
 /// For now the cache grows indefinitely, but that should be fine for now since runtimes can only be
 /// upgraded rarely and there are no other ways to make the node to execute some other runtime.
 pub struct RuntimesCache {
 	/// A cache of runtime instances along with metadata, ready to be reused.
 	///
-	/// Instances are keyed by the hash of their code.
-	instances: HashMap<[u8; 32], Result<Box<dyn WasmRuntime>, WasmError>>,
+	/// Instances are keyed by the Wasm execution method and the hash of their code.
+	instances: HashMap<(WasmExecutionMethod, [u8; 32]), Result<Box<dyn WasmRuntime>, WasmError>>,
 }
 
 impl RuntimesCache {
@@ -100,6 +109,7 @@ impl RuntimesCache {
 	pub fn fetch_runtime<E: Externalities<Blake2Hasher>>(
 		&mut self,
 		ext: &mut E,
+		wasm_method: WasmExecutionMethod,
 		default_heap_pages: u64,
 	) -> Result<&mut (dyn WasmRuntime + 'static), Error> {
 		let code_hash = ext
@@ -111,7 +121,7 @@ impl RuntimesCache {
 			.and_then(|pages| u64::decode(&mut &pages[..]).ok())
 			.unwrap_or(default_heap_pages);
 
-		let result = match self.instances.entry(code_hash.into()) {
+		let result = match self.instances.entry((wasm_method, code_hash.into())) {
 			Entry::Occupied(o) => {
 				let result = o.into_mut();
 				if let Ok(ref mut cached_runtime) = result {
@@ -120,7 +130,7 @@ impl RuntimesCache {
 							target: "runtimes_cache",
 							"heap_pages were changed. Reinstantiating the instance"
 						);
-						*result = create_wasm_runtime(ext, heap_pages);
+						*result = create_wasm_runtime(ext, wasm_method, heap_pages);
 						if let Err(ref err) = result {
 							warn!(target: "runtimes_cache", "cannot create a runtime: {:?}", err);
 						}
@@ -130,7 +140,7 @@ impl RuntimesCache {
 			},
 			Entry::Vacant(v) => {
 				trace!(target: "runtimes_cache", "no instance found in cache, creating now.");
-				let result = create_wasm_runtime(ext, heap_pages);
+				let result = create_wasm_runtime(ext, wasm_method, heap_pages);
 				if let Err(ref err) = result {
 					warn!(target: "runtimes_cache", "cannot create a runtime: {:?}", err);
 				}
@@ -146,11 +156,15 @@ impl RuntimesCache {
 
 fn create_wasm_runtime<E: Externalities<Blake2Hasher>>(
 	ext: &mut E,
+	wasm_method: WasmExecutionMethod,
 	heap_pages: u64,
 ) -> Result<Box<dyn WasmRuntime>, WasmError> {
 	let code = ext
 		.original_storage(well_known_keys::CODE)
 		.ok_or(WasmError::CodeNotFound)?;
-	wasmi_execution::create_instance(ext, &code, heap_pages)
-		.map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) })
+	match wasm_method {
+		WasmExecutionMethod::Interpreted =>
+			wasmi_execution::create_instance(ext, &code, heap_pages)
+				.map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) }),
+	}
 }

@@ -323,7 +323,7 @@ mod tests {
 	use substrate_test_runtime_client::{AccountKeyring, Sr25519Keyring};
 	use crate::{Header, Transfer, WASM_BINARY};
 	use primitives::{Blake2Hasher, NeverNativeValue, map, traits::CodeExecutor};
-	use substrate_executor::{NativeExecutor, native_executor_instance};
+	use substrate_executor::{NativeExecutor, WasmExecutionMethod, native_executor_instance};
 
 	// Declare an instance of the native executor dispatch for the test runtime.
 	native_executor_instance!(
@@ -331,6 +331,10 @@ mod tests {
 		crate::api::dispatch,
 		crate::native_version
 	);
+
+	fn executor() -> NativeExecutor<NativeDispatch> {
+		NativeExecutor::new(WasmExecutionMethod::Interpreted, None)
+	}
 
 	fn new_test_ext() -> TestExternalities<Blake2Hasher> {
 		let authorities = vec![
@@ -383,8 +387,7 @@ mod tests {
 	#[test]
 	fn block_import_works_wasm() {
 		block_import_works(|b, ext| {
-			let executor = <NativeExecutor<NativeDispatch>>::new(None);
-			executor.call::<_, NeverNativeValue, fn() -> _>(
+			executor().call::<_, NeverNativeValue, fn() -> _>(
 				ext,
 				"Core_execute_block",
 				&b.encode(),
@@ -478,8 +481,7 @@ mod tests {
 	#[test]
 	fn block_import_with_transaction_works_wasm() {
 		block_import_with_transaction_works(|b, ext| {
-			let executor = <NativeExecutor<NativeDispatch>>::new(None);
-			executor.call::<_, NeverNativeValue, fn() -> _>(
+			executor().call::<_, NeverNativeValue, fn() -> _>(
 				ext,
 				"Core_execute_block",
 				&b.encode(),

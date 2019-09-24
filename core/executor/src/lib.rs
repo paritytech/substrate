@@ -48,6 +48,7 @@ pub use codec::Codec;
 pub use primitives::{Blake2Hasher, traits::Externalities};
 #[doc(hidden)]
 pub use wasm_interface;
+pub use wasm_runtime::WasmExecutionMethod;
 
 /// Provides runtime information.
 pub trait RuntimeInfo {

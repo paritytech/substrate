@@ -16,7 +16,7 @@
 
 use std::{result, cell::RefCell, panic::UnwindSafe};
 use crate::error::{Error, Result};
-use crate::wasm_runtime::{RuntimesCache, WasmRuntime};
+use crate::wasm_runtime::{RuntimesCache, WasmExecutionMethod, WasmRuntime};
 use crate::RuntimeInfo;
 use runtime_version::{NativeVersion, RuntimeVersion};
 use codec::{Decode, Encode};
@@ -66,6 +66,8 @@ pub trait NativeExecutionDispatch: Send + Sync {
 pub struct NativeExecutor<D> {
 	/// Dummy field to avoid the compiler complaining about us not using `D`.
 	_dummy: ::std::marker::PhantomData<D>,
+	/// Method used to execute fallback Wasm code.
+	fallback_method: WasmExecutionMethod,
 	/// Native runtime version info.
 	native_version: NativeVersion,
 	/// The number of 64KB pages to allocate for Wasm execution.
@@ -77,11 +79,14 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 	///
 	/// # Parameters
 	///
+	/// `fallback_method` - Method used to execute fallback Wasm code.
+	///
 	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
 	/// 	Defaults to `DEFAULT_HEAP_PAGES` if `None` is provided.
-	pub fn new(default_heap_pages: Option<u64>) -> Self {
+	pub fn new(fallback_method: WasmExecutionMethod, default_heap_pages: Option<u64>) -> Self {
 		NativeExecutor {
 			_dummy: Default::default(),
+			fallback_method,
 			native_version: D::native_version(),
 			default_heap_pages: default_heap_pages.unwrap_or(DEFAULT_HEAP_PAGES),
 		}
@@ -96,7 +101,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 	{
 		RUNTIMES_CACHE.with(|cache| {
 			let mut cache = cache.borrow_mut();
-			let runtime = cache.fetch_runtime(ext, self.default_heap_pages)?;
+			let runtime = cache.fetch_runtime(ext, self.fallback_method, self.default_heap_pages)?;
 			f(runtime, ext)
 		})
 	}
@@ -106,6 +111,7 @@ impl<D: NativeExecutionDispatch> Clone for NativeExecutor<D> {
 	fn clone(&self) -> Self {
 		NativeExecutor {
 			_dummy: Default::default(),
+			fallback_method: self.fallback_method,
 			native_version: D::native_version(),
 			default_heap_pages: self.default_heap_pages,
 		}
