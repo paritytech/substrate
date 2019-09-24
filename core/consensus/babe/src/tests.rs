@@ -20,6 +20,7 @@
 // https://github.com/paritytech/substrate/issues/2532
 #![allow(deprecated)]
 use super::*;
+use crate::slots::claim_slot;
 
 use babe_primitives::{AuthorityPair, SlotNumber};
 use client::block_builder::BlockBuilder;
@@ -97,6 +98,7 @@ impl DummyProposer {
 	fn propose_with(&mut self, pre_digests: DigestFor<TestBlock>)
 		-> future::Ready<Result<TestBlock, Error>>
 	{
+		use codec::Encode;
 		let block_builder = self.factory.client.new_block_at(
 			&BlockId::Hash(self.parent_hash),
 			pre_digests,
