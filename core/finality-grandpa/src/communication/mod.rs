@@ -127,7 +127,7 @@ pub trait Network<Block: BlockT>: Clone + Send + 'static {
 	fn report(&self, who: network::PeerId, cost_benefit: i32);
 
 	/// Inform peers that a block with given hash should be downloaded.
-	fn announce(&self, block: Block::Hash);
+	fn announce(&self, block: Block::Hash, associated_data: Vec<u8>);
 }
 
 /// Create a unique topic for a round and set-id combo.
@@ -197,8 +197,8 @@ impl<B, S, H> Network<B> for Arc<NetworkService<B, S, H>> where
 		self.report_peer(who, cost_benefit)
 	}
 
-	fn announce(&self, block: B::Hash) {
-		self.announce_block(block)
+	fn announce(&self, block: B::Hash, associated_data: Vec<u8>) {
+		self.announce_block(block, associated_data)
 	}
 }
 
@@ -727,7 +727,7 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 			);
 
 			// send the target block hash to the background block announcer
-			self.announce_sender.send(target_hash);
+			self.announce_sender.send(target_hash, Vec::new());
 
 			// propagate the message to peers
 			let topic = round_topic::<Block>(self.round, self.set_id);

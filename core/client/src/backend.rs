@@ -25,7 +25,8 @@ use sr_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenSto
 use sr_primitives::traits::{Block as BlockT, NumberFor};
 use state_machine::backend::Backend as StateBackend;
 use state_machine::{ChangesTrieStorage as StateChangesTrieStorage, ChangesTrieTransaction};
-use consensus::{well_known_cache_keys, BlockOrigin};
+use crate::blockchain::well_known_cache_keys;
+use consensus::BlockOrigin;
 use hash_db::Hasher;
 use parking_lot::Mutex;
 

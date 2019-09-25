@@ -29,12 +29,11 @@ use crate::backend::{
 	AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState,
 	StorageCollection, ChildStorageCollection,
 };
-use crate::blockchain::HeaderBackend as BlockchainHeaderBackend;
+use crate::blockchain::{HeaderBackend as BlockchainHeaderBackend, well_known_cache_keys};
 use crate::error::{Error as ClientError, Result as ClientResult};
 use crate::light::blockchain::{Blockchain, Storage as BlockchainStorage};
 use hash_db::Hasher;
 use trie::MemoryDB;
-use consensus::well_known_cache_keys;
 
 const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type and always succeeds; qed";
 

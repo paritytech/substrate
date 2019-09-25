@@ -23,6 +23,7 @@ authorship = { package = "srml-authorship", path = "../authorship", default-feat
 primitives = { package = "substrate-primitives",  path = "../../core/primitives" }
 balances = { package = "srml-balances", path = "../balances" }
 timestamp = { package = "srml-timestamp", path = "../timestamp" }
+srml-staking-reward-curve = { path = "../staking/reward-curve"}
 
 [features]
 equalize = []

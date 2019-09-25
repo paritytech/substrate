@@ -44,7 +44,6 @@ wasm-builder-runner = { package = "substrate-wasm-builder-runner", version = "1.
 default = [
 	"std",
 ]
-no_std = []
 std = [
 	"log",
 	"serde",

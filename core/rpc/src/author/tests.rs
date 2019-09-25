@@ -25,8 +25,8 @@ use transaction_pool::{
 };
 use futures::Stream;
 use primitives::{
-	H256, blake2_256, hexdisplay::HexDisplay, traits::BareCryptoStore, testing::KeyStore,
-	ed25519, crypto::{key_types, Pair},
+	H256, blake2_256, hexdisplay::HexDisplay, traits::BareCryptoStore,
+	testing::{ED25519, SR25519, KeyStore}, ed25519, crypto::Pair
 };
 use test_client::{
 	self, AccountKeyring, runtime::{Extrinsic, Transfer, SessionKeys}, DefaultTestClientBuilderExt,
@@ -198,13 +198,13 @@ fn should_insert_key() {
 	let suri = "//Alice";
 	let key_pair = ed25519::Pair::from_string(suri, None).expect("Generates keypair");
 	p.insert_key(
-		String::from_utf8(key_types::ED25519.0.to_vec()).expect("Keytype is a valid string"),
+		String::from_utf8(ED25519.0.to_vec()).expect("Keytype is a valid string"),
 		suri.to_string(),
 		key_pair.public().0.to_vec().into(),
 	).expect("Insert key");
 
 	let store_key_pair = keystore.read()
-		.ed25519_key_pair(key_types::ED25519, &key_pair.public()).expect("Key exists in store");
+		.ed25519_key_pair(ED25519, &key_pair.public()).expect("Key exists in store");
 
 	assert_eq!(key_pair.public(), store_key_pair.public());
 }
@@ -227,12 +227,12 @@ fn should_rotate_keys() {
 		.expect("SessionKeys decode successfully");
 
 	let ed25519_key_pair = keystore.read().ed25519_key_pair(
-		key_types::ED25519,
+		ED25519,
 		&session_keys.ed25519.clone().into(),
 	).expect("ed25519 key exists in store");
 
 	let sr25519_key_pair = keystore.read().sr25519_key_pair(
-		key_types::SR25519,
+		SR25519,
 		&session_keys.sr25519.clone().into(),
 	).expect("sr25519 key exists in store");
 

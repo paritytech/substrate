@@ -155,6 +155,13 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 	} = instance_opts;
 
 	let expanded = quote! {
+		use #scrate::{
+			StorageValue as _,
+			StorageMap as _,
+			StorageLinkedMap as _,
+			StorageDoubleMap as _
+		};
+
 		#scrate_decl
 		#decl_storage_items
 		#visibility trait #storetype {

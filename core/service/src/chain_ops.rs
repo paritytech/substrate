@@ -20,6 +20,7 @@ use crate::RuntimeGenesis;
 use crate::error;
 use crate::chain_spec::ChainSpec;
 
+/// Defines the logic for an operation exporting blocks within a range.
 #[macro_export]
 /// Export blocks
 macro_rules! export_blocks {
@@ -76,6 +77,7 @@ macro_rules! export_blocks {
 }}
 }
 
+/// Defines the logic for an operation importing blocks from some known import.
 #[macro_export]
 /// Import blocks
 macro_rules! import_blocks {
@@ -205,6 +207,7 @@ macro_rules! import_blocks {
 }}
 }
 
+/// Revert the chain some number of blocks.
 #[macro_export]
 /// Revert a chain
 macro_rules! revert_chain {
