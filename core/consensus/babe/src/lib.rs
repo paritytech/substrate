@@ -68,7 +68,7 @@ use consensus_common::import_queue::{
 };
 use sr_primitives::{generic::{BlockId, OpaqueDigestItemId}, Justification};
 use sr_primitives::traits::{
-	Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi,
+	Block as BlockT, Header, DigestItemFor, ProvideRuntimeApi, NumberFor,
 	Zero,
 };
 use keystore::KeyStorePtr;

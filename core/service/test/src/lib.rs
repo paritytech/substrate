@@ -279,7 +279,7 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 }
 
 pub fn connectivity<G, E, Fb, F, Lb, L>(
-	spec: ChainSpec<G>,
+	spec: ChainSpec<G, E>,
 	full_builder: Fb,
 	light_builder: Lb,
 	light_node_interconnectivity: bool, // should normally be false, unless the light nodes

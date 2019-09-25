@@ -87,6 +87,9 @@ type StorageUpdate<B, Block> = <
 	>::State as state_machine::Backend<Blake2Hasher>>::Transaction;
 type ChangesUpdate<Block> = ChangesTrieTransaction<Blake2Hasher, NumberFor<Block>>;
 
+/// Expected hashes of blocks at given heights.
+///
+/// This may be used as chain spec extension to filter out known, unwanted forks.
 pub type ForkBlocks<Block> = Option<HashMap<NumberFor<Block>, <Block as BlockT>::Hash>>;
 
 /// Execution strategies settings.

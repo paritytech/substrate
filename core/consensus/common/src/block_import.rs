@@ -194,9 +194,10 @@ impl<B: BlockT> BlockImport<B> for crate::import_queue::BoxBlockImport<B> {
 	fn check_block(
 		&mut self,
 		hash: B::Hash,
+		number: NumberFor<B>,
 		parent_hash: B::Hash,
 	) -> Result<ImportResult, Self::Error> {
-		(**self).check_block(hash, parent_hash)
+		(**self).check_block(hash, number, parent_hash)
 	}
 
 	/// Import a block.
