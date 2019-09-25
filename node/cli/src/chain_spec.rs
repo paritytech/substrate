@@ -39,8 +39,13 @@ pub use node_runtime::GenesisConfig;
 
 const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 
+/// Node `ChainSpec` extensions.
+///
+/// Additional parameters for some Substrate core modules,
+/// customizable from the chain spec.
 #[derive(Default, Clone, Serialize, Deserialize, ChainSpecExtension)]
 pub struct Extensions {
+	/// Block numbers with known hashes.
 	pub fork_blocks: client::ForkBlocks<Block>,
 }
 

@@ -19,6 +19,7 @@
 use crate::error;
 use chain_spec::{ChainSpec, RuntimeGenesis, Extension};
 
+/// Generates a method to export blocks.
 #[macro_export]
 macro_rules! export_blocks {
 ($client:ident, $exit:ident, $output:ident, $from:ident, $to:ident, $json:ident) => {{
@@ -74,6 +75,7 @@ macro_rules! export_blocks {
 }}
 }
 
+/// Generates a method to import blocks.
 #[macro_export]
 macro_rules! import_blocks {
 ($block:ty, $client:ident, $queue:ident, $exit:ident, $input:ident) => {{
@@ -202,6 +204,7 @@ macro_rules! import_blocks {
 }}
 }
 
+/// Generates a method to revert chain given number of blocks and client variables.
 #[macro_export]
 macro_rules! revert_chain {
 ($client:ident, $blocks:ident) => {{
