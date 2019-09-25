@@ -82,8 +82,6 @@ impl<Block, B> VotingRule<Block, B> for BeforeBestBlock where
 		best_target: &Block::Header,
 		current_target: &Block::Header,
 	) -> Option<(Block::Hash, NumberFor<Block>)> {
-		debug_assert!(current_target.number() <= best_target.number());
-
 		if current_target.number().is_zero() {
 			return None;
 		}
@@ -137,14 +135,20 @@ impl<Block, B> VotingRule<Block, B> for ThreeQuartersOfTheUnfinalizedChain where
 
 		// walk backwards until we find the target block
 		loop {
-			if *target_header.number() < target_number { unreachable!(); }
+			if *target_header.number() < target_number {
+				unreachable!(
+					"we are traversing backwards from a known block; \
+					 blocks are stored contiguously; \
+					 qed"
+				);
+			}
 			if *target_header.number() == target_number {
 				return Some((target_hash, target_number));
 			}
 
 			target_hash = *target_header.parent_hash();
 			target_header = backend.header(BlockId::Hash(target_hash)).ok()?
-				.expect("Header known to exist after `best_containing` call; qed");
+				.expect("Header known to exist due to the existence of one of its descendents; qed");
 		}
 	}
 }
