@@ -115,8 +115,8 @@ fn generate_host_functions_struct(trait_def: &ItemTrait) -> Result<TokenStream> 
 
 			#[cfg(feature = "std")]
 			impl #crate_::wasm_interface::HostFunctions for HostFunctions {
-				fn get_function(index: usize) -> &'static dyn #crate_::wasm_interface::Function {
-					[ #( #host_functions ),* ][index]
+				fn get_function(index: usize) -> Option<&'static dyn #crate_::wasm_interface::Function> {
+					[ #( #host_functions ),* ].get(index).map(|f| *f)
 				}
 
 				fn num_functions() -> usize {

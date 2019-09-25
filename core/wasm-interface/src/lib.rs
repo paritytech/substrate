@@ -260,18 +260,16 @@ pub trait Sandbox {
 }
 
 /// Something that provides implementations for host functions.
-pub trait HostFunctions {
-	/// Returns the function at the given index.
-	///
-	/// Panics if the given index is invalid.
-	fn get_function(index: usize) -> &'static dyn Function;
+pub trait HostFunctions: 'static {
+	/// Returns the function at the given index or `None` if the index is invalid.
+	fn get_function(index: usize) -> Option<&'static dyn Function>;
 	/// Returns the number of host functions.
 	fn num_functions() -> usize;
 }
 
 #[impl_trait_for_tuples::impl_for_tuples(1, 30)]
 impl HostFunctions for Tuple {
-	fn get_function(mut index: usize) -> &'static dyn Function {
+	fn get_function(mut index: usize) -> Option<&'static dyn Function> {
 		for_tuples!(
 			#(
 				let num_functions = Tuple::num_functions();
@@ -284,11 +282,21 @@ impl HostFunctions for Tuple {
 			)*
 		);
 
-		panic!("Invalid index for `get_function`: {}", index)
+		None
 	}
 
 	fn num_functions() -> usize {
 		for_tuples!( #( Tuple::num_functions() )+* )
+	}
+}
+
+impl HostFunctions for () {
+	fn get_function(_: usize) -> Option<&'static dyn Function> {
+		None
+	}
+
+	fn num_functions() -> usize {
+		0
 	}
 }
 

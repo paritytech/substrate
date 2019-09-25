@@ -25,6 +25,7 @@ use primitives::{storage::well_known_keys, Blake2Hasher, traits::Externalities};
 use runtime_version::RuntimeVersion;
 use std::{collections::hash_map::{Entry, HashMap}, mem, rc::Rc};
 use wasmi::{Module as WasmModule, ModuleRef as WasmModuleInstanceRef, RuntimeValue};
+use wasm_interface::HostFunctions;
 
 #[derive(Debug)]
 enum CacheError {
@@ -236,9 +237,9 @@ impl RuntimesCache {
 	///
 	/// `Error::InvalidMemoryReference` is returned if no memory export with the
 	/// identifier `memory` can be found in the runtime.
-	pub fn fetch_runtime<E: Externalities<Blake2Hasher>>(
+	pub fn fetch_runtime<E: Externalities<Blake2Hasher>, HF: HostFunctions>(
 		&mut self,
-		wasm_executor: &WasmExecutor,
+		wasm_executor: &WasmExecutor<HF>,
 		ext: &mut E,
 		default_heap_pages: Option<u64>,
 	) -> Result<Rc<CachedRuntime>, Error> {
@@ -291,8 +292,8 @@ impl RuntimesCache {
 		}
 	}
 
-	fn create_wasm_instance<E: Externalities<Blake2Hasher>>(
-		wasm_executor: &WasmExecutor,
+	fn create_wasm_instance<E: Externalities<Blake2Hasher>, HF: HostFunctions>(
+		wasm_executor: &WasmExecutor<HF>,
 		ext: &mut E,
 		heap_pages: u64,
 	) -> Result<Rc<CachedRuntime>, CacheError> {
@@ -308,7 +309,7 @@ impl RuntimesCache {
 		let data_segments = extract_data_segments(&code)?;
 
 		// Instantiate this module.
-		let instance = WasmExecutor::instantiate_module(heap_pages as usize, &module)
+		let instance = WasmExecutor::<HF>::instantiate_module(heap_pages as usize, &module)
 			.map_err(CacheError::Instantiation)?;
 
 		// Take state snapshot before executing anything.

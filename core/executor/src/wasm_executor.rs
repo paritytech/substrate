@@ -19,7 +19,7 @@
 //! This module defines and implements the wasm part of Substrate Host Interface and provides
 //! an interface for calling into the wasm runtime.
 
-use std::{convert::TryFrom, str, panic};
+use std::{convert::TryFrom, str, panic, marker::PhantomData};
 use tiny_keccak;
 use secp256k1;
 
@@ -39,7 +39,7 @@ use crate::sandbox;
 use crate::allocator;
 use log::trace;
 use wasm_interface::{
-	FunctionContext, HostFunctions, Pointer, WordSize, Sandbox, MemoryId, PointerType,
+	FunctionContext, HostFunctions, Pointer, WordSize, Sandbox, MemoryId,
 	Result as WResult, ReadPrimitive, WritePrimitive,
 };
 
@@ -53,25 +53,27 @@ macro_rules! debug_trace {
 	( $( $x:tt )* ) => ()
 }
 
-struct FunctionExecutor {
+struct FunctionExecutor<HF> {
 	sandbox_store: sandbox::Store,
 	heap: allocator::FreeingBumpHeapAllocator,
 	memory: MemoryRef,
 	table: Option<TableRef>,
+	_marker: PhantomData<HF>,
 }
 
-impl FunctionExecutor {
+impl<HF: HostFunctions> FunctionExecutor<HF> {
 	fn new(m: MemoryRef, heap_base: u32, t: Option<TableRef>) -> Result<Self> {
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
 			heap: allocator::FreeingBumpHeapAllocator::new(m.clone(), heap_base),
 			memory: m,
 			table: t,
+			_marker: Default::default(),
 		})
 	}
 }
 
-impl sandbox::SandboxCapabilities for FunctionExecutor {
+impl<HF: HostFunctions> sandbox::SandboxCapabilities for FunctionExecutor<HF> {
 	fn store(&self) -> &sandbox::Store {
 		&self.sandbox_store
 	}
@@ -92,7 +94,7 @@ impl sandbox::SandboxCapabilities for FunctionExecutor {
 	}
 }
 
-impl FunctionContext for FunctionExecutor {
+impl<HF: HostFunctions> FunctionContext for FunctionExecutor<HF> {
 	fn read_memory_into(&self, address: Pointer<u8>, dest: &mut [u8]) -> WResult<()> {
 		self.memory.get_into(address.into(), dest).map_err(|e| format!("{:?}", e))
 	}
@@ -114,7 +116,7 @@ impl FunctionContext for FunctionExecutor {
 	}
 }
 
-impl Sandbox for FunctionExecutor {
+impl<HF: HostFunctions> Sandbox for FunctionExecutor<HF> {
 	fn memory_get(
 		&self,
 		memory_id: MemoryId,
@@ -247,19 +249,20 @@ fn deadline_to_timestamp(deadline: u64) -> Option<offchain::Timestamp> {
 	}
 }
 
-impl FunctionExecutor {
+impl<HF: HostFunctions> FunctionExecutor<HF> {
 	fn resolver() -> &'static dyn wasmi::ModuleImportResolver {
-		struct Resolver;
-		impl wasmi::ModuleImportResolver for Resolver {
+		struct Resolver<HF>(PhantomData<HF>);
+		impl<HF: HostFunctions> wasmi::ModuleImportResolver for Resolver<HF> {
 			fn resolve_func(&self, name: &str, signature: &wasmi::Signature)
 				-> std::result::Result<wasmi::FuncRef, wasmi::Error>
 			{
 				let signature = wasm_interface::Signature::from(signature);
-				let num_functions = SubstrateExternals::num_functions();
+				let num_functions = HF::num_functions();
 				let mut function_index = 0;
 
 				while function_index < num_functions {
-					let function = SubstrateExternals::get_function(function_index);
+					let function = HF::get_function(function_index)
+						.expect("Any index below the number of functions is valid; qed");
 
 					if name == function.name() {
 						if signature == function.signature() {
@@ -286,29 +289,23 @@ impl FunctionExecutor {
 				))
 			}
 		}
-		&Resolver
+		&Resolver::<HF>(PhantomData::<HF>)
 	}
 }
 
-impl wasmi::Externals for FunctionExecutor {
+impl<HF: HostFunctions> wasmi::Externals for FunctionExecutor<HF> {
 	fn invoke_index(&mut self, index: usize, args: wasmi::RuntimeArgs)
 		-> std::result::Result<Option<wasmi::RuntimeValue>, wasmi::Trap>
 	{
-		if index >= SubstrateExternals::num_functions() {
-			Err(
-				Error::from(
-					format!("Could not find host function with index: {}", index),
-				).into()
-			)
-		} else {
-			let mut args = args.as_ref().iter().copied().map(Into::into);
+		let function = HF::get_function(index).ok_or_else(||
+			Error::from(format!("Could not find host function with index: {}", index))
+		)?;
 
-			SubstrateExternals::get_function(index)
-				.execute(self, &mut args)
-				.map_err(Error::FunctionExecution)
-				.map_err(wasmi::Trap::from)
-				.map(|v| v.map(Into::into))
-		}
+		let mut args = args.as_ref().iter().copied().map(Into::into);
+		function.execute(self, &mut args)
+			.map_err(Error::FunctionExecution)
+			.map_err(wasmi::Trap::from)
+			.map(|v| v.map(Into::into))
 	}
 }
 struct SubstrateExternals;
@@ -1372,12 +1369,12 @@ fn with_external_storage<T, F>(f: F) -> std::result::Result<T, String>
 ///
 /// Executes the provided code in a sandboxed wasm runtime.
 #[derive(Debug, Clone)]
-pub struct WasmExecutor;
+pub struct WasmExecutor<HF: HostFunctions = ()>(PhantomData<HF>);
 
-impl WasmExecutor {
+impl<HF: HostFunctions> WasmExecutor<HF> {
 	/// Create a new instance.
 	pub fn new() -> Self {
-		WasmExecutor
+		WasmExecutor(PhantomData::<HF>)
 	}
 
 	/// Call a given method in the given code.
@@ -1503,7 +1500,7 @@ impl WasmExecutor {
 			.and_then(|e| e.as_table().cloned());
 		let heap_base = Self::get_heap_base(module_instance)?;
 
-		let mut fec = FunctionExecutor::new(
+		let mut fec = FunctionExecutor::<(SubstrateExternals, HF)>::new(
 			memory.clone(),
 			heap_base,
 			table,
@@ -1544,7 +1541,7 @@ impl WasmExecutor {
 		let intermediate_instance = ModuleInstance::new(
 			module,
 			&ImportsBuilder::new()
-			.with_resolver("env", FunctionExecutor::resolver())
+			.with_resolver("env", FunctionExecutor::<(SubstrateExternals, HF)>::resolver())
 		)?;
 
 		// Verify that the module has the heap base global variable.
@@ -1583,7 +1580,14 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = WASM_BINARY;
 
-		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_empty_return", &[]).unwrap();
+		let output = <WasmExecutor>::new()
+			.call(
+				&mut ext,
+				8,
+				&test_code[..],
+				"test_empty_return",
+				&[],
+			).unwrap();
 		assert_eq!(output, vec![0u8; 0]);
 	}
 
@@ -1592,13 +1596,13 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = WASM_BINARY;
 
-		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_panic", &[]);
+		let output = <WasmExecutor>::new().call(&mut ext, 8, &test_code[..], "test_panic", &[]);
 		assert!(output.is_err());
 
-		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_conditional_panic", &[]);
+		let output = <WasmExecutor>::new().call(&mut ext, 8, &test_code[..], "test_conditional_panic", &[]);
 		assert_eq!(output.unwrap(), vec![0u8; 0]);
 
-		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_conditional_panic", &[2]);
+		let output = <WasmExecutor>::new().call(&mut ext, 8, &test_code[..], "test_conditional_panic", &[2]);
 		assert!(output.is_err());
 	}
 
@@ -1608,7 +1612,14 @@ mod tests {
 		ext.set_storage(b"foo".to_vec(), b"bar".to_vec());
 		let test_code = WASM_BINARY;
 
-		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_data_in", b"Hello world").unwrap();
+		let output = <WasmExecutor>::new()
+			.call(
+				&mut ext,
+				8,
+				&test_code[..],
+				"test_data_in",
+				b"Hello world",
+			).unwrap();
 
 		assert_eq!(output, b"all ok!".to_vec());
 
@@ -1631,7 +1642,14 @@ mod tests {
 		let test_code = WASM_BINARY;
 
 		// This will clear all entries which prefix is "ab".
-		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_clear_prefix", b"ab").unwrap();
+		let output = <WasmExecutor>::new()
+			.call(
+				&mut ext,
+				8,
+				&test_code[..],
+				"test_clear_prefix",
+				b"ab",
+			).unwrap();
 
 		assert_eq!(output, b"all ok!".to_vec());
 
@@ -1648,11 +1666,11 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = WASM_BINARY;
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_blake2_256", &[]).unwrap(),
+			<WasmExecutor>::new().call(&mut ext, 8, &test_code[..], "test_blake2_256", &[]).unwrap(),
 			blake2_256(&b""[..]).encode()
 		);
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_blake2_256", b"Hello world!").unwrap(),
+			<WasmExecutor>::new().call(&mut ext, 8, &test_code[..], "test_blake2_256", b"Hello world!").unwrap(),
 			blake2_256(&b"Hello world!"[..]).encode()
 		);
 	}
@@ -1662,11 +1680,11 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = WASM_BINARY;
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_blake2_128", &[]).unwrap(),
+			<WasmExecutor>::new().call(&mut ext, 8, &test_code[..], "test_blake2_128", &[]).unwrap(),
 			blake2_128(&b""[..]).encode()
 		);
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_blake2_128", b"Hello world!").unwrap(),
+			<WasmExecutor>::new().call(&mut ext, 8, &test_code[..], "test_blake2_128", b"Hello world!").unwrap(),
 			blake2_128(&b"Hello world!"[..]).encode()
 		);
 	}
@@ -1676,11 +1694,11 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = WASM_BINARY;
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_twox_256", &[]).unwrap(),
+			<WasmExecutor>::new().call(&mut ext, 8, &test_code[..], "test_twox_256", &[]).unwrap(),
 			hex!("99e9d85137db46ef4bbea33613baafd56f963c64b1f3685a4eb4abd67ff6203a"),
 		);
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_twox_256", b"Hello world!").unwrap(),
+			<WasmExecutor>::new().call(&mut ext, 8, &test_code[..], "test_twox_256", b"Hello world!").unwrap(),
 			hex!("b27dfd7f223f177f2a13647b533599af0c07f68bda23d96d059da2b451a35a74"),
 		);
 	}
@@ -1690,11 +1708,11 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = WASM_BINARY;
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_twox_128", &[]).unwrap(),
+			<WasmExecutor>::new().call(&mut ext, 8, &test_code[..], "test_twox_128", &[]).unwrap(),
 			hex!("99e9d85137db46ef4bbea33613baafd5")
 		);
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_twox_128", b"Hello world!").unwrap(),
+			<WasmExecutor>::new().call(&mut ext, 8, &test_code[..], "test_twox_128", b"Hello world!").unwrap(),
 			hex!("b27dfd7f223f177f2a13647b533599af")
 		);
 	}
@@ -1710,7 +1728,7 @@ mod tests {
 		calldata.extend_from_slice(sig.as_ref());
 
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_ed25519_verify", &calldata).unwrap(),
+			<WasmExecutor>::new().call(&mut ext, 8, &test_code[..], "test_ed25519_verify", &calldata).unwrap(),
 			vec![1]
 		);
 
@@ -1720,7 +1738,7 @@ mod tests {
 		calldata.extend_from_slice(other_sig.as_ref());
 
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_ed25519_verify", &calldata).unwrap(),
+			<WasmExecutor>::new().call(&mut ext, 8, &test_code[..], "test_ed25519_verify", &calldata).unwrap(),
 			vec![0]
 		);
 	}
@@ -1736,7 +1754,7 @@ mod tests {
 		calldata.extend_from_slice(sig.as_ref());
 
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sr25519_verify", &calldata).unwrap(),
+			<WasmExecutor>::new().call(&mut ext, 8, &test_code[..], "test_sr25519_verify", &calldata).unwrap(),
 			vec![1]
 		);
 
@@ -1746,7 +1764,7 @@ mod tests {
 		calldata.extend_from_slice(other_sig.as_ref());
 
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sr25519_verify", &calldata).unwrap(),
+			<WasmExecutor>::new().call(&mut ext, 8, &test_code[..], "test_sr25519_verify", &calldata).unwrap(),
 			vec![0]
 		);
 	}
@@ -1757,7 +1775,7 @@ mod tests {
 		let trie_input = vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()];
 		let test_code = WASM_BINARY;
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_ordered_trie_root", &[]).unwrap(),
+			<WasmExecutor>::new().call(&mut ext, 8, &test_code[..], "test_ordered_trie_root", &[]).unwrap(),
 			Layout::<Blake2Hasher>::ordered_trie_root(trie_input.iter()).as_fixed_bytes().encode()
 		);
 	}
@@ -1771,7 +1789,7 @@ mod tests {
 		ext.set_offchain_externalities(offchain);
 		let test_code = WASM_BINARY;
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_offchain_local_storage", &[]).unwrap(),
+			<WasmExecutor>::new().call(&mut ext, 8, &test_code[..], "test_offchain_local_storage", &[]).unwrap(),
 			vec![0]
 		);
 		assert_eq!(state.read().persistent_storage.get(b"", b"test"), Some(vec![]));
@@ -1798,7 +1816,7 @@ mod tests {
 
 		let test_code = WASM_BINARY;
 		assert_eq!(
-			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_offchain_http", &[]).unwrap(),
+			<WasmExecutor>::new().call(&mut ext, 8, &test_code[..], "test_offchain_http", &[]).unwrap(),
 			vec![0]
 		);
 	}

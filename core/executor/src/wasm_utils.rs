@@ -162,11 +162,13 @@ macro_rules! impl_wasm_host_interface {
 	) => (
 		impl $crate::wasm_interface::HostFunctions for $interface_name {
 			#[allow(non_camel_case_types)]
-			fn get_function(index: usize) -> &'static dyn $crate::wasm_interface::Function {
+			fn get_function(index: usize) -> Option<&'static dyn $crate::wasm_interface::Function> {
 				gen_functions!(
 					$context,
 					$( $name( $( $names: $params ),* ) $( -> $returns )? { $( $body )* } )*
-				)[index]
+				)
+				.get(index)
+				.map(|f| *f)
 			}
 
 			#[allow(non_camel_case_types)]
@@ -174,7 +176,8 @@ macro_rules! impl_wasm_host_interface {
 				gen_functions!(
 					$context,
 					$( $name( $( $names: $params ),* ) $( -> $returns )? { $( $body )* } )*
-				).len()
+				)
+				.len()
 			}
 		}
 	);
