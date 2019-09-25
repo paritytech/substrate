@@ -87,7 +87,7 @@ type StorageUpdate<B, Block> = <
 	>::State as state_machine::Backend<Blake2Hasher>>::Transaction;
 type ChangesUpdate<Block> = ChangesTrieTransaction<Blake2Hasher, NumberFor<Block>>;
 
-pub type ForkBlocks<Block> = HashMap<NumberFor<Block>, <Block as BlockT>::Hash>;
+pub type ForkBlocks<Block> = Option<HashMap<NumberFor<Block>, <Block as BlockT>::Hash>>;
 
 /// Execution strategies settings.
 #[derive(Debug, Clone)]
@@ -1517,7 +1517,7 @@ impl<'a, B, E, Block, RA> consensus::BlockImport<Block> for &'a Client<B, E, Blo
 		parent_hash: Block::Hash,
 	) -> Result<ImportResult, Self::Error> {
 
-		if let Some(h) = self.fork_blocks.get(&number) {
+		if let Some(h) = self.fork_blocks.as_ref().and_then(|x| x.get(&number)) {
 			if &hash != h  {
 				trace!(
 					"Rejecting block from known invalid fork. Got {:?}, expected: {:?} at height {}",
