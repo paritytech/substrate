@@ -1599,32 +1599,58 @@ fn grandpa_environment_respects_voting_rules() {
 	// create an environment with no voting rule restrictions
 	let unrestricted_env = environment(Box::new(()));
 
-	// and another another one restricted to votes below best block
-	let restricted_env = environment(Box::new(voting_rule::BeforeBestBlock));
+	// another with 3/4 unfinalized chain voting rule restriction
+	let three_quarters_env = environment(Box::new(
+		voting_rule::ThreeQuartersOfTheUnfinalizedChain
+	));
 
-	// both environments should return block 15, which is 3/4 of the way in the unfinalized chain
+	// and another restricted with the default voting rules: i.e. 3/4 rule and
+	// always below best block
+	let default_env = environment(Box::new(
+		VotingRulesBuilder::default().build()
+	));
+
+	// the unrestricted environment should just return the best block
 	assert_eq!(
-		unrestricted_env.best_chain_containing(peer.client().info().chain.finalized_hash).unwrap().1,
+		unrestricted_env.best_chain_containing(
+			peer.client().info().chain.finalized_hash
+		).unwrap().1,
+		20,
+	);
+
+	// both the other environments should return block 15, which is 3/4 of the
+	// way in the unfinalized chain
+	assert_eq!(
+		three_quarters_env.best_chain_containing(
+			peer.client().info().chain.finalized_hash
+		).unwrap().1,
 		15,
 	);
 
 	assert_eq!(
-		restricted_env.best_chain_containing(peer.client().info().chain.finalized_hash).unwrap().1,
+		default_env.best_chain_containing(
+			peer.client().info().chain.finalized_hash
+		).unwrap().1,
 		15,
 	);
 
 	// we finalize block 19 with block 20 being the best block
 	peer.client().finalize_block(BlockId::Number(19), None, false).unwrap();
 
-	// the unrestricted environment should propose block 20 for voting
+	// the 3/4 environment should propose block 20 for voting
 	assert_eq!(
-		unrestricted_env.best_chain_containing(peer.client().info().chain.finalized_hash).unwrap().1,
+		three_quarters_env.best_chain_containing(
+			peer.client().info().chain.finalized_hash
+		).unwrap().1,
 		20,
 	);
 
-	// while the restricted environment will always make sure we don't vote on the best block
+	// while the default environment will always still make sure we don't vote
+	// on the best block
 	assert_eq!(
-		restricted_env.best_chain_containing(peer.client().info().chain.finalized_hash).unwrap().1,
+		default_env.best_chain_containing(
+			peer.client().info().chain.finalized_hash
+		).unwrap().1,
 		19,
 	);
 }
