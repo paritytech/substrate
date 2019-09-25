@@ -122,7 +122,7 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		&cratename,
 		&storage_lines,
 		&where_clause,
-	);
+	).unwrap_or_else(|err| err.to_compile_error());
 
 	let decl_store_items = decl_store_items(
 		&storage_lines,
@@ -637,7 +637,7 @@ fn decl_storage_items(
 	cratename: &Ident,
 	storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
 	where_clause: &Option<WhereClause>,
-) -> TokenStream2 {
+) -> syn::Result<TokenStream2> {
 	let mut impls = TokenStream2::new();
 
 	let InstanceOpts {
@@ -768,6 +768,14 @@ fn decl_storage_items(
 		} = sline;
 
 		let type_infos = get_type_infos(storage_type);
+
+		if type_infos.is_option && default_value.inner.is_some() {
+			return Err(syn::Error::new_spanned(
+				default_value,
+				"Default values for Option types are not supported"
+			));
+		}
+
 		let fielddefault = default_value.inner
 			.as_ref()
 			.map(|d| &d.expr)
@@ -808,7 +816,8 @@ fn decl_storage_items(
 		};
 		impls.extend(implementation)
 	}
-	impls
+
+	Ok(impls)
 }
 
 fn decl_store_items(storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>) -> TokenStream2 {
