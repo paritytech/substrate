@@ -279,4 +279,20 @@ mod tests {
 			|res, _| if res.is_none() { Ok(Some(())) } else { Err("Invalid return value!".into()) },
 		).unwrap();
 	}
+
+	#[test]
+	#[should_panic(expected = "Wasmi(Instantiation(\"Export ext_test_api_return_input not found\"))")]
+	fn host_function_not_found() {
+		let mut ext = TestExternalities::default();
+		let executor = <WasmExecutor>::new();
+
+		executor.call_with_custom_signature::<_, _, _, ()>(
+			&mut ext,
+			8,
+			&WASM_BINARY[..],
+			"test_return_data",
+			|_| Ok(Vec::new()),
+			|res, _| Ok(None),
+		).unwrap();
+	}
 }
