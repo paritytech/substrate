@@ -46,7 +46,7 @@ pub trait OffstateStorage {
 
 }
 
-impl OffstateBackendStorage for TODO {
+impl<N> OffstateBackendStorage for TODO<N> {
 
 	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
 		unimplemented!()
@@ -57,6 +57,19 @@ impl OffstateBackendStorage for TODO {
 	}
 
 }
+
+impl OffstateBackendStorage for TODO2 {
+
+	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
+		unimplemented!()
+	}
+
+	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+		unimplemented!()
+	}
+
+}
+
 
 // This implementation is used by normal storage trie clients.
 impl OffstateBackendStorage for Arc<dyn OffstateStorage> {
@@ -72,7 +85,7 @@ impl OffstateBackendStorage for Arc<dyn OffstateStorage> {
 }
 
 
-impl OffstateStorage for TODO {
+impl<N> OffstateStorage for TODO<N> {
 
 	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
 		unimplemented!()
@@ -88,6 +101,38 @@ impl OffstateStorage for TODO {
 
 }
 
-// TODO EMCH implement, no branch ranges.
-pub struct TODO;
+impl OffstateStorage for TODO2 {
 
+	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
+		unimplemented!()
+	}
+
+	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
+		<Self as OffstateBackendStorage>::get(&self, prefix, key)
+	}
+
+	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+		<Self as OffstateBackendStorage>::pairs(&self)
+	}
+
+}
+
+
+/// TODO EMCH implement, no branch ranges.
+pub struct TODO<N>(N);
+
+/// TODO EMCH variant for proof check or no
+/// need to keep multiple block state.
+/// TODO rename to something like SingleState
+pub struct TODO2;
+
+impl<N> TODO<N> {
+	/// Build for a given block number.
+	/// TODO EMCH may or may not need a branch index to
+	pub fn new(block_number: N) -> Self {
+		TODO(block_number)
+	}
+}
+
+impl<N> TODO<N> {
+}

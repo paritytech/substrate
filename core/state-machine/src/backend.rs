@@ -21,7 +21,7 @@ use log::warn;
 use hash_db::Hasher;
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::TrieBackendStorage;
-use crate::offstate_backend::{OffstateBackendStorage, TODO};
+use crate::offstate_backend::{OffstateBackendStorage, TODO, TODO2};
 use trie::{
 	TrieMut, MemoryDB, child_trie_root, default_child_trie_root, TrieConfiguration,
 	trie_types::{TrieDBMut, Layout},
@@ -310,7 +310,7 @@ impl error::Error for Void {
 /// tests.
 pub struct InMemory<H: Hasher> {
 	inner: HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>>,
-	trie: Option<TrieBackend<MemoryDB<H>, H, TODO>>,
+	trie: Option<TrieBackend<MemoryDB<H>, H, TODO2>>,
 	offstate: HashMap<Vec<u8>, Vec<u8>>,
 	_hasher: PhantomData<H>,
 }
@@ -466,7 +466,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 	type Error = Void;
 	type Transaction = InMemoryTransaction;
 	type TrieBackendStorage = MemoryDB<H>;
-	type OffstateBackendStorage = TODO;
+	type OffstateBackendStorage = TODO2;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		Ok(self.inner.get(&None).and_then(|map| map.get(key).map(Clone::clone)))
@@ -619,7 +619,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> {
 		// Since we are running on a memorydb (not a prefixed memory db), content
 		// is not collision free, so an empty offtrie state can be use (no need
 		// for keyspace).
-		self.trie = Some(TrieBackend::new(mdb, root, TODO));
+		self.trie = Some(TrieBackend::new(mdb, root, TODO2));
 		self.trie.as_ref()
 	}
 }

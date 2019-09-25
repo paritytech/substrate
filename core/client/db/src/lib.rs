@@ -60,7 +60,7 @@ use executor::RuntimeInfo;
 use state_machine::{
 	DBValue, ChangesTrieTransaction, ChangesTrieCacheAction, ChangesTrieBuildCache,
 	backend::Backend as StateBackend,
-	TODO,
+	TODO, TODO2,
 };
 use crate::utils::{Meta, db_err, meta_keys, read_db, block_id_to_lookup_key, read_meta};
 use client::leaves::{LeafSet, FinalizationDisplaced};
@@ -440,6 +440,7 @@ pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	db_updates: (PrefixedMemoryDB<H>, Vec<(Vec<u8>, Option<Vec<u8>>)>),
 	storage_updates: StorageCollection,
 	child_storage_updates: ChildStorageCollection,
+	// TODO EMCH offstate update and offstate values in cache
 	changes_trie_updates: MemoryDB<H>,
 	changes_trie_cache_update: Option<ChangesTrieCacheAction<H::Out, NumberFor<Block>>>,
 	pending_block: Option<PendingBlock<Block>>,
@@ -1497,7 +1498,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 				let genesis_storage = DbGenesisStorage::new();
 				let root = genesis_storage.0.clone();
 				// TODO EMCH see genesis impl: that is empty storage
-				let genesis_offstate = TODO;
+				let genesis_offstate = TODO2;
 				let db_state = DbState::new(Arc::new(genesis_storage), root, Arc::new(genesis_offstate));
 				let state = RefTrackingState::new(db_state, self.storage.clone(), None);
 				return Ok(CachingState::new(state, self.shared_cache.clone(), None));
@@ -1510,7 +1511,8 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 				let hash = hdr.hash();
 				if let Ok(()) = self.storage.state_db.pin(&hash) {
 					let root = H256::from_slice(hdr.state_root().as_ref());
-					let db_state = DbState::new(self.storage.clone(), root, Arc::new(TODO));
+					let block_number = hdr.number().clone();
+					let db_state = DbState::new(self.storage.clone(), root, Arc::new(TODO::new(block_number)));
 					let state = RefTrackingState::new(db_state, self.storage.clone(), Some(hash.clone()));
 					Ok(CachingState::new(state, self.shared_cache.clone(), Some(hash)))
 				} else {

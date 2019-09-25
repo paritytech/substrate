@@ -289,7 +289,7 @@ pub mod tests {
 
 	// TODO this need an actual in momery with possibly content
 	// as the test uses a prefixed memory db.
-	type OffstateBackend = crate::offstate_backend::TODO;
+	type OffstateBackend = crate::offstate_backend::TODO2;
 
 	fn test_db() -> (PrefixedMemoryDB<Blake2Hasher>, H256, OffstateBackend) {
 		let mut root = H256::default();
@@ -314,7 +314,7 @@ pub mod tests {
 			}
 		}
 		// empty history.
-		let offstate = crate::offstate_backend::TODO;
+		let offstate = crate::offstate_backend::TODO2;
 		// TODO EMCH add a block in offstate or use an actual implementation of
 		// offstate that do not use history (a test implementation most likely)
 		// TODO EMCH feed offstate with keyspace for roots.
@@ -346,7 +346,7 @@ pub mod tests {
 		assert!(TrieBackend::<PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher, OffstateBackend>::new(
 			PrefixedMemoryDB::default(),
 			Default::default(),
-			crate::offstate_backend::TODO,
+			crate::offstate_backend::TODO2,
 		).pairs().is_empty());
 	}
 
