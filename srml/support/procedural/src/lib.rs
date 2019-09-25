@@ -64,8 +64,8 @@ use proc_macro::TokenStream;
 ///   `$hash` representing a choice of hashing algorithms available in the
 ///   [`Hashable`](../srml_support/trait.Hashable.html) trait.
 ///
-///   `hasher($hash)` is optional and its default is `blake2_256`. Using another hasher must be
-///   made with care, see generator documentation.
+///   `hasher($hash)` is optional and its default is `blake2_256`. One should use another hasher
+///   with care, see generator documentation.
 ///
 ///   The generator is implemented with:
 ///   * `prefix`: `$module_prefix ++ " " ++ $storage_name`
@@ -79,7 +79,7 @@ use proc_macro::TokenStream;
 ///   [`Hashable`](../srml_support/trait.Hashable.html) trait.
 ///
 ///   `hasher($hash)` is optional and its default is `blake2_256`. One should use another hasher
-///  with care, see generator documentation.
+///   with care, see generator documentation.
 ///
 ///   The generator is implemented with:
 ///   * `prefix`: `$module_prefix ++ " " ++ $storage_name`
@@ -96,8 +96,8 @@ use proc_macro::TokenStream;
 ///
 ///   `hasher($hash)` is optional and its default is `blake2_256`.
 ///
-///   `hasher($hash)` is optional and its default is `blake2_256`. Using another hasher must be
-///   made with care, see generator documentation.
+///   `hasher($hash)` is optional and its default is `blake2_256`. One should use another hasher
+///   with care, see generator documentation.
 ///
 ///   If the first key is untrusted, a cryptographic `hasher` such as `blake2_256` must be used.
 ///   Otherwise, other values of all storage items can be compromised.
