@@ -269,6 +269,29 @@ pub trait HostFunctions {
 	fn num_functions() -> usize;
 }
 
+#[impl_trait_for_tuples::impl_for_tuples(1, 30)]
+impl HostFunctions for Tuple {
+	fn get_function(mut index: usize) -> &'static dyn Function {
+		for_tuples!(
+			#(
+				let num_functions = Tuple::num_functions();
+
+				if index < num_functions {
+					return Tuple::get_function(index)
+				}
+
+				index -= num_functions;
+			)*
+		);
+
+		panic!("Invalid index for `get_function`: {}", index)
+	}
+
+	fn num_functions() -> usize {
+		for_tuples!( #( Tuple::num_functions() )+* )
+	}
+}
+
 /// Something that can be converted into a wasm compatible `Value`.
 pub trait IntoValue {
 	/// The type of the value in wasm.
