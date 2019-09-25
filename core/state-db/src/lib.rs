@@ -31,6 +31,7 @@
 
 mod noncanonical;
 mod pruning;
+mod branch;
 #[cfg(test)] mod test;
 
 use std::fmt;
@@ -97,6 +98,8 @@ pub enum Error<E: fmt::Debug> {
 	InvalidBlockNumber,
 	/// Trying to insert block with unknown parent.
 	InvalidParent,
+	/// branch range access error
+	InvalidRange,
 }
 
 /// Pinning error type.
@@ -119,6 +122,7 @@ impl<E: fmt::Debug> fmt::Debug for Error<E> {
 			Error::InvalidBlock => write!(f, "Trying to canonicalize invalid block"),
 			Error::InvalidBlockNumber => write!(f, "Trying to insert block with invalid number"),
 			Error::InvalidParent => write!(f, "Trying to insert block with unknown parent"),
+			Error::InvalidRange => write!(f, "Trying to use invalid branch range"),
 		}
 	}
 }
