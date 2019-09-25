@@ -23,12 +23,14 @@
 use std::sync::Arc;
 
 use client::blockchain::HeaderBackend;
-use primitives::H256;
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{Block as BlockT, Header, NumberFor, One, Zero};
 
 /// A trait for custom voting rules in GRANDPA.
-pub trait VotingRule<Block: BlockT>: Send + Sync {
+pub trait VotingRule<Block, B>: Send + Sync where
+	Block: BlockT,
+	B: HeaderBackend<Block>,
+{
 	/// Restrict the given `current_target` vote, returning the block hash and
 	/// number of the block to vote on, and `None` in case the vote should not
 	/// be restricted.
@@ -37,14 +39,19 @@ pub trait VotingRule<Block: BlockT>: Send + Sync {
 	/// the returned value **must** be an ancestor of the given `current_target`.
 	fn restrict_vote(
 		&self,
+		backend: &B,
 		best_target: &Block::Header,
 		current_target: &Block::Header,
 	) -> Option<(Block::Hash, NumberFor<Block>)>;
 }
 
-impl<Block: BlockT> VotingRule<Block> for () {
+impl<Block, B> VotingRule<Block, B> for () where
+	Block: BlockT,
+	B: HeaderBackend<Block>,
+{
 	fn restrict_vote(
 		&self,
+		_backend: &B,
 		_best_target: &Block::Header,
 		_current_target: &Block::Header,
 	) -> Option<(Block::Hash, NumberFor<Block>)> {
@@ -56,9 +63,13 @@ impl<Block: BlockT> VotingRule<Block> for () {
 /// block, in the best case exactly one block behind it.
 #[derive(Clone)]
 pub struct AlwaysBehindBestBlock;
-impl<Block: BlockT> VotingRule<Block> for AlwaysBehindBestBlock {
+impl<Block, B> VotingRule<Block, B> for AlwaysBehindBestBlock where
+	Block: BlockT,
+	B: HeaderBackend<Block>,
+{
 	fn restrict_vote(
 		&self,
+		_backend: &B,
 		best_target: &Block::Header,
 		current_target: &Block::Header,
 	) -> Option<(Block::Hash, NumberFor<Block>)> {
@@ -79,26 +90,25 @@ impl<Block: BlockT> VotingRule<Block> for AlwaysBehindBestBlock {
 	}
 }
 
-struct VotingRules<B, Block> {
-	backend: Arc<B>,
-	rules: Arc<Vec<Box<dyn VotingRule<Block>>>>,
+struct VotingRules<Block, B> {
+	rules: Arc<Vec<Box<dyn VotingRule<Block, B>>>>,
 }
 
 impl<B, Block> Clone for VotingRules<B, Block> {
 	fn clone(&self) -> Self {
 		VotingRules {
-			backend: self.backend.clone(),
 			rules: self.rules.clone(),
 		}
 	}
 }
 
-impl<B, Block> VotingRule<Block> for VotingRules<B, Block> where
+impl<Block, B> VotingRule<Block, B> for VotingRules<Block, B> where
+	Block: BlockT,
 	B: HeaderBackend<Block>,
-	Block: BlockT<Hash = H256>,
 {
 	fn restrict_vote(
 		&self,
+		backend: &B,
 		best_target: &Block::Header,
 		current_target: &Block::Header,
 	) -> Option<(Block::Hash, NumberFor<Block>)> {
@@ -106,10 +116,11 @@ impl<B, Block> VotingRule<Block> for VotingRules<B, Block> where
 			current_target.clone(),
 			|current_target, rule| {
 				rule.restrict_vote(
+					backend,
 					best_target,
 					&current_target,
 				)
-					.and_then(|(hash, _)| self.backend.header(BlockId::Hash(hash)).ok())
+					.and_then(|(hash, _)| backend.header(BlockId::Hash(hash)).ok())
 					.and_then(std::convert::identity)
 					.unwrap_or(current_target)
 			},
@@ -127,26 +138,24 @@ impl<B, Block> VotingRule<Block> for VotingRules<B, Block> where
 
 /// A builder of a composite voting rule that applies a set of rules to
 /// progressively restrict the vote.
-pub struct VotingRulesBuilder<B, Block> {
-	backend: Arc<B>,
-	rules: Vec<Box<dyn VotingRule<Block>>>,
+pub struct VotingRulesBuilder<Block, B> {
+	rules: Vec<Box<dyn VotingRule<Block, B>>>,
 }
 
-impl<B, Block> VotingRulesBuilder<B, Block> where
+impl<Block, B> VotingRulesBuilder<Block, B> where
+	Block: BlockT,
 	B: HeaderBackend<Block>,
-	Block: BlockT<Hash = H256>,
 {
 	/// Return a new voting rule builder using the given backend.
-	pub fn new(backend: Arc<B>) -> Self {
+	pub fn new() -> Self {
 		VotingRulesBuilder {
-			backend,
 			rules: Vec::new(),
 		}
 	}
 
 	/// Add a new voting rule to the builder.
 	pub fn add<R>(mut self, rule: R) -> Self where
-		R: VotingRule<Block> + 'static,
+		R: VotingRule<Block, B> + 'static,
 	{
 		self.rules.push(Box::new(rule));
 		self
@@ -154,7 +163,7 @@ impl<B, Block> VotingRulesBuilder<B, Block> where
 
 	/// Add all given voting rules to the builder.
 	pub fn add_all<I>(mut self, rules: I) -> Self where
-		I: IntoIterator<Item=Box<dyn VotingRule<Block>>>,
+		I: IntoIterator<Item=Box<dyn VotingRule<Block, B>>>,
 	{
 		self.rules.extend(rules);
 		self
@@ -162,20 +171,23 @@ impl<B, Block> VotingRulesBuilder<B, Block> where
 
 	/// Return a new `VotingRule` that applies all of the previously added
 	/// voting rules in-order.
-	pub fn build(self) -> impl VotingRule<Block> + Clone {
+	pub fn build(self) -> impl VotingRule<Block, B> + Clone {
 		VotingRules {
-			backend: self.backend,
 			rules: Arc::new(self.rules),
 		}
 	}
 }
 
-impl<Block: BlockT> VotingRule<Block> for Box<dyn VotingRule<Block>> {
+impl<Block, B> VotingRule<Block, B> for Box<dyn VotingRule<Block, B>> where
+	Block: BlockT,
+	B: HeaderBackend<Block>,
+{
 	fn restrict_vote(
 		&self,
+		backend: &B,
 		best_target: &Block::Header,
 		current_target: &Block::Header,
 	) -> Option<(Block::Hash, NumberFor<Block>)> {
-		(**self).restrict_vote(best_target, current_target)
+		(**self).restrict_vote(backend, best_target, current_target)
 	}
 }

@@ -496,7 +496,7 @@ pub fn run_grandpa_voter<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 	N: Network<Block> + Send + Sync + 'static,
 	N::In: Send + 'static,
 	SC: SelectChain<Block> + 'static,
-	VR: VotingRule<Block> + Clone + 'static,
+	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
 	RA: Send + Sync + 'static,
@@ -601,7 +601,7 @@ where
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	SC: SelectChain<Block> + 'static,
-	VR: VotingRule<Block> + Clone + 'static,
+	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
 {
 	fn new(
 		client: Arc<Client<B, E, Block, RA>>,
@@ -773,7 +773,7 @@ where
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	SC: SelectChain<Block> + 'static,
-	VR: VotingRule<Block> + Clone + 'static,
+	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
 {
 	type Item = ();
 	type Error = Error;
@@ -830,7 +830,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA, SC, VR, X>(
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
 	RA: Send + Sync + 'static,
-	VR: VotingRule<Block> + Clone + 'static,
+	VR: VotingRule<Block, Client<B, E, Block, RA>> + Clone + 'static,
 	X: Future<Item=(),Error=()> + Clone + Send + 'static,
 {
 	run_grandpa_voter(grandpa_params)

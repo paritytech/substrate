@@ -404,11 +404,12 @@ for Environment<B, E, Block, N, RA, SC, VR>
 where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	N: Network<Block> + 'static,
 	N::In: 'static,
 	SC: SelectChain<Block> + 'static,
-	VR: VotingRule<Block>,
+	VR: VotingRule<Block, Client<B, E, Block, RA>>,
+	RA: Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
 {
 	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
@@ -490,7 +491,7 @@ where
 				// 3/4 unfinalized chain and authority set limit filters, which
 				// can be considered mandatory/implicit voting rules.
 				self.voting_rule
-					.restrict_vote(&best_header, &target_header)
+					.restrict_vote(&*self.inner, &best_header, &target_header)
 					.or(Some((target_hash, target_number)))
 			},
 			Ok(None) => {
@@ -552,7 +553,7 @@ where
 	N::In: 'static + Send,
 	RA: 'static + Send + Sync,
 	SC: SelectChain<Block> + 'static,
-	VR: VotingRule<Block>,
+	VR: VotingRule<Block, Client<B, E, Block, RA>>,
 	NumberFor<Block>: BlockNumberOps,
 {
 	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
