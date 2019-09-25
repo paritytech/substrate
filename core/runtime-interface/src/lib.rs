@@ -38,6 +38,7 @@ pub use substrate_runtime_interface_proc_macro::runtime_interface;
 
 #[cfg(feature = "std")]
 pub fn with_externalities<F: FnOnce(&mut dyn Externalities<Blake2Hasher>) -> R, R>(f: F) -> R {
+	println!("HEY");
 	unimplemented!()
 }
 
@@ -259,6 +260,23 @@ impl IntoPreAllocatedWasmFFIArg<u64> for [u8] {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use test_wasm::{WASM_BINARY, test_api::HostFunctions};
+	use executor::WasmExecutor;
 
+	type TestExternalities<H> = state_machine::TestExternalities<H, u64>;
 
+	#[test]
+	fn test_return_data() {
+		let mut ext = TestExternalities::default();
+		let executor = WasmExecutor::<HostFunctions>::new();
+
+		executor.call_with_custom_signature::<_, _, _, ()>(
+			&mut ext,
+			8,
+			&WASM_BINARY[..],
+			"test_return_data",
+			|_| Ok(Vec::new()),
+			|res, _| if res.is_none() { Ok(Some(())) } else { Err("Invalid return value!".into()) },
+		).unwrap();
+	}
 }

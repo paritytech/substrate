@@ -5236,6 +5236,7 @@ dependencies = [
  "substrate-primitives 2.0.0",
  "substrate-runtime-interface-proc-macro 2.0.0",
  "substrate-runtime-interface-test-wasm 2.0.0",
+ "substrate-state-machine 2.0.0",
  "substrate-wasm-interface 2.0.0",
 ]
 

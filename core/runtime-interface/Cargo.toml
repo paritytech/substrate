@@ -14,6 +14,7 @@ codec = { package = "parity-scale-codec", version = "1.0.5", default-features = 
 [dev-dependencies]
 executor = { package = "substrate-executor", path = "../executor" }
 test-wasm = { package = "substrate-runtime-interface-test-wasm", path = "test-wasm" }
+state_machine = { package = "substrate-state-machine", path = "../state-machine"  }
 
 [features]
 default = [ "std" ]

@@ -25,7 +25,7 @@ use secp256k1;
 
 use wasmi::{
 	Module, ModuleInstance, MemoryInstance, MemoryRef, TableRef, ImportsBuilder, ModuleRef,
-	memory_units::Pages, RuntimeValue::{I32, I64, self},
+	memory_units::Pages,
 };
 use crate::error::{Error, Result};
 use codec::{Encode, Decode};
@@ -40,7 +40,7 @@ use crate::allocator;
 use log::trace;
 use wasm_interface::{
 	FunctionContext, HostFunctions, Pointer, WordSize, Sandbox, MemoryId,
-	Result as WResult, ReadPrimitive, WritePrimitive,
+	Result as WResult, ReadPrimitive, WritePrimitive, Value,
 };
 
 #[cfg(feature="wasm-extern-trace")]
@@ -1401,8 +1401,8 @@ impl<HF: HostFunctions> WasmExecutor<HF> {
 	/// This should be used for tests only.
 	pub fn call_with_custom_signature<
 		E: Externalities<Blake2Hasher>,
-		F: FnOnce(&mut dyn FnMut(&[u8]) -> Result<u32>) -> Result<Vec<RuntimeValue>>,
-		FR: FnOnce(Option<RuntimeValue>, &MemoryRef) -> Result<Option<R>>,
+		F: FnOnce(&mut dyn FnMut(&[u8]) -> Result<u32>) -> Result<Vec<Value>>,
+		FR: FnOnce(Option<Value>, &MemoryRef) -> Result<Option<R>>,
 		R,
 	>(
 		&self,
@@ -1464,10 +1464,10 @@ impl<HF: HostFunctions> WasmExecutor<HF> {
 			method,
 			|alloc| {
 				let offset = alloc(data)?;
-				Ok(vec![I32(offset as i32), I32(data.len() as i32)])
+				Ok(vec![Value::I32(offset as i32), Value::I32(data.len() as i32)])
 			},
 			|res, memory| {
-				if let Some(I64(r)) = res {
+				if let Some(Value::I64(r)) = res {
 					let offset = r as u32;
 					let length = (r as u64 >> 32) as usize;
 					memory.get(offset, length).map_err(|_| Error::Runtime).map(Some)
@@ -1481,8 +1481,8 @@ impl<HF: HostFunctions> WasmExecutor<HF> {
 	/// Call a given method in the given wasm-module runtime.
 	fn call_in_wasm_module_with_custom_signature<
 		E: Externalities<Blake2Hasher>,
-		F: FnOnce(&mut dyn FnMut(&[u8]) -> Result<u32>) -> Result<Vec<RuntimeValue>>,
-		FR: FnOnce(Option<RuntimeValue>, &MemoryRef) -> Result<Option<R>>,
+		F: FnOnce(&mut dyn FnMut(&[u8]) -> Result<u32>) -> Result<Vec<Value>>,
+		FR: FnOnce(Option<Value>, &MemoryRef) -> Result<Option<R>>,
 		R,
 	>(
 		&self,
@@ -1511,13 +1511,14 @@ impl<HF: HostFunctions> WasmExecutor<HF> {
 			fec.write_memory(offset, data).map(|_| offset.into()).map_err(Into::into)
 		})?;
 
+		let parameters = parameters.into_iter().map(Into::into).collect::<Vec<_>>();
 		let result = runtime_io::with_externalities(
 			ext,
 			|| module_instance.invoke_export(method, &parameters, &mut fec),
 		);
 
 		match result {
-			Ok(val) => match filter_result(val, &memory)? {
+			Ok(val) => match filter_result(val.map(Into::into), &memory)? {
 				Some(val) => Ok(val),
 				None => Err(Error::InvalidReturn),
 			},

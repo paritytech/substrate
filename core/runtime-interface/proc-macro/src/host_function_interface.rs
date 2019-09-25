@@ -96,7 +96,7 @@ fn generate_host_functions_struct(trait_def: &ItemTrait) -> Result<TokenStream> 
 			TraitItem::Method(ref method) => Some(method),
 			_ => None,
 		})
-		.map(generate_host_function_implementation)
+		.map(|m| generate_host_function_implementation(&trait_def.ident, m))
 		.collect::<Result<Vec<_>>>()?;
 	let host_functions_count = trait_def
 		.items
@@ -132,8 +132,11 @@ fn generate_host_functions_struct(trait_def: &ItemTrait) -> Result<TokenStream> 
 ///
 /// When calling from wasm into the host, we will call the `execute` function that calls the native
 /// implementation of the function.
-fn generate_host_function_implementation(method: &TraitItemMethod) -> Result<TokenStream> {
-	let name = method.sig.ident.to_string();
+fn generate_host_function_implementation(
+	trait_name: &Ident,
+	method: &TraitItemMethod,
+) -> Result<TokenStream> {
+	let name = create_host_function_ident(&method.sig.ident, trait_name).to_string();
 	let struct_name = Ident::new(&name.to_pascal_case(), Span::call_site());
 	let crate_ = generate_crate_access();
 	let signature = generate_wasm_interface_signature_for_host_function(&method.sig)?;
