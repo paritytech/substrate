@@ -473,7 +473,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	/// TODO also need branch ix as parameter... (need context)
 	/// or maybe a Number is enough (considering the way levels
 	/// seems to work).
-	pub fn get_offstate(&self, key: &[u8]) -> Option<DBValue> {
+	pub fn get_offstate(&self, key: &[u8], state: &BlockHash) -> Option<DBValue> {
 		if let Some((_, value)) = self.offstate_values.get(key) {
 			return Some(value.clone());
 		}
@@ -560,17 +560,17 @@ mod tests {
 		overlay.get(&H256::from_low_u64_be(key)) == Some(H256::from_low_u64_be(key).as_bytes().to_vec())
 	}
 
-	fn contains_offstate(overlay: &NonCanonicalOverlay<H256, H256>, key: u64) -> bool {
-		overlay.get_offstate(&H256::from_low_u64_be(key).as_bytes().to_vec())
+	fn contains_offstate(overlay: &NonCanonicalOverlay<H256, H256>, key: u64, state: &H256) -> bool {
+		overlay.get_offstate(&H256::from_low_u64_be(key).as_bytes().to_vec(), state)
 			== Some(H256::from_low_u64_be(key).as_bytes().to_vec())
 	}
 
-	fn contains_both(overlay: &NonCanonicalOverlay<H256, H256>, key: u64) -> bool {
-		contains(overlay, key) && contains_offstate(overlay, key)
+	fn contains_both(overlay: &NonCanonicalOverlay<H256, H256>, key: u64, state: &H256) -> bool {
+		contains(overlay, key) && contains_offstate(overlay, key, state)
 	}
 
-	fn contains_any(overlay: &NonCanonicalOverlay<H256, H256>, key: u64) -> bool {
-		contains(overlay, key) || contains_offstate(overlay, key)
+	fn contains_any(overlay: &NonCanonicalOverlay<H256, H256>, key: u64, state: &H256) -> bool {
+		contains(overlay, key) || contains_offstate(overlay, key, state)
 	}
 
 
@@ -755,26 +755,26 @@ mod tests {
 			&h1, 1, &H256::default(),
 			changeset1, offstate_changeset1,
 		).unwrap());
-		assert!(contains_both(&overlay, 5));
+		assert!(contains_both(&overlay, 5, &h1));
 		db.commit(&overlay.insert::<io::Error>(
 			&h2, 2, &h1,
 			changeset2, offstate_changeset2,
 		).unwrap());
-		assert!(contains_both(&overlay, 7));
-		assert!(contains_both(&overlay, 5));
+		assert!(contains_both(&overlay, 7, &h2));
+		assert!(contains_both(&overlay, 5, &h2));
 		assert_eq!(overlay.levels.len(), 2);
 		assert_eq!(overlay.parents.len(), 2);
 		let mut commit = CommitSet::default();
 		overlay.canonicalize::<io::Error>(&h1, &mut commit).unwrap();
 		db.commit(&commit);
-		assert!(contains_both(&overlay, 5));
+		assert!(contains_both(&overlay, 5, &h2));
 		assert_eq!(overlay.levels.len(), 2);
 		assert_eq!(overlay.parents.len(), 2);
 		overlay.apply_pending();
 		assert_eq!(overlay.levels.len(), 1);
 		assert_eq!(overlay.parents.len(), 1);
-		assert!(!contains_any(&overlay, 5));
-		assert!(contains_both(&overlay, 7));
+		assert!(!contains_any(&overlay, 5, &h1));
+		assert!(contains_both(&overlay, 7, &h2));
 		let mut commit = CommitSet::default();
 		overlay.canonicalize::<io::Error>(&h2, &mut commit).unwrap();
 		db.commit(&commit);
@@ -796,13 +796,13 @@ mod tests {
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		db.commit(&overlay.insert::<io::Error>(&h_1, 1, &H256::default(), c_1, o_c_1).unwrap());
 		db.commit(&overlay.insert::<io::Error>(&h_2, 1, &H256::default(), c_2, o_c_2).unwrap());
-		assert!(contains_both(&overlay, 1));
+		assert!(contains_both(&overlay, 1, &h_2));
 		let mut commit = CommitSet::default();
 		overlay.canonicalize::<io::Error>(&h_1, &mut commit).unwrap();
 		db.commit(&commit);
-		assert!(contains_both(&overlay, 1));
+		assert!(contains_both(&overlay, 1, &h_2));
 		overlay.apply_pending();
-		assert!(!contains_any(&overlay, 1));
+		assert!(!contains_any(&overlay, 1, &h_2));
 	}
 
 	#[test]
@@ -893,12 +893,12 @@ mod tests {
 		db.commit(&overlay.insert::<io::Error>(&h_1_2_3, 3, &h_1_2, c_1_2_3, o_c_1_2_3).unwrap());
 		db.commit(&overlay.insert::<io::Error>(&h_2_1_1, 3, &h_2_1, c_2_1_1, o_c_2_1_1).unwrap());
 
-		assert!(contains_both(&overlay, 2));
-		assert!(contains_both(&overlay, 11));
-		assert!(contains_both(&overlay, 21));
-		assert!(contains_both(&overlay, 111));
-		assert!(contains_both(&overlay, 122));
-		assert!(contains_both(&overlay, 211));
+		assert!(contains_both(&overlay, 2, &h_2_1_1));
+		assert!(contains_both(&overlay, 11, &h_1_1_1));
+		assert!(contains_both(&overlay, 21, &h_2_1_1));
+		assert!(contains_both(&overlay, 111, &h_1_1_1));
+		assert!(contains_both(&overlay, 122, &h_1_2_2));
+		assert!(contains_both(&overlay, 211, &h_2_1_1));
 		assert_eq!(overlay.levels.len(), 3);
 		assert_eq!(overlay.parents.len(), 11);
 		assert_eq!(overlay.last_canonicalized, Some((H256::default(), 0)));
@@ -916,13 +916,12 @@ mod tests {
 		overlay.apply_pending();
 		assert_eq!(overlay.levels.len(), 2);
 		assert_eq!(overlay.parents.len(), 6);
-		assert!(!contains_any(&overlay, 1));
-		assert!(!contains_any(&overlay, 2));
-		assert!(!contains_any(&overlay, 21));
-		assert!(!contains_any(&overlay, 22));
-		assert!(!contains_any(&overlay, 211));
-		assert!(contains_both(&overlay, 111));
-		assert!(!contains_any(&overlay, 211));
+		assert!(!contains_any(&overlay, 1, &h_1));
+		assert!(!contains_any(&overlay, 2, &h_2));
+		assert!(!contains_any(&overlay, 21, &h_2_1));
+		assert!(!contains_any(&overlay, 22, &h_2_2));
+		assert!(!contains_any(&overlay, 211, &h_2_1_1));
+		assert!(contains_both(&overlay, 111, &h_1_1_1));
 		// check that journals are deleted
 		assert!(db.get_meta(&to_journal_key(1, 0)).unwrap().is_none());
 		assert!(db.get_meta(&to_journal_key(1, 1)).unwrap().is_none());
@@ -937,11 +936,11 @@ mod tests {
 		overlay.apply_pending();
 		assert_eq!(overlay.levels.len(), 1);
 		assert_eq!(overlay.parents.len(), 3);
-		assert!(!contains_any(&overlay, 11));
-		assert!(!contains_any(&overlay, 111));
-		assert!(contains_both(&overlay, 121));
-		assert!(contains_both(&overlay, 122));
-		assert!(contains_both(&overlay, 123));
+		assert!(!contains_any(&overlay, 11, &h_1_1));
+		assert!(!contains_any(&overlay, 111, &h_1_1_1));
+		assert!(contains_both(&overlay, 121, &h_1_2_1));
+		assert!(contains_both(&overlay, 122, &h_1_2_2));
+		assert!(contains_both(&overlay, 123, &h_1_2_3));
 		assert!(overlay.have_block(&h_1_2_1));
 		assert!(!overlay.have_block(&h_1_2));
 		assert!(!overlay.have_block(&h_1_1));
@@ -978,11 +977,11 @@ mod tests {
 			&h2, 2, &h1,
 			changeset2, ochangeset2,
 		).unwrap());
-		assert!(contains_both(&overlay, 7));
+		assert!(contains_both(&overlay, 7, &h2));
 		db.commit(&overlay.revert_one().unwrap());
 		assert_eq!(overlay.parents.len(), 1);
-		assert!(contains_both(&overlay, 5));
-		assert!(!contains_any(&overlay, 7));
+		assert!(contains_both(&overlay, 5, &h2));
+		assert!(!contains_any(&overlay, 7, &h2));
 		db.commit(&overlay.revert_one().unwrap());
 		assert_eq!(overlay.levels.len(), 0);
 		assert_eq!(overlay.parents.len(), 0);
@@ -1015,13 +1014,13 @@ mod tests {
 			&h2_2, 2, &h1,
 			changeset3, ochangeset3,
 		).unwrap();
-		assert!(contains_both(&overlay, 7));
-		assert!(contains_both(&overlay, 5));
-		assert!(contains_both(&overlay, 9));
+		assert!(contains_both(&overlay, 7, &h2_1));
+		assert!(contains_both(&overlay, 5, &h2_1));
+		assert!(contains_both(&overlay, 9, &h2_2));
 		assert_eq!(overlay.levels.len(), 2);
 		assert_eq!(overlay.parents.len(), 3);
 		overlay.revert_pending();
-		assert!(!contains_any(&overlay, 5));
+		assert!(!contains_any(&overlay, 5, &h1));
 		assert_eq!(overlay.levels.len(), 0);
 		assert_eq!(overlay.parents.len(), 0);
 	}
@@ -1046,8 +1045,8 @@ mod tests {
 		overlay.canonicalize::<io::Error>(&h_2, &mut commit).unwrap();
 		db.commit(&commit);
 		overlay.apply_pending();
-		assert!(contains_both(&overlay, 1));
+		assert!(contains_both(&overlay, 1, &h_1));
 		overlay.unpin(&h_1);
-		assert!(!contains_any(&overlay, 1));
+		assert!(!contains_any(&overlay, 1, &h_1));
 	}
 }

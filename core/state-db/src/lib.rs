@@ -370,7 +370,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		state: &BlockHash,
 		db: &D,
 	) -> Result<Option<DBValue>, Error<D::Error>>	{
-		if let Some(value) = self.non_canonical.get_offstate(key) {
+		if let Some(value) = self.non_canonical.get_offstate(key, state) {
 			return Ok(Some(value));
 		}
 		db.get_offstate(key, state).map_err(|e| Error::Db(e))
