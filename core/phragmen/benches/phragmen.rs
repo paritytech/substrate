@@ -128,19 +128,19 @@ fn do_phragmen(
 			}
 
 			let mut staked_assignments
-					: Vec<(AccountId, Vec<PhragmenStakedAssignment<AccountId>>)>
-					= Vec::with_capacity(assignments.len());
-				for (n, assignment) in assignments.iter() {
-					let mut staked_assignment
-						: Vec<PhragmenStakedAssignment<AccountId>>
-						= Vec::with_capacity(assignment.len());
-					for (c, per_thing) in assignment.iter() {
-						let nominator_stake = to_votes(slashable_balance(n));
-						let other_stake = *per_thing * nominator_stake;
-						staked_assignment.push((c.clone(), other_stake));
-					}
-					staked_assignments.push((n.clone(), staked_assignment));
+				: Vec<(AccountId, Vec<PhragmenStakedAssignment<AccountId>>)>
+				= Vec::with_capacity(assignments.len());
+			for (n, assignment) in assignments.iter() {
+				let mut staked_assignment
+					: Vec<PhragmenStakedAssignment<AccountId>>
+					= Vec::with_capacity(assignment.len());
+				for (c, per_thing) in assignment.iter() {
+					let nominator_stake = to_votes(slashable_balance(n));
+					let other_stake = *per_thing * nominator_stake;
+					staked_assignment.push((c.clone(), other_stake));
 				}
+				staked_assignments.push((n.clone(), staked_assignment));
+			}
 
 			let tolerance = 0_u128;
 			let iterations = 2_usize;
