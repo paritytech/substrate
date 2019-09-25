@@ -20,7 +20,7 @@ use super::*;
 use runtime_io::with_externalities;
 use sr_primitives::traits::OnInitialize;
 use sr_staking_primitives::offence::{OffenceDetails, OnOffenceHandler};
-use support::{assert_ok, assert_noop, assert_eq_uvec, StorageLinkedMap};
+use support::{assert_ok, assert_noop, assert_eq_uvec};
 use mock::*;
 use support::traits::{Currency, ReservableCurrency};
 
