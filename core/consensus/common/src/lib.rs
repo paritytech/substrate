@@ -35,6 +35,7 @@ use sr_primitives::traits::{Block as BlockT, DigestFor};
 use futures::prelude::*;
 pub use inherents::InherentData;
 
+pub mod block_validation;
 pub mod offline_tracker;
 pub mod error;
 pub mod block_import;
@@ -51,6 +52,21 @@ pub use block_import::{
 	JustificationImport, FinalityProofImport,
 };
 pub use select_chain::SelectChain;
+
+/// Block status.
+#[derive(Debug, PartialEq, Eq)]
+pub enum BlockStatus {
+	/// Added to the import queue.
+	Queued,
+	/// Already in the blockchain and the state is available.
+	InChainWithState,
+	/// In the blockchain, but the state is not available.
+	InChainPruned,
+	/// Block or parent is known to be bad.
+	KnownBad,
+	/// Not in the queue or the blockchain.
+	Unknown,
+}
 
 /// Environment producer for a Consensus instance. Creates proposer instance and communication streams.
 pub trait Environment<B: BlockT> {

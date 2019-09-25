@@ -4318,14 +4318,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "srml-staking-reward-curve-test"
-version = "2.0.0"
-dependencies = [
- "sr-primitives 2.0.0",
- "srml-staking-reward-curve 2.0.0",
-]
-
-[[package]]
 name = "srml-sudo"
 version = "2.0.0"
 dependencies = [

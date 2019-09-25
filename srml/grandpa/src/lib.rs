@@ -246,6 +246,8 @@ impl<T: Trait> Module<T> {
 		Authorities::get()
 	}
 
+	/// Schedule GRANDPA to pause starting in the given number of blocks.
+	/// Cannot be done when already paused.
 	pub fn schedule_pause(in_blocks: T::BlockNumber) -> Result {
 		if let StoredState::Live = <State<T>>::get() {
 			let scheduled_at = <system::Module<T>>::block_number();
@@ -261,6 +263,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
+	/// Schedule a resume of GRANDPA after pausing.
 	pub fn schedule_resume(in_blocks: T::BlockNumber) -> Result {
 		if let StoredState::Paused = <State<T>>::get() {
 			let scheduled_at = <system::Module<T>>::block_number();

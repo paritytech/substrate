@@ -118,7 +118,7 @@ pub(super) fn neighbor_packet_worker<B, N>(net: N) -> (
 /// A background worker for performing block announcements.
 struct BlockAnnouncer<B: BlockT, N> {
 	net: N,
-	block_rx: mpsc::UnboundedReceiver<B::Hash>,
+	block_rx: mpsc::UnboundedReceiver<(B::Hash, Vec<u8>)>,
 	latest_voted_blocks: VecDeque<B::Hash>,
 	reannounce_after: Duration,
 	delay: Delay,
@@ -199,8 +199,8 @@ impl<B: BlockT, N: Network<B>> Future for BlockAnnouncer<B, N> {
 			match self.block_rx.poll().expect("unbounded receivers do not error; qed") {
 				Async::Ready(None) => return Ok(Async::Ready(())),
 				Async::Ready(Some(block)) => {
-					if self.note_block(block) {
-						self.net.announce(block);
+					if self.note_block(block.0) {
+						self.net.announce(block.0, block.1);
 						self.reset_delay();
 					}
 				},
@@ -229,7 +229,7 @@ impl<B: BlockT, N: Network<B>> Future for BlockAnnouncer<B, N> {
 					);
 
 					for block in self.latest_voted_blocks.iter() {
-						self.net.announce(*block);
+						self.net.announce(*block, Vec::new());
 					}
 				},
 				Ok(Async::NotReady) => return Ok(Async::NotReady),
@@ -240,15 +240,12 @@ impl<B: BlockT, N: Network<B>> Future for BlockAnnouncer<B, N> {
 
 /// A sender used to send block hashes to announce to a background job.
 #[derive(Clone)]
-pub(super) struct BlockAnnounceSender<B: BlockT>(mpsc::UnboundedSender<B::Hash>);
+pub(super) struct BlockAnnounceSender<B: BlockT>(mpsc::UnboundedSender<(B::Hash, Vec<u8>)>);
 
 impl<B: BlockT> BlockAnnounceSender<B> {
 	/// Send a block hash for the background worker to announce.
-	pub fn send(
-		&self,
-		block: B::Hash,
-	) {
-		if let Err(err) = self.0.unbounded_send(block) {
+	pub fn send(&self, block: B::Hash, associated_data: Vec<u8>) {
+		if let Err(err) = self.0.unbounded_send((block, associated_data)) {
 			debug!(target: "afg", "Failed to send block to background announcer: {:?}", err);
 		}
 	}
