@@ -34,6 +34,7 @@ mod storage_cache;
 mod utils;
 
 use std::sync::Arc;
+use std::ops::Deref;
 use std::path::PathBuf;
 use std::io;
 use std::collections::{HashMap, HashSet};
@@ -85,7 +86,7 @@ const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 pub type DbState = state_machine::TrieBackend<
 	Arc<dyn state_machine::Storage<Blake2Hasher>>,
 	Blake2Hasher,
-	Arc<dyn state_machine::OffstateStorage>,
+	Arc<dyn state_machine::OffstateStorage<H256>>,
 >;
 
 /// A reference tracking state.
@@ -574,6 +575,18 @@ struct StorageDb<Block: BlockT> {
 	pub state_db: StateDb<Block::Hash, Vec<u8>>,
 }
 
+struct StorageDbAt<Block: BlockT, State> {
+	pub storage_db: Arc<StorageDb<Block>>,
+	pub state: State,
+}
+
+// Semantic is one block statedb with block in todo2,
+// state is here for compatibility only.
+struct TODO2At<State> {
+	pub storage_db: TODO2,
+	pub state: State,
+}
+
 impl<Block: BlockT> state_machine::Storage<Blake2Hasher> for StorageDb<Block> {
 	fn get(&self, key: &H256, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		let key = prefixed_key::<Blake2Hasher>(key, prefix);
@@ -591,29 +604,60 @@ impl<Block: BlockT> state_db::NodeDb for StorageDb<Block> {
 	}
 }
 
-impl<Block: BlockT> state_db::OffstateDb for StorageDb<Block> {
+// TODO EMCH try with Block::Hash but no real hope
+impl<Block: BlockT> state_db::OffstateDb<Block::Hash> for StorageDb<Block> {
 
 	type Error = io::Error;
 
-	fn get_offstate(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+	fn get_offstate(&self, key: &[u8], state: &Block::Hash) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.db.get(columns::OFFSTATE, key);
 		unimplemented!("TODO map with history fetch at requested block")
 	}
 
-	fn get_offstate_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+	fn get_offstate_pairs(&self, state: &Block::Hash) -> Vec<(Vec<u8>, Vec<u8>)> {
 		unimplemented!("TODO need to be an iterator")
 	}
 }
 
-impl<Block: BlockT> state_machine::OffstateStorage for StorageDb<Block> {
+impl<Block: BlockT> state_machine::OffstateStorage<Block::Hash> for StorageDbAt<Block, Block::Hash> {
+
+	fn state(&self) -> &Block::Hash {
+		&self.state
+	}
+
+	fn change_state(&mut self, state: Block::Hash) -> Block::Hash {
+		std::mem::replace(&mut self.state, state)
+	}
+
 	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
-		self.state_db.get_offstate(key, self)
+		self.storage_db.state_db.get_offstate(key, &self.state, self.storage_db.deref())
+			.map_err(|e| format!("Database backend error: {:?}", e))
+	}
+
+	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+		self.storage_db.state_db.get_offstate_pairs(&self.state, self.storage_db.deref())
+	}
+}
+
+impl<S: Send + Sync> state_machine::OffstateStorage<S> for TODO2At<S> {
+
+	fn state(&self) -> &S {
+		&self.state
+	}
+
+	fn change_state(&mut self, state: S) -> S {
+		std::mem::replace(&mut self.state, state)
+	}
+
+	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
+		self.storage_db.get(key)
 			.map_err(|e| format!("Database backend error: {:?}", e))
 	}
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.state_db.get_offstate_pairs(self)
+		self.storage_db.pairs()
 	}
 }
+
 
 struct DbGenesisStorage(pub H256);
 
@@ -1524,7 +1568,10 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 				let genesis_storage = DbGenesisStorage::new();
 				let root = genesis_storage.0.clone();
 				// TODO EMCH see genesis impl: that is empty storage
-				let genesis_offstate = TODO2;
+				let genesis_offstate = TODO2At {
+					storage_db: TODO2,
+					state: h,
+				};
 				let db_state = DbState::new(Arc::new(genesis_storage), root, Arc::new(genesis_offstate));
 				let state = RefTrackingState::new(db_state, self.storage.clone(), None);
 				return Ok(CachingState::new(state, self.shared_cache.clone(), None));
@@ -1539,7 +1586,11 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 					let root = H256::from_slice(hdr.state_root().as_ref());
 					//let block_number = hdr.number().clone();
 					//let db_state = DbState::new(self.storage.clone(), root, Arc::new(TODO::new(block_number)));
-					let db_state = DbState::new(self.storage.clone(), root, self.storage.clone());
+					let offstate = StorageDbAt {
+						storage_db: self.storage.clone(),
+						state: hash.clone(),
+					};
+					let db_state = DbState::new(self.storage.clone(), root, Arc::new(offstate));
 					let state = RefTrackingState::new(db_state, self.storage.clone(), Some(hash.clone()));
 					Ok(CachingState::new(state, self.shared_cache.clone(), Some(hash)))
 				} else {

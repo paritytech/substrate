@@ -21,10 +21,16 @@
 use std::sync::Arc;
 use std::ops::Deref;
 
-/// TODO EMCH replace ofstate storage?
-pub trait OffstateStorage: Send + Sync {
+pub trait OffstateStorage<State>: Send + Sync {
+
 	/// Retrieve a value from storage under given key.
 	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String>;
+
+	/// Access inner state to query.
+	fn state(&self) -> &State;
+
+	/// Change inner state to query, return old state
+	fn change_state(&mut self, state: State) -> State;
 
 	/// Return in memory all values for this backend, mainly for
 	/// tests.
@@ -85,7 +91,7 @@ impl OffstateBackendStorage for TODO2 {
 }
 
 // This implementation is used by normal storage trie clients.
-impl OffstateBackendStorage for Arc<dyn OffstateStorage> {
+impl<S> OffstateBackendStorage for Arc<dyn OffstateStorage<S>> {
 	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 		OffstateStorage::get(self.deref(), key)
 	}
@@ -96,7 +102,15 @@ impl OffstateBackendStorage for Arc<dyn OffstateStorage> {
 
 
 
-impl<N: Send + Sync> OffstateStorage for TODO<N> {
+impl<N: Send + Sync> OffstateStorage<N> for TODO<N> {
+
+	fn state(&self) -> &N {
+		&self.0
+	}
+
+	fn change_state(&mut self, state: N) -> N {
+		std::mem::replace(&mut self.0, state)
+	}
 
 	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 		<Self as OffstateBackendStorage>::get(&self, key)
@@ -108,8 +122,16 @@ impl<N: Send + Sync> OffstateStorage for TODO<N> {
 
 }
 
+// TODO EMCH remove??
+impl OffstateStorage<()> for TODO2 {
 
-impl OffstateStorage for TODO2 {
+	fn state(&self) -> &() {
+		&()
+	}
+
+	fn change_state(&mut self, _state: ()) -> () {
+		()
+	}
 
 	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 		<Self as OffstateBackendStorage>::get(&self, key)

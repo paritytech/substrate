@@ -69,13 +69,20 @@ pub trait NodeDb {
 }
 
 /// Backend database trait. Read-only.
-pub trait OffstateDb {
+///
+/// State parameter indicate where to query offstate storage,
+/// this is a Block hash, as branch index are
+/// build on load, with a persistence for this
+/// data it would be more direct to use a
+/// tuple of block number and branchindex.
+pub trait OffstateDb<State: Hash> {
 	type Error: fmt::Debug;
 
 	/// Get state trie node.
-	fn get_offstate(&self, key: &[u8]) -> Result<Option<DBValue>, Self::Error>;
+	fn get_offstate(&self, key: &[u8], state: &State) -> Result<Option<DBValue>, Self::Error>;
+
 	/// Get all pairs of key at current state.
-	fn get_offstate_pairs(&self) -> Vec<(OffstateKey, DBValue)>;
+	fn get_offstate_pairs(&self, state: &State) -> Vec<(OffstateKey, DBValue)>;
 }
 
 /// Error type.
@@ -357,19 +364,21 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		db.get(key.as_ref()).map_err(|e| Error::Db(e))
 	}
 
-	pub fn get_offstate<D: OffstateDb>(
+	pub fn get_offstate<D: OffstateDb<BlockHash>>(
 		&self,
 		key: &[u8],
+		state: &BlockHash,
 		db: &D,
 	) -> Result<Option<DBValue>, Error<D::Error>>	{
 		if let Some(value) = self.non_canonical.get_offstate(key) {
 			return Ok(Some(value));
 		}
-		db.get_offstate(key).map_err(|e| Error::Db(e))
+		db.get_offstate(key, state).map_err(|e| Error::Db(e))
 	}
 
-	pub fn get_offstate_pairs<D: OffstateDb>(
+	pub fn get_offstate_pairs<D: OffstateDb<BlockHash>>(
 		&self,
+		state: &BlockHash,
 		db: &D,
 	) -> Vec<(OffstateKey, DBValue)> {
 		// TODO get non_canonical optional values and then filter
@@ -450,20 +459,22 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	}
 
 	/// Get a value from non-canonical/pruning overlay or the backing DB.
-	pub fn get_offstate<D: OffstateDb>(
+	pub fn get_offstate<D: OffstateDb<BlockHash>>(
 		&self,
 		key: &[u8],
+		state: &BlockHash,
 		db: &D,
 	) -> Result<Option<DBValue>, Error<D::Error>> {
-		self.db.read().get_offstate(key, db)
+		self.db.read().get_offstate(key, state, db)
 	}
 
 	/// Get pairs values offstate.
-	pub fn get_offstate_pairs<D: OffstateDb>(
+	pub fn get_offstate_pairs<D: OffstateDb<BlockHash>>(
 		&self,
+		state: &BlockHash,
 		db: &D,
 	) -> Vec<(OffstateKey, DBValue)> {
-		self.db.read().get_offstate_pairs(db)
+		self.db.read().get_offstate_pairs(state, db)
 	}
 	
 	/// Revert all non-canonical blocks with the best block number.
