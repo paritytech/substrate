@@ -452,47 +452,44 @@ where
 				let best_header = self.inner.header(&BlockId::Hash(best_hash)).ok()?
 					.expect("Header known to exist after `best_containing` call; qed");
 
-				// we target a vote towards 3/4 of the unfinalized chain (rounding up)
-				let target_number = {
-					let two = NumberFor::<Block>::one() + One::one();
-					let three = two + One::one();
-					let four = three + One::one();
+				// check if our vote is currently being limited due to a pending change
+				let limit = limit.filter(|limit| limit < best_header.number());
+				let target;
 
-					let diff = *best_header.number() - *base_header.number();
-					let diff = ((diff * three) + two) / four;
+				let target_header = if let Some(target_number) = limit {
+					let mut target_header = best_header.clone();
 
-					*base_header.number() + diff
-				};
+					// walk backwards until we find the target block
+					loop {
+						if *target_header.number() < target_number {
+							unreachable!();
+						}
 
-				// unless our vote is currently being limited due to a pending change
-				let target_number = limit.map(|limit| limit.min(target_number))
-					.unwrap_or(target_number);
+						if *target_header.number() == target_number {
+							break;
+						}
 
-				let mut target_header = best_header.clone();
-				let mut target_hash = best_hash;
-
-				// walk backwards until we find the target block
-				loop {
-					if *target_header.number() < target_number { unreachable!(); }
-					if *target_header.number() == target_number {
-						break;
+						target_header = self.inner.header(&BlockId::Hash(*target_header.parent_hash())).ok()?
+							.expect("Header known to exist after `best_containing` call; qed");
 					}
 
-					target_hash = *target_header.parent_hash();
-					target_header = self.inner.header(&BlockId::Hash(target_hash)).ok()?
-						.expect("Header known to exist after `best_containing` call; qed");
-				}
+					target = target_header;
+					&target
+				} else {
+					// otherwise just use the given best as the target
+					&best_header
+				};
 
 				// restrict vote according to the given voting rule, if the
 				// voting rule doesn't restrict the vote then we keep the
 				// previous target.
 				//
 				// note that we pass the original `best_header`, i.e. before the
-				// 3/4 unfinalized chain and authority set limit filters, which
-				// can be considered mandatory/implicit voting rules.
+				// authority set limit filter, which can be considered a
+				// mandatory/implicit voting rule.
 				self.voting_rule
-					.restrict_vote(&*self.inner, &best_header, &target_header)
-					.or(Some((target_hash, target_number)))
+					.restrict_vote(&*self.inner, &base_header, &best_header, target_header)
+					.or(Some((target_header.hash(), *target_header.number())))
 			},
 			Ok(None) => {
 				debug!(target: "afg", "Encountered error finding best chain containing {:?}: couldn't find target block", block);

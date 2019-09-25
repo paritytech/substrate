@@ -33,13 +33,20 @@ pub trait VotingRule<Block, B>: Send + Sync where
 {
 	/// Restrict the given `current_target` vote, returning the block hash and
 	/// number of the block to vote on, and `None` in case the vote should not
-	/// be restricted.
+	/// be restricted. `base` is the block that we're basing our votes on in
+	/// order to pick our target (e.g. last finalized block), and `best_target`
+	/// is the initial best vote target before any vote rules were applied. When
+	/// applying multiple `VotingRule`s both `base` and `best_target` should
+	/// remain unchanged.
 	///
-	/// The contract of this interface requires that when restricting a vote,
-	/// the returned value **must** be an ancestor of the given `current_target`.
+	/// The contract of this interface requires that when restricting a vote, the
+	/// returned value **must** be an ancestor of the given `current_target`,
+	/// this also means that a variant must be maintained throughout the
+	/// execution of voting rules wherein `current_target <= best_target`.
 	fn restrict_vote(
 		&self,
 		backend: &B,
+		base: &Block::Header,
 		best_target: &Block::Header,
 		current_target: &Block::Header,
 	) -> Option<(Block::Hash, NumberFor<Block>)>;
@@ -52,6 +59,7 @@ impl<Block, B> VotingRule<Block, B> for () where
 	fn restrict_vote(
 		&self,
 		_backend: &B,
+		_base: &Block::Header,
 		_best_target: &Block::Header,
 		_current_target: &Block::Header,
 	) -> Option<(Block::Hash, NumberFor<Block>)> {
@@ -70,6 +78,7 @@ impl<Block, B> VotingRule<Block, B> for AlwaysBehindBestBlock where
 	fn restrict_vote(
 		&self,
 		_backend: &B,
+		_base: &Block::Header,
 		best_target: &Block::Header,
 		current_target: &Block::Header,
 	) -> Option<(Block::Hash, NumberFor<Block>)> {
@@ -87,6 +96,56 @@ impl<Block, B> VotingRule<Block, B> for AlwaysBehindBestBlock where
 		}
 
 		None
+	}
+}
+
+/// A custom voting rule that limits votes towards 3/4 of the unfinalized chain,
+/// using the given `base` and `best_target` to figure where the 3/4 target
+/// should fall.
+pub struct ThreeQuartersOfTheUnfinalizedChain;
+
+impl<Block, B> VotingRule<Block, B> for ThreeQuartersOfTheUnfinalizedChain where
+	Block: BlockT,
+	B: HeaderBackend<Block>,
+{
+	fn restrict_vote(
+		&self,
+		backend: &B,
+		base: &Block::Header,
+		best_target: &Block::Header,
+		current_target: &Block::Header,
+	) -> Option<(Block::Hash, NumberFor<Block>)> {
+		// target a vote towards 3/4 of the unfinalized chain (rounding up)
+		let target_number = {
+			let two = NumberFor::<Block>::one() + One::one();
+			let three = two + One::one();
+			let four = three + One::one();
+
+			let diff = *best_target.number() - *base.number();
+			let diff = ((diff * three) + two) / four;
+
+			*base.number() + diff
+		};
+
+		// our current target is already lower than this rule would restrict
+		if target_number >= *current_target.number() {
+			return None;
+		}
+
+		let mut target_header = current_target.clone();
+		let mut target_hash = current_target.hash();
+
+		// walk backwards until we find the target block
+		loop {
+			if *target_header.number() < target_number { unreachable!(); }
+			if *target_header.number() == target_number {
+				return Some((target_hash, target_number));
+			}
+
+			target_hash = *target_header.parent_hash();
+			target_header = backend.header(BlockId::Hash(target_hash)).ok()?
+				.expect("Header known to exist after `best_containing` call; qed");
+		}
 	}
 }
 
@@ -109,6 +168,7 @@ impl<Block, B> VotingRule<Block, B> for VotingRules<Block, B> where
 	fn restrict_vote(
 		&self,
 		backend: &B,
+		base: &Block::Header,
 		best_target: &Block::Header,
 		current_target: &Block::Header,
 	) -> Option<(Block::Hash, NumberFor<Block>)> {
@@ -117,6 +177,7 @@ impl<Block, B> VotingRule<Block, B> for VotingRules<Block, B> where
 			|current_target, rule| {
 				rule.restrict_vote(
 					backend,
+					base,
 					best_target,
 					&current_target,
 				)
@@ -140,6 +201,17 @@ impl<Block, B> VotingRule<Block, B> for VotingRules<Block, B> where
 /// progressively restrict the vote.
 pub struct VotingRulesBuilder<Block, B> {
 	rules: Vec<Box<dyn VotingRule<Block, B>>>,
+}
+
+impl<Block, B> Default for VotingRulesBuilder<Block, B> where
+	Block: BlockT,
+	B: HeaderBackend<Block>,
+{
+	fn default() -> Self {
+		VotingRulesBuilder::new()
+			.add(AlwaysBehindBestBlock)
+			.add(ThreeQuartersOfTheUnfinalizedChain)
+	}
 }
 
 impl<Block, B> VotingRulesBuilder<Block, B> where
@@ -185,9 +257,10 @@ impl<Block, B> VotingRule<Block, B> for Box<dyn VotingRule<Block, B>> where
 	fn restrict_vote(
 		&self,
 		backend: &B,
+		base: &Block::Header,
 		best_target: &Block::Header,
 		current_target: &Block::Header,
 	) -> Option<(Block::Hash, NumberFor<Block>)> {
-		(**self).restrict_vote(backend, best_target, current_target)
+		(**self).restrict_vote(backend, base, best_target, current_target)
 	}
 }
