@@ -70,8 +70,8 @@ impl<Block, B> VotingRule<Block, B> for () where
 /// A custom voting rule that guarantees that our vote is always behind the best
 /// block, in the best case exactly one block behind it.
 #[derive(Clone)]
-pub struct AlwaysBehindBestBlock;
-impl<Block, B> VotingRule<Block, B> for AlwaysBehindBestBlock where
+pub struct BeforeBestBlock;
+impl<Block, B> VotingRule<Block, B> for BeforeBestBlock where
 	Block: BlockT,
 	B: HeaderBackend<Block>,
 {
@@ -209,7 +209,7 @@ impl<Block, B> Default for VotingRulesBuilder<Block, B> where
 {
 	fn default() -> Self {
 		VotingRulesBuilder::new()
-			.add(AlwaysBehindBestBlock)
+			.add(BeforeBestBlock)
 			.add(ThreeQuartersOfTheUnfinalizedChain)
 	}
 }

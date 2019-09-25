@@ -98,7 +98,7 @@ pub use communication::Network;
 pub use finality_proof::FinalityProofProvider;
 pub use light_import::light_block_import;
 pub use observer::run_grandpa_observer;
-pub use voting_rule::{AlwaysBehindBestBlock, VotingRule, VotingRulesBuilder};
+pub use voting_rule::{VotingRule, VotingRulesBuilder};
 
 use aux_schema::PersistentData;
 use environment::{Environment, VoterSetState};
