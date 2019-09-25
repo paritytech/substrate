@@ -30,7 +30,7 @@ use rstd::{
 /// Hasher(head_key)
 /// ```
 ///
-/// For each key the value is stored appended by a [`Linkage`](struct.Linkage.html) (which hold
+/// For each key, the value stored under that key is appended by a [`Linkage`](struct.Linkage.html) (which hold
 /// previous and next key) at the path:
 /// ```nocompile
 /// Hasher(prefix ++ key)

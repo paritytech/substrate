@@ -46,9 +46,9 @@ use proc_macro::TokenStream;
 /// another module with the same name and the same inner storage item name will conflict.
 /// `Example` is called the module prefix.
 ///
-/// note: For instantiable modules the module prefix is prepend with instance
+/// note: For instantiable modules the module prefix is prepended with instance
 /// prefix. Instance prefix is "" for default instance and "Instance$n" for instance number $n.
-/// Thus instance 3 of module Example has a module prefix of `Instance3Example`
+/// Thus, instance 3 of module Example has a module prefix of `Instance3Example`
 ///
 /// Basic storage consists of a name and a type; supported types are:
 ///
@@ -78,8 +78,8 @@ use proc_macro::TokenStream;
 ///   `$hash` representing a choice of hashing algorithms available in the
 ///   [`Hashable`](../srml_support/trait.Hashable.html) trait.
 ///
-///   `hasher($hash)` is optional and its default is `blake2_256`. Using another hasher must be
-///   made with care, see generator documentation.
+///   `hasher($hash)` is optional and its default is `blake2_256`. One should use another hasher
+///  with care, see generator documentation.
 ///
 ///   The generator is implemented with:
 ///   * `prefix`: `$module_prefix ++ " " ++ $storage_name`
