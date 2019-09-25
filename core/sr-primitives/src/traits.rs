@@ -1180,13 +1180,14 @@ macro_rules! count {
 /// just the bytes of the key.
 ///
 /// ```rust
-/// use sr_primitives::{impl_opaque_keys, key_types, KeyTypeId, app_crypto::{sr25519, ed25519}};
+/// use sr_primitives::{impl_opaque_keys, KeyTypeId, app_crypto::{sr25519, ed25519}};
+/// use primitives::testing::{SR25519, ED25519};
 ///
 /// impl_opaque_keys! {
 /// 	pub struct Keys {
-/// 		#[id(key_types::ED25519)]
+/// 		#[id(ED25519)]
 /// 		pub ed25519: ed25519::AppPublic,
-/// 		#[id(key_types::SR25519)]
+/// 		#[id(SR25519)]
 /// 		pub sr25519: sr25519::AppPublic,
 /// 	}
 /// }

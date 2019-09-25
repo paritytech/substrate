@@ -22,7 +22,6 @@ use inherents::{
 	RuntimeString, InherentIdentifier, ProvideInherent,
 	InherentData, MakeFatalError,
 };
-use support::StorageValue;
 use sr_primitives::traits::{One, Zero, SaturatedConversion};
 use rstd::{prelude::*, result, cmp, vec};
 use codec::Decode;

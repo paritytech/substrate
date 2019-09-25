@@ -22,12 +22,13 @@ use std::{
 	fmt, result, collections::HashMap,
 	marker::PhantomData, panic::UnwindSafe,
 };
-use log::warn;
+use log::{warn, trace};
 use hash_db::Hasher;
 use codec::{Decode, Encode};
 use primitives::{
 	storage::well_known_keys, NativeOrEncoded, NeverNativeValue, offchain::{self, NeverOffchainExt},
 	traits::{BareCryptoStorePtr, CodeExecutor},
+	hexdisplay::HexDisplay,
 };
 
 pub mod backend;
@@ -258,6 +259,13 @@ impl<'a, B, H, N, T, O, Exec> StateMachine<'a, B, H, N, T, O, Exec> where
 			self.offchain_ext.as_mut().map(|x| &mut **x),
 			self.keystore.clone(),
 		);
+		let id = externalities.id;
+		trace!(target: "state-trace", "{:04x}: Call {} at {:?}. Input={:?}",
+			id,
+			self.method,
+			self.backend,
+			HexDisplay::from(&self.call_data),
+		);
 		let (result, was_native) = self.exec.call(
 			&mut externalities,
 			self.method,
@@ -271,6 +279,11 @@ impl<'a, B, H, N, T, O, Exec> StateMachine<'a, B, H, N, T, O, Exec> where
 		} else {
 			(None, None)
 		};
+		trace!(target: "state-trace", "{:04x}: Return. Native={:?}, Result={:?}",
+			id,
+			was_native,
+			result,
+		);
 		(result, was_native, storage_delta, changes_delta)
 	}
 

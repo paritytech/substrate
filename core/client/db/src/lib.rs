@@ -39,7 +39,7 @@ use std::io;
 use std::collections::{HashMap, HashSet};
 
 use client::backend::NewBlockState;
-use client::blockchain::HeaderBackend;
+use client::blockchain::{well_known_cache_keys, HeaderBackend};
 use client::ExecutionStrategies;
 use client::backend::{StorageCollection, ChildStorageCollection};
 use codec::{Decode, Encode};
@@ -65,7 +65,6 @@ use crate::utils::{Meta, db_err, meta_keys, read_db, block_id_to_lookup_key, rea
 use client::leaves::{LeafSet, FinalizationDisplaced};
 use client::children;
 use state_db::StateDb;
-use consensus_common::well_known_cache_keys;
 use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
 use log::{trace, debug, warn};
 pub use state_db::PruningMode;
@@ -107,6 +106,12 @@ impl<B: BlockT> Drop for RefTrackingState<B> {
 		if let Some(hash) = &self.parent_hash {
 			self.storage.state_db.unpin(hash);
 		}
+	}
+}
+
+impl<Block: BlockT> std::fmt::Debug for RefTrackingState<Block> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "Block {:?}", self.parent_hash)
 	}
 }
 

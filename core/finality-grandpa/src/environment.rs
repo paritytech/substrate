@@ -906,7 +906,7 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 		let status = authority_set.apply_standard_changes(
 			hash,
 			number,
-			&is_descendent_of(client, None),
+			&is_descendent_of::<_, _, Block::Hash>(client, None),
 		).map_err(|e| Error::Safety(e.to_string()))?;
 
 		// check if this is this is the first finalization of some consensus changes

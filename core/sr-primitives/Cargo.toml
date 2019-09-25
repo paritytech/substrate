@@ -21,6 +21,7 @@ impl-trait-for-tuples = "0.1.1"
 [dev-dependencies]
 serde_json = "1.0"
 primitive-types = "0.5.0"
+rand = "0.7.2"
 
 [features]
 default = ["std"]

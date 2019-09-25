@@ -28,7 +28,6 @@ use sr_primitives::{
 	print, traits::{Zero, One, StaticLookup, Bounded, Saturating}, weights::SimpleDispatchInfo,
 };
 use support::{
-	StorageValue, StorageMap,
 	dispatch::Result, decl_storage, decl_event, ensure, decl_module,
 	traits::{
 		Currency, ExistenceRequirement, Get, LockableCurrency, LockIdentifier,
@@ -1054,7 +1053,6 @@ impl<T: Trait> Module<T> {
 	/// Return true of the bit `n` of scalar `x` is set to `1` and false otherwise.
 	fn bit_at(x: ApprovalFlag, n: usize) -> bool {
 		if n < APPROVAL_FLAG_LEN {
-			// x & ( APPROVAL_FLAG_MASK >> n ) != 0
 			x & ( 1 << n ) != 0
 		} else {
 			false

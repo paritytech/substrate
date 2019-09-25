@@ -79,6 +79,17 @@ use proc_macro::TokenStream;
 ///   If the keys are not trusted (e.g. can be set by a user), a cryptographic `hasher` such as
 ///   `blake2_256` must be used. Otherwise, other values in storage can be compromised.
 ///
+///    Once read from the trie (e.g. through an RPC call), a tuple of `(T, Linkage<K>)` is returned,
+///    where `T` is the value and `K` is the key type of the mapping.
+///    [`Linkage`](../srml_support/storage/generator/struct.Linkage.html) is a pointer to the
+///    previous and the next element.
+///
+///    Each linked map has a special key in the trie that can be queried and it can be particularly
+///    useful to query all items: `"head of  " ++ module_name ++ " " ++ storage_name`). This will
+///    return a key `K` that can be later on used with the aforementioned `$hash(module_name ++ " "
+///    ++ storage_name ++ encoding(K))` to fetch the head. For consequent elements, the
+///    [`Linkage`](../srml_support/storage/generator/struct.Linkage.html) can be used.
+///
 /// * Double map: `Foo: double_map hasher($hash1) u32, $hash2(u32) => u32`: Implements the
 ///   [`StorageDoubleMap`](../srml_support/storage/trait.StorageDoubleMap.html) trait using the
 ///   [`StorageDoubleMap generator`](../srml_support/storage/generator/trait.StorageDoubleMap.html).
