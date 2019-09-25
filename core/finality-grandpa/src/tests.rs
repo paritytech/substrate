@@ -893,30 +893,6 @@ fn finalizes_multiple_pending_changes_in_order() {
 }
 
 #[test]
-fn doesnt_vote_on_the_tip_of_the_chain() {
-	let mut runtime = current_thread::Runtime::new().unwrap();
-	let peers_a = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
-	let voters = make_ids(peers_a);
-	let api = TestApi::new(voters);
-	let mut net = GrandpaTestNet::new(api, 3);
-
-	// add 100 blocks
-	net.peer(0).push_blocks(100, false);
-	net.block_until_sync(&mut runtime);
-
-	for i in 0..3 {
-		assert_eq!(net.peer(i).client().info().chain.best_number, 100,
-			"Peer #{} failed to sync", i);
-	}
-
-	let net = Arc::new(Mutex::new(net));
-	let highest = run_to_completion(&mut runtime, 75, net.clone(), peers_a);
-
-	// the highest block to be finalized will be 3/4 deep in the unfinalized chain
-	assert_eq!(highest, 75);
-}
-
-#[test]
 fn force_change_to_new_set() {
 	let _ = env_logger::try_init();
 	let mut runtime = current_thread::Runtime::new().unwrap();
