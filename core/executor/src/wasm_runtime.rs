@@ -16,24 +16,13 @@
 
 //! Implements a cache for pre-created Wasm runtime module instances.
 
-use crate::error::Error;
+use crate::error::{Error, WasmError};
 use crate::wasmi_execution;
 use log::{trace, warn};
 use codec::Decode;
-use parity_wasm::elements::{deserialize_buffer, DataSegment, Instruction, Module as RawModule};
 use primitives::{storage::well_known_keys, Blake2Hasher, traits::Externalities};
 use runtime_version::RuntimeVersion;
-use std::{collections::hash_map::{Entry, HashMap}, mem};
-use wasmi::{Module as WasmModule, ModuleRef as WasmModuleInstanceRef, RuntimeValue};
-
-#[derive(Debug)]
-enum CacheError {
-	CodeNotFound,
-	ApplySnapshotFailed,
-	InvalidModule,
-	CantDeserializeWasm,
-	Instantiation(Error),
-}
+use std::{collections::hash_map::{Entry, HashMap}};
 
 /// The Wasm Substrate runtime.
 pub trait WasmRuntime {
@@ -54,162 +43,6 @@ pub trait WasmRuntime {
 	fn version(&self) -> Option<RuntimeVersion>;
 }
 
-/// A runtime along with its version and initial state snapshot.
-#[derive(Clone)]
-pub struct CachedRuntime {
-	/// A wasm module instance.
-	instance: WasmModuleInstanceRef,
-	/// Runtime version according to `Core_version`.
-	///
-	/// Can be `None` if the runtime doesn't expose this function.
-	version: Option<RuntimeVersion>,
-	/// The snapshot of the instance's state taken just after the instantiation.
-	state_snapshot: StateSnapshot,
-}
-
-impl CachedRuntime {
-	/// Perform an operation with the clean version of the runtime wasm instance.
-	fn with<R, F>(&self, f: F) -> R
-	where
-		F: FnOnce(&WasmModuleInstanceRef) -> R,
-	{
-		self.state_snapshot.apply(&self.instance).expect(
-			"applying the snapshot can only fail if the passed instance is different
-			from the one that was used for creation of the snapshot;
-			we use the snapshot that is directly associated with the instance;
-			thus the snapshot was created using the instance;
-			qed",
-		);
-		f(&self.instance)
-	}
-}
-
-impl WasmRuntime for CachedRuntime {
-	fn set_heap_pages(&mut self, heap_pages: u64) -> bool {
-		self.state_snapshot.heap_pages == heap_pages
-	}
-
-	fn call(&mut self, ext: &mut dyn Externalities<Blake2Hasher>, method: &str, data: &[u8])
-			-> Result<Vec<u8>, Error>
-	{
-		self.with(|module| {
-			wasmi_execution::call_in_wasm_module(ext, module, method, data)
-		})
-	}
-
-	fn version(&self) -> Option<RuntimeVersion> {
-		self.version.clone()
-	}
-}
-
-/// A state snapshot of an instance taken just after instantiation.
-///
-/// It is used for restoring the state of the module after execution.
-#[derive(Clone)]
-struct StateSnapshot {
-	/// The offset and the content of the memory segments that should be used to restore the snapshot
-	data_segments: Vec<(u32, Vec<u8>)>,
-	/// The list of all global mutable variables of the module in their sequential order.
-	global_mut_values: Vec<RuntimeValue>,
-	heap_pages: u64,
-}
-
-impl StateSnapshot {
-	// Returns `None` if instance is not valid.
-	fn take(
-		module_instance: &WasmModuleInstanceRef,
-		data_segments: Vec<DataSegment>,
-		heap_pages: u64,
-	) -> Option<Self> {
-		let prepared_segments = data_segments
-			.into_iter()
-			.map(|mut segment| {
-				// Just replace contents of the segment since the segments will be discarded later
-				// anyway.
-				let contents = mem::replace(segment.value_mut(), vec![]);
-
-				let init_expr = match segment.offset() {
-					Some(offset) => offset.code(),
-					// Return if the segment is passive
-					None => return None
-				};
-
-				// [op, End]
-				if init_expr.len() != 2 {
-					return None;
-				}
-				let offset = match init_expr[0] {
-					Instruction::I32Const(v) => v as u32,
-					Instruction::GetGlobal(idx) => {
-						let global_val = module_instance.globals().get(idx as usize)?.get();
-						match global_val {
-							RuntimeValue::I32(v) => v as u32,
-							_ => return None,
-						}
-					}
-					_ => return None,
-				};
-
-				Some((offset, contents))
-			})
-			.collect::<Option<Vec<_>>>()?;
-
-		// Collect all values of mutable globals.
-		let global_mut_values = module_instance
-			.globals()
-			.iter()
-			.filter(|g| g.is_mutable())
-			.map(|g| g.get())
-			.collect();
-
-		Some(Self {
-			data_segments: prepared_segments,
-			global_mut_values,
-			heap_pages,
-		})
-	}
-
-	/// Reset the runtime instance to the initial version by restoring
-	/// the preserved memory and globals.
-	///
-	/// Returns `Err` if applying the snapshot is failed.
-	fn apply(&self, instance: &WasmModuleInstanceRef) -> Result<(), CacheError> {
-		let memory = instance
-			.export_by_name("memory")
-			.ok_or(CacheError::ApplySnapshotFailed)?
-			.as_memory()
-			.cloned()
-			.ok_or(CacheError::ApplySnapshotFailed)?;
-
-		// First, erase the memory and copy the data segments into it.
-		memory
-			.erase()
-			.map_err(|_| CacheError::ApplySnapshotFailed)?;
-		for (offset, contents) in &self.data_segments {
-			memory
-				.set(*offset, contents)
-				.map_err(|_| CacheError::ApplySnapshotFailed)?;
-		}
-
-		// Second, restore the values of mutable globals.
-		for (global_ref, global_val) in instance
-			.globals()
-			.iter()
-			.filter(|g| g.is_mutable())
-			.zip(self.global_mut_values.iter())
-		{
-			// the instance should be the same as used for preserving and
-			// we iterate the same way it as we do it for preserving values that means that the
-			// types should be the same and all the values are mutable. So no error is expected/
-			global_ref
-				.set(*global_val)
-				.map_err(|_| CacheError::ApplySnapshotFailed)?;
-		}
-		Ok(())
-	}
-}
-
-
 /// Cache for the runtimes.
 ///
 /// When an instance is requested for the first time it is added to this
@@ -224,7 +57,7 @@ pub struct RuntimesCache {
 	/// A cache of runtime instances along with metadata, ready to be reused.
 	///
 	/// Instances are keyed by the hash of their code.
-	instances: HashMap<[u8; 32], Result<CachedRuntime, CacheError>>,
+	instances: HashMap<[u8; 32], Result<Box<dyn WasmRuntime>, WasmError>>,
 }
 
 impl RuntimesCache {
@@ -268,7 +101,7 @@ impl RuntimesCache {
 		&mut self,
 		ext: &mut E,
 		default_heap_pages: u64,
-	) -> Result<&mut CachedRuntime, Error> {
+	) -> Result<&mut (dyn WasmRuntime + 'static), Error> {
 		let code_hash = ext
 			.original_storage_hash(well_known_keys::CODE)
 			.ok_or(Error::InvalidCode("`CODE` not found in storage.".into()))?;
@@ -287,7 +120,7 @@ impl RuntimesCache {
 							target: "runtimes_cache",
 							"heap_pages were changed. Reinstantiating the instance"
 						);
-						*result = create_wasm_instance(ext, heap_pages);
+						*result = create_wasm_runtime(ext, heap_pages);
 						if let Err(ref err) = result {
 							warn!(target: "runtimes_cache", "cannot create a runtime: {:?}", err);
 						}
@@ -297,7 +130,7 @@ impl RuntimesCache {
 			},
 			Entry::Vacant(v) => {
 				trace!(target: "runtimes_cache", "no instance found in cache, creating now.");
-				let result = create_wasm_instance(ext, heap_pages);
+				let result = create_wasm_runtime(ext, heap_pages);
 				if let Err(ref err) = result {
 					warn!(target: "runtimes_cache", "cannot create a runtime: {:?}", err);
 				}
@@ -306,59 +139,18 @@ impl RuntimesCache {
 		};
 
 		result.as_mut()
+			.map(|runtime| runtime.as_mut())
 			.map_err(|ref e| Error::InvalidCode(format!("{:?}", e)))
 	}
 }
 
-fn create_wasm_instance<E: Externalities<Blake2Hasher>>(
+fn create_wasm_runtime<E: Externalities<Blake2Hasher>>(
 	ext: &mut E,
 	heap_pages: u64,
-) -> Result<CachedRuntime, CacheError> {
+) -> Result<Box<dyn WasmRuntime>, WasmError> {
 	let code = ext
 		.original_storage(well_known_keys::CODE)
-		.ok_or(CacheError::CodeNotFound)?;
-	let module = WasmModule::from_buffer(&code).map_err(|_| CacheError::InvalidModule)?;
-
-	// Extract the data segments from the wasm code.
-	//
-	// A return of this error actually indicates that there is a problem in logic, since
-	// we just loaded and validated the `module` above.
-	let data_segments = extract_data_segments(&code)?;
-
-	// Instantiate this module.
-	let instance = wasmi_execution::instantiate_module(heap_pages as usize, &module)
-		.map_err(CacheError::Instantiation)?;
-
-	// Take state snapshot before executing anything.
-	let state_snapshot = StateSnapshot::take(&instance, data_segments, heap_pages)
-		.expect(
-			"`take` returns `Err` if the module is not valid;
-				we already loaded module above, thus the `Module` is proven to be valid at this point;
-				qed
-				",
-		);
-
-	let version = wasmi_execution::call_in_wasm_module(ext, &instance, "Core_version", &[])
-		.ok()
-		.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()).ok());
-	Ok(CachedRuntime {
-		instance,
-		version,
-		state_snapshot,
-	})
-}
-
-/// Extract the data segments from the given wasm code.
-///
-/// Returns `Err` if the given wasm code cannot be deserialized.
-fn extract_data_segments(wasm_code: &[u8]) -> Result<Vec<DataSegment>, CacheError> {
-	let raw_module: RawModule = deserialize_buffer(wasm_code)
-		.map_err(|_| CacheError::CantDeserializeWasm)?;
-
-	let segments = raw_module
-		.data_section()
-		.map(|ds| ds.entries())
-		.unwrap_or(&[])
-		.to_vec();
-	Ok(segments)
+		.ok_or(WasmError::CodeNotFound)?;
+	wasmi_execution::create_instance(ext, &code, heap_pages)
+		.map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) })
 }
