@@ -128,7 +128,8 @@ pub fn derive(
 	let crate_name = match crate_name(CRATE_NAME) {
 		Ok(chain_spec_name) => chain_spec_name,
 		Err(e) => if std::env::var("CARGO_PKG_NAME").expect(PROOF) == CRATE_NAME {
-			"crate".to_string()
+			// we return the name of the crate here instead of `crate` to support doc tests.
+			CRATE_NAME.replace("-", "_")
 		} else {
 			let err = Error::new(Span::call_site(), &e).to_compile_error();
 			return quote!( #err ).into()

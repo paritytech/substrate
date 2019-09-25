@@ -22,6 +22,8 @@ use std::collections::BTreeMap;
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
 
 /// A `ChainSpec` extension.
+///
+/// This trait is implemented automatically by `ChainSpecGroup` macro.
 pub trait Group: Clone + Sized {
 	/// An associated type containing fork definition.
 	type Fork: Fork<Base=Self>;
@@ -110,6 +112,9 @@ impl<T: Fork> Fork for Option<T> {
 }
 
 /// A collection of `ChainSpec` extensions.
+///
+/// This type can be passed around and allows the core
+/// modules to request a strongly-typed, but optional configuration.
 pub trait Extension: Serialize + DeserializeOwned + Clone {
 	type Forks: IsForks;
 
@@ -120,6 +125,7 @@ pub trait Extension: Serialize + DeserializeOwned + Clone {
 	fn forks<BlockNumber, T>(&self) -> Option<Forks<BlockNumber, T>> where
 		BlockNumber: Ord + Clone + 'static,
 		T: Group + 'static,
+		<Self::Forks as IsForks>::Extension: Extension,
 		<<Self::Forks as IsForks>::Extension as Group>::Fork: Extension,
 	{
 		self.get::<Forks<BlockNumber, <Self::Forks as IsForks>::Extension>>()?
@@ -135,7 +141,7 @@ impl Extension for crate::NoExtension {
 
 pub trait IsForks {
 	type BlockNumber: Ord + 'static;
-	type Extension: Extension + Group + 'static;
+	type Extension: Group + 'static;
 }
 
 impl IsForks for Option<()> {
@@ -184,7 +190,7 @@ impl<B: Ord, T: Group> Forks<B, T> where
 
 impl<B, T> IsForks for Forks<B, T> where
 	B: Ord + 'static,
-	T: Group + Extension + 'static,
+	T: Group + 'static,
 {
 	type BlockNumber = B;
 	type Extension = T;
@@ -230,6 +236,7 @@ impl<B, E> Extension for Forks<B, E> where
 	fn forks<BlockNumber, T>(&self) -> Option<Forks<BlockNumber, T>> where
 		BlockNumber: Ord + Clone + 'static,
 		T: Group + 'static,
+		<Self::Forks as IsForks>::Extension: Extension,
 		<<Self::Forks as IsForks>::Extension as Group>::Fork: Extension,
 	{
 		use std::any::{TypeId, Any};
@@ -247,6 +254,8 @@ impl<B, E> Extension for Forks<B, E> where
 mod tests {
 	use super::*;
 	use chain_spec_derive::{ChainSpecGroup, ChainSpecExtension};
+	// Make the proc macro work for tests and doc tests.
+	use crate as substrate_chain_spec;
 
 	#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ChainSpecGroup)]
 	#[serde(deny_unknown_fields)]

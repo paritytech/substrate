@@ -67,7 +67,8 @@
 //!		),
 //! 	// This parameter provides the storage for the chain genesis.
 //! 	<(StorageOverlay, ChildrenStorageOverlay)>::default(),
-//! 	Default::default()
+//! 	Default::default(),
+//! 	Default::default(),
 //! );
 //! ```
 //!
