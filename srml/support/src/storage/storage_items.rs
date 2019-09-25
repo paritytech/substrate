@@ -300,10 +300,10 @@ mod tests {
 			// non-getters: pub / $default
 
 			/// Hello, this is doc!
-			U32 : Option<u32> = Some(3);
+			U32 : Option<u32>;
 			pub PUBU32 : Option<u32>;
-			U32MYDEF : Option<u32> = None;
-			pub PUBU32MYDEF : Option<u32> = Some(3);
+			U32MYDEF : Option<u32>;
+			pub PUBU32MYDEF : Option<u32>;
 
 			// getters: pub / $default
 			// we need at least one type which uses T, otherwise GenesisConfig will complain.
@@ -311,17 +311,17 @@ mod tests {
 			pub PUBGETU32 get(pub_u32_getter) build(|config: &GenesisConfig| config.u32_getter_with_config): u32;
 			GETU32WITHCONFIG get(u32_getter_with_config) config(): u32;
 			pub PUBGETU32WITHCONFIG get(pub_u32_getter_with_config) config(): u32;
-			GETU32MYDEF get(u32_getter_mydef): Option<u32> = Some(4);
+			GETU32MYDEF get(u32_getter_mydef): Option<u32>;
 			pub PUBGETU32MYDEF get(pub_u32_getter_mydef) config(): u32 = 3;
 			GETU32WITHCONFIGMYDEF get(u32_getter_with_config_mydef) config(): u32 = 2;
 			pub PUBGETU32WITHCONFIGMYDEF get(pub_u32_getter_with_config_mydef) config(): u32 = 1;
-			PUBGETU32WITHCONFIGMYDEFOPT get(pub_u32_getter_with_config_mydef_opt) config(): Option<u32> = Some(100);
+			PUBGETU32WITHCONFIGMYDEFOPT get(pub_u32_getter_with_config_mydef_opt) config(): Option<u32>;
 
 			// map non-getters: pub / $default
 			MAPU32 : map u32 => Option<String>;
 			pub PUBMAPU32 : map u32 => Option<String>;
-			MAPU32MYDEF : map u32 => Option<String> = None;
-			pub PUBMAPU32MYDEF : map u32 => Option<String> = Some("hello".into());
+			MAPU32MYDEF : map u32 => Option<String>;
+			pub PUBMAPU32MYDEF : map u32 => Option<String>;
 
 			// map getters: pub / $default
 			GETMAPU32 get(map_u32_getter): map u32 => String;
@@ -332,7 +332,7 @@ mod tests {
 
 			// linked map
 			LINKEDMAPU32 : linked_map u32 => Option<String>;
-			pub PUBLINKEDMAPU32MYDEF : linked_map u32 => Option<String> = Some("hello".into());
+			pub PUBLINKEDMAPU32MYDEF : linked_map u32 => Option<String>;
 			GETLINKEDMAPU32 get(linked_map_u32_getter): linked_map u32 => String;
 			pub PUBGETLINKEDMAPU32MYDEF get(pub_linked_map_u32_getter_mydef): linked_map u32 => String = "pubmap".into();
 
@@ -688,7 +688,7 @@ mod tests {
 		assert_eq!(config.pub_u32_getter_mydef, 3u32);
 		assert_eq!(config.u32_getter_with_config_mydef, 2u32);
 		assert_eq!(config.pub_u32_getter_with_config_mydef, 1u32);
-		assert_eq!(config.pub_u32_getter_with_config_mydef_opt, 100u32);
+		assert_eq!(config.pub_u32_getter_with_config_mydef_opt, 0u32);
 	}
 
 }
@@ -781,17 +781,14 @@ mod test_append_and_len {
 			JustVec: Vec<u32>;
 			JustVecWithDefault: Vec<u32> = vec![6, 9];
 			OptionVec: Option<Vec<u32>>;
-			OptionVecWithDefault: Option<Vec<u32>> = Some(vec![6, 9]);
 
 			MapVec: map u32 => Vec<u32>;
 			MapVecWithDefault: map u32 => Vec<u32> = vec![6, 9];
 			OptionMapVec: map u32 => Option<Vec<u32>>;
-			OptionMapVecWithDefault: map u32 => Option<Vec<u32>> = Some(vec![6, 9]);
 
 			LinkedMapVec: linked_map u32 => Vec<u32>;
 			LinkedMapVecWithDefault: linked_map u32 => Vec<u32> = vec![6, 9];
 			OptionLinkedMapVec: linked_map u32 => Option<Vec<u32>>;
-			OptionLinkedMapVecWithDefault: linked_map u32 => Option<Vec<u32>> = Some(vec![6, 9]);
 		}
 	}
 
@@ -805,7 +802,6 @@ mod test_append_and_len {
 	#[test]
 	fn default_for_option() {
 		with_externalities(&mut TestExternalities::default(), || {
-			assert_eq!(OptionVecWithDefault::get(), Some(vec![6, 9]));
 			assert_eq!(OptionVec::get(), None);
 			assert_eq!(JustVec::get(), vec![]);
 		});
@@ -882,9 +878,6 @@ mod test_append_and_len {
 			assert_eq!(OptionVec::get(), None);
 			assert_eq!(OptionVec::decode_len(), Ok(0));
 
-			assert_eq!(OptionVecWithDefault::get(), Some(vec![6, 9]));
-			assert_eq!(OptionVecWithDefault::decode_len(), Ok(2));
-
 			// map
 			assert_eq!(MapVec::get(0), vec![]);
 			assert_eq!(MapVec::decode_len(0), Ok(0));
@@ -895,9 +888,6 @@ mod test_append_and_len {
 			assert_eq!(OptionMapVec::get(0), None);
 			assert_eq!(OptionMapVec::decode_len(0), Ok(0));
 
-			assert_eq!(OptionMapVecWithDefault::get(0), Some(vec![6, 9]));
-			assert_eq!(OptionMapVecWithDefault::decode_len(0), Ok(2));
-
 			// linked map
 			assert_eq!(LinkedMapVec::get(0), vec![]);
 			assert_eq!(LinkedMapVec::decode_len(0), Ok(0));
@@ -907,9 +897,6 @@ mod test_append_and_len {
 
 			assert_eq!(OptionLinkedMapVec::get(0), None);
 			assert_eq!(OptionLinkedMapVec::decode_len(0), Ok(0));
-
-			assert_eq!(OptionLinkedMapVecWithDefault::get(0), Some(vec![6, 9]));
-			assert_eq!(OptionLinkedMapVecWithDefault::decode_len(0), Ok(2));
 		});
 	}
 }
