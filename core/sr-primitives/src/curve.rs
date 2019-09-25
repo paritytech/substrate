@@ -59,13 +59,13 @@ impl<'a> PiecewiseLinear<'a> {
 
 		let delta_y = multiply_by_rational_saturating(
 			abs_sub(n.clone(), prev.0 * d.clone()),
-			abs_sub(next.1.into_parts(), prev.1.into_parts()),
+			abs_sub(next.1.deconstruct(), prev.1.deconstruct()),
 			// Must not saturate as prev abscissa > next abscissa
-			next.0.into_parts().saturating_sub(prev.0.into_parts()),
+			next.0.deconstruct().saturating_sub(prev.0.deconstruct()),
 		);
 
 		// If both substration are same sign then result is positive
-		if (n > prev.0 * d.clone()) == (next.1.into_parts() > prev.1.into_parts()) {
+		if (n > prev.0 * d.clone()) == (next.1.deconstruct() > prev.1.deconstruct()) {
 			(prev.1 * d).saturating_add(delta_y)
 		// Otherwise result is negative
 		} else {
