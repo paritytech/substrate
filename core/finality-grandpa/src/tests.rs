@@ -1153,7 +1153,7 @@ fn voter_persists_its_votes() {
 							inherent_data_providers: InherentDataProviders::new(),
 							on_exit: Exit,
 							telemetry_on_connect: None,
-							voting_rule: (),
+							voting_rule: VotingRulesBuilder::default().build(),
 						};
 
 						let voter = run_grandpa_voter(grandpa_params)
@@ -1569,6 +1569,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 #[test]
 fn grandpa_environment_respects_voting_rules() {
 	use grandpa::Chain;
+	use network::test::TestClient;
 
 	let peers = &[Ed25519Keyring::Alice];
 	let voters = make_ids(peers);
@@ -1579,7 +1580,7 @@ fn grandpa_environment_respects_voting_rules() {
 	let link = peer.data.lock().take().unwrap();
 
 	// create a voter environment with a given voting rule
-	let environment = |voting_rule: Box<dyn VotingRule<Block>>| {
+	let environment = |voting_rule: Box<dyn VotingRule<Block, TestClient>>| {
 		let PersistentData {
 			ref authority_set,
 			ref consensus_changes,
@@ -1623,7 +1624,7 @@ fn grandpa_environment_respects_voting_rules() {
 	let unrestricted_env = environment(Box::new(()));
 
 	// and another another one restricted to votes below best block
-	let restricted_env = environment(Box::new(voting_rule::AlwaysBehindBestBlock));
+	let restricted_env = environment(Box::new(voting_rule::BeforeBestBlock));
 
 	// both environments should return block 15, which is 3/4 of the way in the unfinalized chain
 	assert_eq!(
