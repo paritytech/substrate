@@ -16,39 +16,53 @@
 
 //! Backend for storing data without a state.
 
+/// TODO EMCH merge offstate storage and offstate backend storage ??
+
 use std::sync::Arc;
 use std::ops::Deref;
 
-pub trait OffstateBackendStorage {
+/// TODO EMCH replace ofstate storage?
+pub trait OffstateStorage: Send + Sync {
+	/// Retrieve a value from storage under given key.
+	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String>;
+
+	/// Return in memory all values for this backend, mainly for
+	/// tests.
+	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)>;
+}
+
+pub trait OffstateBackendStorage: Send + Sync {
 /*	/// state type for querying data
 	/// (similar to hash for a trie_backend).
 	trait ChanState;*/
 
-	/// Retrieve a value from storage under given key and prefix.
-	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>>;
+	/// Retrieve a value from storage under given key.
+	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String>;
 
 	/// Return in memory all values for this backend, mainly for
 	/// tests.
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)>;
+
 }
 
+/*// TODO EMCH is it use??
 pub trait OffstateStorage {
 
-	/// Persist a value in storage under given key and prefix.
-	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]);
+	/// Persist a value in storage under given key.
+	fn set(&mut self, key: &[u8], value: &[u8]);
 
-	/// Retrieve a value from storage under given key and prefix.
-	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>>;
+	/// Retrieve a value from storage under given key.
+	fn get(&self, key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Return in memory all values for this backend, mainly for
 	/// tests.
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)>;
 
-}
+}*/
 
-impl<N> OffstateBackendStorage for TODO<N> {
+impl<N: Sync + Send> OffstateBackendStorage for TODO<N> {
 
-	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
+	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 		unimplemented!()
 	}
 
@@ -60,7 +74,7 @@ impl<N> OffstateBackendStorage for TODO<N> {
 
 impl OffstateBackendStorage for TODO2 {
 
-	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
+	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 		unimplemented!()
 	}
 
@@ -69,50 +83,40 @@ impl OffstateBackendStorage for TODO2 {
 	}
 
 }
-
 
 // This implementation is used by normal storage trie clients.
 impl OffstateBackendStorage for Arc<dyn OffstateStorage> {
-
-	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
-		OffstateStorage::get(self.deref(), prefix, key)
+	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
+		OffstateStorage::get(self.deref(), key)
 	}
-
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		OffstateStorage::pairs(self.deref())
 	}
-
 }
 
 
-impl<N> OffstateStorage for TODO<N> {
 
-	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
-		unimplemented!()
-	}
+impl<N: Send + Sync> OffstateStorage for TODO<N> {
 
-	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
-		<Self as OffstateBackendStorage>::get(&self, prefix, key)
+	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
+		<Self as OffstateBackendStorage>::get(&self, key)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		<Self as OffstateBackendStorage>::pairs(&self)
+		unimplemented!()
 	}
 
 }
+
 
 impl OffstateStorage for TODO2 {
 
-	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
-		unimplemented!()
-	}
-
-	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
-		<Self as OffstateBackendStorage>::get(&self, prefix, key)
+	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
+		<Self as OffstateBackendStorage>::get(&self, key)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		<Self as OffstateBackendStorage>::pairs(&self)
+		unimplemented!()
 	}
 
 }

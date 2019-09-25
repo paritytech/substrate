@@ -62,9 +62,10 @@ impl<S: TrieBackendStorage<H>, O: OffstateBackendStorage, H: Hasher> TrieBackend
 	}
 
 	// TODO EMCH PROTO: remove before pr.
-	pub fn child_keyspace(&self, key: &[u8]) -> Option<Vec<u8>> {
+	pub fn child_keyspace(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 		const PREFIX_KEYSPACE: &'static[u8] = b"offstate_keyspace";
-		self.offstate_storage.get(PREFIX_KEYSPACE, key)
+		// TODO EMCH do prefixing manually.
+		self.offstate_storage.get(key)
 	}
 
 }

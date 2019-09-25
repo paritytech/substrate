@@ -74,6 +74,8 @@ pub trait OffstateDb {
 
 	/// Get state trie node.
 	fn get_offstate(&self, key: &[u8]) -> Result<Option<DBValue>, Self::Error>;
+	/// Get all pairs of key at current state.
+	fn get_offstate_pairs(&self) -> Vec<(OffstateKey, DBValue)>;
 }
 
 /// Error type.
@@ -366,6 +368,17 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		db.get_offstate(key).map_err(|e| Error::Db(e))
 	}
 
+	pub fn get_offstate_pairs<D: OffstateDb>(
+		&self,
+		db: &D,
+	) -> Vec<(OffstateKey, DBValue)> {
+		// TODO get non_canonical optional values and then filter
+		// db pairs over it : TODO -> db.get_offstate would return
+		// an iterator.
+		unimplemented!()
+	}
+
+
 	pub fn apply_pending(&mut self) {
 		self.non_canonical.apply_pending();
 		if let Some(pruning) = &mut self.pruning {
@@ -445,7 +458,14 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 		self.db.read().get_offstate(key, db)
 	}
 
-
+	/// Get pairs values offstate.
+	pub fn get_offstate_pairs<D: OffstateDb>(
+		&self,
+		db: &D,
+	) -> Vec<(OffstateKey, DBValue)> {
+		self.db.read().get_offstate_pairs(db)
+	}
+	
 	/// Revert all non-canonical blocks with the best block number.
 	/// Returns a database commit or `None` if not possible.
 	/// For archive an empty commit set is returned.

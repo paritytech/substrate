@@ -41,6 +41,10 @@ impl OffstateDb for TestDb {
 	fn get_offstate(&self, key: &[u8]) -> Result<Option<DBValue>, ()> {
 		Ok(self.offstate.get(key).cloned())
 	}
+
+	fn get_offstate_pairs(&self) -> Vec<(OffstateKey, DBValue)> {
+		self.offstate.iter().map(|(a, b)| (a.clone(), b.clone())).collect()
+	}
 }
 
 impl NodeDb for TestDb {

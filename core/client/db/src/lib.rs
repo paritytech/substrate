@@ -274,6 +274,8 @@ pub(crate) mod columns {
 	pub const AUX: Option<u32> = Some(8);
 	/// Offchain workers local storage
 	pub const OFFCHAIN: Option<u32> = Some(9);
+	/// Offstate data
+	pub const OFFSTATE: Option<u32> = Some(10);
 }
 
 struct PendingBlock<Block: BlockT> {
@@ -586,6 +588,30 @@ impl<Block: BlockT> state_db::NodeDb for StorageDb<Block> {
 
 	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.db.get(columns::STATE, key).map(|r| r.map(|v| v.to_vec()))
+	}
+}
+
+impl<Block: BlockT> state_db::OffstateDb for StorageDb<Block> {
+
+	type Error = io::Error;
+
+	fn get_offstate(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.db.get(columns::OFFSTATE, key);
+		unimplemented!("TODO map with history fetch at requested block")
+	}
+
+	fn get_offstate_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+		unimplemented!("TODO need to be an iterator")
+	}
+}
+
+impl<Block: BlockT> state_machine::OffstateStorage for StorageDb<Block> {
+	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
+		self.state_db.get_offstate(key, self)
+			.map_err(|e| format!("Database backend error: {:?}", e))
+	}
+	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+		self.state_db.get_offstate_pairs(self)
 	}
 }
 
@@ -1511,8 +1537,9 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 				let hash = hdr.hash();
 				if let Ok(()) = self.storage.state_db.pin(&hash) {
 					let root = H256::from_slice(hdr.state_root().as_ref());
-					let block_number = hdr.number().clone();
-					let db_state = DbState::new(self.storage.clone(), root, Arc::new(TODO::new(block_number)));
+					//let block_number = hdr.number().clone();
+					//let db_state = DbState::new(self.storage.clone(), root, Arc::new(TODO::new(block_number)));
+					let db_state = DbState::new(self.storage.clone(), root, self.storage.clone());
 					let state = RefTrackingState::new(db_state, self.storage.clone(), Some(hash.clone()));
 					Ok(CachingState::new(state, self.shared_cache.clone(), Some(hash)))
 				} else {
