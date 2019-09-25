@@ -95,7 +95,7 @@ fn function_no_std_impl(trait_name: &Ident, method: &TraitItemMethod) -> Result<
 				)*
 
 				// Call the host function
-				let result = unsafe { #host_function_name( #( #arg_names2.into_ffi_arg() )* ) };
+				let result = unsafe { #host_function_name( #( #arg_names2.into_ffi_arg(), )* ) };
 
 				#convert_return_value
 			}
@@ -114,7 +114,7 @@ fn function_std_impl(trait_name: &Ident, method: &TraitItemMethod) -> Result<Tok
 
 	let call_to_trait = if takes_self_argument(&method.sig) {
 		quote! {
-			#crate_::with_externalities(|mut ext| ext.#method_name(#( #arg_names, )*))
+			#crate_::with_externalities(|mut ext| #trait_name::#method_name(&mut ext, #( #arg_names, )*))
 		}
 	} else {
 		quote! {

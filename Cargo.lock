@@ -5232,8 +5232,10 @@ version = "2.0.0"
 dependencies = [
  "parity-scale-codec 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-std 2.0.0",
+ "substrate-executor 2.0.0",
  "substrate-primitives 2.0.0",
  "substrate-runtime-interface-proc-macro 2.0.0",
+ "substrate-runtime-interface-test-wasm 2.0.0",
  "substrate-wasm-interface 2.0.0",
 ]
 
@@ -5246,6 +5248,15 @@ dependencies = [
  "proc-macro2 1.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "quote 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "syn 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "substrate-runtime-interface-test-wasm"
+version = "2.0.0"
+dependencies = [
+ "sr-std 2.0.0",
+ "substrate-runtime-interface 2.0.0",
+ "substrate-wasm-builder-runner 1.0.3",
 ]
 
 [[package]]

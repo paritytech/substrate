@@ -18,21 +18,29 @@
 
 use rstd::{any::TypeId, borrow::Cow, mem};
 
+#[cfg(feature = "std")]
 use wasm_interface::{FunctionContext, IntoValue, TryFromValue, Pointer, Result};
 
 use codec::{Encode, Decode};
 
 #[doc(hidden)]
-pub use primitives::{Blake2Hasher, traits::Externalities};
+pub use primitives::Blake2Hasher;
 
 #[doc(hidden)]
+#[cfg(feature = "std")]
+pub use primitives::traits::Externalities;
+
+#[doc(hidden)]
+#[cfg(feature = "std")]
 pub use wasm_interface;
 
-pub use proc_macro::runtime_interface;
+pub use substrate_runtime_interface_proc_macro::runtime_interface;
 
+#[cfg(feature = "std")]
 pub fn with_externalities<F: FnOnce(&mut dyn Externalities<Blake2Hasher>) -> R, R>(f: F) -> R {
 	unimplemented!()
 }
+
 pub trait AsFFIArg {
 	/// The owned rust type that converts into `Self::FFIType`.
 	type RTOwned: IntoFFIArg<Self::FFIType>;
@@ -47,6 +55,7 @@ pub trait FromFFIArg<T>: Sized {
 	fn from_ffi_arg(arg: T) -> Self;
 }
 
+#[cfg(feature = "std")]
 pub trait FromWasmFFIArg<T> {
 	/// The `Self` instance returned by `from_wasm_ffi_arg`.
 	///
@@ -61,10 +70,12 @@ pub trait IntoFFIArg<T> {
 	fn into_ffi_arg(&self) -> T;
 }
 
+#[cfg(feature = "std")]
 pub trait IntoWasmFFIArg<T> {
 	fn into_wasm_ffi_arg(self, context: &mut dyn FunctionContext) -> Result<T>;
 }
 
+#[cfg(feature = "std")]
 pub trait IntoPreAllocatedWasmFFIArg<T> {
 	type SelfInstance;
 
@@ -174,6 +185,7 @@ impl<T: 'static + Decode> FromFFIArg<u64> for Vec<T> {
 	}
 }
 
+#[cfg(feature = "std")]
 impl<T: 'static + Encode> IntoWasmFFIArg<u64> for Vec<T> {
 	fn into_wasm_ffi_arg(self, context: &mut dyn FunctionContext) -> Result<u64> {
 		let vec: Cow<'_, [u8]> = if TypeId::of::<T>() == TypeId::of::<u8>() {
@@ -189,6 +201,7 @@ impl<T: 'static + Encode> IntoWasmFFIArg<u64> for Vec<T> {
 	}
 }
 
+#[cfg(feature = "std")]
 impl<T: 'static + Decode> FromWasmFFIArg<u64> for Vec<T> {
 	type SelfInstance = Vec<T>;
 
@@ -197,6 +210,7 @@ impl<T: 'static + Decode> FromWasmFFIArg<u64> for Vec<T> {
 	}
 }
 
+#[cfg(feature = "std")]
 impl<T: 'static + Decode> FromWasmFFIArg<u64> for [T] {
 	type SelfInstance = Vec<T>;
 
@@ -215,21 +229,36 @@ impl<T: 'static + Decode> FromWasmFFIArg<u64> for [T] {
 	}
 }
 
+#[cfg(feature = "std")]
+impl IntoPreAllocatedWasmFFIArg<u64> for [u8] {
+	type SelfInstance = Vec<u8>;
+
+	fn into_wasm_ffi_arg(
+		self_instance: Self::SelfInstance,
+		context: &mut dyn FunctionContext,
+		allocated: u64,
+	) -> Result<()> {
+		let arg = u64::from_le(allocated);
+		let len = (arg & (!0u32 as u64)) as u32;
+		let ptr = (arg >> 32) as u32;
+
+		if (len as usize) < self_instance.len() {
+			Err(
+				format!(
+					"Preallocated buffer is not big enough (given {} vs needed {})!",
+					len,
+					self_instance.len()
+				)
+			)
+		} else {
+			context.write_memory(Pointer::new(ptr), &self_instance)
+		}
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
 
-	#[runtime_interface]
-	trait Test {
-		fn test(lol: Vec<u8>) -> Vec<u8> {
-			Vec::new()
-		}
 
-		fn test_with_self(&mut self, data: &[u8]) {
-			self.clear_storage(data);
-		}
-
-		fn test_with_self2(&self, data: &[u8]) {
-		}
-	}
 }

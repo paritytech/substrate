@@ -116,6 +116,7 @@ fn impl_trait_for_externalities(trait_def: &ItemTrait) -> Result<TokenStream> {
 
 	Ok(
 		quote! {
+			#[cfg(feature = "std")]
 			impl #trait_ for &mut dyn #crate_::Externalities<#crate_::Blake2Hasher> {
 				#( #methods )*
 			}
