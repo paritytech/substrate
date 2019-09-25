@@ -27,7 +27,7 @@ use crate::{storage::{self, unhashed, hashed::StorageHasher}, rstd::borrow::Borr
 /// is a hash of a `Key2`.
 ///
 /// Thus value for (key1, key2) is stored at:
-/// ```
+/// ```nocompile
 /// Hasher1(key1_prefix ++ key1) ++ Hasher2(key2)
 /// ```
 ///
