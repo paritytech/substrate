@@ -36,7 +36,7 @@ pub trait StorageLinkedMap<K: Codec, V: Codec> {
 	fn prefix() -> &'static [u8];
 
 	/// Key used to store linked map head.
-	fn final_head_key() -> &'static [u8];
+	fn head_key() -> &'static [u8];
 
 	/// Convert an optionnal value retrieved from storage to the type queried.
 	fn from_optional_value_to_query(v: Option<V>) -> Self::Query;
@@ -52,6 +52,11 @@ pub trait StorageLinkedMap<K: Codec, V: Codec> {
 		let mut final_key = Self::prefix().to_vec();
 		key.borrow().encode_to(&mut final_key);
 		Self::Hasher::hash(&final_key)
+	}
+
+	/// Generate the hashed key for head
+	fn storage_linked_map_final_head_key() -> <Self::Hasher as StorageHasher>::Output {
+		Self::Hasher::hash(Self::head_key())
 	}
 }
 
@@ -181,7 +186,7 @@ where
 	V: Codec,
 	G: StorageLinkedMap<K, V>
 {
-	unhashed::get(G::final_head_key())
+	unhashed::get(G::storage_linked_map_final_head_key().as_ref())
 }
 
 /// Overwrite current head pointer.
@@ -194,8 +199,8 @@ where
 	G: StorageLinkedMap<K, V>
 {
 	match head {
-		Some(head) => unhashed::put(G::final_head_key(), head),
-		None => unhashed::kill(G::final_head_key()),
+		Some(head) => unhashed::put(G::storage_linked_map_final_head_key().as_ref(), head),
+		None => unhashed::kill(G::storage_linked_map_final_head_key().as_ref()),
 	}
 }
 
